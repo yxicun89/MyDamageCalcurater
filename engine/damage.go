@@ -57,6 +57,7 @@ type DamageResult struct {
 	STAB          bool    // タイプ一致
 	Category      MoveCategory
 	DefenderHP    int
+	KO            KOChance // 確定数/乱数n発
 }
 
 // MinDamage / MaxDamage は 16段階の下限・上限。
@@ -172,5 +173,6 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 		}
 		res.Rolls[i] = d
 	}
+	res.KO = ComputeKO(res.Rolls, res.DefenderHP)
 	return res, nil
 }
