@@ -32,13 +32,15 @@
 - [x] P1-3 ダメージ計算コア(基本式・乱数16段階・一致・相性・急所・やけど)
 - [x] P1-4 補正(天候・フィールド・壁・持ち物・特性)※マスタの補正定義から適用
 - [x] P1-5 確定数/乱数n発の算出
-- [~] P1-6 `tools/golden` でテストベクタ生成、`make test-golden` 全件一致
+- [x] P1-6 `tools/golden` でテストベクタ生成、`make test-golden` 全件一致
 - [ ] P1-7 一括計算(防御側の代表調整すべてに対する結果を一度に返す)
 - [ ] P1-8 逆算(観測ダメージ→調整候補、複数観測で絞り込み)+ 再現率テスト
 - [ ] P1-9 WASM ビルド(`make wasm`)と Go/WASM の結果一致テスト
 
 ### Phase 2 マスタデータ
 - [ ] P2-1 **データソース調査**: チャンピオンズの使用可能ポケモン・技・持ち物の取得元を調べ ADR-0002 に記録
+  - 確定後に、ゴールデンの種族集合(現在は gen9 参考集合1392種)を差し替えて `make golden-generate` で再生成し、`metadata.json` の `speciesScope` を更新する
+  - HP=1 のヌケニンはゴールデンから除外している。チャンピオンズの実数値式(HP = 種族値+75+SP)では HP=76 になるため、扱いを決める
 - [ ] P2-2 MySQL スキーマ(migrate)と importer
 - [ ] P2-3 pokedex-svc(検索・詳細・持ち物/技一覧、日本語名で前方一致)
 
@@ -80,3 +82,11 @@
 
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)
+
+P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更。次の engine タスクに合わせて対応を検討):
+- `engine/golden_test.go`: `speciesCount` の下限アサート追加(現在は 0 だけ検査。少数種で再生成しても通ってしまう)
+- `engine/golden_test.go`: `DamageInput` の json タグ明示または `DisallowUnknownFields`(フィールド改名でフィクスチャ値が黙ってゼロ値になる)
+- `Makefile`: `go vet -tags golden` を lint に追加 / `golden-generate` は説明どおり `npm ci` を実行するか未導入で明示的に失敗させる
+- `tools/golden/package.json`: `^0.10.0` を `0.10.0` に完全固定
+- `engine/damage.go` `chainMods`: @smogon/calc はクランプ(41/410〜131072/2097152)を持つ。現在の補正集合では到達しないが、補正追加時に再確認
+- ゴールデン未カバー: リフレクターとオーロラベールの同時成立、`Effectiveness` / `STAB` の直接照合(L1 では確認済み)

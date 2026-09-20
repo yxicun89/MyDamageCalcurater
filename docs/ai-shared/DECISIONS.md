@@ -63,3 +63,11 @@ Reason: 担当ディレクトリを分けても共有ファイルでコンフリ
 それでも起きたコンフリクトは異常のサインとして自動解決せず報告する。
 Impact: Codex は go.work とルート Makefile を編集しない。取り込み時のテスト確認は docs/type-balance-test-strategy.md を基準にするが、
 この文書は未作成(Codex/ユーザーによる作成待ち)。作成されるまで Claude は取り込みを実行せず報告する。
+
+## 2026-09-21: P1-6(golden 照合)の独立レビューが PASS。ゴールデンの種族集合は暫定
+Decision: Codex 実装の golden 照合・丸め順訂正(ADR-0008)を Claude Code の critic が独立レビューし PASS。P1-6 を完了扱いにした。
+Reason: 期待値を変えた6件は critic が @smogon/calc 0.10.0 を直接呼んで新期待値が正と再現。golden は変異テストで実際に不一致を検出し、
+再生成した5ファイルの SHA256 がコミット済みマニフェストと一致、make gen の生成結果も openapi.gen.go と一致。
+Impact: ゴールデンの「全ポケモン」は gen9 参考集合の1392種で、チャンピオンズの使用可能性は保証しない。P2-1 で使用可能マスタ確定後に
+make golden-generate で種族集合を差し替えて再生成する(plan.md P2-1)。Codex による別モデルレビュー(scripts/codex-review.sh)は
+Codex のレートリミットで未実施。実施済みとは扱わない。前回エントリの「独立レビュー未実施」はこれで解消。

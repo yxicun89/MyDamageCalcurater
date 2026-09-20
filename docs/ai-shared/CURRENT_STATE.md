@@ -2,9 +2,9 @@
 
 ## Damage Calculator
 Owner: Claude Code
-Branch: main
-Status: Phase 1 (計算エンジン) 実装中。P1-5 完了。P1-6(golden 照合・ADR-0008 の丸め順訂正)の Codex 作業を main へマージ済み。P1-6 は [~](独立レビュー未実施)
-Next: feat/claude-p1-engine を main から切り、P1-6 を critic でレビューして [x] にしてから P1-7 へ
+Branch: feat/claude-p1-engine
+Status: Phase 1 (計算エンジン) 実装中。P1-6 完了(critic PASS。Codex レビューは Codex のレートリミットで未実施)
+Next: P1-7 一括計算 → P1-8 逆算 → P1-9 WASM
 
 ## Type Balance Checker
 Owner: Codex

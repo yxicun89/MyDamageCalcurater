@@ -45,3 +45,12 @@
 - AGENTS.md に「共有ファイルの編集規約」5点、CLAUDE.md に「Codexブランチの取り込み手順」を追記。実際のマージは未実施
 ### Open issues
 - docs/type-balance-test-strategy.md が未作成。規約に入れていない共有の書き込み先(plan.md / docs/adr の番号 / api/openapi.yaml / deploy/k8s/base / gateway ルーティング)の扱いは要判断
+
+## 2026-09-21 (Claude Code: P1-6 の独立レビューと完了)
+### Done
+- feat/claude-p1-engine を main から作成。quick-scanner で充足状況を確認し、critic(opus)が独立レビューして PASS
+- test-strategy.md を実装(gz+マニフェスト、暫定の種族集合、確定数の照合範囲)に合わせて更新。plan.md の P1-6 を [x]、P2-1 に再生成の依存を記録
+### Open issues
+- Codex による別モデルレビューは未実施(レートリミット)。軽微・任意の指摘6点は plan.md「改善要望」に記録
+### Next
+- P1-7 一括計算

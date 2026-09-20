@@ -19,7 +19,9 @@
 
 ## L2 ゴールデンテスト
 
-`tools/golden`(Node)が @smogon/calc(gen9)で期待値を生成し、JSON を `testdata/golden/` にコミットする。
+`tools/golden`(Node)が @smogon/calc(gen9)で期待値を生成し、`testdata/golden/` にコミットする。
+形式は固定ケースが JSON、大量ベクタは gzip JSONL(`*.jsonl.gz`)で、SHA256 と生成条件(ライブラリ版・シード・件数)を
+`metadata.json` のマニフェストに記録し、テストが照合する。生成は `make golden-generate`(@smogon/calc は 0.10.0 に固定)。
 SP は努力値 `max(0, 8×SP−4)` に換算する。
 
 ベクタの構成:
@@ -29,6 +31,14 @@ SP は努力値 `max(0, 8×SP−4)` に換算する。
 4. **ランダム**: 固定シードで 10,000 件(持ち物・特性・天候・フィールド・ランクをランダム)
 
 照合する値: 16段階の乱数ダメージ配列、確定数。
+確定数の期待値は ADR-0006 のモデルを `tools/golden` 側で独立に実装して生成する(残留ダメージ・きのみ消費などの遷移を
+持たないため @smogon/calc の `kochance()` とは前提が異なる)。`kochance()` との直接照合は一致する条件の35件に限る(`metadata.json`)。
+
+**現状のスコープ(P1-6 時点)**: 「使用可能な全ポケモン」はチャンピオンズの使用可能マスタが未確定のため、
+@smogon/calc の gen9 全種族・フォルム(CAP 等を含む1392種、HP=1 のヌケニンは除外)を参考集合として代用している。
+チャンピオンズの使用可能性を保証するものではない。P2-1 で使用可能マスタを確定したら、種族集合を差し替えて
+`make golden-generate` で再生成する(plan.md P2-1)。
+
 既知の差分(チャンピオンズで仕様が変わった技など)は `testdata/golden/known_diffs.yaml` に ADR 番号付きで登録したものだけ許容する。
 
 ## L3 全ポケモン網羅テスト
