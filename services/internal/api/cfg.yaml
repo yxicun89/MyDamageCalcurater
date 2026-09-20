@@ -1,0 +1,10 @@
+# oapi-codegen 設定。生成は `make gen`(scripts 経由)から実行する。
+package: api
+output: internal/api/openapi.gen.go
+generate:
+  models: true
+  echo-server: true
+  strict-server: true
+  embedded-spec: true
+output-options:
+  skip-prune: true

@@ -1,0 +1,565 @@
+openapi: 3.0.3
+info:
+  title: pokecalc API
+  version: 0.1.0
+  description: |
+    ポケモンチャンピオンズ対応のダメージ計算・構築ビルダー API。
+    仕様先行(この YAML が唯一の正)。Go(Echo)/ TypeScript / Swift のコードを生成する。
+
+    ドメイン規約(CLAUDE.md):
+    - Lv50 固定、個体値 31 固定。能力ポイント SP は 1ステータス最大 32・合計 66。
+    - ステータスキーは Showdown 規約に合わせ hp/atk/def/spa/spd/spe。
+    - 認証なし。全リクエストに端末ID(X-Device-Id)とセッションID(X-Session-Id)を付与する。
+servers:
+  - url: /
+    description: gateway 経由
+
+tags:
+  - name: pokedex
+    description: マスタ参照(種族・技・持ち物・特性・性格)
+  - name: calc
+    description: ダメージ計算・一括計算・逆算
+
+paths:
+  /api/pokedex/species:
+    get:
+      tags: [pokedex]
+      operationId: searchSpecies
+      summary: ポケモンを日本語名で前方一致検索
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+        - name: q
+          in: query
+          description: 日本語名の前方一致(空なら全件・limit まで)
+          schema: { type: string }
+        - name: format
+          in: query
+          schema: { $ref: '#/components/schemas/Format' }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: 一致した種族の一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SpeciesSummary' }
+        default:
+          $ref: '#/components/responses/Error'
+
+  /api/pokedex/species/{key}:
+    get:
+      tags: [pokedex]
+      operationId: getSpecies
+      summary: 種族の詳細(タイプ・種族値・特性・覚える技)
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+        - name: key
+          in: path
+          required: true
+          description: '{図鑑番号4桁}-{フォルム3桁} 例 0445-000'
+          schema: { $ref: '#/components/schemas/SpeciesKey' }
+      responses:
+        '200':
+          description: 種族詳細
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SpeciesDetail' }
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /api/pokedex/moves:
+    get:
+      tags: [pokedex]
+      operationId: searchMoves
+      summary: 技を日本語名で前方一致検索
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: 技の一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Move' }
+        default:
+          $ref: '#/components/responses/Error'
+
+  /api/pokedex/items:
+    get:
+      tags: [pokedex]
+      operationId: searchItems
+      summary: 持ち物を日本語名で前方一致検索
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: 持ち物の一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Item' }
+        default:
+          $ref: '#/components/responses/Error'
+
+  /api/pokedex/natures:
+    get:
+      tags: [pokedex]
+      operationId: listNatures
+      summary: 性格の一覧(補正する能力)
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: 性格一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Nature' }
+        default:
+          $ref: '#/components/responses/Error'
+
+  /api/calc:
+    post:
+      tags: [calc]
+      operationId: calcDamage
+      summary: 1 vs 1 のダメージ計算
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CalcRequest' }
+      responses:
+        '200':
+          description: 計算結果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CalcResult' }
+        '400':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /api/calc/bulk:
+    post:
+      tags: [calc]
+      operationId: calcBulk
+      summary: 防御側の代表調整すべてに対する一括計算
+      description: |
+        攻撃側は1つに固定し、防御側の種族に対して代表的な調整(無振り/H振り/HB特化/HD特化 等)
+        すべての結果を一度に返す。技が物理なら B 系、特殊なら D 系のプリセットに自動で寄せる。
+        持ち物の差し替え候補(itemVariants)を渡すと調整×持ち物の組合せを返す。
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BulkCalcRequest' }
+      responses:
+        '200':
+          description: 調整ごとの結果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BulkCalcResult' }
+        '400':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /api/calc/reverse:
+    post:
+      tags: [calc]
+      operationId: calcReverse
+      summary: 観測ダメージから相手の調整候補を逆算
+      description: |
+        与えた/受けたダメージ(HP%)の観測から、防御側または攻撃側の調整候補(SP配分・性格・持ち物)を
+        一致度の高い順に返す。正確さより候補の提示を優先。複数観測で絞り込む。
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReverseRequest' }
+      responses:
+        '200':
+          description: 調整候補
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReverseResult' }
+        '400':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+
+components:
+  parameters:
+    DeviceId:
+      name: X-Device-Id
+      in: header
+      required: true
+      description: クライアント生成の端末 UUID
+      schema: { type: string }
+    SessionId:
+      name: X-Session-Id
+      in: header
+      required: true
+      description: セッション UUID
+      schema: { type: string }
+
+  responses:
+    Error:
+      description: エラー
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, example: invalid_request }
+        message: { type: string }
+
+    Format:
+      type: string
+      enum: [single, double]
+      default: single
+
+    SpeciesKey:
+      type: string
+      description: '{図鑑番号4桁}-{フォルム3桁}'
+      pattern: '^[0-9]{4}-[0-9]{3}$'
+      example: '0445-000'
+
+    StatKey:
+      type: string
+      enum: [hp, atk, def, spa, spd, spe]
+
+    PokeType:
+      type: string
+      enum: [normal, fire, water, electric, grass, ice, fighting, poison, ground,
+             flying, psychic, bug, rock, ghost, dragon, dark, steel, fairy]
+
+    MoveCategory:
+      type: string
+      enum: [physical, special, status]
+
+    StatusCondition:
+      type: string
+      enum: [none, burn, paralysis, poison, badly_poison, sleep, freeze]
+      default: none
+
+    Weather:
+      type: string
+      enum: [none, sun, rain, sand, snow]
+      default: none
+
+    Terrain:
+      type: string
+      enum: [none, electric, grassy, misty, psychic]
+      default: none
+
+    SpeciesSummary:
+      type: object
+      required: [key, dexNo, form, nameJa, types]
+      properties:
+        key: { $ref: '#/components/schemas/SpeciesKey' }
+        dexNo: { type: integer }
+        form: { type: integer, description: フォルム番号 }
+        nameJa: { type: string }
+        types:
+          type: array
+          items: { $ref: '#/components/schemas/PokeType' }
+          minItems: 1
+          maxItems: 2
+
+    SpeciesDetail:
+      allOf:
+        - $ref: '#/components/schemas/SpeciesSummary'
+        - type: object
+          required: [baseStats, abilities]
+          properties:
+            baseStats: { $ref: '#/components/schemas/StatBlock' }
+            abilities:
+              type: array
+              items: { $ref: '#/components/schemas/Ability' }
+            learnset:
+              type: array
+              description: 覚える技の ID 一覧
+              items: { type: string }
+
+    StatBlock:
+      type: object
+      description: 6ステータスの値(種族値・実数値・SPなどに共用)
+      required: [hp, atk, def, spa, spd, spe]
+      properties:
+        hp: { type: integer }
+        atk: { type: integer }
+        def: { type: integer }
+        spa: { type: integer }
+        spd: { type: integer }
+        spe: { type: integer }
+
+    RankBlock:
+      type: object
+      description: ランク補正(-6..+6)。HP は持たない
+      properties:
+        atk: { type: integer, minimum: -6, maximum: 6, default: 0 }
+        def: { type: integer, minimum: -6, maximum: 6, default: 0 }
+        spa: { type: integer, minimum: -6, maximum: 6, default: 0 }
+        spd: { type: integer, minimum: -6, maximum: 6, default: 0 }
+        spe: { type: integer, minimum: -6, maximum: 6, default: 0 }
+
+    Ability:
+      type: object
+      required: [id, nameJa]
+      properties:
+        id: { type: string }
+        nameJa: { type: string }
+
+    Move:
+      type: object
+      required: [id, nameJa, type, category, power]
+      properties:
+        id: { type: string }
+        nameJa: { type: string }
+        type: { $ref: '#/components/schemas/PokeType' }
+        category: { $ref: '#/components/schemas/MoveCategory' }
+        power: { type: integer, description: 威力(0 は変化技/固定ダメージ) }
+        priority: { type: integer, default: 0 }
+
+    Item:
+      type: object
+      required: [id, nameJa]
+      properties:
+        id: { type: string }
+        nameJa: { type: string }
+
+    Nature:
+      type: object
+      required: [id, nameJa]
+      properties:
+        id: { type: string, example: adamant }
+        nameJa: { type: string, example: いじっぱり }
+        plus:
+          description: 上昇補正(+10%)を受ける能力。無補正性格は null
+          nullable: true
+          allOf: [ { $ref: '#/components/schemas/StatKey' } ]
+        minus:
+          description: 下降補正(-10%)を受ける能力。無補正性格は null
+          nullable: true
+          allOf: [ { $ref: '#/components/schemas/StatKey' } ]
+
+    Individual:
+      type: object
+      description: 計算に使う個体。SP と性格 ID から実数値を導出する
+      required: [speciesKey, natureId, sp]
+      properties:
+        speciesKey: { $ref: '#/components/schemas/SpeciesKey' }
+        level: { type: integer, default: 50 }
+        natureId: { type: string }
+        abilityId: { type: string, nullable: true }
+        itemId: { type: string, nullable: true }
+        moveId: { type: string, nullable: true, description: 攻撃側で使う技 }
+        sp:
+          allOf: [ { $ref: '#/components/schemas/StatBlock' } ]
+          description: 能力ポイント。各 0..32、合計 <= 66
+        ranks: { $ref: '#/components/schemas/RankBlock' }
+        teraType:
+          nullable: true
+          allOf: [ { $ref: '#/components/schemas/PokeType' } ]
+        status: { $ref: '#/components/schemas/StatusCondition' }
+
+    Screens:
+      type: object
+      properties:
+        reflect: { type: boolean, default: false }
+        lightScreen: { type: boolean, default: false }
+        auroraVeil: { type: boolean, default: false }
+
+    FieldState:
+      type: object
+      properties:
+        weather: { $ref: '#/components/schemas/Weather' }
+        terrain: { $ref: '#/components/schemas/Terrain' }
+        attackerScreens: { $ref: '#/components/schemas/Screens' }
+        defenderScreens: { $ref: '#/components/schemas/Screens' }
+
+    CalcOptions:
+      type: object
+      properties:
+        critical: { type: boolean, default: false, description: 急所 }
+
+    CalcRequest:
+      type: object
+      required: [format, attacker, defender, moveId]
+      properties:
+        format: { $ref: '#/components/schemas/Format' }
+        attacker: { $ref: '#/components/schemas/Individual' }
+        defender: { $ref: '#/components/schemas/Individual' }
+        moveId: { type: string, description: 使用する技(attacker.moveId より優先) }
+        field: { $ref: '#/components/schemas/FieldState' }
+        options: { $ref: '#/components/schemas/CalcOptions' }
+
+    KOChance:
+      type: object
+      description: 確定数/乱数n発
+      required: [hits, guaranteed]
+      properties:
+        hits: { type: integer, description: 最大ダメージで倒すのに必要な攻撃回数 }
+        guaranteed: { type: boolean, description: 最小ダメージでも hits 回で倒せるなら true(確定n発) }
+        chancePercent:
+          type: number
+          description: guaranteed が false のとき、hits 回で倒せる確率(%)
+
+    CalcResult:
+      type: object
+      required: [rolls, minDamage, maxDamage, minPercent, maxPercent, defenderHP, effectiveness, stab, ko]
+      properties:
+        rolls:
+          type: array
+          description: 16 段階の乱数ダメージ(非減少)
+          items: { type: integer }
+          minItems: 16
+          maxItems: 16
+        minDamage: { type: integer }
+        maxDamage: { type: integer }
+        minPercent: { type: number }
+        maxPercent: { type: number }
+        defenderHP: { type: integer }
+        effectiveness:
+          type: number
+          description: タイプ相性(0, 0.25, 0.5, 1, 2, 4)
+        stab: { type: boolean, description: タイプ一致 }
+        ko: { $ref: '#/components/schemas/KOChance' }
+
+    DefenderPreset:
+      type: string
+      description: 防御側の代表調整
+      enum: [none, hp, hb, hd, hb_boost, hd_boost]
+
+    BulkCalcRequest:
+      type: object
+      required: [format, attacker, defenderSpeciesKey, moveId]
+      properties:
+        format: { $ref: '#/components/schemas/Format' }
+        attacker: { $ref: '#/components/schemas/Individual' }
+        defenderSpeciesKey: { $ref: '#/components/schemas/SpeciesKey' }
+        moveId: { type: string }
+        field: { $ref: '#/components/schemas/FieldState' }
+        options: { $ref: '#/components/schemas/CalcOptions' }
+        presets:
+          type: array
+          description: 省略時は技の分類に応じた既定セット
+          items: { $ref: '#/components/schemas/DefenderPreset' }
+        itemVariants:
+          type: array
+          description: 差し替えて比較する持ち物 ID(省略時は素の1通り)
+          items: { type: string, nullable: true }
+
+    BulkCalcRow:
+      type: object
+      required: [preset, presetLabel, result]
+      properties:
+        preset: { $ref: '#/components/schemas/DefenderPreset' }
+        presetLabel: { type: string, description: 表示名(例 HB特化) }
+        itemId: { type: string, nullable: true }
+        result: { $ref: '#/components/schemas/CalcResult' }
+
+    BulkCalcResult:
+      type: object
+      required: [defenderSpeciesKey, rows]
+      properties:
+        defenderSpeciesKey: { $ref: '#/components/schemas/SpeciesKey' }
+        rows:
+          type: array
+          items: { $ref: '#/components/schemas/BulkCalcRow' }
+
+    ReverseSide:
+      type: string
+      description: どちら側の調整を逆算するか(defender=与ダメ観測 / attacker=被ダメ観測)
+      enum: [defender, attacker]
+
+    Observation:
+      type: object
+      required: [observedPercent]
+      properties:
+        observedPercent:
+          type: number
+          description: ゲーム内表示に合わせた HP 減少割合(%)
+        note: { type: string }
+
+    ReverseRequest:
+      type: object
+      required: [format, side, attacker, defenderSpeciesKey, moveId, observations]
+      properties:
+        format: { $ref: '#/components/schemas/Format' }
+        side: { $ref: '#/components/schemas/ReverseSide' }
+        attacker: { $ref: '#/components/schemas/Individual' }
+        defenderSpeciesKey: { $ref: '#/components/schemas/SpeciesKey' }
+        moveId: { type: string }
+        field: { $ref: '#/components/schemas/FieldState' }
+        options: { $ref: '#/components/schemas/CalcOptions' }
+        observations:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/Observation' }
+
+    ReverseCandidate:
+      type: object
+      required: [presetLabel, sp, matchScore]
+      properties:
+        presetLabel: { type: string, description: 型の名前(例 HB特化) }
+        natureId: { type: string, nullable: true }
+        itemId: { type: string, nullable: true }
+        sp: { $ref: '#/components/schemas/StatBlock' }
+        matchScore:
+          type: number
+          description: 観測との一致度(0..1、高いほど一致)
+        rangePercent:
+          type: array
+          description: この候補での想定ダメージ幅 [min, max]
+          items: { type: number }
+          minItems: 2
+          maxItems: 2
+
+    ReverseResult:
+      type: object
+      required: [candidates]
+      properties:
+        candidates:
+          type: array
+          description: 一致度の高い順
+          items: { $ref: '#/components/schemas/ReverseCandidate' }

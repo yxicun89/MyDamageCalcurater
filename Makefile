@@ -28,9 +28,8 @@ gen: gen-go gen-ts ## OpenAPI / sqlc のコード生成
 
 .PHONY: gen-go
 gen-go: ## Go サーバ/型を openapi.yaml から生成
-	@if [ -f api/openapi.yaml ]; then \
-		echo "gen-go: (P0-3 以降で oapi-codegen を実装)"; \
-	else echo "gen-go: api/openapi.yaml が未作成"; fi
+	@cd services && $(GO) tool oapi-codegen -config internal/api/cfg.yaml ../api/openapi.yaml
+	@echo "gen-go: services/internal/api/openapi.gen.go を生成"
 
 .PHONY: gen-ts
 gen-ts: ## TypeScript 型を openapi.yaml から生成
