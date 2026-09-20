@@ -1,6 +1,6 @@
 # ADR-0004: ダメージ計算の丸めと補正適用順
 
-- 状態: 承認
+- 状態: 採用(丸め順を ADR-0008 で訂正)
 - 日付: 2026-09-21
 - 関連: CLAUDE.md「ダメージ計算は4096基準の固定小数と五捨五超入。float で近似しない」
 
@@ -8,8 +8,8 @@
 
 ダメージ計算は @smogon/calc(gen9)と同じ結果になることがゴールデンテスト(P1-6)で
 求められる。@smogon は補正ごとに丸めの種類・適用位置が異なるため、engine もそれに厳密に
-合わせる必要がある。P1-3 のレビューで、STAB を個別に丸めると STAB×抜群で値が 1 ずれる
-ことが判明したため、丸め方針を明文化する。
+合わせる必要がある。P1-3ではSTABの丸めを統合していたが、P1-6の外部照合で
+誤りと判明した。訂正の再現値・根拠はADR-0008を参照。
 
 ## 決定
 
@@ -26,9 +26,9 @@
 2. 基礎段階の補正(スプレッド0.75、天候1.5/0.5 など)を **個別に pokeRound**
 3. 急所 `base = floor(base×1.5)`(= `base*3/2`)
 4. 乱数16段階 `d = floor(base×(85+i)/100)`
-5. **タイプ一致(STAB)は丸めずに保持し、タイプ相性を掛けた後に一度だけ floor**
-   - 整数厳密な等価式: `d = d * stabMod * num / (4096 * den)`(単一 floor)
-   - STAB を個別に pokeRound すると 0.5 を落とし、STAB×抜群で @smogon と 1 ずれる(最頻ケースで多発)
+5. **タイプ一致(STAB)を pokeRound してから、タイプ相性を掛けて floor**
+   - `d = pokeRound(d, stabMod) * num / den`
+   - @smogon/calc 0.10.0 の getFinalDamage と同じ順序(ADR-0008で訂正)
 6. やけど `pokeRound(d, 2048)`(物理・guts以外)。`floor(d/2)` と等価
 7. その他補正 `pokeRound(d, chainMods([...]))`
 8. 相性≠0 なら `d = max(1, d)`、無効相性は 0
@@ -38,6 +38,6 @@
   P1-6 ゴールデンで完全一致を確認し、必要なら 32bit マスクを追加する。
 
 ## 影響
-- STAB と相性は engine 内で1段階に統合(damage.go)。P1-4 の天候は base段階で pokeRound、
+- STAB と相性は engine 内で別々に丸める(damage.go)。天候は base段階で pokeRound、
   壁・持ち物・特性は otherModifiers → chainMods 経由で追加する。
 - 丸め順の変更は必ずゴールデン再実行(`make test-golden`)で確認する(絶対ルール3)。

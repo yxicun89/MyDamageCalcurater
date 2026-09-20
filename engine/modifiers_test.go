@@ -2,7 +2,8 @@ package engine
 
 import "testing"
 
-// いずれも統制ケース(base=90、real Atk200/Def100/威力100)を基準に手計算で検証する。
+// 統制ケース(real Atk200/Def100/威力100)。P1-6で @smogon/calc 0.10.0 と照合。
+// 補正段階に起因する期待値の訂正理由は ADR-0008 を参照。
 
 func TestWeatherDamageMod(t *testing.T) {
 	// 晴れ + ほのお技(攻撃みず=一致なし、防御エスパー=等倍): base 90 → pokeRound(90,6144)=135
@@ -22,19 +23,19 @@ func TestWeatherDamageMod(t *testing.T) {
 }
 
 func TestTerrainDamageMod(t *testing.T) {
-	// エレキフィールド + でんき技: 90×1.3 → pokeRound(90,5325)=117
+	// フィールドは威力を100→130に補正し、基本式の結果は116。
 	in := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeElectric)
 	in.Field.Terrain = TerrainElectric
 	r, _ := CalcDamage(in)
-	if r.Rolls[15] != 117 {
-		t.Errorf("electric terrain rolls[15]=%d want 117", r.Rolls[15])
+	if r.Rolls[15] != 116 {
+		t.Errorf("electric terrain rolls[15]=%d want 116", r.Rolls[15])
 	}
-	// ミストフィールド + ドラゴン技: 90×0.5=45
+	// ミストは威力を100→50に補正、基本式の結果は46。
 	in2 := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeDragon)
 	in2.Field.Terrain = TerrainMisty
 	r2, _ := CalcDamage(in2)
-	if r2.Rolls[15] != 45 {
-		t.Errorf("misty dragon rolls[15]=%d want 45", r2.Rolls[15])
+	if r2.Rolls[15] != 46 {
+		t.Errorf("misty dragon rolls[15]=%d want 46", r2.Rolls[15])
 	}
 }
 
@@ -140,12 +141,12 @@ func TestAbilityAdaptability(t *testing.T) {
 }
 
 func TestAbilityThickFat(t *testing.T) {
-	// あついしぼう: ほのお/こおりの被ダメ半減。攻撃みず/技ほのお(一致なし)/防御エスパー等倍。90×0.5=45
+	// あついしぼう: 相手の攻撃実数値200→100、基本式の結果は46。
 	in := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeFire)
 	in.Defender.Ability = Ability{ID: "thick_fat", Effect: &AbilityEffect{DefResistType: map[Type]int{TypeFire: 2048, TypeIce: 2048}}}
 	r, _ := CalcDamage(in)
-	if r.Rolls[15] != 45 {
-		t.Errorf("thick fat rolls[15]=%d want 45", r.Rolls[15])
+	if r.Rolls[15] != 46 {
+		t.Errorf("thick fat rolls[15]=%d want 46", r.Rolls[15])
 	}
 }
 
@@ -170,12 +171,12 @@ func TestWeatherSnowDefBoost(t *testing.T) {
 }
 
 func TestItemTypeBoost(t *testing.T) {
-	// もくたん相当(ほのお強化 ×4915=約1.2): 90×1.2 → pokeRound(90,4915)=108
+	// もくたん: 威力100→120、基本式の結果は107。
 	in := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeFire)
 	in.Attacker.Item = &Item{ID: "charcoal", Effect: &ItemEffect{BoostType: TypeFire, BoostTypeMod: 4915}}
 	r, _ := CalcDamage(in)
-	if r.Rolls[15] != 108 {
-		t.Errorf("type boost rolls[15]=%d want 108", r.Rolls[15])
+	if r.Rolls[15] != 107 {
+		t.Errorf("type boost rolls[15]=%d want 107", r.Rolls[15])
 	}
 }
 

@@ -8,14 +8,17 @@ package engine
 //
 // 適用位置(ADR-0004):
 //   - 天候のダメージ倍率: base 段階で個別に pokeRound
-//   - 天候の防御実数値補正(すなあらし・ゆき): 実数値段階で chainMods
+//   - 天候の防御実数値補正(すなあらし・ゆき): 持ち物より先に独立して丸める
 //   - 持ち物の実数値補正(こだわり系・とつげきチョッキ等): 実数値段階で chainMods
-//   - フィールド・壁・持ち物/特性のダメージ倍率: やけどの後に chainMods で1回
+//   - フィールド・タイプ強化持ち物: 威力段階
+//   - 壁・最終ダメージ倍率: やけどの後に chainMods で1回
 
 // ItemEffect はダメージに影響する持ち物の補正(4096基準)。
 type ItemEffect struct {
 	StatMods           map[StatKey]int // 実数値倍率。例 こだわりハチマキ{atk:6144}, とつげきチョッキ{spd:6144}, しんかのきせき{def:6144,spd:6144}
-	DamageMod          int             // ダメージ倍率。例 いのちのたま5324、ちからのハチマキ4505。0 は補正なし
+	DamageMod          int             // 最終ダメージ倍率。例 いのちのたま5324。0 は補正なし
+	PowerMod           int             // 威力倍率。例 ちからのハチマキ4505。0 は補正なし
+	PowerCategory      MoveCategory    // PowerMod の対象分類。空は全分類
 	OnlySuperEffective bool            // たつじんのおび: 抜群時のみ DamageMod を適用
 	BoostType          Type            // タイプ強化(もくたん等)対象タイプ
 	BoostTypeMod       int             // 例 4915(=約1.2倍)
@@ -25,9 +28,9 @@ type ItemEffect struct {
 // AbilityEffect はダメージに影響する特性の補正(4096基準)。
 type AbilityEffect struct {
 	StabMod              int          // てきおうりょく: 8192。0 は通常(6144)
-	OffBoostType         Type         // 攻撃側タイプ強化の対象タイプ
+	OffBoostType         Type         // 攻撃実数値強化の対象技タイプ
 	OffBoostTypeMod      int          // 例 6144
-	DefResistType        map[Type]int // 被ダメ軽減。例 あついしぼう{fire:2048, ice:2048}
+	DefResistType        map[Type]int // 相手の攻撃実数値補正。例 あついしぼう{fire:2048, ice:2048}
 	ReduceSuperEffective int          // ハードロック/フィルター等: 抜群時に軽減(例 3072)
 	IgnoresBurn          bool         // こんじょう等: やけどの攻撃半減を無効化
 }
@@ -62,7 +65,7 @@ func weatherDamageMod(w Weather, moveType Type) int {
 	return Modifier4096
 }
 
-// terrainDamageMod はフィールドによる技ダメージ倍率を返す(接地している前提)。
+// terrainDamageMod はフィールドによる技威力倍率を返す(接地している前提)。
 func terrainDamageMod(terr Terrain, moveType Type) int {
 	switch terr {
 	case TerrainElectric:
@@ -105,6 +108,14 @@ func screenDamageMod(in DamageInput) int {
 // offensiveStatMod は攻撃側の持ち物による攻撃実数値の倍率(chainMods 済み)を返す。
 func offensiveStatMod(in DamageInput, atkKey StatKey) int {
 	var mods []int
+	if ae := in.Attacker.Ability.Effect; ae != nil && ae.OffBoostType == in.Move.Type && ae.OffBoostTypeMod != 0 {
+		mods = append(mods, ae.OffBoostTypeMod)
+	}
+	if de := in.Defender.Ability.Effect; de != nil {
+		if m, ok := de.DefResistType[in.Move.Type]; ok {
+			mods = append(mods, m)
+		}
+	}
 	if e := itemEffect(in.Attacker.Item); e != nil {
 		if m, ok := e.StatMods[atkKey]; ok {
 			mods = append(mods, m)
@@ -113,7 +124,7 @@ func offensiveStatMod(in DamageInput, atkKey StatKey) int {
 	return chainMods(mods)
 }
 
-// defensiveStatMod は防御側の持ち物・天候による防御実数値の倍率(chainMods 済み)を返す。
+// defensiveStatMod は防御側の持ち物による防御実数値倍率を返す。
 func defensiveStatMod(in DamageInput, defKey StatKey) int {
 	var mods []int
 	if e := itemEffect(in.Defender.Item); e != nil {
@@ -121,12 +132,28 @@ func defensiveStatMod(in DamageInput, defKey StatKey) int {
 			mods = append(mods, m)
 		}
 	}
-	// すなあらし: いわタイプの特防 ×1.5 / ゆき: こおりタイプの防御 ×1.5
+	return chainMods(mods)
+}
+
+func weatherDefenseMod(in DamageInput, defKey StatKey) int {
 	if in.Field.Weather == WeatherSand && defKey == StatSpD && hasType(in.Defender, TypeRock) {
-		mods = append(mods, 6144)
+		return 6144
 	}
 	if in.Field.Weather == WeatherSnow && defKey == StatDef && hasType(in.Defender, TypeIce) {
-		mods = append(mods, 6144)
+		return 6144
+	}
+	return Modifier4096
+}
+
+func powerModifier(in DamageInput) int {
+	mods := []int{terrainDamageMod(in.Field.Terrain, in.Move.Type)}
+	if e := itemEffect(in.Attacker.Item); e != nil {
+		if e.BoostType != TypeNone && e.BoostType == in.Move.Type && e.BoostTypeMod != 0 {
+			mods = append(mods, e.BoostTypeMod)
+		}
+		if e.PowerMod != 0 && (e.PowerCategory == "" || e.PowerCategory == in.Move.Category) {
+			mods = append(mods, e.PowerMod)
+		}
 	}
 	return chainMods(mods)
 }
@@ -139,48 +166,30 @@ func itemEffect(i *Item) *ItemEffect {
 }
 
 // otherModifiers はやけどの後に chainMods で1回適用する「その他補正」の一覧を返す。
-// フィールド・壁・持ち物ダメージ倍率・特性を含む。
+// 壁・抜群軽減特性・持ち物ダメージ倍率・半減きのみの順。
 func otherModifiers(in DamageInput) []int {
 	var mods []int
 	_, _, mult := TypeEffectiveness(in.Move.Type, in.Defender.Species.Types)
 	superEffective := mult > 1
 
-	if tm := terrainDamageMod(in.Field.Terrain, in.Move.Type); tm != Modifier4096 {
-		mods = append(mods, tm)
-	}
 	if !in.Critical {
 		if sm := screenDamageMod(in); sm != Modifier4096 {
 			mods = append(mods, sm)
 		}
 	}
+	if de := in.Defender.Ability.Effect; de != nil && de.ReduceSuperEffective != 0 && superEffective {
+		mods = append(mods, de.ReduceSuperEffective)
+	}
 	// 攻撃側の持ち物
 	if e := itemEffect(in.Attacker.Item); e != nil {
-		if e.BoostType != TypeNone && e.BoostType == in.Move.Type && e.BoostTypeMod != 0 {
-			mods = append(mods, e.BoostTypeMod)
-		}
 		if e.DamageMod != 0 && (!e.OnlySuperEffective || superEffective) {
 			mods = append(mods, e.DamageMod)
 		}
 	}
-	// 攻撃側の特性(タイプ強化)
-	if ae := in.Attacker.Ability.Effect; ae != nil {
-		if ae.OffBoostType != TypeNone && ae.OffBoostType == in.Move.Type && ae.OffBoostTypeMod != 0 {
-			mods = append(mods, ae.OffBoostTypeMod)
-		}
-	}
 	// 防御側の持ち物(半減きのみ)
 	if e := itemEffect(in.Defender.Item); e != nil {
-		if e.ResistBerryType != TypeNone && e.ResistBerryType == in.Move.Type && superEffective {
+		if e.ResistBerryType != TypeNone && e.ResistBerryType == in.Move.Type && (superEffective || in.Move.Type == TypeNormal) {
 			mods = append(mods, 2048)
-		}
-	}
-	// 防御側の特性(タイプ軽減・抜群軽減)
-	if de := in.Defender.Ability.Effect; de != nil {
-		if m, ok := de.DefResistType[in.Move.Type]; ok {
-			mods = append(mods, m)
-		}
-		if de.ReduceSuperEffective != 0 && superEffective {
-			mods = append(mods, de.ReduceSuperEffective)
 		}
 	}
 	return mods

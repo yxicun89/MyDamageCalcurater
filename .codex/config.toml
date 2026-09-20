@@ -1,0 +1,5 @@
+# Role instructions: AGENTS.md and docs/development-workflow.md.
+# Model selection inherits the user's session; do not pin a project model.
+[agents]
+max_concurrent_threads_per_session = 2
+default_subagent_reasoning_effort = "medium"

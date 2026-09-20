@@ -128,7 +128,13 @@ func (in Individual) EffectiveLevel() int {
 // Validate は個体の妥当性を検証する。SP の範囲(各 0..32・合計 <= 66)、
 // ランク(-6..6)、性格(HP に補正なし)を確認する。
 func (in Individual) Validate() error {
+	if in.Level != 0 && in.Level != DefaultLevel {
+		return fmt.Errorf("レベルは %d 固定: %d", DefaultLevel, in.Level)
+	}
 	for _, k := range AllStatKeys {
+		if in.Species.BaseStats.Get(k) < 0 {
+			return fmt.Errorf("種族値 %s は負にできない", k)
+		}
 		v := in.SP.Get(k)
 		if v < 0 || v > MaxSPPerStat {
 			return fmt.Errorf("SP %s は 0..%d の範囲外: %d", k, MaxSPPerStat, v)

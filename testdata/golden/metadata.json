@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "source": "@smogon/calc",
+  "version": "0.10.0",
+  "generation": 9,
+  "seed": 1347373893,
+  "randomAlgorithm": "xorshift32",
+  "level": 50,
+  "ivs": 31,
+  "spToEV": "max(0,8*SP-4)",
+  "speciesScope": "gen9 library reference species/forms (including CAP fan species), NOT Champions availability; P2 source investigation pending",
+  "speciesCount": 1392,
+  "representativeMoves": [
+    "Body Slam",
+    "Hyper Voice",
+    "Fire Punch",
+    "Flamethrower",
+    "Aqua Tail",
+    "Surf",
+    "Thunder Punch",
+    "Thunderbolt",
+    "Seed Bomb",
+    "Energy Ball",
+    "Ice Punch",
+    "Ice Beam",
+    "Drain Punch",
+    "Aura Sphere",
+    "Poison Jab",
+    "Sludge Bomb",
+    "Drill Run",
+    "Earth Power",
+    "Drill Peck",
+    "Air Slash",
+    "Zen Headbutt",
+    "Psychic",
+    "X-Scissor",
+    "Bug Buzz",
+    "Rock Slide",
+    "Power Gem",
+    "Shadow Punch",
+    "Shadow Ball",
+    "Dragon Claw",
+    "Dragon Pulse",
+    "Crunch",
+    "Dark Pulse",
+    "Iron Head",
+    "Flash Cannon",
+    "Play Rough",
+    "Moonblast"
+  ],
+  "learnsets": "Not asserted: arithmetic type/category coverage only",
+  "koModel": "ADR-0006: independent uniform rolls, full HP, identical hit repeated without residuals/recovery or consumable state transitions",
+  "koCrossChecks": 35,
+  "exclusions": [
+    {
+      "scope": "species",
+      "names": [
+        "Shedinja"
+      ],
+      "reason": "HP=1 special mechanic is outside Champions SP formula"
+    },
+    {
+      "scope": "moves",
+      "reason": "Only the listed fixed-power single-hit moves; excludes variable/fixed damage, multi-hit, forced criticals, alternate attack/defense stats, screen removal, terrain-specific move mechanics, tera/Z/Max moves"
+    },
+    {
+      "scope": "abilities/items",
+      "reason": "Only effects.json adapters; no default species ability; Eviolite only on Snover fixed case"
+    },
+    {
+      "scope": "terrain",
+      "reason": "Flying species excluded from terrain-enabled random/fixed cases; ADR-0005 assumes grounded, no Levitate/Air Balloon admitted"
+    },
+    {
+      "scope": "battle",
+      "reason": "No double/tera/Dynamax/form transformations or unsupported status effects"
+    },
+    {
+      "scope": "KO",
+      "reason": "Smogon residual/consumable multi-turn model differs from ADR-0006; direct smogonKO cross-check only residual/consumable-free fixed cases with 1-4 hits"
+    }
+  ],
+  "files": {
+    "fixed.json": {
+      "count": 203,
+      "sha256": "ec46456c237f4bdde77990b2989c50793c2b4ec61632c92a9646fabe5c442783"
+    },
+    "random.jsonl.gz": {
+      "count": 10000,
+      "sha256": "ffd8997b907cd319d98e64a846b8d37872c3c7573380b71ffe2e331092efa2fc"
+    },
+    "attack-species.jsonl.gz": {
+      "count": 27840,
+      "sha256": "846ba7cff38b01af39f302e4270aac1b6d1bc2219c9ddc537b68b1b487b5f97a"
+    },
+    "defense-species.jsonl.gz": {
+      "count": 27840,
+      "sha256": "3937f4456cd16380dc9923ab316e06bb9dcd8c488d160dfb8a6380a454f9f572"
+    },
+    "stats-species.jsonl.gz": {
+      "count": 100224,
+      "sha256": "f374b8b28370b40df70e73761f70fe626f63e62beaab524308a804829eb82088"
+    }
+  }
+}
