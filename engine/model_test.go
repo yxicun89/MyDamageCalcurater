@@ -33,28 +33,35 @@ func TestStatsGetWithStat(t *testing.T) {
 	}
 }
 
-func TestNatureMultiplier(t *testing.T) {
+func TestNatureApplyInteger(t *testing.T) {
 	n := Nature{Plus: StatAtk, Minus: StatSpA}
-	if got := n.Multiplier(StatAtk); got != 1.1 {
-		t.Errorf("plus mult=%v want 1.1", got)
+	// 整数演算(×11/10, ×9/10)で floor されること。100→110/90、105→115(floor)
+	if got := applyNature(100, n, StatAtk); got != 110 {
+		t.Errorf("plus 100=%d want 110", got)
 	}
-	if got := n.Multiplier(StatSpA); got != 0.9 {
-		t.Errorf("minus mult=%v want 0.9", got)
+	if got := applyNature(105, n, StatAtk); got != 115 { // 1155/10 floor
+		t.Errorf("plus 105=%d want 115", got)
 	}
-	if got := n.Multiplier(StatDef); got != 1.0 {
-		t.Errorf("neutral stat mult=%v want 1.0", got)
+	if got := applyNature(100, n, StatSpA); got != 90 {
+		t.Errorf("minus 100=%d want 90", got)
 	}
-	if got := n.Multiplier(StatHP); got != 1.0 {
-		t.Errorf("hp mult=%v want 1.0", got)
+	if got := applyNature(95, n, StatSpA); got != 85 { // 855/10 floor
+		t.Errorf("minus 95=%d want 85", got)
 	}
-	// 無補正性格はすべて等倍
+	if got := applyNature(100, n, StatDef); got != 100 {
+		t.Errorf("neutral stat 100=%d want 100", got)
+	}
+	// HP には補正がかからない
+	if got := applyNature(100, n, StatHP); got != 100 {
+		t.Errorf("hp 100=%d want 100", got)
+	}
+	// 無補正性格・Plus==Minus はすべて等倍
 	if !NatureNeutral.IsNeutral() {
 		t.Error("NatureNeutral should be neutral")
 	}
-	if got := NatureNeutral.Multiplier(StatAtk); got != 1.0 {
-		t.Errorf("neutral nature mult=%v want 1.0", got)
+	if got := applyNature(100, NatureNeutral, StatAtk); got != 100 {
+		t.Errorf("neutral nature 100=%d want 100", got)
 	}
-	// Plus==Minus は打ち消し合って等倍
 	if !(Nature{Plus: StatAtk, Minus: StatAtk}).IsNeutral() {
 		t.Error("Plus==Minus should be neutral")
 	}

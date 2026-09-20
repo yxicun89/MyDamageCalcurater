@@ -50,22 +50,12 @@ var NatureNeutral = Nature{}
 
 // IsNeutral は補正なし(実質等倍)かどうかを返す。
 // Plus と Minus が同一のときも打ち消しあって等倍になる。
+//
+// 補正倍率(1.1/1.0/0.9)を float で持つと「4096基準の固定小数・float 近似禁止」
+// (CLAUDE.md)に反する経路を作りかねないため、実際の適用は整数演算の
+// applyNature(stats.go)に一本化している。
 func (n Nature) IsNeutral() bool {
 	return n.Plus == n.Minus
-}
-
-// Multiplier は StatKey に対する性格補正倍率(1.1 / 1.0 / 0.9)を返す。
-func (n Nature) Multiplier(k StatKey) float64 {
-	if k == StatHP || n.IsNeutral() {
-		return 1.0
-	}
-	switch k {
-	case n.Plus:
-		return 1.1
-	case n.Minus:
-		return 0.9
-	}
-	return 1.0
 }
 
 // rankStatKeys はランク補正を持つステータス(HP を除く)。
