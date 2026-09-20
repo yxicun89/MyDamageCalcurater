@@ -23,7 +23,7 @@
 - [x] P0-1 `scripts/doctor.sh` を実行し不足ツールを報告(入れられるものは brew で入れる)
 - [x] P0-2 Go workspace(go.work)、Makefile、.gitignore、各ディレクトリの雛形
 - [x] P0-3 `api/openapi.yaml` の初版(pokedex検索 / 計算 / 一括計算 / 逆算)と `make gen`
-- [ ] P0-4 k3d クラスタ定義(`deploy/k3d.yaml`)と `make up/down`、Kustomize base/overlays
+- [x] P0-4 k3d クラスタ定義(`deploy/k3d.yaml`)と `make up/down`、Kustomize base/overlays
 - [ ] P0-5 `scripts/codex-review.sh` の動作確認(Codex 未ログインならスキップして記録)
 
 ### Phase 1 計算エンジン

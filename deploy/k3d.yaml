@@ -1,0 +1,19 @@
+# k3d クラスタ定義。`k3d cluster create --config deploy/k3d.yaml` で作成する。
+# ホスト 8080 → クラスタ内 loadbalancer(Traefik)80 に転送し、gateway を公開する。
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: pokecalc
+servers: 1
+agents: 0
+ports:
+  - port: 8080:80
+    nodeFilters:
+      - loadbalancer
+options:
+  k3d:
+    wait: true
+    timeout: "120s"
+  kubeconfig:
+    updateDefaultKubeconfig: true
+    switchCurrentContext: true

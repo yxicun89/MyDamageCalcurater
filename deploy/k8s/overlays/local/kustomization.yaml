@@ -1,0 +1,6 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# ローカル(k3d)向け overlay。クラウドとの差分はここで吸収する。
+namespace: pokecalc
+resources:
+  - ../../base
