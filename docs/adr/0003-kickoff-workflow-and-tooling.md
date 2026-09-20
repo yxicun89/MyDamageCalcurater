@@ -30,8 +30,13 @@ quick-scanner → spec-writer → implementer → critic のサブエージェ�
   存在しないため、quick-scanner を省略し、orchestrator が implementer を兼ねて
   docs(requirements/design/test-strategy)を正として直接実装する。critic 相当の
   確認(ルール違反・越境・テスト有無)は orchestrator が行う。
-- 正しさが要となる engine(P1)・逆算・API契約(P3)は
-  spec-writer → implementer → critic のフルチェーンを使う。
+- 正しさが要となる engine(P1)・逆算・API契約(P3)は spec-first / test-first を守る。
+  ただし engine の P1-1〜P1-5 は 4096基準の固定小数・丸め順・タイプ相性表・性格補正が
+  密結合した1つのモジュールで、cold-start のサブエージェントがタスクごとに engine 内部を
+  再導出すると実装が不整合になり文脈再構築の無駄も大きい。そこで engine コアは orchestrator が
+  test-first で実装し(失敗テストを先に書いてから緑にする)、各 engine タスク完了時に
+  **critic サブエージェントで独立レビュー**する。指摘があれば修正して再レビューする。
+  最終的な正しさの拠り所は P1-6 の @smogon/calc ゴールデンテスト(外部実装照合)。
 - Codex レビュー(P0-5)は未ログインのためスキップし、`.reviews/` に記録しない。
   該当タスクでは critic のみで判定する。
 
