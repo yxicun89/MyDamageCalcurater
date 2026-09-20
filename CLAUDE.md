@@ -9,6 +9,7 @@
 3. `docs/test-strategy.md` — テストの正
 4. `docs/design.md` — 画面・ビジュアルの正
 5. `docs/adr/` — 過去の設計判断
+6. `docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md` — Claude Code と Codex の共有状態(運用は [AGENTS.md](AGENTS.md))
 
 ## リポジトリ構成
 
@@ -95,6 +96,8 @@ make assets       # 画像を WebP 2サイズに変換して MinIO へ
 - 同じ失敗で3回ループしたら止まり、`docs/plan.md` の「ブロッカー」に書いて次のタスクへ
 - 完了条件: `make test` 成功 / engine 変更時は `make test-golden` 成功 / plan.md 更新 / 必要ならADR
 - 改善要望は `/improve`、全体確認は `/verify`
+- ブランチ: Phase ごとに `feat/claude-<phase名>` を切り、`/verify` 通過後に main へマージしてブランチを削除する。
+  詳細は AGENTS.md「Git ブランチ運用」(Codex は `feat/codex-<stage名>`、詰まったブランチは引き継がず保留として記録)
 
 ## 人間の確認が必要なこと(自動で進めない)
 
