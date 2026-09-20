@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "auto",
+    "allow": [
+      "Bash(make *)",
+      "Bash(go *)",
+      "Bash(gofmt *)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(docker *)",
+      "Bash(k3d *)",
+      "Bash(kubectl *)",
+      "Bash(helm *)",
+      "Bash(tiup *)",
+      "Bash(xcodebuild *)",
+      "Bash(xcrun *)",
+      "Bash(brew install *)",
+      "Bash(./scripts/*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ],
+    "ask": [
+      "Bash(git push *)",
+      "Bash(k3d cluster delete *)",
+      "Bash(kubectl delete namespace *)",
+      "Bash(kubectl delete pvc *)",
+      "Bash(brew uninstall *)"
+    ],
+    "deny": [
+      "Bash(git push --force *)",
+      "Bash(git reset --hard *)",
+      "Bash(sudo *)",
+      "Bash(rm -rf / *)",
+      "Bash(rm -rf ~*)",
+      "Read(./.env)",
+      "Read(~/.ssh/**)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in *.go) gofmt -w \"$f\" ;; esac; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}
