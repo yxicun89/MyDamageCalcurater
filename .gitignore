@@ -31,3 +31,6 @@ kubeconfig*.yaml
 # iOS
 ios/build/
 ios/DerivedData/
+
+# 個人用の動作確認手順書(実値入り。コミットしない)
+docs/local/
