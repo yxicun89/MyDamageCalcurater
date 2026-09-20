@@ -39,3 +39,9 @@
 
 ### Next
 - feat/claude-p1-engine を main から切り、P1-6([~])を critic でレビュー → [x] → P1-7 以降
+
+## 2026-09-21 (Claude Code: マージコーディネーター役の整備)
+### Done
+- AGENTS.md に「共有ファイルの編集規約」5点、CLAUDE.md に「Codexブランチの取り込み手順」を追記。実際のマージは未実施
+### Open issues
+- docs/type-balance-test-strategy.md が未作成。規約に入れていない共有の書き込み先(plan.md / docs/adr の番号 / api/openapi.yaml / deploy/k8s/base / gateway ルーティング)の扱いは要判断
