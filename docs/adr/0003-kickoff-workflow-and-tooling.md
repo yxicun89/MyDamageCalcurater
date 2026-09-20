@@ -20,7 +20,7 @@ quick-scanner → spec-writer → implementer → critic のサブエージェ�
 | k3d 5.9.0 | 導入した |
 | helm 4.3.0 | 導入した |
 | docker (Docker.app) | デーモン起動を確認 |
-| tiup | **未導入**。M2 の TiDB 用で M1 に不要。M2 開始時に curl インストーラで導入する |
+| tiup | **未導入**。M2 の TiDB 用で M1 に不要。curl インストーラの自動実行は拒否されたため、M2 開始時に人間が承認して導入する。doctor.sh では tiup を「TiDB(M2で必要)」区分の任意チェックに移動した(xcodebuild=M3 と同じ扱い。チェックは残す) |
 | xcodebuild | あり(M3 で使用) |
 | codex / tailscale | 任意。未導入。Codex レビューは未ログインのためスキップ扱い(P0-5) |
 

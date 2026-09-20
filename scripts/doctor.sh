@@ -22,7 +22,8 @@ check docker orbstack 1
 check k3d k3d 1
 check kubectl kubectl 1
 check helm helm 1
-check tiup "tiup (curl のインストーラ)" 1
+echo "== TiDB(M2で必要)"
+check tiup "tiup (curl のインストーラ: https://tiup-mirrors.pingcap.com/install.sh)" 0
 echo "== iOS(M3で必要)"
 check xcodebuild "Xcode(App Store)" 0
 echo "== 任意"

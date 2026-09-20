@@ -1,0 +1,33 @@
+# Go
+/bin/
+*.test
+*.out
+coverage.*
+
+# WASM ビルド成果物(生成物はコミットしない)
+web/public/engine.wasm
+web/public/wasm_exec.js
+
+# Node / Web
+node_modules/
+web/dist/
+tools/golden/node_modules/
+tools/golden/dist/
+
+# 環境変数・秘密
+.env
+.env.*
+!.env.example
+
+# エディタ / OS
+.DS_Store
+.idea/
+*.swp
+
+# ローカルクラスタ / レビュー成果物
+kubeconfig*.yaml
+.reviews/
+
+# iOS
+ios/build/
+ios/DerivedData/
