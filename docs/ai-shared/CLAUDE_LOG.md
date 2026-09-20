@@ -30,7 +30,10 @@
 
 ### Open issues
 - fix/codex-workflow-golden の再検討(Codex が次に着手する際)。マージ時は AGENTS.md / CLAUDE.md の統合が必要
-- pokecalc-kit-v2/ は反映が未確認の差分があるため削除していない(Sonnet 化・deep-critic 等。採否は人間の判断待ち)
+
+### Later (同日)
+- ユーザー指示により pokecalc-kit-v2/ と UNBLOCK_AND_MERGE_KICKOFF.md を削除。kit-v2 の差分
+  (spec-writer/critic の Sonnet 化、deep-critic、ループ上限2回など)は採用しない判断で、現行の CLAUDE.md の運用を維持
 
 ### Next
 - Damage Calculator: P1-6 は保留ブランチの内容を踏まえて新規タスクとして扱うか判断が必要
