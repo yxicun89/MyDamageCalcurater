@@ -119,7 +119,7 @@ func TestCalcDamageBurnPhysical(t *testing.T) {
 	// こんじょう(guts)はやけど半減を無効化
 	inG := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeNormal)
 	inG.Attacker.Status = StatusBurn
-	inG.Attacker.Ability = Ability{ID: "guts"}
+	inG.Attacker.Ability = Ability{ID: "guts", Effect: &AbilityEffect{IgnoresBurn: true}}
 	rg, _ := CalcDamage(inG)
 	if rg.Rolls[15] != 90 {
 		t.Errorf("guts should ignore burn, rolls[15]=%d want 90", rg.Rolls[15])

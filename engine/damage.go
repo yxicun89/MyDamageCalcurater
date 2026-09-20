@@ -63,31 +63,27 @@ type DamageResult struct {
 func (r DamageResult) MinDamage() int { return r.Rolls[0] }
 func (r DamageResult) MaxDamage() int { return r.Rolls[15] }
 
-// baseStageModifiers は base(乱数前)に適用する補正を返す。
-// 天候などは @smogon と同じく個別に pokeRound する。P1-4 で実装する。
-// 既定は補正なし(base をそのまま返す)。純粋関数(グローバル可変状態を持たない)。
-func baseStageModifiers(in DamageInput, base int) int { return base }
-
-// otherModifiers はやけどの後に chainMods で1回適用する「その他補正」
-// (壁・持ち物・特性)の 4096基準補正リストを返す。P1-4 で実装する。
-// 既定は補正なし(空)。純粋関数。
-func otherModifiers(in DamageInput) []int { return nil }
-
-// stabModifier はタイプ一致補正値を返す(通常 6144、不一致 4096)。
+// stabModifier はタイプ一致補正値を返す(通常 6144、てきおうりょく 8192、不一致 4096)。
 func stabModifier(in DamageInput, moveType Type) (int, bool) {
-	for _, t := range in.Attacker.Species.Types {
-		if t == moveType && moveType != TypeNone {
-			return 6144, true
-		}
+	if moveType == TypeNone || !hasType(in.Attacker, moveType) {
+		return Modifier4096, false
 	}
-	return Modifier4096, false
+	mod := 6144
+	if ae := in.Attacker.Ability.Effect; ae != nil && ae.StabMod != 0 {
+		mod = ae.StabMod
+	}
+	return mod, true
 }
 
-// burnModifier は物理やけどによる攻撃半減(2048)を返す。特性 こんじょう(guts)は除外。
+// burnModifier は物理やけどによる攻撃半減(2048)を返す。
+// やけど無効化の特性(こんじょう等)は AbilityEffect.IgnoresBurn で表す。
 func burnModifier(in DamageInput) int {
+	ignores := false
+	if ae := in.Attacker.Ability.Effect; ae != nil && ae.IgnoresBurn {
+		ignores = true
+	}
 	if in.Move.Category == CategoryPhysical &&
-		in.Attacker.Status == StatusBurn &&
-		in.Attacker.Ability.ID != "guts" {
+		in.Attacker.Status == StatusBurn && !ignores {
 		return 2048
 	}
 	return Modifier4096
@@ -114,6 +110,9 @@ func attackDefenseStats(in DamageInput) (atk, def int) {
 	}
 	atk = applyStatStage(RealStats(in.Attacker).Get(atkKey), atkStage)
 	def = applyStatStage(RealStats(in.Defender).Get(defKey), defStage)
+	// 持ち物・天候による実数値補正(こだわり系・とつげきチョッキ・すなあらし等)。
+	atk = pokeRound(atk, offensiveStatMod(in, atkKey))
+	def = pokeRound(def, defensiveStatMod(in, defKey))
 	return atk, def
 }
 
@@ -147,8 +146,10 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 	// 基礎ダメージ(すべて floor)
 	base := (((2*level/5+2)*in.Move.Power*atk)/def)/50 + 2
 
-	// 基礎段階の補正(天候など P1-4)→ 急所
-	base = baseStageModifiers(in, base)
+	// 基礎段階の補正(天候のダメージ倍率は個別に pokeRound)→ 急所
+	if wm := weatherDamageMod(in.Field.Weather, moveType); wm != Modifier4096 {
+		base = pokeRound(base, wm)
+	}
 	if in.Critical {
 		base = base * 3 / 2 // ×1.5 floor
 	}

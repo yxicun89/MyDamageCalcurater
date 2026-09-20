@@ -26,16 +26,18 @@ type Move struct {
 	Priority int
 }
 
-// Item は持ち物データ。ダメージ補正の定義は P1-4 でマスタから読み込む。
+// Item は持ち物データ。Effect はダメージ補正の定義(マスタから解決)。nil は補正なし。
 type Item struct {
 	ID     string
 	NameJa string
+	Effect *ItemEffect
 }
 
-// Ability は特性データ。
+// Ability は特性データ。Effect はダメージ補正の定義(マスタから解決)。nil は補正なし。
 type Ability struct {
 	ID     string
 	NameJa string
+	Effect *AbilityEffect
 }
 
 // Nature は性格補正。Plus のステータスが +10%、Minus が -10%。
