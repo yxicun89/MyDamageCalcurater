@@ -33,7 +33,7 @@
 - [x] P1-4 補正(天候・フィールド・壁・持ち物・特性)※マスタの補正定義から適用
 - [x] P1-5 確定数/乱数n発の算出
 - [x] P1-6 `tools/golden` でテストベクタ生成、`make test-golden` 全件一致
-- [ ] P1-7 一括計算(防御側の代表調整すべてに対する結果を一度に返す)
+- [x] P1-7 一括計算(防御側の代表調整すべてに対する結果を一度に返す)
 - [ ] P1-8 逆算(観測ダメージ→調整候補、複数観測で絞り込み)+ 再現率テスト
 - [ ] P1-9 WASM ビルド(`make wasm`)と Go/WASM の結果一致テスト
 
@@ -46,6 +46,8 @@
 
 ### Phase 3 API
 - [ ] P3-1 calc-svc(起動時にマスタをメモリへ読み込み)
+  - 一括計算(`/api/calc/bulk`)の対応: API の `presets`(enum 配列)→ engine の `PresetKeys`。`presets: []` と省略はどちらも既定セット
+  - `api/openapi.yaml` の description を先に直して `make gen`(絶対ルール1): 「変化技は none/hp の2件のみ返す」「行の順序はプリセット優先(presets × itemVariants)」「`presets: []` は省略と同じ」。`BulkCalcRow.preset` は enum のみ(engine のカスタム `Presets` は API に出さない)
 - [ ] P3-2 gateway(ルーティング・端末ID/セッションID・/assets・CORS)
 - [ ] P3-3 契約テスト(OpenAPI 準拠)と k3d 上のスモークテスト
 
@@ -79,6 +81,13 @@
 
 ## ブロッカー
 (ここに止まった理由と試したことを書く)
+
+**【人間の確認待ち】`hb_boost` / `hd_boost`(H振り+B(D)補正)の定義**(P1-7、ADR-0009 §2)
+- requirements.md の「H振り+B(D)補正」に SP 配分の定義が無いため、「H振り(hp:32)+防御(特防)を上げる性格補正のみ・SP は振らない」と仮定して実装した。確定扱いにしていない。
+- 別解釈: 残り SP を B/D に全振り(実質 hb/hd と同じになり既定セットが1件減る)/ 中途半端な SP 量。
+- 確認できたら、次を同時に更新する: ADR-0009 §1 の表と §2 / `engine/bulk.go` のカタログ(`hb_boost` `hd_boost` の行)/ `engine/bulk_test.go` の `TestDefenderPresetCatalogDefinitions` と `TestDefaultDefenderPresetsByCategory`・単調性検査 /
+  `tools/golden/generate.mjs`(defense 部分にベクタ追加)→ `make golden-generate` → `testdata/golden/metadata.json` と `engine/bulk_golden_test.go` の件数期待値(現在は4件/グループ前提)/ `api/openapi.yaml` の `presetLabel` 例示。
+- `none/hp/hb/hd` の4種は golden で外部照合済みで、この確認の影響を受けない。テストを緩めて両解釈を通すことはしない(絶対ルール6)。
 
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)

@@ -71,3 +71,13 @@ Reason: 期待値を変えた6件は critic が @smogon/calc 0.10.0 を直接呼
 Impact: ゴールデンの「全ポケモン」は gen9 参考集合の1392種で、チャンピオンズの使用可能性は保証しない。P2-1 で使用可能マスタ確定後に
 make golden-generate で種族集合を差し替えて再生成する(plan.md P2-1)。Codex による別モデルレビュー(scripts/codex-review.sh)は
 Codex のレートリミットで未実施。実施済みとは扱わない。前回エントリの「独立レビュー未実施」はこれで解消。
+
+## 2026-09-21: 一括計算(P1-7)の防御側プリセットは engine が既定カタログを持つ(ADR-0009)
+Decision: 防御側の代表調整(none/hp/hb/hd/hb_boost/hd_boost)の定義は engine の純粋関数 DefenderPresetCatalog() が既定値として持ち、
+呼び出し側は BulkInput.Presets で上書きできる。API の presets(enum 配列)は engine の PresetKeys に対応する。presets 省略・空配列は
+技の分類による既定セット(物理: none,hp,hb_boost,hb / 特殊: none,hp,hd_boost,hd / 変化技: none,hp)。
+Reason: WASM(ブラウザ単体)と calc-svc の双方が同じ定義で動く必要があり、マスタ DB 経由だと二重管理になる。プリセットは持ち物・技・ポケモンの
+マスタではなく「SP の配り方の型」で、ハードコード禁止規約の対象ではないと判断した(critic 2回が妥当と確認)。
+Impact: none/hp/hb/hd は @smogon/calc で外部照合済み。hb_boost / hd_boost(H振り+B(D)補正)の定義は「H32・B(D)を上げる性格補正のみ・SP 振りなし」という
+仮定で、外部照合なし。人間の確認待ち(docs/plan.md ブロッカー節に確定時の更新箇所一覧)。P3-1 で api/openapi.yaml の description を先に直す宿題あり。
+Codex の別モデルレビューは未実施(レートリミット)。
