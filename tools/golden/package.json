@@ -1,0 +1,13 @@
+{
+  "name": "pokecalc-golden",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "@smogon/calc(gen9)でゴールデンテストベクタを生成する",
+  "scripts": {
+    "generate": "node generate.mjs"
+  },
+  "dependencies": {
+    "@smogon/calc": "^0.10.0"
+  }
+}

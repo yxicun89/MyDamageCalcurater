@@ -66,16 +66,16 @@ func TestCalcDamageSuperEffective(t *testing.T) {
 }
 
 func TestCalcDamageSTABSuperEffective(t *testing.T) {
-	// STAB(6144、丸めない)× 抜群(×2)を最後に一度だけ floor する。
-	// 攻撃みず/技みず/防御いわ。base=90、combined 係数 = 6144*4/(4096*2) = 3。
+	// @smogon/calc 0.10.0: STABをpokeRoundした後に相性を適用する。
+	// 攻撃みず/技みず/防御いわ。base=90。
 	in := ctrlInput([]Type{TypeWater}, []Type{TypeRock}, CategoryPhysical, TypeWater)
 	r, _ := CalcDamage(in)
 	if !r.STAB || r.Effectiveness != 2.0 {
 		t.Fatalf("stab=%v eff=%v want true 2.0", r.STAB, r.Effectiveness)
 	}
-	// d_rand*3。i=0:76→228、i=1:77→231(旧実装は STAB を pokeRound して 230 になる)、i=15:90→270
-	if r.Rolls[0] != 228 || r.Rolls[1] != 231 || r.Rolls[15] != 270 {
-		t.Errorf("rolls[0]=%d rolls[1]=%d rolls[15]=%d want 228 231 270", r.Rolls[0], r.Rolls[1], r.Rolls[15])
+	// i=1:77×1.5=115.5を115に丸めてから×2=230。ADR-0008参照。
+	if r.Rolls[0] != 228 || r.Rolls[1] != 230 || r.Rolls[15] != 270 {
+		t.Errorf("rolls[0]=%d rolls[1]=%d rolls[15]=%d want 228 230 270", r.Rolls[0], r.Rolls[1], r.Rolls[15])
 	}
 }
 

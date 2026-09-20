@@ -1,0 +1,24 @@
+{
+  "note": "Test-only adapters from @smogon/calc 0.10.0 names to engine effect inputs; not a Champions item/ability master.",
+  "items": {
+    "Choice Band": {"StatMods":{"atk":6144}},
+    "Choice Specs": {"StatMods":{"spa":6144}},
+    "Assault Vest": {"StatMods":{"spd":6144}},
+    "Eviolite": {"StatMods":{"def":6144,"spd":6144}},
+    "Life Orb": {"DamageMod":5324},
+    "Expert Belt": {"DamageMod":4915,"OnlySuperEffective":true},
+    "Charcoal": {"BoostType":"fire","BoostTypeMod":4915},
+    "Muscle Band": {"PowerMod":4505,"PowerCategory":"physical"},
+    "Wise Glasses": {"PowerMod":4505,"PowerCategory":"special"},
+    "Occa Berry": {"ResistBerryType":"fire"},
+    "Chilan Berry": {"ResistBerryType":"normal"}
+  },
+  "abilities": {
+    "Adaptability":{"StabMod":8192},
+    "Thick Fat":{"DefResistType":{"fire":2048,"ice":2048}},
+    "Filter":{"ReduceSuperEffective":3072},
+    "Solid Rock":{"ReduceSuperEffective":3072},
+    "Steelworker":{"OffBoostType":"steel","OffBoostTypeMod":6144},
+    "Water Bubble":{"OffBoostType":"water","OffBoostTypeMod":8192,"DefResistType":{"fire":2048}}
+  }
+}

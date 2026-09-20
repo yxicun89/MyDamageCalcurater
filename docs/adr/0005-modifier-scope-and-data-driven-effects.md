@@ -1,6 +1,6 @@
 # ADR-0005: 補正の範囲とデータ駆動の効果定義
 
-- 状態: 承認
+- 状態: 採用(補正段階を ADR-0008 で訂正)
 - 日付: 2026-09-21
 - 関連: CLAUDE.md「持ち物・技・ポケモンのリストをコードにハードコードしない。マスタデータから引く」/ ADR-0004
 
@@ -17,15 +17,16 @@ P1-4 で天候・フィールド・壁・持ち物・特性の補正を実装す
 engine 内には「どの持ち物が何倍か」のリストを持たない。
 
 対応する効果の型(汎用フィールドで表現):
-- ItemEffect: 実数値倍率(StatMods)、ダメージ倍率(DamageMod、抜群限定 OnlySuperEffective)、
+- ItemEffect: 実数値倍率(StatMods)、威力倍率(PowerMod/PowerCategory)、最終倍率(DamageMod、抜群限定 OnlySuperEffective)、
   タイプ強化(BoostType/BoostTypeMod)、半減きのみ(ResistBerryType)
-- AbilityEffect: てきおうりょく(StabMod)、攻撃タイプ強化(OffBoostType)、
-  被ダメ軽減(DefResistType)、抜群軽減(ReduceSuperEffective)、やけど無効(IgnoresBurn)
+- AbilityEffect: てきおうりょく(StabMod)、攻撃実数値のタイプ強化(OffBoostType)、
+  相手攻撃実数値の軽減(DefResistType)、抜群軽減(ReduceSuperEffective)、やけど無効(IgnoresBurn)
 
 これで要件が挙げる代表例(こだわり系・とつげきチョッキ・半減きのみ・タイプ強化・
 いのちのたま・たつじんのおび・てきおうりょく・あついしぼう)を表現できる。
 
 ### ゲーム機構(engine ルール)
+補正段階・丸め順はADR-0008を正とする。
 天候(晴/雨のダメージ、砂/雪の防御実数値)、フィールド(電気/草/サイコ ×1.3、ミスト ×0.5)、
 壁(リフレクター/ひかりのかべ/オーロラベール ×0.5、急所貫通)は engine のルールとして実装する。
 これらは「持ち物リスト」ではないため規約に反しない。接地判定は M1 では常に接地とみなす。

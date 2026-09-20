@@ -111,9 +111,10 @@ func attackDefenseStats(in DamageInput) (atk, def int) {
 	}
 	atk = applyStatStage(RealStats(in.Attacker).Get(atkKey), atkStage)
 	def = applyStatStage(RealStats(in.Defender).Get(defKey), defStage)
-	// 持ち物・天候による実数値補正(こだわり系・とつげきチョッキ・すなあらし等)。
-	atk = pokeRound(atk, offensiveStatMod(in, atkKey))
-	def = pokeRound(def, defensiveStatMod(in, defKey))
+	// 天候の防御補正は持ち物より先に独立して丸める。
+	def = pokeRound(def, weatherDefenseMod(in, defKey))
+	atk = max(1, pokeRound(atk, offensiveStatMod(in, atkKey)))
+	def = max(1, pokeRound(def, defensiveStatMod(in, defKey)))
 	return atk, def
 }
 
@@ -145,7 +146,8 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 	atk, def := attackDefenseStats(in)
 
 	// 基礎ダメージ(すべて floor)
-	base := (((2*level/5+2)*in.Move.Power*atk)/def)/50 + 2
+	power := max(1, pokeRound(in.Move.Power, powerModifier(in)))
+	base := (((2*level/5+2)*power*atk)/def)/50 + 2
 
 	// 基礎段階の補正(天候のダメージ倍率は個別に pokeRound)→ 急所
 	if wm := weatherDamageMod(in.Field.Weather, moveType); wm != Modifier4096 {
@@ -162,10 +164,8 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 
 	for i := 0; i < 16; i++ {
 		d := base * (85 + i) / 100 // 乱数(floor)
-		// タイプ一致(丸めない)× タイプ相性 を掛けて「最後に一度だけ floor」する。
-		// @smogon-calc は STAB を丸めず保持し、相性適用後に floor するため、
-		// STAB を個別に pokeRound すると STAB×抜群で 0.5 を落として値がずれる。
-		d = d * stabMod * num / (Modifier4096 * den)
+		// STAB の五捨五超入を済ませてから相性を掛けて floor する。
+		d = pokeRound(d, stabMod) * num / den
 		d = pokeRound(d, burnMod)  // やけど
 		d = pokeRound(d, otherMod) // その他補正(壁・持ち物・特性 P1-4)
 		if d < 1 {

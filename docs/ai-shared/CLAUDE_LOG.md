@@ -29,11 +29,13 @@
 - DECISIONS.md の「fix/codex-workflow-golden は保留」「Git ブランチ運用ルールを導入する」を参照
 
 ### Open issues
-- fix/codex-workflow-golden の再検討(Codex が次に着手する際)。マージ時は AGENTS.md / CLAUDE.md の統合が必要
+- (解決済み)fix/codex-workflow-golden はマージ済み。ただし engine の丸め順訂正・openapi の level 固定は独立レビュー未実施
 
 ### Later (同日)
 - ユーザー指示により pokecalc-kit-v2/ と UNBLOCK_AND_MERGE_KICKOFF.md を削除。kit-v2 の差分
   (spec-writer/critic の Sonnet 化、deep-critic、ループ上限2回など)は採用しない判断で、現行の CLAUDE.md の運用を維持
+- ユーザー判断で fix/codex-workflow-golden を main へマージ(保留を撤回)。AGENTS.md / CLAUDE.md の衝突を統合し、
+  「Claude と Codex の作業を1ブランチで混ぜない」をブランチ運用に追記
 
 ### Next
-- Damage Calculator: P1-6 は保留ブランチの内容を踏まえて新規タスクとして扱うか判断が必要
+- feat/claude-p1-engine を main から切り、P1-6([~])を critic でレビュー → [x] → P1-7 以降

@@ -2,6 +2,10 @@
 
 自分用ポケモン ダメージ計算 & 構築ビルダー(ポケモンチャンピオンズ対応)。学習目的のマイクロサービス構成。
 
+Git・ブランチ・役割分担・検証・引き継ぎは [AGENTS.md](AGENTS.md) の共通運用にも従う。
+Claude Code / Codex の手順対応は [docs/development-workflow.md](docs/development-workflow.md) を参照。
+このファイルの絶対ルール・ドメイン規約・技術規約を共通の正として維持する。
+
 ## 最初に読むもの(この順で)
 
 1. `docs/plan.md` — 進行状況とタスク。**作業の起点は常にここ**
@@ -64,14 +68,17 @@ docs/
 - 認証なし。クライアントは端末ID(UUID)とセッションIDを全リクエストに付与
 - 設定は環境変数。ローカルとクラウドの差分は Kustomize overlay で吸収
 
-## コマンド(Phase 0 で Makefile に実装する)
+## コマンド(実装状況は Makefile と README を確認)
 
 ```
 make doctor       # 前提ツールの確認(scripts/doctor.sh)
 make up / down    # k3d クラスタ作成+全デプロイ / 削除
 make dev          # k8s を使わずローカルで全サービス起動(高速な開発ループ用)
 make gen          # OpenAPI / sqlc のコード生成
-make test         # 全ユニットテスト(engine/services/web)
+make test         # 実装済みユニットテスト(engine/services。Webは後続)
+make lint         # Go整形/vet、shell/Node構文
+make build        # 実装済みGoモジュールのビルド
+make golden-generate # 外部実装の期待値を再生成(先にtools/goldenでnpm ci)
 make test-golden  # engine のゴールデンテスト
 make test-all-species # 全ポケモン網羅テスト
 make e2e          # k3d 上のスモーク + Playwright
@@ -81,9 +88,11 @@ make import       # マスタデータ取込
 make assets       # 画像を WebP 2サイズに変換して MinIO へ
 ```
 
-## 開発ワークフロー
+## Claude Code 固有の開発ワークフロー
 
-タスクは `/phase` スキルで進める。各タスクで以下のサブエージェントを順に使う。
+Claude Code では既存の `/phase` スキルを使用し、通常タスクを以下の順で進める。
+軽微な作業はメインのみでよい。engine コアの test-first 実装と独立 critic レビューは
+ADR-0003 の適応を維持する。Codex では ADR-0007 と共通ワークフローの対応を使う。
 
 | ステップ | エージェント | モデル | 役割 |
 |---|---|---|---|
@@ -96,6 +105,9 @@ make assets       # 画像を WebP 2サイズに変換して MinIO へ
 - 同じ失敗で3回ループしたら止まり、`docs/plan.md` の「ブロッカー」に書いて次のタスクへ
 - 完了条件: `make test` 成功 / engine 変更時は `make test-golden` 成功 / plan.md 更新 / 必要ならADR
 - 改善要望は `/improve`、全体確認は `/verify`
+- 上表のモデルは既存 Claude agent 定義の割り当て。Codex のモデルへ機械的に置換しない
+- `.claude/settings.json` の gofmt フックとは別に、明示的な整形・lint・build の結果を確認する
+- レビューのスキップや未実装ターゲットの正常終了を成功と数えない。詳細は共通ワークフローを参照
 - ブランチ: Phase ごとに `feat/claude-<phase名>` を切り、`/verify` 通過後に main へマージしてブランチを削除する。
   詳細は AGENTS.md「Git ブランチ運用」(Codex は `feat/codex-<stage名>`、詰まったブランチは引き継がず保留として記録)
 

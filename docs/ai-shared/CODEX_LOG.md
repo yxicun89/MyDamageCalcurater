@@ -5,3 +5,5 @@
 ## 2026-09-21 (Claude Code による代理記録。Codex はレートリミットで操作不可)
 - Claude Code が fix/codex-workflow-golden(未コミットだった作業)を確認。engine コア・API 契約に触れるため保留と判断し、
   内容を変えずに 6d86382 として保全。main へはマージしていない。理由と再検討の方針は DECISIONS.md 参照。
+- 同日、ユーザー判断で fix/codex-workflow-golden を main へマージ(Claude Code が実施)。AGENTS.md / CLAUDE.md の衝突は両方残して統合。
+  Codex は次回 main から自分のブランチを切って作業する。詳細は DECISIONS.md。

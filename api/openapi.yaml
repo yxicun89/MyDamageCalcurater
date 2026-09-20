@@ -388,7 +388,7 @@ components:
       required: [speciesKey, natureId, sp]
       properties:
         speciesKey: { $ref: '#/components/schemas/SpeciesKey' }
-        level: { type: integer, default: 50 }
+        level: { type: integer, minimum: 50, maximum: 50, default: 50 }
         natureId: { type: string }
         abilityId: { type: string, nullable: true }
         itemId: { type: string, nullable: true }

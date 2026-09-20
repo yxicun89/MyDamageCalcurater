@@ -39,7 +39,7 @@ gen-ts: ## TypeScript 型を openapi.yaml から生成
 
 ## --- テスト -----------------------------------------------------------
 .PHONY: test
-test: test-engine test-services ## 全ユニットテスト
+test: test-engine test-services test-tools ## 全ユニットテスト(実装済みGoモジュール)
 
 .PHONY: test-engine
 test-engine: ## engine のユニットテスト
@@ -48,6 +48,29 @@ test-engine: ## engine のユニットテスト
 .PHONY: test-services
 test-services: ## services のユニットテスト
 	@cd services && $(GO) test ./...
+
+.PHONY: test-tools
+test-tools:
+	@cd tools && $(GO) test ./...
+
+.PHONY: lint
+lint: ## gofmt / go vet / shell・Node構文チェック
+	@test -z "$$(gofmt -l engine services tools)" || { gofmt -l engine services tools; exit 1; }
+	@cd engine && $(GO) vet ./...
+	@cd services && $(GO) vet ./...
+	@cd tools && $(GO) vet ./...
+	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
+	@node --check tools/golden/generate.mjs
+
+.PHONY: build
+build: ## 実装済みGoモジュールをビルド(Web/WASMは後続タスク)
+	@cd engine && $(GO) build ./...
+	@cd services && $(GO) build ./...
+	@cd tools && $(GO) build ./...
+
+.PHONY: golden-generate
+golden-generate: ## npm ci後に外部実装の期待値を再生成
+	@cd tools/golden && npm run generate
 
 .PHONY: test-golden
 test-golden: ## engine のゴールデンテスト(@smogon/calc 照合)
