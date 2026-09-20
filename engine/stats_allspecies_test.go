@@ -4,6 +4,83 @@ package engine
 
 import "testing"
 
+// allTypes は網羅テスト用の全18タイプ。
+var allTypes = []Type{
+	TypeNormal, TypeFire, TypeWater, TypeElectric, TypeGrass, TypeIce,
+	TypeFighting, TypePoison, TypeGround, TypeFlying, TypePsychic, TypeBug,
+	TypeRock, TypeGhost, TypeDragon, TypeDark, TypeSteel, TypeFairy,
+}
+
+// TestAllSpeciesDamageProperties は test-strategy L3 のダメージ性質を、
+// タイプ全組合せ×代表的な種族値グリッドで確認する(外部実装照合は P1-6)。
+func TestAllSpeciesDamageProperties(t *testing.T) {
+	baseVals := []int{40, 100, 180}
+	newIn := func(atkType, moveType Type, defTypes []Type, atkBase, defBase, atkSP, defSP int) DamageInput {
+		return DamageInput{
+			Format: FormatSingle,
+			Attacker: Individual{
+				Species: Species{Types: []Type{atkType}, BaseStats: Stats{HP: 100, Atk: atkBase, SpA: atkBase}},
+				Nature:  NatureNeutral, SP: Stats{Atk: atkSP, SpA: atkSP},
+			},
+			Defender: Individual{
+				Species: Species{Types: defTypes, BaseStats: Stats{HP: 100, Def: defBase, SpD: defBase}},
+				Nature:  NatureNeutral, SP: Stats{Def: defSP, SpD: defSP},
+			},
+			Move: Move{Type: moveType, Category: CategoryPhysical, Power: 80},
+		}
+	}
+	for _, moveType := range allTypes {
+		for _, dt1 := range allTypes {
+			for _, atkBase := range baseVals {
+				for _, defBase := range baseVals {
+					defTypes := []Type{dt1}
+					in := newIn(TypeNormal, moveType, defTypes, atkBase, defBase, 0, 0)
+					r, err := CalcDamage(in)
+					if err != nil {
+						t.Fatalf("panic-free expected: %v", err)
+					}
+					_, _, mult := TypeEffectiveness(moveType, defTypes)
+					for i := 0; i < 16; i++ {
+						if r.Rolls[i] < 0 {
+							t.Fatalf("negative damage: %v", r.Rolls)
+						}
+						if i > 0 && r.Rolls[i] < r.Rolls[i-1] {
+							t.Fatalf("not monotonic: %v", r.Rolls)
+						}
+						if mult == 0 && r.Rolls[i] != 0 {
+							t.Fatalf("immune must be 0: %v", r.Rolls)
+						}
+					}
+					if r.MinDamage() > r.MaxDamage() {
+						t.Fatalf("min>max: %v", r.Rolls)
+					}
+					if mult == 0 {
+						continue
+					}
+					// 攻撃側 SP 増でダメージ非減少
+					more := newIn(TypeNormal, moveType, defTypes, atkBase, defBase, 32, 0)
+					rMore, _ := CalcDamage(more)
+					if rMore.MaxDamage() < r.MaxDamage() {
+						t.Fatalf("atk SP up decreased damage: %d < %d", rMore.MaxDamage(), r.MaxDamage())
+					}
+					// 防御側 SP 増でダメージ非増加
+					tougher := newIn(TypeNormal, moveType, defTypes, atkBase, defBase, 0, 32)
+					rTough, _ := CalcDamage(tougher)
+					if rTough.MaxDamage() > r.MaxDamage() {
+						t.Fatalf("def SP up increased damage: %d > %d", rTough.MaxDamage(), r.MaxDamage())
+					}
+					// タイプ一致を付けると非減少(一致を外すと非増加)
+					stabbed := newIn(moveType, moveType, defTypes, atkBase, defBase, 0, 0)
+					rStab, _ := CalcDamage(stabbed)
+					if rStab.MaxDamage() < r.MaxDamage() {
+						t.Fatalf("STAB decreased damage: %d < %d", rStab.MaxDamage(), r.MaxDamage())
+					}
+				}
+			}
+		}
+	}
+}
+
 // standardStat は @smogon/calc(gen9)が使う標準式を独立に実装したもの。
 // Lv50・個体値31固定。EV は SP から max(0,8×SP−4) で換算する。
 // engine の実数値がこの標準式と全 base・全 SP で一致することを確認し、

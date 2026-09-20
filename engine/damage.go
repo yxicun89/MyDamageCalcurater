@@ -1,0 +1,175 @@
+package engine
+
+// ダメージ計算コア。第9世代の式を 4096基準の固定小数・五捨五超入(pokeRound)で実装する。
+// float 近似はしない(CLAUDE.md ドメイン規約)。
+//
+// 補正の適用順(Bulbapedia / @smogon-calc gen9):
+//
+//	base = floor(floor(floor(2*L/5+2)*威力*A/D)/50)+2
+//	base ×= 天候など基礎段階の補正(P1-4)
+//	base ×= 急所(1.5, floor)
+//	各ロール i(0..15): d = floor(base*(85+i)/100)
+//	  d = pokeRound(d × タイプ一致)            (6144 or 4096、Adaptability は 8192)
+//	  d = floor(d × タイプ相性)                (num/den)
+//	  d = pokeRound(d × やけど)                (物理やけどで 2048)
+//	  d = pokeRound(d × その他補正)            (壁・持ち物・特性など P1-4)
+//	  相性≠0 なら d = max(1, d)
+
+// Modifier は 4096 を等倍(=1.0)とする固定小数の補正値。
+const Modifier4096 = 4096
+
+// pokeRound は value×mod/4096 を五捨五超入(半分ちょうどは切り捨て)する。
+func pokeRound(value, mod int) int {
+	v := value * mod
+	if v%4096 > 2048 {
+		return v/4096 + 1
+	}
+	return v / 4096
+}
+
+// chainMods は複数の 4096基準補正を連結して1つの補正にまとめる(@smogon-calc 互換)。
+// 各ステップは (M*mod + 2048) >> 12 = 切り上げ寄りの丸め。最終適用は pokeRound で行う。
+// 壁・持ち物・特性など「その他補正」はこの方式で1回にまとめないとゴールデンと一致しない。
+func chainMods(mods []int) int {
+	m := Modifier4096
+	for _, mod := range mods {
+		if mod != Modifier4096 {
+			m = (m*mod + 2048) >> 12
+		}
+	}
+	return m
+}
+
+// DamageInput はダメージ計算の入力。
+type DamageInput struct {
+	Format   Format
+	Attacker Individual
+	Defender Individual
+	Move     Move
+	Field    Field
+	Critical bool
+}
+
+// DamageResult はダメージ計算の結果。確定数は P1-5 で付与する。
+type DamageResult struct {
+	Rolls         [16]int // 16段階の乱数ダメージ(非減少)
+	Effectiveness float64 // タイプ相性(0, 0.25, 0.5, 1, 2, 4)
+	STAB          bool    // タイプ一致
+	Category      MoveCategory
+	DefenderHP    int
+}
+
+// MinDamage / MaxDamage は 16段階の下限・上限。
+func (r DamageResult) MinDamage() int { return r.Rolls[0] }
+func (r DamageResult) MaxDamage() int { return r.Rolls[15] }
+
+// baseStageModifiers は base(乱数前)に適用する補正を返す。
+// 天候などは @smogon と同じく個別に pokeRound する。P1-4 で実装する。
+// 既定は補正なし(base をそのまま返す)。純粋関数(グローバル可変状態を持たない)。
+func baseStageModifiers(in DamageInput, base int) int { return base }
+
+// otherModifiers はやけどの後に chainMods で1回適用する「その他補正」
+// (壁・持ち物・特性)の 4096基準補正リストを返す。P1-4 で実装する。
+// 既定は補正なし(空)。純粋関数。
+func otherModifiers(in DamageInput) []int { return nil }
+
+// stabModifier はタイプ一致補正値を返す(通常 6144、不一致 4096)。
+func stabModifier(in DamageInput, moveType Type) (int, bool) {
+	for _, t := range in.Attacker.Species.Types {
+		if t == moveType && moveType != TypeNone {
+			return 6144, true
+		}
+	}
+	return Modifier4096, false
+}
+
+// burnModifier は物理やけどによる攻撃半減(2048)を返す。特性 こんじょう(guts)は除外。
+func burnModifier(in DamageInput) int {
+	if in.Move.Category == CategoryPhysical &&
+		in.Attacker.Status == StatusBurn &&
+		in.Attacker.Ability.ID != "guts" {
+		return 2048
+	}
+	return Modifier4096
+}
+
+// attackDefenseStats は使用する攻撃・防御の実効値を返す。
+// 急所時は攻撃側の不利なランク(負)と防御側の有利なランク(正)を無視する。
+func attackDefenseStats(in DamageInput) (atk, def int) {
+	var atkKey, defKey StatKey
+	if in.Move.Category == CategoryPhysical {
+		atkKey, defKey = StatAtk, StatDef
+	} else {
+		atkKey, defKey = StatSpA, StatSpD
+	}
+	atkStage := in.Attacker.Ranks.Get(atkKey)
+	defStage := in.Defender.Ranks.Get(defKey)
+	if in.Critical {
+		if atkStage < 0 {
+			atkStage = 0
+		}
+		if defStage > 0 {
+			defStage = 0
+		}
+	}
+	atk = applyStatStage(RealStats(in.Attacker).Get(atkKey), atkStage)
+	def = applyStatStage(RealStats(in.Defender).Get(defKey), defStage)
+	return atk, def
+}
+
+// CalcDamage は 1 vs 1 のダメージを計算する。
+func CalcDamage(in DamageInput) (DamageResult, error) {
+	if err := in.Attacker.Validate(); err != nil {
+		return DamageResult{}, err
+	}
+	if err := in.Defender.Validate(); err != nil {
+		return DamageResult{}, err
+	}
+
+	res := DamageResult{
+		Category:   in.Move.Category,
+		DefenderHP: RealStats(in.Defender).HP,
+	}
+
+	moveType := in.Move.Type
+	num, den, mult := TypeEffectiveness(moveType, in.Defender.Species.Types)
+	res.Effectiveness = mult
+	_, res.STAB = stabModifier(in, moveType)
+
+	// 変化技・威力0・無効相性はダメージ0。
+	if in.Move.Category == CategoryStatus || in.Move.Power <= 0 || num == 0 {
+		return res, nil
+	}
+
+	level := in.Attacker.EffectiveLevel()
+	atk, def := attackDefenseStats(in)
+
+	// 基礎ダメージ(すべて floor)
+	base := (((2*level/5+2)*in.Move.Power*atk)/def)/50 + 2
+
+	// 基礎段階の補正(天候など P1-4)→ 急所
+	base = baseStageModifiers(in, base)
+	if in.Critical {
+		base = base * 3 / 2 // ×1.5 floor
+	}
+
+	stabMod, _ := stabModifier(in, moveType)
+	burnMod := burnModifier(in)
+
+	otherMod := chainMods(otherModifiers(in))
+
+	for i := 0; i < 16; i++ {
+		d := base * (85 + i) / 100 // 乱数(floor)
+		// タイプ一致(丸めない)× タイプ相性 を掛けて「最後に一度だけ floor」する。
+		// @smogon-calc は STAB を丸めず保持し、相性適用後に floor するため、
+		// STAB を個別に pokeRound すると STAB×抜群で 0.5 を落として値がずれる。
+		d = d * stabMod * num / (Modifier4096 * den)
+		d = pokeRound(d, burnMod)  // やけど
+		d = pokeRound(d, otherMod) // その他補正(壁・持ち物・特性 P1-4)
+		if d < 1 {
+			d = 1 // 相性≠0 なら最低1ダメージ
+		}
+		res.Rolls[i] = d
+	}
+	return res, nil
+}
