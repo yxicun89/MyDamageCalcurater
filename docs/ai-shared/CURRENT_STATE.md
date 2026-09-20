@@ -3,7 +3,7 @@
 ## Damage Calculator
 Owner: Claude Code
 Branch: feat/claude-p1-engine
-Status: Phase 1 (計算エンジン) 実装中。P1-7 一括計算まで完了(critic 2回目 PASS。Codex レビューは Codex のレートリミットで未実施)
+Status: Phase 1 (計算エンジン) 実装中。P1-7 一括計算まで完了(critic 2回目 PASS。任意の外部 Codex レビュー(scripts/codex-review.sh)は未実施。Codex の担当はタイプバランスチェッカー実装で、ダメージ計算のレビュー担当ではない)
 Next: P1-8 逆算 → P1-9 WASM。hb_boost / hd_boost の定義は人間の確認待ち(plan.md ブロッカー)
 
 ## Type Balance Checker

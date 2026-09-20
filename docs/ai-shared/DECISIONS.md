@@ -81,3 +81,12 @@ Reason: WASM(ブラウザ単体)と calc-svc の双方が同じ定義で動く�
 Impact: none/hp/hb/hd は @smogon/calc で外部照合済み。hb_boost / hd_boost(H振り+B(D)補正)の定義は「H32・B(D)を上げる性格補正のみ・SP 振りなし」という
 仮定で、外部照合なし。人間の確認待ち(docs/plan.md ブロッカー節に確定時の更新箇所一覧)。P3-1 で api/openapi.yaml の description を先に直す宿題あり。
 Codex の別モデルレビューは未実施(レートリミット)。
+
+## 2026-09-21: 「Codex の別モデルレビュー未実施(レートリミット)」の記述を訂正
+Decision: Codex の担当はタイプバランスチェッカー(services/balance)の実装で、ダメージ計算 engine のレビュー担当ではない。
+scripts/codex-review.sh による外部 Codex レビューは Claude Code が任意で呼ぶ追加確認で、実施しなくても phase は完了できる(ADR-0007)。
+直前2エントリ(P1-6 独立レビューが PASS / 一括計算 ADR-0009)にある「Codex の別モデルレビューは未実施(レートリミット)」は、
+「任意の外部 Codex レビューは未実施」と読み替える。レートリミットが未実施の理由だったとは確認していない。
+Reason: Codex を engine のレビュー担当と誤って記録していたため。未実施の理由の断定も根拠がなかった。
+Impact: engine・逆算・API 契約のタスクの完了条件は critic の PASS と make test / make test-golden で、Codex レビューは含まない。
+DECISIONS.md は追記のみの規約のため、既存エントリは編集せずこの訂正で上書きする。CURRENT_STATE.md と CLAUDE_LOG.md の該当行は訂正済み。

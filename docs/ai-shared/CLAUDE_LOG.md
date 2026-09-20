@@ -51,7 +51,7 @@
 - feat/claude-p1-engine を main から作成。quick-scanner で充足状況を確認し、critic(opus)が独立レビューして PASS
 - test-strategy.md を実装(gz+マニフェスト、暫定の種族集合、確定数の照合範囲)に合わせて更新。plan.md の P1-6 を [x]、P2-1 に再生成の依存を記録
 ### Open issues
-- Codex による別モデルレビューは未実施(レートリミット)。軽微・任意の指摘6点は plan.md「改善要望」に記録
+- 任意の外部 Codex レビュー(scripts/codex-review.sh)は未実施(Codex の担当は TB 実装でレビュー担当ではない。レートリミットが理由とは確認していない)。軽微・任意の指摘6点は plan.md「改善要望」に記録
 ### Next
 - P1-7 一括計算
 
@@ -60,7 +60,7 @@
 - scanner → spec-writer(ADR-0009 とテスト先行)→ implementer → critic(1回目 FAIL: 場・急所・攻撃側のパススルー未検証ほか)→ 修正 → critic 2回目 PASS(変異41種中38検出、2等価、1到達不能)
 - engine/bulk.go(CalcBulk / DefenderPresetCatalog / DefaultDefenderPresets)、docs/adr/0009-bulk-calc-presets.md
 ### Open issues
-- hb_boost / hd_boost の定義は人間の確認待ち。Codex の別モデルレビューは未実施
+- hb_boost / hd_boost の定義は人間の確認待ち。任意の外部 Codex レビューは未実施(上記と同じ扱い)
 - P3-1 で openapi.yaml の description を先に直す(変化技は none/hp のみ、presets:[] は省略と同じ 等)
 ### Next
 - P1-8 逆算
