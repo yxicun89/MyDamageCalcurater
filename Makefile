@@ -61,6 +61,7 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@cd tools && $(GO) vet ./...
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 	@node --check tools/golden/generate.mjs
+	@node --check scripts/wasm-conformance.mjs
 
 .PHONY: build
 build: ## 実装済みGoモジュールをビルド(Web/WASMは後続タスク)
@@ -106,6 +107,10 @@ ios-test: ## iOS シミュレータでテスト
 .PHONY: wasm
 wasm: ## engine を WASM にビルドして web/public へ
 	@./scripts/wasm.sh
+
+.PHONY: test-wasm
+test-wasm: wasm ## Go と WASM の結果一致テスト(Node。要 make wasm)
+	@node scripts/wasm-conformance.mjs
 
 .PHONY: import
 import: ## マスタデータ取込

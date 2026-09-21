@@ -35,7 +35,7 @@
 - [x] P1-6 `tools/golden` でテストベクタ生成、`make test-golden` 全件一致
 - [x] P1-7 一括計算(防御側の代表調整すべてに対する結果を一度に返す)
 - [x] P1-8 逆算(観測ダメージ→調整候補、複数観測で絞り込み)+ 再現率テスト
-- [ ] P1-9 WASM ビルド(`make wasm`)と Go/WASM の結果一致テスト
+- [x] P1-9 WASM ビルド(`make wasm`)と Go/WASM の結果一致テスト
 
 ### Phase 2 マスタデータ
 - [ ] P2-1 **データソース調査**: チャンピオンズの使用可能ポケモン・技・持ち物の取得元を調べ ADR-0002 に記録
@@ -49,6 +49,7 @@
   - 一括計算(`/api/calc/bulk`)の対応: API の `presets`(enum 配列)→ engine の `PresetKeys`。`presets: []` と省略はどちらも既定セット
   - `api/openapi.yaml` の description を先に直して `make gen`(絶対ルール1): 「変化技は none/hp の2件のみ返す」「行の順序はプリセット優先(presets × itemVariants)」「`presets: []` は省略と同じ」。`BulkCalcRow.preset` は enum のみ(engine のカスタム `Presets` は API に出さない)
   - 逆算(`/api/calc/reverse`)の対応(ADR-0010 §9 の持ち越し。engine は `CalcReverse` 済み・API 未変更): `api/openapi.yaml` を先に直して `make gen`(絶対ルール1)。`ReverseRequest.attacker` / `defenderSpeciesKey` を `known` / `unknownSpeciesKey` に改名(`side=attacker` のとき既知側=自分=防御側)、`itemCandidates: [ItemId]` と `Observation.observedDamage` を追加、`observedPercent` は整数でなければ 400(engine には `int` を渡す)、`matchScore` の意味(1.0 = 全観測に完全一致する格子点がある)を description に書き `exact` を足す、`ReverseCandidate` に `archetypeKey` を足し `presetLabel` に `Archetype.Label` を入れる、`natureId` は engine の性格構造値(代表性格クラス)→ 性格 ID に calc-svc が写像する(例 +B/-A → Bold)、`rangePercent` は `MinPercent`/`MaxPercent` を写す
+  - WASM 境界との契約差分の解消(ADR-0011 §10 の持ち越し。P1-9 では `api/openapi.yaml` を変更していない): `api/openapi.yaml` を先に直して `make gen`(絶対ルール1)。`CalcResult.minPercent/maxPercent` を整数(`engine.DisplayPercent`)にして description に丸めを書く、`CalcResult` に `category` を足すか(Web は要求から知っているので落とすか)を決める、`BulkCalcRow` に防御側の `defender{sp,nature,stats}`(SP・性格・実数値)を足す、エラーの `code` 語彙を WASM 境界(ADR-0011 §5 の `invalid_json` / `unknown_field` / `invalid_enum` / `invalid_input` / `unknown_preset` / `duplicate_preset` / `invalid_preset` / `invalid_reverse_side` / `no_observation` / `invalid_observation` / `internal`)と共通化し、同じ失敗が HTTP と WASM で同じ `code` になるようにする
 - [ ] P3-2 gateway(ルーティング・端末ID/セッションID・/assets・CORS)
 - [ ] P3-3 契約テスト(OpenAPI 準拠)と k3d 上のスモークテスト
 
@@ -58,6 +59,7 @@
 - [ ] P4-3 プリセット選択(自分側: A特化/A振り/無振り)
 - [ ] P4-4 逆算画面(観測ダメージ入力→候補リスト)
 - [ ] P4-5 API / WASM 切り替え(WASM ならバックエンド無しで動く)
+  - WASM 境界との契約差分の解消(ADR-0011 §10 の持ち越し): Web に「ID → 実体(種族・技・持ち物・特性)」の解決層を1つ置き、オンライン(API に ID を送る=`moveId` など)とオフライン(WASM に解決済みの `move` / `Individual` を渡す)で同じ型を共有する。`openapi-typescript` の生成型と ADR-0011 §3 の DTO の対応表を作る。`minPercent`/`maxPercent` の整数化・`category`・`BulkCalcRow.defender`・エラー `code` 語彙の共通化(P3-1 で契約側を直した後)に Web 側を追従させる。WASM の遅延ロード(オンラインは API、オフラインだけ WASM)にするかを決める(ADR-0011 §11)
 - [ ] P4-6 Playwright E2E(主要フロー)
 - [ ] P4-7 **M1 完了報告**: 動作確認手順を `docs/verify-m1.md` に書く
 
@@ -94,6 +96,10 @@
 - ポケモンチャンピオンズの表示%が四捨五入なのか切り捨てなのか、小数第1位まで出るのかは未確認。「round-half-up の整数%」と仮定して実装した。確定扱いにしていない。実機が切り捨てだと、1 ポイントずれて完全一致が消える観測が出る(ADR-0010 §8)。
 - 確認できたら、次を同時に更新する: `engine/reverse.go` の `DisplayPercent`(1関数。engine の丸めはここだけ)/ ADR-0010 §3 の式と §7 の Recall 実測値 / `engine/reverse_test.go` の `TestDisplayPercentRounding` の期待値(理由をコミットメッセージに書く)。Recall テストは `DisplayPercent` を使って観測を作るので、関数の差し替えだけで追従する。しきい値(80%/95%)・シード・ケース数は動かさない(絶対ルール6)。
 - 丸めの確定で Recall が基準を割った場合も、しきい値・シード・ケース数ではなく ADR-0010 §6.3 の順序規則側を直す(2回観測の余裕は現状 0.5〜0.6 ポイントで薄い)。
+
+**【人間の確認待ち】ブラウザでの WASM 実動作**(P1-9、ADR-0011 §11)
+- P1-9 は Node + `wasm_exec.js` でしか確認していない(`make test-wasm`)。ブラウザ特有の事情は未確認で、P4-5 で人間が確認する: `.wasm` の MIME(`application/wasm`)/ `WebAssembly.instantiateStreaming` / キャッシュ(Service Worker 含む)/ メモリ上限 / 初回ロード(4.63 MiB、gzip 1.26 MiB)の体感。
+- 確認できたら、ADR-0011 §11 の「ブラウザでの実動作は未確認」と冒頭の状態欄(「§9 の実動作確認は未実施」)を更新する。
 
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)

@@ -3,8 +3,8 @@
 ## Damage Calculator
 Owner: Claude Code
 Branch: feat/claude-p1-engine
-Status: Phase 1 (計算エンジン) 実装中。P1-8 逆算まで完了(critic 2回(FAIL→FAIL)の指摘反映後、指示された修正をメインが確認して完了。3回目の critic 実行はしていない。任意の外部 Codex レビュー(scripts/codex-review.sh)は未実施。Codex の担当はタイプバランスチェッカー実装で、ダメージ計算のレビュー担当ではない)
-Next: P1-9 WASM → Phase 2。人間の確認待ち: hb_boost / hd_boost の定義、表示 % の丸め(いずれも plan.md ブロッカー)
+Status: Phase 1 (計算エンジン) 完了。P1-9 WASM(engine/wasmapi + engine/cmd/wasm、make wasm / make test-wasm)まで。critic 1回目 FAIL → 修正 → 指示された修正をメインが確認して完了(2回目の critic は実行していない)。任意の外部 Codex レビュー(scripts/codex-review.sh)は未実施。Codex の担当はタイプバランスチェッカー実装で、ダメージ計算のレビュー担当ではない
+Next: Phase 2(P2-1 データソース調査)。人間の確認待ち: hb_boost / hd_boost の定義、表示 % の丸め、ブラウザでの WASM 実動作(P4-5)(いずれも plan.md ブロッカー)
 
 ## Type Balance Checker
 Owner: Codex

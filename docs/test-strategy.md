@@ -16,6 +16,7 @@
 | L4 契約 | API が openapi.yaml に準拠 | kin-openapi のバリデータ | `make test` |
 | L5 E2E | k3d 上の全体 | スモーク(curl)+ Playwright | `make e2e` |
 | L6 iOS | 画面ロジック | XCTest(シミュレータ) | `make ios-test` |
+| L7 Go/WASM 一致 | ネイティブ Go と WASM の出力 | Node + wasm_exec.js | `make test-wasm` |
 
 ## L2 ゴールデンテスト
 
@@ -59,6 +60,26 @@ SP は努力値 `max(0, 8×SP−4)` に換算する。
 3. 逆算にかけ、**正解が上位5候補に入る割合(Recall@5)** を測る
 - 合格基準: 1回観測で Recall@5 ≥ 80%、2回観測で ≥ 95%
 - 全ポケモンからランダムに 1,000 ケース(固定シード)
+
+## Go/WASM 一致テスト(`make test-wasm`)
+
+ブラウザ版のオフライン計算は同じ engine を WASM にして使う(ADR-0011)。そこで
+「ネイティブ Go と WASM が**同じバイト列**を返す」ことを別レイヤーで見る。
+
+- 入力は `engine/wasmapi/testdata/vectors.json`(ゴールデンの固定ケース由来 + 手書き。ダメージ・一括・逆算)
+- 期待値はコミットしない。実行のたびに `engine/cmd/wasmexpect` がネイティブ Go で生成し、
+  `scripts/wasm-conformance.mjs` が `engine.wasm`(Node + `wasm_exec.js`)の出力とバイト比較する
+- 順方向・逆方向の2周(状態を持ち越さない)、異常系(引数の型違い・壊れた JSON)の後も正常に計算できること、
+  逆算が 1 秒以内であることも見る
+- **計算の正しさはここでは見ない**。それは L2 ゴールデン(@smogon/calc 照合)の役割で、
+  この層は「実行環境が変わっても結果が変わらない」だけを担保する
+- **前提不足(Node・`engine.wasm`・`wasm_exec.js`・`go` が無い)はスキップではなく失敗**にする
+  (「スキップや未実装ターゲットの正常終了を成功と数えない」)
+- **`make test` には含めない**。WASM ビルドと Node 起動が毎回入り、`make test` < 1分 を損なうため。
+  代わりに `engine/wasmapi/wiring_test.go` が `make wasm` / `make test-wasm` / `.gitignore` の配線を
+  `make test` 側で固定し、配線忘れが緑にならないようにする
+- 境界そのもの(DTO・列挙・エラー写像・engine 素通し)は `engine/wasmapi/*_test.go` が `make test` で見る
+- ブラウザでの実動作(MIME・`instantiateStreaming`・キャッシュ・メモリ上限)は範囲外。E2E(P4-5)で確認する
 
 ## E2E(Playwright)
 

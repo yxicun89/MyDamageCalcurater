@@ -77,3 +77,16 @@
 ### Next
 - P1-9 WASM
 
+## 2026-09-21 (Claude Code: P1-9 WASM)
+### Done
+- scanner 省略 → spec-writer(ADR-0011 とテスト先行)→ implementer → critic 1回目 FAIL(受け入れ条件3点が無検証)→ 修正 → メインが確認して完了。engine 本体は無変更
+- engine/wasmapi(DTO・検証・エラー写像。純粋)、engine/cmd/wasm(syscall/js の登録のみ)、engine/cmd/wasmexpect、scripts/wasm.sh、scripts/wasm-conformance.mjs、make wasm / make test-wasm
+- Go/WASM が 32 ベクタ × 2周でバイト一致。engine.wasm 4.63 MB(gzip 1.32 MB)、逆算の最悪 16 ms(Node)
+### Open issues
+- ブラウザでの実動作は未確認(Node のみ)。P4-5 で人間が確認(plan.md ブロッカー)
+- ADR-0011 §10 の API 契約差分は P3-1 / P4-5 に持ち越し(plan.md)
+- CLAUDE.md のリポジトリ構成表に engine/wasmapi/ と engine/cmd/wasmexpect/ が無い(critic の提案。ユーザー確認待ち)
+- 任意の外部 Codex レビューは未実施
+### Next
+- P2-1 データソース調査
+
