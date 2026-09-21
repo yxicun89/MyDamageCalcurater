@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "items": {
+    "choiceband": {"StatMods": {"atk": 6144}},
+    "choicespecs": {"StatMods": {"spa": 6144}},
+    "assaultvest": {"StatMods": {"spd": 6144}},
+    "eviolite": {"StatMods": {"def": 6144, "spd": 6144}},
+    "lifeorb": {"DamageMod": 5324},
+    "expertbelt": {"DamageMod": 4915, "OnlySuperEffective": true},
+    "charcoal": {"BoostType": "fire", "BoostTypeMod": 4915},
+    "muscleband": {"PowerMod": 4505, "PowerCategory": "physical"},
+    "wiseglasses": {"PowerMod": 4505, "PowerCategory": "special"},
+    "occaberry": {"ResistBerryType": "fire"},
+    "chilanberry": {"ResistBerryType": "normal"}
+  },
+  "abilities": {
+    "adaptability": {"StabMod": 8192},
+    "thickfat": {"DefResistType": {"fire": 2048, "ice": 2048}},
+    "filter": {"ReduceSuperEffective": 3072},
+    "solidrock": {"ReduceSuperEffective": 3072},
+    "steelworker": {"OffBoostType": "steel", "OffBoostTypeMod": 6144},
+    "waterbubble": {"OffBoostType": "water", "OffBoostTypeMod": 8192, "DefResistType": {"fire": 2048}}
+  }
+}

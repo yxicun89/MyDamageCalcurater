@@ -325,6 +325,19 @@ Reason: ユーザーが「iOS も作りたいので iOS レーンも起動した
 Impact: COORDINATION.md のレーン表・依存の節・起動の目安、CURRENT_STATE.md に iOS 欄を追加。準備はタイプバランスレーンのセッションが行った(データレーンの4レーン化の規則に1行ずつ追加しただけ)。
 
 
+## 2026-09-21: importer(P2-2b)の3点(ユーザー回答。既定案どおり)
+Decision: (1) 本番の効果定義 `data/importer/effects.json` を Git にコミットする(英語 ID と 4096 基準の整数だけ)。(2) 日本語名は ja(漢字混じり)を優先し、無ければ ja-Hrkt(かな)。(3) `data/importer/regulations.json` にレギュレーションの日本語ラベルを入れてコミットする。
+Reason: ユーザーが確認の質問に回答した。
+Impact: ADR-0017 の既定値どおり。plan.md のブロッカーから外した。
+
+## 2026-09-21: 言語・ミドルウェア・ライブラリは最新の安定版に上げ、正確な番号で固定する(ユーザー決定。全レーン)
+Decision: Go のツールチェーン、Node、npm パッケージ、Go のモジュール、MySQL・k3s 等のコンテナイメージ、Swift/Xcode 周りを、その時点の最新の安定版に更新し、正確なバージョン(npm は ^ ~ なし、イメージはタグ+できれば digest)で固定する。`latest` 等の自動追従はしない(GitOps で再現できなくなるため)。
+古くなったものを一覧にする make ターゲット(例 `make deps-outdated`)を用意し、定期的にまとめて上げる。
+@smogon/calc(ゴールデンの照合相手)も新しい版があれば上げる。ただし先に今のゴールデンとの差分を調べてから切り替え(P2-1b と同じ手順)、説明のつかない差分があれば止めて報告する。
+分担: 各レーンが自分の範囲の依存を上げる(データ: engine・services/go.mod の共有部分・tools・MySQL・calc / API: API が使うライブラリ / Web: web/ の package.json・Node / タイプバランス: services/balance / iOS: ios/)。Go のツールチェーンの版(go.work・各 go.mod の go/toolchain 行)は全モジュールで揃え、データレーンが先に上げて main に入れ、他のレーンはそれに合わせる。
+Reason: ユーザーが「アップデートの手間を減らすため、ミドルウェアやプログラミング言語等のバージョンは全て最新にして」と指示し、固定方法と calc の扱いに回答した。
+Impact: 各レーンの次のタスクの前に依存の更新を入れる。更新後はそのレーンのテスト一式を通してから PR にする。
+
 ## 2026-09-21: TB3(特性)の仕様3点(ユーザー回答)と細部の既定案
 Decision: ユーザー回答: 特性は analyze の request で `abilityId` を任意指定/効果は無効・吸収・倍率変更に加え ×3/4 なども含める/特性による無効・吸収は集計の「無効」に含め source で区別。
 既定案(ユーザー未確認): 効果は正規化データ(immune / absorb / type_multiplier / super_effective_multiplier)の read model `BALANCE_ABILITIES_PATH`、
