@@ -20,3 +20,4 @@ Next: ユーザー作成のprivate remoteはHTTPSで到達可能・空である�
 - 共通マスタ: 正本は1つ。`feat/claude-p1-engine` の ADR-0002 にあるコミット済みスナップショット案を候補とし、人間の確認待ち
 - TB0 type chart: `engine/typechart.go` と同じ現行相性を temporary adapter で持つ。正式マスタ確定後に provider を差し替える
 - 共有状態の正本: main worktree の `docs/ai-shared/`。feature branch 内のコピーは現在状態として使わない
+- 開発の正本: private の `origin`(履歴を消毒したクリーンコピー)の `main`。作業ディレクトリは Claude Code が `~/MyDamageCalcurater`、Codex が `~/MyDamageCalcurater-codex`(同じリポジトリの worktree)。統合・止まるときの作法は `docs/ai-shared/COORDINATION.md`。旧ディレクトリ(`~/pokecalc*`)はアーカイブで、以後そこで実装しない

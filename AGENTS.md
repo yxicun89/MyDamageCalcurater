@@ -54,22 +54,22 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 ## 共有ファイルの編集規約
 
 担当ディレクトリを分けても、次の5つは両方が触る可能性があり、コンフリクトの原因になる。
-以下の規約で編集する。Codex ブランチの main への取り込みはマージコーディネーター(Claude Code)が行う
-(手順は `CLAUDE.md`「Codexブランチの取り込み手順」)。
+以下の規約で編集する。**main への統合は、各 AI が自分のブランチを自分で行う**(2026-09-21 改訂。
+マージコーディネーターは廃止。手順・条件・止まるときの作法は `docs/ai-shared/COORDINATION.md` を正とする)。
 
 1. `docs/ai-shared/CURRENT_STATE.md`
    - 各 AI は自分のセクション(`## Damage Calculator` / `## Type Balance Checker`)だけを編集する。
      相手のセクションは読むだけ。コンフリクトが起きても、該当セクションを残すだけで解決できる。
-   - 例外: マージコーディネーターは、Codex ブランチの取り込み完了時に `## Type Balance Checker` 欄を更新する。
+   - 統合時の欄の更新も、それぞれ自分のセクションを自分で行う。
 2. `docs/ai-shared/DECISIONS.md`
    - 追記のみ。既存エントリは編集しない。ファイル末尾に新エントリを足す。
 3. `go.work`(Go ワークスペース)
-   - Codex は `services/balance/go.mod` を自分のモジュールとして作成するが、`go.work` への追記は行わない。
-     main への取り込み時にマージコーディネーター(Claude Code)が追記する。
+   - Codex は `services/balance/go.mod` を自分のモジュールとして作成し、`go.work` の `use` に自分のモジュール(`./services/balance`)を
+     自分で追記してよい(自分のブランチを統合するときに含める)。
 4. ルートの `Makefile`
    - Codex は balance 用のターゲットをルートの `Makefile` に直接書かない。`services/balance/Makefile` を作る。
-     ルートの `Makefile` からは `include services/balance/Makefile` の1行だけで取り込む形にする。
-     その1行の追記も、取り込み時にマージコーディネーターが行う。
+     ルートの `Makefile` からは `include services/balance/Makefile` の1行だけで取り込む形にし、その1行は Codex が
+     自分で追記してよい(自分のブランチを統合するときに含める)。
    - include されたレシピはルートから実行される。ターゲット名は `balance-` 接頭辞にして既存ターゲットと衝突させず、
      パスは `services/balance/` 起点で書く(または `cd services/balance &&` を付ける)。
 5. `AGENTS.md` 自体 / `CLAUDE.md` 自体
