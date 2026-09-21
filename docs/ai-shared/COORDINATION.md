@@ -17,11 +17,24 @@
 
 | レーン | 作業ディレクトリ | ブランチ | 範囲 |
 |---|---|---|---|
-| **ダメージ計算**(damage calc) | `~/MyDamageCalcurater` | `feat/calc-<phase名>`(既存の `feat/claude-p1-engine` はマージまでそのまま使う) | `docs/plan.md` の M1〜M4。`services/balance/` 以外 |
+| **データ**(damage calc: engine・マスタ) | `~/MyDamageCalcurater` | `feat/calc-<phase名>`(既存の `feat/claude-p1-engine` はマージまでそのまま使う) | `engine/`、`tools/golden/`・`testdata/golden/`、Phase 2(`services/pokedex/`・`tools/importer/`・`services/internal/master/`・MySQL の k8s 定義)、および他のレーンに属さない M1〜M4 のタスク |
+| **API**(damage calc: サービス) | `~/MyDamageCalcurater-api` | `feat/api-<phase名>` | Phase 3(`services/calc/`・`services/gateway/`・契約テスト・k3d のスモーク)。**`api/openapi.yaml` と生成物(`services/internal/api/`)を変更できるのはこのレーンだけ** |
+| **Web**(damage calc: 画面) | `~/MyDamageCalcurater-web` | `feat/web-<phase名>` | Phase 4(`web/`・Playwright)。`make wasm` の成果物を使う |
 | **タイプバランス**(type balance) | `~/MyDamageCalcurater-tb`(同じリポジトリの git worktree) | `feat/tb-<stage名>`(既存の `feat/codex-tb0-foundation` はマージまでそのまま使う) | `services/balance/` とその Kustomize / Argo CD 定義。設計の正は `docs/type-balance-design.md` |
 
-- ディレクトリはこの2つだけにする。レーンの作業ディレクトリは、どの AI が使ってもよい(同時に2つのセッションで開かない)。
-- タイプバランスの worktree が無いときは作る: `git -C ~/MyDamageCalcurater worktree add ~/MyDamageCalcurater-tb <ブランチ>`
+- ディレクトリはレーンの数だけ(いまは4つ)にする。レーンの作業ディレクトリは、どの AI が使ってもよい(同時に2つのセッションで開かない)。
+- レーンの worktree が無いときは作る: `git -C ~/MyDamageCalcurater worktree add ~/MyDamageCalcurater-<レーン> <ブランチ>`
+
+### レーン間の依存と共有ファイル(4レーン。2026-09-21 ユーザー決定)
+
+- **他のレーンの範囲のファイルは変更しない**。必要な変更は `DECISIONS.md` に既定案付きの提案として書き、そのレーンに任せる。待たずに進めるため、暫定の境界(インターフェース・架空データ・fake)を自分のレーン内に置いてよい。
+  - API レーン: マスタの読み込みは `services/internal/master`(データレーン)の写像が main に入るまで、自分の中の差し替え可能なインターフェースと架空データで作る。engine は変更せず、公開 API を呼ぶだけ。
+  - Web レーン: 計算は WASM(`engine/wasmapi` の JSON 契約。ADR-0011)で先に作る。API の型が要る部分(P4-5)は、API レーンが `api/openapi.yaml` を更新して main に入れてから追従する。マスタ(種族・技の一覧)は pokedex-svc ができるまで架空データで作る。
+  - データレーン: `api/openapi.yaml` を変えない。pokedex の API が要るときは DECISIONS.md で API レーンに提案する。
+- **両方が触る共有ファイル**:
+  - `docs/plan.md`: 自分のレーンのタスクの行(とブロッカー節の自分の項目)だけを更新する。
+  - ルートの `Makefile`・`go.work`: 自分のレーンのターゲット・`use` 行の追加だけ。統合時の競合は両方を残して解決する。
+  - `docs/ai-shared/CURRENT_STATE.md`: 自分のレーンの欄だけ。
 - 単発の修正は `fix/<レーン>-...`(例 `fix/calc-...`)。1つのブランチに複数の Phase/ステージを積まない。
 - git の作者情報は、このリポジトリのローカル設定(`pokecalc-dev <noreply@example.com>`)を使う。個人の identity をコミットしない。
 - リモートの URL・認証情報を文書・コミットに書かない。リポジトリを公開(public)にするのは、ユーザーの明示的な指示と `make check-publishable-full` の後だけ。
@@ -111,6 +124,8 @@ Xcode の署名・実機インストール、Codex / 外部サービスのログ
 ## 起動の目安
 
 ```
-cd ~/MyDamageCalcurater     && claude   # または codex(ダメージ計算レーン)
-cd ~/MyDamageCalcurater-tb  && claude   # または codex(タイプバランスレーン)
+cd ~/MyDamageCalcurater      && claude   # または codex(データレーン)
+cd ~/MyDamageCalcurater-api  && claude   # または codex(API レーン)
+cd ~/MyDamageCalcurater-web  && claude   # または codex(Web レーン)
+cd ~/MyDamageCalcurater-tb   && claude   # または codex(タイプバランスレーン)
 ```
