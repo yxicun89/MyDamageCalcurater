@@ -21,22 +21,22 @@ balance-build:
 
 balance-kustomize:
 	@kubectl kustomize $(BALANCE_DIR)/deploy/k8s/overlays/local >/dev/null
-	@kubectl kustomize services/balance/deploy/k8s/overlays/gitops >/dev/null
-	@kubectl kustomize services/balance/deploy/argocd >/dev/null
+	@kubectl kustomize $(BALANCE_DIR)/deploy/k8s/overlays/gitops >/dev/null
+	@kubectl kustomize $(BALANCE_DIR)/deploy/argocd >/dev/null
 
 balance-gitops-template-check: balance-kustomize
-	@services/balance/scripts/check-gitops.sh template
+	@BALANCE_DIR=$(BALANCE_DIR) $(BALANCE_DIR)/scripts/check-gitops.sh template
 
 balance-gitops-check: balance-kustomize
-	@services/balance/scripts/check-gitops.sh ready
+	@BALANCE_DIR=$(BALANCE_DIR) $(BALANCE_DIR)/scripts/check-gitops.sh ready
 
 balance-docker-build:
 	@docker build -t $(BALANCE_IMAGE) $(BALANCE_DIR)
 
 balance-docker-push:
-	@services/balance/scripts/publish-image.sh
+	@BALANCE_DIR=$(BALANCE_DIR) $(BALANCE_DIR)/scripts/publish-image.sh
 
-balance-k3d-deploy: balance-docker-build
+balance-k3d-deploy: balance-docker-build ## k3d へ balance を直接デプロイ
 	@k3d image import $(BALANCE_IMAGE) --cluster $(CLUSTER)
 	@kubectl apply -k $(BALANCE_DIR)/deploy/k8s/overlays/local
 	@kubectl -n pokecalc rollout restart deployment/balance
@@ -46,4 +46,4 @@ balance-smoke:
 	@BALANCE_URL=$(BALANCE_URL) $(BALANCE_DIR)/scripts/smoke.sh
 
 balance-gitops-apply: balance-gitops-check
-	@kubectl apply -k services/balance/deploy/argocd
+	@kubectl apply -k $(BALANCE_DIR)/deploy/argocd

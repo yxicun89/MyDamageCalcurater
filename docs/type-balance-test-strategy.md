@@ -23,6 +23,9 @@ TB0 の静的タイプ相性表は開発継続用の temporary adapter で、恒
 
 ## 実行コマンド
 
+ルートの `make test` / `make build` / `make lint` の vet は、入れ子のモジュールである `services/balance` を対象にしない
+(ルート Makefile の `include` で balance のターゲットを呼べるだけ)。このレーンの完了確認では、下の `balance-*` を必ず実行する。
+
 ```sh
 make -f services/balance/Makefile balance-gen
 make -f services/balance/Makefile balance-test

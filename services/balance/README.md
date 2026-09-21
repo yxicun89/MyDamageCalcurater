@@ -17,7 +17,7 @@ damage-calc とは兄弟サービスで、互いの実行時 API には依存し
 `TemporaryTypeChart` は開発継続用であり恒久正本ではない。2026-09-21 時点の
 `engine/typechart.go` と同じ第6世代以降の18タイプ相性を複製し、ADR-0012 の共通マスタが
 確定したら `balance.TypeChartProvider` の adapter だけを差し替える。
-複製元は commit `2df01c5eb031` の `engine/typechart.go`、SHA-256 は
+複製元は main の commit `cc9a816` 時点の `engine/typechart.go`(最終変更 `0e4616a`)、SHA-256 は
 `cc41f76f82b0c79818ea784436c6a760bd4a8699a0d2596855526b7fa634edf5`。
 
 ## TB0 HTTP 契約

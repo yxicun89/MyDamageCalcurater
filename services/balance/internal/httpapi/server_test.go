@@ -133,3 +133,75 @@ func TestAnalyzeRejectsOversizedBody(t *testing.T) {
 		t.Errorf("body = %s", recorder.Body.String())
 	}
 }
+
+func TestAnalyzeRejectsPartialOrBlankRequestContext(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		deviceID  string
+		sessionID string
+	}{
+		{name: "missing device", sessionID: "test-session"},
+		{name: "missing session", deviceID: "test-device"},
+		{name: "blank device", deviceID: "   ", sessionID: "test-session"},
+		{name: "blank session", deviceID: "test-device", sessionID: "\t"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodPost, "/api/balance/v1/team-balance/analyze", strings.NewReader(`{"members":[{"pokemonId":"0445-000"}]}`))
+			request.Header.Set("Content-Type", "application/json")
+			if tt.deviceID != "" {
+				request.Header.Set("X-Device-Id", tt.deviceID)
+			}
+			if tt.sessionID != "" {
+				request.Header.Set("X-Session-Id", tt.sessionID)
+			}
+			New().ServeHTTP(recorder, request)
+
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+			}
+			if !strings.Contains(recorder.Body.String(), `"code":"missing_request_context"`) {
+				t.Errorf("body = %s", recorder.Body.String())
+			}
+		})
+	}
+}
+
+func TestAnalyzeAcceptsBoundaryInputs(t *testing.T) {
+	t.Parallel()
+
+	sixMembers := `{"members":[{"pokemonId":"0001-000"},{"pokemonId":"0002-000"},{"pokemonId":"0003-000"},{"pokemonId":"0004-000"},{"pokemonId":"0005-000"},{"pokemonId":"0006-000"}]}`
+	oneMember := `{"members":[{"pokemonId":"0445-000"}]}`
+	exactLimit := oneMember + strings.Repeat(" ", maxAnalyzeBodyBytes-len(oneMember))
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{name: "six members", body: sixMembers},
+		{name: "body exactly at limit", body: exactLimit},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if tt.name == "body exactly at limit" && len(tt.body) != maxAnalyzeBodyBytes {
+				t.Fatalf("fixture length = %d, want %d", len(tt.body), maxAnalyzeBodyBytes)
+			}
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodPost, "/api/balance/v1/team-balance/analyze", strings.NewReader(tt.body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("X-Device-Id", "test-device")
+			request.Header.Set("X-Session-Id", "test-session")
+			New().ServeHTTP(recorder, request)
+
+			// TB0 accepts the input and reports that analysis arrives in TB1.
+			if recorder.Code != http.StatusNotImplemented {
+				t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusNotImplemented, recorder.Body.String())
+			}
+		})
+	}
+}
