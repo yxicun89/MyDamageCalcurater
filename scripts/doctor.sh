@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # 前提ツールの確認。不足があれば brew のコマンドを表示する。
-set -u
+set -euo pipefail
+# 不足ツールを全部列挙してから終了コードを返す設計のため、失敗は if / || true で個別に受ける。
 missing=0
 check() { # name, brew-package, required(1/0)
   if command -v "$1" >/dev/null 2>&1; then
-    printf "  ok   %-12s %s\n" "$1" "$($1 --version 2>/dev/null | head -1)"
+    # --version が失敗・未対応でもバージョン欄が空になるだけで、確認は続ける(|| true)。
+    printf "  ok   %-12s %s\n" "$1" "$($1 --version 2>/dev/null | head -1 || true)"
   else
     if [ "$3" = "1" ]; then
       printf "  NG   %-12s brew install %s\n" "$1" "$2"; missing=1
