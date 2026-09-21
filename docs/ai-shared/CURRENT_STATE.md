@@ -3,8 +3,8 @@
 ## Damage Calculator
 Owner: Claude Code
 Branch: feat/claude-p1-engine
-Status: Phase 1(計算エンジン)完了、P2-1(データソース調査)完了。ADR-0002 は暫定(人間の確認待ち10項目)。P2-2 以降は確認待ちで止めている。任意の外部 Codex レビュー(scripts/codex-review.sh)は未実施。Codex の担当はタイプバランスチェッカー実装で、ダメージ計算のレビュー担当ではない
-Next: 人間が ADR-0002 の確認事項に答える → P2-2(スキーマと importer)。人間の確認待ち(plan.md ブロッカー): マスタデータの取得元と使用可能集合、hb_boost / hd_boost の定義、表示 % の丸め、ブラウザでの WASM 実動作(P4-5)
+Status: Phase 1(計算エンジン)と P2-1(データソース調査)は完了。2026-09-21 のユーザー決定を docs に反映済み(ADR-0002 確定、requirements.md 修正、データ非コミット方針)。決定に伴うエンジン変更は Phase 1b(P1-10 プリセット再定義 → P1-11 表示%の分離 → P1-12 逆算の再設計)として未着手。任意の外部 Codex レビュー(scripts/codex-review.sh)は未実施。Codex の担当はタイプバランスチェッカー実装で、ダメージ計算のレビュー担当ではない
+Next: P1-10 → P1-11 → P1-12 → P2-1b(golden の oracle 切替。先に diff)→ P2-2。人間の確認待ち(plan.md ブロッカー): 実機観測%の丸め規則、testdata/golden と非コミット方針の関係、技の使用可否の食い違い、メガ石・フォーム・更新運用
 
 ## Type Balance Checker
 Owner: Codex

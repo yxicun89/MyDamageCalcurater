@@ -90,3 +90,17 @@ scripts/codex-review.sh による外部 Codex レビューは Claude Code が任
 Reason: Codex を engine のレビュー担当と誤って記録していたため。未実施の理由の断定も根拠がなかった。
 Impact: engine・逆算・API 契約のタスクの完了条件は critic の PASS と make test / make test-golden で、Codex レビューは含まない。
 DECISIONS.md は追記のみの規約のため、既存エントリは編集せずこの訂正で上書きする。CURRENT_STATE.md と CLAUDE_LOG.md の該当行は訂正済み。
+
+## 2026-09-21: マスタデータ方針・防御プリセット・逆算・表示%のユーザー決定(ADR-0002 確定)
+Decision: (1) oracle は `@smogon/calc@0.12.0` Champions を完全固定で使用し、Showdown は照合、公式のレギュレーション情報を使用可能集合の基準、日本語名は PokeAPI+ローカル override と責務を分ける。v1 は M-C のみで、レギュレーションはデータとして持ち直書きしない。
+ゴールデンは 0.12.0 Champions へ切り替えてよいが、先に旧結果と diff して確認してから更新する。
+(2) 実 Pokémon マスタデータ・生成済みスナップショット・公式画像は Git にコミットしない(`data/generated/` は .gitignore)。README に明記。商用公開時の第三者 IP は別問題として ADR に残す。
+(3) M-C に無い持ち物(こだわりハチマキ・こだわりメガネ・とつげきチョッキ・しんかのきせき)は候補から除外。ヌケニンは v1 で考慮不要。
+(4) 防御プリセット: hb/hd = H32+B(D)32・補正なし、hb_boost/hd_boost = H32+B(D)0+上昇性格、新設 hb_full/hd_full = H32+B(D)32+上昇性格。
+(5) 逆算は H32 前提で B(D) の SP を 0〜32 探索し、補正なし/上昇性格ごとに SP の範囲で候補を返す(決め打ちしない)。
+(6) アプリ表示の%は小数第1位。実機観測の整数%の丸め規則は別関数・別概念にする。
+(7) WASM のブラウザ実機確認は P4-5(Chrome/Safari)。engine/wasmapi と engine/cmd/wasmexpect は CLAUDE.md の構成表に追記。
+Reason: ユーザーが plan.md のブロッカーと ADR-0002 の確認事項に回答した。
+Impact: plan.md に P1-10(プリセット再定義)/ P1-11(表示%の分離)/ P1-12(逆算の再設計)/ P2-1b(oracle 切替)を追加。ADR-0009・0010・0011 は各タスクで改訂する。
+未回答: testdata/golden を「スナップショットはコミットしない」方針の対象にするか、技の使用可否の食い違い、メガ石対応・フォーム、importer の更新運用。plan.md ブロッカー節を参照。
+

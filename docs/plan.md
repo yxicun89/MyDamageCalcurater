@@ -37,11 +37,17 @@
 - [x] P1-8 逆算(観測ダメージ→調整候補、複数観測で絞り込み)+ 再現率テスト
 - [x] P1-9 WASM ビルド(`make wasm`)と Go/WASM の結果一致テスト
 
+### Phase 1b 決定の反映(2026-09-21 のユーザー決定。ADR-0002 の確定方針・DECISIONS.md 参照)
+- [ ] P1-10 防御プリセットの再定義: `hb` = H32・B32・性格補正なし / `hd` = H32・D32・補正なし / `hb_boost` = H32・B0・B上昇性格 / `hd_boost` = H32・D0・D上昇性格 / **新設** `hb_full` = H32・B32・B上昇性格 / `hd_full` = H32・D32・D上昇性格。ADR-0009・`engine/bulk.go` のカタログと既定セット・テスト・`tools/golden`(旧 `hb`/`hd` の外部照合ベクタは性格補正ありなので `hb_full`/`hd_full` 相当。補正なしの `hb`/`hd` を追加)・`api/openapi.yaml`(`DefenderPreset` enum と例)を更新して `make gen`(絶対ルール1)。`hb_boost`/`hd_boost` の確認待ちは解消
+- [ ] P1-11 表示%の分離: アプリが表示する計算結果の%は**小数第1位**(例 73.4%)。HP 比率から直接求め、整数%に丸めない(整数演算で 0.1% 単位)。実機画面の観測%(整数%)を逆算の入力にする場合の丸め規則は**別関数・別概念**にし、同じ `DisplayPercent` に混在させない。engine・`engine/wasmapi`(`minPercent`/`maxPercent`)・`api/openapi.yaml`・ADR-0010/0011 を更新
+- [ ] P1-12 逆算の再設計: 固定プリセットからの選択をやめ、**H32 前提で B(D) SP を 0〜32 探索**、性格は「補正なし」「B(D) 上昇」の2通り(攻撃側の A/C も同様に0〜32×補正なし/上昇)。結果は「性格補正あり/なし × 持ち物」ごとの**SP の範囲**で、観測から区別できない候補は決め打ちせず残す。ADR-0010 を改訂、再現率テスト(Recall@5 の定義=真値の SP が範囲に入る等)を再設計し基準(1観測 ≥80%・2観測 ≥95%)は緩めない。P1-11 の後
+
 ### Phase 2 マスタデータ
-- [x] P2-1 **データソース調査**: チャンピオンズの使用可能ポケモン・技・持ち物の取得元を調べ ADR-0002 に記録(調査完了。ADR-0002 は**暫定**で、人間の確認待ちが10項目。P2-2 はその確認後に着手)
+- [x] P2-1 **データソース調査**: チャンピオンズの使用可能ポケモン・技・持ち物の取得元を調べ ADR-0002 に記録(調査完了。ADR-0002 は 2026-09-21 のユーザー決定で方針確定。残る確認事項はブロッカー節)
   - 確定後に、ゴールデンの種族集合(現在は gen9 参考集合1392種)を差し替えて `make golden-generate` で再生成し、`metadata.json` の `speciesScope` を更新する
   - HP=1 のヌケニンはゴールデンから除外している。チャンピオンズの実数値式(HP = 種族値+75+SP)では HP=76 になるため、扱いを決める
-- [ ] P2-2 MySQL スキーマ(migrate)と importer
+- [ ] P2-1b ゴールデンの oracle を `@smogon/calc@0.12.0` の Champions へ切り替え: `tools/golden/package.json` を `0.12.0` に**完全固定**(`^` 不可)。**先に旧ゴールデンと 0.12.0 Champions の結果を diff し、差分を確認してから**更新する(いきなり上書きしない)。種族集合を Champions 集合へ、SP の換算(`8×SP−4`)が不要になる。`known_diffs.yaml` への追加は ADR 付きで人間レビュー(CLAUDE.md)。`make test-golden` 全件一致。ADR-0002 §決定 5
+- [ ] P2-2 MySQL スキーマ(migrate)と importer(**実マスタ・スナップショットは Git にコミットしない**: `data/generated/` は .gitignore、Git には schema・importer・架空データの example・README・データの版 metadata のみ。使用可能集合・持ち物候補は**レギュレーション(v1 は M-C)依存のデータ**で、M-C を直書きしない。日本語名は PokeAPI+ローカル override。ADR-0002)
 - [ ] P2-3 pokedex-svc(検索・詳細・持ち物/技一覧、日本語名で前方一致)
 
 ### Phase 3 API
@@ -60,6 +66,7 @@
 - [ ] P4-4 逆算画面(観測ダメージ入力→候補リスト)
 - [ ] P4-5 API / WASM 切り替え(WASM ならバックエンド無しで動く)
   - WASM 境界との契約差分の解消(ADR-0011 §10 の持ち越し): Web に「ID → 実体(種族・技・持ち物・特性)」の解決層を1つ置き、オンライン(API に ID を送る=`moveId` など)とオフライン(WASM に解決済みの `move` / `Individual` を渡す)で同じ型を共有する。`openapi-typescript` の生成型と ADR-0011 §3 の DTO の対応表を作る。`minPercent`/`maxPercent` の整数化・`category`・`BulkCalcRow.defender`・エラー `code` 語彙の共通化(P3-1 で契約側を直した後)に Web 側を追従させる。WASM の遅延ロード(オンラインは API、オフラインだけ WASM)にするかを決める(ADR-0011 §11)
+  - **ブラウザ実機確認**(P1-9 は Node + wasm_exec.js までの確認。仕様ブロッカーではない): Chrome と Safari で、`.wasm` の MIME type / `WebAssembly.instantiateStreaming` / キャッシュ / Service Worker との干渉 / 初回ロード(約4.6MB・gzip 1.3MB)/ メモリ を確認する
 - [ ] P4-6 Playwright E2E(主要フロー)
 - [ ] P4-7 **M1 完了報告**: 動作確認手順を `docs/verify-m1.md` に書く
 
@@ -85,27 +92,18 @@
 ## ブロッカー
 (ここに止まった理由と試したことを書く)
 
-**【人間の確認待ち】`hb_boost` / `hd_boost`(H振り+B(D)補正)の定義**(P1-7、ADR-0009 §2)
-- requirements.md の「H振り+B(D)補正」に SP 配分の定義が無いため、「H振り(hp:32)+防御(特防)を上げる性格補正のみ・SP は振らない」と仮定して実装した。確定扱いにしていない。
-- 別解釈: 残り SP を B/D に全振り(実質 hb/hd と同じになり既定セットが1件減る)/ 中途半端な SP 量。
-- 確認できたら、次を同時に更新する: ADR-0009 §1 の表と §2 / `engine/bulk.go` のカタログ(`hb_boost` `hd_boost` の行)/ `engine/bulk_test.go` の `TestDefenderPresetCatalogDefinitions` と `TestDefaultDefenderPresetsByCategory`・単調性検査 /
-  `tools/golden/generate.mjs`(defense 部分にベクタ追加)→ `make golden-generate` → `testdata/golden/metadata.json` と `engine/bulk_golden_test.go` の件数期待値(現在は4件/グループ前提)/ `api/openapi.yaml` の `presetLabel` 例示。
-- `none/hp/hb/hd` の4種は golden で外部照合済みで、この確認の影響を受けない。テストを緩めて両解釈を通すことはしない(絶対ルール6)。
+**解決済み(2026-09-21 のユーザー決定。詳細は DECISIONS.md / ADR-0002 / requirements.md)**
+- `hb_boost` / `hd_boost` の定義 → `boost` = H32 + B(D)0 + 上昇性格、`full` = H32 + B(D)32 + 上昇性格、`hb`/`hd` = 性格補正なし。P1-10 で反映
+- マスタデータの取得元 → 責務分離(calc=oracle 0.12.0 固定 / Showdown=照合 / 公式情報=レギュレーション基準 / PokeAPI+override=日本語名)、v1 は M-C のみ(差し替え可能な構造)、実マスタ・スナップショットは Git に置かない
+- requirements.md との食い違い → こだわり系・とつげきチョッキ・しんかのきせきは M-C 向け候補から除外(requirements.md 修正済み)。ヌケニンは v1 で考慮不要
+- 計算結果の表示% → 小数第1位。P1-11 で反映
+- ブラウザでの WASM 実動作 → 仕様ブロッカーではない。P4-5 の確認項目
 
-**【人間の確認待ち】表示 % の丸め(round-half-up)**(P1-8、ADR-0010 §3)
-- ポケモンチャンピオンズの表示%が四捨五入なのか切り捨てなのか、小数第1位まで出るのかは未確認。「round-half-up の整数%」と仮定して実装した。確定扱いにしていない。実機が切り捨てだと、1 ポイントずれて完全一致が消える観測が出る(ADR-0010 §8)。
-- 確認できたら、次を同時に更新する: `engine/reverse.go` の `DisplayPercent`(1関数。engine の丸めはここだけ)/ ADR-0010 §3 の式と §7 の Recall 実測値 / `engine/reverse_test.go` の `TestDisplayPercentRounding` の期待値(理由をコミットメッセージに書く)。Recall テストは `DisplayPercent` を使って観測を作るので、関数の差し替えだけで追従する。しきい値(80%/95%)・シード・ケース数は動かさない(絶対ルール6)。
-- 丸めの確定で Recall が基準を割った場合も、しきい値・シード・ケース数ではなく ADR-0010 §6.3 の順序規則側を直す(2回観測の余裕は現状 0.5〜0.6 ポイントで薄い)。
-
-**【人間の確認待ち】ブラウザでの WASM 実動作**(P1-9、ADR-0011 §11)
-- P1-9 は Node + `wasm_exec.js` でしか確認していない(`make test-wasm`)。ブラウザ特有の事情は未確認で、P4-5 で人間が確認する: `.wasm` の MIME(`application/wasm`)/ `WebAssembly.instantiateStreaming` / キャッシュ(Service Worker 含む)/ メモリ上限 / 初回ロード(4.63 MiB、gzip 1.26 MiB)の体感。
-- 確認できたら、ADR-0011 §11 の「ブラウザでの実動作は未確認」と冒頭の状態欄(「§9 の実動作確認は未実施」)を更新する。
-
-**【人間の確認待ち】マスタデータの取得元と使用可能集合**(P2-1、ADR-0002 §人間の確認事項の10項目)
-- 推奨案(暫定): 一次ソースは `@smogon/calc` 0.12.0 の Champions 世代(MIT・集合と数値が一致・ゴールデンと同じ出所)、照合と習得技は Pokémon Showdown の champions mod、日本語名は PokeAPI(欠落は補完ファイル)。スナップショットをコミットし、importer は外部に取りに行かない。
-- 特に確認したい点: (1) 規約・適法性(元データは任天堂・ゲームフリークの知的財産。スナップショットのコミットと将来のリポジトリ公開の扱い。断定していない) (2) 対象レギュレーションを現行(M-C)のみにするか (3) ゴールデンの oracle を calc 0.12.0 の Champions 世代へ切り替えてよいか(`calculateChampions` の信頼性と、0.10.0→0.12.0 での gen9 出力差は未検証) (4) 技の使用可否の食い違い(calc のみ 11 技、Showdown のみ Pound。Snap Trap・Growth の型)。
-- **requirements.md の前提との食い違い**(ローカル検証で再現済み): 現行の Champions の持ち物にこだわりハチマキ・こだわりメガネ・とつげきチョッキ・しんかのきせきが無い(Choice Scarf・Life Orb は有る)。逆算の持ち物候補の「攻撃側: こだわり系」は現状では空になる。ヌケニン・ヌケッチャは使用可能集合に無い(HP=76 の論点は追加されたときのみ)。requirements.md と ADR-0005 の例の書き換えは確認後。
-- 確定後に更新する箇所: ADR-0002 の状態、P2-2 のスキーマ・importer 設計、`tools/golden`(種族集合・oracle・SP 換算)と `testdata/golden`(`make golden-generate`)、`docs/requirements.md` の逆算の持ち物候補。
+**【人間の確認待ち】残り**
+- **実機画面の観測%(整数%)の丸め規則**(逆算の入力側。ADR-0010 §3): Champions 実機の HP 表示が四捨五入か切り捨てかは未確認で、現在は「round-half-up の整数%」と仮定している。アプリが表示する%(小数第1位)とは別概念(P1-11 で関数を分ける)。確定時の更新箇所は、その観測用の丸め関数 1 つ・ADR-0010・該当テストの期待値(理由をコミットメッセージに)。Recall テストのしきい値・シード・ケース数は動かさない(絶対ルール6)。基準を割った場合は順序規則(ADR-0010 §6.3)側を直す
+- **`testdata/golden`(エンジンのテストベクタ)と「生成済みスナップショットは Git にコミットしない」方針の関係**: 現在のゴールデンは CLAUDE.md で「生成済みテストベクタ(コミットする)」とされ、`make test-golden` の前提。種族値などの入力を含むため、方針の対象に含めるか(含めるなら生成を CI・利用者側に寄せる必要があり、絶対ルール3 の運用が変わる)を決めてほしい。決まるまでは現状どおりコミットしたまま
+- **技の使用可否の食い違い**(ADR-0002 §3): calc のみが持つ 11 技(Anchor Shot 等)、Showdown のみの Pound、Snap Trap / Growth のタイプ。ゲーム内での確認が必要。P2-2 までに決める
+- **メガ石 ↔ メガフォームの対応、見た目違いフォームの持ち方、importer の更新運用**(スナップショットが Git 管理外になったため CronJob の役割を再設計): P2-2 の設計で扱う
 
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)

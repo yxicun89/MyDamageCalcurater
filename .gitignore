@@ -34,3 +34,6 @@ ios/DerivedData/
 
 # 個人用の動作確認手順書(実値入り。コミットしない)
 docs/local/
+
+# 第三者由来の Pokémon マスタデータ・生成済みスナップショット・公式画像(コミットしない。ADR-0002)
+data/generated/

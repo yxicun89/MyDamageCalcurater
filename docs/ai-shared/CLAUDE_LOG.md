@@ -99,3 +99,11 @@
 ### Next
 - 人間の確認後に P2-2
 
+## 2026-09-21 (Claude Code: ユーザー決定の反映)
+### Done
+- ユーザーの決定(マスタ方針・プリセット再定義・逆算の再設計・表示%・WASM・構成表)を docs に反映: ADR-0002 確定、requirements.md(こだわり系除外・プリセット定義・逆算・小数第1位%)、.gitignore(data/generated/)、README(第三者データ非配布)、CLAUDE.md(構成表・データ/レギュレーション規約)、plan.md(Phase 1b・P2-1b・ブロッカー整理)、DECISIONS.md
+### Open issues
+- testdata/golden と非コミット方針の関係(ユーザー確認待ち)。実機観測%の丸め規則。技の食い違い。メガ石対応・フォーム・更新運用
+### Next
+- P1-10 防御プリセットの再定義
+

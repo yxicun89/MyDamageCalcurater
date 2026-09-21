@@ -20,7 +20,9 @@ Claude Code / Codex の手順対応は [docs/development-workflow.md](docs/devel
 ```
 api/openapi.yaml        # API契約の唯一の正(仕様先行)
 engine/                 # 計算エンジン(純粋Go、I/O・外部依存なし)
-engine/cmd/wasm/        # ブラウザ用WASMビルド
+engine/cmd/wasm/        # ブラウザ用WASMビルド(syscall/js の登録のみ)
+engine/wasmapi/         # WASM/JS 境界の DTO・検証・エラー整形(純粋。ネイティブでテスト可)
+engine/cmd/wasmexpect/  # Go/WASM 一致テストの期待値生成(ネイティブ Go の開発用ツール)
 services/gateway/       # Echo。クライアントの唯一の入口、/assets も配信
 services/pokedex/       # マスタ参照(MySQL)
 services/calc/          # 計算(ステートレス)
@@ -58,6 +60,8 @@ docs/
 - 逆算(調整推定)は engine 内の総当たり探索(WASMでも動かすため)
 - 持ち物・技・ポケモンのリストをコードにハードコードしない。マスタデータから引く
 - 画像は必須にしない。無ければタイプ色エンブレムで成立すること
+- 実 Pokémon マスタデータ・生成済みスナップショット・公式画像はGitにコミットしない(`data/generated/` は .gitignore。ADR-0002)。Git に置くのはコード・schema・架空データの example・README・データの生成元/版の metadata
+- 使用可能なポケモン・技・持ち物はレギュレーション(v1 は M-C)依存のデータ。M-C をロジックに直書きしない
 - 常時動くアニメーションを入れない。演出は操作時のみ
 
 ## 技術規約
