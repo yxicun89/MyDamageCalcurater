@@ -9,12 +9,13 @@
 ## 共有状態(docs/ai-shared/)
 
 Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-shared/` だけ。
-現在状態の正本は **`main` 専用 worktree の `docs/ai-shared/`** とし、feature branch 内の
-同名ファイルは履歴上のスナップショットとして扱う。場所と更新手順は `README_AI_SHARED.md` を参照する。
+**作業は AI ではなく「レーン」(ダメージ計算 / タイプバランス)に属する**。どちらの AI がどのレーンを進めてもよく、
+同じレーンは同時に1セッションだけ。レーン・ディレクトリ・ブランチ・PR での統合・止まるときの作法は
+`docs/ai-shared/COORDINATION.md` を正とする(2026-09-21 ユーザー決定)。
 
-1. 作業開始時: main worktree の `docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md` を読む
-2. 作業終了時: main worktree で自分のログに追記し、`CURRENT_STATE.md` の自分の担当欄を更新する
-3. 実装は Claude/Codex それぞれの feature worktree だけで行う。共有状態だけを feature branch に複製しない
+1. 作業開始時: `git fetch origin` し、`origin/main` の `docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md` を読む。
+   続きはレーン欄の `Branch` の最新コミットと `Next` から始める
+2. 作業終了時: 自分のログ(`CLAUDE_LOG.md` / `CODEX_LOG.md`)に追記し、進めたレーンの欄(`Status`・`Next`・`Active`)を更新して commit・push する
 
 ## 開始時と Git 運用
 
@@ -32,24 +33,16 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 - コミットはメインエージェントが担当する。1タスク = 1コミットを基本とし、先に
   `docs/plan.md` を更新する。直前に `git diff` と `git diff --cached` を確認し、
   対象ファイルを明示して stage する。無関係な既存変更を一括で取り込まない。
-  push は明示的な依頼がある場合だけ行う。
+  作業ブランチへの push は区切りごとに行う。main へは PR 経由でのみ入れる(直接 push・直接 merge をしない。COORDINATION.md)。
 
 ## Git ブランチ運用
 
-- Claude Code: `feat/claude-<phase名>`(例 `feat/claude-p1-engine`)。Phase 単位で切る。
-  その Phase の `/verify` が通ったら main へマージしてブランチを削除する
-- Codex: `feat/codex-<stage名>`(例 `feat/codex-tb0-foundation`)。TB ステージ単位で切る。
-  そのステージのテストが全件通ったら main へマージしてブランチを削除する
-- 単発の修正: `fix/claude-...` / `fix/codex-...`。そのセッション内でマージまで完了させる。
-  次のセッションに持ち越さない
-- 1つのブランチに複数の Phase/ステージ分の作業を積み上げない
-- レートリミットや上限で片方が触れなくなることがある。もう片方が引き継ぐことはしない。
-  ブランチが宙に浮いた場合は、内容が明確なら担当外でも完了させてよい
-  (判断基準は「ルール違反や設計変更を含まないか」)。
-  不明瞭なら `DECISIONS.md` に保留として記録し、元の担当が次にそのステージへ着手する際に
-  新規タスクとして扱う(引き継ぎ資料は作らない)
-- Claude Code と Codex の作業を1つのブランチで混ぜない。相手の作業を使いたいときは、
-  相手のブランチを一度 main にマージしてから、各自が main から自分のブランチを切って作業する
+- ブランチはレーン単位で切る(AI 単位ではない)。ダメージ計算: `feat/calc-<phase名>`、タイプバランス: `feat/tb-<stage名>`、
+  単発の修正: `fix/<レーン>-...`。既存の `feat/claude-p1-engine` / `feat/codex-tb0-foundation` はマージまでそのまま使う
+- 1つのブランチに複数の Phase/ステージ分の作業を積み上げない。Phase/ステージが終わったら PR でマージしてブランチを削除する
+- レートリミットや上限で一方の AI が止まったら、**もう一方の AI が同じレーンのブランチの `Next` から続けてよい**
+  (前任の記録はうのみにせず検証する)。引き継ぎ資料は作らない
+- 同じレーンを2つのセッションで同時に進めない。別レーンの作業は、PR で main に入ってから `git merge origin/main` で取り込む
 
 ## 共有ファイルの編集規約
 
@@ -58,25 +51,20 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 マージコーディネーターは廃止。手順・条件・止まるときの作法は `docs/ai-shared/COORDINATION.md` を正とする)。
 
 1. `docs/ai-shared/CURRENT_STATE.md`
-   - 各 AI は自分のセクション(`## Damage Calculator` / `## Type Balance Checker`)だけを編集する。
-     相手のセクションは読むだけ。コンフリクトが起きても、該当セクションを残すだけで解決できる。
-   - 統合時の欄の更新も、それぞれ自分のセクションを自分で行う。
+   - 自分が進めているレーンの欄(`## Damage Calculator` / `## Type Balance Checker`)だけを編集する。
+     他のレーン欄は読むだけ。コンフリクトが起きても、該当欄を残すだけで解決できる。
 2. `docs/ai-shared/DECISIONS.md`
    - 追記のみ。既存エントリは編集しない。ファイル末尾に新エントリを足す。
 3. `go.work`(Go ワークスペース)
-   - Codex は `services/balance/go.mod` を自分のモジュールとして作成し、`go.work` の `use` に自分のモジュール(`./services/balance`)を
-     自分で追記してよい(自分のブランチを統合するときに含める)。
+   - タイプバランスレーンは `services/balance/go.mod` を作成し、`go.work` の `use` に `./services/balance` を追記してよい(その PR に含める)。
 4. ルートの `Makefile`
-   - Codex は balance 用のターゲットをルートの `Makefile` に直接書かない。`services/balance/Makefile` を作る。
-     ルートの `Makefile` からは `include services/balance/Makefile` の1行だけで取り込む形にし、その1行は Codex が
-     自分で追記してよい(自分のブランチを統合するときに含める)。
+   - タイプバランスレーンは balance 用のターゲットをルートの `Makefile` に直接書かない。`services/balance/Makefile` を作る。
+     ルートの `Makefile` からは `include services/balance/Makefile` の1行だけで取り込み、その1行は追記してよい(その PR に含める)。
    - include されたレシピはルートから実行される。ターゲット名は `balance-` 接頭辞にして既存ターゲットと衝突させず、
      パスは `services/balance/` 起点で書く(または `cd services/balance &&` を付ける)。
 5. `AGENTS.md` 自体 / `CLAUDE.md` 自体
-   - 双方とも、自分の担当セクションだけを編集する。全体の書き直しはしない。
-   - Codex の担当セクションは `AGENTS.md` の「Codex の実装担当範囲(タイプバランスチェッカー)」のみ。
-     それ以外の `AGENTS.md` と `CLAUDE.md` は Claude Code が編集する。
-     Codex が他の箇所の変更が必要だと考えたら、直接編集せず `DECISIONS.md` に提案を書く。
+   - 運用ルールの変更はユーザーの決定があったときだけ行い、`DECISIONS.md` に記録する。全体の書き直しはしない。
+   - 「タイプバランスレーンの範囲」節は、そのレーンを進める AI が設計に合わせて更新してよい。
 
 ## 変更・レビューで守ること
 
@@ -111,15 +99,18 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
   複雑な原因究明・設計判断などで高推論が必要な場合だけ、作業前に理由を短く説明する。
   実際に設定変更できない環境で「切り替えた」とは報告しない。
 
-## Codex の実装担当範囲(タイプバランスチェッカー)
+## タイプバランスレーンの範囲(タイプバランスチェッカー)
 
-### 担当範囲(厳守)
+旧「Codex の実装担当範囲」。2026-09-21 のユーザー決定で、**このレーンは Claude Code・Codex のどちらが進めてもよい**
+(レーン制。COORDINATION.md)。以下の範囲・規約は、進める AI によらず同じ。
 
-- **担当**: `services/balance/`(タイプバランスチェッカー)とその Deployment/Service/Kustomize
-- **担当外・変更禁止**: `engine/`, `services/pokedex/`, `services/calc/`, `services/record/`, `services/team/`, `web/`, `ios/`, `api/openapi.yaml` の damage 関連エンドポイント
+### 範囲(厳守)
+
+- **範囲**: `services/balance/`(タイプバランスチェッカー)とその Deployment/Service/Kustomize
+- **範囲外・変更禁止**(ダメージ計算レーンの範囲): `engine/`, `services/pokedex/`, `services/calc/`, `services/record/`, `services/team/`, `web/`, `ios/`, `api/openapi.yaml` の damage 関連エンドポイント
   - pokedex-svc は実装やスキーマを変更しない。ADR-0012 により balance の必須ランタイム依存にもしない
   - 変更が必要だと思ったら実装せず `docs/ai-shared/DECISIONS.md` に提案を書いて止まる
-- ダメージ計算アプリ側の未完了タスクを「引き継ぎ」として実装しない
+- このレーンのセッションで、ダメージ計算レーンの未完了タスクを実装しない(ダメージ計算レーンは別セッションが進める)
 
 ### 最初に読むもの(この順で)
 
@@ -146,7 +137,7 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 
 - ユニットテストが通ること(`go test ./services/balance/...`)
 - k3d 上で `/api/balance/v1/team-balance/analyze` が疎通すること
-- セッション終了時に `docs/ai-shared/CODEX_LOG.md` と `CURRENT_STATE.md` の自分の担当欄を更新すること
+- セッション終了時に自分のログ(`CLAUDE_LOG.md` / `CODEX_LOG.md`)と `CURRENT_STATE.md` の `## Type Balance Checker` 欄を更新すること
 
 ## 検証と終了時
 
