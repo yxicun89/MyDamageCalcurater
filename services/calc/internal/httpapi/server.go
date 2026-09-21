@@ -118,6 +118,7 @@ func httpErrorHandler(c *echo.Context, err error) {
 // 受け取ったときに返す echo.HTTPError.Message の文言の断片(oapi-codegen が生成する固定の英文
 // "Expected one value for X-Device-Id, got 2" 等)。ヘッダの「欠落」「空」(bind 失敗の
 // "is empty, can't bind its value" を含む)とは別の失敗で、missing_header にはしない。
+// gateway が同じ失敗を invalid_header にするため(ADR-0020 §9)、calc-svc も揃える。
 const duplicateHeaderMessage = "Expected one value for"
 
 func errorBodyFor(err error) (int, api.Error) {
@@ -136,12 +137,12 @@ func errorBodyFor(err error) (int, api.Error) {
 		case http.StatusBadRequest:
 			// calc の3操作だけが生成ラッパを経由する(pokedex は直接 not_found。R1)。
 			// そのラッパが返す 400 はヘッダの検証由来。「欠落」「空」(bind 失敗も含む)は
-			// missing_header、それ以外(同名ヘッダの重複指定)は invalid_input にする
-			// (ADR-0018 §1.6: missing_header はヘッダ欠落・空に限定する)。
+			// missing_header、それ以外(同名ヘッダの重複指定)は invalid_header にする
+			// (ADR-0020 §9: gateway と語彙を揃える。missing_header はヘッダ欠落・空に限定する)。
 			var ee *echo.HTTPError
 			if errors.As(err, &ee) && strings.Contains(ee.Message, duplicateHeaderMessage) {
 				slog.Warn("calc-svc: ヘッダが重複している", "message", ee.Message)
-				return http.StatusBadRequest, api.Error{Code: api.InvalidInput, Message: "リクエストヘッダの指定が不正"}
+				return http.StatusBadRequest, api.Error{Code: api.InvalidHeader, Message: "リクエストヘッダの指定が不正"}
 			}
 			return http.StatusBadRequest, api.Error{Code: api.MissingHeader, Message: "X-Device-Id / X-Session-Id が無い"}
 		}

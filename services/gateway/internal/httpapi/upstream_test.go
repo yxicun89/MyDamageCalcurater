@@ -103,16 +103,16 @@ func TestUpstreamFailures(t *testing.T) {
 // panicTransport は RoundTrip で panic する(gateway 内部の想定外の失敗の代わり)。
 type panicTransport struct{}
 
-const panicSecret = "secret-internal-detail-for-test"
+const panicDetail = "internal-panic-detail-for-test"
 
-func (panicTransport) RoundTrip(*http.Request) (*http.Response, error) { panic(panicSecret) }
+func (panicTransport) RoundTrip(*http.Request) (*http.Response, error) { panic(panicDetail) }
 
 // AC-G7: panic は回復して 500 internal(panic の値・スタックを message に出さない)。
 func TestPanicIsRecoveredAsInternal(t *testing.T) {
 	env := newTestEnv(t, func(c *Config) { c.transport = panicTransport{} })
 	rec := serve(t, env.handler, http.MethodPost, "/api/calc", validHeaders(), []byte(`{}`))
 	assertGatewayError(t, rec, http.StatusInternalServerError, "internal")
-	if strings.Contains(rec.Body.String(), panicSecret) {
+	if strings.Contains(rec.Body.String(), panicDetail) {
 		t.Errorf("panic の値が本文に出ている: %s", rec.Body.String())
 	}
 	assertContract(t, http.MethodPost, "/api/calc", validHeaders(), []byte(`{}`), rec, false)
