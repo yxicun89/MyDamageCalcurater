@@ -430,3 +430,8 @@ Impact: COORDINATION.md の規則は確定。gateway の ADR は 0020 → 0202 �
 Decision: `scripts/check-publishable.sh --self-test` の既知の失敗2件を修正し、`make lint` から `make check-publishable-selftest` を実行する。A は任意のホーム相対パスを検出し、利用者名を含まない共有の worktree と権限定義のプレースホルダだけを許可する。E は自己テストへ実際に禁止される GitHub module path を投入する。
 Reason: 検査規則そのものの退行を通常の lint で検出し、自己テストが安全な値を投入して偽陰性になっていた状態を解消するため。plan.md の既定案どおり進めた。
 Impact: `make lint` の所要時間が自己テスト分だけ約6秒増える。A〜F の違反検出・値の非表示・正常系を毎回確認する。
+
+## 2026-09-22: 整備レーン MT-1 / MT-2 を PR #24 で main に統合
+Decision: 最新 main の統合検証(MT-1)と check-publishable 自己テストの修正・lint 組み込み(MT-2)を PR #24 で main に統合した。MT-2 の独立レビューは PASS(重大・重要・軽微 0件)。
+Reason: 必須の test・lint・build・公開前検査、および golden・全種族・WASM・balance の非クラスタ検証が成功したため。
+Impact: 整備レーンの次回開始点は MT-3。データ・API・Web・タイプバランス各レーンの再開を確認したため、本 worktree は削除する。
