@@ -1,0 +1,9 @@
+# ローカル k3d で Argo CD の GitOps を検証するための、クラスタ内のイメージレジストリ(TB0。ADR-0018)。
+# ノードの containerd は localhost:5000(hostPort)から HTTP で pull する(containerd は localhost を平文で許可する)。
+# Mac からの push は `kubectl port-forward` 経由(make balance-registry-push)。本番(クラウド)では使わない。
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: balance-registry
+resources:
+  - namespace.yaml
+  - registry.yaml

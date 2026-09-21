@@ -103,7 +103,7 @@ ConfigMap としてマウントし、`BALANCE_POKEMON_TYPES_PATH` / `BALANCE_MOV
 設定する。base と gitops overlay には設定しない。
 `balance-smoke` は analyze・coverage が 200(架空ID)と 422(未登録ID)を返すことを確認する。
 
-Argo CD用にはlocal imageを参照しない専用overlayを用意している。予約済み`.invalid` domainとzero digestは
-意図的なplaceholderであり、`balance-gitops-check`は置換されるまで失敗する。private repository・registryの
-credentialやSecretはGitへ入れない。公開用クリーンコピーとimage registryを準備した後の手順は
-[`deploy/argocd/README.md`](deploy/argocd/README.md)を参照する。
+Argo CD 用には local image を参照しない専用 overlay(`deploy/k8s/overlays/gitops`)がある。image はクラスタ内レジストリの
+`localhost:5000/pokecalc/balance@sha256:...`(digest 固定)。Application の repoURL は Git に書かず、`make balance-argocd-app` が
+適用時に `git remote get-url origin` から埋め込む。private repository の credential や Secret は Git へ入れない。
+手順は [`deploy/argocd/README.md`](deploy/argocd/README.md)、方式は ADR-0018。

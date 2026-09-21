@@ -5,5 +5,5 @@ resources:
   - ../../base
 images:
   - name: pokecalc/balance
-    newName: registry.example.invalid/pokecalc/balance
-    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    newName: localhost:5000/pokecalc/balance
+    digest: sha256:8adc02744ca2bf418852acc616b1e4c2bafcfe1728902f9bd5875f09216fd112
