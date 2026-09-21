@@ -48,5 +48,10 @@ func CalculateDefense(chart TypeChartProvider, attack TypeID, defenseTypes []Typ
 		combined = Multiplier(uint16(combined) * uint16(matchup) / uint16(MultiplierNormal))
 	}
 
-	return DefenseResult{Multiplier: combined, Source: EffectSourceType}, nil
+	return DefenseResult{
+		Multiplier:    combined,
+		Source:        EffectSourceType,
+		Effectiveness: combined.Effectiveness(),
+		Effect:        DefenseEffectNone,
+	}, nil
 }

@@ -65,30 +65,24 @@ func (e DefenseCategory) Valid() bool {
 	}
 }
 
-// Defines values for DefenseMultiplier.
+// Defines values for DefenseEffect.
 const (
-	N0  DefenseMultiplier = "0"
-	N1  DefenseMultiplier = "1"
-	N12 DefenseMultiplier = "1/2"
-	N14 DefenseMultiplier = "1/4"
-	N2  DefenseMultiplier = "2"
-	N4  DefenseMultiplier = "4"
+	EffectAbsorb     DefenseEffect = "absorb"
+	EffectImmune     DefenseEffect = "immune"
+	EffectMultiplier DefenseEffect = "multiplier"
+	EffectNone       DefenseEffect = "none"
 )
 
-// Valid indicates whether the value is a known member of the DefenseMultiplier enum.
-func (e DefenseMultiplier) Valid() bool {
+// Valid indicates whether the value is a known member of the DefenseEffect enum.
+func (e DefenseEffect) Valid() bool {
 	switch e {
-	case N0:
+	case EffectAbsorb:
 		return true
-	case N1:
+	case EffectImmune:
 		return true
-	case N12:
+	case EffectMultiplier:
 		return true
-	case N14:
-		return true
-	case N2:
-		return true
-	case N4:
+	case EffectNone:
 		return true
 	default:
 		return false
@@ -120,6 +114,7 @@ const (
 	MasterUnavailable     ErrorCode = "master_unavailable"
 	MissingRequestContext ErrorCode = "missing_request_context"
 	RequestTooLarge       ErrorCode = "request_too_large"
+	UnknownAbility        ErrorCode = "unknown_ability"
 	UnknownMove           ErrorCode = "unknown_move"
 	UnknownPokemon        ErrorCode = "unknown_pokemon"
 )
@@ -136,6 +131,8 @@ func (e ErrorCode) Valid() bool {
 	case MissingRequestContext:
 		return true
 	case RequestTooLarge:
+		return true
+	case UnknownAbility:
 		return true
 	case UnknownMove:
 		return true
@@ -227,12 +224,25 @@ func (e TypeId) Valid() bool {
 	}
 }
 
+// AbilityId Optional ability of the member (ADR-0017). Omit it for a member without an ability.
+//
+// Example: ability-9001
+type AbilityId = string
+
 // AnalyzeRequest defines model for AnalyzeRequest.
 type AnalyzeRequest struct {
-	Members []struct {
-		// PokemonId Example: 9001-000
-		PokemonId string `json:"pokemonId"`
-	} `json:"members"`
+	Members []AnalyzeRequestMember `json:"members"`
+}
+
+// AnalyzeRequestMember defines model for AnalyzeRequestMember.
+type AnalyzeRequestMember struct {
+	// AbilityId Optional ability of the member (ADR-0017). Omit it for a member without an ability.
+	//
+	// Example: ability-9001
+	AbilityId *AbilityId `json:"abilityId,omitempty"`
+
+	// PokemonId Example: 9001-000
+	PokemonId string `json:"pokemonId"`
 }
 
 // AnalyzeResponse defines model for AnalyzeResponse.
@@ -270,7 +280,8 @@ type CoverageResponse struct {
 	TeamCoverage []TeamCoverageEntry `json:"teamCoverage"`
 }
 
-// DefenseCategory x4: quad_weak, x2: weak, x1: neutral, x1/2: resist, x1/4: quad_resist, x0: immune.
+// DefenseCategory Classification by value range (ADR-0017 §3): x0: immune, 0 < x <= 1/4: quad_resist,
+// 1/4 < x < 1: resist, x1: neutral, 1 < x < 4: weak, x >= 4: quad_weak.
 type DefenseCategory string
 
 // DefenseCoverageEntry bestMultiplier is the best multiplier of the member's attack moves against this defense type,
@@ -284,24 +295,50 @@ type DefenseCoverageEntry struct {
 	SuperEffective bool                `json:"superEffective"`
 }
 
+// DefenseEffect Kind of ability effect that decided the value (ADR-0017 §3). "immune" / "absorb": the ability
+// made the attack type x0 (absorb ignores its recovery or stat side effects). "multiplier": the ability
+// changed the value by a type multiplier or a super effective multiplier. "none": otherwise
+// (every entry of a member without an ability whose value is not x0 is "none").
+type DefenseEffect string
+
 // DefenseEntry defines model for DefenseEntry.
 type DefenseEntry struct {
 	AttackType TypeId `json:"attackType"`
 
-	// Category x4: quad_weak, x2: weak, x1: neutral, x1/2: resist, x1/4: quad_resist, x0: immune.
+	// Category Classification by value range (ADR-0017 §3): x0: immune, 0 < x <= 1/4: quad_resist,
+	// 1/4 < x < 1: resist, x1: neutral, 1 < x < 4: weak, x >= 4: quad_weak.
 	Category DefenseCategory `json:"category"`
 
-	// Multiplier Exact display form of the defensive multiplier.
+	// Effect Kind of ability effect that decided the value (ADR-0017 §3). "immune" / "absorb": the ability
+	// made the attack type x0 (absorb ignores its recovery or stat side effects). "multiplier": the ability
+	// changed the value by a type multiplier or a super effective multiplier. "none": otherwise
+	// (every entry of a member without an ability whose value is not x0 is "none").
+	Effect DefenseEffect `json:"effect"`
+
+	// Multiplier Exact defensive multiplier as an irreducible fraction "numerator/denominator" (ADR-0017 §3).
+	// A denominator of 1 is written as the integer only ("0", "1", "2", "3", "4"); otherwise the
+	// fraction is in lowest terms ("1/4", "1/2", "3/4", "5/4", "3/2", "5/2"). Never a float.
+	// The TB1 values "0", "1/4", "1/2", "1", "2", "4" are a subset.
+	//
+	//
+	// Example: 3/4
 	Multiplier DefenseMultiplier `json:"multiplier"`
 
-	// Source Origin of the multiplier. Always "type" in TB1; "ability" is reserved for TB3.
+	// Source Origin of the multiplier. "type" when the value comes from the type matchup alone (including a
+	// type immunity, which the ability cannot change); "ability" when the member's ability changed it.
 	Source EffectSource `json:"source"`
 }
 
-// DefenseMultiplier Exact display form of the defensive multiplier.
-type DefenseMultiplier string
+// DefenseMultiplier Exact defensive multiplier as an irreducible fraction "numerator/denominator" (ADR-0017 §3).
+// A denominator of 1 is written as the integer only ("0", "1", "2", "3", "4"); otherwise the
+// fraction is in lowest terms ("1/4", "1/2", "3/4", "5/4", "3/2", "5/2"). Never a float.
+// The TB1 values "0", "1/4", "1/2", "1", "2", "4" are a subset.
+//
+// Example: 3/4
+type DefenseMultiplier = string
 
-// EffectSource Origin of the multiplier. Always "type" in TB1; "ability" is reserved for TB3.
+// EffectSource Origin of the multiplier. "type" when the value comes from the type matchup alone (including a
+// type immunity, which the ability cannot change); "ability" when the member's ability changed it.
 type EffectSource string
 
 // Error defines model for Error.
@@ -338,6 +375,9 @@ type MemberCoverage struct {
 
 // MemberDefense defines model for MemberDefense.
 type MemberDefense struct {
+	// AbilityId The request abilityId, present only when the request member named one.
+	AbilityId *AbilityId `json:"abilityId,omitempty"`
+
 	// Defense One entry per attack type, in canonical type order (normal ... fairy).
 	Defense []DefenseEntry `json:"defense"`
 
@@ -360,8 +400,9 @@ type TeamCoverageEntry struct {
 	SuperEffectiveMembers int                 `json:"superEffectiveMembers"`
 }
 
-// TeamSummaryEntry Per attack type team counts. weak = x2 and x4 members, quadWeak = x4 members (subset of weak),
-// resist = x1/2 and x1/4 members (immune excluded), immune = x0 members, neutral = x1 members.
+// TeamSummaryEntry Per attack type team counts by DefenseCategory. weak = weak and quad_weak members,
+// quadWeak = quad_weak members (subset of weak), resist = resist and quad_resist members (immune excluded),
+// immune = x0 members (type or ability immunity, and ability absorption), neutral = x1 members.
 // Invariant: weak + resist + immune + neutral = number of members.
 type TeamSummaryEntry struct {
 	AttackType TypeId `json:"attackType"`

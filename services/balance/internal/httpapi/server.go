@@ -29,6 +29,12 @@ var moveIDPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 const maxMoveIDLength = 40
 
+// abilityIDPattern mirrors the AbilityId schema (ADR-0017 §2). The 40-character limit is
+// checked separately: the pattern itself has no length bound.
+var abilityIDPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+const maxAbilityIDLength = 40
+
 var errRequestTooLarge = errors.New("request body exceeds 16 KiB")
 
 // Dependencies are the replaceable master-data boundaries of the HTTP adapter.
@@ -36,10 +42,13 @@ var errRequestTooLarge = errors.New("request body exceeds 16 KiB")
 // analyze answers 503 master_unavailable (ADR-0014 §2).
 // Moves may be nil: coverage answers 503 master_unavailable (ADR-0016 §4);
 // analyze does not use it.
+// Abilities may be nil: analyze answers 503 master_unavailable only when a member
+// names an abilityId (ADR-0017 §4); coverage does not use it.
 type Dependencies struct {
 	TypeChart    balance.TypeChartProvider
 	PokemonTypes balance.PokemonTypeProvider
 	Moves        balance.MoveProvider
+	Abilities    balance.AbilityProvider
 }
 
 // New returns the HTTP handler.
@@ -105,6 +114,7 @@ func analyze(c echo.Context, deps Dependencies) error {
 			Message: "members must contain between one and six entries",
 		})
 	}
+	hasAbilityID := false
 	for _, member := range request.Members {
 		if !pokemonIDPattern.MatchString(member.PokemonId) {
 			return c.JSON(http.StatusBadRequest, api.Error{
@@ -112,13 +122,28 @@ func analyze(c echo.Context, deps Dependencies) error {
 				Message: "pokemonId must use the NNNN-NNN format",
 			})
 		}
+		if member.AbilityId != nil {
+			if len(*member.AbilityId) > maxAbilityIDLength || !abilityIDPattern.MatchString(*member.AbilityId) {
+				return c.JSON(http.StatusBadRequest, api.Error{
+					Code:    api.InvalidRequest,
+					Message: "abilityId must match ^[a-z0-9]+(-[a-z0-9]+)*$ and be at most 40 characters",
+				})
+			}
+			hasAbilityID = true
+		}
 	}
 
-	// ADR-0014 §5.4: header (400) → body (400/413) → provider absent (503) → ID resolution (422) → 200.
+	// ADR-0017 §4: header (400) → body (400/413) → provider absent (503) → pokemonId (422) → abilityId (422) → 200.
 	if deps.PokemonTypes == nil {
 		return c.JSON(http.StatusServiceUnavailable, api.Error{
 			Code:    api.MasterUnavailable,
 			Message: "the pokemon type read model is not configured",
+		})
+	}
+	if hasAbilityID && deps.Abilities == nil {
+		return c.JSON(http.StatusServiceUnavailable, api.Error{
+			Code:    api.MasterUnavailable,
+			Message: "the ability read model is not configured",
 		})
 	}
 
@@ -136,6 +161,24 @@ func analyze(c echo.Context, deps Dependencies) error {
 			})
 		}
 		return internalError(c, err)
+	}
+
+	for i, member := range request.Members {
+		if member.AbilityId == nil {
+			continue
+		}
+		ability, err := balance.ResolveAbility(deps.Abilities, *member.AbilityId)
+		if err != nil {
+			var unknown *balance.UnknownAbilityError
+			if errors.As(err, &unknown) {
+				return c.JSON(http.StatusUnprocessableEntity, api.Error{
+					Code:    api.UnknownAbility,
+					Message: "unknown abilityId: " + unknown.AbilityID,
+				})
+			}
+			return internalError(c, err)
+		}
+		members[i].Ability = &ability
 	}
 
 	analysis, err := balance.AnalyzeDefense(deps.TypeChart, members)
@@ -186,12 +229,19 @@ func toMemberDefense(member balance.MemberDefense) api.MemberDefense {
 	for i, entry := range member.Defense {
 		defense[i] = api.DefenseEntry{
 			AttackType: api.TypeId(entry.AttackType),
-			Multiplier: api.DefenseMultiplier(entry.Result.Multiplier.String()),
+			Multiplier: api.DefenseMultiplier(entry.Result.Effectiveness.String()),
 			Category:   api.DefenseCategory(entry.Category),
 			Source:     toEffectSource(entry.Result.Source),
+			Effect:     toDefenseEffect(entry.Result.Effect),
 		}
 	}
-	return api.MemberDefense{PokemonId: member.PokemonID, Types: types, Defense: defense}
+	result := api.MemberDefense{PokemonId: member.PokemonID, Types: types, Defense: defense}
+	// The response abilityId is present only when the request member named one (ADR-0017 §5.2).
+	if member.AbilityID != "" {
+		id := member.AbilityID
+		result.AbilityId = &id
+	}
+	return result
 }
 
 func toEffectSource(source balance.EffectSource) api.EffectSource {
@@ -199,6 +249,19 @@ func toEffectSource(source balance.EffectSource) api.EffectSource {
 		return api.Ability
 	}
 	return api.Type
+}
+
+func toDefenseEffect(effect balance.DefenseEffect) api.DefenseEffect {
+	switch effect {
+	case balance.DefenseEffectImmune:
+		return api.EffectImmune
+	case balance.DefenseEffectAbsorb:
+		return api.EffectAbsorb
+	case balance.DefenseEffectMultiplier:
+		return api.EffectMultiplier
+	default:
+		return api.EffectNone
+	}
 }
 
 func requireRequestContext(next echo.HandlerFunc) echo.HandlerFunc {

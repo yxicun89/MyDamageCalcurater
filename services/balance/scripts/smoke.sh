@@ -101,4 +101,38 @@ if [ "$unknown_move_status" != "422" ] || ! grep -qF '"code":"unknown_move"' "$b
   exit 1
 fi
 
-echo "balance smoke: health=200 analyze=200 unknown=422 coverage=200 unknown_move=422"
+# TB3 (ADR-0017): the local overlay also mounts testdata/abilities.example.json (fictional IDs from ability-9001)
+# and sets BALANCE_ABILITIES_PATH. ability-9002 absorbs water (9002-000 grass: water x0), ability-9004 multiplies
+# super effective hits by 3/4 (9003-000 water/ground: grass x4 -> x3).
+ability_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  -X POST "$base_url/api/balance/v1/team-balance/analyze" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  --data '{"members":[{"pokemonId":"9002-000","abilityId":"ability-9002"},{"pokemonId":"9003-000","abilityId":"ability-9004"}]}' || printf '000')
+if [ "$ability_status" != "200" ]; then
+  echo "balance analyze with abilityId failed: HTTP $ability_status (is the example ability read model mounted?)" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+for key in '"abilityId":"ability-9002"' '"abilityId":"ability-9004"' '"effect":"absorb"' '"effect":"multiplier"' '"source":"ability"' '"multiplier":"3"'; do
+  if ! grep -qF "$key" "$body_file"; then
+    echo "balance analyze with abilityId body is missing $key" >&2
+    cat "$body_file" >&2
+    exit 1
+  fi
+done
+
+unknown_ability_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  -X POST "$base_url/api/balance/v1/team-balance/analyze" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  --data '{"members":[{"pokemonId":"9001-000","abilityId":"ability-9999"}]}')
+if [ "$unknown_ability_status" != "422" ] || ! grep -qF '"code":"unknown_ability"' "$body_file"; then
+  echo "balance analyze unknown ability: HTTP $unknown_ability_status, want 422 unknown_ability" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+
+echo "balance smoke: health=200 analyze=200 unknown=422 coverage=200 unknown_move=422 ability=200 unknown_ability=422"
