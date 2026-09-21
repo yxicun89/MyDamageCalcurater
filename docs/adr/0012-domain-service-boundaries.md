@@ -21,6 +21,8 @@ balance の TB0 を未実装 API の完成まで止めると、独立して検�
    共通マスタのためだけに新しい実行時サービス間依存を追加しない。
 7. TB0 のタイプ相性表は temporary adapter として balance 内に置いてよい。純粋コアに provider
    interface を置き、正式マスタ確定後に adapter のみを差し替える。
+8. balance の外部 API 契約はサービス境界内の `services/balance/api/openapi.yaml` を正とし、
+   oapi-codegen で型を生成する。ルート `api/openapi.yaml` は既存 damage/gateway 契約の正として維持する。
 
 ## 責務
 
@@ -35,6 +37,8 @@ balance の TB0 を未実装 API の完成まで止めると、独立して検�
 - 既存の pokedex-svc 計画は、この ADR だけでは削除・実装しない。P2 の確定時に、独立サービスが
   本当に必要か、damage-calc 内の master adapter/read model で十分かを再評価する。
 - API 化は利用側と責務が確定した場合だけ行い、API 自体を目的にしない。
+- 「API はルート `api/openapi.yaml` が唯一の正」という既存規約は damage/gateway の範囲に限定する。
+  独立サービスである balance の契約をルートへ混在させず、各サービス内では同じ仕様先行・生成型の規律を守る。
 
 ## 却下した案
 
