@@ -117,7 +117,7 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 
 - **担当**: `services/balance/`(タイプバランスチェッカー)とその Deployment/Service/Kustomize
 - **担当外・変更禁止**: `engine/`, `services/pokedex/`, `services/calc/`, `services/record/`, `services/team/`, `web/`, `ios/`, `api/openapi.yaml` の damage 関連エンドポイント
-  - pokedex-svc の API は **呼ぶだけ**。実装やスキーマの変更はしない
+  - pokedex-svc は実装やスキーマを変更しない。ADR-0012 により balance の必須ランタイム依存にもしない
   - 変更が必要だと思ったら実装せず `docs/ai-shared/DECISIONS.md` に提案を書いて止まる
 - ダメージ計算アプリ側の未完了タスクを「引き継ぎ」として実装しない
 
@@ -134,7 +134,10 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 - `services/balance/internal/balance/` は純粋 Go(HTTP・DB・Kubernetes に依存しない)
 - 倍率は float ではなく整数表現(claude-review.md 参照)
 - TB1 の時点から `EffectSource`(タイプ由来/特性由来)を型に持たせる
-- マスタデータは pokedex-svc の REST API から取得する。DB には直接繋がない
+- 共通マスタの恒久正本は1つとし、balance 独自の正本や DB 直結を作らない。TB0 は ADR-0012 の
+  temporary adapter を provider 境界の後ろで使い、正式マスタ確定後に adapter だけを差し替える
+- balance の API 契約は `services/balance/api/openapi.yaml` を正とし、生成型を手書きしない。
+  ルート `api/openapi.yaml` は既存 damage/gateway 契約の正として Codex は変更しない
 - 認証なし。pokecalc と同じ端末ID/セッションIDの流儀に合わせる
 - manifest は Kustomize(`services/balance/deploy/k8s/base` + `overlays/local`)
 - Argo CD Application は balance 専用に分ける。Sync は最初 manual
