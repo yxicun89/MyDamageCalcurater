@@ -59,6 +59,7 @@ func New(deps Dependencies) *echo.Echo {
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
 			"analyzeTeamBalance":  {requireRequestContext},
 			"analyzeTeamCoverage": {requireRequestContext},
+			"analyzeTeamThreats":  {requireRequestContext},
 		},
 	})
 	return e
@@ -88,10 +89,8 @@ func (h handler) AnalyzeTeamCoverage(c *echo.Context, _ api.AnalyzeTeamCoverageP
 }
 
 // AnalyzeTeamThreats is the TB4 threat check endpoint (ADR-0400).
-// TODO(implementer): spec-writer のスタブ。ADR-0400 §4 の判定順で実装し、New の
-// OperationMiddlewares に "analyzeTeamThreats": {requireRequestContext} を足す。
 func (h handler) AnalyzeTeamThreats(c *echo.Context, _ api.AnalyzeTeamThreatsParams) error {
-	return c.NoContent(http.StatusNotImplemented)
+	return threats(c, h.deps)
 }
 
 func health(c *echo.Context) error {

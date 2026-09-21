@@ -435,14 +435,15 @@ func TestAnalyzeThreatsAcceptsOneToSixEntries(t *testing.T) {
 	t.Parallel()
 
 	entry := combatant("9002-000", types(balance.TypeGrass), nil, attack("move-9001", balance.TypeFire))
+	list := make([]balance.Combatant, balance.MaxMembers)
+	for i := range list {
+		list[i] = entry
+	}
+	// members and threats are checked independently at 1 and 6 entries.
 	for _, n := range []int{1, balance.MaxMembers} {
-		list := make([]balance.Combatant, n)
-		for i := range list {
-			list[i] = entry
-		}
 		for _, m := range []int{1, balance.MaxMembers} {
 			members := list[:m]
-			got := analyzeThreats(t, members, list)
+			got := analyzeThreats(t, members, list[:n])
 			if len(got.Threats) != n {
 				t.Errorf("%d members x %d threats: threats length = %d", m, n, len(got.Threats))
 			}
@@ -525,6 +526,110 @@ func TestAnalyzeThreatsMultiplierOverflow(t *testing.T) {
 			t.Parallel()
 			if _, err := balance.AnalyzeThreats(testTypeChart(), tt.members, tt.threats); !errors.Is(err, balance.ErrEffectivenessOverflow) {
 				t.Fatalf("AnalyzeThreats() error = %v, want ErrEffectivenessOverflow", err)
+			}
+		})
+	}
+}
+
+// ADR-0400 §6.1: the core validates every combatant's moves exactly like AnalyzeCoverage
+// (move count, duplicate moveId, move category, attack move type). A provider that returns
+// an invalid classification is an error, not silently excluded (ADR-0016 §6).
+func TestAnalyzeThreatsRejectsInvalidMoves(t *testing.T) {
+	t.Parallel()
+
+	valid := combatant("9002-000", types(balance.TypeGrass), nil, attack("move-9001", balance.TypeFire))
+	fiveMoves := combatant("9002-000", types(balance.TypeGrass), nil,
+		attack("move-9001", balance.TypeFire), attack("move-9003", balance.TypeWater), attack("move-9004", balance.TypeElectric),
+		physical("move-9005", balance.TypeNormal), status("move-9006", balance.TypeGrass))
+	duplicateMoves := combatant("9002-000", types(balance.TypeGrass), nil, attack("move-9001", balance.TypeFire), attack("move-9001", balance.TypeFire))
+	invalidCategory := combatant("9002-000", types(balance.TypeGrass), nil, balance.Move{MoveID: "move-9001", Type: balance.TypeFire, Category: "other"})
+	invalidAttackType := combatant("9002-000", types(balance.TypeGrass), nil, attack("move-9001", "stellar"))
+
+	tests := []struct {
+		name    string
+		members []balance.Combatant
+		threats []balance.Combatant
+		wantErr error
+	}{
+		{name: "five moves on a member", members: []balance.Combatant{fiveMoves}, threats: []balance.Combatant{valid}, wantErr: balance.ErrMoveCount},
+		{name: "five moves on a threat", members: []balance.Combatant{valid}, threats: []balance.Combatant{fiveMoves}, wantErr: balance.ErrMoveCount},
+		{name: "duplicate moveId on a member", members: []balance.Combatant{duplicateMoves}, threats: []balance.Combatant{valid}, wantErr: balance.ErrDuplicateMove},
+		{name: "duplicate moveId on a threat", members: []balance.Combatant{valid}, threats: []balance.Combatant{duplicateMoves}, wantErr: balance.ErrDuplicateMove},
+		{name: "invalid move category on a member", members: []balance.Combatant{invalidCategory}, threats: []balance.Combatant{valid}, wantErr: balance.ErrInvalidMoveCategory},
+		{name: "invalid move category on a threat", members: []balance.Combatant{valid}, threats: []balance.Combatant{invalidCategory}, wantErr: balance.ErrInvalidMoveCategory},
+		{name: "invalid attack move type on a member", members: []balance.Combatant{invalidAttackType}, threats: []balance.Combatant{valid}, wantErr: balance.ErrInvalidType},
+		{name: "invalid attack move type on a threat", members: []balance.Combatant{valid}, threats: []balance.Combatant{invalidAttackType}, wantErr: balance.ErrInvalidType},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := balance.AnalyzeThreats(testTypeChart(), tt.members, tt.threats); !errors.Is(err, tt.wantErr) {
+				t.Fatalf("AnalyzeThreats() error = %v, want errors.Is(_, %v)", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// ADR-0400 §6.2: a nil chart is rejected whatever the presence of attack moves on either
+// side (same as AnalyzeCoverage, ADR-0016 §6.3).
+func TestAnalyzeThreatsRejectsNilChartRegardlessOfAttackMoves(t *testing.T) {
+	t.Parallel()
+
+	noMoves := combatant("9002-000", types(balance.TypeGrass), nil)
+	statusOnly := combatant("9002-000", types(balance.TypeGrass), nil, status("move-9006", balance.TypeGrass))
+
+	tests := []struct {
+		name    string
+		members []balance.Combatant
+		threats []balance.Combatant
+	}{
+		{name: "no attack moves on either side", members: []balance.Combatant{noMoves}, threats: []balance.Combatant{noMoves}},
+		{name: "status move only on either side", members: []balance.Combatant{statusOnly}, threats: []balance.Combatant{statusOnly}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := balance.AnalyzeThreats(nil, tt.members, tt.threats); !errors.Is(err, balance.ErrNilTypeChart) {
+				t.Fatalf("AnalyzeThreats(nil chart) error = %v, want ErrNilTypeChart", err)
+			}
+		})
+	}
+}
+
+// ADR-0400 §6.3: an invalid ability effect is an error even for the side whose ability is
+// never exercised through a matchup in this pairing (its owner has no attack move, and an
+// ability never changes its own side's attacks either, so CalculateDefenseWithAbility is
+// never called with it here).
+func TestAnalyzeThreatsValidatesAbilityEffectsRegardlessOfAttackMoves(t *testing.T) {
+	t.Parallel()
+
+	invalidAbility := threatAbility("ability-9101", balance.AbilityEffect{Kind: "heal", AttackType: balance.TypeFire})
+	noMoves := func(id string, ability *balance.Ability) balance.Combatant {
+		return combatant(id, types(balance.TypeGrass), ability)
+	}
+	plain := noMoves("9002-000", nil)
+
+	tests := []struct {
+		name    string
+		members []balance.Combatant
+		threats []balance.Combatant
+	}{
+		{
+			name:    "member ability invalid, threat has no attack move",
+			members: []balance.Combatant{noMoves("9002-000", invalidAbility)},
+			threats: []balance.Combatant{plain},
+		},
+		{
+			name:    "threat ability invalid, member has no attack move",
+			members: []balance.Combatant{plain},
+			threats: []balance.Combatant{noMoves("9101-000", invalidAbility)},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := balance.AnalyzeThreats(testTypeChart(), tt.members, tt.threats); !errors.Is(err, balance.ErrInvalidAbilityEffect) {
+				t.Fatalf("AnalyzeThreats() error = %v, want ErrInvalidAbilityEffect", err)
 			}
 		})
 	}

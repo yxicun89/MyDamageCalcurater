@@ -191,8 +191,13 @@ func TestThreatsResponseBody(t *testing.T) {
 		if got.PokemonId != w.pokemonID {
 			t.Errorf("threats[%d].pokemonId = %q, want %q (request order)", ti, got.PokemonId, w.pokemonID)
 		}
-		if deref(got.AbilityId) != w.abilityID {
-			t.Errorf("threats[%d].abilityId = %q, want %q", ti, deref(got.AbilityId), w.abilityID)
+		// A threat without abilityId must not echo one (deref reports a missing key as "<absent>").
+		wantAbility := w.abilityID
+		if wantAbility == "" {
+			wantAbility = "<absent>"
+		}
+		if deref(got.AbilityId) != wantAbility {
+			t.Errorf("threats[%d].abilityId = %q, want %q", ti, deref(got.AbilityId), wantAbility)
 		}
 		if fmt.Sprint(got.AttackTypes) != fmt.Sprint(w.attackTypes) {
 			t.Errorf("threats[%d].attackTypes = %v, want %v", ti, got.AttackTypes, w.attackTypes)
@@ -684,6 +689,50 @@ func TestThreatsDoesNotAffectOtherEndpoints(t *testing.T) {
 	// A threats-only field is still unknown to analyze and coverage.
 	if recorder := postCoverage(t, server, `{"members":[{"pokemonId":"9001-000","moveIds":[]}],"threats":[]}`); recorder.Code != http.StatusBadRequest {
 		t.Errorf("coverage with threats: status = %d, want 400; body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+// ADR-0400 §6.1: a provider that returns an invalid move classification is a 500, not a
+// silent exclusion (mirrors the core AnalyzeThreats validation, ADR-0016 §6).
+func TestThreatsInvalidMoveCategoryFromProviderIsInternalError(t *testing.T) {
+	t.Parallel()
+
+	deps := Dependencies{
+		TypeChart:    testTypeChart(),
+		PokemonTypes: threatPokemonTypes,
+		Moves:        testMoves{"move-9001": {MoveID: "move-9001", Type: balance.TypeFire, Category: "other"}},
+		Abilities:    fictionalAbilities,
+	}
+	recorder := postThreats(t, New(deps), `{"members":[{"pokemonId":"9001-000","moveIds":["move-9001"]}],"threats":[{"pokemonId":"9002-000","moveIds":[]}]}`)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500; body=%s", recorder.Code, recorder.Body.String())
+	}
+	if got := decodeError(t, recorder.Body.Bytes()); got.Code != api.InternalError || got.Message != "internal error" {
+		t.Errorf("error = %+v, want internal_error with the fixed text", got)
+	}
+}
+
+// ADR-0400 §6.4: request abilityId: null decodes the same as an omitted field (valid, no
+// ability, response abilityId key omitted), for both a member and a threat.
+func TestThreatsNullAbilityIdIsTreatedAsOmitted(t *testing.T) {
+	t.Parallel()
+
+	body := `{"members":[{"pokemonId":"9001-000","moveIds":[],"abilityId":null}],"threats":[{"pokemonId":"9002-000","moveIds":[],"abilityId":null}]}`
+	recorder := postThreats(t, newThreatsServer(), body)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+	}
+	var raw struct {
+		Threats []map[string]json.RawMessage `json:"threats"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(raw.Threats) != 1 {
+		t.Fatalf("threats = %d, want 1; body=%s", len(raw.Threats), recorder.Body.String())
+	}
+	if _, ok := raw.Threats[0]["abilityId"]; ok {
+		t.Errorf("threats[0] has an explicit null abilityId in the request, so the key must be omitted; got %s", raw.Threats[0]["abilityId"])
 	}
 }
 
