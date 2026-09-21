@@ -1,0 +1,6 @@
+# PokeCalcAPI の生成設定(ADR-0017 §2)。生成物は ios/PokeCalcKit/Sources/PokeCalcAPI/Generated/。
+generate:
+  - types
+  - client
+accessModifier: public
+namingStrategy: idiomatic

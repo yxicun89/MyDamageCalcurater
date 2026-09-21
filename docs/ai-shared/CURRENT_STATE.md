@@ -25,8 +25,8 @@ Next: docs/plan.md の P4-1(docs/design.md のデザイントークンを CSS �
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
 Active: Claude Code
 Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
-Status: 未着手(2026-09-21 にレーンを新設)。Xcode はユーザーが導入中(App Store)。導入後に `sudo xcode-select -s /Applications/Xcode.app` 等が要る
-Next: docs/plan.md の P6-1 から。Xcode が使えるか(`xcodebuild -version`)を最初に確認し、無ければ Swift Package(swift-openapi-generator で `api/openapi.yaml` から生成したクライアント・モデル・docs/design.md のデザイントークン)と `swift test` から始める。Xcode が使えるようになったら SwiftUI の Xcode プロジェクトとシミュレータのテスト(`make ios-test`)。サーバー(P3)ができるまで API はモック
+Status: P6-1 完了(ADR-0017。critic PASS)。Swift Package `ios/PokeCalcKit`(生成 API クライアント・ドメイン・モック・デザイントークン)+ 手書きの `ios/PokeCalc.xcodeproj`。`make ios-test`(ios-gen-check・XCTest 60 件・XCUITest 2 件・Info.plist の接続先)が緑。iOS 27 / Swift 6.4。main へは未 PR
+Next: P6-2(計算画面 → 逆算 → 構築)。ViewModel は PokeCalcCore に置き XCTest、View はアプリ側、主要操作は XCUITest。構築は端末内保存の TeamStore、Showdown 形式は後回し、API 経由の逆算は P3-1 まで「API 未対応」表示(ユーザー回答済み)。区切りで PR
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)

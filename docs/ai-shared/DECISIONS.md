@@ -319,3 +319,32 @@ Decision: M3 の Phase 6(`ios/`)を担当する iOS レーンを新設する(`~/
 Reason: ユーザーが「iOS も作りたいので iOS レーンも起動したい」と依頼し、Xcode を導入することにした(導入中)。
 Impact: COORDINATION.md のレーン表・依存の節・起動の目安、CURRENT_STATE.md に iOS 欄を追加。準備はタイプバランスレーンのセッションが行った(データレーンの4レーン化の規則に1行ずつ追加しただけ)。
 
+
+## 2026-09-21: iOS アプリの構成(iOS レーン。既定案で進行・ユーザー未確認)
+Decision: ADR-0017。`ios/PokeCalcKit`(Swift Package: 生成 API クライアント・ドメイン/ViewModel・デザイントークン)+ 手書きの `ios/PokeCalc.xcodeproj`(フォルダ同期。View と XCUITest だけ)。
+生成物はコミットし `make ios-gen` / `make ios-gen-check`(ルートの `make gen` には入れない)。画面は `PokeCalcService` プロトコルだけを使い、API 実装とモック(架空データ・計算しない)を差し替える。
+逆算のドメインは ADR-0010 §R の形にし、`api/openapi.yaml` が P3-1 で更新されるまで API 経由の逆算は「API 未対応」を表示する。構築は契約が無い(P5-4)ので端末内保存の `TeamStore` で作り、Showdown 形式は後回し。配布対象 iOS 26 以上。
+Reason: iOS レーンは契約を変更できず、サーバーも未完成。契約の変更を写像1か所で吸収するため。深夜(23 時以降)の着手で質問できないため、取り消しやすい既定案で進めた。
+Impact: ルートの Makefile に `include ios/Makefile` の1行、`.gitignore` に SwiftPM の成果物と xcuserdata を追加。
+
+## 2026-09-21: 提案(iOS レーン → API レーン): 構築(team)と逆算の契約
+Decision(提案): (1) P3-1 で逆算の契約を ADR-0010 §R8 の形にしたら、iOS は `make ios-gen` と写像の更新で追従する。(2) P5-4 で team-svc の契約を `api/openapi.yaml` に入れるとき、iOS の端末内の `TeamStore`(メンバー: 種族・技・持ち物・特性・性格・SP)と同じ項目を持たせてほしい。
+既定案: iOS 側は変更を待たずにモックで進める。
+Reason: iOS レーンは `api/openapi.yaml` を変更できない(COORDINATION.md)。
+Impact: なし(API レーンの判断待ち)。
+
+## 2026-09-21: 提案(iOS レーン → データレーン): ルート Makefile の help が include したファイルのターゲットを正しく表示しない
+Decision(提案): `help` の `grep -E` に `-h` を付ける(複数ファイルのときファイル名が接頭辞になり、`ios/Makefile` 等のターゲット名が表示されない。balance も同じ)。
+既定案: データレーンが次に Makefile を触るときに直す。iOS レーンは変更しない。
+Impact: 表示だけ。
+
+## 2026-09-21: iOS レーンの既定案の確認(ユーザー回答)
+Decision: (1) 構築は team-svc の契約ができるまで端末内に保存(既定案どおり)。(2) Showdown 形式の入出力は後回し(既定案どおり)。
+(3) 配布対象は **iOS 27 以上**(既定案の iOS 26 から変更。実機が iOS 27)。(4) API 経由の逆算は P3-1 の契約更新まで「API 未対応」を表示(既定案どおり)。
+Reason: ユーザーが「ブロッカーがあれば今答える」と言い、iOS レーンの質問4点に回答した。
+Impact: ADR-0017 §1 を iOS 27 に更新。上の「iOS アプリの構成」エントリの未確認の項目は、この回答で確定。
+
+## 2026-09-22: iOS レーンの版を最新の安定版で固定(同日のユーザー決定「言語・ミドルウェア・ライブラリを最新の安定版に」の iOS 分)
+Decision: Swift tools 6.4・Swift 6 言語モード・配布対象 iOS 27(macOS 27)・Xcode 27 の推奨設定。依存は swift-openapi-generator 1.13.1 / runtime 1.12.1 / urlsession 1.3.1 / swift-http-types 1.8.0 を `exact` で固定(いずれも確認時点の最新)。
+Reason: 方針の本体はデータレーンの DECISIONS エントリ(2026-09-21)。iOS レーンの範囲はデータレーンからの共有による。
+Impact: ios/ のみ。

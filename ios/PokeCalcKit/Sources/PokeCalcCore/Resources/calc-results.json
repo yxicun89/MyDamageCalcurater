@@ -1,0 +1,56 @@
+{
+  "single": {
+    "rolls": [30, 30, 31, 31, 32, 32, 33, 33, 34, 34, 35, 35, 36, 36, 37, 38],
+    "minDamage": 30, "maxDamage": 38, "minPercent": 25.0, "maxPercent": 31.7,
+    "defenderHP": 120, "effectiveness": 1, "stab": true,
+    "ko": { "hits": 4, "guaranteed": true, "chancePercent": 0, "displayChancePercent": 100.0 }
+  },
+  "none": {
+    "rolls": [18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 23, 24, 24, 25, 26],
+    "minDamage": 18, "maxDamage": 26, "minPercent": 18.0, "maxPercent": 26.0,
+    "defenderHP": 100, "effectiveness": 1, "stab": false,
+    "ko": { "hits": 4, "guaranteed": false, "chancePercent": 16.06, "displayChancePercent": 16.1 }
+  },
+  "hp": {
+    "rolls": [18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 23, 24, 24, 25, 26],
+    "minDamage": 18, "maxDamage": 26, "minPercent": 12.0, "maxPercent": 17.3,
+    "defenderHP": 150, "effectiveness": 1, "stab": false,
+    "ko": { "hits": 6, "guaranteed": false, "chancePercent": 15.71, "displayChancePercent": 15.7 }
+  },
+  "hb_boost": {
+    "rolls": [12, 12, 12, 13, 13, 13, 14, 14, 14, 15, 15, 15, 16, 16, 16, 17],
+    "minDamage": 12, "maxDamage": 17, "minPercent": 8.0, "maxPercent": 11.3,
+    "defenderHP": 150, "effectiveness": 1, "stab": false,
+    "ko": { "hits": 9, "guaranteed": false, "chancePercent": 13.48, "displayChancePercent": 13.5 }
+  },
+  "hb": {
+    "rolls": [10, 10, 10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 14, 14, 14, 15],
+    "minDamage": 10, "maxDamage": 15, "minPercent": 5.4, "maxPercent": 8.1,
+    "defenderHP": 185, "effectiveness": 1, "stab": false,
+    "ko": { "hits": 13, "guaranteed": false, "chancePercent": 16.67, "displayChancePercent": 16.7 }
+  },
+  "hb_full": {
+    "rolls": [8, 8, 8, 9, 9, 9, 10, 10, 10, 11, 11, 11, 12, 12, 12, 13],
+    "minDamage": 8, "maxDamage": 13, "minPercent": 4.3, "maxPercent": 7.0,
+    "defenderHP": 185, "effectiveness": 1, "stab": false,
+    "ko": { "hits": 15, "guaranteed": false, "chancePercent": 15.79, "displayChancePercent": 15.8 }
+  },
+  "hd_boost": {
+    "rolls": [13, 13, 13, 14, 14, 14, 15, 15, 15, 16, 16, 16, 17, 17, 17, 18],
+    "minDamage": 13, "maxDamage": 18, "minPercent": 8.6, "maxPercent": 12.0,
+    "defenderHP": 150, "effectiveness": 1, "stab": false,
+    "ko": { "hits": 9, "guaranteed": false, "chancePercent": 21.3, "displayChancePercent": 21.3 }
+  },
+  "hd": {
+    "rolls": [11, 11, 11, 12, 12, 12, 13, 13, 13, 14, 14, 14, 15, 15, 15, 16],
+    "minDamage": 11, "maxDamage": 16, "minPercent": 5.9, "maxPercent": 8.6,
+    "defenderHP": 185, "effectiveness": 1, "stab": false,
+    "ko": { "hits": 12, "guaranteed": false, "chancePercent": 15.25, "displayChancePercent": 15.2 }
+  },
+  "hd_full": {
+    "rolls": [9, 9, 9, 10, 10, 10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 14],
+    "minDamage": 9, "maxDamage": 14, "minPercent": 4.8, "maxPercent": 7.6,
+    "defenderHP": 185, "effectiveness": 1, "stab": false,
+    "ko": { "hits": 14, "guaranteed": false, "chancePercent": 16.76, "displayChancePercent": 16.8 }
+  }
+}

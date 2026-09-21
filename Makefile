@@ -100,9 +100,7 @@ dev: ## k8s を使わずローカルで全サービス起動
 e2e: ## k3d 上のスモーク + Playwright
 	@./scripts/e2e.sh
 
-.PHONY: ios-test
-ios-test: ## iOS シミュレータでテスト
-	@echo "ios-test: (M3 で実装)"
+# ios-test などの iOS のターゲットは ios/Makefile(末尾で include)
 
 ## --- ビルド / データ --------------------------------------------------
 .PHONY: wasm
@@ -146,3 +144,4 @@ tidy: ## go mod tidy(全モジュール)
 	@cd tools && $(GO) mod tidy
 
 include services/balance/Makefile
+include ios/Makefile

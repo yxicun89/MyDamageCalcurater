@@ -43,3 +43,7 @@ docs/local/
 
 # 第三者由来の Pokémon マスタデータ・生成済みスナップショット・公式画像(コミットしない。ADR-0002)
 data/generated/
+# SwiftPM のビルド成果物(ios/PokeCalcKit・ios/tools/openapi-gen)
+ios/**/.build/
+ios/**/.swiftpm/
+xcuserdata/
