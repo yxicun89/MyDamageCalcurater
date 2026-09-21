@@ -105,7 +105,7 @@ ADR-0003 の適応を維持する。Codex では ADR-0007 と共通ワークフ�
 | 2 | spec-writer | opus | 受け入れ条件とテストを先に書く |
 | 3 | implementer | sonnet | テストを通す最小実装 |
 | 4 | critic | opus | ルール違反・テスト漏れ・越境をレビュー。NGなら3へ(最大3回) |
-| 5 | Codex(任意) | GPT系 | engine・逆算・DB設計など重要タスクのみ `scripts/codex-review.sh` で別モデルレビュー。Codex の担当はタイプバランスチェッカー実装で、これは任意の追加確認。未実施でも完了条件に影響しない(実施済みとは記録しない) |
+| 5 | (廃止) | ― | 外部 Codex レビューは**実行しない**(ユーザー指示 2026-09-21)。Codex の担当はタイプバランスチェッカー実装で、別ターミナルで並行して動く。`scripts/codex-review.sh` は残すが呼ばない |
 
 - 同じ失敗で3回ループしたら止まり、`docs/plan.md` の「ブロッカー」に書いて次のタスクへ
 - 完了条件: `make test` 成功 / engine 変更時は `make test-golden` 成功 / plan.md 更新 / 必要ならADR
