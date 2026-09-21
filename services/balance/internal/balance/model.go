@@ -86,7 +86,8 @@ func (m Multiplier) ValidSingleType() bool {
 	return m == MultiplierZero || m == MultiplierHalf || m == MultiplierNormal || m == MultiplierDouble
 }
 
-// EffectSource distinguishes type-derived effects from future ability effects.
+// EffectSource distinguishes type-derived effects (EffectSourceType) from effects changed
+// by a member's ability (EffectSourceAbility, ADR-0017 §3).
 type EffectSource uint8
 
 const (

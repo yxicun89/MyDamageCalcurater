@@ -109,11 +109,11 @@ func AnalyzeDefense(chart TypeChartProvider, members []Member) (DefenseAnalysis,
 	for mi, member := range members {
 		defense := make([]AttackDefense, len(attackTypes))
 		for ai, attack := range attackTypes {
-			result, err := CalculateDefense(chart, attack, member.Types)
+			result, err := CalculateDefenseWithAbility(chart, attack, member.Types, member.Ability)
 			if err != nil {
 				return DefenseAnalysis{}, err
 			}
-			category, err := ClassifyMultiplier(result.Multiplier)
+			category, err := ClassifyEffectiveness(result.Effectiveness)
 			if err != nil {
 				return DefenseAnalysis{}, err
 			}
@@ -133,7 +133,11 @@ func AnalyzeDefense(chart TypeChartProvider, members []Member) (DefenseAnalysis,
 				summary[ai].Neutral++
 			}
 		}
-		memberDefenses[mi] = MemberDefense{PokemonID: member.PokemonID, Types: member.Types, Defense: defense}
+		abilityID := ""
+		if member.Ability != nil {
+			abilityID = member.Ability.AbilityID
+		}
+		memberDefenses[mi] = MemberDefense{PokemonID: member.PokemonID, AbilityID: abilityID, Types: member.Types, Defense: defense}
 	}
 
 	return DefenseAnalysis{Members: memberDefenses, TeamSummary: summary}, nil

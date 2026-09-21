@@ -54,6 +54,15 @@ const abilitiesPathEnv = "BALANCE_ABILITIES_PATH"
 // when a member names an abilityId (ADR-0017 §4).
 // Set but unreadable or invalid: an error, and main must exit non-zero.
 func abilityProviderFromEnv(lookup func(string) (string, bool)) (balance.AbilityProvider, error) {
-	// TODO(TB3): implement (same pattern as moveProviderFromEnv; avoid the typed-nil pitfall).
-	return nil, nil
+	path, ok := lookup(abilitiesPathEnv)
+	if !ok || path == "" {
+		return nil, nil
+	}
+	model, err := master.LoadAbilitiesFile(path)
+	if err != nil {
+		// Return an untyped nil interface, not a nil *AbilityReadModel wrapped in a
+		// non-nil interface (the classic typed-nil pitfall).
+		return nil, err
+	}
+	return model, nil
 }
