@@ -59,6 +59,17 @@ ADR-0100 の「MySQL は 8.4(LTS)を前提とする」等の記述は、本 ADR 
 決定当時の記録として書き換えない)。CHECK 制約・`REGEXP_LIKE`・JSON・生成列など ADR-0100 が前提とする機能は
 9.7 でも利用可能(後方互換)。
 
+#### 既存データのアップグレード(戻せない)
+
+- 既存の k3d の PVC や `make db-local-up` の docker ボリュームは 8.4 のデータのまま 9.7 で開かれ、インプレースで上がる。
+  LTS から次の LTS への直接のアップグレードは MySQL が公式にサポートする経路。
+- **一度上げたデータは 8.4 に戻せない**。作り直す(PVC・ボリュームを消して migrate から流す)のは DB データの削除に当たるので、
+  人間の確認が要る(CLAUDE.md「人間の確認が必要なこと」)。
+- `scripts/db-local-up.sh` は同名のコンテナがあれば `docker start` で既存のまま起動するため、既存の環境は 8.4 のまま残りうる
+  (スクリプトは停止・削除をしない方針)。新しいイメージで動いているかは `SELECT VERSION()` で確かめる。
+- 系列の出典: Docker 公式イメージ(https://hub.docker.com/_/mysql 、`lts` / `innovation` タグ)と MySQL のリリースモデル
+  (https://dev.mysql.com/doc/refman/9.7/en/mysql-releases.html)。確認日 2026-09-22。
+
 ### 5. Node / @smogon/calc
 
 `tools/golden/package.json` は `@smogon/calc` のみに依存する。`npm view @smogon/calc versions` で確認したところ、
