@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "source": "pokeapi",
+  "version": "cafef00dcafef00dcafef00dcafef00dcafef00d",
+  "species": [
+    {"slug": "testmon", "names": {"ja-Hrkt": "テストモン", "ja": "テスト門"}},
+    {"slug": "testleaf", "names": {"ja": "テストリーフ"}}
+  ],
+  "forms": [
+    {"slug": "testmon-mega", "names": {"ja-Hrkt": "テストメガモン"}},
+    {"slug": "testleaf-rain", "names": {"ja-Hrkt": "テストリーフ雨"}}
+  ],
+  "moves": [
+    {"slug": "test-flame", "names": {"ja-Hrkt": "テストほのおわざ"}},
+    {"slug": "test-strike", "names": {"ja-Hrkt": "テストたいあたり"}},
+    {"slug": "test-glare", "names": {"ja": "テストにらみ"}},
+    {"slug": "test-revived", "names": {"ja-Hrkt": "テストふっかつ"}}
+  ],
+  "items": [
+    {"slug": "testmonite", "names": {"ja-Hrkt": "テストモナイト"}},
+    {"slug": "test-orb", "names": {"ja-Hrkt": "テストだま"}}
+  ],
+  "abilities": [
+    {"slug": "test-blaze", "names": {"ja-Hrkt": "テストもうか"}},
+    {"slug": "test-guard", "names": {"ja-Hrkt": "テストまもり"}},
+    {"slug": "test-leaf", "names": {"ja-Hrkt": "テストはっぱ"}},
+    {"slug": "test-stance", "names": {"ja-Hrkt": "テストかまえ"}}
+  ],
+  "types": [
+    {"slug": "normal", "names": {"ja-Hrkt": "テストノーマル"}},
+    {"slug": "fire", "names": {"ja-Hrkt": "テストほのお"}},
+    {"slug": "water", "names": {"ja-Hrkt": "テストみず"}}
+  ]
+}

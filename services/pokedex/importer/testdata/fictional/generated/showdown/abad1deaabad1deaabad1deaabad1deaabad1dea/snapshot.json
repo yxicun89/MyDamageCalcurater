@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "source": "showdown",
+  "version": "abad1deaabad1deaabad1deaabad1deaabad1dea",
+  "mod": "testmod",
+  "species": [
+    {"id": "testmon", "name": "Testmon", "num": 9001, "baseSpecies": "Testmon", "forme": "", "baseForme": "",
+     "types": ["Fire"], "baseStats": {"hp": 80, "atk": 100, "def": 70, "spa": 60, "spd": 70, "spe": 90},
+     "abilities": {"0": "Test Blaze", "H": "Test Guard"}, "requiredItem": "",
+     "formeOrder": ["Testmon", "Testmon-Mega"], "isNonstandard": null},
+    {"id": "testmonmega", "name": "Testmon-Mega", "num": 9001, "baseSpecies": "Testmon", "forme": "Mega", "baseForme": "",
+     "types": ["Fire", "Normal"], "baseStats": {"hp": 80, "atk": 130, "def": 90, "spa": 80, "spd": 90, "spe": 110},
+     "abilities": {"0": "Test Guard"}, "requiredItem": "Testmonite",
+     "formeOrder": [], "isNonstandard": null},
+    {"id": "testleaf", "name": "Testleaf", "num": 9002, "baseSpecies": "Testleaf", "forme": "", "baseForme": "",
+     "types": ["Grass"], "baseStats": {"hp": 70, "atk": 60, "def": 80, "spa": 90, "spd": 80, "spe": 60},
+     "abilities": {"0": "Test Leaf"}, "requiredItem": "",
+     "formeOrder": ["Testleaf", "Testleaf-Bloom", "Testleaf-Rain"], "isNonstandard": null},
+    {"id": "testleafbloom", "name": "Testleaf-Bloom", "num": 9002, "baseSpecies": "Testleaf", "forme": "Bloom", "baseForme": "",
+     "types": ["Grass"], "baseStats": {"hp": 70, "atk": 60, "def": 80, "spa": 90, "spd": 80, "spe": 60},
+     "abilities": {"0": "Test Leaf"}, "requiredItem": "",
+     "formeOrder": [], "isNonstandard": null},
+    {"id": "testleafrain", "name": "Testleaf-Rain", "num": 9002, "baseSpecies": "Testleaf", "forme": "Rain", "baseForme": "",
+     "types": ["Water"], "baseStats": {"hp": 70, "atk": 60, "def": 80, "spa": 90, "spd": 80, "spe": 60},
+     "abilities": {"0": "Test Leaf"}, "requiredItem": "",
+     "formeOrder": [], "isNonstandard": null},
+    {"id": "testshield", "name": "Testshield", "num": 9003, "baseSpecies": "Testshield", "forme": "", "baseForme": "Shield",
+     "types": ["Normal"], "baseStats": {"hp": 60, "atk": 50, "def": 140, "spa": 50, "spd": 140, "spe": 60},
+     "abilities": {"0": "Test Stance"}, "requiredItem": "",
+     "formeOrder": ["Testshield", "Testshield-Blade"], "isNonstandard": null},
+    {"id": "testshieldblade", "name": "Testshield-Blade", "num": 9003, "baseSpecies": "Testshield", "forme": "Blade", "baseForme": "",
+     "types": ["Normal"], "baseStats": {"hp": 60, "atk": 140, "def": 50, "spa": 140, "spd": 50, "spe": 60},
+     "abilities": {"0": "Test Stance"}, "requiredItem": "",
+     "formeOrder": [], "isNonstandard": null},
+    {"id": "testbug", "name": "Testbug", "num": 9004, "baseSpecies": "Testbug", "forme": "", "baseForme": "",
+     "types": ["Grass"], "baseStats": {"hp": 1, "atk": 90, "def": 45, "spa": 30, "spd": 30, "spe": 40},
+     "abilities": {"0": "Test Guard"}, "requiredItem": "",
+     "formeOrder": [], "isNonstandard": null},
+    {"id": "testpast", "name": "Testpast", "num": 9005, "baseSpecies": "Testpast", "forme": "", "baseForme": "",
+     "types": ["Normal"], "baseStats": {"hp": 50, "atk": 50, "def": 50, "spa": 50, "spd": 50, "spe": 50},
+     "abilities": {"0": "Test Guard"}, "requiredItem": "",
+     "formeOrder": [], "isNonstandard": "Past"}
+  ],
+  "moves": [
+    {"id": "testflame", "name": "Test Flame", "type": "Fire", "category": "Special", "basePower": 90, "accuracy": 100, "pp": 15, "priority": 0, "isNonstandard": null},
+    {"id": "teststrike", "name": "Test Strike", "type": "Normal", "category": "Physical", "basePower": 40, "accuracy": 0, "pp": 30, "priority": 1, "isNonstandard": null},
+    {"id": "testglare", "name": "Test Glare", "type": "Grass", "category": "Status", "basePower": 0, "accuracy": 100, "pp": 20, "priority": 0, "isNonstandard": null},
+    {"id": "testold", "name": "Test Old", "type": "Normal", "category": "Physical", "basePower": 50, "accuracy": 100, "pp": 10, "priority": 0, "isNonstandard": "Past"},
+    {"id": "testrevived", "name": "Test Revived", "type": "Water", "category": "Special", "basePower": 70, "accuracy": 90, "pp": 10, "priority": 0, "isNonstandard": null},
+    {"id": "testbanned", "name": "Test Banned", "type": "Water", "category": "Special", "basePower": 80, "accuracy": 100, "pp": 10, "priority": 0, "isNonstandard": "Past"},
+    {"id": "testsplash", "name": "Test Splash", "type": "Water", "category": "Special", "basePower": 60, "accuracy": 100, "pp": 20, "priority": 0, "isNonstandard": null}
+  ],
+  "items": [
+    {"id": "testmonite", "name": "Testmonite", "isNonstandard": null},
+    {"id": "testorb", "name": "Test Orb", "isNonstandard": null},
+    {"id": "testberry", "name": "Test Berry", "isNonstandard": null},
+    {"id": "testrelic", "name": "Test Relic", "isNonstandard": "Past"}
+  ],
+  "abilities": [
+    {"id": "testblaze", "name": "Test Blaze", "isNonstandard": null},
+    {"id": "testguard", "name": "Test Guard", "isNonstandard": null},
+    {"id": "testleaf", "name": "Test Leaf", "isNonstandard": null},
+    {"id": "teststance", "name": "Test Stance", "isNonstandard": null}
+  ],
+  "learnsets": {
+    "testmon": ["testflame", "teststrike", "testglare", "testold", "testbanned"],
+    "testleaf": ["testglare", "testsplash"],
+    "testshield": ["teststrike", "testrevived"],
+    "testbug": ["teststrike"]
+  }
+}

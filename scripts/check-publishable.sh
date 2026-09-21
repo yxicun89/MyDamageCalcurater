@@ -57,7 +57,14 @@ readonly GOLDEN_DIR="testdata/golden"
 # NameJa は、この接頭辞で始まる架空名か、日本語を含まない値(プレースホルダ "?" など。
 # 実在の日本語名を入れないという目的に反しない)だけを許す。
 readonly FICTIONAL_NAME_PREFIX="テスト"
-readonly -a NAMEJA_PATHSPECS=("engine/*_test.go" "engine/wasmapi/testdata/vectors.json" "services/*_test.go")
+readonly -a NAMEJA_PATHSPECS=("engine/*_test.go" "engine/wasmapi/testdata/vectors.json" "services/*_test.go" "services/pokedex/importer/testdata/*")
+
+# importer の架空データ(JSON の文字列値すべてが対象。ADR-0101)。
+readonly IMPORTER_TESTDATA_DIR="services/pokedex/importer/testdata"
+# data/importer/*.json のうち、日本語を一切禁止するもの(英語IDと4096基準の整数だけ。ADR-0101 §2)。
+readonly -a IMPORTER_NO_JAPANESE_FILES=("data/importer/config.json" "data/importer/effects.json")
+# レギュレーションの日本語ラベルだけ許すファイル(ADR-0101 §7 人間の確認事項3)。
+readonly IMPORTER_REGULATIONS_FILE="data/importer/regulations.json"
 
 # 日本語(ひらがな・カタカナ・漢字・半角カナ)の Unicode 範囲。ADR-0002: 1 文字でもあれば失敗。
 readonly JAPANESE_CLASS='[\x{3040}-\x{30FF}\x{3400}-\x{4DBF}\x{4E00}-\x{9FFF}\x{F900}-\x{FAFF}\x{FF66}-\x{FF9F}]'
@@ -244,6 +251,38 @@ check_d() {
         print $1 ":" $2
       }' | sort -u || true
   )
+
+  # services/pokedex/importer/testdata/ 配下の JSON: 文字列値に日本語があれば
+  # 「テスト」始まりであることを要求する(架空データだけを許す。NameJa キーに限らず全値が対象)。
+  while IFS= read -r -d '' path; do
+    [ -f "$path" ] || continue
+    while IFS= read -r line; do
+      report D "$path:$line" "日本語が「${FICTIONAL_NAME_PREFIX}」始まりの文字列でない(services/pokedex/importer/testdata は架空データだけを許す)"
+    done < <(
+      perl -CS -Mutf8 -X -ne '
+        while (/"((?:[^"\\]|\\.)*)"/g) {
+          my $s = $1;
+          if ($s =~ /'"$JAPANESE_CLASS"'/ && $s !~ /^'"$FICTIONAL_NAME_PREFIX"'/) { print "$.\n"; last }
+        }
+      ' <"$path" || true
+    )
+  done < <(git ls-files -z -- "$IMPORTER_TESTDATA_DIR")
+
+  # data/importer/config.json・effects.json: 日本語を一切禁止する(英語IDと4096基準の整数だけ)。
+  for path in "${IMPORTER_NO_JAPANESE_FILES[@]}"; do
+    git ls-files --error-unmatch -- "$path" >/dev/null 2>&1 || continue
+    [ -f "$path" ] || continue
+    while IFS= read -r line; do
+      report D "$path:$line" "日本語を含んではいけないファイル(英語IDと4096基準の整数だけ。ADR-0101 §2)"
+    done < <(perl -CS -X -ne 'print "$.\n" if /'"$JAPANESE_CLASS"'/' <"$path" || true)
+  done
+
+  # data/importer/regulations.json: 日本語は nameJa の値だけ許す(人が管理するレギュレーション名)。
+  if git ls-files --error-unmatch -- "$IMPORTER_REGULATIONS_FILE" >/dev/null 2>&1 && [ -f "$IMPORTER_REGULATIONS_FILE" ]; then
+    while IFS= read -r line; do
+      report D "$IMPORTER_REGULATIONS_FILE:$line" "nameJa 以外に日本語がある(regulations.json は日本語のレギュレーション名だけ許す)"
+    done < <(perl -CS -X -ne 'print "$.\n" if /'"$JAPANESE_CLASS"'/ && !/[Nn]ameJa"?:/' <"$IMPORTER_REGULATIONS_FILE" || true)
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -487,6 +526,31 @@ var y = Species{NameJa: "実在の名前"}' "$dir" engine/d4_test.go
   selftest_expect_hits "D" testdata/golden/d1.json:1 testdata/golden/d2.jsonl.gz:1 testdata/golden/d3.json:1 \
     engine/d4_test.go:2 engine/wasmapi/testdata/vectors.json:1
   selftest_expect_no_leak "D" ひらがな カタカナ 漢字 実在の名前
+
+  echo "自己テスト: D 追加(importer 固有の日本語検査)"
+  dir="$(selftest_new_repo d2)"
+  selftest_add '{"nameJa":"実在の名前"}' "$dir" services/pokedex/importer/testdata/fictional/importer/regulations.json
+  selftest_add '{"note":"テスト"}' "$dir" data/importer/config.json
+  selftest_add '{"items":{"testorb":"テスト"}}' "$dir" data/importer/effects.json
+  selftest_add '{
+  "id":"m-c",
+  "nameJa":"テストレギュ",
+  "note":"実在の注記"
+}' "$dir" data/importer/regulations.json
+  selftest_run "D2" "$dir"
+  selftest_expect_hits "D2" \
+    "services/pokedex/importer/testdata/fictional/importer/regulations.json:1" \
+    "data/importer/config.json:1" "data/importer/effects.json:1" "data/importer/regulations.json:4"
+  selftest_expect_no_leak "D2" 実在の名前 実在の注記
+
+  echo "自己テスト: D 追加(架空データ・nameJa だけの日本語は誤検知しない)"
+  dir="$(selftest_new_repo d3)"
+  selftest_add '{"nameJa":"テストモン"}' "$dir" services/pokedex/importer/testdata/fictional/species.json
+  selftest_add '{
+  "id":"m-c",
+  "nameJa":"テストレギュ"
+}' "$dir" data/importer/regulations.json
+  selftest_expect_clean "D3(importer 固有チェックの誤検知なし)" "$dir"
 
   echo "自己テスト: E 再現性・依存"
   dir="$(selftest_new_repo e)"

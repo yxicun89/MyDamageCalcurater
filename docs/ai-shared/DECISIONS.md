@@ -325,6 +325,19 @@ Reason: ユーザーが「iOS も作りたいので iOS レーンも起動した
 Impact: COORDINATION.md のレーン表・依存の節・起動の目安、CURRENT_STATE.md に iOS 欄を追加。準備はタイプバランスレーンのセッションが行った(データレーンの4レーン化の規則に1行ずつ追加しただけ)。
 
 
+## 2026-09-21: importer(P2-2b)の3点(ユーザー回答。既定案どおり)
+Decision: (1) 本番の効果定義 `data/importer/effects.json` を Git にコミットする(英語 ID と 4096 基準の整数だけ)。(2) 日本語名は ja(漢字混じり)を優先し、無ければ ja-Hrkt(かな)。(3) `data/importer/regulations.json` にレギュレーションの日本語ラベルを入れてコミットする。
+Reason: ユーザーが確認の質問に回答した。
+Impact: ADR-0017 の既定値どおり。plan.md のブロッカーから外した。
+
+## 2026-09-21: 言語・ミドルウェア・ライブラリは最新の安定版に上げ、正確な番号で固定する(ユーザー決定。全レーン)
+Decision: Go のツールチェーン、Node、npm パッケージ、Go のモジュール、MySQL・k3s 等のコンテナイメージ、Swift/Xcode 周りを、その時点の最新の安定版に更新し、正確なバージョン(npm は ^ ~ なし、イメージはタグ+できれば digest)で固定する。`latest` 等の自動追従はしない(GitOps で再現できなくなるため)。
+古くなったものを一覧にする make ターゲット(例 `make deps-outdated`)を用意し、定期的にまとめて上げる。
+@smogon/calc(ゴールデンの照合相手)も新しい版があれば上げる。ただし先に今のゴールデンとの差分を調べてから切り替え(P2-1b と同じ手順)、説明のつかない差分があれば止めて報告する。
+分担: 各レーンが自分の範囲の依存を上げる(データ: engine・services/go.mod の共有部分・tools・MySQL・calc / API: API が使うライブラリ / Web: web/ の package.json・Node / タイプバランス: services/balance / iOS: ios/)。Go のツールチェーンの版(go.work・各 go.mod の go/toolchain 行)は全モジュールで揃え、データレーンが先に上げて main に入れ、他のレーンはそれに合わせる。
+Reason: ユーザーが「アップデートの手間を減らすため、ミドルウェアやプログラミング言語等のバージョンは全て最新にして」と指示し、固定方法と calc の扱いに回答した。
+Impact: 各レーンの次のタスクの前に依存の更新を入れる。更新後はそのレーンのテスト一式を通してから PR にする。
+
 ## 2026-09-21: TB3(特性)の仕様3点(ユーザー回答)と細部の既定案
 Decision: ユーザー回答: 特性は analyze の request で `abilityId` を任意指定/効果は無効・吸収・倍率変更に加え ×3/4 なども含める/特性による無効・吸収は集計の「無効」に含め source で区別。
 既定案(ユーザー未確認): 効果は正規化データ(immune / absorb / type_multiplier / super_effective_multiplier)の read model `BALANCE_ABILITIES_PATH`、
@@ -377,3 +390,29 @@ Decision: 仮想敵を最大 6 体(pokemonId・技 ID 最大 4・特性は任意
 安全に受けられる人数(incoming < 1)・打ちやすい人数(outgoing ≥ 2)を返す。新 endpoint `/api/balance/v1/team-balance/threats`。詳細は ADR-0400。
 Reason: ユーザーが TB4 の方針に回答した(「安全に受けられる」「打ちやすい」の閾値はタイプバランスレーンの既定案)。
 Impact: TB1〜3 の計算と既存の read model を再利用。
+
+## 2026-09-22: P3-1 calc-svc の API 契約(API レーン。既定案で進行・ユーザー未確認)
+Decision: ADR-0200 のとおり。`CalcResult.category` を足す(落とさない)、`BulkCalcRow.defender{sp,nature,natureId,stats}`、逆算は P1-12 の形
+(`known` / `unknownSpeciesKey` / `itemCandidates` / 観測は percent・percentTenths・damage のちょうど1つ)、`Error.code` を enum `ErrorCode`
+(WASM 境界の語彙 + HTTP だけの missing_header・unknown_*・not_found・master_unavailable・upstream_unavailable)。
+マスタは calc-svc 内の暫定 `Store`(services/calc/internal/master)と架空データで作り、データレーンの共通マスタ(P2-2a)が main に入ったら差し替える。
+Reason: plan.md P3-1 の小項目と ADR-0010 §9・§R8 / ADR-0011 §10 の持ち越しを解消するため。いずれも取り消しやすい契約の既定値。
+Impact: Web レーン(P4-5)は生成型の変更に追従する。データレーンへ: P2-2a の master が入ったら、calc-svc の `Store` インターフェース
+(Species / Move / Item / Ability / Nature / NatureID / TypeChart)を満たす adapter を API レーンが作る。
+
+## 2026-09-22: API レーンの依存を最新の安定版へ(上の 2026-09-21「ミドルウェア・ライブラリ・ツールは導入時点の最新の安定版にする」の API レーン分)
+Decision: services/go.mod の Echo v4.15.4 → v5.3.1(oapi-codegen v2.8.0 の echo5-server で再生成)、kin-openapi v0.142.0 → v0.149.0、間接依存も最新へ。
+例外として go-yit は oapi-codegen v2.8.0 が要求する版に据え置く(最新版は yaml/v4 に移り、make gen が壊れる)。詳細は ADR-0201。Go のツールチェーン行は変えていない(データレーンに合わせる)。
+Reason: ユーザー決定の適用。
+Impact: services/go.mod はデータレーン(mysql・migrate)と共有。統合時の競合は両方を残して解決した。gateway(P3-2)は最初から Echo v5 で作る。
+
+## 2026-09-22: API レーンの ADR を 0200 台へ振り直し(データレーンが決めた ADR 番号の帯の規則に従う)
+Decision: 0018-calc-svc-api-contract → 0200、0019-api-deps-latest-echo-v5 → 0201(タイプバランスの 0018 と衝突していたため)。gateway の ADR は 0202。
+Reason: COORDINATION.md の ADR 番号の帯(API は 0200〜)。
+Impact: API レーンのファイル(services/calc・api/openapi.yaml・plan.md の P3-1 行・CURRENT_STATE の API 欄・DECISIONS の API レーンのエントリ)の参照だけを置き換えた。
+
+## 2026-09-22: Claude の上限時は Codex を最大2本(クリティカルパスのレーン+整備レーン)で動かす(ユーザー決定)
+Decision: Max プランの利用枠は全レーンで共有なので、上限に達すると全レーンが同時に止まる。そのとき Codex を最大2本起動する: (1) M1 の完了に一番効くレーンを通常のプロンプトで Next から続ける、(2) 整備レーン(レーンに属さない共有物の整理・統合の検証・改善要望)。
+整備レーンは Claude の各レーンが止まっている間だけ動かし、作業ディレクトリ ~/MyDamageCalcurater-maint は使うときだけ作って終わったら消す。レーンの範囲は直さず、見つけた問題はそのレーンの Next と DECISIONS.md に書く。
+Reason: ユーザーが「Codex は Max のレートリミット後に 5 レーンの調整・整備を行うのがよいのでは」と提案し、用意を依頼した。全員が止まっている時間はレーンをまたぐ整理をしても衝突しない。
+Impact: COORDINATION.md に節を追加、CURRENT_STATE.md に Maintenance 欄、plan.md に整備レーンのバックログ(MT-1〜7)。

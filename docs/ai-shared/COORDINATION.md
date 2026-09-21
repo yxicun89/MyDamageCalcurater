@@ -97,6 +97,21 @@ gh pr merge <番号> --merge         # マージコミットで入れる。squas
 3. レーン欄の `Status` と `Next` に、**次にやることを具体的に**書き、`Active` を `なし` にする。この更新もブランチに commit・push する。
    (main へはまだ入らないので、次に始める人はレーン欄の `Branch` の最新コミットを見る。)
 
+## Claude の上限時の Codex(最大2本。2026-09-22 ユーザー決定)
+
+Max プランの利用枠は全レーンで共有なので、Claude Code が上限に達すると**全レーンが同時に止まる**。そのときは Codex を**最大2本**だけ起動する
+(Codex の利用枠も有限で、5本同時だとすぐ尽きるため)。
+
+| Codex | 作業ディレクトリ | やること |
+|---|---|---|
+| **1. クリティカルパスのレーン** | そのレーンの作業ディレクトリ | M1 の完了に一番効くレーン(`CURRENT_STATE.md` の各レーンの Next を見て選ぶ。迷ったらデータ → API → Web の順)を、通常のレーンのプロンプトで `Next` から続ける |
+| **2. 整備レーン** | `~/MyDamageCalcurater-maint`(使うときだけ作り、終わったら消す) | 下記。`docs/plan.md` の「整備レーン」のバックログを上から進める |
+
+- 整備レーンは **Claude の各レーンが止まっている間だけ**動かす(レーンをまたぐ整理をしても、作業中のセッションと衝突しない)。Claude が再開したら、区切りで commit・push・PR して止め、worktree を消す。
+- 整備レーンの範囲: レーンに属さない共有物(`scripts/` の共通スクリプト、ルート `Makefile` の共通ターゲット、`docs/` の横断的な文書(`docs/ai-shared/`・`plan.md` の整備節・README・CLAUDE.md のリポジトリ構成の記述の整合)、`.gitignore`)と、統合の検証。
+  **レーンの範囲(engine・services/*・web・ios・各レーンの ADR)は直さない**。壊れているのを見つけたら、そのレーンの `CURRENT_STATE.md` の欄の Next の先頭に既定案付きで書き、`DECISIONS.md` にも記録する。
+- ブランチは `fix/maint-<名前>`、`CURRENT_STATE.md` は `## Maintenance` 欄。worktree の作り方: `git -C ~/MyDamageCalcurater worktree add -b fix/maint-<名前> ~/MyDamageCalcurater-maint origin/main`、消し方: `git -C ~/MyDamageCalcurater worktree remove ~/MyDamageCalcurater-maint`(未 push の commit が無いことを確かめてから)。
+
 ## 人間への質問(時間帯のルール。2026-09-21 ユーザー決定)
 
 人間の判断が本当に必要になったら(仕様の未確定・`known_diffs.yaml` の承認・取り消しにくい操作など。CLAUDE.md「人間の確認が必要なこと」)、
@@ -131,5 +146,6 @@ cd ~/MyDamageCalcurater      && claude   # または codex(データレーン)
 cd ~/MyDamageCalcurater-api  && claude   # または codex(API レーン)
 cd ~/MyDamageCalcurater-web  && claude   # または codex(Web レーン)
 cd ~/MyDamageCalcurater-tb   && claude   # または codex(タイプバランスレーン)
+# Claude の上限時だけ: 整備レーン(Codex。使うときだけ worktree を作る)
 cd ~/MyDamageCalcurater-ios  && claude   # または codex(iOS レーン)
 ```

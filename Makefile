@@ -67,6 +67,7 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 	@node --check tools/golden/generate.mjs
 	@node --check scripts/wasm-conformance.mjs
+	@for script in tools/importer/*.mjs; do node --check "$$script" || exit; done
 	@$(MAKE) --no-print-directory check-publishable
 
 .PHONY: build
@@ -110,7 +111,7 @@ test-db: ## pokedex の DB を使うテスト(POKEDEX_TEST_DSN が必須。make 
 		echo "test-db: POKEDEX_TEST_DSN が設定されていない(スキップせず失敗する)" >&2; \
 		exit 1; \
 	fi
-	@cd services && $(GO) test -tags mysql ./pokedex/db/...
+	@cd services && $(GO) test -tags mysql -p 1 ./pokedex/...
 
 .PHONY: db-local-up
 db-local-up: ## make dev 用に docker で mysql:9.7.2 を 127.0.0.1:3306 に起動する(パスワードは .env)
@@ -148,8 +149,16 @@ test-wasm: wasm ## Go と WASM の結果一致テスト(Node。要 make wasm)
 	@node scripts/wasm-conformance.mjs
 
 .PHONY: import
-import: ## マスタデータ取込
-	@echo "import: (P2 で実装)"
+import: ## マスタデータの変換・投入(POKEDEX_DATABASE_DSN が必須。取得は import-fetch)
+	@cd services && $(GO) run ./pokedex/cmd/import -data ../data
+
+.PHONY: import-dry-run
+import-dry-run: ## マスタデータの変換・報告だけ行う(DB には触らない)
+	@cd services && $(GO) run ./pokedex/cmd/import -data ../data -dry-run
+
+.PHONY: import-fetch
+import-fetch: ## 取得元(calc/Showdown/PokeAPI)から実データを取得する(ネットワークが要る。先に tools/importer で npm ci)
+	@cd tools/importer && npm ci && node fetch.mjs
 
 .PHONY: assets
 assets: ## 画像を WebP 2サイズに変換して MinIO へ

@@ -4,15 +4,15 @@
 Lane: データ(engine・マスタ・pokedex。どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
 Branch: feat/claude-p1-engine(作業ディレクトリ ~/MyDamageCalcurater)
-Status: Phase 1・P2-1・P1-10・Phase R(R-2-9 の公開用クリーンコピーは公開時に実施)・R-3・P1-13(タイプ相性表のデータ化。ADR-0013)・P1-11(表示%の分離)・P1-12(逆算の再設計。ADR-0010 §R)・P2-1b(ゴールデンを Champions へ)・P2-1c(技の使用可否の裁定)・P2-2a(pokedex のスキーマと migrate。ADR-0015)は完了(critic レビュー済み)
-Next: P2-2b(importer の取得・変換と DB への投入)→ P2-2c → P2-2d → P2-3 → P3-1〜3 → P4-1〜7。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)、P2-1c の裁定
+Status: Phase 1・P2-1・P1-10・Phase R(R-2-9 の公開用クリーンコピーは公開時に実施)・R-3・P1-13(タイプ相性表のデータ化。ADR-0013)・P1-11(表示%の分離)・P1-12(逆算の再設計。ADR-0010 §R)・P2-1b(ゴールデンを Champions へ)・P2-1c(技の使用可否の裁定)・P2-2a(pokedex のスキーマと migrate。ADR-0100)・P2-2b(importer の取得・変換・投入。ADR-0101。実データの取得は未実施で版はプレースホルダ=取り込みは明示的に止まる)は完了(critic レビュー済み)
+Next: P2-2c(照合と差分報告。実データの取得と版の固定を含む) → P2-2d → P2-3 → P3-1〜3 → P4-1〜7。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)、P2-1c の裁定
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
-Active: なし
+Active: Claude Code
 Branch: feat/api-p3(作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: 未着手(2026-09-21 にレーンを新設)
-Next: docs/plan.md の P3-1 から。P3-1 の小項目のとおり api/openapi.yaml を先に直して make gen(絶対ルール1)。一括計算・逆算(engine の P1-12 の新しい形。ADR-0010 §R8)・WASM 境界との契約差分(ADR-0011 §10)。マスタの読み込みは services/internal/master(データレーンの P2-2a。main に入るまで)を待たず、差し替え可能なインターフェースと架空データで作る。続いて P3-2 gateway、P3-3 契約テストと k3d のスモーク
+Status: P3-1(calc-svc。ADR-0200)完了・critic PASS。api/openapi.yaml を更新済み(category・BulkCalcRow.defender・逆算の P1-12 形・ErrorCode)。依存を最新へ(Echo v5・ADR-0201)。main へは PR で統合予定
+Next: P3-2 gateway(Echo v5)(ルーティング・X-Device-Id/X-Session-Id の UUID 検証・/assets・CORS・upstream_unavailable)→ P3-3 契約テスト(gateway 経由)と k3d のスモーク。マスタは services/calc/internal/master の暫定 Store(P2-2a が main に入ったら差し替え)
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
@@ -35,6 +35,13 @@ Branch: 次は main から feat/tb-tb5-<名前> を切る(作業ディレクト�
 Status: TB0〜TB4 は完了・main に統合済み(TB4 仮想敵診断 /threats。ADR-0400)。balance は Echo v5.3.1。ポケモン・技・特性は temporary の read model(架空データの example。実データは BALANCE_*_PATH でマウント。P2-2 のスナップショットができたら差し替え)。k3d には Argo CD v3.5.3・クラスタ内レジストリ・Application pokecalc-balance(manual sync)。新しい ADR はタイプバランスの帯 0400〜
 Next: TB5(おすすめタイプと該当ポケモン。DECISIONS.md 2026-09-22: 基準は防御の穴と攻撃範囲の穴の両方、一覧はそのタイプを持つ使用可能なポケモン全員(日本語名付き)、特性でふさげるものは別枠)。使用可能集合・日本語名はデータレーンの P2-2 のマスタが要るので、それまでは read model を広げた架空データで作る。軽微の残り: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の JSON Schema、CoverageMultiplier の nullable enum、HTTP 層の検証・422 変換の重複(analyze・coverage・threats)
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
+
+## Maintenance
+Lane: 整備(Claude の上限時に Codex が進める。COORDINATION.md「Claude の上限時の Codex」)
+Active: なし
+Branch: なし(使うときに fix/maint-<名前> を origin/main から切る。作業ディレクトリ ~/MyDamageCalcurater-maint は使うときだけ作る)
+Status: 未着手(2026-09-22 に新設)
+Next: docs/plan.md の「整備レーン」のバックログを上から
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

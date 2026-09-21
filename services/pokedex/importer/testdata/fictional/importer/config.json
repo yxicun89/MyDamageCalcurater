@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "sources": {"calc": "test-calc-1", "showdown": "abad1deaabad1deaabad1deaabad1deaabad1dea", "pokeapi": "cafef00dcafef00dcafef00dcafef00dcafef00d"},
+  "excludeCalcSpecies": ["Testshield-Both"],
+  "excludeTypes": ["???", "Stellar"],
+  "nameJaLanguages": ["ja-Hrkt", "ja"]
+}
