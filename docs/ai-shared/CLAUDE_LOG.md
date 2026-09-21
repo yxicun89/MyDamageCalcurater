@@ -107,3 +107,12 @@
 ### Next
 - P1-10 防御プリセットの再定義
 
+## 2026-09-21 (Claude Code: コーディング規約 v2 と P1-10)
+### Done
+- docs/coding-rules.md を起草 → Codex に read-only でレビューさせ「要修正」→ v2 に反映 → 再レビュー依頼(未回答)。CLAUDE.md / AGENTS.md から参照。plan.md に Phase R を追加
+- P1-10: spec-writer → implementer → critic(FAIL: ドキュメント3点のみ、コード・テスト・ゴールデンは全項目合格・変異生存ゼロ)→ 私がドキュメントを修正(ADR-0011 の例・test-strategy.md・openapi の説明・design.md・ADR-0009 §2-a)して完了
+### Open issues
+- Codex の v2 再レビューが未回答。LICENSE の方針が未定。main が進んでいる(pokecalc-main worktree)ため、feat/claude-p1-engine の main へのマージ時に確認が要る
+### Next
+- Phase R
+

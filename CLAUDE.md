@@ -14,6 +14,7 @@ Claude Code / Codex の手順対応は [docs/development-workflow.md](docs/devel
 4. `docs/design.md` — 画面・ビジュアルの正
 5. `docs/adr/` — 過去の設計判断
 6. `docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md` — Claude Code と Codex の共有状態(運用は [AGENTS.md](AGENTS.md))
+7. `docs/coding-rules.md` — コーディング規約(公開できる状態を保つ・ハードコードしない・読みやすいコード。Claude Code / Codex 共通)
 
 ## リポジトリ構成
 
