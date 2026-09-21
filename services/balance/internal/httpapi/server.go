@@ -28,9 +28,12 @@ var errRequestTooLarge = errors.New("request body exceeds 16 KiB")
 // Dependencies are the replaceable master-data boundaries of the HTTP adapter.
 // PokemonTypes may be nil: the service still starts, health stays 200, and
 // analyze answers 503 master_unavailable (ADR-0014 §2).
+// Moves may be nil: coverage answers 503 master_unavailable (ADR-0016 §4);
+// analyze does not use it.
 type Dependencies struct {
 	TypeChart    balance.TypeChartProvider
 	PokemonTypes balance.PokemonTypeProvider
+	Moves        balance.MoveProvider
 }
 
 // New returns the HTTP handler.
@@ -63,6 +66,13 @@ func (handler) PublicHealth(c echo.Context) error {
 
 func (h handler) AnalyzeTeamBalance(c echo.Context, _ api.AnalyzeTeamBalanceParams) error {
 	return analyze(c, h.deps)
+}
+
+// AnalyzeTeamCoverage is the TB2 offensive coverage endpoint (ADR-0016).
+//
+// TODO(TB2 implementer): スタブ。未実装。
+func (h handler) AnalyzeTeamCoverage(c echo.Context, _ api.AnalyzeTeamCoverageParams) error {
+	return c.NoContent(http.StatusNotImplemented)
 }
 
 func health(c echo.Context) error {

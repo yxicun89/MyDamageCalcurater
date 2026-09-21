@@ -75,3 +75,32 @@ GitOps専用overlay、digest固定、private repository/registryの秘密をGit�
 | Unit | `internal/balance` | 171 通りの単/複合タイプで `AnalyzeDefense` と `CalculateDefense` が一致(データの表で) |
 
 TB0 の `TemporaryTypeChart` のテストは、コードごと削除した(削除前にデータの表と 18×18 全件一致を確認)。
+
+## TB2 の対象(攻撃範囲。ADR-0016)
+
+契約の正は [ADR-0016](adr/0016-balance-tb2-offense-coverage.md)(§1 はユーザー回答)。`POST /api/balance/v1/team-balance/coverage` は
+メンバーごとに技 ID を 0〜4 個受け取り、変化技を除いた技のタイプ(`attackTypes`)と、18 の単タイプの防御側それぞれに対する
+`bestMultiplier`(`"0" "1/2" "1" "2"`、攻撃技なしは `null`)・`effective`(×1 以上)・`superEffective`(×2)を返し、防御タイプごとに
+メンバー単位のチーム集計(`effectiveMembers` / `superEffectiveMembers`)を返す。複合タイプの防御側・STAB・特性・特殊な技は範囲外(TB4 / TB3 以降)。
+テストは実装より先に書いた(spec 先行)。倍率の期待値は同梱の相性表(`master.EmbeddedTypeChart()`)で成り立つ組だけを使う。
+
+### 受け入れ条件
+
+1. 変化技(`status`)は `attackTypes` と倍率の計算に入らない。`moveIds` は request の順のまま(変化技も含めて)返す。
+2. `attackTypes` は重複なし・正準順(normal … fairy)。同じタイプの技を複数持っても1回。
+3. `coverage` と `teamCoverage` は 18 件・正準順。`bestMultiplier` は攻撃技のタイプの倍率の最大値。攻撃技が無いメンバー(技 0 個・変化技のみ)は全件 `null`・false。
+   ×0 と ×1/2 は `effective` でなく、×1 は `effective` だけ、×2 は両方。
+4. チーム集計はメンバー単位(技の数ではない)。`superEffectiveMembers ≤ effectiveMembers ≤ メンバー数`。チームの `bestMultiplier` は全メンバーの最大で、攻撃技を持つメンバーがいなければ `null`。
+5. 判定順: ヘッダー 400 → body 400/413 → ポケモンまたは技の read model 未設定 503 → `unknown_pokemon` 422 → `unknown_move` 422(message `unknown moveId: <ID>`)→ 200。その他の内部エラーは 500 固定文言 `internal error`。
+6. request の検証(400): メンバー 1〜6、pokemonId の形式、moveIds 5 件以上、同じメンバー内の重複、moveId の形式(`^[a-z0-9]+(-[a-z0-9]+)*$`・最大 40 文字)、未知フィールド・後続 JSON。別メンバー間の同じ moveId・同じ pokemonId は許す。
+7. 技の read model(`BALANCE_MOVES_PATH`)は起動時に1回読み、不正なら起動失敗。未設定・空文字は provider なし(型付き nil ではない nil interface)。Git には架空 ID(move-9001 以降)の example だけ。
+
+| レイヤー | 対象 | 合格条件 |
+|---|---|---|
+| Unit | `internal/balance`(`MoveCategory` / `ResolveMoves` / `UnknownMoveError` / `AnalyzeCoverage`) | 受け入れ条件 1〜4。`ResolveMoves` は順序維持・未登録は ID だけを持つ `*UnknownMoveError`(`Unwrap` は `ErrUnknownMove`、`Error()` は `unknown move: <ID>`)・provider nil は `ErrNilMoves`・その他の失敗は伝播(unknown にしない)。`AnalyzeCoverage` の入力エラー: 0/7 体は `ErrMemberCount`、技 5 個は `ErrMoveCount`、メンバー内の同じ moveId は `ErrDuplicateMove`、攻撃技の不正タイプは `ErrInvalidType`、不正分類は `ErrInvalidMoveCategory`、chart nil は `ErrNilTypeChart`、chart のエラーは伝播、単タイプとしてありえない倍率はエラー。データの表で単タイプ 18 + 2 タイプ 153 通りの攻撃側を、`Matchup` から作った oracle と全件照合 |
+| Adapter | `internal/master` の技 read model(`LoadMoves` / `LoadMovesFile`) | 正常系(40 文字の ID を含む)。`schemaVersion≠1`・欠落・文字列、`moves` の欠落/null/空、moveId の欠落・空・大文字・`_`・空白・先頭/末尾/連続ハイフン・41 文字・重複、type の欠落・空・未知・大文字・配列、category の欠落・空・未知・大文字、未知フィールド、空/壊れた/null/後続付き JSON はすべて `ErrInvalidMoves` で部分 model を返さない。存在しないパス・ディレクトリはエラー。未登録 ID は `balance.ErrUnknownMove`(zero の Move)。example は架空 ID のみで physical/special/status・同タイプの攻撃技 2 個以上・×0 と ×2 の組を含み、local overlay の複製とバイト一致 |
+| Config | `cmd/api` の `BALANCE_MOVES_PATH` 読み込み(`moveProviderFromEnv`) | 未設定・空文字は nil interface でエラーなし。example を読める。不正/存在しないファイル・ディレクトリはエラー(main は起動失敗) |
+| Contract/HTTP | service-local OpenAPI 0.3.0 / coverage | 生成型 `api.CoverageResponse` へ未知フィールド禁止で decode できる 200 と内容。`moveIds` / `attackTypes` は空でも `[]`(null でない)、`bestMultiplier` は文字列か明示的な `null`。受け入れ条件 5・6 の各ケース、境界(6 体×4 技、40 文字の moveId、技 0 個)の成功。技の read model が無くても health 200・analyze 200。analyze の既存テストは変更なし |
+| Smoke | k3d(local overlay) | local overlay が `testdata/moves.example.json` の複製を ConfigMap でマウントし `BALANCE_MOVES_PATH` を設定する。Ingress 経由で coverage が 200(`teamCoverage`・`"attackTypes":["fire"]` 等を含む)、未登録の技が 422 `unknown_move` |
+
+テストの技 ID は架空(move-9001 以降)を使う。実在の技の名前・ID をテストデータとして Git に置かない(ADR-0002)。

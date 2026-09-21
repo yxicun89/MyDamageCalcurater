@@ -43,6 +43,12 @@ pokemonId の解決(422 `unknown_pokemon`)→ moveId の解決(422 `unknown_move
 - タイプ相性表どおりでない技(相手のタイプで倍率が変わる技、2タイプを持つ技、固定ダメージ技など)の特例。技の効果データが要るので TB3 以降。
 - STAB・特性・テラスタル。
 
+### 6. 細部(spec-writer が挙げた未決の確定)
+1. メンバーの `moveIds` の欠落・`null` は 400 `invalid_request`(OpenAPI の required どおり)。空配列 `[]` は可(攻撃技なし)。
+2. `teamCoverage` の `bestMultiplier` も、攻撃技を持つメンバーが1人もいなければ `null`。
+3. 相性表が nil なら、攻撃技の有無によらず `ErrNilTypeChart`(HTTP では 500)。
+4. 防御側が単タイプなので `bestMultiplier` は `"0" "1/2" "1" "2"` のいずれか(×4・×1/4 は出ない)。
+
 ## 却下した案
 - analyze の response に攻撃範囲を足す: 設計書 §6「防御タイプ分析とは別のデータ構造」に反し、技の read model が無いと防御分析まで 503 になる。
 - 技のタイプを request で送る: ユーザー回答(ID を送る)と TB1 の方針に反する。

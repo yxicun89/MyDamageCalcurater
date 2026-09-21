@@ -67,4 +67,38 @@ if [ "$unknown_status" != "422" ] || ! grep -q '"code":"unknown_pokemon"' "$body
   exit 1
 fi
 
-echo "balance smoke: health=200 analyze=200 unknown=422"
+# TB2 (ADR-0016): the local overlay also mounts testdata/moves.example.json (fictional IDs from move-9001)
+# and sets BALANCE_MOVES_PATH. move-9001/move-9002 are fire (special/physical), move-9006 is a status move,
+# move-9005 is normal. analyze already answered 200 above, so the Pod is routable; no retry here.
+coverage_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  -X POST "$base_url/api/balance/v1/team-balance/coverage" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  --data '{"members":[{"pokemonId":"9001-000","moveIds":["move-9001","move-9002","move-9006"]},{"pokemonId":"9002-000","moveIds":["move-9005"]}]}' || printf '000')
+if [ "$coverage_status" != "200" ]; then
+  echo "balance coverage failed: HTTP $coverage_status (is the example move read model mounted?)" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+for key in '"members"' '"teamCoverage"' '"attackTypes":["fire"]' '"bestMultiplier"' '"effectiveMembers"' '"superEffectiveMembers"'; do
+  if ! grep -q "$key" "$body_file"; then
+    echo "balance coverage body is missing $key" >&2
+    cat "$body_file" >&2
+    exit 1
+  fi
+done
+
+unknown_move_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  -X POST "$base_url/api/balance/v1/team-balance/coverage" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  --data '{"members":[{"pokemonId":"9001-000","moveIds":["move-9999"]}]}')
+if [ "$unknown_move_status" != "422" ] || ! grep -q '"code":"unknown_move"' "$body_file"; then
+  echo "balance coverage unknown move: HTTP $unknown_move_status, want 422 unknown_move" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+
+echo "balance smoke: health=200 analyze=200 unknown=422 coverage=200 unknown_move=422"
