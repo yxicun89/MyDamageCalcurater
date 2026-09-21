@@ -6,9 +6,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: REPLACE_WITH_GIT_REPOSITORY_URL
+    repoURL: https://git.example.invalid/pokecalc.git
     targetRevision: main
-    path: services/balance/deploy/k8s/overlays/local
+    path: services/balance/deploy/k8s/overlays/gitops
   destination:
     server: https://kubernetes.default.svc
     namespace: pokecalc

@@ -29,6 +29,7 @@ make -f services/balance/Makefile balance-test
 make -f services/balance/Makefile balance-lint
 make -f services/balance/Makefile balance-build
 make -f services/balance/Makefile balance-kustomize
+make -f services/balance/Makefile balance-gitops-template-check
 make -f services/balance/Makefile balance-docker-build
 make -f services/balance/Makefile balance-k3d-deploy
 make -f services/balance/Makefile balance-smoke
@@ -38,8 +39,9 @@ Docker/k3d/Argo CD を実行できない場合は、未実施理由と再実行�
 
 ## TB0 の未完了ブロッカー
 
-2026-09-21 時点で、Docker build、k3d への直接 deploy、Pod Ready、smoke は確認済み。
-一方、Git remote、取得可能な配布イメージの置き場所、Argo CD Application CRD が未設定のため、
+2026-09-21 時点で、Docker build、k3d への直接 deploy、Pod Ready、smoke、GitOps template検査は確認済み。
+GitOps専用overlay、digest固定、private repository/registryの秘密をGitへ入れない手順も用意した。
+一方、実Git remote、取得可能な配布イメージの置き場所、Argo CD Application CRD が未設定のため、
 `Git変更 → Argo CD manual sync → Pod更新` は未実施であり、TB0 全体は完了扱いにしない。
 実施には利用する Git repository URL、image registry/repository、不変 image tag または digest、
-およびローカルクラスタへ Argo CD を導入するかどうかの人間判断が必要である。
+およびversion固定したArgo CDの導入とprivate repository/registry credentialのクラスタ登録が必要である。

@@ -12,6 +12,7 @@ damage-calc とは兄弟サービスで、互いの実行時 API には依存し
 - `internal/httpapi`: health と TB1 用 endpoint の最小疎通
 - `cmd/api`: プロセス起動と graceful shutdown
 - `deploy`: balance 専用 Kustomize と manual-sync の Argo CD Application
+- `DEPENDENCIES.md`: 公開前確認用の直接依存・利用理由・license
 
 `TemporaryTypeChart` は開発継続用であり恒久正本ではない。2026-09-21 時点の
 `engine/typechart.go` と同じ第6世代以降の18タイプ相性を複製し、ADR-0012 の共通マスタが
@@ -43,10 +44,13 @@ make -f services/balance/Makefile balance-test
 make -f services/balance/Makefile balance-lint
 make -f services/balance/Makefile balance-build
 make -f services/balance/Makefile balance-kustomize
+make -f services/balance/Makefile balance-gitops-template-check
 ```
 
 `balance-k3d-deploy` は、ルートの `deploy/k3d.yaml` と基盤 Kustomize により `pokecalc` クラスタ・
 Namespace が作成済みであることを前提とする。共有 Namespace は balance 側では所有しない。
 
-Argo CD Application の `repoURL` は、このリポジトリに remote が設定された後で置換する。
-現状は `REPLACE_WITH_GIT_REPOSITORY_URL` で Argo CD CRD も未導入のため、Git同期は未設定である。
+Argo CD用にはlocal imageを参照しない専用overlayを用意している。予約済み`.invalid` domainとzero digestは
+意図的なplaceholderであり、`balance-gitops-check`は置換されるまで失敗する。private repository・registryの
+credentialやSecretはGitへ入れない。公開用クリーンコピーとimage registryを準備した後の手順は
+[`deploy/argocd/README.md`](deploy/argocd/README.md)を参照する。

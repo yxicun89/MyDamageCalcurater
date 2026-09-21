@@ -2,5 +2,5 @@
 deploy
 scripts
 Makefile
-README.md
+*.md
 **/*_test.go

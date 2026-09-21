@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: pokecalc
+resources:
+  - ../../base
+images:
+  - name: pokecalc/balance
+    newName: registry.example.invalid/pokecalc/balance
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
