@@ -56,6 +56,87 @@ func (e DefenderPreset) Valid() bool {
 	}
 }
 
+// Defines values for ErrorCode.
+const (
+	DuplicatePreset     ErrorCode = "duplicate_preset"
+	Internal            ErrorCode = "internal"
+	InvalidEnum         ErrorCode = "invalid_enum"
+	InvalidInput        ErrorCode = "invalid_input"
+	InvalidJson         ErrorCode = "invalid_json"
+	InvalidObservation  ErrorCode = "invalid_observation"
+	InvalidPreset       ErrorCode = "invalid_preset"
+	InvalidReverseSide  ErrorCode = "invalid_reverse_side"
+	InvalidTypeChart    ErrorCode = "invalid_type_chart"
+	MasterUnavailable   ErrorCode = "master_unavailable"
+	MissingHeader       ErrorCode = "missing_header"
+	NoObservation       ErrorCode = "no_observation"
+	NotFound            ErrorCode = "not_found"
+	TypeChartMissing    ErrorCode = "type_chart_missing"
+	UnknownAbility      ErrorCode = "unknown_ability"
+	UnknownField        ErrorCode = "unknown_field"
+	UnknownItem         ErrorCode = "unknown_item"
+	UnknownMove         ErrorCode = "unknown_move"
+	UnknownNature       ErrorCode = "unknown_nature"
+	UnknownPreset       ErrorCode = "unknown_preset"
+	UnknownSpecies      ErrorCode = "unknown_species"
+	UnknownType         ErrorCode = "unknown_type"
+	UpstreamUnavailable ErrorCode = "upstream_unavailable"
+)
+
+// Valid indicates whether the value is a known member of the ErrorCode enum.
+func (e ErrorCode) Valid() bool {
+	switch e {
+	case DuplicatePreset:
+		return true
+	case Internal:
+		return true
+	case InvalidEnum:
+		return true
+	case InvalidInput:
+		return true
+	case InvalidJson:
+		return true
+	case InvalidObservation:
+		return true
+	case InvalidPreset:
+		return true
+	case InvalidReverseSide:
+		return true
+	case InvalidTypeChart:
+		return true
+	case MasterUnavailable:
+		return true
+	case MissingHeader:
+		return true
+	case NoObservation:
+		return true
+	case NotFound:
+		return true
+	case TypeChartMissing:
+		return true
+	case UnknownAbility:
+		return true
+	case UnknownField:
+		return true
+	case UnknownItem:
+		return true
+	case UnknownMove:
+		return true
+	case UnknownNature:
+		return true
+	case UnknownPreset:
+		return true
+	case UnknownSpecies:
+		return true
+	case UnknownType:
+		return true
+	case UpstreamUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Format.
 const (
 	Double Format = "double"
@@ -89,6 +170,24 @@ func (e MoveCategory) Valid() bool {
 	case Special:
 		return true
 	case Status:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NatureClass.
+const (
+	Neutral NatureClass = "neutral"
+	Plus    NatureClass = "plus"
+)
+
+// Valid indicates whether the value is a known member of the NatureClass enum.
+func (e NatureClass) Valid() bool {
+	switch e {
+	case Neutral:
+		return true
+	case Plus:
 		return true
 	default:
 		return false
@@ -319,10 +418,13 @@ type BulkCalcRequest struct {
 	MoveId       string       `json:"moveId"`
 	Options      *CalcOptions `json:"options,omitempty"`
 
-	// Presets 省略時(空配列を含む)は技の分類に応じた既定セット。
+	// Presets 使う防御側プリセットと行の順序。省略と空配列(`[]`)は同じで、技の分類に応じた既定セットになる。
 	// 物理技は 5 件(none, hp, hb_boost, hb, hb_full)、
 	// 特殊技は 5 件(none, hp, hd_boost, hd, hd_full)、
-	// 変化技は 2 件(none, hp)。指定したときはその順に行を返す。
+	// **変化技は 2 件(none, hp)のみ**。
+	// 指定したときはその順に行を返す(分類に合わないプリセットも指定どおり返す)。
+	// 同じ preset を2回以上含めると 400 `duplicate_preset`。
+	// engine のカスタムプリセット定義(SP・性格を任意に決めたもの)は API に出さない。
 	Presets *[]DefenderPreset `json:"presets,omitempty"`
 }
 
@@ -337,6 +439,10 @@ type BulkCalcResult struct {
 
 // BulkCalcRow defines model for BulkCalcRow.
 type BulkCalcRow struct {
+	// Defender 一括計算の1行で使った防御側の調整(SP・性格補正・実数値)
+	Defender BulkDefender `json:"defender"`
+
+	// ItemId この行の防御側の持ち物(持ち物なしは null)
 	ItemId *string `json:"itemId,omitempty"`
 
 	// Preset 防御側の代表調整(耐久が上がる順)。SP は能力ポイント(Lv50・個体値31固定)。
@@ -355,6 +461,23 @@ type BulkCalcRow struct {
 	// PresetLabel 表示名(例 HB振り / HB特化 / H振り+B補正)
 	PresetLabel string     `json:"presetLabel"`
 	Result      CalcResult `json:"result"`
+}
+
+// BulkDefender 一括計算の1行で使った防御側の調整(SP・性格補正・実数値)
+type BulkDefender struct {
+	// Nature 性格補正の構造値。plus が +10%、minus が -10% を受ける能力。無補正は両方 null。
+	// HP を指すことはない。
+	Nature NatureModifier `json:"nature"`
+
+	// NatureId nature と (plus, minus) が一致するマスタの性格 ID。無補正は、マスタの無補正性格を
+	// ID の昇順で並べた最初のもの。該当する性格がマスタに無ければ null。
+	NatureId *string `json:"natureId"`
+
+	// Sp 能力ポイント
+	Sp StatBlock `json:"sp"`
+
+	// Stats 実数値(Lv50・個体値31)
+	Stats StatBlock `json:"stats"`
 }
 
 // CalcOptions defines model for CalcOptions.
@@ -380,10 +503,12 @@ type CalcRequest struct {
 
 // CalcResult defines model for CalcResult.
 type CalcResult struct {
-	DefenderHP int `json:"defenderHP"`
+	// Category 使った技の分類(WASM 境界の CalcResult と同じ。Web が型を共有するため)
+	Category   MoveCategory `json:"category"`
+	DefenderHP int          `json:"defenderHP"`
 
 	// Effectiveness タイプ相性(0, 0.25, 0.5, 1, 2, 4)
-	Effectiveness float32 `json:"effectiveness"`
+	Effectiveness float64 `json:"effectiveness"`
 
 	// Ko 確定数/乱数n発
 	Ko        KOChance `json:"ko"`
@@ -392,14 +517,15 @@ type CalcResult struct {
 	// MaxPercent 最大ダメージの表示%(防御側 HP に対する割合)。小数第1位(0.1%刻み)で、
 	// **四捨五入**する(ADR-0010 §3)。
 	// 100 を超える場合は上限で切らず、そのまま返す(例 137.0)。
-	// 逆算の入力に使う実機観測の整数%とは別概念(engine の ObservedPercent)。
-	MaxPercent float32 `json:"maxPercent"`
+	// 逆算の入力の観測%(`Observation.percent` / `percentTenths`)とは別概念。
+	MaxPercent float64 `json:"maxPercent"`
 	MinDamage  int     `json:"minDamage"`
 
 	// MinPercent 最小ダメージの表示%(防御側 HP に対する割合)。小数第1位(0.1%刻み)で、
 	// **切り捨て**る(「最低これくらい入る」を保守的に示すため。ADR-0010 §3)。
 	// 整数%に丸めてから小数にした値ではない。HP 比率から直接求める。
-	MinPercent float32 `json:"minPercent"`
+	// engine の 0.1% 単位の整数(tenths)を 10 で割っただけの値で、float で近似しない。
+	MinPercent float64 `json:"minPercent"`
 
 	// Rolls 16 段階の乱数ダメージ(非減少)
 	Rolls []int `json:"rolls"`
@@ -421,12 +547,80 @@ type CalcResult struct {
 // - `hd_full`: HD特化(HP 32・特防 32・特防上昇 +D/-A)。特殊
 type DefenderPreset string
 
-// Error defines model for Error.
+// Error エラーの本文。HTTP ステータスは `code` から決まる(ErrorCode の対応表)。
+// `message` は日本語の説明で、Go の内部情報(スタック・型名)を含めない。
 type Error struct {
-	// Code Example: invalid_request
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	// Code 安定したエラーコード。WASM 境界(engine/wasmapi の Code* 定数。ADR-0011 §5・§13)と語彙を共通にし、
+	// **同じ失敗は HTTP と WASM で同じ code** になる(ADR-0016)。
+	//
+	// WASM 境界と共通:
+	// | code | 意味 | HTTP |
+	// |---|---|---|
+	// | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
+	// | unknown_field | 契約にないフィールド | 400 |
+	// | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
+	// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など) | 400 |
+	// | unknown_preset | 未知の防御側プリセット | 400 |
+	// | duplicate_preset | 防御側プリセットの重複 | 400 |
+	// | invalid_preset | 防御側プリセットの定義が不正 | 400 |
+	// | invalid_reverse_side | 逆算の side が defender / attacker のどちらでもない | 400 |
+	// | no_observation | 観測が1件も無い | 400 |
+	// | invalid_observation | 観測の指定が不正(percent / percentTenths / damage のちょうど1つでない・範囲外) | 400 |
+	// | type_chart_missing | タイプ相性表が無い(HTTP ではマスタ側の失敗なので通常は起きない) | 400 |
+	// | invalid_type_chart | タイプ相性表の定義が不正 | 400 |
+	// | unknown_type | 相性表に無いタイプ | 400 |
+	// | internal | 上記以外の失敗(回復した panic を含む) | 500 |
+	//
+	// HTTP だけのもの:
+	// | code | 意味 | HTTP |
+	// |---|---|---|
+	// | missing_header | X-Device-Id / X-Session-Id が無い・空(UUID 形式の検証は gateway が行う) | 400 |
+	// | unknown_species | speciesKey がマスタに無い | 400 |
+	// | unknown_move | moveId がマスタに無い | 400 |
+	// | unknown_item | itemId がマスタに無い | 400 |
+	// | unknown_ability | abilityId がマスタに無い | 400 |
+	// | unknown_nature | natureId がマスタに無い | 400 |
+	// | not_found | ルートが無い / このサービスの担当外の操作 | 404 |
+	// | master_unavailable | マスタを参照できない | 503 |
+	// | upstream_unavailable | gateway から下流のサービスに届かない(P3-2) | 503 |
+	Code    ErrorCode `json:"code"`
+	Message string    `json:"message"`
 }
+
+// ErrorCode 安定したエラーコード。WASM 境界(engine/wasmapi の Code* 定数。ADR-0011 §5・§13)と語彙を共通にし、
+// **同じ失敗は HTTP と WASM で同じ code** になる(ADR-0016)。
+//
+// WASM 境界と共通:
+// | code | 意味 | HTTP |
+// |---|---|---|
+// | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
+// | unknown_field | 契約にないフィールド | 400 |
+// | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
+// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など) | 400 |
+// | unknown_preset | 未知の防御側プリセット | 400 |
+// | duplicate_preset | 防御側プリセットの重複 | 400 |
+// | invalid_preset | 防御側プリセットの定義が不正 | 400 |
+// | invalid_reverse_side | 逆算の side が defender / attacker のどちらでもない | 400 |
+// | no_observation | 観測が1件も無い | 400 |
+// | invalid_observation | 観測の指定が不正(percent / percentTenths / damage のちょうど1つでない・範囲外) | 400 |
+// | type_chart_missing | タイプ相性表が無い(HTTP ではマスタ側の失敗なので通常は起きない) | 400 |
+// | invalid_type_chart | タイプ相性表の定義が不正 | 400 |
+// | unknown_type | 相性表に無いタイプ | 400 |
+// | internal | 上記以外の失敗(回復した panic を含む) | 500 |
+//
+// HTTP だけのもの:
+// | code | 意味 | HTTP |
+// |---|---|---|
+// | missing_header | X-Device-Id / X-Session-Id が無い・空(UUID 形式の検証は gateway が行う) | 400 |
+// | unknown_species | speciesKey がマスタに無い | 400 |
+// | unknown_move | moveId がマスタに無い | 400 |
+// | unknown_item | itemId がマスタに無い | 400 |
+// | unknown_ability | abilityId がマスタに無い | 400 |
+// | unknown_nature | natureId がマスタに無い | 400 |
+// | not_found | ルートが無い / このサービスの担当外の操作 | 404 |
+// | master_unavailable | マスタを参照できない | 503 |
+// | upstream_unavailable | gateway から下流のサービスに届かない(P3-2) | 503 |
+type ErrorCode string
 
 // FieldState defines model for FieldState.
 type FieldState struct {
@@ -475,7 +669,7 @@ type KOChance struct {
 	// (ADR-0006)。guaranteed が true のとき、および hits = 0(倒せない)のときは 0。
 	// **画面に出す値ではない**(確定なのに 0% と誤表示されるため)。表示には
 	// displayChancePercent を使う。
-	ChancePercent *float32 `json:"chancePercent,omitempty"`
+	ChancePercent *float64 `json:"chancePercent,omitempty"`
 
 	// DisplayChancePercent 画面に出す「hits 回で倒せる確率(%)」。常に表示できる値であることを保証する。
 	// 小数第1位(0.1%刻み。ADR-0010 §3)。
@@ -483,7 +677,7 @@ type KOChance struct {
 	// - guaranteed = true(確定 n 発): 100.0
 	// - それ以外: chancePercent を 0.1% 単位に四捨五入し、[0.1, 99.9] に収める
 	//   (確定・不可能と取り違えないため、0.0 と 100.0 はこの2つに予約する)
-	DisplayChancePercent float32 `json:"displayChancePercent"`
+	DisplayChancePercent float64 `json:"displayChancePercent"`
 
 	// Guaranteed 最小ダメージでも hits 回で倒せるなら true(確定n発)
 	Guaranteed bool `json:"guaranteed"`
@@ -522,12 +716,31 @@ type Nature struct {
 	Plus *StatKey `json:"plus,omitempty"`
 }
 
-// Observation defines model for Observation.
+// NatureClass 関連ステータスに対する性格補正のクラス(neutral=無補正 / plus=関連ステータス +10%)。下降補正は探索しない
+type NatureClass string
+
+// NatureModifier 性格補正の構造値。plus が +10%、minus が -10% を受ける能力。無補正は両方 null。
+// HP を指すことはない。
+type NatureModifier struct {
+	Minus *StatKey `json:"minus"`
+	Plus  *StatKey `json:"plus"`
+}
+
+// Observation 1発ぶんの観測。percent / percentTenths / damage の**ちょうど1つ**を指定する(ADR-0010 §R2)。
+// 0 個・2 個以上・範囲外は 400 `invalid_observation`。整数でなければ(例 12.5)400 `invalid_json`。
+// 表示%(CalcResult.minPercent など)とは別概念で、丸め規則に依存しない区間で照合する。
 type Observation struct {
+	// Damage HP の実点数の観測(自分の HP の減少量など)
+	Damage *int `json:"damage,omitempty"`
+
+	// Note 画面用のメモ。計算には使わない
 	Note *string `json:"note,omitempty"`
 
-	// ObservedPercent ゲーム内表示に合わせた HP 減少割合(%)
-	ObservedPercent float32 `json:"observedPercent"`
+	// Percent 整数%の観測(精度 1%)
+	Percent *int `json:"percent,omitempty"`
+
+	// PercentTenths 小数第1位の観測を 0.1% 単位の整数にしたもの(例 45.3% → 453)
+	PercentTenths *int `json:"percentTenths,omitempty"`
 }
 
 // PokeType defines model for PokeType.
@@ -542,51 +755,99 @@ type RankBlock struct {
 	Spe *int `json:"spe,omitempty"`
 }
 
-// ReverseCandidate defines model for ReverseCandidate.
+// ReverseCandidate 候補1件(性格クラス × 持ち物。ADR-0010 §R3)
 type ReverseCandidate struct {
-	ItemId *string `json:"itemId,omitempty"`
+	// Exact mismatch == 0(全観測を説明できる)
+	Exact bool `json:"exact"`
 
-	// MatchScore 観測との一致度(0..1、高いほど一致)
-	MatchScore float32 `json:"matchScore"`
-	NatureId   *string `json:"natureId,omitempty"`
+	// ItemId 持ち物(持ち物なしは null)
+	ItemId *string `json:"itemId"`
 
-	// PresetLabel 型の名前(例 HB特化)
-	PresetLabel string `json:"presetLabel"`
+	// MaxPercent ranges 全体での想定ダメージ幅の上限(表示%。小数第1位・四捨五入。CalcResult.maxPercent と同じ意味)
+	MaxPercent float64 `json:"maxPercent"`
 
-	// RangePercent この候補での想定ダメージ幅 [min, max]
-	RangePercent *[]float32 `json:"rangePercent,omitempty"`
+	// MinPercent ranges 全体での想定ダメージ幅の下限(表示%。小数第1位・切り捨て。CalcResult.minPercent と同じ意味)
+	MinPercent float64 `json:"minPercent"`
 
-	// Sp 6ステータスの値(種族値・実数値・SPなどに共用)
-	Sp StatBlock `json:"sp"`
+	// Mismatch 観測とのずれ(0.1% 単位の整数。0 は完全に説明できる)
+	Mismatch int `json:"mismatch"`
+
+	// Nature 性格補正の構造値。plus が +10%、minus が -10% を受ける能力。無補正は両方 null。
+	// HP を指すことはない。
+	Nature NatureModifier `json:"nature"`
+
+	// NatureClass 関連ステータスに対する性格補正のクラス(neutral=無補正 / plus=関連ステータス +10%)。下降補正は探索しない
+	NatureClass NatureClass `json:"natureClass"`
+
+	// NatureId nature と (plus, minus) が一致するマスタの性格 ID(BulkDefender.natureId と同じ規則)。
+	// 無補正は、マスタの無補正性格を ID の昇順で並べた最初のもの。該当なしは null。
+	NatureId *string `json:"natureId"`
+
+	// Ranges 観測を説明できる SP の集合(昇順・互いに素・隣接しない極大連続区間)。説明できなければ距離最小の SP
+	Ranges []SPRange `json:"ranges"`
+
+	// SpCount ranges に含まれる SP の数
+	SpCount int `json:"spCount"`
+
+	// Support ranges の各 SP で各観測を説明できるロールの延べ数
+	Support int `json:"support"`
 }
 
 // ReverseRequest defines model for ReverseRequest.
 type ReverseRequest struct {
-	// Attacker 計算に使う個体。SP と性格 ID から実数値を導出する
-	Attacker Individual `json:"attacker"`
+	Field  *FieldState `json:"field,omitempty"`
+	Format Format      `json:"format"`
 
-	// DefenderSpeciesKey {図鑑番号4桁}-{フォルム3桁}
-	//
-	// Example: 0445-000
-	DefenderSpeciesKey SpeciesKey    `json:"defenderSpeciesKey"`
-	Field              *FieldState   `json:"field,omitempty"`
-	Format             Format        `json:"format"`
-	MoveId             string        `json:"moveId"`
-	Observations       []Observation `json:"observations"`
-	Options            *CalcOptions  `json:"options,omitempty"`
+	// ItemCandidates 相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ
+	ItemCandidates *[]*string `json:"itemCandidates,omitempty"`
+
+	// Known 既知の側(自分)の個体。side=defender なら自分=攻撃側、side=attacker なら自分=防御側。
+	// known.moveId は使わない(技は moveId で指定する)。
+	Known Individual `json:"known"`
+
+	// MaxCandidates 返す候補数の上限。0 は無制限
+	MaxCandidates *int `json:"maxCandidates,omitempty"`
+
+	// MoveId 観測したときの技(side=defender なら自分の技、attacker なら相手の技)
+	MoveId string `json:"moveId"`
+
+	// Observations 同じ技・同じ場・同じ既知側に対する別々の1発。0 件は 400 `no_observation`
+	Observations []Observation `json:"observations"`
+	Options      *CalcOptions  `json:"options,omitempty"`
 
 	// Side どちら側の調整を逆算するか(defender=与ダメ観測 / attacker=被ダメ観測)
 	Side ReverseSide `json:"side"`
+
+	// UnknownSpeciesKey 逆算する相手の種族。SP・性格・持ち物は探索対象なので渡さない
+	UnknownSpeciesKey SpeciesKey `json:"unknownSpeciesKey"`
 }
 
 // ReverseResult defines model for ReverseResult.
 type ReverseResult struct {
-	// Candidates 一致度の高い順
+	// AssumedHpSp 仮定した相手の H の SP(defender=32、attacker=0。ADR-0010 §R1)
+	AssumedHpSp int `json:"assumedHpSp"`
+
+	// Candidates Mismatch 昇順 → Support 降順 → SPCount 降順 → 定義順(ADR-0010 §R4)
 	Candidates []ReverseCandidate `json:"candidates"`
+
+	// ExactCount exact な候補の数(maxCandidates で切る前)
+	ExactCount int `json:"exactCount"`
+
+	// Side どちら側の調整を逆算するか(defender=与ダメ観測 / attacker=被ダメ観測)
+	Side ReverseSide `json:"side"`
+
+	// Stat 逆算した関連ステータス(技の分類と side から決まる)
+	Stat StatKey `json:"stat"`
 }
 
 // ReverseSide どちら側の調整を逆算するか(defender=与ダメ観測 / attacker=被ダメ観測)
 type ReverseSide string
+
+// SPRange SP の区間(両端を含む)
+type SPRange struct {
+	Max int `json:"max"`
+	Min int `json:"min"`
+}
 
 // Screens defines model for Screens.
 type Screens struct {
@@ -1324,6 +1585,34 @@ func (response CalcDamage400JSONResponse) VisitCalcDamageResponse(w http.Respons
 	return err
 }
 
+type CalcDamage500JSONResponse Error
+
+func (response CalcDamage500JSONResponse) VisitCalcDamageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CalcDamage503JSONResponse Error
+
+func (response CalcDamage503JSONResponse) VisitCalcDamageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CalcDamagedefaultJSONResponse struct {
 	Body       Error
 	StatusCode int
@@ -1378,6 +1667,34 @@ func (response CalcBulk400JSONResponse) VisitCalcBulkResponse(w http.ResponseWri
 	return err
 }
 
+type CalcBulk500JSONResponse Error
+
+func (response CalcBulk500JSONResponse) VisitCalcBulkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CalcBulk503JSONResponse Error
+
+func (response CalcBulk503JSONResponse) VisitCalcBulkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CalcBulkdefaultJSONResponse struct {
 	Body       Error
 	StatusCode int
@@ -1428,6 +1745,34 @@ func (response CalcReverse400JSONResponse) VisitCalcReverseResponse(w http.Respo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CalcReverse500JSONResponse Error
+
+func (response CalcReverse500JSONResponse) VisitCalcReverseResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CalcReverse503JSONResponse Error
+
+func (response CalcReverse503JSONResponse) VisitCalcReverseResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1953,93 +2298,142 @@ func (sh *strictHandler) GetSpecies(ctx echo.Context, key SpeciesKey, params Get
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"DGxmeKsH8LKwkuw4u9FcZ7h7+H8GAA==",
+	"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",
+	"KZRsZ4ePhr7O8Pnh/zcA",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -164,6 +164,10 @@ paths:
               schema: { $ref: '#/components/schemas/CalcResult' }
         '400':
           $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
         default:
           $ref: '#/components/responses/Error'
 
@@ -173,9 +177,14 @@ paths:
       operationId: calcBulk
       summary: 防御側の代表調整すべてに対する一括計算
       description: |
-        攻撃側は1つに固定し、防御側の種族に対して代表的な調整(既定は、物理技なら 無振り/H振り/H振り+B補正/HB振り/HB特化 の5件、
-        特殊技なら D 系の5件、変化技なら 無振り/H振り の2件。`presets` で選べる)すべての結果を一度に返す。技が物理なら B 系、特殊なら D 系のプリセットに自動で寄せる。
-        持ち物の差し替え候補(itemVariants)を渡すと調整×持ち物の組合せを返す。
+        攻撃側は1つに固定し、防御側の種族に対して代表的な調整(DefenderPreset)すべての結果を一度に返す(ADR-0009)。
+        - 既定セット(`presets` 省略、または `presets: []`): 物理技なら none/hp/hb_boost/hb/hb_full の5件、
+          特殊技なら none/hp/hd_boost/hd/hd_full の5件、**変化技は none/hp の2件のみ**。
+        - `presets` を指定したときは、その順に行を返す。重複した preset は 400 `duplicate_preset`。
+        - 持ち物の差し替え候補(itemVariants)を渡すと調整×持ち物の組合せを返す。null 要素は「持ち物なし」。
+        - **行の順序はプリセット優先**(presets × itemVariants。プリセットごとに itemVariants の順に並ぶ)。
+          行数は `len(presets) × len(itemVariants)`(itemVariants 省略時は 1)。
+        - 各行の `defender` は、その行で使った防御側の SP・性格補正・実数値(ADR-0011 §3 の WASM 境界と同じ形)。
       parameters:
         - $ref: '#/components/parameters/DeviceId'
         - $ref: '#/components/parameters/SessionId'
@@ -192,6 +201,10 @@ paths:
               schema: { $ref: '#/components/schemas/BulkCalcResult' }
         '400':
           $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
         default:
           $ref: '#/components/responses/Error'
 
@@ -201,8 +214,15 @@ paths:
       operationId: calcReverse
       summary: 観測ダメージから相手の調整候補を逆算
       description: |
-        与えた/受けたダメージ(HP%)の観測から、防御側または攻撃側の調整候補(SP配分・性格・持ち物)を
-        一致度の高い順に返す。正確さより候補の提示を優先。複数観測で絞り込む。
+        与えた/受けたダメージの観測から、相手の調整候補(性格クラス × 持ち物ごとの SP の範囲)を返す(ADR-0010 §R)。
+        - `side=defender`: 自分が与えたダメージから、相手の防御側(H32 前提で B または D の SP 0..32)を逆算する。
+          `known` は自分=攻撃側。
+        - `side=attacker`: 自分が受けたダメージから、相手の攻撃側(A または C の SP 0..32)を逆算する。
+          `known` は自分=防御側。
+        - 候補は「性格クラス(neutral / plus)× itemCandidates」の全組合せで、説明できない候補も最も近い SP 付きで返す。
+        - 並びは Mismatch 昇順 → Support 降順 → SPCount 降順 → 定義順(性格クラス neutral→plus、itemCandidates の添字)の
+          全順序(ADR-0010 §R4)。`maxCandidates` は並べた後に上から切る。`exactCount` は切る前の値。
+        正確さより候補の提示を優先する。複数観測で絞り込む。
       parameters:
         - $ref: '#/components/parameters/DeviceId'
         - $ref: '#/components/parameters/SessionId'
@@ -218,6 +238,10 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ReverseResult' }
         '400':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
           $ref: '#/components/responses/Error'
         default:
           $ref: '#/components/responses/Error'
@@ -247,10 +271,56 @@ components:
   schemas:
     Error:
       type: object
+      description: |
+        エラーの本文。HTTP ステータスは `code` から決まる(ErrorCode の対応表)。
+        `message` は日本語の説明で、Go の内部情報(スタック・型名)を含めない。
       required: [code, message]
       properties:
-        code: { type: string, example: invalid_request }
+        code: { $ref: '#/components/schemas/ErrorCode' }
         message: { type: string }
+
+    ErrorCode:
+      type: string
+      description: |
+        安定したエラーコード。WASM 境界(engine/wasmapi の Code* 定数。ADR-0011 §5・§13)と語彙を共通にし、
+        **同じ失敗は HTTP と WASM で同じ code** になる(ADR-0016)。
+
+        WASM 境界と共通:
+        | code | 意味 | HTTP |
+        |---|---|---|
+        | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
+        | unknown_field | 契約にないフィールド | 400 |
+        | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
+        | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など) | 400 |
+        | unknown_preset | 未知の防御側プリセット | 400 |
+        | duplicate_preset | 防御側プリセットの重複 | 400 |
+        | invalid_preset | 防御側プリセットの定義が不正 | 400 |
+        | invalid_reverse_side | 逆算の side が defender / attacker のどちらでもない | 400 |
+        | no_observation | 観測が1件も無い | 400 |
+        | invalid_observation | 観測の指定が不正(percent / percentTenths / damage のちょうど1つでない・範囲外) | 400 |
+        | type_chart_missing | タイプ相性表が無い(HTTP ではマスタ側の失敗なので通常は起きない) | 400 |
+        | invalid_type_chart | タイプ相性表の定義が不正 | 400 |
+        | unknown_type | 相性表に無いタイプ | 400 |
+        | internal | 上記以外の失敗(回復した panic を含む) | 500 |
+
+        HTTP だけのもの:
+        | code | 意味 | HTTP |
+        |---|---|---|
+        | missing_header | X-Device-Id / X-Session-Id が無い・空(UUID 形式の検証は gateway が行う) | 400 |
+        | unknown_species | speciesKey がマスタに無い | 400 |
+        | unknown_move | moveId がマスタに無い | 400 |
+        | unknown_item | itemId がマスタに無い | 400 |
+        | unknown_ability | abilityId がマスタに無い | 400 |
+        | unknown_nature | natureId がマスタに無い | 400 |
+        | not_found | ルートが無い / このサービスの担当外の操作 | 404 |
+        | master_unavailable | マスタを参照できない | 503 |
+        | upstream_unavailable | gateway から下流のサービスに届かない(P3-2) | 503 |
+      enum: [invalid_json, unknown_field, invalid_enum, invalid_input,
+             unknown_preset, duplicate_preset, invalid_preset,
+             invalid_reverse_side, no_observation, invalid_observation,
+             type_chart_missing, invalid_type_chart, unknown_type, internal,
+             missing_header, unknown_species, unknown_move, unknown_item, unknown_ability, unknown_nature,
+             not_found, master_unavailable, upstream_unavailable]
 
     Format:
       type: string
@@ -442,6 +512,7 @@ components:
         guaranteed: { type: boolean, description: 最小ダメージでも hits 回で倒せるなら true(確定n発) }
         chancePercent:
           type: number
+          format: double
           description: |
             engine の生値。guaranteed が false のとき、hits 回で倒せる確率(%)を丸めずに返す
             (ADR-0006)。guaranteed が true のとき、および hits = 0(倒せない)のときは 0。
@@ -449,6 +520,7 @@ components:
             displayChancePercent を使う。
         displayChancePercent:
           type: number
+          format: double
           description: |
             画面に出す「hits 回で倒せる確率(%)」。常に表示できる値であることを保証する。
             小数第1位(0.1%刻み。ADR-0010 §3)。
@@ -459,7 +531,7 @@ components:
 
     CalcResult:
       type: object
-      required: [rolls, minDamage, maxDamage, minPercent, maxPercent, defenderHP, effectiveness, stab, ko]
+      required: [rolls, minDamage, maxDamage, minPercent, maxPercent, defenderHP, effectiveness, stab, category, ko]
       properties:
         rolls:
           type: array
@@ -471,22 +543,29 @@ components:
         maxDamage: { type: integer }
         minPercent:
           type: number
+          format: double
           description: |
             最小ダメージの表示%(防御側 HP に対する割合)。小数第1位(0.1%刻み)で、
             **切り捨て**る(「最低これくらい入る」を保守的に示すため。ADR-0010 §3)。
             整数%に丸めてから小数にした値ではない。HP 比率から直接求める。
+            engine の 0.1% 単位の整数(tenths)を 10 で割っただけの値で、float で近似しない。
         maxPercent:
           type: number
+          format: double
           description: |
             最大ダメージの表示%(防御側 HP に対する割合)。小数第1位(0.1%刻み)で、
             **四捨五入**する(ADR-0010 §3)。
             100 を超える場合は上限で切らず、そのまま返す(例 137.0)。
-            逆算の入力に使う実機観測の整数%とは別概念(engine の ObservedPercent)。
+            逆算の入力の観測%(`Observation.percent` / `percentTenths`)とは別概念。
         defenderHP: { type: integer }
         effectiveness:
           type: number
+          format: double
           description: タイプ相性(0, 0.25, 0.5, 1, 2, 4)
         stab: { type: boolean, description: タイプ一致 }
+        category:
+          allOf: [ { $ref: '#/components/schemas/MoveCategory' } ]
+          description: 使った技の分類(WASM 境界の CalcResult と同じ。Web が型を共有するため)
         ko: { $ref: '#/components/schemas/KOChance' }
 
     DefenderPreset:
@@ -518,10 +597,13 @@ components:
         presets:
           type: array
           description: |
-            省略時(空配列を含む)は技の分類に応じた既定セット。
+            使う防御側プリセットと行の順序。省略と空配列(`[]`)は同じで、技の分類に応じた既定セットになる。
             物理技は 5 件(none, hp, hb_boost, hb, hb_full)、
             特殊技は 5 件(none, hp, hd_boost, hd, hd_full)、
-            変化技は 2 件(none, hp)。指定したときはその順に行を返す。
+            **変化技は 2 件(none, hp)のみ**。
+            指定したときはその順に行を返す(分類に合わないプリセットも指定どおり返す)。
+            同じ preset を2回以上含めると 400 `duplicate_preset`。
+            engine のカスタムプリセット定義(SP・性格を任意に決めたもの)は API に出さない。
           items: { $ref: '#/components/schemas/DefenderPreset' }
         itemVariants:
           type: array
@@ -530,12 +612,46 @@ components:
 
     BulkCalcRow:
       type: object
-      required: [preset, presetLabel, result]
+      required: [preset, presetLabel, defender, result]
       properties:
         preset: { $ref: '#/components/schemas/DefenderPreset' }
         presetLabel: { type: string, description: 表示名(例 HB振り / HB特化 / H振り+B補正) }
-        itemId: { type: string, nullable: true }
+        itemId: { type: string, nullable: true, description: この行の防御側の持ち物(持ち物なしは null) }
+        defender: { $ref: '#/components/schemas/BulkDefender' }
         result: { $ref: '#/components/schemas/CalcResult' }
+
+    NatureModifier:
+      type: object
+      description: |
+        性格補正の構造値。plus が +10%、minus が -10% を受ける能力。無補正は両方 null。
+        HP を指すことはない。
+      required: [plus, minus]
+      properties:
+        plus:
+          nullable: true
+          allOf: [ { $ref: '#/components/schemas/StatKey' } ]
+        minus:
+          nullable: true
+          allOf: [ { $ref: '#/components/schemas/StatKey' } ]
+
+    BulkDefender:
+      type: object
+      description: 一括計算の1行で使った防御側の調整(SP・性格補正・実数値)
+      required: [sp, nature, natureId, stats]
+      properties:
+        sp:
+          allOf: [ { $ref: '#/components/schemas/StatBlock' } ]
+          description: 能力ポイント
+        nature: { $ref: '#/components/schemas/NatureModifier' }
+        natureId:
+          type: string
+          nullable: true
+          description: |
+            nature と (plus, minus) が一致するマスタの性格 ID。無補正は、マスタの無補正性格を
+            ID の昇順で並べた最初のもの。該当する性格がマスタに無ければ null。
+        stats:
+          allOf: [ { $ref: '#/components/schemas/StatBlock' } ]
+          description: 実数値(Lv50・個体値31)
 
     BulkCalcResult:
       type: object
@@ -553,52 +669,117 @@ components:
 
     Observation:
       type: object
-      required: [observedPercent]
+      description: |
+        1発ぶんの観測。percent / percentTenths / damage の**ちょうど1つ**を指定する(ADR-0010 §R2)。
+        0 個・2 個以上・範囲外は 400 `invalid_observation`。整数でなければ(例 12.5)400 `invalid_json`。
+        表示%(CalcResult.minPercent など)とは別概念で、丸め規則に依存しない区間で照合する。
       properties:
-        observedPercent:
-          type: number
-          description: ゲーム内表示に合わせた HP 減少割合(%)
-        note: { type: string }
+        percent:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: 整数%の観測(精度 1%)
+        percentTenths:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: 小数第1位の観測を 0.1% 単位の整数にしたもの(例 45.3% → 453)
+        damage:
+          type: integer
+          minimum: 1
+          description: HP の実点数の観測(自分の HP の減少量など)
+        note: { type: string, description: 画面用のメモ。計算には使わない }
 
     ReverseRequest:
       type: object
-      required: [format, side, attacker, defenderSpeciesKey, moveId, observations]
+      required: [format, side, known, unknownSpeciesKey, moveId, observations]
       properties:
         format: { $ref: '#/components/schemas/Format' }
         side: { $ref: '#/components/schemas/ReverseSide' }
-        attacker: { $ref: '#/components/schemas/Individual' }
-        defenderSpeciesKey: { $ref: '#/components/schemas/SpeciesKey' }
-        moveId: { type: string }
+        known:
+          allOf: [ { $ref: '#/components/schemas/Individual' } ]
+          description: |
+            既知の側(自分)の個体。side=defender なら自分=攻撃側、side=attacker なら自分=防御側。
+            known.moveId は使わない(技は moveId で指定する)。
+        unknownSpeciesKey:
+          allOf: [ { $ref: '#/components/schemas/SpeciesKey' } ]
+          description: 逆算する相手の種族。SP・性格・持ち物は探索対象なので渡さない
+        moveId: { type: string, description: 観測したときの技(side=defender なら自分の技、attacker なら相手の技) }
         field: { $ref: '#/components/schemas/FieldState' }
         options: { $ref: '#/components/schemas/CalcOptions' }
+        itemCandidates:
+          type: array
+          description: 相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ
+          items: { type: string, nullable: true }
         observations:
           type: array
           minItems: 1
+          description: 同じ技・同じ場・同じ既知側に対する別々の1発。0 件は 400 `no_observation`
           items: { $ref: '#/components/schemas/Observation' }
+        maxCandidates:
+          type: integer
+          minimum: 0
+          default: 0
+          description: 返す候補数の上限。0 は無制限
+
+    NatureClass:
+      type: string
+      description: 関連ステータスに対する性格補正のクラス(neutral=無補正 / plus=関連ステータス +10%)。下降補正は探索しない
+      enum: [neutral, plus]
+
+    SPRange:
+      type: object
+      description: SP の区間(両端を含む)
+      required: [min, max]
+      properties:
+        min: { type: integer, minimum: 0, maximum: 32 }
+        max: { type: integer, minimum: 0, maximum: 32 }
 
     ReverseCandidate:
       type: object
-      required: [presetLabel, sp, matchScore]
+      description: 候補1件(性格クラス × 持ち物。ADR-0010 §R3)
+      required: [natureClass, nature, natureId, itemId, ranges, spCount, exact, mismatch, support, minPercent, maxPercent]
       properties:
-        presetLabel: { type: string, description: 型の名前(例 HB特化) }
-        natureId: { type: string, nullable: true }
-        itemId: { type: string, nullable: true }
-        sp: { $ref: '#/components/schemas/StatBlock' }
-        matchScore:
-          type: number
-          description: 観測との一致度(0..1、高いほど一致)
-        rangePercent:
+        natureClass: { $ref: '#/components/schemas/NatureClass' }
+        nature: { $ref: '#/components/schemas/NatureModifier' }
+        natureId:
+          type: string
+          nullable: true
+          description: |
+            nature と (plus, minus) が一致するマスタの性格 ID(BulkDefender.natureId と同じ規則)。
+            無補正は、マスタの無補正性格を ID の昇順で並べた最初のもの。該当なしは null。
+        itemId: { type: string, nullable: true, description: 持ち物(持ち物なしは null) }
+        ranges:
           type: array
-          description: この候補での想定ダメージ幅 [min, max]
-          items: { type: number }
-          minItems: 2
-          maxItems: 2
+          minItems: 1
+          description: 観測を説明できる SP の集合(昇順・互いに素・隣接しない極大連続区間)。説明できなければ距離最小の SP
+          items: { $ref: '#/components/schemas/SPRange' }
+        spCount: { type: integer, description: ranges に含まれる SP の数 }
+        exact: { type: boolean, description: mismatch == 0(全観測を説明できる) }
+        mismatch: { type: integer, description: 観測とのずれ(0.1% 単位の整数。0 は完全に説明できる) }
+        support: { type: integer, description: ranges の各 SP で各観測を説明できるロールの延べ数 }
+        minPercent:
+          type: number
+          format: double
+          description: ranges 全体での想定ダメージ幅の下限(表示%。小数第1位・切り捨て。CalcResult.minPercent と同じ意味)
+        maxPercent:
+          type: number
+          format: double
+          description: ranges 全体での想定ダメージ幅の上限(表示%。小数第1位・四捨五入。CalcResult.maxPercent と同じ意味)
 
     ReverseResult:
       type: object
-      required: [candidates]
+      required: [side, stat, assumedHpSp, exactCount, candidates]
       properties:
+        side: { $ref: '#/components/schemas/ReverseSide' }
+        stat:
+          allOf: [ { $ref: '#/components/schemas/StatKey' } ]
+          description: 逆算した関連ステータス(技の分類と side から決まる)
+        assumedHpSp:
+          type: integer
+          description: 仮定した相手の H の SP(defender=32、attacker=0。ADR-0010 §R1)
+        exactCount: { type: integer, description: exact な候補の数(maxCandidates で切る前) }
         candidates:
           type: array
-          description: 一致度の高い順
+          description: Mismatch 昇順 → Support 降順 → SPCount 降順 → 定義順(ADR-0010 §R4)
           items: { $ref: '#/components/schemas/ReverseCandidate' }

@@ -3,6 +3,7 @@ module example.com/pokecalc/services
 go 1.27
 
 require (
+	example.com/pokecalc/engine v0.0.0
 	github.com/getkin/kin-openapi v0.142.0
 	github.com/labstack/echo/v4 v4.15.4
 	github.com/oapi-codegen/runtime v1.7.0
@@ -38,3 +39,5 @@ require (
 )
 
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
+
+replace example.com/pokecalc/engine => ../engine
