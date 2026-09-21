@@ -109,3 +109,43 @@ balance の契約変更はサービス内 spec → 生成 → テストの順で
 Decision: ADR-0012 と CURRENT_STATE が参照する ADR-0002 は `feat/claude-p1-engine` 上にあり、main へは未統合であることを明記する。
 Reason: main の共有状態を正本にした時点で、ブランチ指定のない ADR-0002 参照が main 上では辿れなかったため。
 Impact: 共通マスタ方式は確定扱いにしない。Claude ブランチが通常手順で main に統合された後は main の ADR-0002 を参照する。
+
+## 2026-09-21: 公開用クリーンコピーの作成担当をClaude Codeへ固定しない
+Decision: 現在のrepositoryとworktreeは変更せず、公開用に調整したクリーンコピーを別directory・別repositoryとして作る。
+作成担当はClaude Code/Codexのどちらかへ固定せず、ユーザーから依頼された側が行う。元repositoryへ公開用remoteを
+追加せず、作者情報・個人accountを含むpath・秘密・第三者データ等の公開前検査が完了したコピーだけをprivate remoteへ
+接続する。credentialやtoken、個人accountを含むremote URLは文書へ記録しない。
+Reason: 公開準備を特定AIのfeature branchだけに置くと、次に作業するAIがクリーンコピーの場所・基点・検証状態を
+把握できず、古いrepositoryで作業を再開したり、未消毒の履歴をpushしたりする危険があるため。
+Impact: クリーンコピーを作成・更新した担当は、自分のfeature branchだけで完了を記録してはならない。元repositoryの
+main正本`docs/ai-shared/CURRENT_STATE.md`の担当欄と自分のlogへ、秘密を含まない相対path、source commit、clean copyの
+branch/commit、sanitization方式、公開前検査結果、remote設定/push状態を記録する。切替時はclean copy側の
+`docs/ai-shared/`も更新し、以後の開発正本を明記する。元repository側は新正本へのpointerとして残し、以後そこで実装しない。
+
+## 2026-09-21: 開発の正本を private のクリーンコピーへ移し、Claude と Codex の協調運用を「互いを待たない」形に改める(ユーザー指示)
+Decision: (1) 履歴を消毒(作者を `pokecalc-dev <noreply@example.com>` に統一、個人用の手順書を全履歴から除去、module path とホームの絶対パスを置換)したクリーンコピーを
+`~/MyDamageCalcurater` に作り、private の GitHub リポジトリ(origin)へ push した(`main` / `feat/claude-p1-engine` / `feat/codex-tb0-foundation`)。以後の開発の正本は origin の main。
+旧ディレクトリはアーカイブ。(2) 互いのレートリミットで作業が止まらないよう、docs/ai-shared/COORDINATION.md を新設した: 各 AI が自分のブランチの統合まで単独で完了できる
+(マージコーディネーター Claude Code の廃止、Codex の go.work / Makefile 追記を許可)、止まる前に WIP を commit・push して `Next` を書く、相手を待たず既定値付きの提案で進める、
+レビューは各 AI の自己完結(相手に依頼しない)、ADR 番号は統合時に後から統合する側が振り直す。
+Reason: ユーザーが「お互いのレートリミットでお互いの作業が止まるのが問題。先に調整して、それぞれレートリミットに関係なく作業できる状態にしたい」と依頼した。
+Impact: AGENTS.md の共有ファイル編集規約と CLAUDE.md の「Codexブランチの取り込み手順」を更新(後者は廃止)。Claude 側の type-chart ADR は、Codex の ADR-0012(domain-service-boundaries)との衝突を避けて 0013 に振り直した。
+Codex は次のセッションで COORDINATION.md を確認し、異議・修正があれば DECISIONS.md に追記する。それまでは本文の内容で進めてよい(既定案で進む原則)。
+
+
+## 2026-09-21: レーン制に移行し、main への統合は PR 経由にする(ユーザー決定)
+Decision: 担当を AI(Claude Code / Codex)ではなくレーン(ダメージ計算 / タイプバランス)に持たせる。どちらの AI もどちらのレーンを進めてよく、
+一方がレートリミットで止まったら、もう一方が同じレーンのブランチの `Next` から続ける。同じレーンは同時に1セッションだけ(`CURRENT_STATE.md` の `Active`)。
+作業ディレクトリはレーンごとに1つ(`~/MyDamageCalcurater` / `~/MyDamageCalcurater-tb`)。main へは PR を作ってマージする(直接 push・直接 merge をしない)。
+当面はユーザーが Max プランの Claude Code で両レーンを進め、Claude の上限で止まったときに Codex が同じプロンプトで続きを進める。
+Reason: 旧運用(AI ごとの担当・ブランチ・状態)では、両 AI の起動プロンプトがどちらも「M1 の続き」を指示していたため同じ作業を別の場所で進めて衝突し、
+引き継ぎも feature ブランチ内の状態が相手に見えずに失敗していた。main は Argo CD の GitOps が参照するため、PR を通して入れたい(ユーザー)。
+Impact: COORDINATION.md を改訂、AGENTS.md(共有状態・Git ブランチ運用・共有ファイル・「タイプバランスレーンの範囲」)、CLAUDE.md(ブランチ・統合)、
+README_AI_SHARED.md、CURRENT_STATE.md(レーン欄と Active)を更新。新しいブランチは `feat/calc-*` / `feat/tb-*`。既存の2ブランチはマージまでそのまま使う。
+
+## 2026-09-21: 逆算の Recall の新定義を承認/実機の HP 減少は整数%で表示(ユーザー回答)
+Decision: (1) P1-12 の Recall の新定義(返した SP 範囲が総当たりの正解と完全一致すること+被覆・厳密性・絞り込み。基準 80%/95% の数値は据え置き)を承認。
+(2) 実機(ポケモンチャンピオンズ)の相手 HP の減少は**整数%**で表示される。丸め方(切り捨て/四捨五入)は未確認。
+Reason: ユーザーが確認の質問に回答した。
+Impact: 逆算の観測は整数%(`Percent`)が主の入力。丸め方が未確認なので、照合は切り捨て・四捨五入・切り上げのどれでも真値を落とさない区間のまま(ADR-0010 §R)。
+丸め方が確認できたら区間を狭める(1か所の差し替え)。plan.md のブロッカー「観測ダメージの入力と丸め」は「丸め方のみ未確認」に縮小。

@@ -108,35 +108,17 @@ ADR-0003 の適応を維持する。Codex では ADR-0007 と共通ワークフ�
 - 上表のモデルは既存 Claude agent 定義の割り当て。Codex のモデルへ機械的に置換しない
 - `.claude/settings.json` の gofmt フックとは別に、明示的な整形・lint・build の結果を確認する
 - レビューのスキップや未実装ターゲットの正常終了を成功と数えない。詳細は共通ワークフローを参照
-- ブランチ: Phase ごとに `feat/claude-<phase名>` を切り、`/verify` 通過後に main へマージしてブランチを削除する。
-  詳細は AGENTS.md「Git ブランチ運用」(Codex は `feat/codex-<stage名>`、詰まったブランチは引き継がず保留として記録)
+- ブランチ・統合: レーン制(ダメージ計算 `feat/calc-<phase名>` / タイプバランス `feat/tb-<stage名>`)。main へは PR で入れる
+  (直接 push・直接 merge をしない。Argo CD の GitOps が main を見ているため)。詳細は AGENTS.md「Git ブランチ運用」と COORDINATION.md
+- タイプバランスレーンを Claude Code で進めるときは、`/phase` の代わりに `docs/type-balance-design.md` のステージ順で、
+  同じ流れ(quick-scanner → spec-writer → implementer → critic)を使う
 
-### Codexブランチの取り込み手順
+### Codexブランチの取り込み(廃止)とレーン制
 
-Claude Code は Codex ブランチを main に取り込むマージコーディネーターを務める。
-「Codex のブランチを main に取り込んで」と指示されたときだけ、次の手順で行う。
-Codex が完了を報告する前に、自分から取り込まない。共有ファイルの編集規約は AGENTS.md を参照。
-
-1. 対象ブランチ(`feat/codex-*`)の内容を確認する(`git log main..<branch>`、`git diff main...<branch>`、
-   Codex が報告したテスト結果)
-2. `docs/type-balance-test-strategy.md` に沿ったテストが通っていることを確認する。
-   通っていなければマージせず報告する(この文書が未作成の間は確認できないため、マージせず報告する)
-3. ディレクトリが競合していないことを再確認する。Codex の変更が `services/balance/` と共有ファイルの
-   編集規約が許す範囲に収まっているか(`git diff --name-only main...<branch>` で確認)。範囲外があれば報告して止まる
-4. `git switch main && git merge --no-ff --no-commit feat/codex-<stage名>`
-   (`--no-commit` にするのは、手順5〜6の追記をマージコミットに含め、main に `go.work` や Makefile が
-   参照するだけで実体の無い中間状態を作らないため)
-5. 未追記なら、`go.work` の `use` に `./services/balance` を追記し、ルート `Makefile` に
-   `include services/balance/Makefile` の1行を追記する
-6. `docs/ai-shared/DECISIONS.md` の末尾に「このマージで何を統合したか」を1行追記する(既存エントリは編集しない)
-7. `make test` / `make lint` / `make build` を実行して成功を確認し、マージコミットを作る
-8. マージ後、`docs/ai-shared/CURRENT_STATE.md` の `## Type Balance Checker` 欄を更新する(Branch・Status・Next)
-
-コンフリクトが出た場合:
-
-- `docs/ai-shared/CURRENT_STATE.md` / `DECISIONS.md` だけなら、両者の内容を残す形で解決する
-- それ以外のファイルでコンフリクトが出たら、自動解決せず、内容を報告して止まる。
-  担当ディレクトリが正しく分かれていれば通常は起きないため、起きたこと自体を異常のサインとして扱う
+2026-09-21 に、Claude Code がマージコーディネーターを務める運用は**廃止**した。同日、担当を AI ではなくレーン
+(ダメージ計算 / タイプバランス)に持たせる運用に改めた。どちらの AI もどちらのレーンを進めてよく、止まった側の続きを
+同じレーンのブランチの `Next` から続ける。手順・条件・競合の扱い・止まるときの作法は
+[docs/ai-shared/COORDINATION.md](docs/ai-shared/COORDINATION.md) を正とする。
 
 ## 人間の確認が必要なこと(自動で進めない)
 

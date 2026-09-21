@@ -30,3 +30,31 @@
 
 ### Next
 - 取得元の契約確定後、TB0 のテスト設計と `services/balance/` 実装を再開する。
+## 2026-09-21 (TB0 foundation)
+- `feat/codex-tb0-foundation` に TB0 基盤を実装し、`6e8989e` (`feat(balance): add TB0 service foundation`)へコミットした。mainへは未統合。
+- 純粋Goの型・整数倍率・単/複合防御相性・`EffectSource`、差し替え可能な`TypeChartProvider`とtemporary adapterを追加。adapterの複製元commit/hashをREADMEへ記録した。
+- service-local OpenAPIを正としてmodels・Echo server interface・routeを生成。request context、body上限、JSON/ID検証、501 stubを実装し、server timeout/header上限も設定した。
+- Dockerfile、service-local Makefile、Kustomize base/local overlay、manual-syncのArgo CD Application定義、smoke script、テスト戦略を追加した。ルート`go.work`とルート`Makefile`は規約どおり未変更。
+- 独立レビュー初回は重要3・軽微2でFAIL。生成serverによる契約同期、HTTP timeout、providerエラー分岐テスト、複製元metadataを修正し、再レビューは修正差分PASS(重大0・軽微0)。
+- 検証成功: OpenAPI再生成SHA-256一致、`balance-test`、`balance-lint`(gofmt/go vet)、`balance-build`、`balance-kustomize`、`go test -race ./...`、Docker build、k3d deploy、Pod 1/1 Ready・restart 0、smoke `health=200 analyze=501`。`cmd/api`と`internal/api`は`[no test files]`。
+- 未完了ブロッカー: Git remote、配布imageのregistry/repositoryと不変参照、Argo CD Application CRDが未設定で、Git変更→manual sync→Pod更新を検証できない。値を推測せず、`docs/type-balance-test-strategy.md`へ必要な人間判断とともに明記した。このためTB0全体は未完了。
+
+## 2026-09-21 (TB0 GitOps / publication readiness)
+- ユーザー方針「現在の履歴を直接公開せず、別directoryの公開用クリーンコピーをprivate repositoryへ接続する」に合わせ、balance側の準備を`d7a8bbf`へコミットした。元repositoryへのremote追加・pushは行っていない。
+- local overlayと分離したGitOps overlayを追加し、imageはtagでなくdigest固定とした。Applicationはmanual syncのまま、予約済み`.invalid` domainとzero digestを安全なplaceholderに使用する。
+- `balance-gitops-template-check` / `balance-gitops-check`を追加。実設定ではplaceholder、可変image tag、embedded credential付きGit URL、query/fragment、自動syncを拒否する。
+- private Git/registryのcredential・Secret実値をGitへ入れない手順、R-2-9のクリーンコピー/full検査完了前はremoteへ接続しない手順、multi-platform imageをpushしてdigestを取得する補助script、直接依存とlicense記録を追加した。
+- 独立レビュー中にMake変数のshell injectionとcredential URL検査不足を検出して修正。再レビューPASS(重大・重要0、軽微はguard self-testの将来追加余地のみ)。
+- 検証成功: `sh -n`、GitOps template check、local/GitOps/Argo Kustomize render、placeholderの意図的拒否、unsafe image値の拒否、`balance-test`、`balance-lint`、`balance-build`、Docker build、k3d smoke `health=200 analyze=501`、diff/publishable手動scan。sandbox内smokeはlocalhost制限で失敗したため、同じcommandを許可済みsandbox外で再実行して成功を確認した。
+- 未実施: private repository接続、registry image push、Argo CD導入・実同期。repository URL、registry/digest、credentialが未作成であり、成功扱いにしていない。
+
+## 2026-09-21 (public clean copy handoff rule)
+- ユーザー指示により、公開用クリーンコピー作成をClaude Code固定とする表現を撤回した。Claude Code/Codexのうち依頼された側が実施できる。
+- feature branchだけの記録は禁止し、main正本の`DECISIONS.md`・`CURRENT_STATE.md`担当欄・担当logと、切替時のclean copy側`docs/ai-shared/`へ、相対path、source/clean commit、検査、push状態、新しい開発正本を記録する運用を追加した。
+- 現時点ではclean copyとprivate remoteは未作成・未接続であり、開発正本の切替もまだ行っていない。
+
+## 2026-09-21 (private remote preflight)
+- ユーザーからprivate GitHub remote作成と、準備完了後のpush許可を受領。URLは個人accountを含むため共有文書へ記録していない。
+- HTTPS `git ls-remote`は成功し、remoteが空であることを確認した。SSHはlocalのhost key未登録で失敗したため、現時点の到達確認にはHTTPSを使用した。credentialは表示・記録していない。
+- push前監査で、Claude Code側`feat/claude-p1-engine`に未コミットのengine変更と新規fixtureが多数あることを確認。現時点のmain/Codex commitだけでclean copyを作ると作業が欠落するためpushを保留した。
+- 次の開始点: Claude作業をcommit・検証し、Codex branchを通常手順で統合した単一source commitを確定してからclean copyを作る。切替完了後はClaude Code/Codexともclean copy側directoryで起動し、旧repositoryはpointer/参照専用にする。
