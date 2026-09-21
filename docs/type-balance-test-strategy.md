@@ -115,7 +115,7 @@ TB0 の `TemporaryTypeChart` のテストは、コードごと削除した(削�
 ### 受け入れ条件
 
 1. `abilityId` を指定しないメンバーは TB1 と完全に同じ結果(171 通りの防御タイプで `CalculateDefense` と一致、倍率は TB1 の6値、
-   `source=type`、×0 以外は `effect=none`)。特性の read model が無くても 200 で、read model の有無で body が変わらない。効果が空の特性も同じ結果。
+   `source=type`、×0 を含むすべてが `effect=none`)。特性の read model が無くても 200 で、read model の有無で body が変わらない。効果が空の特性も同じ結果。
 2. 計算順: タイプ相性 → タイプ由来の ×0 はそこで確定(`source=type`)→ 特性の効果。`immune` / `absorb` は ×0(`source=ability`、`effect` は
    `immune` / `absorb`)。`type_multiplier` は該当タイプだけ、`super_effective_multiplier` はタイプ相性が ×1 より大きいときだけ掛ける。
    値が変わらなければ(打ち消し合い・×1 の係数を含む)`source=type`・`effect=none`、変われば `source=ability`・`effect=multiplier`。
@@ -139,4 +139,5 @@ TB0 の `TemporaryTypeChart` のテストは、コードごと削除した(削�
 | Smoke | k3d(local overlay) | local overlay が `testdata/abilities.example.json` の複製を ConfigMap でマウントし `BALANCE_ABILITIES_PATH` を設定する。Ingress 経由で abilityId 付きの analyze が 200(`"effect":"absorb"`・`"multiplier":"3"`・`"source":"ability"` 等を含む)、未登録の特性が 422 `unknown_ability` |
 
 テストの特性 ID は架空(ability-9001 以降)を使う。実在の特性の名前・ID をテストデータとして Git に置かない(ADR-0002)。
-タイプ由来の ×0 の `effect`(`none` か `immune` か)は ADR-0017 に明記が無いため、テストは「`none` または `immune`(`absorb` / `multiplier` ではない)」だけを確かめている。
+タイプ由来の ×0 は `effect=none`・`source=type`(ADR-0017 §5.1・§5.5)で、テストはこれを厳密に確かめる。`"abilityId": null` は省略と同じ(§5.2。read model の有無によらず 200、body は省略時と一致)。
+倍率の積が int64 に収まらないデータ(効果を多数重ねた特性)は、黙って折り返さず `ErrEffectivenessOverflow` → HTTP 500(ADR-0017 §5.6)。`Mul` はオーバーフローの境界、`Cmp` は 2^62 のような大きな値で検査する。

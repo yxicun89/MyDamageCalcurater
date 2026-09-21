@@ -3,6 +3,8 @@ package balance
 import (
 	"errors"
 	"fmt"
+	"math"
+	"math/bits"
 )
 
 // TB3 の有理数の倍率(ADR-0017 §3)。
@@ -61,25 +63,49 @@ func (m Multiplier) Effectiveness() Effectiveness {
 	return e
 }
 
-// Mul returns the reduced product e × o.
-func (e Effectiveness) Mul(o Effectiveness) Effectiveness {
-	if e.Num == 0 || o.Num == 0 {
-		return Effectiveness{Num: 0, Den: 1}
+// ErrEffectivenessOverflow reports a product that does not fit in int64. Only data that
+// stacks many multipliers (read model / provider) can reach it; it is never silently wrapped.
+var ErrEffectivenessOverflow = errors.New("effectiveness overflow")
+
+// Mul returns the reduced product e × o. Factors are cross-reduced before multiplying,
+// and a product that would not fit in int64 returns ErrEffectivenessOverflow.
+func (e Effectiveness) Mul(o Effectiveness) (Effectiveness, error) {
+	if e.Den <= 0 || o.Den <= 0 || e.Num < 0 || o.Num < 0 {
+		return Effectiveness{}, fmt.Errorf("%w: %+v × %+v", ErrInvalidEffectiveness, e, o)
 	}
-	num := e.Num * o.Num
-	den := e.Den * o.Den
-	g := gcdInt64(num, den)
-	return Effectiveness{Num: num / g, Den: den / g}
+	if e.Num == 0 || o.Num == 0 {
+		return Effectiveness{Num: 0, Den: 1}, nil
+	}
+	g1 := gcdInt64(e.Num, o.Den)
+	g2 := gcdInt64(o.Num, e.Den)
+	num, okNum := mulNonNegative(e.Num/g1, o.Num/g2)
+	den, okDen := mulNonNegative(e.Den/g2, o.Den/g1)
+	if !okNum || !okDen {
+		return Effectiveness{}, fmt.Errorf("%w: %s × %s", ErrEffectivenessOverflow, e, o)
+	}
+	// Both inputs are reduced, so after cross-reduction the product is already in lowest terms.
+	return Effectiveness{Num: num, Den: den}, nil
 }
 
-// Cmp compares e and o by value: -1 if e < o, 0 if equal, +1 if e > o.
+// mulNonNegative multiplies two non-negative int64 values, reporting whether the product fits.
+func mulNonNegative(a, b int64) (int64, bool) {
+	hi, lo := bits.Mul64(uint64(a), uint64(b))
+	if hi != 0 || lo > math.MaxInt64 {
+		return 0, false
+	}
+	return int64(lo), true
+}
+
+// Cmp compares e and o by value: -1 if e < o, 0 if equal, +1 if e > o. The cross
+// products are compared in 128 bits, so it never overflows. Both values must be valid
+// (non-negative numerator, positive denominator).
 func (e Effectiveness) Cmp(o Effectiveness) int {
-	left := e.Num * o.Den
-	right := o.Num * e.Den
+	leftHi, leftLo := bits.Mul64(uint64(e.Num), uint64(o.Den))
+	rightHi, rightLo := bits.Mul64(uint64(o.Num), uint64(e.Den))
 	switch {
-	case left < right:
+	case leftHi < rightHi || (leftHi == rightHi && leftLo < rightLo):
 		return -1
-	case left > right:
+	case leftHi > rightHi || (leftHi == rightHi && leftLo > rightLo):
 		return 1
 	default:
 		return 0

@@ -71,12 +71,8 @@ func TestAnalyzeDefenseWithoutAbilityKeepsTB1ResultsOnDataChart(t *testing.T) {
 				if entry.Result.Source != balance.EffectSourceType {
 					t.Errorf("%v vs %s: source %d, want type", member.Types, attack, entry.Result.Source)
 				}
-				if entry.Result.Multiplier == balance.MultiplierZero {
-					// The effect of a type immunity is undecided in ADR-0017; it is never absorb or multiplier.
-					if entry.Result.Effect != balance.DefenseEffectNone && entry.Result.Effect != balance.DefenseEffectImmune {
-						t.Errorf("%v vs %s: type immunity effect %q, want none or immune", member.Types, attack, entry.Result.Effect)
-					}
-				} else if entry.Result.Effect != balance.DefenseEffectNone {
+				// ADR-0017 §5.1: without an ability every entry, type immunities included, is effect=none.
+				if entry.Result.Effect != balance.DefenseEffectNone {
 					t.Errorf("%v vs %s: effect %q, want none", member.Types, attack, entry.Result.Effect)
 				}
 				wantCategory, err := balance.ClassifyMultiplier(entry.Result.Multiplier)

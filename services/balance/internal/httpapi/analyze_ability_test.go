@@ -256,9 +256,9 @@ func TestAnalyzeWithAbilitiesResponseBody(t *testing.T) {
 		if entry.Multiplier != "0" || entry.Category != api.Immune || entry.Source != api.Type {
 			t.Errorf("members[%d] vs %s = %+v, want 0 immune from type", tt.member, tt.attack, entry)
 		}
-		// The effect of a type immunity is undecided in ADR-0017 (none or immune).
-		if entry.Effect != api.EffectNone && entry.Effect != api.EffectImmune {
-			t.Errorf("members[%d] vs %s: effect %q, want none or immune", tt.member, tt.attack, entry.Effect)
+		// ADR-0017 §5.1・§5.5: a type immunity is effect=none even when the ability would also make it x0.
+		if entry.Effect != api.EffectNone {
+			t.Errorf("members[%d] vs %s: effect %q, want none", tt.member, tt.attack, entry.Effect)
 		}
 	}
 
@@ -358,11 +358,8 @@ func TestAnalyzeWithoutAbilityIDIsTB1(t *testing.T) {
 			if entry.Source != api.Type {
 				t.Errorf("members[%d] vs %s: source %q, want type", mi, entry.AttackType, entry.Source)
 			}
-			if entry.Multiplier == "0" {
-				if entry.Effect != api.EffectNone && entry.Effect != api.EffectImmune {
-					t.Errorf("members[%d] vs %s: type immunity effect %q, want none or immune", mi, entry.AttackType, entry.Effect)
-				}
-			} else if entry.Effect != api.EffectNone {
+			// ADR-0017 §5.1: without an ability every entry, type immunities included, is effect=none.
+			if entry.Effect != api.EffectNone {
 				t.Errorf("members[%d] vs %s: effect %q, want none", mi, entry.AttackType, entry.Effect)
 			}
 		}
@@ -566,8 +563,13 @@ func TestAnalyzeAbilityInternalErrors(t *testing.T) {
 	tests := []struct {
 		name      string
 		abilities balance.AbilityProvider
+		pokemonID string
 	}{
 		{name: "provider failure", abilities: failingAbilities{err: errors.New("ability backend exploded at /secret/path.json")}},
+		{name: "multiplier overflow from stacked effects", abilities: testAbilities{
+			// 9003-000 is grass x4; 16 stacked super_effective 16/1 overflow int64 (500, never a wrapped value).
+			"ability-9001": fictionalAbility("ability-9001", stackedSuperEffective(16)...),
+		}, pokemonID: "9003-000"},
 		{name: "invalid effect from provider", abilities: testAbilities{
 			"ability-9001": fictionalAbility("ability-9001", balance.AbilityEffect{Kind: "heal", AttackType: balance.TypeFire}),
 		}},
@@ -576,7 +578,11 @@ func TestAnalyzeAbilityInternalErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			server := New(Dependencies{TypeChart: testTypeChart(), PokemonTypes: fictionalPokemonTypes, Abilities: tt.abilities})
-			recorder := postAnalyze(t, server, `{"members":[{"pokemonId":"9001-000","abilityId":"ability-9001"}]}`)
+			pokemonID := tt.pokemonID
+			if pokemonID == "" {
+				pokemonID = "9001-000"
+			}
+			recorder := postAnalyze(t, server, `{"members":[{"pokemonId":"`+pokemonID+`","abilityId":"ability-9001"}]}`)
 			if recorder.Code != http.StatusInternalServerError {
 				t.Fatalf("status = %d, want 500; body=%s", recorder.Code, recorder.Body.String())
 			}
@@ -632,5 +638,38 @@ func TestAnalyzeWithExampleAbilityReadModel(t *testing.T) {
 	}
 	if entry := findDefenseEntry(t, response.Members[1].Defense, api.Grass); entry.Multiplier != "3" || entry.Effect != api.EffectMultiplier {
 		t.Errorf("9003-000 vs grass = %+v, want 3 multiplier", entry)
+	}
+}
+
+func stackedSuperEffective(n int) []balance.AbilityEffect {
+	effects := make([]balance.AbilityEffect, n)
+	for i := range effects {
+		effects[i] = balance.AbilityEffect{Kind: balance.AbilityEffectSuperEffectiveMultiplier, Factor: fraction(16, 1)}
+	}
+	return effects
+}
+
+// ADR-0017 §5.2: "abilityId": null is the same as omitting it (200 with or without the
+// ability read model, no abilityId in the response, the same body as the omitted request).
+func TestAnalyzeNullAbilityIDIsOmitted(t *testing.T) {
+	t.Parallel()
+
+	omitted := `{"members":[{"pokemonId":"9001-000"},{"pokemonId":"9003-000"}]}`
+	null := `{"members":[{"pokemonId":"9001-000","abilityId":null},{"pokemonId":"9003-000","abilityId":null}]}`
+	want := postAnalyze(t, newTestServer(), omitted)
+	if want.Code != http.StatusOK {
+		t.Fatalf("omitted: status = %d; body=%s", want.Code, want.Body.String())
+	}
+	for name, server := range map[string]http.Handler{"without the ability read model": newTestServer(), "with the ability read model": newAbilityServer()} {
+		got := postAnalyze(t, server, null)
+		if got.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d, want 200; body=%s", name, got.Code, got.Body.String())
+		}
+		if got.Body.String() != want.Body.String() {
+			t.Errorf("%s: body differs from the omitted request:\nnull:    %s\nomitted: %s", name, got.Body.String(), want.Body.String())
+		}
+		if strings.Contains(got.Body.String(), `"abilityId"`) {
+			t.Errorf("%s: response must not contain abilityId; body=%s", name, got.Body.String())
+		}
 	}
 }

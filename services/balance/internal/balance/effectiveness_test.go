@@ -100,11 +100,11 @@ func TestEffectivenessMul(t *testing.T) {
 		{eff(1, 4), eff(1, 16), eff(1, 64)},
 	}
 	for _, tt := range tests {
-		if got := tt.a.Mul(tt.b); got != tt.want {
-			t.Errorf("%+v.Mul(%+v) = %+v, want %+v", tt.a, tt.b, got, tt.want)
+		if got, err := tt.a.Mul(tt.b); err != nil || got != tt.want {
+			t.Errorf("%+v.Mul(%+v) = %+v, %v; want %+v", tt.a, tt.b, got, err, tt.want)
 		}
-		if got := tt.b.Mul(tt.a); got != tt.want {
-			t.Errorf("%+v.Mul(%+v) = %+v, want %+v (commutative)", tt.b, tt.a, got, tt.want)
+		if got, err := tt.b.Mul(tt.a); err != nil || got != tt.want {
+			t.Errorf("%+v.Mul(%+v) = %+v, %v; want %+v (commutative)", tt.b, tt.a, got, err, tt.want)
 		}
 	}
 }
@@ -230,5 +230,35 @@ func TestClassifyEffectivenessRejectsInvalidValues(t *testing.T) {
 		if _, err := ClassifyEffectiveness(value); !errors.Is(err, ErrInvalidEffectiveness) {
 			t.Errorf("ClassifyEffectiveness(%+v) error = %v, want ErrInvalidEffectiveness", value, err)
 		}
+	}
+}
+
+func TestEffectivenessMulOverflowBoundary(t *testing.T) {
+	t.Parallel()
+
+	// 2^62 × 1 fits; 2^62 × 2 = 2^63 does not fit in int64.
+	big := Effectiveness{Num: 1 << 62, Den: 1}
+	if got, err := big.Mul(Effectiveness{Num: 1, Den: 1}); err != nil || got != big {
+		t.Fatalf("2^62 × 1 = %+v, %v; want 2^62", got, err)
+	}
+	if _, err := big.Mul(Effectiveness{Num: 2, Den: 1}); !errors.Is(err, ErrEffectivenessOverflow) {
+		t.Errorf("2^62 × 2: err = %v, want ErrEffectivenessOverflow", err)
+	}
+	// Cross-reduction keeps a product in range when it can be reduced: 2^62 × 2/4 = 2^61.
+	if got, err := big.Mul(Effectiveness{Num: 1, Den: 2}); err != nil || got != (Effectiveness{Num: 1 << 61, Den: 1}) {
+		t.Errorf("2^62 × 1/2 = %+v, %v; want 2^61", got, err)
+	}
+}
+
+func TestEffectivenessCmpDoesNotOverflow(t *testing.T) {
+	t.Parallel()
+
+	huge := Effectiveness{Num: 1 << 62, Den: 1}
+	quarter := Effectiveness{Num: 1, Den: 4}
+	if huge.Cmp(quarter) != 1 || quarter.Cmp(huge) != -1 {
+		t.Errorf("Cmp(2^62, 1/4) must be 1 and the reverse -1")
+	}
+	if got, err := ClassifyEffectiveness(huge); err != nil || got != CategoryQuadWeak {
+		t.Errorf("ClassifyEffectiveness(2^62) = %q, %v; want quad_weak", got, err)
 	}
 }

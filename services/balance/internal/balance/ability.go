@@ -96,7 +96,7 @@ func (e *UnknownAbilityError) Unwrap() error { return ErrUnknownAbility }
 
 // validateAbilityEffect checks one normalized effect (ADR-0017 §2): the kind must be known,
 // its attackType (when applicable) must be one of the 18 types, and its factor (when
-// applicable) must have a positive denominator.
+// applicable) must be a positive fraction (ADR-0017 §2: 1〜16 の整数の比)。
 func validateAbilityEffect(e AbilityEffect) error {
 	switch e.Kind {
 	case AbilityEffectImmune, AbilityEffectAbsorb:
@@ -107,11 +107,11 @@ func validateAbilityEffect(e AbilityEffect) error {
 		if !e.AttackType.Valid() {
 			return fmt.Errorf("%w: %s effect has invalid attackType %q", ErrInvalidAbilityEffect, e.Kind, e.AttackType)
 		}
-		if e.Factor.Den <= 0 || e.Factor.Num < 0 {
+		if e.Factor.Den <= 0 || e.Factor.Num < 1 {
 			return fmt.Errorf("%w: %s effect has invalid factor %+v", ErrInvalidAbilityEffect, e.Kind, e.Factor)
 		}
 	case AbilityEffectSuperEffectiveMultiplier:
-		if e.Factor.Den <= 0 || e.Factor.Num < 0 {
+		if e.Factor.Den <= 0 || e.Factor.Num < 1 {
 			return fmt.Errorf("%w: %s effect has invalid factor %+v", ErrInvalidAbilityEffect, e.Kind, e.Factor)
 		}
 	default:
@@ -169,11 +169,15 @@ func CalculateDefenseWithAbility(chart TypeChartProvider, attack TypeID, defense
 			}
 		case AbilityEffectTypeMultiplier:
 			if effect.AttackType == attack {
-				current = current.Mul(effect.Factor)
+				if current, err = current.Mul(effect.Factor); err != nil {
+					return DefenseResult{}, err
+				}
 			}
 		case AbilityEffectSuperEffectiveMultiplier:
 			if superEffective {
-				current = current.Mul(effect.Factor)
+				if current, err = current.Mul(effect.Factor); err != nil {
+					return DefenseResult{}, err
+				}
 			}
 		}
 	}

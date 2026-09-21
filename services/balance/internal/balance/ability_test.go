@@ -119,10 +119,8 @@ func TestCalculateDefenseWithAbility(t *testing.T) {
 		ability  *Ability
 		want     Effectiveness
 		source   EffectSource
-		effect   DefenseEffect // checked unless skipEffect
+		effect   DefenseEffect
 		category Category
-		// skipEffect: the effect of a type immunity is undecided in ADR-0017 (none or immune).
-		skipEffect bool
 	}{
 		{name: "nil ability", attack: TypeWater, defense: []TypeID{TypeFire}, ability: nil,
 			want: eff(2, 1), source: EffectSourceType, effect: DefenseEffectNone, category: CategoryWeak},
@@ -141,11 +139,11 @@ func TestCalculateDefenseWithAbility(t *testing.T) {
 			want: eff(2, 1), source: EffectSourceType, effect: DefenseEffectNone, category: CategoryWeak},
 
 		{name: "type immunity wins over ability immune", attack: TypeGround, defense: []TypeID{TypeFlying}, ability: ability("ability-9001", immuneTo(TypeGround)),
-			want: eff(0, 1), source: EffectSourceType, category: CategoryImmune, skipEffect: true},
+			want: eff(0, 1), source: EffectSourceType, effect: DefenseEffectNone, category: CategoryImmune},
 		{name: "type immunity wins over absorb", attack: TypeElectric, defense: []TypeID{TypeGround}, ability: ability("ability-9002", absorbs(TypeElectric)),
-			want: eff(0, 1), source: EffectSourceType, category: CategoryImmune, skipEffect: true},
+			want: eff(0, 1), source: EffectSourceType, effect: DefenseEffectNone, category: CategoryImmune},
 		{name: "type immunity ignores type_multiplier", attack: TypeGround, defense: []TypeID{TypeFire, TypeFlying}, ability: ability("ability-9003", typeMultiplier(TypeGround, 2, 1)),
-			want: eff(0, 1), source: EffectSourceType, category: CategoryImmune, skipEffect: true},
+			want: eff(0, 1), source: EffectSourceType, effect: DefenseEffectNone, category: CategoryImmune},
 
 		{name: "type_multiplier halves a weakness", attack: TypeFire, defense: []TypeID{TypeGrass}, ability: ability("ability-9003", typeMultiplier(TypeFire, 1, 2)),
 			want: eff(1, 1), source: EffectSourceAbility, effect: DefenseEffectMultiplier, category: CategoryNeutral},
@@ -175,7 +173,7 @@ func TestCalculateDefenseWithAbility(t *testing.T) {
 		{name: "super effective multiplier skips resistance", attack: TypeFire, defense: []TypeID{TypeWater}, ability: ability("ability-9004", superEffectiveMultiplier(3, 4)),
 			want: eff(1, 2), source: EffectSourceType, effect: DefenseEffectNone, category: CategoryResist},
 		{name: "super effective multiplier skips type immunity", attack: TypeGround, defense: []TypeID{TypeFlying}, ability: ability("ability-9004", superEffectiveMultiplier(3, 4)),
-			want: eff(0, 1), source: EffectSourceType, category: CategoryImmune, skipEffect: true},
+			want: eff(0, 1), source: EffectSourceType, effect: DefenseEffectNone, category: CategoryImmune},
 		// fire vs grass/water is x2 × x1/2 = x1 (not above x1), so 3/4 does not apply.
 		{name: "super effective multiplier skips a dual type neutral", attack: TypeFire, defense: []TypeID{TypeGrass, TypeWater}, ability: ability("ability-9004", superEffectiveMultiplier(3, 4)),
 			want: eff(1, 1), source: EffectSourceType, effect: DefenseEffectNone, category: CategoryNeutral},
@@ -201,11 +199,8 @@ func TestCalculateDefenseWithAbility(t *testing.T) {
 			if got.Source != tt.source {
 				t.Errorf("source = %d, want %d", got.Source, tt.source)
 			}
-			if tt.skipEffect {
-				if got.Effect != DefenseEffectNone && got.Effect != DefenseEffectImmune {
-					t.Errorf("type immunity effect = %q, want none or immune (undecided), never absorb or multiplier", got.Effect)
-				}
-			} else if got.Effect != tt.effect {
+			// ADR-0017 §5.1・§5.5: a type immunity is effect=none (source=type).
+			if got.Effect != tt.effect {
 				t.Errorf("effect = %q, want %q", got.Effect, tt.effect)
 			}
 			category, err := ClassifyEffectiveness(got.Effectiveness)
@@ -539,5 +534,33 @@ func TestUnknownAbilityErrorUnwrapsOnlyErrUnknownAbility(t *testing.T) {
 	}
 	if err.Error() != "unknown ability: ability-9999" {
 		t.Errorf("Error() = %q", err.Error())
+	}
+}
+
+func TestCalculateDefenseWithAbilityOverflowIsAnError(t *testing.T) {
+	t.Parallel()
+
+	// ADR-0017 §5.3 allows repeated effects; stacking 16 × (16/1) must not wrap around silently.
+	effects := make([]AbilityEffect, 16)
+	for i := range effects {
+		effects[i] = AbilityEffect{Kind: AbilityEffectSuperEffectiveMultiplier, Factor: eff(16, 1)}
+	}
+	stacked := &Ability{AbilityID: "ability-9999", Effects: effects}
+	_, err := CalculateDefenseWithAbility(tb3Chart, TypeGrass, []TypeID{TypeWater}, stacked)
+	if !errors.Is(err, ErrEffectivenessOverflow) {
+		t.Fatalf("err = %v, want ErrEffectivenessOverflow", err)
+	}
+}
+
+func TestValidateAbilityEffectRejectsZeroFactor(t *testing.T) {
+	t.Parallel()
+
+	for _, effect := range []AbilityEffect{
+		{Kind: AbilityEffectTypeMultiplier, AttackType: TypeFire, Factor: Effectiveness{Num: 0, Den: 1}},
+		{Kind: AbilityEffectSuperEffectiveMultiplier, Factor: Effectiveness{Num: 0, Den: 1}},
+	} {
+		if err := validateAbilityEffect(effect); !errors.Is(err, ErrInvalidAbilityEffect) {
+			t.Errorf("%s with factor 0: err = %v, want ErrInvalidAbilityEffect (factors are 1..16 ratios)", effect.Kind, err)
+		}
 	}
 }
