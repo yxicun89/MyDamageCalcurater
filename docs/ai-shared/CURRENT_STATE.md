@@ -10,9 +10,9 @@ Next: P2-1b(ゴールデンの oracle を @smogon/calc 0.12.0 の Champions へ�
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
-Branch: feat/tb-tb1-defense(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)。TB0 は feat/codex-tb0-foundation から PR で main に統合
-Status: TB0 は Claude Code の critic で独立再レビュー PASS(engine の相性表と単/複合 5832 件一致を確認)、軽微指摘を反映、balance-* / make test・lint・build・check-publishable、k3d smoke(health=200 analyze=501)成功。Argo CD 実同期のみ人間の作業待ち(plan.md「ブロッカー(タイプバランスレーン)」)
-Next: TB1(防御タイプバランス)を main から切った feat/tb-tb1-defense で進める(quick-scanner → spec-writer → implementer → critic)
+Branch: feat/tb-tb1-defense(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)。TB1 は PR で main に統合(squash)
+Status: TB1(防御タイプバランス。ADR-0014)完了: spec-writer でテスト先行 → implementer → critic FAIL(判定順のテスト漏れ)→ 修正 → 再レビュー PASS。make test/lint/build(balance を含む)・check-publishable・k3d smoke(health=200 analyze=200 unknown=422)成功。ポケモンのタイプは temporary の read model(架空データの example。実データは BALANCE_POKEMON_TYPES_PATH でマウント)。TB0 の Argo CD 実同期は人間の作業待ち
+Next: TB1b — 相性表を testdata/golden/typechart.json から読む(balance 内に複製して go:embed、元ファイルとの一致をテストで検査)、TemporaryTypeChart を削除。その後 TB2(攻撃範囲)。未対応の軽微: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の schema ファイル
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

@@ -89,3 +89,24 @@ func TestResolveMembersErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveMembersUnknownPokemonCarriesOnlyTheID(t *testing.T) {
+	t.Parallel()
+
+	provider := failingPokemonTypes{err: fmt.Errorf("%w: 9999-000 (adapter detail)", ErrUnknownPokemon)}
+	_, err := ResolveMembers(provider, []string{"9999-000"})
+
+	var unknown *UnknownPokemonError
+	if !errors.As(err, &unknown) {
+		t.Fatalf("err = %v, want *UnknownPokemonError", err)
+	}
+	if unknown.PokemonID != "9999-000" {
+		t.Errorf("PokemonID = %q, want 9999-000", unknown.PokemonID)
+	}
+	if !errors.Is(err, ErrUnknownPokemon) {
+		t.Errorf("errors.Is(err, ErrUnknownPokemon) = false")
+	}
+	if got, want := err.Error(), "unknown pokemon: 9999-000"; got != want {
+		t.Errorf("Error() = %q, want %q (adapter detail must be dropped)", got, want)
+	}
+}
