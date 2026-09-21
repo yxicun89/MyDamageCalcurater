@@ -1,0 +1,16 @@
+/* アプリの最上位のレイアウト。色は tokens.css の CSS 変数だけを参照する。 */
+
+.app-header {
+  padding: var(--space-4) var(--space-4) 0;
+  text-align: center;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: var(--font-size-heading);
+  color: var(--text-primary);
+}
+
+.app-main {
+  min-height: 100vh;
+}
