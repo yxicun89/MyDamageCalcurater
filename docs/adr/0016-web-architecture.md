@@ -21,8 +21,8 @@ API 接続(P4-5)は API レーンが契約を main に入れてから追従す�
 |---|---|---|
 | 実行時 | react / react-dom 19.3.0 | MIT |
 | ビルド | vite 8.3.0、@vitejs/plugin-react 6.1.1、typescript 6.0.3 | MIT / MIT / Apache-2.0 |
-| テスト | vitest 5.0.1、jsdom 30.1.0、@testing-library/{react,dom,user-event,jest-dom} | MIT |
-| 整形・lint | eslint 10.11.0、typescript-eslint 8.70.0、eslint-plugin-react-hooks、prettier 3.9.8 | MIT |
+| テスト | vitest 5.0.1、jsdom 30.1.0、@testing-library/react 16.3.3・dom 10.4.2・user-event 14.6.7・jest-dom 7.0.1 | MIT |
+| 整形・lint | eslint 10.11.0、typescript-eslint 8.70.0、eslint-plugin-react-hooks 7.1.1、prettier 3.9.8 | MIT |
 
 - すべて `package.json` で完全固定し、`package-lock.json` をコミットする(コーディング規約 §1・§4、`check-publishable` の E 区分)。
 - TypeScript は 7 系(ネイティブ実装)ではなく 6.0 系にする。typescript-eslint 8.70 の peer が `<6.1.0` のため。
@@ -75,7 +75,7 @@ requirements.md「A特化 / A振り(補正なし)/ 無振り」を次の3件に�
 |---|---|---|---|
 | `none` | 無振り | なし | 無補正 |
 | `x_full` | A特化 / C特化 | X:32 | +X / −(`atk` なら `spa`、`spa` なら `atk`) |
-| `x` | A振り / C振り | X:32 | 無補正 |
+| `x` | A振り(無補正)/ C振り(無補正) | X:32 | 無補正 |
 
 - 下降補正の置き方は ADR-0010 §R1 の代表性格(`Minus: atk`、関連が atk のときだけ `Minus: spa`)と同じ。
   下降したステータスは使わないので、どちらでもダメージは変わらない。

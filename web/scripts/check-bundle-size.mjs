@@ -2,10 +2,11 @@
 // vite build の成果物で確かめる。超えたら失敗する。
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 
 const JS_BUDGET_GZIP_BYTES = 300 * 1024;
-const distAssets = new URL("../dist/assets/", import.meta.url);
+const distAssets = fileURLToPath(new URL("../dist/assets/", import.meta.url));
 
 function listJsFiles(dir) {
   return readdirSync(dir)
@@ -15,7 +16,7 @@ function listJsFiles(dir) {
 
 let files;
 try {
-  files = listJsFiles(distAssets.pathname);
+  files = listJsFiles(distAssets);
 } catch {
   console.error("check-bundle-size: dist/assets が無い(先に vite build を実行する)");
   process.exit(1);
