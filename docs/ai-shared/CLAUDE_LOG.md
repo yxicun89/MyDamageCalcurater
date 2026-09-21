@@ -176,3 +176,14 @@
 
 ### Next
 - TB4 はユーザー確認待ち(ADR-0018 の提案)。その間は軽微の残り
+
+## 2026-09-22 タイプバランスレーン(Claude Code): 依存の最新化・TB0 の Argo CD 実同期・TB5 の要望
+
+### Done
+- TB3 を PR #12 で統合(ユーザー確認済み)。依存を最新に(Echo v5.3.1、golang digest。PR #13、critic PASS)
+- Argo CD v3.5.3 を k3d に導入、クラスタ内レジストリ、Application(repoURL は適用時に埋め込み)。PAT はユーザーが登録。critic FAIL → 修正 → PASS。PR #16
+- manual sync: Synced to main 32fbb9e、Pod の image digest が overlay と一致、health 200。TB0 完了
+- ユーザー要望 TB5(おすすめタイプと該当ポケモン)を PR #15 で計画に追加
+
+### Next
+- TB4 → TB5

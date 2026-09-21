@@ -105,7 +105,7 @@
 - [ ] P6-4 Tailscale serve の手順書 → **人間が実機インストール**
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
-- [!] TB0 基盤(型・相性コア・temporary type chart adapter・HTTP 最小疎通・Docker/Kustomize/Argo CD 定義・単体テスト)。Argo CD 実同期以外は完了・main 統合済み。実同期は人間の作業待ち(下のブロッカー)。TB1 はこれを待たずに進める
+- [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)。Argo CD の実同期もローカル k3d で確認済み(ADR-0018: Git 変更 32fbb9e → manual sync → Pod の image digest 一致)
 - [x] TB1 防御タイプバランス(最大6体 × 18タイプの防御倍率、攻撃タイプごとのチーム集計。総合点は作らない。ADR-0014)
 - [x] TB1b 相性表を P1-13 のデータ(`testdata/golden/typechart.json`)から読み、TemporaryTypeChart を削除(ユーザー決定。ADR-0015)
 - [x] TB2 攻撃範囲(ADR-0016)
@@ -115,10 +115,7 @@
   そのタイプを持つ**使用可能なポケモン全員**(レギュレーション依存。日本語名付き)を一覧にする。特性で穴をふさげるポケモンは別枠。他のサイトを見に行かずに候補が分かることが目的。詳細は着手時に ADR
 
 ### ブロッカー(タイプバランスレーン)
-- **【人間の確認待ち】Argo CD の実同期(TB0 の最後の1項目)**: `Git 変更 → Argo CD manual sync → Pod 更新` の確認には、
-  Argo CD の導入、private repository の credential のクラスタ登録、image registry と digest 固定の配布イメージが要る
-  (外部サービスのログイン・認証情報の登録は人間の作業。手順は services/balance/deploy/argocd/README.md)。
-  それ以外の TB0 の項目(k3d への直接デプロイ・smoke `health=200 analyze=501`)は確認済み。
+(なし。Argo CD の実同期は 2026-09-22 に解消)
 
 ## M4: 運用
 - [ ] P7-1 kube-prometheus-stack / Loki、各サービスのメトリクス
