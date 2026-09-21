@@ -57,12 +57,12 @@ func revMove(cat MoveCategory) Move {
 
 // revEviolite / revVest は持ち物候補の試験用(効果はマスタから解決済みの体で直接与える)。
 func revEviolite() *Item {
-	return &Item{ID: "eviolite", NameJa: "しんかのきせき",
+	return &Item{ID: "eviolite", NameJa: "テストもちもの1",
 		Effect: &ItemEffect{StatMods: map[StatKey]int{StatDef: 6144, StatSpD: 6144}}}
 }
 
 func revVest() *Item {
-	return &Item{ID: "assaultvest", NameJa: "とつげきチョッキ",
+	return &Item{ID: "assaultvest", NameJa: "テストもちもの2",
 		Effect: &ItemEffect{StatMods: map[StatKey]int{StatSpD: 6144}}}
 }
 
@@ -1523,10 +1523,10 @@ func revRecallItems(side ReverseSide, cat MoveCategory) []*Item {
 		return []*Item{nil, revEviolite()}
 	}
 	if cat == CategorySpecial {
-		return []*Item{nil, {ID: "choicespecs", NameJa: "こだわりメガネ",
+		return []*Item{nil, {ID: "choicespecs", NameJa: "テストもちもの4",
 			Effect: &ItemEffect{StatMods: map[StatKey]int{StatSpA: 6144}}}}
 	}
-	return []*Item{nil, {ID: "choiceband", NameJa: "こだわりハチマキ",
+	return []*Item{nil, {ID: "choiceband", NameJa: "テストもちもの3",
 		Effect: &ItemEffect{StatMods: map[StatKey]int{StatAtk: 6144}}}}
 }
 

@@ -239,7 +239,7 @@ func TestDefenderPresetsMatchReverseArchetypes(t *testing.T) {
 // プリセットから組み立てる防御側個体の形(ADR-0009 §1)。
 func TestDefenderPresetBuildsIndividual(t *testing.T) {
 	species := bulkDefenderSpecies()
-	item := &Item{ID: "assaultvest", NameJa: "とつげきチョッキ", Effect: &ItemEffect{StatMods: map[StatKey]int{StatSpD: 6144}}}
+	item := &Item{ID: "assaultvest", NameJa: "テストもちもの2", Effect: &ItemEffect{StatMods: map[StatKey]int{StatSpD: 6144}}}
 	p := DefenderPreset{Key: PresetHD, Label: "HD特化", SP: Stats{HP: 32, SpD: 32}, Nature: Nature{Plus: StatSpD, Minus: StatAtk}}
 	got := p.Defender(species, item)
 	if !reflect.DeepEqual(got, wantDefender(p, species, item)) {
@@ -359,8 +359,8 @@ func TestCalcBulkPresetKeysSelectOrder(t *testing.T) {
 
 // 受け入れ条件 d: nil は素の1通り。複数指定は プリセット×持ち物 の順で並ぶ。
 func TestCalcBulkItemVariants(t *testing.T) {
-	// とつげきチョッキ相当(D×1.5)。engine に持ち物一覧は持たせず、テストが定義を渡す。
-	vest := &Item{ID: "assaultvest", NameJa: "とつげきチョッキ", Effect: &ItemEffect{StatMods: map[StatKey]int{StatSpD: 6144}}}
+	// 特防1.5倍の持ち物相当(D×1.5)。engine に持ち物一覧は持たせず、テストが定義を渡す。
+	vest := &Item{ID: "assaultvest", NameJa: "テストもちもの2", Effect: &ItemEffect{StatMods: map[StatKey]int{StatSpD: 6144}}}
 	shield := &Item{ID: "defboost", NameJa: "テストぼうぐ", Effect: &ItemEffect{StatMods: map[StatKey]int{StatDef: 6144}}}
 
 	t.Run("nilは素の1通り", func(t *testing.T) {
@@ -440,7 +440,7 @@ func TestCalcBulkItemVariants(t *testing.T) {
 		}
 		bare, withVest, withShield := res.Rows[0].Result, res.Rows[1].Result, res.Rows[2].Result
 		if withVest.MaxDamage() >= bare.MaxDamage() {
-			t.Errorf("特殊技にチョッキでダメージが減っていない: %d >= %d", withVest.MaxDamage(), bare.MaxDamage())
+			t.Errorf("特殊技に特防1.5倍の持ち物でダメージが減っていない: %d >= %d", withVest.MaxDamage(), bare.MaxDamage())
 		}
 		if withShield.MaxDamage() != bare.MaxDamage() {
 			t.Errorf("特殊技に防御補正の持ち物は影響しないはず: %d != %d", withShield.MaxDamage(), bare.MaxDamage())
@@ -982,11 +982,11 @@ func maxDamageCompare(t *testing.T, label string, a, b BulkResult, dir int) {
 }
 
 func testChoiceBand() *Item {
-	return &Item{ID: "choiceband", NameJa: "こだわりハチマキ", Effect: &ItemEffect{StatMods: map[StatKey]int{StatAtk: 6144}}}
+	return &Item{ID: "choiceband", NameJa: "テストもちもの3", Effect: &ItemEffect{StatMods: map[StatKey]int{StatAtk: 6144}}}
 }
 
 func testAdaptability() Ability {
-	return Ability{ID: "adaptability", NameJa: "てきおうりょく", Effect: &AbilityEffect{StabMod: 8192}}
+	return Ability{ID: "adaptability", NameJa: "テストとくせい", Effect: &AbilityEffect{StabMod: 8192}}
 }
 
 // 攻撃側オプション・場・急所を1つずつ載せる。各行は CalcDamage と一致し、かつ
@@ -1026,8 +1026,8 @@ func TestCalcBulkPassesThroughFieldCriticalAndAttackerOptions(t *testing.T) {
 		{"やけど×物理", CategoryPhysical, TypeWater, func(in *BulkInput) { in.Attacker.Status = StatusBurn }, -1},
 		{"やけど×特殊は無関係", CategorySpecial, TypeWater, func(in *BulkInput) { in.Attacker.Status = StatusBurn }, 0},
 		// 攻撃側の持ち物・特性
-		{"攻撃側こだわりハチマキ×物理", CategoryPhysical, TypeWater, func(in *BulkInput) { in.Attacker.Item = testChoiceBand() }, +1},
-		{"攻撃側てきおうりょく×タイプ一致技", CategoryPhysical, TypeWater, func(in *BulkInput) { in.Attacker.Ability = testAdaptability() }, +1},
+		{"攻撃側の攻撃1.5倍持ち物×物理", CategoryPhysical, TypeWater, func(in *BulkInput) { in.Attacker.Item = testChoiceBand() }, +1},
+		{"攻撃側のタイプ一致強化特性×タイプ一致技", CategoryPhysical, TypeWater, func(in *BulkInput) { in.Attacker.Ability = testAdaptability() }, +1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1093,7 +1093,7 @@ func TestCalcBulkPassesThroughAllOptionsCombined(t *testing.T) {
 		in.Attacker.Item = testChoiceBand()
 		in.Attacker.Ability = testAdaptability()
 		in.Attacker.TeraType = TypeWater
-		in.ItemVariants = []*Item{nil, {ID: "assaultvest", NameJa: "とつげきチョッキ", Effect: &ItemEffect{StatMods: map[StatKey]int{StatSpD: 6144}}}}
+		in.ItemVariants = []*Item{nil, {ID: "assaultvest", NameJa: "テストもちもの2", Effect: &ItemEffect{StatMods: map[StatKey]int{StatSpD: 6144}}}}
 		return in
 	}
 	strips := []struct {

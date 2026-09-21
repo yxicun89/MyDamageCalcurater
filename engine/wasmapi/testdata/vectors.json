@@ -2000,7 +2000,7 @@
         },
         "move": {
           "id": "bodyslam",
-          "nameJa": "のしかかり",
+          "nameJa": "テストわざ1",
           "type": "normal",
           "category": "physical",
           "power": 85,
@@ -2067,7 +2067,7 @@
         },
         "move": {
           "id": "bodyslam",
-          "nameJa": "のしかかり",
+          "nameJa": "テストわざ1",
           "type": "normal",
           "category": "physical",
           "power": 85,
@@ -2138,7 +2138,7 @@
         },
         "move": {
           "id": "swordsdance",
-          "nameJa": "つるぎのまい",
+          "nameJa": "テストわざ3",
           "type": "normal",
           "category": "status",
           "power": 0,
@@ -2158,7 +2158,7 @@
         "effectiveness",
         "resisted"
       ],
-      "source": "手書き(かえんほうしゃ → みず。ゴールデン固定ケースに半減の単独ケースが無いため)",
+      "source": "手書き(炎技 → みず。ゴールデン固定ケースに半減の単独ケースが無いため)",
       "request": {
         "format": "single",
         "attacker": {
@@ -2301,7 +2301,7 @@
         },
         "move": {
           "id": "bodyslam",
-          "nameJa": "のしかかり",
+          "nameJa": "テストわざ1",
           "type": "normal",
           "category": "physical",
           "power": 85,
@@ -2370,7 +2370,7 @@
         },
         "move": {
           "id": "flamethrower",
-          "nameJa": "かえんほうしゃ",
+          "nameJa": "テストわざ2",
           "type": "fire",
           "category": "special",
           "power": 90,
@@ -2438,7 +2438,7 @@
         },
         "move": {
           "id": "bodyslam",
-          "nameJa": "のしかかり",
+          "nameJa": "テストわざ1",
           "type": "normal",
           "category": "physical",
           "power": 85,
@@ -2470,7 +2470,7 @@
           null,
           {
             "id": "eviolite",
-            "nameJa": "しんかのきせき",
+            "nameJa": "テストもちもの1",
             "effect": {
               "statMods": {
                 "def": 6144,
@@ -2480,7 +2480,7 @@
           },
           {
             "id": "assaultvest",
-            "nameJa": "とつげきチョッキ",
+            "nameJa": "テストもちもの2",
             "effect": {
               "statMods": {
                 "spd": 6144
@@ -2544,7 +2544,7 @@
         },
         "move": {
           "id": "bodyslam",
-          "nameJa": "のしかかり",
+          "nameJa": "テストわざ1",
           "type": "normal",
           "category": "physical",
           "power": 85,
@@ -2648,7 +2648,7 @@
         },
         "move": {
           "id": "flamethrower",
-          "nameJa": "かえんほうしゃ",
+          "nameJa": "テストわざ2",
           "type": "fire",
           "category": "special",
           "power": 90,
@@ -2725,7 +2725,7 @@
         },
         "move": {
           "id": "bodyslam",
-          "nameJa": "のしかかり",
+          "nameJa": "テストわざ1",
           "type": "normal",
           "category": "physical",
           "power": 85,
@@ -2802,7 +2802,7 @@
         },
         "move": {
           "id": "bodyslam",
-          "nameJa": "のしかかり",
+          "nameJa": "テストわざ1",
           "type": "normal",
           "category": "physical",
           "power": 85,
@@ -2884,7 +2884,7 @@
         },
         "move": {
           "id": "bodyslam",
-          "nameJa": "のしかかり",
+          "nameJa": "テストわざ1",
           "type": "normal",
           "category": "physical",
           "power": 85,
@@ -2899,7 +2899,7 @@
           null,
           {
             "id": "eviolite",
-            "nameJa": "しんかのきせき",
+            "nameJa": "テストもちもの1",
             "effect": {
               "statMods": {
                 "def": 6144,
@@ -2969,7 +2969,7 @@
         },
         "move": {
           "id": "bodyslam",
-          "nameJa": "のしかかり",
+          "nameJa": "テストわざ1",
           "type": "normal",
           "category": "physical",
           "power": 85,

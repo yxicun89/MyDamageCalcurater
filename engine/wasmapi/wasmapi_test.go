@@ -51,7 +51,7 @@ func blisseySpecies() map[string]any {
 }
 
 func bodySlam() map[string]any {
-	return map[string]any{"id": "bodyslam", "nameJa": "のしかかり", "type": "normal", "category": "physical", "power": 85, "priority": 0}
+	return map[string]any{"id": "bodyslam", "nameJa": "テストわざ1", "type": "normal", "category": "physical", "power": 85, "priority": 0}
 }
 
 func attackerIndividual() map[string]any {

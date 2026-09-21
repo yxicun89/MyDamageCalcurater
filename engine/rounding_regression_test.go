@@ -30,7 +30,7 @@ func TestModifierRoundingRegression(t *testing.T) {
 
 func TestWeatherBeforeItemRounding(t *testing.T) {
 	in := ctrlInput([]Type{TypeWater}, []Type{TypeRock}, CategorySpecial, TypePsychic)
-	in.Defender.Species.BaseStats.SpD = 81 // 実数値101 → 砂151 → チョッキ226
+	in.Defender.Species.BaseStats.SpD = 81 // 実数値101 → 砂151 → 特防1.5倍の持ち物226
 	in.Move.Power = 108
 	in.Field.Weather = WeatherSand
 	in.Defender.Item = &Item{Effect: &ItemEffect{StatMods: map[StatKey]int{StatSpD: 6144}}}

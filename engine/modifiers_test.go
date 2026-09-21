@@ -64,7 +64,7 @@ func TestScreenMod(t *testing.T) {
 }
 
 func TestItemChoiceBand(t *testing.T) {
-	// こだわりハチマキ(Atk×1.5): 200→300、base=(22*100*300/100)/50+2=134
+	// 攻撃を1.5倍にする持ち物(Atk×1.5): 200→300、base=(22*100*300/100)/50+2=134
 	in := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeNormal)
 	in.Attacker.Item = &Item{ID: "choice_band", Effect: &ItemEffect{StatMods: map[StatKey]int{StatAtk: 6144}}}
 	r, _ := CalcDamage(in)
@@ -74,7 +74,7 @@ func TestItemChoiceBand(t *testing.T) {
 }
 
 func TestItemLifeOrb(t *testing.T) {
-	// いのちのたま(ダメージ×5324/4096): pokeRound(90,5324)=117
+	// 最終ダメージ倍率の持ち物(ダメージ×5324/4096): pokeRound(90,5324)=117
 	in := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeNormal)
 	in.Attacker.Item = &Item{ID: "life_orb", Effect: &ItemEffect{DamageMod: 5324}}
 	r, _ := CalcDamage(in)
@@ -84,7 +84,7 @@ func TestItemLifeOrb(t *testing.T) {
 }
 
 func TestItemExpertBelt(t *testing.T) {
-	// たつじんのおび: 抜群時のみ ×4915。等倍なら無効。
+	// 抜群時のみ効く最終ダメージ倍率の持ち物: 抜群時のみ ×4915。等倍なら無効。
 	belt := &ItemEffect{DamageMod: 4915, OnlySuperEffective: true}
 	// 等倍(エスパー): 効果なし → 90
 	neutral := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeNormal)
@@ -104,7 +104,7 @@ func TestItemExpertBelt(t *testing.T) {
 }
 
 func TestItemAssaultVestDefender(t *testing.T) {
-	// とつげきチョッキ(SpD×1.5、特殊技): 防御 SpD100→150、base=(22*100*200/150)/50+2=60
+	// 特防を1.5倍にする持ち物(SpD×1.5、特殊技): 防御 SpD100→150、base=(22*100*200/150)/50+2=60
 	in := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategorySpecial, TypeNormal)
 	in.Defender.Item = &Item{ID: "assault_vest", Effect: &ItemEffect{StatMods: map[StatKey]int{StatSpD: 6144}}}
 	r, _ := CalcDamage(in)
@@ -131,7 +131,7 @@ func TestItemResistBerry(t *testing.T) {
 }
 
 func TestAbilityAdaptability(t *testing.T) {
-	// てきおうりょく: STAB 8192。攻撃みず/技みず(一致)/防御エスパー等倍。90×2=180
+	// タイプ一致補正が8192になる特性: STAB 8192。攻撃みず/技みず(一致)/防御エスパー等倍。90×2=180
 	in := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeWater)
 	in.Attacker.Ability = Ability{ID: "adaptability", Effect: &AbilityEffect{StabMod: 8192}}
 	r, _ := CalcDamage(in)
@@ -141,7 +141,7 @@ func TestAbilityAdaptability(t *testing.T) {
 }
 
 func TestAbilityThickFat(t *testing.T) {
-	// あついしぼう: 相手の攻撃実数値200→100、基本式の結果は46。
+	// 相手の攻撃実数値を半減する特性(炎・氷): 相手の攻撃実数値200→100、基本式の結果は46。
 	in := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeFire)
 	in.Defender.Ability = Ability{ID: "thick_fat", Effect: &AbilityEffect{DefResistType: map[Type]int{TypeFire: 2048, TypeIce: 2048}}}
 	r, _ := CalcDamage(in)
@@ -171,7 +171,7 @@ func TestWeatherSnowDefBoost(t *testing.T) {
 }
 
 func TestItemTypeBoost(t *testing.T) {
-	// もくたん: 威力100→120、基本式の結果は107。
+	// タイプ強化の持ち物: 威力100→120、基本式の結果は107。
 	in := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeFire)
 	in.Attacker.Item = &Item{ID: "charcoal", Effect: &ItemEffect{BoostType: TypeFire, BoostTypeMod: 4915}}
 	r, _ := CalcDamage(in)
@@ -181,7 +181,7 @@ func TestItemTypeBoost(t *testing.T) {
 }
 
 func TestAbilityReduceSuperEffective(t *testing.T) {
-	// フィルター/ハードロック相当: 抜群を ×0.75(3072)。みず→いわ ×2、180 → pokeRound(180,3072)=135
+	// 抜群を軽減する特性相当: 抜群を ×0.75(3072)。みず→いわ ×2、180 → pokeRound(180,3072)=135
 	in := ctrlInput([]Type{TypeNormal}, []Type{TypeRock}, CategoryPhysical, TypeWater)
 	in.Defender.Ability = Ability{ID: "filter", Effect: &AbilityEffect{ReduceSuperEffective: 3072}}
 	r, _ := CalcDamage(in)
@@ -199,7 +199,7 @@ func TestAbilityReduceSuperEffective(t *testing.T) {
 
 func TestRankThenItemOrder(t *testing.T) {
 	// 実数値補正はランクの「後」に適用する(ADR-0004)。floor で順序を判別できる値で固定。
-	// 実 Atk200 → ランク-1: applyStatStage(200,-1)=133 → こだわり: pokeRound(133,6144)=199
+	// 実 Atk200 → ランク-1: applyStatStage(200,-1)=133 → 攻撃1.5倍の持ち物: pokeRound(133,6144)=199
 	// base = (22*100*199/100)/50+2 = 89。順序が逆(先に持ち物→ランク)だと 200 になり base が変わる。
 	in := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeNormal)
 	in.Attacker.Ranks = Ranks{Atk: -1}
