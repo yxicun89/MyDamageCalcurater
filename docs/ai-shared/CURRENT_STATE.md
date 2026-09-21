@@ -1,16 +1,18 @@
 # Current State
 
 ## Damage Calculator
-Owner: Claude Code
+Lane: ダメージ計算(どの AI が進めてもよい。COORDINATION.md)
+Active: Claude Code
 Branch: feat/claude-p1-engine(作業ディレクトリ ~/MyDamageCalcurater)
-Status: Phase 1・P2-1・P1-10・Phase R(R-2-9 の公開用クリーンコピーは公開時に実施)・R-3・P1-13(タイプ相性表のデータ化。ADR-0013)・P1-11(表示%の分離。ADR-0010 §3)・P1-12(逆算の再設計。ADR-0010 §R)は完了し、origin/main(協調運用の改訂 COORDINATION.md ほか)を取り込み済み。P1-13 は critic の独立レビューを受け、指摘を反映済み。旧 ~/pokecalc 系はアーカイブ(削除はユーザーの確認待ち)。
-Next: main への統合(COORDINATION.md の手順: make test / lint / check-publishable の後に push。push はユーザーの指示があれば)→ P2-1b → P2-1c → P2-2。人間の確認待ち(plan.md ブロッカー): 観測ダメージの入力と丸めの解釈、公開のタイミング(LICENSE・クリーンコピー)
+Status: Phase 1・P2-1・P1-10・Phase R(R-2-9 の公開用クリーンコピーは公開時に実施)・R-3・P1-13(タイプ相性表のデータ化。ADR-0013)・P1-11(表示%の分離)・P1-12(逆算の再設計。ADR-0010 §R)は完了(critic レビュー済み)。PR で main へ統合中
+Next: P2-1b(ゴールデンの oracle を @smogon/calc 0.12.0 の Champions へ。先に旧ゴールデンとの diff を確認)→ P2-1c → P2-2 → P2-3 → P3-1〜3 → P4-1〜7。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)、P2-1c の裁定
 
 ## Type Balance Checker
-Owner: Codex
-Branch: feat/codex-tb0-foundation (worktree: ~/pokecalc-codex-tb0)
+Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
+Active: なし
+Branch: feat/codex-tb0-foundation(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
 Status: TB0 基盤6e8989eに加え、GitOps・公開準備をd7a8bbfへコミット。localと分離したdigest固定GitOps overlay、安全なplaceholder/credential検査、private repository/registry手順、multi-platform image push補助、直接依存license記録を追加。独立レビューPASS、test/lint/build/Kustomize/Docker build/smoke成功。Argo CD実同期は未実施のためTB0全体は未完了
-Next: ユーザー作成のprivate remoteはHTTPSで到達可能・空であることを確認済み(URL自体は個人accountを含むため文書へ記録しない)。Claude Code側worktreeに未コミットのengine変更が多数あるため、欠落を避けてpushは保留。Claude作業のcommit・検証完了後、Codex branchを通常手順で統合した単一source commitから、依頼されたAIが公開前full検査済みclean copyを作成してremoteへpushする。作成時はこの欄と担当log、clean copy側共有状態へ相対path・source/clean commit・検査・push状態・新しい開発正本を記録する。その後registry digest反映、version固定Argo CD・credential、manual sync→Pod更新を検証する
+Next: (1) TB0 をこのレーンの手順で検証(services/balance のテスト全件・make lint・make check-publishable)し、独立レビューの結果を確認して、PR で main に統合する(go.work の use と Makefile の include の1行を含める)。(2) 統合後、main から feat/tb-tb1-<名前> を切り、docs/type-balance-design.md の TB1 へ進む。旧 Next にあった「Claude 側の未コミット変更を待って push 保留」は解消済み(Claude 側はブランチに commit・push 済み)
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠
@@ -19,5 +21,5 @@ Next: ユーザー作成のprivate remoteはHTTPSで到達可能・空である�
 - サービス境界: damage-calc と balance は兄弟。相互の実行時 API へ直接依存しない
 - 共通マスタ: 正本は1つ。`feat/claude-p1-engine` の ADR-0002 にあるコミット済みスナップショット案を候補とし、人間の確認待ち
 - TB0 type chart: `engine/typechart.go` と同じ現行相性を temporary adapter で持つ。正式マスタ確定後に provider を差し替える
-- 共有状態の正本: main worktree の `docs/ai-shared/`。feature branch 内のコピーは現在状態として使わない
-- 開発の正本: private の `origin`(履歴を消毒したクリーンコピー)の `main`。作業ディレクトリは Claude Code が `~/MyDamageCalcurater`、Codex が `~/MyDamageCalcurater-codex`(同じリポジトリの worktree)。統合・止まるときの作法は `docs/ai-shared/COORDINATION.md`。旧ディレクトリ(`~/pokecalc*`)はアーカイブで、以後そこで実装しない
+- 共有状態の正本: `origin/main` の `docs/ai-shared/`。未マージの続きは各レーン欄の `Branch` の最新コミット(COORDINATION.md)
+- 開発の正本: private の `origin` の `main`(PR でのみ更新。Argo CD が参照)。作業ディレクトリはレーンごとに `~/MyDamageCalcurater`(ダメージ計算)と `~/MyDamageCalcurater-tb`(タイプバランス)

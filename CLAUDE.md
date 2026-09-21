@@ -113,14 +113,17 @@ ADR-0003 の適応を維持する。Codex では ADR-0007 と共通ワークフ�
 - 上表のモデルは既存 Claude agent 定義の割り当て。Codex のモデルへ機械的に置換しない
 - `.claude/settings.json` の gofmt フックとは別に、明示的な整形・lint・build の結果を確認する
 - レビューのスキップや未実装ターゲットの正常終了を成功と数えない。詳細は共通ワークフローを参照
-- ブランチ: Phase ごとに `feat/claude-<phase名>` を切り、`/verify` 通過後に main へマージしてブランチを削除する。
-  詳細は AGENTS.md「Git ブランチ運用」(Codex は `feat/codex-<stage名>`、詰まったブランチは引き継がず保留として記録)
+- ブランチ・統合: レーン制(ダメージ計算 `feat/calc-<phase名>` / タイプバランス `feat/tb-<stage名>`)。main へは PR で入れる
+  (直接 push・直接 merge をしない。Argo CD の GitOps が main を見ているため)。詳細は AGENTS.md「Git ブランチ運用」と COORDINATION.md
+- タイプバランスレーンを Claude Code で進めるときは、`/phase` の代わりに `docs/type-balance-design.md` のステージ順で、
+  同じ流れ(quick-scanner → spec-writer → implementer → critic)を使う
 
-### Codexブランチの取り込み(廃止)
+### Codexブランチの取り込み(廃止)とレーン制
 
-2026-09-21 に、Claude Code がマージコーディネーターを務める運用は**廃止**した(Claude の上限で Codex が止まらないため)。
-main への統合は各 AI が自分のブランチで行う。手順・条件・競合の扱い・止まるときの作法は
-[docs/ai-shared/COORDINATION.md](docs/ai-shared/COORDINATION.md) を正とする。Claude Code は Codex のブランチを取り込まない。
+2026-09-21 に、Claude Code がマージコーディネーターを務める運用は**廃止**した。同日、担当を AI ではなくレーン
+(ダメージ計算 / タイプバランス)に持たせる運用に改めた。どちらの AI もどちらのレーンを進めてよく、止まった側の続きを
+同じレーンのブランチの `Next` から続ける。手順・条件・競合の扱い・止まるときの作法は
+[docs/ai-shared/COORDINATION.md](docs/ai-shared/COORDINATION.md) を正とする。
 
 ## 人間の確認が必要なこと(自動で進めない)
 

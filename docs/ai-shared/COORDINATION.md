@@ -1,77 +1,89 @@
-# Claude Code と Codex の協調運用(レートリミットで互いを止めない)
+# Claude Code と Codex の協調運用(レーン制・PR で統合)
 
-- 状態: 2026-09-21 制定(ユーザー依頼)。Codex の確認は、Codex が次のセッションで `DECISIONS.md` に記録する
-- 目的: **どちらかがレートリミット・上限・セッション切れで止まっても、もう一方が待たずに最後まで作業できる**状態にする
+- 状態: 2026-09-21 制定、同日改訂(ユーザー決定: レーン制、main への統合は PR 経由)。Codex の確認は、Codex が次のセッションで `DECISIONS.md` に記録する
+- 目的: **どちらかがレートリミット・上限・セッション切れで止まっても、もう一方(または同じ種類の別セッション)が同じ場所から続けられる**状態にする
 
 ## 原則
 
-1. **自己完結**: 各 AI は「実装 → 検証 → main へ統合 → push」を**単独で完了できる**。相手の承認・レビュー・取り込み作業を待たない。
-2. **止まる前に安全な場所へ**: 未コミットの作業を残さない。区切りを付けてブランチに commit・push し、次の一手を共有状態に書く。
-3. **main は常に緑**: 未検証の作業(WIP)は main に入れない。main に入れたものは `make test` / `make lint` / `make check-publishable` が通る。
-4. **相談は「既定値付きの提案」**: 相手の判断が要るときは、既定の案を添えて `DECISIONS.md` に書き、**既定案で先へ進む**。相手は後から異議を `DECISIONS.md` に書く。返事を待って止まらない。
-5. **相手のブランチには触れない**: 引き継ぎ・代行・上書きをしない(ただし宙に浮いた作業を「そのまま活かす」のは下記の手順で可能)。
+1. **担当は AI ではなく「レーン」に持たせる**: 作業は2本のレーンに分かれ、どの AI(Claude Code / Codex)がどのレーンを進めてもよい。
+   引き継ぎ資料は作らない。レーンのブランチと `CURRENT_STATE.md` のレーン欄の `Next` がそのまま引き継ぎになる。
+2. **1レーン = 同時に1セッション**: 同じレーンを2つのセッションで同時に進めない。着手時に `CURRENT_STATE.md` のレーン欄の `Active` を自分にして push する。
+3. **止まる前に安全な場所へ**: 未コミットの作業を残さない。区切りごとに commit・push し、`Next` を具体的に書く。
+4. **main は常に緑。main へは PR でしか入れない**: 直接 push・直接 merge をしない(Argo CD の GitOps が main を見ているため。ユーザー決定)。
+   PR は、テスト・lint・公開前検査が通った作業だけ。WIP は PR にしない。
+5. **相談は「既定値付きの提案」**: 判断が要るときは既定案を添えて `DECISIONS.md` に書き、既定案で先へ進む。人間の確認が本当に必要なものだけ `docs/plan.md` のブロッカーに書く。
 
-## ディレクトリとブランチ(作業場所)
+## レーン・ディレクトリ・ブランチ
 
-| 場所 | 用途 |
-|---|---|
-| `~/MyDamageCalcurater` | Claude Code の作業ディレクトリ(`feat/claude-*` `fix/claude-*` ブランチ) |
-| `~/MyDamageCalcurater-codex` | Codex の作業ディレクトリ。同じリポジトリの git worktree(`feat/codex-*` `fix/codex-*` ブランチ) |
-| `origin`(private GitHub) | 共有の正本。`main` が統合先。**force push しない** |
+| レーン | 作業ディレクトリ | ブランチ | 範囲 |
+|---|---|---|---|
+| **ダメージ計算**(damage calc) | `~/MyDamageCalcurater` | `feat/calc-<phase名>`(既存の `feat/claude-p1-engine` はマージまでそのまま使う) | `docs/plan.md` の M1〜M4。`services/balance/` 以外 |
+| **タイプバランス**(type balance) | `~/MyDamageCalcurater-tb`(同じリポジトリの git worktree) | `feat/tb-<stage名>`(既存の `feat/codex-tb0-foundation` はマージまでそのまま使う) | `services/balance/` とその Kustomize / Argo CD 定義。設計の正は `docs/type-balance-design.md` |
 
-- 同じディレクトリで両方の AI を同時に動かさない(作業ツリーが混ざる)。Codex 用の worktree は次で作る:
-  `git worktree add ~/MyDamageCalcurater-codex feat/codex-<stage名>`(ブランチが既にある場合)
-- 旧ディレクトリ(`~/pokecalc` `~/pokecalc-main` `~/pokecalc-codex-tb0`)は**アーカイブ**。以後そこで実装しない。
+- ディレクトリはこの2つだけにする。レーンの作業ディレクトリは、どの AI が使ってもよい(同時に2つのセッションで開かない)。
+- タイプバランスの worktree が無いときは作る: `git -C ~/MyDamageCalcurater worktree add ~/MyDamageCalcurater-tb <ブランチ>`
+- 単発の修正は `fix/<レーン>-...`(例 `fix/calc-...`)。1つのブランチに複数の Phase/ステージを積まない。
 - git の作者情報は、このリポジトリのローカル設定(`pokecalc-dev <noreply@example.com>`)を使う。個人の identity をコミットしない。
 - リモートの URL・認証情報を文書・コミットに書かない。リポジトリを公開(public)にするのは、ユーザーの明示的な指示と `make check-publishable-full` の後だけ。
 
-## main への統合(各 AI が自分のブランチを自分で行う)
+## 始めるとき
 
-**「マージコーディネーター(Claude Code)」は廃止する**(旧 CLAUDE.md「Codexブランチの取り込み手順」・旧 AGENTS.md の該当記述)。
+```
+cd <レーンの作業ディレクトリ>
+git fetch origin
+git status --short --branch        # 未コミット・未 push が無いか
+```
+1. `origin/main` の `docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md` を読む(`git show origin/main:docs/ai-shared/CURRENT_STATE.md`)。
+   **feature ブランチ内のコピーは古いことがある**。現在状態の正は `origin/main` と、そのレーンのブランチの最新コミット。
+2. レーン欄の `Branch` をチェックアウトし、`git pull` してから `Next` の続きをする。別の AI が途中まで進めたブランチでも、そのまま続けてよい
+   (前任の完了記録・テスト結果はうのみにせず、自分で検証する)。
+3. レーン欄の `Active` を自分(例 `Claude Code` / `Codex`)にする。
 
-統合の条件(すべて満たすとき、自分のブランチを main へ入れてよい):
-1. 自分の領域のテストが通る。Claude は `make test` と、計算を変えたら `make test-golden`、WASM 境界を変えたら `make test-wasm`。
-   Codex は `docs/type-balance-test-strategy.md` に沿ったテスト(未作成の間は自分の領域のテスト全件)。
-2. `make lint` と `make check-publishable` が通る。WIP・未検証の作業ではない。
-3. 相手の領域(Codex なら `services/balance/` 以外、Claude なら `services/balance/`)を、共有ファイルの規約が許す範囲を超えて変更していない。
+## main への統合(PR)
 
-手順(main をチェックアウトしない。自分のブランチ上で完結する):
+条件(すべて満たすとき PR を作ってマージしてよい):
+1. そのレーンのテストが通る。ダメージ計算は `make test` と、計算を変えたら `make test-golden`、WASM 境界を変えたら `make test-wasm`。
+   タイプバランスは `docs/type-balance-test-strategy.md` に沿ったテスト(未作成の間は `services/balance` のテスト全件)。
+2. `make lint` と `make check-publishable` が通る。独立レビュー(下記)を受けて指摘を反映済み。
+3. 別レーンの範囲を、共有ファイルの規約が許す範囲を超えて変更していない。
+
+手順(自分のブランチ上で完結する。main をチェックアウトしない):
 ```
 git fetch origin
-git merge origin/main            # 自分のブランチに main を取り込み、競合はここで解決する
+git merge origin/main              # 競合はここで解決する
 make test && make lint && make check-publishable
-git push origin HEAD:main        # main が先に進んでいて拒否されたら、もう一度 fetch → merge → 検証
+git push origin HEAD
+gh pr create --base main --head <ブランチ> --title "<要約>" --body "<何を・検証結果・レビュー結果>"
+gh pr merge <番号> --merge         # マージコミットで入れる。squash・rebase・force push はしない
 ```
-- **競合の解決**: `CURRENT_STATE.md` は自分のセクションを残し相手のセクションは相手側を採用、`DECISIONS.md` は両方の追記を残す。
-  それ以外のファイルで相手の変更と競合したら、**推測で解決しない**。統合を保留し、`DECISIONS.md` に内容と既定案を書いて、自分の作業を続ける(統合できないだけで、止まらない)。
-- 統合したら `DECISIONS.md` に「何を統合したか」を1行追記し、自分の `CURRENT_STATE.md` セクションを更新する。
+- PR の本文には、テスト・lint・公開前検査の結果と、独立レビューの判定を書く。
+- **競合の解決**: `CURRENT_STATE.md` は自分のレーン欄を残し、他のレーン欄は main 側を採用。`DECISIONS.md` は両方の追記を残す。
+  それ以外のファイルで別レーンの変更と競合したら、**推測で解決しない**。PR を作らず、`DECISIONS.md` に内容と既定案を書いて、自分の作業を続ける。
+- マージしたら `DECISIONS.md` に「何を統合したか(PR 番号)」を1行追記し、レーン欄を更新する(次の PR に含める)。
+- Phase/ステージが完了してマージしたブランチは削除する。途中の区切りで PR を出したブランチは、そのまま続けて使ってよい。
 
-## 共有ファイルの編集(自分の統合に必要な範囲は自分で行う)
+## 共有ファイルの編集
 
 | ファイル | 規約 |
 |---|---|
-| `docs/ai-shared/CURRENT_STATE.md` | 自分のセクションだけ編集する |
+| `docs/ai-shared/CURRENT_STATE.md` | 自分が進めているレーンの欄だけ編集する |
 | `docs/ai-shared/DECISIONS.md` | 追記のみ。既存エントリは編集しない |
-| `go.work` | 自分のモジュールの `use` 行を**自分で追記してよい**(Codex は `./services/balance`) |
-| ルートの `Makefile` | 自分のサービスの `include <path>/Makefile` の1行を**自分で追記してよい**(Codex は `include services/balance/Makefile`)。ターゲット名は接頭辞(`balance-`)で衝突させない |
-| `AGENTS.md` / `CLAUDE.md` | 自分の担当セクションだけ。Codex の担当は `AGENTS.md` の「Codex の実装担当範囲」のみ。他の箇所の変更が要るときは `DECISIONS.md` に提案する |
-| `docs/adr/` | 番号は `git fetch origin` した後の main の最新の次を取る。**統合時に番号が衝突したら、後から統合する側が自分の ADR とその参照を振り直す**(例: type-chart の ADR は 0012 → 0013 に振り直した) |
+| `go.work` | 自分のレーンのモジュールの `use` 行を追記してよい(タイプバランスは `./services/balance`) |
+| ルートの `Makefile` | 自分のレーンのサービスの `include <path>/Makefile` の1行を追記してよい(タイプバランスは `include services/balance/Makefile`。ターゲット名は `balance-` 接頭辞) |
+| `AGENTS.md` / `CLAUDE.md` / 本ファイル | 運用ルールの変更は、ユーザーの決定があったときだけ。変更したら `DECISIONS.md` に記録する |
+| `docs/adr/` | 番号は `git fetch origin` した後の main の最新の次を取る。統合時に番号が衝突したら、後から統合する側が自分の ADR とその参照を振り直す |
 
 ## 止まるとき(レートリミット・上限・セッション終了の前後)
 
-止まる前(予兆があるとき、または区切りごとに)に、自分のブランチで次を行う:
-1. すべて commit する。未完了・未レビューなら `WIP(<タスク>): <何が未検証か>` の形にする(main には入れない)。
-2. `git push origin <自分のブランチ>`。
-3. 自分の `CURRENT_STATE.md` セクションの `Status` と `Next` に、**次にやることを具体的に**書く(再開する人が読むだけで続けられる程度)。自分のログにも要点を追記する。
-
-止まった相手がいるとき(もう一方の AI が作業する側):
-- **待たない。相手のブランチに触れない**。自分の領域の作業を続け、自分のブランチを自分で統合する。
-- 相手の成果が要るときは、暫定の契約(temporary adapter・仮のインターフェース)で先へ進み、`DECISIONS.md` に既定案を書く(例: TB0 の type chart の provider)。
-- 相手が再開したとき、相手は自分の `Next` から続ける。相手のブランチの WIP が main に入るのは、相手が検証して統合したときだけ。
+止まる前(予兆があるとき、または区切りごとに):
+1. すべて commit する。未完了・未レビューなら `WIP(<タスク>): <何が未検証か>` の形にする(PR にはしない)。
+2. `git push origin <ブランチ>`。
+3. レーン欄の `Status` と `Next` に、**次にやることを具体的に**書き、`Active` を `なし` にする。この更新もブランチに commit・push する。
+   (main へはまだ入らないので、次に始める人はレーン欄の `Branch` の最新コミットを見る。)
 
 ## レビュー
 
-- **各 AI が自分の独立レビュー**(Claude Code は critic、Codex は自分のレビュー役)を使う。**相手の AI にレビューを依頼しない**(相手の上限・待ち時間で止まらないため。ユーザー指示 2026-09-21)。
+- **各 AI が自分の独立レビュー**(Claude Code は critic、Codex は自分のレビュー役)を使う。他方の AI にレビューを依頼しない(ユーザー指示 2026-09-21)。
 - 独立レビューのスキップや未実装ターゲットの正常終了を成功と数えない(CLAUDE.md)。
 
 ## ユーザーの確認が要ること(変更なし)
@@ -82,7 +94,6 @@ Xcode の署名・実機インストール、Codex / 外部サービスのログ
 ## 起動の目安
 
 ```
-cd ~/MyDamageCalcurater        && claude    # Claude Code(feat/claude-*)
-cd ~/MyDamageCalcurater-codex  && codex     # Codex(feat/codex-*。worktree)
+cd ~/MyDamageCalcurater     && claude   # または codex(ダメージ計算レーン)
+cd ~/MyDamageCalcurater-tb  && claude   # または codex(タイプバランスレーン)
 ```
-どちらも、最初に `git fetch origin` し、`docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md`(main の最新)を読む。
