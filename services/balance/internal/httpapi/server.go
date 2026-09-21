@@ -87,6 +87,13 @@ func (h handler) AnalyzeTeamCoverage(c *echo.Context, _ api.AnalyzeTeamCoverageP
 	return coverage(c, h.deps)
 }
 
+// AnalyzeTeamThreats is the TB4 threat check endpoint (ADR-0400).
+// TODO(implementer): spec-writer のスタブ。ADR-0400 §4 の判定順で実装し、New の
+// OperationMiddlewares に "analyzeTeamThreats": {requireRequestContext} を足す。
+func (h handler) AnalyzeTeamThreats(c *echo.Context, _ api.AnalyzeTeamThreatsParams) error {
+	return c.NoContent(http.StatusNotImplemented)
+}
+
 func health(c *echo.Context) error {
 	return c.JSON(http.StatusOK, api.Health{Status: api.Ok})
 }
