@@ -4,7 +4,13 @@ BALANCE_DIR ?= services/balance
 BALANCE_IMAGE ?= pokecalc/balance:local
 BALANCE_URL ?= http://localhost:8080
 
-.PHONY: balance-gen balance-test balance-lint balance-build balance-kustomize balance-docker-build balance-docker-push balance-k3d-deploy balance-smoke balance-gitops-template-check balance-gitops-check balance-gitops-apply
+.PHONY: balance-gen balance-test balance-lint balance-build balance-kustomize balance-docker-build balance-docker-push balance-k3d-deploy balance-smoke balance-gitops-template-check balance-gitops-check balance-gitops-apply balance-sync-typechart
+
+# ルートの make test / lint / build に balance を含める(ユーザー決定 2026-09-21: テスト漏れを防ぐ)。
+# レシピを持たない前提条件の追加なので、ルートの既存ターゲットのレシピは変わらない。
+test: balance-test
+lint: balance-lint
+build: balance-build
 
 balance-gen:
 	@cd services && $(GO) tool oapi-codegen -config balance/internal/api/cfg.yaml balance/api/openapi.yaml
@@ -47,3 +53,6 @@ balance-smoke:
 
 balance-gitops-apply: balance-gitops-check
 	@kubectl apply -k $(BALANCE_DIR)/deploy/argocd
+
+balance-sync-typechart:
+	@cp testdata/golden/typechart.json $(BALANCE_DIR)/internal/master/data/typechart.json

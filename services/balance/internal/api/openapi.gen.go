@@ -11,24 +11,135 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for CoverageMultiplier.
+const (
+	CoverageDouble  CoverageMultiplier = "2"
+	CoverageHalf    CoverageMultiplier = "1/2"
+	CoverageNeutral CoverageMultiplier = "1"
+	CoverageZero    CoverageMultiplier = "0"
+)
+
+// Valid indicates whether the value is a known member of the CoverageMultiplier enum.
+func (e CoverageMultiplier) Valid() bool {
+	switch e {
+	case CoverageDouble:
+		return true
+	case CoverageHalf:
+		return true
+	case CoverageNeutral:
+		return true
+	case CoverageZero:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DefenseCategory.
+const (
+	Immune     DefenseCategory = "immune"
+	Neutral    DefenseCategory = "neutral"
+	QuadResist DefenseCategory = "quad_resist"
+	QuadWeak   DefenseCategory = "quad_weak"
+	Resist     DefenseCategory = "resist"
+	Weak       DefenseCategory = "weak"
+)
+
+// Valid indicates whether the value is a known member of the DefenseCategory enum.
+func (e DefenseCategory) Valid() bool {
+	switch e {
+	case Immune:
+		return true
+	case Neutral:
+		return true
+	case QuadResist:
+		return true
+	case QuadWeak:
+		return true
+	case Resist:
+		return true
+	case Weak:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DefenseMultiplier.
+const (
+	N0  DefenseMultiplier = "0"
+	N1  DefenseMultiplier = "1"
+	N12 DefenseMultiplier = "1/2"
+	N14 DefenseMultiplier = "1/4"
+	N2  DefenseMultiplier = "2"
+	N4  DefenseMultiplier = "4"
+)
+
+// Valid indicates whether the value is a known member of the DefenseMultiplier enum.
+func (e DefenseMultiplier) Valid() bool {
+	switch e {
+	case N0:
+		return true
+	case N1:
+		return true
+	case N12:
+		return true
+	case N14:
+		return true
+	case N2:
+		return true
+	case N4:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EffectSource.
+const (
+	Ability EffectSource = "ability"
+	Type    EffectSource = "type"
+)
+
+// Valid indicates whether the value is a known member of the EffectSource enum.
+func (e EffectSource) Valid() bool {
+	switch e {
+	case Ability:
+		return true
+	case Type:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ErrorCode.
 const (
+	InternalError         ErrorCode = "internal_error"
 	InvalidRequest        ErrorCode = "invalid_request"
+	MasterUnavailable     ErrorCode = "master_unavailable"
 	MissingRequestContext ErrorCode = "missing_request_context"
 	RequestTooLarge       ErrorCode = "request_too_large"
-	Tb1NotImplemented     ErrorCode = "tb1_not_implemented"
+	UnknownMove           ErrorCode = "unknown_move"
+	UnknownPokemon        ErrorCode = "unknown_pokemon"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
 func (e ErrorCode) Valid() bool {
 	switch e {
+	case InternalError:
+		return true
 	case InvalidRequest:
+		return true
+	case MasterUnavailable:
 		return true
 	case MissingRequestContext:
 		return true
 	case RequestTooLarge:
 		return true
-	case Tb1NotImplemented:
+	case UnknownMove:
+		return true
+	case UnknownPokemon:
 		return true
 	default:
 		return false
@@ -50,13 +161,148 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
+// Defines values for TypeId.
+const (
+	Bug      TypeId = "bug"
+	Dark     TypeId = "dark"
+	Dragon   TypeId = "dragon"
+	Electric TypeId = "electric"
+	Fairy    TypeId = "fairy"
+	Fighting TypeId = "fighting"
+	Fire     TypeId = "fire"
+	Flying   TypeId = "flying"
+	Ghost    TypeId = "ghost"
+	Grass    TypeId = "grass"
+	Ground   TypeId = "ground"
+	Ice      TypeId = "ice"
+	Normal   TypeId = "normal"
+	Poison   TypeId = "poison"
+	Psychic  TypeId = "psychic"
+	Rock     TypeId = "rock"
+	Steel    TypeId = "steel"
+	Water    TypeId = "water"
+)
+
+// Valid indicates whether the value is a known member of the TypeId enum.
+func (e TypeId) Valid() bool {
+	switch e {
+	case Bug:
+		return true
+	case Dark:
+		return true
+	case Dragon:
+		return true
+	case Electric:
+		return true
+	case Fairy:
+		return true
+	case Fighting:
+		return true
+	case Fire:
+		return true
+	case Flying:
+		return true
+	case Ghost:
+		return true
+	case Grass:
+		return true
+	case Ground:
+		return true
+	case Ice:
+		return true
+	case Normal:
+		return true
+	case Poison:
+		return true
+	case Psychic:
+		return true
+	case Rock:
+		return true
+	case Steel:
+		return true
+	case Water:
+		return true
+	default:
+		return false
+	}
+}
+
 // AnalyzeRequest defines model for AnalyzeRequest.
 type AnalyzeRequest struct {
 	Members []struct {
-		// PokemonId Example: 0445-000
+		// PokemonId Example: 9001-000
 		PokemonId string `json:"pokemonId"`
 	} `json:"members"`
 }
+
+// AnalyzeResponse defines model for AnalyzeResponse.
+type AnalyzeResponse struct {
+	// Members One entry per request member, in request order. Duplicated pokemonId values are kept.
+	Members []MemberDefense `json:"members"`
+
+	// TeamSummary One entry per attack type, in canonical type order (normal ... fairy).
+	TeamSummary []TeamSummaryEntry `json:"teamSummary"`
+}
+
+// CoverageMultiplier Exact display form of a single-type offensive multiplier; null when there is no attack move.
+type CoverageMultiplier string
+
+// CoverageRequest defines model for CoverageRequest.
+type CoverageRequest struct {
+	Members []CoverageRequestMember `json:"members"`
+}
+
+// CoverageRequestMember defines model for CoverageRequestMember.
+type CoverageRequestMember struct {
+	// MoveIds Zero to four moveIds. Duplicates within one member are rejected (400).
+	MoveIds []MoveId `json:"moveIds"`
+
+	// PokemonId Example: 9001-000
+	PokemonId string `json:"pokemonId"`
+}
+
+// CoverageResponse defines model for CoverageResponse.
+type CoverageResponse struct {
+	// Members One entry per request member, in request order.
+	Members []MemberCoverage `json:"members"`
+
+	// TeamCoverage One entry per single defense type, in canonical type order (normal ... fairy).
+	TeamCoverage []TeamCoverageEntry `json:"teamCoverage"`
+}
+
+// DefenseCategory x4: quad_weak, x2: weak, x1: neutral, x1/2: resist, x1/4: quad_resist, x0: immune.
+type DefenseCategory string
+
+// DefenseCoverageEntry bestMultiplier is the best multiplier of the member's attack moves against this defense type,
+// or null when the member has no attack move (then effective and superEffective are false).
+// effective = bestMultiplier is x1 or more; superEffective = bestMultiplier is x2.
+type DefenseCoverageEntry struct {
+	// BestMultiplier Exact display form of a single-type offensive multiplier; null when there is no attack move.
+	BestMultiplier *CoverageMultiplier `json:"bestMultiplier"`
+	DefenseType    TypeId              `json:"defenseType"`
+	Effective      bool                `json:"effective"`
+	SuperEffective bool                `json:"superEffective"`
+}
+
+// DefenseEntry defines model for DefenseEntry.
+type DefenseEntry struct {
+	AttackType TypeId `json:"attackType"`
+
+	// Category x4: quad_weak, x2: weak, x1: neutral, x1/2: resist, x1/4: quad_resist, x0: immune.
+	Category DefenseCategory `json:"category"`
+
+	// Multiplier Exact display form of the defensive multiplier.
+	Multiplier DefenseMultiplier `json:"multiplier"`
+
+	// Source Origin of the multiplier. Always "type" in TB1; "ability" is reserved for TB3.
+	Source EffectSource `json:"source"`
+}
+
+// DefenseMultiplier Exact display form of the defensive multiplier.
+type DefenseMultiplier string
+
+// EffectSource Origin of the multiplier. Always "type" in TB1; "ability" is reserved for TB3.
+type EffectSource string
 
 // Error defines model for Error.
 type Error struct {
@@ -75,6 +321,60 @@ type Health struct {
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
 
+// MemberCoverage defines model for MemberCoverage.
+type MemberCoverage struct {
+	// AttackTypes Types of the non-status moves, without duplicates, in canonical type order.
+	AttackTypes []TypeId `json:"attackTypes"`
+
+	// Coverage One entry per single defense type, in canonical type order (normal ... fairy).
+	Coverage []DefenseCoverageEntry `json:"coverage"`
+
+	// MoveIds The request moveIds, in request order.
+	MoveIds []MoveId `json:"moveIds"`
+
+	// PokemonId Example: 9001-000
+	PokemonId string `json:"pokemonId"`
+}
+
+// MemberDefense defines model for MemberDefense.
+type MemberDefense struct {
+	// Defense One entry per attack type, in canonical type order (normal ... fairy).
+	Defense []DefenseEntry `json:"defense"`
+
+	// PokemonId Example: 9001-000
+	PokemonId string   `json:"pokemonId"`
+	Types     []TypeId `json:"types"`
+}
+
+// MoveId Example: move-9001
+type MoveId = string
+
+// TeamCoverageEntry Per defense type team counts. bestMultiplier is the best over all members (null when no member
+// has an attack move). effectiveMembers = members with x1 or more; superEffectiveMembers = members
+// with x2 (subset of effectiveMembers). Members are counted once regardless of how many moves they have.
+type TeamCoverageEntry struct {
+	// BestMultiplier Exact display form of a single-type offensive multiplier; null when there is no attack move.
+	BestMultiplier        *CoverageMultiplier `json:"bestMultiplier"`
+	DefenseType           TypeId              `json:"defenseType"`
+	EffectiveMembers      int                 `json:"effectiveMembers"`
+	SuperEffectiveMembers int                 `json:"superEffectiveMembers"`
+}
+
+// TeamSummaryEntry Per attack type team counts. weak = x2 and x4 members, quadWeak = x4 members (subset of weak),
+// resist = x1/2 and x1/4 members (immune excluded), immune = x0 members, neutral = x1 members.
+// Invariant: weak + resist + immune + neutral = number of members.
+type TeamSummaryEntry struct {
+	AttackType TypeId `json:"attackType"`
+	Immune     int    `json:"immune"`
+	Neutral    int    `json:"neutral"`
+	QuadWeak   int    `json:"quadWeak"`
+	Resist     int    `json:"resist"`
+	Weak       int    `json:"weak"`
+}
+
+// TypeId defines model for TypeId.
+type TypeId string
+
 // DeviceId defines model for DeviceId.
 type DeviceId = string
 
@@ -87,8 +387,17 @@ type AnalyzeTeamBalanceParams struct {
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
+// AnalyzeTeamCoverageParams defines parameters for AnalyzeTeamCoverage.
+type AnalyzeTeamCoverageParams struct {
+	XDeviceId  DeviceId  `json:"X-Device-Id"`
+	XSessionId SessionId `json:"X-Session-Id"`
+}
+
 // AnalyzeTeamBalanceJSONRequestBody defines body for AnalyzeTeamBalance for application/json ContentType.
 type AnalyzeTeamBalanceJSONRequestBody = AnalyzeRequest
+
+// AnalyzeTeamCoverageJSONRequestBody defines body for AnalyzeTeamCoverage for application/json ContentType.
+type AnalyzeTeamCoverageJSONRequestBody = CoverageRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -98,6 +407,9 @@ type ServerInterface interface {
 	// AnalyzeTeamBalance Analyze a party's type balance
 	// (POST /api/balance/v1/team-balance/analyze)
 	AnalyzeTeamBalance(ctx echo.Context, params AnalyzeTeamBalanceParams) error
+	// AnalyzeTeamCoverage Analyze a party's offensive type coverage
+	// (POST /api/balance/v1/team-balance/coverage)
+	AnalyzeTeamCoverage(ctx echo.Context, params AnalyzeTeamCoverageParams) error
 	// Health Pod health check
 	// (GET /healthz)
 	Health(ctx echo.Context) error
@@ -165,6 +477,54 @@ func (w *ServerInterfaceWrapper) AnalyzeTeamBalance(ctx echo.Context) error {
 	return err
 }
 
+// AnalyzeTeamCoverage converts echo context to params.
+func (w *ServerInterfaceWrapper) AnalyzeTeamCoverage(ctx echo.Context) error {
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AnalyzeTeamCoverageParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Device-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Device-Id")]; found {
+		var XDeviceId DeviceId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
+		}
+
+		params.XDeviceId = XDeviceId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Device-Id is required, but not found"))
+	}
+	// ------------- Required header parameter "X-Session-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Session-Id")]; found {
+		var XSessionId SessionId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
+		}
+
+		params.XSessionId = XSessionId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Session-Id is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.AnalyzeTeamCoverage(ctx, params)
+	return err
+}
+
 // Health converts echo context to params.
 func (w *ServerInterfaceWrapper) Health(ctx echo.Context) error {
 	var err error
@@ -224,5 +584,6 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 	router.GET(options.BaseURL+"/healthz", wrapper.Health, options.OperationMiddlewares["health"]...)
 	router.GET(options.BaseURL+"/api/balance/healthz", wrapper.PublicHealth, options.OperationMiddlewares["publicHealth"]...)
 	router.POST(options.BaseURL+"/api/balance/v1/team-balance/analyze", wrapper.AnalyzeTeamBalance, options.OperationMiddlewares["analyzeTeamBalance"]...)
+	router.POST(options.BaseURL+"/api/balance/v1/team-balance/coverage", wrapper.AnalyzeTeamCoverage, options.OperationMiddlewares["analyzeTeamCoverage"]...)
 
 }

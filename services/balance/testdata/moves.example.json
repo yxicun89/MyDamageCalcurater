@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "moves": [
+    {"moveId": "move-9001", "type": "fire", "category": "special"},
+    {"moveId": "move-9002", "type": "fire", "category": "physical"},
+    {"moveId": "move-9003", "type": "water", "category": "special"},
+    {"moveId": "move-9004", "type": "electric", "category": "special"},
+    {"moveId": "move-9005", "type": "normal", "category": "physical"},
+    {"moveId": "move-9006", "type": "grass", "category": "status"},
+    {"moveId": "move-9007", "type": "ground", "category": "physical"},
+    {"moveId": "move-9008", "type": "ice", "category": "special"},
+    {"moveId": "move-9009", "type": "fighting", "category": "physical"},
+    {"moveId": "move-9010", "type": "fairy", "category": "special"},
+    {"moveId": "move-9011", "type": "dragon", "category": "special"},
+    {"moveId": "move-9012", "type": "psychic", "category": "status"}
+  ]
+}

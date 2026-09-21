@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"example.com/pokecalc/services/balance/internal/httpapi"
+	"example.com/pokecalc/services/balance/internal/master"
 )
 
 const (
@@ -27,9 +28,27 @@ func main() {
 		port = "8080"
 	}
 
+	pokemonTypes, err := pokemonTypeProviderFromEnv(os.LookupEnv)
+	if err != nil {
+		slog.Error("balance API failed to load pokemon type read model", "path", os.Getenv(pokemonTypesPathEnv), "error", err)
+		os.Exit(1)
+	}
+
+	moves, err := moveProviderFromEnv(os.LookupEnv)
+	if err != nil {
+		slog.Error("balance API failed to load move read model", "path", os.Getenv(movesPathEnv), "error", err)
+		os.Exit(1)
+	}
+
+	typeChart, err := master.EmbeddedTypeChart()
+	if err != nil {
+		slog.Error("balance API failed to load the type chart", "error", err)
+		os.Exit(1)
+	}
+
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           httpapi.New(),
+		Handler:           httpapi.New(httpapi.Dependencies{TypeChart: typeChart, PokemonTypes: pokemonTypes, Moves: moves}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,
