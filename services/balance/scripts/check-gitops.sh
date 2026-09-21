@@ -19,7 +19,8 @@ esac
 [ -f "$application_file" ] || fail "Application manifest is missing"
 [ -f "$overlay_file" ] || fail "GitOps overlay is missing"
 
-repo_url=$(awk '$1 == "repoURL:" { print $2; exit }' "$application_file")
+# repoURL はアカウント名を含むので Git に書かない。適用時の値は BALANCE_GITOPS_REPO_URL で渡す(scripts/argocd-local-app.sh)。
+repo_url=${BALANCE_GITOPS_REPO_URL:-$(awk '$1 == "repoURL:" { print $2; exit }' "$application_file")}
 target_revision=$(awk '$1 == "targetRevision:" { print $2; exit }' "$application_file")
 source_path=$(awk '$1 == "path:" { print $2; exit }' "$application_file")
 image_name=$(awk '$1 == "newName:" { print $2; exit }' "$overlay_file")
