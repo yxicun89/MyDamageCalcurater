@@ -24,12 +24,17 @@ doctor: ## 前提ツールの確認
 
 ## --- コード生成 -------------------------------------------------------
 .PHONY: gen
-gen: gen-go gen-ts ## OpenAPI / sqlc のコード生成
+gen: gen-go gen-sql gen-ts ## OpenAPI / sqlc のコード生成
 
 .PHONY: gen-go
 gen-go: ## Go サーバ/型を openapi.yaml から生成
 	@cd services && $(GO) tool oapi-codegen -config internal/api/cfg.yaml ../api/openapi.yaml
 	@echo "gen-go: services/internal/api/openapi.gen.go を生成"
+
+.PHONY: gen-sql
+gen-sql: ## pokedex の DB 行の型・クエリを sqlc から生成(ADR-0015 §1)
+	@cd tools && $(GO) tool sqlc generate -f ../services/pokedex/db/sqlc.yaml
+	@echo "gen-sql: services/pokedex/internal/store を生成"
 
 .PHONY: gen-ts
 gen-ts: ## TypeScript 型を openapi.yaml から生成
@@ -81,6 +86,35 @@ test-golden: ## engine のゴールデンテスト(@smogon/calc 照合)
 .PHONY: test-all-species
 test-all-species: ## 全ポケモン網羅・性質テスト
 	@cd engine && $(GO) test -tags allspecies ./... -run AllSpecies
+
+## --- pokedex DB(migrate。ADR-0015 §5) ---------------------------------
+.PHONY: migrate-up
+migrate-up: ## pokedex の DB を最新版まで migrate する(POKEDEX_DATABASE_DSN が必須)
+	@cd services && $(GO) run ./pokedex/cmd/migrate up
+
+.PHONY: migrate-version
+migrate-version: ## pokedex の migrate バージョンを表示する(POKEDEX_DATABASE_DSN が必須)
+	@cd services && $(GO) run ./pokedex/cmd/migrate version
+
+.PHONY: migrate-down
+migrate-down: ## pokedex の DB を全て戻す(破壊的。CONFIRM_DESTROY=<DB名> が必須。人間の確認)
+	@if [ -z "$(CONFIRM_DESTROY)" ]; then \
+		echo "migrate-down: CONFIRM_DESTROY=<DB名> を指定すること(全テーブルを消す破壊的操作)。人間が確認すること" >&2; \
+		exit 1; \
+	fi
+	@cd services && $(GO) run ./pokedex/cmd/migrate down -confirm "$(CONFIRM_DESTROY)"
+
+.PHONY: test-db
+test-db: ## pokedex の DB を使うテスト(POKEDEX_TEST_DSN が必須。make test には含めない)
+	@if [ -z "$(POKEDEX_TEST_DSN)" ]; then \
+		echo "test-db: POKEDEX_TEST_DSN が設定されていない(スキップせず失敗する)" >&2; \
+		exit 1; \
+	fi
+	@cd services && $(GO) test -tags mysql ./pokedex/db/...
+
+.PHONY: db-local-up
+db-local-up: ## make dev 用に docker で mysql:8.4 を 127.0.0.1:3306 に起動する(パスワードは .env)
+	@./scripts/db-local-up.sh
 
 ## --- クラスタ / ローカル ---------------------------------------------
 .PHONY: up
