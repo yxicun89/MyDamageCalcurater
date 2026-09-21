@@ -8,7 +8,162 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"time"
 )
+
+const deleteAbilities = `-- name: DeleteAbilities :exec
+DELETE FROM abilities
+`
+
+func (q *Queries) DeleteAbilities(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAbilities)
+	return err
+}
+
+const deleteAbilityEffects = `-- name: DeleteAbilityEffects :exec
+DELETE FROM ability_effects
+`
+
+func (q *Queries) DeleteAbilityEffects(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAbilityEffects)
+	return err
+}
+
+const deleteDataVersions = `-- name: DeleteDataVersions :exec
+DELETE FROM data_versions
+`
+
+func (q *Queries) DeleteDataVersions(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteDataVersions)
+	return err
+}
+
+const deleteItemEffects = `-- name: DeleteItemEffects :exec
+DELETE FROM item_effects
+`
+
+func (q *Queries) DeleteItemEffects(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteItemEffects)
+	return err
+}
+
+const deleteItems = `-- name: DeleteItems :exec
+DELETE FROM items
+`
+
+func (q *Queries) DeleteItems(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteItems)
+	return err
+}
+
+const deleteLearnsets = `-- name: DeleteLearnsets :exec
+DELETE FROM learnsets
+`
+
+func (q *Queries) DeleteLearnsets(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteLearnsets)
+	return err
+}
+
+const deleteMegaSpecies = `-- name: DeleteMegaSpecies :exec
+DELETE FROM species WHERE is_mega = 1
+`
+
+func (q *Queries) DeleteMegaSpecies(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteMegaSpecies)
+	return err
+}
+
+const deleteMoves = `-- name: DeleteMoves :exec
+DELETE FROM moves
+`
+
+func (q *Queries) DeleteMoves(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteMoves)
+	return err
+}
+
+const deleteRegulationAbilities = `-- name: DeleteRegulationAbilities :exec
+DELETE FROM regulation_abilities
+`
+
+func (q *Queries) DeleteRegulationAbilities(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteRegulationAbilities)
+	return err
+}
+
+const deleteRegulationItems = `-- name: DeleteRegulationItems :exec
+DELETE FROM regulation_items
+`
+
+func (q *Queries) DeleteRegulationItems(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteRegulationItems)
+	return err
+}
+
+const deleteRegulationMoves = `-- name: DeleteRegulationMoves :exec
+DELETE FROM regulation_moves
+`
+
+func (q *Queries) DeleteRegulationMoves(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteRegulationMoves)
+	return err
+}
+
+const deleteRegulationSpecies = `-- name: DeleteRegulationSpecies :exec
+DELETE FROM regulation_species
+`
+
+func (q *Queries) DeleteRegulationSpecies(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteRegulationSpecies)
+	return err
+}
+
+const deleteRegulations = `-- name: DeleteRegulations :exec
+DELETE FROM regulations
+`
+
+func (q *Queries) DeleteRegulations(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteRegulations)
+	return err
+}
+
+const deleteRemainingSpecies = `-- name: DeleteRemainingSpecies :exec
+DELETE FROM species
+`
+
+func (q *Queries) DeleteRemainingSpecies(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteRemainingSpecies)
+	return err
+}
+
+const deleteSpeciesAbilities = `-- name: DeleteSpeciesAbilities :exec
+DELETE FROM species_abilities
+`
+
+func (q *Queries) DeleteSpeciesAbilities(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteSpeciesAbilities)
+	return err
+}
+
+const deleteTypeChart = `-- name: DeleteTypeChart :exec
+DELETE FROM type_chart
+`
+
+func (q *Queries) DeleteTypeChart(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteTypeChart)
+	return err
+}
+
+const deleteTypes = `-- name: DeleteTypes :exec
+DELETE FROM types
+`
+
+func (q *Queries) DeleteTypes(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteTypes)
+	return err
+}
 
 const getAbility = `-- name: GetAbility :one
 SELECT id, name_ja, name_ja_source, name_en
@@ -124,6 +279,374 @@ func (q *Queries) GetSpeciesByKey(ctx context.Context, key string) (Species, err
 	return i, err
 }
 
+const insertAbility = `-- name: InsertAbility :exec
+INSERT INTO abilities (id, name_ja, name_ja_source, name_en)
+VALUES (?, ?, ?, ?)
+`
+
+type InsertAbilityParams struct {
+	ID           string
+	NameJa       string
+	NameJaSource string
+	NameEn       string
+}
+
+func (q *Queries) InsertAbility(ctx context.Context, arg InsertAbilityParams) error {
+	_, err := q.db.ExecContext(ctx, insertAbility,
+		arg.ID,
+		arg.NameJa,
+		arg.NameJaSource,
+		arg.NameEn,
+	)
+	return err
+}
+
+const insertAbilityEffect = `-- name: InsertAbilityEffect :exec
+INSERT INTO ability_effects (ability_id, effect)
+VALUES (?, ?)
+`
+
+type InsertAbilityEffectParams struct {
+	AbilityID string
+	Effect    json.RawMessage
+}
+
+func (q *Queries) InsertAbilityEffect(ctx context.Context, arg InsertAbilityEffectParams) error {
+	_, err := q.db.ExecContext(ctx, insertAbilityEffect, arg.AbilityID, arg.Effect)
+	return err
+}
+
+const insertDataVersion = `-- name: InsertDataVersion :exec
+INSERT INTO data_versions (source, version, checksum, imported_at)
+VALUES (?, ?, ?, ?)
+`
+
+type InsertDataVersionParams struct {
+	Source     string
+	Version    string
+	Checksum   string
+	ImportedAt time.Time
+}
+
+func (q *Queries) InsertDataVersion(ctx context.Context, arg InsertDataVersionParams) error {
+	_, err := q.db.ExecContext(ctx, insertDataVersion,
+		arg.Source,
+		arg.Version,
+		arg.Checksum,
+		arg.ImportedAt,
+	)
+	return err
+}
+
+const insertItem = `-- name: InsertItem :exec
+INSERT INTO items (id, name_ja, name_ja_source, name_en)
+VALUES (?, ?, ?, ?)
+`
+
+type InsertItemParams struct {
+	ID           string
+	NameJa       string
+	NameJaSource string
+	NameEn       string
+}
+
+func (q *Queries) InsertItem(ctx context.Context, arg InsertItemParams) error {
+	_, err := q.db.ExecContext(ctx, insertItem,
+		arg.ID,
+		arg.NameJa,
+		arg.NameJaSource,
+		arg.NameEn,
+	)
+	return err
+}
+
+const insertItemEffect = `-- name: InsertItemEffect :exec
+INSERT INTO item_effects (item_id, effect)
+VALUES (?, ?)
+`
+
+type InsertItemEffectParams struct {
+	ItemID string
+	Effect json.RawMessage
+}
+
+func (q *Queries) InsertItemEffect(ctx context.Context, arg InsertItemEffectParams) error {
+	_, err := q.db.ExecContext(ctx, insertItemEffect, arg.ItemID, arg.Effect)
+	return err
+}
+
+const insertLearnset = `-- name: InsertLearnset :exec
+INSERT INTO learnsets (species_key, move_id)
+VALUES (?, ?)
+`
+
+type InsertLearnsetParams struct {
+	SpeciesKey string
+	MoveID     string
+}
+
+func (q *Queries) InsertLearnset(ctx context.Context, arg InsertLearnsetParams) error {
+	_, err := q.db.ExecContext(ctx, insertLearnset, arg.SpeciesKey, arg.MoveID)
+	return err
+}
+
+const insertMove = `-- name: InsertMove :exec
+INSERT INTO moves (id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type InsertMoveParams struct {
+	ID           string
+	NameJa       string
+	NameJaSource string
+	NameEn       string
+	Type         string
+	Category     string
+	Power        uint16
+	Accuracy     sql.NullInt16
+	Pp           uint8
+	Priority     int8
+}
+
+func (q *Queries) InsertMove(ctx context.Context, arg InsertMoveParams) error {
+	_, err := q.db.ExecContext(ctx, insertMove,
+		arg.ID,
+		arg.NameJa,
+		arg.NameJaSource,
+		arg.NameEn,
+		arg.Type,
+		arg.Category,
+		arg.Power,
+		arg.Accuracy,
+		arg.Pp,
+		arg.Priority,
+	)
+	return err
+}
+
+const insertRegulation = `-- name: InsertRegulation :exec
+INSERT INTO regulations (id, name_ja, is_default, starts_on, ends_on)
+VALUES (?, ?, ?, ?, ?)
+`
+
+type InsertRegulationParams struct {
+	ID        string
+	NameJa    string
+	IsDefault bool
+	StartsOn  sql.NullTime
+	EndsOn    sql.NullTime
+}
+
+func (q *Queries) InsertRegulation(ctx context.Context, arg InsertRegulationParams) error {
+	_, err := q.db.ExecContext(ctx, insertRegulation,
+		arg.ID,
+		arg.NameJa,
+		arg.IsDefault,
+		arg.StartsOn,
+		arg.EndsOn,
+	)
+	return err
+}
+
+const insertRegulationAbility = `-- name: InsertRegulationAbility :exec
+INSERT INTO regulation_abilities (regulation_id, ability_id)
+VALUES (?, ?)
+`
+
+type InsertRegulationAbilityParams struct {
+	RegulationID string
+	AbilityID    string
+}
+
+func (q *Queries) InsertRegulationAbility(ctx context.Context, arg InsertRegulationAbilityParams) error {
+	_, err := q.db.ExecContext(ctx, insertRegulationAbility, arg.RegulationID, arg.AbilityID)
+	return err
+}
+
+const insertRegulationItem = `-- name: InsertRegulationItem :exec
+INSERT INTO regulation_items (regulation_id, item_id)
+VALUES (?, ?)
+`
+
+type InsertRegulationItemParams struct {
+	RegulationID string
+	ItemID       string
+}
+
+func (q *Queries) InsertRegulationItem(ctx context.Context, arg InsertRegulationItemParams) error {
+	_, err := q.db.ExecContext(ctx, insertRegulationItem, arg.RegulationID, arg.ItemID)
+	return err
+}
+
+const insertRegulationMove = `-- name: InsertRegulationMove :exec
+INSERT INTO regulation_moves (regulation_id, move_id)
+VALUES (?, ?)
+`
+
+type InsertRegulationMoveParams struct {
+	RegulationID string
+	MoveID       string
+}
+
+func (q *Queries) InsertRegulationMove(ctx context.Context, arg InsertRegulationMoveParams) error {
+	_, err := q.db.ExecContext(ctx, insertRegulationMove, arg.RegulationID, arg.MoveID)
+	return err
+}
+
+const insertRegulationSpecies = `-- name: InsertRegulationSpecies :exec
+INSERT INTO regulation_species (regulation_id, species_key)
+VALUES (?, ?)
+`
+
+type InsertRegulationSpeciesParams struct {
+	RegulationID string
+	SpeciesKey   string
+}
+
+func (q *Queries) InsertRegulationSpecies(ctx context.Context, arg InsertRegulationSpeciesParams) error {
+	_, err := q.db.ExecContext(ctx, insertRegulationSpecies, arg.RegulationID, arg.SpeciesKey)
+	return err
+}
+
+const insertSpecies = `-- name: InsertSpecies :exec
+INSERT INTO species (` + "`" + `key` + "`" + `, dex_no, form, showdown_id, name_ja, name_ja_source, name_en, type1, type2,
+                      base_hp, base_atk, base_def, base_spa, base_spd, base_spe, is_mega, base_species_key, required_item_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type InsertSpeciesParams struct {
+	Key            string
+	DexNo          uint16
+	Form           uint16
+	ShowdownID     string
+	NameJa         string
+	NameJaSource   string
+	NameEn         string
+	Type1          string
+	Type2          sql.NullString
+	BaseHp         uint16
+	BaseAtk        uint16
+	BaseDef        uint16
+	BaseSpa        uint16
+	BaseSpd        uint16
+	BaseSpe        uint16
+	IsMega         bool
+	BaseSpeciesKey sql.NullString
+	RequiredItemID sql.NullString
+}
+
+func (q *Queries) InsertSpecies(ctx context.Context, arg InsertSpeciesParams) error {
+	_, err := q.db.ExecContext(ctx, insertSpecies,
+		arg.Key,
+		arg.DexNo,
+		arg.Form,
+		arg.ShowdownID,
+		arg.NameJa,
+		arg.NameJaSource,
+		arg.NameEn,
+		arg.Type1,
+		arg.Type2,
+		arg.BaseHp,
+		arg.BaseAtk,
+		arg.BaseDef,
+		arg.BaseSpa,
+		arg.BaseSpd,
+		arg.BaseSpe,
+		arg.IsMega,
+		arg.BaseSpeciesKey,
+		arg.RequiredItemID,
+	)
+	return err
+}
+
+const insertSpeciesAbility = `-- name: InsertSpeciesAbility :exec
+INSERT INTO species_abilities (species_key, slot, ability_id)
+VALUES (?, ?, ?)
+`
+
+type InsertSpeciesAbilityParams struct {
+	SpeciesKey string
+	Slot       uint8
+	AbilityID  string
+}
+
+func (q *Queries) InsertSpeciesAbility(ctx context.Context, arg InsertSpeciesAbilityParams) error {
+	_, err := q.db.ExecContext(ctx, insertSpeciesAbility, arg.SpeciesKey, arg.Slot, arg.AbilityID)
+	return err
+}
+
+const insertType = `-- name: InsertType :exec
+INSERT INTO types (id, sort_order, name_ja, name_ja_source)
+VALUES (?, ?, ?, ?)
+`
+
+type InsertTypeParams struct {
+	ID           string
+	SortOrder    uint16
+	NameJa       string
+	NameJaSource string
+}
+
+func (q *Queries) InsertType(ctx context.Context, arg InsertTypeParams) error {
+	_, err := q.db.ExecContext(ctx, insertType,
+		arg.ID,
+		arg.SortOrder,
+		arg.NameJa,
+		arg.NameJaSource,
+	)
+	return err
+}
+
+const insertTypeChart = `-- name: InsertTypeChart :exec
+INSERT INTO type_chart (attack_type, defense_type, code)
+VALUES (?, ?, ?)
+`
+
+type InsertTypeChartParams struct {
+	AttackType  string
+	DefenseType string
+	Code        uint8
+}
+
+func (q *Queries) InsertTypeChart(ctx context.Context, arg InsertTypeChartParams) error {
+	_, err := q.db.ExecContext(ctx, insertTypeChart, arg.AttackType, arg.DefenseType, arg.Code)
+	return err
+}
+
+const listDataVersions = `-- name: ListDataVersions :many
+SELECT source, version, checksum, imported_at
+FROM data_versions
+ORDER BY source
+`
+
+func (q *Queries) ListDataVersions(ctx context.Context) ([]DataVersion, error) {
+	rows, err := q.db.QueryContext(ctx, listDataVersions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DataVersion
+	for rows.Next() {
+		var i DataVersion
+		if err := rows.Scan(
+			&i.Source,
+			&i.Version,
+			&i.Checksum,
+			&i.ImportedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMoves = `-- name: ListMoves :many
 SELECT id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority
 FROM moves
@@ -224,6 +747,42 @@ func (q *Queries) ListSpeciesAbilities(ctx context.Context, speciesKey string) (
 	for rows.Next() {
 		var i SpeciesAbility
 		if err := rows.Scan(&i.SpeciesKey, &i.Slot, &i.AbilityID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSpeciesKeys = `-- name: ListSpeciesKeys :many
+
+SELECT ` + "`" + `key` + "`" + `, showdown_id
+FROM species
+`
+
+type ListSpeciesKeysRow struct {
+	Key        string
+	ShowdownID string
+}
+
+// 冪等な投入(importer.Apply。ADR-0101 §9)。全置き換えを1トランザクションで行う。
+// 自己参照の外部キー(species.base_species_key)があるので、削除はメガを先・挿入はメガを後にする。
+func (q *Queries) ListSpeciesKeys(ctx context.Context) ([]ListSpeciesKeysRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSpeciesKeys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSpeciesKeysRow
+	for rows.Next() {
+		var i ListSpeciesKeysRow
+		if err := rows.Scan(&i.Key, &i.ShowdownID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -66,7 +66,7 @@
 - [x] P2-1c 技の使用可否の調査: calc のみが持つ 11 技、Showdown のみの 1 技、タイプの食い違い 2 件(個別名は載せない。A と B の差分スクリプトで `data/generated/` に出す)を、GameWith のポケモンチャンピオンズのデータやポケモン徹底攻略など**公式以外の攻略サイト**(規約・アクセス頻度に配慮し、必要最小限の取得)で調べ、出典 URL と確認日付きで**結論だけ**を ADR-0002 に追記(第三者データの一覧は載せない)。断定できない項目は「未確認」と書き、最終裁定はユーザー
 - [ ] P2-2 MySQL スキーマ(migrate)と importer(`types` / `type_chart` テーブルを含む=ADR-0013。**実マスタ・スナップショットは Git にコミットしない**: `data/generated/` は .gitignore、Git には schema・importer・架空データの example・README・データの版 metadata のみ。使用可能集合・持ち物候補は**レギュレーション(v1 は M-C)依存のデータ**で、M-C を直書きしない。日本語名は PokeAPI+ローカル override。ADR-0002)
   - [x] P2-2a スキーマと migrate(golang-migrate・sqlc)。`types` / `type_chart`・種族(メガの `is_mega` / `base_species_key` / `required_item_id`、性能が同じ見た目違いフォームは1件)・技・持ち物・特性・効果定義(ADR-0005)・レギュレーション(使用可能集合)・日本語名・データの版。k3d の MySQL と `make` からの migrate
-  - [ ] P2-2b importer の取得・変換(calc 0.12.0 Champions・Showdown champions mod・PokeAPI の日本語名+override → `data/generated/`)と DB への投入(冪等)
+  - [x] P2-2b importer の取得・変換(calc 0.12.0 Champions・Showdown champions mod・PokeAPI の日本語名+override → `data/generated/`)と DB への投入(冪等)
   - [ ] P2-2c 照合と差分報告(calc と Showdown の差分、P2-1c の裁定の反映)
   - [ ] P2-2d CronJob(週1回・版に変化が無ければ取り込まない)と `make import`
 - [ ] P2-3 pokedex-svc(検索・詳細・持ち物/技一覧、日本語名で前方一致)
@@ -134,6 +134,7 @@
 - 計算結果の表示% → 小数第1位。P1-11 で反映
 - 逆算の Recall の新定義(返した SP 範囲が総当たりの正解と完全一致。基準 80%/95% は据え置き)→ 承認(2026-09-21)。P1-12 で反映
 - 見た目違いフォーム → 性能が同じなら1件、性能が違えば別登録。マスタ更新 → CronJob で定期取込(既定は週1回・版に変化が無ければ取り込まない)。技の使用可否 → 既定案で進めて後で裁定(2026-09-21)。P2-1c の調査で12件すべて結論が出て、未確認の技は無かった(ADR-0002 追記 P2-1c)
+- P2-2b の3点 → 効果定義 `data/importer/effects.json` はコミットする / 日本語名は ja(漢字混じり)→ ja-Hrkt の順 / レギュレーションの日本語ラベルはコミットする(2026-09-21 ユーザー回答。ADR-0101)
 - 運用 → レーン制(どちらの AI もどちらのレーンを進めてよい)、main へは PR で統合(2026-09-21。COORDINATION.md)
 - ブラウザでの WASM 実動作 → 仕様ブロッカーではない。P4-5 の確認項目
 
@@ -149,6 +150,8 @@
 
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)
+
+- `scripts/check-publishable.sh --self-test` に既存の失敗が2件ある(A: `a1.txt:1` 未検出、E: `engine/go.mod:1` 未検出)。`make lint` では走らないため作業は止まらない。P2-2b の critic で事実確認済み(2026-09-22)。別タスクで直す
 
 P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更。次の engine タスクに合わせて対応を検討):
 - `engine/golden_test.go`: `speciesCount` の下限アサート追加(現在は 0 だけ検査。少数種で再生成しても通ってしまう)
