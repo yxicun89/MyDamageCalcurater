@@ -1,11 +1,12 @@
 openapi: 3.0.3
 info:
   title: pokecalc balance API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     パーティのタイプバランスを分析する独立サービスの契約。
     TB1 は防御タイプバランス(18 攻撃タイプごとの各メンバーの倍率とチーム集計)を返す。
-    契約の正は docs/adr/0014-balance-tb1-defense-analysis.md。
+    TB2 は攻撃範囲(18 防御タイプごとの各メンバーの最大倍率・有効打とチーム集計)を返す。
+    契約の正は docs/adr/0014-balance-tb1-defense-analysis.md と docs/adr/0016-balance-tb2-offense-coverage.md。
 servers:
   - url: /
 paths:
@@ -85,6 +86,64 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/balance/v1/team-balance/coverage:
+    post:
+      operationId: analyzeTeamCoverage
+      summary: Analyze a party's offensive type coverage
+      description: |
+        Returns, for each member (request order), the attack types of its non-status moves
+        (deduplicated, canonical order) and, for each of the 18 single defense types (canonical order),
+        the best multiplier and whether it is effective (x1 or more) / super effective (x2).
+        The team coverage counts members, not moves. Move type and category are resolved from moveId
+        by the service-local move read model (ADR-0016).
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoverageRequest'
+      responses:
+        '200':
+          description: Offensive type coverage of the party
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoverageResponse'
+        '400':
+          description: Invalid request or missing request context
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: Request body exceeds the 16 KiB limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: |
+            A pokemonId is not registered in the pokemon type read model (unknown_pokemon), or
+            a moveId is not registered in the move read model (unknown_move). pokemonId is resolved first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: The pokemon type read model or the move read model is not configured (master_unavailable)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: An unexpected internal error (internal_error). The message is a fixed string; no internal detail is returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   parameters:
     DeviceId:
@@ -149,6 +208,7 @@ components:
         - invalid_request
         - request_too_large
         - unknown_pokemon
+        - unknown_move
         - master_unavailable
         - internal_error
     AnalyzeResponse:
@@ -278,6 +338,160 @@ components:
           type: integer
           minimum: 0
           maximum: 6
+    CoverageRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - members
+      properties:
+        members:
+          type: array
+          minItems: 1
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/CoverageRequestMember'
+    CoverageRequestMember:
+      type: object
+      additionalProperties: false
+      required:
+        - pokemonId
+        - moveIds
+      properties:
+        pokemonId:
+          type: string
+          maxLength: 8
+          pattern: '^\d{4}-\d{3}$'
+          example: 9001-000
+        moveIds:
+          description: Zero to four moveIds. Duplicates within one member are rejected (400).
+          type: array
+          minItems: 0
+          maxItems: 4
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/MoveId'
+    MoveId:
+      type: string
+      minLength: 1
+      maxLength: 40
+      pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+      example: move-9001
+    CoverageResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - members
+        - teamCoverage
+      properties:
+        members:
+          description: One entry per request member, in request order.
+          type: array
+          minItems: 1
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/MemberCoverage'
+        teamCoverage:
+          description: One entry per single defense type, in canonical type order (normal ... fairy).
+          type: array
+          minItems: 18
+          maxItems: 18
+          items:
+            $ref: '#/components/schemas/TeamCoverageEntry'
+    MemberCoverage:
+      type: object
+      additionalProperties: false
+      required:
+        - pokemonId
+        - moveIds
+        - attackTypes
+        - coverage
+      properties:
+        pokemonId:
+          type: string
+          maxLength: 8
+          pattern: '^\d{4}-\d{3}$'
+          example: 9001-000
+        moveIds:
+          description: The request moveIds, in request order.
+          type: array
+          minItems: 0
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/MoveId'
+        attackTypes:
+          description: Types of the non-status moves, without duplicates, in canonical type order.
+          type: array
+          minItems: 0
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/TypeId'
+        coverage:
+          description: One entry per single defense type, in canonical type order (normal ... fairy).
+          type: array
+          minItems: 18
+          maxItems: 18
+          items:
+            $ref: '#/components/schemas/DefenseCoverageEntry'
+    DefenseCoverageEntry:
+      description: |
+        bestMultiplier is the best multiplier of the member's attack moves against this defense type,
+        or null when the member has no attack move (then effective and superEffective are false).
+        effective = bestMultiplier is x1 or more; superEffective = bestMultiplier is x2.
+      type: object
+      additionalProperties: false
+      required:
+        - defenseType
+        - bestMultiplier
+        - effective
+        - superEffective
+      properties:
+        defenseType:
+          $ref: '#/components/schemas/TypeId'
+        bestMultiplier:
+          $ref: '#/components/schemas/CoverageMultiplier'
+        effective:
+          type: boolean
+        superEffective:
+          type: boolean
+    TeamCoverageEntry:
+      description: |
+        Per defense type team counts. bestMultiplier is the best over all members (null when no member
+        has an attack move). effectiveMembers = members with x1 or more; superEffectiveMembers = members
+        with x2 (subset of effectiveMembers). Members are counted once regardless of how many moves they have.
+      type: object
+      additionalProperties: false
+      required:
+        - defenseType
+        - bestMultiplier
+        - effectiveMembers
+        - superEffectiveMembers
+      properties:
+        defenseType:
+          $ref: '#/components/schemas/TypeId'
+        bestMultiplier:
+          $ref: '#/components/schemas/CoverageMultiplier'
+        effectiveMembers:
+          type: integer
+          minimum: 0
+          maximum: 6
+        superEffectiveMembers:
+          type: integer
+          minimum: 0
+          maximum: 6
+    CoverageMultiplier:
+      description: Exact display form of a single-type offensive multiplier; null when there is no attack move.
+      type: string
+      nullable: true
+      enum:
+        - '0'
+        - '1/2'
+        - '1'
+        - '2'
+      x-enum-varnames:
+        - CoverageZero
+        - CoverageHalf
+        - CoverageNeutral
+        - CoverageDouble
     TypeId:
       type: string
       enum:

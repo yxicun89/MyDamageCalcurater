@@ -296,8 +296,19 @@ Reason: ユーザーが深夜のマージについて「マージしないと作
 Impact: COORDINATION.md「人間への質問」に深夜の PR マージの項を追加。上の「判断が必要なときの質問ルールと深夜の自律作業」エントリは本エントリで置き換える
 (深夜の判断待ちの記録先は plan.md のブロッカー節。既定案で進めた判断は DECISIONS.md に「既定案で進行・ユーザー未確認」と書く)。
 
+## 2026-09-21: TB2(攻撃範囲)の仕様3点(ユーザー回答)
+Decision: 有効打は等倍以上(×1 以上。抜群は別に数える)。防御側は 18 の単タイプ(複合は TB4)。技はメンバーごとに技 ID を最大4つ送り、タイプ・分類は balance の技の read model から引く。
+Reason: TB2 着手時に設計書 §6 で未定義だった点をユーザーに質問し、回答を得た。
+Impact: ADR-0016。新 endpoint `/api/balance/v1/team-balance/coverage`、技の read model(`BALANCE_MOVES_PATH`、架空データの example)。
+
 ## 2026-09-21: ダメージ計算を3レーン(データ / API / Web)に分け、全体で4レーンを並列に進める(ユーザー決定)
 Decision: ダメージ計算レーンを、データ(engine・マスタ・pokedex。`~/MyDamageCalcurater`)、API(calc-svc・gateway・契約テスト。`~/MyDamageCalcurater-api`)、Web(`web/`。`~/MyDamageCalcurater-web`)の3レーンに分ける。タイプバランスと合わせて4レーン。
 `api/openapi.yaml` と生成物を変更できるのは API レーンだけ。他のレーンの範囲は変更せず、DECISIONS.md に提案する。待たずに進めるため、暫定の境界(インターフェース・架空データ・fake)を自分のレーン内に置いてよい。
 Reason: ユーザーが「Max プランなので、機能単位でもっと並列に起動して実装・レビューしたい」と依頼した。M1 の残りのうち Phase 3(API)と Phase 4(Web)は、engine と WASM が完成済みのため Phase 2 を待たずに始められる。5本以上に分けると openapi.yaml 等の共有ファイルの衝突と利用枠の消費が増えるので4本にした。
 Impact: COORDINATION.md(レーン表・依存と共有ファイルの節・起動の目安)と CURRENT_STATE.md(API・Web の欄)を更新。
+
+## 2026-09-21: ルートの .gitignore の `coverage.*` を Go のカバレッジ出力だけに絞る提案(タイプバランスレーンから。既定案)
+Decision(提案): `.gitignore` の `coverage.*` は `coverage.go` / `coverage.ts` などのソースも無視してしまう(TB2 で `services/balance/internal/balance/coverage.go` が黙ってコミットから漏れかけた)。
+既定案: `coverage.*` を `coverage.out` と `coverage.html`(と各ツールの実際の出力名)に置き換える。持ち主はルートの共有ファイルなのでデータレーンが判断する。
+Reason: `git status` に出ないため、テストはローカルで通るのに clone すると壊れる状態になる。Web レーンの `coverage.ts` 等でも起きうる。
+Impact: タイプバランスレーンは回避のため本体を `offense.go` にした(変更不要)。他のレーンは、新しいファイルが `git status` に出ることを確かめてから commit する。

@@ -24,9 +24,9 @@ Next: docs/plan.md の P4-1(docs/design.md のデザイントークンを CSS �
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
-Branch: feat/tb-tb1b-typechart(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
-Status: TB0(Argo CD 実同期のみ人間待ち)・TB1(防御タイプバランス。PR #6)は main に統合済み。TB1b(相性表を typechart.json から読み TemporaryTypeChart を削除。ADR-0015)は critic PASS・PR で統合
-Next: TB2(攻撃範囲。設計書 §6 TB2。技のデータ・入力形式が未定義なので ADR を先に書く)。未対応の軽微: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の schema ファイル
+Branch: 次は main から feat/tb-tb3-ability を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
+Status: TB0(Argo CD 実同期のみ人間待ち)・TB1(防御。ADR-0014)・TB1b(相性表のデータ化。ADR-0015)・TB2(攻撃範囲 /coverage。ADR-0016)は main に統合済み。ポケモンのタイプと技は temporary の read model(架空データの example。実データは BALANCE_POKEMON_TYPES_PATH / BALANCE_MOVES_PATH でマウント。P2-2 のスナップショットができたら差し替え)
+Next: TB3(特性。設計書 §6 TB3: 正規化された効果データで、タイプ由来/特性由来の無効を区別)。特性データの形式・入力(pokemonId から特性を引くのか、request で特性 ID を送るのか)が未定義なので、日中にユーザーへ質問してから ADR を書く。未対応の軽微: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の schema ファイル、CoverageMultiplier の nullable enum に null を明示するか
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

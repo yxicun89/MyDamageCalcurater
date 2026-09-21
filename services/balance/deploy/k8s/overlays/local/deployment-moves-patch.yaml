@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: balance
+spec:
+  template:
+    spec:
+      containers:
+        - name: balance
+          env:
+            - name: BALANCE_MOVES_PATH
+              value: /etc/balance/moves.json
+          volumeMounts:
+            - name: moves
+              mountPath: /etc/balance/moves.json
+              subPath: moves.json
+              readOnly: true
+      volumes:
+        - name: moves
+          configMap:
+            name: balance-moves

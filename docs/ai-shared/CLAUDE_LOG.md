@@ -156,3 +156,13 @@
 
 ### Next
 - TB1b → TB2
+
+## 2026-09-21 タイプバランスレーン(Claude Code): TB1b・TB2
+
+### Done
+- TB1b(PR #7): 相性表を testdata/golden/typechart.json のバイト複製(go:embed)から読み、TemporaryTypeChart を削除。ADR-0015。critic PASS
+- TB2: ユーザー回答3点(有効打=等倍以上、防御側=18 単タイプ、技 ID 最大4つ)で ADR-0016。spec-writer → implementer → critic PASS。/coverage と技の read model(BALANCE_MOVES_PATH)。k3d smoke coverage=200 unknown_move=422
+- .gitignore の coverage.* が coverage.go を無視する問題を発見し、offense.go で回避。DECISIONS.md に提案
+
+### Next
+- TB3(特性)。仕様の質問から

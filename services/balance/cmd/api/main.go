@@ -34,6 +34,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	moves, err := moveProviderFromEnv(os.LookupEnv)
+	if err != nil {
+		slog.Error("balance API failed to load move read model", "path", os.Getenv(movesPathEnv), "error", err)
+		os.Exit(1)
+	}
+
 	typeChart, err := master.EmbeddedTypeChart()
 	if err != nil {
 		slog.Error("balance API failed to load the type chart", "error", err)
@@ -42,7 +48,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           httpapi.New(httpapi.Dependencies{TypeChart: typeChart, PokemonTypes: pokemonTypes}),
+		Handler:           httpapi.New(httpapi.Dependencies{TypeChart: typeChart, PokemonTypes: pokemonTypes, Moves: moves}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,
