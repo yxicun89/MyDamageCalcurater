@@ -14,6 +14,7 @@ var allTypes = []Type{
 // TestAllSpeciesDamageProperties は test-strategy L3 のダメージ性質を、
 // タイプ全組合せ×代表的な種族値グリッドで確認する(外部実装照合は P1-6)。
 func TestAllSpeciesDamageProperties(t *testing.T) {
+	chart := mustTypeChart(t) // 相性はマスタ(fixture)から引く。ADR-0013
 	baseVals := []int{40, 100, 180}
 	newIn := func(atkType, moveType Type, defTypes []Type, atkBase, defBase, atkSP, defSP int) DamageInput {
 		return DamageInput{
@@ -35,11 +36,15 @@ func TestAllSpeciesDamageProperties(t *testing.T) {
 				for _, defBase := range baseVals {
 					defTypes := []Type{dt1}
 					in := newIn(TypeNormal, moveType, defTypes, atkBase, defBase, 0, 0)
-					r, err := CalcDamage(in)
+					r, err := calcDamage(in)
 					if err != nil {
 						t.Fatalf("panic-free expected: %v", err)
 					}
-					_, _, mult := TypeEffectiveness(moveType, defTypes)
+					eff, err := chart.Effectiveness(moveType, defTypes)
+					if err != nil {
+						t.Fatalf("Effectiveness(%s, %v): %v", moveType, defTypes, err)
+					}
+					mult := eff.Multiplier()
 					for i := 0; i < 16; i++ {
 						if r.Rolls[i] < 0 {
 							t.Fatalf("negative damage: %v", r.Rolls)
@@ -59,19 +64,19 @@ func TestAllSpeciesDamageProperties(t *testing.T) {
 					}
 					// 攻撃側 SP 増でダメージ非減少
 					more := newIn(TypeNormal, moveType, defTypes, atkBase, defBase, 32, 0)
-					rMore, _ := CalcDamage(more)
+					rMore, _ := calcDamage(more)
 					if rMore.MaxDamage() < r.MaxDamage() {
 						t.Fatalf("atk SP up decreased damage: %d < %d", rMore.MaxDamage(), r.MaxDamage())
 					}
 					// 防御側 SP 増でダメージ非増加
 					tougher := newIn(TypeNormal, moveType, defTypes, atkBase, defBase, 0, 32)
-					rTough, _ := CalcDamage(tougher)
+					rTough, _ := calcDamage(tougher)
 					if rTough.MaxDamage() > r.MaxDamage() {
 						t.Fatalf("def SP up increased damage: %d > %d", rTough.MaxDamage(), r.MaxDamage())
 					}
 					// タイプ一致を付けると非減少(一致を外すと非増加)
 					stabbed := newIn(moveType, moveType, defTypes, atkBase, defBase, 0, 0)
-					rStab, _ := CalcDamage(stabbed)
+					rStab, _ := calcDamage(stabbed)
 					if rStab.MaxDamage() < r.MaxDamage() {
 						t.Fatalf("STAB decreased damage: %d < %d", rStab.MaxDamage(), r.MaxDamage())
 					}

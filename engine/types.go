@@ -6,6 +6,15 @@ const (
 	DefaultLevel = 50
 	// FixedIV は個体値。全ステータス 31 固定。
 	FixedIV = 31
+	// HPStatOffset は HP 実数値の式 `種族値 + HPStatOffset + SP` の定数項。
+	// Lv50・個体値31 で標準式を展開した値(CLAUDE.md ドメイン規約)。
+	// 標準式 floor((2×種族値+個体値+努力値/4)×Lv/100)+Lv+10 に SP=0(努力値0)を
+	// 入れると 種族値 + 50(Lv) + 10 + 15(=floor(31/2)) = 種族値 + 75。
+	HPStatOffset = 75
+	// OtherStatOffset は HP 以外の実数値の式 `floor((種族値 + OtherStatOffset + SP) × 性格補正)` の定数項。
+	// 標準式 floor(floor((2×種族値+個体値+努力値/4)×Lv/100)+5)×性格補正 に SP=0 を
+	// 入れると 種族値 + 5 + 15(=floor(31/2)) = 種族値 + 20。
+	OtherStatOffset = 20
 	// MaxSPPerStat は 1ステータスあたりの能力ポイント上限。
 	MaxSPPerStat = 32
 	// MaxSPTotal は能力ポイント合計の上限。
@@ -154,5 +163,8 @@ func (s Stats) Sum() int {
 	return s.HP + s.Atk + s.Def + s.SpA + s.SpD + s.Spe
 }
 
-// AllStatKeys は6ステータスのキー一覧(反復用)。
-var AllStatKeys = []StatKey{StatHP, StatAtk, StatDef, StatSpA, StatSpD, StatSpe}
+// AllStatKeys は6ステータスのキー一覧(反復用)を返す。
+// 呼び出しごとに新しいスライスを返すため、呼び出し側が書き換えても他に影響しない。
+func AllStatKeys() []StatKey {
+	return []StatKey{StatHP, StatAtk, StatDef, StatSpA, StatSpD, StatSpe}
+}

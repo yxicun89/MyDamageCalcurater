@@ -9,7 +9,7 @@
 | バックエンド | Go + Echo のマイクロサービス | 好み・学習目的。k8s で動かす |
 | API | REST + OpenAPI 仕様先行 | Go/TS/Swift のコードを1つの仕様から生成 |
 | 計算エンジン | 純粋な Go パッケージ | calc-svc と WASM の両方で同じコードを使う |
-| マスタDB | MySQL + sqlc | 読み中心、業務で慣れている |
+| マスタDB | MySQL + sqlc | 読み中心の用途に向き、運用に慣れている |
 | ユーザーデータDB | TiDB | NewSQL を試す。MySQL 互換で sqlc がそのまま使える |
 | 非同期 | NATS JetStream | 計算と保存の障害を分離 |
 | Web | Vite + React + TS | 静的配信、WASM でオフライン計算 |

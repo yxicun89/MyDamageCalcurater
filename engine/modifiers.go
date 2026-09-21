@@ -9,29 +9,29 @@ package engine
 // 適用位置(ADR-0004):
 //   - 天候のダメージ倍率: base 段階で個別に pokeRound
 //   - 天候の防御実数値補正(すなあらし・ゆき): 持ち物より先に独立して丸める
-//   - 持ち物の実数値補正(こだわり系・とつげきチョッキ等): 実数値段階で chainMods
+//   - 持ち物の実数値補正(攻撃・特攻を上げる持ち物、特防を上げる持ち物等): 実数値段階で chainMods
 //   - フィールド・タイプ強化持ち物: 威力段階
 //   - 壁・最終ダメージ倍率: やけどの後に chainMods で1回
 
 // ItemEffect はダメージに影響する持ち物の補正(4096基準)。
 type ItemEffect struct {
-	StatMods           map[StatKey]int // 実数値倍率。例 こだわりハチマキ{atk:6144}, とつげきチョッキ{spd:6144}, しんかのきせき{def:6144,spd:6144}
-	DamageMod          int             // 最終ダメージ倍率。例 いのちのたま5324。0 は補正なし
-	PowerMod           int             // 威力倍率。例 ちからのハチマキ4505。0 は補正なし
+	StatMods           map[StatKey]int // 実数値倍率。例 攻撃を上げる持ち物{atk:6144}, 特防を上げる持ち物{spd:6144}, 防御・特防を上げる持ち物{def:6144,spd:6144}
+	DamageMod          int             // 最終ダメージ倍率。例 最終ダメージを上げる持ち物5324。0 は補正なし
+	PowerMod           int             // 威力倍率。例 物理技の威力を上げる持ち物4505。0 は補正なし
 	PowerCategory      MoveCategory    // PowerMod の対象分類。空は全分類
-	OnlySuperEffective bool            // たつじんのおび: 抜群時のみ DamageMod を適用
-	BoostType          Type            // タイプ強化(もくたん等)対象タイプ
+	OnlySuperEffective bool            // 抜群時のみ DamageMod を適用(抜群のときだけ効く持ち物用)
+	BoostType          Type            // タイプ強化(タイプ技の威力を上げる持ち物)の対象タイプ
 	BoostTypeMod       int             // 例 4915(=約1.2倍)
 	ResistBerryType    Type            // 半減きのみ: このタイプの抜群技を半減(防御側)
 }
 
 // AbilityEffect はダメージに影響する特性の補正(4096基準)。
 type AbilityEffect struct {
-	StabMod              int          // てきおうりょく: 8192。0 は通常(6144)
+	StabMod              int          // タイプ一致補正を上げる特性: 8192(ModifierAdaptability)。0 は通常(ModifierStab)
 	OffBoostType         Type         // 攻撃実数値強化の対象技タイプ
 	OffBoostTypeMod      int          // 例 6144
-	DefResistType        map[Type]int // 相手の攻撃実数値補正。例 あついしぼう{fire:2048, ice:2048}
-	ReduceSuperEffective int          // ハードロック/フィルター等: 抜群時に軽減(例 3072)
+	DefResistType        map[Type]int // 相手の攻撃実数値補正。例 炎・氷技を半減する特性{fire:2048, ice:2048}
+	ReduceSuperEffective int          // 抜群技を軽減する特性等: 抜群時に軽減(例 3072)
 	IgnoresBurn          bool         // こんじょう等: やけどの攻撃半減を無効化
 }
 
@@ -49,17 +49,17 @@ func weatherDamageMod(w Weather, moveType Type) int {
 	switch w {
 	case WeatherSun:
 		if moveType == TypeFire {
-			return 6144 // ×1.5
+			return modifierWeatherBoost // ×1.5
 		}
 		if moveType == TypeWater {
-			return 2048 // ×0.5
+			return ModifierHalf // ×0.5
 		}
 	case WeatherRain:
 		if moveType == TypeWater {
-			return 6144
+			return modifierWeatherBoost
 		}
 		if moveType == TypeFire {
-			return 2048
+			return ModifierHalf
 		}
 	}
 	return Modifier4096
@@ -82,24 +82,24 @@ func terrainDamageMod(terr Terrain, moveType Type) int {
 		}
 	case TerrainMisty:
 		if moveType == TypeDragon {
-			return 2048 // ×0.5
+			return ModifierHalf // ×0.5
 		}
 	}
 	return Modifier4096
 }
 
 // screenDamageMod は壁による軽減倍率を返す。急所は壁を貫通するため呼び出し側で除外する。
-// シングルは 2048(×0.5)。
+// シングルは ModifierHalf(×0.5)。
 func screenDamageMod(in DamageInput) int {
 	s := in.Field.DefenderScreens
 	switch in.Move.Category {
 	case CategoryPhysical:
 		if s.Reflect || s.AuroraVeil {
-			return 2048
+			return ModifierHalf
 		}
 	case CategorySpecial:
 		if s.LightScreen || s.AuroraVeil {
-			return 2048
+			return ModifierHalf
 		}
 	}
 	return Modifier4096
@@ -137,10 +137,10 @@ func defensiveStatMod(in DamageInput, defKey StatKey) int {
 
 func weatherDefenseMod(in DamageInput, defKey StatKey) int {
 	if in.Field.Weather == WeatherSand && defKey == StatSpD && hasType(in.Defender, TypeRock) {
-		return 6144
+		return modifierWeatherBoost
 	}
 	if in.Field.Weather == WeatherSnow && defKey == StatDef && hasType(in.Defender, TypeIce) {
-		return 6144
+		return modifierWeatherBoost
 	}
 	return Modifier4096
 }
@@ -167,10 +167,10 @@ func itemEffect(i *Item) *ItemEffect {
 
 // otherModifiers はやけどの後に chainMods で1回適用する「その他補正」の一覧を返す。
 // 壁・抜群軽減特性・持ち物ダメージ倍率・半減きのみの順。
-func otherModifiers(in DamageInput) []int {
+// eff は CalcDamage が1回だけ引いた技のタイプ相性(抜群判定に使う)。
+func otherModifiers(in DamageInput, eff Effectiveness) []int {
 	var mods []int
-	_, _, mult := TypeEffectiveness(in.Move.Type, in.Defender.Species.Types)
-	superEffective := mult > 1
+	superEffective := eff.IsSuperEffective()
 
 	if !in.Critical {
 		if sm := screenDamageMod(in); sm != Modifier4096 {
@@ -189,7 +189,7 @@ func otherModifiers(in DamageInput) []int {
 	// 防御側の持ち物(半減きのみ)
 	if e := itemEffect(in.Defender.Item); e != nil {
 		if e.ResistBerryType != TypeNone && e.ResistBerryType == in.Move.Type && (superEffective || in.Move.Type == TypeNormal) {
-			mods = append(mods, 2048)
+			mods = append(mods, ModifierHalf)
 		}
 	}
 	return mods

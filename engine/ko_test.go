@@ -131,7 +131,7 @@ func TestComputeKOCannotKO(t *testing.T) {
 func TestCalcDamagePopulatesKO(t *testing.T) {
 	// 統制ケース(base=90、防御HP=175=100+75)。max90 → ceil(175/90)=2発。
 	in := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeNormal)
-	r, _ := CalcDamage(in)
+	r, _ := calcDamage(in)
 	if r.DefenderHP != 175 {
 		t.Fatalf("defenderHP=%d want 175", r.DefenderHP)
 	}

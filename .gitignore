@@ -7,6 +7,8 @@ coverage.*
 # WASM ビルド成果物(生成物はコミットしない)
 web/public/engine.wasm
 web/public/wasm_exec.js
+# WASM バイナリは場所を問わずコミットしない(make wasm で生成する)
+*.wasm
 
 # Node / Web
 node_modules/
@@ -18,6 +20,10 @@ tools/golden/dist/
 .env
 .env.*
 !.env.example
+# 鍵・証明書の秘密鍵類(誤コミット防止)
+*.pem
+*.key
+*.p12
 
 # エディタ / OS
 .DS_Store
@@ -31,3 +37,9 @@ kubeconfig*.yaml
 # iOS
 ios/build/
 ios/DerivedData/
+
+# 個人用の動作確認手順書(実値入り。コミットしない)
+docs/local/
+
+# 第三者由来の Pokémon マスタデータ・生成済みスナップショット・公式画像(コミットしない。ADR-0002)
+data/generated/

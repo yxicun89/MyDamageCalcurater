@@ -3,5 +3,6 @@
 // (CLAUDE.md 絶対ルール2)。calc-svc とブラウザ用 WASM の両方から利用する。
 package engine
 
-// Version はエンジンのスキーマ/ロジックのバージョン。計算結果の互換性追跡に使う。
-const Version = "0.0.0-dev"
+// EngineVersion は計算エンジンのスキーマ/ロジックの版。計算結果の互換性追跡に使う。
+// ビルド版(services/internal/version.Version、-ldflags で差し込む)とは別物。
+const EngineVersion = "0.0.0-dev"

@@ -6,7 +6,7 @@ func sampleSpecies() Species {
 	return Species{
 		Key:       "0445-000",
 		DexNo:     445,
-		NameJa:    "ガブリアス",
+		NameJa:    "テストポケモン",
 		Types:     []Type{TypeDragon, TypeGround},
 		BaseStats: Stats{HP: 108, Atk: 130, Def: 95, SpA: 80, SpD: 85, Spe: 102},
 	}
