@@ -10,7 +10,7 @@ Next: 同 ADR-0002 の確認事項確定後に P2-2。Codex は damage-calc の�
 Owner: Codex
 Branch: feat/codex-tb0-foundation (worktree: ~/pokecalc-codex-tb0)
 Status: TB0 基盤6e8989eに加え、GitOps・公開準備をd7a8bbfへコミット。localと分離したdigest固定GitOps overlay、安全なplaceholder/credential検査、private repository/registry手順、multi-platform image push補助、直接依存license記録を追加。独立レビューPASS、test/lint/build/Kustomize/Docker build/smoke成功。Argo CD実同期は未実施のためTB0全体は未完了
-Next: ユーザーが作成するprivate repositoryのclone URLを待つ。元repositoryへremoteを追加せず、Claude Code側R-2-9の公開用クリーンコピーとfull検査が完了したコピーだけを接続する。registryへimageをpushしてdigestを反映し、version固定したArgo CD・credentialを準備後、manual sync→Pod更新を検証する。main取り込みはユーザー指示後にClaude Codeが行う
+Next: ユーザーが作成するprivate repositoryのclone URLを待つ。クリーンコピー作成担当はClaude Code/Codexのどちらにも固定せず、依頼された側が実施する。元repositoryへremoteを追加せず、公開前full検査済みのコピーだけを接続する。作成時はこの欄と担当log、clean copy側の共有状態へ相対path・source/clean commit・検査・push状態・新しい開発正本を記録する。registryへimageをpushしてdigestを反映し、version固定したArgo CD・credentialを準備後、manual sync→Pod更新を検証する。main取り込みはユーザー指示後にClaude Codeが行う
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

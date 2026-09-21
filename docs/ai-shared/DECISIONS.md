@@ -99,3 +99,15 @@ balance の契約変更はサービス内 spec → 生成 → テストの順で
 Decision: ADR-0012 と CURRENT_STATE が参照する ADR-0002 は `feat/claude-p1-engine` 上にあり、main へは未統合であることを明記する。
 Reason: main の共有状態を正本にした時点で、ブランチ指定のない ADR-0002 参照が main 上では辿れなかったため。
 Impact: 共通マスタ方式は確定扱いにしない。Claude ブランチが通常手順で main に統合された後は main の ADR-0002 を参照する。
+
+## 2026-09-21: 公開用クリーンコピーの作成担当をClaude Codeへ固定しない
+Decision: 現在のrepositoryとworktreeは変更せず、公開用に調整したクリーンコピーを別directory・別repositoryとして作る。
+作成担当はClaude Code/Codexのどちらかへ固定せず、ユーザーから依頼された側が行う。元repositoryへ公開用remoteを
+追加せず、作者情報・個人accountを含むpath・秘密・第三者データ等の公開前検査が完了したコピーだけをprivate remoteへ
+接続する。credentialやtoken、個人accountを含むremote URLは文書へ記録しない。
+Reason: 公開準備を特定AIのfeature branchだけに置くと、次に作業するAIがクリーンコピーの場所・基点・検証状態を
+把握できず、古いrepositoryで作業を再開したり、未消毒の履歴をpushしたりする危険があるため。
+Impact: クリーンコピーを作成・更新した担当は、自分のfeature branchだけで完了を記録してはならない。元repositoryの
+main正本`docs/ai-shared/CURRENT_STATE.md`の担当欄と自分のlogへ、秘密を含まない相対path、source commit、clean copyの
+branch/commit、sanitization方式、公開前検査結果、remote設定/push状態を記録する。切替時はclean copy側の
+`docs/ai-shared/`も更新し、以後の開発正本を明記する。元repository側は新正本へのpointerとして残し、以後そこで実装しない。

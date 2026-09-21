@@ -25,3 +25,8 @@
 - 独立レビュー中にMake変数のshell injectionとcredential URL検査不足を検出して修正。再レビューPASS(重大・重要0、軽微はguard self-testの将来追加余地のみ)。
 - 検証成功: `sh -n`、GitOps template check、local/GitOps/Argo Kustomize render、placeholderの意図的拒否、unsafe image値の拒否、`balance-test`、`balance-lint`、`balance-build`、Docker build、k3d smoke `health=200 analyze=501`、diff/publishable手動scan。sandbox内smokeはlocalhost制限で失敗したため、同じcommandを許可済みsandbox外で再実行して成功を確認した。
 - 未実施: private repository接続、registry image push、Argo CD導入・実同期。repository URL、registry/digest、credentialが未作成であり、成功扱いにしていない。
+
+## 2026-09-21 (public clean copy handoff rule)
+- ユーザー指示により、公開用クリーンコピー作成をClaude Code固定とする表現を撤回した。Claude Code/Codexのうち依頼された側が実施できる。
+- feature branchだけの記録は禁止し、main正本の`DECISIONS.md`・`CURRENT_STATE.md`担当欄・担当logと、切替時のclean copy側`docs/ai-shared/`へ、相対path、source/clean commit、検査、push状態、新しい開発正本を記録する運用を追加した。
+- 現時点ではclean copyとprivate remoteは未作成・未接続であり、開発正本の切替もまだ行っていない。
