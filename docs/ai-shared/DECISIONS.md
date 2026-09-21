@@ -434,4 +434,4 @@ Impact: `make lint` の所要時間が自己テスト分だけ約6秒増える�
 ## 2026-09-22: 整備レーン MT-1 / MT-2 を PR #24 で main に統合
 Decision: 最新 main の統合検証(MT-1)と check-publishable 自己テストの修正・lint 組み込み(MT-2)を PR #24 で main に統合した。MT-2 の独立レビューは PASS(重大・重要・軽微 0件)。
 Reason: 必須の test・lint・build・公開前検査、および golden・全種族・WASM・balance の非クラスタ検証が成功したため。
-Impact: 整備レーンの次回開始点は MT-3。各機能レーンの再開を確認したため、本 worktree は削除する。
+Impact: 整備レーンの次回開始点は MT-3。データ・API・Web・タイプバランス各レーンの再開を確認したため、本 worktree は削除する。
