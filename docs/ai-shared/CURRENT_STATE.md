@@ -11,7 +11,7 @@ Next: P2-2b(importer の取得・変換と DB への投入)→ P2-2c → P2-2d �
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
 Active: Claude Code
 Branch: feat/api-p3(作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: P3-1(calc-svc。ADR-0018)完了・critic PASS。api/openapi.yaml を更新済み(category・BulkCalcRow.defender・逆算の P1-12 形・ErrorCode)。依存を最新へ(Echo v5・ADR-0019)。main へは PR で統合予定
+Status: P3-1(calc-svc。ADR-0200)完了・critic PASS。api/openapi.yaml を更新済み(category・BulkCalcRow.defender・逆算の P1-12 形・ErrorCode)。依存を最新へ(Echo v5・ADR-0201)。main へは PR で統合予定
 Next: P3-2 gateway(Echo v5)(ルーティング・X-Device-Id/X-Session-Id の UUID 検証・/assets・CORS・upstream_unavailable)→ P3-3 契約テスト(gateway 経由)と k3d のスモーク。マスタは services/calc/internal/master の暫定 Store(P2-2a が main に入ったら差し替え)
 
 ## Web
@@ -32,8 +32,9 @@ Next: docs/plan.md の P6-1 から。Xcode が使えるか(`xcodebuild -version`
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
 Branch: 次は main から feat/tb-tb4-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
-Status: TB0(Argo CD 実同期のみ人間待ち)・TB1(防御。ADR-0014)・TB1b(相性表のデータ化。ADR-0015)・TB2(攻撃範囲。ADR-0016)・TB3(特性。ADR-0017。倍率は既約分数)は main に統合済み。ポケモン・技・特性は temporary の read model(架空データの example。実データは BALANCE_*_PATH でマウント。P2-2 のスナップショットができたら差し替え)
-Next: TB4(仮想敵診断)は設計書 §6 で「詳細は TB1〜TB3 完成後に確定」のため、ADR-0018 の提案(既定案)をユーザーが確認してから実装する(plan.md「ブロッカー(タイプバランスレーン)」)。確認待ちの間は軽微の残り: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の JSON Schema ファイル、CoverageMultiplier の nullable enum に null を明示
+Status: TB0〜TB3 は完了・main に統合済み(TB0 の Argo CD 実同期もローカル k3d で確認。ADR-0018)。balance は Echo v5.3.1(最新の安定版)。ポケモン・技・特性は temporary の read model(架空データの example。実データは BALANCE_*_PATH でマウント。P2-2 のスナップショットができたら差し替え)。k3d には Argo CD v3.5.3・クラスタ内レジストリ(balance-registry)・Application pokecalc-balance(manual sync)がある
+Next: TB4(仮想敵診断。ユーザー回答: 仮想敵を最大 6 体、pokemonId・技 ID 最大 4・特性は任意で入力し、各仮想敵について自分の各メンバーが受ける最大倍率と与えられる最大倍率を表にし、安全に受けられるメンバー数を集計。TB1〜3 を再利用)の ADR-0019 → spec-writer → implementer → critic。その後 TB5(おすすめタイプと該当ポケモン。DECISIONS.md 2026-09-22)。軽微の残り: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の JSON Schema、CoverageMultiplier の nullable enum
+メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

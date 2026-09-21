@@ -1,6 +1,6 @@
 package httpapi
 
-// POST /api/calc/bulk の受け入れテスト(ADR-0018 AC-3、ADR-0009)。
+// POST /api/calc/bulk の受け入れテスト(ADR-0200 AC-3、ADR-0009)。
 // 期待値は同じ入力を engine.CalcBulk に直接渡した結果と照合する。
 
 import (
@@ -218,7 +218,7 @@ func TestCalcBulkErrors(t *testing.T) {
 		wantCode   string
 	}{
 		{"重複した preset", bulkBody(movePhysical, []any{"hp", "none", "hp"}, nil), http.StatusBadRequest, "duplicate_preset"},
-		// presets の未知の値は WASM の presetKeys と同じく engine の sentinel に一本化する(ADR-0018)。
+		// presets の未知の値は WASM の presetKeys と同じく engine の sentinel に一本化する(ADR-0200)。
 		{"未知の preset", bulkBody(movePhysical, []any{"hx"}, nil), http.StatusBadRequest, "unknown_preset"},
 		{"未知の持ち物(itemVariants)", bulkBody(movePhysical, nil, []any{nil, "test-nothing"}), http.StatusBadRequest, "unknown_item"},
 		{"未知の防御側種族", func() map[string]any {

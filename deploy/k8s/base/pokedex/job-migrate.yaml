@@ -1,4 +1,4 @@
-# pokedex の migrate を流す Job(up のみ。ADR-0015 §5)。サービスの起動時には自動 migrate
+# pokedex の migrate を流す Job(up のみ。ADR-0100 §5)。サービスの起動時には自動 migrate
 # しない(複数レプリカの競合を避けるため)。down を流す経路はここに置かない。
 apiVersion: batch/v1
 kind: Job
@@ -25,11 +25,11 @@ spec:
       # Job は MySQL(StatefulSet)と同じ overlay apply で作られるため、Pod が MySQL の
       # 起動前にスケジュールされることがある。mysqladmin ping で接続できるまで待つ。
       # パスワードは Secret から MYSQL_PWD で渡し(mysqladmin/mysql クライアントが自動で読む)、
-      # コマンドラインやログに値を出さない。mysql:8.4 イメージの mysql ユーザー(uid 999)で
+      # コマンドラインやログに値を出さない。mysql:9.7.2 イメージの mysql ユーザー(uid 999)で
       # 実行する(client コマンドのみでよく、root 権限は不要)。
       initContainers:
         - name: wait-for-mysql
-          image: mysql:8.4
+          image: mysql:9.7.2@sha256:29abb0a179982e4a8928138bfc7f918af9eda64e7eeb1b1d084c1720a20159e6
           command:
             - sh
             - -c

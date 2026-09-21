@@ -58,14 +58,12 @@ make -f services/balance/Makefile balance-smoke
 
 Docker/k3d/Argo CD を実行できない場合は、未実施理由と再実行コマンドを記録し、成功扱いにしない。
 
-## TB0 の未完了ブロッカー
+## TB0 の GitOps 検証(ADR-0018)
 
-2026-09-21 時点で、Docker build、k3d への直接 deploy、Pod Ready、smoke、GitOps template検査は確認済み。
-GitOps専用overlay、digest固定、private repository/registryの秘密をGitへ入れない手順も用意した。
-一方、実Git remote、取得可能な配布イメージの置き場所、Argo CD Application CRD が未設定のため、
-`Git変更 → Argo CD manual sync → Pod更新` は未実施であり、TB0 全体は完了扱いにしない。
-実施には利用する Git repository URL、image registry/repository、不変 image tag または digest、
-およびversion固定したArgo CDの導入とprivate repository/registry credentialのクラスタ登録が必要である。
+ローカル k3d に Argo CD v3.5.3 とクラスタ内レジストリを入れ、`Git 変更(gitops overlay の digest)→ PR で main → manual sync → Pod 更新` を確認する。
+合格条件: Argo CD の Application が Synced / Healthy、同期 revision が main の該当 commit、稼働 Pod の image が overlay の digest と一致、health 200。
+gitops overlay には read model のマウントが無いので analyze / coverage は 503 が正しい(smoke の analyze 以降は local overlay で確認する)。
+`check-gitops.sh` は template・ready の両モードで application.yaml の repoURL が placeholder のままであることを必須にし(実 URL を Git に入れない)、ready では `BALANCE_GITOPS_REPO_URL`(適用時の repoURL)を検査する。`make balance-argocd-app`(`scripts/argocd-local-app.sh`)が値を渡して `check-gitops.sh ready` を呼び、置換が1か所で placeholder が残っていないことを確かめてから適用する。
 
 ## TB1b の対象(相性表のデータ化。ADR-0015)
 

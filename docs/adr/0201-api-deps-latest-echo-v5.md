@@ -1,7 +1,7 @@
-# ADR-0019: API レーンの依存を最新の安定版へ(Echo v5・oapi-codegen の echo5-server)
+# ADR-0201: API レーンの依存を最新の安定版へ(Echo v5・oapi-codegen の echo5-server)
 
 - 状態: 採用(2026-09-22)
-- 関連: ADR-0001(技術スタック)、ADR-0018(calc-svc)、DECISIONS.md 2026-09-21「ミドルウェア・ライブラリ・ツールは導入時点の最新の安定版にする」(ユーザー決定)
+- 関連: ADR-0001(技術スタック)、ADR-0200(calc-svc)、DECISIONS.md 2026-09-21「ミドルウェア・ライブラリ・ツールは導入時点の最新の安定版にする」(ユーザー決定)
 
 ## 背景
 

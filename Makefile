@@ -32,7 +32,7 @@ gen-go: ## Go サーバ/型を openapi.yaml から生成
 	@echo "gen-go: services/internal/api/openapi.gen.go を生成"
 
 .PHONY: gen-sql
-gen-sql: ## pokedex の DB 行の型・クエリを sqlc から生成(ADR-0015 §1)
+gen-sql: ## pokedex の DB 行の型・クエリを sqlc から生成(ADR-0100 §1)
 	@cd tools && $(GO) tool sqlc generate -f ../services/pokedex/db/sqlc.yaml
 	@echo "gen-sql: services/pokedex/internal/store を生成"
 
@@ -87,7 +87,7 @@ test-golden: ## engine のゴールデンテスト(@smogon/calc 照合)
 test-all-species: ## 全ポケモン網羅・性質テスト
 	@cd engine && $(GO) test -tags allspecies ./... -run AllSpecies
 
-## --- pokedex DB(migrate。ADR-0015 §5) ---------------------------------
+## --- pokedex DB(migrate。ADR-0100 §5) ---------------------------------
 .PHONY: migrate-up
 migrate-up: ## pokedex の DB を最新版まで migrate する(POKEDEX_DATABASE_DSN が必須)
 	@cd services && $(GO) run ./pokedex/cmd/migrate up
@@ -113,7 +113,7 @@ test-db: ## pokedex の DB を使うテスト(POKEDEX_TEST_DSN が必須。make 
 	@cd services && $(GO) test -tags mysql ./pokedex/db/...
 
 .PHONY: db-local-up
-db-local-up: ## make dev 用に docker で mysql:8.4 を 127.0.0.1:3306 に起動する(パスワードは .env)
+db-local-up: ## make dev 用に docker で mysql:9.7.2 を 127.0.0.1:3306 に起動する(パスワードは .env)
 	@./scripts/db-local-up.sh
 
 ## --- クラスタ / ローカル ---------------------------------------------
@@ -178,5 +178,24 @@ tidy: ## go mod tidy(全モジュール)
 	@cd engine && $(GO) mod tidy
 	@cd services && $(GO) mod tidy
 	@cd tools && $(GO) mod tidy
+
+.PHONY: deps-outdated
+deps-outdated: ## 古くなった依存の一覧を表示する(ネットワーク使用。失敗しても一覧を出す。make test には含めない)
+	# GOWORK=off: go.work があると workspace 全体(全モジュール合算)の一覧になってしまうため、
+	# モジュール単体の一覧にする(services/balance の既存ターゲットと同じ考え方)。
+	@echo "== Go: engine (go list -m -u all) =="
+	@cd engine && GOWORK=off $(GO) list -m -u all 2>&1 || true
+	@echo "== Go: services (go list -m -u all) =="
+	@cd services && GOWORK=off $(GO) list -m -u all 2>&1 || true
+	@echo "== Go: tools (go list -m -u all) =="
+	@cd tools && GOWORK=off $(GO) list -m -u all 2>&1 || true
+	@echo "== Go: services/balance (go list -m -u all) =="
+	@cd services/balance && GOWORK=off $(GO) list -m -u all 2>&1 || true
+	@echo "== Node: tools/golden (npm outdated) =="
+	@if [ -f tools/golden/package.json ]; then cd tools/golden && (npm outdated || true); else echo "(tools/golden/package.json が無い)"; fi
+	@echo "== Node: tools/importer (npm outdated) =="
+	@if [ -f tools/importer/package.json ]; then cd tools/importer && (npm outdated || true); else echo "(tools/importer/package.json が無い。未作成)"; fi
+	@echo "== Node: web (npm outdated) =="
+	@if [ -f web/package.json ]; then cd web && (npm outdated || true); else echo "(web/package.json が無い。未作成)"; fi
 
 include services/balance/Makefile

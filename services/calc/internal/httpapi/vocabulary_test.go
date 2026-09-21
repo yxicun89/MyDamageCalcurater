@@ -1,8 +1,8 @@
 package httpapi
 
 // critic 指摘 R2: engine/wasmapi の Code* 語彙と、engine の sentinel → ErrorCode の写像が
-// wasmapi と同じ文字列であることを固定する(ADR-0018: 「同じ失敗は HTTP と WASM で同じ code」)。
-// httpapi は engine/wasmapi に依存しない構成を保つ(ADR-0018 §3 の補足)ので、定数どうしを
+// wasmapi と同じ文字列であることを固定する(ADR-0200: 「同じ失敗は HTTP と WASM で同じ code」)。
+// httpapi は engine/wasmapi に依存しない構成を保つ(ADR-0200 §3 の補足)ので、定数どうしを
 // 1つずつ突き合わせるだけで、wasmapi パッケージを import すること自体はしない。
 
 import (

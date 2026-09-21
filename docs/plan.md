@@ -72,7 +72,7 @@
 - [ ] P2-3 pokedex-svc(検索・詳細・持ち物/技一覧、日本語名で前方一致)
 
 ### Phase 3 API
-- [x] P3-1 calc-svc(起動時にマスタをメモリへ読み込み)。契約の変更・マスタ境界・受け入れ条件は ADR-0018(critic PASS。マスタは暫定の `Store` と架空データ。共通マスタ P2-2a が main に入ったら差し替え)
+- [x] P3-1 calc-svc(起動時にマスタをメモリへ読み込み)。契約の変更・マスタ境界・受け入れ条件は ADR-0200(critic PASS。マスタは暫定の `Store` と架空データ。共通マスタ P2-2a が main に入ったら差し替え)
   - 一括計算(`/api/calc/bulk`)の対応: API の `presets`(enum 配列)→ engine の `PresetKeys`。`presets: []` と省略はどちらも既定セット
   - `api/openapi.yaml` の description を先に直して `make gen`(絶対ルール1): 「変化技は none/hp の2件のみ返す」「行の順序はプリセット優先(presets × itemVariants)」「`presets: []` は省略と同じ」。`BulkCalcRow.preset` は enum のみ(engine のカスタム `Presets` は API に出さない)
   - 逆算(`/api/calc/reverse`)の対応(ADR-0010 §R8 の持ち越し。engine と WASM 境界は P1-12 で新仕様済み・API 未変更): `api/openapi.yaml` を先に直して `make gen`(絶対ルール1)。`ReverseRequest.attacker` / `defenderSpeciesKey` を `known` / `unknownSpeciesKey` に改名(`side=attacker` のとき既知側=自分=防御側)、`itemCandidates: [ItemId]` を追加。`Observation` は `percent`(整数%)/ `percentTenths` / `damage` のちょうど1つ(整数でなければ 400)。`ReverseCandidate` を P1-12 の形(`natureClass` / `nature`(calc-svc が性格 ID に写像)/ `itemId` / `ranges:[{min,max}]` / `spCount` / `exact` / `mismatch` / `support` / `minPercent` / `maxPercent`)にし、結果に `assumedHpSp` を足す。旧 `archetypeKey` / `presetLabel` / `matchScore` は使わない。`CalcResult.minPercent` の description に残る `ObservedPercent` への言及を直す(ADR-0010 §R8)
@@ -105,18 +105,17 @@
 - [ ] P6-4 Tailscale serve の手順書 → **人間が実機インストール**
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
-- [!] TB0 基盤(型・相性コア・temporary type chart adapter・HTTP 最小疎通・Docker/Kustomize/Argo CD 定義・単体テスト)。Argo CD 実同期以外は完了・main 統合済み。実同期は人間の作業待ち(下のブロッカー)。TB1 はこれを待たずに進める
+- [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)。Argo CD の実同期もローカル k3d で確認済み(ADR-0018: Git 変更 32fbb9e → manual sync → Pod の image digest 一致)
 - [x] TB1 防御タイプバランス(最大6体 × 18タイプの防御倍率、攻撃タイプごとのチーム集計。総合点は作らない。ADR-0014)
 - [x] TB1b 相性表を P1-13 のデータ(`testdata/golden/typechart.json`)から読み、TemporaryTypeChart を削除(ユーザー決定。ADR-0015)
 - [x] TB2 攻撃範囲(ADR-0016)
 - [x] TB3 特性(正規化された効果データ経由。タイプ由来/特性由来の区別。ADR-0017)
 - [ ] TB4 仮想敵診断(詳細は TB1〜TB3 完成後に確定)
+- [ ] TB5 おすすめタイプと該当ポケモン(2026-09-22 ユーザー要望。TB4 の後): チームの穴(TB1 で弱点持ちが多く耐性・無効が少ない攻撃タイプ、TB2 で有効打が無い防御タイプ)をふさげるタイプの候補を出し、
+  そのタイプを持つ**使用可能なポケモン全員**(レギュレーション依存。日本語名付き)を一覧にする。特性で穴をふさげるポケモンは別枠。他のサイトを見に行かずに候補が分かることが目的。詳細は着手時に ADR
 
 ### ブロッカー(タイプバランスレーン)
-- **【人間の確認待ち】Argo CD の実同期(TB0 の最後の1項目)**: `Git 変更 → Argo CD manual sync → Pod 更新` の確認には、
-  Argo CD の導入、private repository の credential のクラスタ登録、image registry と digest 固定の配布イメージが要る
-  (外部サービスのログイン・認証情報の登録は人間の作業。手順は services/balance/deploy/argocd/README.md)。
-  それ以外の TB0 の項目(k3d への直接デプロイ・smoke `health=200 analyze=501`)は確認済み。
+(なし。Argo CD の実同期は 2026-09-22 に解消)
 
 ## M4: 運用
 - [ ] P7-1 kube-prometheus-stack / Loki、各サービスのメトリクス

@@ -1,4 +1,4 @@
-# sqlc 設定(ADR-0015 §1)。バージョン固定は tools/go.mod の tool ディレクティブで行う。
+# sqlc 設定(ADR-0100 §1)。バージョン固定は tools/go.mod の tool ディレクティブで行う。
 # 生成は `make gen-sql`。生成物(../internal/store)はコミットし、make gen の差分検査の対象にする。
 version: "2"
 sql:

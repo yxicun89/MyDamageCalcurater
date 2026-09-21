@@ -1,6 +1,6 @@
 module example.com/pokecalc/services
 
-go 1.27
+go 1.27.1
 
 require (
 	example.com/pokecalc/engine v0.0.0
