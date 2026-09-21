@@ -116,3 +116,12 @@
 ### Next
 - Phase R
 
+## 2026-09-21 (Claude Code: Phase R の是正とユーザー回答の反映)
+### Done
+- R-2-1(シェル)・R-2-2(fixture の公式名を架空名に)・R-2-3(oracle の完全固定・.gitignore)・R-2-4(ドメイン定数の命名)を、挙動不変(golden の sha256・件数不変)で実施しコミット
+- 監査へのユーザー回答を反映: ADR-0012(タイプ相性表をデータ化)、ADR-0009 §1-a(Label)、ADR-0002 の第三者データ抜粋を削除、規約の module path・LICENSE・データ化の線引き、plan.md に P1-13 / R-2-8 / R-2-9
+### Open issues
+- R-2-9(履歴の書き換え)は Codex の worktree と main worktree への影響があるため、実行前にユーザーと調整。Codex の docs/type-balance-design.md にレートリミット等の記述が残る(Codex 担当のため未編集)
+### Next
+- R-2-5(実装中)→ R-2-8 → R-2-9 → R-3 → P1-13
+

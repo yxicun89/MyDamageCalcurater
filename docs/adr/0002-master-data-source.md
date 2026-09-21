@@ -49,7 +49,7 @@
 | 1 | 使用可能集合の正の決め方 | 回答済み(上記の責務分離) |
 | 2 | 規約・適法性・スナップショットのコミット | 回答済み(コミットしない。商用時の IP は別問題として残す) |
 | 3 | 対象レギュレーション | 回答済み(M-C のみ。差し替え可能な構造) |
-| 4 | 食い違う技の裁定(Anchor Shot 等 11 技、Pound、Snap Trap、Growth) | 方針回答済み: GameWith(ポケモンチャンピオンズ)・ポケモン徹底攻略などの**公式以外の攻略サイトも Web から調べてよい**。P2-1c で調査し、裁定を本 ADR に追記(規約・アクセス頻度に配慮) |
+| 4 | 食い違う技の裁定(calc のみの 11 技、Showdown のみの 1 技、タイプの食い違い 2 件) | 方針回答済み: GameWith(ポケモンチャンピオンズ)・ポケモン徹底攻略などの**公式以外の攻略サイトも Web から調べてよい**。P2-1c で調査し、裁定を本 ADR に追記(規約・アクセス頻度に配慮) |
 | 5 | 持ち物の例の見直し | 回答済み(除外。requirements.md を修正済み) |
 | 6 | ヌケニン | 回答済み(v1 では考慮不要) |
 | 7 | ゴールデンの oracle | 回答済み(0.12.0 Champions へ。先に diff を確認) |
@@ -70,7 +70,7 @@ P2-2 で、ポケモン・技・持ち物・特性・性格・タイプ相性を
 - **[ローカル検証]**: npm パッケージと Git リポジトリを作業用の一時領域に取得し、コードを実行して確認した。
   リポジトリ(pokecalc)にはデータを取り込んでいない。信頼度が最も高い。
 - **[取得]**: WebFetch で URL を取得し、内容を要約させたもの。要約モデルを経由するため、数値・向きの取り違えがありうる
-  (実際に §調査結果の Snap Trap で他ソースと食い違う要約が出ている)。
+  (実際に、ある技のタイプで他ソースと食い違う要約が出ている(§3))。
 - **[検索]**: 検索結果のスニペットのみ。ページ本体は取得していない。根拠としては弱いので採用判断に使わない。
 
 ## 調査結果
@@ -104,11 +104,12 @@ P2-2 で、ポケモン・技・持ち物・特性・性格・タイプ相性を
 ### 3. 候補 A・B・C の突き合わせ結果([ローカル検証])
 
 作業用の一時領域で、`@smogon/calc@0.12.0` と `smogon/pokemon-showdown`(commit f10d679、2026-09-20)を取得して集計した。
+**この調査記録は、出典・方法・件数・結論を残すためのもので、第三者データの配布物ではない**。個別のデータの一覧は載せない(2026-09-21 のユーザー基準。法的に面倒なデータは公開しない。個人で使うのは問題ない)。
 
 | 項目 | @smogon/calc 0.12.0(Champions) | Showdown `champions`(Reg M-C) | 備考 |
 |---|---|---|---|
 | 種族(フォーム込み) | 359(通常 277 + メガ 82、基底種 231) | 392(通常 310 + メガ 82、基底種 237) | 差は calc 側のみ 2(Aegislash-Both / Aegislash-Shield)、Showdown 側のみ 35(Vivillon の模様違い、Meloetta-Pirouette など。見た目違いが中心だが、全件の内訳は未確認) |
-| 技 | 526(番兵 `(No Move)` を含む) | 515 | calc のみ 11(Anchor Shot、Blood Moon 等。下記)、Showdown のみ 1(Pound) |
+| 技 | 526(番兵 `(No Move)` を含む) | 515 | calc のみ 11、Showdown のみ 1(下記。個別名は載せない) |
 | 持ち物 | 166 | 166 | **集合が完全一致** |
 | 特性(リスト) | 215 | 316(可否フラグは少数のみ) | 特性は種族の特性スロットから引くのが確実 |
 | Reg M-B(`championsregmb`) | ― | 種族 357、持ち物 148、技 515 | M-C は M-B より種族 35・持ち物 18 多い。M-B の種族は M-C の部分集合 |
@@ -118,26 +119,19 @@ P2-2 で、ポケモン・技・持ち物・特性・性格・タイプ相性を
   数え方(フォームの扱い)がソースごとに違うため、**件数の一致は判断材料にならない**。集合そのもの(ID 単位)で照合する必要がある。
 - **種族値・タイプ・特性は gen9(SV)から変わっていない**(Showdown の champions mod は `pokedex.ts` を持たず、gen9 との差分は 0 件。calc の Champions 種族も SV データの部分集合)。
   コミュニティのデータセットは「種族値・特性が変わっているかもしれない」と書くが、**変更の実例は見つけられなかった**(未確認)。
-- 技の Champions 固有変更(威力・タイプ)は、A と B で次が一致した(gen9 → Champions。英語名で記す。日本語名は importer が PokeAPI から引く):
-  Snap Trap のタイプ Grass → Steel、威力 = Apple Acid 80→90、Beak Blast 100→120、Bone Rush 25→30、Fire Lash 80→90、First Impression 90→100、
-  Grav Apple 80→90、Infernal Parade 60→65、Meteor Assault 150→170、Mountain Gale 100→120、Night Daze 85→90、Psyshield Bash 70→90、
-  Slash 70→80、Snipe Shot 80→85、Spirit Shackle 80→90、Trop Kick 70→85。
-  A と B で**一致しない**もの: Growth のタイプ(Showdown は Normal → Grass、calc は Normal のまま。変化技なのでダメージには影響しない)、
-  命中の変更(Crabhammer、Make It Rain、Syrup Bomb 等)は Showdown にあり calc には無い(ダメージ量には影響しない)。
-  Serebii の「Updated Attacks」ページ [取得] は、上の威力の変更(Slash 70→80 等)を含み、Growth も Grass へ変更としている。
-  **食い違い**: 同ページの要約は Snap Trap を「Steel→Grass」と書き、A/B(gen9 の Grass → Steel)と向きが逆に読める。
-  要約の誤りの可能性が高いが、原文は未確認。ダメージに効くため、ゲーム内で確認する(人間の確認事項)。
-  PokeAPI の技データ(例: きりさく)は 70 のままで、Champions の変更を反映していないことを確認した(**Champions の技数値の正には使えない**)。
-- 使用可否について A と B が食い違う技: calc のみが Champions の技として持つ 11 技(Anchor Shot、Astral Barrage、Blood Moon、Bolt Beak、Dragon Hammer、
-  Fishious Rend、Gear Grind、Hyper Drill、Metal Claw、Revelation Dance、Triple Dive)は、Showdown では gen9 由来の「過去作限定」扱いのまま(Pound は逆に Showdown のみ)。
-  Showdown 側にも一部に Champions 用の威力の上書き(Anchor Shot 90 等)があるため、どちらかが取りこぼしている可能性がある。**未確定**。
+- 技の Champions 固有変更(威力・タイプ)は、A と B で 16 件が一致した(gen9 → Champions)。**個別の一覧は本 ADR に載せない**(第三者由来のデータ。2026-09-21 のユーザー基準:
+  法的に面倒なデータは公開しない)。一覧は、A と B を突き合わせる差分スクリプトで手元に生成し、`data/generated/`(Git 管理外)で確認する。
+  A と B が**一致しない**ものが 2 種類ある: (a) 変化技 1 件のタイプ(ダメージには影響しない)、(b) 命中の変更(ダメージ量には影響しない)。
+  ある攻略サイトの要約は、威力が変わる技 1 件のタイプを A/B と逆向きに読める書き方をしていた。要約の誤りの可能性が高いが原文は未確認で、ダメージに効くため確認が要る(P2-1c)。
+  PokeAPI の技データは Champions の変更を反映していない(**Champions の技数値の正には使えない**)ことを確認した。
+- 使用可否について A と B が食い違う技: calc のみが Champions の技として持つもの 11 件、Showdown のみのもの 1 件(いずれも一覧は載せない。差分スクリプトで生成する)。
+  calc の 11 件は、Showdown では gen9 由来の「過去作限定」扱いのまま。Showdown 側にも一部に Champions 用の威力の上書きがあるため、どちらかが取りこぼしている可能性がある。**未確定**(P2-1c で調べる)。
 
 ### 4. 持ち物(CLAUDE.md / requirements の例と食い違う可能性)
 
 A・B の持ち物集合(166 件、完全一致)には、**こだわりハチマキ、こだわりメガネ、とつげきチョッキ、しんかのきせき(Eviolite)が含まれない**。
 Serebii の持ち物一覧ページ [取得] の要約も、この 4 件を「見つからない」としており、3 ソースが一致した。
-一方、Choice Scarf、Life Orb、Expert Belt、Muscle Band、Wise Glasses、タイプ強化系(Charcoal、Mystic Water 等)、半減きのみ(Occa、Passho、Yache 等)、
-Rocky Helmet、Leftovers、Focus Sash、Sitrus Berry、Lum Berry、メガストーンは含まれる(calc の一覧で確認)。
+一方、タイプ強化系・半減きのみ系・こだわりスカーフやいのちのたまなどの主要な補正系の持ち物は含まれる(calc の一覧で確認。個別の一覧は載せない)。
 
 - docs/requirements.md の逆算の持ち物候補(「攻撃側: こだわり系」「防御側: 特防・防御を上げる持ち物」)と ADR-0005 の例(こだわり系・とつげきチョッキ)は、
   **現行のレギュレーション(M-C 相当)では使用不可の持ち物を例に挙げている**。
@@ -147,10 +141,9 @@ Rocky Helmet、Leftovers、Focus Sash、Sitrus Berry、Lum Berry、メガスト�
 
 ### 5. 特性
 
-Champions 専用の特性が calc に 7 件ある(Aura Guard、Dragonize、Eelevate、Fire Mane、Mega Sol、Piercing Drill、Spicy Spray)。
-PokeAPI は Dragonize(ドラゴンスキン)、Mega Sol(メガソーラー)、Piercing Drill(かんつうドリル)の日本語名を持つが、Fire Mane と Eelevate は日本語名が空だった。
-つまり **PokeAPI の日本語名は新規の特性・メガ石・メガフォームで欠落がある**。Clefablite・Chesnaughtite のメガ石も日本語名が空、
-`clefable-mega` / `floette-mega` は `pokemon` エンドポイントに存在する。フォームの日本語名は `pokemon-form` 側にあるはずだが**未確認**([ローカル検証])。
+Champions 専用の特性が calc に 7 件ある(個別の名前は載せない)。PokeAPI はそのうち 5 件の日本語名を持つが、2 件は日本語名が空だった。
+つまり **PokeAPI の日本語名は新規の特性・メガ石・メガフォームで欠落がある**(メガ石にも空のものがある)。メガフォームは `pokemon` エンドポイントに存在する。
+フォームの日本語名は `pokemon-form` 側にあるはずだが**未確認**([ローカル検証])。欠落分はローカル override で補う(確定した方針)。
 
 ### 6. ヌケニン(Shedinja)
 
@@ -295,7 +288,7 @@ ADR-0005 の「補正定義はマスタから解決する」を満たすには�
    スナップショットをコミットすることの可否、将来リポジトリを公開する場合の扱い。PokeAPI のデータは利用条件が README に明記されていない(コードは BSD-3-Clause)。
    Bulbapedia は CC BY-NC-SA 2.5。Serebii の利用規約は未確認。**適法性は断定していない**。
 3. **対象レギュレーション**: 現行(M-C 相当)のみ持つ案でよいか。過去の集合が要るか。calc の Champions 世代と Showdown の `champions`(M-C)が同じ集合を指すことの確認。
-4. **食い違う技の裁定**(§3): Anchor Shot 等 11 技(A のみ)、Pound(B のみ)、Snap Trap のタイプ(A/B は Steel、Serebii の要約は逆向きに読める)、Growth のタイプ(B と Serebii は Grass、A は Normal のまま)。ゲーム内で確認して補完ファイルに書く必要がある。
+4. **食い違う技の裁定**(§3): calc のみの 11 技、Showdown のみの 1 技、タイプの食い違い 2 件。ゲーム内または信頼できる出典で確認して補完ファイルに書く必要がある(個別名は差分スクリプトで生成)。
 5. **持ち物の例の見直し**(§4): こだわりハチマキ・こだわりメガネ・とつげきチョッキ・しんかのきせきが現行で使用不可の可能性が高い。requirements の逆算の持ち物候補と ADR-0005 の例を直すか。
    直す場合、「攻撃側: こだわり系」の分類の扱い(空でよいか)も決める。
 6. **ヌケニン**: 現行の集合に無い前提でよいか。追加されたときに HP=1 特例を残すか(calc は残す)。

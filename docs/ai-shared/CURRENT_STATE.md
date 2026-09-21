@@ -3,8 +3,8 @@
 ## Damage Calculator
 Owner: Claude Code
 Branch: feat/claude-p1-engine
-Status: Phase 1 と P2-1 は完了。ユーザー決定を docs に反映済み。コーディング規約 v2(docs/coding-rules.md)は Codex が条件付き承認(条件反映済み)。R-1 監査は完了(docs/audit-r1.md)、R-2(是正)に着手する。Phase 1b の P1-10(防御プリセット再定義)は完了(critic のドキュメント指摘を修正済み。2回目の critic は実行していない)。任意の外部 Codex レビュー(scripts/codex-review.sh)は未実施(規約 v2 のレビューだけ codex exec で依頼した)。Codex の担当はタイプバランスチェッカー実装で、ダメージ計算のレビュー担当ではない
-Next: Phase R(R-2 是正 → R-3 check-publishable)→ P1-11 → P1-12 → P2-1b(golden の oracle 切替。先に diff)→ P2-1c(技の使用可否の調査)→ P2-2。人間の確認待ち(plan.md ブロッカー): 観測ダメージの入力と丸めの解釈、公開に向けた判断(LICENSE・module path・Git 作者情報など)
+Status: Phase 1・P2-1・P1-10 は完了。コーディング規約 v2(docs/coding-rules.md、Codex が条件付き承認)に沿って Phase R(R-2 是正)を進行中(R-2-1〜4 と R-2-7 は完了、R-2-5 は実装中)。監査へのユーザー回答を反映済み(module path はプレースホルダ、履歴の書き換えは実行前に調整、タイプ相性表はデータ化=ADR-0012、ADR-0002 の第三者データ抜粋は削除)。任意の外部 Codex レビュー(scripts/codex-review.sh)は規約のレビューにだけ使用。Codex の担当はタイプバランスチェッカー実装で、ダメージ計算のレビュー担当ではない
+Next: R-2-5 → R-2-8(module path)→ R-2-9(履歴の書き換え。実行前にユーザーと調整)→ R-3(check-publishable)→ P1-13(タイプ相性表のデータ化)→ P1-11 → P1-12 → P2-1b → P2-1c → P2-2。人間の確認待ち(plan.md ブロッカー): 観測ダメージの入力と丸めの解釈、履歴書き換えの実行タイミング
 
 ## Type Balance Checker
 Owner: Codex
