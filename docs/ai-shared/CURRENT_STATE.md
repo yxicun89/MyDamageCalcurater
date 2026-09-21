@@ -3,8 +3,8 @@
 ## Damage Calculator
 Owner: Claude Code
 Branch: feat/claude-p1-engine
-Status: Phase 1 と P2-1 は完了。ユーザー決定を docs に反映済み。コーディング規約 v2(docs/coding-rules.md)を起草し、Codex の再確認待ち。Phase 1b の P1-10(防御プリセット再定義)は完了(critic のドキュメント指摘を修正済み。2回目の critic は実行していない)。任意の外部 Codex レビュー(scripts/codex-review.sh)は未実施(規約 v2 のレビューだけ codex exec で依頼した)。Codex の担当はタイプバランスチェッカー実装で、ダメージ計算のレビュー担当ではない
-Next: Phase R(R-1 監査 → R-2 是正 → R-3 check-publishable)→ P1-11 → P1-12 → P2-1b(golden の oracle 切替。先に diff)→ P2-1c(技の使用可否の調査)→ P2-2。人間の確認待ち(plan.md ブロッカー): 観測ダメージの入力と丸めの解釈、LICENSE の方針
+Status: Phase 1 と P2-1 は完了。ユーザー決定を docs に反映済み。コーディング規約 v2(docs/coding-rules.md)は Codex が条件付き承認(条件反映済み)。R-1 監査は完了(docs/audit-r1.md)、R-2(是正)に着手する。Phase 1b の P1-10(防御プリセット再定義)は完了(critic のドキュメント指摘を修正済み。2回目の critic は実行していない)。任意の外部 Codex レビュー(scripts/codex-review.sh)は未実施(規約 v2 のレビューだけ codex exec で依頼した)。Codex の担当はタイプバランスチェッカー実装で、ダメージ計算のレビュー担当ではない
+Next: Phase R(R-2 是正 → R-3 check-publishable)→ P1-11 → P1-12 → P2-1b(golden の oracle 切替。先に diff)→ P2-1c(技の使用可否の調査)→ P2-2。人間の確認待ち(plan.md ブロッカー): 観測ダメージの入力と丸めの解釈、公開に向けた判断(LICENSE・module path・Git 作者情報など)
 
 ## Type Balance Checker
 Owner: Codex
