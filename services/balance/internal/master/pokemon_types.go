@@ -114,3 +114,14 @@ func (m *PokemonTypeReadModel) PokemonTypes(pokemonID string) ([]balance.TypeID,
 	copy(result, types)
 	return result, nil
 }
+
+var _ balance.PokemonCatalog = (*PokemonTypeReadModel)(nil)
+
+// AllPokemon implements balance.PokemonCatalog (ADR-0401 §5): every entry with its optional
+// nameJa and abilityIds, pokemonId ascending. The returned slices are copies.
+//
+// spec-writer が置いたコンパイル用のスタブ。implementer が pokemon_types_test.go に従って実装する。
+func (m *PokemonTypeReadModel) AllPokemon() ([]balance.CatalogPokemon, error) {
+	// TODO(implementer): ADR-0401 §5 の実装。
+	return nil, nil
+}

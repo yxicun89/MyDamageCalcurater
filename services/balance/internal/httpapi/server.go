@@ -44,11 +44,14 @@ var errRequestTooLarge = errors.New("request body exceeds 16 KiB")
 // analyze does not use it.
 // Abilities may be nil: analyze answers 503 master_unavailable only when a member
 // names an abilityId (ADR-0017 §4); coverage does not use it.
+// PokemonCatalog is the list view of the same pokemon read model (ADR-0401 §5); only
+// recommendations uses it, and answers 503 master_unavailable when it is nil.
 type Dependencies struct {
-	TypeChart    balance.TypeChartProvider
-	PokemonTypes balance.PokemonTypeProvider
-	Moves        balance.MoveProvider
-	Abilities    balance.AbilityProvider
+	TypeChart      balance.TypeChartProvider
+	PokemonTypes   balance.PokemonTypeProvider
+	Moves          balance.MoveProvider
+	Abilities      balance.AbilityProvider
+	PokemonCatalog balance.PokemonCatalog
 }
 
 // New returns the HTTP handler.

@@ -49,6 +49,16 @@
 - 判定順とエラーは TB4 と同じ流儀(400 → 413 → 503 → unknown_pokemon → unknown_move → unknown_ability → 200、それ以外は 500)。
   特性の別枠は、特性の read model があるときだけ出す(無ければ空配列。503 にしない)。
 
+### 7. 細部(spec-writer が挙げた未決の確定。既定案)
+1. 技はあるが変化技だけのチームも、攻撃技が無いので攻撃範囲の穴を出さない(§2 の「判断材料が無い」と同じ)。
+2. カタログのポケモンの `abilityIds` に特性の read model に無い ID があれば、その特性だけ飛ばす(export の不整合で TB5 全体を 500 にしない)。
+   read model の想定外の失敗(未登録以外)は 500。
+3. `abilityOptions` の中の並びは `pokemonId` の昇順 → `abilityId` の昇順。
+4. `abilityOptions` は防御の穴ごとに必ず1件(ふさげるポケモンがいなければ `pokemon: []`)。
+5. read model の `nameJa: null` / `abilityIds: null`、request の `limit: null` は省略と同じ。
+6. spec-writer の選択を採用: `defenseCovered` / `offenseCovered` は一覧(件数はその長さ)、該当ポケモンがいない候補も返す、
+   候補のポケモンの `types` は read model の順、カタログが無ければ 503、技・特性の read model は ID を指定したときだけ必須(TB4 と同じ)。
+
 ## 却下した案
 - 候補ごとにチーム全体の再計算で最適化する(例: 候補を入れたときの穴の総数の最小化): 1体入れ替えの前提が要り、仕様が膨らむ。まず §3 の単純な数え上げにする。
 - balance がレギュレーションを判定する: レギュレーションはマスタのデータで、balance に持たせると正本が分かれる(ADR-0012)。

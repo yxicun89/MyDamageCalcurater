@@ -169,4 +169,27 @@ if [ "$unknown_threat_move_status" != "422" ] || ! grep -qF '"code":"unknown_mov
   exit 1
 fi
 
-echo "balance smoke: health=200 analyze=200 unknown=422 coverage=200 unknown_move=422 ability=200 unknown_ability=422 threats=200 threats_unknown_move=422"
+# TB5 (ADR-0401): recommendations reuses the three example read models (the pokemon read model also carries
+# nameJa and abilityIds). 9005-000 (ice) alone resists only ice, so 17 attack types are defense holes; steel/fairy
+# (9006-000 カソウメタル) is among the first 10 candidates, and ability-9002 (absorb water, 9001-000) and
+# ability-9001 (immune to ground, 9006-000) fill holes as ability options. No move: offenseHoles is [].
+recommendations_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  -X POST "$base_url/api/balance/v1/team-balance/recommendations" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  --data '{"members":[{"pokemonId":"9005-000","moveIds":[]}]}' || printf '000')
+if [ "$recommendations_status" != "200" ]; then
+  echo "balance recommendations failed: HTTP $recommendations_status (is the example pokemon read model mounted?)" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+for key in '"defenseHoles"' '"offenseHoles":[]' '"candidates"' '"abilityOptions"' '"types":["steel","fairy"]' '"nameJa":"カソウメタル"' '"abilityId":"ability-9002"' '"abilityId":"ability-9001"' '"multiplier":"0"'; do
+  if ! grep -qF "$key" "$body_file"; then
+    echo "balance recommendations body is missing $key" >&2
+    cat "$body_file" >&2
+    exit 1
+  fi
+done
+
+echo "balance smoke: health=200 analyze=200 unknown=422 coverage=200 unknown_move=422 ability=200 unknown_ability=422 threats=200 threats_unknown_move=422 recommendations=200"

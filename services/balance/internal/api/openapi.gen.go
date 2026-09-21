@@ -229,6 +229,36 @@ func (e TypeId) Valid() bool {
 // Example: ability-9001
 type AbilityId = string
 
+// AbilityOption defines model for AbilityOption.
+type AbilityOption struct {
+	AttackType TypeId `json:"attackType"`
+
+	// Pokemon Pairs of a pokemon and one of its abilities (read model abilityIds) that take attackType below x1,
+	// while the pokemon's types alone do not. pokemonId ascending.
+	Pokemon []AbilityOptionPokemon `json:"pokemon"`
+}
+
+// AbilityOptionPokemon defines model for AbilityOptionPokemon.
+type AbilityOptionPokemon struct {
+	// AbilityId The ability that takes attackType below x1.
+	AbilityId AbilityId `json:"abilityId"`
+
+	// Multiplier Exact defensive multiplier as an irreducible fraction "numerator/denominator" (ADR-0017 §3).
+	// A denominator of 1 is written as the integer only ("0", "1", "2", "3", "4"); otherwise the
+	// fraction is in lowest terms ("1/4", "1/2", "3/4", "5/4", "3/2", "5/2"). Never a float.
+	// The TB1 values "0", "1/4", "1/2", "1", "2", "4" are a subset.
+	//
+	//
+	// Example: 3/4
+	Multiplier DefenseMultiplier `json:"multiplier"`
+
+	// NameJa Japanese name from the read model, present only when the read model has one.
+	NameJa *PokemonNameJa `json:"nameJa,omitempty"`
+
+	// PokemonId Example: 9001-000
+	PokemonId string `json:"pokemonId"`
+}
+
 // AnalyzeRequest defines model for AnalyzeRequest.
 type AnalyzeRequest struct {
 	Members []AnalyzeRequestMember `json:"members"`
@@ -252,6 +282,18 @@ type AnalyzeResponse struct {
 
 	// TeamSummary One entry per attack type, in canonical type order (normal ... fairy).
 	TeamSummary []TeamSummaryEntry `json:"teamSummary"`
+}
+
+// CandidatePokemon defines model for CandidatePokemon.
+type CandidatePokemon struct {
+	// NameJa Japanese name from the read model, present only when the read model has one.
+	NameJa *PokemonNameJa `json:"nameJa,omitempty"`
+
+	// PokemonId Example: 9001-000
+	PokemonId string `json:"pokemonId"`
+
+	// Types The pokemon's types in the read model order.
+	Types []TypeId `json:"types"`
 }
 
 // CoverageMultiplier Exact display form of a single-type offensive multiplier; null when there is no attack move.
@@ -395,6 +437,47 @@ type MemberDefense struct {
 // MoveId Example: move-9001
 type MoveId = string
 
+// PokemonNameJa Japanese name from the read model, present only when the read model has one.
+type PokemonNameJa = string
+
+// RecommendationsRequest defines model for RecommendationsRequest.
+type RecommendationsRequest struct {
+	// Limit The largest number of candidates to return. Defaults to 10 when omitted.
+	Limit *int `json:"limit,omitempty"`
+
+	// Members The own party, one to six entries.
+	Members []RecommendationsRequestMember `json:"members"`
+}
+
+// RecommendationsRequestMember One party member (the same shape as a threats entry, ADR-0401 §6).
+type RecommendationsRequestMember struct {
+	// AbilityId Optional ability of the member (ADR-0017). Omit it for a member without an ability.
+	//
+	// Example: ability-9001
+	AbilityId *AbilityId `json:"abilityId,omitempty"`
+
+	// MoveIds Zero to four moveIds. Duplicates within one member are rejected (400).
+	MoveIds []MoveId `json:"moveIds"`
+
+	// PokemonId Example: 9001-000
+	PokemonId string `json:"pokemonId"`
+}
+
+// RecommendationsResponse defines model for RecommendationsResponse.
+type RecommendationsResponse struct {
+	// AbilityOptions One entry per defense hole (canonical order) when the ability read model is configured; empty otherwise.
+	AbilityOptions []AbilityOption `json:"abilityOptions"`
+
+	// Candidates Recommended type sets in the ADR-0401 §3 order, at most `limit` entries.
+	Candidates []TypeCandidate `json:"candidates"`
+
+	// DefenseHoles Attack types that no member resists or is immune to, in canonical type order.
+	DefenseHoles []TypeId `json:"defenseHoles"`
+
+	// OffenseHoles Single defense types the party cannot hit at x1 or more, in canonical type order. Empty when no member has a move.
+	OffenseHoles []TypeId `json:"offenseHoles"`
+}
+
 // TeamCoverageEntry Per defense type team counts. bestMultiplier is the best over all members (null when no member
 // has an attack move). effectiveMembers = members with x1 or more; superEffectiveMembers = members
 // with x2 (subset of effectiveMembers). Members are counted once regardless of how many moves they have.
@@ -494,6 +577,24 @@ type ThreatsResponse struct {
 	Threats []ThreatResult `json:"threats"`
 }
 
+// TypeCandidate defines model for TypeCandidate.
+type TypeCandidate struct {
+	// DefenseCovered The defense holes this type set takes below x1 (types only), in canonical type order.
+	DefenseCovered []TypeId `json:"defenseCovered"`
+
+	// OffenseCovered The offense holes this type set's own types hit at x1 or more, in canonical type order.
+	OffenseCovered []TypeId `json:"offenseCovered"`
+
+	// Pokemon Every pokemon of the read model whose type set equals `types` (in any order), pokemonId ascending.
+	Pokemon []CandidatePokemon `json:"pokemon"`
+
+	// Types One or two types in canonical type order.
+	Types []TypeId `json:"types"`
+
+	// Weaknesses Number of attack types that hit this type set at x2 or more (used only to break ties).
+	Weaknesses int `json:"weaknesses"`
+}
+
 // TypeId defines model for TypeId.
 type TypeId string
 
@@ -515,6 +616,12 @@ type AnalyzeTeamCoverageParams struct {
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
+// RecommendTeamTypesParams defines parameters for RecommendTeamTypes.
+type RecommendTeamTypesParams struct {
+	XDeviceId  DeviceId  `json:"X-Device-Id"`
+	XSessionId SessionId `json:"X-Session-Id"`
+}
+
 // AnalyzeTeamThreatsParams defines parameters for AnalyzeTeamThreats.
 type AnalyzeTeamThreatsParams struct {
 	XDeviceId  DeviceId  `json:"X-Device-Id"`
@@ -526,6 +633,9 @@ type AnalyzeTeamBalanceJSONRequestBody = AnalyzeRequest
 
 // AnalyzeTeamCoverageJSONRequestBody defines body for AnalyzeTeamCoverage for application/json ContentType.
 type AnalyzeTeamCoverageJSONRequestBody = CoverageRequest
+
+// RecommendTeamTypesJSONRequestBody defines body for RecommendTeamTypes for application/json ContentType.
+type RecommendTeamTypesJSONRequestBody = RecommendationsRequest
 
 // AnalyzeTeamThreatsJSONRequestBody defines body for AnalyzeTeamThreats for application/json ContentType.
 type AnalyzeTeamThreatsJSONRequestBody = ThreatsRequest
@@ -541,6 +651,9 @@ type ServerInterface interface {
 	// AnalyzeTeamCoverage Analyze a party's offensive type coverage
 	// (POST /api/balance/v1/team-balance/coverage)
 	AnalyzeTeamCoverage(ctx *echo.Context, params AnalyzeTeamCoverageParams) error
+	// RecommendTeamTypes Recommend types (and pokemon with them) that fill the party's holes
+	// (POST /api/balance/v1/team-balance/recommendations)
+	RecommendTeamTypes(ctx *echo.Context, params RecommendTeamTypesParams) error
 	// AnalyzeTeamThreats Check a party against hypothetical opponents
 	// (POST /api/balance/v1/team-balance/threats)
 	AnalyzeTeamThreats(ctx *echo.Context, params AnalyzeTeamThreatsParams) error
@@ -659,6 +772,54 @@ func (w *ServerInterfaceWrapper) AnalyzeTeamCoverage(ctx *echo.Context) error {
 	return err
 }
 
+// RecommendTeamTypes converts echo context to params.
+func (w *ServerInterfaceWrapper) RecommendTeamTypes(ctx *echo.Context) error {
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RecommendTeamTypesParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Device-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Device-Id")]; found {
+		var XDeviceId DeviceId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
+		}
+
+		params.XDeviceId = XDeviceId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Device-Id is required, but not found"))
+	}
+	// ------------- Required header parameter "X-Session-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Session-Id")]; found {
+		var XSessionId SessionId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
+		}
+
+		params.XSessionId = XSessionId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Session-Id is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.RecommendTeamTypes(ctx, params)
+	return err
+}
+
 // AnalyzeTeamThreats converts echo context to params.
 func (w *ServerInterfaceWrapper) AnalyzeTeamThreats(ctx *echo.Context) error {
 	var err error
@@ -768,5 +929,6 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 	router.POST(options.BaseURL+"/api/balance/v1/team-balance/analyze", wrapper.AnalyzeTeamBalance, options.OperationMiddlewares["analyzeTeamBalance"]...)
 	router.POST(options.BaseURL+"/api/balance/v1/team-balance/coverage", wrapper.AnalyzeTeamCoverage, options.OperationMiddlewares["analyzeTeamCoverage"]...)
 	router.POST(options.BaseURL+"/api/balance/v1/team-balance/threats", wrapper.AnalyzeTeamThreats, options.OperationMiddlewares["analyzeTeamThreats"]...)
+	router.POST(options.BaseURL+"/api/balance/v1/team-balance/recommendations", wrapper.RecommendTeamTypes, options.OperationMiddlewares["recommendTeamTypes"]...)
 
 }
