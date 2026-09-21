@@ -100,6 +100,19 @@
 - [ ] P6-3 シミュレータテスト(`make ios-test`)
 - [ ] P6-4 Tailscale serve の手順書 → **人間が実機インストール**
 
+## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
+- [!] TB0 基盤(型・相性コア・temporary type chart adapter・HTTP 最小疎通・Docker/Kustomize/Argo CD 定義・単体テスト)。Argo CD 実同期以外は完了・main 統合済み。実同期は人間の作業待ち(下のブロッカー)。TB1 はこれを待たずに進める
+- [ ] TB1 防御タイプバランス(最大6体 × 18タイプの防御倍率、攻撃タイプごとのチーム集計。総合点は作らない)
+- [ ] TB2 攻撃範囲
+- [ ] TB3 特性(正規化された効果データ経由。タイプ由来/特性由来の区別)
+- [ ] TB4 仮想敵診断(詳細は TB1〜TB3 完成後に確定)
+
+### ブロッカー(タイプバランスレーン)
+- **【人間の確認待ち】Argo CD の実同期(TB0 の最後の1項目)**: `Git 変更 → Argo CD manual sync → Pod 更新` の確認には、
+  Argo CD の導入、private repository の credential のクラスタ登録、image registry と digest 固定の配布イメージが要る
+  (外部サービスのログイン・認証情報の登録は人間の作業。手順は services/balance/deploy/argocd/README.md)。
+  それ以外の TB0 の項目(k3d への直接デプロイ・smoke `health=200 analyze=501`)は確認済み。
+
 ## M4: 運用
 - [ ] P7-1 kube-prometheus-stack / Loki、各サービスのメトリクス
 - [ ] P7-2 SLO(計算API p99 < 100ms、可用性)とダッシュボード

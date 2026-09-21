@@ -144,3 +144,5 @@ tidy: ## go mod tidy(全モジュール)
 	@cd engine && $(GO) mod tidy
 	@cd services && $(GO) mod tidy
 	@cd tools && $(GO) mod tidy
+
+include services/balance/Makefile

@@ -125,3 +125,19 @@
 ### Next
 - R-2-5(実装中)→ R-2-8 → R-2-9 → R-3 → P1-13
 
+
+## 2026-09-21 タイプバランスレーン(Claude Code): TB0 の検証と統合
+
+### Done
+- feat/codex-tb0-foundation に origin/main を2回マージ(CODEX_LOG.md・DECISIONS.md の競合は追記ログとして両方を保持)
+- go.work に `./services/balance`、ルート Makefile に `include services/balance/Makefile` を追加(COORDINATION.md の共有ファイル規約の範囲)
+- critic による独立再レビュー: PASS(重大・重要 0)。engine の相性表と adapter を単タイプ 324 件・複合 5508 件で突き合わせ不一致 0
+- 軽微指摘の反映: README の複製元コミット訂正、境界テスト追加、Makefile のパス統一、test-strategy 注記、DECISIONS の旧エントリ解決追記
+- 検証: make test / lint / build / check-publishable、balance-test / lint / build / kustomize / gitops-template-check、k3d deploy + smoke(health=200 analyze=501)
+
+### Open issues
+- Argo CD 実同期(credential 登録・registry が人間の作業)。plan.md のブロッカーに記載
+- ルートの `make help` は複数 Makefile を grep するため、include 先の `##` 説明を付けると表示が崩れる。balance ターゲットには説明を付けていない
+
+### Next
+- TB1(防御タイプバランス)
