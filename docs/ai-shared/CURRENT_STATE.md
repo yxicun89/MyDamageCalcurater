@@ -10,8 +10,8 @@ Next: P2-2c(照合と差分報告。実データの取得と版の固定を含�
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
 Active: Claude Code
-Branch: feat/api-p3-gateway(feat/api-p3 から分岐。P3-1 は feat/api-p3 → PR #14。作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: P3-1(calc-svc。ADR-0200)と依存の最新化(Echo v5。ADR-0201)は PR #14 で main に統合済み。P3-2 gateway(ADR-0202)は critic PASS(3回目)・PR で統合
+Branch: feat/api-p3-smoke(作業ディレクトリ ~/MyDamageCalcurater-api)
+Status: P3-1(ADR-0200・0201。PR #14)と P3-2 gateway(ADR-0202。PR #23)は main に統合済み。P3-3 に着手
 Next: P3-3(gateway 経由の契約テストと k3d のスモーク: calc・gateway の Dockerfile(golang 最新 digest)・Kustomize(base と overlays/local。calc の例のマスタと typechart は configMapGenerator)・Ingress `/`(balance の /api/balance と共存)・smoke スクリプトと Makefile ターゲット)
 
 ## Web
