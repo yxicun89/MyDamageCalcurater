@@ -61,8 +61,8 @@ func applyStatStage(stat, stage int) int {
 // EffectiveStat は実数値にランク補正を適用した、戦闘中の攻撃/防御などの値を返す。
 // HP はランクを持たないため実数値をそのまま返す。
 func EffectiveStat(in Individual, k StatKey) int {
-	real := RealStats(in)
-	v := real.Get(k)
+	stats := RealStats(in)
+	v := stats.Get(k)
 	if k == StatHP {
 		return v
 	}

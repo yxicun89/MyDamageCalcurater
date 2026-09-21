@@ -169,8 +169,8 @@ func itemEffect(i *Item) *ItemEffect {
 // 壁・抜群軽減特性・持ち物ダメージ倍率・半減きのみの順。
 func otherModifiers(in DamageInput) []int {
 	var mods []int
-	_, _, mult := TypeEffectiveness(in.Move.Type, in.Defender.Species.Types)
-	superEffective := mult > 1
+	num, den, _ := TypeEffectiveness(in.Move.Type, in.Defender.Species.Types)
+	superEffective := num > den
 
 	if !in.Critical {
 		if sm := screenDamageMod(in); sm != Modifier4096 {

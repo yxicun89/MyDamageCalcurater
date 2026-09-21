@@ -70,7 +70,7 @@ type ArchetypeKey string
 type Archetype struct {
 	Key   ArchetypeKey
 	Label string      // 表示名(例 "HB特化")。requirements の「名前付きの型」
-	Side  ReverseSide //
+	Side  ReverseSide // 攻撃側か防御側か
 	Stat  StatKey     // 関連ステータス(def/spd/atk/spa)
 	// HPBucket は H の SP バケット。Side=attacker では常に SPBucketNone(意味を持たない)。
 	HPBucket    SPBucket

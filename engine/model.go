@@ -8,11 +8,11 @@ import (
 // Species はポケモンの種族データ(マスタから解決済み)。
 type Species struct {
 	Key       string   // {図鑑番号4桁}-{フォルム3桁} 例 0445-000
-	DexNo     int      //
-	Form      int      //
-	NameJa    string   //
+	DexNo     int      // 図鑑番号
+	Form      int      // フォルム番号
+	NameJa    string   // 日本語名
 	Types     []Type   // 1〜2個
-	BaseStats Stats    //
+	BaseStats Stats    // 種族値
 	Abilities []string // 特性 ID(参考。計算では Individual.Ability を使う)
 }
 
@@ -131,7 +131,7 @@ func (in Individual) Validate() error {
 	if in.Level != 0 && in.Level != DefaultLevel {
 		return fmt.Errorf("レベルは %d 固定: %d", DefaultLevel, in.Level)
 	}
-	for _, k := range AllStatKeys {
+	for _, k := range AllStatKeys() {
 		if in.Species.BaseStats.Get(k) < 0 {
 			return fmt.Errorf("種族値 %s は負にできない", k)
 		}

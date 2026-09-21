@@ -120,7 +120,7 @@ func TestDefenderPresetCatalogDefinitions(t *testing.T) {
 	}
 	// SP はドメイン規約の範囲内(1ステータス 32 以下・合計 66 以下)。
 	for _, p := range got {
-		for _, k := range AllStatKeys {
+		for _, k := range AllStatKeys() {
 			if v := p.SP.Get(k); v < 0 || v > MaxSPPerStat {
 				t.Errorf("%s の SP %s=%d が範囲外", p.Key, k, v)
 			}

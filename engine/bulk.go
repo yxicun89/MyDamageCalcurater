@@ -134,7 +134,7 @@ func (p DefenderPreset) validate() error {
 	if p.Key == "" {
 		return fmt.Errorf("%w: キーが空", ErrInvalidPreset)
 	}
-	for _, k := range AllStatKeys {
+	for _, k := range AllStatKeys() {
 		if v := p.SP.Get(k); v < 0 || v > MaxSPPerStat {
 			return fmt.Errorf("%w: %q の SP %s は 0..%d の範囲外: %d", ErrInvalidPreset, p.Key, k, MaxSPPerStat, v)
 		}

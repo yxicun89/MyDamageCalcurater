@@ -163,5 +163,8 @@ func (s Stats) Sum() int {
 	return s.HP + s.Atk + s.Def + s.SpA + s.SpD + s.Spe
 }
 
-// AllStatKeys は6ステータスのキー一覧(反復用)。
-var AllStatKeys = []StatKey{StatHP, StatAtk, StatDef, StatSpA, StatSpD, StatSpe}
+// AllStatKeys は6ステータスのキー一覧(反復用)を返す。
+// 呼び出しごとに新しいスライスを返すため、呼び出し側が書き換えても他に影響しない。
+func AllStatKeys() []StatKey {
+	return []StatKey{StatHP, StatAtk, StatDef, StatSpA, StatSpD, StatSpe}
+}
