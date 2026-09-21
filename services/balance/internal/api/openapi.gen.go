@@ -203,7 +203,7 @@ func (e TypeId) Valid() bool {
 // AnalyzeRequest defines model for AnalyzeRequest.
 type AnalyzeRequest struct {
 	Members []struct {
-		// PokemonId Example: 0445-000
+		// PokemonId Example: 9001-000
 		PokemonId string `json:"pokemonId"`
 	} `json:"members"`
 }

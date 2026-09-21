@@ -37,7 +37,7 @@ func TestAnalyzeDefenseAgreesWithCalculateDefenseOnTemporaryChart(t *testing.T) 
 		end := min(start+balance.MaxMembers, len(combos))
 		members := make([]balance.Member, 0, end-start)
 		for i, types := range combos[start:end] {
-			members = append(members, balance.Member{PokemonID: fmt.Sprintf("9%03d-000", start+i), Types: types})
+			members = append(members, balance.Member{PokemonID: fmt.Sprintf("9%03d-000", start+i+1), Types: types})
 		}
 
 		got, err := balance.AnalyzeDefense(chart, members)

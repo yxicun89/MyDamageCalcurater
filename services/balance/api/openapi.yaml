@@ -131,7 +131,7 @@ components:
                 type: string
                 maxLength: 8
                 pattern: '^\d{4}-\d{3}$'
-                example: 0445-000
+                example: 9001-000
     Error:
       type: object
       required:

@@ -1,8 +1,11 @@
 package balance
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
-// TB1 contract (ADR-0014 §2). Bodies are intentionally unimplemented stubs returning zero values.
+// TB1 の pokemonId → タイプの解決(ADR-0014 §2)。
 
 var (
 	// ErrUnknownPokemon reports a pokemonId that the provider does not know.
@@ -28,6 +31,10 @@ func ResolveMembers(provider PokemonTypeProvider, pokemonIDs []string) ([]Member
 	members := make([]Member, len(pokemonIDs))
 	for i, id := range pokemonIDs {
 		types, err := provider.PokemonTypes(id)
+		if errors.Is(err, ErrUnknownPokemon) {
+			// adapter の詳細(将来のファイルパス等)を落とし、ID だけを持つエラーにする(ADR-0014 §5.6)。
+			return nil, &UnknownPokemonError{PokemonID: id}
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -35,3 +42,14 @@ func ResolveMembers(provider PokemonTypeProvider, pokemonIDs []string) ([]Member
 	}
 	return members, nil
 }
+
+// UnknownPokemonError は provider に無い pokemonId を表す。errors.Is(err, ErrUnknownPokemon) が真になる。
+type UnknownPokemonError struct {
+	PokemonID string
+}
+
+func (e *UnknownPokemonError) Error() string {
+	return fmt.Sprintf("%s: %s", ErrUnknownPokemon, e.PokemonID)
+}
+
+func (e *UnknownPokemonError) Unwrap() error { return ErrUnknownPokemon }

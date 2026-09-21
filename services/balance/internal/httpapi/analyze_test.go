@@ -317,8 +317,8 @@ func TestAnalyzeUnexpectedPokemonTypesFailureIsInternalError(t *testing.T) {
 	if got.Code != api.InternalError {
 		t.Errorf("code = %q, want internal_error", got.Code)
 	}
-	if strings.Contains(got.Message, "exploded") {
-		t.Errorf("message = %q must not leak internal detail", got.Message)
+	if got.Message != "internal error" {
+		t.Errorf("message = %q, want the fixed text %q (no internal detail)", got.Message, "internal error")
 	}
 }
 
@@ -330,8 +330,12 @@ func TestAnalyzeNilTypeChartIsInternalError(t *testing.T) {
 	if recorder.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500; body=%s", recorder.Code, recorder.Body.String())
 	}
-	if got := decodeError(t, recorder.Body.Bytes()); got.Code != api.InternalError {
+	got := decodeError(t, recorder.Body.Bytes())
+	if got.Code != api.InternalError {
 		t.Errorf("code = %q, want internal_error", got.Code)
+	}
+	if got.Message != "internal error" {
+		t.Errorf("message = %q, want the fixed text %q", got.Message, "internal error")
 	}
 }
 
@@ -408,4 +412,54 @@ func findSummaryEntry(t *testing.T, entries []api.TeamSummaryEntry, attack api.T
 	}
 	t.Fatalf("attack type %q not found in teamSummary", attack)
 	return api.TeamSummaryEntry{}
+}
+
+// ADR-0014 §5.4: 不正な request には provider の有無によらず 400/413 を返す(503 より先に判定する)。
+func TestAnalyzeWithoutPokemonTypesValidatesBodyFirst(t *testing.T) {
+	t.Parallel()
+
+	server := New(Dependencies{TypeChart: master.NewTemporaryTypeChart()})
+	seven := `{"members":[{"pokemonId":"9001-000"},{"pokemonId":"9001-000"},{"pokemonId":"9001-000"},{"pokemonId":"9001-000"},{"pokemonId":"9001-000"},{"pokemonId":"9001-000"},{"pokemonId":"9001-000"}]}`
+	tests := []struct {
+		name     string
+		body     string
+		wantCode int
+		wantErr  api.ErrorCode
+	}{
+		{name: "empty party", body: `{"members":[]}`, wantCode: http.StatusBadRequest, wantErr: api.InvalidRequest},
+		{name: "seven members", body: seven, wantCode: http.StatusBadRequest, wantErr: api.InvalidRequest},
+		{name: "malformed pokemonId", body: `{"members":[{"pokemonId":"pokemon-a"}]}`, wantCode: http.StatusBadRequest, wantErr: api.InvalidRequest},
+		{name: "broken JSON", body: `{"members":`, wantCode: http.StatusBadRequest, wantErr: api.InvalidRequest},
+		{name: "oversized body", body: `{"members":[{"pokemonId":"` + strings.Repeat("1", maxAnalyzeBodyBytes) + `"}]}`, wantCode: http.StatusRequestEntityTooLarge, wantErr: api.RequestTooLarge},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			recorder := postAnalyze(t, server, tt.body)
+			if recorder.Code != tt.wantCode {
+				t.Fatalf("status = %d, want %d (not 503); body=%s", recorder.Code, tt.wantCode, recorder.Body.String())
+			}
+			if got := decodeError(t, recorder.Body.Bytes()); got.Code != tt.wantErr {
+				t.Errorf("code = %q, want %q", got.Code, tt.wantErr)
+			}
+		})
+	}
+}
+
+// ADR-0014 §5.6: 422 の message は ID から組み立て、adapter のエラー文言(内部情報を含みうる)を返さない。
+func TestAnalyzeUnknownPokemonMessageDoesNotLeakAdapterDetail(t *testing.T) {
+	t.Parallel()
+
+	server := New(Dependencies{
+		TypeChart:    master.NewTemporaryTypeChart(),
+		PokemonTypes: failingPokemonTypes{err: fmt.Errorf("%w: 9999-000 (read from /secret/path.json)", balance.ErrUnknownPokemon)},
+	})
+	recorder := postAnalyze(t, server, `{"members":[{"pokemonId":"9999-000"}]}`)
+	if recorder.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422; body=%s", recorder.Code, recorder.Body.String())
+	}
+	got := decodeError(t, recorder.Body.Bytes())
+	if got.Message != "unknown pokemonId: 9999-000" {
+		t.Errorf("message = %q, want %q", got.Message, "unknown pokemonId: 9999-000")
+	}
 }

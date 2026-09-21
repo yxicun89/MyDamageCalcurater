@@ -113,10 +113,11 @@ func analyze(c echo.Context, deps Dependencies) error {
 	}
 	members, err := balance.ResolveMembers(deps.PokemonTypes, pokemonIDs)
 	if err != nil {
-		if errors.Is(err, balance.ErrUnknownPokemon) {
+		var unknown *balance.UnknownPokemonError
+		if errors.As(err, &unknown) {
 			return c.JSON(http.StatusUnprocessableEntity, api.Error{
 				Code:    api.UnknownPokemon,
-				Message: err.Error(),
+				Message: "unknown pokemonId: " + unknown.PokemonID,
 			})
 		}
 		return internalError(c, err)

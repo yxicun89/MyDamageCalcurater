@@ -11,9 +11,9 @@ Kubernetes/Argo CD 定義を検証する。チーム集計、攻撃範囲、特�
 |---|---|---|
 | Unit | `internal/balance` | 18タイプ、整数倍率、単/複合タイプ、入力エラー、`EffectSource` |
 | Adapter | temporary static type chart | 18×18 を返し、代表的な弱点・耐性・無効が既存表と一致 |
-| Contract/HTTP | service-local OpenAPI / health / analyze stub | 生成型を使用。health は200。端末ID/セッションID欠落は400。有効な疎通は501 |
+| Contract/HTTP | service-local OpenAPI / health / analyze stub | 生成型を使用。health は200。端末ID/セッションID欠落は400。有効な疎通は501(TB1 で 200 に置換) |
 | Build | Go / Docker / Kustomize | `go test`、`go vet`、`go build`、Docker build、overlay build が成功 |
-| Smoke | k3d | Pod Ready、health 200、Ingress経由 analyze 501 |
+| Smoke | k3d | Pod Ready、health 200、Ingress経由 analyze 501(TB1 で 200・422 に置換) |
 
 ## TB1 の対象(防御タイプバランス)
 
