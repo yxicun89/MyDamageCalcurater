@@ -53,7 +53,6 @@ balance-k3d-deploy: balance-docker-build ## k3d へ balance を直接デプロ�
 balance-smoke:
 	@BALANCE_URL=$(BALANCE_URL) $(BALANCE_DIR)/scripts/smoke.sh
 
-
 balance-sync-typechart:
 	@cp testdata/golden/typechart.json $(BALANCE_DIR)/internal/master/data/typechart.json
 
