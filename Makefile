@@ -146,3 +146,4 @@ tidy: ## go mod tidy(全モジュール)
 	@cd tools && $(GO) mod tidy
 
 include services/balance/Makefile
+include web/Makefile
