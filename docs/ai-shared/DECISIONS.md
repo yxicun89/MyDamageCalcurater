@@ -316,3 +316,12 @@ Reason: 4レーン制で API・データの成果を待たずに Web を進め�
 Impact: ルートの Makefile には `include web/Makefile` の1行だけを足した(ターゲットは `web-` 接頭辞)。engine・openapi.yaml は変更しない。
 docs/design.md に bg.glass のぼかし量(Web は 20px。iOS はシステムのマテリアル)を1行追記した(P4-1)。
 異議があれば追記すること(既定案で進む原則)。
+
+## 2026-09-21: 言語・ミドルウェア・依存のバージョンは最新にする(ユーザー決定。Web レーンのセッションで受領)
+Decision: 「アップデートの手間を減らすため、ミドルウェアやプログラミング言語等のバージョンは全て最新にする」。新しく入れる依存・イメージ・ツールは
+その時点の最新の安定版を選び、完全固定(lockfile・digest)は従来どおり続ける。互換性の都合で最新にできないものは、理由と追従の条件を ADR か本ファイルに書く。
+Web レーンの反映: TypeScript を 7.0.2 に上げる(型検査は TS 7 のネイティブ版)。typescript-eslint 8.70 は TS 7 の API に未対応のため、
+ESLint が読む `typescript` だけ公式の互換パッケージ `@typescript/typescript6` を別名で入れる(typescript-eslint が TS 7 に対応したら外す)。他の依存は確認時点で最新。
+確認時点の最新: Go 1.27.1(go.mod は 1.27 で最新)、Node.js 26.9.0(この Mac を 26.4.0 から上げ、`web/.node-version` と `web/package.json` の `engines` で固定)。
+Reason: ユーザー指示(2026-09-21)。
+Impact: 各レーンは自分の範囲の依存・イメージ(MySQL・TiDB・NATS・k3d 等を含む)を次の区切りで最新に揃える。他レーンのファイルは各レーンが変更する。

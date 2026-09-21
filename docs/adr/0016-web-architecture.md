@@ -20,12 +20,16 @@ API 接続(P4-5)は API レーンが契約を main に入れてから追従す�
 | 用途 | 依存 | ライセンス |
 |---|---|---|
 | 実行時 | react / react-dom 19.3.0 | MIT |
-| ビルド | vite 8.3.0、@vitejs/plugin-react 6.1.1、typescript 6.0.3 | MIT / MIT / Apache-2.0 |
+| ビルド | vite 8.3.0、@vitejs/plugin-react 6.1.1、typescript 7.0.2(別名 `typescript7`)| MIT / MIT / Apache-2.0 |
 | テスト | vitest 5.0.1、jsdom 30.1.0、@testing-library/react 16.3.3・dom 10.4.2・user-event 14.6.7・jest-dom 7.0.1 | MIT |
 | 整形・lint | eslint 10.11.0、typescript-eslint 8.70.0、eslint-plugin-react-hooks 7.1.1、prettier 3.9.8 | MIT |
 
 - すべて `package.json` で完全固定し、`package-lock.json` をコミットする(コーディング規約 §1・§4、`check-publishable` の E 区分)。
-- TypeScript は 7 系(ネイティブ実装)ではなく 6.0 系にする。typescript-eslint 8.70 の peer が `<6.1.0` のため。
+- **版は最新の安定版にする**(ユーザー決定 2026-09-21。DECISIONS.md)。Node.js は 26.9.0 を `web/.node-version` と `engines` で固定する。
+- 型検査は TypeScript 7.0.2(ネイティブ実装)。ただし typescript-eslint 8.70 は TS 7 の API に未対応(peer が `<6.1.0`)で、
+  TS 7 は JS API を持たないため、ESLint が `require("typescript")` で読むパッケージだけ公式の互換パッケージ
+  `@typescript/typescript6`(6.0.2)を `typescript` の別名で入れ、TS 7 は `typescript7` の別名で入れて `npm run typecheck` から直接呼ぶ。
+  typescript-eslint が TS 7 に対応したら、別名をやめて `typescript` を 7 系1本にする。
 - ルーター・状態管理・CSS フレームワークは入れない。画面は「計算」「逆算」の2つで、React の state で足りる
   (使われない汎用機構を作らない。コーディング規約 §3)。Playwright は P4-6 で入れる。
 - 初期ロードの予算(design.md: JS ≤ 300KB gzip、WASM 除く)は `web/scripts/check-bundle-size.mjs` が
