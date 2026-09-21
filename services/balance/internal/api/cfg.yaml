@@ -2,4 +2,4 @@ package: api
 output: balance/internal/api/openapi.gen.go
 generate:
   models: true
-  echo-server: true
+  echo5-server: true

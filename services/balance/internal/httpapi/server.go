@@ -12,7 +12,7 @@ import (
 
 	"example.com/pokecalc/services/balance/internal/api"
 	"example.com/pokecalc/services/balance/internal/balance"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 const (
@@ -54,8 +54,6 @@ type Dependencies struct {
 // New returns the HTTP handler.
 func New(deps Dependencies) *echo.Echo {
 	e := echo.New()
-	e.HideBanner = true
-	e.HidePort = true
 	e.HTTPErrorHandler = writeHTTPError
 	api.RegisterHandlersWithOptions(e, handler{deps: deps}, api.RegisterHandlersOptions{
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
@@ -72,28 +70,28 @@ type handler struct {
 
 var _ api.ServerInterface = handler{}
 
-func (handler) Health(c echo.Context) error {
+func (handler) Health(c *echo.Context) error {
 	return health(c)
 }
 
-func (handler) PublicHealth(c echo.Context) error {
+func (handler) PublicHealth(c *echo.Context) error {
 	return health(c)
 }
 
-func (h handler) AnalyzeTeamBalance(c echo.Context, _ api.AnalyzeTeamBalanceParams) error {
+func (h handler) AnalyzeTeamBalance(c *echo.Context, _ api.AnalyzeTeamBalanceParams) error {
 	return analyze(c, h.deps)
 }
 
 // AnalyzeTeamCoverage is the TB2 offensive coverage endpoint (ADR-0016).
-func (h handler) AnalyzeTeamCoverage(c echo.Context, _ api.AnalyzeTeamCoverageParams) error {
+func (h handler) AnalyzeTeamCoverage(c *echo.Context, _ api.AnalyzeTeamCoverageParams) error {
 	return coverage(c, h.deps)
 }
 
-func health(c echo.Context) error {
+func health(c *echo.Context) error {
 	return c.JSON(http.StatusOK, api.Health{Status: api.Ok})
 }
 
-func analyze(c echo.Context, deps Dependencies) error {
+func analyze(c *echo.Context, deps Dependencies) error {
 	c.Request().Body = http.MaxBytesReader(c.Response(), c.Request().Body, maxAnalyzeBodyBytes)
 	request, err := decodeJSONBody[api.AnalyzeRequest](c.Request())
 	if err != nil {
@@ -193,7 +191,7 @@ func analyze(c echo.Context, deps Dependencies) error {
 // requires that unexpected internal failures (a missing/broken type chart, or a
 // provider failure other than an unknown pokemonId) never leak internal detail
 // to the client. The error is still logged for operators.
-func internalError(c echo.Context, err error) error {
+func internalError(c *echo.Context, err error) error {
 	slog.Error("balance internal error", "path", c.Path(), "error", err)
 	return c.JSON(http.StatusInternalServerError, api.Error{
 		Code:    api.InternalError,
@@ -265,7 +263,7 @@ func toDefenseEffect(effect balance.DefenseEffect) api.DefenseEffect {
 }
 
 func requireRequestContext(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		if strings.TrimSpace(c.Request().Header.Get(deviceIDHeader)) == "" ||
 			strings.TrimSpace(c.Request().Header.Get(sessionIDHeader)) == "" {
 			return c.JSON(http.StatusBadRequest, api.Error{
@@ -277,8 +275,8 @@ func requireRequestContext(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-func writeHTTPError(err error, c echo.Context) {
-	if c.Response().Committed {
+func writeHTTPError(c *echo.Context, err error) {
+	if response, _ := echo.UnwrapResponse(c.Response()); response != nil && response.Committed {
 		return
 	}
 	var httpError *echo.HTTPError
@@ -289,7 +287,7 @@ func writeHTTPError(err error, c echo.Context) {
 		})
 		return
 	}
-	c.Echo().DefaultHTTPErrorHandler(err, c)
+	echo.DefaultHTTPErrorHandler(false)(c, err)
 }
 
 // decodeJSONBody decodes exactly one JSON object into T, rejecting unknown fields,
@@ -322,7 +320,7 @@ func decodeJSONBody[T any](request *http.Request) (T, error) {
 // Validation order (ADR-0016 §4): header (400, via requireRequestContext) → body
 // (400/413) → either read model absent (503) → unknown pokemonId (422) → unknown
 // moveId (422) → 200. Other internal failures answer 500 with a fixed message.
-func coverage(c echo.Context, deps Dependencies) error {
+func coverage(c *echo.Context, deps Dependencies) error {
 	c.Request().Body = http.MaxBytesReader(c.Response(), c.Request().Body, maxAnalyzeBodyBytes)
 	request, err := decodeJSONBody[api.CoverageRequest](c.Request())
 	if err != nil {
