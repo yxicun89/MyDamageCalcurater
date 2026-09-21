@@ -392,6 +392,11 @@ func TestCoverageRejectsInvalidBody(t *testing.T) {
 		{name: "seven members", body: seven},
 		{name: "malformed pokemonId", body: `{"members":[{"pokemonId":"pokemon-a","moveIds":[]}]}`},
 		{name: "missing pokemonId", body: `{"members":[{"moveIds":["move-9001"]}]}`},
+		// ADR-0016 §6.1: moveIds is required; a missing key or an explicit null must be rejected.
+		// An empty array [] is a distinct, valid case (a member with no attack moves) covered
+		// separately in TestCoverageAcceptsBoundaries.
+		{name: "missing moveIds", body: `{"members":[{"pokemonId":"9001-000"}]}`},
+		{name: "null moveIds", body: `{"members":[{"pokemonId":"9001-000","moveIds":null}]}`},
 		{name: "five moveIds", body: member(`["move-9001","move-9003","move-9004","move-9005","move-9007"]`)},
 		{name: "duplicate moveId within a member", body: member(`["move-9001","move-9001"]`)},
 		{name: "duplicate moveId after others", body: member(`["move-9001","move-9003","move-9001"]`)},
@@ -588,13 +593,17 @@ func TestCoverageUnknownMoveMessageDoesNotLeakAdapterDetail(t *testing.T) {
 func TestCoverageInternalErrors(t *testing.T) {
 	t.Parallel()
 
+	const defaultBody = `{"members":[{"pokemonId":"9001-000","moveIds":["move-9001"]}]}`
 	tests := []struct {
 		name string
 		deps Dependencies
+		body string
 	}{
 		{name: "move provider failure", deps: Dependencies{TypeChart: testTypeChart(), PokemonTypes: fictionalPokemonTypes, Moves: failingMoves{err: errors.New("move backend exploded at /secret/moves.json")}}},
 		{name: "pokemon provider failure", deps: Dependencies{TypeChart: testTypeChart(), PokemonTypes: failingPokemonTypes{err: errors.New("pokemon backend exploded")}, Moves: fictionalMoves}},
 		{name: "nil type chart", deps: Dependencies{PokemonTypes: fictionalPokemonTypes, Moves: fictionalMoves}},
+		// ADR-0016 §6.3: a nil type chart is rejected even when no member has an attack move.
+		{name: "nil type chart with no attack moves", deps: Dependencies{PokemonTypes: fictionalPokemonTypes, Moves: fictionalMoves}, body: `{"members":[{"pokemonId":"9001-000","moveIds":["move-9006"]}]}`},
 		{name: "move provider returns an invalid category", deps: Dependencies{TypeChart: testTypeChart(), PokemonTypes: fictionalPokemonTypes, Moves: testMoves{
 			"move-9001": fictionalMove("move-9001", balance.TypeFire, "other"),
 		}}},
@@ -602,7 +611,11 @@ func TestCoverageInternalErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			recorder := postCoverage(t, New(tt.deps), `{"members":[{"pokemonId":"9001-000","moveIds":["move-9001"]}]}`)
+			body := tt.body
+			if body == "" {
+				body = defaultBody
+			}
+			recorder := postCoverage(t, New(tt.deps), body)
 			if recorder.Code != http.StatusInternalServerError {
 				t.Fatalf("status = %d, want 500; body=%s", recorder.Code, recorder.Body.String())
 			}

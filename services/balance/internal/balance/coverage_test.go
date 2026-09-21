@@ -527,6 +527,9 @@ func TestAnalyzeCoverageRejectsInvalidInput(t *testing.T) {
 		{name: "invalid move category", chart: testTypeChart(), members: []balance.CoverageMember{{PokemonID: "9001-000", Moves: []balance.Move{{MoveID: "move-9001", Type: balance.TypeFire, Category: "other"}}}}, wantErr: balance.ErrInvalidMoveCategory},
 		{name: "empty move category", chart: testTypeChart(), members: []balance.CoverageMember{{PokemonID: "9001-000", Moves: []balance.Move{{MoveID: "move-9001", Type: balance.TypeFire}}}}, wantErr: balance.ErrInvalidMoveCategory},
 		{name: "nil chart", chart: nil, members: one, wantErr: balance.ErrNilTypeChart},
+		// ADR-0016 §6.3: a nil chart is rejected regardless of whether any member has an attack move.
+		{name: "nil chart with no attack moves", chart: nil, members: []balance.CoverageMember{{PokemonID: "9001-000"}}, wantErr: balance.ErrNilTypeChart},
+		{name: "nil chart with status move only", chart: nil, members: []balance.CoverageMember{{PokemonID: "9001-000", Moves: []balance.Move{status("move-9006", balance.TypeGrass)}}}, wantErr: balance.ErrNilTypeChart},
 		{name: "chart error is propagated", chart: errorTypeChart{err: chartErr}, members: one, wantErr: chartErr},
 	}
 	for _, tt := range tests {

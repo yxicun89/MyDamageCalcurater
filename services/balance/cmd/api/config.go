@@ -32,8 +32,16 @@ const movesPathEnv = "BALANCE_MOVES_PATH"
 // moveProviderFromEnv loads the read model named by BALANCE_MOVES_PATH.
 // Unset or empty: (nil, nil) — an untyped nil interface, so coverage answers 503.
 // Set but unreadable or invalid: an error, and main must exit non-zero.
-//
-// TODO(TB2 implementer): スタブ。未実装。
 func moveProviderFromEnv(lookup func(string) (string, bool)) (balance.MoveProvider, error) {
-	return nil, nil
+	path, ok := lookup(movesPathEnv)
+	if !ok || path == "" {
+		return nil, nil
+	}
+	model, err := master.LoadMovesFile(path)
+	if err != nil {
+		// Return an untyped nil interface, not a nil *MoveReadModel wrapped in a
+		// non-nil interface (the classic typed-nil pitfall).
+		return nil, err
+	}
+	return model, nil
 }

@@ -6,9 +6,6 @@ import (
 )
 
 // TB2 の moveId → 技のタイプ・分類の解決(ADR-0016 §3)。
-//
-// TODO(TB2 implementer): 以下はテストをコンパイルさせるための契約とスタブ。
-// ResolveMoves の本体は未実装(zero 値を返す)。
 
 // MaxMovesPerMember is the largest number of moveIds one member may send (ADR-0016 §1).
 const MaxMovesPerMember = 4
@@ -37,7 +34,7 @@ const (
 
 // Valid reports whether c is physical, special or status.
 func (c MoveCategory) Valid() bool {
-	return false
+	return c == MoveCategoryPhysical || c == MoveCategorySpecial || c == MoveCategoryStatus
 }
 
 // Move is one resolved move.
@@ -58,7 +55,23 @@ type MoveProvider interface {
 // A nil provider returns ErrNilMoves. An unknown ID returns *UnknownMoveError
 // carrying only the ID (adapter detail dropped). Other provider errors are propagated.
 func ResolveMoves(provider MoveProvider, moveIDs []string) ([]Move, error) {
-	return nil, nil
+	if provider == nil {
+		return nil, ErrNilMoves
+	}
+
+	moves := make([]Move, len(moveIDs))
+	for i, id := range moveIDs {
+		move, err := provider.Move(id)
+		if errors.Is(err, ErrUnknownMove) {
+			// adapter の詳細(将来のファイルパス等)を落とし、ID だけを持つエラーにする(ADR-0016 §4)。
+			return nil, &UnknownMoveError{MoveID: id}
+		}
+		if err != nil {
+			return nil, err
+		}
+		moves[i] = move
+	}
+	return moves, nil
 }
 
 // UnknownMoveError は provider に無い moveId を表す。errors.Is(err, ErrUnknownMove) が真になる。
@@ -70,4 +83,4 @@ func (e *UnknownMoveError) Error() string {
 	return fmt.Sprintf("%s: %s", ErrUnknownMove, e.MoveID)
 }
 
-func (e *UnknownMoveError) Unwrap() error { return nil }
+func (e *UnknownMoveError) Unwrap() error { return ErrUnknownMove }

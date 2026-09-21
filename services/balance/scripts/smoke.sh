@@ -48,7 +48,7 @@ if [ "$analyze_status" != "200" ]; then
   exit 1
 fi
 for key in '"members"' '"teamSummary"' '"pokemonId":"9001-000"' '"quadWeak"' '"source":"type"'; do
-  if ! grep -q "$key" "$body_file"; then
+  if ! grep -qF "$key" "$body_file"; then
     echo "balance analyze body is missing $key" >&2
     cat "$body_file" >&2
     exit 1
@@ -61,7 +61,7 @@ unknown_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   -H 'X-Device-Id: smoke-device' \
   -H 'X-Session-Id: smoke-session' \
   --data '{"members":[{"pokemonId":"9999-999"}]}')
-if [ "$unknown_status" != "422" ] || ! grep -q '"code":"unknown_pokemon"' "$body_file"; then
+if [ "$unknown_status" != "422" ] || ! grep -qF '"code":"unknown_pokemon"' "$body_file"; then
   echo "balance analyze unknown pokemon: HTTP $unknown_status, want 422 unknown_pokemon" >&2
   cat "$body_file" >&2
   exit 1
@@ -82,7 +82,7 @@ if [ "$coverage_status" != "200" ]; then
   exit 1
 fi
 for key in '"members"' '"teamCoverage"' '"attackTypes":["fire"]' '"bestMultiplier"' '"effectiveMembers"' '"superEffectiveMembers"'; do
-  if ! grep -q "$key" "$body_file"; then
+  if ! grep -qF "$key" "$body_file"; then
     echo "balance coverage body is missing $key" >&2
     cat "$body_file" >&2
     exit 1
@@ -95,7 +95,7 @@ unknown_move_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   -H 'X-Device-Id: smoke-device' \
   -H 'X-Session-Id: smoke-session' \
   --data '{"members":[{"pokemonId":"9001-000","moveIds":["move-9999"]}]}')
-if [ "$unknown_move_status" != "422" ] || ! grep -q '"code":"unknown_move"' "$body_file"; then
+if [ "$unknown_move_status" != "422" ] || ! grep -qF '"code":"unknown_move"' "$body_file"; then
   echo "balance coverage unknown move: HTTP $unknown_move_status, want 422 unknown_move" >&2
   cat "$body_file" >&2
   exit 1
