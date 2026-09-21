@@ -64,3 +64,16 @@
 - P3-1 で openapi.yaml の description を先に直す(変化技は none/hp のみ、presets:[] は省略と同じ 等)
 ### Next
 - P1-8 逆算
+
+## 2026-09-21 (Claude Code: P1-8 逆算)
+### Done
+- 先に docs の Codex 役割の記述を訂正(969d335)。scanner → spec-writer(ADR-0010 とテスト先行)→ implementer → critic 2回(FAIL→FAIL)→ 修正 → 指示された修正をメインが確認して完了
+- engine/reverse.go(CalcReverse: 格子の総当たり×性格クラス×持ち物 → 型に畳み込み)、docs/adr/0010-reverse-estimation.md
+- Recall@5(固定シード・1,000ケース・1,392種): defender 92.9%/95.6%、attacker 95.0%/95.5%(基準 80%/95%)。Recall 基準本体は allspecies タグ(make test-all-species)、make test には小標本の Smoke
+### Open issues
+- 2回観測の余裕が 0.5〜0.6pt。順序規則(ADR-0010 §6.3)を触ると基準を割る
+- 表示 % の丸め(round-half-up)は仮定・人間の確認待ち。API 契約との差は plan.md P3-1 に持ち越し
+- 任意の外部 Codex レビューは未実施
+### Next
+- P1-9 WASM
+
