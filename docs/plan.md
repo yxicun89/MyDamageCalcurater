@@ -44,7 +44,7 @@
 - [ ] R-2 是正(挙動を変えない。`make test` / `make test-golden` / `make test-wasm` を維持。塊ごとに1コミット。詳細は audit-r1.md):
   - [x] R-2-1 シェルを `set -euo pipefail` に統一(単独コミット。`doctor.sh` は挙動を確認)
   - [x] R-2-2 fixture の公式日本語名を架空名に置換
-  - [ ] R-2-3 `tools/golden/package.json` を `0.10.0` に完全固定、`.gitignore` に `*.wasm` `*.pem` `*.key` `*.p12` を追加
+  - [x] R-2-3 `tools/golden/package.json` を `0.10.0` に完全固定、`.gitignore` に `*.wasm` `*.pem` `*.key` `*.p12` を追加
   - [ ] R-2-4 ドメイン定数に名前を付けて集約(75/20/2048/6144/8192、プリセットの 32)
   - [ ] R-2-5 小さな可読性の是正(`Version` の重複、空コメント、`real` の改名、`AllStatKeys` の可変性)
   - [ ] R-2-7 ADR の追記・修正(タイプ相性表の所有者、engine の Label の扱い、内輪の表現。ユーザーの判断後)
