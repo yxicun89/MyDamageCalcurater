@@ -125,7 +125,7 @@
 
 ## 整備レーン(Claude の上限時に Codex が進める。COORDINATION.md「Claude の上限時の Codex」)
 範囲はレーンに属さない共有物と統合の検証。レーンの範囲(engine・services/*・web・ios・各レーンの ADR)は直さず、見つけた問題はそのレーンの Next と DECISIONS.md に既定案付きで書く。
-- [ ] MT-1 統合の検証: 最新の main で `make test` / `make lint` / `make build` / `make test-golden` / `make test-all-species` / `make test-wasm`(と、あれば各レーンの追加ターゲット)を通す。失敗はレーンごとに切り分けて報告する(自分の範囲の共通物なら直す)
+- [x] MT-1 統合の検証: `make test`(458件) / `make lint` / `make build` / `make test-golden`(10件) / `make test-all-species`(3件) / `make test-wasm`(34ベクタ×2周)、`make balance-kustomize` / `make balance-gitops-template-check` が成功。クラスタ・DB・E2E は外部状態や資格情報を要するため対象外(2026-09-22)
 - [x] MT-2 `scripts/check-publishable.sh --self-test` の既存の失敗2件を修正(A: 任意の `~/` を検出し、共有の worktree / 権限定義プレースホルダだけ許可。E: 自己テストへ違反する module path を投入)。既定案どおり `make lint` からセルフテストも実行
 - [ ] MT-3 文書の整合: `docs/ai-shared/CURRENT_STATE.md` と `docs/plan.md` のチェック・Next の食い違い、CLAUDE.md のリポジトリ構成と実体、README、`docs/development-workflow.md` と COORDINATION.md(レーン制・PR 統合・時間帯・Codex 2本)の食い違いを直す
 - [ ] MT-4 ADR の番号の帯(COORDINATION.md)の振り直し漏れと、参照の食い違いを一覧にする(直すのは各レーン。一覧を各レーンの Next に書く)
