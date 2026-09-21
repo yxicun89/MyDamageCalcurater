@@ -21,5 +21,17 @@ type PokemonTypeProvider interface {
 // ResolveMembers looks up each pokemonId in order (duplicates allowed) and returns
 // the members with their types. An unknown ID returns an error wrapping ErrUnknownPokemon.
 func ResolveMembers(provider PokemonTypeProvider, pokemonIDs []string) ([]Member, error) {
-	return nil, nil // TB1: not implemented
+	if provider == nil {
+		return nil, ErrNilPokemonTypes
+	}
+
+	members := make([]Member, len(pokemonIDs))
+	for i, id := range pokemonIDs {
+		types, err := provider.PokemonTypes(id)
+		if err != nil {
+			return nil, err
+		}
+		members[i] = Member{PokemonID: id, Types: types}
+	}
+	return members, nil
 }

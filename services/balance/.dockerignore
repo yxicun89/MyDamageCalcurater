@@ -1,6 +1,7 @@
 .git
 deploy
 scripts
+testdata
 Makefile
 *.md
 **/*_test.go

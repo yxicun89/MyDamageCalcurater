@@ -41,6 +41,21 @@ func TestPokemonTypeProviderFromEnvUnset(t *testing.T) {
 	}
 }
 
+// TestPokemonTypeProviderFromEnvEmptyStringIsUnset guards ADR-0014 §5.3: an empty
+// string value (as Kubernetes can produce for an unset env var) is treated the
+// same as the variable being unset, not as an invalid path.
+func TestPokemonTypeProviderFromEnvEmptyStringIsUnset(t *testing.T) {
+	t.Parallel()
+
+	provider, err := pokemonTypeProviderFromEnv(lookupFrom(map[string]string{pokemonTypesPathEnv: ""}))
+	if err != nil {
+		t.Fatalf("error = %v, want nil when %s is empty", err, pokemonTypesPathEnv)
+	}
+	if provider != nil {
+		t.Fatalf("provider = %#v, want nil interface when %s is empty", provider, pokemonTypesPathEnv)
+	}
+}
+
 func TestPokemonTypeProviderFromEnvLoadsExample(t *testing.T) {
 	t.Parallel()
 

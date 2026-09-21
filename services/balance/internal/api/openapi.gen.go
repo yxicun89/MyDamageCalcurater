@@ -91,6 +91,7 @@ func (e EffectSource) Valid() bool {
 
 // Defines values for ErrorCode.
 const (
+	InternalError         ErrorCode = "internal_error"
 	InvalidRequest        ErrorCode = "invalid_request"
 	MasterUnavailable     ErrorCode = "master_unavailable"
 	MissingRequestContext ErrorCode = "missing_request_context"
@@ -101,6 +102,8 @@ const (
 // Valid indicates whether the value is a known member of the ErrorCode enum.
 func (e ErrorCode) Valid() bool {
 	switch e {
+	case InternalError:
+		return true
 	case InvalidRequest:
 		return true
 	case MasterUnavailable:

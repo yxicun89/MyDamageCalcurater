@@ -3,6 +3,18 @@ kind: Kustomization
 namespace: pokecalc
 resources:
   - ../../base
+# TB1 (ADR-0014 §2): the local-only fictional pokemon type read model, mounted as a
+# read-only file so BALANCE_POKEMON_TYPES_PATH resolves and analyze answers 200
+# instead of 503. Not set in base or the gitops overlay. The source of truth for
+# this file is testdata/pokemon-types.example.json (kept in sync by a Go test in
+# internal/master, since Kustomize's load restrictor forbids referencing files
+# outside this overlay's directory tree).
+configMapGenerator:
+  - name: balance-pokemon-types
+    files:
+      - pokemon-types.json=pokemon-types.example.json
+patches:
+  - path: deployment-pokemon-types-patch.yaml
 images:
   - name: pokecalc/balance
     newName: pokecalc/balance

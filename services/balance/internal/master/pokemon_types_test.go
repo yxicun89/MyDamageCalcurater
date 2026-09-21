@@ -14,6 +14,28 @@ import (
 
 const examplePokemonTypesPath = "../../testdata/pokemon-types.example.json"
 
+// overlayPokemonTypesPath is the copy the local overlay mounts as a ConfigMap
+// (Kustomize's load restrictor forbids referencing a file outside the overlay
+// directory tree). testdata/pokemon-types.example.json remains the single source
+// of truth; this test keeps the copy from silently drifting.
+const overlayPokemonTypesPath = "../../deploy/k8s/overlays/local/pokemon-types.example.json"
+
+func TestOverlayExampleMatchesTestdataExample(t *testing.T) {
+	t.Parallel()
+
+	want, err := os.ReadFile(examplePokemonTypesPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", examplePokemonTypesPath, err)
+	}
+	got, err := os.ReadFile(overlayPokemonTypesPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", overlayPokemonTypesPath, err)
+	}
+	if string(got) != string(want) {
+		t.Errorf("%s is out of sync with %s (the source of truth); copy it over", overlayPokemonTypesPath, examplePokemonTypesPath)
+	}
+}
+
 func TestLoadPokemonTypes(t *testing.T) {
 	t.Parallel()
 
@@ -47,6 +69,26 @@ func TestLoadPokemonTypes(t *testing.T) {
 		if fmt.Sprint(got) != fmt.Sprint(tt.want) {
 			t.Errorf("PokemonTypes(%s) = %v, want %v", tt.id, got, tt.want)
 		}
+	}
+}
+
+// TestLoadPokemonTypesPreservesReadModelOrder guards ADR-0014 §5.1: the returned
+// types must stay in the order the read model listed them, not the canonical
+// (normal ... fairy) order used elsewhere in the response.
+func TestLoadPokemonTypesPreservesReadModelOrder(t *testing.T) {
+	t.Parallel()
+
+	model, err := LoadPokemonTypes(strings.NewReader(`{"schemaVersion":1,"pokemon":[{"pokemonId":"9001-000","types":["flying","fire"]}]}`))
+	if err != nil || model == nil {
+		t.Fatalf("LoadPokemonTypes() = %v, %v", model, err)
+	}
+	got, err := model.PokemonTypes("9001-000")
+	if err != nil {
+		t.Fatalf("PokemonTypes() error = %v", err)
+	}
+	want := []balance.TypeID{balance.TypeFlying, balance.TypeFire}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("PokemonTypes() = %v, want %v (read model order, not canonical order)", got, want)
 	}
 }
 
@@ -97,6 +139,8 @@ func TestLoadPokemonTypesRejectsInvalidReadModel(t *testing.T) {
 		{name: "not an object", input: `[]`},
 		{name: "trailing JSON", input: `{"schemaVersion":1,"pokemon":[{"pokemonId":"9001-000","types":["fire"]}]} {}`},
 		{name: "missing schemaVersion", input: `{"pokemon":[{"pokemonId":"9001-000","types":["fire"]}]}`},
+		{name: "missing pokemon key", input: `{"schemaVersion":1}`},
+		{name: "empty pokemon array", input: `{"schemaVersion":1,"pokemon":[]}`},
 		{name: "schemaVersion 0", input: `{"schemaVersion":0,"pokemon":[{"pokemonId":"9001-000","types":["fire"]}]}`},
 		{name: "schemaVersion 2", input: `{"schemaVersion":2,"pokemon":[{"pokemonId":"9001-000","types":["fire"]}]}`},
 		{name: "schemaVersion string", input: `{"schemaVersion":"1","pokemon":[{"pokemonId":"9001-000","types":["fire"]}]}`},

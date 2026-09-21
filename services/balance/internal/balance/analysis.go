@@ -1,9 +1,11 @@
 package balance
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
-// TB1 contract (ADR-0014 §3・§4). Bodies are intentionally unimplemented stubs returning zero values
-// written by the spec step; the implementer replaces them.
+// TB1 contract (ADR-0014 §3・§4).
 
 // MaxMembers is the largest party size accepted by the analysis.
 const MaxMembers = 6
@@ -31,7 +33,22 @@ const (
 // ClassifyMultiplier maps 16/8/4/2/1/0 to quad_weak/weak/neutral/resist/quad_resist/immune.
 // Any other value returns an error wrapping ErrInvalidMultiplier.
 func ClassifyMultiplier(m Multiplier) (Category, error) {
-	return "", nil // TB1: not implemented
+	switch m {
+	case MultiplierQuad:
+		return CategoryQuadWeak, nil
+	case MultiplierDouble:
+		return CategoryWeak, nil
+	case MultiplierNormal:
+		return CategoryNeutral, nil
+	case MultiplierHalf:
+		return CategoryResist, nil
+	case MultiplierQuarter:
+		return CategoryQuadResist, nil
+	case MultiplierZero:
+		return CategoryImmune, nil
+	default:
+		return "", fmt.Errorf("%w: %d", ErrInvalidMultiplier, m)
+	}
 }
 
 // Member is one party member whose types are already resolved.
@@ -74,5 +91,46 @@ type DefenseAnalysis struct {
 
 // AnalyzeDefense computes the defensive type balance of 1..MaxMembers members.
 func AnalyzeDefense(chart TypeChartProvider, members []Member) (DefenseAnalysis, error) {
-	return DefenseAnalysis{}, nil // TB1: not implemented
+	if len(members) < 1 || len(members) > MaxMembers {
+		return DefenseAnalysis{}, ErrMemberCount
+	}
+
+	attackTypes := AllTypes()
+	memberDefenses := make([]MemberDefense, len(members))
+	summary := make([]TeamSummaryEntry, len(attackTypes))
+	for i, attack := range attackTypes {
+		summary[i] = TeamSummaryEntry{AttackType: attack}
+	}
+
+	for mi, member := range members {
+		defense := make([]AttackDefense, len(attackTypes))
+		for ai, attack := range attackTypes {
+			result, err := CalculateDefense(chart, attack, member.Types)
+			if err != nil {
+				return DefenseAnalysis{}, err
+			}
+			category, err := ClassifyMultiplier(result.Multiplier)
+			if err != nil {
+				return DefenseAnalysis{}, err
+			}
+			defense[ai] = AttackDefense{AttackType: attack, Result: result, Category: category}
+
+			switch category {
+			case CategoryQuadWeak:
+				summary[ai].Weak++
+				summary[ai].QuadWeak++
+			case CategoryWeak:
+				summary[ai].Weak++
+			case CategoryResist, CategoryQuadResist:
+				summary[ai].Resist++
+			case CategoryImmune:
+				summary[ai].Immune++
+			case CategoryNeutral:
+				summary[ai].Neutral++
+			}
+		}
+		memberDefenses[mi] = MemberDefense{PokemonID: member.PokemonID, Types: member.Types, Defense: defense}
+	}
+
+	return DefenseAnalysis{Members: memberDefenses, TeamSummary: summary}, nil
 }

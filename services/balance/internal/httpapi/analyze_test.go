@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -268,11 +269,12 @@ func TestAnalyzeUnknownPokemon(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
-		body string
+		name      string
+		body      string
+		wantInMsg string
 	}{
-		{name: "single unknown", body: `{"members":[{"pokemonId":"9999-000"}]}`},
-		{name: "unknown after known", body: `{"members":[{"pokemonId":"9001-000"},{"pokemonId":"9001-001"}]}`},
+		{name: "single unknown", body: `{"members":[{"pokemonId":"9999-000"}]}`, wantInMsg: "9999-000"},
+		{name: "unknown after known", body: `{"members":[{"pokemonId":"9001-000"},{"pokemonId":"9001-001"}]}`, wantInMsg: "9001-001"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -281,10 +283,55 @@ func TestAnalyzeUnknownPokemon(t *testing.T) {
 			if recorder.Code != http.StatusUnprocessableEntity {
 				t.Fatalf("status = %d, want 422; body=%s", recorder.Code, recorder.Body.String())
 			}
-			if got := decodeError(t, recorder.Body.Bytes()); got.Code != api.UnknownPokemon {
+			got := decodeError(t, recorder.Body.Bytes())
+			if got.Code != api.UnknownPokemon {
 				t.Errorf("code = %q, want unknown_pokemon", got.Code)
 			}
+			// ADR-0014 §5.6: the message must name the not-found pokemonId (the client's own input).
+			if !strings.Contains(got.Message, tt.wantInMsg) {
+				t.Errorf("message = %q, want it to contain %q", got.Message, tt.wantInMsg)
+			}
 		})
+	}
+}
+
+// failingPokemonTypes is a fake PokemonTypeProvider that fails in a way other than
+// an unknown pokemonId (e.g. the future shared master snapshot being unreadable),
+// to exercise the 500 internal_error path (ADR-0014 §5.5).
+type failingPokemonTypes struct{ err error }
+
+func (f failingPokemonTypes) PokemonTypes(string) ([]balance.TypeID, error) { return nil, f.err }
+
+func TestAnalyzeUnexpectedPokemonTypesFailureIsInternalError(t *testing.T) {
+	t.Parallel()
+
+	server := New(Dependencies{
+		TypeChart:    master.NewTemporaryTypeChart(),
+		PokemonTypes: failingPokemonTypes{err: errors.New("read model backend exploded")},
+	})
+	recorder := postAnalyze(t, server, `{"members":[{"pokemonId":"9001-000"}]}`)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500; body=%s", recorder.Code, recorder.Body.String())
+	}
+	got := decodeError(t, recorder.Body.Bytes())
+	if got.Code != api.InternalError {
+		t.Errorf("code = %q, want internal_error", got.Code)
+	}
+	if strings.Contains(got.Message, "exploded") {
+		t.Errorf("message = %q must not leak internal detail", got.Message)
+	}
+}
+
+func TestAnalyzeNilTypeChartIsInternalError(t *testing.T) {
+	t.Parallel()
+
+	server := New(Dependencies{PokemonTypes: fictionalPokemonTypes})
+	recorder := postAnalyze(t, server, `{"members":[{"pokemonId":"9001-000"}]}`)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500; body=%s", recorder.Code, recorder.Body.String())
+	}
+	if got := decodeError(t, recorder.Body.Bytes()); got.Code != api.InternalError {
+		t.Errorf("code = %q, want internal_error", got.Code)
 	}
 }
 

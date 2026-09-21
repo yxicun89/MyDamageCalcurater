@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: balance
+spec:
+  template:
+    spec:
+      containers:
+        - name: balance
+          env:
+            - name: BALANCE_POKEMON_TYPES_PATH
+              value: /etc/balance/pokemon-types.json
+          volumeMounts:
+            - name: pokemon-types
+              mountPath: /etc/balance/pokemon-types.json
+              subPath: pokemon-types.json
+              readOnly: true
+      volumes:
+        - name: pokemon-types
+          configMap:
+            name: balance-pokemon-types

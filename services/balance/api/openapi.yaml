@@ -79,6 +79,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '500':
+          description: An unexpected internal error (internal_error). The message is a fixed string; no internal detail is returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   parameters:
     DeviceId:
@@ -144,6 +150,7 @@ components:
         - request_too_large
         - unknown_pokemon
         - master_unavailable
+        - internal_error
     AnalyzeResponse:
       type: object
       additionalProperties: false
