@@ -346,3 +346,15 @@ Decision: 各レーンが導入・更新するミドルウェア(Argo CD・DB・
 Reason: ユーザーが「ミドルウェア等のバージョンは全て最新にして。アップデートの手間を減らすために」と指示した。
 Impact: タイプバランスレーンは Argo CD v3.5.3(2026-09-22 時点の最新。導入手順と版は services/balance/deploy/argocd/README.md・ADR-0018)を導入、balance を Echo v4.15.4 → v5.3.1(oapi-codegen v2.8.0 の echo5-server)に移行、golang:1.27-alpine の digest を更新。
 他のレーン(データ・API・Web・iOS)は、自分の範囲の依存を同じ方針で確認・更新する(services/go.mod の Echo v4 は API レーン、services/pokedex/Dockerfile の golang:1.27-alpine の digest はデータレーンの判断)。
+
+## 2026-09-22: データレーンの依存を最新の安定版に固定(ADR-0018)。Go ツールチェーンは 1.27.1、MySQL は LTS(9.7)を既定にする
+Decision: (1) Go ツールチェーンを `go.dev/dl` で確認した最新の安定版 `go1.27.1` に統一(`go.work`・`engine`/`services`/`tools`/`services/balance`(go/toolchain 行のみ)の `go` 行)。
+(2) engine・services(データレーン分: golang-migrate・go-sql-driver/mysql・yaml.v3)・tools(sqlc)の Go モジュールは `go list -m -u all` と `go mod tidy` で確認したところ既に最新の安定版で変更なし。
+services/go.mod の oapi-codegen tool(生成先が API レーンの services/internal/api)は据え置き、上げない(API レーンの担当)。
+(3) MySQL は Docker 公式イメージのタグ体系を確認し、現在の LTS 系列は `9.x`(最新 `9.7.2`。旧 LTS の `8.4` は `lts` タグが外れている)、Innovation は年ベースの `26.x` に移行していることを確認。
+アップデートの手間を減らす目的に合わせ、Innovation ではなく最新の LTS(`9.7.2`、digest 固定)を既定にした(services/pokedex 周りの statefulset・job-migrate・db-local-up.sh)。
+(4) services/pokedex/Dockerfile の `golang:1.27-alpine` を `golang:1.27.1-alpine`(balance と同じ digest)に更新。
+(5) `@smogon/calc` は `npm view` で確認したところ `0.12.0` が最新(据え置きどおり変更不要)。`tools/importer/` は `.gitkeep` のみで package.json が無いため対象外(別レーンの未マージ作業)。
+(6) 古い依存を一覧化する `make deps-outdated`(Go 各モジュール `go list -m -u all` / Node `npm outdated`)をルート Makefile に追加(`make test` には含めない)。
+Reason: 2026-09-21 のユーザー決定(最新の安定版・正確な番号固定・Go ツールチェーンはデータレーンが先に上げる)への対応。
+Impact: 詳細は ADR-0018。API レーン・Web レーン・iOS レーンは、Go ツールチェーンを `go 1.27.1` に揃えること(services/go.mod の API レーンが使う分の依存は自分の範囲で確認)。タイプバランスレーンの `services/balance/go.mod` は go/toolchain 行(`go 1.27` → `go 1.27.1`)のみ本コミットで揃え、依存(require)は変更していない。

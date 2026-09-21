@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# make dev 用に docker で mysql:8.4 を 127.0.0.1:3306 に起動する(ADR-0015 §5・§9)。
+# make dev 用に docker で mysql:9.7.2 を 127.0.0.1:3306 に起動する(ADR-0015 §5・§9)。
 # パスワードは .env から読む(サンプルは .env.example。.env は Git に含めない)。
 # 停止・削除はこのスクリプトの範囲外(データ削除は人間の確認が必要。CLAUDE.md)。
 set -euo pipefail
@@ -37,7 +37,7 @@ else
     --name "$CONTAINER_NAME" \
     -p 127.0.0.1:3306:3306 \
     -e MYSQL_ROOT_PASSWORD \
-    mysql:8.4 \
+    mysql:9.7.2@sha256:29abb0a179982e4a8928138bfc7f918af9eda64e7eeb1b1d084c1720a20159e6 \
     --character-set-server=utf8mb4 \
     --collation-server=utf8mb4_0900_ai_ci >/dev/null
 fi

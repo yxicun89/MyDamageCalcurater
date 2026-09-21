@@ -1,6 +1,6 @@
 module example.com/pokecalc/services/balance
 
-go 1.27
+go 1.27.1
 
 require (
 	github.com/labstack/echo/v5 v5.3.1

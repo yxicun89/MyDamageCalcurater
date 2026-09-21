@@ -453,7 +453,7 @@ func TestLocalMySQLManifests(t *testing.T) {
 		t.Fatalf("deploy/k8s/overlays/local/mysql が読めない: %v", err)
 	}
 	s := all.String()
-	for _, want := range []string{"kind: StatefulSet", "image: mysql:8.4", "volumeClaimTemplates", "kind: Service"} {
+	for _, want := range []string{"kind: StatefulSet", "image: mysql:9.7.2@sha256:", "volumeClaimTemplates", "kind: Service"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("MySQL の manifest に %q が無い", want)
 		}
