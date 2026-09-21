@@ -30,3 +30,9 @@
 - ユーザー指示により、公開用クリーンコピー作成をClaude Code固定とする表現を撤回した。Claude Code/Codexのうち依頼された側が実施できる。
 - feature branchだけの記録は禁止し、main正本の`DECISIONS.md`・`CURRENT_STATE.md`担当欄・担当logと、切替時のclean copy側`docs/ai-shared/`へ、相対path、source/clean commit、検査、push状態、新しい開発正本を記録する運用を追加した。
 - 現時点ではclean copyとprivate remoteは未作成・未接続であり、開発正本の切替もまだ行っていない。
+
+## 2026-09-21 (private remote preflight)
+- ユーザーからprivate GitHub remote作成と、準備完了後のpush許可を受領。URLは個人accountを含むため共有文書へ記録していない。
+- HTTPS `git ls-remote`は成功し、remoteが空であることを確認した。SSHはlocalのhost key未登録で失敗したため、現時点の到達確認にはHTTPSを使用した。credentialは表示・記録していない。
+- push前監査で、Claude Code側`feat/claude-p1-engine`に未コミットのengine変更と新規fixtureが多数あることを確認。現時点のmain/Codex commitだけでclean copyを作ると作業が欠落するためpushを保留した。
+- 次の開始点: Claude作業をcommit・検証し、Codex branchを通常手順で統合した単一source commitを確定してからclean copyを作る。切替完了後はClaude Code/Codexともclean copy側directoryで起動し、旧repositoryはpointer/参照専用にする。
