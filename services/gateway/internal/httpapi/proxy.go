@@ -25,11 +25,18 @@ import (
 // dial・アドレス・context のエラー文などの Go の内部情報は出さない(ADR-0202 §5)。
 const msgUpstreamUnavailable = "上流を利用できない"
 
-// newReverseProxy は target への ReverseProxy を作る。override が非 nil ならそれを Transport に使う
-// (テストだけが使う。ADR-0202 §1)。既定は DialContext と ResponseHeaderTimeout に timeout を掛けた
-// Transport。接続できない・タイムアウトしたときは ErrorHandler が 503 upstream_unavailable を返す。
-// originAllowed は CORS の許可オリジン判定(ModifyResponse が上流の応答から Access-Control-* を
-// 取り除いたあと、許可オリジンのときだけ gateway 自身の ACAO を付け直すために使う。必須1)。
+// newReverseProxy は target への ReverseProxy を作る。
+//
+//   - target: 転送先の基底 URL。
+//   - timeout: 上流の応答ヘッダを待つ上限(dial にも同じ値を使う)。override が nil のときの
+//     既定 Transport にだけ効く。
+//   - override: 上流への RoundTripper の差し替え(テストだけが使う。nil なら既定の Transport)。
+//   - originAllowed: CORS の許可オリジン判定。ModifyResponse(上流の応答が届いたとき)と
+//     ErrorHandler(上流に接続できない・タイムアウトしたとき)の両方で、Access-Control-* を
+//     いったん取り除いてから、許可オリジンのときだけ gateway 自身の ACAO を付け直すために使う
+//     (必須1・必須2)。
+//
+// 接続できない・タイムアウトしたときは ErrorHandler が 503 upstream_unavailable を返す。
 func newReverseProxy(target *url.URL, timeout time.Duration, override http.RoundTripper, originAllowed func(string) bool) *httputil.ReverseProxy {
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
@@ -54,6 +61,13 @@ func newReverseProxy(target *url.URL, timeout time.Duration, override http.Round
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		// クライアントへは固定文だけ(Go の内部情報を出さない)。詳細はログにだけ残す(推奨4)。
 		slog.Warn("gateway: 上流に到達できない", "upstream", target.Host, "error", err)
+		// 上流に届かなかった応答にも CORS を付ける(必須2: 接続不可・タイムアウトの 503 で
+		// ACAO が抜け落ちる退行の修正)。r は Rewrite 後の outbound リクエストだが、
+		// Origin ヘッダは Rewrite で変更していないのでそのまま読める。
+		stripCORSHeaders(w.Header())
+		if origin := r.Header.Get("Origin"); originAllowed(origin) {
+			setCORSAllowed(w.Header(), origin)
+		}
 		writeJSONError(w, http.StatusServiceUnavailable, api.UpstreamUnavailable, msgUpstreamUnavailable)
 	}
 	return proxy

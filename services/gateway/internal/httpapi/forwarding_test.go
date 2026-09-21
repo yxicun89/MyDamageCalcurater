@@ -17,13 +17,13 @@ import (
 func TestForwardedHeadersAreRewrittenToUpstream(t *testing.T) {
 	env := newTestEnv(t)
 	header := validHeaders()
-	header.Set("X-Forwarded-For", "203.0.113.9") // クライアントが偽装した値
+	header.Set("X-Forwarded-For", "spoofed-client") // クライアントが偽装した値(IP ではない)
 	header.Set("X-Forwarded-Host", "evil.example.test")
 	header.Set("X-Forwarded-Proto", "https")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/calc", strings.NewReader(`{}`))
 	req.Host = "client-supplied.example.test"
-	req.RemoteAddr = "198.51.100.7:54321"
+	req.RemoteAddr = "127.0.0.1:54321"
 	for k, vs := range header {
 		for _, v := range vs {
 			req.Header.Add(k, v)
@@ -45,8 +45,8 @@ func TestForwardedHeadersAreRewrittenToUpstream(t *testing.T) {
 	if got.Host != wantHost {
 		t.Errorf("上流が受け取った Host = %q, want %q(上流のホスト。クライアントの Host ではない)", got.Host, wantHost)
 	}
-	if xff := got.Header.Get("X-Forwarded-For"); xff != "198.51.100.7" {
-		t.Errorf("X-Forwarded-For = %q, want クライアントの実際の IP(198.51.100.7)。偽装した値が残っていないこと", xff)
+	if xff := got.Header.Get("X-Forwarded-For"); xff != "127.0.0.1" {
+		t.Errorf("X-Forwarded-For = %q, want クライアントの実際の IP(127.0.0.1)。偽装した値(spoofed-client)が残っていないこと", xff)
 	}
 	if xfh := got.Header.Get("X-Forwarded-Host"); xfh != "client-supplied.example.test" {
 		t.Errorf("X-Forwarded-Host = %q, want リクエストの実際の Host(偽装した evil.example.test ではない)", xfh)

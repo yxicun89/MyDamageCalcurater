@@ -67,7 +67,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 
 	e := echo.New()
 	e.HTTPErrorHandler = httpErrorHandler
-	e.Use(recoverMiddleware)
+	e.Use(g.recoverMiddleware)
 	e.Any("/*", g.serve)
 	return e, nil
 }

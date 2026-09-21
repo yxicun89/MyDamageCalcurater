@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // プリフライトの応答ヘッダの期待値(ADR-0202 §6)。
@@ -205,6 +206,43 @@ func TestCORSStripsUpstreamHeaders(t *testing.T) {
 				assertNoCORS(t, rec)
 			})
 		}
+	}
+}
+
+// 必須2: 上流に接続できない・タイムアウトした 503(ReverseProxy.ErrorHandler)と、panic 回復の
+// 500(recoverMiddleware)にも CORS を付ける。許可オリジンなら ACAO がちょうど1つ、許可外なら無し
+// (以前はこれらの経路だけ CORS が抜け落ちる退行があった)。
+func TestCORSOnUpstreamFailuresAndPanic(t *testing.T) {
+	const shortTimeout = 100 * time.Millisecond
+	tests := []struct {
+		name       string
+		mutate     func(*Config)
+		wantStatus int
+	}{
+		{"calc に接続できない(503 upstream_unavailable)", func(c *Config) { c.CalcURL = closedServerURL(t) }, http.StatusServiceUnavailable},
+		{"calc がタイムアウト(503 upstream_unavailable)", func(c *Config) {
+			c.CalcURL = slowServerURL(t, 5*time.Second)
+			c.UpstreamTimeout = shortTimeout
+		}, http.StatusServiceUnavailable},
+		{"panicTransport(500 internal)", func(c *Config) { c.transport = panicTransport{} }, http.StatusInternalServerError},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name+"/許可オリジン", func(t *testing.T) {
+			env := newTestEnv(t, tt.mutate)
+			rec := serve(t, env.handler, http.MethodPost, "/api/calc", withOrigin(validHeaders(), allowedOrigin), []byte(`{}`))
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+			assertCORSAllowed(t, rec, allowedOrigin)
+		})
+		t.Run(tt.name+"/許可外オリジン", func(t *testing.T) {
+			env := newTestEnv(t, tt.mutate)
+			rec := serve(t, env.handler, http.MethodPost, "/api/calc", withOrigin(validHeaders(), disallowedOrigin), []byte(`{}`))
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+			assertNoCORS(t, rec)
+		})
 	}
 }
 

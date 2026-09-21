@@ -48,10 +48,17 @@ func statusForCode(code api.ErrorCode) int {
 }
 
 // recoverMiddleware は panic を回復し、500 internal の httpError にする(スタック等を出さない。AC-G7)。
-func recoverMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+// 許可オリジンなら CORS も付ける(必須2: panic 回復の 500 で ACAO が抜け落ちる退行の修正。
+// panic はまだ何も書き出していない時点[calc/pokedex/assets への転送前・転送中の RoundTrip]で
+// 起きるので、ここで付けた ACAO がそのまま httpErrorHandler の応答に乗る)。
+func (g *gateway) recoverMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) (err error) {
 		defer func() {
 			if r := recover(); r != nil {
+				origin := c.Request().Header.Get("Origin")
+				if g.originAllowed(origin) {
+					setCORSAllowed(c.Response().Header(), origin)
+				}
 				err = newError(api.Internal, "%s", messageInternal)
 			}
 		}()
