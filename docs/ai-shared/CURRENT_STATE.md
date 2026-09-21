@@ -9,8 +9,8 @@ Next: 同 ADR-0002 の確認事項確定後に P2-2。Codex は damage-calc の�
 ## Type Balance Checker
 Owner: Codex
 Branch: feat/codex-tb0-foundation (worktree: ~/pokecalc-codex-tb0)
-Status: TB0 基盤を 6e8989e にコミット。型・整数相性コア・EffectSource・temporary provider・service-local OpenAPI生成server・HTTP最小疎通・Docker/Kustomize/Argo CD Application定義・単体テストを実装。独立再レビューは修正差分PASS、Docker build・k3d直接deploy・Pod Ready・smoke(health=200/analyze=501)まで成功。Argo CD実同期は未実施のためTB0全体は未完了
-Next: Git repository URL、配布imageのregistry/repositoryと不変tag/digest、ローカルclusterへArgo CDを導入するかを人間が決定後、Applicationのplaceholderを置換してmanual sync→Pod更新を検証する。main取り込みはユーザー指示後にClaude Codeが行う
+Status: TB0 基盤6e8989eに加え、GitOps・公開準備をd7a8bbfへコミット。localと分離したdigest固定GitOps overlay、安全なplaceholder/credential検査、private repository/registry手順、multi-platform image push補助、直接依存license記録を追加。独立レビューPASS、test/lint/build/Kustomize/Docker build/smoke成功。Argo CD実同期は未実施のためTB0全体は未完了
+Next: ユーザーが作成するprivate repositoryのclone URLを待つ。元repositoryへremoteを追加せず、Claude Code側R-2-9の公開用クリーンコピーとfull検査が完了したコピーだけを接続する。registryへimageをpushしてdigestを反映し、version固定したArgo CD・credentialを準備後、manual sync→Pod更新を検証する。main取り込みはユーザー指示後にClaude Codeが行う
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠
