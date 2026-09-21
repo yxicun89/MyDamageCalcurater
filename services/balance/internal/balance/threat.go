@@ -60,7 +60,7 @@ type ThreatAnalysis struct {
 // combatant (members then threats, same checks as AnalyzeCoverage: move count,
 // duplicate moveId, move category, attack move type; §6.1) → ability effects of
 // every combatant (members then threats, validated in full regardless of any attack
-// move, §6.3).
+// move, §6.3). Every combatant's types are checked first (§6.7).
 func AnalyzeThreats(chart TypeChartProvider, members, threats []Combatant) (ThreatAnalysis, error) {
 	if len(members) < 1 || len(members) > MaxMembers {
 		return ThreatAnalysis{}, ErrMemberCount
@@ -72,6 +72,14 @@ func AnalyzeThreats(chart TypeChartProvider, members, threats []Combatant) (Thre
 		return ThreatAnalysis{}, ErrNilTypeChart
 	}
 
+	// Types are validated even when the other side has no attack move (ADR-0400 §6.7).
+	for _, side := range [][]Combatant{members, threats} {
+		for _, combatant := range side {
+			if err := validateDefenseTypes(combatant.Types); err != nil {
+				return ThreatAnalysis{}, err
+			}
+		}
+	}
 	for _, side := range [][]Combatant{members, threats} {
 		for _, combatant := range side {
 			if err := validateCombatantMoves(combatant.Moves); err != nil {
@@ -163,8 +171,7 @@ func bestDefense(chart TypeChartProvider, attackTypes, defenseTypes []TypeID, ab
 	return best, nil
 }
 
-// validateCombatantMoves checks one combatant's moves exactly as AnalyzeCoverage
-// validates one member's moves (ADR-0400 §6.1 / ADR-0016 §6): move count, duplicate
+// validateCombatantMoves checks one combatant's moves; AnalyzeCoverage and AnalyzeThreats share it (ADR-0400 §6.1 / ADR-0016 §6): move count, duplicate
 // moveId, move category, and (for non-status moves only) attack move type.
 func validateCombatantMoves(moves []Move) error {
 	if len(moves) > MaxMovesPerMember {

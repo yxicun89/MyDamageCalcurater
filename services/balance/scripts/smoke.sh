@@ -149,7 +149,7 @@ if [ "$threats_status" != "200" ]; then
   cat "$body_file" >&2
   exit 1
 fi
-for key in '"threats"' '"matchups"' '"attackTypes":["ice"]' '"incoming":"2"' '"incoming":"1"' '"outgoing":"2"' '"outgoing":null' '"safeMembers":0' '"superEffectiveMembers":1'; do
+for key in '"threats"' '"matchups"' '"attackTypes":["ice"]' '"incoming":"2",' '"incoming":"1",' '"outgoing":"2",' '"outgoing":null' '"safeMembers":0' '"superEffectiveMembers":1'; do
   if ! grep -qF "$key" "$body_file"; then
     echo "balance threats body is missing $key" >&2
     cat "$body_file" >&2

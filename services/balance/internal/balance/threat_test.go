@@ -634,3 +634,36 @@ func TestAnalyzeThreatsValidatesAbilityEffectsRegardlessOfAttackMoves(t *testing
 		})
 	}
 }
+
+// ADR-0400 §6.7: every combatant's types are validated even when the other side has no attack move.
+func TestAnalyzeThreatsValidatesTypesRegardlessOfAttackMoves(t *testing.T) {
+	t.Parallel()
+
+	noMoves := combatant("9002-000", types(balance.TypeGrass), nil)
+	tests := []struct {
+		name string
+		bad  balance.Combatant
+		want error
+	}{
+		{name: "unknown type", bad: combatant("9101-000", types("stellar"), nil), want: balance.ErrInvalidType},
+		{name: "three types", bad: combatant("9101-000", types(balance.TypeFire, balance.TypeWater, balance.TypeGrass), nil), want: balance.ErrDefenseTypeCount},
+		{name: "no type", bad: combatant("9101-000", types(), nil), want: balance.ErrDefenseTypeCount},
+		{name: "duplicate type", bad: combatant("9101-000", types(balance.TypeFire, balance.TypeFire), nil), want: balance.ErrDuplicateDefenseType},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name+" as member", func(t *testing.T) {
+			t.Parallel()
+			_, err := balance.AnalyzeThreats(testTypeChart(), []balance.Combatant{tt.bad}, []balance.Combatant{noMoves})
+			if !errors.Is(err, tt.want) {
+				t.Errorf("err = %v, want %v", err, tt.want)
+			}
+		})
+		t.Run(tt.name+" as threat", func(t *testing.T) {
+			t.Parallel()
+			_, err := balance.AnalyzeThreats(testTypeChart(), []balance.Combatant{noMoves}, []balance.Combatant{tt.bad})
+			if !errors.Is(err, tt.want) {
+				t.Errorf("err = %v, want %v", err, tt.want)
+			}
+		})
+	}
+}

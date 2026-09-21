@@ -187,3 +187,12 @@
 
 ### Next
 - TB4 → TB5
+
+## 2026-09-22 タイプバランスレーン(Claude Code): TB4
+
+### Done
+- TB4 仮想敵診断(ADR-0400。番号はレーンの帯の規則で 0019 から振り直し): spec-writer → implementer → 先行テストの書き間違い2件を意図どおりに修正 → critic PASS → 軽微(技の検証の共通化、両側のタイプを常に検証 §6.7、smoke の厳密化、設計書・共有状態)を反映
+- k3d smoke: threats=200 threats_unknown_move=422
+
+### Next
+- TB5(おすすめタイプと該当ポケモン)
