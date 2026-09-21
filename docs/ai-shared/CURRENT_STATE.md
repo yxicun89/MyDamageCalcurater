@@ -10,7 +10,7 @@ Next: P2-2b(importer の取得・変換と DB への投入)→ P2-2c → P2-2d �
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
 Active: Claude Code
-Branch: feat/api-p3(作業ディレクトリ ~/MyDamageCalcurater-api)
+Branch: feat/api-p3-gateway(feat/api-p3 から分岐。P3-1 は feat/api-p3 → PR #14。作業ディレクトリ ~/MyDamageCalcurater-api)
 Status: P3-1(calc-svc。ADR-0018)完了・critic PASS。api/openapi.yaml を更新済み(category・BulkCalcRow.defender・逆算の P1-12 形・ErrorCode)。依存を最新へ(Echo v5・ADR-0019)。main へは PR で統合予定
 Next: P3-2 gateway(Echo v5)(ルーティング・X-Device-Id/X-Session-Id の UUID 検証・/assets・CORS・upstream_unavailable)→ P3-3 契約テスト(gateway 経由)と k3d のスモーク。マスタは services/calc/internal/master の暫定 Store(P2-2a が main に入ったら差し替え)
 
