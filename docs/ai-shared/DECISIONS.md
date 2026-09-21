@@ -295,3 +295,8 @@ Decision: 同じユーザー決定を両レーンが別々に COORDINATION.md �
 Reason: ユーザーが深夜のマージについて「マージしないと作業止まるならマージしていい」と回答し、条件(テストを通す・朝に報告)を承認した。
 Impact: COORDINATION.md「人間への質問」に深夜の PR マージの項を追加。上の「判断が必要なときの質問ルールと深夜の自律作業」エントリは本エントリで置き換える
 (深夜の判断待ちの記録先は plan.md のブロッカー節。既定案で進めた判断は DECISIONS.md に「既定案で進行・ユーザー未確認」と書く)。
+
+## 2026-09-21: TB2(攻撃範囲)の仕様3点(ユーザー回答)
+Decision: 有効打は等倍以上(×1 以上。抜群は別に数える)。防御側は 18 の単タイプ(複合は TB4)。技はメンバーごとに技 ID を最大4つ送り、タイプ・分類は balance の技の read model から引く。
+Reason: TB2 着手時に設計書 §6 で未定義だった点をユーザーに質問し、回答を得た。
+Impact: ADR-0016。新 endpoint `/api/balance/v1/team-balance/coverage`、技の read model(`BALANCE_MOVES_PATH`、架空データの example)。

@@ -104,7 +104,7 @@
 - [!] TB0 基盤(型・相性コア・temporary type chart adapter・HTTP 最小疎通・Docker/Kustomize/Argo CD 定義・単体テスト)。Argo CD 実同期以外は完了・main 統合済み。実同期は人間の作業待ち(下のブロッカー)。TB1 はこれを待たずに進める
 - [x] TB1 防御タイプバランス(最大6体 × 18タイプの防御倍率、攻撃タイプごとのチーム集計。総合点は作らない。ADR-0014)
 - [x] TB1b 相性表を P1-13 のデータ(`testdata/golden/typechart.json`)から読み、TemporaryTypeChart を削除(ユーザー決定。ADR-0015)
-- [ ] TB2 攻撃範囲
+- [~] TB2 攻撃範囲(ADR-0016)
 - [ ] TB3 特性(正規化された効果データ経由。タイプ由来/特性由来の区別)
 - [ ] TB4 仮想敵診断(詳細は TB1〜TB3 完成後に確定)
 
