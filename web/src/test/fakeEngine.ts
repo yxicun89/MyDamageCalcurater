@@ -10,8 +10,10 @@ import type {
   CalcRequest,
   CalcResult,
   EngineResult,
+  ReverseCandidate,
   ReverseRequest,
   ReverseResult,
+  StatKey,
 } from "../engine/types";
 
 /** engine の既定プリセット(ADR-0009 §1。物理技の5行)。fake の行の Key と表示名に使う。 */
@@ -88,6 +90,50 @@ export function engineError<T>(code: string, message: string): EngineResult<T> {
   return { ok: false, error: { code, message } };
 }
 
+/** 決め打ちの逆算候補1件(P4-4)。指定しないフィールドは表示の確認に都合のよい架空の値。 */
+export function reverseCandidate(spec: Partial<ReverseCandidate> = {}): ReverseCandidate {
+  return {
+    natureClass: "neutral",
+    nature: { plus: "", minus: "" },
+    itemId: "",
+    ranges: [{ min: 10, max: 12 }],
+    spCount: 3,
+    exact: true,
+    mismatch: 0,
+    support: 4,
+    minPercent: 40.2,
+    maxPercent: 47.8,
+    ...spec,
+  };
+}
+
+/** 逆算の対象側と技の分類から、engine が逆算する関連ステータス(ADR-0010 §2 の写し。fake 用)。 */
+function reverseStatFor(request: ReverseRequest): StatKey {
+  const special = request.move.category === "special";
+  if (request.side === "attacker") {
+    return special ? "spa" : "atk";
+  }
+  return special ? "spd" : "def";
+}
+
+/**
+ * リクエストに応じた逆算の結果(engine の形をまねる): 性格クラス(neutral → plus)× 持ち物候補の順に候補を返す。
+ * itemCandidates が無ければ持ち物なしの1通り。防御側は H32 前提(assumedHpSp 32)、攻撃側は 0。
+ */
+export function reverseResultFor(request: ReverseRequest): ReverseResult {
+  const items = request.itemCandidates ?? [null];
+  const candidates = (["neutral", "plus"] as const).flatMap((natureClass) =>
+    items.map((item) => reverseCandidate({ natureClass, itemId: item?.id ?? "" })),
+  );
+  return {
+    side: request.side,
+    stat: reverseStatFor(request),
+    assumedHpSp: request.side === "defender" ? 32 : 0,
+    exactCount: candidates.length,
+    candidates,
+  };
+}
+
 export interface FakeEngine extends CalcEngine {
   /** calcBulk に渡されたリクエスト(呼ばれた順)。 */
   readonly bulkRequests: BulkRequest[];
@@ -96,10 +142,15 @@ export interface FakeEngine extends CalcEngine {
 }
 
 type BulkResponder = (request: BulkRequest) => EngineResult<BulkResult>;
+type ReverseResponder = (request: ReverseRequest) => EngineResult<ReverseResult>;
 
-/** すぐに応答する fake。応答は respond で差し替えられる(既定は bulkResultFor の成功)。 */
+/**
+ * すぐに応答する fake。応答は respond で差し替えられる(既定は bulkResultFor の成功)。
+ * 逆算(P4-4)の応答は respondReverse で差し替えられる(既定は reverseResultFor の成功)。
+ */
 export function createFakeEngine(
   respond: BulkResponder = (request) => ok(bulkResultFor(request)),
+  respondReverse: ReverseResponder = (request) => ok(reverseResultFor(request)),
 ): FakeEngine {
   const bulkRequests: BulkRequest[] = [];
   const calcRequests: CalcRequest[] = [];
@@ -118,7 +169,7 @@ export function createFakeEngine(
     },
     calcReverse(request): Promise<EngineResult<ReverseResult>> {
       reverseRequests.push(request);
-      return Promise.resolve(engineError("not_used", "画面テストでは逆算を使わない"));
+      return Promise.resolve(respondReverse(request));
     },
   };
 }
@@ -136,6 +187,27 @@ export function createDeferredEngine(): { engine: FakeEngine; pending: PendingBu
     ...base,
     calcBulk(request) {
       base.bulkRequests.push(request);
+      return new Promise((resolve) => {
+        pending.push({ request, resolve });
+      });
+    },
+  };
+  return { engine, pending };
+}
+
+export interface PendingReverse {
+  readonly request: ReverseRequest;
+  resolve(result: EngineResult<ReverseResult>): void;
+}
+
+/** 逆算の応答をテストが好きな順に返せる fake(P4-4。古い応答が新しい表示を上書きしないことの確認用)。 */
+export function createDeferredReverseEngine(): { engine: FakeEngine; pending: PendingReverse[] } {
+  const pending: PendingReverse[] = [];
+  const base = createFakeEngine();
+  const engine: FakeEngine = {
+    ...base,
+    calcReverse(request) {
+      base.reverseRequests.push(request);
       return new Promise((resolve) => {
         pending.push({ request, resolve });
       });

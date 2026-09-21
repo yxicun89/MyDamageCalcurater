@@ -4,8 +4,6 @@
 //
 // 実行: make web-test-wasm(vitest.wasm.config.ts、node 環境)
 
-import { existsSync, readFileSync } from "node:fs";
-import vm from "node:vm";
 import { beforeAll, describe, expect, test } from "vitest";
 import {
   ATTACKER_PRESET_KEYS,
@@ -23,12 +21,9 @@ import {
 } from "../domain/requests";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
-import { localPath } from "../test/localPath";
+import { fileWasmLoader, requireWasmArtifacts } from "../test/fileWasmLoader";
 import type { BulkRequest, CalcEngine, Item, Move } from "./types";
-import { createWasmEngine, type WasmLoader } from "./wasmEngine";
-
-const wasmExecPath = localPath("../../public/wasm_exec.js", import.meta.url);
-const wasmPath = localPath("../../public/engine.wasm", import.meta.url);
+import { createWasmEngine } from "./wasmEngine";
 
 /** ADR-0009 §1 の既定カタログ(presetKeys 省略時、技の分類で選ばれる5行)の Key と順序。 */
 const physicalPresetKeys = ["none", "hp", "hb_boost", "hb", "hb_full"];
@@ -36,29 +31,12 @@ const specialPresetKeys = ["none", "hp", "hd_boost", "hd", "hd_full"];
 /** engine の1回の計算が返す乱数の数(ダメージ乱数 85〜100 の16段階)。 */
 const rollCount = 16;
 
-/** Node 用の読み込み口: ブラウザの browserWasmLoader と同じ2段階を、ファイルから行う。 */
-function fileWasmLoader(): WasmLoader {
-  return {
-    loadRuntime() {
-      new vm.Script(readFileSync(wasmExecPath, "utf8"), { filename: wasmExecPath }).runInThisContext();
-      return Promise.resolve();
-    },
-    async instantiate(importObject) {
-      const { instance } = await WebAssembly.instantiate(readFileSync(wasmPath), importObject);
-      return instance;
-    },
-  };
-}
-
 let engine: CalcEngine;
 let master: MasterData;
 
 beforeAll(async () => {
-  for (const path of [wasmExecPath, wasmPath]) {
-    if (!existsSync(path)) {
-      throw new Error(`${path} が無い。先に \`make wasm\` を実行すること(このテストはスキップしない)`);
-    }
-  }
+  // 前提(engine.wasm・wasm_exec.js)が無ければスキップせず失敗する(CLAUDE.md、ADR-0016 §8)。
+  requireWasmArtifacts();
   engine = createWasmEngine(fileWasmLoader());
   master = await exampleMasterSource.load();
 });

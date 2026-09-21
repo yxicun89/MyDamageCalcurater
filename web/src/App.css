@@ -14,3 +14,33 @@
 .app-main {
   min-height: 100vh;
 }
+
+/* 計算・逆算の切り替えタブ(P4-4)。色は tokens.css の CSS 変数だけを参照する。 */
+.app-tabs__list {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-4) 0;
+}
+
+.app-tabs__tab {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-pill);
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--bg-glass-blur));
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  /* 選択の切り替えはタップへの反応だけ(design.md「動き」、CLAUDE.md ドメイン規約)。 */
+  transition:
+    background-color var(--duration-swap) ease,
+    color var(--duration-swap) ease;
+}
+
+.app-tabs__tab[aria-selected="true"] {
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+  color: var(--bg-base);
+}

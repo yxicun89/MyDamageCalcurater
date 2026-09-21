@@ -90,3 +90,117 @@ describe("P4-2 計算画面の組み込み", () => {
     expect(engine.bulkRequests[0]?.defenderSpecies.key).toBe(defender.key);
   });
 });
+
+// P4-4: 計算と逆算の切り替え(ADR-0016 §7)。タブ(role=tab)「計算」「逆算」で切り替え、既定は計算。
+// どちらの画面も App が持つ同じ engine・master を使う。
+describe("P4-4 計算・逆算の切り替え", () => {
+  test("既定は「計算」タブで、計算画面を出す", async () => {
+    render(<App engine={createFakeEngine()} />);
+    const calcTab = await screen.findByRole("tab", { name: "計算" });
+    expect(calcTab).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "逆算" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tablist")).toBeInTheDocument();
+    expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "自分のポケモン" })).toBeNull();
+  });
+
+  test("「逆算」タブで逆算画面に切り替わり、「計算」タブで戻る", async () => {
+    const user = userEvent.setup();
+    render(<App engine={createFakeEngine()} />);
+    await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
+
+    await user.click(screen.getByRole("tab", { name: "逆算" }));
+    expect(screen.getByRole("tab", { name: "逆算" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("combobox", { name: "自分のポケモン" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "攻撃側のポケモン" })).toBeNull();
+
+    await user.click(screen.getByRole("tab", { name: "計算" }));
+    expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toBeInTheDocument();
+  });
+
+  test("逆算画面も App に渡した engine を使う(観測を入れると fake の calcReverse が呼ばれる)", async () => {
+    const engine = createFakeEngine();
+    const master = await exampleMasterSource.load();
+    const [mine, theirs] = master.species;
+    if (mine === undefined || theirs === undefined) {
+      throw new Error("例データに種族が2つ以上要る");
+    }
+    const user = userEvent.setup();
+    render(<App engine={engine} />);
+    await user.click(await screen.findByRole("tab", { name: "逆算" }));
+    await user.selectOptions(await screen.findByRole("combobox", { name: "自分のポケモン" }), mine.key);
+    await user.selectOptions(screen.getByRole("combobox", { name: "相手のポケモン" }), theirs.key);
+    await user.type(screen.getByRole("textbox", { name: "観測1" }), "45");
+
+    await waitFor(() => {
+      expect(engine.reverseRequests.length).toBeGreaterThan(0);
+    });
+    expect(engine.reverseRequests.at(-1)?.unknownSpecies.key).toBe(theirs.key);
+  });
+});
+
+// P4-4 critic 指摘: タブは WAI-ARIA Authoring Practices の Tabs パターン(automatic activation)に従う。
+// aria-controls/aria-labelledby の配線、ロービング tabIndex、矢印キー・Home/End の操作を確かめる。
+describe("P4-4 タブの ARIA 配線とキーボード操作", () => {
+  test("tab の aria-controls が tabpanel の id と一致し、tabpanel の aria-labelledby が選択中の tab の id と一致する", async () => {
+    render(<App engine={createFakeEngine()} />);
+    const calcTab = await screen.findByRole("tab", { name: "計算" });
+    const reverseTab = screen.getByRole("tab", { name: "逆算" });
+    const panel = screen.getByRole("tabpanel");
+
+    expect(calcTab).toHaveAttribute("aria-controls", panel.id);
+    expect(reverseTab).toHaveAttribute("aria-controls", panel.id);
+    expect(panel).toHaveAttribute("aria-labelledby", calcTab.id);
+
+    await userEvent.setup().click(reverseTab);
+    expect(screen.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", reverseTab.id);
+  });
+
+  test("選択中のタブだけ tabindex 0、他は -1(ロービング tabIndex)", async () => {
+    const user = userEvent.setup();
+    render(<App engine={createFakeEngine()} />);
+    const calcTab = await screen.findByRole("tab", { name: "計算" });
+    const reverseTab = screen.getByRole("tab", { name: "逆算" });
+
+    expect(calcTab).toHaveAttribute("tabindex", "0");
+    expect(reverseTab).toHaveAttribute("tabindex", "-1");
+
+    await user.click(reverseTab);
+    expect(reverseTab).toHaveAttribute("tabindex", "0");
+    expect(calcTab).toHaveAttribute("tabindex", "-1");
+  });
+
+  test("ArrowRight/ArrowLeft でタブの選択とフォーカスの両方が移動する", async () => {
+    const user = userEvent.setup();
+    render(<App engine={createFakeEngine()} />);
+    const calcTab = await screen.findByRole("tab", { name: "計算" });
+    const reverseTab = screen.getByRole("tab", { name: "逆算" });
+
+    calcTab.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(reverseTab).toHaveAttribute("aria-selected", "true");
+    expect(reverseTab).toHaveFocus();
+    expect(await screen.findByRole("combobox", { name: "自分のポケモン" })).toBeInTheDocument();
+
+    await user.keyboard("{ArrowLeft}");
+    expect(calcTab).toHaveAttribute("aria-selected", "true");
+    expect(calcTab).toHaveFocus();
+    expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toBeInTheDocument();
+  });
+
+  test("Home/End で最初/最後のタブへ選択とフォーカスが移動する", async () => {
+    const user = userEvent.setup();
+    render(<App engine={createFakeEngine()} />);
+    const calcTab = await screen.findByRole("tab", { name: "計算" });
+    const reverseTab = screen.getByRole("tab", { name: "逆算" });
+
+    calcTab.focus();
+    await user.keyboard("{End}");
+    expect(reverseTab).toHaveAttribute("aria-selected", "true");
+    expect(reverseTab).toHaveFocus();
+
+    await user.keyboard("{Home}");
+    expect(calcTab).toHaveAttribute("aria-selected", "true");
+    expect(calcTab).toHaveFocus();
+  });
+});

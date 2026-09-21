@@ -244,8 +244,11 @@ export interface SPRange {
   readonly max: number;
 }
 
-/** 逆算の性格クラス(engine.NatureClass の写し)。 */
-export type NatureClass = "neutral" | "boost" | "lower" | "mixed";
+/**
+ * 逆算の性格クラス(engine.NatureClass の写し。engine/reverse.go)。下降補正は探索しない
+ * (ADR-0010 §R1: `NatureClassMinus` は廃止された)。
+ */
+export type NatureClass = "neutral" | "plus";
 
 /** 逆算候補1件(ADR-0010 §R3・§R8)。 */
 export interface ReverseCandidate {

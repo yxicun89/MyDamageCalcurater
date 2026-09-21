@@ -11,6 +11,9 @@ import type {
   Item,
   Move,
   Nature,
+  Observation,
+  ReverseRequest,
+  ReverseSide,
   Species,
   Stats,
   StatKey,
@@ -36,8 +39,11 @@ export const NEUTRAL_NATURE: Nature = { plus: "", minus: "" };
 /** 特性なし(種族の特性が1つも一覧に解決できなかったときの既定)。 */
 export const NO_ABILITY: Ability = { id: "", nameJa: "", effect: null };
 
-/** 防御を上げる・特防を上げる判定のしきい値(4096 が等倍。CLAUDE.md ドメイン規約の4096基準)。 */
-const STAT_MOD_NEUTRAL = 4096;
+/**
+ * 補正なし(等倍)を表す固定小数(4096 基準。CLAUDE.md ドメイン規約)。持ち物の効果が「上げる」側かを
+ * 判定するしきい値として使う(defensiveItemCandidates・domain/reverseItems.ts の共通の正)。
+ */
+export const NEUTRAL_MODIFIER = 4096;
 
 /** マスタの種族から engine の Species の形だけにする(画面のための learnset を落とす)。 */
 export function toEngineSpecies(species: MasterSpecies): Species {
@@ -111,23 +117,31 @@ export function buildCalcRequest(input: BuildCalcRequestInput): CalcRequest {
 }
 
 /**
- * 防御側の持ち物の差し替え候補(ADR-0016 §6)。ID・名前では選ばず、効果データから選ぶ:
- * 技の分類に対応する防御側ステータス(物理→def、特殊→spd)を上げる、または技のタイプを半減する
- * (resistBerryType が技のタイプと一致)。マスタの順序をそのまま使う(並べ替えない)。
+ * 防御側の持ち物候補の判定(ADR-0016 §6。技の分類に対応する防御側ステータス(物理→def、特殊→spd)を
+ * 上げる、または技のタイプを半減する(resistBerryType が技のタイプと一致))。変化技には対応する
+ * 防御側ステータスが無いので候補にしない。この1つの定義を defensiveItemCandidates(このファイル、
+ * CalcScreen 用)と domain/reverseItems.ts の防御側の判定(逆算の持ち物候補)が共有する
+ * (コーディング規約 §2「同じ定義を複数箇所に書かない」)。
  */
-export function defensiveItemCandidates(items: readonly Item[], move: Move): Item[] {
+export function isDefensiveItemCandidate(item: Item, move: Move): boolean {
   if (move.category === "status") {
-    return [];
+    return false;
+  }
+  const effect = item.effect;
+  if (effect === null) {
+    return false;
   }
   const relevantStat: StatKey = move.category === "physical" ? "def" : "spd";
-  return items.filter((item) => {
-    const effect = item.effect;
-    if (effect === null) {
-      return false;
-    }
-    const statMod = effect.statMods?.[relevantStat] ?? 0;
-    return statMod > STAT_MOD_NEUTRAL || effect.resistBerryType === move.type;
-  });
+  const statMod = effect.statMods?.[relevantStat] ?? 0;
+  return statMod > NEUTRAL_MODIFIER || effect.resistBerryType === move.type;
+}
+
+/**
+ * 防御側の持ち物の差し替え候補(ADR-0016 §6)。ID・名前では選ばず、効果データから選ぶ
+ * (isDefensiveItemCandidate)。マスタの順序をそのまま使う(並べ替えない)。
+ */
+export function defensiveItemCandidates(items: readonly Item[], move: Move): Item[] {
+  return items.filter((item) => isDefensiveItemCandidate(item, move));
 }
 
 export interface DefenderItemVariantsInput {
@@ -154,4 +168,35 @@ export function defenderItemVariants(
     return [null, ...candidates];
   }
   return [null, selectedItem, ...candidates];
+}
+
+export interface BuildReverseRequestInput {
+  readonly side: ReverseSide;
+  /** 既知側(自分)の個体。side=defender なら攻撃側、side=attacker なら防御側として渡す(ADR-0010 §R1)。 */
+  readonly known: Individual;
+  /** 逆算する相手の種族。SP・性格・持ち物は探索対象なので渡さない。 */
+  readonly unknownSpecies: MasterSpecies;
+  readonly move: Move;
+  readonly typeChart: TypeChart;
+  /** 探索する持ち物候補(domain/reverseItems.ts の reverseItemCandidates)。先頭は必ず null。 */
+  readonly itemCandidates: ReadonlyArray<Item | null>;
+  readonly observations: readonly Observation[];
+}
+
+/**
+ * 逆算リクエスト(ADR-0010 §R、ADR-0011 §3)。maxCandidates は渡さない
+ * (engine は 2 × 持ち物候補数の全候補を返し、候補は高々十数件なので切り取る必要が無い)。
+ */
+export function buildReverseRequest(input: BuildReverseRequestInput): ReverseRequest {
+  const { side, known, unknownSpecies, move, typeChart, itemCandidates, observations } = input;
+  return {
+    format: "single",
+    side,
+    known,
+    unknownSpecies: toEngineSpecies(unknownSpecies),
+    move,
+    typeChart,
+    itemCandidates,
+    observations,
+  };
 }
