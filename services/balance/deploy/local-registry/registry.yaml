@@ -7,6 +7,9 @@ metadata:
     app.kubernetes.io/part-of: pokecalc
 spec:
   replicas: 1
+  # hostPort 5000 は同時に1つの Pod しか持てないので、古い Pod を止めてから新しい Pod を起動する
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: balance-registry
@@ -17,6 +20,9 @@ spec:
         app.kubernetes.io/part-of: pokecalc
     spec:
       automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: registry
           # 2026-09-22 時点の最新の安定版(版は digest で固定。DECISIONS.md「最新の安定版」)

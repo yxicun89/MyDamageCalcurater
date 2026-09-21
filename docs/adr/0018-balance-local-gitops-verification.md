@@ -15,7 +15,7 @@ TB0 の最後の項目「Git 変更 → Argo CD 同期 → Pod 更新」は、Ar
    (`kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.3/manifests/install.yaml`)。
 2. **イメージの置き場所**は、クラスタ内のレジストリ(`services/balance/deploy/local-registry`。registry 3.1.1、digest 固定、hostPort 5000、emptyDir)。
    ノードの containerd は `localhost:5000` を平文で pull できる(containerd は localhost を HTTP で許可する)ので、クラスタの作り直しも
-   containerd の設定変更も要らない。Mac からは `kubectl port-forward` 経由で `crane` で push する(Docker Desktop のデーモンからは Mac の
+   containerd の設定変更も要らない。Mac からは `kubectl port-forward`(Mac 側は既定で 5001。macOS の AirPlay 受信が 5000 を使うことがあるため)経由で `crane` で push する(Docker Desktop のデーモンからは Mac の
    localhost に届かないため `docker save` した tar を push する)。`make balance-registry-apply` / `make balance-registry-push`。
 3. **GitOps overlay**(`deploy/k8s/overlays/gitops`)は `localhost:5000/pokecalc/balance@sha256:...` を Git に持つ(digest 固定。秘密でない)。
    イメージを変えるときは push して表示された digest を overlay に書き、PR で main に入れる。
@@ -30,6 +30,7 @@ TB0 の最後の項目「Git 変更 → Argo CD 同期 → Pod 更新」は、Ar
 - gitops overlay には read model(ポケモン・技・特性)のマウントが無いので、Argo CD で同期した balance は health は 200、analyze / coverage は 503
   (実データの配布は ADR-0014 の未決。P2-2 に合わせる)。local overlay(`make balance-k3d-deploy`)で上書きすると Application は OutOfSync になる
   (manual sync なので自動では戻さない)。
+- クラスタ内レジストリは認証が無く、k3d の docker ネットワーク内(ノード IP:5000・Service)から push できる。Mac には公開していないので検証用として許容する。registry イメージは root で動く(seccomp は RuntimeDefault)。
 - クラスタ内レジストリは emptyDir なので、Pod が作り直されるとイメージは消える。そのときは push し直す(digest は同じイメージなら同じ)。
 - クラウドへ出すときは、レジストリ(ECR / Artifact Registry)と overlay の newName を差し替える。
 
