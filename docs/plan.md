@@ -95,7 +95,7 @@
 - [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー
 
 ## M3: iOS
-- [ ] P6-1 Xcode プロジェクト、swift-openapi-generator、デザイントークン
+- [~] P6-1 Xcode プロジェクト、swift-openapi-generator、デザイントークン
 - [ ] P6-2 計算画面・逆算・構築
 - [ ] P6-3 シミュレータテスト(`make ios-test`)
 - [ ] P6-4 Tailscale serve の手順書 → **人間が実機インストール**

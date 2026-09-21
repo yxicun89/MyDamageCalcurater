@@ -23,7 +23,7 @@ Next: docs/plan.md の P4-1(docs/design.md のデザイントークンを CSS �
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
-Active: なし
+Active: Claude Code
 Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
 Status: 未着手(2026-09-21 にレーンを新設)。Xcode はユーザーが導入中(App Store)。導入後に `sudo xcode-select -s /Applications/Xcode.app` 等が要る
 Next: docs/plan.md の P6-1 から。Xcode が使えるか(`xcodebuild -version`)を最初に確認し、無ければ Swift Package(swift-openapi-generator で `api/openapi.yaml` から生成したクライアント・モデル・docs/design.md のデザイントークン)と `swift test` から始める。Xcode が使えるようになったら SwiftUI の Xcode プロジェクトとシミュレータのテスト(`make ios-test`)。サーバー(P3)ができるまで API はモック
