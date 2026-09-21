@@ -258,3 +258,40 @@ Decision: 上記エントリの停止条件は「TB0 のタイプ相性表は差
 その方針で実装・独立レビュー(PASS)・統合した。上記エントリは追記のみの規約により本文を残すが、現状の判断としては読まない。
 Reason: TB0 の独立レビューで、未決のまま残った旧エントリが共有状態の読み手を誤解させると指摘されたため。
 Impact: なし(記録の整理のみ)。
+
+## 2026-09-21: TB0 を main に統合(PR #3)/TB1 のポケモンタイプ取得は balance ローカルの read model(既定案。タイプバランスレーン、Claude Code)
+Decision: (1) feat/codex-tb0-foundation を PR #3 で main に統合した(Argo CD 実同期のみ人間の作業待ち。plan.md)。
+(2) TB1 は request を `pokemonId` のみのまま維持し、pokemonId → タイプは `PokemonTypeProvider` の後ろの temporary adapter が
+環境変数 `BALANCE_POKEMON_TYPES_PATH` の JSON read model を起動時に読む。未設定なら analyze は 503 `master_unavailable`、未登録 ID は 422 `unknown_pokemon`。
+Git には schema と架空データの example だけを置く。詳細は ADR-0014。
+Reason: ADR-0012(実行時依存なし)と ADR-0002(実データを Git に置かない)を両立し、共通マスタの schema(P2-2)を待たずに TB1 を進めるため。
+Impact: ダメージ計算レーンは変更不要。P2-2 でスナップショット schema が決まったら、タイプバランスレーンが adapter を差し替える。
+異議があれば追記すること(既定案で進む原則)。
+
+## 2026-09-21: TB1 のタイプ取得・balance のテスト対象・相性表の出どころ(ユーザー決定。TB0 の critic セッション経由で受領)
+Decision: (1) TB1 のポケモンのタイプは、まず仮の adapter と架空データでテストし(ADR-0014 の read model)、後で `data/generated/` のスナップショットを読む adapter に置き換える。
+request は `pokemonId` のみ(ADR-0014 §1。type-balance-design.md §16 の未決「pokemonId のみかタイプまで送るか」への回答)。
+(2) ルートの `make test` に balance を含める(「テスト漏れで成果物にエラーが出るのが嫌」)。ルート Makefile は include の1行のまま、
+`services/balance/Makefile` で `test: balance-test` / `lint: balance-lint` / `build: balance-build` を前提条件として追加する。
+(3) balance の相性表は、ダメージ計算レーンの P1-13(ADR-0013)でデータ化されたもの(現状 main の `testdata/golden/typechart.json`、同じ schema)を使う。
+Reason: ユーザーが TB0 レビュー中に回答した(Claude Code のタイプバランスレーンのセッションが受領し記録)。
+Impact: (2) により、balance が失敗するとルートの `make test` / `lint` / `build` も失敗する(ダメージ計算レーンの統合条件にも balance が入る)。
+(3) は TB1 の続きとして balance 側で読む adapter を作り、TemporaryTypeChart を置き換える。ダメージ計算レーンの変更は不要
+(typechart.json の schema を変える場合は balance の adapter も追従が要るので DECISIONS.md に書くこと)。
+
+## 2026-09-21: 判断が必要なときの質問ルールと深夜の自律作業(ユーザー決定)
+Decision: 日中(8:00〜23:00 JST)は判断が必要になったら区切りごとにまとめて質問し、待つ間は依存しない作業を進める。
+深夜(23:00〜翌 8:00 JST)は質問せず、元に戻しやすい案で進めて DECISIONS.md に「暫定(深夜の自律判断。朝に確認)」と記録し、朝の最初の報告で確認を求める。
+検証済みの PR は、マージしないと作業が止まる場合に限り深夜でもマージしてよい。CLAUDE.md の「人間の確認が必要なこと」は深夜も自動で進めない。
+Reason: ユーザーが「判断が必要になった場合は定期的に質問するルールにしたい。寝ている時は反応できないので深夜は質問せず作業を実施してほしい」と依頼し、
+時間帯(23:00〜翌 8:00)と深夜のマージ(止まるならしてよい)に回答した。
+Impact: COORDINATION.md に節を追加、CLAUDE.md の「人間の確認が必要なこと」に1行追加。Codex は AGENTS.md から COORDINATION.md を参照して同じ規則に従う。
+
+## 2026-09-21: 質問の時間帯ルールの重複を1つにまとめ、深夜の PR マージ条件を追加(ユーザー決定)
+Decision: 同じユーザー決定を両レーンが別々に COORDINATION.md へ書いたため、先に main に入った「人間への質問(時間帯のルール)」を正とし、
+タイプバランスレーンが書いた「判断が必要なときの質問と深夜の自律作業」節と CLAUDE.md の重複行は削除した。
+深夜の PR マージは、マージしないと作業が止まる場合に限り可。条件は make test(balance を含む)・lint・build(engine 変更時は test-golden)と独立レビュー PASS、
+理由を DECISIONS.md に記録して朝の最初の報告に含めること。
+Reason: ユーザーが深夜のマージについて「マージしないと作業止まるならマージしていい」と回答し、条件(テストを通す・朝に報告)を承認した。
+Impact: COORDINATION.md「人間への質問」に深夜の PR マージの項を追加。上の「判断が必要なときの質問ルールと深夜の自律作業」エントリは本エントリで置き換える
+(深夜の判断待ちの記録先は plan.md のブロッカー節。既定案で進めた判断は DECISIONS.md に「既定案で進行・ユーザー未確認」と書く)。

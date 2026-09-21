@@ -1,10 +1,11 @@
 openapi: 3.0.3
 info:
   title: pokecalc balance API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     パーティのタイプバランスを分析する独立サービスの契約。
-    TB0 は疎通とエラー契約までを実装し、分析結果は TB1 で追加する。
+    TB1 は防御タイプバランス(18 攻撃タイプごとの各メンバーの倍率とチーム集計)を返す。
+    契約の正は docs/adr/0014-balance-tb1-defense-analysis.md。
 servers:
   - url: /
 paths:
@@ -34,7 +35,10 @@ paths:
     post:
       operationId: analyzeTeamBalance
       summary: Analyze a party's type balance
-      description: TB0 returns tb1_not_implemented after request-context validation.
+      description: |
+        Returns, for each member (request order), the defensive multiplier against all 18
+        attack types (canonical order), and a per-attack-type team summary (canonical order).
+        Member types are resolved from pokemonId by the service-local read model (ADR-0014).
       parameters:
         - $ref: '#/components/parameters/DeviceId'
         - $ref: '#/components/parameters/SessionId'
@@ -45,6 +49,12 @@ paths:
             schema:
               $ref: '#/components/schemas/AnalyzeRequest'
       responses:
+        '200':
+          description: Defensive type balance of the party
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyzeResponse'
         '400':
           description: Invalid request or missing request context
           content:
@@ -52,13 +62,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '413':
-          description: Request body exceeds the TB0 limit
+          description: Request body exceeds the 16 KiB limit
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '501':
-          description: Analysis is introduced in TB1
+        '422':
+          description: A pokemonId is not registered in the pokemon type read model (unknown_pokemon)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: The pokemon type read model is not configured (master_unavailable)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: An unexpected internal error (internal_error). The message is a fixed string; no internal detail is returned.
           content:
             application/json:
               schema:
@@ -109,7 +131,7 @@ components:
                 type: string
                 maxLength: 8
                 pattern: '^\d{4}-\d{3}$'
-                example: 0445-000
+                example: 9001-000
     Error:
       type: object
       required:
@@ -126,4 +148,154 @@ components:
         - missing_request_context
         - invalid_request
         - request_too_large
-        - tb1_not_implemented
+        - unknown_pokemon
+        - master_unavailable
+        - internal_error
+    AnalyzeResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - members
+        - teamSummary
+      properties:
+        members:
+          description: One entry per request member, in request order. Duplicated pokemonId values are kept.
+          type: array
+          minItems: 1
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/MemberDefense'
+        teamSummary:
+          description: One entry per attack type, in canonical type order (normal ... fairy).
+          type: array
+          minItems: 18
+          maxItems: 18
+          items:
+            $ref: '#/components/schemas/TeamSummaryEntry'
+    MemberDefense:
+      type: object
+      additionalProperties: false
+      required:
+        - pokemonId
+        - types
+        - defense
+      properties:
+        pokemonId:
+          type: string
+          maxLength: 8
+          pattern: '^\d{4}-\d{3}$'
+          example: 9001-000
+        types:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/TypeId'
+        defense:
+          description: One entry per attack type, in canonical type order (normal ... fairy).
+          type: array
+          minItems: 18
+          maxItems: 18
+          items:
+            $ref: '#/components/schemas/DefenseEntry'
+    DefenseEntry:
+      type: object
+      additionalProperties: false
+      required:
+        - attackType
+        - multiplier
+        - category
+        - source
+      properties:
+        attackType:
+          $ref: '#/components/schemas/TypeId'
+        multiplier:
+          $ref: '#/components/schemas/DefenseMultiplier'
+        category:
+          $ref: '#/components/schemas/DefenseCategory'
+        source:
+          $ref: '#/components/schemas/EffectSource'
+    DefenseMultiplier:
+      description: Exact display form of the defensive multiplier.
+      type: string
+      enum:
+        - '0'
+        - '1/4'
+        - '1/2'
+        - '1'
+        - '2'
+        - '4'
+    DefenseCategory:
+      description: 'x4: quad_weak, x2: weak, x1: neutral, x1/2: resist, x1/4: quad_resist, x0: immune.'
+      type: string
+      enum:
+        - quad_weak
+        - weak
+        - neutral
+        - resist
+        - quad_resist
+        - immune
+    EffectSource:
+      description: Origin of the multiplier. Always "type" in TB1; "ability" is reserved for TB3.
+      type: string
+      enum:
+        - type
+        - ability
+    TeamSummaryEntry:
+      description: |
+        Per attack type team counts. weak = x2 and x4 members, quadWeak = x4 members (subset of weak),
+        resist = x1/2 and x1/4 members (immune excluded), immune = x0 members, neutral = x1 members.
+        Invariant: weak + resist + immune + neutral = number of members.
+      type: object
+      additionalProperties: false
+      required:
+        - attackType
+        - weak
+        - quadWeak
+        - resist
+        - immune
+        - neutral
+      properties:
+        attackType:
+          $ref: '#/components/schemas/TypeId'
+        weak:
+          type: integer
+          minimum: 0
+          maximum: 6
+        quadWeak:
+          type: integer
+          minimum: 0
+          maximum: 6
+        resist:
+          type: integer
+          minimum: 0
+          maximum: 6
+        immune:
+          type: integer
+          minimum: 0
+          maximum: 6
+        neutral:
+          type: integer
+          minimum: 0
+          maximum: 6
+    TypeId:
+      type: string
+      enum:
+        - normal
+        - fire
+        - water
+        - electric
+        - grass
+        - ice
+        - fighting
+        - poison
+        - ground
+        - flying
+        - psychic
+        - bug
+        - rock
+        - ghost
+        - dragon
+        - dark
+        - steel
+        - fairy

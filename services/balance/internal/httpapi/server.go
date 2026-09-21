@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
 
 	"example.com/pokecalc/services/balance/internal/api"
+	"example.com/pokecalc/services/balance/internal/balance"
 	"github.com/labstack/echo/v4"
 )
 
@@ -23,13 +25,21 @@ var pokemonIDPattern = regexp.MustCompile(`^\d{4}-\d{3}$`)
 
 var errRequestTooLarge = errors.New("request body exceeds 16 KiB")
 
-// New returns the TB0 HTTP handler. Analysis is intentionally introduced in TB1.
-func New() *echo.Echo {
+// Dependencies are the replaceable master-data boundaries of the HTTP adapter.
+// PokemonTypes may be nil: the service still starts, health stays 200, and
+// analyze answers 503 master_unavailable (ADR-0014 §2).
+type Dependencies struct {
+	TypeChart    balance.TypeChartProvider
+	PokemonTypes balance.PokemonTypeProvider
+}
+
+// New returns the HTTP handler.
+func New(deps Dependencies) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
 	e.HTTPErrorHandler = writeHTTPError
-	api.RegisterHandlersWithOptions(e, handler{}, api.RegisterHandlersOptions{
+	api.RegisterHandlersWithOptions(e, handler{deps: deps}, api.RegisterHandlersOptions{
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
 			"analyzeTeamBalance": {requireRequestContext},
 		},
@@ -37,7 +47,9 @@ func New() *echo.Echo {
 	return e
 }
 
-type handler struct{}
+type handler struct {
+	deps Dependencies
+}
 
 var _ api.ServerInterface = handler{}
 
@@ -49,15 +61,15 @@ func (handler) PublicHealth(c echo.Context) error {
 	return health(c)
 }
 
-func (handler) AnalyzeTeamBalance(c echo.Context, _ api.AnalyzeTeamBalanceParams) error {
-	return analyze(c)
+func (h handler) AnalyzeTeamBalance(c echo.Context, _ api.AnalyzeTeamBalanceParams) error {
+	return analyze(c, h.deps)
 }
 
 func health(c echo.Context) error {
 	return c.JSON(http.StatusOK, api.Health{Status: api.Ok})
 }
 
-func analyze(c echo.Context) error {
+func analyze(c echo.Context, deps Dependencies) error {
 	c.Request().Body = http.MaxBytesReader(c.Response(), c.Request().Body, maxAnalyzeBodyBytes)
 	request, err := decodeAnalyzeRequest(c.Request())
 	if err != nil {
@@ -86,10 +98,92 @@ func analyze(c echo.Context) error {
 			})
 		}
 	}
-	return c.JSON(http.StatusNotImplemented, api.Error{
-		Code:    api.Tb1NotImplemented,
-		Message: "team balance analysis is introduced in TB1",
+
+	// ADR-0014 §5.4: header (400) → body (400/413) → provider absent (503) → ID resolution (422) → 200.
+	if deps.PokemonTypes == nil {
+		return c.JSON(http.StatusServiceUnavailable, api.Error{
+			Code:    api.MasterUnavailable,
+			Message: "the pokemon type read model is not configured",
+		})
+	}
+
+	pokemonIDs := make([]string, len(request.Members))
+	for i, member := range request.Members {
+		pokemonIDs[i] = member.PokemonId
+	}
+	members, err := balance.ResolveMembers(deps.PokemonTypes, pokemonIDs)
+	if err != nil {
+		var unknown *balance.UnknownPokemonError
+		if errors.As(err, &unknown) {
+			return c.JSON(http.StatusUnprocessableEntity, api.Error{
+				Code:    api.UnknownPokemon,
+				Message: "unknown pokemonId: " + unknown.PokemonID,
+			})
+		}
+		return internalError(c, err)
+	}
+
+	analysis, err := balance.AnalyzeDefense(deps.TypeChart, members)
+	if err != nil {
+		return internalError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, toAnalyzeResponse(analysis))
+}
+
+// internalError answers 500 internal_error with a fixed message: ADR-0014 §5.5
+// requires that unexpected internal failures (a missing/broken type chart, or a
+// provider failure other than an unknown pokemonId) never leak internal detail
+// to the client. The error is still logged for operators.
+func internalError(c echo.Context, err error) error {
+	slog.Error("balance analyze internal error", "error", err)
+	return c.JSON(http.StatusInternalServerError, api.Error{
+		Code:    api.InternalError,
+		Message: "internal error",
 	})
+}
+
+func toAnalyzeResponse(analysis balance.DefenseAnalysis) api.AnalyzeResponse {
+	members := make([]api.MemberDefense, len(analysis.Members))
+	for i, member := range analysis.Members {
+		members[i] = toMemberDefense(member)
+	}
+	summary := make([]api.TeamSummaryEntry, len(analysis.TeamSummary))
+	for i, entry := range analysis.TeamSummary {
+		summary[i] = api.TeamSummaryEntry{
+			AttackType: api.TypeId(entry.AttackType),
+			Weak:       entry.Weak,
+			QuadWeak:   entry.QuadWeak,
+			Resist:     entry.Resist,
+			Immune:     entry.Immune,
+			Neutral:    entry.Neutral,
+		}
+	}
+	return api.AnalyzeResponse{Members: members, TeamSummary: summary}
+}
+
+func toMemberDefense(member balance.MemberDefense) api.MemberDefense {
+	types := make([]api.TypeId, len(member.Types))
+	for i, t := range member.Types {
+		types[i] = api.TypeId(t)
+	}
+	defense := make([]api.DefenseEntry, len(member.Defense))
+	for i, entry := range member.Defense {
+		defense[i] = api.DefenseEntry{
+			AttackType: api.TypeId(entry.AttackType),
+			Multiplier: api.DefenseMultiplier(entry.Result.Multiplier.String()),
+			Category:   api.DefenseCategory(entry.Category),
+			Source:     toEffectSource(entry.Result.Source),
+		}
+	}
+	return api.MemberDefense{PokemonId: member.PokemonID, Types: types, Defense: defense}
+}
+
+func toEffectSource(source balance.EffectSource) api.EffectSource {
+	if source == balance.EffectSourceAbility {
+		return api.Ability
+	}
+	return api.Type
 }
 
 func requireRequestContext(next echo.HandlerFunc) echo.HandlerFunc {

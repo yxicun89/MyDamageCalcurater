@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"example.com/pokecalc/services/balance/internal/httpapi"
+	"example.com/pokecalc/services/balance/internal/master"
 )
 
 const (
@@ -27,9 +28,15 @@ func main() {
 		port = "8080"
 	}
 
+	pokemonTypes, err := pokemonTypeProviderFromEnv(os.LookupEnv)
+	if err != nil {
+		slog.Error("balance API failed to load pokemon type read model", "path", os.Getenv(pokemonTypesPathEnv), "error", err)
+		os.Exit(1)
+	}
+
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           httpapi.New(),
+		Handler:           httpapi.New(httpapi.Dependencies{TypeChart: master.NewTemporaryTypeChart(), PokemonTypes: pokemonTypes}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,

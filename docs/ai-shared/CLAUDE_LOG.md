@@ -141,3 +141,18 @@
 
 ### Next
 - TB1(防御タイプバランス)
+
+## 2026-09-21 タイプバランスレーン(Claude Code): TB1 防御タイプバランス
+
+### Done
+- ADR-0014(契約・分類6種・集計の定義・read model・判定順・500)。ユーザー決定3件と質問ルールを DECISIONS.md / COORDINATION.md に記録
+- spec-writer がテスト先行 → implementer が実装 → critic FAIL(provider 無しでの 400/413 優先がテストされていない)→ 修正 → 再レビュー PASS(変異テストで確認)
+- ルートの make test / lint / build に balance を含めた(services/balance/Makefile の前提条件。ユーザー決定)
+- k3d: local overlay で架空の example を ConfigMap マウント。smoke は health=200 analyze=200 unknown=422(ロールアウト直後の 502 を再試行するよう smoke を修正)
+
+### Open issues
+- TB1b(相性表のデータ化の取り込み)、軽微3件(CURRENT_STATE の Next)
+- 実データの配布方法(ADR-0014「未決」。P2-2 に合わせる)
+
+### Next
+- TB1b → TB2
