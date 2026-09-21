@@ -72,10 +72,18 @@ func LoadTypeChart(r io.Reader) (*TypeChart, error) {
 		return nil, err
 	}
 
+	// 省略された組は等倍だが、effectiveness そのものの欠落・空・null 行は壊れた入力として拒否する
+	// (静かに「全部等倍」の表にならないように)。
+	if len(file.Effectiveness) == 0 {
+		return nil, fmt.Errorf("%w: effectiveness must not be empty", ErrInvalidTypeChart)
+	}
 	chart := &TypeChart{matchups: make(map[[2]balance.TypeID]balance.Multiplier)}
 	for attack, row := range file.Effectiveness {
 		if !attack.Valid() {
 			return nil, fmt.Errorf("%w: unknown attack type %q", ErrInvalidTypeChart, attack)
+		}
+		if row == nil {
+			return nil, fmt.Errorf("%w: effectiveness row %q must not be null", ErrInvalidTypeChart, attack)
 		}
 		for defense, code := range row {
 			if !defense.Valid() {

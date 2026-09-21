@@ -14,7 +14,7 @@ balance は engine を import しない(claude-review.md 指摘2・ADR-0012)。D
    正は元ファイル。複製がずれたら `TestEmbeddedTypeChartMatchesSharedData` が失敗する(ルートの `make test` に含まれる)。直すのは
    `make balance-sync-typechart`。
 2. `master.LoadTypeChart` は元ファイルの schema(schemaVersion 1)を検証して読む: タイプ集合が balance の 18 タイプとちょうど一致、
-   コードは 0/1/2/4(×2 した整数)、省略された組は等倍、未知のキー・未知のフィールド・後続 JSON は不正(`ErrInvalidTypeChart`)。
+   コードは 0/1/2/4(×2 した整数)、省略された組は等倍、未知のキー・未知のフィールド・後続 JSON・`effectiveness` の欠落・空・null 行は不正(`ErrInvalidTypeChart`。壊れた入力が静かに「全部等倍」にならないように)。
    コードを balance の整数倍率(4 = 等倍)へ変換する。float は使わない。
 3. 起動時に読み、不正なら起動失敗。`TemporaryTypeChart` とそのテストは削除する(削除前に 18×18 全件一致を確認した。コミット ea64577)。
 

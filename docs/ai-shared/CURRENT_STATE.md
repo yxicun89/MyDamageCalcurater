@@ -11,8 +11,8 @@ Next: P2-1c → P2-2 → P2-3 → P3-1〜3 → P4-1〜7。人間の確認待ち(
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
 Branch: feat/tb-tb1b-typechart(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
-Status: TB0(Argo CD 実同期のみ人間待ち)・TB1(防御タイプバランス。PR #6)は main に統合済み。TB1b(相性表を typechart.json から読み TemporaryTypeChart を削除。ADR-0015)を実装・テスト済み、critic レビュー中
-Next: TB1b を critic → PR(squash)で統合 → TB2(攻撃範囲。設計書 §6 TB2。技のデータ・入力形式が未定義なので ADR を先に書く)。未対応の軽微: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の schema ファイル
+Status: TB0(Argo CD 実同期のみ人間待ち)・TB1(防御タイプバランス。PR #6)は main に統合済み。TB1b(相性表を typechart.json から読み TemporaryTypeChart を削除。ADR-0015)は critic PASS・PR で統合
+Next: TB2(攻撃範囲。設計書 §6 TB2。技のデータ・入力形式が未定義なので ADR を先に書く)。未対応の軽微: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の schema ファイル
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

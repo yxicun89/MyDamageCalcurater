@@ -91,9 +91,9 @@ func TestLoadTypeChartRejectsInvalidData(t *testing.T) {
 	}{
 		{name: "empty", json: ``},
 		{name: "broken JSON", json: `{"schemaVersion":1,`},
-		{name: "trailing JSON", json: minimalChart(``) + ` {}`},
-		{name: "schema version 2", json: strings.Replace(minimalChart(``), `"schemaVersion":1`, `"schemaVersion":2`, 1)},
-		{name: "unknown field", json: strings.Replace(minimalChart(``), `"schemaVersion":1`, `"schemaVersion":1,"extra":true`, 1)},
+		{name: "trailing JSON", json: minimalChart(`"fire":{"grass":4}`) + ` {}`},
+		{name: "schema version 2", json: strings.Replace(minimalChart(`"fire":{"grass":4}`), `"schemaVersion":1`, `"schemaVersion":2`, 1)},
+		{name: "unknown field", json: strings.Replace(minimalChart(`"fire":{"grass":4}`), `"schemaVersion":1`, `"schemaVersion":1,"extra":true`, 1)},
 		{name: "missing a type", json: `{"schemaVersion":1,"types":["fire"],"effectiveness":{}}`},
 		{name: "extra type", json: `{"schemaVersion":1,"types":` + strings.Replace(allTypes, `"fairy"`, `"fairy","stellar"`, 1) + `,"effectiveness":{}}`},
 		{name: "duplicate type", json: `{"schemaVersion":1,"types":` + strings.Replace(allTypes, `"fairy"`, `"fire"`, 1) + `,"effectiveness":{}}`},
@@ -102,6 +102,9 @@ func TestLoadTypeChartRejectsInvalidData(t *testing.T) {
 		{name: "invalid code 3", json: minimalChart(`"fire":{"grass":3}`)},
 		{name: "invalid code -1", json: minimalChart(`"fire":{"grass":-1}`)},
 		{name: "invalid code 8", json: minimalChart(`"fire":{"grass":8}`)},
+		{name: "empty effectiveness", json: minimalChart(``)},
+		{name: "missing effectiveness", json: strings.Replace(minimalChart(``), `,"effectiveness":{}`, ``, 1)},
+		{name: "null effectiveness row", json: minimalChart(`"fire":null`)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
