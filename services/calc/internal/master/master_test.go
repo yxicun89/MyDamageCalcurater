@@ -203,6 +203,27 @@ func TestLookupReturnsCopies(t *testing.T) {
 	}
 }
 
+// critic 指摘 O2: Item / Ability の Effect(内部の map を含む)を書き換えても Store に漏れない。
+func TestLookupReturnsCopiesOfEffects(t *testing.T) {
+	store := newStore(t, baseSnapshot())
+
+	shell, _ := store.Item("test-shell")
+	shell.Effect.StatMods[engine.StatDef] = 9999
+	shell.Effect.DamageMod = 9999
+	again, _ := store.Item("test-shell")
+	if again.Effect.StatMods[engine.StatDef] != 6144 || again.Effect.DamageMod != 0 {
+		t.Errorf("Item の Effect の書き換えが Store に漏れた: %+v", again.Effect)
+	}
+
+	thick, _ := store.Ability("test-thick")
+	thick.Effect.DefResistType[engine.TypeFire] = 9999
+	thick.Effect.StabMod = 9999
+	again2, _ := store.Ability("test-thick")
+	if again2.Effect.DefResistType[engine.TypeFire] != 2048 || again2.Effect.StabMod != 0 {
+		t.Errorf("Ability の Effect の書き換えが Store に漏れた: %+v", again2.Effect)
+	}
+}
+
 // 例のファイル(services/calc/testdata/master.example.json)は常に読めること(README の例が腐らない)。
 func TestExampleSnapshotLoads(t *testing.T) {
 	f, err := os.Open(exampleMasterPath)

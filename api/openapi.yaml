@@ -298,8 +298,8 @@ components:
         | invalid_reverse_side | 逆算の side が defender / attacker のどちらでもない | 400 |
         | no_observation | 観測が1件も無い | 400 |
         | invalid_observation | 観測の指定が不正(percent / percentTenths / damage のちょうど1つでない・範囲外) | 400 |
-        | type_chart_missing | タイプ相性表が無い(HTTP ではマスタ側の失敗なので通常は起きない) | 400 |
-        | invalid_type_chart | タイプ相性表の定義が不正 | 400 |
+        | type_chart_missing | タイプ相性表が無い(HTTP では常にマスタ = 起動時に読み込んだ Store 側の不備で、クライアントの入力起因では起こらない) | 500 |
+        | invalid_type_chart | タイプ相性表の定義が不正(同上。HTTP では常にマスタ側の不備) | 500 |
         | unknown_type | 相性表に無いタイプ | 400 |
         | internal | 上記以外の失敗(回復した panic を含む) | 500 |
 

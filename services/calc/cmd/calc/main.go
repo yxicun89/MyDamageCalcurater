@@ -36,6 +36,12 @@ const (
 
 	// shutdownTimeout は ctx 終了後、進行中のリクエストを待つ猶予。
 	shutdownTimeout = 5 * time.Second
+
+	// http.Server のタイムアウト(critic 指摘 R7。遅い・止まったクライアントに接続を占有され続けない)。
+	readHeaderTimeout = 5 * time.Second
+	readTimeout       = 10 * time.Second
+	writeTimeout      = 10 * time.Second
+	idleTimeout       = 60 * time.Second
 )
 
 // config は calc-svc の設定(環境変数から1度だけ読む)。
@@ -105,7 +111,14 @@ func run(ctx context.Context, lookup func(string) (string, bool)) error {
 		return err
 	}
 
-	srv := &http.Server{Addr: cfg.Addr, Handler: handler}
+	srv := &http.Server{
+		Addr:              cfg.Addr,
+		Handler:           handler,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
+	}
 	serveErr := make(chan error, 1)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

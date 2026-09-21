@@ -36,7 +36,12 @@ engine(P1-7〜P1-13)と WASM 境界(`engine/wasmapi`)は新しい形になった
 6. **エラー**: `Error.code` を enum `ErrorCode` にする。語彙は WASM 境界の `Code*` 定数と同じ文字列 +
    HTTP だけのもの(`missing_header`、`unknown_species|move|item|ability|nature`、`not_found`、`master_unavailable`、`upstream_unavailable`)。
    ステータスの対応: 入力の不正と ID 不明はすべて 400、`not_found` は 404、`internal` は 500、`master_unavailable` / `upstream_unavailable` は 503。
+   ただし `type_chart_missing` / `invalid_type_chart` は **500**(critic 指摘 O3)。HTTP では相性表は常にマスタ(起動時に
+   読み込んだ `Store`)から来るので、この2つはクライアントの入力起因では起こらずマスタ側の不備そのものになる
+   (WASM 境界はリクエストに `typeChart` を乗せるので 400 のまま。ADR-0011)。
    calc の3操作に `'500'` / `'503'` を足す。ヘッダの UUID 形式の検証は gateway(P3-2)の仕事で、calc-svc は欠落・空だけを `missing_header` にする。
+   生成ラッパ(`api.ServerInterfaceWrapper`)がヘッダの検証で 400 を返すとき、「欠落・空」(bind 失敗を含む)は `missing_header`、
+   それ以外(同名ヘッダの重複指定)は `invalid_input` にする(critic 指摘 R1)。
 
 ### 2. 性格 ID の写像(`natureId`)
 
@@ -53,11 +58,28 @@ engine は性格を構造値 `{Plus, Minus}` で持ち、ID を持たない。ca
   `services/calc/testdata/master.example.json`。相性表は `testdata/golden/typechart.json` の schema(ADR-0015 と同じ検証: schemaVersion 1・
   未知のキー/フィールド・後続 JSON・effectiveness の欠落/空/null 行を拒否)。種族・技・持ち物・特性に相性表に無いタイプが現れたら
   `New` が `engine.ErrUnknownType` で拒否する(計算時の `unknown_type` を起動時に前倒しする)。
+  ただし `teraType` はリクエスト由来の値であり `master.New` の起動時検査では防げないため、相性表に無ければ
+  `engine.CalcDamage`(`validateAgainstTypeChart`)が都度チェックし、実行時に 400 `unknown_type` になる(critic 指摘 R6)。
+  タイプ/ステータスキー/分類の綴りの検証は生成型 `api.PokeType` / `api.StatKey` / `api.MoveCategory` の `Valid()` を使い、
+  独自の一覧を持たない(critic 指摘 O1)。`Store.Item` / `Store.Ability` は `*ItemEffect` / `*AbilityEffect`(内部の map を
+  含む)もディープコピーして返す(critic 指摘 O2。呼び出し側が書き換えても Store に影響しないという doc の約束を Effect にも適用)。
   データレーンの `services/internal/master` が main に入ったら、`Store` の実装を差し替える(httpapi は `Store` にだけ依存する)。
 - `services/calc/internal/httpapi`: 生成物 `api.ServerInterface` を実装する。流れは wasmapi と同じ
-  「厳格デコード(未知フィールド拒否・末尾の余計なデータ拒否)→ 列挙の検証 → ID 解決 → engine の入力検証 → engine → 生成型への写し」。
-  engine の sentinel → code の写像は wasmapi と同じ(`wasmapi.Code*` を import する)。panic は回復して 500 `internal`(Go の内部情報を message に出さない)。
-  echo の既定エラー(ルート無し・メソッド違い・ヘッダ欠落)も Error 形式にそろえる。pokedex の操作は担当外なので 404 `not_found`。
+  「厳格デコード(未知フィールド拒否・末尾の余計なデータ拒否)→ 列挙の検証(個体ごとに status・teraType、リクエスト全体で
+  format・weather・terrain)→ ID 解決 → engine の入力検証 → engine → 生成型への写し」。
+  engine の sentinel → code の写像は wasmapi の `Code*` と同じ文字列を `api.ErrorCode` として**独立に**持つ(httpapi は
+  `engine/wasmapi` に依存しない構成を保つため import はしない。実装当初の「`wasmapi.Code*` を import する」という記述は
+  実態に合わせて訂正: critic 指摘 R2)。一致は `httpapi.TestWasmCodesAreValidErrorCodes` /
+  `TestErrorCodeVocabularyMatchesWasm` で固定する。panic は回復して 500 `internal`(Go の内部情報を message に出さない)。
+  sentinel に無い想定外のエラーは 500 `internal` の固定文だけを返し、詳細は `log/slog` にだけ残す(critic 指摘 O4)。
+  **pokedex の5操作(searchSpecies / getSpecies / searchMoves / searchItems / listNatures)は生成ラッパ
+  (`api.ServerInterfaceWrapper`。ヘッダの必須検証に加え q/limit/format などのクエリも解析する)を経由させず、
+  `NewHandler` が直接 404 `not_found` を返す echo ハンドラを登録する**(calc の3操作だけがラッパ経由。critic 指摘 R1)。
+  経由させると、ヘッダ欠落やクエリの型不一致(例 `limit=abc`)が `missing_header` / `invalid_json` 等に化けてしまい、
+  「担当外の操作は常に `not_found`」という契約に反するため。
+  echo の既定エラー(ルート無し・メソッド違い)も Error 形式にそろえる(ともに `not_found`)。
+  リクエスト本文は 1MiB を上限にする(`http.MaxBytesReader`。超過は `invalid_json`)。`http.Server` に
+  `ReadHeaderTimeout` 等のタイムアウトを設定する(critic 指摘 R7)。
 - `services/calc/cmd/calc`: 環境変数 `CALC_ADDR`(既定 `:8080`)・`CALC_MASTER_PATH`・`CALC_TYPECHART_PATH`。起動時に両方を読み、失敗したら非ゼロ終了
   (フォールバックの既定データを持たない。ADR-0013)。`GET /healthz` は `200 {"status":"ok"}` で、**openapi には載せない運用エンドポイント**
   (クライアントの API ではなく k8s の probe 用。gateway は外に出さない)。計算はイベント保存に依存しない(絶対ルール5。P5-2 までイベント発行自体が無い)。
@@ -87,11 +109,11 @@ engine は性格を構造値 `{Plus, Minus}` で持ち、ID を持たない。ca
 | AC-2 | `/api/calc` の成功は `engine.CalcDamage` の写し(rolls・min/maxDamage・defenderHP・effectiveness・stab・category・ko、表示%は tenths÷10)。本文の moveId が attacker.moveId より優先。Store 以外に依存しない | `TestCalcDamageMatchesEngine` / `TestCalcDamageMoveIDTakesPrecedence` / `TestCalcDamageNeedsOnlyStore` |
 | AC-3 | `/api/calc/bulk`: 省略と `[]` が同じ既定セット、変化技は none/hp、指定順、preset-major、itemVariants の null、defender{sp,nature,natureId,stats}、重複は duplicate_preset | `TestCalcBulkDefaultPresets` / `TestCalcBulkRowOrderIsPresetMajor` / `TestCalcBulkNatureIDMapping` / `TestCalcBulkErrors` |
 | AC-4 | `/api/calc/reverse`: side=defender / attacker の成功が `engine.CalcReverse` の写し(順序・ranges・spCount・exact・mismatch・support・表示%・natureClass・natureId・assumedHpSp・exactCount)、観測・side・ID の不正 | `TestCalcReverseMatchesEngine` / `TestCalcReverseNatureIDs` / `TestCalcReverseErrors` |
-| AC-5 | エラーの共通語彙とステータス(400)、検証の順序(構文 → 列挙 → ID → 入力検証) | `TestCalcDamageErrorVocabulary` / `TestCalcDamageValidationOrder` |
+| AC-5 | エラーの共通語彙とステータス、検証の順序(wasmapi と同じ段の順: 構文 → format の列挙 → 個体ごとに列挙[status/teraType]と ID 解決 → 入力検証[Validate]は最後。critic 指摘 R5) | `TestCalcDamageErrorVocabulary` / `TestCalcDamageValidationOrder` |
 | AC-6 | ヘッダの欠落・空は 400 missing_header(3操作)。UUID 形式は見ない | `TestMissingHeaders` |
 | AC-7 | pokedex ルート・未知のルート・メソッド違いは 404 not_found(Error 形式)、panic は 500 internal(内部情報を出さない) | `TestPokedexRoutesAreNotFound` / `TestUnknownRoutesAreNotFound` / `TestPanicIsRecoveredAsInternal` |
 | AC-8 | `GET /healthz` は 200 `{"status":"ok"}` | `TestHealthz` |
-| AC-9 | WASM とのパリティ: 同じ失敗は同じ code、calc と bulk の成功は同じ数値 | `TestErrorCodeParityWithWasm` / `TestCalcResultParityWithWasm` / `TestBulkResultParityWithWasm` |
+| AC-9 | WASM とのパリティ: 同じ失敗は同じ code、calc・bulk・reverse の成功は同じ数値(critic 指摘 R3 で reverse を追加) | `TestErrorCodeParityWithWasm` / `TestCalcResultParityWithWasm` / `TestBulkResultParityWithWasm` / `TestReverseResultParityWithWasm` |
 | AC-10 | 起動: 設定の読み込み(必須・既定)、例のマスタで起動して計算できる、壊れたファイルで起動しない、ctx の終了で止まる | `cmd/calc.TestLoadConfig` / `TestNewHandlerServesExampleMaster` / `TestStartupFailsOnBadFiles` / `TestRunStopsOnContextCancel` |
 | AC-M1〜M5 | マスタ境界: ロードと参照・コピーを返す・例のファイル・スキーマ違反の拒否・相性表の読み込みと拒否・New の整合性検査・NatureID の写像 | `master.TestLoadSnapshotAndLookup` ほか `services/calc/internal/master/master_test.go` |
 

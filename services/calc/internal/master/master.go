@@ -16,6 +16,7 @@ import (
 	"sort"
 
 	"example.com/pokecalc/engine"
+	"example.com/pokecalc/services/internal/api"
 )
 
 // ロード時の失敗。呼び出し側は errors.Is で判別する。
@@ -27,30 +28,38 @@ var (
 	ErrInvalidTypeChart = errors.New("タイプ相性表のデータが不正")
 )
 
-// --- 列挙(engine の定数と同じ文字列。ADR-0016 §3 の暫定スキーマが持つ列挙値) ----------
+// --- 列挙(生成型 api.PokeType / api.StatKey / api.MoveCategory の Valid() を使う。
+// 18種類のタイプ・6ステータスキー・3分類は openapi.yaml が正で、engine の定数と同じ文字列。
+// 独自の一覧を持たない(critic 指摘 O1: engine/wasmapi/api とここで別々に列挙を持つと
+// openapi.yaml を直しても追従し忘れる余地ができる)。 ------------------------------------
 
-var validTypes = map[string]engine.Type{
-	"normal": engine.TypeNormal, "fire": engine.TypeFire, "water": engine.TypeWater,
-	"electric": engine.TypeElectric, "grass": engine.TypeGrass, "ice": engine.TypeIce,
-	"fighting": engine.TypeFighting, "poison": engine.TypePoison, "ground": engine.TypeGround,
-	"flying": engine.TypeFlying, "psychic": engine.TypePsychic, "bug": engine.TypeBug,
-	"rock": engine.TypeRock, "ghost": engine.TypeGhost, "dragon": engine.TypeDragon,
-	"dark": engine.TypeDark, "steel": engine.TypeSteel, "fairy": engine.TypeFairy,
+// validType はタイプの綴りを検証する(空・未知は不正)。
+func validType(v string) (engine.Type, bool) {
+	if !api.PokeType(v).Valid() {
+		return "", false
+	}
+	return engine.Type(v), true
 }
 
-var validStatKeys = map[string]engine.StatKey{
-	"hp": engine.StatHP, "atk": engine.StatAtk, "def": engine.StatDef,
-	"spa": engine.StatSpA, "spd": engine.StatSpD, "spe": engine.StatSpe,
+// validStatKey はステータスキーの綴りを検証する(空・未知は不正)。
+func validStatKey(v string) (engine.StatKey, bool) {
+	if !api.StatKey(v).Valid() {
+		return "", false
+	}
+	return engine.StatKey(v), true
 }
 
-var validCategories = map[string]engine.MoveCategory{
-	"physical": engine.CategoryPhysical, "special": engine.CategorySpecial, "status": engine.CategoryStatus,
+// validCategory は技の分類の綴りを検証する(空・未知は不正)。
+func validCategory(v string) (engine.MoveCategory, bool) {
+	if !api.MoveCategory(v).Valid() {
+		return "", false
+	}
+	return engine.MoveCategory(v), true
 }
 
 // parseRequiredType はタイプを検証する(空・未知は不正)。
 func parseRequiredType(v string) (engine.Type, bool) {
-	t, ok := validTypes[v]
-	return t, ok
+	return validType(v)
 }
 
 // parseOptionalType は "" を TypeNone として許すタイプ検証。
@@ -58,7 +67,7 @@ func parseOptionalType(v string) (engine.Type, error) {
 	if v == "" {
 		return engine.TypeNone, nil
 	}
-	t, ok := validTypes[v]
+	t, ok := validType(v)
 	if !ok {
 		return "", fmt.Errorf("%w: 未知のタイプ %q", ErrInvalidSnapshot, v)
 	}
@@ -70,7 +79,7 @@ func parseOptionalCategory(v string) (engine.MoveCategory, error) {
 	if v == "" {
 		return "", nil
 	}
-	c, ok := validCategories[v]
+	c, ok := validCategory(v)
 	if !ok {
 		return "", fmt.Errorf("%w: 未知の分類 %q", ErrInvalidSnapshot, v)
 	}
@@ -170,7 +179,7 @@ func (e itemEffectJSON) toEngine() (*engine.ItemEffect, error) {
 	if e.StatMods != nil {
 		out.StatMods = make(map[engine.StatKey]int, len(e.StatMods))
 		for k, v := range e.StatMods {
-			sk, ok := validStatKeys[k]
+			sk, ok := validStatKey(k)
 			if !ok {
 				return nil, fmt.Errorf("%w: 持ち物効果の statMods に未知のステータスキー %q", ErrInvalidSnapshot, k)
 			}
@@ -217,7 +226,7 @@ func (e abilityEffectJSON) toEngine() (*engine.AbilityEffect, error) {
 	if e.DefResistType != nil {
 		out.DefResistType = make(map[engine.Type]int, len(e.DefResistType))
 		for k, v := range e.DefResistType {
-			t, ok := validTypes[k]
+			t, ok := validType(k)
 			if !ok {
 				return nil, fmt.Errorf("%w: 特性効果の defResistType に未知のタイプ %q", ErrInvalidSnapshot, k)
 			}
@@ -244,7 +253,7 @@ func parseNatureStat(v *string) (engine.StatKey, error) {
 	if v == nil {
 		return "", nil
 	}
-	sk, ok := validStatKeys[*v]
+	sk, ok := validStatKey(*v)
 	if !ok {
 		return "", fmt.Errorf("%w: 性格補正に未知のステータスキー %q", ErrInvalidSnapshot, *v)
 	}
@@ -331,7 +340,7 @@ func convertMoves(entries []moveEntryJSON) (map[string]engine.Move, error) {
 		if !ok {
 			return nil, fmt.Errorf("%w: 技 %q に未知のタイプ %q", ErrInvalidSnapshot, e.ID, e.Type)
 		}
-		cat, ok := validCategories[e.Category]
+		cat, ok := validCategory(e.Category)
 		if !ok {
 			return nil, fmt.Errorf("%w: 技 %q に未知の分類 %q", ErrInvalidSnapshot, e.ID, e.Category)
 		}
@@ -444,7 +453,7 @@ func LoadTypeChart(r io.Reader) (engine.TypeChart, error) {
 	seen := make(map[string]bool, len(file.Types))
 	types := make([]engine.Type, 0, len(file.Types))
 	for _, t := range file.Types {
-		et, ok := validTypes[t]
+		et, ok := validType(t)
 		if !ok {
 			return engine.TypeChart{}, fmt.Errorf("%w: 未知のタイプ %q", ErrInvalidTypeChart, t)
 		}
@@ -460,7 +469,7 @@ func LoadTypeChart(r io.Reader) (engine.TypeChart, error) {
 
 	effectiveness := make(map[engine.Type]map[engine.Type]int, len(file.Effectiveness))
 	for atk, row := range file.Effectiveness {
-		et, ok := validTypes[atk]
+		et, ok := validType(atk)
 		if !ok {
 			return engine.TypeChart{}, fmt.Errorf("%w: 未知の攻撃タイプ %q", ErrInvalidTypeChart, atk)
 		}
@@ -469,7 +478,7 @@ func LoadTypeChart(r io.Reader) (engine.TypeChart, error) {
 		}
 		outRow := make(map[engine.Type]int, len(row))
 		for def, code := range row {
-			edt, ok := validTypes[def]
+			edt, ok := validType(def)
 			if !ok {
 				return engine.TypeChart{}, fmt.Errorf("%w: 未知の防御タイプ %q", ErrInvalidTypeChart, def)
 			}
@@ -564,16 +573,55 @@ func (s *MemoryStore) Move(id string) (engine.Move, bool) {
 	return mv, ok
 }
 
-// Item は Store を実装する。
+// Item は Store を実装する。Effect(内部の map を含む)はコピーを返す(critic 指摘 O2:
+// 呼び出し側が書き換えても Store に影響しない、という doc の約束を Effect にも適用する)。
 func (s *MemoryStore) Item(id string) (engine.Item, bool) {
 	it, ok := s.items[id]
-	return it, ok
+	if !ok {
+		return engine.Item{}, false
+	}
+	it.Effect = copyItemEffect(it.Effect)
+	return it, true
 }
 
-// Ability は Store を実装する。
+// Ability は Store を実装する。Effect(内部の map を含む)はコピーを返す(O2)。
 func (s *MemoryStore) Ability(id string) (engine.Ability, bool) {
 	ab, ok := s.abilities[id]
-	return ab, ok
+	if !ok {
+		return engine.Ability{}, false
+	}
+	ab.Effect = copyAbilityEffect(ab.Effect)
+	return ab, true
+}
+
+// copyItemEffect は *engine.ItemEffect のディープコピーを返す(nil は nil のまま)。
+func copyItemEffect(e *engine.ItemEffect) *engine.ItemEffect {
+	if e == nil {
+		return nil
+	}
+	out := *e
+	if e.StatMods != nil {
+		out.StatMods = make(map[engine.StatKey]int, len(e.StatMods))
+		for k, v := range e.StatMods {
+			out.StatMods[k] = v
+		}
+	}
+	return &out
+}
+
+// copyAbilityEffect は *engine.AbilityEffect のディープコピーを返す(nil は nil のまま)。
+func copyAbilityEffect(e *engine.AbilityEffect) *engine.AbilityEffect {
+	if e == nil {
+		return nil
+	}
+	out := *e
+	if e.DefResistType != nil {
+		out.DefResistType = make(map[engine.Type]int, len(e.DefResistType))
+		for k, v := range e.DefResistType {
+			out.DefResistType[k] = v
+		}
+	}
+	return &out
 }
 
 // Nature は Store を実装する。

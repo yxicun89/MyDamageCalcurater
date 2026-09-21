@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,11 +36,14 @@ func newError(code api.ErrorCode, format string, args ...any) error {
 // statusForCode は ErrorCode から HTTP ステータスを決める(ADR-0016 §1.6)。
 // 入力の不正と ID 不明はすべて 400、not_found は 404、internal は 500、
 // master_unavailable / upstream_unavailable は 503。
+// type_chart_missing / invalid_type_chart は HTTP では常に起動時に読み込んだ Store(マスタ)
+// 側の不備であり、クライアントの入力起因では起こらないため 500 にする(critic 指摘 O3。
+// WASM 境界はリクエストに typeChart を乗せるので 400 のまま。ADR-0011)。
 func statusForCode(code api.ErrorCode) int {
 	switch code {
 	case api.NotFound:
 		return http.StatusNotFound
-	case api.Internal:
+	case api.Internal, api.TypeChartMissing, api.InvalidTypeChart:
 		return http.StatusInternalServerError
 	case api.MasterUnavailable, api.UpstreamUnavailable:
 		return http.StatusServiceUnavailable
@@ -65,13 +69,16 @@ var engineSentinels = []struct {
 }
 
 // errFromEngine は engine が返したエラーを安定した code の httpError に写す。
+// sentinel に無い想定外の失敗は固定文だけをクライアントへ返し、詳細はログにだけ残す
+// (critic 指摘 O4。Go の内部情報を message に出さない ADR-0016 AC-7 と同じ理由)。
 func errFromEngine(err error) error {
 	for _, s := range engineSentinels {
 		if errors.Is(err, s.err) {
 			return newError(s.code, "%v", err)
 		}
 	}
-	return newError(api.Internal, "想定外のエラー: %v", err)
+	slog.Error("calc-svc: engine から想定外のエラー", "error", err)
+	return newError(api.Internal, "%s", messageInternal)
 }
 
 // validateIndividual は engine.Individual.Validate の失敗を invalid_input にする(wasmapi と同じ)。

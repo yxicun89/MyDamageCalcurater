@@ -28,6 +28,7 @@ const (
 	speciesAttacker = "9001-000" // テストモン(normal)
 	speciesDefender = "9002-000" // テストガード(water/steel)
 	speciesLeaf     = "9003-000" // テストリーフ(grass)
+	speciesGhost    = "9004-000" // テストゴースト(ghost。無効相性の境界値テスト用。critic 指摘 R4)
 	speciesUnknown  = "9999-000" // マスタに無い
 
 	movePhysical = "test-beam"  // normal / physical / 80
@@ -180,6 +181,8 @@ func newFakeStore(t *testing.T) *fakeStore {
 				BaseStats: engine.Stats{HP: 95, Atk: 60, Def: 90, SpA: 70, SpD: 85, Spe: 50}, Abilities: []string{abilityPlain}},
 			speciesLeaf: {Key: speciesLeaf, DexNo: 9003, NameJa: "テストリーフ", Types: []engine.Type{engine.TypeGrass},
 				BaseStats: engine.Stats{HP: 70, Atk: 80, Def: 65, SpA: 95, SpD: 80, Spe: 85}, Abilities: []string{abilityBoost}},
+			speciesGhost: {Key: speciesGhost, DexNo: 9004, NameJa: "テストゴースト", Types: []engine.Type{engine.TypeGhost},
+				BaseStats: engine.Stats{HP: 90, Atk: 70, Def: 90, SpA: 70, SpD: 90, Spe: 60}, Abilities: []string{abilityPlain}},
 		},
 		moves: map[string]engine.Move{
 			movePhysical: {ID: movePhysical, NameJa: "テストビーム", Type: engine.TypeNormal, Category: engine.CategoryPhysical, Power: 80},

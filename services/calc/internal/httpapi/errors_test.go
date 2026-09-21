@@ -148,6 +148,17 @@ func TestMissingHeaders(t *testing.T) {
 	}
 }
 
+// R1: ヘッダの重複(同名ヘッダを複数個)は missing_header ではなく invalid_input にする
+// (ADR-0016 §1.6: missing_header はヘッダ欠落・空に限定する)。
+func TestDuplicateHeaderIsInvalidInput(t *testing.T) {
+	h := NewHandler(newFakeStore(t))
+	header := validHeaders()
+	header.Add("X-Device-Id", testDeviceID) // 同じ名前のヘッダをもう1つ足す
+	rec := serve(t, h, http.MethodPost, "/api/calc", header, mustJSON(t, calcBody()))
+	assertContract(t, http.MethodPost, "/api/calc", header, mustJSON(t, calcBody()), rec, false)
+	assertError(t, rec, http.StatusBadRequest, "invalid_input")
+}
+
 // AC-7: pokedex の操作は calc-svc の担当外なので 404 not_found(Error 形式・契約どおり)。
 func TestPokedexRoutesAreNotFound(t *testing.T) {
 	h := NewHandler(newFakeStore(t))
@@ -162,6 +173,27 @@ func TestPokedexRoutesAreNotFound(t *testing.T) {
 			assertError(t, rec, http.StatusNotFound, "not_found")
 		})
 	}
+
+	// R1: pokedex は生成ラッパ(api.ServerInterfaceWrapper)を経由しない(NewHandler が直接
+	// 404 を返す)。ヘッダが無くても・クエリの型が不正でも・ヘッダが重複していても、
+	// missing_header / invalid_json / invalid_input 等に化けず常に not_found であること。
+	t.Run("ヘッダなしでも not_found", func(t *testing.T) {
+		rec := serve(t, h, http.MethodGet, "/api/pokedex/species", http.Header{}, nil)
+		assertError(t, rec, http.StatusNotFound, "not_found")
+	})
+	t.Run("limit=abc でも not_found", func(t *testing.T) {
+		header := validHeaders()
+		path := "/api/pokedex/species?limit=abc"
+		rec := serve(t, h, http.MethodGet, path, header, nil)
+		assertContract(t, http.MethodGet, path, header, nil, rec, false)
+		assertError(t, rec, http.StatusNotFound, "not_found")
+	})
+	t.Run("ヘッダが重複していても not_found", func(t *testing.T) {
+		header := validHeaders()
+		header.Add("X-Device-Id", testDeviceID) // 同じ名前のヘッダをもう1つ足す(値の個数が1でなくなる)
+		rec := serve(t, h, http.MethodGet, "/api/pokedex/species", header, nil)
+		assertError(t, rec, http.StatusNotFound, "not_found")
+	})
 }
 
 // AC-7: echo の既定エラーも Error 形式にそろえる。ルートが無いときも、メソッドが違うときも 404 not_found
@@ -229,4 +261,18 @@ func TestHealthz(t *testing.T) {
 	if len(body) != 1 || body["status"] != "ok" {
 		t.Errorf("本文 = %v, want {\"status\":\"ok\"}", body)
 	}
+}
+
+// R7: 本文の上限(1MiB)を超えるリクエストは invalid_json にする(無制限に読み込まない)。
+// note を巨大化するだけで、それ以外は成功するはずのリクエストにする(上限を超えたことだけを見る)。
+func TestRequestBodyTooLarge(t *testing.T) {
+	store := newFakeStore(t)
+	h := NewHandler(store)
+	c := reverseCases(t, store)[0]
+	body := c.httpBody()
+	obs := body["observations"].([]any)
+	o := obs[0].(map[string]any)
+	o["note"] = strings.Repeat("a", 2<<20) // 2MiB(上限 1MiB を超える)
+	rec := post(t, h, "/api/calc/reverse", mustJSON(t, body), false)
+	assertError(t, rec, http.StatusBadRequest, "invalid_json")
 }

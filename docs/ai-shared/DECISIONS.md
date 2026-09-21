@@ -301,3 +301,19 @@ Decision: ダメージ計算レーンを、データ(engine・マスタ・pokede
 `api/openapi.yaml` と生成物を変更できるのは API レーンだけ。他のレーンの範囲は変更せず、DECISIONS.md に提案する。待たずに進めるため、暫定の境界(インターフェース・架空データ・fake)を自分のレーン内に置いてよい。
 Reason: ユーザーが「Max プランなので、機能単位でもっと並列に起動して実装・レビューしたい」と依頼した。M1 の残りのうち Phase 3(API)と Phase 4(Web)は、engine と WASM が完成済みのため Phase 2 を待たずに始められる。5本以上に分けると openapi.yaml 等の共有ファイルの衝突と利用枠の消費が増えるので4本にした。
 Impact: COORDINATION.md(レーン表・依存と共有ファイルの節・起動の目安)と CURRENT_STATE.md(API・Web の欄)を更新。
+
+## 2026-09-22: P3-1 calc-svc の API 契約(API レーン。既定案で進行・ユーザー未確認)
+Decision: ADR-0016 のとおり。`CalcResult.category` を足す(落とさない)、`BulkCalcRow.defender{sp,nature,natureId,stats}`、逆算は P1-12 の形
+(`known` / `unknownSpeciesKey` / `itemCandidates` / 観測は percent・percentTenths・damage のちょうど1つ)、`Error.code` を enum `ErrorCode`
+(WASM 境界の語彙 + HTTP だけの missing_header・unknown_*・not_found・master_unavailable・upstream_unavailable)。
+マスタは calc-svc 内の暫定 `Store`(services/calc/internal/master)と架空データで作り、データレーンの共通マスタ(P2-2a)が main に入ったら差し替える。
+Reason: plan.md P3-1 の小項目と ADR-0010 §9・§R8 / ADR-0011 §10 の持ち越しを解消するため。いずれも取り消しやすい契約の既定値。
+Impact: Web レーン(P4-5)は生成型の変更に追従する。データレーンへ: P2-2a の master が入ったら、calc-svc の `Store` インターフェース
+(Species / Move / Item / Ability / Nature / NatureID / TypeChart)を満たす adapter を API レーンが作る。
+
+## 2026-09-22: 依存の版は最新の安定版に上げ、正確な番号で固定する(ユーザー決定。API レーンが受領、データレーンからも共有)
+Decision: 言語・ミドルウェア・ライブラリは最新の安定版にし、正確な版で固定する(`latest` などの自動追従は使わない)。例外は @smogon/calc 0.12.0(ゴールデンの oracle)。
+各レーンが自分の範囲の依存を上げる。Go のツールチェーン行(go.work と各 go.mod の go/toolchain)はデータレーンが揃えて main に入れ、他レーンはそれに合わせる。
+API レーンは calc-svc・gateway のライブラリと oapi-codegen(Echo v4 → v5 と `echo5-server` 生成、kin-openapi、oapi-codegen/runtime)。
+Reason: ユーザーが「バージョンは全て最新にして。アップデートの手間を減らすために」と依頼した。
+Impact: 提案(他レーンへ): balance も Echo v4 を使っているので v5 に上げる(タイプバランスレーン)。tools/golden・web の Node は現時点の最新 v26.9.0 を固定する(データ・Web レーン)。

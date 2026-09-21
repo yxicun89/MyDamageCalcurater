@@ -180,6 +180,30 @@ func TestErrorCodeParityWithWasm(t *testing.T) {
 			mh, mw := same(func(b map[string]any) { b["attacker"].(map[string]any)["ranks"] = ranksMap(engine.Ranks{Atk: 7}) })
 			return both(c.httpBody(), calcWasmBody(t, store, c), mh, mw)
 		}(), wasmapi.CodeInvalidInput},
+		// critic 指摘 R3: format / teraType / terrain の invalid_enum、型不一致の invalid_json、
+		// level の invalid_input も HTTP と WASM で同じ code であることを固定する。
+		{"calc: 未知の format", "/api/calc", wasmapi.Calc, func() pair {
+			mh, mw := same(func(b map[string]any) { b["format"] = "triple" })
+			return both(c.httpBody(), calcWasmBody(t, store, c), mh, mw)
+		}(), wasmapi.CodeInvalidEnum},
+		{"calc: 未知の teraType", "/api/calc", wasmapi.Calc, func() pair {
+			mh, mw := same(func(b map[string]any) { b["attacker"].(map[string]any)["teraType"] = "cosmic" })
+			return both(c.httpBody(), calcWasmBody(t, store, c), mh, mw)
+		}(), wasmapi.CodeInvalidEnum},
+		{"calc: 未知の terrain", "/api/calc", wasmapi.Calc, func() pair {
+			mh, mw := same(func(b map[string]any) { b["field"] = map[string]any{"terrain": "swamp"} })
+			return both(c.httpBody(), calcWasmBody(t, store, c), mh, mw)
+		}(), wasmapi.CodeInvalidEnum},
+		{"calc: 型不一致(SP が文字列)", "/api/calc", wasmapi.Calc, func() pair {
+			mh, mw := same(func(b map[string]any) {
+				b["attacker"].(map[string]any)["sp"] = map[string]any{"hp": "a", "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0}
+			})
+			return both(c.httpBody(), calcWasmBody(t, store, c), mh, mw)
+		}(), wasmapi.CodeInvalidJSON},
+		{"calc: level が範囲外", "/api/calc", wasmapi.Calc, func() pair {
+			mh, mw := same(func(b map[string]any) { b["attacker"].(map[string]any)["level"] = 51 })
+			return both(c.httpBody(), calcWasmBody(t, store, c), mh, mw)
+		}(), wasmapi.CodeInvalidInput},
 		{"bulk: 重複した preset", "/api/calc/bulk", wasmapi.CalcBulk, pair{
 			http: mustJSON(t, bulkBody(movePhysical, []any{"hp", "hp"}, nil)),
 			wasm: string(mustJSON(t, bulkWasmBody(t, store, movePhysical, []any{"hp", "hp"}, nil))),
@@ -208,6 +232,14 @@ func TestErrorCodeParityWithWasm(t *testing.T) {
 			mh, mw := same(func(b map[string]any) { b["side"] = "sideways" })
 			return both(rc.httpBody(), reverseWasmBody(t, store, rc), mh, mw)
 		}(), wasmapi.CodeInvalidReverseSide},
+		{"reverse: percentTenths が範囲外", "/api/calc/reverse", wasmapi.CalcReverse, func() pair {
+			mh, mw := same(func(b map[string]any) { b["observations"] = []any{map[string]any{"percentTenths": 1001}} })
+			return both(rc.httpBody(), reverseWasmBody(t, store, rc), mh, mw)
+		}(), wasmapi.CodeInvalidObservation},
+		{"reverse: damage が1未満", "/api/calc/reverse", wasmapi.CalcReverse, func() pair {
+			mh, mw := same(func(b map[string]any) { b["observations"] = []any{map[string]any{"damage": -1}} })
+			return both(rc.httpBody(), reverseWasmBody(t, store, rc), mh, mw)
+		}(), wasmapi.CodeInvalidObservation},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -314,6 +346,61 @@ func TestBulkResultParityWithWasm(t *testing.T) {
 				g := normalizeBulkRow(gotRows[i].(map[string]any))
 				if !reflect.DeepEqual(g, wantRows[i]) {
 					t.Errorf("rows[%d] が WASM と違う\nHTTP: %s\nWASM: %s", i, mustJSON(t, g), mustJSON(t, wantRows[i]))
+				}
+			}
+		})
+	}
+}
+
+// normalizeReverseCandidate は HTTP の候補を WASM の候補の形にそろえる。違いは契約上の表現だけ:
+// 持ち物なし・無補正は HTTP が null、WASM が ""。natureId は HTTP だけにある。
+func normalizeReverseCandidate(c map[string]any) map[string]any {
+	out := map[string]any{}
+	for k, v := range c {
+		out[k] = v
+	}
+	delete(out, "natureId")
+	if out["itemId"] == nil {
+		out["itemId"] = ""
+	}
+	nature := map[string]any{}
+	for k, v := range c["nature"].(map[string]any) {
+		if v == nil {
+			v = ""
+		}
+		nature[k] = v
+	}
+	out["nature"] = nature
+	return out
+}
+
+// critic 指摘 R3 / AC-9: 同じ入力なら reverse の結果(側の別なく)は WASM と完全に同じ。
+// side=defender(cases[0])と side=attacker(cases[2])の各1件を見る(TestCalcReverseNatureIDs と同じ選び方)。
+func TestReverseResultParityWithWasm(t *testing.T) {
+	store := newFakeStore(t)
+	h := NewHandler(store)
+	cases := reverseCases(t, store)
+	for _, c := range []reverseCase{cases[0], cases[2]} {
+		t.Run(c.name, func(t *testing.T) {
+			wasmOut := wasmResult(t, wasmapi.CalcReverse(string(mustJSON(t, reverseWasmBody(t, store, c))))).(map[string]any)
+			rec := post(t, h, "/api/calc/reverse", mustJSON(t, c.httpBody()), true)
+			var got map[string]any
+			decodeInto(t, rec, &got)
+
+			for _, k := range []string{"side", "stat", "assumedHpSp", "exactCount"} {
+				if got[k] != wasmOut[k] {
+					t.Errorf("%s = %v, want %v", k, got[k], wasmOut[k])
+				}
+			}
+			gotCands, _ := got["candidates"].([]any)
+			wantCands, _ := wasmOut["candidates"].([]any)
+			if len(gotCands) != len(wantCands) {
+				t.Fatalf("候補数 = %d, want %d", len(gotCands), len(wantCands))
+			}
+			for i := range wantCands {
+				g := normalizeReverseCandidate(gotCands[i].(map[string]any))
+				if !reflect.DeepEqual(g, wantCands[i]) {
+					t.Errorf("candidates[%d] が WASM と違う\nHTTP: %s\nWASM: %s", i, mustJSON(t, g), mustJSON(t, wantCands[i]))
 				}
 			}
 		})

@@ -11,7 +11,10 @@ package httpapi
 
 import (
 	"errors"
+	"io"
+	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -23,6 +26,10 @@ import (
 // messageInternal は回復した panic・想定外の失敗に付ける固定文。
 // Go のランタイム情報をクライアントへ出さない(ADR-0016 AC-7)。
 const messageInternal = "内部エラーが発生した"
+
+// maxRequestBodyBytes はリクエスト本文の上限(critic 指摘 R7)。1MiB を超える本文は
+// 読み込みを打ち切り invalid_json にする(無制限に読み込んでメモリを使い切らないため)。
+const maxRequestBodyBytes = 1 << 20 // 1MiB
 
 // Server は api.ServerInterface を実装する。マスタは Store 経由でだけ引く。
 type Server struct {
@@ -37,9 +44,9 @@ func NewServer(store master.Store) *Server {
 }
 
 // NewHandler は calc-svc の HTTP ハンドラ全体を組み立てる。
-// 生成ルート(api.RegisterHandlers)、GET /healthz(openapi に載せない運用エンドポイント)、
-// panic の回復(500 internal)、echo の既定エラー(ルート無し・メソッド違い・ヘッダ欠落)を
-// Error 形式({"code","message"})に揃えるエラーハンドラを含む。
+// calc の3操作(生成ラッパ経由)、pokedex の5操作(直接 404。R1)、GET /healthz
+// (openapi に載せない運用エンドポイント)、panic の回復(500 internal)、echo の既定エラー
+// (ルート無し・メソッド違い)を Error 形式({"code","message"})に揃えるエラーハンドラを含む。
 func NewHandler(store master.Store) http.Handler {
 	e := echo.New()
 	e.HideBanner = true
@@ -47,13 +54,44 @@ func NewHandler(store master.Store) http.Handler {
 	e.Use(recoverMiddleware)
 	e.HTTPErrorHandler = httpErrorHandler
 
-	api.RegisterHandlers(e, NewServer(store))
+	registerCalcRoutes(e, NewServer(store))
+	registerPokedexNotFoundRoutes(e)
 	e.GET("/healthz", healthzHandler)
 	return e
 }
 
+// registerCalcRoutes は calc の3操作だけを、生成ラッパ(api.ServerInterfaceWrapper。
+// 必須ヘッダ X-Device-Id / X-Session-Id の有無を検証してから Server を呼ぶ)経由で登録する。
+// pokedex はここに含めない(registerPokedexNotFoundRoutes 参照。critic 指摘 R1)。
+func registerCalcRoutes(e *echo.Echo, srv *Server) {
+	wrapper := api.ServerInterfaceWrapper{Handler: srv}
+	e.POST("/api/calc", wrapper.CalcDamage)
+	e.POST("/api/calc/bulk", wrapper.CalcBulk)
+	e.POST("/api/calc/reverse", wrapper.CalcReverse)
+}
+
+// registerPokedexNotFoundRoutes は calc-svc の担当外(pokedex)の5操作を、生成ラッパを
+// 経由させずに直接 404 not_found で応答する(critic 指摘 R1)。生成ラッパはヘッダの必須検証に
+// 加えて q/limit/format などのクエリパラメータも解析するため、そこを経由させると
+// ヘッダ欠落やクエリの型不一致(例 limit=abc)が missing_header / invalid_json 等に化けてしまい、
+// 「担当外の操作は常に not_found」という契約に反する。
+func registerPokedexNotFoundRoutes(e *echo.Echo) {
+	h := func(c echo.Context) error { return notFoundForPokedex() }
+	e.GET("/api/pokedex/species", h)
+	e.GET("/api/pokedex/species/:key", h)
+	e.GET("/api/pokedex/moves", h)
+	e.GET("/api/pokedex/items", h)
+	e.GET("/api/pokedex/natures", h)
+}
+
 func healthzHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// limitedBody はリクエスト本文を maxRequestBodyBytes に制限した Reader にする(critic 指摘 R7)。
+// 上限を超えて読むと Read がエラーを返し、decodeStrict がそれを invalid_json に写す。
+func limitedBody(ctx echo.Context) io.Reader {
+	return http.MaxBytesReader(ctx.Response(), ctx.Request().Body, maxRequestBodyBytes)
 }
 
 // recoverMiddleware は panic を回復し、500 internal の httpError にする(スタック等を出さない)。
@@ -78,6 +116,12 @@ func httpErrorHandler(err error, c echo.Context) {
 	_ = c.JSON(status, body)
 }
 
+// duplicateHeaderMessage は生成ラッパ(ServerInterfaceWrapper)が同名ヘッダを複数個
+// 受け取ったときに返す echo.HTTPError.Message の文言の断片(oapi-codegen が生成する固定の英文
+// "Expected one value for X-Device-Id, got 2" 等)。ヘッダの「欠落」「空」(bind 失敗の
+// "is empty, can't bind its value" を含む)とは別の失敗で、missing_header にはしない。
+const duplicateHeaderMessage = "Expected one value for"
+
 func errorBodyFor(err error) (int, api.Error) {
 	var he *httpError
 	if errors.As(err, &he) {
@@ -89,12 +133,20 @@ func errorBodyFor(err error) (int, api.Error) {
 		case http.StatusNotFound, http.StatusMethodNotAllowed:
 			// ルートが無い・メソッドが違う(ADR-0016: メソッド違いに新しい code を足さず not_found にする)。
 			return http.StatusNotFound, api.Error{Code: api.NotFound, Message: "ルートが無い"}
-		default:
-			// 生成ラッパ(ServerInterfaceWrapper)が返すのは必須ヘッダ欠落のときだけ(calc-svc の
-			// 操作はヘッダ以外のパラメータを持たない)。
+		case http.StatusBadRequest:
+			// calc の3操作だけが生成ラッパを経由する(pokedex は直接 not_found。R1)。
+			// そのラッパが返す 400 はヘッダの検証由来。「欠落」「空」(bind 失敗も含む)は
+			// missing_header、それ以外(同名ヘッダの重複指定)は invalid_input にする
+			// (ADR-0016 §1.6: missing_header はヘッダ欠落・空に限定する)。
+			if msg, ok := ee.Message.(string); ok && strings.Contains(msg, duplicateHeaderMessage) {
+				slog.Warn("calc-svc: ヘッダが重複している", "message", msg)
+				return http.StatusBadRequest, api.Error{Code: api.InvalidInput, Message: "リクエストヘッダの指定が不正"}
+			}
 			return http.StatusBadRequest, api.Error{Code: api.MissingHeader, Message: "X-Device-Id / X-Session-Id が無い"}
 		}
 	}
+	// 想定外の失敗は固定文だけをクライアントへ返し、詳細はログにだけ残す(critic 指摘 O4)。
+	slog.Error("calc-svc: 想定外のエラー", "error", err)
 	return http.StatusInternalServerError, api.Error{Code: api.Internal, Message: messageInternal}
 }
 
@@ -118,7 +170,7 @@ func (s *Server) CalcDamage(ctx echo.Context, params api.CalcDamageParams) error
 		return err
 	}
 	var req api.CalcRequest
-	if err := decodeStrict(ctx.Request().Body, &req); err != nil {
+	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
 		return err
 	}
 	format, err := parseFormat(req.Format)
@@ -164,7 +216,7 @@ func (s *Server) CalcBulk(ctx echo.Context, params api.CalcBulkParams) error {
 		return err
 	}
 	var req api.BulkCalcRequest
-	if err := decodeStrict(ctx.Request().Body, &req); err != nil {
+	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
 		return err
 	}
 	format, err := parseFormat(req.Format)
@@ -215,7 +267,7 @@ func (s *Server) CalcReverse(ctx echo.Context, params api.CalcReverseParams) err
 		return err
 	}
 	var req api.ReverseRequest
-	if err := decodeStrict(ctx.Request().Body, &req); err != nil {
+	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
 		return err
 	}
 	format, err := parseFormat(req.Format)
