@@ -19,7 +19,7 @@ engine(P1-1〜P1-8)はできている。要件は「ブラウザ版はバック�
 3. エラーをどう返すか(panic を JS に漏らさない)
 4. 「Go と WASM が同じ結果を返す」を何で確かめるか
 5. ビルド成果物をどう作り、どこに置き、コミットするか
-6. 逆算(格子 3,267 点)が WASM で実用的な速度か
+6. 逆算(格子 3,267 点。**P1-12 で §R1 の格子(33 × 2 × 持ち物)に置き換え**)が WASM で実用的な速度か
 
 `api/openapi.yaml` は**今回変更しない**。WASM は HTTP を介さないので API 契約ではなく、
 契約とのズレは §10 に記録して P3-1 / P4-5 で解消する。
@@ -119,11 +119,12 @@ Field   = {"weather":"none","terrain":"none",
  "presetKeys":["none","hp","hb_boost","hb","hb_full"],
  "itemVariants":[null, Item, Item]}
 
-// calcReverse(ADR-0010)
+// calcReverse(ADR-0010 §R。P1-12 で再設計)
 {"format":"single","side":"defender","known":Individual,"unknownSpecies":Species,"move":Move,
  "field":Field,"critical":false,
  "itemCandidates":[null, Item],
- "observations":[{"percent":45,"damage":0,"note":"1発目"}],
+ // percent / percentTenths / damage のちょうど1つを指定する(観測の精度。ADR-0010 §R2)。
+ "observations":[{"percent":45,"note":"1発目"}],
  "maxCandidates":10}
 ```
 
@@ -141,13 +142,12 @@ Field   = {"weather":"none","terrain":"none",
    "defender":{"sp":Stats,"nature":Nature,"stats":Stats},   // stats は engine.RealStats
    "result":{ /* calc と同じ CalcResult */ }}]}}
 
-// calcReverse
-{"result":{"side":"defender","stat":"def","exactCount":15,"candidates":[
-  {"archetype":{"key":"hfull-bfull-neutral","label":"HB振り(無補正)","side":"defender",
-                "stat":"def","hpBucket":"full","statBucket":"full","natureClass":"neutral"},
-   "itemId":"","sp":Stats,"nature":Nature,
-   "matchScore":1,"exact":true,"minPercent":40.2,"maxPercent":47.8,
-   "points":9,"exactPoints":3}]}}
+// calcReverse(P1-12。ADR-0010 §R3・§R8。防御側は H32 前提)
+{"result":{"side":"defender","stat":"def","assumedHpSp":32,"exactCount":1,"candidates":[
+  {"natureClass":"neutral","nature":Nature,"itemId":"",
+   "ranges":[{"min":17,"max":19}],"spCount":3,
+   "exact":true,"mismatch":0,"support":4,
+   "minPercent":40.2,"maxPercent":47.8}]}}
 
 // エラー
 {"error":{"code":"invalid_enum","message":"天候 \"sunny\" は未知"}}
@@ -155,8 +155,10 @@ Field   = {"weather":"none","terrain":"none",
 
 決めたこと:
 
-- **数値は整数のまま**渡す。float で出るのは `effectiveness`(0/0.25/0.5/1/2/4)、
-  `ko.chancePercent`、`matchScore` の3つだけで、いずれも engine が float64 で持っている値。
+- **数値は整数のまま**渡す。float で出るのは `effectiveness`(0/0.25/0.5/1/2/4)と
+  `ko.chancePercent` だけで、いずれも engine が float64 で持っている値。
+  逆算候補の一致度(`exact`/`mismatch`/`support`)は P1-12 で整数(0.1% 単位を含む)になった
+  (旧 `matchScore` の float は廃止。ADR-0010 §R6)。
 - **表示%(`minPercent` / `maxPercent` / `ko.displayChancePercent`)だけは小数第1位の number**
   (P1-11。ADR-0010 §3.2)。ただし **engine から境界までは 0.1% 単位の整数(tenths)のまま**運び、
   float を経由しない。境界に `tenthPercent`(基底型 `int`)を置き、その `MarshalJSON` が
@@ -168,8 +170,9 @@ Field   = {"weather":"none","terrain":"none",
     100 を超える値は切らずにそのまま出す。
   - `minPercent` / `maxPercent` は **`calcReverse` の候補でも同じ意味**(表示%、0.1%)。
     同じキー名が2つの尺度を指さないようにする(ADR-0010 §3.3)。
-  - 逆算の入力 `observations[].percent` は**観測%(整数)**のままで、別概念
-    (ADR-0010 §3.1 の `engine.ObservedPercent`)。境界でも小数にしない。
+  - 逆算の入力 `observations[].percent`(整数%)/ `percentTenths`(0.1% 単位の整数)は
+    表示%とは別概念で、区間モデルで照合する(ADR-0010 §R2)。境界でも小数にしない
+    (小数を渡したら `invalid_json` / `invalid_observation` で拒否する)。
 - **`ko` は生値と表示値の両方を持つ**。`chancePercent` は engine の `KOChance.ChancePercent`
   の素通し(確定・倒せないときは 0。ADR-0006 の意味を変えない)、`displayChancePercent` は
   `KOChance.DisplayChancePercentTenths()`(確定は `100.0`、倒せないときは `0.0`)。
@@ -306,12 +309,14 @@ test-wasm: wasm ## Go と WASM の結果一致テスト(Node)
   ネイティブ側が未実装のまま WASM 側と「同じエラー」で一致して緑になるのを防ぐ。
 
 ベクタは `engine/wasmapi/testdata/vectors.json`(schemaVersion 1)に 33 件。
+**2026-09-21(P1-12)時点の実測は 34 件**(逆算が `percentTenths` 分の1件増え、後述のとおり4→5件になったため。
+`schemaVersion` は §13(ADR-0013 の `typeChart` 追加)で 2 に上がっており、この行のバージョン番号は当時のもの)。
 
 | 系統 | 件数 | 中身 |
 |---|---|---|
 | ダメージ | 24 | `testdata/golden/fixed.json` から 20 件(天候4・フィールド・壁2・持ち物4・特性3・急所2・やけど・確定数)+ 手書き4(既定値省略・タイプ無効・変化技・半減相性) |
 | 一括 | 5 | 既定プリセット(物理/特殊)・`presetKeys` × `itemVariants`(null 込み)・カスタムプリセット・`presetKeys` で D 系全キー |
-| 逆算 | 4 | defender%1回 / defender%2回 / defender 実点数 + 持ち物候補 / attacker 実点数 |
+| 逆算 | **5**(P1-12 時点。当時は4) | defender%1回 / defender%2回 / defender%1回(`percentTenths` 精度。§R8 で追加)/ defender 実点数 + 持ち物候補 / attacker 実点数 |
 
 - 2026-09-21(P1-10): ADR-0009 の防御プリセット再定義に合わせて一括のベクタを 4 → 5 件にし、
   `hb_boost` / `hb` / `hb_full` / `hd_boost` / `hd` / `hd_full` を `presetKeys` で通すようにした。
@@ -339,7 +344,13 @@ go1.27.1 / Node v26.4.0 / darwin arm64、`web/public` と同じ標準 wasm ビ�
 |---|---|
 | `WebAssembly.instantiate` | 6.0 ms |
 | `calc` 1回 | 約 25 µs(1,000回で 25.2 ms) |
-| `calcReverse` 1回(格子 3,267 点 × 持ち物2 = 6,534 回の CalcDamage) | 初回 33.8 ms / 2回目以降 16〜17 ms |
+| `calcReverse` 1回(格子 3,267 点 × 持ち物2 = 6,534 回の CalcDamage。**P1-12 以前の格子での旧実測**) | 初回 33.8 ms / 2回目以降 16〜17 ms |
+
+**P1-12 後の実測**(格子を §R1 の 33 × 2 × 持ち物候補に置き換えた後。`make test-wasm` の
+`scripts/wasm-conformance.mjs` が毎回出力する `逆算の最悪値`。go1.27.1 / Node v26.4.0 / darwin arm64):
+逆算の最悪値は**約 7〜8 ms**(複数回実行の実測で 7.1 ms 〜 8.6 ms、`reverse/defender-damage-with-item-candidates`
+ベクタが最遅)。格子が旧の約 1/150(33×2×持ち物 vs 3,267×3×持ち物)になったことに対応して、
+旧実測(初回 33.8 ms / 2回目以降 16〜17 ms)よりさらに速くなっている。
 
 受け入れ基準「ブラウザで対話的に使える = 逆算1回 1 秒以内」に対して 2 桁の余裕がある。
 `scripts/wasm-conformance.mjs` は `--max-reverse-ms`(既定 1000)を超えたら失敗する。
@@ -368,7 +379,7 @@ WASM は HTTP を通らないので API 契約ではない。ズレを記録し�
 | ~~`CalcResult.minPercent/maxPercent: number` / 整数(`DisplayPercent`)~~ | **解消(P1-11)**。どちらも小数第1位の表示%(min は切り捨て、max は四捨五入)。`api/openapi.yaml` の description に丸めを書き、`KOChance.displayChancePercent` を足した | ― |
 | `CalcResult` に `category` が無い | `category` を返す | P3-1 で契約に足すか、Web が要求から知っているので落とすかを決める |
 | `BulkCalcRow` に防御側の SP/性格/実数値が無い | `defender{sp,nature,stats}` | P3-1 で `BulkCalcRow` に足す |
-| 逆算の契約差分 | ADR-0010 §9 がそのまま当てはまる | P3-1 |
+| 逆算の契約差分 | ~~ADR-0010 §9 がそのまま当てはまる~~ → **P1-12 で §R8 に読み替え**(結果が `Archetype`/`MatchScore` ではなく `Ranges`/`Mismatch`/`Support` の形になったため、§9 の表のうち `archetypeKey` / `presetLabel` / `matchScore` / `natureId` / `rangePercent` の行は ADR-0010 §R8 の形で読む) | P3-1 |
 | エラーは HTTP ステータス + `Error` スキーマ | `{"error":{"code","message"}}` | P3-1 で `code` の語彙を共通化する(同じ失敗が両経路で同じ `code` になるように) |
 
 ### 11. 限界(いまは受け入れる)

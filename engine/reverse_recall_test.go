@@ -2,20 +2,26 @@
 
 package engine
 
-// 逆算(P1-8)の Recall@5 合格基準。docs/test-strategy.md「逆算(調整推定)のテスト」:
+// 逆算の Recall 合格基準(P1-12 で再設計。ADR-0010 §R5)。docs/test-strategy.md「逆算(調整推定)のテスト」:
 //
 //	1. 既知の調整(SP配分・性格・持ち物)でダメージを生成
 //	2. 乱数の1段階を選び、ゲーム内表示と同じ丸め(HP%)をかけて観測値にする
-//	3. 逆算にかけ、正解が上位5候補に入る割合(Recall@5)を測る
-//	- 合格基準: 1回観測で Recall@5 >= 80%、2回観測で >= 95%
+//	   → 実機の丸めは未確認なので、切り捨て・四捨五入・切り上げの3通りすべてで作り、それぞれ判定する
+//	3. 逆算にかけ、正解が候補に入る割合(Recall)を測る
+//	- 合格基準: 1回観測で Recall >= 80%、2回観測で >= 95%(数値は旧 Recall@5 から変えない)
 //	- 全ポケモンからランダムに 1,000 ケース(固定シード)
 //
-// **この基準は緩めない**(CLAUDE.md 絶対ルール6)。落ちたら逆算の順序規則(ADR-0010 §6.3)を
-// 直すのであって、しきい値・シード・ケース数を動かして通してはならない。
+// 新しい Recall の「正解に入る」(ADR-0010 §R5):
+//   - 真値の (性格クラス, 持ち物) の候補が説明可能(Exact)で、真値の SP がその Ranges に入り、
+//   - かつ、その Ranges が総当たりの正解(観測を説明できる SP の集合)と完全に一致する。
 //
-// 全種族 × 3,267 格子点 × 持ち物2 で約1分かかるため、既存の全種族テストと同じ
-// allspecies タグに置く(make test-all-species / go test -tags allspecies -run AllSpecies)。
-// make test 側の早期検知は engine/reverse_test.go の TestReverseRecallSmoke(基準ではない)。
+// 後者が「全範囲 0..32 を返せば必ず当たる」を防ぐ。さらに、被覆(真値を落とさない)と
+// 厳密性(全候補が正解と一致)と絞り込み(観測を足して増えない)は決定的な性質なので 100% を要求する。
+// 旧 Recall@5 の「上位5件」は、候補が 性格2 × 持ち物 に縮んだため条件として意味を失った
+// (持ち物2なら候補4件で自明、実際の持ち物分類なら区別できない候補の決め打ちを強いる。ADR-0010 §R5)。
+// 順位は参考値としてログに出す。
+//
+// **基準は緩めない**(CLAUDE.md 絶対ルール6)。しきい値・シード・ケース数を動かして通してはならない。
 
 import (
 	"bufio"
@@ -36,7 +42,7 @@ const reverseRecallSeed uint64 = 0x50314238 // "P1B8"
 // reverseRecallCases は test-strategy が定める 1,000 ケース。減らさない。
 const reverseRecallCases = 1000
 
-// TestAllSpeciesReverseRecall は全種族・固定シード 1,000 ケースで Recall@5 を測る。
+// TestAllSpeciesReverseRecall は全種族・固定シード 1,000 ケースで Recall を測る。
 func TestAllSpeciesReverseRecall(t *testing.T) {
 	species := loadAllSpeciesForRecall(t)
 	if len(species) < 1000 {
@@ -55,31 +61,41 @@ func TestAllSpeciesReverseRecall(t *testing.T) {
 		{SideAttacker, 2, 95},
 	}
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("%s/観測%d件", tt.side, tt.nObs), func(t *testing.T) {
-			hit, total := reverseRecall(t, tt.side, species, reverseRecallCases, tt.nObs, reverseRecallSeed)
-			if total != reverseRecallCases {
-				t.Fatalf("ケース数 = %d, want %d", total, reverseRecallCases)
-			}
-			got := 100 * hit / total
-			t.Logf("side=%s 観測 %d 件: Recall@5 = %d%% (%d/%d)", tt.side, tt.nObs, got, hit, total)
-			if got < tt.want {
-				t.Errorf("side=%s 観測 %d 件の Recall@5 = %d%% (%d/%d), want >= %d%%"+
-					"(しきい値・シード・ケース数を変えて通さないこと)",
-					tt.side, tt.nObs, got, hit, total, tt.want)
-			}
-		})
+		for _, rule := range allObsRoundings {
+			t.Run(fmt.Sprintf("%s/観測%d件/%s", tt.side, tt.nObs, rule), func(t *testing.T) {
+				st := reverseRecall(t, tt.side, species, reverseRecallCases, tt.nObs, reverseRecallSeed, rule)
+				if st.total != reverseRecallCases {
+					t.Fatalf("ケース数 = %d, want %d", st.total, reverseRecallCases)
+				}
+				t.Logf("side=%s 観測%d件 %s: %s", tt.side, tt.nObs, rule, st)
+				if got := 100 * st.hit / st.total; got < tt.want {
+					t.Errorf("side=%s 観測%d件 %s の Recall = %d%% (%d/%d), want >= %d%%"+
+						"(しきい値・シード・ケース数を変えて通さないこと)", tt.side, tt.nObs, rule, got, st.hit, st.total, tt.want)
+				}
+				// 被覆・厳密性・絞り込みは決定的な性質。1件でも破れたら実装の誤り。
+				if st.covered != st.total {
+					t.Errorf("被覆 = %d/%d(真値の SP を範囲から落とした。区間モデルが丸め規則 %s を覆っていない)",
+						st.covered, st.total, rule)
+				}
+				if st.tightViolations != 0 {
+					t.Errorf("厳密性違反 = %d 件(範囲が観測を説明できる SP の集合と一致しない)", st.tightViolations)
+				}
+				if st.narrowViolations != 0 {
+					t.Errorf("絞り込み違反 = %d 件(観測を足して説明可能な SP が増えた)", st.narrowViolations)
+				}
+			})
+		}
 	}
 }
 
 // loadAllSpeciesForRecall は testdata/golden の防御側網羅ベクタから全種族を取り出す。
-// 逆算用に別の種族表を作らず、ゴールデンと同じ母集団を使う(ADR-0010 §7)。
+// 逆算用に別の種族表を作らず、ゴールデンと同じ母集団を使う(ADR-0010 §7 item 1。P1-12 でも変えない)。
 // Key 昇順に並べ、固定シードでの抽出を決定的にする。
 func loadAllSpeciesForRecall(t *testing.T) []Species {
 	t.Helper()
 	const dir = "../testdata/golden"
 	const name = "defense-species.jsonl.gz"
 
-	// マニフェストの SHA256 と突き合わせ、母集団が差し替わっていないことを確かめる。
 	metaRaw, err := os.ReadFile(filepath.Join(dir, "metadata.json"))
 	if err != nil {
 		t.Fatalf("golden fixtures required (cd tools/golden && npm ci && npm run generate): %v", err)

@@ -180,57 +180,74 @@ func TestDefaultDefenderPresetsByCategory(t *testing.T) {
 	}
 }
 
-// ADR-0009 §1(改訂)の「ADR-0010 の型ラベルとの対応」。
-// 一括表示のプリセットと逆算の型(Archetype)が、同じ調整を同じ呼び名で指していること。
-// 初版では hb(H32・B32・上昇性格)が「HB特化」を名乗り、逆算の hfull-bfull-plus(HB特化)と
-// キーが食い違っていた。改訂後は hb_full が hfull-bfull-plus、hb が hfull-bfull-neutral に対応する。
-func TestDefenderPresetsMatchReverseArchetypes(t *testing.T) {
-	tests := []struct {
-		preset        PresetKey
-		category      MoveCategory
-		wantKey       ArchetypeKey
-		wantLabel     string
-		sameAsPreset  bool // 逆算のラベルと一括のラベルが完全一致するか
-		labelMismatch string
-	}{
-		{PresetNone, CategoryPhysical, "hnone-bnone-neutral", "無振り", true, ""},
-		{PresetHP, CategoryPhysical, "hfull-bnone-neutral", "H振り", true, ""},
-		{PresetHBBoost, CategoryPhysical, "hfull-bnone-plus", "H振り+B補正", true, ""},
-		// 一括側のラベルは要件書の表記に合わせた「HB振り」。逆算側は括弧付きだが同じ調整を指す。
-		{PresetHB, CategoryPhysical, "hfull-bfull-neutral", "HB振り(無補正)", false, "HB振り"},
-		{PresetHBFull, CategoryPhysical, "hfull-bfull-plus", "HB特化", true, ""},
-		{PresetNone, CategorySpecial, "hnone-dnone-neutral", "無振り", true, ""},
-		{PresetHP, CategorySpecial, "hfull-dnone-neutral", "H振り", true, ""},
-		{PresetHDBoost, CategorySpecial, "hfull-dnone-plus", "H振り+D補正", true, ""},
-		{PresetHD, CategorySpecial, "hfull-dfull-neutral", "HD振り(無補正)", false, "HD振り"},
-		{PresetHDFull, CategorySpecial, "hfull-dfull-plus", "HD特化", true, ""},
-	}
-	catalog := map[PresetKey]DefenderPreset{}
+// ADR-0009 §1 と ADR-0010 §R1(P1-12 改訂)の対応。
+// 逆算は型(Archetype)を持たなくなり、防御側は「H32 前提 × B(D) SP 0..32 × 性格{補正なし, 上昇}」を
+// 探索する。H32 の防御プリセットはすべてこの探索空間の点なので、そのプリセットで作った観測を逆算すると、
+// プリセットの性格クラスの候補が説明可能になり、プリセットの B(D) SP がその範囲に入らなければならない。
+// 無振り(none = H0)だけは H32 前提の外にある(ユーザー決定の前提。ADR-0010 §R7)。
+// (旧 TestDefenderPresetsMatchReverseArchetypes の置き換え。プリセットのラベルは
+// TestDefenderPresetCatalog の表が固定している。)
+func TestDefenderPresetsInsideReverseSpace(t *testing.T) {
+	outside := map[PresetKey]bool{PresetNone: true}
+	species := Species{Key: "0990-000", NameJa: "テストぼうぎょ", Types: []Type{TypePsychic},
+		BaseStats: Stats{HP: 100, Atk: 50, Def: 80, SpA: 50, SpD: 80, Spe: 50}}
+	attacker := Individual{Species: Species{Key: "0989-000", NameJa: "テストこうげき", Types: []Type{TypeWater},
+		BaseStats: Stats{HP: 100, Atk: 120, Def: 70, SpA: 120, SpD: 70, Spe: 100}}, Level: DefaultLevel}
 	for _, p := range DefenderPresetCatalog() {
-		catalog[p.Key] = p
-	}
-	for _, tt := range tests {
-		t.Run(string(tt.preset)+"/"+string(tt.category), func(t *testing.T) {
-			p, ok := catalog[tt.preset]
-			if !ok {
-				t.Fatalf("カタログに %q が無い", tt.preset)
+		t.Run(string(p.Key), func(t *testing.T) {
+			if p.SP.HP != MaxSPPerStat {
+				if !outside[p.Key] {
+					t.Fatalf("%q は H%d(H32 前提の外)。想定外のプリセットが増えた", p.Key, p.SP.HP)
+				}
+				return
 			}
-			arch, ok := ArchetypeOf(SideDefender, tt.category, p.SP, p.Nature)
-			if !ok {
-				t.Fatalf("%q の SP/性格が逆算の型に写像できない: sp=%+v nature=%+v", tt.preset, p.SP, p.Nature)
+			if outside[p.Key] {
+				t.Fatalf("%q は H32 なのに探索空間の外として扱われている", p.Key)
 			}
-			if arch.Key != tt.wantKey {
-				t.Errorf("%q → archetype %q want %q(ADR-0009 §1 の対応表)", tt.preset, arch.Key, tt.wantKey)
-			}
-			if arch.Label != tt.wantLabel {
-				t.Errorf("%q → archetype label %q want %q", tt.preset, arch.Label, tt.wantLabel)
-			}
-			wantPresetLabel := tt.wantLabel
-			if !tt.sameAsPreset {
-				wantPresetLabel = tt.labelMismatch
-			}
-			if p.Label != wantPresetLabel {
-				t.Errorf("%q のカタログ Label=%q want %q", tt.preset, p.Label, wantPresetLabel)
+			for _, cat := range []MoveCategory{CategoryPhysical, CategorySpecial} {
+				if p.Applies != "" && p.Applies != cat {
+					continue
+				}
+				stat := StatDef
+				if cat == CategorySpecial {
+					stat = StatSpD
+				}
+				class := NatureClassNeutral
+				if p.Nature.Plus == stat {
+					class = NatureClassPlus
+				} else if p.Nature != NatureNeutral {
+					t.Fatalf("%q の性格 %+v は 補正なし/%s上昇 のどちらでもない", p.Key, p.Nature, stat)
+				}
+				move := Move{ID: "m", NameJa: "テストわざ", Type: TypeWater, Category: cat, Power: 100}
+				res, err := calcDamage(DamageInput{Format: FormatSingle, Attacker: attacker, Defender: p.Defender(species, nil), Move: move})
+				if err != nil {
+					t.Fatal(err)
+				}
+				pct := (res.Rolls[5]*100 + res.DefenderHP/2) / res.DefenderHP
+				out, err := calcReverse(ReverseInput{Format: FormatSingle, Side: SideDefender, Known: attacker,
+					UnknownSpecies: species, Move: move, Observations: []Observation{{Percent: pct}}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				found := false
+				for _, c := range out.Candidates {
+					if c.NatureClass != class || c.ItemID != "" {
+						continue
+					}
+					found = true
+					in := false
+					for _, r := range c.Ranges {
+						if r.Min <= p.SP.Get(stat) && p.SP.Get(stat) <= r.Max {
+							in = true
+						}
+					}
+					if !c.Exact || !in {
+						t.Errorf("%q/%s: 候補(%s)に SP %d が入らない: Exact=%v Ranges=%+v", p.Key, cat, class, p.SP.Get(stat), c.Exact, c.Ranges)
+					}
+				}
+				if !found {
+					t.Errorf("%q/%s: 性格クラス %s の候補が無い", p.Key, cat, class)
+				}
 			}
 		})
 	}

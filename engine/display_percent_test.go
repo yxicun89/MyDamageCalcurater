@@ -3,7 +3,7 @@ package engine
 // P1-11「表示%の分離」の受け入れ条件をテストで固定する。ADR-0010 §3 が定義の正。
 //
 // 2種類の%を混ぜないことがこのタスクの目的:
-//   - 観測%  (ObservedPercent)             : 逆算の入力。整数%。P1-11 では挙動を変えない(§3.1)
+//   - 観測%  (Observation.Percent / PercentTenths): 逆算の入力。精度付きの値(P1-12 で区間モデル。§R2)
 //   - 表示%  (DisplayPercentTenths*)       : アプリが画面に出す値。0.1% 単位の整数(§3.2)
 //
 // 期待値は実装の写しではなく、手計算できる小さな例で固定する。
@@ -191,13 +191,15 @@ func TestDamageResultDisplayPercentRangeTenths(t *testing.T) {
 
 // TestDisplayPercentIsNotDerivedFromObservedPercent は、
 // 表示%が「整数%に丸めてから小数にした値」ではないことを、両者が食い違う例で示す。
+// P1-12 で ObservedPercent(整数%への round-half-up)は削除し、観測%は区間モデル
+// (Observation.Matches。ADR-0010 §R2)になった。ここでは「その整数%の観測と両立する」ことを見る。
 // requirements.md §2「HP 比率から直接求め、整数%に丸めてから表示しない」。
 func TestDisplayPercentIsNotDerivedFromObservedPercent(t *testing.T) {
 	tests := []struct {
 		name         string
 		damage       int
 		maxHP        int
-		wantObserved int // 整数%(round-half-up)
+		wantObserved int // 整数%(四捨五入で読んだ観測。区間モデルと両立すること)
 		wantFloor    int // 0.1% 単位の切り捨て
 	}{
 		// 73.548…% : 整数%は 74、表示%(最小側)は 73.5。74.0 になってはいけない。
@@ -209,8 +211,8 @@ func TestDisplayPercentIsNotDerivedFromObservedPercent(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := ObservedPercent(tt.damage, tt.maxHP); got != tt.wantObserved {
-				t.Errorf("ObservedPercent(%d, %d) = %d, want %d", tt.damage, tt.maxHP, got, tt.wantObserved)
+			if o := (Observation{Percent: tt.wantObserved}); !o.Matches(tt.damage, tt.maxHP) {
+				t.Errorf("%+v.Matches(%d, %d) = false, want true", o, tt.damage, tt.maxHP)
 			}
 			got := DisplayPercentTenthsFloor(tt.damage, tt.maxHP)
 			if got != tt.wantFloor {

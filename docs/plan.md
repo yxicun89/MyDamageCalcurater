@@ -56,7 +56,7 @@
 - [x] P1-10 防御プリセットの再定義: `hb` = H32・B32・性格補正なし / `hd` = H32・D32・補正なし / `hb_boost` = H32・B0・B上昇性格 / `hd_boost` = H32・D0・D上昇性格 / **新設** `hb_full` = H32・B32・B上昇性格 / `hd_full` = H32・D32・D上昇性格。ADR-0009・`engine/bulk.go` のカタログと既定セット・テスト・`tools/golden`(旧 `hb`/`hd` の外部照合ベクタは性格補正ありなので `hb_full`/`hd_full` 相当。補正なしの `hb`/`hd` を追加)・`api/openapi.yaml`(`DefenderPreset` enum と例)を更新して `make gen`(絶対ルール1)。`hb_boost`/`hd_boost` の確認待ちは解消
 - [x] P1-13 タイプ相性表のデータ化(ADR-0013): `TypeChart` 型を engine の入力(`DamageInput`)にし、`typechart.go` の埋め込み表を削除。テストは fixture、`tools/golden` が oracle の相性表を出力。`engine/wasmapi` のリクエスト・ADR-0011 を更新(ゴールデンの期待値は不変)。P1-11・P1-12 と独立に進められるが、`DamageInput` を触るので順番を調整する
 - [x] P1-11 表示%の分離(ユーザー方針: **最小ダメージ側は切り捨て、最大ダメージ側は四捨五入**にして「最低これくらい入る」を保守的に示す。**乱数で何%で倒せるか**(`ko.chancePercent`。乱数n発の確率)も、結果に必ず表示できる形で出力する): アプリが表示する計算結果の%は**小数第1位**(例 73.4%)。HP 比率から直接求め、整数%に丸めない(整数演算で 0.1% 単位)。実機画面の観測%(整数%)を逆算の入力にする場合の丸め規則は**別関数・別概念**にし、同じ `DisplayPercent` に混在させない。engine・`engine/wasmapi`(`minPercent`/`maxPercent`)・`api/openapi.yaml`・ADR-0010/0011 を更新
-- [ ] P1-12 逆算の再設計: 固定プリセットからの選択をやめ、**H32 前提で B(D) SP を 0〜32 探索**、性格は「補正なし」「B(D) 上昇」の2通り(攻撃側の A/C も同様に0〜32×補正なし/上昇)。結果は「性格補正あり/なし × 持ち物」ごとの**SP の範囲**で、観測から区別できない候補は決め打ちせず残す。ADR-0010 を改訂、再現率テスト(Recall@5 の定義=真値の SP が範囲に入る等)を再設計し基準(1観測 ≥80%・2観測 ≥95%)は緩めない。P1-11 の後
+- [x] P1-12 逆算の再設計: 固定プリセットからの選択をやめ、**H32 前提で B(D) SP を 0〜32 探索**、性格は「補正なし」「B(D) 上昇」の2通り(攻撃側の A/C も同様に0〜32×補正なし/上昇)。結果は「性格補正あり/なし × 持ち物」ごとの**SP の範囲**で、観測から区別できない候補は決め打ちせず残す。ADR-0010 を改訂、再現率テスト(Recall@5 の定義=真値の SP が範囲に入る等)を再設計し基準(1観測 ≥80%・2観測 ≥95%)は緩めない。P1-11 の後
 
 ### Phase 2 マスタデータ
 - [x] P2-1 **データソース調査**: チャンピオンズの使用可能ポケモン・技・持ち物の取得元を調べ ADR-0002 に記録(調査完了。ADR-0002 は 2026-09-21 のユーザー決定で方針確定。残る確認事項はブロッカー節)
@@ -71,7 +71,7 @@
 - [ ] P3-1 calc-svc(起動時にマスタをメモリへ読み込み)
   - 一括計算(`/api/calc/bulk`)の対応: API の `presets`(enum 配列)→ engine の `PresetKeys`。`presets: []` と省略はどちらも既定セット
   - `api/openapi.yaml` の description を先に直して `make gen`(絶対ルール1): 「変化技は none/hp の2件のみ返す」「行の順序はプリセット優先(presets × itemVariants)」「`presets: []` は省略と同じ」。`BulkCalcRow.preset` は enum のみ(engine のカスタム `Presets` は API に出さない)
-  - 逆算(`/api/calc/reverse`)の対応(ADR-0010 §9 の持ち越し。engine は `CalcReverse` 済み・API 未変更): `api/openapi.yaml` を先に直して `make gen`(絶対ルール1)。`ReverseRequest.attacker` / `defenderSpeciesKey` を `known` / `unknownSpeciesKey` に改名(`side=attacker` のとき既知側=自分=防御側)、`itemCandidates: [ItemId]` と `Observation.observedDamage` を追加、`observedPercent` は整数でなければ 400(engine には `int` を渡す)、`matchScore` の意味(1.0 = 全観測に完全一致する格子点がある)を description に書き `exact` を足す、`ReverseCandidate` に `archetypeKey` を足し `presetLabel` に `Archetype.Label` を入れる、`natureId` は engine の性格構造値(代表性格クラス)→ 性格 ID に calc-svc が写像する(例 +B/-A → Bold)、`rangePercent` は `MinPercent`/`MaxPercent` を写す
+  - 逆算(`/api/calc/reverse`)の対応(ADR-0010 §R8 の持ち越し。engine と WASM 境界は P1-12 で新仕様済み・API 未変更): `api/openapi.yaml` を先に直して `make gen`(絶対ルール1)。`ReverseRequest.attacker` / `defenderSpeciesKey` を `known` / `unknownSpeciesKey` に改名(`side=attacker` のとき既知側=自分=防御側)、`itemCandidates: [ItemId]` を追加。`Observation` は `percent`(整数%)/ `percentTenths` / `damage` のちょうど1つ(整数でなければ 400)。`ReverseCandidate` を P1-12 の形(`natureClass` / `nature`(calc-svc が性格 ID に写像)/ `itemId` / `ranges:[{min,max}]` / `spCount` / `exact` / `mismatch` / `support` / `minPercent` / `maxPercent`)にし、結果に `assumedHpSp` を足す。旧 `archetypeKey` / `presetLabel` / `matchScore` は使わない。`CalcResult.minPercent` の description に残る `ObservedPercent` への言及を直す(ADR-0010 §R8)
   - WASM 境界との契約差分の解消(ADR-0011 §10 の持ち越し。P1-9 では `api/openapi.yaml` を変更していない): `api/openapi.yaml` を先に直して `make gen`(絶対ルール1)。`CalcResult.minPercent/maxPercent` は P1-11 で解消済み(小数第1位の表示%。`ko.displayChancePercent` も追加済み)、`CalcResult` に `category` を足すか(Web は要求から知っているので落とすか)を決める、`BulkCalcRow` に防御側の `defender{sp,nature,stats}`(SP・性格・実数値)を足す、エラーの `code` 語彙を WASM 境界(ADR-0011 §5 の `invalid_json` / `unknown_field` / `invalid_enum` / `invalid_input` / `unknown_preset` / `duplicate_preset` / `invalid_preset` / `invalid_reverse_side` / `no_observation` / `invalid_observation` / `internal`)と共通化し、同じ失敗が HTTP と WASM で同じ `code` になるようにする
 - [ ] P3-2 gateway(ルーティング・端末ID/セッションID・/assets・CORS)
 - [ ] P3-3 契約テスト(OpenAPI 準拠)と k3d 上のスモークテスト
@@ -114,6 +114,8 @@
 - マスタデータの取得元 → 責務分離(calc=oracle 0.12.0 固定 / Showdown=照合 / 公式情報=レギュレーション基準 / PokeAPI+override=日本語名)、v1 は M-C のみ(差し替え可能な構造)、実マスタ・スナップショットは Git に置かない
 - requirements.md との食い違い → こだわり系・とつげきチョッキ・しんかのきせきは M-C 向け候補から除外(requirements.md 修正済み)。ヌケニンは v1 で考慮不要
 - 計算結果の表示% → 小数第1位。P1-11 で反映
+- 逆算の Recall の新定義(返した SP 範囲が総当たりの正解と完全一致。基準 80%/95% は据え置き)→ 承認(2026-09-21)。P1-12 で反映
+- 運用 → レーン制(どちらの AI もどちらのレーンを進めてよい)、main へは PR で統合(2026-09-21。COORDINATION.md)
 - ブラウザでの WASM 実動作 → 仕様ブロッカーではない。P4-5 の確認項目
 
 **解決済み(追加。2026-09-21 のユーザー回答。audit-r1.md のユーザー判断6件を含む)**
@@ -123,10 +125,7 @@
 - 公開に向けた判断(audit-r1.md): LICENSE は現時点で置かない(法的に面倒なものは公開しない)/ module path のアカウント名はプレースホルダに(R-2-8)/ 履歴は書き換える(R-2-9)/ ADR-0002 の抜粋は削除済み/ タイプ相性表はデータ化(ADR-0013、P1-13)/ engine の日本語ラベルは持ってよい(ADR-0009 §1-a)
 
 **【人間の確認待ち】残り**
-- **観測ダメージの入力と丸め**(逆算の入力側。ADR-0010 §3): ユーザーの回答は「最小ダメージ側は切り捨て、最大ダメージ側は四捨五入。最低これくらい入るを知りたい」。私の解釈は次のとおりで、**違っていたら訂正してほしい**。
-  - 逆算の入力は、プレイヤーが実際のゲーム画面で読み取る「相手 HP バーの減少 %」(または自分の HP の減少量)。実機の表示が**整数%か小数付きか**が分からない(未確認。ユーザーが実機で確認できるなら確認してほしい)。
-  - 確認できるまでは、観測は「精度付きの値」(整数%か小数第1位か)として受け、その精度が表す範囲に候補のダメージが入るかで照合する(特定の丸め規則に依存しない)。P1-12 で設計する。
-  - アプリが**表示する**ダメージ%は、最小側を切り捨て・最大側を四捨五入した小数第1位(P1-11)。
+- **観測%の丸め方**(逆算の入力側。ADR-0010 §R2): 実機の相手 HP の減少は**整数%**で表示される(2026-09-21 ユーザー確認)。**丸め方(切り捨てか四捨五入か)だけが未確認**。確認できるまでは、切り捨て・四捨五入・切り上げのどれでも真値を落とさない区間で照合する(P1-12 で実装済み。作業は止まらない)。確認できたら `Observation.Matches` の1か所で区間を狭める(逆算の精度が上がる)。確認方法の例: HP が分かっている自分のポケモンで、実点数のダメージと画面の%を見比べる
 - **公開のタイミング**(R-2-9・LICENSE): 公開するときに、クリーンコピーの作成と、第三者データを含まない状態の確認、LICENSE の決定を行う。それまでは今のリポジトリで開発を続ける(Codex の並行作業に影響しない)
 - **技の使用可否の調査結果の裁定**(P2-1c の結果を見て決める)
 - **見た目違いフォームの持ち方、importer の更新運用**(スナップショットが Git 管理外になったため CronJob の役割を再設計): P2-2 の設計で扱う

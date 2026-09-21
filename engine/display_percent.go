@@ -4,7 +4,8 @@ import "math"
 
 // 表示%(アプリが画面に出すダメージ%・確率)。定義は ADR-0010 §3.2〜§3.4。
 //
-// 観測%(ObservedPercent。逆算の入力・整数%)とは別概念。ここの値は 0.1% 単位の整数
+// 観測%(逆算の入力。Observation.Percent / PercentTenths。ADR-0010 §R2)とは別概念。
+// ここの値は 0.1% 単位の整数
 // (tenths)で、734 は 73.4% を表す。float でダメージ%を近似しないため、小数への変換は
 // 境界(engine/wasmapi)だけが行う。
 

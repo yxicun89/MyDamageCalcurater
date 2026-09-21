@@ -146,7 +146,7 @@ func TestSuccessEnvelopeShape(t *testing.T) {
 			"defenderHP", "effectiveness", "stab", "category", "ko",
 		}},
 		{"calcBulk", mustJSON(t, baseBulk()), []string{"defenderSpeciesKey", "rows"}},
-		{"calcReverse", mustJSON(t, baseReverse()), []string{"side", "stat", "candidates", "exactCount"}},
+		{"calcReverse", mustJSON(t, baseReverse()), []string{"side", "stat", "assumedHpSp", "candidates", "exactCount"}},
 	}
 	for _, c := range cases {
 		t.Run(c.fn, func(t *testing.T) {
@@ -419,6 +419,22 @@ func TestErrorEnvelopeCodes(t *testing.T) {
 			r["observations"] = []any{map[string]any{"percent": 101}}
 			return mustJSON(t, r)
 		}, wasmapi.CodeInvalidObservation},
+		// 0.1% 精度の観測(P1-12。ADR-0010 §R2)。3種類のうちちょうど1つだけを指定する。
+		{"percent と percentTenths の同時指定", "calcReverse", func(t *testing.T) string {
+			r := baseReverse()
+			r["observations"] = []any{map[string]any{"percent": 45, "percentTenths": 452}}
+			return mustJSON(t, r)
+		}, wasmapi.CodeInvalidObservation},
+		{"percentTenths と damage の同時指定", "calcReverse", func(t *testing.T) string {
+			r := baseReverse()
+			r["observations"] = []any{map[string]any{"percentTenths": 452, "damage": 150}}
+			return mustJSON(t, r)
+		}, wasmapi.CodeInvalidObservation},
+		{"percentTenths が範囲外", "calcReverse", func(t *testing.T) string {
+			r := baseReverse()
+			r["observations"] = []any{map[string]any{"percentTenths": 1001}}
+			return mustJSON(t, r)
+		}, wasmapi.CodeInvalidObservation},
 
 		// タイプ相性表(ADR-0011 §13 / ADR-0013)。境界は既定の表を補わない。
 		{"相性表が無い(calc)", "calc", func(t *testing.T) string {
@@ -665,7 +681,9 @@ func TestIntegerFieldsHaveNoFractionOrExponent(t *testing.T) {
 	// より厳しく固定する(小数点が1つ・小数第1位がちょうど1桁・指数表記なし)。
 	intKeys := map[string]bool{
 		"rolls": true, "minDamage": true, "maxDamage": true,
-		"defenderHP": true, "hits": true, "points": true, "exactPoints": true, "exactCount": true,
+		"defenderHP": true, "hits": true, "exactCount": true,
+		// 逆算候補(P1-12): SP 範囲の両端・SP 数・距離・説明できるロールの延べ数・H の仮定。
+		"min": true, "max": true, "spCount": true, "mismatch": true, "support": true, "assumedHpSp": true,
 		"hp": true, "atk": true, "def": true, "spa": true, "spd": true, "spe": true,
 		"power": true, "priority": true, "level": true,
 	}

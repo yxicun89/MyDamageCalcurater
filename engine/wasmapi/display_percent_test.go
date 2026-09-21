@@ -187,26 +187,31 @@ func TestGuaranteedKOIsDisplayedAsHundred(t *testing.T) {
 
 // --- 観測%は整数のまま(別概念であることの固定) -----------------------------
 
-// TestObservedPercentInputStaysInteger は、逆算の入力 observations[].percent が
-// 表示%(小数)ではなく観測%(整数)のままであることを示す。
-// 小数を渡したら入力検証で落ちる(表示%と入力を取り違えたときに黙って通らない)。
+// TestObservedPercentInputStaysInteger は、逆算の入力 observations[].percent / percentTenths が
+// 表示%(小数)ではなく整数のままであることを示す。percent は整数%、percentTenths は 0.1% 単位の整数
+// (P1-12。ADR-0010 §R2)。小数を渡したら入力検証で落ちる(表示%と入力を取り違えたときに黙って通らない)。
 func TestObservedPercentInputStaysInteger(t *testing.T) {
-	req := baseReverse()
-	req["observations"] = []any{map[string]any{"percent": 45.5}}
-	resp := invoke(t, "calcReverse", mustJSON(t, req))
+	for _, obs := range []map[string]any{
+		{"percent": 45.5},
+		{"percentTenths": 452.5},
+	} {
+		req := baseReverse()
+		req["observations"] = []any{obs}
+		resp := invoke(t, "calcReverse", mustJSON(t, req))
 
-	var env struct {
-		Error *struct {
-			Code string `json:"code"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal([]byte(resp), &env); err != nil {
-		t.Fatalf("レスポンスが読めない: %v", err)
-	}
-	if env.Error == nil {
-		t.Fatalf("小数の観測%%は受け付けないはず(観測%%は整数。ADR-0010 §3.1): %s", resp)
-	}
-	if env.Error.Code != "invalid_json" && env.Error.Code != "invalid_observation" {
-		t.Errorf("error.code = %q(invalid_json か invalid_observation のはず)", env.Error.Code)
+		var env struct {
+			Error *struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(resp), &env); err != nil {
+			t.Fatalf("レスポンスが読めない: %v", err)
+		}
+		if env.Error == nil {
+			t.Fatalf("小数の観測 %v は受け付けないはず(観測は整数。ADR-0010 §R2): %s", obs, resp)
+		}
+		if env.Error.Code != "invalid_json" && env.Error.Code != "invalid_observation" {
+			t.Errorf("%v: error.code = %q(invalid_json か invalid_observation のはず)", obs, env.Error.Code)
+		}
 	}
 }

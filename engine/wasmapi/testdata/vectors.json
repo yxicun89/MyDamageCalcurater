@@ -2926,6 +2926,82 @@
       }
     },
     {
+      "name": "reverse/defender-percent-tenths",
+      "fn": "calcReverse",
+      "tags": [
+        "reverse",
+        "percentTenths",
+        "defender"
+      ],
+      "request": {
+        "format": "single",
+        "side": "defender",
+        "known": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "unknownSpecies": {
+          "key": "blissey",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "observations": [
+          {
+            "percentTenths": 452
+          }
+        ],
+        "maxCandidates": 10
+      }
+    },
+    {
       "name": "reverse/defender-percent-two-observations",
       "fn": "calcReverse",
       "tags": [

@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -271,34 +272,32 @@ type bulkResultView struct {
 	Rows               []bulkRowView `json:"rows"`
 }
 
-type archetypeView struct {
-	Key         string `json:"key"`
-	Label       string `json:"label"`
-	Side        string `json:"side"`
-	Stat        string `json:"stat"`
-	HPBucket    string `json:"hpBucket"`
-	StatBucket  string `json:"statBucket"`
-	NatureClass string `json:"natureClass"`
+// spRangeView は逆算候補の SP 範囲(両端を含む。ADR-0010 §R3 / ADR-0011 §3)。
+type spRangeView struct {
+	Min int `json:"min"`
+	Max int `json:"max"`
 }
 
+// reverseCandidateView は逆算候補1件(P1-12 で再設計。旧 archetype / sp / matchScore / points は無い)。
 type reverseCandidateView struct {
-	Archetype   archetypeView `json:"archetype"`
-	ItemID      string        `json:"itemId"`
-	SP          statsView     `json:"sp"`
+	NatureClass string        `json:"natureClass"`
 	Nature      natureView    `json:"nature"`
-	MatchScore  float64       `json:"matchScore"`
+	ItemID      string        `json:"itemId"`
+	Ranges      []spRangeView `json:"ranges"`
+	SPCount     int           `json:"spCount"`
 	Exact       bool          `json:"exact"`
+	Mismatch    int           `json:"mismatch"`
+	Support     int           `json:"support"`
 	MinPercent  json.Number   `json:"minPercent"`
 	MaxPercent  json.Number   `json:"maxPercent"`
-	Points      int           `json:"points"`
-	ExactPoints int           `json:"exactPoints"`
 }
 
 type reverseResultView struct {
-	Side       string                 `json:"side"`
-	Stat       string                 `json:"stat"`
-	ExactCount int                    `json:"exactCount"`
-	Candidates []reverseCandidateView `json:"candidates"`
+	Side        string                 `json:"side"`
+	Stat        string                 `json:"stat"`
+	AssumedHPSP int                    `json:"assumedHpSp"`
+	ExactCount  int                    `json:"exactCount"`
+	Candidates  []reverseCandidateView `json:"candidates"`
 }
 
 type errorView struct {
@@ -453,28 +452,31 @@ func TestCalcReverseMatchesEngineCalcReverse(t *testing.T) {
 			if got.Side != string(want.Side) || got.Stat != string(want.Stat) || got.ExactCount != want.ExactCount {
 				t.Errorf("side/stat/exactCount: got %q/%q/%d want %q/%q/%d", got.Side, got.Stat, got.ExactCount, want.Side, want.Stat, want.ExactCount)
 			}
+			if got.AssumedHPSP != want.AssumedHPSP {
+				t.Errorf("assumedHpSp: got %d want %d", got.AssumedHPSP, want.AssumedHPSP)
+			}
 			if len(got.Candidates) != len(want.Candidates) {
 				t.Fatalf("候補数: got %d want %d(順序も engine と同じでなければならない)", len(got.Candidates), len(want.Candidates))
 			}
 			for i, wc := range want.Candidates {
 				gc := got.Candidates[i]
-				wantArch := archetypeView{
-					Key: string(wc.Archetype.Key), Label: wc.Archetype.Label,
-					Side: string(wc.Archetype.Side), Stat: string(wc.Archetype.Stat),
-					HPBucket: string(wc.Archetype.HPBucket), StatBucket: string(wc.Archetype.StatBucket),
-					NatureClass: string(wc.Archetype.NatureClass),
+				if gc.NatureClass != string(wc.NatureClass) || gc.ItemID != wc.ItemID {
+					t.Errorf("候補 %d の natureClass/itemId: got %q/%q want %q/%q", i, gc.NatureClass, gc.ItemID, wc.NatureClass, wc.ItemID)
 				}
-				if gc.Archetype != wantArch {
-					t.Errorf("候補 %d の archetype: got %+v want %+v", i, gc.Archetype, wantArch)
+				if gc.Nature != natureOf(wc.Nature) {
+					t.Errorf("候補 %d の nature: got %+v want %+v", i, gc.Nature, natureOf(wc.Nature))
 				}
-				if gc.ItemID != wc.ItemID {
-					t.Errorf("候補 %d の itemId: got %q want %q", i, gc.ItemID, wc.ItemID)
+				// 範囲は engine の SPRange をそのまま写す(非連続の区間を1つに畳まない)。
+				wantRanges := make([]spRangeView, 0, len(wc.Ranges))
+				for _, r := range wc.Ranges {
+					wantRanges = append(wantRanges, spRangeView{Min: r.Min, Max: r.Max})
 				}
-				if gc.SP != statsOf(wc.SP) || gc.Nature != natureOf(wc.Nature) {
-					t.Errorf("候補 %d の sp/nature: got %+v/%+v want %+v/%+v", i, gc.SP, gc.Nature, statsOf(wc.SP), natureOf(wc.Nature))
+				if !reflect.DeepEqual(gc.Ranges, wantRanges) {
+					t.Errorf("候補 %d の ranges: got %+v want %+v", i, gc.Ranges, wantRanges)
 				}
-				if gc.MatchScore != wc.MatchScore || gc.Exact != wc.Exact {
-					t.Errorf("候補 %d の matchScore/exact: got %v/%v want %v/%v", i, gc.MatchScore, gc.Exact, wc.MatchScore, wc.Exact)
+				if gc.SPCount != wc.SPCount || gc.Exact != wc.Exact || gc.Mismatch != wc.Mismatch || gc.Support != wc.Support {
+					t.Errorf("候補 %d の spCount/exact/mismatch/support: got %d/%v/%d/%d want %d/%v/%d/%d",
+						i, gc.SPCount, gc.Exact, gc.Mismatch, gc.Support, wc.SPCount, wc.Exact, wc.Mismatch, wc.Support)
 				}
 				// 候補の想定ダメージ幅も表示%(0.1% 単位)。CalcResult と同じ意味・同じ書式
 				// でなければならない(ADR-0010 §3.3)。
@@ -483,9 +485,6 @@ func TestCalcReverseMatchesEngineCalcReverse(t *testing.T) {
 				if gcMin != wc.MinPercentTenths || gcMax != wc.MaxPercentTenths {
 					t.Errorf("候補 %d の minPercent/maxPercent: got %d/%d want %d/%d(0.1%%単位)",
 						i, gcMin, gcMax, wc.MinPercentTenths, wc.MaxPercentTenths)
-				}
-				if gc.Points != wc.Points || gc.ExactPoints != wc.ExactPoints {
-					t.Errorf("候補 %d の points/exactPoints: got %d/%d want %d/%d", i, gc.Points, gc.ExactPoints, wc.Points, wc.ExactPoints)
 				}
 			}
 		})
@@ -520,7 +519,7 @@ func TestVectorsCoverRequiredScenarios(t *testing.T) {
 	required := []string{
 		"weather", "screens", "item", "ability", "critical", "burn", "terrain", "ranks", "effectiveness",
 		"bulk", "itemVariants",
-		"reverse", "percent", "damage", "defender", "attacker", "multiObservation", "itemCandidates",
+		"reverse", "percent", "percentTenths", "damage", "defender", "attacker", "multiObservation", "itemCandidates",
 		"float", "defaults",
 	}
 	for _, tag := range required {

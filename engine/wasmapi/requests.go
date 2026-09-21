@@ -210,9 +210,10 @@ func (r *bulkRequest) run() (bulkResultDTO, error) {
 // --- calcReverse ------------------------------------------------------------
 
 type observationDTO struct {
-	Percent int    `json:"percent"`
-	Damage  int    `json:"damage"`
-	Note    string `json:"note"`
+	Percent       int    `json:"percent"`
+	PercentTenths int    `json:"percentTenths"`
+	Damage        int    `json:"damage"`
+	Note          string `json:"note"`
 }
 
 type reverseRequest struct {
@@ -230,34 +231,32 @@ type reverseRequest struct {
 	TypeChart typeChartDTO `json:"typeChart"`
 }
 
-type archetypeDTO struct {
-	Key         string `json:"key"`
-	Label       string `json:"label"`
-	Side        string `json:"side"`
-	Stat        string `json:"stat"`
-	HPBucket    string `json:"hpBucket"`
-	StatBucket  string `json:"statBucket"`
-	NatureClass string `json:"natureClass"`
+// spRangeDTO は逆算候補の SP 範囲(両端を含む。ADR-0010 §R3)。
+type spRangeDTO struct {
+	Min int `json:"min"`
+	Max int `json:"max"`
 }
 
+// reverseCandidateDTO は候補1件(P1-12。ADR-0010 §R3・§R8)。
 type reverseCandidateDTO struct {
-	Archetype   archetypeDTO `json:"archetype"`
-	ItemID      string       `json:"itemId"`
-	SP          statsDTO     `json:"sp"`
+	NatureClass string       `json:"natureClass"`
 	Nature      natureDTO    `json:"nature"`
-	MatchScore  float64      `json:"matchScore"`
+	ItemID      string       `json:"itemId"`
+	Ranges      []spRangeDTO `json:"ranges"`
+	SPCount     int          `json:"spCount"`
 	Exact       bool         `json:"exact"`
+	Mismatch    int          `json:"mismatch"`
+	Support     int          `json:"support"`
 	MinPercent  tenthPercent `json:"minPercent"`
 	MaxPercent  tenthPercent `json:"maxPercent"`
-	Points      int          `json:"points"`
-	ExactPoints int          `json:"exactPoints"`
 }
 
 type reverseResultDTO struct {
-	Side       string                `json:"side"`
-	Stat       string                `json:"stat"`
-	ExactCount int                   `json:"exactCount"`
-	Candidates []reverseCandidateDTO `json:"candidates"`
+	Side        string                `json:"side"`
+	Stat        string                `json:"stat"`
+	AssumedHPSP int                   `json:"assumedHpSp"`
+	ExactCount  int                   `json:"exactCount"`
+	Candidates  []reverseCandidateDTO `json:"candidates"`
 }
 
 func (r *reverseRequest) run() (reverseResultDTO, error) {
@@ -294,7 +293,9 @@ func (r *reverseRequest) run() (reverseResultDTO, error) {
 		obs = make([]engine.Observation, 0, len(r.Observations))
 	}
 	for _, o := range r.Observations {
-		obs = append(obs, engine.Observation{Percent: o.Percent, Damage: o.Damage, Note: o.Note})
+		obs = append(obs, engine.Observation{
+			Percent: o.Percent, PercentTenths: o.PercentTenths, Damage: o.Damage, Note: o.Note,
+		})
 	}
 	if err := validateIndividual("既知の側", known); err != nil {
 		return reverseResultDTO{}, err
@@ -314,25 +315,25 @@ func (r *reverseRequest) run() (reverseResultDTO, error) {
 
 	cands := make([]reverseCandidateDTO, 0, len(res.Candidates))
 	for _, c := range res.Candidates {
+		ranges := make([]spRangeDTO, 0, len(c.Ranges))
+		for _, r := range c.Ranges {
+			ranges = append(ranges, spRangeDTO{Min: r.Min, Max: r.Max})
+		}
 		cands = append(cands, reverseCandidateDTO{
-			Archetype: archetypeDTO{
-				Key: string(c.Archetype.Key), Label: c.Archetype.Label,
-				Side: string(c.Archetype.Side), Stat: string(c.Archetype.Stat),
-				HPBucket: string(c.Archetype.HPBucket), StatBucket: string(c.Archetype.StatBucket),
-				NatureClass: string(c.Archetype.NatureClass),
-			},
-			ItemID:      c.ItemID,
-			SP:          statsFrom(c.SP),
+			NatureClass: string(c.NatureClass),
 			Nature:      natureFrom(c.Nature),
-			MatchScore:  c.MatchScore,
+			ItemID:      c.ItemID,
+			Ranges:      ranges,
+			SPCount:     c.SPCount,
 			Exact:       c.Exact,
+			Mismatch:    c.Mismatch,
+			Support:     c.Support,
 			MinPercent:  tenthPercent(c.MinPercentTenths),
 			MaxPercent:  tenthPercent(c.MaxPercentTenths),
-			Points:      c.Points,
-			ExactPoints: c.ExactPoints,
 		})
 	}
 	return reverseResultDTO{
-		Side: string(res.Side), Stat: string(res.Stat), ExactCount: res.ExactCount, Candidates: cands,
+		Side: string(res.Side), Stat: string(res.Stat), AssumedHPSP: res.AssumedHPSP,
+		ExactCount: res.ExactCount, Candidates: cands,
 	}, nil
 }
