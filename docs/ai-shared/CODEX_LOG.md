@@ -65,4 +65,5 @@
 - MT-2 で check-publishable の自己テスト失敗2件を修正。A は任意のホーム相対パスを検出し共有プレースホルダのみ許可、E は禁止 module path を fixture に使用。`make lint` に自己テストを追加した。
 - MT-2 の独立レビューは PASS(重大・重要・軽微 0)。自己テスト A〜F、通常検査0件、統合後の lint を確認済み。
 - データ・API・Web・タイプバランス各ブランチの新しい push を確認し、Claude 側レーンの再開条件に従って区切りで停止した。
-- Next: MT-3 文書整合から継続する。
+- PR #24 を merge commit で main に統合した。
+- Next: 次回は origin/main から新しい整備ブランチを切り、MT-3 文書整合から継続する。
