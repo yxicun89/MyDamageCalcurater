@@ -140,3 +140,9 @@ Decision: Claude Code は Codex を(codex exec / scripts/codex-review.sh で)レ
 Reason: ユーザーが「Codex でレビューは止めてほしい。別ターミナルで開いているものは並行作業のため開いたままにしたい」と指示した。
 Impact: .claude/skills/phase の手順6と CLAUDE.md のワークフロー表を更新。コーディング規約 v2 の Codex 確認(条件付き承認)は、この指示の前に行ったもの。今後の規約の変更の確認は、Codex が自分のセッションで DECISIONS.md に書く形にする。
 
+## 2026-09-21: 履歴の書き換えは「公開用クリーンコピー」方式で行う(ユーザー承認)
+Decision: Git 履歴の作者情報・アカウント名の書き換え(R-2-9)は、今のリポジトリと worktree(Codex の pokecalc-codex-tb0、pokecalc-main)を変更せず、公開時に書き換えたコピーを別に作る方式にする。
+公開用 identity は `pokecalc-dev <noreply@example.com>`(実名・実メールは書き換え対象。スクリプトに直書きしない)。公開のタイミングまで実行しない。
+Reason: ユーザーが Codex を別ターミナルで並行して動かしたい。履歴の書き換えはすべてのブランチと worktree に影響するため。
+Impact: plan.md の R-2-9 を「公開用クリーンコピーの作成」に変更。前提ツールは git-filter-repo(未導入。公開時に導入)。以後のコミットの作者情報は今のまま(コピー作成時にまとめて置換される)。
+

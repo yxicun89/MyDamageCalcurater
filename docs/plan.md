@@ -49,7 +49,7 @@
   - [x] R-2-5 小さな可読性の是正(`Version` の重複、空コメント、`real` の改名、`AllStatKeys` の可変性)
   - [x] R-2-7 ADR の追記・修正(タイプ相性表=ADR-0012、engine の Label=ADR-0009 §1-a、内輪の表現の修正、ADR-0002 の第三者データ抜粋の削除)
   - [x] R-2-8 Go の module path を公開用プレースホルダ(`example.com/pokecalc/...`)に置換(3つの go.mod・import・go.work・テストの import 検査。Codex の `services/balance` は取り込み時に合わせる)。ユーザー決定: アカウント名は公開しない
-  - [ ] R-2-9 Git 履歴の書き換え(作者名・メールを公開用 identity に、履歴内のアカウント名を含む文字列を置換)。**実行前に**: 全体のバックアップ(bundle。リポジトリ外)、Codex の作業(`pokecalc-codex-tb0` worktree)と `main` worktree の扱いをユーザーと調整。ユーザー決定: 履歴を書き換える
+  - [ ] R-2-9 公開用クリーンコピーの作成(ユーザー決定: 履歴を書き換える。方式は**今のリポジトリと worktree には触れず、書き換えたコピーを別に作る**)。`scripts/make-public-copy.sh`(仮): 公開したいブランチをローカル clone → `git filter-repo` で作者名・メールを公開用 identity(`pokecalc-dev <noreply@example.com>`)に置換(`--mailmap` を既存の作者から動的に生成するので、実名をスクリプトに書かない)、履歴内の `github.com/<アカウント名>/pokecalc` を `example.com/pokecalc` に置換(正規表現)→ コピー側で `make check-publishable-full`(Git 作者の許可リストを作成)と履歴全体の検査(絶対パス・メール・秘密)。実行は**公開するとき**。前提ツール: `git-filter-repo`(`brew install git-filter-repo`。`make doctor` の任意ツールに追加)。元のリポジトリ(Codex の `pokecalc-codex-tb0`・`pokecalc-main` を含む)は変更しない
 - [ ] R-3 `make check-publishable`(秘密情報・絶対パス・個人情報・追跡してはいけないファイルの検査。`make lint` から呼ぶ)
 
 ### Phase 1b 決定の反映(2026-09-21 のユーザー決定。ADR-0002 の確定方針・DECISIONS.md 参照)
@@ -127,7 +127,7 @@
   - 逆算の入力は、プレイヤーが実際のゲーム画面で読み取る「相手 HP バーの減少 %」(または自分の HP の減少量)。実機の表示が**整数%か小数付きか**が分からない(未確認。ユーザーが実機で確認できるなら確認してほしい)。
   - 確認できるまでは、観測は「精度付きの値」(整数%か小数第1位か)として受け、その精度が表す範囲に候補のダメージが入るかで照合する(特定の丸め規則に依存しない)。P1-12 で設計する。
   - アプリが**表示する**ダメージ%は、最小側を切り捨て・最大側を四捨五入した小数第1位(P1-11)。
-- **Git 履歴の書き換え(R-2-9)の実行タイミング**: ユーザーは書き換えを決定済み。Codex の作業(`pokecalc-codex-tb0` worktree)と `main` worktree のブランチも書き換えの影響を受けるため、実行前に Codex のセッションを止めてよいか・その worktree をどうするかを確認する。バックアップ(bundle)は必ず先に取る
+- **公開のタイミング**(R-2-9・LICENSE): 公開するときに、クリーンコピーの作成と、第三者データを含まない状態の確認、LICENSE の決定を行う。それまでは今のリポジトリで開発を続ける(Codex の並行作業に影響しない)
 - **技の使用可否の調査結果の裁定**(P2-1c の結果を見て決める)
 - **見た目違いフォームの持ち方、importer の更新運用**(スナップショットが Git 管理外になったため CronJob の役割を再設計): P2-2 の設計で扱う
 
