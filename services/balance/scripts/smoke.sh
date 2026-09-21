@@ -48,7 +48,7 @@ if [ "$analyze_status" != "200" ]; then
   exit 1
 fi
 for key in '"members"' '"teamSummary"' '"pokemonId":"9001-000"' '"quadWeak"' '"source":"type"'; do
-  if ! grep -q "$key" "$body_file"; then
+  if ! grep -qF "$key" "$body_file"; then
     echo "balance analyze body is missing $key" >&2
     cat "$body_file" >&2
     exit 1
@@ -61,10 +61,112 @@ unknown_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   -H 'X-Device-Id: smoke-device' \
   -H 'X-Session-Id: smoke-session' \
   --data '{"members":[{"pokemonId":"9999-999"}]}')
-if [ "$unknown_status" != "422" ] || ! grep -q '"code":"unknown_pokemon"' "$body_file"; then
+if [ "$unknown_status" != "422" ] || ! grep -qF '"code":"unknown_pokemon"' "$body_file"; then
   echo "balance analyze unknown pokemon: HTTP $unknown_status, want 422 unknown_pokemon" >&2
   cat "$body_file" >&2
   exit 1
 fi
 
-echo "balance smoke: health=200 analyze=200 unknown=422"
+# TB2 (ADR-0016): the local overlay also mounts testdata/moves.example.json (fictional IDs from move-9001)
+# and sets BALANCE_MOVES_PATH. move-9001/move-9002 are fire (special/physical), move-9006 is a status move,
+# move-9005 is normal. analyze already answered 200 above, so the Pod is routable; no retry here.
+coverage_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  -X POST "$base_url/api/balance/v1/team-balance/coverage" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  --data '{"members":[{"pokemonId":"9001-000","moveIds":["move-9001","move-9002","move-9006"]},{"pokemonId":"9002-000","moveIds":["move-9005"]}]}' || printf '000')
+if [ "$coverage_status" != "200" ]; then
+  echo "balance coverage failed: HTTP $coverage_status (is the example move read model mounted?)" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+for key in '"members"' '"teamCoverage"' '"attackTypes":["fire"]' '"bestMultiplier"' '"effectiveMembers"' '"superEffectiveMembers"'; do
+  if ! grep -qF "$key" "$body_file"; then
+    echo "balance coverage body is missing $key" >&2
+    cat "$body_file" >&2
+    exit 1
+  fi
+done
+
+unknown_move_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  -X POST "$base_url/api/balance/v1/team-balance/coverage" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  --data '{"members":[{"pokemonId":"9001-000","moveIds":["move-9999"]}]}')
+if [ "$unknown_move_status" != "422" ] || ! grep -qF '"code":"unknown_move"' "$body_file"; then
+  echo "balance coverage unknown move: HTTP $unknown_move_status, want 422 unknown_move" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+
+# TB3 (ADR-0017): the local overlay also mounts testdata/abilities.example.json (fictional IDs from ability-9001)
+# and sets BALANCE_ABILITIES_PATH. ability-9002 absorbs water (9002-000 grass: water x0), ability-9004 multiplies
+# super effective hits by 3/4 (9003-000 water/ground: grass x4 -> x3).
+ability_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  -X POST "$base_url/api/balance/v1/team-balance/analyze" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  --data '{"members":[{"pokemonId":"9002-000","abilityId":"ability-9002"},{"pokemonId":"9003-000","abilityId":"ability-9004"}]}' || printf '000')
+if [ "$ability_status" != "200" ]; then
+  echo "balance analyze with abilityId failed: HTTP $ability_status (is the example ability read model mounted?)" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+for key in '"abilityId":"ability-9002"' '"abilityId":"ability-9004"' '"effect":"absorb"' '"effect":"multiplier"' '"source":"ability"' '"multiplier":"3"'; do
+  if ! grep -qF "$key" "$body_file"; then
+    echo "balance analyze with abilityId body is missing $key" >&2
+    cat "$body_file" >&2
+    exit 1
+  fi
+done
+
+unknown_ability_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  -X POST "$base_url/api/balance/v1/team-balance/analyze" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  --data '{"members":[{"pokemonId":"9001-000","abilityId":"ability-9999"}]}')
+if [ "$unknown_ability_status" != "422" ] || ! grep -qF '"code":"unknown_ability"' "$body_file"; then
+  echo "balance analyze unknown ability: HTTP $unknown_ability_status, want 422 unknown_ability" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+
+# TB4 (ADR-0400): threats reuses the three example read models above. 9002-000 grass with move-9001 (fire) and
+# 9003-000 water/ground with ability-9004 and no moves, against 9005-000 ice with move-9008 (ice):
+# incoming x2 and x1 (ice vs water/ground is x1, so the super effective x3/4 does not apply), outgoing x2 and null.
+threats_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  -X POST "$base_url/api/balance/v1/team-balance/threats" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  --data '{"members":[{"pokemonId":"9002-000","moveIds":["move-9001"]},{"pokemonId":"9003-000","moveIds":[],"abilityId":"ability-9004"}],"threats":[{"pokemonId":"9005-000","moveIds":["move-9008"]}]}' || printf '000')
+if [ "$threats_status" != "200" ]; then
+  echo "balance threats failed: HTTP $threats_status (are the example read models mounted?)" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+for key in '"threats"' '"matchups"' '"attackTypes":["ice"]' '"incoming":"2",' '"incoming":"1",' '"outgoing":"2",' '"outgoing":null' '"safeMembers":0' '"superEffectiveMembers":1'; do
+  if ! grep -qF "$key" "$body_file"; then
+    echo "balance threats body is missing $key" >&2
+    cat "$body_file" >&2
+    exit 1
+  fi
+done
+
+unknown_threat_move_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  -X POST "$base_url/api/balance/v1/team-balance/threats" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  --data '{"members":[{"pokemonId":"9002-000","moveIds":[]}],"threats":[{"pokemonId":"9005-000","moveIds":["move-9999"]}]}')
+if [ "$unknown_threat_move_status" != "422" ] || ! grep -qF '"code":"unknown_move"' "$body_file" || ! grep -qF '"message":"unknown moveId: move-9999"' "$body_file"; then
+  echo "balance threats unknown move: HTTP $unknown_threat_move_status, want 422 unknown_move" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+
+echo "balance smoke: health=200 analyze=200 unknown=422 coverage=200 unknown_move=422 ability=200 unknown_ability=422 threats=200 threats_unknown_move=422"

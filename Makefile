@@ -24,12 +24,17 @@ doctor: ## 前提ツールの確認
 
 ## --- コード生成 -------------------------------------------------------
 .PHONY: gen
-gen: gen-go gen-ts ## OpenAPI / sqlc のコード生成
+gen: gen-go gen-sql gen-ts ## OpenAPI / sqlc のコード生成
 
 .PHONY: gen-go
 gen-go: ## Go サーバ/型を openapi.yaml から生成
 	@cd services && $(GO) tool oapi-codegen -config internal/api/cfg.yaml ../api/openapi.yaml
 	@echo "gen-go: services/internal/api/openapi.gen.go を生成"
+
+.PHONY: gen-sql
+gen-sql: ## pokedex の DB 行の型・クエリを sqlc から生成(ADR-0100 §1)
+	@cd tools && $(GO) tool sqlc generate -f ../services/pokedex/db/sqlc.yaml
+	@echo "gen-sql: services/pokedex/internal/store を生成"
 
 .PHONY: gen-ts
 gen-ts: ## TypeScript 型を openapi.yaml から生成
@@ -62,6 +67,7 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 	@node --check tools/golden/generate.mjs
 	@node --check scripts/wasm-conformance.mjs
+	@for script in tools/importer/*.mjs; do node --check "$$script" || exit; done
 	@$(MAKE) --no-print-directory check-publishable
 
 .PHONY: build
@@ -81,6 +87,35 @@ test-golden: ## engine のゴールデンテスト(@smogon/calc 照合)
 .PHONY: test-all-species
 test-all-species: ## 全ポケモン網羅・性質テスト
 	@cd engine && $(GO) test -tags allspecies ./... -run AllSpecies
+
+## --- pokedex DB(migrate。ADR-0100 §5) ---------------------------------
+.PHONY: migrate-up
+migrate-up: ## pokedex の DB を最新版まで migrate する(POKEDEX_DATABASE_DSN が必須)
+	@cd services && $(GO) run ./pokedex/cmd/migrate up
+
+.PHONY: migrate-version
+migrate-version: ## pokedex の migrate バージョンを表示する(POKEDEX_DATABASE_DSN が必須)
+	@cd services && $(GO) run ./pokedex/cmd/migrate version
+
+.PHONY: migrate-down
+migrate-down: ## pokedex の DB を全て戻す(破壊的。CONFIRM_DESTROY=<DB名> が必須。人間の確認)
+	@if [ -z "$(CONFIRM_DESTROY)" ]; then \
+		echo "migrate-down: CONFIRM_DESTROY=<DB名> を指定すること(全テーブルを消す破壊的操作)。人間が確認すること" >&2; \
+		exit 1; \
+	fi
+	@cd services && $(GO) run ./pokedex/cmd/migrate down -confirm "$(CONFIRM_DESTROY)"
+
+.PHONY: test-db
+test-db: ## pokedex の DB を使うテスト(POKEDEX_TEST_DSN が必須。make test には含めない)
+	@if [ -z "$(POKEDEX_TEST_DSN)" ]; then \
+		echo "test-db: POKEDEX_TEST_DSN が設定されていない(スキップせず失敗する)" >&2; \
+		exit 1; \
+	fi
+	@cd services && $(GO) test -tags mysql -p 1 ./pokedex/...
+
+.PHONY: db-local-up
+db-local-up: ## make dev 用に docker で mysql:9.7.2 を 127.0.0.1:3306 に起動する(パスワードは .env)
+	@./scripts/db-local-up.sh
 
 ## --- クラスタ / ローカル ---------------------------------------------
 .PHONY: up
@@ -114,8 +149,16 @@ test-wasm: wasm ## Go と WASM の結果一致テスト(Node。要 make wasm)
 	@node scripts/wasm-conformance.mjs
 
 .PHONY: import
-import: ## マスタデータ取込
-	@echo "import: (P2 で実装)"
+import: ## マスタデータの変換・投入(POKEDEX_DATABASE_DSN が必須。取得は import-fetch)
+	@cd services && $(GO) run ./pokedex/cmd/import -data ../data
+
+.PHONY: import-dry-run
+import-dry-run: ## マスタデータの変換・報告だけ行う(DB には触らない)
+	@cd services && $(GO) run ./pokedex/cmd/import -data ../data -dry-run
+
+.PHONY: import-fetch
+import-fetch: ## 取得元(calc/Showdown/PokeAPI)から実データを取得する(ネットワークが要る。先に tools/importer で npm ci)
+	@cd tools/importer && npm ci && node fetch.mjs
 
 .PHONY: assets
 assets: ## 画像を WebP 2サイズに変換して MinIO へ
@@ -144,6 +187,25 @@ tidy: ## go mod tidy(全モジュール)
 	@cd engine && $(GO) mod tidy
 	@cd services && $(GO) mod tidy
 	@cd tools && $(GO) mod tidy
+
+.PHONY: deps-outdated
+deps-outdated: ## 古くなった依存の一覧を表示する(ネットワーク使用。失敗しても一覧を出す。make test には含めない)
+	# GOWORK=off: go.work があると workspace 全体(全モジュール合算)の一覧になってしまうため、
+	# モジュール単体の一覧にする(services/balance の既存ターゲットと同じ考え方)。
+	@echo "== Go: engine (go list -m -u all) =="
+	@cd engine && GOWORK=off $(GO) list -m -u all 2>&1 || true
+	@echo "== Go: services (go list -m -u all) =="
+	@cd services && GOWORK=off $(GO) list -m -u all 2>&1 || true
+	@echo "== Go: tools (go list -m -u all) =="
+	@cd tools && GOWORK=off $(GO) list -m -u all 2>&1 || true
+	@echo "== Go: services/balance (go list -m -u all) =="
+	@cd services/balance && GOWORK=off $(GO) list -m -u all 2>&1 || true
+	@echo "== Node: tools/golden (npm outdated) =="
+	@if [ -f tools/golden/package.json ]; then cd tools/golden && (npm outdated || true); else echo "(tools/golden/package.json が無い)"; fi
+	@echo "== Node: tools/importer (npm outdated) =="
+	@if [ -f tools/importer/package.json ]; then cd tools/importer && (npm outdated || true); else echo "(tools/importer/package.json が無い。未作成)"; fi
+	@echo "== Node: web (npm outdated) =="
+	@if [ -f web/package.json ]; then cd web && (npm outdated || true); else echo "(web/package.json が無い。未作成)"; fi
 
 include services/balance/Makefile
 include web/Makefile

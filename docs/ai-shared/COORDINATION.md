@@ -21,8 +21,9 @@
 | **API**(damage calc: サービス) | `~/MyDamageCalcurater-api` | `feat/api-<phase名>` | Phase 3(`services/calc/`・`services/gateway/`・契約テスト・k3d のスモーク)。**`api/openapi.yaml` と生成物(`services/internal/api/`)を変更できるのはこのレーンだけ** |
 | **Web**(damage calc: 画面) | `~/MyDamageCalcurater-web` | `feat/web-<phase名>` | Phase 4(`web/`・Playwright)。`make wasm` の成果物を使う |
 | **タイプバランス**(type balance) | `~/MyDamageCalcurater-tb`(同じリポジトリの git worktree) | `feat/tb-<stage名>`(既存の `feat/codex-tb0-foundation` はマージまでそのまま使う) | `services/balance/` とその Kustomize / Argo CD 定義。設計の正は `docs/type-balance-design.md` |
+| **iOS**(damage calc: iOS アプリ) | `~/MyDamageCalcurater-ios` | `feat/ios-<phase名>` | M3 の Phase 6(`ios/`)。API クライアントは `api/openapi.yaml` から swift-openapi-generator で生成し、手で書かない。署名・実機インストールは人間(CLAUDE.md) |
 
-- ディレクトリはレーンの数だけ(いまは4つ)にする。レーンの作業ディレクトリは、どの AI が使ってもよい(同時に2つのセッションで開かない)。
+- ディレクトリはレーンの数だけ(いまは5つ)にする。レーンの作業ディレクトリは、どの AI が使ってもよい(同時に2つのセッションで開かない)。
 - レーンの worktree が無いときは作る: `git -C ~/MyDamageCalcurater worktree add ~/MyDamageCalcurater-<レーン> <ブランチ>`
 
 ### レーン間の依存と共有ファイル(4レーン。2026-09-21 ユーザー決定)
@@ -30,6 +31,8 @@
 - **他のレーンの範囲のファイルは変更しない**。必要な変更は `DECISIONS.md` に既定案付きの提案として書き、そのレーンに任せる。待たずに進めるため、暫定の境界(インターフェース・架空データ・fake)を自分のレーン内に置いてよい。
   - API レーン: マスタの読み込みは `services/internal/master`(データレーン)の写像が main に入るまで、自分の中の差し替え可能なインターフェースと架空データで作る。engine は変更せず、公開 API を呼ぶだけ。
   - Web レーン: 計算は WASM(`engine/wasmapi` の JSON 契約。ADR-0011)で先に作る。API の型が要る部分(P4-5)は、API レーンが `api/openapi.yaml` を更新して main に入れてから追従する。マスタ(種族・技の一覧)は pokedex-svc ができるまで架空データで作る。
+  - iOS レーン: API の契約は `api/openapi.yaml`(API レーンが持ち主)に追従するだけで変更しない。P3 のサーバーができるまでは生成クライアントに対するモック(架空データ)で画面を作る。
+    Xcode が無い間は Swift Package(生成クライアント・モデル・デザイントークン)と `swift test` の範囲で進め、Xcode プロジェクトとシミュレータのテスト(`make ios-test`)は Xcode の導入後に行う。デザイントークンの値は Web と同じ(docs/design.md)
   - データレーン: `api/openapi.yaml` を変えない。pokedex の API が要るときは DECISIONS.md で API レーンに提案する。
 - **両方が触る共有ファイル**:
   - `docs/plan.md`: 自分のレーンのタスクの行(とブロッカー節の自分の項目)だけを更新する。
@@ -84,7 +87,7 @@ gh pr merge <番号> --merge         # マージコミットで入れる。squas
 | `go.work` | 自分のレーンのモジュールの `use` 行を追記してよい(タイプバランスは `./services/balance`) |
 | ルートの `Makefile` | 自分のレーンのサービスの `include <path>/Makefile` の1行を追記してよい(タイプバランスは `include services/balance/Makefile`。ターゲット名は `balance-` 接頭辞) |
 | `AGENTS.md` / `CLAUDE.md` / 本ファイル | 運用ルールの変更は、ユーザーの決定があったときだけ。変更したら `DECISIONS.md` に記録する |
-| `docs/adr/` | 番号は `git fetch origin` した後の main の最新の次を取る。統合時に番号が衝突したら、後から統合する側が自分の ADR とその参照を振り直す |
+| `docs/adr/` | **新しい ADR の番号はレーンごとの帯から取る**(2026-09-22。並列で「main の最新の次」を取ると衝突するため): データ `0100〜` / API `0200〜` / Web `0300〜` / タイプバランス `0400〜` / iOS `0500〜`。帯の中で自分のレーンの最新の次を使う。`0001〜0019` の既存の番号はそのまま(衝突しているものは、後から統合する側が自分の帯へ振り直す) |
 
 ## 止まるとき(レートリミット・上限・セッション終了の前後)
 
@@ -93,6 +96,21 @@ gh pr merge <番号> --merge         # マージコミットで入れる。squas
 2. `git push origin <ブランチ>`。
 3. レーン欄の `Status` と `Next` に、**次にやることを具体的に**書き、`Active` を `なし` にする。この更新もブランチに commit・push する。
    (main へはまだ入らないので、次に始める人はレーン欄の `Branch` の最新コミットを見る。)
+
+## Claude の上限時の Codex(最大2本。2026-09-22 ユーザー決定)
+
+Max プランの利用枠は全レーンで共有なので、Claude Code が上限に達すると**全レーンが同時に止まる**。そのときは Codex を**最大2本**だけ起動する
+(Codex の利用枠も有限で、5本同時だとすぐ尽きるため)。
+
+| Codex | 作業ディレクトリ | やること |
+|---|---|---|
+| **1. クリティカルパスのレーン** | そのレーンの作業ディレクトリ | M1 の完了に一番効くレーン(`CURRENT_STATE.md` の各レーンの Next を見て選ぶ。迷ったらデータ → API → Web の順)を、通常のレーンのプロンプトで `Next` から続ける |
+| **2. 整備レーン** | `~/MyDamageCalcurater-maint`(使うときだけ作り、終わったら消す) | 下記。`docs/plan.md` の「整備レーン」のバックログを上から進める |
+
+- 整備レーンは **Claude の各レーンが止まっている間だけ**動かす(レーンをまたぐ整理をしても、作業中のセッションと衝突しない)。Claude が再開したら、区切りで commit・push・PR して止め、worktree を消す。
+- 整備レーンの範囲: レーンに属さない共有物(`scripts/` の共通スクリプト、ルート `Makefile` の共通ターゲット、`docs/` の横断的な文書(`docs/ai-shared/`・`plan.md` の整備節・README・CLAUDE.md のリポジトリ構成の記述の整合)、`.gitignore`)と、統合の検証。
+  **レーンの範囲(engine・services/*・web・ios・各レーンの ADR)は直さない**。壊れているのを見つけたら、そのレーンの `CURRENT_STATE.md` の欄の Next の先頭に既定案付きで書き、`DECISIONS.md` にも記録する。
+- ブランチは `fix/maint-<名前>`、`CURRENT_STATE.md` は `## Maintenance` 欄。worktree の作り方: `git -C ~/MyDamageCalcurater worktree add -b fix/maint-<名前> ~/MyDamageCalcurater-maint origin/main`、消し方: `git -C ~/MyDamageCalcurater worktree remove ~/MyDamageCalcurater-maint`(未 push の commit が無いことを確かめてから)。
 
 ## 人間への質問(時間帯のルール。2026-09-21 ユーザー決定)
 
@@ -128,4 +146,6 @@ cd ~/MyDamageCalcurater      && claude   # または codex(データレーン)
 cd ~/MyDamageCalcurater-api  && claude   # または codex(API レーン)
 cd ~/MyDamageCalcurater-web  && claude   # または codex(Web レーン)
 cd ~/MyDamageCalcurater-tb   && claude   # または codex(タイプバランスレーン)
+# Claude の上限時だけ: 整備レーン(Codex。使うときだけ worktree を作る)
+cd ~/MyDamageCalcurater-ios  && claude   # または codex(iOS レーン)
 ```

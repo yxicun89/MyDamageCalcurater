@@ -1,0 +1,13 @@
+{
+  "name": "pokecalc-importer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "calc / Showdown / PokeAPI からマスタデータのスナップショットを取得する(ADR-0101)",
+  "scripts": {
+    "fetch": "node fetch.mjs"
+  },
+  "dependencies": {
+    "@smogon/calc": "0.12.0"
+  }
+}

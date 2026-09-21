@@ -2,7 +2,8 @@
 /bin/
 *.test
 *.out
-coverage.*
+coverage.out
+coverage.html
 
 # WASM ビルド成果物(生成物はコミットしない)
 web/public/engine.wasm
@@ -43,3 +44,6 @@ docs/local/
 
 # 第三者由来の Pokémon マスタデータ・生成済みスナップショット・公式画像(コミットしない。ADR-0002)
 data/generated/
+
+# 日本語名の override(実在の日本語名=第三者データ。ADR-0017 §6)
+data/local/
