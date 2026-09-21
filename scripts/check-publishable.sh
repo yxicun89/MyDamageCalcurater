@@ -133,6 +133,9 @@ matches_any_glob() {
 # ---------------------------------------------------------------------------
 check_a() {
   SCAN_EXTRA_EXCLUDES=("${A_EXCLUDES[@]}")
+  # レーン用 worktree と権限定義の ~/.ssh は、利用者名を含まない共有のプレースホルダとして許可する。
+  scan_content A "絶対パス(~/)" '~/[A-Za-z0-9.][A-Za-z0-9._*/<>-]*' \
+    '^~/((MyDamageCalcurater|pokecalc)[A-Za-z0-9._*/<>-]*|\.ssh/\*\*)$'
   scan_content A "絶対パス(/Users/)" '/Users/'
   scan_content A "絶対パス(/home/)" '/home/[a-z]'
   scan_content A "絶対パス(/var/folders)" '/var/folders'
@@ -556,7 +559,7 @@ var y = Species{NameJa: "実在の名前"}' "$dir" engine/d4_test.go
   dir="$(selftest_new_repo e)"
   selftest_add '{"dependencies":{"pkg":"^1.2.3"}}' "$dir" tools/golden/package.json
   selftest_add '{"dependencies":{"pkg":"1.2.3"}}' "$dir" web/package.json
-  selftest_add 'module example.com/pokecalc/engine' "$dir" engine/go.mod
+  selftest_add 'module github.com/dummyaccount/pokecalc/engine' "$dir" engine/go.mod
   selftest_run "E" "$dir"
   selftest_expect_hits "E" tools/golden/package.json:1 "web/package.json  lockfile" engine/go.mod:1
   selftest_expect_no_leak "E" dummyaccount
