@@ -73,3 +73,27 @@ Reason: `api/openapi.yaml` の pokedex API は種族・技・持ち物・性格�
 Impact: `feat/codex-tb0-foundation` はブランチ作成のみで、`services/balance/` の実装には未着手。
 再開には、(1) pokedex-svc に追加予定のタイプ相性 API 契約、または (2) コミット可能なエクスポートファイルの
 配置先・スキーマ・データバージョン・再生成方法の指定が必要。既存 API への変更が必要なら Codex は実装せず担当側の判断を待つ。
+
+## 2026-09-21: 共有状態は main 専用 worktree の docs/ai-shared を正本にする
+Decision: 新しい coordination branch は作らない。`main` 専用 worktree
+(`~/pokecalc-main`)の `docs/ai-shared/` だけを現在状態の正本とし、feature branch 内の
+同名ファイルは履歴上のスナップショットとして扱う。Claude/Codex は個別 worktree で実装する。
+Reason: 既存の共有 MD とブランチ運用を維持しつつ、feature branch ごとの CURRENT_STATE 分岐と、
+1 worktree のブランチ切り替えによる相互干渉を解消するため。
+Impact: 共有 MD のみ main へ直接コミットしてよい。実装は従来どおり feature branch のみ。
+共有 MD の同期だけを目的とする merge/cherry-pick は行わない。詳細は README_AI_SHARED.md。
+
+## 2026-09-21: damage-calc と balance は兄弟のドメインモノリスとする
+Decision: 「1機能ドメイン=1サービス、サービス内部はモノリス」とし、damage-calc と balance の
+相互 API 依存を作らない。pokemon/type/move/ability/damage-formula 単位の新サービスは作らない。
+Reason: Kubernetes を理由に責務を細分化せず、個人開発で管理可能な複雑さを保つため。
+Impact: 既存の未実装 pokedex-svc を balance の必須ランタイム依存にはしない。既存文書の
+「balance-svc は pokedex-svc API を呼ぶ」は本決定で置き換える。詳細は ADR-0012。
+
+## 2026-09-21: TB0 のタイプ相性表は差し替え可能な temporary adapter とする
+Decision: 共通マスタの恒久正本が未確定の間、現行18タイプ相性を balance 内の temporary/static adapter として
+利用してよい。ただし純粋コアは provider interface に依存し、正式な共通スナップショット確定後に差し替える。
+Reason: Claude 側 P2-1 の ADR-0002 は共通マスタのコミット済みスナップショットを提案しているが人間確認待ち。
+一方、タイプ相性コア・HTTP・Kubernetes 基盤はその確定を待たずに検証できる。
+Impact: 前エントリ「TB0 タイプ相性データの取得元・契約を確認待ち」の停止条件は解除する。
+temporary データを balance 独自の恒久正本として扱わず、API や新サービスを先行追加しない。

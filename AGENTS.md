@@ -9,9 +9,12 @@
 ## 共有状態(docs/ai-shared/)
 
 Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-shared/` だけ。
+現在状態の正本は **`main` 専用 worktree の `docs/ai-shared/`** とし、feature branch 内の
+同名ファイルは履歴上のスナップショットとして扱う。場所と更新手順は `README_AI_SHARED.md` を参照する。
 
-1. 作業開始時: `docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md` を読む(使い方は `README_AI_SHARED.md`)
-2. 作業終了時: 自分のログ(`CODEX_LOG.md`)に追記し、`CURRENT_STATE.md` の自分の担当欄を更新する
+1. 作業開始時: main worktree の `docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md` を読む
+2. 作業終了時: main worktree で自分のログに追記し、`CURRENT_STATE.md` の自分の担当欄を更新する
+3. 実装は Claude/Codex それぞれの feature worktree だけで行う。共有状態だけを feature branch に複製しない
 
 ## 開始時と Git 運用
 
