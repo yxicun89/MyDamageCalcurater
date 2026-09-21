@@ -27,7 +27,7 @@ type ItemEffect struct {
 
 // AbilityEffect はダメージに影響する特性の補正(4096基準)。
 type AbilityEffect struct {
-	StabMod              int          // タイプ一致補正を上げる特性: 8192。0 は通常(6144)
+	StabMod              int          // タイプ一致補正を上げる特性: 8192(ModifierAdaptability)。0 は通常(ModifierStab)
 	OffBoostType         Type         // 攻撃実数値強化の対象技タイプ
 	OffBoostTypeMod      int          // 例 6144
 	DefResistType        map[Type]int // 相手の攻撃実数値補正。例 炎・氷技を半減する特性{fire:2048, ice:2048}
@@ -49,17 +49,17 @@ func weatherDamageMod(w Weather, moveType Type) int {
 	switch w {
 	case WeatherSun:
 		if moveType == TypeFire {
-			return 6144 // ×1.5
+			return modifierWeatherBoost // ×1.5
 		}
 		if moveType == TypeWater {
-			return 2048 // ×0.5
+			return ModifierHalf // ×0.5
 		}
 	case WeatherRain:
 		if moveType == TypeWater {
-			return 6144
+			return modifierWeatherBoost
 		}
 		if moveType == TypeFire {
-			return 2048
+			return ModifierHalf
 		}
 	}
 	return Modifier4096
@@ -82,24 +82,24 @@ func terrainDamageMod(terr Terrain, moveType Type) int {
 		}
 	case TerrainMisty:
 		if moveType == TypeDragon {
-			return 2048 // ×0.5
+			return ModifierHalf // ×0.5
 		}
 	}
 	return Modifier4096
 }
 
 // screenDamageMod は壁による軽減倍率を返す。急所は壁を貫通するため呼び出し側で除外する。
-// シングルは 2048(×0.5)。
+// シングルは ModifierHalf(×0.5)。
 func screenDamageMod(in DamageInput) int {
 	s := in.Field.DefenderScreens
 	switch in.Move.Category {
 	case CategoryPhysical:
 		if s.Reflect || s.AuroraVeil {
-			return 2048
+			return ModifierHalf
 		}
 	case CategorySpecial:
 		if s.LightScreen || s.AuroraVeil {
-			return 2048
+			return ModifierHalf
 		}
 	}
 	return Modifier4096
@@ -137,10 +137,10 @@ func defensiveStatMod(in DamageInput, defKey StatKey) int {
 
 func weatherDefenseMod(in DamageInput, defKey StatKey) int {
 	if in.Field.Weather == WeatherSand && defKey == StatSpD && hasType(in.Defender, TypeRock) {
-		return 6144
+		return modifierWeatherBoost
 	}
 	if in.Field.Weather == WeatherSnow && defKey == StatDef && hasType(in.Defender, TypeIce) {
-		return 6144
+		return modifierWeatherBoost
 	}
 	return Modifier4096
 }
@@ -189,7 +189,7 @@ func otherModifiers(in DamageInput) []int {
 	// 防御側の持ち物(半減きのみ)
 	if e := itemEffect(in.Defender.Item); e != nil {
 		if e.ResistBerryType != TypeNone && e.ResistBerryType == in.Move.Type && (superEffective || in.Move.Type == TypeNormal) {
-			mods = append(mods, 2048)
+			mods = append(mods, ModifierHalf)
 		}
 	}
 	return mods

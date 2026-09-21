@@ -9,32 +9,49 @@ package engine
 //	base ×= 天候など基礎段階の補正(P1-4)
 //	base ×= 急所(1.5, floor)
 //	各ロール i(0..15): d = floor(base*(85+i)/100)
-//	  d = pokeRound(d × タイプ一致)            (6144 or 4096、Adaptability は 8192)
+//	  d = pokeRound(d × タイプ一致)            (ModifierStab or Modifier4096、Adaptability は ModifierAdaptability)
 //	  d = floor(d × タイプ相性)                (num/den)
-//	  d = pokeRound(d × やけど)                (物理やけどで 2048)
+//	  d = pokeRound(d × やけど)                (物理やけどで ModifierHalf)
 //	  d = pokeRound(d × その他補正)            (壁・持ち物・特性など P1-4)
 //	  相性≠0 なら d = max(1, d)
 
-// Modifier は 4096 を等倍(=1.0)とする固定小数の補正値。
-const Modifier4096 = 4096
+// 補正値は 4096 を等倍(=1.0)とする固定小数で表す(値 = 倍率 × 4096)。
+// 出典: 第9世代の補正計算(Bulbapedia / @smogon/calc gen9)。
+const (
+	// Modifier4096 は等倍(×1.0)。補正値の基準。
+	Modifier4096 = 4096
+	// ModifierHalf は ×0.5(4096 に対する比 1/2)。やけど・壁・ミストフィールド・
+	// 天候による弱化・半減きのみなど、半減する補正すべてで共通。
+	ModifierHalf = 2048
+	// ModifierStab はタイプ一致補正 ×1.5。
+	ModifierStab = 6144
+	// ModifierAdaptability はタイプ一致補正を上げる特性(てきおうりょく)の一致補正 ×2.0。
+	ModifierAdaptability = 8192
+
+	// modifierWeatherBoost は天候による強化 ×1.5(はれ/あめの技ダメージ、
+	// すなあらし/ゆきの防御実数値)。
+	modifierWeatherBoost = 6144
+	// modifierRoundHalf は五捨五超入・連鎖丸めで加える「Modifier4096 の半分」(0.5 に相当)。
+	modifierRoundHalf = Modifier4096 / 2
+)
 
 // pokeRound は value×mod/4096 を五捨五超入(半分ちょうどは切り捨て)する。
 func pokeRound(value, mod int) int {
 	v := value * mod
-	if v%4096 > 2048 {
-		return v/4096 + 1
+	if v%Modifier4096 > modifierRoundHalf {
+		return v/Modifier4096 + 1
 	}
-	return v / 4096
+	return v / Modifier4096
 }
 
 // chainMods は複数の 4096基準補正を連結して1つの補正にまとめる(@smogon-calc 互換)。
-// 各ステップは (M*mod + 2048) >> 12 = 切り上げ寄りの丸め。最終適用は pokeRound で行う。
+// 各ステップは (M*mod + modifierRoundHalf) >> 12 = 切り上げ寄りの丸め。最終適用は pokeRound で行う。
 // 壁・持ち物・特性など「その他補正」はこの方式で1回にまとめないとゴールデンと一致しない。
 func chainMods(mods []int) int {
 	m := Modifier4096
 	for _, mod := range mods {
 		if mod != Modifier4096 {
-			m = (m*mod + 2048) >> 12
+			m = (m*mod + modifierRoundHalf) >> 12
 		}
 	}
 	return m
@@ -64,19 +81,20 @@ type DamageResult struct {
 func (r DamageResult) MinDamage() int { return r.Rolls[0] }
 func (r DamageResult) MaxDamage() int { return r.Rolls[15] }
 
-// stabModifier はタイプ一致補正値を返す(通常 6144、てきおうりょく 8192、不一致 4096)。
+// stabModifier はタイプ一致補正値を返す(通常 ModifierStab、てきおうりょく等 AbilityEffect.StabMod
+// (ModifierAdaptability)、不一致 Modifier4096)。
 func stabModifier(in DamageInput, moveType Type) (int, bool) {
 	if moveType == TypeNone || !hasType(in.Attacker, moveType) {
 		return Modifier4096, false
 	}
-	mod := 6144
+	mod := ModifierStab
 	if ae := in.Attacker.Ability.Effect; ae != nil && ae.StabMod != 0 {
 		mod = ae.StabMod
 	}
 	return mod, true
 }
 
-// burnModifier は物理やけどによる攻撃半減(2048)を返す。
+// burnModifier は物理やけどによる攻撃半減(ModifierHalf)を返す。
 // やけど無効化の特性(こんじょう等)は AbilityEffect.IgnoresBurn で表す。
 func burnModifier(in DamageInput) int {
 	ignores := false
@@ -85,7 +103,7 @@ func burnModifier(in DamageInput) int {
 	}
 	if in.Move.Category == CategoryPhysical &&
 		in.Attacker.Status == StatusBurn && !ignores {
-		return 2048
+		return ModifierHalf
 	}
 	return Modifier4096
 }

@@ -94,13 +94,13 @@ type BulkResult struct {
 func DefenderPresetCatalog() []DefenderPreset {
 	return []DefenderPreset{
 		{Key: PresetNone, Label: "無振り", SP: Stats{}, Nature: NatureNeutral},
-		{Key: PresetHP, Label: "H振り", SP: Stats{HP: 32}, Nature: NatureNeutral},
-		{Key: PresetHBBoost, Label: "H振り+B補正", SP: Stats{HP: 32}, Nature: Nature{Plus: StatDef, Minus: StatAtk}, Applies: CategoryPhysical},
-		{Key: PresetHB, Label: "HB振り", SP: Stats{HP: 32, Def: 32}, Nature: NatureNeutral, Applies: CategoryPhysical},
-		{Key: PresetHBFull, Label: "HB特化", SP: Stats{HP: 32, Def: 32}, Nature: Nature{Plus: StatDef, Minus: StatAtk}, Applies: CategoryPhysical},
-		{Key: PresetHDBoost, Label: "H振り+D補正", SP: Stats{HP: 32}, Nature: Nature{Plus: StatSpD, Minus: StatAtk}, Applies: CategorySpecial},
-		{Key: PresetHD, Label: "HD振り", SP: Stats{HP: 32, SpD: 32}, Nature: NatureNeutral, Applies: CategorySpecial},
-		{Key: PresetHDFull, Label: "HD特化", SP: Stats{HP: 32, SpD: 32}, Nature: Nature{Plus: StatSpD, Minus: StatAtk}, Applies: CategorySpecial},
+		{Key: PresetHP, Label: "H振り", SP: Stats{HP: MaxSPPerStat}, Nature: NatureNeutral},
+		{Key: PresetHBBoost, Label: "H振り+B補正", SP: Stats{HP: MaxSPPerStat}, Nature: Nature{Plus: StatDef, Minus: StatAtk}, Applies: CategoryPhysical},
+		{Key: PresetHB, Label: "HB振り", SP: Stats{HP: MaxSPPerStat, Def: MaxSPPerStat}, Nature: NatureNeutral, Applies: CategoryPhysical},
+		{Key: PresetHBFull, Label: "HB特化", SP: Stats{HP: MaxSPPerStat, Def: MaxSPPerStat}, Nature: Nature{Plus: StatDef, Minus: StatAtk}, Applies: CategoryPhysical},
+		{Key: PresetHDBoost, Label: "H振り+D補正", SP: Stats{HP: MaxSPPerStat}, Nature: Nature{Plus: StatSpD, Minus: StatAtk}, Applies: CategorySpecial},
+		{Key: PresetHD, Label: "HD振り", SP: Stats{HP: MaxSPPerStat, SpD: MaxSPPerStat}, Nature: NatureNeutral, Applies: CategorySpecial},
+		{Key: PresetHDFull, Label: "HD特化", SP: Stats{HP: MaxSPPerStat, SpD: MaxSPPerStat}, Nature: Nature{Plus: StatSpD, Minus: StatAtk}, Applies: CategorySpecial},
 	}
 }
 

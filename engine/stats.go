@@ -3,14 +3,14 @@ package engine
 // 実数値計算。ポケモンチャンピオンズは Lv50・個体値31固定なので、標準式を
 // 展開した次の式で求まる(SP を努力値 max(0,8×SP−4) に換算すると標準式と一致)。
 //
-//	HP  = 種族値 + 75 + SP
-//	その他 = floor((種族値 + 20 + SP) × 性格補正)
+//	HP  = 種族値 + HPStatOffset(75) + SP
+//	その他 = floor((種族値 + OtherStatOffset(20) + SP) × 性格補正)
 //
 // 性格補正は float 近似を避け整数演算(×11/10, ×9/10)で行う。
 
 // realOtherStat は HP 以外の実数値を計算する。
 func realOtherStat(base, sp int, n Nature, k StatKey) int {
-	return applyNature(base+20+sp, n, k)
+	return applyNature(base+OtherStatOffset+sp, n, k)
 }
 
 // applyNature は性格補正を整数演算で適用する。v は非負を前提とする。
@@ -32,7 +32,7 @@ func applyNature(v int, n Nature, k StatKey) int {
 func RealStats(in Individual) Stats {
 	b := in.Species.BaseStats
 	return Stats{
-		HP:  b.HP + 75 + in.SP.HP,
+		HP:  b.HP + HPStatOffset + in.SP.HP,
 		Atk: realOtherStat(b.Atk, in.SP.Atk, in.Nature, StatAtk),
 		Def: realOtherStat(b.Def, in.SP.Def, in.Nature, StatDef),
 		SpA: realOtherStat(b.SpA, in.SP.SpA, in.Nature, StatSpA),
