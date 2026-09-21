@@ -1,5 +1,5 @@
 {
-  "note": "Test-only adapters from @smogon/calc 0.10.0 names to engine effect inputs; not a Champions item/ability master.",
+  "note": "Test-only adapters from @smogon/calc 0.12.0 names to engine effect inputs; not a Champions item/ability master.",
   "items": {
     "Choice Band": {"StatMods":{"atk":6144}},
     "Choice Specs": {"StatMods":{"spa":6144}},

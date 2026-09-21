@@ -1,15 +1,14 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "source": "@smogon/calc",
-  "version": "0.10.0",
-  "generation": 9,
+  "version": "0.12.0",
+  "generation": "champions",
   "seed": 1347373893,
   "randomAlgorithm": "xorshift32",
   "level": 50,
   "ivs": 31,
-  "spToEV": "max(0,8*SP-4)",
-  "speciesScope": "gen9 library reference species/forms (including CAP fan species), NOT Champions availability; P2 source investigation pending",
-  "speciesCount": 1392,
+  "speciesScope": "@smogon/calc 0.12.0 Champions generation (Generations.get(0)) species/forms, minus internal forms not selectable in-game (see exclusions)",
+  "speciesCount": 358,
   "representativeMoves": [
     "Body Slam",
     "Hyper Voice",
@@ -50,14 +49,18 @@
   ],
   "learnsets": "Not asserted: arithmetic type/category coverage only",
   "koModel": "ADR-0006: independent uniform rolls, full HP, identical hit repeated without residuals/recovery or consumable state transitions",
-  "koCrossChecks": 35,
   "exclusions": [
     {
       "scope": "species",
       "names": [
-        "Shedinja"
+        "Aegislash-Both"
       ],
-      "reason": "HP=1 special mechanic is outside Champions SP formula"
+      "reason": "Internal calc-only pseudo-form; not a selectable in-game form (P2-1b)"
+    },
+    {
+      "scope": "species",
+      "names": [],
+      "reason": "HP=1 special mechanic is outside Champions SP formula; not present in the current Champions set"
     },
     {
       "scope": "moves",
@@ -65,7 +68,7 @@
     },
     {
       "scope": "abilities/items",
-      "reason": "Only effects.json adapters; no default species ability; Eviolite only on Snover fixed case"
+      "reason": "Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors"
     },
     {
       "scope": "terrain",
@@ -80,30 +83,78 @@
       "reason": "Smogon residual/consumable multi-turn model differs from ADR-0006; direct smogonKO cross-check only residual/consumable-free fixed cases with 1-4 hits"
     }
   ],
+  "oracles": [
+    {
+      "id": "champions",
+      "source": "@smogon/calc",
+      "version": "0.12.0",
+      "generation": "champions",
+      "generationNum": 0,
+      "spInput": "direct",
+      "files": [
+        "fixed.json",
+        "random.jsonl.gz",
+        "attack-species.jsonl.gz",
+        "defense-species.jsonl.gz",
+        "stats-species.jsonl.gz",
+        "typechart.json"
+      ],
+      "koCrossChecks": 37
+    },
+    {
+      "id": "gen9-legacy-effects",
+      "source": "@smogon/calc",
+      "version": "0.12.0",
+      "generation": "gen9",
+      "generationNum": 9,
+      "spInput": "max(0,8*SP-4)",
+      "seed": 1279608641,
+      "files": [
+        "legacy-effects.jsonl.gz"
+      ],
+      "koCrossChecks": 0,
+      "legacyEffects": {
+        "items": [
+          "Choice Band",
+          "Choice Specs",
+          "Assault Vest",
+          "Eviolite"
+        ],
+        "abilities": [
+          "Steelworker"
+        ]
+      },
+      "reason": "These items/ability are not implemented in @smogon/calc 0.12.0 Champions generation mechanics. The calc-formula check (ADR-0002 decision 7) continues against gen9, independent of in-game availability."
+    }
+  ],
   "files": {
     "fixed.json": {
-      "count": 203,
-      "sha256": "ec46456c237f4bdde77990b2989c50793c2b4ec61632c92a9646fabe5c442783"
+      "count": 172,
+      "sha256": "bf4fb9ec8cec9d59fa470ce1cd1d5350134578f35dd05355fc1b4d2abe98d817"
     },
     "random.jsonl.gz": {
       "count": 10000,
-      "sha256": "ffd8997b907cd319d98e64a846b8d37872c3c7573380b71ffe2e331092efa2fc"
+      "sha256": "8a074328e0e2d5ba606b7f4da8f64852b6c8c949d2db2f1409d99d0b3c47d559"
     },
     "attack-species.jsonl.gz": {
-      "count": 27840,
-      "sha256": "846ba7cff38b01af39f302e4270aac1b6d1bc2219c9ddc537b68b1b487b5f97a"
+      "count": 7160,
+      "sha256": "521f11af3cb8a57d3c03ffd933424a5ef25868a9d9be18fb708aa3d93d2e0339"
     },
     "defense-species.jsonl.gz": {
-      "count": 55680,
-      "sha256": "1b7c93b9d333d31df9e291287f1aee04fd24ef7982b0a716c00fe19574171cfb"
+      "count": 14320,
+      "sha256": "c28659dab4c9f6be0483582890f960a2ac710daa21979713d01a3db5d19b5507"
     },
     "stats-species.jsonl.gz": {
-      "count": 100224,
-      "sha256": "f374b8b28370b40df70e73761f70fe626f63e62beaab524308a804829eb82088"
+      "count": 25776,
+      "sha256": "587d63614467798da38a361c50f0963b95196600e6aa8572688e03386943fa85"
+    },
+    "legacy-effects.jsonl.gz": {
+      "count": 3851,
+      "sha256": "5dd0fcfd40baf01ac884315c69f2d26dd11bec8ee0bcff27930b5522c78c2d68"
     },
     "typechart.json": {
       "count": 324,
-      "sha256": "c1de6ddbcbac892620762d3de78a17e6561d2b75c47eb517a6b8b11e4cf9c735"
+      "sha256": "962b20126fb1996c13b05de4533fa94f90266cb08cc5e9ab3d093a038efa2228"
     }
   }
 }

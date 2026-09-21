@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -26,16 +27,93 @@ type goldenCase struct {
 	} `json:"expected"`
 }
 
+// UnmarshalJSON は input(engine に渡す DamageInput)だけを未知フィールド拒否で読む。
+// case 側の oracle / expected.smogonKO は生成器の診断情報で engine の入力ではないため、そこは緩く読む。
+// フィールド改名で入力が黙ってゼロ値になり「別の入力」と照合する事故を防ぐ(P1-6 改善要望。golden_scope_test.go)。
+func (c *goldenCase) UnmarshalJSON(b []byte) error {
+	var raw struct {
+		ID       string          `json:"id"`
+		Input    json.RawMessage `json:"input"`
+		Expected json.RawMessage `json:"expected"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	c.ID = raw.ID
+	if err := decodeStrictGolden(raw.Input, &c.Input); err != nil {
+		return fmt.Errorf("%s: input: %w", raw.ID, err)
+	}
+	if len(raw.Expected) == 0 {
+		return fmt.Errorf("%s: expected が無い", raw.ID)
+	}
+	return json.Unmarshal(raw.Expected, &c.Expected)
+}
+
+// goldenMetadata は testdata/golden/metadata.json(schemaVersion 2。P2-1b / ADR-0002 §決定 5 の追記)。
+//
+// oracle は2つ。どちらも同じ pin した @smogon/calc(0.12.0)で、世代だけが違う:
+//   - champions: 主のゴールデン(種族網羅・ランダム・固定・実数値・相性表)。SP は直接渡す。
+//   - gen9: Champions の mechanics に無い効果(持ち物・特性)の計算式を検証する legacy-effects。SP は max(0,8×SP−4) に換算。
 type goldenMetadata struct {
-	SchemaVersion int    `json:"schemaVersion"`
-	Source        string `json:"source"`
-	Version       string `json:"version"`
-	Seed          uint32 `json:"seed"`
-	SpeciesCount  int    `json:"speciesCount"`
+	SchemaVersion int               `json:"schemaVersion"`
+	Source        string            `json:"source"`
+	Version       string            `json:"version"`
+	Generation    string            `json:"generation"`
+	Seed          uint32            `json:"seed"`
+	SpeciesScope  string            `json:"speciesScope"`
+	SpeciesCount  int               `json:"speciesCount"`
+	Exclusions    []goldenExclusion `json:"exclusions"`
+	Oracles       []goldenOracle    `json:"oracles"`
 	Files         map[string]struct {
 		Count  int    `json:"count"`
 		SHA256 string `json:"sha256"`
 	} `json:"files"`
+}
+
+type goldenExclusion struct {
+	Scope  string   `json:"scope"`
+	Names  []string `json:"names"`
+	Reason string   `json:"reason"`
+}
+
+// goldenOracle は1つの oracle(世代)と、その oracle が生成したファイル。
+type goldenOracle struct {
+	ID            string   `json:"id"`            // "champions" / "gen9-legacy-effects"
+	Source        string   `json:"source"`        // "@smogon/calc"
+	Version       string   `json:"version"`       // "0.12.0"(両方同じ pin)
+	Generation    string   `json:"generation"`    // "champions" / "gen9"
+	GenerationNum int      `json:"generationNum"` // Generations.get(n) の n。champions は 0
+	SPInput       string   `json:"spInput"`       // "direct" / "max(0,8*SP-4)"
+	Seed          *uint32  `json:"seed,omitempty"`
+	Files         []string `json:"files"`
+	// LegacyEffects は Champions 世代に存在しない効果(effects.json の名前)。gen9 oracle だけが持つ。
+	LegacyEffects *struct {
+		Items     []string `json:"items"`
+		Abilities []string `json:"abilities"`
+	} `json:"legacyEffects,omitempty"`
+	Reason string `json:"reason,omitempty"`
+}
+
+const (
+	goldenOracleVersion     = "0.12.0"
+	goldenChampionsOracleID = "champions"
+	goldenLegacyOracleID    = "gen9-legacy-effects"
+	goldenLegacyEffectsFile = "legacy-effects.jsonl.gz"
+	goldenSPToEVFormula     = "max(0,8*SP-4)"
+	goldenChampionsSPDirect = "direct"
+	goldenChampionsGenNum   = 0
+	goldenGen9GenNum        = 9
+)
+
+func (m goldenMetadata) oracle(t *testing.T, id string) goldenOracle {
+	t.Helper()
+	for _, o := range m.Oracles {
+		if o.ID == id {
+			return o
+		}
+	}
+	t.Fatalf("metadata.json の oracles に %q が無い(P2-1b: champions と gen9-legacy-effects の2つを記録する)", id)
+	return goldenOracle{}
 }
 
 func readGoldenMetadata(t *testing.T) goldenMetadata {
@@ -48,8 +126,14 @@ func readGoldenMetadata(t *testing.T) goldenMetadata {
 	if err = json.Unmarshal(data, &meta); err != nil {
 		t.Fatal(err)
 	}
-	if meta.SchemaVersion != 1 || meta.Source != "@smogon/calc" || meta.Version != "0.10.0" || meta.Seed != 0x504f4b45 || meta.SpeciesCount == 0 {
-		t.Fatalf("unexpected oracle metadata: %+v", meta)
+	// P2-1b: oracle を @smogon/calc 0.12.0 の Champions 世代へ切り替え(ADR-0002 §決定 5 の追記)。
+	// 旧値(schemaVersion 1 / 0.10.0 / gen9)からの変更理由: 種族集合と SP の渡し方が Champions の定義になるため。
+	// speciesCount は 0 でないことだけでなく現実的な範囲で守る(golden_scope_test.go の定数の注記)。
+	if meta.SchemaVersion != 2 || meta.Source != "@smogon/calc" || meta.Version != goldenOracleVersion || meta.Generation != goldenChampionsOracleID || meta.Seed != 0x504f4b45 {
+		t.Fatalf("unexpected oracle metadata: schemaVersion=%d source=%q version=%q generation=%q seed=%#x", meta.SchemaVersion, meta.Source, meta.Version, meta.Generation, meta.Seed)
+	}
+	if meta.SpeciesCount < goldenMinSpeciesCount || meta.SpeciesCount > goldenMaxSpeciesCount {
+		t.Fatalf("speciesCount=%d は Champions 集合として範囲外 [%d, %d](基底種だけ・空・gen9 参考集合への逆戻りを疑う)", meta.SpeciesCount, goldenMinSpeciesCount, goldenMaxSpeciesCount)
 	}
 	return meta
 }
@@ -107,10 +191,20 @@ func TestGoldenDamage(t *testing.T) {
 	chart := mustTypeChart(t)
 	// defense-species は P1-10 の防御プリセット再定義でグループあたり 4 → 8 件になった
 	// (種族 × 攻撃側アンカー5 × プリセット8)。ADR-0009 §6。
-	if meta.Files["random.jsonl.gz"].Count != 10000 || meta.Files["fixed.json"].Count < 200 || meta.Files["attack-species.jsonl.gz"].Count != meta.SpeciesCount*20 || meta.Files["defense-species.jsonl.gz"].Count != meta.SpeciesCount*40 {
+	//
+	// 固定ケースの下限 200 は「fixed.json 単独」から「fixed.json + legacy-effects の固定部分」に変えた(P2-1b)。
+	// Champions に無い効果(こだわり系・チョッキ・しんかのきせき・はがねつかい)の固定シナリオは削除せず、
+	// gen9 で照合する legacy-effects へ移すため(ADR-0002 §決定 7)。シナリオが消えていないことは
+	// TestGoldenFixedScenariosPreserved がラベル単位で守る。
+	legacyFixed := countGoldenFixedInLegacy(t, meta)
+	if meta.Files["random.jsonl.gz"].Count != 10000 || meta.Files["fixed.json"].Count+legacyFixed < 200 || meta.Files["attack-species.jsonl.gz"].Count != meta.SpeciesCount*20 || meta.Files["defense-species.jsonl.gz"].Count != meta.SpeciesCount*40 {
 		t.Fatal("golden coverage incomplete")
 	}
-	for _, name := range []string{"fixed.json", "random.jsonl.gz", "attack-species.jsonl.gz", "defense-species.jsonl.gz"} {
+	if meta.Files[goldenLegacyEffectsFile].Count == 0 {
+		t.Fatalf("%s が空(Champions に無い効果の計算式が検証されていない)", goldenLegacyEffectsFile)
+	}
+	// legacy-effects も全件一致を要求する(known_diffs には何も足さない。P2-1b 決定 5)。
+	for _, name := range []string{"fixed.json", "random.jsonl.gz", "attack-species.jsonl.gz", "defense-species.jsonl.gz", goldenLegacyEffectsFile} {
 		t.Run(name, func(t *testing.T) {
 			count, failures := 0, 0
 			seen := map[string]bool{}
@@ -170,7 +264,9 @@ func TestGoldenTypeChart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f.Source != "@smogon/calc" || f.Version != meta.Version || f.Generation != 9 {
+	// P2-1b: 相性表は Champions 世代(Generations.get(0))から出す。gen9 と同一であることは第1段階で確認済み。
+	champions := meta.oracle(t, goldenChampionsOracleID)
+	if f.Source != "@smogon/calc" || f.Version != meta.Version || f.Generation != champions.GenerationNum || f.Generation != goldenChampionsGenNum {
 		t.Fatalf("相性表の出どころが他の fixture と違う: source=%q version=%q generation=%d", f.Source, f.Version, f.Generation)
 	}
 	if len(f.Types) != typeChartTypeCount {
@@ -228,6 +324,16 @@ func TestGoldenSpeciesStats(t *testing.T) {
 		}
 		if err := json.Unmarshal(line, &v); err != nil {
 			t.Fatal(err)
+		}
+		// individual も未知フィールド拒否で読み直す(SP のキー改名でゼロ値のまま照合しないため)。
+		var raw struct {
+			Individual json.RawMessage `json:"individual"`
+		}
+		if err := json.Unmarshal(line, &raw); err != nil {
+			t.Fatal(err)
+		}
+		if err := decodeStrictGolden(raw.Individual, &v.Individual); err != nil {
+			t.Fatalf("%s: individual: %v", v.ID, err)
 		}
 		if err := v.Individual.Validate(); err != nil {
 			t.Fatalf("%s invalid fixture: %v", v.ID, err)
