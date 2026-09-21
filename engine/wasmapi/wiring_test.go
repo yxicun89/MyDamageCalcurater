@@ -87,6 +87,33 @@ func TestWasmConformanceHarnessExists(t *testing.T) {
 	}
 }
 
+// TestTypeChartInjectionIsWired は、ベクタ先頭の相性表を各リクエストへ注入する処理が
+// 期待値生成(ネイティブ)と Node ハーネスの両方にあることを確かめる(ADR-0011 §13)。
+//
+// 一致テストは Go と WASM の**レスポンス**を比べるので、片側が注入を忘れると
+// 「両方が同じ type_chart_missing」でも一致してしまいかねない。
+// ベクタの schemaVersion を上げ、両側がそれを見ていることをここで固定する。
+func TestTypeChartInjectionIsWired(t *testing.T) {
+	for _, f := range []struct {
+		rel  string
+		want []string
+	}{
+		{"engine/cmd/wasmexpect/main.go", []string{"typeChart", "schemaVersion"}},
+		{"scripts/wasm-conformance.mjs", []string{"typeChart", "schemaVersion"}},
+	} {
+		src := readRepoFile(t, f.rel)
+		for _, want := range f.want {
+			if !strings.Contains(src, want) {
+				t.Errorf("%s に %q が無い(ベクタ先頭の相性表を各リクエストへ注入すること。ADR-0011 §13)", f.rel, want)
+			}
+		}
+		// 旧 schemaVersion のままなら、注入を実装していない可能性が高い。
+		if strings.Contains(src, "schemaVersion !== 1") || strings.Contains(src, "SchemaVersion != 1") {
+			t.Errorf("%s がベクタの schemaVersion 1 を前提にしている(2 に上げた。ADR-0011 §13)", f.rel)
+		}
+	}
+}
+
 // sectionOf は Makefile から header で始まるレシピ部分を粗く切り出す。
 func sectionOf(mk, header string) string {
 	i := strings.Index(mk, header)

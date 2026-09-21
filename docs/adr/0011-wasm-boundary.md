@@ -399,6 +399,51 @@ P1-9 の受け入れ条件と、それを守るテスト。AC の番号はテス
 AC-7 は仕様上ここに一本化してある。WASM の実行が要る検証は Node 側にしか置けないため、
 それを `make test` から外した代わりに、AC-9 / AC-10 が「配線が消えていないこと」を `make test` 側で見張る。
 
+### 13. `typeChart` の追加(P1-13、ADR-0013)
+
+ADR-0013 でタイプ相性表をデータ(入力)にしたため、境界の契約に `typeChart` を足す。
+決定は ADR-0013 §P1-13.4 が正で、ここには境界側の差分だけを書く。
+
+- 共通 DTO に1つ追加する。値は**整数コードのまま**(`0`=無効 / `1`=いまひとつ / `2`=等倍 / `4`=抜群)。
+  **等倍は省略してよい**(無い組は等倍)。ただしキーに現れる ID は `types` に含まれていること。
+
+  ```jsonc
+  TypeChart = {"types":["normal","fire",…],
+               "effectiveness":{"fire":{"grass":4,"water":1},"normal":{"ghost":0}, …}}
+  ```
+
+- `calc` / `calcBulk` / `calcReverse` の3リクエストすべてに `"typeChart": TypeChart` を**必須**で足す。
+  省略は `type_chart_missing`。境界が既定の表を補うことはしない(補うと ADR-0013 の決定が実質的に無効になる)。
+- §5 のエラーコード表に3行追加する。
+
+  | code | 起点 |
+  |---|---|
+  | `type_chart_missing` | `engine.ErrTypeChartMissing`(リクエストに `typeChart` が無い / 空) |
+  | `invalid_type_chart` | `engine.ErrInvalidTypeChart`(重複・未知キー・不正なコード) |
+  | `unknown_type` | `engine.ErrUnknownType`(綴りは正しいが表に無い ID が技・種族・テラスに現れた) |
+
+  `types[]` の要素と `effectiveness` のキーは §4 の Type 列挙検証も通る。
+  **綴り誤り(18 タイプに無い文字列)は `invalid_enum`、綴りは正しいが表に無い ID は `unknown_type`** と使い分ける。
+- レスポンスは変えない(`effectiveness` は従来どおり `0/0.25/0.5/1/2/4` の float)。
+- **ベクタ(`engine/wasmapi/testdata/vectors.json`)は `schemaVersion` を 2 に上げ、
+  ファイルの先頭で `typeChart` を1度だけ定義する**。各ベクタの `request` には書かない。
+  18×18 の表を 33 件ぶん書くとファイルが数百 KB になり、差分が読めなくなるため。
+  注入するのは次の3か所で、いずれも「リクエストを呼ぶ直前に `typeChart` キーを足す」だけ。
+
+  | 注入する場所 | 役割 |
+  |---|---|
+  | `engine/wasmapi/vectors_test.go` | ネイティブの素通しテスト(§8) |
+  | `engine/cmd/wasmexpect` | 一致テストの期待値生成(§7) |
+  | `scripts/wasm-conformance.mjs` | WASM 側の呼び出し(§7) |
+
+  比較対象は**レスポンス**なので、Go 側と JS 側で注入の実装が別でもバイト一致の仕組みは壊れない
+  (リクエストの JSON キー順序は結果に影響しない)。`schemaVersion` を上げたので、
+  注入を実装し忘れた側は「未知の schemaVersion」で必ず落ちる(スキップも黙った素通りもしない)。
+- §11 の限界に1つ加える: ベクタの `typeChart` は手書きで、`testdata/golden/typechart.json`(oracle 由来)と
+  自動では同期しない。境界のテストが見るのは「表が素通しされるか」であって表の正しさではないため、
+  同期は取らず、代表的なマッチアップ(`fire→grass=4`、`normal→ghost=0`)と 18 タイプであることだけを固定する。
+  表そのものの正しさは `make test-golden` が担保する。
+
 ## 却下・保留
 
 - **tinygo を使う**: サイズは大きく減るが、この環境に tinygo が無く、`encoding/json` の

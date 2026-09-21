@@ -10,7 +10,7 @@ package engine
 //	base ×= 急所(1.5, floor)
 //	各ロール i(0..15): d = floor(base*(85+i)/100)
 //	  d = pokeRound(d × タイプ一致)            (ModifierStab or Modifier4096、Adaptability は ModifierAdaptability)
-//	  d = floor(d × タイプ相性)                (num/den)
+//	  d = floor(d × タイプ相性)                (Effectiveness の Num/Den)
 //	  d = pokeRound(d × やけど)                (物理やけどで ModifierHalf)
 //	  d = pokeRound(d × その他補正)            (壁・持ち物・特性など P1-4)
 //	  相性≠0 なら d = max(1, d)
@@ -65,6 +65,9 @@ type DamageInput struct {
 	Move     Move
 	Field    Field
 	Critical bool
+	// TypeChart はタイプ相性表(マスタ由来の入力。ADR-0013)。Field と同じ「入力」の扱い。
+	// ゼロ値は未設定で、CalcDamage は ErrTypeChartMissing を返す(既定の表にフォールバックしない)。
+	TypeChart TypeChart
 }
 
 // DamageResult はダメージ計算の結果。確定数は P1-5 で付与する。
@@ -136,12 +139,36 @@ func attackDefenseStats(in DamageInput) (atk, def int) {
 	return atk, def
 }
 
+// validateAgainstTypeChart は入力の表が設定済みで、入力に現れるタイプ ID(技・両側の種族・
+// 両側のテラス)がすべて表にあることを確かめる。表に無い ID を等倍にしない(ADR-0013 §P1-13.3)。
+// 個体のタイプ数の検証は Individual.Validate の責務で、ここでは ID だけを見る。
+func validateAgainstTypeChart(in DamageInput) error {
+	chart := in.TypeChart
+	if err := chart.requireKnown("技のタイプ", in.Move.Type); err != nil {
+		return err
+	}
+	if err := chart.requireKnown("攻撃側の種族タイプ", in.Attacker.Species.Types...); err != nil {
+		return err
+	}
+	if err := chart.requireKnown("防御側の種族タイプ", in.Defender.Species.Types...); err != nil {
+		return err
+	}
+	if err := chart.requireKnown("攻撃側のテラスタイプ", in.Attacker.TeraType); err != nil {
+		return err
+	}
+	return chart.requireKnown("防御側のテラスタイプ", in.Defender.TeraType)
+}
+
 // CalcDamage は 1 vs 1 のダメージを計算する。
+// in.TypeChart が未設定なら ErrTypeChartMissing、表に無いタイプがあれば ErrUnknownType を返す。
 func CalcDamage(in DamageInput) (DamageResult, error) {
 	if err := in.Attacker.Validate(); err != nil {
 		return DamageResult{}, err
 	}
 	if err := in.Defender.Validate(); err != nil {
+		return DamageResult{}, err
+	}
+	if err := validateAgainstTypeChart(in); err != nil {
 		return DamageResult{}, err
 	}
 
@@ -151,12 +178,15 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 	}
 
 	moveType := in.Move.Type
-	num, den, mult := TypeEffectiveness(moveType, in.Defender.Species.Types)
-	res.Effectiveness = mult
+	eff, err := in.TypeChart.Effectiveness(moveType, in.Defender.Species.Types)
+	if err != nil {
+		return DamageResult{}, err
+	}
+	res.Effectiveness = eff.Multiplier()
 	_, res.STAB = stabModifier(in, moveType)
 
 	// 変化技・威力0・無効相性はダメージ0。
-	if in.Move.Category == CategoryStatus || in.Move.Power <= 0 || num == 0 {
+	if in.Move.Category == CategoryStatus || in.Move.Power <= 0 || eff.IsImmune() {
 		return res, nil
 	}
 
@@ -178,12 +208,12 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 	stabMod, _ := stabModifier(in, moveType)
 	burnMod := burnModifier(in)
 
-	otherMod := chainMods(otherModifiers(in))
+	otherMod := chainMods(otherModifiers(in, eff))
 
 	for i := 0; i < 16; i++ {
 		d := base * (85 + i) / 100 // 乱数(floor)
 		// STAB の五捨五超入を済ませてから相性を掛けて floor する。
-		d = pokeRound(d, stabMod) * num / den
+		d = pokeRound(d, stabMod) * eff.Num / eff.Den
 		d = pokeRound(d, burnMod)  // やけど
 		d = pokeRound(d, otherMod) // その他補正(壁・持ち物・特性 P1-4)
 		if d < 1 {

@@ -61,6 +61,8 @@ type BulkInput struct {
 	Move            Move
 	Field           Field
 	Critical        bool
+	// TypeChart はタイプ相性表(ADR-0013)。CalcBulk は解釈せず DamageInput へ素通しする。
+	TypeChart TypeChart
 
 	// Presets は使用するプリセット定義。空のときは既定カタログ / 既定セットを使う(ADR-0009)。
 	Presets []DefenderPreset
@@ -219,12 +221,13 @@ func CalcBulk(in BulkInput) (BulkResult, error) {
 		for _, item := range variants {
 			def := p.Defender(in.DefenderSpecies, item)
 			res, err := CalcDamage(DamageInput{
-				Format:   in.Format,
-				Attacker: in.Attacker,
-				Defender: def,
-				Move:     in.Move,
-				Field:    in.Field,
-				Critical: in.Critical,
+				Format:    in.Format,
+				Attacker:  in.Attacker,
+				Defender:  def,
+				Move:      in.Move,
+				Field:     in.Field,
+				Critical:  in.Critical,
+				TypeChart: in.TypeChart,
 			})
 			if err != nil {
 				return BulkResult{}, fmt.Errorf("防御側プリセット %q の計算: %w", p.Key, err)

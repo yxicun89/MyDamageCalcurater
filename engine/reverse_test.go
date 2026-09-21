@@ -81,7 +81,7 @@ func revDefender(sp Stats, n Nature, item *Item) Individual {
 // revObserve は真値の個体に technique をぶつけ、指定ロールの表示%を観測値にする。
 func revObserve(t *testing.T, in DamageInput, rollIdx int) (Observation, DamageResult) {
 	t.Helper()
-	res, err := CalcDamage(in)
+	res, err := calcDamage(in)
 	if err != nil {
 		t.Fatalf("真値の CalcDamage が失敗した: %v", err)
 	}
@@ -415,7 +415,7 @@ func TestReverseSingleObservationFindsTruth(t *testing.T) {
 				Format: FormatSingle, Attacker: revKnownAttacker(), Defender: truth, Move: move,
 			}, tt.rollIdx)
 
-			res, err := CalcReverse(ReverseInput{
+			res, err := calcReverse(ReverseInput{
 				Format:         FormatSingle,
 				Side:           SideDefender,
 				Known:          revKnownAttacker(),
@@ -481,7 +481,7 @@ func TestReverseMultipleObservationsNarrow(t *testing.T) {
 
 	call := func(obs []Observation) ReverseResult {
 		t.Helper()
-		res, err := CalcReverse(ReverseInput{
+		res, err := calcReverse(ReverseInput{
 			Format: FormatSingle, Side: SideDefender, Known: revKnownAttacker(),
 			UnknownSpecies: revDefenderSpecies(), Move: move,
 			ItemCandidates: items, Observations: obs,
@@ -551,7 +551,7 @@ func TestReverseUnreachableSecondObservationRemovesExact(t *testing.T) {
 
 	call := func(obs []Observation) ReverseResult {
 		t.Helper()
-		res, err := CalcReverse(ReverseInput{
+		res, err := calcReverse(ReverseInput{
 			Format: FormatSingle, Side: SideDefender, Known: revKnownAttacker(),
 			UnknownSpecies: revDefenderSpecies(), Move: move,
 			ItemCandidates: []*Item{nil}, Observations: obs,
@@ -600,7 +600,7 @@ func TestReverseAttackerSide(t *testing.T) {
 		Format: FormatSingle, Attacker: truth, Defender: known, Move: move,
 	}, 9)
 
-	res, err := CalcReverse(ReverseInput{
+	res, err := calcReverse(ReverseInput{
 		Format: FormatSingle, Side: SideAttacker, Known: known,
 		UnknownSpecies: revAttackerSpecies(), Move: move,
 		ItemCandidates: items, Observations: []Observation{obs},
@@ -648,12 +648,12 @@ func TestReverseDamageObservation(t *testing.T) {
 		Species: revAttackerSpecies(), Level: DefaultLevel,
 		Nature: truthNature, SP: truthSP, Status: StatusNone,
 	}
-	base, err := CalcDamage(DamageInput{Format: FormatSingle, Attacker: truth, Defender: known, Move: move})
+	base, err := calcDamage(DamageInput{Format: FormatSingle, Attacker: truth, Defender: known, Move: move})
 	if err != nil {
 		t.Fatalf("真値の CalcDamage: %v", err)
 	}
 
-	res, err := CalcReverse(ReverseInput{
+	res, err := calcReverse(ReverseInput{
 		Format: FormatSingle, Side: SideAttacker, Known: known,
 		UnknownSpecies: revAttackerSpecies(), Move: move,
 		ItemCandidates: items,
@@ -689,7 +689,7 @@ func TestReverseNoExactStillReturnsCandidates(t *testing.T) {
 	items := []*Item{nil}
 	// どの調整でも到達しない観測(1% と 100%)を与える。
 	for _, pct := range []int{1, 100} {
-		res, err := CalcReverse(ReverseInput{
+		res, err := calcReverse(ReverseInput{
 			Format: FormatSingle, Side: SideDefender, Known: revKnownAttacker(),
 			UnknownSpecies: revDefenderSpecies(), Move: move,
 			ItemCandidates: items, Observations: []Observation{{Percent: pct}},
@@ -733,12 +733,12 @@ func TestReverseOrderDeterministic(t *testing.T) {
 			ItemCandidates: items, Observations: obs,
 		}
 	}
-	first, err := CalcReverse(build())
+	first, err := calcReverse(build())
 	if err != nil {
 		t.Fatalf("CalcReverse: %v", err)
 	}
 	for i := 0; i < 5; i++ {
-		again, err := CalcReverse(build())
+		again, err := calcReverse(build())
 		if err != nil {
 			t.Fatalf("CalcReverse(%d): %v", i, err)
 		}
@@ -788,7 +788,7 @@ func TestReverseOrderDeterministic(t *testing.T) {
 	// MaxCandidates は上位から切り取るだけで、順序を変えない。
 	in := build()
 	in.MaxCandidates = 3
-	limited, err := CalcReverse(in)
+	limited, err := calcReverse(in)
 	if err != nil {
 		t.Fatalf("CalcReverse(MaxCandidates=3): %v", err)
 	}
@@ -814,7 +814,7 @@ func TestReverseCandidateRangeMatchesCalcDamage(t *testing.T) {
 		Format: FormatSingle, Attacker: revKnownAttacker(), Defender: truth, Move: move,
 	}, 4)
 
-	res, err := CalcReverse(ReverseInput{
+	res, err := calcReverse(ReverseInput{
 		Format: FormatSingle, Side: SideDefender, Known: revKnownAttacker(),
 		UnknownSpecies: revDefenderSpecies(), Move: move,
 		ItemCandidates: items, Observations: []Observation{obs},
@@ -827,7 +827,7 @@ func TestReverseCandidateRangeMatchesCalcDamage(t *testing.T) {
 	}
 	for _, c := range res.Candidates {
 		def := revDefender(c.SP, c.Nature, c.Item)
-		want, err := CalcDamage(DamageInput{
+		want, err := calcDamage(DamageInput{
 			Format: FormatSingle, Attacker: revKnownAttacker(), Defender: def, Move: move,
 		})
 		if err != nil {
@@ -890,7 +890,7 @@ func TestReverseItemCandidates(t *testing.T) {
 	}
 
 	t.Run("候補に含めれば持ち物付きで完全一致する", func(t *testing.T) {
-		res, err := CalcReverse(ReverseInput{
+		res, err := calcReverse(ReverseInput{
 			Format: FormatSingle, Side: SideDefender, Known: revKnownAttacker(),
 			UnknownSpecies: revDefenderSpecies(), Move: move,
 			ItemCandidates: []*Item{nil, vest}, Observations: []Observation{obs},
@@ -915,7 +915,7 @@ func TestReverseItemCandidates(t *testing.T) {
 	})
 
 	t.Run("持ち物候補を省略すると持ち物なしの1通りになる", func(t *testing.T) {
-		res, err := CalcReverse(ReverseInput{
+		res, err := calcReverse(ReverseInput{
 			Format: FormatSingle, Side: SideDefender, Known: revKnownAttacker(),
 			UnknownSpecies: revDefenderSpecies(), Move: move,
 			Observations: []Observation{obs},
@@ -981,7 +981,7 @@ func TestReverseValidationErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			in := valid()
 			tt.mutate(&in)
-			_, err := CalcReverse(in)
+			_, err := calcReverse(in)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("err = %v, want errors.Is(..., %v)", err, tt.wantErr)
 			}
@@ -991,7 +991,7 @@ func TestReverseValidationErrors(t *testing.T) {
 	t.Run("既知側の個体が不正なら CalcDamage と同じエラー", func(t *testing.T) {
 		in := valid()
 		in.Known.SP = Stats{Atk: MaxSPPerStat + 1}
-		if _, err := CalcReverse(in); err == nil {
+		if _, err := calcReverse(in); err == nil {
 			t.Fatal("SP 上限超えの既知側を受け入れてしまった")
 		}
 	})
@@ -999,7 +999,7 @@ func TestReverseValidationErrors(t *testing.T) {
 	t.Run("未知側の種族が不正ならエラー", func(t *testing.T) {
 		in := valid()
 		in.UnknownSpecies.Types = nil // タイプは1〜2個
-		if _, err := CalcReverse(in); err == nil {
+		if _, err := calcReverse(in); err == nil {
 			t.Fatal("タイプなしの種族を受け入れてしまった")
 		}
 	})
@@ -1026,7 +1026,7 @@ func TestReverseDoesNotMutateInput(t *testing.T) {
 	}
 	beforeVest := *vest
 
-	if _, err := CalcReverse(in); err != nil {
+	if _, err := calcReverse(in); err != nil {
 		t.Fatalf("CalcReverse: %v", err)
 	}
 	if !reflect.DeepEqual(in.Known, before.Known) {
@@ -1081,7 +1081,7 @@ func TestReverseDamageObservationNearMissIsNotExact(t *testing.T) {
 				Species: revAttackerSpecies(), Level: DefaultLevel,
 				Nature: revNatureFor(StatAtk, c), SP: Stats{Atk: x}, Status: StatusNone,
 			}
-			res, err := CalcDamage(DamageInput{Format: FormatSingle, Attacker: atk, Defender: known, Move: move})
+			res, err := calcDamage(DamageInput{Format: FormatSingle, Attacker: atk, Defender: known, Move: move})
 			if err != nil {
 				t.Fatalf("格子点の CalcDamage: %v", err)
 			}
@@ -1095,7 +1095,7 @@ func TestReverseDamageObservationNearMissIsNotExact(t *testing.T) {
 
 	call := func(d int) ReverseResult {
 		t.Helper()
-		res, err := CalcReverse(ReverseInput{
+		res, err := calcReverse(ReverseInput{
 			Format: FormatSingle, Side: SideAttacker, Known: known,
 			UnknownSpecies: revAttackerSpecies(), Move: move,
 			Observations: []Observation{{Damage: d}},
@@ -1144,7 +1144,7 @@ func TestReverseMaxCandidatesKeepsExactCount(t *testing.T) {
 	}, 4)
 	call := func(limit int) ReverseResult {
 		t.Helper()
-		res, err := CalcReverse(ReverseInput{
+		res, err := calcReverse(ReverseInput{
 			Format: FormatSingle, Side: SideDefender, Known: revKnownAttacker(),
 			UnknownSpecies: revDefenderSpecies(), Move: move, ItemCandidates: items,
 			Observations: []Observation{obs}, MaxCandidates: limit,
@@ -1198,7 +1198,7 @@ func TestReverseCriticalAndFieldAreApplied(t *testing.T) {
 			}, 8)
 			call := func(critical bool, field Field) *ReverseCandidate {
 				t.Helper()
-				res, err := CalcReverse(ReverseInput{
+				res, err := calcReverse(ReverseInput{
 					Format: FormatSingle, Side: SideDefender, Known: revKnownAttacker(),
 					UnknownSpecies: revDefenderSpecies(), Move: move,
 					Field: field, Critical: critical, Observations: []Observation{obs},
@@ -1239,7 +1239,7 @@ func TestReverseZeroDamageMovesKeepPriorityOrder(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res, err := CalcReverse(ReverseInput{
+			res, err := calcReverse(ReverseInput{
 				Format: FormatSingle, Side: SideDefender, Known: revKnownAttacker(),
 				UnknownSpecies: tt.species, Move: tt.move,
 				ItemCandidates: items, Observations: []Observation{{Percent: 30}},
@@ -1293,7 +1293,7 @@ func TestReverseRepresentativePointsAndNatures(t *testing.T) {
 			in.Known = revDefender(Stats{HP: 32, Def: 32}, NatureNeutral, nil)
 			in.UnknownSpecies = revAttackerSpecies()
 		}
-		res, err := CalcReverse(in)
+		res, err := calcReverse(in)
 		if err != nil {
 			t.Fatalf("CalcReverse: %v", err)
 		}
@@ -1384,11 +1384,11 @@ func TestReverseMixedObservationKinds(t *testing.T) {
 		Species: revAttackerSpecies(), Level: DefaultLevel,
 		Nature: truthNature, SP: truthSP, Status: StatusNone,
 	}
-	base, err := CalcDamage(DamageInput{Format: FormatSingle, Attacker: truth, Defender: known, Move: move})
+	base, err := calcDamage(DamageInput{Format: FormatSingle, Attacker: truth, Defender: known, Move: move})
 	if err != nil {
 		t.Fatalf("真値の CalcDamage: %v", err)
 	}
-	res, err := CalcReverse(ReverseInput{
+	res, err := calcReverse(ReverseInput{
 		Format: FormatSingle, Side: SideAttacker, Known: known,
 		UnknownSpecies: revAttackerSpecies(), Move: move,
 		Observations: []Observation{
@@ -1618,7 +1618,7 @@ func reverseRecall(t *testing.T, side ReverseSide, species []Species, cases, nOb
 		} else {
 			dmgIn.Attacker, dmgIn.Defender = truth, known
 		}
-		res, err := CalcDamage(dmgIn)
+		res, err := calcDamage(dmgIn)
 		if err != nil {
 			continue // SP 合計超過などは引き直す(現実的な調整では起きない)
 		}
@@ -1647,7 +1647,7 @@ func reverseRecall(t *testing.T, side ReverseSide, species []Species, cases, nOb
 		total++
 
 		// --- 逆算して真値の型の順位を見る ---
-		out, err := CalcReverse(ReverseInput{
+		out, err := calcReverse(ReverseInput{
 			Format: FormatSingle, Side: side, Known: known,
 			UnknownSpecies: unknownSpecies, Move: move,
 			ItemCandidates: items, Observations: obs,

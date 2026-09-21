@@ -57,9 +57,21 @@ if (!Number.isFinite(maxReverseMs) || maxReverseMs <= 0) die('--max-reverse-ms �
 // --- 入力ベクタ -------------------------------------------------------------
 
 const vectorDoc = JSON.parse(fs.readFileSync(vectorsPath, 'utf8'));
-if (vectorDoc.schemaVersion !== 1) die(`ベクタの schemaVersion=${vectorDoc.schemaVersion} は未知`);
+// schemaVersion 2: ファイル先頭の typeChart を各リクエストへ注入する(ADR-0011 §13)。
+// 注入を持たない旧版のベクタは未知の版として拒否する。
+if (vectorDoc.schemaVersion !== 2) die(`ベクタの schemaVersion=${vectorDoc.schemaVersion} は未知(2 のみ対応)`);
+if (vectorDoc.typeChart == null || typeof vectorDoc.typeChart !== 'object') die('ベクタ先頭の typeChart が無い');
 const vectors = vectorDoc.vectors ?? [];
 if (vectors.length === 0) die('ベクタが空');
+for (const v of vectors) {
+  if ('typeChart' in v.request) die(`ベクタ ${v.name} に typeChart が直書きされている(表はファイル先頭で1度だけ定義する)`);
+}
+
+// 呼び出す直前にだけ typeChart を足す。ネイティブ側(wasmexpect)とキー順序が違っても、
+// 比べるのはレスポンスなので一致の仕組みは壊れない。
+function requestJSON(v) {
+  return JSON.stringify({ ...v.request, typeChart: vectorDoc.typeChart });
+}
 
 // --- 期待値(ネイティブ Go)--------------------------------------------------
 
@@ -129,7 +141,7 @@ const timings = [];
 
 function call(v) {
   const t0 = performance.now();
-  const got = api[v.fn](JSON.stringify(v.request));
+  const got = api[v.fn](requestJSON(v));
   const ms = performance.now() - t0;
   if (typeof got !== 'string') {
     failures.push(`${v.name}: 戻り値が文字列でない (${typeof got})`);

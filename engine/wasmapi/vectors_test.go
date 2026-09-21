@@ -13,7 +13,9 @@ package wasmapi_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
+	"sync"
 	"testing"
 
 	"example.com/pokecalc/engine"
@@ -21,6 +23,14 @@ import (
 )
 
 const vectorsPath = "testdata/vectors.json"
+
+// vectorsSchemaVersion はベクタファイルの版。
+// 2 で「先頭の typeChart を各リクエストに注入する」形になった(ADR-0011 §13)。
+// 注入を実装していない読み手は、ここで必ず落ちる(黙って素通りさせない)。
+const vectorsSchemaVersion = 2
+
+// typeChartTypeCount は相性表のタイプ数(第9世代 / チャンピオンズ)。
+const typeChartTypeCount = 18
 
 type vector struct {
 	Name    string          `json:"name"`
@@ -30,28 +40,132 @@ type vector struct {
 	Request json.RawMessage `json:"request"`
 }
 
-type vectorFile struct {
-	SchemaVersion int      `json:"schemaVersion"`
-	Vectors       []vector `json:"vectors"`
+// typeChartDoc はベクタ先頭で1度だけ定義する相性表(ADR-0013 §P1-13.4)。
+type typeChartDoc struct {
+	Types         []engine.Type                       `json:"types"`
+	Effectiveness map[engine.Type]map[engine.Type]int `json:"effectiveness"`
 }
+
+type vectorFile struct {
+	SchemaVersion int             `json:"schemaVersion"`
+	TypeChart     typeChartDoc    `json:"typeChart"`
+	TypeChartRaw  json.RawMessage `json:"-"`
+	Vectors       []vector        `json:"vectors"`
+}
+
+// loadVectorFile はベクタと共有の相性表を1度だけ読む。
+var loadVectorFile = sync.OnceValues(func() (vectorFile, error) {
+	var f vectorFile
+	b, err := os.ReadFile(vectorsPath)
+	if err != nil {
+		return f, fmt.Errorf("ベクタを読めない: %w", err)
+	}
+	if err := json.Unmarshal(b, &f); err != nil {
+		return f, fmt.Errorf("ベクタの JSON が壊れている: %w", err)
+	}
+	if f.SchemaVersion != vectorsSchemaVersion {
+		return f, fmt.Errorf("ベクタの schemaVersion=%d は未知(want %d)", f.SchemaVersion, vectorsSchemaVersion)
+	}
+	if len(f.Vectors) == 0 {
+		return f, fmt.Errorf("ベクタが空")
+	}
+	if len(f.TypeChart.Types) == 0 {
+		return f, fmt.Errorf("ベクタ先頭の typeChart が無い(ADR-0011 §13)")
+	}
+	// リクエストへ注入する生の JSON も取っておく(DTO を経由せずそのまま載せる)。
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(b, &top); err != nil {
+		return f, err
+	}
+	f.TypeChartRaw = top["typeChart"]
+	return f, nil
+})
 
 func loadVectors(t *testing.T) []vector {
 	t.Helper()
-	b, err := os.ReadFile(vectorsPath)
+	f, err := loadVectorFile()
 	if err != nil {
-		t.Fatalf("ベクタを読めない: %v", err)
-	}
-	var f vectorFile
-	if err := json.Unmarshal(b, &f); err != nil {
-		t.Fatalf("ベクタの JSON が壊れている: %v", err)
-	}
-	if f.SchemaVersion != 1 {
-		t.Fatalf("ベクタの schemaVersion=%d は未知", f.SchemaVersion)
-	}
-	if len(f.Vectors) == 0 {
-		t.Fatal("ベクタが空")
+		t.Fatalf("%v", err)
 	}
 	return f.Vectors
+}
+
+// sharedTypeChart はベクタ先頭の表を engine の値にしたもの。
+func sharedTypeChart(t *testing.T) engine.TypeChart {
+	t.Helper()
+	f, err := loadVectorFile()
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	c, err := engine.NewTypeChart(engine.TypeChartData{Types: f.TypeChart.Types, Effectiveness: f.TypeChart.Effectiveness})
+	if err != nil {
+		t.Fatalf("ベクタの typeChart から表を作れない: %v", err)
+	}
+	return c
+}
+
+// requestWithTypeChart はリクエストに共有の typeChart を注入する(ADR-0011 §13)。
+// 比較対象はレスポンスなので、キーの順序が変わっても一致テストには影響しない。
+func requestWithTypeChart(t *testing.T, req json.RawMessage) string {
+	t.Helper()
+	f, err := loadVectorFile()
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(req, &m); err != nil {
+		t.Fatalf("ベクタの request が object ではない: %v", err)
+	}
+	if _, dup := m["typeChart"]; dup {
+		t.Fatal("リクエストに typeChart が直書きされている(表はファイル先頭で1度だけ定義する)")
+	}
+	m["typeChart"] = f.TypeChartRaw
+	b, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("リクエストを組み立てられない: %v", err)
+	}
+	return string(b)
+}
+
+// TestVectorsDefineSharedTypeChart はベクタが表を1度だけ定義していることを確かめる
+// (各リクエストに 18×18 を書かない。ADR-0011 §13)。
+func TestVectorsDefineSharedTypeChart(t *testing.T) {
+	f, err := loadVectorFile()
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if len(f.TypeChart.Types) != typeChartTypeCount {
+		t.Errorf("typeChart のタイプ数 = %d, want %d", len(f.TypeChart.Types), typeChartTypeCount)
+	}
+	// 表の正しさは make test-golden の担当。ここでは代表的なマッチアップだけ固定する。
+	chart := sharedTypeChart(t)
+	for _, tt := range []struct {
+		atk, def engine.Type
+		want     int
+	}{
+		{engine.TypeFire, engine.TypeGrass, 4},
+		{engine.TypeNormal, engine.TypeGhost, 0},
+		{engine.TypeWater, engine.TypeFire, 4},
+		{engine.TypeNormal, engine.TypePsychic, 2}, // 等倍は省略されている
+	} {
+		got, err := chart.Code(tt.atk, tt.def)
+		if err != nil {
+			t.Fatalf("Code(%s, %s): %v", tt.atk, tt.def, err)
+		}
+		if got != tt.want {
+			t.Errorf("Code(%s, %s) = %d, want %d", tt.atk, tt.def, got, tt.want)
+		}
+	}
+	// どのベクタも表を直書きしていないこと。
+	for _, v := range f.Vectors {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(v.Request, &m); err != nil {
+			t.Fatalf("%s: request が object ではない: %v", v.Name, err)
+		}
+		if _, dup := m["typeChart"]; dup {
+			t.Errorf("%s が typeChart を直書きしている", v.Name)
+		}
+	}
 }
 
 func vectorsFor(t *testing.T, fn string) []vector {
@@ -191,19 +305,21 @@ func decodeEnvelope(t *testing.T, resp string, out any) {
 // --- AC-2: engine の素通しであること ---------------------------------------
 
 func TestCalcMatchesEngineCalcDamage(t *testing.T) {
+	chart := sharedTypeChart(t)
 	for _, v := range vectorsFor(t, "calc") {
 		t.Run(v.Name, func(t *testing.T) {
 			var in engine.DamageInput
 			if err := json.Unmarshal(v.Request, &in); err != nil {
 				t.Fatalf("ベクタを engine.DamageInput にできない: %v", err)
 			}
+			in.TypeChart = chart // 表はベクタ先頭の1つを注入する(ADR-0011 §13)
 			want, err := engine.CalcDamage(in)
 			if err != nil {
 				t.Fatalf("engine.CalcDamage が失敗(ベクタが不正): %v", err)
 			}
 
 			var got calcResultView
-			decodeEnvelope(t, wasmapi.Calc(string(v.Request)), &got)
+			decodeEnvelope(t, wasmapi.Calc(requestWithTypeChart(t, v.Request)), &got)
 			assertCalcResult(t, got, want)
 		})
 	}
@@ -240,19 +356,21 @@ func assertCalcResult(t *testing.T, got calcResultView, want engine.DamageResult
 }
 
 func TestCalcBulkMatchesEngineCalcBulk(t *testing.T) {
+	chart := sharedTypeChart(t)
 	for _, v := range vectorsFor(t, "calcBulk") {
 		t.Run(v.Name, func(t *testing.T) {
 			var in engine.BulkInput
 			if err := json.Unmarshal(v.Request, &in); err != nil {
 				t.Fatalf("ベクタを engine.BulkInput にできない: %v", err)
 			}
+			in.TypeChart = chart
 			want, err := engine.CalcBulk(in)
 			if err != nil {
 				t.Fatalf("engine.CalcBulk が失敗(ベクタが不正): %v", err)
 			}
 
 			var got bulkResultView
-			decodeEnvelope(t, wasmapi.CalcBulk(string(v.Request)), &got)
+			decodeEnvelope(t, wasmapi.CalcBulk(requestWithTypeChart(t, v.Request)), &got)
 
 			if got.DefenderSpeciesKey != want.DefenderSpeciesKey {
 				t.Errorf("defenderSpeciesKey: got %q want %q", got.DefenderSpeciesKey, want.DefenderSpeciesKey)
@@ -281,19 +399,21 @@ func TestCalcBulkMatchesEngineCalcBulk(t *testing.T) {
 }
 
 func TestCalcReverseMatchesEngineCalcReverse(t *testing.T) {
+	chart := sharedTypeChart(t)
 	for _, v := range vectorsFor(t, "calcReverse") {
 		t.Run(v.Name, func(t *testing.T) {
 			var in engine.ReverseInput
 			if err := json.Unmarshal(v.Request, &in); err != nil {
 				t.Fatalf("ベクタを engine.ReverseInput にできない: %v", err)
 			}
+			in.TypeChart = chart
 			want, err := engine.CalcReverse(in)
 			if err != nil {
 				t.Fatalf("engine.CalcReverse が失敗(ベクタが不正): %v", err)
 			}
 
 			var got reverseResultView
-			decodeEnvelope(t, wasmapi.CalcReverse(string(v.Request)), &got)
+			decodeEnvelope(t, wasmapi.CalcReverse(requestWithTypeChart(t, v.Request)), &got)
 
 			if got.Side != string(want.Side) || got.Stat != string(want.Stat) || got.ExactCount != want.ExactCount {
 				t.Errorf("side/stat/exactCount: got %q/%q/%d want %q/%q/%d", got.Side, got.Stat, got.ExactCount, want.Side, want.Stat, want.ExactCount)

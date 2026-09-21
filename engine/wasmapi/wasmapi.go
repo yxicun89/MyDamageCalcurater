@@ -55,6 +55,13 @@ const (
 	CodeNoObservation = "no_observation"
 	// CodeInvalidObservation は engine.ErrInvalidObservation。
 	CodeInvalidObservation = "invalid_observation"
+	// CodeTypeChartMissing は engine.ErrTypeChartMissing(リクエストに typeChart が無い)。
+	// ADR-0011 §13 / ADR-0013。境界は既定の表を補わない。
+	CodeTypeChartMissing = "type_chart_missing"
+	// CodeInvalidTypeChart は engine.ErrInvalidTypeChart(表の定義が不正)。
+	CodeInvalidTypeChart = "invalid_type_chart"
+	// CodeUnknownType は engine.ErrUnknownType(綴りは正しいが渡された表に無いタイプ)。
+	CodeUnknownType = "unknown_type"
 	// CodeInternal は上記のどれにも当てはまらない失敗(回復した panic を含む)。
 	CodeInternal = "internal"
 )
@@ -154,6 +161,9 @@ func errorResponse(err error) string {
 		{engine.ErrInvalidReverseSide, CodeInvalidReverseSide},
 		{engine.ErrNoObservation, CodeNoObservation},
 		{engine.ErrInvalidObservation, CodeInvalidObservation},
+		{engine.ErrTypeChartMissing, CodeTypeChartMissing},
+		{engine.ErrInvalidTypeChart, CodeInvalidTypeChart},
+		{engine.ErrUnknownType, CodeUnknownType},
 	}
 	for _, s := range sentinels {
 		if errors.Is(err, s.err) {

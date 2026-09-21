@@ -57,7 +57,7 @@ func wantDefender(p DefenderPreset, species Species, item *Item) Individual {
 // wantResult は行の期待値を CalcDamage から直接作る。
 func wantResult(t *testing.T, in BulkInput, def Individual) DamageResult {
 	t.Helper()
-	r, err := CalcDamage(DamageInput{
+	r, err := calcDamage(DamageInput{
 		Format:   in.Format,
 		Attacker: in.Attacker,
 		Defender: def,
@@ -275,7 +275,7 @@ func TestCalcBulkRowsMatchCalcDamage(t *testing.T) {
 			if len(presets) != 5 {
 				t.Fatalf("既定セットは5件のはず: %v", presetKeys(presets))
 			}
-			res, err := CalcBulk(in)
+			res, err := calcBulk(in)
 			if err != nil {
 				t.Fatalf("CalcBulk: %v", err)
 			}
@@ -320,7 +320,7 @@ func TestCalcBulkUsesGivenPresetDefinitions(t *testing.T) {
 		{Key: "custom_b", Label: "", SP: Stats{Def: 32}, Nature: NatureNeutral},
 	}
 	in.Presets = custom
-	res, err := CalcBulk(in)
+	res, err := calcBulk(in)
 	if err != nil {
 		t.Fatalf("CalcBulk: %v", err)
 	}
@@ -346,7 +346,7 @@ func TestCalcBulkUsesGivenPresetDefinitions(t *testing.T) {
 func TestCalcBulkPresetKeysSelectOrder(t *testing.T) {
 	in := bulkInput(CategoryPhysical, TypeWater)
 	in.PresetKeys = []PresetKey{PresetHD, PresetNone, PresetHBBoost}
-	res, err := CalcBulk(in)
+	res, err := calcBulk(in)
 	if err != nil {
 		t.Fatalf("CalcBulk: %v", err)
 	}
@@ -366,7 +366,7 @@ func TestCalcBulkItemVariants(t *testing.T) {
 	t.Run("nilは素の1通り", func(t *testing.T) {
 		in := bulkInput(CategorySpecial, TypeWater)
 		in.PresetKeys = []PresetKey{PresetNone, PresetHP}
-		res, err := CalcBulk(in)
+		res, err := calcBulk(in)
 		if err != nil {
 			t.Fatalf("CalcBulk: %v", err)
 		}
@@ -384,7 +384,7 @@ func TestCalcBulkItemVariants(t *testing.T) {
 		in := bulkInput(CategorySpecial, TypeWater)
 		in.PresetKeys = []PresetKey{PresetNone, PresetHD}
 		in.ItemVariants = []*Item{nil, vest, shield}
-		res, err := CalcBulk(in)
+		res, err := calcBulk(in)
 		if err != nil {
 			t.Fatalf("CalcBulk: %v", err)
 		}
@@ -431,7 +431,7 @@ func TestCalcBulkItemVariants(t *testing.T) {
 		in := bulkInput(CategorySpecial, TypeWater)
 		in.PresetKeys = []PresetKey{PresetNone}
 		in.ItemVariants = []*Item{nil, vest, shield}
-		res, err := CalcBulk(in)
+		res, err := calcBulk(in)
 		if err != nil {
 			t.Fatalf("CalcBulk: %v", err)
 		}
@@ -453,7 +453,7 @@ func TestCalcBulkItemVariants(t *testing.T) {
 		in := bulkInput(CategorySpecial, TypeWater)
 		in.PresetKeys = []PresetKey{PresetNone, PresetHD}
 		in.ItemVariants = []*Item{vest, nil, shield}
-		res, err := CalcBulk(in)
+		res, err := calcBulk(in)
 		if err != nil {
 			t.Fatalf("CalcBulk: %v", err)
 		}
@@ -512,7 +512,7 @@ func TestCalcBulkDoesNotMutateInput(t *testing.T) {
 		return in
 	}
 	in := build()
-	if _, err := CalcBulk(in); err != nil {
+	if _, err := calcBulk(in); err != nil {
 		t.Fatalf("CalcBulk: %v", err)
 	}
 	if !reflect.DeepEqual(in, build()) {
@@ -524,7 +524,7 @@ func TestCalcBulkDoesNotMutateInput(t *testing.T) {
 func TestCalcBulkDeterministic(t *testing.T) {
 	in := bulkInput(CategoryPhysical, TypeWater)
 	in.ItemVariants = []*Item{nil, {ID: "assaultvest", Effect: &ItemEffect{StatMods: map[StatKey]int{StatSpD: 6144}}}}
-	first, err := CalcBulk(in)
+	first, err := calcBulk(in)
 	if err != nil {
 		t.Fatalf("CalcBulk: %v", err)
 	}
@@ -532,7 +532,7 @@ func TestCalcBulkDeterministic(t *testing.T) {
 		t.Fatal("行が空")
 	}
 	for i := 0; i < 3; i++ {
-		again, err := CalcBulk(in)
+		again, err := calcBulk(in)
 		if err != nil {
 			t.Fatalf("CalcBulk(%d): %v", i, err)
 		}
@@ -548,7 +548,7 @@ func TestCalcBulkDeterministic(t *testing.T) {
 func TestCalcBulkImmuneAllRowsZero(t *testing.T) {
 	in := bulkInput(CategoryPhysical, TypeNormal)
 	in.DefenderSpecies.Types = []Type{TypeGhost}
-	res, err := CalcBulk(in)
+	res, err := calcBulk(in)
 	if err != nil {
 		t.Fatalf("CalcBulk: %v", err)
 	}
@@ -574,7 +574,7 @@ func TestCalcBulkImmuneAllRowsZero(t *testing.T) {
 func TestCalcBulkStatusMove(t *testing.T) {
 	in := bulkInput(CategoryStatus, TypeNormal)
 	in.Move.Power = 0
-	res, err := CalcBulk(in)
+	res, err := calcBulk(in)
 	if err != nil {
 		t.Fatalf("CalcBulk: %v", err)
 	}
@@ -595,7 +595,7 @@ func TestCalcBulkStatusMove(t *testing.T) {
 func TestCalcBulkLowHPDefender(t *testing.T) {
 	in := bulkInput(CategoryPhysical, TypeWater)
 	in.DefenderSpecies.BaseStats = Stats{HP: 1, Atk: 1, Def: 1, SpA: 1, SpD: 1, Spe: 1}
-	res, err := CalcBulk(in)
+	res, err := calcBulk(in)
 	if err != nil {
 		t.Fatalf("CalcBulk: %v", err)
 	}
@@ -622,11 +622,11 @@ func TestCalcBulkFormatDouble(t *testing.T) {
 	single := bulkInput(CategoryPhysical, TypeWater)
 	double := bulkInput(CategoryPhysical, TypeWater)
 	double.Format = FormatDouble
-	sres, err := CalcBulk(single)
+	sres, err := calcBulk(single)
 	if err != nil {
 		t.Fatalf("CalcBulk(single): %v", err)
 	}
-	dres, err := CalcBulk(double)
+	dres, err := calcBulk(double)
 	if err != nil {
 		t.Fatalf("CalcBulk(double): %v", err)
 	}
@@ -649,7 +649,7 @@ func TestCalcBulkSPBoundaryAccepted(t *testing.T) {
 	if in.Presets[0].SP.Sum() != MaxSPTotal {
 		t.Fatalf("テストの前提が壊れている: SP 合計=%d", in.Presets[0].SP.Sum())
 	}
-	res, err := CalcBulk(in)
+	res, err := calcBulk(in)
 	if err != nil {
 		t.Fatalf("上限ちょうどは受け付けること: %v", err)
 	}
@@ -702,7 +702,7 @@ func TestCalcBulkErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			in := bulkInput(CategoryPhysical, TypeWater)
 			tt.mod(&in)
-			res, err := CalcBulk(in)
+			res, err := calcBulk(in)
 			if err == nil {
 				t.Fatalf("エラーになるべき入力が成功した: rows=%v", rowKeys(res.Rows))
 			}
@@ -735,7 +735,7 @@ func TestCalcBulkPresetKeysSelectFromGivenPresets(t *testing.T) {
 		in := bulkInput(CategoryPhysical, TypeWater)
 		in.Presets = []DefenderPreset{customA, customB, customC, overrideHP}
 		in.PresetKeys = []PresetKey{PresetHP, "custom_b", "custom_a"}
-		res, err := CalcBulk(in)
+		res, err := calcBulk(in)
 		if err != nil {
 			t.Fatalf("CalcBulk: %v", err)
 		}
@@ -762,7 +762,7 @@ func TestCalcBulkPresetKeysSelectFromGivenPresets(t *testing.T) {
 		in := bulkInput(CategoryPhysical, TypeWater)
 		in.Presets = []DefenderPreset{customA}
 		in.PresetKeys = []PresetKey{"custom_a", PresetNone} // none はカタログにだけある
-		res, err := CalcBulk(in)
+		res, err := calcBulk(in)
 		if !errors.Is(err, ErrUnknownPreset) {
 			t.Fatalf("err=%v、ErrUnknownPreset を期待(カタログへフォールバックしない)", err)
 		}
@@ -777,7 +777,7 @@ func TestCalcBulkPresetKeysSelectFromGivenPresets(t *testing.T) {
 		dup.Label = "自作A(重複定義)"
 		in.Presets = []DefenderPreset{customA, customB, dup}
 		in.PresetKeys = []PresetKey{"custom_b"} // 重複していないキーだけを選んでも検索元の重複はエラー
-		res, err := CalcBulk(in)
+		res, err := calcBulk(in)
 		if !errors.Is(err, ErrDuplicatePreset) {
 			t.Fatalf("err=%v、ErrDuplicatePreset を期待", err)
 		}
@@ -813,7 +813,7 @@ func TestCalcBulkStrictDurabilityOrder(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res, err := CalcBulk(bulkInput(tt.category, tt.moveType))
+			res, err := calcBulk(bulkInput(tt.category, tt.moveType))
 			if err != nil {
 				t.Fatalf("CalcBulk: %v", err)
 			}
@@ -938,7 +938,7 @@ func checkedBulk(t *testing.T, in BulkInput) BulkResult {
 	if len(items) == 0 {
 		items = []*Item{nil}
 	}
-	res, err := CalcBulk(in)
+	res, err := calcBulk(in)
 	if err != nil {
 		t.Fatalf("CalcBulk: %v", err)
 	}

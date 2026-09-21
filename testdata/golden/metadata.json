@@ -100,6 +100,10 @@
     "stats-species.jsonl.gz": {
       "count": 100224,
       "sha256": "f374b8b28370b40df70e73761f70fe626f63e62beaab524308a804829eb82088"
+    },
+    "typechart.json": {
+      "count": 324,
+      "sha256": "9597456df6096025b702291b94c2d8da1cc38489b70c58f92826f5dfd9070b01"
     }
   }
 }

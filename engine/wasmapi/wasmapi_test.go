@@ -74,14 +74,26 @@ func defenderIndividual() map[string]any {
 	}
 }
 
+// typeChartRequestValue はリクエストに載せるタイプ相性表(ADR-0011 §13)。
+// 表はベクタ(testdata/vectors.json)の先頭で1度だけ定義したものを使い回す。
+// 読めないときは nil を返し、TestVectorsDefineSharedTypeChart が理由付きで落とす。
+func typeChartRequestValue() any {
+	f, err := loadVectorFile()
+	if err != nil {
+		return nil
+	}
+	return f.TypeChartRaw
+}
+
 func baseCalc() map[string]any {
 	return map[string]any{
-		"format":   "single",
-		"attacker": attackerIndividual(),
-		"defender": defenderIndividual(),
-		"move":     bodySlam(),
-		"field":    map[string]any{"weather": "none", "terrain": "none"},
-		"critical": false,
+		"format":    "single",
+		"attacker":  attackerIndividual(),
+		"defender":  defenderIndividual(),
+		"move":      bodySlam(),
+		"field":     map[string]any{"weather": "none", "terrain": "none"},
+		"critical":  false,
+		"typeChart": typeChartRequestValue(),
 	}
 }
 
@@ -93,6 +105,7 @@ func baseBulk() map[string]any {
 		"move":            bodySlam(),
 		"field":           map[string]any{"weather": "none", "terrain": "none"},
 		"critical":        false,
+		"typeChart":       typeChartRequestValue(),
 	}
 }
 
@@ -107,6 +120,7 @@ func baseReverse() map[string]any {
 		"critical":       false,
 		"observations":   []any{map[string]any{"percent": 45}},
 		"maxCandidates":  5,
+		"typeChart":      typeChartRequestValue(),
 	}
 }
 
@@ -405,6 +419,90 @@ func TestErrorEnvelopeCodes(t *testing.T) {
 			r["observations"] = []any{map[string]any{"percent": 101}}
 			return mustJSON(t, r)
 		}, wasmapi.CodeInvalidObservation},
+
+		// タイプ相性表(ADR-0011 §13 / ADR-0013)。境界は既定の表を補わない。
+		{"相性表が無い(calc)", "calc", func(t *testing.T) string {
+			r := baseCalc()
+			delete(r, "typeChart")
+			return mustJSON(t, r)
+		}, wasmapi.CodeTypeChartMissing},
+		{"相性表が null(calc)", "calc", func(t *testing.T) string {
+			r := baseCalc()
+			r["typeChart"] = nil
+			return mustJSON(t, r)
+		}, wasmapi.CodeTypeChartMissing},
+		{"相性表が空(calc)", "calc", func(t *testing.T) string {
+			r := baseCalc()
+			r["typeChart"] = map[string]any{}
+			return mustJSON(t, r)
+		}, wasmapi.CodeTypeChartMissing},
+		{"相性表が無い(calcBulk)", "calcBulk", func(t *testing.T) string {
+			r := baseBulk()
+			delete(r, "typeChart")
+			return mustJSON(t, r)
+		}, wasmapi.CodeTypeChartMissing},
+		{"相性表が無い(calcReverse)", "calcReverse", func(t *testing.T) string {
+			r := baseReverse()
+			delete(r, "typeChart")
+			return mustJSON(t, r)
+		}, wasmapi.CodeTypeChartMissing},
+
+		{"相性表のコードが不正", "calc", func(t *testing.T) string {
+			r := baseCalc()
+			r["typeChart"] = map[string]any{
+				"types":         []any{"normal", "ghost"},
+				"effectiveness": map[string]any{"normal": map[string]any{"ghost": 3}},
+			}
+			return mustJSON(t, r)
+		}, wasmapi.CodeInvalidTypeChart},
+		{"相性表のタイプが重複", "calc", func(t *testing.T) string {
+			r := baseCalc()
+			r["typeChart"] = map[string]any{"types": []any{"normal", "normal"}}
+			return mustJSON(t, r)
+		}, wasmapi.CodeInvalidTypeChart},
+		{"相性表のキーが types に無い", "calc", func(t *testing.T) string {
+			r := baseCalc()
+			r["typeChart"] = map[string]any{
+				"types":         []any{"normal"},
+				"effectiveness": map[string]any{"fire": map[string]any{"normal": 4}},
+			}
+			return mustJSON(t, r)
+		}, wasmapi.CodeInvalidTypeChart},
+
+		// 綴りの誤り(18 タイプに無い文字列)は invalid_enum、
+		// 綴りは正しいが渡された表に無い ID は unknown_type。
+		{"相性表のタイプ名が未知の綴り", "calc", func(t *testing.T) string {
+			r := baseCalc()
+			r["typeChart"] = map[string]any{"types": []any{"normal", "light"}}
+			return mustJSON(t, r)
+		}, wasmapi.CodeInvalidEnum},
+		{"技のタイプが表に無い", "calc", func(t *testing.T) string {
+			r := baseCalc()
+			r["typeChart"] = map[string]any{"types": []any{"ghost"}}
+			return mustJSON(t, r)
+		}, wasmapi.CodeUnknownType},
+		{"種族のタイプが表に無い", "calc", func(t *testing.T) string {
+			r := baseCalc()
+			r["typeChart"] = map[string]any{"types": []any{"normal"}}
+			sub(t, sub(t, r, "defender"), "species")["types"] = []any{"ghost"}
+			return mustJSON(t, r)
+		}, wasmapi.CodeUnknownType},
+		{"テラスタイプが表に無い", "calc", func(t *testing.T) string {
+			r := baseCalc()
+			r["typeChart"] = map[string]any{"types": []any{"normal"}}
+			sub(t, r, "attacker")["teraType"] = "ghost"
+			return mustJSON(t, r)
+		}, wasmapi.CodeUnknownType},
+		{"一括: 種族のタイプが表に無い", "calcBulk", func(t *testing.T) string {
+			r := baseBulk()
+			r["typeChart"] = map[string]any{"types": []any{"ghost"}}
+			return mustJSON(t, r)
+		}, wasmapi.CodeUnknownType},
+		{"逆算: 種族のタイプが表に無い", "calcReverse", func(t *testing.T) string {
+			r := baseReverse()
+			r["typeChart"] = map[string]any{"types": []any{"ghost"}}
+			return mustJSON(t, r)
+		}, wasmapi.CodeUnknownType},
 	}
 
 	for _, c := range cases {
@@ -432,6 +530,40 @@ func TestEmptyEnumMeansDefault(t *testing.T) {
 	decodeEnvelope(t, wasmapi.Calc(mustJSON(t, r)), &got)
 	if got.Category != "physical" {
 		t.Errorf("category: got %q want physical", got.Category)
+	}
+}
+
+// TestTypeChartIsPassedThroughToEngine は、境界が相性表を解釈せず engine に渡すことを
+// 確かめる(ADR-0011 §13)。実在の相性と違う表を渡しても、その表どおりの結果になる。
+// 等倍の省略も engine と同じ規則で扱われる。
+func TestTypeChartIsPassedThroughToEngine(t *testing.T) {
+	// 攻撃側・防御側・技のすべてが normal(baseCalc)。
+	tests := []struct {
+		name  string
+		chart map[string]any
+		want  float64
+	}{
+		{"表がいまひとつと言えば 0.5", map[string]any{
+			"types":         []any{"normal"},
+			"effectiveness": map[string]any{"normal": map[string]any{"normal": 1}},
+		}, 0.5},
+		{"表が抜群と言えば 2", map[string]any{
+			"types":         []any{"normal"},
+			"effectiveness": map[string]any{"normal": map[string]any{"normal": 4}},
+		}, 2.0},
+		{"省略は等倍", map[string]any{"types": []any{"normal"}}, 1.0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := baseCalc()
+			r["typeChart"] = tt.chart
+
+			var got calcResultView
+			decodeEnvelope(t, wasmapi.Calc(mustJSON(t, r)), &got)
+			if got.Effectiveness != tt.want {
+				t.Errorf("effectiveness = %v, want %v(渡した表が使われていない)", got.Effectiveness, tt.want)
+			}
+		})
 	}
 }
 

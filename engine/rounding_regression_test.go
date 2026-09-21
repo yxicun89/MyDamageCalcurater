@@ -17,7 +17,7 @@ func TestModifierRoundingRegression(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := CalcDamage(tt.input)
+			got, err := calcDamage(tt.input)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -34,7 +34,7 @@ func TestWeatherBeforeItemRounding(t *testing.T) {
 	in.Move.Power = 108
 	in.Field.Weather = WeatherSand
 	in.Defender.Item = &Item{Effect: &ItemEffect{StatMods: map[StatKey]int{StatSpD: 6144}}}
-	got, err := CalcDamage(in)
+	got, err := calcDamage(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,13 +47,13 @@ func TestCalcDamageRejectsInvalidLevelAndStats(t *testing.T) {
 	for _, level := range []int{-1, 1, 49, 51, 100} {
 		in := ctrlInput([]Type{TypeWater}, []Type{TypeRock}, CategoryPhysical, TypeNormal)
 		in.Attacker.Level = level
-		if _, err := CalcDamage(in); err == nil {
+		if _, err := calcDamage(in); err == nil {
 			t.Errorf("accepted level=%d", level)
 		}
 	}
 	in := ctrlInput([]Type{TypeWater}, []Type{TypeRock}, CategoryPhysical, TypeNormal)
 	in.Defender.Species.BaseStats.Def = -20
-	if _, err := CalcDamage(in); err == nil {
+	if _, err := calcDamage(in); err == nil {
 		t.Error("accepted negative base stat")
 	}
 }

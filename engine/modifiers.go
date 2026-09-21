@@ -167,10 +167,10 @@ func itemEffect(i *Item) *ItemEffect {
 
 // otherModifiers はやけどの後に chainMods で1回適用する「その他補正」の一覧を返す。
 // 壁・抜群軽減特性・持ち物ダメージ倍率・半減きのみの順。
-func otherModifiers(in DamageInput) []int {
+// eff は CalcDamage が1回だけ引いた技のタイプ相性(抜群判定に使う)。
+func otherModifiers(in DamageInput, eff Effectiveness) []int {
 	var mods []int
-	num, den, _ := TypeEffectiveness(in.Move.Type, in.Defender.Species.Types)
-	superEffective := num > den
+	superEffective := eff.IsSuperEffective()
 
 	if !in.Critical {
 		if sm := screenDamageMod(in); sm != Modifier4096 {

@@ -138,7 +138,7 @@ func TestGoldenBulkDefenderPresets(t *testing.T) {
 			in.PresetKeys = append(in.PresetKeys, key)
 		}
 
-		res, err := CalcBulk(in)
+		res, err := calcBulk(in)
 		if err != nil || len(res.Rows) != len(group) {
 			failures += len(group)
 			if failures <= 12 {

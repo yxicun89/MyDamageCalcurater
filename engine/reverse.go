@@ -99,6 +99,8 @@ type ReverseInput struct {
 	Move           Move
 	Field          Field
 	Critical       bool
+	// TypeChart はタイプ相性表(ADR-0013)。CalcReverse は解釈せず DamageInput へ素通しする。
+	TypeChart TypeChart
 	// ItemCandidates は探索する持ち物(解決済み)。nil 要素は「持ち物なし」。
 	// nil / 空スライスは []*Item{nil} と同じ(持ち物なしの1通り)。
 	ItemCandidates []*Item
@@ -537,6 +539,7 @@ func CalcReverse(in ReverseInput) (ReverseResult, error) {
 					}
 					dmg := DamageInput{
 						Format: in.Format, Move: in.Move, Field: in.Field, Critical: in.Critical,
+						TypeChart: in.TypeChart,
 					}
 					if in.Side == SideDefender {
 						dmg.Attacker, dmg.Defender = in.Known, unknown

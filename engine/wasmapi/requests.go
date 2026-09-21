@@ -32,6 +32,8 @@ type calcRequest struct {
 	Move     moveDTO       `json:"move"`
 	Field    fieldDTO      `json:"field"`
 	Critical bool          `json:"critical"`
+	// TypeChart は必須。省略は type_chart_missing(ADR-0011 §13)。
+	TypeChart typeChartDTO `json:"typeChart"`
 }
 
 func (r *calcRequest) run() (calcResultDTO, error) {
@@ -55,6 +57,10 @@ func (r *calcRequest) run() (calcResultDTO, error) {
 	if err != nil {
 		return calcResultDTO{}, err
 	}
+	chart, err := r.TypeChart.toEngine("typeChart")
+	if err != nil {
+		return calcResultDTO{}, err
+	}
 	if err := validateIndividual("攻撃側", attacker); err != nil {
 		return calcResultDTO{}, err
 	}
@@ -64,6 +70,7 @@ func (r *calcRequest) run() (calcResultDTO, error) {
 
 	res, err := engine.CalcDamage(engine.DamageInput{
 		Format: format, Attacker: attacker, Defender: defender, Move: move, Field: field, Critical: r.Critical,
+		TypeChart: chart,
 	})
 	if err != nil {
 		return calcResultDTO{}, err
@@ -91,6 +98,8 @@ type bulkRequest struct {
 	Presets         []presetDTO   `json:"presets"`
 	PresetKeys      []string      `json:"presetKeys"`
 	ItemVariants    []*itemDTO    `json:"itemVariants"`
+	// TypeChart は必須。省略は type_chart_missing(ADR-0011 §13)。
+	TypeChart typeChartDTO `json:"typeChart"`
 }
 
 type bulkDefenderDTO struct {
@@ -133,6 +142,10 @@ func (r *bulkRequest) run() (bulkResultDTO, error) {
 	if err != nil {
 		return bulkResultDTO{}, err
 	}
+	chart, err := r.TypeChart.toEngine("typeChart")
+	if err != nil {
+		return bulkResultDTO{}, err
+	}
 	var presets []engine.DefenderPreset
 	if r.Presets != nil {
 		presets = make([]engine.DefenderPreset, 0, len(r.Presets))
@@ -171,7 +184,7 @@ func (r *bulkRequest) run() (bulkResultDTO, error) {
 
 	res, err := engine.CalcBulk(engine.BulkInput{
 		Format: format, Attacker: attacker, DefenderSpecies: species, Move: move, Field: field,
-		Critical: r.Critical, Presets: presets, PresetKeys: keys, ItemVariants: variants,
+		Critical: r.Critical, Presets: presets, PresetKeys: keys, ItemVariants: variants, TypeChart: chart,
 	})
 	if err != nil {
 		return bulkResultDTO{}, err
@@ -213,6 +226,8 @@ type reverseRequest struct {
 	ItemCandidates []*itemDTO       `json:"itemCandidates"`
 	Observations   []observationDTO `json:"observations"`
 	MaxCandidates  int              `json:"maxCandidates"`
+	// TypeChart は必須。省略は type_chart_missing(ADR-0011 §13)。
+	TypeChart typeChartDTO `json:"typeChart"`
 }
 
 type archetypeDTO struct {
@@ -266,6 +281,10 @@ func (r *reverseRequest) run() (reverseResultDTO, error) {
 	if err != nil {
 		return reverseResultDTO{}, err
 	}
+	chart, err := r.TypeChart.toEngine("typeChart")
+	if err != nil {
+		return reverseResultDTO{}, err
+	}
 	items, err := itemsToEngine("itemCandidates", r.ItemCandidates)
 	if err != nil {
 		return reverseResultDTO{}, err
@@ -287,7 +306,7 @@ func (r *reverseRequest) run() (reverseResultDTO, error) {
 	res, err := engine.CalcReverse(engine.ReverseInput{
 		Format: format, Side: engine.ReverseSide(r.Side), Known: known, UnknownSpecies: species,
 		Move: move, Field: field, Critical: r.Critical, ItemCandidates: items,
-		Observations: obs, MaxCandidates: r.MaxCandidates,
+		Observations: obs, MaxCandidates: r.MaxCandidates, TypeChart: chart,
 	})
 	if err != nil {
 		return reverseResultDTO{}, err

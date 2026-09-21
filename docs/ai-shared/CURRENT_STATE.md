@@ -3,7 +3,7 @@
 ## Damage Calculator
 Owner: Claude Code
 Branch: feat/claude-p1-engine
-Status: Phase 1・P2-1・P1-10 は完了。コーディング規約 v2(docs/coding-rules.md、Codex が条件付き承認)に沿って Phase R(R-2 是正)を進行中(R-2-1〜4 と R-2-7 は完了、R-2-5 と R-2-8 も完了。履歴の書き換えは公開時に「クリーンコピー」方式で行う=R-2-9)。監査へのユーザー回答を反映済み(module path はプレースホルダ、履歴の書き換えは実行前に調整、タイプ相性表はデータ化=ADR-0012、ADR-0002 の第三者データ抜粋は削除)。任意の外部 Codex レビュー(scripts/codex-review.sh)は規約のレビューにだけ使用。Codex の担当はタイプバランスチェッカー実装で、ダメージ計算のレビュー担当ではない
+Status: Phase 1・P2-1・P1-10 は完了。コーディング規約 v2(docs/coding-rules.md、Codex が条件付き承認)に沿って Phase R(R-2 是正)を進行中(R-2-1〜4 と R-2-7 は完了、R-2-5 と R-2-8 も完了。履歴の書き換えは公開時に「クリーンコピー」方式で行う=R-2-9)。監査へのユーザー回答を反映済み(module path はプレースホルダ、履歴の書き換えは実行前に調整、タイプ相性表はデータ化=ADR-0013、ADR-0002 の第三者データ抜粋は削除)。任意の外部 Codex レビュー(scripts/codex-review.sh)は規約のレビューにだけ使用。Codex の担当はタイプバランスチェッカー実装で、ダメージ計算のレビュー担当ではない
 Next: R-2-5 → R-2-8(module path)→ R-3(check-publishable。実装中)→ P1-13(タイプ相性表のデータ化)→ P1-11 → P1-12 → P2-1b → P2-1c → P2-2。人間の確認待ち(plan.md ブロッカー): 観測ダメージの入力と丸めの解釈、公開のタイミング(LICENSE・クリーンコピー)
 
 ## Type Balance Checker

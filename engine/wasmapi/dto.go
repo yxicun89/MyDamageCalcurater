@@ -153,6 +153,62 @@ func (s screensDTO) toEngine() engine.Screens {
 	return engine.Screens{Reflect: s.Reflect, LightScreen: s.LightScreen, AuroraVeil: s.AuroraVeil}
 }
 
+// typeChartDTO はリクエストに載せるタイプ相性表(ADR-0011 §13 / ADR-0013)。
+// 倍率は整数コード(0=無効 / 1=いまひとつ / 2=等倍 / 4=抜群)のまま渡し、等倍は省略できる。
+// 境界は表を解釈せず、綴りの検証だけをして engine.NewTypeChart に渡す。
+type typeChartDTO struct {
+	Types         []string                  `json:"types"`
+	Effectiveness map[string]map[string]int `json:"effectiveness"`
+}
+
+// toEngine は綴りを検証して engine の検証済みの表にする。
+// 省略(null・空オブジェクト)は engine.ErrTypeChartMissing、定義の不正は engine.ErrInvalidTypeChart。
+// 既定の表は補わない。
+func (c typeChartDTO) toEngine(path string) (engine.TypeChart, error) {
+	if len(c.Types) == 0 && len(c.Effectiveness) == 0 {
+		return engine.TypeChart{}, fmt.Errorf("%w: リクエストに %s が無い", engine.ErrTypeChartMissing, path)
+	}
+	types := make([]engine.Type, 0, len(c.Types))
+	for i, v := range c.Types {
+		t, err := parseType(fmt.Sprintf("%s.types[%d]", path, i), v, false)
+		if err != nil {
+			return engine.TypeChart{}, err
+		}
+		types = append(types, t)
+	}
+	effectiveness, err := c.effectivenessToEngine(path + ".effectiveness")
+	if err != nil {
+		return engine.TypeChart{}, err
+	}
+	return engine.NewTypeChart(engine.TypeChartData{Types: types, Effectiveness: effectiveness})
+}
+
+// effectivenessToEngine は effectiveness の攻撃側・防御側のキーを検証して engine の形にする。
+func (c typeChartDTO) effectivenessToEngine(path string) (map[engine.Type]map[engine.Type]int, error) {
+	if c.Effectiveness == nil {
+		return nil, nil
+	}
+	out := make(map[engine.Type]map[engine.Type]int, len(c.Effectiveness))
+	// キーを整列して走査する(複数の不正があっても報告が毎回同じになるように)。
+	for _, atkKey := range sortedKeys(c.Effectiveness) {
+		atk, err := parseType(path, atkKey, false)
+		if err != nil {
+			return nil, err
+		}
+		row := c.Effectiveness[atkKey]
+		outRow := make(map[engine.Type]int, len(row))
+		for _, defKey := range sortedKeys(row) {
+			def, err := parseType(path+"."+atkKey, defKey, false)
+			if err != nil {
+				return nil, err
+			}
+			outRow[def] = row[defKey]
+		}
+		out[atk] = outRow
+	}
+	return out, nil
+}
+
 type speciesDTO struct {
 	Key       string   `json:"key"`
 	DexNo     int      `json:"dexNo"`
