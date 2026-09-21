@@ -358,6 +358,12 @@ type Health struct {
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
 
+// MatchupMultiplier Exact multiplier as an irreducible fraction, in the same form as DefenseMultiplier (ADR-0017 §3):
+// "0", "1/4", "1/2", "3/4", "1", "3/2", "2", "3", "4" and so on. null when there is no attack move.
+//
+// Example: 3/2
+type MatchupMultiplier = string
+
 // MemberCoverage defines model for MemberCoverage.
 type MemberCoverage struct {
 	// AttackTypes Types of the non-status moves, without duplicates, in canonical type order.
@@ -413,6 +419,81 @@ type TeamSummaryEntry struct {
 	Weak       int    `json:"weak"`
 }
 
+// ThreatMatchup incoming is the largest multiplier the member receives from the threat's attack moves (member's
+// types and ability); null when the threat has no attack move. outgoing is the largest multiplier the
+// member's attack moves deal to the threat (threat's types and ability); null when the member has no
+// attack move. safe = incoming < 1 (false when null); superEffective = outgoing >= 2 (false when null).
+type ThreatMatchup struct {
+	// Incoming Exact multiplier as an irreducible fraction, in the same form as DefenseMultiplier (ADR-0017 §3):
+	// "0", "1/4", "1/2", "3/4", "1", "3/2", "2", "3", "4" and so on. null when there is no attack move.
+	//
+	//
+	// Example: 3/2
+	Incoming *MatchupMultiplier `json:"incoming"`
+
+	// Outgoing Exact multiplier as an irreducible fraction, in the same form as DefenseMultiplier (ADR-0017 §3):
+	// "0", "1/4", "1/2", "3/4", "1", "3/2", "2", "3", "4" and so on. null when there is no attack move.
+	//
+	//
+	// Example: 3/2
+	Outgoing *MatchupMultiplier `json:"outgoing"`
+
+	// PokemonId Example: 9001-000
+	PokemonId      string `json:"pokemonId"`
+	Safe           bool   `json:"safe"`
+	SuperEffective bool   `json:"superEffective"`
+}
+
+// ThreatResult defines model for ThreatResult.
+type ThreatResult struct {
+	// AbilityId The request abilityId of the threat, present only when the request named one.
+	AbilityId *AbilityId `json:"abilityId,omitempty"`
+
+	// AttackTypes Types of the threat's non-status moves, without duplicates, in canonical type order.
+	AttackTypes []TypeId `json:"attackTypes"`
+
+	// Matchups One entry per request member, in request order. Duplicated pokemonId values are kept.
+	Matchups []ThreatMatchup `json:"matchups"`
+
+	// PokemonId Example: 9001-000
+	PokemonId string `json:"pokemonId"`
+
+	// SafeMembers Number of matchups whose safe is true.
+	SafeMembers int `json:"safeMembers"`
+
+	// SuperEffectiveMembers Number of matchups whose superEffective is true.
+	SuperEffectiveMembers int `json:"superEffectiveMembers"`
+}
+
+// ThreatsRequest defines model for ThreatsRequest.
+type ThreatsRequest struct {
+	// Members The own party, one to six entries.
+	Members []ThreatsRequestPokemon `json:"members"`
+
+	// Threats The hypothetical opponents, one to six entries.
+	Threats []ThreatsRequestPokemon `json:"threats"`
+}
+
+// ThreatsRequestPokemon One member or threat (the same shape on both sides, ADR-0400 §2).
+type ThreatsRequestPokemon struct {
+	// AbilityId Optional ability of the member (ADR-0017). Omit it for a member without an ability.
+	//
+	// Example: ability-9001
+	AbilityId *AbilityId `json:"abilityId,omitempty"`
+
+	// MoveIds Zero to four moveIds. Duplicates within one entry are rejected (400).
+	MoveIds []MoveId `json:"moveIds"`
+
+	// PokemonId Example: 9001-000
+	PokemonId string `json:"pokemonId"`
+}
+
+// ThreatsResponse defines model for ThreatsResponse.
+type ThreatsResponse struct {
+	// Threats One entry per request threat, in request order.
+	Threats []ThreatResult `json:"threats"`
+}
+
 // TypeId defines model for TypeId.
 type TypeId string
 
@@ -434,11 +515,20 @@ type AnalyzeTeamCoverageParams struct {
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
+// AnalyzeTeamThreatsParams defines parameters for AnalyzeTeamThreats.
+type AnalyzeTeamThreatsParams struct {
+	XDeviceId  DeviceId  `json:"X-Device-Id"`
+	XSessionId SessionId `json:"X-Session-Id"`
+}
+
 // AnalyzeTeamBalanceJSONRequestBody defines body for AnalyzeTeamBalance for application/json ContentType.
 type AnalyzeTeamBalanceJSONRequestBody = AnalyzeRequest
 
 // AnalyzeTeamCoverageJSONRequestBody defines body for AnalyzeTeamCoverage for application/json ContentType.
 type AnalyzeTeamCoverageJSONRequestBody = CoverageRequest
+
+// AnalyzeTeamThreatsJSONRequestBody defines body for AnalyzeTeamThreats for application/json ContentType.
+type AnalyzeTeamThreatsJSONRequestBody = ThreatsRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -451,6 +541,9 @@ type ServerInterface interface {
 	// AnalyzeTeamCoverage Analyze a party's offensive type coverage
 	// (POST /api/balance/v1/team-balance/coverage)
 	AnalyzeTeamCoverage(ctx *echo.Context, params AnalyzeTeamCoverageParams) error
+	// AnalyzeTeamThreats Check a party against hypothetical opponents
+	// (POST /api/balance/v1/team-balance/threats)
+	AnalyzeTeamThreats(ctx *echo.Context, params AnalyzeTeamThreatsParams) error
 	// Health Pod health check
 	// (GET /healthz)
 	Health(ctx *echo.Context) error
@@ -566,6 +659,54 @@ func (w *ServerInterfaceWrapper) AnalyzeTeamCoverage(ctx *echo.Context) error {
 	return err
 }
 
+// AnalyzeTeamThreats converts echo context to params.
+func (w *ServerInterfaceWrapper) AnalyzeTeamThreats(ctx *echo.Context) error {
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AnalyzeTeamThreatsParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Device-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Device-Id")]; found {
+		var XDeviceId DeviceId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
+		}
+
+		params.XDeviceId = XDeviceId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Device-Id is required, but not found"))
+	}
+	// ------------- Required header parameter "X-Session-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Session-Id")]; found {
+		var XSessionId SessionId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
+		}
+
+		params.XSessionId = XSessionId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Session-Id is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.AnalyzeTeamThreats(ctx, params)
+	return err
+}
+
 // Health converts echo context to params.
 func (w *ServerInterfaceWrapper) Health(ctx *echo.Context) error {
 	var err error
@@ -626,5 +767,6 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 	router.GET(options.BaseURL+"/api/balance/healthz", wrapper.PublicHealth, options.OperationMiddlewares["publicHealth"]...)
 	router.POST(options.BaseURL+"/api/balance/v1/team-balance/analyze", wrapper.AnalyzeTeamBalance, options.OperationMiddlewares["analyzeTeamBalance"]...)
 	router.POST(options.BaseURL+"/api/balance/v1/team-balance/coverage", wrapper.AnalyzeTeamCoverage, options.OperationMiddlewares["analyzeTeamCoverage"]...)
+	router.POST(options.BaseURL+"/api/balance/v1/team-balance/threats", wrapper.AnalyzeTeamThreats, options.OperationMiddlewares["analyzeTeamThreats"]...)
 
 }

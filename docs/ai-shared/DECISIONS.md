@@ -384,6 +384,13 @@ Decision: タイプバランスチェッカーに、チームの穴をふさげ�
 Reason: ユーザーが「既存のタイプバランスチェッカーはおすすめタイプは出すが、該当ポケモンを別サイトで探す必要がある。タイプだけ見て候補のポケモンを教えてほしい」と要望した。
 Impact: plan.md に TB5。使用可能なポケモンの集合と日本語名はマスタ(データレーンの P2-2。レギュレーション依存)から引く必要がある。それまでは TB1 と同じ temporary の read model を広げる(架空データの example)。
 
+
+## 2026-09-22: TB4(仮想敵診断)の仕様(ユーザー回答と既定案)
+Decision: 仮想敵を最大 6 体(pokemonId・技 ID 最大 4・特性は任意)で入力し、各仮想敵 × 自分の各メンバーの受ける最大倍率(incoming)と与える最大倍率(outgoing)、
+安全に受けられる人数(incoming < 1)・打ちやすい人数(outgoing ≥ 2)を返す。新 endpoint `/api/balance/v1/team-balance/threats`。詳細は ADR-0400。
+Reason: ユーザーが TB4 の方針に回答した(「安全に受けられる」「打ちやすい」の閾値はタイプバランスレーンの既定案)。
+Impact: TB1〜3 の計算と既存の read model を再利用。
+
 ## 2026-09-22: P3-1 calc-svc の API 契約(API レーン。既定案で進行・ユーザー未確認)
 Decision: ADR-0200 のとおり。`CalcResult.category` を足す(落とさない)、`BulkCalcRow.defender{sp,nature,natureId,stats}`、逆算は P1-12 の形
 (`known` / `unknownSpeciesKey` / `itemCandidates` / 観測は percent・percentTenths・damage のちょうど1つ)、`Error.code` を enum `ErrorCode`
