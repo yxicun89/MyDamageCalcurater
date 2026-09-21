@@ -8,6 +8,11 @@ import { existsSync, readFileSync } from "node:fs";
 import vm from "node:vm";
 import { beforeAll, describe, expect, test } from "vitest";
 import {
+  ATTACKER_PRESET_KEYS,
+  resolveAttackerPreset,
+  type AttackerPresetKey,
+} from "../domain/attackerPresets";
+import {
   NEUTRAL_NATURE,
   ZERO_SP,
   buildBulkRequest,
@@ -228,4 +233,49 @@ describe("calc(1対1)", () => {
       expect(result.value.category).toBe("special");
     }
   });
+});
+
+// P4-3: 攻撃側プリセット(ADR-0016 §5)で組み立てた攻撃側が engine に受理され、強さの順
+// (無振り ≤ A(C)振り(無補正) ≤ A(C)特化)に並ぶこと。数値の正しさはゴールデンの役割なので、
+// Web が「強くなる順の入力」を組み立てたことだけを単調性で確かめる。
+describe("calcBulk(攻撃側プリセット。P4-3)", () => {
+  async function maxDamagesFor(category: "physical" | "special", key: AttackerPresetKey): Promise<number[]> {
+    const { attacker, defender, move } = matchup(category);
+    const result = await engine.calcBulk(
+      buildBulkRequest({
+        attacker: buildIndividual(attacker, {
+          ...resolveAttackerPreset(key, move.category),
+          item: null,
+          ability: defaultAbility(attacker, master.abilities),
+        }),
+        defenderSpecies: defender,
+        move,
+        typeChart: master.typeChart,
+      }),
+    );
+    if (!result.ok) {
+      throw new Error(`${key} × ${category} が失敗: ${result.error.code} ${result.error.message}`);
+    }
+    return result.value.rows.map((row) => row.result.maxDamage);
+  }
+
+  test.each(["physical", "special"] as const)(
+    "%s: 3件とも受理され、同じ防御側の行で x_full ≥ x ≥ none、x_full は none より大きい",
+    async (category) => {
+      const [none, xFull, x] = await Promise.all(
+        ATTACKER_PRESET_KEYS.map((key) => maxDamagesFor(category, key)),
+      );
+      if (none === undefined || xFull === undefined || x === undefined) {
+        throw new Error("プリセットが3件でない");
+      }
+      expect(xFull).toHaveLength(none.length);
+      expect(x).toHaveLength(none.length);
+      none.forEach((noneDamage, index) => {
+        expect(x[index]).toBeGreaterThanOrEqual(noneDamage);
+        expect(xFull[index]).toBeGreaterThanOrEqual(x[index] ?? Number.POSITIVE_INFINITY);
+      });
+      // 無振りの防御側(1行目)では、特化は無振りより必ず強い(SP 32 と上昇補正が効いている)
+      expect(xFull[0]).toBeGreaterThan(none[0] ?? Number.POSITIVE_INFINITY);
+    },
+  );
 });

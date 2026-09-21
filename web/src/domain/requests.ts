@@ -21,6 +21,12 @@ import type { MasterSpecies } from "../master/types";
 /** バトルのレベル。Lv50 固定(CLAUDE.md ドメイン規約)。 */
 export const BATTLE_LEVEL = 50;
 
+/** SP の1ステータスあたりの上限(CLAUDE.md ドメイン規約: 1ステータス最大32)。 */
+export const MAX_SP_PER_STAT = 32;
+
+/** SP の合計の上限(CLAUDE.md ドメイン規約: 合計66)。 */
+export const MAX_SP_TOTAL = 66;
+
 /** 無振りの SP(6ステータスとも 0)。 */
 export const ZERO_SP: Stats = { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 };
 

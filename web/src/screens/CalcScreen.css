@@ -89,6 +89,47 @@
   font-size: var(--font-size-caption);
 }
 
+.calc-preset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.calc-preset__option {
+  /* 隠したネイティブのラジオ(.calc-preset__input)の位置の基準をラベルにする。 */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+  cursor: pointer;
+  /* 選択の切り替えはタップへの反応だけ(design.md「動き」、CLAUDE.md ドメイン規約: 常時動くアニメーションを入れない)。 */
+  transition:
+    background-color var(--duration-swap) ease,
+    color var(--duration-swap) ease;
+}
+
+.calc-preset__option--selected {
+  /* 既存のトークンだけで選択状態を表す(design.md にアクセントトークンは無いため、地・文字を反転させる)。 */
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+  color: var(--bg-base);
+}
+
+.calc-preset__input {
+  /* 選択の見た目はピルの背景色で表す(design.md)。ネイティブのラジオの丸は隠すが、
+     アクセシビリティツリー上は role=radio のまま残す(視覚的に隠すだけ)。 */
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
 .calc-screen__compare {
   display: flex;
   align-items: center;
@@ -174,4 +215,10 @@
   border-radius: var(--radius-pill);
   /* ダメージバーの伸び縮み(design.md「動き」: spring アニメーションで減る)。 */
   transition: width var(--duration-swap) ease;
+}
+
+/* ネイティブのラジオは隠しているので、キーボード操作のフォーカス位置をラベル側に出す(WCAG 2.4.7)。 */
+.calc-preset__option:has(.calc-preset__input:focus-visible) {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
 }

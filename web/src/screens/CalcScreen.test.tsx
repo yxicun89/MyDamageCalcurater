@@ -5,7 +5,7 @@
 //   - 攻撃側・防御側・ダメージ技が揃ったら calcBulk を1回呼び、そのリクエストの中身(ADR-0016 §2・§6、ADR-0009)
 //   - 返ってきた行を加工せずに表示(調整名・%幅・ダメージバー・確定数)
 //   - 持ち物の候補の比較、攻守入れ替え、エラー表示、古い応答で新しい表示を上書きしないこと
-// 攻撃側は P4-2 では無振り・無補正で固定(攻撃側プリセットの選択は P4-3)。
+// 攻撃側の既定は無振り・無補正。攻撃側プリセットの選択(P4-3、ADR-0016 §5)は末尾の describe で確かめる。
 
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
@@ -534,6 +534,193 @@ describe("攻守入れ替え", () => {
       defenderSpecies: toEngineSpecies(attacker),
       move: firstMoveOf(defender),
       itemVariants: [attackerItem],
+    });
+  });
+});
+
+// P4-3: 攻撃側(自分側)のプリセット(ADR-0016 §5、requirements.md「自分側のプリセット」)。
+// 決めたこと:
+//   - 選択は攻撃側カードの中のラジオグループ(名前「攻撃側の調整」)。design.md「入力はタップで選ぶ」のピル型を想定し、
+//     select ではなく radio にする。既定は無振り。
+//   - 選んでいるのは Key(none / x_full / x)。技の分類が変わっても Key は保ち、表示名(A特化 ⇄ C特化 など)と
+//     リクエストの SP・性格が分類に合わせて変わる。
+//   - 攻守入れ替えでは Key を保つ(攻撃側の調整は「自分側」の設定で、入れ替え後も自分が攻撃側のため)。
+//   - 変化技を選んでいるときの表示名は物理と同じ(domain/attackerPresets.test.ts)。
+describe("攻撃側のプリセット(P4-3)", () => {
+  const presetGroup = () => within(attackerCard()).getByRole("radiogroup", { name: "攻撃側の調整" });
+  const presetRadio = (name: string) => within(presetGroup()).getByRole("radio", { name });
+
+  /** 物理と特殊の両方のダメージ技を覚える種族と、その2つの技。 */
+  function mixedAttacker(): { species: MasterSpecies; physical: Move; special: Move } {
+    for (const species of master.species) {
+      const moves = learnsetMoves(species, master.moves);
+      const physical = moves.find((move) => move.category === "physical");
+      const special = moves.find((move) => move.category === "special");
+      if (physical !== undefined && special !== undefined) {
+        return { species, physical, special };
+      }
+    }
+    throw new Error("例データに物理と特殊の両方を覚える種族が無い");
+  }
+
+  /** 最初のダメージ技が指定の分類になる種族。 */
+  function speciesWithFirstMove(category: "physical" | "special", exceptKey = ""): MasterSpecies {
+    const found = master.species.find(
+      (species) =>
+        species.key !== exceptKey && firstDamagingMove(species, master.moves)?.category === category,
+    );
+    if (found === undefined) {
+      throw new Error(`例データに最初のダメージ技が ${category} の種族が無い`);
+    }
+    return found;
+  }
+
+  test("攻撃側カードに3つの選択肢(物理: 無振り・A特化・A振り(無補正))がこの順で並び、既定は無振り", async () => {
+    const { user } = renderScreen();
+    const attacker = speciesWithFirstMove("physical");
+    await choosePair(user, attacker, speciesWithFirstMove("special", attacker.key));
+
+    const radios = within(presetGroup()).getAllByRole("radio");
+    expect(radios).toHaveLength(3);
+    expect(presetRadio("無振り")).toBeChecked();
+    expect(presetRadio("A特化")).not.toBeChecked();
+    expect(presetRadio("A振り(無補正)")).not.toBeChecked();
+    // 並び順は none → x_full → x
+    expect(radios.indexOf(presetRadio("無振り"))).toBe(0);
+    expect(radios.indexOf(presetRadio("A特化"))).toBe(1);
+    expect(radios.indexOf(presetRadio("A振り(無補正)"))).toBe(2);
+  });
+
+  test("特殊技を選んでいるときは C 表記(無振り・C特化・C振り(無補正))になる", async () => {
+    const { user } = renderScreen();
+    const attacker = speciesWithFirstMove("special");
+    await choosePair(user, attacker, speciesWithFirstMove("physical", attacker.key));
+
+    expect(presetRadio("無振り")).toBeChecked();
+    expect(presetRadio("C特化")).toBeInTheDocument();
+    expect(presetRadio("C振り(無補正)")).toBeInTheDocument();
+    expect(within(presetGroup()).queryByRole("radio", { name: "A特化" })).toBeNull();
+  });
+
+  test("A特化を選ぶと計算し直し、攻撃側は A:32・他 0、性格は +atk / −spa", async () => {
+    const { user, engine } = renderScreen();
+    const attacker = speciesWithFirstMove("physical");
+    await choosePair(user, attacker, speciesWithFirstMove("special", attacker.key));
+    await waitFor(() => {
+      expect(engine.bulkRequests).toHaveLength(1);
+    });
+
+    await user.click(presetRadio("A特化"));
+
+    expect(presetRadio("A特化")).toBeChecked();
+    expect(presetRadio("無振り")).not.toBeChecked();
+    await waitFor(() => {
+      expect(engine.bulkRequests).toHaveLength(2);
+    });
+    expect(lastRequest(engine).attacker).toMatchObject({
+      level: 50,
+      sp: { hp: 0, atk: 32, def: 0, spa: 0, spd: 0, spe: 0 },
+      nature: { plus: "atk", minus: "spa" },
+    });
+  });
+
+  test("A振り(無補正)は A:32・無補正、無振りに戻すと SP 0・無補正に戻る", async () => {
+    const { user, engine } = renderScreen();
+    const attacker = speciesWithFirstMove("physical");
+    await choosePair(user, attacker, speciesWithFirstMove("special", attacker.key));
+
+    await user.click(presetRadio("A振り(無補正)"));
+    await waitFor(() => {
+      expect(lastRequest(engine).attacker.sp).toEqual({ hp: 0, atk: 32, def: 0, spa: 0, spd: 0, spe: 0 });
+    });
+    expect(lastRequest(engine).attacker.nature).toEqual({ plus: "", minus: "" });
+
+    await user.click(presetRadio("無振り"));
+    await waitFor(() => {
+      expect(lastRequest(engine).attacker.sp).toEqual({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 });
+    });
+    expect(lastRequest(engine).attacker.nature).toEqual({ plus: "", minus: "" });
+  });
+
+  test("A特化のまま特殊技に替えると、Key を保って表示は C特化、リクエストは C:32・+spa / −atk", async () => {
+    const { user, engine } = renderScreen();
+    const { species, physical, special } = mixedAttacker();
+    const defender = master.species.find((candidate) => candidate.key !== species.key);
+    if (defender === undefined) {
+      throw new Error("例データの種族が足りない");
+    }
+    await choosePair(user, species, defender);
+    await user.selectOptions(moveSelect(), physical.id);
+    await user.click(presetRadio("A特化"));
+    await waitFor(() => {
+      expect(lastRequest(engine)).toMatchObject({ move: physical, attacker: { nature: { plus: "atk" } } });
+    });
+
+    await user.selectOptions(moveSelect(), special.id);
+
+    expect(presetRadio("C特化")).toBeChecked();
+    expect(within(presetGroup()).queryByRole("radio", { name: "A特化" })).toBeNull();
+    await waitFor(() => {
+      expect(lastRequest(engine).move).toEqual(special);
+    });
+    expect(lastRequest(engine).attacker).toMatchObject({
+      sp: { hp: 0, atk: 0, def: 0, spa: 32, spd: 0, spe: 0 },
+      nature: { plus: "spa", minus: "atk" },
+    });
+  });
+
+  test("調整を替えると、応答が届くまで古い行を消して「計算中」を出す(古い調整の結果を新しい調整の結果として出さない)", async () => {
+    const { engine, pending } = createDeferredEngine();
+    const { user } = renderScreen(engine);
+    const attacker = speciesWithFirstMove("physical");
+    const defender = speciesWithFirstMove("special", attacker.key);
+    await choosePair(user, attacker, defender);
+    await waitFor(() => {
+      expect(pending).toHaveLength(1);
+    });
+    await act(async () => {
+      pending[0]?.resolve(
+        ok({ defenderSpeciesKey: defender.key, rows: [bulkRow({ presetLabel: "無振りの結果" })] }),
+      );
+      await Promise.resolve();
+    });
+    expect(await screen.findByText("無振りの結果")).toBeInTheDocument();
+
+    await user.click(presetRadio("A特化"));
+    await waitFor(() => {
+      expect(pending).toHaveLength(2);
+    });
+    expect(screen.queryByText("無振りの結果")).toBeNull();
+    expect(await screen.findByText("計算中")).toBeInTheDocument();
+
+    await act(async () => {
+      pending[1]?.resolve(
+        ok({ defenderSpeciesKey: defender.key, rows: [bulkRow({ presetLabel: "A特化の結果" })] }),
+      );
+      await Promise.resolve();
+    });
+    expect(await screen.findByText("A特化の結果")).toBeInTheDocument();
+  });
+
+  test("攻守入れ替えでも調整の Key を保つ(物理の A特化 → 入れ替え後の特殊技では C特化)", async () => {
+    const { user, engine } = renderScreen();
+    const attacker = speciesWithFirstMove("physical");
+    const defender = speciesWithFirstMove("special", attacker.key);
+    await choosePair(user, attacker, defender);
+    await user.click(presetRadio("A特化"));
+    await waitFor(() => {
+      expect(lastRequest(engine).attacker.nature).toEqual({ plus: "atk", minus: "spa" });
+    });
+
+    await user.click(screen.getByRole("button", { name: "攻守入れ替え" }));
+
+    expect(presetRadio("C特化")).toBeChecked();
+    await waitFor(() => {
+      expect(lastRequest(engine).attacker.species).toEqual(toEngineSpecies(defender));
+    });
+    expect(lastRequest(engine).attacker).toMatchObject({
+      sp: { hp: 0, atk: 0, def: 0, spa: 32, spd: 0, spe: 0 },
+      nature: { plus: "spa", minus: "atk" },
     });
   });
 });

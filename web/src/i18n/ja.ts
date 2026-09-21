@@ -80,6 +80,23 @@ export const calcScreenText = {
   movePowerLabel: "威力",
   /** 入力が揃い calcBulk の応答待ちのときに出す文言(古い行を出さず、これに差し替える)。 */
   loadingNotice: "計算中",
+  /** 攻撃側プリセットのラジオグループの名前(P4-3、ADR-0016 §5)。 */
+  attackerPresetGroupLabel: "攻撃側の調整",
+} as const;
+
+/**
+ * 攻撃側プリセット(domain/attackerPresets.ts、P4-3、ADR-0016 §5)の文言。
+ * X は技の分類で決まる関連ステータス(物理・変化 = atk、特殊 = spa)。
+ */
+export const attackerPresetText = {
+  /** none の表示名(分類によらず共通)。 */
+  none: "無振り",
+  /** X のステータスの1文字表記(物理・変化 = A、特殊 = C)。 */
+  statLetter: { atk: "A", spa: "C" } as const,
+  /** x_full の接尾辞(「A特化」「C特化」)。 */
+  fullSuffix: "特化",
+  /** x の接尾辞(「A振り(無補正)」「C振り(無補正)」)。 */
+  xSuffix: "振り(無補正)",
 } as const;
 
 /** アプリ全体(App.tsx)の文言。 */

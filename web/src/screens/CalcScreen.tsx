@@ -1,24 +1,41 @@
-// P4-2: 計算画面(docs/design.md「画面: ダメージ計算」、ADR-0016 §2・§6)。
+// P4-2/P4-3: 計算画面(docs/design.md「画面: ダメージ計算」、ADR-0016 §2・§5・§6)。
 // engine には CalcEngine(差し替え口)、マスタには MasterData(いまは架空の例データ)を渡してもらう。
-// 攻撃側は無振り・無補正で固定(攻撃側プリセットの選択は P4-3、ADR-0016 §5)。
+// 攻撃側は攻撃側プリセット(domain/attackerPresets.ts、既定は無振り)の Key を選び、SP・性格は
+// 今の技の分類から導出する(P4-3、ADR-0016 §5)。
 // 返ってきた値は加工せずに表示する(ADR-0016 §8)。技の相性・確定数の言葉も engine の値をそのまま使う。
 
-import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { useEffect, useId, useMemo, useState, type ReactElement, type ReactNode } from "react";
+import {
+  ATTACKER_PRESET_KEYS,
+  DEFAULT_ATTACKER_PRESET,
+  attackerPresetLabel,
+  resolveAttackerPreset,
+  type AttackerPresetKey,
+} from "../domain/attackerPresets";
 import { formatEffectiveness, formatKO, formatMoveCategory, formatPercentRange } from "../domain/format";
 import { firstDamagingMove, learnsetMoves } from "../domain/moves";
 import {
-  NEUTRAL_NATURE,
-  ZERO_SP,
   buildBulkRequest,
   buildIndividual,
   defaultAbility,
   defenderItemVariants,
   defensiveItemCandidates,
 } from "../domain/requests";
-import type { BulkResult, CalcEngine, EngineError, EngineResult, Item, Move } from "../engine/types";
+import type {
+  BulkResult,
+  CalcEngine,
+  EngineError,
+  EngineResult,
+  Item,
+  Move,
+  MoveCategory,
+} from "../engine/types";
 import { calcScreenText, isTypeId, typeNameJa } from "../i18n/ja";
 import type { MasterData, MasterSpecies } from "../master/types";
 import "./CalcScreen.css";
+
+/** 技を選んでいないときの、攻撃側プリセット表示用の仮の分類(A/C 表記の既定は物理と同じ)。 */
+const DEFAULT_MOVE_CATEGORY: MoveCategory = "physical";
 
 /** 計算画面(design.md「画面: ダメージ計算」)。engine と master は呼び出し側が注入する(ADR-0016 §2・§3)。 */
 export interface CalcScreenProps {
@@ -47,6 +64,7 @@ interface CompletedCalc {
   readonly attackerItem: Item | null;
   readonly defenderItem: Item | null;
   readonly compareItems: boolean;
+  readonly attackerPresetKey: AttackerPresetKey;
   readonly result: EngineResult<BulkResult>;
 }
 
@@ -72,6 +90,9 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
   const [defenderItemId, setDefenderItemId] = useState("");
   const [moveId, setMoveId] = useState("");
   const [compareItems, setCompareItems] = useState(false);
+  // 攻撃側プリセットの Key だけを持ち、攻撃側・技・攻守入れ替えでは変えない(ADR-0016 §5、
+  // CalcScreen.test.tsx「攻撃側のプリセット(P4-3)」)。表示名・SP・性格は今の技の分類から毎レンダー導出する。
+  const [attackerPresetKey, setAttackerPresetKey] = useState<AttackerPresetKey>(DEFAULT_ATTACKER_PRESET);
   // calcBulk の応答だけを state に持つ。idle・status-move・loading は入力から毎レンダー導出する
   // (effect の中で同期的に setState すると react-hooks/set-state-in-effect に引っかかるため)。
   const [completed, setCompleted] = useState<CompletedCalc | null>(null);
@@ -125,9 +146,10 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
       return;
     }
     let cancelled = false;
+    const { sp, nature } = resolveAttackerPreset(attackerPresetKey, move.category);
     const attackerIndividual = buildIndividual(attackerSpecies, {
-      sp: ZERO_SP,
-      nature: NEUTRAL_NATURE,
+      sp,
+      nature,
       item: attackerItem,
       ability: defaultAbility(attackerSpecies, master.abilities),
     });
@@ -155,6 +177,7 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
           attackerItem,
           defenderItem,
           compareItems,
+          attackerPresetKey,
           result,
         });
       }
@@ -162,7 +185,17 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, [engine, master, attackerSpecies, defenderSpecies, move, attackerItem, defenderItem, compareItems]);
+  }, [
+    engine,
+    master,
+    attackerSpecies,
+    defenderSpecies,
+    move,
+    attackerItem,
+    defenderItem,
+    compareItems,
+    attackerPresetKey,
+  ]);
 
   // idle・status-move は選ばれている入力から直接決まる。completed が無い、または今の入力と違う入力の
   // 応答(初回の読み込み中・入力を変えた直後)は loading にし、古い行を出さない(ADR-0016 §8)。
@@ -178,7 +211,8 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
     completed.move !== move ||
     completed.attackerItem !== attackerItem ||
     completed.defenderItem !== defenderItem ||
-    completed.compareItems !== compareItems
+    completed.compareItems !== compareItems ||
+    completed.attackerPresetKey !== attackerPresetKey
   ) {
     outcome = { status: "loading" };
   } else {
@@ -200,7 +234,15 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
           selectedItemId={attackerItemId}
           onSpeciesChange={selectAttacker}
           onItemChange={setAttackerItemId}
-        />
+        >
+          {attackerSpecies !== null && (
+            <AttackerPresetSelector
+              category={move?.category ?? DEFAULT_MOVE_CATEGORY}
+              value={attackerPresetKey}
+              onChange={setAttackerPresetKey}
+            />
+          )}
+        </SpeciesCard>
         <button type="button" className="calc-screen__swap" onClick={swap}>
           {calcScreenText.swapButtonLabel}
         </button>
@@ -245,6 +287,8 @@ interface SpeciesCardProps {
   readonly selectedItemId: string;
   readonly onSpeciesChange: (key: string) => void;
   readonly onItemChange: (id: string) => void;
+  /** カードの中に足す追加要素(攻撃側プリセットの選択。防御側カードは渡さない)。 */
+  readonly children?: ReactNode;
 }
 
 /** 攻撃側・防御側の共通カード: ポケモン・持ち物の選択と、選んだ種族の名前・タイプ・エンブレム。 */
@@ -258,6 +302,7 @@ function SpeciesCard({
   selectedItemId,
   onSpeciesChange,
   onItemChange,
+  children,
 }: SpeciesCardProps) {
   const species = speciesList.find((candidate) => candidate.key === selectedSpeciesKey) ?? null;
   const primaryType = species?.types[0];
@@ -310,7 +355,48 @@ function SpeciesCard({
           </ul>
         </div>
       )}
+      {children}
     </section>
+  );
+}
+
+interface AttackerPresetSelectorProps {
+  readonly category: MoveCategory;
+  readonly value: AttackerPresetKey;
+  readonly onChange: (key: AttackerPresetKey) => void;
+}
+
+/**
+ * 攻撃側プリセットのピル型ラジオグループ(design.md「入力はタップで選ぶ」、ADR-0016 §5)。
+ * 選んでいるのは Key で、表示名は今の技の分類(category)から導出する
+ * (CalcScreen.test.tsx「A特化のまま特殊技に替えると…」)。
+ */
+function AttackerPresetSelector({ category, value, onChange }: AttackerPresetSelectorProps) {
+  // ラジオの name は画面内で一意にする(同じ部品を複数置いてもグループが混ざらないように)。
+  const groupName = useId();
+  return (
+    <div role="radiogroup" aria-label={calcScreenText.attackerPresetGroupLabel} className="calc-preset">
+      {ATTACKER_PRESET_KEYS.map((key) => {
+        const selected = key === value;
+        return (
+          <label
+            key={key}
+            className={`calc-preset__option${selected ? " calc-preset__option--selected" : ""}`}
+          >
+            <input
+              type="radio"
+              name={groupName}
+              className="calc-preset__input"
+              checked={selected}
+              onChange={() => {
+                onChange(key);
+              }}
+            />
+            {attackerPresetLabel(key, category)}
+          </label>
+        );
+      })}
+    </div>
   );
 }
 
