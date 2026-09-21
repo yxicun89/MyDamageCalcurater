@@ -69,6 +69,8 @@ func ResolveMoves(provider MoveProvider, moveIDs []string) ([]Move, error) {
 		if err != nil {
 			return nil, err
 		}
+		// response の moveIds は request の値のまま返す契約(ADR-0016 §2)なので、provider が ID を正規化しても request の ID を使う。
+		move.MoveID = id
 		moves[i] = move
 	}
 	return moves, nil

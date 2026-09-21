@@ -151,7 +151,7 @@ func analyze(c echo.Context, deps Dependencies) error {
 // provider failure other than an unknown pokemonId) never leak internal detail
 // to the client. The error is still logged for operators.
 func internalError(c echo.Context, err error) error {
-	slog.Error("balance analyze internal error", "error", err)
+	slog.Error("balance internal error", "path", c.Path(), "error", err)
 	return c.JSON(http.StatusInternalServerError, api.Error{
 		Code:    api.InternalError,
 		Message: "internal error",

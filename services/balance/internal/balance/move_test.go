@@ -187,3 +187,21 @@ func TestUnknownMoveErrorUnwrapsOnlyToErrUnknownMove(t *testing.T) {
 		t.Errorf("Error() = %q, want %q", got, want)
 	}
 }
+
+type normalizingMoves struct{}
+
+func (normalizingMoves) Move(moveID string) (Move, error) {
+	return Move{MoveID: "normalized-" + moveID, Type: TypeFire, Category: MoveCategorySpecial}, nil
+}
+
+func TestResolveMovesKeepsRequestIDs(t *testing.T) {
+	t.Parallel()
+
+	moves, err := ResolveMoves(normalizingMoves{}, []string{"move-9001"})
+	if err != nil {
+		t.Fatalf("ResolveMoves() error = %v", err)
+	}
+	if moves[0].MoveID != "move-9001" {
+		t.Errorf("MoveID = %q, want the request ID move-9001", moves[0].MoveID)
+	}
+}
