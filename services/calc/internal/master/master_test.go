@@ -1,6 +1,6 @@
 package master
 
-// 暫定マスタ境界(ADR-0016 §B)の受け入れテスト。データはすべて架空
+// 暫定マスタ境界(ADR-0018 §B)の受け入れテスト。データはすべて架空
 // (種族・技・持ち物・特性・性格の名前と ID)。相性表だけは testdata/golden/typechart.json
 // (数値と英語 ID のみ。ADR-0002 / ADR-0015)を読む。
 
@@ -383,7 +383,7 @@ func TestNewRejectsInconsistentMaster(t *testing.T) {
 	}
 }
 
-// AC-M5: NatureID の写像規則(ADR-0016)。
+// AC-M5: NatureID の写像規則(ADR-0018)。
 func TestNatureID(t *testing.T) {
 	m := baseSnapshot()
 	// plus == minus は engine の IsNeutral で無補正。ID 昇順で最も小さいので、無補正の代表になる。

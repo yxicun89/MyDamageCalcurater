@@ -57,7 +57,7 @@ readonly GOLDEN_DIR="testdata/golden"
 # NameJa は、この接頭辞で始まる架空名か、日本語を含まない値(プレースホルダ "?" など。
 # 実在の日本語名を入れないという目的に反しない)だけを許す。
 readonly FICTIONAL_NAME_PREFIX="テスト"
-readonly -a NAMEJA_PATHSPECS=("engine/*_test.go" "engine/wasmapi/testdata/vectors.json")
+readonly -a NAMEJA_PATHSPECS=("engine/*_test.go" "engine/wasmapi/testdata/vectors.json" "services/*_test.go")
 
 # 日本語(ひらがな・カタカナ・漢字・半角カナ)の Unicode 範囲。ADR-0002: 1 文字でもあれば失敗。
 readonly JAPANESE_CLASS='[\x{3040}-\x{30FF}\x{3400}-\x{4DBF}\x{4E00}-\x{9FFF}\x{F900}-\x{FAFF}\x{FF66}-\x{FF9F}]'

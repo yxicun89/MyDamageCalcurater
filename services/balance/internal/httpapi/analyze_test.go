@@ -13,7 +13,7 @@ import (
 	"example.com/pokecalc/services/balance/internal/api"
 	"example.com/pokecalc/services/balance/internal/balance"
 	"example.com/pokecalc/services/balance/internal/master"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 const analyzePath = "/api/balance/v1/team-balance/analyze"
@@ -124,7 +124,7 @@ func TestAnalyzeResponseBody(t *testing.T) {
 			if entry.Source != api.Type {
 				t.Errorf("members[%d].defense[%d].source = %q, want type", i, j, entry.Source)
 			}
-			if !entry.Multiplier.Valid() || !entry.Category.Valid() {
+			if !tb1DefenseMultipliers[entry.Multiplier] || !entry.Category.Valid() {
 				t.Errorf("members[%d].defense[%d] has out-of-enum values: %+v", i, j, entry)
 			}
 		}
@@ -137,15 +137,15 @@ func TestAnalyzeResponseBody(t *testing.T) {
 		multiplier api.DefenseMultiplier
 		category   api.DefenseCategory
 	}{
-		{"water/ground grass x4", 0, api.Grass, api.N4, api.QuadWeak},
-		{"water/ground electric x0", 0, api.Electric, api.N0, api.Immune},
-		{"water/ground rock x1/2", 0, api.Rock, api.N12, api.Resist},
-		{"water/ground normal x1", 0, api.Normal, api.N1, api.Neutral},
-		{"fire/flying rock x4", 1, api.Rock, api.N4, api.QuadWeak},
-		{"fire/flying ground x0", 1, api.Ground, api.N0, api.Immune},
-		{"fire/flying grass x1/4", 1, api.Grass, api.N14, api.QuadResist},
-		{"fire/flying water x2", 1, api.Water, api.N2, api.Weak},
-		{"fire/flying electric x2", 1, api.Electric, api.N2, api.Weak},
+		{"water/ground grass x4", 0, api.Grass, "4", api.QuadWeak},
+		{"water/ground electric x0", 0, api.Electric, "0", api.Immune},
+		{"water/ground rock x1/2", 0, api.Rock, "1/2", api.Resist},
+		{"water/ground normal x1", 0, api.Normal, "1", api.Neutral},
+		{"fire/flying rock x4", 1, api.Rock, "4", api.QuadWeak},
+		{"fire/flying ground x0", 1, api.Ground, "0", api.Immune},
+		{"fire/flying grass x1/4", 1, api.Grass, "1/4", api.QuadResist},
+		{"fire/flying water x2", 1, api.Water, "2", api.Weak},
+		{"fire/flying electric x2", 1, api.Electric, "2", api.Weak},
 	}
 	for _, tt := range tests {
 		entry := findDefenseEntry(t, response.Members[tt.member].Defense, tt.attack)

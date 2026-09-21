@@ -4,15 +4,15 @@
 Lane: データ(engine・マスタ・pokedex。どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
 Branch: feat/claude-p1-engine(作業ディレクトリ ~/MyDamageCalcurater)
-Status: Phase 1・P2-1・P1-10・Phase R(R-2-9 の公開用クリーンコピーは公開時に実施)・R-3・P1-13(タイプ相性表のデータ化。ADR-0013)・P1-11(表示%の分離)・P1-12(逆算の再設計。ADR-0010 §R)・P2-1b(ゴールデンを @smogon/calc 0.12.0 の Champions へ。ADR-0002 追記)は完了(critic レビュー済み)
-Next: P2-1c → P2-2 → P2-3 → P3-1〜3 → P4-1〜7。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)、P2-1c の裁定
+Status: Phase 1・P2-1・P1-10・Phase R(R-2-9 の公開用クリーンコピーは公開時に実施)・R-3・P1-13(タイプ相性表のデータ化。ADR-0013)・P1-11(表示%の分離)・P1-12(逆算の再設計。ADR-0010 §R)・P2-1b(ゴールデンを Champions へ)・P2-1c(技の使用可否の裁定)・P2-2a(pokedex のスキーマと migrate。ADR-0015)は完了(critic レビュー済み)
+Next: P2-2b(importer の取得・変換と DB への投入)→ P2-2c → P2-2d → P2-3 → P3-1〜3 → P4-1〜7。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)、P2-1c の裁定
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
 Active: Claude Code
 Branch: feat/api-p3(作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: P3-1(calc-svc。ADR-0016)完了・critic PASS。api/openapi.yaml を更新済み(category・BulkCalcRow.defender・逆算の P1-12 形・ErrorCode)。main へは PR で統合予定
-Next: 依存の版上げ(Echo v5・kin-openapi 等。ユーザー決定 2026-09-21)→ P3-2 gateway(ルーティング・X-Device-Id/X-Session-Id の UUID 検証・/assets・CORS・upstream_unavailable)→ P3-3 契約テスト(gateway 経由)と k3d のスモーク。マスタは services/calc/internal/master の暫定 Store(P2-2a が main に入ったら差し替え)
+Status: P3-1(calc-svc。ADR-0018)完了・critic PASS。api/openapi.yaml を更新済み(category・BulkCalcRow.defender・逆算の P1-12 形・ErrorCode)。依存を最新へ(Echo v5・ADR-0019)。main へは PR で統合予定
+Next: P3-2 gateway(Echo v5)(ルーティング・X-Device-Id/X-Session-Id の UUID 検証・/assets・CORS・upstream_unavailable)→ P3-3 契約テスト(gateway 経由)と k3d のスモーク。マスタは services/calc/internal/master の暫定 Store(P2-2a が main に入ったら差し替え)
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
@@ -21,12 +21,19 @@ Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
 Status: 未着手(2026-09-21 にレーンを新設)
 Next: docs/plan.md の P4-1(docs/design.md のデザイントークンを CSS 変数に)から。P4-2〜P4-4 は WASM(make wasm の engine.wasm と engine/wasmapi の JSON 契約。ADR-0011)で先に作り、マスタ(種族・技・持ち物)は pokedex-svc ができるまで架空データで作る。P4-5 の API 接続は API レーンが api/openapi.yaml を main に入れてから
 
+## iOS
+Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
+Active: なし
+Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
+Status: 未着手(2026-09-21 にレーンを新設)。Xcode はユーザーが導入中(App Store)。導入後に `sudo xcode-select -s /Applications/Xcode.app` 等が要る
+Next: docs/plan.md の P6-1 から。Xcode が使えるか(`xcodebuild -version`)を最初に確認し、無ければ Swift Package(swift-openapi-generator で `api/openapi.yaml` から生成したクライアント・モデル・docs/design.md のデザイントークン)と `swift test` から始める。Xcode が使えるようになったら SwiftUI の Xcode プロジェクトとシミュレータのテスト(`make ios-test`)。サーバー(P3)ができるまで API はモック
+
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
-Branch: feat/tb-tb1b-typechart(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
-Status: TB0(Argo CD 実同期のみ人間待ち)・TB1(防御タイプバランス。PR #6)は main に統合済み。TB1b(相性表を typechart.json から読み TemporaryTypeChart を削除。ADR-0015)は critic PASS・PR で統合
-Next: TB2(攻撃範囲。設計書 §6 TB2。技のデータ・入力形式が未定義なので ADR を先に書く)。未対応の軽微: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の schema ファイル
+Branch: 次は main から feat/tb-tb4-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
+Status: TB0(Argo CD 実同期のみ人間待ち)・TB1(防御。ADR-0014)・TB1b(相性表のデータ化。ADR-0015)・TB2(攻撃範囲。ADR-0016)・TB3(特性。ADR-0017。倍率は既約分数)は main に統合済み。ポケモン・技・特性は temporary の read model(架空データの example。実データは BALANCE_*_PATH でマウント。P2-2 のスナップショットができたら差し替え)
+Next: TB4(仮想敵診断)は設計書 §6 で「詳細は TB1〜TB3 完成後に確定」のため、ADR-0018 の提案(既定案)をユーザーが確認してから実装する(plan.md「ブロッカー(タイプバランスレーン)」)。確認待ちの間は軽微の残り: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の JSON Schema ファイル、CoverageMultiplier の nullable enum に null を明示
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

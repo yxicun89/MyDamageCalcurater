@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "abilities": [
+    {"abilityId": "ability-9001", "effects": [{"kind": "immune", "attackType": "ground"}]},
+    {"abilityId": "ability-9002", "effects": [{"kind": "absorb", "attackType": "water"}]},
+    {"abilityId": "ability-9003", "effects": [{"kind": "type_multiplier", "attackType": "fire", "numerator": 1, "denominator": 2}]},
+    {"abilityId": "ability-9004", "effects": [{"kind": "super_effective_multiplier", "numerator": 3, "denominator": 4}]},
+    {"abilityId": "ability-9005", "effects": []},
+    {"abilityId": "ability-9006", "effects": [{"kind": "type_multiplier", "attackType": "fire", "numerator": 5, "denominator": 4}]},
+    {"abilityId": "ability-9007", "effects": [{"kind": "immune", "attackType": "electric"}, {"kind": "type_multiplier", "attackType": "ice", "numerator": 2, "denominator": 1}]}
+  ]
+}

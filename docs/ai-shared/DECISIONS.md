@@ -259,6 +259,11 @@ Decision: 上記エントリの停止条件は「TB0 のタイプ相性表は差
 Reason: TB0 の独立レビューで、未決のまま残った旧エントリが共有状態の読み手を誤解させると指摘されたため。
 Impact: なし(記録の整理のみ)。
 
+## 2026-09-21: `.gitignore` の `coverage.*` を `coverage.out` / `coverage.html` に絞る(タイプバランスレーンの提案を採用。データレーン)
+Decision: 提案どおり、ルートの `.gitignore` の `coverage.*` を `coverage.out` と `coverage.html` の2行に置き換える。`coverage.*` に依存して無視されていたファイルは無い(`git ls-files -o -i` で確認)。
+Reason: `coverage.go` / `coverage.ts` などのソースまで無視され、コミットから黙って漏れる。
+Impact: `.gitignore` のみ。
+
 ## 2026-09-21: TB0 を main に統合(PR #3)/TB1 のポケモンタイプ取得は balance ローカルの read model(既定案。タイプバランスレーン、Claude Code)
 Decision: (1) feat/codex-tb0-foundation を PR #3 で main に統合した(Argo CD 実同期のみ人間の作業待ち。plan.md)。
 (2) TB1 は request を `pokemonId` のみのまま維持し、pokemonId → タイプは `PokemonTypeProvider` の後ろの temporary adapter が
@@ -296,14 +301,53 @@ Reason: ユーザーが深夜のマージについて「マージしないと作
 Impact: COORDINATION.md「人間への質問」に深夜の PR マージの項を追加。上の「判断が必要なときの質問ルールと深夜の自律作業」エントリは本エントリで置き換える
 (深夜の判断待ちの記録先は plan.md のブロッカー節。既定案で進めた判断は DECISIONS.md に「既定案で進行・ユーザー未確認」と書く)。
 
+## 2026-09-21: TB2(攻撃範囲)の仕様3点(ユーザー回答)
+Decision: 有効打は等倍以上(×1 以上。抜群は別に数える)。防御側は 18 の単タイプ(複合は TB4)。技はメンバーごとに技 ID を最大4つ送り、タイプ・分類は balance の技の read model から引く。
+Reason: TB2 着手時に設計書 §6 で未定義だった点をユーザーに質問し、回答を得た。
+Impact: ADR-0016。新 endpoint `/api/balance/v1/team-balance/coverage`、技の read model(`BALANCE_MOVES_PATH`、架空データの example)。
+
 ## 2026-09-21: ダメージ計算を3レーン(データ / API / Web)に分け、全体で4レーンを並列に進める(ユーザー決定)
 Decision: ダメージ計算レーンを、データ(engine・マスタ・pokedex。`~/MyDamageCalcurater`)、API(calc-svc・gateway・契約テスト。`~/MyDamageCalcurater-api`)、Web(`web/`。`~/MyDamageCalcurater-web`)の3レーンに分ける。タイプバランスと合わせて4レーン。
 `api/openapi.yaml` と生成物を変更できるのは API レーンだけ。他のレーンの範囲は変更せず、DECISIONS.md に提案する。待たずに進めるため、暫定の境界(インターフェース・架空データ・fake)を自分のレーン内に置いてよい。
 Reason: ユーザーが「Max プランなので、機能単位でもっと並列に起動して実装・レビューしたい」と依頼した。M1 の残りのうち Phase 3(API)と Phase 4(Web)は、engine と WASM が完成済みのため Phase 2 を待たずに始められる。5本以上に分けると openapi.yaml 等の共有ファイルの衝突と利用枠の消費が増えるので4本にした。
 Impact: COORDINATION.md(レーン表・依存と共有ファイルの節・起動の目安)と CURRENT_STATE.md(API・Web の欄)を更新。
 
+## 2026-09-21: ルートの .gitignore の `coverage.*` を Go のカバレッジ出力だけに絞る提案(タイプバランスレーンから。既定案)
+Decision(提案): `.gitignore` の `coverage.*` は `coverage.go` / `coverage.ts` などのソースも無視してしまう(TB2 で `services/balance/internal/balance/coverage.go` が黙ってコミットから漏れかけた)。
+既定案: `coverage.*` を `coverage.out` と `coverage.html`(と各ツールの実際の出力名)に置き換える。持ち主はルートの共有ファイルなのでデータレーンが判断する。
+Reason: `git status` に出ないため、テストはローカルで通るのに clone すると壊れる状態になる。Web レーンの `coverage.ts` 等でも起きうる。
+Impact: タイプバランスレーンは回避のため本体を `offense.go` にした(変更不要)。他のレーンは、新しいファイルが `git status` に出ることを確かめてから commit する。
+
+## 2026-09-21: iOS レーンを追加して5レーンにする(ユーザー決定)
+Decision: M3 の Phase 6(`ios/`)を担当する iOS レーンを新設する(`~/MyDamageCalcurater-ios`、`feat/ios-<phase名>`)。API の契約は `api/openapi.yaml` に追従するだけで変更しない。
+サーバーができるまでは生成クライアントに対するモックで作る。Xcode が無い間は Swift Package と `swift test` の範囲で進める。
+Reason: ユーザーが「iOS も作りたいので iOS レーンも起動したい」と依頼し、Xcode を導入することにした(導入中)。
+Impact: COORDINATION.md のレーン表・依存の節・起動の目安、CURRENT_STATE.md に iOS 欄を追加。準備はタイプバランスレーンのセッションが行った(データレーンの4レーン化の規則に1行ずつ追加しただけ)。
+
+
+## 2026-09-21: TB3(特性)の仕様3点(ユーザー回答)と細部の既定案
+Decision: ユーザー回答: 特性は analyze の request で `abilityId` を任意指定/効果は無効・吸収・倍率変更に加え ×3/4 なども含める/特性による無効・吸収は集計の「無効」に含め source で区別。
+既定案(ユーザー未確認): 効果は正規化データ(immune / absorb / type_multiplier / super_effective_multiplier)の read model `BALANCE_ABILITIES_PATH`、
+防御の最終倍率は既約分数に広げ(API の multiplier 文字列も "3/4" 等を許す。特性なしなら TB1 と同じ)、category は値の範囲で決める。詳細は ADR-0017。
+Reason: TB3 着手時に質問し回答を得た。細部は 23 時以降に決めるため既定案とした。
+Impact: ADR-0017。analyze の契約を後方互換で拡張(abilityId 任意、multiplier 文字列の値域拡大、effect の追加、422 unknown_ability、503 条件)。
+
+## 2026-09-21: TB3 の既定案を確認、TB4 の方針、Argo CD の実同期をローカル k3d で行う(ユーザー回答)
+Decision: (1) ADR-0017 の既定案(最終倍率は既約分数、category の境界 0/≤1/4/<1/1/<4/≥4)をユーザーが確認。TB3 は今マージしてよい(深夜だがユーザーの指示)。
+(2) TB4(仮想敵診断)は、仮想敵を最大 6 体(pokemonId・技 ID 最大 4・特性は任意)で入力し、各仮想敵について自分の各メンバーが受ける最大倍率(受けやすさ)と与えられる最大倍率(打ちやすさ)を表にし、安全に受けられるメンバー数を集計する。TB1〜3 の計算を再利用する。詳細は ADR-0018。
+(3) TB0 の Argo CD 実同期は、ローカル k3d に Argo CD を入れ、イメージは k3d のローカルレジストリ、private リポジトリの読み取りはユーザーが作る読み取り専用の fine-grained PAT を、ユーザー自身が ! コマンドでクラスタの Secret に登録する(AI はトークンを見ない・Git に入れない)。
+Reason: ユーザーがブロッカーの質問に回答した。
+Impact: TB3 を PR で統合。TB4 は ADR-0018 から。Argo CD はタイプバランスレーンの services/balance/deploy/argocd の範囲で進める。
+
+## 2026-09-21: ミドルウェア・ライブラリ・ツールは導入時点の最新の安定版にする(ユーザー決定)
+Decision: 各レーンが導入・更新するミドルウェア(Argo CD・DB・メッセージング・監視等)、ライブラリ、ベースイメージ、ツールは、その時点の最新の安定版にする。
+再現性のため、版は引き続き完全に固定する(タグ + digest、go.mod・package-lock 等。`latest` タグや範囲指定は使わない)。メジャーバージョンの更新もコードの移行を含めて行う。
+ゴールデンの oracle `@smogon/calc` も、新しい版があれば差分を確かめてから上げる(データレーンの同日の記録に合わせる)。Go のツールチェーンの版(go.work と各 go.mod の go/toolchain 行)は全モジュールで揃え、データレーンが先に上げたものに合わせる。
+Reason: ユーザーが「ミドルウェア等のバージョンは全て最新にして。アップデートの手間を減らすために」と指示した。
+Impact: タイプバランスレーンは Argo CD v3.5.3(2026-09-22 時点の最新。導入手順と版は services/balance/deploy/argocd/README.md・ADR-0018)を導入、balance を Echo v4.15.4 → v5.3.1(oapi-codegen v2.8.0 の echo5-server)に移行、golang:1.27-alpine の digest を更新。
+他のレーン(データ・API・Web・iOS)は、自分の範囲の依存を同じ方針で確認・更新する(services/go.mod の Echo v4 は API レーン、services/pokedex/Dockerfile の golang:1.27-alpine の digest はデータレーンの判断)。
 ## 2026-09-22: P3-1 calc-svc の API 契約(API レーン。既定案で進行・ユーザー未確認)
-Decision: ADR-0016 のとおり。`CalcResult.category` を足す(落とさない)、`BulkCalcRow.defender{sp,nature,natureId,stats}`、逆算は P1-12 の形
+Decision: ADR-0018 のとおり。`CalcResult.category` を足す(落とさない)、`BulkCalcRow.defender{sp,nature,natureId,stats}`、逆算は P1-12 の形
 (`known` / `unknownSpeciesKey` / `itemCandidates` / 観測は percent・percentTenths・damage のちょうど1つ)、`Error.code` を enum `ErrorCode`
 (WASM 境界の語彙 + HTTP だけの missing_header・unknown_*・not_found・master_unavailable・upstream_unavailable)。
 マスタは calc-svc 内の暫定 `Store`(services/calc/internal/master)と架空データで作り、データレーンの共通マスタ(P2-2a)が main に入ったら差し替える。
@@ -311,9 +355,8 @@ Reason: plan.md P3-1 の小項目と ADR-0010 §9・§R8 / ADR-0011 §10 の持�
 Impact: Web レーン(P4-5)は生成型の変更に追従する。データレーンへ: P2-2a の master が入ったら、calc-svc の `Store` インターフェース
 (Species / Move / Item / Ability / Nature / NatureID / TypeChart)を満たす adapter を API レーンが作る。
 
-## 2026-09-22: 依存の版は最新の安定版に上げ、正確な番号で固定する(ユーザー決定。API レーンが受領、データレーンからも共有)
-Decision: 言語・ミドルウェア・ライブラリは最新の安定版にし、正確な版で固定する(`latest` などの自動追従は使わない)。例外は @smogon/calc 0.12.0(ゴールデンの oracle)。
-各レーンが自分の範囲の依存を上げる。Go のツールチェーン行(go.work と各 go.mod の go/toolchain)はデータレーンが揃えて main に入れ、他レーンはそれに合わせる。
-API レーンは calc-svc・gateway のライブラリと oapi-codegen(Echo v4 → v5 と `echo5-server` 生成、kin-openapi、oapi-codegen/runtime)。
-Reason: ユーザーが「バージョンは全て最新にして。アップデートの手間を減らすために」と依頼した。
-Impact: 提案(他レーンへ): balance も Echo v4 を使っているので v5 に上げる(タイプバランスレーン)。tools/golden・web の Node は現時点の最新 v26.9.0 を固定する(データ・Web レーン)。
+## 2026-09-22: API レーンの依存を最新の安定版へ(上の 2026-09-21「ミドルウェア・ライブラリ・ツールは導入時点の最新の安定版にする」の API レーン分)
+Decision: services/go.mod の Echo v4.15.4 → v5.3.1(oapi-codegen v2.8.0 の echo5-server で再生成)、kin-openapi v0.142.0 → v0.149.0、間接依存も最新へ。
+例外として go-yit は oapi-codegen v2.8.0 が要求する版に据え置く(最新版は yaml/v4 に移り、make gen が壊れる)。詳細は ADR-0019。Go のツールチェーン行は変えていない(データレーンに合わせる)。
+Reason: ユーザー決定の適用。
+Impact: services/go.mod はデータレーン(mysql・migrate)と共有。統合時の競合は両方を残して解決した。gateway(P3-2)は最初から Echo v5 で作る。

@@ -1,6 +1,6 @@
 package httpapi
 
-// エラーの共通の形(ADR-0016 §1.6)。calc-svc の失敗はすべて httpError に写し、
+// エラーの共通の形(ADR-0018 §1.6)。calc-svc の失敗はすべて httpError に写し、
 // echo の HTTPErrorHandler で {"code","message"} の Error 本文に変換する。
 // engine の sentinel → code の写像は wasmapi と同じ語彙(ADR-0011 §5)を使う。
 
@@ -28,12 +28,12 @@ type httpError struct {
 
 func (e *httpError) Error() string { return e.message }
 
-// newError は code から HTTP ステータスを決めて httpError を作る(ADR-0016 のステータス対応表)。
+// newError は code から HTTP ステータスを決めて httpError を作る(ADR-0018 のステータス対応表)。
 func newError(code api.ErrorCode, format string, args ...any) error {
 	return &httpError{status: statusForCode(code), code: code, message: fmt.Sprintf(format, args...)}
 }
 
-// statusForCode は ErrorCode から HTTP ステータスを決める(ADR-0016 §1.6)。
+// statusForCode は ErrorCode から HTTP ステータスを決める(ADR-0018 §1.6)。
 // 入力の不正と ID 不明はすべて 400、not_found は 404、internal は 500、
 // master_unavailable / upstream_unavailable は 503。
 // type_chart_missing / invalid_type_chart は HTTP では常に起動時に読み込んだ Store(マスタ)
@@ -70,7 +70,7 @@ var engineSentinels = []struct {
 
 // errFromEngine は engine が返したエラーを安定した code の httpError に写す。
 // sentinel に無い想定外の失敗は固定文だけをクライアントへ返し、詳細はログにだけ残す
-// (critic 指摘 O4。Go の内部情報を message に出さない ADR-0016 AC-7 と同じ理由)。
+// (critic 指摘 O4。Go の内部情報を message に出さない ADR-0018 AC-7 と同じ理由)。
 func errFromEngine(err error) error {
 	for _, s := range engineSentinels {
 		if errors.Is(err, s.err) {

@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: balance
+spec:
+  template:
+    spec:
+      containers:
+        - name: balance
+          env:
+            - name: BALANCE_ABILITIES_PATH
+              value: /etc/balance/abilities.json
+          volumeMounts:
+            - name: abilities
+              mountPath: /etc/balance/abilities.json
+              subPath: abilities.json
+              readOnly: true
+      volumes:
+        - name: abilities
+          configMap:
+            name: balance-abilities

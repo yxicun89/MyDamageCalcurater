@@ -1,7 +1,7 @@
 package httpapi
 
 // エラーの共通語彙・HTTP ステータス・ヘッダ・担当外ルート・panic 回復・/healthz の受け入れテスト
-// (ADR-0016 AC-5〜AC-7)。すべてのエラーは本文が {"code","message"} ちょうどで、code は
+// (ADR-0018 AC-5〜AC-7)。すべてのエラーは本文が {"code","message"} ちょうどで、code は
 // api/openapi.yaml の ErrorCode(契約テストでも照合する)。
 
 import (
@@ -149,7 +149,7 @@ func TestMissingHeaders(t *testing.T) {
 }
 
 // R1: ヘッダの重複(同名ヘッダを複数個)は missing_header ではなく invalid_input にする
-// (ADR-0016 §1.6: missing_header はヘッダ欠落・空に限定する)。
+// (ADR-0018 §1.6: missing_header はヘッダ欠落・空に限定する)。
 func TestDuplicateHeaderIsInvalidInput(t *testing.T) {
 	h := NewHandler(newFakeStore(t))
 	header := validHeaders()
@@ -197,7 +197,7 @@ func TestPokedexRoutesAreNotFound(t *testing.T) {
 }
 
 // AC-7: echo の既定エラーも Error 形式にそろえる。ルートが無いときも、メソッドが違うときも 404 not_found
-// (ErrorCode にメソッド違いの語彙を持たない。ADR-0016)。
+// (ErrorCode にメソッド違いの語彙を持たない。ADR-0018)。
 func TestUnknownRoutesAreNotFound(t *testing.T) {
 	h := NewHandler(newFakeStore(t))
 	tests := []struct{ method, path string }{

@@ -1,7 +1,7 @@
 # calc-svc
 
 ダメージ計算・一括計算・逆算の HTTP サービス(ステートレス)。契約は `api/openapi.yaml` の `calc` タグ、設計は
-[ADR-0016](../../docs/adr/0016-calc-svc-api-contract.md)。計算は `engine/` の公開 API を呼ぶだけで、独自の式を持たない。
+[ADR-0018](../../docs/adr/0016-calc-svc-api-contract.md)。計算は `engine/` の公開 API を呼ぶだけで、独自の式を持たない。
 
 ## 起動
 

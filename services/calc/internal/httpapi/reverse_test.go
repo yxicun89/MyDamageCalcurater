@@ -1,6 +1,6 @@
 package httpapi
 
-// POST /api/calc/reverse の受け入れテスト(ADR-0016 AC-4、ADR-0010 §R)。
+// POST /api/calc/reverse の受け入れテスト(ADR-0018 AC-4、ADR-0010 §R)。
 // 期待値は同じ入力を engine.CalcReverse に直接渡した結果と照合する。観測は engine.CalcDamage で
 // 作った「真値」のダメージから作る(手計算しない)。
 
@@ -262,7 +262,7 @@ func TestCalcReverseNatureIDs(t *testing.T) {
 	}
 }
 
-// AC-4: 観測・side・ID の不正(ADR-0016 の code 対応)。
+// AC-4: 観測・side・ID の不正(ADR-0018 の code 対応)。
 func TestCalcReverseErrors(t *testing.T) {
 	store := newFakeStore(t)
 	h := NewHandler(store)
@@ -285,7 +285,7 @@ func TestCalcReverseErrors(t *testing.T) {
 		{"どれも指定しない観測", with(func(b map[string]any) {
 			b["observations"] = []any{map[string]any{"note": "メモだけ"}}
 		}), "invalid_observation"},
-		// HTTP ではキーの有無で数える: percent:0 は「指定したが範囲外」(ADR-0016)。
+		// HTTP ではキーの有無で数える: percent:0 は「指定したが範囲外」(ADR-0018)。
 		{"percent 0 と damage", with(func(b map[string]any) {
 			b["observations"] = []any{map[string]any{"percent": 0, "damage": 50}}
 		}), "invalid_observation"},
@@ -301,7 +301,7 @@ func TestCalcReverseErrors(t *testing.T) {
 		{"percent に小数 12.5", []byte(`{"format":"single","side":"defender","known":{"speciesKey":"9001-000","natureId":"test-atk-up",` +
 			`"sp":{"hp":0,"atk":32,"def":0,"spa":0,"spd":0,"spe":32}},"unknownSpeciesKey":"9002-000","moveId":"test-beam",` +
 			`"observations":[{"percent":12.5}]}`), "invalid_json"},
-		// side は WASM と同じく engine の sentinel に一本化する(列挙で先に弾くと invalid_enum になり食い違う。ADR-0016)。
+		// side は WASM と同じく engine の sentinel に一本化する(列挙で先に弾くと invalid_enum になり食い違う。ADR-0018)。
 		{"side が未知", with(func(b map[string]any) { b["side"] = "sideways" }), "invalid_reverse_side"},
 		{"side の欠落", with(func(b map[string]any) { delete(b, "side") }), "invalid_reverse_side"},
 		{"未知の相手種族", with(func(b map[string]any) { b["unknownSpeciesKey"] = speciesUnknown }), "unknown_species"},

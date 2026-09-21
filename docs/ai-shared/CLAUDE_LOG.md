@@ -156,3 +156,23 @@
 
 ### Next
 - TB1b → TB2
+
+## 2026-09-21 タイプバランスレーン(Claude Code): TB1b・TB2
+
+### Done
+- TB1b(PR #7): 相性表を testdata/golden/typechart.json のバイト複製(go:embed)から読み、TemporaryTypeChart を削除。ADR-0015。critic PASS
+- TB2: ユーザー回答3点(有効打=等倍以上、防御側=18 単タイプ、技 ID 最大4つ)で ADR-0016。spec-writer → implementer → critic PASS。/coverage と技の read model(BALANCE_MOVES_PATH)。k3d smoke coverage=200 unknown_move=422
+- .gitignore の coverage.* が coverage.go を無視する問題を発見し、offense.go で回避。DECISIONS.md に提案
+
+### Next
+- TB3(特性)。仕様の質問から
+
+## 2026-09-21 タイプバランスレーン(Claude Code): TB2 統合・iOS レーン追加・TB3
+
+### Done
+- TB2 を PR #9 で統合。iOS レーンを追加(PR #10、ユーザー決定。~/MyDamageCalcurater-ios)。Xcode 27・iOS 27 シミュレータの導入を確認
+- TB3: ユーザー回答3点 + 細部の既定案で ADR-0017。spec-writer → implementer → critic FAIL(倍率の積の int64 オーバーフロー、effect=none のテストが弱い)→ 修正 → 再レビュー PASS(変異テストで確認)
+- k3d smoke: ability=200 unknown_ability=422
+
+### Next
+- TB4 はユーザー確認待ち(ADR-0018 の提案)。その間は軽微の残り

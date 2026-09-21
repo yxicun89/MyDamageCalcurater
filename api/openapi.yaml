@@ -283,7 +283,7 @@ components:
       type: string
       description: |
         安定したエラーコード。WASM 境界(engine/wasmapi の Code* 定数。ADR-0011 §5・§13)と語彙を共通にし、
-        **同じ失敗は HTTP と WASM で同じ code** になる(ADR-0016)。
+        **同じ失敗は HTTP と WASM で同じ code** になる(ADR-0018)。
 
         WASM 境界と共通:
         | code | 意味 | HTTP |

@@ -1,7 +1,7 @@
-# ADR-0017: API レーンの依存を最新の安定版へ(Echo v5・oapi-codegen の echo5-server)
+# ADR-0019: API レーンの依存を最新の安定版へ(Echo v5・oapi-codegen の echo5-server)
 
 - 状態: 採用(2026-09-22)
-- 関連: ADR-0001(技術スタック)、ADR-0016(calc-svc)、DECISIONS.md 2026-09-22「依存の版は最新の安定版に上げ、正確な番号で固定する」(ユーザー決定)
+- 関連: ADR-0001(技術スタック)、ADR-0018(calc-svc)、DECISIONS.md 2026-09-21「ミドルウェア・ライブラリ・ツールは導入時点の最新の安定版にする」(ユーザー決定)
 
 ## 背景
 
@@ -28,5 +28,5 @@ oapi-codegen v2.8.0(最新)は `echo5-server` の生成に対応している。
 
 ## 影響
 
-- balance(タイプバランスレーン)も Echo v4 を使っている。v5 への移行は DECISIONS.md でそのレーンに提案済み。
+- balance(タイプバランスレーン)は同じ決定で先に Echo v5.3.1 へ移行済み(main)。
 - gateway(P3-2)は最初から Echo v5 で作る。

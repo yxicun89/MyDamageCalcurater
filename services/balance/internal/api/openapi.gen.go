@@ -7,9 +7,33 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"github.com/oapi-codegen/runtime"
 )
+
+// Defines values for CoverageMultiplier.
+const (
+	CoverageDouble  CoverageMultiplier = "2"
+	CoverageHalf    CoverageMultiplier = "1/2"
+	CoverageNeutral CoverageMultiplier = "1"
+	CoverageZero    CoverageMultiplier = "0"
+)
+
+// Valid indicates whether the value is a known member of the CoverageMultiplier enum.
+func (e CoverageMultiplier) Valid() bool {
+	switch e {
+	case CoverageDouble:
+		return true
+	case CoverageHalf:
+		return true
+	case CoverageNeutral:
+		return true
+	case CoverageZero:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for DefenseCategory.
 const (
@@ -41,30 +65,24 @@ func (e DefenseCategory) Valid() bool {
 	}
 }
 
-// Defines values for DefenseMultiplier.
+// Defines values for DefenseEffect.
 const (
-	N0  DefenseMultiplier = "0"
-	N1  DefenseMultiplier = "1"
-	N12 DefenseMultiplier = "1/2"
-	N14 DefenseMultiplier = "1/4"
-	N2  DefenseMultiplier = "2"
-	N4  DefenseMultiplier = "4"
+	EffectAbsorb     DefenseEffect = "absorb"
+	EffectImmune     DefenseEffect = "immune"
+	EffectMultiplier DefenseEffect = "multiplier"
+	EffectNone       DefenseEffect = "none"
 )
 
-// Valid indicates whether the value is a known member of the DefenseMultiplier enum.
-func (e DefenseMultiplier) Valid() bool {
+// Valid indicates whether the value is a known member of the DefenseEffect enum.
+func (e DefenseEffect) Valid() bool {
 	switch e {
-	case N0:
+	case EffectAbsorb:
 		return true
-	case N1:
+	case EffectImmune:
 		return true
-	case N12:
+	case EffectMultiplier:
 		return true
-	case N14:
-		return true
-	case N2:
-		return true
-	case N4:
+	case EffectNone:
 		return true
 	default:
 		return false
@@ -96,6 +114,8 @@ const (
 	MasterUnavailable     ErrorCode = "master_unavailable"
 	MissingRequestContext ErrorCode = "missing_request_context"
 	RequestTooLarge       ErrorCode = "request_too_large"
+	UnknownAbility        ErrorCode = "unknown_ability"
+	UnknownMove           ErrorCode = "unknown_move"
 	UnknownPokemon        ErrorCode = "unknown_pokemon"
 )
 
@@ -111,6 +131,10 @@ func (e ErrorCode) Valid() bool {
 	case MissingRequestContext:
 		return true
 	case RequestTooLarge:
+		return true
+	case UnknownAbility:
+		return true
+	case UnknownMove:
 		return true
 	case UnknownPokemon:
 		return true
@@ -200,12 +224,25 @@ func (e TypeId) Valid() bool {
 	}
 }
 
+// AbilityId Optional ability of the member (ADR-0017). Omit it for a member without an ability.
+//
+// Example: ability-9001
+type AbilityId = string
+
 // AnalyzeRequest defines model for AnalyzeRequest.
 type AnalyzeRequest struct {
-	Members []struct {
-		// PokemonId Example: 9001-000
-		PokemonId string `json:"pokemonId"`
-	} `json:"members"`
+	Members []AnalyzeRequestMember `json:"members"`
+}
+
+// AnalyzeRequestMember defines model for AnalyzeRequestMember.
+type AnalyzeRequestMember struct {
+	// AbilityId Optional ability of the member (ADR-0017). Omit it for a member without an ability.
+	//
+	// Example: ability-9001
+	AbilityId *AbilityId `json:"abilityId,omitempty"`
+
+	// PokemonId Example: 9001-000
+	PokemonId string `json:"pokemonId"`
 }
 
 // AnalyzeResponse defines model for AnalyzeResponse.
@@ -217,27 +254,91 @@ type AnalyzeResponse struct {
 	TeamSummary []TeamSummaryEntry `json:"teamSummary"`
 }
 
-// DefenseCategory x4: quad_weak, x2: weak, x1: neutral, x1/2: resist, x1/4: quad_resist, x0: immune.
+// CoverageMultiplier Exact display form of a single-type offensive multiplier; null when there is no attack move.
+type CoverageMultiplier string
+
+// CoverageRequest defines model for CoverageRequest.
+type CoverageRequest struct {
+	Members []CoverageRequestMember `json:"members"`
+}
+
+// CoverageRequestMember defines model for CoverageRequestMember.
+type CoverageRequestMember struct {
+	// MoveIds Zero to four moveIds. Duplicates within one member are rejected (400).
+	MoveIds []MoveId `json:"moveIds"`
+
+	// PokemonId Example: 9001-000
+	PokemonId string `json:"pokemonId"`
+}
+
+// CoverageResponse defines model for CoverageResponse.
+type CoverageResponse struct {
+	// Members One entry per request member, in request order.
+	Members []MemberCoverage `json:"members"`
+
+	// TeamCoverage One entry per single defense type, in canonical type order (normal ... fairy).
+	TeamCoverage []TeamCoverageEntry `json:"teamCoverage"`
+}
+
+// DefenseCategory Classification by value range (ADR-0017 §3): x0: immune, 0 < x <= 1/4: quad_resist,
+// 1/4 < x < 1: resist, x1: neutral, 1 < x < 4: weak, x >= 4: quad_weak.
 type DefenseCategory string
+
+// DefenseCoverageEntry bestMultiplier is the best multiplier of the member's attack moves against this defense type,
+// or null when the member has no attack move (then effective and superEffective are false).
+// effective = bestMultiplier is x1 or more; superEffective = bestMultiplier is x2.
+type DefenseCoverageEntry struct {
+	// BestMultiplier Exact display form of a single-type offensive multiplier; null when there is no attack move.
+	BestMultiplier *CoverageMultiplier `json:"bestMultiplier"`
+	DefenseType    TypeId              `json:"defenseType"`
+	Effective      bool                `json:"effective"`
+	SuperEffective bool                `json:"superEffective"`
+}
+
+// DefenseEffect Kind of ability effect that decided the value (ADR-0017 §3). "immune" / "absorb": the ability
+// made the attack type x0 (absorb ignores its recovery or stat side effects). "multiplier": the ability
+// changed the value by a type multiplier or a super effective multiplier. "none": otherwise
+// (every entry of a member without an ability whose value is not x0 is "none").
+type DefenseEffect string
 
 // DefenseEntry defines model for DefenseEntry.
 type DefenseEntry struct {
 	AttackType TypeId `json:"attackType"`
 
-	// Category x4: quad_weak, x2: weak, x1: neutral, x1/2: resist, x1/4: quad_resist, x0: immune.
+	// Category Classification by value range (ADR-0017 §3): x0: immune, 0 < x <= 1/4: quad_resist,
+	// 1/4 < x < 1: resist, x1: neutral, 1 < x < 4: weak, x >= 4: quad_weak.
 	Category DefenseCategory `json:"category"`
 
-	// Multiplier Exact display form of the defensive multiplier.
+	// Effect Kind of ability effect that decided the value (ADR-0017 §3). "immune" / "absorb": the ability
+	// made the attack type x0 (absorb ignores its recovery or stat side effects). "multiplier": the ability
+	// changed the value by a type multiplier or a super effective multiplier. "none": otherwise
+	// (every entry of a member without an ability whose value is not x0 is "none").
+	Effect DefenseEffect `json:"effect"`
+
+	// Multiplier Exact defensive multiplier as an irreducible fraction "numerator/denominator" (ADR-0017 §3).
+	// A denominator of 1 is written as the integer only ("0", "1", "2", "3", "4"); otherwise the
+	// fraction is in lowest terms ("1/4", "1/2", "3/4", "5/4", "3/2", "5/2"). Never a float.
+	// The TB1 values "0", "1/4", "1/2", "1", "2", "4" are a subset.
+	//
+	//
+	// Example: 3/4
 	Multiplier DefenseMultiplier `json:"multiplier"`
 
-	// Source Origin of the multiplier. Always "type" in TB1; "ability" is reserved for TB3.
+	// Source Origin of the multiplier. "type" when the value comes from the type matchup alone (including a
+	// type immunity, which the ability cannot change); "ability" when the member's ability changed it.
 	Source EffectSource `json:"source"`
 }
 
-// DefenseMultiplier Exact display form of the defensive multiplier.
-type DefenseMultiplier string
+// DefenseMultiplier Exact defensive multiplier as an irreducible fraction "numerator/denominator" (ADR-0017 §3).
+// A denominator of 1 is written as the integer only ("0", "1", "2", "3", "4"); otherwise the
+// fraction is in lowest terms ("1/4", "1/2", "3/4", "5/4", "3/2", "5/2"). Never a float.
+// The TB1 values "0", "1/4", "1/2", "1", "2", "4" are a subset.
+//
+// Example: 3/4
+type DefenseMultiplier = string
 
-// EffectSource Origin of the multiplier. Always "type" in TB1; "ability" is reserved for TB3.
+// EffectSource Origin of the multiplier. "type" when the value comes from the type matchup alone (including a
+// type immunity, which the ability cannot change); "ability" when the member's ability changed it.
 type EffectSource string
 
 // Error defines model for Error.
@@ -257,8 +358,26 @@ type Health struct {
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
 
+// MemberCoverage defines model for MemberCoverage.
+type MemberCoverage struct {
+	// AttackTypes Types of the non-status moves, without duplicates, in canonical type order.
+	AttackTypes []TypeId `json:"attackTypes"`
+
+	// Coverage One entry per single defense type, in canonical type order (normal ... fairy).
+	Coverage []DefenseCoverageEntry `json:"coverage"`
+
+	// MoveIds The request moveIds, in request order.
+	MoveIds []MoveId `json:"moveIds"`
+
+	// PokemonId Example: 9001-000
+	PokemonId string `json:"pokemonId"`
+}
+
 // MemberDefense defines model for MemberDefense.
 type MemberDefense struct {
+	// AbilityId The request abilityId, present only when the request member named one.
+	AbilityId *AbilityId `json:"abilityId,omitempty"`
+
 	// Defense One entry per attack type, in canonical type order (normal ... fairy).
 	Defense []DefenseEntry `json:"defense"`
 
@@ -267,8 +386,23 @@ type MemberDefense struct {
 	Types     []TypeId `json:"types"`
 }
 
-// TeamSummaryEntry Per attack type team counts. weak = x2 and x4 members, quadWeak = x4 members (subset of weak),
-// resist = x1/2 and x1/4 members (immune excluded), immune = x0 members, neutral = x1 members.
+// MoveId Example: move-9001
+type MoveId = string
+
+// TeamCoverageEntry Per defense type team counts. bestMultiplier is the best over all members (null when no member
+// has an attack move). effectiveMembers = members with x1 or more; superEffectiveMembers = members
+// with x2 (subset of effectiveMembers). Members are counted once regardless of how many moves they have.
+type TeamCoverageEntry struct {
+	// BestMultiplier Exact display form of a single-type offensive multiplier; null when there is no attack move.
+	BestMultiplier        *CoverageMultiplier `json:"bestMultiplier"`
+	DefenseType           TypeId              `json:"defenseType"`
+	EffectiveMembers      int                 `json:"effectiveMembers"`
+	SuperEffectiveMembers int                 `json:"superEffectiveMembers"`
+}
+
+// TeamSummaryEntry Per attack type team counts by DefenseCategory. weak = weak and quad_weak members,
+// quadWeak = quad_weak members (subset of weak), resist = resist and quad_resist members (immune excluded),
+// immune = x0 members (type or ability immunity, and ability absorption), neutral = x1 members.
 // Invariant: weak + resist + immune + neutral = number of members.
 type TeamSummaryEntry struct {
 	AttackType TypeId `json:"attackType"`
@@ -294,20 +428,32 @@ type AnalyzeTeamBalanceParams struct {
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
+// AnalyzeTeamCoverageParams defines parameters for AnalyzeTeamCoverage.
+type AnalyzeTeamCoverageParams struct {
+	XDeviceId  DeviceId  `json:"X-Device-Id"`
+	XSessionId SessionId `json:"X-Session-Id"`
+}
+
 // AnalyzeTeamBalanceJSONRequestBody defines body for AnalyzeTeamBalance for application/json ContentType.
 type AnalyzeTeamBalanceJSONRequestBody = AnalyzeRequest
+
+// AnalyzeTeamCoverageJSONRequestBody defines body for AnalyzeTeamCoverage for application/json ContentType.
+type AnalyzeTeamCoverageJSONRequestBody = CoverageRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// PublicHealth Ingress smoke check
 	// (GET /api/balance/healthz)
-	PublicHealth(ctx echo.Context) error
+	PublicHealth(ctx *echo.Context) error
 	// AnalyzeTeamBalance Analyze a party's type balance
 	// (POST /api/balance/v1/team-balance/analyze)
-	AnalyzeTeamBalance(ctx echo.Context, params AnalyzeTeamBalanceParams) error
+	AnalyzeTeamBalance(ctx *echo.Context, params AnalyzeTeamBalanceParams) error
+	// AnalyzeTeamCoverage Analyze a party's offensive type coverage
+	// (POST /api/balance/v1/team-balance/coverage)
+	AnalyzeTeamCoverage(ctx *echo.Context, params AnalyzeTeamCoverageParams) error
 	// Health Pod health check
 	// (GET /healthz)
-	Health(ctx echo.Context) error
+	Health(ctx *echo.Context) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
@@ -316,7 +462,7 @@ type ServerInterfaceWrapper struct {
 }
 
 // PublicHealth converts echo context to params.
-func (w *ServerInterfaceWrapper) PublicHealth(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) PublicHealth(ctx *echo.Context) error {
 	var err error
 
 	// Invoke the callback with all the unmarshaled arguments
@@ -325,7 +471,7 @@ func (w *ServerInterfaceWrapper) PublicHealth(ctx echo.Context) error {
 }
 
 // AnalyzeTeamBalance converts echo context to params.
-func (w *ServerInterfaceWrapper) AnalyzeTeamBalance(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) AnalyzeTeamBalance(ctx *echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -372,8 +518,56 @@ func (w *ServerInterfaceWrapper) AnalyzeTeamBalance(ctx echo.Context) error {
 	return err
 }
 
+// AnalyzeTeamCoverage converts echo context to params.
+func (w *ServerInterfaceWrapper) AnalyzeTeamCoverage(ctx *echo.Context) error {
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AnalyzeTeamCoverageParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Device-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Device-Id")]; found {
+		var XDeviceId DeviceId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
+		}
+
+		params.XDeviceId = XDeviceId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Device-Id is required, but not found"))
+	}
+	// ------------- Required header parameter "X-Session-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Session-Id")]; found {
+		var XSessionId SessionId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
+		}
+
+		params.XSessionId = XSessionId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Session-Id is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.AnalyzeTeamCoverage(ctx, params)
+	return err
+}
+
 // Health converts echo context to params.
-func (w *ServerInterfaceWrapper) Health(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) Health(ctx *echo.Context) error {
 	var err error
 
 	// Invoke the callback with all the unmarshaled arguments
@@ -385,15 +579,15 @@ func (w *ServerInterfaceWrapper) Health(ctx echo.Context) error {
 // are present on both echo.Echo and echo.Group, since we want to allow using
 // either of them for path registration
 type EchoRouter interface {
-	CONNECT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	DELETE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	GET(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	HEAD(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	OPTIONS(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	PATCH(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	PUT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	TRACE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
+	CONNECT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	DELETE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	GET(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	HEAD(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	OPTIONS(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	PATCH(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	PUT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	TRACE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
 }
 
 // RegisterHandlersOptions configures RegisterHandlersWithOptions.
@@ -431,5 +625,6 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 	router.GET(options.BaseURL+"/healthz", wrapper.Health, options.OperationMiddlewares["health"]...)
 	router.GET(options.BaseURL+"/api/balance/healthz", wrapper.PublicHealth, options.OperationMiddlewares["publicHealth"]...)
 	router.POST(options.BaseURL+"/api/balance/v1/team-balance/analyze", wrapper.AnalyzeTeamBalance, options.OperationMiddlewares["analyzeTeamBalance"]...)
+	router.POST(options.BaseURL+"/api/balance/v1/team-balance/coverage", wrapper.AnalyzeTeamCoverage, options.OperationMiddlewares["analyzeTeamCoverage"]...)
 
 }

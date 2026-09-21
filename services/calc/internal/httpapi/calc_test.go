@@ -1,6 +1,6 @@
 package httpapi
 
-// POST /api/calc の受け入れテスト(ADR-0016 AC-2)。期待値は手計算せず、同じ入力を
+// POST /api/calc の受け入れテスト(ADR-0018 AC-2)。期待値は手計算せず、同じ入力を
 // engine.CalcDamage に直接渡した結果と照合する(HTTP 境界が engine の素通しであること)。
 
 import (

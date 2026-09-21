@@ -1,4 +1,4 @@
-# ADR-0016: calc-svc の API 契約とマスタ境界
+# ADR-0018: calc-svc の API 契約とマスタ境界
 
 - 状態: 採用(2026-09-21。P3-1 の設計。受け入れ条件とテストは spec-writer が先に書き、実装は implementer)
 - 日付: 2026-09-21
