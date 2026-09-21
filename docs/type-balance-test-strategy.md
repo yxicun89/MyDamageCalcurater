@@ -66,3 +66,12 @@ GitOps専用overlay、digest固定、private repository/registryの秘密をGit�
 `Git変更 → Argo CD manual sync → Pod更新` は未実施であり、TB0 全体は完了扱いにしない。
 実施には利用する Git repository URL、image registry/repository、不変 image tag または digest、
 およびversion固定したArgo CDの導入とprivate repository/registry credentialのクラスタ登録が必要である。
+
+## TB1b の対象(相性表のデータ化。ADR-0015)
+
+| レイヤー | 対象 | 合格条件 |
+|---|---|---|
+| Adapter | `master.LoadTypeChart` / `EmbeddedTypeChart` | 同梱の複製が `testdata/golden/typechart.json` とバイト一致。代表的な弱点・耐性・無効。省略は等倍。schemaVersion・タイプ集合(過不足・重複)・未知キー・不正コード・未知フィールド・後続 JSON を `ErrInvalidTypeChart` で拒否 |
+| Unit | `internal/balance` | 171 通りの単/複合タイプで `AnalyzeDefense` と `CalculateDefense` が一致(データの表で) |
+
+TB0 の `TemporaryTypeChart` のテストは、コードごと削除した(削除前にデータの表と 18×18 全件一致を確認)。

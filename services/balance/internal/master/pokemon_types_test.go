@@ -236,7 +236,10 @@ func TestExamplePokemonTypesIsValidAndFictional(t *testing.T) {
 	}
 
 	var single, dual bool
-	chart := NewTemporaryTypeChart()
+	chart, err := EmbeddedTypeChart()
+	if err != nil {
+		t.Fatalf("EmbeddedTypeChart() error = %v", err)
+	}
 	var quadWeak, immune bool
 	for _, id := range ids {
 		pokemonID := id[1]

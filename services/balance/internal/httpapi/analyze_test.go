@@ -39,7 +39,7 @@ var fictionalPokemonTypes = testPokemonTypes{
 
 func newTestServer() *echo.Echo {
 	return New(Dependencies{
-		TypeChart:    master.NewTemporaryTypeChart(),
+		TypeChart:    testTypeChart(),
 		PokemonTypes: fictionalPokemonTypes,
 	})
 }
@@ -306,7 +306,7 @@ func TestAnalyzeUnexpectedPokemonTypesFailureIsInternalError(t *testing.T) {
 	t.Parallel()
 
 	server := New(Dependencies{
-		TypeChart:    master.NewTemporaryTypeChart(),
+		TypeChart:    testTypeChart(),
 		PokemonTypes: failingPokemonTypes{err: errors.New("read model backend exploded")},
 	})
 	recorder := postAnalyze(t, server, `{"members":[{"pokemonId":"9001-000"}]}`)
@@ -342,7 +342,7 @@ func TestAnalyzeNilTypeChartIsInternalError(t *testing.T) {
 func TestAnalyzeWithoutPokemonTypesIsMasterUnavailable(t *testing.T) {
 	t.Parallel()
 
-	server := New(Dependencies{TypeChart: master.NewTemporaryTypeChart()})
+	server := New(Dependencies{TypeChart: testTypeChart()})
 
 	recorder := postAnalyze(t, server, `{"members":[{"pokemonId":"9001-000"}]}`)
 	if recorder.Code != http.StatusServiceUnavailable {
@@ -364,7 +364,7 @@ func TestAnalyzeWithoutPokemonTypesIsMasterUnavailable(t *testing.T) {
 func TestAnalyzeWithoutPokemonTypesStillRequiresRequestContext(t *testing.T) {
 	t.Parallel()
 
-	server := New(Dependencies{TypeChart: master.NewTemporaryTypeChart()})
+	server := New(Dependencies{TypeChart: testTypeChart()})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, analyzePath, strings.NewReader(`{"members":[{"pokemonId":"9001-000"}]}`))
 	request.Header.Set("Content-Type", "application/json")
@@ -381,7 +381,7 @@ func TestAnalyzeWithExampleReadModel(t *testing.T) {
 	if err != nil || model == nil {
 		t.Fatalf("LoadPokemonTypesFile(example) = %v, %v", model, err)
 	}
-	server := New(Dependencies{TypeChart: master.NewTemporaryTypeChart(), PokemonTypes: model})
+	server := New(Dependencies{TypeChart: testTypeChart(), PokemonTypes: model})
 	recorder := postAnalyze(t, server, `{"members":[{"pokemonId":"9001-000"},{"pokemonId":"9002-000"}]}`)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
@@ -418,7 +418,7 @@ func findSummaryEntry(t *testing.T, entries []api.TeamSummaryEntry, attack api.T
 func TestAnalyzeWithoutPokemonTypesValidatesBodyFirst(t *testing.T) {
 	t.Parallel()
 
-	server := New(Dependencies{TypeChart: master.NewTemporaryTypeChart()})
+	server := New(Dependencies{TypeChart: testTypeChart()})
 	seven := `{"members":[{"pokemonId":"9001-000"},{"pokemonId":"9001-000"},{"pokemonId":"9001-000"},{"pokemonId":"9001-000"},{"pokemonId":"9001-000"},{"pokemonId":"9001-000"},{"pokemonId":"9001-000"}]}`
 	tests := []struct {
 		name     string
@@ -451,7 +451,7 @@ func TestAnalyzeUnknownPokemonMessageDoesNotLeakAdapterDetail(t *testing.T) {
 	t.Parallel()
 
 	server := New(Dependencies{
-		TypeChart:    master.NewTemporaryTypeChart(),
+		TypeChart:    testTypeChart(),
 		PokemonTypes: failingPokemonTypes{err: fmt.Errorf("%w: 9999-000 (read from /secret/path.json)", balance.ErrUnknownPokemon)},
 	})
 	recorder := postAnalyze(t, server, `{"members":[{"pokemonId":"9999-000"}]}`)
@@ -462,4 +462,13 @@ func TestAnalyzeUnknownPokemonMessageDoesNotLeakAdapterDetail(t *testing.T) {
 	if got.Message != "unknown pokemonId: 9999-000" {
 		t.Errorf("message = %q, want %q", got.Message, "unknown pokemonId: 9999-000")
 	}
+}
+
+// testTypeChart は同梱の相性表(P1-13 のデータ)を返す。読めないのはテスト環境の不備なので panic する。
+func testTypeChart() *master.TypeChart {
+	chart, err := master.EmbeddedTypeChart()
+	if err != nil {
+		panic(err)
+	}
+	return chart
 }
