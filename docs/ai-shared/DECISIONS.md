@@ -416,3 +416,12 @@ Decision: Max プランの利用枠は全レーンで共有なので、上限に
 整備レーンは Claude の各レーンが止まっている間だけ動かし、作業ディレクトリ ~/MyDamageCalcurater-maint は使うときだけ作って終わったら消す。レーンの範囲は直さず、見つけた問題はそのレーンの Next と DECISIONS.md に書く。
 Reason: ユーザーが「Codex は Max のレートリミット後に 5 レーンの調整・整備を行うのがよいのでは」と提案し、用意を依頼した。全員が止まっている時間はレーンをまたぐ整理をしても衝突しない。
 Impact: COORDINATION.md に節を追加、CURRENT_STATE.md に Maintenance 欄、plan.md に整備レーンのバックログ(MT-1〜7)。
+## 2026-09-22: PR #14(API P3-1 calc-svc・依存の最新化)を main に統合
+Decision: 他レーンの状況(開いている PR は #14 のみ、Web・iOS の未マージの変更は api/openapi.yaml・services と競合しない)を確認し、main を取り込んで再検証(make test 12 件・lint・build・check-publishable 0 件・make gen 差分なし)してからマージした。
+Reason: ユーザーが「テストとか諸々通っているならマージしていい。他のレーンの状況確認してから」と回答した。
+Impact: Web(P4-5)・iOS は新しい api/openapi.yaml(category・BulkCalcRow.defender・逆算の新形・ErrorCode)に追従できる。
+
+## 2026-09-22: ADR 番号の帯(データ 0100〜 / API 0200〜 / Web 0300〜 / タイプバランス 0400〜 / iOS 0500〜)をユーザーが承認
+Decision: データレーンが深夜に既定案で決めた ADR 番号の帯の規則を、ユーザーが「他レーンと整合するなら承認してOK」と承認した。API レーンは 0200 / 0201 / 0202 を使っており整合している。
+Reason: ユーザー回答(API レーンのセッションで受領)。
+Impact: COORDINATION.md の規則は確定。gateway の ADR は 0020 → 0202 に振り直した。
