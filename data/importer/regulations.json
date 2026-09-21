@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "regulations": [
+    {
+      "id": "m-c",
+      "nameJa": "レギュレーション M-C",
+      "isDefault": true,
+      "startsOn": "",
+      "endsOn": "",
+      "showdownMod": "PENDING-PIN-MOD"
+    }
+  ]
+}

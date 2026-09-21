@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "items": {
+    "testorb": {"DamageMod": 5324},
+    "testberry": {"ResistBerryType": "fire"},
+    "testunused": {"DamageMod": 4915}
+  },
+  "abilities": {
+    "testguard": {"DefResistType": {"fire": 2048}}
+  }
+}
