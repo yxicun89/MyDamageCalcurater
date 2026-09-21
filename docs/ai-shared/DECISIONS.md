@@ -384,6 +384,13 @@ Decision: タイプバランスチェッカーに、チームの穴をふさげ�
 Reason: ユーザーが「既存のタイプバランスチェッカーはおすすめタイプは出すが、該当ポケモンを別サイトで探す必要がある。タイプだけ見て候補のポケモンを教えてほしい」と要望した。
 Impact: plan.md に TB5。使用可能なポケモンの集合と日本語名はマスタ(データレーンの P2-2。レギュレーション依存)から引く必要がある。それまでは TB1 と同じ temporary の read model を広げる(架空データの example)。
 
+
+## 2026-09-22: TB4(仮想敵診断)の仕様(ユーザー回答と既定案)
+Decision: 仮想敵を最大 6 体(pokemonId・技 ID 最大 4・特性は任意)で入力し、各仮想敵 × 自分の各メンバーの受ける最大倍率(incoming)と与える最大倍率(outgoing)、
+安全に受けられる人数(incoming < 1)・打ちやすい人数(outgoing ≥ 2)を返す。新 endpoint `/api/balance/v1/team-balance/threats`。詳細は ADR-0400。
+Reason: ユーザーが TB4 の方針に回答した(「安全に受けられる」「打ちやすい」の閾値はタイプバランスレーンの既定案)。
+Impact: TB1〜3 の計算と既存の read model を再利用。
+
 ## 2026-09-22: P3-1 calc-svc の API 契約(API レーン。既定案で進行・ユーザー未確認)
 Decision: ADR-0200 のとおり。`CalcResult.category` を足す(落とさない)、`BulkCalcRow.defender{sp,nature,natureId,stats}`、逆算は P1-12 の形
 (`known` / `unknownSpeciesKey` / `itemCandidates` / 観測は percent・percentTenths・damage のちょうど1つ)、`Error.code` を enum `ErrorCode`
@@ -404,6 +411,11 @@ Decision: 0018-calc-svc-api-contract → 0200、0019-api-deps-latest-echo-v5 →
 Reason: COORDINATION.md の ADR 番号の帯(API は 0200〜)。
 Impact: API レーンのファイル(services/calc・api/openapi.yaml・plan.md の P3-1 行・CURRENT_STATE の API 欄・DECISIONS の API レーンのエントリ)の参照だけを置き換えた。
 
+## 2026-09-22: Claude の上限時は Codex を最大2本(クリティカルパスのレーン+整備レーン)で動かす(ユーザー決定)
+Decision: Max プランの利用枠は全レーンで共有なので、上限に達すると全レーンが同時に止まる。そのとき Codex を最大2本起動する: (1) M1 の完了に一番効くレーンを通常のプロンプトで Next から続ける、(2) 整備レーン(レーンに属さない共有物の整理・統合の検証・改善要望)。
+整備レーンは Claude の各レーンが止まっている間だけ動かし、作業ディレクトリ ~/MyDamageCalcurater-maint は使うときだけ作って終わったら消す。レーンの範囲は直さず、見つけた問題はそのレーンの Next と DECISIONS.md に書く。
+Reason: ユーザーが「Codex は Max のレートリミット後に 5 レーンの調整・整備を行うのがよいのでは」と提案し、用意を依頼した。全員が止まっている時間はレーンをまたぐ整理をしても衝突しない。
+Impact: COORDINATION.md に節を追加、CURRENT_STATE.md に Maintenance 欄、plan.md に整備レーンのバックログ(MT-1〜7)。
 ## 2026-09-22: PR #14(API P3-1 calc-svc・依存の最新化)を main に統合
 Decision: 他レーンの状況(開いている PR は #14 のみ、Web・iOS の未マージの変更は api/openapi.yaml・services と競合しない)を確認し、main を取り込んで再検証(make test 12 件・lint・build・check-publishable 0 件・make gen 差分なし)してからマージした。
 Reason: ユーザーが「テストとか諸々通っているならマージしていい。他のレーンの状況確認してから」と回答した。

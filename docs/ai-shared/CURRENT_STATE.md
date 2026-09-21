@@ -31,10 +31,17 @@ Next: docs/plan.md の P6-1 から。Xcode が使えるか(`xcodebuild -version`
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
-Branch: 次は main から feat/tb-tb4-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
-Status: TB0〜TB3 は完了・main に統合済み(TB0 の Argo CD 実同期もローカル k3d で確認。ADR-0018)。balance は Echo v5.3.1(最新の安定版)。ポケモン・技・特性は temporary の read model(架空データの example。実データは BALANCE_*_PATH でマウント。P2-2 のスナップショットができたら差し替え)。k3d には Argo CD v3.5.3・クラスタ内レジストリ(balance-registry)・Application pokecalc-balance(manual sync)がある
-Next: TB4(仮想敵診断。ユーザー回答: 仮想敵を最大 6 体、pokemonId・技 ID 最大 4・特性は任意で入力し、各仮想敵について自分の各メンバーが受ける最大倍率と与えられる最大倍率を表にし、安全に受けられるメンバー数を集計。TB1〜3 を再利用)の ADR-0019 → spec-writer → implementer → critic。その後 TB5(おすすめタイプと該当ポケモン。DECISIONS.md 2026-09-22)。軽微の残り: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の JSON Schema、CoverageMultiplier の nullable enum
+Branch: 次は main から feat/tb-tb5-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
+Status: TB0〜TB4 は完了・main に統合済み(TB4 仮想敵診断 /threats。ADR-0400)。balance は Echo v5.3.1。ポケモン・技・特性は temporary の read model(架空データの example。実データは BALANCE_*_PATH でマウント。P2-2 のスナップショットができたら差し替え)。k3d には Argo CD v3.5.3・クラスタ内レジストリ・Application pokecalc-balance(manual sync)。新しい ADR はタイプバランスの帯 0400〜
+Next: TB5(おすすめタイプと該当ポケモン。DECISIONS.md 2026-09-22: 基準は防御の穴と攻撃範囲の穴の両方、一覧はそのタイプを持つ使用可能なポケモン全員(日本語名付き)、特性でふさげるものは別枠)。使用可能集合・日本語名はデータレーンの P2-2 のマスタが要るので、それまでは read model を広げた架空データで作る。軽微の残り: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の JSON Schema、CoverageMultiplier の nullable enum、HTTP 層の検証・422 変換の重複(analyze・coverage・threats)
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
+
+## Maintenance
+Lane: 整備(Claude の上限時に Codex が進める。COORDINATION.md「Claude の上限時の Codex」)
+Active: なし
+Branch: なし(使うときに fix/maint-<名前> を origin/main から切る。作業ディレクトリ ~/MyDamageCalcurater-maint は使うときだけ作る)
+Status: 未着手(2026-09-22 に新設)
+Next: docs/plan.md の「整備レーン」のバックログを上から
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

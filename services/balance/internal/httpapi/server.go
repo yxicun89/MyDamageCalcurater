@@ -59,6 +59,7 @@ func New(deps Dependencies) *echo.Echo {
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
 			"analyzeTeamBalance":  {requireRequestContext},
 			"analyzeTeamCoverage": {requireRequestContext},
+			"analyzeTeamThreats":  {requireRequestContext},
 		},
 	})
 	return e
@@ -85,6 +86,11 @@ func (h handler) AnalyzeTeamBalance(c *echo.Context, _ api.AnalyzeTeamBalancePar
 // AnalyzeTeamCoverage is the TB2 offensive coverage endpoint (ADR-0016).
 func (h handler) AnalyzeTeamCoverage(c *echo.Context, _ api.AnalyzeTeamCoverageParams) error {
 	return coverage(c, h.deps)
+}
+
+// AnalyzeTeamThreats is the TB4 threat check endpoint (ADR-0400).
+func (h handler) AnalyzeTeamThreats(c *echo.Context, _ api.AnalyzeTeamThreatsParams) error {
+	return threats(c, h.deps)
 }
 
 func health(c *echo.Context) error {

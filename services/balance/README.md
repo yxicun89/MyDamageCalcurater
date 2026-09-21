@@ -1,19 +1,19 @@
 # balance service
 
-パーティのタイプ相性・弱点・耐性・攻撃範囲を分析するドメインモノリス。
+パーティのタイプ相性・弱点・耐性・攻撃範囲・仮想敵診断を分析するドメインモノリス。
 damage-calc とは兄弟サービスで、互いの実行時 API には依存しない。
 
-## TB1(防御タイプバランス)・TB2(攻撃範囲)・TB3(特性による防御相性の変化)の範囲
+## TB1(防御タイプバランス)・TB2(攻撃範囲)・TB3(特性による防御相性の変化)・TB4(仮想敵診断)の範囲
 
 - `internal/balance`: HTTP・DB・Kubernetes に依存しない型・防御相性コア・チーム集計(`AnalyzeDefense`)、
-  技の解決コア(`ResolveMoves`)・攻撃範囲コア・チーム集計(`AnalyzeCoverage`)、
-  および特性の解決コア(`ResolveAbility`)・有理数の倍率(`Effectiveness`)・特性込みの防御計算
-  (`CalculateDefenseWithAbility`)
+  技の解決コア(`ResolveMoves`)・攻撃範囲コア・チーム集計(`AnalyzeCoverage`)、特性の解決コア
+  (`ResolveAbility`)・有理数の倍率(`Effectiveness`)・特性込みの防御計算(`CalculateDefenseWithAbility`)、
+  および TB1〜3 の計算を再利用する仮想敵診断コア(`AnalyzeThreats`)
 - `api/openapi.yaml`: balance 外部 API 契約の正
 - `internal/api`: oapi-codegen による生成型
 - `internal/master`: 共通マスタへ差し替えるための adapter(タイプ相性表・ポケモンタイプ read model・技 read model・
   特性 read model)
-- `internal/httpapi`: health・analyze・coverage の実装
+- `internal/httpapi`: health・analyze・coverage・threats の実装
 - `cmd/api`: プロセス起動・`BALANCE_POKEMON_TYPES_PATH` / `BALANCE_MOVES_PATH` / `BALANCE_ABILITIES_PATH` の
   読み込み・graceful shutdown
 - `deploy`: balance 専用 Kustomize と manual-sync の Argo CD Application
@@ -21,7 +21,8 @@ damage-calc とは兄弟サービスで、互いの実行時 API には依存し
 
 契約の正は TB1 が [ADR-0014](../../docs/adr/0014-balance-tb1-defense-analysis.md)、
 TB2 が [ADR-0016](../../docs/adr/0016-balance-tb2-offense-coverage.md)、
-TB3 が [ADR-0017](../../docs/adr/0017-balance-tb3-ability-effects.md)。
+TB3 が [ADR-0017](../../docs/adr/0017-balance-tb3-ability-effects.md)、
+TB4 が [ADR-0400](../../docs/adr/0400-balance-tb4-threat-check.md)。
 
 タイプ相性表はコードに持たない(ADR-0013・ADR-0015)。ダメージ計算レーンの P1-13 でデータ化された
 `testdata/golden/typechart.json` を `internal/master/data/typechart.json` にバイト複製して go:embed で同梱し、
@@ -76,6 +77,24 @@ schema と架空データの example(`testdata/abilities.example.json`、ID は 
     18防御タイプ(正準順)ごとの最大倍率・`effective`(×1以上)・`superEffective`(×2)、および防御タイプごとの
     チーム集計(`effectiveMembers`/`superEffectiveMembers`、メンバー単位)を返す。攻撃技を持つメンバーが
     いない防御タイプの `bestMultiplier` は `null`
+- `POST /api/balance/v1/team-balance/threats`(ADR-0400): `X-Device-Id` と `X-Session-Id` が必須。判定順は
+  ヘッダー(400)→ body(400/413)→ ポケモン、または moveId を1つでも指定したのに技、または abilityId を
+  1つでも指定したのに特性の read model 未設定(503)→ pokemonId 解決(422)→ moveId 解決(422)→
+  abilityId 解決(422、いずれも members → threats・request 順で最初のもの)→ 200。
+  - request は自分の `members` と仮想敵の `threats`(各1〜6件)を同じ形
+    `{ "pokemonId": "NNNN-NNN", "moveIds": [moveId, ...], "abilityId"?: "..." }` で受け取る。`moveIds` は
+    coverage と同じ検証(0〜4件・重複禁止・欠落や `null` は400)、`abilityId` は analyze と同じ検証
+    (任意。`null` は省略と同じ)
+  - `moveIds` が全員空・`abilityId` を誰も指定しなければ、技・特性の read model が未設定でも 200
+  - 未登録の `pokemonId`/`moveId`/`abilityId`: 422(message に該当 ID を含む)
+  - 上記以外の内部エラー(相性表や read model の想定外の失敗・不正な特性効果・倍率の積のオーバーフローを含む):
+    500 `internal_error`(固定文言)
+  - 成功: 200。`threats`(request順)ごとに `abilityId`(指定時のみ)・`attackTypes`(変化技を除く技のタイプ、
+    重複なし・正準順)・`matchups`(`members` の request 順。各メンバーの `incoming`(受ける最大倍率、
+    仮想敵の攻撃技が無ければ `null`)・`outgoing`(与える最大倍率、自分の攻撃技が無ければ `null`)・
+    `safe`(`incoming < 1`)・`superEffective`(`outgoing >= 2`))・`safeMembers`/`superEffectiveMembers`
+    (`matchups` の人数)を返す。倍率は既約分数の文字列。TB1〜3 の `CalculateDefenseWithAbility` を
+    そのまま再利用し、新しい read model は無い
 
 HTTP の path・必須 header・handler interface は service-local OpenAPI から生成し、実装を
 `api.ServerInterface` へコンパイル時に適合させる。
@@ -101,7 +120,7 @@ local overlay(`deploy/k8s/overlays/local`)は架空データの example
 `testdata/pokemon-types.example.json`・`testdata/moves.example.json`・`testdata/abilities.example.json` と同一内容)を
 ConfigMap としてマウントし、`BALANCE_POKEMON_TYPES_PATH` / `BALANCE_MOVES_PATH` / `BALANCE_ABILITIES_PATH` を
 設定する。base と gitops overlay には設定しない。
-`balance-smoke` は analyze・coverage が 200(架空ID)と 422(未登録ID)を返すことを確認する。
+`balance-smoke` は analyze・coverage・threats が 200(架空ID)と 422(未登録ID)を返すことを確認する。
 
 Argo CD 用には local image を参照しない専用 overlay(`deploy/k8s/overlays/gitops`)がある。image はクラスタ内レジストリの
 `localhost:5000/pokecalc/balance@sha256:...`(digest 固定)。Application の repoURL は Git に書かず、`make balance-argocd-app` が

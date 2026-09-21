@@ -110,7 +110,7 @@
 - [x] TB1b 相性表を P1-13 のデータ(`testdata/golden/typechart.json`)から読み、TemporaryTypeChart を削除(ユーザー決定。ADR-0015)
 - [x] TB2 攻撃範囲(ADR-0016)
 - [x] TB3 特性(正規化された効果データ経由。タイプ由来/特性由来の区別。ADR-0017)
-- [ ] TB4 仮想敵診断(詳細は TB1〜TB3 完成後に確定)
+- [x] TB4 仮想敵診断(ADR-0400)
 - [ ] TB5 おすすめタイプと該当ポケモン(2026-09-22 ユーザー要望。TB4 の後): チームの穴(TB1 で弱点持ちが多く耐性・無効が少ない攻撃タイプ、TB2 で有効打が無い防御タイプ)をふさげるタイプの候補を出し、
   そのタイプを持つ**使用可能なポケモン全員**(レギュレーション依存。日本語名付き)を一覧にする。特性で穴をふさげるポケモンは別枠。他のサイトを見に行かずに候補が分かることが目的。詳細は着手時に ADR
 
@@ -122,6 +122,16 @@
 - [ ] P7-2 SLO(計算API p99 < 100ms、可用性)とダッシュボード
 - [ ] P7-3 ArgoCD(GitOps)
 - [ ] P7-4 MySQL/TiDB バックアップと復元テスト
+
+## 整備レーン(Claude の上限時に Codex が進める。COORDINATION.md「Claude の上限時の Codex」)
+範囲はレーンに属さない共有物と統合の検証。レーンの範囲(engine・services/*・web・ios・各レーンの ADR)は直さず、見つけた問題はそのレーンの Next と DECISIONS.md に既定案付きで書く。
+- [ ] MT-1 統合の検証: 最新の main で `make test` / `make lint` / `make build` / `make test-golden` / `make test-all-species` / `make test-wasm`(と、あれば各レーンの追加ターゲット)を通す。失敗はレーンごとに切り分けて報告する(自分の範囲の共通物なら直す)
+- [ ] MT-2 `scripts/check-publishable.sh --self-test` の既存の失敗2件(A: `a1.txt:1` 未検出、E: `engine/go.mod:1` 未検出)を直す。`make lint` からセルフテストも走らせるかを決める(既定案: 走らせる)
+- [ ] MT-3 文書の整合: `docs/ai-shared/CURRENT_STATE.md` と `docs/plan.md` のチェック・Next の食い違い、CLAUDE.md のリポジトリ構成と実体、README、`docs/development-workflow.md` と COORDINATION.md(レーン制・PR 統合・時間帯・Codex 2本)の食い違いを直す
+- [ ] MT-4 ADR の番号の帯(COORDINATION.md)の振り直し漏れと、参照の食い違いを一覧にする(直すのは各レーン。一覧を各レーンの Next に書く)
+- [ ] MT-5 `make deps-outdated` を実行し、古くなった依存を各レーンの Next に追記する(上げるのは各レーン)
+- [ ] MT-6 ルート `Makefile` の共通ターゲットの整理: `lint` に `go vet -tags golden` と `go vet -tags allspecies` を足す、`golden-generate` は `npm ci` を実行するか未導入で明示的に失敗させる(P1-6 の改善要望)
+- [ ] MT-7 plan.md の「改善要望」のうち、レーンに属さないものを片付ける(レーンに属するものは、そのレーンの Next へ移す)
 
 ## ブロッカー
 (ここに止まった理由と試したことを書く)
