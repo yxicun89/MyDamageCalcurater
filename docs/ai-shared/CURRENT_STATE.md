@@ -16,9 +16,9 @@ Next: docs/plan.md の P3-1 から。P3-1 の小項目のとおり api/openapi.y
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
-Active: なし
+Active: Claude Code
 Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
-Status: 未着手(2026-09-21 にレーンを新設)
+Status: 着手(2026-09-21 Claude Code。web/ の土台と P4-1 から)
 Next: docs/plan.md の P4-1(docs/design.md のデザイントークンを CSS 変数に)から。P4-2〜P4-4 は WASM(make wasm の engine.wasm と engine/wasmapi の JSON 契約。ADR-0011)で先に作り、マスタ(種族・技・持ち物)は pokedex-svc ができるまで架空データで作る。P4-5 の API 接続は API レーンが api/openapi.yaml を main に入れてから
 
 ## Type Balance Checker
