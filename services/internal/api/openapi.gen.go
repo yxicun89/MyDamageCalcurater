@@ -16,7 +16,7 @@ import (
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"github.com/oapi-codegen/runtime"
 )
 
@@ -1022,28 +1022,28 @@ type CalcReverseJSONRequestBody = ReverseRequest
 type ServerInterface interface {
 	// CalcDamage 1 vs 1 のダメージ計算
 	// (POST /api/calc)
-	CalcDamage(ctx echo.Context, params CalcDamageParams) error
+	CalcDamage(ctx *echo.Context, params CalcDamageParams) error
 	// CalcBulk 防御側の代表調整すべてに対する一括計算
 	// (POST /api/calc/bulk)
-	CalcBulk(ctx echo.Context, params CalcBulkParams) error
+	CalcBulk(ctx *echo.Context, params CalcBulkParams) error
 	// CalcReverse 観測ダメージから相手の調整候補を逆算
 	// (POST /api/calc/reverse)
-	CalcReverse(ctx echo.Context, params CalcReverseParams) error
+	CalcReverse(ctx *echo.Context, params CalcReverseParams) error
 	// SearchItems 持ち物を日本語名で前方一致検索
 	// (GET /api/pokedex/items)
-	SearchItems(ctx echo.Context, params SearchItemsParams) error
+	SearchItems(ctx *echo.Context, params SearchItemsParams) error
 	// SearchMoves 技を日本語名で前方一致検索
 	// (GET /api/pokedex/moves)
-	SearchMoves(ctx echo.Context, params SearchMovesParams) error
+	SearchMoves(ctx *echo.Context, params SearchMovesParams) error
 	// ListNatures 性格の一覧(補正する能力)
 	// (GET /api/pokedex/natures)
-	ListNatures(ctx echo.Context, params ListNaturesParams) error
+	ListNatures(ctx *echo.Context, params ListNaturesParams) error
 	// SearchSpecies ポケモンを日本語名で前方一致検索
 	// (GET /api/pokedex/species)
-	SearchSpecies(ctx echo.Context, params SearchSpeciesParams) error
+	SearchSpecies(ctx *echo.Context, params SearchSpeciesParams) error
 	// GetSpecies 種族の詳細(タイプ・種族値・特性・覚える技)
 	// (GET /api/pokedex/species/{key})
-	GetSpecies(ctx echo.Context, key SpeciesKey, params GetSpeciesParams) error
+	GetSpecies(ctx *echo.Context, key SpeciesKey, params GetSpeciesParams) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
@@ -1052,7 +1052,7 @@ type ServerInterfaceWrapper struct {
 }
 
 // CalcDamage converts echo context to params.
-func (w *ServerInterfaceWrapper) CalcDamage(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) CalcDamage(ctx *echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -1100,7 +1100,7 @@ func (w *ServerInterfaceWrapper) CalcDamage(ctx echo.Context) error {
 }
 
 // CalcBulk converts echo context to params.
-func (w *ServerInterfaceWrapper) CalcBulk(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) CalcBulk(ctx *echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -1148,7 +1148,7 @@ func (w *ServerInterfaceWrapper) CalcBulk(ctx echo.Context) error {
 }
 
 // CalcReverse converts echo context to params.
-func (w *ServerInterfaceWrapper) CalcReverse(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) CalcReverse(ctx *echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -1196,7 +1196,7 @@ func (w *ServerInterfaceWrapper) CalcReverse(ctx echo.Context) error {
 }
 
 // SearchItems converts echo context to params.
-func (w *ServerInterfaceWrapper) SearchItems(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) SearchItems(ctx *echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -1257,7 +1257,7 @@ func (w *ServerInterfaceWrapper) SearchItems(ctx echo.Context) error {
 }
 
 // SearchMoves converts echo context to params.
-func (w *ServerInterfaceWrapper) SearchMoves(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) SearchMoves(ctx *echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -1318,7 +1318,7 @@ func (w *ServerInterfaceWrapper) SearchMoves(ctx echo.Context) error {
 }
 
 // ListNatures converts echo context to params.
-func (w *ServerInterfaceWrapper) ListNatures(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) ListNatures(ctx *echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -1366,7 +1366,7 @@ func (w *ServerInterfaceWrapper) ListNatures(ctx echo.Context) error {
 }
 
 // SearchSpecies converts echo context to params.
-func (w *ServerInterfaceWrapper) SearchSpecies(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) SearchSpecies(ctx *echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -1434,7 +1434,7 @@ func (w *ServerInterfaceWrapper) SearchSpecies(ctx echo.Context) error {
 }
 
 // GetSpecies converts echo context to params.
-func (w *ServerInterfaceWrapper) GetSpecies(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) GetSpecies(ctx *echo.Context) error {
 	var err error
 	// ------------- Path parameter "key" -------------
 	var key SpeciesKey
@@ -1492,15 +1492,15 @@ func (w *ServerInterfaceWrapper) GetSpecies(ctx echo.Context) error {
 // are present on both echo.Echo and echo.Group, since we want to allow using
 // either of them for path registration
 type EchoRouter interface {
-	CONNECT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	DELETE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	GET(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	HEAD(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	OPTIONS(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	PATCH(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	PUT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	TRACE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
+	CONNECT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	DELETE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	GET(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	HEAD(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	OPTIONS(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	PATCH(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	PUT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	TRACE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
 }
 
 // RegisterHandlersOptions configures RegisterHandlersWithOptions.
@@ -2032,7 +2032,7 @@ type StrictServerInterface interface {
 	GetSpecies(ctx context.Context, request GetSpeciesRequestObject) (GetSpeciesResponseObject, error)
 }
 
-type StrictHandlerFunc func(ctx echo.Context, request any) (any, error)
+type StrictHandlerFunc func(ctx *echo.Context, request any) (any, error)
 type StrictMiddlewareFunc func(f StrictHandlerFunc, operationID string) StrictHandlerFunc
 
 func NewStrictHandler(ssi StrictServerInterface, middlewares []StrictMiddlewareFunc) ServerInterface {
@@ -2045,17 +2045,17 @@ type strictHandler struct {
 }
 
 // CalcDamage operation middleware
-func (sh *strictHandler) CalcDamage(ctx echo.Context, params CalcDamageParams) error {
+func (sh *strictHandler) CalcDamage(ctx *echo.Context, params CalcDamageParams) error {
 	var request CalcDamageRequestObject
 
 	request.Params = params
 
 	var body CalcDamageJSONRequestBody
 	var err error
-	if binder, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
+	if _, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
 		// Bind only the request body, so that path and query parameters
 		// are not also bound into the body struct.
-		err = binder.BindBody(ctx, &body)
+		err = echo.BindBody(ctx, &body)
 	} else {
 		// A custom binder is installed on the Echo instance; defer to it
 		// entirely, since echo.Binder does not expose body-only binding.
@@ -2066,7 +2066,7 @@ func (sh *strictHandler) CalcDamage(ctx echo.Context, params CalcDamageParams) e
 	}
 	request.Body = &body
 
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.CalcDamage(ctx.Request().Context(), request.(CalcDamageRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
@@ -2086,17 +2086,17 @@ func (sh *strictHandler) CalcDamage(ctx echo.Context, params CalcDamageParams) e
 }
 
 // CalcBulk operation middleware
-func (sh *strictHandler) CalcBulk(ctx echo.Context, params CalcBulkParams) error {
+func (sh *strictHandler) CalcBulk(ctx *echo.Context, params CalcBulkParams) error {
 	var request CalcBulkRequestObject
 
 	request.Params = params
 
 	var body CalcBulkJSONRequestBody
 	var err error
-	if binder, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
+	if _, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
 		// Bind only the request body, so that path and query parameters
 		// are not also bound into the body struct.
-		err = binder.BindBody(ctx, &body)
+		err = echo.BindBody(ctx, &body)
 	} else {
 		// A custom binder is installed on the Echo instance; defer to it
 		// entirely, since echo.Binder does not expose body-only binding.
@@ -2107,7 +2107,7 @@ func (sh *strictHandler) CalcBulk(ctx echo.Context, params CalcBulkParams) error
 	}
 	request.Body = &body
 
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.CalcBulk(ctx.Request().Context(), request.(CalcBulkRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
@@ -2127,17 +2127,17 @@ func (sh *strictHandler) CalcBulk(ctx echo.Context, params CalcBulkParams) error
 }
 
 // CalcReverse operation middleware
-func (sh *strictHandler) CalcReverse(ctx echo.Context, params CalcReverseParams) error {
+func (sh *strictHandler) CalcReverse(ctx *echo.Context, params CalcReverseParams) error {
 	var request CalcReverseRequestObject
 
 	request.Params = params
 
 	var body CalcReverseJSONRequestBody
 	var err error
-	if binder, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
+	if _, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
 		// Bind only the request body, so that path and query parameters
 		// are not also bound into the body struct.
-		err = binder.BindBody(ctx, &body)
+		err = echo.BindBody(ctx, &body)
 	} else {
 		// A custom binder is installed on the Echo instance; defer to it
 		// entirely, since echo.Binder does not expose body-only binding.
@@ -2148,7 +2148,7 @@ func (sh *strictHandler) CalcReverse(ctx echo.Context, params CalcReverseParams)
 	}
 	request.Body = &body
 
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.CalcReverse(ctx.Request().Context(), request.(CalcReverseRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
@@ -2168,12 +2168,12 @@ func (sh *strictHandler) CalcReverse(ctx echo.Context, params CalcReverseParams)
 }
 
 // SearchItems operation middleware
-func (sh *strictHandler) SearchItems(ctx echo.Context, params SearchItemsParams) error {
+func (sh *strictHandler) SearchItems(ctx *echo.Context, params SearchItemsParams) error {
 	var request SearchItemsRequestObject
 
 	request.Params = params
 
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.SearchItems(ctx.Request().Context(), request.(SearchItemsRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
@@ -2193,12 +2193,12 @@ func (sh *strictHandler) SearchItems(ctx echo.Context, params SearchItemsParams)
 }
 
 // SearchMoves operation middleware
-func (sh *strictHandler) SearchMoves(ctx echo.Context, params SearchMovesParams) error {
+func (sh *strictHandler) SearchMoves(ctx *echo.Context, params SearchMovesParams) error {
 	var request SearchMovesRequestObject
 
 	request.Params = params
 
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.SearchMoves(ctx.Request().Context(), request.(SearchMovesRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
@@ -2218,12 +2218,12 @@ func (sh *strictHandler) SearchMoves(ctx echo.Context, params SearchMovesParams)
 }
 
 // ListNatures operation middleware
-func (sh *strictHandler) ListNatures(ctx echo.Context, params ListNaturesParams) error {
+func (sh *strictHandler) ListNatures(ctx *echo.Context, params ListNaturesParams) error {
 	var request ListNaturesRequestObject
 
 	request.Params = params
 
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.ListNatures(ctx.Request().Context(), request.(ListNaturesRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
@@ -2243,12 +2243,12 @@ func (sh *strictHandler) ListNatures(ctx echo.Context, params ListNaturesParams)
 }
 
 // SearchSpecies operation middleware
-func (sh *strictHandler) SearchSpecies(ctx echo.Context, params SearchSpeciesParams) error {
+func (sh *strictHandler) SearchSpecies(ctx *echo.Context, params SearchSpeciesParams) error {
 	var request SearchSpeciesRequestObject
 
 	request.Params = params
 
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.SearchSpecies(ctx.Request().Context(), request.(SearchSpeciesRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
@@ -2268,13 +2268,13 @@ func (sh *strictHandler) SearchSpecies(ctx echo.Context, params SearchSpeciesPar
 }
 
 // GetSpecies operation middleware
-func (sh *strictHandler) GetSpecies(ctx echo.Context, key SpeciesKey, params GetSpeciesParams) error {
+func (sh *strictHandler) GetSpecies(ctx *echo.Context, key SpeciesKey, params GetSpeciesParams) error {
 	var request GetSpeciesRequestObject
 
 	request.Key = key
 	request.Params = params
 
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.GetSpecies(ctx.Request().Context(), request.(GetSpeciesRequestObject))
 	}
 	for _, middleware := range sh.middlewares {

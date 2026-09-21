@@ -16,7 +16,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 
 	"example.com/pokecalc/engine"
 	"example.com/pokecalc/services/calc/internal/master"
@@ -49,8 +49,6 @@ func NewServer(store master.Store) *Server {
 // (ルート無し・メソッド違い)を Error 形式({"code","message"})に揃えるエラーハンドラを含む。
 func NewHandler(store master.Store) http.Handler {
 	e := echo.New()
-	e.HideBanner = true
-	e.HidePort = true
 	e.Use(recoverMiddleware)
 	e.HTTPErrorHandler = httpErrorHandler
 
@@ -76,7 +74,7 @@ func registerCalcRoutes(e *echo.Echo, srv *Server) {
 // ヘッダ欠落やクエリの型不一致(例 limit=abc)が missing_header / invalid_json 等に化けてしまい、
 // 「担当外の操作は常に not_found」という契約に反する。
 func registerPokedexNotFoundRoutes(e *echo.Echo) {
-	h := func(c echo.Context) error { return notFoundForPokedex() }
+	h := func(c *echo.Context) error { return notFoundForPokedex() }
 	e.GET("/api/pokedex/species", h)
 	e.GET("/api/pokedex/species/:key", h)
 	e.GET("/api/pokedex/moves", h)
@@ -84,19 +82,19 @@ func registerPokedexNotFoundRoutes(e *echo.Echo) {
 	e.GET("/api/pokedex/natures", h)
 }
 
-func healthzHandler(c echo.Context) error {
+func healthzHandler(c *echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // limitedBody はリクエスト本文を maxRequestBodyBytes に制限した Reader にする(critic 指摘 R7)。
 // 上限を超えて読むと Read がエラーを返し、decodeStrict がそれを invalid_json に写す。
-func limitedBody(ctx echo.Context) io.Reader {
+func limitedBody(ctx *echo.Context) io.Reader {
 	return http.MaxBytesReader(ctx.Response(), ctx.Request().Body, maxRequestBodyBytes)
 }
 
 // recoverMiddleware は panic を回復し、500 internal の httpError にする(スタック等を出さない)。
 func recoverMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) (err error) {
+	return func(c *echo.Context) (err error) {
 		defer func() {
 			if r := recover(); r != nil {
 				err = newError(api.Internal, "%s", messageInternal)
@@ -108,8 +106,8 @@ func recoverMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 
 // httpErrorHandler は echo に渡ったエラー(Server が返した httpError・生成ラッパのヘッダ検証・
 // echo の既定 404/405 を含む)をすべて Error 形式に揃える。
-func httpErrorHandler(err error, c echo.Context) {
-	if c.Response().Committed {
+func httpErrorHandler(c *echo.Context, err error) {
+	if r, uerr := echo.UnwrapResponse(c.Response()); uerr == nil && r.Committed {
 		return
 	}
 	status, body := errorBodyFor(err)
@@ -127,9 +125,11 @@ func errorBodyFor(err error) (int, api.Error) {
 	if errors.As(err, &he) {
 		return he.status, api.Error{Code: he.code, Message: he.message}
 	}
-	var ee *echo.HTTPError
-	if errors.As(err, &ee) {
-		switch ee.Code {
+	// echo v5 の既定エラー(ErrNotFound / ErrMethodNotAllowed)は非公開型なので、
+	// ステータスは HTTPStatusCoder から読む。
+	var sc echo.HTTPStatusCoder
+	if errors.As(err, &sc) {
+		switch sc.StatusCode() {
 		case http.StatusNotFound, http.StatusMethodNotAllowed:
 			// ルートが無い・メソッドが違う(ADR-0016: メソッド違いに新しい code を足さず not_found にする)。
 			return http.StatusNotFound, api.Error{Code: api.NotFound, Message: "ルートが無い"}
@@ -138,8 +138,9 @@ func errorBodyFor(err error) (int, api.Error) {
 			// そのラッパが返す 400 はヘッダの検証由来。「欠落」「空」(bind 失敗も含む)は
 			// missing_header、それ以外(同名ヘッダの重複指定)は invalid_input にする
 			// (ADR-0016 §1.6: missing_header はヘッダ欠落・空に限定する)。
-			if msg, ok := ee.Message.(string); ok && strings.Contains(msg, duplicateHeaderMessage) {
-				slog.Warn("calc-svc: ヘッダが重複している", "message", msg)
+			var ee *echo.HTTPError
+			if errors.As(err, &ee) && strings.Contains(ee.Message, duplicateHeaderMessage) {
+				slog.Warn("calc-svc: ヘッダが重複している", "message", ee.Message)
 				return http.StatusBadRequest, api.Error{Code: api.InvalidInput, Message: "リクエストヘッダの指定が不正"}
 			}
 			return http.StatusBadRequest, api.Error{Code: api.MissingHeader, Message: "X-Device-Id / X-Session-Id が無い"}
@@ -165,7 +166,7 @@ func notFoundForPokedex() error {
 }
 
 // CalcDamage は POST /api/calc。
-func (s *Server) CalcDamage(ctx echo.Context, params api.CalcDamageParams) error {
+func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) error {
 	if err := checkHeaders(params.XDeviceId, params.XSessionId); err != nil {
 		return err
 	}
@@ -211,7 +212,7 @@ func (s *Server) CalcDamage(ctx echo.Context, params api.CalcDamageParams) error
 }
 
 // CalcBulk は POST /api/calc/bulk。
-func (s *Server) CalcBulk(ctx echo.Context, params api.CalcBulkParams) error {
+func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 	if err := checkHeaders(params.XDeviceId, params.XSessionId); err != nil {
 		return err
 	}
@@ -262,7 +263,7 @@ func (s *Server) CalcBulk(ctx echo.Context, params api.CalcBulkParams) error {
 }
 
 // CalcReverse は POST /api/calc/reverse。
-func (s *Server) CalcReverse(ctx echo.Context, params api.CalcReverseParams) error {
+func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) error {
 	if err := checkHeaders(params.XDeviceId, params.XSessionId); err != nil {
 		return err
 	}
@@ -321,26 +322,26 @@ func (s *Server) CalcReverse(ctx echo.Context, params api.CalcReverseParams) err
 }
 
 // SearchItems は pokedex の操作。calc-svc の担当外なので 404 not_found。
-func (s *Server) SearchItems(ctx echo.Context, params api.SearchItemsParams) error {
+func (s *Server) SearchItems(ctx *echo.Context, params api.SearchItemsParams) error {
 	return notFoundForPokedex()
 }
 
 // SearchMoves は pokedex の操作。calc-svc の担当外なので 404 not_found。
-func (s *Server) SearchMoves(ctx echo.Context, params api.SearchMovesParams) error {
+func (s *Server) SearchMoves(ctx *echo.Context, params api.SearchMovesParams) error {
 	return notFoundForPokedex()
 }
 
 // ListNatures は pokedex の操作。calc-svc の担当外なので 404 not_found。
-func (s *Server) ListNatures(ctx echo.Context, params api.ListNaturesParams) error {
+func (s *Server) ListNatures(ctx *echo.Context, params api.ListNaturesParams) error {
 	return notFoundForPokedex()
 }
 
 // SearchSpecies は pokedex の操作。calc-svc の担当外なので 404 not_found。
-func (s *Server) SearchSpecies(ctx echo.Context, params api.SearchSpeciesParams) error {
+func (s *Server) SearchSpecies(ctx *echo.Context, params api.SearchSpeciesParams) error {
 	return notFoundForPokedex()
 }
 
 // GetSpecies は pokedex の操作。calc-svc の担当外なので 404 not_found。
-func (s *Server) GetSpecies(ctx echo.Context, key api.SpeciesKey, params api.GetSpeciesParams) error {
+func (s *Server) GetSpecies(ctx *echo.Context, key api.SpeciesKey, params api.GetSpeciesParams) error {
 	return notFoundForPokedex()
 }
