@@ -9,10 +9,10 @@ Next: P2-1b(ゴールデンの oracle を @smogon/calc 0.12.0 の Champions へ�
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
-Active: なし
-Branch: feat/codex-tb0-foundation(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
-Status: TB0 基盤6e8989eに加え、GitOps・公開準備をd7a8bbfへコミット。localと分離したdigest固定GitOps overlay、安全なplaceholder/credential検査、private repository/registry手順、multi-platform image push補助、直接依存license記録を追加。独立レビューPASS、test/lint/build/Kustomize/Docker build/smoke成功。Argo CD実同期は未実施のためTB0全体は未完了
-Next: (1) TB0 をこのレーンの手順で検証(services/balance のテスト全件・make lint・make check-publishable)し、独立レビューの結果を確認して、PR で main に統合する(go.work の use と Makefile の include の1行を含める)。(2) 統合後、main から feat/tb-tb1-<名前> を切り、docs/type-balance-design.md の TB1 へ進む。旧 Next にあった「Claude 側の未コミット変更を待って push 保留」は解消済み(Claude 側はブランチに commit・push 済み)
+Active: Claude Code
+Branch: feat/tb-tb1-defense(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)。TB0 は feat/codex-tb0-foundation から PR で main に統合
+Status: TB0 は Claude Code の critic で独立再レビュー PASS(engine の相性表と単/複合 5832 件一致を確認)、軽微指摘を反映、balance-* / make test・lint・build・check-publishable、k3d smoke(health=200 analyze=501)成功。Argo CD 実同期のみ人間の作業待ち(plan.md「ブロッカー(タイプバランスレーン)」)
+Next: TB1(防御タイプバランス)を main から切った feat/tb-tb1-defense で進める(quick-scanner → spec-writer → implementer → critic)
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠
