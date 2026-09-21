@@ -64,4 +64,5 @@
 - Go キャッシュと loopback bind は sandbox 制限で初回失敗したが、`GOCACHE` を一時領域へ移し正式な権限昇格で同一テストを再実行して成功。クラスタ ready/smoke/deploy、DB、E2E、iOS は外部状態・資格情報・長時間クラスタ操作を要するため未実施。
 - MT-2 で check-publishable の自己テスト失敗2件を修正。A は任意の `~/...` を検出し共有プレースホルダのみ許可、E は禁止 module path を fixture に使用。`make lint` に自己テストを追加した。
 - MT-2 の独立レビューは PASS(重大・重要・軽微 0)。自己テスト A〜F、通常検査0件、統合後の lint を確認済み。
+- データ・API・Web・タイプバランス各ブランチの新しい push を確認し、Claude 側レーンの再開条件に従って区切りで停止した。
 - Next: MT-3 文書整合から継続する。
