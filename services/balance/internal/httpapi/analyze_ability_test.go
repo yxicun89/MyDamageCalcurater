@@ -14,7 +14,7 @@ import (
 	"example.com/pokecalc/services/balance/internal/api"
 	"example.com/pokecalc/services/balance/internal/balance"
 	"example.com/pokecalc/services/balance/internal/master"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // TB3 特性による防御相性の変化の HTTP 契約(ADR-0017)。特性 ID は架空(ability-9001 以降)。

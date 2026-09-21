@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"github.com/oapi-codegen/runtime"
 )
 
@@ -444,16 +444,16 @@ type AnalyzeTeamCoverageJSONRequestBody = CoverageRequest
 type ServerInterface interface {
 	// PublicHealth Ingress smoke check
 	// (GET /api/balance/healthz)
-	PublicHealth(ctx echo.Context) error
+	PublicHealth(ctx *echo.Context) error
 	// AnalyzeTeamBalance Analyze a party's type balance
 	// (POST /api/balance/v1/team-balance/analyze)
-	AnalyzeTeamBalance(ctx echo.Context, params AnalyzeTeamBalanceParams) error
+	AnalyzeTeamBalance(ctx *echo.Context, params AnalyzeTeamBalanceParams) error
 	// AnalyzeTeamCoverage Analyze a party's offensive type coverage
 	// (POST /api/balance/v1/team-balance/coverage)
-	AnalyzeTeamCoverage(ctx echo.Context, params AnalyzeTeamCoverageParams) error
+	AnalyzeTeamCoverage(ctx *echo.Context, params AnalyzeTeamCoverageParams) error
 	// Health Pod health check
 	// (GET /healthz)
-	Health(ctx echo.Context) error
+	Health(ctx *echo.Context) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
@@ -462,7 +462,7 @@ type ServerInterfaceWrapper struct {
 }
 
 // PublicHealth converts echo context to params.
-func (w *ServerInterfaceWrapper) PublicHealth(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) PublicHealth(ctx *echo.Context) error {
 	var err error
 
 	// Invoke the callback with all the unmarshaled arguments
@@ -471,7 +471,7 @@ func (w *ServerInterfaceWrapper) PublicHealth(ctx echo.Context) error {
 }
 
 // AnalyzeTeamBalance converts echo context to params.
-func (w *ServerInterfaceWrapper) AnalyzeTeamBalance(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) AnalyzeTeamBalance(ctx *echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -519,7 +519,7 @@ func (w *ServerInterfaceWrapper) AnalyzeTeamBalance(ctx echo.Context) error {
 }
 
 // AnalyzeTeamCoverage converts echo context to params.
-func (w *ServerInterfaceWrapper) AnalyzeTeamCoverage(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) AnalyzeTeamCoverage(ctx *echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -567,7 +567,7 @@ func (w *ServerInterfaceWrapper) AnalyzeTeamCoverage(ctx echo.Context) error {
 }
 
 // Health converts echo context to params.
-func (w *ServerInterfaceWrapper) Health(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) Health(ctx *echo.Context) error {
 	var err error
 
 	// Invoke the callback with all the unmarshaled arguments
@@ -579,15 +579,15 @@ func (w *ServerInterfaceWrapper) Health(ctx echo.Context) error {
 // are present on both echo.Echo and echo.Group, since we want to allow using
 // either of them for path registration
 type EchoRouter interface {
-	CONNECT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	DELETE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	GET(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	HEAD(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	OPTIONS(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	PATCH(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	PUT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	TRACE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
+	CONNECT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	DELETE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	GET(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	HEAD(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	OPTIONS(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	PATCH(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	PUT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	TRACE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
 }
 
 // RegisterHandlersOptions configures RegisterHandlersWithOptions.

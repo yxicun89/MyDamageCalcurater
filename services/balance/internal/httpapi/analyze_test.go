@@ -13,7 +13,7 @@ import (
 	"example.com/pokecalc/services/balance/internal/api"
 	"example.com/pokecalc/services/balance/internal/balance"
 	"example.com/pokecalc/services/balance/internal/master"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 const analyzePath = "/api/balance/v1/team-balance/analyze"
