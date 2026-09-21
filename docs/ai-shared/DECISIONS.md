@@ -374,6 +374,6 @@ Impact: plan.md に TB5。使用可能なポケモンの集合と日本語名は
 
 ## 2026-09-22: TB4(仮想敵診断)の仕様(ユーザー回答と既定案)
 Decision: 仮想敵を最大 6 体(pokemonId・技 ID 最大 4・特性は任意)で入力し、各仮想敵 × 自分の各メンバーの受ける最大倍率(incoming)と与える最大倍率(outgoing)、
-安全に受けられる人数(incoming < 1)・打ちやすい人数(outgoing ≥ 2)を返す。新 endpoint `/api/balance/v1/team-balance/threats`。詳細は ADR-0019。
+安全に受けられる人数(incoming < 1)・打ちやすい人数(outgoing ≥ 2)を返す。新 endpoint `/api/balance/v1/team-balance/threats`。詳細は ADR-0400。
 Reason: ユーザーが TB4 の方針に回答した(「安全に受けられる」「打ちやすい」の閾値はタイプバランスレーンの既定案)。
 Impact: TB1〜3 の計算と既存の read model を再利用。
