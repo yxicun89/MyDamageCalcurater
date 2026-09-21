@@ -56,7 +56,7 @@ type Querier interface {
 	// 自己参照の外部キー(species.base_species_key)があるので、削除はメガを先・挿入はメガを後にする。
 	ListSpeciesKeys(ctx context.Context) ([]ListSpeciesKeysRow, error)
 	ListTypeChart(ctx context.Context) ([]TypeChart, error)
-	// sqlc のクエリ(ADR-0015 §1)。services/internal/master(DB行→engine型の写像)が
+	// sqlc のクエリ(ADR-0100 §1)。services/internal/master(DB行→engine型の写像)が
 	// 受け取る素朴な行の型(TypeRow・SpeciesRow 等)にそのまま詰め替えられる列の並びにする。
 	ListTypes(ctx context.Context) ([]Type, error)
 }

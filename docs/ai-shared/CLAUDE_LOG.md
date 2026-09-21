@@ -166,3 +166,24 @@
 
 ### Next
 - TB3(特性)。仕様の質問から
+
+## 2026-09-21 タイプバランスレーン(Claude Code): TB2 統合・iOS レーン追加・TB3
+
+### Done
+- TB2 を PR #9 で統合。iOS レーンを追加(PR #10、ユーザー決定。~/MyDamageCalcurater-ios)。Xcode 27・iOS 27 シミュレータの導入を確認
+- TB3: ユーザー回答3点 + 細部の既定案で ADR-0017。spec-writer → implementer → critic FAIL(倍率の積の int64 オーバーフロー、effect=none のテストが弱い)→ 修正 → 再レビュー PASS(変異テストで確認)
+- k3d smoke: ability=200 unknown_ability=422
+
+### Next
+- TB4 はユーザー確認待ち(ADR-0018 の提案)。その間は軽微の残り
+
+## 2026-09-22 タイプバランスレーン(Claude Code): 依存の最新化・TB0 の Argo CD 実同期・TB5 の要望
+
+### Done
+- TB3 を PR #12 で統合(ユーザー確認済み)。依存を最新に(Echo v5.3.1、golang digest。PR #13、critic PASS)
+- Argo CD v3.5.3 を k3d に導入、クラスタ内レジストリ、Application(repoURL は適用時に埋め込み)。PAT はユーザーが登録。critic FAIL → 修正 → PASS。PR #16
+- manual sync: Synced to main 32fbb9e、Pod の image digest が overlay と一致、health 200。TB0 完了
+- ユーザー要望 TB5(おすすめタイプと該当ポケモン)を PR #15 で計画に追加
+
+### Next
+- TB4 → TB5

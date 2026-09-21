@@ -831,7 +831,7 @@ FROM types
 ORDER BY sort_order
 `
 
-// sqlc のクエリ(ADR-0015 §1)。services/internal/master(DB行→engine型の写像)が
+// sqlc のクエリ(ADR-0100 §1)。services/internal/master(DB行→engine型の写像)が
 // 受け取る素朴な行の型(TypeRow・SpeciesRow 等)にそのまま詰め替えられる列の並びにする。
 func (q *Queries) ListTypes(ctx context.Context) ([]Type, error) {
 	rows, err := q.db.QueryContext(ctx, listTypes)

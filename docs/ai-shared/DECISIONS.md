@@ -337,3 +337,50 @@ Decision: Go のツールチェーン、Node、npm パッケージ、Go のモ�
 分担: 各レーンが自分の範囲の依存を上げる(データ: engine・services/go.mod の共有部分・tools・MySQL・calc / API: API が使うライブラリ / Web: web/ の package.json・Node / タイプバランス: services/balance / iOS: ios/)。Go のツールチェーンの版(go.work・各 go.mod の go/toolchain 行)は全モジュールで揃え、データレーンが先に上げて main に入れ、他のレーンはそれに合わせる。
 Reason: ユーザーが「アップデートの手間を減らすため、ミドルウェアやプログラミング言語等のバージョンは全て最新にして」と指示し、固定方法と calc の扱いに回答した。
 Impact: 各レーンの次のタスクの前に依存の更新を入れる。更新後はそのレーンのテスト一式を通してから PR にする。
+
+## 2026-09-21: TB3(特性)の仕様3点(ユーザー回答)と細部の既定案
+Decision: ユーザー回答: 特性は analyze の request で `abilityId` を任意指定/効果は無効・吸収・倍率変更に加え ×3/4 なども含める/特性による無効・吸収は集計の「無効」に含め source で区別。
+既定案(ユーザー未確認): 効果は正規化データ(immune / absorb / type_multiplier / super_effective_multiplier)の read model `BALANCE_ABILITIES_PATH`、
+防御の最終倍率は既約分数に広げ(API の multiplier 文字列も "3/4" 等を許す。特性なしなら TB1 と同じ)、category は値の範囲で決める。詳細は ADR-0017。
+Reason: TB3 着手時に質問し回答を得た。細部は 23 時以降に決めるため既定案とした。
+Impact: ADR-0017。analyze の契約を後方互換で拡張(abilityId 任意、multiplier 文字列の値域拡大、effect の追加、422 unknown_ability、503 条件)。
+
+## 2026-09-21: TB3 の既定案を確認、TB4 の方針、Argo CD の実同期をローカル k3d で行う(ユーザー回答)
+Decision: (1) ADR-0017 の既定案(最終倍率は既約分数、category の境界 0/≤1/4/<1/1/<4/≥4)をユーザーが確認。TB3 は今マージしてよい(深夜だがユーザーの指示)。
+(2) TB4(仮想敵診断)は、仮想敵を最大 6 体(pokemonId・技 ID 最大 4・特性は任意)で入力し、各仮想敵について自分の各メンバーが受ける最大倍率(受けやすさ)と与えられる最大倍率(打ちやすさ)を表にし、安全に受けられるメンバー数を集計する。TB1〜3 の計算を再利用する。詳細は ADR-0018。
+(3) TB0 の Argo CD 実同期は、ローカル k3d に Argo CD を入れ、イメージは k3d のローカルレジストリ、private リポジトリの読み取りはユーザーが作る読み取り専用の fine-grained PAT を、ユーザー自身が ! コマンドでクラスタの Secret に登録する(AI はトークンを見ない・Git に入れない)。
+Reason: ユーザーがブロッカーの質問に回答した。
+Impact: TB3 を PR で統合。TB4 は ADR-0018 から。Argo CD はタイプバランスレーンの services/balance/deploy/argocd の範囲で進める。
+
+## 2026-09-21: ミドルウェア・ライブラリ・ツールは導入時点の最新の安定版にする(ユーザー決定)
+Decision: 各レーンが導入・更新するミドルウェア(Argo CD・DB・メッセージング・監視等)、ライブラリ、ベースイメージ、ツールは、その時点の最新の安定版にする。
+再現性のため、版は引き続き完全に固定する(タグ + digest、go.mod・package-lock 等。`latest` タグや範囲指定は使わない)。メジャーバージョンの更新もコードの移行を含めて行う。
+ゴールデンの oracle `@smogon/calc` も、新しい版があれば差分を確かめてから上げる(データレーンの同日の記録に合わせる)。Go のツールチェーンの版(go.work と各 go.mod の go/toolchain 行)は全モジュールで揃え、データレーンが先に上げたものに合わせる。
+Reason: ユーザーが「ミドルウェア等のバージョンは全て最新にして。アップデートの手間を減らすために」と指示した。
+Impact: タイプバランスレーンは Argo CD v3.5.3(2026-09-22 時点の最新。導入手順と版は services/balance/deploy/argocd/README.md・ADR-0018)を導入、balance を Echo v4.15.4 → v5.3.1(oapi-codegen v2.8.0 の echo5-server)に移行、golang:1.27-alpine の digest を更新。
+他のレーン(データ・API・Web・iOS)は、自分の範囲の依存を同じ方針で確認・更新する(services/go.mod の Echo v4 は API レーン、services/pokedex/Dockerfile の golang:1.27-alpine の digest はデータレーンの判断)。
+
+## 2026-09-22: データレーンの依存を最新の安定版に固定(ADR-0018)。Go ツールチェーンは 1.27.1、MySQL は LTS(9.7)を既定にする
+Decision: (1) Go ツールチェーンを `go.dev/dl` で確認した最新の安定版 `go1.27.1` に統一(`go.work`・`engine`/`services`/`tools`/`services/balance`(go/toolchain 行のみ)の `go` 行)。
+(2) engine・services(データレーン分: golang-migrate・go-sql-driver/mysql・yaml.v3)・tools(sqlc)の Go モジュールは `go list -m -u all` と `go mod tidy` で確認したところ既に最新の安定版で変更なし。
+services/go.mod の oapi-codegen tool(生成先が API レーンの services/internal/api)は据え置き、上げない(API レーンの担当)。
+(3) MySQL は Docker 公式イメージのタグ体系を確認し、現在の LTS 系列は `9.x`(最新 `9.7.2`。旧 LTS の `8.4` は `lts` タグが外れている)、Innovation は年ベースの `26.x` に移行していることを確認。
+アップデートの手間を減らす目的に合わせ、Innovation ではなく最新の LTS(`9.7.2`、digest 固定)を既定にした(services/pokedex 周りの statefulset・job-migrate・db-local-up.sh)。
+(4) services/pokedex/Dockerfile の `golang:1.27-alpine` を `golang:1.27.1-alpine`(balance と同じ digest)に更新。
+(5) `@smogon/calc` は `npm view` で確認したところ `0.12.0` が最新(据え置きどおり変更不要)。`tools/importer/` は `.gitkeep` のみで package.json が無いため対象外(別レーンの未マージ作業)。
+(6) 古い依存を一覧化する `make deps-outdated`(Go 各モジュール `go list -m -u all` / Node `npm outdated`)をルート Makefile に追加(`make test` には含めない)。
+Reason: 2026-09-21 のユーザー決定(最新の安定版・正確な番号固定・Go ツールチェーンはデータレーンが先に上げる)への対応。
+Impact: 詳細は ADR-0018。API レーン・Web レーン・iOS レーンは、Go ツールチェーンを `go 1.27.1` に揃えること(services/go.mod の API レーンが使う分の依存は自分の範囲で確認)。タイプバランスレーンの `services/balance/go.mod` は go/toolchain 行(`go 1.27` → `go 1.27.1`)のみ本コミットで揃え、依存(require)は変更していない。
+
+## 2026-09-22: ADR の番号をレーンごとの帯にする(データレーンの既定案・ユーザー未確認。深夜のため)
+Decision: 新しい ADR の番号はレーンごとの帯から取る。データ 0100〜 / API 0200〜 / Web 0300〜 / タイプバランス 0400〜 / iOS 0500〜。既存の 0001〜0019 はそのまま。
+衝突している既存の番号は、後から統合する側が自分の帯へ振り直す。データレーンは 0015-pokedex-schema-and-migrate → 0100、依存更新の ADR → 0102、importer の ADR(未統合)→ 0101 に振り直した。
+Reason: 5レーンが並行して「main の最新の次」を取った結果、main に 0015 が2つ入り、0016(Web / タイプバランス)・0017(iOS / タイプバランス / データ)・0018(API / タイプバランス)もブランチ間で衝突した。帯にすれば統合の順番に依らず衝突しない。
+Impact: COORDINATION.md の共有ファイルの表(docs/adr/)を更新。各レーンは次に ADR を作るときから帯を使い、未統合の ADR が main と衝突していれば自分の帯へ振り直す。深夜のため既定案で進めた(取り消しやすい文書の規則)。朝にユーザーが確認する。
+
+## 2026-09-22: TB5「おすすめタイプと該当ポケモン」を追加(ユーザー要望)
+Decision: タイプバランスチェッカーに、チームの穴をふさげるおすすめタイプの候補と、そのタイプを持つ使用可能なポケモン全員の一覧(日本語名付き)を出す機能を TB5 として追加する。
+ユーザー回答: おすすめの基準は防御の穴(弱点持ちが多く耐性・無効が少ない攻撃タイプ)と攻撃範囲の穴(有効打が無い防御タイプ)の両方/一覧はそのタイプを持つ使用可能なポケモン全員(特性でふさげるものは別枠)/TB4 を先に作り、TB5 はその後。
+Reason: ユーザーが「既存のタイプバランスチェッカーはおすすめタイプは出すが、該当ポケモンを別サイトで探す必要がある。タイプだけ見て候補のポケモンを教えてほしい」と要望した。
+Impact: plan.md に TB5。使用可能なポケモンの集合と日本語名はマスタ(データレーンの P2-2。レギュレーション依存)から引く必要がある。それまでは TB1 と同じ temporary の read model を広げる(架空データの example)。
+

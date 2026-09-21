@@ -115,7 +115,7 @@ func speciesTypes(row SpeciesRow, chart engine.TypeChart) ([]engine.Type, error)
 	return append(types, engine.Type(row.Type2)), nil
 }
 
-// validateMegaConsistency はメガの3列の整合(ADR-0015 §3)を検証する。
+// validateMegaConsistency はメガの3列の整合(ADR-0100 §3)を検証する。
 func validateMegaConsistency(row SpeciesRow) error {
 	hasBaseKey := row.BaseSpeciesKey != ""
 	hasItem := row.RequiredItemID != ""

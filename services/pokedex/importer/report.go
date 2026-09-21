@@ -1,4 +1,4 @@
-// Package importer は取得元のスナップショットを読み込み(LoadInput)、ADR-0015 の行に変換し
+// Package importer は取得元のスナップショットを読み込み(LoadInput)、ADR-0100 の行に変換し
 // (Convert)、pokedex の DB に冪等に投入する(Apply / Run)。ADR-0101 を参照。
 //
 // engine は変更しない(CLAUDE.md 絶対ルール2)。ネットワークには触らない(取得は tools/importer)。

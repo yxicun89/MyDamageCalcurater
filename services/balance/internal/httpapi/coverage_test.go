@@ -13,7 +13,7 @@ import (
 	"example.com/pokecalc/services/balance/internal/api"
 	"example.com/pokecalc/services/balance/internal/balance"
 	"example.com/pokecalc/services/balance/internal/master"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // TB2 攻撃範囲の HTTP 契約(ADR-0016)。技 ID は架空(move-9001 以降)。

@@ -3,14 +3,14 @@
 - 状態: 提案(P2-2b の仕様。spec-writer 起草、implementer が実装、critic がレビュー)
 - 日付: 2026-09-21
 - 関連: plan.md P2-2b(P2-2c 照合と差分報告・P2-2d CronJob との境界は §10)、ADR-0002(確定した方針・追記 P2-1b・追記 P2-1c)、
-  ADR-0005(データ駆動の効果定義)、ADR-0013(相性表はデータ)、ADR-0015(スキーマ・写像)、ADR-0012 / ADR-0015 §8(balance の read model は P2-3)、
+  ADR-0005(データ駆動の効果定義)、ADR-0013(相性表はデータ)、ADR-0100(スキーマ・写像)、ADR-0012 / ADR-0100 §8(balance の read model は P2-3)、
   DECISIONS.md 2026-09-21(フォームの登録単位・CronJob 週1回・技の使用可否の既定案)、CLAUDE.md 絶対ルール 2/4/6
 - 番号: データレーンの帯(0100〜。COORDINATION.md)の2本目。当初は 0017 だったが、main・他レーンと衝突したため 2026-09-22 に振り直した
 
 ## 背景
 
-ADR-0015 で pokedex のスキーマと DB 行 → engine 型の写像ができた。P2-2b では、取得元(@smogon/calc 0.12.0 の Champions、
-Showdown の champions mod、PokeAPI)から実データを手元に取り、ADR-0015 の行に変換し、pokedex の DB に冪等に投入する。
+ADR-0100 で pokedex のスキーマと DB 行 → engine 型の写像ができた。P2-2b では、取得元(@smogon/calc 0.12.0 の Champions、
+Showdown の champions mod、PokeAPI)から実データを手元に取り、ADR-0100 の行に変換し、pokedex の DB に冪等に投入する。
 実データは Git に入れない(ADR-0002)ので、**取得・変換・投入の仕組みとその検証**だけをリポジトリに置き、検証は架空データで行う。
 
 ## 決定
@@ -24,7 +24,7 @@ tools/importer (Node)   ──▶ data/generated/<source>/<version>/snapshot.jso
                               + data/local/name_ja_overrides.json(Git 管理外・任意)
                                         │ LoadInput
                                         ▼
-                         services/pokedex/importer.Convert ──▶ Output(ADR-0015 の行)+ Report
+                         services/pokedex/importer.Convert ──▶ Output(ADR-0100 の行)+ Report
                                                                       │ Run / Apply
                                                                       ▼
                                                                pokedex DB(1 トランザクション)
@@ -63,7 +63,7 @@ tools/importer (Node)   ──▶ data/generated/<source>/<version>/snapshot.jso
  "abilities": {"<特性ID>":   <効果オブジェクト>}}
 ```
 
-  - キーは技・持ち物・特性の ID 形式(`^[a-z0-9]+$`。calc / Showdown の `toID`)。値は ADR-0015 §6 と同じ形(engine のフィールド名。例 `{"DamageMod":5324}`)で、
+  - キーは技・持ち物・特性の ID 形式(`^[a-z0-9]+$`。calc / Showdown の `toID`)。値は ADR-0100 §6 と同じ形(engine のフィールド名。例 `{"DamageMod":5324}`)で、
     `master.DecodeItemEffect` / `DecodeAbilityEffect` の厳格な検証を**変換時に**、取り込むタイプ相性表で通す(小数・負・未知フィールド・空・表に無いタイプは失敗)。
     投入する値は `master.Encode*Effect` の正準形。
   - **中身は英語 ID と 4096 基準の整数だけ**。名前・説明文・日本語・画像などの第三者の表現は入れない。
@@ -113,7 +113,7 @@ ID は `toID(名前)`(小文字英数字以外を落とす)。calc の技は `ty
 - **分類・威力**: calc の `category` 省略は Status(規則4)。calc と Showdown で違えば `move-value-mismatch` の **Blocker**(ダメージに効く。P2-1c では 0 件)。値は calc を採る。
 - **命中・PP**: Showdown(calc は持たない)。**優先度**: Showdown。calc と違えば警告 `move-value-mismatch`(ダメージに効かない)。
 - 変化技の威力は 0。`name_en` は Showdown の名前。
-- 規則5(覚えるポケモンが 0 の技)は既定案どおりマスタに置き、選べるかは習得技で決める(`learnsets ∩ regulation_moves`。ADR-0015)。
+- 規則5(覚えるポケモンが 0 の技)は既定案どおりマスタに置き、選べるかは習得技で決める(`learnsets ∩ regulation_moves`。ADR-0100)。
 
 ### 5. 種族・フォーム・メガ
 
@@ -123,7 +123,7 @@ ID は `toID(名前)`(小文字英数字以外を落とす)。calc の技は `ty
   (calc の `Aegislash-Shield` ↔ Showdown の `Aegislash`(baseForme `Shield`) のような既定フォームの表記違い。名前の対応表を持たない)。
   対応が無い calc の種族(除外の設定にも無い)は `ErrInvalidData`。対応した Showdown の `isNonstandard` が null でなければ除外して警告(技の規則1に揃える)。
 - **値**: タイプ・種族値は calc を採り、Showdown と違えば `species-mismatch` の **Blocker**(ダメージに効く)。特性は Showdown の `abilities`(`"0"`→slot 1、`"1"`→2、`"H"`→3。calc は slot 0 しか持たない)。
-  `"S"`(特殊な特性。Zygarde 系統など一部の種族にだけ現れる)は `species_abilities.slot` が 1..3 の3枠しかない(ADR-0015 §3)ため `"H"` と同じ slot 3 に置く
+  `"S"`(特殊な特性。Zygarde 系統など一部の種族にだけ現れる)は `species_abilities.slot` が 1..3 の3枠しかない(ADR-0100 §3)ため `"H"` と同じ slot 3 に置く
   (実装時の確認: 実データで `H` と `S` が同じ種族に同時に現れることは無い前提。両方揃った場合は slot の重複として `master.Species` の写像(§9 の投入前チェック)で検出して止める)。
   `showdown_id` は Showdown の id、`name_en` は Showdown の name、`dex_no` は Showdown の `num`。
 - **フォルム番号 `{図鑑番号4桁}-{フォルム3桁}`**: 基本種(Showdown の name が `baseSpecies` の種族)の `formeOrder` における添字(基本種は 0)。
@@ -134,7 +134,7 @@ ID は `toID(名前)`(小文字英数字以外を落とす)。calc の技は `ty
   フォルム番号が最小のもの(代表)だけを取り込み、他は警告 `form-folded`(Detail に代表)にする。calc にあるかどうかに依らない。
   Showdown だけにあり(`isNonstandard` が null)、同じ num のどの取り込む種族とも性能が違うもの(戦闘中だけのフォーム等)は取り込まず警告 `species-showdown-only`(P2-2c で照合)。
 - **メガ**: Showdown の `forme` が `Mega` で始まる種族は `is_mega = 1`、`base_species_key` = 基本種の key、`required_item_id` = `toID(requiredItem)`。
-  `requiredItem` が空、またはその持ち物を取り込まない場合は `ErrInvalidData`(ADR-0015 のメガの整合と、「集合のメガなら持ち物も同じ集合」の行をまたぐ検査)。
+  `requiredItem` が空、またはその持ち物を取り込まない場合は `ErrInvalidData`(ADR-0100 のメガの整合と、「集合のメガなら持ち物も同じ集合」の行をまたぐ検査)。
   メガ以外の `requiredItem` は保存しない(スキーマに列が無い)。
 - **習得技**: Showdown の `learnsets[showdown_id]`。無ければ `learnsets[toID(baseSpecies)]`(メガ・フォームは基本種を継ぐ)。取り込まない技は落とす。
   畳んだフォームの習得技は代表のものだけ(v1。差があれば P2-2c で報告)。
@@ -261,7 +261,7 @@ func DecodeRegulationsFile([]byte) (RegulationsFile, error)
 func DecodeConfig([]byte) (Config, error)                     // nameJaLanguages が空なら失敗
 func LoadInput(root string) (Input, []SourceVersion, error)   // root/importer/*.json, root/generated/<source>/<version>/snapshot.json, root/local/name_ja_overrides.json(任意)
 
-// 出力(ADR-0015 の行。スライスは ID / key 順)
+// 出力(ADR-0100 の行。スライスは ID / key 順)
 type TypeRow struct{ master.TypeRow; NameJaSource string }
 type NamedRow struct{ ID, NameJa, NameJaSource, NameEn string }            // abilities / items
 type MoveRow struct{ ID, NameJa, NameJaSource, NameEn, Type, Category string; Power, Accuracy, PP, Priority int } // Accuracy 0 = NULL

@@ -1,8 +1,8 @@
 package importer_test
 
-// 純粋な変換(スナップショット → ADR-0015 の行)のテスト(ADR-0101 §3〜§8)。
+// 純粋な変換(スナップショット → ADR-0100 の行)のテスト(ADR-0101 §3〜§8)。
 // DB もネットワークも使わない。入力は testdata/fictional の架空データだけ
-// (図鑑番号 9001 以降、ID は test で始まる英小文字、日本語名は「テスト」で始まる。ADR-0015 §7)。
+// (図鑑番号 9001 以降、ID は test で始まる英小文字、日本語名は「テスト」で始まる。ADR-0100 §7)。
 
 import (
 	"errors"
@@ -656,7 +656,7 @@ func TestConvertRejectsInvalidEffects(t *testing.T) {
 	}
 }
 
-// --- engine の型まで通る(ADR-0015 §6) ---------------------------------------------
+// --- engine の型まで通る(ADR-0100 §6) ---------------------------------------------
 
 func engineChart(t *testing.T, out importer.Output) engine.TypeChart {
 	t.Helper()

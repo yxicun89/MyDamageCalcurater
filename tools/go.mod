@@ -1,6 +1,6 @@
 module example.com/pokecalc/tools
 
-go 1.27
+go 1.27.1
 
 require (
 	cel.dev/expr v0.25.1 // indirect

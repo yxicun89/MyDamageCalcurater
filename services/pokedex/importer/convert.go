@@ -1,6 +1,6 @@
 package importer
 
-// Convert は取得元スナップショット(Input)を ADR-0015 の行(Output)に変換する
+// Convert は取得元スナップショット(Input)を ADR-0100 の行(Output)に変換する
 // (ADR-0101 §4〜§9・§12)。
 
 import (
@@ -72,7 +72,7 @@ type RegulationMemberRow struct {
 	MemberID     string
 }
 
-// Output は投入する行の集合(ADR-0015)。スライスは ID / key 順(決定的)。
+// Output は投入する行の集合(ADR-0100)。スライスは ID / key 順(決定的)。
 type Output struct {
 	Types               []TypeRow
 	TypeChart           []master.TypeChartRow

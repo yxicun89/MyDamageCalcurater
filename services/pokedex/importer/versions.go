@@ -16,7 +16,7 @@ type SourceVersion struct {
 	Checksum string
 }
 
-// sourcePattern / checksumPattern は data_versions の CHECK 制約と同じ形式(ADR-0015 §3)。
+// sourcePattern / checksumPattern は data_versions の CHECK 制約と同じ形式(ADR-0100 §3)。
 var (
 	sourcePattern   = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 	checksumPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)

@@ -24,7 +24,7 @@ import (
 	"example.com/pokecalc/services/pokedex/importer"
 )
 
-// masterTables は投入で置き換えるテーブル(ADR-0015 §3。schema_migrations を除く全テーブル)。
+// masterTables は投入で置き換えるテーブル(ADR-0100 §3。schema_migrations を除く全テーブル)。
 var masterTables = []string{
 	"types", "type_chart", "abilities", "items", "moves", "species", "species_abilities",
 	"item_effects", "ability_effects", "learnsets",
