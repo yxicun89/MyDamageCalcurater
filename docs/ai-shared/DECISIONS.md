@@ -258,3 +258,8 @@ Decision: 上記エントリの停止条件は「TB0 のタイプ相性表は差
 その方針で実装・独立レビュー(PASS)・統合した。上記エントリは追記のみの規約により本文を残すが、現状の判断としては読まない。
 Reason: TB0 の独立レビューで、未決のまま残った旧エントリが共有状態の読み手を誤解させると指摘されたため。
 Impact: なし(記録の整理のみ)。
+
+## 2026-09-21: `.gitignore` の `coverage.*` を `coverage.out` / `coverage.html` に絞る(タイプバランスレーンの提案を採用。データレーン)
+Decision: 提案どおり、ルートの `.gitignore` の `coverage.*` を `coverage.out` と `coverage.html` の2行に置き換える。`coverage.*` に依存して無視されていたファイルは無い(`git ls-files -o -i` で確認)。
+Reason: `coverage.go` / `coverage.ts` などのソースまで無視され、コミットから黙って漏れる。
+Impact: `.gitignore` のみ。
