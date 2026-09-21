@@ -36,6 +36,13 @@ Status: TB0〜TB3 は完了・main に統合済み(TB0 の Argo CD 実同期も�
 Next: TB4(仮想敵診断。ユーザー回答: 仮想敵を最大 6 体、pokemonId・技 ID 最大 4・特性は任意で入力し、各仮想敵について自分の各メンバーが受ける最大倍率と与えられる最大倍率を表にし、安全に受けられるメンバー数を集計。TB1〜3 を再利用)の ADR-0019 → spec-writer → implementer → critic。その後 TB5(おすすめタイプと該当ポケモン。DECISIONS.md 2026-09-22)。軽微の残り: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の JSON Schema、CoverageMultiplier の nullable enum
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
 
+## Maintenance
+Lane: 整備(Claude の上限時に Codex が進める。COORDINATION.md「Claude の上限時の Codex」)
+Active: なし
+Branch: なし(使うときに fix/maint-<名前> を origin/main から切る。作業ディレクトリ ~/MyDamageCalcurater-maint は使うときだけ作る)
+Status: 未着手(2026-09-22 に新設)
+Next: docs/plan.md の「整備レーン」のバックログを上から
+
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠
 - Type: 18タイプの英語小文字ID(fire, water, ...)。表示名・色は docs/design.md のトークンに準拠
