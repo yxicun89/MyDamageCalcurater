@@ -3,10 +3,16 @@
 このディレクトリは、公開用クリーンコピーをprivate Git repositoryへpushした後に使う。
 現在の開発repositoryへ公開用remoteを追加せず、履歴をそのままpushしない。
 
-公開用コピーはroot `docs/plan.md` のR-2-9で承認された手順に従い、別ディレクトリのlocal cloneで
+公開用コピーの作成担当はClaude Code/Codexのどちらかへ固定しない。ユーザーから依頼された側が、
+root `docs/plan.md` のR-2-9とmain正本の`docs/ai-shared/DECISIONS.md`に従い、別ディレクトリのlocal cloneで
 作者名・メールと個人accountを含むmodule pathを置換する。`check-publishable-full`を含む履歴全体の
 検査が成功したコピーにだけ、作成したprivate remoteを追加する。balance側から元repositoryの履歴や
 remoteを変更しない。R-2-9のスクリプトが未完成なら、手作業で代替せず完成を待つ。
+
+作成・更新した担当は、自分のfeature branchだけで完了を記録しない。元repositoryのmain正本にある
+`docs/ai-shared/CURRENT_STATE.md`の担当欄と自分のlogへ、秘密を含まない相対path、source commit、
+clean copyのbranch/commit、実行した公開前検査、remote設定/pushの成否を記録する。切替時はclean copy側の
+`docs/ai-shared/`も更新し、以後どちらを開発正本にするかを明記して、次のClaude Code/Codexが迷わない状態にする。
 
 ## Gitへ入れる値
 
