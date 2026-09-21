@@ -262,3 +262,14 @@ func TestEffectivenessCmpDoesNotOverflow(t *testing.T) {
 		t.Errorf("ClassifyEffectiveness(2^62) = %q, %v; want quad_weak", got, err)
 	}
 }
+
+func TestEffectivenessMulReducesUnreducedInputs(t *testing.T) {
+	t.Parallel()
+
+	if got, err := eff(1, 1).Mul(eff(2, 4)); err != nil || got != eff(1, 2) {
+		t.Errorf("1 × 2/4 = %+v, %v; want 1/2", got, err)
+	}
+	if got, err := eff(3, 6).Mul(eff(4, 2)); err != nil || got != eff(1, 1) {
+		t.Errorf("3/6 × 4/2 = %+v, %v; want 1", got, err)
+	}
+}

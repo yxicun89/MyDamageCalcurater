@@ -76,6 +76,10 @@ func (e Effectiveness) Mul(o Effectiveness) (Effectiveness, error) {
 	if e.Num == 0 || o.Num == 0 {
 		return Effectiveness{Num: 0, Den: 1}, nil
 	}
+	// Inputs from a provider may not be reduced (e.g. 2/4); reduce them first so the
+	// product is always in lowest terms (ADR-0017 §3・§5.3).
+	e, _ = NewEffectiveness(e.Num, e.Den)
+	o, _ = NewEffectiveness(o.Num, o.Den)
 	g1 := gcdInt64(e.Num, o.Den)
 	g2 := gcdInt64(o.Num, e.Den)
 	num, okNum := mulNonNegative(e.Num/g1, o.Num/g2)
@@ -83,7 +87,7 @@ func (e Effectiveness) Mul(o Effectiveness) (Effectiveness, error) {
 	if !okNum || !okDen {
 		return Effectiveness{}, fmt.Errorf("%w: %s × %s", ErrEffectivenessOverflow, e, o)
 	}
-	// Both inputs are reduced, so after cross-reduction the product is already in lowest terms.
+	// Both inputs are now reduced, so after cross-reduction the product is in lowest terms.
 	return Effectiveness{Num: num, Den: den}, nil
 }
 

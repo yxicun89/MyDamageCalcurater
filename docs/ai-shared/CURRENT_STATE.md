@@ -31,9 +31,9 @@ Next: docs/plan.md の P6-1 から。Xcode が使えるか(`xcodebuild -version`
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
-Branch: 次は main から feat/tb-tb3-ability を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
-Status: TB0(Argo CD 実同期のみ人間待ち)・TB1(防御。ADR-0014)・TB1b(相性表のデータ化。ADR-0015)・TB2(攻撃範囲 /coverage。ADR-0016)は main に統合済み。ポケモンのタイプと技は temporary の read model(架空データの example。実データは BALANCE_POKEMON_TYPES_PATH / BALANCE_MOVES_PATH でマウント。P2-2 のスナップショットができたら差し替え)
-Next: TB3(特性。設計書 §6 TB3: 正規化された効果データで、タイプ由来/特性由来の無効を区別)。特性データの形式・入力(pokemonId から特性を引くのか、request で特性 ID を送るのか)が未定義なので、日中にユーザーへ質問してから ADR を書く。未対応の軽微: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の schema ファイル、CoverageMultiplier の nullable enum に null を明示するか
+Branch: 次は main から feat/tb-tb4-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
+Status: TB0(Argo CD 実同期のみ人間待ち)・TB1(防御。ADR-0014)・TB1b(相性表のデータ化。ADR-0015)・TB2(攻撃範囲。ADR-0016)・TB3(特性。ADR-0017。倍率は既約分数)は main に統合済み。ポケモン・技・特性は temporary の read model(架空データの example。実データは BALANCE_*_PATH でマウント。P2-2 のスナップショットができたら差し替え)
+Next: TB4(仮想敵診断)は設計書 §6 で「詳細は TB1〜TB3 完成後に確定」のため、ADR-0018 の提案(既定案)をユーザーが確認してから実装する(plan.md「ブロッカー(タイプバランスレーン)」)。確認待ちの間は軽微の残り: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の JSON Schema ファイル、CoverageMultiplier の nullable enum に null を明示
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

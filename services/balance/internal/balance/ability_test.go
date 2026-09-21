@@ -564,3 +564,17 @@ func TestValidateAbilityEffectRejectsZeroFactor(t *testing.T) {
 		}
 	}
 }
+
+func TestUnreducedFactorOfOneChangesNothingOnNeutral(t *testing.T) {
+	t.Parallel()
+
+	// A provider may hand over 2/2; on a neutral matchup it must stay x1, source=type, effect=none (§5.3).
+	two := &Ability{AbilityID: "ability-9998", Effects: []AbilityEffect{{Kind: AbilityEffectTypeMultiplier, AttackType: TypeFire, Factor: Effectiveness{Num: 2, Den: 2}}}}
+	got, err := CalculateDefenseWithAbility(tb3Chart, TypeFire, []TypeID{TypeNormal}, two)
+	if err != nil {
+		t.Fatalf("error = %v", err)
+	}
+	if got.Effectiveness != eff(1, 1) || got.Source != EffectSourceType || got.Effect != DefenseEffectNone {
+		t.Errorf("result = %+v, want 1 with source=type effect=none", got)
+	}
+}
