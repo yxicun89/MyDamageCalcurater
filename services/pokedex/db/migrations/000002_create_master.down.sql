@@ -1,0 +1,8 @@
+DROP TABLE IF EXISTS learnsets;
+DROP TABLE IF EXISTS ability_effects;
+DROP TABLE IF EXISTS item_effects;
+DROP TABLE IF EXISTS species_abilities;
+DROP TABLE IF EXISTS species;
+DROP TABLE IF EXISTS moves;
+DROP TABLE IF EXISTS items;
+DROP TABLE IF EXISTS abilities;

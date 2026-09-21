@@ -2,7 +2,8 @@
 /bin/
 *.test
 *.out
-coverage.*
+coverage.out
+coverage.html
 
 # WASM ビルド成果物(生成物はコミットしない)
 web/public/engine.wasm
