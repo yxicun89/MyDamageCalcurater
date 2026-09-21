@@ -63,3 +63,13 @@ Reason: 担当ディレクトリを分けても共有ファイルでコンフリ
 それでも起きたコンフリクトは異常のサインとして自動解決せず報告する。
 Impact: Codex は go.work とルート Makefile を編集しない。取り込み時のテスト確認は docs/type-balance-test-strategy.md を基準にするが、
 この文書は未作成(Codex/ユーザーによる作成待ち)。作成されるまで Claude は取り込みを実行せず報告する。
+
+## 2026-09-21: TB0 タイプ相性データの取得元・契約を確認待ち
+Decision: 未決。TB0 のタイプ相性表は、pokedex-svc の REST API または既存 MySQL 取り込みデータのエクスポートを
+入力にする必要があるが、現時点では該当 API・importer・export データがリポジトリに存在しないため実装を停止する。
+Reason: `api/openapi.yaml` の pokedex API は種族・技・持ち物・性格のみで、タイプ相性取得契約がない。
+`services/pokedex/` は `.gitkeep` のみ、P2-2/P2-3 も未着手であり、取得形式・バージョン・生成手順を推測できない。
+既存 `engine/typechart.go` の手書き表を複製することは、指定された取得経路にもマスタ正本の API 化にもならない。
+Impact: `feat/codex-tb0-foundation` はブランチ作成のみで、`services/balance/` の実装には未着手。
+再開には、(1) pokedex-svc に追加予定のタイプ相性 API 契約、または (2) コミット可能なエクスポートファイルの
+配置先・スキーマ・データバージョン・再生成方法の指定が必要。既存 API への変更が必要なら Codex は実装せず担当側の判断を待つ。

@@ -8,10 +8,10 @@ Next: feat/claude-p1-engine を main から切り、P1-6 を critic でレビュ
 
 ## Type Balance Checker
 Owner: Codex
-Branch: なし(fix/codex-workflow-golden は main へマージ済み・削除済み。TB 用のブランチはまだ無い)
-Status: 未着手
-Next: Codex がレートリミット解除後、feat/codex-tb0-foundation で TB0(基盤・Kustomize・Argo CD Application 定義)を
-新規開始する(CODEX_KICKOFF.md どおり。引き継ぎ作業ではない)
+Branch: feat/codex-tb0-foundation(main の 8049702 から作成)
+Status: TB0 はタイプ相性データの取得元・契約が不明なためブロック中。実装未着手
+Next: pokedex-svc のタイプ相性 API 契約、または MySQL 取り込みデータのエクスポート仕様が確定したら、
+同ブランチで TB0(基盤・Kustomize・Argo CD Application 定義)を再開する
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠
