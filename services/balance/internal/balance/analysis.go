@@ -52,9 +52,11 @@ func ClassifyMultiplier(m Multiplier) (Category, error) {
 }
 
 // Member is one party member whose types are already resolved.
+// Ability is nil for a member without an ability (TB1 behaviour, ADR-0017 §1).
 type Member struct {
 	PokemonID string
 	Types     []TypeID
+	Ability   *Ability
 }
 
 // AttackDefense is one member's defensive result against one attack type.
@@ -65,8 +67,10 @@ type AttackDefense struct {
 }
 
 // MemberDefense holds 18 AttackDefense entries in canonical attack-type order.
+// AbilityID is the member's Ability.AbilityID, or "" without an ability.
 type MemberDefense struct {
 	PokemonID string
+	AbilityID string
 	Types     []TypeID
 	Defense   []AttackDefense
 }

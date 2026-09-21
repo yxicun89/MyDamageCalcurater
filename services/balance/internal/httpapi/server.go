@@ -36,10 +36,13 @@ var errRequestTooLarge = errors.New("request body exceeds 16 KiB")
 // analyze answers 503 master_unavailable (ADR-0014 §2).
 // Moves may be nil: coverage answers 503 master_unavailable (ADR-0016 §4);
 // analyze does not use it.
+// Abilities may be nil: analyze answers 503 master_unavailable only when a member
+// names an abilityId (ADR-0017 §4); coverage does not use it.
 type Dependencies struct {
 	TypeChart    balance.TypeChartProvider
 	PokemonTypes balance.PokemonTypeProvider
 	Moves        balance.MoveProvider
+	Abilities    balance.AbilityProvider
 }
 
 // New returns the HTTP handler.

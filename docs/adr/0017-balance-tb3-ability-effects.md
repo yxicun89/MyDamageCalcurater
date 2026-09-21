@@ -58,6 +58,14 @@
   → unknown_pokemon(422)→ unknown_ability(422、message は `unknown abilityId: <ID>`)→ 200。それ以外は 500 固定文言。
   特性を指定しない request は、特性の read model が無くても従来どおり動く。
 
+### 5. 細部(spec-writer が挙げた未決の確定。レーン内の判断)
+1. `effect` は特性の効果の種類を表す。タイプ由来の無効(×0)は `effect=none`・`source=type`(特性を持たないメンバーが `none` 以外になることはない)。
+2. request の `"abilityId": null` は省略と同じ(任意の項目なので)。`moveIds`(必須)の null が 400 なのとは扱いが違う。
+3. read model は、`type_multiplier` の係数 1(例 2/2)や、同じ種類の効果の重複(`super_effective_multiplier` が2つ等)を拒否しない。効果は書かれた順に掛ける(掛け算なので順序で結果は変わらない)。
+   係数 1 は「変化なし」として `source=type`・`effect=none`。
+4. `super_effective_multiplier` の条件「等倍より大きい」は、特性を掛ける前のタイプ相性で判定する。
+5. タイプ由来の無効と同じタイプを特性でも無効にする場合は、タイプ由来(`source=type`・`effect=none`)として報告する。
+
 ## 未決(既定案で進行・ユーザー未確認)
 - §2 の効果の種類で足りない特性(例: 効果抜群以外を無効にする特性、半減実を持たせる等の持ち物)は扱わない。必要になったら kind を足す。
 - category の境界(×3 は `weak`、×5 は `quad_weak` など)。

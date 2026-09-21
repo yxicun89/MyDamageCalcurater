@@ -1,12 +1,14 @@
 openapi: 3.0.3
 info:
   title: pokecalc balance API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     パーティのタイプバランスを分析する独立サービスの契約。
     TB1 は防御タイプバランス(18 攻撃タイプごとの各メンバーの倍率とチーム集計)を返す。
     TB2 は攻撃範囲(18 防御タイプごとの各メンバーの最大倍率・有効打とチーム集計)を返す。
-    契約の正は docs/adr/0014-balance-tb1-defense-analysis.md と docs/adr/0016-balance-tb2-offense-coverage.md。
+    TB3 は analyze のメンバーに任意の特性(abilityId)を受け取り、特性による防御相性の変化を反映する。
+    契約の正は docs/adr/0014-balance-tb1-defense-analysis.md、docs/adr/0016-balance-tb2-offense-coverage.md、
+    docs/adr/0017-balance-tb3-ability-effects.md。
 servers:
   - url: /
 paths:
@@ -40,6 +42,9 @@ paths:
         Returns, for each member (request order), the defensive multiplier against all 18
         attack types (canonical order), and a per-attack-type team summary (canonical order).
         Member types are resolved from pokemonId by the service-local read model (ADR-0014).
+        A member may name an optional abilityId; its effects (immune / absorb / type multiplier /
+        super effective multiplier) are resolved by the service-local ability read model and applied
+        after the type matchup (ADR-0017). Without abilityId the member is analyzed exactly as in TB1.
       parameters:
         - $ref: '#/components/parameters/DeviceId'
         - $ref: '#/components/parameters/SessionId'
@@ -69,13 +74,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '422':
-          description: A pokemonId is not registered in the pokemon type read model (unknown_pokemon)
+          description: |
+            A pokemonId is not registered in the pokemon type read model (unknown_pokemon), or
+            an abilityId is not registered in the ability read model (unknown_ability, message
+            "unknown abilityId: <ID>"). pokemonId is resolved first.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '503':
-          description: The pokemon type read model is not configured (master_unavailable)
+          description: |
+            The pokemon type read model is not configured, or a member names an abilityId while the
+            ability read model is not configured (master_unavailable). A request without any abilityId
+            does not need the ability read model.
           content:
             application/json:
               schema:
@@ -181,16 +192,27 @@ components:
           minItems: 1
           maxItems: 6
           items:
-            type: object
-            additionalProperties: false
-            required:
-              - pokemonId
-            properties:
-              pokemonId:
-                type: string
-                maxLength: 8
-                pattern: '^\d{4}-\d{3}$'
-                example: 9001-000
+            $ref: '#/components/schemas/AnalyzeRequestMember'
+    AnalyzeRequestMember:
+      type: object
+      additionalProperties: false
+      required:
+        - pokemonId
+      properties:
+        pokemonId:
+          type: string
+          maxLength: 8
+          pattern: '^\d{4}-\d{3}$'
+          example: 9001-000
+        abilityId:
+          $ref: '#/components/schemas/AbilityId'
+    AbilityId:
+      description: Optional ability of the member (ADR-0017). Omit it for a member without an ability.
+      type: string
+      minLength: 1
+      maxLength: 40
+      pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+      example: ability-9001
     Error:
       type: object
       required:
@@ -209,6 +231,7 @@ components:
         - request_too_large
         - unknown_pokemon
         - unknown_move
+        - unknown_ability
         - master_unavailable
         - internal_error
     AnalyzeResponse:
@@ -245,6 +268,10 @@ components:
           maxLength: 8
           pattern: '^\d{4}-\d{3}$'
           example: 9001-000
+        abilityId:
+          description: The request abilityId, present only when the request member named one.
+          allOf:
+            - $ref: '#/components/schemas/AbilityId'
         types:
           type: array
           minItems: 1
@@ -266,6 +293,7 @@ components:
         - multiplier
         - category
         - source
+        - effect
       properties:
         attackType:
           $ref: '#/components/schemas/TypeId'
@@ -275,18 +303,21 @@ components:
           $ref: '#/components/schemas/DefenseCategory'
         source:
           $ref: '#/components/schemas/EffectSource'
+        effect:
+          $ref: '#/components/schemas/DefenseEffect'
     DefenseMultiplier:
-      description: Exact display form of the defensive multiplier.
+      description: |
+        Exact defensive multiplier as an irreducible fraction "numerator/denominator" (ADR-0017 §3).
+        A denominator of 1 is written as the integer only ("0", "1", "2", "3", "4"); otherwise the
+        fraction is in lowest terms ("1/4", "1/2", "3/4", "5/4", "3/2", "5/2"). Never a float.
+        The TB1 values "0", "1/4", "1/2", "1", "2", "4" are a subset.
       type: string
-      enum:
-        - '0'
-        - '1/4'
-        - '1/2'
-        - '1'
-        - '2'
-        - '4'
+      pattern: '^(0|[1-9][0-9]*(/([2-9]|[1-9][0-9]+))?)$'
+      example: 3/4
     DefenseCategory:
-      description: 'x4: quad_weak, x2: weak, x1: neutral, x1/2: resist, x1/4: quad_resist, x0: immune.'
+      description: |
+        Classification by value range (ADR-0017 §3): x0: immune, 0 < x <= 1/4: quad_resist,
+        1/4 < x < 1: resist, x1: neutral, 1 < x < 4: weak, x >= 4: quad_weak.
       type: string
       enum:
         - quad_weak
@@ -296,15 +327,35 @@ components:
         - quad_resist
         - immune
     EffectSource:
-      description: Origin of the multiplier. Always "type" in TB1; "ability" is reserved for TB3.
+      description: |
+        Origin of the multiplier. "type" when the value comes from the type matchup alone (including a
+        type immunity, which the ability cannot change); "ability" when the member's ability changed it.
       type: string
       enum:
         - type
         - ability
+    DefenseEffect:
+      description: |
+        Kind of ability effect that decided the value (ADR-0017 §3). "immune" / "absorb": the ability
+        made the attack type x0 (absorb ignores its recovery or stat side effects). "multiplier": the ability
+        changed the value by a type multiplier or a super effective multiplier. "none": otherwise
+        (every entry of a member without an ability whose value is not x0 is "none").
+      type: string
+      enum:
+        - none
+        - immune
+        - absorb
+        - multiplier
+      x-enum-varnames:
+        - EffectNone
+        - EffectImmune
+        - EffectAbsorb
+        - EffectMultiplier
     TeamSummaryEntry:
       description: |
-        Per attack type team counts. weak = x2 and x4 members, quadWeak = x4 members (subset of weak),
-        resist = x1/2 and x1/4 members (immune excluded), immune = x0 members, neutral = x1 members.
+        Per attack type team counts by DefenseCategory. weak = weak and quad_weak members,
+        quadWeak = quad_weak members (subset of weak), resist = resist and quad_resist members (immune excluded),
+        immune = x0 members (type or ability immunity, and ability absorption), neutral = x1 members.
         Invariant: weak + resist + immune + neutral = number of members.
       type: object
       additionalProperties: false

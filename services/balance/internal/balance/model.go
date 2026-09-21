@@ -95,7 +95,14 @@ const (
 )
 
 // DefenseResult is stable from TB0 onward so TB3 can add ability-derived results.
+//
+// Multiplier is the type matchup alone (single or dual type product, TB0 representation).
+// Effectiveness is the final multiplier after the member's ability (ADR-0017 §3); without an
+// ability it equals Multiplier.Effectiveness(). Source and Effect tell whether the ability
+// changed the value and how.
 type DefenseResult struct {
-	Multiplier Multiplier
-	Source     EffectSource
+	Multiplier    Multiplier
+	Source        EffectSource
+	Effectiveness Effectiveness
+	Effect        DefenseEffect
 }
