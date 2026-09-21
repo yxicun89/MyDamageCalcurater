@@ -1,4 +1,4 @@
-// Command migrate は pokedex-svc の DB migration を操作する CLI(ADR-0015 §5)。
+// Command migrate は pokedex-svc の DB migration を操作する CLI(ADR-0100 §5)。
 //
 //	migrate up
 //	migrate version

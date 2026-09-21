@@ -1,4 +1,4 @@
-# headless Service(StatefulSet の Pod DNS 用。ADR-0015 §9)。
+# headless Service(StatefulSet の Pod DNS 用。ADR-0100 §9)。
 apiVersion: v1
 kind: Service
 metadata:

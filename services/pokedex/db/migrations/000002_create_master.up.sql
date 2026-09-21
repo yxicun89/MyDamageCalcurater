@@ -1,4 +1,4 @@
--- 共通マスタ(特性・持ち物・技・種族)と、その効果定義・習得技(ADR-0015 §3)。
+-- 共通マスタ(特性・持ち物・技・種族)と、その効果定義・習得技(ADR-0100 §3)。
 -- 効果定義(item_effects / ability_effects)は正規化せず JSON 列に持つ(§3 判断)。
 -- 行が無い = 補正なし。空オブジェクト {} は「補正なし」と区別できないため
 -- JSON の中身の妥当性(厳格デコード)は services/internal/master が担う。
@@ -53,7 +53,7 @@ CREATE TABLE moves (
 -- required_item_id)は「性能が同じ見た目違いフォームは1件、性能が違うフォーム/メガは別行」
 -- (DECISIONS 2026-09-21)の採番を支える。base_species_key / required_item_id の外部キーは
 -- 既定(RESTRICT)にする: MySQL は CHECK 制約が参照する列に ON DELETE/UPDATE CASCADE|SET NULL を
--- 付けられないため(ADR-0015 §2)。
+-- 付けられないため(ADR-0100 §2)。
 CREATE TABLE species (
   `key` CHAR(8) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   dex_no SMALLINT UNSIGNED NOT NULL,
