@@ -5,7 +5,7 @@
 
 ## 背景
 
-Claude Code の利用制限に伴い、実装だけでなく既存の役割分担・検証・Git 運用を Codex に引き継ぐ。
+Claude Code と Codex の両方で開発を進められるよう、実装だけでなく既存の役割分担・検証・Git 運用を Codex にも適用する。
 既存の `.claude/agents/` は scanner → spec-writer → implementer → critic の直列構成で、
 重要タスクでは外部 Codex レビューを追加する。ADR-0003 では engine コアを親が test-first で実装し、
 critic が独立レビューする適応を認めている。これらを無視した全面置換は行わない。

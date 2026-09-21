@@ -173,8 +173,8 @@ paths:
       operationId: calcBulk
       summary: 防御側の代表調整すべてに対する一括計算
       description: |
-        攻撃側は1つに固定し、防御側の種族に対して代表的な調整(無振り/H振り/HB特化/HD特化 等)
-        すべての結果を一度に返す。技が物理なら B 系、特殊なら D 系のプリセットに自動で寄せる。
+        攻撃側は1つに固定し、防御側の種族に対して代表的な調整(既定は、物理技なら 無振り/H振り/H振り+B補正/HB振り/HB特化 の5件、
+        特殊技なら D 系の5件、変化技なら 無振り/H振り の2件。`presets` で選べる)すべての結果を一度に返す。技が物理なら B 系、特殊なら D 系のプリセットに自動で寄せる。
         持ち物の差し替え候補(itemVariants)を渡すと調整×持ち物の組合せを返す。
       parameters:
         - $ref: '#/components/parameters/DeviceId'
@@ -436,13 +436,26 @@ components:
     KOChance:
       type: object
       description: 確定数/乱数n発
-      required: [hits, guaranteed]
+      required: [hits, guaranteed, displayChancePercent]
       properties:
-        hits: { type: integer, description: 最大ダメージで倒すのに必要な攻撃回数 }
+        hits: { type: integer, description: 最大ダメージで倒すのに必要な攻撃回数(0 = 倒せない) }
         guaranteed: { type: boolean, description: 最小ダメージでも hits 回で倒せるなら true(確定n発) }
         chancePercent:
           type: number
-          description: guaranteed が false のとき、hits 回で倒せる確率(%)
+          description: |
+            engine の生値。guaranteed が false のとき、hits 回で倒せる確率(%)を丸めずに返す
+            (ADR-0006)。guaranteed が true のとき、および hits = 0(倒せない)のときは 0。
+            **画面に出す値ではない**(確定なのに 0% と誤表示されるため)。表示には
+            displayChancePercent を使う。
+        displayChancePercent:
+          type: number
+          description: |
+            画面に出す「hits 回で倒せる確率(%)」。常に表示できる値であることを保証する。
+            小数第1位(0.1%刻み。ADR-0010 §3)。
+            - hits = 0(倒せない): 0
+            - guaranteed = true(確定 n 発): 100.0
+            - それ以外: chancePercent を 0.1% 単位に四捨五入し、[0.1, 99.9] に収める
+              (確定・不可能と取り違えないため、0.0 と 100.0 はこの2つに予約する)
 
     CalcResult:
       type: object
@@ -456,8 +469,19 @@ components:
           maxItems: 16
         minDamage: { type: integer }
         maxDamage: { type: integer }
-        minPercent: { type: number }
-        maxPercent: { type: number }
+        minPercent:
+          type: number
+          description: |
+            最小ダメージの表示%(防御側 HP に対する割合)。小数第1位(0.1%刻み)で、
+            **切り捨て**る(「最低これくらい入る」を保守的に示すため。ADR-0010 §3)。
+            整数%に丸めてから小数にした値ではない。HP 比率から直接求める。
+        maxPercent:
+          type: number
+          description: |
+            最大ダメージの表示%(防御側 HP に対する割合)。小数第1位(0.1%刻み)で、
+            **四捨五入**する(ADR-0010 §3)。
+            100 を超える場合は上限で切らず、そのまま返す(例 137.0)。
+            逆算の入力に使う実機観測の整数%とは別概念(engine の ObservedPercent)。
         defenderHP: { type: integer }
         effectiveness:
           type: number
@@ -467,8 +491,19 @@ components:
 
     DefenderPreset:
       type: string
-      description: 防御側の代表調整
-      enum: [none, hp, hb, hd, hb_boost, hd_boost]
+      description: |
+        防御側の代表調整(耐久が上がる順)。SP は能力ポイント(Lv50・個体値31固定)。
+        性格の「無補正」は上昇・下降なし、「+B/-A」は防御上昇・攻撃下降のこと。
+        engine の PresetKey と同一文字列(docs/adr/0009-bulk-calc-presets.md §1)。
+        - `none`: 無振り(SP なし・無補正)。全分類
+        - `hp`: H振り(HP 32・無補正)。全分類
+        - `hb_boost`: H振り+B補正(HP 32・防御上昇 +B/-A)。物理
+        - `hb`: HB振り(HP 32・防御 32・無補正)。物理
+        - `hb_full`: HB特化(HP 32・防御 32・防御上昇 +B/-A)。物理
+        - `hd_boost`: H振り+D補正(HP 32・特防上昇 +D/-A)。特殊
+        - `hd`: HD振り(HP 32・特防 32・無補正)。特殊
+        - `hd_full`: HD特化(HP 32・特防 32・特防上昇 +D/-A)。特殊
+      enum: [none, hp, hb_boost, hb, hb_full, hd_boost, hd, hd_full]
 
     BulkCalcRequest:
       type: object
@@ -482,7 +517,11 @@ components:
         options: { $ref: '#/components/schemas/CalcOptions' }
         presets:
           type: array
-          description: 省略時は技の分類に応じた既定セット
+          description: |
+            省略時(空配列を含む)は技の分類に応じた既定セット。
+            物理技は 5 件(none, hp, hb_boost, hb, hb_full)、
+            特殊技は 5 件(none, hp, hd_boost, hd, hd_full)、
+            変化技は 2 件(none, hp)。指定したときはその順に行を返す。
           items: { $ref: '#/components/schemas/DefenderPreset' }
         itemVariants:
           type: array
@@ -494,7 +533,7 @@ components:
       required: [preset, presetLabel, result]
       properties:
         preset: { $ref: '#/components/schemas/DefenderPreset' }
-        presetLabel: { type: string, description: 表示名(例 HB特化) }
+        presetLabel: { type: string, description: 表示名(例 HB振り / HB特化 / H振り+B補正) }
         itemId: { type: string, nullable: true }
         result: { $ref: '#/components/schemas/CalcResult' }
 

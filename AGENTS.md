@@ -3,7 +3,7 @@
 まず `CLAUDE.md` を読む。プロジェクトの絶対ルール・ドメイン規約・技術規約の正は
 `CLAUDE.md`、Git・役割分担・引き継ぎの共通運用はこのファイルとする。
 続いて `docs/plan.md`、`docs/requirements.md`、`docs/test-strategy.md`、
-`docs/design.md`、関連する `docs/adr/` を読む。
+`docs/design.md`、関連する `docs/adr/`、コードを書く・直す・レビューするときは `docs/coding-rules.md`(共通のコーディング規約)を読む。
 手順と Claude → Codex の対応は `docs/development-workflow.md` を参照。
 
 ## 共有状態(docs/ai-shared/)

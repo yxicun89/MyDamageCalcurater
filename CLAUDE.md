@@ -14,13 +14,16 @@ Claude Code / Codex の手順対応は [docs/development-workflow.md](docs/devel
 4. `docs/design.md` — 画面・ビジュアルの正
 5. `docs/adr/` — 過去の設計判断
 6. `docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md` — Claude Code と Codex の共有状態(運用は [AGENTS.md](AGENTS.md))
+7. `docs/coding-rules.md` — コーディング規約(公開できる状態を保つ・ハードコードしない・読みやすいコード。Claude Code / Codex 共通)
 
 ## リポジトリ構成
 
 ```
 api/openapi.yaml        # API契約の唯一の正(仕様先行)
 engine/                 # 計算エンジン(純粋Go、I/O・外部依存なし)
-engine/cmd/wasm/        # ブラウザ用WASMビルド
+engine/cmd/wasm/        # ブラウザ用WASMビルド(syscall/js の登録のみ)
+engine/wasmapi/         # WASM/JS 境界の DTO・検証・エラー整形(純粋。ネイティブでテスト可)
+engine/cmd/wasmexpect/  # Go/WASM 一致テストの期待値生成(ネイティブ Go の開発用ツール)
 services/gateway/       # Echo。クライアントの唯一の入口、/assets も配信
 services/pokedex/       # マスタ参照(MySQL)
 services/calc/          # 計算(ステートレス)
@@ -56,8 +59,10 @@ docs/
 - ゴールデンテストでは SP を努力値 `max(0, 8×SP−4)` に換算して @smogon/calc(gen9)と照合
 - ダメージ計算は4096基準の固定小数と五捨五超入。float で近似しない
 - 逆算(調整推定)は engine 内の総当たり探索(WASMでも動かすため)
-- 持ち物・技・ポケモンのリストをコードにハードコードしない。マスタデータから引く
+- 持ち物・技・ポケモンのリスト、およびタイプ相性表をコードにハードコードしない。マスタデータから引く(タイプ相性表は ADR-0013。移行は P1-13)
 - 画像は必須にしない。無ければタイプ色エンブレムで成立すること
+- 実 Pokémon マスタデータ・生成済みスナップショット・公式画像はGitにコミットしない(`data/generated/` は .gitignore。ADR-0002)。Git に置くのはコード・schema・架空データの example・README・データの生成元/版の metadata
+- 使用可能なポケモン・技・持ち物はレギュレーション(v1 は M-C)依存のデータ。M-C をロジックに直書きしない
 - 常時動くアニメーションを入れない。演出は操作時のみ
 
 ## 技術規約
@@ -100,7 +105,7 @@ ADR-0003 の適応を維持する。Codex では ADR-0007 と共通ワークフ�
 | 2 | spec-writer | opus | 受け入れ条件とテストを先に書く |
 | 3 | implementer | sonnet | テストを通す最小実装 |
 | 4 | critic | opus | ルール違反・テスト漏れ・越境をレビュー。NGなら3へ(最大3回) |
-| 5 | Codex(任意) | GPT系 | engine・逆算・DB設計など重要タスクのみ `scripts/codex-review.sh` で別モデルレビュー |
+| 5 | (廃止) | ― | 外部 Codex レビューは**実行しない**(ユーザー指示 2026-09-21)。Codex の担当はタイプバランスチェッカー実装で、別ターミナルで並行して動く。`scripts/codex-review.sh` は残すが呼ばない |
 
 - 同じ失敗で3回ループしたら止まり、`docs/plan.md` の「ブロッカー」に書いて次のタスクへ
 - 完了条件: `make test` 成功 / engine 変更時は `make test-golden` 成功 / plan.md 更新 / 必要ならADR

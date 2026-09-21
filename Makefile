@@ -61,6 +61,8 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@cd tools && $(GO) vet ./...
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 	@node --check tools/golden/generate.mjs
+	@node --check scripts/wasm-conformance.mjs
+	@$(MAKE) --no-print-directory check-publishable
 
 .PHONY: build
 build: ## 実装済みGoモジュールをビルド(Web/WASMは後続タスク)
@@ -107,6 +109,10 @@ ios-test: ## iOS シミュレータでテスト
 wasm: ## engine を WASM にビルドして web/public へ
 	@./scripts/wasm.sh
 
+.PHONY: test-wasm
+test-wasm: wasm ## Go と WASM の結果一致テスト(Node。要 make wasm)
+	@node scripts/wasm-conformance.mjs
+
 .PHONY: import
 import: ## マスタデータ取込
 	@echo "import: (P2 で実装)"
@@ -114,6 +120,19 @@ import: ## マスタデータ取込
 .PHONY: assets
 assets: ## 画像を WebP 2サイズに変換して MinIO へ
 	@echo "assets: (M画像対応 で実装)"
+
+## --- 公開前の検査 -----------------------------------------------------
+.PHONY: check-publishable
+check-publishable: ## 公開前の検査(絶対パス・秘密・追跡禁止ファイル・第三者データ。速い)
+	@./scripts/check-publishable.sh
+
+.PHONY: check-publishable-full
+check-publishable-full: ## 上記 + Git 作者情報・make gen の差分(遅い)
+	@./scripts/check-publishable.sh --full
+
+.PHONY: check-publishable-selftest
+check-publishable-selftest: ## 公開前の検査の自己テスト(違反を検出できることの確認)
+	@./scripts/check-publishable.sh --self-test
 
 ## --- 補助 -------------------------------------------------------------
 .PHONY: fmt

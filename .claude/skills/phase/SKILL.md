@@ -13,7 +13,7 @@ description: docs/plan.md のマイルストーンまたはタスクをワーク
 3. `spec-writer` に受け入れ条件とテストを書かせる
 4. `implementer` に実装させる
 5. `critic` にレビューさせる。FAIL なら指摘を渡して 4 に戻る(最大3回)
-6. engine・逆算・DBスキーマ・API契約のタスクなら `scripts/codex-review.sh` を実行し、重大な指摘があれば 4 に戻る(Codex が無ければスキップ)
+6. 外部 Codex レビュー(`scripts/codex-review.sh` / `codex exec`)は**実行しない**(ユーザー指示 2026-09-21。Codex は別ターミナルで並行して実装しているため、レビューには使わない)。レビューは critic のみ
 7. plan.md を `[x]` にし、1タスク1コミット(`P1-3: ダメージ計算コア` の形式)
 8. 3回ループしても通らなければ `[!]` にして「ブロッカー」に記録し、依存しない次のタスクへ進む
 

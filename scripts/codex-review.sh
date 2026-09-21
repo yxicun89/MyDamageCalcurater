@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 直近コミット(または作業中の差分)を Codex にレビューさせ、.reviews/ に保存する。
 # Codex が無い/未ログインならスキップ(失敗扱いにしない)。
-set -u
+set -euo pipefail
 if ! command -v codex >/dev/null 2>&1; then echo "codex not found: skip"; exit 0; fi
 mkdir -p .reviews
 out=".reviews/codex-$(git rev-parse --short HEAD 2>/dev/null || echo wip)-$(date +%H%M%S).md"

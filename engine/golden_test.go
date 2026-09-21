@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 )
 
@@ -101,7 +102,12 @@ func eachGoldenLine(t *testing.T, meta goldenMetadata, name string, consume func
 
 func TestGoldenDamage(t *testing.T) {
 	meta := readGoldenMetadata(t)
-	if meta.Files["random.jsonl.gz"].Count != 10000 || meta.Files["fixed.json"].Count < 200 || meta.Files["attack-species.jsonl.gz"].Count != meta.SpeciesCount*20 || meta.Files["defense-species.jsonl.gz"].Count != meta.SpeciesCount*20 {
+	// タイプ相性表は oracle が出す fixture(testdata/golden/typechart.json)から入力に注入する。
+	// ベクタ1件ずつに 324 件の表を書かないため(ADR-0013 §P1-13.5)。
+	chart := mustTypeChart(t)
+	// defense-species は P1-10 の防御プリセット再定義でグループあたり 4 → 8 件になった
+	// (種族 × 攻撃側アンカー5 × プリセット8)。ADR-0009 §6。
+	if meta.Files["random.jsonl.gz"].Count != 10000 || meta.Files["fixed.json"].Count < 200 || meta.Files["attack-species.jsonl.gz"].Count != meta.SpeciesCount*20 || meta.Files["defense-species.jsonl.gz"].Count != meta.SpeciesCount*40 {
 		t.Fatal("golden coverage incomplete")
 	}
 	for _, name := range []string{"fixed.json", "random.jsonl.gz", "attack-species.jsonl.gz", "defense-species.jsonl.gz"} {
@@ -114,6 +120,7 @@ func TestGoldenDamage(t *testing.T) {
 					t.Fatalf("missing or duplicate case ID: %q", v.ID)
 				}
 				seen[v.ID] = true
+				v.Input.TypeChart = chart
 				result, err := CalcDamage(v.Input)
 				a, d := RealStats(v.Input.Attacker), RealStats(v.Input.Defender)
 				ko := v.Expected.KO
@@ -150,6 +157,60 @@ func TestGoldenDamage(t *testing.T) {
 				t.Errorf("%d/%d external oracle cases disagree", failures, count)
 			}
 		})
+	}
+}
+
+// TestGoldenTypeChart は oracle が出した相性表(testdata/golden/typechart.json)が
+// 生成物として完全であり、engine がその値どおりに引くことを確かめる(ADR-0013 §P1-13.5)。
+// 表の中身の正しさは oracle の責務なので、ここでは「取りこぼしなく渡って引ける」ことだけを見る。
+func TestGoldenTypeChart(t *testing.T) {
+	meta := readGoldenMetadata(t)
+	goldenFile(t, meta, typeChartFixture) // sha256 の照合
+	f, err := readTypeChartFixture()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Source != "@smogon/calc" || f.Version != meta.Version || f.Generation != 9 {
+		t.Fatalf("相性表の出どころが他の fixture と違う: source=%q version=%q generation=%d", f.Source, f.Version, f.Generation)
+	}
+	if len(f.Types) != typeChartTypeCount {
+		t.Fatalf("タイプ数=%d want %d(oracle の ??? / Stellar は除外する)", len(f.Types), typeChartTypeCount)
+	}
+	if n := meta.Files[typeChartFixture].Count; n != typeChartTypeCount*typeChartTypeCount {
+		t.Fatalf("metadata の count=%d want %d(18×18)", n, typeChartTypeCount*typeChartTypeCount)
+	}
+	if !sort.SliceIsSorted(f.Types, func(i, j int) bool { return f.Types[i] < f.Types[j] }) {
+		t.Errorf("types は ID 昇順で出力すること(生成を決定的にするため): %v", f.Types)
+	}
+
+	chart := mustTypeChart(t)
+	valid := map[int]bool{TypeCodeImmune: true, TypeCodeNotVeryEffective: true, TypeCodeNeutral: true, TypeCodeSuperEffective: true}
+	pairs := 0
+	for _, atk := range f.Types {
+		row, ok := f.Effectiveness[atk]
+		if !ok {
+			t.Fatalf("生成物なのに %q の行が無い(等倍の省略は手書き fixture だけ)", atk)
+		}
+		for _, def := range f.Types {
+			code, ok := row[def]
+			if !ok {
+				t.Fatalf("生成物なのに %q → %q の組が無い", atk, def)
+			}
+			if !valid[code] {
+				t.Fatalf("%q → %q のコード %d は 0/1/2/4 以外", atk, def, code)
+			}
+			got, err := chart.Code(atk, def)
+			if err != nil {
+				t.Fatalf("Code(%q, %q): %v", atk, def, err)
+			}
+			if got != code {
+				t.Errorf("Code(%q, %q) = %d, fixture = %d", atk, def, got, code)
+			}
+			pairs++
+		}
+	}
+	if pairs != typeChartTypeCount*typeChartTypeCount {
+		t.Fatalf("照合した組数=%d want %d", pairs, typeChartTypeCount*typeChartTypeCount)
 	}
 }
 

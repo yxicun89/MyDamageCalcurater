@@ -1,0 +1,3249 @@
+{
+  "schemaVersion": 2,
+  "note": "P1-9 Go/WASM 一致テストの入力ベクタ。ADR-0011 の JSON 契約に従う。期待値は実行時に engine/cmd/wasmexpect がネイティブ Go で生成する(コミットしない)。",
+  "generatedFrom": "testdata/golden/fixed.json(@smogon/calc 0.10.0 由来)+ 手書きの境界条件",
+  "typeChartNote": "ADR-0011 §13 / ADR-0013: タイプ相性表は入力(マスタ)。18×18 を 33 件のリクエストに書くとファイルが読めなくなるため、ここで1度だけ定義し、テストと Node ハーネスが各リクエストへ typeChart として注入する。等倍(2)は省略している。",
+  "typeChart": {
+    "types": [
+      "bug",
+      "dark",
+      "dragon",
+      "electric",
+      "fairy",
+      "fighting",
+      "fire",
+      "flying",
+      "ghost",
+      "grass",
+      "ground",
+      "ice",
+      "normal",
+      "poison",
+      "psychic",
+      "rock",
+      "steel",
+      "water"
+    ],
+    "effectiveness": {
+      "bug": {
+        "dark": 4,
+        "fairy": 1,
+        "fighting": 1,
+        "fire": 1,
+        "flying": 1,
+        "ghost": 1,
+        "grass": 4,
+        "poison": 1,
+        "psychic": 4,
+        "steel": 1
+      },
+      "dark": {
+        "dark": 1,
+        "fairy": 1,
+        "fighting": 1,
+        "ghost": 4,
+        "psychic": 4
+      },
+      "dragon": {
+        "dragon": 4,
+        "fairy": 0,
+        "steel": 1
+      },
+      "electric": {
+        "dragon": 1,
+        "electric": 1,
+        "flying": 4,
+        "grass": 1,
+        "ground": 0,
+        "water": 4
+      },
+      "fairy": {
+        "dark": 4,
+        "dragon": 4,
+        "fighting": 4,
+        "fire": 1,
+        "poison": 1,
+        "steel": 1
+      },
+      "fighting": {
+        "bug": 1,
+        "dark": 4,
+        "fairy": 1,
+        "flying": 1,
+        "ghost": 0,
+        "ice": 4,
+        "normal": 4,
+        "poison": 1,
+        "psychic": 1,
+        "rock": 4,
+        "steel": 4
+      },
+      "fire": {
+        "bug": 4,
+        "dragon": 1,
+        "fire": 1,
+        "grass": 4,
+        "ice": 4,
+        "rock": 1,
+        "steel": 4,
+        "water": 1
+      },
+      "flying": {
+        "bug": 4,
+        "electric": 1,
+        "fighting": 4,
+        "grass": 4,
+        "rock": 1,
+        "steel": 1
+      },
+      "ghost": {
+        "dark": 1,
+        "ghost": 4,
+        "normal": 0,
+        "psychic": 4
+      },
+      "grass": {
+        "bug": 1,
+        "dragon": 1,
+        "fire": 1,
+        "flying": 1,
+        "grass": 1,
+        "ground": 4,
+        "poison": 1,
+        "rock": 4,
+        "steel": 1,
+        "water": 4
+      },
+      "ground": {
+        "bug": 1,
+        "electric": 4,
+        "fire": 4,
+        "flying": 0,
+        "grass": 1,
+        "poison": 4,
+        "rock": 4,
+        "steel": 4
+      },
+      "ice": {
+        "dragon": 4,
+        "fire": 1,
+        "flying": 4,
+        "grass": 4,
+        "ground": 4,
+        "ice": 1,
+        "steel": 1,
+        "water": 1
+      },
+      "normal": {
+        "ghost": 0,
+        "rock": 1,
+        "steel": 1
+      },
+      "poison": {
+        "fairy": 4,
+        "ghost": 1,
+        "grass": 4,
+        "ground": 1,
+        "poison": 1,
+        "rock": 1,
+        "steel": 0
+      },
+      "psychic": {
+        "dark": 0,
+        "fighting": 4,
+        "poison": 4,
+        "psychic": 1,
+        "steel": 1
+      },
+      "rock": {
+        "bug": 4,
+        "fighting": 1,
+        "fire": 4,
+        "flying": 4,
+        "ground": 1,
+        "ice": 4,
+        "steel": 1
+      },
+      "steel": {
+        "electric": 1,
+        "fairy": 4,
+        "fire": 1,
+        "ice": 4,
+        "rock": 4,
+        "steel": 1,
+        "water": 1
+      },
+      "water": {
+        "dragon": 1,
+        "fire": 4,
+        "grass": 1,
+        "ground": 4,
+        "rock": 4,
+        "water": 1
+      }
+    }
+  },
+  "vectors": [
+    {
+      "name": "calc/baseline-special-4x",
+      "fn": "calc",
+      "tags": [
+        "baseline",
+        "effectiveness"
+      ],
+      "source": "testdata/golden/fixed.json#baseline/Magmortar/Flamethrower",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "magmortar",
+            "types": [
+              "fire"
+            ],
+            "baseStats": {
+              "hp": 75,
+              "atk": 95,
+              "def": 67,
+              "spa": 125,
+              "spd": 95,
+              "spe": 83
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "abomasnow",
+            "types": [
+              "grass",
+              "ice"
+            ],
+            "baseStats": {
+              "hp": 90,
+              "atk": 92,
+              "def": 75,
+              "spa": 92,
+              "spd": 85,
+              "spe": 60
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "flamethrower",
+          "type": "fire",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/baseline-physical",
+      "fn": "calc",
+      "tags": [
+        "baseline",
+        "stab"
+      ],
+      "source": "testdata/golden/fixed.json#baseline/Snorlax/Body Slam",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "bodyslam",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/critical",
+      "fn": "calc",
+      "tags": [
+        "critical"
+      ],
+      "source": "testdata/golden/fixed.json#critical/Raichu/Thunderbolt",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "raichu",
+            "types": [
+              "electric"
+            ],
+            "baseStats": {
+              "hp": 60,
+              "atk": 90,
+              "def": 55,
+              "spa": 90,
+              "spd": 80,
+              "spe": 110
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "blastoise",
+            "types": [
+              "water"
+            ],
+            "baseStats": {
+              "hp": 79,
+              "atk": 83,
+              "def": 100,
+              "spa": 85,
+              "spd": 105,
+              "spe": 78
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "thunderbolt",
+          "type": "electric",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": true
+      }
+    },
+    {
+      "name": "calc/burn",
+      "fn": "calc",
+      "tags": [
+        "burn"
+      ],
+      "source": "testdata/golden/fixed.json#burn/Snorlax/Body Slam",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "burn",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "bodyslam",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/weather-sun",
+      "fn": "calc",
+      "tags": [
+        "weather"
+      ],
+      "source": "testdata/golden/fixed.json#sun/Magmortar/Flamethrower",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "magmortar",
+            "types": [
+              "fire"
+            ],
+            "baseStats": {
+              "hp": 75,
+              "atk": 95,
+              "def": 67,
+              "spa": 125,
+              "spd": 95,
+              "spe": 83
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "abomasnow",
+            "types": [
+              "grass",
+              "ice"
+            ],
+            "baseStats": {
+              "hp": 90,
+              "atk": 92,
+              "def": 75,
+              "spa": 92,
+              "spd": 85,
+              "spe": 60
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "flamethrower",
+          "type": "fire",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "sun",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/weather-rain",
+      "fn": "calc",
+      "tags": [
+        "weather"
+      ],
+      "source": "testdata/golden/fixed.json#rain/Magmortar/Flamethrower",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "magmortar",
+            "types": [
+              "fire"
+            ],
+            "baseStats": {
+              "hp": 75,
+              "atk": 95,
+              "def": 67,
+              "spa": 125,
+              "spd": 95,
+              "spe": 83
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "abomasnow",
+            "types": [
+              "grass",
+              "ice"
+            ],
+            "baseStats": {
+              "hp": 90,
+              "atk": 92,
+              "def": 75,
+              "spa": 92,
+              "spd": 85,
+              "spe": 60
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "flamethrower",
+          "type": "fire",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "rain",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/weather-sand-assault-vest",
+      "fn": "calc",
+      "tags": [
+        "weather",
+        "item"
+      ],
+      "source": "testdata/golden/fixed.json#sand-vest/Haxorus/Dragon Pulse",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "haxorus",
+            "types": [
+              "dragon"
+            ],
+            "baseStats": {
+              "hp": 76,
+              "atk": 147,
+              "def": 90,
+              "spa": 60,
+              "spd": 70,
+              "spe": 97
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "garchomp",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "baseStats": {
+              "hp": 108,
+              "atk": 130,
+              "def": 95,
+              "spa": 80,
+              "spd": 85,
+              "spe": 102
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": {
+            "id": "Assault Vest",
+            "effect": {
+              "statMods": {
+                "spd": 6144
+              }
+            }
+          }
+        },
+        "move": {
+          "id": "dragonpulse",
+          "type": "dragon",
+          "category": "special",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "sand",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/weather-snow-eviolite",
+      "fn": "calc",
+      "tags": [
+        "weather",
+        "item"
+      ],
+      "source": "testdata/golden/fixed.json#eviolite-snow",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snover",
+            "types": [
+              "grass",
+              "ice"
+            ],
+            "baseStats": {
+              "hp": 60,
+              "atk": 62,
+              "def": 50,
+              "spa": 62,
+              "spd": 60,
+              "spe": 40
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": {
+            "id": "Eviolite",
+            "effect": {
+              "statMods": {
+                "def": 6144,
+                "spd": 6144
+              }
+            }
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "snow",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/terrain-misty-dragon",
+      "fn": "calc",
+      "tags": [
+        "terrain"
+      ],
+      "source": "testdata/golden/fixed.json#misty-dragon",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "haxorus",
+            "types": [
+              "dragon"
+            ],
+            "baseStats": {
+              "hp": 76,
+              "atk": 147,
+              "def": 90,
+              "spa": 60,
+              "spd": 70,
+              "spe": 97
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "dragonclaw",
+          "type": "dragon",
+          "category": "physical",
+          "power": 80,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "misty",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/screen-reflect",
+      "fn": "calc",
+      "tags": [
+        "screens"
+      ],
+      "source": "testdata/golden/fixed.json#reflect/Snorlax/Body Slam",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "bodyslam",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": true,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/screen-aurora-veil",
+      "fn": "calc",
+      "tags": [
+        "screens"
+      ],
+      "source": "testdata/golden/fixed.json#aurora-veil/Metagross/Iron Head",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "metagross",
+            "types": [
+              "steel",
+              "psychic"
+            ],
+            "baseStats": {
+              "hp": 80,
+              "atk": 135,
+              "def": 130,
+              "spa": 95,
+              "spd": 90,
+              "spe": 70
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "clefable",
+            "types": [
+              "fairy"
+            ],
+            "baseStats": {
+              "hp": 95,
+              "atk": 70,
+              "def": 73,
+              "spa": 95,
+              "spd": 90,
+              "spe": 60
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "ironhead",
+          "type": "steel",
+          "category": "physical",
+          "power": 80,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": true
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/item-life-orb",
+      "fn": "calc",
+      "tags": [
+        "item"
+      ],
+      "source": "testdata/golden/fixed.json#lifeorb/Snorlax/Body Slam",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": {
+            "id": "Life Orb",
+            "effect": {
+              "damageMod": 5324
+            }
+          }
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "bodyslam",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/item-expert-belt",
+      "fn": "calc",
+      "tags": [
+        "item"
+      ],
+      "source": "testdata/golden/fixed.json#expertbelt/Magmortar/Flamethrower",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "magmortar",
+            "types": [
+              "fire"
+            ],
+            "baseStats": {
+              "hp": 75,
+              "atk": 95,
+              "def": 67,
+              "spa": 125,
+              "spd": 95,
+              "spe": 83
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": {
+            "id": "Expert Belt",
+            "effect": {
+              "damageMod": 4915,
+              "onlySuperEffective": true
+            }
+          }
+        },
+        "defender": {
+          "species": {
+            "key": "abomasnow",
+            "types": [
+              "grass",
+              "ice"
+            ],
+            "baseStats": {
+              "hp": 90,
+              "atk": 92,
+              "def": 75,
+              "spa": 92,
+              "spd": 85,
+              "spe": 60
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "flamethrower",
+          "type": "fire",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/item-charcoal",
+      "fn": "calc",
+      "tags": [
+        "item"
+      ],
+      "source": "testdata/golden/fixed.json#charcoal/Magmortar/Flamethrower",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "magmortar",
+            "types": [
+              "fire"
+            ],
+            "baseStats": {
+              "hp": 75,
+              "atk": 95,
+              "def": 67,
+              "spa": 125,
+              "spd": 95,
+              "spe": 83
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": {
+            "id": "Charcoal",
+            "effect": {
+              "boostType": "fire",
+              "boostTypeMod": 4915
+            }
+          }
+        },
+        "defender": {
+          "species": {
+            "key": "abomasnow",
+            "types": [
+              "grass",
+              "ice"
+            ],
+            "baseStats": {
+              "hp": 90,
+              "atk": 92,
+              "def": 75,
+              "spa": 92,
+              "spd": 85,
+              "spe": 60
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "flamethrower",
+          "type": "fire",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/item-occa-berry",
+      "fn": "calc",
+      "tags": [
+        "item"
+      ],
+      "source": "testdata/golden/fixed.json#occaberry/Magmortar/Flamethrower",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "magmortar",
+            "types": [
+              "fire"
+            ],
+            "baseStats": {
+              "hp": 75,
+              "atk": 95,
+              "def": 67,
+              "spa": 125,
+              "spd": 95,
+              "spe": 83
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "abomasnow",
+            "types": [
+              "grass",
+              "ice"
+            ],
+            "baseStats": {
+              "hp": 90,
+              "atk": 92,
+              "def": 75,
+              "spa": 92,
+              "spd": 85,
+              "spe": 60
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": {
+            "id": "Occa Berry",
+            "effect": {
+              "resistBerryType": "fire"
+            }
+          }
+        },
+        "move": {
+          "id": "flamethrower",
+          "type": "fire",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/ability-adaptability",
+      "fn": "calc",
+      "tags": [
+        "ability"
+      ],
+      "source": "testdata/golden/fixed.json#adaptability/Snorlax/Body Slam",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "Adaptability",
+            "effect": {
+              "stabMod": 8192
+            }
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "bodyslam",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/ability-thick-fat",
+      "fn": "calc",
+      "tags": [
+        "ability"
+      ],
+      "source": "testdata/golden/fixed.json#thick-fat/Magmortar/Flamethrower",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "magmortar",
+            "types": [
+              "fire"
+            ],
+            "baseStats": {
+              "hp": 75,
+              "atk": 95,
+              "def": 67,
+              "spa": 125,
+              "spd": 95,
+              "spe": 83
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "abomasnow",
+            "types": [
+              "grass",
+              "ice"
+            ],
+            "baseStats": {
+              "hp": 90,
+              "atk": 92,
+              "def": 75,
+              "spa": 92,
+              "spd": 85,
+              "spe": 60
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "Thick Fat",
+            "effect": {
+              "defResistType": {
+                "fire": 2048,
+                "ice": 2048
+              }
+            }
+          },
+          "item": null
+        },
+        "move": {
+          "id": "flamethrower",
+          "type": "fire",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/ability-filter-with-life-orb",
+      "fn": "calc",
+      "tags": [
+        "ability",
+        "item"
+      ],
+      "source": "testdata/golden/fixed.json#filter-life-orb/Magmortar/Flamethrower",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "magmortar",
+            "types": [
+              "fire"
+            ],
+            "baseStats": {
+              "hp": 75,
+              "atk": 95,
+              "def": 67,
+              "spa": 125,
+              "spd": 95,
+              "spe": 83
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": {
+            "id": "Life Orb",
+            "effect": {
+              "damageMod": 5324
+            }
+          }
+        },
+        "defender": {
+          "species": {
+            "key": "abomasnow",
+            "types": [
+              "grass",
+              "ice"
+            ],
+            "baseStats": {
+              "hp": 90,
+              "atk": 92,
+              "def": 75,
+              "spa": 92,
+              "spd": 85,
+              "spe": 60
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "Filter",
+            "effect": {
+              "reduceSuperEffective": 3072
+            }
+          },
+          "item": null
+        },
+        "move": {
+          "id": "flamethrower",
+          "type": "fire",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/critical-ranks-screens",
+      "fn": "calc",
+      "tags": [
+        "critical",
+        "ranks",
+        "screens"
+      ],
+      "source": "testdata/golden/fixed.json#critical-ranks-screens/Raichu/Thunderbolt",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "raichu",
+            "types": [
+              "electric"
+            ],
+            "baseStats": {
+              "hp": 60,
+              "atk": 90,
+              "def": 55,
+              "spa": 90,
+              "spd": 80,
+              "spe": 110
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {
+            "atk": -6,
+            "spa": -6
+          },
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "blastoise",
+            "types": [
+              "water"
+            ],
+            "baseStats": {
+              "hp": 79,
+              "atk": 83,
+              "def": 100,
+              "spa": 85,
+              "spd": 105,
+              "spe": 78
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {
+            "def": 6,
+            "spd": 6
+          },
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "thunderbolt",
+          "type": "electric",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": true
+          }
+        },
+        "critical": true
+      }
+    },
+    {
+      "name": "calc/ko-four-hits",
+      "fn": "calc",
+      "tags": [
+        "ko",
+        "float"
+      ],
+      "source": "testdata/golden/fixed.json#ko-four-hits",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 32,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "bodyslam",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/minimal-omitted-optional-fields",
+      "fn": "calc",
+      "tags": [
+        "defaults"
+      ],
+      "request": {
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          }
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        }
+      }
+    },
+    {
+      "name": "calc/type-immunity",
+      "fn": "calc",
+      "tags": [
+        "effectiveness"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "defender": {
+          "species": {
+            "key": "gengar",
+            "types": [
+              "ghost",
+              "poison"
+            ],
+            "baseStats": {
+              "hp": 60,
+              "atk": 65,
+              "def": 60,
+              "spa": 130,
+              "spd": 75,
+              "spe": 110
+            }
+          },
+          "level": 50,
+          "status": "none"
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/status-move-zero-damage",
+      "fn": "calc",
+      "tags": [
+        "effectiveness"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "status": "none"
+        },
+        "move": {
+          "id": "swordsdance",
+          "nameJa": "テストわざ3",
+          "type": "normal",
+          "category": "status",
+          "power": 0,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/resisted-half",
+      "fn": "calc",
+      "tags": [
+        "effectiveness",
+        "resisted"
+      ],
+      "source": "手書き(炎技 → みず。ゴールデン固定ケースに半減の単独ケースが無いため)",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "magmortar",
+            "types": [
+              "fire"
+            ],
+            "baseStats": {
+              "hp": 75,
+              "atk": 95,
+              "def": 67,
+              "spa": 125,
+              "spd": 95,
+              "spe": 83
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "blastoise",
+            "types": [
+              "water"
+            ],
+            "baseStats": {
+              "hp": 79,
+              "atk": 83,
+              "def": 100,
+              "spa": 85,
+              "spd": 105,
+              "spe": 78
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "flamethrower",
+          "type": "fire",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "bulk/default-presets-physical",
+      "fn": "calcBulk",
+      "tags": [
+        "bulk",
+        "defaults"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "defenderSpecies": {
+          "key": "blissey",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "bulk/default-presets-special",
+      "fn": "calcBulk",
+      "tags": [
+        "bulk",
+        "defaults"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "magmortar",
+            "types": [
+              "fire"
+            ],
+            "baseStats": {
+              "hp": 75,
+              "atk": 95,
+              "def": 67,
+              "spa": 125,
+              "spd": 95,
+              "spe": 83
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "spa",
+            "minus": "atk"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 32,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "defenderSpecies": {
+          "key": "abomasnow",
+          "types": [
+            "grass",
+            "ice"
+          ],
+          "baseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "move": {
+          "id": "flamethrower",
+          "nameJa": "テストわざ2",
+          "type": "fire",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "bulk/preset-keys-and-item-variants",
+      "fn": "calcBulk",
+      "tags": [
+        "bulk",
+        "itemVariants"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "defenderSpecies": {
+          "key": "blissey",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "attackerScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          },
+          "defenderScreens": {
+            "reflect": true,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false,
+        "presetKeys": [
+          "none",
+          "hp",
+          "hb_boost",
+          "hb",
+          "hb_full"
+        ],
+        "itemVariants": [
+          null,
+          {
+            "id": "eviolite",
+            "nameJa": "テストもちもの1",
+            "effect": {
+              "statMods": {
+                "def": 6144,
+                "spd": 6144
+              }
+            }
+          },
+          {
+            "id": "assaultvest",
+            "nameJa": "テストもちもの2",
+            "effect": {
+              "statMods": {
+                "spd": 6144
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "bulk/custom-presets",
+      "fn": "calcBulk",
+      "tags": [
+        "bulk"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "defenderSpecies": {
+          "key": "blissey",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "presets": [
+          {
+            "key": "none",
+            "label": "無振り",
+            "sp": {
+              "hp": 0,
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0
+            },
+            "nature": {
+              "plus": "",
+              "minus": ""
+            },
+            "applies": ""
+          },
+          {
+            "key": "hb_full",
+            "label": "HB特化",
+            "sp": {
+              "hp": 32,
+              "atk": 0,
+              "def": 32,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0
+            },
+            "nature": {
+              "plus": "def",
+              "minus": "atk"
+            },
+            "applies": "physical"
+          }
+        ]
+      }
+    },
+    {
+      "name": "bulk/preset-keys-special-full",
+      "fn": "calcBulk",
+      "tags": [
+        "bulk"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "magmortar",
+            "types": [
+              "fire"
+            ],
+            "baseStats": {
+              "hp": 75,
+              "atk": 95,
+              "def": 67,
+              "spa": 125,
+              "spd": 95,
+              "spe": 83
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "spa",
+            "minus": "atk"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 32,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "defenderSpecies": {
+          "key": "abomasnow",
+          "types": [
+            "grass",
+            "ice"
+          ],
+          "baseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "move": {
+          "id": "flamethrower",
+          "nameJa": "テストわざ2",
+          "type": "fire",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "presetKeys": [
+          "none",
+          "hp",
+          "hd_boost",
+          "hd",
+          "hd_full"
+        ]
+      }
+    },
+    {
+      "name": "reverse/defender-percent-single-observation",
+      "fn": "calcReverse",
+      "tags": [
+        "reverse",
+        "percent",
+        "defender"
+      ],
+      "request": {
+        "format": "single",
+        "side": "defender",
+        "known": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "unknownSpecies": {
+          "key": "blissey",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "observations": [
+          {
+            "percent": 45
+          }
+        ],
+        "maxCandidates": 10
+      }
+    },
+    {
+      "name": "reverse/defender-percent-tenths",
+      "fn": "calcReverse",
+      "tags": [
+        "reverse",
+        "percentTenths",
+        "defender"
+      ],
+      "request": {
+        "format": "single",
+        "side": "defender",
+        "known": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "unknownSpecies": {
+          "key": "blissey",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "observations": [
+          {
+            "percentTenths": 452
+          }
+        ],
+        "maxCandidates": 10
+      }
+    },
+    {
+      "name": "reverse/defender-percent-two-observations",
+      "fn": "calcReverse",
+      "tags": [
+        "reverse",
+        "percent",
+        "defender",
+        "multiObservation"
+      ],
+      "request": {
+        "format": "single",
+        "side": "defender",
+        "known": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "unknownSpecies": {
+          "key": "blissey",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "observations": [
+          {
+            "percent": 45,
+            "note": "1発目"
+          },
+          {
+            "percent": 47,
+            "note": "2発目"
+          }
+        ],
+        "maxCandidates": 10
+      }
+    },
+    {
+      "name": "reverse/defender-damage-with-item-candidates",
+      "fn": "calcReverse",
+      "tags": [
+        "reverse",
+        "damage",
+        "defender",
+        "itemCandidates"
+      ],
+      "request": {
+        "format": "single",
+        "side": "defender",
+        "known": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "unknownSpecies": {
+          "key": "blissey",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "itemCandidates": [
+          null,
+          {
+            "id": "eviolite",
+            "nameJa": "テストもちもの1",
+            "effect": {
+              "statMods": {
+                "def": 6144,
+                "spd": 6144
+              }
+            }
+          }
+        ],
+        "observations": [
+          {
+            "damage": 150
+          }
+        ],
+        "maxCandidates": 8
+      }
+    },
+    {
+      "name": "reverse/attacker-damage",
+      "fn": "calcReverse",
+      "tags": [
+        "reverse",
+        "damage",
+        "attacker"
+      ],
+      "request": {
+        "format": "single",
+        "side": "attacker",
+        "known": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "sp": {
+            "hp": 32,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "unknownSpecies": {
+          "key": "snorlax",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "observations": [
+          {
+            "damage": 270
+          }
+        ],
+        "maxCandidates": 10
+      }
+    }
+  ]
+}

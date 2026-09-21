@@ -12,7 +12,7 @@ func indiv(base Stats, sp Stats, n Nature, ranks Ranks) Individual {
 }
 
 func TestRealStatsKnownValues(t *testing.T) {
-	// ガブリアス Lv50。既知の実数値で確認。
+	// 種族値が攻撃寄り(HP108/Atk130/Def95/SpA80/SpD85/Spe102)の種族 Lv50。既知の実数値で確認。
 	garchomp := Stats{HP: 108, Atk: 130, Def: 95, SpA: 80, SpD: 85, Spe: 102}
 
 	// A特化(いじっぱり: +Atk/-SpA、Atk に SP32、HP に SP32)

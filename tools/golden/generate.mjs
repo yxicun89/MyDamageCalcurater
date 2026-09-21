@@ -150,6 +150,17 @@ for(let i=0;i<10000;i++) {
     a:{sp:randomSP(),nature:pick(['Serious','Adamant','Modest','Bold','Calm']),item:attackItem,ability:pick(['','Adaptability','Steelworker','Water Bubble']),burn:random()<0.2,ranks:rank()},
     d:{sp:randomSP(),nature:pick(['Serious','Adamant','Modest','Bold','Calm']),item:defendItem,ability:pick(['','Thick Fat','Filter','Solid Rock','Water Bubble']),ranks:rank()}}));
 }
+// ADR-0009 §1/§6: engine の DefenderPresetCatalog と同じ8件。名前は engine の PresetKey と同一文字列。
+const defensePresets=[
+  ['none',{}],
+  ['hp',{sp:{hp:32}}],
+  ['hb_boost',{sp:{hp:32},nature:'Bold'}],
+  ['hb',{sp:{hp:32,def:32}}],
+  ['hb_full',{sp:{hp:32,def:32},nature:'Bold'}],
+  ['hd_boost',{sp:{hp:32},nature:'Calm'}],
+  ['hd',{sp:{hp:32,spd:32}}],
+  ['hd_full',{sp:{hp:32,spd:32},nature:'Calm'}],
+];
 const attacks=[],defenses=[],statCases=[];
 for(const s of species) {
   // All gen9 data species/forms are reference inputs; Champions legality awaits P2.
@@ -159,7 +170,7 @@ for(const s of species) {
     for(const boosted of [false,true]) for(const d of defenderAnchors)
       attacks.push(vector(`attack/${s.id}/${m.id}/${boosted?'max':'zero'}/${id(d)}`,s.name,d,m.name,{a:boosted?{sp:{[atk]:32},nature:atk==='atk'?'Adamant':'Modest'}:{}}));
   }
-  for(const [a,m] of attackAnchors) for(const [preset,opt] of [['zero',{}],['h',{sp:{hp:32}}],['hb',{sp:{hp:32,def:32},nature:'Bold'}],['hd',{sp:{hp:32,spd:32},nature:'Calm'}]])
+  for(const [a,m] of attackAnchors) for(const [preset,opt] of defensePresets)
     defenses.push(vector(`defense/${s.id}/${id(a)}/${preset}`,a,s.name,m,{d:opt}));
   for(const k of keys) for(const sp of [0,1,31,32]) for(const modifier of ['neutral','plus','minus']) {
     const n=[...gen.natures].find(n=>modifier==='neutral'?n.plus===n.minus:modifier==='plus'?n.plus===k&&n.minus!==k:n.minus===k&&n.plus!==k);
@@ -172,5 +183,30 @@ mkdirSync(out,{recursive:true});
 const files={};
 function save(name,data,compressed=false){const raw=compressed?data.map(v=>JSON.stringify(v)).join('\n')+'\n':JSON.stringify(data,null,2)+'\n';const bytes=compressed?gzipSync(raw,{level:9}):Buffer.from(raw);writeFileSync(`${out}/${name}`,bytes);files[name]={count:data.length,sha256:createHash('sha256').update(bytes).digest('hex')};}
 save('fixed.json',fixed);save('random.jsonl.gz',randomCases,true);save('attack-species.jsonl.gz',attacks,true);save('defense-species.jsonl.gz',defenses,true);save('stats-species.jsonl.gz',statCases,true);
+// ADR-0013 §P1-13.5: oracle のタイプ相性表を engine に渡す入力として出力する。表の正しさは oracle の責務。
+// 倍率は oracle の値(0/0.5/1/2)を2倍した整数コード(0=無効/1=いまひとつ/2=等倍/4=抜群)。
+const excludedTypes=['???','stellar']; // oracle の type.id では '' と 'stellar'
+const engineTypes=['bug','dark','dragon','electric','fairy','fighting','fire','flying','ghost','grass','ground','ice','normal','poison','psychic','rock','steel','water'];
+const chartTypes=[...gen.types].filter(t=>t.id!==''&&t.id!=='stellar');
+assert.deepEqual(chartTypes.map(t=>t.id).sort(),engineTypes,'oracle types differ from the 18 engine types; review before regenerating');
+const typeNameById=Object.fromEntries([...gen.types].map(t=>[t.id,t.name]));
+const typeChart={};
+for(const atk of [...chartTypes].sort((a,b)=>a.id<b.id?-1:1)) {
+  const row={};
+  for(const def of engineTypes) {
+    const multiplier=atk.effectiveness[typeNameById[def]];
+    assert([0,0.5,1,2].includes(multiplier),`unexpected effectiveness ${atk.id} -> ${def}: ${multiplier}`);
+    row[def]=multiplier*2;
+  }
+  typeChart[atk.id]=row;
+}
+assert.equal(Object.keys(typeChart).length*engineTypes.length,324);
+{
+  const raw=JSON.stringify({schemaVersion:1,source:'@smogon/calc',version,generation:9,
+    note:'Multiplier codes are the effectiveness x2 as integers (0=immune, 1=not very effective, 2=neutral, 4=super effective). ADR-0013',
+    excludedTypes,types:engineTypes,effectiveness:typeChart},null,2)+'\n';
+  writeFileSync(`${out}/typechart.json`,raw);
+  files['typechart.json']={count:engineTypes.length*engineTypes.length,sha256:createHash('sha256').update(raw).digest('hex')};
+}
 writeFileSync(`${out}/metadata.json`,JSON.stringify({schemaVersion:1,source:'@smogon/calc',version,generation:9,seed,randomAlgorithm:'xorshift32',level:50,ivs:31,spToEV:'max(0,8*SP-4)',speciesScope:'gen9 library reference species/forms (including CAP fan species), NOT Champions availability; P2 source investigation pending',speciesCount:species.length,representativeMoves:moveNames,learnsets:'Not asserted: arithmetic type/category coverage only',koModel:'ADR-0006: independent uniform rolls, full HP, identical hit repeated without residuals/recovery or consumable state transitions',koCrossChecks,exclusions:[{scope:'species',names:[...gen.species].filter(s=>s.baseStats.hp===1).map(s=>s.name),reason:'HP=1 special mechanic is outside Champions SP formula'},{scope:'moves',reason:'Only the listed fixed-power single-hit moves; excludes variable/fixed damage, multi-hit, forced criticals, alternate attack/defense stats, screen removal, terrain-specific move mechanics, tera/Z/Max moves'},{scope:'abilities/items',reason:'Only effects.json adapters; no default species ability; Eviolite only on Snover fixed case'},{scope:'terrain',reason:'Flying species excluded from terrain-enabled random/fixed cases; ADR-0005 assumes grounded, no Levitate/Air Balloon admitted'},{scope:'battle',reason:'No double/tera/Dynamax/form transformations or unsupported status effects'},{scope:'KO',reason:'Smogon residual/consumable multi-turn model differs from ADR-0006; direct smogonKO cross-check only residual/consumable-free fixed cases with 1-4 hits'}],files},null,2)+'\n');
 console.log(JSON.stringify({species:species.length,koCrossChecks,files},null,2));
