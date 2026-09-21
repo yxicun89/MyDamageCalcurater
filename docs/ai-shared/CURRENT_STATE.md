@@ -38,10 +38,10 @@ Next: TB5(おすすめタイプと該当ポケモン。DECISIONS.md 2026-09-22: 
 
 ## Maintenance
 Lane: 整備(Claude の上限時に Codex が進める。COORDINATION.md「Claude の上限時の Codex」)
-Active: なし
-Branch: なし(使うときに fix/maint-<名前> を origin/main から切る。作業ディレクトリ ~/MyDamageCalcurater-maint は使うときだけ作る)
-Status: 未着手(2026-09-22 に新設)
-Next: docs/plan.md の「整備レーン」のバックログを上から
+Active: Codex
+Branch: fix/maint-0922
+Status: MT-1 統合検証に着手
+Next: docs/plan.md の「整備レーン」の MT-1 から順に進める
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠
