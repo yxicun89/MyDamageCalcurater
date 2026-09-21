@@ -3,8 +3,8 @@
 ## Damage Calculator
 Owner: Claude Code
 Branch: feat/claude-p1-engine
-Status: Phase 1・P2-1・P1-10 は完了。コーディング規約 v2(docs/coding-rules.md、Codex が条件付き承認)に沿って Phase R(R-2 是正)を進行中(R-2-1〜4 と R-2-7 は完了、R-2-5 と R-2-8 も完了。履歴の書き換えは公開時に「クリーンコピー」方式で行う=R-2-9)。監査へのユーザー回答を反映済み(module path はプレースホルダ、履歴の書き換えは実行前に調整、タイプ相性表はデータ化=ADR-0013、ADR-0002 の第三者データ抜粋は削除)。任意の外部 Codex レビュー(scripts/codex-review.sh)は規約のレビューにだけ使用。Codex の担当はタイプバランスチェッカー実装で、ダメージ計算のレビュー担当ではない
-Next: R-2-5 → R-2-8(module path)→ R-3(check-publishable。実装中)→ P1-13(タイプ相性表のデータ化)→ P1-11 → P1-12 → P2-1b → P2-1c → P2-2。人間の確認待ち(plan.md ブロッカー): 観測ダメージの入力と丸めの解釈、公開のタイミング(LICENSE・クリーンコピー)
+Status: Phase 1・P2-1・P1-10・Phase R(R-2-9 の公開用クリーンコピーは公開時に実施)・R-3・P1-13(タイプ相性表のデータ化。ADR-0013)は完了。P1-13 は critic の独立レビューを受け、指摘(ADR 番号の参照・AC-8 のテスト名・ドキュメント)を反映済み。注意: origin/main に協調運用の改訂(docs/ai-shared/COORDINATION.md。マージコーディネーター廃止・各 AI が自分のブランチを統合)があるが、このブランチには未取り込み(main より8コミット遅れ)。作業ディレクトリは ~/MyDamageCalcurater(旧 ~/pokecalc 系はアーカイブ。削除はユーザーの確認待ち)。
+Next: origin/main を取り込む(git fetch → merge → make test/lint/check-publishable)→ P1-11(表示%の分離)→ P1-12(逆算の再設計)→ P2-1b → P2-1c → P2-2。人間の確認待ち(plan.md ブロッカー): 観測ダメージの入力と丸めの解釈、公開のタイミング(LICENSE・クリーンコピー)
 
 ## Type Balance Checker
 Owner: Codex

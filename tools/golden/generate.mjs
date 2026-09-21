@@ -203,7 +203,7 @@ for(const atk of [...chartTypes].sort((a,b)=>a.id<b.id?-1:1)) {
 assert.equal(Object.keys(typeChart).length*engineTypes.length,324);
 {
   const raw=JSON.stringify({schemaVersion:1,source:'@smogon/calc',version,generation:9,
-    note:'倍率は ×2 した整数コード(0=無効 / 1=いまひとつ / 2=等倍 / 4=抜群)。ADR-0013',
+    note:'Multiplier codes are the effectiveness x2 as integers (0=immune, 1=not very effective, 2=neutral, 4=super effective). ADR-0013',
     excludedTypes,types:engineTypes,effectiveness:typeChart},null,2)+'\n';
   writeFileSync(`${out}/typechart.json`,raw);
   files['typechart.json']={count:engineTypes.length*engineTypes.length,sha256:createHash('sha256').update(raw).digest('hex')};

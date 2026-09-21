@@ -54,7 +54,7 @@
 
 ### Phase 1b 決定の反映(2026-09-21 のユーザー決定。ADR-0002 の確定方針・DECISIONS.md 参照)
 - [x] P1-10 防御プリセットの再定義: `hb` = H32・B32・性格補正なし / `hd` = H32・D32・補正なし / `hb_boost` = H32・B0・B上昇性格 / `hd_boost` = H32・D0・D上昇性格 / **新設** `hb_full` = H32・B32・B上昇性格 / `hd_full` = H32・D32・D上昇性格。ADR-0009・`engine/bulk.go` のカタログと既定セット・テスト・`tools/golden`(旧 `hb`/`hd` の外部照合ベクタは性格補正ありなので `hb_full`/`hd_full` 相当。補正なしの `hb`/`hd` を追加)・`api/openapi.yaml`(`DefenderPreset` enum と例)を更新して `make gen`(絶対ルール1)。`hb_boost`/`hd_boost` の確認待ちは解消
-- [~] P1-13 タイプ相性表のデータ化(ADR-0013): `TypeChart` 型を engine の入力(`DamageInput`)にし、`typechart.go` の埋め込み表を削除。テストは fixture、`tools/golden` が oracle の相性表を出力。`engine/wasmapi` のリクエスト・ADR-0011 を更新(ゴールデンの期待値は不変)。P1-11・P1-12 と独立に進められるが、`DamageInput` を触るので順番を調整する
+- [x] P1-13 タイプ相性表のデータ化(ADR-0013): `TypeChart` 型を engine の入力(`DamageInput`)にし、`typechart.go` の埋め込み表を削除。テストは fixture、`tools/golden` が oracle の相性表を出力。`engine/wasmapi` のリクエスト・ADR-0011 を更新(ゴールデンの期待値は不変)。P1-11・P1-12 と独立に進められるが、`DamageInput` を触るので順番を調整する
 - [ ] P1-11 表示%の分離(ユーザー方針: **最小ダメージ側は切り捨て、最大ダメージ側は四捨五入**にして「最低これくらい入る」を保守的に示す。**乱数で何%で倒せるか**(`ko.chancePercent`。乱数n発の確率)も、結果に必ず表示できる形で出力する): アプリが表示する計算結果の%は**小数第1位**(例 73.4%)。HP 比率から直接求め、整数%に丸めない(整数演算で 0.1% 単位)。実機画面の観測%(整数%)を逆算の入力にする場合の丸め規則は**別関数・別概念**にし、同じ `DisplayPercent` に混在させない。engine・`engine/wasmapi`(`minPercent`/`maxPercent`)・`api/openapi.yaml`・ADR-0010/0011 を更新
 - [ ] P1-12 逆算の再設計: 固定プリセットからの選択をやめ、**H32 前提で B(D) SP を 0〜32 探索**、性格は「補正なし」「B(D) 上昇」の2通り(攻撃側の A/C も同様に0〜32×補正なし/上昇)。結果は「性格補正あり/なし × 持ち物」ごとの**SP の範囲**で、観測から区別できない候補は決め打ちせず残す。ADR-0010 を改訂、再現率テスト(Recall@5 の定義=真値の SP が範囲に入る等)を再設計し基準(1観測 ≥80%・2観測 ≥95%)は緩めない。P1-11 の後
 

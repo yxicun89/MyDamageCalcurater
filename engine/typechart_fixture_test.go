@@ -1,8 +1,8 @@
 package engine
 
-// テストがタイプ相性表(ADR-0012)を受け取るための共通 fixture とヘルパー。
+// テストがタイプ相性表(ADR-0013)を受け取るための共通 fixture とヘルパー。
 //
-// 方針(ADR-0012 §P1-13.5):
+// 方針(ADR-0013 §P1-13.5):
 //   - engine のテストは表を**データから読む**。engine 側に「正しい表」を書き戻さない。
 //   - 正の表は oracle(@smogon/calc)が生成する testdata/golden/typechart.json ただ1つ。
 //     単体テスト(make test)もゴールデン(-tags golden)も同じファイルを読む。
@@ -31,7 +31,7 @@ const (
 	typeChartTypeCount = 18 // 第9世代 / チャンピオンズの18タイプ
 )
 
-// typeChartFixtureFile は testdata/golden/typechart.json の形(ADR-0012 §P1-13.5)。
+// typeChartFixtureFile は testdata/golden/typechart.json の形(ADR-0013 §P1-13.5)。
 type typeChartFixtureFile struct {
 	SchemaVersion int                   `json:"schemaVersion"`
 	Source        string                `json:"source"`

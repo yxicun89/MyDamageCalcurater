@@ -174,7 +174,7 @@ TypeChart = {"types":["normal","fire",…],
 ```jsonc
 {
   "schemaVersion": 1, "source": "@smogon/calc", "version": "0.10.0", "generation": 9,
-  "note": "倍率は ×2 した整数コード(0=無効 / 1=いまひとつ / 2=等倍 / 4=抜群)。ADR-0013",
+  "note": "Multiplier codes are the effectiveness x2 as integers (0=immune, 1=not very effective, 2=neutral, 4=super effective). ADR-0013",
   "excludedTypes": ["???", "stellar"],
   "types": ["bug","dark",…],                     // 18件・ID 昇順(決定的にするため並べ替える)
   "effectiveness": {"bug":{"bug":2,"dark":4,…}, …}  // 18×18=324 件すべてを明示(生成物なので省略しない)
@@ -234,7 +234,7 @@ TypeChart = {"types":["normal","fire",…],
 | AC-5 | 表に無いタイプ(技・種族・テラス)は `ErrUnknownType`。等倍にフォールバックしない | `TestCalcDamageRejectsUnknownType` |
 | AC-6 | 不正な表は `NewTypeChart` が `ErrInvalidTypeChart` で拒否する。検証済みの表は不変 | `TestNewTypeChartRejectsInvalidData` / `TestTypeChartIsImmutable` |
 | AC-7 | `BulkInput` / `ReverseInput` は表を `DamageInput` へ素通しする(自分で解釈しない) | `TestCalcBulkPassesTypeChartThrough` / `TestCalcReversePassesTypeChartThrough` |
-| AC-8 | WASM 境界は `typeChart` を必須で受け、engine の素通しのままである。ベクタは先頭で1度だけ表を定義する | `TestCalcRequiresTypeChart`(wasmapi)/ `TestTypeChartEnvelopeCodes` / 既存の `TestCalcMatchesEngineCalcDamage` / `TestVectorsDefineSharedTypeChart` |
+| AC-8 | WASM 境界は `typeChart` を必須で受け、engine の素通しのままである。ベクタは先頭で1度だけ表を定義する | `TestErrorEnvelopeCodes`(wasmapi。3リクエストの `type_chart_missing`・`invalid_type_chart`・`unknown_type`・`invalid_enum` との切り分けのケース)/ `TestTypeChartIsPassedThroughToEngine` / `TestTypeChartInjectionIsWired` / 既存の `TestCalcMatchesEngineCalcDamage` / `TestVectorsDefineSharedTypeChart` |
 
 ### P1-13.9 移行手順(implementer 向け)
 
