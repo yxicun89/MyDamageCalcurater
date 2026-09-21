@@ -1,0 +1,6 @@
+.git
+deploy
+scripts
+Makefile
+README.md
+**/*_test.go

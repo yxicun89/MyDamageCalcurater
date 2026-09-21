@@ -1,0 +1,135 @@
+package httpapi
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestHealth(t *testing.T) {
+	t.Parallel()
+
+	for _, path := range []string{"/healthz", "/api/balance/healthz"} {
+		path := path
+		t.Run(path, func(t *testing.T) {
+			t.Parallel()
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, path, nil)
+			New().ServeHTTP(recorder, request)
+
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+			}
+			if got := strings.TrimSpace(recorder.Body.String()); got != `{"status":"ok"}` {
+				t.Errorf("body = %s", got)
+			}
+		})
+	}
+}
+
+func TestAnalyzeRequiresRequestContextHeaders(t *testing.T) {
+	t.Parallel()
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/balance/v1/team-balance/analyze", strings.NewReader(`{}`))
+	request.Header.Set("Content-Type", "application/json")
+	New().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+	}
+	if !strings.Contains(recorder.Body.String(), `"code":"missing_request_context"`) {
+		t.Errorf("body = %s", recorder.Body.String())
+	}
+}
+
+func TestAnalyzeNormalizesGeneratedParameterErrors(t *testing.T) {
+	t.Parallel()
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/balance/v1/team-balance/analyze", strings.NewReader(`{"members":[{"pokemonId":"0445-000"}]}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Add("X-Device-Id", "first-device")
+	request.Header.Add("X-Device-Id", "second-device")
+	request.Header.Set("X-Session-Id", "test-session")
+	New().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+	}
+	if !strings.Contains(recorder.Body.String(), `"code":"invalid_request"`) {
+		t.Errorf("body = %s", recorder.Body.String())
+	}
+}
+
+func TestAnalyzeTB0Connectivity(t *testing.T) {
+	t.Parallel()
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/balance/v1/team-balance/analyze", strings.NewReader(`{"members":[{"pokemonId":"0445-000"}]}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Device-Id", "test-device")
+	request.Header.Set("X-Session-Id", "test-session")
+	New().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNotImplemented {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNotImplemented)
+	}
+	if !strings.Contains(recorder.Body.String(), `"code":"tb1_not_implemented"`) {
+		t.Errorf("body = %s", recorder.Body.String())
+	}
+}
+
+func TestAnalyzeRejectsInvalidBody(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{name: "malformed JSON", body: `{"members":`},
+		{name: "empty party", body: `{"members":[]}`},
+		{name: "too many members", body: `{"members":[{"pokemonId":"0001-000"},{"pokemonId":"0002-000"},{"pokemonId":"0003-000"},{"pokemonId":"0004-000"},{"pokemonId":"0005-000"},{"pokemonId":"0006-000"},{"pokemonId":"0007-000"}]}`},
+		{name: "invalid pokemon ID", body: `{"members":[{"pokemonId":"garchomp"}]}`},
+		{name: "unknown property", body: `{"members":[{"pokemonId":"0445-000","types":["dragon"]}]}`},
+		{name: "trailing JSON", body: `{"members":[{"pokemonId":"0445-000"}]} {}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodPost, "/api/balance/v1/team-balance/analyze", strings.NewReader(tt.body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("X-Device-Id", "test-device")
+			request.Header.Set("X-Session-Id", "test-session")
+			New().ServeHTTP(recorder, request)
+
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+			}
+			if !strings.Contains(recorder.Body.String(), `"code":"invalid_request"`) {
+				t.Errorf("body = %s", recorder.Body.String())
+			}
+		})
+	}
+}
+
+func TestAnalyzeRejectsOversizedBody(t *testing.T) {
+	t.Parallel()
+
+	body := `{"members":[{"pokemonId":"` + strings.Repeat("1", maxAnalyzeBodyBytes) + `"}]}`
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/balance/v1/team-balance/analyze", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Device-Id", "test-device")
+	request.Header.Set("X-Session-Id", "test-session")
+	New().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusRequestEntityTooLarge, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), `"code":"request_too_large"`) {
+		t.Errorf("body = %s", recorder.Body.String())
+	}
+}

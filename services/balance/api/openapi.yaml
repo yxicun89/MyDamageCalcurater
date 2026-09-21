@@ -1,0 +1,129 @@
+openapi: 3.0.3
+info:
+  title: pokecalc balance API
+  version: 0.1.0
+  description: |
+    パーティのタイプバランスを分析する独立サービスの契約。
+    TB0 は疎通とエラー契約までを実装し、分析結果は TB1 で追加する。
+servers:
+  - url: /
+paths:
+  /healthz:
+    get:
+      operationId: health
+      summary: Pod health check
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /api/balance/healthz:
+    get:
+      operationId: publicHealth
+      summary: Ingress smoke check
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /api/balance/v1/team-balance/analyze:
+    post:
+      operationId: analyzeTeamBalance
+      summary: Analyze a party's type balance
+      description: TB0 returns tb1_not_implemented after request-context validation.
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyzeRequest'
+      responses:
+        '400':
+          description: Invalid request or missing request context
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: Request body exceeds the TB0 limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '501':
+          description: Analysis is introduced in TB1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  parameters:
+    DeviceId:
+      name: X-Device-Id
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    SessionId:
+      name: X-Session-Id
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+  schemas:
+    Health:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+    AnalyzeRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - members
+      properties:
+        members:
+          type: array
+          minItems: 1
+          maxItems: 6
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - pokemonId
+            properties:
+              pokemonId:
+                type: string
+                maxLength: 8
+                pattern: '^\d{4}-\d{3}$'
+                example: 0445-000
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        message:
+          type: string
+    ErrorCode:
+      type: string
+      enum:
+        - missing_request_context
+        - invalid_request
+        - request_too_large
+        - tb1_not_implemented
