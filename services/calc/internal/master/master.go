@@ -9,8 +9,11 @@
 package master
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"sort"
 
 	"example.com/pokecalc/engine"
 )
@@ -24,8 +27,55 @@ var (
 	ErrInvalidTypeChart = errors.New("タイプ相性表のデータが不正")
 )
 
-// errNotImplemented は P3-1 の implementer が置き換えるまでのスタブ用。
-var errNotImplemented = errors.New("未実装(P3-1)")
+// --- 列挙(engine の定数と同じ文字列。ADR-0016 §3 の暫定スキーマが持つ列挙値) ----------
+
+var validTypes = map[string]engine.Type{
+	"normal": engine.TypeNormal, "fire": engine.TypeFire, "water": engine.TypeWater,
+	"electric": engine.TypeElectric, "grass": engine.TypeGrass, "ice": engine.TypeIce,
+	"fighting": engine.TypeFighting, "poison": engine.TypePoison, "ground": engine.TypeGround,
+	"flying": engine.TypeFlying, "psychic": engine.TypePsychic, "bug": engine.TypeBug,
+	"rock": engine.TypeRock, "ghost": engine.TypeGhost, "dragon": engine.TypeDragon,
+	"dark": engine.TypeDark, "steel": engine.TypeSteel, "fairy": engine.TypeFairy,
+}
+
+var validStatKeys = map[string]engine.StatKey{
+	"hp": engine.StatHP, "atk": engine.StatAtk, "def": engine.StatDef,
+	"spa": engine.StatSpA, "spd": engine.StatSpD, "spe": engine.StatSpe,
+}
+
+var validCategories = map[string]engine.MoveCategory{
+	"physical": engine.CategoryPhysical, "special": engine.CategorySpecial, "status": engine.CategoryStatus,
+}
+
+// parseRequiredType はタイプを検証する(空・未知は不正)。
+func parseRequiredType(v string) (engine.Type, bool) {
+	t, ok := validTypes[v]
+	return t, ok
+}
+
+// parseOptionalType は "" を TypeNone として許すタイプ検証。
+func parseOptionalType(v string) (engine.Type, error) {
+	if v == "" {
+		return engine.TypeNone, nil
+	}
+	t, ok := validTypes[v]
+	if !ok {
+		return "", fmt.Errorf("%w: 未知のタイプ %q", ErrInvalidSnapshot, v)
+	}
+	return t, nil
+}
+
+// parseOptionalCategory は "" を「全分類」として許す分類検証。
+func parseOptionalCategory(v string) (engine.MoveCategory, error) {
+	if v == "" {
+		return "", nil
+	}
+	c, ok := validCategories[v]
+	if !ok {
+		return "", fmt.Errorf("%w: 未知の分類 %q", ErrInvalidSnapshot, v)
+	}
+	return c, nil
+}
 
 // Store は calc-svc が計算に使うマスタの参照口。実装は並行に呼ばれても安全であること。
 // 返す値は呼び出し側が書き換えても Store の中身に影響しない(スライスは複製して返す)。
@@ -51,24 +101,398 @@ type Store interface {
 
 // Snapshot は検証済みのマスタのスナップショット(暫定スキーマ。services/calc/README.md)。
 type Snapshot struct {
-	// TODO(P3-1): implementer が中身を決める。
+	species   map[string]engine.Species
+	moves     map[string]engine.Move
+	items     map[string]engine.Item
+	abilities map[string]engine.Ability
+	natures   map[string]engine.Nature
+}
+
+// --- スナップショットの JSON 形(暫定スキーマ) -------------------------------
+
+type snapshotFile struct {
+	SchemaVersion int                `json:"schemaVersion"`
+	Species       []speciesEntryJSON `json:"species"`
+	Moves         []moveEntryJSON    `json:"moves"`
+	Items         []itemEntryJSON    `json:"items"`
+	Abilities     []abilityEntryJSON `json:"abilities"`
+	Natures       []natureEntryJSON  `json:"natures"`
+}
+
+type statsEntryJSON struct {
+	HP  int `json:"hp"`
+	Atk int `json:"atk"`
+	Def int `json:"def"`
+	SpA int `json:"spa"`
+	SpD int `json:"spd"`
+	Spe int `json:"spe"`
+}
+
+func (s statsEntryJSON) toEngine() engine.Stats {
+	return engine.Stats{HP: s.HP, Atk: s.Atk, Def: s.Def, SpA: s.SpA, SpD: s.SpD, Spe: s.Spe}
+}
+
+type speciesEntryJSON struct {
+	Key       string         `json:"key"`
+	DexNo     int            `json:"dexNo"`
+	Form      int            `json:"form"`
+	NameJa    string         `json:"nameJa"`
+	Types     []string       `json:"types"`
+	BaseStats statsEntryJSON `json:"baseStats"`
+	Abilities []string       `json:"abilities"`
+}
+
+type moveEntryJSON struct {
+	ID       string `json:"id"`
+	NameJa   string `json:"nameJa"`
+	Type     string `json:"type"`
+	Category string `json:"category"`
+	Power    int    `json:"power"`
+	Priority int    `json:"priority"`
+}
+
+type itemEffectJSON struct {
+	StatMods           map[string]int `json:"statMods"`
+	DamageMod          int            `json:"damageMod"`
+	PowerMod           int            `json:"powerMod"`
+	PowerCategory      string         `json:"powerCategory"`
+	OnlySuperEffective bool           `json:"onlySuperEffective"`
+	BoostType          string         `json:"boostType"`
+	BoostTypeMod       int            `json:"boostTypeMod"`
+	ResistBerryType    string         `json:"resistBerryType"`
+}
+
+func (e itemEffectJSON) toEngine() (*engine.ItemEffect, error) {
+	out := &engine.ItemEffect{
+		DamageMod: e.DamageMod, PowerMod: e.PowerMod, OnlySuperEffective: e.OnlySuperEffective,
+		BoostTypeMod: e.BoostTypeMod,
+	}
+	if e.StatMods != nil {
+		out.StatMods = make(map[engine.StatKey]int, len(e.StatMods))
+		for k, v := range e.StatMods {
+			sk, ok := validStatKeys[k]
+			if !ok {
+				return nil, fmt.Errorf("%w: 持ち物効果の statMods に未知のステータスキー %q", ErrInvalidSnapshot, k)
+			}
+			out.StatMods[sk] = v
+		}
+	}
+	var err error
+	if out.PowerCategory, err = parseOptionalCategory(e.PowerCategory); err != nil {
+		return nil, err
+	}
+	if out.BoostType, err = parseOptionalType(e.BoostType); err != nil {
+		return nil, err
+	}
+	if out.ResistBerryType, err = parseOptionalType(e.ResistBerryType); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+type itemEntryJSON struct {
+	ID     string          `json:"id"`
+	NameJa string          `json:"nameJa"`
+	Effect *itemEffectJSON `json:"effect"`
+}
+
+type abilityEffectJSON struct {
+	StabMod              int            `json:"stabMod"`
+	OffBoostType         string         `json:"offBoostType"`
+	OffBoostTypeMod      int            `json:"offBoostTypeMod"`
+	DefResistType        map[string]int `json:"defResistType"`
+	ReduceSuperEffective int            `json:"reduceSuperEffective"`
+	IgnoresBurn          bool           `json:"ignoresBurn"`
+}
+
+func (e abilityEffectJSON) toEngine() (*engine.AbilityEffect, error) {
+	out := &engine.AbilityEffect{
+		StabMod: e.StabMod, OffBoostTypeMod: e.OffBoostTypeMod,
+		ReduceSuperEffective: e.ReduceSuperEffective, IgnoresBurn: e.IgnoresBurn,
+	}
+	var err error
+	if out.OffBoostType, err = parseOptionalType(e.OffBoostType); err != nil {
+		return nil, err
+	}
+	if e.DefResistType != nil {
+		out.DefResistType = make(map[engine.Type]int, len(e.DefResistType))
+		for k, v := range e.DefResistType {
+			t, ok := validTypes[k]
+			if !ok {
+				return nil, fmt.Errorf("%w: 特性効果の defResistType に未知のタイプ %q", ErrInvalidSnapshot, k)
+			}
+			out.DefResistType[t] = v
+		}
+	}
+	return out, nil
+}
+
+type abilityEntryJSON struct {
+	ID     string             `json:"id"`
+	NameJa string             `json:"nameJa"`
+	Effect *abilityEffectJSON `json:"effect"`
+}
+
+type natureEntryJSON struct {
+	ID     string  `json:"id"`
+	NameJa string  `json:"nameJa"`
+	Plus   *string `json:"plus"`
+	Minus  *string `json:"minus"`
+}
+
+func parseNatureStat(v *string) (engine.StatKey, error) {
+	if v == nil {
+		return "", nil
+	}
+	sk, ok := validStatKeys[*v]
+	if !ok {
+		return "", fmt.Errorf("%w: 性格補正に未知のステータスキー %q", ErrInvalidSnapshot, *v)
+	}
+	return sk, nil
 }
 
 // LoadSnapshot はスナップショットを読んで検証する。
 // 不正はすべて ErrInvalidSnapshot で包んで返す(部分的なスナップショットは返さない)。
 func LoadSnapshot(r io.Reader) (*Snapshot, error) {
-	return nil, errNotImplemented
+	var file snapshotFile
+	dec := json.NewDecoder(r)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&file); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidSnapshot, err)
+	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("%w: JSON の後ろに余計なデータがある", ErrInvalidSnapshot)
+	}
+	if file.SchemaVersion != 1 {
+		return nil, fmt.Errorf("%w: schemaVersion は 1 でなければならない: %d", ErrInvalidSnapshot, file.SchemaVersion)
+	}
+
+	species, err := convertSpecies(file.Species)
+	if err != nil {
+		return nil, err
+	}
+	moves, err := convertMoves(file.Moves)
+	if err != nil {
+		return nil, err
+	}
+	items, err := convertItems(file.Items)
+	if err != nil {
+		return nil, err
+	}
+	abilities, err := convertAbilities(file.Abilities)
+	if err != nil {
+		return nil, err
+	}
+	natures, err := convertNatures(file.Natures)
+	if err != nil {
+		return nil, err
+	}
+	return &Snapshot{species: species, moves: moves, items: items, abilities: abilities, natures: natures}, nil
+}
+
+func convertSpecies(entries []speciesEntryJSON) (map[string]engine.Species, error) {
+	out := make(map[string]engine.Species, len(entries))
+	for _, e := range entries {
+		if e.Key == "" {
+			return nil, fmt.Errorf("%w: 種族キーが空", ErrInvalidSnapshot)
+		}
+		if _, dup := out[e.Key]; dup {
+			return nil, fmt.Errorf("%w: 種族キーが重複している: %q", ErrInvalidSnapshot, e.Key)
+		}
+		if len(e.Types) < 1 || len(e.Types) > 2 {
+			return nil, fmt.Errorf("%w: 種族 %q のタイプ数は1〜2個: %d", ErrInvalidSnapshot, e.Key, len(e.Types))
+		}
+		types := make([]engine.Type, 0, len(e.Types))
+		for _, t := range e.Types {
+			et, ok := parseRequiredType(t)
+			if !ok {
+				return nil, fmt.Errorf("%w: 種族 %q に未知のタイプ %q", ErrInvalidSnapshot, e.Key, t)
+			}
+			types = append(types, et)
+		}
+		out[e.Key] = engine.Species{
+			Key: e.Key, DexNo: e.DexNo, Form: e.Form, NameJa: e.NameJa,
+			Types: types, BaseStats: e.BaseStats.toEngine(), Abilities: append([]string(nil), e.Abilities...),
+		}
+	}
+	return out, nil
+}
+
+func convertMoves(entries []moveEntryJSON) (map[string]engine.Move, error) {
+	out := make(map[string]engine.Move, len(entries))
+	for _, e := range entries {
+		if e.ID == "" {
+			return nil, fmt.Errorf("%w: 技IDが空", ErrInvalidSnapshot)
+		}
+		if _, dup := out[e.ID]; dup {
+			return nil, fmt.Errorf("%w: 技IDが重複している: %q", ErrInvalidSnapshot, e.ID)
+		}
+		typ, ok := parseRequiredType(e.Type)
+		if !ok {
+			return nil, fmt.Errorf("%w: 技 %q に未知のタイプ %q", ErrInvalidSnapshot, e.ID, e.Type)
+		}
+		cat, ok := validCategories[e.Category]
+		if !ok {
+			return nil, fmt.Errorf("%w: 技 %q に未知の分類 %q", ErrInvalidSnapshot, e.ID, e.Category)
+		}
+		out[e.ID] = engine.Move{ID: e.ID, NameJa: e.NameJa, Type: typ, Category: cat, Power: e.Power, Priority: e.Priority}
+	}
+	return out, nil
+}
+
+func convertItems(entries []itemEntryJSON) (map[string]engine.Item, error) {
+	out := make(map[string]engine.Item, len(entries))
+	for _, e := range entries {
+		if e.ID == "" {
+			return nil, fmt.Errorf("%w: 持ち物IDが空", ErrInvalidSnapshot)
+		}
+		if _, dup := out[e.ID]; dup {
+			return nil, fmt.Errorf("%w: 持ち物IDが重複している: %q", ErrInvalidSnapshot, e.ID)
+		}
+		it := engine.Item{ID: e.ID, NameJa: e.NameJa}
+		if e.Effect != nil {
+			eff, err := e.Effect.toEngine()
+			if err != nil {
+				return nil, err
+			}
+			it.Effect = eff
+		}
+		out[e.ID] = it
+	}
+	return out, nil
+}
+
+func convertAbilities(entries []abilityEntryJSON) (map[string]engine.Ability, error) {
+	out := make(map[string]engine.Ability, len(entries))
+	for _, e := range entries {
+		if e.ID == "" {
+			return nil, fmt.Errorf("%w: 特性IDが空", ErrInvalidSnapshot)
+		}
+		if _, dup := out[e.ID]; dup {
+			return nil, fmt.Errorf("%w: 特性IDが重複している: %q", ErrInvalidSnapshot, e.ID)
+		}
+		ab := engine.Ability{ID: e.ID, NameJa: e.NameJa}
+		if e.Effect != nil {
+			eff, err := e.Effect.toEngine()
+			if err != nil {
+				return nil, err
+			}
+			ab.Effect = eff
+		}
+		out[e.ID] = ab
+	}
+	return out, nil
+}
+
+func convertNatures(entries []natureEntryJSON) (map[string]engine.Nature, error) {
+	out := make(map[string]engine.Nature, len(entries))
+	for _, e := range entries {
+		if e.ID == "" {
+			return nil, fmt.Errorf("%w: 性格IDが空", ErrInvalidSnapshot)
+		}
+		if _, dup := out[e.ID]; dup {
+			return nil, fmt.Errorf("%w: 性格IDが重複している: %q", ErrInvalidSnapshot, e.ID)
+		}
+		plus, err := parseNatureStat(e.Plus)
+		if err != nil {
+			return nil, err
+		}
+		minus, err := parseNatureStat(e.Minus)
+		if err != nil {
+			return nil, err
+		}
+		if plus == engine.StatHP || minus == engine.StatHP {
+			return nil, fmt.Errorf("%w: 性格 %q の補正は HP を指せない", ErrInvalidSnapshot, e.ID)
+		}
+		out[e.ID] = engine.Nature{Plus: plus, Minus: minus}
+	}
+	return out, nil
+}
+
+// --- タイプ相性表の JSON 形(testdata/golden/typechart.json と同じ schema) ----
+
+type typeChartFile struct {
+	SchemaVersion int                       `json:"schemaVersion"`
+	Source        string                    `json:"source"`
+	Version       string                    `json:"version"`
+	Generation    int                       `json:"generation"`
+	Note          string                    `json:"note"`
+	ExcludedTypes []string                  `json:"excludedTypes"`
+	Types         []string                  `json:"types"`
+	Effectiveness map[string]map[string]int `json:"effectiveness"`
 }
 
 // LoadTypeChart は testdata/golden/typechart.json と同じ schema(schemaVersion 1)の相性表を読み、
 // engine.NewTypeChart で検証済みの表にする。不正はすべて ErrInvalidTypeChart で包む。
 func LoadTypeChart(r io.Reader) (engine.TypeChart, error) {
-	return engine.TypeChart{}, errNotImplemented
+	var file typeChartFile
+	dec := json.NewDecoder(r)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&file); err != nil {
+		return engine.TypeChart{}, fmt.Errorf("%w: %v", ErrInvalidTypeChart, err)
+	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return engine.TypeChart{}, fmt.Errorf("%w: JSON の後ろに余計なデータがある", ErrInvalidTypeChart)
+	}
+	if file.SchemaVersion != 1 {
+		return engine.TypeChart{}, fmt.Errorf("%w: schemaVersion は 1 でなければならない: %d", ErrInvalidTypeChart, file.SchemaVersion)
+	}
+	if len(file.Types) == 0 {
+		return engine.TypeChart{}, fmt.Errorf("%w: types が空", ErrInvalidTypeChart)
+	}
+
+	seen := make(map[string]bool, len(file.Types))
+	types := make([]engine.Type, 0, len(file.Types))
+	for _, t := range file.Types {
+		et, ok := validTypes[t]
+		if !ok {
+			return engine.TypeChart{}, fmt.Errorf("%w: 未知のタイプ %q", ErrInvalidTypeChart, t)
+		}
+		if seen[t] {
+			return engine.TypeChart{}, fmt.Errorf("%w: タイプが重複している: %q", ErrInvalidTypeChart, t)
+		}
+		seen[t] = true
+		types = append(types, et)
+	}
+	if len(file.Effectiveness) == 0 {
+		return engine.TypeChart{}, fmt.Errorf("%w: effectiveness が空", ErrInvalidTypeChart)
+	}
+
+	effectiveness := make(map[engine.Type]map[engine.Type]int, len(file.Effectiveness))
+	for atk, row := range file.Effectiveness {
+		et, ok := validTypes[atk]
+		if !ok {
+			return engine.TypeChart{}, fmt.Errorf("%w: 未知の攻撃タイプ %q", ErrInvalidTypeChart, atk)
+		}
+		if row == nil {
+			return engine.TypeChart{}, fmt.Errorf("%w: %q の行が null", ErrInvalidTypeChart, atk)
+		}
+		outRow := make(map[engine.Type]int, len(row))
+		for def, code := range row {
+			edt, ok := validTypes[def]
+			if !ok {
+				return engine.TypeChart{}, fmt.Errorf("%w: 未知の防御タイプ %q", ErrInvalidTypeChart, def)
+			}
+			outRow[edt] = code
+		}
+		effectiveness[et] = outRow
+	}
+
+	chart, err := engine.NewTypeChart(engine.TypeChartData{Types: types, Effectiveness: effectiveness})
+	if err != nil {
+		return engine.TypeChart{}, fmt.Errorf("%w: %v", ErrInvalidTypeChart, err)
+	}
+	return chart, nil
 }
 
 // MemoryStore はスナップショットと相性表をメモリに持つ Store。
 type MemoryStore struct {
-	// TODO(P3-1): implementer が中身を決める。
+	species   map[string]engine.Species
+	moves     map[string]engine.Move
+	items     map[string]engine.Item
+	abilities map[string]engine.Ability
+	natures   map[string]engine.Nature
+	chart     engine.TypeChart
 }
 
 var _ Store = (*MemoryStore)(nil)
@@ -78,26 +502,101 @@ var _ Store = (*MemoryStore)(nil)
 // 相性表に無いタイプが現れたら engine.ErrUnknownType で包んだエラーを返す
 // (計算時ではなく起動時に気づくため)。
 func New(snapshot *Snapshot, chart engine.TypeChart) (*MemoryStore, error) {
-	return nil, errNotImplemented
+	if chart.IsZero() {
+		return nil, fmt.Errorf("%w: 相性表が未設定", ErrInvalidTypeChart)
+	}
+	for key, sp := range snapshot.species {
+		for _, t := range sp.Types {
+			if !chart.Has(t) {
+				return nil, fmt.Errorf("%w: 種族 %q のタイプ %q が相性表に無い", engine.ErrUnknownType, key, t)
+			}
+		}
+	}
+	for id, mv := range snapshot.moves {
+		if mv.Type != engine.TypeNone && !chart.Has(mv.Type) {
+			return nil, fmt.Errorf("%w: 技 %q のタイプ %q が相性表に無い", engine.ErrUnknownType, id, mv.Type)
+		}
+	}
+	for id, it := range snapshot.items {
+		if it.Effect == nil {
+			continue
+		}
+		if t := it.Effect.BoostType; t != engine.TypeNone && !chart.Has(t) {
+			return nil, fmt.Errorf("%w: 持ち物 %q の boostType %q が相性表に無い", engine.ErrUnknownType, id, t)
+		}
+		if t := it.Effect.ResistBerryType; t != engine.TypeNone && !chart.Has(t) {
+			return nil, fmt.Errorf("%w: 持ち物 %q の resistBerryType %q が相性表に無い", engine.ErrUnknownType, id, t)
+		}
+	}
+	for id, ab := range snapshot.abilities {
+		if ab.Effect == nil {
+			continue
+		}
+		if t := ab.Effect.OffBoostType; t != engine.TypeNone && !chart.Has(t) {
+			return nil, fmt.Errorf("%w: 特性 %q の offBoostType %q が相性表に無い", engine.ErrUnknownType, id, t)
+		}
+		for t := range ab.Effect.DefResistType {
+			if !chart.Has(t) {
+				return nil, fmt.Errorf("%w: 特性 %q の defResistType %q が相性表に無い", engine.ErrUnknownType, id, t)
+			}
+		}
+	}
+	return &MemoryStore{
+		species: snapshot.species, moves: snapshot.moves, items: snapshot.items,
+		abilities: snapshot.abilities, natures: snapshot.natures, chart: chart,
+	}, nil
 }
 
-// Species は Store を実装する。
-func (s *MemoryStore) Species(key string) (engine.Species, bool) { panic("TODO(P3-1)") }
+// Species は Store を実装する。返すスライスはコピーで、書き換えても Store に影響しない。
+func (s *MemoryStore) Species(key string) (engine.Species, bool) {
+	sp, ok := s.species[key]
+	if !ok {
+		return engine.Species{}, false
+	}
+	sp.Types = append([]engine.Type(nil), sp.Types...)
+	sp.Abilities = append([]string(nil), sp.Abilities...)
+	return sp, true
+}
 
 // Move は Store を実装する。
-func (s *MemoryStore) Move(id string) (engine.Move, bool) { panic("TODO(P3-1)") }
+func (s *MemoryStore) Move(id string) (engine.Move, bool) {
+	mv, ok := s.moves[id]
+	return mv, ok
+}
 
 // Item は Store を実装する。
-func (s *MemoryStore) Item(id string) (engine.Item, bool) { panic("TODO(P3-1)") }
+func (s *MemoryStore) Item(id string) (engine.Item, bool) {
+	it, ok := s.items[id]
+	return it, ok
+}
 
 // Ability は Store を実装する。
-func (s *MemoryStore) Ability(id string) (engine.Ability, bool) { panic("TODO(P3-1)") }
+func (s *MemoryStore) Ability(id string) (engine.Ability, bool) {
+	ab, ok := s.abilities[id]
+	return ab, ok
+}
 
 // Nature は Store を実装する。
-func (s *MemoryStore) Nature(id string) (engine.Nature, bool) { panic("TODO(P3-1)") }
+func (s *MemoryStore) Nature(id string) (engine.Nature, bool) {
+	n, ok := s.natures[id]
+	return n, ok
+}
 
-// NatureID は Store を実装する。
-func (s *MemoryStore) NatureID(n engine.Nature) (string, bool) { panic("TODO(P3-1)") }
+// NatureID は Store を実装する(ADR-0016 の写像規則)。
+func (s *MemoryStore) NatureID(n engine.Nature) (string, bool) {
+	ids := make([]string, 0, len(s.natures))
+	for id := range s.natures {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		m := s.natures[id]
+		if (n.IsNeutral() && m.IsNeutral()) || m == n {
+			return id, true
+		}
+	}
+	return "", false
+}
 
 // TypeChart は Store を実装する。
-func (s *MemoryStore) TypeChart() engine.TypeChart { panic("TODO(P3-1)") }
+func (s *MemoryStore) TypeChart() engine.TypeChart { return s.chart }

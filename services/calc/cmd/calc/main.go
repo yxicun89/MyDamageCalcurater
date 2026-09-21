@@ -13,11 +13,16 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
+
+	"example.com/pokecalc/services/calc/internal/httpapi"
+	"example.com/pokecalc/services/calc/internal/master"
 )
 
 // 環境変数の名前。
@@ -28,10 +33,10 @@ const (
 
 	// defaultAddr は CALC_ADDR が未設定・空のときの待ち受けアドレス。
 	defaultAddr = ":8080"
-)
 
-// errNotImplemented は P3-1 の implementer が置き換えるまでのスタブ用。
-var errNotImplemented = errors.New("未実装(P3-1)")
+	// shutdownTimeout は ctx 終了後、進行中のリクエストを待つ猶予。
+	shutdownTimeout = 5 * time.Second
+)
 
 // config は calc-svc の設定(環境変数から1度だけ読む)。
 type config struct {
@@ -43,19 +48,85 @@ type config struct {
 // loadConfig は環境変数から設定を読む。必須の CALC_MASTER_PATH / CALC_TYPECHART_PATH が
 // 未設定・空ならエラー。CALC_ADDR が未設定・空なら defaultAddr。
 func loadConfig(lookup func(string) (string, bool)) (config, error) {
-	return config{}, errNotImplemented
+	addr, ok := lookup(envAddr)
+	if !ok || addr == "" {
+		addr = defaultAddr
+	}
+	masterPath, ok := lookup(envMasterPath)
+	if !ok || masterPath == "" {
+		return config{}, fmt.Errorf("%s が未設定", envMasterPath)
+	}
+	typeChartPath, ok := lookup(envTypeChartPath)
+	if !ok || typeChartPath == "" {
+		return config{}, fmt.Errorf("%s が未設定", envTypeChartPath)
+	}
+	return config{Addr: addr, MasterPath: masterPath, TypeChartPath: typeChartPath}, nil
 }
 
 // newHandler は設定のファイルからマスタと相性表を読み込み、HTTP ハンドラを作る。
 // ファイルが無い・壊れている・スキーマ違反ならエラー(部分的なデータで起動しない)。
 func newHandler(cfg config) (http.Handler, error) {
-	return nil, errNotImplemented
+	mf, err := os.Open(cfg.MasterPath)
+	if err != nil {
+		return nil, fmt.Errorf("マスタのスナップショットを開けない(%s): %w", cfg.MasterPath, err)
+	}
+	defer mf.Close()
+	snapshot, err := master.LoadSnapshot(mf)
+	if err != nil {
+		return nil, fmt.Errorf("マスタのスナップショットの読み込みに失敗(%s): %w", cfg.MasterPath, err)
+	}
+
+	tf, err := os.Open(cfg.TypeChartPath)
+	if err != nil {
+		return nil, fmt.Errorf("タイプ相性表を開けない(%s): %w", cfg.TypeChartPath, err)
+	}
+	defer tf.Close()
+	chart, err := master.LoadTypeChart(tf)
+	if err != nil {
+		return nil, fmt.Errorf("タイプ相性表の読み込みに失敗(%s): %w", cfg.TypeChartPath, err)
+	}
+
+	store, err := master.New(snapshot, chart)
+	if err != nil {
+		return nil, fmt.Errorf("マスタの整合性検査に失敗: %w", err)
+	}
+	return httpapi.NewHandler(store), nil
 }
 
 // run は設定を読み、マスタを読み込み、ctx が終わるまで待ち受ける。ctx が終わったら
 // サーバを止めて nil を返す。起動前の失敗(設定・マスタ)はエラーで返す。
 func run(ctx context.Context, lookup func(string) (string, bool)) error {
-	return errNotImplemented
+	cfg, err := loadConfig(lookup)
+	if err != nil {
+		return err
+	}
+	handler, err := newHandler(cfg)
+	if err != nil {
+		return err
+	}
+
+	srv := &http.Server{Addr: cfg.Addr, Handler: handler}
+	serveErr := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serveErr <- err
+			return
+		}
+		serveErr <- nil
+	}()
+
+	select {
+	case err := <-serveErr:
+		return err
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			return err
+		}
+		<-serveErr
+		return nil
+	}
 }
 
 func main() {
