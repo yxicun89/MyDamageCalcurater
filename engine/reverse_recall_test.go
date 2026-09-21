@@ -45,8 +45,12 @@ const reverseRecallCases = 1000
 // TestAllSpeciesReverseRecall は全種族・固定シード 1,000 ケースで Recall を測る。
 func TestAllSpeciesReverseRecall(t *testing.T) {
 	species := loadAllSpeciesForRecall(t)
-	if len(species) < 1000 {
-		t.Fatalf("種族数 = %d。全ポケモンの母集団になっていない", len(species))
+	// 母集団の下限は golden と共通(golden_scope_test.go)。P2-1b で種族集合が gen9 の参考集合(1392)から
+	// Champions 集合(約 358)に変わったため、旧しきい値 1000 から変更した。Recall の基準(しきい値・シード・
+	// ケース数)は変えていない。母集団が「全ポケモン」であることの確認は、speciesCount との一致
+	// (loadAllSpeciesForRecall)と、この下限で行う。
+	if len(species) < goldenMinSpeciesCount {
+		t.Fatalf("種族数 = %d。全ポケモンの母集団になっていない(下限 %d)", len(species), goldenMinSpeciesCount)
 	}
 	t.Logf("種族数 = %d", len(species))
 

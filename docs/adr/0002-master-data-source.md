@@ -296,3 +296,96 @@ ADR-0005 の「補正定義はマスタから解決する」を満たすには�
 8. **日本語名の欠落の補完**: 新規の特性・メガ石・メガフォーム名を人手で補完する運用でよいか(欠落は英語名でフォールバック)。
 9. **更新運用**: スナップショットを手動更新して CronJob は冪等な照合だけにする案でよいか(学習目的で CronJob を残す理由は残る)。
 10. **見た目違いフォーム**(Vivillon の模様違い等)と、メガ石 ↔ メガフォームの対応をマスタにどう持つか(エンジンの入力は「メガ後の種族を直接選ぶ」形でよいか)。
+
+## 追記: P2-1b ゴールデンの oracle を @smogon/calc@0.12.0 の Champions へ切り替える(2026-09-21)
+
+§決定 5 の推奨手順を実施する際の詳細。上の「確定した方針 / ゴールデン」(先に diff してから更新)に従い、第1段階で diff を取り、第2段階で本追記の形に切り替える。
+
+### 第1段階の結果([ローカル検証]、作業用の一時領域)
+
+- 0.12.0 の Champions 世代は `Generations.get(0)`(`gen.num === 0`)。種族 359 / 技 526 / 持ち物 166 / 特性 215。
+  SP は `Pokemon` の `evs` に 0〜32 をそのまま渡す(`8×SP−4` の換算は要らない)。タイプ相性表・性格は gen9 と完全一致。
+- 既存ゴールデン(0.10.0 gen9)の入力を 0.12.0 Champions で再計算: 比較可能 41,408 件中 41,286 件一致。
+  差分 122 件は**すべて** Champions の mechanics に無い効果(こだわりハチマキ・こだわりメガネ・とつげきチョッキ・しんかのきせき・はがねつかい)を使うケース。
+  **説明のつかない差分は 0 件**。比較不能はすべて「種族が Champions 集合に無い」もの。**engine の修正は不要**。
+  これで §決定 5 の確認事項(`calculateChampions` とエンジンの丸め・補正順の一致)は、ゴールデンの入力範囲で確認できた。
+
+### 決定
+
+1. **主のゴールデンの oracle は 0.12.0 の Champions 世代**(`Generations.get(0)`)。対象: 種族網羅(attack/defense/stats)、random、fixed のうち Champions で表現できるもの、typechart.json。
+   - SP は `evs` に直接渡す。`metadata.json` の oracle に `spInput: "direct"` と記録する。
+   - **種族集合 = Champions 世代の全種族から、選択できない内部フォームを除いたもの**。除外は名前の列挙で持ち(現時点で `Aegislash-Both` の1件。
+     calc が Aegislash の攻守フォームを1つの計算で扱うための擬似フォームで、ゲーム内で選べる姿ではない)、生成器は列挙した名前が
+     Champions 世代に実在することを assert する(改名されたら黙って素通りせず止まる)。`metadata.json` の `exclusions`(scope=species)に名前と理由を書く。
+     HP 種族値 1 の除外規則(ヌケニン)は残す(Champions 集合には該当が無い。§決定 6)。
+   - Champions に居ない種族を固定シナリオ・アンカーで使っていた箇所は、**同じ役割の Champions の種族に差し替える**(下表)。
+2. **Champions に無い効果を使うシナリオは削除しない**(§決定 7「効果アダプタは計算式の検証が目的で使用可否とは独立」)。
+   同じ 0.12.0(完全固定)の **gen9 世代**で照合する別ファイル `testdata/golden/legacy-effects.jsonl.gz` に分ける。
+   - 中身: (a) 旧 fixed のうち該当効果を使うシナリオ(choiceband / choicespecs / assaultvest / steelworker / sand-vest × 元の6組、eviolite-snow)を**元の種族のまま**。
+     (b) 旧 random がこれらの効果を天候・ランク・急所・壁と組み合わせて検証していた分を残すため、該当効果を必ず1つ以上含むランダムケース 1,000 件以上(固定シード。ID は `legacy-random/NNNNN`)。
+   - SP は gen9 側だけ従来どおり `max(0, 8×SP−4)` に換算する(`spInput: "max(0,8*SP-4)"`)。
+   - 「Champions に無い効果」は生成器が `effects.json` の名前を Champions 世代の items / abilities と突き合わせて**導出**し、`metadata.json` の gen9 oracle の `legacyEffects` に記録する(手で列挙しない)。
+     Champions 側のベクタ(fixed / random)はこれらを使わない。
+   - engine の照合は**両ファイルとも全件一致**を要求する。`known_diffs.yaml` には何も追加しない(差分は説明済みで、世代を分けて照合するため)。
+   - **将来のレギュレーションでこれらの効果が復活した場合**: マスタ(レギュレーション依存データ)の差し替えで逆算・一括計算の候補に戻る(確定方針「レギュレーション」)。
+     計算式の検証は legacy-effects で既に続いているため、engine 側の追加作業は無い。calc の Champions 世代がその効果を実装した版に上げるときは、
+     生成器の導出で `legacyEffects` から自動的に外れ、Champions 側のファイルへ移る(その際は版の更新を ADR に追記する)。
+3. **`tools/golden/package.json` は `"@smogon/calc": "0.12.0"`(完全固定、`^` 不可)**。生成器は `node_modules` の版が 0.12.0 でなければ止まる。
+4. `metadata.json` は `schemaVersion: 2`。トップレベルに `version: "0.12.0"`、`generation: "champions"`、`speciesScope`(Champions 集合であることを書く)、`speciesCount`、
+   各ファイルの `count` / `sha256`。加えて `oracles` に2件(`champions`: generationNum 0 / spInput direct / 主の6ファイル、
+   `gen9-legacy-effects`: generationNum 9 / spInput `max(0,8*SP-4)` / seed / legacyEffects / reason / legacy-effects.jsonl.gz)。manifest の全ファイルがちょうど1つの oracle に属する。
+   typechart.json は Champions 世代から出す(`generation: 0`。gen9 と同一のはずで、違えば生成器は止める)。
+5. テストは件数を固定値ではなく**下限と整合性**で守る(再生成・レギュレーション更新で件数が動くため): speciesCount は 300〜1000
+   (基底種だけ 231・空・gen9 参考集合 1392 への逆戻りを検出)、ファイル間の種族集合の一致、旧 fixed の全シナリオラベルが fixed + legacy-effects の和に残ること、
+   fixed の下限 200 は fixed + legacy-effects の固定部分の和で見る。fixture の input は未知フィールドを拒否して読む(フィールド改名で値が黙ってゼロ値にならないように)。
+
+### 固定シナリオ・アンカーの種族の差し替え(Champions に居ない種族 → 同じ役割)
+
+| 旧 | 新 | 役割(なぜその種族か) |
+|---|---|---|
+| Magmortar | Typhlosion | 接地した炎単タイプの特殊アタッカー(Flamethrower がタイプ一致。飛行でないのでフィールドのケースに使える) |
+| Blissey(fixed の防御側。Snorlax/Blissey/Body Slam の組) | Wigglytuff | HP 種族値が突出して高く防御が低い受け。ノーマルを含み、ゴースト無効の性質も残る |
+| Blissey(attack-species の防御アンカー) | Snorlax | 単ノーマルの高HP受け(再修正: 当初 Wigglytuff にしたが、ノーマル/フェアリーはドラゴン無効・格闘等倍などタイプ相性が変わるため、単タイプで役割の近い Snorlax に変更。critic レビュー指摘) |
+| Tangrowth | Venusaur | 接地した草の特殊アタッカー(Energy Ball がタイプ一致。いわ・あくの Tyranitar に抜群) |
+| Haxorus | Goodra | 接地したドラゴン単タイプ(Dragon Pulse / Dragon Claw がタイプ一致。misty-dragon のミストフィールド半減に使う) |
+| Snover | (差し替えなし) | eviolite-snow は legacy-effects(gen9)に元の種族のまま移る。Champions の NFE はピカチュウのみで、しんかのきせきも無い |
+
+### 再修正: legacy-random が効果を「使うだけ」で「実際に効いていない」問題(critic レビュー、2026-09-21)
+
+初回実装の legacy-random(旧 `legacyRandomCount=1200`)は、技を先に(全代表技からランダムに)選んでから
+持ち物・特性を上書きしていたため、technical には効果を「使っている」ケースが大半でも、engine の補正
+(`modifiers.go`)が実際には一度も乗らないケースが多数混ざっていた:
+こだわりハチマキ(`StatMods.atk`)は技が物理でなければ攻撃実数値に効かず、こだわりメガネ(`StatMods.spa`)ととつげきチョッキ
+(`StatMods.spd`)は技が特殊でなければ効かず、はがねつかい(`OffBoostType: steel`)は技タイプが鋼でなければ効かない
+(いずれも `atkKey`/`defKey` は技の分類で決まり、はがねつかいは技タイプで決まるため)。
+初回の生成で実際に効いていた件数を数えたところ、P2-1b 以前の Champions random(10,000件。legacy 効果もランダムに
+混ぜていた旧実装)で実際に効いていた件数(チョッキ 1181 / ハチマキ 623 / メガネ 611 / はがねつかい 151)を
+大きく下回っていた(チョッキ 185 / ハチマキ 152 / メガネ 160 / はがねつかい 17)。これは実質的なテストの弱体化
+(絶対ルール6)にあたるため修正した。
+
+**修正**: 効果ごとに層(layer)を分けて生成する。層ごとに、その効果が実際に乗る技の集合だけから技を選ぶ:
+- こだわりハチマキ層(1,200件): 技は物理のみ(`physicalMoves`)。攻撃側に固定。
+- こだわりメガネ層(1,200件): 技は特殊のみ(`specialMoves`)。攻撃側に固定。
+- とつげきチョッキ層(1,200件): 技は特殊のみ(`specialMoves`)。防御側に固定。
+- はがねつかい層(220件): 技は鋼タイプのみ(代表技 36 種のうち Iron Head / Flash Cannon の2つ)。攻撃側の特性に固定。
+
+天候・地形・急所・ランク・壁・種族・性格などそれ以外の要素は従来どおりランダム(旧 random が持っていた組合せの検証を残す)。
+この構成で、各層のケースは**その効果が確実に働く**(100%)。件数は最も厳しい過去実績(チョッキ 1181)にも
+十分な余裕を持たせた(各層 1,200 件、はがねつかいのみ代表技が2つしかないため 220 件)。
+ID は引き続き `legacy-random/NNNNN` で通し番号(層をまたいで連番)。乱数列(シード `0x4c454741`)は変えていない。
+
+`engine/golden_oracle_test.go` の `TestGoldenLegacyEffectsPartition` も強化した: legacy-random の各ケースについて、
+`goldenLegacyEffectApplies`(技の分類・タイプ・持ち主の側から `modifiers.go` の適用条件を判定する)で
+実際に効いているかを判定し、効いていなければ失敗にする。効果ごとに実際に効いた件数の下限
+(`goldenLegacyEffectMinWorking`: ハチマキ・メガネ 620 / チョッキ 1180 / はがねつかい 150。上記の旧実績を下回らない値)も追加した。
+`goldenLegacyRandomMin`(全体件数の下限)は 1,000 から 3,000 に引き上げた。
+なお旧 fixed のシナリオ(choiceband 等 × 元の6組。§決定2 (a))は元の構成のまま維持しており(「元の種族のまま」)、
+一部の組(技が特殊の組でこだわりハチマキを使う等)は元々効果が乗らない技の組み合わせを含むが、これは P2-1b が
+新たに持ち込んだものではなく、この強化の対象外とした(強化対象は generate.mjs の legacy-random 部分のみ)。
+
+併せて、attack-species の防御アンカーの Blissey 差し替え先を Wigglytuff → Snorlax に修正した(上表)。
+
+### 限界
+
+- gen9 で照合する効果は、Champions で実際に同じ数値になる保証は無い(Champions に存在しないので確かめようがない)。検証しているのは engine の**計算式**で、ゲームとの一致ではない。
+- 0.12.0 の gen9 世代の出力が 0.10.0 と同じかは、legacy-effects の再生成で差分として現れる(期待値が動いたら理由をコミットメッセージに書く。絶対ルール6)。

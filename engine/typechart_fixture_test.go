@@ -181,7 +181,9 @@ func TestTypeChartFixtureIsAvailable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	if f.SchemaVersion != 1 || f.Source != "@smogon/calc" || f.Version != "0.10.0" || f.Generation != 9 {
+	// P2-1b(ADR-0002 §決定5 の追記): 相性表は @smogon/calc 0.12.0 の Champions 世代(Generations.get(0))
+	// から生成する。gen9 と一致することは生成器(tools/golden/generate.mjs)が確認済み。
+	if f.SchemaVersion != 1 || f.Source != "@smogon/calc" || f.Version != "0.12.0" || f.Generation != 0 {
 		t.Fatalf("相性表の出どころが想定と違う: %+v", struct {
 			SchemaVersion   int
 			Source, Version string

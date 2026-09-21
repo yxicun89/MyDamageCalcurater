@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "source": "@smogon/calc",
-  "version": "0.10.0",
-  "generation": 9,
-  "note": "Multiplier codes are the effectiveness x2 as integers (0=immune, 1=not very effective, 2=neutral, 4=super effective). ADR-0013",
+  "version": "0.12.0",
+  "generation": 0,
+  "note": "Multiplier codes are the effectiveness x2 as integers (0=immune, 1=not very effective, 2=neutral, 4=super effective). ADR-0013. Generated from the Champions generation (Generations.get(0)); confirmed identical to gen9.",
   "excludedTypes": [
     "???",
     "stellar"
