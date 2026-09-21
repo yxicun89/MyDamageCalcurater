@@ -34,9 +34,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	typeChart, err := master.EmbeddedTypeChart()
+	if err != nil {
+		slog.Error("balance API failed to load the type chart", "error", err)
+		os.Exit(1)
+	}
+
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           httpapi.New(httpapi.Dependencies{TypeChart: master.NewTemporaryTypeChart(), PokemonTypes: pokemonTypes}),
+		Handler:           httpapi.New(httpapi.Dependencies{TypeChart: typeChart, PokemonTypes: pokemonTypes}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,

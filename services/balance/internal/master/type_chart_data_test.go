@@ -51,26 +51,6 @@ func TestEmbeddedTypeChartLoads(t *testing.T) {
 	}
 }
 
-// 移行の確認: データの表は TB0 の TemporaryTypeChart と 18×18 全件で一致する。
-func TestEmbeddedTypeChartMatchesTemporaryChart(t *testing.T) {
-	t.Parallel()
-
-	chart, err := EmbeddedTypeChart()
-	if err != nil {
-		t.Fatalf("EmbeddedTypeChart() error = %v", err)
-	}
-	temporary := NewTemporaryTypeChart()
-	for _, attack := range balance.AllTypes() {
-		for _, defense := range balance.AllTypes() {
-			got, err := chart.Matchup(attack, defense)
-			want, _ := temporary.Matchup(attack, defense)
-			if err != nil || got != want {
-				t.Errorf("Matchup(%s, %s) = %d, %v; temporary = %d", attack, defense, got, err, want)
-			}
-		}
-	}
-}
-
 func TestTypeChartMatchupRejectsUnknownTypes(t *testing.T) {
 	t.Parallel()
 

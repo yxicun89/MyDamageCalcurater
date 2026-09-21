@@ -16,11 +16,11 @@ damage-calc とは兄弟サービスで、互いの実行時 API には依存し
 
 契約の正は [ADR-0014](../../docs/adr/0014-balance-tb1-defense-analysis.md)。
 
-`TemporaryTypeChart` は開発継続用であり恒久正本ではない。2026-09-21 時点の
-`engine/typechart.go` と同じ第6世代以降の18タイプ相性を複製し、ADR-0012 の共通マスタが
-確定したら `balance.TypeChartProvider` の adapter だけを差し替える。
-複製元は main の commit `cc9a816` 時点の `engine/typechart.go`(最終変更 `0e4616a`)、SHA-256 は
-`cc41f76f82b0c79818ea784436c6a760bd4a8699a0d2596855526b7fa634edf5`。
+タイプ相性表はコードに持たない(ADR-0013・ADR-0015)。ダメージ計算レーンの P1-13 でデータ化された
+`testdata/golden/typechart.json` を `internal/master/data/typechart.json` にバイト複製して go:embed で同梱し、
+`master.EmbeddedTypeChart` が起動時に検証して読む(不正なら起動失敗)。元ファイルとの一致はテスト
+(`TestEmbeddedTypeChartMatchesSharedData`)が検査するので、元が更新されたら `make balance-sync-typechart` で複製し直す。
+共通マスタ(P2-2)の相性表が別の形で配布されるようになったら、`balance.TypeChartProvider` の adapter だけを差し替える。
 
 ポケモンのタイプは `internal/master.PokemonTypeReadModel`(`BALANCE_POKEMON_TYPES_PATH` が指す JSON を
 起動時に1回だけ読む)から引く。これも temporary adapter で、共通マスタのスナップショット schema(P2-2)が

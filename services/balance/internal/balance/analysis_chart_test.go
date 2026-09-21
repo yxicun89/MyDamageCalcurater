@@ -21,14 +21,14 @@ func allDefenseTypeCombos() [][]balance.TypeID {
 	return combos
 }
 
-// TestAnalyzeDefenseAgreesWithCalculateDefenseOnTemporaryChart runs every single and
-// dual type through AnalyzeDefense (six at a time) with the temporary chart and checks
+// TestAnalyzeDefenseAgreesWithCalculateDefenseOnDataChart runs every single and
+// dual type through AnalyzeDefense (six at a time) with the bundled data chart and checks
 // that each entry equals CalculateDefense, that categories follow ClassifyMultiplier,
 // and that the team summary invariant holds for all 18 attack types.
-func TestAnalyzeDefenseAgreesWithCalculateDefenseOnTemporaryChart(t *testing.T) {
+func TestAnalyzeDefenseAgreesWithCalculateDefenseOnDataChart(t *testing.T) {
 	t.Parallel()
 
-	chart := master.NewTemporaryTypeChart()
+	chart := testTypeChart()
 	combos := allDefenseTypeCombos()
 	if len(combos) != 171 {
 		t.Fatalf("combos = %d, want 171", len(combos))
@@ -78,4 +78,13 @@ func TestAnalyzeDefenseAgreesWithCalculateDefenseOnTemporaryChart(t *testing.T) 
 			}
 		}
 	}
+}
+
+// testTypeChart は同梱の相性表(P1-13 のデータ)を返す。読めないのはテスト環境の不備なので panic する。
+func testTypeChart() *master.TypeChart {
+	chart, err := master.EmbeddedTypeChart()
+	if err != nil {
+		panic(err)
+	}
+	return chart
 }
