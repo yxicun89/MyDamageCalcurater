@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# make dev 用に docker で mysql:9.7.2 を 127.0.0.1:3306 に起動する(ADR-0015 §5・§9)。
+# make dev 用に docker で mysql:9.7.2 を 127.0.0.1:3306 に起動する(ADR-0100 §5・§9)。
 # パスワードは .env から読む(サンプルは .env.example。.env は Git に含めない)。
 # 停止・削除はこのスクリプトの範囲外(データ削除は人間の確認が必要。CLAUDE.md)。
 set -euo pipefail

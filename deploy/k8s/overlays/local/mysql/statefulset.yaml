@@ -1,4 +1,4 @@
-# ローカル(k3d)専用の MySQL(ADR-0015 §9)。クラウドはマネージド DB を想定するため
+# ローカル(k3d)専用の MySQL(ADR-0100 §9)。クラウドはマネージド DB を想定するため
 # cloud overlay には置かない。Secret mysql-auth はコミットせず scripts/up.sh が作る。
 apiVersion: apps/v1
 kind: StatefulSet

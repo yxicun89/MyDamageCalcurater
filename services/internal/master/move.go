@@ -16,7 +16,7 @@ type MoveRow struct {
 	Priority int
 }
 
-// moveCategories は moves.category として許される値(ADR-0015 §3)。
+// moveCategories は moves.category として許される値(ADR-0100 §3)。
 var moveCategories = map[string]engine.MoveCategory{
 	"physical": engine.CategoryPhysical,
 	"special":  engine.CategorySpecial,

@@ -1,6 +1,6 @@
 package db
 
-// ファイルを読むだけの静的テスト(ADR-0015 §1〜§5・§7・§9)。DB は使わない(make test で走る)。
+// ファイルを読むだけの静的テスト(ADR-0100 §1〜§5・§7・§9)。DB は使わない(make test で走る)。
 
 import (
 	"errors"
@@ -92,7 +92,7 @@ func readAll(t *testing.T, paths map[int]string) string {
 	return strings.ToLower(b.String())
 }
 
-// requiredTables は ADR-0015 §3 のテーブル。
+// requiredTables は ADR-0100 §3 のテーブル。
 var requiredTables = []string{
 	"types", "type_chart",
 	"abilities", "items", "moves", "species", "species_abilities",
@@ -116,7 +116,7 @@ func TestMigrationsCreateAndDropRequiredTables(t *testing.T) {
 	}
 }
 
-// TestMigrationsHaveNoData は migrations に実データを入れないこと(ADR-0015 §2。タイプもマスタ = ADR-0013)。
+// TestMigrationsHaveNoData は migrations に実データを入れないこと(ADR-0100 §2。タイプもマスタ = ADR-0013)。
 func TestMigrationsHaveNoData(t *testing.T) {
 	_, up, down := migrationPairs(t)
 	for _, paths := range []map[int]string{up, down} {
@@ -132,7 +132,7 @@ func TestMigrationsHaveNoData(t *testing.T) {
 	}
 }
 
-// TestMigrationsDeclareKeyConstraints は ADR-0015 §3 の要の制約が up にあることを確かめる
+// TestMigrationsDeclareKeyConstraints は ADR-0100 §3 の要の制約が up にあることを確かめる
 // (効くことの確認は -tags mysql のテスト)。
 func TestMigrationsDeclareKeyConstraints(t *testing.T) {
 	_, up, _ := migrationPairs(t)
@@ -182,7 +182,7 @@ func TestMigrationsAreEmbedded(t *testing.T) {
 	}
 }
 
-// TestDownAllRequiresConfirmation は DB 名の確認が無い down を接続前に拒否すること(ADR-0015 §5)。
+// TestDownAllRequiresConfirmation は DB 名の確認が無い down を接続前に拒否すること(ADR-0100 §5)。
 // 到達できないアドレスを使い、接続を試みたら別のエラーになって落ちるようにしている。
 func TestDownAllRequiresConfirmation(t *testing.T) {
 	const dsn = "testuser:testpass@tcp(127.0.0.1:1)/pokedex_test"
@@ -198,7 +198,7 @@ func TestDownAllRequiresConfirmation(t *testing.T) {
 		{name: "大文字小文字違い", confirm: "POKEDEX_TEST"},
 		{name: "前方一致", confirm: "pokedex_tes"},
 		// DSN 側に DB 名が無いと「確認なし(空文字)」同士が一致してしまいかねない。
-		// 空文字同士の一致でも確認したことにしない(ADR-0015 §5)。
+		// 空文字同士の一致でも確認したことにしない(ADR-0100 §5)。
 		{name: "DSN に DB 名が無い×確認なし", dsn: dsnWithoutDBName, confirm: ""},
 	}
 	for _, tc := range cases {
@@ -269,7 +269,7 @@ func TestSqlcConfig(t *testing.T) {
 	}
 }
 
-// --- Makefile・k8s(ADR-0015 §5・§9) ------------------------------------------
+// --- Makefile・k8s(ADR-0100 §5・§9) ------------------------------------------
 
 func readRepoFile(t *testing.T, rel string) string {
 	t.Helper()
@@ -377,7 +377,7 @@ func TestNoAutomaticDown(t *testing.T) {
 }
 
 // TestUpScriptBuildsAndImportsMigrateImage は scripts/up.sh が pokedex-migrate イメージを
-// build し、k3d に import してから Job を流すこと(ADR-0015 §9: 「make up が k3d に import
+// build し、k3d に import してから Job を流すこと(ADR-0100 §9: 「make up が k3d に import
 // する」)。
 func TestUpScriptBuildsAndImportsMigrateImage(t *testing.T) {
 	s := readRepoFile(t, "scripts/up.sh")
@@ -466,7 +466,7 @@ func TestLocalMySQLManifests(t *testing.T) {
 	}
 }
 
-// TestNoCommittedSecrets は deploy/ に値入りの Secret を置かないこと(ADR-0015 §9)。
+// TestNoCommittedSecrets は deploy/ に値入りの Secret を置かないこと(ADR-0100 §9)。
 func TestNoCommittedSecrets(t *testing.T) {
 	err := filepath.WalkDir(filepath.Join(repoRoot, "deploy"), func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -489,7 +489,7 @@ func TestNoCommittedSecrets(t *testing.T) {
 	}
 }
 
-// --- 架空データの example(ADR-0015 §7) --------------------------------------
+// --- 架空データの example(ADR-0100 §7) --------------------------------------
 
 func TestExampleSeedIsFictional(t *testing.T) {
 	raw, err := os.ReadFile("testdata/example_seed.sql")

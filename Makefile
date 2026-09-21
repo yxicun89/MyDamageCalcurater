@@ -32,7 +32,7 @@ gen-go: ## Go サーバ/型を openapi.yaml から生成
 	@echo "gen-go: services/internal/api/openapi.gen.go を生成"
 
 .PHONY: gen-sql
-gen-sql: ## pokedex の DB 行の型・クエリを sqlc から生成(ADR-0015 §1)
+gen-sql: ## pokedex の DB 行の型・クエリを sqlc から生成(ADR-0100 §1)
 	@cd tools && $(GO) tool sqlc generate -f ../services/pokedex/db/sqlc.yaml
 	@echo "gen-sql: services/pokedex/internal/store を生成"
 
@@ -87,7 +87,7 @@ test-golden: ## engine のゴールデンテスト(@smogon/calc 照合)
 test-all-species: ## 全ポケモン網羅・性質テスト
 	@cd engine && $(GO) test -tags allspecies ./... -run AllSpecies
 
-## --- pokedex DB(migrate。ADR-0015 §5) ---------------------------------
+## --- pokedex DB(migrate。ADR-0100 §5) ---------------------------------
 .PHONY: migrate-up
 migrate-up: ## pokedex の DB を最新版まで migrate する(POKEDEX_DATABASE_DSN が必須)
 	@cd services && $(GO) run ./pokedex/cmd/migrate up

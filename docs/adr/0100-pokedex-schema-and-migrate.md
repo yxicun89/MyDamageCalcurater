@@ -1,4 +1,4 @@
-# ADR-0015: pokedex のスキーマ(MySQL)・migrate・DB 行から engine 型への写像
+# ADR-0100: pokedex のスキーマ(MySQL)・migrate・DB 行から engine 型への写像
 
 - 状態: 提案(P2-2a の仕様。spec-writer 起草、implementer が実装、critic がレビュー)
 - 日付: 2026-09-21

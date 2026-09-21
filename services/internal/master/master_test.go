@@ -1,6 +1,6 @@
 package master_test
 
-// DB の行 → engine の型の写像(ADR-0015 §6)。DB を使わない。架空データだけを使う。
+// DB の行 → engine の型の写像(ADR-0100 §6)。DB を使わない。架空データだけを使う。
 
 import (
 	"encoding/json"
@@ -15,7 +15,7 @@ import (
 	"example.com/pokecalc/services/internal/master"
 )
 
-// testTypes は架空の小さなタイプ表(ADR-0015 §7。example_seed.sql と同じ形)。
+// testTypes は架空の小さなタイプ表(ADR-0100 §7。example_seed.sql と同じ形)。
 func testTypes() []master.TypeRow {
 	return []master.TypeRow{
 		{ID: "grass", SortOrder: 3, NameJa: "テストくさ"},
@@ -364,7 +364,7 @@ func TestItemAndAbilityRejectInvalidRows(t *testing.T) {
 	}
 }
 
-// --- 効果定義の JSON(ADR-0005 / ADR-0015 §6) --------------------------------
+// --- 効果定義の JSON(ADR-0005 / ADR-0100 §6) --------------------------------
 
 // fullItemEffect は ItemEffect の全フィールドを埋めた値。engine にフィールドが増えたら
 // TestEffectFixturesCoverAllFields が落ちて、写像とこの fixture の更新を強制する。

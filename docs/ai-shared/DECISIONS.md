@@ -358,3 +358,9 @@ services/go.mod の oapi-codegen tool(生成先が API レーンの services/int
 (6) 古い依存を一覧化する `make deps-outdated`(Go 各モジュール `go list -m -u all` / Node `npm outdated`)をルート Makefile に追加(`make test` には含めない)。
 Reason: 2026-09-21 のユーザー決定(最新の安定版・正確な番号固定・Go ツールチェーンはデータレーンが先に上げる)への対応。
 Impact: 詳細は ADR-0018。API レーン・Web レーン・iOS レーンは、Go ツールチェーンを `go 1.27.1` に揃えること(services/go.mod の API レーンが使う分の依存は自分の範囲で確認)。タイプバランスレーンの `services/balance/go.mod` は go/toolchain 行(`go 1.27` → `go 1.27.1`)のみ本コミットで揃え、依存(require)は変更していない。
+
+## 2026-09-22: ADR の番号をレーンごとの帯にする(データレーンの既定案・ユーザー未確認。深夜のため)
+Decision: 新しい ADR の番号はレーンごとの帯から取る。データ 0100〜 / API 0200〜 / Web 0300〜 / タイプバランス 0400〜 / iOS 0500〜。既存の 0001〜0019 はそのまま。
+衝突している既存の番号は、後から統合する側が自分の帯へ振り直す。データレーンは 0015-pokedex-schema-and-migrate → 0100、依存更新の ADR → 0102、importer の ADR(未統合)→ 0101 に振り直した。
+Reason: 5レーンが並行して「main の最新の次」を取った結果、main に 0015 が2つ入り、0016(Web / タイプバランス)・0017(iOS / タイプバランス / データ)・0018(API / タイプバランス)もブランチ間で衝突した。帯にすれば統合の順番に依らず衝突しない。
+Impact: COORDINATION.md の共有ファイルの表(docs/adr/)を更新。各レーンは次に ADR を作るときから帯を使い、未統合の ADR が main と衝突していれば自分の帯へ振り直す。深夜のため既定案で進めた(取り消しやすい文書の規則)。朝にユーザーが確認する。

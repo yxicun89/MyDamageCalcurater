@@ -19,7 +19,7 @@ type Querier interface {
 	ListRegulations(ctx context.Context) ([]ListRegulationsRow, error)
 	ListSpeciesAbilities(ctx context.Context, speciesKey string) ([]SpeciesAbility, error)
 	ListTypeChart(ctx context.Context) ([]TypeChart, error)
-	// sqlc のクエリ(ADR-0015 §1)。services/internal/master(DB行→engine型の写像)が
+	// sqlc のクエリ(ADR-0100 §1)。services/internal/master(DB行→engine型の写像)が
 	// 受け取る素朴な行の型(TypeRow・SpeciesRow 等)にそのまま詰め替えられる列の並びにする。
 	ListTypes(ctx context.Context) ([]Type, error)
 }

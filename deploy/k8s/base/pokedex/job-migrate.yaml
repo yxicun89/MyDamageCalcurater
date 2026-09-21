@@ -1,4 +1,4 @@
-# pokedex の migrate を流す Job(up のみ。ADR-0015 §5)。サービスの起動時には自動 migrate
+# pokedex の migrate を流す Job(up のみ。ADR-0100 §5)。サービスの起動時には自動 migrate
 # しない(複数レプリカの競合を避けるため)。down を流す経路はここに置かない。
 apiVersion: batch/v1
 kind: Job

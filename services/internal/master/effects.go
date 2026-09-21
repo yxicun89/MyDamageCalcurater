@@ -1,6 +1,6 @@
 package master
 
-// 効果定義(item_effects.effect / ability_effects.effect)の JSON デコード/エンコード(ADR-0015 §6)。
+// 効果定義(item_effects.effect / ability_effects.effect)の JSON デコード/エンコード(ADR-0100 §6)。
 //
 // デコードは厳格にする: 未知のフィールド・大文字小文字違い・オブジェクト以外・後続データ・
 // 空・負の値・小数(4096基準の整数のみ)を拒否する。encoding/json の Unmarshal は
