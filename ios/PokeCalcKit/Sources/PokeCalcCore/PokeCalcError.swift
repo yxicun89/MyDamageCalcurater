@@ -24,6 +24,19 @@ public struct PokeCalcError: Error, Equatable, Sendable {
         /// 原因が違うので分ける。
         public static let decode = "client_decode_error"
 
+        // MARK: - CalcViewModel が使う値(P6-2a)
+
+        /// `AttackerPreset.build` に要る性格(上昇 or 無補正)がマスタの一覧に無い(ADR-0017 §6)。
+        public static let natureUnavailable = "client_nature_unavailable"
+        /// 計算画面に攻撃側・防御側として選べる種族が2つ未満(マスタが少なすぎる)。
+        public static let insufficientSpecies = "client_insufficient_species"
+        /// 攻撃側の learnset とマスタの技を突き合わせても、選べる技が1つも無い
+        /// (データ由来。`reselectMove` が既定技を選べないときに使う)。
+        public static let moveUnavailable = "client_move_unavailable"
+        /// 選択中の `moveId` が `moveOptions` に無い(内部の不整合。`moveUnavailable` とは原因が違う。
+        /// `moveOptions` にある技だけを選べるはずなので、通常は起きない防御的なエラー)。
+        public static let selectedMoveMissing = "client_selected_move_missing"
+
         // MARK: - MockPokeCalcService が使う値
 
         /// サーバーの語彙を真似た「見つからない」。`APIPokeCalcServiceTests` のフィクスチャで

@@ -160,13 +160,27 @@ public enum TextStyleToken: CaseIterable {
     }
 
     public var font: Font {
-        let base = Font.system(size: size, design: .rounded)
+        let base = Self.dynamicRoundedFont(size: size)
         // design.md「数字は等幅(.monospacedDigit())」: 結果の%表示は数字が入れ替わっても
         // レイアウトが揺れないよう等幅数字にする。他のスタイルは通常の(可変幅の)数字でよい。
         switch self {
         case .resultPercent: return base.monospacedDigit()
         case .heading, .body, .caption: return base
         }
+    }
+
+    /// SF Pro Rounded で、`size` を「既定の文字サイズでの基準値」として端末の Dynamic Type
+    /// (アクセシビリティの文字サイズ設定)に応じて拡大される固定デザインのフォント。
+    /// `size` 自体(design.md の 28/17/15/12)は変えない(`DesignTokenTests` が固定する値)。
+    private static func dynamicRoundedFont(size: CGFloat) -> Font {
+        #if canImport(UIKit)
+        let base = UIFont.systemFont(ofSize: size, weight: .regular)
+        let rounded = base.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: size) } ?? base
+        return Font(UIFontMetrics(forTextStyle: .body).scaledFont(for: rounded))
+        #else
+        // macOS はパッケージテストのためだけの対象(Dynamic Type の主戦場は iOS)。固定サイズで返す。
+        return Font.system(size: size, design: .rounded)
+        #endif
     }
 }
 

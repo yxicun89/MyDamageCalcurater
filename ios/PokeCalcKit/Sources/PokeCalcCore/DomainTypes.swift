@@ -371,7 +371,10 @@ public struct BulkCalcResult: Equatable, Sendable {
 
 /// 観測(ADR-0010 §R2)。3つのうちちょうど1つの精度で持つ(値と精度の組み合わせ不整合を
 /// 型で起こせなくするため enum にする。engine と違い note は今のところ画面から渡さない)。
-public enum Observation: Equatable, Sendable {
+/// 名前は `DamageObservation`(`Observation` ではなく): SwiftUI の `@Observable` マクロが展開する
+/// コードは `Observation.ObservationRegistrar`(Apple の Observation フレームワーク)を参照するため、
+/// 同名の型がこのモジュールにあると解決が衝突する(P6-2a・CalcViewModel の `@Observable` 化で判明)。
+public enum DamageObservation: Equatable, Sendable {
     /// 整数%の観測(ゲーム内表示)。
     case percent(Int)
     /// 小数第1位の観測(0.1% 単位の整数)。
@@ -455,11 +458,11 @@ public struct ReverseRequest: Sendable {
     public var moveId: String
     /// 持ち物候補(`nil` は「持ち物なし」)。空は「持ち物なし」の1通りと同じ。
     public var itemCandidates: [String?]
-    public var observations: [Observation]
+    public var observations: [DamageObservation]
 
     public init(
         format: Format, side: ReverseSide, known: Individual, unknownSpeciesKey: String, moveId: String,
-        itemCandidates: [String?] = [], observations: [Observation]
+        itemCandidates: [String?] = [], observations: [DamageObservation]
     ) {
         self.format = format
         self.side = side

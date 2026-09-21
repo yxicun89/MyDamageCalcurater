@@ -5,6 +5,14 @@ import SwiftUI
 /// ルート画面(P6-1)。モックで動いていることの表示と、計算画面(P6-2)への入口だけを持つ。
 struct RootView: View {
     private let environment: AppEnvironment
+    /// 計算画面への遷移を値ベースにし、起動時に自動で遷移させられるようにする(下記の
+    /// `openCalcScreenAtLaunchEnvironmentKey` 用。テスト・スクリーンショット撮影専用)。
+    @State private var path = NavigationPath()
+
+    /// 起動時にいきなり計算画面を開かせる環境変数(XCUITest を介さずスクリーンショットを撮る用途。
+    /// 通常の起動には影響しない。README「P6-2a」参照)。
+    static let openCalcScreenAtLaunchEnvironmentKey = "POKECALC_OPEN_CALC_SCREEN_AT_LAUNCH"
+    private static let openCalcScreenAtLaunchValue = "1"
 
     /// `environment` は既定でも作れる(#Preview 用)。実行時は `PokeCalcApp` が `@State` で
     /// 1回だけ作ったものを渡す(セッション ID を起動ごとに1つに保つため)。
@@ -13,14 +21,12 @@ struct RootView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             VStack(spacing: SpacingToken.x6) {
                 statusBadge
                 Spacer()
                 if case .ready = environment {
-                    NavigationLink {
-                        CalcPlaceholderView()
-                    } label: {
+                    NavigationLink(value: CalcScreenRoute()) {
                         Text("計算する")
                     }
                     .buttonStyle(PillButtonStyle())
@@ -39,6 +45,18 @@ struct RootView: View {
                         .font(TextStyleToken.heading.font)
                         .foregroundStyle(ColorToken.textPrimary.color)
                 }
+            }
+            .navigationDestination(for: CalcScreenRoute.self) { _ in
+                if case .ready(let service, let backendDescription) = environment {
+                    CalcScreenView(service: service, backendDescription: backendDescription)
+                }
+            }
+        }
+        .task {
+            let env = ProcessInfo.processInfo.environment
+            if env[Self.openCalcScreenAtLaunchEnvironmentKey] == Self.openCalcScreenAtLaunchValue,
+               case .ready = environment {
+                path.append(CalcScreenRoute())
             }
         }
     }
@@ -81,17 +99,8 @@ struct PillButtonStyle: ButtonStyle {
     }
 }
 
-/// 計算画面(P6-2)のプレースホルダ。P6-1 では画面遷移がつながることだけを確かめる。
-struct CalcPlaceholderView: View {
-    var body: some View {
-        Text("計算画面(準備中)")
-            .font(TextStyleToken.heading.font)
-            .foregroundStyle(ColorToken.textPrimary.color)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(ColorToken.bgBase.color.ignoresSafeArea())
-            .accessibilityIdentifier("calcScreen")
-    }
-}
+/// `NavigationPath` に積む計算画面の行き先(値だけで、状態は持たない)。
+private struct CalcScreenRoute: Hashable {}
 
 #Preview {
     if let mock = try? MockPokeCalcService() {

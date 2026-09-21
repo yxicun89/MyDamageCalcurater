@@ -9,3 +9,7 @@
 //   APIPokeCalcService.swift   生成クライアントでの実装。生成型 ↔ ドメインの写像はここに閉じる
 //   MockPokeCalcService.swift  架空データ(Resources/*.json)での実装(§4)。ダメージは計算しない
 //   MockFixtures.swift         MockPokeCalcService が読む JSON の decode 用の型
+//   AttackerPreset.swift       自分側の調整プリセット(§6。P6-2a)
+//   BulkRowDisplay.swift       一括計算の結果行の画面向け整形・KOTier(P6-2a)
+//   CalcScreenError.swift      PokeCalcError → 計算画面が出し分けるエラーの種類(P6-2a)
+//   CalcViewModel.swift        ダメージ計算画面の状態(§1「画面の状態は PokeCalcCore」。P6-2a)

@@ -28,6 +28,8 @@ final class PokeCalcUITests: XCTestCase {
         let openButton = app.buttons["openCalcScreen"]
         XCTAssertTrue(openButton.waitForExistence(timeout: 5))
         openButton.tap()
-        XCTAssertTrue(app.staticTexts["calcScreen"].waitForExistence(timeout: 5))
+        // 計算画面のルートは P6-2a でプレースホルダの `Text` から実画面(`ScrollView`)に変わった。
+        // 要素の種類を決め打ちしないよう `.any` で探す(P6-2a の画面の中身は CalcScreenUITests)。
+        XCTAssertTrue(app.descendants(matching: .any)["calcScreen"].waitForExistence(timeout: 5))
     }
 }
