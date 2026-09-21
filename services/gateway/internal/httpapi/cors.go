@@ -1,11 +1,11 @@
 package httpapi
 
-// CORS(ADR-0020 §6)。許可オリジンに完全一致する Origin にだけ ACAO と Vary: Origin を付ける。
+// CORS(ADR-0202 §6)。許可オリジンに完全一致する Origin にだけ ACAO と Vary: Origin を付ける。
 // 認証なしなので Access-Control-Allow-Credentials は付けない。`*` は Config で拒否済み(NewHandler)。
 
 import "net/http"
 
-// corsAllowMethods / corsAllowHeaders / corsMaxAge はプリフライトの応答ヘッダの固定値(ADR-0020 §6)。
+// corsAllowMethods / corsAllowHeaders / corsMaxAge はプリフライトの応答ヘッダの固定値(ADR-0202 §6)。
 const (
 	corsAllowMethods = "GET, POST, OPTIONS"
 	corsAllowHeaders = "Content-Type, X-Device-Id, X-Session-Id"

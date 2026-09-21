@@ -9,17 +9,54 @@ import (
 )
 
 type Querier interface {
+	DeleteAbilities(ctx context.Context) error
+	DeleteAbilityEffects(ctx context.Context) error
+	DeleteDataVersions(ctx context.Context) error
+	DeleteItemEffects(ctx context.Context) error
+	DeleteItems(ctx context.Context) error
+	DeleteLearnsets(ctx context.Context) error
+	DeleteMegaSpecies(ctx context.Context) error
+	DeleteMoves(ctx context.Context) error
+	DeleteRegulationAbilities(ctx context.Context) error
+	DeleteRegulationItems(ctx context.Context) error
+	DeleteRegulationMoves(ctx context.Context) error
+	DeleteRegulationSpecies(ctx context.Context) error
+	DeleteRegulations(ctx context.Context) error
+	DeleteRemainingSpecies(ctx context.Context) error
+	DeleteSpeciesAbilities(ctx context.Context) error
+	DeleteTypeChart(ctx context.Context) error
+	DeleteTypes(ctx context.Context) error
 	GetAbility(ctx context.Context, id string) (Ability, error)
 	GetAbilityEffect(ctx context.Context, abilityID string) (AbilityEffect, error)
 	GetDataVersion(ctx context.Context, source string) (DataVersion, error)
 	GetItem(ctx context.Context, id string) (Item, error)
 	GetItemEffect(ctx context.Context, itemID string) (ItemEffect, error)
 	GetSpeciesByKey(ctx context.Context, key string) (Species, error)
+	InsertAbility(ctx context.Context, arg InsertAbilityParams) error
+	InsertAbilityEffect(ctx context.Context, arg InsertAbilityEffectParams) error
+	InsertDataVersion(ctx context.Context, arg InsertDataVersionParams) error
+	InsertItem(ctx context.Context, arg InsertItemParams) error
+	InsertItemEffect(ctx context.Context, arg InsertItemEffectParams) error
+	InsertLearnset(ctx context.Context, arg InsertLearnsetParams) error
+	InsertMove(ctx context.Context, arg InsertMoveParams) error
+	InsertRegulation(ctx context.Context, arg InsertRegulationParams) error
+	InsertRegulationAbility(ctx context.Context, arg InsertRegulationAbilityParams) error
+	InsertRegulationItem(ctx context.Context, arg InsertRegulationItemParams) error
+	InsertRegulationMove(ctx context.Context, arg InsertRegulationMoveParams) error
+	InsertRegulationSpecies(ctx context.Context, arg InsertRegulationSpeciesParams) error
+	InsertSpecies(ctx context.Context, arg InsertSpeciesParams) error
+	InsertSpeciesAbility(ctx context.Context, arg InsertSpeciesAbilityParams) error
+	InsertType(ctx context.Context, arg InsertTypeParams) error
+	InsertTypeChart(ctx context.Context, arg InsertTypeChartParams) error
+	ListDataVersions(ctx context.Context) ([]DataVersion, error)
 	ListMoves(ctx context.Context) ([]Move, error)
 	ListRegulations(ctx context.Context) ([]ListRegulationsRow, error)
 	ListSpeciesAbilities(ctx context.Context, speciesKey string) ([]SpeciesAbility, error)
+	// 冪等な投入(importer.Apply。ADR-0101 §9)。全置き換えを1トランザクションで行う。
+	// 自己参照の外部キー(species.base_species_key)があるので、削除はメガを先・挿入はメガを後にする。
+	ListSpeciesKeys(ctx context.Context) ([]ListSpeciesKeysRow, error)
 	ListTypeChart(ctx context.Context) ([]TypeChart, error)
-	// sqlc のクエリ(ADR-0015 §1)。services/internal/master(DB行→engine型の写像)が
+	// sqlc のクエリ(ADR-0100 §1)。services/internal/master(DB行→engine型の写像)が
 	// 受け取る素朴な行の型(TypeRow・SpeciesRow 等)にそのまま詰め替えられる列の並びにする。
 	ListTypes(ctx context.Context) ([]Type, error)
 }

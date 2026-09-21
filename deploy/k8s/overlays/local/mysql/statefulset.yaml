@@ -1,4 +1,4 @@
-# ローカル(k3d)専用の MySQL(ADR-0015 §9)。クラウドはマネージド DB を想定するため
+# ローカル(k3d)専用の MySQL(ADR-0100 §9)。クラウドはマネージド DB を想定するため
 # cloud overlay には置かない。Secret mysql-auth はコミットせず scripts/up.sh が作る。
 apiVersion: apps/v1
 kind: StatefulSet
@@ -22,7 +22,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: mysql
-          image: mysql:8.4
+          image: mysql:9.7.2@sha256:29abb0a179982e4a8928138bfc7f918af9eda64e7eeb1b1d084c1720a20159e6
           ports:
             - name: mysql
               containerPort: 3306

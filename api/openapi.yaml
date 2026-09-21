@@ -9,7 +9,7 @@ info:
     ドメイン規約(CLAUDE.md):
     - Lv50 固定、個体値 31 固定。能力ポイント SP は 1ステータス最大 32・合計 66。
     - ステータスキーは Showdown 規約に合わせ hp/atk/def/spa/spd/spe。
-    - 認証なし。全リクエストに端末ID(X-Device-Id)とセッションID(X-Session-Id)を付与する(UUID。gateway が検証する。ADR-0020)。
+    - 認証なし。全リクエストに端末ID(X-Device-Id)とセッションID(X-Session-Id)を付与する(UUID。gateway が検証する。ADR-0202)。
 servers:
   - url: /
     description: gateway 経由
@@ -48,7 +48,7 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/SpeciesSummary' }
         '503':
-          description: gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0020)
+          description: gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -77,7 +77,7 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
         '503':
-          description: gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0020)
+          description: gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -107,7 +107,7 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/Move' }
         '503':
-          description: gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0020)
+          description: gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -137,7 +137,7 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/Item' }
         '503':
-          description: gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0020)
+          description: gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -161,7 +161,7 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/Nature' }
         '503':
-          description: gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0020)
+          description: gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -194,7 +194,7 @@ paths:
         '503':
           description: |
             下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
-            gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0020)
+            gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -236,7 +236,7 @@ paths:
         '503':
           description: |
             下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
-            gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0020)
+            gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -279,7 +279,7 @@ paths:
         '503':
           description: |
             下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
-            gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0020)
+            gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -294,7 +294,7 @@ components:
       required: true
       description: |
         クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
-        gateway が検証する(ADR-0020): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+        gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
         下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
       schema:
         type: string
@@ -305,7 +305,7 @@ components:
       in: header
       required: true
       description: |
-        セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0020)。
+        セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
       schema:
         type: string
         format: uuid
@@ -333,7 +333,7 @@ components:
       type: string
       description: |
         安定したエラーコード。WASM 境界(engine/wasmapi の Code* 定数。ADR-0011 §5・§13)と語彙を共通にし、
-        **同じ失敗は HTTP と WASM で同じ code** になる(ADR-0018)。
+        **同じ失敗は HTTP と WASM で同じ code** になる(ADR-0200)。
 
         WASM 境界と共通:
         | code | 意味 | HTTP |
@@ -357,7 +357,7 @@ components:
         | code | 意味 | HTTP |
         |---|---|---|
         | missing_header | X-Device-Id / X-Session-Id が無い・空 | 400 |
-        | invalid_header | X-Device-Id / X-Session-Id が UUID でない・同名ヘッダの重複(UUID 形式の検証は gateway だけが行う。ADR-0020) | 400 |
+        | invalid_header | X-Device-Id / X-Session-Id が UUID でない・同名ヘッダの重複(UUID 形式の検証は gateway だけが行う。ADR-0202) | 400 |
         | unknown_species | speciesKey がマスタに無い | 400 |
         | unknown_move | moveId がマスタに無い | 400 |
         | unknown_item | itemId がマスタに無い | 400 |
@@ -365,7 +365,7 @@ components:
         | unknown_nature | natureId がマスタに無い | 400 |
         | not_found | ルートが無い / このサービスの担当外の操作 | 404 |
         | master_unavailable | マスタを参照できない | 503 |
-        | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0020) | 503 |
+        | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202) | 503 |
       enum: [invalid_json, unknown_field, invalid_enum, invalid_input,
              unknown_preset, duplicate_preset, invalid_preset,
              invalid_reverse_side, no_observation, invalid_observation,

@@ -1,11 +1,11 @@
 package httpapi
 
-// 生成型(api.*)と engine 型の変換、および Store を使った ID 解決(ADR-0018)。
+// 生成型(api.*)と engine 型の変換、および Store を使った ID 解決(ADR-0200)。
 //
 // 1リクエストの流れ(パッケージ doc と同じ): 厳格デコード → 列挙の検証(invalid_enum)
 // → ID 解決(unknown_*)→ engine の入力検証(invalid_input)→ engine 呼び出し → 生成型への写し。
 // 列挙は「format・weather・terrain・status・teraType」だけを生成型の Valid() で検証する。
-// side・presets は engine の sentinel に一本化する(WASM 境界と同じ失敗にするため。ADR-0018 §4)。
+// side・presets は engine の sentinel に一本化する(WASM 境界と同じ失敗にするため。ADR-0200 §4)。
 
 import (
 	"example.com/pokecalc/engine"
@@ -171,7 +171,7 @@ func (s *Server) resolveMove(id string) (engine.Move, error) {
 }
 
 // resolveItems は持ち物 ID の配列(null は持ち物なし)を解決する。省略(nil)は nil のまま返す
-// (engine 側が「持ち物なしの1通り」に既定するため。ADR-0018)。
+// (engine 側が「持ち物なしの1通り」に既定するため。ADR-0200)。
 func (s *Server) resolveItems(label string, ids *[]*string) ([]*engine.Item, error) {
 	if ids == nil {
 		return nil, nil
@@ -204,7 +204,7 @@ func presetKeysFrom(ps *[]api.DefenderPreset) []engine.PresetKey {
 	return out
 }
 
-// convertObservations は観測を検証して engine.Observation に写す(ADR-0018: キーの有無で数える)。
+// convertObservations は観測を検証して engine.Observation に写す(ADR-0200: キーの有無で数える)。
 // engine.CalcReverse 自体は値の有無を区別できない(0 を未指定とみなす)ため、ここで独立に検証する。
 func convertObservations(obs []api.Observation) ([]engine.Observation, error) {
 	if len(obs) == 0 {

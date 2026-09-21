@@ -1,5 +1,5 @@
 // Package calctest は、他のサービス(gateway)のテストが calc-svc の実物を架空マスタで起動するための補助
-// (ADR-0020 §テスト)。calc-svc の httpapi / master は services/calc/internal にあり、Go の internal 規則で
+// (ADR-0202 §テスト)。calc-svc の httpapi / master は services/calc/internal にあり、Go の internal 規則で
 // calc の外からは import できないため、この薄い入口だけを公開する。本番コードから使わない。
 //
 // マスタは services/calc/testdata/master.example.json(架空データ)、相性表は testdata/golden/typechart.json

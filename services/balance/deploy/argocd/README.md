@@ -1,66 +1,45 @@
 # balance GitOps setup
 
-このディレクトリは、公開用クリーンコピーをprivate Git repositoryへpushした後に使う。
-現在の開発repositoryへ公開用remoteを追加せず、履歴をそのままpushしない。
+balance の Argo CD Application。方式は ADR-0018(ローカル k3d での検証)。同期は manual。
 
-公開用コピーの作成担当はClaude Code/Codexのどちらかへ固定しない。ユーザーから依頼された側が、
-root `docs/plan.md` のR-2-9とmain正本の`docs/ai-shared/DECISIONS.md`に従い、別ディレクトリのlocal cloneで
-作者名・メールと個人accountを含むmodule pathを置換する。`check-publishable-full`を含む履歴全体の
-検査が成功したコピーにだけ、作成したprivate remoteを追加する。balance側から元repositoryの履歴や
-remoteを変更しない。R-2-9のスクリプトが未完成なら、手作業で代替せず完成を待つ。
+## Git に入れる値 / 入れない値
 
-作成・更新した担当は、自分のfeature branchだけで完了を記録しない。元repositoryのmain正本にある
-`docs/ai-shared/CURRENT_STATE.md`の担当欄と自分のlogへ、秘密を含まない相対path、source commit、
-clean copyのbranch/commit、実行した公開前検査、remote設定/pushの成否を記録する。切替時はclean copy側の
-`docs/ai-shared/`も更新し、以後どちらを開発正本にするかを明記して、次のClaude Code/Codexが迷わない状態にする。
+- 入れる: `../k8s/overlays/gitops/kustomization.yaml` の image(`newName` と `digest`。tag や `latest` は使わない)。
+- 入れない: リポジトリの URL(アカウント名を含む)、Git の access token、registry の password、Kubernetes Secret の実値、ローカルの絶対パス。
+  `application.yaml` の `repoURL` は placeholder のままにし、適用時に `git remote get-url origin` から埋め込む。
 
-## Gitへ入れる値
+## 初回の準備(ローカル k3d)
 
-1. `application.yaml` の `repoURL` を、作成したrepositoryのclone URLへ置換する。
-2. 必要なら `targetRevision` を公開用repositoryのdefault branchへ合わせる。
-3. `../k8s/overlays/gitops/kustomization.yaml` の `newName` と `digest` を、registryへpushした
-   balance imageのrepository名とdigestへ置換する。`latest`、可変tag、ローカルimageは使用しない。
-4. repository rootで次を実行し、placeholderが残っていないことを確認する。
+1. Argo CD(版を固定。2026-09-22 時点の最新 v3.5.3):
+   ```sh
+   kubectl create namespace argocd
+   kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.3/manifests/install.yaml
+   ```
+2. private リポジトリの認証(**ユーザーが自分のターミナルで**。読み取り専用・このリポジトリだけの fine-grained PAT):
+   ```sh
+   read -rs PAT && kubectl -n argocd create secret generic repo-pokecalc \
+     --from-literal=type=git --from-literal=url="$(git remote get-url origin)" \
+     --from-literal=username=x-access-token --from-literal=password="$PAT" \
+   && kind_label="argocd.argoproj.io/secret-type" \
+   && kubectl -n argocd label secret repo-pokecalc "${kind_label}=repository"; unset PAT kind_label
+   ```
+   (最後の label は Argo CD が repository の認証情報として認識するための印。値 `repository` は秘密ではない)
+3. クラスタ内レジストリと Application:
+   ```sh
+   make balance-registry-apply
+   make balance-argocd-app
+   ```
 
-```sh
-make -f services/balance/Makefile balance-gitops-check
-```
-
-registryへ安全な方法でloginした後、commit SHA等の一意なtagでmulti-platform imageをpushできる。
-コマンドの最後に表示されるdigest参照をGitOps overlayへ記録する。
-
-```sh
-BALANCE_RELEASE_IMAGE=registry.example.invalid/pokecalc/balance:COMMIT_SHA \
-  make -f services/balance/Makefile balance-docker-push
-```
-
-上の`.invalid` repositoryは例であり、そのまま実行しない。スクリプトもplaceholderを拒否する。
-
-## Gitへ入れない値
-
-- Git access token、SSH private key
-- container registryのpassword/token
-- Kubernetes Secretの実値
-- ローカル絶対パス
-
-private Git repositoryのcredentialはArgo CDへrepository credentialとして登録する。
-private container imageを使う場合は、`private-registry-patch.example.yaml` を参考にDeploymentへ
-Secret名だけを設定し、Secret本体はクラスタへ別経路で作成する。patchを利用する場合は公開用コピーで
-`.example.yaml` を `private-registry-patch.yaml` として複製し、GitOps overlayの`patches`へ追加する。
-公開用コピーにも秘密を含めない。
-
-## 初回適用とmanual sync
-
-Argo CDはversionを固定してクラスタへ導入する。`latest`のinstall manifestは使わない。
-Application CRDとrepository credentialの準備後に、次を実行する。
+## デプロイ(Git 変更 → manual sync → Pod 更新)
 
 ```sh
-make -f services/balance/Makefile balance-gitops-apply
-argocd app sync pokecalc-balance
+make balance-registry-push          # 表示された localhost:5000/pokecalc/balance@sha256:... の digest を
+                                    # ../k8s/overlays/gitops/kustomization.yaml に書き、PR で main に入れる
+argocd --core app sync pokecalc-balance   # または Argo CD の UI から Sync
 kubectl -n argocd get application pokecalc-balance
-kubectl -n pokecalc rollout status deployment/balance --timeout=120s
-make -f services/balance/Makefile balance-smoke
+kubectl -n pokecalc get deploy balance -o jsonpath='{.spec.template.spec.containers[0].image}'
 ```
 
-自動syncは設定しない。TB0ではmanual syncで、Gitのcommit、Argo CDの同期revision、稼働Podの
-image digestを記録して一致を確認する。
+Git の commit、Argo CD の同期 revision、稼働 Pod の image digest が一致することを確認する。
+gitops overlay には read model のマウントが無いので、Argo CD で同期した balance の analyze / coverage は 503(ADR-0018「影響と制約」)。
+local の read model で動かすときは `make balance-k3d-deploy`(Application は OutOfSync になる)。

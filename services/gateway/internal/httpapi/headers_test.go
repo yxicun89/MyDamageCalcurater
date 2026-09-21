@@ -1,6 +1,6 @@
 package httpapi
 
-// X-Device-Id / X-Session-Id の検証の受け入れテスト(ADR-0020 §4。AC-G4)。
+// X-Device-Id / X-Session-Id の検証の受け入れテスト(ADR-0202 §4。AC-G4)。
 
 import (
 	"net/http"

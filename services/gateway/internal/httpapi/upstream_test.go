@@ -1,6 +1,6 @@
 package httpapi
 
-// 上流の失敗・未設定と panic 回復の受け入れテスト(ADR-0020 §5・§7。AC-G5・AC-G7)。
+// 上流の失敗・未設定と panic 回復の受け入れテスト(ADR-0202 §5・§7。AC-G5・AC-G7)。
 
 import (
 	"errors"

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "source": "calc",
+  "version": "test-calc-1",
+  "generation": 0,
+  "types": ["Normal", "Fire", "Water", "Grass", "???", "Stellar"],
+  "typeChart": {
+    "Normal": {},
+    "Fire": {"Fire": 1, "Water": 1, "Grass": 4},
+    "Water": {"Fire": 4, "Water": 1, "Grass": 1},
+    "Grass": {"Fire": 1, "Water": 4, "Grass": 1},
+    "???": {"Fire": 2}
+  },
+  "species": [
+    {"name": "Testmon", "types": ["Fire"], "baseStats": {"hp": 80, "atk": 100, "def": 70, "spa": 60, "spd": 70, "spe": 90}},
+    {"name": "Testmon-Mega", "types": ["Fire", "Normal"], "baseStats": {"hp": 80, "atk": 130, "def": 90, "spa": 80, "spd": 90, "spe": 110}},
+    {"name": "Testleaf", "types": ["Grass"], "baseStats": {"hp": 70, "atk": 60, "def": 80, "spa": 90, "spd": 80, "spe": 60}},
+    {"name": "Testleaf-Rain", "types": ["Water"], "baseStats": {"hp": 70, "atk": 60, "def": 80, "spa": 90, "spd": 80, "spe": 60}},
+    {"name": "Testshield-Shield", "types": ["Normal"], "baseStats": {"hp": 60, "atk": 50, "def": 140, "spa": 50, "spd": 140, "spe": 60}},
+    {"name": "Testshield-Both", "types": ["Normal"], "baseStats": {"hp": 60, "atk": 140, "def": 140, "spa": 140, "spd": 140, "spe": 60}},
+    {"name": "Testbug", "types": ["Grass"], "baseStats": {"hp": 1, "atk": 90, "def": 45, "spa": 30, "spd": 30, "spe": 40}}
+  ],
+  "moves": [
+    {"name": "Test Flame", "type": "Fire", "category": "Special", "basePower": 90, "priority": 0},
+    {"name": "Test Strike", "type": "Normal", "category": "Physical", "basePower": 40, "priority": 1},
+    {"name": "Test Glare", "type": "Normal", "basePower": 0, "priority": 0},
+    {"name": "Test Old", "basePower": 0, "priority": 0},
+    {"name": "Test Revived", "basePower": 0, "priority": 0},
+    {"name": "(No Move)", "type": "Normal", "category": "Status", "basePower": 0, "priority": 0},
+    {"name": "Test Banned", "type": "Water", "category": "Special", "basePower": 80, "priority": 0}
+  ],
+  "items": ["Testmonite", "Test Orb", "Test Berry"],
+  "abilities": ["Test Blaze", "Test Guard", "Test Leaf", "Test Stance"]
+}

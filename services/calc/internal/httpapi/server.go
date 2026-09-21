@@ -1,4 +1,4 @@
-// Package httpapi は calc-svc の HTTP 境界(ADR-0018)。生成物 api.ServerInterface を実装する。
+// Package httpapi は calc-svc の HTTP 境界(ADR-0200)。生成物 api.ServerInterface を実装する。
 //
 // 1リクエストの流れ(engine/wasmapi と同じ順。同じ失敗は同じ code にする):
 //
@@ -24,7 +24,7 @@ import (
 )
 
 // messageInternal は回復した panic・想定外の失敗に付ける固定文。
-// Go のランタイム情報をクライアントへ出さない(ADR-0018 AC-7)。
+// Go のランタイム情報をクライアントへ出さない(ADR-0200 AC-7)。
 const messageInternal = "内部エラーが発生した"
 
 // maxRequestBodyBytes はリクエスト本文の上限(critic 指摘 R7)。1MiB を超える本文は
@@ -118,7 +118,7 @@ func httpErrorHandler(c *echo.Context, err error) {
 // 受け取ったときに返す echo.HTTPError.Message の文言の断片(oapi-codegen が生成する固定の英文
 // "Expected one value for X-Device-Id, got 2" 等)。ヘッダの「欠落」「空」(bind 失敗の
 // "is empty, can't bind its value" を含む)とは別の失敗で、missing_header にはしない。
-// gateway が同じ失敗を invalid_header にするため(ADR-0020 §9)、calc-svc も揃える。
+// gateway が同じ失敗を invalid_header にするため(ADR-0202 §9)、calc-svc も揃える。
 const duplicateHeaderMessage = "Expected one value for"
 
 func errorBodyFor(err error) (int, api.Error) {
@@ -132,13 +132,13 @@ func errorBodyFor(err error) (int, api.Error) {
 	if errors.As(err, &sc) {
 		switch sc.StatusCode() {
 		case http.StatusNotFound, http.StatusMethodNotAllowed:
-			// ルートが無い・メソッドが違う(ADR-0018: メソッド違いに新しい code を足さず not_found にする)。
+			// ルートが無い・メソッドが違う(ADR-0200: メソッド違いに新しい code を足さず not_found にする)。
 			return http.StatusNotFound, api.Error{Code: api.NotFound, Message: "ルートが無い"}
 		case http.StatusBadRequest:
 			// calc の3操作だけが生成ラッパを経由する(pokedex は直接 not_found。R1)。
 			// そのラッパが返す 400 はヘッダの検証由来。「欠落」「空」(bind 失敗も含む)は
 			// missing_header、それ以外(同名ヘッダの重複指定)は invalid_header にする
-			// (ADR-0020 §9: gateway と語彙を揃える。missing_header はヘッダ欠落・空に限定する)。
+			// (ADR-0202 §9: gateway と語彙を揃える。missing_header はヘッダ欠落・空に限定する)。
 			var ee *echo.HTTPError
 			if errors.As(err, &ee) && strings.Contains(ee.Message, duplicateHeaderMessage) {
 				slog.Warn("calc-svc: ヘッダが重複している", "message", ee.Message)
@@ -153,7 +153,7 @@ func errorBodyFor(err error) (int, api.Error) {
 }
 
 // checkHeaders は X-Device-Id / X-Session-Id の欠落・空を missing_header にする。
-// UUID 形式の検証はしない(gateway の仕事。ADR-0018 AC-6)。
+// UUID 形式の検証はしない(gateway の仕事。ADR-0200 AC-6)。
 func checkHeaders(deviceID, sessionID string) error {
 	if deviceID == "" || sessionID == "" {
 		return newError(api.MissingHeader, "X-Device-Id / X-Session-Id が無い")

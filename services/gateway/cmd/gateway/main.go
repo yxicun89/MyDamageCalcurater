@@ -1,4 +1,4 @@
-// Command gateway はクライアントの唯一の入口(ADR-0020)。/api/calc・/api/pokedex・/assets を各上流へ転送する。
+// Command gateway はクライアントの唯一の入口(ADR-0202)。/api/calc・/api/pokedex・/assets を各上流へ転送する。
 //
 // 設定は環境変数で渡す(1か所で読み込み、必須値は起動時に検証する。docs/coding-rules.md §2):
 //
@@ -46,7 +46,7 @@ const (
 	// http.Server のタイムアウト(calc-svc と同じ理由。遅い・止まったクライアントに接続を占有され続けない)。
 	readHeaderTimeout = 5 * time.Second
 	readTimeout       = 10 * time.Second
-	writeTimeout      = 60 * time.Second // assets の転送を早期に打ち切らない(ADR-0020 §5)
+	writeTimeout      = 60 * time.Second // assets の転送を早期に打ち切らない(ADR-0202 §5)
 	idleTimeout       = 60 * time.Second
 )
 

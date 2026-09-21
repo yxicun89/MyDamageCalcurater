@@ -1,6 +1,6 @@
 package httpapi
 
-// エラーの共通の形(ADR-0020 §7・calc-svc の internal/httpapi/errors.go と同じ流儀)。
+// エラーの共通の形(ADR-0202 §7・calc-svc の internal/httpapi/errors.go と同じ流儀)。
 // gateway の失敗はすべて httpError に写し、echo の HTTPErrorHandler で
 // {"code","message"} の Error 本文に変換する。
 
@@ -15,7 +15,7 @@ import (
 )
 
 // messageInternal は回復した panic・想定外の失敗に付ける固定文。
-// Go のランタイム情報をクライアントへ出さない(ADR-0020 §7)。
+// Go のランタイム情報をクライアントへ出さない(ADR-0202 §7)。
 const messageInternal = "内部エラーが発生した"
 
 // httpError は境界で検出した失敗。code は契約の ErrorCode、message は日本語の説明。
@@ -27,12 +27,12 @@ type httpError struct {
 
 func (e *httpError) Error() string { return e.message }
 
-// newError は code から HTTP ステータスを決めて httpError を作る(ADR-0020 のステータス対応表)。
+// newError は code から HTTP ステータスを決めて httpError を作る(ADR-0202 のステータス対応表)。
 func newError(code api.ErrorCode, format string, args ...any) error {
 	return &httpError{status: statusForCode(code), code: code, message: fmt.Sprintf(format, args...)}
 }
 
-// statusForCode は gateway が返す ErrorCode から HTTP ステータスを決める(ADR-0020 §3・§4・§5・§7)。
+// statusForCode は gateway が返す ErrorCode から HTTP ステータスを決める(ADR-0202 §3・§4・§5・§7)。
 func statusForCode(code api.ErrorCode) int {
 	switch code {
 	case api.NotFound:

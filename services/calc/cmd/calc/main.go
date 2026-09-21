@@ -1,4 +1,4 @@
-// Command calc は calc-svc(ダメージ計算・一括計算・逆算の HTTP サービス。ADR-0018)。
+// Command calc は calc-svc(ダメージ計算・一括計算・逆算の HTTP サービス。ADR-0200)。
 //
 // 設定は環境変数で渡す(1か所で読み込み、必須値は起動時に検証する。docs/coding-rules.md §2):
 //

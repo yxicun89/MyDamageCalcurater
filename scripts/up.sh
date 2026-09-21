@@ -25,7 +25,7 @@ fi
 echo "namespace を作成します..."
 kubectl apply -f deploy/k8s/base/namespace.yaml
 
-# mysql-auth は値を持つため Git に置かない(ADR-0015 §9)。namespace の作成直後、
+# mysql-auth は値を持つため Git に置かない(ADR-0100 §9)。namespace の作成直後、
 # 他のリソース(mysql・pokedex-migrate)が参照する前に用意する。無いときだけ乱数で
 # 作る(既存は上書きしない)。
 if kubectl -n pokecalc get secret mysql-auth >/dev/null 2>&1; then
@@ -40,7 +40,7 @@ else
     --from-literal="${dsn_key}=root:${root_pw_value}@tcp(mysql:3306)/pokedex?parseTime=true"
 fi
 
-# pokedex-migrate は k3d のノードに直接 import する(ADR-0015 §9)。レジストリを介さない
+# pokedex-migrate は k3d のノードに直接 import する(ADR-0100 §9)。レジストリを介さない
 # ローカル専用の経路。
 echo "pokedex-migrate イメージを build して k3d に import します..."
 docker build -f services/pokedex/Dockerfile --target migrate -t "$POKEDEX_MIGRATE_IMAGE" .

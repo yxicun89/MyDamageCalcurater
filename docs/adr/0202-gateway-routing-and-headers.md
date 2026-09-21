@@ -1,15 +1,15 @@
-# ADR-0020: gateway のルーティングとヘッダ検証
+# ADR-0202: gateway のルーティングとヘッダ検証
 
 - 状態: 採用(2026-09-22。P3-2 の設計。受け入れ条件とテストは spec-writer が先に書き、実装は implementer)
 - 日付: 2026-09-22
 - 関連: ADR-0001(技術スタック)、ADR-0012(サービス境界。balance は兄弟で `/api/balance` は独自の Ingress)、
-  ADR-0018(calc-svc の契約・ErrorCode の語彙と HTTP ステータス・healthz の扱い)、ADR-0019(Echo v5)、
+  ADR-0200(calc-svc の契約・ErrorCode の語彙と HTTP ステータス・healthz の扱い)、ADR-0201(Echo v5)、
   docs/requirements.md §3(認証なし・端末ID)・§4(アーキテクチャ)・§8(画像は gateway の `/assets/` から配信)、plan.md P3-2
 
 ## 背景
 
 クライアント(Web / iOS)の入口は gateway ただ1つ(requirements.md §4)。calc-svc(P3-1)は出来ており、pokedex-svc(P2-3)は
-まだ無い。ADR-0018 は UUID 形式の検証と `upstream_unavailable` を gateway の仕事として持ち越した。
+まだ無い。ADR-0200 は UUID 形式の検証と `upstream_unavailable` を gateway の仕事として持ち越した。
 ブラウザ版は別オリジン(Vite の開発サーバ等)から呼ぶので CORS が要る。画像は `<img>` から読むのでヘッダを付けられない。
 
 ## 決定
@@ -20,7 +20,7 @@
   (CalcURL が無い・UpstreamTimeout が 0 以下・許可オリジンに `*`)なら `ErrInvalidConfig` を包んで返す。
   上流への RoundTripper は非公開フィールド `transport` でテストだけが差し替える(nil なら既定)。
 - `services/gateway/cmd/gateway`: `loadConfig(lookup)` と `run(ctx, lookup)` を切り出す(calc-svc と同じ形)。設定の不正は
-  `errInvalidConfig` を包む。`http.Server` にタイムアウトを設定する(ADR-0018 R7 と同じ理由)。
+  `errInvalidConfig` を包む。`http.Server` にタイムアウトを設定する(ADR-0200 R7 と同じ理由)。
 - 新しい外部依存は足さない(UUID の検証は正規表現か手書きの走査。`google/uuid` の `Parse` は波括弧・`urn:uuid:`・ハイフン無しも
   受け付けるので正準形の判定には使えない)。
 
@@ -42,7 +42,7 @@
 | `/api/calc`、`/api/calc/*` | calc-svc | `/api/calcx` のような前方一致は拾わない |
 | `/api/pokedex/*` | pokedex-svc | `/api/pokedex` そのものは 404 |
 | `/assets/*`(GET / HEAD のみ) | assets の上流(MinIO) | それ以外のメソッドは 404 `not_found` |
-| `GET /healthz` | gateway 自身 | 200 `{"status":"ok"}`。openapi に載せない(ADR-0018 と同じ)。上流の `/healthz` は外に出さない |
+| `GET /healthz` | gateway 自身 | 200 `{"status":"ok"}`。openapi に載せない(ADR-0200 と同じ)。上流の `/healthz` は外に出さない |
 | それ以外(`/api/balance` を含む) | なし | 404 `not_found`(Error 形式)。`/api/balance` は独自の Ingress(ADR-0012) |
 
 - パスとクエリはそのまま転送する(上流の基底 URL にパスがあれば前に連結する。`ReverseProxy` の標準の連結)。
@@ -78,19 +78,19 @@
 ### 7. エラー
 
 - panic は回復して 500 `internal`(panic の値・スタックを出さない)。
-- echo の既定エラー(ルート無し・メソッド違い)は Error 形式の 404 `not_found`(ADR-0018 と同じ)。
+- echo の既定エラー(ルート無し・メソッド違い)は Error 形式の 404 `not_found`(ADR-0200 と同じ)。
 
 ### 8. 契約(`api/openapi.yaml`。絶対ルール1。`make gen` で再生成)
 
 1. `ErrorCode` に `invalid_header`(400)を追加。対応表: `missing_header` は「欠落・空」、`invalid_header` は「UUID でない・重複」。
 2. `DeviceId` / `SessionId` パラメータの schema に `format: uuid` を付け、description に gateway が検証する旨を書く。
    **`x-go-type: string` で生成型は string のまま**にする(oapi-codegen は `format: uuid` を `openapi_types.UUID` にし、生成ラッパが
-   bind 時に UUID を解析してしまう。calc-svc は UUID 形式を検証しない[ADR-0018 AC-6]ので、それを保つ)。
+   bind 時に UUID を解析してしまう。calc-svc は UUID 形式を検証しない[ADR-0200 AC-6]ので、それを保つ)。
 3. calc の3操作の '503' と pokedex の5操作(新たに '503' を追加)に、`upstream_unavailable` が返りうることを書く。
 
 ### 9. calc-svc の語彙の変更(期待値の変更)
 
-calc-svc は同名ヘッダの重複を `invalid_input` にしていた(ADR-0018 §1.6・critic 指摘 R1)。`invalid_input` は本来「入力検証
+calc-svc は同名ヘッダの重複を `invalid_input` にしていた(ADR-0200 §1.6・critic 指摘 R1)。`invalid_input` は本来「入力検証
 (SP・ランク等)」の語彙で、ヘッダの形式の失敗とは意味が違う。gateway が同じ失敗を `invalid_header` にするので、
 **calc-svc も `invalid_header` に揃える**(gateway を経由しない直叩き[クラスタ内・テスト]でも同じ失敗は同じ code)。
 既存テスト `TestDuplicateHeaderIsInvalidInput` は `TestDuplicateHeaderIsInvalidHeader` に改め、期待値を `invalid_header` に変える
@@ -119,7 +119,7 @@ calc-svc の `httpapi` / `master` は `services/calc/internal` にあり、Go �
 
 ## 却下した案
 
-- **UUID の検証を calc-svc(と各サービス)でも行う**: 検証が重複し、語彙の揺れの元になる。入口の gateway に一本化する(ADR-0018 AC-6)。
+- **UUID の検証を calc-svc(と各サービス)でも行う**: 検証が重複し、語彙の揺れの元になる。入口の gateway に一本化する(ADR-0200 AC-6)。
 - **`format: uuid` で生成型を UUID にする**: 生成ラッパが下流でも UUID を解析してしまい、calc-svc の「形式を見ない」契約と食い違う。
 - **CORS で `*` を許す**: 認証なしでも、許可するオリジンを明示する方が意図が読める。誤設定は起動時に落とす。
 - **重複ヘッダを `invalid_input` のまま残す**: 同じ失敗が gateway と calc-svc で別の code になる。
@@ -131,4 +131,4 @@ calc-svc の `httpapi` / `master` は `services/calc/internal` にあり、Go �
 - Web(P4)・iOS は `invalid_header` を扱う(生成型の ErrorCode に追加される)。
 - P3-3 の契約テストは `TestGatewayErrorsMatchContract` / `TestRealCalcThroughGatewayMatchesContract` を土台にする。
 - k8s の manifest(deploy/k8s)は上の環境変数で gateway を設定する(本 ADR では manifest は変えない)。
-- ADR-0018 §1.6 の「重複は invalid_input」は本 ADR §9 で `invalid_header` に変わる。
+- ADR-0200 §1.6 の「重複は invalid_input」は本 ADR §9 で `invalid_header` に変わる。

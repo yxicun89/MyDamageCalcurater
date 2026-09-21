@@ -6,7 +6,7 @@ metadata:
     app.kubernetes.io/name: mysql
     app.kubernetes.io/part-of: pokecalc
 data:
-  # pokedex のスキーマは utf8mb4(ID 列だけ ascii/ascii_bin。ADR-0015 §2)を前提にする。
+  # pokedex のスキーマは utf8mb4(ID 列だけ ascii/ascii_bin。ADR-0100 §2)を前提にする。
   charset.cnf: |
     [mysqld]
     character-set-server=utf8mb4

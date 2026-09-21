@@ -1,8 +1,8 @@
-// Package db は pokedex-svc の MySQL スキーマの migration を持つ(ADR-0015 §1・§5)。
+// Package db は pokedex-svc の MySQL スキーマの migration を持つ(ADR-0100 §1・§5)。
 //
 // migrations/ の SQL は embed.FS に埋め込み、実行版がコードと一致するようにする。
 // golang-migrate の公式 CLI を使わず自前コマンド(cmd/migrate)にする理由は
-// ADR-0015 §1 を参照。
+// ADR-0100 §1 を参照。
 package db
 
 import (

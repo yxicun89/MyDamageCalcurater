@@ -1,6 +1,6 @@
 package httpapi
 
-// ルーティングの受け入れテスト(ADR-0020 §3。AC-G1〜AC-G3)。
+// ルーティングの受け入れテスト(ADR-0202 §3。AC-G1〜AC-G3)。
 
 import (
 	"bytes"

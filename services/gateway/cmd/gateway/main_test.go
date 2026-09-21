@@ -1,6 +1,6 @@
 package main
 
-// gateway の起動(設定の読み込み・待ち受け・停止)の受け入れテスト(ADR-0020 §2。AC-G9)。
+// gateway の起動(設定の読み込み・待ち受け・停止)の受け入れテスト(ADR-0202 §2。AC-G9)。
 
 import (
 	"context"

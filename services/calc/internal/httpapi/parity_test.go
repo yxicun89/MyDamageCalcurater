@@ -1,6 +1,6 @@
 package httpapi
 
-// HTTP(calc-svc)と WASM 境界(engine/wasmapi)のパリティ(ADR-0018 AC-9。ADR-0011 §10 の持ち越し)。
+// HTTP(calc-svc)と WASM 境界(engine/wasmapi)のパリティ(ADR-0200 AC-9。ADR-0011 §10 の持ち越し)。
 //
 // 同じ失敗は同じ code、同じ入力は同じ数値になることを固定する。wasmapi には、HTTP が ID で渡す
 // 個体・技・持ち物を fake のマスタで解決した実体(ADR-0011 §3 の DTO)と相性表を渡す。

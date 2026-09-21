@@ -1,4 +1,4 @@
-// Package master は calc-svc の**暫定の**マスタ境界(ADR-0018)。
+// Package master は calc-svc の**暫定の**マスタ境界(ADR-0200)。
 //
 // データレーンの共通マスタ(services/internal/master。plan.md P2-2a)が main に入ったら、
 // Store の実装をそちらに差し替える。httpapi は Store インターフェースにだけ依存する。
@@ -99,7 +99,7 @@ type Store interface {
 	Ability(id string) (engine.Ability, bool)
 	// Nature は性格 ID で性格補正を引く。
 	Nature(id string) (engine.Nature, bool)
-	// NatureID は性格補正の構造値から性格 ID を引く(ADR-0018)。
+	// NatureID は性格補正の構造値から性格 ID を引く(ADR-0200)。
 	//   - 無補正(n.IsNeutral())は、マスタ中の無補正性格を ID の昇順で並べた最初のもの。
 	//   - それ以外は (Plus, Minus) が一致する性格のうち ID の昇順で最初のもの。
 	//   - 該当が無ければ ("", false)。
@@ -630,7 +630,7 @@ func (s *MemoryStore) Nature(id string) (engine.Nature, bool) {
 	return n, ok
 }
 
-// NatureID は Store を実装する(ADR-0018 の写像規則)。
+// NatureID は Store を実装する(ADR-0200 の写像規則)。
 func (s *MemoryStore) NatureID(n engine.Nature) (string, bool) {
 	ids := make([]string, 0, len(s.natures))
 	for id := range s.natures {

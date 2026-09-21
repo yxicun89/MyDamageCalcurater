@@ -19,7 +19,14 @@ esac
 [ -f "$application_file" ] || fail "Application manifest is missing"
 [ -f "$overlay_file" ] || fail "GitOps overlay is missing"
 
-repo_url=$(awk '$1 == "repoURL:" { print $2; exit }' "$application_file")
+# repoURL はアカウント名を含むので Git に書かない(ADR-0018)。ファイルは placeholder のままであることを必須にし、
+# 適用時の値は ready モードでだけ BALANCE_GITOPS_REPO_URL から受け取る(scripts/argocd-local-app.sh)。
+file_repo_url=$(awk '$1 == "repoURL:" { print $2; exit }' "$application_file")
+[ "$file_repo_url" = "https://git.example.invalid/pokecalc.git" ] || fail "application.yaml repoURL must stay the placeholder (the real URL must not be committed)"
+repo_url=$file_repo_url
+if [ "$mode" = "ready" ]; then
+  repo_url=${BALANCE_GITOPS_REPO_URL:-$file_repo_url}
+fi
 target_revision=$(awk '$1 == "targetRevision:" { print $2; exit }' "$application_file")
 source_path=$(awk '$1 == "path:" { print $2; exit }' "$application_file")
 image_name=$(awk '$1 == "newName:" { print $2; exit }' "$overlay_file")

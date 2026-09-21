@@ -1,8 +1,8 @@
-// Package httpapi は gateway の HTTP 境界(ADR-0020)。クライアントの唯一の入口として、
+// Package httpapi は gateway の HTTP 境界(ADR-0202)。クライアントの唯一の入口として、
 // /api/calc・/api/pokedex・/assets を各上流へ転送し、/api/* の X-Device-Id / X-Session-Id を検証し、
 // CORS に答える。gateway 自身は計算もマスタ参照もしない(サービスは自分のデータだけに触る。CLAUDE.md 絶対ルール4)。
 //
-// 1リクエストの判定順序(ADR-0020 §3): CORS(プリフライトはここで204)→ ドットセグメント拒否 →
+// 1リクエストの判定順序(ADR-0202 §3): CORS(プリフライトはここで204)→ ドットセグメント拒否 →
 // ルーティング(未知のパスはヘッダが無くても404)→ /api/* のヘッダ検証 → 上流の有無 → 転送。
 package httpapi
 
@@ -22,7 +22,7 @@ import (
 // ErrInvalidConfig は Config が不正(CalcURL が無い等)なときに NewHandler が包んで返すエラー。
 var ErrInvalidConfig = errors.New("gateway の設定が不正")
 
-// msgNotFound は gateway が扱わないパス・メソッドに返す固定文(ADR-0020 §3・§7)。
+// msgNotFound は gateway が扱わないパス・メソッドに返す固定文(ADR-0202 §3・§7)。
 const msgNotFound = "ルートが無い"
 
 // Config は gateway のルーティング・検証・CORS の設定(cmd/gateway の loadConfig が環境変数から作る)。
@@ -73,7 +73,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 }
 
 // validateConfig は NewHandler が受け付けられない Config を ErrInvalidConfig で拒否する
-// (ADR-0020 §1: CalcURL が無い・UpstreamTimeout が 0 以下・許可オリジンに "*")。
+// (ADR-0202 §1: CalcURL が無い・UpstreamTimeout が 0 以下・許可オリジンに "*")。
 func validateConfig(cfg Config) error {
 	if cfg.CalcURL == nil {
 		return fmt.Errorf("%w: CalcURL が無い", ErrInvalidConfig)

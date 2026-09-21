@@ -1,6 +1,6 @@
 package httpapi
 
-// ルーティング(ADR-0020 §3)。パスの前方一致だけで振り分ける(gateway は上流の中の操作を知らない)。
+// ルーティング(ADR-0202 §3)。パスの前方一致だけで振り分ける(gateway は上流の中の操作を知らない)。
 
 import (
 	"net/http"
@@ -27,7 +27,7 @@ const (
 )
 
 // matchRoute はメソッドとパスからルートを決める。一致しない(未知のパス・許さないメソッド)場合は
-// (routeNone, false)。ヘッダ検証・上流の有無はここでは見ない(判定順序は ADR-0020 §3)。
+// (routeNone, false)。ヘッダ検証・上流の有無はここでは見ない(判定順序は ADR-0202 §3)。
 func matchRoute(method, path string) (routeKind, bool) {
 	switch {
 	case method == http.MethodGet && path == pathHealthz:
@@ -48,7 +48,7 @@ func matchRoute(method, path string) (routeKind, bool) {
 	}
 }
 
-// hasDotSegment はパスのセグメントに "." または ".." があるかを返す(ADR-0020 §3: ドットセグメントは
+// hasDotSegment はパスのセグメントに "." または ".." があるかを返す(ADR-0202 §3: ドットセグメントは
 // 404 にし、どの上流にも送らない。上流の運用エンドポイントや他のルートへ抜けさせない)。
 func hasDotSegment(path string) bool {
 	for _, seg := range strings.Split(path, "/") {
@@ -60,7 +60,7 @@ func hasDotSegment(path string) bool {
 }
 
 // requiresHeaderCheck は /api/* のルート(calc・pokedex)にだけ X-Device-Id / X-Session-Id の
-// 検証を課す(ADR-0020 §4。/assets・/healthz・CORS プリフライトは課さない)。
+// 検証を課す(ADR-0202 §4。/assets・/healthz・CORS プリフライトは課さない)。
 func requiresHeaderCheck(kind routeKind) bool {
 	return kind == routeCalc || kind == routePokedex
 }

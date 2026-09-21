@@ -1,6 +1,6 @@
 package httpapi
 
-// 契約テスト(test-strategy.md L4。P3-3 の gateway 経由の契約テストの先取り。ADR-0020 AC-G8)。
+// 契約テスト(test-strategy.md L4。P3-3 の gateway 経由の契約テストの先取り。ADR-0202 AC-G8)。
 // gateway 自身が作るエラー応答と、上流が calc-svc の実物(calctest。架空マスタ)のときの応答を
 // api/openapi.yaml に照らして kin-openapi で検証する。仕様は生成物に埋め込まれたもの
 // (api.GetSwagger。make gen で openapi.yaml から作られる)を使う。検証ヘルパーは
@@ -243,7 +243,7 @@ func TestRealCalcThroughGatewayMatchesContract(t *testing.T) {
 		})
 	}
 
-	// 同名ヘッダの重複は gateway が invalid_header で止める(calc-svc の判定と同じ語彙。ADR-0020)。
+	// 同名ヘッダの重複は gateway が invalid_header で止める(calc-svc の判定と同じ語彙。ADR-0202)。
 	t.Run("重複ヘッダは gateway で invalid_header", func(t *testing.T) {
 		header := validHeaders()
 		header.Add("X-Session-Id", testSessionID)

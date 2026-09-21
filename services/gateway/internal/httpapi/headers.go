@@ -1,8 +1,8 @@
 package httpapi
 
-// X-Device-Id / X-Session-Id の検証(ADR-0020 §4)。UUID かどうかは正準形 8-4-4-4-12 の
+// X-Device-Id / X-Session-Id の検証(ADR-0202 §4)。UUID かどうかは正準形 8-4-4-4-12 の
 // 16進かどうかを手書きで走査して判定する(google/uuid の uuid.Parse は波括弧・urn:uuid:・
-// ハイフン無しも受け付けてしまうため使わない。ADR-0020 決定 §1)。
+// ハイフン無しも受け付けてしまうため使わない。ADR-0202 決定 §1)。
 
 import (
 	"net/http"
@@ -15,7 +15,7 @@ const uuidLength = 36
 
 // checkAPIHeaders は /api/* に課す X-Device-Id / X-Session-Id の検証。
 // 欠落・空は missing_header、UUID でない値・同名ヘッダの重複は invalid_header。
-// 欠落と不正が同時にあれば missing_header を優先する(ADR-0020 §4)。
+// 欠落と不正が同時にあれば missing_header を優先する(ADR-0202 §4)。
 func checkAPIHeaders(h http.Header) error {
 	deviceMissing, deviceInvalid := headerStatus(h, "X-Device-Id")
 	sessionMissing, sessionInvalid := headerStatus(h, "X-Session-Id")

@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "regulations": [
+    {"id": "test-reg", "nameJa": "テストレギュ", "isDefault": true, "startsOn": "2026-01-01", "endsOn": "2026-03-31", "showdownMod": "testmod"}
+  ]
+}

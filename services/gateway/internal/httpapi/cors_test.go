@@ -1,6 +1,6 @@
 package httpapi
 
-// CORS の受け入れテスト(ADR-0020 §6。AC-G6)。
+// CORS の受け入れテスト(ADR-0202 §6。AC-G6)。
 
 import (
 	"net/http"
@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// プリフライトの応答ヘッダの期待値(ADR-0020 §6)。
+// プリフライトの応答ヘッダの期待値(ADR-0202 §6)。
 const (
 	wantAllowMethods = "GET, POST, OPTIONS"
 	wantAllowHeaders = "Content-Type, X-Device-Id, X-Session-Id"

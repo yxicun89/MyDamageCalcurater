@@ -1,4 +1,4 @@
-// Package master は pokedex の DB 行(素朴な行の型)を engine の型へ写像する(ADR-0015 §6)。
+// Package master は pokedex の DB 行(素朴な行の型)を engine の型へ写像する(ADR-0100 §6)。
 //
 // engine は純粋に保つ(CLAUDE.md 絶対ルール2)ので、この写像は engine の外に置く。
 // sqlc の生成型には依存せず、store 層が sqlc の行をここで定義する型に詰め替える
@@ -20,7 +20,7 @@ var ErrInvalidRow = errors.New("行の値が不正")
 // ErrInvalidEffect は効果定義の JSON が不正(effects.go)。
 var ErrInvalidEffect = errors.New("効果定義の JSON が不正")
 
-// タイプ・技・持ち物・特性の ID 形式、種族の key の形式(ADR-0015 §2)。
+// タイプ・技・持ち物・特性の ID 形式、種族の key の形式(ADR-0100 §2)。
 var (
 	typeIDPattern     = regexp.MustCompile(`^[a-z]+$`)
 	codeIDPattern     = regexp.MustCompile(`^[a-z0-9]+$`)

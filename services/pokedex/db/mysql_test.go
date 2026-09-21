@@ -2,7 +2,7 @@
 
 package db
 
-// 実 MySQL を使うテスト(ADR-0015 §5)。`make test-db` だけが実行する(`make test` には含めない)。
+// 実 MySQL を使うテスト(ADR-0100 §5)。`make test-db` だけが実行する(`make test` には含めない)。
 // POKEDEX_TEST_DSN が無い・DB に届かないときは**失敗**する(黙ってスキップして成功扱いにしない)。
 // 全テーブルを消すので、DB 名が _test で終わる DSN だけを受け付ける。
 
@@ -149,7 +149,7 @@ func TestExampleSeedLoads(t *testing.T) {
 	}
 }
 
-// TestConstraintsRejectInvalidRows は ADR-0015 §3 の制約を DB が拒否すること。
+// TestConstraintsRejectInvalidRows は ADR-0100 §3 の制約を DB が拒否すること。
 // 各ケースは example_seed.sql を流した状態に対する1文。
 func TestConstraintsRejectInvalidRows(t *testing.T) {
 	conn := freshDB(t)
@@ -246,7 +246,7 @@ func TestConstraintsRejectInvalidRows(t *testing.T) {
 	}
 }
 
-// TestMegaItemCannotBeDeletedWhileReferenced はメガの持ち物が参照中は消せないこと(FK は RESTRICT。ADR-0015 §2)。
+// TestMegaItemCannotBeDeletedWhileReferenced はメガの持ち物が参照中は消せないこと(FK は RESTRICT。ADR-0100 §2)。
 func TestMegaItemCannotBeDeletedWhileReferenced(t *testing.T) {
 	conn := freshDB(t)
 	seed(t, conn)
@@ -257,7 +257,7 @@ func TestMegaItemCannotBeDeletedWhileReferenced(t *testing.T) {
 	}
 }
 
-// TestSeedMapsToEngineTypes は DB の行 → engine の型までを通す(ADR-0015 §4・§6)。
+// TestSeedMapsToEngineTypes は DB の行 → engine の型までを通す(ADR-0100 §4・§6)。
 func TestSeedMapsToEngineTypes(t *testing.T) {
 	conn := freshDB(t)
 	seed(t, conn)
