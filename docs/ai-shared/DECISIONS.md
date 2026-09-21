@@ -94,3 +94,8 @@ Decision: balance の契約は `services/balance/api/openapi.yaml` を正とし�
 Reason: damage-calc と balance を兄弟のドメインモノリスとして分離しつつ、仕様先行と生成型の規律を維持するため。
 Impact: CLAUDE.md の「API はルート OpenAPI が唯一の正」は damage/gateway の範囲に限定して読み替える。
 balance の契約変更はサービス内 spec → 生成 → テストの順で行う。詳細は ADR-0012。
+
+## 2026-09-21: 共通マスタ候補 ADR-0002 は Claude feature branch 上の提案として参照する
+Decision: ADR-0012 と CURRENT_STATE が参照する ADR-0002 は `feat/claude-p1-engine` 上にあり、main へは未統合であることを明記する。
+Reason: main の共有状態を正本にした時点で、ブランチ指定のない ADR-0002 参照が main 上では辿れなかったため。
+Impact: 共通マスタ方式は確定扱いにしない。Claude ブランチが通常手順で main に統合された後は main の ADR-0002 を参照する。
