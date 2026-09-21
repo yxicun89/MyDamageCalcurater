@@ -125,9 +125,10 @@ type ReverseCandidate struct {
 	// Exact は MatchScore == 1.0 と同値。画面と絞り込みの判定に使う。
 	Exact bool
 
-	// MinPercent / MaxPercent は代表点での想定ダメージ幅(表示%)。
-	MinPercent int
-	MaxPercent int
+	// MinPercentTenths / MaxPercentTenths は代表点での想定ダメージ幅(表示%。0.1% 単位。
+	// 最小側は切り捨て・最大側は四捨五入。ADR-0010 §3.3)。照合に使う観測%とは別物。
+	MinPercentTenths int
+	MaxPercentTenths int
 
 	// Points は型に属する格子点数、ExactPoints は全観測に完全一致した格子点数。
 	// 画面の参考値であり、順序には使わない(ADR-0010 §6.4)。
@@ -146,12 +147,13 @@ type ReverseResult struct {
 	ExactCount int
 }
 
-// DisplayPercent はダメージをゲーム内表示の整数%に丸める(ADR-0010 §3)。
+// ObservedPercent はダメージを観測%(ゲーム内表示の整数%)に丸める(ADR-0010 §3.1)。
+// 逆算の入力との照合に使う値であり、アプリが画面に出す表示%(DisplayPercentTenths*)ではない。
 //
 // 丸めは round-half-up と仮定している = floor(100*damage/maxHP + 0.5)。
 // float を使わず整数演算で行う(CLAUDE.md ドメイン規約)。
-// 実機の丸めが確認できたら、この関数と ADR-0010 §3 だけを差し替える。
-func DisplayPercent(damage, maxHP int) int {
+// 実機の丸めが確認できたら、この関数と ADR-0010 §3.1 だけを差し替える。
+func ObservedPercent(damage, maxHP int) int {
 	if maxHP <= 0 {
 		return 0
 	}
@@ -473,13 +475,13 @@ func observationDistance(o Observation, rolls *[16]int, disp *[16]int, hp int) i
 
 // reverseState は (型 × 持ち物) ごとの集計。
 type reverseState struct {
-	seen       bool
-	score      float64
-	sp         Stats
-	nature     Nature
-	minP, maxP int
-	points     int
-	exactPts   int
+	seen                 bool
+	score                float64
+	sp                   Stats
+	nature               Nature
+	minTenths, maxTenths int // 代表点の表示%(0.1% 単位)
+	points               int
+	exactPts             int
 }
 
 // CalcReverse は観測ダメージから相手の調整候補を一致度の高い順に返す。
@@ -553,7 +555,7 @@ func CalcReverse(in ReverseInput) (ReverseResult, error) {
 
 					var disp [16]int
 					for i, r := range res.Rolls {
-						disp[i] = DisplayPercent(r, res.DefenderHP)
+						disp[i] = ObservedPercent(r, res.DefenderHP)
 					}
 					sum, exact := 0.0, true
 					for _, o := range in.Observations {
@@ -579,7 +581,7 @@ func CalcReverse(in ReverseInput) (ReverseResult, error) {
 						st.score = score
 						st.sp = sp
 						st.nature = nature
-						st.minP, st.maxP = disp[0], disp[15]
+						st.minTenths, st.maxTenths = res.DisplayPercentRangeTenths()
 					}
 				}
 			}
@@ -597,16 +599,16 @@ func CalcReverse(in ReverseInput) (ReverseResult, error) {
 		for ii, item := range items {
 			st := states[pi*len(items)+ii]
 			c := ReverseCandidate{
-				Archetype:   a,
-				Item:        item,
-				SP:          st.sp,
-				Nature:      st.nature,
-				MatchScore:  st.score,
-				Exact:       st.score == 1.0,
-				MinPercent:  st.minP,
-				MaxPercent:  st.maxP,
-				Points:      st.points,
-				ExactPoints: st.exactPts,
+				Archetype:        a,
+				Item:             item,
+				SP:               st.sp,
+				Nature:           st.nature,
+				MatchScore:       st.score,
+				Exact:            st.score == 1.0,
+				MinPercentTenths: st.minTenths,
+				MaxPercentTenths: st.maxTenths,
+				Points:           st.points,
+				ExactPoints:      st.exactPts,
 			}
 			if item != nil {
 				c.ItemID = item.ID

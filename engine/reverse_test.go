@@ -78,7 +78,7 @@ func revDefender(sp Stats, n Nature, item *Item) Individual {
 	}
 }
 
-// revObserve は真値の個体に technique をぶつけ、指定ロールの表示%を観測値にする。
+// revObserve は真値の個体に technique をぶつけ、指定ロールの観測%(整数%)を観測値にする。
 func revObserve(t *testing.T, in DamageInput, rollIdx int) (Observation, DamageResult) {
 	t.Helper()
 	res, err := calcDamage(in)
@@ -86,9 +86,9 @@ func revObserve(t *testing.T, in DamageInput, rollIdx int) (Observation, DamageR
 		t.Fatalf("真値の CalcDamage が失敗した: %v", err)
 	}
 	hp := res.DefenderHP
-	pct := DisplayPercent(res.Rolls[rollIdx], hp)
+	pct := ObservedPercent(res.Rolls[rollIdx], hp)
 	if pct <= 0 {
-		t.Fatalf("観測%%が 0 以下(DisplayPercent 未実装?): damage=%d hp=%d pct=%d",
+		t.Fatalf("観測%%が 0 以下(ObservedPercent 未実装?): damage=%d hp=%d pct=%d",
 			res.Rolls[rollIdx], hp, pct)
 	}
 	return Observation{Percent: pct}, res
@@ -105,10 +105,14 @@ func findCandidate(cands []ReverseCandidate, key ArchetypeKey, itemID string) (i
 }
 
 // ---------------------------------------------------------------------------
-// 受け入れ条件 1: 表示%の丸め(ADR-0010 §3)
+// 受け入れ条件 1: 観測%の丸め(ADR-0010 §3.1)
+//
+// これは「逆算の入力(実機画面から読み取る整数%)」の丸めであって、アプリが画面に出す
+// 表示%(小数第1位)ではない。表示%は engine/display_percent_test.go が固定する。
+// P1-11 で関数名を DisplayPercent → ObservedPercent に改めたが、**挙動は変えない**。
 // ---------------------------------------------------------------------------
 
-func TestDisplayPercentRounding(t *testing.T) {
+func TestObservedPercentRounding(t *testing.T) {
 	// round-half-up = floor(100*damage/maxHP + 0.5)。float を使わない整数演算。
 	tests := []struct {
 		name   string
@@ -132,8 +136,8 @@ func TestDisplayPercentRounding(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := DisplayPercent(tt.damage, tt.maxHP); got != tt.want {
-				t.Errorf("DisplayPercent(%d, %d) = %d, want %d", tt.damage, tt.maxHP, got, tt.want)
+			if got := ObservedPercent(tt.damage, tt.maxHP); got != tt.want {
+				t.Errorf("ObservedPercent(%d, %d) = %d, want %d", tt.damage, tt.maxHP, got, tt.want)
 			}
 		})
 	}
@@ -833,11 +837,12 @@ func TestReverseCandidateRangeMatchesCalcDamage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("代表点 %q の CalcDamage: %v", c.Archetype.Key, err)
 		}
-		wantMin := DisplayPercent(want.Rolls[0], want.DefenderHP)
-		wantMax := DisplayPercent(want.Rolls[15], want.DefenderHP)
-		if c.MinPercent != wantMin || c.MaxPercent != wantMax {
-			t.Errorf("型 %q(持ち物 %q)の想定ダメージ幅 = [%d,%d], want [%d,%d]",
-				c.Archetype.Key, c.ItemID, c.MinPercent, c.MaxPercent, wantMin, wantMax)
+		// 想定ダメージ幅は画面に出す値なので表示%(0.1% 単位。ADR-0010 §3.3)。
+		// 最小側は切り捨て、最大側は四捨五入。照合に使う観測%(整数)とは別物。
+		wantMin, wantMax := want.DisplayPercentRangeTenths()
+		if c.MinPercentTenths != wantMin || c.MaxPercentTenths != wantMax {
+			t.Errorf("型 %q(持ち物 %q)の想定ダメージ幅 = [%d,%d], want [%d,%d](0.1%%単位)",
+				c.Archetype.Key, c.ItemID, c.MinPercentTenths, c.MaxPercentTenths, wantMin, wantMax)
 		}
 		// 代表 SP / 性格は、その型のバケット規則に合っていること。
 		got, ok := ArchetypeOf(SideDefender, CategoryPhysical, c.SP, c.Nature)
@@ -849,7 +854,7 @@ func TestReverseCandidateRangeMatchesCalcDamage(t *testing.T) {
 		if c.Exact {
 			hit := false
 			for _, r := range want.Rolls {
-				if DisplayPercent(r, want.DefenderHP) == obs.Percent {
+				if ObservedPercent(r, want.DefenderHP) == obs.Percent {
 					hit = true
 					break
 				}
@@ -1392,7 +1397,7 @@ func TestReverseMixedObservationKinds(t *testing.T) {
 		Format: FormatSingle, Side: SideAttacker, Known: known,
 		UnknownSpecies: revAttackerSpecies(), Move: move,
 		Observations: []Observation{
-			{Percent: DisplayPercent(base.Rolls[3], base.DefenderHP)},
+			{Percent: ObservedPercent(base.Rolls[3], base.DefenderHP)},
 			{Damage: base.Rolls[9]},
 		},
 	})
@@ -1538,9 +1543,9 @@ func revRecallItems(side ReverseSide, cat MoveCategory) []*Item {
 //  3. 既知側は現実的な調整(無振り / 関連ステータス32 + 上昇補正)
 //  4. 真値(未知側)は SP が 0 か 32、性格は無補正か上昇補正、持ち物は候補集合から
 //     → ADR-0010 §5.3 の上位8型(attacker は上位4型)のいずれかに必ず属する
-//  5. ダメージ0・無効相性・表示0% は観測にならないので引き直す。
-//     表示が 100% を超える観測(瀕死)は 100% に丸めて分母に残す
-//  6. 16ロールから一様に nObs 段階を独立に選び、DisplayPercent で観測化する
+//  5. ダメージ0・無効相性・観測0% は観測にならないので引き直す。
+//     観測%が 100% を超えるケース(瀕死)は 100% に丸めて分母に残す
+//  6. 16ロールから一様に nObs 段階を独立に選び、ObservedPercent で観測化する
 func reverseRecall(t *testing.T, side ReverseSide, species []Species, cases, nObs int, seed uint64) (hit, total int) {
 	t.Helper()
 	if len(species) == 0 {
@@ -1555,7 +1560,7 @@ func reverseRecall(t *testing.T, side ReverseSide, species []Species, cases, nOb
 		attempts++
 		if attempts > maxAttempts {
 			t.Fatalf("観測を作れるケースが %d 回引いても %d 件しか集まらない"+
-				"(DisplayPercent / CalcDamage を確認)", maxAttempts, total)
+				"(ObservedPercent / CalcDamage を確認)", maxAttempts, total)
 		}
 
 		knownSpecies := species[r.intn(len(species))]
@@ -1629,7 +1634,7 @@ func reverseRecall(t *testing.T, side ReverseSide, species []Species, cases, nOb
 		obs := make([]Observation, 0, nObs)
 		ok := true
 		for k := 0; k < nObs; k++ {
-			pct := DisplayPercent(res.Rolls[r.intn(16)], refHP)
+			pct := ObservedPercent(res.Rolls[r.intn(16)], refHP)
 			if pct <= 0 {
 				ok = false
 				break

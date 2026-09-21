@@ -436,13 +436,26 @@ components:
     KOChance:
       type: object
       description: 確定数/乱数n発
-      required: [hits, guaranteed]
+      required: [hits, guaranteed, displayChancePercent]
       properties:
-        hits: { type: integer, description: 最大ダメージで倒すのに必要な攻撃回数 }
+        hits: { type: integer, description: 最大ダメージで倒すのに必要な攻撃回数(0 = 倒せない) }
         guaranteed: { type: boolean, description: 最小ダメージでも hits 回で倒せるなら true(確定n発) }
         chancePercent:
           type: number
-          description: guaranteed が false のとき、hits 回で倒せる確率(%)
+          description: |
+            engine の生値。guaranteed が false のとき、hits 回で倒せる確率(%)を丸めずに返す
+            (ADR-0006)。guaranteed が true のとき、および hits = 0(倒せない)のときは 0。
+            **画面に出す値ではない**(確定なのに 0% と誤表示されるため)。表示には
+            displayChancePercent を使う。
+        displayChancePercent:
+          type: number
+          description: |
+            画面に出す「hits 回で倒せる確率(%)」。常に表示できる値であることを保証する。
+            小数第1位(0.1%刻み。ADR-0010 §3)。
+            - hits = 0(倒せない): 0
+            - guaranteed = true(確定 n 発): 100.0
+            - それ以外: chancePercent を 0.1% 単位に四捨五入し、[0.1, 99.9] に収める
+              (確定・不可能と取り違えないため、0.0 と 100.0 はこの2つに予約する)
 
     CalcResult:
       type: object
@@ -456,8 +469,19 @@ components:
           maxItems: 16
         minDamage: { type: integer }
         maxDamage: { type: integer }
-        minPercent: { type: number }
-        maxPercent: { type: number }
+        minPercent:
+          type: number
+          description: |
+            最小ダメージの表示%(防御側 HP に対する割合)。小数第1位(0.1%刻み)で、
+            **切り捨て**る(「最低これくらい入る」を保守的に示すため。ADR-0010 §3)。
+            整数%に丸めてから小数にした値ではない。HP 比率から直接求める。
+        maxPercent:
+          type: number
+          description: |
+            最大ダメージの表示%(防御側 HP に対する割合)。小数第1位(0.1%刻み)で、
+            **四捨五入**する(ADR-0010 §3)。
+            100 を超える場合は上限で切らず、そのまま返す(例 137.0)。
+            逆算の入力に使う実機観測の整数%とは別概念(engine の ObservedPercent)。
         defenderHP: { type: integer }
         effectiveness:
           type: number

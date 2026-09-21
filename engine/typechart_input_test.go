@@ -248,7 +248,7 @@ func TestCalcReversePassesTypeChartThrough(t *testing.T) {
 	differs := false
 	for i, se := range superEffective.Candidates {
 		ne := neutral.Candidates[i]
-		if se.MinPercent != ne.MinPercent || se.MaxPercent != ne.MaxPercent {
+		if se.MinPercentTenths != ne.MinPercentTenths || se.MaxPercentTenths != ne.MaxPercentTenths {
 			differs = true
 			break
 		}

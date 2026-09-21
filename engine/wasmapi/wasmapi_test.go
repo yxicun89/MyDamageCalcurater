@@ -660,8 +660,11 @@ func TestCallsAreStatelessAndDeterministic(t *testing.T) {
 // --- AC-5: 整数は整数のまま(float 化しない)---------------------------------
 
 func TestIntegerFieldsHaveNoFractionOrExponent(t *testing.T) {
+	// minPercent / maxPercent / displayChancePercent は P1-11 で「小数第1位の表示%」になったので
+	// ここでは見ない。書式は display_percent_test.go の TestDisplayPercentFieldsAreOneDecimal が
+	// より厳しく固定する(小数点が1つ・小数第1位がちょうど1桁・指数表記なし)。
 	intKeys := map[string]bool{
-		"rolls": true, "minDamage": true, "maxDamage": true, "minPercent": true, "maxPercent": true,
+		"rolls": true, "minDamage": true, "maxDamage": true,
 		"defenderHP": true, "hits": true, "points": true, "exactPoints": true, "exactCount": true,
 		"hp": true, "atk": true, "def": true, "spa": true, "spd": true, "spe": true,
 		"power": true, "priority": true, "level": true,

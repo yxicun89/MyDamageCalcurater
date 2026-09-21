@@ -15,6 +15,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -206,23 +208,48 @@ func natureOf(n engine.Nature) natureView {
 	return natureView{Plus: string(n.Plus), Minus: string(n.Minus)}
 }
 
+// tenths は表示%(0.1% 単位。ADR-0010 §3.2)のテキスト "73.4" を 734 に戻す。
+// JSON の生テキストのまま受けるので、「値」だけでなく「書式」も見られる。
+// 小数第1位がちょうど1桁でなければ失敗させる(ADR-0011 §3)。
+func tenths(t *testing.T, what string, v json.Number) int {
+	t.Helper()
+	s := v.String()
+	neg := strings.HasPrefix(s, "-")
+	if neg {
+		s = s[1:]
+	}
+	intPart, fracPart, ok := strings.Cut(s, ".")
+	if !ok || len(fracPart) != 1 || intPart == "" {
+		t.Fatalf("%s は小数第1位を1桁だけ持つべき: %q", what, v.String())
+	}
+	n, err := strconv.Atoi(intPart + fracPart)
+	if err != nil {
+		t.Fatalf("%s が数値でない: %q", what, v.String())
+	}
+	if neg {
+		n = -n
+	}
+	return n
+}
+
 type koView struct {
-	Hits          int     `json:"hits"`
-	Guaranteed    bool    `json:"guaranteed"`
-	ChancePercent float64 `json:"chancePercent"`
+	Hits                 int         `json:"hits"`
+	Guaranteed           bool        `json:"guaranteed"`
+	ChancePercent        float64     `json:"chancePercent"`
+	DisplayChancePercent json.Number `json:"displayChancePercent"`
 }
 
 type calcResultView struct {
-	Rolls         [16]int `json:"rolls"`
-	MinDamage     int     `json:"minDamage"`
-	MaxDamage     int     `json:"maxDamage"`
-	MinPercent    int     `json:"minPercent"`
-	MaxPercent    int     `json:"maxPercent"`
-	DefenderHP    int     `json:"defenderHP"`
-	Effectiveness float64 `json:"effectiveness"`
-	STAB          bool    `json:"stab"`
-	Category      string  `json:"category"`
-	KO            koView  `json:"ko"`
+	Rolls         [16]int     `json:"rolls"`
+	MinDamage     int         `json:"minDamage"`
+	MaxDamage     int         `json:"maxDamage"`
+	MinPercent    json.Number `json:"minPercent"`
+	MaxPercent    json.Number `json:"maxPercent"`
+	DefenderHP    int         `json:"defenderHP"`
+	Effectiveness float64     `json:"effectiveness"`
+	STAB          bool        `json:"stab"`
+	Category      string      `json:"category"`
+	KO            koView      `json:"ko"`
 }
 
 type bulkDefenderView struct {
@@ -261,8 +288,8 @@ type reverseCandidateView struct {
 	Nature      natureView    `json:"nature"`
 	MatchScore  float64       `json:"matchScore"`
 	Exact       bool          `json:"exact"`
-	MinPercent  int           `json:"minPercent"`
-	MaxPercent  int           `json:"maxPercent"`
+	MinPercent  json.Number   `json:"minPercent"`
+	MaxPercent  json.Number   `json:"maxPercent"`
 	Points      int           `json:"points"`
 	ExactPoints int           `json:"exactPoints"`
 }
@@ -333,10 +360,13 @@ func assertCalcResult(t *testing.T, got calcResultView, want engine.DamageResult
 	if got.MinDamage != want.MinDamage() || got.MaxDamage != want.MaxDamage() {
 		t.Errorf("minDamage/maxDamage: got %d/%d want %d/%d", got.MinDamage, got.MaxDamage, want.MinDamage(), want.MaxDamage())
 	}
-	wantMin := engine.DisplayPercent(want.MinDamage(), want.DefenderHP)
-	wantMax := engine.DisplayPercent(want.MaxDamage(), want.DefenderHP)
-	if got.MinPercent != wantMin || got.MaxPercent != wantMax {
-		t.Errorf("minPercent/maxPercent: got %d/%d want %d/%d(engine.DisplayPercent)", got.MinPercent, got.MaxPercent, wantMin, wantMax)
+	// 表示%(0.1% 単位)は engine の値の素通し。最小側=切り捨て、最大側=四捨五入(ADR-0010 §3.2)。
+	wantMin, wantMax := want.DisplayPercentRangeTenths()
+	gotMin := tenths(t, "minPercent", got.MinPercent)
+	gotMax := tenths(t, "maxPercent", got.MaxPercent)
+	if gotMin != wantMin || gotMax != wantMax {
+		t.Errorf("minPercent/maxPercent: got %d/%d want %d/%d(0.1%%単位。DamageResult.DisplayPercentRangeTenths)",
+			gotMin, gotMax, wantMin, wantMax)
 	}
 	if got.DefenderHP != want.DefenderHP {
 		t.Errorf("defenderHP: got %d want %d", got.DefenderHP, want.DefenderHP)
@@ -352,6 +382,11 @@ func assertCalcResult(t *testing.T, got calcResultView, want engine.DamageResult
 	}
 	if got.KO.Hits != want.KO.Hits || got.KO.Guaranteed != want.KO.Guaranteed || got.KO.ChancePercent != want.KO.ChancePercent {
 		t.Errorf("ko: got %+v want %+v", got.KO, want.KO)
+	}
+	// 表示用の確率も engine の素通し(確定なら 100.0%、倒せないなら 0.0%。ADR-0010 §3.4)。
+	if gotChance, wantChance := tenths(t, "ko.displayChancePercent", got.KO.DisplayChancePercent),
+		want.KO.DisplayChancePercentTenths(); gotChance != wantChance {
+		t.Errorf("ko.displayChancePercent: got %d want %d(0.1%%単位)", gotChance, wantChance)
 	}
 }
 
@@ -441,8 +476,13 @@ func TestCalcReverseMatchesEngineCalcReverse(t *testing.T) {
 				if gc.MatchScore != wc.MatchScore || gc.Exact != wc.Exact {
 					t.Errorf("候補 %d の matchScore/exact: got %v/%v want %v/%v", i, gc.MatchScore, gc.Exact, wc.MatchScore, wc.Exact)
 				}
-				if gc.MinPercent != wc.MinPercent || gc.MaxPercent != wc.MaxPercent {
-					t.Errorf("候補 %d の minPercent/maxPercent: got %d/%d want %d/%d", i, gc.MinPercent, gc.MaxPercent, wc.MinPercent, wc.MaxPercent)
+				// 候補の想定ダメージ幅も表示%(0.1% 単位)。CalcResult と同じ意味・同じ書式
+				// でなければならない(ADR-0010 §3.3)。
+				gcMin := tenths(t, "候補の minPercent", gc.MinPercent)
+				gcMax := tenths(t, "候補の maxPercent", gc.MaxPercent)
+				if gcMin != wc.MinPercentTenths || gcMax != wc.MaxPercentTenths {
+					t.Errorf("候補 %d の minPercent/maxPercent: got %d/%d want %d/%d(0.1%%単位)",
+						i, gcMin, gcMax, wc.MinPercentTenths, wc.MaxPercentTenths)
 				}
 				if gc.Points != wc.Points || gc.ExactPoints != wc.ExactPoints {
 					t.Errorf("候補 %d の points/exactPoints: got %d/%d want %d/%d", i, gc.Points, gc.ExactPoints, wc.Points, wc.ExactPoints)

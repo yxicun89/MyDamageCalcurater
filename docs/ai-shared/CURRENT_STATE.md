@@ -3,8 +3,8 @@
 ## Damage Calculator
 Owner: Claude Code
 Branch: feat/claude-p1-engine(作業ディレクトリ ~/MyDamageCalcurater)
-Status: Phase 1・P2-1・P1-10・Phase R(R-2-9 の公開用クリーンコピーは公開時に実施)・R-3・P1-13(タイプ相性表のデータ化。ADR-0013)は完了し、origin/main(協調運用の改訂 COORDINATION.md ほか)を取り込み済み。P1-13 は critic の独立レビューを受け、指摘を反映済み。旧 ~/pokecalc 系はアーカイブ(削除はユーザーの確認待ち)。
-Next: main への統合(COORDINATION.md の手順: make test / lint / check-publishable の後に push。push はユーザーの指示があれば)→ P1-11(表示%の分離)→ P1-12(逆算の再設計)→ P2-1b → P2-1c → P2-2。人間の確認待ち(plan.md ブロッカー): 観測ダメージの入力と丸めの解釈、公開のタイミング(LICENSE・クリーンコピー)
+Status: Phase 1・P2-1・P1-10・Phase R(R-2-9 の公開用クリーンコピーは公開時に実施)・R-3・P1-13(タイプ相性表のデータ化。ADR-0013)・P1-11(表示%の分離。ADR-0010 §3)は完了し、origin/main(協調運用の改訂 COORDINATION.md ほか)を取り込み済み。P1-13 は critic の独立レビューを受け、指摘を反映済み。旧 ~/pokecalc 系はアーカイブ(削除はユーザーの確認待ち)。
+Next: main への統合(COORDINATION.md の手順: make test / lint / check-publishable の後に push。push はユーザーの指示があれば)→ P1-12(逆算の再設計)→ P2-1b → P2-1c → P2-2。人間の確認待ち(plan.md ブロッカー): 観測ダメージの入力と丸めの解釈、公開のタイミング(LICENSE・クリーンコピー)
 
 ## Type Balance Checker
 Owner: Codex

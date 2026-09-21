@@ -1,8 +1,8 @@
 # ADR-0011: WASM 境界(JSON 文字列 API)とビルド・Go/WASM 一致テスト
 
-- 状態: 採用(ただし §9 の「ブラウザでの実動作確認」は未実施。P4-5 で人間が確認する)
-- 日付: 2026-09-21
-- 関連: P1-9、docs/requirements.md「オフライン: ブラウザ版はWASMでバックエンドなしでも計算可能」
+- 状態: 採用(§3 / §10 / §12 は P1-11 で改訂。§9 の「ブラウザでの実動作確認」は未実施。P4-5 で人間が確認する)
+- 日付: 2026-09-21(P1-11 で改訂: 表示%を小数第1位に、`ko.displayChancePercent` を追加)
+- 関連: P1-9、P1-11、docs/requirements.md「オフライン: ブラウザ版はWASMでバックエンドなしでも計算可能」
   (非機能要件・アーキテクチャ図・技術スタック「オフライン計算 Go → WASM」)、
   docs/test-strategy.md「E2E: WASM モードでバックエンドを止めても計算できる」、
   ADR-0005(データ駆動の効果定義)、ADR-0009(一括計算のプリセット)、ADR-0010(逆算)、
@@ -49,7 +49,7 @@ engine/cmd/wasmexpect/   ← 一致テストの期待値をネイティブ Go �
   (`TestBoundaryPackageImportsAreMinimal`)。
 
 `engine/wasmapi` は engine の公開 API(`CalcDamage` / `CalcBulk` / `CalcReverse` / `RealStats` /
-`DisplayPercent`)を呼ぶだけで、独自のダメージ式・独自の丸めを持たない。
+`DamageResult.DisplayPercentRangeTenths` / `KOChance.DisplayChancePercentTenths`)を呼ぶだけで、独自のダメージ式・独自の丸めを持たない。
 これは「DTO 出力と engine 直呼びの結果が一致する」テストで固定する(§8)。
 
 絶対ルール2(engine は純粋)が守る対象は **engine のライブラリパッケージ**(`engine` 本体と
@@ -131,9 +131,9 @@ Field   = {"weather":"none","terrain":"none",
 
 ```jsonc
 // calc
-{"result":{"rolls":[16個],"minDamage":208,"maxDamage":246,"minPercent":63,"maxPercent":75,
+{"result":{"rolls":[16個],"minDamage":208,"maxDamage":246,"minPercent":63.0,"maxPercent":74.5,
            "defenderHP":330,"effectiveness":1,"stab":true,"category":"physical",
-           "ko":{"hits":2,"guaranteed":true,"chancePercent":0}}}
+           "ko":{"hits":2,"guaranteed":true,"chancePercent":0,"displayChancePercent":100.0}}}
 
 // calcBulk
 {"result":{"defenderSpeciesKey":"blissey","rows":[
@@ -146,7 +146,7 @@ Field   = {"weather":"none","terrain":"none",
   {"archetype":{"key":"hfull-bfull-neutral","label":"HB振り(無補正)","side":"defender",
                 "stat":"def","hpBucket":"full","statBucket":"full","natureClass":"neutral"},
    "itemId":"","sp":Stats,"nature":Nature,
-   "matchScore":1,"exact":true,"minPercent":40,"maxPercent":48,
+   "matchScore":1,"exact":true,"minPercent":40.2,"maxPercent":47.8,
    "points":9,"exactPoints":3}]}}
 
 // エラー
@@ -155,9 +155,25 @@ Field   = {"weather":"none","terrain":"none",
 
 決めたこと:
 
-- **数値は整数のまま**渡す。`minPercent` / `maxPercent` は `engine.DisplayPercent`(整数%)を使い、
-  float にしない(ドメイン規約)。float で出るのは `effectiveness`(0/0.25/0.5/1/2/4)、
+- **数値は整数のまま**渡す。float で出るのは `effectiveness`(0/0.25/0.5/1/2/4)、
   `ko.chancePercent`、`matchScore` の3つだけで、いずれも engine が float64 で持っている値。
+- **表示%(`minPercent` / `maxPercent` / `ko.displayChancePercent`)だけは小数第1位の number**
+  (P1-11。ADR-0010 §3.2)。ただし **engine から境界までは 0.1% 単位の整数(tenths)のまま**運び、
+  float を経由しない。境界に `tenthPercent`(基底型 `int`)を置き、その `MarshalJSON` が
+  `strconv` で整数を `"73.4"` の形に組み立てる。
+  - **小数第1位を必ず1桁出す**(`100.0`、`0.0`、`137.0`)。書式が1つに決まるので、
+    Go(ネイティブ)と WASM のレスポンスは**バイト一致**する(§7 の一致テストは文字列比較)。
+    float64 の最短表現に頼らないので、`73.4` が `73.40000000000001` になる余地もない。
+  - `minPercent` は切り捨て、`maxPercent` は四捨五入(ADR-0010 §3.2)。
+    100 を超える値は切らずにそのまま出す。
+  - `minPercent` / `maxPercent` は **`calcReverse` の候補でも同じ意味**(表示%、0.1%)。
+    同じキー名が2つの尺度を指さないようにする(ADR-0010 §3.3)。
+  - 逆算の入力 `observations[].percent` は**観測%(整数)**のままで、別概念
+    (ADR-0010 §3.1 の `engine.ObservedPercent`)。境界でも小数にしない。
+- **`ko` は生値と表示値の両方を持つ**。`chancePercent` は engine の `KOChance.ChancePercent`
+  の素通し(確定・倒せないときは 0。ADR-0006 の意味を変えない)、`displayChancePercent` は
+  `KOChance.DisplayChancePercentTenths()`(確定は `100.0`、倒せないときは `0.0`)。
+  画面が使うのは後者。前者を画面に出すと「確定n発なのに 0%」になる。
 - **レスポンスは改行で終わらせない**(`json.Encoder` ではなく `json.Marshal`)。
   Go/WASM のバイト一致比較で末尾改行の有無に足を取られないため。
 - 一括の `rows[].defender` は SP・性格・実数値だけを返す。個体を丸ごと返すと種族データを
@@ -349,7 +365,7 @@ WASM は HTTP を通らないので API 契約ではない。ズレを記録し�
 |---|---|---|
 | `CalcRequest.moveId: string`(ID をサーバが解決) | `move: Move`(解決済み) | P4-5。Web は「オンライン=ID を送る / オフライン=解決済みを渡す」の2経路を持つ。マスタ解決は Web の責務 |
 | `Individual` は ID 参照(speciesKey / itemId / abilityId) | 種族・持ち物・特性の実体 | 同上。Web に「ID → 実体」の解決層を1つ置き、両経路で共有する |
-| `CalcResult.minPercent/maxPercent: number` | 整数(`DisplayPercent`) | P3-1。calc-svc も整数で返し、description に丸めを書く |
+| ~~`CalcResult.minPercent/maxPercent: number` / 整数(`DisplayPercent`)~~ | **解消(P1-11)**。どちらも小数第1位の表示%(min は切り捨て、max は四捨五入)。`api/openapi.yaml` の description に丸めを書き、`KOChance.displayChancePercent` を足した | ― |
 | `CalcResult` に `category` が無い | `category` を返す | P3-1 で契約に足すか、Web が要求から知っているので落とすかを決める |
 | `BulkCalcRow` に防御側の SP/性格/実数値が無い | `defender{sp,nature,stats}` | P3-1 で `BulkCalcRow` に足す |
 | 逆算の契約差分 | ADR-0010 §9 がそのまま当てはまる | P3-1 |
@@ -378,7 +394,7 @@ WASM は HTTP を通らないので API 契約ではない。ズレを記録し�
   Go と WASM の差は補正の種類ではなく実行環境から出るので、補正を1つずつ通す固定ケースで足りる
   と判断した。全件回したくなったら `-vectors` に別ファイルを渡せる。
 
-### 12. 受け入れ条件(AC-1〜AC-10)と担当テスト
+### 12. 受け入れ条件(AC-1〜AC-11)と担当テスト
 
 P1-9 の受け入れ条件と、それを守るテスト。AC の番号はテストファイルの節見出し(`wasmapi_test.go` /
 `vectors_test.go` / `wiring_test.go`)に書かれているものと同じ。
@@ -390,6 +406,7 @@ P1-9 の受け入れ条件と、それを守るテスト。AC の番号はテス
 | AC-3 | 失敗は `{"error":{"code","message"}}` の封筒。code は §5 の表どおり(JSON 破損・未知フィールド・末尾データ・列挙・入力検証・sentinel)。どんな入力でも panic を外へ出さず、message に Go のランタイム情報を含めない | `TestErrorEnvelopeCodes` / `TestEmptyEnumMeansDefault` / `TestTrailingDataIsInvalidJSON` / `TestHostileInputNeverPanics` |
 | AC-4 | ステートレスで決定的。他の呼び出し・不正入力を挟んでも同じ入力は同じバイト列 | `TestCallsAreStatelessAndDeterministic`(ネイティブ)、`wasm-conformance.mjs` の逆順2周(WASM) |
 | AC-5 | 整数は整数のまま(小数点・指数表記にしない)。NaN/Inf を出さない | `TestIntegerFieldsHaveNoFractionOrExponent` |
+| AC-11(P1-11 で追加) | 表示%(`minPercent` / `maxPercent` / `ko.displayChancePercent`)は**必ず小数第1位を1桁**持ち、指数表記にならない。値は engine の tenths と一致する。`ko` のキー集合は `hits` / `guaranteed` / `chancePercent` / `displayChancePercent` | `TestDisplayPercentFieldsAreOneDecimal` / `TestDisplayPercentFieldsMatchEngineTenths` / `TestKOObjectShape` / `TestGuaranteedKOIsDisplayedAsHundred` / `TestObservedPercentInputStaysInteger`(`display_percent_test.go`) |
 | AC-6 | マスタを持ち込まない(ID を解釈せず効果定義だけで計算する)。境界パッケージは engine と標準ライブラリにしか依存せず `syscall/js` を持たない | `TestOpaqueMasterIDsArePassedThrough` / `TestBoundaryPackageImportsAreMinimal` |
 | AC-7 | **Go/WASM 一致**。同じベクタをネイティブ Go と `engine.wasm`(Node)に通し、レスポンスがバイト一致する(順逆2周)。逆算が 1 秒以内。引数の型違い・壊れた JSON でも文字列の error 封筒を返し、その後も正常に計算できる(Promise が死なない) | `scripts/wasm-conformance.mjs`(`make test-wasm`)。ネイティブ側の `go test` では検証できない(WASM 実行が要る)ので、`make test` には含めず AC-10 の配線テストで存在だけを固定する |
 | AC-8 | ベクタが必要な条件(補正の種類・一括・逆算・浮動小数の出る確率)を覆う | `TestVectorsCoverRequiredScenarios` |
@@ -398,6 +415,13 @@ P1-9 の受け入れ条件と、それを守るテスト。AC の番号はテス
 
 AC-7 は仕様上ここに一本化してある。WASM の実行が要る検証は Node 側にしか置けないため、
 それを `make test` から外した代わりに、AC-9 / AC-10 が「配線が消えていないこと」を `make test` 側で見張る。
+
+**P1-11 でベクタは変えない。** `wasmapi/testdata/vectors.json` はリクエストだけを持ち、期待値は
+`engine/cmd/wasmexpect` が実行のたびに生成する(§7。期待値はコミットしない)。レスポンスの形が
+変わっても、リクエストの schema は変わらないので **`schemaVersion` は 2 のまま**で、
+`vectors.json` の編集も期待値の再生成コマンドも要らない。`make test-wasm` を実行すれば
+新しい書式で生成し直される。逆に、`vectors.json` の**リクエスト**に新しいフィールドを足したくなったら
+そのときは `schemaVersion` を上げる(§13 と同じ手順)。
 
 ### 13. `typeChart` の追加(P1-13、ADR-0013)
 

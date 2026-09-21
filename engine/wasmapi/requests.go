@@ -247,8 +247,8 @@ type reverseCandidateDTO struct {
 	Nature      natureDTO    `json:"nature"`
 	MatchScore  float64      `json:"matchScore"`
 	Exact       bool         `json:"exact"`
-	MinPercent  int          `json:"minPercent"`
-	MaxPercent  int          `json:"maxPercent"`
+	MinPercent  tenthPercent `json:"minPercent"`
+	MaxPercent  tenthPercent `json:"maxPercent"`
 	Points      int          `json:"points"`
 	ExactPoints int          `json:"exactPoints"`
 }
@@ -326,8 +326,8 @@ func (r *reverseRequest) run() (reverseResultDTO, error) {
 			Nature:      natureFrom(c.Nature),
 			MatchScore:  c.MatchScore,
 			Exact:       c.Exact,
-			MinPercent:  c.MinPercent,
-			MaxPercent:  c.MaxPercent,
+			MinPercent:  tenthPercent(c.MinPercentTenths),
+			MaxPercent:  tenthPercent(c.MaxPercentTenths),
 			Points:      c.Points,
 			ExactPoints: c.ExactPoints,
 		})

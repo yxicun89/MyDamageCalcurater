@@ -8,6 +8,7 @@ package wasmapi
 import (
 	"fmt"
 	"sort"
+	"strconv"
 
 	"example.com/pokecalc/engine"
 )
@@ -478,39 +479,61 @@ func sortedKeys[V any](m map[string]V) []string {
 
 // --- 結果の DTO -------------------------------------------------------------
 
+// tenthPercent は 0.1% 単位の整数で持つ表示%。JSON では小数第1位をちょうど1桁持つ
+// 数値リテラル(734 -> 73.4、1000 -> 100.0、0 -> 0.0)にする。float を経由しないので
+// 73.4 が 73.40000000000001 になる余地がなく、書式が1つに決まって Go と WASM が
+// バイト一致する(ADR-0011 §3、ADR-0010 §3.2)。
+type tenthPercent int
+
+// MarshalJSON は tenths を "73.4" の形の JSON 数値にする。
+func (p tenthPercent) MarshalJSON() ([]byte, error) {
+	n := int(p)
+	sign := ""
+	if n < 0 {
+		sign, n = "-", -n
+	}
+	return []byte(sign + strconv.Itoa(n/10) + "." + strconv.Itoa(n%10)), nil
+}
+
 type koDTO struct {
 	Hits          int     `json:"hits"`
 	Guaranteed    bool    `json:"guaranteed"`
 	ChancePercent float64 `json:"chancePercent"`
+	// DisplayChancePercent は画面に出す値(確定は 100.0、倒せないときは 0.0)。
+	// ChancePercent は engine の生値で、確定のとき 0(ADR-0006)。
+	DisplayChancePercent tenthPercent `json:"displayChancePercent"`
 }
 
 type calcResultDTO struct {
-	Rolls         [16]int `json:"rolls"`
-	MinDamage     int     `json:"minDamage"`
-	MaxDamage     int     `json:"maxDamage"`
-	MinPercent    int     `json:"minPercent"`
-	MaxPercent    int     `json:"maxPercent"`
-	DefenderHP    int     `json:"defenderHP"`
-	Effectiveness float64 `json:"effectiveness"`
-	STAB          bool    `json:"stab"`
-	Category      string  `json:"category"`
-	KO            koDTO   `json:"ko"`
+	Rolls         [16]int      `json:"rolls"`
+	MinDamage     int          `json:"minDamage"`
+	MaxDamage     int          `json:"maxDamage"`
+	MinPercent    tenthPercent `json:"minPercent"`
+	MaxPercent    tenthPercent `json:"maxPercent"`
+	DefenderHP    int          `json:"defenderHP"`
+	Effectiveness float64      `json:"effectiveness"`
+	STAB          bool         `json:"stab"`
+	Category      string       `json:"category"`
+	KO            koDTO        `json:"ko"`
 }
 
-// calcResultFrom は engine の結果を写す。パーセントは engine.DisplayPercent(整数%)。
+// calcResultFrom は engine の結果を写す。パーセントは表示%(0.1% 単位。
+// 最小側は切り捨て・最大側は四捨五入)で、engine の値を丸め直さず素通しする。
 func calcResultFrom(r engine.DamageResult) calcResultDTO {
+	minTenths, maxTenths := r.DisplayPercentRangeTenths()
 	return calcResultDTO{
 		Rolls:         r.Rolls,
 		MinDamage:     r.MinDamage(),
 		MaxDamage:     r.MaxDamage(),
-		MinPercent:    engine.DisplayPercent(r.MinDamage(), r.DefenderHP),
-		MaxPercent:    engine.DisplayPercent(r.MaxDamage(), r.DefenderHP),
+		MinPercent:    tenthPercent(minTenths),
+		MaxPercent:    tenthPercent(maxTenths),
 		DefenderHP:    r.DefenderHP,
 		Effectiveness: r.Effectiveness,
 		STAB:          r.STAB,
 		Category:      string(r.Category),
 		KO: koDTO{
 			Hits: r.KO.Hits, Guaranteed: r.KO.Guaranteed, ChancePercent: r.KO.ChancePercent,
+			DisplayChancePercent: tenthPercent(r.KO.DisplayChancePercentTenths()),
 		},
 	}
 }

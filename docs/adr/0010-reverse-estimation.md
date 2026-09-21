@@ -1,8 +1,8 @@
 # ADR-0010: 逆算(調整推定)の探索空間・型の定義・一致度
 
-- 状態: 採用(ただし §3 の表示%の丸めは**人間の確認が必要**。§8 の限界も参照)
-- 日付: 2026-09-21
-- 関連: P1-8、docs/requirements.md「調整の推定(逆算)」、docs/test-strategy.md「逆算(調整推定)のテスト」、
+- 状態: 採用(§3 は P1-11 で改訂。§3.1 の**観測%**の丸めは**人間の確認が必要**。§8 の限界も参照)
+- 日付: 2026-09-21(§3 を P1-11 で改訂: 観測%と表示%を別概念に分離)
+- 関連: P1-8、P1-11、docs/requirements.md「調整の推定(逆算)」、docs/test-strategy.md「逆算(調整推定)のテスト」、
   api/openapi.yaml(`/api/calc/reverse`、`ReverseRequest` / `ReverseCandidate`)、
   ADR-0005(データ駆動の効果定義)、ADR-0009(一括計算のプリセット)、
   CLAUDE.md 絶対ルール2(engine は純粋)・絶対ルール6(テストを弱めない)・
@@ -51,28 +51,117 @@ test-strategy は合格基準を **Recall@5: 1回観測 ≥80%、2回観測 ≥9
   `Side=defender` のときの分母は**候補ごとに変わる**(H の振りが未知だから)。
   この非対称性が逆算の情報源そのものなので、%の分母は必ず「その候補の防御側実 HP」を使う。
 
-### 3. 観測の表し方と表示 % の丸め(**仮定**)
+### 3. 「観測%」と「表示%」を別概念にする(P1-11 で分離)
+
+%は2種類ある。**同じ関数に混ぜない**。名前で取り違えられないようにする。
+
+| 概念 | 何のため | 精度 | 丸め | engine の名前 |
+|---|---|---|---|---|
+| **観測%** | 逆算の入力。プレイヤーが実機画面から読み取った値との照合 | 整数% | round-half-up(**仮定**) | `ObservedPercent(damage, maxHP) int` |
+| **表示%** | アプリが画面に出す値 | 小数第1位(0.1%) | 最小側=切り捨て / 最大側=四捨五入 | `DisplayPercentTenthsFloor` / `DisplayPercentTenthsRound` |
+
+#### 3.1 観測%(逆算の入力。P1-11 では挙動を変えない)
 
 `Observation` は `Percent`(ゲーム表示の整数%)または `Damage`(HP の実点数)の**どちらか一方**を持つ。
 両方指定・両方未指定・0以下・`Percent > 100` は `ErrInvalidObservation`。
 
-表示 % の丸めは **round-half-up の整数%** と仮定し、整数演算1関数に閉じ込める。
+観測%の丸めは **round-half-up の整数%** と仮定し、整数演算1関数に閉じ込める。
 
 ```
-DisplayPercent(damage, maxHP) = (damage*200 + maxHP) / (2*maxHP)   // = floor(100*damage/maxHP + 0.5)
+ObservedPercent(damage, maxHP) = (damage*200 + maxHP) / (2*maxHP)   // = floor(100*damage/maxHP + 0.5)
+                                 maxHP <= 0 は 0
 ```
 
 - **これは仮定である。**ポケモンチャンピオンズの実機が切り捨て表示なのか四捨五入なのか、
-  小数第1位まで出るのかは未確認。確認が取れたらこの1関数と本節だけを差し替える。
+  小数第1位まで出るのかは未確認(plan.md ブロッカー「観測ダメージの入力と丸め」。**人間の確認待ち**)。
+  確認が取れたらこの1関数と本節だけを差し替える。丸め規則そのものの再設計は **P1-12**。
   engine の float 禁止規約に合わせ、丸めは整数演算のみで行う(`Percent` も engine では `int`)。
+- P1-11 の変更は**改名だけ**(旧 `DisplayPercent` → `ObservedPercent`)。式・戻り値・照合結果は同じで、
+  Recall@5 の基準(§7)も変えない。改名する理由は、表示%が 0.1% 精度になったことで
+  `DisplayPercent` という名前が「画面に出す値」と読めてしまい、逆算の照合に 0.1% 値が
+  紛れ込む事故が起きやすくなるため。
 - 実装は `Percent` を `int` で持つ。OpenAPI の `observedPercent` は `number` なので、
   P3-1 の calc-svc が「整数でなければ 400」を課して `int` に写す(§9)。
 - `Damage` 観測は完全一致(ロールの実点数が一致)で判定する。
 
-一致・不一致の距離はすべて**表示%ポイント**に揃える。`Damage` 観測の距離は
+一致・不一致の距離はすべて**観測%ポイント**(整数)に揃える。`Damage` 観測の距離は
 `max(1, |roll - Damage| * 100 / HP)`(整数除算。`|roll - Damage| = 0` のときだけ 0)で%ポイントに換算する。
 下限 `1` を置く理由: 点数差があるのに整数除算で `差*100/HP = 0`(HP が大きいと差 1〜2 で起きる)になると
 dist=0 = Exact 扱いになり、「dist=0 のときだけ 1.0」「Exact ⇔ MatchScore==1.0」(§6.1, §6.2)が壊れるため。
+
+#### 3.2 表示%(アプリが画面に出す値。P1-11 で追加)
+
+requirements.md §2 のとおり、アプリが表示するダメージ%は**小数第1位**(例 73.4%)。
+HP 比率から直接求め、整数%に丸めてから表示しない。float でダメージ%を近似しない
+(CLAUDE.md ドメイン規約)ので、**engine は 0.1% 単位の整数(tenths)を返す**。
+小数にするのは境界(`engine/wasmapi` の DTO、API の JSON)だけ。
+
+```
+DisplayPercentTenthsFloor(damage, maxHP) = damage*1000 / maxHP                 // 切り捨て。最小側
+DisplayPercentTenthsRound(damage, maxHP) = (damage*2000 + maxHP) / (2*maxHP)   // 四捨五入。最大側
+    どちらも damage <= 0 または maxHP <= 0 のときは 0
+```
+
+- **戻り値の単位は 0.1%**。`734` は `73.4%`。関数名に `Tenths` を入れるのは、
+  `int` の値が%そのものだと読み違えると 10 倍ずれるため。
+- **最小側は切り捨て、最大側は四捨五入**(ユーザー決定。DECISIONS.md 2026-09-21 (4))。
+  「最低これくらい入る」を保守的に示すのが目的なので、下限を切り上げない。
+  上限は「最大でどこまで届くか」なので、切り捨てて過小に見せず四捨五入する。
+  したがって `Floor(d,h) <= Round(d,h) <= Floor(d,h)+1` が常に成り立つ。
+- **どちらの関数を使うかを間違えないよう、正規の入口は範囲を返すメソッドにする**:
+  `func (r DamageResult) DisplayPercentRangeTenths() (minTenths, maxTenths int)`
+  = `(Floor(Rolls[0], DefenderHP), Round(Rolls[15], DefenderHP))`。
+- **境界**:
+  - `maxHP <= 0` は 0(ゼロ除算しない)。engine は純粋関数で panic しない。`ObservedPercent` と同じ扱い。
+  - `damage <= 0` は 0。engine は負のダメージを作らないが、Go の整数除算は 0 方向に丸めるため
+    負値では floor の意味が壊れる。定義域全体で floor を成立させるために 0 で止める。
+  - `damage > maxHP` は **100 を超えた値をそのまま返す**(例 `1370` = 137.0%)。上限で切らない。
+    根拠: 現行の `DisplayPercent` も切っていない(挙動を変えない)。加えて、過剰打点の大きさは
+    「確定1発だがどれだけ余裕があるか」の判断材料で、100% に丸めると情報が消える。
+    画面が「100%で頭打ち」に見せたいなら、それは表示層の判断であって engine の値ではない。
+- **既知の帰結(特別扱いしない)**: `rolls[0] == rolls[15]`(乱数幅が無い)のとき、
+  最小側と最大側で丸めが違うので表示が 0.1 ずれることがある(例 HP16・1ダメージ固定 →
+  `6.2% 〜 6.3%`)。ここで「同じ値なら同じ丸め」の例外を入れると、ダメージ 1〜1 と 1〜2 で
+  規則が切り替わる不連続ができ、規則が1行で説明できなくなる。最小側は常に保守的、
+  最大側は常に四捨五入、で通す。実ダメージ(`minDamage` / `maxDamage`)も併せて返すので
+  情報は失われない。気になるなら表示層が「1ダメージ(6.2%)」と畳めばよい。
+
+#### 3.3 逆算候補の想定ダメージ幅も表示%にする
+
+`ReverseCandidate` の想定ダメージ幅は画面に出す値なので、表示%(0.1% 単位)で持つ。
+フィールド名も単位が分かる形にする: `MinPercentTenths` / `MaxPercentTenths`
+(= 代表点の `DisplayPercentRangeTenths()`)。
+
+理由: JSON のキー `minPercent` / `maxPercent` は計算結果(`CalcResult`)と逆算候補の両方に出る。
+片方が整数%、もう片方が 0.1% だと、同じキー名が2つの尺度を指すことになり §3 の分離が
+契約の側で崩れる。**`minPercent` / `maxPercent` はどこでも同じ意味(表示%)**に揃える。
+
+一方、**候補の照合に使う値は観測%のまま**(`ObservedPercent`)。CalcReverse の内部で
+16ロールを観測%へ写して距離を測る部分(§6)は P1-11 で変更しない。
+P1-12(逆算の再設計。結果は SP の範囲)で候補の持ち物・形は作り直すので、
+P1-11 側の変更は「単位と名前を表示%へ合わせる」だけに留める。
+
+#### 3.4 確定数の確率(`ko.chancePercent`)を必ず表示できる形にする
+
+`engine.KOChance` の生値(ADR-0006)は、**確定(`Guaranteed`)のとき `ChancePercent` が 0**、
+倒せないとき(`Hits == 0`)も 0 である。これをそのまま画面に出すと「確定n発なのに 0%」になる。
+ゴールデンの期待値がこの生値に依存している(`tools/golden/generate.mjs` が確定時に
+`ChancePercent: 0` を書く)ので、**生値の意味は変えない**。代わりに engine に表示用の
+メソッドを1つ足す。
+
+```
+func (k KOChance) DisplayChancePercentTenths() int   // 0.1% 単位
+    Hits == 0(倒せない)      -> 0
+    Guaranteed                  -> 1000   (= 100.0%)
+    それ以外                    -> round(ChancePercent * 10) を [1, 999] に収める
+```
+
+- 精度は表示%と揃えて小数第1位。
+- `[1, 999]` に収めるのは、`0.0%` を「不可能」、`100.0%` を「確定」に予約するため。
+  確率 0.04% が `0.0%`、99.98% が `100.0%` と出ると、確定/不可能と区別できなくなる。
+- `ChancePercent` は確率であってダメージ%ではないので、engine が既に float64 で持っている
+  (ADR-0006)値をそのまま丸めてよい。ダメージ%の float 禁止はここには当たらない。
+- 生値も境界には残す(`ko.chancePercent`)。画面が使うのは `ko.displayChancePercent`。
 
 ### 4. 探索格子(総当たり)
 
@@ -195,9 +284,10 @@ attacker(X = A または C):
 
 #### 6.1 格子点の一致度
 
-格子点 g と観測 o について、g の 16 ロールを表示%に直した集合を使い
+格子点 g と観測 o について、g の 16 ロールを**観測%**(§3.1 の `ObservedPercent`。整数%)に
+直した集合を使う。ここは照合であって画面ではないので、表示%(0.1%)は使わない。
 
-- `dist(g,o)` = ロールの表示%と `o` の値の差(絶対値、%ポイント)の**最小値**
+- `dist(g,o)` = ロールの観測%と `o` の値の差(絶対値、%ポイント)の**最小値**
 - `near(g,o) = 1 / (1 + dist(g,o))` ∈ (0,1]。**`dist=0`(= 完全一致)のときだけ 1.0**
 - `pointExact(g)` = すべての観測で `dist=0`
 
@@ -218,7 +308,8 @@ max を取るのは「この型はその観測を説明できるか」を測り�
 
 代表 SP・代表性格は `MatchScore` を達成した格子点のうち、走査順
 (H 昇順 → 関連ステータス昇順 → 性格 `plus`,`neutral`,`minus` の順)で**最初のもの**。
-`MinPercent` / `MaxPercent` はその代表点の `rolls[0]` / `rolls[15]` の表示%。
+`MinPercentTenths` / `MaxPercentTenths` はその代表点の想定ダメージ幅を**表示%**(0.1% 単位)に
+したもの(§3.3)。`rolls[0]` は切り捨て、`rolls[15]` は四捨五入。
 
 #### 6.3 順序(全順序・決定的)
 
@@ -261,10 +352,11 @@ test-strategy の手順を次のように具体化する。
 4. **既知側**: 現実的な調整(無振り、または関連ステータス 32 + 上昇補正)。
 5. **真値(未知側)**: SP は 0 か 32、性格は無補正か上昇補正、持ち物は候補集合から。
    → §5.3 の上位8型(attacker は上位4型)のいずれかに必ず属する。
-6. ダメージ 0・無効相性・表示0% のケースは引き直す(観測にならないため)。
-   **表示が 100% を超える観測(相手が瀕死になる)は除外せず、100 に丸めて分母に残す。**
-   ゲームの表示は 100% で頭打ちなので現実に近く、基準も厳しくなる。
-7. 16 ロールから一様に1段階を選び、`DisplayPercent` で観測化する。2回観測は独立に2段階選ぶ。
+6. ダメージ 0・無効相性・観測 0% のケースは引き直す(観測にならないため)。
+   **観測%が 100% を超えるケース(相手が瀕死になる)は除外せず、100 に丸めて分母に残す。**
+   ゲームの HP バーは 100% で頭打ちなので現実に近く、基準も厳しくなる
+   (これは**観測**側の話。engine が返す**表示%**は 100 を超えてもそのまま返す。§3.2)。
+7. 16 ロールから一様に1段階を選び、`ObservedPercent` で観測化する。2回観測は独立に2段階選ぶ。
 8. `CalcReverse` にかけ、**真値の型(`ArchetypeOf` が返すキー)と真値の持ち物 ID が一致する候補が
    上位5件に入った割合**を Recall@5 とする。
 
@@ -314,14 +406,14 @@ attacker が旧標本より大きく下がる原因は、(仮説)強い攻撃側
 
 | 契約 | engine | P3-1 での解消 |
 |---|---|---|
-| `Observation.observedPercent: number` | `Observation.Percent int`(表示%) | calc-svc が整数でなければ 400。engine に float を渡さない |
+| `Observation.observedPercent: number` | `Observation.Percent int`(観測%。§3.1) | calc-svc が整数でなければ 400。engine に float を渡さない |
 | `Observation` に実点数の観測が無い | `Observation.Damage int` | `side=attacker` は自分の HP 減少を点数で知れるので契約に `observedDamage` を足す |
 | `ReverseRequest.attacker: Individual` 固定 | `Known Individual`(`Side` により攻撃側/防御側) | `side=attacker` のとき `attacker` フィールドが「自分=防御側」を指す読み替えが必要。`known` へ改名するか `defender` を足す |
 | `ReverseRequest.defenderSpeciesKey` 固定 | `UnknownSpecies Species` | 同上。`side` によって未知側が変わるので `unknownSpeciesKey` に寄せる |
 | `ReverseRequest` に持ち物候補が無い | `ItemCandidates []*Item` | `itemCandidates: [ItemId]` を足す。解決は calc-svc(engine に持ち物一覧を持ち込まない) |
 | `ReverseCandidate.natureId: string` | `Nature{Plus,Minus}`(構造値) | engine は性格 ID を持たない。calc-svc が代表性格クラス → 性格 ID に写像する(例 +B/-A → Bold) |
 | `ReverseCandidate.presetLabel` | `Archetype.Key` + `Archetype.Label` | `presetLabel` に `Label` を入れる。キーも返したいなら `archetypeKey` を足す |
-| `ReverseCandidate.rangePercent: [number,number]` | `MinPercent` / `MaxPercent`(int) | そのまま写す |
+| `ReverseCandidate.rangePercent: [number,number]` | `MinPercentTenths` / `MaxPercentTenths`(0.1% 単位の int。§3.3) | calc-svc が 10 で割って小数第1位の number にする |
 | 一致度の意味が未定義 | `MatchScore`(1.0 = 完全一致)+ `Exact` | `matchScore` の意味を description に書き、`exact` を足すか検討 |
 | `ReverseResult` に候補数の上限が無い | `MaxCandidates`(0 = 無制限) | ページングは不要。`limit` を足すかは画面を見て決める |
 
@@ -362,5 +454,19 @@ Smoke の標本・種族数はこれ以上増やさない。`allspecies` 側は�
 - `engine/reverse_test.go`(受け入れテスト)と `engine/reverse_recall_test.go`(`allspecies` タグ)を追加。
 - `api/openapi.yaml` は変更しない。§9 の差分は P3-1 の作業項目。
 - `docs/plan.md` の P1-8 に、§9 の宿題を P3-1 へ持ち越す旨を書く。
-- 表示 % の丸め(§3)が人間の確認で変わったら、`DisplayPercent` と本 ADR §3、
+- 観測%の丸め(§3.1)が人間の確認で変わったら、`ObservedPercent` と本 ADR §3.1、
   および Recall テストの期待値を同時に更新する(理由はコミットメッセージに書く。テストは緩めない)。
+  表示%(§3.2)はユーザーが決めた仕様なので、実機の確認結果では変わらない。
+
+### P1-11(表示%の分離)で変わるもの
+
+- `engine`: `DisplayPercent` を `ObservedPercent` へ改名(挙動は同じ)。
+  `DisplayPercentTenthsFloor` / `DisplayPercentTenthsRound` /
+  `DamageResult.DisplayPercentRangeTenths` / `KOChance.DisplayChancePercentTenths` を追加。
+  `ReverseCandidate.MinPercent` / `MaxPercent` を `MinPercentTenths` / `MaxPercentTenths` に
+  改名し、値を表示%にする。**照合(§6)とゴールデン(`make test-golden`)は変えない。**
+- `engine/wasmapi`: 表示%を小数第1位で出す(ADR-0011 §3)。`ko.displayChancePercent` を追加。
+  ベクタ(`testdata/vectors.json`)は変更なし(`schemaVersion` は 2 のまま)。
+- `api/openapi.yaml`: `CalcResult.minPercent` / `maxPercent` の description に丸めを明記。
+  `KOChance.displayChancePercent` を追加(required)。`make gen` で生成物を更新。
+- 逆算の**入力**(観測%)は変更なし。Recall@5 の基準(§7)も変更なし。
