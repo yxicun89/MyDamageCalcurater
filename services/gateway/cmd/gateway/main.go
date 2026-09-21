@@ -106,6 +106,13 @@ func loadConfig(lookup func(string) (string, bool)) (config, error) {
 			return config{}, fmt.Errorf("%w: %s は正でなければならない(%s)", errInvalidConfig, envUpstreamTimeout, raw)
 		}
 	}
+	// 任意7: 上流の応答待ちタイムアウトが http.Server の書き込みタイムアウト以上だと、
+	// 上流がタイムアウトぎりぎりまで粘ったときに WriteTimeout がクライアントへの応答を
+	// 先に打ち切ってしまう(本文の転送を打ち切らないという ADR-0202 §5 の方針に反する)。
+	if timeout >= writeTimeout {
+		return config{}, fmt.Errorf("%w: %s(%s)は http.Server の書き込みタイムアウト(%s)より短くなければならない",
+			errInvalidConfig, envUpstreamTimeout, timeout, writeTimeout)
+	}
 
 	return config{
 		Addr: addr,

@@ -155,6 +155,59 @@ func TestCORSPreflight(t *testing.T) {
 	}
 }
 
+// 必須1: 上流が独自の Access-Control-* を返しても、gateway の外へは出さない。
+// 許可オリジンなら gateway 自身の ACAO(ちょうど1つ)に付け替え、許可外なら CORS ヘッダを一切付けない
+// (calc・/assets の両方。上流が `*` を返す場合と、別オリジンを反射して返す場合の両方を確かめる)。
+func TestCORSStripsUpstreamHeaders(t *testing.T) {
+	upstreamCORSVariants := []struct {
+		name   string
+		header http.Header
+	}{
+		{"上流が * を返す", http.Header{"Access-Control-Allow-Origin": []string{"*"}}},
+		{"上流が別オリジンを反射して返す", http.Header{
+			"Access-Control-Allow-Origin": []string{disallowedOrigin},
+			"Vary":                        []string{"Origin"},
+		}},
+	}
+	routes := []struct {
+		name         string
+		method       string
+		path         string
+		target       string // "calc" / "assets"
+		baseHeader   http.Header
+		requiresBody bool
+	}{
+		{"calc", http.MethodPost, "/api/calc", "calc", validHeaders(), true},
+		{"assets", http.MethodGet, "/assets/0445-000.webp", "assets", http.Header{}, false},
+	}
+	for _, route := range routes {
+		for _, variant := range upstreamCORSVariants {
+			t.Run(route.name+"/"+variant.name+"/許可オリジン", func(t *testing.T) {
+				env := newTestEnv(t)
+				target := map[string]*fakeUpstream{"calc": env.calc, "assets": env.assets}[route.target]
+				target.respond(upstreamResponse{status: http.StatusOK, contentType: "application/json", body: `{}`, header: variant.header})
+				var body []byte
+				if route.requiresBody {
+					body = []byte(`{}`)
+				}
+				rec := serve(t, env.handler, route.method, route.path, withOrigin(route.baseHeader, allowedOrigin), body)
+				assertCORSAllowed(t, rec, allowedOrigin)
+			})
+			t.Run(route.name+"/"+variant.name+"/許可外オリジン", func(t *testing.T) {
+				env := newTestEnv(t)
+				target := map[string]*fakeUpstream{"calc": env.calc, "assets": env.assets}[route.target]
+				target.respond(upstreamResponse{status: http.StatusOK, contentType: "application/json", body: `{}`, header: variant.header})
+				var body []byte
+				if route.requiresBody {
+					body = []byte(`{}`)
+				}
+				rec := serve(t, env.handler, route.method, route.path, withOrigin(route.baseHeader, disallowedOrigin), body)
+				assertNoCORS(t, rec)
+			})
+		}
+	}
+}
+
 // AC-G6: CORS 未設定なら、許可オリジンと同じ Origin の単純リクエストにも CORS ヘッダを付けない。
 func TestCORSDisabledWhenNoOrigins(t *testing.T) {
 	env := newTestEnv(t, func(c *Config) { c.CORSAllowedOrigins = nil })

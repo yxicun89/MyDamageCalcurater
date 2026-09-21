@@ -49,7 +49,9 @@
   gateway は `/api/calc` の中の操作を知らない(メソッド違い・未知の下位パスの判定は上流に任せる)。
 - **ドットセグメント**(`.` / `..` のセグメント)を含むパスは 404 `not_found` にし、どの上流にも送らない
   (`/api/calc/../../healthz` のような経路で上流の運用エンドポイントや他のルートに抜けさせない)。
-- 判定の順序: ルーティング(未知のパスは 404。ヘッダが無くても 404)→ ヘッダ検証(`/api/*` だけ)→ 上流の有無(pokedex 未設定は 503)→ 転送。
+- 判定の順序: CORS プリフライト(`OPTIONS` + `Access-Control-Request-Method`。ここで 204 を返し、以降には進まない)→
+  ドットセグメント拒否 → ルーティング(未知のパスは 404。ヘッダが無くても 404)→ ヘッダ検証(`/api/*` だけ)→
+  上流の有無(pokedex 未設定は 503)→ 転送。
 
 ### 4. ヘッダ検証(`/api/*` のみ)
 
@@ -64,12 +66,16 @@
 
 - 接続できない・タイムアウト(`GATEWAY_UPSTREAM_TIMEOUT`。上流の応答ヘッダが届くまでの上限。本文の転送は打ち切らない)→
   503 `upstream_unavailable`(Error 形式。Go の内部情報[dial・アドレス・context のエラー文]を message に出さない)。
-- 上流が返したレスポンス(4xx / 5xx を含む)はステータス・ヘッダ・ボディをそのまま返す(gateway は書き換えない)。
+- 上流が返したレスポンス(4xx / 5xx を含む)はステータス・ヘッダ・ボディをそのまま返す(gateway は書き換えない。ただし CORS ヘッダは §6 のとおり付け替える)。
+- 転送は `httputil.ReverseProxy` の `Rewrite`(`Director` は非推奨)を使い、`ProxyRequest.SetURL` で Host を上流のホストに書き換え、
+  `SetXForwarded` でクライアントが送った `X-Forwarded-For` / `X-Forwarded-Host` / `X-Forwarded-Proto` を信用せず実際の値に付け替える。
 
 ### 6. CORS
 
 - 許可オリジンに**完全一致**する `Origin` のときだけ `Access-Control-Allow-Origin: <そのオリジン>` と `Vary: Origin` を付ける。
   上流の応答・gateway 自身のエラー・`/assets` のどれにも付ける(ブラウザがエラー本文を読めるように)。
+- 上流を経由する応答は、上流が独自に付けた `Access-Control-*`(誤った `*` や別オリジンの反射を含む)を`ReverseProxy.ModifyResponse`
+  で全部取り除いてから、許可オリジンのときだけ gateway 自身の ACAO を1つだけ付け直す(上流の判断をそのまま外へ出さない)。
 - プリフライト(OPTIONS + `Access-Control-Request-Method`)は 204(本文なし)で、上流に送らない。許可オリジンなら
   `Access-Control-Allow-Methods: GET, POST, OPTIONS`、`Access-Control-Allow-Headers: Content-Type, X-Device-Id, X-Session-Id`、
   `Access-Control-Max-Age: 600`。許可外のオリジン・CORS 未設定なら CORS ヘッダ無しの 204(ブラウザが拒否する)。

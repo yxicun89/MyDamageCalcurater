@@ -137,6 +137,10 @@ func TestLoadConfigRejects(t *testing.T) {
 		{"TIMEOUT が文字列", envWith(func(e map[string]string) { e[envUpstreamTimeout] = "abc" })},
 		{"TIMEOUT が 0", envWith(func(e map[string]string) { e[envUpstreamTimeout] = "0s" })},
 		{"TIMEOUT が負", envWith(func(e map[string]string) { e[envUpstreamTimeout] = "-1s" })},
+		// 任意7: 上流タイムアウトは http.Server の WriteTimeout より短くなければならない
+		// (等しい場合も含めて拒否。本文の転送を先に打ち切らないため)。
+		{"TIMEOUT が WriteTimeout と等しい", envWith(func(e map[string]string) { e[envUpstreamTimeout] = writeTimeout.String() })},
+		{"TIMEOUT が WriteTimeout より長い", envWith(func(e map[string]string) { e[envUpstreamTimeout] = "5m" })},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

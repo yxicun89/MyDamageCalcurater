@@ -151,6 +151,12 @@ func TestUnroutedPathsAreNotFound(t *testing.T) {
 		{"ドットセグメントで /healthz へ", http.MethodGet, "/api/calc/../../healthz", validHeaders()},
 		{"ドットセグメントで /api/balance へ", http.MethodGet, "/api/calc/../balance", validHeaders()},
 		{"ドットセグメントで assets から api へ", http.MethodGet, "/assets/../api/calc", http.Header{}},
+		// 推奨5: パーセントエンコードされたドットセグメント(net/url が Path をデコードするので
+		// 平文の ".." と同じに見える。抜け道にならないことを確かめる)。
+		{"エンコードされたドットセグメントで /healthz へ", http.MethodGet, "/api/calc/%2e%2e/%2e%2e/healthz", validHeaders()},
+		{"エンコードされたスラッシュを含むドットセグメント", http.MethodGet, "/api/calc%2f..%2fhealthz", validHeaders()},
+		{"エンコードされたドットセグメントで assets から api へ", http.MethodGet, "/assets/..%2fapi/calc", http.Header{}},
+		{"一部だけエンコードされたドットセグメント", http.MethodGet, "/api/calc/.%2e/pokedex", validHeaders()},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

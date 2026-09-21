@@ -2,7 +2,7 @@
 
 クライアント(Web / iOS)の唯一の入口。`/api/calc`・`/api/pokedex`・`/assets` を各上流へ転送し、`/api/*` の
 `X-Device-Id` / `X-Session-Id`(UUID)を検証し、CORS に答える。設計は
-[ADR-0202](../../docs/adr/0020-gateway-routing-and-headers.md)。契約は `api/openapi.yaml`(gateway 経由のパス)。
+[ADR-0202](../../docs/adr/0202-gateway-routing-and-headers.md)。契約は `api/openapi.yaml`(gateway 経由のパス)。
 
 ## 起動
 

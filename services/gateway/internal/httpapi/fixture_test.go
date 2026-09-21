@@ -37,6 +37,7 @@ type recordedRequest struct {
 	Method   string
 	Path     string
 	RawQuery string
+	Host     string // 上流が受け取った Host(推奨3: クライアントの Host ではなく上流のホストになる)
 	Header   http.Header
 	Body     []byte
 }
@@ -74,7 +75,7 @@ func (f *fakeUpstream) serve(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
 	f.mu.Lock()
 	f.reqs = append(f.reqs, recordedRequest{
-		Method: r.Method, Path: r.URL.Path, RawQuery: r.URL.RawQuery, Header: r.Header.Clone(), Body: body,
+		Method: r.Method, Path: r.URL.Path, RawQuery: r.URL.RawQuery, Host: r.Host, Header: r.Header.Clone(), Body: body,
 	})
 	resp := f.resp
 	f.mu.Unlock()
