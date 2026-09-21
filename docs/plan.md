@@ -48,7 +48,7 @@
   - [x] R-2-4 ドメイン定数に名前を付けて集約(75/20/2048/6144/8192、プリセットの 32)
   - [x] R-2-5 小さな可読性の是正(`Version` の重複、空コメント、`real` の改名、`AllStatKeys` の可変性)
   - [x] R-2-7 ADR の追記・修正(タイプ相性表=ADR-0012、engine の Label=ADR-0009 §1-a、内輪の表現の修正、ADR-0002 の第三者データ抜粋の削除)
-  - [ ] R-2-8 Go の module path を公開用プレースホルダ(`example.com/pokecalc/...`)に置換(3つの go.mod・import・go.work・テストの import 検査。Codex の `services/balance` は取り込み時に合わせる)。ユーザー決定: アカウント名は公開しない
+  - [x] R-2-8 Go の module path を公開用プレースホルダ(`example.com/pokecalc/...`)に置換(3つの go.mod・import・go.work・テストの import 検査。Codex の `services/balance` は取り込み時に合わせる)。ユーザー決定: アカウント名は公開しない
   - [ ] R-2-9 Git 履歴の書き換え(作者名・メールを公開用 identity に、履歴内のアカウント名を含む文字列を置換)。**実行前に**: 全体のバックアップ(bundle。リポジトリ外)、Codex の作業(`pokecalc-codex-tb0` worktree)と `main` worktree の扱いをユーザーと調整。ユーザー決定: 履歴を書き換える
 - [ ] R-3 `make check-publishable`(秘密情報・絶対パス・個人情報・追跡してはいけないファイルの検査。`make lint` から呼ぶ)
 
