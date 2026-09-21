@@ -1,5 +1,5 @@
-// P4-4: 逆算の観測の入力(ADR-0016 §7、ADR-0010 §R2)。観測は整数%(1〜100)か、HP の実点数(1 以上の整数)。
-// 小数の表示%は観測に使わない(ADR-0016 §7)ので、画面の入力は整数だけを受け付け、engine に渡す前に弾く。
+// P4-4: 逆算の観測の入力(ADR-0300 §7、ADR-0010 §R2)。観測は整数%(1〜100)か、HP の実点数(1 以上の整数)。
+// 小数の表示%は観測に使わない(ADR-0300 §7)ので、画面の入力は整数だけを受け付け、engine に渡す前に弾く。
 // engine に渡す Observation は percent / damage のちょうど1つを持つ(percentTenths は画面から使わない)。
 
 import type { Observation, ReverseSide } from "../engine/types";

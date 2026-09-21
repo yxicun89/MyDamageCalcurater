@@ -1,7 +1,7 @@
 // P4-2: engine に渡すリクエストの組み立て(純粋関数)。形は ADR-0011 §3 の WASM 境界の DTO
 // (engine/wasmapi/dto.go・requests.go)。境界は未知のフィールドを拒否する(unknown_field)ので、
 // 画面のための追加フィールド(learnset)を engine に渡さないことも確かめる。
-// 一括計算は presetKeys / presets を省き、engine の既定(技の分類で HB 系 / HD 系の5行)を使う(ADR-0009、ADR-0016 §6)。
+// 一括計算は presetKeys / presets を省き、engine の既定(技の分類で HB 系 / HD 系の5行)を使う(ADR-0009、ADR-0300 §6)。
 
 import { describe, expect, test } from "vitest";
 import type { Ability, Individual, Item, Move, Nature, TypeChart } from "../engine/types";
@@ -245,7 +245,7 @@ describe("buildCalcRequest", () => {
   });
 });
 
-describe("defensiveItemCandidates(ADR-0016 §6。効果データから選び、ID・名前では選ばない)", () => {
+describe("defensiveItemCandidates(ADR-0300 §6。効果データから選び、ID・名前では選ばない)", () => {
   const items: Item[] = [
     { id: "example-def", nameJa: "テスト防御", effect: { statMods: { def: 6144 } } },
     { id: "example-spd", nameJa: "テスト特防", effect: { statMods: { spd: 6144 } } },

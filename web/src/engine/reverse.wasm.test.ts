@@ -1,10 +1,10 @@
-// P4-4: 逆算の WASM 結合テスト(ADR-0016 §7・§8、ADR-0010 §R、ADR-0011 §3 calcReverse)。
+// P4-4: 逆算の WASM 結合テスト(ADR-0300 §7・§8、ADR-0010 §R、ADR-0011 §3 calcReverse)。
 // Web が組み立てた逆算リクエスト(buildReverseRequest・reverseItemCandidates)を本物の engine.wasm に通し、
 // 結果の形(候補数 = 2 × 持ち物候補、SP の範囲は 0〜32 の昇順・互いに素な区間、性格クラス)と、
 // 観測を足すと一致候補が絞られること(requirements.md「同じ相手の観測を複数入力すると候補を絞り込める」)を確かめる。
 // 観測は架空の値ではなく、既知の調整を calc に通して得た本物のダメージから作る(整数%は切り捨て。
 // engine の観測は丸め規則に依存しない区間で照合する。ADR-0010 §R2)。
-// 前提(web/public/engine.wasm・wasm_exec.js)が無ければスキップせず失敗する(CLAUDE.md、ADR-0016 §8)。
+// 前提(web/public/engine.wasm・wasm_exec.js)が無ければスキップせず失敗する(CLAUDE.md、ADR-0300 §8)。
 //
 // 実行: make web-test-wasm(vitest.wasm.config.ts、node 環境)
 

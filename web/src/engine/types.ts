@@ -1,6 +1,6 @@
-// WASM 境界の DTO を TypeScript で書いたもの(ADR-0016 §2、契約は ADR-0011 §3・§13)。
+// WASM 境界の DTO を TypeScript で書いたもの(ADR-0300 §2、契約は ADR-0011 §3・§13)。
 // engine/wasmapi/dto.go・requests.go のフィールド名(lowerCamelCase)と1対1に対応させる。
-// WASM 境界は HTTP を通らず OpenAPI の契約ではないので、ここは手書きの型が正(ADR-0016 §2)。
+// WASM 境界は HTTP を通らず OpenAPI の契約ではないので、ここは手書きの型が正(ADR-0300 §2)。
 // ずれは engine/wasmEngine.wasm.test.ts(本物の engine.wasm との結合テスト)が検出する。
 
 /** 対戦形式(engine.Format と同じ文字列)。 */
@@ -284,7 +284,7 @@ export type EngineResult<T> =
   { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: EngineError };
 
 /**
- * 画面が依存する計算の差し替え口(ADR-0016 §2)。WASM 実装(createWasmEngine)と、
+ * 画面が依存する計算の差し替え口(ADR-0300 §2)。WASM 実装(createWasmEngine)と、
  * 将来の API 実装(P4-5)が同じ形で後ろに入る。画面は実装を知らない。
  */
 export interface CalcEngine {

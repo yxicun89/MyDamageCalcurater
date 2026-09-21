@@ -1,5 +1,5 @@
 // マスタの相性表データ(@typechart、testdata/golden/typechart.json)を engine の TypeChart DTO に変換する
-// (ADR-0016 §3、ADR-0011 §13)。schemaVersion・source・note・excludedTypes などの説明用フィールドは
+// (ADR-0300 §3、ADR-0011 §13)。schemaVersion・source・note・excludedTypes などの説明用フィールドは
 // engine の境界に渡さない(DisallowUnknownFields → unknown_field。ADR-0011 §4)。
 
 import type { TypeChart } from "../engine/types";

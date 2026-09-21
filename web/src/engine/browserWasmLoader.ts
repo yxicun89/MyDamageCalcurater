@@ -1,4 +1,4 @@
-// P4-2: ブラウザの WasmLoader 実装(ADR-0016 §2)。`make wasm` が web/public/ に出す
+// P4-2: ブラウザの WasmLoader 実装(ADR-0300 §2)。`make wasm` が web/public/ に出す
 // /wasm_exec.js を script 要素で読み、/engine.wasm を fetch して WebAssembly.instantiateStreaming で実体化する。
 
 import type { WasmLoader } from "./wasmEngine";

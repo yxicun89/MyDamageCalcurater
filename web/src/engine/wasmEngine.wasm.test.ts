@@ -1,6 +1,6 @@
-// P4-2: WASM 結合テスト(ADR-0016 §8)。Web が組み立てたリクエストを本物の engine.wasm(`make wasm` の成果物)に
+// P4-2: WASM 結合テスト(ADR-0300 §8)。Web が組み立てたリクエストを本物の engine.wasm(`make wasm` の成果物)に
 // 通し、成功の封筒と結果の形を確かめる。計算の数値の正しさはゴールデンと Go/WASM 一致テストの役割なので見ない。
-// 前提(web/public/engine.wasm・wasm_exec.js)が無ければスキップせず失敗する(CLAUDE.md、ADR-0016 §8)。
+// 前提(web/public/engine.wasm・wasm_exec.js)が無ければスキップせず失敗する(CLAUDE.md、ADR-0300 §8)。
 //
 // 実行: make web-test-wasm(vitest.wasm.config.ts、node 環境)
 
@@ -35,7 +35,7 @@ let engine: CalcEngine;
 let master: MasterData;
 
 beforeAll(async () => {
-  // 前提(engine.wasm・wasm_exec.js)が無ければスキップせず失敗する(CLAUDE.md、ADR-0016 §8)。
+  // 前提(engine.wasm・wasm_exec.js)が無ければスキップせず失敗する(CLAUDE.md、ADR-0300 §8)。
   requireWasmArtifacts();
   engine = createWasmEngine(fileWasmLoader());
   master = await exampleMasterSource.load();
@@ -213,7 +213,7 @@ describe("calc(1対1)", () => {
   });
 });
 
-// P4-3: 攻撃側プリセット(ADR-0016 §5)で組み立てた攻撃側が engine に受理され、強さの順
+// P4-3: 攻撃側プリセット(ADR-0300 §5)で組み立てた攻撃側が engine に受理され、強さの順
 // (無振り ≤ A(C)振り(無補正) ≤ A(C)特化)に並ぶこと。数値の正しさはゴールデンの役割なので、
 // Web が「強くなる順の入力」を組み立てたことだけを単調性で確かめる。
 describe("calcBulk(攻撃側プリセット。P4-3)", () => {

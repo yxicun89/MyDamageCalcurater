@@ -11,8 +11,8 @@ test("アプリが描画される", () => {
   expect(screen.getByRole("main")).toBeInTheDocument();
 });
 
-// P4-2: App はヘッダーと計算画面を出す。マスタは MasterSource(既定は架空の例データ。ADR-0016 §3)から、
-// 計算は CalcEngine(既定は browserWasmLoader の WASM 実装。ADR-0016 §2)から受け取り、テストでは差し替える。
+// P4-2: App はヘッダーと計算画面を出す。マスタは MasterSource(既定は架空の例データ。ADR-0300 §3)から、
+// 計算は CalcEngine(既定は browserWasmLoader の WASM 実装。ADR-0300 §2)から受け取り、テストでは差し替える。
 describe("P4-2 計算画面の組み込み", () => {
   function deferredMasterSource(): {
     source: MasterSource;
@@ -56,7 +56,7 @@ describe("P4-2 計算画面の組み込み", () => {
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toBeInTheDocument();
   });
 
-  test("既定の engine(WASM)でも、描画〜マスタ読み込みの間は engine.wasm を読まない(計算するまで遅らせる。ADR-0016 §2)", async () => {
+  test("既定の engine(WASM)でも、描画〜マスタ読み込みの間は engine.wasm を読まない(計算するまで遅らせる。ADR-0300 §2)", async () => {
     // fetch(/engine.wasm の取得)と script 要素の追加(/wasm_exec.js の読み込み)のどちらも
     // 計算を始めるまで起きないはず。実際に監視して確かめる(読み込みタイミングの実装が壊れたら検出する)。
     const fetchSpy = vi.spyOn(globalThis, "fetch");
@@ -91,7 +91,7 @@ describe("P4-2 計算画面の組み込み", () => {
   });
 });
 
-// P4-4: 計算と逆算の切り替え(ADR-0016 §7)。タブ(role=tab)「計算」「逆算」で切り替え、既定は計算。
+// P4-4: 計算と逆算の切り替え(ADR-0300 §7)。タブ(role=tab)「計算」「逆算」で切り替え、既定は計算。
 // どちらの画面も App が持つ同じ engine・master を使う。
 describe("P4-4 計算・逆算の切り替え", () => {
   test("既定は「計算」タブで、計算画面を出す", async () => {

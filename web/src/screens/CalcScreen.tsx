@@ -1,8 +1,8 @@
-// P4-2/P4-3: 計算画面(docs/design.md「画面: ダメージ計算」、ADR-0016 §2・§5・§6)。
+// P4-2/P4-3: 計算画面(docs/design.md「画面: ダメージ計算」、ADR-0300 §2・§5・§6)。
 // engine には CalcEngine(差し替え口)、マスタには MasterData(いまは架空の例データ)を渡してもらう。
 // 攻撃側は攻撃側プリセット(domain/attackerPresets.ts、既定は無振り)の Key を選び、SP・性格は
-// 今の技の分類から導出する(P4-3、ADR-0016 §5)。
-// 返ってきた値は加工せずに表示する(ADR-0016 §8)。技の相性・確定数の言葉も engine の値をそのまま使う。
+// 今の技の分類から導出する(P4-3、ADR-0300 §5)。
+// 返ってきた値は加工せずに表示する(ADR-0300 §8)。技の相性・確定数の言葉も engine の値をそのまま使う。
 
 import { useEffect, useId, useMemo, useState, type ReactElement, type ReactNode } from "react";
 import {
@@ -37,7 +37,7 @@ import "./CalcScreen.css";
 /** 技を選んでいないときの、攻撃側プリセット表示用の仮の分類(A/C 表記の既定は物理と同じ)。 */
 const DEFAULT_MOVE_CATEGORY: MoveCategory = "physical";
 
-/** 計算画面(design.md「画面: ダメージ計算」)。engine と master は呼び出し側が注入する(ADR-0016 §2・§3)。 */
+/** 計算画面(design.md「画面: ダメージ計算」)。engine と master は呼び出し側が注入する(ADR-0300 §2・§3)。 */
 export interface CalcScreenProps {
   readonly engine: CalcEngine;
   readonly master: MasterData;
@@ -82,7 +82,7 @@ function resolveMoveId(species: MasterSpecies | null, moves: readonly Move[], cu
   return firstDamagingMove(species, moves)?.id ?? "";
 }
 
-/** 計算画面(design.md「画面: ダメージ計算」、ADR-0016 §2・§6)。攻撃側・防御側・技が揃うと自動で計算する。 */
+/** 計算画面(design.md「画面: ダメージ計算」、ADR-0300 §2・§6)。攻撃側・防御側・技が揃うと自動で計算する。 */
 export function CalcScreen({ engine, master }: CalcScreenProps) {
   const [attackerKey, setAttackerKey] = useState("");
   const [defenderKey, setDefenderKey] = useState("");
@@ -90,7 +90,7 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
   const [defenderItemId, setDefenderItemId] = useState("");
   const [moveId, setMoveId] = useState("");
   const [compareItems, setCompareItems] = useState(false);
-  // 攻撃側プリセットの Key だけを持ち、攻撃側・技・攻守入れ替えでは変えない(ADR-0016 §5、
+  // 攻撃側プリセットの Key だけを持ち、攻撃側・技・攻守入れ替えでは変えない(ADR-0300 §5、
   // CalcScreen.test.tsx「攻撃側のプリセット(P4-3)」)。表示名・SP・性格は今の技の分類から毎レンダー導出する。
   const [attackerPresetKey, setAttackerPresetKey] = useState<AttackerPresetKey>(DEFAULT_ATTACKER_PRESET);
   // calcBulk の応答だけを state に持つ。idle・status-move・loading は入力から毎レンダー導出する
@@ -137,7 +137,7 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
     setMoveId((prev) => resolveMoveId(newAttackerSpecies, master.moves, prev));
   }
 
-  // 攻撃側・防御側・ダメージ技が揃ったら calcBulk を呼ぶ(ADR-0016 §2・§6)。
+  // 攻撃側・防御側・ダメージ技が揃ったら calcBulk を呼ぶ(ADR-0300 §2・§6)。
   // setState は応答が届いたとき(.then のコールバック)だけで行い、effect の本体では呼ばない
   // (react-hooks/set-state-in-effect)。入力が変わるたびに実行し直し、古い応答が新しい表示を
   // 上書きしないよう cancelled で無視する。idle・status-move は下の outcome で入力から直接導出する。
@@ -198,7 +198,7 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
   ]);
 
   // idle・status-move は選ばれている入力から直接決まる。completed が無い、または今の入力と違う入力の
-  // 応答(初回の読み込み中・入力を変えた直後)は loading にし、古い行を出さない(ADR-0016 §8)。
+  // 応答(初回の読み込み中・入力を変えた直後)は loading にし、古い行を出さない(ADR-0300 §8)。
   let outcome: Outcome;
   if (attackerSpecies === null || defenderSpecies === null || move === null) {
     outcome = { status: "idle" };
@@ -367,7 +367,7 @@ interface AttackerPresetSelectorProps {
 }
 
 /**
- * 攻撃側プリセットのピル型ラジオグループ(design.md「入力はタップで選ぶ」、ADR-0016 §5)。
+ * 攻撃側プリセットのピル型ラジオグループ(design.md「入力はタップで選ぶ」、ADR-0300 §5)。
  * 選んでいるのは Key で、表示名は今の技の分類(category)から導出する
  * (CalcScreen.test.tsx「A特化のまま特殊技に替えると…」)。
  */
@@ -438,7 +438,7 @@ interface ResultsSectionProps {
 }
 
 /**
- * 計算結果の表示(ADR-0016 §8: 返ってきた値を加工せずに表示する)。loading は、新しい入力に対する
+ * 計算結果の表示(ADR-0300 §8: 返ってきた値を加工せずに表示する)。loading は、新しい入力に対する
  * 応答をまだ待っている間、古い行を出さないための表示(CalcScreen.test.tsx「入力を変えたら…」)。
  */
 function ResultsSection({ outcome, items, moveType }: ResultsSectionProps): ReactElement | null {
@@ -480,7 +480,7 @@ interface ResultsListProps {
 const DAMAGE_BAR_MAX_PERCENT = 100;
 
 /**
- * 行一覧(ADR-0016 §8: engine の順のまま、加工せずに表示)。技の相性(effectiveness)は調整(preset)や
+ * 行一覧(ADR-0300 §8: engine の順のまま、加工せずに表示)。技の相性(effectiveness)は調整(preset)や
  * 持ち物のバリアントが変わっても同じ値になる(防御側の種族・技のタイプだけで決まる)ため、行ごとに
  * 繰り返さず、結果全体の先頭行の値を1回だけ表示する。
  */

@@ -1,4 +1,4 @@
-// P4-2: WASM の計算実装 createWasmEngine(ADR-0016 §2、境界の契約は ADR-0011 §2〜§5)。
+// P4-2: WASM の計算実装 createWasmEngine(ADR-0300 §2、境界の契約は ADR-0011 §2〜§5)。
 // wasm_exec.js(Go ランタイム)を起動し、engine/cmd/wasm が登録する globalThis.pokecalc の3関数を
 // JSON 文字列1つで呼ぶ(ADR-0011 §2)。読み込みは初回の計算時に1回だけ行い、同時の初回呼び出しも
 // 1回の読み込みを共有する。読み込みに失敗しても例外にせず、次の計算で読み込みをやり直せるようにする
@@ -15,7 +15,7 @@ import type {
   ReverseResult,
 } from "./types";
 
-/** ブラウザ/Node の違いを注入する読み込み口(ADR-0016 §2)。 */
+/** ブラウザ/Node の違いを注入する読み込み口(ADR-0300 §2)。 */
 export interface WasmLoader {
   /** wasm_exec.js(Go ランタイム)を読み込み、globalThis.Go を使えるようにする。 */
   loadRuntime(): Promise<void>;
@@ -136,7 +136,7 @@ function parseEnvelope<T>(responseJSON: string): EngineResult<T> {
 }
 
 /**
- * WASM 実装の CalcEngine(ADR-0016 §2)。loader はブラウザ(browserWasmLoader)と
+ * WASM 実装の CalcEngine(ADR-0300 §2)。loader はブラウザ(browserWasmLoader)と
  * Node の結合テスト(ファイルから読む loader)で差し替える。
  */
 export function createWasmEngine(loader: WasmLoader): CalcEngine {

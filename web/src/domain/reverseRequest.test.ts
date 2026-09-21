@@ -1,4 +1,4 @@
-// P4-4: 逆算リクエストの組み立て(純粋関数。ADR-0011 §3 calcReverse、ADR-0010 §R、ADR-0016 §7)。
+// P4-4: 逆算リクエストの組み立て(純粋関数。ADR-0011 §3 calcReverse、ADR-0010 §R、ADR-0300 §7)。
 // 境界は未知のフィールドを拒否する(unknown_field)ので、画面のための learnset を渡さない。
 // maxCandidates は渡さない(engine は 2 × 持ち物候補数を全部返す。候補は高々十数件で切る必要がない)。
 

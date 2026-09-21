@@ -1,11 +1,11 @@
-// P4-2: 計算画面(docs/design.md「画面: ダメージ計算」、requirements.md「相手側の一括表示」、ADR-0016 §2・§6)。
-// engine は fake(ADR-0016 §8)。マスタは架空の例データ(exampleMasterSource)を使い、特定の名前には依存しない。
+// P4-2: 計算画面(docs/design.md「画面: ダメージ計算」、requirements.md「相手側の一括表示」、ADR-0300 §2・§6)。
+// engine は fake(ADR-0300 §8)。マスタは架空の例データ(exampleMasterSource)を使い、特定の名前には依存しない。
 // 確かめること:
 //   - 左右のカード(ポケモン・タイプ・エンブレム・持ち物)と技セレクタ
-//   - 攻撃側・防御側・ダメージ技が揃ったら calcBulk を1回呼び、そのリクエストの中身(ADR-0016 §2・§6、ADR-0009)
+//   - 攻撃側・防御側・ダメージ技が揃ったら calcBulk を1回呼び、そのリクエストの中身(ADR-0300 §2・§6、ADR-0009)
 //   - 返ってきた行を加工せずに表示(調整名・%幅・ダメージバー・確定数)
 //   - 持ち物の候補の比較、攻守入れ替え、エラー表示、古い応答で新しい表示を上書きしないこと
-// 攻撃側の既定は無振り・無補正。攻撃側プリセットの選択(P4-3、ADR-0016 §5)は末尾の describe で確かめる。
+// 攻撃側の既定は無振り・無補正。攻撃側プリセットの選択(P4-3、ADR-0300 §5)は末尾の describe で確かめる。
 
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
@@ -144,7 +144,7 @@ describe("技セレクタ", () => {
 });
 
 describe("計算の呼び出し", () => {
-  test("開いた時点では計算しない(engine.wasm の読み込みを初回の計算まで遅らせる。ADR-0016 §2)", () => {
+  test("開いた時点では計算しない(engine.wasm の読み込みを初回の計算まで遅らせる。ADR-0300 §2)", () => {
     const { engine } = renderScreen();
     expect(engine.bulkRequests).toHaveLength(0);
     expect(screen.queryByRole("list", { name: "計算結果" })).toBeNull();
@@ -393,7 +393,7 @@ describe("結果の表示(engine の値を加工せずに出す)", () => {
     expect(screen.queryByText("古い結果")).toBeNull();
   });
 
-  test("入力を変えると、応答が届くまで古い行を消して「計算中」を出す(ADR-0016 §8)", async () => {
+  test("入力を変えると、応答が届くまで古い行を消して「計算中」を出す(ADR-0300 §8)", async () => {
     const { engine, pending } = createDeferredEngine();
     const { user } = renderScreen(engine);
     const attacker = master.species.find(
@@ -441,7 +441,7 @@ describe("結果の表示(engine の値を加工せずに出す)", () => {
   });
 });
 
-describe("防御側の持ち物(ADR-0016 §6)", () => {
+describe("防御側の持ち物(ADR-0300 §6)", () => {
   test("トグルなしで防御側の持ち物を選ぶと、itemVariants はその持ち物1つで、行に持ち物名を出す", async () => {
     const { user, engine } = renderScreen();
     const item = master.items[0];
@@ -538,7 +538,7 @@ describe("攻守入れ替え", () => {
   });
 });
 
-// P4-3: 攻撃側(自分側)のプリセット(ADR-0016 §5、requirements.md「自分側のプリセット」)。
+// P4-3: 攻撃側(自分側)のプリセット(ADR-0300 §5、requirements.md「自分側のプリセット」)。
 // 決めたこと:
 //   - 選択は攻撃側カードの中のラジオグループ(名前「攻撃側の調整」)。design.md「入力はタップで選ぶ」のピル型を想定し、
 //     select ではなく radio にする。既定は無振り。

@@ -1,4 +1,4 @@
-// P4-4: 逆算画面(docs/design.md「画面: 逆算」、requirements.md「調整の推定(逆算)」、ADR-0016 §7、ADR-0010 §R)。
+// P4-4: 逆算画面(docs/design.md「画面: 逆算」、requirements.md「調整の推定(逆算)」、ADR-0300 §7、ADR-0010 §R)。
 // engine には CalcEngine、マスタには MasterData を渡してもらう(App.tsx が CalcScreen と同じものを共有する)。
 //
 // 「自分」は常に既知側(engine.known)、「相手」は常に未知側(engine.unknownSpecies)。技も常に攻撃側(相手を
@@ -52,7 +52,7 @@ import "./ReverseScreen.css";
 /** 技を選んでいないときの、自分の調整の表示用の仮の分類(A/C 表記の既定は物理と同じ)。 */
 const DEFAULT_MOVE_CATEGORY: MoveCategory = "physical";
 
-/** 逆算画面(design.md「画面: 逆算」)。engine と master は呼び出し側が注入する(ADR-0016 §2・§3)。 */
+/** 逆算画面(design.md「画面: 逆算」)。engine と master は呼び出し側が注入する(ADR-0300 §2・§3)。 */
 export interface ReverseScreenProps {
   readonly engine: CalcEngine;
   readonly master: MasterData;
@@ -114,7 +114,7 @@ function resolveMoveId(species: MasterSpecies | null, moves: readonly Move[], cu
   return firstDamagingMove(species, moves)?.id ?? "";
 }
 
-/** 逆算画面(design.md「画面: 逆算」、ADR-0016 §2・§7)。自分・相手・観測したダメージの側が揃うと自動で逆算する。 */
+/** 逆算画面(design.md「画面: 逆算」、ADR-0300 §2・§7)。自分・相手・観測したダメージの側が揃うと自動で逆算する。 */
 export function ReverseScreen({ engine, master }: ReverseScreenProps) {
   const [side, setSide] = useState<ReverseSide>("defender");
   const [mySpeciesKey, setMySpeciesKey] = useState("");
@@ -207,7 +207,7 @@ export function ReverseScreen({ engine, master }: ReverseScreenProps) {
     setObservations((prev) => prev.map((row, rowIndex) => (rowIndex === index ? { ...row, unit } : row)));
   }
 
-  // 自分・相手・技(ダメージ技)・有効な観測が1件以上揃ったら calcReverse を呼ぶ(ADR-0016 §2・§7)。
+  // 自分・相手・技(ダメージ技)・有効な観測が1件以上揃ったら calcReverse を呼ぶ(ADR-0300 §2・§7)。
   // setState は応答が届いたとき(.then のコールバック)だけで行う(react-hooks/set-state-in-effect)。
   useEffect(() => {
     if (
@@ -575,7 +575,7 @@ interface ResultsSectionProps {
   readonly items: readonly Item[];
 }
 
-/** 結果の表示(ADR-0016 §8: 返ってきた値を加工せずに表示する)。invalid は観測の不正行がある間、何も出さない。 */
+/** 結果の表示(ADR-0300 §8: 返ってきた値を加工せずに表示する)。invalid は観測の不正行がある間、何も出さない。 */
 function ResultsSection({ outcome, items }: ResultsSectionProps): ReactElement | null {
   switch (outcome.status) {
     case "idle":
@@ -610,7 +610,7 @@ interface ReverseResultsListProps {
   readonly items: readonly Item[];
 }
 
-/** 候補一覧(ADR-0016 §8: engine の順のまま、加工せずに表示)。防御側は H32 前提の注記を添える。 */
+/** 候補一覧(ADR-0300 §8: engine の順のまま、加工せずに表示)。防御側は H32 前提の注記を添える。 */
 function ReverseResultsList({ result, items }: ReverseResultsListProps) {
   const assumptionNote = reverseAssumptionNote(result);
   return (

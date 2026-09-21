@@ -1,7 +1,7 @@
 // P4-2: engine に渡すリクエストの組み立て(純粋関数)。形は ADR-0011 §3 の WASM 境界の DTO
 // (engine/wasmapi/dto.go・requests.go)。境界は未知のフィールドを拒否する(unknown_field)ので、
 // 画面のための追加フィールド(learnset)を engine に渡さない(toEngineSpecies)。
-// 一括計算は presetKeys / presets を省き、engine の既定(技の分類で HB 系 / HD 系の5行)を使う(ADR-0009、ADR-0016 §6)。
+// 一括計算は presetKeys / presets を省き、engine の既定(技の分類で HB 系 / HD 系の5行)を使う(ADR-0009、ADR-0300 §6)。
 
 import type {
   Ability,
@@ -86,7 +86,7 @@ export interface BuildBulkRequestInput {
   readonly defenderSpecies: MasterSpecies;
   readonly move: Move;
   readonly typeChart: TypeChart;
-  /** 防御側の持ち物の差し替え候補(ADR-0016 §6)。省くと engine は持ち物なしの5行を返す。 */
+  /** 防御側の持ち物の差し替え候補(ADR-0300 §6)。省くと engine は持ち物なしの5行を返す。 */
   readonly itemVariants?: ReadonlyArray<Item | null>;
 }
 
@@ -117,7 +117,7 @@ export function buildCalcRequest(input: BuildCalcRequestInput): CalcRequest {
 }
 
 /**
- * 防御側の持ち物候補の判定(ADR-0016 §6。技の分類に対応する防御側ステータス(物理→def、特殊→spd)を
+ * 防御側の持ち物候補の判定(ADR-0300 §6。技の分類に対応する防御側ステータス(物理→def、特殊→spd)を
  * 上げる、または技のタイプを半減する(resistBerryType が技のタイプと一致))。変化技には対応する
  * 防御側ステータスが無いので候補にしない。この1つの定義を defensiveItemCandidates(このファイル、
  * CalcScreen 用)と domain/reverseItems.ts の防御側の判定(逆算の持ち物候補)が共有する
@@ -137,7 +137,7 @@ export function isDefensiveItemCandidate(item: Item, move: Move): boolean {
 }
 
 /**
- * 防御側の持ち物の差し替え候補(ADR-0016 §6)。ID・名前では選ばず、効果データから選ぶ
+ * 防御側の持ち物の差し替え候補(ADR-0300 §6)。ID・名前では選ばず、効果データから選ぶ
  * (isDefensiveItemCandidate)。マスタの順序をそのまま使う(並べ替えない)。
  */
 export function defensiveItemCandidates(items: readonly Item[], move: Move): Item[] {
@@ -154,7 +154,7 @@ export interface DefenderItemVariantsInput {
 }
 
 /**
- * 一括計算に渡す itemVariants を、選んだ持ち物と「候補も比較」のトグルから決める(ADR-0016 §6)。
+ * 一括計算に渡す itemVariants を、選んだ持ち物と「候補も比較」のトグルから決める(ADR-0300 §6)。
  * 比較なしで持ち物も選ばなければ undefined を返す(engine に itemVariants を渡さず、既定の持ち物なし5行にする)。
  */
 export function defenderItemVariants(

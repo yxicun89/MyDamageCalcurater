@@ -1,4 +1,4 @@
-// P4-4: 逆算の持ち物候補(ADR-0016 §7、requirements.md「逆算の持ち物候補」)。ID・名前では選ばず、効果データから選ぶ。
+// P4-4: 逆算の持ち物候補(ADR-0300 §7、requirements.md「逆算の持ち物候補」)。ID・名前では選ばず、効果データから選ぶ。
 //   防御側(side defender)= なし / 技の分類の防御側ステータス(物理→def、特殊→spd)を上げる / 技のタイプの半減きのみ
 //   攻撃側(side attacker)= なし / ダメージ倍率(damageMod)/ 分類の威力(powerMod。powerCategory が技の分類か全分類)
 //                          / 技のタイプの強化(boostType が技のタイプ)

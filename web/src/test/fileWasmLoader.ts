@@ -1,6 +1,6 @@
-// テスト専用: Node で本物の engine.wasm(`make wasm` の成果物)を読む WasmLoader(ADR-0016 §8 の WASM 結合テスト)。
+// テスト専用: Node で本物の engine.wasm(`make wasm` の成果物)を読む WasmLoader(ADR-0300 §8 の WASM 結合テスト)。
 // ブラウザの browserWasmLoader と同じ2段階(wasm_exec.js の実行 → engine.wasm のインスタンス化)を、ファイルから行う。
-// 前提のファイルが無ければスキップせず失敗させる(requireWasmArtifacts。CLAUDE.md、ADR-0016 §8)。
+// 前提のファイルが無ければスキップせず失敗させる(requireWasmArtifacts。CLAUDE.md、ADR-0300 §8)。
 
 import { existsSync, readFileSync } from "node:fs";
 import vm from "node:vm";

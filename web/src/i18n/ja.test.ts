@@ -1,4 +1,4 @@
-// P4-1: タイプの表示名は web/src/i18n/ja.ts の文言資源が ID → 表示名で持つ(ADR-0016 §4)。
+// P4-1: タイプの表示名は web/src/i18n/ja.ts の文言資源が ID → 表示名で持つ(ADR-0300 §4)。
 // 一覧は相性表のデータ(testdata/golden/typechart.json の types)が正で、表示名はその全 ID を過不足なく覆う。
 
 import { expect, test } from "vitest";

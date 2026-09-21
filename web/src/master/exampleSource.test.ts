@@ -1,4 +1,4 @@
-// P4-2: 架空の例データ(web/src/master/example/)と exampleMasterSource(ADR-0016 §3)。
+// P4-2: 架空の例データ(web/src/master/example/)と exampleMasterSource(ADR-0300 §3)。
 // 実マスタを Git に置かない(ADR-0002)ため、名前は「テスト」で始め、ID は「example-」で始め、
 // 図鑑番号は実在と重ならない 9001 以降にする。タイプ相性表だけは架空にせず @typechart を読む。
 // 形(DTO の契約どおりか)は wasmEngine.wasm.test.ts が本物の engine に通して確かめる。
@@ -10,7 +10,7 @@ import { exampleMasterSource } from "./exampleSource";
 import { typeChartFromData } from "./typeChart";
 import type { MasterData } from "./types";
 
-/** 架空データの名前・ID・図鑑番号の規則(ADR-0016 §3)。 */
+/** 架空データの名前・ID・図鑑番号の規則(ADR-0300 §3)。 */
 const namePrefix = "テスト";
 const idPrefix = "example-";
 const firstFictionalDexNo = 9001;

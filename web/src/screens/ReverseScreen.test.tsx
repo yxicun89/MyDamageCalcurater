@@ -1,5 +1,5 @@
-// P4-4: 逆算画面(docs/design.md「画面: 逆算」、requirements.md「調整の推定(逆算)」、ADR-0016 §7、ADR-0010 §R)。
-// engine は fake(ADR-0016 §8)。マスタは架空の例データ(exampleMasterSource)で、特定の名前には依存しない。
+// P4-4: 逆算画面(docs/design.md「画面: 逆算」、requirements.md「調整の推定(逆算)」、ADR-0300 §7、ADR-0010 §R)。
+// engine は fake(ADR-0300 §8)。マスタは架空の例データ(exampleMasterSource)で、特定の名前には依存しない。
 // 確かめること:
 //   - 「与えたダメージ」= side defender(自分 = 攻撃側、技は自分の learnset、自分の調整は攻撃側プリセット)
 //     「受けたダメージ」= side attacker(自分 = 防御側で SP 0・補正なし、技は相手の learnset)

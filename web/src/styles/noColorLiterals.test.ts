@@ -1,4 +1,4 @@
-// P4-1: 色の値は CSS(tokens.css の CSS 変数)にだけ置く。TypeScript 側に色を書かない(ADR-0016 §4)。
+// P4-1: 色の値は CSS(tokens.css の CSS 変数)にだけ置く。TypeScript 側に色を書かない(ADR-0300 §4)。
 
 import { readFileSync, readdirSync } from "node:fs";
 import { localPath } from "../test/localPath";

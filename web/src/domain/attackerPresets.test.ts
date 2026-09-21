@@ -1,4 +1,4 @@
-// P4-3: 攻撃側(自分側)のプリセット(ADR-0016 §5、requirements.md「自分側のプリセット」)。
+// P4-3: 攻撃側(自分側)のプリセット(ADR-0300 §5、requirements.md「自分側のプリセット」)。
 // 3件(none / x_full / x)の順序、技の分類ごとの SP・性格、表示名を確かめる。
 // X は技の分類で決まる関連ステータス(物理 = atk、特殊 = spa)。下降補正は ADR-0010 §R1 の代表性格と同じ
 // (X が atk なら spa、spa なら atk)。
@@ -23,7 +23,7 @@ function spTotal(sp: Stats): number {
 }
 
 describe("カタログ", () => {
-  test("3件で、順序は none → x_full → x(ADR-0016 §5 の表の順)", () => {
+  test("3件で、順序は none → x_full → x(ADR-0300 §5 の表の順)", () => {
     expect(ATTACKER_PRESET_KEYS).toEqual(["none", "x_full", "x"]);
   });
 

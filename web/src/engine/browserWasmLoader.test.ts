@@ -1,4 +1,4 @@
-// P4-2: ブラウザの読み込み口 browserWasmLoader(ADR-0016 §2)。
+// P4-2: ブラウザの読み込み口 browserWasmLoader(ADR-0300 §2)。
 // `make wasm` が web/public/ に出す /wasm_exec.js を script 要素で読み、/engine.wasm を fetch して
 // WebAssembly.instantiateStreaming で実体化する。本物のファイルは読まず、DOM と fetch を観察する。
 

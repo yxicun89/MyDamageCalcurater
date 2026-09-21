@@ -1,5 +1,5 @@
 // アンビエント型宣言(P4-2)。
-// - "@typechart": vite.config.ts の別名(testdata/golden/typechart.json、ADR-0016 §3)。
+// - "@typechart": vite.config.ts の別名(testdata/golden/typechart.json、ADR-0300 §3)。
 // - Go / pokecalc / pokecalcReady: wasm_exec.js(Go ランタイム)と engine/cmd/wasm が
 //   登録するグローバル(ADR-0011 §2)。値は web/src/engine/wasmEngine.ts だけが読む。
 //

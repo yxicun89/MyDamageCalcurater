@@ -1,7 +1,7 @@
-# ADR-0016: Web(P4)の構成 — WASM 先行・計算の差し替え口・架空マスタ・攻撃側プリセット
+# ADR-0300: Web(P4)の構成 — WASM 先行・計算の差し替え口・架空マスタ・攻撃側プリセット
 
 - 状態: 採用(Web レーン、2026-09-21。§5 の攻撃側プリセットの置き場と §9 の `make test` への組み込みは DECISIONS.md に既定案付きで提案)
-- 日付: 2026-09-21
+- 日付: 2026-09-21(2026-09-22 に ADR 番号の帯の規則(COORDINATION.md)に合わせて 0016 から 0300 に振り直した)
 - 関連: plan.md P4-1〜P4-7、docs/design.md、docs/requirements.md「自分側のプリセット」「相手側の一括表示」「調整の推定」、
   ADR-0009(防御プリセット)、ADR-0010 §R(逆算)、ADR-0011(WASM 境界)、ADR-0013(相性表はデータ)、
   docs/ai-shared/COORDINATION.md「レーン間の依存と共有ファイル」、docs/coding-rules.md

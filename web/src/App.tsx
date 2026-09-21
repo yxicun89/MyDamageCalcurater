@@ -1,5 +1,5 @@
 // アプリの最上位(P4-2)。ヘッダーと計算画面を出す。マスタは MasterSource(既定は架空の例データ)から、
-// 計算は CalcEngine(既定は WASM 実装)から受け取り、テストでは差し替える(ADR-0016 §2・§3)。
+// 計算は CalcEngine(既定は WASM 実装)から受け取り、テストでは差し替える(ADR-0300 §2・§3)。
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import "./App.css";
@@ -12,17 +12,17 @@ import type { MasterData, MasterSource } from "./master/types";
 import { CalcScreen } from "./screens/CalcScreen";
 import { ReverseScreen } from "./screens/ReverseScreen";
 
-/** 計算・逆算の切り替えタブ(P4-4、ADR-0016 §7)。既定は計算。 */
+/** 計算・逆算の切り替えタブ(P4-4、ADR-0300 §7)。既定は計算。 */
 type ScreenTab = "calc" | "reverse";
 
 /** タブの定義順(ロービング tabIndex・矢印キーの移動順。WAI-ARIA Authoring Practices の Tabs パターン)。 */
 const TAB_ORDER: readonly ScreenTab[] = ["calc", "reverse"];
 
-/** App の props(テストで engine・masterSource を差し替える。ADR-0016 §2・§3)。 */
+/** App の props(テストで engine・masterSource を差し替える。ADR-0300 §2・§3)。 */
 export interface AppProps {
   /** 計算の差し替え口。省くと WASM 実装(ブラウザから wasm_exec.js / engine.wasm を読む)。 */
   readonly engine?: CalcEngine;
-  /** マスタの取得口。省くと架空の例データ(ADR-0016 §3)。 */
+  /** マスタの取得口。省くと架空の例データ(ADR-0300 §3)。 */
   readonly masterSource?: MasterSource;
 }
 

@@ -1,4 +1,4 @@
-// P4-2: WASM の計算実装 createWasmEngine(ADR-0016 §2、境界の契約は ADR-0011 §2〜§5)。
+// P4-2: WASM の計算実装 createWasmEngine(ADR-0300 §2、境界の契約は ADR-0011 §2〜§5)。
 // 本物の engine.wasm は使わず、Go ランタイム(wasm_exec.js の globalThis.Go)と
 // engine/cmd/wasm が登録する globalThis.pokecalc を fake に置き換えて、次を確かめる:
 //   - 読み込みは初回の計算時に1回だけ(同時の初回呼び出しも1回の読み込みを共有する)

@@ -1,7 +1,7 @@
 /*
  * デザイントークン(CSS 変数)。
  * 値の正は docs/design.md「デザイントークン」。iOS(SwiftUI の Color/Font 拡張)と同じ名前・同じ値を使う
- * (docs/design.md 冒頭、ADR-0016 §4)。色は必ずこのファイルの `--*` 定義の中だけに書き、
+ * (docs/design.md 冒頭、ADR-0300 §4)。色は必ずこのファイルの `--*` 定義の中だけに書き、
  * それ以外の宣言や TypeScript には書かない(コーディング規約 §2、web/src/styles/noColorLiterals.test.ts)。
  */
 

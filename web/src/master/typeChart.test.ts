@@ -1,5 +1,5 @@
 // P4-2: タイプ相性表のデータ(testdata/golden/typechart.json、Vite の別名 @typechart)を
-// engine の TypeChart DTO({types, effectiveness})に変換する(ADR-0016 §3、ADR-0011 §13、ADR-0013)。
+// engine の TypeChart DTO({types, effectiveness})に変換する(ADR-0300 §3、ADR-0011 §13、ADR-0013)。
 // typechart.json は schemaVersion・source・note・excludedTypes などの説明用フィールドも持つが、
 // engine の境界は未知のフィールドを拒否する(DisallowUnknownFields → unknown_field)ので、2つだけを渡す。
 

@@ -1,4 +1,4 @@
-// 画面の文言資源(日本語)。タイプの表示名はここに ID → 表示名で持つ(ADR-0016 §4)。
+// 画面の文言資源(日本語)。タイプの表示名はここに ID → 表示名で持つ(ADR-0300 §4)。
 // タイプの一覧(どの ID が存在するか)は相性表のデータ(testdata/golden/typechart.json の types)が正であり、
 // ここでは全 ID を過不足なく覆う対応表だけを持つ(コーディング規約 §2: マスタをコードに埋め込まない)。
 // TypeId のユニオンは手書きの複製だが、相性表と過不足なく一致することを ja.test.ts が検査して同期を保つ
@@ -82,12 +82,12 @@ export const calcScreenText = {
   movePowerLabel: "威力",
   /** 入力が揃い calcBulk の応答待ちのときに出す文言(古い行を出さず、これに差し替える)。 */
   loadingNotice: "計算中",
-  /** 攻撃側プリセットのラジオグループの名前(P4-3、ADR-0016 §5)。 */
+  /** 攻撃側プリセットのラジオグループの名前(P4-3、ADR-0300 §5)。 */
   attackerPresetGroupLabel: "攻撃側の調整",
 } as const;
 
 /**
- * 攻撃側プリセット(domain/attackerPresets.ts、P4-3、ADR-0016 §5)の文言。
+ * 攻撃側プリセット(domain/attackerPresets.ts、P4-3、ADR-0300 §5)の文言。
  * X は技の分類で決まる関連ステータス(物理・変化 = atk、特殊 = spa)。
  */
 export const attackerPresetText = {
@@ -106,7 +106,7 @@ export const appText = {
   title: "ポケモン ダメージ計算",
   loading: "読み込み中…",
   masterLoadError: "マスタデータの読み込みに失敗しました",
-  /** 計算・逆算の切り替えタブ(P4-4、ADR-0016 §7)。 */
+  /** 計算・逆算の切り替えタブ(P4-4、ADR-0300 §7)。 */
   tabsLabel: "画面の切り替え",
   calcTabLabel: "計算",
   reverseTabLabel: "逆算",
@@ -123,7 +123,7 @@ export const statLetterJa: Record<StatKey, string> = {
 };
 
 /**
- * 逆算画面(P4-4、ADR-0016 §7、ADR-0010 §R)の入力まわりの文言。
+ * 逆算画面(P4-4、ADR-0300 §7、ADR-0010 §R)の入力まわりの文言。
  * n を含む語は行番号(1始まり)から作る関数にする(観測は複数行あるため)。
  */
 export const reverseScreenText = {
