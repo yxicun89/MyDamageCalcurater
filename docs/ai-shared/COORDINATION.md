@@ -21,8 +21,9 @@
 | **API**(damage calc: サービス) | `~/MyDamageCalcurater-api` | `feat/api-<phase名>` | Phase 3(`services/calc/`・`services/gateway/`・契約テスト・k3d のスモーク)。**`api/openapi.yaml` と生成物(`services/internal/api/`)を変更できるのはこのレーンだけ** |
 | **Web**(damage calc: 画面) | `~/MyDamageCalcurater-web` | `feat/web-<phase名>` | Phase 4(`web/`・Playwright)。`make wasm` の成果物を使う |
 | **タイプバランス**(type balance) | `~/MyDamageCalcurater-tb`(同じリポジトリの git worktree) | `feat/tb-<stage名>`(既存の `feat/codex-tb0-foundation` はマージまでそのまま使う) | `services/balance/` とその Kustomize / Argo CD 定義。設計の正は `docs/type-balance-design.md` |
+| **iOS**(damage calc: iOS アプリ) | `~/MyDamageCalcurater-ios` | `feat/ios-<phase名>` | M3 の Phase 6(`ios/`)。API クライアントは `api/openapi.yaml` から swift-openapi-generator で生成し、手で書かない。署名・実機インストールは人間(CLAUDE.md) |
 
-- ディレクトリはレーンの数だけ(いまは4つ)にする。レーンの作業ディレクトリは、どの AI が使ってもよい(同時に2つのセッションで開かない)。
+- ディレクトリはレーンの数だけ(いまは5つ)にする。レーンの作業ディレクトリは、どの AI が使ってもよい(同時に2つのセッションで開かない)。
 - レーンの worktree が無いときは作る: `git -C ~/MyDamageCalcurater worktree add ~/MyDamageCalcurater-<レーン> <ブランチ>`
 
 ### レーン間の依存と共有ファイル(4レーン。2026-09-21 ユーザー決定)
@@ -30,6 +31,8 @@
 - **他のレーンの範囲のファイルは変更しない**。必要な変更は `DECISIONS.md` に既定案付きの提案として書き、そのレーンに任せる。待たずに進めるため、暫定の境界(インターフェース・架空データ・fake)を自分のレーン内に置いてよい。
   - API レーン: マスタの読み込みは `services/internal/master`(データレーン)の写像が main に入るまで、自分の中の差し替え可能なインターフェースと架空データで作る。engine は変更せず、公開 API を呼ぶだけ。
   - Web レーン: 計算は WASM(`engine/wasmapi` の JSON 契約。ADR-0011)で先に作る。API の型が要る部分(P4-5)は、API レーンが `api/openapi.yaml` を更新して main に入れてから追従する。マスタ(種族・技の一覧)は pokedex-svc ができるまで架空データで作る。
+  - iOS レーン: API の契約は `api/openapi.yaml`(API レーンが持ち主)に追従するだけで変更しない。P3 のサーバーができるまでは生成クライアントに対するモック(架空データ)で画面を作る。
+    Xcode が無い間は Swift Package(生成クライアント・モデル・デザイントークン)と `swift test` の範囲で進め、Xcode プロジェクトとシミュレータのテスト(`make ios-test`)は Xcode の導入後に行う。デザイントークンの値は Web と同じ(docs/design.md)
   - データレーン: `api/openapi.yaml` を変えない。pokedex の API が要るときは DECISIONS.md で API レーンに提案する。
 - **両方が触る共有ファイル**:
   - `docs/plan.md`: 自分のレーンのタスクの行(とブロッカー節の自分の項目)だけを更新する。
@@ -128,4 +131,5 @@ cd ~/MyDamageCalcurater      && claude   # または codex(データレーン)
 cd ~/MyDamageCalcurater-api  && claude   # または codex(API レーン)
 cd ~/MyDamageCalcurater-web  && claude   # または codex(Web レーン)
 cd ~/MyDamageCalcurater-tb   && claude   # または codex(タイプバランスレーン)
+cd ~/MyDamageCalcurater-ios  && claude   # または codex(iOS レーン)
 ```

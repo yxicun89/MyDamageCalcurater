@@ -21,6 +21,13 @@ Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
 Status: 未着手(2026-09-21 にレーンを新設)
 Next: docs/plan.md の P4-1(docs/design.md のデザイントークンを CSS 変数に)から。P4-2〜P4-4 は WASM(make wasm の engine.wasm と engine/wasmapi の JSON 契約。ADR-0011)で先に作り、マスタ(種族・技・持ち物)は pokedex-svc ができるまで架空データで作る。P4-5 の API 接続は API レーンが api/openapi.yaml を main に入れてから
 
+## iOS
+Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
+Active: なし
+Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
+Status: 未着手(2026-09-21 にレーンを新設)。Xcode はユーザーが導入中(App Store)。導入後に `sudo xcode-select -s /Applications/Xcode.app` 等が要る
+Next: docs/plan.md の P6-1 から。Xcode が使えるか(`xcodebuild -version`)を最初に確認し、無ければ Swift Package(swift-openapi-generator で `api/openapi.yaml` から生成したクライアント・モデル・docs/design.md のデザイントークン)と `swift test` から始める。Xcode が使えるようになったら SwiftUI の Xcode プロジェクトとシミュレータのテスト(`make ios-test`)。サーバー(P3)ができるまで API はモック
+
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code

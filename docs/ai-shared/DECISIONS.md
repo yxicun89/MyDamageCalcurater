@@ -312,3 +312,10 @@ Decision(提案): `.gitignore` の `coverage.*` は `coverage.go` / `coverage.ts
 既定案: `coverage.*` を `coverage.out` と `coverage.html`(と各ツールの実際の出力名)に置き換える。持ち主はルートの共有ファイルなのでデータレーンが判断する。
 Reason: `git status` に出ないため、テストはローカルで通るのに clone すると壊れる状態になる。Web レーンの `coverage.ts` 等でも起きうる。
 Impact: タイプバランスレーンは回避のため本体を `offense.go` にした(変更不要)。他のレーンは、新しいファイルが `git status` に出ることを確かめてから commit する。
+
+## 2026-09-21: iOS レーンを追加して5レーンにする(ユーザー決定)
+Decision: M3 の Phase 6(`ios/`)を担当する iOS レーンを新設する(`~/MyDamageCalcurater-ios`、`feat/ios-<phase名>`)。API の契約は `api/openapi.yaml` に追従するだけで変更しない。
+サーバーができるまでは生成クライアントに対するモックで作る。Xcode が無い間は Swift Package と `swift test` の範囲で進める。
+Reason: ユーザーが「iOS も作りたいので iOS レーンも起動したい」と依頼し、Xcode を導入することにした(導入中)。
+Impact: COORDINATION.md のレーン表・依存の節・起動の目安、CURRENT_STATE.md に iOS 欄を追加。準備はタイプバランスレーンのセッションが行った(データレーンの4レーン化の規則に1行ずつ追加しただけ)。
+
