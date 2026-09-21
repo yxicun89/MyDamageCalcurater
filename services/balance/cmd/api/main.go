@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"example.com/pokecalc/services/balance/internal/httpapi"
+	"example.com/pokecalc/services/balance/internal/master"
 )
 
 const (
@@ -27,9 +28,10 @@ func main() {
 		port = "8080"
 	}
 
+	// TB1: the implementer wires pokemonTypeProviderFromEnv here (fail startup on error).
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           httpapi.New(),
+		Handler:           httpapi.New(httpapi.Dependencies{TypeChart: master.NewTemporaryTypeChart()}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,

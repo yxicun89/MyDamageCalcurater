@@ -11,12 +11,91 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for DefenseCategory.
+const (
+	Immune     DefenseCategory = "immune"
+	Neutral    DefenseCategory = "neutral"
+	QuadResist DefenseCategory = "quad_resist"
+	QuadWeak   DefenseCategory = "quad_weak"
+	Resist     DefenseCategory = "resist"
+	Weak       DefenseCategory = "weak"
+)
+
+// Valid indicates whether the value is a known member of the DefenseCategory enum.
+func (e DefenseCategory) Valid() bool {
+	switch e {
+	case Immune:
+		return true
+	case Neutral:
+		return true
+	case QuadResist:
+		return true
+	case QuadWeak:
+		return true
+	case Resist:
+		return true
+	case Weak:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DefenseMultiplier.
+const (
+	N0  DefenseMultiplier = "0"
+	N1  DefenseMultiplier = "1"
+	N12 DefenseMultiplier = "1/2"
+	N14 DefenseMultiplier = "1/4"
+	N2  DefenseMultiplier = "2"
+	N4  DefenseMultiplier = "4"
+)
+
+// Valid indicates whether the value is a known member of the DefenseMultiplier enum.
+func (e DefenseMultiplier) Valid() bool {
+	switch e {
+	case N0:
+		return true
+	case N1:
+		return true
+	case N12:
+		return true
+	case N14:
+		return true
+	case N2:
+		return true
+	case N4:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EffectSource.
+const (
+	Ability EffectSource = "ability"
+	Type    EffectSource = "type"
+)
+
+// Valid indicates whether the value is a known member of the EffectSource enum.
+func (e EffectSource) Valid() bool {
+	switch e {
+	case Ability:
+		return true
+	case Type:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ErrorCode.
 const (
 	InvalidRequest        ErrorCode = "invalid_request"
+	MasterUnavailable     ErrorCode = "master_unavailable"
 	MissingRequestContext ErrorCode = "missing_request_context"
 	RequestTooLarge       ErrorCode = "request_too_large"
-	Tb1NotImplemented     ErrorCode = "tb1_not_implemented"
+	UnknownPokemon        ErrorCode = "unknown_pokemon"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
@@ -24,11 +103,13 @@ func (e ErrorCode) Valid() bool {
 	switch e {
 	case InvalidRequest:
 		return true
+	case MasterUnavailable:
+		return true
 	case MissingRequestContext:
 		return true
 	case RequestTooLarge:
 		return true
-	case Tb1NotImplemented:
+	case UnknownPokemon:
 		return true
 	default:
 		return false
@@ -50,6 +131,72 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
+// Defines values for TypeId.
+const (
+	Bug      TypeId = "bug"
+	Dark     TypeId = "dark"
+	Dragon   TypeId = "dragon"
+	Electric TypeId = "electric"
+	Fairy    TypeId = "fairy"
+	Fighting TypeId = "fighting"
+	Fire     TypeId = "fire"
+	Flying   TypeId = "flying"
+	Ghost    TypeId = "ghost"
+	Grass    TypeId = "grass"
+	Ground   TypeId = "ground"
+	Ice      TypeId = "ice"
+	Normal   TypeId = "normal"
+	Poison   TypeId = "poison"
+	Psychic  TypeId = "psychic"
+	Rock     TypeId = "rock"
+	Steel    TypeId = "steel"
+	Water    TypeId = "water"
+)
+
+// Valid indicates whether the value is a known member of the TypeId enum.
+func (e TypeId) Valid() bool {
+	switch e {
+	case Bug:
+		return true
+	case Dark:
+		return true
+	case Dragon:
+		return true
+	case Electric:
+		return true
+	case Fairy:
+		return true
+	case Fighting:
+		return true
+	case Fire:
+		return true
+	case Flying:
+		return true
+	case Ghost:
+		return true
+	case Grass:
+		return true
+	case Ground:
+		return true
+	case Ice:
+		return true
+	case Normal:
+		return true
+	case Poison:
+		return true
+	case Psychic:
+		return true
+	case Rock:
+		return true
+	case Steel:
+		return true
+	case Water:
+		return true
+	default:
+		return false
+	}
+}
+
 // AnalyzeRequest defines model for AnalyzeRequest.
 type AnalyzeRequest struct {
 	Members []struct {
@@ -57,6 +204,38 @@ type AnalyzeRequest struct {
 		PokemonId string `json:"pokemonId"`
 	} `json:"members"`
 }
+
+// AnalyzeResponse defines model for AnalyzeResponse.
+type AnalyzeResponse struct {
+	// Members One entry per request member, in request order. Duplicated pokemonId values are kept.
+	Members []MemberDefense `json:"members"`
+
+	// TeamSummary One entry per attack type, in canonical type order (normal ... fairy).
+	TeamSummary []TeamSummaryEntry `json:"teamSummary"`
+}
+
+// DefenseCategory x4: quad_weak, x2: weak, x1: neutral, x1/2: resist, x1/4: quad_resist, x0: immune.
+type DefenseCategory string
+
+// DefenseEntry defines model for DefenseEntry.
+type DefenseEntry struct {
+	AttackType TypeId `json:"attackType"`
+
+	// Category x4: quad_weak, x2: weak, x1: neutral, x1/2: resist, x1/4: quad_resist, x0: immune.
+	Category DefenseCategory `json:"category"`
+
+	// Multiplier Exact display form of the defensive multiplier.
+	Multiplier DefenseMultiplier `json:"multiplier"`
+
+	// Source Origin of the multiplier. Always "type" in TB1; "ability" is reserved for TB3.
+	Source EffectSource `json:"source"`
+}
+
+// DefenseMultiplier Exact display form of the defensive multiplier.
+type DefenseMultiplier string
+
+// EffectSource Origin of the multiplier. Always "type" in TB1; "ability" is reserved for TB3.
+type EffectSource string
 
 // Error defines model for Error.
 type Error struct {
@@ -74,6 +253,31 @@ type Health struct {
 
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
+
+// MemberDefense defines model for MemberDefense.
+type MemberDefense struct {
+	// Defense One entry per attack type, in canonical type order (normal ... fairy).
+	Defense []DefenseEntry `json:"defense"`
+
+	// PokemonId Example: 9001-000
+	PokemonId string   `json:"pokemonId"`
+	Types     []TypeId `json:"types"`
+}
+
+// TeamSummaryEntry Per attack type team counts. weak = x2 and x4 members, quadWeak = x4 members (subset of weak),
+// resist = x1/2 and x1/4 members (immune excluded), immune = x0 members, neutral = x1 members.
+// Invariant: weak + resist + immune + neutral = number of members.
+type TeamSummaryEntry struct {
+	AttackType TypeId `json:"attackType"`
+	Immune     int    `json:"immune"`
+	Neutral    int    `json:"neutral"`
+	QuadWeak   int    `json:"quadWeak"`
+	Resist     int    `json:"resist"`
+	Weak       int    `json:"weak"`
+}
+
+// TypeId defines model for TypeId.
+type TypeId string
 
 // DeviceId defines model for DeviceId.
 type DeviceId = string

@@ -64,6 +64,14 @@ TB0 の契約は request を `pokemonId` のみにしている(claude-review.md�
 - 各倍率に `source`(`type` / `ability`)を付ける。TB1 では常に `type`(claude-review.md 指摘3、TB3 のための型)。
 - 同じ `pokemonId` の重複は許す(分析の入力として禁止する理由がない。種族の重複可否はレギュレーション依存で balance の責務外)。
 
+### 5. 細部(spec-writer が挙げた未決の確定。レーン内の実装判断)
+1. response の各メンバーの `types` は read model の順のまま返す(並べ替えない)。「正準順」は `defense` と `teamSummary` の攻撃タイプの並びを指す。
+2. read model の `pokemon` が空配列、またはキーが無いものは不正(起動時エラー)。空のマスタで起動して全件 422 になるのを防ぐ。
+3. `BALANCE_POKEMON_TYPES_PATH` が空文字のときは未設定と同じ扱い(Kubernetes の env で空値が入る場合と区別しない)。
+4. 判定順は ヘッダー(400)→ body(400/413)→ provider 未設定(503)→ ID 解決(422)→ 200。不正な request には provider の有無によらず 400 を返す。
+5. 上記以外の内部エラー(相性表の欠落・相性表や provider の想定外の失敗)は **500 `internal_error`**(message は固定文言。内部の詳細を返さない)。OpenAPI に 500 を追加する。
+6. 422 の message には、見つからなかった `pokemonId`(クライアント自身の入力)を含める。
+
 ## 未決(人間の判断が要るもの。既定案で進めている)
 - 共通マスタの配布方法(GitOps でデプロイした balance に、Git 管理外の実データをどう渡すか)。既定案: P2-2 の設計で決まる方法に合わせ、
   それまでは local overlay の example と、利用者が用意したファイルのマウントで運用する。

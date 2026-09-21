@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"example.com/pokecalc/services/balance/internal/api"
+	"example.com/pokecalc/services/balance/internal/balance"
 	"github.com/labstack/echo/v4"
 )
 
@@ -23,8 +24,17 @@ var pokemonIDPattern = regexp.MustCompile(`^\d{4}-\d{3}$`)
 
 var errRequestTooLarge = errors.New("request body exceeds 16 KiB")
 
-// New returns the TB0 HTTP handler. Analysis is intentionally introduced in TB1.
-func New() *echo.Echo {
+// Dependencies are the replaceable master-data boundaries of the HTTP adapter.
+// PokemonTypes may be nil: the service still starts, health stays 200, and
+// analyze answers 503 master_unavailable (ADR-0014 §2).
+type Dependencies struct {
+	TypeChart    balance.TypeChartProvider
+	PokemonTypes balance.PokemonTypeProvider
+}
+
+// New returns the HTTP handler.
+// TB1: deps are accepted but not yet used; the implementer wires them into analyze.
+func New(deps Dependencies) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
@@ -86,10 +96,7 @@ func analyze(c echo.Context) error {
 			})
 		}
 	}
-	return c.JSON(http.StatusNotImplemented, api.Error{
-		Code:    api.Tb1NotImplemented,
-		Message: "team balance analysis is introduced in TB1",
-	})
+	return c.NoContent(http.StatusNotImplemented) // TB1: not implemented
 }
 
 func requireRequestContext(next echo.HandlerFunc) echo.HandlerFunc {

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "pokemon": [
+    {"pokemonId": "9001-000", "types": ["fire", "flying"]},
+    {"pokemonId": "9002-000", "types": ["grass"]},
+    {"pokemonId": "9003-000", "types": ["water", "ground"]},
+    {"pokemonId": "9004-000", "types": ["normal", "ghost"]},
+    {"pokemonId": "9005-000", "types": ["ice"]},
+    {"pokemonId": "9006-000", "types": ["steel", "fairy"]},
+    {"pokemonId": "9006-001", "types": ["dragon", "flying"]}
+  ]
+}
