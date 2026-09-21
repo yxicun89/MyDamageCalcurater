@@ -150,6 +150,17 @@ for(let i=0;i<10000;i++) {
     a:{sp:randomSP(),nature:pick(['Serious','Adamant','Modest','Bold','Calm']),item:attackItem,ability:pick(['','Adaptability','Steelworker','Water Bubble']),burn:random()<0.2,ranks:rank()},
     d:{sp:randomSP(),nature:pick(['Serious','Adamant','Modest','Bold','Calm']),item:defendItem,ability:pick(['','Thick Fat','Filter','Solid Rock','Water Bubble']),ranks:rank()}}));
 }
+// ADR-0009 §1/§6: engine の DefenderPresetCatalog と同じ8件。名前は engine の PresetKey と同一文字列。
+const defensePresets=[
+  ['none',{}],
+  ['hp',{sp:{hp:32}}],
+  ['hb_boost',{sp:{hp:32},nature:'Bold'}],
+  ['hb',{sp:{hp:32,def:32}}],
+  ['hb_full',{sp:{hp:32,def:32},nature:'Bold'}],
+  ['hd_boost',{sp:{hp:32},nature:'Calm'}],
+  ['hd',{sp:{hp:32,spd:32}}],
+  ['hd_full',{sp:{hp:32,spd:32},nature:'Calm'}],
+];
 const attacks=[],defenses=[],statCases=[];
 for(const s of species) {
   // All gen9 data species/forms are reference inputs; Champions legality awaits P2.
@@ -159,7 +170,7 @@ for(const s of species) {
     for(const boosted of [false,true]) for(const d of defenderAnchors)
       attacks.push(vector(`attack/${s.id}/${m.id}/${boosted?'max':'zero'}/${id(d)}`,s.name,d,m.name,{a:boosted?{sp:{[atk]:32},nature:atk==='atk'?'Adamant':'Modest'}:{}}));
   }
-  for(const [a,m] of attackAnchors) for(const [preset,opt] of [['zero',{}],['h',{sp:{hp:32}}],['hb',{sp:{hp:32,def:32},nature:'Bold'}],['hd',{sp:{hp:32,spd:32},nature:'Calm'}]])
+  for(const [a,m] of attackAnchors) for(const [preset,opt] of defensePresets)
     defenses.push(vector(`defense/${s.id}/${id(a)}/${preset}`,a,s.name,m,{d:opt}));
   for(const k of keys) for(const sp of [0,1,31,32]) for(const modifier of ['neutral','plus','minus']) {
     const n=[...gen.natures].find(n=>modifier==='neutral'?n.plus===n.minus:modifier==='plus'?n.plus===k&&n.minus!==k:n.minus===k&&n.plus!==k);

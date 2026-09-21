@@ -115,8 +115,8 @@ Field   = {"weather":"none","terrain":"none",
 // calcBulk(ADR-0009)
 {"format":"single","attacker":Individual,"defenderSpecies":Species,"move":Move,
  "field":Field,"critical":false,
- "presets":[{"key":"hb","label":"HB特化","sp":Stats,"nature":Nature,"applies":"physical"}],
- "presetKeys":["none","hp","hb"],
+ "presets":[{"key":"hb_full","label":"HB特化","sp":Stats,"nature":Nature,"applies":"physical"}],
+ "presetKeys":["none","hp","hb_boost","hb","hb_full"],
  "itemVariants":[null, Item, Item]}
 
 // calcReverse(ADR-0010)
@@ -137,7 +137,7 @@ Field   = {"weather":"none","terrain":"none",
 
 // calcBulk
 {"result":{"defenderSpeciesKey":"blissey","rows":[
-  {"preset":"hb","presetLabel":"HB特化","itemId":"eviolite",
+  {"preset":"hb_full","presetLabel":"HB特化","itemId":"eviolite",
    "defender":{"sp":Stats,"nature":Nature,"stats":Stats},   // stats は engine.RealStats
    "result":{ /* calc と同じ CalcResult */ }}]}}
 
@@ -289,13 +289,18 @@ test-wasm: wasm ## Go と WASM の結果一致テスト(Node)
 - Node 側は期待値が `result` を持たないベクタがあれば先に落ちる。
   ネイティブ側が未実装のまま WASM 側と「同じエラー」で一致して緑になるのを防ぐ。
 
-ベクタは `engine/wasmapi/testdata/vectors.json`(schemaVersion 1)に 32 件。
+ベクタは `engine/wasmapi/testdata/vectors.json`(schemaVersion 1)に 33 件。
 
 | 系統 | 件数 | 中身 |
 |---|---|---|
 | ダメージ | 24 | `testdata/golden/fixed.json` から 20 件(天候4・フィールド・壁2・持ち物4・特性3・急所2・やけど・確定数)+ 手書き4(既定値省略・タイプ無効・変化技・半減相性) |
-| 一括 | 4 | 既定プリセット(物理/特殊)・`presetKeys` × `itemVariants`(null 込み)・カスタムプリセット |
+| 一括 | 5 | 既定プリセット(物理/特殊)・`presetKeys` × `itemVariants`(null 込み)・カスタムプリセット・`presetKeys` で D 系全キー |
 | 逆算 | 4 | defender%1回 / defender%2回 / defender 実点数 + 持ち物候補 / attacker 実点数 |
+
+- 2026-09-21(P1-10): ADR-0009 の防御プリセット再定義に合わせて一括のベクタを 4 → 5 件にし、
+  `hb_boost` / `hb` / `hb_full` / `hd_boost` / `hd` / `hd_full` を `presetKeys` で通すようにした。
+  §5 のとおり境界は `presetKeys` を列挙検証せず engine の sentinel に委ねているので、**境界側のコード変更は不要**。
+  新キーが境界を素通りすることをこのベクタで固定する。
 
 ダメージ系はゴールデンの固定ケースから機械変換した(フィールド名を lowerCamelCase にするだけ)。
 入力の出どころを1つにしておくと、P2 で種族集合を差し替えたときに同じ変換で作り直せる。

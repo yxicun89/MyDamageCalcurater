@@ -5,10 +5,21 @@ package engine
 // 一括計算(P1-7)のプリセット定義を、外部実装(@smogon/calc)と照合済みの
 // 防御側網羅ベクタ testdata/golden/defense-species.jsonl.gz と突き合わせる。
 //
-// ベクタは tools/golden/generate.mjs が
-//   zero = SP なし / 無補正、h = hp:32、hb = hp:32,def:32 + Bold、hd = hp:32,spd:32 + Calm
-// で生成している。engine の既定カタログ(ADR-0009)がこれと1文字でも違えば、
+// ベクタは tools/golden/generate.mjs が、ADR-0009 §6 の8件
+//   none     = SP なし          / Serious(無補正)
+//   hp       = hp:32            / Serious
+//   hb_boost = hp:32            / Bold
+//   hb       = hp:32, def:32    / Serious
+//   hb_full  = hp:32, def:32    / Bold
+//   hd_boost = hp:32            / Calm
+//   hd       = hp:32, spd:32    / Serious
+//   hd_full  = hp:32, spd:32    / Calm
+// で生成する。engine の既定カタログ(ADR-0009 §1)がこれと1文字でも違えば、
 // 一括計算の行はゴールデンと一致しない。ここで検出する。
+//
+// 件数・期待値を変えた理由: P1-10 の防御プリセット再定義(ユーザー決定)。
+// 旧ベクタは zero/h/hb/hd の4件で、旧 hb(Bold 込み)は新 hb_full、旧 hd(Calm 込み)は新 hd_full に相当する。
+// 改訂後のカタログは8件すべてが「SP と性格だけ」で定義されるため、全件を外部照合できる。
 
 import (
 	"encoding/json"
@@ -18,19 +29,72 @@ import (
 	"testing"
 )
 
-// golden のプリセット名 → engine のプリセットキー。
+// golden のベクタ名 → engine のプリセットキー。
+// ADR-0009 §6: ベクタ名は PresetKey と同一文字列にする(対応表は存在検査で済む)。
 var goldenDefensePresetKeys = map[string]PresetKey{
-	"zero": PresetNone,
-	"h":    PresetHP,
-	"hb":   PresetHB,
-	"hd":   PresetHD,
+	"none":     PresetNone,
+	"hp":       PresetHP,
+	"hb_boost": PresetHBBoost,
+	"hb":       PresetHB,
+	"hb_full":  PresetHBFull,
+	"hd_boost": PresetHDBoost,
+	"hd":       PresetHD,
+	"hd_full":  PresetHDFull,
+}
+
+// goldenDefensePresetsPerGroup は (種族 × 攻撃側アンカー) 1グループあたりのベクタ件数。
+const goldenDefensePresetsPerGroup = 8
+
+// goldenDefenseAnchors は防御側網羅ベクタの攻撃側アンカー数(generate.mjs の attackAnchors)。
+const goldenDefenseAnchors = 5
+
+// 外部照合(@smogon/calc)されているのがどのプリセットかを固定する。
+// ADR-0009 §6: 改訂後は既定カタログの全キーが golden のベクタ名として存在しなければならない。
+// カタログにプリセットを足したのに golden を足し忘れる、という退行をここで止める。
+func TestGoldenCoversEveryDefenderPreset(t *testing.T) {
+	catalog := DefenderPresetCatalog()
+	if len(catalog) != goldenDefensePresetsPerGroup {
+		t.Fatalf("カタログ件数=%d、golden の1グループ件数=%d。両方を同時に更新すること(ADR-0009 §6)",
+			len(catalog), goldenDefensePresetsPerGroup)
+	}
+	seen := map[PresetKey]string{}
+	for name, key := range goldenDefensePresetKeys {
+		if prev, dup := seen[key]; dup {
+			t.Errorf("プリセット %q に golden のベクタ名が2つ対応している: %q と %q", key, prev, name)
+		}
+		seen[key] = name
+	}
+	for _, p := range catalog {
+		name, ok := seen[p.Key]
+		if !ok {
+			t.Errorf("カタログの %q に対応する golden ベクタが無い(外部照合されていない)", p.Key)
+			continue
+		}
+		if name != string(p.Key) {
+			t.Errorf("golden ベクタ名 %q はプリセットキー %q と同じ文字列であること(ADR-0009 §6)", name, p.Key)
+		}
+	}
+	for key, name := range seen {
+		found := false
+		for _, p := range catalog {
+			if p.Key == key {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("golden ベクタ %q に対応するプリセット %q がカタログに無い", name, key)
+		}
+	}
 }
 
 func TestGoldenBulkDefenderPresets(t *testing.T) {
 	meta := readGoldenMetadata(t)
 	const file = "defense-species.jsonl.gz"
-	if meta.Files[file].Count != meta.SpeciesCount*20 {
-		t.Fatal("defense-species coverage incomplete")
+	wantCount := meta.SpeciesCount * goldenDefenseAnchors * goldenDefensePresetsPerGroup
+	if meta.Files[file].Count != wantCount {
+		t.Fatalf("defense-species coverage incomplete: count=%d want %d(種族 %d × アンカー %d × プリセット %d)",
+			meta.Files[file].Count, wantCount, meta.SpeciesCount, goldenDefenseAnchors, goldenDefensePresetsPerGroup)
 	}
 
 	var (
@@ -41,13 +105,16 @@ func TestGoldenBulkDefenderPresets(t *testing.T) {
 		failures int
 	)
 
-	// ベクタは (種族, 攻撃側アンカー) ごとに zero/h/hb/hd の4件が連続して並ぶ。
-	// その4件を1回の CalcBulk で再現し、全行を照合する。
+	// ベクタは (種族, 攻撃側アンカー) ごとにカタログ順の8件が連続して並ぶ。
+	// その8件を1回の CalcBulk で再現し、全行を照合する。
 	flush := func() {
 		if len(group) == 0 {
 			return
 		}
 		groups++
+		if len(group) != goldenDefensePresetsPerGroup {
+			t.Fatalf("%s: グループの件数=%d want %d(ベクタの並び順の前提が崩れた)", group[0].ID, len(group), goldenDefensePresetsPerGroup)
+		}
 		first := group[0]
 		in := BulkInput{
 			Format:          first.Input.Format,
@@ -121,8 +188,8 @@ func TestGoldenBulkDefenderPresets(t *testing.T) {
 	})
 	flush()
 
-	if groups != meta.SpeciesCount*5 {
-		t.Errorf("グループ数=%d want %d", groups, meta.SpeciesCount*5)
+	if groups != meta.SpeciesCount*goldenDefenseAnchors {
+		t.Errorf("グループ数=%d want %d", groups, meta.SpeciesCount*goldenDefenseAnchors)
 	}
 	if failures == 0 && rows != meta.Files[file].Count {
 		t.Errorf("照合した行数=%d want %d", rows, meta.Files[file].Count)

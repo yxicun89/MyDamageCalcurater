@@ -3,7 +3,7 @@ package engine
 // 一括計算(P1-7)。防御側の代表調整(プリセット)× 持ち物バリアントの全行を一度に返す。
 //
 // 要件(docs/requirements.md「相手側の一括表示」): 相手側は入力させず、
-// 無振り / H振り / HB特化(またはHD特化)/ H振り+B(D)補正 を並べて表示する。
+// 無振り / H振り / H振り+B(D)補正 / HB(HD)振り / HB(HD)特化 を並べて表示する。
 //
 // 設計は ADR-0009:
 //   - プリセット定義は引数(データ)として受け取る。既定値は engine の純粋関数として持ち、
@@ -29,13 +29,16 @@ var (
 // PresetKey は防御側の代表調整のキー。OpenAPI の DefenderPreset enum と1対1に対応する。
 type PresetKey string
 
+// ADR-0009 §1 のカタログ順(耐久が上がる順)に並べる。
 const (
 	PresetNone    PresetKey = "none"     // 無振り
 	PresetHP      PresetKey = "hp"       // H振り
-	PresetHB      PresetKey = "hb"       // HB特化
-	PresetHD      PresetKey = "hd"       // HD特化
-	PresetHBBoost PresetKey = "hb_boost" // H振り + B補正
-	PresetHDBoost PresetKey = "hd_boost" // H振り + D補正
+	PresetHBBoost PresetKey = "hb_boost" // H振り + B補正(H32 / B0 / B上昇性格)
+	PresetHB      PresetKey = "hb"       // HB振り(H32 / B32 / 補正なし)
+	PresetHBFull  PresetKey = "hb_full"  // HB特化(H32 / B32 / B上昇性格)
+	PresetHDBoost PresetKey = "hd_boost" // H振り + D補正(H32 / D0 / D上昇性格)
+	PresetHD      PresetKey = "hd"       // HD振り(H32 / D32 / 補正なし)
+	PresetHDFull  PresetKey = "hd_full"  // HD特化(H32 / D32 / D上昇性格)
 )
 
 // DefenderPreset は防御側の代表調整の定義。マスタのキー(性格ID等)は持たず、
@@ -84,16 +87,20 @@ type BulkResult struct {
 	Rows               []BulkRow
 }
 
-// DefenderPresetCatalog は既定のプリセット定義6件を耐久が上がる順に返す(ADR-0009)。
+// DefenderPresetCatalog は既定のプリセット定義を耐久が上がる順に返す(ADR-0009 §1)。
 // 呼び出しごとに新しいスライスを返し、呼び出し側の変更が次回に漏れないようにする。
+//
+// 期待値は engine/bulk_test.go の TestDefenderPresetCatalogDefinitions が正。
 func DefenderPresetCatalog() []DefenderPreset {
 	return []DefenderPreset{
 		{Key: PresetNone, Label: "無振り", SP: Stats{}, Nature: NatureNeutral},
 		{Key: PresetHP, Label: "H振り", SP: Stats{HP: 32}, Nature: NatureNeutral},
 		{Key: PresetHBBoost, Label: "H振り+B補正", SP: Stats{HP: 32}, Nature: Nature{Plus: StatDef, Minus: StatAtk}, Applies: CategoryPhysical},
-		{Key: PresetHB, Label: "HB特化", SP: Stats{HP: 32, Def: 32}, Nature: Nature{Plus: StatDef, Minus: StatAtk}, Applies: CategoryPhysical},
+		{Key: PresetHB, Label: "HB振り", SP: Stats{HP: 32, Def: 32}, Nature: NatureNeutral, Applies: CategoryPhysical},
+		{Key: PresetHBFull, Label: "HB特化", SP: Stats{HP: 32, Def: 32}, Nature: Nature{Plus: StatDef, Minus: StatAtk}, Applies: CategoryPhysical},
 		{Key: PresetHDBoost, Label: "H振り+D補正", SP: Stats{HP: 32}, Nature: Nature{Plus: StatSpD, Minus: StatAtk}, Applies: CategorySpecial},
-		{Key: PresetHD, Label: "HD特化", SP: Stats{HP: 32, SpD: 32}, Nature: Nature{Plus: StatSpD, Minus: StatAtk}, Applies: CategorySpecial},
+		{Key: PresetHD, Label: "HD振り", SP: Stats{HP: 32, SpD: 32}, Nature: NatureNeutral, Applies: CategorySpecial},
+		{Key: PresetHDFull, Label: "HD特化", SP: Stats{HP: 32, SpD: 32}, Nature: Nature{Plus: StatSpD, Minus: StatAtk}, Applies: CategorySpecial},
 	}
 }
 

@@ -101,7 +101,9 @@ func eachGoldenLine(t *testing.T, meta goldenMetadata, name string, consume func
 
 func TestGoldenDamage(t *testing.T) {
 	meta := readGoldenMetadata(t)
-	if meta.Files["random.jsonl.gz"].Count != 10000 || meta.Files["fixed.json"].Count < 200 || meta.Files["attack-species.jsonl.gz"].Count != meta.SpeciesCount*20 || meta.Files["defense-species.jsonl.gz"].Count != meta.SpeciesCount*20 {
+	// defense-species は P1-10 の防御プリセット再定義でグループあたり 4 → 8 件になった
+	// (種族 × 攻撃側アンカー5 × プリセット8)。ADR-0009 §6。
+	if meta.Files["random.jsonl.gz"].Count != 10000 || meta.Files["fixed.json"].Count < 200 || meta.Files["attack-species.jsonl.gz"].Count != meta.SpeciesCount*20 || meta.Files["defense-species.jsonl.gz"].Count != meta.SpeciesCount*40 {
 		t.Fatal("golden coverage incomplete")
 	}
 	for _, name := range []string{"fixed.json", "random.jsonl.gz", "attack-species.jsonl.gz", "defense-species.jsonl.gz"} {

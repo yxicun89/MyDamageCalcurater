@@ -94,8 +94,8 @@
       "sha256": "846ba7cff38b01af39f302e4270aac1b6d1bc2219c9ddc537b68b1b487b5f97a"
     },
     "defense-species.jsonl.gz": {
-      "count": 27840,
-      "sha256": "3937f4456cd16380dc9923ab316e06bb9dcd8c488d160dfb8a6380a454f9f572"
+      "count": 55680,
+      "sha256": "1b7c93b9d333d31df9e291287f1aee04fd24ef7982b0a716c00fe19574171cfb"
     },
     "stats-species.jsonl.gz": {
       "count": 100224,

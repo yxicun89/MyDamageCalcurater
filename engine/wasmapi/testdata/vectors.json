@@ -2462,7 +2462,9 @@
         "presetKeys": [
           "none",
           "hp",
-          "hb"
+          "hb_boost",
+          "hb",
+          "hb_full"
         ],
         "itemVariants": [
           null,
@@ -2572,7 +2574,7 @@
             "applies": ""
           },
           {
-            "key": "hb",
+            "key": "hb_full",
             "label": "HB特化",
             "sp": {
               "hp": 32,
@@ -2588,6 +2590,81 @@
             },
             "applies": "physical"
           }
+        ]
+      }
+    },
+    {
+      "name": "bulk/preset-keys-special-full",
+      "fn": "calcBulk",
+      "tags": [
+        "bulk"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "magmortar",
+            "types": [
+              "fire"
+            ],
+            "baseStats": {
+              "hp": 75,
+              "atk": 95,
+              "def": 67,
+              "spa": 125,
+              "spd": 95,
+              "spe": 83
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "spa",
+            "minus": "atk"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 32,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "defenderSpecies": {
+          "key": "abomasnow",
+          "types": [
+            "grass",
+            "ice"
+          ],
+          "baseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "move": {
+          "id": "flamethrower",
+          "nameJa": "かえんほうしゃ",
+          "type": "fire",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "presetKeys": [
+          "none",
+          "hp",
+          "hd_boost",
+          "hd",
+          "hd_full"
         ]
       }
     },

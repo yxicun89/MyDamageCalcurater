@@ -89,15 +89,25 @@ func rowKeys(rows []BulkRow) []PresetKey {
 
 // --- プリセット定義 -------------------------------------------------------
 
-// ADR-0009 §1 の既定カタログ。hb_boost / hd_boost は同 §2 の仮定(人間の確認待ち)。
+// ADR-0009 §1(2026-09-21 改訂)の既定カタログ8件。
+//
+// 期待値を変えた理由: ユーザー決定(docs/ai-shared/DECISIONS.md 2026-09-21 最終エントリ、
+// docs/requirements.md「相手側の一括表示」)で防御プリセットを再定義した。
+//   - hb / hd は「H32・B(D)32・**性格補正なし**」= HB振り / HD振り に変わった(初版は上昇性格込み)
+//   - 初版の hb / hd(上昇性格込みの最大耐久)は hb_full / hd_full として新設したキーへ移った
+//   - hb_boost / hd_boost は初版の仮定どおりで確定(人間の確認待ちは解消)
+//
+// ラベルは要件書の表記に合わせる。ADR-0010 §5.3 の型ラベルとの対応は ADR-0009 §1 の表を参照。
 func TestDefenderPresetCatalogDefinitions(t *testing.T) {
 	want := []DefenderPreset{
 		{Key: PresetNone, Label: "無振り", SP: Stats{}, Nature: NatureNeutral, Applies: ""},
 		{Key: PresetHP, Label: "H振り", SP: Stats{HP: 32}, Nature: NatureNeutral, Applies: ""},
 		{Key: PresetHBBoost, Label: "H振り+B補正", SP: Stats{HP: 32}, Nature: Nature{Plus: StatDef, Minus: StatAtk}, Applies: CategoryPhysical},
-		{Key: PresetHB, Label: "HB特化", SP: Stats{HP: 32, Def: 32}, Nature: Nature{Plus: StatDef, Minus: StatAtk}, Applies: CategoryPhysical},
+		{Key: PresetHB, Label: "HB振り", SP: Stats{HP: 32, Def: 32}, Nature: NatureNeutral, Applies: CategoryPhysical},
+		{Key: PresetHBFull, Label: "HB特化", SP: Stats{HP: 32, Def: 32}, Nature: Nature{Plus: StatDef, Minus: StatAtk}, Applies: CategoryPhysical},
 		{Key: PresetHDBoost, Label: "H振り+D補正", SP: Stats{HP: 32}, Nature: Nature{Plus: StatSpD, Minus: StatAtk}, Applies: CategorySpecial},
-		{Key: PresetHD, Label: "HD特化", SP: Stats{HP: 32, SpD: 32}, Nature: Nature{Plus: StatSpD, Minus: StatAtk}, Applies: CategorySpecial},
+		{Key: PresetHD, Label: "HD振り", SP: Stats{HP: 32, SpD: 32}, Nature: NatureNeutral, Applies: CategorySpecial},
+		{Key: PresetHDFull, Label: "HD特化", SP: Stats{HP: 32, SpD: 32}, Nature: Nature{Plus: StatSpD, Minus: StatAtk}, Applies: CategorySpecial},
 	}
 	got := DefenderPresetCatalog()
 	if len(got) != len(want) {
@@ -142,8 +152,9 @@ func TestDefaultDefenderPresetsByCategory(t *testing.T) {
 		category MoveCategory
 		want     []PresetKey
 	}{
-		{"物理はB系", CategoryPhysical, []PresetKey{PresetNone, PresetHP, PresetHBBoost, PresetHB}},
-		{"特殊はD系", CategorySpecial, []PresetKey{PresetNone, PresetHP, PresetHDBoost, PresetHD}},
+		// ADR-0009 §3(改訂): 物理・特殊の既定セットは 4 件から 5 件になった(hb_full / hd_full の新設分)。
+		{"物理はB系", CategoryPhysical, []PresetKey{PresetNone, PresetHP, PresetHBBoost, PresetHB, PresetHBFull}},
+		{"特殊はD系", CategorySpecial, []PresetKey{PresetNone, PresetHP, PresetHDBoost, PresetHD, PresetHDFull}},
 		{"変化技は none と hp のみ", CategoryStatus, []PresetKey{PresetNone, PresetHP}},
 		{"分類なしも none と hp のみ", MoveCategory(""), []PresetKey{PresetNone, PresetHP}},
 		{"未知の分類も none と hp のみ", MoveCategory("unknown"), []PresetKey{PresetNone, PresetHP}},
@@ -164,6 +175,62 @@ func TestDefaultDefenderPresetsByCategory(t *testing.T) {
 				if !reflect.DeepEqual(p, byKey[p.Key]) {
 					t.Errorf("%s の定義がカタログと異なる: %+v want %+v", p.Key, p, byKey[p.Key])
 				}
+			}
+		})
+	}
+}
+
+// ADR-0009 §1(改訂)の「ADR-0010 の型ラベルとの対応」。
+// 一括表示のプリセットと逆算の型(Archetype)が、同じ調整を同じ呼び名で指していること。
+// 初版では hb(H32・B32・上昇性格)が「HB特化」を名乗り、逆算の hfull-bfull-plus(HB特化)と
+// キーが食い違っていた。改訂後は hb_full が hfull-bfull-plus、hb が hfull-bfull-neutral に対応する。
+func TestDefenderPresetsMatchReverseArchetypes(t *testing.T) {
+	tests := []struct {
+		preset        PresetKey
+		category      MoveCategory
+		wantKey       ArchetypeKey
+		wantLabel     string
+		sameAsPreset  bool // 逆算のラベルと一括のラベルが完全一致するか
+		labelMismatch string
+	}{
+		{PresetNone, CategoryPhysical, "hnone-bnone-neutral", "無振り", true, ""},
+		{PresetHP, CategoryPhysical, "hfull-bnone-neutral", "H振り", true, ""},
+		{PresetHBBoost, CategoryPhysical, "hfull-bnone-plus", "H振り+B補正", true, ""},
+		// 一括側のラベルは要件書の表記に合わせた「HB振り」。逆算側は括弧付きだが同じ調整を指す。
+		{PresetHB, CategoryPhysical, "hfull-bfull-neutral", "HB振り(無補正)", false, "HB振り"},
+		{PresetHBFull, CategoryPhysical, "hfull-bfull-plus", "HB特化", true, ""},
+		{PresetNone, CategorySpecial, "hnone-dnone-neutral", "無振り", true, ""},
+		{PresetHP, CategorySpecial, "hfull-dnone-neutral", "H振り", true, ""},
+		{PresetHDBoost, CategorySpecial, "hfull-dnone-plus", "H振り+D補正", true, ""},
+		{PresetHD, CategorySpecial, "hfull-dfull-neutral", "HD振り(無補正)", false, "HD振り"},
+		{PresetHDFull, CategorySpecial, "hfull-dfull-plus", "HD特化", true, ""},
+	}
+	catalog := map[PresetKey]DefenderPreset{}
+	for _, p := range DefenderPresetCatalog() {
+		catalog[p.Key] = p
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.preset)+"/"+string(tt.category), func(t *testing.T) {
+			p, ok := catalog[tt.preset]
+			if !ok {
+				t.Fatalf("カタログに %q が無い", tt.preset)
+			}
+			arch, ok := ArchetypeOf(SideDefender, tt.category, p.SP, p.Nature)
+			if !ok {
+				t.Fatalf("%q の SP/性格が逆算の型に写像できない: sp=%+v nature=%+v", tt.preset, p.SP, p.Nature)
+			}
+			if arch.Key != tt.wantKey {
+				t.Errorf("%q → archetype %q want %q(ADR-0009 §1 の対応表)", tt.preset, arch.Key, tt.wantKey)
+			}
+			if arch.Label != tt.wantLabel {
+				t.Errorf("%q → archetype label %q want %q", tt.preset, arch.Label, tt.wantLabel)
+			}
+			wantPresetLabel := tt.wantLabel
+			if !tt.sameAsPreset {
+				wantPresetLabel = tt.labelMismatch
+			}
+			if p.Label != wantPresetLabel {
+				t.Errorf("%q のカタログ Label=%q want %q", tt.preset, p.Label, wantPresetLabel)
 			}
 		})
 	}
@@ -204,8 +271,9 @@ func TestCalcBulkRowsMatchCalcDamage(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			in := bulkInput(tt.category, tt.moveType)
 			presets := DefaultDefenderPresets(tt.category)
-			if len(presets) != 4 {
-				t.Fatalf("既定セットは4件のはず: %v", presetKeys(presets))
+			// ADR-0009 §3(改訂): 物理・特殊の既定セットは 5 件(none, hp, *_boost, *, *_full)。
+			if len(presets) != 5 {
+				t.Fatalf("既定セットは5件のはず: %v", presetKeys(presets))
 			}
 			res, err := CalcBulk(in)
 			if err != nil {
@@ -233,7 +301,8 @@ func TestCalcBulkRowsMatchCalcDamage(t *testing.T) {
 					t.Errorf("rows[%d].Result=%+v want %+v", i, row.Result, want)
 				}
 			}
-			// 耐久が上がる順(ADR-0009): 無振り >= H振り >= H振り+補正 >= 特化 のダメージ
+			// 耐久が上がる順(ADR-0009 §1): none >= hp >= *_boost >= * >= *_full のダメージ。
+			// 厳密な大小関係は TestCalcBulkStrictDurabilityOrder が固定する。
 			for i := 1; i < len(res.Rows); i++ {
 				if res.Rows[i].Result.MaxDamage() > res.Rows[i-1].Result.MaxDamage() {
 					t.Errorf("行 %d のダメージが前行より大きい: %d > %d", i, res.Rows[i].Result.MaxDamage(), res.Rows[i-1].Result.MaxDamage())
@@ -483,8 +552,8 @@ func TestCalcBulkImmuneAllRowsZero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CalcBulk: %v", err)
 	}
-	if len(res.Rows) != 4 {
-		t.Fatalf("行数=%d want 4", len(res.Rows))
+	if len(res.Rows) != 5 {
+		t.Fatalf("行数=%d want 5(ADR-0009 §3 改訂: 物理の既定セットは5件)", len(res.Rows))
 	}
 	for i, row := range res.Rows {
 		if row.Result.Effectiveness != 0 {
@@ -530,8 +599,8 @@ func TestCalcBulkLowHPDefender(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CalcBulk: %v", err)
 	}
-	if len(res.Rows) != 4 {
-		t.Fatalf("行数=%d want 4", len(res.Rows))
+	if len(res.Rows) != 5 {
+		t.Fatalf("行数=%d want 5(ADR-0009 §3 改訂: 物理の既定セットは5件)", len(res.Rows))
 	}
 	for i, row := range res.Rows {
 		wantHP := 1 + 75 + row.Defender.SP.HP
@@ -561,7 +630,7 @@ func TestCalcBulkFormatDouble(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CalcBulk(double): %v", err)
 	}
-	if !reflect.DeepEqual(rowKeys(sres.Rows), rowKeys(dres.Rows)) || len(dres.Rows) != 4 {
+	if !reflect.DeepEqual(rowKeys(sres.Rows), rowKeys(dres.Rows)) || len(dres.Rows) != 5 {
 		t.Fatalf("double の行構成が single と異なる: %v vs %v", rowKeys(sres.Rows), rowKeys(dres.Rows))
 	}
 	for i, row := range dres.Rows {
@@ -720,21 +789,27 @@ func TestCalcBulkPresetKeysSelectFromGivenPresets(t *testing.T) {
 
 // --- 耐久の厳密な単調性(ADR-0009 §1 の「耐久が上がる順」)---------------------
 
-// 既存の緩い単調性検査(>=)に加え、hp > 補正 > 特化 が厳密に成り立つこと。
+// 既存の緩い単調性検査(>=)に加え、既定セット内の大小が厳密に成り立つこと:
+//
+//	none == hp > *_boost > * > *_full
+//
 // 被ダメージ = 最大ダメージなので、防御実数値が上がるほど最大ダメージは厳密に減る(HP はダメージに効かない)。
-// hb_boost と hd_boost の性格の取り違えは、この厳密不等号でのみ検出できる。
+// none == hp を等号で固定するのは、H振りが防御実数値を動かさないことの確認。
+// プリセットの性格・SP の取り違え(例: hb に上昇性格を残す = hb_full と同値になる)は、
+// この厳密不等号でのみ検出できる。ADR-0009 §2「耐久の単調性」が根拠。
 func TestCalcBulkStrictDurabilityOrder(t *testing.T) {
 	tests := []struct {
 		name     string
 		category MoveCategory
 		moveType Type
 		boost    PresetKey
+		plain    PresetKey
 		full     PresetKey
 	}{
-		{"物理は hp > hb_boost > hb", CategoryPhysical, TypeWater, PresetHBBoost, PresetHB},
-		{"物理・不一致技でも同じ", CategoryPhysical, TypeNormal, PresetHBBoost, PresetHB},
-		{"特殊は hp > hd_boost > hd", CategorySpecial, TypeWater, PresetHDBoost, PresetHD},
-		{"特殊・抜群でも同じ", CategorySpecial, TypeDark, PresetHDBoost, PresetHD},
+		{"物理は hp > hb_boost > hb > hb_full", CategoryPhysical, TypeWater, PresetHBBoost, PresetHB, PresetHBFull},
+		{"物理・不一致技でも同じ", CategoryPhysical, TypeNormal, PresetHBBoost, PresetHB, PresetHBFull},
+		{"特殊は hp > hd_boost > hd > hd_full", CategorySpecial, TypeWater, PresetHDBoost, PresetHD, PresetHDFull},
+		{"特殊・抜群でも同じ", CategorySpecial, TypeDark, PresetHDBoost, PresetHD, PresetHDFull},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -746,7 +821,7 @@ func TestCalcBulkStrictDurabilityOrder(t *testing.T) {
 			for _, row := range res.Rows {
 				max[row.Preset] = row.Result.MaxDamage()
 			}
-			for _, k := range []PresetKey{PresetNone, PresetHP, tt.boost, tt.full} {
+			for _, k := range []PresetKey{PresetNone, PresetHP, tt.boost, tt.plain, tt.full} {
 				if _, ok := max[k]; !ok {
 					t.Fatalf("行 %q が無い: %v", k, rowKeys(res.Rows))
 				}
@@ -755,11 +830,89 @@ func TestCalcBulkStrictDurabilityOrder(t *testing.T) {
 			if max[PresetNone] != max[PresetHP] {
 				t.Errorf("none(%d) == hp(%d) であること(HP はダメージに影響しない)", max[PresetNone], max[PresetHP])
 			}
-			if !(max[PresetHP] > max[tt.boost]) {
-				t.Errorf("hp(%d) > %s(%d) であること", max[PresetHP], tt.boost, max[tt.boost])
+			steps := []struct{ hi, lo PresetKey }{
+				{PresetHP, tt.boost},
+				{tt.boost, tt.plain},
+				{tt.plain, tt.full},
 			}
-			if !(max[tt.boost] > max[tt.full]) {
-				t.Errorf("%s(%d) > %s(%d) であること", tt.boost, max[tt.boost], tt.full, max[tt.full])
+			for _, s := range steps {
+				if !(max[s.hi] > max[s.lo]) {
+					t.Errorf("%s(%d) > %s(%d) であること", s.hi, max[s.hi], s.lo, max[s.lo])
+				}
+			}
+		})
+	}
+}
+
+// ADR-0009 §2「耐久の単調性」: 上の厳密順序が特定の種族値に依存しないこと。
+//
+// 防御実数値は floor((種族値 + 20 + SP) × 性格補正)、上昇補正は ×11/10(engine/stats.go)。
+// D0 = 種族値 + 20 と置くと boost = floor(11·D0/10)、plain = D0 + 32、full = floor(11·(D0+32)/10)。
+// boost < plain は floor(D0/10) < 32 ⟺ D0 < 320 ⟺ 種族値 <= 299 のときに成り立つ。
+// 種族値は仕様上 255 が上限(実在最大は B/D = 230 のツボツボ)なので、全種族で常に真。
+// ここでは 1..255 を総当たりして「ありうる種族値すべてで厳密順序が成り立つ」ことを固定する。
+// 成立条件を見失わないよう、閾値 299/300 の挙動も併せて検査する
+// (300 以上で boost と plain が逆転するのは算術上の事実であり、実在しない入力なので
+//
+//	カタログ順の反例にはならない。ここでは「なぜ 255 上限なら安全か」の根拠として記録する)。
+func TestDefenderPresetOrderHoldsForAllBaseStats(t *testing.T) {
+	defStat := func(base, sp int, n Nature, k StatKey) int {
+		in := Individual{
+			Species: Species{
+				Key:       "sweep",
+				Types:     []Type{TypeNormal},
+				BaseStats: Stats{HP: 100, Atk: 100, Def: base, SpA: 100, SpD: base, Spe: 100},
+			},
+			Level:  DefaultLevel,
+			Nature: n,
+			SP:     Stats{HP: 32, Def: 0, SpD: 0},
+			Status: StatusNone,
+		}
+		switch k {
+		case StatDef:
+			in.SP.Def = sp
+		case StatSpD:
+			in.SP.SpD = sp
+		}
+		return RealStats(in).Get(k)
+	}
+
+	catalog := map[PresetKey]DefenderPreset{}
+	for _, p := range DefenderPresetCatalog() {
+		catalog[p.Key] = p
+	}
+	groups := []struct {
+		name                   string
+		stat                   StatKey
+		boost, plain, full, hp PresetKey
+		maxBase, breakEvenBase int
+	}{
+		{"B系", StatDef, PresetHBBoost, PresetHB, PresetHBFull, PresetHP, 255, 299},
+		{"D系", StatSpD, PresetHDBoost, PresetHD, PresetHDFull, PresetHP, 255, 299},
+	}
+	for _, g := range groups {
+		t.Run(g.name, func(t *testing.T) {
+			for _, k := range []PresetKey{g.hp, g.boost, g.plain, g.full} {
+				if _, ok := catalog[k]; !ok {
+					t.Fatalf("カタログに %q が無い", k)
+				}
+			}
+			stat := func(base int, key PresetKey) int {
+				p := catalog[key]
+				return defStat(base, p.SP.Get(g.stat), p.Nature, g.stat)
+			}
+			for base := 1; base <= g.maxBase; base++ {
+				hp, boost, plain, full := stat(base, g.hp), stat(base, g.boost), stat(base, g.plain), stat(base, g.full)
+				if !(hp < boost && boost < plain && plain < full) {
+					t.Fatalf("種族値 %d で防御実数値の厳密順序が崩れた: hp=%d boost=%d plain=%d full=%d", base, hp, boost, plain, full)
+				}
+			}
+			// 閾値の根拠。299 までは成り立ち、300 で boost >= plain に反転する。
+			if b, p := stat(g.breakEvenBase, g.boost), stat(g.breakEvenBase, g.plain); !(b < p) {
+				t.Errorf("種族値 %d では boost(%d) < plain(%d) のはず", g.breakEvenBase, b, p)
+			}
+			if b, p := stat(g.breakEvenBase+1, g.boost), stat(g.breakEvenBase+1, g.plain); b < p {
+				t.Errorf("種族値 %d で boost(%d) < plain(%d) のまま。反転の閾値が動いた(ADR-0009 §2 の算術を見直すこと)", g.breakEvenBase+1, b, p)
 			}
 		})
 	}
