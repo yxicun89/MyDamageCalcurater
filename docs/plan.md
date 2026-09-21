@@ -38,7 +38,7 @@
 - [x] P1-9 WASM ビルド(`make wasm`)と Go/WASM の結果一致テスト
 
 ### Phase 2 マスタデータ
-- [ ] P2-1 **データソース調査**: チャンピオンズの使用可能ポケモン・技・持ち物の取得元を調べ ADR-0002 に記録
+- [x] P2-1 **データソース調査**: チャンピオンズの使用可能ポケモン・技・持ち物の取得元を調べ ADR-0002 に記録(調査完了。ADR-0002 は**暫定**で、人間の確認待ちが10項目。P2-2 はその確認後に着手)
   - 確定後に、ゴールデンの種族集合(現在は gen9 参考集合1392種)を差し替えて `make golden-generate` で再生成し、`metadata.json` の `speciesScope` を更新する
   - HP=1 のヌケニンはゴールデンから除外している。チャンピオンズの実数値式(HP = 種族値+75+SP)では HP=76 になるため、扱いを決める
 - [ ] P2-2 MySQL スキーマ(migrate)と importer
@@ -100,6 +100,12 @@
 **【人間の確認待ち】ブラウザでの WASM 実動作**(P1-9、ADR-0011 §11)
 - P1-9 は Node + `wasm_exec.js` でしか確認していない(`make test-wasm`)。ブラウザ特有の事情は未確認で、P4-5 で人間が確認する: `.wasm` の MIME(`application/wasm`)/ `WebAssembly.instantiateStreaming` / キャッシュ(Service Worker 含む)/ メモリ上限 / 初回ロード(4.63 MiB、gzip 1.26 MiB)の体感。
 - 確認できたら、ADR-0011 §11 の「ブラウザでの実動作は未確認」と冒頭の状態欄(「§9 の実動作確認は未実施」)を更新する。
+
+**【人間の確認待ち】マスタデータの取得元と使用可能集合**(P2-1、ADR-0002 §人間の確認事項の10項目)
+- 推奨案(暫定): 一次ソースは `@smogon/calc` 0.12.0 の Champions 世代(MIT・集合と数値が一致・ゴールデンと同じ出所)、照合と習得技は Pokémon Showdown の champions mod、日本語名は PokeAPI(欠落は補完ファイル)。スナップショットをコミットし、importer は外部に取りに行かない。
+- 特に確認したい点: (1) 規約・適法性(元データは任天堂・ゲームフリークの知的財産。スナップショットのコミットと将来のリポジトリ公開の扱い。断定していない) (2) 対象レギュレーションを現行(M-C)のみにするか (3) ゴールデンの oracle を calc 0.12.0 の Champions 世代へ切り替えてよいか(`calculateChampions` の信頼性と、0.10.0→0.12.0 での gen9 出力差は未検証) (4) 技の使用可否の食い違い(calc のみ 11 技、Showdown のみ Pound。Snap Trap・Growth の型)。
+- **requirements.md の前提との食い違い**(ローカル検証で再現済み): 現行の Champions の持ち物にこだわりハチマキ・こだわりメガネ・とつげきチョッキ・しんかのきせきが無い(Choice Scarf・Life Orb は有る)。逆算の持ち物候補の「攻撃側: こだわり系」は現状では空になる。ヌケニン・ヌケッチャは使用可能集合に無い(HP=76 の論点は追加されたときのみ)。requirements.md と ADR-0005 の例の書き換えは確認後。
+- 確定後に更新する箇所: ADR-0002 の状態、P2-2 のスキーマ・importer 設計、`tools/golden`(種族集合・oracle・SP 換算)と `testdata/golden`(`make golden-generate`)、`docs/requirements.md` の逆算の持ち物候補。
 
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)

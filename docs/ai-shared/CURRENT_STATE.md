@@ -3,8 +3,8 @@
 ## Damage Calculator
 Owner: Claude Code
 Branch: feat/claude-p1-engine
-Status: Phase 1 (計算エンジン) 完了。P1-9 WASM(engine/wasmapi + engine/cmd/wasm、make wasm / make test-wasm)まで。critic 1回目 FAIL → 修正 → 指示された修正をメインが確認して完了(2回目の critic は実行していない)。任意の外部 Codex レビュー(scripts/codex-review.sh)は未実施。Codex の担当はタイプバランスチェッカー実装で、ダメージ計算のレビュー担当ではない
-Next: Phase 2(P2-1 データソース調査)。人間の確認待ち: hb_boost / hd_boost の定義、表示 % の丸め、ブラウザでの WASM 実動作(P4-5)(いずれも plan.md ブロッカー)
+Status: Phase 1(計算エンジン)完了、P2-1(データソース調査)完了。ADR-0002 は暫定(人間の確認待ち10項目)。P2-2 以降は確認待ちで止めている。任意の外部 Codex レビュー(scripts/codex-review.sh)は未実施。Codex の担当はタイプバランスチェッカー実装で、ダメージ計算のレビュー担当ではない
+Next: 人間が ADR-0002 の確認事項に答える → P2-2(スキーマと importer)。人間の確認待ち(plan.md ブロッカー): マスタデータの取得元と使用可能集合、hb_boost / hd_boost の定義、表示 % の丸め、ブラウザでの WASM 実動作(P4-5)
 
 ## Type Balance Checker
 Owner: Codex
