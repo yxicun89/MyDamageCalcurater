@@ -9,13 +9,16 @@ import { DEFAULT_SCREEN, SCREEN_ROUTES, documentTitle, pathForScreen, screenFrom
 
 describe("ルート表", () => {
   // P4-12a(ADR-0303 §2): タイプバランス(/balance)を逆算の後ろに足す。
-  test("計算 → calc、逆算 → reverse、タイプバランス → balance の順に並び、表示名は appText の語", () => {
+  // SP3(ADR-0604 §2): 素早さ比較(/speed)をタイプバランスの後ろに足す。
+  test("計算 → calc、逆算 → reverse、タイプバランス → balance、素早さ → speed の順に並び、表示名は appText の語", () => {
     expect(SCREEN_ROUTES.map((route) => [route.id, route.segment, route.label])).toEqual([
       ["calc", "calc", appText.calcTabLabel],
       ["reverse", "reverse", appText.reverseTabLabel],
       ["balance", "balance", appText.balanceTabLabel],
+      ["speed", "speed", appText.speedTabLabel],
     ]);
     expect(appText.balanceTabLabel).toBe("タイプバランス");
+    expect(appText.speedTabLabel).toBe("素早さ");
   });
 
   test("既定の画面は計算", () => {

@@ -6,8 +6,6 @@
 // 基点 URL(api/config.ts の apiBaseUrl)・端末 ID/セッション ID(api/clientIds.ts の ClientIds)は
 // Web レーン共通のヘルパーをそのまま使う(ADR-0604 §3。あちらは変更しない)。
 //
-// ここは SP3 のスタブで、まだ通信しない。契約(パス・ヘッダー・本文・エラーの解釈)は speedClient.test.ts が定める。
-
 import type { ClientIds } from "../api/clientIds";
 import { speedClientText } from "../i18n/ja";
 import type { components } from "./speed.gen";
@@ -59,19 +57,97 @@ export function speedUnavailableError(): SpeedError {
   return { code: SPEED_UNAVAILABLE_CODE, message: speedClientText.unavailable };
 }
 
+/** サーバーのエラー本文({code, message})の形をしているかの型ガード(balanceClient.ts と同じ形)。 */
+function isErrorBody(value: unknown): value is Schemas["Error"] {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return typeof record.code === "string" && typeof record.message === "string";
+}
+
+/** speed_unavailable の失敗(通信できない・応答が読めない・エラー本文の形が不正)。 */
+function unavailableResult<T>(): SpeedResult<T> {
+  return { ok: false, error: speedUnavailableError() };
+}
+
 /**
- * speed API のクライアント(ADR-0604 §3)。
- *
- * SP3 のスタブ: まだ通信せず、どの呼び出しも「未実装」で落ちる。実装(implementer)は speedClient.test.ts が
- * 定める形(パス・ヘッダー・presets のクエリ・エラー本文の解釈)を満たすように、ここを埋める。
+ * speed API のクライアント実装(ADR-0604 §3)。応答をそのまま運び、Web で素早さを計算し直さない。
+ * 通信・応答の失敗は speed_unavailable にし、自動の切り替え先へは移らない(ADR-0604 §3)。
  */
 export function createSpeedClient(input: CreateSpeedClientInput): SpeedClient {
-  function notImplemented(): never {
-    throw new Error(`not implemented: createSpeedClient(${input.baseUrl})`);
+  const { baseUrl, fetch: fetchImpl, ids } = input;
+
+  /** GET し、応答(成功の値、または境界のエラー封筒)を返す。例外を投げない。 */
+  async function getJson<T>(path: string, query?: string): Promise<SpeedResult<T>> {
+    const url = `${baseUrl}${path}${query === undefined ? "" : `?${query}`}`;
+    let response: Response;
+    try {
+      response = await fetchImpl(url, {
+        method: "GET",
+        headers: {
+          "X-Device-Id": ids.deviceId,
+          "X-Session-Id": ids.sessionId,
+        },
+      });
+    } catch {
+      return unavailableResult();
+    }
+    let parsed: unknown;
+    try {
+      parsed = await response.json();
+    } catch {
+      return unavailableResult();
+    }
+    if (!response.ok) {
+      return isErrorBody(parsed)
+        ? { ok: false, error: { code: parsed.code, message: parsed.message } }
+        : unavailableResult();
+    }
+    return { ok: true, value: parsed as T };
   }
+
+  /** JSON を POST し、応答(成功の値、または境界のエラー封筒)を返す。例外を投げない。 */
+  async function postJson<T>(path: string, body: unknown): Promise<SpeedResult<T>> {
+    let response: Response;
+    try {
+      response = await fetchImpl(`${baseUrl}${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Device-Id": ids.deviceId,
+          "X-Session-Id": ids.sessionId,
+        },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      return unavailableResult();
+    }
+    let parsed: unknown;
+    try {
+      parsed = await response.json();
+    } catch {
+      return unavailableResult();
+    }
+    if (!response.ok) {
+      return isErrorBody(parsed)
+        ? { ok: false, error: { code: parsed.code, message: parsed.message } }
+        : unavailableResult();
+    }
+    return { ok: true, value: parsed as T };
+  }
+
   return {
-    pokemon: notImplemented,
-    table: notImplemented,
-    position: notImplemented,
+    pokemon() {
+      return getJson(SPEED_PATHS.pokemon);
+    },
+    table(presets) {
+      const query =
+        presets === undefined ? undefined : new URLSearchParams({ presets: presets.join(",") }).toString();
+      return getJson(SPEED_PATHS.table, query);
+    },
+    position(request) {
+      return postJson(SPEED_PATHS.position, request);
+    },
   };
 }
