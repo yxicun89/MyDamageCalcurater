@@ -50,13 +50,13 @@ func TestLoadPokemonTypesReadsNameAndAbilities(t *testing.T) {
 	sixtyFourRunes := strings.Repeat("カ", 64)
 	model := loadCatalog(t, `{"schemaVersion":1,"pokemon":[
 		{"pokemonId":"9003-000","nameJa":"`+sixtyFourRunes+`","types":["water","ground"],"abilityIds":["ability-9001","ability-9002","`+fortyCharAbilityID+`"]},
-		{"pokemonId":"9001-000","nameJa":"カソウバード","types":["flying","fire"],"abilityIds":["ability-9002"]},
+		{"pokemonId":"9001-000","nameJa":"テストバード","types":["flying","fire"],"abilityIds":["ability-9002"]},
 		{"pokemonId":"9002-001","types":["grass"],"abilityIds":[]},
 		{"pokemonId":"9002-000","nameJa":"A","types":["grass"]}
 	]}`)
 
 	want := []string{
-		"9001-000|カソウバード|[flying fire]|[ability-9002]",
+		"9001-000|テストバード|[flying fire]|[ability-9002]",
 		"9002-000|A|[grass]|[]",
 		"9002-001||[grass]|[]",
 		"9003-000|" + sixtyFourRunes + "|[water ground]|[ability-9001 ability-9002 " + fortyCharAbilityID + "]",
@@ -96,10 +96,31 @@ func TestLoadPokemonTypesWithoutOptionalFields(t *testing.T) {
 	}
 }
 
+// ADR-0401 §7.5: an explicit JSON null for nameJa or abilityIds decodes the same as the
+// field being omitted (no name, no abilities), not as an error.
+func TestLoadPokemonTypesTreatsExplicitNullAsOmitted(t *testing.T) {
+	t.Parallel()
+
+	model := loadCatalog(t, `{"schemaVersion":1,"pokemon":[
+		{"pokemonId":"9001-000","nameJa":null,"types":["fire","flying"],"abilityIds":null},
+		{"pokemonId":"9002-000","nameJa":null,"types":["grass"],"abilityIds":["ability-9001"]}
+	]}`)
+	all := allPokemon(t, model)
+	if len(all) != 2 {
+		t.Fatalf("AllPokemon() = %+v, want 2 entries", all)
+	}
+	if all[0].PokemonID != "9001-000" || all[0].NameJa != "" || len(all[0].AbilityIDs) != 0 {
+		t.Errorf("AllPokemon()[0] = %+v, want 9001-000 with no name and no abilities (null == omitted)", all[0])
+	}
+	if all[1].PokemonID != "9002-000" || all[1].NameJa != "" || fmt.Sprint(all[1].AbilityIDs) != "[ability-9001]" {
+		t.Errorf("AllPokemon()[1] = %+v, want 9002-000 with no name (null == omitted) and [ability-9001]", all[1])
+	}
+}
+
 func TestPokemonCatalogReturnsIndependentSlices(t *testing.T) {
 	t.Parallel()
 
-	model := loadCatalog(t, `{"schemaVersion":1,"pokemon":[{"pokemonId":"9001-000","nameJa":"カソウバード","types":["fire","flying"],"abilityIds":["ability-9001","ability-9002"]}]}`)
+	model := loadCatalog(t, `{"schemaVersion":1,"pokemon":[{"pokemonId":"9001-000","nameJa":"テストバード","types":["fire","flying"],"abilityIds":["ability-9001","ability-9002"]}]}`)
 	first := allPokemon(t, model)
 	if len(first) != 1 || len(first[0].Types) != 2 || len(first[0].AbilityIDs) != 2 {
 		t.Fatalf("AllPokemon() = %+v", first)
@@ -109,7 +130,7 @@ func TestPokemonCatalogReturnsIndependentSlices(t *testing.T) {
 	first[0] = balance.CatalogPokemon{}
 
 	second := allPokemon(t, model)
-	if catalogView(second[0]) != "9001-000|カソウバード|[fire flying]|[ability-9001 ability-9002]" {
+	if catalogView(second[0]) != "9001-000|テストバード|[fire flying]|[ability-9001 ability-9002]" {
 		t.Errorf("mutating a returned value changed the read model: %+v", second[0])
 	}
 	if types, err := model.PokemonTypes("9001-000"); err != nil || types[0] != balance.TypeFire {
@@ -131,7 +152,7 @@ func TestLoadPokemonTypesRejectsInvalidNameOrAbilities(t *testing.T) {
 		{name: "empty nameJa", input: entry(`"nameJa":""`)},
 		{name: "nameJa of 65 characters", input: entry(`"nameJa":"` + strings.Repeat("カ", 65) + `"`)},
 		{name: "nameJa is a number", input: entry(`"nameJa":9002`)},
-		{name: "nameJa is an array", input: entry(`"nameJa":["カソウリーフ"]`)},
+		{name: "nameJa is an array", input: entry(`"nameJa":["テストリーフ"]`)},
 		{name: "four abilityIds", input: entry(`"abilityIds":["ability-9001","ability-9002","ability-9003","ability-9004"]`)},
 		{name: "duplicate abilityId", input: entry(`"abilityIds":["ability-9001","ability-9001"]`)},
 		{name: "empty abilityId", input: entry(`"abilityIds":[""]`)},

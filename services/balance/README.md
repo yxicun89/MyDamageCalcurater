@@ -3,17 +3,18 @@
 パーティのタイプ相性・弱点・耐性・攻撃範囲・仮想敵診断を分析するドメインモノリス。
 damage-calc とは兄弟サービスで、互いの実行時 API には依存しない。
 
-## TB1(防御タイプバランス)・TB2(攻撃範囲)・TB3(特性による防御相性の変化)・TB4(仮想敵診断)の範囲
+## TB1(防御タイプバランス)・TB2(攻撃範囲)・TB3(特性による防御相性の変化)・TB4(仮想敵診断)・TB5(おすすめタイプ)の範囲
 
 - `internal/balance`: HTTP・DB・Kubernetes に依存しない型・防御相性コア・チーム集計(`AnalyzeDefense`)、
   技の解決コア(`ResolveMoves`)・攻撃範囲コア・チーム集計(`AnalyzeCoverage`)、特性の解決コア
   (`ResolveAbility`)・有理数の倍率(`Effectiveness`)・特性込みの防御計算(`CalculateDefenseWithAbility`)、
-  および TB1〜3 の計算を再利用する仮想敵診断コア(`AnalyzeThreats`)
+  TB1〜3 の計算を再利用する仮想敵診断コア(`AnalyzeThreats`)、および TB1〜3 の計算を再利用するおすすめ
+  タイプコア(`RecommendTypes`)
 - `api/openapi.yaml`: balance 外部 API 契約の正
 - `internal/api`: oapi-codegen による生成型
-- `internal/master`: 共通マスタへ差し替えるための adapter(タイプ相性表・ポケモンタイプ read model・技 read model・
-  特性 read model)
-- `internal/httpapi`: health・analyze・coverage・threats の実装
+- `internal/master`: 共通マスタへ差し替えるための adapter(タイプ相性表・ポケモンタイプ read model 兼
+  カタログ(`balance.PokemonCatalog`)・技 read model・特性 read model)
+- `internal/httpapi`: health・analyze・coverage・threats・recommendations の実装
 - `cmd/api`: プロセス起動・`BALANCE_POKEMON_TYPES_PATH` / `BALANCE_MOVES_PATH` / `BALANCE_ABILITIES_PATH` の
   読み込み・graceful shutdown
 - `deploy`: balance 専用 Kustomize と manual-sync の Argo CD Application
@@ -22,7 +23,8 @@ damage-calc とは兄弟サービスで、互いの実行時 API には依存し
 契約の正は TB1 が [ADR-0014](../../docs/adr/0014-balance-tb1-defense-analysis.md)、
 TB2 が [ADR-0016](../../docs/adr/0016-balance-tb2-offense-coverage.md)、
 TB3 が [ADR-0017](../../docs/adr/0017-balance-tb3-ability-effects.md)、
-TB4 が [ADR-0400](../../docs/adr/0400-balance-tb4-threat-check.md)。
+TB4 が [ADR-0400](../../docs/adr/0400-balance-tb4-threat-check.md)、
+TB5 が [ADR-0401](../../docs/adr/0401-balance-tb5-recommend-types.md)。
 
 タイプ相性表はコードに持たない(ADR-0013・ADR-0015)。ダメージ計算レーンの P1-13 でデータ化された
 `testdata/golden/typechart.json` を `internal/master/data/typechart.json` にバイト複製して go:embed で同梱し、
@@ -33,7 +35,9 @@ TB4 が [ADR-0400](../../docs/adr/0400-balance-tb4-threat-check.md)。
 ポケモンのタイプは `internal/master.PokemonTypeReadModel`(`BALANCE_POKEMON_TYPES_PATH` が指す JSON を
 起動時に1回だけ読む)から引く。これも temporary adapter で、共通マスタのスナップショット schema(P2-2)が
 決まったら差し替える。Git に置くのは schema と架空データの example(`testdata/pokemon-types.example.json`、
-ID は `9001-000` 以降)だけで、実 Pokémon マスタはコミットしない(ADR-0002)。
+ID は `9001-000` 以降)だけで、実 Pokémon マスタはコミットしない(ADR-0002)。同じ read model が TB5 の
+カタログ(`balance.PokemonCatalog`)も兼ねる:各エントリは省略可能な `nameJa`(1〜64文字)と `abilityIds`
+(0〜3件・重複なし、特性 read model と同じ ID 形式)を持てる(ADR-0401 §5、`schemaVersion` は 1 のまま)。
 
 技のタイプ・分類(物理/特殊/変化)は `internal/master.MoveReadModel`(`BALANCE_MOVES_PATH` が指す JSON を
 起動時に1回だけ読む)から引く。同じく temporary adapter。Git に置くのは schema と架空データの example
@@ -95,6 +99,24 @@ schema と架空データの example(`testdata/abilities.example.json`、ID は 
     `safe`(`incoming < 1`)・`superEffective`(`outgoing >= 2`))・`safeMembers`/`superEffectiveMembers`
     (`matchups` の人数)を返す。倍率は既約分数の文字列。TB1〜3 の `CalculateDefenseWithAbility` を
     そのまま再利用し、新しい read model は無い
+- `POST /api/balance/v1/team-balance/recommendations`(ADR-0401): `X-Device-Id` と `X-Session-Id` が必須。
+  判定順は threats と同じ流儀: ヘッダー(400)→ body(400/413: `members` 件数・各メンバー・`limit` の範囲)→
+  ポケモンの read model またはカタログ未設定、`moveId` を1つでも指定したのに技、または `abilityId` を
+  1つでも指定したのに特性の read model 未設定(503)→ pokemonId 解決(422)→ moveId 解決(422)→
+  abilityId 解決(422、request 順で最初のもの)→ 200。
+  - request は `members`(1〜6件、threats の1エントリと同じ形 `{ "pokemonId", "moveIds", "abilityId"? }`)と
+    任意の `limit`(1〜20。省略または `null` は10)
+  - 防御の穴: TB1〜3 の集計で、耐性・無効を持つメンバーが0人の攻撃タイプ。攻撃範囲の穴: TB2の
+    `teamCoverage` で有効打(×1以上)を取れない防御タイプ(メンバー全員が攻撃技を持たない場合は穴を出さない)
+  - 候補は防御タイプの組み合わせ171通り(単タイプ18・複合153)のうち、穴を1つ以上ふさぐものだけを
+    「ふさぐ穴の数(多い順)→弱点の数(少ない順)→正準順」で並べ、先頭から `limit` 件を返す
+  - 上記以外の内部エラー(相性表や read model の想定外の失敗・不正な特性効果・不正な技分類を含む):
+    500 `internal_error`(固定文言)。ただしカタログの `abilityIds` に特性 read model が知らない ID が
+    あっても、その特性だけ飛ばして 200 を返す(export の不整合で全体を落とさない)
+  - 成功: 200。`defenseHoles`/`offenseHoles`(正準順)、`candidates`(各候補の `types`・`defenseCovered`・
+    `offenseCovered`・`weaknesses`・`pokemon`(read model でタイプ集合が一致する全員、pokemonId 昇順、
+    `nameJa` は read model にあるときだけ))、`abilityOptions`(防御の穴ごとに1件。特性で穴をふさげる
+    ポケモンと特性の組、pokemonId 昇順→abilityId 昇順。特性 read model が無ければ全体が空配列 `[]`)を返す
 
 HTTP の path・必須 header・handler interface は service-local OpenAPI から生成し、実装を
 `api.ServerInterface` へコンパイル時に適合させる。

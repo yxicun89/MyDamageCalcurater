@@ -81,13 +81,13 @@ type failingCatalog struct{ err error }
 func (f failingCatalog) AllPokemon() ([]balance.CatalogPokemon, error) { return nil, f.err }
 
 var recCatalog = testCatalog{
-	{PokemonID: "9001-000", NameJa: "カソウノーマル", Types: []balance.TypeID{balance.TypeNormal}, AbilityIDs: []string{}},
-	{PokemonID: "9002-000", NameJa: "カソウイワ", Types: []balance.TypeID{balance.TypeRock}},
+	{PokemonID: "9001-000", NameJa: "テストノーマル", Types: []balance.TypeID{balance.TypeNormal}, AbilityIDs: []string{}},
+	{PokemonID: "9002-000", NameJa: "テストイワ", Types: []balance.TypeID{balance.TypeRock}},
 	{PokemonID: "9003-000", Types: []balance.TypeID{balance.TypeRock, balance.TypeFire}},
-	{PokemonID: "9002-001", NameJa: "カソウヨウガン", Types: []balance.TypeID{balance.TypeFire, balance.TypeRock}},
+	{PokemonID: "9002-001", NameJa: "テストヨウガン", Types: []balance.TypeID{balance.TypeFire, balance.TypeRock}},
 	{PokemonID: "9004-000", Types: []balance.TypeID{balance.TypeGrass}, AbilityIDs: []string{"ability-9001"}},
 	{PokemonID: "9005-000", Types: []balance.TypeID{balance.TypeNormal}, AbilityIDs: []string{"ability-9003"}},
-	{PokemonID: "9006-000", NameJa: "カソウホノオ", Types: []balance.TypeID{balance.TypeFire}, AbilityIDs: []string{"ability-9002"}},
+	{PokemonID: "9006-000", NameJa: "テストホノオ", Types: []balance.TypeID{balance.TypeFire}, AbilityIDs: []string{"ability-9002"}},
 }
 
 var recAbilities = testAbilities{
@@ -179,15 +179,15 @@ func TestRecommendationsResponseBody(t *testing.T) {
 		pokemon                 []pokemon
 	}{
 		// defenseCovered + offenseCovered = 3, weaknesses 0 (canonical order).
-		{"fire/rock", "fire", "normal/steel", 0, []pokemon{{"9002-001", "カソウヨウガン", "fire/rock"}, {"9003-000", "", "rock/fire"}}},
+		{"fire/rock", "fire", "normal/steel", 0, []pokemon{{"9002-001", "テストヨウガン", "fire/rock"}, {"9003-000", "", "rock/fire"}}},
 		{"water/rock", "fire", "normal/steel", 0, []pokemon{}},
 		// 3, weaknesses 1 (fire hits grass x2).
 		{"fire/grass", "water", "normal/steel", 1, []pokemon{}},
 		{"water/grass", "water", "normal/steel", 1, []pokemon{}},
 		// 2, weaknesses 0: single types first, then duals in canonical order.
-		{"fire", "", "normal/steel", 0, []pokemon{{"9006-000", "カソウホノオ", "fire"}}},
+		{"fire", "", "normal/steel", 0, []pokemon{{"9006-000", "テストホノオ", "fire"}}},
 		{"water", "", "normal/steel", 0, []pokemon{}},
-		{"rock", "fire", "steel", 0, []pokemon{{"9002-000", "カソウイワ", "rock"}}},
+		{"rock", "fire", "steel", 0, []pokemon{{"9002-000", "テストイワ", "rock"}}},
 		{"normal/fire", "", "normal/steel", 0, []pokemon{}},
 		{"normal/water", "", "normal/steel", 0, []pokemon{}},
 		{"normal/rock", "fire", "steel", 0, []pokemon{}},
@@ -228,7 +228,7 @@ func TestRecommendationsResponseBody(t *testing.T) {
 		pokemon []option
 	}{
 		{api.Fire, []option{{"9004-000", "<absent>", "ability-9001", "0"}, {"9005-000", "<absent>", "ability-9003", "1/2"}}},
-		{api.Water, []option{{"9006-000", "カソウホノオ", "ability-9002", "0"}}},
+		{api.Water, []option{{"9006-000", "テストホノオ", "ability-9002", "0"}}},
 	}
 	if len(response.AbilityOptions) != len(wantOptions) {
 		t.Fatalf("abilityOptions = %+v, want one entry per defense hole", response.AbilityOptions)
@@ -281,8 +281,8 @@ func TestRecommendationsResponseUsesContractFieldNames(t *testing.T) {
 	if err := json.Unmarshal(candidates[0]["pokemon"], &firstRock); err != nil || len(firstRock) != 2 {
 		t.Fatalf("candidates[0].pokemon = %s, err = %v", candidates[0]["pokemon"], err)
 	}
-	if got := string(firstRock[0]["nameJa"]); got != `"カソウヨウガン"` {
-		t.Errorf("candidates[0].pokemon[0].nameJa = %s, want \"カソウヨウガン\"", got)
+	if got := string(firstRock[0]["nameJa"]); got != `"テストヨウガン"` {
+		t.Errorf("candidates[0].pokemon[0].nameJa = %s, want \"テストヨウガン\"", got)
 	}
 	if _, ok := firstRock[1]["nameJa"]; ok {
 		t.Errorf("candidates[0].pokemon[1] has no nameJa in the read model, so the key must be omitted; got %s", firstRock[1]["nameJa"])
@@ -374,6 +374,23 @@ func TestRecommendationsLimit(t *testing.T) {
 		if got := decodeError(t, recorder.Body.Bytes()); got.Code != api.InvalidRequest {
 			t.Errorf("limit %s: code = %q, want invalid_request", limit, got.Code)
 		}
+	}
+}
+
+// ADR-0401 §7.5: an explicit "limit": null is the same as the field being omitted (default 10).
+func TestRecommendationsLimitNullIsDefault(t *testing.T) {
+	t.Parallel()
+
+	withNull := postRecommendations(t, newRecommendationsServer(), `{"members":[{"pokemonId":"9001-000","moveIds":["move-9005"]}],"limit":null}`)
+	if withNull.Code != http.StatusOK {
+		t.Fatalf("limit null: status = %d, want 200; body=%s", withNull.Code, withNull.Body.String())
+	}
+	omitted := postRecommendations(t, newRecommendationsServer(), recBody)
+	if omitted.Code != http.StatusOK {
+		t.Fatalf("omitted limit: status = %d, want 200; body=%s", omitted.Code, omitted.Body.String())
+	}
+	if withNull.Body.String() != omitted.Body.String() {
+		t.Errorf("limit null response differs from omitted limit:\nnull    %s\nomitted %s", withNull.Body.String(), omitted.Body.String())
 	}
 }
 
@@ -816,7 +833,7 @@ func TestRecommendationsWithExampleReadModels(t *testing.T) {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
 	}
 	for _, key := range []string{`"defenseHoles"`, `"offenseHoles":[]`, `"candidates"`, `"abilityOptions"`,
-		`"types":["steel","fairy"]`, `"nameJa":"カソウメタル"`, `"abilityId":"ability-9002"`, `"abilityId":"ability-9001"`, `"multiplier":"0"`} {
+		`"types":["steel","fairy"]`, `"nameJa":"テストメタル"`, `"abilityId":"ability-9002"`, `"abilityId":"ability-9001"`, `"multiplier":"0"`} {
 		if !strings.Contains(recorder.Body.String(), key) {
 			t.Errorf("body is missing %s; body=%s", key, recorder.Body.String())
 		}

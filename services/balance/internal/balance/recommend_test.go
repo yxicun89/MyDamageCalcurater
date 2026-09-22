@@ -381,9 +381,9 @@ func TestRecommendTypesCandidatePokemon(t *testing.T) {
 
 	catalog := []balance.CatalogPokemon{
 		catalogPokemon("9006-000", "", types(balance.TypeRock, balance.TypeFire)),
-		catalogPokemon("9005-000", "カソウイワ", types(balance.TypeRock), "ability-9001"),
-		catalogPokemon("9004-000", "カソウノーマル", types(balance.TypeNormal)),
-		catalogPokemon("9003-000", "カソウユウレイイワ", types(balance.TypeRock, balance.TypeGhost)),
+		catalogPokemon("9005-000", "テストイワ", types(balance.TypeRock), "ability-9001"),
+		catalogPokemon("9004-000", "テストノーマル", types(balance.TypeNormal)),
+		catalogPokemon("9003-000", "テストユウレイイワ", types(balance.TypeRock, balance.TypeGhost)),
 		catalogPokemon("9002-000", "", types(balance.TypeGhost, balance.TypeRock)),
 		catalogPokemon("9001-000", "", types(balance.TypeRock)),
 	}
@@ -394,8 +394,8 @@ func TestRecommendTypesCandidatePokemon(t *testing.T) {
 		label string
 		want  []pokemon
 	}{
-		{"rock", []pokemon{{"9001-000", "", "rock"}, {"9005-000", "カソウイワ", "rock"}}},
-		{"rock/ghost", []pokemon{{"9002-000", "", "ghost/rock"}, {"9003-000", "カソウユウレイイワ", "rock/ghost"}}},
+		{"rock", []pokemon{{"9001-000", "", "rock"}, {"9005-000", "テストイワ", "rock"}}},
+		{"rock/ghost", []pokemon{{"9002-000", "", "ghost/rock"}, {"9003-000", "テストユウレイイワ", "rock/ghost"}}},
 		{"fire/rock", []pokemon{{"9006-000", "", "rock/fire"}}},
 		{"normal/rock", []pokemon{}},
 	}
@@ -437,7 +437,7 @@ func TestRecommendTypesAbilityOptions(t *testing.T) {
 		// grass: fire x2 x1/2 = x1 is not below x1.
 		catalogPokemon("9001-000", "", types(balance.TypeGrass), "ability-9003"),
 		// grass: fire x2 -> immune. water x1/2 by type alone, so not listed for water.
-		catalogPokemon("9002-000", "カソウクサ", types(balance.TypeGrass), "ability-9001"),
+		catalogPokemon("9002-000", "テストクサ", types(balance.TypeGrass), "ability-9001"),
 		// normal: fire x1 x1/2 = x1/2; water absorbed.
 		catalogPokemon("9003-000", "", types(balance.TypeNormal), "ability-9003", "ability-9002"),
 		// rock: fire x1/2 by type alone, so the immunity does not make it an ability option.
@@ -448,7 +448,7 @@ func TestRecommendTypesAbilityOptions(t *testing.T) {
 		// x1 x5/4 and an ability without effects.
 		catalogPokemon("9008-000", "", types(balance.TypeNormal), "ability-9005", "ability-9006"),
 		// Two abilities of one pokemon both fill fire: two pairs.
-		catalogPokemon("9009-000", "カソウノーマル", types(balance.TypeNormal), "ability-9003", "ability-9001"),
+		catalogPokemon("9009-000", "テストノーマル", types(balance.TypeNormal), "ability-9003", "ability-9001"),
 		catalogPokemon("9007-000", "", types(balance.TypeNormal), "ability-9005"),
 	}
 	got := recommend(t, chartAbilityOptions(), normalMember, catalog, abilities, balance.MaxRecommendationLimit)
@@ -465,10 +465,10 @@ func TestRecommendTypesAbilityOptions(t *testing.T) {
 		want   []pair
 	}{
 		{balance.TypeFire, []pair{
-			{"9002-000", "カソウクサ", "ability-9001", "0"},
+			{"9002-000", "テストクサ", "ability-9001", "0"},
 			{"9003-000", "", "ability-9003", "1/2"},
-			{"9009-000", "カソウノーマル", "ability-9001", "0"},
-			{"9009-000", "カソウノーマル", "ability-9003", "1/2"},
+			{"9009-000", "テストノーマル", "ability-9001", "0"},
+			{"9009-000", "テストノーマル", "ability-9003", "1/2"},
 		}},
 		{balance.TypeWater, []pair{{"9003-000", "", "ability-9002", "0"}}},
 	}
@@ -489,6 +489,40 @@ func TestRecommendTypesAbilityOptions(t *testing.T) {
 		if fmt.Sprint(pairs) != fmt.Sprint(w.want) {
 			t.Errorf("AbilityOptions[%d] (%s) = %v, want %v", i, w.attack, pairs, w.want)
 		}
+	}
+}
+
+// ADR-0401 §7.2: a catalog abilityId the ability read model does not know (an export
+// inconsistency) is skipped for that one ability only; the pokemon's other abilities, and
+// every other pokemon, are still considered. Any other provider failure still propagates.
+func TestRecommendTypesSkipsUnknownCatalogAbility(t *testing.T) {
+	t.Parallel()
+
+	abilities := recAbilities{
+		"ability-9001": recAbility("ability-9001", immuneEffect(balance.TypeFire)),
+	}
+	catalog := []balance.CatalogPokemon{
+		// ability-9999 is not in the ability read model; ability-9001 still applies.
+		catalogPokemon("9001-000", "", types(balance.TypeGrass), "ability-9999", "ability-9001"),
+		// Every abilityId unknown: no ability option for this pokemon, and no error.
+		catalogPokemon("9002-000", "", types(balance.TypeGrass), "ability-9998"),
+	}
+	got := recommend(t, chartAbilityOptions(), normalMember, catalog, abilities, balance.DefaultRecommendationLimit)
+	if len(got.AbilityOptions) != 2 {
+		t.Fatalf("AbilityOptions = %+v, want one entry per defense hole (fire, water)", got.AbilityOptions)
+	}
+	fire := got.AbilityOptions[0]
+	if fire.AttackType != balance.TypeFire {
+		t.Fatalf("AbilityOptions[0].AttackType = %s, want fire", fire.AttackType)
+	}
+	if len(fire.Pokemon) != 1 || fire.Pokemon[0].PokemonID != "9001-000" || fire.Pokemon[0].AbilityID != "ability-9001" {
+		t.Errorf("AbilityOptions[fire].Pokemon = %+v, want only 9001-000/ability-9001 (ability-9999 skipped, 9002-000 has no known ability)", fire.Pokemon)
+	}
+
+	// A provider failure other than ErrUnknownAbility still propagates as an error.
+	_, err := balance.RecommendTypes(chartAbilityOptions(), normalMember, catalog, failingRecAbilities{err: errors.New("ability backend exploded")}, balance.DefaultRecommendationLimit)
+	if err == nil || errors.Is(err, balance.ErrUnknownAbility) {
+		t.Errorf("RecommendTypes() error = %v, want a propagated non-ErrUnknownAbility failure", err)
 	}
 }
 

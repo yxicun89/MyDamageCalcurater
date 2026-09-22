@@ -63,6 +63,7 @@ func New(deps Dependencies) *echo.Echo {
 			"analyzeTeamBalance":  {requireRequestContext},
 			"analyzeTeamCoverage": {requireRequestContext},
 			"analyzeTeamThreats":  {requireRequestContext},
+			"recommendTeamTypes":  {requireRequestContext},
 		},
 	})
 	return e
