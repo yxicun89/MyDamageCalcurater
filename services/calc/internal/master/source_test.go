@@ -371,11 +371,14 @@ func TestHTTPSourceBodyStopsMidStream(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hj, ok := w.(http.Hijacker)
 		if !ok {
-			t.Fatal("ResponseWriter が http.Hijacker を実装していない")
+			// ハンドラはサーバの goroutine で動くので Fatal ではなく Error + return にする。
+			t.Error("ResponseWriter が http.Hijacker を実装していない")
+			return
 		}
 		conn, rw, err := hj.Hijack()
 		if err != nil {
-			t.Fatalf("Hijack = %v", err)
+			t.Errorf("Hijack = %v", err)
+			return
 		}
 		defer conn.Close()
 		_, _ = rw.WriteString("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 1000000\r\n\r\n")
