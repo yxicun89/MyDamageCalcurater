@@ -1,5 +1,6 @@
-# calc-svc(ダメージ計算・一括計算・逆算。ADR-0200)。マスタの場所(CALC_MASTER_PATH・
-# CALC_TYPECHART_PATH)は base では持たない(local overlay の Component が渡す。ADR-0203 §3)。
+# calc-svc(ダメージ計算・一括計算・逆算。ADR-0200)。マスタは pokedex-svc の内部 API から取る
+# (CALC_MASTER_URL=http://pokedex。ADR-0204・ADR-0206 §1)。Service 名はどの環境でも同じなので base に置く。
+# ファイル方式(CALC_MASTER_PATH)は `make dev` とテスト専用。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -27,6 +28,8 @@ spec:
             - name: http
               containerPort: 8080
           env:
+            - name: CALC_MASTER_URL
+              value: http://pokedex
             # limits.memory の 64Mi に対して少し余裕を持たせた値(GC が OOMKill の前に働くように)。
             - name: GOMEMLIMIT
               value: 56MiB

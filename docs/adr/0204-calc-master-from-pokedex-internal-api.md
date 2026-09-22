@@ -92,9 +92,11 @@ ADR-0012 §6 は「共通マスタのためだけに新しい実行時サービ�
 
 - local overlay は引き続き**ファイル方式**。`services/calc/testdata/master.example.json` を MasterExport の形(架空データ + 相性表の行)に置き換え、
   `deploy/k8s/overlays/local/api/master.example.json` はそのコピー(一致テストは維持)。`typechart.example.json` と ConfigMap `calc-typechart` は削除。
+  **ADR-0206 で変更**: pokedex-svc(P2-3)がデプロイされたため、base(local を含む)は `CALC_MASTER_URL=http://pokedex` の URL 方式に切り替えた。
+  ファイル方式(`CALC_MASTER_PATH`)は `make dev` とテストの fallback にだけ残る。
 - base の calc Deployment の readinessProbe を `/readyz` に(liveness は `/healthz` のまま)。
 - gateway は `/internal/*` を 404 `not_found` のまま通さない(ルーティングは前方一致の許可リスト。ADR-0202 §3)。テストとスモークで固定する。
-- `scripts/dev.sh` は `CALC_MASTER_PATH` だけを渡す。
+- `scripts/dev.sh` は `CALC_MASTER_PATH` だけを渡す(変更なし。dev はファイル方式のまま)。
 
 ### 5. データレーンへの提案(実装はデータレーン)
 
@@ -102,6 +104,7 @@ ADR-0012 §6 は「共通マスタのためだけに新しい実行時サービ�
   DB に未投入なら 503 `master_unavailable`。
 - `natures` テーブル(`id, name_ja, plus, minus`)を追加し、`/api/pokedex/natures` と内部 API の両方で使う。
 - k3d で calc の local overlay を URL 方式(`CALC_MASTER_URL=http://pokedex`)に切り替えるのは、pokedex-svc のデプロイ後に API レーンが行う。
+  **実施済み(ADR-0206)**。
 
 ### spec-writer が決めたこと
 
@@ -127,7 +130,7 @@ ADR-0012 §6 は「共通マスタのためだけに新しい実行時サービ�
 | AC-M5 | NatureID の規則は ADR-0200 §2 のまま | `TestNatureID` / `TestNatureIDNoNeutralInMaster` |
 | AC-R1〜R4 | 準備中は3操作と /readyz が 503 master_unavailable(契約どおり)、/healthz は 200。準備後は NewHandler と同じ。NewHandler の /readyz は 200。calc-svc は内部 API を 404 | `httpapi.TestMasterUnavailableWhileNotReady` / `TestProbesWhileNotReady` / `TestDeferredHandlerBecomesReady` / `TestDeferredHandlerMatchesNewHandler` / `TestReadyzWithLoadedStore` / `TestMasterExportRouteIsNotFound` |
 | AC-B1〜B5 | 設定(ちょうど1つ・URL の検証・CALC_TYPECHART_PATH の拒否)、バックオフ、ファイル方式の起動と失敗、URL 方式の 503→200・失敗の再試行・再取得しない・ctx で止まる・上流なしでも起動 | `cmd/calc.TestEnvNames` / `TestDefaultMasterFetchSettings` / `TestLoadConfig` / `TestBackoffDelay` / `TestNewHandlerServesExampleMaster` / `TestStartupFailsOnBadFiles` / `TestRunStopsOnContextCancel` / `TestURLModeBecomesReadyAfterUpstream` / `TestURLModeRetriesOnInvalidExport` / `TestURLModeStopsRetryingOnCancel` / `TestRunURLModeStartsWithoutUpstream` |
-| AC-D1 | k8s: readiness は /readyz、base にマスタの設定なし、local はファイル方式(CALC_MASTER_PATH だけ・コピー一致・相性表のコピーなし)、dev.sh に CALC_TYPECHART_PATH なし | `TestManifestCalcWorkload` / `TestManifestCalcBaseHasNoLocalData` / `TestManifestCalcLocalDataFromOverlayCopies` / `TestManifestCalcLocalHasNoTypeChartCopy` / `deploytest.TestDevScript` |
+| AC-D1 | k8s: readiness は /readyz、dev.sh に CALC_TYPECHART_PATH なし。~~base にマスタの設定なし、local はファイル方式~~ **ADR-0206 で変更**: base(local を含む)は `CALC_MASTER_URL=http://pokedex` の URL 方式、相性表のコピーなし | `TestManifestCalcWorkload` / `TestManifestCalcBaseUsesPokedexMaster` / `TestManifestCalcLocalUsesPokedexMaster` / `TestManifestCalcLocalHasNoMasterCopy` / `deploytest.TestDevScript` |
 | AC-G1 | gateway は `/internal/*` を 404 not_found にし、どの上流にも届けない(スモークでも確認) | `gateway/internal/httpapi.TestUnroutedPathsAreNotFound` / `deploytest.TestSmokeScriptPassesAgainstGatewayAndCalc` |
 
 ## 却下した案

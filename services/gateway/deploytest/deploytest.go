@@ -78,20 +78,6 @@ type ConfigMapGenerator struct {
 	Files []string `yaml:"files"`
 }
 
-// SourceFor は key に対応する元ファイル(ジェネレータの kustomization.yaml からの相対)を返す。
-func (g ConfigMapGenerator) SourceFor(key string) (string, bool) {
-	for _, f := range g.Files {
-		k, src, found := strings.Cut(f, "=")
-		if !found {
-			k, src = filepath.Base(f), f
-		}
-		if k == key {
-			return src, true
-		}
-	}
-	return "", false
-}
-
 // KustomizeImage は images の1件。
 type KustomizeImage struct {
 	Name    string `yaml:"name"`
@@ -543,40 +529,6 @@ func applyImageOverride(ref string, images []KustomizeImage) string {
 		out += "@" + digest
 	}
 	return out
-}
-
-// MountedConfigMapFile は、コンテナ内のファイル path がどの ConfigMap のどの key から来るかを返す
-// (ディレクトリへのマウント・subPath・configMap.items に対応)。見つからなければ ok=false。
-func MountedConfigMapFile(d Deployment, c *Container, path string) (configMap, key string, ok bool) {
-	for _, m := range c.VolumeMounts {
-		var vol *Volume
-		for i := range d.Spec.Template.Spec.Volumes {
-			if d.Spec.Template.Spec.Volumes[i].Name == m.Name {
-				vol = &d.Spec.Template.Spec.Volumes[i]
-			}
-		}
-		if vol == nil || vol.ConfigMap == nil {
-			continue
-		}
-		var fileInVolume string
-		switch {
-		case m.SubPath != "" && m.MountPath == path:
-			fileInVolume = m.SubPath
-		case m.SubPath == "" && strings.TrimSuffix(m.MountPath, "/") == filepath.Dir(path):
-			fileInVolume = filepath.Base(path)
-		default:
-			continue
-		}
-		if len(vol.ConfigMap.Items) == 0 {
-			return vol.ConfigMap.Name, fileInVolume, true
-		}
-		for _, it := range vol.ConfigMap.Items {
-			if it.Path == fileInVolume {
-				return vol.ConfigMap.Name, it.Key, true
-			}
-		}
-	}
-	return "", "", false
 }
 
 // Workload は AssertWorkload に渡す、サービスごとの期待値。

@@ -4,6 +4,7 @@ package main
 // 環境変数名はこのパッケージの定数と突き合わせ、local overlay の値で loadConfig が通ることまで確かめる。
 
 import (
+	"net/url"
 	"slices"
 	"testing"
 
@@ -19,7 +20,24 @@ const (
 	localViteOrigin = "http://localhost:5173"
 	// webServiceName は Web レーンが deploy/k8s/base/web に置く nginx の Service 名(80 番。ADR-0205)。
 	webServiceName = "web"
+	// pokedexServiceName は gateway が /api/pokedex/* を転送する pokedex-svc の Service 名
+	// (deploy/k8s/base/pokedex。ADR-0105・ADR-0206)。
+	pokedexServiceName = "pokedex"
 )
+
+// assertServiceURL は cfg の上流 URL が Service 名の 80 番(パス・クエリなし)であることを確かめる。
+func assertServiceURL(t *testing.T, envName string, u *url.URL, service string) {
+	t.Helper()
+	if u == nil {
+		t.Fatalf("%s が読まれていない(nil)", envName)
+	}
+	if u.Scheme != "http" || u.Hostname() != service || (u.Port() != "" && u.Port() != "80") {
+		t.Errorf("%s = %q, want http://%s(Service の %d 番)", envName, u, service, deploytest.ServicePort)
+	}
+	if (u.Path != "" && u.Path != "/") || u.RawQuery != "" {
+		t.Errorf("%s にパス・クエリがある: %q", envName, u)
+	}
+}
 
 // AC-S3: base の Deployment・Service が ADR-0203 §3 の形(/healthz の probe・非 root・readOnlyRootFilesystem・80 番)。
 func TestManifestGatewayWorkload(t *testing.T) {
@@ -59,20 +77,29 @@ func TestManifestGatewayIngress(t *testing.T) {
 	}
 }
 
-// AC-S4: base の設定だけで起動できる(GATEWAY_CALC_URL は Service 名)。CORS の許可オリジンは local 専用なので base に置かない。
+// AC-S4 / AC-P1(ADR-0206): base の設定だけで起動できる(GATEWAY_CALC_URL・GATEWAY_POKEDEX_URL はどちらも
+// Service 名。Service 名はクラウドでも同じなので base に置く)。CORS の許可オリジンは local 専用なので base に置かない。
+// 画像配信(GATEWAY_ASSETS_URL)はまだ無いので未設定(→ /assets/* は 404)。
 func TestManifestGatewayBaseConfig(t *testing.T) {
 	d := deploytest.BaseDeployment(t, gatewayService)
 	env := d.Container(t, gatewayService).EnvMap(t)
 	if _, ok := env[envCORSAllowedOrigins]; ok {
 		t.Errorf("base に %s がある(localhost の許可は local overlay だけに置く)", envCORSAllowedOrigins)
 	}
-	if _, err := loadConfig(lookupFrom(env)); err != nil {
+	cfg, err := loadConfig(lookupFrom(env))
+	if err != nil {
 		t.Fatalf("base の環境変数で loadConfig が失敗: %v(env=%v)", err, env)
+	}
+	assertServiceURL(t, envCalcURL, cfg.Gateway.CalcURL, calcServiceName)
+	assertServiceURL(t, envPokedexURL, cfg.Gateway.PokedexURL, pokedexServiceName)
+	if cfg.Gateway.AssetsURL != nil {
+		t.Errorf("base に %s がある(画像配信はまだ無い)", envAssetsURL)
 	}
 }
 
-// AC-S4: local overlay(base + deploy/k8s/overlays/local/api)の環境変数で loadConfig が通り、
-// calc は Service 名 calc の 80 番、pokedex・assets は未設定(503 / 404)、CORS は Vite の既定オリジンだけ。
+// AC-S4 / AC-P2(ADR-0206): local overlay(base + deploy/k8s/overlays/local/api)の環境変数で loadConfig が通り、
+// calc は Service 名 calc の 80 番、pokedex は Service 名 pokedex の 80 番(base の設定が Component の patch で
+// 消えていないこと)、assets は未設定(404)、CORS は Vite の既定オリジンだけ。
 func TestManifestGatewayLocalConfig(t *testing.T) {
 	d := deploytest.LocalDeployment(t, gatewayService)
 	env := d.Container(t, gatewayService).EnvMap(t)
@@ -80,17 +107,9 @@ func TestManifestGatewayLocalConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("local overlay の環境変数で loadConfig が失敗: %v(env=%v)", err, env)
 	}
-	calc := cfg.Gateway.CalcURL
-	if calc.Scheme != "http" || calc.Hostname() != calcServiceName || (calc.Port() != "" && calc.Port() != "80") {
-		t.Errorf("%s = %q, want http://%s(Service の %d 番)", envCalcURL, calc, calcServiceName, deploytest.ServicePort)
-	}
-	if calc.Path != "" && calc.Path != "/" {
-		t.Errorf("%s にパスがある: %q", envCalcURL, calc)
-	}
-	// pokedex-svc(plan.md P2-3)を deploy/k8s に入れたら、この検査と smoke.sh の 503 の確認を一緒に変える(ADR-0203 §5)。
-	if cfg.Gateway.PokedexURL != nil {
-		t.Errorf("%s が設定されている(pokedex-svc はまだ無い。入れるならスモークの 503 の確認も変えること)", envPokedexURL)
-	}
+	assertServiceURL(t, envCalcURL, cfg.Gateway.CalcURL, calcServiceName)
+	// ADR-0206: pokedex-svc(P2-3)が base に入ったので /api/pokedex/* は上流に届く(未設定の 503 ではなくなった)。
+	assertServiceURL(t, envPokedexURL, cfg.Gateway.PokedexURL, pokedexServiceName)
 	if cfg.Gateway.AssetsURL != nil {
 		t.Errorf("%s が設定されている(画像配信はまだ無い)", envAssetsURL)
 	}

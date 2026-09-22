@@ -11,8 +11,8 @@ Next: P2-3b(無効・吸収の特性を engine・DB・export に足す)→ P3-1�
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
 Active: なし
 Branch: (次は main から feat/api-<名前> を切る。作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: Phase 3 完了(PR #14・#23・#30)、P3-4 マスタを pokedex-svc の内部 API から(ADR-0204。PR #42)、P3-5 gateway の GATEWAY_WEB_URL(ADR-0205。PR #54)、pokedex-svc の契約 description を ADR-0105 に合わせる(PR #59)は main に統合済み。ユーザー指示(2026-09-22)により利用枠をデータレーンに集中させるため一旦停止
-Next: データレーン依頼 d(gateway の /api/pokedex/* を pokedex-svc(Service 名 pokedex、ポート80)へ、calc の local overlay を CALC_MASTER_URL=http://pokedex の URL 方式へ切り替え)。疎通確認には pokedex-svc の実データ投入が要る(データレーンの docs/runbooks/data.md の手順: make up → make import-fetch/import-dry-run → make import または make import-k8s → kubectl -n pokecalc get deploy pokedex で Ready 確認)。その後は DOC-api(calc・gateway の README を coding-rules §8 に、docs/runbooks/api.md)
+Status: Phase 3 完了(PR #14・#23・#30)、P3-4 マスタを pokedex-svc の内部 API から(ADR-0204。PR #42)、P3-5 gateway の GATEWAY_WEB_URL(ADR-0205。PR #54)、pokedex-svc の契約 description(PR #59)、copyAbilityEffect のディープコピー修正(P2-3b critic 指摘。PR #81)、P3-6 calc・gateway を pokedex-svc につなぐ(ADR-0206。critic PASS。PR #87)は main に統合済み
+Next: DOC-api(calc・gateway の README を coding-rules §8 に、docs/runbooks/api.md)
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
