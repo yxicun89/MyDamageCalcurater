@@ -36,7 +36,7 @@
   レギュレーションでの絞り込みは read model を出力する側(pokedex export。データレーン)の責務とする(DECISIONS.md に依頼)。
 
 ### 5. read model の拡張
-- ポケモンの read model(ADR-0014 §2)の各要素に、省略可能な `nameJa`(文字列 1〜64 文字)と `abilityIds`(特性 ID の配列。0〜3 件、重複なし、
+- ポケモンの read model(ADR-0014 §2)の各要素に、省略可能な `nameJa`(文字列 1〜64 文字)と `abilityIds`(特性 ID の配列。0〜4 件(2026-09-22 に 3 から変更。特性スロットが4つの種族があるため)、重複なし、
   ADR-0017 §2 の ID 形式)を足す。`schemaVersion` は 1 のまま(省略可能な項目の追加で、既存のファイルはそのまま読める)。
 - Git の example は架空データ(架空の名前)だけ。
 

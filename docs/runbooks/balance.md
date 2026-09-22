@@ -20,6 +20,18 @@ make balance-smoke
 確認: 最後の行が `balance smoke: health=200 analyze=200 unknown=422 coverage=200 unknown_move=422 ability=200 unknown_ability=422 threats=200 threats_unknown_move=422 recommendations=200`
 (1回目がロールアウト直後で失敗したら `make balance-smoke` をもう一度)。
 
+## 2b. pokedex export の実データで動かす(export があるときだけ)
+
+データレーンの pokedex export で `data/generated/readmodel/` に3つの JSON ができてから実行する。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make balance-k3d-deploy-readmodel
+make balance-smoke-readmodel
+```
+確認: 最後の行が `balance readmodel smoke: pokemon=<ID> analyze=200 recommendations=200`。
+ファイルが無い・不正なときは `read model check failed` や `missing ...` で止まり、デプロイされない。
+
 GitOps(Argo CD)を確かめるときだけ、以降の 3〜9 を続ける(3〜5 は初回だけ)。
 
 ## 3. Argo CD を入れる(初回だけ)

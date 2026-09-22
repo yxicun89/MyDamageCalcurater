@@ -1,0 +1,14 @@
+# ローカル k3d で pokedex export の read model(Git 管理外)を読む overlay(ADR-0403)。
+# ConfigMap balance-readmodel は Git に置かず、make balance-k3d-deploy-readmodel が
+# data/generated/readmodel/ から作る(Kustomize の load restrictor で overlay 外のファイルを参照できないため)。
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: pokecalc
+resources:
+  - ../../base
+patches:
+  - path: deployment-readmodel-patch.yaml
+images:
+  - name: pokecalc/balance
+    newName: pokecalc/balance
+    newTag: local

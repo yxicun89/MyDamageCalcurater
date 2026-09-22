@@ -6,7 +6,7 @@ BALANCE_URL ?= http://localhost:8080
 # macOS の AirPlay 受信が 5000 を使うことがあるので、Mac 側の port-forward は 5001(ノード側は localhost:5000 のまま)
 BALANCE_REGISTRY_PORT ?= 5001
 
-.PHONY: balance-gen balance-test balance-lint balance-build balance-kustomize balance-docker-build balance-docker-push balance-k3d-deploy balance-smoke balance-gitops-template-check balance-gitops-check balance-sync-typechart balance-registry-apply balance-registry-push balance-argocd-app
+.PHONY: balance-gen balance-test balance-lint balance-build balance-kustomize balance-docker-build balance-docker-push balance-k3d-deploy balance-smoke balance-gitops-template-check balance-gitops-check balance-sync-typechart balance-registry-apply balance-registry-push balance-argocd-app balance-k3d-deploy-readmodel balance-smoke-readmodel
 
 # ルートの make test / lint / build に balance を含める(ユーザー決定 2026-09-21: テスト漏れを防ぐ)。
 # レシピを持たない前提条件の追加なので、ルートの既存ターゲットのレシピは変わらない。
@@ -65,3 +65,9 @@ balance-registry-push:
 
 balance-argocd-app:
 	@BALANCE_DIR=$(BALANCE_DIR) $(BALANCE_DIR)/scripts/argocd-local-app.sh
+
+balance-k3d-deploy-readmodel:
+	@BALANCE_DIR=$(BALANCE_DIR) BALANCE_IMAGE=$(BALANCE_IMAGE) CLUSTER=$(CLUSTER) $(BALANCE_DIR)/scripts/k3d-deploy-readmodel.sh
+
+balance-smoke-readmodel:
+	@BALANCE_URL=$(BALANCE_URL) $(BALANCE_DIR)/scripts/smoke-readmodel.sh
