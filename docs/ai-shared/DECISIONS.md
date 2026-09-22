@@ -578,3 +578,7 @@ up.sh は `pokecalc/calc:local` / `pokecalc/gateway:local` をビルド・import
 up.sh の最後で `make api-docker-build` と `k3d image import` を呼ぶ形にするかは、up.sh の持ち主(データレーン・整備レーン)の判断に任せる。API レーンは scripts/up.sh を変えない。
 Reason: critic の推奨。共有スクリプトは他レーンの範囲のため。
 Impact: `api-k3d-deploy` は他レーンのリソースに触れないよう、常に API 専用の overlay(deploy/k8s/overlays/local-api)だけを適用する(ADR-0203)。
+
+## 2026-09-22: 素早さ SP0 を PR #32 で main に統合(素早さレーン)
+Decision: SP0(ADR-0600)を PR #32 で統合した。critic は1回目 NG(smoke の架空名)→ 修正後 PASS。make test・lint・build・check-publishable・smoke が成功。
+Impact: 素早さレーンは SP1(feat/speed-s1)へ。
