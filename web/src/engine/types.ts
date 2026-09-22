@@ -96,12 +96,28 @@ export interface Item {
   readonly effect: ItemEffect | null;
 }
 
+/**
+ * 吸収したときの副次効果(ADR-0106 §決定2)。省略(`{}`)は「吸収するが副次効果は持たない」
+ * (もらいび 等)を表す正しい値。healNumerator/healDenominator と boostStat/boostStages はそれぞれ組で指定する
+ * (WASM 境界の検証。engine/wasmapi/dto.go の absorbEffectDTO)。
+ */
+export interface AbsorbEffect {
+  readonly healNumerator?: number;
+  readonly healDenominator?: number;
+  readonly boostStat?: string;
+  readonly boostStages?: number;
+}
+
 /** 特性の効果(4096 基準の固定小数)。すべて省略可。 */
 export interface AbilityEffect {
   readonly stabMod?: number;
   readonly offBoostType?: string;
   readonly offBoostTypeMod?: number;
   readonly defResistType?: Readonly<Record<string, number>>;
+  /** 無効にする攻撃タイプ(ふゆう 等)。ダメージ 0・副次効果なし(ADR-0106)。 */
+  readonly defImmuneTypes?: readonly string[];
+  /** 吸収する攻撃タイプ(ちょすい 等)→ 副次効果。ダメージ 0(ADR-0106)。 */
+  readonly defAbsorbTypes?: Readonly<Record<string, AbsorbEffect>>;
   readonly reduceSuperEffective?: number;
   readonly ignoresBurn?: boolean;
 }
