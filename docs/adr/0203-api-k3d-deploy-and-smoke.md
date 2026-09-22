@@ -1,6 +1,6 @@
 # ADR-0203: calc・gateway の k3d デプロイとスモーク
 
-- 状態: 採用(2026-09-22。P3-3 の設計。受け入れ条件とテストは spec-writer が先に書き、実装は implementer)
+- 状態: 採用・実装済み(2026-09-22。P3-3。k3d の既存クラスタで `make api-k3d-deploy && make api-smoke` を確認: calc・bulk・reverse=200、missing_header・invalid_header=400、pokedex=503、balance=200)
 - 日付: 2026-09-22
 - 関連: ADR-0002(実マスタをコミットしない)、ADR-0012(サービス境界。`/api/balance` は balance の Ingress)、
   ADR-0015(相性表 JSON)、ADR-0200(calc-svc の契約・`/healthz`)、ADR-0202(gateway のルーティング・ヘッダ検証)、
@@ -64,11 +64,17 @@ gateway 経由の代表的な 400 と pokedex 未設定の 503 が1つの表に�
 | ターゲット | 中身 |
 |---|---|
 | `api-docker-build` | 2イメージを `docker build -f services/<svc>/Dockerfile -t pokecalc/<svc>:local .` |
-| `api-k3d-deploy` | `api-docker-build` → `k3d image import`(2イメージ)→ `kubectl apply -k deploy/k8s/overlays/local` → rollout restart / `rollout status`(calc・gateway) |
+| `api-k3d-deploy` | `api-docker-build` → `k3d image import`(2イメージ)→ `kubectl apply -k`(下の「apply の分離」)→ rollout restart / `rollout status`(calc・gateway) |
 | `api-smoke` | `API_URL=… services/gateway/scripts/smoke.sh` |
-| `api-kustomize` | `kubectl kustomize deploy/k8s/base` と `deploy/k8s/overlays/local` が描画できること |
+| `api-kustomize` | `kubectl kustomize` で `deploy/k8s/base`・`deploy/k8s/overlays/local`・`deploy/k8s/overlays/local-api` が描画できること |
 
 API のテストは既存の `test-services` で `make test` に入っているので、balance のような `test: api-test` の前提条件は足さない。
+
+**apply の分離(実装時の追記)**: 共有の `deploy/k8s/overlays/local` は base 全体(pokedex の migrate Job を含む)と mysql を含み、
+migrate Job はデータレーンが `make up` で作る `mysql-auth` Secret(.env 由来。Git に置かない)を前提にする。API レーンは他レーンの
+Secret を代わりに作らず、不完全な他レーンのリソースも持ち込まない。そこで API 専用の overlay `deploy/k8s/overlays/local-api`
+(`base/calc`・`base/gateway` と Component `local/api` だけ)を置き、`api-k3d-deploy` は `mysql-auth` が無いクラスタではこちらを、
+ある(`make up` 済み)クラスタでは `deploy/k8s/overlays/local` を丸ごと適用する。
 
 ### 5. スモーク(L5 の API 部分)
 
