@@ -16,13 +16,12 @@ Next: 他レーン待ち。(1) データレーンの pokedex-svc(P2-3)が main �
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
-Active: Claude Code
+Active: なし
 Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
-Status: P4-1〜P4-6・P4-8 完了・main に統合(PR #22・#28・#33。critic PASS)。Web のテストはルートの make test / lint / build に含まれる。
+Status: P4-1〜P4-6・P4-8・P4-9 完了・main に統合(PR #22・#28・#33 と P4-9 の PR。critic PASS)。Web のテストはルートの make test / lint / build に含まれる。
 人間待ち: P4-5 のブラウザ実機確認(Chrome・Safari。手順は docs/verify-m1.md §2)。P4-7 は verify-m1.md のドラフト(M1 の残りを待つ)
 Next: (1) P4-7 の完成: P2-2c/d・P2-3 pokedex-svc・P3-3 が main に入ったら、オンラインのときにマスタを API から読む MasterSource を作り(ADR-0301 §4)、
-verify-m1.md §4 を手順に置き換える。(2) 軽微の改善候補(P4-8 の critic): ホロの pointermove で画面全体を再レンダーしている(カード内の state に分けるか rAF で間引く)、
-touch でのホロ、弾み・絞り込みのフォールバックタイマー。(3) P5-5(M2 の Web: 履歴・よく計算する相手・構築ビルダー)は record/team の API を待つ
+verify-m1.md §4 を手順に置き換える。(2) P5-5(M2 の Web: 履歴・よく計算する相手・構築ビルダー)は record/team の API を待つ
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)

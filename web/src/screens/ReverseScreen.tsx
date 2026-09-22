@@ -56,6 +56,13 @@ import "./ReverseScreen.css";
  */
 const NARROWING_MIN_OBSERVATIONS = 2;
 
+/**
+ * 絞り込みの演出(design.md「画面: 逆算」: --duration-narrow 0.3秒)を、animationend が来なくても
+ * (タブが裏にある等)必ず終わらせるまでの最大待ち時間。CSS の --duration-narrow(styles/tokens.css)を
+ * 上回る値にする(animationend が実際に来るまでの余裕。CSS の秒数そのものを TS に複製しない。P4-9)。
+ */
+const NARROWING_ANIMATION_MAX_WAIT_MS = 1000;
+
 /** 技を選んでいないときの、自分の調整の表示用の仮の分類(A/C 表記の既定は物理と同じ)。 */
 const DEFAULT_MOVE_CATEGORY: MoveCategory = "physical";
 
@@ -301,6 +308,22 @@ export function ReverseScreen({ engine, master }: ReverseScreenProps) {
       setNarrowingState((prev) => ({ ...prev, narrowing: false }));
     }
   }
+
+  // 絞り込みの演出は animationend が来なくても(タブが裏にある等)最大待ちで必ず外す(P4-9)。
+  // lastCompleted(絞り込み直すたびに新しい参照になる)を依存に含めることで、animationend の前に
+  // 入れ直して絞り込み直しても前のタイマーでは外さず、新しい最大待ちで掛け直す。視差効果を減らす設定・
+  // 絞り込みでない結果では narrowing が false なのでタイマーを掛けない。
+  useEffect(() => {
+    if (!narrowing) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setNarrowingState((prev) => ({ ...prev, narrowing: false }));
+    }, NARROWING_ANIMATION_MAX_WAIT_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [narrowingState.lastCompleted, narrowing]);
 
   let outcome: Outcome;
   if (mySpecies === null || theirsSpecies === null || move === null) {
