@@ -19,6 +19,10 @@ tags:
     description: マスタ参照(種族・技・持ち物・特性・性格)
   - name: calc
     description: ダメージ計算・一括計算・逆算
+  - name: internal
+    description: |
+      サービス間の内部 API(ADR-0204)。gateway は公開しない(`/internal/*` は gateway で 404 `not_found`)。
+      クラスタ内の Service からだけ呼ぶ。端末ID(X-Device-Id)/ セッションID(X-Session-Id)は要らない。
 
 paths:
   /api/pokedex/species:
@@ -285,6 +289,30 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
         default:
           $ref: '#/components/responses/Error'
+
+  /internal/pokedex/master:
+    get:
+      tags: [internal]
+      operationId: getMasterExport
+      summary: 計算用のマスタ一式(pokedex-svc → calc-svc)
+      description: |
+        pokedex-svc が自分の DB(マスタの正本。CLAUDE.md 絶対ルール4)から、calc-svc が計算に使うマスタ一式を
+        DB の行に近い形で返す(ADR-0204)。calc-svc は起動時に1度取得し、`services/internal/master` の写像で
+        engine の型にしてメモリに載せる(取得後の再取得はしない。マスタの更新は calc-svc の再起動で反映する)。
+        - 使用可能集合(レギュレーション)で絞らない。計算は全件を扱える必要がある(絞り込みは pokedex の検索の仕事)。
+        - 並び順に意味は持たせない(タイプの表示順は `types[].sortOrder`)。
+        - gateway は公開しない。端末ID/セッションID は要らない。
+      responses:
+        '200':
+          description: マスタ一式
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MasterExport' }
+        '503':
+          description: マスタを返せない(DB に未投入・DB に接続できない。`master_unavailable`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
 components:
   parameters:
@@ -834,3 +862,156 @@ components:
           type: array
           description: Mismatch 昇順 → Support 降順 → SPCount 降順 → 定義順(ADR-0010 §R4)
           items: { $ref: '#/components/schemas/ReverseCandidate' }
+
+    MasterExport:
+      type: object
+      description: |
+        calc-svc が計算に使うマスタ一式(ADR-0204)。形は pokedex の DB の行(`services/internal/master` の
+        TypeRow / TypeChartRow / SpeciesRow + SpeciesAbilityRow / MoveRow / ItemRow / AbilityRow)に対応する。
+        値の検証(ID の形式・範囲・組の整合・効果定義)は受け取った側が共通マスタの写像で行う。
+      required: [schemaVersion, dataVersion, types, typeChart, species, moves, items, abilities, natures]
+      properties:
+        schemaVersion:
+          type: integer
+          enum: [1]
+          description: この形の版。いまは 1 だけ
+        dataVersion:
+          type: string
+          minLength: 1
+          description: |
+            データの版の識別子(pokedex の data_versions に由来する)。calc-svc は記録とログに使うだけで、
+            計算の結果には影響しない。
+        types:
+          type: array
+          items: { $ref: '#/components/schemas/MasterType' }
+        typeChart:
+          type: array
+          description: タイプ相性表の行(ADR-0013)。等倍(code 2)の組は省略してよい
+          items: { $ref: '#/components/schemas/MasterTypeChartEntry' }
+        species:
+          type: array
+          items: { $ref: '#/components/schemas/MasterSpecies' }
+        moves:
+          type: array
+          items: { $ref: '#/components/schemas/MasterMove' }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MasterItem' }
+        abilities:
+          type: array
+          items: { $ref: '#/components/schemas/MasterAbility' }
+        natures:
+          type: array
+          items: { $ref: '#/components/schemas/MasterNature' }
+
+    MasterType:
+      type: object
+      description: types テーブルの行
+      required: [id, sortOrder, nameJa]
+      properties:
+        id: { $ref: '#/components/schemas/PokeType' }
+        sortOrder: { type: integer, description: 表示順(重複しない) }
+        nameJa: { type: string }
+
+    MasterTypeChartEntry:
+      type: object
+      description: type_chart テーブルの行。code は倍率を ×2 した整数(0=無効・1=いまひとつ・2=等倍・4=ばつぐん。ADR-0013)
+      required: [attackType, defenseType, code]
+      properties:
+        attackType: { $ref: '#/components/schemas/PokeType' }
+        defenseType: { $ref: '#/components/schemas/PokeType' }
+        code: { type: integer, enum: [0, 1, 2, 4] }
+
+    MasterSpecies:
+      type: object
+      description: |
+        species テーブルの行と、その species_abilities の行。showdownId は取得元との突き合わせ用の ID で、
+        共通マスタの写像が形式を検証する(ADR-0100 §2)。
+      required: [key, dexNo, form, showdownId, nameJa, type1, type2, baseStats, isMega, baseSpeciesKey, requiredItemId, abilities]
+      properties:
+        key: { $ref: '#/components/schemas/SpeciesKey' }
+        dexNo: { type: integer }
+        form: { type: integer }
+        showdownId: { type: string }
+        nameJa: { type: string }
+        type1: { $ref: '#/components/schemas/PokeType' }
+        type2:
+          description: 第2タイプ。単タイプは null
+          nullable: true
+          allOf: [ { $ref: '#/components/schemas/PokeType' } ]
+        baseStats:
+          allOf: [ { $ref: '#/components/schemas/StatBlock' } ]
+          description: 種族値
+        isMega: { type: boolean }
+        baseSpeciesKey:
+          type: string
+          nullable: true
+          description: メガシンカ前の種族キー(メガでなければ null)
+        requiredItemId:
+          type: string
+          nullable: true
+          description: メガシンカに要る持ち物の ID(メガでなければ null)
+        abilities:
+          type: array
+          items: { $ref: '#/components/schemas/MasterSpeciesAbility' }
+
+    MasterSpeciesAbility:
+      type: object
+      description: species_abilities テーブルの行
+      required: [slot, abilityId]
+      properties:
+        slot: { type: integer, description: 1..3 }
+        abilityId: { type: string }
+
+    MasterMove:
+      type: object
+      description: moves テーブルの行(計算に使う列だけ)
+      required: [id, nameJa, type, category, power, priority]
+      properties:
+        id: { type: string }
+        nameJa: { type: string }
+        type: { $ref: '#/components/schemas/PokeType' }
+        category: { $ref: '#/components/schemas/MoveCategory' }
+        power: { type: integer }
+        priority: { type: integer }
+
+    MasterEffect:
+      type: object
+      additionalProperties: true
+      nullable: true
+      description: |
+        効果定義(item_effects / ability_effects の JSON をそのまま。ADR-0005)。null は補正なし。
+        形は共通マスタ(`services/internal/master` の DecodeItemEffect / DecodeAbilityEffect)が受け付けるもので、
+        受け取った側がそこで厳格に検証する(未知のキー・4096 基準の整数でない値・空のオブジェクトは不正)。
+
+    MasterItem:
+      type: object
+      description: items テーブルの行 + item_effects の effect
+      required: [id, nameJa, effect]
+      properties:
+        id: { type: string }
+        nameJa: { type: string }
+        effect: { $ref: '#/components/schemas/MasterEffect' }
+
+    MasterAbility:
+      type: object
+      description: abilities テーブルの行 + ability_effects の effect
+      required: [id, nameJa, effect]
+      properties:
+        id: { type: string }
+        nameJa: { type: string }
+        effect: { $ref: '#/components/schemas/MasterEffect' }
+
+    MasterNature:
+      type: object
+      description: 性格(ADR-0204 でデータレーンに natures テーブルを提案)。無補正は plus / minus とも null。HP を指すことはない
+      required: [id, nameJa, plus, minus]
+      properties:
+        id: { type: string }
+        nameJa: { type: string }
+        plus:
+          nullable: true
+          allOf: [ { $ref: '#/components/schemas/StatKey' } ]
+        minus:
+          nullable: true
+          allOf: [ { $ref: '#/components/schemas/StatKey' } ]

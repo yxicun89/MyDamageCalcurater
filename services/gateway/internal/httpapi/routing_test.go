@@ -157,6 +157,13 @@ func TestUnroutedPathsAreNotFound(t *testing.T) {
 		{"エンコードされたスラッシュを含むドットセグメント", http.MethodGet, "/api/calc%2f..%2fhealthz", validHeaders()},
 		{"エンコードされたドットセグメントで assets から api へ", http.MethodGet, "/assets/..%2fapi/calc", http.Header{}},
 		{"一部だけエンコードされたドットセグメント", http.MethodGet, "/api/calc/.%2e/pokedex", validHeaders()},
+		// ADR-0204: サービス間の内部 API(pokedex-svc の GET /internal/pokedex/master)は gateway が外に出さない。
+		// PokedexURL が設定されていても pokedex-svc へ転送しない(assertNoUpstreamReached)。
+		{"内部 API /internal/pokedex/master", http.MethodGet, "/internal/pokedex/master", validHeaders()},
+		{"内部 API はヘッダ無しでも not_found", http.MethodGet, "/internal/pokedex/master", http.Header{}},
+		{"内部 API /internal(接頭辞だけ)", http.MethodGet, "/internal", http.Header{}},
+		{"ドットセグメントで /api/pokedex から /internal へ", http.MethodGet, "/api/pokedex/../../internal/pokedex/master", validHeaders()},
+		{"エンコードされたドットセグメントで /internal へ", http.MethodGet, "/api/pokedex/%2e%2e/%2e%2e/internal/pokedex/master", validHeaders()},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
