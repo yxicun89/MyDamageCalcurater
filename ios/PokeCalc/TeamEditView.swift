@@ -21,6 +21,7 @@ struct TeamEditView: View {
     /// トリムした後の値になるため、入力中の文字列をそのまま `TextField` に戻すとカーソル位置が
     /// 揺れうる)。
     @State private var nameText: String
+    @State private var isSpeciesSearchPresented = false
 
     init(store: any TeamStore, service: any PokeCalcService, team: Team) {
         _viewModel = State(initialValue: TeamEditViewModel(store: store, service: service, team: team))
@@ -81,20 +82,22 @@ struct TeamEditView: View {
         }
     }
 
+    /// issue #68: `Menu` ではなく検索シートで選ぶ(`CalcScreenCards` と同じ理由)。
     private var addMemberSection: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x1) {
-            Menu {
-                ForEach(viewModel.speciesOptions, id: \.key) { option in
-                    Button(option.nameJa) {
-                        Task { await viewModel.addMember(speciesKey: option.key) }
-                    }
-                }
+            Button {
+                isSpeciesSearchPresented = true
             } label: {
                 Label("メンバーを追加", systemImage: "plus.circle")
                     .font(TextStyleToken.body.font)
                     .foregroundStyle(ColorToken.textPrimary.color)
             }
             .accessibilityIdentifier("addMemberButton")
+            .sheet(isPresented: $isSpeciesSearchPresented) {
+                SpeciesSearchSheet(viewModel: viewModel) { option in
+                    Task { await viewModel.addMember(speciesKey: option.key) }
+                }
+            }
 
             if let teamError = viewModel.teamError {
                 Text(teamError.uiMessage)
