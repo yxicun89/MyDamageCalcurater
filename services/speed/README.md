@@ -1,44 +1,60 @@
-# speed(素早さ比較サービス)
+# speed-svc(素早さ比較サービス)
 
-使用可能なポケモン全員の素早さの表と、自分のポケモンの位置を比べる独立サービス。
-設計の正は [docs/speed-design.md](../../docs/speed-design.md) と [ADR-0600](../../docs/adr/0600-speed-sp0-foundation.md)。
-API の契約は [api/openapi.yaml](api/openapi.yaml)(変更後は `make speed-gen`)。
+使用可能なポケモン全員の素早さを速い順の表にし、自分のポケモンの位置を比べる。
+damage-calc・balance とは兄弟サービスで、互いの実行時 API に依存しない。実数値・ランクの式は engine を呼ぶだけで複製しない。
+HTTP の契約の正は [`api/openapi.yaml`](api/openapi.yaml)。手順書は [`docs/runbooks/speed.md`](../../docs/runbooks/speed.md)。
 
-## SP0 の受け入れ条件
-
-1. **素早さの計算**: `speed.Speed` が「実数値(engine.RealStats)→ ランク(engine.EffectiveStat)→ こだわりスカーフ(×6144/4096 の五捨五超入)」の順で値を返す。
-   例: 実数値 201 はスカーフで 301、200 は 300。201 にランク +2 とスカーフで 603(逆順なら 602)。
-2. **入力検証**: 種族値 1〜255・SP 0〜32・ランク -6〜+6・性格の補正 `minus` / `neutral` / `plus` の外は sentinel エラー(`ErrInvalidBaseSpeed` / `ErrInvalidSP` / `ErrInvalidRank` / `ErrInvalidNature`)。
-3. **read model**: `SPEED_POKEMON_PATH` の JSON を ADR-0600 §4 のとおり全項目検証し、1 つでも不正なら全体を `ErrInvalidPokemon` で拒否する。
-   架空データの例 `testdata/pokemon.example.json` が読め、local overlay のコピーとバイト一致する。
-4. **起動設定**: `SPEED_POKEMON_PATH` が未設定・空なら provider なしで起動する。設定されているのに読めない・不正なら起動を失敗させる。`PORT` の既定は 8080。
-5. **ヘルス**: `GET /healthz` と `GET /api/speed/healthz` は read model が無くても 200 `{"status":"ok"}`。
-6. **ポケモン一覧**: `GET /api/speed/v1/pokemon` は `X-Device-Id`・`X-Session-Id` の欠落・空で 400 `invalid_request`、
-   read model 未設定で 503 `master_unavailable`、正常なら 200 で pokemonId の昇順。provider のエラーは 500 `internal_error` の固定文言で、内部の文言を返さない。
-7. **ビルド・検査**: `make speed-test` / `make speed-lint` / `make speed-build` が通り、ルートの `make test` / `lint` / `build` に含まれる。
-
-## SP1 の受け入れ条件(ADR-0601)
-
-1. **プリセット**: `speed.Presets()` が 6 つの行の型を ADR-0601 §2 の順(`uninvested` / `neutral-max` / `max` / `max-scarf` / `max-plus1` / `max-plus2`)で返し、
-   各行の SP・性格の補正・ランク・スカーフが §2 の表と一致する。ID は OpenAPI の `PresetId` の enum と同じ順・同じ文字列。
-2. **表の組み立て**: `speed.BuildTable(roster, presets)` が各ポケモン × 指定のプリセットを `speed.Speed` で計算し、同じ値を 1 つの段にまとめる。
-   段は素早さの降順、段の中は pokemonId の昇順 → §2 の順(別のポケモン・別のプリセットでも値が同じなら同じ段)。
-3. **絞り込み**: 指定したプリセットの行だけを出し、指定の順は結果に影響しない。空・未知・重複は sentinel エラー
-   (`ErrNoPresets` / `ErrUnknownPreset` / `ErrDuplicatePreset`)。roster の種族値が不正なら `Speed` のエラーを包んで返す。
-4. **API**: `GET /api/speed/v1/table?presets=...` は ヘッダー(400)→ クエリ(未知・重複・`presets=` の空・キーの繰り返しは 400 `invalid_request`)
-   → read model 未設定(503 `master_unavailable`)→ 200 の順に判定する。provider・計算のエラーは 500 `internal_error` の固定文言。
-5. **レスポンス**: `presets` 省略時は 6 行すべて。レスポンスの `presets` は実際に使った行を §2 の順で返す。
-   例の read model では 35 段・48 行で、種族値 81 の `9002-000` と `9005-000` の行は同じ段(同速)に並ぶ。
-6. **スモーク**: `make speed-smoke` が表の 200 と同速の段(`presets=max-scarf` の 219)・未知のプリセットの 400 を確かめる。
-
-## コマンド
-
+```mermaid
+flowchart LR
+  Client["Web / iOS"] -->|"/api/speed/v1/*"| HTTP
+  subgraph speed["speed-svc"]
+    HTTP["internal/httpapi<br/>検証・判定順・応答"] --> Core["internal/speed<br/>純粋 Go(計算・表の組み立て)"]
+    Master["internal/master<br/>read model の loader"] --> Core
+  end
+  Engine["engine<br/>RealStats / EffectiveStat"] --> Core
+  RM["read model(JSON)<br/>ポケモン(種族値・日本語名)"] -->|"SPEED_POKEMON_PATH"| Master
+  Pokedex["pokedex export<br/>(データレーン。SP4)"] -.-> RM
 ```
-make speed-gen      # OpenAPI からコード生成
-make speed-test     # GOWORK=off で go test
-make speed-lint     # gofmt と go vet
-make speed-build    # go build
+
+## ディレクトリ
+
+| パス | 役割 |
+|---|---|
+| `api/openapi.yaml` | 外部 API 契約の正(`make speed-gen` で `internal/api` を生成) |
+| `internal/speed` | 純粋 Go のコア。`Speed`(実数値・ランクは engine、スカーフだけ自前)、`Presets`/`BuildTable`(表の組み立て) |
+| `internal/master` | read model(ポケモン)の loader。検証に失敗したら起動しない |
+| `internal/httpapi` | HTTP の検証・判定順(400 → 503 → 200、それ以外は 500)・応答の変換 |
+| `internal/api` | oapi-codegen の生成物(手で書かない) |
+| `cmd/api` | 起動・環境変数の読み込み・graceful shutdown |
+| `testdata/` | 架空データの example(実データは Git に置かない) |
+| `deploy/` | Kustomize(base / local。GitOps は SP4) |
+| `scripts/` | smoke |
+
+## エンドポイント
+
+| path | 内容 | ADR |
+|---|---|---|
+| `GET .../pokemon` | 使用可能なポケモン一覧(pokemonId 昇順) | 0600 |
+| `GET .../table` | 6 行のプリセット(`presets` で絞り込み)を速い順の段にまとめて返す。同じ値は同速として 1 段 | 0601 |
+
+## よく使うコマンド
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make speed-test speed-lint speed-build   # ルートの make test / lint / build にも含まれる
+make speed-gen                           # OpenAPI を変えたら
 make speed-kustomize
 make speed-docker-build
-make speed-smoke
 ```
+
+## 環境変数
+
+| 名前 | 内容(未設定・空文字なら該当する機能は 503) |
+|---|---|
+| `SPEED_POKEMON_PATH` | ポケモンの種族値・日本語名・タイプの read model |
+| `PORT` | 待受ポート(既定 8080) |
+
+## 関連 ADR
+
+[0012](../../docs/adr/0012-domain-service-boundaries.md)(サービス境界)・[0600](../../docs/adr/0600-speed-sp0-foundation.md)(基盤・計算・read model)・
+[0601](../../docs/adr/0601-speed-sp1-table.md)(表の6行・速い順・同速)。直接依存とライセンスは [`DEPENDENCIES.md`](DEPENDENCIES.md)。

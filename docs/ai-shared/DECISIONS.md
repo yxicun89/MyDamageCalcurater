@@ -623,6 +623,9 @@ Decision: P4-8(design.md「動き」の演出)と逆算の表示方針・design.
 Reason: critic PASS、make test / lint / build・E2E の通過を確認。
 Impact: Web レーンの Active を「なし」にした。続きは CURRENT_STATE.md の Web 欄の Next。
 
+## 2026-09-22: 素早さ SP1 を PR #36 で main に統合(素早さレーン)
+Decision: SP1(ADR-0601。表の 6 行・速い順・同速の段・presets の絞り込み)を PR #36 で統合した。critic PASS(軽微4。テストのコメントは修正、空の roster の扱いは SP4 までに決める)。
+Impact: 素早さレーンの次は SP2(feat/speed-s2)。
 ## 2026-09-22: 手順書の書き方を全レーン共通のルールにする(ユーザー決定。Web レーンのセッションで受領)
 Decision: 人が実行する手順書は、上から下へ1回読めば終わる形にし(節の間を行き来させない)、動作を伴うコマンドと必要最低限の確認点だけを書く
 (行動を伴わない説明は ADR や設計の節へ)。コマンドの塊はリポジトリのルートへの `cd` から始め、ローカルの手順は k3d(コンテナ)を主にする。
