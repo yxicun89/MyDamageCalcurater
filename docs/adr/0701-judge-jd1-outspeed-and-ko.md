@@ -129,12 +129,17 @@ judge は `Individual.itemId` の**文字列 1 つ**を既知の ID と比べて
 | body が 8 KiB 超 | 413 | `request_too_large` |
 | `natureId` が natures の一覧に無い | 422 | `unknown_nature` |
 | pokedex が speciesKey に 404(`ErrNotFound`) | 422 | `unknown_species` |
+| pokedex が natures/species に想定外の 400(`ErrInvalidRequest`) | 503 | `upstream_unavailable` |
 | 上流が未設定(client が nil)・接続不可・タイムアウト・5xx・契約に合わない応答 | 503 | `upstream_unavailable` |
 | calc-svc が 400(`ErrInvalidRequest`) | 400 | `invalid_request` |
 | 想定外の内部エラー | 500 | `internal_error`(固定文言) |
 
 - `unknown_species` / `unknown_nature` を 422 にするのは、形は正しいが指しているものがマスタに無い、という
   balance / speed の `unknown_pokemon`(422)と同じ区別。
+- pokedex の 400 は calc-svc の 400 とは扱いを分け、`invalid_request` にしない。judge は `speciesKey`(§7 のパターン)を
+  自分の事前検査で通した後にしか pokedex を呼ばないため、それでも pokedex が 400 を返すのは呼び出し側の入力の非ではなく
+  judge と pokedex-svc の契約のズレを意味する。呼び出し側を「入力が不正」と責めるより、`upstream_unavailable` として
+  「上流が使えない状態」で表す方が実態に近い(実運用では起こらない想定の経路)。
 - calc-svc の 400 は `unknown_move` / `unknown_item` / `unknown_ability` / SP 超過などをまとめたもので、
   judge は**どれだったかを見分けられない**。ADR-0700 §3 で上流の本文を読まない・漏らさないと決めているため。
   したがって judge 側に `unknown_move` は作らず、`invalid_request` に畳んで「calc-svc が計算要求を受け付けなかった」

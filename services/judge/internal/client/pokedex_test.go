@@ -480,3 +480,41 @@ func TestNaturesTimesOut(t *testing.T) {
 	}
 	assertNoUpstreamAuthority(t, err.Error(), server.URL)
 }
+
+// TestNaturesOnDNSError: ホスト名が解決できない上流も ErrUpstreamUnavailable で、
+// 文面にホスト名を含まない(Species と同じ検査。critic 指摘: Natures だけ対にする DNS テストが
+// 無かった)。
+func TestNaturesOnDNSError(t *testing.T) {
+	t.Parallel()
+
+	_, err := newPokedex(t, deadHostBaseURL, testTimeout).Natures(t.Context(), requestContext)
+	if !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Fatalf("err = %v, want ErrUpstreamUnavailable", err)
+	}
+	assertNoUpstreamAuthority(t, err.Error(), deadHostBaseURL)
+}
+
+// TestNaturesErrorDoesNotLeakUpstreamDetail: エラーの文面に上流の本文を入れない(ADR-0700 §3。
+// Species と同じ検査。critic 指摘: Natures だけ本文漏洩の対が無かった)。
+func TestNaturesErrorDoesNotLeakUpstreamDetail(t *testing.T) {
+	t.Parallel()
+
+	const upstreamDetail = "dsn dbhost02 svcaccount internal-only-detail"
+	server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"code":"internal_error","message":"` + upstreamDetail + `"}`))
+	})
+
+	_, err := newPokedex(t, server.URL, testTimeout).Natures(t.Context(), requestContext)
+	if !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Fatalf("err = %v, want ErrUpstreamUnavailable", err)
+	}
+	message := err.Error()
+	if strings.Contains(message, upstreamDetail) {
+		t.Errorf("エラーが上流の本文を漏らしている: %s", message)
+	}
+	if strings.Contains(message, server.URL) {
+		t.Errorf("エラーが上流の URL を漏らしている: %s", message)
+	}
+}

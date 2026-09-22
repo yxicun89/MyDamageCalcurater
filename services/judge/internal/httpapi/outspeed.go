@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"regexp"
 
@@ -432,9 +433,10 @@ func writeCalcError(c *echo.Context, err error) error {
 
 // writeUpstreamError answers 503 upstream_unavailable (ADR-0701 §6): pokedex-svc/calc-svc
 // unreachable, timed out, 5xx, or a response that doesn't match the contract. The message never
-// includes upstream detail (ADR-0700 §3); the actual err is not logged here since callers of
-// this package already fold out any upstream body/URL.
-func writeUpstreamError(c *echo.Context, _ error) error {
+// includes upstream detail (ADR-0700 §3), but err is still logged so operators have a cause to
+// look at (ADR-0700 §3 "ログには残す"; same as internalError).
+func writeUpstreamError(c *echo.Context, err error) error {
+	slog.Warn("judge upstream unavailable", "path", c.Path(), "error", err)
 	return c.JSON(http.StatusServiceUnavailable, api.Error{
 		Code:    api.UpstreamUnavailable,
 		Message: "upstream is unavailable",

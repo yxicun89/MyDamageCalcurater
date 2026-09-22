@@ -30,7 +30,9 @@ type Individual struct {
 }
 
 // Screens is judge's copy of the root api/openapi.yaml Screens (ADR-0701 §1). judge does not
-// interpret it; it's forwarded to calc-svc as-is.
+// interpret it; it's forwarded to calc-svc as-is. `omitempty` drops an unset (false) field from
+// the wire instead of sending it explicitly; this is equivalent for calc-svc, whose own schema
+// defaults each of these to false.
 type Screens struct {
 	Reflect     bool `json:"reflect,omitempty"`
 	LightScreen bool `json:"lightScreen,omitempty"`

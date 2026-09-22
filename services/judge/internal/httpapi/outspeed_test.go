@@ -447,17 +447,26 @@ func TestOutspeedAndKoChoiceScarf(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name          string
-		scarfItemID   string // Dependencies の上書き(空なら既定)
-		itemID        string
-		wantSpeed     int
-		wantOutspeeds bool
+		name           string
+		scarfItemID    string // Dependencies の上書き(空なら既定)
+		itemID         string
+		defenderItemID string
+		wantSpeed      int
+		wantDefSpeed   int
+		wantOutspeeds  bool
+		wantSpeedTie   bool
 	}{
-		{"既定の ID", "", "choicescarf", 180, true},
-		{"別の持ち物は効かない", "", "test-other-item", 120, false},
-		{"持ち物なし", "", "", 120, false},
-		{"設定で上書きした ID", "test-scarf", "test-scarf", 180, true},
-		{"上書きすると既定は効かない", "test-scarf", "choicescarf", 120, false},
+		// defender は natureId=naturePlusSpeID・sp=32(下のループの前で固定)なので、スカーフ無しの
+		// 素早さは (100+20+32)×1.1 = floor(167.2) = 167 になる。
+		{"既定の ID", "", "choicescarf", "", 180, 167, true, false},
+		{"別の持ち物は効かない", "", "test-other-item", "", 120, 167, false, false},
+		{"持ち物なし", "", "", "", 120, 167, false, false},
+		{"設定で上書きした ID", "test-scarf", "test-scarf", "", 180, 167, true, false},
+		{"上書きすると既定は効かない", "test-scarf", "choicescarf", "", 120, 167, false, false},
+		// defender 側の itemId でもスカーフが乗ることを確認する(critic 指摘: attacker 側しか
+		// 検査していなかった。ADR-0701 受け入れ条件2は自分・相手どちらの持ち物も対象)。
+		// 167 × 1.5 の五捨五超入 = floor((167*6144+2047)/4096) = 250。
+		{"defender のスカーフで抜き返される", "", "", "choicescarf", 120, 250, false, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -470,8 +479,12 @@ func TestOutspeedAndKoChoiceScarf(t *testing.T) {
 			if tt.itemID != "" {
 				attacker["itemId"] = tt.itemID
 			}
-			body["defender"].(map[string]any)["natureId"] = naturePlusSpeID
-			body["defender"].(map[string]any)["sp"] = sp(32)
+			defender := body["defender"].(map[string]any)
+			defender["natureId"] = naturePlusSpeID
+			defender["sp"] = sp(32)
+			if tt.defenderItemID != "" {
+				defender["itemId"] = tt.defenderItemID
+			}
 
 			stub := &upstreams{}
 			deps := newUpstreams(t, stub)
@@ -482,18 +495,58 @@ func TestOutspeedAndKoChoiceScarf(t *testing.T) {
 				t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
 			}
 			got := decodeResponse(t, recorder)
-			if got.AttackerSpeed != tt.wantSpeed || got.Outspeeds != tt.wantOutspeeds {
-				t.Errorf("attackerSpeed/outspeeds = %d/%v, want %d/%v",
-					got.AttackerSpeed, got.Outspeeds, tt.wantSpeed, tt.wantOutspeeds)
+			if got.AttackerSpeed != tt.wantSpeed || got.DefenderSpeed != tt.wantDefSpeed ||
+				got.Outspeeds != tt.wantOutspeeds || got.SpeedTie != tt.wantSpeedTie {
+				t.Errorf("attackerSpeed/defenderSpeed/outspeeds/speedTie = %d/%d/%v/%v, want %d/%d/%v/%v",
+					got.AttackerSpeed, got.DefenderSpeed, got.Outspeeds, got.SpeedTie,
+					tt.wantSpeed, tt.wantDefSpeed, tt.wantOutspeeds, tt.wantSpeedTie)
 			}
 			// スカーフの持ち物 ID は calc-svc にもそのまま渡す(ダメージ側の効果は calc-svc が持つ)。
+			calcBody := stub.lastCalcBody(t)
 			if tt.itemID != "" {
-				attackerSent := stub.lastCalcBody(t)["attacker"].(map[string]any)
+				attackerSent := calcBody["attacker"].(map[string]any)
 				if attackerSent["itemId"] != tt.itemID {
 					t.Errorf("calc の attacker.itemId = %v, want %q", attackerSent["itemId"], tt.itemID)
 				}
 			}
+			if tt.defenderItemID != "" {
+				defenderSent := calcBody["defender"].(map[string]any)
+				if defenderSent["itemId"] != tt.defenderItemID {
+					t.Errorf("calc の defender.itemId = %v, want %q", defenderSent["itemId"], tt.defenderItemID)
+				}
+			}
 		})
+	}
+}
+
+// TestOutspeedAndKoAsymmetricBaseSpeed: attacker/defender の種族値そのものが違う(調整では
+// なく種族差)場合でも、それぞれの Species を正しく紐づけて素早さを計算する(critic 指摘:
+// attackerSpeed/defenderSpeed のフィクスチャがどのテストからも設定されておらず、種族の
+// 取り違えが緑のまま通っていた)。
+func TestOutspeedAndKoAsymmetricBaseSpeed(t *testing.T) {
+	t.Parallel()
+
+	body := validBody()
+	body["attacker"].(map[string]any)["natureId"] = natureNeutralID
+	body["attacker"].(map[string]any)["sp"] = sp(0)
+	body["defender"].(map[string]any)["natureId"] = natureNeutralID
+	body["defender"].(map[string]any)["sp"] = sp(0)
+
+	stub := &upstreams{attackerSpeed: 100, defenderSpeed: 130}
+	recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+	}
+	got := decodeResponse(t, recorder)
+	// 100 + 20 + 0 = 120 / 130 + 20 + 0 = 150(どちらも無補正・無振り)。
+	if got.AttackerSpeed != 120 {
+		t.Errorf("attackerSpeed = %d, want 120(種族値100の方)", got.AttackerSpeed)
+	}
+	if got.DefenderSpeed != 150 {
+		t.Errorf("defenderSpeed = %d, want 150(種族値130の方)", got.DefenderSpeed)
+	}
+	if got.Outspeeds || got.SpeedTie {
+		t.Errorf("outspeeds/speedTie = %v/%v, want false/false(defender の方が速い)", got.Outspeeds, got.SpeedTie)
 	}
 }
 
@@ -819,6 +872,23 @@ func TestOutspeedAndKoUpstreamFailures(t *testing.T) {
 				return &upstreams{calcStatus: http.StatusBadRequest, calcBody: `{"code":"unknown_move","message":"no such move"}`}
 			},
 			http.StatusBadRequest, api.InvalidRequest,
+		},
+		{
+			// pokedex の 400 は calc-svc の 400 と違って invalid_request にしない(ADR-0701 §6追記)。
+			// judge は speciesKey を事前検査してから呼ぶため、それでも pokedex が 400 を返すのは
+			// 呼び出し側の入力の非ではなく上流との契約ズレを意味する。
+			"natures が 400",
+			func() *upstreams {
+				return &upstreams{naturesStatus: http.StatusBadRequest, naturesBody: `{"code":"invalid_input","message":"bad request"}`}
+			},
+			http.StatusServiceUnavailable, api.UpstreamUnavailable,
+		},
+		{
+			"species が 400",
+			func() *upstreams {
+				return &upstreams{speciesStatus: http.StatusBadRequest, speciesBody: `{"code":"invalid_input","message":"bad key"}`}
+			},
+			http.StatusServiceUnavailable, api.UpstreamUnavailable,
 		},
 	}
 	for _, tt := range tests {
