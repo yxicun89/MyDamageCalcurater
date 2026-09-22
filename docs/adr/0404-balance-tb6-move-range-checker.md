@@ -48,6 +48,18 @@
   一致判定、TB6 は「実在ポケモンの実際のタイプ」に対する `CalculateDefense` の直接計算という違いがあるため、新しいヘルパーを書く
   (カタログの全ポケモンを1件ずつ評価。348 件程度なら計算量は問題にならない)。
 
+### 4. 細部(spec-writer が挙げた未決の確定)
+1. エラー名は新設してよい(`ErrMoveRangeMoveCount`・`ErrMoveRangeNoAttackMove`)。重複は既存の `ErrDuplicateMove` を再利用する。
+2. 「全件変化技 → 400」の判定は、技を解決した後(unknown_move の 422・read model の 503 より後ろ)になってよい。ADR §2 の判定順はこの位置を妨げない。
+3. body が 16 KiB を超えるときは、他の4エンドポイントと同じく 413 `request_too_large` にする(既存の `decodeJSONBody`/`MaxBytesReader` をそのまま使う)。
+4. 503 が必要な read model は **ポケモンのカタログ(`PokemonCatalog`)だけ**。`PokemonTypes`(pokemonId→タイプの read model)は TB6 では使わないので、
+   nil でも 200 でよい(TB5 が両方必須なのとは非対称だが、TB6 は pokemonId を受け取らないので妥当)。
+5. カタログの `abilityIds` に特性 read model が知らない ID があれば、ADR-0401 §7.2 と同じくその特性だけ飛ばす(全体を 500 にしない)。
+6. `typeChart` の共通化の実装方法(`AnalyzeCoverage` を仮想メンバー1体として呼ぶか、ヘルパーへ切り出すか)は implementer の判断に委ねる。
+   二重実装しないことだけが必須(`TestAnalyzeMoveRangeTypeChartAgreesWithCoverage` で担保)。
+7. `bestMultiplier` は必ず値を持つので、既存の `CoverageMultiplier`(nullable)とは別の非 nullable schema `MoveRangeMultiplier` にする。
+8. `walledBy`/`walledByAbility` の倍率は複合タイプの ×1/4・×4 も出るため、既存の `DefenseMultiplier`(既約分数の文字列)を再利用する。
+
 ## 却下した案
 - 既存の coverage(TB2)を拡張してポケモン指定を任意にする: request の形(pokemonId 必須)を壊す。呼び出し側(Web 等)の契約変更が要らない別 endpoint の方が安全。
 - 「一貫」を4タイプの複合まで見る: 設計書 TB2 の「防御側は18の単タイプ」の方針に合わせ、単タイプだけにする(複合は TB4 仮想敵診断で個別に見られる)。
