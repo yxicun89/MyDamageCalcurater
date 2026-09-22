@@ -4,3 +4,10 @@ generate:
   - client
 accessModifier: public
 namingStrategy: idiomatic
+# アプリが使うタグだけを生成する。`internal`(サーバー間の API。gateway も公開しない。ADR-0204)は
+# iOS から呼ばないので生成しない(API レーンとの取り決め。DECISIONS.md 2026-09-22)。
+# 新しいタグをアプリで使うときは、ここに足してから make ios-gen する。
+filter:
+  tags:
+    - pokedex
+    - calc

@@ -1,0 +1,69 @@
+# web(nginx の静的配信。engine.wasm を含む。ADR-0011 §6)。/api はここでは配らない(gateway の持ち物。
+# DECISIONS.md 2026-09-22)。イメージ(web/Dockerfile)は nginx-unprivileged(数値 UID 101)で動く。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app.kubernetes.io/name: web
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: web
+        app.kubernetes.io/part-of: pokecalc
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: web
+          image: pokecalc/web:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+          volumeMounts:
+            # nginx(基底イメージの /etc/nginx/nginx.conf)は pid・一時ファイルを /tmp に置く。
+            # readOnlyRootFilesystem のままそこへ書けるように emptyDir を渡す。
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      securityContext:
+        runAsNonRoot: true
+        # イメージ(nginxinc/nginx-unprivileged)の非 root ユーザーと合わせて明示する。
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault

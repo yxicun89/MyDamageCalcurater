@@ -1,11 +1,11 @@
 import XCTest
 
 /// ダメージ計算画面(P6-2a)の骨組みを確かめる。`POKECALC_USE_MOCK=1` で起動してモックを強制する。
-/// README「XCUITest で確かめること」のとおり、行の文言の数値は検査しない(モックの数値に依存しない)。
+/// ADR-0501「XCUITest で確かめること」のとおり、行の文言の数値は検査しない(モックの数値に依存しない)。
 @MainActor
 final class CalcScreenUITests: XCTestCase {
     /// モックの物理技の既定5行(ADR-0009。プリセットは openapi `DefenderPreset` の raw value)。
-    /// 持ち物の比較が無いときの行 id は `<preset>@-`(README の約束)。
+    /// 持ち物の比較が無いときの行 id は `<preset>@-`(ADR-0501 の約束)。
     private static let defaultPhysicalRowIDs = ["none@-", "hp@-", "hb_boost@-", "hb@-", "hb_full@-"]
     /// `Resources/items.json` の唯一の架空持ち物(比較トグルの対象)。
     private static let mockItemID = "test-item-berry"
@@ -32,7 +32,7 @@ final class CalcScreenUITests: XCTestCase {
     }
 
     /// 開いた直後に、モックの既定(攻撃側 = モックの種族1番目・技 = その最初のダメージ技)で
-    /// 物理の既定5行が出る(README・ADR-0009)。
+    /// 物理の既定5行が出る(ADR-0501・ADR-0009)。
     func testOpeningShowsDefaultPhysicalRows() {
         let app = launchCalcScreen()
 

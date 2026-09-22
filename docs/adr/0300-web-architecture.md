@@ -32,6 +32,12 @@ API 接続(P4-5)は API レーンが契約を main に入れてから追従す�
   typescript-eslint が TS 7 に対応したら、別名をやめて `typescript` を 7 系1本にする。
 - ルーター・状態管理・CSS フレームワークは入れない。画面は「計算」「逆算」の2つで、React の state で足りる
   (使われない汎用機構を作らない。コーディング規約 §3)。Playwright は P4-6 で入れる。
+- **画面の切り替えは URL と連動させる**(2026-09-22 追記。P4-10。ユーザー要望): `/calc`・`/reverse` のように1画面1パス。ルーターのライブラリは入れず、
+  History API(`pushState` / `replaceState` / `popstate`)と、画面 ID・パス・タブ名の対応を1か所に置いたルート表(`web/src/app/routes.ts`)で行う。
+  画面を足すレーン(タイプバランスの P4-12、素早さの SP3)は、ルート表(`app/routes.ts`)・表示名(`i18n/ja.ts`)・画面のコンポーネントの対応(`app/screens.tsx`)に1件ずつ足す。
+  `App.tsx` は触らない(`ScreenId` はルート表から導出し、対応は `Record<ScreenId, …>` なので足し忘れは型エラーになる)。
+  nginx の SPA フォールバックは P4-11 で入れ、E2E で確かめる。`/` と未知のパスは `/calc` に置き換える(履歴を増やさない)。
+  配信側(nginx・vite preview)は未知のパスで `index.html` を返す(SPA のフォールバック)。
 - 初期ロードの予算(design.md: JS ≤ 300KB gzip、WASM 除く)は `web/scripts/check-bundle-size.mjs` が
   `npm run build` の最後に検査し、超えたら失敗する。
 

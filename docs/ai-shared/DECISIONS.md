@@ -598,6 +598,17 @@ up.sh の最後で `make api-docker-build` と `k3d image import` を呼ぶ形�
 Reason: critic の推奨。共有スクリプトは他レーンの範囲のため。
 Impact: `api-k3d-deploy` は他レーンのリソースに触れないよう、常に API 専用の overlay(deploy/k8s/overlays/local-api)だけを適用する(ADR-0203)。
 
+## 2026-09-22: iOS レーンの統合(PR #31)
+Decision: P6-1(ADR-0500)・P6-2a 計算画面・P3-1/P3-2 の契約変更への追従を PR #31 で main にマージした(critic はそれぞれ PASS。make test / lint / build / check-publishable / ios-test が成功)。
+Reason: ユーザー回答(2026-09-22)「契約追従が緑になったら PR」。
+Impact: 続き(P6-2b 逆算画面・P6-2c 構築)は同じブランチ feat/ios-p6 で進める。
+
+## 2026-09-22: iOS の API 生成は pokedex・calc タグだけにする(API レーンからの連絡への回答)
+Decision: `ios/tools/openapi-gen/openapi-generator-config.yaml` に `filter.tags: [pokedex, calc]` を入れ、`internal` タグ(`GET /internal/pokedex/master`。ADR-0204)を iOS の生成物に含めない。
+feat/api-master-adapter の api/openapi.yaml でも生成物がいまと同一になることを確認した(internal の型は出ない)。
+Reason: サーバー間の API で、gateway も公開せずアプリは呼ばない。生成すると使わない型が増え、internal の変更のたびに iOS の生成物がずれる。
+Impact: iOS がアプリで新しいタグ(例: 構築の team)を使うときは、この設定に足してから `make ios-gen` する。
+
 ## 2026-09-22: 素早さ SP0 を PR #32 で main に統合(素早さレーン)
 Decision: SP0(ADR-0600)を PR #32 で統合した。critic は1回目 NG(smoke の架空名)→ 修正後 PASS。make test・lint・build・check-publishable・smoke が成功。
 Impact: 素早さレーンは SP1(feat/speed-s1)へ。
@@ -613,11 +624,19 @@ Decision: (1) 逆算の候補は engine の順に1件ずつカード表示し、
 Reason: ユーザー回答。逆算の結果(性格 × 持ち物ごとの SP 範囲)では型が一意に決まらないため。
 Impact: design.md の1行、plan.md に P4-8、ADR-0300 §7 の持ち越しの記述を更新。iOS(M3)も同じ表示方針に従う。
 
+## 2026-09-22: マスタの定期取込(P2-2d)の2点(ユーザー回答。既定案どおり)
+Decision: (1) 取得元に新しい版が出ていても CronJob は成功のまま、ログと報告で知らせるだけにする(取り込むのは Git に固定した版だけ。版を上げるのは人が PR で config.json を更新する)。(2) 実行は毎週土曜 12:00(日本時間)。
+Reason: ユーザーが確認の質問に回答した。
+Impact: ADR-0104 の既定値どおり。
+
 ## 2026-09-22: Web P4-8 を統合(PR #33)
 Decision: P4-8(design.md「動き」の演出)と逆算の表示方針・design.md の演出の値を PR #33 で main に統合した。Web レーンは他レーン(P2-3・P3-3)待ちで一時停止。
 Reason: critic PASS、make test / lint / build・E2E の通過を確認。
 Impact: Web レーンの Active を「なし」にした。続きは CURRENT_STATE.md の Web 欄の Next。
 
+## 2026-09-22: 素早さ SP1 を PR #36 で main に統合(素早さレーン)
+Decision: SP1(ADR-0601。表の 6 行・速い順・同速の段・presets の絞り込み)を PR #36 で統合した。critic PASS(軽微4。テストのコメントは修正、空の roster の扱いは SP4 までに決める)。
+Impact: 素早さレーンの次は SP2(feat/speed-s2)。
 ## 2026-09-22: 手順書の書き方を全レーン共通のルールにする(ユーザー決定。Web レーンのセッションで受領)
 Decision: 人が実行する手順書は、上から下へ1回読めば終わる形にし(節の間を行き来させない)、動作を伴うコマンドと必要最低限の確認点だけを書く
 (行動を伴わない説明は ADR や設計の節へ)。コマンドの塊はリポジトリのルートへの `cd` から始め、ローカルの手順は k3d(コンテナ)を主にする。
@@ -645,3 +664,41 @@ Web / iOS へ: openapi に tag `internal` の操作と Master* の型が増え�
 Decision: どちらも critic PASS、make test・lint・build・check-publishable 0 件・api-kustomize・make gen 差分なし、k3d の api-smoke 成功、開いている他の PR と未マージのブランチとの重なりが無いこと(#42 のときは #39 がドキュメントのみ)を確認してマージした。
 Reason: ユーザーの指示(テストが通り他レーンを確認済みならマージしてよい)。
 Impact: API レーンの Phase 3 と P3-4 は完了。次は Web レーンの依頼(GATEWAY_WEB_URL)と DOC-api。
+
+
+## 2026-09-22: Web P4-9 を統合(PR #35)
+Decision: P4-9(P4-8 の軽微な改善3件)を PR #35 で main に統合した。Web レーンは他レーン(P2-3・P3-3)待ちで一時停止(Active: なし)。
+Reason: critic PASS、make test / lint / build・E2E の通過を確認。
+Impact: 続きは CURRENT_STATE.md の Web 欄の Next。
+
+## 2026-09-22: Web の画面・コンテナ化・手順書の方針(ユーザー回答)と、API レーンへの依頼
+Decision: (1) 画面は URL で切り替える(`/calc`・`/reverse`。P4-10)。(2) タイプバランスと素早さ比較の画面を Web に作る(P4-12・P4-13。balance / speed API を使う。
+各サービスのレーンの API 契約は変えずに使う)。(3) ローカルでもコンテナ(k3d)で動かすのを主にする。Web は nginx の静的配信イメージにし、
+**gateway の後ろ**に置く(localhost:8080 だけで画面も API も使える。P4-11)。(4) 手順書は上から順に実行するだけで済む形にし、各コマンドは
+リポジトリのルートへの `cd` から始める(P4-14)。(5) P4-5 のブラウザ実機確認は Chrome で良好(Safari は未確認)。
+**依頼(API レーン宛て)**: gateway に任意の `GATEWAY_WEB_URL` を足し、設定されていれば `/api`・`/assets`・`/healthz` 以外のパスを Web(nginx の Service)へ転送してほしい
+(未設定なら従来どおり)。Web レーンは base/web の Service 名 `web`(port 80)を用意する。それまでは `kubectl port-forward` で Web を開く。
+Reason: ユーザーが make web-dev で確認したうえで「他の画面も見たい」「make の実行場所で迷う」「ローカルもコンテナで動かして k8s の恩恵を受けたい」「手順書を上下に行き来する」と要望した。
+Impact: plan.md に P4-10〜P4-14。gateway の変更は API レーンの範囲なので Web レーンは変更しない。
+
+## 2026-09-22: 素早さの画面は素早さレーン(SP3)のまま(ユーザー決定)
+Decision: 素早さ比較の画面は、COORDINATION.md のとおり素早さレーンの SP3(`web/src/speed/`)が作る。Web レーンの P4-13 は取り消す。
+Web レーンは P4-10 の URL で画面を切り替える仕組み(ルート表)を、素早さレーンが1項目足すだけで `/speed` を登録できる形にする。
+タイプバランスの画面(P4-12)は、担当が決まっていないので Web レーンが作る。
+Reason: 上の「Web の画面・コンテナ化・手順書の方針」で P4-13 を Web に置いたが、素早さの画面は既に素早さレーンの範囲と決まっていた(素早さレーンの指摘)。ユーザーが素早さレーンのままを選んだ。
+Impact: plan.md の P4-13 を取り消し。素早さレーンの SP3 はそのまま。
+
+## 2026-09-22: pokedex export の abilityIds 上限を 4 に、実データの配線をタイプバランスレーンが実装(データレーンの依頼への回答)
+Decision: データレーンの依頼(abilityIds を4件に、export の read model を balance に読ませる配線)を受け、ADR-0401 §5(上限 4)と ADR-0403(配線)で実装した。
+`make balance-k3d-deploy-readmodel` / `make balance-smoke-readmodel`(docs/runbooks/balance.md 2b)で、data/generated/readmodel/ の実データを検証してから k3d の balance にマウントする。
+Reason: データレーンからの依頼(2026-09-22)。
+Impact: pokedex export はそのまま出力してよい(slot 4 を落とさなくてよい)。無効・吸収の特性が export に無いことは了解済みで、当面は倍率を変える特性だけ反映される。
+## 2026-09-22: 各レーンのメインセッションは Sonnet で起動する(ユーザー決定)
+Decision: Claude Code の各レーンのメインセッションは `--model sonnet` で起動し、設計の判断が重いときだけ `/model opus` に切り替えて戻す。サブエージェントの割り当て(spec-writer・critic は Opus、implementer は Sonnet、quick-scanner は Haiku)は変えない。
+Reason: 6レーンのメインセッションをすべて Opus で動かすと、Max プランでも5時間の利用枠に達する。ユーザーが「メインだけ Sonnet にする」を選んだ。
+Impact: CLAUDE.md のワークフロー、COORDINATION.md の起動の目安。動いているセッションは `/model sonnet` で切り替える。
+
+## 2026-09-22: サブエージェントも重い作業のときだけ Opus にする(ユーザー決定。前エントリ「メインだけ Sonnet」を改める)
+Decision: メインセッションは Sonnet で起動し、重い設計の判断のときだけ Opus。spec-writer・critic は engine・逆算・DB・API 契約に関わるときだけ Opus(既定)、文書・k8s・スクリプト・軽い修正では Sonnet で呼ぶ。利用枠が厳しいときは M1 のレーン(データ・API・Web)を優先し、他のレーンは区切りで止める。
+Reason: ユーザーが確認の質問に改めて答えた(前回の回答「メインだけ Sonnet」は意図と違った)。
+Impact: CLAUDE.md・COORDINATION.md を更新。

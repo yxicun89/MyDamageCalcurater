@@ -23,7 +23,9 @@ flowchart LR
   Web --> GW
   iOS --> GW
   Web -.-> WASM
-  GW --> Calc & Balance & Speed & Pokedex
+  GW --> Calc & Pokedex
+  Web -- Ingress /api/balance --> Balance
+  Web -- Ingress /api/speed --> Speed
   Calc -- 内部API: マスタ --> Pokedex
   Pokedex --> MySQL
   Import --> MySQL
@@ -40,7 +42,7 @@ flowchart LR
 | engine | ダメージ・確定数・一括計算・逆算・実数値(I/O なし) | データ | [engine/](../engine/README.md) |
 | pokedex-svc / importer | マスタの DB・取込(calc・Showdown・PokeAPI)・マスタ API | データ | [services/pokedex/](../services/pokedex/README.md) |
 | calc-svc | 計算 API(engine を呼ぶだけ) | API | [services/calc/](../services/calc/README.md) |
-| gateway | 唯一の入口(ルーティング・端末ID・/assets) | API | [services/gateway/](../services/gateway/README.md) |
+| gateway | ダメージ計算の入口(ルーティング・端末ID・/assets)。balance・speed は各自の Ingress で公開 | API | [services/gateway/](../services/gateway/README.md) |
 | balance-svc | 構築のタイプバランス | タイプバランス | [services/balance/](../services/balance/README.md) |
 | speed-svc | 素早さ比較 | 素早さ | [services/speed/](../services/speed/README.md) |
 | Web | 画面(API とオフライン WASM を切り替え) | Web | [web/](../web/README.md) |

@@ -7,6 +7,17 @@ import { exampleMasterSource } from "./master/exampleSource";
 import type { MasterData, MasterSource } from "./master/types";
 import { createFakeEngine, engineError } from "./test/fakeEngine";
 
+// P4-10: タブの選択が URL(History API)と連動するようになったため(App.routing.test.tsx が詳細を確かめる)、
+// このファイルの各テストは既定の「計算」タブ(パス "/")から始まる前提を置く。テストの間で URL が
+// 漏れないよう、前後で "/" に戻す。
+beforeEach(() => {
+  window.history.replaceState(null, "", "/");
+});
+
+afterEach(() => {
+  window.history.replaceState(null, "", "/");
+});
+
 test("アプリが描画される", () => {
   render(<App />);
   expect(screen.getByRole("main")).toBeInTheDocument();

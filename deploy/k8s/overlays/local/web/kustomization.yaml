@@ -1,0 +1,9 @@
+# local overlay 専用の Kustomize Component(P4-11)。base/web のイメージをローカルでビルドした版に差し替える
+# (calc・gateway と同じ考え方。deploy/k8s/overlays/local/api/kustomization.yaml)。base はタグを固定しない。
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+images:
+  - name: pokecalc/web
+    newName: pokecalc/web
+    newTag: local

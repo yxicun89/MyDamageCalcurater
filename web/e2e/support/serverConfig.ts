@@ -40,3 +40,26 @@ export function assertWasmArtifacts(): void {
     );
   }
 }
+
+/** P4-11: コンテナ(pokecalc/web:local)の E2E で、ホスト側に出すポート。 */
+export const CONTAINER_PORT = 4319;
+
+/** P4-11: コンテナの E2E が起動するイメージ(`make web-docker-build` が作る)。 */
+export const CONTAINER_IMAGE = "pokecalc/web:local";
+
+/** P4-11: コンテナの E2E が使うコンテナ名(前回の残りを消すのに使う)。 */
+export const CONTAINER_NAME = "pokecalc-web-e2e";
+
+/**
+ * 作り済みのイメージを起動するコマンド。イメージが無ければ Docker Hub から取りに行かず失敗させる(--pull never)。
+ * 前回の実行で残ったコンテナがあれば先に消す。コンテナ内の nginx は 8080 で待ち受ける(web/Dockerfile)。
+ * k8s の Deployment(deploy/k8s/base/web/deployment.yaml)と同じ制約(読み取り専用のルート・/tmp だけ書ける・
+ * 非 root の UID 101・capability なし・権限昇格なし)で起動し、k3d に載せる前に同じ条件で壊れないことを確かめる。
+ */
+export function containerCommand(port: number): string {
+  return (
+    `docker rm -f ${CONTAINER_NAME} >/dev/null 2>&1; ` +
+    `docker run --rm --pull never --read-only --tmpfs /tmp --user 101:101 --cap-drop ALL ` +
+    `--security-opt no-new-privileges -p 127.0.0.1:${port}:8080 --name ${CONTAINER_NAME} ${CONTAINER_IMAGE}`
+  );
+}
