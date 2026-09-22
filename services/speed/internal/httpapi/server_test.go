@@ -90,6 +90,7 @@ func TestListPokemonRequiresRequestContext(t *testing.T) {
 		{"X-Device-Id 空", map[string]string{"X-Device-Id": "", "X-Session-Id": "test-session"}},
 		{"X-Session-Id 空", map[string]string{"X-Device-Id": "test-device", "X-Session-Id": ""}},
 		{"X-Device-Id 空白だけ", map[string]string{"X-Device-Id": "  ", "X-Session-Id": "test-session"}},
+		{"X-Session-Id 空白だけ", map[string]string{"X-Device-Id": "test-device", "X-Session-Id": "  "}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

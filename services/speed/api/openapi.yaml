@@ -128,7 +128,7 @@ components:
         nameJa:
           type: string
           minLength: 1
-          example: カソウドリ
+          example: テストカソウドリ
         types:
           description: One or two lowercase type IDs, for display only (the 18 types are not listed in the contract).
           type: array

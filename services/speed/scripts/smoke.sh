@@ -46,7 +46,7 @@ if [ "$pokemon_status" != "200" ]; then
   cat "$body_file" >&2
   exit 1
 fi
-for key in '"regulationId":"example"' '"pokemonId":"9001-000"' '"nameJa":"カソウドリ"' '"baseSpeed":100'; do
+for key in '"regulationId":"example"' '"pokemonId":"9001-000"' '"nameJa":"テストカソウドリ"' '"baseSpeed":100'; do
   if ! grep -qF "$key" "$body_file"; then
     echo "speed pokemon list body is missing $key" >&2
     cat "$body_file" >&2

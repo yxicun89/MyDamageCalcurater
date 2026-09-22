@@ -80,7 +80,7 @@ type SpeedPokemon struct {
 	// BaseSpeed Example: 100
 	BaseSpeed int `json:"baseSpeed"`
 
-	// NameJa Example: カソウドリ
+	// NameJa Example: テストカソウドリ
 	NameJa string `json:"nameJa"`
 
 	// PokemonId Example: 9001-000
