@@ -1,0 +1,69 @@
+# pokedex-svc(検索 API・内部 API GET /internal/pokedex/master。ADR-0105)。
+# DB(POKEDEX_DATABASE_DSN)は Secret mysql-auth から渡す。起動時に DB へ接続しない
+# (sql.Open だけ。DB が無くても起動し、DB を使う操作は 503 を返す)。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pokedex
+  labels:
+    app.kubernetes.io/name: pokedex
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pokedex
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pokedex
+        app.kubernetes.io/part-of: pokecalc
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: pokedex
+          image: pokecalc/pokedex:0.1.0
+          imagePullPolicy: IfNotPresent
+          args: ["serve"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: POKEDEX_DATABASE_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-auth
+                  key: pokedex-dsn
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+      securityContext:
+        runAsNonRoot: true
+        # イメージ(services/pokedex/Dockerfile)の server ターゲットの USER 65532:65532 と合わせて明示する。
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault

@@ -4,8 +4,8 @@
 Lane: データ(engine・マスタ・pokedex。どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
 Branch: feat/claude-p1-engine(作業ディレクトリ ~/MyDamageCalcurater)
-Status: Phase 1・P2-1・P1-10・Phase R(R-2-9 の公開用クリーンコピーは公開時に実施)・R-3・P1-13(タイプ相性表のデータ化。ADR-0013)・P1-11(表示%の分離)・P1-12(逆算の再設計。ADR-0010 §R)・P2-1b(ゴールデンを Champions へ)・P2-1c(技の使用可否の裁定)・P2-2a(pokedex のスキーマと migrate。ADR-0100)・P2-2b(importer の取得・変換・投入。ADR-0101)・P2-2c(照合と差分報告・版の固定・習得技は進化前から継がない。ADR-0103。実データの dry-run が通る)・P2-2d(マスタの定期取込の CronJob。毎週土曜 12:00 JST・固定版だけ投入・新しい版は報告だけ。ADR-0104)は完了(critic レビュー済み)
-Next: DOC-data(engine・pokedex・importer・golden の README と docs/runbooks/data.md)→ P2-3(pokedex-svc。内部 API・natures・balance/speed 向けの export を含む) → P3-1〜3 → P4-1〜7。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)、P2-1c の裁定
+Status: Phase 1・P2-1・P1-10・Phase R・P1-13・P1-11・P1-12・P2-1b・P2-1c・P2-2a・P2-2b・P2-2c・P2-2d・P2-3(pokedex-svc。内部 API・公開 API・natures・balance/speed 向け export。ADR-0105)は完了(critic レビュー済み)
+Next: P2-3b(無効・吸収の特性を engine・DB・export に足す)→ P3-1〜3(API レーンが実装中。gateway を pokedex-svc に向ける依頼は main 統合後に送る)→ P4-1〜7。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)、P2-1c の裁定
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
@@ -32,10 +32,10 @@ Next: PR(P6-2b・internal タグ除外・DOC-ios をまとめて main へ)→ P6
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
-Active: Claude Code
+Active: なし(ユーザー指示で一時停止。P2-3 の実データ確認は完了。再開はユーザーの指示があってから)
 Branch: 次は main から feat/tb-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
-Status: TB0〜TB5 と整備(ADR-0402 の read model の JSON Schema を含む)は完了・main に統合済み。balance は Echo v5.3.1。ポケモン・技・特性は temporary の read model(架空データの example。実データは BALANCE_*_PATH でマウント)。k3d には Argo CD v3.5.3・クラスタ内レジストリ・Application pokecalc-balance(manual sync)。新しい ADR はタイプバランスの帯 0400〜
-Next: データレーンの pokedex export(ADR-0105)が main に入ったら、`make balance-k3d-deploy-readmodel && make balance-smoke-readmodel`(docs/runbooks/balance.md の 2b)で実データの動作を確かめる。無効・吸収の特性は export に出ない(データレーンの P2-3b でユーザーに要否を確認中)
+Status: TB0〜TB5・整備・実データ配線(ADR-0403)は完了・main に統合済み。データレーンの pokedex export(PR #57)を実データで確認済み: 348 種・516 技・特性のマスタで analyze/recommendations が 200(例: フシギバナ、あついしぼう持ちのカビゴン・マンムーが氷技の弱点を軽減する候補として正しく出た)。メガフォームの nameJa が英語表記のまま(Venusaur-Mega 等)なのはデータレーン側の日本語名収集の余地(ブロッカーではない)
+Next: 一時停止中。再開したら: (1) 上記メガフォームの nameJa の件をデータレーンに確認するか判断。(2) 軽微の残り(HTTP 層の検証・422 変換の重複整理、read model の JSON Schema の細部)。(3) TB6 以降は未定(設計書 TB0〜TB5 で完了)
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
 
 ## Speed

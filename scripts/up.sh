@@ -7,6 +7,7 @@ cd "$(dirname "$0")/.."
 CLUSTER="${CLUSTER:-pokecalc}"
 POKEDEX_MIGRATE_IMAGE="${POKEDEX_MIGRATE_IMAGE:-pokecalc/pokedex-migrate:0.1.0}"
 POKEDEX_IMPORTER_IMAGE="${POKEDEX_IMPORTER_IMAGE:-pokecalc/pokedex-importer:0.1.0}"
+POKEDEX_SERVER_IMAGE="${POKEDEX_SERVER_IMAGE:-pokecalc/pokedex:0.1.0}"
 
 if k3d cluster list 2>/dev/null | awk '{print $1}' | grep -qx "$CLUSTER"; then
   echo "k3d クラスタ '$CLUSTER' は既に存在します"
@@ -46,6 +47,12 @@ fi
 echo "pokedex-migrate イメージを build して k3d に import します..."
 docker build -f services/pokedex/Dockerfile --target migrate -t "$POKEDEX_MIGRATE_IMAGE" .
 k3d image import "$POKEDEX_MIGRATE_IMAGE" -c "$CLUSTER"
+
+# pokedex(検索 API・内部 API)の Deployment が使うイメージも、overlay を apply する前に
+# k3d へ import しておく(ADR-0105 §6)。
+echo "pokedex(server)イメージを build して k3d に import します..."
+docker build -f services/pokedex/Dockerfile --target server -t "$POKEDEX_SERVER_IMAGE" .
+k3d image import "$POKEDEX_SERVER_IMAGE" -c "$CLUSTER"
 
 # Job は一度作成すると Pod テンプレートを更新できない(kubectl apply が失敗する)ため、
 # overlay を apply する前に(実行中の可能性がある正しい Job を消してしまわないよう、

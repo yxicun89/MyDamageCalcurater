@@ -120,6 +120,11 @@ const types = await fetchCSV('types.csv');
 const typeNames = await fetchCSV('type_names.csv');
 const typeEntries = await namedEntries(types, typeNames, 'id', 'identifier', 'type_id');
 
+// natures(ADR-0105 §4): 性格の日本語名。補正の正は Showdown で、ここは名前だけ。
+const natures = await fetchCSV('natures.csv');
+const natureNames = await fetchCSV('nature_names.csv');
+const natureEntries = await namedEntries(natures, natureNames, 'id', 'identifier', 'nature_id');
+
 const snapshot = {
   schemaVersion: 1,
   source: 'pokeapi',
@@ -130,6 +135,7 @@ const snapshot = {
   items: itemEntries,
   abilities: abilityEntries,
   types: typeEntries,
+  natures: natureEntries,
 };
 
 const raw = JSON.stringify(snapshot);

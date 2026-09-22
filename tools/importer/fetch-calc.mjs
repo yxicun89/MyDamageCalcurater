@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 
 const EXPECTED_VERSION = '0.12.0';
-const { Generations } = calc;
+const { Generations, NATURES } = calc;
 
 const pkgVersion = JSON.parse(
   readFileSync(new URL('node_modules/@smogon/calc/package.json', import.meta.url)),
@@ -50,6 +50,10 @@ const moves = [...gen.moves].map((m) => ({
 const items = [...gen.items].map((i) => i.name);
 const abilities = [...gen.abilities].map((a) => a.name);
 
+// natures(ADR-0105 §4): NATURES は {Name: [plus, minus]}(無補正は同じ能力が2つ)。ID を持たない
+// ので突き合わせにだけ使う(補正の正は Showdown)。
+const natures = Object.entries(NATURES).map(([name, [plus, minus]]) => ({ name, plus, minus }));
+
 const snapshot = {
   schemaVersion: 1,
   source: 'calc',
@@ -61,6 +65,7 @@ const snapshot = {
   moves,
   items,
   abilities,
+  natures,
 };
 
 const outDir = fileURLToPath(new URL(`../../data/generated/calc/${pkgVersion}/`, import.meta.url));

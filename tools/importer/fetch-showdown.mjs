@@ -109,6 +109,14 @@ const abilities = [...dex.abilities.all()].map((a) => ({
   hooks: hooks(a),
 }));
 
+// natures(ADR-0105 §4): 補正の正。無補正は plus/minus を省略する。
+const natures = [...dex.natures.all()].map((n) => ({
+  id: n.id,
+  name: n.name,
+  ...(n.plus ? { plus: n.plus } : {}),
+  ...(n.minus ? { minus: n.minus } : {}),
+}));
+
 // 学習元の符号(例 "9M" 第9世代マシン・"7L12" 第7世代レベル12・"8E" 第8世代タマゴ技)の先頭の数字が
 // 学習した世代。ADR-0103 §7: フォーマットの minSourceGen 以上の学習元が1つでもあれば学習可能なので、
 // 技ごとに学習元の最大世代だけを残す(個々の学習元の一覧までは持たない)。
@@ -141,6 +149,7 @@ const snapshot = {
   items,
   abilities,
   learnsets,
+  natures,
 };
 
 const outDir = `${root}data/generated/showdown/${commit}/`;

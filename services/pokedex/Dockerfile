@@ -1,6 +1,7 @@
 # ビルドコンテキストはリポジトリ直下(services が engine を ../engine の replace で参照するため)。
 #   docker build -f services/pokedex/Dockerfile --target migrate -t <image> .
 #   docker build -f services/pokedex/Dockerfile --target importer -t <image> .
+#   docker build -f services/pokedex/Dockerfile --target server -t <image> .
 FROM golang:1.27.1-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS build
 
 WORKDIR /src
@@ -10,6 +11,7 @@ WORKDIR /src/services
 RUN go mod download
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pokedex-migrate ./pokedex/cmd/migrate
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pokedex-import ./pokedex/cmd/import
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pokedex ./pokedex/cmd/pokedex
 
 # migrate: pokedex-migrate Job(deploy/k8s/base/pokedex)が使うイメージ。up だけを実行する
 # (down はここに含めない。CLAUDE.md: DB のデータ削除は人間の確認が必要)。
@@ -18,6 +20,15 @@ COPY --from=build /out/pokedex-migrate /pokedex-migrate
 USER 65532:65532
 ENTRYPOINT ["/pokedex-migrate"]
 CMD ["up"]
+
+# server: pokedex(検索 API・内部 API)の Deployment(deploy/k8s/base/pokedex)が使うイメージ。
+# 既定は serve(HTTP)。read model の export はローカルの make pokedex-export / タイプバランスレーンの
+# 手順から別に流す(ADR-0105 §5・§6)。
+FROM scratch AS server
+COPY --from=build /out/pokedex /pokedex
+USER 65532:65532
+ENTRYPOINT ["/pokedex"]
+CMD ["serve"]
 
 # importer-deps: tools/importer の依存(package-lock.json の固定版)だけを npm ci する段。
 # package.json・package-lock.json だけを COPY してキャッシュを効かせる(ADR-0104 §6)。
