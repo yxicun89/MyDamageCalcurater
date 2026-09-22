@@ -196,3 +196,12 @@
 
 ### Next
 - TB5(おすすめタイプと該当ポケモン)
+
+## 2026-09-22 タイプバランスレーン(Claude Code): TB5
+
+### Done
+- TB5 おすすめタイプと該当ポケモン(ADR-0401): spec-writer → implementer(利用上限で中断 → 再開)→ 架空名を規約の「テスト〜」に → ユーザー回答で §8(単タイプの候補にそのタイプを含むポケモンも)をテスト先行で実装 → critic FAIL(OpenAPI の説明が古い、§7.1 のテスト漏れ、DECISIONS の記録)→ 修正
+- データレーンが pokedex export への依頼3点を受諾(P2-3)
+
+### Next
+- export ができたら read model を差し替えて実データで確認

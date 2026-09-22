@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "pokemon": [
-    {"pokemonId": "9001-000", "types": ["fire", "flying"]},
-    {"pokemonId": "9002-000", "types": ["grass"]},
+    {"pokemonId": "9001-000", "nameJa": "テストバード", "types": ["fire", "flying"], "abilityIds": ["ability-9002"]},
+    {"pokemonId": "9002-000", "nameJa": "テストリーフ", "types": ["grass"], "abilityIds": ["ability-9003", "ability-9005"]},
     {"pokemonId": "9003-000", "types": ["water", "ground"]},
-    {"pokemonId": "9004-000", "types": ["normal", "ghost"]},
-    {"pokemonId": "9005-000", "types": ["ice"]},
-    {"pokemonId": "9006-000", "types": ["steel", "fairy"]},
-    {"pokemonId": "9006-001", "types": ["dragon", "flying"]}
+    {"pokemonId": "9004-000", "nameJa": "テストゴースト", "types": ["normal", "ghost"], "abilityIds": []},
+    {"pokemonId": "9005-000", "nameJa": "テストアイス", "types": ["ice"]},
+    {"pokemonId": "9006-000", "nameJa": "テストメタル", "types": ["steel", "fairy"], "abilityIds": ["ability-9001", "ability-9004", "ability-9007"]},
+    {"pokemonId": "9006-001", "nameJa": "テストドラゴン", "types": ["dragon", "flying"], "abilityIds": ["ability-9006"]}
   ]
 }

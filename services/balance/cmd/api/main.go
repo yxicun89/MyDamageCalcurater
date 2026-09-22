@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"example.com/pokecalc/services/balance/internal/balance"
 	"example.com/pokecalc/services/balance/internal/httpapi"
 	"example.com/pokecalc/services/balance/internal/master"
 )
@@ -52,9 +53,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	// The pokemon type read model doubles as the TB5 catalog (ADR-0401 §5): the same
+	// *master.PokemonTypeReadModel implements both. A comma-ok assertion keeps an unset
+	// read model an untyped nil interface rather than a nil PokemonCatalog wrapping a
+	// nil *PokemonTypeReadModel.
+	pokemonCatalog, _ := pokemonTypes.(balance.PokemonCatalog)
+
 	server := &http.Server{
-		Addr:              ":" + port,
-		Handler:           httpapi.New(httpapi.Dependencies{TypeChart: typeChart, PokemonTypes: pokemonTypes, Moves: moves, Abilities: abilities}),
+		Addr: ":" + port,
+		Handler: httpapi.New(httpapi.Dependencies{
+			TypeChart:      typeChart,
+			PokemonTypes:   pokemonTypes,
+			Moves:          moves,
+			Abilities:      abilities,
+			PokemonCatalog: pokemonCatalog,
+		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,
