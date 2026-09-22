@@ -61,7 +61,7 @@ git status --short --branch        # 未コミット・未 push が無いか
 
 ### 承認省略の設定と運用上の注意(2026-09-23 ユーザー決定)
 
-ユーザーのグローバル設定(`~/.claude/settings.json`。全レーン共通)で、次を**確認なし**にしている。
+ユーザーの Claude Code グローバル設定(ユーザー設定ファイル。全レーン共通)で、次を**確認なし**にしている。
 - `git push`(feature ブランチへの push)
 - `gh pr create`
 - `gh pr merge`

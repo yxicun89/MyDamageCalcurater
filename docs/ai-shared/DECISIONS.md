@@ -770,7 +770,7 @@ Web・iOS レーンのローカル k3d 環境でも calc を使う画面(ダメ�
 先に `make import-k8s` を実行すること。`make api-smoke` の出力1行目が `master=pokedex …` であれば実際に pokedex-svc へつながっている確認になる(`master=example` はフォールバック)。
 
 ## 2026-09-23: 承認省略の設定(git push / gh pr create / gh pr merge を自動承認、rm は据え置き。ユーザー決定)
-Decision: `~/.claude/settings.json`(全レーン共通のグローバル設定)で `git push`・`gh pr create`・`gh pr merge` を確認なし(allow)にした。
+Decision: Claude Code のユーザー設定ファイル(全レーン共通のグローバル設定)で `git push`・`gh pr create`・`gh pr merge` を確認なし(allow)にした。
 一方、main への直接 push・force push・`--mirror`・`--all` は引き続き禁止(deny)、リモートブランチの `--delete` は引き続き確認が要る(ask)。
 `rm` は変更していない(ユーザーが「何を破壊するか分からなくて怖い」ため明示的に据え置きを希望。auto mode の既定判断のまま)。
 Reason: ユーザーの言葉「ローカルでのmain直接マージは良くないけどpushとpr mergeは許可した方が承認する手間省けるから許可するルールにしたい」
