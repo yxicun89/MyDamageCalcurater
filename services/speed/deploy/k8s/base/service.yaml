@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: speed
+  labels:
+    app.kubernetes.io/name: speed
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  selector:
+    app.kubernetes.io/name: speed
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

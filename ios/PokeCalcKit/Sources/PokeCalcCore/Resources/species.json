@@ -1,0 +1,32 @@
+[
+  {
+    "key": "9001-000",
+    "dexNo": 9001,
+    "form": 0,
+    "nameJa": "テストモンいち",
+    "types": ["fire"],
+    "baseStats": { "hp": 80, "atk": 90, "def": 70, "spa": 60, "spd": 65, "spe": 100 },
+    "abilities": [{ "id": "test-ability-alpha", "nameJa": "テストとくせいアルファ" }],
+    "learnset": ["test-move-physical-a", "test-move-special-a", "test-move-status-a"]
+  },
+  {
+    "key": "9002-000",
+    "dexNo": 9002,
+    "form": 0,
+    "nameJa": "テストモンに",
+    "types": ["water", "flying"],
+    "baseStats": { "hp": 90, "atk": 70, "def": 80, "spa": 85, "spd": 80, "spe": 60 },
+    "abilities": [{ "id": "test-ability-beta", "nameJa": "テストとくせいベータ" }],
+    "learnset": ["test-move-physical-a", "test-move-special-b", "test-move-status-a"]
+  },
+  {
+    "key": "9003-000",
+    "dexNo": 9003,
+    "form": 0,
+    "nameJa": "テストモンさん",
+    "types": ["electric"],
+    "baseStats": { "hp": 70, "atk": 60, "def": 60, "spa": 95, "spd": 70, "spe": 110 },
+    "abilities": [{ "id": "test-ability-gamma", "nameJa": "テストとくせいガンマ" }],
+    "learnset": ["test-move-physical-a", "test-move-special-a", "test-move-special-b", "test-move-status-a"]
+  }
+]

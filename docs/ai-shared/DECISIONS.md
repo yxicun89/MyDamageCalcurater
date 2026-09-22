@@ -325,6 +325,35 @@ Reason: ユーザーが「iOS も作りたいので iOS レーンも起動した
 Impact: COORDINATION.md のレーン表・依存の節・起動の目安、CURRENT_STATE.md に iOS 欄を追加。準備はタイプバランスレーンのセッションが行った(データレーンの4レーン化の規則に1行ずつ追加しただけ)。
 
 
+## 2026-09-21: iOS アプリの構成(iOS レーン。既定案で進行・ユーザー未確認)
+Decision: ADR-0017。`ios/PokeCalcKit`(Swift Package: 生成 API クライアント・ドメイン/ViewModel・デザイントークン)+ 手書きの `ios/PokeCalc.xcodeproj`(フォルダ同期。View と XCUITest だけ)。
+生成物はコミットし `make ios-gen` / `make ios-gen-check`(ルートの `make gen` には入れない)。画面は `PokeCalcService` プロトコルだけを使い、API 実装とモック(架空データ・計算しない)を差し替える。
+逆算のドメインは ADR-0010 §R の形にし、`api/openapi.yaml` が P3-1 で更新されるまで API 経由の逆算は「API 未対応」を表示する。構築は契約が無い(P5-4)ので端末内保存の `TeamStore` で作り、Showdown 形式は後回し。配布対象 iOS 26 以上。
+Reason: iOS レーンは契約を変更できず、サーバーも未完成。契約の変更を写像1か所で吸収するため。深夜(23 時以降)の着手で質問できないため、取り消しやすい既定案で進めた。
+Impact: ルートの Makefile に `include ios/Makefile` の1行、`.gitignore` に SwiftPM の成果物と xcuserdata を追加。
+
+## 2026-09-21: 提案(iOS レーン → API レーン): 構築(team)と逆算の契約
+Decision(提案): (1) P3-1 で逆算の契約を ADR-0010 §R8 の形にしたら、iOS は `make ios-gen` と写像の更新で追従する。(2) P5-4 で team-svc の契約を `api/openapi.yaml` に入れるとき、iOS の端末内の `TeamStore`(メンバー: 種族・技・持ち物・特性・性格・SP)と同じ項目を持たせてほしい。
+既定案: iOS 側は変更を待たずにモックで進める。
+Reason: iOS レーンは `api/openapi.yaml` を変更できない(COORDINATION.md)。
+Impact: なし(API レーンの判断待ち)。
+
+## 2026-09-21: 提案(iOS レーン → データレーン): ルート Makefile の help が include したファイルのターゲットを正しく表示しない
+Decision(提案): `help` の `grep -E` に `-h` を付ける(複数ファイルのときファイル名が接頭辞になり、`ios/Makefile` 等のターゲット名が表示されない。balance も同じ)。
+既定案: データレーンが次に Makefile を触るときに直す。iOS レーンは変更しない。
+Impact: 表示だけ。
+
+## 2026-09-21: iOS レーンの既定案の確認(ユーザー回答)
+Decision: (1) 構築は team-svc の契約ができるまで端末内に保存(既定案どおり)。(2) Showdown 形式の入出力は後回し(既定案どおり)。
+(3) 配布対象は **iOS 27 以上**(既定案の iOS 26 から変更。実機が iOS 27)。(4) API 経由の逆算は P3-1 の契約更新まで「API 未対応」を表示(既定案どおり)。
+Reason: ユーザーが「ブロッカーがあれば今答える」と言い、iOS レーンの質問4点に回答した。
+Impact: ADR-0017 §1 を iOS 27 に更新。上の「iOS アプリの構成」エントリの未確認の項目は、この回答で確定。
+
+## 2026-09-22: iOS レーンの版を最新の安定版で固定(同日のユーザー決定「言語・ミドルウェア・ライブラリを最新の安定版に」の iOS 分)
+Decision: Swift tools 6.4・Swift 6 言語モード・配布対象 iOS 27(macOS 27)・Xcode 27 の推奨設定。依存は swift-openapi-generator 1.13.1 / runtime 1.12.1 / urlsession 1.3.1 / swift-http-types 1.8.0 を `exact` で固定(いずれも確認時点の最新)。
+Reason: 方針の本体はデータレーンの DECISIONS エントリ(2026-09-21)。iOS レーンの範囲はデータレーンからの共有による。
+Impact: ios/ のみ。
+
 ## 2026-09-21: importer(P2-2b)の3点(ユーザー回答。既定案どおり)
 Decision: (1) 本番の効果定義 `data/importer/effects.json` を Git にコミットする(英語 ID と 4096 基準の整数だけ)。(2) 日本語名は ja(漢字混じり)を優先し、無ければ ja-Hrkt(かな)。(3) `data/importer/regulations.json` にレギュレーションの日本語ラベルを入れてコミットする。
 Reason: ユーザーが確認の質問に回答した。
@@ -416,6 +445,23 @@ Decision: Max プランの利用枠は全レーンで共有なので、上限に
 整備レーンは Claude の各レーンが止まっている間だけ動かし、作業ディレクトリ ~/MyDamageCalcurater-maint は使うときだけ作って終わったら消す。レーンの範囲は直さず、見つけた問題はそのレーンの Next と DECISIONS.md に書く。
 Reason: ユーザーが「Codex は Max のレートリミット後に 5 レーンの調整・整備を行うのがよいのでは」と提案し、用意を依頼した。全員が止まっている時間はレーンをまたぐ整理をしても衝突しない。
 Impact: COORDINATION.md に節を追加、CURRENT_STATE.md に Maintenance 欄、plan.md に整備レーンのバックログ(MT-1〜7)。
+
+## 2026-09-22: TB5 の詳細は既定案で進める/pokedex export に nameJa・abilityIds とレギュレーションでの絞り込みを依頼(タイプバランスレーン。既定案で進行・ユーザー未確認)
+Decision: TB5 は ADR-0401 の既定案(防御の穴 = 耐性・無効が 0 人の攻撃タイプ、攻撃範囲の穴 = 有効打の無い防御タイプ、171 通りの候補を
+ふさぐ穴の数で並べ上位 10 件、候補とタイプの集合が一致するポケモン全員、特性でふさげるポケモンは別枠)で作る。
+データレーンへの依頼(既定案): ADR-0100 §8 の `pokedex export`(balance 向けのポケモンの read model)で、(1) 各ポケモンに `nameJa` と
+`abilityIds`(持ちうる特性 ID。隠れ特性を含む)を出す、(2) 出力するポケモンを既定のレギュレーションの使用可能集合に絞る
+(balance は read model に入っているポケモンを使用可能とみなす)。形は ADR-0401 §5(schemaVersion 1 のまま省略可能な項目を追加)。
+Reason: 深夜(02 時台)でユーザーに質問しないため。ユーザー回答の3点(基準は両方の穴・使用可能なポケモン全員・特性は別枠)は反映済み。
+Impact: 朝にユーザーへ ADR-0401 §2〜§6 の確認を求める。データレーンは export を作るときに上記を含める(異議があれば追記)。
+
+## 2026-09-22: TB5 の既定案をユーザーが確認、該当ポケモンの範囲を変更(ユーザー回答)
+Decision: ADR-0401 §2〜§7 の既定案(防御の穴 = 耐性・無効が 0 人、候補の並びと上位 10 件など)をユーザーが確認した。
+該当ポケモンの範囲を変更(ADR-0401 §8): 単タイプの候補は、そのタイプを含むポケモン(複合タイプを含む)も並べる。ただし、もう片方のタイプで
+候補がふさぐ防御の穴を等倍未満で受けられなくなるものは除く。複合タイプの候補はタイプの集合が一致するものだけ。各ポケモンに `exactMatch` を付け、一致するものを先に並べる。
+Reason: ユーザーが 10 時台の確認の質問に「そのタイプを含むポケモンも出す」と回答した(上の「TB5 の詳細は既定案で進める」を置き換える)。
+Impact: ADR-0401 §8、OpenAPI の `CandidatePokemon.exactMatch`。
+
 ## 2026-09-22: PR #14(API P3-1 calc-svc・依存の最新化)を main に統合
 Decision: 他レーンの状況(開いている PR は #14 のみ、Web・iOS の未マージの変更は api/openapi.yaml・services と競合しない)を確認し、main を取り込んで再検証(make test 12 件・lint・build・check-publishable 0 件・make gen 差分なし)してからマージした。
 Reason: ユーザーが「テストとか諸々通っているならマージしていい。他のレーンの状況確認してから」と回答した。
@@ -436,6 +482,18 @@ Decision: 最新 main の統合検証(MT-1)と check-publishable 自己テスト
 Reason: 必須の test・lint・build・公開前検査、および golden・全種族・WASM・balance の非クラスタ検証が成功したため。
 Impact: 整備レーンの次回開始点は MT-3。データ・API・Web・タイプバランス各レーンの再開を確認したため、本 worktree は削除する。
 
+## 2026-09-22: iOS の ADR を 0500 に振り直し(レーンごとの番号帯。データレーンの規則に従う)
+Decision: `docs/adr/0017-ios-app-architecture.md` を `docs/adr/0500-ios-app-architecture.md`(ADR-0500)に改名し、ios/・plan.md の M3 節・CURRENT_STATE.md の iOS 欄の参照を更新した。
+上の iOS のエントリ(2026-09-21)に書いた「ADR-0017」は iOS の構成の ADR のことで、以後は ADR-0500 と読む(main の ADR-0017 は balance TB3)。
+Reason: main の ADR-0017(balance TB3)と番号が衝突した。後から統合する側(iOS)が振り直す(COORDINATION.md)。
+Impact: ios/ と文書の参照のみ。
+
+## 2026-09-22: iOS の逆算画面の観測入力と PR の区切り(ユーザー回答)
+Decision: (1) 逆算の観測(与えたダメージ = 相手 HP の減少%(整数)、受けたダメージ = 自分 HP の減少量(実点数))はテンキーで数値入力する
+(requirements.md「数値の直接入力は原則しない」の例外。観測値は選択肢から選べないため)。(2) main への PR は、P6-2 の契約追従が緑になった時点で
+P6-1・P6-2a・契約追従をまとめて出す。逆算・構築は次の PR。
+Reason: 日中にユーザーへ質問し、既定案(推奨)どおりの回答を得た。
+Impact: P6-2b の画面仕様、PR の区切り。
 ## 2026-09-22: 素早さ比較を3つ目のサービスとして新しいレーン(6本目)で作る(ユーザー決定)
 Decision: 素早さ比較サービス(`services/speed/`)を新しい「素早さ」レーンで作る(`~/MyDamageCalcurater-speed`、ブランチ `feat/speed-<stage名>`、ADR は `0600〜`)。
 画面は Web に独立したタブ。素早さの画面は `web/src/speed/` を素早さレーンの持ち物にし、アプリの骨組み(タブの登録)は自分の1項目を足すだけにする。
@@ -443,6 +501,16 @@ Decision: 素早さ比較サービス(`services/speed/`)を新しい「素早さ
 Reason: ユーザーが素早さ比較サイトの使い勝手(表と見比べて自分の数値を算出する)を改善したいと依頼し、表の行・入力・担当(タイプバランスの次ではなく新しいレーン)・画面の置き場所に回答した。
 Impact: COORDINATION.md のレーン表・ADR の帯・起動の目安、CURRENT_STATE.md の Speed 欄、plan.md の「SP: 素早さ比較」(SP0〜SP4)。データレーンの P2-3 の read model(`pokedex export`)に、素早さの種族値が含まれていること(ポケモンの read model に baseStats があれば足りる)。
 
+## 2026-09-22: 素早さ比較の未確定4点をユーザーが回答(素早さレーン)
+Decision: (1) 右のオプションは SP 0〜32・性格の補正3通り・ランク -6〜+6・スカーフ、または実数値の直接入力 (2) 同じ実数値は同速としてまとめて表示 (3) 表は既定のレギュレーションの使用可能集合 (4) `web/` の骨組みが無い間は `web/src/speed/` の画面部品とテストだけ先に作り、タブ登録は骨組みができてから1項目足す。いずれも既定案どおり。
+Reason: 素早さレーンの着手時に AskUserQuestion で確認した。
+Impact: docs/plan.md「SP: 素早さ比較」の未確定を確定に更新。docs/speed-design.md・ADR-0600 に反映。
+
+## 2026-09-22: 素早さ SP0 の設計(素早さレーンの判断)
+Decision: services/speed は engine に `replace` で依存し、実数値・ランクは `engine.RealStats` / `engine.EffectiveStat` を呼ぶ。engine に無いこだわりスカーフ(×1.5)だけを speed のコアが 4096 基準の補正 6144・五捨五超入で持つ(ランクの後。Showdown の順)。GitOps の overlay と Argo CD Application は、イメージの digest が決まる SP4 で作る(ADR-0600)。
+提案(データレーンへ。既定案: 今は何もしない): engine に素早さの持ち物補正(スカーフ)の公開関数を足すなら、speed はそれを呼ぶように切り替える。足さない場合は speed の1式のままでよい。
+Reason: engine はデータレーンの範囲で、Champions に無い効果をダメージ計算の engine に入れない方針のため。表の行としてスカーフはユーザーの仕様で必要。
+Impact: ADR-0600、docs/speed-design.md。
 
 ## 2026-09-21: Web レーンの構成(ADR-0300)と、他レーンへの提案2件(Web レーン、Claude Code。既定案で進行・ユーザー未確認)
 Decision: (1) Web は計算を `CalcEngine` の後ろに置き、WASM(ADR-0011 の JSON 契約)で先に作る。マスタは `MasterData` の後ろに置き、
@@ -498,6 +566,19 @@ Decision: (1) ユーザー決定どおり、`web/Makefile` が `test: web-test` 
 gateway 経由のオンライン E2E(`VITE_API_BASE_URL` を gateway に向ける)は P3-3 の後に Web レーンが足す。
 Reason: P4-6 の完了条件と、ユーザー回答(2026-09-22)の反映。
 Impact: 他のレーンのルートの `make test` / `lint` / `build` で Web のテスト・型検査・ビルドも走る(初回は npm ci ぶん遅い)。
+## 2026-09-22: PR #23(API P3-2 gateway)を main に統合(深夜。ユーザーの指示に基づく)
+Decision: critic PASS(NG 2回のあと3回目)、make test 14 件・lint・build・check-publishable 0 件・make gen 差分なし、開いている他の PR 無し・Web/iOS/データのブランチに競合する変更無し、を確認してマージした。
+Reason: ユーザーが同日「PR はテストとか諸々通っているならマージしていい。他のレーンの状況確認してから」と指示した(深夜のマージ条件より優先)。
+Impact: Web(P4-5)・iOS は gateway 経由の API(ErrorCode に invalid_header、X-Device-Id / X-Session-Id は UUID)に追従する。
+
+## 2026-09-22: 提案(データレーン・整備レーンへ): `make up` 後の calc・gateway のイメージ(API レーン。既定案)
+Decision: P3-3 で共有の local overlay に `components: [api]` を足したため、`make up`(scripts/up.sh)も calc・gateway の Deployment を作るようになる。
+up.sh は `pokecalc/calc:local` / `pokecalc/gateway:local` をビルド・import しないので、`make api-k3d-deploy` を流すまで ImagePullBackOff のまま残る。
+既定案: 手順として `make up && make api-k3d-deploy` を README(services/gateway/README.md)に明記する(API レーンで実施済み)。
+up.sh の最後で `make api-docker-build` と `k3d image import` を呼ぶ形にするかは、up.sh の持ち主(データレーン・整備レーン)の判断に任せる。API レーンは scripts/up.sh を変えない。
+Reason: critic の推奨。共有スクリプトは他レーンの範囲のため。
+Impact: `api-k3d-deploy` は他レーンのリソースに触れないよう、常に API 専用の overlay(deploy/k8s/overlays/local-api)だけを適用する(ADR-0203)。
+
 
 ## 2026-09-22: Web の統合記録(PR #22・#28)
 Decision: PR #22(Web P4-1〜P4-5)と PR #28(P4-6 Playwright E2E・make test への Web の組み込み・verify-m1.md ドラフト)を main に統合した。

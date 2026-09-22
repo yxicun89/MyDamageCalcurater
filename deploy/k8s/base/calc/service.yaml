@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: calc
+  labels:
+    app.kubernetes.io/name: calc
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  selector:
+    app.kubernetes.io/name: calc
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

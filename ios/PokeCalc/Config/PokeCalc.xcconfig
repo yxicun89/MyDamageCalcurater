@@ -1,0 +1,17 @@
+// PokeCalc アプリの接続先(ADR-0500 §5)。
+//
+// POKECALC_API_BASE_URL が空なら起動時にモックを使う。http(s) の URL を入れると
+// その API に接続する(全リクエストに X-Device-Id / X-Session-Id を付ける)。
+//
+// 注意: xcconfig は "//" 以降を行コメントとして扱うため、URL をそのまま書くと
+// スキームの "//" から後ろが消える。空の変数参照 $() で "//" を分断して書くこと。
+// 例: POKECALC_API_BASE_URL = https:/$()/pokecalc.example.invalid
+POKECALC_API_BASE_URL =
+
+// `INFOPLIST_KEY_PokeCalcAPIBaseURL` は生成 Info.plist(GENERATE_INFOPLIST_FILE)に無視される
+// 独自キーなので使わない(シミュレータ向けビルドの成果物に反映されないことを確認済み)。
+// 同期フォルダ(ios/PokeCalc/)の外、プロジェクト直下に置いた実ファイル ios/PokeCalc-Info.plist を
+// INFOPLIST_FILE で指定し、GENERATE_INFOPLIST_FILE と合わせて使う(Xcode がこの2つを1つの
+// Info.plist にマージする)。パスはプロジェクトディレクトリ(ios/)からの相対。
+// 接続先の設定はこの xcconfig 1か所だけにする(pbxproj 側に重複定義を置かない)。
+INFOPLIST_FILE = PokeCalc-Info.plist

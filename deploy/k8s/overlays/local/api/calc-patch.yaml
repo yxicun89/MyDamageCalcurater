@@ -1,0 +1,31 @@
+# calc-svc に例のマスタと相性表の場所を渡す(ADR-0203 §3)。ConfigMap は読み取り専用でマウントする。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calc
+spec:
+  template:
+    spec:
+      containers:
+        - name: calc
+          env:
+            - name: CALC_MASTER_PATH
+              value: /etc/pokecalc/master.json
+            - name: CALC_TYPECHART_PATH
+              value: /etc/pokecalc/typechart.json
+          volumeMounts:
+            - name: master
+              mountPath: /etc/pokecalc/master.json
+              subPath: master.json
+              readOnly: true
+            - name: typechart
+              mountPath: /etc/pokecalc/typechart.json
+              subPath: typechart.json
+              readOnly: true
+      volumes:
+        - name: master
+          configMap:
+            name: calc-master-example
+        - name: typechart
+          configMap:
+            name: calc-typechart
