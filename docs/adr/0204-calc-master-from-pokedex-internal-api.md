@@ -1,6 +1,6 @@
 # ADR-0204: calc-svc のマスタを pokedex-svc の内部 API から受け取る
 
-- 状態: 提案(2026-09-22。ユーザー決定に基づく API レーンの設計。受け入れ条件とテストは spec-writer が先に書き、実装は implementer)
+- 状態: 採用・実装済み(2026-09-22。ユーザー決定「pokedex-svc の内部 API」に基づく。pokedex-svc 側の実装はデータレーンの P2-3 が受け入れ済み。k3d と dev はファイル方式で確認)
 - 日付: 2026-09-22
 - 関連: ADR-0002(実マスタをコミットしない)、ADR-0005(データ駆動の効果定義)、ADR-0012 §6(共通マスタのための実行時依存)、
   ADR-0013(相性表はデータ)、ADR-0100(pokedex のスキーマと写像)、ADR-0101(importer)、ADR-0200(calc-svc の契約と暫定マスタ境界)、
@@ -59,11 +59,17 @@ ADR-0012 §6 は「共通マスタのためだけに新しい実行時サービ�
   - `MemoryStore.DataVersion()` で `dataVersion` を返す(ログ用。`Store` インターフェースには足さない)。
 - `DecodeExport(io.Reader)`: 厳格デコード(未知のフィールド・後続のデータ・必須のトップレベルの欠落/null を拒否)。
   効果定義の数値は字面のまま保つ(`json.Decoder.UseNumber` 等。`5324.0` を `5324` に丸めて共通マスタの整数検査をすり抜けさせない)。
+  本文には上限(バイト数の定数)を設け、超過は `ErrInvalidMaster`。`items` / `abilities` の各要素は `effect` キーの
+  **有無**だけを確かめる(値が `null` は「補正なし」として許すが、キーごと無いのは不正。ポインタ型では欠落と
+  `null` が区別できなくなるため)。それ以外のオブジェクト内の各フィールドの必須・型は、ここでは確かめない
+  (共通マスタの写像・ID の形式検査など、受け取った値を使う側に委ねる)。
 - 入手元は `Source` インターフェース(`Fetch(ctx) (api.MasterExport, error)`):
   - `FileSource{Path}`: JSON ファイル(k3d の local overlay と `make dev`)。
   - `NewHTTPSource(baseURL, timeout)`: `GET {baseURL}/internal/pokedex/master`。URL は http/https の絶対 URL(クエリ不可)、
     タイムアウトは正。接続できない・タイムアウト・200 以外は `ErrMasterUnavailable`、本文の不正は `ErrInvalidMaster`、
-    呼び出し側の ctx の終了は ctx のエラー。端末ID/セッションID は付けない。
+    呼び出し側の ctx の終了は ctx のエラー。端末ID/セッションID は付けない。本文を読む段階(取得後・デコード前)の
+    I/O エラーは、内容の不正ではなく取得できていないだけなので、ctx がすでに終わっていればそのエラー、
+    そうでなければ `ErrMasterUnavailable`(上限超過だけは内容の不正として `ErrInvalidMaster`)。
 
 ### 3. 起動(`services/calc/cmd/calc`)と準備状態(`services/calc/internal/httpapi`)
 
@@ -78,6 +84,8 @@ ADR-0012 §6 は「共通マスタのためだけに新しい実行時サービ�
     理由: 計算中にマスタが入れ替わると、同じ入力の結果が途中で変わる。版の切り替えを起動の単位にそろえる方が追いやすい。
 - httpapi は `NewDeferredHandler(current StoreFunc)` を持つ(`StoreFunc` は準備中なら nil を返す)。`NewHandler(store)` は従来どおりで、
   `/readyz` は常に 200。`/readyz` も `/healthz` と同じく openapi に載せない運用エンドポイント。
+  マスタが準備できていない間、calc の3操作は生成ラッパ(ヘッダの必須検証)を経由させず先に 503
+  `master_unavailable` を返す(ヘッダの検証より判定を先にする。準備状態はリクエストの中身によらないため)。
 - calc-svc は `GET /internal/pokedex/master` を提供しない(生成物 `api.ServerInterface` を満たすメソッドだけ置き、ルートに登録しない)。
 
 ### 4. k3d / dev

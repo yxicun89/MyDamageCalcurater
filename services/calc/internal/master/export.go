@@ -281,15 +281,44 @@ func natureStat(s *api.StatKey) (engine.StatKey, error) {
 	return engine.StatKey(*s), nil
 }
 
+// maxMasterExportBytes はマスタ一式の本文の上限(バイト)。例のファイルは数 KB、実マスタ(全種族・技・
+// 持ち物・特性)でも数 MB を超えない見込みだが、上流の異常時に無制限に読み込んでメモリを使い切らないよう
+// 余裕を持った上限を設ける(critic 指摘)。
+const maxMasterExportBytes = 16 << 20 // 16MiB
+
+// errBodyTooLarge は readAllLimited が上限超過を伝えるための内部エラー(呼び出し側が包み直す)。
+var errBodyTooLarge = errors.New("本文が上限を超える")
+
+// readAllLimited は r から最大 limit バイトを読む。それを超えるデータがあれば errBodyTooLarge、
+// 読み込み自体が失敗すれば(接続断・タイムアウト等)そのエラーをそのまま返す(呼び出し側が種別を判断する)。
+func readAllLimited(r io.Reader, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, errBodyTooLarge
+	}
+	return data, nil
+}
+
 // DecodeExport はマスタ一式の JSON を厳格に読む(未知のフィールド・後続のデータ・必須のトップレベルの
 // 欠落/null を拒否する。効果定義の数値は字面のまま保つ: 5324.0 を 5324 に丸めて通さない)。
-// 不正は ErrInvalidMaster で包む。
+// 本文が maxMasterExportBytes を超える場合も含め、不正は ErrInvalidMaster で包む。
+// (HTTPSource.Fetch は本文を読む段階の失敗を別に扱うため、readAllLimited と decodeExportBytes を直接使う。)
 func DecodeExport(r io.Reader) (api.MasterExport, error) {
-	data, err := io.ReadAll(r)
+	data, err := readAllLimited(r, maxMasterExportBytes)
 	if err != nil {
+		if errors.Is(err, errBodyTooLarge) {
+			return api.MasterExport{}, fmt.Errorf("%w: 本文が上限 %d バイトを超える", ErrInvalidMaster, maxMasterExportBytes)
+		}
 		return api.MasterExport{}, fmt.Errorf("%w: %v", ErrInvalidMaster, err)
 	}
+	return decodeExportBytes(data)
+}
 
+// decodeExportBytes は読み込み済みの本文を厳格にデコードする(DecodeExport と HTTPSource.Fetch の共通部分)。
+func decodeExportBytes(data []byte) (api.MasterExport, error) {
 	// 構造体デコードは欠落・null のフィールドを素通りさせる(ゼロ値・nil のまま)ため、
 	// トップレベルの必須フィールドの有無・null は別に確かめる。
 	var top map[string]json.RawMessage
@@ -301,6 +330,16 @@ func DecodeExport(r io.Reader) (api.MasterExport, error) {
 		if !ok || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 			return api.MasterExport{}, fmt.Errorf("%w: 必須のフィールド %q が無いか null", ErrInvalidMaster, key)
 		}
+	}
+	// items / abilities の各要素は effect キーを持つこと(値が null は「補正なし」として許す)。
+	// *api.MasterEffect は「欠落」と「null」の両方が nil ポインタになって区別が付かなくなるため、
+	// 構造体デコードの前に JSON の段階でキーの有無だけを確かめる。その他のオブジェクト内の必須は
+	// ここでは見ない(共通マスタ・engine 側の検証、および ID の形式検査に委ねる。ADR-0204 §2)。
+	if err := requireEffectField(top["items"], "items"); err != nil {
+		return api.MasterExport{}, err
+	}
+	if err := requireEffectField(top["abilities"], "abilities"); err != nil {
+		return api.MasterExport{}, err
 	}
 
 	dec := json.NewDecoder(bytes.NewReader(data))
@@ -314,6 +353,21 @@ func DecodeExport(r io.Reader) (api.MasterExport, error) {
 		return api.MasterExport{}, fmt.Errorf("%w: JSON の後ろに余計なデータがある", ErrInvalidMaster)
 	}
 	return export, nil
+}
+
+// requireEffectField は items / abilities(raw はその JSON 配列)の各要素に "effect" キーがあることを
+// 確かめる(値は見ない。null は許す。無いこと自体を ErrInvalidMaster にする)。
+func requireEffectField(raw json.RawMessage, label string) error {
+	var entries []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return fmt.Errorf("%w: %s を読めない: %v", ErrInvalidMaster, label, err)
+	}
+	for i, e := range entries {
+		if _, ok := e["effect"]; !ok {
+			return fmt.Errorf("%w: %s[%d] に effect が無い", ErrInvalidMaster, label, i)
+		}
+	}
+	return nil
 }
 
 // Source はマスタ一式の入手元(ADR-0204 §2)。
@@ -390,5 +444,18 @@ func (h *HTTPSource) Fetch(ctx context.Context) (api.MasterExport, error) {
 	if resp.StatusCode != http.StatusOK {
 		return api.MasterExport{}, fmt.Errorf("%w: 上流が %d を返した", ErrMasterUnavailable, resp.StatusCode)
 	}
-	return DecodeExport(resp.Body)
+	// 本文を読む段階の失敗(接続が途中で切れる・タイムアウト)は、JSON として不正なのではなく取得できて
+	// いないだけなので ErrInvalidMaster にしない。ctx がすでに終わっていればそれを、そうでなければ
+	// ErrMasterUnavailable を返す(critic 指摘)。上限超過だけは内容の不正として ErrInvalidMaster にする。
+	data, err := readAllLimited(resp.Body, maxMasterExportBytes)
+	if err != nil {
+		if errors.Is(err, errBodyTooLarge) {
+			return api.MasterExport{}, fmt.Errorf("%w: マスタ一式が上限 %d バイトを超える", ErrInvalidMaster, maxMasterExportBytes)
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return api.MasterExport{}, ctxErr
+		}
+		return api.MasterExport{}, fmt.Errorf("%w: %v", ErrMasterUnavailable, err)
+	}
+	return decodeExportBytes(data)
 }

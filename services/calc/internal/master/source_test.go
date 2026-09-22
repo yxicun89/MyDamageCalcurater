@@ -103,6 +103,16 @@ func TestDecodeExportRejectsInvalid(t *testing.T) {
 			}
 			return example[:start] + `"natures": null` + "\n}\n"
 		}},
+		{"items の要素に effect が無い(critic 指摘: 欠落と null は区別する)", func(t *testing.T) string {
+			return replaceOnce(t,
+				`"id": "testplainitem", "nameJa": "テストのいし", "effect": null}`,
+				`"id": "testplainitem", "nameJa": "テストのいし"}`)
+		}},
+		{"abilities の要素に effect が無い(critic 指摘: 欠落と null は区別する)", func(t *testing.T) string {
+			return replaceOnce(t,
+				`"id": "testplain", "nameJa": "テストとくせい", "effect": null}`,
+				`"id": "testplain", "nameJa": "テストとくせい"}`)
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -351,5 +361,106 @@ func TestHTTPSourceHonorsContext(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
 		t.Errorf("Fetch が ctx の終了後も %v 待った", elapsed)
+	}
+}
+
+// critic 指摘: 本文の途中で接続が切れる上流は、JSON として不正なのではなく取得できていないだけなので
+// ErrMasterUnavailable(ErrInvalidMaster にしない)。Content-Length を実際より大きく宣言してから
+// 少しだけ書いて接続を切り、クライアント側に読み切れないことを気付かせる。
+func TestHTTPSourceBodyStopsMidStream(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatal("ResponseWriter が http.Hijacker を実装していない")
+		}
+		conn, rw, err := hj.Hijack()
+		if err != nil {
+			t.Fatalf("Hijack = %v", err)
+		}
+		defer conn.Close()
+		_, _ = rw.WriteString("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 1000000\r\n\r\n")
+		_, _ = rw.WriteString(`{"schemaVersion":1,`)
+		_ = rw.Flush()
+		// ここで接続を閉じる(defer conn.Close)。宣言した Content-Length に満たないので、
+		// クライアントは本文を読み切れず io.ErrUnexpectedEOF 相当のエラーになる。
+	}))
+	t.Cleanup(srv.Close)
+
+	src, err := NewHTTPSource(srv.URL, fetchTimeout)
+	if err != nil {
+		t.Fatalf("NewHTTPSource = %v", err)
+	}
+	if _, err := src.Fetch(context.Background()); !errors.Is(err, ErrMasterUnavailable) {
+		t.Fatalf("Fetch err = %v, want ErrMasterUnavailable(本文が途中で切れた)", err)
+	}
+}
+
+// critic 指摘: 本文を読んでいる最中に呼び出し側の ctx が終わったら、ErrMasterUnavailable ではなく
+// ctx のエラーで返る(タイムアウト到達前の応答ヘッダ受信後、本文のストリーミング中の cancel を再現する)。
+func TestHTTPSourceContextEndsWhileReadingBody(t *testing.T) {
+	headerSent := make(chan struct{})
+	release := make(chan struct{})
+	_, srv := newFakePokedex(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"schemaVersion":1,`))
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		close(headerSent)
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
+	})
+	t.Cleanup(func() { close(release) })
+
+	src, err := NewHTTPSource(srv.URL, 10*time.Second)
+	if err != nil {
+		t.Fatalf("NewHTTPSource = %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	var fetchErr error
+	go func() {
+		_, fetchErr = src.Fetch(ctx)
+		close(done)
+	}()
+
+	<-headerSent
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Fetch が ctx の終了後も 5 秒以内に返らない")
+	}
+	if !errors.Is(fetchErr, context.Canceled) {
+		t.Fatalf("Fetch err = %v, want context.Canceled", fetchErr)
+	}
+}
+
+// critic 指摘: 本文が上限(maxMasterExportBytes)を超えたら ErrInvalidMaster(内容の不正として扱う)。
+func TestHTTPSourceRejectsOversizedBody(t *testing.T) {
+	huge := bytes.Repeat([]byte(" "), maxMasterExportBytes+1)
+	_, srv := newFakePokedex(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(huge)
+	})
+
+	src, err := NewHTTPSource(srv.URL, 10*time.Second)
+	if err != nil {
+		t.Fatalf("NewHTTPSource = %v", err)
+	}
+	if _, err := src.Fetch(context.Background()); !errors.Is(err, ErrInvalidMaster) {
+		t.Fatalf("Fetch err = %v, want ErrInvalidMaster(本文が上限を超える)", err)
+	}
+}
+
+// critic 指摘: DecodeExport 自身も本文の上限を超えたら ErrInvalidMaster にする(HTTPSource 経由に限らない)。
+func TestDecodeExportRejectsOversizedBody(t *testing.T) {
+	huge := bytes.Repeat([]byte(" "), maxMasterExportBytes+1)
+	if _, err := DecodeExport(bytes.NewReader(huge)); !errors.Is(err, ErrInvalidMaster) {
+		t.Fatalf("DecodeExport(oversized) err = %v, want ErrInvalidMaster", err)
 	}
 }

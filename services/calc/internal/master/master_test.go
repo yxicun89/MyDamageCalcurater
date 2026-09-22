@@ -222,6 +222,46 @@ func TestFromExportTypeChart(t *testing.T) {
 	}
 }
 
+// critic 指摘: services/calc/testdata/master.example.json の typeChart が共有の相性表
+// (testdata/golden/typechart.json)と意味として等しいことを確かめる。等倍の組は省略されている
+// (ADR-0013)ので、18×18 の総当たりで Code() を比較する(省略の有無に左右されない)。
+func TestExampleMasterTypeChartMatchesSharedTypeChart(t *testing.T) {
+	export, err := DecodeExport(bytes.NewReader(readExample(t)))
+	if err != nil {
+		t.Fatalf("DecodeExport(example) = %v, want nil", err)
+	}
+	exampleChart, err := buildTypeChart(export.Types, export.TypeChart)
+	if err != nil {
+		t.Fatalf("例のマスタの相性表を作れない: %v", err)
+	}
+
+	sharedTypes, sharedRows := sharedTypeRows(t)
+	sharedChart, err := buildTypeChart(sharedTypes, sharedRows)
+	if err != nil {
+		t.Fatalf("共有の相性表を作れない: %v", err)
+	}
+
+	types := sharedChart.Types()
+	if got, want := len(exampleChart.Types()), len(types); got != want {
+		t.Fatalf("例のマスタのタイプ数 = %d, want %d(共有の相性表と同じ 18 種)", got, want)
+	}
+	for _, atk := range types {
+		for _, def := range types {
+			want, err := sharedChart.Code(atk, def)
+			if err != nil {
+				t.Fatalf("共有の相性表 Code(%s, %s) = %v", atk, def, err)
+			}
+			got, err := exampleChart.Code(atk, def)
+			if err != nil {
+				t.Fatalf("例のマスタの相性表 Code(%s, %s) = %v", atk, def, err)
+			}
+			if got != want {
+				t.Errorf("Code(%s, %s) = %d, want %d(共有の相性表 testdata/golden/typechart.json と不一致)", atk, def, got, want)
+			}
+		}
+	}
+}
+
 // AC-M1: 未知の ID は false(panic しない)。
 func TestLookupUnknownIDs(t *testing.T) {
 	store := newStore(t, baseExport(t))

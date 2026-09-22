@@ -163,10 +163,12 @@ func fetchMasterLoop(ctx context.Context, src master.Source, retry retryPolicy, 
 			return
 		}
 		slog.Warn("calc-svc: マスタを取得できない。再試行する", "error", err, "attempt", attempt)
+		timer := time.NewTimer(backoffDelay(attempt, retry))
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return
-		case <-time.After(backoffDelay(attempt, retry)):
+		case <-timer.C:
 		}
 	}
 }
