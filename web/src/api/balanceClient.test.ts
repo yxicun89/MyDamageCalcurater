@@ -230,6 +230,172 @@ describe("coverage", () => {
   });
 });
 
+// ---- P4-12b: 仮想敵(threats)・おすすめタイプ(recommendations)(ADR-0303 §7・§8) ----
+
+const threatsResponse: Schemas["ThreatsResponse"] = {
+  threats: [
+    {
+      pokemonId: "9002-000",
+      abilityId: "example-ability-none",
+      attackTypes: ["water"],
+      matchups: [
+        { pokemonId: "9001-000", incoming: "2", outgoing: "1/2", safe: false, superEffective: false },
+      ],
+      safeMembers: 0,
+      superEffectiveMembers: 0,
+    },
+  ],
+};
+
+const recommendationsResponse: Schemas["RecommendationsResponse"] = {
+  defenseHoles: ["water"],
+  offenseHoles: ["dragon"],
+  candidates: [
+    {
+      types: ["grass"],
+      defenseCovered: ["water"],
+      offenseCovered: ["dragon"],
+      weaknesses: 5,
+      pokemon: [{ pokemonId: "9003-000", nameJa: "テストくさ", types: ["grass"], exactMatch: true }],
+    },
+  ],
+  abilityOptions: [
+    {
+      attackType: "water",
+      pokemon: [
+        {
+          pokemonId: "9003-000",
+          nameJa: "テストくさ",
+          abilityId: "example-ability-none",
+          multiplier: "1/2",
+        },
+      ],
+    },
+  ],
+};
+
+/**
+ * recommendations に送る本文の形。契約(services/balance/api/openapi.yaml)では `limit` は必須ではないが、
+ * 既定値(10)を持つため openapi-typescript が必須の項目として生成する。limit を省いたときに Web が既定値を
+ * 決め打ちして送らない(サーバーの既定に任せる。ADR-0303 §7)ことを、この型で表す。
+ */
+type RecommendationsBody = Omit<Schemas["RecommendationsRequest"], "limit"> & {
+  limit?: Schemas["RecommendationsRequest"]["limit"];
+};
+
+describe("threats(仮想敵)", () => {
+  test("threats のパスに、端末 ID・セッション ID 付きで ThreatsRequest を POST する", async () => {
+    const fetchMock = fakeFetch(jsonResponse(200, threatsResponse));
+    const client = createBalanceClient({ baseUrl: BASE_URL, fetch: fetchMock, ids });
+    const members: Schemas["ThreatsRequest"]["members"] = [
+      { pokemonId: "9001-000", moveIds: ["example-move-firepunch"], abilityId: "example-ability-none" },
+    ];
+    const threats: Schemas["ThreatsRequest"]["threats"] = [
+      { pokemonId: "9002-000", moveIds: [] },
+      { pokemonId: "9003-000", moveIds: ["example-move-tackle"], abilityId: "example-ability-none" },
+    ];
+
+    const result = await client.threats(members, threats);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const { url, init } = callAt(fetchMock);
+    expect(url).toBe("http://balance.test/api/balance/v1/team-balance/threats");
+    expect(init.method).toBe("POST");
+    expect(headersOf(init)).toMatchObject({
+      "content-type": "application/json",
+      "x-device-id": ids.deviceId,
+      "x-session-id": ids.sessionId,
+    });
+    const expected: Schemas["ThreatsRequest"] = {
+      members: [
+        { pokemonId: "9001-000", moveIds: ["example-move-firepunch"], abilityId: "example-ability-none" },
+      ],
+      threats: [
+        { pokemonId: "9002-000", moveIds: [] },
+        { pokemonId: "9003-000", moveIds: ["example-move-tackle"], abilityId: "example-ability-none" },
+      ],
+    };
+    expect(bodyOf(init)).toEqual(expected);
+    // 応答はそのまま運ぶ(safe / superEffective を倍率から判定し直さない。ADR-0303 §7)。
+    expect(result).toEqual({ ok: true, value: threatsResponse });
+  });
+
+  test("HTTP エラーの {code: unknown_pokemon} をそのまま運ぶ", async () => {
+    const error: Schemas["Error"] = { code: "unknown_pokemon", message: "unknown pokemonId: 9999-000" };
+    const client = createBalanceClient({
+      baseUrl: BASE_URL,
+      fetch: fakeFetch(jsonResponse(422, error)),
+      ids,
+    });
+    const result = await client.threats(
+      [{ pokemonId: "9001-000", moveIds: [] }],
+      [{ pokemonId: "9999-000", moveIds: [] }],
+    );
+    expect(result).toEqual({ ok: false, error });
+  });
+});
+
+describe("recommendations(おすすめタイプ)", () => {
+  test("recommendations のパスに、端末 ID・セッション ID 付きで {members} を POST する", async () => {
+    const fetchMock = fakeFetch(jsonResponse(200, recommendationsResponse));
+    const client = createBalanceClient({ baseUrl: BASE_URL, fetch: fetchMock, ids });
+    const members: Schemas["RecommendationsRequest"]["members"] = [
+      { pokemonId: "9001-000", moveIds: ["example-move-firepunch"], abilityId: "example-ability-none" },
+      { pokemonId: "9002-000", moveIds: [] },
+    ];
+
+    const result = await client.recommendations(members);
+
+    const { url, init } = callAt(fetchMock);
+    expect(url).toBe("http://balance.test/api/balance/v1/team-balance/recommendations");
+    expect(init.method).toBe("POST");
+    expect(headersOf(init)).toMatchObject({
+      "content-type": "application/json",
+      "x-device-id": ids.deviceId,
+      "x-session-id": ids.sessionId,
+    });
+    const expected: RecommendationsBody = {
+      members: [
+        { pokemonId: "9001-000", moveIds: ["example-move-firepunch"], abilityId: "example-ability-none" },
+        { pokemonId: "9002-000", moveIds: [] },
+      ],
+    };
+    expect(bodyOf(init)).toEqual(expected);
+    expect(result).toEqual({ ok: true, value: recommendationsResponse });
+  });
+
+  test("limit を渡さなければ limit のキー自体を送らない(既定の件数を Web が決めない)", async () => {
+    const fetchMock = fakeFetch(jsonResponse(200, recommendationsResponse));
+    const client = createBalanceClient({ baseUrl: BASE_URL, fetch: fetchMock, ids });
+
+    await client.recommendations([{ pokemonId: "9001-000", moveIds: [] }]);
+
+    const body = bodyOf(callAt(fetchMock).init);
+    expect(Object.keys(body as Record<string, unknown>)).toEqual(["members"]);
+  });
+
+  test("limit を渡すとそのまま送る", async () => {
+    const fetchMock = fakeFetch(jsonResponse(200, recommendationsResponse));
+    const client = createBalanceClient({ baseUrl: BASE_URL, fetch: fetchMock, ids });
+
+    await client.recommendations([{ pokemonId: "9001-000", moveIds: [] }], 5);
+
+    const expected: RecommendationsBody = { members: [{ pokemonId: "9001-000", moveIds: [] }], limit: 5 };
+    expect(bodyOf(callAt(fetchMock).init)).toEqual(expected);
+  });
+
+  test("HTTP エラーの {code: invalid_request} をそのまま運ぶ", async () => {
+    const error: Schemas["Error"] = { code: "invalid_request", message: "limit must be 1 to 20" };
+    const client = createBalanceClient({
+      baseUrl: BASE_URL,
+      fetch: fakeFetch(jsonResponse(400, error)),
+      ids,
+    });
+    const result = await client.recommendations([{ pokemonId: "9001-000", moveIds: [] }], 21);
+    expect(result).toEqual({ ok: false, error });
+  });
+});
+
 describe("通信・応答の失敗は balance_unavailable(自動の切り替えはしない。ADR-0303 §6)", () => {
   const cases: ReadonlyArray<[string, () => Response | Error]> = [
     ["fetch が reject する(通信できない)", () => new TypeError("Failed to fetch")],
@@ -257,6 +423,29 @@ describe("通信・応答の失敗は balance_unavailable(自動の切り替え�
   test.each(cases)("coverage: %s", async (_name, make) => {
     const client = createBalanceClient({ baseUrl: BASE_URL, fetch: fakeFetch(make()), ids });
     const result = await client.coverage([{ pokemonId: "9001-000", moveIds: [] }]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("balance_unavailable");
+      expect(result.error.message).not.toBe("");
+    }
+  });
+
+  test.each(cases)("threats: %s", async (_name, make) => {
+    const client = createBalanceClient({ baseUrl: BASE_URL, fetch: fakeFetch(make()), ids });
+    const result = await client.threats(
+      [{ pokemonId: "9001-000", moveIds: [] }],
+      [{ pokemonId: "9002-000", moveIds: [] }],
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("balance_unavailable");
+      expect(result.error.message).not.toBe("");
+    }
+  });
+
+  test.each(cases)("recommendations: %s", async (_name, make) => {
+    const client = createBalanceClient({ baseUrl: BASE_URL, fetch: fakeFetch(make()), ids });
+    const result = await client.recommendations([{ pokemonId: "9001-000", moveIds: [] }]);
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("balance_unavailable");

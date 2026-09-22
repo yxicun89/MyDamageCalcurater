@@ -20,3 +20,26 @@ export function coverageMultiplierLabel(multiplier: Schemas["CoverageMultiplier"
   }
   return `×${multiplier} ${balanceLabelText.coverageWord[multiplier]}`;
 }
+
+/**
+ * P4-12b: 語を添えない倍率表示(「×2」)。ThreatMatchup.incoming/outgoing・AbilityOptionPokemon.multiplier は
+ * category を持たないため、倍率の範囲から弱点・耐性を Web で判定し直さない(ADR-0303 §7)。
+ */
+export function multiplierLabel(multiplier: string): string {
+  return `×${multiplier}`;
+}
+
+/** P4-12b: 仮想敵の受ける/与える倍率(MatchupMultiplier)。攻撃技が無ければ null で「攻撃技なし」。 */
+export function matchupMultiplierLabel(multiplier: string | null): string {
+  return multiplier === null ? balanceLabelText.coverageNoAttackMove : multiplierLabel(multiplier);
+}
+
+/** P4-12b: 仮想敵の「安全に受けられるか」(ThreatMatchup.safe)。応答の真偽値をそのまま語にする。 */
+export function safeLabel(safe: boolean): string {
+  return safe ? balanceLabelText.safe : balanceLabelText.unsafe;
+}
+
+/** P4-12b: 仮想敵への「抜群が取れるか」(ThreatMatchup.superEffective)。応答の真偽値をそのまま語にする。 */
+export function superEffectiveLabel(superEffective: boolean): string {
+  return superEffective ? balanceLabelText.superEffective : balanceLabelText.notSuperEffective;
+}

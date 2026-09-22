@@ -151,6 +151,12 @@ export const balanceLabelText = {
   } as const,
   /** CoverageMultiplier が null(攻撃技なし)のときの表示。 */
   coverageNoAttackMove: "攻撃技なし",
+  /** P4-12b: ThreatMatchup.safe(応答の真偽値のまま。ADR-0303 §7)。 */
+  safe: "安全",
+  unsafe: "注意",
+  /** P4-12b: ThreatMatchup.superEffective(応答の真偽値のまま。ADR-0303 §7)。 */
+  superEffective: "抜群",
+  notSuperEffective: "ふつう",
 } as const;
 
 /** P4-12a: タイプバランスの画面(screens/BalanceScreen.tsx、ADR-0303 §2)の文言。 */
@@ -177,6 +183,36 @@ export const balanceScreenText = {
   bestMultiplierColumnLabel: "最大倍率",
   effectiveColumnLabel: "有効",
   superEffectiveColumnLabel: "抜群",
+  // ---- P4-12b: 仮想敵(threats)・おすすめタイプ(recommendations)(ADR-0303 §7、ADR-0400、ADR-0401) ----
+  threatGroupLabel: (n: number): string => `仮想敵${String(n)}`,
+  addThreatLabel: "仮想敵を追加",
+  removeThreatLabel: (n: number): string => `仮想敵${String(n)}を削除`,
+  /** 仮想敵ごとの結果のかたまり(region)の名前。 */
+  threatRegionLabel: (n: number, nameJa: string): string => `仮想敵${String(n)}(${nameJa})`,
+  threatMatchupTableLabel: "相性",
+  incomingColumnLabel: "受ける倍率",
+  outgoingColumnLabel: "与える倍率",
+  safeColumnLabel: "安全",
+  safeMembersLabel: (n: number): string => `安全に受けられる ${String(n)}人`,
+  superEffectiveMembersLabel: (n: number): string => `抜群を取れる ${String(n)}人`,
+  threatsLoadingNotice: "仮想敵を計算中",
+  recommendationsRegionLabel: "おすすめタイプ",
+  recommendationsLoadingNotice: "おすすめタイプを計算中",
+  defenseHolesLabel: (list: string): string => `防御の穴: ${list}`,
+  offenseHolesLabel: (list: string): string => `攻撃範囲の穴: ${list}`,
+  candidatesTableLabel: "おすすめタイプの候補",
+  typesColumnLabel: "タイプ",
+  defenseCoveredColumnLabel: "ふさぐ防御の穴",
+  offenseCoveredColumnLabel: "ふさぐ攻撃範囲の穴",
+  pokemonColumnLabel: "ポケモン",
+  abilityOptionsTableLabel: "特性で補えるポケモン",
+  /** 一覧が空のときの表示(防御・攻撃範囲の穴、候補・特性の該当ポケモン)。 */
+  noneLabel: "なし",
+  /** タイプ・ポケモンの一覧を並べるときの区切り。 */
+  listSeparator: "・",
+  /** 特性で補えるポケモンの1件(「名前(特性名 ×倍率)」)。 */
+  abilityOptionEntryLabel: (name: string, ability: string, multiplier: string): string =>
+    `${name}(${ability} ${multiplier})`,
 } as const;
 
 /**

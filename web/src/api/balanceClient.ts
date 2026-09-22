@@ -30,6 +30,15 @@ export interface CreateBalanceClientInput {
   readonly ids: ClientIds;
 }
 
+/**
+ * recommendations に送る本文の形(P4-12b)。契約(services/balance/api/openapi.yaml)では `limit` は必須では
+ * ないが、既定値(10)を持つため openapi-typescript が必須の項目として生成する。limit を省いたときは
+ * Web が既定値を決め打ちせず、`limit` キー自体を送らない(サーバーの既定に任せる。ADR-0303 §7)。
+ */
+type RecommendationsBody = Omit<Schemas["RecommendationsRequest"], "limit"> & {
+  limit?: Schemas["RecommendationsRequest"]["limit"];
+};
+
 /** balance API のクライアント(ADR-0303 §1)。呼び出し側の配列を書き換えないので readonly で受ける。 */
 export interface BalanceClient {
   analyze(
@@ -38,12 +47,24 @@ export interface BalanceClient {
   coverage(
     members: readonly Schemas["CoverageRequestMember"][],
   ): Promise<BalanceResult<Schemas["CoverageResponse"]>>;
+  /** P4-12b(ADR-0400): 仮想敵(threats)ごとの、自分のパーティとの相性診断。 */
+  threats(
+    members: readonly Schemas["ThreatsRequestPokemon"][],
+    threats: readonly Schemas["ThreatsRequestPokemon"][],
+  ): Promise<BalanceResult<Schemas["ThreatsResponse"]>>;
+  /** P4-12b(ADR-0401): おすすめタイプ。limit を省くとサーバーの既定(10)になる。 */
+  recommendations(
+    members: readonly Schemas["RecommendationsRequestMember"][],
+    limit?: number,
+  ): Promise<BalanceResult<Schemas["RecommendationsResponse"]>>;
 }
 
 /** balance API のパス(services/balance/api/openapi.yaml の paths。基点 URL からの相対)。 */
 const BALANCE_PATHS = {
   analyze: "api/balance/v1/team-balance/analyze",
   coverage: "api/balance/v1/team-balance/coverage",
+  threats: "api/balance/v1/team-balance/threats",
+  recommendations: "api/balance/v1/team-balance/recommendations",
 } as const;
 
 /** サーバーのエラー本文({code, message})の形をしているかの型ガード。 */
@@ -105,6 +126,15 @@ export function createBalanceClient(input: CreateBalanceClientInput): BalanceCli
     coverage(members) {
       const body: Schemas["CoverageRequest"] = { members: [...members] };
       return postJson(BALANCE_PATHS.coverage, body);
+    },
+    threats(members, threats) {
+      const body: Schemas["ThreatsRequest"] = { members: [...members], threats: [...threats] };
+      return postJson(BALANCE_PATHS.threats, body);
+    },
+    recommendations(members, limit) {
+      const body: RecommendationsBody =
+        limit === undefined ? { members: [...members] } : { members: [...members], limit };
+      return postJson(BALANCE_PATHS.recommendations, body);
     },
   };
 }
