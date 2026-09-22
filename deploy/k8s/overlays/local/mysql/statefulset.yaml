@@ -32,6 +32,10 @@ spec:
                 secretKeyRef:
                   name: mysql-auth
                   key: mysql-root-password
+            # pokedex-dsn(secret)が指す DB 名。無いと migrate が
+            # 「Unknown database 'pokedex'」で失敗し続ける(初回起動時にだけ効く)。
+            - name: MYSQL_DATABASE
+              value: pokedex
           volumeMounts:
             - name: data
               mountPath: /var/lib/mysql
