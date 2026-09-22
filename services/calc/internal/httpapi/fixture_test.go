@@ -139,7 +139,7 @@ var (
 )
 
 // sharedTypeChart は共有の相性表を1度だけ読む(engine の表と、wasmapi に渡す JSON の両方)。
-func sharedTypeChart(t *testing.T) (engine.TypeChart, rawTypeChart) {
+func sharedTypeChart(t testing.TB) (engine.TypeChart, rawTypeChart) {
 	t.Helper()
 	chartOnce.Do(func() {
 		b, err := os.ReadFile(sharedTypeChartPath)
@@ -170,7 +170,7 @@ func sharedTypeChart(t *testing.T) (engine.TypeChart, rawTypeChart) {
 	return chartValue, chartRaw
 }
 
-func newFakeStore(t *testing.T) *fakeStore {
+func newFakeStore(t testing.TB) *fakeStore {
 	t.Helper()
 	chart, _ := sharedTypeChart(t)
 	return &fakeStore{
@@ -258,7 +258,7 @@ func (in indiv) http() map[string]any {
 }
 
 // engine は同じ個体を engine.Individual にする(ID は fake から解決する)。
-func (in indiv) engine(t *testing.T, f *fakeStore) engine.Individual {
+func (in indiv) engine(t testing.TB, f *fakeStore) engine.Individual {
 	t.Helper()
 	sp, ok := f.species[in.speciesKey]
 	if !ok {
@@ -286,7 +286,7 @@ func (in indiv) engine(t *testing.T, f *fakeStore) engine.Individual {
 }
 
 // wasm は同じ個体を engine/wasmapi の individual DTO(解決済みの実体)にする。
-func (in indiv) wasm(t *testing.T, f *fakeStore) map[string]any {
+func (in indiv) wasm(t testing.TB, f *fakeStore) map[string]any {
 	t.Helper()
 	e := in.engine(t, f)
 	return map[string]any{
@@ -358,7 +358,7 @@ func wasmItem(it *engine.Item) any {
 	return out
 }
 
-func wasmTypeChart(t *testing.T) map[string]any {
+func wasmTypeChart(t testing.TB) map[string]any {
 	t.Helper()
 	_, raw := sharedTypeChart(t)
 	return map[string]any{"types": raw.Types, "effectiveness": raw.Effectiveness}
@@ -380,7 +380,7 @@ func validHeaders() http.Header {
 	return h
 }
 
-func mustJSON(t *testing.T, v any) []byte {
+func mustJSON(t testing.TB, v any) []byte {
 	t.Helper()
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -390,7 +390,7 @@ func mustJSON(t *testing.T, v any) []byte {
 }
 
 // serve は handler に1リクエストを送る。body が nil なら本文なし。
-func serve(t *testing.T, h http.Handler, method, path string, header http.Header, body []byte) *httptest.ResponseRecorder {
+func serve(t testing.TB, h http.Handler, method, path string, header http.Header, body []byte) *httptest.ResponseRecorder {
 	t.Helper()
 	var reader *bytes.Reader
 	if body != nil {

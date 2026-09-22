@@ -236,6 +236,8 @@ paths:
         - **行の順序はプリセット優先**(presets × itemVariants。プリセットごとに itemVariants の順に並ぶ)。
           行数は `len(presets) × len(itemVariants)`(itemVariants 省略時は 1)。
         - 各行の `defender` は、その行で使った防御側の SP・性格補正・実数値(ADR-0011 §3 の WASM 境界と同じ形)。
+        - 件数の上限(ADR-0208): `presets` は 8 件以下、`itemVariants` は 64 件以下で重複なし。
+          超えたものは ID の解決・計算より前に 400 `invalid_input` で拒否する(本文の 1MiB 制限とは別)。
       parameters:
         - $ref: '#/components/parameters/DeviceId'
         - $ref: '#/components/parameters/SessionId'
@@ -278,6 +280,9 @@ paths:
         - 候補は「性格クラス(neutral / plus)× itemCandidates」の全組合せで、説明できない候補も最も近い SP 付きで返す。
         - 並びは Mismatch 昇順 → Support 降順 → SPCount 降順 → 定義順(性格クラス neutral→plus、itemCandidates の添字)の
           全順序(ADR-0010 §R4)。`maxCandidates` は並べた後に上から切る。`exactCount` は切る前の値。
+        - 件数の上限(ADR-0208): `itemCandidates` は 64 件以下で重複なし、`observations` は 16 件以下、
+          `maxCandidates` は 0〜128。超えたものは ID の解決・計算より前に 400 `invalid_input` で拒否する
+          (`maxCandidates` は返却件数だけの上限で、計算量は減らないため別に上限を置く)。
         正確さより候補の提示を優先する。複数観測で絞り込む。
       parameters:
         - $ref: '#/components/parameters/DeviceId'
@@ -386,7 +391,7 @@ components:
         | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
         | unknown_field | 契約にないフィールド | 400 |
         | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-        | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など) | 400 |
+        | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208) | 400 |
         | unknown_preset | 未知の防御側プリセット | 400 |
         | duplicate_preset | 防御側プリセットの重複 | 400 |
         | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -698,12 +703,20 @@ components:
             特殊技は 5 件(none, hp, hd_boost, hd, hd_full)、
             **変化技は 2 件(none, hp)のみ**。
             指定したときはその順に行を返す(分類に合わないプリセットも指定どおり返す)。
-            同じ preset を2回以上含めると 400 `duplicate_preset`。
+            同じ preset を2回以上含めると 400 `duplicate_preset`(`uniqueItems` 違反に対する
+            この操作の code。ADR-0208)。9 件以上は 400 `invalid_input`。
             engine のカスタムプリセット定義(SP・性格を任意に決めたもの)は API に出さない。
+          maxItems: 8
+          uniqueItems: true
           items: { $ref: '#/components/schemas/DefenderPreset' }
         itemVariants:
           type: array
-          description: 差し替えて比較する持ち物 ID(省略時は素の1通り)
+          description: |
+            差し替えて比較する持ち物 ID(省略時は素の1通り)。null 要素は「持ち物なし」。
+            65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
+            行数は `len(presets) × len(itemVariants)` なので、上限は 8 × 64 = 512 行。
+          maxItems: 64
+          uniqueItems: true
           items: { type: string, nullable: true }
 
     BulkCalcRow:
@@ -805,18 +818,29 @@ components:
         options: { $ref: '#/components/schemas/CalcOptions' }
         itemCandidates:
           type: array
-          description: 相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ
+          description: |
+            相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ。
+            65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
+          maxItems: 64
+          uniqueItems: true
           items: { type: string, nullable: true }
         observations:
           type: array
           minItems: 1
-          description: 同じ技・同じ場・同じ既知側に対する別々の1発。0 件は 400 `no_observation`
+          maxItems: 16
+          description: |
+            同じ技・同じ場・同じ既知側に対する別々の1発。0 件は 400 `no_observation`、
+            17 件以上は 400 `invalid_input`(ADR-0208)。同じ内容の観測を繰り返してよい
+            (絞り込みに寄与しないだけで矛盾しない)ので `uniqueItems` は付けない。
           items: { $ref: '#/components/schemas/Observation' }
         maxCandidates:
           type: integer
           minimum: 0
+          maximum: 128
           default: 0
-          description: 返す候補数の上限。0 は無制限
+          description: |
+            返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(上限は
+            2 性格クラス × 64 itemCandidates = 128 件)。負の値と 129 以上は 400 `invalid_input`。
 
     NatureClass:
       type: string
