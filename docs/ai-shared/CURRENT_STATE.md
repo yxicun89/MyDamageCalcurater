@@ -32,10 +32,10 @@ Next: PR(P6-2b・internal タグ除外・DOC-ios をまとめて main へ)→ P6
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
-Active: Claude Code
+Active: なし(ユーザー指示で一時停止。P2-3 の実データ確認は完了。再開はユーザーの指示があってから)
 Branch: 次は main から feat/tb-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
-Status: TB0〜TB5 と整備(ADR-0402 の read model の JSON Schema を含む)は完了・main に統合済み。balance は Echo v5.3.1。ポケモン・技・特性は temporary の read model(架空データの example。実データは BALANCE_*_PATH でマウント)。k3d には Argo CD v3.5.3・クラスタ内レジストリ・Application pokecalc-balance(manual sync)。新しい ADR はタイプバランスの帯 0400〜
-Next: データレーンの pokedex export(ADR-0105)が main に入ったら、`make balance-k3d-deploy-readmodel && make balance-smoke-readmodel`(docs/runbooks/balance.md の 2b)で実データの動作を確かめる。無効・吸収の特性は export に出ない(データレーンの P2-3b でユーザーに要否を確認中)
+Status: TB0〜TB5・整備・実データ配線(ADR-0403)は完了・main に統合済み。データレーンの pokedex export(PR #57)を実データで確認済み: 348 種・516 技・特性のマスタで analyze/recommendations が 200(例: フシギバナ、あついしぼう持ちのカビゴン・マンムーが氷技の弱点を軽減する候補として正しく出た)。メガフォームの nameJa が英語表記のまま(Venusaur-Mega 等)なのはデータレーン側の日本語名収集の余地(ブロッカーではない)
+Next: 一時停止中。再開したら: (1) 上記メガフォームの nameJa の件をデータレーンに確認するか判断。(2) 軽微の残り(HTTP 層の検証・422 変換の重複整理、read model の JSON Schema の細部)。(3) TB6 以降は未定(設計書 TB0〜TB5 で完了)
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
 
 ## Speed
