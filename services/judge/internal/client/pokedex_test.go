@@ -304,3 +304,217 @@ func TestSpeciesErrorDoesNotLeakUpstreamDetail(t *testing.T) {
 		t.Errorf("エラーが上流の URL を漏らしている: %s", message)
 	}
 }
+
+// --- JD1: 性格の解決(ADR-0701 §4)。judge は engine.Individual に Plus/Minus の StatKey を
+// 渡す必要があり、natureId の文字列からは作れないため、pokedex-svc の性格一覧を 1 リクエストに
+// つき 1 回だけ引く。--------------------------------------------------------------------
+
+// validNaturesBody は pokedex-svc の GET /api/pokedex/natures の 200 の本文
+// (ルートの api/openapi.yaml の Nature の配列)を模した架空データ。実マスタは使わない。
+// 無補正の性格は plus / minus とも null で返る。
+func validNaturesBody() []byte {
+	return []byte(`[
+      {"id": "test-plus-spe", "nameJa": "テストようき", "plus": "spe", "minus": "spa"},
+      {"id": "test-neutral", "nameJa": "テストまじめ", "plus": null, "minus": null}
+    ]`)
+}
+
+// TestNaturesDecodesUpstreamResponse: 200 の本文から judge が使う欄(ID と補正する能力)を取り出し、
+// 無補正は空文字で表す(ADR-0701 §4)。client は engine に依存しないので素の文字列のまま持つ。
+// X-Device-Id / X-Session-Id は呼び出し元のものをそのまま転送する(ADR-0700 §2)。
+func TestNaturesDecodesUpstreamResponse(t *testing.T) {
+	t.Parallel()
+
+	var gotMethod, gotPath, gotDevice, gotSession string
+	server := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		gotDevice = r.Header.Get("X-Device-Id")
+		gotSession = r.Header.Get("X-Session-Id")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(validNaturesBody())
+	})
+
+	got, err := newPokedex(t, server.URL, testTimeout).Natures(t.Context(), requestContext)
+	if err != nil {
+		t.Fatalf("Natures: %v", err)
+	}
+
+	want := []Nature{
+		{ID: "test-plus-spe", NameJa: "テストようき", Plus: "spe", Minus: "spa"},
+		{ID: "test-neutral", NameJa: "テストまじめ", Plus: "", Minus: ""},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Natures = %+v, want %+v", got, want)
+	}
+	if gotMethod != http.MethodGet {
+		t.Errorf("method = %q, want GET", gotMethod)
+	}
+	if gotPath != "/api/pokedex/natures" {
+		t.Errorf("path = %q, want /api/pokedex/natures", gotPath)
+	}
+	if gotDevice != requestContext.DeviceID || gotSession != requestContext.SessionID {
+		t.Errorf("headers = (%q, %q), want (%q, %q)", gotDevice, gotSession, requestContext.DeviceID, requestContext.SessionID)
+	}
+}
+
+// TestNaturesRequiresRequestContext: 端末 ID・セッション ID が無いまま上流を呼ばない(Species と同じ)。
+func TestNaturesRequiresRequestContext(t *testing.T) {
+	t.Parallel()
+
+	called := false
+	server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(validNaturesBody())
+	})
+
+	_, err := newPokedex(t, server.URL, testTimeout).Natures(t.Context(), RequestContext{})
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Errorf("err = %v, want ErrInvalidRequest", err)
+	}
+	if called {
+		t.Error("上流を呼んでいる。端末 ID が無い要求は judge の中で止める")
+	}
+}
+
+// TestNaturesNormalizesUpstreamStatus: 上流のステータスを ADR-0700 §3 の番兵エラーに畳む。
+// pokedex-svc は性格が 0 行のとき 503 master_unavailable を返す(services/pokedex の ListNatures)。
+func TestNaturesNormalizesUpstreamStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		want   error
+	}{
+		{"500", http.StatusInternalServerError, `{"code":"internal","message":"boom"}`, ErrUpstreamUnavailable},
+		{"503(性格が未投入)", http.StatusServiceUnavailable, `{"code":"master_unavailable","message":"no natures"}`, ErrUpstreamUnavailable},
+		{"400", http.StatusBadRequest, `{"code":"missing_header","message":"no device id"}`, ErrInvalidRequest},
+		{"404", http.StatusNotFound, `{"code":"not_found","message":"no route"}`, ErrNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			})
+
+			_, err := newPokedex(t, server.URL, testTimeout).Natures(t.Context(), requestContext)
+			if !errors.Is(err, tt.want) {
+				t.Errorf("err = %v, want %v", err, tt.want)
+			}
+		})
+	}
+}
+
+// TestNaturesRejectsInvalidBody: 200 でも本文が契約に合わなければ ErrUpstreamInvalidResponse
+// (ADR-0701 §4)。特に、補正する能力が 6 ステータス以外・一覧が空のときに黙って「無補正」に
+// 倒さない(性格補正を取り違えた判定は、外からは正しく見えるまま間違う)。
+func TestNaturesRejectsInvalidBody(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"壊れた JSON", `[{"id": "test-neutral"`},
+		{"JSON ですらない", `<html>502 Bad Gateway</html>`},
+		{"配列ではなくオブジェクト", `{"id":"test-neutral","plus":null,"minus":null}`},
+		{"一覧が空", `[]`},
+		{"id が無い", `[{"nameJa":"テストまじめ","plus":null,"minus":null}]`},
+		{"id が空文字", `[{"id":"","nameJa":"テストまじめ","plus":null,"minus":null}]`},
+		{"plus が 6 ステータス以外", `[{"id":"test-bad","nameJa":"テスト","plus":"speed","minus":"spa"}]`},
+		{"minus が 6 ステータス以外", `[{"id":"test-bad","nameJa":"テスト","plus":"spe","minus":"attack"}]`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tt.body))
+			})
+
+			_, err := newPokedex(t, server.URL, testTimeout).Natures(t.Context(), requestContext)
+			if !errors.Is(err, ErrUpstreamInvalidResponse) {
+				t.Errorf("err = %v, want ErrUpstreamInvalidResponse", err)
+			}
+		})
+	}
+}
+
+// TestNaturesOnConnectionError: 誰も待ち受けていない上流は ErrUpstreamUnavailable で、
+// 文面に上流の URL・アドレスを含まない(ADR-0700 §3)。
+func TestNaturesOnConnectionError(t *testing.T) {
+	t.Parallel()
+
+	_, err := newPokedex(t, deadBaseURL, testTimeout).Natures(t.Context(), requestContext)
+	if !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Fatalf("err = %v, want ErrUpstreamUnavailable", err)
+	}
+	if strings.Contains(err.Error(), deadBaseURL) {
+		t.Errorf("エラーが上流の URL を漏らしている: %s", err.Error())
+	}
+	assertNoUpstreamAuthority(t, err.Error(), deadBaseURL)
+}
+
+// TestNaturesTimesOut: 答えない上流を設定のタイムアウトで打ち切る(ADR-0700 §2)。
+func TestNaturesTimesOut(t *testing.T) {
+	t.Parallel()
+
+	server := blockingServer(t)
+
+	start := time.Now()
+	_, err := newPokedex(t, server.URL, shortTimeout).Natures(t.Context(), requestContext)
+	elapsed := time.Since(start)
+
+	if !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Errorf("err = %v, want ErrUpstreamUnavailable", err)
+	}
+	if elapsed > time.Second {
+		t.Errorf("%v 待った。設定のタイムアウト %v で打ち切ること", elapsed, shortTimeout)
+	}
+	assertNoUpstreamAuthority(t, err.Error(), server.URL)
+}
+
+// TestNaturesOnDNSError: ホスト名が解決できない上流も ErrUpstreamUnavailable で、
+// 文面にホスト名を含まない(Species と同じ検査。critic 指摘: Natures だけ対にする DNS テストが
+// 無かった)。
+func TestNaturesOnDNSError(t *testing.T) {
+	t.Parallel()
+
+	_, err := newPokedex(t, deadHostBaseURL, testTimeout).Natures(t.Context(), requestContext)
+	if !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Fatalf("err = %v, want ErrUpstreamUnavailable", err)
+	}
+	assertNoUpstreamAuthority(t, err.Error(), deadHostBaseURL)
+}
+
+// TestNaturesErrorDoesNotLeakUpstreamDetail: エラーの文面に上流の本文を入れない(ADR-0700 §3。
+// Species と同じ検査。critic 指摘: Natures だけ本文漏洩の対が無かった)。
+func TestNaturesErrorDoesNotLeakUpstreamDetail(t *testing.T) {
+	t.Parallel()
+
+	const upstreamDetail = "dsn dbhost02 svcaccount internal-only-detail"
+	server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"code":"internal_error","message":"` + upstreamDetail + `"}`))
+	})
+
+	_, err := newPokedex(t, server.URL, testTimeout).Natures(t.Context(), requestContext)
+	if !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Fatalf("err = %v, want ErrUpstreamUnavailable", err)
+	}
+	message := err.Error()
+	if strings.Contains(message, upstreamDetail) {
+		t.Errorf("エラーが上流の本文を漏らしている: %s", message)
+	}
+	if strings.Contains(message, server.URL) {
+		t.Errorf("エラーが上流の URL を漏らしている: %s", message)
+	}
+}

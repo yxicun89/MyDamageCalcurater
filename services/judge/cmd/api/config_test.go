@@ -3,6 +3,8 @@ package main
 import (
 	"testing"
 	"time"
+
+	"example.com/pokecalc/services/judge/internal/judge"
 )
 
 // envLookup は os.LookupEnv の差し替え(テストは実環境の環境変数を読まない)。
@@ -132,5 +134,32 @@ func TestUpstreamsFromEnvBuildsBothClients(t *testing.T) {
 	}
 	if deps.Pokedex == nil || deps.Calc == nil {
 		t.Errorf("deps = %+v, want どちらも非 nil", deps)
+	}
+}
+
+// TestChoiceScarfItemIDFromEnv: こだわりスカーフの持ち物 ID は決め打ちにせず、環境変数で
+// 上書きできる(ADR-0701 §3)。実マスタは Git に無く(ADR-0002)、既定値が実際の命名と違っていた
+// 場合に、コードを直さず overlay の環境変数 1 行で直せるようにするため。
+func TestChoiceScarfItemIDFromEnv(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		env  map[string]string
+		want string
+	}{
+		{"未設定なら既定", nil, judge.DefaultChoiceScarfItemID},
+		{"空文字なら既定", map[string]string{"JUDGE_CHOICE_SCARF_ITEM_ID": ""}, judge.DefaultChoiceScarfItemID},
+		{"空白だけなら既定", map[string]string{"JUDGE_CHOICE_SCARF_ITEM_ID": "  "}, judge.DefaultChoiceScarfItemID},
+		{"設定されていればその値", map[string]string{"JUDGE_CHOICE_SCARF_ITEM_ID": "scarf-v2"}, "scarf-v2"},
+		{"前後の空白は落とす", map[string]string{"JUDGE_CHOICE_SCARF_ITEM_ID": " scarf-v2 "}, "scarf-v2"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := choiceScarfItemIDFromEnv(envLookup(tt.env)); got != tt.want {
+				t.Errorf("choiceScarfItemIDFromEnv = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

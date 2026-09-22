@@ -785,6 +785,11 @@ Decision: P6-2c 構築ビルダー(一覧・編集画面・ニックネーム・
 Reason: 前回(PR #53)の続き。P6-2c の critic レビュー(1回目 NG → 2回目 PASS)を経て区切りで統合した。
 Impact: 続き(P6-2d 構築から個体を呼び出す配線・P6-3・P6-4)は同じブランチ feat/ios-p6 で進める。
 
+## 2026-09-22: 判定 JD0(judge-svc 基盤)を PR #92 で main に統合
+Decision: ADR-0700(基盤・上流の呼び方・エラー正規化・受け入れ条件8件)と、docs/judge-design.md §4 の未決事項5件の決定・`services/judge/` の実装(internal/client・internal/httpapi・cmd/api・deploy/k8s・Dockerfile・scripts/smoke.sh)を PR #92 で main に統合した。critic は3回目で PASS(1・2回目 NG はいずれも上流エラー文面への URL/host:port/ホスト名の漏洩。`transportFailureReason()` を固定語彙への分類に変更して解消)。
+Reason: `make test`・`make lint`・`make build`(ルート)が緑、critic PASS、他レーンの範囲外変更なし(COORDINATION.md の共有ファイル規約の範囲内)を確認してマージした。
+Impact: 判定レーンのブランチを `feat/judge-jd1` に切り替えた(JD0 の `feat/judge-jd0` は削除)。次は JD1(`POST /api/judge/v1/outspeed-and-ko`)。
+
 ## 2026-09-23: 素早さ SP5(GitOps)の設計。balance-registry の共有と改名の提案(タイプバランスレーンへ)
 Decision: SP5(GitOps。ADR-0605)は speed 専用のクラスタ内レジストリを新設せず、balance が構築した balance-registry(services/balance/deploy/local-registry/。TB0・ADR-0018)を push 先として共有する(k3d ノードの containerd が localhost:5000 の1レジストリしか信頼しないため)。services/balance/ のファイルは変更しない(services/speed/scripts/local-registry-push.sh から kubectl -n balance-registry port-forward するだけ)。Argo CD も TB0 で導入済みの1インスタンスを共有し、speed が再インストールすることはしない。
 提案(タイプバランスレーンへ。既定案: 今は何もしない): balance-registry という名前は今後クラスタ全体で共有されるとわかりにくいので、都合の良いときに pokecalc-registry へ改名することを検討してほしい。急ぎではない。
@@ -800,3 +805,11 @@ Impact: **運用上の注意(COORDINATION.md に追記済み)**: `gh pr merge` �
 テスト・lint・check-publishable・独立レビュー(critic)PASS を自分で確認することが、これまで以上に唯一の安全網になる。
 ローカルで `git merge` して `origin/main` へ直接 push することは、main への直接 push を拒否する deny ルールで従来どおり止まる。
 main への統合は必ず PR(`gh pr create` → `gh pr merge`)を経由する。
+## 2026-09-23: DOC-api(calc・gateway の README・手順書)の coding-rules §8 からの意図的な逸脱
+Decision: `services/calc/README.md`・`services/gateway/README.md` を coding-rules §8 の5節(何をするか・構成図・ディレクトリ・コマンド・関連ADR)に沿って書き直したが、
+gateway の README には「環境変数」「ルーティング」の2節も残した。§8 は「これ以外は書かない」としているが、既存の文書検査テスト
+(`services/gateway/deploytest/web_docs_test.go` の `TestWebUpstreamIsDocumented`、`pokedex_docs_test.go` の `TestPokedexWiringIsDocumented`)が
+環境変数表の特定の行(`GATEWAY_WEB_URL`・`GATEWAY_POKEDEX_URL`)とルーティング表の「それ以外」の行の文言を検査しており、削ると絶対ルール6(テストを弱めない)に反する。
+`services/speed/README.md`(既存)にも同種の「エンドポイント」「環境変数」節があり、同じ運用パターンとして許容した。
+Reason: critic 指摘(coding-rules §7「規約から外れるときは理由を書く」)。
+Impact: 今後 gateway の README を §8 の5節だけに削る場合は、まず上記2テストの検査方法(README の文言ではなく実装から生成する等)を変える必要がある。

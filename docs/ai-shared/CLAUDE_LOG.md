@@ -241,3 +241,18 @@
 
 ### Next
 - TB6 を PR・マージ → データレーンの export 再生成を待って実データ確認
+
+## 2026-09-23 タイプバランスレーン(Claude Code): P2-3b 実データ確認、権限設定の整理
+
+### Done
+- TB6 を PR・main へ統合(PR #65 相当。以後の作業はブランチ整理のみ)
+- グローバル設定と、Git 管理下のプロジェクト側 `.claude/settings.json`(両方)で `git push`・`gh pr create`・`gh pr merge` を自動承認にする、というユーザー決定を反映(PR #95・#96)。運用上の注意を COORDINATION.md に追記、DECISIONS.md に決定を記録
+- `gh pr merge` の実行方法を、このセッションが使っていた `--squash` から、COORDINATION.md が定めている `--merge`(マージコミット)に修正(以後この方式で統一)
+- P2-3b(特性の無効・吸収)の実データ確認: データレーンが再生成した export(348 pokemon・moves・216 abilities)で `make balance-k3d-deploy-readmodel && make balance-smoke-readmodel` を実行し、`POST .../team-balance/analyze` でチリーン(levitate)への ground 攻撃が `{"category":"immune","effect":"immune","multiplier":"0","source":"ability"}` になること、`POST .../move-range/analyze`(thunderbolt)の `walledByAbility` にエモンガ(motordrive)が正しく含まれることを確認
+- Web レーンが `make gen-ts` 済みで `web/src/api/balance.gen.ts` に move-range の型が反映されていることを確認(データ差し替え不要)
+
+### Open issues
+なし
+
+### Next
+ユーザーからの新規要望待ち(タイプバランス設計書 TB0〜TB6 はすべて完了・実データ確認済み)

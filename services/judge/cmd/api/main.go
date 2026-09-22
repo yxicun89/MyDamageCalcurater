@@ -29,10 +29,15 @@ func main() {
 		slog.Error("judge API failed to configure upstreams", "error", err)
 		os.Exit(1)
 	}
+	choiceScarfItemID := choiceScarfItemIDFromEnv(os.LookupEnv)
 
 	server := &http.Server{
-		Addr:              ":" + port,
-		Handler:           httpapi.New(httpapi.Dependencies{Pokedex: upstreams.Pokedex, Calc: upstreams.Calc}),
+		Addr: ":" + port,
+		Handler: httpapi.New(httpapi.Dependencies{
+			Pokedex:           upstreams.Pokedex,
+			Calc:              upstreams.Calc,
+			ChoiceScarfItemID: choiceScarfItemID,
+		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,

@@ -44,44 +44,39 @@ P6-3(`make ios-test` の総仕上げ)→ P6-4(手順書は AGENTS.md「手順書
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
 Active: なし(TB6 完了・main 統合済み。次はユーザー指示待ち)
 Branch: 次は main から feat/tb-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
-Status: 設計書(docs/type-balance-design.md)の TB0〜TB6 はすべて main に統合済み(TB6: 技範囲チェッカー、PR #65)。P2-3b(特性の無効・吸収)は main に engine 側の実装が入った(ADR-0106。データレーンの別ライン)ので、balance の read model 再生成待ちは解消に近づいている見込み。メガフォームの nameJa が英語表記のままの件はデータレーンへ確認候補として残る(ブロッカーではない)
-Next: (1) データレーンが export(data/generated/readmodel)を再生成したら `make balance-k3d-deploy-readmodel && make balance-smoke-readmodel` で実データ確認(特性の無効・吸収を含む)する。(2) Web レーンが `make gen-ts` を実行して `web/src/api/balance.gen.ts` に move-range の型を反映する。設計書の TB0〜TB6 はすべて完了、以後はユーザーからの新規要望待ち
+Status: 設計書(docs/type-balance-design.md)の TB0〜TB6 はすべて main に統合済み(TB6: 技範囲チェッカー、PR #65)。P2-3b(特性の無効・吸収)の実データ確認を完了(2026-09-23): データレーンが再生成した export(348 pokemon・moves・216 abilities)で `make balance-k3d-deploy-readmodel && make balance-smoke-readmodel` を実行し、`POST .../team-balance/analyze` でチリーン(levitate)への ground 攻撃が `{"category":"immune","effect":"immune","multiplier":"0","source":"ability"}` になること、`POST .../move-range/analyze`(thunderbolt)の `walledByAbility` にエモンガ(motordrive)が正しく含まれることを実データで確認済み。メガフォームの nameJa が英語表記のままの件はデータレーンへ確認候補として残る(ブロッカーではない)
+Next: (Web レーンは `make gen-ts` 実行済み。`web/src/api/balance.gen.ts` に move-range の型が反映済みであることを確認した)設計書の TB0〜TB6 はすべて完了・実データ確認済み、以後はユーザーからの新規要望待ち
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
 
 ## Speed
 Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
-Active: Claude Code
-Branch: feat/speed-sp5(SP3 は feat/speed-sp3 → PR #93 で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
-Status: SP0〜SP4(SP4: pokedex export の read model を k3d の speed に読ませる配線。ADR-0603)は完了・main に統合
-(PR #32・#36・#52・#83・#86・#93)。**SP4 の実データ(pokedex-svc の DB)での最終確認は未実施のまま**(DSN の取り扱いがこのセッションの
-権限で扱えないため。`make pokedex-export` で `data/generated/readmodel/speed-pokemon.json` を用意した状態で
-`make speed-k3d-deploy-readmodel && make speed-smoke-readmodel` を、DSN を扱えるセッションか人間が実行して確認する)。
-SP5(GitOps。ADR-0605。digest 固定の overlay・Argo CD Application `pokecalc-speed`・balance-registry と Argo CD を新設せず共有)は
-critic PASS(1回目 NG 重大1〈plan.md/CURRENT_STATE 未更新〉・重要3〈read model 未マウントで 503 になる制約が ADR に未記載・
-DECISIONS.md の記述が意図と逆・手順書に Argo CD 導入の前提が無い〉を修正)。**`speed-gitops-template-check`(クラスタを変更しない)
-までのみ実行済み**。`speed-argocd-app`・`speed-registry-push`・実際の `kubectl apply`・sync は未実施(ADR-0605 §4 のとおり、
-共有クラスタへの変更のため人間の確認のもとで別途)。PR 作成待ち
-Next: SP5 の PR を作って main に統合 → (任意・人間の確認のもとで)実際に Argo CD へ Application を適用し sync して疎通確認
-(docs/runbooks/speed.md 節5〜10)。空の roster の扱いは pokedex export が1件以上を返す前提のまま(ADR-0603 影響。実データで
-0件になる状況が起きたら別途決める)。balance-registry → pokecalc-registry への改名提案はタイプバランスレーンへ既定案で提示済み
-(DECISIONS.md 2026-09-23)
+Active: なし(SP0〜SP3・SP5 完了。残る SP4 の実データ確認は人間/DSN を扱えるセッション待ちのため一区切り)
+Branch: feat/speed-next2(main から作成済み。SP5 は feat/speed-sp5 → PR #97、CURRENT_STATE 更新は PR #114 で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
+Status: SP0〜SP3・SP5 は完了・main に統合(PR #32・#36・#52・#83・#86・#93・#97)。**SP4(pokedex export の read model を k3d の
+speed に読ませる配線。ADR-0603)は配線の実装・critic PASS・fixture データでの k3d 疎通確認まで完了**しているが、**実データ
+(pokedex-svc の DB)での最終確認だけが未実施**(`POKEDEX_DATABASE_DSN` の取り扱いが auto mode のセッションでは権限上できない
+ため。credential materialization としてブロックされた)。SP5 は実際の Argo CD への適用(`speed-argocd-app`・`speed-registry-push`・
+sync)も同じ理由で未実施(ADR-0605 §4。共有クラスタへの変更のため人間の確認のもとで)
+Next: **人間または DB の認証情報を扱えるセッションへ**: (1) `make pokedex-export`(データレーンの docs/runbooks/data.md の手順で
+DB を用意し `POKEDEX_DATABASE_DSN` を設定)→ `make speed-k3d-deploy-readmodel && make speed-smoke-readmodel` で SP4 の実データ確認。
+(2) 任意で docs/runbooks/speed.md 節5〜10(Argo CD への Application 適用・レジストリへの push・sync)。
+どちらも素早さレーンの実装作業としては完了しており、残るのはクラスタ操作の実行確認だけ。空の roster の扱いは pokedex export が
+1件以上を返す前提のまま(ADR-0603 影響。実データで0件になる状況が起きたら別途決める)。balance-registry → pokecalc-registry への
+改名提案はタイプバランスレーンへ既定案で提示済み(DECISIONS.md 2026-09-23)。次に新しい素早さの要望が出たら、このレーンで続ける
 
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
-Active: なし
-Branch: feat/judge-jd0(作業ディレクトリ ~/MyDamageCalcurater-judge。PR 作成待ち)
-Status: JD0(基盤)完了。ADR-0700(基盤・上流の呼び方・エラーの正規化・受け入れ条件8件)を採用し、docs/judge-design.md §4 の
-未決事項5件をすべて決定に変えた(同速は `outspeeds` と `speedTie` を別に返す / JD1 は自分が殴る側だけ / 独自 Ingress `/api/judge`(gateway は変更しない) /
-ADR 帯 0700 / 技の追加効果は request の `ranks` で受ける)。`internal/client`(pokedex-svc・calc-svc への HTTP クライアント。request スコープの timeout・
-4つの番兵エラー・1MiB上限・ヘッダー転送)・`internal/httpapi`(healthz)・`cmd/api` を実装。critic 3回目で PASS(1・2回目 NG は接続エラー・DNS失敗時に
-上流の URL・host:port・ホスト名がエラー文面に漏れていた件。`*net.OpError`/`*net.DNSError` の `Error()` を呼ばず固定語彙に分類して解消)。
-deploy/k8s(base の Deployment・Service・Ingress `/api/judge`)・Dockerfile・scripts/smoke.sh・Makefile の `judge-kustomize`/`judge-docker-build`/
-`judge-k3d-deploy`/`judge-smoke` も追加し、`docker build` とコンテナ起動(healthz 200)を確認済み(k3d への実デプロイは未確認)。
-`make test`/`make lint`/`make build`(ルート)が緑。JD1 の endpoint(`POST /api/judge/v1/outspeed-and-ko`)は ADR-0700 §5 の判断により
-JD0 の契約に含めていない(契約にあるのに404を作らないため)
-Next: PR を作って main へ統合(このセッションの残タスク)。その後 JD1 に着手: `services/judge/api/openapi.yaml` に
-`POST /api/judge/v1/outspeed-and-ko` を足すところから(quick-scanner → spec-writer → implementer → critic)。JD1 の response は
-`outspeeds`・`speedTie`・`ko` の3つ(ADR-0700 §6-1・§6-5)
+Active: Claude Code
+Branch: feat/judge-jd1(作業ディレクトリ ~/MyDamageCalcurater-judge。PR 作成待ち。JD0 の feat/judge-jd0 は PR #92 で main に統合済み・削除)
+Status: JD0(基盤。PR #92)に続き JD1(判定 API 本体)完了。ADR-0701: `POST /api/judge/v1/outspeed-and-ko` を実装。
+素早さは `engine.EffectiveStat`(実数値→ランク)→ こだわりスカーフ(×6144/4096 五捨五超入。既定 item ID `choicescarf`、
+`JUDGE_CHOICE_SCARF_ITEM_ID` で上書き可)。性格は新設 `Pokedex.Natures`(`GET /api/pokedex/natures`。1リクエスト1回で
+attacker・defender 両方を解決)。上流呼び出しは逐次(natures→species×2→calc。並列化しない。検査順を契約に書き
+エラーの勝ち負けを固定するため)。response は `outspeeds`・`speedTie`・`attackerSpeed`・`defenderSpeed`・`ko`。
+critic 2回目で PASS(1回目 NG 重要3件: 上流エラーのログ未記録・pokedex 400 の扱いが ADR 未記載・defender 側スカーフ/
+種族差のテスト欠如。すべて修正・テスト追加済み)。`make test`/`make lint`/`make build`(ルート)が緑
+Next: PR を作って main へ統合(このセッションの残タスク)。JD2 以降(複数の相手候補・場の効果・画面)は
+plan.md の方針どおり、着手前にユーザーへ確認する
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

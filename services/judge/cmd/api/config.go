@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"example.com/pokecalc/services/judge/internal/client"
+	"example.com/pokecalc/services/judge/internal/judge"
 )
 
 const (
@@ -15,6 +17,8 @@ const (
 	calcBaseURLEnv         = "JUDGE_CALC_BASE_URL"
 	upstreamTimeoutEnv     = "JUDGE_UPSTREAM_TIMEOUT"
 	defaultUpstreamTimeout = 3 * time.Second
+
+	choiceScarfItemIDEnv = "JUDGE_CHOICE_SCARF_ITEM_ID"
 )
 
 // Upstreams holds the upstream clients judge depends on (ADR-0700 §1). A nil field means its
@@ -71,6 +75,22 @@ func upstreamsFromEnv(lookup func(string) (string, bool)) (Upstreams, error) {
 		return Upstreams{}, err
 	}
 	return Upstreams{Pokedex: pokedex, Calc: calc}, nil
+}
+
+// choiceScarfItemIDFromEnv reads JUDGE_CHOICE_SCARF_ITEM_ID (ADR-0701 §3): unset, empty, or
+// whitespace-only falls back to judge.DefaultChoiceScarfItemID. This is the one seam that lets
+// an overlay fix a wrong choice-scarf item ID without a code change (the real master isn't in
+// Git; ADR-0002).
+func choiceScarfItemIDFromEnv(lookup func(string) (string, bool)) string {
+	value, ok := lookup(choiceScarfItemIDEnv)
+	if !ok {
+		return judge.DefaultChoiceScarfItemID
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return judge.DefaultChoiceScarfItemID
+	}
+	return value
 }
 
 // optionalClient builds a client with the given constructor only when envName is set to a
