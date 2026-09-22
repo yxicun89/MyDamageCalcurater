@@ -53,19 +53,16 @@ Next: (Web レーンは `make gen-ts` 実行済み。`web/src/api/balance.gen.ts
 
 ## Speed
 Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
-Active: なし(SP0〜SP3・SP5 完了。残る SP4 の実データ確認は人間/DSN を扱えるセッション待ちのため一区切り)
+Active: なし(SP0〜SP5 すべて完了。次の要望待ち)
 Branch: 次は main から feat/speed-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-speed。SP5 は feat/speed-sp5 → PR #97 で main に統合)
-Status: SP0〜SP3・SP5 は完了・main に統合(PR #32・#36・#52・#83・#86・#93・#97)。**SP4(pokedex export の read model を k3d の
-speed に読ませる配線。ADR-0603)は配線の実装・critic PASS・fixture データでの k3d 疎通確認まで完了**しているが、**実データ
-(pokedex-svc の DB)での最終確認だけが未実施**(`POKEDEX_DATABASE_DSN` の取り扱いが auto mode のセッションでは権限上できない
-ため。credential materialization としてブロックされた)。SP5 は実際の Argo CD への適用(`speed-argocd-app`・`speed-registry-push`・
-sync)も同じ理由で未実施(ADR-0605 §4。共有クラスタへの変更のため人間の確認のもとで)
-Next: **人間または DB の認証情報を扱えるセッションへ**: (1) `make pokedex-export`(データレーンの docs/runbooks/data.md の手順で
-DB を用意し `POKEDEX_DATABASE_DSN` を設定)→ `make speed-k3d-deploy-readmodel && make speed-smoke-readmodel` で SP4 の実データ確認。
-(2) 任意で docs/runbooks/speed.md 節5〜10(Argo CD への Application 適用・レジストリへの push・sync)。
-どちらも素早さレーンの実装作業としては完了しており、残るのはクラスタ操作の実行確認だけ。空の roster の扱いは pokedex export が
-1件以上を返す前提のまま(ADR-0603 影響。実データで0件になる状況が起きたら別途決める)。balance-registry → pokecalc-registry への
-改名提案はタイプバランスレーンへ既定案で提示済み(DECISIONS.md 2026-09-23)。次に新しい素早さの要望が出たら、このレーンで続ける。
+Status: SP0〜SP5 すべて完了・main に統合(PR #32・#36・#52・#83・#86・#93・#97)。SP4 の実データ確認はユーザーが2026-09-24 に実施:
+`mysql` Service はクラスタ内部の DNS 名で Mac からは解決できないため、`kubectl -n pokecalc port-forward svc/mysql 3306:3306` を張り、
+DSN のホストを `127.0.0.1` に付け替えて `make pokedex-export`(348 pokemon)→ `make speed-k3d-deploy-readmodel` →
+`make speed-smoke-readmodel` を実行(初回はロールアウト直後で 504、再実行で `speed readmodel smoke: pokemon=0003-000 list=200 table=200`)。
+SP5 の実際の Argo CD への適用(`speed-argocd-app`・`speed-registry-push`・sync)は未実施のまま(ADR-0605 §4。共有クラスタへの変更のため
+人間の確認のもとで、必要になったときに)
+Next: 特に無し。他レーンからの依頼(Codexレビュー issue #105・#108。上記)かユーザーからの新規要望待ち。balance-registry →
+pokecalc-registry への改名提案はタイプバランスレーンへ既定案で提示済み(DECISIONS.md 2026-09-23)。
 Codexレビューissue(2026-09-23、タイプバランスレーンから連絡): #105(Argo CD導入・digest固定の共有スクリプト化)はタイプバランスレーンが
 主担当で進め、できたら docs/runbooks/speed.md の該当節をその呼び出しに差し替えるだけになる見込み(今は着手不要)。#108(read model の
 dataVersion・rollout一本化)はデータレーンが主担当で、連絡が来たら合わせる(今は着手不要)

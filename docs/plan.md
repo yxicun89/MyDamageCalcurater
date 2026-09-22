@@ -162,7 +162,9 @@
 - [x] SP1 素早さの表(ADR-0601。critic PASS。6行の生成・速い順の並び・同速の扱い・絞り込みの API)
 - [x] SP2 自分のポケモンの位置(ADR-0602。critic PASS。preset/custom/raw の3モード・faster/slower/tie・POST /api/speed/v1/position)
 - [x] SP3 Web の素早さ画面(ADR-0604。critic PASS。左右の配置・自分の位置の強調・表の絞り込み。`web/src/speed/`)
-- [~] SP4 pokedex の read model(データレーン P2-3)への切り替えと k3d の疎通(ADR-0603。配線は実装・fixture データで疎通確認済み。実データでの最終確認は critic 後)
+- [x] SP4 pokedex の read model(データレーン P2-3)への切り替えと k3d の疎通(ADR-0603。critic PASS。2026-09-24 ユーザーが実データで確認:
+  `make pokedex-export`(348 pokemon)→ `make speed-k3d-deploy-readmodel` → `make speed-smoke-readmodel` が
+  `speed readmodel smoke: pokemon=0003-000 list=200 table=200` で成功)
 - [x] SP5 GitOps(ADR-0605。critic PASS。digest 固定の overlay・Argo CD Application・balance-registry と Argo CD を共有。
   `speed-gitops-template-check` まで実行して確認済み。クラスタへの実際の適用〈speed-argocd-app・registry-push・sync〉は
   人間の確認のもとで別途。手順は docs/runbooks/speed.md の節5〜10)
