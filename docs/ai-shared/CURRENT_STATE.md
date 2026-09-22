@@ -27,6 +27,9 @@ Next: (1) P4-12b(仮想敵 threats・おすすめタイプ recommendations)。�
 implementer に委ねるところから再開できる(受け入れ条件・実装者への注意は WIP コミットのメッセージと ADR-0303 参照)。
 (2) P4-12b の後、pokedex-svc の公開 API から Web のオンライン MasterSource を作る(ADR-0301 §4)。
 (3) 続いて P5-5(構築ビルダー等)は record/team の API 待ち
+(4) データレーンの依頼(P2-3b・ADR-0106。main 入り後に対応): AbilityEffect に defImmuneTypes・defAbsorbTypes を追加
+(`web/src/engine/types.ts`)。`web/src/master/exportBalanceReadModel.ts` の BalanceAbilityEffect に absorb を追加し、
+toBalanceAbilityEffects の出力順を ADR-0106 §決定7(immune→absorb→type_multiplier→super_effective_multiplier)に合わせる
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
