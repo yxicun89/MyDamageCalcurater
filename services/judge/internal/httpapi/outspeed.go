@@ -37,11 +37,12 @@ var speciesKeyPattern = regexp.MustCompile(`^[0-9]{4}-[0-9]{3}$`)
 // investment", but a missing sp must still be rejected). Same reasoning as
 // internal/client's speciesWire/statBlockWire.
 type outspeedRequestWire struct {
-	Format   *string         `json:"format"`
-	Attacker *individualWire `json:"attacker"`
-	Defender *individualWire `json:"defender"`
-	MoveID   *string         `json:"moveId"`
-	Field    *api.FieldState `json:"field"`
+	Format     *string         `json:"format"`
+	Attacker   *individualWire `json:"attacker"`
+	Defender   *individualWire `json:"defender"`
+	MoveID     *string         `json:"moveId"`
+	Field      *api.FieldState `json:"field"`
+	SpeedField json.RawMessage `json:"speedField"`
 }
 
 type individualWire struct {
@@ -73,11 +74,20 @@ type rankBlockWire struct {
 // outspeedRequest is the validated, range-checked request (ADR-0701 §5: everything here is
 // confirmed without calling an upstream).
 type outspeedRequest struct {
-	format   string
-	attacker individualInput
-	defender individualInput
-	moveID   string
-	field    *api.FieldState
+	format     string
+	attacker   individualInput
+	defender   individualInput
+	moveID     string
+	field      *api.FieldState
+	speedField speedFieldInput
+}
+
+// speedFieldInput is the resolved SpeedField (ADR-0702 §1): a missing speedField, or a missing
+// field within it, is false (no field effect), matching JD1's behavior exactly.
+type speedFieldInput struct {
+	trickRoom        bool
+	attackerTailwind bool
+	defenderTailwind bool
 }
 
 type individualInput struct {
@@ -158,6 +168,7 @@ func outspeedAndKo(c *echo.Context, deps Dependencies, params api.OutspeedAndKoP
 			SP:        req.attacker.sp,
 			Ranks:     req.attacker.ranks,
 			Scarf:     judge.IsChoiceScarf(req.attacker.itemID, deps.ChoiceScarfItemID),
+			Tailwind:  req.speedField.attackerTailwind,
 		},
 		judge.Individual{
 			BaseSpeed: defenderSpecies.BaseStats.Spe,
@@ -165,7 +176,9 @@ func outspeedAndKo(c *echo.Context, deps Dependencies, params api.OutspeedAndKoP
 			SP:        req.defender.sp,
 			Ranks:     req.defender.ranks,
 			Scarf:     judge.IsChoiceScarf(req.defender.itemID, deps.ChoiceScarfItemID),
+			Tailwind:  req.speedField.defenderTailwind,
 		},
+		judge.SpeedField{TrickRoom: req.speedField.trickRoom},
 	)
 	if err != nil {
 		// req はここまでに自前で範囲を検証済みなので、残るのは pokedex-svc が契約に反する
@@ -244,13 +257,59 @@ func toOutspeedRequest(wire outspeedRequestWire) (outspeedRequest, error) {
 		return outspeedRequest{}, err
 	}
 
+	speedField, err := toSpeedFieldInput(wire.SpeedField)
+	if err != nil {
+		return outspeedRequest{}, err
+	}
+
 	return outspeedRequest{
-		format:   *wire.Format,
-		attacker: attacker,
-		defender: defender,
-		moveID:   *wire.MoveID,
-		field:    wire.Field,
+		format:     *wire.Format,
+		attacker:   attacker,
+		defender:   defender,
+		moveID:     *wire.MoveID,
+		field:      wire.Field,
+		speedField: speedField,
 	}, nil
+}
+
+// speedFieldKeys is the exact (case-sensitive) allow-list for speedField's own object, checked
+// separately from the outer decoder.DisallowUnknownFields(): encoding/json falls back to a
+// case-insensitive field match, which would otherwise silently accept a typo like "trickroom"
+// (ADR-0702 受け入れ条件7).
+var speedFieldKeys = map[string]bool{"trickRoom": true, "attackerTailwind": true, "defenderTailwind": true}
+
+// toSpeedFieldInput はワイヤの speedField(3 欄すべて省略可)を厳密に検証して解決する。
+// speedField 自体の省略・null・空オブジェクトも、個々の欄の省略も、すべて false
+// (ADR-0702 §1・受け入れ条件5)。未知の欄・真偽値でない値は errInvalidOutspeedBody。
+func toSpeedFieldInput(raw json.RawMessage) (speedFieldInput, error) {
+	if raw == nil || string(raw) == "null" {
+		return speedFieldInput{}, nil
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return speedFieldInput{}, errInvalidOutspeedBody
+	}
+
+	input := speedFieldInput{}
+	for key, value := range fields {
+		if !speedFieldKeys[key] {
+			return speedFieldInput{}, errInvalidOutspeedBody
+		}
+		var b bool
+		if err := json.Unmarshal(value, &b); err != nil {
+			return speedFieldInput{}, errInvalidOutspeedBody
+		}
+		switch key {
+		case "trickRoom":
+			input.trickRoom = b
+		case "attackerTailwind":
+			input.attackerTailwind = b
+		case "defenderTailwind":
+			input.defenderTailwind = b
+		}
+	}
+	return input, nil
 }
 
 // toIndividualInput validates one Individual's required strings and sp/ranks range. The

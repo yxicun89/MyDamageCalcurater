@@ -814,7 +814,41 @@ gateway の README には「環境変数」「ルーティング」の2節も残
 Reason: critic 指摘(coding-rules §7「規約から外れるときは理由を書く」)。
 Impact: 今後 gateway の README を §8 の5節だけに削る場合は、まず上記2テストの検査方法(README の文言ではなく実装から生成する等)を変える必要がある。
 
+## 2026-09-22: 判定 JD1(outspeed-and-ko)を PR #118 で main に統合
+Decision: ADR-0701(`POST /api/judge/v1/outspeed-and-ko`。素早さの求め方・こだわりスカーフ・性格解決・上流呼び出し順序・エラー対応表)を PR #118 で main に統合した。critic は2回目で PASS(1回目 NG 重要3件: 上流エラーのログ未記録・pokedex 400 の扱いが ADR 未記載・defender 側スカーフ/種族差の未検証。いずれも修正し、期待値は実行結果で検算済み)。
+Reason: `make test`・`make lint`・`make build`(ルート)が緑、critic PASS、他レーンの範囲外変更なし(COORDINATION.md の共有ファイル規約の範囲内)を確認してマージした。
+Impact: 判定レーンのブランチを `feat/judge-jd2` に切り替えた(JD1 の `feat/judge-jd1` は削除)。JD2(複数の相手候補・場の効果・画面)は plan.md の方針どおり、着手前にユーザーへ確認する。
+
+## 2026-09-22: JD2〜JD5 の範囲・順序をユーザーが確定。API レーンへの依頼(既定案付き。判定レーン)
+Decision: ユーザーが「複数の相手候補・相手の技を含めた返り討ち判定・場の効果(トリックルーム等)・Web/iOS の画面」の4項目すべてを対象と回答した(技の追加効果によるランク変化の自動反映は対象外のまま)。
+判定レーンは技術的な依存関係から順序を JD2(場の効果)→ JD3(複数の相手候補)→ JD4(返り討ち判定)→ JD5(画面)に決めた(docs/judge-design.md §3)。
+**API レーンへの依頼(既定案。今回は提案の記録のみで、api/openapi.yaml は変更していない)**: JD4(相手の技を含めた返り討ち判定)には技の優先度(`priority`)が要るが、
+`GET /api/pokedex/moves` は日本語名の前方一致検索のみで、moveId 1件を引く detail endpoint が無い。`GET /api/pokedex/species/{key}` と同じ形で
+`GET /api/pokedex/moves/{key}` を追加してほしい(species の `SpeciesDetail` に相当する `MoveDetail` を返す。既存の `Move` スキーマで足りるはず)。
+Reason: judge が上流から priority を引く手段が無いと、先に動く側を正しく決められず JD4 が実装できない。
+Impact: 優先度は低い(JD2・JD3 は依頼を待たずに進められる)。着手は JD3 完了後でよい。API レーンが実装したら plan.md の JD4 の行を進められる。
+
+## 2026-09-23: 判定 JD2 の設計確定(場の効果 `speedField`)。素早さ補正の連結と丸めを @smogon/calc で確認(判定レーン)
+Decision: ADR-0702 で JD2 を確定した。`POST /api/judge/v1/outspeed-and-ko` に省略可の `speedField`
+(`trickRoom`・`attackerTailwind`・`defenderTailwind`。すべて既定 false)を足す。calc-svc へ転送する `field` とは別の欄にし、`speedField` は calc-svc に送らない。
+追い風は実数値を ×2 し、トリックルームは実数値を変えず `outspeeds`(自分が先に動くか)の比較の向きだけを反転する(`speedTie` は反転しない)。
+**素早さ補正は 4096 基準で 1 つに連結してから 1 回だけ五捨五超入する**(補正ごとに丸めない)。追い風 8192・こだわりスカーフ 6144。
+Reason: 丸めの規約(CLAUDE.md「4096基準の固定小数と五捨五超入」)に関わるため推測せず、ADR-0002 が固定した @smogon/calc 0.12.0 の
+`dist/mechanics/util.js` の `getFinalSpeed` を実際に読んで確認した(Champions 世代も `computeFinalStats` 経由で同じ関数を通る)。
+原典は `speedMods` に追い風 8192・スカーフ 6144 を積み、`chainMods`(1 ステップは切り上げ寄り)で 1 つにまとめてから `pokeRound`(五捨五超入)を 1 回だけ掛ける。
+実数値 91 にスカーフと追い風が両方乗ると 273 になり、補正ごとに丸める実装(136 → ×2)だと 272 で 1 ずれる。
+Impact: judge は engine の非公開 `chainMods` / `pokeRound` を呼べないため、同じ式を `internal/judge` に名前付き定数で持つ(ADR-0600 §3・ADR-0701 §2 と同じ扱い)。
+`CompareSpeed` は引数を 1 つ(`SpeedField`)足す形に変えた(既存テストの期待値は変えていない)。麻痺(`status`)は連結の後に別枠で掛かり、ダメージ側にも効くため JD2 に含めない。
+実装(implementer)は未着手で、`make judge-test` は失敗したままにしてある。
+
 ## 2026-09-23: iOS レーンの統合(PR #119)
 Decision: P6-2d(構築から個体を呼び出す配線)を PR #119 で main にマージした(critic PASS。make test / lint / build / check-publishable / ios-test が成功)。
 Reason: P6-2c に続く区切り。P6-2(計算画面・逆算・構築)がすべて完了した。
 Impact: 続き(P6-3 シミュレータテストの総仕上げ・P6-4 実機インストール手順書)は同じブランチ feat/ios-p6 で進める。
+
+## 2026-09-23: Codexレビュー issue #103・#111 の needs-decision をユーザーが決定
+Decision:
+- #103(M2保存データ〈record-svc/team-svc〉の保持・削除・端末ID境界): **一定期間の自動失効**にする(例: 未使用90日。具体的な日数は実装レーンの提案に任せる)。無期限保持はしない。
+- #111(importer PVC〈現在2Gi〉の容量上限・保持方針): **古いキャッシュを自動削除**する(直近N世代のみ保持。世代数は実装レーンの提案に任せる)。容量拡張だけで対症療法にはしない。
+Reason: ユーザー回答(AskUserQuestion、2026-09-23)。両方とも「無期限に持ち続けない」方向で統一。
+Impact: #103 は主担当の API・データレーンへ、#111 は主担当のデータレーンへタイプバランスレーンから連絡済み。着手のブロッカーが外れたので、それぞれの実装レーンで ADR を書いて進めてよい。
