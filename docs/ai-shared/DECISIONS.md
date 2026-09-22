@@ -617,3 +617,7 @@ Impact: design.md の1行、plan.md に P4-8、ADR-0300 §7 の持ち越しの�
 Decision: P4-8(design.md「動き」の演出)と逆算の表示方針・design.md の演出の値を PR #33 で main に統合した。Web レーンは他レーン(P2-3・P3-3)待ちで一時停止。
 Reason: critic PASS、make test / lint / build・E2E の通過を確認。
 Impact: Web レーンの Active を「なし」にした。続きは CURRENT_STATE.md の Web 欄の Next。
+
+## 2026-09-22: 素早さ SP1 を PR #36 で main に統合(素早さレーン)
+Decision: SP1(ADR-0601。表の 6 行・速い順・同速の段・presets の絞り込み)を PR #36 で統合した。critic PASS(軽微4。テストのコメントは修正、空の roster の扱いは SP4 までに決める)。
+Impact: 素早さレーンの次は SP2(feat/speed-s2)。
