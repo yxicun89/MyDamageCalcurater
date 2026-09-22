@@ -11,7 +11,11 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** ポケモンを日本語名で前方一致検索 */
+    /**
+     * ポケモンを日本語名で前方一致検索
+     * @description 既定のレギュレーション(コードに書かず DB から引く。ADR-0105)の使用可能集合だけを返す(並びは ID 順)。
+     *     `format` は v1 では結果に影響しない(使用可能集合は形式で分かれていない)。
+     */
     get: operations["searchSpecies"];
     put?: never;
     post?: never;
@@ -28,7 +32,11 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** 種族の詳細(タイプ・種族値・特性・覚える技) */
+    /**
+     * 種族の詳細(タイプ・種族値・特性・覚える技)
+     * @description 使用可能集合の外の種族も返す(絞り込みは検索の仕事)。`abilities` は slot 順、
+     *     `learnset` は習得技 ∩ 既定のレギュレーションの使用可能な技(ID 昇順)。
+     */
     get: operations["getSpecies"];
     put?: never;
     post?: never;
@@ -45,7 +53,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** 技を日本語名で前方一致検索 */
+    /**
+     * 技を日本語名で前方一致検索
+     * @description 既定のレギュレーションの使用可能集合だけを返す(並びは ID 順。ADR-0105)。
+     */
     get: operations["searchMoves"];
     put?: never;
     post?: never;
@@ -62,7 +73,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** 持ち物を日本語名で前方一致検索 */
+    /**
+     * 持ち物を日本語名で前方一致検索
+     * @description 既定のレギュレーションの使用可能集合だけを返す(並びは ID 順。ADR-0105)。
+     */
     get: operations["searchItems"];
     put?: never;
     post?: never;
@@ -79,7 +93,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** 性格の一覧(補正する能力) */
+    /**
+     * 性格の一覧(補正する能力)
+     * @description 使用可能集合で絞らない(全性格。並びは ID 順。ADR-0105)。
+     */
     get: operations["listNatures"];
     put?: never;
     post?: never;
@@ -706,7 +723,7 @@ export interface components {
     };
     /** @description species_abilities テーブルの行 */
     MasterSpeciesAbility: {
-      /** @description 1..3 */
+      /** @description 1..4(Showdown の特性スロット "S" を含む。ADR-0103 §12) */
       slot: number;
       abilityId: string;
     };
@@ -780,6 +797,7 @@ export interface operations {
         /** @description 日本語名の前方一致(空なら全件・limit まで) */
         q?: string;
         format?: components["schemas"]["Format"];
+        /** @description 範囲外・整数でない値は 400 `invalid_input` */
         limit?: number;
       };
       header: {
@@ -806,7 +824,7 @@ export interface operations {
           "application/json": components["schemas"]["SpeciesSummary"][];
         };
       };
-      /** @description gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202) */
+      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -832,7 +850,7 @@ export interface operations {
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path: {
-        /** @description {図鑑番号4桁}-{フォルム3桁} 例 0445-000 */
+        /** @description {図鑑番号4桁}-{フォルム3桁} 例 0445-000。形式が違えば 400 `invalid_input` */
         key: components["schemas"]["SpeciesKey"];
       };
       cookie?: never;
@@ -848,8 +866,16 @@ export interface operations {
           "application/json": components["schemas"]["SpeciesDetail"];
         };
       };
-      404: components["responses"]["Error"];
-      /** @description gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202) */
+      /** @description 該当する種族が無い(`not_found`) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -864,7 +890,9 @@ export interface operations {
   searchMoves: {
     parameters: {
       query?: {
+        /** @description 日本語名の前方一致(空なら全件・limit まで) */
         q?: string;
+        /** @description 範囲外・整数でない値は 400 `invalid_input` */
         limit?: number;
       };
       header: {
@@ -891,7 +919,7 @@ export interface operations {
           "application/json": components["schemas"]["Move"][];
         };
       };
-      /** @description gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202) */
+      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -906,7 +934,9 @@ export interface operations {
   searchItems: {
     parameters: {
       query?: {
+        /** @description 日本語名の前方一致(空なら全件・limit まで) */
         q?: string;
+        /** @description 範囲外・整数でない値は 400 `invalid_input` */
         limit?: number;
       };
       header: {
@@ -933,7 +963,7 @@ export interface operations {
           "application/json": components["schemas"]["Item"][];
         };
       };
-      /** @description gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202) */
+      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -972,7 +1002,7 @@ export interface operations {
           "application/json": components["schemas"]["Nature"][];
         };
       };
-      /** @description gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202) */
+      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
