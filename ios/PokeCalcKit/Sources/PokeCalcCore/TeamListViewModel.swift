@@ -3,16 +3,10 @@ import Observation
 // TeamListViewModel: 構築一覧画面の状態(P6-2c・ADR-0500 §1「画面のロジックは ViewModel で
 // XCTest に固定し、View は描くだけ」)。
 
-/// 構築一覧画面の状態。`TeamStore` だけに依存する(ADR-0500 §4)。
-///
-/// **判断(`@MainActor` を付けない)**: `CalcViewModel`(P6-2a)は `@MainActor` だが、
-/// `TeamListViewModelTests` / `TeamEditViewModelTests` のテストクラスは `@MainActor` を付けずに
-/// 書かれていて、`viewModel.error` 等のプロパティを `await` なしで直接参照する(XCTAssert の
-/// 引数は暗黙の autoclosure で、呼び出し元が `@MainActor` でないと MainActor 隔離プロパティを
-/// `await` なしで読めない。実測: `@MainActor` を付けると `swift build --build-tests` がテスト
-/// ファイル側のこの参照でコンパイルエラーになる)。テストを変更せずに通すため(CLAUDE.md 絶対
-/// ルール6)、構築の2つの ViewModel は `@MainActor` を付けない。呼び出し元(View)は既存の
-/// `@State` プロパティ経由でメインスレッドから使う限り実害は無い(ADR-0501「P6-2c」実装メモに追記)。
+/// 構築一覧画面の状態。`TeamStore` だけに依存する(ADR-0500 §4)。ADR-0501「P6-2c」3章の指定どおり
+/// `@MainActor`(`CalcViewModel`/`ReverseViewModel` と同じ)。テストクラス(`TeamListViewModelTests`)も
+/// `CalcViewModelTests`/`ReverseViewModelTests` と同じく `@MainActor` を付けて呼び出し側もそろえる。
+@MainActor
 @Observable
 public final class TeamListViewModel {
     private let store: any TeamStore

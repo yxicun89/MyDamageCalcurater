@@ -40,6 +40,7 @@ import XCTest
 //   `SPLimits.maxTotal` を超えるなら変更せず false(`memberErrors[id]` に `.spPerStatExceeded` /
 //   `.spTotalExceeded`)。それ以外は代入して true(`memberErrors[id]` を nil にする)。
 // - `save() async -> Bool`: `store.save(team)` を呼ぶ。成功で true、失敗で `error` を立てて false。
+@MainActor
 final class TeamEditViewModelTests: XCTestCase {
 
     /// `load()` 中に `species(key:)` を呼ぶ既存メンバー1体(alpha)を持つチームで組み立てた ViewModel。

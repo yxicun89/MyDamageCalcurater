@@ -121,8 +121,10 @@ final class LocalTeamStoreTests: XCTestCase {
         let other = LocalTeamStore(defaults: otherDefaults)
         try await store.save(Team(id: "team-1", name: "テストチーム1"))
 
-        XCTAssertEqual(try await store.list().count, 1)
-        XCTAssertEqual(try await other.list().count, 0)
+        let storeCount = try await store.list().count
+        let otherCount = try await other.list().count
+        XCTAssertEqual(storeCount, 1)
+        XCTAssertEqual(otherCount, 0)
     }
 
     // MARK: - 永続化(同じ suite を指す新しいインスタンスが読める。UserDefaults 経由の JSON を確かめる)

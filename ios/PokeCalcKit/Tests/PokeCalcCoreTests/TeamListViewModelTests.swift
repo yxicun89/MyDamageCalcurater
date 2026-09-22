@@ -17,6 +17,7 @@ import XCTest
 //   空でなければ新しい `Team(name:)` を `store.save` し、成功したら `load()` して返す(失敗したら nil)。
 // - `func deleteTeam(id:) async`: `store.delete(id:)` を呼び、成功でも失敗でも `load()` して最新化する
 //   (失敗時は `error` を立てる)。
+@MainActor
 final class TeamListViewModelTests: XCTestCase {
 
     private func team(_ id: String, name: String = "テストチーム") -> Team {
@@ -76,7 +77,8 @@ final class TeamListViewModelTests: XCTestCase {
 
         let created = await viewModel.createTeam(name: "   ")
         XCTAssertNil(created)
-        XCTAssertEqual(await store.saveCalls.count, 0, "store.save を呼ばない")
+        let saveCallCount = await store.saveCalls.count
+        XCTAssertEqual(saveCallCount, 0, "store.save を呼ばない")
         guard case .service(let code, _) = viewModel.error else {
             return XCTFail("teamNameEmpty の service エラーになる: \(String(describing: viewModel.error))")
         }
@@ -102,7 +104,8 @@ final class TeamListViewModelTests: XCTestCase {
 
         await viewModel.deleteTeam(id: "team-1")
         XCTAssertEqual(viewModel.teams.map(\.id), ["team-2"])
-        XCTAssertEqual(await store.deleteCalls, ["team-1"])
+        let deleteCalls = await store.deleteCalls
+        XCTAssertEqual(deleteCalls, ["team-1"])
     }
 
     func testDeleteTeamFailureSetsError() async {

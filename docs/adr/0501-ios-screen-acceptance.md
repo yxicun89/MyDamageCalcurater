@@ -377,7 +377,7 @@ XCUITest は `PokeCalcUITests/ReverseScreenUITests.swift`。ルート画面の�
   折り返し、崩れは無かった(アクセシビリティ文字サイズでのカードの縦積みは計算画面と同じ `dynamicTypeSize >=
   .accessibility1` の分岐を流用しており、計算画面側の批評で確認済みの経路)。
 
-## P6-2c の受け入れ条件(構築ビルダー。spec-writer 着手・実装は未着手)
+## P6-2c の受け入れ条件(構築ビルダー。ドメイン・TeamStore・ViewModel は実装済み・green。View/XCUITest は未着手)
 
 ADR-0500 §4「構築(team)は API の契約が無い(P5-4)。`TeamStore` プロトコルと端末内の実装(UserDefaults に
 JSON)で作り、team-svc の契約ができたら API 実装を足す。Showdown 形式の入出力は team-svc の契約に合わせるため
@@ -533,7 +533,32 @@ XCUITest はモック(`MockPokeCalcService` + `LocalTeamStore`。起動時 `POKE
 「一覧を開く→新規作成→名前を付けて保存→一覧に出る→開いてメンバーを1体追加して保存→一覧から削除できる」の
 一連がつながることを見る(P6-1〜P6-2b の XCUITest と同じ粒度。数値の正しさではなく操作がつながることを見る)。
 
-### 6. 確認事項(未決のまま残った判断はここに書く。次の implementer/critic が変えてよい)
+### 6. コンパイルを止めていた2つのブロッカーと直し方(解決済み。次の implementer/critic 向けの記録)
+
+一時的な実装(実装者A)が `swift build --build-tests` を通せずに中断した。原因は2つとも解決済み:
+
+1. **`LocalTeamStore`(actor)の init に `UserDefaults`(非 Sendable)を渡す箇所の Swift 6 concurrency エラー**
+   (`sending 'self.defaults' risks causing data races`)。`init` の中で `@unchecked Sendable` の箱に包んでも
+   直らない(region-based sending チェックは**呼び出し側から見える init の引数の宣言型**で判定するため、
+   init の中で何をしても呼び出し側の型は変わらない)。正しい直し方は `extension UserDefaults: @retroactive
+   @unchecked Sendable {}` をこのモジュール内に置くこと(`LocalTeamStore.swift` にコメント付きである)。
+   これで公開 API `init(defaults: UserDefaults = .standard)` もテストの呼び出し `LocalTeamStore(defaults:
+   defaults)` も変更せずに済む。
+2. **`TeamListViewModel` / `TeamEditViewModel` に `@MainActor` を付けると spec-writer のテストがコンパイル
+   エラーになる、という実装者Aの判断は誤り**。原因はテストクラス自体に `@MainActor` を付けていなかった
+   ことで、`CalcViewModelTests` / `ReverseViewModelTests` が `@MainActor final class` になっているのと
+   同じパターンで `TeamListViewModelTests` / `TeamEditViewModelTests` にも `@MainActor` を付ければ解決する
+   (アサーション・期待値は一切変更していない。CLAUDE.md 絶対ルール6に抵触しない)。両 ViewModel は本章の
+   指定どおり `@MainActor @Observable` のまま。
+3. 上記2つとは別に、spec-writer のテストファイル自体に `await` が `XCTAssertEqual` の autoclosure 引数内に
+   あるという Swift 構文エラーが2件あった(`TeamListViewModelTests.swift`(旧行 79・105)・
+   `LocalTeamStoreTests.swift`(旧行 124-125))。`let` で一度受けてから `XCTAssertEqual` に渡す形に直した
+   (`ReverseViewModelTests.swift` で既に使われているのと同じパターン)。比較する値・アサーションの内容は
+   変えていない。
+
+`swift test`(macOS)・`make ios-test-unit`(シミュレータ)とも Team* を含む全件が green(2026-09-22)。
+
+### 7. 確認事項(未決のまま残った判断はここに書く。次の implementer/critic が変えてよい)
 
 - `TeamMember.nickname` を持つかどうかはユーザーに未確認(spec-writer の判断で「持つ」とした。上記1章)。
   実装後の動作確認で不要と分かれば消してよい(フィールド1つなので戻すコストは小さい)。

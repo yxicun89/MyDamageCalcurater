@@ -7,9 +7,8 @@ import Observation
 // 特性検索 API が無いため `SpeciesDetail.abilities`(種族ごと)から出す。
 
 /// 構築編集画面の状態。`TeamStore`(保存)と `PokeCalcService`(マスタ)の両方に依存する。
-///
-/// `@MainActor` を付けない理由は `TeamListViewModel` のコメントと同じ(テストクラスが `@MainActor`
-/// を付けずにプロパティを直接参照するため。ADR-0501「P6-2c」実装メモに追記)。
+/// ADR-0501「P6-2c」3章の指定どおり `@MainActor`(`CalcViewModel`/`ReverseViewModel` と同じ)。
+@MainActor
 @Observable
 public final class TeamEditViewModel {
     /// openapi の `limit` の上限(`CalcViewModel` と同じ値。coding-rules §2「同じ値を複数箇所に

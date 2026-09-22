@@ -5,24 +5,24 @@ import Foundation
 // 1つの UserDefaults キーの下に `[Team]` を丸ごと JSON で保存する(team ごとに別キーにしない。
 // 索引キーと実体の不整合を起こしうる複数キー方式より一貫する。ADR-0501「P6-2c」2章の判断)。
 
+/// `UserDefaults` は SDK 側で `Sendable` を宣言していないが、Apple のドキュメントどおりスレッドセーフな
+/// クラスなので、このモジュール内でだけ `@unchecked Sendable` を後付けする。
+///
+/// 最初は「呼び出し元で箱に包んでから actor の init に渡す」形を試したが、Swift 6 の region-based
+/// sending チェックは**呼び出し側から見える init の引数の宣言型**(`UserDefaults`)で判定するため、
+/// init の中で箱に包んでも(呼び出し側の型は変わらないので)効果が無かった。`UserDefaults` 自体を
+/// Sendable と宣言するのが正しい直し方(呼び出し側のシグネチャ `init(defaults: UserDefaults = .standard)`
+/// を変えずに済み、テストの呼び出し `LocalTeamStore(defaults: defaults)` もそのまま使える)。
+extension UserDefaults: @retroactive @unchecked Sendable {}
+
 /// UserDefaults に JSON で保存する `TeamStore`(`ClientIdentity(defaults:)` と同じ、保存先を
 /// 注入できる形。テストは専用の UserDefaults suite を使う)。
 public actor LocalTeamStore: TeamStore {
     /// `ClientIdentity.deviceIDDefaultsKey`(`"PokeCalcDeviceID"`)と衝突しないキー。
     public static let teamsDefaultsKey = "PokeCalcTeams"
 
-    /// `UserDefaults` は Swift Concurrency の `Sendable` に適合しない(SDK が明示的に unavailable と
-    /// している)が、Apple のドキュメントどおりスレッドセーフなクラスなので `nonisolated(unsafe)` で
-    /// 安全に共有する(`ClientIdentity` が構造体で同じ値をそのまま保持するのと同じ前提)。
-    private nonisolated(unsafe) let defaults: UserDefaults
+    private let defaults: UserDefaults
 
-    // TODO(未解決・作業中断): `UserDefaults`(非 Sendable)をアクターの init へ渡す箇所で
-    // 「sending 'self.defaults' risks causing data races」が取れていない。`nonisolated(unsafe)` を
-    // プロパティに付けても解消しない(呼び出し側の region-based sending チェックは宣言型が
-    // Sendable かどうかだけで決まり、内部の isolation 属性では変わらないため)。次の一手候補:
-    // 1) `UserDefaults` を `@unchecked Sendable` の小さな箱型で包んでから actor へ渡す、
-    // 2) `actor` をやめて内部ロック付きの `final class ... : TeamStore, @unchecked Sendable` にする
-    //   (ADR-0501「P6-2c」2章は `actor` を明示しているので、2) を選ぶなら ADR 追記が要る)。
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }
