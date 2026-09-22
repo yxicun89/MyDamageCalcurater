@@ -16,7 +16,7 @@ Next: データレーン依頼 d(gateway の /api/pokedex/* を pokedex-svc(Serv
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
-Active: なし(ユーザー指示で一時停止。利用枠をデータレーンに集中。再開はユーザーの指示後)
+Active: Claude Code(ユーザー指示で再開)
 Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
 Status: P4-1〜P4-6・P4-8〜P4-11・P4-12a(タイプバランス画面の防御相性・攻撃範囲。ADR-0303)・P4-14・DOC-web 完了(critic PASS。main 統合済み)。
 GATEWAY_WEB_URL(API レーンの ADR-0205)が main に入り、k3d の http://localhost:8080 で画面(/calc・/reverse・/balance)と API が揃うことを実地確認し verify-m1.md に反映。
