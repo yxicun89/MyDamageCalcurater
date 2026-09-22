@@ -28,7 +28,7 @@ import { createWasmEngine } from "./engine/wasmEngine";
 import { appText } from "./i18n/ja";
 import { exampleMasterSource } from "./master/exampleSource";
 import { createSpeedClient } from "./speed/speedClient";
-import type { MasterData, MasterSource } from "./master/types";
+import type { MasterData, MasterSource, MasterSources } from "./master/types";
 import { SCREEN_COMPONENTS } from "./app/screens";
 
 /** タブの定義順(ロービング tabIndex・矢印キーの移動順。WAI-ARIA Authoring Practices の Tabs パターン)。 */
@@ -57,8 +57,15 @@ export interface AppProps {
   readonly engine?: CalcEngine;
   /** モードごとの計算の差し替え口。engine より優先する。 */
   readonly engines?: CalcEngines;
-  /** マスタの取得口。省くと架空の例データ(ADR-0300 §3)。 */
+  /** マスタの取得口。省くと架空の例データ(ADR-0300 §3)。両モードで同じマスタを使う。 */
   readonly masterSource?: MasterSource;
+  /**
+   * P4-16(ADR-0304 §追記): 計算モードごとのマスタの取得口。masterSource より優先する。
+   * 端末 ID・セッション ID は App が持つ(ADR-0301 §3)ので、オンラインのマスタを組み立てられるよう
+   * ClientIds を受け取る関数で渡す。マウント時に1回だけ呼ぶ(以後この props の同一性は見ない)。
+   * 省くと両モードとも masterSource(既定は架空の例データ)。本番の組み立ては main.tsx が渡す。
+   */
+  readonly masterSources?: (ids: ClientIds) => MasterSources;
 }
 
 /** masterSource.load() の結果(成功/失敗のどちらか)。読み込み中は state を持たず null のまま表す。 */

@@ -1,6 +1,7 @@
 # ADR-0304: Web のオンライン MasterSource — 検索ベースの選択 UI と、技の ID 解決の API ギャップ
 
-- 状態: 提案(Web レーン、2026-09-23。§3 の技解決の既定案は DECISIONS.md でデータ/API レーンへ提案中・未確認)
+- 状態: 提案(Web レーン、2026-09-23。§3 の技解決の既定案は DECISIONS.md でデータ/API レーンへ提案中・未確認。
+  型の設計は「追記(2026-09-23)」で確定し、P4-16 の受け入れ条件・テストの正になっている)
 - 日付: 2026-09-23
 - 関連: plan.md Next(1)、ADR-0301 §4(オンライン用 MasterSource は「まだ作れない」として持ち越した宿題)、
   ADR-0300(Web の構成)、api/openapi.yaml(`searchSpecies`・`getSpecies`・`searchMoves`・`searchItems`・`listNatures`)、
@@ -105,3 +106,114 @@ Web 側が暗黙に依存することになるため、素直に壊れやすい�
 - 画面側: 種族選択 UI がオンライン/オフラインで一覧/検索に分かれる(コンポーネントの分岐が増える)。
 - データ/API レーンへの依頼(DECISIONS.md に転記): `getSpecies.learnset` を `Move[]` に変える(案A、既定)。
   返答があるまで、Web のオンラインモードは技選択を無効化した状態で先に進める。
+
+## 追記(2026-09-23、Web レーン): 実際の TypeScript インターフェース設計
+
+§1〜§4 は概念の決定にとどまり、型の設計は未定だった。P4-16 の spec(受け入れ条件と失敗するテスト)を書くにあたり、
+以下を決めた。**最優先の制約は「オフライン(`exampleMasterSource`)の同期的な使い方を一切壊さない」**
+(既存の全画面・既存テストを1行も変えずに今までどおり動くこと)。
+
+### A-1. 公開 API の欠落は §3 の技だけではない(調査で追加で判明)
+
+`api/openapi.gen.ts` の生成型を読み直したところ、§1 の件数の問題・§3 の技の ID 解決に加えて、次の2つが欠けている:
+
+- **持ち物・特性の効果データが無い**。公開 API の `Item`・`Ability` は `{id, nameJa}` だけで、
+  engine の `ItemEffect`・`AbilityEffect`(4096基準の固定小数)に当たるフィールドを持たない
+  (効果を持つのは internal-only の `getMasterExport` のみ。ADR-0204)。
+  このため `domain/requests.ts` の `defensiveItemCandidates` と `domain/reverseItems.ts` の
+  `reverseItemCandidates` は**効果データで候補を選ぶ**設計(ADR-0300 §6)なので、オンラインでは
+  「候補なし」しか返せない。黙って空の候補を出すのは誤解を招くため、技と同じく**明示的に無効化**する。
+- **特性の全件一覧を引く公開 API が無い**(`listNatures` に相当するものが特性には無い)。
+  特性の実体は `getSpecies` の応答に種族ごとに付いてくるので、`MasterData.abilities` は
+  「これまでに引いた種族の特性」を積み上げる形になる(`defaultAbility` が `species.abilities` の ID を
+  引けるようにするため)。
+
+### A-2. `MasterData` は変えない。使えない機能を `MasterCapabilities` で伝える
+
+案(a)(`MasterData` 本体を変えず別インターフェースを足す)を採る。`MasterData` に**省略可能な**
+`capabilities?: MasterCapabilities` を1つ足すだけにし、省略は「全部使える」(オフライン相当)とみなす。
+省略可にしたのは、既存の `MasterData` の作り手(`exampleMasterSource` と各画面テストの fixture)を
+1つも変えずに済ませるため。既定の補完は `master/capabilities.ts` の `masterCapabilities()` 1か所に集める
+(コーディング規約 §2「単一の正」)。
+
+```
+MasterCapabilities { speciesList: boolean; moves: boolean; effects: boolean }
+```
+
+画面は「オンラインかどうか」ではなく「この機能が使えるか」で分岐する(モードの名前を画面に持ち込まない)。
+オンラインは `{speciesList: false, moves: false, effects: false}`(`ONLINE_MASTER_CAPABILITIES`)。
+
+### A-3. 種族の都度取得は `MasterSource` と別のインターフェースにする
+
+`MasterSource.load()` の形(全件を1回返す)は変えない。検索は `SearchableMasterSource`(= `MasterSource` +
+`search: MasterSpeciesSearch`)で足し、`isSearchableMasterSource()` で絞り込む。
+
+```
+MasterSpeciesSummary  { key, dexNo, form, nameJa, types }     // 公開 API の SpeciesSummary 相当
+MasterSpeciesResolution { species: MasterSpecies; abilities: readonly Ability[] }
+MasterSpeciesSearch {
+  searchSpecies(query, signal?): Promise<readonly MasterSpeciesSummary[]>
+  resolveSpecies(key, signal?): Promise<MasterSpeciesResolution>
+}
+SearchableMasterSource extends MasterSource { readonly search: MasterSpeciesSearch }
+```
+
+`MasterSpecies` は `MasterSpeciesSummary` を構造的に満たすので、オフラインの種族もそのまま候補として扱える
+(検索 UI をオフラインにも流用できる)。`resolveSpecies` が特性も返すのは A-1 の後半の理由による。
+取得結果を覚えるのは呼び出し側(画面)の責務とし、`MasterSpeciesSearch` の実装はキャッシュを持たない。
+
+### A-4. 検索 UI のパラメータ(`master/onlineSource.ts` の定数)
+
+- `SPECIES_SEARCH_MIN_LENGTH = 1`(日本語名の前方一致なので1文字で十分絞れる)
+- `SPECIES_SEARCH_LIMIT = 50`(§1 の「既定の limit(50)」。349件を一覧にはしない)
+- `SPECIES_SEARCH_DEBOUNCE_MS = 250`(入力1文字ごとに投げない)
+- 空・空白だけのクエリは **fetch せず空配列**(空 = 全件にしない。§1)
+- 候補が `SPECIES_SEARCH_LIMIT` に達したら「全件ではない」旨を出す(`masterOnlineText.speciesSearchTruncated`)
+- `ITEMS_FETCH_LIMIT = 200`(公開 API の maximum。実データ166件)。
+  **応答が limit ちょうどなら打ち切りの疑いがあるため `load()` は失敗する**(黙って欠けたマスタを配らない)
+
+### A-5. 技・持ち物候補が無効なときの画面の見え方
+
+文言は `web/src/i18n/ja.ts` の `masterOnlineText`(コーディング規約 §2)。
+
+- **技**(`capabilities.moves === false`): 技のセレクトは**残すが `disabled`** にし(欄そのものを消すと
+  画面の構造が両モードで変わりすぎる)、選択肢は「なし」相当の空だけ。すぐ下に
+  `masterOnlineText.movesUnavailable`(「オンラインでは技を選べません…」)を出す。
+  技が決まらないので計算は実行しない(壊れた結果を出さない。§4)。
+- **持ち物の候補比較**(`capabilities.effects === false`): 計算画面の「持ち物の候補も比較」トグルと
+  逆算画面の持ち物候補を `disabled` にし、`masterOnlineText.itemCandidatesUnavailable` を添える。
+  持ち物そのものの選択は残す(API の計算は `itemId` だけを送るので成立する)。
+- **種族**(`capabilities.speciesList === false`): ドロップダウンの代わりに検索欄(A-4)。
+
+### A-6. モードとマスタの結び付け(`App.tsx`)
+
+`AppProps` に `masterSources?: (ids: ClientIds) => MasterSources` を足す(`engines` と同じ「モードごと」の形)。
+端末 ID・セッション ID は App が持つ(ADR-0301 §3)ので、オンラインのマスタを組み立てられるよう関数で受ける。
+**既定は変えない**(省略時は両モードとも `masterSource`、その既定は架空の例データ)。本番の組み立ては `main.tsx` が渡す。
+既定を変えないのは、`engines` を渡してオンラインに切り替える既存テストが、例データのまま今までどおり動くため。
+
+モードを切り替えたらマスタを読み直す。読み終わるまで前のモードのマスタで画面を出さない
+(`masterLoad` に「どの取得口の結果か」を持たせ、現在の取得口と一致しないときは読み込み中として扱う。
+`useEffect` の中で `setState` しない)。オンラインのマスタが読めなくても自動でオフラインに戻さない(ADR-0301 §4)。
+
+### A-7. 段階の分割
+
+- **P4-16(この spec の範囲)**: 型(A-2・A-3)、`master/onlineSource.ts`、`master/capabilities.ts`、
+  `i18n/ja.ts` の `masterOnlineText`、`App.tsx` の配線(A-6)。
+- **P4-16b(次)**: 画面側(A-5)。種族の検索コンボボックス、技・持ち物候補の無効化と案内の描画。
+- **P4-17**: §3 の技の ID 解決が API レーンで入ったあと、`capabilities.moves` を true にして技を復活させる。
+
+`api/openapi.yaml` はこのタスクでは変えない(必要な変更は §3 の案A = データ/API レーンの持ち物で、
+DECISIONS.md で提案済み・未回答)。
+
+### A-8. 変更する既存ファイル(implementer 向け)
+
+| ファイル | 変更 |
+|---|---|
+| `web/src/master/types.ts` | 型の追加(済。`MasterData.capabilities?` は省略可なので既存の作り手に影響なし) |
+| `web/src/master/capabilities.ts` | 新規(spec-writer はスタブ。実装は implementer) |
+| `web/src/master/onlineSource.ts` | 新規(同上) |
+| `web/src/i18n/ja.ts` | `masterOnlineText` の追加(済) |
+| `web/src/App.tsx` | `masterSources` prop の追加(spec-writer は props の宣言のみ)と読み込みの配線 |
+| `web/src/main.tsx` | `masterSources` を渡す(オンラインは `createOnlineMasterSource`) |
+| 画面(`screens/*.tsx`) | **P4-16 では変えない**(capabilities を省いたマスタ = 今までどおり) |
