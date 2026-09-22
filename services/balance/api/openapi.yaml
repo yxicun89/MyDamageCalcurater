@@ -957,11 +957,16 @@ components:
           items:
             $ref: '#/components/schemas/CandidatePokemon'
     CandidatePokemon:
+      description: |
+        A pokemon for a candidate (ADR-0401 §8). A single-type candidate also lists the pokemon that
+        contain its type (unless their other type loses one of the candidate's covered defense holes);
+        exact type-set matches come first, then pokemonId ascending.
       type: object
       additionalProperties: false
       required:
         - pokemonId
         - types
+        - exactMatch
       properties:
         pokemonId:
           type: string
@@ -977,6 +982,9 @@ components:
           maxItems: 2
           items:
             $ref: '#/components/schemas/TypeId'
+        exactMatch:
+          description: Whether the pokemon's type set equals the candidate's.
+          type: boolean
     PokemonNameJa:
       description: Japanese name from the read model, present only when the read model has one.
       type: string

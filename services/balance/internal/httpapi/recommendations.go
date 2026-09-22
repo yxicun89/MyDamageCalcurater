@@ -159,8 +159,9 @@ func toCandidatePokemon(pokemon []balance.RecommendedPokemon) []api.CandidatePok
 	result := make([]api.CandidatePokemon, len(pokemon))
 	for i, p := range pokemon {
 		result[i] = api.CandidatePokemon{
-			PokemonId: p.PokemonID,
-			Types:     toRecommendationTypes(p.Types),
+			PokemonId:  p.PokemonID,
+			Types:      toRecommendationTypes(p.Types),
+			ExactMatch: p.ExactMatch,
 		}
 		if p.NameJa != "" {
 			name := p.NameJa

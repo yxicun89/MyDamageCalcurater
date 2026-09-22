@@ -284,8 +284,13 @@ type AnalyzeResponse struct {
 	TeamSummary []TeamSummaryEntry `json:"teamSummary"`
 }
 
-// CandidatePokemon defines model for CandidatePokemon.
+// CandidatePokemon A pokemon for a candidate (ADR-0401 §8). A single-type candidate also lists the pokemon that
+// contain its type (unless their other type loses one of the candidate's covered defense holes);
+// exact type-set matches come first, then pokemonId ascending.
 type CandidatePokemon struct {
+	// ExactMatch Whether the pokemon's type set equals the candidate's.
+	ExactMatch bool `json:"exactMatch"`
+
 	// NameJa Japanese name from the read model, present only when the read model has one.
 	NameJa *PokemonNameJa `json:"nameJa,omitempty"`
 

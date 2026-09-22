@@ -389,21 +389,29 @@ func TestRecommendTypesCandidatePokemon(t *testing.T) {
 	}
 	got := recommend(t, chartRockOnly(), normalMember, catalog, nil, balance.MaxRecommendationLimit)
 
-	type pokemon struct{ id, name, types string }
+	type pokemon struct {
+		id, name, types string
+		exact           bool
+	}
+	// ADR-0401 §8: a single-type candidate also lists the pokemon that contain its type (exact matches
+	// first, then pokemonId); a dual-type candidate lists exact matches only.
 	tests := []struct {
 		label string
 		want  []pokemon
 	}{
-		{"rock", []pokemon{{"9001-000", "", "rock"}, {"9005-000", "テストイワ", "rock"}}},
-		{"rock/ghost", []pokemon{{"9002-000", "", "ghost/rock"}, {"9003-000", "テストユウレイイワ", "rock/ghost"}}},
-		{"fire/rock", []pokemon{{"9006-000", "", "rock/fire"}}},
+		{"rock", []pokemon{
+			{"9001-000", "", "rock", true}, {"9005-000", "テストイワ", "rock", true},
+			{"9002-000", "", "ghost/rock", false}, {"9003-000", "テストユウレイイワ", "rock/ghost", false}, {"9006-000", "", "rock/fire", false},
+		}},
+		{"rock/ghost", []pokemon{{"9002-000", "", "ghost/rock", true}, {"9003-000", "テストユウレイイワ", "rock/ghost", true}}},
+		{"fire/rock", []pokemon{{"9006-000", "", "rock/fire", true}}},
 		{"normal/rock", []pokemon{}},
 	}
 	for _, tt := range tests {
 		candidate := findCandidate(t, got, tt.label)
 		gotPokemon := make([]pokemon, len(candidate.Pokemon))
 		for i, p := range candidate.Pokemon {
-			gotPokemon[i] = pokemon{p.PokemonID, p.NameJa, typeLabel(p.Types)}
+			gotPokemon[i] = pokemon{p.PokemonID, p.NameJa, typeLabel(p.Types), p.ExactMatch}
 		}
 		if fmt.Sprint(gotPokemon) != fmt.Sprint(tt.want) {
 			t.Errorf("%s pokemon = %v, want %v", tt.label, gotPokemon, tt.want)
@@ -747,5 +755,28 @@ func TestRecommendTypesAgreesWithOracleOnDataChart(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// ADR-0401 §8: a pokemon that contains the single candidate type is left out when its other type
+// stops it from taking one of the candidate's covered defense holes below x1.
+func TestRecommendTypesSingleCandidateExcludesPokemonThatLoseTheHole(t *testing.T) {
+	t.Parallel()
+
+	// The hole is fire (normalMember). rock takes fire x1/2; grass takes fire x2, so rock/grass is back to x1.
+	chart := chartRockOnly().set(balance.TypeFire, balance.TypeGrass, dbl)
+	catalog := []balance.CatalogPokemon{
+		catalogPokemon("9001-000", "", types(balance.TypeRock)),
+		catalogPokemon("9002-000", "", types(balance.TypeRock, balance.TypeGrass)),
+		catalogPokemon("9003-000", "", types(balance.TypeGhost, balance.TypeRock)),
+	}
+	got := recommend(t, chart, normalMember, catalog, nil, balance.MaxRecommendationLimit)
+	candidate := findCandidate(t, got, "rock")
+	ids := make([]string, len(candidate.Pokemon))
+	for i, p := range candidate.Pokemon {
+		ids[i] = p.PokemonID
+	}
+	if fmt.Sprint(ids) != fmt.Sprint([]string{"9001-000", "9003-000"}) {
+		t.Errorf("rock pokemon = %v, want [9001-000 9003-000] (rock/grass loses the fire hole)", ids)
 	}
 }

@@ -172,22 +172,27 @@ func TestRecommendationsResponseBody(t *testing.T) {
 		t.Errorf("offenseHoles = %s, want normal/steel", got)
 	}
 
-	type pokemon struct{ id, name, types string }
+	type pokemon struct {
+		id, name, types string
+		exact           bool
+	}
 	want := []struct {
 		types, defense, offense string
 		weaknesses              int
 		pokemon                 []pokemon
 	}{
 		// defenseCovered + offenseCovered = 3, weaknesses 0 (canonical order).
-		{"fire/rock", "fire", "normal/steel", 0, []pokemon{{"9002-001", "テストヨウガン", "fire/rock"}, {"9003-000", "", "rock/fire"}}},
+		{"fire/rock", "fire", "normal/steel", 0, []pokemon{{"9002-001", "テストヨウガン", "fire/rock", true}, {"9003-000", "", "rock/fire", true}}},
 		{"water/rock", "fire", "normal/steel", 0, []pokemon{}},
 		// 3, weaknesses 1 (fire hits grass x2).
 		{"fire/grass", "water", "normal/steel", 1, []pokemon{}},
 		{"water/grass", "water", "normal/steel", 1, []pokemon{}},
 		// 2, weaknesses 0: single types first, then duals in canonical order.
-		{"fire", "", "normal/steel", 0, []pokemon{{"9006-000", "テストホノオ", "fire"}}},
+		// ADR-0401 §8: single types also list the pokemon containing them (exact matches first).
+		// fire covers no defense hole, so every fire pokemon stays; rock/fire takes fire x1/4, so it stays under rock.
+		{"fire", "", "normal/steel", 0, []pokemon{{"9006-000", "テストホノオ", "fire", true}, {"9002-001", "テストヨウガン", "fire/rock", false}, {"9003-000", "", "rock/fire", false}}},
 		{"water", "", "normal/steel", 0, []pokemon{}},
-		{"rock", "fire", "steel", 0, []pokemon{{"9002-000", "テストイワ", "rock"}}},
+		{"rock", "fire", "steel", 0, []pokemon{{"9002-000", "テストイワ", "rock", true}, {"9002-001", "テストヨウガン", "fire/rock", false}, {"9003-000", "", "rock/fire", false}}},
 		{"normal/fire", "", "normal/steel", 0, []pokemon{}},
 		{"normal/water", "", "normal/steel", 0, []pokemon{}},
 		{"normal/rock", "fire", "steel", 0, []pokemon{}},
@@ -208,7 +213,7 @@ func TestRecommendationsResponseBody(t *testing.T) {
 		}
 		got := make([]pokemon, len(c.Pokemon))
 		for j, p := range c.Pokemon {
-			got[j] = pokemon{p.PokemonId, deref(p.NameJa), apiTypeLabel(p.Types)}
+			got[j] = pokemon{p.PokemonId, deref(p.NameJa), apiTypeLabel(p.Types), p.ExactMatch}
 		}
 		wantPokemon := make([]pokemon, len(w.pokemon))
 		for j, p := range w.pokemon {

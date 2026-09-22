@@ -114,7 +114,7 @@ schema と架空データの example(`testdata/abilities.example.json`、ID は 
     500 `internal_error`(固定文言)。ただしカタログの `abilityIds` に特性 read model が知らない ID が
     あっても、その特性だけ飛ばして 200 を返す(export の不整合で全体を落とさない)
   - 成功: 200。`defenseHoles`/`offenseHoles`(正準順)、`candidates`(各候補の `types`・`defenseCovered`・
-    `offenseCovered`・`weaknesses`・`pokemon`(read model でタイプ集合が一致する全員、pokemonId 昇順、
+    `offenseCovered`・`weaknesses`・`pokemon`(複合タイプの候補はタイプ集合が一致する全員。単タイプの候補はそのタイプを含む全員で、もう片方のタイプで候補の防御の穴を受けられなくなるものを除く。`exactMatch` が真のもの → pokemonId 昇順。ADR-0401 §8、
     `nameJa` は read model にあるときだけ))、`abilityOptions`(防御の穴ごとに1件。特性で穴をふさげる
     ポケモンと特性の組、pokemonId 昇順→abilityId 昇順。特性 read model が無ければ全体が空配列 `[]`)を返す
 

@@ -42,6 +42,8 @@ type RecommendedPokemon struct {
 	PokemonID string
 	NameJa    string
 	Types     []TypeID
+	// ExactMatch reports whether the pokemon's type set equals the candidate's (ADR-0401 §8).
+	ExactMatch bool
 }
 
 // TypeCandidate is one recommended defense type set (ADR-0401 §3).
@@ -131,7 +133,11 @@ func RecommendTypes(chart TypeChartProvider, members []Combatant, catalog []Cata
 		candidates = candidates[:limit]
 	}
 	for i := range candidates {
-		candidates[i].Pokemon = matchingPokemon(catalog, candidates[i].Types)
+		pokemon, err := matchingPokemon(chart, catalog, candidates[i])
+		if err != nil {
+			return Recommendation{}, err
+		}
+		candidates[i].Pokemon = pokemon
 	}
 
 	var abilityOptions []AbilityOption
@@ -308,25 +314,50 @@ func recommendCandidates(chart TypeChartProvider, defenseHoles, offenseHoles, al
 	return candidates, nil
 }
 
-// matchingPokemon returns every catalog pokemon whose type set equals comboTypes (in any
-// order), pokemonId ascending (ADR-0401 §4).
-func matchingPokemon(catalog []CatalogPokemon, comboTypes []TypeID) []RecommendedPokemon {
-	want := typeSet(comboTypes)
-	matched := make([]CatalogPokemon, 0, len(catalog))
+// matchingPokemon returns the catalog pokemon for a candidate (ADR-0401 §8). A dual-type
+// candidate lists the pokemon whose type set equals it. A single-type candidate also lists the
+// pokemon that contain its type, except those whose actual types no longer take every one of the
+// candidate's covered defense holes below x1. Exact matches come first, then pokemonId ascending.
+func matchingPokemon(chart TypeChartProvider, catalog []CatalogPokemon, candidate TypeCandidate) ([]RecommendedPokemon, error) {
+	want := typeSet(candidate.Types)
+	one := Effectiveness{Num: 1, Den: 1}
+	result := make([]RecommendedPokemon, 0, len(catalog))
 	for _, pokemon := range catalog {
-		if typeSetEqual(typeSet(pokemon.Types), want) {
-			matched = append(matched, pokemon)
+		have := typeSet(pokemon.Types)
+		exact := typeSetEqual(have, want)
+		if !exact {
+			if len(candidate.Types) != 1 {
+				continue
+			}
+			if _, ok := have[candidate.Types[0]]; !ok {
+				continue
+			}
+			keepsHoles := true
+			for _, attack := range candidate.DefenseCovered {
+				defense, err := CalculateDefense(chart, attack, pokemon.Types)
+				if err != nil {
+					return nil, err
+				}
+				if defense.Effectiveness.Cmp(one) >= 0 {
+					keepsHoles = false
+					break
+				}
+			}
+			if !keepsHoles {
+				continue
+			}
 		}
-	}
-	sort.Slice(matched, func(i, j int) bool { return matched[i].PokemonID < matched[j].PokemonID })
-
-	result := make([]RecommendedPokemon, len(matched))
-	for i, pokemon := range matched {
 		types := make([]TypeID, len(pokemon.Types))
 		copy(types, pokemon.Types)
-		result[i] = RecommendedPokemon{PokemonID: pokemon.PokemonID, NameJa: pokemon.NameJa, Types: types}
+		result = append(result, RecommendedPokemon{PokemonID: pokemon.PokemonID, NameJa: pokemon.NameJa, Types: types, ExactMatch: exact})
 	}
-	return result
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].ExactMatch != result[j].ExactMatch {
+			return result[i].ExactMatch
+		}
+		return result[i].PokemonID < result[j].PokemonID
+	})
+	return result, nil
 }
 
 func typeSet(types []TypeID) map[TypeID]struct{} {
