@@ -94,12 +94,14 @@ type abilityEntry struct {
 	Effects   []effectEntry `json:"effects"`
 }
 
-// effectEntry は特性の防御側のタイプ相性に関わる効果(ADR-0017 §2。ADR-0105 §5)。
+// effectEntry は特性の防御側のタイプ相性に関わる効果(ADR-0017 §2。ADR-0105 §5・ADR-0106 §決定7)。
+// Numerator/Denominator は immune/absorb の行では意味を持たないので省く
+// (abilities.schema.json の factor は minimum 1 で、immune/absorb では存在自体が不正になる)。
 type effectEntry struct {
 	Kind        string `json:"kind"`
 	AttackType  string `json:"attackType,omitempty"`
-	Numerator   int    `json:"numerator"`
-	Denominator int    `json:"denominator"`
+	Numerator   int    `json:"numerator,omitempty"`
+	Denominator int    `json:"denominator,omitempty"`
 }
 
 type speedFile struct {
@@ -299,6 +301,12 @@ func normalizedAbilityEffects(raw []byte, chart engine.TypeChart) ([]effectEntry
 	if err != nil {
 		return nil, fmt.Errorf("%w: 特性の効果定義を読めない: %v", ErrInvalidExport, err)
 	}
+	for _, t := range sortedImmuneTypes(effect.DefImmuneTypes) {
+		out = append(out, effectEntry{Kind: "immune", AttackType: string(t)})
+	}
+	for _, t := range sortedTypeKeys(effect.DefAbsorbTypes) {
+		out = append(out, effectEntry{Kind: "absorb", AttackType: string(t)})
+	}
 	for _, t := range sortedTypeKeys(effect.DefResistType) {
 		num, den, ok := reduceRatio(effect.DefResistType[t])
 		if !ok {
@@ -336,11 +344,19 @@ func gcd(a, b int) int {
 	return a
 }
 
-func sortedTypeKeys(m map[engine.Type]int) []engine.Type {
+func sortedTypeKeys[V any](m map[engine.Type]V) []engine.Type {
 	out := make([]engine.Type, 0, len(m))
 	for k := range m {
 		out = append(out, k)
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
+
+// sortedImmuneTypes はタイプ ID 昇順にした DefImmuneTypes のコピーを返す(入力を書き換えない)。
+func sortedImmuneTypes(types []engine.Type) []engine.Type {
+	out := make([]engine.Type, len(types))
+	copy(out, types)
 	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 	return out
 }

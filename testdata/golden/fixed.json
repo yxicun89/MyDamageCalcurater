@@ -24051,5 +24051,3428 @@
         "ChancePercent": 99.566650390625
       }
     }
+  },
+  {
+    "id": "levitate/immune",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Earth Power"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Levitate",
+          "Effect": {
+            "DefImmuneTypes": [
+              "ground"
+            ]
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "earthpower",
+        "Type": "ground",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "levitate/control",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Flamethrower"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Levitate",
+          "Effect": {
+            "DefImmuneTypes": [
+              "ground"
+            ]
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "flamethrower",
+        "Type": "fire",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        27,
+        27,
+        27,
+        28,
+        28,
+        28,
+        29,
+        29,
+        29,
+        30,
+        30,
+        30,
+        31,
+        31,
+        31,
+        32
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 8,
+        "Guaranteed": false,
+        "ChancePercent": 40.92980327550322
+      }
+    }
+  },
+  {
+    "id": "levitate/combined",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Earth Power"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Levitate",
+          "Effect": {
+            "DefImmuneTypes": [
+              "ground"
+            ]
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "earthpower",
+        "Type": "ground",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": true
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "earth-eater/immune",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Drill Run"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Earth Eater",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "ground": {
+                "HealNumerator": 1,
+                "HealDenominator": 4
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "drillrun",
+        "Type": "ground",
+        "Category": "physical",
+        "Power": 80,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "earth-eater/control",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Flamethrower"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Earth Eater",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "ground": {
+                "HealNumerator": 1,
+                "HealDenominator": 4
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "flamethrower",
+        "Type": "fire",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        27,
+        27,
+        27,
+        28,
+        28,
+        28,
+        29,
+        29,
+        29,
+        30,
+        30,
+        30,
+        31,
+        31,
+        31,
+        32
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 8,
+        "Guaranteed": false,
+        "ChancePercent": 40.92980327550322
+      }
+    }
+  },
+  {
+    "id": "earth-eater/combined",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Drill Run"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Earth Eater",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "ground": {
+                "HealNumerator": 1,
+                "HealDenominator": 4
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "drillrun",
+        "Type": "ground",
+        "Category": "physical",
+        "Power": 80,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": true
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "water-absorb/immune",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Blastoise",
+      "move": "Surf"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "blastoise",
+          "Types": [
+            "water"
+          ],
+          "BaseStats": {
+            "hp": 79,
+            "atk": 83,
+            "def": 100,
+            "spa": 85,
+            "spd": 105,
+            "spe": 78
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Water Absorb",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "water": {
+                "HealNumerator": 1,
+                "HealDenominator": 4
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "surf",
+        "Type": "water",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 154,
+        "atk": 103,
+        "def": 120,
+        "spa": 105,
+        "spd": 125,
+        "spe": 98
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "water-absorb/control",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Blastoise",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "blastoise",
+          "Types": [
+            "water"
+          ],
+          "BaseStats": {
+            "hp": 79,
+            "atk": 83,
+            "def": 100,
+            "spa": 85,
+            "spd": 105,
+            "spe": 78
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Water Absorb",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "water": {
+                "HealNumerator": 1,
+                "HealDenominator": 4
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        28,
+        29,
+        29,
+        29,
+        30,
+        30,
+        30,
+        31,
+        31,
+        31,
+        32,
+        32,
+        32,
+        33,
+        33,
+        34
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 154,
+        "atk": 103,
+        "def": 120,
+        "spa": 105,
+        "spd": 125,
+        "spe": 98
+      },
+      "ko": {
+        "Hits": 5,
+        "Guaranteed": false,
+        "ChancePercent": 58.8292121887207
+      }
+    }
+  },
+  {
+    "id": "water-absorb/combined",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Blastoise",
+      "move": "Surf"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "blastoise",
+          "Types": [
+            "water"
+          ],
+          "BaseStats": {
+            "hp": 79,
+            "atk": 83,
+            "def": 100,
+            "spa": 85,
+            "spd": 105,
+            "spe": 78
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Water Absorb",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "water": {
+                "HealNumerator": 1,
+                "HealDenominator": 4
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "surf",
+        "Type": "water",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "sun",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 154,
+        "atk": 103,
+        "def": 120,
+        "spa": 105,
+        "spd": 125,
+        "spe": 98
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "volt-absorb/immune",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Blastoise",
+      "move": "Thunderbolt"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "blastoise",
+          "Types": [
+            "water"
+          ],
+          "BaseStats": {
+            "hp": 79,
+            "atk": 83,
+            "def": 100,
+            "spa": 85,
+            "spd": 105,
+            "spe": 78
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Volt Absorb",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "electric": {
+                "HealNumerator": 1,
+                "HealDenominator": 4
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "thunderbolt",
+        "Type": "electric",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 154,
+        "atk": 103,
+        "def": 120,
+        "spa": 105,
+        "spd": 125,
+        "spe": 98
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "volt-absorb/control",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Blastoise",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "blastoise",
+          "Types": [
+            "water"
+          ],
+          "BaseStats": {
+            "hp": 79,
+            "atk": 83,
+            "def": 100,
+            "spa": 85,
+            "spd": 105,
+            "spe": 78
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Volt Absorb",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "electric": {
+                "HealNumerator": 1,
+                "HealDenominator": 4
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        28,
+        29,
+        29,
+        29,
+        30,
+        30,
+        30,
+        31,
+        31,
+        31,
+        32,
+        32,
+        32,
+        33,
+        33,
+        34
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 154,
+        "atk": 103,
+        "def": 120,
+        "spa": 105,
+        "spd": 125,
+        "spe": 98
+      },
+      "ko": {
+        "Hits": 5,
+        "Guaranteed": false,
+        "ChancePercent": 58.8292121887207
+      }
+    }
+  },
+  {
+    "id": "volt-absorb/combined",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Blastoise",
+      "move": "Thunderbolt"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {
+          "atk": 6,
+          "spa": 6
+        },
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "blastoise",
+          "Types": [
+            "water"
+          ],
+          "BaseStats": {
+            "hp": 79,
+            "atk": 83,
+            "def": 100,
+            "spa": 85,
+            "spd": 105,
+            "spe": 78
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Volt Absorb",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "electric": {
+                "HealNumerator": 1,
+                "HealDenominator": 4
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "thunderbolt",
+        "Type": "electric",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 154,
+        "atk": 103,
+        "def": 120,
+        "spa": 105,
+        "spd": 125,
+        "spe": 98
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "motor-drive/immune",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Blastoise",
+      "move": "Thunderbolt"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "blastoise",
+          "Types": [
+            "water"
+          ],
+          "BaseStats": {
+            "hp": 79,
+            "atk": 83,
+            "def": 100,
+            "spa": 85,
+            "spd": 105,
+            "spe": 78
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Motor Drive",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "electric": {
+                "BoostStat": "spe",
+                "BoostStages": 1
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "thunderbolt",
+        "Type": "electric",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 154,
+        "atk": 103,
+        "def": 120,
+        "spa": 105,
+        "spd": 125,
+        "spe": 98
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "motor-drive/control",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Blastoise",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "blastoise",
+          "Types": [
+            "water"
+          ],
+          "BaseStats": {
+            "hp": 79,
+            "atk": 83,
+            "def": 100,
+            "spa": 85,
+            "spd": 105,
+            "spe": 78
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Motor Drive",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "electric": {
+                "BoostStat": "spe",
+                "BoostStages": 1
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        28,
+        29,
+        29,
+        29,
+        30,
+        30,
+        30,
+        31,
+        31,
+        31,
+        32,
+        32,
+        32,
+        33,
+        33,
+        34
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 154,
+        "atk": 103,
+        "def": 120,
+        "spa": 105,
+        "spd": 125,
+        "spe": 98
+      },
+      "ko": {
+        "Hits": 5,
+        "Guaranteed": false,
+        "ChancePercent": 58.8292121887207
+      }
+    }
+  },
+  {
+    "id": "motor-drive/combined",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Blastoise",
+      "move": "Thunderbolt"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "blastoise",
+          "Types": [
+            "water"
+          ],
+          "BaseStats": {
+            "hp": 79,
+            "atk": 83,
+            "def": 100,
+            "spa": 85,
+            "spd": 105,
+            "spe": 78
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Motor Drive",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "electric": {
+                "BoostStat": "spe",
+                "BoostStages": 1
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "thunderbolt",
+        "Type": "electric",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": true
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 154,
+        "atk": 103,
+        "def": 120,
+        "spa": 105,
+        "spd": 125,
+        "spe": 98
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "lightning-rod/immune",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Blastoise",
+      "move": "Thunderbolt"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "blastoise",
+          "Types": [
+            "water"
+          ],
+          "BaseStats": {
+            "hp": 79,
+            "atk": 83,
+            "def": 100,
+            "spa": 85,
+            "spd": 105,
+            "spe": 78
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Lightning Rod",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "electric": {
+                "BoostStat": "spa",
+                "BoostStages": 1
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "thunderbolt",
+        "Type": "electric",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 154,
+        "atk": 103,
+        "def": 120,
+        "spa": 105,
+        "spd": 125,
+        "spe": 98
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "lightning-rod/control",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Blastoise",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "blastoise",
+          "Types": [
+            "water"
+          ],
+          "BaseStats": {
+            "hp": 79,
+            "atk": 83,
+            "def": 100,
+            "spa": 85,
+            "spd": 105,
+            "spe": 78
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Lightning Rod",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "electric": {
+                "BoostStat": "spa",
+                "BoostStages": 1
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        28,
+        29,
+        29,
+        29,
+        30,
+        30,
+        30,
+        31,
+        31,
+        31,
+        32,
+        32,
+        32,
+        33,
+        33,
+        34
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 154,
+        "atk": 103,
+        "def": 120,
+        "spa": 105,
+        "spd": 125,
+        "spe": 98
+      },
+      "ko": {
+        "Hits": 5,
+        "Guaranteed": false,
+        "ChancePercent": 58.8292121887207
+      }
+    }
+  },
+  {
+    "id": "lightning-rod/combined",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Blastoise",
+      "move": "Thunderbolt"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "blastoise",
+          "Types": [
+            "water"
+          ],
+          "BaseStats": {
+            "hp": 79,
+            "atk": 83,
+            "def": 100,
+            "spa": 85,
+            "spd": 105,
+            "spe": 78
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Lightning Rod",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "electric": {
+                "BoostStat": "spa",
+                "BoostStages": 1
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "thunderbolt",
+        "Type": "electric",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": true,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 154,
+        "atk": 103,
+        "def": 120,
+        "spa": 105,
+        "spd": 125,
+        "spe": 98
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "flash-fire/immune",
+    "oracle": {
+      "attacker": "Metagross",
+      "defender": "Goodra",
+      "move": "Flamethrower"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "metagross",
+          "Types": [
+            "steel",
+            "psychic"
+          ],
+          "BaseStats": {
+            "hp": 80,
+            "atk": 135,
+            "def": 130,
+            "spa": 95,
+            "spd": 90,
+            "spe": 70
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "goodra",
+          "Types": [
+            "dragon"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 100,
+            "def": 70,
+            "spa": 110,
+            "spd": 150,
+            "spe": 80
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Flash Fire",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "fire": {}
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "flamethrower",
+        "Type": "fire",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 155,
+        "atk": 155,
+        "def": 150,
+        "spa": 115,
+        "spd": 110,
+        "spe": 90
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 120,
+        "def": 90,
+        "spa": 130,
+        "spd": 170,
+        "spe": 100
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "flash-fire/control",
+    "oracle": {
+      "attacker": "Metagross",
+      "defender": "Goodra",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "metagross",
+          "Types": [
+            "steel",
+            "psychic"
+          ],
+          "BaseStats": {
+            "hp": 80,
+            "atk": 135,
+            "def": 130,
+            "spa": 95,
+            "spd": 90,
+            "spe": 70
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "goodra",
+          "Types": [
+            "dragon"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 100,
+            "def": 70,
+            "spa": 110,
+            "spd": 150,
+            "spe": 80
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Flash Fire",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "fire": {}
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        56,
+        56,
+        57,
+        58,
+        58,
+        59,
+        60,
+        60,
+        61,
+        62,
+        62,
+        63,
+        64,
+        64,
+        65,
+        66
+      ],
+      "attackerStats": {
+        "hp": 155,
+        "atk": 155,
+        "def": 150,
+        "spa": 115,
+        "spd": 110,
+        "spe": 90
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 120,
+        "def": 90,
+        "spa": 130,
+        "spd": 170,
+        "spe": 100
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "flash-fire/combined",
+    "oracle": {
+      "attacker": "Metagross",
+      "defender": "Goodra",
+      "move": "Flamethrower"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "metagross",
+          "Types": [
+            "steel",
+            "psychic"
+          ],
+          "BaseStats": {
+            "hp": 80,
+            "atk": 135,
+            "def": 130,
+            "spa": 95,
+            "spd": 90,
+            "spe": 70
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "goodra",
+          "Types": [
+            "dragon"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 100,
+            "def": 70,
+            "spa": 110,
+            "spd": 150,
+            "spe": 80
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Flash Fire",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "fire": {}
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "flamethrower",
+        "Type": "fire",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "rain",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 155,
+        "atk": 155,
+        "def": 150,
+        "spa": 115,
+        "spd": 110,
+        "spe": 90
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 120,
+        "def": 90,
+        "spa": 130,
+        "spd": 170,
+        "spe": 100
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "sap-sipper/immune",
+    "oracle": {
+      "attacker": "Metagross",
+      "defender": "Garchomp",
+      "move": "Energy Ball"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "metagross",
+          "Types": [
+            "steel",
+            "psychic"
+          ],
+          "BaseStats": {
+            "hp": 80,
+            "atk": 135,
+            "def": 130,
+            "spa": 95,
+            "spd": 90,
+            "spe": 70
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Sap Sipper",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "grass": {
+                "BoostStat": "atk",
+                "BoostStages": 1
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "energyball",
+        "Type": "grass",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 155,
+        "atk": 155,
+        "def": 150,
+        "spa": 115,
+        "spd": 110,
+        "spe": 90
+      },
+      "defenderStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "sap-sipper/control",
+    "oracle": {
+      "attacker": "Metagross",
+      "defender": "Garchomp",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "metagross",
+          "Types": [
+            "steel",
+            "psychic"
+          ],
+          "BaseStats": {
+            "hp": 80,
+            "atk": 135,
+            "def": 130,
+            "spa": 95,
+            "spd": 90,
+            "spe": 70
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Sap Sipper",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "grass": {
+                "BoostStat": "atk",
+                "BoostStages": 1
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        44,
+        44,
+        45,
+        45,
+        46,
+        46,
+        47,
+        47,
+        48,
+        48,
+        49,
+        49,
+        50,
+        50,
+        51,
+        52
+      ],
+      "attackerStats": {
+        "hp": 155,
+        "atk": 155,
+        "def": 150,
+        "spa": 115,
+        "spd": 110,
+        "spe": 90
+      },
+      "defenderStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "ko": {
+        "Hits": 4,
+        "Guaranteed": false,
+        "ChancePercent": 94.873046875
+      }
+    }
+  },
+  {
+    "id": "sap-sipper/combined",
+    "oracle": {
+      "attacker": "Metagross",
+      "defender": "Garchomp",
+      "move": "Energy Ball"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "metagross",
+          "Types": [
+            "steel",
+            "psychic"
+          ],
+          "BaseStats": {
+            "hp": 80,
+            "atk": 135,
+            "def": 130,
+            "spa": 95,
+            "spd": 90,
+            "spe": 70
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {
+          "atk": 6,
+          "spa": 6
+        },
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Sap Sipper",
+          "Effect": {
+            "DefAbsorbTypes": {
+              "grass": {
+                "BoostStat": "atk",
+                "BoostStages": 1
+              }
+            }
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "energyball",
+        "Type": "grass",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 155,
+        "atk": 155,
+        "def": 150,
+        "spa": 115,
+        "spd": 110,
+        "spe": 90
+      },
+      "defenderStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
   }
 ]

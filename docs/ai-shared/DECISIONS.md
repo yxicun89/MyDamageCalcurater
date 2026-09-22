@@ -708,3 +708,10 @@ Impact: CLAUDE.md のワークフロー、COORDINATION.md の起動の目安。�
 Decision: メインセッションは Sonnet で起動し、重い設計の判断のときだけ Opus。spec-writer・critic は engine・逆算・DB・API 契約に関わるときだけ Opus(既定)、文書・k8s・スクリプト・軽い修正では Sonnet で呼ぶ。利用枠が厳しいときは M1 のレーン(データ・API・Web)を優先し、他のレーンは区切りで止める。
 Reason: ユーザーが確認の質問に改めて答えた(前回の回答「メインだけ Sonnet」は意図と違った)。
 Impact: CLAUDE.md・COORDINATION.md を更新。
+
+## 2026-09-22: P2-3b の設計判断(既定案どおり。データレーンで確認)
+Decision: (1) `data/importer/effects.json` に足す無効・吸収の特性8件は、ADR-0106 §決定5の表のまま(oracleが裏付けるのは「ダメージ0」のみで、回復1/4・上昇+1はゲームの一般仕様として入れる)。(2) `effectHooks` に `onTryHit`・`onImmunity` を足す。(3) `CalcResult` に `nullified` は出さない(画面で理由表示が要るときに依頼する)。
+Reason: spec-writer(ADR-0106)が3点を既定案として報告し、いずれも取り消しやすい・oracleの実装に基づく判断のため、データレーンで確認して進めた。
+Impact: export に immune/absorb が出るようになり、TB3/TB5 の結果が変わる(balanceのschema・loaderは対応済みで依頼不要)。
+Web レーンへの依頼(ADR-0106 §他レーンへの依頼): `web/src/engine/types.ts` の `AbilityEffect` に `defImmuneTypes`/`defAbsorbTypes` を追加(足さないと WASM 経由の計算だけ無効・吸収が効かない)、`web/src/master/exportBalanceReadModel.ts` の `BalanceAbilityEffect` に `absorb` を追加し §7 の順序で出す。
+API(calc)レーンへの依頼(P2-3b の critic 指摘): `services/calc/internal/master/master.go` の `copyAbilityEffect` が `DefResistType` しかディープコピーしておらず、`DefImmuneTypes`/`DefAbsorbTypes` が共有マスタと同じメモリを指す。コピーを足し、`TestLookupReturnsCopiesOfEffects` に両フィールドの書き換えケースを足す。
