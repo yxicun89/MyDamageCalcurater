@@ -39,6 +39,12 @@ const (
 	KindSpeciesExcluded     FindingKind = "species-excluded"
 	KindFormFolded          FindingKind = "form-folded"
 
+	// KindSpeciesMegaBaseDependency は、使用可能なメガの基本種が Showdown で isNonstandard
+	// (calc に対応が無い)ため、base_species_key の外部キーを満たすためだけに依存行として
+	// 取り込んだときの案内(止めない。ADR-0101 §5・ADR-0103 §12)。取り込みはするがレギュレーションの
+	// 使用可能集合には入れないので、件数で見えるようにする。
+	KindSpeciesMegaBaseDependency FindingKind = "species-mega-base-dependency"
+
 	// KindAbilityShowdownOnly は、取り込んだ種族の特性スロットに現れる特性が calc の一覧に
 	// 無いときの警告(ADR-0101 §5)。取り込みは止めない(calc の一覧は特性の一覧としての正
 	// ではなく参考情報のため)。
@@ -47,18 +53,33 @@ const (
 	KindNameFallback   FindingKind = "name-fallback"
 	KindOverrideUnused FindingKind = "override-unused"
 	KindEffectUnused   FindingKind = "effect-unused"
+
+	// 以下は Reconcile が追加する指摘の種類(ADR-0103 §9)。
+
+	// KindVerdictMismatch は P2-1c の裁定(件数・ID集合のハッシュ)と実データが食い違ったとき。
+	// ID は裁定の区分キー(calcOnlyExcluded / showdownOnlyIncluded / statusTypeMismatch)。
+	KindVerdictMismatch FindingKind = "verdict-mismatch"
+	// KindVerdictBasisChanged は裁定を行った版(basis)と実際に取り込む版が違うとき(警告だけ)。
+	// ID は source 名。
+	KindVerdictBasisChanged FindingKind = "verdict-basis-changed"
+	// KindEffectMissing はダメージに効くハンドラを持つのに効果定義が無いとき。ID は持ち物/特性 ID。
+	KindEffectMissing FindingKind = "effect-missing"
+	// KindEffectNoHook は効果定義があるのにダメージに効くハンドラが無いとき。ID は持ち物/特性 ID。
+	KindEffectNoHook FindingKind = "effect-no-hook"
+	// KindFormLearnetDiff は畳んだフォームの習得技(取り込む技に絞る)が代表と違うとき。ID は畳んだフォーム。
+	KindFormLearnsetDiff FindingKind = "form-learnset-diff"
 )
 
 // Finding は1件の指摘。ID は技・持ち物・特性 ID、種族は showdown_id(calc だけのものは
 // toID(calc 名))。Detail は補足情報(任意)。
 type Finding struct {
-	Kind   FindingKind
-	ID     string
-	Detail string
+	Kind   FindingKind `json:"kind"`
+	ID     string      `json:"id"`
+	Detail string      `json:"detail,omitempty"`
 }
 
 // Report は Convert の結果の指摘一覧。Blockers が1件でもあれば Output は空で返る。
 type Report struct {
-	Warnings []Finding
-	Blockers []Finding
+	Warnings []Finding `json:"warnings"`
+	Blockers []Finding `json:"blockers"`
 }

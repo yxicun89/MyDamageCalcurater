@@ -67,9 +67,12 @@
 - [ ] P2-2 MySQL スキーマ(migrate)と importer(`types` / `type_chart` テーブルを含む=ADR-0013。**実マスタ・スナップショットは Git にコミットしない**: `data/generated/` は .gitignore、Git には schema・importer・架空データの example・README・データの版 metadata のみ。使用可能集合・持ち物候補は**レギュレーション(v1 は M-C)依存のデータ**で、M-C を直書きしない。日本語名は PokeAPI+ローカル override。ADR-0002)
   - [x] P2-2a スキーマと migrate(golang-migrate・sqlc)。`types` / `type_chart`・種族(メガの `is_mega` / `base_species_key` / `required_item_id`、性能が同じ見た目違いフォームは1件)・技・持ち物・特性・効果定義(ADR-0005)・レギュレーション(使用可能集合)・日本語名・データの版。k3d の MySQL と `make` からの migrate
   - [x] P2-2b importer の取得・変換(calc 0.12.0 Champions・Showdown champions mod・PokeAPI の日本語名+override → `data/generated/`)と DB への投入(冪等)
-  - [ ] P2-2c 照合と差分報告(calc と Showdown の差分、P2-1c の裁定の反映)
+  - [x] P2-2c 照合と差分報告(calc と Showdown の差分、P2-1c の裁定の反映)
   - [ ] P2-2d CronJob(週1回・版に変化が無ければ取り込まない)と `make import`
 - [ ] P2-3 pokedex-svc(検索・詳細・持ち物/技一覧、日本語名で前方一致)
+  - calc-svc 向けの内部 API `GET /internal/pokedex/master`(契約は api/openapi.yaml の MasterExport。ADR-0204。API レーンの依頼): Ingress に出さずクラスタ内の Service だけ、DB に未投入なら 503 `master_unavailable`、使用可能集合で絞らない、effect は item_effects / ability_effects の JSON をそのまま、species に showdownId を含める
+  - 性格のマスタ `natures`(id, name_ja, plus, minus)を追加する(API レーンの依頼。ADR-0100 の「性格は engine の固定」を改める。新しい migration と importer の取得・変換。日本語名は PokeAPI+override)
+  - balance 向けの read model の出力(`pokedex export`。ADR-0100 §8)。タイプバランスレーンの依頼(TB5。ADR-0401 §5 の形、schemaVersion 1 のまま省略可能な項目を足す): 各ポケモンに `nameJa` と `abilityIds`(隠れ特性を含む)、出力を既定のレギュレーションの使用可能集合に絞る、特性の read model(ADR-0017 の正規化された効果)も同じ export で出す
 
 ### Phase 3 API
 - [ ] P3-1 calc-svc(起動時にマスタをメモリへ読み込み)
@@ -134,6 +137,7 @@
 - 逆算の Recall の新定義(返した SP 範囲が総当たりの正解と完全一致。基準 80%/95% は据え置き)→ 承認(2026-09-21)。P1-12 で反映
 - 見た目違いフォーム → 性能が同じなら1件、性能が違えば別登録。マスタ更新 → CronJob で定期取込(既定は週1回・版に変化が無ければ取り込まない)。技の使用可否 → 既定案で進めて後で裁定(2026-09-21)。P2-1c の調査で12件すべて結論が出て、未確認の技は無かった(ADR-0002 追記 P2-1c)
 - P2-2b の3点 → 効果定義 `data/importer/effects.json` はコミットする / 日本語名は ja(漢字混じり)→ ja-Hrkt の順 / レギュレーションの日本語ラベルはコミットする(2026-09-21 ユーザー回答。ADR-0101)
+- P2-2c → 習得技は進化前から継がない(Champions のルール。Showdown に合わせる。当初の「世代で絞る」案 b は実データで不十分と判明し改めた)/ P2-1c の裁定の件数・集合が実データと食い違ったら取り込みを止める / ADR 番号のレーンごとの帯を承認(2026-09-22 ユーザー回答)
 - 運用 → レーン制(どちらの AI もどちらのレーンを進めてよい)、main へは PR で統合(2026-09-21。COORDINATION.md)
 - ブラウザでの WASM 実動作 → 仕様ブロッカーではない。P4-5 の確認項目
 
@@ -149,6 +153,8 @@
 
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)
+
+- `services/pokedex/db/mysql_test.go` に「species_abilities.slot = 4 が入る」ことを確かめるケースを足す(P2-2c の critic の軽微。000005 は使い捨てコンテナで手動確認済み)
 
 - `scripts/check-publishable.sh --self-test` に既存の失敗が2件ある(A: `a1.txt:1` 未検出、E: `engine/go.mod:1` 未検出)。`make lint` では走らないため作業は止まらない。P2-2b の critic で事実確認済み(2026-09-22)。別タスクで直す
 

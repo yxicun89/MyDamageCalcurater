@@ -6,6 +6,19 @@
   ADR-0005(データ駆動の効果定義)、ADR-0013(相性表はデータ)、ADR-0100(スキーマ・写像)、ADR-0012 / ADR-0100 §8(balance の read model は P2-3)、
   DECISIONS.md 2026-09-21(フォームの登録単位・CronJob 週1回・技の使用可否の既定案)、CLAUDE.md 絶対ルール 2/4/6
 - 番号: データレーンの帯(0100〜。COORDINATION.md)の2本目。当初は 0017 だったが、main・他レーンと衝突したため 2026-09-22 に振り直した
+- 更新: P2-2c(ADR-0103)が §3 のスナップショット(Showdown の `species[].prevo`・`items[]/abilities[].hooks`、learnsets は全種族の分)、
+  §5「習得技」(進化前の継承)、§8 の停止条件(裁定の照合)、§11 の CLI(`Reconcile` と報告ファイル)を拡張・置き換える
+- 更新(P2-2c §10 の実データでの確認で判明): §5 の下記3点を実データに合わせて直した。
+  1. 特性スロット `"S"` は `"H"` と同じ種族に実在する(想定と違った)ため、`species_abilities.slot` を 1..4 の4枠に広げ、`"S"` は slot 4 に置く
+     (ADR-0100 のスキーマ・`master.Species` の検証も合わせて変更)。
+  2. 使用可能なメガの基本種が Showdown で `isNonstandard: "Past"`(calc に無い)ことがある。`base_species_key` の外部キーを満たすため、
+     その基本種だけをレギュレーションの使用可能集合の外(依存行)として取り込む。件数を見えるようにするため、
+     依存行として取り込むたびに警告 `species-mega-base-dependency`(`KindSpeciesMegaBaseDependency`)を出す(止めない)。
+  3. フォームを持たない基本種(`forme` が空で `formeOrder` も空)は `form = 0` を許す(Showdown が `formeOrder` を省略する場合があるため)。
+  4. `config.json` の `excludeTypes` から `Stellar` を外した。固定した calc 0.12.0 の Champions 世代(`Generations.get(0)`)には
+     `Stellar` 型そのものが無く(`gen.types` に含まれない)、`excludeTypes` は「calc に実在する名前だけを許す」検査(§5。
+     `excludeCalcSpecies` と同じ考え方)を持つため、`Stellar` を含めたままだと実データで `ErrInvalidData` になって止まっていた
+     (実行して判明)。実際に calc に存在し除外が必要なのは `???`(タイプ不明の枠)だけなので、それだけを残した。
 
 ## 背景
 
@@ -89,7 +102,7 @@ tools/importer (Node)   ──▶ data/generated/<source>/<version>/snapshot.jso
 | source | version | 中身(JSON のキー) | 抽出の注記 |
 |---|---|---|---|
 | `calc` | npm の版(`0.12.0`) | `generation`、`types`(型名。順序 = sort_order の元)、`typeChart`(型名→型名→×2 コード。無い組は等倍)、`species[]{name,types,baseStats{hp,atk,def,spa,spd,spe}}`、`moves[]{name,type?,category?,basePower,priority}`(**type / category は calc が省略するとき省略**)、`items[]`(名前)、`abilities[]`(名前) | `Generations.get(0)`。抽出スクリプトは `node_modules` の版が `config.json` の版と一致しなければ止まる(tools/golden と同じ)。calc の種族は特性を slot 0 しか持たないので出さない |
-| `showdown` | GitHub の commit(40 桁) | `mod`、`species[]{id,name,num,baseSpecies,forme,baseForme,types,baseStats,abilities{"0","1","H"},requiredItem,formeOrder,isNonstandard}`、`moves[]{id,name,type,category,basePower,accuracy,pp,priority,isNonstandard}`、`items[]{id,name,isNonstandard}`、`abilities[]{id,name,isNonstandard}`、`learnsets{種族ID:[技ID]}` | Showdown の `Dex.mod(<mod>)` を**実行して**継承(`inherit`)を解決した実効値を出す(読むだけでは誤る。ADR-0002 却下案)。`accuracy: true`(必中)は `0` にする。learnsets は `isNonstandard` が null の種族の分だけ |
+| `showdown` | GitHub の commit(40 桁) | `mod`、`species[]{id,name,num,baseSpecies,forme,baseForme,types,baseStats,abilities{"0","1","H","S"},requiredItem,formeOrder,isNonstandard,prevo}`、`moves[]{id,name,type,category,basePower,accuracy,pp,priority,isNonstandard}`、`items[]{id,name,isNonstandard,hooks}`、`abilities[]{id,name,isNonstandard,hooks}`、`learnsets{種族ID:{技ID:学習した最大世代}}`(形式は ADR-0103 §7) | Showdown の `Dex.mod(<mod>)` を**実行して**継承(`inherit`)を解決した実効値を出す(読むだけでは誤る。ADR-0002 却下案)。`accuracy: true`(必中)は `0` にする。learnsets は全種族の分(進化前の学習元として使うため。ADR-0103 §7) |
 | `pokeapi` | PokeAPI リポジトリ(`PokeAPI/pokeapi`)の commit | `species[]`(pokemon-species)、`forms[]`(既定でないフォーム。pokemon-form の `pokemon_name`)、`moves[]`、`items[]`、`abilities[]`、`types[]`。いずれも `{slug, names{<PokeAPI の言語 identifier>: 名前}}`。言語は `ja-Hrkt` と `ja` だけ出す | commit を固定した `data/v2/csv/*.csv`(約 14 ファイル)を raw で取得する。REST を約 1,200 回叩かず、版が commit で固定でき、公平利用(キャッシュ・頻度)に沿う |
 
 - Showdown の取得方法(implementer が選ぶ。条件は「版の正は `config.json` の commit だけ」「Showdown のコードを実行して実効値を出す」):
@@ -122,13 +135,15 @@ ID は `toID(名前)`(小文字英数字以外を落とす)。calc の技は `ty
 - **calc ↔ Showdown の対応**: `toID(calc 名) == Showdown の id`、または `toID(calc 名) == toID(Showdown の name + "-" + baseForme)`
   (calc の `Aegislash-Shield` ↔ Showdown の `Aegislash`(baseForme `Shield`) のような既定フォームの表記違い。名前の対応表を持たない)。
   対応が無い calc の種族(除外の設定にも無い)は `ErrInvalidData`。対応した Showdown の `isNonstandard` が null でなければ除外して警告(技の規則1に揃える)。
-- **値**: タイプ・種族値は calc を採り、Showdown と違えば `species-mismatch` の **Blocker**(ダメージに効く)。特性は Showdown の `abilities`(`"0"`→slot 1、`"1"`→2、`"H"`→3。calc は slot 0 しか持たない)。
-  `"S"`(特殊な特性。Zygarde 系統など一部の種族にだけ現れる)は `species_abilities.slot` が 1..3 の3枠しかない(ADR-0100 §3)ため `"H"` と同じ slot 3 に置く
-  (実装時の確認: 実データで `H` と `S` が同じ種族に同時に現れることは無い前提。両方揃った場合は slot の重複として `master.Species` の写像(§9 の投入前チェック)で検出して止める)。
+- **値**: タイプ・種族値は calc を採り、Showdown と違えば `species-mismatch` の **Blocker**(ダメージに効く)。特性は Showdown の `abilities`
+  (`"0"`→slot 1、`"1"`→2、`"H"`→3、`"S"`→4。calc は slot 0 しか持たない)。`species_abilities.slot` は 1..4 の4枠(ADR-0100 §3。
+  実データで `"H"` と `"S"` が同じ種族に共存することが判明したため、当初の「`"S"` を `"H"` と同じ slot 3 に置く」案(1..3 の3枠)から広げた)。
+  スロットの重複・特性 ID の重複は `master.Species` の写像(§9 の投入前チェック)で検出して止める。
   `showdown_id` は Showdown の id、`name_en` は Showdown の name、`dex_no` は Showdown の `num`。
 - **フォルム番号 `{図鑑番号4桁}-{フォルム3桁}`**: 基本種(Showdown の name が `baseSpecies` の種族)の `formeOrder` における添字(基本種は 0)。
   見た目違いで畳んだフォームの添字も**欠番として数える**(Showdown が formeOrder に追記しても既存の番号が動かない)。
-  `formeOrder` に無いフォームは `ErrInvalidData`。採番表をリポジトリに持たない(ADR-0002 §P2-2 草案の「採番表」を置き換える。第三者の一覧をコミットしないため)。
+  基本種自身(`forme` が空)で `formeOrder` も空の場合は `form = 0` とする(Showdown はフォームを持たない基本種で `formeOrder` を省略することがある。
+  実データで判明)。それ以外で `formeOrder` に無いフォームは `ErrInvalidData`。採番表をリポジトリに持たない(ADR-0002 §P2-2 草案の「採番表」を置き換える。第三者の一覧をコミットしないため)。
   **番号の安定性は投入時に検査**する: DB に既にある `showdown_id` の key が変わる投入は `ErrKeyChanged` で止め、DB を変えない(team-svc 等が保存した key を壊さない)。
 - **見た目だけ違うフォームの畳み込み**(DECISIONS 2026-09-21): 同じ `num` の中で、性能(タイプの並び・種族値・特性の slot と ID)が同じものは、
   フォルム番号が最小のもの(代表)だけを取り込み、他は警告 `form-folded`(Detail に代表)にする。calc にあるかどうかに依らない。
@@ -136,11 +151,14 @@ ID は `toID(名前)`(小文字英数字以外を落とす)。calc の技は `ty
 - **メガ**: Showdown の `forme` が `Mega` で始まる種族は `is_mega = 1`、`base_species_key` = 基本種の key、`required_item_id` = `toID(requiredItem)`。
   `requiredItem` が空、またはその持ち物を取り込まない場合は `ErrInvalidData`(ADR-0100 のメガの整合と、「集合のメガなら持ち物も同じ集合」の行をまたぐ検査)。
   メガ以外の `requiredItem` は保存しない(スキーマに列が無い)。
+  使用可能なメガの基本種が Showdown で `isNonstandard: "Past"`(calc に対応が無い)場合は、`base_species_key` の外部キーを満たすためだけに
+  その基本種を依存行として取り込む(レギュレーションの使用可能集合には入れない。実データで判明。ADR-0103 §12)。
 - **習得技**: Showdown の `learnsets[showdown_id]`。無ければ `learnsets[toID(baseSpecies)]`(メガ・フォームは基本種を継ぐ)。取り込まない技は落とす。
   畳んだフォームの習得技は代表のものだけ(v1。差があれば P2-2c で報告)。
 - **特性・タイプ・持ち物**:
   - 特性 = 取り込む種族の特性スロットに現れる ID(Showdown の abilities に null で存在すること。calc の一覧に無ければ警告 `ability-showdown-only`。calc の一覧は特性の正ではなく参考情報なので取り込みは止めない)。
-  - タイプ = calc の `types` から `config.json` の `excludeTypes`(calc の型名。`???` と `Stellar`。calc に無い名前は `ErrInvalidData`)を除いたもの。
+  - タイプ = calc の `types` から `config.json` の `excludeTypes`(calc の型名。`???` だけ。`Stellar` は固定した calc 0.12.0 の
+    Champions 世代に存在しないため含めない。含めると calc に無い名前として `ErrInvalidData` になる。上の「更新」4点目)を除いたもの。
     sort_order は calc の並び順の 1 始まり。種族・技・効果が除外したタイプを使えば `ErrInvalidData`。相性表は除外したタイプの組を落とす(無い組は等倍)。
   - 持ち物 = 技と同じ規則(両方にあり Showdown で null → 取り込む。Showdown だけで null → 取り込み警告 `item-showdown-only`。calc だけ、または Showdown で非 null・無い → 除外警告 `item-excluded`)。
     技と違い値の食い違いは無い(名前と有無だけ)ので Blocker は無い。

@@ -53,10 +53,20 @@ if (!existsSync(extractDir)) {
   execFileSync('node', ['build'], { cwd: extractDir, stdio: 'inherit' });
 }
 
-const { Dex } = await import(`${extractDir}dist/sim/dex.js`);
+// 固定した Showdown は CommonJS として build される。ESM からの dynamic import では
+// named export が直接見える版と default に包まれる版があるため、両方を受ける。
+const dexModule = await import(`${extractDir}dist/sim/dex.js`);
+const dexExports = dexModule.default ?? dexModule['module.exports'] ?? dexModule;
+const Dex = dexExports.Dex ?? dexExports.default;
+if (!Dex?.mod) {
+  throw new Error(`Showdown の Dex export を解決できない(exports=${Object.keys(dexModule).sort().join(',')})`);
+}
 const dex = Dex.mod(mod);
 
 const toNonstandard = (thing) => (thing.isNonstandard ? thing.isNonstandard : null);
+const hooks = (thing) => Object.keys(thing)
+  .filter((key) => /^on[A-Z]/.test(key) && typeof thing[key] === 'function')
+  .sort();
 
 const species = [...dex.species.all()].map((s) => ({
   id: s.id,
@@ -71,6 +81,7 @@ const species = [...dex.species.all()].map((s) => ({
   requiredItem: s.requiredItem ?? '',
   formeOrder: s.formeOrder ?? [],
   isNonstandard: toNonstandard(s),
+  prevo: s.prevo ?? '',
 }));
 
 const moves = [...dex.moves.all()].map((m) => ({
@@ -85,14 +96,38 @@ const moves = [...dex.moves.all()].map((m) => ({
   isNonstandard: toNonstandard(m),
 }));
 
-const items = [...dex.items.all()].map((i) => ({ id: i.id, name: i.name, isNonstandard: toNonstandard(i) }));
-const abilities = [...dex.abilities.all()].map((a) => ({ id: a.id, name: a.name, isNonstandard: toNonstandard(a) }));
+const items = [...dex.items.all()].map((i) => ({
+  id: i.id,
+  name: i.name,
+  isNonstandard: toNonstandard(i),
+  hooks: hooks(i),
+}));
+const abilities = [...dex.abilities.all()].map((a) => ({
+  id: a.id,
+  name: a.name,
+  isNonstandard: toNonstandard(a),
+  hooks: hooks(a),
+}));
+
+// 学習元の符号(例 "9M" 第9世代マシン・"7L12" 第7世代レベル12・"8E" 第8世代タマゴ技)の先頭の数字が
+// 学習した世代。ADR-0103 §7: フォーマットの minSourceGen 以上の学習元が1つでもあれば学習可能なので、
+// 技ごとに学習元の最大世代だけを残す(個々の学習元の一覧までは持たない)。
+const maxSourceGen = (sources) => {
+  const gens = sources.map((src) => Number(src.charAt(0))).filter((g) => Number.isInteger(g) && g > 0);
+  return gens.length > 0 ? Math.max(...gens) : 0;
+};
 
 const learnsets = {};
-for (const s of species) {
-  const entry = await dex.learnsets.get(s.id);
+// 進化前はレギュレーション外でも習得元になるため、mod の標準集合に絞らず全種族を走査する。
+for (const s of dex.species.all()) {
+  const entry = dex.species.getLearnsetData(s.id);
   if (entry?.learnset) {
-    learnsets[s.id] = Object.keys(entry.learnset);
+    const byMove = {};
+    for (const [moveId, sources] of Object.entries(entry.learnset)) {
+      const gen = maxSourceGen(sources);
+      if (gen > 0) byMove[moveId] = gen;
+    }
+    learnsets[s.id] = byMove;
   }
 }
 

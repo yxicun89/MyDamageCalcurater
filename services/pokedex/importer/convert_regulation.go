@@ -42,18 +42,69 @@ func checkOverrideUnused(overrides map[string]string, used map[string]bool) []Fi
 	return out
 }
 
-// buildLearnsets は Showdown の learnsets を、取り込んだ種族・技だけに絞って行にする。
-// 自分の習得技が無いフォーム(メガ・別フォーム)は baseSpecies の習得技を使う。
-func buildLearnsets(learnsets map[string][]string, speciesRows []SpeciesRow, baseSpeciesShowdownID map[string]string, includedMoves map[string]bool) []LearnsetRow {
-	var rows []LearnsetRow
-	for _, sp := range speciesRows {
-		list, ok := learnsets[sp.ShowdownID]
-		if !ok {
-			list = learnsets[baseSpeciesShowdownID[sp.ShowdownID]]
+// learnsetRules は習得技の解決に使うレギュレーション由来の規則(ADR-0103 §7)。
+type learnsetRules struct {
+	InheritFromPrevo bool
+	MinSourceGen     int
+}
+
+// regulationLearnsetRules は全レギュレーションの InheritFromPrevo・MinSourceGen(ADR-0103 §7)が
+// 一致することを確かめ、その値を返す(showdownMod の一致条件と同じ考え方: v1 は1つの Showdown
+// スナップショットに対して単一の習得技テーブルしか持たないため、レギュレーションごとに値が割れると矛盾する)。
+// レギュレーションが無ければゼロ値(絞り込み無し・継承無し)を返す。
+func regulationLearnsetRules(regs RegulationsFile) (learnsetRules, error) {
+	var rules learnsetRules
+	for i, r := range regs.Regulations {
+		if i == 0 {
+			rules = learnsetRules{InheritFromPrevo: r.InheritFromPrevo, MinSourceGen: r.MinSourceGen}
+			continue
 		}
-		for _, moveID := range list {
-			if includedMoves[moveID] {
-				rows = append(rows, LearnsetRow{SpeciesKey: sp.Key, MoveID: moveID})
+		if r.MinSourceGen != rules.MinSourceGen {
+			return learnsetRules{}, fmt.Errorf("%w: レギュレーション %q の minSourceGen %d が他のレギュレーションの %d と違う",
+				ErrInvalidData, r.ID, r.MinSourceGen, rules.MinSourceGen)
+		}
+		if r.InheritFromPrevo != rules.InheritFromPrevo {
+			return learnsetRules{}, fmt.Errorf("%w: レギュレーション %q の inheritFromPrevo %t が他のレギュレーションの %t と違う",
+				ErrInvalidData, r.ID, r.InheritFromPrevo, rules.InheritFromPrevo)
+		}
+	}
+	return rules, nil
+}
+
+// buildLearnsets は Showdown の learnsets を、取り込んだ種族・技だけに絞って行にする
+// (ADR-0101 §5・ADR-0103 §7)。resolved(s) = 自分の学習元(rules.MinSourceGen 以上の世代のものだけ)
+// があればそれ、無ければ基本種(フォーム・メガの base species)の学習元を1段だけ。
+// rules.InheritFromPrevo が true のときだけ、進化前(prevo)の resolved も何段でも足す
+// (Showdown の champions mod は進化前をたどらないため、既定(M-C)は false。ADR-0103 §7)。
+// 戻り値の2番目は Learnsets.Inherited の内訳(species_key -> 継承で増えた行数。
+// InheritFromPrevo が false なら常に 0)。
+func buildLearnsets(showdownSpecies []ShowdownSpecies, learnsets map[string]map[string]int, speciesRows []SpeciesRow, includedMoves map[string]bool, rules learnsetRules) ([]LearnsetRow, map[string]int, error) {
+	resolver := newLearnsetResolver(showdownSpecies, learnsets, rules)
+	// rules.InheritFromPrevo が true のときだけ prevo をたどるので、その場合だけ prevo の
+	// 欠落・循環が入力データの矛盾になる(false のときは prevo を見ないので検証もしない)。
+	// 出力行に現れる種族だけでなく全種族を検証する(取り込まない進化前や畳んだフォームの
+	// prevo が壊れていても見逃さないため)。
+	for _, sp := range showdownSpecies {
+		if _, err := resolver.resolve(sp.ID); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	var rows []LearnsetRow
+	inheritedBySpecies := map[string]int{}
+	for _, sp := range speciesRows {
+		withPrevo, err := resolver.resolve(sp.ShowdownID)
+		if err != nil {
+			return nil, nil, err
+		}
+		withoutPrevo := resolver.resolveWithoutPrevo(sp.ShowdownID)
+		for moveID := range withPrevo {
+			if !includedMoves[moveID] {
+				continue
+			}
+			rows = append(rows, LearnsetRow{SpeciesKey: sp.Key, MoveID: moveID})
+			if !withoutPrevo[moveID] {
+				inheritedBySpecies[sp.Key]++
 			}
 		}
 	}
@@ -63,7 +114,7 @@ func buildLearnsets(learnsets map[string][]string, speciesRows []SpeciesRow, bas
 		}
 		return rows[i].MoveID < rows[j].MoveID
 	})
-	return rows
+	return rows, inheritedBySpecies, nil
 }
 
 // buildRegulations はレギュレーション定義から集合の行を作る(v1: 定義の showdownMod が

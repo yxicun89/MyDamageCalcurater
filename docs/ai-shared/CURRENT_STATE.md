@@ -2,10 +2,10 @@
 
 ## Damage Calculator
 Lane: データ(engine・マスタ・pokedex。どの AI が進めてもよい。COORDINATION.md)
-Active: Codex
+Active: Claude Code
 Branch: feat/claude-p1-engine(作業ディレクトリ ~/MyDamageCalcurater)
-Status: Phase 1・P2-1・P1-10・Phase R(R-2-9 の公開用クリーンコピーは公開時に実施)・R-3・P1-13(タイプ相性表のデータ化。ADR-0013)・P1-11(表示%の分離)・P1-12(逆算の再設計。ADR-0010 §R)・P2-1b(ゴールデンを Champions へ)・P2-1c(技の使用可否の裁定)・P2-2a(pokedex のスキーマと migrate。ADR-0100)・P2-2b(importer の取得・変換・投入。ADR-0101。実データの取得は未実施で版はプレースホルダ=取り込みは明示的に止まる)は完了(critic レビュー済み)
-Next: P2-2c(照合と差分報告。実データの取得と版の固定を含む) → P2-2d → P2-3 → P3-1〜3 → P4-1〜7。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)、P2-1c の裁定
+Status: Phase 1・P2-1・P1-10・Phase R(R-2-9 の公開用クリーンコピーは公開時に実施)・R-3・P1-13(タイプ相性表のデータ化。ADR-0013)・P1-11(表示%の分離)・P1-12(逆算の再設計。ADR-0010 §R)・P2-1b(ゴールデンを Champions へ)・P2-1c(技の使用可否の裁定)・P2-2a(pokedex のスキーマと migrate。ADR-0100)・P2-2b(importer の取得・変換・投入。ADR-0101)・P2-2c(照合と差分報告・版の固定・習得技は進化前から継がない。ADR-0103。実データの dry-run が通る)は完了(critic レビュー済み)
+Next: P2-2d(CronJob と make import)→ P2-3(pokedex-svc。内部 API・natures・balance/speed 向けの export を含む) → P3-1〜3 → P4-1〜7。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)、P2-1c の裁定
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
