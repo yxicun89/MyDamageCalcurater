@@ -120,20 +120,34 @@ func mustParseURL(t *testing.T, raw string) *url.URL {
 	return u
 }
 
-// testEnv は3つの上流の偽物と、それらに向けた gateway のハンドラ。
+// testEnv は4つの上流の偽物と、それらに向けた gateway のハンドラ。web の偽物は常に起動するが、
+// Config の WebURL に入るのは newWebTestEnv のときだけ(newTestEnv では WebURL 未設定 = 従来どおり)。
 type testEnv struct {
-	calc, pokedex, assets *fakeUpstream
-	handler               http.Handler
+	calc, pokedex, assets, web *fakeUpstream
+	handler                    http.Handler
 }
 
-// newTestEnv は既定の Config(3つの上流・許可オリジン2つ・タイムアウト 2s)で gateway を作る。
-// mutate で Config を書き換えられる(未設定の上流・短いタイムアウト・CORS 無しなど)。
+// newTestEnv は既定の Config(calc・pokedex・assets の上流・許可オリジン2つ・タイムアウト 2s。WebURL は未設定)で
+// gateway を作る。mutate で Config を書き換えられる(未設定の上流・短いタイムアウト・CORS 無しなど)。
 func newTestEnv(t *testing.T, mutate ...func(*Config)) *testEnv {
+	t.Helper()
+	return buildTestEnv(t, false, mutate...)
+}
+
+// newWebTestEnv は newTestEnv に加えて WebURL を web の偽物に向けた gateway を作る(ADR-0205)。
+// mutate は WebURL を設定した後に適用する(WebURL を閉じたサーバや遅いサーバに差し替えられる)。
+func newWebTestEnv(t *testing.T, mutate ...func(*Config)) *testEnv {
+	t.Helper()
+	return buildTestEnv(t, true, mutate...)
+}
+
+func buildTestEnv(t *testing.T, withWeb bool, mutate ...func(*Config)) *testEnv {
 	t.Helper()
 	env := &testEnv{
 		calc:    newFakeUpstream(t, "calc"),
 		pokedex: newFakeUpstream(t, "pokedex"),
 		assets:  newFakeUpstream(t, "assets"),
+		web:     newFakeUpstream(t, "web"),
 	}
 	cfg := Config{
 		CalcURL:            env.calc.url(t),
@@ -141,6 +155,9 @@ func newTestEnv(t *testing.T, mutate ...func(*Config)) *testEnv {
 		AssetsURL:          env.assets.url(t),
 		CORSAllowedOrigins: []string{allowedOrigin, allowedOriginLocal},
 		UpstreamTimeout:    defaultTestTimeout,
+	}
+	if withWeb {
+		cfg.WebURL = env.web.url(t)
 	}
 	for _, m := range mutate {
 		m(&cfg)
@@ -153,9 +170,9 @@ func newTestEnv(t *testing.T, mutate ...func(*Config)) *testEnv {
 	return env
 }
 
-// upstreams は3つの上流を名前つきで返す(「どこにも届かない」の検査用)。
+// upstreams は4つの上流を名前つきで返す(「どこにも届かない」の検査用。web は WebURL 未設定でも含める)。
 func (e *testEnv) upstreams() []*fakeUpstream {
-	return []*fakeUpstream{e.calc, e.pokedex, e.assets}
+	return []*fakeUpstream{e.calc, e.pokedex, e.assets, e.web}
 }
 
 // assertNoUpstreamReached はどの上流にもリクエストが届いていないことを確かめる。

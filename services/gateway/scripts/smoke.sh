@@ -1,10 +1,13 @@
 #!/usr/bin/env sh
 # API レーンのスモーク(ADR-0203 §5。test-strategy.md L5)。gateway 経由で calc-svc の3操作・ヘッダ検証・
-# pokedex 未設定の 503 を確かめる。k3d 上では `make api-smoke`、`make dev` の上では API_URL を渡して使う。
+# pokedex 未設定の 503・Web の静的配信(ADR-0205。デプロイ前は 503、デプロイ後は 200)を確かめる。
+# k3d 上では `make api-smoke`、`make dev` の上では API_URL を渡して使う。
 #
 # 環境変数:
 #   API_URL             gateway の基底 URL(既定 http://localhost:8080。k3d の loadbalancer)
-#   API_SMOKE_RETRIES   ロールアウト直後の 000/404/502/503 を再試行する回数(既定 30。1秒間隔)
+#   API_SMOKE_RETRIES   ロールアウト直後、Traefik が終了中の Pod に振り分けて返す 000(接続不可)・502
+#                       (Bad Gateway)だけを再試行する回数(既定 30。1秒間隔)。404・503 は意味のある
+#                       最終状態(pokedex 未設定・Web 未デプロイ等)でもありうるので再試行しない
 #   API_SMOKE_BALANCE   /api/balance/healthz が balance の Ingress に届くかの確認。
 #                       auto(既定: kubectl で balance の Ingress があるときだけ見る)/ on / off
 #   API_SMOKE_NAMESPACE auto のときに balance の Ingress を探す namespace(既定 pokecalc)
@@ -66,13 +69,16 @@ request() {
   : "${status:=000}"
 }
 
-# ロールアウト直後は Ingress の反映前(404)や終了中の Pod(502/503)に当たることがあるので、最初の1件だけ再試行する。
+# ロールアウト直後、Traefik がまだ終了中の Pod に振り分けて 000(接続不可)や 502(Bad Gateway)を返すことが
+# あるので、それらだけを数回再試行する(critic 指摘: 以前は最初の1件のリクエストにしか適用していなかった。
+# 以下のすべてのリクエストに使う)。404・503 は意味のある最終状態(pokedex 未設定の 503、Web 未デプロイの
+# 503、内部 API の 404 等)でもありうるので、ここでは再試行しない(空振りせず、すぐに最終状態として扱う)。
 request_with_retry() {
   attempt=0
   while :; do
     request "$@"
     case "$status" in
-      000|404|502|503) ;;
+      000|502) ;;
       *) return 0 ;;
     esac
     attempt=$((attempt + 1))
@@ -111,31 +117,50 @@ if [ "$roll_count" != 16 ]; then
 fi
 
 # 2. POST /api/calc/bulk: rows がある(1行以上)。
-request POST /api/calc/bulk "$bulk_body"
+request_with_retry POST /api/calc/bulk "$bulk_body"
 expect_status 200 "POST /api/calc/bulk"
 expect_body '"rows":[{' "POST /api/calc/bulk"
 
 # 3. POST /api/calc/reverse: candidates がある(1件以上)。
-request POST /api/calc/reverse "$reverse_body"
+request_with_retry POST /api/calc/reverse "$reverse_body"
 expect_status 200 "POST /api/calc/reverse"
 expect_body '"candidates":[{' "POST /api/calc/reverse"
 
 # 4. ヘッダの検証は gateway が行う(ADR-0202)。
-request POST /api/calc "$calc_body" none
+request_with_retry POST /api/calc "$calc_body" none
 expect_error 400 missing_header "POST /api/calc without device/session headers"
-request POST /api/calc "$calc_body" bad-session
+request_with_retry POST /api/calc "$calc_body" bad-session
 expect_error 400 invalid_header "POST /api/calc with a non-UUID session id"
 
 # 5. pokedex-svc(plan.md P2-3)が入るまで GATEWAY_POKEDEX_URL は未設定なので 503 upstream_unavailable。
-#    pokedex-svc を deploy/k8s に入れたら、ここを 200 の確認に変える(ADR-0203 §5)。
-request GET /api/pokedex/natures
+#    pokedex-svc を deploy/k8s に入れたら、ここを 200 の確認に変える(ADR-0203 §5)。503 は再試行しない
+#    (request_with_retry も 000/502 だけしか再試行しないので、この 503 が再試行で消えることはない)。
+request_with_retry GET /api/pokedex/natures
 expect_error 503 upstream_unavailable "GET /api/pokedex/natures (pokedex-svc not deployed yet)"
 
 # 6. サービス間の内部 API(/internal/*。ADR-0204)は gateway が外に出さない(ヘッダの有無によらず 404 not_found)。
-request GET /internal/pokedex/master "" none
+# 404 は再試行しない(意味のある最終状態)。
+request_with_retry GET /internal/pokedex/master "" none
 expect_error 404 not_found "GET /internal/pokedex/master (internal API must not be exposed by the gateway)"
 
-# 7. 任意: balance がデプロイされているとき、/api/balance は balance の Ingress に届く(gateway の `/` が奪わない)。
+# 7. Web の静的配信(ADR-0205)。gateway の後ろに置かれていれば 200、Web レーンの Service がまだ無ければ
+#    503 upstream_unavailable(接続不可)。それ以外(404 や他の 5xx)は Web を後ろに置けていないので失敗。
+#    「まだデプロイされていない」の 503 も、Web が返す 404・500 も意味のある最終状態なので、
+#    request_with_retry を使っても(000/502 しか再試行しないので)再試行で消えることはない。
+request_with_retry GET / "" none
+case "$status" in
+  200) web_result=200 ;;
+  503)
+    if grep -qF '"code":"upstream_unavailable"' "$body_file"; then
+      web_result=503
+    else
+      fail "GET /"
+    fi
+    ;;
+  *) fail "GET /" ;;
+esac
+
+# 8. 任意: balance がデプロイされているとき、/api/balance は balance の Ingress に届く(gateway の `/` が奪わない)。
 check_balance=no
 case "$balance_mode" in
   on) check_balance=yes ;;
@@ -154,4 +179,4 @@ if [ "$check_balance" = yes ]; then
   balance_result=200
 fi
 
-echo "api smoke: calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=503 internal=404 balance=$balance_result"
+echo "api smoke: calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=503 internal=404 balance=$balance_result web=$web_result"

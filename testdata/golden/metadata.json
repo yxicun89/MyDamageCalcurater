@@ -68,7 +68,7 @@
     },
     {
       "scope": "abilities/items",
-      "reason": "Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors"
+      "reason": "Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2)"
     },
     {
       "scope": "terrain",
@@ -129,8 +129,8 @@
   ],
   "files": {
     "fixed.json": {
-      "count": 172,
-      "sha256": "bf4fb9ec8cec9d59fa470ce1cd1d5350134578f35dd05355fc1b4d2abe98d817"
+      "count": 196,
+      "sha256": "1e113aa921417cd10577f8b151736d2ac28f247a1ded11ac43dfa38fa691fcbb"
     },
     "random.jsonl.gz": {
       "count": 10000,

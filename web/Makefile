@@ -52,6 +52,10 @@ web-e2e: wasm web-deps ## Web の E2E(Playwright・chromium。オフライン = 
 web-e2e-online: wasm web-deps ## Web の E2E(オンライン = API。例データで calc-svc も起動する。要 Go)
 	@cd $(WEB_DIR) && npm run e2e:online
 
+.PHONY: web-e2e-balance
+web-e2e-balance: wasm web-deps ## Web の E2E(タイプバランス = balance API。例データで balance-svc も起動する。要 Go)
+	@cd $(WEB_DIR) && npm run e2e:balance
+
 # --- P4-11: コンテナ(k3d)---
 # 既定の WEB_URL(web-k3d-smoke)は `web-k3d-open` の port-forward の宛先(localhost:5173)に合わせる。
 WEB_URL ?= http://localhost:5173

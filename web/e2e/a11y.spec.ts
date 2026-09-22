@@ -8,6 +8,8 @@ test("タブは矢印キー・Home・End で選択とフォーカスが移り、
   await openApp(page);
   const calcTab = page.getByRole("tab", { name: "計算", exact: true });
   const reverseTab = page.getByRole("tab", { name: "逆算", exact: true });
+  // P4-12a(ADR-0303 §2): タブの並びは 計算 → 逆算 → タイプバランス(3件、タイプバランスが末尾)。
+  const balanceTab = page.getByRole("tab", { name: "タイプバランス", exact: true });
 
   await calcTab.focus();
   await expect(calcTab).toHaveAttribute("aria-selected", "true");
@@ -20,18 +22,25 @@ test("タブは矢印キー・Home・End で選択とフォーカスが移り、
   await expect(combobox(page, "自分のポケモン")).toBeVisible();
   await expect(combobox(page, "攻撃側のポケモン")).toHaveCount(0);
 
+  await page.keyboard.press("ArrowRight");
+  await expect(balanceTab).toBeFocused();
+  await expect(balanceTab).toHaveAttribute("aria-selected", "true");
+  await expect(reverseTab).toHaveAttribute("aria-selected", "false");
+  await expect(page.getByRole("group", { name: "メンバー1", exact: true })).toBeVisible();
+
   // 末尾から ArrowRight で先頭へ回り込む。
   await page.keyboard.press("ArrowRight");
   await expect(calcTab).toBeFocused();
   await expect(combobox(page, "攻撃側のポケモン")).toBeVisible();
 
   await page.keyboard.press("End");
-  await expect(reverseTab).toBeFocused();
+  await expect(balanceTab).toBeFocused();
   await page.keyboard.press("Home");
   await expect(calcTab).toBeFocused();
+  // 先頭から ArrowLeft で末尾へ回り込む。
   await page.keyboard.press("ArrowLeft");
-  await expect(reverseTab).toBeFocused();
-  await expect(reverseTab).toHaveAttribute("aria-selected", "true");
+  await expect(balanceTab).toBeFocused();
+  await expect(balanceTab).toHaveAttribute("aria-selected", "true");
 });
 
 test("Tab キーは選択中のタブにだけ止まる(ロービング tabIndex)", async ({ page }) => {

@@ -114,7 +114,7 @@ func DecodeNameOverrides(raw []byte) (NameOverrides, error) {
 	if err := checkSchemaVersion(o.SchemaVersion); err != nil {
 		return NameOverrides{}, err
 	}
-	for _, m := range []map[string]string{o.Species, o.Moves, o.Items, o.Abilities, o.Types} {
+	for _, m := range []map[string]string{o.Species, o.Moves, o.Items, o.Abilities, o.Types, o.Natures} {
 		for k, v := range m {
 			if v == "" {
 				return NameOverrides{}, fmt.Errorf("%w: override %q の値が空", ErrInvalidInput, k)

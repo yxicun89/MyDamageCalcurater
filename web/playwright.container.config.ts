@@ -11,7 +11,7 @@ const baseURL = `http://127.0.0.1:${CONTAINER_PORT}`;
 export default defineConfig({
   testDir: "./e2e",
   // オンライン(API)の spec は calc-svc が要る。/api は gateway の持ち物で、Web のコンテナは転送しない。
-  testIgnore: ["**/online.spec.ts"],
+  testIgnore: ["**/online.spec.ts", "**/balance.spec.ts"],
   fullyParallel: true,
   forbidOnly: process.env.CI !== undefined,
   retries: 0,

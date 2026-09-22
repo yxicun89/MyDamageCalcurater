@@ -105,6 +105,8 @@ PokeAPI 由来の名前を持つテーブル(`regulations` を除く)の `name_j
   フォルム番号の採番表は importer(P2-2b)の管理とし、スキーマは `form` と `showdown_id` だけを持つ。
 - **性格はマスタにしない**。25 種の補正はゲームのルール(engine の固定)で、取得元の版で変わるデータではない。
   `/api/pokedex/natures` は engine の定義から返す(P2-3)。
+  **更新(2026-09-22・ADR-0105 §4)**: この判断を改め、性格をマスタ `natures`(`000006_create_natures`)にする。calc-svc が MasterExport の
+  `natures` で性格を受け取る契約になった(ADR-0204)ため。補正は Showdown、日本語名は PokeAPI+override から importer が入れる。
 - **SP の制約は pokedex のスキーマに無い**。SP は個体(team-svc / 計算の入力)の値で、マスタの列ではない。
 - 重量・技の追加効果・命中以外の詳細は engine が使っていないので v1 のスキーマに入れない(必要になったら migration を足す)。
 - `data_versions` は取得元ごとの**最新の適用済み版**を1行で持つ。importer はデータの置き換えと同じトランザクションで更新する。

@@ -279,9 +279,11 @@ func TestReconcileSummary(t *testing.T) {
 		importer.KindFormFolded:          1,
 		importer.KindSpeciesShowdownOnly: 1,
 		importer.KindSpeciesExcluded:     2,
-		importer.KindNameFallback:        3,
-		importer.KindOverrideUnused:      1,
-		importer.KindEffectUnused:        1,
+		// +1 ずつは性格(natures)の fixture 分(ADR-0105 §4・§7): testneutral の英語名フォールバックと
+		// どの性格にも当たらない override(testunknownnature)。TestConvertNaturesNameFindings と同じ。
+		importer.KindNameFallback:   4,
+		importer.KindOverrideUnused: 2,
+		importer.KindEffectUnused:   1,
 	}
 	for kind, n := range wantWarnings {
 		if s.WarningCounts[kind] != n {

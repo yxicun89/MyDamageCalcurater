@@ -42,7 +42,12 @@ var (
 	}
 	abilityEffectFields = map[string]bool{
 		"StabMod": true, "OffBoostType": true, "OffBoostTypeMod": true,
-		"DefResistType": true, "ReduceSuperEffective": true, "IgnoresBurn": true,
+		"DefResistType": true, "DefImmuneTypes": true, "DefAbsorbTypes": true,
+		"ReduceSuperEffective": true, "IgnoresBurn": true,
+	}
+	// absorbEffectFields は DefAbsorbTypes の値(1タイプぶんの副次効果)の既知のフィールド名。
+	absorbEffectFields = map[string]bool{
+		"HealNumerator": true, "HealDenominator": true, "BoostStat": true, "BoostStages": true,
 	}
 )
 
@@ -182,6 +187,114 @@ func decodeDefResistType(raw json.RawMessage, chart engine.TypeChart) (map[engin
 	return out, nil
 }
 
+// decodeDefImmuneTypes は AbilityEffect.DefImmuneTypes を検証つきで読む(表にあるタイプの配列、
+// 空不可、重複不可。ADR-0106 §決定5)。
+func decodeDefImmuneTypes(raw json.RawMessage, chart engine.TypeChart) ([]engine.Type, error) {
+	var arr []json.RawMessage
+	if err := json.Unmarshal(raw, &arr); err != nil {
+		return nil, fmt.Errorf("%w: DefImmuneTypes が配列でない: %v", ErrInvalidEffect, err)
+	}
+	if len(arr) == 0 {
+		return nil, fmt.Errorf("%w: DefImmuneTypes が空", ErrInvalidEffect)
+	}
+	seen := make(map[engine.Type]bool, len(arr))
+	out := make([]engine.Type, 0, len(arr))
+	for _, v := range arr {
+		t, err := decodeKnownType(v, chart)
+		if err != nil {
+			return nil, err
+		}
+		if seen[t] {
+			return nil, fmt.Errorf("%w: DefImmuneTypes にタイプが重複している: %q", ErrInvalidEffect, t)
+		}
+		seen[t] = true
+		out = append(out, t)
+	}
+	return out, nil
+}
+
+// decodeAbsorbEffect は DefAbsorbTypes の1タイプぶんの副次効果を検証つきで読む。
+// {} は「吸収するが副次効果は持たない」として正しい値(ADR-0106 §決定2)。
+func decodeAbsorbEffect(raw json.RawMessage) (engine.AbsorbEffect, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return engine.AbsorbEffect{}, fmt.Errorf("%w: 吸収の値がオブジェクトでない: %v", ErrInvalidEffect, err)
+	}
+	if err := rejectUnknownFields(fields, absorbEffectFields); err != nil {
+		return engine.AbsorbEffect{}, err
+	}
+	var out engine.AbsorbEffect
+	num, hasNum := fields["HealNumerator"]
+	den, hasDen := fields["HealDenominator"]
+	if hasNum != hasDen {
+		return engine.AbsorbEffect{}, fmt.Errorf("%w: HealNumerator と HealDenominator は組で指定する", ErrInvalidEffect)
+	}
+	if hasNum {
+		n, err := decodePositiveInt(num)
+		if err != nil {
+			return engine.AbsorbEffect{}, err
+		}
+		d, err := decodePositiveInt(den)
+		if err != nil {
+			return engine.AbsorbEffect{}, err
+		}
+		if d > 16 {
+			return engine.AbsorbEffect{}, fmt.Errorf("%w: HealDenominator は1..16の範囲でない: %d", ErrInvalidEffect, d)
+		}
+		if n > d {
+			return engine.AbsorbEffect{}, fmt.Errorf("%w: 回復の割合が1を超える: %d/%d", ErrInvalidEffect, n, d)
+		}
+		out.HealNumerator, out.HealDenominator = n, d
+	}
+	stat, hasStat := fields["BoostStat"]
+	stages, hasStages := fields["BoostStages"]
+	if hasStat != hasStages {
+		return engine.AbsorbEffect{}, fmt.Errorf("%w: BoostStat と BoostStages は組で指定する", ErrInvalidEffect)
+	}
+	if hasStat {
+		s, err := decodeStrictString(stat)
+		if err != nil {
+			return engine.AbsorbEffect{}, err
+		}
+		key, ok := statModKeys[s]
+		if !ok {
+			return engine.AbsorbEffect{}, fmt.Errorf("%w: BoostStat が不正: %q", ErrInvalidEffect, s)
+		}
+		n, err := decodePositiveInt(stages)
+		if err != nil {
+			return engine.AbsorbEffect{}, err
+		}
+		if n > 6 {
+			return engine.AbsorbEffect{}, fmt.Errorf("%w: BoostStages は1..6の範囲でない: %d", ErrInvalidEffect, n)
+		}
+		out.BoostStat, out.BoostStages = key, n
+	}
+	return out, nil
+}
+
+// decodeDefAbsorbTypes は AbilityEffect.DefAbsorbTypes を検証つきで読む(表にあるタイプのみ、空不可)。
+func decodeDefAbsorbTypes(raw json.RawMessage, chart engine.TypeChart) (map[engine.Type]engine.AbsorbEffect, error) {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return nil, fmt.Errorf("%w: DefAbsorbTypes がオブジェクトでない: %v", ErrInvalidEffect, err)
+	}
+	if len(obj) == 0 {
+		return nil, fmt.Errorf("%w: DefAbsorbTypes が空", ErrInvalidEffect)
+	}
+	out := make(map[engine.Type]engine.AbsorbEffect, len(obj))
+	for k, v := range obj {
+		if !chart.Has(engine.Type(k)) {
+			return nil, fmt.Errorf("%w: DefAbsorbTypes のタイプが表に無い: %q", ErrInvalidEffect, k)
+		}
+		abs, err := decodeAbsorbEffect(v)
+		if err != nil {
+			return nil, err
+		}
+		out[engine.Type(k)] = abs
+	}
+	return out, nil
+}
+
 // DecodeItemEffect は item_effects.effect の JSON を engine.ItemEffect に厳格デコードする。
 func DecodeItemEffect(raw []byte, chart engine.TypeChart) (*engine.ItemEffect, error) {
 	if chart.IsZero() {
@@ -307,6 +420,25 @@ func DecodeAbilityEffect(raw []byte, chart engine.TypeChart) (*engine.AbilityEff
 		}
 		e.DefResistType = m
 	}
+	if v, ok := fields["DefImmuneTypes"]; ok {
+		m, err := decodeDefImmuneTypes(v, chart)
+		if err != nil {
+			return nil, err
+		}
+		e.DefImmuneTypes = m
+	}
+	if v, ok := fields["DefAbsorbTypes"]; ok {
+		m, err := decodeDefAbsorbTypes(v, chart)
+		if err != nil {
+			return nil, err
+		}
+		e.DefAbsorbTypes = m
+	}
+	for _, t := range e.DefImmuneTypes {
+		if _, dup := e.DefAbsorbTypes[t]; dup {
+			return nil, fmt.Errorf("%w: タイプ %q が DefImmuneTypes と DefAbsorbTypes の両方にある", ErrInvalidEffect, t)
+		}
+	}
 	if v, ok := fields["ReduceSuperEffective"]; ok {
 		n, err := decodePositiveInt(v)
 		if err != nil {
@@ -363,6 +495,64 @@ func encodeDefResistType(m map[engine.Type]int) []byte {
 			buf.WriteByte(',')
 		}
 		fmt.Fprintf(&buf, "%q:%d", k, m[engine.Type(k)])
+	}
+	buf.WriteByte('}')
+	return buf.Bytes()
+}
+
+// encodeDefImmuneTypes はタイプ ID 昇順の JSON 配列を作る(正準形)。
+func encodeDefImmuneTypes(types []engine.Type) []byte {
+	keys := make([]string, 0, len(types))
+	for _, t := range types {
+		keys = append(keys, string(t))
+	}
+	sort.Strings(keys)
+	var buf bytes.Buffer
+	buf.WriteByte('[')
+	for i, k := range keys {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		buf.Write(quoteJSON(k))
+	}
+	buf.WriteByte(']')
+	return buf.Bytes()
+}
+
+// encodeAbsorbEffect は struct 定義順(ゼロ値省略)で1タイプぶんの吸収効果を組み立てる。
+func encodeAbsorbEffect(a engine.AbsorbEffect) []byte {
+	w := newEffectWriter()
+	if a.HealNumerator != 0 {
+		w.field("HealNumerator", []byte(strconv.Itoa(a.HealNumerator)))
+	}
+	if a.HealDenominator != 0 {
+		w.field("HealDenominator", []byte(strconv.Itoa(a.HealDenominator)))
+	}
+	if a.BoostStat != "" {
+		w.field("BoostStat", quoteJSON(string(a.BoostStat)))
+	}
+	if a.BoostStages != 0 {
+		w.field("BoostStages", []byte(strconv.Itoa(a.BoostStages)))
+	}
+	w.buf.WriteByte('}')
+	return w.buf.Bytes()
+}
+
+// encodeDefAbsorbTypes はタイプ ID 昇順の JSON オブジェクトを作る(正準形)。
+func encodeDefAbsorbTypes(m map[engine.Type]engine.AbsorbEffect) []byte {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, string(k))
+	}
+	sort.Strings(keys)
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+	for i, k := range keys {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		fmt.Fprintf(&buf, "%q:", k)
+		buf.Write(encodeAbsorbEffect(m[engine.Type(k)]))
 	}
 	buf.WriteByte('}')
 	return buf.Bytes()
@@ -446,6 +636,12 @@ func EncodeAbilityEffect(e engine.AbilityEffect) ([]byte, error) {
 	}
 	if len(e.DefResistType) > 0 {
 		w.field("DefResistType", encodeDefResistType(e.DefResistType))
+	}
+	if len(e.DefImmuneTypes) > 0 {
+		w.field("DefImmuneTypes", encodeDefImmuneTypes(e.DefImmuneTypes))
+	}
+	if len(e.DefAbsorbTypes) > 0 {
+		w.field("DefAbsorbTypes", encodeDefAbsorbTypes(e.DefAbsorbTypes))
 	}
 	if e.ReduceSuperEffective != 0 {
 		w.field("ReduceSuperEffective", []byte(strconv.Itoa(e.ReduceSuperEffective)))

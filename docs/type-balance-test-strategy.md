@@ -208,6 +208,41 @@ STAB・持ち物・威力・天候・場は扱わないので、それを検証�
 
 テストの ID・名前は架空(9001-000 / move-9001 / ability-9001 以降、`テスト…`)を使う。実在ポケモン・技・特性の名前・ID を Git に置かない(ADR-0002)。
 
+## TB6 の対象(技範囲チェッカー。ADR-0404)
+
+契約の正は [ADR-0404](adr/0404-balance-tb6-move-range-checker.md)(§1 はユーザー回答、§2・§3 はタイプバランスレーンの判断)。
+`POST /api/balance/v1/move-range/analyze` は**技 ID だけ**(1〜4 件、重複不可。ポケモンは指定しない)を受け取り、
+その技構成の攻撃範囲(`attackTypes`・18 単防御タイプの `typeChart`)と、半減以下(×1/2 以下)で受けられる実在ポケモン
+(タイプだけの `walledBy`、特性で受けられる `walledByAbility` の別枠)を返す。新しい read model は足さない
+(TB5 で足した `nameJa`・`abilityIds` をそのまま使う)。テストは実装より先に書いた(spec 先行)。
+期待値は、手で数えられる架空の相性表(既定 ×1)で作り、`typeChart` は同梱の相性表で TB2(`AnalyzeCoverage`)の
+1 メンバー分の防御配列と一致することを照合する(ADR-0404 §3: 二重実装しない)。
+
+### 受け入れ条件
+
+1. `attackTypes` は変化技を除いた技のタイプ(重複なし・正準順)。同じタイプの技を2つ持っても1回。変化技が混ざっても結果は変わらない。
+2. `typeChart` は 18 の単防御タイプ(正準順)ごとに `{defenseType, bestMultiplier, effective, superEffective}`。
+   `bestMultiplier` は攻撃技の最大倍率で、**必ず値を持つ**(`null` にならない)。`effective` は ×1 以上、`superEffective` は ×2。
+   同梱の相性表で、TB2 の1メンバー分の `coverage` と全件一致する。
+3. `walledBy` は、read model のカタログのうち、そのポケモンの実際のタイプ(単/複合)に対する技構成の最大倍率
+   (`CalculateDefense`。特性は考えない)が ×1/2 以下のもの。無効(×0)も含む。`pokemonId` の昇順、
+   `types` は read model の順、`nameJa` は read model にあるときだけ(無ければキーを省略)。該当が無ければ `[]`。
+4. `walledByAbility` は、タイプだけでは ×1/2 以下にならないが `abilityIds` の特性のどれかで ×1/2 以下になるものの別枠。
+   無効・吸収も含む。`pokemonId` 昇順 → `abilityId` 昇順。特性の read model が無ければ `[]` で 200(503 にしない)、ほかの結果は変わらない。
+   倍率はどちらの一覧も全攻撃タイプにわたる最大値なので、1つのタイプを無効にしても残りのタイプで基準を超えれば載らない。
+5. 入力エラー: `moveIds` が 0 件・5 件以上・重複は 400 `invalid_request`。解決した技が**全件変化技**(攻撃範囲が空になる)も 400。
+6. 判定順は ADR-0404 §2: ヘッダー 400 → body 400/413(件数・形式・重複、未知フィールド・後続 JSON)→ 技の read model 未設定 503 →
+   `unknown_move` 422(request 順で最初のもの)→ ポケモンの read model(カタログ)未設定 503 → 200。それ以外は 500 固定文言 `internal error`。
+   TB6 は `pokemonId` を受け取らないので、型の provider(`PokemonTypes`)は無くても 200。
+
+| レイヤー | 対象 | 合格条件 |
+|---|---|---|
+| Unit | `internal/balance`(`AnalyzeMoveRange` / `MoveRangeEntry` / `WalledByPokemon` / `WalledByAbilityPokemon`) | 受け入れ条件 1〜5(`moverange_test.go`)。`attackTypes`(単タイプ・同タイプ2つ・正準順・変化技除外・4技)、`typeChart`(手で数えた18件 × 6 通りの技構成、同梱の相性表で `AnalyzeCoverage` と一致)、`walledBy`(単/複合タイプ、×0、最大倍率が全攻撃タイプにわたること、`pokemonId` 昇順、`nameJa` の有無)、`walledByAbility`(無効・吸収・×1/2 の特性、×5/4 は入らない、タイプだけで受けられるものは別枠に入らない、1体の2特性は2組、`abilityId` 昇順)。特性 provider が nil なら空でほかは不変。カタログが空でも計算できる。カタログの `abilityIds` に特性 read model が知らない ID があってもその特性だけ飛ばす(500 にしない。ADR-0401 §7.2 と同じ)。入力エラー: 0/空/5件は `ErrMoveRangeMoveCount`、重複は `ErrDuplicateMove`、全件変化技は `ErrMoveRangeNoAttackMove`、chart nil は `ErrNilTypeChart`、不正な分類は `ErrInvalidMoveCategory`、不正なタイプは `ErrInvalidType`、相性表・特性 provider の失敗は伝播 |
+| Contract/HTTP | service-local OpenAPI 0.7.0 / move-range | 生成型 `api.MoveRangeResponse` へ未知フィールド禁止で decode できる 200 と内容(`attackTypes`・18 件の `typeChart`・`walledBy`・`walledByAbility`)。空の配列は `[]`、`nameJa` は無ければキーを省略、`typeChart` の `bestMultiplier` は `null` にならない。受け入れ条件 6 の各ケース、境界(1 技・4 技・40 文字の moveId・攻撃技+変化技)、body の 400(欠落・`null`・空・5 件・重複・空文字・大文字・`_`・末尾ハイフン・41 文字・未知フィールド・後続 JSON・配列でない)、413、変化技のみは 400、特性の read model 無しでも 200 で `walledByAbility` は `[]`、型の provider 無しでも 200。health・analyze・coverage・threats・recommendations は影響を受けない |
+| Smoke | k3d(local overlay) | 既存の3つの example read model のマウントのまま、Ingress 経由で move-range が 200(`"attackTypes":["water"]`・`"nameJa":"テストリーフ"`・`"nameJa":"テストドラゴン"`・`"abilityId":"ability-9002","bestMultiplier":"0"` を含む)、未登録の技が 422 `unknown_move`、変化技だけの技構成が 400 `invalid_request` |
+
+テストの ID・名前は架空(9001-000 / move-9001 / ability-9001 以降、`テスト…`)を使う。実在ポケモン・技・特性の名前・ID を Git に置かない(ADR-0002)。
+
 ## read model の JSON Schema(ADR-0402)
 
 | レイヤー | 対象 | 合格条件 |

@@ -37,10 +37,11 @@ gen-sql: ## pokedex の DB 行の型・クエリを sqlc から生成(ADR-0100 �
 	@echo "gen-sql: services/pokedex/internal/store を生成"
 
 .PHONY: gen-ts
-gen-ts: ## TypeScript 型を openapi.yaml から生成(web/src/api/openapi.gen.ts。要 make web-install)
+gen-ts: ## TypeScript 型を openapi.yaml から生成(web/src/api/openapi.gen.ts・balance.gen.ts。要 make web-install)
 	@test -x web/node_modules/.bin/openapi-typescript || { echo "gen-ts: web の依存が無い(先に make web-install)" >&2; exit 1; }
 	@cd web && npx --no-install openapi-typescript ../api/openapi.yaml -o src/api/openapi.gen.ts >/dev/null && npx --no-install prettier --write src/api/openapi.gen.ts >/dev/null
-	@echo "gen-ts: web/src/api/openapi.gen.ts を生成"
+	@cd web && npx --no-install openapi-typescript ../services/balance/api/openapi.yaml -o src/api/balance.gen.ts >/dev/null && npx --no-install prettier --write src/api/balance.gen.ts >/dev/null
+	@echo "gen-ts: web/src/api/openapi.gen.ts・web/src/api/balance.gen.ts を生成"
 
 ## --- テスト -----------------------------------------------------------
 .PHONY: test
@@ -164,6 +165,10 @@ import-fetch: ## 取得元(calc/Showdown/PokeAPI)から実データを取得す�
 .PHONY: import-check-upstream
 import-check-upstream: ## 上流(calc/Showdown/PokeAPI)の最新版を検出して報告する(ネットワークが要る。取り込みはしない)
 	@cd tools/importer && npm ci && node check-upstream.mjs
+
+.PHONY: pokedex-export
+pokedex-export: ## balance/speed 向けの read model を4ファイル書く(POKEDEX_DATABASE_DSN が必須。出力先 data/generated/readmodel/)
+	@cd services && $(GO) run ./pokedex/cmd/pokedex export -out ../data/generated/readmodel
 
 .PHONY: import-k8s
 import-k8s: ## k3d 上の CronJob pokedex-import を手動で1回流す(週1回の定期実行とは別に)

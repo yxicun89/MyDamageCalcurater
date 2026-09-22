@@ -35,6 +35,10 @@ readonly -a CONTENT_EXCLUDES=(
 #   docs/audit-r1.md : 検査対象のパターン(/Users/ など)を説明する文書で、実際の値ではない
 readonly -a A_EXCLUDES=(":(exclude)docs/audit-r1.md")
 
+# B(秘密らしき文字列「キー名=値」)の許可(ERE)。値そのものではなく、k8s の Secret/Key の
+# *名前*(pokedex-svc の manifest 検査。ADR-0105 §6)を指す定数だけを対象にする(秘密の値ではない)。
+readonly B_KEYVALUE_ALLOW='=[[:space:]]*"(mysql-auth|pokedex-dsn)$'
+
 # 許可するメールアドレス(ERE。一致した文字列全体に対して評価)。
 #   noreply@anthropic.com : コミットの共同著者表記(公開情報)
 #   @example.com/.org     : RFC 2606 の予約ドメイン(架空データ用)
@@ -57,7 +61,7 @@ readonly GOLDEN_DIR="testdata/golden"
 # NameJa は、この接頭辞で始まる架空名か、日本語を含まない値(プレースホルダ "?" など。
 # 実在の日本語名を入れないという目的に反しない)だけを許す。
 readonly FICTIONAL_NAME_PREFIX="テスト"
-readonly -a NAMEJA_PATHSPECS=("engine/*_test.go" "engine/wasmapi/testdata/vectors.json" "services/*_test.go" "services/pokedex/importer/testdata/*")
+readonly -a NAMEJA_PATHSPECS=("engine/*_test.go" "engine/wasmapi/testdata/vectors.json" "services/*_test.go" "services/pokedex/importer/testdata/*" "services/pokedex/internal/storetest/*")
 
 # importer の架空データ(JSON の文字列値すべてが対象。ADR-0101)。
 readonly IMPORTER_TESTDATA_DIR="services/pokedex/importer/testdata"
@@ -153,7 +157,8 @@ check_a() {
 # ---------------------------------------------------------------------------
 check_b() {
   scan_content B "秘密らしき文字列(キー名=値)" \
-    '(password|passwd|secret|api[_-]?key|private[_-]?key|access[_-]?token)[A-Za-z0-9_-]*['"'"'"]?[[:space:]]*[:=][[:space:]]*['"'"'"]?[^[:space:]'"'"'"]{8,}' "" i
+    '(password|passwd|secret|api[_-]?key|private[_-]?key|access[_-]?token)[A-Za-z0-9_-]*['"'"'"]?[[:space:]]*[:=][[:space:]]*['"'"'"]?[^[:space:]'"'"'"]{8,}' \
+    "$B_KEYVALUE_ALLOW" i
   scan_content B "秘密らしき文字列(秘密鍵ブロック)" '-----BEGIN [A-Z ]*PRIVATE KEY-----'
   scan_content B "秘密らしき文字列(AWS アクセスキー形式)" 'AKIA[0-9A-Z]{16}'
   scan_content B "秘密らしき文字列(GitHub トークン形式)" 'gh[pousr]_[A-Za-z0-9]{36}'

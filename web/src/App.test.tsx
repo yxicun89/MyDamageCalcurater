@@ -206,8 +206,14 @@ describe("P4-4 タブの ARIA 配線とキーボード操作", () => {
     const calcTab = await screen.findByRole("tab", { name: "計算" });
     const reverseTab = screen.getByRole("tab", { name: "逆算" });
 
+    // P4-12a: 最後のタブはタイプバランス(ADR-0303 §2)。逆算は End の1つ手前。
+    const balanceTab = screen.getByRole("tab", { name: "タイプバランス" });
     calcTab.focus();
     await user.keyboard("{End}");
+    expect(balanceTab).toHaveAttribute("aria-selected", "true");
+    expect(balanceTab).toHaveFocus();
+
+    await user.keyboard("{ArrowLeft}");
     expect(reverseTab).toHaveAttribute("aria-selected", "true");
     expect(reverseTab).toHaveFocus();
 

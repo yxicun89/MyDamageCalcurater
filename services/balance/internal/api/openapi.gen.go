@@ -158,6 +158,30 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
+// Defines values for MoveRangeMultiplier.
+const (
+	MoveRangeDouble  MoveRangeMultiplier = "2"
+	MoveRangeHalf    MoveRangeMultiplier = "1/2"
+	MoveRangeNeutral MoveRangeMultiplier = "1"
+	MoveRangeZero    MoveRangeMultiplier = "0"
+)
+
+// Valid indicates whether the value is a known member of the MoveRangeMultiplier enum.
+func (e MoveRangeMultiplier) Valid() bool {
+	switch e {
+	case MoveRangeDouble:
+		return true
+	case MoveRangeHalf:
+		return true
+	case MoveRangeNeutral:
+		return true
+	case MoveRangeZero:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TypeId.
 const (
 	Bug      TypeId = "bug"
@@ -442,6 +466,46 @@ type MemberDefense struct {
 // MoveId Example: move-9001
 type MoveId = string
 
+// MoveRangeMultiplier Exact display form of a single-type offensive multiplier. Unlike CoverageMultiplier it is
+// never null: the move set always has at least one attack move (ADR-0404 §2).
+type MoveRangeMultiplier string
+
+// MoveRangeRequest A move set on its own (ADR-0404 §2). No pokemon is named.
+type MoveRangeRequest struct {
+	// MoveIds One to four moveIds. Duplicates are rejected (400).
+	MoveIds []MoveId `json:"moveIds"`
+}
+
+// MoveRangeResponse defines model for MoveRangeResponse.
+type MoveRangeResponse struct {
+	// AttackTypes Types of the non-status moves, without duplicates, in canonical type order. Never empty.
+	AttackTypes []TypeId `json:"attackTypes"`
+
+	// TypeChart One entry per single defense type, in canonical type order (normal ... fairy).
+	TypeChart []MoveRangeTypeEntry `json:"typeChart"`
+
+	// WalledBy The read model pokemon whose own types take the move set at x1/2 or less (abilities not
+	// considered), pokemonId ascending. Empty when no pokemon walls the move set.
+	WalledBy []WalledByPokemon `json:"walledBy"`
+
+	// WalledByAbility Pairs of a pokemon and one of its read model abilityIds that take the move set at x1/2 or
+	// less while its types alone do not, pokemonId then abilityId ascending. Empty when the
+	// ability read model is not configured.
+	WalledByAbility []WalledByAbilityPokemon `json:"walledByAbility"`
+}
+
+// MoveRangeTypeEntry bestMultiplier is the best multiplier of the move set's attack moves against this single
+// defense type; it always has a value (a request without any attack move is rejected with 400).
+// effective = bestMultiplier is x1 or more; superEffective = bestMultiplier is x2.
+type MoveRangeTypeEntry struct {
+	// BestMultiplier Exact display form of a single-type offensive multiplier. Unlike CoverageMultiplier it is
+	// never null: the move set always has at least one attack move (ADR-0404 §2).
+	BestMultiplier MoveRangeMultiplier `json:"bestMultiplier"`
+	DefenseType    TypeId              `json:"defenseType"`
+	Effective      bool                `json:"effective"`
+	SuperEffective bool                `json:"superEffective"`
+}
+
 // PokemonNameJa Japanese name from the read model, present only when the read model has one.
 type PokemonNameJa = string
 
@@ -603,11 +667,61 @@ type TypeCandidate struct {
 // TypeId defines model for TypeId.
 type TypeId string
 
+// WalledByAbilityPokemon One read model pokemon and one of its abilities that bring the move set to x1/2 or less while
+// its types alone do not. bestMultiplier is the largest multiplier with that ability applied.
+type WalledByAbilityPokemon struct {
+	// AbilityId The ability that brings the move set to x1/2 or less.
+	AbilityId AbilityId `json:"abilityId"`
+
+	// BestMultiplier Exact defensive multiplier as an irreducible fraction "numerator/denominator" (ADR-0017 §3).
+	// A denominator of 1 is written as the integer only ("0", "1", "2", "3", "4"); otherwise the
+	// fraction is in lowest terms ("1/4", "1/2", "3/4", "5/4", "3/2", "5/2"). Never a float.
+	// The TB1 values "0", "1/4", "1/2", "1", "2", "4" are a subset.
+	//
+	//
+	// Example: 3/4
+	BestMultiplier DefenseMultiplier `json:"bestMultiplier"`
+
+	// NameJa Japanese name from the read model, present only when the read model has one.
+	NameJa *PokemonNameJa `json:"nameJa,omitempty"`
+
+	// PokemonId Example: 9001-000
+	PokemonId string `json:"pokemonId"`
+}
+
+// WalledByPokemon One read model pokemon that walls the move set by its types alone. bestMultiplier is the
+// largest multiplier the move set deals to its actual (single or dual) types, so it is x1/2 or less.
+type WalledByPokemon struct {
+	// BestMultiplier Exact defensive multiplier as an irreducible fraction "numerator/denominator" (ADR-0017 §3).
+	// A denominator of 1 is written as the integer only ("0", "1", "2", "3", "4"); otherwise the
+	// fraction is in lowest terms ("1/4", "1/2", "3/4", "5/4", "3/2", "5/2"). Never a float.
+	// The TB1 values "0", "1/4", "1/2", "1", "2", "4" are a subset.
+	//
+	//
+	// Example: 3/4
+	BestMultiplier DefenseMultiplier `json:"bestMultiplier"`
+
+	// NameJa Japanese name from the read model, present only when the read model has one.
+	NameJa *PokemonNameJa `json:"nameJa,omitempty"`
+
+	// PokemonId Example: 9001-000
+	PokemonId string `json:"pokemonId"`
+
+	// Types The pokemon's types in the read model order.
+	Types []TypeId `json:"types"`
+}
+
 // DeviceId defines model for DeviceId.
 type DeviceId = string
 
 // SessionId defines model for SessionId.
 type SessionId = string
+
+// AnalyzeMoveRangeParams defines parameters for AnalyzeMoveRange.
+type AnalyzeMoveRangeParams struct {
+	XDeviceId  DeviceId  `json:"X-Device-Id"`
+	XSessionId SessionId `json:"X-Session-Id"`
+}
 
 // AnalyzeTeamBalanceParams defines parameters for AnalyzeTeamBalance.
 type AnalyzeTeamBalanceParams struct {
@@ -633,6 +747,9 @@ type AnalyzeTeamThreatsParams struct {
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
+// AnalyzeMoveRangeJSONRequestBody defines body for AnalyzeMoveRange for application/json ContentType.
+type AnalyzeMoveRangeJSONRequestBody = MoveRangeRequest
+
 // AnalyzeTeamBalanceJSONRequestBody defines body for AnalyzeTeamBalance for application/json ContentType.
 type AnalyzeTeamBalanceJSONRequestBody = AnalyzeRequest
 
@@ -650,6 +767,9 @@ type ServerInterface interface {
 	// PublicHealth Ingress smoke check
 	// (GET /api/balance/healthz)
 	PublicHealth(ctx *echo.Context) error
+	// AnalyzeMoveRange Analyze the offensive range of a move set and who walls it
+	// (POST /api/balance/v1/move-range/analyze)
+	AnalyzeMoveRange(ctx *echo.Context, params AnalyzeMoveRangeParams) error
 	// AnalyzeTeamBalance Analyze a party's type balance
 	// (POST /api/balance/v1/team-balance/analyze)
 	AnalyzeTeamBalance(ctx *echo.Context, params AnalyzeTeamBalanceParams) error
@@ -678,6 +798,54 @@ func (w *ServerInterfaceWrapper) PublicHealth(ctx *echo.Context) error {
 
 	// Invoke the callback with all the unmarshaled arguments
 	err = w.Handler.PublicHealth(ctx)
+	return err
+}
+
+// AnalyzeMoveRange converts echo context to params.
+func (w *ServerInterfaceWrapper) AnalyzeMoveRange(ctx *echo.Context) error {
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AnalyzeMoveRangeParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Device-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Device-Id")]; found {
+		var XDeviceId DeviceId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
+		}
+
+		params.XDeviceId = XDeviceId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Device-Id is required, but not found"))
+	}
+	// ------------- Required header parameter "X-Session-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Session-Id")]; found {
+		var XSessionId SessionId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
+		}
+
+		params.XSessionId = XSessionId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Session-Id is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.AnalyzeMoveRange(ctx, params)
 	return err
 }
 
@@ -935,5 +1103,6 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 	router.POST(options.BaseURL+"/api/balance/v1/team-balance/coverage", wrapper.AnalyzeTeamCoverage, options.OperationMiddlewares["analyzeTeamCoverage"]...)
 	router.POST(options.BaseURL+"/api/balance/v1/team-balance/threats", wrapper.AnalyzeTeamThreats, options.OperationMiddlewares["analyzeTeamThreats"]...)
 	router.POST(options.BaseURL+"/api/balance/v1/team-balance/recommendations", wrapper.RecommendTeamTypes, options.OperationMiddlewares["recommendTeamTypes"]...)
+	router.POST(options.BaseURL+"/api/balance/v1/move-range/analyze", wrapper.AnalyzeMoveRange, options.OperationMiddlewares["analyzeMoveRange"]...)
 
 }

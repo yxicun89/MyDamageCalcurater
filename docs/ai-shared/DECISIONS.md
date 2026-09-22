@@ -597,7 +597,6 @@ up.sh は `pokecalc/calc:local` / `pokecalc/gateway:local` をビルド・import
 up.sh の最後で `make api-docker-build` と `k3d image import` を呼ぶ形にするかは、up.sh の持ち主(データレーン・整備レーン)の判断に任せる。API レーンは scripts/up.sh を変えない。
 Reason: critic の推奨。共有スクリプトは他レーンの範囲のため。
 Impact: `api-k3d-deploy` は他レーンのリソースに触れないよう、常に API 専用の overlay(deploy/k8s/overlays/local-api)だけを適用する(ADR-0203)。
->>>>>>> origin/main
 
 ## 2026-09-22: iOS レーンの統合(PR #31)
 Decision: P6-1(ADR-0500)・P6-2a 計算画面・P3-1/P3-2 の契約変更への追従を PR #31 で main にマージした(critic はそれぞれ PASS。make test / lint / build / check-publishable / ios-test が成功)。
@@ -661,6 +660,17 @@ Impact(データレーンへの提案。既定案): (1) pokedex-svc(P2-3)で `GE
 API レーンの後続: pokedex-svc のデプロイ後に calc の local overlay を URL 方式(`CALC_MASTER_URL=http://pokedex`)に切り替える。
 Web / iOS へ: openapi に tag `internal` の操作と Master* の型が増える(web/src/api/openapi.gen.ts はこの PR で再生成済み)。iOS は生成し直すか、生成設定で `internal` タグを除外する。
 
+## 2026-09-22: 無効・吸収の特性は後続タスク P2-3b で engine と効果定義に足す(ユーザー決定)
+Decision: ふゆう・ちょすい等の「特定のタイプの技を無効・吸収する特性」は、P2-3 には入れず、後続の P2-3b で engine の効果定義(AbilityEffect)・DB・importer・export に足す。ダメージ計算でも 0 になり、ゴールデンと照合する。
+Reason: 今の効果定義に無いため、タイプバランスの判定にもダメージ計算にも反映されていない。ユーザーが「後続タスクで足す」を選んだ。
+Impact: plan.md に P2-3b。タイプバランスレーンは P2-3b が入るまで、タイプ由来の相性と倍率を変える特性だけで判断する。
+
+
+## 2026-09-22: PR #30(API P3-3)・PR #42(API P3-4 マスタを pokedex-svc の内部 API から)を main に統合
+Decision: どちらも critic PASS、make test・lint・build・check-publishable 0 件・api-kustomize・make gen 差分なし、k3d の api-smoke 成功、開いている他の PR と未マージのブランチとの重なりが無いこと(#42 のときは #39 がドキュメントのみ)を確認してマージした。
+Reason: ユーザーの指示(テストが通り他レーンを確認済みならマージしてよい)。
+Impact: API レーンの Phase 3 と P3-4 は完了。次は Web レーンの依頼(GATEWAY_WEB_URL)と DOC-api。
+
 
 ## 2026-09-22: Web P4-9 を統合(PR #35)
 Decision: P4-9(P4-8 の軽微な改善3件)を PR #35 で main に統合した。Web レーンは他レーン(P2-3・P3-3)待ちで一時停止(Active: なし)。
@@ -703,3 +713,26 @@ Impact: CLAUDE.md・COORDINATION.md を更新。
 Decision: P6-2b 逆算画面・internal タグ除外・DOC-ios(ios/README.md を coding-rules §8 の形に、ADR-0501・docs/runbooks/ios.md)を PR #53 で main にマージした(critic はそれぞれ PASS。make test / lint / build / check-publishable / ios-test が成功)。
 Reason: ユーザー回答(2026-09-22)「契約追従が緑になったら PR」の続き。P6-2b が完了し DOC-ios の割り当て(データレーンより)も完了したため区切りで統合した。
 Impact: 続き(P6-2c 構築)は同じブランチ feat/ios-p6 で進める。
+
+## 2026-09-22: 判定レーン(素早さ×ダメージ連動)を新設(ユーザー要望)
+Decision: 「ニトチャ+メイン技で素早さ抜ける+そのポケモンを倒せるか」を1回で判定する新レーン「判定」を追加する(`~/MyDamageCalcurater-judge`、`feat/judge-<stage名>`、ADR 帯 `0700〜`)。
+判定サービスは speed-svc に依存しない(SP2 未着手のため)。engine を直接呼んで実数値(素早さ)を計算し、pokedex-svc の公開 API(種族値)・calc-svc の公開 API(`/api/calc` の KOChance)だけに依存する。
+相手側も「具体的な調整を入力できる形」(ユーザー回答。極限スピードではなく個別の性格・SP・持ち物を指定する)。
+Reason: ユーザーが「新しいレーンを作る」「相手の具体的な調整を入力」と回答した。
+Impact: docs/judge-design.md(起草)、COORDINATION.md・CURRENT_STATE.md・plan.md にレーンを登録。ADR・実装は判定レーンの最初のセッションが行う(このセッションはタイプバランス担当のため実装しない)。
+## 2026-09-22: P2-3b の設計判断(既定案どおり。データレーンで確認)
+Decision: (1) `data/importer/effects.json` に足す無効・吸収の特性8件は、ADR-0106 §決定5の表のまま(oracleが裏付けるのは「ダメージ0」のみで、回復1/4・上昇+1はゲームの一般仕様として入れる)。(2) `effectHooks` に `onTryHit`・`onImmunity` を足す。(3) `CalcResult` に `nullified` は出さない(画面で理由表示が要るときに依頼する)。
+Reason: spec-writer(ADR-0106)が3点を既定案として報告し、いずれも取り消しやすい・oracleの実装に基づく判断のため、データレーンで確認して進めた。
+Impact: export に immune/absorb が出るようになり、TB3/TB5 の結果が変わる(balanceのschema・loaderは対応済みで依頼不要)。
+Web レーンへの依頼(ADR-0106 §他レーンへの依頼): `web/src/engine/types.ts` の `AbilityEffect` に `defImmuneTypes`/`defAbsorbTypes` を追加(足さないと WASM 経由の計算だけ無効・吸収が効かない)、`web/src/master/exportBalanceReadModel.ts` の `BalanceAbilityEffect` に `absorb` を追加し §7 の順序で出す。
+API(calc)レーンへの依頼(P2-3b の critic 指摘): `services/calc/internal/master/master.go` の `copyAbilityEffect` が `DefResistType` しかディープコピーしておらず、`DefImmuneTypes`/`DefAbsorbTypes` が共有マスタと同じメモリを指す。コピーを足し、`TestLookupReturnsCopiesOfEffects` に両フィールドの書き換えケースを足す。
+
+## 2026-09-22: TB6 実装後の web の生成コードの再生成はWeb レーンの申し送り(タイプバランスレーンから)
+Decision: TB6(technical range checker。ADR-0404)で `services/balance/api/openapi.yaml` に `/api/balance/v1/move-range/analyze` を追加した。
+`web/src/api/balance.gen.ts`(`make gen-ts` の生成物)は `web/` の範囲でこのレーンからは変更しない。**TB6 が main に入ってから**、Web レーンが必要になったタイミングで `make gen-ts` を再実行してほしい。
+Reason: AGENTS.md「タイプバランスレーンの範囲」により web/ は範囲外(critic 指摘)。
+Impact: Web が move-range を呼ぶ画面を作るときに、まず `make gen-ts` を実行して型を最新化する必要がある。
+## 2026-09-22: 整備レーン(Claude の上限時の Codex)の仕組みを削除する(ユーザー決定)
+Decision: COORDINATION.md の「Claude の上限時の Codex」節、plan.md の「整備レーン」節(MT-1〜MT-7)、CURRENT_STATE.md の Maintenance 欄を削除する。
+Reason: ユーザーが「Codex はこのプロジェクトで必ず使う必要はなく、有効活用したい程度の感覚。ノイズになるなら消した方がいい」と判断した。整備タスク(MT-3〜MT-7)は文書の整合性などの低優先度の掃除作業で、M1 の完成に影響しない。今後はレーンの作業を Claude だけで進める。
+Impact: 今後、Claude が利用枠の上限に達しても Codex を自動的に起動する仕組みは無い。Codex を使いたい場合は、その都度ユーザーが判断してレーンを直接担当させる(通常のレーン運用と同じ)。MT-1・MT-2(統合検証・check-publishable の自己テスト修正)はすでに完了して main に入っているので、成果は失われない。

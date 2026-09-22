@@ -3,10 +3,13 @@
 // スナップショット(services/calc/README.md の暫定スキーマ schemaVersion 1、src/master/exportSnapshot.ts の
 // toCalcSnapshot)の JSON に書き出す。calc-svc をこの出力で起動すれば、Web の例データの ID がそのまま
 // API に通る(オンラインの動作確認・P4-6 の E2E)。
+// P4-12a(ADR-0303 §4): 同じ例データを balance-svc の read model(pokemon-types・moves・abilities。
+// src/master/exportBalanceReadModel.ts)にも、calc のスナップショットと同じディレクトリに書き出す。
 //
 // 使い方: node scripts/export-example-master.mjs [出力先のパス]
 //   省略すると data/generated/web-example-master.json(リポジトリルート基準)に書く。
-//   data/generated/ は .gitignore 済みで、生成物はコミットしない(ADR-0002)。
+//   balance の3ファイル(balance-pokemon-types.json・balance-moves.json・balance-abilities.json)は
+//   同じディレクトリに書く。data/generated/ は .gitignore 済みで、生成物はコミットしない(ADR-0002)。
 //
 // 例データは TypeScript(拡張子省略の import・vite.config.ts の @typechart 別名)で書かれているため、
 // プレーンな node では import できない。vite.config.ts の設定(alias・fs.allow)をそのまま使う開発サーバーを
@@ -20,7 +23,7 @@ import { createServer } from "vite";
 const webRoot = fileURLToPath(new URL("..", import.meta.url));
 const defaultOutPath = join(webRoot, "..", "data", "generated", "web-example-master.json");
 
-async function loadSnapshot() {
+async function loadSnapshots() {
   const server = await createServer({
     root: webRoot,
     logLevel: "error",
@@ -29,8 +32,16 @@ async function loadSnapshot() {
   try {
     const { exampleMasterSource } = await server.ssrLoadModule("/src/master/exampleSource.ts");
     const { toCalcSnapshot } = await server.ssrLoadModule("/src/master/exportSnapshot.ts");
+    const { toBalanceAbilities, toBalanceMoves, toBalancePokemonTypes } = await server.ssrLoadModule(
+      "/src/master/exportBalanceReadModel.ts",
+    );
     const master = await exampleMasterSource.load();
-    return toCalcSnapshot(master);
+    return {
+      calc: toCalcSnapshot(master),
+      balancePokemonTypes: toBalancePokemonTypes(master),
+      balanceMoves: toBalanceMoves(master),
+      balanceAbilities: toBalanceAbilities(master),
+    };
   } finally {
     await server.close();
   }
@@ -38,10 +49,14 @@ async function loadSnapshot() {
 
 async function main() {
   const outPath = resolve(process.argv[2] ?? defaultOutPath);
-  const snapshot = await loadSnapshot();
-  await mkdir(dirname(outPath), { recursive: true });
-  await writeFile(outPath, JSON.stringify(snapshot, null, 2));
-  console.log(`export-example-master: ${outPath} に書き出した`);
+  const outDir = dirname(outPath);
+  const { calc, balancePokemonTypes, balanceMoves, balanceAbilities } = await loadSnapshots();
+  await mkdir(outDir, { recursive: true });
+  await writeFile(outPath, JSON.stringify(calc, null, 2));
+  await writeFile(join(outDir, "balance-pokemon-types.json"), JSON.stringify(balancePokemonTypes, null, 2));
+  await writeFile(join(outDir, "balance-moves.json"), JSON.stringify(balanceMoves, null, 2));
+  await writeFile(join(outDir, "balance-abilities.json"), JSON.stringify(balanceAbilities, null, 2));
+  console.log(`export-example-master: ${outPath} と balance の3ファイルに書き出した`);
 }
 
 await main();

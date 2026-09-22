@@ -203,3 +203,37 @@ describe("P4-10 文書のタイトル", () => {
     expect(document.title).toBe("逆算 | pokecalc");
   });
 });
+
+// P4-12a: タイプバランスの画面(ADR-0303 §2)。ルート表に1件足し、タブ「タイプバランス」と /balance で開く。
+// 画面はメンバーを選ぶまで balance API を呼ばない(ここでは fetch が呼ばれないことも確かめる)。
+describe("P4-12a タイプバランスのタブ", () => {
+  test("タブ「タイプバランス」があり、/balance を直接開くと選択され、メンバーの枠を出す(balance はまだ呼ばない)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    setPath("/balance");
+    render(<App engine={createFakeEngine()} />);
+    expect(await screen.findByRole("tab", { name: "タイプバランス" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("tab", { name: "計算" })).toHaveAttribute("aria-selected", "false");
+    expect(await screen.findByRole("group", { name: "メンバー1" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/balance");
+    expect(document.title).toBe("タイプバランス | pokecalc");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test("タイプバランスのタブのクリックで /balance を pushState し、画面を切り替える", async () => {
+    const user = userEvent.setup();
+    render(<App engine={createFakeEngine()} />);
+    await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
+    const pushSpy = vi.spyOn(window.history, "pushState");
+
+    await user.click(screen.getByRole("tab", { name: "タイプバランス" }));
+    expect(window.location.pathname).toBe("/balance");
+    expect(pushSpy).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole("group", { name: "メンバー1" })).toBeInTheDocument();
+
+    simulatePopState("/calc");
+    expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toBeInTheDocument();
+  });
+});
