@@ -645,3 +645,26 @@ Impact(データレーンへの提案。既定案): (1) pokedex-svc(P2-3)で `GE
 (2) natures テーブル(id, name_ja, plus, minus)を追加し、/api/pokedex/natures と内部 API の両方で使う。(3) MasterExport の species には showdownId を含める(共通マスタの Species が形式を検証するため。nameEn は含めない)。
 API レーンの後続: pokedex-svc のデプロイ後に calc の local overlay を URL 方式(`CALC_MASTER_URL=http://pokedex`)に切り替える。
 Web / iOS へ: openapi に tag `internal` の操作と Master* の型が増える(web/src/api/openapi.gen.ts はこの PR で再生成済み)。iOS は生成し直すか、生成設定で `internal` タグを除外する。
+
+
+## 2026-09-22: Web P4-9 を統合(PR #35)
+Decision: P4-9(P4-8 の軽微な改善3件)を PR #35 で main に統合した。Web レーンは他レーン(P2-3・P3-3)待ちで一時停止(Active: なし)。
+Reason: critic PASS、make test / lint / build・E2E の通過を確認。
+Impact: 続きは CURRENT_STATE.md の Web 欄の Next。
+
+## 2026-09-22: Web の画面・コンテナ化・手順書の方針(ユーザー回答)と、API レーンへの依頼
+Decision: (1) 画面は URL で切り替える(`/calc`・`/reverse`。P4-10)。(2) タイプバランスと素早さ比較の画面を Web に作る(P4-12・P4-13。balance / speed API を使う。
+各サービスのレーンの API 契約は変えずに使う)。(3) ローカルでもコンテナ(k3d)で動かすのを主にする。Web は nginx の静的配信イメージにし、
+**gateway の後ろ**に置く(localhost:8080 だけで画面も API も使える。P4-11)。(4) 手順書は上から順に実行するだけで済む形にし、各コマンドは
+リポジトリのルートへの `cd` から始める(P4-14)。(5) P4-5 のブラウザ実機確認は Chrome で良好(Safari は未確認)。
+**依頼(API レーン宛て)**: gateway に任意の `GATEWAY_WEB_URL` を足し、設定されていれば `/api`・`/assets`・`/healthz` 以外のパスを Web(nginx の Service)へ転送してほしい
+(未設定なら従来どおり)。Web レーンは base/web の Service 名 `web`(port 80)を用意する。それまでは `kubectl port-forward` で Web を開く。
+Reason: ユーザーが make web-dev で確認したうえで「他の画面も見たい」「make の実行場所で迷う」「ローカルもコンテナで動かして k8s の恩恵を受けたい」「手順書を上下に行き来する」と要望した。
+Impact: plan.md に P4-10〜P4-14。gateway の変更は API レーンの範囲なので Web レーンは変更しない。
+
+## 2026-09-22: 素早さの画面は素早さレーン(SP3)のまま(ユーザー決定)
+Decision: 素早さ比較の画面は、COORDINATION.md のとおり素早さレーンの SP3(`web/src/speed/`)が作る。Web レーンの P4-13 は取り消す。
+Web レーンは P4-10 の URL で画面を切り替える仕組み(ルート表)を、素早さレーンが1項目足すだけで `/speed` を登録できる形にする。
+タイプバランスの画面(P4-12)は、担当が決まっていないので Web レーンが作る。
+Reason: 上の「Web の画面・コンテナ化・手順書の方針」で P4-13 を Web に置いたが、素早さの画面は既に素早さレーンの範囲と決まっていた(素早さレーンの指摘)。ユーザーが素早さレーンのままを選んだ。
+Impact: plan.md の P4-13 を取り消し。素早さレーンの SP3 はそのまま。

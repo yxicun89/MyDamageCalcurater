@@ -3,6 +3,8 @@
 // P4-5: ヘッダーに計算モード(オフライン = WASM / オンライン = API)の切り替えを置く(ADR-0301 §4)。
 // engines(offline・online)を渡せ、選択中のモードの engine だけで計算する(自動フォールバックはしない)。
 // 単一の engine を渡すと(既存の使い方のまま)両モードでその engine を使う。
+// P4-10: タブの選択は URL(History API)と連動する(ADR-0300 §1: ルーターのライブラリは入れない)。
+// 画面 ID・パス・タブの表示名・文書タイトルの対応は app/routes.ts の SCREEN_ROUTES を正とする。
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import "./App.css";
@@ -10,20 +12,25 @@ import { createApiEngine } from "./api/apiEngine";
 import { apiBaseUrl } from "./api/config";
 import { createClientIds, type ClientIds } from "./api/clientIds";
 import { loadCalcMode, saveCalcMode, type CalcMode } from "./app/calcMode";
+import {
+  DEFAULT_SCREEN,
+  SCREEN_ROUTES,
+  documentTitle,
+  pathForScreen,
+  screenFromPath,
+  screenLabel,
+  type ScreenId,
+} from "./app/routes";
 import { browserWasmLoader } from "./engine/browserWasmLoader";
 import type { CalcEngine } from "./engine/types";
 import { createWasmEngine } from "./engine/wasmEngine";
 import { appText } from "./i18n/ja";
 import { exampleMasterSource } from "./master/exampleSource";
 import type { MasterData, MasterSource } from "./master/types";
-import { CalcScreen } from "./screens/CalcScreen";
-import { ReverseScreen } from "./screens/ReverseScreen";
-
-/** 計算・逆算の切り替えタブ(P4-4、ADR-0300 §7)。既定は計算。 */
-type ScreenTab = "calc" | "reverse";
+import { SCREEN_COMPONENTS } from "./app/screens";
 
 /** タブの定義順(ロービング tabIndex・矢印キーの移動順。WAI-ARIA Authoring Practices の Tabs パターン)。 */
-const TAB_ORDER: readonly ScreenTab[] = ["calc", "reverse"];
+const TAB_ORDER: readonly ScreenId[] = SCREEN_ROUTES.map((route) => route.id);
 
 /** 計算モードの定義順(ラジオの表示順。既定のオフラインを先に出す)。 */
 const CALC_MODE_ORDER: readonly CalcMode[] = ["offline", "online"];
@@ -55,11 +62,6 @@ export interface AppProps {
 /** masterSource.load() の結果(成功/失敗のどちらか)。読み込み中は state を持たず null のまま表す。 */
 type MasterLoad =
   { readonly ok: true; readonly master: MasterData } | { readonly ok: false; readonly error: Error };
-
-/** タブの表示名(appText の語をそのまま使う)。 */
-function tabLabel(tabId: ScreenTab): string {
-  return tabId === "calc" ? appText.calcTabLabel : appText.reverseTabLabel;
-}
 
 /**
  * アプリの最上位。ヘッダーと計算画面(CalcScreen)を出す。マスタを読み込むまでは「読み込み中」、
@@ -109,22 +111,32 @@ export function App({ engine, engines, masterSource = exampleMasterSource }: App
     saveCalcMode(nextMode);
   }
 
-  // 計算・逆算の切り替え(P4-4)。既定は計算。どちらの画面も同じ engine・master を使う。
-  const [tab, setTab] = useState<ScreenTab>("calc");
+  // 計算・逆算の切り替え(P4-4)。URL と連動する(P4-10)。パスは BASE_URL からの相対として読む。
+  // 初期状態は現在の URL から決め、未知のパスは既定の画面(calc)にしておき(マウント効果が URL を
+  // /calc に置き換える。画面自体はマスタ読み込み待ちの間 state だけ既定にしておけば齟齬はない)。
+  const base = import.meta.env.BASE_URL;
+  const [tab, setTab] = useState<ScreenId>(
+    () => screenFromPath(window.location.pathname, base) ?? DEFAULT_SCREEN,
+  );
 
   // タブ・タブパネルの id(WAI-ARIA Authoring Practices の Tabs パターン: tab の aria-controls が
   // panel の id を指し、panel の aria-labelledby が選択中の tab の id を指す)。パネルは1つだけ描画し
   // (非選択側の画面は DOM から外す。App.test.tsx が別タブの combobox が無いことを確かめる)、
   // 中身を選択中のタブで入れ替える。
   const idBase = useId();
-  const tabElementId = (id: ScreenTab): string => `${idBase}-tab-${id}`;
+  const tabElementId = (id: ScreenId): string => `${idBase}-tab-${id}`;
   const panelId = `${idBase}-panel`;
 
   // ロービング tabIndex(選択中のタブだけ 0、他は -1)のフォーカス移動先を、クリックでなく
   // キーボードで選んだときに参照する(WAI-ARIA Authoring Practices「automatic activation」)。
-  const tabRefs = useRef<Partial<Record<ScreenTab, HTMLButtonElement>>>({});
+  const tabRefs = useRef<Partial<Record<ScreenId, HTMLButtonElement>>>({});
 
-  function selectTab(nextTab: ScreenTab): void {
+  /** タブの選択(クリック・キーボード)。URL を pushState する(同じタブの選び直しは履歴を積まない)。 */
+  function navigateToTab(nextTab: ScreenId): void {
+    if (nextTab === tab) {
+      return;
+    }
+    window.history.pushState(null, "", pathForScreen(nextTab, base));
     setTab(nextTab);
   }
 
@@ -152,9 +164,47 @@ export function App({ engine, engines, masterSource = exampleMasterSource }: App
     if (nextTab === undefined) {
       return;
     }
-    selectTab(nextTab);
+    navigateToTab(nextTab);
     tabRefs.current[nextTab]?.focus();
   }
+
+  // マウント時: URL が既知のパスでなければ /calc に置き換える(push でなく replace。履歴を増やさない)。
+  // マスタの読み込みを待たない(state の初期値は既に既定になっているので、ここは URL の見た目を直すだけ)。
+  useEffect(() => {
+    if (screenFromPath(window.location.pathname, base) === null) {
+      window.history.replaceState(null, "", pathForScreen(DEFAULT_SCREEN, base));
+    }
+    // base は import.meta.env.BASE_URL(実行中は不変)なので依存配列に含めない。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ブラウザの戻る・進む(popstate)で URL に合わせてタブを切り替える。未知のパスへ戻ったときは
+  // 計算タブを出し、URL も /calc に置き換える(push はしない)。アンマウントで購読を外す。
+  useEffect(() => {
+    function handlePopState(): void {
+      const next = screenFromPath(window.location.pathname, base);
+      if (next === null) {
+        window.history.replaceState(null, "", pathForScreen(DEFAULT_SCREEN, base));
+        setTab(DEFAULT_SCREEN);
+        return;
+      }
+      setTab(next);
+    }
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+    // base は import.meta.env.BASE_URL(実行中は不変)なので依存配列に含めない(購読を張り直さない)。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 文書のタイトル(「<画面名> | pokecalc」)。タブの切り替え・popstate に追従し、マスタ読み込み中も設定する。
+  useEffect(() => {
+    document.title = documentTitle(tab);
+  }, [tab]);
+
+  // 選ばれている画面のコンポーネント(app/screens.tsx の対応表から引く)。
+  const ActiveScreen = SCREEN_COMPONENTS[tab];
 
   useEffect(() => {
     let cancelled = false;
@@ -206,23 +256,19 @@ export function App({ engine, engines, masterSource = exampleMasterSource }: App
                     }}
                     className="app-tabs__tab"
                     onClick={() => {
-                      selectTab(id);
+                      navigateToTab(id);
                     }}
                     onKeyDown={(event) => {
                       handleTabKeyDown(event, index);
                     }}
                   >
-                    {tabLabel(id)}
+                    {screenLabel(id)}
                   </button>
                 );
               })}
             </div>
             <div role="tabpanel" id={panelId} aria-labelledby={tabElementId(tab)} className="app-tabs__panel">
-              {tab === "calc" ? (
-                <CalcScreen engine={resolvedEngine} master={masterLoad.master} />
-              ) : (
-                <ReverseScreen engine={resolvedEngine} master={masterLoad.master} />
-              )}
+              <ActiveScreen engine={resolvedEngine} master={masterLoad.master} />
             </div>
           </div>
         )}

@@ -89,7 +89,7 @@
 - [x] P4-2 計算画面(左右カード・持ち物・技・結果の一括表示・攻守入れ替え)。WASM で計算、マスタは架空の例データ(ADR-0300)
 - [x] P4-3 プリセット選択(自分側: A特化/A振り/無振り)。定義は web/src/domain/attackerPresets.ts(ADR-0300 §5。engine への移設は DECISIONS.md で提案)
 - [x] P4-4 逆算画面(観測ダメージ入力→候補リスト)。与えた/受けたダメージ・観測の追加・SP 範囲と目安の名前(ADR-0300 §7。型名でまとめる表示と絞り込みの演出は持ち越し)
-- [!] P4-5 API / WASM 切り替え(WASM ならバックエンド無しで動く)。実装・自動テスト済み(ADR-0301。critic PASS)、**ブラウザ実機確認は人間待ち**(ブロッカー節)
+- [!] P4-5 API / WASM 切り替え(WASM ならバックエンド無しで動く)。実装・自動テスト済み(ADR-0301。critic PASS)。ブラウザ実機確認: **Chrome は確認済み**(2026-09-22 ユーザー。`make web-dev` で良好)、**Safari は未確認**
   - WASM 境界との契約差分の解消(ADR-0011 §10 の持ち越し): Web に「ID → 実体(種族・技・持ち物・特性)」の解決層を1つ置き、オンライン(API に ID を送る=`moveId` など)とオフライン(WASM に解決済みの `move` / `Individual` を渡す)で同じ型を共有する。`openapi-typescript` の生成型と ADR-0011 §3 の DTO の対応表を作る。`minPercent`/`maxPercent` の整数化・`category`・`BulkCalcRow.defender`・エラー `code` 語彙の共通化(P3-1 で契約側を直した後)に Web 側を追従させる。WASM の遅延ロード(オンラインは API、オフラインだけ WASM)にするかを決める(ADR-0011 §11)
   - **ブラウザ実機確認**(P1-9 は Node + wasm_exec.js までの確認。仕様ブロッカーではない): Chrome と Safari で、`.wasm` の MIME type / `WebAssembly.instantiateStreaming` / キャッシュ / Service Worker との干渉 / 初回ロード(約4.6MB・gzip 1.3MB)/ メモリ を確認する
 - [x] P4-6 Playwright E2E(主要フロー)。`make web-e2e`(オフライン)/ `make web-e2e-online`(calc-svc)。Web のテストを `make test` / `lint` / `build` に組み込み(ADR-0300 §9)
@@ -98,6 +98,13 @@
 - [x] P4-8 design.md「動き」の演出(操作したときだけ): 確定数が変わった瞬間にバッジが弾む、攻守入れ替えでカードが入れ替わる(0.35秒)、選択中のカード1枚だけのホロ(ポインタ位置に連動)、逆算で観測を追加したときの絞り込みの動き、ダメージバーの spring。OS の「視差効果を減らす」で全演出を無効化(ユーザー決定 2026-09-22)
 
 - [x] P4-9 P4-8 の軽微な改善(ユーザー指示 2026-09-22): ホロの pointermove で画面全体を再レンダーしない(カード内に閉じる・rAF で間引き、cancel と対)、touch ではホロを出さない(pointerType が mouse / pen のときだけ)、確定数バッジの弾みと逆算の絞り込みにも最大待ちのタイマーを付ける(animationend が来なくても外す)
+
+- [x] P4-10 URL で画面を切り替える(`/calc`・`/reverse`。タブと連動し、ブラウザの戻る・進む・直接開くが効く。以後の画面も同じ形)(ユーザー要望 2026-09-22)
+- [ ] P4-11 Web をコンテナで動かす: nginx の静的配信イメージ(engine.wasm を含む)、Kustomize(base/web と local の Component)、`make web-k3d-deploy`。
+  入口は gateway の後ろ(localhost:8080 だけで画面も API も使える。gateway が /api 以外を Web に転送する変更は API レーンに依頼)。それまでは port-forward で開く(ユーザー決定 2026-09-22)
+- [ ] P4-12 タイプバランスの画面(balance API を使う。設計から)(ユーザー要望 2026-09-22)
+- ~~P4-13 素早さ比較の画面~~ → 取り消し(ユーザー決定 2026-09-22: 素早さレーンの SP3 のまま。Web は P4-10 の URL の仕組みで `/speed` を足せる形を用意する)
+- [ ] P4-14 手順書の書き方の改善: docs/verify-m1.md を上から順に実行するだけで済む形にし、各コマンドの塊は必ずリポジトリのルートへの `cd` から始める(make の実行場所で迷わない)。k3d(コンテナ)で動かす手順を主にする(ユーザー要望 2026-09-22)
 
 ## M2: 保存・構築
 - [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)
@@ -170,7 +177,7 @@
 (ここに止まった理由と試したことを書く)
 
 **【人間の確認待ち】(Web レーン、2026-09-22 深夜に記載)**
-- **P4-5 のブラウザ実機確認**(仕様ブロッカーではない。作業は止めない): `make web-dev` で開き、Chrome と Safari で計算・逆算が動くこと、
+- **P4-5 のブラウザ実機確認**(仕様ブロッカーではない。作業は止めない。**Chrome は 2026-09-22 に確認済み**、残りは Safari): `make web-dev` で開き、Chrome と Safari で計算・逆算が動くこと、
   `.wasm` の MIME type(`application/wasm`)・`WebAssembly.instantiateStreaming`(失敗時は arrayBuffer にフォールバックする実装)・
   キャッシュ・初回ロード(約4.6MB / gzip 1.3MB)・メモリを確認する。既定案: 確認できるまで P4-5 は「実装・自動テスト済み、実機未確認」として扱う。
 - **PR #22(Web P4-1〜P4-4)のマージ**: 深夜のため作成のみ(作業はブランチで続けられるので止まらない)。朝に確認してマージする。
