@@ -25,14 +25,26 @@ type ItemEffect struct {
 	ResistBerryType    Type            // 半減きのみ: このタイプの抜群技を半減(防御側)
 }
 
+// AbsorbEffect は吸収したときの副次効果(マスタの記述)。ゼロ値は「吸収するが副次効果は持たない」
+// (もらいび等)。ダメージ計算はこの値を読まない(ADR-0106 §決定4: 現在HP・現在のランクを
+// 受け取らないためモデル化しない)。
+type AbsorbEffect struct {
+	HealNumerator   int     // 最大HPに対する回復の分子。0 は回復なし
+	HealDenominator int     // 回復の分母(1..16)。HealNumerator が 0 でないときだけ意味を持つ
+	BoostStat       StatKey // 上げる能力(HP 不可)。"" は無し
+	BoostStages     int     // 上げる段階(1..6)。BoostStat があるときだけ意味を持つ
+}
+
 // AbilityEffect はダメージに影響する特性の補正(4096基準)。
 type AbilityEffect struct {
-	StabMod              int          // タイプ一致補正を上げる特性: 8192(ModifierAdaptability)。0 は通常(ModifierStab)
-	OffBoostType         Type         // 攻撃実数値強化の対象技タイプ
-	OffBoostTypeMod      int          // 例 6144
-	DefResistType        map[Type]int // 相手の攻撃実数値補正。例 炎・氷技を半減する特性{fire:2048, ice:2048}
-	ReduceSuperEffective int          // 抜群技を軽減する特性等: 抜群時に軽減(例 3072)
-	IgnoresBurn          bool         // こんじょう等: やけどの攻撃半減を無効化
+	StabMod              int                   // タイプ一致補正を上げる特性: 8192(ModifierAdaptability)。0 は通常(ModifierStab)
+	OffBoostType         Type                  // 攻撃実数値強化の対象技タイプ
+	OffBoostTypeMod      int                   // 例 6144
+	DefResistType        map[Type]int          // 相手の攻撃実数値補正。例 炎・氷技を半減する特性{fire:2048, ice:2048}
+	DefImmuneTypes       []Type                // 無効にする攻撃タイプ(ふゆう)。ダメージ0、副次効果なし(ADR-0106)
+	DefAbsorbTypes       map[Type]AbsorbEffect // 吸収する攻撃タイプ(ちょすい等)→副次効果。ダメージ0(ADR-0106)
+	ReduceSuperEffective int                   // 抜群技を軽減する特性等: 抜群時に軽減(例 3072)
+	IgnoresBurn          bool                  // こんじょう等: やけどの攻撃半減を無効化
 }
 
 func hasType(in Individual, t Type) bool {

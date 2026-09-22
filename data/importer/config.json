@@ -13,6 +13,7 @@
       "onAnyBasePower",
       "onBasePower",
       "onEffectiveness",
+      "onImmunity",
       "onModifyAtk",
       "onModifyDamage",
       "onModifyDef",
@@ -23,7 +24,8 @@
       "onSourceBasePower",
       "onSourceModifyAtk",
       "onSourceModifyDamage",
-      "onSourceModifySpA"
+      "onSourceModifySpA",
+      "onTryHit"
     ],
     "verdicts": {
       "basis": {
