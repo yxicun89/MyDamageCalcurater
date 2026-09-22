@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # k8s を使わずローカルで calc-svc・gateway を起動する高速な開発ループ(ADR-0203 §6)。
-# 例のマスタ(services/calc/testdata/master.example.json。架空データ)と共有の相性表
-# (testdata/golden/typechart.json)を calc-svc に読ませ、gateway をその calc-svc へ向ける。
+# 例のマスタ一式(services/calc/testdata/master.example.json。架空データ + 相性表。ADR-0204)を
+# calc-svc に読ませ、gateway をその calc-svc へ向ける。
 # CORS は Vite の開発サーバの既定オリジン(http://localhost:5173)だけ許可する。
 #
 # `go run` は SIGINT/SIGTERM をビルドした実バイナリへ転送しない(go run 自身のプロセスだけが
@@ -26,7 +26,6 @@ calc_port="${DEV_CALC_PORT:-8081}"
 gateway_port="${DEV_GATEWAY_PORT:-8080}"
 
 calc_master="$repo_root/services/calc/testdata/master.example.json"
-calc_typechart="$repo_root/testdata/golden/typechart.json"
 
 tmpdir="$(mktemp -d)"
 pids=()
@@ -56,7 +55,6 @@ echo "dev: calc-svc・gateway をビルドします..."
 echo "dev: calc-svc を http://localhost:$calc_port で起動します(マスタ: $calc_master)"
 CALC_ADDR=":$calc_port" \
 CALC_MASTER_PATH="$calc_master" \
-CALC_TYPECHART_PATH="$calc_typechart" \
 "$tmpdir/calc" &
 pids+=("$!")
 

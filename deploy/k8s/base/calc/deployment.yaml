@@ -32,7 +32,7 @@ spec:
               value: 56MiB
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /readyz
               port: http
             initialDelaySeconds: 1
             periodSeconds: 5

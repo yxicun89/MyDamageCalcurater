@@ -14,20 +14,22 @@
 //     取得後の再取得はしない(マスタの更新は再起動で反映する)。
 //
 // 計算はイベント保存に依存しない(CLAUDE.md 絶対ルール5)。
-//
-// TODO(ADR-0204): spec-writer のスタブ。loadConfig / newHandler / backoffDelay は implementer が実装する
-// (振る舞いは main_test.go・manifest_test.go が固定する)。
 package main
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
+
+	"example.com/pokecalc/services/calc/internal/httpapi"
+	"example.com/pokecalc/services/calc/internal/master"
 )
 
 // 環境変数の名前。
@@ -73,25 +75,119 @@ type config struct {
 	MasterFetchTimeout time.Duration // 同上
 }
 
-var errNotImplemented = errors.New("未実装(ADR-0204)")
-
 // loadConfig は環境変数から設定を読む。CALC_MASTER_URL と CALC_MASTER_PATH のちょうど1つ(空は未設定と同じ)、
 // URL は http / https の絶対 URL、CALC_TYPECHART_PATH は未設定であること。CALC_ADDR が未設定・空なら defaultAddr。
 func loadConfig(lookup func(string) (string, bool)) (config, error) {
-	return config{}, errNotImplemented
+	if v, ok := lookup(envTypeChartPath); ok && v != "" {
+		return config{}, fmt.Errorf("%s は廃止された(ADR-0204。相性表は CALC_MASTER_URL / CALC_MASTER_PATH のマスタ一式に含まれる)", envTypeChartPath)
+	}
+
+	addr := defaultAddr
+	if v, ok := lookup(envAddr); ok && v != "" {
+		addr = v
+	}
+
+	var masterURL, masterPath string
+	if v, ok := lookup(envMasterURL); ok {
+		masterURL = v
+	}
+	if v, ok := lookup(envMasterPath); ok {
+		masterPath = v
+	}
+	switch {
+	case masterURL != "" && masterPath != "":
+		return config{}, fmt.Errorf("%s と %s はちょうど1つを指定すること", envMasterURL, envMasterPath)
+	case masterURL == "" && masterPath == "":
+		return config{}, fmt.Errorf("%s か %s のどちらかが必要", envMasterURL, envMasterPath)
+	case masterURL != "":
+		if _, err := master.NewHTTPSource(masterURL, defaultMasterFetchTimeout); err != nil {
+			return config{}, fmt.Errorf("%s が不正: %w", envMasterURL, err)
+		}
+	}
+
+	return config{
+		Addr:               addr,
+		MasterURL:          masterURL,
+		MasterPath:         masterPath,
+		MasterRetry:        retryPolicy{Initial: defaultMasterRetryInitial, Max: defaultMasterRetryMax},
+		MasterFetchTimeout: defaultMasterFetchTimeout,
+	}, nil
 }
 
 // newHandler は設定に応じて HTTP ハンドラを作る。
 //   - ファイル方式: マスタを読み込んでから返す。ファイルが無い・壊れている・不正ならエラー(部分的なデータで起動しない)。
 //   - URL 方式: すぐに返し、ctx が続く間バックグラウンドで取得を再試行する(取得・検証の失敗はどちらも再試行)。
 func newHandler(ctx context.Context, cfg config) (http.Handler, error) {
-	return nil, errNotImplemented
+	if cfg.MasterPath != "" {
+		export, err := master.FileSource{Path: cfg.MasterPath}.Fetch(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("マスタファイル %s を読めない: %w", cfg.MasterPath, err)
+		}
+		store, err := master.FromExport(export)
+		if err != nil {
+			return nil, fmt.Errorf("マスタファイル %s の検証に失敗: %w", cfg.MasterPath, err)
+		}
+		return httpapi.NewHandler(store), nil
+	}
+
+	src, err := master.NewHTTPSource(cfg.MasterURL, cfg.MasterFetchTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("%s が不正: %w", envMasterURL, err)
+	}
+	var current atomic.Pointer[master.MemoryStore]
+	go fetchMasterLoop(ctx, src, cfg.MasterRetry, &current)
+	return httpapi.NewDeferredHandler(func() master.Store {
+		s := current.Load()
+		if s == nil {
+			// 型付きの nil を master.Store として返さない(nil 判定が効かなくなるため)。
+			return nil
+		}
+		return s
+	}), nil
+}
+
+// fetchMasterLoop はマスタ一式が取得・検証できるまで指数バックオフで再試行し、成功したら current に
+// 格納して戻る(取得後の再取得はしない。ADR-0204 §3)。ctx が終わったら再試行を止める。
+func fetchMasterLoop(ctx context.Context, src master.Source, retry retryPolicy, current *atomic.Pointer[master.MemoryStore]) {
+	for attempt := 0; ; attempt++ {
+		export, err := src.Fetch(ctx)
+		if err == nil {
+			var store *master.MemoryStore
+			store, err = master.FromExport(export)
+			if err == nil {
+				current.Store(store)
+				return
+			}
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		slog.Warn("calc-svc: マスタを取得できない。再試行する", "error", err, "attempt", attempt)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(backoffDelay(attempt, retry)):
+		}
+	}
 }
 
 // backoffDelay は attempt 回目(0 始まり)の失敗の後に待つ時間。Initial から倍々に伸ばし、Max で止める
 // (大きな attempt でも桁あふれしない)。負の attempt は 0 とみなす。
 func backoffDelay(attempt int, p retryPolicy) time.Duration {
-	return 0
+	if attempt < 0 {
+		attempt = 0
+	}
+	delay := p.Initial
+	for i := 0; i < attempt; i++ {
+		if delay >= p.Max {
+			return p.Max
+		}
+		delay *= 2
+		if delay <= 0 || delay > p.Max {
+			return p.Max
+		}
+	}
+	return delay
 }
 
 // run は設定を読み、マスタを読み込み、ctx が終わるまで待ち受ける。ctx が終わったら
