@@ -9,6 +9,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import "./App.css";
 import { createApiEngine } from "./api/apiEngine";
+import { createBalanceClient } from "./api/balanceClient";
 import { apiBaseUrl } from "./api/config";
 import { createClientIds, type ClientIds } from "./api/clientIds";
 import { loadCalcMode, saveCalcMode, type CalcMode } from "./app/calcMode";
@@ -73,6 +74,11 @@ export function App({ engine, engines, masterSource = exampleMasterSource }: App
   const [fallbackOfflineEngine] = useState<CalcEngine>(() => createWasmEngine(browserWasmLoader()));
   // 端末 ID・セッション ID はマウント時に1回だけ作る(ADR-0301 §3: セッション ID はページを開くたびに新しく)。
   const [clientIds] = useState<ClientIds>(() => createClientIds());
+  // P4-12a: balance API のクライアント(ADR-0303 §5)。計算と同じ基点 URL・端末 ID・セッション ID を使う。
+  // createBalanceClient 自体は fetch しない(メンバーを選ぶまで呼ばれない。BalanceScreen.tsx)。
+  const [balanceClient] = useState(() =>
+    createBalanceClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
+  );
 
   // setState は応答が届いたとき(.then のコールバック)だけで行う(react-hooks/set-state-in-effect)。
   // 読み込み中は load 未完了(null)のまま表す。
@@ -268,7 +274,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource }: App
               })}
             </div>
             <div role="tabpanel" id={panelId} aria-labelledby={tabElementId(tab)} className="app-tabs__panel">
-              <ActiveScreen engine={resolvedEngine} master={masterLoad.master} />
+              <ActiveScreen engine={resolvedEngine} master={masterLoad.master} client={balanceClient} />
             </div>
           </div>
         )}

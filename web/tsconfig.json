@@ -27,6 +27,7 @@
     "e2e",
     "playwright.config.ts",
     "playwright.online.config.ts",
-    "playwright.container.config.ts"
+    "playwright.container.config.ts",
+    "playwright.balance.config.ts"
   ]
 }
