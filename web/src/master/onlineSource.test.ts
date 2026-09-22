@@ -333,3 +333,46 @@ test("resolveSpecies は AbortSignal を fetch に渡す", async () => {
   const [, init] = fetchMock.mock.calls[0] ?? [];
   expect((init ?? {}).signal).toBe(controller.signal);
 });
+
+// ---- P4-16b: P4-16 の critic が残した軽微な積み残し(plan.md P4-16b の(1)〜(3)) ----
+
+test("searchSpecies は fetch の AbortError をそのまま返す(汎用のエラーに包まない)", async () => {
+  const abortError = new DOMException("中断した", "AbortError");
+  const fetchMock = vi.fn<typeof fetch>(() => Promise.reject(abortError));
+  const controller = new AbortController();
+  controller.abort();
+
+  await expect(createSource(fetchMock).search.searchSpecies("テスト", controller.signal)).rejects.toBe(
+    abortError,
+  );
+});
+
+test("応答の読み出し中の AbortError もそのまま返す(取り消しと通信失敗を取り違えない)", async () => {
+  const abortError = new DOMException("中断した", "AbortError");
+  // 本文を読んでいる途中で取り消されると、失敗するのは fetch ではなく response.json() の側になる。
+  const abortingBody = {
+    ok: true,
+    status: 200,
+    json: () => Promise.reject(abortError),
+  } as unknown as Response;
+  const fetchMock = vi.fn<typeof fetch>(() => Promise.resolve(abortingBody));
+  const controller = new AbortController();
+  controller.abort();
+
+  await expect(createSource(fetchMock).search.searchSpecies("テスト", controller.signal)).rejects.toBe(
+    abortError,
+  );
+});
+
+test("性格・種族の取得先も基点 URL の origin を使う(相対パスの組み立てを取り違えない)", async () => {
+  const fetchMock = okFetch();
+  const source = createSource(fetchMock);
+  await source.load();
+  await source.search.searchSpecies("テスト");
+  await source.search.resolveSpecies("9001-000");
+
+  const base = new URL(BASE_URL);
+  for (const [input] of fetchMock.mock.calls) {
+    expect(urlOf(input).origin).toBe(base.origin);
+  }
+});

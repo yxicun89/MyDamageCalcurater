@@ -26,6 +26,7 @@ import { browserWasmLoader } from "./engine/browserWasmLoader";
 import type { CalcEngine } from "./engine/types";
 import { createWasmEngine } from "./engine/wasmEngine";
 import { appText } from "./i18n/ja";
+import { isSearchableMasterSource } from "./master/capabilities";
 import { exampleMasterSource } from "./master/exampleSource";
 import { createSpeedClient } from "./speed/speedClient";
 import type { MasterData, MasterSource, MasterSources } from "./master/types";
@@ -123,6 +124,11 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   // 今選ばれている取得口。masterSources が無ければ常に masterSource(既定は架空の例データ)。
   const activeMasterSource: MasterSource =
     modeMasterSources === null ? masterSource : modeMasterSources[mode];
+
+  // P4-16b(ADR-0304 A-10): 今の取得口が検索付きのときだけ、その search を画面へ渡す(省略は「検索できない」)。
+  const activeMasterSearch = isSearchableMasterSource(activeMasterSource)
+    ? activeMasterSource.search
+    : undefined;
 
   // setState は応答が届いたとき(.then のコールバック)だけで行う(react-hooks/set-state-in-effect)。
   // どの取得口(source)の結果かを state に持たせ、現在の取得口(activeMasterSource)と一致しないときは
@@ -321,6 +327,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
                 master={currentMasterLoad.master}
                 client={balanceClient}
                 speedClient={speedClient}
+                masterSearch={activeMasterSearch}
               />
             </div>
           </div>

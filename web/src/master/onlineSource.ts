@@ -154,6 +154,9 @@ export function createOnlineMasterSource(input: CreateOnlineMasterSourceInput): 
     try {
       parsed = await response.json();
     } catch (error) {
+      if (signal?.aborted === true || (error instanceof DOMException && error.name === "AbortError")) {
+        throw error;
+      }
       throw new Error(`マスタの応答が読めない: ${path}`, { cause: error });
     }
     if (!response.ok) {
