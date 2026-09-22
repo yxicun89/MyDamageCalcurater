@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -16,7 +17,16 @@ import (
 const (
 	deviceIDHeader  = "X-Device-Id"
 	sessionIDHeader = "X-Session-Id"
+
+	// maxPositionBodyBytes: PositionRequest の妥当な body はスカラーのフィールドだけで、
+	// 最長でも pokemonId(8文字)+ 他のフィールドで 200 バイトに満たない。4 KiB は十分な余裕を
+	// 持たせつつ、際限なく大きい body を読み込まないための上限(balance の decodeJSONBody と同じ考え方)。
+	maxPositionBodyBytes = 4 * 1024
 )
+
+// pokemonIDPattern は PositionRequest.pokemonId の形式(openapi.yaml の PokemonId スキーマと同じ)。
+// 生成コードは body の中身を検証しないので、httpapi 側で 1 か所だけ持つ(balance と同じ形)。
+var pokemonIDPattern = regexp.MustCompile(`^\d{4}-\d{3}$`)
 
 // Dependencies は HTTP アダプタの差し替え可能な境界。
 // Pokemon が nil でも起動はし、/healthz は 200、ポケモンを使う API は 503 master_unavailable(ADR-0600 §4)。
@@ -30,8 +40,9 @@ func New(deps Dependencies) *echo.Echo {
 	e.HTTPErrorHandler = writeHTTPError
 	api.RegisterHandlersWithOptions(e, handler{deps: deps}, api.RegisterHandlersOptions{
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
-			"listPokemon":   {requireRequestContext},
-			"getSpeedTable": {requireRequestContext},
+			"listPokemon":      {requireRequestContext},
+			"getSpeedTable":    {requireRequestContext},
+			"getSpeedPosition": {requireRequestContext},
 		},
 	})
 	return e
@@ -60,6 +71,12 @@ func (h handler) ListPokemon(c *echo.Context, _ api.ListPokemonParams) error {
 // requireRequestContext ミドルウェア(New で登録)がクエリより先に行う。
 func (h handler) GetSpeedTable(c *echo.Context, params api.GetSpeedTableParams) error {
 	return getSpeedTable(c, h.deps, params)
+}
+
+// GetSpeedPosition implements POST /api/speed/v1/position (ADR-0602 §4): header (400) → body
+// (400) → read model absent (503) → unknown pokemonId (422) → 200.
+func (h handler) GetSpeedPosition(c *echo.Context, _ api.GetSpeedPositionParams) error {
+	return getSpeedPosition(c, h.deps)
 }
 
 // getSpeedTable implements the body of GetSpeedTable. deps is passed explicitly, matching

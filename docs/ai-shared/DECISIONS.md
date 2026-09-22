@@ -709,6 +709,15 @@ Decision: メインセッションは Sonnet で起動し、重い設計の判�
 Reason: ユーザーが確認の質問に改めて答えた(前回の回答「メインだけ Sonnet」は意図と違った)。
 Impact: CLAUDE.md・COORDINATION.md を更新。
 
+## 2026-09-22: 素早さ DOC-speed を PR #52 で main に統合(素早さレーン)
+Decision: README(coding-rules §8 の形)と手順書 docs/runbooks/speed.md(AGENTS.md「手順書の書き方」)を PR #52 で統合した。speed-k3d-deploy ターゲットを追加し、実際に k3d へデプロイして smoke まで確認した。文書のみのため critic レビューは省略。
+Impact: 素早さレーンの次は SP2(feat/speed-sp2)。
+
+## 2026-09-22: 素早さレーンを一時停止(ユーザー指示。データレーンへ利用枠を集中)
+Decision: 利用枠の残りをデータレーンに集中させるため、素早さレーンのセッションを一旦停止した。SP2(ADR-0602)は実装済み・critic 1回目 NG の重要3件を修正済み(コミット 7aff455)だが、critic の再確認は開始直後に停止したため未完了。作業ツリーはクリーンで全 push 済み(make test/lint/build/check-publishable は成功)。
+Reason: ユーザー指示(データレーンのセッション経由で伝達)。
+Impact: 再開はユーザー指示があってから。次にやることは CURRENT_STATE.md の Speed 欄の Next(critic の再確認から)。
+
 ## 2026-09-22: 判定レーン(素早さ×ダメージ連動)を新設(ユーザー要望)
 Decision: 「ニトチャ+メイン技で素早さ抜ける+そのポケモンを倒せるか」を1回で判定する新レーン「判定」を追加する(`~/MyDamageCalcurater-judge`、`feat/judge-<stage名>`、ADR 帯 `0700〜`)。
 判定サービスは speed-svc に依存しない(SP2 未着手のため)。engine を直接呼んで実数値(素早さ)を計算し、pokedex-svc の公開 API(種族値)・calc-svc の公開 API(`/api/calc` の KOChance)だけに依存する。
