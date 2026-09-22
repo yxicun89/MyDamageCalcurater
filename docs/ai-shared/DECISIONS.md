@@ -665,6 +665,7 @@ Decision: ふゆう・ちょすい等の「特定のタイプの技を無効・�
 Reason: 今の効果定義に無いため、タイプバランスの判定にもダメージ計算にも反映されていない。ユーザーが「後続タスクで足す」を選んだ。
 Impact: plan.md に P2-3b。タイプバランスレーンは P2-3b が入るまで、タイプ由来の相性と倍率を変える特性だけで判断する。
 
+
 ## 2026-09-22: PR #30(API P3-3)・PR #42(API P3-4 マスタを pokedex-svc の内部 API から)を main に統合
 Decision: どちらも critic PASS、make test・lint・build・check-publishable 0 件・api-kustomize・make gen 差分なし、k3d の api-smoke 成功、開いている他の PR と未マージのブランチとの重なりが無いこと(#42 のときは #39 がドキュメントのみ)を確認してマージした。
 Reason: ユーザーの指示(テストが通り他レーンを確認済みならマージしてよい)。
