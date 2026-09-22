@@ -9,16 +9,20 @@ import type { MasterData } from "../master/types";
 import { BalanceScreen } from "../screens/BalanceScreen";
 import { CalcScreen } from "../screens/CalcScreen";
 import { ReverseScreen } from "../screens/ReverseScreen";
+import { SpeedScreen } from "../speed/SpeedScreen";
+import type { SpeedClient } from "../speed/speedClient";
 import type { ScreenId } from "./routes";
 
 /**
  * どの画面にも App が渡すもの(計算の差し替え口・マスタ・balance API のクライアント。
  * ADR-0300 §2・§3、P4-12a: ADR-0303 §2)。計算画面・逆算画面は client を使わない(構造的に無視する)。
+ * SP3(ADR-0604 §2): 素早さの画面は client(balance 専用)とは別のフィールド speedClient を使う。
  */
 export interface ScreenProps {
   readonly engine: CalcEngine;
   readonly master: MasterData;
   readonly client: BalanceClient;
+  readonly speedClient: SpeedClient;
 }
 
 /** 画面 ID ごとのコンポーネント。 */
@@ -26,4 +30,6 @@ export const SCREEN_COMPONENTS: Record<ScreenId, ComponentType<ScreenProps>> = {
   calc: CalcScreen,
   reverse: ReverseScreen,
   balance: BalanceScreen,
+  // SP3(ADR-0604 §2): 素早さ比較。画面の中身は web/src/speed/ にある(レーンの境界)。
+  speed: SpeedScreen,
 };

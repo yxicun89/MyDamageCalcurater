@@ -214,9 +214,14 @@ struct ChipButton: View {
     }
 }
 
-/// エラー表示。design.md「danger」トークン。
+/// エラー表示。design.md「danger」トークン。`identifier` は既定で計算画面の
+/// `calcErrorMessage`(逆算画面もこれをそのまま再利用してきた)。構築画面(P6-2c)は
+/// ADR-0501「P6-2c」5章の契約どおり `teamListErrorMessage` / `teamEditErrorMessage` を
+/// 個別に持つ必要があるため、呼び出し側で指定できるようにする(呼び出し元を変えない
+/// デフォルト引数。既存の Calc/Reverse 画面の呼び出しはそのまま)。
 struct ErrorBannerView: View {
     let message: String
+    var identifier: String = "calcErrorMessage"
 
     var body: some View {
         Text(message)
@@ -226,6 +231,6 @@ struct ErrorBannerView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(SpacingToken.x3)
             .background(ColorToken.bgGlass.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
-            .accessibilityIdentifier("calcErrorMessage")
+            .accessibilityIdentifier(identifier)
     }
 }

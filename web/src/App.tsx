@@ -27,6 +27,7 @@ import type { CalcEngine } from "./engine/types";
 import { createWasmEngine } from "./engine/wasmEngine";
 import { appText } from "./i18n/ja";
 import { exampleMasterSource } from "./master/exampleSource";
+import { createSpeedClient } from "./speed/speedClient";
 import type { MasterData, MasterSource } from "./master/types";
 import { SCREEN_COMPONENTS } from "./app/screens";
 
@@ -78,6 +79,11 @@ export function App({ engine, engines, masterSource = exampleMasterSource }: App
   // createBalanceClient 自体は fetch しない(メンバーを選ぶまで呼ばれない。BalanceScreen.tsx)。
   const [balanceClient] = useState(() =>
     createBalanceClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
+  );
+  // SP3: speed API のクライアント(ADR-0604 §2・§3)。balance と同じ基点 URL・端末 ID・セッション ID を使う。
+  // createSpeedClient 自体は fetch しない(素早さのタブを開くまで呼ばれない。speed/SpeedScreen.tsx)。
+  const [speedClient] = useState(() =>
+    createSpeedClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
   );
 
   // setState は応答が届いたとき(.then のコールバック)だけで行う(react-hooks/set-state-in-effect)。
@@ -274,7 +280,12 @@ export function App({ engine, engines, masterSource = exampleMasterSource }: App
               })}
             </div>
             <div role="tabpanel" id={panelId} aria-labelledby={tabElementId(tab)} className="app-tabs__panel">
-              <ActiveScreen engine={resolvedEngine} master={masterLoad.master} client={balanceClient} />
+              <ActiveScreen
+                engine={resolvedEngine}
+                master={masterLoad.master}
+                client={balanceClient}
+                speedClient={speedClient}
+              />
             </div>
           </div>
         )}

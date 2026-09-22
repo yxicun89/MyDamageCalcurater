@@ -41,6 +41,22 @@ public enum PokeTypeLabel {
     }
 }
 
+/// ステータスキーの日本語名(openapi `StatKey` の6値。Showdown 規約の並び)。P6-2c 構築編集画面の
+/// SP 入力ラベルで使う(他画面には無かったので新設。マスタに無い表示専用文言なのでコードに置く
+/// 理由は `MoveCategoryLabel` と同じ)。
+public enum StatKeyLabel {
+    public static func japaneseName(for stat: StatKey) -> String {
+        switch stat {
+        case .hp: return "HP"
+        case .atk: return "こうげき"
+        case .def: return "ぼうぎょ"
+        case .spa: return "とくこう"
+        case .spd: return "とくぼう"
+        case .spe: return "すばやさ"
+        }
+    }
+}
+
 /// タイプ相性(`CalcResult.effectiveness`。0, 0.25, 0.5, 1, 2, 4 のどれか)の日本語ラベル。
 public enum EffectivenessLabel {
     /// 「ばつぐん」(等倍より効果が高い)かどうか。design.md「色を持つのはタイプだけ」: 技の要約行は

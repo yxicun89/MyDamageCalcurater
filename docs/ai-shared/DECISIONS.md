@@ -709,6 +709,11 @@ Decision: メインセッションは Sonnet で起動し、重い設計の判�
 Reason: ユーザーが確認の質問に改めて答えた(前回の回答「メインだけ Sonnet」は意図と違った)。
 Impact: CLAUDE.md・COORDINATION.md を更新。
 
+## 2026-09-22: iOS レーンの統合(PR #53)
+Decision: P6-2b 逆算画面・internal タグ除外・DOC-ios(ios/README.md を coding-rules §8 の形に、ADR-0501・docs/runbooks/ios.md)を PR #53 で main にマージした(critic はそれぞれ PASS。make test / lint / build / check-publishable / ios-test が成功)。
+Reason: ユーザー回答(2026-09-22)「契約追従が緑になったら PR」の続き。P6-2b が完了し DOC-ios の割り当て(データレーンより)も完了したため区切りで統合した。
+Impact: 続き(P6-2c 構築)は同じブランチ feat/ios-p6 で進める。
+
 ## 2026-09-22: 素早さ DOC-speed を PR #52 で main に統合(素早さレーン)
 Decision: README(coding-rules §8 の形)と手順書 docs/runbooks/speed.md(AGENTS.md「手順書の書き方」)を PR #52 で統合した。speed-k3d-deploy ターゲットを追加し、実際に k3d へデプロイして smoke まで確認した。文書のみのため critic レビューは省略。
 Impact: 素早さレーンの次は SP2(feat/speed-sp2)。
@@ -750,6 +755,17 @@ Impact: docs/judge-design.md §4 が「未決事項」から「決定事項」�
 現状、engine の `Move`・pokedex-svc/calc-svc の公開 API のいずれにも、技の追加効果によるランク変化を表すデータが無いことを確認した。そのため JD1 は「技を撃った後のランク」を呼び出し側(Web/iOS)が `Individual.ranks` に指定する形にした(ADR-0700 §6-5)。ユーザーの元の要望(「ニトチャ+メイン技で素早さ抜けるか」を一発で)を完全に満たすには、技 ID から自動でランク変化を出せることが要る。
 既定案: ADR-0005(データ駆動の効果定義)に沿って、技の効果定義に「追加効果(対象=self/target・確率・ランク変化量)」を足す(例: `{"secondary": {"chance": 100, "self": {"boosts": {"spe": 1}}}}`)。importer と export に通し、calc-svc の `MasterMove` 経由で judge が読めるようにする。
 優先度: 低(JD1 は現状のデータで出せる)。着手は M1 の後でよい。確率が 100% でない追加効果の扱い(発動時/不発時の両方を返すか)は、その実装時に判定レーンと合わせて決める。
+
+## 2026-09-22: 素早さ SP3 の設計(素早さレーンの判断)と Web レーンへの提案(既定案)
+Decision: SpeedScreen・SpeedClient・speed.gen.ts は web/src/speed/ の中だけに置く(web/src/api/ は使わない)。ScreenProps に balance専用のclientとは別に speedClient: SpeedClient を1フィールド追加し、App.tsx に speedClient の作成と ActiveScreen への1引数を追加する(Web レーンに既定案として提示・進行中)。
+提案(Web レーンへ。既定案: 今は何もしない): speed.gen.ts の再生成は npx openapi-typescript を手動実行してコミットする。make gen-ts への組み込みは Web レーンの都合の良いときにお任せする。
+Reason: P4-12a で ScreenProps.client が BalanceClient 専用の型になっており、以前の「props は {engine, master}」の案内より後の変更のため。ディレクトリでのレーン境界(web/src/speed/)を保つため。
+Impact: ADR-0604。web/src/app/screens.tsx・web/src/App.tsx に最小限の追記(Web レーンと合意のうえ進行)。
+
+## 2026-09-22: 素早さ SP3 の ja.ts への追記範囲(素早さレーンから Web レーンへの通知)
+Decision: SP3 実装で web/src/i18n/ja.ts に appText.speedTabLabel(合意済みの1項目)に加え、speedClientText・speedPresetText・speedScreenText の3ブロック(画面・クライアントの文言)を末尾に追記した。ADR-0604 §2 を実態に合わせて更新済み。
+Reason: coding-rules §2「表示文言は各クライアントの文言資源に置く」により、SpeedScreen 本体の文言も ja.ts に置く必要があった(balanceScreenText と同じ置き場所)。web/src/speed/ の中には文言を置けない(ja.ts が文言の単一の正)。
+Impact: web/src/i18n/ja.ts への追記が「1項目」より広がった。ファイルの所有はこれまでどおり Web レーン。素早さレーンが追記した3ブロックの内容変更は素早さレーンに確認すること。
 
 ## 2026-09-22: calc・gateway を pokedex-svc につなぐ(データレーンからの依頼d。ADR-0206。PR #87)
 Decision: base(local overlay を含む)の calc に `CALC_MASTER_URL=http://pokedex`、gateway に `GATEWAY_POKEDEX_URL=http://pokedex` を設定した。

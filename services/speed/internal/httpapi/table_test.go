@@ -352,6 +352,30 @@ func TestTablePresetsSubset(t *testing.T) {
 			query:       "presets=max-plus2,max,uninvested,max-scarf,neutral-max,max-plus1",
 			wantPresets: allPresetIDs,
 		},
+		{
+			// カンマを %2C にパーセントエンコードしても素のカンマと同じに扱う(SP3 の Web クライアントが
+			// URLSearchParams でエンコードするため。SP2 critic の軽微)。期待値は「逆順の指定」と同じ。
+			name:        "パーセントエンコードされたカンマ",
+			query:       "presets=max-plus1%2Cuninvested",
+			wantPresets: []api.PresetId{api.PresetIdUninvested, api.PresetIdMaxPlus1},
+			wantOrder:   []int{300, 267, 250, 219, 184, 159, 150, 135, 130, 120, 101, 80, 65, 50},
+			wantTiers: map[int][]row{
+				300: {{"9004-000", api.PresetIdMaxPlus1}},
+				267: {{"9008-000", api.PresetIdMaxPlus1}},
+				250: {{"9001-000", api.PresetIdMaxPlus1}},
+				219: {{"9002-000", api.PresetIdMaxPlus1}, {"9005-000", api.PresetIdMaxPlus1}},
+				184: {{"9006-000", api.PresetIdMaxPlus1}},
+				159: {{"9003-000", api.PresetIdMaxPlus1}},
+				150: {{"9004-000", api.PresetIdUninvested}},
+				135: {{"9007-000", api.PresetIdMaxPlus1}},
+				130: {{"9008-000", api.PresetIdUninvested}},
+				120: {{"9001-000", api.PresetIdUninvested}},
+				101: {{"9002-000", api.PresetIdUninvested}, {"9005-000", api.PresetIdUninvested}},
+				80:  {{"9006-000", api.PresetIdUninvested}},
+				65:  {{"9003-000", api.PresetIdUninvested}},
+				50:  {{"9007-000", api.PresetIdUninvested}},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

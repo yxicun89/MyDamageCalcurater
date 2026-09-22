@@ -5,7 +5,7 @@
 // jsdom の window.history を使う。テストの間で URL が漏れないよう、前後で "/" に戻す。
 // (vitest では import.meta.env.BASE_URL は "/"。base 付きのパスは app/routes.test.ts が確かめる。)
 
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "./App";
@@ -235,5 +235,41 @@ describe("P4-12a タイプバランスのタブ", () => {
 
     simulatePopState("/calc");
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toBeInTheDocument();
+  });
+});
+
+// SP3: 素早さ比較の画面(ADR-0604 §2)。ルート表に1件足し、タブ「素早さ」と /speed で開く。
+// 画面はマウント時に speed API(使用可能なポケモンの一覧・素早さの表)を呼ぶ(ADR-0604 §4)。
+describe("SP3 素早さのタブ", () => {
+  test("タブ「素早さ」があり、/speed を直接開くと選択され、自分のポケモンの入力と speed API の呼び出しが出る", async () => {
+    // speed-svc は居ないので通信は失敗させる(画面はそれでも壊れない。ADR-0604 §4)。
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    setPath("/speed");
+    render(<App engine={createFakeEngine()} />);
+
+    expect(await screen.findByRole("tab", { name: "素早さ" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "計算" })).toHaveAttribute("aria-selected", "false");
+    expect(await screen.findByRole("region", { name: "自分のポケモン" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/speed");
+    expect(document.title).toBe("素早さ | pokecalc");
+
+    await waitFor(() => {
+      // クライアントは文字列の URL で呼ぶ(speed/speedClient.ts)。
+      const requested = fetchSpy.mock.calls.flatMap(([url]) => (typeof url === "string" ? [url] : []));
+      expect(requested).toEqual(expect.arrayContaining(["/api/speed/v1/pokemon", "/api/speed/v1/table"]));
+    });
+  });
+
+  test("素早さのタブのクリックで /speed を pushState し、画面を切り替える", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    const user = userEvent.setup();
+    render(<App engine={createFakeEngine()} />);
+    await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
+    const pushSpy = vi.spyOn(window.history, "pushState");
+
+    await user.click(screen.getByRole("tab", { name: "素早さ" }));
+    expect(window.location.pathname).toBe("/speed");
+    expect(pushSpy).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole("region", { name: "自分のポケモン" })).toBeInTheDocument();
   });
 });
