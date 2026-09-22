@@ -30,8 +30,9 @@ func New(deps Dependencies) *echo.Echo {
 	e.HTTPErrorHandler = writeHTTPError
 	api.RegisterHandlersWithOptions(e, handler{deps: deps}, api.RegisterHandlersOptions{
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
-			"listPokemon":   {requireRequestContext},
-			"getSpeedTable": {requireRequestContext},
+			"listPokemon":      {requireRequestContext},
+			"getSpeedTable":    {requireRequestContext},
+			"getSpeedPosition": {requireRequestContext},
 		},
 	})
 	return e
@@ -62,15 +63,10 @@ func (h handler) GetSpeedTable(c *echo.Context, params api.GetSpeedTableParams) 
 	return getSpeedTable(c, h.deps, params)
 }
 
-// errPositionUnimplemented は SP2 の spec-writer が置いたスタブの印(実装は implementer)。
-// 生成された api.ServerInterface を満たすためにメソッドだけ置き、panic では既存のテストを
-// 道連れに落としてしまうので error を返す。
-var errPositionUnimplemented = errors.New("position is not implemented yet")
-
 // GetSpeedPosition implements POST /api/speed/v1/position (ADR-0602 §4): header (400) → body
-// (400) → read model absent (503) → unknown pokemonId (422) → 200。実装は SP2 の implementer。
-func (handler) GetSpeedPosition(_ *echo.Context, _ api.GetSpeedPositionParams) error {
-	return errPositionUnimplemented
+// (400) → read model absent (503) → unknown pokemonId (422) → 200.
+func (h handler) GetSpeedPosition(c *echo.Context, _ api.GetSpeedPositionParams) error {
+	return getSpeedPosition(c, h.deps)
 }
 
 // getSpeedTable implements the body of GetSpeedTable. deps is passed explicitly, matching
