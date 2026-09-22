@@ -11,7 +11,9 @@
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:wasm": "vitest run --config vitest.wasm.config.ts"
+    "test:wasm": "vitest run --config vitest.wasm.config.ts",
+    "e2e": "playwright test",
+    "e2e:online": "playwright test --config playwright.online.config.ts"
   },
   "dependencies": {
     "react": "19.3.0",
@@ -19,6 +21,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
     "@testing-library/dom": "10.4.2",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.3",
