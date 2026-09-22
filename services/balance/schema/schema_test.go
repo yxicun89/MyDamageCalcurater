@@ -87,6 +87,8 @@ func TestPokemonTypesSchemaRejectsInvalidDocuments(t *testing.T) {
 		{"unknown entry field", `{"schemaVersion":1,"pokemon":[{"pokemonId":"9001-000","name":"x","types":["fire"]}]}`},
 		{"schemaVersion 2", `{"schemaVersion":2,"pokemon":[{"pokemonId":"9001-000","types":["fire"]}]}`},
 		{"three types", `{"schemaVersion":1,"pokemon":[{"pokemonId":"9001-000","types":["fire","water","grass"]}]}`},
+		// ADR-0401 §5 (2026-09-22 update): the abilityIds limit moved from 3 to 4, so 5 is now the boundary.
+		{"five abilityIds", `{"schemaVersion":1,"pokemon":[{"pokemonId":"9001-000","types":["fire"],"abilityIds":["ability-9001","ability-9002","ability-9003","ability-9004","ability-9005"]}]}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -95,6 +97,18 @@ func TestPokemonTypesSchemaRejectsInvalidDocuments(t *testing.T) {
 				t.Errorf("document must be rejected by the schema: %s", tt.doc)
 			}
 		})
+	}
+}
+
+// ADR-0401 §5 (2026-09-22 update): the schema must accept the new limit of 4 abilityIds
+// (some species have four ability slots), matching internal/master's loader.
+func TestPokemonTypesSchemaAcceptsFourAbilityIDs(t *testing.T) {
+	t.Parallel()
+
+	sch := compile(t, "pokemon-types.schema.json")
+	doc := `{"schemaVersion":1,"pokemon":[{"pokemonId":"9001-000","types":["fire"],"abilityIds":["ability-9001","ability-9002","ability-9003","ability-9004"]}]}`
+	if err := validateString(t, sch, doc); err != nil {
+		t.Errorf("four abilityIds must be accepted by the schema: %v", err)
 	}
 }
 

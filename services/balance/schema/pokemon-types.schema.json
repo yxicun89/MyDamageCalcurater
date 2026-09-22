@@ -56,7 +56,7 @@
         "abilityIds": {
           "type": ["array", "null"],
           "items": { "$ref": "#/$defs/abilityId" },
-          "maxItems": 3,
+          "maxItems": 4,
           "uniqueItems": true,
           "description": "Omitted, null and [] all decode to the same empty result (ADR-0401 §5/§7.5)."
         }
