@@ -8,7 +8,7 @@
 // 観測は行ごとに単位(%/HP)を持ち、無効な行が1つでもあれば engine を呼ばない(古い候補も出さない)。
 // 空行は無視して送る観測から外す(ADR-0010 §R2)。デバウンスはしない(入力のたびに再計算する)。
 
-import { useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type AnimationEvent, type ReactElement } from "react";
 import {
   ATTACKER_PRESET_KEYS,
   DEFAULT_ATTACKER_PRESET,
@@ -47,7 +47,14 @@ import type {
 } from "../engine/types";
 import { calcScreenText, reverseResultText, reverseScreenText } from "../i18n/ja";
 import type { MasterData, MasterSpecies } from "../master/types";
+import { prefersReducedMotion } from "../ui/motion";
 import "./ReverseScreen.css";
+
+/**
+ * 「絞り込み」の演出(design.md「画面: 逆算」「観測を追加すると候補が絞られるアニメーション」)を
+ * 出す観測数のしきい値。1件目の推定は絞り込みではないので対象外にする。
+ */
+const NARROWING_MIN_OBSERVATIONS = 2;
 
 /** 技を選んでいないときの、自分の調整の表示用の仮の分類(A/C 表記の既定は物理と同じ)。 */
 const DEFAULT_MOVE_CATEGORY: MoveCategory = "physical";
@@ -132,6 +139,13 @@ export function ReverseScreen({ engine, master }: ReverseScreenProps) {
     newObservationRow(0, defaultObservationUnit("defender")),
   ]);
   const [completed, setCompleted] = useState<CompletedReverse | null>(null);
+  // 観測を2件以上入れて届いた結果に「絞り込み」の演出を出す(design.md「画面: 逆算」)。
+  // lastCompleted は直近に判定した completed(react-hooks/set-state-in-effect を避けるため、
+  // effect ではなくレンダー本体で新しい completed かどうかを比べる。CalcScreen.tsx の koPulse と同じ形)。
+  const [narrowingState, setNarrowingState] = useState<{
+    readonly lastCompleted: CompletedReverse | null;
+    readonly narrowing: boolean;
+  }>({ lastCompleted: null, narrowing: false });
 
   const mySpecies = useMemo(
     () => master.species.find((species) => species.key === mySpeciesKey) ?? null,
@@ -270,6 +284,24 @@ export function ReverseScreen({ engine, master }: ReverseScreenProps) {
     validObservations,
   ]);
 
+  // 「絞り込み」の演出(design.md「画面: 逆算」)。新しい成功結果が届いたとき(completed の参照が
+  // 変わったとき)だけ判定する。観測が1件だけの結果や、観測を減らして1件に戻った結果では付けない。
+  if (completed !== null && completed !== narrowingState.lastCompleted) {
+    const shouldNarrow =
+      completed.result.ok &&
+      completed.observations.length >= NARROWING_MIN_OBSERVATIONS &&
+      !prefersReducedMotion();
+    setNarrowingState({ lastCompleted: completed, narrowing: shouldNarrow });
+  }
+  const narrowing = narrowingState.narrowing;
+
+  /** 絞り込みの is-narrowing を外す(animationend。バブリングで子要素と混ざらないよう currentTarget と比べる)。 */
+  function handleNarrowingAnimationEnd(event: AnimationEvent<HTMLUListElement>): void {
+    if (event.target === event.currentTarget) {
+      setNarrowingState((prev) => ({ ...prev, narrowing: false }));
+    }
+  }
+
   let outcome: Outcome;
   if (mySpecies === null || theirsSpecies === null || move === null) {
     outcome = { status: "idle" };
@@ -383,7 +415,12 @@ export function ReverseScreen({ engine, master }: ReverseScreenProps) {
         </button>
       </div>
 
-      <ResultsSection outcome={outcome} items={master.items} />
+      <ResultsSection
+        outcome={outcome}
+        items={master.items}
+        narrowing={narrowing}
+        onNarrowingAnimationEnd={handleNarrowingAnimationEnd}
+      />
     </div>
   );
 }
@@ -573,10 +610,18 @@ function ObservationRowView({
 interface ResultsSectionProps {
   readonly outcome: Outcome;
   readonly items: readonly Item[];
+  /** 観測を2件以上入れて届いた結果の「絞り込み」演出(design.md「画面: 逆算」)。 */
+  readonly narrowing: boolean;
+  readonly onNarrowingAnimationEnd: (event: AnimationEvent<HTMLUListElement>) => void;
 }
 
 /** 結果の表示(ADR-0300 §8: 返ってきた値を加工せずに表示する)。invalid は観測の不正行がある間、何も出さない。 */
-function ResultsSection({ outcome, items }: ResultsSectionProps): ReactElement | null {
+function ResultsSection({
+  outcome,
+  items,
+  narrowing,
+  onNarrowingAnimationEnd,
+}: ResultsSectionProps): ReactElement | null {
   switch (outcome.status) {
     case "idle":
     case "invalid":
@@ -596,7 +641,14 @@ function ResultsSection({ outcome, items }: ResultsSectionProps): ReactElement |
         </p>
       );
     case "success":
-      return <ReverseResultsList result={outcome.result} items={items} />;
+      return (
+        <ReverseResultsList
+          result={outcome.result}
+          items={items}
+          narrowing={narrowing}
+          onNarrowingAnimationEnd={onNarrowingAnimationEnd}
+        />
+      );
     default: {
       // 判別 union の網羅性チェック(コーディング規約 §4 TypeScript「判別 union は網羅性を検査する」)。
       const exhaustive: never = outcome;
@@ -608,15 +660,22 @@ function ResultsSection({ outcome, items }: ResultsSectionProps): ReactElement |
 interface ReverseResultsListProps {
   readonly result: ReverseResult;
   readonly items: readonly Item[];
+  readonly narrowing: boolean;
+  readonly onNarrowingAnimationEnd: (event: AnimationEvent<HTMLUListElement>) => void;
 }
 
 /** 候補一覧(ADR-0300 §8: engine の順のまま、加工せずに表示)。防御側は H32 前提の注記を添える。 */
-function ReverseResultsList({ result, items }: ReverseResultsListProps) {
+function ReverseResultsList({ result, items, narrowing, onNarrowingAnimationEnd }: ReverseResultsListProps) {
   const assumptionNote = reverseAssumptionNote(result);
+  const listClassName = `reverse-results__list${narrowing ? " is-narrowing" : ""}`;
   return (
     <div className="reverse-results">
       {assumptionNote !== null && <p className="reverse-results__assumption">{assumptionNote}</p>}
-      <ul aria-label={reverseScreenText.resultsListLabel} className="reverse-results__list">
+      <ul
+        aria-label={reverseScreenText.resultsListLabel}
+        className={listClassName}
+        onAnimationEnd={onNarrowingAnimationEnd}
+      >
         {result.candidates.map((candidate, index) => {
           const guideNames = reverseGuideNames(
             result.side,
