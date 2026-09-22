@@ -11,7 +11,7 @@ import (
 	"example.com/pokecalc/services/balance/internal/balance"
 )
 
-// TB5 のポケモン read model の拡張(ADR-0401 §5)。nameJa(1〜64 文字)と abilityIds(0〜3 件・重複なし・
+// TB5 のポケモン read model の拡張(ADR-0401 §5)。nameJa(1〜64 文字)と abilityIds(0〜4 件・重複なし・
 // ADR-0017 §2 の ID 形式)は省略可能で、schemaVersion は 1 のまま。名前と ID はすべて架空。
 
 const exampleAbilitiesPathForCatalog = "../../testdata/abilities.example.json"
@@ -153,7 +153,8 @@ func TestLoadPokemonTypesRejectsInvalidNameOrAbilities(t *testing.T) {
 		{name: "nameJa of 65 characters", input: entry(`"nameJa":"` + strings.Repeat("カ", 65) + `"`)},
 		{name: "nameJa is a number", input: entry(`"nameJa":9002`)},
 		{name: "nameJa is an array", input: entry(`"nameJa":["テストリーフ"]`)},
-		{name: "four abilityIds", input: entry(`"abilityIds":["ability-9001","ability-9002","ability-9003","ability-9004"]`)},
+		// ADR-0401 §5 (2026-09-22 update): up to 4 abilities (some species have four ability slots).
+		{name: "five abilityIds", input: entry(`"abilityIds":["ability-9001","ability-9002","ability-9003","ability-9004","ability-9005"]`)},
 		{name: "duplicate abilityId", input: entry(`"abilityIds":["ability-9001","ability-9001"]`)},
 		{name: "empty abilityId", input: entry(`"abilityIds":[""]`)},
 		{name: "uppercase abilityId", input: entry(`"abilityIds":["Ability-9001"]`)},
@@ -224,5 +225,16 @@ func TestExamplePokemonTypesHasNamesAndAbilities(t *testing.T) {
 	}
 	if !named || !unnamed || !withAbilities || !withoutAbilities {
 		t.Errorf("example must include named=%v unnamed=%v withAbilities=%v withoutAbilities=%v (all true)", named, unnamed, withAbilities, withoutAbilities)
+	}
+}
+
+// ADR-0401 §5 (2026-09-22 update): four abilityIds are valid (a species with four ability slots).
+func TestLoadPokemonTypesAcceptsFourAbilityIDs(t *testing.T) {
+	t.Parallel()
+
+	model := loadCatalog(t, `{"schemaVersion":1,"pokemon":[{"pokemonId":"9001-000","types":["fire"],"abilityIds":["ability-9001","ability-9002","ability-9003","ability-9004"]}]}`)
+	all, err := model.AllPokemon()
+	if err != nil || len(all) != 1 || len(all[0].AbilityIDs) != 4 {
+		t.Fatalf("AllPokemon() = %+v, %v; want one pokemon with four abilityIds", all, err)
 	}
 }

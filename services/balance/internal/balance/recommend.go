@@ -21,7 +21,7 @@ const (
 var ErrRecommendationLimit = errors.New("limit must be between 1 and 20")
 
 // CatalogPokemon is one pokemon of the read model (ADR-0401 §5). NameJa is "" when the read
-// model has no name. AbilityIDs are the abilities it may have (0..3, read model order).
+// model has no name. AbilityIDs are the abilities it may have (0..4, read model order).
 // Types keep the read model order (ADR-0014 §5.1).
 type CatalogPokemon struct {
 	PokemonID  string

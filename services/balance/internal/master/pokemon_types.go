@@ -29,7 +29,7 @@ var pokemonIDPattern = regexp.MustCompile(`^\d{4}-\d{3}$`)
 var catalogAbilityIDPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 const maxCatalogAbilityIDLength = 40
-const maxCatalogAbilityCount = 3
+const maxCatalogAbilityCount = 4
 const maxCatalogNameJaRunes = 64
 
 // PokemonTypeReadModel is the temporary balance-local read model of pokemonId -> types.
@@ -142,7 +142,7 @@ func parseCatalogNameJa(pokemonID string, raw *string) (string, error) {
 	return *raw, nil
 }
 
-// parseCatalogAbilityIDs validates an optional abilityIds (ADR-0401 §5): 0..3 entries,
+// parseCatalogAbilityIDs validates an optional abilityIds (ADR-0401 §5): 0..4 entries,
 // each matching the AbilityId format (ADR-0017 §2), no duplicates. Omitted, null and an
 // explicit empty array all give a non-nil, zero-length result.
 func parseCatalogAbilityIDs(pokemonID string, raw *[]string) ([]string, error) {

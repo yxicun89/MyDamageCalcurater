@@ -35,7 +35,7 @@ Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
 Branch: 次は main から feat/tb-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
 Status: TB0〜TB5 と整備(ADR-0402 の read model の JSON Schema を含む)は完了・main に統合済み。balance は Echo v5.3.1。ポケモン・技・特性は temporary の read model(架空データの example。実データは BALANCE_*_PATH でマウント)。k3d には Argo CD v3.5.3・クラスタ内レジストリ・Application pokecalc-balance(manual sync)。新しい ADR はタイプバランスの帯 0400〜
-Next: データレーンの `pokedex export`(P2-3。nameJa・abilityIds・レギュレーションで絞る・特性の read model。受諾済み。形は services/balance/schema/ の JSON Schema)が main に入ったら、balance の read model をそれに差し替え、実データで TB5 を確認する。それまでは待ち(ブロッカーではない)。Web / iOS から balance を使う画面は各レーンの範囲(必要なら DECISIONS.md で依頼)
+Next: データレーンの pokedex export(ADR-0105)が main に入ったら、`make balance-k3d-deploy-readmodel && make balance-smoke-readmodel`(docs/runbooks/balance.md の 2b)で実データの動作を確かめる。無効・吸収の特性は export に出ない(データレーンの P2-3b でユーザーに要否を確認中)
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
 
 ## Speed
