@@ -52,7 +52,7 @@ func TestLoadPokemonFileReadsExample(t *testing.T) {
 	if len(roster.Pokemon) < 2 {
 		t.Fatalf("len(Pokemon) = %d, want at least 2", len(roster.Pokemon))
 	}
-	want := speed.Pokemon{PokemonID: "9001-000", NameJa: "カソウドリ", Types: []string{"fire", "flying"}, BaseSpeed: 100}
+	want := speed.Pokemon{PokemonID: "9001-000", NameJa: "テストカソウドリ", Types: []string{"fire", "flying"}, BaseSpeed: 100}
 	if !reflect.DeepEqual(roster.Pokemon[0], want) {
 		t.Errorf("Pokemon[0] = %+v, want %+v", roster.Pokemon[0], want)
 	}
@@ -77,8 +77,8 @@ func TestLoadPokemonPreservesFileOrder(t *testing.T) {
 	t.Parallel()
 
 	doc := `{"schemaVersion":1,"regulationId":"m-c","pokemon":[
-		{"pokemonId":"9002-000","nameJa":"ニバンメ","types":["water"],"baseSpeed":81},
-		{"pokemonId":"9001-000","nameJa":"イチバンメ","types":["fire","flying"],"baseSpeed":100}]}`
+		{"pokemonId":"9002-000","nameJa":"テストニバンメ","types":["water"],"baseSpeed":81},
+		{"pokemonId":"9001-000","nameJa":"テストイチバンメ","types":["fire","flying"],"baseSpeed":100}]}`
 	model, err := LoadPokemon(strings.NewReader(doc))
 	if err != nil {
 		t.Fatalf("LoadPokemon error = %v", err)
@@ -88,8 +88,8 @@ func TestLoadPokemonPreservesFileOrder(t *testing.T) {
 		t.Fatalf("Roster() error = %v", err)
 	}
 	want := speed.Roster{RegulationID: "m-c", Pokemon: []speed.Pokemon{
-		{PokemonID: "9002-000", NameJa: "ニバンメ", Types: []string{"water"}, BaseSpeed: 81},
-		{PokemonID: "9001-000", NameJa: "イチバンメ", Types: []string{"fire", "flying"}, BaseSpeed: 100},
+		{PokemonID: "9002-000", NameJa: "テストニバンメ", Types: []string{"water"}, BaseSpeed: 81},
+		{PokemonID: "9001-000", NameJa: "テストイチバンメ", Types: []string{"fire", "flying"}, BaseSpeed: 100},
 	}}
 	if !reflect.DeepEqual(roster, want) {
 		t.Errorf("Roster() = %+v, want %+v", roster, want)
@@ -116,13 +116,13 @@ func TestRosterReturnsCopy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Roster() error = %v", err)
 	}
-	want := []speed.Pokemon{{PokemonID: "9001-000", NameJa: "カソウドリ", Types: []string{"fire", "flying"}, BaseSpeed: 100}}
+	want := []speed.Pokemon{{PokemonID: "9001-000", NameJa: "テストカソウドリ", Types: []string{"fire", "flying"}, BaseSpeed: 100}}
 	if !reflect.DeepEqual(second.Pokemon, want) {
 		t.Errorf("Roster() after mutation = %+v, want %+v", second.Pokemon, want)
 	}
 }
 
-const validEntry = `{"pokemonId":"9001-000","nameJa":"カソウドリ","types":["fire","flying"],"baseSpeed":100}`
+const validEntry = `{"pokemonId":"9001-000","nameJa":"テストカソウドリ","types":["fire","flying"],"baseSpeed":100}`
 
 func validDoc(entries ...string) string {
 	return `{"schemaVersion":1,"regulationId":"example","pokemon":[` + strings.Join(entries, ",") + `]}`
@@ -193,7 +193,7 @@ func TestLoadPokemonRejectsInvalidReadModel(t *testing.T) {
 		{"nameJa 欠落", validDoc(`{"pokemonId":"9001-000","types":["fire"],"baseSpeed":100}`)},
 		// types: 1〜2 個・重複なし・英小文字
 		{"types 0 個", validDoc(entryWith(`"9001-000"`, `"ア"`, `[]`, `100`))},
-		{"types 欠落", validDoc(`{"pokemonId":"9001-000","nameJa":"ア","baseSpeed":100}`)},
+		{"types 欠落", validDoc(`{"pokemonId":"9001-000","nameJa":"テストア","baseSpeed":100}`)},
 		{"types 3 個", validDoc(entryWith(`"9001-000"`, `"ア"`, `["fire","water","grass"]`, `100`))},
 		{"types 重複", validDoc(entryWith(`"9001-000"`, `"ア"`, `["fire","fire"]`, `100`))},
 		{"types 空文字", validDoc(entryWith(`"9001-000"`, `"ア"`, `[""]`, `100`))},
@@ -204,11 +204,11 @@ func TestLoadPokemonRejectsInvalidReadModel(t *testing.T) {
 		{"baseSpeed 0", validDoc(entryWith(`"9001-000"`, `"ア"`, `["fire"]`, `0`))},
 		{"baseSpeed 256", validDoc(entryWith(`"9001-000"`, `"ア"`, `["fire"]`, `256`))},
 		{"baseSpeed 負", validDoc(entryWith(`"9001-000"`, `"ア"`, `["fire"]`, `-1`))},
-		{"baseSpeed 欠落", validDoc(`{"pokemonId":"9001-000","nameJa":"ア","types":["fire"]}`)},
+		{"baseSpeed 欠落", validDoc(`{"pokemonId":"9001-000","nameJa":"テストア","types":["fire"]}`)},
 		{"baseSpeed 小数", validDoc(entryWith(`"9001-000"`, `"ア"`, `["fire"]`, `100.5`))},
 		// JSON の形
 		{"未知のフィールド(最上位)", `{"schemaVersion":1,"regulationId":"example","extra":true,"pokemon":[` + validEntry + `]}`},
-		{"未知のフィールド(ポケモン)", validDoc(`{"pokemonId":"9001-000","nameJa":"ア","types":["fire"],"baseSpeed":100,"baseAttack":80}`)},
+		{"未知のフィールド(ポケモン)", validDoc(`{"pokemonId":"9001-000","nameJa":"テストア","types":["fire"],"baseSpeed":100,"baseAttack":80}`)},
 		{"末尾の余計な JSON", validDoc(validEntry) + `{}`},
 		{"JSON でない", `not json`},
 		{"空の入力", ``},

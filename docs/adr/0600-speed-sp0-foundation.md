@@ -49,7 +49,7 @@
 
 ```json
 {"schemaVersion": 1, "regulationId": "example", "pokemon": [
-  {"pokemonId": "9001-000", "nameJa": "カソウドリ", "types": ["fire", "flying"], "baseSpeed": 100}
+  {"pokemonId": "9001-000", "nameJa": "テストカソウドリ", "types": ["fire", "flying"], "baseSpeed": 100}
 ]}
 ```
 - `schemaVersion` は 1 だけ。`regulationId` は `^[a-z0-9]+(-[a-z0-9]+)*$`。このファイル全体が 1 つのレギュレーションの使用可能集合。

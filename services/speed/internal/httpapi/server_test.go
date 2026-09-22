@@ -27,10 +27,10 @@ func (f fakeProvider) Roster() (speed.Roster, error) {
 
 func unorderedRoster() speed.Roster {
 	return speed.Roster{RegulationID: "example", Pokemon: []speed.Pokemon{
-		{PokemonID: "9003-000", NameJa: "サンバンメ", Types: []string{"rock", "ground"}, BaseSpeed: 45},
-		{PokemonID: "9001-000", NameJa: "カソウドリ", Types: []string{"fire", "flying"}, BaseSpeed: 100},
-		{PokemonID: "9010-000", NameJa: "ジュウバンメ", Types: []string{"ghost"}, BaseSpeed: 81},
-		{PokemonID: "9002-000", NameJa: "ニバンメ", Types: []string{"water"}, BaseSpeed: 81},
+		{PokemonID: "9003-000", NameJa: "テストサンバンメ", Types: []string{"rock", "ground"}, BaseSpeed: 45},
+		{PokemonID: "9001-000", NameJa: "テストカソウドリ", Types: []string{"fire", "flying"}, BaseSpeed: 100},
+		{PokemonID: "9010-000", NameJa: "テストジュウバンメ", Types: []string{"ghost"}, BaseSpeed: 81},
+		{PokemonID: "9002-000", NameJa: "テストニバンメ", Types: []string{"water"}, BaseSpeed: 81},
 	}}
 }
 
@@ -154,10 +154,10 @@ func TestListPokemonReturnsSortedByPokemonID(t *testing.T) {
 		t.Fatalf("body is not a PokemonListResponse: %v; body=%s", err, recorder.Body.String())
 	}
 	want := api.PokemonListResponse{RegulationId: "example", Pokemon: []api.SpeedPokemon{
-		{PokemonId: "9001-000", NameJa: "カソウドリ", Types: []string{"fire", "flying"}, BaseSpeed: 100},
-		{PokemonId: "9002-000", NameJa: "ニバンメ", Types: []string{"water"}, BaseSpeed: 81},
-		{PokemonId: "9003-000", NameJa: "サンバンメ", Types: []string{"rock", "ground"}, BaseSpeed: 45},
-		{PokemonId: "9010-000", NameJa: "ジュウバンメ", Types: []string{"ghost"}, BaseSpeed: 81},
+		{PokemonId: "9001-000", NameJa: "テストカソウドリ", Types: []string{"fire", "flying"}, BaseSpeed: 100},
+		{PokemonId: "9002-000", NameJa: "テストニバンメ", Types: []string{"water"}, BaseSpeed: 81},
+		{PokemonId: "9003-000", NameJa: "テストサンバンメ", Types: []string{"rock", "ground"}, BaseSpeed: 45},
+		{PokemonId: "9010-000", NameJa: "テストジュウバンメ", Types: []string{"ghost"}, BaseSpeed: 81},
 	}}
 	if !reflect.DeepEqual(body, want) {
 		t.Errorf("body = %+v, want %+v", body, want)
