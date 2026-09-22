@@ -166,23 +166,13 @@
 - [x] DOC-tb: `services/balance/README.md` を §8 の形に、手順書 `docs/runbooks/balance.md`
 - [x] DOC-speed: `services/speed/README.md` を §8 の形に、手順書 `docs/runbooks/speed.md`(k3d での疎通を確認済み)
 - [x] DOC-ios: `ios/README.md`(coding-rules §8 の形)、手順書 `docs/runbooks/ios.md`(シミュレータでの確認。実機インストールは P6-4)。受け入れ条件・判断は ADR-0501 へ移動
-- [ ] DOC-arch: `docs/architecture.md` を各レーンの変化に合わせて保つ(整備レーンの MT-3 でも確かめる)
+- [ ] DOC-arch: `docs/architecture.md` を各レーンの変化に合わせて保つ
 
 ## M4: 運用
 - [ ] P7-1 kube-prometheus-stack / Loki、各サービスのメトリクス
 - [ ] P7-2 SLO(計算API p99 < 100ms、可用性)とダッシュボード
 - [ ] P7-3 ArgoCD(GitOps)
 - [ ] P7-4 MySQL/TiDB バックアップと復元テスト
-
-## 整備レーン(Claude の上限時に Codex が進める。COORDINATION.md「Claude の上限時の Codex」)
-範囲はレーンに属さない共有物と統合の検証。レーンの範囲(engine・services/*・web・ios・各レーンの ADR)は直さず、見つけた問題はそのレーンの Next と DECISIONS.md に既定案付きで書く。
-- [x] MT-1 統合の検証: `make test`(458件) / `make lint` / `make build` / `make test-golden`(10件) / `make test-all-species`(3件) / `make test-wasm`(34ベクタ×2周)、`make balance-kustomize` / `make balance-gitops-template-check` が成功。クラスタ・DB・E2E は外部状態や資格情報を要するため対象外(2026-09-22)
-- [x] MT-2 `scripts/check-publishable.sh --self-test` の既存の失敗2件を修正(A: 任意の `~/` を検出し、共有の worktree / 権限定義プレースホルダだけ許可。E: 自己テストへ違反する module path を投入)。既定案どおり `make lint` からセルフテストも実行
-- [ ] MT-3 文書の整合: `docs/ai-shared/CURRENT_STATE.md` と `docs/plan.md` のチェック・Next の食い違い、CLAUDE.md のリポジトリ構成と実体、README、`docs/development-workflow.md` と COORDINATION.md(レーン制・PR 統合・時間帯・Codex 2本)の食い違いを直す
-- [ ] MT-4 ADR の番号の帯(COORDINATION.md)の振り直し漏れと、参照の食い違いを一覧にする(直すのは各レーン。一覧を各レーンの Next に書く)
-- [ ] MT-5 `make deps-outdated` を実行し、古くなった依存を各レーンの Next に追記する(上げるのは各レーン)
-- [ ] MT-6 ルート `Makefile` の共通ターゲットの整理: `lint` に `go vet -tags golden` と `go vet -tags allspecies` を足す、`golden-generate` は `npm ci` を実行するか未導入で明示的に失敗させる(P1-6 の改善要望)
-- [ ] MT-7 plan.md の「改善要望」のうち、レーンに属さないものを片付ける(レーンに属するものは、そのレーンの Next へ移す)
 
 ## ブロッカー
 (ここに止まった理由と試したことを書く)
