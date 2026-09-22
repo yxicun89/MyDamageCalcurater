@@ -27,6 +27,7 @@ flowchart LR
 | `internal/httpapi` | HTTP の検証・判定順(400 → 413 → 503 → 422 → 200、それ以外は 500)・応答の変換 |
 | `internal/api` | oapi-codegen の生成物(手で書かない) |
 | `cmd/api` | 起動・環境変数の読み込み・graceful shutdown |
+| `cmd/checkreadmodel` | export の read model をサービスと同じ loader で検証する |
 | `schema/` | read model の JSON Schema(pokedex export 向け) |
 | `testdata/` | 架空データの example(実データは Git に置かない) |
 | `deploy/` | Kustomize(base / local / gitops)、Argo CD Application、クラスタ内レジストリ |
@@ -47,7 +48,8 @@ flowchart LR
 cd "$(git rev-parse --show-toplevel)"
 make balance-test balance-lint balance-build   # ルートの make test / lint / build にも含まれる
 make balance-gen                               # OpenAPI を変えたら
-make balance-k3d-deploy balance-smoke          # k3d に local overlay でデプロイして疎通確認
+make balance-k3d-deploy balance-smoke          # k3d に local overlay(架空データ)でデプロイして疎通確認
+make balance-k3d-deploy-readmodel balance-smoke-readmodel  # pokedex export の実データ(data/generated/readmodel)で
 make balance-sync-typechart                    # testdata/golden/typechart.json が変わったら
 ```
 
@@ -65,4 +67,4 @@ make balance-sync-typechart                    # testdata/golden/typechart.json 
 [0015](../../docs/adr/0015-balance-type-chart-from-data.md)(相性表)・[0016](../../docs/adr/0016-balance-tb2-offense-coverage.md)・
 [0017](../../docs/adr/0017-balance-tb3-ability-effects.md)・[0018](../../docs/adr/0018-balance-local-gitops-verification.md)(GitOps)・
 [0400](../../docs/adr/0400-balance-tb4-threat-check.md)・[0401](../../docs/adr/0401-balance-tb5-recommend-types.md)・
-[0402](../../docs/adr/0402-balance-read-model-json-schema.md)(JSON Schema)。直接依存とライセンスは [`DEPENDENCIES.md`](DEPENDENCIES.md)。
+[0402](../../docs/adr/0402-balance-read-model-json-schema.md)(JSON Schema)・[0403](../../docs/adr/0403-balance-readmodel-wiring.md)(実データの配線)。直接依存とライセンスは [`DEPENDENCIES.md`](DEPENDENCIES.md)。

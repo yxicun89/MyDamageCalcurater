@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: balance
+spec:
+  template:
+    metadata:
+      annotations:
+        # make balance-k3d-deploy-readmodel が ConfigMap の内容の hash を入れ、内容が変わったら Pod を作り直す
+        pokecalc.example/readmodel-hash: "unset"
+    spec:
+      containers:
+        - name: balance
+          env:
+            - name: BALANCE_POKEMON_TYPES_PATH
+              value: /etc/balance/readmodel/pokemon-types.json
+            - name: BALANCE_MOVES_PATH
+              value: /etc/balance/readmodel/moves.json
+            - name: BALANCE_ABILITIES_PATH
+              value: /etc/balance/readmodel/abilities.json
+          volumeMounts:
+            - name: readmodel
+              mountPath: /etc/balance/readmodel
+              readOnly: true
+      volumes:
+        - name: readmodel
+          configMap:
+            name: balance-readmodel

@@ -13,7 +13,9 @@ const baseURL = `http://127.0.0.1:${OFFLINE_PORT}`;
 export default defineConfig({
   testDir: "./e2e",
   // オンライン専用の spec は calc-svc が要るので、こちらでは走らせない。
-  testIgnore: ["**/online.spec.ts"],
+  // container.spec.ts は nginx(web/nginx.conf)の配信設定を確かめるもので、preview では成り立たない
+  // (playwright.container.config.ts だけが走らせる)。
+  testIgnore: ["**/online.spec.ts", "**/container.spec.ts", "**/balance.spec.ts"],
   fullyParallel: true,
   forbidOnly: process.env.CI !== undefined,
   retries: 0,

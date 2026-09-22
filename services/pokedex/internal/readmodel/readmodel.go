@@ -31,7 +31,7 @@ const exportSchemaVersion = 1
 // maxCatalogAbilityCount は balance の read model が受け付ける abilityIds の上限
 // (services/balance/schema/pokemon-types.schema.json の maxItems・loader の maxCatalogAbilityCount と同じ。
 // 4件ある種族は slot 4(Showdown の特殊枠)を落とす。ADR-0105 §5・限界2)。
-const maxCatalogAbilityCount = 3
+const maxCatalogAbilityCount = 4
 
 // ErrNoDefaultRegulation は既定のレギュレーションが無い(regulations に is_default=1 の行が無い)。
 var ErrNoDefaultRegulation = errors.New("readmodel: 既定のレギュレーションが無い")

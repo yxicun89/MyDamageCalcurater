@@ -102,7 +102,7 @@ func TestBalanceAbilityIdsMaxItemsMatchesReadmodel(t *testing.T) {
 	if abilityIds.MaxItems == nil {
 		t.Fatal("abilityIds.maxItems が無い")
 	}
-	const wantMaxItems = 3 // readmodel.go の maxCatalogAbilityCount と同じ値を書く(2箇所で手動同期)
+	const wantMaxItems = 4 // readmodel.go の maxCatalogAbilityCount と同じ値を書く(2箇所で手動同期)
 	if got := *abilityIds.MaxItems; got != wantMaxItems {
 		t.Fatalf("schema の abilityIds.maxItems=%d だが readmodel の maxCatalogAbilityCount は %d のまま。"+
 			"readmodel.go の maxCatalogAbilityCount を %d に合わせる", got, wantMaxItems, got)
@@ -248,12 +248,16 @@ func TestExportPokemonTypes(t *testing.T) {
 	if !reflect.DeepEqual(mega.Types, []string{"fire", "water"}) || !reflect.DeepEqual(mega.AbilityIDs, []string{"teststance"}) {
 		t.Errorf("9001-001 = %+v", mega)
 	}
+	// 9002-000 は slot 1〜4 の4つを持つ。balance の abilityIds.maxItems が 4 に上がったため
+	// (feat/tb-readmodel-wiring。TestBalanceAbilityIdsMaxItemsMatchesReadmodel が追従を検出する)、
+	// もう slot 4 は落とさない。TruncatedAbilities の切り詰めそのもの(5件目以降)は
+	// storetest の固定データに5件目を作れないため、この fixture では確認できない。
 	leaf := f.Pokemon[byID["9002-000"]]
-	if !reflect.DeepEqual(leaf.AbilityIDs, []string{"testleafy", "testguard", "testhidden"}) {
-		t.Errorf("9002-000 の abilityIds = %v, want slot 1〜3(slot 4 は落とす)", leaf.AbilityIDs)
+	if !reflect.DeepEqual(leaf.AbilityIDs, []string{"testleafy", "testguard", "testhidden", "testspecial"}) {
+		t.Errorf("9002-000 の abilityIds = %v, want slot 1〜4(すべて含む)", leaf.AbilityIDs)
 	}
-	if !reflect.DeepEqual(rep.TruncatedAbilities, []readmodel.TruncatedAbility{{PokemonID: "9002-000", AbilityID: "testspecial"}}) {
-		t.Errorf("Report.TruncatedAbilities = %+v, want 9002-000 の testspecial", rep.TruncatedAbilities)
+	if len(rep.TruncatedAbilities) != 0 {
+		t.Errorf("Report.TruncatedAbilities = %+v, want 空(上限4に収まる)", rep.TruncatedAbilities)
 	}
 }
 

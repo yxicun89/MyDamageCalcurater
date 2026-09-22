@@ -84,13 +84,14 @@
 - [x] P3-2 gateway(ルーティング・端末ID/セッションID・/assets・CORS)。設計・受け入れ条件は ADR-0202(calc-svc の重複ヘッダは `invalid_header` に統一)
 - [x] P3-3 契約テスト(OpenAPI 準拠)と k3d 上のスモークテスト。gateway 経由の契約表・マニフェストの静的検査・`make api-k3d-deploy` / `make api-smoke`・`make dev`(ADR-0203)
 - [x] P3-4 calc-svc のマスタを pokedex-svc の内部 API(`GET /internal/pokedex/master`・MasterExport)から受け取る形に変更(ユーザー決定 2026-09-22。ADR-0204)。k3d と dev は同じ形のファイル(架空データ)。pokedex-svc(P2-3)のデプロイ後に local overlay を URL 方式へ切り替える(API レーンの後続)
+- [x] P3-5 gateway の `GATEWAY_WEB_URL`(Web レーンの依頼。設定時は `/api`・`/assets`・`/healthz`・`/internal` 以外への GET/HEAD を Web の Service へ転送。k3d の local は `http://web`。ADR-0205)
 
 ### Phase 4 Web
 - [x] P4-1 デザイントークン(docs/design.md)を CSS 変数に実装(ADR-0300 §4。web/src/styles/tokens.css)
 - [x] P4-2 計算画面(左右カード・持ち物・技・結果の一括表示・攻守入れ替え)。WASM で計算、マスタは架空の例データ(ADR-0300)
 - [x] P4-3 プリセット選択(自分側: A特化/A振り/無振り)。定義は web/src/domain/attackerPresets.ts(ADR-0300 §5。engine への移設は DECISIONS.md で提案)
 - [x] P4-4 逆算画面(観測ダメージ入力→候補リスト)。与えた/受けたダメージ・観測の追加・SP 範囲と目安の名前(ADR-0300 §7。型名でまとめる表示と絞り込みの演出は持ち越し)
-- [!] P4-5 API / WASM 切り替え(WASM ならバックエンド無しで動く)。実装・自動テスト済み(ADR-0301。critic PASS)、**ブラウザ実機確認は人間待ち**(ブロッカー節)
+- [!] P4-5 API / WASM 切り替え(WASM ならバックエンド無しで動く)。実装・自動テスト済み(ADR-0301。critic PASS)。ブラウザ実機確認: **Chrome は確認済み**(2026-09-22 ユーザー。`make web-dev` で良好)、**Safari は未確認**
   - WASM 境界との契約差分の解消(ADR-0011 §10 の持ち越し): Web に「ID → 実体(種族・技・持ち物・特性)」の解決層を1つ置き、オンライン(API に ID を送る=`moveId` など)とオフライン(WASM に解決済みの `move` / `Individual` を渡す)で同じ型を共有する。`openapi-typescript` の生成型と ADR-0011 §3 の DTO の対応表を作る。`minPercent`/`maxPercent` の整数化・`category`・`BulkCalcRow.defender`・エラー `code` 語彙の共通化(P3-1 で契約側を直した後)に Web 側を追従させる。WASM の遅延ロード(オンラインは API、オフラインだけ WASM)にするかを決める(ADR-0011 §11)
   - **ブラウザ実機確認**(P1-9 は Node + wasm_exec.js までの確認。仕様ブロッカーではない): Chrome と Safari で、`.wasm` の MIME type / `WebAssembly.instantiateStreaming` / キャッシュ / Service Worker との干渉 / 初回ロード(約4.6MB・gzip 1.3MB)/ メモリ を確認する
 - [x] P4-6 Playwright E2E(主要フロー)。`make web-e2e`(オフライン)/ `make web-e2e-online`(calc-svc)。Web のテストを `make test` / `lint` / `build` に組み込み(ADR-0300 §9)
@@ -99,6 +100,15 @@
 - [x] P4-8 design.md「動き」の演出(操作したときだけ): 確定数が変わった瞬間にバッジが弾む、攻守入れ替えでカードが入れ替わる(0.35秒)、選択中のカード1枚だけのホロ(ポインタ位置に連動)、逆算で観測を追加したときの絞り込みの動き、ダメージバーの spring。OS の「視差効果を減らす」で全演出を無効化(ユーザー決定 2026-09-22)
 
 - [x] P4-9 P4-8 の軽微な改善(ユーザー指示 2026-09-22): ホロの pointermove で画面全体を再レンダーしない(カード内に閉じる・rAF で間引き、cancel と対)、touch ではホロを出さない(pointerType が mouse / pen のときだけ)、確定数バッジの弾みと逆算の絞り込みにも最大待ちのタイマーを付ける(animationend が来なくても外す)
+
+- [x] P4-10 URL で画面を切り替える(`/calc`・`/reverse`。タブと連動し、ブラウザの戻る・進む・直接開くが効く。以後の画面も同じ形)(ユーザー要望 2026-09-22)
+- [x] P4-11 Web をコンテナで動かす(ADR-0302。gateway の転送は API レーン待ち、それまでは `make web-k3d-open`): nginx の静的配信イメージ(engine.wasm を含む)、Kustomize(base/web と local の Component)、`make web-k3d-deploy`。
+  入口は gateway の後ろ(localhost:8080 だけで画面も API も使える。gateway が /api 以外を Web に転送する変更は API レーンに依頼)。それまでは port-forward で開く(ユーザー決定 2026-09-22)
+- [ ] P4-12 タイプバランスの画面 `/balance`(balance API をそのまま使う。ADR-0303)(ユーザー要望 2026-09-22)
+  - [x] P4-12a メンバー選択(最大6体・特性・技)、防御相性(analyze)、攻撃範囲(coverage)、balance の read model への例データの書き出し(ADR-0303。critic PASS)
+  - [ ] P4-12b 仮想敵(threats)、おすすめタイプ(recommendations)
+- ~~P4-13 素早さ比較の画面~~ → 取り消し(ユーザー決定 2026-09-22: 素早さレーンの SP3 のまま。Web は P4-10 の URL の仕組みで `/speed` を足せる形を用意する)
+- [x] P4-14 手順書の書き方の改善: docs/verify-m1.md を上から順に実行するだけで済む形にし、各コマンドの塊は必ずリポジトリのルートへの `cd` から始める(make の実行場所で迷わない)。k3d(コンテナ)で動かす手順を主にする(ユーザー要望 2026-09-22)
 
 ## M2: 保存・構築
 - [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)
@@ -109,7 +119,7 @@
 
 ## M3: iOS
 - [x] P6-1 Xcode プロジェクト、swift-openapi-generator、デザイントークン(ADR-0500。`make ios-test` = 生成物の一致・XCTest・XCUITest・Info.plist の接続先。critic PASS)
-- [~] P6-2 計算画面・逆算・構築(構築は端末内に保存、Showdown 形式は後回し。2026-09-21 ユーザー回答)。P6-2a 計算画面は完了(critic PASS)。P3-1・P3-2 の契約変更への追従(ErrorCode・503・category・BulkDefender・逆算の API 接続)も完了(critic PASS)。P6-2b 逆算画面(観測はテンキー入力。2026-09-22 ユーザー回答)・P6-2c 構築が残り
+- [~] P6-2 計算画面・逆算・構築(構築は端末内に保存、Showdown 形式は後回し。2026-09-21 ユーザー回答)。P6-2a 計算画面は完了(critic PASS)。P3-1・P3-2 の契約変更への追従(ErrorCode・503・category・BulkDefender・逆算の API 接続)も完了(critic PASS)。P6-2b 逆算画面(観測はテンキー入力。2026-09-22 ユーザー回答)も完了(critic PASS)。P6-2c 構築が残り
 - [ ] P6-3 シミュレータテスト(`make ios-test`)
 - [ ] P6-4 Tailscale serve の手順書 → **人間が実機インストール**
 
@@ -123,6 +133,7 @@
 - [x] TB5 おすすめタイプと該当ポケモン(2026-09-22 ユーザー要望。ADR-0401): チームの穴(TB1 で弱点持ちが多く耐性・無効が少ない攻撃タイプ、TB2 で有効打が無い防御タイプ)をふさげるタイプの候補を出し、
   そのタイプを持つ**使用可能なポケモン全員**(レギュレーション依存。日本語名付き)を一覧にする。特性で穴をふさげるポケモンは別枠。他のサイトを見に行かずに候補が分かることが目的。詳細は着手時に ADR
 - [x] TB 整備(2026-09-22): HTTP の 500 テスト、typed nil の provider の正規化、read model の JSON Schema(ADR-0402)、HTTP 層の検証の共通化、おすすめの穴を既存の集計から導出
+- [x] TB 実データの配線(2026-09-22。データレーンの依頼): pokedex export の read model を ConfigMap で k3d の balance に読ませる(ADR-0403)、abilityIds の上限を 4 に
 
 ### ブロッカー(タイプバランスレーン)
 (なし。Argo CD の実同期は 2026-09-22 に解消)
@@ -145,10 +156,10 @@
 各レーンが自分の範囲の README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)と、動かして確かめられるレーンは手順書(`docs/runbooks/<レーン>.md`。AGENTS.md「手順書の書き方」に従う)を書く。全体図は `docs/architecture.md`。
 - [x] DOC-data: `engine/README.md`・`services/pokedex/README.md`・`tools/importer/README.md`・`tools/golden/README.md`、手順書 `docs/runbooks/data.md`(migrate・import・dry-run の確認)
 - [ ] DOC-api: `services/calc/README.md`・`services/gateway/README.md` を §8 の形に、手順書 `docs/runbooks/api.md`(k3d での疎通)
-- [ ] DOC-web: `web/README.md`、手順書(`docs/verify-m1.md` の画面の部分と重複させない。M1 の完了報告は verify-m1.md にまとめる)
+- [x] DOC-web: `web/README.md`、手順書(`docs/verify-m1.md` の画面の部分と重複させない。M1 の完了報告は verify-m1.md にまとめる)
 - [x] DOC-tb: `services/balance/README.md` を §8 の形に、手順書 `docs/runbooks/balance.md`
-- [ ] DOC-speed: `services/speed/README.md`、手順書 `docs/runbooks/speed.md`
-- [ ] DOC-ios: `ios/README.md`、手順書(シミュレータでの確認。実機インストールは P6-4)
+- [x] DOC-speed: `services/speed/README.md` を §8 の形に、手順書 `docs/runbooks/speed.md`(k3d での疎通を確認済み)
+- [x] DOC-ios: `ios/README.md`(coding-rules §8 の形)、手順書 `docs/runbooks/ios.md`(シミュレータでの確認。実機インストールは P6-4)。受け入れ条件・判断は ADR-0501 へ移動
 - [ ] DOC-arch: `docs/architecture.md` を各レーンの変化に合わせて保つ(整備レーンの MT-3 でも確かめる)
 
 ## M4: 運用
@@ -171,7 +182,7 @@
 (ここに止まった理由と試したことを書く)
 
 **【人間の確認待ち】(Web レーン、2026-09-22 深夜に記載)**
-- **P4-5 のブラウザ実機確認**(仕様ブロッカーではない。作業は止めない): `make web-dev` で開き、Chrome と Safari で計算・逆算が動くこと、
+- **P4-5 のブラウザ実機確認**(仕様ブロッカーではない。作業は止めない。**Chrome は 2026-09-22 に確認済み**、残りは Safari): `make web-dev` で開き、Chrome と Safari で計算・逆算が動くこと、
   `.wasm` の MIME type(`application/wasm`)・`WebAssembly.instantiateStreaming`(失敗時は arrayBuffer にフォールバックする実装)・
   キャッシュ・初回ロード(約4.6MB / gzip 1.3MB)・メモリを確認する。既定案: 確認できるまで P4-5 は「実装・自動テスト済み、実機未確認」として扱う。
 - **PR #22(Web P4-1〜P4-4)のマージ**: 深夜のため作成のみ(作業はブランチで続けられるので止まらない)。朝に確認してマージする。

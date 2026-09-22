@@ -4,7 +4,7 @@
 - 日付: 2026-09-21
 - 関連: docs/plan.md P6-1〜P6-3、docs/requirements.md、docs/design.md、docs/test-strategy.md L6、ADR-0009(一括計算のプリセット)、
   ADR-0010 §R(逆算の新しい形)、ADR-0012(サービス境界)、CLAUDE.md 技術規約(SwiftUI・swift-openapi-generator・XCTest)、
-  docs/ai-shared/COORDINATION.md(iOS レーンは `api/openapi.yaml` に追従するだけ)
+  docs/ai-shared/COORDINATION.md(iOS レーンは `api/openapi.yaml` に追従するだけ)、ADR-0501(画面ごとの受け入れ条件・判断)
 
 ## 背景
 
@@ -32,8 +32,12 @@ ios/
 - **View 以外はパッケージに置く**。画面のロジック(入力 → 要求の組み立て、結果の並び、エラー表示)は ViewModel として XCTest で検証し、
   View は ViewModel の状態を描くだけにする。XCUITest は主要な操作が画面でつながることだけを見る。
 - 配布対象は iOS 27 以上(ユーザー回答 2026-09-21: 実機は iOS 27。Liquid Glass の `glassEffect` は iOS 26 から。requirements.md のビジュアル B)。パッケージは macOS 27 も対象にし、
-  Xcode を使わない `swift test` でも同じテストが走る。
+  Xcode を使わない `swift test` でも同じテストが走る。ツール版は Swift 6.4(swift-tools-version)、言語モードは Swift 6
+  (`swiftLanguageModes: [.v6]` / Xcode ターゲットの `SWIFT_VERSION = 6.0`)。
 - `.xcodeproj` はフォルダ同期にし、ファイルを足しても pbxproj を編集しない。生成ツール(XcodeGen 等)への依存を増やさない。
+  Xcode 27 で開くとローカルパッケージ参照 `PokeCalcKit` の初回解決(Resolve Package Graph)が走る。スキームは `PokeCalc`
+  (アプリ + XCUITest)。シミュレータでの実行・テストはそのままのシステム署名で動くが、実機は `DEVELOPMENT_TEAM` が空なので
+  人間が署名チームを設定する(CLAUDE.md「人間の確認が必要なこと」。P6-4)。
 
 ### 2. API クライアントの生成
 - `make ios-gen` が `ios/tools/openapi-gen` の swift-openapi-generator(版は `Package.resolved` で完全固定)を実行し、
@@ -66,6 +70,9 @@ ios/
 - API の接続先はビルド設定 `POKECALC_API_BASE_URL`(xcconfig)→ Info.plist の `PokeCalcAPIBaseURL` で渡し、起動時に1か所で読む。
   独自キーは `INFOPLIST_KEY_*`(生成 Info.plist)では反映されないので、同期フォルダの外の `ios/PokeCalc-Info.plist` を
   `INFOPLIST_FILE` で指定し、`GENERATE_INFOPLIST_FILE` の生成分とマージする。
+  接続先には `/api` を含めない(生成クライアントの各操作が `/api/...` から始まるので二重になる)。xcconfig は `//` から行末をコメントとして扱うので、
+  空の変数参照で分断して書く(例 `POKECALC_API_BASE_URL = https:/$()/pokecalc.example.invalid`)。URL が不正
+  (スキーム無し・`http(s)` 以外・ホスト無し)なら起動時にエラーを表示し、黙ってモックに落とさない。
   空ならモックを使う。起動時の環境変数 `POKECALC_USE_MOCK=1` はモックを強制する(XCUITest 用)。
 - 端末 ID は初回起動で UUID を作り UserDefaults に保存する(秘密ではない)。セッション ID は起動ごとに作る。
 
@@ -75,10 +82,11 @@ ios/
   無補正は `plus == nil` の最初のもの。**性格 ID を直書きしない**。
 
 ### 7. テスト(make ios-test)
-- (1) `PokeCalcKit` の XCTest を `xcodebuild test -scheme PokeCalcKit-Package` でシミュレータ実行
-- (2) アプリの XCUITest を `xcodebuild test -scheme PokeCalc` でシミュレータ実行(モック強制)
-- (3) `make ios-gen-check`
-- (4) `make ios-check-infoplist`(接続先を渡してビルドし、成果物の Info.plist にキーが入ることを確かめる。§5)
+- (1) `ios-lint`(`ios/scripts/*.sh` の構文チェック。ルートの `make lint` は `scripts/*.sh` しか見ないので個別に持つ)
+- (2) `PokeCalcKit` の XCTest を `xcodebuild test -scheme PokeCalcKit-Package` でシミュレータ実行
+- (3) アプリの XCUITest を `xcodebuild test -scheme PokeCalc` でシミュレータ実行(モック強制)
+- (4) `make ios-gen-check`
+- (5) `make ios-check-infoplist`(接続先を渡してビルドし、成果物の Info.plist にキーが入ることを確かめる。§5)
 - シミュレータ名は `IOS_SIMULATOR`(既定 `iPhone 18 Pro`)。`xcode-select` が CommandLineTools のときは `DEVELOPER_DIR` を Xcode に向ける。
 - 失敗・スキップを成功と数えない(`xcodebuild` の終了コードと、テスト件数 0 を失敗にする)。
 - 画面のスクリーンショット(ライト/ダーク)は手元で撮って確認し、Git には入れない。

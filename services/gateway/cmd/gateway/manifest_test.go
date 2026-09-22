@@ -17,6 +17,8 @@ const (
 	calcServiceName = "calc"
 	// localViteOrigin は local overlay で CORS を許可するオリジン(Vite の開発サーバの既定)。
 	localViteOrigin = "http://localhost:5173"
+	// webServiceName は Web レーンが deploy/k8s/base/web に置く nginx の Service 名(80 番。ADR-0205)。
+	webServiceName = "web"
 )
 
 // AC-S3: base の Deployment・Service が ADR-0203 §3 の形(/healthz の probe・非 root・readOnlyRootFilesystem・80 番)。
@@ -94,6 +96,36 @@ func TestManifestGatewayLocalConfig(t *testing.T) {
 	}
 	if want := []string{localViteOrigin}; !slices.Equal(cfg.Gateway.CORSAllowedOrigins, want) {
 		t.Errorf("CORS の許可オリジン = %q, want %q", cfg.Gateway.CORSAllowedOrigins, want)
+	}
+}
+
+// AC-W8(ADR-0205): GATEWAY_WEB_URL は base に置かず(クラウドの Web の置き方は未定)、local overlay だけが
+// Web レーンの Service 名 web(80 番)を指す。loadConfig を通した値も http://web になる。
+func TestManifestGatewayWebURLOnlyInLocal(t *testing.T) {
+	baseDeployment := deploytest.BaseDeployment(t, gatewayService)
+	base := baseDeployment.Container(t, gatewayService).EnvMap(t)
+	if v, ok := base[envWebURL]; ok {
+		t.Errorf("base に %s=%q がある(local overlay だけに置く)", envWebURL, v)
+	}
+
+	d := deploytest.LocalDeployment(t, gatewayService)
+	env := d.Container(t, gatewayService).EnvMap(t)
+	if got := env[envWebURL]; got != "http://"+webServiceName {
+		t.Fatalf("local overlay の %s = %q, want %q", envWebURL, got, "http://"+webServiceName)
+	}
+	cfg, err := loadConfig(lookupFrom(env))
+	if err != nil {
+		t.Fatalf("local overlay の環境変数で loadConfig が失敗: %v(env=%v)", err, env)
+	}
+	web := cfg.Gateway.WebURL
+	if web == nil {
+		t.Fatalf("loadConfig が %s を読んでいない(WebURL が nil)", envWebURL)
+	}
+	if web.Scheme != "http" || web.Hostname() != webServiceName || (web.Port() != "" && web.Port() != "80") {
+		t.Errorf("WebURL = %q, want http://%s(Service の %d 番)", web, webServiceName, deploytest.ServicePort)
+	}
+	if web.Path != "" && web.Path != "/" {
+		t.Errorf("WebURL にパスがある: %q", web)
 	}
 }
 
