@@ -28,6 +28,8 @@ public final class ReverseViewModel {
     private static let minimumSpeciesCount = 2
 
     private let service: any PokeCalcService
+    /// 構築の永続化(P6-2d)。`CalcViewModel.teamStore` と同じ理由で省略可(既定 nil)。
+    private let teamStore: (any TeamStore)?
 
     // MARK: - マスタ(load() で読み込む)
 
@@ -46,14 +48,29 @@ public final class ReverseViewModel {
     public private(set) var mySpeciesKey: String = ""
     public private(set) var opponentSpeciesKey: String = ""
     public private(set) var moveId: String = ""
-    /// 与えたダメージのときの自分(攻撃側)のプリセット。既定は `AttackerPreset.allCases` の最初(A特化)。
-    public private(set) var attackerPreset: AttackerPreset = .aFull
-    /// 受けたダメージのときの自分(防御側)のプリセット。既定は `KnownDefenderPreset.allCases` の最初(無振り)。
-    public private(set) var knownDefenderPreset: KnownDefenderPreset = .none
+    /// 与えたダメージ(自分が攻撃側)のときの自分の出どころ(P6-2d。ADR-0501「P6-2d」4章:
+    /// 両側に入れる)。既定は `AttackerPreset.allCases` の最初(A特化)。
+    public private(set) var attackerBuildSource: AttackerBuildSource = .preset(.aFull)
+    /// `attackerBuildSource.preset` のショートカット(`CalcViewModel.attackerPreset` と同じ理由で
+    /// 計算プロパティにする)。
+    public var attackerPreset: AttackerPreset? { attackerBuildSource.preset }
+    /// 受けたダメージ(自分が防御側)のときの自分の出どころ。既定は `KnownDefenderPreset.allCases` の
+    /// 最初(無振り)。
+    public private(set) var knownDefenderBuildSource: KnownDefenderBuildSource = .preset(.none)
+    public var knownDefenderPreset: KnownDefenderPreset? { knownDefenderBuildSource.preset }
     public private(set) var myItemId: String?
     /// 持ち物マスタの順(トグルした順ではない)。
     public private(set) var opponentItemCandidateIds: [String] = []
     private var toggledOpponentItemIds: Set<String> = []
+
+    // MARK: - 構築から個体を呼び出す(P6-2d)
+
+    /// 構築の一覧から作った選択肢(`CalcViewModel.teamOptions` と同じ規則)。
+    public private(set) var teamOptions: [TeamPickerGroup] = []
+    /// `teamOptions` の元になった構築本体(`CalcViewModel.loadedTeams` と同じ理由)。
+    private var loadedTeams: [Team] = []
+    /// `loadTeams()` 専用の世代の通し番号(`CalcViewModel.latestTeamListToken` と同じ理由)。
+    private var latestTeamListToken = 0
 
     public private(set) var observations: [ObservationRow] = []
     /// 次に発行する観測行の id(単調増加。行の入れ替えをまたいでも重複しない)。
@@ -68,8 +85,9 @@ public final class ReverseViewModel {
     /// 「最新の要求だけを反映する」ための通し番号(`CalcViewModel.beginInput()` と同じ規則)。
     private var latestRequestToken = 0
 
-    public init(service: any PokeCalcService) {
+    public init(service: any PokeCalcService, teamStore: (any TeamStore)? = nil) {
         self.service = service
+        self.teamStore = teamStore
     }
 
     /// 側から観測の精度が決まる(与えたダメージ = %、受けたダメージ = 実点数)。
@@ -106,8 +124,8 @@ public final class ReverseViewModel {
             side = .defender
             mySpeciesKey = species[0].key
             opponentSpeciesKey = species[1].key
-            attackerPreset = .aFull
-            knownDefenderPreset = .none
+            attackerBuildSource = .preset(.aFull)
+            knownDefenderBuildSource = .preset(.none)
             myItemId = nil
             toggledOpponentItemIds = []
             opponentItemCandidateIds = []
@@ -126,6 +144,63 @@ public final class ReverseViewModel {
         // 観測は空の1行から始まるので計算しない状態(規則3。isLoading だけ解く)。
         guard token == latestRequestToken else { return }
         isLoading = false
+        // 構築の読み込みは起動時の入力確定の後(`CalcViewModel.load()` と同じ理由)。
+        await loadTeams()
+    }
+
+    // MARK: - 構築から個体を呼び出す(P6-2d。ADR-0501「P6-2d」4章: 両側に効かせる)
+
+    /// `CalcViewModel.loadTeams()` と同じ規則。
+    public func loadTeams() async {
+        guard let teamStore else {
+            loadedTeams = []
+            teamOptions = []
+            return
+        }
+        latestTeamListToken += 1
+        let token = latestTeamListToken
+        let (teams, groups) = await TeamListFetcher.fetchGroups(from: teamStore, species: speciesOptions)
+        guard token == latestTeamListToken else { return }
+        loadedTeams = teams
+        teamOptions = groups
+    }
+
+    /// 構築の個体を呼び出す。**いま表示している側**(`side`)の出どころだけを変える(4章)。
+    /// `teamOptions` に無い teamID/memberID は無視する(計算もしない)。
+    public func selectTeamIndividual(teamID: String, memberID: String) async {
+        guard let selection = TeamIndividualSelectionBuilder.make(
+            teamID: teamID, memberID: memberID, teamOptions: teamOptions, teams: loadedTeams, moves: masterMoves
+        ) else { return }
+
+        mySpeciesKey = selection.individual.speciesKey
+        myItemId = selection.individual.itemId
+        let token = beginInput()
+
+        switch side {
+        case .defender:
+            // 与えたダメージ: 自分が攻撃側なので、自分の learnset を読み直して技を選び直す
+            // (`CalcViewModel.selectTeamIndividual` と同じ。3章)。
+            isLoading = true
+            do {
+                try await reloadMoveOptions(token: token)
+                guard token == latestRequestToken else { return }
+                try reselectMove(preferringCurrent: selection.individual.moveId)
+            } catch {
+                guard token == latestRequestToken else { return }
+                self.error = CalcScreenError(error)
+                result = nil
+                isLoading = false
+                return
+            }
+            guard token == latestRequestToken else { return }
+            error = nil
+            attackerBuildSource = .team(selection)
+            await recalculateIfPossible(token: token)
+        case .attacker:
+            // 受けたダメージ: 技は相手の learnset なので触らない(3章)。
+            knownDefenderBuildSource = .team(selection)
+            await recalculateIfPossible(token: token)
+        }
     }
 
     // MARK: - 観測の操作(規則5: 送る観測の列が変わったときだけ reverse を1回呼ぶ)
@@ -251,16 +326,18 @@ public final class ReverseViewModel {
     }
 
     /// 与えたダメージのときの自分のプリセット。受けたダメージのときに変えても値を覚えるだけ(計算しない)。
+    /// 押すと**この側だけ**構築の選択が外れる(排他。ADR-0501「P6-2d」4章)。
     public func selectAttackerPreset(_ preset: AttackerPreset) async {
-        attackerPreset = preset
+        attackerBuildSource = .preset(preset)
         guard side == .defender else { return }
         let token = beginInput()
         await recalculateIfPossible(token: token)
     }
 
     /// 受けたダメージのときの自分のプリセット。与えたダメージのときに変えても値を覚えるだけ(計算しない)。
+    /// 押すと**この側だけ**構築の選択が外れる(排他。ADR-0501「P6-2d」4章)。
     public func selectKnownDefenderPreset(_ preset: KnownDefenderPreset) async {
-        knownDefenderPreset = preset
+        knownDefenderBuildSource = .preset(preset)
         guard side == .attacker else { return }
         let token = beginInput()
         await recalculateIfPossible(token: token)
@@ -404,11 +481,21 @@ public final class ReverseViewModel {
         let known: Individual
         switch side {
         case .defender:
-            let build = try AttackerPreset.build(attackerPreset, moveCategory: move.category, natures: natureOptions)
-            known = Individual(speciesKey: mySpeciesKey, natureId: build.natureId, sp: build.sp, itemId: myItemId)
+            switch attackerBuildSource {
+            case .preset(let preset):
+                let build = try AttackerPreset.build(preset, moveCategory: move.category, natures: natureOptions)
+                known = Individual(speciesKey: mySpeciesKey, natureId: build.natureId, sp: build.sp, itemId: myItemId)
+            case .team(let selection):
+                known = selection.individualForRequest(speciesKey: mySpeciesKey, itemId: myItemId)
+            }
         case .attacker:
-            let build = try KnownDefenderPreset.build(knownDefenderPreset, moveCategory: move.category, natures: natureOptions)
-            known = Individual(speciesKey: mySpeciesKey, natureId: build.natureId, sp: build.sp, itemId: myItemId)
+            switch knownDefenderBuildSource {
+            case .preset(let preset):
+                let build = try KnownDefenderPreset.build(preset, moveCategory: move.category, natures: natureOptions)
+                known = Individual(speciesKey: mySpeciesKey, natureId: build.natureId, sp: build.sp, itemId: myItemId)
+            case .team(let selection):
+                known = selection.individualForRequest(speciesKey: mySpeciesKey, itemId: myItemId)
+            }
         }
         // 相手の持ち物候補が1つ以上あれば「持ち物なし」を先頭に含める。無ければ省略(規則6)。
         let itemCandidates: [String?] = opponentItemCandidateIds.isEmpty

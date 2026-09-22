@@ -321,37 +321,40 @@ enum StubMaster {
     /// 攻撃側 A の learnset にだけある物理技(入れ替え後に選び直されることの確認用)。
     static let alphaOnlyMove = Move(id: "stub-move-alpha-only", nameJa: "テストわざアルファ専用", type: .water, category: .physical, power: 40)
 
+    /// 架空の特性(どの種族も同じものを持つ。`Individual.abilityId` を写していることの確認に使う。P6-2d)。
+    static let ability = Ability(id: "stub-ability", nameJa: "テストとくせい")
+
     /// learnset の先頭が変化技。既定の技は「最初のダメージ技」なので先頭は選ばれない。
     static let alpha = SpeciesDetail(
         key: "9101-000", dexNo: 9101, form: 0, nameJa: "テストアルファ", types: [.normal],
         baseStats: StatBlock(hp: 50, atk: 50, def: 50, spa: 50, spd: 50, spe: 50),
-        abilities: [Ability(id: "stub-ability", nameJa: "テストとくせい")],
+        abilities: [ability],
         learnset: [statusMove.id, alphaOnlyMove.id, specialMove.id, "stub-move-unknown"]
     )
     static let beta = SpeciesDetail(
         key: "9102-000", dexNo: 9102, form: 0, nameJa: "テストベータ", types: [.fire],
         baseStats: StatBlock(hp: 50, atk: 50, def: 50, spa: 50, spd: 50, spe: 50),
-        abilities: [Ability(id: "stub-ability", nameJa: "テストとくせい")],
+        abilities: [ability],
         learnset: [statusMove.id, specialMove.id, physicalMove.id]
     )
     static let gamma = SpeciesDetail(
         key: "9103-000", dexNo: 9103, form: 0, nameJa: "テストガンマ", types: [.water],
         baseStats: StatBlock(hp: 50, atk: 50, def: 50, spa: 50, spd: 50, spe: 50),
-        abilities: [Ability(id: "stub-ability", nameJa: "テストとくせい")],
+        abilities: [ability],
         learnset: [physicalMove.id, specialMove.id]
     )
     /// 変化技しか覚えない(ダメージ技が無いときの既定の規則の確認用)。
     static let statusOnly = SpeciesDetail(
         key: "9104-000", dexNo: 9104, form: 0, nameJa: "テストへんかのみ", types: [.normal],
         baseStats: StatBlock(hp: 50, atk: 50, def: 50, spa: 50, spd: 50, spe: 50),
-        abilities: [Ability(id: "stub-ability", nameJa: "テストとくせい")],
+        abilities: [ability],
         learnset: [statusMove.id]
     )
     /// learnset がマスタのどの技とも一致しない(`moveOptions` が空になる。`moveUnavailable` の確認用)。
     static let unknownMovesOnly = SpeciesDetail(
         key: "9105-000", dexNo: 9105, form: 0, nameJa: "テストみしらぬわざ", types: [.normal],
         baseStats: StatBlock(hp: 50, atk: 50, def: 50, spa: 50, spd: 50, spe: 50),
-        abilities: [Ability(id: "stub-ability", nameJa: "テストとくせい")],
+        abilities: [ability],
         learnset: ["stub-move-does-not-exist"]
     )
 

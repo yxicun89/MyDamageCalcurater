@@ -20,8 +20,8 @@ struct ReverseScreenView: View {
     /// 読み込み中インジケータの高さ(`CalcScreenView` と同じ理由で固定する)。
     private static let loadingIndicatorHeight: CGFloat = 24
 
-    init(service: any PokeCalcService, backendDescription: String) {
-        _viewModel = State(initialValue: ReverseViewModel(service: service))
+    init(service: any PokeCalcService, teamStore: any TeamStore, backendDescription: String) {
+        _viewModel = State(initialValue: ReverseViewModel(service: service, teamStore: teamStore))
         self.backendDescription = backendDescription
     }
 
@@ -40,6 +40,7 @@ struct ReverseScreenView: View {
                 }
                 cardsRow
                 presetSegmentedRow
+                teamSourceRow
                 moveSelector
                 opponentItemCandidateToggles
                 ReverseObservationListView(viewModel: viewModel, focusedObservationID: $focusedObservationID)
@@ -171,6 +172,24 @@ struct ReverseScreenView: View {
         }
     }
 
+    /// 「構築から選ぶ」の入口(P6-2d)。側ごとに出し分けないので identifier は1つ(いまの側は
+    /// `reverseSide-*` で分かる。ADR-0501「P6-2d」7章)。いま表示している側の出どころだけを見せる。
+    private var teamSourceRow: some View {
+        let currentSideSelection: TeamIndividualSelection? = {
+            switch viewModel.side {
+            case .defender: return viewModel.attackerBuildSource.teamSelection
+            case .attacker: return viewModel.knownDefenderBuildSource.teamSelection
+            }
+        }()
+        return TeamSourceMenuRow(
+            teamOptions: viewModel.teamOptions,
+            selection: currentSideSelection,
+            identifierPrefix: "reverseTeam"
+        ) { teamID, memberID in
+            await viewModel.selectTeamIndividual(teamID: teamID, memberID: memberID)
+        }
+    }
+
     private var moveSelector: some View {
         Menu {
             ForEach(viewModel.moveOptions, id: \.id) { move in
@@ -265,7 +284,7 @@ private struct PresetPillButton: View {
 #Preview {
     if let mock = try? MockPokeCalcService() {
         NavigationStack {
-            ReverseScreenView(service: mock, backendDescription: "モックデータで動作中")
+            ReverseScreenView(service: mock, teamStore: LocalTeamStore(), backendDescription: "モックデータで動作中")
         }
     } else {
         Text("プレビュー用モックの読み込みに失敗")

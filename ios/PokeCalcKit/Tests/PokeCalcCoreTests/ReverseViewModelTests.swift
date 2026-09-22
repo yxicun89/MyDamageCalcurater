@@ -79,7 +79,11 @@ final class ReverseViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.moveOptions.map(\.id), [StubMaster.alphaOnlyMove.id, StubMaster.specialMove.id])
         XCTAssertEqual(viewModel.moveId, StubMaster.alphaOnlyMove.id)
         XCTAssertEqual(viewModel.attackerPreset, .aFull)
-        XCTAssertEqual(viewModel.knownDefenderPreset, .none)
+        // P6-2d で `knownDefenderPreset` が `KnownDefenderPreset?`(計算プロパティ)になったため、
+        // 素の `.none` は `Optional<KnownDefenderPreset>.none`(nil)に解決されてしまう
+        // (Swift の既知の挙動。ビルド時に警告も出る)。列挙子を明示して曖昧さを消す
+        // (比較する意味は変えていない。P6-2d の implementer が気づいた型だけのバグ)。
+        XCTAssertEqual(viewModel.knownDefenderPreset, KnownDefenderPreset.none)
         XCTAssertNil(viewModel.myItemId)
         XCTAssertEqual(viewModel.opponentItemCandidateIds, [])
 

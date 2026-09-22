@@ -18,6 +18,9 @@ public final class CalcViewModel {
     private static let minimumSpeciesCount = 2
 
     private let service: any PokeCalcService
+    /// 構築の永続化(P6-2d)。省略可(既定 nil。ADR-0501「P6-2d」5章「判断」): 既存のテストを
+    /// 変えずに通すため、また nil のときは `UserDefaults` に触れずに済むため。
+    private let teamStore: (any TeamStore)?
 
     // MARK: - マスタ(load() で読み込む)
 
@@ -36,13 +39,30 @@ public final class CalcViewModel {
     public private(set) var attackerSpeciesKey: String = ""
     public private(set) var defenderSpeciesKey: String = ""
     public private(set) var moveId: String = ""
-    /// 既定は `AttackerPreset.allCases` の最初(A特化。`AttackerPresetTests` が順序を固定する)。
-    public private(set) var attackerPreset: AttackerPreset = .aFull
+    /// 自分側(攻撃側)の SP・性格などの出どころ(P6-2d。ADR-0501「P6-2d」1章)。既定は
+    /// `AttackerPreset.allCases` の最初(A特化。`AttackerPresetTests` が順序を固定する)。
+    public private(set) var attackerBuildSource: AttackerBuildSource = .preset(.aFull)
+    /// `attackerBuildSource.preset` のショートカット。構築の個体を呼んでいる間は nil になる
+    /// (ADR-0501「P6-2d」1章「判断」: 既存のテスト・View のピル選択表示を無変更で保つため、
+    /// 計算プロパティとして残す。Swift の optional 昇格で `== .aFull` の比較がそのまま成り立つ)。
+    public var attackerPreset: AttackerPreset? { attackerBuildSource.preset }
     public private(set) var attackerItemId: String?
     /// 持ち物マスタの順(トグルした順ではない)。
     public private(set) var comparedDefenderItemIds: [String] = []
     /// `comparedDefenderItemIds` を作るための、トグルされた持ち物 ID の集合(順序は持たない)。
     private var toggledDefenderItemIds: Set<String> = []
+
+    // MARK: - 構築から個体を呼び出す(P6-2d)
+
+    /// 構築の一覧から作った選択肢(メンバーが0体の構築は含まない)。`teamStore` が nil、
+    /// または読み込みに失敗したときは空のまま(ADR-0501「P6-2d」5章)。
+    public private(set) var teamOptions: [TeamPickerGroup] = []
+    /// `teamOptions` の元になった構築本体(`selectTeamIndividual` が個体を引くのに使う。
+    /// `TeamMemberOption` は表示用の射影で `TeamMember` の全フィールドを持たないため別に持つ)。
+    private var loadedTeams: [Team] = []
+    /// `loadTeams()` 専用の世代の通し番号(`beginInput()` とは別。6章「判断」: 構築の読み込みは
+    /// 要求の内容に影響しないので、進行中の計算を追い越したことにしない)。
+    private var latestTeamListToken = 0
 
     // MARK: - 計算結果
 
@@ -55,8 +75,9 @@ public final class CalcViewModel {
     /// (species の応答も含めて世代を守る。M1)。値そのものに意味は無い。
     private var latestRequestToken = 0
 
-    public init(service: any PokeCalcService) {
+    public init(service: any PokeCalcService, teamStore: (any TeamStore)? = nil) {
         self.service = service
+        self.teamStore = teamStore
     }
 
     // MARK: - 起動
@@ -88,7 +109,7 @@ public final class CalcViewModel {
             }
             attackerSpeciesKey = species[0].key
             defenderSpeciesKey = species[1].key
-            attackerPreset = .aFull
+            attackerBuildSource = .preset(.aFull)
             attackerItemId = nil
             toggledDefenderItemIds = []
             comparedDefenderItemIds = []
@@ -103,6 +124,53 @@ public final class CalcViewModel {
             isLoading = false
             return
         }
+        await recalculate(token: token)
+        // 構築の読み込みは計算の後(6章「起動時の構築の読み込みで起動時の計算を遅らせない」)。
+        await loadTeams()
+    }
+
+    // MARK: - 構築から個体を呼び出す(P6-2d。ADR-0501「P6-2d」)
+
+    /// 保存済みの構築を読み直し、`teamOptions` を作り直す。`teamStore` が無ければ常に空にする。
+    /// 何度でも呼べる(構築ビルダーで編集して戻ってきたときに View から呼び直すため。6章)。
+    public func loadTeams() async {
+        guard let teamStore else {
+            loadedTeams = []
+            teamOptions = []
+            return
+        }
+        latestTeamListToken += 1
+        let token = latestTeamListToken
+        let (teams, groups) = await TeamListFetcher.fetchGroups(from: teamStore, species: speciesOptions)
+        guard token == latestTeamListToken else { return }
+        loadedTeams = teams
+        teamOptions = groups
+    }
+
+    /// 構築の個体を呼び出す(1〜4章)。`teamOptions` に無い teamID/memberID は無視する(計算もしない)。
+    public func selectTeamIndividual(teamID: String, memberID: String) async {
+        guard let selection = TeamIndividualSelectionBuilder.make(
+            teamID: teamID, memberID: memberID, teamOptions: teamOptions, teams: loadedTeams, moves: masterMoves
+        ) else { return }
+
+        let token = beginInput()
+        isLoading = true
+        attackerSpeciesKey = selection.individual.speciesKey
+        attackerItemId = selection.individual.itemId
+        do {
+            try await reloadAttackerMoveOptions(token: token)
+            guard token == latestRequestToken else { return }
+            // 個体の技を優先する(無ければ・いまの learnset に無ければ規則3・4の既定に落ちる)。
+            try reselectMove(preferringCurrent: selection.individual.moveId)
+        } catch {
+            guard token == latestRequestToken else { return }
+            self.error = CalcScreenError(error)
+            rows = []
+            isLoading = false
+            return
+        }
+        guard token == latestRequestToken else { return }
+        attackerBuildSource = .team(selection)
         await recalculate(token: token)
     }
 
@@ -130,9 +198,10 @@ public final class CalcViewModel {
         await recalculate(token: token)
     }
 
+    /// プリセットを押すと構築の選択は外れる(排他。ADR-0501「P6-2d」1章「判断」)。
     public func selectAttackerPreset(_ preset: AttackerPreset) async {
         let token = beginInput()
-        attackerPreset = preset
+        attackerBuildSource = .preset(preset)
         await recalculate(token: token)
     }
 
@@ -272,8 +341,16 @@ public final class CalcViewModel {
             // (`moveUnavailable`: 技が1つも無い、とは原因が違うので別のコードにする)。
             throw PokeCalcError(code: PokeCalcError.Code.selectedMoveMissing, message: "選択中の技が一覧にありません")
         }
-        let build = try AttackerPreset.build(attackerPreset, moveCategory: move.category, natures: natureOptions)
-        let attacker = Individual(speciesKey: attackerSpeciesKey, natureId: build.natureId, sp: build.sp, itemId: attackerItemId)
+        let attacker: Individual
+        switch attackerBuildSource {
+        case .preset(let preset):
+            let build = try AttackerPreset.build(preset, moveCategory: move.category, natures: natureOptions)
+            attacker = Individual(speciesKey: attackerSpeciesKey, natureId: build.natureId, sp: build.sp, itemId: attackerItemId)
+        case .team(let selection):
+            // 呼び出した個体の性格・SP・特性・テラスタイプをそのまま使う(プリセットに丸め直さない。
+            // 種族・持ち物は画面の状態が正。ADR-0501「P6-2d」2章)。
+            attacker = selection.individualForRequest(speciesKey: attackerSpeciesKey, itemId: attackerItemId)
+        }
         // 比較する持ち物が1つ以上あれば「持ち物なし」を先頭に含める。無ければ素の1通り(省略。規則5)。
         let itemVariants: [String?] = comparedDefenderItemIds.isEmpty
             ? []
