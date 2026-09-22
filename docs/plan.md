@@ -154,7 +154,7 @@
 - [ ] DOC-web: `web/README.md`、手順書(`docs/verify-m1.md` の画面の部分と重複させない。M1 の完了報告は verify-m1.md にまとめる)
 - [x] DOC-tb: `services/balance/README.md` を §8 の形に、手順書 `docs/runbooks/balance.md`
 - [ ] DOC-speed: `services/speed/README.md`、手順書 `docs/runbooks/speed.md`
-- [ ] DOC-ios: `ios/README.md`、手順書(シミュレータでの確認。実機インストールは P6-4)
+- [x] DOC-ios: `ios/README.md`(coding-rules §8 の形)、手順書 `docs/runbooks/ios.md`(シミュレータでの確認。実機インストールは P6-4)。受け入れ条件・判断は ADR-0501 へ移動
 - [ ] DOC-arch: `docs/architecture.md` を各レーンの変化に合わせて保つ(整備レーンの MT-3 でも確かめる)
 
 ## M4: 運用

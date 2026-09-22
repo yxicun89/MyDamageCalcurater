@@ -1,5 +1,5 @@
 // ReverseCandidateDisplay: 逆算候補(`ReverseCandidate` / `ReverseResult`)を画面に出す形へ
-// 整形する(P6-2b・ADR-0010 §R3・R4、README「P6-2b の受け入れ条件」3)。
+// 整形する(P6-2b・ADR-0010 §R3・R4、ADR-0501「P6-2b の受け入れ条件」3)。
 //
 // サーバーの値を丸め直さない・並べ替えない(候補の順序はサーバーの一致度順=ADR-0010 §R4 のまま)。
 // 純粋な整形だけを持ち、View はここが作った文字列・値をそのまま描く(`BulkRowDisplay` と同じ方針)。

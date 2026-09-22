@@ -12,7 +12,7 @@ struct ReverseScreenView: View {
     @State private var viewModel: ReverseViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// テンキーには Return が無いので、キーボード上部の「完了」で閉じる(README「実装メモ」の
+    /// テンキーには Return が無いので、キーボード上部の「完了」で閉じる(ADR-0501「実装メモ」の
     /// 「テンキーの「完了」ボタン」)。
     @FocusState private var focusedObservationID: Int?
     private let backendDescription: String

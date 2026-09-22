@@ -27,8 +27,8 @@ gateway が Web に転送する GATEWAY_WEB_URL は API レーンが実装中(�
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
 Active: Claude Code
 Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
-Status: P6-1(ADR-0500)・P6-2a 計算画面・契約追従は main に統合済み(PR #31)。P6-2b 逆算画面(critic PASS)と生成の internal タグ除外はブランチにあり未 PR。`make ios-test`(XCTest 174 件・XCUITest 9 件)が緑
-Next: DOC-ios(ios/README.md を coding-rules §8 の形に、手順書 docs/runbooks/ios.md。受け入れ条件は iOS の ADR へ移す)→ PR → P6-2c 構築(端末内保存の TeamStore、Showdown 形式は後回し)→ P6-3 → P6-4(手順書は AGENTS.md「手順書の書き方」)
+Status: P6-1(ADR-0500)・P6-2a 計算画面・契約追従は main に統合済み(PR #31)。P6-2b 逆算画面(critic PASS)・生成の internal タグ除外・DOC-ios(ios/README.md を coding-rules §8 の形に、ADR-0501・docs/runbooks/ios.md。critic PASS)はブランチにあり未 PR。`make ios-test`(XCTest 174 件・XCUITest 9 件)が緑
+Next: PR(P6-2b・internal タグ除外・DOC-ios をまとめて main へ)→ P6-2c 構築(端末内保存の TeamStore、Showdown 形式は後回し)→ P6-3 → P6-4(手順書は AGENTS.md「手順書の書き方」)
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)

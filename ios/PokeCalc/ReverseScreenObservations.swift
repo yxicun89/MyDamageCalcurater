@@ -4,7 +4,7 @@ import SwiftUI
 
 // ReverseScreenObservations: 観測の入力欄一覧(P6-2b・docs/design.md「画面: 逆算」)。
 // 各行はテンキー入力(`.keyboardType(.numberPad)`)。テンキーには Return が無いので、キーボード上部に
-// 「完了」ボタンを足す(README「実装メモ」の「テンキーの「完了」ボタン」)。
+// 「完了」ボタンを足す(ADR-0501「実装メモ」の「テンキーの「完了」ボタン」)。
 
 /// 観測欄の一覧 + 「観測を追加」ボタン。
 struct ReverseObservationListView: View {
@@ -47,7 +47,7 @@ private struct ReverseObservationRowView: View {
     let unitLabel: String
     var focusedObservationID: FocusState<Int?>.Binding
 
-    /// 空の行(`.empty`)はエラーを表示しない(README の identifier 表「空の行では出さない」)。
+    /// 空の行(`.empty`)はエラーを表示しない(ADR-0501 の identifier 表「空の行では出さない」)。
     private var visibleErrorMessage: String? {
         guard let error = row.error, error != .empty else { return nil }
         return error.message(kind: viewModel.observationKind)

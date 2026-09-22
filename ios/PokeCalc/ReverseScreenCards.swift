@@ -4,7 +4,7 @@ import SwiftUI
 
 // ReverseScreenCards: 逆算画面の自分・相手カード(P6-2b・docs/design.md「画面: 逆算」)。
 // 計算画面のカード部品(`SpeciesHeaderMenuLabel` / `MenuLabelChip`)をそのまま再利用する
-// (README「実装メモ」の「`SpeciesHeaderMenuLabel` / `MenuLabelChip` を internal に広げた」)。
+// (ADR-0501「実装メモ」の「`SpeciesHeaderMenuLabel` / `MenuLabelChip` を internal に広げた」)。
 
 /// 自分のカード: 種族セレクタ(ヘッダーがそのまま Menu ラベル。タイプバッジ込み)+ 持ち物セレクタ。
 struct ReverseMyCardView: View {

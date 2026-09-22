@@ -1,7 +1,7 @@
 import XCTest
 
 /// 逆算画面(P6-2b)の骨組みを確かめる。`POKECALC_USE_MOCK=1` で起動してモックを強制する。
-/// README「XCUITest で確かめること」のとおり、候補の数値・範囲の文言は検査しない
+/// ADR-0501「XCUITest で確かめること」のとおり、候補の数値・範囲の文言は検査しない
 /// (モックの数値に依存しない。モックは計算しないので観測を足しても範囲は絞られない)。
 @MainActor
 final class ReverseScreenUITests: XCTestCase {
@@ -57,7 +57,7 @@ final class ReverseScreenUITests: XCTestCase {
     }
 
     /// `reverseAddObservationButton` で観測欄が増える。範囲外(101)を入力すると `reverseObservationError-1`
-    /// が出て、不正な行があるうちは候補が消える(README「入力できない」規則は `abc` 側、テンキーなので
+    /// が出て、不正な行があるうちは候補が消える(ADR-0501「入力できない」規則は `abc` 側、テンキーなので
     /// 数字しか打てず、ここでは範囲外だけを確かめる)。
     func testAddingObservationAndInvalidValueClearsCandidates() {
         let app = launchReverseScreen()

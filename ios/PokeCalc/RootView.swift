@@ -10,10 +10,10 @@ struct RootView: View {
     @State private var path = NavigationPath()
 
     /// 起動時にいきなり計算画面を開かせる環境変数(XCUITest を介さずスクリーンショットを撮る用途。
-    /// 通常の起動には影響しない。README「P6-2a」参照)。
+    /// 通常の起動には影響しない。ADR-0501「P6-2a」参照)。
     static let openCalcScreenAtLaunchEnvironmentKey = "POKECALC_OPEN_CALC_SCREEN_AT_LAUNCH"
     private static let openCalcScreenAtLaunchValue = "1"
-    /// 起動時にいきなり逆算画面を開かせる環境変数(同上。README「P6-2b」参照)。
+    /// 起動時にいきなり逆算画面を開かせる環境変数(同上。ADR-0501「P6-2b」参照)。
     static let openReverseScreenAtLaunchEnvironmentKey = "POKECALC_OPEN_REVERSE_SCREEN_AT_LAUNCH"
     private static let openReverseScreenAtLaunchValue = "1"
 

@@ -1,7 +1,7 @@
 // ObservationInput: 逆算画面の観測(テンキー入力)の検証(P6-2b・ADR-0010 §R2)。
 //
 // 実機の HP バーはゲーム内表示のとおり整数%(与えたダメージ)/ 実点数(受けたダメージ)なので、
-// 画面は 0.1% 入力(`DamageObservation.percentTenths`)を出さない(2026-09-21 のユーザー回答。README「判断した点」)。
+// 画面は 0.1% 入力(`DamageObservation.percentTenths`)を出さない(2026-09-21 のユーザー回答。ADR-0501「判断した点」)。
 // 純粋関数だけを持ち、`ReverseViewModel` が呼び出す。
 
 /// 観測1件の精度(`side` から決まる。ADR-0010 §R1: 与えたダメージ = 相手 HP の%、受けたダメージ = 自分 HP の実点数)。
