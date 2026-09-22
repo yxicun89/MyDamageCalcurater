@@ -28,13 +28,14 @@ func newTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 func blockingServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	done := make(chan struct{})
-	t.Cleanup(func() { close(done) })
-	return newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+	server := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-done:
 		case <-r.Context().Done():
 		}
 	})
+	t.Cleanup(func() { close(done) }) // server.Close より先に走る(Cleanup は後入れ先出し。services/calc/internal/master/source_test.go と同じ前例)
+	return server
 }
 
 // deadBaseURL は誰も待ち受けていないアドレス(接続エラーの検査に使う)。

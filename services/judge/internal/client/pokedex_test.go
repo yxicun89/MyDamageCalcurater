@@ -260,11 +260,11 @@ func TestSpeciesHonorsCallerContext(t *testing.T) {
 func TestSpeciesErrorDoesNotLeakUpstreamDetail(t *testing.T) {
 	t.Parallel()
 
-	const secret = "postgres://user:password@db.internal/pokedex"
+	const upstreamDetail = "dsn dbhost01 svcaccount internal-only-detail"
 	server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"code":"internal_error","message":"` + secret + `"}`))
+		_, _ = w.Write([]byte(`{"code":"internal_error","message":"` + upstreamDetail + `"}`))
 	})
 
 	_, err := newPokedex(t, server.URL, testTimeout).Species(t.Context(), requestContext, "9001-000")
@@ -272,7 +272,7 @@ func TestSpeciesErrorDoesNotLeakUpstreamDetail(t *testing.T) {
 		t.Fatalf("err = %v, want ErrUpstreamUnavailable", err)
 	}
 	message := err.Error()
-	if strings.Contains(message, secret) {
+	if strings.Contains(message, upstreamDetail) {
 		t.Errorf("エラーが上流の本文を漏らしている: %s", message)
 	}
 	if strings.Contains(message, server.URL) {
