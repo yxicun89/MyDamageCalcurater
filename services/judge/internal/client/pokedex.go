@@ -91,3 +91,98 @@ func (w statBlockWire) toStatBlock() (StatBlock, error) {
 	}
 	return StatBlock{HP: *w.HP, Atk: *w.Atk, Def: *w.Def, SpA: *w.SpA, SpD: *w.SpD, Spe: *w.Spe}, nil
 }
+
+// --- JD1: 性格の解決(ADR-0701 §4) ---------------------------------------------------
+
+// Nature is judge's own copy of the pokedex fields it reads for a nature: the field meaning
+// is defined by Nature in the root api/openapi.yaml, not here. Plus/Minus stay plain strings
+// (one of the six stat keys, or "" for a neutral nature) so this package stays independent of
+// engine (ADR-0701 §4); internal/judge converts them to engine.StatKey.
+type Nature struct {
+	ID     string
+	NameJa string
+	Plus   string
+	Minus  string
+}
+
+// natureStatKeys is the set of valid Nature.plus/minus values (the six stat keys). It exists
+// only to validate the upstream response shape, not as a master list (ADR-0701 §4 rejects
+// hardcoding a nature-name table; this is the fixed StatKey vocabulary, same footing as
+// ADR-0600 §3's scarfSpeedModifier constant).
+var natureStatKeys = map[string]bool{
+	"hp": true, "atk": true, "def": true, "spa": true, "spd": true, "spe": true,
+}
+
+// Natures calls GET {base}/api/pokedex/natures and extracts the fields judge reads (ADR-0701
+// §4). judge calls this once per client request and does not cache the result.
+func (p *Pokedex) Natures(ctx context.Context, rc RequestContext) ([]Nature, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/api/pokedex/natures", nil)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
+	}
+
+	resp, err := send(ctx, p.http, req, rc)
+	if err != nil {
+		return nil, err
+	}
+
+	var wire []natureWire
+	if err := decodeUpstreamJSON(resp, &wire); err != nil {
+		return nil, err
+	}
+	// An empty list is a contract violation, not "no natures": silently proceeding would let a
+	// judgement resolve every natureId as unknown, or (worse) a caller mistake it for "no
+	// correction" (ADR-0701 §4).
+	if len(wire) == 0 {
+		return nil, fmt.Errorf("%w: nature list is empty", ErrUpstreamInvalidResponse)
+	}
+
+	natures := make([]Nature, len(wire))
+	for i, w := range wire {
+		nature, err := w.toNature()
+		if err != nil {
+			return nil, err
+		}
+		natures[i] = nature
+	}
+	return natures, nil
+}
+
+// natureWire mirrors just the fields judge reads from the root api/openapi.yaml Nature. plus
+// and minus are pointers so JSON null (a neutral nature) is distinguishable from an upstream
+// bug that omits the field entirely; both end up as "" via normalizeNatureStat, but only the
+// former is contractually valid.
+type natureWire struct {
+	ID     string  `json:"id"`
+	NameJa string  `json:"nameJa"`
+	Plus   *string `json:"plus"`
+	Minus  *string `json:"minus"`
+}
+
+func (w natureWire) toNature() (Nature, error) {
+	if w.ID == "" {
+		return Nature{}, fmt.Errorf("%w: nature is missing id", ErrUpstreamInvalidResponse)
+	}
+	plus, err := normalizeNatureStat(w.Plus)
+	if err != nil {
+		return Nature{}, err
+	}
+	minus, err := normalizeNatureStat(w.Minus)
+	if err != nil {
+		return Nature{}, err
+	}
+	return Nature{ID: w.ID, NameJa: w.NameJa, Plus: plus, Minus: minus}, nil
+}
+
+// normalizeNatureStat maps a null/absent plus-or-minus to "" (no correction) and rejects
+// anything that isn't one of the six stat keys (ADR-0701 §4: never silently fall back to
+// neutral for a value the contract doesn't allow).
+func normalizeNatureStat(v *string) (string, error) {
+	if v == nil || *v == "" {
+		return "", nil
+	}
+	if !natureStatKeys[*v] {
+		return "", fmt.Errorf("%w: nature stat %q is not one of the six stats", ErrUpstreamInvalidResponse, *v)
+	}
+	return *v, nil
+}

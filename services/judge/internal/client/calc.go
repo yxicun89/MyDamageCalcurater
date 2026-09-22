@@ -29,12 +29,31 @@ type Individual struct {
 	Ranks      RankBlock `json:"ranks"`
 }
 
+// Screens is judge's copy of the root api/openapi.yaml Screens (ADR-0701 §1). judge does not
+// interpret it; it's forwarded to calc-svc as-is.
+type Screens struct {
+	Reflect     bool `json:"reflect,omitempty"`
+	LightScreen bool `json:"lightScreen,omitempty"`
+	AuroraVeil  bool `json:"auroraVeil,omitempty"`
+}
+
+// FieldState is judge's copy of the root api/openapi.yaml FieldState's fields that judge
+// forwards to calc-svc (ADR-0701 §1). judge does not interpret weather/terrain/screens; a nil
+// pointer means "not sent" (calc-svc's own default), never "explicitly cleared" (ADR-0700 §4).
+type FieldState struct {
+	Weather         string   `json:"weather,omitempty"`
+	Terrain         string   `json:"terrain,omitempty"`
+	AttackerScreens *Screens `json:"attackerScreens,omitempty"`
+	DefenderScreens *Screens `json:"defenderScreens,omitempty"`
+}
+
 // CalcRequest is judge's copy of the root api/openapi.yaml CalcRequest's required fields.
 type CalcRequest struct {
-	Format   string     `json:"format"`
-	Attacker Individual `json:"attacker"`
-	Defender Individual `json:"defender"`
-	MoveID   string     `json:"moveId"`
+	Format   string      `json:"format"`
+	Attacker Individual  `json:"attacker"`
+	Defender Individual  `json:"defender"`
+	MoveID   string      `json:"moveId"`
+	Field    *FieldState `json:"field,omitempty"`
 }
 
 // KOChance is judge's copy of the fields it reads from the root api/openapi.yaml KOChance.
