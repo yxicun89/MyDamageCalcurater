@@ -435,3 +435,10 @@ Impact: `make lint` の所要時間が自己テスト分だけ約6秒増える�
 Decision: 最新 main の統合検証(MT-1)と check-publishable 自己テストの修正・lint 組み込み(MT-2)を PR #24 で main に統合した。MT-2 の独立レビューは PASS(重大・重要・軽微 0件)。
 Reason: 必須の test・lint・build・公開前検査、および golden・全種族・WASM・balance の非クラスタ検証が成功したため。
 Impact: 整備レーンの次回開始点は MT-3。データ・API・Web・タイプバランス各レーンの再開を確認したため、本 worktree は削除する。
+
+## 2026-09-22: 素早さ比較を3つ目のサービスとして新しいレーン(6本目)で作る(ユーザー決定)
+Decision: 素早さ比較サービス(`services/speed/`)を新しい「素早さ」レーンで作る(`~/MyDamageCalcurater-speed`、ブランチ `feat/speed-<stage名>`、ADR は `0600〜`)。
+画面は Web に独立したタブ。素早さの画面は `web/src/speed/` を素早さレーンの持ち物にし、アプリの骨組み(タブの登録)は自分の1項目を足すだけにする。
+仕様(ユーザー回答): 左 = 速い順の全体の表、右 = 自分のポケモン、自分の位置を視覚的に示す。表は各ポケモン6行(無振り / 準速 / 最速 / 最速スカーフ / 最速+1 / 最速+2)。右は「無振り / 準速 / 最速」+スカーフ on/off の最小の選択で計算でき、オプションで好きな数値でも算出できる。
+Reason: ユーザーが素早さ比較サイトの使い勝手(表と見比べて自分の数値を算出する)を改善したいと依頼し、表の行・入力・担当(タイプバランスの次ではなく新しいレーン)・画面の置き場所に回答した。
+Impact: COORDINATION.md のレーン表・ADR の帯・起動の目安、CURRENT_STATE.md の Speed 欄、plan.md の「SP: 素早さ比較」(SP0〜SP4)。データレーンの P2-3 の read model(`pokedex export`)に、素早さの種族値が含まれていること(ポケモンの read model に baseStats があれば足りる)。

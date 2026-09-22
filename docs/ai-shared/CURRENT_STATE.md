@@ -36,6 +36,13 @@ Status: TB0〜TB4 は完了・main に統合済み(TB4 仮想敵診断 /threats�
 Next: TB5(おすすめタイプと該当ポケモン。DECISIONS.md 2026-09-22: 基準は防御の穴と攻撃範囲の穴の両方、一覧はそのタイプを持つ使用可能なポケモン全員(日本語名付き)、特性でふさげるものは別枠)。使用可能集合・日本語名はデータレーンの P2-2 のマスタが要るので、それまでは read model を広げた架空データで作る。軽微の残り: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の JSON Schema、CoverageMultiplier の nullable enum、HTTP 層の検証・422 変換の重複(analyze・coverage・threats)
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
 
+## Speed
+Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
+Active: なし
+Branch: feat/speed-s0(作業ディレクトリ ~/MyDamageCalcurater-speed)
+Status: 未着手(2026-09-22 にレーンを新設。ユーザーの仕様は docs/plan.md の「SP: 素早さ比較」と DECISIONS.md)
+Next: SP0 から。docs/speed-design.md(設計の正)と ADR-0600 を書き、services/speed の基盤(タイプバランスの services/balance と同じ構成: 純粋な Go のコア・HTTP API・自前の openapi・Kustomize)を作る。種族の素早さ種族値と使用可能集合は pokedex の read model(データレーン P2-3 の `pokedex export`)から読む。それまでは架空データで作る。実数値の式は engine の公開 API(RealStats 等)を呼ぶだけで、自前で持たない
+
 ## Maintenance
 Lane: 整備(Claude の上限時に Codex が進める。COORDINATION.md「Claude の上限時の Codex」)
 Active: なし
