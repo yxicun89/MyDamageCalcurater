@@ -1,6 +1,6 @@
 # 判定(素早さ×ダメージ連動) 設計書(判定レーン)
 
-- 更新日: 2026-09-22
+- 更新日: 2026-09-23
 - 状態: 起草(ユーザー要望を受けてタイプバランスレーンのセッションが起草。設計の正はこの文書と `docs/adr/0700〜`(判定レーンの帯))
 - ユーザーの要望: 「ニトチャ+メイン技で素早さ抜ける+そのポケモンを倒せるか」を1回の入力で確認したい
 
@@ -40,9 +40,20 @@ Client (Web/iOS)
 - ヘルスチェックのみで疎通を確認する。
 
 ### JD1: 抜けるか + 倒せるか(最小構成)
-- request: 自分の `Individual`(既存の `api/openapi.yaml` の `Individual` と同じ形を再利用: speciesKey・natureId・sp・abilityId・itemId・ranks)+ 相手の `Individual`(**相手も具体的な調整を入力できる形**。ユーザー回答)+ 使用する技の moveId + field(天候等、任意)。
-- response: `outspeeds`(自分が相手より**厳密に**速いか)、`speedTie`(実数値が同じか。§4-1 の決定)、相手への `ko`(calc-svc の `KOChance` をそのまま転記)。
-- 「抜ける」の判定は実数値の比較(ランク補正・こだわりスカーフを含む。麻痺などの状態変化は既存の `StatusCondition` を使うなら含めてよいが最初は見送り候補)。
+
+決定の正は **ADR-0701**(`POST /api/judge/v1/outspeed-and-ko`。契約は `services/judge/api/openapi.yaml`)。
+
+- request: 自分の `Individual`(speciesKey・natureId・sp・ranks・abilityId・itemId)+ 相手の `Individual`
+  (**相手も具体的な調整を入力できる形**。ユーザー回答)+ 使用する技の moveId + format + field(天候等、任意)。
+  `status`・`teraType`・`options.critical` は JD1 では受け取らない(ADR-0701 §2・却下した案)。
+- response: `outspeeds`(自分が相手より**厳密に**速いか)、`speedTie`(実数値が同じか。§4-1 の決定)、
+  `attackerSpeed` / `defenderSpeed`(judge が使った戦闘中の素早さ。ADR-0701 §1)、
+  相手への `ko`(calc-svc の `KOChance` をそのまま転記)。
+- 「抜ける」の判定は実数値の比較。順序は 実数値(`engine.EffectiveStat`)→ ランク → こだわりスカーフ(×1.5・五捨五超入)
+  で、こだわりスカーフの持ち物 ID は既定 `choicescarf`(環境変数 `JUDGE_CHOICE_SCARF_ITEM_ID` で上書き可。ADR-0701 §3)。
+  **麻痺などの状態変化は見送り**(ADR-0701 §2 で確定。JD2 で `status` ごと扱う)。
+- 性格は `GET /api/pokedex/natures` を 1 リクエストにつき 1 回だけ引いて、自分と相手の両方を解決する(ADR-0701 §4)。
+- 上流(natures → attacker の種族 → defender の種族 → calc)は**逐次**で呼ぶ。検査順とエラーの対応表は ADR-0701 §5・§6。
 
 ### JD2 以降(未定。着手時にユーザーに確認)
 - 複数の相手候補を一度に判定する(TB4 の仮想敵診断のような複数体入力)。
@@ -50,7 +61,7 @@ Client (Web/iOS)
 - Web/iOS の画面。
 - JD1 では「使用した技自身の追加効果によるランク変化」までを対象にする(§4-5)。相手の技・場の状態変化によるランク変化は JD2 以降。
 
-## 4. 決定事項(JD0 で確定。正は ADR-0700)
+## 4. 決定事項(1〜5 は JD0 で確定。正は ADR-0700。JD1 の決定は ADR-0701)
 
 1. **同速(実数値が同じ)の扱い: 決定** — `outspeeds`(自分が相手より**厳密に**速いか)と `speedTie`(実数値が同じか)を別のフィールドで返す。
    根拠: 同速は「抜けている」でも「抜けられている」でもなく、真偽値1つに丸めると画面で区別できない。同速を真偽に丸めない ADR-0602 の `tie` に倣う。

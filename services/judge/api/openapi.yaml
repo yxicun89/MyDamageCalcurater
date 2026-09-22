@@ -5,9 +5,10 @@ info:
   description: |
     判定(素早さ×ダメージ連動)の独立サービスの契約。
     「自分のポケモンが相手を素早さで抜けて、かつ使う技で倒せるか」を 1 回の request で判定する。
-    JD0 はヘルスチェックだけを持つ。判定の endpoint(POST /api/judge/v1/outspeed-and-ko)は
-    request の形が確定する JD1 で足す(ADR-0700 §5)。
-    契約の正は docs/adr/0700-judge-jd0-foundation.md と docs/judge-design.md。
+    judge は自分の契約を自分で持つ(ADR-0012)。ルートの api/openapi.yaml を $ref せず、
+    同じ意味のスキーマをここで定義する。欄の意味の正はルートの api/openapi.yaml にある。
+    契約の正は docs/adr/0700-judge-jd0-foundation.md(基盤)・
+    docs/adr/0701-judge-jd1-outspeed-and-ko.md(判定)と docs/judge-design.md。
 servers:
   - url: /
 paths:
@@ -40,6 +41,78 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Health'
+  /api/judge/v1/outspeed-and-ko:
+    post:
+      operationId: outspeedAndKo
+      summary: 素早さで抜けるか + その技で倒せるか
+      description: |
+        自分(attacker)と相手(defender)の調整、および自分が使う技 1 つを受け取り、
+        「自分が相手より素早いか(outspeeds / speedTie)」と「その技で相手を倒せるか(ko)」を
+        1 回の request で返す(ADR-0701 §1)。
+
+        素早さは 実数値(engine.RealStats)→ ランク補正 → こだわりスカーフ(×1.5・五捨五超入)の順で求める
+        (ADR-0701 §2)。状態異常(麻痺など)による素早さの変化は JD1 では扱わないため、
+        Individual に status は無い。ko は calc-svc の計算結果をそのまま転記する(judge は確定数を再計算しない)。
+
+        検査順(ADR-0701 §5。上流は逐次で呼ぶ):
+        ヘッダー (400) → body が 1 つの JSON か・上限 8 KiB (400 / 413)
+        → sp・ranks・format・必須文字列の範囲 (400。ここまで上流を 1 回も呼ばない)
+        → 性格の一覧 (503) → natureId が一覧に無い (422 unknown_nature)
+        → attacker の種族 (422 unknown_species / 503) → defender の種族 (同じ)
+        → ダメージ計算 (400 / 503) → 200。
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OutspeedAndKoRequest'
+      responses:
+        '200':
+          description: 素早さの比較結果と確定数
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutspeedAndKoResponse'
+        '400':
+          description: |
+            X-Device-Id / X-Session-Id が無い・空、body が 1 つの JSON オブジェクトでない・未知の欄がある、
+            必須の欄が無い、sp / ranks / format が範囲外、または calc-svc が計算要求を受け付けなかった
+            (invalid_request。ADR-0701 §6)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: body が 8 KiB を超えている(request_too_large)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: |
+            speciesKey が pokedex-svc のマスタに無い(unknown_species)、
+            または natureId が性格の一覧に無い(unknown_nature)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: |
+            pokedex-svc / calc-svc が未設定・接続できない・タイムアウト・5xx・契約に合わない応答
+            (upstream_unavailable)。/healthz はこのとき 200 のまま(ADR-0700 §5)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: 想定外の内部エラー(internal_error)。message は固定文言で、内部の詳細を返さない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   parameters:
     DeviceId:
@@ -66,6 +139,231 @@ components:
           type: string
           enum:
             - ok
+    SpeciesKey:
+      description: '{図鑑番号4桁}-{フォルム3桁}。意味の正はルートの api/openapi.yaml の SpeciesKey。'
+      type: string
+      pattern: '^[0-9]{4}-[0-9]{3}$'
+      example: '0445-000'
+    Format:
+      description: 対戦形式。calc-svc にそのまま渡す。
+      type: string
+      enum:
+        - single
+        - double
+      default: single
+    StatBlock:
+      description: |
+        6 ステータスの値。judge では Individual.sp(能力ポイント。各 0..32・合計 <= 66)に使う。
+        意味の正はルートの api/openapi.yaml の StatBlock。
+      type: object
+      required:
+        - hp
+        - atk
+        - def
+        - spa
+        - spd
+        - spe
+      properties:
+        hp:
+          type: integer
+          minimum: 0
+          maximum: 32
+        atk:
+          type: integer
+          minimum: 0
+          maximum: 32
+        def:
+          type: integer
+          minimum: 0
+          maximum: 32
+        spa:
+          type: integer
+          minimum: 0
+          maximum: 32
+        spd:
+          type: integer
+          minimum: 0
+          maximum: 32
+        spe:
+          type: integer
+          minimum: 0
+          maximum: 32
+    RankBlock:
+      description: |
+        ランク補正(-6..+6)。HP は持たない。judge は「技の追加効果を適用した後のランク」を
+        呼び出し側が入れたものとして受け取る(ADR-0700 §6-5)。
+      type: object
+      properties:
+        atk:
+          type: integer
+          minimum: -6
+          maximum: 6
+          default: 0
+        def:
+          type: integer
+          minimum: -6
+          maximum: 6
+          default: 0
+        spa:
+          type: integer
+          minimum: -6
+          maximum: 6
+          default: 0
+        spd:
+          type: integer
+          minimum: -6
+          maximum: 6
+          default: 0
+        spe:
+          type: integer
+          minimum: -6
+          maximum: 6
+          default: 0
+    Individual:
+      description: |
+        判定に使う個体。欄は docs/judge-design.md §3 JD1 の列挙そのまま。
+        status(状態異常)と teraType は JD1 では受け取らない(ADR-0701 §2)。
+      type: object
+      required:
+        - speciesKey
+        - natureId
+        - sp
+      properties:
+        speciesKey:
+          $ref: '#/components/schemas/SpeciesKey'
+        natureId:
+          description: 性格 ID。GET /api/pokedex/natures の一覧で補正する能力に解決する(ADR-0701 §4)。
+          type: string
+          minLength: 1
+        sp:
+          $ref: '#/components/schemas/StatBlock'
+        ranks:
+          $ref: '#/components/schemas/RankBlock'
+        abilityId:
+          description: 特性 ID。judge は解釈せず calc-svc にそのまま渡す。
+          type: string
+          nullable: true
+        itemId:
+          description: |
+            持ち物 ID。judge は calc-svc にそのまま渡すほか、こだわりスカーフの ID
+            (既定 choicescarf。環境変数 JUDGE_CHOICE_SCARF_ITEM_ID で上書きできる。ADR-0701 §3)
+            と一致するときだけ素早さに ×1.5 を掛ける。
+          type: string
+          nullable: true
+    Weather:
+      type: string
+      enum:
+        - none
+        - sun
+        - rain
+        - sand
+        - snow
+      default: none
+    Terrain:
+      type: string
+      enum:
+        - none
+        - electric
+        - grassy
+        - misty
+        - psychic
+      default: none
+    Screens:
+      type: object
+      properties:
+        reflect:
+          type: boolean
+          default: false
+        lightScreen:
+          type: boolean
+          default: false
+        auroraVeil:
+          type: boolean
+          default: false
+    FieldState:
+      description: |
+        場の状態。judge は解釈せず calc-svc の field にそのまま転送する(省略時は送らない)。
+        意味の正はルートの api/openapi.yaml の FieldState。
+      type: object
+      properties:
+        weather:
+          $ref: '#/components/schemas/Weather'
+        terrain:
+          $ref: '#/components/schemas/Terrain'
+        attackerScreens:
+          $ref: '#/components/schemas/Screens'
+        defenderScreens:
+          $ref: '#/components/schemas/Screens'
+    OutspeedAndKoRequest:
+      type: object
+      required:
+        - format
+        - attacker
+        - defender
+        - moveId
+      properties:
+        format:
+          $ref: '#/components/schemas/Format'
+        attacker:
+          description: 自分の個体。JD1 は自分が攻撃する側だけを扱う(ADR-0700 §6-2)。
+          allOf:
+            - $ref: '#/components/schemas/Individual'
+        defender:
+          description: 相手の個体。
+          allOf:
+            - $ref: '#/components/schemas/Individual'
+        moveId:
+          description: 自分が使う技(1 つ)。
+          type: string
+          minLength: 1
+        field:
+          $ref: '#/components/schemas/FieldState'
+    KOChance:
+      description: |
+        確定数 / 乱数 n 発。calc-svc の KOChance をそのまま転記する(judge は再計算しない)。
+        意味の正はルートの api/openapi.yaml の KOChance と ADR-0006・ADR-0010。
+        engine の生値 chancePercent は画面に出す値ではないので judge は返さない。
+      type: object
+      required:
+        - hits
+        - guaranteed
+        - displayChancePercent
+      properties:
+        hits:
+          description: 最大ダメージで倒すのに必要な攻撃回数(0 = 倒せない)。
+          type: integer
+        guaranteed:
+          description: 最小ダメージでも hits 回で倒せるなら true(確定 n 発)。
+          type: boolean
+        displayChancePercent:
+          description: 画面に出す「hits 回で倒せる確率(%)」。小数第1位(ADR-0010 §3)。
+          type: number
+          format: double
+    OutspeedAndKoResponse:
+      type: object
+      required:
+        - outspeeds
+        - speedTie
+        - attackerSpeed
+        - defenderSpeed
+        - ko
+      properties:
+        outspeeds:
+          description: |
+            自分の戦闘中の素早さが相手より厳密に大きいか。同速は false で、speedTie が true になる
+            (真偽値 1 つに丸めない。ADR-0700 §6-1)。
+          type: boolean
+        speedTie:
+          description: 双方の戦闘中の素早さが等しいか。outspeeds と同時に true にはならない。
+          type: boolean
+        attackerSpeed:
+          description: 自分の戦闘中の素早さ(ランク・こだわりスカーフ適用後)。
+          type: integer
+        defenderSpeed:
+          description: 相手の戦闘中の素早さ(ランク・こだわりスカーフ適用後)。
+          type: integer
+        ko:
+          $ref: '#/components/schemas/KOChance'
     Error:
       type: object
       required:
@@ -79,12 +377,18 @@ components:
     ErrorCode:
       description: |
         エラーの区分。judge は上流の事情(HTTP のステータス・接続エラーの文面・URL)をそのまま返さず、
-        ADR-0700 §3 の対応表でこの列挙に畳む。
-        invalid_request: ヘッダー・request body が契約に合わない。
-        upstream_unavailable: pokedex-svc / calc-svc に接続できない・タイムアウト・5xx・契約に合わない応答。
+        ADR-0700 §3・ADR-0701 §6 の対応表でこの列挙に畳む。
+        invalid_request: ヘッダー・request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
+        unknown_species: speciesKey が pokedex-svc のマスタに無い。
+        unknown_nature: natureId が性格の一覧に無い。
+        request_too_large: request body が上限(8 KiB)を超えている。
+        upstream_unavailable: pokedex-svc / calc-svc が未設定・接続できない・タイムアウト・5xx・契約に合わない応答。
         internal_error: 想定外の内部エラー(message は固定文言で、内部の詳細を返さない)。
       type: string
       enum:
         - invalid_request
+        - unknown_species
+        - unknown_nature
+        - request_too_large
         - upstream_unavailable
         - internal_error
