@@ -2,6 +2,7 @@ package balance
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 )
 
@@ -143,9 +144,14 @@ func moveRangeWalledBy(chart TypeChartProvider, attackTypes []TypeID, catalog []
 	var walledBy []WalledByPokemon
 	var walledByAbility []WalledByAbilityPokemon
 	for _, pokemon := range sorted {
-		best, err := moveRangeBestEffectiveness(chart, attackTypes, pokemon.Types, nil)
+		// attackTypes is non-empty here (AnalyzeMoveRange already rejected the empty case via
+		// ErrMoveRangeNoAttackMove), so bestDefense (ADR-0400 §3) never returns nil.
+		best, err := bestDefense(chart, attackTypes, pokemon.Types, nil)
 		if err != nil {
 			return nil, nil, err
+		}
+		if best == nil {
+			return nil, nil, fmt.Errorf("%w: bestDefense returned nil with a non-empty move set", ErrNilTypeChart)
 		}
 		if best.Cmp(moveRangeWalledByThreshold) <= 0 {
 			types := make([]TypeID, len(pokemon.Types))
@@ -154,7 +160,7 @@ func moveRangeWalledBy(chart TypeChartProvider, attackTypes []TypeID, catalog []
 				PokemonID:      pokemon.PokemonID,
 				NameJa:         pokemon.NameJa,
 				Types:          types,
-				BestMultiplier: best,
+				BestMultiplier: *best,
 			})
 			continue
 		}
@@ -174,35 +180,22 @@ func moveRangeWalledBy(chart TypeChartProvider, attackTypes []TypeID, catalog []
 				}
 				return nil, nil, err
 			}
-			withAbility, err := moveRangeBestEffectiveness(chart, attackTypes, pokemon.Types, &ability)
+			withAbility, err := bestDefense(chart, attackTypes, pokemon.Types, &ability)
 			if err != nil {
 				return nil, nil, err
+			}
+			if withAbility == nil {
+				return nil, nil, fmt.Errorf("%w: bestDefense returned nil with a non-empty move set", ErrNilTypeChart)
 			}
 			if withAbility.Cmp(moveRangeWalledByThreshold) <= 0 {
 				walledByAbility = append(walledByAbility, WalledByAbilityPokemon{
 					PokemonID:      pokemon.PokemonID,
 					NameJa:         pokemon.NameJa,
 					AbilityID:      abilityID,
-					BestMultiplier: withAbility,
+					BestMultiplier: *withAbility,
 				})
 			}
 		}
 	}
 	return walledBy, walledByAbility, nil
-}
-
-// moveRangeBestEffectiveness is the largest multiplier defenseTypes takes from any of
-// attackTypes (with ability applied when not nil; CalculateDefenseWithAbility accepts nil).
-func moveRangeBestEffectiveness(chart TypeChartProvider, attackTypes, defenseTypes []TypeID, ability *Ability) (Effectiveness, error) {
-	var best Effectiveness
-	for i, attack := range attackTypes {
-		result, err := CalculateDefenseWithAbility(chart, attack, defenseTypes, ability)
-		if err != nil {
-			return Effectiveness{}, err
-		}
-		if i == 0 || result.Effectiveness.Cmp(best) > 0 {
-			best = result.Effectiveness
-		}
-	}
-	return best, nil
 }

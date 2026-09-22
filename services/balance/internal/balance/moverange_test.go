@@ -395,6 +395,25 @@ func TestAnalyzeMoveRangeWalledBy(t *testing.T) {
 	}
 }
 
+// ADR-0404 §4.5 / ADR-0401 §7.2: カタログの abilityIds に特性 read model が知らない ID があっても、
+// その特性だけ飛ばして 500 にしない。既知の特性(ability-9001。fire を無効化)は walledByAbility に残る。
+func TestAnalyzeMoveRangeSkipsUnknownCatalogAbility(t *testing.T) {
+	t.Parallel()
+
+	catalog := []balance.CatalogPokemon{
+		{PokemonID: "9010-000", NameJa: "テストミステリー", Types: []balance.TypeID{mrGrass}, AbilityIDs: []string{"ability-9999", "ability-9001"}},
+	}
+	analysis, err := balance.AnalyzeMoveRange(moveRangeChart(), []balance.Move{mrFireMove}, catalog, mrAbilities)
+	if err != nil {
+		t.Fatalf("AnalyzeMoveRange: %v", err)
+	}
+	got := abilityPairsOf(analysis.WalledByAbility)
+	want := []abilityPair{{"9010-000", "テストミステリー", "ability-9001", "0"}}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("walledByAbility = %v, want %v (unknown ability-9999 skipped, not an error)", got, want)
+	}
+}
+
 // ADR-0404 §2: 特性の read model が無ければ walledByAbility は空(エラーにしない)。
 // ほかの結果は特性の有無で変わらない。
 func TestAnalyzeMoveRangeWithoutAbilityProvider(t *testing.T) {

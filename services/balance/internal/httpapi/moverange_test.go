@@ -320,6 +320,25 @@ func TestMoveRangeNeedsNoPokemonTypeProvider(t *testing.T) {
 	decodeMoveRangeResponse(t, recorder.Body.Bytes())
 }
 
+// ADR-0404 §4.5 / ADR-0401 §7.2: カタログの abilityIds に特性 read model が知らない ID があっても
+// 500 にならず、その特性だけ飛ばして 200 を返す。
+func TestMoveRangeSkipsUnknownCatalogAbility(t *testing.T) {
+	t.Parallel()
+
+	deps := mrFullDependencies()
+	deps.PokemonCatalog = testCatalog{
+		{PokemonID: "9010-000", NameJa: "テストミステリー", Types: []balance.TypeID{balance.TypeGrass}, AbilityIDs: []string{"ability-9999", "ability-9001"}},
+	}
+	recorder := postMoveRange(t, New(deps), `{"moveIds":["move-9001"]}`)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+	}
+	response := decodeMoveRangeResponse(t, recorder.Body.Bytes())
+	if len(response.WalledByAbility) != 1 || response.WalledByAbility[0].AbilityId != "ability-9001" {
+		t.Errorf("walledByAbility = %+v, want one entry for ability-9001 (ability-9999 skipped, not an error)", response.WalledByAbility)
+	}
+}
+
 func TestMoveRangeAcceptsBoundaries(t *testing.T) {
 	t.Parallel()
 

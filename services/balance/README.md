@@ -6,7 +6,7 @@ HTTP の契約の正は [`api/openapi.yaml`](api/openapi.yaml)。手順書は [`
 
 ```mermaid
 flowchart LR
-  Client["Web / iOS"] -->|"/api/balance/v1/team-balance/*"| HTTP
+  Client["Web / iOS"] -->|"/api/balance/v1/team-balance/* , /move-range/*"| HTTP
   subgraph balance["balance-svc"]
     HTTP["internal/httpapi<br/>検証・判定順・応答"] --> Core["internal/balance<br/>純粋 Go(相性・集計・おすすめ)"]
     Master["internal/master<br/>read model の loader"] --> Core
@@ -41,6 +41,7 @@ flowchart LR
 | `POST .../coverage` | 技から攻撃範囲(有効打 = 等倍以上) | 0016 |
 | `POST .../threats` | 仮想敵ごとの受ける・与える最大倍率 | 0400 |
 | `POST .../recommendations` | 防御・攻撃範囲の穴と、ふさぐタイプ候補・該当ポケモン | 0401 |
+| `POST .../move-range/analyze` | 技構成(1〜4件)の攻撃範囲と、半減以下で受けられる実在ポケモン | 0404 |
 
 ## よく使うコマンド
 
@@ -67,4 +68,5 @@ make balance-sync-typechart                    # testdata/golden/typechart.json 
 [0015](../../docs/adr/0015-balance-type-chart-from-data.md)(相性表)・[0016](../../docs/adr/0016-balance-tb2-offense-coverage.md)・
 [0017](../../docs/adr/0017-balance-tb3-ability-effects.md)・[0018](../../docs/adr/0018-balance-local-gitops-verification.md)(GitOps)・
 [0400](../../docs/adr/0400-balance-tb4-threat-check.md)・[0401](../../docs/adr/0401-balance-tb5-recommend-types.md)・
+[0404](../../docs/adr/0404-balance-tb6-move-range-checker.md)・
 [0402](../../docs/adr/0402-balance-read-model-json-schema.md)(JSON Schema)・[0403](../../docs/adr/0403-balance-readmodel-wiring.md)(実データの配線)。直接依存とライセンスは [`DEPENDENCIES.md`](DEPENDENCIES.md)。
