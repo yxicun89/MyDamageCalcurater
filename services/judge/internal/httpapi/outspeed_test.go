@@ -962,3 +962,320 @@ func TestOutspeedAndKoCheckOrder(t *testing.T) {
 		assertStatusAndCode(t, recorder, http.StatusUnprocessableEntity, api.UnknownNature)
 	})
 }
+
+// --- JD2: 場の効果(トリックルーム・追い風)。ADR-0702 ---
+
+// neutralBody は attacker / defender をどちらも無振り・無補正(= 実数値 120)にした body。
+// JD2 のテストは場の効果だけを動かして差を見たいので、調整の差を先に消しておく。
+func neutralBody() map[string]any {
+	body := validBody()
+	attacker := body["attacker"].(map[string]any)
+	attacker["natureId"] = natureNeutralID
+	attacker["sp"] = sp(0)
+	defender := body["defender"].(map[string]any)
+	defender["natureId"] = natureNeutralID
+	defender["sp"] = sp(0)
+	return body
+}
+
+// TestOutspeedAndKoTrickRoom: トリックルームは実数値を変えず、outspeeds(自分が先に動くか)の
+// 向きだけを反転する(ADR-0702 §3・受け入れ条件4)。speedTie は反転しない。
+func TestOutspeedAndKoTrickRoom(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		trickRoom     bool
+		attackerSpeed int // 種族の素早さ種族値(0 なら 100)
+		defenderSpeed int
+		wantAttacker  int
+		wantDefender  int
+		wantOutspeeds bool
+		wantSpeedTie  bool
+	}{
+		// 種族値 100 → 120、種族値 130 → 150(どちらも無振り・無補正)。
+		{"トリックルーム無し: 速い方が先に動く", false, 130, 100, 150, 120, true, false},
+		{"トリックルーム中: 速い方が後になる", true, 130, 100, 150, 120, false, false},
+		{"トリックルーム無し: 遅いと抜けない", false, 100, 130, 120, 150, false, false},
+		{"トリックルーム中: 遅い方が先に動く", true, 100, 130, 120, 150, true, false},
+		{"同速はトリックルーム無しで speedTie", false, 100, 100, 120, 120, false, true},
+		// 同速はゲームでもトリックルームの有無に関わらず行動順が決まらない(ADR-0702 §3)。
+		{"同速はトリックルーム中でも反転しない", true, 100, 100, 120, 120, false, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			body := neutralBody()
+			body["speedField"] = map[string]any{"trickRoom": tt.trickRoom}
+
+			stub := &upstreams{attackerSpeed: tt.attackerSpeed, defenderSpeed: tt.defenderSpeed}
+			recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+			}
+
+			got := decodeResponse(t, recorder)
+			// トリックルームは実数値を変えない(ADR-0702 §2)。
+			if got.AttackerSpeed != tt.wantAttacker || got.DefenderSpeed != tt.wantDefender {
+				t.Errorf("attackerSpeed/defenderSpeed = %d/%d, want %d/%d(トリックルームは実数値を変えない)",
+					got.AttackerSpeed, got.DefenderSpeed, tt.wantAttacker, tt.wantDefender)
+			}
+			if got.Outspeeds != tt.wantOutspeeds || got.SpeedTie != tt.wantSpeedTie {
+				t.Errorf("outspeeds/speedTie = %v/%v, want %v/%v",
+					got.Outspeeds, got.SpeedTie, tt.wantOutspeeds, tt.wantSpeedTie)
+			}
+			if got.Outspeeds && got.SpeedTie {
+				t.Error("outspeeds と speedTie が同時に true になっている")
+			}
+		})
+	}
+}
+
+// TestOutspeedAndKoTailwind: 追い風は指定した側の実数値を ×2 し、attackerSpeed / defenderSpeed に
+// 現れる(ADR-0702 §2・受け入れ条件2)。attackerTailwind は自分だけ、defenderTailwind は相手だけ。
+func TestOutspeedAndKoTailwind(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name             string
+		attackerTailwind bool
+		defenderTailwind bool
+		wantAttacker     int
+		wantDefender     int
+		wantOutspeeds    bool
+		wantSpeedTie     bool
+	}{
+		// attacker の種族値 100 → 120、defender の種族値 130 → 150。
+		{"追い風なし", false, false, 120, 150, false, false},
+		{"自分だけ追い風", true, false, 240, 150, true, false},
+		{"相手だけ追い風", false, true, 120, 300, false, false},
+		{"両方追い風(大小関係は変わらない)", true, true, 240, 300, false, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			body := neutralBody()
+			body["speedField"] = map[string]any{
+				"attackerTailwind": tt.attackerTailwind,
+				"defenderTailwind": tt.defenderTailwind,
+			}
+
+			stub := &upstreams{attackerSpeed: 100, defenderSpeed: 130}
+			recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+			}
+
+			got := decodeResponse(t, recorder)
+			if got.AttackerSpeed != tt.wantAttacker || got.DefenderSpeed != tt.wantDefender ||
+				got.Outspeeds != tt.wantOutspeeds || got.SpeedTie != tt.wantSpeedTie {
+				t.Errorf("attackerSpeed/defenderSpeed/outspeeds/speedTie = %d/%d/%v/%v, want %d/%d/%v/%v",
+					got.AttackerSpeed, got.DefenderSpeed, got.Outspeeds, got.SpeedTie,
+					tt.wantAttacker, tt.wantDefender, tt.wantOutspeeds, tt.wantSpeedTie)
+			}
+		})
+	}
+}
+
+// TestOutspeedAndKoTailwindAndScarfRounding: 追い風とこだわりスカーフが同時に乗るときは、
+// 4096 基準で 1 つに連結してから 1 回だけ五捨五超入する(ADR-0702 §2・受け入れ条件3)。
+// 出典は @smogon/calc 0.12.0 の getFinalSpeed(chainMods → pokeRound を 1 回)。
+//
+// 種族値 71・無振り・無補正 = 実数値 91(奇数)。
+// 連結: chainMods([8192, 6144]) = 12288 = ×3 → 91 × 3 = 273。
+// 各補正ごとに丸める実装: 91 × 1.5 = 136.5 → 136 → × 2 = 272(1 ずれる)。
+func TestOutspeedAndKoTailwindAndScarfRounding(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		baseSpeed int
+		scarf     bool
+		tailwind  bool
+		want      int
+		naive     int // 補正ごとに丸めた場合の誤った値(want と同じなら差が出ないケース)
+	}{
+		{"実数値 91・スカーフのみ(JD1 から変わらない)", 71, true, false, 136, 136},
+		{"実数値 91・追い風のみ", 71, false, true, 182, 182},
+		{"実数値 91・スカーフ + 追い風", 71, true, true, 273, 272},
+		{"実数値 93・スカーフ + 追い風", 73, true, true, 279, 278},
+		{"実数値 120・スカーフ + 追い風(偶数なので差は出ない)", 100, true, true, 360, 360},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			body := neutralBody()
+			if tt.scarf {
+				body["attacker"].(map[string]any)["itemId"] = "choicescarf"
+			}
+			body["speedField"] = map[string]any{"attackerTailwind": tt.tailwind}
+
+			stub := &upstreams{attackerSpeed: tt.baseSpeed, defenderSpeed: 100}
+			recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+			}
+
+			got := decodeResponse(t, recorder).AttackerSpeed
+			if got != tt.want {
+				t.Errorf("attackerSpeed = %d, want %d", got, tt.want)
+			}
+			if tt.naive != tt.want && got == tt.naive {
+				t.Errorf("attackerSpeed = %d は補正ごとに丸めた値。連結してから 1 回だけ五捨五超入する(ADR-0702 §2)", got)
+			}
+		})
+	}
+}
+
+// TestOutspeedAndKoDoesNotForwardSpeedField: speedField は judge だけが解釈し、calc-svc には
+// 送らない(ADR-0702 §1・受け入れ条件6)。calc-svc が理解するのは weather/terrain/screens だけで、
+// トリックルーム・追い風はダメージに関与しない。既存の field の転送は変わらない。
+func TestOutspeedAndKoDoesNotForwardSpeedField(t *testing.T) {
+	t.Parallel()
+
+	t.Run("speedField だけを指定しても calc には送らない", func(t *testing.T) {
+		t.Parallel()
+
+		body := validBody()
+		body["speedField"] = map[string]any{
+			"trickRoom":        true,
+			"attackerTailwind": true,
+			"defenderTailwind": true,
+		}
+
+		stub := &upstreams{}
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+		}
+
+		calc := stub.lastCalcBody(t)
+		if value, present := calc["speedField"]; present {
+			t.Errorf("calc に speedField = %v を送っている。calc-svc は解釈できない(ADR-0702 §1)", value)
+		}
+		if value, present := calc["field"]; present {
+			t.Errorf("calc に field = %v を送っている。request で指定していない", value)
+		}
+	})
+
+	t.Run("field と併用しても field だけが転送される", func(t *testing.T) {
+		t.Parallel()
+
+		body := validBody()
+		body["field"] = map[string]any{"weather": "sun"}
+		body["speedField"] = map[string]any{"trickRoom": true, "attackerTailwind": true}
+
+		stub := &upstreams{}
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+		}
+
+		calc := stub.lastCalcBody(t)
+		if value, present := calc["speedField"]; present {
+			t.Errorf("calc に speedField = %v を送っている(ADR-0702 §1)", value)
+		}
+		field, ok := calc["field"].(map[string]any)
+		if !ok {
+			t.Fatalf("calc の field = %v, want an object", calc["field"])
+		}
+		if field["weather"] != "sun" {
+			t.Errorf("calc の field.weather = %v, want sun(ADR-0701 受け入れ条件6 は変わらない)", field["weather"])
+		}
+		// トリックルーム・追い風が field に紛れ込んでいないこと。
+		for _, key := range []string{"trickRoom", "attackerTailwind", "defenderTailwind"} {
+			if value, present := field[key]; present {
+				t.Errorf("calc の field に %s = %v が混ざっている", key, value)
+			}
+		}
+	})
+}
+
+// TestOutspeedAndKoSpeedFieldOmittedMatchesJD1: speedField を省略した request の応答は JD1 と同一
+// (ADR-0702 受け入れ条件5)。空オブジェクト・全欄 false も同じ。
+func TestOutspeedAndKoSpeedFieldOmittedMatchesJD1(t *testing.T) {
+	t.Parallel()
+
+	// JD1 と同じ条件: attacker = 167、defender = 120 で抜ける。
+	want := api.OutspeedAndKoResponse{
+		Outspeeds:     true,
+		SpeedTie:      false,
+		AttackerSpeed: 167,
+		DefenderSpeed: 120,
+		Ko:            api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100},
+	}
+
+	tests := []struct {
+		name       string
+		speedField any // nil なら欄そのものを送らない
+	}{
+		{"speedField を送らない", nil},
+		{"speedField が空オブジェクト", map[string]any{}},
+		{"speedField の全欄が false", map[string]any{
+			"trickRoom": false, "attackerTailwind": false, "defenderTailwind": false,
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			body := validBody()
+			if tt.speedField != nil {
+				body["speedField"] = tt.speedField
+			}
+
+			stub := &upstreams{}
+			recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+			}
+			if got := decodeResponse(t, recorder); got != want {
+				t.Errorf("response = %+v, want %+v(JD1 と同じ)", got, want)
+			}
+		})
+	}
+}
+
+// TestOutspeedAndKoRejectsInvalidSpeedField: speedField の未知の欄・真偽値でない値は
+// 400 invalid_request で、上流を 1 回も呼ばない(ADR-0702 受け入れ条件7。検査順は ADR-0701 §5 のまま)。
+func TestOutspeedAndKoRejectsInvalidSpeedField(t *testing.T) {
+	t.Parallel()
+
+	withSpeedField := func(value any) map[string]any {
+		body := validBody()
+		body["speedField"] = value
+		return body
+	}
+
+	tests := []struct {
+		name string
+		body any
+	}{
+		{"未知の欄がある", withSpeedField(map[string]any{"gravity": true})},
+		{"トリックルームの綴り違い", withSpeedField(map[string]any{"trickroom": true})},
+		{"trickRoom が真偽値でない", withSpeedField(map[string]any{"trickRoom": "true"})},
+		{"attackerTailwind が数値", withSpeedField(map[string]any{"attackerTailwind": 1})},
+		{"speedField がオブジェクトでない", withSpeedField(true)},
+		// 追い風は side ごとの欄で受け取る。単一の tailwind という欄は契約に無い。
+		{"tailwind という欄は無い", withSpeedField(map[string]any{"tailwind": true})},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			stub := &upstreams{}
+			recorder := postOutspeed(newUpstreams(t, stub), tt.body, nil)
+
+			assertStatusAndCode(t, recorder, http.StatusBadRequest, api.InvalidRequest)
+
+			natures, speciesKeys, calcCalls := stub.counts()
+			if natures+len(speciesKeys)+calcCalls != 0 {
+				t.Errorf("上流を呼んでいる(natures=%d species=%v calc=%d)。request の検査は上流より先(ADR-0701 §5)",
+					natures, speciesKeys, calcCalls)
+			}
+		})
+	}
+}

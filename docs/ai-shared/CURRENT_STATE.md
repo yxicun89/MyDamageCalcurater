@@ -25,11 +25,19 @@ exportBalanceReadModel に absorb と ADR-0106 §決定7の出力順・無効優
 verify-m1.md を完成版にした: P2-2c/d・P2-3・P3-3 が main に入り、k3d(gateway 経由 http://localhost:8080)で
 計算・逆算・タイプバランス(仮想敵・おすすめタイプ含む)を実地確認(pokedex-svc は実データ投入済みだが、
 gateway/calc-svc のマスタ参照先はまだ pokedex-svc に向いていない。API レーンの依頼 d が一時停止中)。
-P4-5 は Chrome で確認済み(Safari は未確認。人間の作業)
-Next: (1) pokedex-svc の公開 API から Web のオンライン MasterSource を作る(ADR-0301 §4。gateway/calc の
-pokedex 配線待ちなので、API レーンの依頼 d が進んでから本格着手するのが自然)。
-(2) 続いて P5-5(構築ビルダー等)は record/team の API 待ち。
-(3) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
+P4-5 は Chrome で確認済み(Safari は未確認。人間の作業)。
+**P4-16(オンライン MasterSource の基盤。ADR-0304)完了・main 統合済み(PR #128)**: `createOnlineMasterSource`
+(持ち物・性格を全件取得、種族は `searchSpecies`/`getSpecies` の検索専用インターフェース)、
+`MasterData.capabilities`(技選択・持ち物候補比較・特性一覧は公開 API の欠落により明示的に無効化)、
+`App.tsx`/`main.tsx` の配線。critic 1回目 FAIL で重大バグ発見(`apiBaseUrl()` の既定値 `"/"` で
+`new URL(path, baseUrl)` が例外を投げ、オンラインモードが常に失敗していた)→ 修正・回帰テスト追加 → 2回目 critic PASS。
+既存のオフライン・全画面・既存752件のテストは無変更。技の ID→実体化(`getSpecies.learnset`)は公開 API に手段が無く、
+データ/API レーンへ既定案付きで提案済み(DECISIONS.md 2026-09-23、未回答・急ぎではない)。
+Next: (1) P4-16b(画面側。ADR-0304 A-5): 種族の検索コンボボックス、技選択・持ち物候補比較・特性一覧が使えないときの
+無効化と案内表示(`web/src/screens/*.tsx` が対象。plan.md に軽微な積み残し4件も記録済み)。
+(2) P4-18(Codexレビュー issue。タイプバランスレーンから連絡): 優先 #99(アクセシビリティ)・#113(debounce/cancel)。
+(3) 続いて P5-5(構築ビルダー等)は record/team の API 待ち。
+(4) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
@@ -53,19 +61,16 @@ Next: (Web レーンは `make gen-ts` 実行済み。`web/src/api/balance.gen.ts
 
 ## Speed
 Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
-Active: なし(SP0〜SP3・SP5 完了。残る SP4 の実データ確認は人間/DSN を扱えるセッション待ちのため一区切り)
+Active: なし(SP0〜SP5 すべて完了。次の要望待ち)
 Branch: 次は main から feat/speed-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-speed。SP5 は feat/speed-sp5 → PR #97 で main に統合)
-Status: SP0〜SP3・SP5 は完了・main に統合(PR #32・#36・#52・#83・#86・#93・#97)。**SP4(pokedex export の read model を k3d の
-speed に読ませる配線。ADR-0603)は配線の実装・critic PASS・fixture データでの k3d 疎通確認まで完了**しているが、**実データ
-(pokedex-svc の DB)での最終確認だけが未実施**(`POKEDEX_DATABASE_DSN` の取り扱いが auto mode のセッションでは権限上できない
-ため。credential materialization としてブロックされた)。SP5 は実際の Argo CD への適用(`speed-argocd-app`・`speed-registry-push`・
-sync)も同じ理由で未実施(ADR-0605 §4。共有クラスタへの変更のため人間の確認のもとで)
-Next: **人間または DB の認証情報を扱えるセッションへ**: (1) `make pokedex-export`(データレーンの docs/runbooks/data.md の手順で
-DB を用意し `POKEDEX_DATABASE_DSN` を設定)→ `make speed-k3d-deploy-readmodel && make speed-smoke-readmodel` で SP4 の実データ確認。
-(2) 任意で docs/runbooks/speed.md 節5〜10(Argo CD への Application 適用・レジストリへの push・sync)。
-どちらも素早さレーンの実装作業としては完了しており、残るのはクラスタ操作の実行確認だけ。空の roster の扱いは pokedex export が
-1件以上を返す前提のまま(ADR-0603 影響。実データで0件になる状況が起きたら別途決める)。balance-registry → pokecalc-registry への
-改名提案はタイプバランスレーンへ既定案で提示済み(DECISIONS.md 2026-09-23)。次に新しい素早さの要望が出たら、このレーンで続ける。
+Status: SP0〜SP5 すべて完了・main に統合(PR #32・#36・#52・#83・#86・#93・#97)。SP4 の実データ確認はユーザーが2026-09-24 に実施:
+`mysql` Service はクラスタ内部の DNS 名で Mac からは解決できないため、`kubectl -n pokecalc port-forward svc/mysql 3306:3306` を張り、
+DSN のホストを `127.0.0.1` に付け替えて `make pokedex-export`(348 pokemon)→ `make speed-k3d-deploy-readmodel` →
+`make speed-smoke-readmodel` を実行(初回はロールアウト直後で 504、再実行で `speed readmodel smoke: pokemon=0003-000 list=200 table=200`)。
+SP5 の実際の Argo CD への適用(`speed-argocd-app`・`speed-registry-push`・sync)は未実施のまま(ADR-0605 §4。共有クラスタへの変更のため
+人間の確認のもとで、必要になったときに)
+Next: 特に無し。他レーンからの依頼(Codexレビュー issue #105・#108。上記)かユーザーからの新規要望待ち。balance-registry →
+pokecalc-registry への改名提案はタイプバランスレーンへ既定案で提示済み(DECISIONS.md 2026-09-23)。
 Codexレビューissue(2026-09-23、タイプバランスレーンから連絡): #105(Argo CD導入・digest固定の共有スクリプト化)はタイプバランスレーンが
 主担当で進め、できたら docs/runbooks/speed.md の該当節をその呼び出しに差し替えるだけになる見込み(今は着手不要)。#108(read model の
 dataVersion・rollout一本化)はデータレーンが主担当で、連絡が来たら合わせる(今は着手不要)
@@ -73,16 +78,15 @@ dataVersion・rollout一本化)はデータレーンが主担当で、連絡が�
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
 Active: Claude Code
-Branch: feat/judge-jd1(作業ディレクトリ ~/MyDamageCalcurater-judge。PR 作成待ち。JD0 の feat/judge-jd0 は PR #92 で main に統合済み・削除)
-Status: JD0(基盤。PR #92)に続き JD1(判定 API 本体)完了。ADR-0701: `POST /api/judge/v1/outspeed-and-ko` を実装。
-素早さは `engine.EffectiveStat`(実数値→ランク)→ こだわりスカーフ(×6144/4096 五捨五超入。既定 item ID `choicescarf`、
-`JUDGE_CHOICE_SCARF_ITEM_ID` で上書き可)。性格は新設 `Pokedex.Natures`(`GET /api/pokedex/natures`。1リクエスト1回で
-attacker・defender 両方を解決)。上流呼び出しは逐次(natures→species×2→calc。並列化しない。検査順を契約に書き
-エラーの勝ち負けを固定するため)。response は `outspeeds`・`speedTie`・`attackerSpeed`・`defenderSpeed`・`ko`。
-critic 2回目で PASS(1回目 NG 重要3件: 上流エラーのログ未記録・pokedex 400 の扱いが ADR 未記載・defender 側スカーフ/
-種族差のテスト欠如。すべて修正・テスト追加済み)。`make test`/`make lint`/`make build`(ルート)が緑
-Next: PR を作って main へ統合(このセッションの残タスク)。JD2 以降(複数の相手候補・場の効果・画面)は
-plan.md の方針どおり、着手前にユーザーへ確認する
+Branch: feat/judge-jd2(作業ディレクトリ ~/MyDamageCalcurater-judge。PR 作成待ち。JD1 の feat/judge-jd1 は PR #118 で main に統合済み・削除)
+Status: JD0(基盤。PR #92)・JD1(判定 API 本体。PR #118)は main に統合済み。JD2(場の効果: トリックルーム・追い風)も完了。
+`speedField`(trickRoom・attackerTailwind・defenderTailwind)を `POST /api/judge/v1/outspeed-and-ko` に追加した(ADR-0702)。
+追い風は実数値を×2、こだわりスカーフとの併用は4096基準で1つに連結してから1回だけ五捨五超入(補正ごとに丸めない。
+@smogon/calc 0.12.0 の `getFinalSpeed`/`chainMods`/`pokeRound` を実際に読んで確認・独立検算済み)。トリックルームは
+実数値を変えず `outspeeds`(自分が先に動くか)の向きだけ反転、`speedTie` は反転しない。critic PASS(1回目)。
+JD2〜JD5 の範囲・順序はユーザー回答で確定済み(judge-design.md §3): JD2 場の効果→JD3 複数の相手候補→JD4 返り討ち判定
+(pokedex-svc の技 detail endpoint が無く API レーンへ依頼中。DECISIONS.md)→JD5 Web/iOS 画面
+Next: PR を作って main へ統合(このセッションの残タスク)。その後 JD3(複数の相手候補を一度に判定)に着手
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠
