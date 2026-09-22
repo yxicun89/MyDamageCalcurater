@@ -6,8 +6,8 @@ Active: Claude Code
 Branch: feat/claude-p1-engine(作業ディレクトリ ~/MyDamageCalcurater)
 Status: Phase 1・P2-1・P1-10・Phase R・P1-13・P1-11・P1-12・P2-1b・P2-1c・P2-2a・P2-2b・P2-2c・P2-2d・P2-3(pokedex-svc。内部 API・公開 API・natures・balance/speed 向け export。ADR-0105)は完了(critic レビュー済み)
 Status(追記): P2-3b(無効・吸収の特性)も完了・main 統合済み(ADR-0106)。calc・gateway の pokedex-svc 接続(API レーンの依頼)も PR #87 で解決済み(api-smoke で master=pokedex 確認済み)。
-Status(追記): P5-6(技の追加効果によるランク変化。ADR-0107)完了・critic PASS(1往復)。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。`move_effects` 別表・`MasterMove.effect`(内部API)まで。公開APIへの露出(判定レーンが技IDからランク変化を引く経路)は判定レーンの要件確定後に別途対応。
-Next: main へ PR。その後は他レーン(Codexレビュー issue #106 排他制御を優先)からの依頼待ち。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)
+Status(追記): P5-6(技の追加効果によるランク変化。ADR-0107)完了・critic PASS(1往復)・**main 統合済み(PR #132)**。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。`move_effects` 別表・`MasterMove.effect`(内部API)まで。公開APIへの露出(判定レーンが技IDからランク変化を引く経路)は判定レーンの要件確定後に別途対応。
+Next: (1) issue #110(API レーンから依頼。DECISIONS.md 2026-09-23): `engine.CalcBulk`/`CalcReverse` に同じ防御上限(presets 8/ItemVariants 64/ItemCandidates 64/Observations 16/MaxCandidates 0..128)を置き、`engine/wasmapi` にも invalid_input 相当の上限と HTTP/WASM parity テストを足す。(2) Codexレビュー issue #106(排他制御)を優先、続いて #104/#109/#112。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)

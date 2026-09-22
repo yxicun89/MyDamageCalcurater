@@ -908,3 +908,12 @@ Impact(依頼):
 - 残存リスク(このADRの範囲外): 同時実行数・レート制限は扱っていない。上限ちょうどの reverse は約22.6msのCPUを要するため、
   calc-svc の CPU limit(200m)は理論上 約9 req/s 程度で飽和しうる。レート制限は gateway かクラスタ側の別課題。
 - issue #110 は API レーンの分だけでは閉じない。engine/WASM・Web・iOS が追従してから閉じる。
+
+## 2026-09-23: P5-6(技の追加効果)を main へ統合(データレーン)
+Decision: PR #132(`feat/claude-p1-engine` → `main`)をマージした。ADR-0107・engine.MoveEffect・
+`move_effects` 表・importer(Showdown 単体)・内部API `MasterMove.effect`・calc-svc export まで。
+critic 1往復で PASS(指摘は accuracy/evasion 混在時の無音警告漏れ・secondaries 判定基準の粗さ・
+fixture 整形崩れの3点。いずれも ADR-0107 の「追記(2026-09-23)」に記録)。
+Reason: 独立レビュー PASS・`make test`(790件)/`lint`/`build`/`test-golden`/`test-all-species`/`test-wasm` すべて green。
+Impact: 判定レーンは JD1(ADR-0701 の Individual.ranks 方式)のまま。技IDからランク変化を自動で出す
+公開APIの拡張は、判定レーンの要件が固まってから別途(データ・APIレーン)。
