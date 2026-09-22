@@ -404,6 +404,8 @@ func fullAbilityEffect() engine.AbilityEffect {
 		OffBoostType:         "grass",
 		OffBoostTypeMod:      6144,
 		DefResistType:        map[engine.Type]int{"fire": 2048, "normal": 2048},
+		DefImmuneTypes:       []engine.Type{"grass"},
+		DefAbsorbTypes:       map[engine.Type]engine.AbsorbEffect{"water": {HealNumerator: 1, HealDenominator: 4}},
 		ReduceSuperEffective: 3072,
 		IgnoresBurn:          true,
 	}
@@ -608,25 +610,32 @@ func TestDecodeAcceptsGoldenEffectsFormat(t *testing.T) {
 
 // --- ヘルパー ----------------------------------------------------------------
 
-// chartOfTypesIn は effects.json に現れる小文字のタイプ ID(値と map のキー)だけで表を作る。
-// タイプの一覧をテストに書かないため、ファイルの内容から集める。
+// chartOfTypesIn は effects.json に現れる小文字のタイプ ID(値と map のキー・配列の要素)だけで
+// 表を作る。タイプの一覧をテストに書かないため、ファイルの内容から集める。
 func chartOfTypesIn(t *testing.T, raw []byte) engine.TypeChart {
 	t.Helper()
 	var doc any
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatal(err)
 	}
-	typeKeys := map[string]bool{"BoostType": true, "ResistBerryType": true, "OffBoostType": true}
+	typeKeys := map[string]bool{
+		"BoostType": true, "ResistBerryType": true, "OffBoostType": true, "DefImmuneTypes": true,
+	}
+	mapKeyTypeParents := map[string]bool{"DefResistType": true, "DefAbsorbTypes": true}
 	seen := map[string]bool{}
 	var walk func(parent string, v any)
 	walk = func(parent string, v any) {
 		switch x := v.(type) {
 		case map[string]any:
 			for k, child := range x {
-				if parent == "DefResistType" {
+				if mapKeyTypeParents[parent] {
 					seen[k] = true
 				}
 				walk(k, child)
+			}
+		case []any:
+			for _, child := range x {
+				walk(parent, child)
 			}
 		case string:
 			if typeKeys[parent] {
