@@ -29,6 +29,7 @@ balance-build:
 
 balance-kustomize:
 	@kubectl kustomize $(BALANCE_DIR)/deploy/k8s/overlays/local >/dev/null
+	@kubectl kustomize $(BALANCE_DIR)/deploy/k8s/overlays/local-readmodel >/dev/null
 	@kubectl kustomize $(BALANCE_DIR)/deploy/k8s/overlays/gitops >/dev/null
 	@kubectl kustomize $(BALANCE_DIR)/deploy/argocd >/dev/null
 

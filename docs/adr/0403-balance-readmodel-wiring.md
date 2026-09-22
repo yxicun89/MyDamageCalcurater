@@ -12,7 +12,8 @@
 2. overlay `deploy/k8s/overlays/local-readmodel` は ConfigMap をマウントし、3つの `BALANCE_*_PATH` を設定する。
    Pod テンプレートに内容の hash の annotation を入れ、中身が変わったら Pod を作り直す。
 3. デプロイの前に `cmd/checkreadmodel` が、サービスと同じ loader で3つのファイルを検証する(不正ならデプロイしない)。
-   ConfigMap の上限(1 MiB)を超える大きさなら止める。
+   ConfigMap の上限(1 MiB)を超える大きさなら止める。`kubectl apply` は `--server-side` を使う(client-side apply が
+   `last-applied-configuration` annotation に書く分の 256 KiB 上限を、実データのように 1 MiB に近いサイズで超えるため)。
 4. `make balance-smoke-readmodel` は、read model の先頭のポケモンで analyze と recommendations が 200 になることを確かめる。
 5. 特性の候補(`abilityIds`)の上限は 4(ADR-0401 §5 を変更)。実データに特性スロットが4つの種族があるため。
 
