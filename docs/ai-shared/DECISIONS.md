@@ -768,3 +768,8 @@ Impact: **他レーンへの申し送り**: `make up` 直後(pokedex の DB 未�
 Web・iOS レーンのローカル k3d 環境でも calc を使う画面(ダメージ計算)が動かない。初回だけ `make import-k8s` でマスタを投入すること
 (データレーンの docs/runbooks/data.md 参照)。`make api-k3d-deploy` も、マスタ未投入のクラスタでは `kubectl rollout status` が120秒でタイムアウトして失敗するので、
 先に `make import-k8s` を実行すること。`make api-smoke` の出力1行目が `master=pokedex …` であれば実際に pokedex-svc へつながっている確認になる(`master=example` はフォールバック)。
+
+## 2026-09-23: iOS レーンの統合(PR #91)
+Decision: P6-2c 構築ビルダー(一覧・編集画面・ニックネーム・XCUITest)と api/openapi.yaml(ADR-0105)への追従を PR #91 で main にマージした(critic 2回目 PASS。make test / lint / build / check-publishable / ios-test が成功)。
+Reason: 前回(PR #53)の続き。P6-2c の critic レビュー(1回目 NG → 2回目 PASS)を経て区切りで統合した。
+Impact: 続き(P6-2d 構築から個体を呼び出す配線・P6-3・P6-4)は同じブランチ feat/ios-p6 で進める。
