@@ -145,6 +145,115 @@ final class TeamEditViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.abilityOptionsByMember["member-alpha"], StubMaster.gamma.abilities)
     }
 
+    // MARK: - setMemberSpecies / abilityId (issue #100)
+    //
+    // `StubMaster.alpha`/`beta`/`gamma`/`statusOnly` はすべて同じ `StubMaster.ability` を共有するため
+    // 「旧特性が新種族に無い」ケースを確かめられない。特性集合が種族ごとに異なる
+    // `abilityXOnly` / `abilityYOnly` / `abilityXAndY` / `noAbilities` を使う。
+
+    /// 現在の `abilityId` が新種族の候補にまだあれば保持する(既定案)。保存値(`store.save` に渡る値)
+    /// も画面の状態と一致することを確かめる。
+    func testSetMemberSpeciesKeepsAbilityIdWhenStillValidForNewSpecies() async {
+        let service = StubMaster.makeService(
+            species: [StubMaster.abilityXOnly, StubMaster.abilityXAndY, StubMaster.abilityYOnly, StubMaster.noAbilities]
+        )
+        let member = TeamMember(
+            id: "member-alpha", speciesKey: StubMaster.abilityXOnly.key,
+            abilityId: StubMaster.abilityX.id, natureId: "stub-nature-neutral"
+        )
+        let (viewModel, store) = await loadedViewModel(service, member: member)
+
+        await viewModel.setMemberSpecies(id: "member-alpha", speciesKey: StubMaster.abilityXAndY.key)
+
+        let updated = viewModel.team.members.first { $0.id == "member-alpha" }
+        XCTAssertEqual(updated?.abilityId, StubMaster.abilityX.id, "新種族にもある特性は保持する")
+        XCTAssertEqual(viewModel.abilityOptionsByMember["member-alpha"], StubMaster.abilityXAndY.abilities)
+
+        let saved = await viewModel.save()
+        XCTAssertTrue(saved)
+        let savedTeam = await store.saveCalls.last
+        XCTAssertEqual(savedTeam?.members.first?.abilityId, StubMaster.abilityX.id, "保存値も画面と一致する")
+    }
+
+    /// 現在の `abilityId` が新種族の候補に無ければ、新種族の先頭特性へ差し替える(既定案)。
+    func testSetMemberSpeciesFallsBackToFirstAbilityWhenOldAbilityIsInvalid() async {
+        let service = StubMaster.makeService(
+            species: [StubMaster.abilityXOnly, StubMaster.abilityYOnly, StubMaster.abilityXAndY, StubMaster.noAbilities]
+        )
+        let member = TeamMember(
+            id: "member-alpha", speciesKey: StubMaster.abilityXOnly.key,
+            abilityId: StubMaster.abilityX.id, natureId: "stub-nature-neutral"
+        )
+        let (viewModel, store) = await loadedViewModel(service, member: member)
+
+        await viewModel.setMemberSpecies(id: "member-alpha", speciesKey: StubMaster.abilityYOnly.key)
+
+        let updated = viewModel.team.members.first { $0.id == "member-alpha" }
+        XCTAssertEqual(updated?.abilityId, StubMaster.abilityY.id, "旧特性が無ければ新種族の先頭特性へ差し替える")
+        XCTAssertEqual(viewModel.abilityOptionsByMember["member-alpha"], StubMaster.abilityYOnly.abilities)
+
+        let saved = await viewModel.save()
+        XCTAssertTrue(saved)
+        let savedTeam = await store.saveCalls.last
+        XCTAssertEqual(savedTeam?.members.first?.abilityId, StubMaster.abilityY.id, "保存値も画面と一致する")
+    }
+
+    /// 新種族に特性候補が無ければ `nil` にする(既定案)。
+    func testSetMemberSpeciesClearsAbilityIdWhenNewSpeciesHasNoAbilities() async {
+        let service = StubMaster.makeService(
+            species: [StubMaster.abilityXOnly, StubMaster.noAbilities]
+        )
+        let member = TeamMember(
+            id: "member-alpha", speciesKey: StubMaster.abilityXOnly.key,
+            abilityId: StubMaster.abilityX.id, natureId: "stub-nature-neutral"
+        )
+        let (viewModel, _) = await loadedViewModel(service, member: member)
+
+        await viewModel.setMemberSpecies(id: "member-alpha", speciesKey: StubMaster.noAbilities.key)
+
+        let updated = viewModel.team.members.first { $0.id == "member-alpha" }
+        XCTAssertNil(updated?.abilityId, "候補が空なら nil")
+        XCTAssertEqual(viewModel.abilityOptionsByMember["member-alpha"], [])
+    }
+
+    /// 種族を連続で変えたとき、古い方の `species(key:)` 応答が abilityId も上書きしない
+    /// (`testStaleSpeciesResponseForMemberIsIgnored` と同じ世代保護。旧特性が最新種族にしか無い状況で、
+    /// 追い越された応答のフォールバック計算が abilityId を書き換えないことを確かめる)。
+    func testStaleSpeciesResponseDoesNotOverwriteAbilityId() async throws {
+        let service = StubMaster.makeService(
+            species: [StubMaster.abilityXOnly, StubMaster.abilityYOnly, StubMaster.abilityXAndY, StubMaster.noAbilities]
+        )
+        let member = TeamMember(
+            id: "member-alpha", speciesKey: StubMaster.abilityXOnly.key,
+            abilityId: StubMaster.abilityX.id, natureId: "stub-nature-neutral"
+        )
+        let (viewModel, _) = await loadedViewModel(service, member: member)
+        let baseline = await service.speciesRequests.count
+        await service.setSpeciesMode(.manual)
+
+        // 先に選び、後から追い越される候補(abilityYOnly)には abilityX が無いので、もし適用されれば
+        // フォールバックで abilityY に書き換わってしまう。
+        let selectStale = Task { await viewModel.setMemberSpecies(id: "member-alpha", speciesKey: StubMaster.abilityYOnly.key) }
+        try await service.waitForSpeciesRequests(count: baseline + 1)
+        // 後に選び、最終的に反映されるべき候補(abilityXAndY)には abilityX が含まれるので保持されるはず。
+        let selectFinal = Task { await viewModel.setMemberSpecies(id: "member-alpha", speciesKey: StubMaster.abilityXAndY.key) }
+        try await service.waitForSpeciesRequests(count: baseline + 2)
+
+        let finalDetail = try await service.lookupSpecies(key: StubMaster.abilityXAndY.key)
+        await service.resolveSpecies(at: baseline + 1, with: .success(finalDetail))
+        await selectFinal.value
+        XCTAssertEqual(viewModel.team.members.first?.abilityId, StubMaster.abilityX.id, "新種族にもある特性は保持する")
+
+        let staleDetail = try await service.lookupSpecies(key: StubMaster.abilityYOnly.key)
+        await service.resolveSpecies(at: baseline, with: .success(staleDetail))
+        await selectStale.value
+        XCTAssertEqual(
+            viewModel.team.members.first?.abilityId, StubMaster.abilityX.id,
+            "古い応答が最新種族の abilityId を上書きしない"
+        )
+        XCTAssertEqual(viewModel.abilityOptionsByMember["member-alpha"], StubMaster.abilityXAndY.abilities, "古い応答で選択肢を上書きしない")
+    }
+
     /// 種族を連続で変えたとき、古い方の `species(key:)` 応答が後から届いても上書きしない
     /// (`CalcViewModel` の `testStaleSpeciesDetailDoesNotOverwriteNewerAttackerSelection` と同じ理由)。
     func testStaleSpeciesResponseForMemberIsIgnored() async throws {
