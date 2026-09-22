@@ -163,7 +163,7 @@ final class BulkRowDisplayTests: XCTestCase {
     }
 
     func testRowIdIsStableAndUniquePerPresetAndItem() {
-        // XCUITest の accessibilityIdentifier(`calcResultRow-<id>`)に使う。形は README の約束どおり
+        // XCUITest の accessibilityIdentifier(`calcResultRow-<id>`)に使う。形は ADR-0501 の約束どおり
         // `<preset の rawValue>@<itemId。nil は ->`。
         let base = result(minPercent: 1, maxPercent: 2, ko: ko(hits: 0, guaranteed: false, display: 0))
         let plain = BulkRowDisplay(row: BulkCalcRow(preset: .hb, presetLabel: "x", itemId: nil, defender: testBulkDefender, result: base), items: [itemA])

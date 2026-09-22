@@ -10,6 +10,8 @@ import XCTest
 /// - `bulkMode = .manual` のとき、`calcBulk` は応答を保留し、テストが `resolveBulk(at:with:)` で
 ///   **任意の順序**で応答を返す(古い要求の応答が後から届く状況を再現する)。
 /// - マスタの読み込みを失敗させられる(`masterError`)。
+/// - `reverse` は既定で呼ばれたら失敗(`.disallowed`。計算画面が逆算を呼ばないことの確認を保つ)。
+///   逆算画面のテスト(P6-2b)は `setReverseMode(.immediate)` / `.manual` で有効にし、要求を記録する。
 actor StubPokeCalcService: PokeCalcService {
     enum BulkMode {
         /// 要求を受けたらすぐ `bulkResponder` の結果を返す。
@@ -23,6 +25,15 @@ actor StubPokeCalcService: PokeCalcService {
         case immediate
         /// 応答を保留する。テストが `resolveSpecies(at:with:)` で返す
         /// (`species(key:)` の応答が世代を追い越して届く状況を再現する。M1)。
+        case manual
+    }
+
+    enum ReverseMode {
+        /// 呼ばれたらテストを失敗させる(P6-2a の計算画面は reverse を使わない)。
+        case disallowed
+        /// 要求を受けたらすぐ `reverseResponder` の結果を返す。
+        case immediate
+        /// 応答を保留する。テストが `resolveReverse(at:with:)` で返す。
         case manual
     }
 
@@ -45,6 +56,14 @@ actor StubPokeCalcService: PokeCalcService {
     private var masterError: PokeCalcError?
     private var speciesMode: SpeciesMode = .immediate
 
+    private var reverseMode: ReverseMode = .disallowed
+    /// `.immediate` のときの応答。既定は要求の形を写した候補(`StubPokeCalcService.echoReverseResult`)。
+    private var reverseResponder: @Sendable (ReverseRequest) -> Result<ReverseResult, PokeCalcError> = { request in
+        .success(StubPokeCalcService.echoReverseResult(for: request))
+    }
+    private(set) var reverseRequests: [ReverseRequest] = []
+    private var pendingReverse: [Int: CheckedContinuation<ReverseResult, any Error>] = [:]
+
     private(set) var bulkRequests: [BulkCalcRequest] = []
     private var pendingBulk: [Int: CheckedContinuation<BulkCalcResult, any Error>] = [:]
     /// `species(key:)` に渡された `key` の記録(呼ばれた順)。
@@ -66,6 +85,42 @@ actor StubPokeCalcService: PokeCalcService {
 
     func setBulkResponder(_ responder: @escaping @Sendable (BulkCalcRequest) -> Result<BulkCalcResult, PokeCalcError>) {
         bulkResponder = responder
+    }
+
+    func setReverseMode(_ mode: ReverseMode) {
+        reverseMode = mode
+    }
+
+    func setReverseResponder(_ responder: @escaping @Sendable (ReverseRequest) -> Result<ReverseResult, PokeCalcError>) {
+        reverseResponder = responder
+    }
+
+    /// 保留中の `index` 番目(0 始まり、`reverseRequests` の添字)の `reverse` に応答する。
+    func resolveReverse(at index: Int, with result: Result<ReverseResult, PokeCalcError>) {
+        guard let continuation = pendingReverse.removeValue(forKey: index) else {
+            XCTFail("保留中の reverse が無い: index \(index)")
+            return
+        }
+        continuation.resume(with: result.mapError { $0 as any Error })
+    }
+
+    /// 保留中の `index` 番目の `reverse` に、要求の形を写した既定の応答を返す。
+    func resolveReverseWithEcho(at index: Int) {
+        guard index < reverseRequests.count else {
+            XCTFail("reverse の要求が無い: index \(index)")
+            return
+        }
+        resolveReverse(at: index, with: .success(Self.echoReverseResult(for: reverseRequests[index])))
+    }
+
+    /// `reverse` がちょうど `count` 回以上呼ばれるまで待つ。
+    func waitForReverseRequests(count: Int, file: StaticString = #filePath, line: UInt = #line) async throws {
+        for _ in 0..<Self.waitPollLimit {
+            if reverseRequests.count >= count { return }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTFail("reverse が \(count) 回呼ばれなかった(\(reverseRequests.count) 回)", file: file, line: line)
+        throw PokeCalcError(code: "test_timeout", message: "reverse の待ち合わせがタイムアウト")
     }
 
     func setMasterError(_ error: PokeCalcError?) {
@@ -147,6 +202,31 @@ actor StubPokeCalcService: PokeCalcService {
         return BulkCalcResult(defenderSpeciesKey: request.defenderSpeciesKey, rows: rows)
     }
 
+    /// 要求の形(性格クラス × 持ち物候補。空は「持ち物なし」の1通り)を写した逆算の結果。
+    /// 数値に意味は無い(ViewModel は結果を並べ替えずに整形するだけ)。`stat` は側だけで決め打ちする。
+    /// ADR-0010 §R1: 逆算は相手の H の SP を defender=32・attacker=0 と仮定する(サーバーの値を写すだけ)。
+    static let echoAssumedDefenderHPSP = 32
+    static let echoAssumedAttackerHPSP = 0
+
+    static func echoReverseResult(for request: ReverseRequest) -> ReverseResult {
+        let items = request.itemCandidates.isEmpty ? [String?.none] : request.itemCandidates
+        var candidates: [ReverseCandidate] = []
+        for natureClass in NatureClass.allCases {
+            for itemId in items {
+                candidates.append(ReverseCandidate(
+                    natureClass: natureClass, nature: NatureModifier(), natureId: nil, itemId: itemId,
+                    ranges: [SPRange(min: 10, max: 12)], spCount: 3,
+                    exact: true, mismatch: 0, support: 1, minPercent: 10.0, maxPercent: 12.0
+                ))
+            }
+        }
+        return ReverseResult(
+            side: request.side, stat: request.side == .defender ? .def : .atk,
+            assumedHPSP: request.side == .defender ? echoAssumedDefenderHPSP : echoAssumedAttackerHPSP,
+            candidates: candidates, exactCount: candidates.count
+        )
+    }
+
     // MARK: - PokeCalcService
 
     func searchSpecies(query: String, limit: Int) async throws -> [SpeciesSummary] {
@@ -213,8 +293,20 @@ actor StubPokeCalcService: PokeCalcService {
     }
 
     func reverse(_ request: ReverseRequest) async throws -> ReverseResult {
-        XCTFail("P6-2a の画面は reverse を使わない")
-        throw PokeCalcError(code: "test_unexpected", message: "reverse")
+        switch reverseMode {
+        case .disallowed:
+            XCTFail("P6-2a の画面は reverse を使わない")
+            throw PokeCalcError(code: "test_unexpected", message: "reverse")
+        case .immediate:
+            reverseRequests.append(request)
+            return try reverseResponder(request).get()
+        case .manual:
+            let index = reverseRequests.count
+            reverseRequests.append(request)
+            return try await withCheckedThrowingContinuation { continuation in
+                pendingReverse[index] = continuation
+            }
+        }
     }
 }
 
@@ -269,6 +361,13 @@ enum StubMaster {
     static let neutralNature = Nature(id: "stub-nature-neutral", nameJa: "テストせいかく無補正")
     static let atkUpNature = Nature(id: "stub-nature-atk-up", nameJa: "テストせいかく攻撃上昇", plus: .atk, minus: .spa)
     static let spaUpNature = Nature(id: "stub-nature-spa-up", nameJa: "テストせいかく特攻上昇", plus: .spa, minus: .atk)
+    /// 逆算画面の「受けたダメージ」で自分(防御側)の HB/HD 特化に使う上昇性格(ADR-0009: +def/-atk・+spd/-atk)。
+    static let defUpNature = Nature(id: "stub-nature-def-up", nameJa: "テストせいかく防御上昇", plus: .def, minus: .atk)
+    static let spdUpNature = Nature(id: "stub-nature-spd-up", nameJa: "テストせいかく特防上昇", plus: .spd, minus: .atk)
+
+    /// 逆算画面のテスト用の性格一覧(攻撃・防御の両方の上昇性格を含む)。`makeService` の既定は変えない
+    /// (計算画面のテストの前提を崩さないため)。
+    static let reverseNatures = [atkUpNature, neutralNature, spaUpNature, defUpNature, spdUpNature]
 
     static func makeService(
         species: [SpeciesDetail] = [alpha, beta, gamma, statusOnly],
