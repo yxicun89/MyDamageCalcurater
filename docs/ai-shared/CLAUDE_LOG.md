@@ -215,3 +215,29 @@
 
 ### Next
 - pokedex export を待って read model を差し替え
+
+## 2026-09-22 タイプバランスレーン(Claude Code): 一時停止(利用枠をデータレーンに集中)
+
+### Done
+- pokedex export(PR #57)を実データで確認: 348種・516技・特性で analyze・recommendations が 200。おすすめタイプの特性軽減も正しく動作(あついしぼう→カビゴン・マンムー)
+- 未 push の作業なし(このセッションの成果はすべて main に統合済み)
+
+### 気づいた点(ブロッカーではない)
+- メガフォームの nameJa が英語表記のまま(データレーン側の日本語名収集の対象漏れの可能性)
+
+### Next
+- ユーザー指示で一時停止。再開はユーザーの指示があってから
+
+## 2026-09-22 タイプバランスレーン(Claude Code): TB6
+
+### Done
+- TB6 技範囲チェッカー(ユーザー要望。ADR-0404): spec-writer → implementer → critic FAIL(bestDefense との重複、ADR §4.5 のテスト欠落、README未更新)→ 修正 → 再レビュー PASS
+- `POST /api/balance/v1/move-range/analyze`: 技ID(最大4つ)から18タイプの一貫判定、実在ポケモンの「受けに回れる一覧」「特性で受けに回れる一覧」を返す
+- k3d smoke: move_range=200 move_range_unknown_move=422 move_range_status_only=400
+
+### Open issues
+- TB6 はブランチにあり未 PR(次のコミットで PR にして main へ)
+- P2-3b(特性の無効・吸収)の実データ確認はデータレーンの export 再生成待ち
+
+### Next
+- TB6 を PR・マージ → データレーンの export 再生成を待って実データ確認

@@ -19,6 +19,14 @@
     "filter": {"ReduceSuperEffective": 3072},
     "solidrock": {"ReduceSuperEffective": 3072},
     "steelworker": {"OffBoostType": "steel", "OffBoostTypeMod": 6144},
-    "waterbubble": {"OffBoostType": "water", "OffBoostTypeMod": 8192, "DefResistType": {"fire": 2048}}
+    "waterbubble": {"OffBoostType": "water", "OffBoostTypeMod": 8192, "DefResistType": {"fire": 2048}},
+    "levitate": {"DefImmuneTypes": ["ground"]},
+    "waterabsorb": {"DefAbsorbTypes": {"water": {"HealNumerator": 1, "HealDenominator": 4}}},
+    "voltabsorb": {"DefAbsorbTypes": {"electric": {"HealNumerator": 1, "HealDenominator": 4}}},
+    "eartheater": {"DefAbsorbTypes": {"ground": {"HealNumerator": 1, "HealDenominator": 4}}},
+    "flashfire": {"DefAbsorbTypes": {"fire": {}}},
+    "sapsipper": {"DefAbsorbTypes": {"grass": {"BoostStat": "atk", "BoostStages": 1}}},
+    "motordrive": {"DefAbsorbTypes": {"electric": {"BoostStat": "spe", "BoostStages": 1}}},
+    "lightningrod": {"DefAbsorbTypes": {"electric": {"BoostStat": "spa", "BoostStages": 1}}}
   }
 }

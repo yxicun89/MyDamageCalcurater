@@ -19,6 +19,14 @@
     "Filter":{"ReduceSuperEffective":3072},
     "Solid Rock":{"ReduceSuperEffective":3072},
     "Steelworker":{"OffBoostType":"steel","OffBoostTypeMod":6144},
-    "Water Bubble":{"OffBoostType":"water","OffBoostTypeMod":8192,"DefResistType":{"fire":2048}}
+    "Water Bubble":{"OffBoostType":"water","OffBoostTypeMod":8192,"DefResistType":{"fire":2048}},
+    "Levitate":{"DefImmuneTypes":["ground"]},
+    "Water Absorb":{"DefAbsorbTypes":{"water":{"HealNumerator":1,"HealDenominator":4}}},
+    "Volt Absorb":{"DefAbsorbTypes":{"electric":{"HealNumerator":1,"HealDenominator":4}}},
+    "Earth Eater":{"DefAbsorbTypes":{"ground":{"HealNumerator":1,"HealDenominator":4}}},
+    "Flash Fire":{"DefAbsorbTypes":{"fire":{}}},
+    "Sap Sipper":{"DefAbsorbTypes":{"grass":{"BoostStat":"atk","BoostStages":1}}},
+    "Motor Drive":{"DefAbsorbTypes":{"electric":{"BoostStat":"spe","BoostStages":1}}},
+    "Lightning Rod":{"DefAbsorbTypes":{"electric":{"BoostStat":"spa","BoostStages":1}}}
   }
 }

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: pokecalc balance API
-  version: 0.6.0
+  version: 0.7.0
   description: |
     パーティのタイプバランスを分析する独立サービスの契約。
     TB1 は防御タイプバランス(18 攻撃タイプごとの各メンバーの倍率とチーム集計)を返す。
@@ -9,9 +9,10 @@ info:
     TB3 は analyze のメンバーに任意の特性(abilityId)を受け取り、特性による防御相性の変化を反映する。
     TB4 は仮想敵(最大 6 体)ごとに、各メンバーが受ける最大倍率と与える最大倍率、安全に受けられる人数を返す。
     TB5 はチームの防御の穴・攻撃範囲の穴をふさげるタイプの候補と、そのタイプを持つポケモン、特性で穴をふさげるポケモンを返す。
+    TB6 は技構成(技 ID 1〜4 件)そのものの攻撃範囲と、その技構成を半減以下で受けられる実在ポケモン(タイプだけ・特性ありの別枠)を返す。
     契約の正は docs/adr/0014-balance-tb1-defense-analysis.md、docs/adr/0016-balance-tb2-offense-coverage.md、
     docs/adr/0017-balance-tb3-ability-effects.md、docs/adr/0400-balance-tb4-threat-check.md、
-    docs/adr/0401-balance-tb5-recommend-types.md。
+    docs/adr/0401-balance-tb5-recommend-types.md、docs/adr/0404-balance-tb6-move-range-checker.md。
 servers:
   - url: /
 paths:
@@ -282,6 +283,76 @@ paths:
             The pokemon read model is not configured, or any member names a moveId while the move read model
             is not configured, or any member names an abilityId while the ability read model is not configured
             (master_unavailable). A missing ability read model alone only empties abilityOptions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: An unexpected internal error (internal_error). The message is a fixed string.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/balance/v1/move-range/analyze:
+    post:
+      operationId: analyzeMoveRange
+      summary: Analyze the offensive range of a move set and who walls it
+      description: |
+        Takes one to four moveIds only (no pokemon: a move set alone decides the offensive range,
+        ADR-0404 §1). Status moves do not contribute to the range; a request whose moves are all
+        status moves is rejected (400 invalid_request), so the range is never empty.
+        attackTypes are the types of the non-status moves (deduplicated, canonical order).
+        typeChart has one entry per single defense type (canonical order) with the best multiplier
+        of the move set against it, and whether that is effective (x1 or more) / super effective (x2);
+        it is the same calculation as one member's coverage entry in TB2.
+        walledBy lists every pokemon of the read model whose own types (a single or dual type,
+        abilities not considered) take the move set at x1/2 or less, pokemonId ascending.
+        walledByAbility separately lists the pokemon whose types alone do NOT reach x1/2 or less but
+        one of their read model abilityIds does (an immunity or absorption counts too), pokemonId
+        then abilityId ascending; it is empty when the ability read model is not configured.
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveRangeRequest'
+      responses:
+        '200':
+          description: Offensive range of the move set and the pokemon that wall it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoveRangeResponse'
+        '400':
+          description: |
+            Invalid request or missing request context (invalid_request / missing_request_context):
+            moveIds absent, empty, more than four, malformed, duplicated, or resolving to status moves only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: Request body exceeds the 16 KiB limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: |
+            A moveId is not registered in the move read model (unknown_move, "unknown moveId: <ID>").
+            The first one in request order is reported.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: |
+            The move read model is not configured, or the pokemon read model (catalog) is not
+            configured (master_unavailable). The move read model is checked first, since moveIds are
+            always required. A missing ability read model alone only empties walledByAbility.
           content:
             application/json:
               schema:
@@ -1027,4 +1098,144 @@ components:
           allOf:
             - $ref: '#/components/schemas/AbilityId'
         multiplier:
+          $ref: '#/components/schemas/DefenseMultiplier'
+    MoveRangeRequest:
+      description: A move set on its own (ADR-0404 §2). No pokemon is named.
+      type: object
+      additionalProperties: false
+      required:
+        - moveIds
+      properties:
+        moveIds:
+          description: One to four moveIds. Duplicates are rejected (400).
+          type: array
+          minItems: 1
+          maxItems: 4
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/MoveId'
+    MoveRangeResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - attackTypes
+        - typeChart
+        - walledBy
+        - walledByAbility
+      properties:
+        attackTypes:
+          description: Types of the non-status moves, without duplicates, in canonical type order. Never empty.
+          type: array
+          minItems: 1
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/TypeId'
+        typeChart:
+          description: One entry per single defense type, in canonical type order (normal ... fairy).
+          type: array
+          minItems: 18
+          maxItems: 18
+          items:
+            $ref: '#/components/schemas/MoveRangeTypeEntry'
+        walledBy:
+          description: |
+            The read model pokemon whose own types take the move set at x1/2 or less (abilities not
+            considered), pokemonId ascending. Empty when no pokemon walls the move set.
+          type: array
+          items:
+            $ref: '#/components/schemas/WalledByPokemon'
+        walledByAbility:
+          description: |
+            Pairs of a pokemon and one of its read model abilityIds that take the move set at x1/2 or
+            less while its types alone do not, pokemonId then abilityId ascending. Empty when the
+            ability read model is not configured.
+          type: array
+          items:
+            $ref: '#/components/schemas/WalledByAbilityPokemon'
+    MoveRangeTypeEntry:
+      description: |
+        bestMultiplier is the best multiplier of the move set's attack moves against this single
+        defense type; it always has a value (a request without any attack move is rejected with 400).
+        effective = bestMultiplier is x1 or more; superEffective = bestMultiplier is x2.
+      type: object
+      additionalProperties: false
+      required:
+        - defenseType
+        - bestMultiplier
+        - effective
+        - superEffective
+      properties:
+        defenseType:
+          $ref: '#/components/schemas/TypeId'
+        bestMultiplier:
+          $ref: '#/components/schemas/MoveRangeMultiplier'
+        effective:
+          type: boolean
+        superEffective:
+          type: boolean
+    MoveRangeMultiplier:
+      description: |
+        Exact display form of a single-type offensive multiplier. Unlike CoverageMultiplier it is
+        never null: the move set always has at least one attack move (ADR-0404 §2).
+      type: string
+      enum:
+        - '0'
+        - '1/2'
+        - '1'
+        - '2'
+      x-enum-varnames:
+        - MoveRangeZero
+        - MoveRangeHalf
+        - MoveRangeNeutral
+        - MoveRangeDouble
+    WalledByPokemon:
+      description: |
+        One read model pokemon that walls the move set by its types alone. bestMultiplier is the
+        largest multiplier the move set deals to its actual (single or dual) types, so it is x1/2 or less.
+      type: object
+      additionalProperties: false
+      required:
+        - pokemonId
+        - types
+        - bestMultiplier
+      properties:
+        pokemonId:
+          type: string
+          maxLength: 8
+          pattern: '^\d{4}-\d{3}$'
+          example: 9001-000
+        nameJa:
+          $ref: '#/components/schemas/PokemonNameJa'
+        types:
+          description: The pokemon's types in the read model order.
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/TypeId'
+        bestMultiplier:
+          $ref: '#/components/schemas/DefenseMultiplier'
+    WalledByAbilityPokemon:
+      description: |
+        One read model pokemon and one of its abilities that bring the move set to x1/2 or less while
+        its types alone do not. bestMultiplier is the largest multiplier with that ability applied.
+      type: object
+      additionalProperties: false
+      required:
+        - pokemonId
+        - abilityId
+        - bestMultiplier
+      properties:
+        pokemonId:
+          type: string
+          maxLength: 8
+          pattern: '^\d{4}-\d{3}$'
+          example: 9001-000
+        nameJa:
+          $ref: '#/components/schemas/PokemonNameJa'
+        abilityId:
+          description: The ability that brings the move set to x1/2 or less.
+          allOf:
+            - $ref: '#/components/schemas/AbilityId'
+        bestMultiplier:
           $ref: '#/components/schemas/DefenseMultiplier'

@@ -717,3 +717,25 @@ Impact: 素早さレーンの次は SP2(feat/speed-sp2)。
 Decision: 利用枠の残りをデータレーンに集中させるため、素早さレーンのセッションを一旦停止した。SP2(ADR-0602)は実装済み・critic 1回目 NG の重要3件を修正済み(コミット 7aff455)だが、critic の再確認は開始直後に停止したため未完了。作業ツリーはクリーンで全 push 済み(make test/lint/build/check-publishable は成功)。
 Reason: ユーザー指示(データレーンのセッション経由で伝達)。
 Impact: 再開はユーザー指示があってから。次にやることは CURRENT_STATE.md の Speed 欄の Next(critic の再確認から)。
+## 2026-09-22: 判定レーン(素早さ×ダメージ連動)を新設(ユーザー要望)
+Decision: 「ニトチャ+メイン技で素早さ抜ける+そのポケモンを倒せるか」を1回で判定する新レーン「判定」を追加する(`~/MyDamageCalcurater-judge`、`feat/judge-<stage名>`、ADR 帯 `0700〜`)。
+判定サービスは speed-svc に依存しない(SP2 未着手のため)。engine を直接呼んで実数値(素早さ)を計算し、pokedex-svc の公開 API(種族値)・calc-svc の公開 API(`/api/calc` の KOChance)だけに依存する。
+相手側も「具体的な調整を入力できる形」(ユーザー回答。極限スピードではなく個別の性格・SP・持ち物を指定する)。
+Reason: ユーザーが「新しいレーンを作る」「相手の具体的な調整を入力」と回答した。
+Impact: docs/judge-design.md(起草)、COORDINATION.md・CURRENT_STATE.md・plan.md にレーンを登録。ADR・実装は判定レーンの最初のセッションが行う(このセッションはタイプバランス担当のため実装しない)。
+## 2026-09-22: P2-3b の設計判断(既定案どおり。データレーンで確認)
+Decision: (1) `data/importer/effects.json` に足す無効・吸収の特性8件は、ADR-0106 §決定5の表のまま(oracleが裏付けるのは「ダメージ0」のみで、回復1/4・上昇+1はゲームの一般仕様として入れる)。(2) `effectHooks` に `onTryHit`・`onImmunity` を足す。(3) `CalcResult` に `nullified` は出さない(画面で理由表示が要るときに依頼する)。
+Reason: spec-writer(ADR-0106)が3点を既定案として報告し、いずれも取り消しやすい・oracleの実装に基づく判断のため、データレーンで確認して進めた。
+Impact: export に immune/absorb が出るようになり、TB3/TB5 の結果が変わる(balanceのschema・loaderは対応済みで依頼不要)。
+Web レーンへの依頼(ADR-0106 §他レーンへの依頼): `web/src/engine/types.ts` の `AbilityEffect` に `defImmuneTypes`/`defAbsorbTypes` を追加(足さないと WASM 経由の計算だけ無効・吸収が効かない)、`web/src/master/exportBalanceReadModel.ts` の `BalanceAbilityEffect` に `absorb` を追加し §7 の順序で出す。
+API(calc)レーンへの依頼(P2-3b の critic 指摘): `services/calc/internal/master/master.go` の `copyAbilityEffect` が `DefResistType` しかディープコピーしておらず、`DefImmuneTypes`/`DefAbsorbTypes` が共有マスタと同じメモリを指す。コピーを足し、`TestLookupReturnsCopiesOfEffects` に両フィールドの書き換えケースを足す。
+
+## 2026-09-22: TB6 実装後の web の生成コードの再生成はWeb レーンの申し送り(タイプバランスレーンから)
+Decision: TB6(technical range checker。ADR-0404)で `services/balance/api/openapi.yaml` に `/api/balance/v1/move-range/analyze` を追加した。
+`web/src/api/balance.gen.ts`(`make gen-ts` の生成物)は `web/` の範囲でこのレーンからは変更しない。**TB6 が main に入ってから**、Web レーンが必要になったタイミングで `make gen-ts` を再実行してほしい。
+Reason: AGENTS.md「タイプバランスレーンの範囲」により web/ は範囲外(critic 指摘)。
+Impact: Web が move-range を呼ぶ画面を作るときに、まず `make gen-ts` を実行して型を最新化する必要がある。
+## 2026-09-22: 整備レーン(Claude の上限時の Codex)の仕組みを削除する(ユーザー決定)
+Decision: COORDINATION.md の「Claude の上限時の Codex」節、plan.md の「整備レーン」節(MT-1〜MT-7)、CURRENT_STATE.md の Maintenance 欄を削除する。
+Reason: ユーザーが「Codex はこのプロジェクトで必ず使う必要はなく、有効活用したい程度の感覚。ノイズになるなら消した方がいい」と判断した。整備タスク(MT-3〜MT-7)は文書の整合性などの低優先度の掃除作業で、M1 の完成に影響しない。今後はレーンの作業を Claude だけで進める。
+Impact: 今後、Claude が利用枠の上限に達しても Codex を自動的に起動する仕組みは無い。Codex を使いたい場合は、その都度ユーザーが判断してレーンを直接担当させる(通常のレーン運用と同じ)。MT-1・MT-2(統合検証・check-publishable の自己テスト修正)はすでに完了して main に入っているので、成果は失われない。

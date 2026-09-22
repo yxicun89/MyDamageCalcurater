@@ -192,4 +192,51 @@ for key in '"defenseHoles"' '"offenseHoles":[]' '"candidates"' '"abilityOptions"
   fi
 done
 
-echo "balance smoke: health=200 analyze=200 unknown=422 coverage=200 unknown_move=422 ability=200 unknown_ability=422 threats=200 threats_unknown_move=422 recommendations=200"
+# TB6 (ADR-0404): move-range/analyze takes moveIds only. move-9003 is water: with the bundled type chart,
+# 9002-000 (テストリーフ grass) and 9006-001 (テストドラゴン dragon/flying) take it at x1/2, and 9001-000
+# (テストバード fire/flying) only reaches x0 through ability-9002 (absorb water), so it is in walledByAbility.
+move_range_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  -X POST "$base_url/api/balance/v1/move-range/analyze" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  --data '{"moveIds":["move-9003"]}' || printf '000')
+if [ "$move_range_status" != "200" ]; then
+  echo "balance move-range failed: HTTP $move_range_status (are the example read models mounted?)" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+for key in '"attackTypes":["water"]' '"typeChart"' '"walledBy"' '"walledByAbility"' '"nameJa":"テストリーフ"' '"nameJa":"テストドラゴン"' '"abilityId":"ability-9002","bestMultiplier":"0"'; do
+  if ! grep -qF "$key" "$body_file"; then
+    echo "balance move-range body is missing $key" >&2
+    cat "$body_file" >&2
+    exit 1
+  fi
+done
+
+unknown_range_move_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  -X POST "$base_url/api/balance/v1/move-range/analyze" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  --data '{"moveIds":["move-9999"]}')
+if [ "$unknown_range_move_status" != "422" ] || ! grep -qF '"code":"unknown_move"' "$body_file"; then
+  echo "balance move-range unknown move: HTTP $unknown_range_move_status, want 422 unknown_move" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+
+# move-9006 and move-9012 are status moves: a move set without any attack move is 400 (ADR-0404 §2).
+status_only_range=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  -X POST "$base_url/api/balance/v1/move-range/analyze" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  --data '{"moveIds":["move-9006","move-9012"]}')
+if [ "$status_only_range" != "400" ] || ! grep -qF '"code":"invalid_request"' "$body_file"; then
+  echo "balance move-range status-only move set: HTTP $status_only_range, want 400 invalid_request" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+
+echo "balance smoke: health=200 analyze=200 unknown=422 coverage=200 unknown_move=422 ability=200 unknown_ability=422 threats=200 threats_unknown_move=422 recommendations=200 move_range=200 move_range_unknown_move=422 move_range_status_only=400"
