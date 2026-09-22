@@ -1,0 +1,98 @@
+package httpapi
+
+// 上流への転送(ADR-0202 §1・§5)。標準ライブラリの net/http/httputil.ReverseProxy を使う
+// (新しい依存を足さない)。タイムアウトは応答ヘッダを待つ上限(ResponseHeaderTimeout)と
+// dial の上限だけに掛け、本文の転送は打ち切らない。
+//
+// Rewrite(Director は非推奨。ADR-0202 §5)で Host を上流のホストに書き換え、
+// X-Forwarded-For / X-Forwarded-Host / X-Forwarded-Proto をクライアントの値で信用せず
+// gateway が実際のクライアント IP・元の Host・スキームで付け直す(ProxyRequest.SetXForwarded は
+// 呼び出し前に Rewrite がこれらのヘッダを削除済みの outbound リクエストに対して働く)。
+
+import (
+	"encoding/json"
+	"log/slog"
+	"net"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"time"
+
+	"example.com/pokecalc/services/internal/api"
+)
+
+// msgUpstreamUnavailable は上流に接続できない・タイムアウトしたときの固定文。
+// dial・アドレス・context のエラー文などの Go の内部情報は出さない(ADR-0202 §5)。
+const msgUpstreamUnavailable = "上流を利用できない"
+
+// newReverseProxy は target への ReverseProxy を作る。
+//
+//   - target: 転送先の基底 URL。
+//   - timeout: 上流の応答ヘッダを待つ上限(dial にも同じ値を使う)。override が nil のときの
+//     既定 Transport にだけ効く。
+//   - override: 上流への RoundTripper の差し替え(テストだけが使う。nil なら既定の Transport)。
+//   - originAllowed: CORS の許可オリジン判定。ModifyResponse(上流の応答が届いたとき)と
+//     ErrorHandler(上流に接続できない・タイムアウトしたとき)の両方で、Access-Control-* を
+//     いったん取り除いてから、許可オリジンのときだけ gateway 自身の ACAO を付け直すために使う
+//     (必須1・必須2)。
+//
+// 接続できない・タイムアウトしたときは ErrorHandler が 503 upstream_unavailable を返す。
+func newReverseProxy(target *url.URL, timeout time.Duration, override http.RoundTripper, originAllowed func(string) bool) *httputil.ReverseProxy {
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.SetURL(target)  // Host も target のホストに書き換わる(推奨3)。
+			pr.SetXForwarded() // X-Forwarded-* はクライアントの値を信用せず付け直す(推奨3)。
+		},
+	}
+	if override != nil {
+		proxy.Transport = override
+	} else {
+		proxy.Transport = defaultUpstreamTransport(timeout)
+	}
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		// 上流が付けた Access-Control-* は外へ出さない。許可オリジンのときだけ gateway が
+		// 付け直す(ACAO はちょうど1つ。必須1)。
+		stripCORSHeaders(resp.Header)
+		if origin := resp.Request.Header.Get("Origin"); originAllowed(origin) {
+			setCORSAllowed(resp.Header, origin)
+		}
+		return nil
+	}
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		// クライアントへは固定文だけ(Go の内部情報を出さない)。詳細はログにだけ残す(推奨4)。
+		slog.Warn("gateway: 上流に到達できない", "upstream", target.Host, "error", err)
+		// 上流に届かなかった応答にも CORS を付ける(必須2: 接続不可・タイムアウトの 503 で
+		// ACAO が抜け落ちる退行の修正)。r は Rewrite 後の outbound リクエストだが、
+		// Origin ヘッダは Rewrite で変更していないのでそのまま読める。
+		stripCORSHeaders(w.Header())
+		if origin := r.Header.Get("Origin"); originAllowed(origin) {
+			setCORSAllowed(w.Header(), origin)
+		}
+		writeJSONError(w, http.StatusServiceUnavailable, api.UpstreamUnavailable, msgUpstreamUnavailable)
+	}
+	return proxy
+}
+
+// defaultUpstreamTransport は上流ごとの既定の RoundTripper。dial と応答ヘッダ待ちの両方に
+// timeout を掛ける(本文の転送そのものには掛けない)。
+func defaultUpstreamTransport(timeout time.Duration) http.RoundTripper {
+	dialer := &net.Dialer{Timeout: timeout}
+	return &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           dialer.DialContext,
+		ResponseHeaderTimeout: timeout,
+		TLSHandshakeTimeout:   timeout,
+		ExpectContinueTimeout: 1 * time.Second,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+	}
+}
+
+// writeJSONError は Error 本文(ADR-0202 §7)を直接書く。httputil.ReverseProxy.ErrorHandler は
+// echo を経由しないので、echo.Context を使わずに書く(errors.go の httpErrorHandler と同じ形)。
+func writeJSONError(w http.ResponseWriter, status int, code api.ErrorCode, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(api.Error{Code: code, Message: message})
+}

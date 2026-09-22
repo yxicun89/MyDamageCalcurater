@@ -69,6 +69,7 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@node --check scripts/wasm-conformance.mjs
 	@for script in tools/importer/*.mjs; do node --check "$$script" || exit; done
 	@$(MAKE) --no-print-directory check-publishable
+	@$(MAKE) --no-print-directory check-publishable-selftest
 
 .PHONY: build
 build: ## 実装済みGoモジュールをビルド(Web/WASMは後続タスク)

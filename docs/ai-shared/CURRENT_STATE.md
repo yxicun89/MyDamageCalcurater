@@ -10,17 +10,16 @@ Next: P2-2c(照合と差分報告。実データの取得と版の固定を含�
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
 Active: Claude Code
-Branch: feat/api-p3(作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: P3-1(calc-svc。ADR-0200)完了・critic PASS。api/openapi.yaml を更新済み(category・BulkCalcRow.defender・逆算の P1-12 形・ErrorCode)。依存を最新へ(Echo v5・ADR-0201)。main へは PR で統合予定
-Next: P3-2 gateway(Echo v5)(ルーティング・X-Device-Id/X-Session-Id の UUID 検証・/assets・CORS・upstream_unavailable)→ P3-3 契約テスト(gateway 経由)と k3d のスモーク。マスタは services/calc/internal/master の暫定 Store(P2-2a が main に入ったら差し替え)
+Branch: feat/api-p3-gateway(feat/api-p3 から分岐。P3-1 は feat/api-p3 → PR #14。作業ディレクトリ ~/MyDamageCalcurater-api)
+Status: P3-1(calc-svc。ADR-0200)と依存の最新化(Echo v5。ADR-0201)は PR #14 で main に統合済み。P3-2 gateway(ADR-0202)は critic PASS(3回目)・PR で統合
+Next: P3-3(gateway 経由の契約テストと k3d のスモーク: calc・gateway の Dockerfile(golang 最新 digest)・Kustomize(base と overlays/local。calc の例のマスタと typechart は configMapGenerator)・Ingress `/`(balance の /api/balance と共存)・smoke スクリプトと Makefile ターゲット)
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
 Active: Claude Code
 Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
-Status: P4-1〜P4-4 完了(critic PASS。WASM で計算・架空の例マスタ。ADR-0300)。依存は最新(TypeScript 7.0.2・Node 26.9.0)。P4-1〜P4-4 を PR で main へ
-Next: P4-5(API / WASM 切り替え)。API レーンの P3(ADR-0200、api/openapi.yaml)は main に入ったので、openapi-typescript で型を生成(ルート Makefile の gen-ts)し、
-ID → 実体の解決層・API 実装の CalcEngine・ADR-0011 §10 の対応表・WASM の遅延ロード方針を決める。続いて P4-6 Playwright(make test/lint への Web の組み込みも。DECISIONS.md 提案)、P4-7 verify-m1.md
+Status: P4-1〜P4-5 完了・PR #22 で main に統合(critic PASS。WASM で計算・架空の例マスタ・API / WASM 切り替え。ADR-0300 / ADR-0301)。P4-5 のブラウザ実機確認(Chrome・Safari)は人間待ち
+Next: P4-6 Playwright E2E(offline / online。online は例データを書き出して calc-svc を起動)と、Web のテストを make test / make lint に組み込む(ユーザー決定 2026-09-22: node_modules が無ければ npm ci)。続いて P4-7 docs/verify-m1.md
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
@@ -37,12 +36,19 @@ Status: TB0〜TB4 は完了・main に統合済み(TB4 仮想敵診断 /threats�
 Next: TB5(おすすめタイプと該当ポケモン。DECISIONS.md 2026-09-22: 基準は防御の穴と攻撃範囲の穴の両方、一覧はそのタイプを持つ使用可能なポケモン全員(日本語名付き)、特性でふさげるものは別枠)。使用可能集合・日本語名はデータレーンの P2-2 のマスタが要るので、それまでは read model を広げた架空データで作る。軽微の残り: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の JSON Schema、CoverageMultiplier の nullable enum、HTTP 層の検証・422 変換の重複(analyze・coverage・threats)
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
 
+## Speed
+Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
+Active: なし
+Branch: feat/speed-s0(作業ディレクトリ ~/MyDamageCalcurater-speed)
+Status: 未着手(2026-09-22 にレーンを新設。ユーザーの仕様は docs/plan.md の「SP: 素早さ比較」と DECISIONS.md)
+Next: SP0 から。docs/speed-design.md(設計の正)と ADR-0600 を書き、services/speed の基盤(タイプバランスの services/balance と同じ構成: 純粋な Go のコア・HTTP API・自前の openapi・Kustomize)を作る。種族の素早さ種族値と使用可能集合は pokedex の read model(データレーン P2-3 の `pokedex export`)から読む。それまでは架空データで作る。実数値の式は engine の公開 API(RealStats 等)を呼ぶだけで、自前で持たない
+
 ## Maintenance
 Lane: 整備(Claude の上限時に Codex が進める。COORDINATION.md「Claude の上限時の Codex」)
 Active: なし
-Branch: なし(使うときに fix/maint-<名前> を origin/main から切る。作業ディレクトリ ~/MyDamageCalcurater-maint は使うときだけ作る)
-Status: 未着手(2026-09-22 に新設)
-Next: docs/plan.md の「整備レーン」のバックログを上から
+Branch: なし(次回は origin/main から新しい fix/maint-<名前> を切る)
+Status: MT-1(統合検証)・MT-2(check-publishable の自己テスト修正・lint 組み込み)は PR #24 で main に統合済み
+Next: docs/plan.md の整備レーン MT-3 から順に進める
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

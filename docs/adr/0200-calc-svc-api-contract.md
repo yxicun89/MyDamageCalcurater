@@ -41,7 +41,7 @@ engine(P1-7〜P1-13)と WASM 境界(`engine/wasmapi`)は新しい形になった
    (WASM 境界はリクエストに `typeChart` を乗せるので 400 のまま。ADR-0011)。
    calc の3操作に `'500'` / `'503'` を足す。ヘッダの UUID 形式の検証は gateway(P3-2)の仕事で、calc-svc は欠落・空だけを `missing_header` にする。
    生成ラッパ(`api.ServerInterfaceWrapper`)がヘッダの検証で 400 を返すとき、「欠落・空」(bind 失敗を含む)は `missing_header`、
-   それ以外(同名ヘッダの重複指定)は `invalid_input` にする(critic 指摘 R1)。
+   それ以外(同名ヘッダの重複指定)は `invalid_input` にする(critic 指摘 R1)。**ADR-0202 で `invalid_header` に変更**(gateway と語彙を揃える)。
 
 ### 2. 性格 ID の写像(`natureId`)
 

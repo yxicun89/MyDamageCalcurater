@@ -198,7 +198,8 @@ export interface components {
      *     HTTP だけのもの:
      *     | code | 意味 | HTTP |
      *     |---|---|---|
-     *     | missing_header | X-Device-Id / X-Session-Id が無い・空(UUID 形式の検証は gateway が行う) | 400 |
+     *     | missing_header | X-Device-Id / X-Session-Id が無い・空 | 400 |
+     *     | invalid_header | X-Device-Id / X-Session-Id が UUID でない・同名ヘッダの重複(UUID 形式の検証は gateway だけが行う。ADR-0202) | 400 |
      *     | unknown_species | speciesKey がマスタに無い | 400 |
      *     | unknown_move | moveId がマスタに無い | 400 |
      *     | unknown_item | itemId がマスタに無い | 400 |
@@ -206,7 +207,7 @@ export interface components {
      *     | unknown_nature | natureId がマスタに無い | 400 |
      *     | not_found | ルートが無い / このサービスの担当外の操作 | 404 |
      *     | master_unavailable | マスタを参照できない | 503 |
-     *     | upstream_unavailable | gateway から下流のサービスに届かない(P3-2) | 503 |
+     *     | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202) | 503 |
      * @enum {string}
      */
     ErrorCode:
@@ -225,6 +226,7 @@ export interface components {
       | "unknown_type"
       | "internal"
       | "missing_header"
+      | "invalid_header"
       | "unknown_species"
       | "unknown_move"
       | "unknown_item"
@@ -629,9 +631,13 @@ export interface components {
     };
   };
   parameters: {
-    /** @description クライアント生成の端末 UUID */
+    /**
+     * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+     *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+     *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+     */
     DeviceId: string;
-    /** @description セッション UUID */
+    /** @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。 */
     SessionId: string;
   };
   requestBodies: never;
@@ -649,9 +655,13 @@ export interface operations {
         limit?: number;
       };
       header: {
-        /** @description クライアント生成の端末 UUID */
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
-        /** @description セッション UUID */
+        /** @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。 */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -668,6 +678,15 @@ export interface operations {
           "application/json": components["schemas"]["SpeciesSummary"][];
         };
       };
+      /** @description gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202) */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
       default: components["responses"]["Error"];
     };
   };
@@ -675,9 +694,13 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        /** @description クライアント生成の端末 UUID */
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
-        /** @description セッション UUID */
+        /** @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。 */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path: {
@@ -698,6 +721,15 @@ export interface operations {
         };
       };
       404: components["responses"]["Error"];
+      /** @description gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202) */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
       default: components["responses"]["Error"];
     };
   };
@@ -708,9 +740,13 @@ export interface operations {
         limit?: number;
       };
       header: {
-        /** @description クライアント生成の端末 UUID */
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
-        /** @description セッション UUID */
+        /** @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。 */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -727,6 +763,15 @@ export interface operations {
           "application/json": components["schemas"]["Move"][];
         };
       };
+      /** @description gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202) */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
       default: components["responses"]["Error"];
     };
   };
@@ -737,9 +782,13 @@ export interface operations {
         limit?: number;
       };
       header: {
-        /** @description クライアント生成の端末 UUID */
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
-        /** @description セッション UUID */
+        /** @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。 */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -756,6 +805,15 @@ export interface operations {
           "application/json": components["schemas"]["Item"][];
         };
       };
+      /** @description gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202) */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
       default: components["responses"]["Error"];
     };
   };
@@ -763,9 +821,13 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        /** @description クライアント生成の端末 UUID */
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
-        /** @description セッション UUID */
+        /** @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。 */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -782,6 +844,15 @@ export interface operations {
           "application/json": components["schemas"]["Nature"][];
         };
       };
+      /** @description gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202) */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
       default: components["responses"]["Error"];
     };
   };
@@ -789,9 +860,13 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        /** @description クライアント生成の端末 UUID */
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
-        /** @description セッション UUID */
+        /** @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。 */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -814,7 +889,18 @@ export interface operations {
       };
       400: components["responses"]["Error"];
       500: components["responses"]["Error"];
-      503: components["responses"]["Error"];
+      /**
+       * @description 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+       *     gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+       */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
       default: components["responses"]["Error"];
     };
   };
@@ -822,9 +908,13 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        /** @description クライアント生成の端末 UUID */
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
-        /** @description セッション UUID */
+        /** @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。 */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -847,7 +937,18 @@ export interface operations {
       };
       400: components["responses"]["Error"];
       500: components["responses"]["Error"];
-      503: components["responses"]["Error"];
+      /**
+       * @description 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+       *     gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+       */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
       default: components["responses"]["Error"];
     };
   };
@@ -855,9 +956,13 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        /** @description クライアント生成の端末 UUID */
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
-        /** @description セッション UUID */
+        /** @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。 */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -880,7 +985,18 @@ export interface operations {
       };
       400: components["responses"]["Error"];
       500: components["responses"]["Error"];
-      503: components["responses"]["Error"];
+      /**
+       * @description 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+       *     gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+       */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
       default: components["responses"]["Error"];
     };
   };
