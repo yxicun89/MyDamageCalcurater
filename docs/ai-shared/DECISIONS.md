@@ -622,3 +622,13 @@ Impact: Web レーンの Active を「なし」にした。続きは CURRENT_STA
 Decision: P4-9(P4-8 の軽微な改善3件)を PR #35 で main に統合した。Web レーンは他レーン(P2-3・P3-3)待ちで一時停止(Active: なし)。
 Reason: critic PASS、make test / lint / build・E2E の通過を確認。
 Impact: 続きは CURRENT_STATE.md の Web 欄の Next。
+
+## 2026-09-22: Web の画面・コンテナ化・手順書の方針(ユーザー回答)と、API レーンへの依頼
+Decision: (1) 画面は URL で切り替える(`/calc`・`/reverse`。P4-10)。(2) タイプバランスと素早さ比較の画面を Web に作る(P4-12・P4-13。balance / speed API を使う。
+各サービスのレーンの API 契約は変えずに使う)。(3) ローカルでもコンテナ(k3d)で動かすのを主にする。Web は nginx の静的配信イメージにし、
+**gateway の後ろ**に置く(localhost:8080 だけで画面も API も使える。P4-11)。(4) 手順書は上から順に実行するだけで済む形にし、各コマンドは
+リポジトリのルートへの `cd` から始める(P4-14)。(5) P4-5 のブラウザ実機確認は Chrome で良好(Safari は未確認)。
+**依頼(API レーン宛て)**: gateway に任意の `GATEWAY_WEB_URL` を足し、設定されていれば `/api`・`/assets`・`/healthz` 以外のパスを Web(nginx の Service)へ転送してほしい
+(未設定なら従来どおり)。Web レーンは base/web の Service 名 `web`(port 80)を用意する。それまでは `kubectl port-forward` で Web を開く。
+Reason: ユーザーが make web-dev で確認したうえで「他の画面も見たい」「make の実行場所で迷う」「ローカルもコンテナで動かして k8s の恩恵を受けたい」「手順書を上下に行き来する」と要望した。
+Impact: plan.md に P4-10〜P4-14。gateway の変更は API レーンの範囲なので Web レーンは変更しない。
