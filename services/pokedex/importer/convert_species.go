@@ -12,9 +12,11 @@ import (
 
 // speciesConversion は Convert の種族処理の結果。
 type speciesConversion struct {
-	Rows            []SpeciesRow
-	BaseSpeciesName map[string]string // showdown_id -> toID(raw Showdown BaseSpecies 名)。learnsets のフォールバック用(learnsets のキーは showdown_id 形式)
-	AbilityNameEn   map[string]string // ability id -> 英語名(取り込んだ種族が使うものだけとは限らないが上書きは同名で無害)
+	Rows                 []SpeciesRow
+	RegulationKeys       []string
+	RegulationAbilityIDs []string
+	BaseSpeciesName      map[string]string // showdown_id -> toID(raw Showdown BaseSpecies 名)。learnsets のフォールバック用(learnsets のキーは showdown_id 形式)
+	AbilityNameEn        map[string]string // ability id -> 英語名(取り込んだ種族が使うものだけとは限らないが上書きは同名で無害)
 }
 
 // rawSpecies は畳み込み判定・key 採番より前の中間表現。
@@ -30,13 +32,13 @@ type rawSpecies struct {
 	requiredItemName string
 	abilities        []master.SpeciesAbilityRow
 	fromCalc         bool
+	support          bool // 使用可能なメガの FK を満たすためだけに保持する、レギュレーション外の基本種
 }
 
 // slotBySDKey は Showdown の abilities マップのキーを species_abilities.slot に写す。
-// "S"(特殊な特性。Showdown のデータで H と同時に現れない前提)は "H" と同じ slot 3 に置く
-// (DB の slot は 1..3 の3枠しか無いため。ADR-0101 §5 追記)。同じ種族に H と S が両方ある
-// 場合は slot が重複し、master.Species の写像(Convert 末尾の安全網)で検出されて止まる。
-var slotBySDKey = map[string]int{"0": 1, "1": 2, "H": 3, "S": 3}
+// "S" は Showdown の特殊枠。実データでは H と同時に存在する種族があるため、隠れ特性の
+// slot 3 と区別して slot 4 に写す(ADR-0103 §12)。
+var slotBySDKey = map[string]int{"0": 1, "1": 2, "H": 3, "S": 4}
 
 // buildSpeciesAbilities は Showdown の abilities マップ(スロットキー→英語名)を、
 // species_abilities の行(スロット番号→ID)と ID→英語名のマップに変換する。
@@ -154,6 +156,11 @@ func buildRawSpecies(c CalcSpecies, sd ShowdownSpecies, sdByName map[string]Show
 		return rawSpecies{}, nil, nil, fmt.Errorf("%w: 種族 %q の基本種 %q が Showdown に無い", ErrInvalidData, sd.Name, sd.BaseSpecies)
 	}
 	form := -1
+	if len(base.FormeOrder) == 0 && sd.Name == base.Name && sd.Forme == "" {
+		// Showdown はフォームを持たない基本種では formeOrder を省略する。
+		// 基本種の form 0 は ADR-0101 §5 の規則から一意なので、省略を許容する。
+		form = 0
+	}
 	for i, n := range base.FormeOrder {
 		if n == sd.Name {
 			form = i
@@ -254,6 +261,31 @@ func convertSpecies(in Input, typeNameToID map[string]string, includedItems map[
 		return speciesConversion{}, warnings, blockers, nil
 	}
 
+	// Showdown では、使用可能なメガの基本種が Past で calc に無い場合がある。メガの
+	// base_species_key 外部キーを満たすため、その基本種をマスタの依存行として保持する。
+	// 依存行は下でレギュレーションの使用可能集合から除外する。
+	for i := 0; i < len(raw); i++ {
+		mega := raw[i]
+		if !mega.isMega || rawByID[toID(mega.baseSpeciesName)] {
+			continue
+		}
+		base, ok := sdByName[mega.baseSpeciesName]
+		if !ok {
+			return speciesConversion{}, nil, nil, fmt.Errorf("%w: メガ %q の基本種 %q が Showdown に無い", ErrInvalidData, mega.nameEn, mega.baseSpeciesName)
+		}
+		dependency, names, _, err := buildRawSpecies(CalcSpecies{}, base, sdByName, typeNameToID, includedItems, false)
+		if err != nil {
+			return speciesConversion{}, nil, nil, err
+		}
+		dependency.support = true
+		for id, name := range names {
+			abilityNameEn[id] = name
+		}
+		raw = append(raw, dependency)
+		rawByID[dependency.showdownID] = true
+		warnings = append(warnings, Finding{Kind: KindSpeciesMegaBaseDependency, ID: dependency.showdownID})
+	}
+
 	numsWithRaw := map[int]bool{}
 	for _, r := range raw {
 		numsWithRaw[r.dexNo] = true
@@ -308,7 +340,7 @@ func convertSpecies(in Input, typeNameToID map[string]string, includedItems map[
 		}
 	}
 	for i, r := range raw {
-		if !excluded[i] && !r.fromCalc && !repHasCalcMember[i] {
+		if !excluded[i] && !r.fromCalc && !r.support && !repHasCalcMember[i] {
 			excluded[i] = true
 			warnings = append(warnings, Finding{Kind: KindSpeciesShowdownOnly, ID: r.showdownID})
 		}
@@ -336,6 +368,8 @@ func convertSpecies(in Input, typeNameToID map[string]string, includedItems map[
 	pokeAPIForms := newPokeAPILookup(in.PokeAPI.Forms)
 
 	var rows []SpeciesRow
+	var regulationKeys []string
+	regulationAbilitySet := map[string]bool{}
 	for _, f := range finals {
 		r := f.raw
 		var baseKey, itemID string
@@ -369,8 +403,18 @@ func convertSpecies(in Input, typeNameToID map[string]string, includedItems map[
 			NameJaSource: res.Source,
 			Abilities:    r.abilities,
 		})
+		if !r.support {
+			regulationKeys = append(regulationKeys, f.key)
+			for _, ability := range r.abilities {
+				regulationAbilitySet[ability.AbilityID] = true
+			}
+		}
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Key < rows[j].Key })
+	sort.Strings(regulationKeys)
 
-	return speciesConversion{Rows: rows, BaseSpeciesName: baseSpeciesName, AbilityNameEn: abilityNameEn}, warnings, nil, nil
+	return speciesConversion{
+		Rows: rows, RegulationKeys: regulationKeys, RegulationAbilityIDs: sortedKeysRaw(regulationAbilitySet),
+		BaseSpeciesName: baseSpeciesName, AbilityNameEn: abilityNameEn,
+	}, warnings, nil, nil
 }

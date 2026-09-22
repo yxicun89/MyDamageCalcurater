@@ -8,9 +8,12 @@ import (
 	"strings"
 )
 
+// sentinelMoveName は calc の技一覧の番兵(実在しない技。ADR-0002 追記 P2-1c)。
+const sentinelMoveName = "(No Move)"
+
 // isFragment は calc の技が「断片」(type が無い。番兵 (No Move) も含む)かどうか。
 func isFragment(m CalcMove) bool {
-	return m.Type == "" || m.Name == "(No Move)"
+	return m.Type == "" || m.Name == sentinelMoveName
 }
 
 // resolveCalcCategory は calc の category 省略を Status として解決する。
