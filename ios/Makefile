@@ -42,5 +42,5 @@ ios-swift-test: ## PokeCalcKit の XCTest を macOS で実行(Xcode 無しでも
 	@cd ios/PokeCalcKit && swift test
 
 .PHONY: ios-sim-run
-ios-sim-run: ## アプリをシミュレータでモック起動(IOS_SCREEN=root|calc|reverse IOS_APPEARANCE IOS_CONTENT_SIZE)
+ios-sim-run: ## アプリをシミュレータでモック起動(IOS_SCREEN=root|calc|reverse|team IOS_APPEARANCE IOS_CONTENT_SIZE)
 	@./ios/scripts/sim-run.sh "$(IOS_SIMULATOR)" "$(IOS_SCREEN)" "$(IOS_APPEARANCE)" "$(IOS_CONTENT_SIZE)"

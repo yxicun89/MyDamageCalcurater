@@ -48,6 +48,19 @@ final class DisplayLabelsTests: XCTestCase {
         }
     }
 
+    func testStatKeyLabelCoversAllSixStats() {
+        // P6-2c 構築編集画面の SP 入力ラベル。Showdown 規約の6値を漏れなくカバーする。
+        let expected: [StatKey: String] = [
+            .hp: "HP", .atk: "こうげき", .def: "ぼうぎょ",
+            .spa: "とくこう", .spd: "とくぼう", .spe: "すばやさ",
+        ]
+        XCTAssertEqual(expected.count, 6)
+        for stat in StatKey.allCases {
+            XCTAssertEqual(StatKeyLabel.japaneseName(for: stat), expected[stat], "\(stat)")
+        }
+        XCTAssertEqual(StatKey.allCases.count, 6)
+    }
+
     func testIsSuperEffectiveIsTrueOnlyAtOrAboveDoubleDamage() {
         // 「ばつぐん」= 等倍(1)より効果が高い(2 以上)。View の色分けがこれ1つで判定できることを確かめる。
         let cases: [(Double, Bool)] = [

@@ -51,5 +51,20 @@ public struct PokeCalcError: Error, Equatable, Sendable {
         public static let fixtureMissing = "client_fixture_missing"
         /// モックのフィクスチャ JSON の値が想定した形(タイプ・分類・ステータスの enum 文字列)でない。
         public static let fixtureInvalid = "client_fixture_invalid"
+
+        // MARK: - TeamValidator / TeamStore が使う値(P6-2c。ADR-0501「P6-2c」1章)
+
+        /// `Team.name` が空(前後空白を落として空になる場合を含む)。
+        public static let teamNameEmpty = "client_team_name_empty"
+        /// `Team.members` が `TeamLimits.maxMembers` を超える。
+        public static let teamTooManyMembers = "client_team_too_many_members"
+        /// メンバー1体の `moveIds` が `TeamLimits.maxMovesPerMember` を超える。
+        public static let teamTooManyMoves = "client_team_too_many_moves"
+        /// メンバー1体の `moveIds` に重複がある。
+        public static let teamDuplicateMoves = "client_team_duplicate_moves"
+        /// メンバー1体の SP が `SPLimits.maxPerStat`(単体)または `SPLimits.maxTotal`(合計)を超える。
+        public static let teamSPInvalid = "client_team_sp_invalid"
+        /// `LocalTeamStore` の保存データが JSON として `[Team]` にデコードできない。
+        public static let teamStoreCorrupted = "client_team_store_corrupted"
     }
 }

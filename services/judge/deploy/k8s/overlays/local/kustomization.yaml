@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: pokecalc
+resources:
+  - ../../base
+# judge は read model を持たず(judge-design.md §2)、pokedex-svc・calc-svc の Service 名は
+# base の env(JUDGE_POKEDEX_BASE_URL・JUDGE_CALC_BASE_URL)がどの環境でも同じなので、
+# local overlay はイメージの差し替えだけでよい(speed の read model 相当の架空データパッチは不要)。
+images:
+  - name: pokecalc/judge
+    newName: pokecalc/judge
+    newTag: local

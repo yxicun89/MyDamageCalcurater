@@ -122,7 +122,10 @@
 
 ## M3: iOS
 - [x] P6-1 Xcode プロジェクト、swift-openapi-generator、デザイントークン(ADR-0500。`make ios-test` = 生成物の一致・XCTest・XCUITest・Info.plist の接続先。critic PASS)
-- [~] P6-2 計算画面・逆算・構築(構築は端末内に保存、Showdown 形式は後回し。2026-09-21 ユーザー回答)。P6-2a 計算画面は完了(critic PASS)。P3-1・P3-2 の契約変更への追従(ErrorCode・503・category・BulkDefender・逆算の API 接続)も完了(critic PASS)。P6-2b 逆算画面(観測はテンキー入力。2026-09-22 ユーザー回答)も完了(critic PASS)。P6-2c 構築が残り
+- [~] P6-2 計算画面・逆算・構築(構築は端末内に保存、Showdown 形式は後回し。2026-09-21 ユーザー回答)。P6-2a 計算画面・契約追従・P6-2b 逆算画面・P6-2c 構築(一覧・編集画面・ニックネーム・XCUITest)は完了(critic PASS)。P6-2d が残り
+- [ ] P6-2d 構築から個体を呼び出す配線(`TeamMemberConverter.makeIndividual` を `CalcViewModel` / `ReverseViewModel` の
+  「構築から呼び出す」ボタンとして実際につなぐ。requirements.md「自分側のプリセット」。ADR-0501「P6-2c」4章で範囲外と
+  明記し、ここに積んだ)
 - [ ] P6-3 シミュレータテスト(`make ios-test`)
 - [ ] P6-4 Tailscale serve の手順書 → **人間が実機インストール**
 
@@ -153,14 +156,16 @@
 - [x] SP0 基盤(ADR-0600。critic PASS。GitOps の overlay と Argo CD Application は digest が決まる SP4 へ): docs/speed-design.md と ADR-0600、services/speed(純粋な Go のコア・HTTP API・`services/speed/api/openapi.yaml`・Kustomize・Argo CD の定義はタイプバランスに倣う)、架空データの read model
 - [x] SP1 素早さの表(ADR-0601。critic PASS。6行の生成・速い順の並び・同速の扱い・絞り込みの API)
 - [x] SP2 自分のポケモンの位置(ADR-0602。critic PASS。preset/custom/raw の3モード・faster/slower/tie・POST /api/speed/v1/position)
-- [ ] SP3 Web の素早さ画面(左右の配置・自分の位置の強調。`web/src/speed/`)
+- [x] SP3 Web の素早さ画面(ADR-0604。critic PASS。左右の配置・自分の位置の強調・表の絞り込み。`web/src/speed/`)
 - [~] SP4 pokedex の read model(データレーン P2-3)への切り替えと k3d の疎通(ADR-0603。配線は実装・fixture データで疎通確認済み。実データでの最終確認は critic 後)
-- [ ] SP5 GitOps(digest 固定の overlay と Argo CD Application。ADR-0603 で SP4 から分離。イメージの digest が決まる段階で着手)
+- [x] SP5 GitOps(ADR-0605。critic PASS。digest 固定の overlay・Argo CD Application・balance-registry と Argo CD を共有。
+  `speed-gitops-template-check` まで実行して確認済み。クラスタへの実際の適用〈speed-argocd-app・registry-push・sync〉は
+  人間の確認のもとで別途。手順は docs/runbooks/speed.md の節5〜10)
 
 ## JD: 判定(判定レーン。設計は docs/judge-design.md。2026-09-22 ユーザー要望)
 「ニトチャ+メイン技で素早さ抜ける+そのポケモンを倒せるか」を1回の入力で確認する。engine を直接呼び、pokedex-svc と calc-svc の公開 API だけに依存する(speed-svc には依存しない)。
-- [ ] JD0 基盤(ディレクトリ構成・pokedex-svc/calc-svc への HTTP クライアント・ヘルスチェック)
-- [ ] JD1 抜けるか+倒せるかの最小構成(自分と相手の Individual・使う技 → outspeeds・ko)。着手前に docs/judge-design.md §4 の未決事項(同速の扱い・相手の技を含めるか・gateway 経由か)を確認する
+- [x] JD0 基盤(ディレクトリ構成・pokedex-svc/calc-svc への HTTP クライアント・ヘルスチェック)。受け入れ条件と契約は ADR-0700(docs/judge-design.md §4 の未決事項はここで全部決めた)。critic PASS(3回目。1・2回目 NG は上流エラー文面への URL/host:port/ホスト名の漏洩を修正)
+- [ ] JD1 抜けるか+倒せるかの最小構成(自分と相手の Individual・使う技 → outspeeds・speedTie・ko)。endpoint(POST /api/judge/v1/outspeed-and-ko)は JD1 で services/judge/api/openapi.yaml に足す(ADR-0700 §5)
 - [ ] JD2 以降(複数の相手候補・場の効果・画面)は JD1 完了後にユーザーへ確認して確定する
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
@@ -213,6 +218,7 @@
 
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)
+- MySQL の manifest に MYSQL_DATABASE が無く、初回起動時に pokedex DB が自動作成されない実バグを発見(データレーンが k3d に初めて実デプロイした際に発生)。deploy/k8s/overlays/local/mysql/statefulset.yaml に MYSQL_DATABASE: pokedex を追加し、layout_test.go に検知テストを追加して修正(2026-09-22)。**新規クラスタでは直るが、この修正前にすでに初期化済みの PVC は MYSQL_DATABASE の効果を受けない**(コンテナ起動時にしか実行されない仕様のため)。既存の PVC に対しては CREATE DATABASE を手動実行するしかない。docs/runbooks/data.md に一言注記するとよい
 - P2-3 の critic の軽微(2026-09-22。未反映の4件): `check-publishable.sh` の `B_KEYVALUE_ALLOW` を self-test の基準リポジトリにも播く / `maxCatalogAbilityCount` が balance の schema・loader と三重管理(テストで検出はできる) / natures-mismatch のエラー案内が Showdown 側だけを見て `make import-fetch` の案内が出ないことがある / `TestPublicInputValidation` の 400 応答を契約検証(kin-openapi)に通す
 
 - P2-2d の critic の軽微(2026-09-22): `cronjob_layout_test.go` の「消さない」検査を secret・statefulset・configmap にも広げる / `make lint` が kubectl に依存する(kubectl の無い環境では失敗する)/ upstream の `checkedAt` が未来でも fresh 扱い / **コンテナの中で取得スクリプト(Showdown の build 等)を実際に流した記録が無い。初回の `make import-k8s` で確かめる**
