@@ -198,39 +198,88 @@ func spOf(hp, atk, def, spa, spd, spe int) map[string]int {
 	return map[string]int{"hp": hp, "atk": atk, "def": def, "spa": spa, "spd": spd, "spe": spe}
 }
 
-// AC-G8: 上流が calc-svc の実物のとき、gateway 経由の calc・bulk・reverse の成功と calc-svc のエラーが
-// 契約どおり(リクエストも契約に照らす)。gateway は上流の応答を書き換えない。
+// AC-G8 / AC-S1(ADR-0203 §1): 上流が calc-svc の実物のとき、gateway 経由の calc・bulk・reverse の成功と、
+// 代表的な 400(gateway の missing_header / invalid_header、calc-svc の unknown_field / unknown_species / unknown_move)、
+// pokedex 未設定の 503 が契約どおり(成功はリクエストも契約に照らす)。gateway は上流の応答を書き換えない。
 func TestRealCalcThroughGatewayMatchesContract(t *testing.T) {
 	h := newRealCalcEnv(t)
 	attacker := realCalcIndividual(calctest.SpeciesAttacker, calctest.NatureAtkUp, spOf(0, 32, 0, 0, 0, 32))
 	defender := realCalcIndividual(calctest.SpeciesDefender, calctest.NatureNeutral, spOf(32, 0, 0, 0, 0, 0))
+	unknownDefender := realCalcIndividual("9999-000", calctest.NatureNeutral, spOf(0, 0, 0, 0, 0, 0))
+
+	// 3操作それぞれの正しい本文(成功の行と、ヘッダだけを崩す行で共有する)。
+	calcBody := map[string]any{
+		"format": "single", "attacker": attacker, "defender": defender, "moveId": calctest.MovePhysical,
+	}
+	bulkBody := map[string]any{
+		"format": "single", "attacker": attacker, "defenderSpeciesKey": calctest.SpeciesDefender, "moveId": calctest.MovePhysical,
+	}
+	reverseBody := map[string]any{
+		"format": "single", "side": "defender", "known": attacker, "unknownSpeciesKey": calctest.SpeciesDefender,
+		"moveId": calctest.MovePhysical, "observations": []map[string]any{{"percent": 40}},
+	}
+	// with は本文に1つのフィールドを足した(または上書きした)写しを返す。
+	with := func(body map[string]any, key string, value any) map[string]any {
+		out := make(map[string]any, len(body)+1)
+		for k, v := range body {
+			out[k] = v
+		}
+		out[key] = value
+		return out
+	}
+	missingSession := func() http.Header { h := validHeaders(); h.Del("X-Session-Id"); return h }
+	invalidDevice := func() http.Header { h := validHeaders(); h.Set("X-Device-Id", "not-a-uuid"); return h }
 
 	tests := []struct {
 		name       string
+		method     string
 		path       string
-		body       map[string]any
+		header     func() http.Header // nil なら validHeaders
+		body       map[string]any     // GET は nil
 		wantStatus int
 		wantCode   string // エラーのときだけ
 	}{
-		{"calc の成功", "/api/calc", map[string]any{
-			"format": "single", "attacker": attacker, "defender": defender, "moveId": calctest.MovePhysical,
-		}, http.StatusOK, ""},
-		{"bulk の成功", "/api/calc/bulk", map[string]any{
-			"format": "single", "attacker": attacker, "defenderSpeciesKey": calctest.SpeciesDefender, "moveId": calctest.MovePhysical,
-		}, http.StatusOK, ""},
-		{"reverse の成功", "/api/calc/reverse", map[string]any{
-			"format": "single", "side": "defender", "known": attacker, "unknownSpeciesKey": calctest.SpeciesDefender,
-			"moveId": calctest.MovePhysical, "observations": []map[string]any{{"percent": 40}},
-		}, http.StatusOK, ""},
-		{"calc-svc の 400(unknown_move)はそのまま", "/api/calc", map[string]any{
-			"format": "single", "attacker": attacker, "defender": defender, "moveId": "test-no-such-move",
-		}, http.StatusBadRequest, "unknown_move"},
+		{"calc の成功", http.MethodPost, "/api/calc", nil, calcBody, http.StatusOK, ""},
+		{"bulk の成功", http.MethodPost, "/api/calc/bulk", nil, bulkBody, http.StatusOK, ""},
+		{"reverse の成功", http.MethodPost, "/api/calc/reverse", nil, reverseBody, http.StatusOK, ""},
+
+		{"calc: missing_header", http.MethodPost, "/api/calc", missingSession, calcBody, http.StatusBadRequest, "missing_header"},
+		{"bulk: missing_header", http.MethodPost, "/api/calc/bulk", missingSession, bulkBody, http.StatusBadRequest, "missing_header"},
+		{"reverse: missing_header", http.MethodPost, "/api/calc/reverse", missingSession, reverseBody, http.StatusBadRequest, "missing_header"},
+		{"calc: invalid_header", http.MethodPost, "/api/calc", invalidDevice, calcBody, http.StatusBadRequest, "invalid_header"},
+		{"bulk: invalid_header", http.MethodPost, "/api/calc/bulk", invalidDevice, bulkBody, http.StatusBadRequest, "invalid_header"},
+		{"reverse: invalid_header", http.MethodPost, "/api/calc/reverse", invalidDevice, reverseBody, http.StatusBadRequest, "invalid_header"},
+
+		{"calc: calc-svc の unknown_field はそのまま", http.MethodPost, "/api/calc", nil,
+			with(calcBody, "notInContract", 1), http.StatusBadRequest, "unknown_field"},
+		{"bulk: calc-svc の unknown_field はそのまま", http.MethodPost, "/api/calc/bulk", nil,
+			with(bulkBody, "notInContract", 1), http.StatusBadRequest, "unknown_field"},
+		{"reverse: calc-svc の unknown_field はそのまま", http.MethodPost, "/api/calc/reverse", nil,
+			with(reverseBody, "notInContract", 1), http.StatusBadRequest, "unknown_field"},
+		{"calc: calc-svc の unknown_species はそのまま", http.MethodPost, "/api/calc", nil,
+			with(calcBody, "defender", unknownDefender), http.StatusBadRequest, "unknown_species"},
+		{"bulk: calc-svc の unknown_species はそのまま", http.MethodPost, "/api/calc/bulk", nil,
+			with(bulkBody, "defenderSpeciesKey", "9999-000"), http.StatusBadRequest, "unknown_species"},
+		{"reverse: calc-svc の unknown_species はそのまま", http.MethodPost, "/api/calc/reverse", nil,
+			with(reverseBody, "unknownSpeciesKey", "9999-000"), http.StatusBadRequest, "unknown_species"},
+		{"calc-svc の 400(unknown_move)はそのまま", http.MethodPost, "/api/calc", nil,
+			with(calcBody, "moveId", "test-no-such-move"), http.StatusBadRequest, "unknown_move"},
+
+		// pokedex-svc(P2-3)が入るまで k3d の gateway は GATEWAY_POKEDEX_URL 未設定(ADR-0203 §3)。
+		{"pokedex 未設定: natures は upstream_unavailable", http.MethodGet, "/api/pokedex/natures", nil, nil,
+			http.StatusServiceUnavailable, "upstream_unavailable"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			header := validHeaders()
-			body := mustJSON(t, tt.body)
-			rec := serve(t, h, http.MethodPost, tt.path, header, body)
+			if tt.header != nil {
+				header = tt.header()
+			}
+			var body []byte
+			if tt.body != nil {
+				body = mustJSON(t, tt.body)
+			}
+			rec := serve(t, h, tt.method, tt.path, header, body)
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.wantStatus, rec.Body.String())
 			}
@@ -239,7 +288,7 @@ func TestRealCalcThroughGatewayMatchesContract(t *testing.T) {
 					t.Errorf("code = %q, want %q", got.Code, tt.wantCode)
 				}
 			}
-			assertContract(t, http.MethodPost, tt.path, header, body, rec, tt.wantStatus == http.StatusOK)
+			assertContract(t, tt.method, tt.path, header, body, rec, tt.wantStatus == http.StatusOK)
 		})
 	}
 
@@ -247,7 +296,7 @@ func TestRealCalcThroughGatewayMatchesContract(t *testing.T) {
 	t.Run("重複ヘッダは gateway で invalid_header", func(t *testing.T) {
 		header := validHeaders()
 		header.Add("X-Session-Id", testSessionID)
-		body := mustJSON(t, tests[0].body)
+		body := mustJSON(t, calcBody)
 		rec := serve(t, h, http.MethodPost, "/api/calc", header, body)
 		assertGatewayError(t, rec, http.StatusBadRequest, "invalid_header")
 		assertContract(t, http.MethodPost, "/api/calc", header, body, rec, false)

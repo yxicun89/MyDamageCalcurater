@@ -9,10 +9,10 @@ Next: P2-2c(照合と差分報告。実データの取得と版の固定を含�
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
-Active: Claude Code
-Branch: feat/api-p3-gateway(feat/api-p3 から分岐。P3-1 は feat/api-p3 → PR #14。作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: P3-1(calc-svc。ADR-0200)と依存の最新化(Echo v5。ADR-0201)は PR #14 で main に統合済み。P3-2 gateway(ADR-0202)は critic PASS(3回目)・PR で統合
-Next: P3-3(gateway 経由の契約テストと k3d のスモーク: calc・gateway の Dockerfile(golang 最新 digest)・Kustomize(base と overlays/local。calc の例のマスタと typechart は configMapGenerator)・Ingress `/`(balance の /api/balance と共存)・smoke スクリプトと Makefile ターゲット)
+Active: なし
+Branch: (次の作業で main から feat/api-<名前> を切る。作業ディレクトリ ~/MyDamageCalcurater-api)
+Status: Phase 3 完了。P3-1(ADR-0200・0201。PR #14)・P3-2 gateway(ADR-0202。PR #23)・P3-3 契約表と k3d のデプロイ・スモーク(ADR-0203。critic PASS)。k3d の既存クラスタで make api-k3d-deploy && make api-smoke 成功
+Next: 他レーン待ち。(1) データレーンの pokedex-svc(P2-3)が main に入ったら、gateway の local overlay に GATEWAY_POKEDEX_URL を設定し、smoke.sh の /api/pokedex の期待値 503→200 と TestManifestGatewayLocalConfig を変える。(2) 共通マスタ(P2-2a の services/internal/master)の写像が入ったら calc-svc の暫定 Store(services/calc/internal/master)を差し替える。(3) Web(P4-5)・iOS から API 契約の要望があれば DECISIONS.md で受ける
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
@@ -25,10 +25,10 @@ Next: P4-7 の完成(P2-2c/d・P2-3 pokedex-svc・P3-3 が main に入ったら�
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
-Active: なし
+Active: Claude Code
 Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
-Status: 未着手(2026-09-21 にレーンを新設)。Xcode はユーザーが導入中(App Store)。導入後に `sudo xcode-select -s /Applications/Xcode.app` 等が要る
-Next: docs/plan.md の P6-1 から。Xcode が使えるか(`xcodebuild -version`)を最初に確認し、無ければ Swift Package(swift-openapi-generator で `api/openapi.yaml` から生成したクライアント・モデル・docs/design.md のデザイントークン)と `swift test` から始める。Xcode が使えるようになったら SwiftUI の Xcode プロジェクトとシミュレータのテスト(`make ios-test`)。サーバー(P3)ができるまで API はモック
+Status: P6-1(ADR-0500)・P6-2a 計算画面・P3-1/P3-2 の契約変更への追従(逆算も API で呼ぶ)は完了(critic PASS)。`make ios-test`(ios-gen-check・XCTest 119 件・XCUITest 5 件・Info.plist)が緑。iOS 27 / Swift 6.4
+Next: P6-2b 逆算画面(観測はテンキー入力。与えたダメージ = 相手 HP の減少%(整数)、受けたダメージ = 自分 HP の減少量)→ P6-2c 構築(端末内保存の TeamStore、Showdown 形式は後回し)→ P6-3 → P6-4。ViewModel は PokeCalcCore で XCTest、主要操作は XCUITest
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
@@ -40,10 +40,10 @@ Next: (1) データレーンの `pokedex export`(P2-3。nameJa・abilityIds・�
 
 ## Speed
 Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
-Active: なし
-Branch: feat/speed-s0(作業ディレクトリ ~/MyDamageCalcurater-speed)
-Status: 未着手(2026-09-22 にレーンを新設。ユーザーの仕様は docs/plan.md の「SP: 素早さ比較」と DECISIONS.md)
-Next: SP0 から。docs/speed-design.md(設計の正)と ADR-0600 を書き、services/speed の基盤(タイプバランスの services/balance と同じ構成: 純粋な Go のコア・HTTP API・自前の openapi・Kustomize)を作る。種族の素早さ種族値と使用可能集合は pokedex の read model(データレーン P2-3 の `pokedex export`)から読む。それまでは架空データで作る。実数値の式は engine の公開 API(RealStats 等)を呼ぶだけで、自前で持たない
+Active: Claude Code
+Branch: feat/speed-s1(SP0 は feat/speed-s0 → PR で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
+Status: SP0 完了(ADR-0600。services/speed の基盤: engine を呼ぶ素早さの計算コア・スカーフ ×1.5 の五捨五超入・架空データの read model `SPEED_POKEMON_PATH`・`GET /api/speed/v1/pokemon`・Kustomize base/local・Dockerfile(ルートがコンテキスト)・smoke)。ユーザー回答4点は plan.md に反映済み
+Next: SP1(表。ADR-0601: 6 行のプリセット・速い順・同速の段・`presets` クエリでの絞り込み・`GET /api/speed/v1/table`)→ SP2(自分の位置)→ SP3(`web/src/speed/` の画面部品。Web の骨組みが無い間は部品とテストだけ)→ SP4(pokedex の read model・k3d・GitOps)。検討: 404/405 を `{code,message}` にそろえるか(SP0 critic 軽微)
 
 ## Maintenance
 Lane: 整備(Claude の上限時に Codex が進める。COORDINATION.md「Claude の上限時の Codex」)

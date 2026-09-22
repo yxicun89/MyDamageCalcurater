@@ -9,7 +9,9 @@ export default mergeConfig(
       environment: "jsdom",
       include: ["src/**/*.test.{ts,tsx}"],
       exclude: ["src/**/*.wasm.test.ts"],
-      setupFiles: ["src/test/setup.ts"],
+      // domPolyfills.ts を先に読み込む(react-dom の import 前に window.AnimationEvent を足す必要があるため。
+      // 理由は src/test/domPolyfills.ts のコメントを参照)。
+      setupFiles: ["src/test/domPolyfills.ts", "src/test/setup.ts"],
     },
   }),
 );

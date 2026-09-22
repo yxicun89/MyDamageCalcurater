@@ -1,0 +1,7 @@
+[
+  { "id": "test-nature-neutral", "nameJa": "テストせいかく無補正", "plus": null, "minus": null },
+  { "id": "test-nature-atk-up", "nameJa": "テストせいかく攻撃上昇", "plus": "atk", "minus": "spa" },
+  { "id": "test-nature-spa-up", "nameJa": "テストせいかく特攻上昇", "plus": "spa", "minus": "atk" },
+  { "id": "test-nature-def-up", "nameJa": "テストせいかく防御上昇", "plus": "def", "minus": "atk" },
+  { "id": "test-nature-spd-up", "nameJa": "テストせいかく特防上昇", "plus": "spd", "minus": "atk" }
+]

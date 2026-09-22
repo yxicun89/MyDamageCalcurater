@@ -78,7 +78,7 @@
   - 逆算(`/api/calc/reverse`)の対応(ADR-0010 §R8 の持ち越し。engine と WASM 境界は P1-12 で新仕様済み・API 未変更): `api/openapi.yaml` を先に直して `make gen`(絶対ルール1)。`ReverseRequest.attacker` / `defenderSpeciesKey` を `known` / `unknownSpeciesKey` に改名(`side=attacker` のとき既知側=自分=防御側)、`itemCandidates: [ItemId]` を追加。`Observation` は `percent`(整数%)/ `percentTenths` / `damage` のちょうど1つ(整数でなければ 400)。`ReverseCandidate` を P1-12 の形(`natureClass` / `nature`(calc-svc が性格 ID に写像)/ `itemId` / `ranges:[{min,max}]` / `spCount` / `exact` / `mismatch` / `support` / `minPercent` / `maxPercent`)にし、結果に `assumedHpSp` を足す。旧 `archetypeKey` / `presetLabel` / `matchScore` は使わない。`CalcResult.minPercent` の description に残る `ObservedPercent` への言及を直す(ADR-0010 §R8)
   - WASM 境界との契約差分の解消(ADR-0011 §10 の持ち越し。P1-9 では `api/openapi.yaml` を変更していない): `api/openapi.yaml` を先に直して `make gen`(絶対ルール1)。`CalcResult.minPercent/maxPercent` は P1-11 で解消済み(小数第1位の表示%。`ko.displayChancePercent` も追加済み)、`CalcResult` に `category` を足すか(Web は要求から知っているので落とすか)を決める、`BulkCalcRow` に防御側の `defender{sp,nature,stats}`(SP・性格・実数値)を足す、エラーの `code` 語彙を WASM 境界(ADR-0011 §5 の `invalid_json` / `unknown_field` / `invalid_enum` / `invalid_input` / `unknown_preset` / `duplicate_preset` / `invalid_preset` / `invalid_reverse_side` / `no_observation` / `invalid_observation` / `internal`)と共通化し、同じ失敗が HTTP と WASM で同じ `code` になるようにする
 - [x] P3-2 gateway(ルーティング・端末ID/セッションID・/assets・CORS)。設計・受け入れ条件は ADR-0202(calc-svc の重複ヘッダは `invalid_header` に統一)
-- [ ] P3-3 契約テスト(OpenAPI 準拠)と k3d 上のスモークテスト
+- [x] P3-3 契約テスト(OpenAPI 準拠)と k3d 上のスモークテスト。gateway 経由の契約表・マニフェストの静的検査・`make api-k3d-deploy` / `make api-smoke`・`make dev`(ADR-0203)
 
 ### Phase 4 Web
 - [x] P4-1 デザイントークン(docs/design.md)を CSS 変数に実装(ADR-0300 §4。web/src/styles/tokens.css)
@@ -91,6 +91,8 @@
 - [x] P4-6 Playwright E2E(主要フロー)。`make web-e2e`(オフライン)/ `make web-e2e-online`(calc-svc)。Web のテストを `make test` / `lint` / `build` に組み込み(ADR-0300 §9)
 - [!] P4-7 **M1 完了報告**: 動作確認手順を `docs/verify-m1.md` に書く。**ドラフト**(いま確認できる範囲: 自動テスト・オフライン/オンラインの画面)。P2-2c/d・P2-3・P3-3 が main に入ったら完成版にする
 
+- [x] P4-8 design.md「動き」の演出(操作したときだけ): 確定数が変わった瞬間にバッジが弾む、攻守入れ替えでカードが入れ替わる(0.35秒)、選択中のカード1枚だけのホロ(ポインタ位置に連動)、逆算で観測を追加したときの絞り込みの動き、ダメージバーの spring。OS の「視差効果を減らす」で全演出を無効化(ユーザー決定 2026-09-22)
+
 ## M2: 保存・構築
 - [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)
 - [ ] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)
@@ -99,8 +101,8 @@
 - [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー
 
 ## M3: iOS
-- [ ] P6-1 Xcode プロジェクト、swift-openapi-generator、デザイントークン
-- [ ] P6-2 計算画面・逆算・構築
+- [x] P6-1 Xcode プロジェクト、swift-openapi-generator、デザイントークン(ADR-0500。`make ios-test` = 生成物の一致・XCTest・XCUITest・Info.plist の接続先。critic PASS)
+- [~] P6-2 計算画面・逆算・構築(構築は端末内に保存、Showdown 形式は後回し。2026-09-21 ユーザー回答)。P6-2a 計算画面は完了(critic PASS)。P3-1・P3-2 の契約変更への追従(ErrorCode・503・category・BulkDefender・逆算の API 接続)も完了(critic PASS)。P6-2b 逆算画面(観測はテンキー入力。2026-09-22 ユーザー回答)・P6-2c 構築が残り
 - [ ] P6-3 シミュレータテスト(`make ios-test`)
 - [ ] P6-4 Tailscale serve の手順書 → **人間が実機インストール**
 
@@ -124,8 +126,8 @@
 - 左の表は、使用可能な各ポケモンについて **6 行**: 無振り / 準速(素早さ SP 32・補正なし)/ 最速(SP 32・素早さ上昇性格)/ 最速+こだわりスカーフ / 最速+1(ニトロチャージ等)/ 最速+2(こうそくいどう等)。道具・ランクで絞り込める
 - 右の入力は**最小の選択で計算できる**こと: ポケモンを選び、「無振り / 準速 / 最速」を選んで、こだわりスカーフの on/off を切り替えるだけ。**オプション**で好きな数値でも算出できる
 - 実数値は Champions の式(その他 = floor((種族値 + 20 + SP) × 性格補正))、Lv50・個体値31固定。スカーフ・ランクの掛け方は engine / Showdown の規則に従う
-未確定(素早さレーンが既定案で進め、ユーザーに確認する): 右のオプションの「好きな数値」の範囲(既定案: 素早さ SP 0〜32 を自由に・性格の補正3通り・ランク -6〜+6、または実数値を直接入力)、同速の表示、表に載せる種族の範囲(既定案: 既定のレギュレーションの使用可能集合)
-- [ ] SP0 基盤: docs/speed-design.md と ADR-0600、services/speed(純粋な Go のコア・HTTP API・`services/speed/api/openapi.yaml`・Kustomize・Argo CD の定義はタイプバランスに倣う)、架空データの read model
+- 2026-09-22 ユーザー回答(確定): 右のオプションは素早さ SP 0〜32・性格の補正3通り・ランク -6〜+6・スカーフ on/off を自由に選ぶか、実数値を直接入力して位置だけを見る。同じ実数値は同速としてまとめて表示(同速の中は図鑑番号順)。表に載せるのは既定のレギュレーションの使用可能集合。Web の骨組み(`web/`)が無い間は `web/src/speed/` の画面部品とテストだけ先に作り、タブ登録は骨組みができてから1項目足す
+- [x] SP0 基盤(ADR-0600。critic PASS。GitOps の overlay と Argo CD Application は digest が決まる SP4 へ): docs/speed-design.md と ADR-0600、services/speed(純粋な Go のコア・HTTP API・`services/speed/api/openapi.yaml`・Kustomize・Argo CD の定義はタイプバランスに倣う)、架空データの read model
 - [ ] SP1 素早さの表(6行の生成・速い順の並び・同速の扱い・絞り込みの API)
 - [ ] SP2 自分のポケモンの位置(最小の選択+オプションの数値 → 実数値 → 表の中の位置)
 - [ ] SP3 Web の素早さ画面(左右の配置・自分の位置の強調。`web/src/speed/`)

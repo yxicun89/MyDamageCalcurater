@@ -1,0 +1,65 @@
+# calc-svc(ダメージ計算・一括計算・逆算。ADR-0200)。マスタの場所(CALC_MASTER_PATH・
+# CALC_TYPECHART_PATH)は base では持たない(local overlay の Component が渡す。ADR-0203 §3)。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calc
+  labels:
+    app.kubernetes.io/name: calc
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: calc
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: calc
+        app.kubernetes.io/part-of: pokecalc
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: calc
+          image: pokecalc/calc:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            # limits.memory の 64Mi に対して少し余裕を持たせた値(GC が OOMKill の前に働くように)。
+            - name: GOMEMLIMIT
+              value: 56MiB
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+      securityContext:
+        runAsNonRoot: true
+        # イメージ(services/calc/Dockerfile)の USER 65532:65532 と合わせて明示する。
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
