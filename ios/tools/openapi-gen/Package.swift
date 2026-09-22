@@ -1,5 +1,5 @@
 // swift-tools-version: 6.4
-// swift-openapi-generator を版固定で実行するための生成専用パッケージ(ADR-0017 §2)。
+// swift-openapi-generator を版固定で実行するための生成専用パッケージ(ADR-0500 §2)。
 // アプリやパッケージの依存には入らない。`ios/scripts/openapi-gen.sh` から
 // `swift build -c release --product swift-openapi-generator` した実行ファイルを直接呼ぶ
 // (`swift run` は使わない。`swift build` の方が生成器自身の標準出力・終了コードを汚さない)。

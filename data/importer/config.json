@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "sources": {
+    "calc": "0.12.0",
+    "showdown": "PENDING-PIN-COMMIT",
+    "pokeapi": "PENDING-PIN-COMMIT"
+  },
+  "excludeCalcSpecies": ["Aegislash-Both"],
+  "excludeTypes": ["???", "Stellar"],
+  "nameJaLanguages": ["ja", "ja-Hrkt"]
+}

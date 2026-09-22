@@ -1,6 +1,6 @@
 import Foundation
 
-/// `MockPokeCalcService` が読む架空データ(ADR-0017 §4)。
+/// `MockPokeCalcService` が読む架空データ(ADR-0500 §4)。
 ///
 /// JSON は `Resources/*.json` に置く(パッケージのリソースとして `Bundle.module` から読める)。
 /// 名前はすべて「テスト」で始まる架空データで、実在のポケモン・技・持ち物・性格の名前や

@@ -29,7 +29,7 @@ services/pokedex/       # マスタ参照(MySQL)
 services/calc/          # 計算(ステートレス)
 services/record/        # 計算イベント・お気に入り(TiDB: record DB)
 services/team/          # 構築(TiDB: team DB)
-tools/importer/         # マスタ取込(k8s CronJob)
+tools/importer/         # マスタの取得(Node。data/generated/ へ。変換・投入は services/pokedex/importer。ADR-0101)
 tools/golden/           # @smogon/calc からテストベクタ生成(Node)
 tools/assets/           # 画像変換・アップロード
 testdata/golden/        # 生成済みテストベクタ(コミットする)

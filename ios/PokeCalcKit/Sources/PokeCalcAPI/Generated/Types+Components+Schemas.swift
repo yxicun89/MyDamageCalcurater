@@ -12,10 +12,14 @@ public import struct Foundation.Date
 extension Components {
     /// Types generated from the `#/components/schemas` section of the OpenAPI document.
     public enum Schemas {
+        /// エラーの本文。HTTP ステータスは `code` から決まる(ErrorCode の対応表)。
+        /// `message` は日本語の説明で、Go の内部情報(スタック・型名)を含めない。
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/Error`.
         public struct _Error: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/Error/code`.
-            public var code: Swift.String
+            public var code: Components.Schemas.ErrorCode
             /// - Remark: Generated from `#/components/schemas/Error/message`.
             public var message: Swift.String
             /// Creates a new `_Error`.
@@ -24,7 +28,7 @@ extension Components {
             ///   - code:
             ///   - message:
             public init(
-                code: Swift.String,
+                code: Components.Schemas.ErrorCode,
                 message: Swift.String
             ) {
                 self.code = code
@@ -34,6 +38,69 @@ extension Components {
                 case code
                 case message
             }
+        }
+        /// 安定したエラーコード。WASM 境界(engine/wasmapi の Code* 定数。ADR-0011 §5・§13)と語彙を共通にし、
+        /// **同じ失敗は HTTP と WASM で同じ code** になる(ADR-0200)。
+        ///
+        /// WASM 境界と共通:
+        /// | code | 意味 | HTTP |
+        /// |---|---|---|
+        /// | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
+        /// | unknown_field | 契約にないフィールド | 400 |
+        /// | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
+        /// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など) | 400 |
+        /// | unknown_preset | 未知の防御側プリセット | 400 |
+        /// | duplicate_preset | 防御側プリセットの重複 | 400 |
+        /// | invalid_preset | 防御側プリセットの定義が不正 | 400 |
+        /// | invalid_reverse_side | 逆算の side が defender / attacker のどちらでもない | 400 |
+        /// | no_observation | 観測が1件も無い | 400 |
+        /// | invalid_observation | 観測の指定が不正(percent / percentTenths / damage のちょうど1つでない・範囲外) | 400 |
+        /// | type_chart_missing | タイプ相性表が無い(HTTP では常にマスタ = 起動時に読み込んだ Store 側の不備で、クライアントの入力起因では起こらない) | 500 |
+        /// | invalid_type_chart | タイプ相性表の定義が不正(同上。HTTP では常にマスタ側の不備) | 500 |
+        /// | unknown_type | 相性表に無いタイプ | 400 |
+        /// | internal | 上記以外の失敗(回復した panic を含む) | 500 |
+        ///
+        /// HTTP だけのもの:
+        /// | code | 意味 | HTTP |
+        /// |---|---|---|
+        /// | missing_header | X-Device-Id / X-Session-Id が無い・空 | 400 |
+        /// | invalid_header | X-Device-Id / X-Session-Id が UUID でない・同名ヘッダの重複(UUID 形式の検証は gateway だけが行う。ADR-0202) | 400 |
+        /// | unknown_species | speciesKey がマスタに無い | 400 |
+        /// | unknown_move | moveId がマスタに無い | 400 |
+        /// | unknown_item | itemId がマスタに無い | 400 |
+        /// | unknown_ability | abilityId がマスタに無い | 400 |
+        /// | unknown_nature | natureId がマスタに無い | 400 |
+        /// | not_found | ルートが無い / このサービスの担当外の操作 | 404 |
+        /// | master_unavailable | マスタを参照できない | 503 |
+        /// | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202) | 503 |
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ErrorCode`.
+        @frozen public enum ErrorCode: String, Codable, Hashable, Sendable, CaseIterable {
+            case invalidJson = "invalid_json"
+            case unknownField = "unknown_field"
+            case invalidEnum = "invalid_enum"
+            case invalidInput = "invalid_input"
+            case unknownPreset = "unknown_preset"
+            case duplicatePreset = "duplicate_preset"
+            case invalidPreset = "invalid_preset"
+            case invalidReverseSide = "invalid_reverse_side"
+            case noObservation = "no_observation"
+            case invalidObservation = "invalid_observation"
+            case typeChartMissing = "type_chart_missing"
+            case invalidTypeChart = "invalid_type_chart"
+            case unknownType = "unknown_type"
+            case _internal = "internal"
+            case missingHeader = "missing_header"
+            case invalidHeader = "invalid_header"
+            case unknownSpecies = "unknown_species"
+            case unknownMove = "unknown_move"
+            case unknownItem = "unknown_item"
+            case unknownAbility = "unknown_ability"
+            case unknownNature = "unknown_nature"
+            case notFound = "not_found"
+            case masterUnavailable = "master_unavailable"
+            case upstreamUnavailable = "upstream_unavailable"
         }
         /// - Remark: Generated from `#/components/schemas/Format`.
         @frozen public enum Format: String, Codable, Hashable, Sendable, CaseIterable {
@@ -786,6 +853,7 @@ extension Components {
             /// 最小ダメージの表示%(防御側 HP に対する割合)。小数第1位(0.1%刻み)で、
             /// **切り捨て**る(「最低これくらい入る」を保守的に示すため。ADR-0010 §3)。
             /// 整数%に丸めてから小数にした値ではない。HP 比率から直接求める。
+            /// engine の 0.1% 単位の整数(tenths)を 10 で割っただけの値で、float で近似しない。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/CalcResult/minPercent`.
@@ -793,7 +861,7 @@ extension Components {
             /// 最大ダメージの表示%(防御側 HP に対する割合)。小数第1位(0.1%刻み)で、
             /// **四捨五入**する(ADR-0010 §3)。
             /// 100 を超える場合は上限で切らず、そのまま返す(例 137.0)。
-            /// 逆算の入力に使う実機観測の整数%とは別概念(engine の ObservedPercent)。
+            /// 逆算の入力の観測%(`Observation.percent` / `percentTenths`)とは別概念。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/CalcResult/maxPercent`.
@@ -808,6 +876,30 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/CalcResult/stab`.
             public var stab: Swift.Bool
+            /// 使った技の分類(WASM 境界の CalcResult と同じ。Web が型を共有するため)
+            ///
+            /// - Remark: Generated from `#/components/schemas/CalcResult/category`.
+            public struct CategoryPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/CalcResult/category/value1`.
+                public var value1: Components.Schemas.MoveCategory
+                /// Creates a new `CategoryPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.MoveCategory) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeToSingleValueContainer(self.value1)
+                }
+            }
+            /// 使った技の分類(WASM 境界の CalcResult と同じ。Web が型を共有するため)
+            ///
+            /// - Remark: Generated from `#/components/schemas/CalcResult/category`.
+            public var category: Components.Schemas.CalcResult.CategoryPayload
             /// - Remark: Generated from `#/components/schemas/CalcResult/ko`.
             public var ko: Components.Schemas.KOChance
             /// Creates a new `CalcResult`.
@@ -821,6 +913,7 @@ extension Components {
             ///   - defenderHP:
             ///   - effectiveness: タイプ相性(0, 0.25, 0.5, 1, 2, 4)
             ///   - stab: タイプ一致
+            ///   - category: 使った技の分類(WASM 境界の CalcResult と同じ。Web が型を共有するため)
             ///   - ko:
             public init(
                 rolls: [Swift.Int],
@@ -831,6 +924,7 @@ extension Components {
                 defenderHP: Swift.Int,
                 effectiveness: Swift.Double,
                 stab: Swift.Bool,
+                category: Components.Schemas.CalcResult.CategoryPayload,
                 ko: Components.Schemas.KOChance
             ) {
                 self.rolls = rolls
@@ -841,6 +935,7 @@ extension Components {
                 self.defenderHP = defenderHP
                 self.effectiveness = effectiveness
                 self.stab = stab
+                self.category = category
                 self.ko = ko
             }
             public enum CodingKeys: String, CodingKey {
@@ -852,6 +947,7 @@ extension Components {
                 case defenderHP
                 case effectiveness
                 case stab
+                case category
                 case ko
             }
         }
@@ -893,10 +989,13 @@ extension Components {
             public var field: Components.Schemas.FieldState?
             /// - Remark: Generated from `#/components/schemas/BulkCalcRequest/options`.
             public var options: Components.Schemas.CalcOptions?
-            /// 省略時(空配列を含む)は技の分類に応じた既定セット。
+            /// 使う防御側プリセットと行の順序。省略と空配列(`[]`)は同じで、技の分類に応じた既定セットになる。
             /// 物理技は 5 件(none, hp, hb_boost, hb, hb_full)、
             /// 特殊技は 5 件(none, hp, hd_boost, hd, hd_full)、
-            /// 変化技は 2 件(none, hp)。指定したときはその順に行を返す。
+            /// **変化技は 2 件(none, hp)のみ**。
+            /// 指定したときはその順に行を返す(分類に合わないプリセットも指定どおり返す)。
+            /// 同じ preset を2回以上含めると 400 `duplicate_preset`。
+            /// engine のカスタムプリセット定義(SP・性格を任意に決めたもの)は API に出さない。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/BulkCalcRequest/presets`.
@@ -914,7 +1013,7 @@ extension Components {
             ///   - moveId:
             ///   - field:
             ///   - options:
-            ///   - presets: 省略時(空配列を含む)は技の分類に応じた既定セット。
+            ///   - presets: 使う防御側プリセットと行の順序。省略と空配列(`[]`)は同じで、技の分類に応じた既定セットになる。
             ///   - itemVariants: 差し替えて比較する持ち物 ID(省略時は素の1通り)
             public init(
                 format: Components.Schemas.Format,
@@ -954,8 +1053,12 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/BulkCalcRow/presetLabel`.
             public var presetLabel: Swift.String
+            /// この行の防御側の持ち物(持ち物なしは null)
+            ///
             /// - Remark: Generated from `#/components/schemas/BulkCalcRow/itemId`.
             public var itemId: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/BulkCalcRow/defender`.
+            public var defender: Components.Schemas.BulkDefender
             /// - Remark: Generated from `#/components/schemas/BulkCalcRow/result`.
             public var result: Components.Schemas.CalcResult
             /// Creates a new `BulkCalcRow`.
@@ -963,24 +1066,176 @@ extension Components {
             /// - Parameters:
             ///   - preset:
             ///   - presetLabel: 表示名(例 HB振り / HB特化 / H振り+B補正)
-            ///   - itemId:
+            ///   - itemId: この行の防御側の持ち物(持ち物なしは null)
+            ///   - defender:
             ///   - result:
             public init(
                 preset: Components.Schemas.DefenderPreset,
                 presetLabel: Swift.String,
                 itemId: Swift.String? = nil,
+                defender: Components.Schemas.BulkDefender,
                 result: Components.Schemas.CalcResult
             ) {
                 self.preset = preset
                 self.presetLabel = presetLabel
                 self.itemId = itemId
+                self.defender = defender
                 self.result = result
             }
             public enum CodingKeys: String, CodingKey {
                 case preset
                 case presetLabel
                 case itemId
+                case defender
                 case result
+            }
+        }
+        /// 性格補正の構造値。plus が +10%、minus が -10% を受ける能力。無補正は両方 null。
+        /// HP を指すことはない。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/NatureModifier`.
+        public struct NatureModifier: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/NatureModifier/plus`.
+            public struct PlusPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/NatureModifier/plus/value1`.
+                public var value1: Components.Schemas.StatKey
+                /// Creates a new `PlusPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.StatKey) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeToSingleValueContainer(self.value1)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/NatureModifier/plus`.
+            public var plus: Components.Schemas.NatureModifier.PlusPayload?
+            /// - Remark: Generated from `#/components/schemas/NatureModifier/minus`.
+            public struct MinusPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/NatureModifier/minus/value1`.
+                public var value1: Components.Schemas.StatKey
+                /// Creates a new `MinusPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.StatKey) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeToSingleValueContainer(self.value1)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/NatureModifier/minus`.
+            public var minus: Components.Schemas.NatureModifier.MinusPayload?
+            /// Creates a new `NatureModifier`.
+            ///
+            /// - Parameters:
+            ///   - plus:
+            ///   - minus:
+            public init(
+                plus: Components.Schemas.NatureModifier.PlusPayload? = nil,
+                minus: Components.Schemas.NatureModifier.MinusPayload? = nil
+            ) {
+                self.plus = plus
+                self.minus = minus
+            }
+            public enum CodingKeys: String, CodingKey {
+                case plus
+                case minus
+            }
+        }
+        /// 一括計算の1行で使った防御側の調整(SP・性格補正・実数値)
+        ///
+        /// - Remark: Generated from `#/components/schemas/BulkDefender`.
+        public struct BulkDefender: Codable, Hashable, Sendable {
+            /// 能力ポイント
+            ///
+            /// - Remark: Generated from `#/components/schemas/BulkDefender/sp`.
+            public struct SpPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/BulkDefender/sp/value1`.
+                public var value1: Components.Schemas.StatBlock
+                /// Creates a new `SpPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.StatBlock) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 能力ポイント
+            ///
+            /// - Remark: Generated from `#/components/schemas/BulkDefender/sp`.
+            public var sp: Components.Schemas.BulkDefender.SpPayload
+            /// - Remark: Generated from `#/components/schemas/BulkDefender/nature`.
+            public var nature: Components.Schemas.NatureModifier
+            /// nature と (plus, minus) が一致するマスタの性格 ID。無補正は、マスタの無補正性格を
+            /// ID の昇順で並べた最初のもの。該当する性格がマスタに無ければ null。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/BulkDefender/natureId`.
+            public var natureId: Swift.String?
+            /// 実数値(Lv50・個体値31)
+            ///
+            /// - Remark: Generated from `#/components/schemas/BulkDefender/stats`.
+            public struct StatsPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/BulkDefender/stats/value1`.
+                public var value1: Components.Schemas.StatBlock
+                /// Creates a new `StatsPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.StatBlock) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 実数値(Lv50・個体値31)
+            ///
+            /// - Remark: Generated from `#/components/schemas/BulkDefender/stats`.
+            public var stats: Components.Schemas.BulkDefender.StatsPayload
+            /// Creates a new `BulkDefender`.
+            ///
+            /// - Parameters:
+            ///   - sp: 能力ポイント
+            ///   - nature:
+            ///   - natureId: nature と (plus, minus) が一致するマスタの性格 ID。無補正は、マスタの無補正性格を
+            ///   - stats: 実数値(Lv50・個体値31)
+            public init(
+                sp: Components.Schemas.BulkDefender.SpPayload,
+                nature: Components.Schemas.NatureModifier,
+                natureId: Swift.String? = nil,
+                stats: Components.Schemas.BulkDefender.StatsPayload
+            ) {
+                self.sp = sp
+                self.nature = nature
+                self.natureId = natureId
+                self.stats = stats
+            }
+            public enum CodingKeys: String, CodingKey {
+                case sp
+                case nature
+                case natureId
+                case stats
             }
         }
         /// - Remark: Generated from `#/components/schemas/BulkCalcResult`.
@@ -1013,28 +1268,51 @@ extension Components {
             case defender = "defender"
             case attacker = "attacker"
         }
+        /// 1発ぶんの観測。percent / percentTenths / damage の**ちょうど1つ**を指定する(ADR-0010 §R2)。
+        /// 0 個・2 個以上・範囲外は 400 `invalid_observation`。整数でなければ(例 12.5)400 `invalid_json`。
+        /// 表示%(CalcResult.minPercent など)とは別概念で、丸め規則に依存しない区間で照合する。
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/Observation`.
         public struct Observation: Codable, Hashable, Sendable {
-            /// ゲーム内表示に合わせた HP 減少割合(%)
+            /// 整数%の観測(精度 1%)
             ///
-            /// - Remark: Generated from `#/components/schemas/Observation/observedPercent`.
-            public var observedPercent: Swift.Double
+            /// - Remark: Generated from `#/components/schemas/Observation/percent`.
+            public var percent: Swift.Int?
+            /// 小数第1位の観測を 0.1% 単位の整数にしたもの(例 45.3% → 453)
+            ///
+            /// - Remark: Generated from `#/components/schemas/Observation/percentTenths`.
+            public var percentTenths: Swift.Int?
+            /// HP の実点数の観測(自分の HP の減少量など)
+            ///
+            /// - Remark: Generated from `#/components/schemas/Observation/damage`.
+            public var damage: Swift.Int?
+            /// 画面用のメモ。計算には使わない
+            ///
             /// - Remark: Generated from `#/components/schemas/Observation/note`.
             public var note: Swift.String?
             /// Creates a new `Observation`.
             ///
             /// - Parameters:
-            ///   - observedPercent: ゲーム内表示に合わせた HP 減少割合(%)
-            ///   - note:
+            ///   - percent: 整数%の観測(精度 1%)
+            ///   - percentTenths: 小数第1位の観測を 0.1% 単位の整数にしたもの(例 45.3% → 453)
+            ///   - damage: HP の実点数の観測(自分の HP の減少量など)
+            ///   - note: 画面用のメモ。計算には使わない
             public init(
-                observedPercent: Swift.Double,
+                percent: Swift.Int? = nil,
+                percentTenths: Swift.Int? = nil,
+                damage: Swift.Int? = nil,
                 note: Swift.String? = nil
             ) {
-                self.observedPercent = observedPercent
+                self.percent = percent
+                self.percentTenths = percentTenths
+                self.damage = damage
                 self.note = note
             }
             public enum CodingKeys: String, CodingKey {
-                case observedPercent
+                case percent
+                case percentTenths
+                case damage
                 case note
             }
         }
@@ -1044,126 +1322,324 @@ extension Components {
             public var format: Components.Schemas.Format
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/side`.
             public var side: Components.Schemas.ReverseSide
-            /// - Remark: Generated from `#/components/schemas/ReverseRequest/attacker`.
-            public var attacker: Components.Schemas.Individual
-            /// - Remark: Generated from `#/components/schemas/ReverseRequest/defenderSpeciesKey`.
-            public var defenderSpeciesKey: Components.Schemas.SpeciesKey
+            /// 既知の側(自分)の個体。side=defender なら自分=攻撃側、side=attacker なら自分=防御側。
+            /// known.moveId は使わない(技は moveId で指定する)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseRequest/known`.
+            public struct KnownPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ReverseRequest/known/value1`.
+                public var value1: Components.Schemas.Individual
+                /// Creates a new `KnownPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.Individual) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 既知の側(自分)の個体。side=defender なら自分=攻撃側、side=attacker なら自分=防御側。
+            /// known.moveId は使わない(技は moveId で指定する)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseRequest/known`.
+            public var known: Components.Schemas.ReverseRequest.KnownPayload
+            /// 逆算する相手の種族。SP・性格・持ち物は探索対象なので渡さない
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseRequest/unknownSpeciesKey`.
+            public struct UnknownSpeciesKeyPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ReverseRequest/unknownSpeciesKey/value1`.
+                public var value1: Components.Schemas.SpeciesKey
+                /// Creates a new `UnknownSpeciesKeyPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.SpeciesKey) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeToSingleValueContainer(self.value1)
+                }
+            }
+            /// 逆算する相手の種族。SP・性格・持ち物は探索対象なので渡さない
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseRequest/unknownSpeciesKey`.
+            public var unknownSpeciesKey: Components.Schemas.ReverseRequest.UnknownSpeciesKeyPayload
+            /// 観測したときの技(side=defender なら自分の技、attacker なら相手の技)
+            ///
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/moveId`.
             public var moveId: Swift.String
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/field`.
             public var field: Components.Schemas.FieldState?
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/options`.
             public var options: Components.Schemas.CalcOptions?
+            /// 相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseRequest/itemCandidates`.
+            public var itemCandidates: [Swift.String?]?
+            /// 同じ技・同じ場・同じ既知側に対する別々の1発。0 件は 400 `no_observation`
+            ///
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/observations`.
             public var observations: [Components.Schemas.Observation]
+            /// 返す候補数の上限。0 は無制限
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseRequest/maxCandidates`.
+            public var maxCandidates: Swift.Int?
             /// Creates a new `ReverseRequest`.
             ///
             /// - Parameters:
             ///   - format:
             ///   - side:
-            ///   - attacker:
-            ///   - defenderSpeciesKey:
-            ///   - moveId:
+            ///   - known: 既知の側(自分)の個体。side=defender なら自分=攻撃側、side=attacker なら自分=防御側。
+            ///   - unknownSpeciesKey: 逆算する相手の種族。SP・性格・持ち物は探索対象なので渡さない
+            ///   - moveId: 観測したときの技(side=defender なら自分の技、attacker なら相手の技)
             ///   - field:
             ///   - options:
-            ///   - observations:
+            ///   - itemCandidates: 相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ
+            ///   - observations: 同じ技・同じ場・同じ既知側に対する別々の1発。0 件は 400 `no_observation`
+            ///   - maxCandidates: 返す候補数の上限。0 は無制限
             public init(
                 format: Components.Schemas.Format,
                 side: Components.Schemas.ReverseSide,
-                attacker: Components.Schemas.Individual,
-                defenderSpeciesKey: Components.Schemas.SpeciesKey,
+                known: Components.Schemas.ReverseRequest.KnownPayload,
+                unknownSpeciesKey: Components.Schemas.ReverseRequest.UnknownSpeciesKeyPayload,
                 moveId: Swift.String,
                 field: Components.Schemas.FieldState? = nil,
                 options: Components.Schemas.CalcOptions? = nil,
-                observations: [Components.Schemas.Observation]
+                itemCandidates: [Swift.String?]? = nil,
+                observations: [Components.Schemas.Observation],
+                maxCandidates: Swift.Int? = nil
             ) {
                 self.format = format
                 self.side = side
-                self.attacker = attacker
-                self.defenderSpeciesKey = defenderSpeciesKey
+                self.known = known
+                self.unknownSpeciesKey = unknownSpeciesKey
                 self.moveId = moveId
                 self.field = field
                 self.options = options
+                self.itemCandidates = itemCandidates
                 self.observations = observations
+                self.maxCandidates = maxCandidates
             }
             public enum CodingKeys: String, CodingKey {
                 case format
                 case side
-                case attacker
-                case defenderSpeciesKey
+                case known
+                case unknownSpeciesKey
                 case moveId
                 case field
                 case options
+                case itemCandidates
                 case observations
+                case maxCandidates
             }
         }
+        /// 関連ステータスに対する性格補正のクラス(neutral=無補正 / plus=関連ステータス +10%)。下降補正は探索しない
+        ///
+        /// - Remark: Generated from `#/components/schemas/NatureClass`.
+        @frozen public enum NatureClass: String, Codable, Hashable, Sendable, CaseIterable {
+            case neutral = "neutral"
+            case plus = "plus"
+        }
+        /// SP の区間(両端を含む)
+        ///
+        /// - Remark: Generated from `#/components/schemas/SPRange`.
+        public struct SPRange: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SPRange/min`.
+            public var min: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/SPRange/max`.
+            public var max: Swift.Int
+            /// Creates a new `SPRange`.
+            ///
+            /// - Parameters:
+            ///   - min:
+            ///   - max:
+            public init(
+                min: Swift.Int,
+                max: Swift.Int
+            ) {
+                self.min = min
+                self.max = max
+            }
+            public enum CodingKeys: String, CodingKey {
+                case min
+                case max
+            }
+        }
+        /// 候補1件(性格クラス × 持ち物。ADR-0010 §R3)
+        ///
         /// - Remark: Generated from `#/components/schemas/ReverseCandidate`.
         public struct ReverseCandidate: Codable, Hashable, Sendable {
-            /// 型の名前(例 HB特化)
+            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/natureClass`.
+            public var natureClass: Components.Schemas.NatureClass
+            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/nature`.
+            public var nature: Components.Schemas.NatureModifier
+            /// nature と (plus, minus) が一致するマスタの性格 ID(BulkDefender.natureId と同じ規則)。
+            /// 無補正は、マスタの無補正性格を ID の昇順で並べた最初のもの。該当なしは null。
             ///
-            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/presetLabel`.
-            public var presetLabel: Swift.String
+            ///
             /// - Remark: Generated from `#/components/schemas/ReverseCandidate/natureId`.
             public var natureId: Swift.String?
+            /// 持ち物(持ち物なしは null)
+            ///
             /// - Remark: Generated from `#/components/schemas/ReverseCandidate/itemId`.
             public var itemId: Swift.String?
-            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/sp`.
-            public var sp: Components.Schemas.StatBlock
-            /// 観測との一致度(0..1、高いほど一致)
+            /// 観測を説明できる SP の集合(昇順・互いに素・隣接しない極大連続区間)。説明できなければ距離最小の SP
             ///
-            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/matchScore`.
-            public var matchScore: Swift.Double
-            /// この候補での想定ダメージ幅 [min, max]
+            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/ranges`.
+            public var ranges: [Components.Schemas.SPRange]
+            /// ranges に含まれる SP の数
             ///
-            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/rangePercent`.
-            public var rangePercent: [Swift.Double]?
+            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/spCount`.
+            public var spCount: Swift.Int
+            /// mismatch == 0(全観測を説明できる)
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/exact`.
+            public var exact: Swift.Bool
+            /// 観測とのずれ(0.1% 単位の整数。0 は完全に説明できる)
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/mismatch`.
+            public var mismatch: Swift.Int
+            /// ranges の各 SP で各観測を説明できるロールの延べ数
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/support`.
+            public var support: Swift.Int
+            /// ranges 全体での想定ダメージ幅の下限(表示%。小数第1位・切り捨て。CalcResult.minPercent と同じ意味)
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/minPercent`.
+            public var minPercent: Swift.Double
+            /// ranges 全体での想定ダメージ幅の上限(表示%。小数第1位・四捨五入。CalcResult.maxPercent と同じ意味)
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/maxPercent`.
+            public var maxPercent: Swift.Double
             /// Creates a new `ReverseCandidate`.
             ///
             /// - Parameters:
-            ///   - presetLabel: 型の名前(例 HB特化)
-            ///   - natureId:
-            ///   - itemId:
-            ///   - sp:
-            ///   - matchScore: 観測との一致度(0..1、高いほど一致)
-            ///   - rangePercent: この候補での想定ダメージ幅 [min, max]
+            ///   - natureClass:
+            ///   - nature:
+            ///   - natureId: nature と (plus, minus) が一致するマスタの性格 ID(BulkDefender.natureId と同じ規則)。
+            ///   - itemId: 持ち物(持ち物なしは null)
+            ///   - ranges: 観測を説明できる SP の集合(昇順・互いに素・隣接しない極大連続区間)。説明できなければ距離最小の SP
+            ///   - spCount: ranges に含まれる SP の数
+            ///   - exact: mismatch == 0(全観測を説明できる)
+            ///   - mismatch: 観測とのずれ(0.1% 単位の整数。0 は完全に説明できる)
+            ///   - support: ranges の各 SP で各観測を説明できるロールの延べ数
+            ///   - minPercent: ranges 全体での想定ダメージ幅の下限(表示%。小数第1位・切り捨て。CalcResult.minPercent と同じ意味)
+            ///   - maxPercent: ranges 全体での想定ダメージ幅の上限(表示%。小数第1位・四捨五入。CalcResult.maxPercent と同じ意味)
             public init(
-                presetLabel: Swift.String,
+                natureClass: Components.Schemas.NatureClass,
+                nature: Components.Schemas.NatureModifier,
                 natureId: Swift.String? = nil,
                 itemId: Swift.String? = nil,
-                sp: Components.Schemas.StatBlock,
-                matchScore: Swift.Double,
-                rangePercent: [Swift.Double]? = nil
+                ranges: [Components.Schemas.SPRange],
+                spCount: Swift.Int,
+                exact: Swift.Bool,
+                mismatch: Swift.Int,
+                support: Swift.Int,
+                minPercent: Swift.Double,
+                maxPercent: Swift.Double
             ) {
-                self.presetLabel = presetLabel
+                self.natureClass = natureClass
+                self.nature = nature
                 self.natureId = natureId
                 self.itemId = itemId
-                self.sp = sp
-                self.matchScore = matchScore
-                self.rangePercent = rangePercent
+                self.ranges = ranges
+                self.spCount = spCount
+                self.exact = exact
+                self.mismatch = mismatch
+                self.support = support
+                self.minPercent = minPercent
+                self.maxPercent = maxPercent
             }
             public enum CodingKeys: String, CodingKey {
-                case presetLabel
+                case natureClass
+                case nature
                 case natureId
                 case itemId
-                case sp
-                case matchScore
-                case rangePercent
+                case ranges
+                case spCount
+                case exact
+                case mismatch
+                case support
+                case minPercent
+                case maxPercent
             }
         }
         /// - Remark: Generated from `#/components/schemas/ReverseResult`.
         public struct ReverseResult: Codable, Hashable, Sendable {
-            /// 一致度の高い順
+            /// - Remark: Generated from `#/components/schemas/ReverseResult/side`.
+            public var side: Components.Schemas.ReverseSide
+            /// 逆算した関連ステータス(技の分類と side から決まる)
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseResult/stat`.
+            public struct StatPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ReverseResult/stat/value1`.
+                public var value1: Components.Schemas.StatKey
+                /// Creates a new `StatPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.StatKey) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeToSingleValueContainer(self.value1)
+                }
+            }
+            /// 逆算した関連ステータス(技の分類と side から決まる)
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseResult/stat`.
+            public var stat: Components.Schemas.ReverseResult.StatPayload
+            /// 仮定した相手の H の SP(defender=32、attacker=0。ADR-0010 §R1)
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseResult/assumedHpSp`.
+            public var assumedHpSp: Swift.Int
+            /// exact な候補の数(maxCandidates で切る前)
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseResult/exactCount`.
+            public var exactCount: Swift.Int
+            /// Mismatch 昇順 → Support 降順 → SPCount 降順 → 定義順(ADR-0010 §R4)
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseResult/candidates`.
             public var candidates: [Components.Schemas.ReverseCandidate]
             /// Creates a new `ReverseResult`.
             ///
             /// - Parameters:
-            ///   - candidates: 一致度の高い順
-            public init(candidates: [Components.Schemas.ReverseCandidate]) {
+            ///   - side:
+            ///   - stat: 逆算した関連ステータス(技の分類と side から決まる)
+            ///   - assumedHpSp: 仮定した相手の H の SP(defender=32、attacker=0。ADR-0010 §R1)
+            ///   - exactCount: exact な候補の数(maxCandidates で切る前)
+            ///   - candidates: Mismatch 昇順 → Support 降順 → SPCount 降順 → 定義順(ADR-0010 §R4)
+            public init(
+                side: Components.Schemas.ReverseSide,
+                stat: Components.Schemas.ReverseResult.StatPayload,
+                assumedHpSp: Swift.Int,
+                exactCount: Swift.Int,
+                candidates: [Components.Schemas.ReverseCandidate]
+            ) {
+                self.side = side
+                self.stat = stat
+                self.assumedHpSp = assumedHpSp
+                self.exactCount = exactCount
                 self.candidates = candidates
             }
             public enum CodingKeys: String, CodingKey {
+                case side
+                case stat
+                case assumedHpSp
+                case exactCount
                 case candidates
             }
         }

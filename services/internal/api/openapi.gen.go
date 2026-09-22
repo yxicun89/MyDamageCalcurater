@@ -16,7 +16,7 @@ import (
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"github.com/oapi-codegen/runtime"
 )
 
@@ -56,6 +56,90 @@ func (e DefenderPreset) Valid() bool {
 	}
 }
 
+// Defines values for ErrorCode.
+const (
+	DuplicatePreset     ErrorCode = "duplicate_preset"
+	Internal            ErrorCode = "internal"
+	InvalidEnum         ErrorCode = "invalid_enum"
+	InvalidHeader       ErrorCode = "invalid_header"
+	InvalidInput        ErrorCode = "invalid_input"
+	InvalidJson         ErrorCode = "invalid_json"
+	InvalidObservation  ErrorCode = "invalid_observation"
+	InvalidPreset       ErrorCode = "invalid_preset"
+	InvalidReverseSide  ErrorCode = "invalid_reverse_side"
+	InvalidTypeChart    ErrorCode = "invalid_type_chart"
+	MasterUnavailable   ErrorCode = "master_unavailable"
+	MissingHeader       ErrorCode = "missing_header"
+	NoObservation       ErrorCode = "no_observation"
+	NotFound            ErrorCode = "not_found"
+	TypeChartMissing    ErrorCode = "type_chart_missing"
+	UnknownAbility      ErrorCode = "unknown_ability"
+	UnknownField        ErrorCode = "unknown_field"
+	UnknownItem         ErrorCode = "unknown_item"
+	UnknownMove         ErrorCode = "unknown_move"
+	UnknownNature       ErrorCode = "unknown_nature"
+	UnknownPreset       ErrorCode = "unknown_preset"
+	UnknownSpecies      ErrorCode = "unknown_species"
+	UnknownType         ErrorCode = "unknown_type"
+	UpstreamUnavailable ErrorCode = "upstream_unavailable"
+)
+
+// Valid indicates whether the value is a known member of the ErrorCode enum.
+func (e ErrorCode) Valid() bool {
+	switch e {
+	case DuplicatePreset:
+		return true
+	case Internal:
+		return true
+	case InvalidEnum:
+		return true
+	case InvalidHeader:
+		return true
+	case InvalidInput:
+		return true
+	case InvalidJson:
+		return true
+	case InvalidObservation:
+		return true
+	case InvalidPreset:
+		return true
+	case InvalidReverseSide:
+		return true
+	case InvalidTypeChart:
+		return true
+	case MasterUnavailable:
+		return true
+	case MissingHeader:
+		return true
+	case NoObservation:
+		return true
+	case NotFound:
+		return true
+	case TypeChartMissing:
+		return true
+	case UnknownAbility:
+		return true
+	case UnknownField:
+		return true
+	case UnknownItem:
+		return true
+	case UnknownMove:
+		return true
+	case UnknownNature:
+		return true
+	case UnknownPreset:
+		return true
+	case UnknownSpecies:
+		return true
+	case UnknownType:
+		return true
+	case UpstreamUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Format.
 const (
 	Double Format = "double"
@@ -89,6 +173,24 @@ func (e MoveCategory) Valid() bool {
 	case Special:
 		return true
 	case Status:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NatureClass.
+const (
+	Neutral NatureClass = "neutral"
+	Plus    NatureClass = "plus"
+)
+
+// Valid indicates whether the value is a known member of the NatureClass enum.
+func (e NatureClass) Valid() bool {
+	switch e {
+	case Neutral:
+		return true
+	case Plus:
 		return true
 	default:
 		return false
@@ -319,10 +421,13 @@ type BulkCalcRequest struct {
 	MoveId       string       `json:"moveId"`
 	Options      *CalcOptions `json:"options,omitempty"`
 
-	// Presets 省略時(空配列を含む)は技の分類に応じた既定セット。
+	// Presets 使う防御側プリセットと行の順序。省略と空配列(`[]`)は同じで、技の分類に応じた既定セットになる。
 	// 物理技は 5 件(none, hp, hb_boost, hb, hb_full)、
 	// 特殊技は 5 件(none, hp, hd_boost, hd, hd_full)、
-	// 変化技は 2 件(none, hp)。指定したときはその順に行を返す。
+	// **変化技は 2 件(none, hp)のみ**。
+	// 指定したときはその順に行を返す(分類に合わないプリセットも指定どおり返す)。
+	// 同じ preset を2回以上含めると 400 `duplicate_preset`。
+	// engine のカスタムプリセット定義(SP・性格を任意に決めたもの)は API に出さない。
 	Presets *[]DefenderPreset `json:"presets,omitempty"`
 }
 
@@ -337,6 +442,10 @@ type BulkCalcResult struct {
 
 // BulkCalcRow defines model for BulkCalcRow.
 type BulkCalcRow struct {
+	// Defender 一括計算の1行で使った防御側の調整(SP・性格補正・実数値)
+	Defender BulkDefender `json:"defender"`
+
+	// ItemId この行の防御側の持ち物(持ち物なしは null)
 	ItemId *string `json:"itemId,omitempty"`
 
 	// Preset 防御側の代表調整(耐久が上がる順)。SP は能力ポイント(Lv50・個体値31固定)。
@@ -355,6 +464,23 @@ type BulkCalcRow struct {
 	// PresetLabel 表示名(例 HB振り / HB特化 / H振り+B補正)
 	PresetLabel string     `json:"presetLabel"`
 	Result      CalcResult `json:"result"`
+}
+
+// BulkDefender 一括計算の1行で使った防御側の調整(SP・性格補正・実数値)
+type BulkDefender struct {
+	// Nature 性格補正の構造値。plus が +10%、minus が -10% を受ける能力。無補正は両方 null。
+	// HP を指すことはない。
+	Nature NatureModifier `json:"nature"`
+
+	// NatureId nature と (plus, minus) が一致するマスタの性格 ID。無補正は、マスタの無補正性格を
+	// ID の昇順で並べた最初のもの。該当する性格がマスタに無ければ null。
+	NatureId *string `json:"natureId"`
+
+	// Sp 能力ポイント
+	Sp StatBlock `json:"sp"`
+
+	// Stats 実数値(Lv50・個体値31)
+	Stats StatBlock `json:"stats"`
 }
 
 // CalcOptions defines model for CalcOptions.
@@ -380,10 +506,12 @@ type CalcRequest struct {
 
 // CalcResult defines model for CalcResult.
 type CalcResult struct {
-	DefenderHP int `json:"defenderHP"`
+	// Category 使った技の分類(WASM 境界の CalcResult と同じ。Web が型を共有するため)
+	Category   MoveCategory `json:"category"`
+	DefenderHP int          `json:"defenderHP"`
 
 	// Effectiveness タイプ相性(0, 0.25, 0.5, 1, 2, 4)
-	Effectiveness float32 `json:"effectiveness"`
+	Effectiveness float64 `json:"effectiveness"`
 
 	// Ko 確定数/乱数n発
 	Ko        KOChance `json:"ko"`
@@ -392,14 +520,15 @@ type CalcResult struct {
 	// MaxPercent 最大ダメージの表示%(防御側 HP に対する割合)。小数第1位(0.1%刻み)で、
 	// **四捨五入**する(ADR-0010 §3)。
 	// 100 を超える場合は上限で切らず、そのまま返す(例 137.0)。
-	// 逆算の入力に使う実機観測の整数%とは別概念(engine の ObservedPercent)。
-	MaxPercent float32 `json:"maxPercent"`
+	// 逆算の入力の観測%(`Observation.percent` / `percentTenths`)とは別概念。
+	MaxPercent float64 `json:"maxPercent"`
 	MinDamage  int     `json:"minDamage"`
 
 	// MinPercent 最小ダメージの表示%(防御側 HP に対する割合)。小数第1位(0.1%刻み)で、
 	// **切り捨て**る(「最低これくらい入る」を保守的に示すため。ADR-0010 §3)。
 	// 整数%に丸めてから小数にした値ではない。HP 比率から直接求める。
-	MinPercent float32 `json:"minPercent"`
+	// engine の 0.1% 単位の整数(tenths)を 10 で割っただけの値で、float で近似しない。
+	MinPercent float64 `json:"minPercent"`
 
 	// Rolls 16 段階の乱数ダメージ(非減少)
 	Rolls []int `json:"rolls"`
@@ -421,12 +550,82 @@ type CalcResult struct {
 // - `hd_full`: HD特化(HP 32・特防 32・特防上昇 +D/-A)。特殊
 type DefenderPreset string
 
-// Error defines model for Error.
+// Error エラーの本文。HTTP ステータスは `code` から決まる(ErrorCode の対応表)。
+// `message` は日本語の説明で、Go の内部情報(スタック・型名)を含めない。
 type Error struct {
-	// Code Example: invalid_request
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	// Code 安定したエラーコード。WASM 境界(engine/wasmapi の Code* 定数。ADR-0011 §5・§13)と語彙を共通にし、
+	// **同じ失敗は HTTP と WASM で同じ code** になる(ADR-0200)。
+	//
+	// WASM 境界と共通:
+	// | code | 意味 | HTTP |
+	// |---|---|---|
+	// | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
+	// | unknown_field | 契約にないフィールド | 400 |
+	// | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
+	// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など) | 400 |
+	// | unknown_preset | 未知の防御側プリセット | 400 |
+	// | duplicate_preset | 防御側プリセットの重複 | 400 |
+	// | invalid_preset | 防御側プリセットの定義が不正 | 400 |
+	// | invalid_reverse_side | 逆算の side が defender / attacker のどちらでもない | 400 |
+	// | no_observation | 観測が1件も無い | 400 |
+	// | invalid_observation | 観測の指定が不正(percent / percentTenths / damage のちょうど1つでない・範囲外) | 400 |
+	// | type_chart_missing | タイプ相性表が無い(HTTP では常にマスタ = 起動時に読み込んだ Store 側の不備で、クライアントの入力起因では起こらない) | 500 |
+	// | invalid_type_chart | タイプ相性表の定義が不正(同上。HTTP では常にマスタ側の不備) | 500 |
+	// | unknown_type | 相性表に無いタイプ | 400 |
+	// | internal | 上記以外の失敗(回復した panic を含む) | 500 |
+	//
+	// HTTP だけのもの:
+	// | code | 意味 | HTTP |
+	// |---|---|---|
+	// | missing_header | X-Device-Id / X-Session-Id が無い・空 | 400 |
+	// | invalid_header | X-Device-Id / X-Session-Id が UUID でない・同名ヘッダの重複(UUID 形式の検証は gateway だけが行う。ADR-0202) | 400 |
+	// | unknown_species | speciesKey がマスタに無い | 400 |
+	// | unknown_move | moveId がマスタに無い | 400 |
+	// | unknown_item | itemId がマスタに無い | 400 |
+	// | unknown_ability | abilityId がマスタに無い | 400 |
+	// | unknown_nature | natureId がマスタに無い | 400 |
+	// | not_found | ルートが無い / このサービスの担当外の操作 | 404 |
+	// | master_unavailable | マスタを参照できない | 503 |
+	// | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202) | 503 |
+	Code    ErrorCode `json:"code"`
+	Message string    `json:"message"`
 }
+
+// ErrorCode 安定したエラーコード。WASM 境界(engine/wasmapi の Code* 定数。ADR-0011 §5・§13)と語彙を共通にし、
+// **同じ失敗は HTTP と WASM で同じ code** になる(ADR-0200)。
+//
+// WASM 境界と共通:
+// | code | 意味 | HTTP |
+// |---|---|---|
+// | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
+// | unknown_field | 契約にないフィールド | 400 |
+// | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
+// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など) | 400 |
+// | unknown_preset | 未知の防御側プリセット | 400 |
+// | duplicate_preset | 防御側プリセットの重複 | 400 |
+// | invalid_preset | 防御側プリセットの定義が不正 | 400 |
+// | invalid_reverse_side | 逆算の side が defender / attacker のどちらでもない | 400 |
+// | no_observation | 観測が1件も無い | 400 |
+// | invalid_observation | 観測の指定が不正(percent / percentTenths / damage のちょうど1つでない・範囲外) | 400 |
+// | type_chart_missing | タイプ相性表が無い(HTTP では常にマスタ = 起動時に読み込んだ Store 側の不備で、クライアントの入力起因では起こらない) | 500 |
+// | invalid_type_chart | タイプ相性表の定義が不正(同上。HTTP では常にマスタ側の不備) | 500 |
+// | unknown_type | 相性表に無いタイプ | 400 |
+// | internal | 上記以外の失敗(回復した panic を含む) | 500 |
+//
+// HTTP だけのもの:
+// | code | 意味 | HTTP |
+// |---|---|---|
+// | missing_header | X-Device-Id / X-Session-Id が無い・空 | 400 |
+// | invalid_header | X-Device-Id / X-Session-Id が UUID でない・同名ヘッダの重複(UUID 形式の検証は gateway だけが行う。ADR-0202) | 400 |
+// | unknown_species | speciesKey がマスタに無い | 400 |
+// | unknown_move | moveId がマスタに無い | 400 |
+// | unknown_item | itemId がマスタに無い | 400 |
+// | unknown_ability | abilityId がマスタに無い | 400 |
+// | unknown_nature | natureId がマスタに無い | 400 |
+// | not_found | ルートが無い / このサービスの担当外の操作 | 404 |
+// | master_unavailable | マスタを参照できない | 503 |
+// | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202) | 503 |
+type ErrorCode string
 
 // FieldState defines model for FieldState.
 type FieldState struct {
@@ -475,7 +674,7 @@ type KOChance struct {
 	// (ADR-0006)。guaranteed が true のとき、および hits = 0(倒せない)のときは 0。
 	// **画面に出す値ではない**(確定なのに 0% と誤表示されるため)。表示には
 	// displayChancePercent を使う。
-	ChancePercent *float32 `json:"chancePercent,omitempty"`
+	ChancePercent *float64 `json:"chancePercent,omitempty"`
 
 	// DisplayChancePercent 画面に出す「hits 回で倒せる確率(%)」。常に表示できる値であることを保証する。
 	// 小数第1位(0.1%刻み。ADR-0010 §3)。
@@ -483,7 +682,7 @@ type KOChance struct {
 	// - guaranteed = true(確定 n 発): 100.0
 	// - それ以外: chancePercent を 0.1% 単位に四捨五入し、[0.1, 99.9] に収める
 	//   (確定・不可能と取り違えないため、0.0 と 100.0 はこの2つに予約する)
-	DisplayChancePercent float32 `json:"displayChancePercent"`
+	DisplayChancePercent float64 `json:"displayChancePercent"`
 
 	// Guaranteed 最小ダメージでも hits 回で倒せるなら true(確定n発)
 	Guaranteed bool `json:"guaranteed"`
@@ -522,12 +721,31 @@ type Nature struct {
 	Plus *StatKey `json:"plus,omitempty"`
 }
 
-// Observation defines model for Observation.
+// NatureClass 関連ステータスに対する性格補正のクラス(neutral=無補正 / plus=関連ステータス +10%)。下降補正は探索しない
+type NatureClass string
+
+// NatureModifier 性格補正の構造値。plus が +10%、minus が -10% を受ける能力。無補正は両方 null。
+// HP を指すことはない。
+type NatureModifier struct {
+	Minus *StatKey `json:"minus"`
+	Plus  *StatKey `json:"plus"`
+}
+
+// Observation 1発ぶんの観測。percent / percentTenths / damage の**ちょうど1つ**を指定する(ADR-0010 §R2)。
+// 0 個・2 個以上・範囲外は 400 `invalid_observation`。整数でなければ(例 12.5)400 `invalid_json`。
+// 表示%(CalcResult.minPercent など)とは別概念で、丸め規則に依存しない区間で照合する。
 type Observation struct {
+	// Damage HP の実点数の観測(自分の HP の減少量など)
+	Damage *int `json:"damage,omitempty"`
+
+	// Note 画面用のメモ。計算には使わない
 	Note *string `json:"note,omitempty"`
 
-	// ObservedPercent ゲーム内表示に合わせた HP 減少割合(%)
-	ObservedPercent float32 `json:"observedPercent"`
+	// Percent 整数%の観測(精度 1%)
+	Percent *int `json:"percent,omitempty"`
+
+	// PercentTenths 小数第1位の観測を 0.1% 単位の整数にしたもの(例 45.3% → 453)
+	PercentTenths *int `json:"percentTenths,omitempty"`
 }
 
 // PokeType defines model for PokeType.
@@ -542,51 +760,99 @@ type RankBlock struct {
 	Spe *int `json:"spe,omitempty"`
 }
 
-// ReverseCandidate defines model for ReverseCandidate.
+// ReverseCandidate 候補1件(性格クラス × 持ち物。ADR-0010 §R3)
 type ReverseCandidate struct {
-	ItemId *string `json:"itemId,omitempty"`
+	// Exact mismatch == 0(全観測を説明できる)
+	Exact bool `json:"exact"`
 
-	// MatchScore 観測との一致度(0..1、高いほど一致)
-	MatchScore float32 `json:"matchScore"`
-	NatureId   *string `json:"natureId,omitempty"`
+	// ItemId 持ち物(持ち物なしは null)
+	ItemId *string `json:"itemId"`
 
-	// PresetLabel 型の名前(例 HB特化)
-	PresetLabel string `json:"presetLabel"`
+	// MaxPercent ranges 全体での想定ダメージ幅の上限(表示%。小数第1位・四捨五入。CalcResult.maxPercent と同じ意味)
+	MaxPercent float64 `json:"maxPercent"`
 
-	// RangePercent この候補での想定ダメージ幅 [min, max]
-	RangePercent *[]float32 `json:"rangePercent,omitempty"`
+	// MinPercent ranges 全体での想定ダメージ幅の下限(表示%。小数第1位・切り捨て。CalcResult.minPercent と同じ意味)
+	MinPercent float64 `json:"minPercent"`
 
-	// Sp 6ステータスの値(種族値・実数値・SPなどに共用)
-	Sp StatBlock `json:"sp"`
+	// Mismatch 観測とのずれ(0.1% 単位の整数。0 は完全に説明できる)
+	Mismatch int `json:"mismatch"`
+
+	// Nature 性格補正の構造値。plus が +10%、minus が -10% を受ける能力。無補正は両方 null。
+	// HP を指すことはない。
+	Nature NatureModifier `json:"nature"`
+
+	// NatureClass 関連ステータスに対する性格補正のクラス(neutral=無補正 / plus=関連ステータス +10%)。下降補正は探索しない
+	NatureClass NatureClass `json:"natureClass"`
+
+	// NatureId nature と (plus, minus) が一致するマスタの性格 ID(BulkDefender.natureId と同じ規則)。
+	// 無補正は、マスタの無補正性格を ID の昇順で並べた最初のもの。該当なしは null。
+	NatureId *string `json:"natureId"`
+
+	// Ranges 観測を説明できる SP の集合(昇順・互いに素・隣接しない極大連続区間)。説明できなければ距離最小の SP
+	Ranges []SPRange `json:"ranges"`
+
+	// SpCount ranges に含まれる SP の数
+	SpCount int `json:"spCount"`
+
+	// Support ranges の各 SP で各観測を説明できるロールの延べ数
+	Support int `json:"support"`
 }
 
 // ReverseRequest defines model for ReverseRequest.
 type ReverseRequest struct {
-	// Attacker 計算に使う個体。SP と性格 ID から実数値を導出する
-	Attacker Individual `json:"attacker"`
+	Field  *FieldState `json:"field,omitempty"`
+	Format Format      `json:"format"`
 
-	// DefenderSpeciesKey {図鑑番号4桁}-{フォルム3桁}
-	//
-	// Example: 0445-000
-	DefenderSpeciesKey SpeciesKey    `json:"defenderSpeciesKey"`
-	Field              *FieldState   `json:"field,omitempty"`
-	Format             Format        `json:"format"`
-	MoveId             string        `json:"moveId"`
-	Observations       []Observation `json:"observations"`
-	Options            *CalcOptions  `json:"options,omitempty"`
+	// ItemCandidates 相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ
+	ItemCandidates *[]*string `json:"itemCandidates,omitempty"`
+
+	// Known 既知の側(自分)の個体。side=defender なら自分=攻撃側、side=attacker なら自分=防御側。
+	// known.moveId は使わない(技は moveId で指定する)。
+	Known Individual `json:"known"`
+
+	// MaxCandidates 返す候補数の上限。0 は無制限
+	MaxCandidates *int `json:"maxCandidates,omitempty"`
+
+	// MoveId 観測したときの技(side=defender なら自分の技、attacker なら相手の技)
+	MoveId string `json:"moveId"`
+
+	// Observations 同じ技・同じ場・同じ既知側に対する別々の1発。0 件は 400 `no_observation`
+	Observations []Observation `json:"observations"`
+	Options      *CalcOptions  `json:"options,omitempty"`
 
 	// Side どちら側の調整を逆算するか(defender=与ダメ観測 / attacker=被ダメ観測)
 	Side ReverseSide `json:"side"`
+
+	// UnknownSpeciesKey 逆算する相手の種族。SP・性格・持ち物は探索対象なので渡さない
+	UnknownSpeciesKey SpeciesKey `json:"unknownSpeciesKey"`
 }
 
 // ReverseResult defines model for ReverseResult.
 type ReverseResult struct {
-	// Candidates 一致度の高い順
+	// AssumedHpSp 仮定した相手の H の SP(defender=32、attacker=0。ADR-0010 §R1)
+	AssumedHpSp int `json:"assumedHpSp"`
+
+	// Candidates Mismatch 昇順 → Support 降順 → SPCount 降順 → 定義順(ADR-0010 §R4)
 	Candidates []ReverseCandidate `json:"candidates"`
+
+	// ExactCount exact な候補の数(maxCandidates で切る前)
+	ExactCount int `json:"exactCount"`
+
+	// Side どちら側の調整を逆算するか(defender=与ダメ観測 / attacker=被ダメ観測)
+	Side ReverseSide `json:"side"`
+
+	// Stat 逆算した関連ステータス(技の分類と side から決まる)
+	Stat StatKey `json:"stat"`
 }
 
 // ReverseSide どちら側の調整を逆算するか(defender=与ダメ観測 / attacker=被ダメ観測)
 type ReverseSide string
+
+// SPRange SP の区間(両端を含む)
+type SPRange struct {
+	Max int `json:"max"`
+	Min int `json:"min"`
+}
 
 // Screens defines model for Screens.
 type Screens struct {
@@ -667,28 +933,34 @@ type SessionId = string
 
 // CalcDamageParams defines parameters for CalcDamage.
 type CalcDamageParams struct {
-	// XDeviceId クライアント生成の端末 UUID
+	// XDeviceId クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+	// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+	// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
 	XDeviceId DeviceId `json:"X-Device-Id"`
 
-	// XSessionId セッション UUID
+	// XSessionId セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
 // CalcBulkParams defines parameters for CalcBulk.
 type CalcBulkParams struct {
-	// XDeviceId クライアント生成の端末 UUID
+	// XDeviceId クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+	// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+	// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
 	XDeviceId DeviceId `json:"X-Device-Id"`
 
-	// XSessionId セッション UUID
+	// XSessionId セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
 // CalcReverseParams defines parameters for CalcReverse.
 type CalcReverseParams struct {
-	// XDeviceId クライアント生成の端末 UUID
+	// XDeviceId クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+	// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+	// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
 	XDeviceId DeviceId `json:"X-Device-Id"`
 
-	// XSessionId セッション UUID
+	// XSessionId セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
@@ -697,10 +969,12 @@ type SearchItemsParams struct {
 	Q     *string `form:"q,omitempty" json:"q,omitempty"`
 	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
 
-	// XDeviceId クライアント生成の端末 UUID
+	// XDeviceId クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+	// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+	// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
 	XDeviceId DeviceId `json:"X-Device-Id"`
 
-	// XSessionId セッション UUID
+	// XSessionId セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
@@ -709,19 +983,23 @@ type SearchMovesParams struct {
 	Q     *string `form:"q,omitempty" json:"q,omitempty"`
 	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
 
-	// XDeviceId クライアント生成の端末 UUID
+	// XDeviceId クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+	// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+	// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
 	XDeviceId DeviceId `json:"X-Device-Id"`
 
-	// XSessionId セッション UUID
+	// XSessionId セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
 // ListNaturesParams defines parameters for ListNatures.
 type ListNaturesParams struct {
-	// XDeviceId クライアント生成の端末 UUID
+	// XDeviceId クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+	// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+	// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
 	XDeviceId DeviceId `json:"X-Device-Id"`
 
-	// XSessionId セッション UUID
+	// XSessionId セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
@@ -732,19 +1010,23 @@ type SearchSpeciesParams struct {
 	Format *Format `form:"format,omitempty" json:"format,omitempty"`
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 
-	// XDeviceId クライアント生成の端末 UUID
+	// XDeviceId クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+	// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+	// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
 	XDeviceId DeviceId `json:"X-Device-Id"`
 
-	// XSessionId セッション UUID
+	// XSessionId セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
 // GetSpeciesParams defines parameters for GetSpecies.
 type GetSpeciesParams struct {
-	// XDeviceId クライアント生成の端末 UUID
+	// XDeviceId クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+	// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+	// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
 	XDeviceId DeviceId `json:"X-Device-Id"`
 
-	// XSessionId セッション UUID
+	// XSessionId セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
@@ -761,28 +1043,28 @@ type CalcReverseJSONRequestBody = ReverseRequest
 type ServerInterface interface {
 	// CalcDamage 1 vs 1 のダメージ計算
 	// (POST /api/calc)
-	CalcDamage(ctx echo.Context, params CalcDamageParams) error
+	CalcDamage(ctx *echo.Context, params CalcDamageParams) error
 	// CalcBulk 防御側の代表調整すべてに対する一括計算
 	// (POST /api/calc/bulk)
-	CalcBulk(ctx echo.Context, params CalcBulkParams) error
+	CalcBulk(ctx *echo.Context, params CalcBulkParams) error
 	// CalcReverse 観測ダメージから相手の調整候補を逆算
 	// (POST /api/calc/reverse)
-	CalcReverse(ctx echo.Context, params CalcReverseParams) error
+	CalcReverse(ctx *echo.Context, params CalcReverseParams) error
 	// SearchItems 持ち物を日本語名で前方一致検索
 	// (GET /api/pokedex/items)
-	SearchItems(ctx echo.Context, params SearchItemsParams) error
+	SearchItems(ctx *echo.Context, params SearchItemsParams) error
 	// SearchMoves 技を日本語名で前方一致検索
 	// (GET /api/pokedex/moves)
-	SearchMoves(ctx echo.Context, params SearchMovesParams) error
+	SearchMoves(ctx *echo.Context, params SearchMovesParams) error
 	// ListNatures 性格の一覧(補正する能力)
 	// (GET /api/pokedex/natures)
-	ListNatures(ctx echo.Context, params ListNaturesParams) error
+	ListNatures(ctx *echo.Context, params ListNaturesParams) error
 	// SearchSpecies ポケモンを日本語名で前方一致検索
 	// (GET /api/pokedex/species)
-	SearchSpecies(ctx echo.Context, params SearchSpeciesParams) error
+	SearchSpecies(ctx *echo.Context, params SearchSpeciesParams) error
 	// GetSpecies 種族の詳細(タイプ・種族値・特性・覚える技)
 	// (GET /api/pokedex/species/{key})
-	GetSpecies(ctx echo.Context, key SpeciesKey, params GetSpeciesParams) error
+	GetSpecies(ctx *echo.Context, key SpeciesKey, params GetSpeciesParams) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
@@ -791,7 +1073,7 @@ type ServerInterfaceWrapper struct {
 }
 
 // CalcDamage converts echo context to params.
-func (w *ServerInterfaceWrapper) CalcDamage(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) CalcDamage(ctx *echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -806,7 +1088,7 @@ func (w *ServerInterfaceWrapper) CalcDamage(ctx echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
 		}
@@ -823,7 +1105,7 @@ func (w *ServerInterfaceWrapper) CalcDamage(ctx echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
 		}
@@ -839,7 +1121,7 @@ func (w *ServerInterfaceWrapper) CalcDamage(ctx echo.Context) error {
 }
 
 // CalcBulk converts echo context to params.
-func (w *ServerInterfaceWrapper) CalcBulk(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) CalcBulk(ctx *echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -854,7 +1136,7 @@ func (w *ServerInterfaceWrapper) CalcBulk(ctx echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
 		}
@@ -871,7 +1153,7 @@ func (w *ServerInterfaceWrapper) CalcBulk(ctx echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
 		}
@@ -887,7 +1169,7 @@ func (w *ServerInterfaceWrapper) CalcBulk(ctx echo.Context) error {
 }
 
 // CalcReverse converts echo context to params.
-func (w *ServerInterfaceWrapper) CalcReverse(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) CalcReverse(ctx *echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -902,7 +1184,7 @@ func (w *ServerInterfaceWrapper) CalcReverse(ctx echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
 		}
@@ -919,7 +1201,7 @@ func (w *ServerInterfaceWrapper) CalcReverse(ctx echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
 		}
@@ -935,7 +1217,7 @@ func (w *ServerInterfaceWrapper) CalcReverse(ctx echo.Context) error {
 }
 
 // SearchItems converts echo context to params.
-func (w *ServerInterfaceWrapper) SearchItems(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) SearchItems(ctx *echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -963,7 +1245,7 @@ func (w *ServerInterfaceWrapper) SearchItems(ctx echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
 		}
@@ -980,7 +1262,7 @@ func (w *ServerInterfaceWrapper) SearchItems(ctx echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
 		}
@@ -996,7 +1278,7 @@ func (w *ServerInterfaceWrapper) SearchItems(ctx echo.Context) error {
 }
 
 // SearchMoves converts echo context to params.
-func (w *ServerInterfaceWrapper) SearchMoves(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) SearchMoves(ctx *echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -1024,7 +1306,7 @@ func (w *ServerInterfaceWrapper) SearchMoves(ctx echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
 		}
@@ -1041,7 +1323,7 @@ func (w *ServerInterfaceWrapper) SearchMoves(ctx echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
 		}
@@ -1057,7 +1339,7 @@ func (w *ServerInterfaceWrapper) SearchMoves(ctx echo.Context) error {
 }
 
 // ListNatures converts echo context to params.
-func (w *ServerInterfaceWrapper) ListNatures(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) ListNatures(ctx *echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -1072,7 +1354,7 @@ func (w *ServerInterfaceWrapper) ListNatures(ctx echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
 		}
@@ -1089,7 +1371,7 @@ func (w *ServerInterfaceWrapper) ListNatures(ctx echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
 		}
@@ -1105,7 +1387,7 @@ func (w *ServerInterfaceWrapper) ListNatures(ctx echo.Context) error {
 }
 
 // SearchSpecies converts echo context to params.
-func (w *ServerInterfaceWrapper) SearchSpecies(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) SearchSpecies(ctx *echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -1140,7 +1422,7 @@ func (w *ServerInterfaceWrapper) SearchSpecies(ctx echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
 		}
@@ -1157,7 +1439,7 @@ func (w *ServerInterfaceWrapper) SearchSpecies(ctx echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
 		}
@@ -1173,7 +1455,7 @@ func (w *ServerInterfaceWrapper) SearchSpecies(ctx echo.Context) error {
 }
 
 // GetSpecies converts echo context to params.
-func (w *ServerInterfaceWrapper) GetSpecies(ctx echo.Context) error {
+func (w *ServerInterfaceWrapper) GetSpecies(ctx *echo.Context) error {
 	var err error
 	// ------------- Path parameter "key" -------------
 	var key SpeciesKey
@@ -1195,7 +1477,7 @@ func (w *ServerInterfaceWrapper) GetSpecies(ctx echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
 		}
@@ -1212,7 +1494,7 @@ func (w *ServerInterfaceWrapper) GetSpecies(ctx echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
 		}
@@ -1231,15 +1513,15 @@ func (w *ServerInterfaceWrapper) GetSpecies(ctx echo.Context) error {
 // are present on both echo.Echo and echo.Group, since we want to allow using
 // either of them for path registration
 type EchoRouter interface {
-	CONNECT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	DELETE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	GET(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	HEAD(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	OPTIONS(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	PATCH(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	PUT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	TRACE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
+	CONNECT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	DELETE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	GET(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	HEAD(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	OPTIONS(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	PATCH(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	PUT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
+	TRACE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) echo.RouteInfo
 }
 
 // RegisterHandlersOptions configures RegisterHandlersWithOptions.
@@ -1324,6 +1606,34 @@ func (response CalcDamage400JSONResponse) VisitCalcDamageResponse(w http.Respons
 	return err
 }
 
+type CalcDamage500JSONResponse Error
+
+func (response CalcDamage500JSONResponse) VisitCalcDamageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CalcDamage503JSONResponse Error
+
+func (response CalcDamage503JSONResponse) VisitCalcDamageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CalcDamagedefaultJSONResponse struct {
 	Body       Error
 	StatusCode int
@@ -1374,6 +1684,34 @@ func (response CalcBulk400JSONResponse) VisitCalcBulkResponse(w http.ResponseWri
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CalcBulk500JSONResponse Error
+
+func (response CalcBulk500JSONResponse) VisitCalcBulkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CalcBulk503JSONResponse Error
+
+func (response CalcBulk503JSONResponse) VisitCalcBulkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1432,6 +1770,34 @@ func (response CalcReverse400JSONResponse) VisitCalcReverseResponse(w http.Respo
 	return err
 }
 
+type CalcReverse500JSONResponse Error
+
+func (response CalcReverse500JSONResponse) VisitCalcReverseResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CalcReverse503JSONResponse Error
+
+func (response CalcReverse503JSONResponse) VisitCalcReverseResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CalcReversedefaultJSONResponse struct {
 	Body       Error
 	StatusCode int
@@ -1467,6 +1833,20 @@ func (response SearchItems200JSONResponse) VisitSearchItemsResponse(w http.Respo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchItems503JSONResponse Error
+
+func (response SearchItems503JSONResponse) VisitSearchItemsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1510,6 +1890,20 @@ func (response SearchMoves200JSONResponse) VisitSearchMovesResponse(w http.Respo
 	return err
 }
 
+type SearchMoves503JSONResponse Error
+
+func (response SearchMoves503JSONResponse) VisitSearchMovesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SearchMovesdefaultJSONResponse struct {
 	Body       Error
 	StatusCode int
@@ -1549,6 +1943,20 @@ func (response ListNatures200JSONResponse) VisitListNaturesResponse(w http.Respo
 	return err
 }
 
+type ListNatures503JSONResponse Error
+
+func (response ListNatures503JSONResponse) VisitListNaturesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListNaturesdefaultJSONResponse struct {
 	Body       Error
 	StatusCode int
@@ -1584,6 +1992,20 @@ func (response SearchSpecies200JSONResponse) VisitSearchSpeciesResponse(w http.R
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchSpecies503JSONResponse Error
+
+func (response SearchSpecies503JSONResponse) VisitSearchSpeciesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1642,6 +2064,20 @@ func (response GetSpecies404JSONResponse) VisitGetSpeciesResponse(w http.Respons
 	return err
 }
 
+type GetSpecies503JSONResponse Error
+
+func (response GetSpecies503JSONResponse) VisitGetSpeciesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetSpeciesdefaultJSONResponse struct {
 	Body       Error
 	StatusCode int
@@ -1687,7 +2123,7 @@ type StrictServerInterface interface {
 	GetSpecies(ctx context.Context, request GetSpeciesRequestObject) (GetSpeciesResponseObject, error)
 }
 
-type StrictHandlerFunc func(ctx echo.Context, request any) (any, error)
+type StrictHandlerFunc func(ctx *echo.Context, request any) (any, error)
 type StrictMiddlewareFunc func(f StrictHandlerFunc, operationID string) StrictHandlerFunc
 
 func NewStrictHandler(ssi StrictServerInterface, middlewares []StrictMiddlewareFunc) ServerInterface {
@@ -1700,17 +2136,17 @@ type strictHandler struct {
 }
 
 // CalcDamage operation middleware
-func (sh *strictHandler) CalcDamage(ctx echo.Context, params CalcDamageParams) error {
+func (sh *strictHandler) CalcDamage(ctx *echo.Context, params CalcDamageParams) error {
 	var request CalcDamageRequestObject
 
 	request.Params = params
 
 	var body CalcDamageJSONRequestBody
 	var err error
-	if binder, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
+	if _, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
 		// Bind only the request body, so that path and query parameters
 		// are not also bound into the body struct.
-		err = binder.BindBody(ctx, &body)
+		err = echo.BindBody(ctx, &body)
 	} else {
 		// A custom binder is installed on the Echo instance; defer to it
 		// entirely, since echo.Binder does not expose body-only binding.
@@ -1721,7 +2157,7 @@ func (sh *strictHandler) CalcDamage(ctx echo.Context, params CalcDamageParams) e
 	}
 	request.Body = &body
 
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.CalcDamage(ctx.Request().Context(), request.(CalcDamageRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
@@ -1741,17 +2177,17 @@ func (sh *strictHandler) CalcDamage(ctx echo.Context, params CalcDamageParams) e
 }
 
 // CalcBulk operation middleware
-func (sh *strictHandler) CalcBulk(ctx echo.Context, params CalcBulkParams) error {
+func (sh *strictHandler) CalcBulk(ctx *echo.Context, params CalcBulkParams) error {
 	var request CalcBulkRequestObject
 
 	request.Params = params
 
 	var body CalcBulkJSONRequestBody
 	var err error
-	if binder, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
+	if _, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
 		// Bind only the request body, so that path and query parameters
 		// are not also bound into the body struct.
-		err = binder.BindBody(ctx, &body)
+		err = echo.BindBody(ctx, &body)
 	} else {
 		// A custom binder is installed on the Echo instance; defer to it
 		// entirely, since echo.Binder does not expose body-only binding.
@@ -1762,7 +2198,7 @@ func (sh *strictHandler) CalcBulk(ctx echo.Context, params CalcBulkParams) error
 	}
 	request.Body = &body
 
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.CalcBulk(ctx.Request().Context(), request.(CalcBulkRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
@@ -1782,17 +2218,17 @@ func (sh *strictHandler) CalcBulk(ctx echo.Context, params CalcBulkParams) error
 }
 
 // CalcReverse operation middleware
-func (sh *strictHandler) CalcReverse(ctx echo.Context, params CalcReverseParams) error {
+func (sh *strictHandler) CalcReverse(ctx *echo.Context, params CalcReverseParams) error {
 	var request CalcReverseRequestObject
 
 	request.Params = params
 
 	var body CalcReverseJSONRequestBody
 	var err error
-	if binder, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
+	if _, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
 		// Bind only the request body, so that path and query parameters
 		// are not also bound into the body struct.
-		err = binder.BindBody(ctx, &body)
+		err = echo.BindBody(ctx, &body)
 	} else {
 		// A custom binder is installed on the Echo instance; defer to it
 		// entirely, since echo.Binder does not expose body-only binding.
@@ -1803,7 +2239,7 @@ func (sh *strictHandler) CalcReverse(ctx echo.Context, params CalcReverseParams)
 	}
 	request.Body = &body
 
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.CalcReverse(ctx.Request().Context(), request.(CalcReverseRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
@@ -1823,12 +2259,12 @@ func (sh *strictHandler) CalcReverse(ctx echo.Context, params CalcReverseParams)
 }
 
 // SearchItems operation middleware
-func (sh *strictHandler) SearchItems(ctx echo.Context, params SearchItemsParams) error {
+func (sh *strictHandler) SearchItems(ctx *echo.Context, params SearchItemsParams) error {
 	var request SearchItemsRequestObject
 
 	request.Params = params
 
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.SearchItems(ctx.Request().Context(), request.(SearchItemsRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
@@ -1848,12 +2284,12 @@ func (sh *strictHandler) SearchItems(ctx echo.Context, params SearchItemsParams)
 }
 
 // SearchMoves operation middleware
-func (sh *strictHandler) SearchMoves(ctx echo.Context, params SearchMovesParams) error {
+func (sh *strictHandler) SearchMoves(ctx *echo.Context, params SearchMovesParams) error {
 	var request SearchMovesRequestObject
 
 	request.Params = params
 
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.SearchMoves(ctx.Request().Context(), request.(SearchMovesRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
@@ -1873,12 +2309,12 @@ func (sh *strictHandler) SearchMoves(ctx echo.Context, params SearchMovesParams)
 }
 
 // ListNatures operation middleware
-func (sh *strictHandler) ListNatures(ctx echo.Context, params ListNaturesParams) error {
+func (sh *strictHandler) ListNatures(ctx *echo.Context, params ListNaturesParams) error {
 	var request ListNaturesRequestObject
 
 	request.Params = params
 
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.ListNatures(ctx.Request().Context(), request.(ListNaturesRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
@@ -1898,12 +2334,12 @@ func (sh *strictHandler) ListNatures(ctx echo.Context, params ListNaturesParams)
 }
 
 // SearchSpecies operation middleware
-func (sh *strictHandler) SearchSpecies(ctx echo.Context, params SearchSpeciesParams) error {
+func (sh *strictHandler) SearchSpecies(ctx *echo.Context, params SearchSpeciesParams) error {
 	var request SearchSpeciesRequestObject
 
 	request.Params = params
 
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.SearchSpecies(ctx.Request().Context(), request.(SearchSpeciesRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
@@ -1923,13 +2359,13 @@ func (sh *strictHandler) SearchSpecies(ctx echo.Context, params SearchSpeciesPar
 }
 
 // GetSpecies operation middleware
-func (sh *strictHandler) GetSpecies(ctx echo.Context, key SpeciesKey, params GetSpeciesParams) error {
+func (sh *strictHandler) GetSpecies(ctx *echo.Context, key SpeciesKey, params GetSpeciesParams) error {
 	var request GetSpeciesRequestObject
 
 	request.Key = key
 	request.Params = params
 
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.GetSpecies(ctx.Request().Context(), request.(GetSpeciesRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
@@ -1953,93 +2389,148 @@ func (sh *strictHandler) GetSpecies(ctx echo.Context, key SpeciesKey, params Get
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"DGxmeKsH8LKwkuw4u9FcZ7h7+H8GAA==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -3,7 +3,7 @@ import XCTest
 
 @testable import PokeCalcCore
 
-/// `MockPokeCalcService`(ADR-0017 §4): サーバーができるまで画面を動かすための架空データ。
+/// `MockPokeCalcService`(ADR-0500 §4): サーバーができるまで画面を動かすための架空データ。
 /// - 架空であること(名前は「テスト」で始める。ADR-0002)をデータの全列挙で検査する。
 /// - **モックはダメージを計算しない**(絶対ルール2・coding-rules §2)。数値の正しさは検査せず、
 ///   契約(api/openapi.yaml)と ADR-0009 / ADR-0010 §R が決める「形と順序」だけを検査する。
@@ -59,7 +59,7 @@ final class MockPokeCalcServiceTests: XCTestCase {
         }
     }
 
-    /// ADR-0017 §6(自分側のプリセット)で性格 ID を直書きせずに選べるだけの性格があること。
+    /// ADR-0500 §6(自分側のプリセット)で性格 ID を直書きせずに選べるだけの性格があること。
     /// 無補正(plus == nil)と、ADR-0009 の防御プリセット(+B/-A・+D/-A)・攻撃側の上昇性格(+A/-C・+C/-A)。
     func testFixtureNaturesCoverPresetSelection() async throws {
         let natures = try await mock.natures()

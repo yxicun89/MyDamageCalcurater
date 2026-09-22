@@ -1,4 +1,4 @@
-// PokeCalcCore: ドメインの型・PokeCalcService・API 実装・モック(ADR-0017 §1, §3, §4, §5)。
+// PokeCalcCore: ドメインの型・PokeCalcService・API 実装・モック(ADR-0500 §1, §3, §4, §5)。
 //
 // このファイル自体はモジュールの索引だけを持つ。実装は責務ごとに分けている:
 //   DomainTypes.swift          ドメインの型(openapi の enum/struct と同じ意味を持つが、生成型には依存しない)

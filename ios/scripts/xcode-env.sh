@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# iOS レーンのスクリプトが共通で読む環境設定(ADR-0017 §7)。source して使う。
+# iOS レーンのスクリプトが共通で読む環境設定(ADR-0500 §7)。source して使う。
 #
 # xcode-select が CommandLineTools を指していると xcodebuild / simctl が使えないので、
 # DEVELOPER_DIR が未設定のときだけ Xcode.app に向ける(利用者の明示的な設定を上書きしない)。

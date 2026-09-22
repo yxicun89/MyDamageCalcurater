@@ -4,7 +4,7 @@ import SwiftUI
 
 // CalcScreenCards: 攻撃側・防御側カード(docs/design.md「画面: ダメージ計算」)。
 // View はロジックを持たず、`CalcViewModel` の状態を描いて操作を async メソッドへつなぐだけ
-// (ADR-0017 §1)。
+// (ADR-0500 §1)。
 
 /// 攻撃側カード: ヘッダー(エンブレム・名前・タイプ)が種族セレクタの Menu ラベルを兼ねる・持ち物セレクタ。
 /// プリセットのチップはカードの外(`CalcScreenView` がカード行の直下に画面幅いっぱいで置く。批評 M3c)。

@@ -1,4 +1,4 @@
-// PokeCalcDesign: docs/design.md のデザイントークン(ADR-0017 §1)。
+// PokeCalcDesign: docs/design.md のデザイントークン(ADR-0500 §1)。
 // iOS(ここ)と Web(CSS 変数)で同じ名前・同じ値を使う。値を変えるときは design.md と
 // DesignTokenTests の両方を合わせて直す(coding-rules §2 の「独立した検証」)。
 import SwiftUI

@@ -17,7 +17,7 @@ enum CalcScreenMetrics {
     static let hairlineBorderWidth: CGFloat = 1
 }
 
-/// design.md「Liquid Glass 系のクリーン」の角丸カード背景。requirements のビジュアル B・ADR-0017 §1
+/// design.md「Liquid Glass 系のクリーン」の角丸カード背景。requirements のビジュアル B・ADR-0500 §1
 /// に合わせ、iOS 26+ の本物の Liquid Glass(`.glassEffect(_:in:)`)を使う。`ColorToken.bgGlass` を
 /// `Glass.tint(_:)` で載せ、design.md の bg.glass のトーンに近づける(不透明度はシステムの
 /// ガラス素材が持つため、そこは design.md の「+ ぼかし」の意図どおりシステムに委ねる)。

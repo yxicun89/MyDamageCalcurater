@@ -1,4 +1,4 @@
-# iOS レーンのターゲット(ADR-0017 §7)。ルートの Makefile から include する。
+# iOS レーンのターゲット(ADR-0500 §7)。ルートの Makefile から include する。
 # パスはリポジトリのルートからの相対。ターゲット名は ios- 接頭辞。
 
 IOS_SIMULATOR ?= iPhone 18 Pro
@@ -26,7 +26,7 @@ ios-test-ui: ## アプリの XCUITest をシミュレータで実行(モック�
 		-project ios/PokeCalc.xcodeproj -scheme PokeCalc -destination "$(IOS_DESTINATION)"
 
 .PHONY: ios-check-infoplist
-ios-check-infoplist: ## POKECALC_API_BASE_URL を渡してビルドし、成果物の Info.plist に反映されるか確認(ADR-0017 §5)
+ios-check-infoplist: ## POKECALC_API_BASE_URL を渡してビルドし、成果物の Info.plist に反映されるか確認(ADR-0500 §5)
 	@./ios/scripts/check-infoplist.sh "$(IOS_DESTINATION)"
 
 .PHONY: ios-swift-test

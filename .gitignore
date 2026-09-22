@@ -2,7 +2,8 @@
 /bin/
 *.test
 *.out
-coverage.*
+coverage.out
+coverage.html
 
 # WASM ビルド成果物(生成物はコミットしない)
 web/public/engine.wasm
@@ -47,3 +48,6 @@ data/generated/
 ios/**/.build/
 ios/**/.swiftpm/
 xcuserdata/
+
+# 日本語名の override(実在の日本語名=第三者データ。ADR-0017 §6)
+data/local/

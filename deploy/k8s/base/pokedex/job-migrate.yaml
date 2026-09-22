@@ -1,0 +1,75 @@
+# pokedex の migrate を流す Job(up のみ。ADR-0100 §5)。サービスの起動時には自動 migrate
+# しない(複数レプリカの競合を避けるため)。down を流す経路はここに置かない。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pokedex-migrate
+  labels:
+    app.kubernetes.io/name: pokedex-migrate
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  backoffLimit: 3
+  # MySQL が起動しないときに initContainer が待ち続けないよう、Job 全体に上限を置く
+  activeDeadlineSeconds: 600
+  # 完了後に自動で消える(再 apply 時に Pod テンプレート不変のエラーになりにくくする。
+  # up.sh は念のため apply 前に明示的な delete も行う)。
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pokedex-migrate
+        app.kubernetes.io/part-of: pokecalc
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      # Job は MySQL(StatefulSet)と同じ overlay apply で作られるため、Pod が MySQL の
+      # 起動前にスケジュールされることがある。mysqladmin ping で接続できるまで待つ。
+      # パスワードは Secret から MYSQL_PWD で渡し(mysqladmin/mysql クライアントが自動で読む)、
+      # コマンドラインやログに値を出さない。mysql:9.7.2 イメージの mysql ユーザー(uid 999)で
+      # 実行する(client コマンドのみでよく、root 権限は不要)。
+      initContainers:
+        - name: wait-for-mysql
+          image: mysql:9.7.2@sha256:29abb0a179982e4a8928138bfc7f918af9eda64e7eeb1b1d084c1720a20159e6
+          command:
+            - sh
+            - -c
+            - |
+              until mysqladmin ping -h mysql -u root --silent; do
+                echo "pokedex-migrate: waiting for mysql..."
+                sleep 2
+              done
+          env:
+            - name: MYSQL_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-auth
+                  key: mysql-root-password
+          securityContext:
+            runAsUser: 999
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+      containers:
+        - name: migrate
+          image: pokecalc/pokedex-migrate:0.1.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POKEDEX_DATABASE_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-auth
+                  key: pokedex-dsn
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault

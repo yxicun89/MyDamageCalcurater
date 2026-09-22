@@ -1,6 +1,6 @@
 import Foundation
 
-/// サーバー(P3)ができるまで画面を動かすための `PokeCalcService` 実装(ADR-0017 §4)。
+/// サーバー(P3)ができるまで画面を動かすための `PokeCalcService` 実装(ADR-0500 §4)。
 ///
 /// 架空データ(`Resources/*.json`。名前はすべて「テスト」で始まる)を返すだけで、
 /// **ダメージ計算はしない**(engine の式を Swift に写すと単一の正が2つできてしまう。

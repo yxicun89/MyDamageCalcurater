@@ -52,9 +52,11 @@ func ClassifyMultiplier(m Multiplier) (Category, error) {
 }
 
 // Member is one party member whose types are already resolved.
+// Ability is nil for a member without an ability (TB1 behaviour, ADR-0017 §1).
 type Member struct {
 	PokemonID string
 	Types     []TypeID
+	Ability   *Ability
 }
 
 // AttackDefense is one member's defensive result against one attack type.
@@ -65,8 +67,10 @@ type AttackDefense struct {
 }
 
 // MemberDefense holds 18 AttackDefense entries in canonical attack-type order.
+// AbilityID is the member's Ability.AbilityID, or "" without an ability.
 type MemberDefense struct {
 	PokemonID string
+	AbilityID string
 	Types     []TypeID
 	Defense   []AttackDefense
 }
@@ -105,11 +109,11 @@ func AnalyzeDefense(chart TypeChartProvider, members []Member) (DefenseAnalysis,
 	for mi, member := range members {
 		defense := make([]AttackDefense, len(attackTypes))
 		for ai, attack := range attackTypes {
-			result, err := CalculateDefense(chart, attack, member.Types)
+			result, err := CalculateDefenseWithAbility(chart, attack, member.Types, member.Ability)
 			if err != nil {
 				return DefenseAnalysis{}, err
 			}
-			category, err := ClassifyMultiplier(result.Multiplier)
+			category, err := ClassifyEffectiveness(result.Effectiveness)
 			if err != nil {
 				return DefenseAnalysis{}, err
 			}
@@ -129,7 +133,11 @@ func AnalyzeDefense(chart TypeChartProvider, members []Member) (DefenseAnalysis,
 				summary[ai].Neutral++
 			}
 		}
-		memberDefenses[mi] = MemberDefense{PokemonID: member.PokemonID, Types: member.Types, Defense: defense}
+		abilityID := ""
+		if member.Ability != nil {
+			abilityID = member.Ability.AbilityID
+		}
+		memberDefenses[mi] = MemberDefense{PokemonID: member.PokemonID, AbilityID: abilityID, Types: member.Types, Defense: defense}
 	}
 
 	return DefenseAnalysis{Members: memberDefenses, TeamSummary: summary}, nil

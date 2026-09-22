@@ -1,7 +1,7 @@
 import PokeCalcCore
 import SwiftUI
 
-/// アプリのエントリポイント。View だけを持つ(ADR-0017 §1)。
+/// アプリのエントリポイント。View だけを持つ(ADR-0500 §1)。
 @main
 struct PokeCalcApp: App {
     // `@State` の初期値式は State の生存中に1回だけ評価される(SwiftUI の仕様)。

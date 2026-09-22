@@ -1,6 +1,6 @@
 import Observation
 
-// CalcViewModel: ダメージ計算画面の状態(P6-2a・ADR-0017 §1「画面のロジックは ViewModel で
+// CalcViewModel: ダメージ計算画面の状態(P6-2a・ADR-0500 §1「画面のロジックは ViewModel で
 // XCTest に固定し、View は描くだけ」)。
 //
 // `@Observable` は Apple の Observation フレームワークのマクロ。このモジュールに同名の型
@@ -8,7 +8,7 @@ import Observation
 // ドメイン側は `DamageObservation` に改名してある(DomainTypes.swift のコメント参照)。
 
 /// ダメージ計算画面の状態。`PokeCalcService` だけに依存し、View は生成型やサービスを直接知らない
-/// (ADR-0017 §3)。
+/// (ADR-0500 §3)。
 @MainActor
 @Observable
 public final class CalcViewModel {

@@ -3,7 +3,7 @@ package: api
 output: internal/api/openapi.gen.go
 generate:
   models: true
-  echo-server: true
+  echo5-server: true
   strict-server: true
   embedded-spec: true
 output-options:

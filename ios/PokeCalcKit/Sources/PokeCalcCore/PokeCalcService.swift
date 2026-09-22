@@ -1,4 +1,4 @@
-// PokeCalcService: 画面が依存する唯一の境界(ADR-0017 §3)。
+// PokeCalcService: 画面が依存する唯一の境界(ADR-0500 §3)。
 // 実装は2つ: `APIPokeCalcService`(サーバー)と `MockPokeCalcService`(架空データ)。
 // どちらも同じプロトコルを満たすので、画面(ViewModel)は接続先を意識しない。
 

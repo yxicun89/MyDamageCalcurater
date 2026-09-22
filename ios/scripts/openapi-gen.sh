@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# api/openapi.yaml から Swift の API クライアントを生成する(ADR-0017 §2)。
+# api/openapi.yaml から Swift の API クライアントを生成する(ADR-0500 §2)。
 #
 #   ios/scripts/openapi-gen.sh           生成物を ios/PokeCalcKit/Sources/PokeCalcAPI/Generated に書く
 #   ios/scripts/openapi-gen.sh --check   一時ディレクトリに生成し、コミット済みの生成物と差分が無いことを確かめる

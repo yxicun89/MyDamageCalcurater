@@ -2,7 +2,7 @@ import XCTest
 
 @testable import PokeCalcCore
 
-/// 自分側のプリセット(ADR-0017 §6・requirements.md「自分側のプリセット」)。
+/// 自分側のプリセット(ADR-0500 §6・requirements.md「自分側のプリセット」)。
 ///
 /// - A特化 = 関連ステータス SP 32 + 上昇性格 / A振り = SP 32 + 無補正 / 無振り = SP 0 + 無補正。
 /// - 関連ステータスは技の分類で決まる: 物理 = atk、特殊 = spa、変化 = atk(ADR-0010 §2 と同じ扱い。

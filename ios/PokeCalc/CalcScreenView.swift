@@ -5,7 +5,7 @@ import SwiftUI
 // CalcScreenView: ダメージ計算画面(P6-2a・docs/design.md「画面: ダメージ計算」)。
 //
 // ロジックは持たない。`CalcViewModel`(PokeCalcCore)の状態を描き、操作を async メソッドへ
-// つなぐだけ(ADR-0017 §1)。
+// つなぐだけ(ADR-0500 §1)。
 
 /// ダメージ計算画面。
 struct CalcScreenView: View {

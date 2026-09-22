@@ -5,7 +5,7 @@ import XCTest
 
 @testable import PokeCalcCore
 
-/// ドメインの型(ADR-0017 §3)が契約(api/openapi.yaml の enum)と食い違わないことの同期テスト。
+/// ドメインの型(ADR-0500 §3)が契約(api/openapi.yaml の enum)と食い違わないことの同期テスト。
 /// 画面は生成型を直接使わないので、enum の値の集合がずれると写像で黙って落ちる。ここで固定する。
 final class DomainTypesTests: XCTestCase {
 

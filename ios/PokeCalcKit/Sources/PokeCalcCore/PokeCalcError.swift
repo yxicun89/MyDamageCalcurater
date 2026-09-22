@@ -1,4 +1,4 @@
-// PokeCalcError: PokeCalcService の唯一のエラー型(ADR-0017 §3)。
+// PokeCalcError: PokeCalcService の唯一のエラー型(ADR-0500 §3)。
 // 画面はこの1種類だけを扱えばよい(通信失敗・サーバーのエラー応答・クライアント側の
 // 制約のどれでもここに写す)。
 
@@ -16,7 +16,7 @@ public struct PokeCalcError: Error, Equatable, Sendable {
 
     /// クライアント側で作るエラーコード(1か所に集約。coding-rules §2)。
     public enum Code {
-        /// 逆算は契約更新(P3-1)まで API 実装が対応しない(ADR-0017 §3)。
+        /// 逆算は契約更新(P3-1)まで API 実装が対応しない(ADR-0500 §3)。
         public static let apiUnsupported = "client_api_unsupported"
         /// 通信できない(接続失敗・タイムアウト等)。HTTP 応答が無い失敗すべて。
         public static let transport = "client_transport_error"
@@ -26,7 +26,7 @@ public struct PokeCalcError: Error, Equatable, Sendable {
 
         // MARK: - CalcViewModel が使う値(P6-2a)
 
-        /// `AttackerPreset.build` に要る性格(上昇 or 無補正)がマスタの一覧に無い(ADR-0017 §6)。
+        /// `AttackerPreset.build` に要る性格(上昇 or 無補正)がマスタの一覧に無い(ADR-0500 §6)。
         public static let natureUnavailable = "client_nature_unavailable"
         /// 計算画面に攻撃側・防御側として選べる種族が2つ未満(マスタが少なすぎる)。
         public static let insufficientSpecies = "client_insufficient_species"

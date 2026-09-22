@@ -1,5 +1,5 @@
 // swift-tools-version: 6.4
-// PokeCalcKit: iOS アプリの View 以外(API 生成物・ドメイン・モック・デザイントークン)を置くパッケージ(ADR-0017 §1)。
+// PokeCalcKit: iOS アプリの View 以外(API 生成物・ドメイン・モック・デザイントークン)を置くパッケージ(ADR-0500 §1)。
 // macOS の `swift test` と iOS シミュレータの `xcodebuild test -scheme PokeCalcKit-Package` の両方で同じテストが走る。
 // 依存の版は完全固定(coding-rules §1)。ライセンスは いずれも Apache-2.0(apple/swift-openapi-* と apple/swift-http-types)。
 // ツール版・言語モードは導入できる最新(Swift 6.4 / Xcode 27。ユーザー決定)に揃える。
@@ -7,7 +7,7 @@ import PackageDescription
 
 let package = Package(
     name: "PokeCalcKit",
-    // iOS 27 未満は対象外(ユーザー決定。ADR-0017 §1 は別途更新される)。
+    // iOS 27 未満は対象外(ユーザー決定。ADR-0500 §1 は別途更新される)。
     platforms: [.iOS(.v27), .macOS(.v27)],
     products: [
         .library(name: "PokeCalcAPI", targets: ["PokeCalcAPI"]),
@@ -21,7 +21,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-http-types", exact: "1.8.0"),
     ],
     targets: [
-        // swift-openapi-generator の生成物だけ(手で編集しない。`make ios-gen` で作る。ADR-0017 §2)
+        // swift-openapi-generator の生成物だけ(手で編集しない。`make ios-gen` で作る。ADR-0500 §2)
         .target(
             name: "PokeCalcAPI",
             dependencies: [

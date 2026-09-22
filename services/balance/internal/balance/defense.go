@@ -26,18 +26,12 @@ func CalculateDefense(chart TypeChartProvider, attack TypeID, defenseTypes []Typ
 	if !attack.Valid() {
 		return DefenseResult{}, fmt.Errorf("%w: attack %q", ErrInvalidType, attack)
 	}
-	if len(defenseTypes) < 1 || len(defenseTypes) > 2 {
-		return DefenseResult{}, ErrDefenseTypeCount
-	}
-	if len(defenseTypes) == 2 && defenseTypes[0] == defenseTypes[1] {
-		return DefenseResult{}, ErrDuplicateDefenseType
+	if err := validateDefenseTypes(defenseTypes); err != nil {
+		return DefenseResult{}, err
 	}
 
 	combined := MultiplierNormal
 	for _, defense := range defenseTypes {
-		if !defense.Valid() {
-			return DefenseResult{}, fmt.Errorf("%w: defense %q", ErrInvalidType, defense)
-		}
 		matchup, err := chart.Matchup(attack, defense)
 		if err != nil {
 			return DefenseResult{}, fmt.Errorf("type chart matchup %s/%s: %w", attack, defense, err)
@@ -48,5 +42,26 @@ func CalculateDefense(chart TypeChartProvider, attack TypeID, defenseTypes []Typ
 		combined = Multiplier(uint16(combined) * uint16(matchup) / uint16(MultiplierNormal))
 	}
 
-	return DefenseResult{Multiplier: combined, Source: EffectSourceType}, nil
+	return DefenseResult{
+		Multiplier:    combined,
+		Source:        EffectSourceType,
+		Effectiveness: combined.Effectiveness(),
+		Effect:        DefenseEffectNone,
+	}, nil
+}
+
+// validateDefenseTypes checks a defender's types: one or two, distinct, each one of the 18 types.
+func validateDefenseTypes(defenseTypes []TypeID) error {
+	if len(defenseTypes) < 1 || len(defenseTypes) > 2 {
+		return ErrDefenseTypeCount
+	}
+	if len(defenseTypes) == 2 && defenseTypes[0] == defenseTypes[1] {
+		return ErrDuplicateDefenseType
+	}
+	for _, defense := range defenseTypes {
+		if !defense.Valid() {
+			return fmt.Errorf("%w: defense %q", ErrInvalidType, defense)
+		}
+	}
+	return nil
 }

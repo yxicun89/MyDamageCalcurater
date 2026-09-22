@@ -3,7 +3,7 @@ import XCTest
 
 @testable import PokeCalcCore
 
-/// `AppConfiguration`(ADR-0017 §5): 接続先は Info.plist の `PokeCalcAPIBaseURL`(xcconfig の
+/// `AppConfiguration`(ADR-0500 §5): 接続先は Info.plist の `PokeCalcAPIBaseURL`(xcconfig の
 /// `POKECALC_API_BASE_URL` から入る)と、起動時の環境変数 `POKECALC_USE_MOCK` から1か所で決める。
 /// - 空・無し → モック
 /// - 有効な http(s) の URL → API
@@ -11,7 +11,7 @@ import XCTest
 /// - 不正な URL → エラー(黙ってモックに落とさない。設定ミスを起動時に気付けるように。coding-rules §2)
 final class AppConfigurationTests: XCTestCase {
 
-    /// キー名は ADR-0017 §5 の名前そのもの。
+    /// キー名は ADR-0500 §5 の名前そのもの。
     func testKeyNamesMatchADR() {
         XCTAssertEqual(AppConfiguration.apiBaseURLInfoKey, "PokeCalcAPIBaseURL")
         XCTAssertEqual(AppConfiguration.useMockEnvironmentKey, "POKECALC_USE_MOCK")

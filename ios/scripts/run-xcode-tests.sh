@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# xcodebuild test を実行し、結果バンドルの件数で合否を判定する(ADR-0017 §7)。
+# xcodebuild test を実行し、結果バンドルの件数で合否を判定する(ADR-0500 §7)。
 #
 #   ios/scripts/run-xcode-tests.sh <表示名> <xcodebuild の引数...>
 #

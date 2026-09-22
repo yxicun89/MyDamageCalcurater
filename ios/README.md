@@ -1,6 +1,6 @@
 # iOS(SwiftUI)
 
-iPhone 向けのダメージ計算アプリ。設計は [ADR-0017](../docs/adr/0017-ios-app-architecture.md)、見た目は [docs/design.md](../docs/design.md)。
+iPhone 向けのダメージ計算アプリ。設計は [ADR-0500](../docs/adr/0500-ios-app-architecture.md)、見た目は [docs/design.md](../docs/design.md)。
 iOS レーンは `api/openapi.yaml` に追従するだけで、契約は変更しない。
 
 ## 構成
@@ -53,9 +53,9 @@ xcodebuild test -scheme PokeCalcKit-Package -destination 'platform=iOS Simulator
 xcodebuild build -project ios/PokeCalc.xcodeproj -scheme PokeCalc -destination 'platform=iOS Simulator,name=iPhone 18 Pro'
 ```
 
-失敗・スキップ・テスト 0 件を成功と数えない(ADR-0017 §7)。
+失敗・スキップ・テスト 0 件を成功と数えない(ADR-0500 §7)。
 
-## モックと API の切り替え(ADR-0017 §5)
+## モックと API の切り替え(ADR-0500 §5)
 
 | 設定 | 結果 |
 |---|---|
@@ -99,7 +99,7 @@ POKECALC_API_BASE_URL = https:/$()/pokecalc.example.invalid
 
 ## P6-2a の受け入れ条件(ダメージ計算画面。実装済み)
 
-ロジックは `PokeCalcCore` に置く(ADR-0017 §1「画面の状態(ViewModel)」は PokeCalcCore。新ターゲットは作らない)。
+ロジックは `PokeCalcCore` に置く(ADR-0500 §1「画面の状態(ViewModel)」は PokeCalcCore。新ターゲットは作らない)。
 XCTest: `AttackerPresetTests` / `BulkRowDisplayTests` / `CalcViewModelTests` / `CalcScreenErrorTests`
 (サービスはテスト内のスタブ `Support/StubPokeCalcService.swift`。モックの数値に依存しない)。
 実装ファイル: `PokeCalcKit/Sources/PokeCalcCore/{AttackerPreset,BulkRowDisplay,CalcScreenError,CalcViewModel,DisplayLabels}.swift`、
@@ -112,7 +112,7 @@ View は `PokeCalc/{CalcScreenView,CalcScreenCards,CalcScreenResults,CalcScreenS
 `Observation.ObservationRegistrar` を参照するため、同じモジュールに `Observation` という型があると解決が衝突する
 (`CalcViewModel` を `@Observable` にした時点で判明)。テストは型名では参照していないので、この改名でテストへの影響は無い。
 
-1. **自分側のプリセット** `AttackerPreset`(ADR-0017 §6): `allCases == [.aFull, .aMax, .none]`、表示名「A特化」「A振り」「無振り」。
+1. **自分側のプリセット** `AttackerPreset`(ADR-0500 §6): `allCases == [.aFull, .aMax, .none]`、表示名「A特化」「A振り」「無振り」。
    `AttackerPreset.build(_:moveCategory:natures:) throws -> AttackerBuild`(`natureId` / `sp`)。関連ステータスは
    物理 = atk・特殊 = spa・**変化 = atk**(ADR-0010 §2・モックの `reverseStat` と同じ規則。変化技はダメージを出さないので結果は変わらない)。
    A特化 = 関連 SP 32 + 一覧で最初の (plus = 関連, minus = atk。関連が atk なら spa) の性格、A振り = 関連 SP 32 + 最初の `plus == nil`、
@@ -163,7 +163,7 @@ View は `PokeCalc/{CalcScreenView,CalcScreenCards,CalcScreenResults,CalcScreenS
 | identifier | 要素 |
 |---|---|
 | `calcScreen` | 計算画面のルート(P6-1 から継続) |
-| `calcBackendModeBadge` | モックで動いている表示(計算画面にも出す。ADR-0017 §4) |
+| `calcBackendModeBadge` | モックで動いている表示(計算画面にも出す。ADR-0500 §4) |
 | `attackerCard` / `defenderCard` | 攻撃側・防御側のカード(種族名を含む) |
 | `attackerSpeciesPicker` / `defenderSpeciesPicker` / `movePicker` / `attackerItemPicker` | 選択 UI。種族セレクタはカードのヘッダー(エンブレム・名前・タイプ)そのものが `Menu` のラベルを兼ねる(批評 M3d)。`Menu` は中身を1つのボタンにまとめるため、種族名は `accessibilityLabel`(ボタン自体のラベル)で読む |
 | `attackerPreset-<AttackerPreset の rawValue>` | プリセットの各セグメント(`aFull` / `aMax` / `none`)。カードの外、カード行の直下に画面幅いっぱいの3等分の行として置く(批評 M3c: カード内だと幅が足りず「無振り」が見切れていた) |
@@ -219,7 +219,7 @@ View は `PokeCalc/{CalcScreenView,CalcScreenCards,CalcScreenResults,CalcScreenS
 - ダメージバー(`DamageBarView`)は% が小さいと帯が消えて見えなくなるため、最小可視幅(6pt)を確保し、
   トラックにヘアライン枠線を付けて範囲が常に視認できるようにしてある。
 - **Liquid Glass(M5)**: `glassCard()` は iOS 26+ の本物の `.glassEffect(.regular.tint(ColorToken.bgGlass.color), in:)`
-  を使う(初版は `.ultraThinMaterial` + 色の重ねがけで代用していたが、requirements のビジュアル B・ADR-0017 §1
+  を使う(初版は `.ultraThinMaterial` + 色の重ねがけで代用していたが、requirements のビジュアル B・ADR-0500 §1
   に合わせて本物に差し替えた)。攻撃側・防御側の2枚のカードは `GlassEffectContainer` でまとめている。
 - **技の要約・相性(M4)**: タイプ・技分類・相性の日本語ラベル(`PokeTypeLabel` / `MoveCategoryLabel` /
   `EffectivenessLabel`, `PokeCalcCore/DisplayLabels.swift`)は Core に置く(`moveSummaryText` が組み立てで使うため)。

@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS type_chart;
+DROP TABLE IF EXISTS types;

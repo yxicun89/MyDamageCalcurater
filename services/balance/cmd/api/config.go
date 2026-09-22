@@ -45,3 +45,24 @@ func moveProviderFromEnv(lookup func(string) (string, bool)) (balance.MoveProvid
 	}
 	return model, nil
 }
+
+// abilitiesPathEnv names the balance-local ability read model (ADR-0017 §2).
+const abilitiesPathEnv = "BALANCE_ABILITIES_PATH"
+
+// abilityProviderFromEnv loads the read model named by BALANCE_ABILITIES_PATH.
+// Unset or empty: (nil, nil) — an untyped nil interface, so analyze answers 503 only
+// when a member names an abilityId (ADR-0017 §4).
+// Set but unreadable or invalid: an error, and main must exit non-zero.
+func abilityProviderFromEnv(lookup func(string) (string, bool)) (balance.AbilityProvider, error) {
+	path, ok := lookup(abilitiesPathEnv)
+	if !ok || path == "" {
+		return nil, nil
+	}
+	model, err := master.LoadAbilitiesFile(path)
+	if err != nil {
+		// Return an untyped nil interface, not a nil *AbilityReadModel wrapped in a
+		// non-nil interface (the classic typed-nil pitfall).
+		return nil, err
+	}
+	return model, nil
+}

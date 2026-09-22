@@ -1,4 +1,4 @@
-// PokeCalc アプリの接続先(ADR-0017 §5)。
+// PokeCalc アプリの接続先(ADR-0500 §5)。
 //
 // POKECALC_API_BASE_URL が空なら起動時にモックを使う。http(s) の URL を入れると
 // その API に接続する(全リクエストに X-Device-Id / X-Session-Id を付ける)。

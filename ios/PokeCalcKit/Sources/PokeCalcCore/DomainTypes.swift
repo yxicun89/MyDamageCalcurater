@@ -1,4 +1,4 @@
-// PokeCalcCore: ドメインの型(ADR-0017 §3)。
+// PokeCalcCore: ドメインの型(ADR-0500 §3)。
 //
 // 画面(View)は生成型(PokeCalcAPI)を直接使わず、この型と `PokeCalcService` だけに依存する。
 // 生成型 ↔ ドメインの写像は `APIPokeCalcService` の中の1か所に置く(このファイルは写像を持たない)。
@@ -446,7 +446,7 @@ public struct ReverseResult: Equatable, Sendable {
     }
 }
 
-/// 逆算の要求。ADR-0017 §3: いまの openapi `ReverseRequest` は P3-1 で置き換わる決定済みの形
+/// 逆算の要求。ADR-0500 §3: いまの openapi `ReverseRequest` は P3-1 で置き換わる決定済みの形
 /// (`ReverseCandidate.matchScore` 等)なので、ドメインは先に ADR-0010 §R の形にしておく。
 public struct ReverseRequest: Sendable {
     public var format: Format

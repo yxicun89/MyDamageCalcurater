@@ -1,7 +1,7 @@
 import Foundation
 import PokeCalcCore
 
-/// 起動時に1回だけ作る、画面が使う実行時の状態(ADR-0017 §5)。
+/// 起動時に1回だけ作る、画面が使う実行時の状態(ADR-0500 §5)。
 ///
 /// `AppConfiguration` を1か所(ここ)で読み、モック/API のどちらの `PokeCalcService` を使うかを
 /// 決める。設定が壊れているときは画面にエラーを出す(クラッシュしない。coding-rules §2)。

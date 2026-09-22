@@ -14,6 +14,11 @@ resources:
 # model, so BALANCE_MOVES_PATH resolves and coverage answers 200 instead of 503.
 # The source of truth is testdata/moves.example.json (kept in sync by a Go test
 # in internal/master).
+#
+# TB3 (ADR-0017 §2): the same treatment for the local-only fictional ability read
+# model, so BALANCE_ABILITIES_PATH resolves and analyze reflects ability effects
+# instead of 503 when a member names an abilityId. The source of truth is
+# testdata/abilities.example.json (kept in sync by a Go test in internal/master).
 configMapGenerator:
   - name: balance-pokemon-types
     files:
@@ -21,9 +26,13 @@ configMapGenerator:
   - name: balance-moves
     files:
       - moves.json=moves.example.json
+  - name: balance-abilities
+    files:
+      - abilities.json=abilities.example.json
 patches:
   - path: deployment-pokemon-types-patch.yaml
   - path: deployment-moves-patch.yaml
+  - path: deployment-abilities-patch.yaml
 images:
   - name: pokecalc/balance
     newName: pokecalc/balance

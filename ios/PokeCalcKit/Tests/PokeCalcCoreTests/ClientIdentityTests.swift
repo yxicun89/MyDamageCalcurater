@@ -3,7 +3,7 @@ import XCTest
 
 @testable import PokeCalcCore
 
-/// `ClientIdentity`(ADR-0017 §5, CLAUDE.md 技術規約「端末ID(UUID)とセッションIDを全リクエストに付与」)。
+/// `ClientIdentity`(ADR-0500 §5, CLAUDE.md 技術規約「端末ID(UUID)とセッションIDを全リクエストに付与」)。
 /// 端末 ID は初回に作って UserDefaults に保存し、以後は同じ値。セッション ID は起動(インスタンス)ごとに新しい。
 /// UserDefaults はテスト専用の suite に閉じ、標準の設定を汚さない。
 final class ClientIdentityTests: XCTestCase {

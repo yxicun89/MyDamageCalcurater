@@ -6,7 +6,7 @@ import XCTest
 
 @testable import PokeCalcCore
 
-/// `APIPokeCalcService`(ADR-0017 §3): 生成された `Client` と偽の transport で、
+/// `APIPokeCalcService`(ADR-0500 §3): 生成された `Client` と偽の transport で、
 /// ドメイン ↔ HTTP(api/openapi.yaml)の写像を検証する。期待値は openapi.yaml のパス・パラメータ名・スキーマから書く。
 /// フィクスチャは架空(名前は「テスト」で始める。ADR-0002)。
 final class APIPokeCalcServiceTests: XCTestCase {
@@ -310,7 +310,7 @@ final class APIPokeCalcServiceTests: XCTestCase {
         XCTAssertEqual(items.map(\.nameJa), ["テストどうぐ"])
     }
 
-    /// openapi `Nature.plus/minus` は nullable。null は無補正(ADR-0017 §6 の「plus == nil の最初のもの」に使う)。
+    /// openapi `Nature.plus/minus` は nullable。null は無補正(ADR-0500 §6 の「plus == nil の最初のもの」に使う)。
     func testNaturesResponseMapsNullableStats() async throws {
         let service = try makeService(transport: RecordingTransport(json: Self.naturesJSON))
         let natures = try await service.natures()
@@ -324,7 +324,7 @@ final class APIPokeCalcServiceTests: XCTestCase {
     // MARK: - (4) エラーの写像
 
     /// openapi `responses.Error`(400 / 404 / default)の body `{code, message}` → `PokeCalcError`。
-    /// code はサーバーの値をそのまま運ぶ(ADR-0017 §3)。
+    /// code はサーバーの値をそのまま運ぶ(ADR-0500 §3)。
     func testErrorResponsesMapToPokeCalcErrorKeepingCode() async throws {
         let calcRequest = CalcRequest(format: .single, attacker: attacker, defender: defender,
                                       moveId: "test-move-physical")
@@ -411,7 +411,7 @@ final class APIPokeCalcServiceTests: XCTestCase {
 
     // MARK: - (5) 逆算は API 未対応
 
-    /// ADR-0017 §3: いまの契約の `ReverseCandidate` は P3-1 で廃止が決まっているので写像しない。
+    /// ADR-0500 §3: いまの契約の `ReverseCandidate` は P3-1 で廃止が決まっているので写像しない。
     /// 契約が更新されるまで、HTTP を送らずに「API 未対応」のエラーを返す。
     func testReverseThrowsAPIUnsupportedWithoutSendingHTTP() async throws {
         let transport = RecordingTransport(json: "{}")

@@ -2,7 +2,7 @@ import XCTest
 
 @testable import PokeCalcCore
 
-/// ダメージ計算画面の状態(P6-2a。ADR-0017 §1: 画面のロジックは ViewModel で XCTest に固定し、View は描くだけ)。
+/// ダメージ計算画面の状態(P6-2a。ADR-0500 §1: 画面のロジックは ViewModel で XCTest に固定し、View は描くだけ)。
 ///
 /// サービスは `StubPokeCalcService`(架空マスタ・呼び出しの記録・応答の保留と順不同の返却)。
 /// 計算結果の数値には依存しない(ViewModel は結果を整形して並べるだけ)。

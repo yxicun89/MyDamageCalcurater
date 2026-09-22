@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "species": {"testleafrain": "テストリーフあめ", "testghost": "テストおばけ"},
+  "moves": {"teststrike": "テストうわがき"},
+  "items": {"testberry": "テストのみ"},
+  "abilities": {},
+  "types": {}
+}

@@ -58,14 +58,12 @@ make -f services/balance/Makefile balance-smoke
 
 Docker/k3d/Argo CD を実行できない場合は、未実施理由と再実行コマンドを記録し、成功扱いにしない。
 
-## TB0 の未完了ブロッカー
+## TB0 の GitOps 検証(ADR-0018)
 
-2026-09-21 時点で、Docker build、k3d への直接 deploy、Pod Ready、smoke、GitOps template検査は確認済み。
-GitOps専用overlay、digest固定、private repository/registryの秘密をGitへ入れない手順も用意した。
-一方、実Git remote、取得可能な配布イメージの置き場所、Argo CD Application CRD が未設定のため、
-`Git変更 → Argo CD manual sync → Pod更新` は未実施であり、TB0 全体は完了扱いにしない。
-実施には利用する Git repository URL、image registry/repository、不変 image tag または digest、
-およびversion固定したArgo CDの導入とprivate repository/registry credentialのクラスタ登録が必要である。
+ローカル k3d に Argo CD v3.5.3 とクラスタ内レジストリを入れ、`Git 変更(gitops overlay の digest)→ PR で main → manual sync → Pod 更新` を確認する。
+合格条件: Argo CD の Application が Synced / Healthy、同期 revision が main の該当 commit、稼働 Pod の image が overlay の digest と一致、health 200。
+gitops overlay には read model のマウントが無いので analyze / coverage は 503 が正しい(smoke の analyze 以降は local overlay で確認する)。
+`check-gitops.sh` は template・ready の両モードで application.yaml の repoURL が placeholder のままであることを必須にし(実 URL を Git に入れない)、ready では `BALANCE_GITOPS_REPO_URL`(適用時の repoURL)を検査する。`make balance-argocd-app`(`scripts/argocd-local-app.sh`)が値を渡して `check-gitops.sh ready` を呼び、置換が1か所で placeholder が残っていないことを確かめてから適用する。
 
 ## TB1b の対象(相性表のデータ化。ADR-0015)
 
@@ -104,3 +102,72 @@ TB0 の `TemporaryTypeChart` のテストは、コードごと削除した(削�
 | Smoke | k3d(local overlay) | local overlay が `testdata/moves.example.json` の複製を ConfigMap でマウントし `BALANCE_MOVES_PATH` を設定する。Ingress 経由で coverage が 200(`teamCoverage`・`"attackTypes":["fire"]` 等を含む)、未登録の技が 422 `unknown_move` |
 
 テストの技 ID は架空(move-9001 以降)を使う。実在の技の名前・ID をテストデータとして Git に置かない(ADR-0002)。
+
+## TB3 の対象(特性による防御相性の変化。ADR-0017)
+
+契約の正は [ADR-0017](adr/0017-balance-tb3-ability-effects.md)(§1 はユーザー回答、§2〜4 は採用済みの既定案)。analyze のメンバーに任意の
+`abilityId` を受け取り、特性の read model(`BALANCE_ABILITIES_PATH`)の正規化された効果(`immune` / `absorb` / `type_multiplier` /
+`super_effective_multiplier`)をタイプ相性の後に適用する。倍率は既約分数(float を使わない)。coverage(TB2)は変えない。
+テストは実装より先に書いた(spec 先行)。HTTP の倍率の期待値は同梱の相性表で成り立つ組だけを使う。
+
+### 受け入れ条件
+
+1. `abilityId` を指定しないメンバーは TB1 と完全に同じ結果(171 通りの防御タイプで `CalculateDefense` と一致、倍率は TB1 の6値、
+   `source=type`、×0 を含むすべてが `effect=none`)。特性の read model が無くても 200 で、read model の有無で body が変わらない。効果が空の特性も同じ結果。
+2. 計算順: タイプ相性 → タイプ由来の ×0 はそこで確定(`source=type`)→ 特性の効果。`immune` / `absorb` は ×0(`source=ability`、`effect` は
+   `immune` / `absorb`)。`type_multiplier` は該当タイプだけ、`super_effective_multiplier` はタイプ相性が ×1 より大きいときだけ掛ける。
+   値が変わらなければ(打ち消し合い・×1 の係数を含む)`source=type`・`effect=none`、変われば `source=ability`・`effect=multiplier`。
+3. 倍率の文字列は既約分数(分母 1 は整数だけ。`"0" "1/4" "3/4" "5/4" "3/2" "5/2" "3"` など)。category は範囲で決める:
+   0 → `immune`、(0, 1/4] → `quad_resist`、(1/4, 1) → `resist`、1 → `neutral`、(1, 4) → `weak`、[4, ∞) → `quad_weak`。
+4. チーム集計の定義(ADR-0014 §3)は変えない。特性の無効・吸収は `immune` に数える。全18タイプで `weak+resist+immune+neutral = メンバー数`、
+   メンバーの category から数え直した値と一致。
+5. response のメンバーの `abilityId` は指定したときだけ(無ければキー自体を省略)。
+6. 判定順: ヘッダー 400 → body 400/413(`abilityId` の形式 `^[a-z0-9]+(-[a-z0-9]+)*$`・1〜40 文字・文字列)→ ポケモンの read model 未設定、
+   または `abilityId` を指定したメンバーがいるのに特性の read model 未設定 503 → `unknown_pokemon` 422 → `unknown_ability` 422
+   (message `unknown abilityId: <ID>`、adapter の詳細を含めない)→ 200。それ以外(provider の想定外の失敗・不正な効果)は 500 固定文言 `internal error`。
+7. 特性の read model は起動時に1回読み、ADR-0017 §2 の検証に1つでも反すれば起動失敗。未設定・空文字は provider なし(型付き nil ではない nil interface)。
+   Git には架空 ID(ability-9001 以降)の example だけ。
+
+| レイヤー | 対象 | 合格条件 |
+|---|---|---|
+| Unit | `internal/balance`(`Effectiveness` / `ClassifyEffectiveness` / `CalculateDefenseWithAbility` / `AnalyzeDefense` / `ResolveAbility` / `UnknownAbilityError`) | `NewEffectiveness` は約分し 0 は `{0,1}`、分母 0 以下・負の分子は `ErrInvalidEffectiveness`。`Mul`(可換・約分)・`Cmp`・`IsZero`・`String`。TB0 の6値の変換と TB1 ラベルの一致。category の境界(0、1/64、3/16、1/4、5/16、3/4、15/16、1、17/16、5/4、3/2、3、63/16、4、5、8、16)。受け入れ条件 1〜4 の計算(単独・複合の効果、効果の順序によらない結果、タイプ無効の優先)。不正な効果(未知の kind・不正な攻撃タイプ・分母 0)は `ErrInvalidAbilityEffect`。`ResolveAbility` は request の ID を返す・未登録は ID だけを持つ `*UnknownAbilityError`(`Error()` は `unknown ability: <ID>`、`Unwrap` は `ErrUnknownAbility` だけ)・provider nil は `ErrNilAbilities`・その他の失敗は伝播 |
+| Adapter | `internal/master` の特性 read model(`LoadAbilities` / `LoadAbilitiesFile`) | 正常系(4 種の kind、空の effects、約分して保持、同じタイプへの `type_multiplier` の重複、別特性の同タイプ、40 文字の ID)。`schemaVersion`、`abilities` の欠落/null/空、abilityId の形式・41 文字・重複・数値、effects の欠落/null/オブジェクト、kind の欠落・空・未知・大文字、kind ごとの必須項目の欠落と余分な項目、attackType の不正、numerator/denominator の 0・17・負・小数・文字列・null、同じ特性内の同じ攻撃タイプへの `immune` / `absorb` の重複、未知フィールド、空/壊れた/null/後続付き JSON はすべて `ErrInvalidAbilities` で部分 model を返さない。存在しないパス・ディレクトリはエラー。未登録は `balance.ErrUnknownAbility`(zero の Ability)。返した effects を書き換えても model は変わらない。example は架空 ID のみで 4 種の kind と空の effects を含み、local overlay の複製とバイト一致 |
+| Config | `cmd/api` の `BALANCE_ABILITIES_PATH` 読み込み(`abilityProviderFromEnv`) | 未設定・空文字は nil interface でエラーなし。example を読める。不正・空・存在しないファイル・ディレクトリはエラー(main は起動失敗) |
+| Contract/HTTP | service-local OpenAPI 0.4.0 / analyze | 生成型 `api.AnalyzeResponse` へ未知フィールド禁止で decode できる 200。全 entry で倍率が pattern に合い既約、category が範囲と一致、`source` と `effect` の組が整合、集計が数え直しと一致。受け入れ条件 1・5・6 の各ケース。境界(40 文字の abilityId、6 体すべて同じ abilityId)の成功。coverage に `abilityId` を送ると 400(TB2 の契約は不変)。TB1 の analyze テストは期待値を変えない(`DefenseMultiplier` が enum でなくなったため、生成定数と `Valid()` を TB1 の6値の集合での判定に置き換えただけ) |
+| Smoke | k3d(local overlay) | local overlay が `testdata/abilities.example.json` の複製を ConfigMap でマウントし `BALANCE_ABILITIES_PATH` を設定する。Ingress 経由で abilityId 付きの analyze が 200(`"effect":"absorb"`・`"multiplier":"3"`・`"source":"ability"` 等を含む)、未登録の特性が 422 `unknown_ability` |
+
+テストの特性 ID は架空(ability-9001 以降)を使う。実在の特性の名前・ID をテストデータとして Git に置かない(ADR-0002)。
+タイプ由来の ×0 は `effect=none`・`source=type`(ADR-0017 §5.1・§5.5)で、テストはこれを厳密に確かめる。`"abilityId": null` は省略と同じ(§5.2。read model の有無によらず 200、body は省略時と一致)。
+倍率の積が int64 に収まらないデータ(効果を多数重ねた特性)は、黙って折り返さず `ErrEffectivenessOverflow` → HTTP 500(ADR-0017 §5.6)。`Mul` はオーバーフローの境界、`Cmp` は 2^62 のような大きな値で検査する。
+
+## TB4 の対象(仮想敵診断。ADR-0400)
+
+契約の正は [ADR-0400](adr/0400-balance-tb4-threat-check.md)(§1 はユーザー回答)。`POST /api/balance/v1/team-balance/threats` は
+自分のメンバー(1〜6)と仮想敵(1〜6)を同じ形 `{pokemonId, moveIds(0〜4), abilityId(任意)}` で受け取り、仮想敵ごとに
+`attackTypes`・メンバーごとの `incoming`(受ける最大倍率)/ `outgoing`(与える最大倍率)/ `safe` / `superEffective`・
+`safeMembers` / `superEffectiveMembers` を返す。計算は TB1〜3 の `CalculateDefenseWithAbility` の再利用で、新しい read model は無い。
+STAB・持ち物・威力・天候・場は扱わないので、それを検証するテストも置かない。テストは実装より先に書いた(spec 先行)。
+倍率の期待値は同梱の相性表(`master.EmbeddedTypeChart()`)で成り立つ組だけを使う。
+
+### 受け入れ条件
+
+1. `incoming` は仮想敵の攻撃技(変化技を除く)のタイプごとに、メンバーのタイプと**メンバーの特性**で求めた倍率の最大。
+   `outgoing` はメンバーの攻撃技のタイプごとに、仮想敵のタイプと**仮想敵の特性**で求めた倍率の最大。攻撃側の特性は自分の攻撃に掛からない。
+2. 倍率は既約分数の文字列(`"0" "1/4" "1/2" "3/4" "1" "5/4" "3/2" "2" "3" "4"` など。分母 1 は整数だけ)。攻撃技が無い側の倍率は `null`(JSON で明示的な `null`)。
+3. `safe` は `incoming < 1`(×0・×1/4・×1/2・特性の ×3/4・無効・吸収)、`superEffective` は `outgoing ≥ 2`(×2・×3・×4)。
+   ×1 は両方 false、×3/2(×2 に ×3/4)と ×5/4 は false。`null` のときは false。
+4. `safeMembers` / `superEffectiveMembers` は仮想敵ごとの `safe` / `superEffective` の人数。
+5. `attackTypes` は仮想敵の攻撃技のタイプ(重複なし・正準順。変化技のみ・技なしは `[]`)。`threats` は request の順、`matchups` はメンバーの request の順(同じ pokemonId の重複もそのまま)。
+   仮想敵の `abilityId` は指定したときだけ(無ければキーを省略)。
+6. 判定順: ヘッダー 400 → body 400/413(メンバー・仮想敵とも 1〜6、moveIds 0〜4・重複・形式、abilityId の形式、pokemonId の形式、未知フィールド・後続 JSON)→
+   ポケモンの read model 未設定、または moveId が1つでもあるのに技の read model 未設定、または abilityId が1つでもあるのに特性の read model 未設定(503)→
+   `unknown_pokemon` → `unknown_move` → `unknown_ability`(422。それぞれ members → threats・request の順で最初のもの。message は `unknown pokemonId: <ID>` 等で adapter の詳細を含めない)→ 200。
+   それ以外(provider の想定外の失敗・chart nil・不正な特性効果・倍率の積のオーバーフロー)は 500 固定文言 `internal error`。
+
+| レイヤー | 対象 | 合格条件 |
+|---|---|---|
+| Unit | `internal/balance`(`AnalyzeThreats` / `Combatant` / `ThreatMatchup` / `ThreatResult`) | 受け入れ条件 1〜5。境界(×0・×1/4・×1/2・×1・×2・×4、特性の ×3/4 で等倍未満・×5/4・×1/2 でちょうど ×1・×3/4 で ×3/2 と ×3、特性の無効・吸収)。すべての結果で `safe` / `superEffective` が倍率から、人数が matchups から数え直した値と一致し、倍率が既約。171 通りの防御タイプ × 18 攻撃タイプで `incoming` / `outgoing` が `CalculateDefenseWithAbility` と一致。メンバー・仮想敵それぞれ 0/7 件は `ErrMemberCount` / `ErrThreatCount`、1 件と 6 件は成功。chart nil は `ErrNilTypeChart`、chart のエラーは伝播、単タイプとしてありえない倍率はエラー。倍率の積のオーバーフローは incoming・outgoing のどちらでも `ErrEffectivenessOverflow` |
+| Contract/HTTP | service-local OpenAPI 0.5.0 / threats | 生成型 `api.ThreatsResponse` へ未知フィールド禁止で decode できる 200 と内容(4 体の仮想敵 × 3 メンバーの全 matchups)。`attackTypes` は空でも `[]`、倍率は文字列か明示的な `null`、仮想敵の `abilityId` は指定時だけ。受け入れ条件 6 の各ケースと境界(6 × 6・4 技・40 文字の moveId / abilityId、技 0 個、メンバーと仮想敵で同じ moveId)。moveIds が全員空・abilityId なしなら技・特性の read model が無くても 200。analyze・coverage・health の既存テストは変更なし(threats の追加で影響しないことも確認) |
+| Smoke | k3d(local overlay) | 既存の3つの example read model のマウントのまま、Ingress 経由で threats が 200(`"incoming":"2"`・`"outgoing":null`・`"superEffectiveMembers":1` 等を含む)、未登録の技が 422 `unknown_move` |
+
+テストの ID は架空(9001-000 / move-9001 / ability-9001 以降)を使う。実在ポケモン・技・特性の名前・ID を Git に置かない(ADR-0002)。

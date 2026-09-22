@@ -47,11 +47,15 @@ public enum Operations {
             public var query: Operations.SearchSpecies.Input.Query
             /// - Remark: Generated from `#/paths/api/pokedex/species/GET/header`.
             public struct Headers: Sendable, Hashable {
-                /// クライアント生成の端末 UUID
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/species/GET/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
-                /// セッション UUID
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/species/GET/header/X-Session-Id`.
                 public var xSessionId: Components.Parameters.SessionId
@@ -59,8 +63,8 @@ public enum Operations {
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
-                ///   - xDeviceId: クライアント生成の端末 UUID
-                ///   - xSessionId: セッション UUID
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
                 ///   - accept:
                 public init(
                     xDeviceId: Components.Parameters.DeviceId,
@@ -133,6 +137,57 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/pokedex/species/GET/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/pokedex/species/GET/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.SearchSpecies.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.SearchSpecies.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202)
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/species/get(searchSpecies)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.SearchSpecies.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.SearchSpecies.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
                             response: self
                         )
                     }
@@ -212,11 +267,15 @@ public enum Operations {
             public var path: Operations.GetSpecies.Input.Path
             /// - Remark: Generated from `#/paths/api/pokedex/species/{key}/GET/header`.
             public struct Headers: Sendable, Hashable {
-                /// クライアント生成の端末 UUID
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/species/{key}/GET/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
-                /// セッション UUID
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/species/{key}/GET/header/X-Session-Id`.
                 public var xSessionId: Components.Parameters.SessionId
@@ -224,8 +283,8 @@ public enum Operations {
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
-                ///   - xDeviceId: クライアント生成の端末 UUID
-                ///   - xSessionId: セッション UUID
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
                 ///   - accept:
                 public init(
                     xDeviceId: Components.Parameters.DeviceId,
@@ -326,6 +385,57 @@ public enum Operations {
                     }
                 }
             }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/pokedex/species/{key}/GET/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/pokedex/species/{key}/GET/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetSpecies.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetSpecies.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202)
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/species/{key}/get(getSpecies)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.GetSpecies.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.GetSpecies.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
             /// エラー
             ///
             /// - Remark: Generated from `#/paths//api/pokedex/species/{key}/get(getSpecies)/responses/default`.
@@ -405,11 +515,15 @@ public enum Operations {
             public var query: Operations.SearchMoves.Input.Query
             /// - Remark: Generated from `#/paths/api/pokedex/moves/GET/header`.
             public struct Headers: Sendable, Hashable {
-                /// クライアント生成の端末 UUID
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/moves/GET/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
-                /// セッション UUID
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/moves/GET/header/X-Session-Id`.
                 public var xSessionId: Components.Parameters.SessionId
@@ -417,8 +531,8 @@ public enum Operations {
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
-                ///   - xDeviceId: クライアント生成の端末 UUID
-                ///   - xSessionId: セッション UUID
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
                 ///   - accept:
                 public init(
                     xDeviceId: Components.Parameters.DeviceId,
@@ -491,6 +605,57 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/pokedex/moves/GET/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/pokedex/moves/GET/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.SearchMoves.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.SearchMoves.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202)
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/moves/get(searchMoves)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.SearchMoves.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.SearchMoves.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
                             response: self
                         )
                     }
@@ -575,11 +740,15 @@ public enum Operations {
             public var query: Operations.SearchItems.Input.Query
             /// - Remark: Generated from `#/paths/api/pokedex/items/GET/header`.
             public struct Headers: Sendable, Hashable {
-                /// クライアント生成の端末 UUID
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/items/GET/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
-                /// セッション UUID
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/items/GET/header/X-Session-Id`.
                 public var xSessionId: Components.Parameters.SessionId
@@ -587,8 +756,8 @@ public enum Operations {
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
-                ///   - xDeviceId: クライアント生成の端末 UUID
-                ///   - xSessionId: セッション UUID
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
                 ///   - accept:
                 public init(
                     xDeviceId: Components.Parameters.DeviceId,
@@ -666,6 +835,57 @@ public enum Operations {
                     }
                 }
             }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/pokedex/items/GET/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/pokedex/items/GET/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.SearchItems.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.SearchItems.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202)
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/items/get(searchItems)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.SearchItems.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.SearchItems.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
             /// エラー
             ///
             /// - Remark: Generated from `#/paths//api/pokedex/items/get(searchItems)/responses/default`.
@@ -725,11 +945,15 @@ public enum Operations {
         public struct Input: Sendable, Hashable {
             /// - Remark: Generated from `#/paths/api/pokedex/natures/GET/header`.
             public struct Headers: Sendable, Hashable {
-                /// クライアント生成の端末 UUID
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/natures/GET/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
-                /// セッション UUID
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/natures/GET/header/X-Session-Id`.
                 public var xSessionId: Components.Parameters.SessionId
@@ -737,8 +961,8 @@ public enum Operations {
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
-                ///   - xDeviceId: クライアント生成の端末 UUID
-                ///   - xSessionId: セッション UUID
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
                 ///   - accept:
                 public init(
                     xDeviceId: Components.Parameters.DeviceId,
@@ -811,6 +1035,57 @@ public enum Operations {
                     }
                 }
             }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/pokedex/natures/GET/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/pokedex/natures/GET/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListNatures.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListNatures.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202)
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/natures/get(listNatures)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.ListNatures.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.ListNatures.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
             /// エラー
             ///
             /// - Remark: Generated from `#/paths//api/pokedex/natures/get(listNatures)/responses/default`.
@@ -870,11 +1145,15 @@ public enum Operations {
         public struct Input: Sendable, Hashable {
             /// - Remark: Generated from `#/paths/api/calc/POST/header`.
             public struct Headers: Sendable, Hashable {
-                /// クライアント生成の端末 UUID
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/calc/POST/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
-                /// セッション UUID
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/calc/POST/header/X-Session-Id`.
                 public var xSessionId: Components.Parameters.SessionId
@@ -882,8 +1161,8 @@ public enum Operations {
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
-                ///   - xDeviceId: クライアント生成の端末 UUID
-                ///   - xSessionId: セッション UUID
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
                 ///   - accept:
                 public init(
                     xDeviceId: Components.Parameters.DeviceId,
@@ -992,6 +1271,82 @@ public enum Operations {
             }
             /// エラー
             ///
+            /// - Remark: Generated from `#/paths//api/calc/post(calcDamage)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/calc/POST/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/calc/POST/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.CalcDamage.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.CalcDamage.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+            /// gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/post(calcDamage)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.CalcDamage.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.CalcDamage.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
             /// - Remark: Generated from `#/paths//api/calc/post(calcDamage)/responses/default`.
             ///
             /// HTTP response code: `default`.
@@ -1042,9 +1397,14 @@ public enum Operations {
     }
     /// 防御側の代表調整すべてに対する一括計算
     ///
-    /// 攻撃側は1つに固定し、防御側の種族に対して代表的な調整(既定は、物理技なら 無振り/H振り/H振り+B補正/HB振り/HB特化 の5件、
-    /// 特殊技なら D 系の5件、変化技なら 無振り/H振り の2件。`presets` で選べる)すべての結果を一度に返す。技が物理なら B 系、特殊なら D 系のプリセットに自動で寄せる。
-    /// 持ち物の差し替え候補(itemVariants)を渡すと調整×持ち物の組合せを返す。
+    /// 攻撃側は1つに固定し、防御側の種族に対して代表的な調整(DefenderPreset)すべての結果を一度に返す(ADR-0009)。
+    /// - 既定セット(`presets` 省略、または `presets: []`): 物理技なら none/hp/hb_boost/hb/hb_full の5件、
+    ///   特殊技なら none/hp/hd_boost/hd/hd_full の5件、**変化技は none/hp の2件のみ**。
+    /// - `presets` を指定したときは、その順に行を返す。重複した preset は 400 `duplicate_preset`。
+    /// - 持ち物の差し替え候補(itemVariants)を渡すと調整×持ち物の組合せを返す。null 要素は「持ち物なし」。
+    /// - **行の順序はプリセット優先**(presets × itemVariants。プリセットごとに itemVariants の順に並ぶ)。
+    ///   行数は `len(presets) × len(itemVariants)`(itemVariants 省略時は 1)。
+    /// - 各行の `defender` は、その行で使った防御側の SP・性格補正・実数値(ADR-0011 §3 の WASM 境界と同じ形)。
     ///
     ///
     /// - Remark: HTTP `POST /api/calc/bulk`.
@@ -1054,11 +1414,15 @@ public enum Operations {
         public struct Input: Sendable, Hashable {
             /// - Remark: Generated from `#/paths/api/calc/bulk/POST/header`.
             public struct Headers: Sendable, Hashable {
-                /// クライアント生成の端末 UUID
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/calc/bulk/POST/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
-                /// セッション UUID
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/calc/bulk/POST/header/X-Session-Id`.
                 public var xSessionId: Components.Parameters.SessionId
@@ -1066,8 +1430,8 @@ public enum Operations {
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
-                ///   - xDeviceId: クライアント生成の端末 UUID
-                ///   - xSessionId: セッション UUID
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
                 ///   - accept:
                 public init(
                     xDeviceId: Components.Parameters.DeviceId,
@@ -1176,6 +1540,82 @@ public enum Operations {
             }
             /// エラー
             ///
+            /// - Remark: Generated from `#/paths//api/calc/bulk/post(calcBulk)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/calc/bulk/POST/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/calc/bulk/POST/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.CalcBulk.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.CalcBulk.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+            /// gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/bulk/post(calcBulk)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.CalcBulk.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.CalcBulk.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
             /// - Remark: Generated from `#/paths//api/calc/bulk/post(calcBulk)/responses/default`.
             ///
             /// HTTP response code: `default`.
@@ -1226,8 +1666,15 @@ public enum Operations {
     }
     /// 観測ダメージから相手の調整候補を逆算
     ///
-    /// 与えた/受けたダメージ(HP%)の観測から、防御側または攻撃側の調整候補(SP配分・性格・持ち物)を
-    /// 一致度の高い順に返す。正確さより候補の提示を優先。複数観測で絞り込む。
+    /// 与えた/受けたダメージの観測から、相手の調整候補(性格クラス × 持ち物ごとの SP の範囲)を返す(ADR-0010 §R)。
+    /// - `side=defender`: 自分が与えたダメージから、相手の防御側(H32 前提で B または D の SP 0..32)を逆算する。
+    ///   `known` は自分=攻撃側。
+    /// - `side=attacker`: 自分が受けたダメージから、相手の攻撃側(A または C の SP 0..32)を逆算する。
+    ///   `known` は自分=防御側。
+    /// - 候補は「性格クラス(neutral / plus)× itemCandidates」の全組合せで、説明できない候補も最も近い SP 付きで返す。
+    /// - 並びは Mismatch 昇順 → Support 降順 → SPCount 降順 → 定義順(性格クラス neutral→plus、itemCandidates の添字)の
+    ///   全順序(ADR-0010 §R4)。`maxCandidates` は並べた後に上から切る。`exactCount` は切る前の値。
+    /// 正確さより候補の提示を優先する。複数観測で絞り込む。
     ///
     ///
     /// - Remark: HTTP `POST /api/calc/reverse`.
@@ -1237,11 +1684,15 @@ public enum Operations {
         public struct Input: Sendable, Hashable {
             /// - Remark: Generated from `#/paths/api/calc/reverse/POST/header`.
             public struct Headers: Sendable, Hashable {
-                /// クライアント生成の端末 UUID
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/calc/reverse/POST/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
-                /// セッション UUID
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/calc/reverse/POST/header/X-Session-Id`.
                 public var xSessionId: Components.Parameters.SessionId
@@ -1249,8 +1700,8 @@ public enum Operations {
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
-                ///   - xDeviceId: クライアント生成の端末 UUID
-                ///   - xSessionId: セッション UUID
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
                 ///   - accept:
                 public init(
                     xDeviceId: Components.Parameters.DeviceId,
@@ -1352,6 +1803,82 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/reverse/post(calcReverse)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/calc/reverse/POST/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/calc/reverse/POST/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.CalcReverse.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.CalcReverse.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+            /// gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/reverse/post(calcReverse)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.CalcReverse.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.CalcReverse.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
                             response: self
                         )
                     }

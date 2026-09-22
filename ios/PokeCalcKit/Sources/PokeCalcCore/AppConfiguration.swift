@@ -1,6 +1,6 @@
 import Foundation
 
-/// 接続先(ADR-0017 §5)。
+/// 接続先(ADR-0500 §5)。
 public enum Backend: Equatable, Sendable {
     /// `MockPokeCalcService`(架空データ)。
     case mock
@@ -18,7 +18,7 @@ public struct AppConfigurationError: Error, Equatable, Sendable {
     }
 }
 
-/// 起動時に1か所で読む設定(ADR-0017 §5)。
+/// 起動時に1か所で読む設定(ADR-0500 §5)。
 ///
 /// | 設定 | 結果 |
 /// |---|---|
@@ -39,7 +39,7 @@ public struct AppConfiguration: Sendable {
 
     public init(infoDictionary: [String: Any], environment: [String: String]) throws {
         // モック強制は不正な URL より優先する。XCUITest はいつでも起動できる必要があるため
-        // (ADR-0017 §5・AppConfigurationTests「モック強制は不正な URL より優先」)。
+        // (ADR-0500 §5・AppConfigurationTests「モック強制は不正な URL より優先」)。
         if environment[Self.useMockEnvironmentKey] == Self.forceMockValue {
             self.backend = .mock
             return

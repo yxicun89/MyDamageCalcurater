@@ -4,15 +4,15 @@
 Lane: データ(engine・マスタ・pokedex。どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
 Branch: feat/claude-p1-engine(作業ディレクトリ ~/MyDamageCalcurater)
-Status: Phase 1・P2-1・P1-10・Phase R(R-2-9 の公開用クリーンコピーは公開時に実施)・R-3・P1-13(タイプ相性表のデータ化。ADR-0013)・P1-11(表示%の分離)・P1-12(逆算の再設計。ADR-0010 §R)・P2-1b(ゴールデンを @smogon/calc 0.12.0 の Champions へ。ADR-0002 追記)は完了(critic レビュー済み)
-Next: P2-1c → P2-2 → P2-3 → P3-1〜3 → P4-1〜7。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)、P2-1c の裁定
+Status: Phase 1・P2-1・P1-10・Phase R(R-2-9 の公開用クリーンコピーは公開時に実施)・R-3・P1-13(タイプ相性表のデータ化。ADR-0013)・P1-11(表示%の分離)・P1-12(逆算の再設計。ADR-0010 §R)・P2-1b(ゴールデンを Champions へ)・P2-1c(技の使用可否の裁定)・P2-2a(pokedex のスキーマと migrate。ADR-0100)・P2-2b(importer の取得・変換・投入。ADR-0101。実データの取得は未実施で版はプレースホルダ=取り込みは明示的に止まる)は完了(critic レビュー済み)
+Next: P2-2c(照合と差分報告。実データの取得と版の固定を含む) → P2-2d → P2-3 → P3-1〜3 → P4-1〜7。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)、P2-1c の裁定
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
-Active: なし
-Branch: feat/api-p3(作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: 未着手(2026-09-21 にレーンを新設)
-Next: docs/plan.md の P3-1 から。P3-1 の小項目のとおり api/openapi.yaml を先に直して make gen(絶対ルール1)。一括計算・逆算(engine の P1-12 の新しい形。ADR-0010 §R8)・WASM 境界との契約差分(ADR-0011 §10)。マスタの読み込みは services/internal/master(データレーンの P2-2a。main に入るまで)を待たず、差し替え可能なインターフェースと架空データで作る。続いて P3-2 gateway、P3-3 契約テストと k3d のスモーク
+Active: Claude Code
+Branch: feat/api-p3-gateway(feat/api-p3 から分岐。P3-1 は feat/api-p3 → PR #14。作業ディレクトリ ~/MyDamageCalcurater-api)
+Status: P3-1(calc-svc。ADR-0200)と依存の最新化(Echo v5。ADR-0201)は PR #14 で main に統合済み。P3-2 gateway(ADR-0202)は critic PASS(3回目)・PR で統合
+Next: P3-3(gateway 経由の契約テストと k3d のスモーク: calc・gateway の Dockerfile(golang 最新 digest)・Kustomize(base と overlays/local。calc の例のマスタと typechart は configMapGenerator)・Ingress `/`(balance の /api/balance と共存)・smoke スクリプトと Makefile ターゲット)
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
@@ -25,15 +25,23 @@ Next: docs/plan.md の P4-1(docs/design.md のデザイントークンを CSS �
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
 Active: Claude Code
 Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
-Status: P6-1 完了(ADR-0017。critic PASS)。Swift Package `ios/PokeCalcKit`(生成 API クライアント・ドメイン・モック・デザイントークン)+ 手書きの `ios/PokeCalc.xcodeproj`。`make ios-test`(ios-gen-check・XCTest 60 件・XCUITest 2 件・Info.plist の接続先)が緑。iOS 27 / Swift 6.4。main へは未 PR
+Status: P6-1 完了(ADR-0500。critic PASS)。Swift Package `ios/PokeCalcKit`(生成 API クライアント・ドメイン・モック・デザイントークン)+ 手書きの `ios/PokeCalc.xcodeproj`。`make ios-test`(ios-gen-check・XCTest 60 件・XCUITest 2 件・Info.plist の接続先)が緑。iOS 27 / Swift 6.4。main へは未 PR
 Next: P6-2(計算画面 → 逆算 → 構築)。ViewModel は PokeCalcCore に置き XCTest、View はアプリ側、主要操作は XCUITest。構築は端末内保存の TeamStore、Showdown 形式は後回し、API 経由の逆算は P3-1 まで「API 未対応」表示(ユーザー回答済み)。区切りで PR
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
-Branch: 次は main から feat/tb-tb3-ability を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
-Status: TB0(Argo CD 実同期のみ人間待ち)・TB1(防御。ADR-0014)・TB1b(相性表のデータ化。ADR-0015)・TB2(攻撃範囲 /coverage。ADR-0016)は main に統合済み。ポケモンのタイプと技は temporary の read model(架空データの example。実データは BALANCE_POKEMON_TYPES_PATH / BALANCE_MOVES_PATH でマウント。P2-2 のスナップショットができたら差し替え)
-Next: TB3(特性。設計書 §6 TB3: 正規化された効果データで、タイプ由来/特性由来の無効を区別)。特性データの形式・入力(pokemonId から特性を引くのか、request で特性 ID を送るのか)が未定義なので、日中にユーザーへ質問してから ADR を書く。未対応の軽微: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の schema ファイル、CoverageMultiplier の nullable enum に null を明示するか
+Branch: 次は main から feat/tb-tb5-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
+Status: TB0〜TB4 は完了・main に統合済み(TB4 仮想敵診断 /threats。ADR-0400)。balance は Echo v5.3.1。ポケモン・技・特性は temporary の read model(架空データの example。実データは BALANCE_*_PATH でマウント。P2-2 のスナップショットができたら差し替え)。k3d には Argo CD v3.5.3・クラスタ内レジストリ・Application pokecalc-balance(manual sync)。新しい ADR はタイプバランスの帯 0400〜
+Next: TB5(おすすめタイプと該当ポケモン。DECISIONS.md 2026-09-22: 基準は防御の穴と攻撃範囲の穴の両方、一覧はそのタイプを持つ使用可能なポケモン全員(日本語名付き)、特性でふさげるものは別枠)。使用可能集合・日本語名はデータレーンの P2-2 のマスタが要るので、それまでは read model を広げた架空データで作る。軽微の残り: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の JSON Schema、CoverageMultiplier の nullable enum、HTTP 層の検証・422 変換の重複(analyze・coverage・threats)
+メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
+
+## Maintenance
+Lane: 整備(Claude の上限時に Codex が進める。COORDINATION.md「Claude の上限時の Codex」)
+Active: なし
+Branch: なし(次回は origin/main から新しい fix/maint-<名前> を切る)
+Status: MT-1(統合検証)・MT-2(check-publishable の自己テスト修正・lint 組み込み)は PR #24 で main に統合済み
+Next: docs/plan.md の整備レーン MT-3 から順に進める
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

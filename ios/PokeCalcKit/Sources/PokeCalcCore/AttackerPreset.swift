@@ -1,4 +1,4 @@
-// AttackerPreset: 自分側(攻撃側)の調整プリセット(ADR-0017 §6、docs/requirements.md「自分側のプリセット」)。
+// AttackerPreset: 自分側(攻撃側)の調整プリセット(ADR-0500 §6、docs/requirements.md「自分側のプリセット」)。
 //
 // 画面はこの型を使ってセグメントを並べ、選ばれたプリセットから `Individual.natureId` / `sp` を組み立てる。
 // 性格 ID は一覧(マスタ)から規則で選ぶだけで、直書きしない(CLAUDE.md「ハードコードしない」)。
@@ -30,7 +30,7 @@ public enum AttackerPreset: String, CaseIterable, Sendable, Hashable {
         }
     }
 
-    /// `preset` と技の分類から性格 ID と SP を組み立てる(ADR-0017 §6)。
+    /// `preset` と技の分類から性格 ID と SP を組み立てる(ADR-0500 §6)。
     /// 該当する性格が `natures`(一覧の順序で探す)に無ければ `PokeCalcError(code: .natureUnavailable)`。
     public static func build(_ preset: AttackerPreset, moveCategory: MoveCategory, natures: [Nature]) throws -> AttackerBuild {
         let relevant = relevantStat(for: moveCategory)

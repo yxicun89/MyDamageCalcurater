@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # POKECALC_API_BASE_URL を渡してビルドし、成果物(PokeCalc.app)の Info.plist に
-# PokeCalcAPIBaseURL キーとその値が入っていることを確かめる(ADR-0017 §5)。
+# PokeCalcAPIBaseURL キーとその値が入っていることを確かめる(ADR-0500 §5)。
 #
 # なぜ要るか: `INFOPLIST_KEY_PokeCalcAPIBaseURL` のような openapi/Apple 既知でない独自キーは
 # `GENERATE_INFOPLIST_FILE=YES` の自動生成 Info.plist には反映されない(シミュレータ向けビルドで

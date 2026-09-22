@@ -3,7 +3,7 @@ import OpenAPIRuntime
 import OpenAPIURLSession
 import PokeCalcAPI
 
-/// `PokeCalcService` を生成クライアント(`PokeCalcAPI.Client`)で実装する(ADR-0017 §3)。
+/// `PokeCalcService` を生成クライアント(`PokeCalcAPI.Client`)で実装する(ADR-0500 §3)。
 ///
 /// 生成型(`Components.Schemas.*`) ↔ ドメイン(`PokeCalcCore` の型)の写像は、この1ファイルに
 /// 閉じる。契約(`api/openapi.yaml`)が変わったら、直すのはここだけでよい。
@@ -19,7 +19,7 @@ public struct APIPokeCalcService: PokeCalcService {
 
     /// `URLSession` を使う既定の transport で `Client` を組み立てる便利イニシャライザ。
     /// アプリ(View 層)は `PokeCalcAPI` / `OpenAPIURLSession` に直接依存せず、この1つの
-    /// 初期化子だけで API 実装を作れる(ADR-0017 §1「View 以外はパッケージに置く」)。
+    /// 初期化子だけで API 実装を作れる(ADR-0500 §1「View 以外はパッケージに置く」)。
     public init(baseURL: URL, identity: ClientIdentity) {
         self.init(client: Client(serverURL: baseURL, transport: URLSessionTransport()), identity: identity)
     }
@@ -139,7 +139,7 @@ public struct APIPokeCalcService: PokeCalcService {
     }
 
     /// 逆算は契約更新(P3-1)まで未対応。いまの openapi `ReverseCandidate`(`matchScore` 等)は
-    /// 廃止が決まっているので写像しない。HTTP は送らない(ADR-0017 §3)。
+    /// 廃止が決まっているので写像しない。HTTP は送らない(ADR-0500 §3)。
     public func reverse(_ request: ReverseRequest) async throws -> ReverseResult {
         throw PokeCalcError(code: PokeCalcError.Code.apiUnsupported, message: "逆算は API 契約の更新(P3-1)まで未対応")
     }
