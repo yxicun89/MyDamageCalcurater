@@ -48,9 +48,19 @@ Next: (1) データレーンが export(data/generated/readmodel)を再生成し�
 ## Speed
 Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
 Active: Claude Code
-Branch: feat/speed-sp2(DOC-speed は feat/speed-s2 → PR #52 で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
-Status: SP0(ADR-0600)・SP1(ADR-0601)・DOC-speed は完了・main に統合(PR #32・#36・#52)。SP2(自分の位置。ADR-0602。preset/custom/raw の3モード・faster/slower/tie・POST /api/speed/v1/position)は critic PASS(3回目。1回目 NG 重要3件・2回目 NG 重要1件〈ADR記述漏れ〉を修正済み)。PR 作成待ち
-Next: SP2 の PR を作って main に統合 → SP3(`web/src/speed/` の画面は素早さレーンのまま。タブ登録は3か所に1件ずつ: web/src/app/routes.ts の SCREEN_ROUTES・web/src/i18n/ja.ts の appText.speedTabLabel・web/src/app/screens.tsx の SCREEN_COMPONENTS。P4-10 は PR #44 で main に統合済み。テストの例は web/src/App.routing.test.tsx と web/e2e/routing.spec.ts)→ SP4(pokedex の read model への切り替え・k3d・GitOps。**P2-3 は PR #57(コミット 5b4b0de)で main に統合済み**。`data/generated/readmodel/speed-pokemon.json` が speed の loader の全条件を満たすことをデータレーンが確認済みなので、SP4 は SPEED_POKEMON_PATH をこのファイルに向ける配線から始められる)。SP4 までに決める: 空の roster の扱い(いまは read model が空を拒否。SP1 critic 軽微)
+Branch: feat/speed-sp4(SP2 は feat/speed-sp2 → PR #83 で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
+Status: SP0〜SP2 は完了・main に統合(PR #32・#36・#52・#83)。SP4(pokedex export の read model を k3d の speed に読ませる配線。ADR-0603。
+balance の ADR-0403 と同じ形: `cmd/checkreadmodel`・`scripts/k3d-deploy-readmodel.sh`・`scripts/smoke-readmodel.sh`・`deploy/k8s/overlays/local-readmodel`)は
+critic PASS(2回目。1回目 NG 重要1件〈ADR-0600 §2 と ADR-0603 の GitOps 記述の矛盾。ADR-0600 に変更履歴を追記・docs/speed-design.md の段階表から
+GitOps を SP5 として分離・plan.md に SP5 を追加して修正〉)。fixture データ(testdata/pokemon.example.json)で k3d への実配線・非回帰(架空データの
+local overlay)を確認済み。**実データ(pokedex-svc の DB)での最終確認は未実施**(DSN の取り扱いがこのセッションの権限で扱えないため。
+`make pokedex-export`(データレーンの docs/runbooks/data.md の手順で DB を用意した状態で、POKEDEX_DATABASE_DSN を設定して実行)→
+`make speed-k3d-deploy-readmodel && make speed-smoke-readmodel` を人間または権限のあるセッションで実行して確認する)。PR 作成待ち
+Next: SP4 の PR を作って main に統合(実データでの最終確認は、DSN を扱えるセッションで PR 前後どちらでもよい)→ SP3(`web/src/speed/` の画面は
+素早さレーンのまま。タブ登録は3か所に1件ずつ: web/src/app/routes.ts の SCREEN_ROUTES・web/src/i18n/ja.ts の appText.speedTabLabel・
+web/src/app/screens.tsx の SCREEN_COMPONENTS。P4-10 は PR #44 で main に統合済み。テストの例は web/src/App.routing.test.tsx と
+web/e2e/routing.spec.ts)→ SP5(GitOps。ADR-0603 で SP4 から分離。イメージの digest が決まる段階で着手)。SP4 までに決めた: 空の roster の
+扱いは pokedex export が1件以上を返す前提のまま(ADR-0603 影響。実データで0件になる状況が起きたら別途決める)
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠
