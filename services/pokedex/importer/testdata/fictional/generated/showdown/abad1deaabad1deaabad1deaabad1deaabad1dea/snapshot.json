@@ -42,13 +42,20 @@
      "formeOrder": [], "isNonstandard": "Past"}
   ],
   "moves": [
-    {"id": "testflame", "name": "Test Flame", "type": "Fire", "category": "Special", "basePower": 90, "accuracy": 100, "pp": 15, "priority": 0, "isNonstandard": null},
-    {"id": "teststrike", "name": "Test Strike", "type": "Normal", "category": "Physical", "basePower": 40, "accuracy": 0, "pp": 30, "priority": 1, "isNonstandard": null},
-    {"id": "testglare", "name": "Test Glare", "type": "Grass", "category": "Status", "basePower": 0, "accuracy": 100, "pp": 20, "priority": 0, "isNonstandard": null},
-    {"id": "testold", "name": "Test Old", "type": "Normal", "category": "Physical", "basePower": 50, "accuracy": 100, "pp": 10, "priority": 0, "isNonstandard": "Past"},
-    {"id": "testrevived", "name": "Test Revived", "type": "Water", "category": "Special", "basePower": 70, "accuracy": 90, "pp": 10, "priority": 0, "isNonstandard": null},
-    {"id": "testbanned", "name": "Test Banned", "type": "Water", "category": "Special", "basePower": 80, "accuracy": 100, "pp": 10, "priority": 0, "isNonstandard": "Past"},
-    {"id": "testsplash", "name": "Test Splash", "type": "Water", "category": "Special", "basePower": 60, "accuracy": 100, "pp": 20, "priority": 0, "isNonstandard": null}
+    {"id": "testflame", "name": "Test Flame", "type": "Fire", "category": "Special", "basePower": 90, "accuracy": 100, "pp": 15, "priority": 0, "isNonstandard": null,
+     "self": null, "secondary": {"chance": 10, "self": {"boosts": {"spa": 1}}, "boosts": null}, "secondaries": []},
+    {"id": "teststrike", "name": "Test Strike", "type": "Normal", "category": "Physical", "basePower": 40, "accuracy": 0, "pp": 30, "priority": 1, "isNonstandard": null,
+     "self": {"boosts": {"def": -1, "spe": 1}}, "secondary": null, "secondaries": []},
+    {"id": "testglare", "name": "Test Glare", "type": "Grass", "category": "Status", "basePower": 0, "accuracy": 100, "pp": 20, "priority": 0, "isNonstandard": null,
+     "self": null, "secondary": null, "secondaries": []},
+    {"id": "testold", "name": "Test Old", "type": "Normal", "category": "Physical", "basePower": 50, "accuracy": 100, "pp": 10, "priority": 0, "isNonstandard": "Past",
+     "self": null, "secondary": null, "secondaries": []},
+    {"id": "testrevived", "name": "Test Revived", "type": "Water", "category": "Special", "basePower": 70, "accuracy": 90, "pp": 10, "priority": 0, "isNonstandard": null,
+     "self": null, "secondary": {"chance": 20, "self": null, "boosts": {"def": -1}}, "secondaries": []},
+    {"id": "testbanned", "name": "Test Banned", "type": "Water", "category": "Special", "basePower": 80, "accuracy": 100, "pp": 10, "priority": 0, "isNonstandard": "Past",
+     "self": {"boosts": {"atk": 1}}, "secondary": null, "secondaries": []},
+    {"id": "testsplash", "name": "Test Splash", "type": "Water", "category": "Special", "basePower": 60, "accuracy": 100, "pp": 20, "priority": 0, "isNonstandard": null,
+     "self": null, "secondary": {"chance": 30, "self": null, "boosts": {"accuracy": -1}}, "secondaries": []}
   ],
   "items": [
     {"id": "testmonite", "name": "Testmonite", "isNonstandard": null},

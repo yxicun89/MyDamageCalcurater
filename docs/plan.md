@@ -118,13 +118,25 @@
   公開 API に無いデータに依存するため capabilities で明示的に無効を伝える)、`App.tsx`/`main.tsx` の配線。
   実装時に見つけた重大バグ(`baseUrl: "/"`(本番の既定)で `new URL(path, baseUrl)` が Invalid URL 例外を投げ、
   オンラインモードが常に失敗する)を修正し回帰テストを追加(critic 指摘。文字列連結に変更)。画面側は未着手
-- [ ] P4-16b Web のオンライン MasterSource の画面側(ADR-0304 A-5・A-7): 種族の検索コンボボックス、技選択・持ち物候補比較・
-  特性一覧が使えないときの無効化と案内表示(`i18n/ja.ts` の `masterOnlineText` を使う)。`web/src/screens/*.tsx` が対象。
-  併せて拾う軽微な積み残し(P4-16 の2回目 critic PASS で指摘。ブロッカーではない): (1) `onlineSource.ts` の
-  AbortError 再送出に検証テストが無い(検索キャンセル実装時に signal で reject するテストを追加)。
-  (2) `response.json()` 側の catch は abort を汎用エラーに潰す(fetch 側と同じ扱いに揃える)。
-  (3) `onlineSource.test.ts` の `urlOf` に基点を足した副作用で、`natures`/`species` の呼び出しは絶対 URL の
-  origin を検査していない(`items` のみ検査済み)。(4) `SPECIES_SEARCH_DEBOUNCE_MS` が未使用なら削除か使用を確認
+- [x] P4-16b Web のオンライン MasterSource の画面側(ADR-0304 A-5・A-7・「追記2」A-9〜A-11。critic 2回目 PASS 相当:
+  1回目 FAIL の指摘のうち必須分〈重要1・重要4・軽微1・軽微2〉は修正済み、重要2・3・軽微3・4 は下記 P4-16c へ分離
+  〈critic 許容範囲〉): 種族の検索コンボボックス(ADR A-4・A-10)、技選択・持ち物候補比較が使えないときの無効化と
+  案内表示(`i18n/ja.ts` の `masterOnlineText`)、BalanceScreen は `speciesList`・`moves` が両方そろうまで画面ごと
+  無効(案内 + 入力を全部 disabled + balance API を呼ばない。A-9)。検索を画面へ渡す経路は `ScreenProps.masterSearch?`
+  (A-10)。P4-16 の積み残し(1)(2)(response.json 側の AbortError 再送出)も本タスクで解消・回帰テスト追加。
+  (3)(4)は影響が無い軽微事項のため P4-16c にまとめて送る
+- [ ] P4-16c P4-16b の critic 指摘で今回見送った残り(ブロッカーではないが今回中に必須ではないため分離。
+  critic の許容どおり明記): (1) 種族の検索候補がキーボードで選べない(↑↓/Enter/Escape・`aria-activedescendant`
+  が無い。WAI-ARIA Combobox パターン未実装。`web/src/screens/SpeciesSearchField.tsx`)。(2) 検索欄に CSS が無い
+  (`species-search__*` のクラスが未スタイルのまま。`docs/design.md` に沿った見た目を用意する)。
+  (3) `onlineSource.test.ts` の `urlOf` に基点を足した副作用で `natures`/`species` の呼び出しが絶対 URL の origin を
+  検査していない(`items` のみ検査済み)。(4) 検索中に入力を空へ戻した直後に古い検索が届くケースの未カバー
+  (`createDeferredSpeciesSearch` で1件追加)。(5) `aria-controls` の参照先が閉じているとき DOM に無い・
+  `aria-selected` が常に false。(6) P4-16b の2回目 critic PASS の指摘: `BalanceScreen.online.test.tsx` の
+  A-9 回帰テストは `analyze`/`recommendations` のガード削除は検知するが `coverage`/`threats` のガード削除は
+  検知しない(技1つ・仮想敵1体も選んでから capabilities を切り替える形にすれば4つとも覆える)。
+  (7) `CalcScreen.online.test.tsx` の truncated 肯定側テストに候補件数(`SPECIES_SEARCH_LIMIT` 件)のアサーションが無い
+  (否定側と非対称)
 - [ ] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら
   `capabilities.moves` を true にして技を復活させる
 - [ ] P4-18 Codex コードレビューの issue(Web レーン主担当。タイプバランスレーンから 2026-09-23 に連絡・`gh issue view <番号>`)。
@@ -141,7 +153,7 @@
 - [ ] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰)
 - [ ] P5-4 team-svc(構築 CRUD、Showdown 形式入出力)
 - [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー
-- [~] P5-6 技の追加効果(使用者自身のランク変化。例: ニトロチャージで自分の素早さ+1)を engine の Move・マスタ・importer・export に足す(判定レーンからの提案。DECISIONS.md 2026-09-22。ADR-0005 に沿い、追加効果の対象=self/target・確率・ランク変化量をデータとして持つ)。優先度は低く、判定レーンの JD1 は今のデータのままで動く(呼び出し側が Individual.ranks で指定)ため、着手は他の M1 残作業の後でよい
+- [x] P5-6 技の追加効果(使用者自身のランク変化。例: ニトロチャージで自分の素早さ+1)を engine の Move・マスタ・importer・export に足す(判定レーンからの提案。DECISIONS.md 2026-09-22。ADR-0005 に沿い、追加効果の対象=self/target・確率・ランク変化量をデータとして持つ。ADR-0107。critic PASS。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。公開APIへの露出は判定レーンの要件確定後)
 
 ## M3: iOS
 - [x] P6-1 Xcode プロジェクト、swift-openapi-generator、デザイントークン(ADR-0500。`make ios-test` = 生成物の一致・XCTest・XCUITest・Info.plist の接続先。critic PASS)
@@ -253,6 +265,7 @@
 
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)
+- [x] issue #110(セキュリティ。Codex レビュー)の API レーン担当分: `POST /api/calc/bulk`・`/api/calc/reverse` の候補・観測配列に件数上限が無く、1MiB未満の小さな本文で計算量を増幅できた(2,000×2,000 で約9.4秒)。契約(`maxItems`/`uniqueItems`/`maximum`。ADR-0208)を追加し、calc-svc の生成ラッパは検証しないため(実測確認済み)自前検証をID解決・engine呼び出しより前に実装。critic PASS、実HTTPで境界値と再現手順の解消(0.9ms・engine未到達)を確認。engine/wasmapi(データレーン)・Web・iOSへの追従は DECISIONS.md に既定案付きで依頼(issue はレーンの完了までクローズしない)
 - MySQL の manifest に MYSQL_DATABASE が無く、初回起動時に pokedex DB が自動作成されない実バグを発見(データレーンが k3d に初めて実デプロイした際に発生)。deploy/k8s/overlays/local/mysql/statefulset.yaml に MYSQL_DATABASE: pokedex を追加し、layout_test.go に検知テストを追加して修正(2026-09-22)。**新規クラスタでは直るが、この修正前にすでに初期化済みの PVC は MYSQL_DATABASE の効果を受けない**(コンテナ起動時にしか実行されない仕様のため)。既存の PVC に対しては CREATE DATABASE を手動実行するしかない。docs/runbooks/data.md に一言注記するとよい
 - P2-3 の critic の軽微(2026-09-22。未反映の4件): `check-publishable.sh` の `B_KEYVALUE_ALLOW` を self-test の基準リポジトリにも播く / `maxCatalogAbilityCount` が balance の schema・loader と三重管理(テストで検出はできる) / natures-mismatch のエラー案内が Showdown 側だけを見て `make import-fetch` の案内が出ないことがある / `TestPublicInputValidation` の 400 応答を契約検証(kin-openapi)に通す
 

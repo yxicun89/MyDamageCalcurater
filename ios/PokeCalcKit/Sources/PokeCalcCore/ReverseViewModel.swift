@@ -21,9 +21,7 @@ public struct ObservationRow: Identifiable, Equatable, Sendable {
 /// 逆算画面の状態。`PokeCalcService` だけに依存する(ADR-0500 §3)。
 @MainActor
 @Observable
-public final class ReverseViewModel {
-    /// openapi の `limit` の上限(`CalcViewModel` と同じ)。
-    private static let masterListLimit = 200
+public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSearchProviding {
     /// 与えたダメージ・受けたダメージのどちらでも自分・相手として選べるためには種族が最低2つ要る。
     private static let minimumSpeciesCount = 2
 
@@ -31,15 +29,36 @@ public final class ReverseViewModel {
     /// 構築の永続化(P6-2d)。`CalcViewModel.teamStore` と同じ理由で省略可(既定 nil)。
     private let teamStore: (any TeamStore)?
 
+    // MARK: - 検索(issue #68。ADR-0501「issue #68」3〜6章・10章。`CalcViewModel` と同じ規則)
+
+    private let speciesSearch: MasterSearchField<SpeciesSummary>
+    private let moveSearch: MasterSearchField<Move>
+    /// 一度でも見た種族(検索結果・`species(key:)` の応答のどちらからも合流する。5章)。
+    private var speciesDictionary: [String: SpeciesSummary] = [:]
+    /// 一度でも見た技(検索結果から合流する。5章)。`selectedMove` はここから引く。
+    private var moveDictionary: [String: Move] = [:]
+    /// 直近の技検索の結果(`moveOptions` は「これと攻撃側の learnset の ID 集合との交差」。6章)。
+    private var latestMoveSearchResults: [Move] = []
+    /// いまの攻撃側(与えたダメージ=自分、受けたダメージ=相手)の learnset(ID のみ。6章)。
+    private var attackingLearnsetIds: [String] = []
+
     // MARK: - マスタ(load() で読み込む)
 
+    public private(set) var speciesQuery: String = ""
+    public private(set) var moveQuery: String = ""
+    public private(set) var isSearchingSpecies = false
+    public private(set) var isSearchingMoves = false
+    public private(set) var speciesSearchReachedLimit = false
+    public private(set) var moveSearchReachedLimit = false
+
+    /// 直近の種族検索の結果(空クエリなら起動時の先頭ページ。`CalcViewModel.speciesOptions` と同じ
+    /// 理由で名前は変えない。2章)。
     public private(set) var speciesOptions: [SpeciesSummary] = []
     public private(set) var itemOptions: [Item] = []
-    /// 攻撃側(与えたダメージ = 自分、受けたダメージ = 相手)の learnset とマスタの技を突き合わせた、
-    /// **ダメージ技だけ**の選択肢(learnset の順。変化技は逆算できないので出さない)。
+    /// 攻撃側(与えたダメージ = 自分、受けたダメージ = 相手)の「直近の技検索の結果 ∩ learnset の
+    /// ID 集合」を learnset の順で並べた、**ダメージ技だけ**の選択肢(変化技は逆算できないので出さない)。
     public private(set) var moveOptions: [Move] = []
     private var natureOptions: [Nature] = []
-    private var masterMoves: [Move] = []
     private var didLoad = false
 
     // MARK: - 画面の入力
@@ -85,9 +104,15 @@ public final class ReverseViewModel {
     /// 「最新の要求だけを反映する」ための通し番号(`CalcViewModel.beginInput()` と同じ規則)。
     private var latestRequestToken = 0
 
-    public init(service: any PokeCalcService, teamStore: (any TeamStore)? = nil) {
+    public init(service: any PokeCalcService, teamStore: (any TeamStore)? = nil, searchDebounce: Duration = MasterSearch.debounceInterval) {
         self.service = service
         self.teamStore = teamStore
+        speciesSearch = MasterSearchField(debounce: searchDebounce) { query, limit in
+            try await service.searchSpecies(query: query, limit: limit)
+        }
+        moveSearch = MasterSearchField(debounce: searchDebounce) { query, limit in
+            try await service.searchMoves(query: query, limit: limit)
+        }
     }
 
     /// 側から観測の精度が決まる(与えたダメージ = %、受けたダメージ = 実点数)。
@@ -105,14 +130,22 @@ public final class ReverseViewModel {
         isLoading = true
         do {
             let natures = try await service.natures()
-            let species = try await service.searchSpecies(query: "", limit: Self.masterListLimit)
-            let moves = try await service.searchMoves(query: "", limit: Self.masterListLimit)
-            let items = try await service.searchItems(query: "", limit: Self.masterListLimit)
+            let species = try await service.searchSpecies(query: "", limit: MasterSearch.pageLimit)
+            let moves = try await service.searchMoves(query: "", limit: MasterSearch.pageLimit)
+            let items = try await service.searchItems(query: "", limit: MasterSearch.pageLimit)
             guard token == latestRequestToken else { return }
 
             natureOptions = natures
-            speciesOptions = species
-            masterMoves = moves
+            speciesSearch.setFirstPage(species)
+            speciesOptions = speciesSearch.options
+            speciesSearchReachedLimit = speciesSearch.reachedLimit
+            mergeSpeciesIntoDictionary(species)
+
+            moveSearch.setFirstPage(moves)
+            latestMoveSearchResults = moveSearch.options
+            moveSearchReachedLimit = moveSearch.reachedLimit
+            mergeMovesIntoDictionary(moves)
+
             itemOptions = items
 
             guard species.count >= Self.minimumSpeciesCount else {
@@ -168,8 +201,10 @@ public final class ReverseViewModel {
     /// 構築の個体を呼び出す。**いま表示している側**(`side`)の出どころだけを変える(4章)。
     /// `teamOptions` に無い teamID/memberID は無視する(計算もしない)。
     public func selectTeamIndividual(teamID: String, memberID: String) async {
+        // 構築に保存された技の分類判定には、一度でも見た技の辞書を使う(`CalcViewModel` と同じ理由。issue #68)。
         guard let selection = TeamIndividualSelectionBuilder.make(
-            teamID: teamID, memberID: memberID, teamOptions: teamOptions, teams: loadedTeams, moves: masterMoves
+            teamID: teamID, memberID: memberID, teamOptions: teamOptions, teams: loadedTeams,
+            moves: Array(moveDictionary.values)
         ) else { return }
 
         mySpeciesKey = selection.individual.speciesKey
@@ -275,8 +310,10 @@ public final class ReverseViewModel {
 
     // MARK: - 種族の選択(規則7: 攻撃側の種族が変わったときだけ learnset を読み直す)
 
+    /// 選べるかどうかは「一度でも見た種族」の辞書で判定する(issue #68。`CalcViewModel.selectAttacker`
+    /// と同じ理由: 検索で見つけた種族を選べるようにするため)。
     public func selectMySpecies(key: String) async {
-        guard speciesOptions.contains(where: { $0.key == key }) else { return }
+        guard speciesDictionary[key] != nil else { return }
         mySpeciesKey = key
         let token = beginInput()
         if side == .defender {
@@ -287,7 +324,7 @@ public final class ReverseViewModel {
     }
 
     public func selectOpponentSpecies(key: String) async {
-        guard speciesOptions.contains(where: { $0.key == key }) else { return }
+        guard speciesDictionary[key] != nil else { return }
         opponentSpeciesKey = key
         let token = beginInput()
         if side == .attacker {
@@ -341,6 +378,50 @@ public final class ReverseViewModel {
         guard side == .attacker else { return }
         let token = beginInput()
         await recalculateIfPossible(token: token)
+    }
+
+    // MARK: - 検索(issue #68。ADR-0501「issue #68」10章。`CalcViewModel` と同じ規則)
+
+    public func speciesSummary(forKey key: String) -> SpeciesSummary? {
+        speciesDictionary[key]
+    }
+
+    public var mySpecies: SpeciesSummary? { speciesDictionary[mySpeciesKey] }
+    public var opponentSpecies: SpeciesSummary? { speciesDictionary[opponentSpeciesKey] }
+    /// 選択中の技。「見えている候補」(`moveOptions`)ではなく一度でも見た技の辞書から引く
+    /// (`CalcViewModel.selectedMove` と同じ理由。issue #68)。
+    public var selectedMove: Move? { moveDictionary[moveId] }
+
+    @discardableResult
+    public func setSpeciesQuery(_ text: String) -> Bool {
+        let needsSearch = speciesSearch.setQuery(text)
+        speciesQuery = speciesSearch.query
+        return needsSearch
+    }
+
+    @discardableResult
+    public func setMoveQuery(_ text: String) -> Bool {
+        let needsSearch = moveSearch.setQuery(text)
+        moveQuery = moveSearch.query
+        return needsSearch
+    }
+
+    public func runSpeciesSearch() async {
+        let results = await speciesSearch.run()
+        speciesOptions = speciesSearch.options
+        isSearchingSpecies = speciesSearch.isSearching
+        speciesSearchReachedLimit = speciesSearch.reachedLimit
+        guard let results else { return }
+        mergeSpeciesIntoDictionary(results)
+    }
+
+    public func runMoveSearch() async {
+        let results = await moveSearch.run()
+        latestMoveSearchResults = moveSearch.options
+        isSearchingMoves = moveSearch.isSearching
+        moveSearchReachedLimit = moveSearch.reachedLimit
+        if let results { mergeMovesIntoDictionary(results) }
+        recomputeMoveOptions()
     }
 
     // MARK: - 内部: 世代の保護
@@ -413,9 +494,24 @@ public final class ReverseViewModel {
         let attackingKey = attackingSpeciesKey
         let detail = try await service.species(key: attackingKey)
         guard token == latestRequestToken, detail.key == attackingKey else { return }
-        moveOptions = detail.learnset
-            .compactMap { learnedId in masterMoves.first(where: { $0.id == learnedId }) }
+        speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+        attackingLearnsetIds = detail.learnset
+        recomputeMoveOptions()
+    }
+
+    /// `attackingLearnsetIds` と `latestMoveSearchResults` のどちらかが変わったら呼び直す(issue #68・6章)。
+    private func recomputeMoveOptions() {
+        moveOptions = attackingLearnsetIds
+            .compactMap { learnedId in latestMoveSearchResults.first(where: { $0.id == learnedId }) }
             .filter { $0.category != .status }
+    }
+
+    private func mergeSpeciesIntoDictionary(_ items: [SpeciesSummary]) {
+        for item in items { speciesDictionary[item.key] = item }
+    }
+
+    private func mergeMovesIntoDictionary(_ items: [Move]) {
+        for item in items { moveDictionary[item.id] = item }
     }
 
     /// `currentMoveId` がいまの `moveOptions` にまだあればそれを残し、無ければ最初のダメージ技を選ぶ。
@@ -475,7 +571,9 @@ public final class ReverseViewModel {
 
     /// いまの入力から `ReverseRequest` を組み立てる(規則6)。既知側(`known`)は常に自分。
     private func buildRequest(observations: [DamageObservation]) throws -> ReverseRequest {
-        guard let move = moveOptions.first(where: { $0.id == moveId }) else {
+        // `moveOptions`(見えている候補)ではなく一度でも見た技の辞書から引く(`CalcViewModel.buildRequest`
+        // と同じ理由。issue #68・5章: 検索語を変えても選択中の技の計算入力が壊れないようにするため)。
+        guard let move = selectedMove else {
             throw PokeCalcError(code: PokeCalcError.Code.selectedMoveMissing, message: "選択中の技が一覧にありません")
         }
         let known: Individual

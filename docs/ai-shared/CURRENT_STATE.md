@@ -6,14 +6,15 @@ Active: Claude Code
 Branch: feat/claude-p1-engine(作業ディレクトリ ~/MyDamageCalcurater)
 Status: Phase 1・P2-1・P1-10・Phase R・P1-13・P1-11・P1-12・P2-1b・P2-1c・P2-2a・P2-2b・P2-2c・P2-2d・P2-3(pokedex-svc。内部 API・公開 API・natures・balance/speed 向け export。ADR-0105)は完了(critic レビュー済み)
 Status(追記): P2-3b(無効・吸収の特性)も完了・main 統合済み(ADR-0106)。calc・gateway の pokedex-svc 接続(API レーンの依頼)も PR #87 で解決済み(api-smoke で master=pokedex 確認済み)。
-Next: P5-6(技の追加効果によるランク変化。判定レーンからの提案。DECISIONS.md 2026-09-22)に着手中。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)
+Status(追記): P5-6(技の追加効果によるランク変化。ADR-0107)完了・critic PASS(1往復)・**main 統合済み(PR #132)**。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。`move_effects` 別表・`MasterMove.effect`(内部API)まで。公開APIへの露出(判定レーンが技IDからランク変化を引く経路)は判定レーンの要件確定後に別途対応。
+Next: (1) issue #110(API レーンから依頼。DECISIONS.md 2026-09-23): `engine.CalcBulk`/`CalcReverse` に同じ防御上限(presets 8/ItemVariants 64/ItemCandidates 64/Observations 16/MaxCandidates 0..128)を置き、`engine/wasmapi` にも invalid_input 相当の上限と HTTP/WASM parity テストを足す。(2) Codexレビュー issue #106(排他制御)を優先、続いて #104/#109/#112。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
-Active: なし
-Branch: (次は main から feat/api-<名前> を切る。作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: Phase 3 完了(PR #14・#23・#30)、P3-4〜P3-6(ADR-0204/0205/0206。PR #42/#54/#87)、DOC-api(README・手順書。PR #117)は main に統合済み
-Next: 特に無し。他レーン(データ・Web・iOS)からの依頼待ち
+Active: Claude Code
+Branch: feat/api-issue110-limits(PR で main へ。作業ディレクトリ ~/MyDamageCalcurater-api)
+Status: Phase 3 完了、P3-4〜P3-6・DOC-api は main に統合済み。issue #110(セキュリティ。Codex レビュー)の API レーン担当分(契約の maxItems/uniqueItems・calc-svc の自前検証。ADR-0208)は critic PASS。PR 作成待ち
+Next: (1) issue #110 の PR を main へ(マージ後、他レーンへ依頼: engine/wasmapi に同じ防御上限、Web/iOS の観測16件・候補64件UI。DECISIONS.md に既定案あり。issue はレーンの完了までクローズしない)。(2) issue #103(M2保存データの保持・削除・端末ID境界。ユーザー決定=一定期間の自動失効。ADR作成。データレーンと調整)
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
@@ -33,22 +34,32 @@ P4-5 は Chrome で確認済み(Safari は未確認。人間の作業)。
 `new URL(path, baseUrl)` が例外を投げ、オンラインモードが常に失敗していた)→ 修正・回帰テスト追加 → 2回目 critic PASS。
 既存のオフライン・全画面・既存752件のテストは無変更。技の ID→実体化(`getSpecies.learnset`)は公開 API に手段が無く、
 データ/API レーンへ既定案付きで提案済み(DECISIONS.md 2026-09-23、未回答・急ぎではない)。
-Next: (1) P4-16b(画面側。ADR-0304 A-5): 種族の検索コンボボックス、技選択・持ち物候補比較・特性一覧が使えないときの
-無効化と案内表示(`web/src/screens/*.tsx` が対象。plan.md に軽微な積み残し4件も記録済み)。
+**P4-16b(画面側。ADR-0304 A-9〜A-11)も完了・main 統合済み(PR #134)**: CalcScreen・ReverseScreen は技・持ち物候補比較が
+無効なとき disabled+案内、種族一覧が無効なとき検索欄(`SpeciesSearchField`)。BalanceScreen は `speciesList`・`moves`
+が両方そろうまで画面ごと無効化し balance API を1本も呼ばない(A-9。技が空のまま誤解を招く診断を返さないため)。
+critic 1回目 FAIL(検索候補が1件でも「候補が多い」と誤案内する文言バグ、BalanceScreen のガードが実質未検証だった点)
+を修正・テスト強化して2回目 PASS。既存803件は無変更・新規30件追加(833件)。
+キーボード操作・CSS 等の残りは P4-16c として plan.md に理由付きで分離(ブロッカーではない)。
+Next: (1) P4-16c(検索欄のキーボード操作・CSS 等。plan.md 参照)。
 (2) P4-18(Codexレビュー issue。タイプバランスレーンから連絡): 優先 #99(アクセシビリティ)・#113(debounce/cancel)。
-(3) 続いて P5-5(構築ビルダー等)は record/team の API 待ち。
-(4) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
+(3) P4-17: 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら技を復活。
+(4) 続いて P5-5(構築ビルダー等)は record/team の API 待ち。
+(5) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
 Active: Claude Code
 Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
 Status: **M3(iPhone で使える)は完了**。P6-1(ADR-0500)・P6-2a 計算画面・契約追従・P6-2b 逆算画面・P6-2c 構築ビルダー
-(一覧・編集・ニックネーム)・P6-2d(構築から個体を呼び出す配線)・生成の internal タグ除外・DOC-ios は main に統合済み
-(PR #31・#53・#91・#119)。`make ios-test`(gen-check・XCTest 284件・XCUITest 12件・Info.plist 検査)が緑(P6-3)。
-P6-4 の手順書 `docs/runbooks/ios-device-install.md` を作成しコミット済み(ブランチにあり PR 作成中)。
-Next: PR を main へ。その後は M3 完了なので、ユーザーからの新規要望待ち(実機インストール・署名は手順書どおり
-人間が行う)。将来の候補: engine の Champions マスタが pokedex-svc 経由になったら iOS のモック/実マスタの
+(一覧・編集・ニックネーム)・P6-2d(構築から個体を呼び出す配線)・P6-3・P6-4(手順書 `docs/runbooks/ios-device-install.md`)・
+生成の internal タグ除外・DOC-ios は main に統合済み(PR #31・#53・#91・#119・#122)。
+続けて Codex レビュー issue のうち iOS 主担当分を修正・main 統合済み: #100(種族変更後の特性ID残留)・#101(負のSPの
+検証漏れ、PR #131)、#68(検索上限200件。種族・技ピッカーを `Menu` 一括取得から `.searchable()` 検索UIへ変更。
+Web の ADR-0304 と同じ方針。PR #136)。`make ios-test`(gen-check・XCTest 321件・XCUITest 16件・Info.plist 検査)が緑。
+issue #68 は既知の制約(一度も検索結果に出ていない技IDは名前解決できない)をコメントで記録した上でクローズせず残す。
+Next: 次点候補は issue #113(Web/iOS共同主担当。入力デバウンス・キャンセル)。#71(攻撃側プリセット単一化)は engine 側の
+`AttackerPreset` カタログ新設(データレーン)が前提のため iOS からは未着手。#99・#110 は他レーンが主担当。#103 は着手しない
+(ユーザー決定待ち)。将来の候補: engine の Champions マスタが pokedex-svc 経由になったら iOS のモック/実マスタの
 差し替え動作を再確認、Web の record/team-svc(M2)が進んだら iOS の構築を端末内保存から API 保存へ移行するかを検討。
 
 ## Type Balance Checker

@@ -10,6 +10,7 @@ import SwiftUI
 /// 逆算画面。
 struct ReverseScreenView: View {
     @State private var viewModel: ReverseViewModel
+    @State private var isMoveSearchPresented = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// テンキーには Return が無いので、キーボード上部の「完了」で閉じる(ADR-0501「実装メモ」の
@@ -23,11 +24,6 @@ struct ReverseScreenView: View {
     init(service: any PokeCalcService, teamStore: any TeamStore, backendDescription: String) {
         _viewModel = State(initialValue: ReverseViewModel(service: service, teamStore: teamStore))
         self.backendDescription = backendDescription
-    }
-
-    /// いまの技(未読み込みなら nil)。防御側プリセットの表示名(HB/HD)に使う。
-    private var selectedMove: Move? {
-        viewModel.moveOptions.first(where: { $0.id == viewModel.moveId })
     }
 
     var body: some View {
@@ -158,7 +154,7 @@ struct ReverseScreenView: View {
             }
         case .attacker:
             // ラベルは相手の技の分類(HB/HD)に依存する。技の読み込み前は物理扱いで暫定表示する。
-            let category = selectedMove?.category ?? .physical
+            let category = viewModel.selectedMove?.category ?? .physical
             HStack(spacing: SpacingToken.x2) {
                 ForEach(KnownDefenderPreset.allCases, id: \.self) { preset in
                     PresetPillButton(
@@ -190,22 +186,19 @@ struct ReverseScreenView: View {
         }
     }
 
+    /// issue #68: `Menu` ではなく検索シートで選ぶ(`CalcScreenView.moveSelector` と同じ理由)。
     private var moveSelector: some View {
-        Menu {
-            ForEach(viewModel.moveOptions, id: \.id) { move in
-                Button(move.nameJa) {
-                    Task { await viewModel.selectMove(id: move.id) }
-                }
-            }
+        Button {
+            isMoveSearchPresented = true
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: SpacingToken.x1) {
-                    Text(selectedMove?.nameJa ?? "-")
+                    Text(viewModel.selectedMove?.nameJa ?? "-")
                         .font(TextStyleToken.heading.font)
                         .foregroundStyle(ColorToken.textPrimary.color)
                         .lineLimit(1)
                         .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
-                    if let move = selectedMove {
+                    if let move = viewModel.selectedMove {
                         Text("威力\(move.power) / \(MoveCategoryLabel.japaneseName(for: move.category))")
                             .font(TextStyleToken.caption.font)
                             .foregroundStyle(ColorToken.textSecondary.color)
@@ -221,6 +214,11 @@ struct ReverseScreenView: View {
             .glassCard(cornerRadius: RadiusToken.input)
         }
         .accessibilityIdentifier("reverseMovePicker")
+        .sheet(isPresented: $isMoveSearchPresented) {
+            MoveSearchSheet(viewModel: viewModel, options: viewModel.moveOptions) { move in
+                Task { await viewModel.selectMove(id: move.id) }
+            }
+        }
     }
 
     private var opponentItemCandidateToggles: some View {

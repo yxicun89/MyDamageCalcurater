@@ -145,6 +145,12 @@ export const masterOnlineText = {
   speciesSearchTruncated: "候補が多いため一部だけ表示しています。名前をもう少し入力してください",
   /** 検索・種族の取得に失敗したとき(自動でオフラインには切り替えない。ADR-0301 §4)。 */
   speciesSearchFailed: "ポケモンの検索に失敗しました",
+  /**
+   * capabilities.speciesList か moves が false のとき、タイプバランスの画面に出す案内(ADR-0304 A-9)。
+   * この画面は4つの診断のうち3つが技に依存し、技が無いまま呼ぶと誤解を招く結果になるため画面ごと止める。
+   */
+  balanceUnavailable:
+    "オンラインではタイプバランス診断を使えません(ポケモンと技の一覧に未対応のため、オフラインで行ってください)",
 } as const;
 
 /**

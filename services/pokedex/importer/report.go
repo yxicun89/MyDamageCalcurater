@@ -54,6 +54,13 @@ const (
 	KindOverrideUnused FindingKind = "override-unused"
 	KindEffectUnused   FindingKind = "effect-unused"
 
+	// KindMoveEffectUnsupportedStat は技の追加効果(命中時のランク変化)が accuracy/evasion しか
+	// 動かさないとき(engine の Ranks に持ち場が無い。ADR-0107 決定6 規則4)。落として警告にする。
+	KindMoveEffectUnsupportedStat FindingKind = "move-effect-unsupported-stat"
+	// KindMoveEffectAmbiguous は1つの技が2つ以上のランク変化エントリを持つとき(ADR-0107 決定3
+	// の前提「取得元に2エントリ以上の技は無い」が崩れたことを人に知らせる。決定6 規則6)。
+	KindMoveEffectAmbiguous FindingKind = "move-effect-ambiguous"
+
 	// KindNatureMismatch は性格(natures)の補正が Showdown と calc で食い違う、または片方にしか
 	// 無いとき(ADR-0105 §4)。ID は Showdown の ID か、calc にしかない性格名の toID。
 	KindNatureMismatch FindingKind = "nature-mismatch"

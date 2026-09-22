@@ -28,6 +28,22 @@ actor StubPokeCalcService: PokeCalcService {
         case manual
     }
 
+    /// `searchSpecies` / `searchMoves` の1回の呼び出しの記録(issue #68: 検索語と上限が契約どおり
+    /// 渡っていることと、余計な再取得をしていないことを固定するため)。
+    struct SearchCall: Equatable, Sendable {
+        let query: String
+        let limit: Int
+    }
+
+    /// 検索(`searchSpecies` / `searchMoves`)の応答の返し方。`species(key:)` の `SpeciesMode` と同じ規則。
+    enum SearchMode {
+        /// 要求を受けたらすぐ架空マスタを前方一致で絞って返す。
+        case immediate
+        /// 応答を保留する。テストが `resolveSpeciesSearch(at:with:)` / `resolveMoveSearch(at:with:)` で
+        /// **任意の順序**で返す(新しい検索の応答が古い検索より先に届く状況を再現する)。
+        case manual
+    }
+
     enum ReverseMode {
         /// 呼ばれたらテストを失敗させる(P6-2a の計算画面は reverse を使わない)。
         case disallowed
@@ -69,6 +85,14 @@ actor StubPokeCalcService: PokeCalcService {
     /// `species(key:)` に渡された `key` の記録(呼ばれた順)。
     private(set) var speciesRequests: [String] = []
     private var pendingSpecies: [Int: CheckedContinuation<SpeciesDetail, any Error>] = [:]
+
+    /// `searchSpecies` / `searchMoves` の記録(呼ばれた順)と保留(issue #68)。
+    private var speciesSearchMode: SearchMode = .immediate
+    private(set) var speciesSearchCalls: [SearchCall] = []
+    private var pendingSpeciesSearch: [Int: CheckedContinuation<[SpeciesSummary], any Error>] = [:]
+    private var moveSearchMode: SearchMode = .immediate
+    private(set) var moveSearchCalls: [SearchCall] = []
+    private var pendingMoveSearch: [Int: CheckedContinuation<[Move], any Error>] = [:]
 
     init(species: [SpeciesDetail], moves: [Move], items: [Item], natures: [Nature]) {
         speciesDetails = species
@@ -125,6 +149,67 @@ actor StubPokeCalcService: PokeCalcService {
 
     func setMasterError(_ error: PokeCalcError?) {
         masterError = error
+    }
+
+    // MARK: - テストからの操作(検索。issue #68)
+
+    func setSpeciesSearchMode(_ mode: SearchMode) {
+        speciesSearchMode = mode
+    }
+
+    func setMoveSearchMode(_ mode: SearchMode) {
+        moveSearchMode = mode
+    }
+
+    /// 保留中の `index` 番目(0 始まり、`speciesSearchCalls` の添字)の `searchSpecies` に応答する。
+    func resolveSpeciesSearch(at index: Int, with result: Result<[SpeciesSummary], PokeCalcError>) {
+        guard let continuation = pendingSpeciesSearch.removeValue(forKey: index) else {
+            XCTFail("保留中の searchSpecies が無い: index \(index)")
+            return
+        }
+        continuation.resume(with: result.mapError { $0 as any Error })
+    }
+
+    /// 保留中の `index` 番目の `searchMoves` に応答する。
+    func resolveMoveSearch(at index: Int, with result: Result<[Move], PokeCalcError>) {
+        guard let continuation = pendingMoveSearch.removeValue(forKey: index) else {
+            XCTFail("保留中の searchMoves が無い: index \(index)")
+            return
+        }
+        continuation.resume(with: result.mapError { $0 as any Error })
+    }
+
+    /// `searchSpecies` が `count` 回以上呼ばれるまで待つ。
+    func waitForSpeciesSearchCalls(count: Int, file: StaticString = #filePath, line: UInt = #line) async throws {
+        for _ in 0..<Self.waitPollLimit {
+            if speciesSearchCalls.count >= count { return }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTFail("searchSpecies が \(count) 回呼ばれなかった(\(speciesSearchCalls.count) 回)", file: file, line: line)
+        throw PokeCalcError(code: "test_timeout", message: "searchSpecies の待ち合わせがタイムアウト")
+    }
+
+    /// `searchMoves` が `count` 回以上呼ばれるまで待つ。
+    func waitForMoveSearchCalls(count: Int, file: StaticString = #filePath, line: UInt = #line) async throws {
+        for _ in 0..<Self.waitPollLimit {
+            if moveSearchCalls.count >= count { return }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTFail("searchMoves が \(count) 回呼ばれなかった(\(moveSearchCalls.count) 回)", file: file, line: line)
+        throw PokeCalcError(code: "test_timeout", message: "searchMoves の待ち合わせがタイムアウト")
+    }
+
+    /// `.immediate` の既定応答、および手動モードでテストが `resolveSpeciesSearch` に渡す値を組み立てるのに使う。
+    func matchedSpecies(query: String, limit: Int) -> [SpeciesSummary] {
+        speciesDetails
+            .filter { query.isEmpty || $0.nameJa.hasPrefix(query) }
+            .prefix(limit)
+            .map { SpeciesSummary(key: $0.key, dexNo: $0.dexNo, form: $0.form, nameJa: $0.nameJa, types: $0.types) }
+    }
+
+    /// `matchedSpecies` の技版。
+    func matchedMoves(query: String, limit: Int) -> [Move] {
+        Array(moves.filter { query.isEmpty || $0.nameJa.hasPrefix(query) }.prefix(limit))
     }
 
     func setSpeciesMode(_ mode: SpeciesMode) {
@@ -230,10 +315,16 @@ actor StubPokeCalcService: PokeCalcService {
     // MARK: - PokeCalcService
 
     func searchSpecies(query: String, limit: Int) async throws -> [SpeciesSummary] {
+        let index = speciesSearchCalls.count
+        speciesSearchCalls.append(SearchCall(query: query, limit: limit))
         if let masterError { throw masterError }
-        let matched = speciesDetails.filter { query.isEmpty || $0.nameJa.hasPrefix(query) }
-        return matched.prefix(limit).map {
-            SpeciesSummary(key: $0.key, dexNo: $0.dexNo, form: $0.form, nameJa: $0.nameJa, types: $0.types)
+        switch speciesSearchMode {
+        case .immediate:
+            return matchedSpecies(query: query, limit: limit)
+        case .manual:
+            return try await withCheckedThrowingContinuation { continuation in
+                pendingSpeciesSearch[index] = continuation
+            }
         }
     }
 
@@ -260,8 +351,17 @@ actor StubPokeCalcService: PokeCalcService {
     }
 
     func searchMoves(query: String, limit: Int) async throws -> [Move] {
+        let index = moveSearchCalls.count
+        moveSearchCalls.append(SearchCall(query: query, limit: limit))
         if let masterError { throw masterError }
-        return Array(moves.filter { query.isEmpty || $0.nameJa.hasPrefix(query) }.prefix(limit))
+        switch moveSearchMode {
+        case .immediate:
+            return matchedMoves(query: query, limit: limit)
+        case .manual:
+            return try await withCheckedThrowingContinuation { continuation in
+                pendingMoveSearch[index] = continuation
+            }
+        }
     }
 
     func searchItems(query: String, limit: Int) async throws -> [Item] {
@@ -414,5 +514,71 @@ enum StubMaster {
         natures: [Nature] = [atkUpNature, neutralNature, spaUpNature]
     ) -> StubPokeCalcService {
         StubPokeCalcService(species: species, moves: moves, items: items, natures: natures)
+    }
+}
+
+// MARK: - 検索の上限(issue #68)を実際に踏む架空マスタ
+
+/// `MasterSearch.pageLimit` 件の「先頭ページに入る」架空マスタと、その**外側**に1件だけ置いた架空マスタ。
+///
+/// 空クエリの検索は `prefix(limit)` で切られるので、`hiddenSpecies` / `hiddenMove` は
+/// **名前で検索したときだけ**返る。これが issue #68 の再現手順(先頭200件だけを返す fake service +
+/// 201件目の技だけを持つ learnset)に相当する。アプリの架空データ(`Sources/PokeCalcCore/Resources/*.json`)は
+/// 増やさない(実データの件数をモックに持ち込まないため。ADR-0501「issue #68」9章)。
+enum StubBulkMaster {
+    /// 先頭ページに入る詰め物の技(すべて物理。既定の技選択が成立するように変化技は混ぜない)。
+    static func pageMove(_ index: Int) -> Move {
+        Move(id: "stub-page-move-\(index)", nameJa: "テストページわざ\(index)", type: .normal, category: .physical, power: 40)
+    }
+
+    /// 先頭ページに入る詰め物の種族。learnset は同じ index の詰め物の技1つだけ(先頭ページの内側)。
+    static func pageSpecies(_ index: Int) -> SpeciesDetail {
+        SpeciesDetail(
+            key: "8\(index)-000", dexNo: 8000 + index, form: 0, nameJa: "テストページしゅぞく\(index)", types: [.normal],
+            baseStats: StatBlock(hp: 50, atk: 50, def: 50, spa: 50, spd: 50, spe: 50),
+            abilities: [StubMaster.ability],
+            learnset: [pageMove(index).id]
+        )
+    }
+
+    /// 先頭ページの**外**にある技(名前で検索したときだけ返る)。
+    static let hiddenMove = Move(id: "stub-hidden-move", nameJa: "テストかくれわざ", type: .water, category: .physical, power: 40)
+
+    /// 先頭ページの**外**にある種族。learnset も先頭ページの外の技だけ(issue #68 の再現手順4)。
+    static let hiddenSpecies = SpeciesDetail(
+        key: "8999-000", dexNo: 8999, form: 0, nameJa: "テストかくれしゅぞく", types: [.water],
+        baseStats: StatBlock(hp: 50, atk: 50, def: 50, spa: 50, spd: 50, spe: 50),
+        abilities: [StubMaster.ability],
+        learnset: [hiddenMove.id]
+    )
+
+    /// learnset に先頭ページの内と外の技を1つずつ持つ種族(構築に保存済みの技の扱いの確認用)。
+    /// この種族自体も先頭ページの外に置く(`species(key:)` は key 指定なので検索しなくても引ける)。
+    static let mixedSpecies = SpeciesDetail(
+        key: "8998-000", dexNo: 8998, form: 0, nameJa: "テストまざりしゅぞく", types: [.normal],
+        baseStats: StatBlock(hp: 50, atk: 50, def: 50, spa: 50, spd: 50, spe: 50),
+        abilities: [StubMaster.ability],
+        learnset: [pageMove(0).id, hiddenMove.id]
+    )
+
+    /// `hiddenSpecies` だけに当たる検索語(前方一致。詰め物の名前とは接頭辞が重ならない)。
+    static let hiddenSpeciesQuery = "テストかくれしゅぞく"
+    /// `hiddenMove` だけに当たる検索語。
+    static let hiddenMoveQuery = "テストかくれわざ"
+    /// 詰め物すべてに当たる検索語(先頭ページと同じ集合が返る = 上限に達する)。
+    static let pageSpeciesQuery = "テストページしゅぞく"
+
+    static var pageSpeciesList: [SpeciesDetail] { (0..<MasterSearch.pageLimit).map(pageSpecies) }
+    static var pageMoveList: [Move] { (0..<MasterSearch.pageLimit).map(pageMove) }
+
+    /// 種族・技ともに「先頭ページ + その外の1件」。持ち物・性格は `StubMaster` のものをそのまま使う
+    /// (どちらも上限内なので issue #68 の対象外)。
+    static func makeService(natures: [Nature] = [StubMaster.atkUpNature, StubMaster.neutralNature, StubMaster.spaUpNature]) -> StubPokeCalcService {
+        StubPokeCalcService(
+            species: pageSpeciesList + [mixedSpecies, hiddenSpecies],
+            moves: pageMoveList + [hiddenMove],
+            items: [StubMaster.itemA, StubMaster.itemB],
+            natures: natures
+        )
     }
 }

@@ -10,25 +10,40 @@ import Observation
 /// ADR-0501「P6-2c」3章の指定どおり `@MainActor`(`CalcViewModel`/`ReverseViewModel` と同じ)。
 @MainActor
 @Observable
-public final class TeamEditViewModel {
-    /// openapi の `limit` の上限(`CalcViewModel` と同じ値。coding-rules §2「同じ値を複数箇所に
-    /// 書かない」の例外にはならない別モジュール内定数だが、意味は揃えている)。
-    private static let masterListLimit = 200
-
+public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSearchProviding {
     private let store: any TeamStore
     private let service: any PokeCalcService
 
+    // MARK: - 検索(issue #68。ADR-0501「issue #68」3〜6章・10章。`CalcViewModel` と同じ規則)
+
+    private let speciesSearch: MasterSearchField<SpeciesSummary>
+    private let moveSearch: MasterSearchField<Move>
+    /// 一度でも見た種族(検索結果・`species(key:)` の応答のどちらからも合流する。5章)。
+    private var speciesDictionary: [String: SpeciesSummary] = [:]
+    /// 直近の技検索の結果(`moveOptionsByMember` は「これとメンバーごとの learnset の ID 集合との交差」。6章)。
+    private var latestMoveSearchResults: [Move] = []
+    /// メンバー id → いまの種族の learnset(ID のみ。6章)。
+    private var learnsetIdsByMember: [String: [String]] = [:]
+
+    public private(set) var speciesQuery: String = ""
+    public private(set) var moveQuery: String = ""
+    public private(set) var isSearchingSpecies = false
+    public private(set) var isSearchingMoves = false
+    public private(set) var speciesSearchReachedLimit = false
+    public private(set) var moveSearchReachedLimit = false
+
     // MARK: - マスタ(load() で読み込む)
 
+    /// 直近の種族検索の結果(空クエリなら起動時の先頭ページ。`CalcViewModel.speciesOptions` と同じ
+    /// 理由で名前は変えない。2章)。
     public private(set) var speciesOptions: [SpeciesSummary] = []
     public private(set) var itemOptions: [Item] = []
     public private(set) var natureOptions: [Nature] = []
-    /// メンバー id → 現在の種族の learnset の順・マスタにある技だけ(`CalcViewModel.moveOptions` と同じ規則)。
+    /// メンバー id → 「直近の技検索の結果 ∩ そのメンバーの learnset の ID 集合」を learnset の順で
+    /// 並べたもの(issue #68・6章。`CalcViewModel.moveOptions` と同じ規則)。
     public private(set) var moveOptionsByMember: [String: [Move]] = [:]
     /// メンバー id → 現在の種族の特性一覧(`SpeciesDetail.abilities` をそのまま写す)。
     public private(set) var abilityOptionsByMember: [String: [Ability]] = [:]
-    /// `moveOptionsByMember` を作るための技マスタ全件(learnset の ID と突き合わせる)。
-    private var masterMoves: [Move] = []
 
     // MARK: - 画面の状態
 
@@ -44,10 +59,16 @@ public final class TeamEditViewModel {
     /// 世代保護[M1]と同じ理由)。メンバーごとに独立させ、他のメンバーの選択をブロックしない。
     private var memberSpeciesGeneration: [String: Int] = [:]
 
-    public init(store: any TeamStore, service: any PokeCalcService, team: Team) {
+    public init(store: any TeamStore, service: any PokeCalcService, team: Team, searchDebounce: Duration = MasterSearch.debounceInterval) {
         self.store = store
         self.service = service
         self.team = team
+        speciesSearch = MasterSearchField(debounce: searchDebounce) { query, limit in
+            try await service.searchSpecies(query: query, limit: limit)
+        }
+        moveSearch = MasterSearchField(debounce: searchDebounce) { query, limit in
+            try await service.searchMoves(query: query, limit: limit)
+        }
     }
 
     // MARK: - 起動
@@ -58,17 +79,26 @@ public final class TeamEditViewModel {
         isLoading = true
         do {
             let natures = try await service.natures()
-            let species = try await service.searchSpecies(query: "", limit: Self.masterListLimit)
-            let moves = try await service.searchMoves(query: "", limit: Self.masterListLimit)
-            let items = try await service.searchItems(query: "", limit: Self.masterListLimit)
+            let species = try await service.searchSpecies(query: "", limit: MasterSearch.pageLimit)
+            let moves = try await service.searchMoves(query: "", limit: MasterSearch.pageLimit)
+            let items = try await service.searchItems(query: "", limit: MasterSearch.pageLimit)
             natureOptions = natures
-            speciesOptions = species
-            masterMoves = moves
+            speciesSearch.setFirstPage(species)
+            speciesOptions = speciesSearch.options
+            speciesSearchReachedLimit = speciesSearch.reachedLimit
+            mergeSpeciesIntoDictionary(species)
+
+            moveSearch.setFirstPage(moves)
+            latestMoveSearchResults = moveSearch.options
+            moveSearchReachedLimit = moveSearch.reachedLimit
+
             itemOptions = items
 
             for member in team.members {
                 let detail = try await service.species(key: member.speciesKey)
-                moveOptionsByMember[member.id] = moveOptions(from: detail)
+                speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+                learnsetIdsByMember[member.id] = detail.learnset
+                recomputeMoveOptions(forMember: member.id)
                 abilityOptionsByMember[member.id] = detail.abilities
             }
             error = nil
@@ -106,7 +136,9 @@ public final class TeamEditViewModel {
         do {
             let detail = try await service.species(key: speciesKey)
             guard token == memberSpeciesGeneration[member.id] else { return true }
-            moveOptionsByMember[member.id] = moveOptions(from: detail)
+            speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+            learnsetIdsByMember[member.id] = detail.learnset
+            recomputeMoveOptions(forMember: member.id)
             abilityOptionsByMember[member.id] = detail.abilities
         } catch {
             guard token == memberSpeciesGeneration[member.id] else { return true }
@@ -122,6 +154,7 @@ public final class TeamEditViewModel {
         abilityOptionsByMember[id] = nil
         memberErrors[id] = nil
         memberSpeciesGeneration[id] = nil
+        learnsetIdsByMember[id] = nil
     }
 
     // MARK: - 種族
@@ -146,12 +179,15 @@ public final class TeamEditViewModel {
     /// 新種族の `detail.abilities` にまだあれば保持し、無ければ新種族の先頭特性へ差し替える(候補が空なら
     /// `nil`)。表示(`abilityOptionsByMember`)・保存値(`team.members[index].abilityId`)・計算入力
     /// (`TeamMemberConverter`)を常に一致させるため(既定案どおり)。
+    ///
+    /// `moveIds` の絞り込みは**learnset の ID 集合**で行う(解決済みの `moveOptionsByMember` ではない。
+    /// issue #68・6章「判断」: 先頭ページの外にある合法な技を、実体化できないだけで黙って消さないため)。
     private func applySpeciesChange(_ detail: SpeciesDetail, speciesKey: String, toMemberID id: String) {
         guard let index = team.members.firstIndex(where: { $0.id == id }) else { return }
-        let options = moveOptions(from: detail)
+        let learnsetIds = Set(detail.learnset)
         team.members[index].speciesKey = speciesKey
         team.members[index].moveIds = team.members[index].moveIds.filter { moveId in
-            options.contains(where: { $0.id == moveId })
+            learnsetIds.contains(moveId)
         }
         let currentAbilityId = team.members[index].abilityId
         let abilityStillValid = currentAbilityId.map { abilityId in
@@ -160,12 +196,18 @@ public final class TeamEditViewModel {
         if !abilityStillValid {
             team.members[index].abilityId = detail.abilities.first?.id
         }
-        moveOptionsByMember[id] = options
+        speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+        learnsetIdsByMember[id] = detail.learnset
+        recomputeMoveOptions(forMember: id)
         abilityOptionsByMember[id] = detail.abilities
     }
 
-    private func moveOptions(from detail: SpeciesDetail) -> [Move] {
-        detail.learnset.compactMap { learnedId in masterMoves.first(where: { $0.id == learnedId }) }
+    /// `learnsetIdsByMember[id]` と `latestMoveSearchResults` のどちらかが変わったら呼び直す(issue #68・6章)。
+    private func recomputeMoveOptions(forMember id: String) {
+        let learnsetIds = learnsetIdsByMember[id] ?? []
+        moveOptionsByMember[id] = learnsetIds.compactMap { learnedId in
+            latestMoveSearchResults.first(where: { $0.id == learnedId })
+        }
     }
 
     private func nextMemberSpeciesToken(for id: String) -> Int {
@@ -255,6 +297,53 @@ public final class TeamEditViewModel {
         team.members[index].sp = sp
         memberErrors[id] = nil
         return true
+    }
+
+    // MARK: - 検索(issue #68。ADR-0501「issue #68」10章。`CalcViewModel` と同じ規則)
+
+    public func speciesSummary(forKey key: String) -> SpeciesSummary? {
+        speciesDictionary[key]
+    }
+
+    @discardableResult
+    public func setSpeciesQuery(_ text: String) -> Bool {
+        let needsSearch = speciesSearch.setQuery(text)
+        speciesQuery = speciesSearch.query
+        return needsSearch
+    }
+
+    @discardableResult
+    public func setMoveQuery(_ text: String) -> Bool {
+        let needsSearch = moveSearch.setQuery(text)
+        moveQuery = moveSearch.query
+        return needsSearch
+    }
+
+    public func runSpeciesSearch() async {
+        let results = await speciesSearch.run()
+        speciesOptions = speciesSearch.options
+        isSearchingSpecies = speciesSearch.isSearching
+        speciesSearchReachedLimit = speciesSearch.reachedLimit
+        guard let results else { return }
+        mergeSpeciesIntoDictionary(results)
+    }
+
+    /// メンバーごとの候補(`moveOptionsByMember`)はどれも同じ検索結果から作るので、全メンバー分
+    /// 作り直す(issue #68・6章)。
+    public func runMoveSearch() async {
+        // Team は技の辞書を持たない(issue #68・6章「残る穴」: 実体化できない技はスロットに ID を
+        // そのまま出す規則のため、`moveOptionsByMember` だけを作り直せば足りる)。
+        await moveSearch.run()
+        latestMoveSearchResults = moveSearch.options
+        isSearchingMoves = moveSearch.isSearching
+        moveSearchReachedLimit = moveSearch.reachedLimit
+        for memberID in learnsetIdsByMember.keys {
+            recomputeMoveOptions(forMember: memberID)
+        }
+    }
+
+    private func mergeSpeciesIntoDictionary(_ items: [SpeciesSummary]) {
+        for item in items { speciesDictionary[item.key] = item }
     }
 
     // MARK: - 保存

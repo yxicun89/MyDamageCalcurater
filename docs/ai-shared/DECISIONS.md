@@ -859,6 +859,23 @@ Decision:
 Reason: ユーザー回答(AskUserQuestion、2026-09-23)。両方とも「無期限に持ち続けない」方向で統一。
 Impact: #103 は主担当の API・データレーンへ、#111 は主担当のデータレーンへタイプバランスレーンから連絡済み。着手のブロッカーが外れたので、それぞれの実装レーンで ADR を書いて進めてよい。
 
+## 2026-09-23: P5-6(技の追加効果)の設計とその判定レーンへの申し送り(データレーン)
+Decision: 判定レーンからの提案(2026-09-22)を受けて実装した P5-6(ADR-0107)の設計と、判定レーン向けの申し送り。
+- 効果 JSON の形は判定レーンの既定案(`{"secondary":{"chance":...,"self":{"boosts":...}}}`)から `{"Chance":100,"Target":"self","Stages":{"spe":1}}` に変更(item/ability の既存効果 JSON と同じ流儀に揃えるため)。
+- 確率が100%でない追加効果は、engine が乱数を持たず「発動した場合の値」だけを返す(ADR-0107 決定1)。実際に発動するかどうかの判定・不発時との出し分けは判定レーンの責務。
+- 取得元は Showdown 1本(実測で自己完結。calc 0.12.0 は真偽値だけで使えない)。実データで97件(2エントリ以上を持つ技は0件、accuracy/evasion は必ず単独)。
+- 公開: `MasterMove.effect` は pokedex-svc の内部 API(calc-svc だけが読む)止まり。**判定レーンが技IDからランク変化を自動で出すには、公開 API に技1件を引く経路(getMove 等)がもう1段要る**。判定レーンの要件が固まってから、API レーンと合わせて追加する(既定案。今回は追加しない)。
+- balance の read model(services/balance)には影響なし(schema・loader 未変更。番人テストで今後の誤追加を検知する)。
+Reason: 判定レーンの提案を実装するにあたり、取得元の実データを調査した結果、提案時のデータ形式・取得方針から変更が必要だった。
+Impact: docs/plan.md P5-6・docs/adr/0107。判定レーンは JD1(ADR-0701 の Individual.ranks 方式)をそのまま使い続けてよい。公開APIの拡張が要るときはデータレーン・API レーンに依頼すること。
+
+## 2026-09-23(追記): P5-6 の独立レビュー指摘の反映(データレーン)
+Decision: critic の FAIL 指摘を反映した(PASS 前提の修正。ADR-0107 に追記節で記録)。
+- accuracy/evasion が atk 等の engine が持つステータスと同じエントリに混ざっても、常に `KindMoveEffectUnsupportedStat` の警告を残すようにした(以前は stages が空のときしか警告を積まず、混在時に無音で消えていた)。
+- `secondaries` の判定基準を「配列の件数」から「boosts(自分・相手とも)を伴う要素の件数」に変更した。実データで firefang/icefang/thunderfang/triplearrows が secondaries を2件持つが中身は火傷・氷結・麻痺・ひるみでランク変化ではなく、そのままだと `import-dry-run` が実運用で必ずこの4技を blocker にし続けていた。`ShowdownMove.Secondaries` を `int` から `[]ShowdownSecondary` に変え、件数の判定を Go 側(`secondaryBoostCount`)に置いてテスト可能にした。
+Reason: 独立レビュー(critic)の指摘。詳細は docs/adr/0107 の「追記(2026-09-23)」節。
+Impact: docs/adr/0107・services/pokedex/importer(convert_move_effects.go・snapshot.go)・tools/importer/fetch-showdown.mjs。他レーンへの影響なし。
+
 ## 2026-09-23: Web オンライン MasterSource — getSpecies.learnset の ID→実体化を提案(Web レーンからデータ/API レーンへ)
 Decision(Webレーンの設計。ADR-0304): オンラインモードの種族・技選択は検索ベース UI にする(`searchSpecies`/`searchMoves` が
 `limit<=200` 固定・ページングパラメータ無しのため、種族349件・技515件は一括取得できないと実クラスタで確認した。
@@ -876,7 +893,6 @@ Reason: 技の一覧が515件で `limit` 上限(200)を超え、offset/cursor �
 Impact: 返答・実装があるまで、Web のオンラインモードは種族・持ち物・性格の選択を先に作り、技を必要とする操作
 (ダメージ技の選択等)は「オンライン未対応」として無効化した状態で進める(ADR-0304 §4)。この提案が承認・実装され次第、
 Web 側は技も検索/一覧に切り替える。急ぎではない(ブロッカーにはしていない)。
-
 ## 2026-09-23: iOS レーンの統合(PR #131)。Codex レビュー issue #100・#101 を修正
 Decision: 型バランスレーンから共有された Codex レビュー issue のうち iOS 主担当の #100(種族変更後の特性ID残留)・#101(負のSPの検証漏れ)を fix/ios-issue-100-101 ブランチで修正し、PR #131 で main にマージした(critic PASS。修正前に新規テストが実際に失敗することを確認済み)。
 Reason: データ整合性のバグで、#103 のような「needs-decision」ではなく独立して修正できる内容だったため。
@@ -899,3 +915,49 @@ Web レーンが同じ理由でオンラインモードを検索ベースUIに�
 持ち物(166件)・性格(25件)は200件以内なので一覧のままでよい(Web と同じ整理)。
 Reason: 契約変更なしで完全に直せる範囲が存在するため、API/データレーンを待たずに着手できる。
 Impact: CalcViewModel/ReverseViewModel/TeamEditViewModel の種族・技ピッカーを検索UIに変える設計変更(#68 対応として着手)。
+
+## 2026-09-23: calc の候補・観測件数に上限を置く(issue #110。API レーンから データ/Web/iOS レーンへ)
+Decision: api/openapi.yaml に maxItems / uniqueItems / maximum を入れた(presets 8+unique、itemVariants 64+unique、
+itemCandidates 64+unique、observations 16、maxCandidates 0..128)。calc-svc は生成ラッパの schema 検証に依存できない
+(oapi-codegen の echo5/strict サーバーはヘッダしか検証しないことを生成物と実測で確認)ため、ID 解決・engine 呼び出しより
+前に自前で検証し 400 invalid_input で拒否する。presets の重複だけは既存どおり duplicate_preset(件数 9 以上は invalid_input が先)。
+新しい ErrorCode は足さない。設計は ADR-0208。critic PASS(実HTTPで境界値・issueの再現手順の解消を確認: 2,000×2,000が9.43秒→0.9ms)。
+Reason: 1MiB 未満の本文で presets × itemVariants、itemCandidates × 33SP × observations × 16rolls の全組合せを計算させられる
+(issue #110)。maxCandidates は出力を切るだけで計算量が減らず、本文サイズ制限も gateway の 10 秒タイムアウトもサーバー内部の
+増幅を止めない。
+Impact(依頼):
+- データレーン(engine): engine.CalcBulk / CalcReverse にも同じ防御上限(presets 8 / ItemVariants 64 / ItemCandidates 64 /
+  Observations 16 / MaxCandidates 0 または 1..128)を置いてください。HTTP を通らない直接呼び出し・WASM でも巨大入力を計算しない
+  ようにするためです。上限超過は engine の sentinel(命名はデータレーンの判断)。engine の純粋性は保てます(定数と sentinel だけ)。
+- データレーン(engine/wasmapi): 同じ上限を wasmapi の語彙で invalid_input 相当に写し、HTTP/WASM parity テストを足してください。
+  HTTP 側の code は invalid_input です(presets 重複だけ duplicate_preset)。
+- Web レーン: 観測追加 UI を 16 件で無効化(理由表示・アクセシビリティ通知)。持ち物候補が 64 件を超える場合は黙って切り捨てず、
+  明示的なエラーか仕様で決めた決定的な絞り込みにしてください。生成型(openapi.gen.ts)の差分はコメントのみで型は変わりません。
+- iOS レーン: 同様の対応(観測 16 件上限・候補 64 件超の扱い)。
+- 残存リスク(このADRの範囲外): 同時実行数・レート制限は扱っていない。上限ちょうどの reverse は約22.6msのCPUを要するため、
+  calc-svc の CPU limit(200m)は理論上 約9 req/s 程度で飽和しうる。レート制限は gateway かクラスタ側の別課題。
+- issue #110 は API レーンの分だけでは閉じない。engine/WASM・Web・iOS が追従してから閉じる。
+
+## 2026-09-23: P5-6(技の追加効果)を main へ統合(データレーン)
+Decision: PR #132(`feat/claude-p1-engine` → `main`)をマージした。ADR-0107・engine.MoveEffect・
+`move_effects` 表・importer(Showdown 単体)・内部API `MasterMove.effect`・calc-svc export まで。
+critic 1往復で PASS(指摘は accuracy/evasion 混在時の無音警告漏れ・secondaries 判定基準の粗さ・
+fixture 整形崩れの3点。いずれも ADR-0107 の「追記(2026-09-23)」に記録)。
+Reason: 独立レビュー PASS・`make test`(790件)/`lint`/`build`/`test-golden`/`test-all-species`/`test-wasm` すべて green。
+Impact: 判定レーンは JD1(ADR-0701 の Individual.ranks 方式)のまま。技IDからランク変化を自動で出す
+公開APIの拡張は、判定レーンの要件が固まってから別途(データ・APIレーン)。
+
+## 2026-09-23: iOS レーンの統合(PR #136)。issue #68(検索上限200件)を検索UIで解消
+Decision: 2026-09-23 の「issue #68 は Web と同じ検索ベースUIで対応する」方針どおり実装した(契約変更なし)。
+CalcScreen・ReverseScreen・TeamEdit の種族・技ピッカーを `Menu`(起動時一括取得)から `.searchable()` + シート
+(`searchSpecies`/`searchMoves` の `q` パラメータを使う)に置き換えた。`fix/ios-issue-68-search` ブランチで
+PR #136 として main にマージした(critic PASS。`swift test` 312/312・`make ios-test` 321/321 unit + 16/16 UI・
+`check-publishable` 0件を確認済み)。同ブランチで issue #100(種族変更後の特性ID残留)・#101(負のSPの検証漏れ)も
+先に修正済み(PR #131 で統合)。
+Reason: 検索ベースUIへの変更で205件超の技・種族も選択できるようになったが、`TeamEditViewModel.applySpeciesChange`
+の学習技フィルタが `moveOptions`(検索結果由来)を見ていたため、種族変更時に「検索したことのない技」が誤って
+全消去される副作用があった。生の learnset ID 集合を見るよう修正して解消した。
+Impact: issue #68 はコメントで既知の制約を記録した上でクローズせずに残す(一度も検索結果に現れていない技IDは
+名前解決できない。根本対応には `getSpecies` の学習技名 enrichment が必要。データ/APIレーンへの提案は上の
+「Webレーンの設計(ADR-0304)」欄の提案と同じ内容で、iOS も乗る)。残る iOS 関連 issue: #113(Web/iOS共同主担当の
+入力デバウンス・キャンセル。次に着手予定)。#71・#99・#110 は他レーンが主担当。#103 は着手しない。

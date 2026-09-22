@@ -11,9 +11,7 @@ import Observation
 /// (ADR-0500 §3)。
 @MainActor
 @Observable
-public final class CalcViewModel {
-    /// openapi の `limit` の上限(`searchSpecies` 等)。画面は検索語を絞らず、まとめて読む。
-    private static let masterListLimit = 200
+public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearchProviding {
     /// 攻撃側・防御側に選べるためには種族が最低2つ要る。
     private static let minimumSpeciesCount = 2
 
@@ -22,15 +20,37 @@ public final class CalcViewModel {
     /// 変えずに通すため、また nil のときは `UserDefaults` に触れずに済むため。
     private let teamStore: (any TeamStore)?
 
+    // MARK: - 検索(issue #68。ADR-0501「issue #68」3〜6章・10章)
+
+    /// 種族・技の検索欄1つ分の状態機械(デバウンス・世代保護は `MasterSearchField` に任せる)。
+    private let speciesSearch: MasterSearchField<SpeciesSummary>
+    private let moveSearch: MasterSearchField<Move>
+    /// 一度でも見た種族(検索結果・`species(key:)` の応答のどちらからも合流する。5章)。
+    /// 検索語を変えても、選択中の種族の名前をここから引ける。
+    private var speciesDictionary: [String: SpeciesSummary] = [:]
+    /// 一度でも見た技(検索結果から合流する。5章)。`selectedMove` はここから引く。
+    private var moveDictionary: [String: Move] = [:]
+    /// 直近の技検索の結果(`moveOptions` は「これと攻撃側の learnset の ID 集合との交差」。6章)。
+    private var latestMoveSearchResults: [Move] = []
+    /// いまの攻撃側の learnset(ID のみ。`moveOptions` を作るのに使う。6章)。
+    private var attackerLearnsetIds: [String] = []
+
     // MARK: - マスタ(load() で読み込む)
 
+    public private(set) var speciesQuery: String = ""
+    public private(set) var moveQuery: String = ""
+    public private(set) var isSearchingSpecies = false
+    public private(set) var isSearchingMoves = false
+    public private(set) var speciesSearchReachedLimit = false
+    public private(set) var moveSearchReachedLimit = false
+
+    /// 直近の種族検索の結果(空クエリなら起動時の先頭ページ。意味は「マスタ全件」ではなく
+    /// 「検索結果」に変わったが、名前は既存のテストを壊さないため変えない。2章)。
     public private(set) var speciesOptions: [SpeciesSummary] = []
     public private(set) var itemOptions: [Item] = []
-    /// 攻撃側の learnset とマスタの技を突き合わせた選択肢(learnset の順)。
+    /// 「直近の技検索の結果 ∩ 攻撃側の learnset の ID 集合」を learnset の順で並べたもの(6章)。
     public private(set) var moveOptions: [Move] = []
     private var natureOptions: [Nature] = []
-    /// `moveOptions` を作るための技マスタ全件(learnset の ID と突き合わせる)。
-    private var masterMoves: [Move] = []
     /// `load()` の二重実行を防ぐ(同じ画面から複数回 `load()` を呼んでも読み込みは1回だけ)。
     private var didLoad = false
 
@@ -75,9 +95,15 @@ public final class CalcViewModel {
     /// (species の応答も含めて世代を守る。M1)。値そのものに意味は無い。
     private var latestRequestToken = 0
 
-    public init(service: any PokeCalcService, teamStore: (any TeamStore)? = nil) {
+    public init(service: any PokeCalcService, teamStore: (any TeamStore)? = nil, searchDebounce: Duration = MasterSearch.debounceInterval) {
         self.service = service
         self.teamStore = teamStore
+        speciesSearch = MasterSearchField(debounce: searchDebounce) { query, limit in
+            try await service.searchSpecies(query: query, limit: limit)
+        }
+        moveSearch = MasterSearchField(debounce: searchDebounce) { query, limit in
+            try await service.searchMoves(query: query, limit: limit)
+        }
     }
 
     // MARK: - 起動
@@ -91,14 +117,22 @@ public final class CalcViewModel {
         isLoading = true
         do {
             let natures = try await service.natures()
-            let species = try await service.searchSpecies(query: "", limit: Self.masterListLimit)
-            let moves = try await service.searchMoves(query: "", limit: Self.masterListLimit)
-            let items = try await service.searchItems(query: "", limit: Self.masterListLimit)
+            let species = try await service.searchSpecies(query: "", limit: MasterSearch.pageLimit)
+            let moves = try await service.searchMoves(query: "", limit: MasterSearch.pageLimit)
+            let items = try await service.searchItems(query: "", limit: MasterSearch.pageLimit)
             guard token == latestRequestToken else { return }
 
             natureOptions = natures
-            speciesOptions = species
-            masterMoves = moves
+            speciesSearch.setFirstPage(species)
+            speciesOptions = speciesSearch.options
+            speciesSearchReachedLimit = speciesSearch.reachedLimit
+            mergeSpeciesIntoDictionary(species)
+
+            moveSearch.setFirstPage(moves)
+            latestMoveSearchResults = moveSearch.options
+            moveSearchReachedLimit = moveSearch.reachedLimit
+            mergeMovesIntoDictionary(moves)
+
             itemOptions = items
 
             guard species.count >= Self.minimumSpeciesCount else {
@@ -149,8 +183,11 @@ public final class CalcViewModel {
 
     /// 構築の個体を呼び出す(1〜4章)。`teamOptions` に無い teamID/memberID は無視する(計算もしない)。
     public func selectTeamIndividual(teamID: String, memberID: String) async {
+        // 構築に保存された技の分類判定には、一度でも見た技の辞書を使う(issue #68: 先頭ページの
+        // 外にある技しか持たないメンバーを呼び出しても分類判定を諦めないため。5章)。
         guard let selection = TeamIndividualSelectionBuilder.make(
-            teamID: teamID, memberID: memberID, teamOptions: teamOptions, teams: loadedTeams, moves: masterMoves
+            teamID: teamID, memberID: memberID, teamOptions: teamOptions, teams: loadedTeams,
+            moves: Array(moveDictionary.values)
         ) else { return }
 
         let token = beginInput()
@@ -176,15 +213,17 @@ public final class CalcViewModel {
 
     // MARK: - 入力の変更(規則4〜6。どれも calcBulk をちょうど1回呼ぶ)
 
+    /// 選べるかどうかは「いま見えている検索結果」ではなく「一度でも見た種族」の辞書で判定する
+    /// (issue #68。ADR-0501「issue #68」5章: 検索で見つけた種族を選べるようにするため)。
     public func selectAttacker(speciesKey: String) async {
-        guard speciesOptions.contains(where: { $0.key == speciesKey }) else { return }
+        guard speciesDictionary[speciesKey] != nil else { return }
         let token = beginInput()
         attackerSpeciesKey = speciesKey
         await applyAttackerChangeAndRecalculate(token: token)
     }
 
     public func selectDefender(speciesKey: String) async {
-        guard speciesOptions.contains(where: { $0.key == speciesKey }) else { return }
+        guard speciesDictionary[speciesKey] != nil else { return }
         let token = beginInput()
         defenderSpeciesKey = speciesKey
         await recalculate(token: token)
@@ -239,11 +278,55 @@ public final class CalcViewModel {
     /// `.animation(value:)` はこの2つの変更を同じひとまとまりとして扱える。
     public private(set) var swapTick = 0
 
+    // MARK: - 検索(issue #68。ADR-0501「issue #68」10章)
+
+    /// 一度でも見た種族から引く(検索結果を変えても、選択中の種族の名前が消えないようにするため。5章)。
+    public func speciesSummary(forKey key: String) -> SpeciesSummary? {
+        speciesDictionary[key]
+    }
+
+    public var attackerSpecies: SpeciesSummary? { speciesDictionary[attackerSpeciesKey] }
+    public var defenderSpecies: SpeciesSummary? { speciesDictionary[defenderSpeciesKey] }
+
+    @discardableResult
+    public func setSpeciesQuery(_ text: String) -> Bool {
+        let needsSearch = speciesSearch.setQuery(text)
+        speciesQuery = speciesSearch.query
+        return needsSearch
+    }
+
+    @discardableResult
+    public func setMoveQuery(_ text: String) -> Bool {
+        let needsSearch = moveSearch.setQuery(text)
+        moveQuery = moveSearch.query
+        return needsSearch
+    }
+
+    public func runSpeciesSearch() async {
+        let results = await speciesSearch.run()
+        speciesOptions = speciesSearch.options
+        isSearchingSpecies = speciesSearch.isSearching
+        speciesSearchReachedLimit = speciesSearch.reachedLimit
+        guard let results else { return }
+        mergeSpeciesIntoDictionary(results)
+    }
+
+    public func runMoveSearch() async {
+        let results = await moveSearch.run()
+        latestMoveSearchResults = moveSearch.options
+        isSearchingMoves = moveSearch.isSearching
+        moveSearchReachedLimit = moveSearch.reachedLimit
+        if let results { mergeMovesIntoDictionary(results) }
+        recomputeMoveOptions()
+    }
+
     // MARK: - 表示用の派生値(M4: 技の要約・相性)
 
-    /// 選択中の技。`moveOptions` に無ければ nil(読み込み中・不整合)。
+    /// 選択中の技。「見えている候補」(`moveOptions`)ではなく一度でも見た技の辞書から引く
+    /// (issue #68。ADR-0501「issue #68」5章: 技の検索語を learnset と重ならない語に変えても、
+    /// 選択中の技の名前が消えないようにするため)。
     public var selectedMove: Move? {
-        moveOptions.first(where: { $0.id == moveId })
+        moveDictionary[moveId]
     }
 
     /// 表示中の全行が同じタイプ相性ならその値、行が無い・値が割れているときは nil
@@ -293,15 +376,31 @@ public final class CalcViewModel {
         await recalculate(token: token)
     }
 
-    /// いまの `attackerSpeciesKey` の詳細を読み、`moveOptions`(learnset の順・マスタにある技だけ)を作る。
-    /// 応答が届いた時点で `token` が最新でない、または詳細の種族がいまの攻撃側と違う(＝この操作は
-    /// 追い越された)ときは、黙って反映しない(M1)。
+    /// いまの `attackerSpeciesKey` の詳細を読み、`moveOptions`(「直近の技検索の結果 ∩ learnset の
+    /// ID 集合」を learnset の順で並べたもの。issue #68・6章)を作り直す。応答が届いた時点で `token`
+    /// が最新でない、または詳細の種族がいまの攻撃側と違う(＝この操作は追い越された)ときは、
+    /// 黙って反映しない(M1)。
     private func reloadAttackerMoveOptions(token: Int) async throws {
         let detail = try await service.species(key: attackerSpeciesKey)
         guard token == latestRequestToken, detail.key == attackerSpeciesKey else { return }
-        moveOptions = detail.learnset.compactMap { learnedId in
-            masterMoves.first(where: { $0.id == learnedId })
+        speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+        attackerLearnsetIds = detail.learnset
+        recomputeMoveOptions()
+    }
+
+    /// `attackerLearnsetIds` と `latestMoveSearchResults` のどちらかが変わったら呼び直す(6章)。
+    private func recomputeMoveOptions() {
+        moveOptions = attackerLearnsetIds.compactMap { learnedId in
+            latestMoveSearchResults.first(where: { $0.id == learnedId })
         }
+    }
+
+    private func mergeSpeciesIntoDictionary(_ items: [SpeciesSummary]) {
+        for item in items { speciesDictionary[item.key] = item }
+    }
+
+    private func mergeMovesIntoDictionary(_ items: [Move]) {
+        for item in items { moveDictionary[item.id] = item }
     }
 
     /// `currentMoveId` がいまの `moveOptions` にまだあればそれを残し、無ければ

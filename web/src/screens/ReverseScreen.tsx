@@ -45,9 +45,17 @@ import type {
   ReverseResult,
   ReverseSide,
 } from "../engine/types";
-import { calcScreenText, reverseResultText, reverseScreenText } from "../i18n/ja";
-import type { MasterData, MasterSpecies } from "../master/types";
+import { calcScreenText, masterOnlineText, reverseResultText, reverseScreenText } from "../i18n/ja";
+import { masterCapabilities } from "../master/capabilities";
+import type {
+  MasterData,
+  MasterSpecies,
+  MasterSpeciesResolution,
+  MasterSpeciesSearch,
+} from "../master/types";
 import { prefersReducedMotion } from "../ui/motion";
+import { SpeciesSearchField } from "./SpeciesSearchField";
+import { useSpeciesResolutions } from "./speciesResolution";
 import "./ReverseScreen.css";
 
 /**
@@ -70,6 +78,11 @@ const DEFAULT_MOVE_CATEGORY: MoveCategory = "physical";
 export interface ReverseScreenProps {
   readonly engine: CalcEngine;
   readonly master: MasterData;
+  /**
+   * P4-16b(ADR-0304 A-10): 種族を都度引く口。`master.capabilities.speciesList` が false のとき、
+   * 自分・相手のポケモンの選択をドロップダウンから検索欄に替えるために使う。省略は「検索できない」。
+   */
+  readonly masterSearch?: MasterSpeciesSearch;
 }
 
 /**
@@ -129,7 +142,10 @@ function resolveMoveId(species: MasterSpecies | null, moves: readonly Move[], cu
 }
 
 /** 逆算画面(design.md「画面: 逆算」、ADR-0300 §2・§7)。自分・相手・観測したダメージの側が揃うと自動で逆算する。 */
-export function ReverseScreen({ engine, master }: ReverseScreenProps) {
+export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenProps) {
+  // P4-16b(ADR-0304 A-2・A-5・A-10・A-11): 使える機能。capabilities を省いたマスタは全部使える。
+  const capabilities = masterCapabilities(master);
+  const { speciesFor, abilitiesFor, register: registerSpeciesResolution } = useSpeciesResolutions();
   const [side, setSide] = useState<ReverseSide>("defender");
   const [mySpeciesKey, setMySpeciesKey] = useState("");
   const [theirsSpeciesKey, setTheirsSpeciesKey] = useState("");
@@ -155,12 +171,12 @@ export function ReverseScreen({ engine, master }: ReverseScreenProps) {
   }>({ lastCompleted: null, narrowing: false });
 
   const mySpecies = useMemo(
-    () => master.species.find((species) => species.key === mySpeciesKey) ?? null,
-    [master.species, mySpeciesKey],
+    () => speciesFor(master.species, mySpeciesKey),
+    [master.species, mySpeciesKey, speciesFor],
   );
   const theirsSpecies = useMemo(
-    () => master.species.find((species) => species.key === theirsSpeciesKey) ?? null,
-    [master.species, theirsSpeciesKey],
+    () => speciesFor(master.species, theirsSpeciesKey),
+    [master.species, theirsSpeciesKey, speciesFor],
   );
   const myItem = useMemo(
     () => master.items.find((item) => item.id === myItemId) ?? null,
@@ -198,7 +214,7 @@ export function ReverseScreen({ engine, master }: ReverseScreenProps) {
   function selectMySpecies(key: string): void {
     setMySpeciesKey(key);
     if (side === "defender") {
-      const species = master.species.find((candidate) => candidate.key === key) ?? null;
+      const species = speciesFor(master.species, key);
       setMoveId((prev) => resolveMoveId(species, master.moves, prev));
     }
   }
@@ -206,8 +222,30 @@ export function ReverseScreen({ engine, master }: ReverseScreenProps) {
   function selectTheirsSpecies(key: string): void {
     setTheirsSpeciesKey(key);
     if (side === "attacker") {
-      const species = master.species.find((candidate) => candidate.key === key) ?? null;
+      const species = speciesFor(master.species, key);
       setMoveId((prev) => resolveMoveId(species, master.moves, prev));
+    }
+  }
+
+  /**
+   * P4-16b(ADR-0304 A-10): 検索で自分の種族が解決したとき。resolution.species をそのまま使う
+   * (register の setState は非同期なので、直後に speciesFor で引き直すと古い覚え書きのままになる。
+   * CalcScreen.tsx の handleAttackerResolved と同じ考え方)。
+   */
+  function handleMineResolved(resolution: MasterSpeciesResolution): void {
+    registerSpeciesResolution(resolution);
+    setMySpeciesKey(resolution.species.key);
+    if (side === "defender") {
+      setMoveId((prev) => resolveMoveId(resolution.species, master.moves, prev));
+    }
+  }
+
+  /** P4-16b(ADR-0304 A-10): 検索で相手の種族が解決したとき。 */
+  function handleTheirsResolved(resolution: MasterSpeciesResolution): void {
+    registerSpeciesResolution(resolution);
+    setTheirsSpeciesKey(resolution.species.key);
+    if (side === "attacker") {
+      setMoveId((prev) => resolveMoveId(resolution.species, master.moves, prev));
     }
   }
 
@@ -250,7 +288,7 @@ export function ReverseScreen({ engine, master }: ReverseScreenProps) {
       sp,
       nature,
       item: myItem,
-      ability: defaultAbility(mySpecies, master.abilities),
+      ability: defaultAbility(mySpecies, abilitiesFor(master.abilities, mySpeciesKey)),
     });
     const request = buildReverseRequest({
       side,
@@ -281,6 +319,7 @@ export function ReverseScreen({ engine, master }: ReverseScreenProps) {
   }, [
     engine,
     master,
+    mySpeciesKey,
     side,
     mySpecies,
     theirsSpecies,
@@ -289,6 +328,7 @@ export function ReverseScreen({ engine, master }: ReverseScreenProps) {
     attackerPresetKey,
     hasInvalidObservation,
     validObservations,
+    abilitiesFor,
   ]);
 
   // 「絞り込み」の演出(design.md「画面: 逆算」)。新しい成功結果が届いたとき(completed の参照が
@@ -357,34 +397,46 @@ export function ReverseScreen({ engine, master }: ReverseScreenProps) {
 
       <div className="reverse-screen__cards">
         <section className="reverse-card" aria-label={reverseScreenText.mySpeciesLabel}>
-          <select
-            aria-label={reverseScreenText.mySpeciesLabel}
-            value={mySpeciesKey}
-            onChange={(event) => {
-              selectMySpecies(event.target.value);
-            }}
-          >
-            <option value="" hidden />
-            {master.species.map((species) => (
-              <option key={species.key} value={species.key}>
-                {species.nameJa}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label={reverseScreenText.myItemLabel}
-            value={myItemId}
-            onChange={(event) => {
-              setMyItemId(event.target.value);
-            }}
-          >
-            <option value="">{calcScreenText.noItemOption}</option>
-            {master.items.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.nameJa}
-              </option>
-            ))}
-          </select>
+          {capabilities.speciesList ? (
+            <select
+              aria-label={reverseScreenText.mySpeciesLabel}
+              value={mySpeciesKey}
+              onChange={(event) => {
+                selectMySpecies(event.target.value);
+              }}
+            >
+              <option value="" hidden />
+              {master.species.map((species) => (
+                <option key={species.key} value={species.key}>
+                  {species.nameJa}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <SpeciesSearchField
+              label={reverseScreenText.mySpeciesLabel}
+              masterSearch={masterSearch}
+              onResolved={handleMineResolved}
+            />
+          )}
+          {/* P4-16b(ADR-0304 A-10): 検索中(まだ種族が解決していない)は持ち物欄も出さない
+              (「入力前は候補を出さない」: カード内の role="option" は種族の検索候補だけにする)。 */}
+          {(capabilities.speciesList || mySpecies !== null) && (
+            <select
+              aria-label={reverseScreenText.myItemLabel}
+              value={myItemId}
+              onChange={(event) => {
+                setMyItemId(event.target.value);
+              }}
+            >
+              <option value="">{calcScreenText.noItemOption}</option>
+              {master.items.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.nameJa}
+                </option>
+              ))}
+            </select>
+          )}
           {side === "defender" && mySpecies !== null && (
             <MyPresetSelector
               category={move?.category ?? DEFAULT_MOVE_CATEGORY}
@@ -395,24 +447,36 @@ export function ReverseScreen({ engine, master }: ReverseScreenProps) {
         </section>
 
         <section className="reverse-card" aria-label={reverseScreenText.theirSpeciesLabel}>
-          <select
-            aria-label={reverseScreenText.theirSpeciesLabel}
-            value={theirsSpeciesKey}
-            onChange={(event) => {
-              selectTheirsSpecies(event.target.value);
-            }}
-          >
-            <option value="" hidden />
-            {master.species.map((species) => (
-              <option key={species.key} value={species.key}>
-                {species.nameJa}
-              </option>
-            ))}
-          </select>
+          {capabilities.speciesList ? (
+            <select
+              aria-label={reverseScreenText.theirSpeciesLabel}
+              value={theirsSpeciesKey}
+              onChange={(event) => {
+                selectTheirsSpecies(event.target.value);
+              }}
+            >
+              <option value="" hidden />
+              {master.species.map((species) => (
+                <option key={species.key} value={species.key}>
+                  {species.nameJa}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <SpeciesSearchField
+              label={reverseScreenText.theirSpeciesLabel}
+              masterSearch={masterSearch}
+              onResolved={handleTheirsResolved}
+            />
+          )}
         </section>
       </div>
 
-      <MoveSelect moves={moveOptions} value={moveId} onChange={setMoveId} />
+      <MoveSelect moves={moveOptions} value={moveId} onChange={setMoveId} disabled={!capabilities.moves} />
+      {!capabilities.moves && <p className="reverse-screen__notice">{masterOnlineText.movesUnavailable}</p>}
+      {!capabilities.effects && (
+        <p className="reverse-screen__notice">{masterOnlineText.itemCandidatesUnavailable}</p>
+      )}
 
       <div className="reverse-observations">
         {observations.map((row, index) => (
@@ -523,14 +587,17 @@ interface MoveSelectProps {
   readonly moves: readonly Move[];
   readonly value: string;
   readonly onChange: (moveId: string) => void;
+  /** P4-16b(ADR-0304 A-5): capabilities.moves が false のとき、欄は残すが disabled にする。 */
+  readonly disabled?: boolean;
 }
 
 /** 技セレクタ(CalcScreen.tsx の MoveSelect と同じ表記)。learnset の順のまま出す。 */
-function MoveSelect({ moves, value, onChange }: MoveSelectProps) {
+function MoveSelect({ moves, value, onChange, disabled = false }: MoveSelectProps) {
   return (
     <select
       aria-label={calcScreenText.moveLabel}
       value={value}
+      disabled={disabled}
       onChange={(event) => {
         onChange(event.target.value);
       }}
