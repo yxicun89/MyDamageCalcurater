@@ -1,0 +1,238 @@
+/*
+ * 逆算画面(docs/design.md「画面: 逆算」)。色は必ず tokens.css の CSS 変数で参照する
+ * (web/src/styles/noColorLiterals.test.ts)。動きは操作(観測の追加・削除、選択)への反応だけにする
+ * (design.md「動き」、CLAUDE.md ドメイン規約: 常時動くアニメーションを入れない)。
+ */
+
+.reverse-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+.reverse-side {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.reverse-side__option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-primary);
+}
+
+.reverse-screen__cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.reverse-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--bg-glass-blur));
+  padding: var(--space-4);
+}
+
+.reverse-card select {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  padding: var(--space-2) var(--space-3);
+}
+
+.reverse-preset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.reverse-preset__option {
+  /* 隠したネイティブのラジオ(.reverse-preset__input)の位置の基準をラベルにする(CalcScreen.css と同じ形)。 */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-swap) ease,
+    color var(--duration-swap) ease;
+}
+
+.reverse-preset__option--selected {
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+  color: var(--bg-base);
+}
+
+.reverse-preset__input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.reverse-preset__option:has(.reverse-preset__input:focus-visible) {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+.reverse-observations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.reverse-observation {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  padding: var(--space-2) var(--space-3);
+}
+
+.reverse-observation__input {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  padding: var(--space-2) var(--space-3);
+}
+
+.reverse-observation__input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.reverse-observation__unit {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.reverse-observation__unit-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.reverse-observation__message {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--font-size-caption);
+}
+
+.reverse-observation__remove {
+  grid-column: 1 / -1;
+  justify-self: start;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.reverse-screen__notice {
+  color: var(--text-secondary);
+  font-size: var(--font-size-body);
+}
+
+.reverse-screen__error {
+  color: var(--danger);
+  font-size: var(--font-size-body);
+}
+
+.reverse-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.reverse-results__assumption {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.reverse-results__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.reverse-results__row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+}
+
+.reverse-results__nature {
+  font-size: var(--font-size-heading);
+  color: var(--text-primary);
+}
+
+.reverse-results__item {
+  grid-column: 1 / -1;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.reverse-results__ranges {
+  grid-column: 1 / -1;
+  font-size: var(--font-size-body);
+  color: var(--text-primary);
+}
+
+.reverse-results__guide {
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.reverse-results__mismatch {
+  font-size: var(--font-size-caption);
+  color: var(--danger);
+}
+
+.reverse-results__percent {
+  grid-column: 1 / -1;
+  font-size: var(--font-size-result);
+  color: var(--text-primary);
+}

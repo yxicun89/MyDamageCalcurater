@@ -39,3 +39,19 @@ go run ./gateway/cmd/gateway
 - ヘッダの欠落・空は 400 `missing_header`、UUID でない値(正準形 8-4-4-4-12 以外)・重複は 400 `invalid_header`。
 - 上流に接続できない・タイムアウトは 503 `upstream_unavailable`。上流の応答(4xx / 5xx を含む)は書き換えずに返す。
 - CORS のプリフライト(OPTIONS)は 204 で、上流には送らない。
+
+## k3d で動かす(ADR-0203)
+
+```
+make up                 # クラスタが無ければ作る(既存の pokecalc クラスタを使う)
+make api-k3d-deploy     # calc・gateway のイメージをビルドして k3d に載せる
+make api-smoke          # gateway 経由のスモーク(http://localhost:8080。API_URL で上書き)
+```
+
+- 全体(namespace・mysql・pokedex-migrate Job を含む)のデプロイは `make up`。API レーンの `api-k3d-deploy` は
+  自分の2つの Deployment(calc・gateway)だけを専用の overlay(`deploy/k8s/overlays/local-api`)で適用する
+  (共有の `deploy/k8s/overlays/local` を丸ごと apply しない。k3d クラスタは他レーンと共有のため)。
+- `/api/pokedex/*` は pokedex-svc(P2-3)ができるまで上流が未設定なので **503 `upstream_unavailable`**。pokedex-svc を載せて
+  `GATEWAY_POKEDEX_URL` を設定したら **200** に変わる(`services/gateway/scripts/smoke.sh` の期待値と
+  `TestManifestGatewayLocalConfig` を一緒に変える)。
+- k3d を使わない開発ループは `make dev`(calc-svc と gateway をローカルで起動。`DEV_GATEWAY_PORT` / `DEV_CALC_PORT` で変更可)。

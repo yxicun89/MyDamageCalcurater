@@ -1,0 +1,32 @@
+# local overlay 専用の Kustomize Component(ADR-0203 §3)。calc-svc に例のマスタと相性表を渡し、
+# gateway に Vite の開発サーバのオリジンを CORS で許可する。base はどちらも持たない
+# (base は環境変数だけで動く必要があるため。クラウドは別の渡し方をする)。
+#
+# master.example.json・typechart.example.json は元ファイル(単一の正)のコピー。Kustomize の load
+# restrictor が overlay の外のファイルを読めないためコピーしている。元ファイルが変わったら
+# コピーし直す(services/calc/cmd/calc/manifest_test.go の TestManifestCalcLocalDataFromOverlayCopies が
+# バイト一致を固定する):
+#   cp services/calc/testdata/master.example.json deploy/k8s/overlays/local/api/master.example.json
+#   cp testdata/golden/typechart.json deploy/k8s/overlays/local/api/typechart.example.json
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+configMapGenerator:
+  - name: calc-master-example
+    files:
+      - master.json=master.example.json
+  - name: calc-typechart
+    files:
+      - typechart.json=typechart.example.json
+
+patches:
+  - path: calc-patch.yaml
+  - path: gateway-patch.yaml
+
+images:
+  - name: pokecalc/calc
+    newName: pokecalc/calc
+    newTag: local
+  - name: pokecalc/gateway
+    newName: pokecalc/gateway
+    newTag: local
