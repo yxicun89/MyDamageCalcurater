@@ -27,8 +27,8 @@ flowchart LR
 | `internal/api` | oapi-codegen の生成物(手で書かない) |
 | `cmd/api` | 起動・環境変数の読み込み・graceful shutdown |
 | `testdata/` | 架空データの example(実データは Git に置かない) |
-| `deploy/` | Kustomize(base / local。GitOps は SP4) |
-| `scripts/` | smoke |
+| `deploy/` | Kustomize(base / local=架空データ / local-readmodel=pokedex export の実データ。ADR-0603) |
+| `scripts/` | smoke・k3d への read model デプロイ |
 
 ## エンドポイント
 
@@ -46,7 +46,10 @@ make speed-test speed-lint speed-build   # ルートの make test / lint / build
 make speed-gen                           # OpenAPI を変えたら
 make speed-kustomize
 make speed-docker-build
+make speed-k3d-deploy-readmodel && make speed-smoke-readmodel   # pokedex export の実データで動かす(ADR-0603)
 ```
+
+read model の実データは `SPEED_READMODEL_DIR`(既定 `data/generated/readmodel`)の `speed-pokemon.json`。Git には置かない。
 
 ## 環境変数
 
@@ -58,5 +61,5 @@ make speed-docker-build
 ## 関連 ADR
 
 [0012](../../docs/adr/0012-domain-service-boundaries.md)(サービス境界)・[0600](../../docs/adr/0600-speed-sp0-foundation.md)(基盤・計算・read model)・
-[0601](../../docs/adr/0601-speed-sp1-table.md)(表の6行・速い順・同速)・[0602](../../docs/adr/0602-speed-sp2-position.md)(自分の位置)。
+[0601](../../docs/adr/0601-speed-sp1-table.md)(表の6行・速い順・同速)・[0602](../../docs/adr/0602-speed-sp2-position.md)(自分の位置)・[0603](../../docs/adr/0603-speed-sp4-readmodel-wiring.md)(read model の配線)。
 直接依存とライセンスは [`DEPENDENCIES.md`](DEPENDENCIES.md)。

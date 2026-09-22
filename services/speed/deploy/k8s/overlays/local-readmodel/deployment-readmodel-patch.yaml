@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: speed
+spec:
+  template:
+    metadata:
+      annotations:
+        # make speed-k3d-deploy-readmodel が ConfigMap の内容の hash を入れ、内容が変わったら Pod を作り直す
+        pokecalc.example/readmodel-hash: "unset"
+    spec:
+      containers:
+        - name: speed
+          env:
+            - name: SPEED_POKEMON_PATH
+              value: /etc/speed/readmodel/speed-pokemon.json
+          volumeMounts:
+            - name: readmodel
+              mountPath: /etc/speed/readmodel
+              readOnly: true
+      volumes:
+        - name: readmodel
+          configMap:
+            name: speed-readmodel
