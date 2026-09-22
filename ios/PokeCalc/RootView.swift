@@ -13,6 +13,9 @@ struct RootView: View {
     /// 通常の起動には影響しない。README「P6-2a」参照)。
     static let openCalcScreenAtLaunchEnvironmentKey = "POKECALC_OPEN_CALC_SCREEN_AT_LAUNCH"
     private static let openCalcScreenAtLaunchValue = "1"
+    /// 起動時にいきなり逆算画面を開かせる環境変数(同上。README「P6-2b」参照)。
+    static let openReverseScreenAtLaunchEnvironmentKey = "POKECALC_OPEN_REVERSE_SCREEN_AT_LAUNCH"
+    private static let openReverseScreenAtLaunchValue = "1"
 
     /// `environment` は既定でも作れる(#Preview 用)。実行時は `PokeCalcApp` が `@State` で
     /// 1回だけ作ったものを渡す(セッション ID を起動ごとに1つに保つため)。
@@ -26,11 +29,19 @@ struct RootView: View {
                 statusBadge
                 Spacer()
                 if case .ready = environment {
-                    NavigationLink(value: CalcScreenRoute()) {
-                        Text("計算する")
+                    VStack(spacing: SpacingToken.x4) {
+                        NavigationLink(value: CalcScreenRoute()) {
+                            Text("計算する")
+                        }
+                        .buttonStyle(PillButtonStyle())
+                        .accessibilityIdentifier("openCalcScreen")
+
+                        NavigationLink(value: ReverseScreenRoute()) {
+                            Text("逆算する")
+                        }
+                        .buttonStyle(PillButtonStyle())
+                        .accessibilityIdentifier("openReverseScreen")
                     }
-                    .buttonStyle(PillButtonStyle())
-                    .accessibilityIdentifier("openCalcScreen")
                 }
                 Spacer()
             }
@@ -51,12 +62,19 @@ struct RootView: View {
                     CalcScreenView(service: service, backendDescription: backendDescription)
                 }
             }
+            .navigationDestination(for: ReverseScreenRoute.self) { _ in
+                if case .ready(let service, let backendDescription) = environment {
+                    ReverseScreenView(service: service, backendDescription: backendDescription)
+                }
+            }
         }
         .task {
             let env = ProcessInfo.processInfo.environment
-            if env[Self.openCalcScreenAtLaunchEnvironmentKey] == Self.openCalcScreenAtLaunchValue,
-               case .ready = environment {
+            guard case .ready = environment else { return }
+            if env[Self.openCalcScreenAtLaunchEnvironmentKey] == Self.openCalcScreenAtLaunchValue {
                 path.append(CalcScreenRoute())
+            } else if env[Self.openReverseScreenAtLaunchEnvironmentKey] == Self.openReverseScreenAtLaunchValue {
+                path.append(ReverseScreenRoute())
             }
         }
     }
@@ -101,6 +119,9 @@ struct PillButtonStyle: ButtonStyle {
 
 /// `NavigationPath` に積む計算画面の行き先(値だけで、状態は持たない)。
 private struct CalcScreenRoute: Hashable {}
+
+/// `NavigationPath` に積む逆算画面の行き先(値だけで、状態は持たない)。
+private struct ReverseScreenRoute: Hashable {}
 
 #Preview {
     if let mock = try? MockPokeCalcService() {

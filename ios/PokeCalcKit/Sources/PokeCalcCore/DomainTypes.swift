@@ -10,6 +10,13 @@
 /// 個体値は API へ渡さない値なのでここには持たない)。
 public let fixedLevel = 50
 
+/// 能力ポイント(SP)の上限。CLAUDE.md ドメイン規約: 1ステータスにつき最大32(合計は66まで)。
+/// `AttackerPreset` / `KnownDefenderPreset` / `ReverseCandidateDisplay` が「振り切った」SP の判定に
+/// 共通で使う(同じ値を複数箇所に書かない。coding-rules §2)。
+public enum SPLimits {
+    public static let maxPerStat = 32
+}
+
 // MARK: - 契約と同期する enum(DomainTypesTests がテストで固定する)
 
 /// シングル/ダブル(openapi `Format`)。

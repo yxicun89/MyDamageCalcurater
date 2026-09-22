@@ -270,3 +270,174 @@ View は `PokeCalc/{CalcScreenView,CalcScreenCards,CalcScreenResults,CalcScreenS
    plus = {関連ステータス, atk}(関連が atk なら spa)。
 6. 既存の計算画面のテスト(`CalcViewModelTests` / `BulkRowDisplayTests` ほか)は、構築コードに `category` / `defender` を
    足しただけで、検査内容はそのまま通る。
+
+## P6-2b の受け入れ条件(逆算画面。実装済み)
+
+ロジックは `PokeCalcCore` に置く(ADR-0500 §1)。XCTest: `ObservationInputTests` / `KnownDefenderPresetTests` /
+`ReverseCandidateDisplayTests` / `ReverseViewModelTests`(サービスは `Support/StubPokeCalcService.swift` の
+`setReverseMode(.immediate / .manual)`。既定の `.disallowed` は計算画面が逆算を呼ばないことの確認として残す。モックの数値に依存しない)。
+用語: 「自分」= 既知側(`known`)、「相手」= 逆算する側(`unknownSpeciesKey`)。
+与えたダメージ = `side: .defender`(自分が攻撃側)、受けたダメージ = `side: .attacker`(自分が防御側)。
+
+実装ファイル: `PokeCalcKit/Sources/PokeCalcCore/{ObservationInput,KnownDefenderPreset,ReverseCandidateDisplay,ReverseViewModel}.swift`、
+View は `PokeCalc/{ReverseScreenView,ReverseScreenCards,ReverseScreenObservations,ReverseScreenResults}.swift`
+(カードの一部部品は `CalcScreenCards.swift` の `SpeciesHeaderMenuLabel` / `MenuLabelChip` を再利用。internal に広げた)。
+XCUITest は `PokeCalcUITests/ReverseScreenUITests.swift`。ルート画面の入口は `RootView.swift`(`openReverseScreen`)。
+
+1. **観測の入力** `ObservationParser.parse(_:kind:) -> Result<DamageObservation, ObservationFieldError>`(純粋):
+   テンキー入力の文字列を前後の空白を落として読み、ASCII の数字だけを受ける。`ObservationKind(side:)` は
+   defender → `.percent`(整数 1〜100 = `ObservationLimits.percentRange`)、attacker → `.damage`(1 以上 =
+   `ObservationLimits.minimumDamage`。上限なし)。範囲の出典は openapi `Observation` と ADR-0010 §R2。
+   空・空白だけ → `.empty`、数字以外(小数・符号・全角を含む)→ `.notANumber`、0・範囲外・Int に収まらない → `.outOfRange`。
+   `ObservationFieldError.message(kind:)` の文言の数値は定数から作る。0.1% 入力(`.percentTenths`)は出さない。
+2. **自分の防御側** `KnownDefenderPreset`(受けたダメージ用): `allCases == [.none, .max, .full]`、表示名は相手の技の分類で
+   「無振り」「HB振り / HD振り」「HB特化 / HD特化」。`build(_:moveCategory:natures:) throws -> DefenderBuild`
+   (`natureId` / `sp`): 関連ステータスは物理・変化 = def、特殊 = spd。`max` = H32 + 関連 32 + 最初の無補正、
+   `full` = H32 + 関連 32 + 一覧で最初の (plus = 関連, minus = atk) の性格(ADR-0009 の `hb_full` / `hd_full`)、
+   `none` = SP 0 + 最初の無補正。無ければ `natureUnavailable`。性格 ID を直書きしない。
+3. **候補の整形** `ReverseCandidateDisplay(candidate:stat:items:)` / `ReverseResultDisplay(result:items:)`(純粋):
+   - `id` = `<natureClass の rawValue>@<itemId。nil は ->`(例 `plus@-`)。
+   - 性格クラス「補正なし」/「B上昇」(`statLetter`: H/A/B/C/D/S。stat は `ReverseResult.stat`)。
+   - 持ち物名(nil は「持ち物なし」、マスタに無い ID はそのまま。`BulkRowDisplay.itemLabel` と同じ規則)。
+   - SP の範囲「B 20〜23」/「B 17, 19〜32」/「B 20」(`ranges` を全部出し、1区間に畳まない。ADR-0010 §R3)。
+   - 目安の名前 `guideNames`: 範囲に SP 0 / 32 が入るときだけ、性格クラスとの組で付ける(Web の ADR-0300 §7 と同じ規則。0 側が先)。
+     防御側 0+補正なし = H振り、0+上昇 = H振り+B(D)補正、32+補正なし = HB(HD)振り、32+上昇 = HB(HD)特化。
+     攻撃側 0+補正なし = 無振り、0+上昇 = A(C)補正のみ、32+補正なし = A(C)振り、32+上昇 = A(C)特化。
+   - 一致 `matchLabel`: exact →「観測と一致」、そうでなければ「一致なし(最も近い SP)」。
+   - 想定ダメージ幅「12.3〜15.6%」(`BulkRowDisplay.percentRangeText` と同じ書式)。
+   - 結果全体: 候補は**サーバーの順のまま**(ADR-0010 §R4 = design.md「一致度の高い順」。表示で並べ替えない・グループ化しない)、
+     `exactCountText`「観測と一致: 2 件 / 候補 3 件」、`premiseText` は defender のとき
+     「相手の HP の SP を 32(H32)と仮定した結果です」(数値は `assumedHPSP` から作る。ADR-0010 §R1・§R7)、attacker は nil。
+4. **起動** `ReverseViewModel(service:)`(`@MainActor`・`@Observable`)の `load()`(2回目以降は何もしない):
+   natures・種族・技・持ち物を読み、与えたダメージ・自分 = 種族一覧の最初・相手 = 2番目・技 = 攻撃側 learnset の順で
+   最初のダメージ技・A特化・自分の防御側 = 無振り・持ち物なし・相手の持ち物候補なし・観測は空の1行。**逆算は呼ばない**。
+   技の選択肢 `moveOptions` は攻撃側(与えたダメージ = 自分、受けたダメージ = 相手)の learnset の順で、マスタにある
+   **ダメージ技だけ**(変化技は逆算できないので出さない)。1つも無ければ `moveUnavailable`。
+5. **逆算を呼ぶ条件**: 空でない行がすべて有効で、有効な行が1つ以上あるとき。空の行は送らない(エラー `.empty` は持つが
+   計算は止めない)。不正な行が1つでもあれば計算せず結果を消す(Web の ADR-0300 §7 と同じ)。
+   観測の操作(`addObservation()` / `removeObservation(id:)` / `editObservation(id:text:)`)は、送る観測の列(行の順)が
+   変わったときだけ reverse を1回呼ぶ(空の行の追加・削除、"12" → "012" は呼ばない)。最後の1行を消すと空の1行に戻る。
+   それ以外の入力の変更(`selectMySpecies` / `selectOpponentSpecies` / `selectMove` / `selectMyItem` /
+   `toggleOpponentItemCandidate` / いまの側で使うプリセット)は計算できる状態なら1回呼ぶ。使っていない側のプリセットの変更は値を覚えるだけ。
+   未知の ID(種族・技・観測の行)は無視する。
+6. **要求**: `format = single`・`side`・`known`(与えたダメージ = 自分の種族 + `AttackerPreset.build`(技の分類で A/C)+ 自分の持ち物、
+   受けたダメージ = 自分の種族 + `KnownDefenderPreset.build`(相手の技の分類で B/D)+ 自分の持ち物)・`unknownSpeciesKey`・`moveId`・
+   `itemCandidates`(相手の持ち物候補が無ければ空、あれば `[nil] + 候補`。候補は持ち物マスタの順)・`observations`(有効な行を行の順で
+   `.percent` / `.damage`)・`critical = false`・`maxCandidates = 0`。
+7. **側の切り替え** `selectSide(_:)`: 同じ側なら何もしない。変えたら観測を空の1行に戻し(単位の意味が変わる)、自分の持ち物と
+   相手の持ち物候補を外し(攻撃用・防御用で意味が変わる)、結果を消す。種族と両方のプリセットは残す。技は新しい攻撃側の learnset で
+   選び直す(いまの技を覚えていれば残す)。種族の learnset を読み直すのは攻撃側の種族が変わったときだけ
+   (与えたダメージでの自分の変更、受けたダメージでの相手の変更、側の切り替え)。
+8. **最新の要求だけを反映**(`CalcViewModel` と同じ世代の保護): 古い `reverse` の成功・失敗、古い `species(key:)` の応答は
+   `result` / `error` / `isLoading` / `moveOptions` を変えない。有効な観測が無くなった(計算しない状態に戻った)ときも世代を進め、
+   応答待ちの古い要求を捨てて `isLoading = false`。`isLoading` は最新の要求の応答待ちの間だけ true。
+9. **エラー**: `CalcScreenError(_:)` をそのまま使う(PokeCalcError の汎用の写像で、計算画面専用の分岐は無いため一般化は不要)。
+   逆算の失敗は `error` を立てて `result` を消し、次の成功で消す。マスタの読み込み失敗・種族が2つ未満・性格が無い・技が無いときは
+   `error` を立てて計算しない。行ごとの入力エラーは画面全体の `error` にしない。
+   **古いエラーを持ち越さない**(批評対応): 次の成功以外にも、計算しない状態に戻ったときに技が選べていれば
+   (`moveOptions` に `moveId` がある = マスタ起因の失敗ではない)、前回の失敗を画面に残さない
+   (観測を全部消す・側を切り替える・技が選べる種族に変える、のどれでも `error` が消える)。
+
+### 判断した点(既定案。ユーザー未確認)
+
+- **受けたダメージの自分の防御側**: `KnownDefenderPreset`(無振り / HB(HD)振り / HB(HD)特化)から選ぶ。既定は無振り。
+  理由: Web の P4-4 は既知の防御側を SP 0・無補正に固定しており(ADR-0300 §7)、既定をそろえると同じ入力で両クライアントの
+  結果が一致する。そのうえで「H を振った自分」の観測を扱えるよう ADR-0009 のカタログから H の有無が明確な2つを足した
+  (`hp` / `*_boost` は選択肢を増やすだけなので入れない)。構築の個体を使うのは P6-2c の後。
+- **相手の持ち物候補**: 既定は「持ち物なし」の1通り(`itemCandidates` を省略)、利用者が持ち物マスタ(`searchItems` の一覧・順)から
+  トグルで足す。理由: requirements.md は「ダメージ補正を持つ持ち物」の自動抽出を求めるが、API の `Item` は `id` / `nameJa` だけで
+  効果データを持たないため iOS では抽出できない。分類のリストをコードに書くのはハードコードになる(CLAUDE.md)。
+  API が効果データを返すようになったら、既定の候補をそこから作る形に差し替える(Web は WASM のマスタの効果データで抽出している)。
+- **0.1% 入力**: 出さない(実機の HP 表示は整数%。ADR-0010 §R2 の 2026-09-21 ユーザー回答)。
+- **不正な行の扱い**: 空の行は送らないだけ、不正な行が1つでもあれば計算しない(Web と同じ)。「観測を追加」で空の行を足すたびに
+  結果が消えると、design.md の「2回目以降を入力すると候補が絞られる」演出が成り立たないため、空の行では止めない。
+- **目安の名前**: Web(ADR-0300 §7)と同じ規則で付ける。design.md の「型の名前でまとめる」グループ化はしない(Web も持ち越し。
+  ADR-0010 §R 以降は候補 = 性格クラス × 持ち物そのものがまとまりで、サーバーの順が一致度の順)。
+- **変化技**: 逆算の技の選択肢から外す(ダメージが出ないので観測を説明できない)。
+
+### XCUITest で確かめること(`POKECALC_USE_MOCK=1`。View と一緒に implementer が書く)
+
+ルート画面に逆算画面への入口 `openReverseScreen` を足す。accessibilityIdentifier は View に1か所で定義する。
+
+| identifier | 要素 |
+|---|---|
+| `openReverseScreen` | ルート画面の入口 |
+| `reverseScreen` | 逆算画面のルート |
+| `reverseBackendModeBadge` | モックで動いている表示(ADR-0500 §4) |
+| `reverseSide-<ReverseSide の rawValue>` | 与えたダメージ(`defender`)/ 受けたダメージ(`attacker`)の切り替え |
+| `reverseMySpeciesPicker` / `reverseOpponentSpeciesPicker` / `reverseMovePicker` / `reverseMyItemPicker` | 選択 UI(種族名は `accessibilityLabel` で読む。計算画面と同じ) |
+| `reverseAttackerPreset-<AttackerPreset の rawValue>` | 与えたダメージのときの自分のプリセット |
+| `reverseKnownDefenderPreset-<KnownDefenderPreset の rawValue>` | 受けたダメージのときの自分のプリセット |
+| `reverseOpponentItemToggle-<itemId>` | 相手の持ち物候補のトグル |
+| `reverseObservationField-<行の位置 0 始まり>` | 観測の入力欄(`.keyboardType(.numberPad)`) |
+| `reverseObservationError-<行の位置>` | 行の入力エラー(空の行では出さない) |
+| `reverseObservationRemove-<行の位置>` / `reverseAddObservationButton` | 行の削除・「観測を追加」 |
+| `reversePremise` / `reverseExactCount` | 「H32 を仮定」の文言・一致件数 |
+| `reverseCandidateRow-<候補の id>` | 候補カード(例 `reverseCandidateRow-neutral@-`) |
+| `reverseCandidateRange-<候補の id>` / `reverseCandidateMatch-<候補の id>` | SP の範囲・一致の文言 |
+| `reverseLoadingIndicator` / `reverseErrorMessage` | 読み込み中・エラー表示 |
+
+- 開いた直後は候補が無く、観測欄が1つある。`reverseObservationField-0` に `12` を入力すると
+  `reverseCandidateRow-neutral@-` と `reverseCandidateRow-plus@-` が出て、`reversePremise` が見える(モックは defender で H32)。
+- `reverseAddObservationButton` で `reverseObservationField-1` が増える。`abc` のような不正値は入力できない(テンキー)ので、
+  範囲外の `101` を入力すると `reverseObservationError-1` が出て候補が消える。
+- `reverseOpponentItemToggle-<モックの持ち物 ID>` をタップすると候補が 2 → 4 になる。
+- `reverseSide-attacker` をタップすると観測欄が空の1つに戻り、候補が消える。
+- 候補の数値・範囲の文言は検査しない(モックの数値に依存しない。モックは計算しないので観測を足しても範囲は絞られない)。
+- 演出: 観測を足して候補が変わったときだけ、候補カードの出入りと範囲の変化にアニメーション(design.md「動き」)。
+  「視差効果を減らす」で無効化。常時動くものは置かない。XCUITest では検査しない。
+
+### 実装メモ
+
+- **`SpeciesHeaderMenuLabel` / `MenuLabelChip` を internal に広げた**: 計算画面(`CalcScreenCards.swift`)の
+  種族セレクタのヘッダー部品は元々 `private`(同ファイル内の `AttackerCardView` / `DefenderCardView` だけが使う前提)
+  だったが、逆算画面のカード(`ReverseScreenCards.swift`)からも同じ見た目(エンブレム・名前・タイプバッジ)を
+  再利用するため `private struct` → `struct`(internal)、`fileprivate static let placeholderName` →
+  `static let placeholderName` に広げた。挙動・文言は変えていない。
+- **自分のプリセット行**: 与えたダメージ(`side == .defender`。自分が攻撃側)は `AttackerPreset` の3セグメント
+  (`reverseAttackerPreset-<rawValue>`)、受けたダメージ(`side == .attacker`。自分が防御側)は
+  `KnownDefenderPreset` の3セグメント(`reverseKnownDefenderPreset-<rawValue>`)を、側で排他的に表示する
+  (`ReverseScreenView.presetSegmentedRow`)。`KnownDefenderPreset.label(for:)` は相手の技の分類(HB/HD)を要るので、
+  技の読み込み前(`selectedMove == nil`)は暫定的に `.physical` 扱いで表示する(起動直後の一瞬だけ)。
+- **観測欄の単位**: `ObservationKind.percent` は「%」、`.damage` は「ダメージ」という短い接尾辞をフィールドの
+  横に出す(design.md に数値・文言指定が無いため実装側で決めた)。
+- **候補の絞り込みアニメーション**(批評対応で書き直し): `ReverseResultsSectionView` は候補カードの `VStack` に
+  `.animation(reduceMotion || observationCount <= 1 ? nil : Self.narrowingAnimation, value: result?.candidates.map(\.id))`
+  を直接付ける。観測欄が2つ以上(「観測を追加」して2件目以降を入力した状況の近似)のときだけ、候補の id 列が
+  変わった瞬間にアニメーションが掛かる(design.md「画面: 逆算」の「「観測を追加」で2回目以降を入力すると候補が
+  絞られるアニメーション」)。側の切り替え・起動時(観測欄1つに戻る)では動かない。初版は別の `@State` の
+  「ティック」を `onChange` で1手遅れて進めていたため、SwiftUI が描画を終えた*後*にアニメーションの発火条件が
+  そろい、実際には動いていなかった(批評で指摘)。「視差効果を減らす」で無効化。XCUITest では検査しない
+  (数値検査をしない方針のため)。
+- **テンキーの「完了」ボタン**: `.keyboardType(.numberPad)` には Return が無いため、`ReverseScreenView` に
+  `.toolbar { ToolbarItemGroup(placement: .keyboard) { ... Button("完了") { focusedObservationID = nil } } }` を
+  足した。フォーカスは観測欄をまたいで1つの `@FocusState<Int?>` で共有する。
+- **観測欄の `Binding` を同期にした**(批評対応): `ReverseViewModel.editObservation(id:text:)`(async)を
+  `TextField` の `Binding` から `Task { await ... }` で呼ぶと、`Task` の起動がイベントループを1回分後回しに
+  するため、キー入力から画面表示までに1フレームの遅れが出る。テキストの反映・検証だけを行う同期版
+  `setObservationText(id:text:) -> Bool`(送る観測の列が変わったら true)を新設し、`TextField` の `Binding` は
+  これを直接呼ぶ。逆算の呼び出しが要るとき(戻り値が true)だけ `recalculateAfterObservationEdit()` を `Task` で
+  呼ぶ。既存の async `editObservation(id:text:)` は `setObservationText` + 条件付き `recalculateAfterObservationEdit`
+  をまとめた一括版として残したので、`ReverseViewModelTests` の呼び出し側は1つも変えていない。
+- **SP の上限を1か所に**(批評対応): `AttackerPreset` / `KnownDefenderPreset` / `ReverseCandidateDisplay` に
+  それぞれ `private static let maxStatSP = 32` があったのを、`DomainTypes.swift` の `SPLimits.maxPerStat`
+  (CLAUDE.md ドメイン規約「SP は1ステータス最大32」が出典)にまとめ、3か所から参照する形にした。
+- **観測欄に VoiceOver ラベルを追加**(批評対応): `reverseObservationField-<index>` に
+  `.accessibilityLabel("観測\(index + 1)(\(unitLabel))")` を付けた(空の `TextField` はラベルが無いと
+  VoiceOver で読み上げられないため)。
+- **一致なし・削除ボタンの色を danger から textSecondary に**(批評対応): design.md の `danger` トークンは
+  エラー表示専用。「一致なし(最も近い SP)」は入力エラーではなく候補の性質を表す文言、観測欄の削除ボタンは
+  通常の操作なので、どちらも `textSecondary` に直した。
+- **側の切り替えもアクセシビリティの大きい文字サイズで縦積みに**(批評対応): `sideSwitch` は `cardsRow` と同じ
+  `dynamicTypeSize >= .accessibility1` の分岐で、横2分割のピルと縦積みの2行を切り替える。どちらの並びでも
+  セグメントは幅いっぱいに広がる。
+- **起動時にいきなり逆算画面を開く環境変数** `POKECALC_OPEN_REVERSE_SCREEN_AT_LAUNCH=1`(`RootView`)を、
+  既存の `POKECALC_OPEN_CALC_SCREEN_AT_LAUNCH` と同じ理由(XCUITest を介さずスクリーンショットを撮る用途)で追加した。
+  通常の起動・モック/API の判定には影響しない。
+- **スクリーンショット確認**(iPhone 18 Pro ライト/ダーク・iPhone 17e ダーク + 文字サイズ extra-extra-large、
+  観測を1件入力してキーボードを閉じ、候補カードが2件見える状態): カード・タイプバッジ・プリセットの3セグメント・
+  技セレクタ・持ち物候補チップ・観測欄(単位・削除ボタン)・「観測を追加」・前提文言・一致件数・候補カード
+  (性格クラス/持ち物・SP範囲・目安の名前・一致文言・想定ダメージ幅)のどれも折り返し・文字切れ・はみ出しは無かった。
+  ダークモードもトークンどおりの配色で読める。extra-extra-large でも1行に収まらない項目はカード内で自然に
+  折り返し、崩れは無かった(アクセシビリティ文字サイズでのカードの縦積みは計算画面と同じ `dynamicTypeSize >=
+  .accessibility1` の分岐を流用しており、計算画面側の批評で確認済みの経路)。

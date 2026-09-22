@@ -37,18 +37,15 @@ public enum AttackerPreset: String, CaseIterable, Sendable, Hashable {
         switch preset {
         case .aFull:
             let nature = try increasingNature(for: relevant, in: natures)
-            return AttackerBuild(natureId: nature.id, sp: statBlock(relevant: relevant, value: maxStatSP))
+            return AttackerBuild(natureId: nature.id, sp: statBlock(relevant: relevant, value: SPLimits.maxPerStat))
         case .aMax:
             let nature = try neutralNature(in: natures)
-            return AttackerBuild(natureId: nature.id, sp: statBlock(relevant: relevant, value: maxStatSP))
+            return AttackerBuild(natureId: nature.id, sp: statBlock(relevant: relevant, value: SPLimits.maxPerStat))
         case .none:
             let nature = try neutralNature(in: natures)
             return AttackerBuild(natureId: nature.id, sp: statBlock(relevant: relevant, value: 0))
         }
     }
-
-    /// CLAUDE.md ドメイン規約: SP は 1 ステータス最大 32(A特化・A振りは関連ステータスに振り切る)。
-    private static let maxStatSP = 32
 
     /// `plus` が `relevant`、`minus` がもう一方(atk/spa の逆側)の性格を一覧の最初から探す。
     private static func increasingNature(for relevant: StatKey, in natures: [Nature]) throws -> Nature {
