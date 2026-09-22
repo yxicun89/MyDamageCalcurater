@@ -209,4 +209,5 @@ deps-outdated: ## 古くなった依存の一覧を表示する(ネットワー�
 	@if [ -f web/package.json ]; then cd web && (npm outdated || true); else echo "(web/package.json が無い。未作成)"; fi
 
 include services/balance/Makefile
+include services/gateway/Makefile
 include web/Makefile
