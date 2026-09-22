@@ -22,23 +22,39 @@
       "Bash(git diff*)",
       "Bash(git log*)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(gh pr create *)"
     ],
     "ask": [
-      "Bash(git push *)",
       "Bash(k3d cluster delete *)",
       "Bash(kubectl delete namespace *)",
       "Bash(kubectl delete pvc *)",
-      "Bash(brew uninstall *)"
+      "Bash(brew uninstall *)",
+      "Bash(gh pr merge *)",
+      "Bash(git push * --delete*)",
+      "Bash(git push --delete*)"
     ],
     "deny": [
-      "Bash(git push --force *)",
       "Bash(git reset --hard *)",
       "Bash(sudo *)",
       "Bash(rm -rf / *)",
       "Bash(rm -rf ~*)",
       "Read(./.env)",
-      "Read(~/.ssh/**)"
+      "Read(~/.ssh/**)",
+      "Bash(git push --force*)",
+      "Bash(git push * --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push * -f*)",
+      "Bash(git push * +*)",
+      "Bash(git push * main)",
+      "Bash(git push * main:*)",
+      "Bash(git push * HEAD:main*)",
+      "Bash(git push * :main*)",
+      "Bash(git push --mirror*)",
+      "Bash(git push * --mirror*)",
+      "Bash(git push --all*)",
+      "Bash(git push * --all*)"
     ]
   },
   "hooks": {

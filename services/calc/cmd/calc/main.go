@@ -2,11 +2,17 @@
 //
 // 設定は環境変数で渡す(1か所で読み込み、必須値は起動時に検証する。docs/coding-rules.md §2):
 //
-//	CALC_ADDR            待ち受けアドレス(既定 ":8080")
-//	CALC_MASTER_PATH     マスタのスナップショット(暫定 JSON スキーマ。services/calc/README.md)。必須
-//	CALC_TYPECHART_PATH  タイプ相性表(testdata/golden/typechart.json と同じ schema)。必須
+//	CALC_ADDR         待ち受けアドレス(既定 ":8080")
+//	CALC_MASTER_URL   pokedex-svc のベース URL(GET /internal/pokedex/master からマスタ一式を取得する。ADR-0204)
+//	CALC_MASTER_PATH  マスタ一式の JSON ファイル(MasterExport の形。k3d の local overlay と make dev 用)
 //
-// 起動時に両方をメモリへ読み込み、失敗したら非ゼロで終了する(フォールバックの既定データは持たない。ADR-0013)。
+// CALC_MASTER_URL と CALC_MASTER_PATH は**ちょうど1つ**を指定する。CALC_TYPECHART_PATH は廃止
+// (相性表は MasterExport に含まれる)で、設定されていたら起動しない。
+//   - ファイル方式: 起動時に読み、失敗したら非ゼロで終了する(フォールバックの既定データは持たない。ADR-0013)。
+//   - URL 方式: HTTP サーバはすぐ起動し、バックグラウンドで取得を再試行する(指数バックオフ・上限あり・ctx で止まる)。
+//     取得できるまで calc の3操作は 503 master_unavailable、GET /readyz は 503、GET /healthz は 200。
+//     取得後の再取得はしない(マスタの更新は再起動で反映する)。
+//
 // 計算はイベント保存に依存しない(CLAUDE.md 絶対ルール5)。
 package main
 
@@ -18,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -27,12 +34,21 @@ import (
 
 // 環境変数の名前。
 const (
-	envAddr          = "CALC_ADDR"
-	envMasterPath    = "CALC_MASTER_PATH"
+	envAddr       = "CALC_ADDR"
+	envMasterURL  = "CALC_MASTER_URL"
+	envMasterPath = "CALC_MASTER_PATH"
+	// envTypeChartPath は廃止した環境変数(ADR-0204)。設定されていたら起動エラーにして、古い設定に気づかせる。
 	envTypeChartPath = "CALC_TYPECHART_PATH"
 
 	// defaultAddr は CALC_ADDR が未設定・空のときの待ち受けアドレス。
 	defaultAddr = ":8080"
+
+	// URL 方式のマスタ取得の既定値(ADR-0204 §3)。最初は短い間隔で再試行し(pokedex-svc と同時に起動する
+	// ことが多い)、倍々に伸ばして上限で止める(pokedex-svc が長く落ちていても叩き続けない)。
+	defaultMasterRetryInitial = 500 * time.Millisecond
+	defaultMasterRetryMax     = 30 * time.Second
+	// defaultMasterFetchTimeout は1回の取得のタイムアウト(マスタ一式は数百 KB 程度の想定)。
+	defaultMasterFetchTimeout = 10 * time.Second
 
 	// shutdownTimeout は ctx 終了後、進行中のリクエストを待つ猶予。
 	shutdownTimeout = 5 * time.Second
@@ -44,59 +60,136 @@ const (
 	idleTimeout       = 60 * time.Second
 )
 
-// config は calc-svc の設定(環境変数から1度だけ読む)。
+// retryPolicy は URL 方式のマスタ取得の再試行間隔(指数バックオフ)。
+type retryPolicy struct {
+	Initial time.Duration // 1回目の失敗の後に待つ時間
+	Max     time.Duration // 待つ時間の上限
+}
+
+// config は calc-svc の設定(環境変数から1度だけ読む)。MasterURL と MasterPath はちょうど一方が空でない。
 type config struct {
-	Addr          string
-	MasterPath    string
-	TypeChartPath string
+	Addr               string
+	MasterURL          string
+	MasterPath         string
+	MasterRetry        retryPolicy   // 環境変数では変えない(既定値。テストが短くする)
+	MasterFetchTimeout time.Duration // 同上
 }
 
-// loadConfig は環境変数から設定を読む。必須の CALC_MASTER_PATH / CALC_TYPECHART_PATH が
-// 未設定・空ならエラー。CALC_ADDR が未設定・空なら defaultAddr。
+// loadConfig は環境変数から設定を読む。CALC_MASTER_URL と CALC_MASTER_PATH のちょうど1つ(空は未設定と同じ)、
+// URL は http / https の絶対 URL、CALC_TYPECHART_PATH は未設定であること。CALC_ADDR が未設定・空なら defaultAddr。
 func loadConfig(lookup func(string) (string, bool)) (config, error) {
-	addr, ok := lookup(envAddr)
-	if !ok || addr == "" {
-		addr = defaultAddr
+	if v, ok := lookup(envTypeChartPath); ok && v != "" {
+		return config{}, fmt.Errorf("%s は廃止された(ADR-0204。相性表は CALC_MASTER_URL / CALC_MASTER_PATH のマスタ一式に含まれる)", envTypeChartPath)
 	}
-	masterPath, ok := lookup(envMasterPath)
-	if !ok || masterPath == "" {
-		return config{}, fmt.Errorf("%s が未設定", envMasterPath)
+
+	addr := defaultAddr
+	if v, ok := lookup(envAddr); ok && v != "" {
+		addr = v
 	}
-	typeChartPath, ok := lookup(envTypeChartPath)
-	if !ok || typeChartPath == "" {
-		return config{}, fmt.Errorf("%s が未設定", envTypeChartPath)
+
+	var masterURL, masterPath string
+	if v, ok := lookup(envMasterURL); ok {
+		masterURL = v
 	}
-	return config{Addr: addr, MasterPath: masterPath, TypeChartPath: typeChartPath}, nil
+	if v, ok := lookup(envMasterPath); ok {
+		masterPath = v
+	}
+	switch {
+	case masterURL != "" && masterPath != "":
+		return config{}, fmt.Errorf("%s と %s はちょうど1つを指定すること", envMasterURL, envMasterPath)
+	case masterURL == "" && masterPath == "":
+		return config{}, fmt.Errorf("%s か %s のどちらかが必要", envMasterURL, envMasterPath)
+	case masterURL != "":
+		if _, err := master.NewHTTPSource(masterURL, defaultMasterFetchTimeout); err != nil {
+			return config{}, fmt.Errorf("%s が不正: %w", envMasterURL, err)
+		}
+	}
+
+	return config{
+		Addr:               addr,
+		MasterURL:          masterURL,
+		MasterPath:         masterPath,
+		MasterRetry:        retryPolicy{Initial: defaultMasterRetryInitial, Max: defaultMasterRetryMax},
+		MasterFetchTimeout: defaultMasterFetchTimeout,
+	}, nil
 }
 
-// newHandler は設定のファイルからマスタと相性表を読み込み、HTTP ハンドラを作る。
-// ファイルが無い・壊れている・スキーマ違反ならエラー(部分的なデータで起動しない)。
-func newHandler(cfg config) (http.Handler, error) {
-	mf, err := os.Open(cfg.MasterPath)
-	if err != nil {
-		return nil, fmt.Errorf("マスタのスナップショットを開けない(%s): %w", cfg.MasterPath, err)
-	}
-	defer mf.Close()
-	snapshot, err := master.LoadSnapshot(mf)
-	if err != nil {
-		return nil, fmt.Errorf("マスタのスナップショットの読み込みに失敗(%s): %w", cfg.MasterPath, err)
-	}
-
-	tf, err := os.Open(cfg.TypeChartPath)
-	if err != nil {
-		return nil, fmt.Errorf("タイプ相性表を開けない(%s): %w", cfg.TypeChartPath, err)
-	}
-	defer tf.Close()
-	chart, err := master.LoadTypeChart(tf)
-	if err != nil {
-		return nil, fmt.Errorf("タイプ相性表の読み込みに失敗(%s): %w", cfg.TypeChartPath, err)
+// newHandler は設定に応じて HTTP ハンドラを作る。
+//   - ファイル方式: マスタを読み込んでから返す。ファイルが無い・壊れている・不正ならエラー(部分的なデータで起動しない)。
+//   - URL 方式: すぐに返し、ctx が続く間バックグラウンドで取得を再試行する(取得・検証の失敗はどちらも再試行)。
+func newHandler(ctx context.Context, cfg config) (http.Handler, error) {
+	if cfg.MasterPath != "" {
+		export, err := master.FileSource{Path: cfg.MasterPath}.Fetch(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("マスタファイル %s を読めない: %w", cfg.MasterPath, err)
+		}
+		store, err := master.FromExport(export)
+		if err != nil {
+			return nil, fmt.Errorf("マスタファイル %s の検証に失敗: %w", cfg.MasterPath, err)
+		}
+		return httpapi.NewHandler(store), nil
 	}
 
-	store, err := master.New(snapshot, chart)
+	src, err := master.NewHTTPSource(cfg.MasterURL, cfg.MasterFetchTimeout)
 	if err != nil {
-		return nil, fmt.Errorf("マスタの整合性検査に失敗: %w", err)
+		return nil, fmt.Errorf("%s が不正: %w", envMasterURL, err)
 	}
-	return httpapi.NewHandler(store), nil
+	var current atomic.Pointer[master.MemoryStore]
+	go fetchMasterLoop(ctx, src, cfg.MasterRetry, &current)
+	return httpapi.NewDeferredHandler(func() master.Store {
+		s := current.Load()
+		if s == nil {
+			// 型付きの nil を master.Store として返さない(nil 判定が効かなくなるため)。
+			return nil
+		}
+		return s
+	}), nil
+}
+
+// fetchMasterLoop はマスタ一式が取得・検証できるまで指数バックオフで再試行し、成功したら current に
+// 格納して戻る(取得後の再取得はしない。ADR-0204 §3)。ctx が終わったら再試行を止める。
+func fetchMasterLoop(ctx context.Context, src master.Source, retry retryPolicy, current *atomic.Pointer[master.MemoryStore]) {
+	for attempt := 0; ; attempt++ {
+		export, err := src.Fetch(ctx)
+		if err == nil {
+			var store *master.MemoryStore
+			store, err = master.FromExport(export)
+			if err == nil {
+				current.Store(store)
+				return
+			}
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		slog.Warn("calc-svc: マスタを取得できない。再試行する", "error", err, "attempt", attempt)
+		timer := time.NewTimer(backoffDelay(attempt, retry))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+	}
+}
+
+// backoffDelay は attempt 回目(0 始まり)の失敗の後に待つ時間。Initial から倍々に伸ばし、Max で止める
+// (大きな attempt でも桁あふれしない)。負の attempt は 0 とみなす。
+func backoffDelay(attempt int, p retryPolicy) time.Duration {
+	if attempt < 0 {
+		attempt = 0
+	}
+	delay := p.Initial
+	for i := 0; i < attempt; i++ {
+		if delay >= p.Max {
+			return p.Max
+		}
+		delay *= 2
+		if delay <= 0 || delay > p.Max {
+			return p.Max
+		}
+	}
+	return delay
 }
 
 // run は設定を読み、マスタを読み込み、ctx が終わるまで待ち受ける。ctx が終わったら
@@ -106,7 +199,7 @@ func run(ctx context.Context, lookup func(string) (string, bool)) error {
 	if err != nil {
 		return err
 	}
-	handler, err := newHandler(cfg)
+	handler, err := newHandler(ctx, cfg)
 	if err != nil {
 		return err
 	}

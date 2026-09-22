@@ -601,6 +601,7 @@ func TestCoverageInternalErrors(t *testing.T) {
 	}{
 		{name: "move provider failure", deps: Dependencies{TypeChart: testTypeChart(), PokemonTypes: fictionalPokemonTypes, Moves: failingMoves{err: errors.New("move backend exploded at /secret/moves.json")}}},
 		{name: "pokemon provider failure", deps: Dependencies{TypeChart: testTypeChart(), PokemonTypes: failingPokemonTypes{err: errors.New("pokemon backend exploded")}, Moves: fictionalMoves}},
+		{name: "type chart matchup failure", deps: Dependencies{TypeChart: failingChart{err: errors.New("type chart backend exploded")}, PokemonTypes: fictionalPokemonTypes, Moves: fictionalMoves}},
 		{name: "nil type chart", deps: Dependencies{PokemonTypes: fictionalPokemonTypes, Moves: fictionalMoves}},
 		// ADR-0016 §6.3: a nil type chart is rejected even when no member has an attack move.
 		{name: "nil type chart with no attack moves", deps: Dependencies{PokemonTypes: fictionalPokemonTypes, Moves: fictionalMoves}, body: `{"members":[{"pokemonId":"9001-000","moveIds":["move-9006"]}]}`},

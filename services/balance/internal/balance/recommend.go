@@ -117,11 +117,11 @@ func RecommendTypes(chart TypeChartProvider, members []Combatant, catalog []Cata
 
 	allTypes := AllTypes()
 
-	defenseHoles, err := recommendDefenseHoles(chart, members, allTypes)
+	defenseHoles, err := recommendDefenseHoles(chart, members)
 	if err != nil {
 		return Recommendation{}, err
 	}
-	offenseHoles, err := recommendOffenseHoles(chart, members, allTypes)
+	offenseHoles, err := recommendOffenseHoles(chart, members)
 	if err != nil {
 		return Recommendation{}, err
 	}
@@ -162,42 +162,54 @@ func RecommendTypes(chart TypeChartProvider, members []Combatant, catalog []Cata
 }
 
 // recommendDefenseHoles finds every attack type that no member resists or is immune to,
-// with the members' abilities applied (ADR-0401 §2, TB1/TB3 rules).
-func recommendDefenseHoles(chart TypeChartProvider, members []Combatant, allTypes []TypeID) ([]TypeID, error) {
+// with the members' abilities applied (ADR-0401 §2), by reusing TB1's team aggregation
+// (AnalyzeDefense) instead of re-deriving categories per attack type: a hole is exactly an
+// attack type whose TeamSummaryEntry has no resist and no immune member (ADR-0014 §3:
+// Resist already includes quad_resist and never immunities, so entry.Resist == 0 &&
+// entry.Immune == 0 is "no member resists or is immune to it"). Every member × attack type is
+// evaluated, so a broken type chart is always an error (the previous per-type loop could stop early).
+func recommendDefenseHoles(chart TypeChartProvider, members []Combatant) ([]TypeID, error) {
+	defenseMembers := make([]Member, len(members))
+	for i, member := range members {
+		defenseMembers[i] = Member{PokemonID: member.PokemonID, Types: member.Types, Ability: member.Ability}
+	}
+	analysis, err := AnalyzeDefense(chart, defenseMembers)
+	if err != nil {
+		return nil, err
+	}
+
 	var holes []TypeID
-	for _, attack := range allTypes {
-		covered := false
-		for _, member := range members {
-			result, err := CalculateDefenseWithAbility(chart, attack, member.Types, member.Ability)
-			if err != nil {
-				return nil, err
-			}
-			category, err := ClassifyEffectiveness(result.Effectiveness)
-			if err != nil {
-				return nil, err
-			}
-			if category == CategoryResist || category == CategoryQuadResist || category == CategoryImmune {
-				covered = true
-				break
-			}
-		}
-		if !covered {
-			holes = append(holes, attack)
+	for _, entry := range analysis.TeamSummary {
+		if entry.Resist == 0 && entry.Immune == 0 {
+			holes = append(holes, entry.AttackType)
 		}
 	}
 	return holes, nil
 }
 
 // recommendOffenseHoles finds every single defense type the party's own moves cannot hit at
-// x1 or more (ADR-0401 §2, TB2's teamCoverage). A party without any attack move has no
-// offense hole at all (§7.1: a team of only status moves counts the same as no move).
-func recommendOffenseHoles(chart TypeChartProvider, members []Combatant, allTypes []TypeID) ([]TypeID, error) {
-	memberAttackTypes := make([][]TypeID, len(members))
-	hasAttack := false
+// x1 or more (ADR-0401 §2), by reusing TB2's team aggregation (AnalyzeCoverage) instead of
+// re-deriving attack types and best matchups per defense type: a hole is exactly a defense
+// type whose TeamCoverageEntry has no effective member. A party without any attack move has
+// no offense hole at all (§7.1: a team of only status moves counts the same as no move),
+// which AnalyzeCoverage itself cannot report (every TeamCoverageEntry.EffectiveMembers would
+// be 0, indistinguishable from "every type is a hole"), so that case is detected separately
+// from whether any member's resolved MemberCoverage.AttackTypes is non-empty.
+func recommendOffenseHoles(chart TypeChartProvider, members []Combatant) ([]TypeID, error) {
+	coverageMembers := make([]CoverageMember, len(members))
 	for i, member := range members {
-		memberAttackTypes[i] = attackTypesOf(member.Moves)
-		if len(memberAttackTypes[i]) > 0 {
+		coverageMembers[i] = CoverageMember{PokemonID: member.PokemonID, Moves: member.Moves}
+	}
+	analysis, err := AnalyzeCoverage(chart, coverageMembers)
+	if err != nil {
+		return nil, err
+	}
+
+	hasAttack := false
+	for _, member := range analysis.Members {
+		if len(member.AttackTypes) > 0 {
 			hasAttack = true
+			break
 		}
 	}
 	if !hasAttack {
@@ -205,28 +217,9 @@ func recommendOffenseHoles(chart TypeChartProvider, members []Combatant, allType
 	}
 
 	var holes []TypeID
-	for _, defense := range allTypes {
-		effective := false
-		for _, attackTypes := range memberAttackTypes {
-			for _, attackType := range attackTypes {
-				matchup, err := chart.Matchup(attackType, defense)
-				if err != nil {
-					return nil, fmt.Errorf("type chart matchup %s/%s: %w", attackType, defense, err)
-				}
-				if !matchup.ValidSingleType() {
-					return nil, fmt.Errorf("type chart matchup %s/%s returned invalid multiplier %d", attackType, defense, matchup)
-				}
-				if matchup >= MultiplierNormal {
-					effective = true
-					break
-				}
-			}
-			if effective {
-				break
-			}
-		}
-		if !effective {
-			holes = append(holes, defense)
+	for _, entry := range analysis.TeamCoverage {
+		if entry.EffectiveMembers == 0 {
+			holes = append(holes, entry.DefenseType)
 		}
 	}
 	return holes, nil

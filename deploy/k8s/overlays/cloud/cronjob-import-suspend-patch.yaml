@@ -1,0 +1,8 @@
+# cloud には MySQL・Secret mysql-auth・イメージの配布経路がまだ無いため、CronJob pokedex-import を
+# suspend する(毎週失敗し続けないように。ADR-0104 §8)。cloud を使うときに外す。
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pokedex-import
+spec:
+  suspend: true

@@ -3,7 +3,7 @@
 - 状態: 採用(2026-09-22。方式はユーザー回答「ローカル k3d で試す」。細部はタイプバランスレーンの判断)
 - 日付: 2026-09-22
 - 関連: docs/type-balance-design.md §4「GitOps / Argo CD」・§14、DECISIONS.md「Argo CD を共通デプロイ基盤にする」「最新の安定版」、
-  services/balance/deploy/argocd/README.md、COORDINATION.md(リモートの URL・認証情報を文書・コミットに書かない)
+  docs/runbooks/balance.md、COORDINATION.md(リモートの URL・認証情報を文書・コミットに書かない)
 
 ## 背景
 TB0 の最後の項目「Git 変更 → Argo CD 同期 → Pod 更新」は、Argo CD・配布イメージの置き場所・private リポジトリの認証が無く未実施だった。
@@ -38,3 +38,10 @@ TB0 の最後の項目「Git 変更 → Argo CD 同期 → Pod 更新」は、Ar
 - k3d クラスタをレジストリ付きで作り直す: 他のレーンの作業を止める(クラスタ削除は人間の確認事項)。
 - repoURL を Git に書く: アカウント名を公開しない方針(R-2-8)に反する。
 - ユーザーの gh の認証トークンを流用する: 権限が広すぎる。読み取り専用・リポジトリ限定の PAT にする。
+
+## 追記(2026-09-22): Git に入れる値・入れない値
+- 入れる: gitops overlay の image(`newName` と `digest`。tag や `latest` は使わない)。
+- 入れない: リポジトリの URL(アカウント名を含む)、Git の access token、registry の password、Kubernetes Secret の実値、ローカルの絶対パス。
+  `application.yaml` の `repoURL` は placeholder のままにし、適用時に `git remote get-url origin` から埋め込む。
+- Argo CD で同期した balance は gitops overlay に read model のマウントが無いので、analyze / coverage などは 503(health は 200)。
+

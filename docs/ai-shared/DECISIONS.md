@@ -613,6 +613,11 @@ Decision: (1) 逆算の候補は engine の順に1件ずつカード表示し、
 Reason: ユーザー回答。逆算の結果(性格 × 持ち物ごとの SP 範囲)では型が一意に決まらないため。
 Impact: design.md の1行、plan.md に P4-8、ADR-0300 §7 の持ち越しの記述を更新。iOS(M3)も同じ表示方針に従う。
 
+## 2026-09-22: マスタの定期取込(P2-2d)の2点(ユーザー回答。既定案どおり)
+Decision: (1) 取得元に新しい版が出ていても CronJob は成功のまま、ログと報告で知らせるだけにする(取り込むのは Git に固定した版だけ。版を上げるのは人が PR で config.json を更新する)。(2) 実行は毎週土曜 12:00(日本時間)。
+Reason: ユーザーが確認の質問に回答した。
+Impact: ADR-0104 の既定値どおり。
+
 ## 2026-09-22: Web P4-8 を統合(PR #33)
 Decision: P4-8(design.md「動き」の演出)と逆算の表示方針・design.md の演出の値を PR #33 で main に統合した。Web レーンは他レーン(P2-3・P3-3)待ちで一時停止。
 Reason: critic PASS、make test / lint / build・E2E の通過を確認。
@@ -621,3 +626,58 @@ Impact: Web レーンの Active を「なし」にした。続きは CURRENT_STA
 ## 2026-09-22: 素早さ SP1 を PR #36 で main に統合(素早さレーン)
 Decision: SP1(ADR-0601。表の 6 行・速い順・同速の段・presets の絞り込み)を PR #36 で統合した。critic PASS(軽微4。テストのコメントは修正、空の roster の扱いは SP4 までに決める)。
 Impact: 素早さレーンの次は SP2(feat/speed-s2)。
+## 2026-09-22: 手順書の書き方を全レーン共通のルールにする(ユーザー決定。Web レーンのセッションで受領)
+Decision: 人が実行する手順書は、上から下へ1回読めば終わる形にし(節の間を行き来させない)、動作を伴うコマンドと必要最低限の確認点だけを書く
+(行動を伴わない説明は ADR や設計の節へ)。コマンドの塊はリポジトリのルートへの `cd` から始め、ローカルの手順は k3d(コンテナ)を主にする。
+AGENTS.md に「手順書の書き方」節を追加し、CLAUDE.md の「最初に読むもの」から参照した。
+Reason: ユーザーが「手順書を上下に行き来するのは手間」「行動を伴わない説明は要らない」「make の実行場所で迷う」「全レーンに共有して」と指示した。
+Impact: 全レーン・両 AI に適用。既存の手順書は、各レーンが次に触るときにこの形に直す(Web は docs/verify-m1.md を P4-14 で直す)。
+
+## 2026-09-22: README・手順書・構成図の規則(ユーザー決定。全レーン)
+Decision: 各コンポーネントに README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)、動かせるレーンには手順書 `docs/runbooks/<レーン>.md`、全体図は `docs/architecture.md`。
+手順書の書き方は AGENTS.md「手順書の書き方」(Web レーンが PR #38 で追加した全レーン共通の規則)に従う。
+図は mermaid を基本にする。文書は短く、重複させずリンクでつなぐ(読んで直すのは人間。量が多いと疲れる)。
+Reason: ユーザーが「各 README で何をしているか・どうしているかの説明、動作確認の手順書、アーキテクチャの図が欲しい。人間が後で読みやすく AI も扱いやすく、ただし過剰な量にしない」と依頼した。
+Impact: docs/coding-rules.md §8、docs/architecture.md(全体図)、plan.md の「DOC: 文書」(各レーンのタスク)。各レーンは自分の範囲の README・手順書を書く。
+## 2026-09-22: calc-svc のマスタを pokedex-svc の内部 API から受け取る(ユーザー決定。ADR-0204)
+Decision: calc-svc のマスタの入手元を pokedex-svc の内部 API `GET /internal/pokedex/master`(契約は api/openapi.yaml の tag `internal`、operationId `getMasterExport`、200 は MasterExport、503 は master_unavailable)にする。
+calc-svc は起動時に取得し(失敗は指数バックオフで再試行、取得後は再取得しない、更新は再起動で反映)、services/internal/master の写像でメモリに載せる。取得できるまで計算は 503 master_unavailable、readiness(/readyz)も 503。
+gateway は /internal/* を公開しない。k3d local と `make dev` は同じ形の JSON ファイル(架空データ)で動かす。
+Reason: ユーザーが「pokedex-svc の内部 API」を選んだ(絶対ルール4を守り、マスタの正本を pokedex の DB 1つにするため)。
+Impact(データレーンへの提案。既定案): (1) pokedex-svc(P2-3)で `GET /internal/pokedex/master` を実装する(クラスタ内の Service だけで Ingress には出さない。DB に未投入なら 503 master_unavailable。使用可能集合で絞らない。effect は item_effects / ability_effects の JSON をそのまま返す)。
+(2) natures テーブル(id, name_ja, plus, minus)を追加し、/api/pokedex/natures と内部 API の両方で使う。(3) MasterExport の species には showdownId を含める(共通マスタの Species が形式を検証するため。nameEn は含めない)。
+API レーンの後続: pokedex-svc のデプロイ後に calc の local overlay を URL 方式(`CALC_MASTER_URL=http://pokedex`)に切り替える。
+Web / iOS へ: openapi に tag `internal` の操作と Master* の型が増える(web/src/api/openapi.gen.ts はこの PR で再生成済み)。iOS は生成し直すか、生成設定で `internal` タグを除外する。
+
+
+## 2026-09-22: Web P4-9 を統合(PR #35)
+Decision: P4-9(P4-8 の軽微な改善3件)を PR #35 で main に統合した。Web レーンは他レーン(P2-3・P3-3)待ちで一時停止(Active: なし)。
+Reason: critic PASS、make test / lint / build・E2E の通過を確認。
+Impact: 続きは CURRENT_STATE.md の Web 欄の Next。
+
+## 2026-09-22: Web の画面・コンテナ化・手順書の方針(ユーザー回答)と、API レーンへの依頼
+Decision: (1) 画面は URL で切り替える(`/calc`・`/reverse`。P4-10)。(2) タイプバランスと素早さ比較の画面を Web に作る(P4-12・P4-13。balance / speed API を使う。
+各サービスのレーンの API 契約は変えずに使う)。(3) ローカルでもコンテナ(k3d)で動かすのを主にする。Web は nginx の静的配信イメージにし、
+**gateway の後ろ**に置く(localhost:8080 だけで画面も API も使える。P4-11)。(4) 手順書は上から順に実行するだけで済む形にし、各コマンドは
+リポジトリのルートへの `cd` から始める(P4-14)。(5) P4-5 のブラウザ実機確認は Chrome で良好(Safari は未確認)。
+**依頼(API レーン宛て)**: gateway に任意の `GATEWAY_WEB_URL` を足し、設定されていれば `/api`・`/assets`・`/healthz` 以外のパスを Web(nginx の Service)へ転送してほしい
+(未設定なら従来どおり)。Web レーンは base/web の Service 名 `web`(port 80)を用意する。それまでは `kubectl port-forward` で Web を開く。
+Reason: ユーザーが make web-dev で確認したうえで「他の画面も見たい」「make の実行場所で迷う」「ローカルもコンテナで動かして k8s の恩恵を受けたい」「手順書を上下に行き来する」と要望した。
+Impact: plan.md に P4-10〜P4-14。gateway の変更は API レーンの範囲なので Web レーンは変更しない。
+
+## 2026-09-22: 素早さの画面は素早さレーン(SP3)のまま(ユーザー決定)
+Decision: 素早さ比較の画面は、COORDINATION.md のとおり素早さレーンの SP3(`web/src/speed/`)が作る。Web レーンの P4-13 は取り消す。
+Web レーンは P4-10 の URL で画面を切り替える仕組み(ルート表)を、素早さレーンが1項目足すだけで `/speed` を登録できる形にする。
+タイプバランスの画面(P4-12)は、担当が決まっていないので Web レーンが作る。
+Reason: 上の「Web の画面・コンテナ化・手順書の方針」で P4-13 を Web に置いたが、素早さの画面は既に素早さレーンの範囲と決まっていた(素早さレーンの指摘)。ユーザーが素早さレーンのままを選んだ。
+Impact: plan.md の P4-13 を取り消し。素早さレーンの SP3 はそのまま。
+
+## 2026-09-22: 各レーンのメインセッションは Sonnet で起動する(ユーザー決定)
+Decision: Claude Code の各レーンのメインセッションは `--model sonnet` で起動し、設計の判断が重いときだけ `/model opus` に切り替えて戻す。サブエージェントの割り当て(spec-writer・critic は Opus、implementer は Sonnet、quick-scanner は Haiku)は変えない。
+Reason: 6レーンのメインセッションをすべて Opus で動かすと、Max プランでも5時間の利用枠に達する。ユーザーが「メインだけ Sonnet にする」を選んだ。
+Impact: CLAUDE.md のワークフロー、COORDINATION.md の起動の目安。動いているセッションは `/model sonnet` で切り替える。
+
+## 2026-09-22: サブエージェントも重い作業のときだけ Opus にする(ユーザー決定。前エントリ「メインだけ Sonnet」を改める)
+Decision: メインセッションは Sonnet で起動し、重い設計の判断のときだけ Opus。spec-writer・critic は engine・逆算・DB・API 契約に関わるときだけ Opus(既定)、文書・k8s・スクリプト・軽い修正では Sonnet で呼ぶ。利用枠が厳しいときは M1 のレーン(データ・API・Web)を優先し、他のレーンは区切りで止める。
+Reason: ユーザーが確認の質問に改めて答えた(前回の回答「メインだけ Sonnet」は意図と違った)。
+Impact: CLAUDE.md・COORDINATION.md を更新。

@@ -339,6 +339,24 @@ func TestAnalyzeNilTypeChartIsInternalError(t *testing.T) {
 	}
 }
 
+// ADR-0014 §5.5: a type chart that fails (not merely absent) is also a 500 internal_error.
+func TestAnalyzeMatchupFailureIsInternalError(t *testing.T) {
+	t.Parallel()
+
+	server := New(Dependencies{
+		TypeChart:    failingChart{err: errors.New("type chart backend exploded")},
+		PokemonTypes: fictionalPokemonTypes,
+	})
+	recorder := postAnalyze(t, server, `{"members":[{"pokemonId":"9001-000"}]}`)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500; body=%s", recorder.Code, recorder.Body.String())
+	}
+	got := decodeError(t, recorder.Body.Bytes())
+	if got.Code != api.InternalError || got.Message != "internal error" {
+		t.Errorf("error = %+v, want internal_error with the fixed text %q", got, "internal error")
+	}
+}
+
 func TestAnalyzeWithoutPokemonTypesIsMasterUnavailable(t *testing.T) {
 	t.Parallel()
 

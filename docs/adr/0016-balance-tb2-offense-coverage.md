@@ -52,3 +52,9 @@ pokemonId の解決(422 `unknown_pokemon`)→ moveId の解決(422 `unknown_move
 ## 却下した案
 - analyze の response に攻撃範囲を足す: 設計書 §6「防御タイプ分析とは別のデータ構造」に反し、技の read model が無いと防御分析まで 503 になる。
 - 技のタイプを request で送る: ユーザー回答(ID を送る)と TB1 の方針に反する。
+
+## 追記(2026-09-22)
+- `CoverageMultiplier` は OpenAPI 3.0.3 の `nullable: true` と `enum` の併用で null を表す。厳密な validator は enum に `null` の明示を求めるが、
+  oapi-codegen v2.8.0 は enum の `null` から値が `"<nil>"` の定数を生成してしまい、誤用すると壊れた値を返しうるので明示しない。
+  クライアントを生成するときに問題になれば、`MatchupMultiplier` と同じ pattern の形へ移す。
+

@@ -15,7 +15,7 @@ func (h handler) RecommendTeamTypes(c *echo.Context, _ api.RecommendTeamTypesPar
 }
 
 // recommendations implements the TB5 recommendation endpoint (ADR-0401 §2〜6), reusing the
-// TB4 request/resolve helpers (validateThreatsEntry, resolveThreats*, threatsResolveError):
+// TB4 request/resolve helpers (validateThreatsEntry, resolveThreats*, resolveError):
 // a recommendations member has the same shape as a threats entry.
 //
 // Validation order (ADR-0401 §6, the same flavor as TB4 §4/§6): header (400, via
@@ -41,11 +41,8 @@ func recommendations(c *echo.Context, deps Dependencies) error {
 		})
 	}
 
-	if len(request.Members) < 1 || len(request.Members) > balance.MaxMembers {
-		return c.JSON(http.StatusBadRequest, api.Error{
-			Code:    api.InvalidRequest,
-			Message: "members must contain between one and six entries",
-		})
+	if err := validateCount(c, len(request.Members), "members"); err != nil {
+		return err
 	}
 
 	entries := make([]api.ThreatsRequestPokemon, len(request.Members))
@@ -58,10 +55,7 @@ func recommendations(c *echo.Context, deps Dependencies) error {
 		}
 		entryHasMoveID, entryHasAbilityID, err := validateThreatsEntry(entry)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, api.Error{
-				Code:    api.InvalidRequest,
-				Message: err.Error(),
-			})
+			return badRequest(c, err.Error())
 		}
 		entries[i] = entry
 		hasMoveID = hasMoveID || entryHasMoveID
@@ -102,13 +96,13 @@ func recommendations(c *echo.Context, deps Dependencies) error {
 
 	members, err := resolveThreatsPokemon(deps, entries)
 	if err != nil {
-		return threatsResolveError(c, err)
+		return resolveError(c, err)
 	}
 	if err := resolveThreatsMoves(deps, entries, members); err != nil {
-		return threatsResolveError(c, err)
+		return resolveError(c, err)
 	}
 	if err := resolveThreatsAbilities(deps, entries, members); err != nil {
-		return threatsResolveError(c, err)
+		return resolveError(c, err)
 	}
 
 	catalog, err := deps.PokemonCatalog.AllPokemon()

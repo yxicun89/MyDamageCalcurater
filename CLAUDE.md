@@ -15,6 +15,7 @@ Claude Code / Codex の手順対応は [docs/development-workflow.md](docs/devel
 5. `docs/adr/` — 過去の設計判断
 6. `docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md` — Claude Code と Codex の共有状態(運用は [AGENTS.md](AGENTS.md))
 7. `docs/coding-rules.md` — コーディング規約(公開できる状態を保つ・ハードコードしない・読みやすいコード。Claude Code / Codex 共通)
+   手順書(verify・README の起動手順)は AGENTS.md「手順書の書き方」に従う(上から下へ1回で読める・動作を伴うコマンドと最低限の確認点だけ・ルートへの cd から始める)
 
 ## リポジトリ構成
 
@@ -111,6 +112,7 @@ ADR-0003 の適応を維持する。Codex では ADR-0007 と共通ワークフ�
 - 完了条件: `make test` 成功 / engine 変更時は `make test-golden` 成功 / plan.md 更新 / 必要ならADR
 - 改善要望は `/improve`、全体確認は `/verify`
 - 上表のモデルは既存 Claude agent 定義の割り当て。Codex のモデルへ機械的に置換しない
+- **各レーンのメインセッションは Sonnet で起動する**(`--model sonnet`)。設計の判断が重いときだけ `/model opus` に切り替え、終わったら戻す。サブエージェントは、spec-writer・critic を **engine・逆算・DB・API 契約に関わるときだけ Opus**(上表の既定)にし、文書・k8s・スクリプト・軽い修正では Agent の `model: "sonnet"` で呼ぶ。利用枠が厳しいときは M1 のレーン(データ・API・Web)を優先し、他のレーンは区切りで止める。Max プランの5時間の利用枠を6レーンで使い切らないため(2026-09-22 ユーザー決定)
 - `.claude/settings.json` の gofmt フックとは別に、明示的な整形・lint・build の結果を確認する
 - レビューのスキップや未実装ターゲットの正常終了を成功と数えない。詳細は共通ワークフローを参照
 - ブランチ・統合: レーン制(ダメージ計算 `feat/calc-<phase名>` / タイプバランス `feat/tb-<stage名>`)。main へは PR で入れる
