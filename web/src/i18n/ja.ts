@@ -110,6 +110,23 @@ export const appText = {
   tabsLabel: "画面の切り替え",
   calcTabLabel: "計算",
   reverseTabLabel: "逆算",
+  /** 計算モード(オフライン = WASM / オンライン = API)の切り替え(P4-5、ADR-0301 §4)。 */
+  calcModeGroupLabel: "計算モード",
+  calcModeOfflineLabel: "オフライン(WASM)",
+  calcModeOnlineLabel: "オンライン(API)",
+} as const;
+
+/**
+ * API 実装(createApiEngine、P4-5)がクライアント側(fetch する前・応答を読めないとき)で作るエラーの文言
+ * (ADR-0301 §2・§4)。サーバーが返す Error.message はそのまま運ぶので、ここには含まない。
+ */
+export const apiEngineText = {
+  /** 個体の性格(plus/minus の組)に一致するマスタの性格が無いとき。 */
+  unknownNature: "この性格に対応するマスタの性格が見つかりません",
+  /** 通信できない・応答が読めない・エラー本文の形が不正なとき(ADR-0301 §4: 自動フォールバックはしない)。 */
+  unavailable: "API に接続できません",
+  /** BulkRequest.presets(engine のカスタムプリセット定義)は API に送れないとき(ADR-0301 §2)。 */
+  invalidPreset: "カスタムの防御側プリセット定義は API に送れません",
 } as const;
 
 /** ステータスの1文字表記(H・A・B・C・D・S)。逆算の SP 範囲・目安の名前の表示に使う(P4-4)。 */

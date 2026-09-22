@@ -2,12 +2,14 @@
 // 図鑑番号は実在と重ならない 9001 以降にする(ADR-0002)。6種族以上・5タイプ以上にまたがる。
 // 画面の確認に要る組み合わせ(ADR-0300 §3): ダメージ技を2つ以上覚える種族(テストほのお)、
 // 変化技を覚える種族(テストほのお・テストみず)を含める。
+// P4-5(ADR-0301 §5): 種族の key だけは API の SpeciesKey({図鑑番号4桁}-{フォルム3桁})の形にする
+// (技・持ち物・特性・性格の ID は「example-」のまま)。すべて単一フォルム(form 0)。
 
 import type { MasterSpecies } from "../types";
 
 export const exampleSpecies: MasterSpecies[] = [
   {
-    key: "example-fire",
+    key: "9001-000",
     dexNo: 9001,
     form: 0,
     nameJa: "テストほのお",
@@ -17,7 +19,7 @@ export const exampleSpecies: MasterSpecies[] = [
     learnset: ["example-move-tackle", "example-move-firepunch", "example-move-growl"],
   },
   {
-    key: "example-water",
+    key: "9002-000",
     dexNo: 9002,
     form: 0,
     nameJa: "テストみず",
@@ -27,7 +29,7 @@ export const exampleSpecies: MasterSpecies[] = [
     learnset: ["example-move-waterblast", "example-move-growl"],
   },
   {
-    key: "example-grass",
+    key: "9003-000",
     dexNo: 9003,
     form: 0,
     nameJa: "テストくさ",
@@ -37,7 +39,7 @@ export const exampleSpecies: MasterSpecies[] = [
     learnset: ["example-move-leafcutter"],
   },
   {
-    key: "example-electric",
+    key: "9004-000",
     dexNo: 9004,
     form: 0,
     nameJa: "テストでんき",
@@ -47,7 +49,7 @@ export const exampleSpecies: MasterSpecies[] = [
     learnset: ["example-move-thunder"],
   },
   {
-    key: "example-rocksteel",
+    key: "9005-000",
     dexNo: 9005,
     form: 0,
     nameJa: "テストいわはがね",
@@ -57,7 +59,7 @@ export const exampleSpecies: MasterSpecies[] = [
     learnset: ["example-move-rockslide", "example-move-steelwing"],
   },
   {
-    key: "example-dragonflying",
+    key: "9006-000",
     dexNo: 9006,
     form: 0,
     nameJa: "テストりゅうひこう",

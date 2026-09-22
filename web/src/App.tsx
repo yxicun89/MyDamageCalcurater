@@ -1,8 +1,15 @@
 // アプリの最上位(P4-2)。ヘッダーと計算画面を出す。マスタは MasterSource(既定は架空の例データ)から、
 // 計算は CalcEngine(既定は WASM 実装)から受け取り、テストでは差し替える(ADR-0300 §2・§3)。
+// P4-5: ヘッダーに計算モード(オフライン = WASM / オンライン = API)の切り替えを置く(ADR-0301 §4)。
+// engines(offline・online)を渡せ、選択中のモードの engine だけで計算する(自動フォールバックはしない)。
+// 単一の engine を渡すと(既存の使い方のまま)両モードでその engine を使う。
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import "./App.css";
+import { createApiEngine } from "./api/apiEngine";
+import { apiBaseUrl } from "./api/config";
+import { createClientIds, type ClientIds } from "./api/clientIds";
+import { loadCalcMode, saveCalcMode, type CalcMode } from "./app/calcMode";
 import { browserWasmLoader } from "./engine/browserWasmLoader";
 import type { CalcEngine } from "./engine/types";
 import { createWasmEngine } from "./engine/wasmEngine";
@@ -18,10 +25,29 @@ type ScreenTab = "calc" | "reverse";
 /** タブの定義順(ロービング tabIndex・矢印キーの移動順。WAI-ARIA Authoring Practices の Tabs パターン)。 */
 const TAB_ORDER: readonly ScreenTab[] = ["calc", "reverse"];
 
-/** App の props(テストで engine・masterSource を差し替える。ADR-0300 §2・§3)。 */
+/** 計算モードの定義順(ラジオの表示順。既定のオフラインを先に出す)。 */
+const CALC_MODE_ORDER: readonly CalcMode[] = ["offline", "online"];
+
+/** 計算モードの表示名(appText の語をそのまま使う)。 */
+function calcModeLabel(mode: CalcMode): string {
+  return mode === "offline" ? appText.calcModeOfflineLabel : appText.calcModeOnlineLabel;
+}
+
+/** オフライン(WASM)・オンライン(API)、それぞれの計算の差し替え口(ADR-0301 §4)。 */
+export interface CalcEngines {
+  readonly offline: CalcEngine;
+  readonly online: CalcEngine;
+}
+
+/** App の props(テストで engine・masterSource を差し替える。ADR-0300 §2・§3、ADR-0301 §4)。 */
 export interface AppProps {
-  /** 計算の差し替え口。省くと WASM 実装(ブラウザから wasm_exec.js / engine.wasm を読む)。 */
+  /**
+   * 計算の差し替え口。渡すと計算モードによらず常にこれを使う(engines を渡さないときの簡便な指定。
+   * 既存の使い方のまま)。省くと既定の WASM 実装(オフライン)・API 実装(オンライン)を使う。
+   */
   readonly engine?: CalcEngine;
+  /** モードごとの計算の差し替え口。engine より優先する。 */
+  readonly engines?: CalcEngines;
   /** マスタの取得口。省くと架空の例データ(ADR-0300 §3)。 */
   readonly masterSource?: MasterSource;
 }
@@ -39,15 +65,50 @@ function tabLabel(tabId: ScreenTab): string {
  * アプリの最上位。ヘッダーと計算画面(CalcScreen)を出す。マスタを読み込むまでは「読み込み中」、
  * 読み込みに失敗したら role=alert で知らせる。
  */
-export function App({ engine, masterSource = exampleMasterSource }: AppProps) {
-  // 既定の WASM エンジンはマウント時に1回だけ作る(呼び出しのたびに作り直すと、計算のたびに
+export function App({ engine, engines, masterSource = exampleMasterSource }: AppProps) {
+  // 既定のオフライン(WASM)エンジンはマウント時に1回だけ作る(呼び出しのたびに作り直すと、計算のたびに
   // 読み込み状態がリセットされる)。createWasmEngine 自体は engine.wasm を読まない(初回の計算まで遅延)。
-  const [fallbackEngine] = useState<CalcEngine>(() => createWasmEngine(browserWasmLoader()));
-  const resolvedEngine = engine ?? fallbackEngine;
+  const [fallbackOfflineEngine] = useState<CalcEngine>(() => createWasmEngine(browserWasmLoader()));
+  // 端末 ID・セッション ID はマウント時に1回だけ作る(ADR-0301 §3: セッション ID はページを開くたびに新しく)。
+  const [clientIds] = useState<ClientIds>(() => createClientIds());
 
   // setState は応答が届いたとき(.then のコールバック)だけで行う(react-hooks/set-state-in-effect)。
   // 読み込み中は load 未完了(null)のまま表す。
   const [masterLoad, setMasterLoad] = useState<MasterLoad | null>(null);
+
+  // 既定のオンライン(API)エンジンは、natures(性格の一覧)が要るのでマスタの読み込みが終わってから作る
+  // (ADR-0301 §2・§4)。createApiEngine 自体は fetch しない(初回の計算まで遅延。ADR-0300 §2 と同じ考え方)。
+  const fallbackOnlineEngine = useMemo<CalcEngine | null>(() => {
+    if (masterLoad === null || !masterLoad.ok) {
+      return null;
+    }
+    return createApiEngine({
+      baseUrl: apiBaseUrl(),
+      fetch: globalThis.fetch.bind(globalThis),
+      master: { natures: masterLoad.master.natures },
+      ids: clientIds,
+    });
+  }, [masterLoad, clientIds]);
+
+  // モードごとに使う engine を決める(ADR-0301 §4)。engines > engine(両モードに使う) > 既定の順。
+  // 既定のオンラインは、マスタ読み込み前は使われない(masterLoad が ok になるまで下の画面を描画しない)ので
+  // null のままでもよく、その間は offline のプレースホルダで埋める。
+  const resolvedEngines: CalcEngines =
+    engines ??
+    (engine !== undefined
+      ? { offline: engine, online: engine }
+      : { offline: fallbackOfflineEngine, online: fallbackOnlineEngine ?? fallbackOfflineEngine });
+
+  // 計算モード(オフライン = WASM / オンライン = API)。既定はオフラインで、選択は localStorage に覚える
+  // (ADR-0301 §4)。マウント時に一度だけ読み、以後はこの state が正(他タブでの変更は追わない)。
+  const [mode, setMode] = useState<CalcMode>(() => loadCalcMode());
+  const resolvedEngine = mode === "online" ? resolvedEngines.online : resolvedEngines.offline;
+
+  function selectMode(nextMode: CalcMode): void {
+    setMode(nextMode);
+    saveCalcMode(nextMode);
+  }
+
   // 計算・逆算の切り替え(P4-4)。既定は計算。どちらの画面も同じ engine・master を使う。
   const [tab, setTab] = useState<ScreenTab>("calc");
 
@@ -119,6 +180,7 @@ export function App({ engine, masterSource = exampleMasterSource }: AppProps) {
       {/* main の外に置く: main の内側だと header は banner ランドマークにならない(HTML-AAM)。 */}
       <header className="app-header">
         <h1>{appText.title}</h1>
+        <CalcModeSelector value={mode} onChange={selectMode} />
       </header>
       <main className="app-main">
         {masterLoad === null && <p>{appText.loading}</p>}
@@ -166,5 +228,40 @@ export function App({ engine, masterSource = exampleMasterSource }: AppProps) {
         )}
       </main>
     </>
+  );
+}
+
+interface CalcModeSelectorProps {
+  readonly value: CalcMode;
+  readonly onChange: (mode: CalcMode) => void;
+}
+
+/**
+ * 計算モード(オフライン = WASM / オンライン = API)のラジオグループ(ヘッダー、ADR-0301 §4)。
+ * CalcScreen.tsx の AttackerPresetSelector と同じ、ピル型ラジオグループの作法。
+ */
+function CalcModeSelector({ value, onChange }: CalcModeSelectorProps) {
+  // ラジオの name は画面内で一意にする(同じ部品を複数置いてもグループが混ざらないように)。
+  const groupName = useId();
+  return (
+    <div role="radiogroup" aria-label={appText.calcModeGroupLabel} className="app-mode">
+      {CALC_MODE_ORDER.map((mode) => {
+        const selected = mode === value;
+        return (
+          <label key={mode} className={`app-mode__option${selected ? " app-mode__option--selected" : ""}`}>
+            <input
+              type="radio"
+              name={groupName}
+              className="app-mode__input"
+              checked={selected}
+              onChange={() => {
+                onChange(mode);
+              }}
+            />
+            {calcModeLabel(mode)}
+          </label>
+        );
+      })}
+    </div>
   );
 }

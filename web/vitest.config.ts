@@ -1,9 +1,9 @@
 import { defineConfig, mergeConfig } from "vitest/config";
-import viteConfig from "./vite.config.ts";
+import { baseConfig } from "./vite.config.ts";
 
 // 画面とロジックの単体テスト。engine は fake に差し替える(本物の engine.wasm は vitest.wasm.config.ts)。
 export default mergeConfig(
-  viteConfig,
+  baseConfig,
   defineConfig({
     test: {
       environment: "jsdom",

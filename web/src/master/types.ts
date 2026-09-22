@@ -2,11 +2,22 @@
 // 同じ形にする(解決済みの実体をそのまま engine に渡せる)。種族が覚える技の一覧(learnset)だけは
 // 画面のための追加フィールドで、engine には渡さない(domain/requests.ts の toEngineSpecies が落とす)。
 
-import type { Ability, Item, Move, Species, TypeChart } from "../engine/types";
+import type { Ability, Item, Move, Species, StatKey, TypeChart } from "../engine/types";
 
 /** マスタの種族。learnset は画面のための追加フィールド。 */
 export interface MasterSpecies extends Species {
   readonly learnset: readonly string[];
+}
+
+/**
+ * マスタの性格(API の Nature と同じ形。ADR-0301 §2)。上昇補正(plus)・下降補正(minus)を受ける
+ * ステータス。無補正は plus・minus とも null(HP を指すことはない)。
+ */
+export interface MasterNature {
+  readonly id: string;
+  readonly nameJa: string;
+  readonly plus: StatKey | null;
+  readonly minus: StatKey | null;
 }
 
 /** 画面が使うマスタ一式(ADR-0300 §3)。 */
@@ -15,6 +26,7 @@ export interface MasterData {
   readonly moves: readonly Move[];
   readonly items: readonly Item[];
   readonly abilities: readonly Ability[];
+  readonly natures: readonly MasterNature[];
   readonly typeChart: TypeChart;
 }
 

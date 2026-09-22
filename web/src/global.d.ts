@@ -13,6 +13,15 @@ declare module "@typechart" {
   export default data;
 }
 
+/**
+ * Vite の環境変数(ADR-0301 §4)。`VITE_API_BASE_URL` は api/config.ts の apiBaseUrl() だけが読む
+ * (コーディング規約 §2「設定は1か所で読み込む」)。開発サーバーのプロキシ先 `API_PROXY_TARGET` は
+ * `VITE_` 接頭辞を付けず、vite.config.ts だけが読む(`VITE_` の値はクライアントのバンドルに入りうるため)。
+ */
+interface ImportMetaEnv {
+  readonly VITE_API_BASE_URL?: string;
+}
+
 /** engine/cmd/wasm が globalThis.pokecalc に登録する3関数(ADR-0011 §2)。引数・戻り値は JSON 文字列。 */
 interface PokecalcApi {
   calc(requestJSON: string): string;

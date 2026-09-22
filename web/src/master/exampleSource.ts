@@ -6,6 +6,7 @@ import typeChartData from "@typechart";
 import { exampleAbilities } from "./example/abilities";
 import { exampleItems } from "./example/items";
 import { exampleMoves } from "./example/moves";
+import { exampleNatures } from "./example/natures";
 import { exampleSpecies } from "./example/species";
 import { typeChartFromData } from "./typeChart";
 import type { MasterData, MasterSource } from "./types";
@@ -16,6 +17,7 @@ function loadExampleMasterData(): Promise<MasterData> {
     moves: exampleMoves,
     items: exampleItems,
     abilities: exampleAbilities,
+    natures: exampleNatures,
     typeChart: typeChartFromData(typeChartData),
   });
 }

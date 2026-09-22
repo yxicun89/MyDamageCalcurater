@@ -32,6 +32,8 @@ API レーンの P3-1(ADR-0200)で `api/openapi.yaml` が P1-12 以降の engine
 | `Individual.sp` / `ranks` / `teraType` / `status` / `level` | 同名 | そのまま(`teraType` の `""` は `null`) |
 | `CalcRequest.move` | `CalcRequest.moveId` | `move.id` |
 | `critical` | `options.critical` | そのまま |
+| `status` / `field.weather` / `field.terrain` の `""` | 省略 | WASM は `""` を「なし」として受けるが、API の enum は `""` を拒否する(400 `invalid_enum`)。送らずに API の既定(`none`)に任せる |
+| `BulkRequest.presets`(カスタムのプリセット定義) | (無し) | API の `presets` はプリセット名(`DefenderPreset`)だけなので表せない。fetch せずに `invalid_preset`(`presetKeys` は `presets` に写す) |
 | `typeChart` | (無し) | 送らない。API は相性表をサーバーのマスタから引く |
 | `BulkRequest.defenderSpecies` / `itemVariants` | `defenderSpeciesKey` / `itemVariants: (string\|null)[]` | `key` / `id`(`null` は `null`) |
 | `ReverseRequest.known` / `unknownSpecies` / `itemCandidates` | `known` / `unknownSpeciesKey` / `itemCandidates` | 同上 |
@@ -55,7 +57,7 @@ API レーンの P3-1(ADR-0200)で `api/openapi.yaml` が P1-12 以降の engine
   いまの Web のマスタは架空の例データで、pokedex-svc(P2-3)からマスタを読む `MasterSource` はまだ作れない。
   pokedex-svc と gateway(P3-2)が揃った時点で、オンラインのときは API からマスタを読む `MasterSource` に切り替え、既定を見直す。
 - API の基点 URL は環境変数 `VITE_API_BASE_URL`(既定は同じオリジン `/`。gateway が `/api` と Web の両方を配る想定。requirements.md §4)で1か所で読む。
-  開発時は Vite の `server.proxy` で `/api` を calc-svc(または gateway)に送れるようにする(`VITE_API_PROXY_TARGET`)。
+  開発時は Vite の `server.proxy` で `/api` を calc-svc(または gateway)に送れるようにする(`API_PROXY_TARGET`。`VITE_` 接頭辞を付けず、クライアントのバンドルに入れない)。
 - **WASM の遅延ロード(ADR-0011 §11 の宿題)**: オンラインのときは WASM を読まない。オフラインで最初に計算したときだけ読む(ADR-0300 §2 のまま)。
   オンラインで API に届かないとき、自動でオフラインに切り替えることはしない(どちらで計算したかが分からなくなるため)。
   エラー(`engine_unavailable`)を出し、切り替えは利用者が選ぶ。
