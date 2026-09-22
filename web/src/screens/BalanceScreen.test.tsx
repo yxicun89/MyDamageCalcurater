@@ -23,9 +23,20 @@ import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
 import { BalanceScreen } from "./BalanceScreen";
 
+// P4-12b: 仮想敵(threats)とおすすめタイプ(recommendations)(ADR-0303 §7・§9、ADR-0400、ADR-0401)。
+// 確かめること(この節は下の「仮想敵の枠」以降):
+//   - 仮想敵の枠(group「仮想敵n」)はメンバーと同じ入力(ポケモン・特性・技1〜技4)で最大6体
+//   - パーティ1体以上 かつ 仮想敵1体以上 のときだけ threats を呼ぶ({members, threats} とも ID だけ)
+//   - 仮想敵ごとに表(行=メンバー、列=受ける倍率・与える倍率・安全・抜群)と、安全/抜群の人数を応答のまま出す
+//   - safe / superEffective の語は応答の真偽値だけで決める(倍率から閾値を判定し直さない。ADR-0303 §7)
+//   - パーティが1体以上そろえば recommendations を呼ぶ(新しい入力は無い・limit は送らない)
+//   - 4つの呼び出しは独立(1つのエラー・遅延が他の表示を消さない。ADR-0303 §9)
+
 type Schemas = components["schemas"];
 type AnalyzeMembers = Schemas["AnalyzeRequest"]["members"];
 type CoverageMembers = Schemas["CoverageRequest"]["members"];
+type ThreatsPokemon = Schemas["ThreatsRequestPokemon"];
+type RecommendationsMembers = Schemas["RecommendationsRequest"]["members"];
 
 /** 18タイプの正準順(応答を作るためだけに使う。画面は応答の順に従う)。 */
 const TYPES: readonly Schemas["TypeId"][] = [
@@ -62,17 +73,37 @@ interface PendingCall<M, T> {
   resolve(result: BalanceResult<T>): void;
 }
 
+/** threats の呼び出し1回(パーティと仮想敵の両方を記録する)。 */
+interface ThreatsCall {
+  readonly members: readonly ThreatsPokemon[];
+  readonly threats: readonly ThreatsPokemon[];
+  resolve(result: BalanceResult<Schemas["ThreatsResponse"]>): void;
+}
+
+/** recommendations の呼び出し1回(limit を送ったかどうかも記録する)。 */
+interface RecommendationsCall {
+  readonly members: RecommendationsMembers;
+  readonly limit: number | undefined;
+  resolve(result: BalanceResult<Schemas["RecommendationsResponse"]>): void;
+}
+
 interface FakeBalanceClient extends BalanceClient {
   readonly analyzeCalls: PendingCall<AnalyzeMembers, Schemas["AnalyzeResponse"]>[];
   readonly coverageCalls: PendingCall<CoverageMembers, Schemas["CoverageResponse"]>[];
+  readonly threatsCalls: ThreatsCall[];
+  readonly recommendationsCalls: RecommendationsCall[];
 }
 
 function createFakeBalanceClient(): FakeBalanceClient {
   const analyzeCalls: PendingCall<AnalyzeMembers, Schemas["AnalyzeResponse"]>[] = [];
   const coverageCalls: PendingCall<CoverageMembers, Schemas["CoverageResponse"]>[] = [];
+  const threatsCalls: ThreatsCall[] = [];
+  const recommendationsCalls: RecommendationsCall[] = [];
   return {
     analyzeCalls,
     coverageCalls,
+    threatsCalls,
+    recommendationsCalls,
     analyze(members) {
       return new Promise((resolve) => {
         analyzeCalls.push({ members: structuredClone(members) as AnalyzeMembers, resolve });
@@ -81,6 +112,24 @@ function createFakeBalanceClient(): FakeBalanceClient {
     coverage(members) {
       return new Promise((resolve) => {
         coverageCalls.push({ members: structuredClone(members) as CoverageMembers, resolve });
+      });
+    },
+    threats(members, threats) {
+      return new Promise((resolve) => {
+        threatsCalls.push({
+          members: structuredClone(members) as ThreatsPokemon[],
+          threats: structuredClone(threats) as ThreatsPokemon[],
+          resolve,
+        });
+      });
+    },
+    recommendations(members, limit) {
+      return new Promise((resolve) => {
+        recommendationsCalls.push({
+          members: structuredClone(members) as RecommendationsMembers,
+          limit,
+          resolve,
+        });
       });
     },
   };
@@ -237,6 +286,114 @@ async function resolveAnalyze(client: FakeBalanceClient, options?: Parameters<ty
     call.resolve({ ok: true, value: analyzeResponse(call.members, options) });
     await Promise.resolve();
   });
+}
+
+// ---- P4-12b: 仮想敵・おすすめタイプの操作と応答 ----
+
+function threatGroup(index: number): HTMLElement {
+  return screen.getByRole("group", { name: `仮想敵${String(index)}` });
+}
+
+async function addThreat(user: UserEvent): Promise<void> {
+  await user.click(screen.getByRole("button", { name: "仮想敵を追加" }));
+}
+
+async function selectThreatSpecies(user: UserEvent, index: number, species: MasterSpecies): Promise<void> {
+  await user.selectOptions(
+    within(threatGroup(index)).getByRole("combobox", { name: "ポケモン" }),
+    species.key,
+  );
+}
+
+async function selectThreatMove(
+  user: UserEvent,
+  index: number,
+  slot: number,
+  move: Move | null,
+): Promise<void> {
+  await user.selectOptions(
+    within(threatGroup(index)).getByRole("combobox", { name: `技${String(slot)}` }),
+    move === null ? "" : move.id,
+  );
+}
+
+/** 仮想敵1体 × メンバー1人の相性(値は画面がそのまま出すことを確かめるための任意の値)。 */
+interface MatchupSpec {
+  readonly incoming: Schemas["MatchupMultiplier"];
+  readonly outgoing: Schemas["MatchupMultiplier"];
+  readonly safe: boolean;
+  readonly superEffective: boolean;
+}
+
+const NEUTRAL_MATCHUP: MatchupSpec = { incoming: "1", outgoing: "1", safe: false, superEffective: false };
+
+interface ThreatsResponseOptions {
+  /** 仮想敵 × メンバーの相性(既定は等倍・安全でない・抜群でない)。 */
+  readonly matchup?: (threatIndex: number, memberIndex: number) => MatchupSpec;
+  /** 集計の人数(既定は matchup から数える。応答のまま出すかを見るときだけ上書きする)。 */
+  readonly counts?: (threatIndex: number) => {
+    readonly safeMembers: number;
+    readonly superEffectiveMembers: number;
+  };
+}
+
+function threatsResponse(
+  call: ThreatsCall,
+  options: ThreatsResponseOptions = {},
+): Schemas["ThreatsResponse"] {
+  return {
+    threats: call.threats.map((threat, threatIndex) => {
+      const matchups = call.members.map((member, memberIndex) => ({
+        pokemonId: member.pokemonId,
+        ...(options.matchup?.(threatIndex, memberIndex) ?? NEUTRAL_MATCHUP),
+      }));
+      const counts = options.counts?.(threatIndex) ?? {
+        safeMembers: matchups.filter((matchup) => matchup.safe).length,
+        superEffectiveMembers: matchups.filter((matchup) => matchup.superEffective).length,
+      };
+      return {
+        pokemonId: threat.pokemonId,
+        ...(threat.abilityId === undefined ? {} : { abilityId: threat.abilityId }),
+        attackTypes: [],
+        matchups,
+        ...counts,
+      };
+    }),
+  };
+}
+
+function recommendationsResponse(
+  overrides: Partial<Schemas["RecommendationsResponse"]> = {},
+): Schemas["RecommendationsResponse"] {
+  return { defenseHoles: [], offenseHoles: [], candidates: [], abilityOptions: [], ...overrides };
+}
+
+async function resolveThreats(client: FakeBalanceClient, options?: ThreatsResponseOptions): Promise<void> {
+  const call = lastOf(client.threatsCalls, "threats");
+  await act(async () => {
+    call.resolve({ ok: true, value: threatsResponse(call, options) });
+    await Promise.resolve();
+  });
+}
+
+async function resolveRecommendations(
+  client: FakeBalanceClient,
+  overrides?: Partial<Schemas["RecommendationsResponse"]>,
+): Promise<void> {
+  const call = lastOf(client.recommendationsCalls, "recommendations");
+  await act(async () => {
+    call.resolve({ ok: true, value: recommendationsResponse(overrides) });
+    await Promise.resolve();
+  });
+}
+
+/** 仮想敵 n の結果のかたまり(表と人数の集計を含む region)。 */
+function threatRegion(n: number, nameJa: string): HTMLElement {
+  return screen.getByRole("region", { name: `仮想敵${String(n)}(${nameJa})` });
+}
+
+function recommendationsRegion(): HTMLElement {
+  return screen.getByRole("region", { name: "おすすめタイプ" });
 }
 
 // ---- テスト ----
@@ -582,5 +739,431 @@ describe("coverage(攻撃範囲)", () => {
       expect(within(memberGroup(1)).getByRole("combobox", { name: `技${String(slot)}` })).toHaveValue("");
     }
     expect(client.coverageCalls).toHaveLength(coverageBefore);
+  });
+});
+
+// ---- P4-12b: 仮想敵(threats)とおすすめタイプ(recommendations) ----
+
+describe("仮想敵の枠", () => {
+  test("最初は仮想敵1の枠が1つ(ポケモン・特性・技1〜技4)で、threats を呼ばない", () => {
+    const { client } = renderScreen();
+    const group = threatGroup(1);
+    expect(within(group).getByRole("combobox", { name: "ポケモン" })).toHaveValue("");
+    expect(within(group).getByRole("combobox", { name: "特性" })).toBeInTheDocument();
+    for (const slot of [1, 2, 3, 4]) {
+      expect(within(group).getByRole("combobox", { name: `技${String(slot)}` })).toBeInTheDocument();
+    }
+    // 仮想敵の枠はメンバーの枠と別(メンバーは1つのまま)。
+    expect(screen.getAllByRole("group", { name: /^メンバー\d$/ })).toHaveLength(1);
+    expect(client.threatsCalls).toHaveLength(0);
+    expect(client.recommendationsCalls).toHaveLength(0);
+  });
+
+  test("「仮想敵を追加」で6体まで枠が増え、6体では押せない(メンバーの枠は増えない)", async () => {
+    const { user } = renderScreen();
+    const add = screen.getByRole("button", { name: "仮想敵を追加" });
+    for (let count = 2; count <= 6; count += 1) {
+      await user.click(add);
+      expect(threatGroup(count)).toBeInTheDocument();
+    }
+    expect(screen.getAllByRole("group", { name: /^仮想敵\d$/ })).toHaveLength(6);
+    expect(screen.getAllByRole("group", { name: /^メンバー\d$/ })).toHaveLength(1);
+    expect(add).toBeDisabled();
+  });
+
+  test("「仮想敵1を削除」で枠を消し、残りを詰めて送り直す", async () => {
+    const { user, client } = renderScreen();
+    const mine = speciesAt(0);
+    const first = speciesAt(1);
+    const second = speciesAt(2);
+    await selectSpecies(user, 1, mine);
+    await selectThreatSpecies(user, 1, first);
+    await addThreat(user);
+    await selectThreatSpecies(user, 2, second);
+    expect(lastOf(client.threatsCalls, "threats").threats.map((threat) => threat.pokemonId)).toEqual([
+      first.key,
+      second.key,
+    ]);
+
+    await user.click(screen.getByRole("button", { name: "仮想敵1を削除" }));
+    expect(screen.getAllByRole("group", { name: /^仮想敵\d$/ })).toHaveLength(1);
+    expect(within(threatGroup(1)).getByRole("combobox", { name: "ポケモン" })).toHaveValue(second.key);
+    expect(lastOf(client.threatsCalls, "threats").threats.map((threat) => threat.pokemonId)).toEqual([
+      second.key,
+    ]);
+  });
+
+  test("仮想敵の技の選択肢もその種族の覚える技(と「なし」)", async () => {
+    const { user } = renderScreen();
+    const { species } = speciesWithMoves();
+    await selectThreatSpecies(user, 1, species);
+    const select = within(threatGroup(1)).getByRole("combobox", { name: "技1" });
+    expect(
+      within(select)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["なし", ...learnsetMoves(species, master.moves).map((move) => move.nameJa)]);
+  });
+});
+
+describe("threats(仮想敵の診断)", () => {
+  test("パーティだけ・仮想敵だけでは呼ばず、両方そろったら呼ぶ", async () => {
+    const { user, client } = renderScreen();
+    await selectSpecies(user, 1, speciesAt(0));
+    expect(client.threatsCalls).toHaveLength(0);
+
+    await selectThreatSpecies(user, 1, speciesAt(1));
+    expect(client.threatsCalls.length).toBeGreaterThan(0);
+
+    // パーティのポケモンを外すと(仮想敵は残っていても)呼ばず、表も消す。
+    await resolveThreats(client);
+    const callsAfterFirst = client.threatsCalls.length;
+    await user.selectOptions(within(memberGroup(1)).getByRole("combobox", { name: "ポケモン" }), "");
+    expect(client.threatsCalls).toHaveLength(callsAfterFirst);
+    expect(screen.queryByRole("region", { name: /^仮想敵1/ })).not.toBeInTheDocument();
+  });
+
+  test("パーティと仮想敵を ID だけで送る(同じ枠の重複した技は1つ・特性も送る)", async () => {
+    const { user, client } = renderScreen();
+    const { species, damaging, status } = speciesWithMoves();
+    const [moveA, moveB] = damaging;
+    if (moveA === undefined || moveB === undefined) {
+      throw new Error("攻撃技が2つ要る");
+    }
+    await selectSpecies(user, 1, species);
+    await selectMove(user, 1, 1, moveA);
+    await selectMove(user, 1, 2, moveA);
+    await selectThreatSpecies(user, 1, species);
+    await selectThreatMove(user, 1, 1, moveB);
+    await selectThreatMove(user, 1, 2, status);
+
+    const call = lastOf(client.threatsCalls, "threats");
+    expect(call.members).toEqual([
+      { pokemonId: species.key, moveIds: [moveA.id], abilityId: species.abilities[0] },
+    ]);
+    expect(call.threats).toEqual([
+      { pokemonId: species.key, moveIds: [moveB.id, status.id], abilityId: species.abilities[0] },
+    ]);
+  });
+
+  test("応答を待つ間は「仮想敵を計算中」を出し、届いたら仮想敵ごとの表を出す", async () => {
+    const { user, client } = renderScreen();
+    const mine = speciesAt(0);
+    const enemy = speciesAt(1);
+    await selectSpecies(user, 1, mine);
+    await selectThreatSpecies(user, 1, enemy);
+    expect(screen.getByText("仮想敵を計算中")).toBeInTheDocument();
+
+    await resolveThreats(client, {
+      matchup: () => ({ incoming: "2", outgoing: "1/2", safe: false, superEffective: false }),
+    });
+
+    expect(screen.queryByText("仮想敵を計算中")).not.toBeInTheDocument();
+    const table = within(threatRegion(1, enemy.nameJa)).getByRole("table", { name: "相性" });
+    expect(columnHeaders(table)).toEqual(["メンバー", "受ける倍率", "与える倍率", "安全", "抜群"]);
+    expect(rowCells(table, mine.nameJa)).toEqual(["×2", "×1/2", "注意", "ふつう"]);
+  });
+
+  test("攻撃技が無い側の倍率(null)は「攻撃技なし」", async () => {
+    const { user, client } = renderScreen();
+    const mine = speciesAt(0);
+    const enemy = speciesAt(1);
+    await selectSpecies(user, 1, mine);
+    await selectThreatSpecies(user, 1, enemy);
+    await resolveThreats(client, {
+      matchup: () => ({ incoming: null, outgoing: null, safe: false, superEffective: false }),
+    });
+
+    const table = within(threatRegion(1, enemy.nameJa)).getByRole("table", { name: "相性" });
+    expect(rowCells(table, mine.nameJa)).toEqual(["攻撃技なし", "攻撃技なし", "注意", "ふつう"]);
+  });
+
+  test("安全・抜群の語は応答の真偽値だけで決める(倍率から判定し直さない)", async () => {
+    const { user, client } = renderScreen();
+    const mine = speciesAt(0);
+    const first = speciesAt(1);
+    const second = speciesAt(2);
+    await selectSpecies(user, 1, mine);
+    await selectThreatSpecies(user, 1, first);
+    await addThreat(user);
+    await selectThreatSpecies(user, 2, second);
+    // 契約上ありえない組(×1/2 なのに safe=false、×2 なのに superEffective=false など)でも応答に従う。
+    await resolveThreats(client, {
+      matchup: (threatIndex) =>
+        threatIndex === 0
+          ? { incoming: "1/2", outgoing: "2", safe: false, superEffective: false }
+          : { incoming: "2", outgoing: "1/2", safe: true, superEffective: true },
+    });
+
+    const firstTable = within(threatRegion(1, first.nameJa)).getByRole("table", { name: "相性" });
+    expect(rowCells(firstTable, mine.nameJa)).toEqual(["×1/2", "×2", "注意", "ふつう"]);
+    const secondTable = within(threatRegion(2, second.nameJa)).getByRole("table", { name: "相性" });
+    expect(rowCells(secondTable, mine.nameJa)).toEqual(["×2", "×1/2", "安全", "抜群"]);
+  });
+
+  test("安全・抜群の人数は応答の値をそのまま出す(行から数え直さない)", async () => {
+    const { user, client } = renderScreen();
+    const mine = speciesAt(0);
+    const enemy = speciesAt(1);
+    await selectSpecies(user, 1, mine);
+    await selectThreatSpecies(user, 1, enemy);
+    await resolveThreats(client, {
+      matchup: () => NEUTRAL_MATCHUP,
+      counts: () => ({ safeMembers: 5, superEffectiveMembers: 4 }),
+    });
+
+    const region = threatRegion(1, enemy.nameJa);
+    expect(within(region).getByText("安全に受けられる 5人")).toBeInTheDocument();
+    expect(within(region).getByText("抜群を取れる 4人")).toBeInTheDocument();
+  });
+
+  test("メンバーが2人なら、仮想敵の表にも2行出す(応答の順)", async () => {
+    const { user, client } = renderScreen();
+    const first = speciesAt(0);
+    const second = speciesAt(1);
+    const enemy = speciesAt(2);
+    await selectSpecies(user, 1, first);
+    await user.click(screen.getByRole("button", { name: "メンバーを追加" }));
+    await selectSpecies(user, 2, second);
+    await selectThreatSpecies(user, 1, enemy);
+    await resolveThreats(client, {
+      matchup: (_threatIndex, memberIndex) =>
+        memberIndex === 0
+          ? { incoming: "4", outgoing: "0", safe: false, superEffective: false }
+          : { incoming: "0", outgoing: "4", safe: true, superEffective: true },
+    });
+
+    const table = within(threatRegion(1, enemy.nameJa)).getByRole("table", { name: "相性" });
+    expect(rowCells(table, first.nameJa)).toEqual(["×4", "×0", "注意", "ふつう"]);
+    expect(rowCells(table, second.nameJa)).toEqual(["×0", "×4", "安全", "抜群"]);
+  });
+
+  test("仮想敵を選び直すと、新しい応答が届くまで前の表を残さず「仮想敵を計算中」に戻す", async () => {
+    const { user, client } = renderScreen();
+    const mine = speciesAt(0);
+    const first = speciesAt(1);
+    const second = speciesAt(2);
+    await selectSpecies(user, 1, mine);
+    await selectThreatSpecies(user, 1, first);
+    await resolveThreats(client);
+    expect(threatRegion(1, first.nameJa)).toBeInTheDocument();
+
+    await selectThreatSpecies(user, 1, second);
+    expect(screen.getByText("仮想敵を計算中")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /^仮想敵1/ })).not.toBeInTheDocument();
+  });
+
+  test("パーティを選び直したときも、新しい応答が届くまで仮想敵の表を残さない", async () => {
+    const { user, client } = renderScreen();
+    const enemy = speciesAt(2);
+    await selectSpecies(user, 1, speciesAt(0));
+    await selectThreatSpecies(user, 1, enemy);
+    await resolveThreats(client);
+    expect(threatRegion(1, enemy.nameJa)).toBeInTheDocument();
+
+    await selectSpecies(user, 1, speciesAt(1));
+    expect(screen.getByText("仮想敵を計算中")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /^仮想敵1/ })).not.toBeInTheDocument();
+  });
+
+  test("古い応答は無視する(後から届いた前の仮想敵の応答で表を上書きしない)", async () => {
+    const { user, client } = renderScreen();
+    const mine = speciesAt(0);
+    const first = speciesAt(1);
+    const second = speciesAt(2);
+    await selectSpecies(user, 1, mine);
+    await selectThreatSpecies(user, 1, first);
+    const staleCall = lastOf(client.threatsCalls, "threats");
+    await selectThreatSpecies(user, 1, second);
+    const freshCall = lastOf(client.threatsCalls, "threats");
+    expect(freshCall).not.toBe(staleCall);
+
+    await act(async () => {
+      freshCall.resolve({ ok: true, value: threatsResponse(freshCall) });
+      await Promise.resolve();
+    });
+    await act(async () => {
+      staleCall.resolve({ ok: true, value: threatsResponse(staleCall) });
+      await Promise.resolve();
+    });
+
+    expect(threatRegion(1, second.nameJa)).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: `仮想敵1(${first.nameJa})` })).not.toBeInTheDocument();
+  });
+
+  test("threats のエラーは role=alert で知らせ、防御相性の表は出したままにする", async () => {
+    const { user, client } = renderScreen();
+    await selectSpecies(user, 1, speciesAt(0));
+    await selectThreatSpecies(user, 1, speciesAt(1));
+    await resolveAnalyze(client);
+    const call = lastOf(client.threatsCalls, "threats");
+    await act(async () => {
+      call.resolve({ ok: false, error: { code: "unknown_pokemon", message: "unknown pokemonId: 9999-000" } });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("alert").map((alert) => alert.textContent)).toContain(
+        "unknown pokemonId: 9999-000",
+      );
+    });
+    expect(screen.getByRole("table", { name: "防御相性" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /^仮想敵1/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("仮想敵を計算中")).not.toBeInTheDocument();
+  });
+});
+
+describe("recommendations(おすすめタイプ)", () => {
+  test("パーティが1体そろったら、analyze と同じ内容を limit 無しで送る", async () => {
+    const { user, client } = renderScreen();
+    const { species, damaging } = speciesWithMoves();
+    await selectSpecies(user, 1, species);
+    await selectMove(user, 1, 1, damaging[0] ?? null);
+
+    const call = lastOf(client.recommendationsCalls, "recommendations");
+    expect(call.members).toEqual([
+      { pokemonId: species.key, moveIds: [damaging[0]?.id], abilityId: species.abilities[0] },
+    ]);
+    // 既定の件数(10)はサーバーが決める(ADR-0303 §7: limit は省略)。
+    expect(call.limit).toBeUndefined();
+  });
+
+  test("パーティにポケモンがいなければ呼ばず、仮想敵の入力では呼び直さない", async () => {
+    const { user, client } = renderScreen();
+    await selectThreatSpecies(user, 1, speciesAt(1));
+    expect(client.recommendationsCalls).toHaveLength(0);
+
+    await selectSpecies(user, 1, speciesAt(0));
+    const callsAfterParty = client.recommendationsCalls.length;
+    expect(callsAfterParty).toBeGreaterThan(0);
+
+    // 仮想敵は recommendations の入力ではない(ADR-0303 §7)。
+    await selectThreatSpecies(user, 1, speciesAt(2));
+    expect(client.recommendationsCalls).toHaveLength(callsAfterParty);
+  });
+
+  test("応答を待つ間は「おすすめタイプを計算中」を出し、届いたら防御の穴・攻撃範囲の穴を出す(無ければ「なし」)", async () => {
+    const { user, client } = renderScreen();
+    await selectSpecies(user, 1, speciesAt(0));
+    expect(screen.getByText("おすすめタイプを計算中")).toBeInTheDocument();
+
+    await resolveRecommendations(client, { defenseHoles: ["fire", "water"], offenseHoles: [] });
+
+    expect(screen.queryByText("おすすめタイプを計算中")).not.toBeInTheDocument();
+    const region = recommendationsRegion();
+    expect(within(region).getByText(`防御の穴: ${typeNameJa.fire}・${typeNameJa.water}`)).toBeInTheDocument();
+    expect(within(region).getByText("攻撃範囲の穴: なし")).toBeInTheDocument();
+  });
+
+  test("候補の表: タイプ・ふさぐ穴・該当ポケモンを応答の順で出す(名前が無ければ ID)", async () => {
+    const { user, client } = renderScreen();
+    await selectSpecies(user, 1, speciesAt(0));
+    const candidates: Schemas["TypeCandidate"][] = [
+      {
+        types: ["water", "steel"],
+        defenseCovered: ["fire", "grass"],
+        offenseCovered: ["dragon"],
+        weaknesses: 3,
+        pokemon: [
+          { pokemonId: "9101-000", nameJa: "テストみずはがね", types: ["water", "steel"], exactMatch: true },
+          { pokemonId: "9102-000", types: ["water", "steel"], exactMatch: false },
+        ],
+      },
+      {
+        types: ["ghost"],
+        defenseCovered: [],
+        offenseCovered: ["ghost"],
+        weaknesses: 2,
+        pokemon: [],
+      },
+    ];
+    await resolveRecommendations(client, { candidates });
+
+    const table = within(recommendationsRegion()).getByRole("table", { name: "おすすめタイプの候補" });
+    expect(columnHeaders(table)).toEqual(["タイプ", "ふさぐ防御の穴", "ふさぐ攻撃範囲の穴", "ポケモン"]);
+    expect(rowCells(table, `${typeNameJa.water}・${typeNameJa.steel}`)).toEqual([
+      `${typeNameJa.fire}・${typeNameJa.grass}`,
+      typeNameJa.dragon,
+      "テストみずはがね・9102-000",
+    ]);
+    expect(rowCells(table, typeNameJa.ghost)).toEqual(["なし", typeNameJa.ghost, "なし"]);
+  });
+
+  test("特性で補える表: 防御の穴ごとに ポケモン・特性・倍率 を出す(いなければ「なし」)", async () => {
+    const { user, client } = renderScreen();
+    await selectSpecies(user, 1, speciesAt(0));
+    const abilityId = "example-ability-none";
+    const abilityOptions: Schemas["AbilityOption"][] = [
+      {
+        attackType: "fire",
+        pokemon: [{ pokemonId: "9103-000", nameJa: "テストほのおけし", abilityId, multiplier: "1/2" }],
+      },
+      { attackType: "water", pokemon: [] },
+    ];
+    await resolveRecommendations(client, { defenseHoles: ["fire", "water"], abilityOptions });
+
+    const table = within(recommendationsRegion()).getByRole("table", { name: "特性で補えるポケモン" });
+    expect(columnHeaders(table)).toEqual(["攻撃タイプ", "ポケモン"]);
+    // 倍率には category が無いので語(弱点・耐性)を付けない(multiplierLabel)。
+    expect(rowCells(table, typeNameJa.fire)).toEqual([`テストほのおけし(${abilityName(abilityId)} ×1/2)`]);
+    expect(rowCells(table, typeNameJa.water)).toEqual(["なし"]);
+  });
+
+  test("選択を変えると、新しい応答が届くまで前の結果を残さず「おすすめタイプを計算中」に戻す", async () => {
+    const { user, client } = renderScreen();
+    await selectSpecies(user, 1, speciesAt(0));
+    await resolveRecommendations(client, { defenseHoles: ["fire"] });
+    expect(recommendationsRegion()).toBeInTheDocument();
+
+    await selectSpecies(user, 1, speciesAt(1));
+    expect(screen.getByText("おすすめタイプを計算中")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "おすすめタイプ" })).not.toBeInTheDocument();
+  });
+
+  test("古い応答は無視する(後から届いた前の選択の応答で結果を上書きしない)", async () => {
+    const { user, client } = renderScreen();
+    await selectSpecies(user, 1, speciesAt(0));
+    const staleCall = lastOf(client.recommendationsCalls, "recommendations");
+    await selectSpecies(user, 1, speciesAt(1));
+    const freshCall = lastOf(client.recommendationsCalls, "recommendations");
+    expect(freshCall).not.toBe(staleCall);
+
+    await act(async () => {
+      freshCall.resolve({ ok: true, value: recommendationsResponse({ defenseHoles: ["water"] }) });
+      await Promise.resolve();
+    });
+    await act(async () => {
+      staleCall.resolve({ ok: true, value: recommendationsResponse({ defenseHoles: ["fire"] }) });
+      await Promise.resolve();
+    });
+
+    const region = recommendationsRegion();
+    expect(within(region).getByText(`防御の穴: ${typeNameJa.water}`)).toBeInTheDocument();
+    expect(within(region).queryByText(`防御の穴: ${typeNameJa.fire}`)).not.toBeInTheDocument();
+  });
+
+  test("recommendations のエラーは role=alert で知らせ、仮想敵の表は出したままにする", async () => {
+    const { user, client } = renderScreen();
+    const enemy = speciesAt(1);
+    await selectSpecies(user, 1, speciesAt(0));
+    await selectThreatSpecies(user, 1, enemy);
+    await resolveThreats(client);
+    const call = lastOf(client.recommendationsCalls, "recommendations");
+    await act(async () => {
+      call.resolve({
+        ok: false,
+        error: { code: "balance_unavailable", message: "タイプバランスの API に接続できません" },
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("alert").map((alert) => alert.textContent)).toContain(
+        "タイプバランスの API に接続できません",
+      );
+    });
+    expect(threatRegion(1, enemy.nameJa)).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "おすすめタイプ" })).not.toBeInTheDocument();
+    expect(screen.queryByText("おすすめタイプを計算中")).not.toBeInTheDocument();
   });
 });

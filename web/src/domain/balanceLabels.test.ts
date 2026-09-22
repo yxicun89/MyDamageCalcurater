@@ -5,7 +5,14 @@
 
 import { describe, expect, test } from "vitest";
 import type { components } from "../api/balance.gen";
-import { coverageMultiplierLabel, defenseMultiplierLabel } from "./balanceLabels";
+import {
+  coverageMultiplierLabel,
+  defenseMultiplierLabel,
+  matchupMultiplierLabel,
+  multiplierLabel,
+  safeLabel,
+  superEffectiveLabel,
+} from "./balanceLabels";
 
 type Schemas = components["schemas"];
 
@@ -55,5 +62,67 @@ describe("coverageMultiplierLabel(攻撃範囲)", () => {
 
   test("null(攻撃技なし)は「攻撃技なし」", () => {
     expect(coverageMultiplierLabel(null)).toBe("攻撃技なし");
+  });
+});
+
+// ---- P4-12b: 仮想敵(threats)・おすすめタイプ(recommendations)の表示(ADR-0303 §7) ----
+
+describe("multiplierLabel(語を添えない倍率)", () => {
+  // recommendations の abilityOptions の倍率(AbilityOptionPokemon.multiplier)には category が無い
+  // (services/balance/api/openapi.yaml)。語(弱点・耐性)は倍率の範囲から Web で判定せず、数だけを出す。
+  test.each([
+    ["0", "×0"],
+    ["1/4", "×1/4"],
+    ["1/2", "×1/2"],
+    ["3/4", "×3/4"],
+    ["1", "×1"],
+    ["3/2", "×3/2"],
+    ["2", "×2"],
+    ["4", "×4"],
+  ] as const satisfies ReadonlyArray<readonly [Schemas["DefenseMultiplier"], string]>)(
+    "%s は「%s」",
+    (multiplier, expected) => {
+      expect(multiplierLabel(multiplier)).toBe(expected);
+    },
+  );
+});
+
+describe("matchupMultiplierLabel(仮想敵の受ける/与える倍率)", () => {
+  // ThreatMatchup.incoming / outgoing(MatchupMultiplier)にも category は無い(ADR-0400 §2)。
+  test.each([
+    ["0", "×0"],
+    ["1/4", "×1/4"],
+    ["1/2", "×1/2"],
+    ["1", "×1"],
+    ["3/2", "×3/2"],
+    ["2", "×2"],
+    ["4", "×4"],
+  ] as const satisfies ReadonlyArray<readonly [NonNullable<Schemas["MatchupMultiplier"]>, string]>)(
+    "%s は「%s」(語を付けない)",
+    (multiplier, expected) => {
+      expect(matchupMultiplierLabel(multiplier)).toBe(expected);
+    },
+  );
+
+  test("null(攻撃技なし)は「攻撃技なし」", () => {
+    expect(matchupMultiplierLabel(null)).toBe("攻撃技なし");
+  });
+});
+
+describe("safeLabel / superEffectiveLabel(応答の真偽値をそのまま語にする)", () => {
+  // ADR-0303 §7・却下: incoming < 1 / outgoing >= 2 の判定は balance-svc の定義(ADR-0400 §2)で済んでおり、
+  // Web は倍率の文字列から判定し直さない(閾値を二重管理しない)。
+  test.each([
+    [true, "安全"],
+    [false, "注意"],
+  ] as const)("safe が %s なら「%s」", (safe, expected) => {
+    expect(safeLabel(safe)).toBe(expected);
+  });
+
+  test.each([
+    [true, "抜群"],
+    [false, "ふつう"],
+  ] as const)("superEffective が %s なら「%s」", (superEffective, expected) => {
+    expect(superEffectiveLabel(superEffective)).toBe(expected);
   });
 });
