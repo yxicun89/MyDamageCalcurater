@@ -67,4 +67,46 @@ if [ "$missing_headers_status" != "400" ] || ! grep -qF '"code":"invalid_request
   exit 1
 fi
 
-echo "speed smoke: health=200 pokemon=200 (count=8) missing_headers=400"
+# SP1 (ADR-0601 §3-§5): the table of the example read model. 9002-000 and 9005-000 share base
+# speed 81, so their max-scarf rows (146 x 1.5 = 219) form one tie tier, in pokemonId order.
+table_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  "$base_url/api/speed/v1/table?presets=max-scarf" \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' || printf '000')
+if [ "$table_status" != "200" ]; then
+  echo "speed table failed: HTTP $table_status" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+for key in '"regulationId":"example"' '"presets":["max-scarf"]' '"speed":219'; do
+  if ! grep -qF "$key" "$body_file"; then
+    echo "speed table body is missing $key" >&2
+    cat "$body_file" >&2
+    exit 1
+  fi
+done
+# The generated types encode fields in alphabetical order: a tier is {"entries":[...],"speed":N}.
+tie_pattern='"entries":\[\{[^}]*"pokemonId":"9002-000"[^}]*\},\{[^}]*"pokemonId":"9005-000"[^}]*\}\],"speed":219'
+if ! grep -qE "$tie_pattern" "$body_file"; then
+  echo "speed table has no tie tier 219 with 9002-000 and 9005-000" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+tier_count=$(grep -o '"speed":' "$body_file" | wc -l | tr -d ' ')
+if [ "$tier_count" != "7" ]; then
+  echo "speed table tier count = $tier_count, want 7 (8 pokemon, one tie)" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+
+invalid_presets_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  "$base_url/api/speed/v1/table?presets=unknown" \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session')
+if [ "$invalid_presets_status" != "400" ] || ! grep -qF '"code":"invalid_request"' "$body_file"; then
+  echo "speed table with unknown presets: HTTP $invalid_presets_status, want 400 invalid_request" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+
+echo "speed smoke: health=200 pokemon=200 (count=8) missing_headers=400 table=200 (tiers=7, tie 219) invalid_presets=400"

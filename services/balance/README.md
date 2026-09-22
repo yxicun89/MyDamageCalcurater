@@ -17,6 +17,8 @@ damage-calc とは兄弟サービスで、互いの実行時 API には依存し
 - `internal/httpapi`: health・analyze・coverage・threats・recommendations の実装
 - `cmd/api`: プロセス起動・`BALANCE_POKEMON_TYPES_PATH` / `BALANCE_MOVES_PATH` / `BALANCE_ABILITIES_PATH` の
   読み込み・graceful shutdown
+- `schema/`: 4つの read model(ポケモンタイプ・技・特性・タイプ相性表)の JSON Schema(draft 2020-12)。
+  データレーンの `pokedex export` が出す形の正。`schema/schema_test.go` が example とタイプ相性表を検証する
 - `deploy`: balance 専用 Kustomize と manual-sync の Argo CD Application
 - `DEPENDENCIES.md`: 公開前確認用の直接依存・利用理由・license
 
@@ -48,6 +50,12 @@ ID は `9001-000` 以降)だけで、実 Pokémon マスタはコミットしな
 同じく temporary adapter。倍率は既約分数(`balance.Effectiveness`、float は使わない)で持つ。Git に置くのは
 schema と架空データの example(`testdata/abilities.example.json`、ID は `ability-9001` 以降)だけ
 (ADR-0002・ADR-0017 §2)。
+
+4つの read model すべての JSON Schema(draft 2020-12)を `schema/` に置く: `pokemon-types.schema.json`
+(ADR-0014 §2・ADR-0401 §5)、`moves.schema.json`(ADR-0016 §3)、`abilities.schema.json`(ADR-0017 §2)、
+`type-chart.schema.json`(ADR-0015)。データレーンの `pokedex export` はこの schema に合うことを確かめて出力する(形の意味の正は各 ADR で、schema はそれを機械で
+確かめる形、各 loader(`internal/master`)は実装)。schema で表せない制約(特性の係数は既約でない比も受け付け、loader が約分して保持する・ID の重複禁止など)は
+schema の `description` に書く。方針は ADR-0402。
 
 ## HTTP 契約
 
@@ -121,30 +129,39 @@ schema と架空データの example(`testdata/abilities.example.json`、ID は 
 HTTP の path・必須 header・handler interface は service-local OpenAPI から生成し、実装を
 `api.ServerInterface` へコンパイル時に適合させる。
 
-## ローカル検証
+## ローカル検証(k3d)
 
-リポジトリルートから実行する。
+前提: k3d の `pokecalc` クラスタが起動している(`make up`)。
+
+1. テストと静的検査を通す。
+   ```sh
+   cd "$(git rev-parse --show-toplevel)"
+   make test lint build check-publishable
+   ```
+   確認: 最後の行が `check-publishable: 0 件` で、エラーで止まらない。
+
+2. k3d にデプロイして疎通を確かめる。
+   ```sh
+   cd "$(git rev-parse --show-toplevel)"
+   make balance-k3d-deploy
+   make balance-smoke
+   ```
+   確認: 最後の行が `balance smoke: health=200 analyze=200 unknown=422 coverage=200 unknown_move=422 ability=200 unknown_ability=422 threats=200 threats_unknown_move=422 recommendations=200`。
+   1回目がロールアウト直後で失敗したら `make balance-smoke` をもう一度実行する。
+
+## ローカル検証(ホストで直接。開発用)
 
 ```sh
-make -f services/balance/Makefile balance-gen
-make -f services/balance/Makefile balance-test
-make -f services/balance/Makefile balance-lint
-make -f services/balance/Makefile balance-build
-make -f services/balance/Makefile balance-kustomize
-make -f services/balance/Makefile balance-gitops-template-check
+cd "$(git rev-parse --show-toplevel)"
+make balance-gen balance-test balance-lint balance-build balance-kustomize balance-gitops-template-check
 ```
+確認: `balance GitOps template: valid` が出て、エラーで止まらない。
 
-`balance-k3d-deploy` は、ルートの `deploy/k3d.yaml` と基盤 Kustomize により `pokecalc` クラスタ・
-Namespace が作成済みであることを前提とする。共有 Namespace は balance 側では所有しない。
+## ローカルの構成(説明)
 
-local overlay(`deploy/k8s/overlays/local`)は架空データの example
-(`deploy/k8s/overlays/local/pokemon-types.example.json`・`moves.example.json`・`abilities.example.json`、それぞれ
-`testdata/pokemon-types.example.json`・`testdata/moves.example.json`・`testdata/abilities.example.json` と同一内容)を
-ConfigMap としてマウントし、`BALANCE_POKEMON_TYPES_PATH` / `BALANCE_MOVES_PATH` / `BALANCE_ABILITIES_PATH` を
-設定する。base と gitops overlay には設定しない。
-`balance-smoke` は analyze・coverage・threats が 200(架空ID)と 422(未登録ID)を返すことを確認する。
-
-Argo CD 用には local image を参照しない専用 overlay(`deploy/k8s/overlays/gitops`)がある。image はクラスタ内レジストリの
-`localhost:5000/pokecalc/balance@sha256:...`(digest 固定)。Application の repoURL は Git に書かず、`make balance-argocd-app` が
-適用時に `git remote get-url origin` から埋め込む。private repository の credential や Secret は Git へ入れない。
-手順は [`deploy/argocd/README.md`](deploy/argocd/README.md)、方式は ADR-0018。
+- `balance-k3d-deploy` は、ルートの `deploy/k3d.yaml` と基盤 Kustomize で `pokecalc` クラスタ・Namespace が作成済みであることを前提とする。
+  共有 Namespace は balance 側では所有しない。
+- local overlay(`deploy/k8s/overlays/local`)は架空データの example(`testdata/*.example.json` と同一内容の複製)を ConfigMap でマウントし、
+  `BALANCE_POKEMON_TYPES_PATH` / `BALANCE_MOVES_PATH` / `BALANCE_ABILITIES_PATH` を設定する。base と gitops overlay には設定しない。
+- Argo CD 用の gitops overlay(`deploy/k8s/overlays/gitops`)の image はクラスタ内レジストリの `localhost:5000/pokecalc/balance@sha256:...`(digest 固定)。
+  Application の repoURL は Git に書かず、適用時に `git remote get-url origin` から埋め込む。手順は [`deploy/argocd/README.md`](deploy/argocd/README.md)、方式は ADR-0018。

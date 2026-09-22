@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pokecalc.example.com/schema/balance/abilities.schema.json",
+  "title": "balance ability read model",
+  "description": "The abilityId -> normalized type effects read model consumed by BALANCE_ABILITIES_PATH (ADR-0017 §2). This machine-checks the shape defined by the ADRs (the ADRs stay the source of truth; ADR-0402), which the data lane's `pokedex export` should satisfy; services/balance/internal/master/abilities.go is the executable version of the same contract. Not expressible here: abilityId must be unique across `abilities` entries; within one ability, effects must not have more than one immune/absorb effect for the same attackType; numerator/denominator are an integer ratio that need not be in lowest terms (2/4 is accepted); the loader reduces it (to 1/2) when it stores the effect. For `super_effective_multiplier`, an explicit `attackType: null` is rejected here although the loader treats it as absent. Integral decimals such as `2.0` pass JSON Schema `integer` but the loader rejects them; exporters must write plain integers. None of these are expressible as JSON Schema constraints; the loader enforces them.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "abilities"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "description": "The only accepted value."
+    },
+    "abilities": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "typeId": {
+      "type": "string",
+      "enum": [
+        "normal", "fire", "water", "electric", "grass", "ice",
+        "fighting", "poison", "ground", "flying", "psychic", "bug",
+        "rock", "ghost", "dragon", "dark", "steel", "fairy"
+      ]
+    },
+    "factor": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 16,
+      "description": "The numerator or denominator of a type_multiplier/super_effective_multiplier factor. 1..16, not necessarily reduced (see the top-level description)."
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["abilityId", "effects"],
+      "properties": {
+        "abilityId": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "maxLength": 40
+        },
+        "effects": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/effect" },
+          "description": "May be empty: an ability without any type-related effect (ADR-0017 §2)."
+        }
+      }
+    },
+    "effect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["immune", "absorb", "type_multiplier", "super_effective_multiplier"]
+        },
+        "attackType": { "$ref": "#/$defs/typeId" },
+        "numerator": { "$ref": "#/$defs/factor" },
+        "denominator": { "$ref": "#/$defs/factor" }
+      },
+      "description": "Numerator/denominator both null is treated as absent by the loader (same laxity as an omitted key); this schema treats an explicit null as present (and therefore, for immune/absorb, rejects it), which is stricter than the loader for that one edge case.",
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "immune" } }, "required": ["kind"] },
+          "then": {
+            "required": ["attackType"],
+            "not": { "anyOf": [{ "required": ["numerator"] }, { "required": ["denominator"] }] }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "absorb" } }, "required": ["kind"] },
+          "then": {
+            "required": ["attackType"],
+            "not": { "anyOf": [{ "required": ["numerator"] }, { "required": ["denominator"] }] }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "type_multiplier" } }, "required": ["kind"] },
+          "then": { "required": ["attackType", "numerator", "denominator"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "super_effective_multiplier" } }, "required": ["kind"] },
+          "then": {
+            "required": ["numerator", "denominator"],
+            "not": { "required": ["attackType"] }
+          }
+        }
+      ]
+    }
+  }
+}

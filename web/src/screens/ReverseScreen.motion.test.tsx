@@ -3,10 +3,12 @@
 // 確かめること:
 //   - 観測が1つだけの結果では、候補の一覧に is-narrowing を付けない(最初の推定は「絞り込み」ではない)
 //   - 2つ目以降の観測を入れて届いた結果では、候補の一覧(role=list「推定結果」)に is-narrowing を付け、animationend で外す
+//   - P4-9: animationend が来なくても、最大待ちのタイマー(1秒以内。CSS の 0.3秒より長い)で外す。
+//     入れ直しで絞り込み直したらタイマーを掛け直し、画面が消えたら片付ける
 //   - 観測を削除して1つに戻った結果では付けない
 //   - OS の「視差効果を減らす」では付けない
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import { exampleMasterSource } from "../master/exampleSource";
@@ -22,6 +24,7 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -122,5 +125,97 @@ describe("観測を追加すると候補が絞られる動き", () => {
     const { user, engine } = renderScreen();
     await enterTwoObservations(user);
     expect(await listAfterObservations(engine, 2)).not.toHaveClass("is-narrowing");
+  });
+});
+
+describe("絞り込みの動きは animationend が来なくても外す(P4-9)", () => {
+  // animationend が来ない(タブが裏にある等)ときの最大待ち。CSS の --duration-narrow(0.3秒)を上回り、1秒以内。
+  const NARROW_CSS_DURATION_MS = 300;
+  const MAX_WAIT_UPPER_BOUND_MS = 1000;
+
+  /** 本物の時間を進めつつ(応答の Promise・findBy が進むように)、タイマーはテストからも進められる fake にする。 */
+  function renderWithFakeTimers(): { user: UserEvent; engine: FakeEngine; unmount: () => void } {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+    const engine = createFakeEngine();
+    const { unmount } = render(<ReverseScreen engine={engine} master={master} />);
+    return { user, engine, unmount };
+  }
+
+  function advance(ms: number): void {
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  }
+
+  async function narrowedList(user: UserEvent, engine: FakeEngine): Promise<HTMLElement> {
+    await enterTwoObservations(user);
+    const list = await listAfterObservations(engine, 2);
+    await waitFor(() => {
+      expect(list).toHaveClass("is-narrowing");
+    });
+    return list;
+  }
+
+  test("絞り込み始めてから1秒たっても animationend が来なければ is-narrowing を外す", async () => {
+    const { user, engine } = renderWithFakeTimers();
+    const list = await narrowedList(user, engine);
+
+    advance(MAX_WAIT_UPPER_BOUND_MS);
+    expect(list).not.toHaveClass("is-narrowing");
+  });
+
+  test("CSS の切り替え(0.3秒)が終わる前には外さない", async () => {
+    const { user, engine } = renderWithFakeTimers();
+    const list = await narrowedList(user, engine);
+
+    advance(NARROW_CSS_DURATION_MS - 1);
+    expect(list).toHaveClass("is-narrowing");
+  });
+
+  // 前の絞り込みのタイマーが、次の絞り込みを途中で打ち切らないこと(絞り込み直すたびにタイマーを掛け直す)。
+  // 最大待ち(0.3秒超〜1秒)のどの値でも、前のタイマーが次の動きの 0.3秒の間に発火する間隔を選ぶ。
+  test.each([200, 450, 720])(
+    "%i ms 後に観測を入れ直したら、前のタイマーでは外さない(次の動きの 0.3秒の間は付けたまま)",
+    async (retriggerAfterMs) => {
+      const { user, engine } = renderWithFakeTimers();
+      await narrowedList(user, engine);
+
+      advance(retriggerAfterMs);
+      await user.type(observationInput(2), "{Backspace}");
+      await waitFor(() => {
+        expect(engine.reverseRequests.at(-1)?.observations).toEqual([{ percent: 45 }, { percent: 5 }]);
+      });
+      const list = await candidateList();
+      await waitFor(() => {
+        expect(list).toHaveClass("is-narrowing");
+      });
+
+      advance(NARROW_CSS_DURATION_MS - 1);
+      expect(list).toHaveClass("is-narrowing");
+      advance(MAX_WAIT_UPPER_BOUND_MS);
+      expect(list).not.toHaveClass("is-narrowing");
+    },
+  );
+
+  test("絞り込みの動きの間に画面が消えたら、最大待ちのタイマーも片付ける(回しっぱなしにしない)", async () => {
+    const { user, engine, unmount } = renderWithFakeTimers();
+    await enterTwoObservations(user);
+    await listAfterObservations(engine, 2);
+    await waitFor(async () => {
+      expect(await candidateList()).toHaveClass("is-narrowing");
+    });
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test("OS の「視差効果を減らす」では付けないので、タイマーも掛けない", async () => {
+    vi.stubGlobal("matchMedia", fakeMatchMedia(true));
+    const { user, engine } = renderWithFakeTimers();
+    await enterTwoObservations(user);
+    expect(await listAfterObservations(engine, 2)).not.toHaveClass("is-narrowing");
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

@@ -598,6 +598,9 @@ up.sh の最後で `make api-docker-build` と `k3d image import` を呼ぶ形�
 Reason: critic の推奨。共有スクリプトは他レーンの範囲のため。
 Impact: `api-k3d-deploy` は他レーンのリソースに触れないよう、常に API 専用の overlay(deploy/k8s/overlays/local-api)だけを適用する(ADR-0203)。
 
+## 2026-09-22: 素早さ SP0 を PR #32 で main に統合(素早さレーン)
+Decision: SP0(ADR-0600)を PR #32 で統合した。critic は1回目 NG(smoke の架空名)→ 修正後 PASS。make test・lint・build・check-publishable・smoke が成功。
+Impact: 素早さレーンは SP1(feat/speed-s1)へ。
 
 ## 2026-09-22: Web の統合記録(PR #22・#28)
 Decision: PR #22(Web P4-1〜P4-5)と PR #28(P4-6 Playwright E2E・make test への Web の組み込み・verify-m1.md ドラフト)を main に統合した。
@@ -614,3 +617,22 @@ Impact: design.md の1行、plan.md に P4-8、ADR-0300 §7 の持ち越しの�
 Decision: (1) 取得元に新しい版が出ていても CronJob は成功のまま、ログと報告で知らせるだけにする(取り込むのは Git に固定した版だけ。版を上げるのは人が PR で config.json を更新する)。(2) 実行は毎週土曜 12:00(日本時間)。
 Reason: ユーザーが確認の質問に回答した。
 Impact: ADR-0104 の既定値どおり。
+
+## 2026-09-22: Web P4-8 を統合(PR #33)
+Decision: P4-8(design.md「動き」の演出)と逆算の表示方針・design.md の演出の値を PR #33 で main に統合した。Web レーンは他レーン(P2-3・P3-3)待ちで一時停止。
+Reason: critic PASS、make test / lint / build・E2E の通過を確認。
+Impact: Web レーンの Active を「なし」にした。続きは CURRENT_STATE.md の Web 欄の Next。
+
+## 2026-09-22: 手順書の書き方を全レーン共通のルールにする(ユーザー決定。Web レーンのセッションで受領)
+Decision: 人が実行する手順書は、上から下へ1回読めば終わる形にし(節の間を行き来させない)、動作を伴うコマンドと必要最低限の確認点だけを書く
+(行動を伴わない説明は ADR や設計の節へ)。コマンドの塊はリポジトリのルートへの `cd` から始め、ローカルの手順は k3d(コンテナ)を主にする。
+AGENTS.md に「手順書の書き方」節を追加し、CLAUDE.md の「最初に読むもの」から参照した。
+Reason: ユーザーが「手順書を上下に行き来するのは手間」「行動を伴わない説明は要らない」「make の実行場所で迷う」「全レーンに共有して」と指示した。
+Impact: 全レーン・両 AI に適用。既存の手順書は、各レーンが次に触るときにこの形に直す(Web は docs/verify-m1.md を P4-14 で直す)。
+
+## 2026-09-22: README・手順書・構成図の規則(ユーザー決定。全レーン)
+Decision: 各コンポーネントに README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)、動かせるレーンには手順書 `docs/runbooks/<レーン>.md`、全体図は `docs/architecture.md`。
+手順書の書き方は AGENTS.md「手順書の書き方」(Web レーンが PR #38 で追加した全レーン共通の規則)に従う。
+図は mermaid を基本にする。文書は短く、重複させずリンクでつなぐ(読んで直すのは人間。量が多いと疲れる)。
+Reason: ユーザーが「各 README で何をしているか・どうしているかの説明、動作確認の手順書、アーキテクチャの図が欲しい。人間が後で読みやすく AI も扱いやすく、ただし過剰な量にしない」と依頼した。
+Impact: docs/coding-rules.md §8、docs/architecture.md(全体図)、plan.md の「DOC: 文書」(各レーンのタスク)。各レーンは自分の範囲の README・手順書を書く。
