@@ -32,10 +32,10 @@ Next: PR(P6-2b・internal タグ除外・DOC-ios をまとめて main へ)→ P6
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
-Active: なし(ユーザー指示で一時停止。P2-3 の実データ確認は完了。再開はユーザーの指示があってから)
+Active: なし(TB6 完了・main 統合済み。次はユーザー指示待ち)
 Branch: 次は main から feat/tb-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
-Status: TB0〜TB5・整備・実データ配線(ADR-0403)は完了・main に統合済み。データレーンの pokedex export(PR #57)を実データで確認済み: 348 種・516 技・特性のマスタで analyze/recommendations が 200(例: フシギバナ、あついしぼう持ちのカビゴン・マンムーが氷技の弱点を軽減する候補として正しく出た)。メガフォームの nameJa が英語表記のまま(Venusaur-Mega 等)なのはデータレーン側の日本語名収集の余地(ブロッカーではない)
-Next: 設計書(docs/type-balance-design.md)の TB0〜TB5 はすべて完了。メガフォームの nameJa が英語表記のままの件はデータレーンへ確認候補として残すのみ(ブロッカーではない)。追加機能(技範囲チェッカー等)は ADR を書いてから着手
+Status: 設計書(docs/type-balance-design.md)の TB0〜TB6 はすべて main に統合済み(TB6: 技範囲チェッカー、PR #65)。P2-3b(特性の無効・吸収)は main に engine 側の実装が入った(ADR-0106。データレーンの別ライン)ので、balance の read model 再生成待ちは解消に近づいている見込み。メガフォームの nameJa が英語表記のままの件はデータレーンへ確認候補として残る(ブロッカーではない)
+Next: (1) データレーンが export(data/generated/readmodel)を再生成したら `make balance-k3d-deploy-readmodel && make balance-smoke-readmodel` で実データ確認(特性の無効・吸収を含む)する。(2) Web レーンが `make gen-ts` を実行して `web/src/api/balance.gen.ts` に move-range の型を反映する。設計書の TB0〜TB6 はすべて完了、以後はユーザーからの新規要望待ち
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
 
 ## Speed
