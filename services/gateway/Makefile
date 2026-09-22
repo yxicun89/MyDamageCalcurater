@@ -14,19 +14,16 @@ api-docker-build: ## calc・gateway のイメージを local タグでビルド�
 	@docker build -f services/calc/Dockerfile -t pokecalc/calc:local .
 	@docker build -f services/gateway/Dockerfile -t pokecalc/gateway:local .
 
-# `deploy/k8s/overlays/local`(共有)は pokedex-migrate Job・mysql も含む。その Job が前提にする
-# `mysql-auth` Secret はデータレーンが `make up`(scripts/up.sh)で作るもので、API レーンは他レーンの
-# Secret を代わりに作らない(CLAUDE.md「サービスは自分のDBにだけ触る」)。Secret が無いクラスタでは
-# `deploy/k8s/overlays/local-api`(calc・gateway だけ)を適用する(ADR-0203 追記)。
-api-k3d-deploy: api-docker-build ## k3d(既存クラスタ)へ calc・gateway をデプロイする
+# クラスタ全体の立ち上げ(namespace・mysql・pokedex-migrate Job を含む)は `make up`
+# (scripts/up.sh)が担う。`deploy/k8s/overlays/local`(共有)を丸ごと apply すると、
+# pokedex-migrate Job の再実行(spec.template は immutable なので既存 Job と食い違うと
+# 失敗する)や mysql の意図しない上書きを引き起こしうる(k3d クラスタは他レーンと共有)。
+# API レーンはここで自分の2つの Deployment(calc・gateway)だけを、専用の overlay
+# `deploy/k8s/overlays/local-api`(base/calc・base/gateway と Component local/api だけ)で
+# apply する。他レーンのリソースには一切触らない(ADR-0203 追記「apply の分離」)。
+api-k3d-deploy: api-docker-build ## k3d(既存クラスタ。make up 済み)へ calc・gateway だけをデプロイする
 	@k3d image import pokecalc/calc:local pokecalc/gateway:local --cluster $(API_CLUSTER)
-	@if kubectl -n pokecalc get secret mysql-auth >/dev/null 2>&1; then \
-		echo "api-k3d-deploy: mysql-auth がある(make up 済み)。deploy/k8s/overlays/local を適用します"; \
-		kubectl apply -k deploy/k8s/overlays/local; \
-	else \
-		echo "api-k3d-deploy: mysql-auth が無い(他レーン未デプロイ)。deploy/k8s/overlays/local-api だけ適用します"; \
-		kubectl apply -k deploy/k8s/overlays/local-api; \
-	fi
+	@kubectl apply -k deploy/k8s/overlays/local-api
 	@kubectl -n pokecalc rollout restart deployment/calc deployment/gateway
 	@kubectl -n pokecalc rollout status deployment/calc --timeout=120s
 	@kubectl -n pokecalc rollout status deployment/gateway --timeout=120s

@@ -29,6 +29,9 @@ spec:
           env:
             - name: GATEWAY_CALC_URL
               value: http://calc
+            # limits.memory の 64Mi に対して少し余裕を持たせた値(GC が OOMKill の前に働くように)。
+            - name: GOMEMLIMIT
+              value: 56MiB
           readinessProbe:
             httpGet:
               path: /healthz
@@ -57,5 +60,8 @@ spec:
             runAsNonRoot: true
       securityContext:
         runAsNonRoot: true
+        # イメージ(services/gateway/Dockerfile)の USER 65532:65532 と合わせて明示する。
+        runAsUser: 65532
+        runAsGroup: 65532
         seccompProfile:
           type: RuntimeDefault

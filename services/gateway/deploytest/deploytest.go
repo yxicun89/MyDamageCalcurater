@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -24,13 +25,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// リポジトリ直下からの相対パス(ADR-0203 §3)。
+// リポジトリ直下からの相対パス(ADR-0203 §3、および「apply の分離」の追記)。
 const (
 	BaseDir              = "deploy/k8s/base"
 	LocalOverlayDir      = "deploy/k8s/overlays/local"
 	LocalAPIComponentDir = "deploy/k8s/overlays/local/api"
 	// LocalAPIComponentRef は local overlay の kustomization.yaml の components に書く値。
 	LocalAPIComponentRef = "api"
+	// LocalAPIOnlyOverlayDir は API レーンだけ(calc・gateway)を k3d に載せる専用の overlay。
+	// `api-k3d-deploy` は常にここだけを適用し、共有の LocalOverlayDir を丸ごとは apply しない
+	// (pokedex-migrate Job の再実行・mysql の上書きを避ける。ADR-0203 追記「apply の分離」)。
+	LocalAPIOnlyOverlayDir = "deploy/k8s/overlays/local-api"
 )
 
 // RepoRoot はリポジトリ直下の絶対パスを返す(このファイルの位置から解決するので、テストの作業ディレクトリに依存しない)。
@@ -399,6 +404,7 @@ func LocalDeployment(t testing.TB, service string) Deployment {
 			}
 			var patch Deployment
 			o.Decode(t, &patch)
+			assertPatchFieldsSupported(t, LocalAPIComponentDir+"/"+p.Path, o)
 			mergeDeployment(&d, patch)
 		}
 	}
@@ -435,6 +441,66 @@ func mergeDeployment(dst *Deployment, patch Deployment) {
 			if pc.Image != "" {
 				c.Image = pc.Image
 			}
+		}
+	}
+}
+
+// patchAllowedFields は、strategic merge patch(Deployment)のうち mergeDeployment が実際に合成する
+// フィールドを、パス(ドット区切り。配列は "[]")ごとに列挙する。ここに無いフィールドを patch に書いても
+// mergeDeployment は静かに無視する(実物の kustomize は適用するが、この静的検査は再現しない)ため、
+// 気づかないまま乖離することを防ぐ(任意項目。critic 指摘)。
+var patchAllowedFields = map[string][]string{
+	"":                                      {"apiVersion", "kind", "metadata", "spec"},
+	"metadata":                              {"name"},
+	"spec":                                  {"template"},
+	"spec.template":                         {"spec"},
+	"spec.template.spec":                    {"containers", "volumes"},
+	"spec.template.spec.containers[]":       {"name", "env", "volumeMounts", "image"},
+	"spec.template.spec.containers[].env[]": {"name", "value", "valueFrom"},
+	"spec.template.spec.containers[].volumeMounts[]": {"name", "mountPath", "subPath", "readOnly"},
+	"spec.template.spec.volumes[]":                   {"name", "configMap"},
+	"spec.template.spec.volumes[].configMap":         {"name", "items"},
+	"spec.template.spec.volumes[].configMap.items[]": {"key", "path"},
+}
+
+// assertPatchFieldsSupported は o(strategic merge patch の Deployment)が patchAllowedFields の
+// 範囲だけを使っていることを確かめる。範囲外のフィールドがあれば、この静的検査が実物の kustomize と
+// 乖離する(patch は適用されるのに、テストはそれを見ない)ので、テストを失敗させる。
+func assertPatchFieldsSupported(t testing.TB, file string, o Object) {
+	t.Helper()
+	var generic any
+	if err := o.node.Decode(&generic); err != nil {
+		t.Fatalf("%s を解析できない: %v", file, err)
+	}
+	walkPatchFields(t, file, "", generic)
+}
+
+func walkPatchFields(t testing.TB, file, path string, node any) {
+	t.Helper()
+	switch v := node.(type) {
+	case map[string]any:
+		allowed, ok := patchAllowedFields[path]
+		if !ok {
+			t.Fatalf("%s: mergeDeployment が検査しない場所 %q が patch にある(mergeDeployment・patchAllowedFields を拡張すること)",
+				file, path)
+			return
+		}
+		for key, val := range v {
+			if !slices.Contains(allowed, key) {
+				t.Fatalf("%s: %s に mergeDeployment が合成しないフィールド %q がある"+
+					"(patch はこの範囲だけを使うこと。ADR-0203 §3)", file, path, key)
+				continue
+			}
+			childPath := key
+			if path != "" {
+				childPath = path + "." + key
+			}
+			walkPatchFields(t, file, childPath, val)
+		}
+	case []any:
+		childPath := path + "[]"
+		for _, item := range v {
+			walkPatchFields(t, file, childPath, item)
 		}
 	}
 }

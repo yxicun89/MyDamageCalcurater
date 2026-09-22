@@ -11,8 +11,8 @@ Next: P2-2c(照合と差分報告。実データの取得と版の固定を含�
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
 Active: Claude Code
 Branch: feat/api-p3-smoke(作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: P3-1(ADR-0200・0201。PR #14)と P3-2 gateway(ADR-0202。PR #23)は main に統合済み。P3-3 に着手
-Next: P3-3(gateway 経由の契約テストと k3d のスモーク: calc・gateway の Dockerfile(golang 最新 digest)・Kustomize(base と overlays/local。calc の例のマスタと typechart は configMapGenerator)・Ingress `/`(balance の /api/balance と共存)・smoke スクリプトと Makefile ターゲット)
+Status: P3-1(ADR-0200・0201。PR #14)と P3-2 gateway(ADR-0202。PR #23)は main に統合済み。P3-3(契約表・k3d のデプロイとスモーク。ADR-0203)は実装済み・k3d のスモーク成功、critic の指摘を反映中
+Next: P3-3 の critic 再レビュー → PR → Phase 3 完了(feat/api-p3・feat/api-p3-gateway・feat/api-p3-smoke を削除)。その後は pokedex-svc(P2-3)が入ったら gateway の GATEWAY_POKEDEX_URL と smoke の 503→200、共通マスタ(P2-2a の services/internal/master)が入ったら calc-svc の Store の差し替え
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)

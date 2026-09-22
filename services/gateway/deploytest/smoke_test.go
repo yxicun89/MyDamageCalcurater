@@ -6,6 +6,7 @@ package deploytest_test
 // k3d 上での実行(`make api-smoke`)は implementer と人間の手動確認。
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -118,6 +119,71 @@ func TestSmokeScriptPassesAgainstGatewayAndCalc(t *testing.T) {
 	want := "api smoke: calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=503 balance=skipped"
 	if !strings.Contains(out, want) {
 		t.Errorf("smoke.sh の出力に %q が無い:\n%s", want, out)
+	}
+}
+
+// buildDefaultGatewayHandler は startStack(t, stack{}) と同じ構成(calc-svc は実物、pokedex は未設定)の
+// gateway ハンドラを作る。TestSmokeScriptRetriesThroughGatewayNotYetListening が listen の開始を自分で
+// 遅らせるために、httptest.NewServer(自動で bind される)を使わずここでハンドラだけを組み立てる。
+func buildDefaultGatewayHandler(t *testing.T) http.Handler {
+	t.Helper()
+	calcHandler, err := calctest.NewExampleHandler()
+	if err != nil {
+		t.Fatalf("calc-svc の実物を起動できない: %v", err)
+	}
+	calcSrv := httptest.NewServer(calcHandler)
+	t.Cleanup(calcSrv.Close)
+	h, err := httpapi.NewHandler(httpapi.Config{CalcURL: mustURL(t, calcSrv.URL), UpstreamTimeout: 5 * time.Second})
+	if err != nil {
+		t.Fatalf("gateway を作れない: %v", err)
+	}
+	return h
+}
+
+// AC-S6 回帰(critic 指摘): gateway がロールアウト直後で最初は接続拒否(まだ誰も listen していない)、
+// 数百 ms 後に listen を始める場合でも、request_with_retry が正しく再試行して成功すること。
+//
+// 修正前は request() が `status=$(curl ... || printf '000')` としており、curl 自身が接続拒否時に
+// 書き出す "000"(-w '%{http_code}')に、失敗時の `printf '000'` がさらに連結されて "000000" になっていた。
+// その値は case の 000/404/502/503 のどれにも一致せず、request_with_retry が「再試行不要な最終ステータス」
+// と誤認して即座に打ち切っていた(=このテストが無ければ壊れたまま気づけない)。
+func TestSmokeScriptRetriesThroughGatewayNotYetListening(t *testing.T) {
+	if _, err := exec.LookPath("curl"); err != nil {
+		t.Skip("curl が無いのでスモークスクリプトを流せない(スクリプトは curl を使う)")
+	}
+	h := buildDefaultGatewayHandler(t)
+
+	// ポート番号だけを予約してすぐ閉じる(この直後は誰も listen していないので接続拒否になる)。
+	reserve, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("ポートを予約できない: %v", err)
+	}
+	addr := reserve.Addr().String()
+	if err := reserve.Close(); err != nil {
+		t.Fatalf("予約したポートを閉じられない: %v", err)
+	}
+
+	srv := &http.Server{Addr: addr, Handler: h}
+	t.Cleanup(func() { _ = srv.Close() })
+	listenErr := make(chan error, 1)
+	go func() {
+		// ロールアウト直後(Pod がまだ Ready でない)を模して、しばらく接続拒否のままにする。
+		time.Sleep(300 * time.Millisecond)
+		l, err := net.Listen("tcp", addr)
+		if err != nil {
+			listenErr <- err
+			return
+		}
+		listenErr <- nil
+		_ = srv.Serve(l)
+	}()
+
+	out, err := runSmoke(t, "http://"+addr, "10")
+	if lerr := <-listenErr; lerr != nil {
+		t.Fatalf("予約したポートで listen できない(テストの前提が崩れている): %v", lerr)
+	}
+	if err != nil {
+		t.Fatalf("smoke.sh が失敗した(接続拒否からの再試行が壊れている): %v\n%s", err, out)
 	}
 }
 

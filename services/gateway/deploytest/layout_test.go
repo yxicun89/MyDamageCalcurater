@@ -61,6 +61,26 @@ func TestLocalOverlayUsesAPIComponent(t *testing.T) {
 	}
 }
 
+// AC-S4 追記(apply の分離): deploy/k8s/overlays/local-api は API レーンだけ(calc・gateway)を k3d に
+// 載せる専用 overlay。namespace は pokecalc、resources は base/calc・base/gateway だけ(他レーンの
+// namespace.yaml・pokedex・mysql を含まない)、components は local overlay と同じ Component `local/api` だけ。
+func TestLocalAPIOverlayIsScopedToAPIServices(t *testing.T) {
+	k := deploytest.ReadKustomization(t, deploytest.LocalAPIOnlyOverlayDir)
+	if k.Namespace != "pokecalc" {
+		t.Errorf("%s の namespace = %q, want pokecalc", deploytest.LocalAPIOnlyOverlayDir, k.Namespace)
+	}
+	wantResources := []string{"../../base/calc", "../../base/gateway"}
+	if !slices.Equal(k.Resources, wantResources) {
+		t.Errorf("%s の resources = %q, want %q(base/calc・base/gateway だけ。他レーンの resources を含まない)",
+			deploytest.LocalAPIOnlyOverlayDir, k.Resources, wantResources)
+	}
+	wantComponents := []string{"../local/api"}
+	if !slices.Equal(k.Components, wantComponents) {
+		t.Errorf("%s の components = %q, want %q(local overlay と同じ Component)",
+			deploytest.LocalAPIOnlyOverlayDir, k.Components, wantComponents)
+	}
+}
+
 // AC-S2: Dockerfile はリポジトリ直下をビルドコンテキストにし、golang の alpine を services/go.mod の Go の版と
 // digest で固定し、CGO なしで静的にビルドし、最終段は scratch で非 root の数値 UID で動く。
 func TestAPIDockerfiles(t *testing.T) {
@@ -154,7 +174,7 @@ func TestAPIMakefile(t *testing.T) {
 
 	wants := map[string][]string{
 		"api-docker-build": {"services/calc/Dockerfile", "services/gateway/Dockerfile"},
-		"api-k3d-deploy":   {"k3d image import", "kubectl apply -k", "rollout status"},
+		"api-k3d-deploy":   {"k3d image import", "kubectl apply -k", deploytest.LocalAPIOnlyOverlayDir, "rollout status"},
 		"api-smoke":        {"scripts/smoke.sh"},
 		"api-kustomize":    {"kubectl kustomize"},
 	}
@@ -173,6 +193,21 @@ func TestAPIMakefile(t *testing.T) {
 			}
 		}
 	}
+	// api-k3d-deploy は自分の2つの Deployment(calc・gateway)だけを local-api overlay で適用し、
+	// 共有の deploy/k8s/overlays/local(pokedex-migrate Job・mysql を含む)は丸ごと apply しない
+	// (critic 指摘: Secret の有無で分岐して丸ごと apply する経路があると、pokedex-migrate Job の
+	// 再実行で immutable エラーや mysql の意図しない上書きが起こりうる。ADR-0203 追記「apply の分離」)。
+	deployRecipe := expandVars(src, targets["api-k3d-deploy"])
+	withoutLocalAPI := strings.ReplaceAll(deployRecipe, deploytest.LocalAPIOnlyOverlayDir, "")
+	if strings.Contains(withoutLocalAPI, deploytest.LocalOverlayDir) {
+		t.Errorf("%s の api-k3d-deploy が共有の %s を apply している(%s だけを使うこと): %q",
+			path, deploytest.LocalOverlayDir, deploytest.LocalAPIOnlyOverlayDir, deployRecipe)
+	}
+	if strings.Contains(deployRecipe, "mysql-auth") {
+		t.Errorf("%s の api-k3d-deploy が Secret の有無で分岐している(常に %s だけを apply すること): %q",
+			path, deploytest.LocalAPIOnlyOverlayDir, deployRecipe)
+	}
+
 	// イメージ名は Kustomize の local overlay と同じ(AssertLocalImage)。
 	for _, img := range []string{"pokecalc/calc", "pokecalc/gateway"} {
 		if !strings.Contains(src, img) {

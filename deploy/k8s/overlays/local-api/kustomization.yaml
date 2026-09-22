@@ -1,15 +1,13 @@
 # API レーンだけを k3d に載せるための overlay(ADR-0203 追記。§apply の分離)。
 #
-# `deploy/k8s/overlays/local`(共有)は base 全体(namespace・pokedex・calc・gateway)と mysql を含む。
-# `pokedex-migrate` Job は `mysql-auth` Secret(データレーンが `make up`/`scripts/up.sh` で作る。
-# .env 由来の値なので Git に置かない)を前提にしており、その Secret が無いクラスタでは Pod が
-# `CreateContainerConfigError` のまま残る。API レーンの `make api-k3d-deploy` は他レーンの
-# Secret を勝手に作ったり、他レーンのリソースを不完全な状態で持ち込んだりしない
-# (CLAUDE.md「サービスは自分の DB にだけ触る」・「人間の確認が必要なこと」)。
+# クラスタ全体の立ち上げ(namespace・mysql・pokedex-migrate Job を含む)は `make up`
+# (scripts/up.sh)が担う。`deploy/k8s/overlays/local`(共有)を丸ごと apply すると、
+# pokedex-migrate Job の再実行(spec.template は immutable なので既存 Job と食い違うと
+# 失敗する)や mysql の意図しない上書きを引き起こしうる(k3d クラスタは他レーンと共有)。
 #
-# そのため `services/gateway/Makefile` の `api-k3d-deploy` は、`mysql-auth` Secret が無いクラスタでは
-# ここ(calc・gateway と、それぞれの local overlay の Component のパッチだけ)を適用する。
-# Secret があるクラスタ(`make up` 済み)では従来どおり `deploy/k8s/overlays/local` を丸ごと適用する。
+# `services/gateway/Makefile` の `api-k3d-deploy` は常にここ(base/calc・base/gateway と、
+# それぞれへの local overlay の Component `local/api` のパッチだけ)を適用する。他レーンの
+# リソース(namespace・mysql・pokedex-migrate Job)には一切触らない。
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: pokecalc

@@ -48,8 +48,9 @@ make api-k3d-deploy     # calc・gateway のイメージをビルドして k3d �
 make api-smoke          # gateway 経由のスモーク(http://localhost:8080。API_URL で上書き)
 ```
 
-- `api-k3d-deploy` は、データレーンの `mysql-auth` Secret が無いクラスタでは calc・gateway だけ(`deploy/k8s/overlays/local-api`)を、
-  ある(`make up` 済み)クラスタでは `deploy/k8s/overlays/local` を丸ごと適用する。
+- 全体(namespace・mysql・pokedex-migrate Job を含む)のデプロイは `make up`。API レーンの `api-k3d-deploy` は
+  自分の2つの Deployment(calc・gateway)だけを専用の overlay(`deploy/k8s/overlays/local-api`)で適用する
+  (共有の `deploy/k8s/overlays/local` を丸ごと apply しない。k3d クラスタは他レーンと共有のため)。
 - `/api/pokedex/*` は pokedex-svc(P2-3)ができるまで上流が未設定なので **503 `upstream_unavailable`**。pokedex-svc を載せて
   `GATEWAY_POKEDEX_URL` を設定したら **200** に変わる(`services/gateway/scripts/smoke.sh` の期待値と
   `TestManifestGatewayLocalConfig` を一緒に変える)。

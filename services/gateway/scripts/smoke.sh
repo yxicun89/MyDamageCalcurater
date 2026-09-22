@@ -48,7 +48,7 @@ request() {
   path=$2
   data=${3:-}
   header_mode=${4:-valid}
-  set -- -sS -o "$body_file" -w '%{http_code}' -X "$method" -H 'Content-Type: application/json'
+  set -- -sS --connect-timeout 5 --max-time 30 -o "$body_file" -w '%{http_code}' -X "$method" -H 'Content-Type: application/json'
   case "$header_mode" in
     valid) set -- "$@" -H "X-Device-Id: $device_id" -H "X-Session-Id: $session_id" ;;
     none) ;;
@@ -58,7 +58,12 @@ request() {
   if [ -n "$data" ]; then
     set -- "$@" --data "$data"
   fi
-  status=$(curl "$@" "$base_url$path" || printf '000')
+  # curl は接続拒否・タイムアウトでも `-w '%{http_code}'` により自分で "000" を書き出す。
+  # ここで `|| printf '000'` を足すと失敗時に出力が二重になり("000000")、下の case の
+  # どの分岐にも一致せず再試行されなくなる(critic 指摘で修正)。`|| true` は command
+  # substitution の非ゼロ終了で set -e が働かないようにするためだけに使い、出力には触らない。
+  status=$(curl "$@" "$base_url$path") || true
+  : "${status:=000}"
 }
 
 # ロールアウト直後は Ingress の反映前(404)や終了中の Pod(502/503)に当たることがあるので、最初の1件だけ再試行する。

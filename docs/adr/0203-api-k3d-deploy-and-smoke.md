@@ -1,6 +1,6 @@
 # ADR-0203: calc・gateway の k3d デプロイとスモーク
 
-- 状態: 採用・実装済み(2026-09-22。P3-3。k3d の既存クラスタで `make api-k3d-deploy && make api-smoke` を確認: calc・bulk・reverse=200、missing_header・invalid_header=400、pokedex=503、balance=200)
+- 状態: 採用・実装済み(2026-09-22。P3-3。k3d の既存クラスタで `make api-k3d-deploy && make api-smoke` を確認: calc・bulk・reverse=200、missing_header・invalid_header=400、pokedex=503、balance=200。critic 指摘を受け、apply の分離を「Secret の有無で分岐」から「常に local-api だけ」に修正、smoke.sh の 000 連結バグと dev.sh の go run 孤児プロセスを修正)
 - 日付: 2026-09-22
 - 関連: ADR-0002(実マスタをコミットしない)、ADR-0012(サービス境界。`/api/balance` は balance の Ingress)、
   ADR-0015(相性表 JSON)、ADR-0200(calc-svc の契約・`/healthz`)、ADR-0202(gateway のルーティング・ヘッダ検証)、
@@ -70,11 +70,14 @@ gateway 経由の代表的な 400 と pokedex 未設定の 503 が1つの表に�
 
 API のテストは既存の `test-services` で `make test` に入っているので、balance のような `test: api-test` の前提条件は足さない。
 
-**apply の分離(実装時の追記)**: 共有の `deploy/k8s/overlays/local` は base 全体(pokedex の migrate Job を含む)と mysql を含み、
-migrate Job はデータレーンが `make up` で作る `mysql-auth` Secret(.env 由来。Git に置かない)を前提にする。API レーンは他レーンの
-Secret を代わりに作らず、不完全な他レーンのリソースも持ち込まない。そこで API 専用の overlay `deploy/k8s/overlays/local-api`
-(`base/calc`・`base/gateway` と Component `local/api` だけ)を置き、`api-k3d-deploy` は `mysql-auth` が無いクラスタではこちらを、
-ある(`make up` 済み)クラスタでは `deploy/k8s/overlays/local` を丸ごと適用する。
+**apply の分離(実装時の追記。critic 指摘で修正)**: クラスタ全体の立ち上げ(namespace・mysql・pokedex-migrate Job を含む)は
+`make up`(scripts/up.sh)が担う。共有の `deploy/k8s/overlays/local` を `api-k3d-deploy` からも丸ごと apply すると、
+pokedex-migrate Job の再実行(`spec.template` は immutable なので既存 Job と食い違うと apply が失敗する)や mysql の
+意図しない上書きを引き起こしうる(k3d クラスタは他レーンと共有)。そこで API 専用の overlay `deploy/k8s/overlays/local-api`
+(`base/calc`・`base/gateway` と Component `local/api` だけ)を置き、`api-k3d-deploy` は**常に**こちらだけを適用する
+(`mysql-auth` Secret の有無で分岐しない。他レーンのリソースには一切触らない)。全体のデプロイと API だけのデプロイを
+両立できるよう `api-kustomize` は `deploy/k8s/base`・`deploy/k8s/overlays/local`・`deploy/k8s/overlays/local-api` の
+3つとも描画できることを確かめる(apply はしない。描画は副作用が無い)。
 
 ### 5. スモーク(L5 の API 部分)
 
@@ -88,6 +91,9 @@ Secret を代わりに作らず、不完全な他レーンのリソースも持�
 - `/api/balance/healthz` が balance に届くこと(gateway の `/` が奪わない)は任意。`API_SMOKE_BALANCE=auto`(既定。kubectl で
   `balance` の Ingress があるときだけ見る)/ `on` / `off`。
 - ロールアウト直後の 000 / 404 / 502 / 503 は最初の1件だけ `API_SMOKE_RETRIES` 回(既定 30、1秒間隔)再試行する。
+  接続拒否は curl 自身が `000` を書き出す(`-w '%{http_code}'`)ので、`status=$(curl ... || printf '000')` のように
+  失敗時にさらに `000` を連結してはいけない(`000000` になり `case` の判定から漏れて再試行されなくなる。critic 指摘で修正。
+  `status=$(curl ...) || true` で受けてから空なら `000` を補う)。
 - 失敗したら内容・ステータス・本文を出して非ゼロで終わる。
 - スクリプト自体は Go テスト(`services/gateway/deploytest/smoke_test.go`)で、同じプロセスに起動した calc-svc の実物と gateway に
   向けて流し、正しい構成で成功・calc に届かない構成と pokedex が答える構成で失敗することを確かめる(確認の空振りを防ぐ)。
@@ -112,10 +118,10 @@ P4-6(Web レーン)の占位。k3d のスモークは `make api-smoke`、`e2e.sh
 | AC-S1 | gateway 経由の calc・bulk・reverse の成功、missing_header・invalid_header・unknown_field・unknown_species(と unknown_move)、pokedex 未設定の 503 が api/openapi.yaml に合う(1つの表) | `gateway/internal/httpapi.TestRealCalcThroughGatewayMatchesContract` |
 | AC-S2 | Dockerfile: コンテキストはリポジトリ直下、`golang:<services/go.mod の版>-alpine@sha256:<64桁>`、`CGO_ENABLED=0`、最終段 scratch、数値の非 root USER、ENTRYPOINT | `gateway/deploytest.TestAPIDockerfiles` |
 | AC-S3 | base の Deployment / Service(名前・ラベル・イメージ名・ポート http・`/healthz` の probe・resources・非 root・readOnlyRootFilesystem・drop ALL・seccomp・Service 80)、待ち受けアドレスが containerPort と一致、gateway の Ingress(traefik・`/` Prefix・ホストなし → gateway)、base の resources に calc・gateway が1行ずつ | `cmd/calc.TestManifestCalcWorkload` / `cmd/gateway.TestManifestGatewayWorkload` / `TestManifestGatewayIngress` / `deploytest.TestBaseKustomizationListsAPIServices` |
-| AC-S4 | local overlay は Component `api` を読む。calc のマスタと相性表は Component の直下のコピーから configMapGenerator で作った ConfigMap の読み取り専用マウントから来て、コピーは元ファイルとバイト一致し、そのまま起動できる。base はそれを参照しない。gateway は base で起動でき、local では calc=http://calc・pokedex/assets 未設定・CORS は `http://localhost:5173` だけ。イメージは `<repo>:local` | `cmd/calc.TestManifestCalcBaseHasNoLocalData` / `TestManifestCalcLocalDataFromOverlayCopies` / `TestManifestCalcLocalImage` / `cmd/gateway.TestManifestGatewayBaseConfig` / `TestManifestGatewayLocalConfig` / `TestManifestGatewayLocalImage` / `deploytest.TestLocalOverlayUsesAPIComponent` |
-| AC-S5 | `services/gateway/Makefile` に `api-docker-build`・`api-k3d-deploy`・`api-smoke`・`api-kustomize`(.PHONY、`api-` 接頭辞のみ)。ルートの Makefile は `include services/gateway/Makefile` の1行。`make api-kustomize` が成功する | `deploytest.TestAPIMakefile` + 手動 `make api-kustomize` |
-| AC-S6 | smoke.sh は POSIX sh・`set -eu`・実行可能。正しい構成で成功し、壊れた構成で非ゼロ。k3d 上で `make up && make api-k3d-deploy && make api-smoke` が成功する | `deploytest.TestSmokeScriptIsPOSIXShell` / `TestSmokeScriptPassesAgainstGatewayAndCalc` / `TestSmokeScriptFailsOnBrokenStack` + 手動(k3d) |
-| AC-S7 | `scripts/dev.sh` が calc-svc と gateway を例のマスタで起動し、Ctrl-C で両方止まる。`make dev` の上で smoke.sh が成功する | `deploytest.TestDevScript`(静的)+ 手動 |
+| AC-S4 | local overlay は Component `api` を読む。calc のマスタと相性表は Component の直下のコピーから configMapGenerator で作った ConfigMap の読み取り専用マウントから来て、コピーは元ファイルとバイト一致し、そのまま起動できる。base はそれを参照しない。gateway は base で起動でき、local では calc=http://calc・pokedex/assets 未設定・CORS は `http://localhost:5173` だけ。イメージは `<repo>:local`。`deploy/k8s/overlays/local-api` は namespace `pokecalc`、resources は `../../base/calc`・`../../base/gateway` だけ、components は `../local/api` だけ(他レーンの resources を持たない) | `cmd/calc.TestManifestCalcBaseHasNoLocalData` / `TestManifestCalcLocalDataFromOverlayCopies` / `TestManifestCalcLocalImage` / `cmd/gateway.TestManifestGatewayBaseConfig` / `TestManifestGatewayLocalConfig` / `TestManifestGatewayLocalImage` / `deploytest.TestLocalOverlayUsesAPIComponent` / `TestLocalAPIOverlayIsScopedToAPIServices` |
+| AC-S5 | `services/gateway/Makefile` に `api-docker-build`・`api-k3d-deploy`・`api-smoke`・`api-kustomize`(.PHONY、`api-` 接頭辞のみ)。`api-k3d-deploy` は `deploy/k8s/overlays/local-api` だけを apply し、共有の `deploy/k8s/overlays/local` は apply しない。ルートの Makefile は `include services/gateway/Makefile` の1行。`make api-kustomize` が成功する | `deploytest.TestAPIMakefile` + 手動 `make api-kustomize` |
+| AC-S6 | smoke.sh は POSIX sh・`set -eu`・実行可能。正しい構成で成功し、壊れた構成で非ゼロ。接続拒否(ロールアウト直後)は `000` として再試行され、二重に連結されない。全体のデプロイは `make up`、API レーンは自分の2つの Deployment(calc・gateway)だけを `deploy/k8s/overlays/local-api` で apply する(`make api-k3d-deploy && make api-smoke` が成功する) | `deploytest.TestSmokeScriptIsPOSIXShell` / `TestSmokeScriptPassesAgainstGatewayAndCalc` / `TestSmokeScriptFailsOnBrokenStack` / `TestSmokeScriptRetriesThroughGatewayNotYetListening` + 手動(k3d) |
+| AC-S7 | `scripts/dev.sh` が calc-svc と gateway を例のマスタで起動し、Ctrl-C・SIGTERM で両方止まる(`go run` は子プロセスへシグナルを転送しないため、先に `go build` した実バイナリを直接起動する)。`make dev` の上で smoke.sh が成功する | `deploytest.TestDevScript`(静的)+ 手動 |
 | AC-S8 | `make test`・`make lint`(check-publishable を含む)が成功。`api/openapi.yaml`・`scripts/e2e.sh`・他レーンの範囲は変えない | `make test` / `make lint` / `git diff --stat` |
 
 ## 結果
