@@ -25,16 +25,19 @@ exportBalanceReadModel に absorb と ADR-0106 §決定7の出力順・無効優
 verify-m1.md を完成版にした: P2-2c/d・P2-3・P3-3 が main に入り、k3d(gateway 経由 http://localhost:8080)で
 計算・逆算・タイプバランス(仮想敵・おすすめタイプ含む)を実地確認(pokedex-svc は実データ投入済みだが、
 gateway/calc-svc のマスタ参照先はまだ pokedex-svc に向いていない。API レーンの依頼 d が一時停止中)。
-P4-5 は Chrome で確認済み(Safari は未確認。人間の作業)
-Next: (1) pokedex-svc の公開 API から Web のオンライン MasterSource を作る(ADR-0301 §4)に着手。設計を ADR-0304 として
-まとめた: 種族(349件)・技(515件)は `searchSpecies`/`searchMoves` の `limit<=200` 上限とページング手段の欠如により
-一括取得できないと実クラスタで確認したため、検索ベースの選択 UI にする。持ち物(166件)・性格(25件)は1回の取得で
-足りるので一覧のまま。加えて `getSpecies.learnset` が技の ID 配列しか返さず、技を ID で解決する公開手段が無いため、
-技の実体化(名前・タイプ・分類)は Web 単独では作れないと判明。既定案(`learnset` を `Move[]` に変える)を DECISIONS.md で
-データ/API レーンへ提案済み(2026-09-23、急ぎではない)。実装は ADR-0304 §4 の段階どおり進める: まず種族・持ち物・性格の
-オンライン MasterSource を作り、技を要する操作(ダメージ技選択等)はオンラインモードで無効化した状態にする。
-(2) 続いて P5-5(構築ビルダー等)は record/team の API 待ち。
-(3) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
+P4-5 は Chrome で確認済み(Safari は未確認。人間の作業)。
+**P4-16(オンライン MasterSource の基盤。ADR-0304)完了・main 統合済み(PR #128)**: `createOnlineMasterSource`
+(持ち物・性格を全件取得、種族は `searchSpecies`/`getSpecies` の検索専用インターフェース)、
+`MasterData.capabilities`(技選択・持ち物候補比較・特性一覧は公開 API の欠落により明示的に無効化)、
+`App.tsx`/`main.tsx` の配線。critic 1回目 FAIL で重大バグ発見(`apiBaseUrl()` の既定値 `"/"` で
+`new URL(path, baseUrl)` が例外を投げ、オンラインモードが常に失敗していた)→ 修正・回帰テスト追加 → 2回目 critic PASS。
+既存のオフライン・全画面・既存752件のテストは無変更。技の ID→実体化(`getSpecies.learnset`)は公開 API に手段が無く、
+データ/API レーンへ既定案付きで提案済み(DECISIONS.md 2026-09-23、未回答・急ぎではない)。
+Next: (1) P4-16b(画面側。ADR-0304 A-5): 種族の検索コンボボックス、技選択・持ち物候補比較・特性一覧が使えないときの
+無効化と案内表示(`web/src/screens/*.tsx` が対象。plan.md に軽微な積み残し4件も記録済み)。
+(2) P4-18(Codexレビュー issue。タイプバランスレーンから連絡): 優先 #99(アクセシビリティ)・#113(debounce/cancel)。
+(3) 続いて P5-5(構築ビルダー等)は record/team の API 待ち。
+(4) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
