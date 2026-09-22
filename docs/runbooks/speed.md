@@ -25,12 +25,27 @@ SPEED_URL=http://localhost:8080 make speed-smoke
 データレーンの pokedex export(`make pokedex-export`。`POKEDEX_DATABASE_DSN` が必要)で
 `data/generated/readmodel/speed-pokemon.json` ができてから実行する。DB を用意する手順は [`data.md`](data.md) を見る。
 
+`mysql` Service はクラスタ内部の DNS 名で、`make pokedex-export` は Mac 上で動くため直接は解決できない。
+ポートフォワードして DSN のホストを付け替えてから実行する(2026-09-24 実機確認済み)。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc port-forward svc/mysql 3306:3306 >/tmp/mysql-pf.log 2>&1 &
+PF_PID=$!
+sleep 2
+export POKEDEX_DATABASE_DSN=$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.pokedex-dsn}' | base64 -d | sed 's/@tcp(mysql:/@tcp(127.0.0.1:/')
+make pokedex-export
+kill $PF_PID
+```
+確認: `export: ../data/generated/readmodel に書いた`。
+
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 make speed-k3d-deploy-readmodel
 SPEED_URL=http://localhost:8080 make speed-smoke-readmodel
 ```
-確認: 最後の行が `speed readmodel smoke: pokemon=<ID> list=200 table=200`。
+確認: 最後の行が `speed readmodel smoke: pokemon=<ID> list=200 table=200`
+(1回目がロールアウト直後で `504 Gateway Timeout` になったら、`SPEED_URL=http://localhost:8080 make speed-smoke-readmodel` をもう一度)。
 ファイルが無い・不正なときは `missing ...` や `read model check failed` で止まり、デプロイされない(ADR-0603 §3)。
 
 架空データに戻すときは 2 をもう一度実行する(あとから適用したほうが k3d の speed の中身になる)。

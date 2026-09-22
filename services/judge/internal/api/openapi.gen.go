@@ -152,8 +152,9 @@ type Error struct {
 // internal_error: 想定外の内部エラー(message は固定文言で、内部の詳細を返さない)。
 type ErrorCode string
 
-// FieldState 場の状態。judge は解釈せず calc-svc の field にそのまま転送する(省略時は送らない)。
+// FieldState ダメージに効く場の状態。judge は解釈せず calc-svc の field にそのまま転送する(省略時は送らない)。
 // 意味の正はルートの api/openapi.yaml の FieldState。
+// 素早さにしか効かないトリックルーム・追い風はここに入れない(speedField。ADR-0702 §1)。
 type FieldState struct {
 	AttackerScreens *Screens `json:"attackerScreens,omitempty"`
 	DefenderScreens *Screens `json:"defenderScreens,omitempty"`
@@ -222,8 +223,9 @@ type OutspeedAndKoRequest struct {
 	// Defender 相手の個体。
 	Defender Individual `json:"defender"`
 
-	// Field 場の状態。judge は解釈せず calc-svc の field にそのまま転送する(省略時は送らない)。
+	// Field ダメージに効く場の状態。judge は解釈せず calc-svc の field にそのまま転送する(省略時は送らない)。
 	// 意味の正はルートの api/openapi.yaml の FieldState。
+	// 素早さにしか効かないトリックルーム・追い風はここに入れない(speedField。ADR-0702 §1)。
 	Field *FieldState `json:"field,omitempty"`
 
 	// Format 対戦形式。calc-svc にそのまま渡す。
@@ -231,14 +233,22 @@ type OutspeedAndKoRequest struct {
 
 	// MoveId 自分が使う技(1 つ)。
 	MoveId string `json:"moveId"`
+
+	// SpeedField 素早さの判定にだけ効く場の効果(ADR-0702 §1)。judge が自分で解釈し、calc-svc には送らない。
+	// トリックルーム・追い風はダメージに関与せず、calc-svc は場の効果として weather / terrain /
+	// screens しか理解しないため、calc-svc へ転送する field とは別の欄にする。
+	// speedField 自体を省略した場合も、個々の欄を省略した場合も、すべて false(場の効果なし)
+	// として扱う。したがって speedField を送らない request の挙動は JD1 と同じになる。
+	SpeedField *SpeedField `json:"speedField,omitempty"`
 }
 
 // OutspeedAndKoResponse defines model for OutspeedAndKoResponse.
 type OutspeedAndKoResponse struct {
-	// AttackerSpeed 自分の戦闘中の素早さ(ランク・こだわりスカーフ適用後)。
+	// AttackerSpeed 自分の戦闘中の素早さ(ランク・追い風・こだわりスカーフ適用後)。
+	// トリックルームは実数値を変えないので、この値には現れない(ADR-0702 §2)。
 	AttackerSpeed int `json:"attackerSpeed"`
 
-	// DefenderSpeed 相手の戦闘中の素早さ(ランク・こだわりスカーフ適用後)。
+	// DefenderSpeed 相手の戦闘中の素早さ(ランク・追い風・こだわりスカーフ適用後)。
 	DefenderSpeed int `json:"defenderSpeed"`
 
 	// Ko 確定数 / 乱数 n 発。calc-svc の KOChance をそのまま転記する(judge は再計算しない)。
@@ -246,11 +256,14 @@ type OutspeedAndKoResponse struct {
 	// engine の生値 chancePercent は画面に出す値ではないので judge は返さない。
 	Ko KOChance `json:"ko"`
 
-	// Outspeeds 自分の戦闘中の素早さが相手より厳密に大きいか。同速は false で、speedTie が true になる
-	// (真偽値 1 つに丸めない。ADR-0700 §6-1)。
+	// Outspeeds 自分が相手より先に動くか(ADR-0700 §6-1・ADR-0702 §3)。トリックルームが無ければ
+	// attackerSpeed > defenderSpeed、speedField.trickRoom が true なら
+	// attackerSpeed < defenderSpeed。同速は false で、speedTie が true になる
+	// (真偽値 1 つに丸めない)。
 	Outspeeds bool `json:"outspeeds"`
 
 	// SpeedTie 双方の戦闘中の素早さが等しいか。outspeeds と同時に true にはならない。
+	// 同速はトリックルームの有無に関わらず行動順が決まらないため、trickRoom では反転しない。
 	SpeedTie bool `json:"speedTie"`
 }
 
@@ -275,6 +288,26 @@ type Screens struct {
 //
 // Example: 0445-000
 type SpeciesKey = string
+
+// SpeedField 素早さの判定にだけ効く場の効果(ADR-0702 §1)。judge が自分で解釈し、calc-svc には送らない。
+// トリックルーム・追い風はダメージに関与せず、calc-svc は場の効果として weather / terrain /
+// screens しか理解しないため、calc-svc へ転送する field とは別の欄にする。
+// speedField 自体を省略した場合も、個々の欄を省略した場合も、すべて false(場の効果なし)
+// として扱う。したがって speedField を送らない request の挙動は JD1 と同じになる。
+type SpeedField struct {
+	// AttackerTailwind 自分の側に追い風がかかっているか。追い風は実数値そのものを ×2 する(ADR-0702 §2)ため、
+	// attackerSpeed にも反映される。
+	AttackerTailwind *bool `json:"attackerTailwind,omitempty"`
+
+	// DefenderTailwind 相手の側に追い風がかかっているか。相手の戦闘中の素早さを ×2 する。
+	DefenderTailwind *bool `json:"defenderTailwind,omitempty"`
+
+	// TrickRoom トリックルームがかかっているか。トリックルームは素早さの実数値そのものを変えないため、
+	// attackerSpeed / defenderSpeed は変わらない。変わるのは outspeeds(どちらが先に動くか)の
+	// 比較の向きだけで、true のときは「遅い方が先に動く」= attackerSpeed < defenderSpeed に
+	// なる(ADR-0702 §3)。speedTie(同速)は反転しない。
+	TrickRoom *bool `json:"trickRoom,omitempty"`
+}
 
 // StatBlock 6 ステータスの値。judge では Individual.sp(能力ポイント。各 0..32・合計 <= 66)に使う。
 // 意味の正はルートの api/openapi.yaml の StatBlock。

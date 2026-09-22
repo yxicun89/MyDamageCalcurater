@@ -132,7 +132,8 @@
   #113(improvement)逆算の数値入力で古い計算要求を抑止・キャンセル(200ms debounce・AbortSignal。iOS・API と連携)。
   次点: #98(bug)モバイル幅で計算・逆算画面が横に溢れる、#67(bug)2xx の契約外 JSON で API クライアントが例外を投げる(防御的処理)。
   連携(他レーン主担当。Web は連携のみ): #71(データ+Web+iOS 攻撃側プリセット単一化)・#72(API+Web ルート make e2e を Playwright へ)・
-  #78(API+Web 特性の無効・吸収の境界反映)・#110(主担当 API。calc 候補配列の上限)。#103 は needs-decision でユーザー決定待ち、着手しない
+  #78(API+Web 特性の無効・吸収の境界反映)・#110(主担当 API。calc 候補配列の上限)・#103(主担当 API・データ。M2保存データの
+  保持期間。ユーザー決定 2026-09-23 で needs-decision は解消済み。DECISIONS.md参照。Web は連携のみで主担当ではない)
 
 ## M2: 保存・構築
 - [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)
@@ -140,6 +141,7 @@
 - [ ] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰)
 - [ ] P5-4 team-svc(構築 CRUD、Showdown 形式入出力)
 - [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー
+- [~] P5-6 技の追加効果(使用者自身のランク変化。例: ニトロチャージで自分の素早さ+1)を engine の Move・マスタ・importer・export に足す(判定レーンからの提案。DECISIONS.md 2026-09-22。ADR-0005 に沿い、追加効果の対象=self/target・確率・ランク変化量をデータとして持つ)。優先度は低く、判定レーンの JD1 は今のデータのままで動く(呼び出し側が Individual.ranks で指定)ため、着手は他の M1 残作業の後でよい
 
 ## M3: iOS
 - [x] P6-1 Xcode プロジェクト、swift-openapi-generator、デザイントークン(ADR-0500。`make ios-test` = 生成物の一致・XCTest・XCUITest・Info.plist の接続先。critic PASS)
@@ -182,7 +184,9 @@
 - [x] SP1 素早さの表(ADR-0601。critic PASS。6行の生成・速い順の並び・同速の扱い・絞り込みの API)
 - [x] SP2 自分のポケモンの位置(ADR-0602。critic PASS。preset/custom/raw の3モード・faster/slower/tie・POST /api/speed/v1/position)
 - [x] SP3 Web の素早さ画面(ADR-0604。critic PASS。左右の配置・自分の位置の強調・表の絞り込み。`web/src/speed/`)
-- [~] SP4 pokedex の read model(データレーン P2-3)への切り替えと k3d の疎通(ADR-0603。配線は実装・fixture データで疎通確認済み。実データでの最終確認は critic 後)
+- [x] SP4 pokedex の read model(データレーン P2-3)への切り替えと k3d の疎通(ADR-0603。critic PASS。2026-09-24 ユーザーが実データで確認:
+  `make pokedex-export`(348 pokemon)→ `make speed-k3d-deploy-readmodel` → `make speed-smoke-readmodel` が
+  `speed readmodel smoke: pokemon=0003-000 list=200 table=200` で成功)
 - [x] SP5 GitOps(ADR-0605。critic PASS。digest 固定の overlay・Argo CD Application・balance-registry と Argo CD を共有。
   `speed-gitops-template-check` まで実行して確認済み。クラスタへの実際の適用〈speed-argocd-app・registry-push・sync〉は
   人間の確認のもとで別途。手順は docs/runbooks/speed.md の節5〜10)
@@ -191,7 +195,13 @@
 「ニトチャ+メイン技で素早さ抜ける+そのポケモンを倒せるか」を1回の入力で確認する。engine を直接呼び、pokedex-svc と calc-svc の公開 API だけに依存する(speed-svc には依存しない)。
 - [x] JD0 基盤(ディレクトリ構成・pokedex-svc/calc-svc への HTTP クライアント・ヘルスチェック)。受け入れ条件と契約は ADR-0700(docs/judge-design.md §4 の未決事項はここで全部決めた)。critic PASS(3回目。1・2回目 NG は上流エラー文面への URL/host:port/ホスト名の漏洩を修正)
 - [x] JD1 抜けるか+倒せるかの最小構成(自分と相手の Individual・使う技 → outspeeds・speedTie・ko)。endpoint(POST /api/judge/v1/outspeed-and-ko)を services/judge/api/openapi.yaml に追加(ADR-0701)。critic PASS(2回目。1回目 NG は上流エラーのログ未記録・pokedex 400の扱いがADR未記載・defender側スカーフ/種族差の未検証を修正)
-- [ ] JD2 以降(複数の相手候補・場の効果・画面)は JD1 完了後にユーザーへ確認して確定する
+- [x] JD2〜JD5 の範囲・順序をユーザーに確認(2026-09-22)。4項目すべて対象(複数の相手候補・相手の技を含めた返り討ち・場の効果・Web/iOS 画面)、
+  技の追加効果の自動反映は対象外のまま。順序は docs/judge-design.md §3(JD2 場の効果 → JD3 複数の相手候補 → JD4 返り討ち判定 → JD5 画面)
+- [x] JD2 場の効果(トリックルーム・追い風)。judge だけが解釈する `speedField` を outspeed-and-ko に追加(ADR-0702)。
+  丸め方(4096基準で連結してから1回だけ五捨五超入)は @smogon/calc 0.12.0 の実装を読んで確認・独立検算した。critic PASS(1回目)
+- [ ] JD3 複数の相手候補を一度に判定(攻撃側1つ・相手候補の配列 → 候補ごとの判定結果の配列)
+- [ ] JD4 相手の技を含めた返り討ち判定。技の優先度を pokedex-svc から引く endpoint が無いため、まず API レーンへ依頼を出す(DECISIONS.md に既定案)
+- [ ] JD5 Web/iOS の画面(judge-svc を呼ぶ。担当は着手時に判断)
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
 各レーンが自分の範囲の README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)と、動かして確かめられるレーンは手順書(`docs/runbooks/<レーン>.md`。AGENTS.md「手順書の書き方」に従う)を書く。全体図は `docs/architecture.md`。
