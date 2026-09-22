@@ -22,6 +22,10 @@ const (
 // (ADR-0701 §2。services/speed/internal/speed/speed.go と同一の出典・式)。
 const scarfSpeedModifier = 6144
 
+// tailwindSpeedModifier は追い風の素早さ補正(×2)を engine.Modifier4096 基準で表した値
+// (ADR-0702 §2。出典は @smogon/calc 0.12.0 の dist/mechanics/util.js の getFinalSpeed)。
+const tailwindSpeedModifier = 8192
+
 // DefaultChoiceScarfItemID は pokedex-svc の持ち物 ID の命名規則(Showdown ID。小文字英数のみ)
 // に沿った既定値(ADR-0701 §3)。cmd/api が環境変数で上書きできる。
 const DefaultChoiceScarfItemID = "choicescarf"
@@ -44,6 +48,17 @@ type Individual struct {
 	SP        engine.Stats
 	Ranks     engine.Ranks
 	Scarf     bool
+	// Tailwind は追い風がこの個体の側にかかっているか(ADR-0702 §4)。Scarf と同じ「その個体の
+	// 素早さに乗る補正」なので、CompareSpeed の引数ではなく Individual に置く。
+	Tailwind bool
+}
+
+// SpeedField は CompareSpeed の第3引数で、比較そのものに効く場の効果を表す(ADR-0702 §4)。
+// 追い風は片側の値を変えるだけなので Individual.Tailwind に置き、ここには持たせない。
+type SpeedField struct {
+	// TrickRoom はトリックルームがかかっているか。実数値は変えず、outspeeds の向きだけを
+	// 反転する(ADR-0702 §3)。
+	TrickRoom bool
 }
 
 // SpeedComparison は attacker/defender の戦闘中の素早さの比較結果(ADR-0700 §6-1)。
@@ -54,9 +69,10 @@ type SpeedComparison struct {
 	SpeedTie      bool
 }
 
-// Speed は 実数値(engine.RealStats)→ ランク補正(engine.EffectiveStat)→ こだわりスカーフ
-// (×6144/4096・五捨五超入)の順で戦闘中の素早さを求める(ADR-0701 §2)。judge は式を複製せず、
-// engine に無いこだわりスカーフの補正だけを自分で持つ。入力が範囲外なら sentinel エラーを返す。
+// Speed は 実数値(engine.RealStats)→ ランク補正(engine.EffectiveStat)→ 素早さ補正(追い風・
+// こだわりスカーフ)の順で戦闘中の素早さを求める(ADR-0701 §2・ADR-0702 §2)。効いている補正は
+// 4096 基準で 1 つに連結してから 1 回だけ五捨五超入する(各補正ごとに丸めない)。judge は式を
+// 複製せず、engine に無い素早さ補正だけを自分で持つ。入力が範囲外なら sentinel エラーを返す。
 func Speed(in Individual) (int, error) {
 	if in.BaseSpeed < minBaseSpeed || in.BaseSpeed > maxBaseSpeed {
 		return 0, ErrInvalidBaseSpeed
@@ -75,17 +91,40 @@ func Speed(in Individual) (int, error) {
 		Ranks:   in.Ranks,
 	}
 	v := engine.EffectiveStat(individual, engine.StatSpe)
+
+	// 配列に積む順は追い風が先、こだわりスカーフが後(ADR-0702 §2 の出典どおり)。
+	var mods []int
+	if in.Tailwind {
+		mods = append(mods, tailwindSpeedModifier)
+	}
 	if in.Scarf {
-		v = applyChoiceScarf(v)
+		mods = append(mods, scarfSpeedModifier)
+	}
+	if len(mods) > 0 {
+		v = applySpeedModifiers(v, mods)
 	}
 	return v, nil
 }
 
-// applyChoiceScarf はランク適用後の実数値にこだわりスカーフの補正を五捨五超入で掛ける
-// (floor((v × scarfSpeedModifier + engine.Modifier4096/2 − 1) / engine.Modifier4096)。
-// ADR-0701 §2・services/speed/internal/speed/speed.go の applyScarf と同一の式)。
-func applyChoiceScarf(v int) int {
-	return (v*scarfSpeedModifier + engine.Modifier4096/2 - 1) / engine.Modifier4096
+// chainSpeedModifiers merges speed modifiers (each expressed in engine.Modifier4096 units) into
+// a single modifier, replicating @smogon/calc 0.12.0's chainMods: each step rounds up
+// (ADR-0702 §2. `M = (M*mod + engine.Modifier4096/2) / engine.Modifier4096`, starting from the
+// identity modifier engine.Modifier4096). mods must be in the order @smogon/calc pushes them
+// (tailwind before item).
+func chainSpeedModifiers(mods []int) int {
+	m := engine.Modifier4096
+	for _, mod := range mods {
+		m = (m*mod + engine.Modifier4096/2) / engine.Modifier4096
+	}
+	return m
+}
+
+// applySpeedModifiers はランク適用後の実数値に、連結済みの素早さ補正を五捨五超入で 1 回だけ掛ける
+// (floor((v × M + engine.Modifier4096/2 − 1) / engine.Modifier4096)。ADR-0701 §2・ADR-0702 §2。
+// 丸めの向きが chainSpeedModifiers の 1 ステップと違うのは @smogon/calc の原典どおり)。
+func applySpeedModifiers(v int, mods []int) int {
+	m := chainSpeedModifiers(mods)
+	return (v*m + engine.Modifier4096/2 - 1) / engine.Modifier4096
 }
 
 // validateSP は SP の各ステータスが 0..MaxSPPerStat、合計が MaxSPTotal 以下であることを確かめる
@@ -113,10 +152,11 @@ func validateRanks(ranks engine.Ranks) error {
 	return nil
 }
 
-// CompareSpeed は attacker と defender の戦闘中の素早さを求めて比較する。outspeeds は厳密な
-// >、speedTie は ==(ADR-0700 §6-1。同速を真偽値 1 つに丸めない)。どちらかが範囲外ならその
-// sentinel エラーを返す。
-func CompareSpeed(attacker, defender Individual) (SpeedComparison, error) {
+// CompareSpeed は attacker と defender の戦闘中の素早さを求めて比較する。outspeeds は
+// トリックルームが無ければ厳密な >、あれば < に反転する(ADR-0702 §3)。speedTie は常に ==
+// (ADR-0700 §6-1。同速を真偽値 1 つに丸めない。トリックルームでも反転しない)。どちらかが
+// 範囲外ならその sentinel エラーを返す。
+func CompareSpeed(attacker, defender Individual, field SpeedField) (SpeedComparison, error) {
 	attackerSpeed, err := Speed(attacker)
 	if err != nil {
 		return SpeedComparison{}, err
@@ -125,10 +165,14 @@ func CompareSpeed(attacker, defender Individual) (SpeedComparison, error) {
 	if err != nil {
 		return SpeedComparison{}, err
 	}
+	outspeeds := attackerSpeed > defenderSpeed
+	if field.TrickRoom {
+		outspeeds = attackerSpeed < defenderSpeed
+	}
 	return SpeedComparison{
 		AttackerSpeed: attackerSpeed,
 		DefenderSpeed: defenderSpeed,
-		Outspeeds:     attackerSpeed > defenderSpeed,
+		Outspeeds:     outspeeds,
 		SpeedTie:      attackerSpeed == defenderSpeed,
 	}, nil
 }

@@ -220,7 +220,9 @@ func TestCompareSpeed(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := CompareSpeed(tt.attacker, tt.defender)
+			// JD2 で CompareSpeed に場の効果の引数が増えた(ADR-0702 §4)。SpeedField{} は
+			// 「場の効果なし」= JD1 と同じ条件なので、上の表の期待値は 1 つも変えていない。
+			got, err := CompareSpeed(tt.attacker, tt.defender, SpeedField{})
 			if err != nil {
 				t.Fatalf("CompareSpeed: %v", err)
 			}
@@ -248,7 +250,7 @@ func TestCompareSpeedRejectsOutOfRangeInput(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			if _, err := CompareSpeed(sides[0], sides[1]); !errors.Is(err, ErrInvalidSP) {
+			if _, err := CompareSpeed(sides[0], sides[1], SpeedField{}); !errors.Is(err, ErrInvalidSP) {
 				t.Errorf("err = %v, want ErrInvalidSP", err)
 			}
 		})
@@ -300,5 +302,334 @@ func TestDefaultChoiceScarfItemIDFollowsMasterConvention(t *testing.T) {
 		if (r < 'a' || r > 'z') && (r < '0' || r > '9') {
 			t.Errorf("DefaultChoiceScarfItemID = %q に小文字英数以外の文字 %q がある", DefaultChoiceScarfItemID, r)
 		}
+	}
+}
+
+// --- JD2: 場の効果(トリックルーム・追い風)。ADR-0702 ---
+
+// TestSpeedTailwind: 追い風は対象側の実数値そのものを ×2 する(ADR-0702 §2・受け入れ条件2)。
+// トリックルームと違い、これは値が変わるので Speed() の段で効く。
+func TestSpeedTailwind(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   Individual
+		want int
+	}{
+		{
+			// 120 × 2 = 240
+			"無振り・無補正 + 追い風",
+			Individual{BaseSpeed: 100, Nature: engine.NatureNeutral, Tailwind: true},
+			240,
+		},
+		{
+			// (100 + 20 + 32) × 1.1 = 167 → × 2 = 334
+			"最速 + 追い風",
+			Individual{BaseSpeed: 100, Nature: naturePlusSpe, SP: engine.Stats{Spe: 32}, Tailwind: true},
+			334,
+		},
+		{
+			// ランクが先、追い風が後: 120 × 3/2 = 180 → × 2 = 360
+			"ランク +1 + 追い風",
+			Individual{BaseSpeed: 100, Nature: engine.NatureNeutral, Ranks: engine.Ranks{Spe: 1}, Tailwind: true},
+			360,
+		},
+		{
+			// 120 × 2/3 = 80 → × 2 = 160
+			"ランク -1 + 追い風",
+			Individual{BaseSpeed: 100, Nature: engine.NatureNeutral, Ranks: engine.Ranks{Spe: -1}, Tailwind: true},
+			160,
+		},
+		{
+			// 71 + 20 + 0 = 91 → × 2 = 182(×2 は整数を保つので丸めは起きない)
+			"奇数の実数値 + 追い風",
+			Individual{BaseSpeed: 71, Nature: engine.NatureNeutral, Tailwind: true},
+			182,
+		},
+		{
+			// 追い風なしは JD1 から変わらない(後方互換。ADR-0702 受け入れ条件5)。
+			"追い風なしは JD1 と同じ",
+			Individual{BaseSpeed: 100, Nature: engine.NatureNeutral},
+			120,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := Speed(tt.in)
+			if err != nil {
+				t.Fatalf("Speed(%+v): %v", tt.in, err)
+			}
+			if got != tt.want {
+				t.Errorf("Speed(%+v) = %d, want %d", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSpeedTailwindAndChoiceScarfChainBeforeRounding: 素早さ補正は 4096 基準で 1 つに連結してから
+// **1 回だけ**五捨五超入する(ADR-0702 §2・受け入れ条件3)。出典は @smogon/calc 0.12.0(ADR-0002 が
+// 固定した版)の dist/mechanics/util.js の getFinalSpeed: 追い風 8192 と こだわりスカーフ 6144 を
+// speedMods に積み、chainMods でまとめてから pokeRound を 1 回掛ける。
+//
+// 連結後の補正は chainMods([8192, 6144]) = 12288 = ちょうど ×3 になる。
+// 各補正ごとに丸める実装(スカーフで丸めてから ×2)は、実数値が奇数のときに 1 ずれる。
+func TestSpeedTailwindAndChoiceScarfChainBeforeRounding(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   Individual
+		want int
+		// naive は「スカーフを先に五捨五超入してから追い風で ×2」した場合の誤った値。
+		// want と違うことを明示して、丸めの向き・回数が実装から落ちたら気づけるようにする。
+		naive int
+	}{
+		{
+			// 71 + 20 + 0 = 91(奇数)。91 × 3 = 273。
+			// スカーフ先: 91 × 1.5 = 136.5 → 五捨五超入で 136 → × 2 = 272(ずれる)。
+			"実数値 91 + スカーフ + 追い風",
+			Individual{BaseSpeed: 71, Nature: engine.NatureNeutral, Scarf: true, Tailwind: true},
+			273, 272,
+		},
+		{
+			// 73 + 20 + 0 = 93(奇数)。93 × 3 = 279。スカーフ先だと 139 × 2 = 278。
+			"実数値 93 + スカーフ + 追い風",
+			Individual{BaseSpeed: 73, Nature: engine.NatureNeutral, Scarf: true, Tailwind: true},
+			279, 278,
+		},
+		{
+			// (100 + 20 + 32) × 1.1 = 167(奇数)。167 × 3 = 501。
+			// スカーフ先: 167 × 1.5 = 250.5 → 250 → × 2 = 500。
+			"実数値 167 + スカーフ + 追い風",
+			Individual{BaseSpeed: 100, Nature: naturePlusSpe, SP: engine.Stats{Spe: 32}, Scarf: true, Tailwind: true},
+			501, 500,
+		},
+		{
+			// 実数値が偶数なら連結でも逐次でも同じ(120 × 3 = 360)。
+			// 「奇数のときだけずれる」ことを示すための対照。
+			"実数値 120 + スカーフ + 追い風(偶数なので差は出ない)",
+			Individual{BaseSpeed: 100, Nature: engine.NatureNeutral, Scarf: true, Tailwind: true},
+			360, 360,
+		},
+		{
+			// ランク → 補正の連結 の順は変わらない。120 × 3/2 = 180 → × 3 = 540。
+			"ランク +1 + スカーフ + 追い風",
+			Individual{
+				BaseSpeed: 100, Nature: engine.NatureNeutral,
+				Ranks: engine.Ranks{Spe: 1}, Scarf: true, Tailwind: true,
+			},
+			540, 540,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := Speed(tt.in)
+			if err != nil {
+				t.Fatalf("Speed(%+v): %v", tt.in, err)
+			}
+			if got != tt.want {
+				t.Errorf("Speed(%+v) = %d, want %d", tt.in, got, tt.want)
+			}
+			if tt.naive != tt.want && got == tt.naive {
+				t.Errorf("Speed(%+v) = %d は補正ごとに丸めた値。連結してから 1 回だけ五捨五超入する(ADR-0702 §2)",
+					tt.in, got)
+			}
+		})
+	}
+}
+
+// TestSpeedSingleModifiersUnchangedFromJD1: 補正が 1 つだけのときの値は JD1 から変わらない
+// (ADR-0702 受け入れ条件3)。連結の導入でスカーフ単独の丸めが動いていないことを固定する。
+func TestSpeedSingleModifiersUnchangedFromJD1(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   Individual
+		want int
+	}{
+		// 91 × 1.5 = 136.5 → 五捨五超入で 136(ADR-0701「テストの期待値」と同じ値)。
+		{"スカーフ単独(.5 は切り捨て)", Individual{BaseSpeed: 71, Nature: engine.NatureNeutral, Scarf: true}, 136},
+		{"スカーフ単独(別の .5)", Individual{BaseSpeed: 73, Nature: engine.NatureNeutral, Scarf: true}, 139},
+		{
+			"スカーフ単独(167 → 250.5 → 250)",
+			Individual{BaseSpeed: 100, Nature: naturePlusSpe, SP: engine.Stats{Spe: 32}, Scarf: true},
+			250,
+		},
+		// 追い風単独は ×2 ちょうどなので丸めが起きない。
+		{"追い風単独", Individual{BaseSpeed: 71, Nature: engine.NatureNeutral, Tailwind: true}, 182},
+		{"補正なし", Individual{BaseSpeed: 71, Nature: engine.NatureNeutral}, 91},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := Speed(tt.in)
+			if err != nil {
+				t.Fatalf("Speed(%+v): %v", tt.in, err)
+			}
+			if got != tt.want {
+				t.Errorf("Speed(%+v) = %d, want %d", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCompareSpeedTrickRoom: トリックルームは実数値を変えず、outspeeds(= 自分が先に動くか)の
+// 比較の向きだけを反転する(ADR-0702 §3・受け入れ条件4)。speedTie は反転しない。
+func TestCompareSpeedTrickRoom(t *testing.T) {
+	t.Parallel()
+
+	var (
+		fast    = Individual{BaseSpeed: 100, Nature: naturePlusSpe, SP: engine.Stats{Spe: 32}} // 167
+		neutral = Individual{BaseSpeed: 100, Nature: engine.NatureNeutral}                     // 120
+	)
+
+	tests := []struct {
+		name               string
+		attacker, defender Individual
+		field              SpeedField
+		want               SpeedComparison
+	}{
+		{
+			"トリックルーム無し: 速い方が先に動く",
+			fast, neutral, SpeedField{},
+			SpeedComparison{AttackerSpeed: 167, DefenderSpeed: 120, Outspeeds: true, SpeedTie: false},
+		},
+		{
+			// 実数値は変わらない。反転するのは outspeeds だけ。
+			"トリックルーム中: 速い方が後になる",
+			fast, neutral, SpeedField{TrickRoom: true},
+			SpeedComparison{AttackerSpeed: 167, DefenderSpeed: 120, Outspeeds: false, SpeedTie: false},
+		},
+		{
+			"トリックルーム無し: 遅いと抜けない",
+			neutral, fast, SpeedField{},
+			SpeedComparison{AttackerSpeed: 120, DefenderSpeed: 167, Outspeeds: false, SpeedTie: false},
+		},
+		{
+			"トリックルーム中: 遅い方が先に動く",
+			neutral, fast, SpeedField{TrickRoom: true},
+			SpeedComparison{AttackerSpeed: 120, DefenderSpeed: 167, Outspeeds: true, SpeedTie: false},
+		},
+		{
+			"同速はトリックルーム無しでも outspeeds=false・speedTie=true",
+			neutral, neutral, SpeedField{},
+			SpeedComparison{AttackerSpeed: 120, DefenderSpeed: 120, Outspeeds: false, SpeedTie: true},
+		},
+		{
+			// 同速はゲームでもトリックルームの有無に関わらず行動順が決まらない(ADR-0702 §3)。
+			"同速はトリックルーム中でも反転しない",
+			neutral, neutral, SpeedField{TrickRoom: true},
+			SpeedComparison{AttackerSpeed: 120, DefenderSpeed: 120, Outspeeds: false, SpeedTie: true},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := CompareSpeed(tt.attacker, tt.defender, tt.field)
+			if err != nil {
+				t.Fatalf("CompareSpeed: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("CompareSpeed(field=%+v) = %+v, want %+v", tt.field, got, tt.want)
+			}
+			if got.Outspeeds && got.SpeedTie {
+				t.Error("outspeeds と speedTie が同時に true になっている")
+			}
+		})
+	}
+}
+
+// TestCompareSpeedTailwindPerSide: 追い風は指定した側だけに乗る(ADR-0702 受け入れ条件2)。
+// 片側だけ ×2 になることと、トリックルームと組み合わせても向きの反転だけが効くことを見る。
+func TestCompareSpeedTailwindPerSide(t *testing.T) {
+	t.Parallel()
+
+	var (
+		fast    = Individual{BaseSpeed: 100, Nature: naturePlusSpe, SP: engine.Stats{Spe: 32}} // 167
+		neutral = Individual{BaseSpeed: 100, Nature: engine.NatureNeutral}                     // 120
+	)
+	withTailwind := func(in Individual) Individual {
+		in.Tailwind = true
+		return in
+	}
+
+	tests := []struct {
+		name               string
+		attacker, defender Individual
+		field              SpeedField
+		want               SpeedComparison
+	}{
+		{
+			// 120 × 2 = 240 > 167
+			"自分だけ追い風で抜ける",
+			withTailwind(neutral), fast, SpeedField{},
+			SpeedComparison{AttackerSpeed: 240, DefenderSpeed: 167, Outspeeds: true, SpeedTie: false},
+		},
+		{
+			// 相手だけ ×2: 167 × 2 = 334
+			"相手だけ追い風で抜き返される",
+			neutral, withTailwind(fast), SpeedField{},
+			SpeedComparison{AttackerSpeed: 120, DefenderSpeed: 334, Outspeeds: false, SpeedTie: false},
+		},
+		{
+			// 両方 ×2 なら大小関係は変わらない(240 < 334)。
+			"両方追い風なら関係は変わらない",
+			withTailwind(neutral), withTailwind(fast), SpeedField{},
+			SpeedComparison{AttackerSpeed: 240, DefenderSpeed: 334, Outspeeds: false, SpeedTie: false},
+		},
+		{
+			// 追い風で同速になることもある(120 × 2 = 240 = 240)。
+			"追い風で同速になる",
+			withTailwind(neutral), Individual{BaseSpeed: 220, Nature: engine.NatureNeutral}, SpeedField{},
+			SpeedComparison{AttackerSpeed: 240, DefenderSpeed: 240, Outspeeds: false, SpeedTie: true},
+		},
+		{
+			// 追い風で上回った側が、トリックルーム中は後攻になる。
+			"追い風 + トリックルーム",
+			withTailwind(neutral), fast, SpeedField{TrickRoom: true},
+			SpeedComparison{AttackerSpeed: 240, DefenderSpeed: 167, Outspeeds: false, SpeedTie: false},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := CompareSpeed(tt.attacker, tt.defender, tt.field)
+			if err != nil {
+				t.Fatalf("CompareSpeed: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("CompareSpeed(field=%+v) = %+v, want %+v", tt.field, got, tt.want)
+			}
+			if got.Outspeeds && got.SpeedTie {
+				t.Error("outspeeds と speedTie が同時に true になっている")
+			}
+		})
+	}
+}
+
+// TestCompareSpeedZeroSpeedFieldMatchesJD1: SpeedField のゼロ値は「場の効果なし」で、JD1 の
+// 挙動と完全に一致する(ADR-0702 受け入れ条件5 の後方互換をコアの側で固定する)。
+func TestCompareSpeedZeroSpeedFieldMatchesJD1(t *testing.T) {
+	t.Parallel()
+
+	attacker := Individual{BaseSpeed: 100, Nature: naturePlusSpe, SP: engine.Stats{Spe: 32}}
+	defender := Individual{BaseSpeed: 100, Nature: engine.NatureNeutral}
+
+	got, err := CompareSpeed(attacker, defender, SpeedField{})
+	if err != nil {
+		t.Fatalf("CompareSpeed: %v", err)
+	}
+	want := SpeedComparison{AttackerSpeed: 167, DefenderSpeed: 120, Outspeeds: true, SpeedTie: false}
+	if got != want {
+		t.Errorf("CompareSpeed(SpeedField{}) = %+v, want %+v(JD1 と同じ)", got, want)
 	}
 }

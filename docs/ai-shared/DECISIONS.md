@@ -814,13 +814,72 @@ gateway の README には「環境変数」「ルーティング」の2節も残
 Reason: critic 指摘(coding-rules §7「規約から外れるときは理由を書く」)。
 Impact: 今後 gateway の README を §8 の5節だけに削る場合は、まず上記2テストの検査方法(README の文言ではなく実装から生成する等)を変える必要がある。
 
+## 2026-09-22: 判定 JD1(outspeed-and-ko)を PR #118 で main に統合
+Decision: ADR-0701(`POST /api/judge/v1/outspeed-and-ko`。素早さの求め方・こだわりスカーフ・性格解決・上流呼び出し順序・エラー対応表)を PR #118 で main に統合した。critic は2回目で PASS(1回目 NG 重要3件: 上流エラーのログ未記録・pokedex 400 の扱いが ADR 未記載・defender 側スカーフ/種族差の未検証。いずれも修正し、期待値は実行結果で検算済み)。
+Reason: `make test`・`make lint`・`make build`(ルート)が緑、critic PASS、他レーンの範囲外変更なし(COORDINATION.md の共有ファイル規約の範囲内)を確認してマージした。
+Impact: 判定レーンのブランチを `feat/judge-jd2` に切り替えた(JD1 の `feat/judge-jd1` は削除)。JD2(複数の相手候補・場の効果・画面)は plan.md の方針どおり、着手前にユーザーへ確認する。
+
+## 2026-09-22: JD2〜JD5 の範囲・順序をユーザーが確定。API レーンへの依頼(既定案付き。判定レーン)
+Decision: ユーザーが「複数の相手候補・相手の技を含めた返り討ち判定・場の効果(トリックルーム等)・Web/iOS の画面」の4項目すべてを対象と回答した(技の追加効果によるランク変化の自動反映は対象外のまま)。
+判定レーンは技術的な依存関係から順序を JD2(場の効果)→ JD3(複数の相手候補)→ JD4(返り討ち判定)→ JD5(画面)に決めた(docs/judge-design.md §3)。
+**API レーンへの依頼(既定案。今回は提案の記録のみで、api/openapi.yaml は変更していない)**: JD4(相手の技を含めた返り討ち判定)には技の優先度(`priority`)が要るが、
+`GET /api/pokedex/moves` は日本語名の前方一致検索のみで、moveId 1件を引く detail endpoint が無い。`GET /api/pokedex/species/{key}` と同じ形で
+`GET /api/pokedex/moves/{key}` を追加してほしい(species の `SpeciesDetail` に相当する `MoveDetail` を返す。既存の `Move` スキーマで足りるはず)。
+Reason: judge が上流から priority を引く手段が無いと、先に動く側を正しく決められず JD4 が実装できない。
+Impact: 優先度は低い(JD2・JD3 は依頼を待たずに進められる)。着手は JD3 完了後でよい。API レーンが実装したら plan.md の JD4 の行を進められる。
+
+## 2026-09-23: 判定 JD2 の設計確定(場の効果 `speedField`)。素早さ補正の連結と丸めを @smogon/calc で確認(判定レーン)
+Decision: ADR-0702 で JD2 を確定した。`POST /api/judge/v1/outspeed-and-ko` に省略可の `speedField`
+(`trickRoom`・`attackerTailwind`・`defenderTailwind`。すべて既定 false)を足す。calc-svc へ転送する `field` とは別の欄にし、`speedField` は calc-svc に送らない。
+追い風は実数値を ×2 し、トリックルームは実数値を変えず `outspeeds`(自分が先に動くか)の比較の向きだけを反転する(`speedTie` は反転しない)。
+**素早さ補正は 4096 基準で 1 つに連結してから 1 回だけ五捨五超入する**(補正ごとに丸めない)。追い風 8192・こだわりスカーフ 6144。
+Reason: 丸めの規約(CLAUDE.md「4096基準の固定小数と五捨五超入」)に関わるため推測せず、ADR-0002 が固定した @smogon/calc 0.12.0 の
+`dist/mechanics/util.js` の `getFinalSpeed` を実際に読んで確認した(Champions 世代も `computeFinalStats` 経由で同じ関数を通る)。
+原典は `speedMods` に追い風 8192・スカーフ 6144 を積み、`chainMods`(1 ステップは切り上げ寄り)で 1 つにまとめてから `pokeRound`(五捨五超入)を 1 回だけ掛ける。
+実数値 91 にスカーフと追い風が両方乗ると 273 になり、補正ごとに丸める実装(136 → ×2)だと 272 で 1 ずれる。
+Impact: judge は engine の非公開 `chainMods` / `pokeRound` を呼べないため、同じ式を `internal/judge` に名前付き定数で持つ(ADR-0600 §3・ADR-0701 §2 と同じ扱い)。
+`CompareSpeed` は引数を 1 つ(`SpeedField`)足す形に変えた(既存テストの期待値は変えていない)。麻痺(`status`)は連結の後に別枠で掛かり、ダメージ側にも効くため JD2 に含めない。
+実装(implementer)は未着手で、`make judge-test` は失敗したままにしてある。
+
 ## 2026-09-23: iOS レーンの統合(PR #119)
 Decision: P6-2d(構築から個体を呼び出す配線)を PR #119 で main にマージした(critic PASS。make test / lint / build / check-publishable / ios-test が成功)。
 Reason: P6-2c に続く区切り。P6-2(計算画面・逆算・構築)がすべて完了した。
 Impact: 続き(P6-3 シミュレータテストの総仕上げ・P6-4 実機インストール手順書)は同じブランチ feat/ios-p6 で進める。
 
+<<<<<<< HEAD
 ## 2026-09-23: iOS レーンの統合(PR #122)・M3 完了
 Decision: P6-3(make ios-test の確認)・P6-4(実機インストール手順書 docs/runbooks/ios-device-install.md)を PR #122 で main にマージした。
 これにより M3(iPhone で使える)の Phase 6 タスクがすべて完了した。
 Reason: P6-1〜P6-2d に続く最後の区切り。
 Impact: iOS レーンはユーザーからの新規要望待ち。実機インストール・署名は手順書どおり人間が行う。
+=======
+## 2026-09-23: Codexレビュー issue #103・#111 の needs-decision をユーザーが決定
+Decision:
+- #103(M2保存データ〈record-svc/team-svc〉の保持・削除・端末ID境界): **一定期間の自動失効**にする(例: 未使用90日。具体的な日数は実装レーンの提案に任せる)。無期限保持はしない。
+- #111(importer PVC〈現在2Gi〉の容量上限・保持方針): **古いキャッシュを自動削除**する(直近N世代のみ保持。世代数は実装レーンの提案に任せる)。容量拡張だけで対症療法にはしない。
+Reason: ユーザー回答(AskUserQuestion、2026-09-23)。両方とも「無期限に持ち続けない」方向で統一。
+Impact: #103 は主担当の API・データレーンへ、#111 は主担当のデータレーンへタイプバランスレーンから連絡済み。着手のブロッカーが外れたので、それぞれの実装レーンで ADR を書いて進めてよい。
+
+## 2026-09-23: Web オンライン MasterSource — getSpecies.learnset の ID→実体化を提案(Web レーンからデータ/API レーンへ)
+Decision(Webレーンの設計。ADR-0304): オンラインモードの種族・技選択は検索ベース UI にする(`searchSpecies`/`searchMoves` が
+`limit<=200` 固定・ページングパラメータ無しのため、種族349件・技515件は一括取得できないと実クラスタで確認した。
+持ち物166件・性格25件は1回の取得で足りるので一覧のままでよい)。
+提案(データ/API レーンへ。既定案: `getSpecies` の応答の `learnset` を技ID配列 (`string[]`) から `Move` 実体の配列に変える):
+`searchMoves` は日本語名の前方一致でしか技を引けず、技を ID で個別解決する公開エンドポイントも無いため、
+`getSpecies` の `learnset`(ID配列)を人が読める技名・タイプ・分類に解決する手段が公開 API に無い。
+`services/pokedex/internal/httpapi/search.go` の `getSpecies` は `ListSpeciesLearnset` で ID を得た後そのまま返しており、
+`store.Queries.ListMoves` 相当の材料は既にあるので、ハンドラ内で ID→実体に解決してから返す変更は実装コストが小さいはず、
+というのが Web レーンの推測(データ/API レーンでの実際の見積もりを優先する)。代案(ADR-0304 §3 案B)は
+`GET /api/pokedex/moves/{id}` 等の個別解決エンドポイント追加。どちらでも Web 側の対応は小さく変わるだけなので、
+実装しやすい方を選んでよい。
+Reason: 技の一覧が515件で `limit` 上限(200)を超え、offset/cursor 等のページング手段も無いため、オンラインモードで
+「その種族が覚えられる技」を正しく出す手立てが、既存の公開 API の組み合わせだけでは無い(名前検索と ID の突き合わせが原理的にできない)。
+Impact: 返答・実装があるまで、Web のオンラインモードは種族・持ち物・性格の選択を先に作り、技を必要とする操作
+(ダメージ技の選択等)は「オンライン未対応」として無効化した状態で進める(ADR-0304 §4)。この提案が承認・実装され次第、
+Web 側は技も検索/一覧に切り替える。急ぎではない(ブロッカーにはしていない)。
+>>>>>>> origin/main
+
+## 2026-09-23: iOS レーンの統合(PR #131)。Codex レビュー issue #100・#101 を修正
+Decision: 型バランスレーンから共有された Codex レビュー issue のうち iOS 主担当の #100(種族変更後の特性ID残留)・#101(負のSPの検証漏れ)を fix/ios-issue-100-101 ブランチで修正し、PR #131 で main にマージした(critic PASS。修正前に新規テストが実際に失敗することを確認済み)。
+Reason: データ整合性のバグで、#103 のような「needs-decision」ではなく独立して修正できる内容だったため。
+Impact: 残る iOS 関連 issue: #68(検索上限200件の欠落。契約変更の要否を検討中)、#113(Web/iOS共同主担当の入力デバウンス・キャンセル。次に着手)。連携issue #71・#99・#110 は他レーンが主担当。#103 は着手しない(ユーザー決定待ち)。

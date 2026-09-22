@@ -173,6 +173,27 @@ final class TeamDomainTypesTests: XCTestCase {
         XCTAssertNil(TeamValidator.firstViolation(in: Team(name: "テストチーム", members: [member(sp: sp)])))
     }
 
+    /// issue #101: 負の SP は `$0 > SPLimits.maxPerStat` だけの判定だと通ってしまう(上限だけを見ていて
+    /// 0 未満を見ていないため)。`$0 < 0 || $0 > SPLimits.maxPerStat` で拒否する(既定案)。
+    func testNegativeSPPerStatViolation() throws {
+        let sp = StatBlock(hp: 0, atk: -1, def: 0, spa: 0, spd: 0, spe: 0)
+        let error = try XCTUnwrap(
+            TeamValidator.firstViolation(in: Team(name: "テストチーム", members: [member(sp: sp)]))
+        )
+        XCTAssertEqual(error.code, PokeCalcError.Code.teamSPInvalid)
+    }
+
+    /// issue #101: 負の値は合計検査も素通りさせる(例: -1 + 32*2 + 3 = 66 と、上限内に収まって見える)。
+    /// 単体の負数チェックが先に効くことを確かめる。
+    func testNegativeSPStillViolatesEvenWhenTotalLooksWithinLimit() throws {
+        let sp = StatBlock(hp: -1, atk: 32, def: 32, spa: 3, spd: 0, spe: 0)
+        XCTAssertEqual(sp.total, 66, "合計だけ見ると上限ちょうどに見える")
+        let error = try XCTUnwrap(
+            TeamValidator.firstViolation(in: Team(name: "テストチーム", members: [member(sp: sp)]))
+        )
+        XCTAssertEqual(error.code, PokeCalcError.Code.teamSPInvalid)
+    }
+
     func testSPTotalOverLimitViolation() throws {
         // 各ステータス上限内でも合計が66を超える(32 * 3 = 96)。
         let sp = StatBlock(hp: 0, atk: 32, def: 32, spa: 32, spd: 0, spe: 0)
