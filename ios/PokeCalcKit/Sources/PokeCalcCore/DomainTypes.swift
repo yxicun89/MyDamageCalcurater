@@ -15,6 +15,8 @@ public let fixedLevel = 50
 /// 共通で使う(同じ値を複数箇所に書かない。coding-rules §2)。
 public enum SPLimits {
     public static let maxPerStat = 32
+    /// 合計の上限(CLAUDE.md ドメイン規約「合計66」。P6-2c `TeamValidator` が使う)。
+    public static let maxTotal = 66
 }
 
 // MARK: - 契約と同期する enum(DomainTypesTests がテストで固定する)
@@ -25,8 +27,10 @@ public enum Format: String, CaseIterable, Sendable, Hashable {
     case double
 }
 
-/// タイプ(openapi `PokeType`)。
-public enum PokeType: String, CaseIterable, Sendable, Hashable {
+/// タイプ(openapi `PokeType`)。`Codable` は P6-2c `LocalTeamStore` が `Team` を JSON で
+/// 永続化するために要る(自動合成は宣言と同じファイルでしか効かないため、ここで付ける。
+/// ADR-0501「P6-2c」2章)。
+public enum PokeType: String, CaseIterable, Sendable, Hashable, Codable {
     case normal, fire, water, electric, grass, ice, fighting, poison, ground
     case flying, psychic, bug, rock, ghost, dragon, dark, steel, fairy
 }
@@ -73,8 +77,9 @@ public enum NatureClass: String, CaseIterable, Sendable, Hashable {
 
 // MARK: - 共用の値型
 
-/// ランク補正(-6..+6)。HP は持たない(openapi `RankBlock`)。
-public struct RankBlock: Equatable, Sendable {
+/// ランク補正(-6..+6)。HP は持たない(openapi `RankBlock`)。`Codable` は P6-2c の
+/// 永続化のため(PokeType のコメントと同じ理由)。
+public struct RankBlock: Equatable, Sendable, Codable {
     public var atk: Int
     public var def: Int
     public var spa: Int
@@ -90,8 +95,9 @@ public struct RankBlock: Equatable, Sendable {
     }
 }
 
-/// 6ステータスの値。種族値・実数値・能力ポイント(SP)に共用(openapi `StatBlock`)。
-public struct StatBlock: Equatable, Sendable {
+/// 6ステータスの値。種族値・実数値・能力ポイント(SP)に共用(openapi `StatBlock`)。`Codable` は
+/// P6-2c の永続化のため(PokeType のコメントと同じ理由)。
+public struct StatBlock: Equatable, Sendable, Codable {
     public var hp: Int
     public var atk: Int
     public var def: Int

@@ -376,3 +376,165 @@ XCUITest は `PokeCalcUITests/ReverseScreenUITests.swift`。ルート画面の�
   ダークモードもトークンどおりの配色で読める。extra-extra-large でも1行に収まらない項目はカード内で自然に
   折り返し、崩れは無かった(アクセシビリティ文字サイズでのカードの縦積みは計算画面と同じ `dynamicTypeSize >=
   .accessibility1` の分岐を流用しており、計算画面側の批評で確認済みの経路)。
+
+## P6-2c の受け入れ条件(構築ビルダー。spec-writer 着手・実装は未着手)
+
+ADR-0500 §4「構築(team)は API の契約が無い(P5-4)。`TeamStore` プロトコルと端末内の実装(UserDefaults に
+JSON)で作り、team-svc の契約ができたら API 実装を足す。Showdown 形式の入出力は team-svc の契約に合わせるため
+後回しにする」を具体化する。docs/design.md には構築ビルダー画面の節が無い(方向性 C「カード/ホロのコレクション
+風」だけが決まっている)ため、画面のレイアウトは implementer が design.md のトークン(カード角丸20・チップ999・
+余白4/8/12/16/24・タイプ色)を使って組み、確定した見た目は本節に追記する。
+
+ロジックは `PokeCalcCore` に置く(ADR-0500 §1)。View と XCUITest は範囲外(実装者の担当)。
+spec-writer が失敗する状態で置いたテスト: `PokeCalcKit/Tests/PokeCalcCoreTests/{TeamDomainTypesTests,
+LocalTeamStoreTests,TeamListViewModelTests,TeamEditViewModelTests,TeamMemberConversionTests}.swift`、
+`Tests/PokeCalcCoreTests/Support/StubTeamStore.swift`。`swift test`(`swift build --build-tests` でも同様)は
+`TeamMember` / `Team` / `TeamStore` / `LocalTeamStore` / `TeamValidator` / `TeamLimits` / `TeamScreenError` /
+`TeamFieldError` / `TeamMemberFieldError` / `TeamListViewModel` / `TeamEditViewModel` / `TeamMemberConverter`
+と `SPLimits.maxTotal` / `PokeCalcError.Code.team*` が存在しないため**コンパイルエラーで失敗する**
+(2026-09-22 に `swift build --build-tests` で確認済み。`cannot find type 'Team' in scope` 等)。
+実装者はこれらの型を新設し、テストを変更せずに通すこと(ここに書いた形と食い違うテストがあれば、テストを
+先に critic 相談なしでは変えない。CLAUDE.md 絶対ルール6)。
+
+### 1. ドメインの型(新規ファイル。DomainTypes.swift は変更しない)
+
+- `TeamLimits.maxMembers == 6`(requirements.md「構築ビルダー」の6体パーティ)、
+  `TeamLimits.maxMovesPerMember == 4`(ADR-0016 §1 balance TB2 と同じ規則を踏襲。メンバーごとの技IDは最大4つ、
+  同一メンバー内の重複は不可)。
+- 既存の `SPLimits`(DomainTypes.swift)に `maxTotal = 66` を追加する(CLAUDE.md ドメイン規約「合計66」。
+  新しい型を作らず、`maxPerStat` と同じ場所に並べる)。
+- `TeamMember`(`Equatable, Sendable, Codable`): `id`(既定 UUID 文字列)・`speciesKey`・`nickname: String?`
+  (**判断**: 持つ。requirements.md はニックネームに触れていないが、実機の構築には一般的にニックネームがあり、
+  低コストな任意フィールドなので先に用意する。Showdown 形式は後回しだが、ニックネームは Showdown 形式の1行目
+  そのものなので、将来のインポート/エクスポートと形を合わせやすくする意図もある)・`moveIds: [String]`
+  (0〜4、`TeamLimits.maxMovesPerMember` を超えない・同一メンバー内で重複しない)・`itemId: String?`・
+  `abilityId: String?`・`natureId: String`(必須。空文字の禁止はこのタスクでは検証しない。
+  `TeamEditViewModel.addMember` が常にマスタの性格を既定値として入れるため、ViewModel 経由では空にならない)・
+  `sp: StatBlock`(既定 全0)・`teraType: PokeType?`。
+- `Team`(`Equatable, Sendable, Codable`): `id`(既定 UUID 文字列)・`name: String`(必須。前後空白だけは無効。
+  **判断**: 文字数上限は設けない。要件に無い数値を作らない[coding-rules「ハードコードしない」])・
+  `members: [TeamMember]`(0〜6、追加順)。
+  **範囲外(判断)**: メンバーの並べ替え(ドラッグでの reorder)はこのタスクでは実装しない。requirements.md に
+  並べ替えの要求が無く、`TeamStore` に無い操作を UI 無しで作ると検証できないため(coding-rules「使われていない
+  汎用機構を作らない」)。必要になったら `docs/plan.md` に follow-up として積む。
+- `TeamValidator.firstViolation(in: Team) -> PokeCalcError?`(純粋関数): 判定順は
+  TeamDomainTypesTests.swift のコメントを正とする(name空 → members超過 → メンバーを先頭から
+  技数超過/技重複/SP単体超過/SP合計超過)。**判断**: 無効な値は丸めて保存し直さず「却下」する
+  (超過した SP や重複した技を黙って正規化すると、保存した内容が画面の見た目と食い違いうるため)。
+- 新しい `PokeCalcError.Code`(`client_` 接頭辞。PokeCalcError.swift の既存の書き方に合わせて追記する):
+  `teamNameEmpty` / `teamTooManyMembers` / `teamTooManyMoves` / `teamDuplicateMoves` / `teamSPInvalid` /
+  `teamStoreCorrupted`。
+
+### 2. `TeamStore` / `LocalTeamStore`
+
+- `TeamStore`(`protocol, Sendable`): `list() async throws -> [Team]` / `get(id:) async throws -> Team?` /
+  `save(_ team: Team) async throws`(id が既存なら更新・無ければ追加。`TeamValidator` で却下されうる) /
+  `delete(id:) async throws`。reorder/move は持たない(上記「範囲外」と同じ理由)。
+- `LocalTeamStore`(`actor`, `TeamStore` 準拠): `init(defaults: UserDefaults = .standard)`
+  (`ClientIdentity(defaults:)` と同じ、保存先を注入できる形。テストは `ClientIdentityTests` と同じ手法で
+  専用の UserDefaults suite を使う)。
+- 保存キー: `LocalTeamStore.teamsDefaultsKey == "PokeCalcTeams"`(`ClientIdentity.deviceIDDefaultsKey`
+  `"PokeCalcDeviceID"` と衝突しない)。
+- **判断(保存形式)**: 1つのキーの下に `[Team]` を丸ごと JSON で保存する(team ごとに別キーにしない)。
+  理由: 端末内は最大6体 × 数チーム程度の小さいデータで、複数キーにすると「どのチームがあるか」を知るための
+  索引キーが別途要り、索引と実体の不整合が起こりうる。1キーなら常に一貫する。
+  実装のために `TeamMember` / `Team` が `Codable` である必要があり、その内部で使う `StatBlock` / `RankBlock` /
+  `PokeType` を `Codable` にする(DomainTypes.swift への追加)。Swift の自動 `Codable` 合成は「元の型を
+  宣言したファイルと同じファイルで `Codable` に準拠する」必要があるため、これらの型は DomainTypes.swift 側で
+  `Codable` に準拠させること(別ファイルの extension では合成されない)。あるいは永続化専用の DTO を
+  `LocalTeamStore` 側に置いて手動でマッピングしてもよい(ADR-0500 §3 の「生成型↔ドメインの写像は1か所」と
+  同じ発想で、持続化の都合をドメイン型に持ち込みたくなければこちらを選んでよい)。どちらでも
+  `LocalTeamStoreTests` の往復テストは形を問わない(`JSONEncoder`/`JSONDecoder` で往復することだけを見る)。
+- 壊れたデータ(UserDefaults の値が JSON として teams にデコードできない)は
+  `PokeCalcError(code: .teamStoreCorrupted)` を投げる(黙って空配列にしない)。
+
+### 3. `TeamListViewModel` / `TeamEditViewModel`
+
+2つに分ける(**判断**: 一覧画面と編集画面は別の状態・別のマスタ依存を持つため、1つにまとめると
+「一覧だけ見たいときも編集用のマスタ読み込みが要る」ことになり無駄。`CalcViewModel`/`ReverseViewModel` が
+画面ごとに分かれているのとも一貫する)。
+
+- `TeamListViewModel`(`@MainActor @Observable`): `init(store: any TeamStore)`。`teams` / `isLoading` /
+  `error: TeamScreenError?`。`load()` は呼ぶたびに `store.list()` して最新化する(`CalcViewModel.load()` の
+  一度きりガードは付けない。一覧画面は編集画面から戻るたびに再読み込みが要るため)。`createTeam(name:) async ->
+  Team?`(空白だけの名前は `store.save` を呼ばず `PokeCalcError.Code.teamNameEmpty` の `error` を立てる)。
+  `deleteTeam(id:) async`(削除後に `load()` して最新化)。
+- `TeamEditViewModel`(`@MainActor @Observable`): `init(store: any TeamStore, service: any PokeCalcService,
+  team: Team)`。マスタは `CalcViewModel` と同じ `PokeCalcService`(P6-2a で実装済み)を再利用する
+  (構築専用のマスタ取得は増やさない)。特性は `SpeciesDetail.abilities`(種族ごと)から出す(`PokeCalcService`
+  に特性検索 API が無いため)。
+  `team` / `speciesOptions` / `itemOptions` / `natureOptions` / `moveOptionsByMember: [String: [Move]]`
+  (メンバー id → 現在の種族の learnset の順・マスタにある技だけ。`CalcViewModel.moveOptions` と同じ規則) /
+  `abilityOptionsByMember: [String: [Ability]]` / `isLoading` / `error: TeamScreenError?` /
+  `nameError: TeamFieldError?` / `teamError: TeamFieldError?`(6体超の追加) /
+  `memberErrors: [String: TeamMemberFieldError]`。
+  `load()`・`setName(_:)`・`addMember(speciesKey:) async -> Bool`・`removeMember(id:)`・
+  `setMemberSpecies(id:speciesKey:) async`(種族を差し替えたら learnset に無い技を黙って落とす。
+  `species(key:)` の応答はメンバーごとの世代トークンで守り、連続で種族を変えたときに古い応答が後から
+  上書きしないこと。`CalcViewModel` の species 世代保護[M1]と同じ理由・同じテスト手法)・
+  `addMove(id:moveId:) -> Bool` / `removeMove(id:at:)`・`setMemberItem`/`setMemberAbility`/
+  `setMemberNature`/`setMemberTeraType`(そのまま代入。`CalcViewModel.selectAttackerItem` と同じ扱いで
+  ID の存在チェックはしない)・`setMemberSP(id:stat:value:) -> Bool`(`0...SPLimits.maxPerStat` の外、
+  または合計が `SPLimits.maxTotal` を超えるなら**変更せず** false + `memberErrors` を立てる。
+  **判断**: 無効な入力をいったん状態に入れてから検証する[`ObservationFieldError` 方式]のではなく、
+  変更そのものを拒否する。SP はステッパー/スライダー操作が主で、範囲外の値を一瞬でも保持する UI 上の理由が
+  無いため。ステートは常に妥当 = `TeamValidator` が引っかかるのは `TeamStore` に直接触る将来の実装
+  [例: API 実装]からの経路だけ、という設計にする)・`save() async -> Bool`。
+  `TeamFieldError`: `.emptyName` / `.tooManyMembers`。`TeamMemberFieldError`: `.duplicateMove` /
+  `.tooManyMoves` / `.spPerStatExceeded` / `.spTotalExceeded`。
+- `TeamScreenError`(`Equatable, Sendable`): `CalcScreenError`(P6-2a)と同じ3ケース
+  (`.transport` / `.unexpectedResponse` / `.service(code:message:)`)・同じ `init(_ error: any Error)`。
+  **判断**: 構築を別型にする(`CalcScreenError` を再利用しない)。理由は将来 `APITeamStore`
+  (ADR-0500 §4 の「team-svc の契約ができたら足す」)に切り替わったときの通信エラーが計算画面のエラー文言と
+  混ざらないようにするため。ロジック(`init` の分岐)は同じでよい。
+
+### 4. `TeamMemberConverter`(「構築から個体を呼び出す」の下ごしらえ・**範囲外の明記**)
+
+requirements.md「自分側のプリセット: 構築から個体を呼び出す」に備え、`TeamMember` → `Individual` の純粋な
+変換関数 `TeamMemberConverter.makeIndividual(from: TeamMember, moves: [Move]) -> Individual` を用意し
+テストで固定する(TeamMemberConversionTests.swift)。`speciesKey`/`natureId`/`sp`/`itemId`/`abilityId`/
+`teraType` はそのまま写す(`Individual` も ID をそのまま運ぶ値型なので、この変換時点でマスタ照合はしない)。
+`moveId`(`Individual` は1つしか持てない)は `moveIds` から「最初の変化技でない技(`moves` で判定)、
+無ければ `moveIds` の最初、空なら nil」で選ぶ(`CalcViewModel.reselectMove` の既定技の選び方と同じ規則)。
+
+**この変換関数を `CalcViewModel` / `ReverseViewModel` の「構築から呼び出す」ボタンとして実際に配線するのは
+このタスク(P6-2c)の範囲外**。依頼文の指示どおり、後で配線できるように純粋関数を用意してテストで固定する
+ところまでを行う。配線は `docs/plan.md` に別タスクとして積む(P6-2c の続き、または新しいタスク番号)。
+
+### 5. View / XCUITest(実装者の担当。accessibilityIdentifier 契約)
+
+画面のレイアウト自体は design.md に節が無いため implementer が組むが、XCUITest から辿れるように
+以下の識別子を**この名前で**付けること(他画面の命名規則: 画面ルートは `<screen>Screen`、カードは
+`<role>Card`、ピッカーは `<role>Picker`、行は `<種類>Row-<id>`)。
+
+- 構築一覧画面: ルート `accessibilityIdentifier("teamListScreen")`。新規作成の入口
+  `accessibilityIdentifier("createTeamButton")`。各行 `accessibilityIdentifier("teamRow-\(team.id)")`、
+  行内の削除操作 `accessibilityIdentifier("teamDelete-\(team.id)")`。空(0件)のときの案内文言
+  `accessibilityIdentifier("teamListEmpty")`。ロード中 `accessibilityIdentifier("teamListLoadingIndicator")`。
+  エラー文言 `accessibilityIdentifier("teamListErrorMessage")`。`RootView` に一覧画面への入口を足す場合は
+  既存の `openCalcScreen`/`openReverseScreen` に揃えて `accessibilityIdentifier("openTeamListScreen")`。
+- 構築編集画面: ルート `accessibilityIdentifier("teamEditScreen")`。チーム名の入力欄
+  `accessibilityIdentifier("teamNameField")`、そのエラー `accessibilityIdentifier("teamNameError")`。
+  メンバー追加ボタン `accessibilityIdentifier("addMemberButton")`。メンバーごとのカード
+  `accessibilityIdentifier("memberCard-\(member.id)")`、削除
+  `accessibilityIdentifier("memberDelete-\(member.id)")`、種族ピッカー
+  `accessibilityIdentifier("memberSpeciesPicker-\(member.id)")`、持ち物ピッカー
+  `accessibilityIdentifier("memberItemPicker-\(member.id)")`、特性ピッカー
+  `accessibilityIdentifier("memberAbilityPicker-\(member.id)")`、性格ピッカー
+  `accessibilityIdentifier("memberNaturePicker-\(member.id)")`、テラスタイプピッカー
+  `accessibilityIdentifier("memberTeraPicker-\(member.id)")`、技スロット(0始まりの index)
+  `accessibilityIdentifier("memberMoveSlot-\(member.id)-\(index)")`、SP 入力(StatKey ごと)
+  `accessibilityIdentifier("memberSP-\(member.id)-\(stat.rawValue)")`、メンバーのエラー文言
+  `accessibilityIdentifier("memberError-\(member.id)")`。保存ボタン
+  `accessibilityIdentifier("saveTeamButton")`。画面全体のエラー
+  `accessibilityIdentifier("teamEditErrorMessage")`。
+
+XCUITest はモック(`MockPokeCalcService` + `LocalTeamStore`。起動時 `POKECALC_USE_MOCK=1`)で
+「一覧を開く→新規作成→名前を付けて保存→一覧に出る→開いてメンバーを1体追加して保存→一覧から削除できる」の
+一連がつながることを見る(P6-1〜P6-2b の XCUITest と同じ粒度。数値の正しさではなく操作がつながることを見る)。
+
+### 6. 確認事項(未決のまま残った判断はここに書く。次の implementer/critic が変えてよい)
+
+- `TeamMember.nickname` を持つかどうかはユーザーに未確認(spec-writer の判断で「持つ」とした。上記1章)。
+  実装後の動作確認で不要と分かれば消してよい(フィールド1つなので戻すコストは小さい)。
+- メンバーの並べ替えを本当に要るかは未確認(範囲外とした。requirements.md に明記が無いため)。
