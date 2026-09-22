@@ -117,8 +117,8 @@ function createFakeBalanceClient(): FakeBalanceClient {
     threats(members, threats) {
       return new Promise((resolve) => {
         threatsCalls.push({
-          members: structuredClone(members) as ThreatsPokemon[],
-          threats: structuredClone(threats) as ThreatsPokemon[],
+          members: structuredClone(members),
+          threats: structuredClone(threats),
           resolve,
         });
       });
@@ -791,6 +791,25 @@ describe("仮想敵の枠", () => {
     expect(lastOf(client.threatsCalls, "threats").threats.map((threat) => threat.pokemonId)).toEqual([
       second.key,
     ]);
+  });
+
+  test("仮想敵1を空けたまま仮想敵2だけ選ぶと、結果の見出しも「仮想敵2」になる(入力欄の番号とずれない)", async () => {
+    const { user, client } = renderScreen();
+    const mine = speciesAt(0);
+    const second = speciesAt(1);
+    await selectSpecies(user, 1, mine);
+    // 仮想敵1 は空のまま、追加した仮想敵2 だけにポケモンを選ぶ。
+    await addThreat(user);
+    await selectThreatSpecies(user, 2, second);
+    await resolveThreats(client);
+
+    // 送るのは仮想敵2だけ(仮想敵1は空なので含めない)。
+    expect(lastOf(client.threatsCalls, "threats").threats.map((threat) => threat.pokemonId)).toEqual([
+      second.key,
+    ]);
+    // 結果の見出しは、応答の並び順(0番目)ではなく、入力欄の番号(仮想敵2)に合わせる。
+    expect(threatRegion(2, second.nameJa)).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /^仮想敵1/ })).not.toBeInTheDocument();
   });
 
   test("仮想敵の技の選択肢もその種族の覚える技(と「なし」)", async () => {
