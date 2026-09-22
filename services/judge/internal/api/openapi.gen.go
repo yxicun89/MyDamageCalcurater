@@ -4,8 +4,60 @@
 package api
 
 import (
+	"fmt"
+	"net/http"
+
 	"github.com/labstack/echo/v5"
+	"github.com/oapi-codegen/runtime"
 )
+
+// Defines values for ErrorCode.
+const (
+	InternalError       ErrorCode = "internal_error"
+	InvalidRequest      ErrorCode = "invalid_request"
+	RequestTooLarge     ErrorCode = "request_too_large"
+	UnknownNature       ErrorCode = "unknown_nature"
+	UnknownSpecies      ErrorCode = "unknown_species"
+	UpstreamUnavailable ErrorCode = "upstream_unavailable"
+)
+
+// Valid indicates whether the value is a known member of the ErrorCode enum.
+func (e ErrorCode) Valid() bool {
+	switch e {
+	case InternalError:
+		return true
+	case InvalidRequest:
+		return true
+	case RequestTooLarge:
+		return true
+	case UnknownNature:
+		return true
+	case UnknownSpecies:
+		return true
+	case UpstreamUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for Format.
+const (
+	Double Format = "double"
+	Single Format = "single"
+)
+
+// Valid indicates whether the value is a known member of the Format enum.
+func (e Format) Valid() bool {
+	switch e {
+	case Double:
+		return true
+	case Single:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for HealthStatus.
 const (
@@ -22,6 +74,96 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
+// Defines values for Terrain.
+const (
+	TerrainElectric Terrain = "electric"
+	TerrainGrassy   Terrain = "grassy"
+	TerrainMisty    Terrain = "misty"
+	TerrainNone     Terrain = "none"
+	TerrainPsychic  Terrain = "psychic"
+)
+
+// Valid indicates whether the value is a known member of the Terrain enum.
+func (e Terrain) Valid() bool {
+	switch e {
+	case TerrainElectric:
+		return true
+	case TerrainGrassy:
+		return true
+	case TerrainMisty:
+		return true
+	case TerrainNone:
+		return true
+	case TerrainPsychic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for Weather.
+const (
+	WeatherNone Weather = "none"
+	WeatherRain Weather = "rain"
+	WeatherSand Weather = "sand"
+	WeatherSnow Weather = "snow"
+	WeatherSun  Weather = "sun"
+)
+
+// Valid indicates whether the value is a known member of the Weather enum.
+func (e Weather) Valid() bool {
+	switch e {
+	case WeatherNone:
+		return true
+	case WeatherRain:
+		return true
+	case WeatherSand:
+		return true
+	case WeatherSnow:
+		return true
+	case WeatherSun:
+		return true
+	default:
+		return false
+	}
+}
+
+// Error defines model for Error.
+type Error struct {
+	// Code エラーの区分。judge は上流の事情(HTTP のステータス・接続エラーの文面・URL)をそのまま返さず、
+	// ADR-0700 §3・ADR-0701 §6 の対応表でこの列挙に畳む。
+	// invalid_request: ヘッダー・request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
+	// unknown_species: speciesKey が pokedex-svc のマスタに無い。
+	// unknown_nature: natureId が性格の一覧に無い。
+	// request_too_large: request body が上限(8 KiB)を超えている。
+	// upstream_unavailable: pokedex-svc / calc-svc が未設定・接続できない・タイムアウト・5xx・契約に合わない応答。
+	// internal_error: 想定外の内部エラー(message は固定文言で、内部の詳細を返さない)。
+	Code    ErrorCode `json:"code"`
+	Message string    `json:"message"`
+}
+
+// ErrorCode エラーの区分。judge は上流の事情(HTTP のステータス・接続エラーの文面・URL)をそのまま返さず、
+// ADR-0700 §3・ADR-0701 §6 の対応表でこの列挙に畳む。
+// invalid_request: ヘッダー・request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
+// unknown_species: speciesKey が pokedex-svc のマスタに無い。
+// unknown_nature: natureId が性格の一覧に無い。
+// request_too_large: request body が上限(8 KiB)を超えている。
+// upstream_unavailable: pokedex-svc / calc-svc が未設定・接続できない・タイムアウト・5xx・契約に合わない応答。
+// internal_error: 想定外の内部エラー(message は固定文言で、内部の詳細を返さない)。
+type ErrorCode string
+
+// FieldState 場の状態。judge は解釈せず calc-svc の field にそのまま転送する(省略時は送らない)。
+// 意味の正はルートの api/openapi.yaml の FieldState。
+type FieldState struct {
+	AttackerScreens *Screens `json:"attackerScreens,omitempty"`
+	DefenderScreens *Screens `json:"defenderScreens,omitempty"`
+	Terrain         *Terrain `json:"terrain,omitempty"`
+	Weather         *Weather `json:"weather,omitempty"`
+}
+
+// Format 対戦形式。calc-svc にそのまま渡す。
+type Format string
+
 // Health defines model for Health.
 type Health struct {
 	Status HealthStatus `json:"status"`
@@ -30,11 +172,150 @@ type Health struct {
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
 
+// Individual 判定に使う個体。欄は docs/judge-design.md §3 JD1 の列挙そのまま。
+// status(状態異常)と teraType は JD1 では受け取らない(ADR-0701 §2)。
+type Individual struct {
+	// AbilityId 特性 ID。judge は解釈せず calc-svc にそのまま渡す。
+	AbilityId *string `json:"abilityId,omitempty"`
+
+	// ItemId 持ち物 ID。judge は calc-svc にそのまま渡すほか、こだわりスカーフの ID
+	// (既定 choicescarf。環境変数 JUDGE_CHOICE_SCARF_ITEM_ID で上書きできる。ADR-0701 §3)
+	// と一致するときだけ素早さに ×1.5 を掛ける。
+	ItemId *string `json:"itemId,omitempty"`
+
+	// NatureId 性格 ID。GET /api/pokedex/natures の一覧で補正する能力に解決する(ADR-0701 §4)。
+	NatureId string `json:"natureId"`
+
+	// Ranks ランク補正(-6..+6)。HP は持たない。judge は「技の追加効果を適用した後のランク」を
+	// 呼び出し側が入れたものとして受け取る(ADR-0700 §6-5)。
+	Ranks *RankBlock `json:"ranks,omitempty"`
+
+	// Sp 6 ステータスの値。judge では Individual.sp(能力ポイント。各 0..32・合計 <= 66)に使う。
+	// 意味の正はルートの api/openapi.yaml の StatBlock。
+	Sp StatBlock `json:"sp"`
+
+	// SpeciesKey {図鑑番号4桁}-{フォルム3桁}。意味の正はルートの api/openapi.yaml の SpeciesKey。
+	//
+	// Example: 0445-000
+	SpeciesKey SpeciesKey `json:"speciesKey"`
+}
+
+// KOChance 確定数 / 乱数 n 発。calc-svc の KOChance をそのまま転記する(judge は再計算しない)。
+// 意味の正はルートの api/openapi.yaml の KOChance と ADR-0006・ADR-0010。
+// engine の生値 chancePercent は画面に出す値ではないので judge は返さない。
+type KOChance struct {
+	// DisplayChancePercent 画面に出す「hits 回で倒せる確率(%)」。小数第1位(ADR-0010 §3)。
+	DisplayChancePercent float64 `json:"displayChancePercent"`
+
+	// Guaranteed 最小ダメージでも hits 回で倒せるなら true(確定 n 発)。
+	Guaranteed bool `json:"guaranteed"`
+
+	// Hits 最大ダメージで倒すのに必要な攻撃回数(0 = 倒せない)。
+	Hits int `json:"hits"`
+}
+
+// OutspeedAndKoRequest defines model for OutspeedAndKoRequest.
+type OutspeedAndKoRequest struct {
+	// Attacker 自分の個体。JD1 は自分が攻撃する側だけを扱う(ADR-0700 §6-2)。
+	Attacker Individual `json:"attacker"`
+
+	// Defender 相手の個体。
+	Defender Individual `json:"defender"`
+
+	// Field 場の状態。judge は解釈せず calc-svc の field にそのまま転送する(省略時は送らない)。
+	// 意味の正はルートの api/openapi.yaml の FieldState。
+	Field *FieldState `json:"field,omitempty"`
+
+	// Format 対戦形式。calc-svc にそのまま渡す。
+	Format Format `json:"format"`
+
+	// MoveId 自分が使う技(1 つ)。
+	MoveId string `json:"moveId"`
+}
+
+// OutspeedAndKoResponse defines model for OutspeedAndKoResponse.
+type OutspeedAndKoResponse struct {
+	// AttackerSpeed 自分の戦闘中の素早さ(ランク・こだわりスカーフ適用後)。
+	AttackerSpeed int `json:"attackerSpeed"`
+
+	// DefenderSpeed 相手の戦闘中の素早さ(ランク・こだわりスカーフ適用後)。
+	DefenderSpeed int `json:"defenderSpeed"`
+
+	// Ko 確定数 / 乱数 n 発。calc-svc の KOChance をそのまま転記する(judge は再計算しない)。
+	// 意味の正はルートの api/openapi.yaml の KOChance と ADR-0006・ADR-0010。
+	// engine の生値 chancePercent は画面に出す値ではないので judge は返さない。
+	Ko KOChance `json:"ko"`
+
+	// Outspeeds 自分の戦闘中の素早さが相手より厳密に大きいか。同速は false で、speedTie が true になる
+	// (真偽値 1 つに丸めない。ADR-0700 §6-1)。
+	Outspeeds bool `json:"outspeeds"`
+
+	// SpeedTie 双方の戦闘中の素早さが等しいか。outspeeds と同時に true にはならない。
+	SpeedTie bool `json:"speedTie"`
+}
+
+// RankBlock ランク補正(-6..+6)。HP は持たない。judge は「技の追加効果を適用した後のランク」を
+// 呼び出し側が入れたものとして受け取る(ADR-0700 §6-5)。
+type RankBlock struct {
+	Atk *int `json:"atk,omitempty"`
+	Def *int `json:"def,omitempty"`
+	Spa *int `json:"spa,omitempty"`
+	Spd *int `json:"spd,omitempty"`
+	Spe *int `json:"spe,omitempty"`
+}
+
+// Screens defines model for Screens.
+type Screens struct {
+	AuroraVeil  *bool `json:"auroraVeil,omitempty"`
+	LightScreen *bool `json:"lightScreen,omitempty"`
+	Reflect     *bool `json:"reflect,omitempty"`
+}
+
+// SpeciesKey {図鑑番号4桁}-{フォルム3桁}。意味の正はルートの api/openapi.yaml の SpeciesKey。
+//
+// Example: 0445-000
+type SpeciesKey = string
+
+// StatBlock 6 ステータスの値。judge では Individual.sp(能力ポイント。各 0..32・合計 <= 66)に使う。
+// 意味の正はルートの api/openapi.yaml の StatBlock。
+type StatBlock struct {
+	Atk int `json:"atk"`
+	Def int `json:"def"`
+	Hp  int `json:"hp"`
+	Spa int `json:"spa"`
+	Spd int `json:"spd"`
+	Spe int `json:"spe"`
+}
+
+// Terrain defines model for Terrain.
+type Terrain string
+
+// Weather defines model for Weather.
+type Weather string
+
+// DeviceId defines model for DeviceId.
+type DeviceId = string
+
+// SessionId defines model for SessionId.
+type SessionId = string
+
+// OutspeedAndKoParams defines parameters for OutspeedAndKo.
+type OutspeedAndKoParams struct {
+	XDeviceId  DeviceId  `json:"X-Device-Id"`
+	XSessionId SessionId `json:"X-Session-Id"`
+}
+
+// OutspeedAndKoJSONRequestBody defines body for OutspeedAndKo for application/json ContentType.
+type OutspeedAndKoJSONRequestBody = OutspeedAndKoRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// PublicHealth Ingress smoke check
 	// (GET /api/judge/healthz)
 	PublicHealth(ctx *echo.Context) error
+	// OutspeedAndKo 素早さで抜けるか + その技で倒せるか
+	// (POST /api/judge/v1/outspeed-and-ko)
+	OutspeedAndKo(ctx *echo.Context, params OutspeedAndKoParams) error
 	// Health Pod health check
 	// (GET /healthz)
 	Health(ctx *echo.Context) error
@@ -51,6 +332,54 @@ func (w *ServerInterfaceWrapper) PublicHealth(ctx *echo.Context) error {
 
 	// Invoke the callback with all the unmarshaled arguments
 	err = w.Handler.PublicHealth(ctx)
+	return err
+}
+
+// OutspeedAndKo converts echo context to params.
+func (w *ServerInterfaceWrapper) OutspeedAndKo(ctx *echo.Context) error {
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params OutspeedAndKoParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Device-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Device-Id")]; found {
+		var XDeviceId DeviceId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
+		}
+
+		params.XDeviceId = XDeviceId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Device-Id is required, but not found"))
+	}
+	// ------------- Required header parameter "X-Session-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Session-Id")]; found {
+		var XSessionId SessionId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
+		}
+
+		params.XSessionId = XSessionId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Session-Id is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.OutspeedAndKo(ctx, params)
 	return err
 }
 
@@ -112,5 +441,6 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 
 	router.GET(options.BaseURL+"/healthz", wrapper.Health, options.OperationMiddlewares["health"]...)
 	router.GET(options.BaseURL+"/api/judge/healthz", wrapper.PublicHealth, options.OperationMiddlewares["publicHealth"]...)
+	router.POST(options.BaseURL+"/api/judge/v1/outspeed-and-ko", wrapper.OutspeedAndKo, options.OperationMiddlewares["outspeedAndKo"]...)
 
 }

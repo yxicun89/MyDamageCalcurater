@@ -780,6 +780,11 @@ Web・iOS レーンのローカル k3d 環境でも calc を使う画面(ダメ�
 (データレーンの docs/runbooks/data.md 参照)。`make api-k3d-deploy` も、マスタ未投入のクラスタでは `kubectl rollout status` が120秒でタイムアウトして失敗するので、
 先に `make import-k8s` を実行すること。`make api-smoke` の出力1行目が `master=pokedex …` であれば実際に pokedex-svc へつながっている確認になる(`master=example` はフォールバック)。
 
+## 2026-09-22: 判定 JD0(judge-svc 基盤)を PR #92 で main に統合
+Decision: ADR-0700(基盤・上流の呼び方・エラー正規化・受け入れ条件8件)と、docs/judge-design.md §4 の未決事項5件の決定・`services/judge/` の実装(internal/client・internal/httpapi・cmd/api・deploy/k8s・Dockerfile・scripts/smoke.sh)を PR #92 で main に統合した。critic は3回目で PASS(1・2回目 NG はいずれも上流エラー文面への URL/host:port/ホスト名の漏洩。`transportFailureReason()` を固定語彙への分類に変更して解消)。
+Reason: `make test`・`make lint`・`make build`(ルート)が緑、critic PASS、他レーンの範囲外変更なし(COORDINATION.md の共有ファイル規約の範囲内)を確認してマージした。
+Impact: 判定レーンのブランチを `feat/judge-jd1` に切り替えた(JD0 の `feat/judge-jd0` は削除)。次は JD1(`POST /api/judge/v1/outspeed-and-ko`)。
+
 ## 2026-09-23: 素早さ SP5(GitOps)の設計。balance-registry の共有と改名の提案(タイプバランスレーンへ)
 Decision: SP5(GitOps。ADR-0605)は speed 専用のクラスタ内レジストリを新設せず、balance が構築した balance-registry(services/balance/deploy/local-registry/。TB0・ADR-0018)を push 先として共有する(k3d ノードの containerd が localhost:5000 の1レジストリしか信頼しないため)。services/balance/ のファイルは変更しない(services/speed/scripts/local-registry-push.sh から kubectl -n balance-registry port-forward するだけ)。Argo CD も TB0 で導入済みの1インスタンスを共有し、speed が再インストールすることはしない。
 提案(タイプバランスレーンへ。既定案: 今は何もしない): balance-registry という名前は今後クラスタ全体で共有されるとわかりにくいので、都合の良いときに pokecalc-registry へ改名することを検討してほしい。急ぎではない。

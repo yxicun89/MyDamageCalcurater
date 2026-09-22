@@ -66,20 +66,17 @@ DB を用意し `POKEDEX_DATABASE_DSN` を設定)→ `make speed-k3d-deploy-read
 
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
-Active: なし
-Branch: feat/judge-jd0(作業ディレクトリ ~/MyDamageCalcurater-judge。PR 作成待ち)
-Status: JD0(基盤)完了。ADR-0700(基盤・上流の呼び方・エラーの正規化・受け入れ条件8件)を採用し、docs/judge-design.md §4 の
-未決事項5件をすべて決定に変えた(同速は `outspeeds` と `speedTie` を別に返す / JD1 は自分が殴る側だけ / 独自 Ingress `/api/judge`(gateway は変更しない) /
-ADR 帯 0700 / 技の追加効果は request の `ranks` で受ける)。`internal/client`(pokedex-svc・calc-svc への HTTP クライアント。request スコープの timeout・
-4つの番兵エラー・1MiB上限・ヘッダー転送)・`internal/httpapi`(healthz)・`cmd/api` を実装。critic 3回目で PASS(1・2回目 NG は接続エラー・DNS失敗時に
-上流の URL・host:port・ホスト名がエラー文面に漏れていた件。`*net.OpError`/`*net.DNSError` の `Error()` を呼ばず固定語彙に分類して解消)。
-deploy/k8s(base の Deployment・Service・Ingress `/api/judge`)・Dockerfile・scripts/smoke.sh・Makefile の `judge-kustomize`/`judge-docker-build`/
-`judge-k3d-deploy`/`judge-smoke` も追加し、`docker build` とコンテナ起動(healthz 200)を確認済み(k3d への実デプロイは未確認)。
-`make test`/`make lint`/`make build`(ルート)が緑。JD1 の endpoint(`POST /api/judge/v1/outspeed-and-ko`)は ADR-0700 §5 の判断により
-JD0 の契約に含めていない(契約にあるのに404を作らないため)
-Next: PR を作って main へ統合(このセッションの残タスク)。その後 JD1 に着手: `services/judge/api/openapi.yaml` に
-`POST /api/judge/v1/outspeed-and-ko` を足すところから(quick-scanner → spec-writer → implementer → critic)。JD1 の response は
-`outspeeds`・`speedTie`・`ko` の3つ(ADR-0700 §6-1・§6-5)
+Active: Claude Code
+Branch: feat/judge-jd1(作業ディレクトリ ~/MyDamageCalcurater-judge。PR 作成待ち。JD0 の feat/judge-jd0 は PR #92 で main に統合済み・削除)
+Status: JD0(基盤。PR #92)に続き JD1(判定 API 本体)完了。ADR-0701: `POST /api/judge/v1/outspeed-and-ko` を実装。
+素早さは `engine.EffectiveStat`(実数値→ランク)→ こだわりスカーフ(×6144/4096 五捨五超入。既定 item ID `choicescarf`、
+`JUDGE_CHOICE_SCARF_ITEM_ID` で上書き可)。性格は新設 `Pokedex.Natures`(`GET /api/pokedex/natures`。1リクエスト1回で
+attacker・defender 両方を解決)。上流呼び出しは逐次(natures→species×2→calc。並列化しない。検査順を契約に書き
+エラーの勝ち負けを固定するため)。response は `outspeeds`・`speedTie`・`attackerSpeed`・`defenderSpeed`・`ko`。
+critic 2回目で PASS(1回目 NG 重要3件: 上流エラーのログ未記録・pokedex 400 の扱いが ADR 未記載・defender 側スカーフ/
+種族差のテスト欠如。すべて修正・テスト追加済み)。`make test`/`make lint`/`make build`(ルート)が緑
+Next: PR を作って main へ統合(このセッションの残タスク)。JD2 以降(複数の相手候補・場の効果・画面)は
+plan.md の方針どおり、着手前にユーザーへ確認する
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

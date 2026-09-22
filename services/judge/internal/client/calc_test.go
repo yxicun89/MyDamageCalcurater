@@ -313,3 +313,81 @@ func TestDamageTimesOut(t *testing.T) {
 	}
 	assertNoUpstreamAuthority(t, err.Error(), server.URL)
 }
+
+// --- JD1: 場の状態(field)の転送(ADR-0701 §1)。judge は field を解釈せず、calc-svc の
+// CalcRequest.field にそのまま渡す。急所(options.critical)は JD1 では受け取らない(ADR-0701 却下した案)。
+// ------------------------------------------------------------------------------------
+
+// exampleFieldState は架空の場の状態(ルートの api/openapi.yaml の FieldState と同じ意味)。
+func exampleFieldState() *FieldState {
+	return &FieldState{
+		Weather:         "sun",
+		Terrain:         "electric",
+		DefenderScreens: &Screens{Reflect: true},
+	}
+}
+
+// TestDamageSendsFieldWhenSet: field を指定した要求では、calc-svc に送る body の field に
+// 天候・フィールド・壁がそのまま乗る(ADR-0701 受け入れ条件6)。
+func TestDamageSendsFieldWhenSet(t *testing.T) {
+	t.Parallel()
+
+	var gotBody map[string]any
+	server := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(validCalcBody())
+	})
+
+	request := exampleCalcRequest()
+	request.Field = exampleFieldState()
+	if _, err := newCalc(t, server.URL, testTimeout).Damage(t.Context(), requestContext, request); err != nil {
+		t.Fatalf("Damage: %v", err)
+	}
+
+	field, ok := gotBody["field"].(map[string]any)
+	if !ok {
+		t.Fatalf("field = %v, want an object", gotBody["field"])
+	}
+	if got := field["weather"]; got != "sun" {
+		t.Errorf("field.weather = %v, want sun", got)
+	}
+	if got := field["terrain"]; got != "electric" {
+		t.Errorf("field.terrain = %v, want electric", got)
+	}
+	screens, ok := field["defenderScreens"].(map[string]any)
+	if !ok {
+		t.Fatalf("field.defenderScreens = %v, want an object", field["defenderScreens"])
+	}
+	if got := screens["reflect"]; got != true {
+		t.Errorf("field.defenderScreens.reflect = %v, want true", got)
+	}
+	// 指定していない側の壁は送らない(未指定と「すべて false」を取り違えさせない)。
+	if _, present := field["attackerScreens"]; present {
+		t.Errorf("field に attackerScreens を送っている。未指定の欄は送らない")
+	}
+}
+
+// TestDamageOmitsFieldWhenUnset: field を指定しない要求では field 自体を送らない。
+// calc-svc の既定(天候なし・フィールドなし・壁なし)に任せ、null を送って「指定なし」と
+// 取り違えさせない(ADR-0700 §4 と同じ立場)。
+func TestDamageOmitsFieldWhenUnset(t *testing.T) {
+	t.Parallel()
+
+	var gotBody map[string]any
+	server := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(validCalcBody())
+	})
+
+	if _, err := newCalc(t, server.URL, testTimeout).Damage(t.Context(), requestContext, exampleCalcRequest()); err != nil {
+		t.Fatalf("Damage: %v", err)
+	}
+
+	if _, present := gotBody["field"]; present {
+		t.Errorf("field = %v を送っている。未指定なら field ごと送らない", gotBody["field"])
+	}
+}
