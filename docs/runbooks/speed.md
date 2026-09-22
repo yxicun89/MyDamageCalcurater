@@ -17,7 +17,7 @@ cd "$(git rev-parse --show-toplevel)"
 make speed-k3d-deploy
 SPEED_URL=http://localhost:8080 make speed-smoke
 ```
-確認: 最後の行が `speed smoke: health=200 pokemon=200 (count=8) missing_headers=400 table=200 (tiers=7, tie 219) invalid_presets=400`
+確認: 最後の行が `speed smoke: health=200 pokemon=200 (count=8) missing_headers=400 table=200 (tiers=7, tie 219) invalid_presets=400 position=200 (146, 29/2/17) invalid_position=400 unknown_pokemon=422`
 (1回目がロールアウト直後で失敗したら、`SPEED_URL=http://localhost:8080 make speed-smoke` をもう一度)。
 
 GitOps(Argo CD)は SP4 で足す(ADR-0600 §2)。それまでの動作確認は 1〜2 で完結する。

@@ -19,7 +19,7 @@ const (
 )
 
 // allPresetIDs は ADR-0601 §2 の表の順(API の PresetId の enum の順と同じ)。
-var allPresetIDs = []api.PresetId{api.Uninvested, api.NeutralMax, api.Max, api.MaxScarf, api.MaxPlus1, api.MaxPlus2}
+var allPresetIDs = []api.PresetId{api.PresetIdUninvested, api.PresetIdNeutralMax, api.PresetIdMax, api.PresetIdMaxScarf, api.PresetIdMaxPlus1, api.PresetIdMaxPlus2}
 
 // exampleProvider は testdata/pokemon.example.json(架空の 8 体)の read model。
 func exampleProvider(t *testing.T) speed.PokemonProvider {
@@ -242,10 +242,10 @@ func TestTableAllPresetsFromExample(t *testing.T) {
 		t.Errorf("entries = %d, want 48", entries)
 	}
 	if len(body.Tiers) > 0 {
-		if first := body.Tiers[0]; first.Speed != 400 || len(first.Entries) != 1 || first.Entries[0].PokemonId != "9004-000" || first.Entries[0].Preset != api.MaxPlus2 {
+		if first := body.Tiers[0]; first.Speed != 400 || len(first.Entries) != 1 || first.Entries[0].PokemonId != "9004-000" || first.Entries[0].Preset != api.PresetIdMaxPlus2 {
 			t.Errorf("first tier = %+v, want 400 with 9004-000 max-plus2", first)
 		}
-		if last := body.Tiers[len(body.Tiers)-1]; last.Speed != 50 || len(last.Entries) != 1 || last.Entries[0].PokemonId != "9007-000" || last.Entries[0].Preset != api.Uninvested {
+		if last := body.Tiers[len(body.Tiers)-1]; last.Speed != 50 || len(last.Entries) != 1 || last.Entries[0].PokemonId != "9007-000" || last.Entries[0].Preset != api.PresetIdUninvested {
 			t.Errorf("last tier = %+v, want 50 with 9007-000 uninvested", last)
 		}
 	}
@@ -258,18 +258,18 @@ func TestTableAllPresetsFromExample(t *testing.T) {
 		return e
 	}
 	wantTies := []api.SpeedTier{
-		{Speed: 292, Entries: []api.SpeedTableEntry{withPreset(fixture9002, api.MaxPlus2), withPreset(fixture9005, api.MaxPlus2)}},
+		{Speed: 292, Entries: []api.SpeedTableEntry{withPreset(fixture9002, api.PresetIdMaxPlus2), withPreset(fixture9005, api.PresetIdMaxPlus2)}},
 		{Speed: 219, Entries: []api.SpeedTableEntry{
-			withPreset(fixture9002, api.MaxScarf), withPreset(fixture9002, api.MaxPlus1),
-			withPreset(fixture9005, api.MaxScarf), withPreset(fixture9005, api.MaxPlus1),
+			withPreset(fixture9002, api.PresetIdMaxScarf), withPreset(fixture9002, api.PresetIdMaxPlus1),
+			withPreset(fixture9005, api.PresetIdMaxScarf), withPreset(fixture9005, api.PresetIdMaxPlus1),
 		}},
-		{Speed: 146, Entries: []api.SpeedTableEntry{withPreset(fixture9002, api.Max), withPreset(fixture9005, api.Max)}},
-		{Speed: 133, Entries: []api.SpeedTableEntry{withPreset(fixture9002, api.NeutralMax), withPreset(fixture9005, api.NeutralMax)}},
-		{Speed: 101, Entries: []api.SpeedTableEntry{withPreset(fixture9002, api.Uninvested), withPreset(fixture9005, api.Uninvested)}},
+		{Speed: 146, Entries: []api.SpeedTableEntry{withPreset(fixture9002, api.PresetIdMax), withPreset(fixture9005, api.PresetIdMax)}},
+		{Speed: 133, Entries: []api.SpeedTableEntry{withPreset(fixture9002, api.PresetIdNeutralMax), withPreset(fixture9005, api.PresetIdNeutralMax)}},
+		{Speed: 101, Entries: []api.SpeedTableEntry{withPreset(fixture9002, api.PresetIdUninvested), withPreset(fixture9005, api.PresetIdUninvested)}},
 		// 同じポケモンの同速(スカーフと +1)も 1 つの段。0.5 ちょうどの切り捨てで 184 になる例。
 		{Speed: 184, Entries: []api.SpeedTableEntry{
-			{PokemonId: "9006-000", NameJa: "テストコオリクジラン", Types: []string{"ice", "water"}, BaseSpeed: 60, Preset: api.MaxScarf},
-			{PokemonId: "9006-000", NameJa: "テストコオリクジラン", Types: []string{"ice", "water"}, BaseSpeed: 60, Preset: api.MaxPlus1},
+			{PokemonId: "9006-000", NameJa: "テストコオリクジラン", Types: []string{"ice", "water"}, BaseSpeed: 60, Preset: api.PresetIdMaxScarf},
+			{PokemonId: "9006-000", NameJa: "テストコオリクジラン", Types: []string{"ice", "water"}, BaseSpeed: 60, Preset: api.PresetIdMaxPlus1},
 		}},
 	}
 	for _, want := range wantTies {
@@ -312,39 +312,39 @@ func TestTablePresetsSubset(t *testing.T) {
 		{
 			name:        "スカーフだけ",
 			query:       "presets=max-scarf",
-			wantPresets: []api.PresetId{api.MaxScarf},
+			wantPresets: []api.PresetId{api.PresetIdMaxScarf},
 			wantOrder:   []int{300, 267, 250, 219, 184, 159, 135},
 			wantTiers: map[int][]row{
-				300: {{"9004-000", api.MaxScarf}},
-				267: {{"9008-000", api.MaxScarf}},
-				250: {{"9001-000", api.MaxScarf}},
-				219: {{"9002-000", api.MaxScarf}, {"9005-000", api.MaxScarf}},
-				184: {{"9006-000", api.MaxScarf}},
-				159: {{"9003-000", api.MaxScarf}},
-				135: {{"9007-000", api.MaxScarf}},
+				300: {{"9004-000", api.PresetIdMaxScarf}},
+				267: {{"9008-000", api.PresetIdMaxScarf}},
+				250: {{"9001-000", api.PresetIdMaxScarf}},
+				219: {{"9002-000", api.PresetIdMaxScarf}, {"9005-000", api.PresetIdMaxScarf}},
+				184: {{"9006-000", api.PresetIdMaxScarf}},
+				159: {{"9003-000", api.PresetIdMaxScarf}},
+				135: {{"9007-000", api.PresetIdMaxScarf}},
 			},
 		},
 		{
 			// 指定の順(+1 → 無振り)は結果に影響しない。
 			name:        "逆順の指定",
 			query:       "presets=max-plus1,uninvested",
-			wantPresets: []api.PresetId{api.Uninvested, api.MaxPlus1},
+			wantPresets: []api.PresetId{api.PresetIdUninvested, api.PresetIdMaxPlus1},
 			wantOrder:   []int{300, 267, 250, 219, 184, 159, 150, 135, 130, 120, 101, 80, 65, 50},
 			wantTiers: map[int][]row{
-				300: {{"9004-000", api.MaxPlus1}},
-				267: {{"9008-000", api.MaxPlus1}},
-				250: {{"9001-000", api.MaxPlus1}},
-				219: {{"9002-000", api.MaxPlus1}, {"9005-000", api.MaxPlus1}},
-				184: {{"9006-000", api.MaxPlus1}},
-				159: {{"9003-000", api.MaxPlus1}},
-				150: {{"9004-000", api.Uninvested}},
-				135: {{"9007-000", api.MaxPlus1}},
-				130: {{"9008-000", api.Uninvested}},
-				120: {{"9001-000", api.Uninvested}},
-				101: {{"9002-000", api.Uninvested}, {"9005-000", api.Uninvested}},
-				80:  {{"9006-000", api.Uninvested}},
-				65:  {{"9003-000", api.Uninvested}},
-				50:  {{"9007-000", api.Uninvested}},
+				300: {{"9004-000", api.PresetIdMaxPlus1}},
+				267: {{"9008-000", api.PresetIdMaxPlus1}},
+				250: {{"9001-000", api.PresetIdMaxPlus1}},
+				219: {{"9002-000", api.PresetIdMaxPlus1}, {"9005-000", api.PresetIdMaxPlus1}},
+				184: {{"9006-000", api.PresetIdMaxPlus1}},
+				159: {{"9003-000", api.PresetIdMaxPlus1}},
+				150: {{"9004-000", api.PresetIdUninvested}},
+				135: {{"9007-000", api.PresetIdMaxPlus1}},
+				130: {{"9008-000", api.PresetIdUninvested}},
+				120: {{"9001-000", api.PresetIdUninvested}},
+				101: {{"9002-000", api.PresetIdUninvested}, {"9005-000", api.PresetIdUninvested}},
+				80:  {{"9006-000", api.PresetIdUninvested}},
+				65:  {{"9003-000", api.PresetIdUninvested}},
+				50:  {{"9007-000", api.PresetIdUninvested}},
 			},
 		},
 		{
