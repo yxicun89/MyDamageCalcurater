@@ -56,11 +56,21 @@ function countingClient(): CountingBalanceClient {
   };
 }
 
-function renderScreen(master: MasterData): { user: UserEvent; client: CountingBalanceClient } {
+function renderScreen(master: MasterData): {
+  user: UserEvent;
+  client: CountingBalanceClient;
+  rerenderMaster: (next: MasterData) => void;
+} {
   const user = userEvent.setup();
   const client = countingClient();
-  render(<BalanceScreen master={master} client={client} />);
-  return { user, client };
+  const rendered = render(<BalanceScreen master={master} client={client} />);
+  return {
+    user,
+    client,
+    rerenderMaster: (next) => {
+      rendered.rerender(<BalanceScreen master={next} client={client} />);
+    },
+  };
 }
 
 const memberGroup = (n: number) => screen.getByRole("group", { name: `メンバー${String(n)}` });
@@ -129,5 +139,30 @@ describe("capabilities を省いたマスタ(オフライン相当)は今まで�
     await waitFor(() => {
       expect(client.calls).toContain("analyze");
     });
+  });
+});
+
+describe("A-9 のガードが実際に効いていること(critic 指摘の回帰ガード)", () => {
+  test("メンバーを選んだ状態でオンラインの capabilities に切り替わると、analyze を呼び直さない", async () => {
+    // 先に使えるマスタで選ばせ、analyze が呼ばれることを確認する(入力が空だから呼ばれない、という
+    // 見せかけの緑を避けるため)。member.speciesKey は画面のローカル state なので、master が変わっても
+    // 選択は残る = balanceAvailable のガード以外に呼び出しを止めるものが無い状態を作れる。
+    const { user, client, rerenderMaster } = renderScreen(example);
+    await user.selectOptions(
+      within(memberGroup(1)).getByRole("combobox", { name: "ポケモン" }),
+      speciesAt(0).key,
+    );
+    await waitFor(() => {
+      expect(client.calls).toContain("analyze");
+    });
+    const callsBeforeSwitch = client.calls.length;
+
+    rerenderMaster(limitedMaster(example, ONLINE_MASTER_CAPABILITIES));
+
+    expect(screen.getByText(masterOnlineText.balanceUnavailable)).toBeInTheDocument();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(client.calls.length).toBe(callsBeforeSwitch);
   });
 });

@@ -118,16 +118,21 @@
   公開 API に無いデータに依存するため capabilities で明示的に無効を伝える)、`App.tsx`/`main.tsx` の配線。
   実装時に見つけた重大バグ(`baseUrl: "/"`(本番の既定)で `new URL(path, baseUrl)` が Invalid URL 例外を投げ、
   オンラインモードが常に失敗する)を修正し回帰テストを追加(critic 指摘。文字列連結に変更)。画面側は未着手
-- [ ] P4-16b Web のオンライン MasterSource の画面側(ADR-0304 A-5・A-7): 種族の検索コンボボックス、技選択・持ち物候補比較・
-  特性一覧が使えないときの無効化と案内表示(`i18n/ja.ts` の `masterOnlineText` を使う)。`web/src/screens/*.tsx` が対象。
-  併せて拾う軽微な積み残し(P4-16 の2回目 critic PASS で指摘。ブロッカーではない): (1) `onlineSource.ts` の
-  AbortError 再送出に検証テストが無い(検索キャンセル実装時に signal で reject するテストを追加)。
-  (2) `response.json()` 側の catch は abort を汎用エラーに潰す(fetch 側と同じ扱いに揃える)。
-  (3) `onlineSource.test.ts` の `urlOf` に基点を足した副作用で、`natures`/`species` の呼び出しは絶対 URL の
-  origin を検査していない(`items` のみ検査済み)。(4) `SPECIES_SEARCH_DEBOUNCE_MS` が未使用なら削除か使用を確認
-  spec 済み(受け入れ条件と失敗するテストの正は ADR-0304「追記2」A-9〜A-11): BalanceScreen は
-  `speciesList` と `moves` が両方そろうまで画面ごと無効(案内 + 入力を全部 disabled + balance API を呼ばない)。
-  検索を画面へ渡す経路は `ScreenProps.masterSearch?`。(4) は検索欄が使い手になるので残す
+- [x] P4-16b Web のオンライン MasterSource の画面側(ADR-0304 A-5・A-7・「追記2」A-9〜A-11。critic 2回目 PASS 相当:
+  1回目 FAIL の指摘のうち必須分〈重要1・重要4・軽微1・軽微2〉は修正済み、重要2・3・軽微3・4 は下記 P4-16c へ分離
+  〈critic 許容範囲〉): 種族の検索コンボボックス(ADR A-4・A-10)、技選択・持ち物候補比較が使えないときの無効化と
+  案内表示(`i18n/ja.ts` の `masterOnlineText`)、BalanceScreen は `speciesList`・`moves` が両方そろうまで画面ごと
+  無効(案内 + 入力を全部 disabled + balance API を呼ばない。A-9)。検索を画面へ渡す経路は `ScreenProps.masterSearch?`
+  (A-10)。P4-16 の積み残し(1)(2)(response.json 側の AbortError 再送出)も本タスクで解消・回帰テスト追加。
+  (3)(4)は影響が無い軽微事項のため P4-16c にまとめて送る
+- [ ] P4-16c P4-16b の critic 指摘で今回見送った残り(ブロッカーではないが今回中に必須ではないため分離。
+  critic の許容どおり明記): (1) 種族の検索候補がキーボードで選べない(↑↓/Enter/Escape・`aria-activedescendant`
+  が無い。WAI-ARIA Combobox パターン未実装。`web/src/screens/SpeciesSearchField.tsx`)。(2) 検索欄に CSS が無い
+  (`species-search__*` のクラスが未スタイルのまま。`docs/design.md` に沿った見た目を用意する)。
+  (3) `onlineSource.test.ts` の `urlOf` に基点を足した副作用で `natures`/`species` の呼び出しが絶対 URL の origin を
+  検査していない(`items` のみ検査済み)。(4) 検索中に入力を空へ戻した直後に古い検索が届くケースの未カバー
+  (`createDeferredSpeciesSearch` で1件追加)。(5) `aria-controls` の参照先が閉じているとき DOM に無い・
+  `aria-selected` が常に false
 - [ ] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら
   `capabilities.moves` を true にして技を復活させる
 - [ ] P4-18 Codex コードレビューの issue(Web レーン主担当。タイプバランスレーンから 2026-09-23 に連絡・`gh issue view <番号>`)。

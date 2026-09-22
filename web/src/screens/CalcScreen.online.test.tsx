@@ -81,6 +81,22 @@ function fakeSearch(limit?: number): FakeSpeciesSearch {
   });
 }
 
+/**
+ * 名前が共通の接頭辞("テスト")で始まる架空の種族を SPECIES_SEARCH_LIMIT 件以上作る
+ * (createFakeSpeciesSearch は limit オプションを渡さない限り母集団の件数をそのまま返すので、
+ * 実際に SPECIES_SEARCH_LIMIT に「達した」状態を作るには母集団自体をこの件数以上にする必要がある。
+ * 元は limit: 1 でごまかしていたが、それだと SPECIES_SEARCH_LIMIT の実値と無関係に常に
+ * speciesSearchTruncated が出る実装(重大な文言バグ)を見逃す。critic 指摘で修正)。
+ */
+function manySpecies(count: number): readonly MasterSpecies[] {
+  const base = speciesAt(0);
+  return Array.from({ length: count }, (_, index) => ({
+    ...base,
+    key: `${base.key}-many-${index}`,
+    nameJa: `テスト種族${index}`,
+  }));
+}
+
 /** 検索欄に名前を入れ、デバウンスを越えてから候補を選ぶ。 */
 async function chooseBySearch(
   rendered: RenderResult,
@@ -247,13 +263,12 @@ describe("種族の一覧が無いマスタ(capabilities.speciesList === false�
     expect(within(attackerCard()).queryAllByRole("option")).toHaveLength(0);
   });
 
-  test("候補が上限に達したら、全件ではないことを明示する", async () => {
-    // 例データは十数件なので、上限そのものを1件に下げて「上限に達した」状態を作る
-    // (SPECIES_SEARCH_LIMIT の値自体は onlineSource.ts が正。ここでは画面の表示だけを見る)。
+  test("候補が SPECIES_SEARCH_LIMIT に達したら、全件ではないことを明示する", async () => {
+    // 母集団自体を SPECIES_SEARCH_LIMIT 件ちょうどにし、実際に上限へ「達した」状態を作る
+    // (limit オプションで人為的に絞ると、実装が候補数を見ずに常に案内を出していても検知できない)。
     const search = createFakeSpeciesSearch({
-      species: example.species,
+      species: manySpecies(SPECIES_SEARCH_LIMIT),
       abilities: example.abilities,
-      limit: 1,
     });
     const rendered = renderScreen(limitedMaster(example, SEARCH_ONLY), search);
     await rendered.user.type(
@@ -265,7 +280,26 @@ describe("種族の一覧が無いマスタ(capabilities.speciesList === false�
     expect(
       await within(attackerCard()).findByText(masterOnlineText.speciesSearchTruncated),
     ).toBeInTheDocument();
-    expect(SPECIES_SEARCH_LIMIT).toBeGreaterThan(0);
+  });
+
+  test("候補が SPECIES_SEARCH_LIMIT 未満なら、全件ではないことを明示しない(critic 指摘の回帰ガード)", async () => {
+    // manySpecies(SPECIES_SEARCH_LIMIT) は達するが、1件少ない母集団では出ないことを確かめる
+    // (「候補が1件でもあれば常に出す」実装への回帰を検知する)。
+    const search = createFakeSpeciesSearch({
+      species: manySpecies(SPECIES_SEARCH_LIMIT - 1),
+      abilities: example.abilities,
+    });
+    const rendered = renderScreen(limitedMaster(example, SEARCH_ONLY), search);
+    await rendered.user.type(
+      within(attackerCard()).getByRole("combobox", { name: "攻撃側のポケモン" }),
+      "テスト",
+    );
+    rendered.advance(SPECIES_SEARCH_DEBOUNCE_MS);
+
+    expect(await within(attackerCard()).findAllByRole("option")).toHaveLength(SPECIES_SEARCH_LIMIT - 1);
+    expect(
+      within(attackerCard()).queryByText(masterOnlineText.speciesSearchTruncated),
+    ).not.toBeInTheDocument();
   });
 
   test("検索に失敗したら、その旨を出して古い候補を残さない", async () => {

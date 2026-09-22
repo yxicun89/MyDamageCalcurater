@@ -44,9 +44,17 @@ import type {
   Move,
   MoveCategory,
 } from "../engine/types";
-import { calcScreenText, isTypeId, typeNameJa } from "../i18n/ja";
-import type { MasterData, MasterSpecies, MasterSpeciesSearch } from "../master/types";
+import { calcScreenText, isTypeId, masterOnlineText, typeNameJa } from "../i18n/ja";
+import { masterCapabilities } from "../master/capabilities";
+import type {
+  MasterData,
+  MasterSpecies,
+  MasterSpeciesResolution,
+  MasterSpeciesSearch,
+} from "../master/types";
 import { prefersReducedMotion } from "../ui/motion";
+import { SpeciesSearchField } from "./SpeciesSearchField";
+import { useSpeciesResolutions } from "./speciesResolution";
 import "./CalcScreen.css";
 
 /**
@@ -238,7 +246,11 @@ function resolveMoveId(species: MasterSpecies | null, moves: readonly Move[], cu
 }
 
 /** 計算画面(design.md「画面: ダメージ計算」、ADR-0300 §2・§6)。攻撃側・防御側・技が揃うと自動で計算する。 */
-export function CalcScreen({ engine, master }: CalcScreenProps) {
+export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
+  // P4-16b(ADR-0304 A-2・A-9・A-10): 使える機能。capabilities を省いたマスタ(オフライン相当)は全部使える。
+  const capabilities = masterCapabilities(master);
+  // 検索で解決した種族・特性の覚え書き(capabilities.speciesList が true のときは常に空のまま。ADR-0304 A-10)。
+  const { speciesFor, abilitiesFor, register: registerSpeciesResolution } = useSpeciesResolutions();
   const [attackerKey, setAttackerKey] = useState("");
   const [defenderKey, setDefenderKey] = useState("");
   const [attackerItemId, setAttackerItemId] = useState("");
@@ -272,12 +284,12 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
   const activeHoloClearRef = useRef<(() => void) | null>(null);
 
   const attackerSpecies = useMemo(
-    () => master.species.find((species) => species.key === attackerKey) ?? null,
-    [master.species, attackerKey],
+    () => speciesFor(master.species, attackerKey),
+    [master.species, attackerKey, speciesFor],
   );
   const defenderSpecies = useMemo(
-    () => master.species.find((species) => species.key === defenderKey) ?? null,
-    [master.species, defenderKey],
+    () => speciesFor(master.species, defenderKey),
+    [master.species, defenderKey, speciesFor],
   );
   const attackerItem = useMemo(
     () => master.items.find((item) => item.id === attackerItemId) ?? null,
@@ -298,8 +310,24 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
 
   function selectAttacker(key: string): void {
     setAttackerKey(key);
-    const species = master.species.find((candidate) => candidate.key === key) ?? null;
+    const species = speciesFor(master.species, key);
     setMoveId((prev) => resolveMoveId(species, master.moves, prev));
+  }
+
+  /**
+   * P4-16b(ADR-0304 A-10): 検索で攻撃側の種族が解決したとき。resolution.species をそのまま使う
+   * (register の setState は非同期なので、直後に speciesFor で引き直すと古い覚え書きのままになる)。
+   */
+  function handleAttackerResolved(resolution: MasterSpeciesResolution): void {
+    registerSpeciesResolution(resolution);
+    setAttackerKey(resolution.species.key);
+    setMoveId((prev) => resolveMoveId(resolution.species, master.moves, prev));
+  }
+
+  /** P4-16b(ADR-0304 A-10): 検索で防御側の種族が解決したとき(防御側は技を持たないので moveId は変えない)。 */
+  function handleDefenderResolved(resolution: MasterSpeciesResolution): void {
+    registerSpeciesResolution(resolution);
+    setDefenderKey(resolution.species.key);
   }
 
   /** タイマーが残っていれば止める(2回目の入れ替えで前のタイマーが後から発火しないように)。 */
@@ -417,7 +445,7 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
       sp,
       nature,
       item: attackerItem,
-      ability: defaultAbility(attackerSpecies, master.abilities),
+      ability: defaultAbility(attackerSpecies, abilitiesFor(master.abilities, attackerKey)),
     });
     const candidates = defensiveItemCandidates(master.items, move);
     const itemVariants = defenderItemVariants({
@@ -454,6 +482,7 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
   }, [
     engine,
     master,
+    attackerKey,
     attackerSpecies,
     defenderSpecies,
     move,
@@ -461,6 +490,7 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
     defenderItem,
     compareItems,
     attackerPresetKey,
+    abilitiesFor,
   ]);
 
   // idle・status-move は選ばれている入力から直接決まる。completed が無い、または今の入力と違う入力の
@@ -494,11 +524,15 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
           regionLabel={calcScreenText.attackerRegionLabel}
           speciesSelectLabel={calcScreenText.attackerPokemonLabel}
           itemSelectLabel={calcScreenText.attackerItemLabel}
+          species={attackerSpecies}
+          speciesListAvailable={capabilities.speciesList}
           speciesList={master.species}
+          masterSearch={masterSearch}
           items={master.items}
           selectedSpeciesKey={attackerKey}
           selectedItemId={attackerItemId}
           onSpeciesChange={selectAttacker}
+          onSpeciesResolved={handleAttackerResolved}
           onItemChange={setAttackerItemId}
           isSwapping={swapping}
           onSwapAnimationEnd={endSwapAnimation}
@@ -519,11 +553,15 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
           regionLabel={calcScreenText.defenderRegionLabel}
           speciesSelectLabel={calcScreenText.defenderPokemonLabel}
           itemSelectLabel={calcScreenText.defenderItemLabel}
+          species={defenderSpecies}
+          speciesListAvailable={capabilities.speciesList}
           speciesList={master.species}
+          masterSearch={masterSearch}
           items={master.items}
           selectedSpeciesKey={defenderKey}
           selectedItemId={defenderItemId}
           onSpeciesChange={setDefenderKey}
+          onSpeciesResolved={handleDefenderResolved}
           onItemChange={setDefenderItemId}
           isSwapping={swapping}
           onSwapAnimationEnd={endSwapAnimation}
@@ -531,18 +569,23 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
         />
       </div>
 
-      <MoveSelect moves={attackerMoves} value={moveId} onChange={setMoveId} />
+      <MoveSelect moves={attackerMoves} value={moveId} onChange={setMoveId} disabled={!capabilities.moves} />
+      {!capabilities.moves && <p className="calc-screen__notice">{masterOnlineText.movesUnavailable}</p>}
 
       <label className="calc-screen__compare">
         <input
           type="checkbox"
           checked={compareItems}
+          disabled={!capabilities.effects}
           onChange={(event) => {
             setCompareItems(event.target.checked);
           }}
         />
         {calcScreenText.compareItemCandidatesLabel}
       </label>
+      {!capabilities.effects && (
+        <p className="calc-screen__notice">{masterOnlineText.itemCandidatesUnavailable}</p>
+      )}
 
       <ResultsSection
         outcome={outcome}
@@ -559,11 +602,19 @@ interface SpeciesCardProps {
   readonly regionLabel: string;
   readonly speciesSelectLabel: string;
   readonly itemSelectLabel: string;
+  /** 選ばれている種族の実体(ドロップダウン・検索のどちらで選んでも、呼び出し側が解決して渡す)。 */
+  readonly species: MasterSpecies | null;
+  /** P4-16b(ADR-0304 A-10): 種族の一覧が使えるか。false ならドロップダウンの代わりに検索欄を出す。 */
+  readonly speciesListAvailable: boolean;
   readonly speciesList: readonly MasterSpecies[];
+  /** 検索口(speciesListAvailable が false のときに使う。省略は「検索できない」)。 */
+  readonly masterSearch: MasterSpeciesSearch | undefined;
   readonly items: readonly Item[];
   readonly selectedSpeciesKey: string;
   readonly selectedItemId: string;
   readonly onSpeciesChange: (key: string) => void;
+  /** 検索で種族が解決したとき(speciesListAvailable が false のときに使う)。 */
+  readonly onSpeciesResolved: (resolution: MasterSpeciesResolution) => void;
   readonly onItemChange: (id: string) => void;
   /** カードの中に足す追加要素(攻撃側プリセットの選択。防御側カードは渡さない)。 */
   readonly children?: ReactNode;
@@ -579,18 +630,21 @@ function SpeciesCard({
   regionLabel,
   speciesSelectLabel,
   itemSelectLabel,
+  species,
+  speciesListAvailable,
   speciesList,
+  masterSearch,
   items,
   selectedSpeciesKey,
   selectedItemId,
   onSpeciesChange,
+  onSpeciesResolved,
   onItemChange,
   children,
   isSwapping,
   onSwapAnimationEnd,
   activeHoloClearRef,
 }: SpeciesCardProps) {
-  const species = speciesList.find((candidate) => candidate.key === selectedSpeciesKey) ?? null;
   const primaryType = species?.types[0];
   const holo = useHoloCard(activeHoloClearRef);
   const className = ["calc-card", isSwapping ? "is-swapping" : "", holo.isHolo ? "is-holo" : ""]
@@ -610,34 +664,46 @@ function SpeciesCard({
       onPointerMove={holo.onPointerMove}
       onPointerLeave={holo.onPointerLeave}
     >
-      <select
-        aria-label={speciesSelectLabel}
-        value={selectedSpeciesKey}
-        onChange={(event) => {
-          onSpeciesChange(event.target.value);
-        }}
-      >
-        <option value="" hidden />
-        {speciesList.map((candidate) => (
-          <option key={candidate.key} value={candidate.key}>
-            {candidate.nameJa}
-          </option>
-        ))}
-      </select>
-      <select
-        aria-label={itemSelectLabel}
-        value={selectedItemId}
-        onChange={(event) => {
-          onItemChange(event.target.value);
-        }}
-      >
-        <option value="">{calcScreenText.noItemOption}</option>
-        {items.map((item) => (
-          <option key={item.id} value={item.id}>
-            {item.nameJa}
-          </option>
-        ))}
-      </select>
+      {speciesListAvailable ? (
+        <select
+          aria-label={speciesSelectLabel}
+          value={selectedSpeciesKey}
+          onChange={(event) => {
+            onSpeciesChange(event.target.value);
+          }}
+        >
+          <option value="" hidden />
+          {speciesList.map((candidate) => (
+            <option key={candidate.key} value={candidate.key}>
+              {candidate.nameJa}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <SpeciesSearchField
+          label={speciesSelectLabel}
+          masterSearch={masterSearch}
+          onResolved={onSpeciesResolved}
+        />
+      )}
+      {/* P4-16b(ADR-0304 A-10): 検索中(まだ種族が解決していない)は持ち物欄も出さない
+          (attackerCard 内の role="option" は種族の検索候補だけにする。「入力前は候補を出さない」)。 */}
+      {(speciesListAvailable || species !== null) && (
+        <select
+          aria-label={itemSelectLabel}
+          value={selectedItemId}
+          onChange={(event) => {
+            onItemChange(event.target.value);
+          }}
+        >
+          <option value="">{calcScreenText.noItemOption}</option>
+          {items.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.nameJa}
+            </option>
+          ))}
+        </select>
+      )}
       {species !== null && primaryType !== undefined && (
         <div className="calc-card__info">
           <span
@@ -706,14 +772,17 @@ interface MoveSelectProps {
   readonly moves: readonly Move[];
   readonly value: string;
   readonly onChange: (moveId: string) => void;
+  /** P4-16b(ADR-0304 A-5): capabilities.moves が false のとき、欄は残すが disabled にする。 */
+  readonly disabled?: boolean;
 }
 
 /** 技セレクタ。learnset の順のまま、分類と威力(変化技は威力を出さない)を併記する。 */
-function MoveSelect({ moves, value, onChange }: MoveSelectProps) {
+function MoveSelect({ moves, value, onChange, disabled = false }: MoveSelectProps) {
   return (
     <select
       aria-label={calcScreenText.moveLabel}
       value={value}
+      disabled={disabled}
       onChange={(event) => {
         onChange(event.target.value);
       }}

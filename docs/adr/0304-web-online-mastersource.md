@@ -184,6 +184,13 @@ SearchableMasterSource extends MasterSource { readonly search: MasterSpeciesSear
   逆算画面の持ち物候補を `disabled` にし、`masterOnlineText.itemCandidatesUnavailable` を添える。
   持ち物そのものの選択は残す(API の計算は `itemId` だけを送るので成立する)。
 - **種族**(`capabilities.speciesList === false`): ドロップダウンの代わりに検索欄(A-4)。
+  **追記(P4-16b 実装。critic 指摘): 検索モードで種族がまだ解決していない間は、持ち物欄も一時的に出さない**
+  (「欄を消さず `disabled` にする」という上の原則からの意図的な例外)。理由: HTML の `<select><option>` も
+  検索候補の `<li role="option">` も同じ ARIA ロール `option` を持つため、種族が未解決の間に持ち物欄を
+  `disabled` のまま描画すると、カード内の `role="option"` 要素数だけでは「検索候補が0件」と「持ち物の
+  選択肢がある」を区別できない(テストの検証手段の制約ではなく、支援技術から見ても2つの意味が異なる
+  `option` 集合が同じ親カード内に混在すること自体が紛らわしいため、実装上も分けるのが妥当と判断した)。
+  種族が解決すれば通常どおり持ち物欄も出る。
 
 ### A-6. モードとマスタの結び付け(`App.tsx`)
 
