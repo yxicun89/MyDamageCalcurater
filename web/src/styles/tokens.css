@@ -1,0 +1,113 @@
+/*
+ * デザイントークン(CSS 変数)。
+ * 値の正は docs/design.md「デザイントークン」。iOS(SwiftUI の Color/Font 拡張)と同じ名前・同じ値を使う
+ * (docs/design.md 冒頭、ADR-0300 §4)。色は必ずこのファイルの `--*` 定義の中だけに書き、
+ * それ以外の宣言や TypeScript には書かない(コーディング規約 §2、web/src/styles/noColorLiterals.test.ts)。
+ */
+
+/* ライトのベース値(docs/design.md「ベース」表のライト列)。 */
+:root {
+  --bg-base: #f4f5f7;
+  /* bg.glass はガラス風の半透明背景。design.md の「白 70% + ぼかし」を rgba で表す。 */
+  --bg-glass: rgba(255, 255, 255, 0.7);
+  /* ぼかし量は色と別の変数で持つ(design.md の表の値そのものではないため)。 */
+  --bg-glass-blur: 20px;
+  --text-primary: #14161a;
+  --text-secondary: #5c6270;
+  /* border.hairline は黒 8%(design.md)。 */
+  --border-hairline: rgba(0, 0, 0, 0.08);
+  --danger: #e5484d;
+
+  /* タイプ色(docs/design.md「タイプ色(自作パレット)」)。用途: バッジ・カードのふち・ダメージバー・効果抜群表示。
+     ライト / ダークで同じ値(タイプの色は背景の明暗と独立)。 */
+  --type-normal: #9fa19f;
+  --type-fire: #e8622b;
+  --type-water: #3b8fe0;
+  --type-electric: #f2c21b;
+  --type-grass: #4caf50;
+  --type-ice: #5cc8d8;
+  --type-fighting: #d0453a;
+  --type-poison: #9b51c6;
+  --type-ground: #b8863b;
+  --type-flying: #7fa7e8;
+  --type-psychic: #e8517f;
+  --type-bug: #93b21e;
+  --type-rock: #a99a62;
+  --type-ghost: #6b55a8;
+  --type-dragon: #5160d8;
+  --type-dark: #54474a;
+  --type-steel: #6e93a8;
+  --type-fairy: #e68ad6;
+
+  /* 文字(docs/design.md「文字」)。Web の書体は SF Pro Rounded → M PLUS Rounded 1c → system-ui の順。 */
+  --font-family: "SF Pro Rounded", "M PLUS Rounded 1c", system-ui, sans-serif;
+  --font-size-result: 28px;
+  --font-size-heading: 17px;
+  --font-size-body: 15px;
+  --font-size-caption: 12px;
+
+  /* 形・余白(docs/design.md「形・余白」)。 */
+  --radius-card: 20px;
+  --radius-pill: 999px;
+  --radius-input: 12px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+
+  /* 動き(docs/design.md「動き」)。攻守入れ替えのカードアニメーションの秒数。 */
+  --duration-swap: 0.35s;
+}
+
+/* OS がダーク設定のときのダーク値。data-theme="light" の明示指定はこの上書きより優先する
+   (:not([data-theme="light"]) にすることで、常時ダークの OS でもライト表示を選べるようにする)。 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-base: #0e1015;
+    --bg-glass: rgba(26, 29, 36, 0.6);
+    --text-primary: #f2f3f5;
+    --text-secondary: #a3a9b6;
+    --border-hairline: rgba(255, 255, 255, 0.1);
+    --danger: #ff6369;
+  }
+}
+
+/* data-theme="dark" の明示指定(OS の設定に関わらずダークを選んだとき)。 */
+:root[data-theme="dark"] {
+  --bg-base: #0e1015;
+  --bg-glass: rgba(26, 29, 36, 0.6);
+  --text-primary: #f2f3f5;
+  --text-secondary: #a3a9b6;
+  --border-hairline: rgba(255, 255, 255, 0.1);
+  --danger: #ff6369;
+}
+
+/* OS の「視差効果を減らす」設定では全演出を無効化する(docs/design.md「動き」)。
+   `animation: none` ではなく継続時間を 0 にする形にする: 前者は要素からアニメーションそのものを外すため
+   `animationend` が発火しなくなり、それを待つ処理(例: 攻守入れ替えの完了検知)が止まってしまう。
+   `*` は詳細度が 0 なので、クラスやインラインの transition/animation 宣言にも勝つよう `!important` を付ける。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  :root {
+    --duration-swap: 0s;
+  }
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  /* 数字を等幅にする(docs/design.md「文字」、iOS の .monospacedDigit() に対応)。 */
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}

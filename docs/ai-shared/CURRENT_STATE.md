@@ -16,10 +16,10 @@ Next: P3-3(gateway 経由の契約テストと k3d のスモーク: calc・gatew
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
-Active: なし
+Active: Claude Code
 Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
-Status: 未着手(2026-09-21 にレーンを新設)
-Next: docs/plan.md の P4-1(docs/design.md のデザイントークンを CSS 変数に)から。P4-2〜P4-4 は WASM(make wasm の engine.wasm と engine/wasmapi の JSON 契約。ADR-0011)で先に作り、マスタ(種族・技・持ち物)は pokedex-svc ができるまで架空データで作る。P4-5 の API 接続は API レーンが api/openapi.yaml を main に入れてから
+Status: P4-1〜P4-5 完了・PR #22 で main に統合(critic PASS。WASM で計算・架空の例マスタ・API / WASM 切り替え。ADR-0300 / ADR-0301)。P4-5 のブラウザ実機確認(Chrome・Safari)は人間待ち
+Next: P4-6 Playwright E2E(offline / online。online は例データを書き出して calc-svc を起動)と、Web のテストを make test / make lint に組み込む(ユーザー決定 2026-09-22: node_modules が無ければ npm ci)。続いて P4-7 docs/verify-m1.md
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)

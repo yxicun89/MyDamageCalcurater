@@ -1,0 +1,224 @@
+/*
+ * 計算画面(docs/design.md「画面: ダメージ計算」)。色は必ず tokens.css の CSS 変数(--*)で参照し、
+ * ここに 16 進の色リテラルを書かない(web/src/styles/noColorLiterals.test.ts)。
+ * 動きは操作(攻守入れ替え・値の変化)への反応だけにする(design.md「動き」、CLAUDE.md ドメイン規約)。
+ */
+
+.calc-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+.calc-screen__cards {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.calc-screen__swap {
+  align-self: center;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-pill);
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--bg-glass-blur));
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  /* 攻守入れ替え自体はボタン押下への反応(design.md「動き」)。 */
+  transition: transform var(--duration-swap) ease;
+}
+
+.calc-screen__swap:active {
+  transform: rotate(180deg);
+}
+
+.calc-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--bg-glass-blur));
+  padding: var(--space-4);
+}
+
+.calc-card select {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  padding: var(--space-2) var(--space-3);
+}
+
+.calc-card__info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.calc-card__emblem {
+  display: inline-block;
+  width: var(--space-5);
+  height: var(--space-5);
+  border-radius: 50%;
+}
+
+.calc-card__name {
+  margin: 0;
+  font-size: var(--font-size-heading);
+  color: var(--text-primary);
+}
+
+.calc-card__types {
+  display: flex;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--font-size-caption);
+}
+
+.calc-preset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.calc-preset__option {
+  /* 隠したネイティブのラジオ(.calc-preset__input)の位置の基準をラベルにする。 */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+  cursor: pointer;
+  /* 選択の切り替えはタップへの反応だけ(design.md「動き」、CLAUDE.md ドメイン規約: 常時動くアニメーションを入れない)。 */
+  transition:
+    background-color var(--duration-swap) ease,
+    color var(--duration-swap) ease;
+}
+
+.calc-preset__option--selected {
+  /* 既存のトークンだけで選択状態を表す(design.md にアクセントトークンは無いため、地・文字を反転させる)。 */
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+  color: var(--bg-base);
+}
+
+.calc-preset__input {
+  /* 選択の見た目はピルの背景色で表す(design.md)。ネイティブのラジオの丸は隠すが、
+     アクセシビリティツリー上は role=radio のまま残す(視覚的に隠すだけ)。 */
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.calc-screen__compare {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-body);
+  color: var(--text-secondary);
+}
+
+.calc-screen__notice {
+  color: var(--text-secondary);
+  font-size: var(--font-size-body);
+}
+
+.calc-screen__error {
+  color: var(--danger);
+  font-size: var(--font-size-body);
+}
+
+.calc-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.calc-results__effectiveness {
+  margin: 0;
+  font-size: var(--font-size-body);
+  color: var(--text-secondary);
+}
+
+.calc-results__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.calc-results__row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+}
+
+.calc-results__preset {
+  font-size: var(--font-size-heading);
+  color: var(--text-primary);
+}
+
+.calc-results__item {
+  grid-column: 1 / -1;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.calc-results__percent {
+  font-size: var(--font-size-result);
+  color: var(--text-primary);
+}
+
+.calc-results__ko {
+  font-size: var(--font-size-body);
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.calc-results__bar {
+  grid-column: 1 / -1;
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--border-hairline);
+  overflow: hidden;
+}
+
+.calc-results__bar-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  /* ダメージバーの伸び縮み(design.md「動き」: spring アニメーションで減る)。 */
+  transition: width var(--duration-swap) ease;
+}
+
+/* ネイティブのラジオは隠しているので、キーボード操作のフォーカス位置をラベル側に出す(WCAG 2.4.7)。 */
+.calc-preset__option:has(.calc-preset__input:focus-visible) {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
