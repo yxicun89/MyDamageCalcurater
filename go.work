@@ -4,6 +4,7 @@ use (
 	./engine
 	./services
 	./services/balance
+	./services/judge
 	./services/speed
 	./tools
 )

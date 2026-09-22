@@ -62,6 +62,19 @@ web/src/app/screens.tsx の SCREEN_COMPONENTS。P4-10 は PR #44 で main に統
 web/e2e/routing.spec.ts)→ SP5(GitOps。ADR-0603 で SP4 から分離。イメージの digest が決まる段階で着手)。SP4 までに決めた: 空の roster の
 扱いは pokedex export が1件以上を返す前提のまま(ADR-0603 影響。実データで0件になる状況が起きたら別途決める)
 
+## Judge
+Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
+Active: Claude Code
+Branch: feat/judge-jd0(作業ディレクトリ ~/MyDamageCalcurater-judge)
+Status: JD0 の spec-writer まで完了。ADR-0700(基盤・上流の呼び方・エラーの正規化・受け入れ条件8件)を採用し、docs/judge-design.md §4 の
+未決事項5件をすべて決定に変えた(同速は `outspeeds` と `speedTie` を別に返す / JD1 は自分が殴る側だけ / 独自 Ingress `/api/judge`(gateway は変更しない) /
+ADR 帯 0700 / 技の追加効果は request の `ranks` で受ける)。`services/judge/` に契約(api/openapi.yaml。JD0 は healthz のみ)・go.mod・Makefile・README と、
+**失敗する状態のテスト**(internal/httpapi/server_test.go・internal/client/{client,pokedex,calc}_test.go・cmd/api/config_test.go)を置いた。
+ルート Makefile に `include services/judge/Makefile`、go.work に `./services/judge` を追記済み。実装は未了なので `make judge-test` はコンパイルエラーで落ちる(想定どおり)
+Next: implementer が JD0 のテストを通す最小実装を書く(`make judge-gen` → `internal/api` の生成 → `internal/client`(Pokedex・Calc・4つの番兵エラー)→
+`internal/httpapi`(healthz)→ `cmd/api`(環境変数・graceful shutdown))。そのあと critic → deploy/k8s(base の Deployment・Service・Ingress `/api/judge`)と
+Dockerfile を足して `judge-kustomize` / `judge-docker-build` を Makefile に追加 → PR。JD1 は ADR-0700 §5 のとおり endpoint を契約に足すところから
+
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠
 - Type: 18タイプの英語小文字ID(fire, water, ...)。表示名・色は docs/design.md のトークンに準拠

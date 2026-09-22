@@ -740,3 +740,13 @@ Impact: Web が move-range を呼ぶ画面を作るときに、まず `make gen-
 Decision: COORDINATION.md の「Claude の上限時の Codex」節、plan.md の「整備レーン」節(MT-1〜MT-7)、CURRENT_STATE.md の Maintenance 欄を削除する。
 Reason: ユーザーが「Codex はこのプロジェクトで必ず使う必要はなく、有効活用したい程度の感覚。ノイズになるなら消した方がいい」と判断した。整備タスク(MT-3〜MT-7)は文書の整合性などの低優先度の掃除作業で、M1 の完成に影響しない。今後はレーンの作業を Claude だけで進める。
 Impact: 今後、Claude が利用枠の上限に達しても Codex を自動的に起動する仕組みは無い。Codex を使いたい場合は、その都度ユーザーが判断してレーンを直接担当させる(通常のレーン運用と同じ)。MT-1・MT-2(統合検証・check-publishable の自己テスト修正)はすでに完了して main に入っているので、成果は失われない。
+
+## 2026-09-22: JD0 の決定と、技の追加効果によるランク変化のデータをデータレーンへ提案(判定レーン)
+Decision: JD0(ADR-0700)で docs/judge-design.md §4 の未決事項を確定した。(1) 同速は `outspeeds`(厳密に速いか)と `speedTie`(実数値が同じか)を別のフィールドで返す(ADR-0602 の `tie` と同じ立場。真偽値1つに丸めない)。(2) JD1 は自分が攻撃する側だけを扱い、相手の技による返り討ち判定は JD2 以降。(3) judge は `/api/judge` prefix の独自 Ingress を持つ(balance・speed と同じ。gateway は変更せず、API レーンへの依頼も出さない)。(4) 上流(pokedex-svc・calc-svc)はリクエストごとに公開 API を呼び、失敗は judge の4つの番兵エラー(`ErrUpstreamUnavailable` / `ErrUpstreamInvalidResponse` / `ErrNotFound` / `ErrInvalidRequest`)に正規化する。
+Reason: いずれも既存の前例(ADR-0600・0602、balance/speed の Ingress、calc-svc の HTTPSource)から導け、取り消しやすい。深夜帯でないが人間の確認を要する項目(クラスタ削除・known_diffs 等)に当たらないため、判定レーンで決めた。
+Impact: docs/judge-design.md §4 が「未決事項」から「決定事項」に変わった。JD1 の response は `outspeeds` と `speedTie` の2つの真偽値を持つ。
+
+データレーンへの提案(既定案付き。今回は提案の記録のみで、データレーンのファイルは変更していない): **技の追加効果(使用者自身のランク変化)をマスタに持たせてほしい**。
+現状、engine の `Move`・pokedex-svc/calc-svc の公開 API のいずれにも、技の追加効果によるランク変化を表すデータが無いことを確認した。そのため JD1 は「技を撃った後のランク」を呼び出し側(Web/iOS)が `Individual.ranks` に指定する形にした(ADR-0700 §6-5)。ユーザーの元の要望(「ニトチャ+メイン技で素早さ抜けるか」を一発で)を完全に満たすには、技 ID から自動でランク変化を出せることが要る。
+既定案: ADR-0005(データ駆動の効果定義)に沿って、技の効果定義に「追加効果(対象=self/target・確率・ランク変化量)」を足す(例: `{"secondary": {"chance": 100, "self": {"boosts": {"spe": 1}}}}`)。importer と export に通し、calc-svc の `MasterMove` 経由で judge が読めるようにする。
+優先度: 低(JD1 は現状のデータで出せる)。着手は M1 の後でよい。確率が 100% でない追加効果の扱い(発動時/不発時の両方を返すか)は、その実装時に判定レーンと合わせて決める。
