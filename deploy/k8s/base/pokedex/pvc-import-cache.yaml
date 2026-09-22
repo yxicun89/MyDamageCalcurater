@@ -1,0 +1,17 @@
+# pokedex-import(CronJob)の取得キャッシュ・スナップショット・報告・上流の検出結果を置く PVC
+# (ADR-0104 §5)。ReadWriteOnce(単一 Pod からのマウントで十分。CronJob は concurrencyPolicy:
+# Forbid のため同時に複数 Pod がマウントすることはない)。削除は自動化しない(データの削除。
+# CLAUDE.md の人間の確認事項)。
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pokedex-import-cache
+  labels:
+    app.kubernetes.io/name: pokedex-import
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi

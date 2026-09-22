@@ -6,4 +6,4 @@ resources:
 images:
   - name: pokecalc/balance
     newName: localhost:5000/pokecalc/balance
-    digest: sha256:8adc02744ca2bf418852acc616b1e4c2bafcfe1728902f9bd5875f09216fd112
+    digest: sha256:ad41022e5fba325be3911d51c3d82289783c4563cb56e67f83530e081d385b08

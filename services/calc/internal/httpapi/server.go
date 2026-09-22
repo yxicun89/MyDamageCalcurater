@@ -55,7 +55,13 @@ func NewHandler(store master.Store) http.Handler {
 	registerCalcRoutes(e, NewServer(store))
 	registerPokedexNotFoundRoutes(e)
 	e.GET("/healthz", healthzHandler)
+	e.GET("/readyz", readyzHandler)
 	return e
+}
+
+// readyzHandler は起動時に読み込み済み(NewHandler)の /readyz。常に 200(ADR-0204 §3)。
+func readyzHandler(c *echo.Context) error {
+	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // registerCalcRoutes は calc の3操作だけを、生成ラッパ(api.ServerInterfaceWrapper。

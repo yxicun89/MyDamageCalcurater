@@ -418,6 +418,18 @@ func TestConvertRejectsInconsistentData(t *testing.T) {
 			second.ID = "test-reg-two"
 			in.Regulations.Regulations = append(in.Regulations.Regulations, second)
 		}},
+		{"複数のレギュレーションで minSourceGen の値が割れている(ADR-0103 §7・§9)", func(t *testing.T, in *importer.Input) {
+			requireRegulation(t, in)
+			second := in.Regulations.Regulations[0]
+			second.ID, second.IsDefault, second.MinSourceGen = "test-reg-two", false, second.MinSourceGen+1
+			in.Regulations.Regulations = append(in.Regulations.Regulations, second)
+		}},
+		{"複数のレギュレーションで inheritFromPrevo の値が割れている(ADR-0103 §7・§9)", func(t *testing.T, in *importer.Input) {
+			requireRegulation(t, in)
+			second := in.Regulations.Regulations[0]
+			second.ID, second.IsDefault, second.InheritFromPrevo = "test-reg-two", false, !second.InheritFromPrevo
+			in.Regulations.Regulations = append(in.Regulations.Regulations, second)
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -428,6 +440,85 @@ func TestConvertRejectsInconsistentData(t *testing.T) {
 				t.Fatalf("err = %v, want ErrInvalidData", err)
 			}
 		})
+	}
+}
+
+func TestConvertAllowsBaseSpeciesWithoutFormeOrder(t *testing.T) {
+	in := loadFixture(t)
+	calcSpecies(t, &in, "Testbug").BaseStats.HP = 40
+	showdownSpecies(t, &in, "testbug").BaseStats.HP = 40
+	showdownSpecies(t, &in, "testbug").FormeOrder = nil
+
+	out, _, err := importer.Convert(in)
+	if err != nil {
+		t.Fatalf("フォームを持たない基本種の空 formeOrder を拒否した: %v", err)
+	}
+	found := false
+	for _, species := range out.Species {
+		if species.ShowdownID == "testbug" {
+			found = true
+			if species.Form != 0 {
+				t.Errorf("Form = %d, want 0", species.Form)
+			}
+		}
+	}
+	if !found {
+		t.Error("testbug が取り込まれていない")
+	}
+}
+
+func TestConvertKeepsUnavailableMegaBaseOutsideRegulation(t *testing.T) {
+	in := loadFixture(t)
+	kept := in.Calc.Species[:0]
+	for _, species := range in.Calc.Species {
+		if species.Name != "Testmon" {
+			kept = append(kept, species)
+		}
+	}
+	in.Calc.Species = kept
+	past := "Past"
+	showdownSpecies(t, &in, "testmon").IsNonstandard = &past
+
+	out, rep, err := importer.Convert(in)
+	if err != nil {
+		t.Fatalf("レギュレーション外の基本種を持つメガを拒否した: %v", err)
+	}
+	baseKey := ""
+	megaBaseKey := ""
+	for _, species := range out.Species {
+		switch species.ShowdownID {
+		case "testmon":
+			baseKey = species.Key
+		case "testmonmega":
+			megaBaseKey = species.BaseSpeciesKey
+		}
+	}
+	if baseKey == "" || megaBaseKey != baseKey {
+		t.Fatalf("基本種 key = %q, メガの BaseSpeciesKey = %q", baseKey, megaBaseKey)
+	}
+	for _, member := range out.RegulationSpecies {
+		if member.MemberID == baseKey {
+			t.Error("依存行の基本種がレギュレーションの使用可能集合に入った")
+		}
+	}
+	if !hasFinding(rep.Warnings, importer.KindSpeciesMegaBaseDependency, "testmon") {
+		t.Errorf("依存行として取り込んだ testmon が %s の記録に無い", importer.KindSpeciesMegaBaseDependency)
+	}
+}
+
+func TestConvertKeepsHiddenAndSpecialAbilitiesInSeparateSlots(t *testing.T) {
+	in := loadFixture(t)
+	showdownSpecies(t, &in, "testmon").Abilities["S"] = "Test Special"
+
+	out, _ := convertOK(t, in)
+	got := speciesByShowdownID(out)["testmon"].Abilities
+	want := []master.SpeciesAbilityRow{
+		{Slot: 1, AbilityID: "testblaze"},
+		{Slot: 3, AbilityID: "testguard"},
+		{Slot: 4, AbilityID: "testspecial"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Abilities = %v, want %v", got, want)
 	}
 }
 

@@ -184,7 +184,7 @@ func TestConstraintsRejectInvalidRows(t *testing.T) {
 		{"種族値0", `INSERT INTO species (` + "`key`" + `, dex_no, form, showdown_id, name_ja, name_ja_source, name_en, type1, type2,
 			base_hp, base_atk, base_def, base_spa, base_spd, base_spe, is_mega, base_species_key, required_item_id)
 			VALUES ('9003-000', 9003, 0, 'testzero', 'テストゼロ', 'override', 'Testzero', 'fire', NULL, 0, 1, 1, 1, 1, 1, 0, NULL, NULL)`, []uint16{errCheckViolated}},
-		{"特性スロット4", `INSERT INTO species_abilities (species_key, slot, ability_id) VALUES ('9002-000', 4, 'testhidden')`, []uint16{errCheckViolated}},
+		{"特性スロット5", `INSERT INTO species_abilities (species_key, slot, ability_id) VALUES ('9002-000', 5, 'testhidden')`, []uint16{errCheckViolated}},
 		{"同じ特性が2スロット", `INSERT INTO species_abilities (species_key, slot, ability_id) VALUES ('9002-000', 3, 'testguard')`, []uint16{errDupEntry}},
 		// moves
 		{"技 ID に大文字", `INSERT INTO moves (id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority)

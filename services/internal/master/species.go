@@ -130,7 +130,7 @@ func validateMegaConsistency(row SpeciesRow) error {
 	return nil
 }
 
-// speciesAbilities は特性の行を検証し、slot 順の特性 ID 列を返す(1〜3件、slot は 1..3・重複不可、
+// speciesAbilities は特性の行を検証し、slot 順の特性 ID 列を返す(1〜4件、slot は 1..4・重複不可、
 // 特性 ID の重複も不可)。
 func speciesAbilities(abilities []SpeciesAbilityRow) ([]string, error) {
 	if len(abilities) == 0 {
@@ -143,8 +143,8 @@ func speciesAbilities(abilities []SpeciesAbilityRow) ([]string, error) {
 	seenID := map[string]bool{}
 	out := make([]string, 0, len(sorted))
 	for _, a := range sorted {
-		if a.Slot < 1 || a.Slot > 3 {
-			return nil, fmt.Errorf("%w: 特性スロットが範囲外(1..3): %d", ErrInvalidRow, a.Slot)
+		if a.Slot < 1 || a.Slot > 4 {
+			return nil, fmt.Errorf("%w: 特性スロットが範囲外(1..4): %d", ErrInvalidRow, a.Slot)
 		}
 		if seenSlot[a.Slot] {
 			return nil, fmt.Errorf("%w: 特性スロットが重複: %d", ErrInvalidRow, a.Slot)

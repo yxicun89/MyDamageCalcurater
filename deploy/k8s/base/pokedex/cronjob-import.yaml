@@ -1,0 +1,94 @@
+# pokedex の master データの取り込みを週1回流す CronJob(ADR-0104)。
+# 「取得(Node)→ 上流の最新版の検出(失敗は警告だけ)→ 照合・投入(Go)」を1つのコンテナで順に行う
+# (tools/importer/cronjob.sh)。CronJob が取り込むのは Git に固定した data/importer/config.json の
+# 版だけで、上流に新しい版があってもログと報告に出すだけ(ADR-0104 §1)。
+# 版を上げるのは人(config.json を更新する PR)。CronJob はスキーマの適用を行わない
+# (それは pokedex-migrate Job の担当)。
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pokedex-import
+  labels:
+    app.kubernetes.io/name: pokedex-import
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  # 週1回・土曜 12:00(日本時間)。ノート PC 上で動く k3d が起動している可能性の高い時間帯。
+  schedule: "0 12 * * 6"
+  timeZone: Asia/Tokyo
+  # 手動実行(make import-k8s)と重なっても同時に投入しない(取得のキャッシュ書き込みが競合する)。
+  concurrencyPolicy: Forbid
+  # 7日未満(次の予定と重ねない)。クラスタが予定時刻に止まっていても6日以内に起動すれば追いつく。
+  startingDeadlineSeconds: 518400
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # 一時的な失敗(ネットワーク・DB の再起動)を2回まで再試行する。
+      backoffLimit: 2
+      # 初回・版の変更時は Showdown の tarball 取得と npm ci && node build がある。超えたら異常とみなす。
+      activeDeadlineSeconds: 3600
+      # 週1回の結果を次の実行より長く残す(14日)。make import-k8s の手動 Job も最終的に消える。
+      ttlSecondsAfterFinished: 1209600
+      podFailurePolicy:
+        rules:
+          # 終了コード 2(使い方・設定の誤り)・3(人間の対応が要る)は再試行しても同じ結果になるので
+          # 再試行しない。1(一時的な失敗)は backoffLimit の再試行に任せる。
+          - action: FailJob
+            onExitCodes:
+              containerName: import
+              operator: In
+              values: [2, 3]
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: pokedex-import
+            app.kubernetes.io/part-of: pokecalc
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            # PVC(root 所有でも)に uid 1000(node)で書けるようにする
+            fsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: import
+              image: pokecalc/pokedex-importer:0.1.0
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: HOME
+                  value: /tmp
+                - name: npm_config_cache
+                  value: /tmp/npm-cache
+                - name: POKEDEX_DATABASE_DSN
+                  valueFrom:
+                    secretKeyRef:
+                      name: mysql-auth
+                      key: pokedex-dsn
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                runAsUser: 1000
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: import-cache
+                  mountPath: /app/data/generated
+                - name: name-overrides
+                  mountPath: /app/data/local
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: import-cache
+              persistentVolumeClaim:
+                claimName: pokedex-import-cache
+            - name: name-overrides
+              configMap:
+                name: pokedex-name-overrides
+                optional: true
+            - name: tmp
+              emptyDir: {}

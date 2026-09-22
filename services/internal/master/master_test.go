@@ -166,6 +166,23 @@ func TestSpeciesMapsAllEngineFields(t *testing.T) {
 	assertAllFieldsSet(t, "engine.Species", got)
 }
 
+func TestSpeciesMapsShowdownSpecialAbilitySlot(t *testing.T) {
+	abilities := []master.SpeciesAbilityRow{
+		{Slot: 1, AbilityID: "testone"},
+		{Slot: 2, AbilityID: "testtwo"},
+		{Slot: 3, AbilityID: "testhidden"},
+		{Slot: 4, AbilityID: "testspecial"},
+	}
+	got, err := master.Species(baseSpeciesRow(), abilities, testChart(t))
+	if err != nil {
+		t.Fatalf("Species: %v", err)
+	}
+	want := []string{"testone", "testtwo", "testhidden", "testspecial"}
+	if !reflect.DeepEqual(got.Abilities, want) {
+		t.Fatalf("Abilities = %v, want %v", got.Abilities, want)
+	}
+}
+
 func TestSpeciesMegaAndDualType(t *testing.T) {
 	c := testChart(t)
 	got, err := master.Species(megaSpeciesRow(), []master.SpeciesAbilityRow{{Slot: 1, AbilityID: "testguard"}}, c)
@@ -224,7 +241,7 @@ func TestSpeciesRejectsInvalidRows(t *testing.T) {
 		}},
 		{name: "特性が無い", abilities: []master.SpeciesAbilityRow{}},
 		{name: "特性スロット0", abilities: []master.SpeciesAbilityRow{{Slot: 0, AbilityID: "testability"}}},
-		{name: "特性スロット4", abilities: []master.SpeciesAbilityRow{{Slot: 4, AbilityID: "testability"}}},
+		{name: "特性スロット5", abilities: []master.SpeciesAbilityRow{{Slot: 5, AbilityID: "testability"}}},
 		{name: "特性スロットの重複", abilities: []master.SpeciesAbilityRow{{Slot: 1, AbilityID: "testability"}, {Slot: 1, AbilityID: "testguard"}}},
 		{name: "同じ特性が2スロット", abilities: []master.SpeciesAbilityRow{{Slot: 1, AbilityID: "testability"}, {Slot: 2, AbilityID: "testability"}}},
 		{name: "特性 ID が空", abilities: []master.SpeciesAbilityRow{{Slot: 1, AbilityID: ""}}},

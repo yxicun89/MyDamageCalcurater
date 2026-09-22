@@ -2,10 +2,48 @@
   "schemaVersion": 1,
   "sources": {
     "calc": "0.12.0",
-    "showdown": "PENDING-PIN-COMMIT",
-    "pokeapi": "PENDING-PIN-COMMIT"
+    "showdown": "f10d6798f2ba5af92e55892c8c7063ca7b53c18a",
+    "pokeapi": "575291cdb197a7e3a320297be276c9de4ef8401a"
   },
   "excludeCalcSpecies": ["Aegislash-Both"],
-  "excludeTypes": ["???", "Stellar"],
-  "nameJaLanguages": ["ja", "ja-Hrkt"]
+  "excludeTypes": ["???"],
+  "nameJaLanguages": ["ja", "ja-Hrkt"],
+  "reconcile": {
+    "effectHooks": [
+      "onAnyBasePower",
+      "onBasePower",
+      "onEffectiveness",
+      "onModifyAtk",
+      "onModifyDamage",
+      "onModifyDef",
+      "onModifySpA",
+      "onModifySpD",
+      "onModifySTAB",
+      "onModifyType",
+      "onSourceBasePower",
+      "onSourceModifyAtk",
+      "onSourceModifyDamage",
+      "onSourceModifySpA"
+    ],
+    "verdicts": {
+      "basis": {
+        "calc": "0.12.0",
+        "showdown": "f10d6798f2ba5af92e55892c8c7063ca7b53c18a"
+      },
+      "moves": {
+        "calcOnlyExcluded": {
+          "count": 11,
+          "idsSha256": "574e58721e2f48ba74828f0b6f9e9b980be8c56e3d23d671d9c92d877b6e1e30"
+        },
+        "showdownOnlyIncluded": {
+          "count": 1,
+          "idsSha256": "39d77c4bd9a79b5db22c128a0a8fa9ef1ca5a4f2dada7b99db1fd9d587ffe6e2"
+        },
+        "statusTypeMismatch": {
+          "count": 1,
+          "idsSha256": "19c64195eb8f22c39b4bad63078823ddd82e6d61847b25f1f5b969be6c891661"
+        }
+      }
+    }
+  }
 }

@@ -161,6 +161,31 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/internal/pokedex/master": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * 計算用のマスタ一式(pokedex-svc → calc-svc)
+     * @description pokedex-svc が自分の DB(マスタの正本。CLAUDE.md 絶対ルール4)から、calc-svc が計算に使うマスタ一式を
+     *     DB の行に近い形で返す(ADR-0204)。calc-svc は起動時に1度取得し、`services/internal/master` の写像で
+     *     engine の型にしてメモリに載せる(取得後の再取得はしない。マスタの更新は calc-svc の再起動で反映する)。
+     *     - 使用可能集合(レギュレーション)で絞らない。計算は全件を扱える必要がある(絞り込みは pokedex の検索の仕事)。
+     *     - 並び順に意味は持たせない(タイプの表示順は `types[].sortOrder`)。
+     *     - gateway は公開しない。端末ID/セッションID は要らない。
+     */
+    get: operations["getMasterExport"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -618,6 +643,109 @@ export interface components {
       /** @description Mismatch 昇順 → Support 降順 → SPCount 降順 → 定義順(ADR-0010 §R4) */
       candidates: components["schemas"]["ReverseCandidate"][];
     };
+    /**
+     * @description calc-svc が計算に使うマスタ一式(ADR-0204)。形は pokedex の DB の行(`services/internal/master` の
+     *     TypeRow / TypeChartRow / SpeciesRow + SpeciesAbilityRow / MoveRow / ItemRow / AbilityRow)に対応する。
+     *     値の検証(ID の形式・範囲・組の整合・効果定義)は受け取った側が共通マスタの写像で行う。
+     */
+    MasterExport: {
+      /**
+       * @description この形の版。いまは 1 だけ
+       * @enum {integer}
+       */
+      schemaVersion: 1;
+      /**
+       * @description データの版の識別子(pokedex の data_versions に由来する)。calc-svc は記録とログに使うだけで、
+       *     計算の結果には影響しない。
+       */
+      dataVersion: string;
+      types: components["schemas"]["MasterType"][];
+      /** @description タイプ相性表の行(ADR-0013)。等倍(code 2)の組は省略してよい */
+      typeChart: components["schemas"]["MasterTypeChartEntry"][];
+      species: components["schemas"]["MasterSpecies"][];
+      moves: components["schemas"]["MasterMove"][];
+      items: components["schemas"]["MasterItem"][];
+      abilities: components["schemas"]["MasterAbility"][];
+      natures: components["schemas"]["MasterNature"][];
+    };
+    /** @description types テーブルの行 */
+    MasterType: {
+      id: components["schemas"]["PokeType"];
+      /** @description 表示順(重複しない) */
+      sortOrder: number;
+      nameJa: string;
+    };
+    /** @description type_chart テーブルの行。code は倍率を ×2 した整数(0=無効・1=いまひとつ・2=等倍・4=ばつぐん。ADR-0013) */
+    MasterTypeChartEntry: {
+      attackType: components["schemas"]["PokeType"];
+      defenseType: components["schemas"]["PokeType"];
+      /** @enum {integer} */
+      code: 0 | 1 | 2 | 4;
+    };
+    /**
+     * @description species テーブルの行と、その species_abilities の行。showdownId は取得元との突き合わせ用の ID で、
+     *     共通マスタの写像が形式を検証する(ADR-0100 §2)。
+     */
+    MasterSpecies: {
+      key: components["schemas"]["SpeciesKey"];
+      dexNo: number;
+      form: number;
+      showdownId: string;
+      nameJa: string;
+      type1: components["schemas"]["PokeType"];
+      /** @description 第2タイプ。単タイプは null */
+      type2: components["schemas"]["PokeType"] | null;
+      /** @description 種族値 */
+      baseStats: components["schemas"]["StatBlock"];
+      isMega: boolean;
+      /** @description メガシンカ前の種族キー(メガでなければ null) */
+      baseSpeciesKey: string | null;
+      /** @description メガシンカに要る持ち物の ID(メガでなければ null) */
+      requiredItemId: string | null;
+      abilities: components["schemas"]["MasterSpeciesAbility"][];
+    };
+    /** @description species_abilities テーブルの行 */
+    MasterSpeciesAbility: {
+      /** @description 1..3 */
+      slot: number;
+      abilityId: string;
+    };
+    /** @description moves テーブルの行(計算に使う列だけ) */
+    MasterMove: {
+      id: string;
+      nameJa: string;
+      type: components["schemas"]["PokeType"];
+      category: components["schemas"]["MoveCategory"];
+      power: number;
+      priority: number;
+    };
+    /**
+     * @description 効果定義(item_effects / ability_effects の JSON をそのまま。ADR-0005)。null は補正なし。
+     *     形は共通マスタ(`services/internal/master` の DecodeItemEffect / DecodeAbilityEffect)が受け付けるもので、
+     *     受け取った側がそこで厳格に検証する(未知のキー・4096 基準の整数でない値・空のオブジェクトは不正)。
+     */
+    MasterEffect: {
+      [key: string]: unknown;
+    } | null;
+    /** @description items テーブルの行 + item_effects の effect */
+    MasterItem: {
+      id: string;
+      nameJa: string;
+      effect: components["schemas"]["MasterEffect"];
+    };
+    /** @description abilities テーブルの行 + ability_effects の effect */
+    MasterAbility: {
+      id: string;
+      nameJa: string;
+      effect: components["schemas"]["MasterEffect"];
+    };
+    /** @description 性格(ADR-0204 でデータレーンに natures テーブルを提案)。無補正は plus / minus とも null。HP を指すことはない */
+    MasterNature: {
+      id: string;
+      nameJa: string;
+      plus: components["schemas"]["StatKey"] | null;
+      minus: components["schemas"]["StatKey"] | null;
+    };
   };
   responses: {
     /** @description エラー */
@@ -998,6 +1126,35 @@ export interface operations {
         };
       };
       default: components["responses"]["Error"];
+    };
+  };
+  getMasterExport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description マスタ一式 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MasterExport"];
+        };
+      };
+      /** @description マスタを返せない(DB に未投入・DB に接続できない。`master_unavailable`) */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
     };
   };
 }

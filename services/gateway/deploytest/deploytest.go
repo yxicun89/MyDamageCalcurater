@@ -585,16 +585,21 @@ type Workload struct {
 	ImageRepo   string // イメージ名(タグ抜き。例 "pokecalc/calc")
 	AddrEnv     string // 待ち受けアドレスの環境変数名(cmd の定数)
 	DefaultAddr string // 待ち受けアドレスの既定値(cmd の定数)
+	// ReadinessPath は readinessProbe のパス。空なら HealthzPath(liveness と同じ)。
+	// calc-svc はマスタの取得前に Service の宛先へ入らないよう /readyz を使う(ADR-0204 §3)。
+	ReadinessPath string
 }
 
 // ServicePort は Service の公開ポート。gateway は上流を http://<Service 名> で指すので 80 に固定する(ADR-0203 §3)。
 const ServicePort = 80
 
-// HealthzPath は readiness / liveness の probe のパス(calc-svc・gateway の運用エンドポイント。ADR-0200 / ADR-0202)。
+// HealthzPath は liveness の probe のパス(calc-svc・gateway の運用エンドポイント。ADR-0200 / ADR-0202)。
+// readiness も、Workload.ReadinessPath が空ならこのパス。
 const HealthzPath = "/healthz"
 
 // AssertWorkload は base の Deployment と Service が ADR-0203 §3 の形であることを確かめる:
-// 名前・ラベル・イメージ・ポート・probe(/healthz)・resources・非 root・readOnlyRootFilesystem・Service の 80 番。
+// 名前・ラベル・イメージ・ポート・probe(liveness は /healthz、readiness は Workload.ReadinessPath か /healthz)・
+// resources・非 root・readOnlyRootFilesystem・Service の 80 番。
 func AssertWorkload(t *testing.T, w Workload) {
 	t.Helper()
 	objs := BaseObjects(t, w.Service)
@@ -634,13 +639,26 @@ func AssertWorkload(t *testing.T, w Workload) {
 		t.Errorf("待ち受けアドレス %q(%s か既定値)のポートが containerPort %d と違う", addr, w.AddrEnv, containerPort)
 	}
 
-	for name, p := range map[string]*Probe{"readinessProbe": c.ReadinessProbe, "livenessProbe": c.LivenessProbe} {
+	readinessPath := w.ReadinessPath
+	if readinessPath == "" {
+		readinessPath = HealthzPath
+	}
+	probes := []struct {
+		name     string
+		probe    *Probe
+		wantPath string
+	}{
+		{"readinessProbe", c.ReadinessProbe, readinessPath},
+		{"livenessProbe", c.LivenessProbe, HealthzPath},
+	}
+	for _, pr := range probes {
+		name, p := pr.name, pr.probe
 		if p == nil || p.HTTPGet == nil {
 			t.Errorf("%s の httpGet が無い", name)
 			continue
 		}
-		if p.HTTPGet.Path != HealthzPath {
-			t.Errorf("%s.httpGet.path = %q, want %s", name, p.HTTPGet.Path, HealthzPath)
+		if p.HTTPGet.Path != pr.wantPath {
+			t.Errorf("%s.httpGet.path = %q, want %s", name, p.HTTPGet.Path, pr.wantPath)
 		}
 		if port := p.ProbePort(); port != "http" && port != itoa(containerPort) {
 			t.Errorf("%s.httpGet.port = %q, want http か %d", name, port, containerPort)

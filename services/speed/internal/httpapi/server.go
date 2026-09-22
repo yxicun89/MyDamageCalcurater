@@ -1,0 +1,222 @@
+// Package httpapi は speed サービスの Echo の HTTP アダプタ(ADR-0600 §5)。
+package httpapi
+
+import (
+	"errors"
+	"log/slog"
+	"net/http"
+	"sort"
+	"strings"
+
+	"example.com/pokecalc/services/speed/internal/api"
+	"example.com/pokecalc/services/speed/internal/speed"
+	"github.com/labstack/echo/v5"
+)
+
+const (
+	deviceIDHeader  = "X-Device-Id"
+	sessionIDHeader = "X-Session-Id"
+)
+
+// Dependencies は HTTP アダプタの差し替え可能な境界。
+// Pokemon が nil でも起動はし、/healthz は 200、ポケモンを使う API は 503 master_unavailable(ADR-0600 §4)。
+type Dependencies struct {
+	Pokemon speed.PokemonProvider
+}
+
+// New は HTTP ハンドラを返す。
+func New(deps Dependencies) *echo.Echo {
+	e := echo.New()
+	e.HTTPErrorHandler = writeHTTPError
+	api.RegisterHandlersWithOptions(e, handler{deps: deps}, api.RegisterHandlersOptions{
+		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
+			"listPokemon":   {requireRequestContext},
+			"getSpeedTable": {requireRequestContext},
+		},
+	})
+	return e
+}
+
+type handler struct {
+	deps Dependencies
+}
+
+var _ api.ServerInterface = handler{}
+
+func (handler) Health(c *echo.Context) error {
+	return health(c)
+}
+
+func (handler) PublicHealth(c *echo.Context) error {
+	return health(c)
+}
+
+func (h handler) ListPokemon(c *echo.Context, _ api.ListPokemonParams) error {
+	return listPokemon(c, h.deps)
+}
+
+// GetSpeedTable implements GET /api/speed/v1/table (ADR-0601 §5): query (400) → read model
+// absent (503) → provider/calc error (500, fixed message) → 200. Header の検査は
+// requireRequestContext ミドルウェア(New で登録)がクエリより先に行う。
+func (h handler) GetSpeedTable(c *echo.Context, params api.GetSpeedTableParams) error {
+	return getSpeedTable(c, h.deps, params)
+}
+
+// getSpeedTable implements the body of GetSpeedTable. deps is passed explicitly, matching
+// the listPokemon convention in this file.
+func getSpeedTable(c *echo.Context, deps Dependencies, params api.GetSpeedTableParams) error {
+	presets, err := speed.NormalizePresets(requestedPresetIDs(params))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, api.Error{
+			Code:    api.InvalidRequest,
+			Message: "presets is invalid",
+		})
+	}
+
+	if deps.Pokemon == nil {
+		return c.JSON(http.StatusServiceUnavailable, api.Error{
+			Code:    api.MasterUnavailable,
+			Message: "the pokemon read model is not configured",
+		})
+	}
+	roster, err := deps.Pokemon.Roster()
+	if err != nil {
+		return internalError(c, err)
+	}
+
+	table, err := speed.BuildTable(roster, presets)
+	if err != nil {
+		return internalError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, toTableResponse(table))
+}
+
+// requestedPresetIDs converts the query parameter to the core's PresetID, defaulting to
+// every preset in ADR-0601 §2 order when presets is omitted.
+func requestedPresetIDs(params api.GetSpeedTableParams) []speed.PresetID {
+	if params.Presets == nil {
+		defs := speed.Presets()
+		ids := make([]speed.PresetID, len(defs))
+		for i, p := range defs {
+			ids[i] = p.ID
+		}
+		return ids
+	}
+	ids := make([]speed.PresetID, len(*params.Presets))
+	for i, id := range *params.Presets {
+		ids[i] = speed.PresetID(id)
+	}
+	return ids
+}
+
+// toTableResponse は speed.Table を生成型 api.TableResponse に詰め替える。Types はコアの
+// slice を共有しないよう複製する(listPokemon と同じ)。
+func toTableResponse(table speed.Table) api.TableResponse {
+	presets := make([]api.PresetId, len(table.Presets))
+	for i, id := range table.Presets {
+		presets[i] = api.PresetId(id)
+	}
+
+	tiers := make([]api.SpeedTier, len(table.Tiers))
+	for i, tier := range table.Tiers {
+		entries := make([]api.SpeedTableEntry, len(tier.Entries))
+		for j, e := range tier.Entries {
+			types := make([]string, len(e.Pokemon.Types))
+			copy(types, e.Pokemon.Types)
+			entries[j] = api.SpeedTableEntry{
+				PokemonId: e.Pokemon.PokemonID,
+				NameJa:    e.Pokemon.NameJa,
+				Types:     types,
+				BaseSpeed: e.Pokemon.BaseSpeed,
+				Preset:    api.PresetId(e.Preset),
+			}
+		}
+		tiers[i] = api.SpeedTier{Speed: tier.Speed, Entries: entries}
+	}
+
+	return api.TableResponse{
+		RegulationId: table.RegulationID,
+		Presets:      presets,
+		Tiers:        tiers,
+	}
+}
+
+func health(c *echo.Context) error {
+	return c.JSON(http.StatusOK, api.Health{Status: api.Ok})
+}
+
+// listPokemon implements GET /api/speed/v1/pokemon (ADR-0600 §5): read model absent (503) →
+// provider error (500, fixed message) → 200 sorted by pokemonId ascending.
+func listPokemon(c *echo.Context, deps Dependencies) error {
+	if deps.Pokemon == nil {
+		return c.JSON(http.StatusServiceUnavailable, api.Error{
+			Code:    api.MasterUnavailable,
+			Message: "the pokemon read model is not configured",
+		})
+	}
+	roster, err := deps.Pokemon.Roster()
+	if err != nil {
+		return internalError(c, err)
+	}
+
+	pokemon := make([]api.SpeedPokemon, len(roster.Pokemon))
+	for i, p := range roster.Pokemon {
+		types := make([]string, len(p.Types))
+		copy(types, p.Types)
+		pokemon[i] = api.SpeedPokemon{
+			PokemonId: p.PokemonID,
+			NameJa:    p.NameJa,
+			Types:     types,
+			BaseSpeed: p.BaseSpeed,
+		}
+	}
+	sort.Slice(pokemon, func(i, j int) bool { return pokemon[i].PokemonId < pokemon[j].PokemonId })
+
+	return c.JSON(http.StatusOK, api.PokemonListResponse{
+		RegulationId: roster.RegulationID,
+		Pokemon:      pokemon,
+	})
+}
+
+// internalError answers 500 internal_error with a fixed message (ADR-0600 §5): an
+// unexpected provider failure never leaks internal detail to the client. The error
+// is still logged for operators.
+func internalError(c *echo.Context, err error) error {
+	slog.Error("speed internal error", "path", c.Path(), "error", err)
+	return c.JSON(http.StatusInternalServerError, api.Error{
+		Code:    api.InternalError,
+		Message: "internal error",
+	})
+}
+
+func requireRequestContext(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c *echo.Context) error {
+		if strings.TrimSpace(c.Request().Header.Get(deviceIDHeader)) == "" ||
+			strings.TrimSpace(c.Request().Header.Get(sessionIDHeader)) == "" {
+			return c.JSON(http.StatusBadRequest, api.Error{
+				Code:    api.InvalidRequest,
+				Message: "X-Device-Id and X-Session-Id are required",
+			})
+		}
+		return next(c)
+	}
+}
+
+// writeHTTPError normalizes any 400 from the generated parameter binding (e.g. a
+// duplicate header) to the same Error{code: invalid_request} shape as the rest of
+// the API (balance と同じ)。
+func writeHTTPError(c *echo.Context, err error) {
+	if response, _ := echo.UnwrapResponse(c.Response()); response != nil && response.Committed {
+		return
+	}
+	var httpError *echo.HTTPError
+	if errors.As(err, &httpError) && httpError.Code == http.StatusBadRequest {
+		_ = c.JSON(http.StatusBadRequest, api.Error{
+			Code:    api.InvalidRequest,
+			Message: "request parameters are invalid",
+		})
+		return
+	}
+	echo.DefaultHTTPErrorHandler(false)(c, err)
+}

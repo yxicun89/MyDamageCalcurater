@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:wasm": "vitest run --config vitest.wasm.config.ts",
     "e2e": "playwright test",
-    "e2e:online": "playwright test --config playwright.online.config.ts"
+    "e2e:online": "playwright test --config playwright.online.config.ts",
+    "e2e:container": "playwright test --config playwright.container.config.ts"
   },
   "dependencies": {
     "react": "19.3.0",

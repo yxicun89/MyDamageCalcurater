@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: speed
+spec:
+  template:
+    spec:
+      containers:
+        - name: speed
+          env:
+            - name: SPEED_POKEMON_PATH
+              value: /etc/speed/pokemon.json
+          volumeMounts:
+            - name: pokemon
+              mountPath: /etc/speed/pokemon.json
+              subPath: pokemon.json
+              readOnly: true
+      volumes:
+        - name: pokemon
+          configMap:
+            name: speed-pokemon
