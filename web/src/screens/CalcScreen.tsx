@@ -5,6 +5,7 @@
 // 返ってきた値は加工せずに表示する(ADR-0300 §8)。技の相性・確定数の言葉も engine の値をそのまま使う。
 
 import {
+  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -15,6 +16,7 @@ import {
   type PointerEvent,
   type ReactElement,
   type ReactNode,
+  type RefObject,
 } from "react";
 import {
   ATTACKER_PRESET_KEYS,
@@ -54,12 +56,15 @@ import "./CalcScreen.css";
  */
 const SWAP_ANIMATION_MAX_WAIT_MS = 1000;
 
-/** ホロ効果・攻守入れ替えの対象になるカード(design.md「動き」: 選択中のカード1枚だけ)。 */
-type CardSide = "attacker" | "defender";
+/**
+ * 確定数バッジの弾み(design.md「動き」: --duration-pulse 0.4秒)を、animationend が来なくても
+ * (タブが裏にある等)必ず終わらせるまでの最大待ち時間。CSS の --duration-pulse を上回る値にする
+ * (animationend が実際に来るまでの余裕。CSS の秒数そのものを TS に複製しない。P4-9)。
+ */
+const KO_PULSE_ANIMATION_MAX_WAIT_MS = 1000;
 
-/** ホロ効果の状態: どちらのカードに、カード内のどの位置(0〜100%)で出すか。 */
-interface HoloState {
-  readonly card: CardSide;
+/** ホロ効果のカード内の位置(0〜100%)。 */
+interface HoloPosition {
   readonly xPercent: number;
   readonly yPercent: number;
 }
@@ -78,6 +83,104 @@ function clampPercent(value: number): number {
 /** 確定数バッジの弾みを、行ごとに追跡するためのキー(preset・itemId の組。CalcScreen.tsx の行の識別と同じ考え方)。 */
 function koRowKey(row: BulkRow): string {
   return `${row.preset}-${row.itemId}`;
+}
+
+/**
+ * 同時に光るカードを1枚だけにするための共有 ref(CalcScreen が1つ作り、両方のカードの useHoloCard に渡す)。
+ * 値は「今光っているカードを消す関数」。state ではなく ref にするのは、これが変わったときに
+ * CalcScreen まで再レンダーする必要が無いため(ホロの状態はカードの中に閉じる。CalcScreen.holoRender.test.tsx)。
+ */
+type ActiveHoloClearRef = RefObject<(() => void) | null>;
+
+interface HoloCard {
+  readonly isHolo: boolean;
+  readonly style: HoloStyle | undefined;
+  readonly onPointerMove: (event: PointerEvent<HTMLElement>) => void;
+  readonly onPointerLeave: () => void;
+}
+
+/**
+ * ホロ効果(design.md「動き」)。状態はこのカードの中だけに持ち、CalcScreen を再レンダーしない
+ * (CalcScreen.holoRender.test.tsx「ホロの pointermove で画面全体を描き直さない」)。
+ * 位置の反映は requestAnimationFrame で1フレームに1回へ間引く(1回の予約につき最後の位置だけ反映する。
+ * P4-9)。ポインタが離れた・画面から消えたら、予約中のフレームを取り消す。mouse・pen 以外(touch)では
+ * 何もしない(design.md「動き」: ホロはポインタ操作のときだけ)。
+ */
+function useHoloCard(activeClearRef: ActiveHoloClearRef): HoloCard {
+  const [position, setPosition] = useState<HoloPosition | null>(null);
+  const frameIdRef = useRef<number | null>(null);
+  const pendingPositionRef = useRef<HoloPosition | null>(null);
+
+  // このカードを消す関数(常に同じ参照にする。activeClearRef との比較に使うため)。
+  const clear = useCallback((): void => {
+    if (frameIdRef.current !== null) {
+      cancelAnimationFrame(frameIdRef.current);
+      frameIdRef.current = null;
+    }
+    pendingPositionRef.current = null;
+    setPosition(null);
+  }, []);
+
+  // 画面から消えたら、予約中のフレームを取り消す(回しっぱなしにしない)。このカードが今光っている
+  // カードだったときは、共有 ref も片付ける(消えたカードの clear を後から呼ばないように)。
+  useEffect(() => {
+    return () => {
+      if (frameIdRef.current !== null) {
+        cancelAnimationFrame(frameIdRef.current);
+        frameIdRef.current = null;
+      }
+      if (activeClearRef.current === clear) {
+        activeClearRef.current = null;
+      }
+    };
+  }, [activeClearRef, clear]);
+
+  function applyPendingPosition(): void {
+    frameIdRef.current = null;
+    const next = pendingPositionRef.current;
+    pendingPositionRef.current = null;
+    if (next === null) {
+      return;
+    }
+    // 光り始めるとき: 前に光っていたカード(自分以外)があれば消す(同時に光るのは1枚だけ)。
+    // カードを移るときはブラウザが先に pointerleave を送り、前のカードの予約は取り消されている前提
+    // (同じフレーム内で A→B→A と動いて leave が来ない場合は、予約順で B が光ることがある)。
+    if (activeClearRef.current !== clear) {
+      activeClearRef.current?.();
+      activeClearRef.current = clear;
+    }
+    setPosition(next);
+  }
+
+  function onPointerMove(event: PointerEvent<HTMLElement>): void {
+    if (event.pointerType !== "mouse" && event.pointerType !== "pen") {
+      return;
+    }
+    if (prefersReducedMotion()) {
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    pendingPositionRef.current = {
+      xPercent: clampPercent(((event.clientX - rect.left) / rect.width) * 100),
+      yPercent: clampPercent(((event.clientY - rect.top) / rect.height) * 100),
+    };
+    if (frameIdRef.current === null) {
+      frameIdRef.current = requestAnimationFrame(applyPendingPosition);
+    }
+  }
+
+  return {
+    isHolo: position !== null,
+    style:
+      position === null
+        ? undefined
+        : {
+            "--holo-x": `${String(Math.round(position.xPercent))}%`,
+            "--holo-y": `${String(Math.round(position.yPercent))}%`,
+          },
+    onPointerMove,
+    onPointerLeave: clear,
+  };
 }
 
 /** 技を選んでいないときの、攻撃側プリセット表示用の仮の分類(A/C 表記の既定は物理と同じ)。 */
@@ -157,8 +260,10 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
   const [swapping, setSwapping] = useState(false);
   const swapFallbackTimerRef = useRef<number | null>(null);
 
-  // ホロ効果(design.md「動き」)。選択中のカード1枚だけに出すため、単一の state で持つ。
-  const [holo, setHolo] = useState<HoloState | null>(null);
+  // ホロ効果(design.md「動き」、P4-9)。状態はカード(useHoloCard)の中に持つ。ここでは
+  // 「同時に光るのは1枚だけ」を保つための共有 ref だけを持つ(ref なので、これが変わっても
+  // CalcScreen までは再レンダーしない。CalcScreen.holoRender.test.tsx)。
+  const activeHoloClearRef = useRef<(() => void) | null>(null);
 
   const attackerSpecies = useMemo(
     () => master.species.find((species) => species.key === attackerKey) ?? null,
@@ -267,25 +372,30 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
     };
   }
 
-  /** ホロ効果: ポインタが乗っているカードの、カード内での位置(0〜100%)を計算する(design.md「動き」)。 */
-  function handleCardPointerMove(card: CardSide) {
-    return (event: PointerEvent<HTMLElement>): void => {
-      if (prefersReducedMotion()) {
-        return;
-      }
-      const rect = event.currentTarget.getBoundingClientRect();
-      const xPercent = clampPercent(((event.clientX - rect.left) / rect.width) * 100);
-      const yPercent = clampPercent(((event.clientY - rect.top) / rect.height) * 100);
-      setHolo({ card, xPercent, yPercent });
+  // 確定数バッジの弾みは animationend が来なくても(タブが裏にある等)最大待ちで必ず外す(P4-9)。
+  // 弾み始めるたび(pulsingKeys が変わるたび)に掛け直す(前のタイマーが次の弾みを打ち切らないように)。
+  // 視差効果を減らす設定では pulsingKeys が常に空なので、このタイマーも動かない。
+  useEffect(() => {
+    if (pulsingKeys.size === 0) {
+      return;
+    }
+    const keysToClear = pulsingKeys;
+    const timer = window.setTimeout(() => {
+      setKoPulse((prev) => {
+        if (prev.pulsingKeys.size === 0) {
+          return prev;
+        }
+        const next = new Set(prev.pulsingKeys);
+        for (const key of keysToClear) {
+          next.delete(key);
+        }
+        return { ...prev, pulsingKeys: next };
+      });
+    }, KO_PULSE_ANIMATION_MAX_WAIT_MS);
+    return () => {
+      window.clearTimeout(timer);
     };
-  }
-
-  /** ホロ効果を外す(ポインタがカードから離れたとき)。今光っているのがこのカードのときだけ外す。 */
-  function handleCardPointerLeave(card: CardSide) {
-    return (): void => {
-      setHolo((prev) => (prev?.card === card ? null : prev));
-    };
-  }
+  }, [pulsingKeys]);
 
   // 攻撃側・防御側・ダメージ技が揃ったら calcBulk を呼ぶ(ADR-0300 §2・§6)。
   // setState は応答が届いたとき(.then のコールバック)だけで行い、effect の本体では呼ばない
@@ -386,9 +496,7 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
           onItemChange={setAttackerItemId}
           isSwapping={swapping}
           onSwapAnimationEnd={endSwapAnimation}
-          holo={holo?.card === "attacker" ? holo : null}
-          onPointerMove={handleCardPointerMove("attacker")}
-          onPointerLeave={handleCardPointerLeave("attacker")}
+          activeHoloClearRef={activeHoloClearRef}
         >
           {attackerSpecies !== null && (
             <AttackerPresetSelector
@@ -413,9 +521,7 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
           onItemChange={setDefenderItemId}
           isSwapping={swapping}
           onSwapAnimationEnd={endSwapAnimation}
-          holo={holo?.card === "defender" ? holo : null}
-          onPointerMove={handleCardPointerMove("defender")}
-          onPointerLeave={handleCardPointerLeave("defender")}
+          activeHoloClearRef={activeHoloClearRef}
         />
       </div>
 
@@ -458,10 +564,8 @@ interface SpeciesCardProps {
   /** 攻守入れ替えの演出中か(design.md「動き」)。 */
   readonly isSwapping: boolean;
   readonly onSwapAnimationEnd: () => void;
-  /** ホロ効果(design.md「動き」)。このカードで出す状態のときだけ渡す(それ以外は null)。 */
-  readonly holo: HoloState | null;
-  readonly onPointerMove: (event: PointerEvent<HTMLElement>) => void;
-  readonly onPointerLeave: () => void;
+  /** ホロ効果(design.md「動き」、P4-9): 同時に光るのは1枚だけにするための、カード間で共有する ref。 */
+  readonly activeHoloClearRef: ActiveHoloClearRef;
 }
 
 /** 攻撃側・防御側の共通カード: ポケモン・持ち物の選択と、選んだ種族の名前・タイプ・エンブレム。 */
@@ -478,35 +582,27 @@ function SpeciesCard({
   children,
   isSwapping,
   onSwapAnimationEnd,
-  holo,
-  onPointerMove,
-  onPointerLeave,
+  activeHoloClearRef,
 }: SpeciesCardProps) {
   const species = speciesList.find((candidate) => candidate.key === selectedSpeciesKey) ?? null;
   const primaryType = species?.types[0];
-  const className = ["calc-card", isSwapping ? "is-swapping" : "", holo !== null ? "is-holo" : ""]
+  const holo = useHoloCard(activeHoloClearRef);
+  const className = ["calc-card", isSwapping ? "is-swapping" : "", holo.isHolo ? "is-holo" : ""]
     .filter((part) => part !== "")
     .join(" ");
-  const holoStyle: HoloStyle | undefined =
-    holo === null
-      ? undefined
-      : {
-          "--holo-x": `${String(Math.round(holo.xPercent))}%`,
-          "--holo-y": `${String(Math.round(holo.yPercent))}%`,
-        };
   return (
     <section
       className={className}
       aria-label={regionLabel}
-      style={holoStyle}
+      style={holo.style}
       onAnimationEnd={(event) => {
         // バブリングで子要素のアニメーション(バッジの弾み等)と混ざらないよう currentTarget と比べる。
         if (event.target === event.currentTarget) {
           onSwapAnimationEnd();
         }
       }}
-      onPointerMove={onPointerMove}
-      onPointerLeave={onPointerLeave}
+      onPointerMove={holo.onPointerMove}
+      onPointerLeave={holo.onPointerLeave}
     >
       <select
         aria-label={speciesSelectLabel}

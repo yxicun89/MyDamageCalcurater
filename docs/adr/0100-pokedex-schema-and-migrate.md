@@ -6,6 +6,9 @@
   ADR-0012(サービス境界と共通マスタ)、ADR-0013(タイプ相性表はデータ)、ADR-0014(balance TB1 の read model)、
   DECISIONS.md 2026-09-21(フォームの登録単位・CronJob・技の使用可否の既定案)、CLAUDE.md 絶対ルール 2/4/6・ドメイン規約
 - 番号: `origin/main` に ADR-0014(balance TB1)があるため 0015 とする
+- 更新(P2-2c §10 の実データでの確認で判明。ADR-0103 §12): `species_abilities.slot` の CHECK は実データでは 1..4
+  (4 = Showdown の特殊枠 `"S"`。`"H"`(隠れ特性。3)と同じ種族に共存することがある)。既に main に取り込み済みの
+  `000002_create_master.up.sql` は書き換えず、`000005_widen_species_ability_slot.up/down.sql` で ALTER TABLE により広げた。
 
 ## 背景
 
@@ -70,7 +73,7 @@ species_abilities, item_effects, ability_effects, learnsets)/ `000003_create_reg
 | `items` | 同上 | 同上 |
 | `moves` | `id`、`name_ja`、`name_ja_source`、`name_en`、`type`、`category` VARCHAR(16)、`power` SMALLINT UNSIGNED、`accuracy` TINYINT UNSIGNED NULL(NULL=必中)、`pp` TINYINT UNSIGNED、`priority` TINYINT | PK(id)、FK type → types、CHECK id 形式・`category IN ('physical','special','status')`・`power BETWEEN 0 AND 999`・`category <> 'status' OR power = 0`・`accuracy IS NULL OR accuracy BETWEEN 1 AND 100`・`pp BETWEEN 1 AND 64`・`priority BETWEEN -7 AND 5` |
 | `species` | `key` CHAR(8)、`dex_no` SMALLINT UNSIGNED、`form` SMALLINT UNSIGNED、`showdown_id`、`name_ja`、`name_ja_source`、`name_en`、`type1`、`type2` NULL、`base_hp`〜`base_spe`(6列 SMALLINT UNSIGNED)、`is_mega`、`base_species_key` NULL、`required_item_id` NULL | PK(key)、UNIQUE(showdown_id)、UNIQUE(dex_no, form)、FK type1/type2 → types、FK base_species_key → species(key)、FK required_item_id → items(id)。CHECK: `key = CONCAT(LPAD(dex_no,4,'0'),'-',LPAD(form,3,'0'))`、`dex_no BETWEEN 1 AND 9999`、`form BETWEEN 0 AND 999`、`type2 IS NULL OR type2 <> type1`、各種族値 `BETWEEN 1 AND 255`、**メガの整合** `(is_mega = 1 AND base_species_key IS NOT NULL AND required_item_id IS NOT NULL) OR (is_mega = 0 AND base_species_key IS NULL AND required_item_id IS NULL)`、`base_species_key IS NULL OR base_species_key <> key` |
-| `species_abilities` | `species_key`、`slot` TINYINT UNSIGNED、`ability_id` | PK(species_key, slot)、UNIQUE(species_key, ability_id)、FK species(CASCADE)・abilities、CHECK `slot IN (1,2,3)`(3 = 隠れ特性) |
+| `species_abilities` | `species_key`、`slot` TINYINT UNSIGNED、`ability_id` | PK(species_key, slot)、UNIQUE(species_key, ability_id)、FK species(CASCADE)・abilities、CHECK `slot IN (1,2,3)`(3 = 隠れ特性)。**更新**: 実データでは 1..4(4 = Showdown の特殊枠 `"S"`)。`000005_widen_species_ability_slot` で広げた。ADR-0103 §12 参照 |
 | `item_effects` | `item_id`、`effect` JSON | PK(item_id)、FK items(CASCADE)、CHECK `JSON_TYPE(effect) = 'OBJECT'` |
 | `ability_effects` | `ability_id`、`effect` JSON | 同上(abilities) |
 | `learnsets` | `species_key`、`move_id` | PK(species_key, move_id)、FK species(CASCADE)・moves(CASCADE) |

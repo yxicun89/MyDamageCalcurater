@@ -63,9 +63,9 @@
     {"id": "teststance", "name": "Test Stance", "isNonstandard": null}
   ],
   "learnsets": {
-    "testmon": ["testflame", "teststrike", "testglare", "testold", "testbanned"],
-    "testleaf": ["testglare", "testsplash"],
-    "testshield": ["teststrike", "testrevived"],
-    "testbug": ["teststrike"]
+    "testmon": {"testflame": 9, "teststrike": 9, "testglare": 9, "testold": 9, "testbanned": 9},
+    "testleaf": {"testglare": 9, "testsplash": 9},
+    "testshield": {"teststrike": 9, "testrevived": 9},
+    "testbug": {"teststrike": 9}
   }
 }

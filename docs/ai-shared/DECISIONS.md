@@ -414,6 +414,25 @@ Reason: ユーザーが「既存のタイプバランスチェッカーはおす
 Impact: plan.md に TB5。使用可能なポケモンの集合と日本語名はマスタ(データレーンの P2-2。レギュレーション依存)から引く必要がある。それまでは TB1 と同じ temporary の read model を広げる(架空データの example)。
 
 
+## 2026-09-22: P2-2c の2点と ADR 番号の帯の承認、データレーンは Claude で続ける(ユーザー回答)
+Decision: (1) 進化前から継ぐ習得技は、取得データに「学習した世代」の情報を足し、Showdown のチーム検証(M-C は現行世代由来の学習元のみ認める)と同じ判定で絞る(実データの標本 5/5 件が Showdown 本体と食い違ったため)。
+(2) P2-1c の裁定の件数・集合が将来の取込で実データと食い違ったら、取り込みを止める(既定案どおり)。
+(3) ADR 番号のレーンごとの帯(データ 0100〜 / API 0200〜 / Web 0300〜 / タイプバランス 0400〜 / iOS 0500〜 / 素早さ 0600〜)を承認。
+(4) データレーンは Claude で続ける。Claude の上限の間に起動した Codex はデータレーンでは止め、Codex は上限の間の整備だけに使う(ユーザー: 「codex は claude のレートリミットの間だけ整備する作業をさせたかった」)。
+Reason: ユーザーが確認の質問に回答した。
+Impact: ADR-0103 の習得技の継承を案 b で実装し直す。COORDINATION.md の「Claude の上限時の Codex」の1本目(クリティカルパスのレーン)の扱いは、ユーザーの意図(整備だけ)に合わせて次の文書整理で見直す。
+
+## 2026-09-22: 習得技は進化前から継がない(Champions のルールに合わせる。ユーザー決定。直前の「案 b」を改める)
+Decision: 習得技は自分の学習元だけを使い、自分の学習元が無いフォーム・メガだけ基本種の学習元を1段使う。進化前(prevo)からは継がない。
+Reason: 案 b(学習した世代で絞る)を実装して実データで確かめたところ、Showdown 本体の検証と 5/5 件食い違った。Showdown のソース(learnsetParent)は champions の mod では進化前をたどらず、実データに9世代より古い学習元は無かった(世代の条件は効果が無かった)。ユーザーが「継承をやめて Showdown に合わせる」を選んだ。
+Impact: ADR-0103 §7 を改訂。継承を前提にしたテストは、Champions では継がないことを確かめるテストに書き換える(弱めない)。
+
+## 2026-09-22: API レーンの依頼(内部 API・性格のマスタ・showdownId)を受ける(データレーン)
+Decision: P2-3 で pokedex-svc に `GET /internal/pokedex/master`(ADR-0204 の契約。クラスタ内だけ、未投入なら 503)を実装し、species に showdownId を含める。
+性格は、ADR-0100 の「マスタにせず engine の固定」を改め、`natures`(id, name_ja, plus, minus)をマスタに加える(新しい migration と importer)。
+Reason: calc-svc がマスタを pokedex-svc から受け取る形になり(ユーザー決定 2026-09-22、API レーン)、性格の ID → 補正と日本語名が必要になった。ADR-0013 §2 の「表・一覧はデータ」とも合う。
+Impact: plan.md の P2-3 に小項目を追加。ADR-0100 に更新の注記を足す(P2-3 で)。
+
 ## 2026-09-22: TB4(仮想敵診断)の仕様(ユーザー回答と既定案)
 Decision: 仮想敵を最大 6 体(pokemonId・技 ID 最大 4・特性は任意)で入力し、各仮想敵 × 自分の各メンバーの受ける最大倍率(incoming)と与える最大倍率(outgoing)、
 安全に受けられる人数(incoming < 1)・打ちやすい人数(outgoing ≥ 2)を返す。新 endpoint `/api/balance/v1/team-balance/threats`。詳細は ADR-0400。
@@ -579,6 +598,9 @@ up.sh の最後で `make api-docker-build` と `k3d image import` を呼ぶ形�
 Reason: critic の推奨。共有スクリプトは他レーンの範囲のため。
 Impact: `api-k3d-deploy` は他レーンのリソースに触れないよう、常に API 専用の overlay(deploy/k8s/overlays/local-api)だけを適用する(ADR-0203)。
 
+## 2026-09-22: 素早さ SP0 を PR #32 で main に統合(素早さレーン)
+Decision: SP0(ADR-0600)を PR #32 で統合した。critic は1回目 NG(smoke の架空名)→ 修正後 PASS。make test・lint・build・check-publishable・smoke が成功。
+Impact: 素早さレーンは SP1(feat/speed-s1)へ。
 
 ## 2026-09-22: Web の統合記録(PR #22・#28)
 Decision: PR #22(Web P4-1〜P4-5)と PR #28(P4-6 Playwright E2E・make test への Web の組み込み・verify-m1.md ドラフト)を main に統合した。
@@ -590,3 +612,8 @@ Decision: (1) 逆算の候補は engine の順に1件ずつカード表示し、
 (2) Web レーンの次の作業は design.md「動き」の演出(P4-8。操作時のみ、視差効果を減らす設定で無効)。
 Reason: ユーザー回答。逆算の結果(性格 × 持ち物ごとの SP 範囲)では型が一意に決まらないため。
 Impact: design.md の1行、plan.md に P4-8、ADR-0300 §7 の持ち越しの記述を更新。iOS(M3)も同じ表示方針に従う。
+
+## 2026-09-22: Web P4-8 を統合(PR #33)
+Decision: P4-8(design.md「動き」の演出)と逆算の表示方針・design.md の演出の値を PR #33 で main に統合した。Web レーンは他レーン(P2-3・P3-3)待ちで一時停止。
+Reason: critic PASS、make test / lint / build・E2E の通過を確認。
+Impact: Web レーンの Active を「なし」にした。続きは CURRENT_STATE.md の Web 欄の Next。

@@ -146,7 +146,7 @@ func TestMigrationsDeclareKeyConstraints(t *testing.T) {
 		{"メガの整合(is_mega と required_item_id)", `is_mega\s*=\s*1[^;]*required_item_id\s+is\s+not\s+null`},
 		{"既定のレギュレーションは高々1件(生成列)", `default_marker[^,]*generated\s+always\s+as|default_marker[^,]*\bas\s*\(`},
 		{"効果定義は JSON 列", `effect\s+json\b`},
-		{"特性スロット 1..3", `slot\s+in\s*\(\s*1\s*,\s*2\s*,\s*3\s*\)`},
+		{"特性スロット 1..4", `slot\s+in\s*\(\s*1\s*,\s*2\s*,\s*3\s*,\s*4\s*\)`},
 		{"checksum は sha256 の16進", `\[0-9a-f\]\{64\}`},
 		{"species の外部キー(タイプ)", `foreign\s+key\s*\(\s*` + "`?" + `type1` + "`?" + `\s*\)\s*references\s+` + "`?" + `types`},
 	}
