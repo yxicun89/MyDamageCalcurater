@@ -44,11 +44,14 @@ var errRequestTooLarge = errors.New("request body exceeds 16 KiB")
 // analyze does not use it.
 // Abilities may be nil: analyze answers 503 master_unavailable only when a member
 // names an abilityId (ADR-0017 §4); coverage does not use it.
+// PokemonCatalog is the list view of the same pokemon read model (ADR-0401 §5); only
+// recommendations uses it, and answers 503 master_unavailable when it is nil.
 type Dependencies struct {
-	TypeChart    balance.TypeChartProvider
-	PokemonTypes balance.PokemonTypeProvider
-	Moves        balance.MoveProvider
-	Abilities    balance.AbilityProvider
+	TypeChart      balance.TypeChartProvider
+	PokemonTypes   balance.PokemonTypeProvider
+	Moves          balance.MoveProvider
+	Abilities      balance.AbilityProvider
+	PokemonCatalog balance.PokemonCatalog
 }
 
 // New returns the HTTP handler.
@@ -59,6 +62,8 @@ func New(deps Dependencies) *echo.Echo {
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
 			"analyzeTeamBalance":  {requireRequestContext},
 			"analyzeTeamCoverage": {requireRequestContext},
+			"analyzeTeamThreats":  {requireRequestContext},
+			"recommendTeamTypes":  {requireRequestContext},
 		},
 	})
 	return e
@@ -85,6 +90,11 @@ func (h handler) AnalyzeTeamBalance(c *echo.Context, _ api.AnalyzeTeamBalancePar
 // AnalyzeTeamCoverage is the TB2 offensive coverage endpoint (ADR-0016).
 func (h handler) AnalyzeTeamCoverage(c *echo.Context, _ api.AnalyzeTeamCoverageParams) error {
 	return coverage(c, h.deps)
+}
+
+// AnalyzeTeamThreats is the TB4 threat check endpoint (ADR-0400).
+func (h handler) AnalyzeTeamThreats(c *echo.Context, _ api.AnalyzeTeamThreatsParams) error {
+	return threats(c, h.deps)
 }
 
 func health(c *echo.Context) error {

@@ -139,3 +139,71 @@ TB0 の `TemporaryTypeChart` のテストは、コードごと削除した(削�
 テストの特性 ID は架空(ability-9001 以降)を使う。実在の特性の名前・ID をテストデータとして Git に置かない(ADR-0002)。
 タイプ由来の ×0 は `effect=none`・`source=type`(ADR-0017 §5.1・§5.5)で、テストはこれを厳密に確かめる。`"abilityId": null` は省略と同じ(§5.2。read model の有無によらず 200、body は省略時と一致)。
 倍率の積が int64 に収まらないデータ(効果を多数重ねた特性)は、黙って折り返さず `ErrEffectivenessOverflow` → HTTP 500(ADR-0017 §5.6)。`Mul` はオーバーフローの境界、`Cmp` は 2^62 のような大きな値で検査する。
+
+## TB4 の対象(仮想敵診断。ADR-0400)
+
+契約の正は [ADR-0400](adr/0400-balance-tb4-threat-check.md)(§1 はユーザー回答)。`POST /api/balance/v1/team-balance/threats` は
+自分のメンバー(1〜6)と仮想敵(1〜6)を同じ形 `{pokemonId, moveIds(0〜4), abilityId(任意)}` で受け取り、仮想敵ごとに
+`attackTypes`・メンバーごとの `incoming`(受ける最大倍率)/ `outgoing`(与える最大倍率)/ `safe` / `superEffective`・
+`safeMembers` / `superEffectiveMembers` を返す。計算は TB1〜3 の `CalculateDefenseWithAbility` の再利用で、新しい read model は無い。
+STAB・持ち物・威力・天候・場は扱わないので、それを検証するテストも置かない。テストは実装より先に書いた(spec 先行)。
+倍率の期待値は同梱の相性表(`master.EmbeddedTypeChart()`)で成り立つ組だけを使う。
+
+### 受け入れ条件
+
+1. `incoming` は仮想敵の攻撃技(変化技を除く)のタイプごとに、メンバーのタイプと**メンバーの特性**で求めた倍率の最大。
+   `outgoing` はメンバーの攻撃技のタイプごとに、仮想敵のタイプと**仮想敵の特性**で求めた倍率の最大。攻撃側の特性は自分の攻撃に掛からない。
+2. 倍率は既約分数の文字列(`"0" "1/4" "1/2" "3/4" "1" "5/4" "3/2" "2" "3" "4"` など。分母 1 は整数だけ)。攻撃技が無い側の倍率は `null`(JSON で明示的な `null`)。
+3. `safe` は `incoming < 1`(×0・×1/4・×1/2・特性の ×3/4・無効・吸収)、`superEffective` は `outgoing ≥ 2`(×2・×3・×4)。
+   ×1 は両方 false、×3/2(×2 に ×3/4)と ×5/4 は false。`null` のときは false。
+4. `safeMembers` / `superEffectiveMembers` は仮想敵ごとの `safe` / `superEffective` の人数。
+5. `attackTypes` は仮想敵の攻撃技のタイプ(重複なし・正準順。変化技のみ・技なしは `[]`)。`threats` は request の順、`matchups` はメンバーの request の順(同じ pokemonId の重複もそのまま)。
+   仮想敵の `abilityId` は指定したときだけ(無ければキーを省略)。
+6. 判定順: ヘッダー 400 → body 400/413(メンバー・仮想敵とも 1〜6、moveIds 0〜4・重複・形式、abilityId の形式、pokemonId の形式、未知フィールド・後続 JSON)→
+   ポケモンの read model 未設定、または moveId が1つでもあるのに技の read model 未設定、または abilityId が1つでもあるのに特性の read model 未設定(503)→
+   `unknown_pokemon` → `unknown_move` → `unknown_ability`(422。それぞれ members → threats・request の順で最初のもの。message は `unknown pokemonId: <ID>` 等で adapter の詳細を含めない)→ 200。
+   それ以外(provider の想定外の失敗・chart nil・不正な特性効果・倍率の積のオーバーフロー)は 500 固定文言 `internal error`。
+
+| レイヤー | 対象 | 合格条件 |
+|---|---|---|
+| Unit | `internal/balance`(`AnalyzeThreats` / `Combatant` / `ThreatMatchup` / `ThreatResult`) | 受け入れ条件 1〜5。境界(×0・×1/4・×1/2・×1・×2・×4、特性の ×3/4 で等倍未満・×5/4・×1/2 でちょうど ×1・×3/4 で ×3/2 と ×3、特性の無効・吸収)。すべての結果で `safe` / `superEffective` が倍率から、人数が matchups から数え直した値と一致し、倍率が既約。171 通りの防御タイプ × 18 攻撃タイプで `incoming` / `outgoing` が `CalculateDefenseWithAbility` と一致。メンバー・仮想敵それぞれ 0/7 件は `ErrMemberCount` / `ErrThreatCount`、1 件と 6 件は成功。chart nil は `ErrNilTypeChart`、chart のエラーは伝播、単タイプとしてありえない倍率はエラー。倍率の積のオーバーフローは incoming・outgoing のどちらでも `ErrEffectivenessOverflow` |
+| Contract/HTTP | service-local OpenAPI 0.5.0 / threats | 生成型 `api.ThreatsResponse` へ未知フィールド禁止で decode できる 200 と内容(4 体の仮想敵 × 3 メンバーの全 matchups)。`attackTypes` は空でも `[]`、倍率は文字列か明示的な `null`、仮想敵の `abilityId` は指定時だけ。受け入れ条件 6 の各ケースと境界(6 × 6・4 技・40 文字の moveId / abilityId、技 0 個、メンバーと仮想敵で同じ moveId)。moveIds が全員空・abilityId なしなら技・特性の read model が無くても 200。analyze・coverage・health の既存テストは変更なし(threats の追加で影響しないことも確認) |
+| Smoke | k3d(local overlay) | 既存の3つの example read model のマウントのまま、Ingress 経由で threats が 200(`"incoming":"2"`・`"outgoing":null`・`"superEffectiveMembers":1` 等を含む)、未登録の技が 422 `unknown_move` |
+
+テストの ID は架空(9001-000 / move-9001 / ability-9001 以降)を使う。実在ポケモン・技・特性の名前・ID を Git に置かない(ADR-0002)。
+
+## TB5 の対象(おすすめタイプと該当ポケモン。ADR-0401)
+
+契約の正は [ADR-0401](adr/0401-balance-tb5-recommend-types.md)(§1 はユーザー回答、§2〜6 は採用済みの既定案)。
+`POST /api/balance/v1/team-balance/recommendations` はメンバー(1〜6、`{pokemonId, moveIds(0〜4), abilityId?}`)と任意の `limit`(1〜20、既定 10)を受け取り、
+防御の穴・攻撃範囲の穴・おすすめタイプの候補(171 通りから)と各候補のタイプを持つポケモン全員・特性で穴をふさげるポケモン(別枠)を返す。
+ポケモンの read model に省略可能な `nameJa`・`abilityIds` を足す(`schemaVersion` は 1 のまま)。read model に入っているポケモンを使用可能とみなし、
+レギュレーションの絞り込みはしない(read model を出力する側の責務)ので、それを検証するテストも置かない。テストは実装より先に書いた(spec 先行)。
+純粋コアと HTTP の順位の期待値は、手で数えられる架空の相性表(既定 ×1)で作り、同梱の相性表では独立に組んだ oracle(総当たり)と上位 20 件を照合する。
+
+### 受け入れ条件
+
+1. 防御の穴は、メンバーの特性を反映した TB1 の集計で `resist + immune = 0` の攻撃タイプ(正準順)。×5/4 の特性や等倍への ×3/4 は穴を消さない。
+2. 攻撃範囲の穴は、TB2 のチーム集計で `bestMultiplier` が ×1 未満の防御タイプ(正準順)。技が1つも無いチームでは穴を出さない(`offenseHoles` は `[]`)。
+3. 候補ごとに `defenseCovered`(防御の穴のうち候補のタイプだけで ×1 未満)、`offenseCovered`(攻撃範囲の穴のうち候補のどちらかのタイプで ×1 以上)、
+   `weaknesses`(×2 以上の攻撃タイプの数)を返す。穴を1つもふさがない候補は出さない。候補の特性は考えない。
+4. 並びは `defenseCovered + offenseCovered` の多い順 → `weaknesses` の少ない順 → 正準順(単タイプがすべての複合より先、複合は1つ目・2つ目の正準順)。
+   上位 `limit` 件(既定 10、1〜20)。候補が `limit` より少なければ全件。
+5. 候補の `pokemon` は、複合タイプの候補ならタイプの集合が一致する(順不同)ポケモン全員、単タイプの候補ならそのタイプを含むポケモン全員(もう片方のタイプで候補の `defenseCovered` を等倍未満で受けられなくなるものは除く。ADR-0401 §8)。`exactMatch` が真のもの → `pokemonId` の昇順。`types` は read model の順のまま、
+   `nameJa` は read model にあるときだけ(無ければキーを省略)。該当が無ければ `[]`。
+6. `abilityOptions` は防御の穴ごと(正準順)に、`abilityIds` の特性のどれかで ×1 未満にできる(タイプだけでは ×1 以上の)ポケモンを、
+   ポケモンと特性の組で `pokemonId` の昇順に(`multiplier` は特性込みの既約分数)。特性の read model が無ければ `[]` で 200(503 にしない)で、ほかの結果は変わらない。
+7. 判定順は TB4 と同じ流儀: ヘッダー 400 → body 400/413(メンバー 1〜6、pokemonId・moveIds・abilityId の形式、`limit` の範囲と型、未知フィールド・後続 JSON)→
+   ポケモンの read model(型の provider または一覧の catalog)未設定、または moveId があるのに技、abilityId があるのに特性の read model 未設定(503)→
+   `unknown_pokemon` → `unknown_move` → `unknown_ability`(422、request 順で最初のもの)→ 200。それ以外は 500 固定文言 `internal error`。
+8. ポケモンの read model の `nameJa`(1〜64 文字)・`abilityIds`(0〜3 件・重複なし・ADR-0017 §2 の ID 形式)は省略可能。不正なら `ErrInvalidPokemonTypes` で起動失敗。
+   既存の v1 ファイル(項目なし)はそのまま読める。
+
+| レイヤー | 対象 | 合格条件 |
+|---|---|---|
+| Unit | `internal/balance`(`RecommendTypes` / `PokemonCatalog` / `CatalogPokemon` / `TypeCandidate` / `AbilityOption`) | 受け入れ条件 1〜6(`recommend_test.go`)。防御の穴(特性の無効・吸収・×1/2・×5/4・効果なし、複数メンバー)、攻撃範囲の穴(1体の複数技、複数メンバー、技なし)、手で数えた並び(同点の weaknesses・正準順・単タイプ優先)、穴をふさがない候補の除外(18 件ちょうど)、limit(1・2・10・19・20 は上位の接頭辞、0・21・-1 は `ErrRecommendationLimit`)、該当ポケモン(順不同一致・昇順・nameJa・read model の順)、特性の別枠(タイプだけで受けられるものの除外、×1 ちょうどは入らない、1体の2特性は2組)。provider なしは `AbilityOptions` 空。入力エラー: 0/7 体は `ErrMemberCount`、chart nil は `ErrNilTypeChart`、chart の失敗は伝播、不正タイプは `ErrInvalidType`、不正な特性効果は `ErrInvalidAbilityEffect`、不正な技分類は `ErrInvalidMoveCategory`、catalog の特性の解決失敗は伝播。同梱の相性表で3チームを oracle と上位 20 件照合 |
+| Adapter | `internal/master` のポケモン read model(`LoadPokemonTypes` / `AllPokemon`) | 受け入れ条件 8(`pokemon_catalog_test.go`)。64 文字の nameJa・40 文字の abilityId・3 件・空配列を読める。`AllPokemon` は全件を `pokemonId` の昇順で、返した値を書き換えても read model は変わらない。nameJa の空・65 文字・数値・配列、abilityIds の 4 件・重複・空・大文字・`_`・連続/末尾ハイフン・空白・41 文字・数値・文字列、別の未知フィールドはすべて `ErrInvalidPokemonTypes` で部分 model を返さない。example は名前あり/なし・特性あり/なしを含み、`abilityIds` は特性の example に存在する ID だけ(local overlay の複製とのバイト一致は既存テスト) |
+| Contract/HTTP | service-local OpenAPI 0.6.0 / recommendations | 生成型 `api.RecommendationsResponse` へ未知フィールド禁止で decode できる 200 と内容(穴・候補 10 件・該当ポケモン・特性の別枠)。空の配列は `[]`、`nameJa` は無ければキーを省略。メンバーの特性が防御の穴に効く。limit(省略=10・1・10・19・20、0・21・-1・1.5・文字列は 400)。特性・技の read model が不要なときは無くても 200。受け入れ条件 7 の各ケース、境界(6 体×4 技・40 文字の ID)、`abilityId: null`。health・analyze・coverage・threats は影響を受けない。example read model と同梱の相性表で smoke と同じ結果 |
+| Smoke | k3d(local overlay) | 既存の3つの example read model のマウントのまま、Ingress 経由で recommendations が 200(`"offenseHoles":[]`・`"types":["steel","fairy"]`・`"nameJa":"テストメタル"`・`"abilityId":"ability-9002"` 等を含む) |
+
+テストの ID・名前は架空(9001-000 / move-9001 / ability-9001 以降、`テスト…`)を使う。実在ポケモン・技・特性の名前・ID を Git に置かない(ADR-0002)。

@@ -61,28 +61,8 @@ func AnalyzeCoverage(chart TypeChartProvider, members []CoverageMember) (Coverag
 	}
 
 	for _, member := range members {
-		if len(member.Moves) > MaxMovesPerMember {
-			return CoverageAnalysis{}, ErrMoveCount
-		}
-		seen := make(map[string]struct{}, len(member.Moves))
-		for _, move := range member.Moves {
-			if _, ok := seen[move.MoveID]; ok {
-				return CoverageAnalysis{}, ErrDuplicateMove
-			}
-			seen[move.MoveID] = struct{}{}
-		}
-		for _, move := range member.Moves {
-			if !move.Category.Valid() {
-				return CoverageAnalysis{}, fmt.Errorf("%w: %q", ErrInvalidMoveCategory, move.Category)
-			}
-		}
-		for _, move := range member.Moves {
-			if move.Category == MoveCategoryStatus {
-				continue
-			}
-			if !move.Type.Valid() {
-				return CoverageAnalysis{}, fmt.Errorf("%w: attack %q", ErrInvalidType, move.Type)
-			}
+		if err := validateCombatantMoves(member.Moves); err != nil {
+			return CoverageAnalysis{}, err
 		}
 	}
 

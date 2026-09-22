@@ -1,0 +1,161 @@
+openapi: 3.0.3
+info:
+  title: pokecalc speed API
+  version: 0.1.0
+  description: |
+    素早さ比較の独立サービスの契約。
+    SP0 はヘルスチェックと、既定のレギュレーションで使用可能なポケモンの一覧(素早さ種族値つき)を返す。
+    表(SP1)・自分の位置(SP2)の endpoint は各段階の ADR で足す。
+    契約の正は docs/adr/0600-speed-sp0-foundation.md と docs/speed-design.md。
+servers:
+  - url: /
+paths:
+  /healthz:
+    get:
+      operationId: health
+      summary: Pod health check
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /api/speed/healthz:
+    get:
+      operationId: publicHealth
+      summary: Ingress smoke check
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /api/speed/v1/pokemon:
+    get:
+      operationId: listPokemon
+      summary: List the pokemon available in the default regulation
+      description: |
+        Returns the pokemon of the service-local read model (ADR-0600 §4), which is the available set of
+        one regulation, sorted by pokemonId in ascending order (ADR-0600 §5).
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: The available pokemon with their base speed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PokemonListResponse'
+        '400':
+          description: X-Device-Id or X-Session-Id is missing, empty, or invalid (invalid_request)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: The pokemon read model is not configured (master_unavailable)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: An unexpected internal error (internal_error). The message is a fixed string; no internal detail is returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  parameters:
+    DeviceId:
+      name: X-Device-Id
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    SessionId:
+      name: X-Session-Id
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+  schemas:
+    Health:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+    PokemonListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - regulationId
+        - pokemon
+      properties:
+        regulationId:
+          description: The regulation whose available set the list is (ADR-0600 §4).
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          example: example
+        pokemon:
+          description: The available pokemon, sorted by pokemonId in ascending order.
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SpeedPokemon'
+    SpeedPokemon:
+      type: object
+      additionalProperties: false
+      required:
+        - pokemonId
+        - nameJa
+        - types
+        - baseSpeed
+      properties:
+        pokemonId:
+          type: string
+          maxLength: 8
+          pattern: '^\d{4}-\d{3}$'
+          example: 9001-000
+        nameJa:
+          type: string
+          minLength: 1
+          example: テストカソウドリ
+        types:
+          description: One or two lowercase type IDs, for display only (the 18 types are not listed in the contract).
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            type: string
+            pattern: '^[a-z]+$'
+            example: fire
+        baseSpeed:
+          type: integer
+          minimum: 1
+          maximum: 255
+          example: 100
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        message:
+          type: string
+    ErrorCode:
+      type: string
+      enum:
+        - invalid_request
+        - master_unavailable
+        - internal_error

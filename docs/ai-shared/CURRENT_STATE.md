@@ -10,31 +10,47 @@ Next: P2-2d(CronJob と make import)→ P2-3(pokedex-svc。内部 API・natures�
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
 Active: なし
-Branch: feat/api-p3(作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: 未着手(2026-09-21 にレーンを新設)
-Next: docs/plan.md の P3-1 から。P3-1 の小項目のとおり api/openapi.yaml を先に直して make gen(絶対ルール1)。一括計算・逆算(engine の P1-12 の新しい形。ADR-0010 §R8)・WASM 境界との契約差分(ADR-0011 §10)。マスタの読み込みは services/internal/master(データレーンの P2-2a。main に入るまで)を待たず、差し替え可能なインターフェースと架空データで作る。続いて P3-2 gateway、P3-3 契約テストと k3d のスモーク
+Branch: (次の作業で main から feat/api-<名前> を切る。作業ディレクトリ ~/MyDamageCalcurater-api)
+Status: Phase 3 完了。P3-1(ADR-0200・0201。PR #14)・P3-2 gateway(ADR-0202。PR #23)・P3-3 契約表と k3d のデプロイ・スモーク(ADR-0203。critic PASS)。k3d の既存クラスタで make api-k3d-deploy && make api-smoke 成功
+Next: 他レーン待ち。(1) データレーンの pokedex-svc(P2-3)が main に入ったら、gateway の local overlay に GATEWAY_POKEDEX_URL を設定し、smoke.sh の /api/pokedex の期待値 503→200 と TestManifestGatewayLocalConfig を変える。(2) 共通マスタ(P2-2a の services/internal/master)の写像が入ったら calc-svc の暫定 Store(services/calc/internal/master)を差し替える。(3) Web(P4-5)・iOS から API 契約の要望があれば DECISIONS.md で受ける
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
-Active: なし
+Active: Claude Code
 Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
-Status: 未着手(2026-09-21 にレーンを新設)
-Next: docs/plan.md の P4-1(docs/design.md のデザイントークンを CSS 変数に)から。P4-2〜P4-4 は WASM(make wasm の engine.wasm と engine/wasmapi の JSON 契約。ADR-0011)で先に作り、マスタ(種族・技・持ち物)は pokedex-svc ができるまで架空データで作る。P4-5 の API 接続は API レーンが api/openapi.yaml を main に入れてから
+Status: P4-1〜P4-6 完了(critic PASS。P4-1〜P4-5 は PR #22 で main 済み)。Web のテストはルートの make test / lint / build に含まれる。
+P4-5 のブラウザ実機確認(Chrome・Safari)は人間待ち。P4-7 は docs/verify-m1.md のドラフト(M1 の残りを待つ)
+Next: P4-7 の完成(P2-2c/d・P2-3 pokedex-svc・P3-3 が main に入ったら、オンラインのときにマスタを API から読む MasterSource を作り、verify-m1.md §4 を手順に置き換える)。
+持ち越し: 逆算の「型名でまとめる表示」と絞り込みの演出(ADR-0300 §7)、攻撃側プリセットの engine への移設(データレーンへの提案)
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
-Active: なし
+Active: Claude Code
 Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
-Status: 未着手(2026-09-21 にレーンを新設)。Xcode はユーザーが導入中(App Store)。導入後に `sudo xcode-select -s /Applications/Xcode.app` 等が要る
-Next: docs/plan.md の P6-1 から。Xcode が使えるか(`xcodebuild -version`)を最初に確認し、無ければ Swift Package(swift-openapi-generator で `api/openapi.yaml` から生成したクライアント・モデル・docs/design.md のデザイントークン)と `swift test` から始める。Xcode が使えるようになったら SwiftUI の Xcode プロジェクトとシミュレータのテスト(`make ios-test`)。サーバー(P3)ができるまで API はモック
+Status: P6-1(ADR-0500)・P6-2a 計算画面・P3-1/P3-2 の契約変更への追従(逆算も API で呼ぶ)は完了(critic PASS)。`make ios-test`(ios-gen-check・XCTest 119 件・XCUITest 5 件・Info.plist)が緑。iOS 27 / Swift 6.4
+Next: P6-2b 逆算画面(観測はテンキー入力。与えたダメージ = 相手 HP の減少%(整数)、受けたダメージ = 自分 HP の減少量)→ P6-2c 構築(端末内保存の TeamStore、Showdown 形式は後回し)→ P6-3 → P6-4。ViewModel は PokeCalcCore で XCTest、主要操作は XCUITest
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
-Branch: 次は main から feat/tb-tb4-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
-Status: TB0〜TB3 は完了・main に統合済み(TB0 の Argo CD 実同期もローカル k3d で確認。ADR-0018)。balance は Echo v5.3.1(最新の安定版)。ポケモン・技・特性は temporary の read model(架空データの example。実データは BALANCE_*_PATH でマウント。P2-2 のスナップショットができたら差し替え)。k3d には Argo CD v3.5.3・クラスタ内レジストリ(balance-registry)・Application pokecalc-balance(manual sync)がある
-Next: TB4(仮想敵診断。ユーザー回答: 仮想敵を最大 6 体、pokemonId・技 ID 最大 4・特性は任意で入力し、各仮想敵について自分の各メンバーが受ける最大倍率と与えられる最大倍率を表にし、安全に受けられるメンバー数を集計。TB1〜3 を再利用)の ADR-0019 → spec-writer → implementer → critic。その後 TB5(おすすめタイプと該当ポケモン。DECISIONS.md 2026-09-22)。軽微の残り: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の JSON Schema、CoverageMultiplier の nullable enum
+Branch: 次は main から feat/tb-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
+Status: TB0〜TB4 は完了・main に統合済み。TB5 は完了し PR で統合する(TB5 おすすめタイプと該当ポケモン /recommendations。ADR-0401、§8 はユーザー回答による範囲の変更)。balance は Echo v5.3.1。ポケモン・技・特性は temporary の read model(架空データの example。実データは BALANCE_*_PATH でマウント)。k3d には Argo CD v3.5.3・クラスタ内レジストリ・Application pokecalc-balance(manual sync)。新しい ADR はタイプバランスの帯 0400〜
+Next: (1) データレーンの `pokedex export`(P2-3。nameJa・abilityIds・レギュレーションで絞る・特性の read model。受諾済み)が main に入ったら、balance の read model をそれに差し替え、実データで TB5 を確認する。(2) 軽微の残り: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の JSON Schema、CoverageMultiplier の nullable enum、HTTP 層の検証・422 変換の重複(analyze・coverage・threats・recommendations)、recommend の穴の算出を AnalyzeDefense/AnalyzeCoverage の集計に寄せる。(3) Web / iOS から balance を使う画面は各レーンの範囲(必要なら DECISIONS.md で依頼)
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
+
+## Speed
+Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
+Active: Claude Code
+Branch: feat/speed-s1(SP0 は feat/speed-s0 → PR で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
+Status: SP0 完了(ADR-0600。services/speed の基盤: engine を呼ぶ素早さの計算コア・スカーフ ×1.5 の五捨五超入・架空データの read model `SPEED_POKEMON_PATH`・`GET /api/speed/v1/pokemon`・Kustomize base/local・Dockerfile(ルートがコンテキスト)・smoke)。ユーザー回答4点は plan.md に反映済み
+Next: SP1(表。ADR-0601: 6 行のプリセット・速い順・同速の段・`presets` クエリでの絞り込み・`GET /api/speed/v1/table`)→ SP2(自分の位置)→ SP3(`web/src/speed/` の画面部品。Web の骨組みが無い間は部品とテストだけ)→ SP4(pokedex の read model・k3d・GitOps)。検討: 404/405 を `{code,message}` にそろえるか(SP0 critic 軽微)
+
+## Maintenance
+Lane: 整備(Claude の上限時に Codex が進める。COORDINATION.md「Claude の上限時の Codex」)
+Active: なし
+Branch: なし(次回は origin/main から新しい fix/maint-<名前> を切る)
+Status: MT-1(統合検証)・MT-2(check-publishable の自己テスト修正・lint 組み込み)は PR #24 で main に統合済み
+Next: docs/plan.md の整備レーン MT-3 から順に進める
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

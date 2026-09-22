@@ -1,0 +1,17 @@
+# services/speed/Dockerfile 用の BuildKit ignore ファイル。ビルドコンテキストはリポジトリの
+# ルート(ADR-0600 §2)なので、Dockerfile が実際に COPY する engine と services/speed だけを
+# デーモンへ送る対象として残す。
+*
+!engine
+!services/speed
+
+# engine 側で不要なもの(WASM ビルド専用・pure Go の docker ビルドには使わない)。
+engine/cmd/wasm
+
+# services/speed 側でイメージに要らないもの(balance の .dockerignore と同じ考え方)。
+services/speed/deploy
+services/speed/scripts
+services/speed/testdata
+services/speed/Makefile
+services/speed/*.md
+services/speed/**/*_test.go

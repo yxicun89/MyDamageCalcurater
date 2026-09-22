@@ -135,4 +135,61 @@ if [ "$unknown_ability_status" != "422" ] || ! grep -qF '"code":"unknown_ability
   exit 1
 fi
 
-echo "balance smoke: health=200 analyze=200 unknown=422 coverage=200 unknown_move=422 ability=200 unknown_ability=422"
+# TB4 (ADR-0400): threats reuses the three example read models above. 9002-000 grass with move-9001 (fire) and
+# 9003-000 water/ground with ability-9004 and no moves, against 9005-000 ice with move-9008 (ice):
+# incoming x2 and x1 (ice vs water/ground is x1, so the super effective x3/4 does not apply), outgoing x2 and null.
+threats_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  -X POST "$base_url/api/balance/v1/team-balance/threats" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  --data '{"members":[{"pokemonId":"9002-000","moveIds":["move-9001"]},{"pokemonId":"9003-000","moveIds":[],"abilityId":"ability-9004"}],"threats":[{"pokemonId":"9005-000","moveIds":["move-9008"]}]}' || printf '000')
+if [ "$threats_status" != "200" ]; then
+  echo "balance threats failed: HTTP $threats_status (are the example read models mounted?)" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+for key in '"threats"' '"matchups"' '"attackTypes":["ice"]' '"incoming":"2",' '"incoming":"1",' '"outgoing":"2",' '"outgoing":null' '"safeMembers":0' '"superEffectiveMembers":1'; do
+  if ! grep -qF "$key" "$body_file"; then
+    echo "balance threats body is missing $key" >&2
+    cat "$body_file" >&2
+    exit 1
+  fi
+done
+
+unknown_threat_move_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  -X POST "$base_url/api/balance/v1/team-balance/threats" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  --data '{"members":[{"pokemonId":"9002-000","moveIds":[]}],"threats":[{"pokemonId":"9005-000","moveIds":["move-9999"]}]}')
+if [ "$unknown_threat_move_status" != "422" ] || ! grep -qF '"code":"unknown_move"' "$body_file" || ! grep -qF '"message":"unknown moveId: move-9999"' "$body_file"; then
+  echo "balance threats unknown move: HTTP $unknown_threat_move_status, want 422 unknown_move" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+
+# TB5 (ADR-0401): recommendations reuses the three example read models (the pokemon read model also carries
+# nameJa and abilityIds). 9005-000 (ice) alone resists only ice, so 17 attack types are defense holes; steel/fairy
+# (9006-000 テストメタル) is among the first 10 candidates, and ability-9002 (absorb water, 9001-000) and
+# ability-9001 (immune to ground, 9006-000) fill holes as ability options. No move: offenseHoles is [].
+recommendations_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  -X POST "$base_url/api/balance/v1/team-balance/recommendations" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  --data '{"members":[{"pokemonId":"9005-000","moveIds":[]}]}' || printf '000')
+if [ "$recommendations_status" != "200" ]; then
+  echo "balance recommendations failed: HTTP $recommendations_status (is the example pokemon read model mounted?)" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+for key in '"defenseHoles"' '"offenseHoles":[]' '"candidates"' '"abilityOptions"' '"types":["steel","fairy"]' '"nameJa":"テストメタル"' '"abilityId":"ability-9002"' '"abilityId":"ability-9001"' '"multiplier":"0"'; do
+  if ! grep -qF "$key" "$body_file"; then
+    echo "balance recommendations body is missing $key" >&2
+    cat "$body_file" >&2
+    exit 1
+  fi
+done
+
+echo "balance smoke: health=200 analyze=200 unknown=422 coverage=200 unknown_move=422 ability=200 unknown_ability=422 threats=200 threats_unknown_move=422 recommendations=200"

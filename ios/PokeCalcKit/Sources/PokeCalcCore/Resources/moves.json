@@ -1,0 +1,6 @@
+[
+  { "id": "test-move-physical-a", "nameJa": "テストわざぶつりA", "type": "fighting", "category": "physical", "power": 37, "priority": 0 },
+  { "id": "test-move-special-a", "nameJa": "テストわざとくしゅA", "type": "poison", "category": "special", "power": 33, "priority": 0 },
+  { "id": "test-move-special-b", "nameJa": "テストわざとくしゅB", "type": "dragon", "category": "special", "power": 55, "priority": 0 },
+  { "id": "test-move-status-a", "nameJa": "テストわざへんかA", "type": "fairy", "category": "status", "power": 0, "priority": 0 }
+]
