@@ -780,6 +780,11 @@ Web・iOS レーンのローカル k3d 環境でも calc を使う画面(ダメ�
 (データレーンの docs/runbooks/data.md 参照)。`make api-k3d-deploy` も、マスタ未投入のクラスタでは `kubectl rollout status` が120秒でタイムアウトして失敗するので、
 先に `make import-k8s` を実行すること。`make api-smoke` の出力1行目が `master=pokedex …` であれば実際に pokedex-svc へつながっている確認になる(`master=example` はフォールバック)。
 
+## 2026-09-23: iOS レーンの統合(PR #91)
+Decision: P6-2c 構築ビルダー(一覧・編集画面・ニックネーム・XCUITest)と api/openapi.yaml(ADR-0105)への追従を PR #91 で main にマージした(critic 2回目 PASS。make test / lint / build / check-publishable / ios-test が成功)。
+Reason: 前回(PR #53)の続き。P6-2c の critic レビュー(1回目 NG → 2回目 PASS)を経て区切りで統合した。
+Impact: 続き(P6-2d 構築から個体を呼び出す配線・P6-3・P6-4)は同じブランチ feat/ios-p6 で進める。
+
 ## 2026-09-22: 判定 JD0(judge-svc 基盤)を PR #92 で main に統合
 Decision: ADR-0700(基盤・上流の呼び方・エラー正規化・受け入れ条件8件)と、docs/judge-design.md §4 の未決事項5件の決定・`services/judge/` の実装(internal/client・internal/httpapi・cmd/api・deploy/k8s・Dockerfile・scripts/smoke.sh)を PR #92 で main に統合した。critic は3回目で PASS(1・2回目 NG はいずれも上流エラー文面への URL/host:port/ホスト名の漏洩。`transportFailureReason()` を固定語彙への分類に変更して解消)。
 Reason: `make test`・`make lint`・`make build`(ルート)が緑、critic PASS、他レーンの範囲外変更なし(COORDINATION.md の共有ファイル規約の範囲内)を確認してマージした。

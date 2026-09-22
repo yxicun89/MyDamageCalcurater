@@ -8,6 +8,12 @@ final class ReverseScreenUITests: XCTestCase {
     /// `Resources/items.json` の唯一の架空持ち物(相手の持ち物候補トグルの対象。`CalcScreenUITests` と同じ)。
     private static let mockItemID = "test-item-berry"
     private static let existenceTimeout: TimeInterval = 5
+    /// `Resources/species.json` の2番目。逆算画面の既定の自分(先頭の種族)とは別の種族にして、
+    /// 構築から呼び出したときに種族が実際に変わったことを検査できるようにする(P6-2d)。
+    private static let secondMockSpeciesName = "テストモンに"
+    /// P6-2d のテスト用の構築ビルダーで付けるニックネーム(`CalcScreenUITests` と同じ理由:
+    /// `Menu` の項目は accessibilityIdentifier が渡らないため、ラベルで一意に選べる値にする)。
+    private static let mockMemberNickname = "テストこたいP6逆算"
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -16,6 +22,51 @@ final class ReverseScreenUITests: XCTestCase {
     /// SwiftUI の View 種別を決め打ちせず、identifier だけで要素を探す(`CalcScreenUITests` と同じ)。
     private func element(_ app: XCUIApplication, _ identifier: String) -> XCUIElement {
         app.descendants(matching: .any)[identifier]
+    }
+
+    /// id を含む動的な identifier(`memberCard-<id>` 等)を前方一致で探す(`CalcScreenUITests` と同じ)。
+    private func elementBeginningWith(_ app: XCUIApplication, _ prefix: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
+    }
+
+    /// ルート画面の構築一覧を開き、メンバー1体だけの構築を1つ作って一覧まで戻る
+    /// (`CalcScreenUITests.createTeamWithOneMember` と同じ操作列。P6-2d)。
+    private func createTeamWithOneMember(_ app: XCUIApplication) {
+        let openTeamList = app.buttons["openTeamListScreen"]
+        XCTAssertTrue(openTeamList.waitForExistence(timeout: Self.existenceTimeout))
+        openTeamList.tap()
+        XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
+
+        let createButton = element(app, "createTeamButton")
+        XCTAssertTrue(createButton.waitForExistence(timeout: Self.existenceTimeout))
+        createButton.tap()
+        let nameField = app.alerts.textFields.firstMatch
+        XCTAssertTrue(nameField.waitForExistence(timeout: Self.existenceTimeout))
+        nameField.tap()
+        nameField.typeText("テストこうちくP6-2d逆算")
+        app.alerts.buttons["作成"].tap()
+
+        XCTAssertTrue(element(app, "teamEditScreen").waitForExistence(timeout: Self.existenceTimeout))
+        let addMemberButton = element(app, "addMemberButton")
+        XCTAssertTrue(addMemberButton.waitForExistence(timeout: Self.existenceTimeout))
+        addMemberButton.tap()
+        let speciesOption = app.buttons[Self.secondMockSpeciesName]
+        XCTAssertTrue(speciesOption.waitForExistence(timeout: Self.existenceTimeout))
+        speciesOption.tap()
+        XCTAssertTrue(elementBeginningWith(app, "memberCard-").waitForExistence(timeout: Self.existenceTimeout))
+
+        let nicknameField = elementBeginningWith(app, "memberNickname-")
+        XCTAssertTrue(nicknameField.waitForExistence(timeout: Self.existenceTimeout))
+        nicknameField.tap()
+        nicknameField.typeText(Self.mockMemberNickname)
+
+        let saveButton = element(app, "saveTeamButton")
+        XCTAssertTrue(saveButton.waitForExistence(timeout: Self.existenceTimeout))
+        saveButton.tap()
+        XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
+
+        // ルートへ戻る(構築一覧の戻るボタン)。
+        app.navigationBars.buttons.element(boundBy: 0).tap()
     }
 
     private func launchReverseScreen() -> XCUIApplication {
@@ -109,5 +160,57 @@ final class ReverseScreenUITests: XCTestCase {
         // 空の `TextField` は `value` が "" と nil のどちらの実装もありうるので両方許容する。
         XCTAssertTrue((field.value as? String ?? "").isEmpty, "側を切り替えたら観測欄のテキストも空に戻す")
         XCTAssertFalse(element(app, "reverseCandidateRow-neutral@-").exists, "側を切り替えたら候補を消す")
+    }
+
+    /// 「構築から選ぶ」の入口(P6-2d。ADR-0501「P6-2d」7章)。構築が無い起動直後は無効 + 案内文、
+    /// 構築ビルダーで1体作ってから呼ぶと自分のカードの種族が変わりプリセットの選択が外れる、
+    /// プリセットを選び直すとまた選択表示が戻る。数値は検査しない(`CalcScreenUITests` と同じ粒度)。
+    func testTeamSourceRowEmptyThenSelectingMemberClearsPresetAndPresetClearsBack() {
+        let app = launchReverseScreen()
+
+        let teamButton = element(app, "reverseTeamSourceButton")
+        XCTAssertTrue(teamButton.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertFalse(teamButton.isEnabled, "構築が無いときは無効")
+        XCTAssertTrue(element(app, "reverseTeamEmptyMessage").waitForExistence(timeout: Self.existenceTimeout))
+
+        // ルートへ戻り、構築を1つ作って逆算画面を開き直す(`loadTeams()` は画面の起動時に走る。
+        // `POKECALC_USE_MOCK=1` は起動のたびに構築の保存先を空にするため、プロセスを再起動せず
+        // 同じアプリのまま画面を行き来する。`CalcScreenUITests` と同じ)。
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        createTeamWithOneMember(app)
+        let openReverseAgain = app.buttons["openReverseScreen"]
+        XCTAssertTrue(openReverseAgain.waitForExistence(timeout: Self.existenceTimeout))
+        openReverseAgain.tap()
+        XCTAssertTrue(element(app, "reverseScreen").waitForExistence(timeout: Self.existenceTimeout))
+
+        let teamButtonAfter = element(app, "reverseTeamSourceButton")
+        XCTAssertTrue(teamButtonAfter.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(teamButtonAfter.isEnabled, "構築ができたので選べる")
+        XCTAssertFalse(element(app, "reverseTeamEmptyMessage").exists)
+
+        // 既定の側は「与えたダメージ」(自分が攻撃側)。自分のカードは `reverseMySpeciesPicker`。
+        let mySpeciesPicker = element(app, "reverseMySpeciesPicker")
+        XCTAssertTrue(mySpeciesPicker.waitForExistence(timeout: Self.existenceTimeout))
+        let presetButton = app.buttons["reverseAttackerPreset-aFull"]
+        XCTAssertTrue(presetButton.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(presetButton.isSelected, "起動直後は既定のプリセットが選ばれている")
+
+        teamButtonAfter.tap()
+        // `Section` で構築ごとに見出しを付けているので、開いた直後に全メンバーが並ぶ(9章)。
+        let memberButton = app.buttons[Self.mockMemberNickname]
+        XCTAssertTrue(memberButton.waitForExistence(timeout: Self.existenceTimeout))
+        memberButton.tap()
+
+        // 呼び出しは非同期。プリセットの選択表示が外れるまで待つ。
+        let presetDeselected = NSPredicate(format: "isSelected == false")
+        expectation(for: presetDeselected, evaluatedWith: presetButton, handler: nil)
+        waitForExpectations(timeout: Self.existenceTimeout)
+        XCTAssertEqual(mySpeciesPicker.label, Self.secondMockSpeciesName, "呼び出した個体の種族に変わる")
+
+        // プリセットを選び直すと、ピルの選択表示が戻る(構築の選択は排他に外れる)。
+        presetButton.tap()
+        let presetSelectedAgain = NSPredicate(format: "isSelected == true")
+        expectation(for: presetSelectedAgain, evaluatedWith: presetButton, handler: nil)
+        waitForExpectations(timeout: Self.existenceTimeout)
     }
 }

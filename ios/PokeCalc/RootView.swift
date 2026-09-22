@@ -99,12 +99,12 @@ struct RootView: View {
             }
             .navigationDestination(for: CalcScreenRoute.self) { _ in
                 if case .ready(let service, let backendDescription) = environment {
-                    CalcScreenView(service: service, backendDescription: backendDescription)
+                    CalcScreenView(service: service, teamStore: teamStore, backendDescription: backendDescription)
                 }
             }
             .navigationDestination(for: ReverseScreenRoute.self) { _ in
                 if case .ready(let service, let backendDescription) = environment {
-                    ReverseScreenView(service: service, backendDescription: backendDescription)
+                    ReverseScreenView(service: service, teamStore: teamStore, backendDescription: backendDescription)
                 }
             }
             .navigationDestination(for: TeamListScreenRoute.self) { _ in

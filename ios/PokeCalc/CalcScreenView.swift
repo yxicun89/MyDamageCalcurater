@@ -20,8 +20,8 @@ struct CalcScreenView: View {
     /// 表示の有無に関わらず高さを固定で確保する(批評「任意」対応)。
     private static let loadingIndicatorHeight: CGFloat = 24
 
-    init(service: any PokeCalcService, backendDescription: String) {
-        _viewModel = State(initialValue: CalcViewModel(service: service))
+    init(service: any PokeCalcService, teamStore: any TeamStore, backendDescription: String) {
+        _viewModel = State(initialValue: CalcViewModel(service: service, teamStore: teamStore))
         self.backendDescription = backendDescription
     }
 
@@ -57,6 +57,7 @@ struct CalcScreenView: View {
                 }
                 cardsRow
                 presetSegmentedRow
+                teamSourceRow
                 moveSelector
                 loadingSlot
                 ResultsSectionView(viewModel: viewModel, barColor: moveTypeColor)
@@ -152,6 +153,18 @@ struct CalcScreenView: View {
         }
     }
 
+    /// 「構築から選ぶ」の入口(P6-2d)。プリセットのピル行の直下、幅いっぱいの独立した1行
+    /// (ADR-0501「P6-2d」5章・7章)。
+    private var teamSourceRow: some View {
+        TeamSourceMenuRow(
+            teamOptions: viewModel.teamOptions,
+            selection: viewModel.attackerBuildSource.teamSelection,
+            identifierPrefix: "attackerTeam"
+        ) { teamID, memberID in
+            await viewModel.selectTeamIndividual(teamID: teamID, memberID: memberID)
+        }
+    }
+
     private var moveSelector: some View {
         Menu {
             ForEach(viewModel.moveOptions, id: \.id) { move in
@@ -200,7 +213,7 @@ struct CalcScreenView: View {
 #Preview {
     if let mock = try? MockPokeCalcService() {
         NavigationStack {
-            CalcScreenView(service: mock, backendDescription: "モックデータで動作中")
+            CalcScreenView(service: mock, teamStore: LocalTeamStore(), backendDescription: "モックデータで動作中")
         }
     } else {
         Text("プレビュー用モックの読み込みに失敗")

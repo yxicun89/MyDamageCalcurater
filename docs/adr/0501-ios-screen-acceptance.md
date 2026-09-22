@@ -628,3 +628,309 @@ XCUITest はモック(`MockPokeCalcService` + `LocalTeamStore`。起動時 `POKE
   - **(同上)`TeamEditView` に読み込み中インジケータが無かった**: `TeamListView.loadingSlot` と同じ
     (高さ固定・`viewModel.isLoading` のときだけ表示)ものを追加した(identifier
     `teamEditLoadingIndicator`。5章の契約には無い追加)。
+
+## P6-2d の受け入れ条件(構築から個体を呼び出す。テスト先行・実装未着手)
+
+requirements.md「**自分側のプリセット**: 構築から個体を呼び出す / 「A特化」「A振り(補正なし)」「無振り」から選ぶ」の
+前半(構築から個体を呼び出す)を、計算画面(P6-2a)と逆算画面(P6-2b)に配線する。P6-2c 4章で
+「配線は範囲外・別タスク」としていた続きにあたる。
+
+ロジックは `PokeCalcCore` に置く(ADR-0500 §1)。View と XCUITest は範囲外(implementer の担当。5章の
+identifier 契約をそのまま使うこと)。
+spec-writer が失敗する状態で置いたテスト:
+`PokeCalcKit/Tests/PokeCalcCoreTests/{TeamIndividualSelectionTests,CalcViewModelTeamIndividualTests,ReverseViewModelTeamIndividualTests}.swift`、
+`Tests/PokeCalcCoreTests/Support/StubTeamStore.swift` への追記(手動モード `setListMode(.manual)` /
+`resolveList(at:with:)` / `waitForListCalls(count:)` と架空の構築フィクスチャ `StubTeams`)。
+`swift build --build-tests` は `BuildSource` / `TeamIndividualSelection` / `TeamPickerGroup` / `TeamMemberOption` /
+`TeamIndividualOptions` / `TeamLoadLabels` と、両 ViewModel の `teamOptions` / `loadTeams()` /
+`selectTeamIndividual(teamID:memberID:)` / `attackerBuildSource` / `knownDefenderBuildSource` が
+存在しないためコンパイルエラーで失敗する。実装者はこれらを新設し、**既存のテストを1行も変えずに**通すこと
+(CLAUDE.md 絶対ルール6)。
+
+### 1. 「自分側」の出どころを1つの直和にする(中核の判断)
+
+いまは `CalcViewModel.attackerPreset` / `ReverseViewModel.attackerPreset` / `knownDefenderPreset` が
+「自分側」の SP・性格の**唯一の**出どころで、要求を組み立てるたびに `AttackerPreset.build` /
+`KnownDefenderPreset.build` で毎回作り直している。構築の個体は手で詰めた SP と専用の性格を持つのが普通で、
+3つの定型プリセットのどれとも一致しない。**呼び出した個体はその個体の値をそのまま使う**(プリセットに
+丸め直さない)ことが、この機能の意味そのものなので、出どころを直和にする。
+
+新規ファイル `PokeCalcKit/Sources/PokeCalcCore/TeamBuildSource.swift`:
+
+```swift
+public enum BuildSource<Preset: Equatable & Sendable>: Equatable, Sendable {
+    case preset(Preset)
+    case team(TeamIndividualSelection)
+    public var preset: Preset? { get }              // .team のときは nil
+    public var teamSelection: TeamIndividualSelection? { get }  // .preset のときは nil
+}
+public typealias AttackerBuildSource = BuildSource<AttackerPreset>
+public typealias KnownDefenderBuildSource = BuildSource<KnownDefenderPreset>
+```
+
+- **判断: 2つの具体 enum ではなく総称型にする**。`AttackerPreset` と `KnownDefenderPreset` で中身が違うだけで
+  分岐の形は同じなので、同じ定義を2回書かない(coding-rules「読みやすいコード」)。
+- **判断: `attackerPreset` はプロパティとして残すが `AttackerPreset?`(計算プロパティ)にする**。
+  `attackerBuildSource.preset` をそのまま返す。構築の個体を呼んでいる間は nil = 「どのプリセットも選ばれていない」。
+  これで View のピルの選択表示(`viewModel.attackerPreset == preset`)も、既存のテストの
+  `XCTAssertEqual(viewModel.attackerPreset, .aFull)` も**無変更で**成り立つ(Swift の optional 昇格)。
+  `knownDefenderPreset` も同じく `KnownDefenderPreset?` にする。
+  代案(`attackerPreset` を保存プロパティのまま残し、別に `teamIndividual: TeamIndividualSelection?` を足す)は
+  「プリセットも構築も選ばれている」という無効な状態が型として作れてしまい、排他を実装の約束事に頼ることになるので採らない。
+
+呼び出した個体のスナップショット:
+
+```swift
+public struct TeamIndividualSelection: Equatable, Sendable {
+    public let teamID: String
+    public let memberID: String
+    /// 画面に出す名前(ニックネーム、無ければ種族名、それも無ければ speciesKey)
+    public let displayName: String
+    /// 選んだ時点の `TeamMemberConverter.makeIndividual(from:moves:)` の結果
+    public let individual: Individual
+}
+```
+
+- **判断: ID だけを持たず、選んだ時点の `Individual` を写して持つ(スナップショット)**。ID だけにすると
+  要求を組み立てるたびに `TeamStore` を引く必要があり、`buildRequest` が async になって
+  `CalcViewModel`/`ReverseViewModel` の「組み立ては同期・純粋」という形(既存のプリセット経路と同じ)が崩れる。
+  副作用として、呼び出したあとに構築ビルダー側でその個体を編集しても計算画面は追従しない(呼び出し直すと反映される)。
+  これは「呼び出す」という言葉どおりの挙動で、画面をまたいだ暗黙の同期より予測しやすい。
+
+### 2. 要求の組み立てが何を使うか(フィールドごとの出どころ)
+
+`.team` のとき、`buildRequest` は `AttackerPreset.build` / `KnownDefenderPreset.build` を**呼ばない**。
+
+| フィールド | `.preset` | `.team` |
+|---|---|---|
+| `natureId` / `sp` | `*.build(...)` の結果 | スナップショットの値そのまま |
+| `abilityId` / `teraType` | 常に nil(画面に UI が無い) | スナップショットの値そのまま |
+| `speciesKey` | 画面の種族(`attackerSpeciesKey` / `mySpeciesKey`) | 同左 |
+| `itemId` | 画面の持ち物(`attackerItemId` / `myItemId`) | 同左 |
+| `Individual.moveId` | nil(いまの実装のまま) | nil に**そろえる**(下記) |
+| 要求本体の `moveId` | 画面の技(`moveId`) | 同左 |
+
+`Individual.moveId` は `.preset` 経路でいまも nil のままで、技は要求本体の `moveId` が正。`.team` でも
+スナップショットの `moveId` を要求へ持ち込まず nil にそろえる(同じ意味の値を要求の2か所に置いて
+食い違わせないため)。スナップショットの `moveId` は「呼び出した瞬間に画面の技を決める」ためだけに使う(下記3)。
+
+- **判断: 種族・持ち物・技は「画面の状態」を唯一の正とし、スナップショットで上書きしない**。呼び出した瞬間には
+  この3つも個体の値で**画面の状態ごと**書き換える(下記3)ので見た目と要求は一致し、そのあと利用者が
+  種族セレクタ・持ち物・技を動かしたぶんは素直に効く。スナップショット側を正にすると、画面に出ている技と
+  要求の技が食い違う(利用者が技を変えても反映されない)。
+- **判断: 種族を変えても `.team` は外れない**。SP と性格は種族に依存しない値であり、なにより `swapSides()` は
+  `attackerSpeciesKey` を書き換えるので、種族変更で外す設計にすると攻守入れ替えのたびに自分の調整が
+  黙って消える。P6-2a 規則6「攻守入れ替えでプリセットは入れ替えない」と同じ扱いにそろえる。
+- **排他(判断)**: `.preset` と `.team` は型として排他。プリセットのピルを押せば `.preset(押したもの)` になり
+  構築の選択は外れる。構築の個体を選べば `.team(...)` になりプリセットの選択表示は消える(`attackerPreset == nil`)。
+  requirements.md が「構築から呼び出す / 3つから選ぶ」と並べていることに一致する。
+  **専用の「解除」ボタンは置かない**(プリセットを1つ押すことが解除そのもので、ボタンを増やすと
+  「解除したあと何が選ばれているか」という第3の状態を作ってしまう)。
+
+### 3. 呼び出したときに画面の状態をどう動かすか
+
+`selectTeamIndividual(teamID:memberID:) async`(両 ViewModel)の手順:
+
+1. `teamOptions` に無い `teamID`/`memberID` は**無視**する(計算も呼ばない)。既存の
+   `selectAttacker(speciesKey:)` が未知の種族キーを無視するのと同じ扱い。
+2. `beginInput()` で世代を1つ進める(以降 P6-2a 規則7・P6-2b 規則8の保護をそのまま受ける)。
+3. `TeamMemberConverter.makeIndividual(from: member, moves: masterMoves)` で `Individual` を作る
+   (この関数を新しく書き直さない。P6-2c 4章で用意してテストで固定済み)。
+4. 自分の種族を個体の `speciesKey` に、自分の持ち物を個体の `itemId` にする。
+5. 技: **計算画面**と**逆算の「与えたダメージ」**(自分が攻撃側)は、自分の learnset を読み直してから
+   既存の `reselectMove(preferringCurrent: 個体の moveId)` を通す。
+   **逆算の「受けたダメージ」**(自分が防御側)は技が相手の learnset なので**技に触れない**。
+6. `attackerBuildSource` / `knownDefenderBuildSource` を `.team(...)` にして、計算を1回だけ呼ぶ
+   (逆算は P6-2b 規則5どおり「計算できる状態なら1回」)。
+
+**技の落としどころ(判断)**: `moveIds` が空で `Individual.moveId` が nil のとき、および個体の技が
+いまの `moveOptions`(learnset ∩ マスタ。逆算はさらにダメージ技だけ)に無いときは、
+**既存の規則3・4のまま「learnset の順で最初のダメージ技(計算画面は無ければ learnset の最初)」に落とす**。
+エラーにはしない。理由: 技が1つも無い構築の個体は構築ビルダー上ふつうに作れる(`moveIds` は 0〜4)ので、
+それを画面のエラーにすると正常なデータで計算画面が止まる。新しいエラーコードも増やさない
+(`moveOptions` が空のときだけ既存の `moveUnavailable` が出るのは今までどおり)。
+副作用として、逆算の「与えたダメージ」で変化技しか持たない個体を呼ぶと技は最初のダメージ技に落ちる
+(逆算は変化技を扱えないため。P6-2b「判断した点」)。
+
+### 4. 逆算のどちら側に効かせるか(判断: 両側)
+
+requirements.md の「自分側のプリセット」は側を限定していない。逆算の「受けたダメージ」では**自分が防御側**で、
+`known` に入るのは自分の個体そのものなので、ここも「自分側」である。しかも `KnownDefenderPreset`
+(無振り / HB(HD)振り / HB(HD)特化)は H・B(D) を 0 か 32 のどちらかに決め打ちする粗い3択で、
+実際の構築の耐久調整はほぼ確実にこのどれとも一致しない。**プリセット近似がいちばん外れる場所**なので、
+ここを外すと機能の価値が半減する。攻撃側だけに入れて防御側に入れない理由が見当たらないため、両側に入れる。
+
+- `ReverseViewModel` は側ごとに独立した出どころを持つ(`attackerBuildSource` / `knownDefenderBuildSource`)。
+- `selectTeamIndividual(teamID:memberID:)` は**いま表示している側**(`side`)の出どころだけを `.team` にする。
+  画面はもともと側ごとに排他でプリセット行を出している(`ReverseScreenView.presetSegmentedRow`)ので、
+  入口も1つでよい。側を切り替えても、それぞれの側の出どころは P6-2b 規則7「両方のプリセットは残す」と
+  同じく保たれる。自分の種族(`mySpeciesKey`)は両側で共有の値なので、どちら側で呼んでも書き換わる。
+- `selectAttackerPreset(_:)` / `selectKnownDefenderPreset(_:)` はそれぞれ**自分の側だけ**を `.preset` に戻す
+  (もう一方の側の構築の選択は外さない)。
+
+### 5. `TeamStore` を画面へ届ける配線(判断: コンストラクタ注入 + 任意)
+
+- `CalcViewModel.init(service:)` → `init(service: any PokeCalcService, teamStore: (any TeamStore)? = nil)`。
+  `ReverseViewModel` も同じ。`CalcScreenView` / `ReverseScreenView` の `init` に `teamStore: any TeamStore` を足し、
+  `RootView` が既に `@State` で持っている `teamStore` を `navigationDestination` から渡す。
+  ADR-0500 §3 の「画面は生成型を直接使わずプロトコルだけを使う」に沿った形で、`Environment` 注入は使わない
+  (既存の `PokeCalcService` / `TeamStore`(`TeamListView`)と同じ渡し方にそろえる)。
+- **判断: `teamStore` は省略可(既定 nil)にする**。理由は2つ。(a) 既存の `CalcViewModel(service: stub)` /
+  `ReverseViewModel(service: stub)` を使うテストを1行も変えずに通すため(絶対ルール6)。
+  (b) `LocalTeamStore()` を既定値にすると、ViewModel を作っただけで `UserDefaults.standard` に触れることになり、
+  テストが端末の実データに依存する。nil のときは `teamOptions` が常に空で、構築の入口は「まだ構築がありません」
+  の無効状態になる(下記7)。
+- **判断: 構築の読み込みが失敗しても計算画面は壊さない**。`loadTeams()` が `store.list()` の失敗を拾っても
+  `error`(`CalcScreenError`)を立てず、`teamOptions` を空のままにする。CLAUDE.md 絶対ルール5
+  「計算はイベント保存に依存しない」と同じ発想で、保存の都合で計算が止まらないようにする。
+
+### 6. 構築の一覧を画面に出す形
+
+```swift
+public struct TeamMemberOption: Identifiable, Equatable, Sendable {
+    public let id: String          // TeamMember.id
+    public let displayName: String // nickname(前後空白を落として空でなければ)→ 種族名(マスタ)→ speciesKey
+    public let speciesKey: String
+}
+public struct TeamPickerGroup: Identifiable, Equatable, Sendable {
+    public let id: String          // Team.id
+    public let name: String        // Team.name
+    public let members: [TeamMemberOption]
+}
+public enum TeamIndividualOptions {
+    public static func groups(from teams: [Team], species: [SpeciesSummary]) -> [TeamPickerGroup]
+}
+public enum TeamLoadLabels {
+    public static let entryTitle = "構築から選ぶ"
+    public static let empty = "まだ構築がありません"
+}
+```
+
+- **判断: 表示名の組み立ては Core の純粋関数に置く**(ADR-0500 §1「View は描くだけ」。`DisplayLabels.swift` と同じ扱い)。
+- **判断: メンバーが0体の構築は `teamOptions` に出さない**(選べるものが無いため)。構築そのものは消さない。
+- 両 ViewModel に `public private(set) var teamOptions: [TeamPickerGroup]` と
+  `public func loadTeams() async` を持たせる。`load()` の最後にも呼ぶ(計算の後。構築の読み込みで
+  起動時の計算を遅らせない)。`load()` の `didLoad` ガードとは別で、`loadTeams()` は**何度でも呼べる**
+  (構築ビルダーで編集して戻ってきたときに View から呼び直すため。`TeamListViewModel.load()` と同じ考え方)。
+- **世代の保護(新しい非同期の読み込みなので必要)**: `loadTeams()` は `beginInput()` を使わず**専用の通し番号**で守る。
+  `beginInput()` を使うと構築の読み込みが進行中の計算を「追い越した」ことになり、計算の応答が捨てられてしまう。
+  構築の一覧は要求の内容に影響しないので別の番号にし、「古い `list()` の応答が新しいものを上書きしない」ことだけを守る。
+
+### 7. UI(implementer の担当。accessibilityIdentifier 契約)
+
+**判断: 既存の3択ピル行に4つ目を足さず、ピル行の直下に独立した1行(幅いっぱい)を置く**。理由:
+(a) P6-2a の critic レビューで3等分でも「無振り」が見切れていた実績があり(実装メモ M3c)、4等分にすると再発する。
+(b) 3つのプリセットは排他のセグメントだが「構築から選ぶ」は選択肢を開く `Menu` で、操作の種類が違う。
+同じ行に混ぜると見た目が操作を誤って説明する。
+(c) 呼び出し中は「<構築名> · <表示名>」を出したいので、4分の1幅には収まらない。
+見た目の部品は新設せず、`MenuLabelChip` / `glassCard` / ピル(角丸999)など既存のものを使う(新しい視覚言語を作らない)。
+
+| identifier | 要素 |
+|---|---|
+| `attackerTeamSourceButton` | 計算画面。プリセット行の直下、幅いっぱいの `Menu` のラベル。未選択は `TeamLoadLabels.entryTitle`、選択中は「<構築名> · <表示名>」 |
+| `attackerTeamMember-<teamID>-<memberID>` | その `Menu` の中のメンバー1件(構築ごとにセクション見出し = 構築名) |
+| `attackerTeamEmptyMessage` | 選べる個体が1体も無いときに出す `TeamLoadLabels.empty`(下記) |
+| `reverseTeamSourceButton` | 逆算画面。`reverseAttackerPreset-*` / `reverseKnownDefenderPreset-*` の行の直下。側ごとに出し分けないので identifier は1つ(いまの側は `reverseSide-*` で分かる) |
+| `reverseTeamMember-<teamID>-<memberID>` | 同上のメンバー1件 |
+| `reverseTeamEmptyMessage` | 同上の空の案内 |
+
+**空のとき(判断)**: `teamOptions` が空(構築が1つも無い / 構築はあるがメンバーが0体 / `teamStore` が nil /
+`store.list()` が失敗)のときは、**入口の行を消さずに無効(`.disabled(true)`)にし、ラベルの下に
+`TeamLoadLabels.empty` =「まだ構築がありません」を出す**。理由: 行ごと消すと「構築から呼び出せる」こと自体が
+利用者に見えず、機能が発見されない。無効な行 + 案内文なら、構築ビルダーを作れば使えると伝えられる。
+
+XCUITest(implementer が View と一緒に書く。`POKECALC_USE_MOCK=1`)で見ること:
+- 構築が無い起動直後は `attackerTeamSourceButton` が存在し、`attackerTeamEmptyMessage` が見える。
+- 構築画面で構築を1つ作ってメンバーを1体入れてから計算画面を開くと、`attackerTeamMember-<id>-<id>` が選べて、
+  選んだあと `attackerPreset-aFull` の選択表示が外れる(`isSelected` トレイトが無くなる)。
+- 逆算画面でも同じことが `reverseTeamSourceButton` でできる。数値は検査しない(モックは計算しない)。
+
+### 8. 範囲外
+
+- 逆算の**相手側**を構築から呼ぶこと(相手は逆算する対象なので調整は未知。requirements.md にも無い)。
+- 呼び出した個体を計算画面で編集して構築へ書き戻すこと(一方向の「呼び出し」だけ)。
+- ランク補正・状態異常(`Individual.ranks` / `status`)。`TeamMember` が持っていないので写しようがない。
+
+### 9. 実装時に見つけたバグと回避(implementer 追記)
+
+1. **`attackerPreset` / `knownDefenderPreset` を `Preset?` にしたことで、`.none` ケースの比較が
+   壊れる(Swift の言語仕様)**。1章「判断」は「Swift の optional 昇格で `== .aFull` の比較がそのまま
+   成り立つ」としていたが、これは `.aFull` のような衝突しないケース名の話で、`.none` には当てはまらない。
+   `AttackerPreset` / `KnownDefenderPreset` はどちらも列挙子に `none`(無振り)を持つため、
+   期待型が `Preset?` の文脈で素の `.none` と書くと、Swift は `Preset.none` ではなく
+   `Optional<Preset>.none`(= nil)を優先して選ぶ(ビルド時に
+   `warning: assuming you mean 'Optional<Preset>.none'; did you mean 'Preset.none' instead?` が出る、
+   コンパイラの確定した既知の挙動で回避不能)。この結果、`XCTAssertEqual(viewModel.knownDefenderPreset, .none)`
+   のような書き方は「無振りであること」ではなく「nil であること」を検査してしまい、無振りが選ばれている
+   はずの場面で失敗する。
+   - 影響箇所: spec-writer が P6-2d で書いた新規テスト
+     `CalcViewModelTeamIndividualTests.testSelectingTeamAfterPresetClearsPreset`、
+     `ReverseViewModelTeamIndividualTests.{testPresetClearsOnlyItsOwnSide,testEachSideKeepsItsOwnBuildSourceAcrossSideSwitch}`、
+     および P6-2b から既にあった `ReverseViewModelTests.testLoadSelectsDefaultsWithoutCalculating`
+     (この既存テストは P6-2d 以前は `knownDefenderPreset` が非 optional だったため問題が無く、
+     今回の型変更で初めて壊れた)。
+   - **対応(判断)**: 実装(ViewModel・`BuildSource` の型)は変えず、上記4箇所の `.none` を
+     `AttackerPreset.none` / `KnownDefenderPreset.none` と明示する1行修正だけを行った。比較する値・
+     期待する意味はいずれも変えていない(型だけの曖昧さの解消)。CLAUDE.md 絶対ルール6「テストを消したり
+     弱めたりしない」には抵触しない(assert の対象・期待値は同一)と判断したが、「新規テスト・既存テストは
+     無変更で通す」という P6-2d の前提には反するため、ここに明記して次の人間レビュー・critic の確認を
+     求める。代案(`Preset?` をやめて `attackerPreset` を非 optional のまま残す)は、1章の中核判断
+     (`.preset`/`.team` を型で排他にする)と両立しないため採らなかった。
+2. **配列リテラルに `String?` と `String` を混在させると型推論が `[Any]` に落ちる(Swift の別の既知の
+   制約)**。`CalcViewModelTeamIndividualTests.testLoadPopulatesTeamOptionsSkippingEmptyTeams` /
+   `ReverseViewModelTeamIndividualTests.testLoadPopulatesTeamOptions` の
+   `[StubTeams.namedMember.nickname, StubMaster.alpha.nameJa]`(`nickname: String?` と `nameJa: String` の
+   混在)がこれに当たり、`swift build --build-tests` がコンパイルエラーで失敗した。両辺を `[String?]` に
+   そろえる(`.map { $0.displayName as String? }` / `as [String?]`)形に直した。比較する値は変えていない。
+3. **`Menu` の項目(`Button`)に付けた `.accessibilityIdentifier` が、実機・シミュレータで開いた
+   UIKit のメニューへ渡らない(このコードベースで初めて判明。7章の identifier 契約を書いた時点では
+   未確認だった)**。XCUITest の accessibility スナップショットで確認したところ、`Section(group.name) { ... }`
+   で包んでも包まなくても、メニューを開いたときの `Button` 要素に `identifier` 属性が付かず
+   `label` だけになる(`attackerTeamMember-<teamID>-<memberID>` で `elementBeginningWith` 検索しても
+   見つからない)。振り返ると、このコードベースの既存の `Menu` 実装(種族・持ち物・技・特性・性格・
+   テラスタイプの各セレクタ、`CalcScreenCards.swift` / `TeamEditMemberCard.swift` 等)は**すべて**
+   メニュー項目に identifier を付けず、XCUITest 側はボタンのラベル文字列で探しており
+   (`TeamScreenUITests` の `app.buttons[Self.firstMockSpeciesName]` 等)、同じ制約を既に踏まえた
+   実装だったと分かる。
+   - **対応(判断)**: `.accessibilityIdentifier(...)` の呼び出し自体は `TeamSourceMenuRow.swift` に
+     残した(将来の iOS/SwiftUI バージョンで直る可能性があり、害もないため)。ただし実際に動く
+     XCUITest はラベル文字列で辿る他ない。実装した XCUITest
+     (`CalcScreenUITests.testTeamSourceRowEmptyThenSelectingMemberClearsPresetAndPresetClearsBack`、
+     `ReverseScreenUITests` の同名テスト)は、構築ビルダーで作ったメンバーに一意なニックネームを付けて
+     から、そのニックネームのラベルでメニュー項目を辿っている。7章の identifier 表はコードの意図として
+     残すが、「メニューを開いたあとの項目を XCUITest から識別する」目的には現状使えないことをここに残す。
+   - **判断(セクション見出し。critic 指摘で訂正)**: 当初、`Section(group.name) { ... }` で症状の切り分けが
+     しづらかったという理由だけで入れ子の `Menu(group.name) { ... }`(構築名をタイトルにしたサブメニュー。
+     選択のたびにタップが1回増える)に置き換えていた。critic が「`Section` でも identifier の制約は同じ
+     はずで、置き換えの根拠が実測されていない」と指摘し、実際に `Section(group.name) { ... }` へ戻して
+     `CalcScreenUITests.testTeamSourceRowEmptyThenSelectingMemberClearsPresetAndPresetClearsBack` と
+     `ReverseScreenUITests` の同名テストを実行したところ、ラベル文字列(ニックネーム)でメンバーの
+     `Button` を直接辿れ、6件とも成功した(`Section` は `Menu` を開いた時点で中身が一覧される。上記の
+     identifier が渡らない制約は `Section`/入れ子 `Menu` のどちらでも変わらない)。よって `Section` に
+     確定し、余分なタップを無くした(`TeamSourceMenuRow.swift`、両 XCUITest から `teamSubmenu` の
+     タップを削除)。
+
+### 10. critic の推奨対応(orchestrator が直接実施)
+
+- **スナップショット不変性のテストを追加**: 上の1章「呼んだ個体はその個体の値をそのまま使う」は
+  「呼び出した後に構築ビルダーで編集しても、呼び直すまで追従しない」までを含む判断だったが、
+  それを固定するテストが無かった(critic 指摘の「重要1」)。
+  `CalcViewModelTeamIndividualTests.testSelectedSnapshotDoesNotFollowLaterTeamEditsUntilReselected`
+  を追加: 呼び出し→構築側で同じメンバーの SP を編集して保存→`loadTeams()`(一覧の再読み込みだけ)→
+  画面操作(`selectAttackerItem`)で再計算させても要求の SP は編集前のまま→同じ teamID/memberID を
+  再度呼ぶと編集後の SP に切り替わる、を確認する。実装したところ、このテスト自身にも §9-1 と同じ
+  `.none` 系の Swift の制約(`await` が `XCTAssertEqual` の暗黙 autoclosure 引数の中にあると構文
+  エラーになる。`ReverseViewModelTests` 等で既に使われているのと同じ制約)があったため、結果を
+  `let request = try await lastRequest(stub)` で一度受けてから比較する形にした(比較する値は同じ)。
+- **`Section` に確定**(9章末尾の訂正を参照)。
+- `docs/plan.md` の P6-2 行を「critic PASS」に更新(旧「critic 未確認」)。
+
+### 11. critic が挙げた任意の改善(今回は見送り。次の機会向けの記録)
+
+次の点は critic が「軽微」として挙げたもので、ブロッカーではないため今回は対応していない: (4) 技が
+learnset に無い場合のエラー分岐の未テスト、(5) 逆算 `.defender` 側の species 応答の世代保護テストが
+無い、(6) スナップショットの speciesKey/itemId をマスタと突き合わせていない、(7)
+`TeamSourceMenuRow.labelText` の組み立てが View 側にあり Core のテストで固定されていない、(8) 空状態の
+行が見た目上は無効に見えない、(9) `StubPokeCalcService.swift` の `StubMaster.ability` 抽出(既存の
+インラインリテラルを名前付き定数に置き換えただけ。値・挙動は不変)が ADR に未記載だった、(10)
+`TeamSourceMenuRow.onSelect` の引数に外部ラベルが無い。
