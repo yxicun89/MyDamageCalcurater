@@ -818,3 +818,9 @@ Impact: 今後 gateway の README を §8 の5節だけに削る場合は、ま�
 Decision: P6-2d(構築から個体を呼び出す配線)を PR #119 で main にマージした(critic PASS。make test / lint / build / check-publishable / ios-test が成功)。
 Reason: P6-2c に続く区切り。P6-2(計算画面・逆算・構築)がすべて完了した。
 Impact: 続き(P6-3 シミュレータテストの総仕上げ・P6-4 実機インストール手順書)は同じブランチ feat/ios-p6 で進める。
+
+## 2026-09-23: iOS レーンの統合(PR #122)・M3 完了
+Decision: P6-3(make ios-test の確認)・P6-4(実機インストール手順書 docs/runbooks/ios-device-install.md)を PR #122 で main にマージした。
+これにより M3(iPhone で使える)の Phase 6 タスクがすべて完了した。
+Reason: P6-1〜P6-2d に続く最後の区切り。
+Impact: iOS レーンはユーザーからの新規要望待ち。実機インストール・署名は手順書どおり人間が行う。
