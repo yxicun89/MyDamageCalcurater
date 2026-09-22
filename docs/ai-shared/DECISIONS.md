@@ -686,3 +686,7 @@ Impact: CLAUDE.md のワークフロー、COORDINATION.md の起動の目安。�
 Decision: メインセッションは Sonnet で起動し、重い設計の判断のときだけ Opus。spec-writer・critic は engine・逆算・DB・API 契約に関わるときだけ Opus(既定)、文書・k8s・スクリプト・軽い修正では Sonnet で呼ぶ。利用枠が厳しいときは M1 のレーン(データ・API・Web)を優先し、他のレーンは区切りで止める。
 Reason: ユーザーが確認の質問に改めて答えた(前回の回答「メインだけ Sonnet」は意図と違った)。
 Impact: CLAUDE.md・COORDINATION.md を更新。
+
+## 2026-09-22: 素早さ DOC-speed を PR #52 で main に統合(素早さレーン)
+Decision: README(coding-rules §8 の形)と手順書 docs/runbooks/speed.md(AGENTS.md「手順書の書き方」)を PR #52 で統合した。speed-k3d-deploy ターゲットを追加し、実際に k3d へデプロイして smoke まで確認した。文書のみのため critic レビューは省略。
+Impact: 素早さレーンの次は SP2(feat/speed-sp2)。
