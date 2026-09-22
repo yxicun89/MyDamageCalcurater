@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pokecalc.example.com/schema/balance/pokemon-types.schema.json",
+  "title": "balance pokemon type read model",
+  "description": "The pokemonId -> types read model consumed by BALANCE_POKEMON_TYPES_PATH (ADR-0014 §2), extended with the optional nameJa/abilityIds catalog fields (ADR-0401 §5). This machine-checks the shape defined by the ADRs (the ADRs stay the source of truth; ADR-0402), which the data lane's `pokedex export` should satisfy; services/balance/internal/master/pokemon_types.go is the executable version of the same contract. Not expressible here: pokemonId must be unique across `pokemon` entries (a cross-array uniqueness constraint); the loader rejects duplicates, this schema does not.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "pokemon"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "description": "The only accepted value. A future incompatible shape bumps this."
+    },
+    "pokemon": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "typeId": {
+      "type": "string",
+      "enum": [
+        "normal", "fire", "water", "electric", "grass", "ice",
+        "fighting", "poison", "ground", "flying", "psychic", "bug",
+        "rock", "ghost", "dragon", "dark", "steel", "fairy"
+      ]
+    },
+    "abilityId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "maxLength": 40
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pokemonId", "types"],
+      "properties": {
+        "pokemonId": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{3}$"
+        },
+        "nameJa": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Omitted and null both mean absent (ADR-0401 §7.5); the minLength/maxLength only apply when the value is a string."
+        },
+        "types": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/typeId" },
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "abilityIds": {
+          "type": ["array", "null"],
+          "items": { "$ref": "#/$defs/abilityId" },
+          "maxItems": 3,
+          "uniqueItems": true,
+          "description": "Omitted, null and [] all decode to the same empty result (ADR-0401 §5/§7.5)."
+        }
+      }
+    }
+  }
+}

@@ -7,6 +7,7 @@
 |---|---:|---|---|
 | `github.com/labstack/echo/v5` | `v5.3.1` | HTTP adapter/router | module同梱`LICENSE`: MIT |
 | `github.com/oapi-codegen/runtime` | `v1.7.0` | OpenAPI生成serverのparameter binding | module同梱`LICENSE`: Apache-2.0 |
+| `github.com/santhosh-tekuri/jsonschema/v6` | `v6.0.3` | read model の JSON Schema(`schema/`)をテストで検証(draft 2020-12) | module同梱`LICENSE`: Apache-2.0 |
 
 公開用クリーンコピーを作る際は、transitive dependencyを含むlicense/security scanを別途実行し、
 repository自体のLICENSEはプロジェクト方針が決まるまで追加しない。

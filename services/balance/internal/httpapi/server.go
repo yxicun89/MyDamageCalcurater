@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"reflect"
 	"regexp"
 	"strings"
 
@@ -54,8 +55,51 @@ type Dependencies struct {
 	PokemonCatalog balance.PokemonCatalog
 }
 
+// normalizeDependencies clears any provider whose interface value wraps a nil pointer (or
+// nil map/slice/chan/func) of a concrete type, so it is treated exactly like an omitted
+// (nil interface) dependency: the 503/500 checks above see it as absent instead of the
+// handler calling straight into a nil receiver's method and panicking. This can happen when
+// a caller assembles Dependencies from a variable that was declared but never assigned,
+// e.g. `var m *master.PokemonTypeReadModel` passed as PokemonTypes.
+func normalizeDependencies(deps Dependencies) Dependencies {
+	if isNilProvider(deps.TypeChart) {
+		deps.TypeChart = nil
+	}
+	if isNilProvider(deps.PokemonTypes) {
+		deps.PokemonTypes = nil
+	}
+	if isNilProvider(deps.Moves) {
+		deps.Moves = nil
+	}
+	if isNilProvider(deps.Abilities) {
+		deps.Abilities = nil
+	}
+	if isNilProvider(deps.PokemonCatalog) {
+		deps.PokemonCatalog = nil
+	}
+	return deps
+}
+
+// isNilProvider reports whether v is a nil interface, or a non-nil interface holding a
+// "typed nil" (a nil pointer/chan/func value). A nil map or slice is a usable value in Go
+// (reading it does not panic; e.g. an empty catalog), so it is not treated as unset. A typed nil never equals plain
+// nil through the interface (v == nil is false), so reflection is required to detect it.
+func isNilProvider(v any) bool {
+	if v == nil {
+		return true
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Ptr, reflect.Chan, reflect.Func, reflect.Interface, reflect.UnsafePointer:
+		return rv.IsNil()
+	default:
+		return false
+	}
+}
+
 // New returns the HTTP handler.
 func New(deps Dependencies) *echo.Echo {
+	deps = normalizeDependencies(deps)
 	e := echo.New()
 	e.HTTPErrorHandler = writeHTTPError
 	api.RegisterHandlersWithOptions(e, handler{deps: deps}, api.RegisterHandlersOptions{
@@ -116,26 +160,17 @@ func analyze(c *echo.Context, deps Dependencies) error {
 			Message: err.Error(),
 		})
 	}
-	if len(request.Members) < 1 || len(request.Members) > 6 {
-		return c.JSON(http.StatusBadRequest, api.Error{
-			Code:    api.InvalidRequest,
-			Message: "members must contain between one and six entries",
-		})
+	if err := validateCount(c, len(request.Members), "members"); err != nil {
+		return err
 	}
 	hasAbilityID := false
 	for _, member := range request.Members {
-		if !pokemonIDPattern.MatchString(member.PokemonId) {
-			return c.JSON(http.StatusBadRequest, api.Error{
-				Code:    api.InvalidRequest,
-				Message: "pokemonId must use the NNNN-NNN format",
-			})
+		if err := validatePokemonID(member.PokemonId); err != nil {
+			return badRequest(c, err.Error())
 		}
 		if member.AbilityId != nil {
-			if len(*member.AbilityId) > maxAbilityIDLength || !abilityIDPattern.MatchString(*member.AbilityId) {
-				return c.JSON(http.StatusBadRequest, api.Error{
-					Code:    api.InvalidRequest,
-					Message: "abilityId must match ^[a-z0-9]+(-[a-z0-9]+)*$ and be at most 40 characters",
-				})
+			if err := validateAbilityIDFormat(*member.AbilityId); err != nil {
+				return badRequest(c, err.Error())
 			}
 			hasAbilityID = true
 		}
@@ -161,14 +196,7 @@ func analyze(c *echo.Context, deps Dependencies) error {
 	}
 	members, err := balance.ResolveMembers(deps.PokemonTypes, pokemonIDs)
 	if err != nil {
-		var unknown *balance.UnknownPokemonError
-		if errors.As(err, &unknown) {
-			return c.JSON(http.StatusUnprocessableEntity, api.Error{
-				Code:    api.UnknownPokemon,
-				Message: "unknown pokemonId: " + unknown.PokemonID,
-			})
-		}
-		return internalError(c, err)
+		return resolveError(c, err)
 	}
 
 	for i, member := range request.Members {
@@ -177,14 +205,7 @@ func analyze(c *echo.Context, deps Dependencies) error {
 		}
 		ability, err := balance.ResolveAbility(deps.Abilities, *member.AbilityId)
 		if err != nil {
-			var unknown *balance.UnknownAbilityError
-			if errors.As(err, &unknown) {
-				return c.JSON(http.StatusUnprocessableEntity, api.Error{
-					Code:    api.UnknownAbility,
-					Message: "unknown abilityId: " + unknown.AbilityID,
-				})
-			}
-			return internalError(c, err)
+			return resolveError(c, err)
 		}
 		members[i].Ability = &ability
 	}
@@ -345,49 +366,15 @@ func coverage(c *echo.Context, deps Dependencies) error {
 			Message: err.Error(),
 		})
 	}
-	if len(request.Members) < 1 || len(request.Members) > 6 {
-		return c.JSON(http.StatusBadRequest, api.Error{
-			Code:    api.InvalidRequest,
-			Message: "members must contain between one and six entries",
-		})
+	if err := validateCount(c, len(request.Members), "members"); err != nil {
+		return err
 	}
 	for _, member := range request.Members {
-		if !pokemonIDPattern.MatchString(member.PokemonId) {
-			return c.JSON(http.StatusBadRequest, api.Error{
-				Code:    api.InvalidRequest,
-				Message: "pokemonId must use the NNNN-NNN format",
-			})
+		if err := validatePokemonID(member.PokemonId); err != nil {
+			return badRequest(c, err.Error())
 		}
-		// ADR-0016 §6.1: a missing or null moveIds decodes to a nil slice (an
-		// explicit [] decodes to a non-nil, zero-length slice), so this also
-		// rejects the field's omission or an explicit JSON null.
-		if member.MoveIds == nil {
-			return c.JSON(http.StatusBadRequest, api.Error{
-				Code:    api.InvalidRequest,
-				Message: "moveIds is required",
-			})
-		}
-		if len(member.MoveIds) > balance.MaxMovesPerMember {
-			return c.JSON(http.StatusBadRequest, api.Error{
-				Code:    api.InvalidRequest,
-				Message: "a member must have at most four moves",
-			})
-		}
-		seen := make(map[string]struct{}, len(member.MoveIds))
-		for _, moveID := range member.MoveIds {
-			if len(moveID) > maxMoveIDLength || !moveIDPattern.MatchString(moveID) {
-				return c.JSON(http.StatusBadRequest, api.Error{
-					Code:    api.InvalidRequest,
-					Message: "moveId must match ^[a-z0-9]+(-[a-z0-9]+)*$ and be at most 40 characters",
-				})
-			}
-			if _, ok := seen[moveID]; ok {
-				return c.JSON(http.StatusBadRequest, api.Error{
-					Code:    api.InvalidRequest,
-					Message: "moveIds must be distinct within a member",
-				})
-			}
-			seen[moveID] = struct{}{}
+		if _, err := validateMoveIDs(member.MoveIds); err != nil {
+			return badRequest(c, err.Error())
 		}
 	}
 
@@ -403,28 +390,14 @@ func coverage(c *echo.Context, deps Dependencies) error {
 		pokemonIDs[i] = member.PokemonId
 	}
 	if _, err := balance.ResolveMembers(deps.PokemonTypes, pokemonIDs); err != nil {
-		var unknown *balance.UnknownPokemonError
-		if errors.As(err, &unknown) {
-			return c.JSON(http.StatusUnprocessableEntity, api.Error{
-				Code:    api.UnknownPokemon,
-				Message: "unknown pokemonId: " + unknown.PokemonID,
-			})
-		}
-		return internalError(c, err)
+		return resolveError(c, err)
 	}
 
 	members := make([]balance.CoverageMember, len(request.Members))
 	for i, member := range request.Members {
 		moves, err := balance.ResolveMoves(deps.Moves, member.MoveIds)
 		if err != nil {
-			var unknown *balance.UnknownMoveError
-			if errors.As(err, &unknown) {
-				return c.JSON(http.StatusUnprocessableEntity, api.Error{
-					Code:    api.UnknownMove,
-					Message: "unknown moveId: " + unknown.MoveID,
-				})
-			}
-			return internalError(c, err)
+			return resolveError(c, err)
 		}
 		members[i] = balance.CoverageMember{PokemonID: member.PokemonId, Moves: moves}
 	}

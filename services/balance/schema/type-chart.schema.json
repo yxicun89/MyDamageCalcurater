@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pokecalc.example.com/schema/balance/type-chart.schema.json",
+  "title": "balance type chart data",
+  "description": "The type matchup table embedded from testdata/golden/typechart.json (ADR-0013 P1-13.1, ADR-0015). services/balance/internal/master/type_chart_data.go is the executable version of the same contract; the embedded copy must be byte-identical to the shared golden file (TestEmbeddedTypeChartMatchesSharedData).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "source", "version", "generation", "note",
+    "excludedTypes", "types", "effectiveness"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "description": "The only accepted value."
+    },
+    "source": { "type": "string" },
+    "version": { "type": "string" },
+    "generation": { "type": "integer" },
+    "note": { "type": "string" },
+    "excludedTypes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Types the source tracks but balance does not (e.g. \"???\", \"stellar\"). Informational only; the loader does not read it."
+    },
+    "types": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/typeId" },
+      "minItems": 18,
+      "maxItems": 18,
+      "uniqueItems": true,
+      "description": "Must be exactly the 18 balance types; order does not matter to the loader."
+    },
+    "effectiveness": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(normal|fire|water|electric|grass|ice|fighting|poison|ground|flying|psychic|bug|rock|ghost|dragon|dark|steel|fairy)$": {
+          "type": "object",
+          "additionalProperties": false,
+          "patternProperties": {
+            "^(normal|fire|water|electric|grass|ice|fighting|poison|ground|flying|psychic|bug|rock|ghost|dragon|dark|steel|fairy)$": {
+              "$ref": "#/$defs/code"
+            }
+          },
+          "description": "A row must not be null and, when present, is never empty of meaning: an omitted attack/defense pair defaults to neutral (code 2); this row need not list every defense type."
+        }
+      }
+    }
+  },
+  "$defs": {
+    "typeId": {
+      "type": "string",
+      "enum": [
+        "normal", "fire", "water", "electric", "grass", "ice",
+        "fighting", "poison", "ground", "flying", "psychic", "bug",
+        "rock", "ghost", "dragon", "dark", "steel", "fairy"
+      ]
+    },
+    "code": {
+      "type": "integer",
+      "enum": [0, 1, 2, 4],
+      "description": "Effectiveness x2 as an integer: 0=immune, 1=not very effective, 2=neutral, 4=super effective (ADR-0013 §P1-13.1)."
+    }
+  }
+}

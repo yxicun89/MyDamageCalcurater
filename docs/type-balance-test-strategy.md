@@ -207,3 +207,11 @@ STAB・持ち物・威力・天候・場は扱わないので、それを検証�
 | Smoke | k3d(local overlay) | 既存の3つの example read model のマウントのまま、Ingress 経由で recommendations が 200(`"offenseHoles":[]`・`"types":["steel","fairy"]`・`"nameJa":"テストメタル"`・`"abilityId":"ability-9002"` 等を含む) |
 
 テストの ID・名前は架空(9001-000 / move-9001 / ability-9001 以降、`テスト…`)を使う。実在ポケモン・技・特性の名前・ID を Git に置かない(ADR-0002)。
+
+## read model の JSON Schema(ADR-0402)
+
+| レイヤー | 対象 | 合格条件 |
+|---|---|---|
+| Schema | `services/balance/schema/*.schema.json` | 各 example(`testdata/*.example.json`)と同梱の相性表(`internal/master/data/typechart.json`)が schema に合う。loader が拒否する代表的な入力(未知フィールド・schemaVersion 2・タイプ 3 個・不正な category / kind / code など)を schema も拒否する |
+| HTTP | `httpapi.New` | typed nil の provider(nil のポインタ・関数など)は未設定と同じ(503。相性表は 500)。nil の slice / map は空の値として扱う |
+
