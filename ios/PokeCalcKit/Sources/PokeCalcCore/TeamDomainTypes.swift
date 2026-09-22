@@ -92,7 +92,7 @@ public enum TeamValidator {
             if Set(member.moveIds).count != member.moveIds.count {
                 return PokeCalcError(code: PokeCalcError.Code.teamDuplicateMoves, message: "同じ技が重複しています")
             }
-            if member.sp.values.contains(where: { $0 > SPLimits.maxPerStat }) {
+            if member.sp.values.contains(where: { $0 < 0 || $0 > SPLimits.maxPerStat }) {
                 return PokeCalcError(
                     code: PokeCalcError.Code.teamSPInvalid,
                     message: "能力ポイントは1ステータスにつき\(SPLimits.maxPerStat)までです"

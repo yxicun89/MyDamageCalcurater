@@ -324,6 +324,12 @@ enum StubMaster {
     /// 架空の特性(どの種族も同じものを持つ。`Individual.abilityId` を写していることの確認に使う。P6-2d)。
     static let ability = Ability(id: "stub-ability", nameJa: "テストとくせい")
 
+    /// 種族ごとに異なる特性集合を持たせるための架空の特性(issue #100: 種族変更で `abilityId` が
+    /// 新種族の候補と食い違わないことの確認用。`alpha`/`beta`/`gamma`/`statusOnly` はすべて同じ
+    /// `ability` を共有するため、この確認には使えない)。
+    static let abilityX = Ability(id: "stub-ability-x", nameJa: "テストとくせいX")
+    static let abilityY = Ability(id: "stub-ability-y", nameJa: "テストとくせいY")
+
     /// learnset の先頭が変化技。既定の技は「最初のダメージ技」なので先頭は選ばれない。
     static let alpha = SpeciesDetail(
         key: "9101-000", dexNo: 9101, form: 0, nameJa: "テストアルファ", types: [.normal],
@@ -356,6 +362,35 @@ enum StubMaster {
         baseStats: StatBlock(hp: 50, atk: 50, def: 50, spa: 50, spd: 50, spe: 50),
         abilities: [ability],
         learnset: ["stub-move-does-not-exist"]
+    )
+
+    /// 特性Xだけを持つ(issue #100 用。`abilityX`/`abilityY` は種族間で重ならない)。
+    static let abilityXOnly = SpeciesDetail(
+        key: "9106-000", dexNo: 9106, form: 0, nameJa: "テストとくせいXのみ", types: [.normal],
+        baseStats: StatBlock(hp: 50, atk: 50, def: 50, spa: 50, spd: 50, spe: 50),
+        abilities: [abilityX],
+        learnset: [statusMove.id, physicalMove.id]
+    )
+    /// 特性Yだけを持つ(issue #100 用。`abilityXOnly` と重ならない)。
+    static let abilityYOnly = SpeciesDetail(
+        key: "9107-000", dexNo: 9107, form: 0, nameJa: "テストとくせいYのみ", types: [.normal],
+        baseStats: StatBlock(hp: 50, atk: 50, def: 50, spa: 50, spd: 50, spe: 50),
+        abilities: [abilityY],
+        learnset: [statusMove.id, physicalMove.id]
+    )
+    /// 特性XとYの両方を持つ(issue #100 用。「旧特性が新種族にもまだある」ケースの確認)。
+    static let abilityXAndY = SpeciesDetail(
+        key: "9108-000", dexNo: 9108, form: 0, nameJa: "テストとくせいXY", types: [.normal],
+        baseStats: StatBlock(hp: 50, atk: 50, def: 50, spa: 50, spd: 50, spe: 50),
+        abilities: [abilityX, abilityY],
+        learnset: [statusMove.id, physicalMove.id]
+    )
+    /// 特性が無い(issue #100 用。フォールバック先が `nil` になるケースの確認)。
+    static let noAbilities = SpeciesDetail(
+        key: "9109-000", dexNo: 9109, form: 0, nameJa: "テストとくせいなし", types: [.normal],
+        baseStats: StatBlock(hp: 50, atk: 50, def: 50, spa: 50, spd: 50, spe: 50),
+        abilities: [],
+        learnset: [statusMove.id, physicalMove.id]
     )
 
     static let itemA = Item(id: "stub-item-a", nameJa: "テストどうぐA")
