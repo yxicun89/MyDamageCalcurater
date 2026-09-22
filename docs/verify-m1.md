@@ -36,7 +36,16 @@ make api-k3d-deploy
 make web-k3d-deploy
 kubectl -n pokecalc get pods
 ```
-→ `calc`・`gateway`・`web`・`balance` の Pod が `Running`。
+→ `calc`・`gateway`・`web`・`balance`・`pokedex`・`mysql-0` の Pod が `Running`。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make import-fetch
+make import-dry-run
+make import-k8s
+```
+→ `import-dry-run` の最後の行が `blockers: none`。`import-k8s` が作った Job が `condition met` で終わる
+(`make up` の最後に出る案内どおり、実データの初回投入は手動で1回だけ行う。週1回の自動実行は土曜 12:00 JST)。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
@@ -72,9 +81,10 @@ make api-smoke
 M1 の定義(「ブラウザで計算できる」)は §3・§4 で満たしている(架空の例データでも計算・一括表示・逆算・タイプバランスの診断が
 一通り動く)。ただし次はまだ end-to-end でつながっていない。
 
-- **実マスタでの計算**: pokedex-svc(P2-3)は k3d にデプロイ・実データ投入済みだが、gateway の `/api/pokedex/*` と
-  calc-svc のマスタ参照先(`CALC_MASTER_URL`)がまだ pokedex-svc に向いていない(API レーンの依頼 d、一時停止中)。
-  それまで `/api/pokedex/*` は 503 のまま(`api-smoke` の `pokedex=503` が正常値)。
-- **Web の「オンライン(API)」モードでの実マスタ選択**: 上記に加えて、Web 自身がポケモン・技・持ち物の一覧を
-  pokedex-svc の公開 API から読む「オンライン用 MasterSource」がまだ無い(ADR-0301 §4)。今のオンラインモードは
-  架空の例データの ID を calc-svc に送るので、実マスタと繋いでも ID が一致せず動かない。
+- ~~実マスタでの計算~~ → **解決済み(2026-09-22。PR #87)**。gateway の `/api/pokedex/*` と calc-svc のマスタ参照先が
+  pokedex-svc に向いた(`GATEWAY_POKEDEX_URL`・`CALC_MASTER_URL`)。実データ投入後は `api-smoke` の出力が
+  `master=pokedex species=... move=... nature=...` になり、`pokedex=200` になることを確認済み。
+- **Web の「オンライン(API)」モードでの実マスタ選択**: Web 自身がポケモン・技・持ち物の一覧を pokedex-svc の
+  公開 API から読む「オンライン用 MasterSource」がまだ無い(ADR-0301 §4。`web/src/App.tsx` は今も
+  `exampleMasterSource`(架空の例データ)が既定)。今のオンラインモードは架空の例データの ID を calc-svc に送るので、
+  実マスタと繋いでも ID が一致せず動かない。
