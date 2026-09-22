@@ -698,3 +698,8 @@ Impact: CLAUDE.md のワークフロー、COORDINATION.md の起動の目安。�
 Decision: メインセッションは Sonnet で起動し、重い設計の判断のときだけ Opus。spec-writer・critic は engine・逆算・DB・API 契約に関わるときだけ Opus(既定)、文書・k8s・スクリプト・軽い修正では Sonnet で呼ぶ。利用枠が厳しいときは M1 のレーン(データ・API・Web)を優先し、他のレーンは区切りで止める。
 Reason: ユーザーが確認の質問に改めて答えた(前回の回答「メインだけ Sonnet」は意図と違った)。
 Impact: CLAUDE.md・COORDINATION.md を更新。
+
+## 2026-09-22: iOS レーンの統合(PR #53)
+Decision: P6-2b 逆算画面・internal タグ除外・DOC-ios(ios/README.md を coding-rules §8 の形に、ADR-0501・docs/runbooks/ios.md)を PR #53 で main にマージした(critic はそれぞれ PASS。make test / lint / build / check-publishable / ios-test が成功)。
+Reason: ユーザー回答(2026-09-22)「契約追従が緑になったら PR」の続き。P6-2b が完了し DOC-ios の割り当て(データレーンより)も完了したため区切りで統合した。
+Impact: 続き(P6-2c 構築)は同じブランチ feat/ios-p6 で進める。
