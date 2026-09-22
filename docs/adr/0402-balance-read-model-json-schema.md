@@ -3,7 +3,7 @@
 - 状態: 採用(2026-09-22。タイプバランスレーンの判断。ユーザーの「残っている作業を進めて」による整備)
 - 日付: 2026-09-22
 - 関連: ADR-0014 §2・ADR-0401 §5(ポケモン)、ADR-0016 §3(技)、ADR-0017 §2(特性)、ADR-0015(相性表)、ADR-0100 §8(pokedex export)、
-  DECISIONS.md 2026-09-22「pokedex export への依頼」
+  DECISIONS.md 2026-09-22「TB5 の詳細は既定案で進める/pokedex export に nameJa・abilityIds とレギュレーションでの絞り込みを依頼」
 
 ## 背景
 balance が読む read model の形は ADR の本文と loader(`internal/master`)にしか書かれておらず、データレーンが `pokedex export` を作るときに
