@@ -1,21 +1,13 @@
-# local overlay 専用の Kustomize Component(ADR-0203 §3。ADR-0204 §4)。calc-svc に例のマスタ一式を渡し、
-# gateway に Vite の開発サーバのオリジンを CORS で許可する。base はどちらも持たない
-# (base は環境変数だけで動く必要があるため。クラウドは別の渡し方をする)。
+# local overlay 専用の Kustomize Component(ADR-0203 §3)。gateway に Vite の開発サーバのオリジンを CORS で
+# 許可する(base は持たない。CORS の許可オリジンは local 専用のため)。
 #
-# master.example.json は元ファイル(単一の正。相性表を含む MasterExport の形)のコピー。Kustomize の load
-# restrictor が overlay の外のファイルを読めないためコピーしている。元ファイルが変わったらコピーし直す
-# (services/calc/cmd/calc/manifest_test.go の TestManifestCalcLocalDataFromOverlayCopies がバイト一致を固定する):
-#   cp services/calc/testdata/master.example.json deploy/k8s/overlays/local/api/master.example.json
+# calc へのマスタの渡し方(ConfigMap 経由のファイル方式)は ADR-0206 で廃止した。calc・gateway とも
+# pokedex-svc の Service(http://pokedex)を base の環境変数だけで指すので、この Component は calc に patch を
+# 当てない(local と local-api が同じ内容の Deployment calc を描画する)。
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 
-configMapGenerator:
-  - name: calc-master-example
-    files:
-      - master.json=master.example.json
-
 patches:
-  - path: calc-patch.yaml
   - path: gateway-patch.yaml
 
 images:

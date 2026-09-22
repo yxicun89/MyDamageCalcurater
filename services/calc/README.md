@@ -7,12 +7,14 @@
 ## 起動
 
 マスタ一式(`MasterExport`。下記)は `CALC_MASTER_URL` か `CALC_MASTER_PATH` の**ちょうど1つ**で渡す。
+k3d(base・local・local-api のどの overlay でも)は **URL 方式**(`CALC_MASTER_URL=http://pokedex`。ADR-0206)。
+ファイル方式(`CALC_MASTER_PATH`)は `make dev` とテスト専用。
 
 | 環境変数 | 必須 | 意味 |
 |---|---|---|
 | `CALC_ADDR` | いいえ(既定 `:8080`) | 待ち受けアドレス |
 | `CALC_MASTER_URL` | どちらか一方 | pokedex-svc のベース URL。`GET {URL}/internal/pokedex/master` からマスタ一式を取得する |
-| `CALC_MASTER_PATH` | どちらか一方 | マスタ一式(`MasterExport` の形)の JSON ファイル(k3d の local overlay・`make dev` 用) |
+| `CALC_MASTER_PATH` | どちらか一方 | マスタ一式(`MasterExport` の形)の JSON ファイル(`make dev`・テスト用) |
 
 `CALC_TYPECHART_PATH` は廃止した(タイプ相性表は `MasterExport` に含まれる)。設定されていると起動しない。
 
@@ -44,7 +46,10 @@ CALC_MASTER_URL=http://pokedex go run ./calc/cmd/calc
 テーブルが無いため calc-svc 側で検証する(ID が空・重複でない、`plus`/`minus` が `StatKey` で HP を指さない)。
 
 実データはコミットしない(ADR-0002)。例 [`testdata/master.example.json`](testdata/master.example.json) は
-架空データ + 相性表(pokedex-svc がまだ無い間、ファイル方式・k3d local overlay・`make dev` で使う)。
+架空データ + 相性表(ファイル方式・`make dev`・`calctest`・契約テスト・スモークの fallback で使う。ADR-0206)。
+
+k3d では pokedex-svc(ADR-0105)の内部 API からマスタを取る。`make up` の直後は DB が未投入なので、初回だけ
+`make import-k8s` を実行するまで `/readyz` が `503 master_unavailable` のままになる(ADR-0204 §3)。
 
 - `FromExport`(`internal/master/export.go`)がロード時にエラーにするもの: `schemaVersion` が 1 でない・
   `dataVersion` が空、種類ごとの ID の重複、種族/技/持ち物/特性/性格の値の不正(共通マスタ・engine の検証)、
