@@ -782,3 +782,31 @@ func TestRecommendTypesSingleCandidateExcludesPokemonThatLoseTheHole(t *testing.
 		t.Errorf("rock pokemon = %v, want [9001-000 9003-000] (rock/grass loses the fire hole)", ids)
 	}
 }
+
+// brokenColumnChart fails every matchup against one defense type.
+type brokenColumnChart struct {
+	recChart
+	broken balance.TypeID
+}
+
+func (c brokenColumnChart) Matchup(attack, defense balance.TypeID) (balance.Multiplier, error) {
+	if defense == c.broken {
+		return 0, errors.New("broken column")
+	}
+	return c.recChart.Matchup(attack, defense)
+}
+
+// A broken type chart is always an error (as in AnalyzeDefense), even when an earlier member
+// would already decide the hole: the holes are derived from the full team aggregation.
+func TestRecommendTypesBrokenChartIsAlwaysAnError(t *testing.T) {
+	t.Parallel()
+
+	chart := brokenColumnChart{recChart: recChart{}, broken: balance.TypeWater}
+	members := []balance.Combatant{
+		combatant("9001-000", types(balance.TypeGrass), nil),
+		combatant("9002-000", types(balance.TypeWater), nil),
+	}
+	if _, err := balance.RecommendTypes(chart, members, nil, nil, balance.MaxRecommendationLimit); err == nil {
+		t.Fatal("err = nil, want the chart failure")
+	}
+}

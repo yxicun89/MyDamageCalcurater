@@ -90,3 +90,16 @@ func TestNewNormalizesTypedNilProviders(t *testing.T) {
 		})
 	}
 }
+
+// A nil slice/map provider is a usable (empty) value in Go, so it is not normalized away:
+// a nil testCatalog is an empty catalog (200), not a missing one (503).
+func TestNewKeepsNilSliceProviderAsEmpty(t *testing.T) {
+	t.Parallel()
+
+	deps := recFullDependencies()
+	deps.PokemonCatalog = testCatalog(nil)
+	recorder := postRecommendations(t, New(deps), recBody)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 for an empty (nil slice) catalog; body=%s", recorder.Code, recorder.Body.String())
+	}
+}

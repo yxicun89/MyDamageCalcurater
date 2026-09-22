@@ -81,7 +81,8 @@ func normalizeDependencies(deps Dependencies) Dependencies {
 }
 
 // isNilProvider reports whether v is a nil interface, or a non-nil interface holding a
-// "typed nil" (a nil pointer/map/slice/chan/func value). A typed nil never equals plain
+// "typed nil" (a nil pointer/chan/func value). A nil map or slice is a usable value in Go
+// (reading it does not panic; e.g. an empty catalog), so it is not treated as unset. A typed nil never equals plain
 // nil through the interface (v == nil is false), so reflection is required to detect it.
 func isNilProvider(v any) bool {
 	if v == nil {
@@ -89,7 +90,7 @@ func isNilProvider(v any) bool {
 	}
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
-	case reflect.Ptr, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func, reflect.Interface, reflect.UnsafePointer:
+	case reflect.Ptr, reflect.Chan, reflect.Func, reflect.Interface, reflect.UnsafePointer:
 		return rv.IsNil()
 	default:
 		return false

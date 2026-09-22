@@ -166,7 +166,8 @@ func RecommendTypes(chart TypeChartProvider, members []Combatant, catalog []Cata
 // (AnalyzeDefense) instead of re-deriving categories per attack type: a hole is exactly an
 // attack type whose TeamSummaryEntry has no resist and no immune member (ADR-0014 §3:
 // Resist already includes quad_resist and never immunities, so entry.Resist == 0 &&
-// entry.Immune == 0 is "no member resists or is immune to it").
+// entry.Immune == 0 is "no member resists or is immune to it"). Every member × attack type is
+// evaluated, so a broken type chart is always an error (the previous per-type loop could stop early).
 func recommendDefenseHoles(chart TypeChartProvider, members []Combatant) ([]TypeID, error) {
 	defenseMembers := make([]Member, len(members))
 	for i, member := range members {

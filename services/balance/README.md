@@ -54,8 +54,8 @@ schema と架空データの example(`testdata/abilities.example.json`、ID は 
 4つの read model すべての JSON Schema(draft 2020-12)を `schema/` に置く: `pokemon-types.schema.json`
 (ADR-0014 §2・ADR-0401 §5)、`moves.schema.json`(ADR-0016 §3)、`abilities.schema.json`(ADR-0017 §2)、
 `type-chart.schema.json`(ADR-0015)。データレーンの `pokedex export` が出すべき形の正はこの schema で、
-各 loader(`internal/master`)はその実装。schema で表せない制約(既約分数のまま持つ・ID の重複禁止など)は
-schema の `description` に書く。
+各 loader(`internal/master`)はその実装。schema で表せない制約(特性の係数は既約でない比も受け付け、loader が約分して保持する・ID の重複禁止など)は
+schema の `description` に書く。方針は ADR-0402。
 
 ## HTTP 契約
 
