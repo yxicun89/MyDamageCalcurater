@@ -1,0 +1,21 @@
+# gateway はクライアントの唯一の入口(ADR-0202)。ホスト指定なし・path "/" Prefix で全トラフィックを受ける。
+# balance の /api/balance は traefik の最長一致で balance の Ingress に届く(ADR-0012)。
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gateway
+  labels:
+    app.kubernetes.io/name: gateway
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  name: http

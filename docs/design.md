@@ -21,6 +21,8 @@ iOS(SwiftUI の Color/Font 拡張)と Web(CSS 変数)で同じ名前・同じ値
 | border.hairline | 黒 8% | 白 10% |
 | danger | #E5484D | #FF6369 |
 
+- bg.glass のぼかし: Web は `backdrop-filter: blur(20px)`(`--bg-glass-blur`)。iOS はシステムのマテリアル
+
 ### タイプ色(自作パレット)
 | タイプ | 色 | タイプ | 色 | タイプ | 色 |
 |---|---|---|---|---|---|
