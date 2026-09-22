@@ -41,9 +41,9 @@ Next: (1) データレーンの `pokedex export`(P2-3。nameJa・abilityIds・�
 ## Speed
 Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
 Active: Claude Code
-Branch: feat/speed-s1(SP0 は feat/speed-s0 → PR で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
-Status: SP0 完了(ADR-0600。services/speed の基盤: engine を呼ぶ素早さの計算コア・スカーフ ×1.5 の五捨五超入・架空データの read model `SPEED_POKEMON_PATH`・`GET /api/speed/v1/pokemon`・Kustomize base/local・Dockerfile(ルートがコンテキスト)・smoke)。ユーザー回答4点は plan.md に反映済み
-Next: SP1(表。ADR-0601: 6 行のプリセット・速い順・同速の段・`presets` クエリでの絞り込み・`GET /api/speed/v1/table`)→ SP2(自分の位置)→ SP3(`web/src/speed/` の画面部品。Web の骨組みが無い間は部品とテストだけ)→ SP4(pokedex の read model・k3d・GitOps)。検討: 404/405 を `{code,message}` にそろえるか(SP0 critic 軽微)
+Branch: 次は main から feat/speed-s2 を切る(SP1 は feat/speed-s1 → PR で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
+Status: SP0(ADR-0600。基盤・計算コア・read model・一覧 API・Kustomize)と SP1(ADR-0601。6 行のプリセット・速い順・同速の段・`presets` での絞り込み・`GET /api/speed/v1/table`)は完了・main に統合
+Next: SP2(自分の位置: 最小の選択 = プリセット uninvested / neutral-max / max + スカーフ on/off、オプション = SP 0〜32・性格3通り・ランク -6〜+6・スカーフ、または実数値の直接入力 → 実数値と表の中の位置(速い段・同速の段・遅い段の境目))→ SP3(`web/src/speed/`。web/ は main にできたので、画面部品を作りタブを1項目登録)→ SP4(pokedex の read model・k3d・GitOps)。SP4 までに決める: 空の roster の扱い(いまは read model が空を拒否。pokedex の adapter では 503 か空配列か。SP1 critic 軽微)
 
 ## Maintenance
 Lane: 整備(Claude の上限時に Codex が進める。COORDINATION.md「Claude の上限時の Codex」)

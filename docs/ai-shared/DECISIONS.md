@@ -598,6 +598,9 @@ up.sh の最後で `make api-docker-build` と `k3d image import` を呼ぶ形�
 Reason: critic の推奨。共有スクリプトは他レーンの範囲のため。
 Impact: `api-k3d-deploy` は他レーンのリソースに触れないよう、常に API 専用の overlay(deploy/k8s/overlays/local-api)だけを適用する(ADR-0203)。
 
+## 2026-09-22: 素早さ SP0 を PR #32 で main に統合(素早さレーン)
+Decision: SP0(ADR-0600)を PR #32 で統合した。critic は1回目 NG(smoke の架空名)→ 修正後 PASS。make test・lint・build・check-publishable・smoke が成功。
+Impact: 素早さレーンは SP1(feat/speed-s1)へ。
 
 ## 2026-09-22: Web の統合記録(PR #22・#28)
 Decision: PR #22(Web P4-1〜P4-5)と PR #28(P4-6 Playwright E2E・make test への Web の組み込み・verify-m1.md ドラフト)を main に統合した。

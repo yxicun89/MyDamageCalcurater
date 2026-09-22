@@ -30,7 +30,8 @@ func New(deps Dependencies) *echo.Echo {
 	e.HTTPErrorHandler = writeHTTPError
 	api.RegisterHandlersWithOptions(e, handler{deps: deps}, api.RegisterHandlersOptions{
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
-			"listPokemon": {requireRequestContext},
+			"listPokemon":   {requireRequestContext},
+			"getSpeedTable": {requireRequestContext},
 		},
 	})
 	return e
@@ -52,6 +53,93 @@ func (handler) PublicHealth(c *echo.Context) error {
 
 func (h handler) ListPokemon(c *echo.Context, _ api.ListPokemonParams) error {
 	return listPokemon(c, h.deps)
+}
+
+// GetSpeedTable implements GET /api/speed/v1/table (ADR-0601 §5): query (400) → read model
+// absent (503) → provider/calc error (500, fixed message) → 200. Header の検査は
+// requireRequestContext ミドルウェア(New で登録)がクエリより先に行う。
+func (h handler) GetSpeedTable(c *echo.Context, params api.GetSpeedTableParams) error {
+	return getSpeedTable(c, h.deps, params)
+}
+
+// getSpeedTable implements the body of GetSpeedTable. deps is passed explicitly, matching
+// the listPokemon convention in this file.
+func getSpeedTable(c *echo.Context, deps Dependencies, params api.GetSpeedTableParams) error {
+	presets, err := speed.NormalizePresets(requestedPresetIDs(params))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, api.Error{
+			Code:    api.InvalidRequest,
+			Message: "presets is invalid",
+		})
+	}
+
+	if deps.Pokemon == nil {
+		return c.JSON(http.StatusServiceUnavailable, api.Error{
+			Code:    api.MasterUnavailable,
+			Message: "the pokemon read model is not configured",
+		})
+	}
+	roster, err := deps.Pokemon.Roster()
+	if err != nil {
+		return internalError(c, err)
+	}
+
+	table, err := speed.BuildTable(roster, presets)
+	if err != nil {
+		return internalError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, toTableResponse(table))
+}
+
+// requestedPresetIDs converts the query parameter to the core's PresetID, defaulting to
+// every preset in ADR-0601 §2 order when presets is omitted.
+func requestedPresetIDs(params api.GetSpeedTableParams) []speed.PresetID {
+	if params.Presets == nil {
+		defs := speed.Presets()
+		ids := make([]speed.PresetID, len(defs))
+		for i, p := range defs {
+			ids[i] = p.ID
+		}
+		return ids
+	}
+	ids := make([]speed.PresetID, len(*params.Presets))
+	for i, id := range *params.Presets {
+		ids[i] = speed.PresetID(id)
+	}
+	return ids
+}
+
+// toTableResponse は speed.Table を生成型 api.TableResponse に詰め替える。Types はコアの
+// slice を共有しないよう複製する(listPokemon と同じ)。
+func toTableResponse(table speed.Table) api.TableResponse {
+	presets := make([]api.PresetId, len(table.Presets))
+	for i, id := range table.Presets {
+		presets[i] = api.PresetId(id)
+	}
+
+	tiers := make([]api.SpeedTier, len(table.Tiers))
+	for i, tier := range table.Tiers {
+		entries := make([]api.SpeedTableEntry, len(tier.Entries))
+		for j, e := range tier.Entries {
+			types := make([]string, len(e.Pokemon.Types))
+			copy(types, e.Pokemon.Types)
+			entries[j] = api.SpeedTableEntry{
+				PokemonId: e.Pokemon.PokemonID,
+				NameJa:    e.Pokemon.NameJa,
+				Types:     types,
+				BaseSpeed: e.Pokemon.BaseSpeed,
+				Preset:    api.PresetId(e.Preset),
+			}
+		}
+		tiers[i] = api.SpeedTier{Speed: tier.Speed, Entries: entries}
+	}
+
+	return api.TableResponse{
+		RegulationId: table.RegulationID,
+		Presets:      presets,
+		Tiers:        tiers,
+	}
 }
 
 func health(c *echo.Context) error {
