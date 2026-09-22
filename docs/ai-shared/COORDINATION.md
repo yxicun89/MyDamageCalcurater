@@ -142,7 +142,7 @@ Xcode の署名・実機インストール、Codex / 外部サービスのログ
 
 ## 起動の目安
 
-Claude Code のメインセッションは **Sonnet で起動**する(`claude --model sonnet ...`)。重い設計の判断のときだけ `/model opus` にして、終わったら `/model sonnet` に戻す。サブエージェントのモデルは `.claude/agents/*.md` の割り当てのまま(2026-09-22 ユーザー決定。Max の5時間の枠を6レーンで使い切らないため)。
+Claude Code のメインセッションは **Sonnet で起動**する(`claude --model sonnet ...`)。重い設計の判断のときだけ `/model opus` にして、終わったら `/model sonnet` に戻す。spec-writer・critic は engine・逆算・DB・API 契約に関わるときだけ Opus(`.claude/agents/*.md` の既定)、それ以外(文書・k8s・スクリプト・軽い修正)は `model: "sonnet"` で呼ぶ。利用枠が厳しいときは M1 のレーン(データ・API・Web)を優先し、他のレーンは区切りで止める(2026-09-22 ユーザー決定。Max の5時間の枠を6レーンで使い切らないため)。
 
 
 ```
