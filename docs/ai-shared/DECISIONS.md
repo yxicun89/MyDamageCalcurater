@@ -618,6 +618,20 @@ Decision: P4-8(design.md「動き」の演出)と逆算の表示方針・design.
 Reason: critic PASS、make test / lint / build・E2E の通過を確認。
 Impact: Web レーンの Active を「なし」にした。続きは CURRENT_STATE.md の Web 欄の Next。
 
+## 2026-09-22: 手順書の書き方を全レーン共通のルールにする(ユーザー決定。Web レーンのセッションで受領)
+Decision: 人が実行する手順書は、上から下へ1回読めば終わる形にし(節の間を行き来させない)、動作を伴うコマンドと必要最低限の確認点だけを書く
+(行動を伴わない説明は ADR や設計の節へ)。コマンドの塊はリポジトリのルートへの `cd` から始め、ローカルの手順は k3d(コンテナ)を主にする。
+AGENTS.md に「手順書の書き方」節を追加し、CLAUDE.md の「最初に読むもの」から参照した。
+Reason: ユーザーが「手順書を上下に行き来するのは手間」「行動を伴わない説明は要らない」「make の実行場所で迷う」「全レーンに共有して」と指示した。
+Impact: 全レーン・両 AI に適用。既存の手順書は、各レーンが次に触るときにこの形に直す(Web は docs/verify-m1.md を P4-14 で直す)。
+
+## 2026-09-22: README・手順書・構成図の規則(ユーザー決定。全レーン)
+Decision: 各コンポーネントに README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)、動かせるレーンには手順書 `docs/runbooks/<レーン>.md`、全体図は `docs/architecture.md`。
+手順書の書き方は AGENTS.md「手順書の書き方」(Web レーンが PR #38 で追加した全レーン共通の規則)に従う。
+図は mermaid を基本にする。文書は短く、重複させずリンクでつなぐ(読んで直すのは人間。量が多いと疲れる)。
+Reason: ユーザーが「各 README で何をしているか・どうしているかの説明、動作確認の手順書、アーキテクチャの図が欲しい。人間が後で読みやすく AI も扱いやすく、ただし過剰な量にしない」と依頼した。
+Impact: docs/coding-rules.md §8、docs/architecture.md(全体図)、plan.md の「DOC: 文書」(各レーンのタスク)。各レーンは自分の範囲の README・手順書を書く。
+
 ## 2026-09-22: Web P4-9 を統合(PR #35)
 Decision: P4-9(P4-8 の軽微な改善3件)を PR #35 で main に統合した。Web レーンは他レーン(P2-3・P3-3)待ちで一時停止(Active: なし)。
 Reason: critic PASS、make test / lint / build・E2E の通過を確認。
