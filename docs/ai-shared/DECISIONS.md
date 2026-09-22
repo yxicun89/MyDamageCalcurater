@@ -485,6 +485,11 @@ pokedex-svc と gateway が揃ったら見直す。(4) `gen-ts` は web の依�
 Reason: 夜の間に既定案で進めた判断を、朝の最初の区切りでまとめて確認した(COORDINATION.md「人間への質問」)。
 Impact: (2) により、他のレーンのルートの `make test` / `make lint` でも Web のテストが走る(初回は npm ci の分だけ遅い)。
 
+## 2026-09-22: Claude の上限時の Codex は整備レーンだけにする(ユーザー決定。前エントリの「最大2本」を改める)
+Decision: Claude の上限時に Codex で進めるのは整備レーンだけ。Codex はレーン(データ・API・Web・タイプバランス・iOS・素早さ)の作業を引き継がない。
+Reason: ユーザーが「Codex は Claude のレートリミットの間だけ整備する作業をさせたかった」と述べた。上限の間に Codex がデータレーンを引き継いだ結果、Claude の再開後に同じディレクトリで2つの AI が動く状態になった(データレーンの Codex はユーザーの指示で停止)。
+Impact: COORDINATION.md の「Claude の上限時の Codex」を整備レーンだけに改訂。
+
 ## 2026-09-22: Web の E2E(P4-6)とルートの make への組み込み(Web レーン、Claude Code)
 Decision: (1) ユーザー決定どおり、`web/Makefile` が `test: web-test` / `lint: web-lint` / `build: web-build` を足した。依存が無い・lockfile より古いときは自動で `npm ci`。
 (2) E2E は `make web-e2e`(オフライン = WASM。`/api` を遮断しても計算できること、engine.wasm は初回の計算まで読まないこと)と
