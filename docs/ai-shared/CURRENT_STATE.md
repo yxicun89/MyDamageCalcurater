@@ -50,21 +50,19 @@ Next: (1) データレーンが export(data/generated/readmodel)を再生成し�
 
 ## Speed
 Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
-Active: Claude Code
-Branch: feat/speed-sp5(SP3 は feat/speed-sp3 → PR #93 で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
-Status: SP0〜SP4(SP4: pokedex export の read model を k3d の speed に読ませる配線。ADR-0603)は完了・main に統合
-(PR #32・#36・#52・#83・#86・#93)。**SP4 の実データ(pokedex-svc の DB)での最終確認は未実施のまま**(DSN の取り扱いがこのセッションの
-権限で扱えないため。`make pokedex-export` で `data/generated/readmodel/speed-pokemon.json` を用意した状態で
-`make speed-k3d-deploy-readmodel && make speed-smoke-readmodel` を、DSN を扱えるセッションか人間が実行して確認する)。
-SP5(GitOps。ADR-0605。digest 固定の overlay・Argo CD Application `pokecalc-speed`・balance-registry と Argo CD を新設せず共有)は
-critic PASS(1回目 NG 重大1〈plan.md/CURRENT_STATE 未更新〉・重要3〈read model 未マウントで 503 になる制約が ADR に未記載・
-DECISIONS.md の記述が意図と逆・手順書に Argo CD 導入の前提が無い〉を修正)。**`speed-gitops-template-check`(クラスタを変更しない)
-までのみ実行済み**。`speed-argocd-app`・`speed-registry-push`・実際の `kubectl apply`・sync は未実施(ADR-0605 §4 のとおり、
-共有クラスタへの変更のため人間の確認のもとで別途)。PR 作成待ち
-Next: SP5 の PR を作って main に統合 → (任意・人間の確認のもとで)実際に Argo CD へ Application を適用し sync して疎通確認
-(docs/runbooks/speed.md 節5〜10)。空の roster の扱いは pokedex export が1件以上を返す前提のまま(ADR-0603 影響。実データで
-0件になる状況が起きたら別途決める)。balance-registry → pokecalc-registry への改名提案はタイプバランスレーンへ既定案で提示済み
-(DECISIONS.md 2026-09-23)
+Active: なし(SP0〜SP3・SP5 完了。残る SP4 の実データ確認は人間/DSN を扱えるセッション待ちのため一区切り)
+Branch: feat/speed-next(main から作成済み。SP5 は feat/speed-sp5 → PR #97 で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
+Status: SP0〜SP3・SP5 は完了・main に統合(PR #32・#36・#52・#83・#86・#93・#97)。**SP4(pokedex export の read model を k3d の
+speed に読ませる配線。ADR-0603)は配線の実装・critic PASS・fixture データでの k3d 疎通確認まで完了**しているが、**実データ
+(pokedex-svc の DB)での最終確認だけが未実施**(`POKEDEX_DATABASE_DSN` の取り扱いが auto mode のセッションでは権限上できない
+ため。credential materialization としてブロックされた)。SP5 は実際の Argo CD への適用(`speed-argocd-app`・`speed-registry-push`・
+sync)も同じ理由で未実施(ADR-0605 §4。共有クラスタへの変更のため人間の確認のもとで)
+Next: **人間または DB の認証情報を扱えるセッションへ**: (1) `make pokedex-export`(データレーンの docs/runbooks/data.md の手順で
+DB を用意し `POKEDEX_DATABASE_DSN` を設定)→ `make speed-k3d-deploy-readmodel && make speed-smoke-readmodel` で SP4 の実データ確認。
+(2) 任意で docs/runbooks/speed.md 節5〜10(Argo CD への Application 適用・レジストリへの push・sync)。
+どちらも素早さレーンの実装作業としては完了しており、残るのはクラスタ操作の実行確認だけ。空の roster の扱いは pokedex export が
+1件以上を返す前提のまま(ADR-0603 影響。実データで0件になる状況が起きたら別途決める)。balance-registry → pokecalc-registry への
+改名提案はタイプバランスレーンへ既定案で提示済み(DECISIONS.md 2026-09-23)。次に新しい素早さの要望が出たら、このレーンで続ける
 
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
