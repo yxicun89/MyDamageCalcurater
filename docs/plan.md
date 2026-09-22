@@ -117,7 +117,7 @@
 
 ## M3: iOS
 - [x] P6-1 Xcode プロジェクト、swift-openapi-generator、デザイントークン(ADR-0500。`make ios-test` = 生成物の一致・XCTest・XCUITest・Info.plist の接続先。critic PASS)
-- [~] P6-2 計算画面・逆算・構築(構築は端末内に保存、Showdown 形式は後回し。2026-09-21 ユーザー回答)。P6-2a 計算画面は完了(critic PASS)。P3-1・P3-2 の契約変更への追従(ErrorCode・503・category・BulkDefender・逆算の API 接続)も完了(critic PASS)。P6-2b 逆算画面(観測はテンキー入力。2026-09-22 ユーザー回答)・P6-2c 構築が残り
+- [~] P6-2 計算画面・逆算・構築(構築は端末内に保存、Showdown 形式は後回し。2026-09-21 ユーザー回答)。P6-2a 計算画面は完了(critic PASS)。P3-1・P3-2 の契約変更への追従(ErrorCode・503・category・BulkDefender・逆算の API 接続)も完了(critic PASS)。P6-2b 逆算画面(観測はテンキー入力。2026-09-22 ユーザー回答)も完了(critic PASS)。P6-2c 構築が残り
 - [ ] P6-3 シミュレータテスト(`make ios-test`)
 - [ ] P6-4 Tailscale serve の手順書 → **人間が実機インストール**
 
@@ -131,6 +131,7 @@
 - [x] TB5 おすすめタイプと該当ポケモン(2026-09-22 ユーザー要望。ADR-0401): チームの穴(TB1 で弱点持ちが多く耐性・無効が少ない攻撃タイプ、TB2 で有効打が無い防御タイプ)をふさげるタイプの候補を出し、
   そのタイプを持つ**使用可能なポケモン全員**(レギュレーション依存。日本語名付き)を一覧にする。特性で穴をふさげるポケモンは別枠。他のサイトを見に行かずに候補が分かることが目的。詳細は着手時に ADR
 - [x] TB 整備(2026-09-22): HTTP の 500 テスト、typed nil の provider の正規化、read model の JSON Schema(ADR-0402)、HTTP 層の検証の共通化、おすすめの穴を既存の集計から導出
+- [x] TB 実データの配線(2026-09-22。データレーンの依頼): pokedex export の read model を ConfigMap で k3d の balance に読ませる(ADR-0403)、abilityIds の上限を 4 に
 
 ### ブロッカー(タイプバランスレーン)
 (なし。Argo CD の実同期は 2026-09-22 に解消)
@@ -155,8 +156,8 @@
 - [ ] DOC-api: `services/calc/README.md`・`services/gateway/README.md` を §8 の形に、手順書 `docs/runbooks/api.md`(k3d での疎通)
 - [x] DOC-web: `web/README.md`、手順書(`docs/verify-m1.md` の画面の部分と重複させない。M1 の完了報告は verify-m1.md にまとめる)
 - [x] DOC-tb: `services/balance/README.md` を §8 の形に、手順書 `docs/runbooks/balance.md`
-- [ ] DOC-speed: `services/speed/README.md`、手順書 `docs/runbooks/speed.md`
-- [ ] DOC-ios: `ios/README.md`、手順書(シミュレータでの確認。実機インストールは P6-4)
+- [x] DOC-speed: `services/speed/README.md` を §8 の形に、手順書 `docs/runbooks/speed.md`(k3d での疎通を確認済み)
+- [x] DOC-ios: `ios/README.md`(coding-rules §8 の形)、手順書 `docs/runbooks/ios.md`(シミュレータでの確認。実機インストールは P6-4)。受け入れ条件・判断は ADR-0501 へ移動
 - [ ] DOC-arch: `docs/architecture.md` を各レーンの変化に合わせて保つ(整備レーンの MT-3 でも確かめる)
 
 ## M4: 運用

@@ -27,23 +27,23 @@ gateway が Web に転送する GATEWAY_WEB_URL は API レーンが実装中(�
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
 Active: Claude Code
 Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
-Status: P6-1(ADR-0500)・P6-2a 計算画面・P3-1/P3-2 の契約変更への追従(逆算も API で呼ぶ)は完了(critic PASS)。`make ios-test`(ios-gen-check・XCTest 119 件・XCUITest 5 件・Info.plist)が緑。iOS 27 / Swift 6.4
-Next: P6-2b 逆算画面(観測はテンキー入力。与えたダメージ = 相手 HP の減少%(整数)、受けたダメージ = 自分 HP の減少量)→ P6-2c 構築(端末内保存の TeamStore、Showdown 形式は後回し)→ P6-3 → P6-4。ViewModel は PokeCalcCore で XCTest、主要操作は XCUITest
+Status: P6-1(ADR-0500)・P6-2a 計算画面・契約追従は main に統合済み(PR #31)。P6-2b 逆算画面(critic PASS)・生成の internal タグ除外・DOC-ios(ios/README.md を coding-rules §8 の形に、ADR-0501・docs/runbooks/ios.md。critic PASS)はブランチにあり未 PR。`make ios-test`(XCTest 174 件・XCUITest 9 件)が緑
+Next: PR(P6-2b・internal タグ除外・DOC-ios をまとめて main へ)→ P6-2c 構築(端末内保存の TeamStore、Showdown 形式は後回し)→ P6-3 → P6-4(手順書は AGENTS.md「手順書の書き方」)
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
 Branch: 次は main から feat/tb-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
 Status: TB0〜TB5 と整備(ADR-0402 の read model の JSON Schema を含む)は完了・main に統合済み。balance は Echo v5.3.1。ポケモン・技・特性は temporary の read model(架空データの example。実データは BALANCE_*_PATH でマウント)。k3d には Argo CD v3.5.3・クラスタ内レジストリ・Application pokecalc-balance(manual sync)。新しい ADR はタイプバランスの帯 0400〜
-Next: データレーンの `pokedex export`(P2-3。nameJa・abilityIds・レギュレーションで絞る・特性の read model。受諾済み。形は services/balance/schema/ の JSON Schema)が main に入ったら、balance の read model をそれに差し替え、実データで TB5 を確認する。それまでは待ち(ブロッカーではない)。Web / iOS から balance を使う画面は各レーンの範囲(必要なら DECISIONS.md で依頼)
+Next: データレーンの pokedex export(ADR-0105)が main に入ったら、`make balance-k3d-deploy-readmodel && make balance-smoke-readmodel`(docs/runbooks/balance.md の 2b)で実データの動作を確かめる。無効・吸収の特性は export に出ない(データレーンの P2-3b でユーザーに要否を確認中)
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
 
 ## Speed
 Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
 Active: Claude Code
-Branch: 次は main から feat/speed-s2 を切る(SP1 は feat/speed-s1 → PR で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
-Status: SP0(ADR-0600。基盤・計算コア・read model・一覧 API・Kustomize)と SP1(ADR-0601。6 行のプリセット・速い順・同速の段・`presets` での絞り込み・`GET /api/speed/v1/table`)は完了・main に統合
-Next: SP2(自分の位置: 最小の選択 = プリセット uninvested / neutral-max / max + スカーフ on/off、オプション = SP 0〜32・性格3通り・ランク -6〜+6・スカーフ、または実数値の直接入力 → 実数値と表の中の位置(速い段・同速の段・遅い段の境目))→ SP3(`web/src/speed/`。web/ は main にできたので、画面部品を作りタブを1項目登録)→ SP4(pokedex の read model・k3d・GitOps)。SP4 までに決める: 空の roster の扱い(いまは read model が空を拒否。pokedex の adapter では 503 か空配列か。SP1 critic 軽微)
+Branch: feat/speed-s2(main から作成済み。SP1 は feat/speed-s1 → PR で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
+Status: SP0(ADR-0600。基盤・計算コア・read model・一覧 API・Kustomize)と SP1(ADR-0601。6 行のプリセット・速い順・同速の段・`presets` での絞り込み・`GET /api/speed/v1/table`)は完了・main に統合。DOC-speed(README・手順書 docs/runbooks/speed.md。k3d 疎通を確認済み)も完了
+Next: SP2(自分の位置: 最小の選択 = プリセット uninvested / neutral-max / max + スカーフ on/off、オプション = SP 0〜32・性格3通り・ランク -6〜+6・スカーフ、または実数値の直接入力 → 実数値と表の中の位置(速い段・同速の段・遅い段の境目))→ SP3(`web/src/speed/` の画面は素早さレーンのまま(ユーザー決定。Web の P4-13 は取り消し)。タブ・URL は Web の P4-10 のルート表(1か所)に `/speed` の1項目を足すだけ。P4-10 は PR #44 で main に統合済み。足すのは3か所に1件ずつ(App.tsx は触らない): web/src/app/routes.ts の SCREEN_ROUTES に `{ id: "speed", segment: "speed", label: appText.speedTabLabel }`、web/src/i18n/ja.ts の appText に speedTabLabel、web/src/app/screens.tsx の SCREEN_COMPONENTS に `speed: SpeedScreen`(props は ScreenProps = {engine, master}。使わなくてよい)。テストの例は web/src/App.routing.test.tsx と web/e2e/routing.spec.ts)→ SP4(pokedex の read model・k3d・GitOps)。SP4 までに決める: 空の roster の扱い(いまは read model が空を拒否。pokedex の adapter では 503 か空配列か。SP1 critic 軽微)。SP4 の read model: データレーン P2-3 の pokedex export(ADR-0105)が素早さ専用の `data/generated/readmodel/speed-pokemon.json` を ADR-0600 §4 の形(baseSpeed。既定レギュレーションの使用可能集合・ID 昇順)で出す。SP4 はそれを `SPEED_POKEMON_PATH` で読む(adapter の差し替えは不要の見込み。local overlay への載せ方と k3d の疎通を行う)。P2-3 が main に入るまでは架空データ
 
 ## Maintenance
 Lane: 整備(Claude の上限時に Codex が進める。COORDINATION.md「Claude の上限時の Codex」)

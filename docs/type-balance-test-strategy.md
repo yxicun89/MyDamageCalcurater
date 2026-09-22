@@ -196,13 +196,13 @@ STAB・持ち物・威力・天候・場は扱わないので、それを検証�
 7. 判定順は TB4 と同じ流儀: ヘッダー 400 → body 400/413(メンバー 1〜6、pokemonId・moveIds・abilityId の形式、`limit` の範囲と型、未知フィールド・後続 JSON)→
    ポケモンの read model(型の provider または一覧の catalog)未設定、または moveId があるのに技、abilityId があるのに特性の read model 未設定(503)→
    `unknown_pokemon` → `unknown_move` → `unknown_ability`(422、request 順で最初のもの)→ 200。それ以外は 500 固定文言 `internal error`。
-8. ポケモンの read model の `nameJa`(1〜64 文字)・`abilityIds`(0〜3 件・重複なし・ADR-0017 §2 の ID 形式)は省略可能。不正なら `ErrInvalidPokemonTypes` で起動失敗。
+8. ポケモンの read model の `nameJa`(1〜64 文字)・`abilityIds`(0〜4 件・重複なし・ADR-0017 §2 の ID 形式)は省略可能。不正なら `ErrInvalidPokemonTypes` で起動失敗。
    既存の v1 ファイル(項目なし)はそのまま読める。
 
 | レイヤー | 対象 | 合格条件 |
 |---|---|---|
 | Unit | `internal/balance`(`RecommendTypes` / `PokemonCatalog` / `CatalogPokemon` / `TypeCandidate` / `AbilityOption`) | 受け入れ条件 1〜6(`recommend_test.go`)。防御の穴(特性の無効・吸収・×1/2・×5/4・効果なし、複数メンバー)、攻撃範囲の穴(1体の複数技、複数メンバー、技なし)、手で数えた並び(同点の weaknesses・正準順・単タイプ優先)、穴をふさがない候補の除外(18 件ちょうど)、limit(1・2・10・19・20 は上位の接頭辞、0・21・-1 は `ErrRecommendationLimit`)、該当ポケモン(順不同一致・昇順・nameJa・read model の順)、特性の別枠(タイプだけで受けられるものの除外、×1 ちょうどは入らない、1体の2特性は2組)。provider なしは `AbilityOptions` 空。入力エラー: 0/7 体は `ErrMemberCount`、chart nil は `ErrNilTypeChart`、chart の失敗は伝播、不正タイプは `ErrInvalidType`、不正な特性効果は `ErrInvalidAbilityEffect`、不正な技分類は `ErrInvalidMoveCategory`、catalog の特性の解決失敗は伝播。同梱の相性表で3チームを oracle と上位 20 件照合 |
-| Adapter | `internal/master` のポケモン read model(`LoadPokemonTypes` / `AllPokemon`) | 受け入れ条件 8(`pokemon_catalog_test.go`)。64 文字の nameJa・40 文字の abilityId・3 件・空配列を読める。`AllPokemon` は全件を `pokemonId` の昇順で、返した値を書き換えても read model は変わらない。nameJa の空・65 文字・数値・配列、abilityIds の 4 件・重複・空・大文字・`_`・連続/末尾ハイフン・空白・41 文字・数値・文字列、別の未知フィールドはすべて `ErrInvalidPokemonTypes` で部分 model を返さない。example は名前あり/なし・特性あり/なしを含み、`abilityIds` は特性の example に存在する ID だけ(local overlay の複製とのバイト一致は既存テスト) |
+| Adapter | `internal/master` のポケモン read model(`LoadPokemonTypes` / `AllPokemon`) | 受け入れ条件 8(`pokemon_catalog_test.go`)。64 文字の nameJa・40 文字の abilityId・4 件・空配列を読める。`AllPokemon` は全件を `pokemonId` の昇順で、返した値を書き換えても read model は変わらない。nameJa の空・65 文字・数値・配列、abilityIds の 5 件・重複・空・大文字・`_`・連続/末尾ハイフン・空白・41 文字・数値・文字列、別の未知フィールドはすべて `ErrInvalidPokemonTypes` で部分 model を返さない。example は名前あり/なし・特性あり/なしを含み、`abilityIds` は特性の example に存在する ID だけ(local overlay の複製とのバイト一致は既存テスト) |
 | Contract/HTTP | service-local OpenAPI 0.6.0 / recommendations | 生成型 `api.RecommendationsResponse` へ未知フィールド禁止で decode できる 200 と内容(穴・候補 10 件・該当ポケモン・特性の別枠)。空の配列は `[]`、`nameJa` は無ければキーを省略。メンバーの特性が防御の穴に効く。limit(省略=10・1・10・19・20、0・21・-1・1.5・文字列は 400)。特性・技の read model が不要なときは無くても 200。受け入れ条件 7 の各ケース、境界(6 体×4 技・40 文字の ID)、`abilityId: null`。health・analyze・coverage・threats は影響を受けない。example read model と同梱の相性表で smoke と同じ結果 |
 | Smoke | k3d(local overlay) | 既存の3つの example read model のマウントのまま、Ingress 経由で recommendations が 200(`"offenseHoles":[]`・`"types":["steel","fairy"]`・`"nameJa":"テストメタル"`・`"abilityId":"ability-9002"` 等を含む) |
 
