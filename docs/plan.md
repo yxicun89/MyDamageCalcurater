@@ -132,7 +132,11 @@
   (3) `onlineSource.test.ts` の `urlOf` に基点を足した副作用で `natures`/`species` の呼び出しが絶対 URL の origin を
   検査していない(`items` のみ検査済み)。(4) 検索中に入力を空へ戻した直後に古い検索が届くケースの未カバー
   (`createDeferredSpeciesSearch` で1件追加)。(5) `aria-controls` の参照先が閉じているとき DOM に無い・
-  `aria-selected` が常に false
+  `aria-selected` が常に false。(6) P4-16b の2回目 critic PASS の指摘: `BalanceScreen.online.test.tsx` の
+  A-9 回帰テストは `analyze`/`recommendations` のガード削除は検知するが `coverage`/`threats` のガード削除は
+  検知しない(技1つ・仮想敵1体も選んでから capabilities を切り替える形にすれば4つとも覆える)。
+  (7) `CalcScreen.online.test.tsx` の truncated 肯定側テストに候補件数(`SPECIES_SEARCH_LIMIT` 件)のアサーションが無い
+  (否定側と非対称)
 - [ ] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら
   `capabilities.moves` を true にして技を復活させる
 - [ ] P4-18 Codex コードレビューの issue(Web レーン主担当。タイプバランスレーンから 2026-09-23 に連絡・`gh issue view <番号>`)。
