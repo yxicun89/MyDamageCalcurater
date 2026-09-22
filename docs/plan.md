@@ -201,6 +201,7 @@
 
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)
+- P2-3 の critic の軽微(2026-09-22。未反映の4件): `check-publishable.sh` の `B_KEYVALUE_ALLOW` を self-test の基準リポジトリにも播く / `maxCatalogAbilityCount` が balance の schema・loader と三重管理(テストで検出はできる) / natures-mismatch のエラー案内が Showdown 側だけを見て `make import-fetch` の案内が出ないことがある / `TestPublicInputValidation` の 400 応答を契約検証(kin-openapi)に通す
 
 - P2-2d の critic の軽微(2026-09-22): `cronjob_layout_test.go` の「消さない」検査を secret・statefulset・configmap にも広げる / `make lint` が kubectl に依存する(kubectl の無い環境では失敗する)/ upstream の `checkedAt` が未来でも fresh 扱い / **コンテナの中で取得スクリプト(Showdown の build 等)を実際に流した記録が無い。初回の `make import-k8s` で確かめる**
 
