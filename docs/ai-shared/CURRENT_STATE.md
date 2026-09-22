@@ -16,12 +16,17 @@ Next: (1) GATEWAY_WEB_URL(P3-5)の PR → main。(2) データレーンの依頼
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
-Active: Claude Code
+Active: なし(ユーザー指示で一時停止。利用枠をデータレーンに集中。再開はユーザーの指示後)
 Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
 Status: P4-1〜P4-6・P4-8〜P4-11・P4-12a(タイプバランス画面の防御相性・攻撃範囲。ADR-0303)・P4-14・DOC-web 完了(critic PASS。main 統合済み)。
 GATEWAY_WEB_URL(API レーンの ADR-0205)が main に入り、k3d の http://localhost:8080 で画面(/calc・/reverse・/balance)と API が揃うことを実地確認し verify-m1.md に反映。
-P4-5 は Chrome で確認済み(Safari は未確認)。P4-7 は verify-m1.md のドラフト(pokedex-svc・契約テストを待つ)
-Next: P4-12b(仮想敵 threats・おすすめタイプ recommendations)。続いて P5-5(構築ビルダー等)は record/team の API 待ち
+P4-5 は Chrome で確認済み(Safari は未確認)。P4-7 は verify-m1.md のドラフト(pokedex-svc は main 済み。契約テスト P3-3 を待つ)
+P2-3(pokedex-svc)が main に入った(PR #57)。オンライン時の MasterSource(ADR-0301 §4)に着手できる状態
+Next: (1) P4-12b(仮想敵 threats・おすすめタイプ recommendations)。設計は ADR-0303 の P4-12b 節。
+失敗するテスト3本(balanceClient.test.ts・balanceLabels.test.ts・BalanceScreen.test.tsx)はブランチに WIP コミット済み、実装は未着手(critic 未実施)。
+implementer に委ねるところから再開できる(受け入れ条件・実装者への注意は WIP コミットのメッセージと ADR-0303 参照)。
+(2) P4-12b の後、pokedex-svc の公開 API から Web のオンライン MasterSource を作る(ADR-0301 §4)。
+(3) 続いて P5-5(構築ビルダー等)は record/team の API 待ち
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
