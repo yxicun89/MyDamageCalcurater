@@ -18,15 +18,17 @@ Next: データレーン依頼 d(gateway の /api/pokedex/* を pokedex-svc(Serv
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
 Active: Claude Code(ユーザー指示で再開)
 Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
-Status: P4-1〜P4-6・P4-8〜P4-12(仮想敵 threats・おすすめタイプ recommendations を含む。ADR-0303)・P4-14・P4-15・DOC-web 完了(critic PASS。main 統合済み。PR #82)。
-GATEWAY_WEB_URL(API レーンの ADR-0205)が main に入り、k3d の http://localhost:8080 で画面(/calc・/reverse・/balance)と API が揃うことを実地確認し verify-m1.md に反映。
-データレーンの依頼(P2-3b・ADR-0106)に追従: `web/src/engine/types.ts` の AbilityEffect に defImmuneTypes・defAbsorbTypes を追加し、
-`web/src/master/exportBalanceReadModel.ts` に absorb と ADR-0106 §決定7の出力順(immune→absorb→type_multiplier→super_effective_multiplier)・
-無効優先(immune が absorb に勝つ)を実装。本物の engine.wasm を再ビルドし、無効・吸収が実際にダメージを0にすることを結合テストで確認済み(critic PASS)。未コミット。
-P4-5 は Chrome で確認済み(Safari は未確認)。P4-7 は verify-m1.md のドラフト(pokedex-svc は main 済み。契約テスト P3-3 を待つ)
-Next: (1) 上記 ADR-0106 追従分をコミット・PR して main へ。
-(2) pokedex-svc の公開 API から Web のオンライン MasterSource を作る(ADR-0301 §4)。P4-7(verify-m1.md の完成版)・Safari での P4-5 確認もこの後。
-(3) 続いて P5-5(構築ビルダー等)は record/team の API 待ち
+Status: P4-1〜P4-6・P4-8〜P4-12(仮想敵 threats・おすすめタイプ recommendations を含む。ADR-0303)・P4-14・P4-15・DOC-web・P4-7(M1 完了報告)完了(critic PASS。main 統合済み。PR #82・#84)。
+データレーンの依頼(P2-3b・ADR-0106)にも追従済み(PR #84): AbilityEffect に defImmuneTypes・defAbsorbTypes、
+exportBalanceReadModel に absorb と ADR-0106 §決定7の出力順・無効優先。本物の engine.wasm で無効・吸収を結合テスト確認済み。
+verify-m1.md を完成版にした: P2-2c/d・P2-3・P3-3 が main に入り、k3d(gateway 経由 http://localhost:8080)で
+計算・逆算・タイプバランス(仮想敵・おすすめタイプ含む)を実地確認(pokedex-svc は実データ投入済みだが、
+gateway/calc-svc のマスタ参照先はまだ pokedex-svc に向いていない。API レーンの依頼 d が一時停止中)。
+P4-5 は Chrome で確認済み(Safari は未確認。人間の作業)
+Next: (1) pokedex-svc の公開 API から Web のオンライン MasterSource を作る(ADR-0301 §4。gateway/calc の
+pokedex 配線待ちなので、API レーンの依頼 d が進んでから本格着手するのが自然)。
+(2) 続いて P5-5(構築ビルダー等)は record/team の API 待ち。
+(3) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
