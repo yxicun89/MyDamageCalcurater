@@ -11,6 +11,10 @@ final class ReverseScreenUITests: XCTestCase {
     /// `Resources/species.json` の2番目。逆算画面の既定の自分(先頭の種族)とは別の種族にして、
     /// 構築から呼び出したときに種族が実際に変わったことを検査できるようにする(P6-2d)。
     private static let secondMockSpeciesName = "テストモンに"
+    private static let secondMockSpeciesKey = "9002-000"
+    /// `Resources/species.json` の3番目(issue #68: 種族検索シートで打ってから選ぶ確認用)。
+    private static let thirdMockSpeciesName = "テストモンさん"
+    private static let thirdMockSpeciesKey = "9003-000"
     /// P6-2d のテスト用の構築ビルダーで付けるニックネーム(`CalcScreenUITests` と同じ理由:
     /// `Menu` の項目は accessibilityIdentifier が渡らないため、ラベルで一意に選べる値にする)。
     private static let mockMemberNickname = "テストこたいP6逆算"
@@ -50,6 +54,8 @@ final class ReverseScreenUITests: XCTestCase {
         let addMemberButton = element(app, "addMemberButton")
         XCTAssertTrue(addMemberButton.waitForExistence(timeout: Self.existenceTimeout))
         addMemberButton.tap()
+        // issue #68: 種族は検索シート経由で選ぶ(`Menu` ではなくなった)。
+        XCTAssertTrue(element(app, "speciesSearchSheet").waitForExistence(timeout: Self.existenceTimeout))
         let speciesOption = app.buttons[Self.secondMockSpeciesName]
         XCTAssertTrue(speciesOption.waitForExistence(timeout: Self.existenceTimeout))
         speciesOption.tap()
@@ -212,5 +218,34 @@ final class ReverseScreenUITests: XCTestCase {
         let presetSelectedAgain = NSPredicate(format: "isSelected == true")
         expectation(for: presetSelectedAgain, evaluatedWith: presetButton, handler: nil)
         waitForExpectations(timeout: Self.existenceTimeout)
+    }
+
+    /// issue #68: `reverseOpponentSpeciesPicker` をタップすると `speciesSearchSheet` が出て、検索欄に
+    /// 打つと候補が絞られ、1件タップするとシートが閉じて選択が反映される(`CalcScreenUITests` と同じ流れ)。
+    func testOpponentSpeciesSearchSheetFiltersAndSelects() {
+        let app = launchReverseScreen()
+
+        let opponentPicker = element(app, "reverseOpponentSpeciesPicker")
+        XCTAssertTrue(opponentPicker.waitForExistence(timeout: Self.existenceTimeout))
+        opponentPicker.tap()
+
+        XCTAssertTrue(element(app, "speciesSearchSheet").waitForExistence(timeout: Self.existenceTimeout))
+        let field = app.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: Self.existenceTimeout))
+        field.tap()
+        field.typeText(Self.thirdMockSpeciesName)
+
+        let result = element(app, "speciesSearchResult-\(Self.thirdMockSpeciesKey)")
+        XCTAssertTrue(result.waitForExistence(timeout: Self.existenceTimeout))
+        // ラベルの文字列だけで探すと、シートの裏の自分側カードのヘッダー(既定の自分 = 2番目の種族。
+        // ラベルが同じ文字列)を誤って拾う(`CalcScreenUITests` と同じ理由)。検索結果一覧に限定した
+        // identifier で確かめる。
+        XCTAssertFalse(
+            element(app, "speciesSearchResult-\(Self.secondMockSpeciesKey)").exists, "絞り込まれて一致しない種族は消える"
+        )
+        result.tap()
+
+        XCTAssertFalse(element(app, "speciesSearchSheet").exists, "選ぶとシートが閉じる")
+        XCTAssertEqual(opponentPicker.label, Self.thirdMockSpeciesName)
     }
 }

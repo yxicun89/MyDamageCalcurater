@@ -184,6 +184,15 @@ public struct SpeciesSummary: Equatable, Sendable {
     }
 }
 
+extension SpeciesSummary {
+    /// `SpeciesDetail`(`species(key:)` の応答)から一覧表示に要る値だけを写す(issue #68。
+    /// ADR-0501「issue #68」5章: 「一度でも見た種族」の辞書には検索結果だけでなく
+    /// `species(key:)` の応答も入れるため、3画面の ViewModel が共通で使う変換)。
+    public init(detail: SpeciesDetail) {
+        self.init(key: detail.key, dexNo: detail.dexNo, form: detail.form, nameJa: detail.nameJa, types: detail.types)
+    }
+}
+
 public struct Ability: Equatable, Sendable {
     public var id: String
     public var nameJa: String

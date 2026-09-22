@@ -934,3 +934,228 @@ learnset に無い場合のエラー分岐の未テスト、(5) 逆算 `.defende
 行が見た目上は無効に見えない、(9) `StubPokeCalcService.swift` の `StubMaster.ability` 抽出(既存の
 インラインリテラルを名前付き定数に置き換えただけ。値・挙動は不変)が ADR に未記載だった、(10)
 `TeamSourceMenuRow.onSelect` の引数に外部ラベルが無い。
+
+## issue #68 の受け入れ条件(検索上限200件の切り捨て。テスト先行・実装未着手)
+
+- 日付: 2026-09-23 / 担当レーン: iOS / 関連: issue #68、issue #113(入力変更のデバウンス・キャンセル。別課題)、
+  ADR-0304(Web レーンの同じ判断)、DECISIONS.md 2026-09-23「Web オンライン MasterSource — getSpecies.learnset の ID→実体化を提案」
+
+### 0. 何が壊れているか
+
+`CalcViewModel` / `ReverseViewModel` / `TeamEditViewModel` の `load()` はどれも
+`searchSpecies(query: "", limit: 200)`(技・持ち物も同様)を1回だけ呼び、その結果を**マスタ全件**として扱っている。
+`api/openapi.yaml` の `limit` は最大200・ページングパラメータ無しの契約(iOS からは変えられない)なので、
+実データ(種族349・技515)では201件目以降が恒久的に選べない。learnset は全技 ID を返すのに、
+先頭200件の `masterMoves` としか突合しないため、learnset の技が先頭200件に無い種族は `moveUnavailable` で計算不能になる。
+
+### 1. 判断: 種族と技の選択を検索ベースにする(3画面とも同じ1つのパターン)
+
+Web レーンの ADR-0304 と同じ方向にそろえる。持ち物(166件)・性格(25件)は上限内なので一覧のまま変えない
+(`natures` には `q` パラメータ自体が契約に無い)。
+
+**判断: `Menu` の中にインラインの検索欄は置かず、ヘッダー/チップのタップで検索シートを開く**(`.searchable()` を付けた
+`List` を `.sheet` で出す)。理由:
+(a) SwiftUI の `Menu` の中身はシステムのメニュー表示に渡されるため `TextField` が実質的に機能しない(フォーカス・
+キーボードが入らない)。「検索できるメニュー」は iOS の標準部品として存在しない。
+(b) 数百件を絞り込む操作は `.searchable()` を付けたリストが iOS の標準の形で、VoiceOver・キーボード・
+「検索」キーの扱いを OS 任せにできる。
+(c) 入口(ヘッダー = `SpeciesHeaderMenuLabel`、技チップ)は見た目を変えずに `Menu` → `Button` に替えるだけで済み、
+XCUITest の既存 identifier(`attackerSpeciesPicker` 等)も名前を変えずに残せる。
+
+持ち物・特性・性格・テラスタイプは `Menu` のまま(混在するが、件数と操作の種類が違うので同じにしない)。
+
+### 2. 判断: `load()` の1回の取得は「全件」ではなく「先頭ページ」
+
+`load()` は起動時の既定(攻撃側 = 最初・防御側 = 2番目・技 = learnset の最初のダメージ技)を決めるために
+どうしても最初の1ページが要る。そこで **`load()` の `searchSpecies(query: "", limit: MasterSearch.pageLimit)` は残すが、
+意味を「検索結果の先頭ページ」に変える**。`speciesOptions` / `moveOptions` は「マスタ全件」ではなく
+「直近の検索結果(から作った選択肢)」という意味になる(プロパティ名は既存テストを壊さないため変えない)。
+
+- `MasterSearch.pageLimit = 200`(契約の上限。`api/openapi.yaml` の `limit` の `maximum` と同じ値で、**全件の意味は持たない**)
+- 件数が `pageLimit` に達したら `speciesSearchReachedLimit` / `moveSearchReachedLimit` を true にし、View は
+  `MasterSearchLabels.truncated` を出す(黙って切り捨てない)。
+
+### 3. 判断: 検索は1キーストロークごと + 素朴なデバウンス(#113 が後で置き換える)
+
+明示的な検索ボタンは置かない(前方一致検索なので打ちながら絞れるのが自然)。
+ViewModel は「同期の文字反映」と「非同期の検索」を分ける — 既存の `setObservationText(id:text:)` /
+`recalculateAfterObservationEdit()` と同じ形(`TextField` の `Binding` から1フレーム遅れずに反映するため)。
+
+- `@discardableResult func setSpeciesQuery(_ text: String) -> Bool` — 同期。前後空白を落として `speciesQuery` に入れ、
+  検索を走らせる必要があれば true(前回と同じ語なら false)。
+- `func runSpeciesSearch() async` — 世代トークンを進め、`searchDebounce` だけ待ってから
+  `searchSpecies(query:limit:)` を呼び、**自分が最新の世代のときだけ**結果を反映する。
+- View は `.searchable(text:)` の `Binding` の setter で `setSpeciesQuery` を呼び、
+  `.task(id: viewModel.speciesQuery) { await viewModel.runSpeciesSearch() }` で走らせる
+  (`.task(id:)` が前の検索タスクをキャンセルするので、デバウンスの `sleep` 中に打ち直せば要求自体が飛ばない)。
+- `searchDebounce` は ViewModel の init 引数(既定 `MasterSearch.debounceInterval`)。テストは `.zero` を渡して
+  待ち時間に依存しない。**判断**: 定数をコードに直書きせず注入可能にしたのは、テストを速く・決定的にするため。
+- **issue #113 との関係**: これは「この修正のための素朴なデバウンス」であり、共有のデバウンス/キャンセル基盤ではない。
+  #113 がその基盤を入れるときに、ここの `searchDebounce` + 世代トークンを置き換えてよい(#113 をこの修正のブロッカーにしない)。
+
+### 4. 判断: 空クエリは「起動時の先頭ページ」を出す(再取得しない)
+
+検索欄が空のときに「全件(上限200)を取り直す」のは、この issue で消したい振る舞いそのものなので取らない。
+空にしたときは **`load()` で取った先頭ページをそのまま出し、API を呼ばない**(候補が0件のシートは
+「何も選べない画面」に見えて使いづらいので、空リストにもしない)。View は同時に
+`MasterSearchLabels.prompt` =「名前の先頭で検索」を出す。0件のときは `MasterSearchLabels.noMatch`。
+
+### 5. 判断: 選択中の種族・技は検索結果とは独立に解決する
+
+「いま選んでいる種族の名前」が検索語を変えた瞬間に `-` に化けてはいけない。ViewModel は
+**一度でも見た `SpeciesSummary` / `Move` を key/id で蓄える辞書**を持ち、表示と選択の検証はそこから引く。
+
+- `func speciesSummary(forKey key: String) -> SpeciesSummary?`(3画面共通の名前)。辞書には
+  **検索結果だけでなく `species(key:)` の応答も入れる**(`SpeciesDetail` は `SpeciesSummary` を作るのに
+  必要な値をすべて持つ)。構築に保存されたメンバーの種族が先頭ページの外でも名前を出せるようにするため。
+- `var attackerSpecies / defenderSpecies`(Calc)、`var mySpecies / opponentSpecies`(Reverse) — 上の辞書から引く計算プロパティ。
+  View は `speciesOptions.first(where:)` をやめてこれを使う。
+- `selectAttacker(speciesKey:)` 等のガードは `speciesOptions.contains` ではなく **辞書に有るか**で判定する
+  (＝検索で見つけた種族を選べる。知らない key を無視する既存の規則は変えない)。
+- 技も同じ: `selectedMove` は `moveOptions.first(where:)` ではなく**技の辞書**から引く。技の検索語を
+  learnset と重ならない語に変えると `moveOptions` は空になるが、それで選択中の技が消えて
+  `selectedMoveMissing`(内部の不整合)になってはいけない。検索は**見えている候補を絞るだけ**で、
+  選択中の技・`moveId`・エラー状態を変えない。
+  一方、`selectMove(id:)` のガードは従来どおり `moveOptions`(＝いま見えている候補)で判定する
+  (learnset に無い技を選べない既存の規則を弱めない)。
+
+### 6. 判断: learnset の解決は「検索結果 ∩ learnset の ID 集合」。完全な解決は API 待ちで**部分的**
+
+`getSpecies` の `learnset` は技 ID の配列で、技を ID で個別に解決する公開エンドポイントは無い
+(DECISIONS.md 2026-09-23。データ/API レーンへ `learnset` を `Move` 実体にする提案が出ている)。
+名前の前方一致でしか引けない以上、iOS だけでは learnset 全件を実体化できない。そこで:
+
+- `moveOptions`(Calc/Reverse)・`moveOptionsByMember`(Team)は **「直近の技検索の結果 ∩ その種族の learnset の ID 集合」を
+  learnset の順**で並べたものにする。技名で検索すれば、先頭200件の外にある技でも選べる(これが issue #68 の技側の解消)。
+- learnset の ID 集合(`SpeciesDetail.learnset` そのもの)は ViewModel が種族ごとに保持し、
+  **「その技を持ち続けてよいか」の判定は ID 集合で行う**(解決済みの `Move` の有無で判定しない)。
+  とくに `TeamEditViewModel.applySpeciesChange` の `moveIds` の絞り込みは ID 集合で行う
+  (現状は解決済み `moveOptions` で絞っており、先頭200件の外にある合法な技を黙って消す。同じ根本原因の別の症状)。
+- **残る穴(部分的な修正であることの明記)**: 選択中の技 ID が一度も検索結果に現れていないとき
+  (構築に保存された技・起動直後の learnset がすべて先頭200件の外、など)、技名を表示できない。
+  Calc/Reverse ではその状態を既存の `moveUnavailable` として出し、利用者は技の検索シートで名前を打てば復帰できる。
+  Team では技スロットに ID をそのまま出す(`BulkRowDisplay.itemLabel` の「マスタに無い ID は ID のまま」と同じ規則)。
+  この穴は DECISIONS.md の提案(`getSpecies.learnset` を `Move` 実体にする)が入れば消える。**follow-up として残す**:
+  issue #68 は iOS 側のこの修正だけでは閉じない。
+
+### 7. 変えないもの
+
+- 持ち物(`searchItems`)・性格(`natures()`)は一覧のまま(上限内。`natures` には `q` が無い)。
+- 起動時の既定の選び方(規則3)・入力ごとに計算1回(規則4)・世代の保護(規則7)・エラーの分け方(規則8)。
+- `api/openapi.yaml`・生成物(`Generated/`)は触らない(契約の変更は要らない。`q` は既にある)。
+
+### 8. accessibilityIdentifier 契約(implementer の担当)
+
+入口のボタンは既存の identifier を**そのまま**使う(`attackerSpeciesPicker` / `defenderSpeciesPicker` / `movePicker` /
+`reverseMySpeciesPicker` 等の既存名・`memberSpeciesPicker-<memberID>` / `memberMoveSlot-<memberID>-<index>` /
+`addMemberButton`)。シートは画面ごとに1つ(同時に2つ開かない)なので identifier も1つにする。
+
+| identifier | 要素 |
+|---|---|
+| `speciesSearchSheet` | 種族検索シートのルート |
+| `speciesSearchField` | その検索欄(`.searchable()`) |
+| `speciesSearchResult-<種族の key>` | 結果の1行(例 `speciesSearchResult-0445-000`) |
+| `speciesSearchHint` | 案内文言(`MasterSearchLabels.prompt` / `.truncated` / `.noMatch` のいずれか) |
+| `speciesSearchLoadingIndicator` | 検索中 |
+| `speciesSearchCancelButton` | 閉じる |
+| `moveSearchSheet` / `moveSearchField` / `moveSearchResult-<技の id>` / `moveSearchHint` / `moveSearchLoadingIndicator` / `moveSearchCancelButton` | 技側。同じ規則 |
+
+XCUITest(`POKECALC_USE_MOCK=1`)で見ること: `attackerSpeciesPicker` をタップ → `speciesSearchSheet` が出る →
+`speciesSearchField` に文字を入れると `speciesSearchResult-*` が絞られる → 1件タップするとシートが閉じ、
+`attackerSpeciesPicker` の `accessibilityLabel` がその種族名になる。技も `movePicker` で同じ。
+既存の XCUITest は `Menu` の中のボタンを直接叩いているので、シート経由に**書き換えが要る**(implementer の担当)。
+
+### 9. XCTest(spec-writer が先に書く。すべて `StubPokeCalcService`)
+
+新規: `CalcViewModelSearchTests` / `ReverseViewModelSearchTests` / `TeamEditViewModelSearchTests`。
+`Support/StubPokeCalcService.swift` に `searchSpecies` / `searchMoves` の**呼び出し記録**(`SearchCall(query:limit:)`)と
+**保留モード**(`.manual` + `resolveSpeciesSearch(at:with:)`)を足し、`StubBulkMaster` に
+**`pageLimit` 件 + その外に1件**の架空マスタを置く(アプリの架空データ `Resources/*.json` は増やさない。
+実データの件数をモックに持ち込まないため)。固定すること:
+
+1. `load()` の取得は先頭ページで、上限に達したら `speciesSearchReachedLimit == true`。
+2. 検索語が `q` として渡り、結果が絞られる。
+3. 先頭ページの外の種族を検索して選べる(＝ issue #68 の再現手順が解消する)。
+4. 選択中の種族名が、検索結果を変えたあとでも解決できる。
+5. 空クエリは先頭ページに戻り、**追加の API 呼び出しをしない**。
+6. 知らない key/id を選ぼうとしたら無視する(既存の規則を弱めない)。
+7. 検索応答の追い越し: 新しい検索の応答が先に届き、古い検索の応答が後から届いても上書きしない。
+8. 連続した検索語の変更で、実際に飛ぶ要求は最後の1つだけ。
+9. 先頭ページの外の技が、検索してから選べる(Calc/Reverse)・技スロットに入れられる(Team)。
+10. 種族変更時の `moveIds` の絞り込みが learnset の ID 集合で行われる(解決できない合法な技を消さない)。
+
+### 10. implementer が足す API(テストが固定している名前)
+
+Core に新設する共通の語彙(新規ファイル1つ。3画面から使う):
+
+```swift
+public enum MasterSearch {
+    /// api/openapi.yaml の searchSpecies/searchMoves/searchItems の limit の maximum。**全件の意味は持たない**
+    public static let pageLimit = 200
+    /// 1キーストロークごとの検索をまとめる待ち時間(issue #113 が共有の基盤に置き換えるまでの素朴な実装)
+    public static let debounceInterval: Duration = .milliseconds(250)
+}
+
+public enum MasterSearchLabels {
+    public static let prompt = "名前の先頭で検索"      // 空欄のとき
+    public static let truncated = "候補が多いので、名前を入力して絞り込んでください"  // 上限に達したとき
+    public static let noMatch = "一致する候補がありません"   // 0件
+}
+```
+
+3画面に共通で足すメンバー(`CalcViewModel` / `ReverseViewModel` / `TeamEditViewModel`):
+
+| メンバー | 意味 |
+|---|---|
+| `init(..., searchDebounce: Duration = MasterSearch.debounceInterval)` | デバウンスの待ち時間(テストは `.zero`) |
+| `var speciesQuery: String` / `var moveQuery: String` | 検索欄の文字(`private(set)`) |
+| `@discardableResult func setSpeciesQuery(_:) -> Bool` / `setMoveQuery(_:) -> Bool` | 同期の反映。検索が要るなら true |
+| `func runSpeciesSearch() async` / `func runMoveSearch() async` | デバウンス → 検索 → 最新の世代だけ反映 |
+| `var isSearchingSpecies: Bool` / `var isSearchingMoves: Bool` | 検索中(`private(set)`) |
+| `var speciesSearchReachedLimit: Bool` / `var moveSearchReachedLimit: Bool` | 結果が `pageLimit` に達した |
+| `func speciesSummary(forKey:) -> SpeciesSummary?` | 一度でも見た種族の辞書 |
+
+画面ごと: `CalcViewModel.attackerSpecies` / `.defenderSpecies`、`ReverseViewModel.mySpecies` / `.opponentSpecies`
+(どれも `SpeciesSummary?` の計算プロパティ)。`speciesOptions` / `moveOptions` / `moveOptionsByMember` は
+名前を変えず意味だけ変える(2章・6章)。`selectedMove` は技の辞書から引く(5章)。
+
+テスト側の下ごしらえ(spec-writer が追加済み): `StubPokeCalcService` の `SearchCall` / `SearchMode` /
+`speciesSearchCalls` / `moveSearchCalls` / `setSpeciesSearchMode` / `setMoveSearchMode` /
+`resolveSpeciesSearch(at:with:)` / `resolveMoveSearch(at:with:)` / `waitForSpeciesSearchCalls(count:)` /
+`waitForMoveSearchCalls(count:)` / `matchedSpecies(query:limit:)` / `matchedMoves(query:limit:)` と、
+`StubBulkMaster`(先頭ページ + `mixedSpecies` / `hiddenSpecies` / `hiddenMove`)。
+
+### 11. implementer が追加で決めたこと(実装時。ADR に無かった判断)
+
+- **`MasterSearchField`(新規・内部型)**: 検索欄(種族×3画面・技×3画面 = 6箇所)がすべて「世代トークン →
+  デバウンス待ち → 検索 → 最新世代だけ反映」という同じ手順を踏むため、この手順を1つの汎用状態機械に
+  切り出した(`MasterSpeciesSearchProviding`/`MasterMoveSearchProviding` プロトコル経由で View 側の
+  共有シートからも使う)。「たまたま似ている」ではなく、6箇所が本当に同じ契約(世代保護・デバウンス・
+  空クエリの扱い)を守る必要があるための共通化(coding-rules §2)。
+- **`ReverseViewModel.selectedMove`**: 9章の依頼リストには明記が無かったが、Calc と同様に View が
+  「いま選ばれている技」の名前・威力・分類を検索結果に依存せず出す必要があったため追加した
+  (`CalcViewModel.selectedMove` と同じ理由・同じ形)。
+- **`.searchable()` の accessibilityIdentifier 制約**: `.accessibilityIdentifier("speciesSearchField")`
+  を `.searchable()` の `List` に付けても、実際にタップ・入力できる `UISearchBar` の `TextField` には
+  渡らない(`Menu` の子に identifier が渡らないのと同種の UIKit 橋渡しの制約。P6-2d の ADR 9章で
+  記録済みの制約と同類)。XCUITest は `app.searchFields.firstMatch`(システムの検索欄の型)で辿る。
+  8章の identifier は「コードの意図」として残す。
+- **構築編集の技スロット**: 1メンバーに技スロットが最大4つあるため、スロットごとに `.sheet` を付けると
+  同じ `@State` を4つのシートが同時に監視することになる。`.sheet(item:)` + 選択中のスロットを表す
+  `MoveSlotTarget`(private)を1つだけ持たせ、メンバーカードごとに1つのシートにした。
+- **検索失敗時の扱い**: 検索(`searchSpecies`/`searchMoves`)が失敗しても画面の `error` は立てない
+  (`isSearching` を false に戻すだけ)。検索は「絞り込みの補助」であり、失敗してもいまの選択・計算結果は
+  壊れないようにする(絶対ルール5と同じ発想: 補助機能の失敗で主機能を止めない)。
+
+### 12. orchestrator が見つけて直した XCUITest の不具合(実装バグではない)
+
+critic レビュー前の自己検証で、`CalcScreenUITests.testAttackerSpeciesSearchSheetFiltersAndSelects` と
+`ReverseScreenUITests.testOpponentSpeciesSearchSheetFiltersAndSelects` が失敗した(implementer が
+利用枠の上限で中断し、リトライの結果を見られないまま引き継いだ状態)。
+
+原因はテストの誤り(検索の絞り込み自体は正しく動いていた): `XCTAssertFalse(app.buttons[secondMockSpeciesName]
+.exists)` のようにラベルの**文字列だけ**で「一致しない種族が消えていること」を確かめていたが、
+検索シートの裏にある防御側(Calc)・自分側(Reverse)カードのヘッダーが、既定でちょうど2番目の種族
+(`secondMockSpeciesName` と同じラベル)を表示しており、シートに隠れていても `exists` は true のままだった。
+検索結果一覧に**限定**した identifier(`speciesSearchResult-<key>`)で確かめる形に直し、両方とも green に
+なることを確認した(修正後の値・意味は変えていない。検査の対象を正確にしただけ)。

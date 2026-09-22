@@ -16,6 +16,10 @@ struct MemberCardView: View {
     /// `ForEach(id: \.id)` がメンバーごとに安定したインスタンスを作るので、この `@State` は
     /// 選択中のメンバーと1対1で対応する。
     @State private var nicknameText: String
+    @State private var isSpeciesSearchPresented = false
+    /// 非 nil のとき、その index の技スロットの検索シートが開いている(issue #68: シートは画面ごとに
+    /// 1つだが、メンバー内では「いま編集中のスロット」を覚える必要がある。ADR-0501「issue #68」8章)。
+    @State private var moveSearchSlot: MoveSlotTarget?
 
     init(viewModel: TeamEditViewModel, member: TeamMember) {
         self.viewModel = viewModel
@@ -24,7 +28,7 @@ struct MemberCardView: View {
     }
 
     private var species: SpeciesSummary? {
-        viewModel.speciesOptions.first(where: { $0.key == member.speciesKey })
+        viewModel.speciesSummary(forKey: member.speciesKey)
     }
 
     var body: some View {
@@ -51,18 +55,20 @@ struct MemberCardView: View {
 
     private var header: some View {
         HStack(spacing: SpacingToken.x2) {
-            Menu {
-                ForEach(viewModel.speciesOptions, id: \.key) { option in
-                    Button(option.nameJa) {
-                        Task { await viewModel.setMemberSpecies(id: member.id, speciesKey: option.key) }
-                    }
-                }
+            // issue #68: `Menu` ではなく検索シートで選ぶ(`CalcScreenCards` と同じ理由)。
+            Button {
+                isSpeciesSearchPresented = true
             } label: {
                 SpeciesHeaderMenuLabel(species: species)
             }
             .accessibilityIdentifier("memberSpeciesPicker-\(member.id)")
             .accessibilityLabel(species?.nameJa ?? SpeciesHeaderMenuLabel.placeholderName)
             .accessibilityHint("ポケモンを変える")
+            .sheet(isPresented: $isSpeciesSearchPresented) {
+                SpeciesSearchSheet(viewModel: viewModel) { option in
+                    Task { await viewModel.setMemberSpecies(id: member.id, speciesKey: option.key) }
+                }
+            }
 
             Button {
                 viewModel.removeMember(id: member.id)
@@ -197,25 +203,32 @@ struct MemberCardView: View {
                 moveSlot(index: index)
             }
         }
+        // シートは1つだけ持ち、`moveSearchSlot`(いま編集中のスロット index)で内容を出し分ける
+        // (issue #68・8章「シートは画面ごとに1つ」。4つのスロットボタンそれぞれに `.sheet` を付けると
+        // 同じ状態を4つのシートが同時に監視してしまうため、ここにまとめる)。
+        .sheet(item: $moveSearchSlot) { target in
+            let selectedID = member.moveIds.indices.contains(target.index) ? member.moveIds[target.index] : nil
+            let remainingOptions = moveOptions.filter { !member.moveIds.contains($0.id) }
+            MoveSearchSheet(
+                viewModel: viewModel, options: remainingOptions,
+                onSelect: { move in viewModel.addMove(id: member.id, moveId: move.id) },
+                removeAction: selectedID != nil ? { viewModel.removeMove(id: member.id, at: target.index) } : nil
+            )
+        }
     }
 
+    /// issue #68: `Menu` ではなく検索シートで選ぶ(`CalcScreenView.moveSelector` と同じ理由)。
+    /// 選択中の技が実体化できない(先頭ページの外にあり、まだ検索していない)ときは、
+    /// `BulkRowDisplay.itemLabel` の「マスタに無い ID はそのまま出す」規則にそろえて ID を出す
+    /// (issue #68・6章「残る穴」: 「技を選択」に見えてしまうと選択済みであることが伝わらないため)。
     private func moveSlot(index: Int) -> some View {
         let selectedID = member.moveIds.indices.contains(index) ? member.moveIds[index] : nil
         let selectedMove = selectedID.flatMap { id in moveOptions.first(where: { $0.id == id }) }
-        let remainingOptions = moveOptions.filter { !member.moveIds.contains($0.id) }
-        return Menu {
-            if selectedID != nil {
-                Button("外す", role: .destructive) {
-                    viewModel.removeMove(id: member.id, at: index)
-                }
-            }
-            ForEach(remainingOptions, id: \.id) { move in
-                Button(move.nameJa) {
-                    viewModel.addMove(id: member.id, moveId: move.id)
-                }
-            }
+        let label = selectedID.map { id in selectedMove?.nameJa ?? id } ?? "技を選択"
+        return Button {
+            moveSearchSlot = MoveSlotTarget(index: index)
         } label: {
-            MenuLabelChip(text: selectedMove?.nameJa ?? "技を選択")
+            MenuLabelChip(text: label)
         }
         .accessibilityIdentifier("memberMoveSlot-\(member.id)-\(index)")
     }
@@ -260,4 +273,10 @@ struct MemberCardView: View {
         }
         .accessibilityIdentifier("memberSP-\(member.id)-\(stat.rawValue)")
     }
+}
+
+/// `.sheet(item:)` に渡すための、開いている技スロットの index(issue #68)。
+private struct MoveSlotTarget: Identifiable, Equatable {
+    let index: Int
+    var id: Int { index }
 }

@@ -48,7 +48,7 @@ extension Components {
         /// | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
         /// | unknown_field | 契約にないフィールド | 400 |
         /// | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-        /// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など) | 400 |
+        /// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208) | 400 |
         /// | unknown_preset | 未知の防御側プリセット | 400 |
         /// | duplicate_preset | 防御側プリセットの重複 | 400 |
         /// | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -994,13 +994,17 @@ extension Components {
             /// 特殊技は 5 件(none, hp, hd_boost, hd, hd_full)、
             /// **変化技は 2 件(none, hp)のみ**。
             /// 指定したときはその順に行を返す(分類に合わないプリセットも指定どおり返す)。
-            /// 同じ preset を2回以上含めると 400 `duplicate_preset`。
+            /// 同じ preset を2回以上含めると 400 `duplicate_preset`(`uniqueItems` 違反に対する
+            /// この操作の code。ADR-0208)。9 件以上は 400 `invalid_input`。
             /// engine のカスタムプリセット定義(SP・性格を任意に決めたもの)は API に出さない。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/BulkCalcRequest/presets`.
             public var presets: [Components.Schemas.DefenderPreset]?
-            /// 差し替えて比較する持ち物 ID(省略時は素の1通り)
+            /// 差し替えて比較する持ち物 ID(省略時は素の1通り)。null 要素は「持ち物なし」。
+            /// 65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
+            /// 行数は `len(presets) × len(itemVariants)` なので、上限は 8 × 64 = 512 行。
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/BulkCalcRequest/itemVariants`.
             public var itemVariants: [Swift.String?]?
@@ -1014,7 +1018,7 @@ extension Components {
             ///   - field:
             ///   - options:
             ///   - presets: 使う防御側プリセットと行の順序。省略と空配列(`[]`)は同じで、技の分類に応じた既定セットになる。
-            ///   - itemVariants: 差し替えて比較する持ち物 ID(省略時は素の1通り)
+            ///   - itemVariants: 差し替えて比較する持ち物 ID(省略時は素の1通り)。null 要素は「持ち物なし」。
             public init(
                 format: Components.Schemas.Format,
                 attacker: Components.Schemas.Individual,
@@ -1382,15 +1386,22 @@ extension Components {
             public var field: Components.Schemas.FieldState?
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/options`.
             public var options: Components.Schemas.CalcOptions?
-            /// 相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ
+            /// 相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ。
+            /// 65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/itemCandidates`.
             public var itemCandidates: [Swift.String?]?
-            /// 同じ技・同じ場・同じ既知側に対する別々の1発。0 件は 400 `no_observation`
+            /// 同じ技・同じ場・同じ既知側に対する別々の1発。0 件は 400 `no_observation`、
+            /// 17 件以上は 400 `invalid_input`(ADR-0208)。同じ内容の観測を繰り返してよい
+            /// (絞り込みに寄与しないだけで矛盾しない)ので `uniqueItems` は付けない。
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/observations`.
             public var observations: [Components.Schemas.Observation]
-            /// 返す候補数の上限。0 は無制限
+            /// 返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(上限は
+            /// 2 性格クラス × 64 itemCandidates = 128 件)。負の値と 129 以上は 400 `invalid_input`。
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/maxCandidates`.
             public var maxCandidates: Swift.Int?
@@ -1404,9 +1415,9 @@ extension Components {
             ///   - moveId: 観測したときの技(side=defender なら自分の技、attacker なら相手の技)
             ///   - field:
             ///   - options:
-            ///   - itemCandidates: 相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ
-            ///   - observations: 同じ技・同じ場・同じ既知側に対する別々の1発。0 件は 400 `no_observation`
-            ///   - maxCandidates: 返す候補数の上限。0 は無制限
+            ///   - itemCandidates: 相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ。
+            ///   - observations: 同じ技・同じ場・同じ既知側に対する別々の1発。0 件は 400 `no_observation`、
+            ///   - maxCandidates: 返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(上限は
             public init(
                 format: Components.Schemas.Format,
                 side: Components.Schemas.ReverseSide,
