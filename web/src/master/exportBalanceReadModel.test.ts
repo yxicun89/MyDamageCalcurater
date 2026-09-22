@@ -3,12 +3,17 @@
 // (pokemonId = 種族キー・moveId・abilityId)がそのまま balance の API に通るようにする。
 // 形は services/balance/schema/*.schema.json(ADR-0402)を読んで確かめる(必須キー・許されたキー・enum・pattern)。
 // 特性: engine の効果定義から balance の正規化された効果に写せるものだけを書く(ADR-0303 §4)。
-//   defResistType[t] = 0        → {kind: "immune", attackType: t}
+//   defImmuneTypes の要素・defResistType[t] = 0(P4-12a からの書き方)→ {kind: "immune", attackType: t}
+//   defAbsorbTypes のキー         → {kind: "absorb", attackType: t}(副次効果は書かない。ADR-0106 §決定7)
 //   defResistType[t] = m (> 0)  → {kind: "type_multiplier", attackType: t, numerator/denominator = m/4096 の既約分数}
 //   reduceSuperEffective = r    → {kind: "super_effective_multiplier", numerator/denominator = r/4096 の既約分数}
 //   既約分数の分子・分母が 1〜16 に収まらない効果は書かない。それ以外の効果(stabMod など)は書かない。
 //   画面はどの特性も選べる(analyze は read model に無い abilityId を 422 にする)ので、特性はすべて書き、
 //   写せる効果が無い特性は effects: [] にする。
+// P2-3b(ADR-0106)追記: 出力順は immune(タイプ順)→ absorb(タイプ順)→ type_multiplier(タイプ順)→
+//   super_effective_multiplier(ADR-0106 §決定7。データレーンの pokedex export と同じ並びに揃える)。
+//   P4-12a 時点ではタイプ相性表の順に immune と type_multiplier を混ぜて出していたが、
+//   ADR-0106 で absorb が増えたのを機に「種類ごとにまとめる」順へ改めた(以下のテストの期待値も合わせて変更)。
 
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -211,30 +216,178 @@ describe("toBalanceAbilities(abilities.schema.json)", () => {
     }
   });
 
-  test("defResistType の 0 は immune、正の値は m/4096 の既約分数の type_multiplier(相性表のタイプ順)", () => {
-    const typeOrder = master.typeChart.types;
+  test("defResistType の 0 は immune、正の値は m/4096 の既約分数の type_multiplier(immune が先、type_multiplier はタイプ順)", () => {
     const model = toBalanceAbilities(
       withAbilities([
         {
           id: "example-ability-defense",
           nameJa: "テストぼうぎょ",
-          // 相性表の順と逆に並べる(出力は相性表のタイプ順)。
+          // 相性表の順と逆に並べる(type_multiplier の出力は相性表のタイプ順)。
           effect: { defResistType: { ice: 2048, ground: 0, fire: 2048, water: 5120 } },
         },
       ]),
     );
     expectValid("abilities.schema.json", model);
+    // ADR-0106 §決定7: immune が先、そのあと type_multiplier がタイプ順(ここでは fire → ice → water)。
     const expected = [
       { kind: "immune", attackType: "ground" },
-      { kind: "type_multiplier", attackType: "ice", ...reduced(2048, 4096) },
       { kind: "type_multiplier", attackType: "fire", ...reduced(2048, 4096) },
+      { kind: "type_multiplier", attackType: "ice", ...reduced(2048, 4096) },
       { kind: "type_multiplier", attackType: "water", ...reduced(5120, 4096) },
-    ].sort((a, b) => typeOrder.indexOf(a.attackType) - typeOrder.indexOf(b.attackType));
+    ];
     expect(model.abilities).toEqual([{ abilityId: "example-ability-defense", effects: expected }]);
     expect(expected.find((effect) => effect.attackType === "fire")).toMatchObject({
       numerator: 1,
       denominator: 2,
     });
+  });
+
+  test("defImmuneTypes(ADR-0106)は immune。defResistType の 0 と混ざってもタイプ順で1件ずつ", () => {
+    const model = toBalanceAbilities(
+      withAbilities([
+        {
+          id: "example-ability-levitate",
+          nameJa: "テストふゆう",
+          // defImmuneTypes は相性表の順と逆に、defResistType の 0 とは別のタイプで指定する。
+          effect: { defImmuneTypes: ["water", "fire"], defResistType: { ground: 0 } },
+        },
+      ]),
+    );
+    expectValid("abilities.schema.json", model);
+    // タイプ順(fire < ground < water)にそろう。
+    expect(model.abilities).toEqual([
+      {
+        abilityId: "example-ability-levitate",
+        effects: [
+          { kind: "immune", attackType: "fire" },
+          { kind: "immune", attackType: "ground" },
+          { kind: "immune", attackType: "water" },
+        ],
+      },
+    ]);
+  });
+
+  test("同じタイプが defImmuneTypes と defResistType の 0 の両方にあっても、immune は1件だけ(重複しない)", () => {
+    const model = toBalanceAbilities(
+      withAbilities([
+        {
+          id: "example-ability-levitate-overlap",
+          nameJa: "テストふゆうかさなり",
+          // ground は両方の書き方で無効を指定している。fire は defResistType の 0 だけ。
+          effect: { defImmuneTypes: ["water", "ground"], defResistType: { ground: 0, fire: 0 } },
+        },
+      ]),
+    );
+    expectValid("abilities.schema.json", model);
+    // ground が2件にならず、fire・ground・water の3件だけ(タイプ順)。
+    expect(model.abilities).toEqual([
+      {
+        abilityId: "example-ability-levitate-overlap",
+        effects: [
+          { kind: "immune", attackType: "fire" },
+          { kind: "immune", attackType: "ground" },
+          { kind: "immune", attackType: "water" },
+        ],
+      },
+    ]);
+  });
+
+  test("defAbsorbTypes(ADR-0106)は absorb。副次効果(回復・能力上昇)は出さず attackType だけ", () => {
+    const model = toBalanceAbilities(
+      withAbilities([
+        {
+          id: "example-ability-water-absorb",
+          nameJa: "テストちょすい",
+          effect: { defAbsorbTypes: { water: { healNumerator: 1, healDenominator: 4 } } },
+        },
+        {
+          id: "example-ability-flash-fire",
+          nameJa: "テストもらいび",
+          // 副次効果なしの吸収({})も正しい値(ADR-0106 §決定2)。
+          effect: { defAbsorbTypes: { fire: {} } },
+        },
+        {
+          id: "example-ability-sap-sipper",
+          nameJa: "テストそうしょく",
+          effect: { defAbsorbTypes: { grass: { boostStat: "atk", boostStages: 1 } } },
+        },
+      ]),
+    );
+    expectValid("abilities.schema.json", model);
+    expect(model.abilities).toEqual([
+      { abilityId: "example-ability-water-absorb", effects: [{ kind: "absorb", attackType: "water" }] },
+      { abilityId: "example-ability-flash-fire", effects: [{ kind: "absorb", attackType: "fire" }] },
+      { abilityId: "example-ability-sap-sipper", effects: [{ kind: "absorb", attackType: "grass" }] },
+    ]);
+  });
+
+  test("同じタイプが defAbsorbTypes と無効(の両方の書き方)にあると、無効が勝ち absorb は出さない(ADR-0106 §決定1)", () => {
+    const model = toBalanceAbilities(
+      withAbilities([
+        {
+          id: "example-ability-immune-wins-1",
+          nameJa: "テストむこうゆうせん1",
+          // fire は defImmuneTypes と defAbsorbTypes の両方にある(不正な入力だが、結果は immune に決める)。
+          effect: { defImmuneTypes: ["fire"], defAbsorbTypes: { fire: {}, water: {} } },
+        },
+        {
+          id: "example-ability-immune-wins-2",
+          nameJa: "テストむこうゆうせん2",
+          // fire は defResistType の 0(無効の別の書き方)と defAbsorbTypes の両方にある。
+          effect: { defResistType: { fire: 0 }, defAbsorbTypes: { fire: {}, water: {} } },
+        },
+      ]),
+    );
+    expectValid("abilities.schema.json", model);
+    expect(model.abilities).toEqual([
+      {
+        abilityId: "example-ability-immune-wins-1",
+        effects: [
+          { kind: "immune", attackType: "fire" },
+          { kind: "absorb", attackType: "water" },
+        ],
+      },
+      {
+        abilityId: "example-ability-immune-wins-2",
+        effects: [
+          { kind: "immune", attackType: "fire" },
+          { kind: "absorb", attackType: "water" },
+        ],
+      },
+    ]);
+  });
+
+  test("immune → absorb → type_multiplier → super_effective_multiplier の順(ADR-0106 §決定7。全種類そろえたとき)", () => {
+    const model = toBalanceAbilities(
+      withAbilities([
+        {
+          id: "example-ability-mixed",
+          nameJa: "テストごちゃまぜ",
+          effect: {
+            // 種類ごとの中では意図的にタイプ順と逆に書く(出力は種類の中でもタイプ順にそろうことを見る)。
+            defImmuneTypes: ["water", "ground"],
+            defAbsorbTypes: { steel: {}, electric: {} },
+            defResistType: { rock: 2048, fairy: 2048 },
+            reduceSuperEffective: 3072,
+          },
+        },
+      ]),
+    );
+    expectValid("abilities.schema.json", model);
+    expect(model.abilities).toEqual([
+      {
+        abilityId: "example-ability-mixed",
+        effects: [
+          { kind: "immune", attackType: "ground" },
+          { kind: "immune", attackType: "water" },
+          { kind: "absorb", attackType: "electric" },
+          { kind: "absorb", attackType: "steel" },
+          { kind: "type_multiplier", attackType: "fairy", numerator: 1, denominator: 2 },
+          { kind: "type_multiplier", attackType: "rock", numerator: 1, denominator: 2 },
+          { kind: "super_effective_multiplier", numerator: 3, denominator: 4 },
+        ],
+      },
+    ]);
   });
 
   test("reduceSuperEffective は r/4096 の既約分数の super_effective_multiplier(attackType を持たない。タイプの効果の後)", () => {
