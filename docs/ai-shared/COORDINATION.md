@@ -22,6 +22,7 @@
 | **Web**(damage calc: 画面) | `~/MyDamageCalcurater-web` | `feat/web-<phase名>` | Phase 4(`web/`・Playwright)。`make wasm` の成果物を使う |
 | **タイプバランス**(type balance) | `~/MyDamageCalcurater-tb`(同じリポジトリの git worktree) | `feat/tb-<stage名>`(既存の `feat/codex-tb0-foundation` はマージまでそのまま使う) | `services/balance/` とその Kustomize / Argo CD 定義。設計の正は `docs/type-balance-design.md` |
 | **iOS**(damage calc: iOS アプリ) | `~/MyDamageCalcurater-ios` | `feat/ios-<phase名>` | M3 の Phase 6(`ios/`)。API クライアントは `api/openapi.yaml` から swift-openapi-generator で生成し、手で書かない。署名・実機インストールは人間(CLAUDE.md) |
+| **素早さ**(speed) | `~/MyDamageCalcurater-speed` | `feat/speed-<stage名>` | 素早さ比較サービス(`services/speed/` とその Kustomize、Web の素早さ画面 `web/src/speed/`)。設計の正は `docs/speed-design.md`(このレーンが作る)。Web のタブ登録(`web/src/App.tsx` 等のアプリの骨組み)は共有ファイルとして自分の1項目を足すだけにし、骨組みの変更が要るときは Web レーンに DECISIONS.md で提案する |
 
 - ディレクトリはレーンの数だけ(いまは5つ)にする。レーンの作業ディレクトリは、どの AI が使ってもよい(同時に2つのセッションで開かない)。
 - レーンの worktree が無いときは作る: `git -C ~/MyDamageCalcurater worktree add ~/MyDamageCalcurater-<レーン> <ブランチ>`
@@ -87,7 +88,7 @@ gh pr merge <番号> --merge         # マージコミットで入れる。squas
 | `go.work` | 自分のレーンのモジュールの `use` 行を追記してよい(タイプバランスは `./services/balance`) |
 | ルートの `Makefile` | 自分のレーンのサービスの `include <path>/Makefile` の1行を追記してよい(タイプバランスは `include services/balance/Makefile`。ターゲット名は `balance-` 接頭辞) |
 | `AGENTS.md` / `CLAUDE.md` / 本ファイル | 運用ルールの変更は、ユーザーの決定があったときだけ。変更したら `DECISIONS.md` に記録する |
-| `docs/adr/` | **新しい ADR の番号はレーンごとの帯から取る**(2026-09-22。並列で「main の最新の次」を取ると衝突するため): データ `0100〜` / API `0200〜` / Web `0300〜` / タイプバランス `0400〜` / iOS `0500〜`。帯の中で自分のレーンの最新の次を使う。`0001〜0019` の既存の番号はそのまま(衝突しているものは、後から統合する側が自分の帯へ振り直す) |
+| `docs/adr/` | **新しい ADR の番号はレーンごとの帯から取る**(2026-09-22。並列で「main の最新の次」を取ると衝突するため): データ `0100〜` / API `0200〜` / Web `0300〜` / タイプバランス `0400〜` / iOS `0500〜` / 素早さ `0600〜`。帯の中で自分のレーンの最新の次を使う。`0001〜0019` の既存の番号はそのまま(衝突しているものは、後から統合する側が自分の帯へ振り直す) |
 
 ## 止まるとき(レートリミット・上限・セッション終了の前後)
 
@@ -148,4 +149,5 @@ cd ~/MyDamageCalcurater-web  && claude   # または codex(Web レーン)
 cd ~/MyDamageCalcurater-tb   && claude   # または codex(タイプバランスレーン)
 # Claude の上限時だけ: 整備レーン(Codex。使うときだけ worktree を作る)
 cd ~/MyDamageCalcurater-ios  && claude   # または codex(iOS レーン)
+cd ~/MyDamageCalcurater-speed && claude  # または codex(素早さレーン)
 ```
