@@ -70,16 +70,15 @@ dataVersion・rollout一本化)はデータレーンが主担当で、連絡が�
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
 Active: Claude Code
-Branch: feat/judge-jd1(作業ディレクトリ ~/MyDamageCalcurater-judge。PR 作成待ち。JD0 の feat/judge-jd0 は PR #92 で main に統合済み・削除)
-Status: JD0(基盤。PR #92)に続き JD1(判定 API 本体)完了。ADR-0701: `POST /api/judge/v1/outspeed-and-ko` を実装。
-素早さは `engine.EffectiveStat`(実数値→ランク)→ こだわりスカーフ(×6144/4096 五捨五超入。既定 item ID `choicescarf`、
-`JUDGE_CHOICE_SCARF_ITEM_ID` で上書き可)。性格は新設 `Pokedex.Natures`(`GET /api/pokedex/natures`。1リクエスト1回で
-attacker・defender 両方を解決)。上流呼び出しは逐次(natures→species×2→calc。並列化しない。検査順を契約に書き
-エラーの勝ち負けを固定するため)。response は `outspeeds`・`speedTie`・`attackerSpeed`・`defenderSpeed`・`ko`。
-critic 2回目で PASS(1回目 NG 重要3件: 上流エラーのログ未記録・pokedex 400 の扱いが ADR 未記載・defender 側スカーフ/
-種族差のテスト欠如。すべて修正・テスト追加済み)。`make test`/`make lint`/`make build`(ルート)が緑
-Next: PR を作って main へ統合(このセッションの残タスク)。JD2 以降(複数の相手候補・場の効果・画面)は
-plan.md の方針どおり、着手前にユーザーへ確認する
+Branch: feat/judge-jd2(作業ディレクトリ ~/MyDamageCalcurater-judge。PR 作成待ち。JD1 の feat/judge-jd1 は PR #118 で main に統合済み・削除)
+Status: JD0(基盤。PR #92)・JD1(判定 API 本体。PR #118)は main に統合済み。JD2(場の効果: トリックルーム・追い風)も完了。
+`speedField`(trickRoom・attackerTailwind・defenderTailwind)を `POST /api/judge/v1/outspeed-and-ko` に追加した(ADR-0702)。
+追い風は実数値を×2、こだわりスカーフとの併用は4096基準で1つに連結してから1回だけ五捨五超入(補正ごとに丸めない。
+@smogon/calc 0.12.0 の `getFinalSpeed`/`chainMods`/`pokeRound` を実際に読んで確認・独立検算済み)。トリックルームは
+実数値を変えず `outspeeds`(自分が先に動くか)の向きだけ反転、`speedTie` は反転しない。critic PASS(1回目)。
+JD2〜JD5 の範囲・順序はユーザー回答で確定済み(judge-design.md §3): JD2 場の効果→JD3 複数の相手候補→JD4 返り討ち判定
+(pokedex-svc の技 detail endpoint が無く API レーンへ依頼中。DECISIONS.md)→JD5 Web/iOS 画面
+Next: PR を作って main へ統合(このセッションの残タスク)。その後 JD3(複数の相手候補を一度に判定)に着手
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠
