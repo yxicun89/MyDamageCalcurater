@@ -325,6 +325,35 @@ Reason: ユーザーが「iOS も作りたいので iOS レーンも起動した
 Impact: COORDINATION.md のレーン表・依存の節・起動の目安、CURRENT_STATE.md に iOS 欄を追加。準備はタイプバランスレーンのセッションが行った(データレーンの4レーン化の規則に1行ずつ追加しただけ)。
 
 
+## 2026-09-21: iOS アプリの構成(iOS レーン。既定案で進行・ユーザー未確認)
+Decision: ADR-0017。`ios/PokeCalcKit`(Swift Package: 生成 API クライアント・ドメイン/ViewModel・デザイントークン)+ 手書きの `ios/PokeCalc.xcodeproj`(フォルダ同期。View と XCUITest だけ)。
+生成物はコミットし `make ios-gen` / `make ios-gen-check`(ルートの `make gen` には入れない)。画面は `PokeCalcService` プロトコルだけを使い、API 実装とモック(架空データ・計算しない)を差し替える。
+逆算のドメインは ADR-0010 §R の形にし、`api/openapi.yaml` が P3-1 で更新されるまで API 経由の逆算は「API 未対応」を表示する。構築は契約が無い(P5-4)ので端末内保存の `TeamStore` で作り、Showdown 形式は後回し。配布対象 iOS 26 以上。
+Reason: iOS レーンは契約を変更できず、サーバーも未完成。契約の変更を写像1か所で吸収するため。深夜(23 時以降)の着手で質問できないため、取り消しやすい既定案で進めた。
+Impact: ルートの Makefile に `include ios/Makefile` の1行、`.gitignore` に SwiftPM の成果物と xcuserdata を追加。
+
+## 2026-09-21: 提案(iOS レーン → API レーン): 構築(team)と逆算の契約
+Decision(提案): (1) P3-1 で逆算の契約を ADR-0010 §R8 の形にしたら、iOS は `make ios-gen` と写像の更新で追従する。(2) P5-4 で team-svc の契約を `api/openapi.yaml` に入れるとき、iOS の端末内の `TeamStore`(メンバー: 種族・技・持ち物・特性・性格・SP)と同じ項目を持たせてほしい。
+既定案: iOS 側は変更を待たずにモックで進める。
+Reason: iOS レーンは `api/openapi.yaml` を変更できない(COORDINATION.md)。
+Impact: なし(API レーンの判断待ち)。
+
+## 2026-09-21: 提案(iOS レーン → データレーン): ルート Makefile の help が include したファイルのターゲットを正しく表示しない
+Decision(提案): `help` の `grep -E` に `-h` を付ける(複数ファイルのときファイル名が接頭辞になり、`ios/Makefile` 等のターゲット名が表示されない。balance も同じ)。
+既定案: データレーンが次に Makefile を触るときに直す。iOS レーンは変更しない。
+Impact: 表示だけ。
+
+## 2026-09-21: iOS レーンの既定案の確認(ユーザー回答)
+Decision: (1) 構築は team-svc の契約ができるまで端末内に保存(既定案どおり)。(2) Showdown 形式の入出力は後回し(既定案どおり)。
+(3) 配布対象は **iOS 27 以上**(既定案の iOS 26 から変更。実機が iOS 27)。(4) API 経由の逆算は P3-1 の契約更新まで「API 未対応」を表示(既定案どおり)。
+Reason: ユーザーが「ブロッカーがあれば今答える」と言い、iOS レーンの質問4点に回答した。
+Impact: ADR-0017 §1 を iOS 27 に更新。上の「iOS アプリの構成」エントリの未確認の項目は、この回答で確定。
+
+## 2026-09-22: iOS レーンの版を最新の安定版で固定(同日のユーザー決定「言語・ミドルウェア・ライブラリを最新の安定版に」の iOS 分)
+Decision: Swift tools 6.4・Swift 6 言語モード・配布対象 iOS 27(macOS 27)・Xcode 27 の推奨設定。依存は swift-openapi-generator 1.13.1 / runtime 1.12.1 / urlsession 1.3.1 / swift-http-types 1.8.0 を `exact` で固定(いずれも確認時点の最新)。
+Reason: 方針の本体はデータレーンの DECISIONS エントリ(2026-09-21)。iOS レーンの範囲はデータレーンからの共有による。
+Impact: ios/ のみ。
+
 ## 2026-09-21: importer(P2-2b)の3点(ユーザー回答。既定案どおり)
 Decision: (1) 本番の効果定義 `data/importer/effects.json` を Git にコミットする(英語 ID と 4096 基準の整数だけ)。(2) 日本語名は ja(漢字混じり)を優先し、無ければ ja-Hrkt(かな)。(3) `data/importer/regulations.json` にレギュレーションの日本語ラベルを入れてコミットする。
 Reason: ユーザーが確認の質問に回答した。
@@ -453,6 +482,20 @@ Decision: 最新 main の統合検証(MT-1)と check-publishable 自己テスト
 Reason: 必須の test・lint・build・公開前検査、および golden・全種族・WASM・balance の非クラスタ検証が成功したため。
 Impact: 整備レーンの次回開始点は MT-3。データ・API・Web・タイプバランス各レーンの再開を確認したため、本 worktree は削除する。
 
+<<<<<<< HEAD
+## 2026-09-22: iOS の ADR を 0500 に振り直し(レーンごとの番号帯。データレーンの規則に従う)
+Decision: `docs/adr/0017-ios-app-architecture.md` を `docs/adr/0500-ios-app-architecture.md`(ADR-0500)に改名し、ios/・plan.md の M3 節・CURRENT_STATE.md の iOS 欄の参照を更新した。
+上の iOS のエントリ(2026-09-21)に書いた「ADR-0017」は iOS の構成の ADR のことで、以後は ADR-0500 と読む(main の ADR-0017 は balance TB3)。
+Reason: main の ADR-0017(balance TB3)と番号が衝突した。後から統合する側(iOS)が振り直す(COORDINATION.md)。
+Impact: ios/ と文書の参照のみ。
+
+## 2026-09-22: iOS の逆算画面の観測入力と PR の区切り(ユーザー回答)
+Decision: (1) 逆算の観測(与えたダメージ = 相手 HP の減少%(整数)、受けたダメージ = 自分 HP の減少量(実点数))はテンキーで数値入力する
+(requirements.md「数値の直接入力は原則しない」の例外。観測値は選択肢から選べないため)。(2) main への PR は、P6-2 の契約追従が緑になった時点で
+P6-1・P6-2a・契約追従をまとめて出す。逆算・構築は次の PR。
+Reason: 日中にユーザーへ質問し、既定案(推奨)どおりの回答を得た。
+Impact: P6-2b の画面仕様、PR の区切り。
+=======
 ## 2026-09-22: 素早さ比較を3つ目のサービスとして新しいレーン(6本目)で作る(ユーザー決定)
 Decision: 素早さ比較サービス(`services/speed/`)を新しい「素早さ」レーンで作る(`~/MyDamageCalcurater-speed`、ブランチ `feat/speed-<stage名>`、ADR は `0600〜`)。
 画面は Web に独立したタブ。素早さの画面は `web/src/speed/` を素早さレーンの持ち物にし、アプリの骨組み(タブの登録)は自分の1項目を足すだけにする。
@@ -527,3 +570,4 @@ up.sh は `pokecalc/calc:local` / `pokecalc/gateway:local` をビルド・import
 up.sh の最後で `make api-docker-build` と `k3d image import` を呼ぶ形にするかは、up.sh の持ち主(データレーン・整備レーン)の判断に任せる。API レーンは scripts/up.sh を変えない。
 Reason: critic の推奨。共有スクリプトは他レーンの範囲のため。
 Impact: `api-k3d-deploy` は他レーンのリソースに触れないよう、常に API 専用の overlay(deploy/k8s/overlays/local-api)だけを適用する(ADR-0203)。
+>>>>>>> origin/main
