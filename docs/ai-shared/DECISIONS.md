@@ -717,6 +717,7 @@ Impact: 素早さレーンの次は SP2(feat/speed-sp2)。
 Decision: 利用枠の残りをデータレーンに集中させるため、素早さレーンのセッションを一旦停止した。SP2(ADR-0602)は実装済み・critic 1回目 NG の重要3件を修正済み(コミット 7aff455)だが、critic の再確認は開始直後に停止したため未完了。作業ツリーはクリーンで全 push 済み(make test/lint/build/check-publishable は成功)。
 Reason: ユーザー指示(データレーンのセッション経由で伝達)。
 Impact: 再開はユーザー指示があってから。次にやることは CURRENT_STATE.md の Speed 欄の Next(critic の再確認から)。
+
 ## 2026-09-22: 判定レーン(素早さ×ダメージ連動)を新設(ユーザー要望)
 Decision: 「ニトチャ+メイン技で素早さ抜ける+そのポケモンを倒せるか」を1回で判定する新レーン「判定」を追加する(`~/MyDamageCalcurater-judge`、`feat/judge-<stage名>`、ADR 帯 `0700〜`)。
 判定サービスは speed-svc に依存しない(SP2 未着手のため)。engine を直接呼んで実数値(素早さ)を計算し、pokedex-svc の公開 API(種族値)・calc-svc の公開 API(`/api/calc` の KOChance)だけに依存する。

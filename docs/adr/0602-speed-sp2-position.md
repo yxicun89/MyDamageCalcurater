@@ -35,7 +35,9 @@ HTTP 層が `mode` ごとに要る・要らないフィールドを検査する)
   - `faster`: 自分より値が大きい段の行数の合計。
   - `slower`: 自分より値が小さい段の行数の合計。
   - `tie`: 自分と同じ値の段があれば、その段の行(ポケモン × プリセット)の一覧。無ければ空配列(空 = 同速なし。真偽値を別に持たない)。
-- `pokemonId` が read model に無ければ 422 `unknown_pokemon`(balance の ADR-0014 と同じ考え方。新しい ErrorCode)。
+- `pokemonId` は openapi の `PokemonId` と同じ形式(`^\d{4}-\d{3}$`)を HTTP 層で検査する(balance の `validatePokemonID` と同じ形。ADR-0014)。
+  **形式が不正なら 400 `invalid_request`**、形式は正しいが read model に無ければ 422 `unknown_pokemon`(balance の ADR-0014 と同じ考え方。新しい ErrorCode)。
+  raw で `pokemonId` を渡したとき(表示用の解決だけ)も同じ扱い。
 
 ### 4. API
 `POST /api/speed/v1/position` → 200
@@ -45,7 +47,9 @@ HTTP 層が `mode` ごとに要る・要らないフィールドを検査する)
 ```
 `pokemon` は `pokemonId` を渡したときだけ含む。
 
-判定順: ヘッダー(400)→ body の JSON・mode ごとの必須フィールド・範囲(400 `invalid_request`)→ read model 未設定(503 `master_unavailable`)→
+判定順: ヘッダー(400)→ body のサイズ(4 KiB 超は 413 `request_too_large`。balance の `MaxBytesReader`/`decodeJSONBody` と同じ形。
+妥当な body はスカラーのフィールドだけで 200 バイト未満のため、十分な余裕を持たせつつ際限なく大きい body を読み込まない上限)→
+body の JSON・mode ごとの必須フィールド・pokemonId の形式・範囲(400 `invalid_request`)→ read model 未設定(503 `master_unavailable`)→
 `pokemonId` が read model に無い(422 `unknown_pokemon`)→ 200。それ以外(計算・表の組み立てのエラー)は 500 の固定文言。
 
 ### 5. 細部

@@ -23,7 +23,7 @@ flowchart LR
 | `api/openapi.yaml` | 外部 API 契約の正(`make speed-gen` で `internal/api` を生成) |
 | `internal/speed` | 純粋 Go のコア。`Speed`(実数値・ランクは engine、スカーフだけ自前)、`Presets`/`BuildTable`(表の組み立て)、`Position`(自分の位置) |
 | `internal/master` | read model(ポケモン)の loader。検証に失敗したら起動しない |
-| `internal/httpapi` | HTTP の検証・判定順(400 → 503 → 200、それ以外は 500)・応答の変換 |
+| `internal/httpapi` | HTTP の検証・判定順(400 → 413 → 503 → 422 → 200、それ以外は 500)・応答の変換 |
 | `internal/api` | oapi-codegen の生成物(手で書かない) |
 | `cmd/api` | 起動・環境変数の読み込み・graceful shutdown |
 | `testdata/` | 架空データの example(実データは Git に置かない) |

@@ -129,7 +129,9 @@ func TestPositionChecksHeadersBeforeBody(t *testing.T) {
 }
 
 // TestPositionRejectsOversizedBody: maxPositionBodyBytes(4 KiB)を超える body は 413
-// request_too_large(balance の decodeJSONBody と同じ形。ADR-0602 §4)。
+// request_too_large(balance の decodeJSONBody と同じ形。ADR-0602 §4)。ちょうど上限の body は
+// 413 にならないことも確かめる(上限を縮める回帰を検出するため。balance の
+// TestAnalyzeAcceptsBoundaryInputs と同じ考え方)。
 func TestPositionRejectsOversizedBody(t *testing.T) {
 	t.Parallel()
 
@@ -142,6 +144,23 @@ func TestPositionRejectsOversizedBody(t *testing.T) {
 		if body := decodeError(t, recorder); body.Code != api.RequestTooLarge {
 			t.Errorf("code = %q, want %q", body.Code, api.RequestTooLarge)
 		}
+	}
+}
+
+// TestPositionAcceptsBodyAtSizeLimit: ちょうど maxPositionBodyBytes の body は 413 にならない
+// (末尾の空白で長さを合わせても、JSON としては1つのオブジェクトのまま)。
+func TestPositionAcceptsBodyAtSizeLimit(t *testing.T) {
+	t.Parallel()
+
+	base := `{"mode":"raw","value":200}`
+	exactLimit := base + strings.Repeat(" ", maxPositionBodyBytes-len(base))
+	if len(exactLimit) != maxPositionBodyBytes {
+		t.Fatalf("fixture length = %d, want %d", len(exactLimit), maxPositionBodyBytes)
+	}
+
+	recorder := serve(Dependencies{Pokemon: exampleProvider(t)}, newPositionRequest(validHeaders, exactLimit))
+	if recorder.Code == http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want anything but %d (body is exactly at the limit)", recorder.Code, http.StatusRequestEntityTooLarge)
 	}
 }
 
