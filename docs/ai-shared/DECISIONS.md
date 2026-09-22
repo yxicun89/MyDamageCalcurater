@@ -753,3 +753,12 @@ Impact: **他レーンへの申し送り**: `make up` 直後(pokedex の DB 未�
 Web・iOS レーンのローカル k3d 環境でも calc を使う画面(ダメージ計算)が動かない。初回だけ `make import-k8s` でマスタを投入すること
 (データレーンの docs/runbooks/data.md 参照)。`make api-k3d-deploy` も、マスタ未投入のクラスタでは `kubectl rollout status` が120秒でタイムアウトして失敗するので、
 先に `make import-k8s` を実行すること。`make api-smoke` の出力1行目が `master=pokedex …` であれば実際に pokedex-svc へつながっている確認になる(`master=example` はフォールバック)。
+
+## 2026-09-23: DOC-api(calc・gateway の README・手順書)の coding-rules §8 からの意図的な逸脱
+Decision: `services/calc/README.md`・`services/gateway/README.md` を coding-rules §8 の5節(何をするか・構成図・ディレクトリ・コマンド・関連ADR)に沿って書き直したが、
+gateway の README には「環境変数」「ルーティング」の2節も残した。§8 は「これ以外は書かない」としているが、既存の文書検査テスト
+(`services/gateway/deploytest/web_docs_test.go` の `TestWebUpstreamIsDocumented`、`pokedex_docs_test.go` の `TestPokedexWiringIsDocumented`)が
+環境変数表の特定の行(`GATEWAY_WEB_URL`・`GATEWAY_POKEDEX_URL`)とルーティング表の「それ以外」の行の文言を検査しており、削ると絶対ルール6(テストを弱めない)に反する。
+`services/speed/README.md`(既存)にも同種の「エンドポイント」「環境変数」節があり、同じ運用パターンとして許容した。
+Reason: critic 指摘(coding-rules §7「規約から外れるときは理由を書く」)。
+Impact: 今後 gateway の README を §8 の5節だけに削る場合は、まず上記2テストの検査方法(README の文言ではなく実装から生成する等)を変える必要がある。
