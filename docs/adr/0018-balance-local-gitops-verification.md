@@ -38,3 +38,10 @@ TB0 の最後の項目「Git 変更 → Argo CD 同期 → Pod 更新」は、Ar
 - k3d クラスタをレジストリ付きで作り直す: 他のレーンの作業を止める(クラスタ削除は人間の確認事項)。
 - repoURL を Git に書く: アカウント名を公開しない方針(R-2-8)に反する。
 - ユーザーの gh の認証トークンを流用する: 権限が広すぎる。読み取り専用・リポジトリ限定の PAT にする。
+
+## 追記(2026-09-22): Git に入れる値・入れない値
+- 入れる: gitops overlay の image(`newName` と `digest`。tag や `latest` は使わない)。
+- 入れない: リポジトリの URL(アカウント名を含む)、Git の access token、registry の password、Kubernetes Secret の実値、ローカルの絶対パス。
+  `application.yaml` の `repoURL` は placeholder のままにし、適用時に `git remote get-url origin` から埋め込む。
+- Argo CD で同期した balance は gitops overlay に read model のマウントが無いので、analyze / coverage などは 503(health は 200)。
+

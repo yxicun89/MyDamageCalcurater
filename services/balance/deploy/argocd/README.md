@@ -1,45 +1,78 @@
-# balance GitOps setup
+# balance の GitOps(Argo CD、ローカル k3d)
 
-balance の Argo CD Application。方式は ADR-0018(ローカル k3d での検証)。同期は manual。
+方式と、Git に入れる値・入れない値は ADR-0018。前提: k3d の `pokecalc` クラスタが起動している(`make up`)。
 
-## Git に入れる値 / 入れない値
-
-- 入れる: `../k8s/overlays/gitops/kustomization.yaml` の image(`newName` と `digest`。tag や `latest` は使わない)。
-- 入れない: リポジトリの URL(アカウント名を含む)、Git の access token、registry の password、Kubernetes Secret の実値、ローカルの絶対パス。
-  `application.yaml` の `repoURL` は placeholder のままにし、適用時に `git remote get-url origin` から埋め込む。
-
-## 初回の準備(ローカル k3d)
-
-1. Argo CD(版を固定。2026-09-22 時点の最新 v3.5.3):
-   ```sh
-   kubectl create namespace argocd
-   kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.3/manifests/install.yaml
-   ```
-2. private リポジトリの認証(**ユーザーが自分のターミナルで**。読み取り専用・このリポジトリだけの fine-grained PAT):
-   ```sh
-   read -rs PAT && kubectl -n argocd create secret generic repo-pokecalc \
-     --from-literal=type=git --from-literal=url="$(git remote get-url origin)" \
-     --from-literal=username=x-access-token --from-literal=password="$PAT" \
-   && kind_label="argocd.argoproj.io/secret-type" \
-   && kubectl -n argocd label secret repo-pokecalc "${kind_label}=repository"; unset PAT kind_label
-   ```
-   (最後の label は Argo CD が repository の認証情報として認識するための印。値 `repository` は秘密ではない)
-3. クラスタ内レジストリと Application:
-   ```sh
-   make balance-registry-apply
-   make balance-argocd-app
-   ```
-
-## デプロイ(Git 変更 → manual sync → Pod 更新)
+## 1. Argo CD を入れる(初回だけ)
 
 ```sh
-make balance-registry-push          # 表示された localhost:5000/pokecalc/balance@sha256:... の digest を
-                                    # ../k8s/overlays/gitops/kustomization.yaml に書き、PR で main に入れる
-argocd --core app sync pokecalc-balance   # または Argo CD の UI から Sync
-kubectl -n argocd get application pokecalc-balance
-kubectl -n pokecalc get deploy balance -o jsonpath='{.spec.template.spec.containers[0].image}'
+cd "$(git rev-parse --show-toplevel)"
+kubectl create namespace argocd
+kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.3/manifests/install.yaml
+kubectl -n argocd rollout status deployment/argocd-server --timeout=300s
 ```
+確認: `deployment "argocd-server" successfully rolled out`。
 
-Git の commit、Argo CD の同期 revision、稼働 Pod の image digest が一致することを確認する。
-gitops overlay には read model のマウントが無いので、Argo CD で同期した balance の analyze / coverage は 503(ADR-0018「影響と制約」)。
-local の read model で動かすときは `make balance-k3d-deploy`(Application は OutOfSync になる)。
+## 2. リポジトリの認証を登録する(初回だけ。人が自分のターミナルで)
+
+GitHub で、このリポジトリだけ・Contents: Read-only の fine-grained token を作ってから実行する。トークンは画面に出さずに貼り付けて Enter。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+read -rs PAT && kubectl -n argocd create secret generic repo-pokecalc \
+  --from-literal=type=git --from-literal=url="$(git remote get-url origin)" \
+  --from-literal=username=x-access-token --from-literal=password="$PAT" \
+&& kind_label="argocd.argoproj.io/secret-type" \
+&& kubectl -n argocd label secret repo-pokecalc "${kind_label}=repository"; unset PAT kind_label
+```
+確認: `secret/repo-pokecalc labeled`。
+
+## 3. レジストリと Application を作る(初回だけ)
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make balance-registry-apply
+make balance-argocd-app
+```
+確認: `application.argoproj.io/pokecalc-balance created`(2回目以降は `unchanged`)。
+
+## 4. イメージを push して digest を GitOps の定義に書く
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+digest=$(make -s balance-registry-push 2>/dev/null | tail -1 | sed 's/.*@//')
+sed -i '' "s/digest: .*/digest: ${digest}/" services/balance/deploy/k8s/overlays/gitops/kustomization.yaml
+git diff services/balance/deploy/k8s/overlays/gitops/kustomization.yaml
+```
+確認: diff の `digest:` が `sha256:` で始まる値に変わる(変わらなければ同じイメージなので、5 と 6 は不要)。
+この変更をブランチに commit し、PR で main に入れる。
+
+## 5. 同期する(main に入った後)
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n argocd annotate application pokecalc-balance argocd.argoproj.io/refresh=normal --overwrite
+kubectl config set-context --current --namespace=argocd
+argocd --core app sync pokecalc-balance --timeout 180
+kubectl config set-context --current --namespace=default
+```
+確認: 出力に `Sync Status: Synced to main (<main の commit>)` と `Phase: Succeeded`。
+
+## 6. Pod が更新されたことを確かめる
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc rollout status deployment/balance --timeout=120s
+kubectl -n pokecalc get deploy balance -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+grep digest services/balance/deploy/k8s/overlays/gitops/kustomization.yaml
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/api/balance/healthz
+```
+確認: 2つ目と3つ目の `sha256:` の値が一致し、最後が `200`。
+
+## 7. local の read model で動かす状態に戻す(必要なとき)
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make balance-k3d-deploy
+make balance-smoke
+```
+確認: 最後の行が `balance smoke: health=200 ... recommendations=200`(Argo CD の Application は OutOfSync になる)。
