@@ -170,7 +170,8 @@
 - [x] JD1 抜けるか+倒せるかの最小構成(自分と相手の Individual・使う技 → outspeeds・speedTie・ko)。endpoint(POST /api/judge/v1/outspeed-and-ko)を services/judge/api/openapi.yaml に追加(ADR-0701)。critic PASS(2回目。1回目 NG は上流エラーのログ未記録・pokedex 400の扱いがADR未記載・defender側スカーフ/種族差の未検証を修正)
 - [x] JD2〜JD5 の範囲・順序をユーザーに確認(2026-09-22)。4項目すべて対象(複数の相手候補・相手の技を含めた返り討ち・場の効果・Web/iOS 画面)、
   技の追加効果の自動反映は対象外のまま。順序は docs/judge-design.md §3(JD2 場の効果 → JD3 複数の相手候補 → JD4 返り討ち判定 → JD5 画面)
-- [ ] JD2 場の効果(トリックルーム・追い風)。judge だけが解釈する `speedField` を outspeed-and-ko に追加(docs/judge-design.md §3)
+- [x] JD2 場の効果(トリックルーム・追い風)。judge だけが解釈する `speedField` を outspeed-and-ko に追加(ADR-0702)。
+  丸め方(4096基準で連結してから1回だけ五捨五超入)は @smogon/calc 0.12.0 の実装を読んで確認・独立検算した。critic PASS(1回目)
 - [ ] JD3 複数の相手候補を一度に判定(攻撃側1つ・相手候補の配列 → 候補ごとの判定結果の配列)
 - [ ] JD4 相手の技を含めた返り討ち判定。技の優先度を pokedex-svc から引く endpoint が無いため、まず API レーンへ依頼を出す(DECISIONS.md に既定案)
 - [ ] JD5 Web/iOS の画面(judge-svc を呼ぶ。担当は着手時に判断)

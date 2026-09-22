@@ -66,7 +66,7 @@ Client (Web/iOS)
 「先に動くのはどちらか」を正しく決められないため、(2) は API レーンへの依頼(下記)が要る。(1)(3) は今の1体対1体の endpoint を
 拡張するだけで新しい上流依存が無いため、先に進められる。(4) は API の形が (1)〜(3) で変わるので最後にする。
 
-- **JD2: 場の効果(トリックルーム・追い風)。設計確定(正は ADR-0702。実装は未着手)**。
+- **JD2: 場の効果(トリックルーム・追い風)。完了(正は ADR-0702。critic PASS)**。
   今の `POST /api/judge/v1/outspeed-and-ko` に、judge だけが解釈する `speedField`
   (`trickRoom`・`attackerTailwind`・`defenderTailwind`。すべて省略可・既定 false)を足す。
   calc-svc は場の効果として weather/terrain/screens しか知らず、トリックルーム・追い風はダメージに関与しない
