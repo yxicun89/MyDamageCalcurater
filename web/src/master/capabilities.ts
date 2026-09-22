@@ -15,15 +15,11 @@ export const FULL_MASTER_CAPABILITIES: MasterCapabilities = {
 };
 
 /** マスタが使える機能(capabilities を省いたマスタは FULL_MASTER_CAPABILITIES)。 */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- P4-16 spec-writer のスタブ(引数は実装で使う)
 export function masterCapabilities(master: MasterData): MasterCapabilities {
-  // P4-16 spec-writer のスタブ。implementer が実装する(master/capabilities.test.ts が仕様)。
-  throw new Error("masterCapabilities は未実装(P4-16)");
+  return master.capabilities ?? FULL_MASTER_CAPABILITIES;
 }
 
 /** マスタの取得口が種族の検索に対応しているか(capabilities.speciesList が false のときに使う)。 */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- P4-16 spec-writer のスタブ(引数は実装で使う)
 export function isSearchableMasterSource(source: MasterSource): source is SearchableMasterSource {
-  // P4-16 spec-writer のスタブ。implementer が実装する(master/capabilities.test.ts が仕様)。
-  throw new Error("isSearchableMasterSource は未実装(P4-16)");
+  return "search" in source;
 }

@@ -69,14 +69,24 @@ export interface AppProps {
 }
 
 /** masterSource.load() の結果(成功/失敗のどちらか)。読み込み中は state を持たず null のまま表す。 */
-type MasterLoad =
+type MasterLoadResult =
   { readonly ok: true; readonly master: MasterData } | { readonly ok: false; readonly error: Error };
+
+/**
+ * masterLoad の state(P4-16、ADR-0304 §追記 A-6)。どの取得口(source)の結果かを持たせ、
+ * 現在選ばれている取得口と一致しないとき(モードを切り替えた直後など)は読み込み中として扱う
+ * (`useEffect` の中で setState せず、レンダー時にこの一致を見て導出する)。
+ */
+interface MasterLoadState {
+  readonly source: MasterSource;
+  readonly result: MasterLoadResult;
+}
 
 /**
  * アプリの最上位。ヘッダーと計算画面(CalcScreen)を出す。マスタを読み込むまでは「読み込み中」、
  * 読み込みに失敗したら role=alert で知らせる。
  */
-export function App({ engine, engines, masterSource = exampleMasterSource }: AppProps) {
+export function App({ engine, engines, masterSource = exampleMasterSource, masterSources }: AppProps) {
   // 既定のオフライン(WASM)エンジンはマウント時に1回だけ作る(呼び出しのたびに作り直すと、計算のたびに
   // 読み込み状態がリセットされる)。createWasmEngine 自体は engine.wasm を読まない(初回の計算まで遅延)。
   const [fallbackOfflineEngine] = useState<CalcEngine>(() => createWasmEngine(browserWasmLoader()));
@@ -93,42 +103,80 @@ export function App({ engine, engines, masterSource = exampleMasterSource }: App
     createSpeedClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
   );
 
+  // 計算モード(オフライン = WASM / オンライン = API)。既定はオフラインで、選択は localStorage に覚える
+  // (ADR-0301 §4)。マウント時に一度だけ読み、以後はこの state が正(他タブでの変更は追わない)。
+  // マスタの取得口(下)がモードで切り替わるため、mode はそれより前に置く。
+  const [mode, setMode] = useState<CalcMode>(() => loadCalcMode());
+
+  function selectMode(nextMode: CalcMode): void {
+    setMode(nextMode);
+    saveCalcMode(nextMode);
+  }
+
+  // P4-16(ADR-0304 §追記 A-6): モードごとのマスタの取得口。masterSources はマウント時に1回だけ呼ぶ
+  // (以後この props の同一性は見ない。関数の再生成でマスタを読み直させない)。
+  // 省略時は null のままにし、masterSource(単数)を両モードで使う既存の使い方を保つ
+  // (モードを切り替えてもマスタを読み直さない)。
+  const [modeMasterSources] = useState<MasterSources | null>(() =>
+    masterSources === undefined ? null : masterSources(clientIds),
+  );
+  // 今選ばれている取得口。masterSources が無ければ常に masterSource(既定は架空の例データ)。
+  const activeMasterSource: MasterSource =
+    modeMasterSources === null ? masterSource : modeMasterSources[mode];
+
   // setState は応答が届いたとき(.then のコールバック)だけで行う(react-hooks/set-state-in-effect)。
-  // 読み込み中は load 未完了(null)のまま表す。
-  const [masterLoad, setMasterLoad] = useState<MasterLoad | null>(null);
+  // どの取得口(source)の結果かを state に持たせ、現在の取得口(activeMasterSource)と一致しないときは
+  // 読み込み中として扱う(ADR-0304 §追記 A-6。前のモードのマスタで画面を出さない)。
+  const [masterLoad, setMasterLoad] = useState<MasterLoadState | null>(null);
+  const currentMasterLoad: MasterLoadResult | null =
+    masterLoad !== null && masterLoad.source === activeMasterSource ? masterLoad.result : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    activeMasterSource.load().then(
+      (master) => {
+        if (!cancelled) {
+          setMasterLoad({ source: activeMasterSource, result: { ok: true, master } });
+        }
+      },
+      (error: unknown) => {
+        if (!cancelled) {
+          setMasterLoad({
+            source: activeMasterSource,
+            result: { ok: false, error: error instanceof Error ? error : new Error(String(error)) },
+          });
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [activeMasterSource]);
 
   // 既定のオンライン(API)エンジンは、natures(性格の一覧)が要るのでマスタの読み込みが終わってから作る
   // (ADR-0301 §2・§4)。createApiEngine 自体は fetch しない(初回の計算まで遅延。ADR-0300 §2 と同じ考え方)。
   const fallbackOnlineEngine = useMemo<CalcEngine | null>(() => {
-    if (masterLoad === null || !masterLoad.ok) {
+    if (currentMasterLoad === null || !currentMasterLoad.ok) {
       return null;
     }
     return createApiEngine({
       baseUrl: apiBaseUrl(),
       fetch: globalThis.fetch.bind(globalThis),
-      master: { natures: masterLoad.master.natures },
+      master: { natures: currentMasterLoad.master.natures },
       ids: clientIds,
     });
-  }, [masterLoad, clientIds]);
+  }, [currentMasterLoad, clientIds]);
 
   // モードごとに使う engine を決める(ADR-0301 §4)。engines > engine(両モードに使う) > 既定の順。
-  // 既定のオンラインは、マスタ読み込み前は使われない(masterLoad が ok になるまで下の画面を描画しない)ので
-  // null のままでもよく、その間は offline のプレースホルダで埋める。
+  // 既定のオンラインは、マスタ読み込み前は使われない(currentMasterLoad が ok になるまで下の画面を描画しない)
+  // ので null のままでもよく、その間は offline のプレースホルダで埋める。
   const resolvedEngines: CalcEngines =
     engines ??
     (engine !== undefined
       ? { offline: engine, online: engine }
       : { offline: fallbackOfflineEngine, online: fallbackOnlineEngine ?? fallbackOfflineEngine });
 
-  // 計算モード(オフライン = WASM / オンライン = API)。既定はオフラインで、選択は localStorage に覚える
-  // (ADR-0301 §4)。マウント時に一度だけ読み、以後はこの state が正(他タブでの変更は追わない)。
-  const [mode, setMode] = useState<CalcMode>(() => loadCalcMode());
   const resolvedEngine = mode === "online" ? resolvedEngines.online : resolvedEngines.offline;
-
-  function selectMode(nextMode: CalcMode): void {
-    setMode(nextMode);
-    saveCalcMode(nextMode);
-  }
 
   // 計算・逆算の切り替え(P4-4)。URL と連動する(P4-10)。パスは BASE_URL からの相対として読む。
   // 初期状態は現在の URL から決め、未知のパスは既定の画面(calc)にしておき(マウント効果が URL を
@@ -225,25 +273,6 @@ export function App({ engine, engines, masterSource = exampleMasterSource }: App
   // 選ばれている画面のコンポーネント(app/screens.tsx の対応表から引く)。
   const ActiveScreen = SCREEN_COMPONENTS[tab];
 
-  useEffect(() => {
-    let cancelled = false;
-    masterSource.load().then(
-      (master) => {
-        if (!cancelled) {
-          setMasterLoad({ ok: true, master });
-        }
-      },
-      (error: unknown) => {
-        if (!cancelled) {
-          setMasterLoad({ ok: false, error: error instanceof Error ? error : new Error(String(error)) });
-        }
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [masterSource]);
-
   return (
     <>
       {/* main の外に置く: main の内側だと header は banner ランドマークにならない(HTML-AAM)。 */}
@@ -252,9 +281,9 @@ export function App({ engine, engines, masterSource = exampleMasterSource }: App
         <CalcModeSelector value={mode} onChange={selectMode} />
       </header>
       <main className="app-main">
-        {masterLoad === null && <p>{appText.loading}</p>}
-        {masterLoad !== null && !masterLoad.ok && <p role="alert">{appText.masterLoadError}</p>}
-        {masterLoad !== null && masterLoad.ok && (
+        {currentMasterLoad === null && <p>{appText.loading}</p>}
+        {currentMasterLoad !== null && !currentMasterLoad.ok && <p role="alert">{appText.masterLoadError}</p>}
+        {currentMasterLoad !== null && currentMasterLoad.ok && (
           <div className="app-tabs">
             <div role="tablist" aria-label={appText.tabsLabel} className="app-tabs__list">
               {TAB_ORDER.map((id, index) => {
@@ -289,7 +318,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource }: App
             <div role="tabpanel" id={panelId} aria-labelledby={tabElementId(tab)} className="app-tabs__panel">
               <ActiveScreen
                 engine={resolvedEngine}
-                master={masterLoad.master}
+                master={currentMasterLoad.master}
                 client={balanceClient}
                 speedClient={speedClient}
               />

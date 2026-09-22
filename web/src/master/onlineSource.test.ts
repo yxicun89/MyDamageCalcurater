@@ -76,12 +76,16 @@ function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-/** fetch の第1引数(文字列・URL・Request のいずれか)から URL を作る。 */
+/**
+ * fetch の第1引数(文字列・URL・Request のいずれか)から URL を作る。
+ * baseUrl: "/" のとき実装が渡すのは相対パス文字列("/api/pokedex/items?...")なので、
+ * 絶対 URL には影響しないダミーの基点(new URL は絶対文字列に対して第2引数を無視する)を添える。
+ */
 function urlOf(input: RequestInfo | URL): URL {
   if (input instanceof URL) {
     return input;
   }
-  return new URL(typeof input === "string" ? input : input.url);
+  return new URL(typeof input === "string" ? input : input.url, "http://localhost/");
 }
 
 /** パスごとに応答を決める fake fetch(応答を用意していないパスを引いたらテストを落とす)。 */
@@ -150,6 +154,14 @@ test("性格はクエリなしで引く(listNatures は無条件に全件)", asy
   await createSource(fetchMock).load();
   const { url } = callTo(fetchMock, PATHS.natures);
   expect([...url.searchParams.keys()]).toEqual([]);
+});
+
+test("基点 URL が同じオリジン(api/config.ts の既定 '/')でも load できる(new URL(path, '/') は Invalid URL になる)", async () => {
+  const fetchMock = okFetch();
+  const source = createOnlineMasterSource({ baseUrl: "/", fetch: fetchMock, ids });
+  await expect(source.load()).resolves.toMatchObject({ capabilities: ONLINE_MASTER_CAPABILITIES });
+  const { url } = callTo(fetchMock, PATHS.items);
+  expect(url.pathname).toBe(PATHS.items);
 });
 
 test("すべてのリクエストに端末 ID・セッション ID を付ける", async () => {
