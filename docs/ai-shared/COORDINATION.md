@@ -59,6 +59,26 @@ git status --short --branch        # 未コミット・未 push が無いか
 
 ## main への統合(PR)
 
+### 承認省略の設定と運用上の注意(2026-09-23 ユーザー決定)
+
+ユーザーのグローバル設定(`~/.claude/settings.json`。全レーン共通)で、次を**確認なし**にしている。
+- `git push`(feature ブランチへの push)
+- `gh pr create`
+- `gh pr merge`
+
+一方、次は**引き続き禁止**(deny。実行されない)または**確認が要る**(ask)。
+- 禁止: main への直接 push(`git push … main` 系すべて)・force push(`--force`/`-f`/`+refspec`)・`--mirror`・`--all`
+- 確認が要る: リモートブランチの `--delete`
+- `rm` は変更していない。auto mode の既定判断のまま(危険なものは引き続き確認を求める)
+
+**この設定により、`gh pr merge` の直前にユーザーが目を通す機会が無くなる**。したがって、PR を作る前に必ず次を自分で確認してから進める(これまで以上に重要):
+1. そのレーンのテスト・`make lint`・`make check-publishable` が通っていること。
+2. 独立レビュー(critic)が PASS していること(FAIL のまま PR を作らない)。
+3. PR の本文に検証結果とレビュー結果を書く(あとから確認できるように)。
+
+ローカルで `git merge` して `origin/main` へ直接 `push` することは、main への直接 push を拒否する deny ルールで従来どおり止まる。
+main への統合は必ず PR(`gh pr create` → `gh pr merge`)を経由する。
+
 条件(すべて満たすとき PR を作ってマージしてよい):
 1. そのレーンのテストが通る。ダメージ計算は `make test` と、計算を変えたら `make test-golden`、WASM 境界を変えたら `make test-wasm`。
    タイプバランスは `docs/type-balance-test-strategy.md` に沿ったテスト(未作成の間は `services/balance` のテスト全件)。
