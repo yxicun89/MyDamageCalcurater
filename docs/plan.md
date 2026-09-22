@@ -125,6 +125,9 @@
   (2) `response.json()` 側の catch は abort を汎用エラーに潰す(fetch 側と同じ扱いに揃える)。
   (3) `onlineSource.test.ts` の `urlOf` に基点を足した副作用で、`natures`/`species` の呼び出しは絶対 URL の
   origin を検査していない(`items` のみ検査済み)。(4) `SPECIES_SEARCH_DEBOUNCE_MS` が未使用なら削除か使用を確認
+  spec 済み(受け入れ条件と失敗するテストの正は ADR-0304「追記2」A-9〜A-11): BalanceScreen は
+  `speciesList` と `moves` が両方そろうまで画面ごと無効(案内 + 入力を全部 disabled + balance API を呼ばない)。
+  検索を画面へ渡す経路は `ScreenProps.masterSearch?`。(4) は検索欄が使い手になるので残す
 - [ ] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら
   `capabilities.moves` を true にして技を復活させる
 - [ ] P4-18 Codex コードレビューの issue(Web レーン主担当。タイプバランスレーンから 2026-09-23 に連絡・`gh issue view <番号>`)。

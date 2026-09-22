@@ -22,7 +22,7 @@ import {
 } from "../domain/balanceLabels";
 import { learnsetMoves } from "../domain/moves";
 import { balanceScreenText, typeNameJa } from "../i18n/ja";
-import type { MasterData } from "../master/types";
+import type { MasterData, MasterSpeciesSearch } from "../master/types";
 import "./BalanceScreen.css";
 
 type Schemas = components["schemas"];
@@ -35,6 +35,12 @@ type RecommendationsMembers = Schemas["RecommendationsRequest"]["members"];
 export interface BalanceScreenProps {
   readonly master: MasterData;
   readonly client: BalanceClient;
+  /**
+   * P4-16b(ADR-0304 A-9・A-10): 種族を都度引く口。この画面は
+   * `capabilities.speciesList` と `capabilities.moves` が両方そろうまで使えない(A-9)ので、
+   * 今は受け取るだけで使わない。技が戻る P4-17 で、各枠の検索欄に使う。
+   */
+  readonly masterSearch?: MasterSpeciesSearch;
 }
 
 /** 技の枠数(services/balance/api/openapi.yaml の moveIds の maxItems)。 */

@@ -45,7 +45,7 @@ import type {
   MoveCategory,
 } from "../engine/types";
 import { calcScreenText, isTypeId, typeNameJa } from "../i18n/ja";
-import type { MasterData, MasterSpecies } from "../master/types";
+import type { MasterData, MasterSpecies, MasterSpeciesSearch } from "../master/types";
 import { prefersReducedMotion } from "../ui/motion";
 import "./CalcScreen.css";
 
@@ -190,6 +190,12 @@ const DEFAULT_MOVE_CATEGORY: MoveCategory = "physical";
 export interface CalcScreenProps {
   readonly engine: CalcEngine;
   readonly master: MasterData;
+  /**
+   * P4-16b(ADR-0304 A-10): 種族を都度引く口。`master.capabilities.speciesList` が false のとき、
+   * ポケモンの選択をドロップダウンから検索欄に替えるために使う。省略は「検索できない」
+   * (capabilities を省いたマスタ = 今までどおりドロップダウン)。
+   */
+  readonly masterSearch?: MasterSpeciesSearch;
 }
 
 /** 計算の状態(判別 union)。idle は入力が揃っていない、status-move は変化技を選んでいる。 */

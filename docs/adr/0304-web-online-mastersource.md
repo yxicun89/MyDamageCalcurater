@@ -217,3 +217,83 @@ DECISIONS.md で提案済み・未回答)。
 | `web/src/App.tsx` | `masterSources` prop の追加(spec-writer は props の宣言のみ)と読み込みの配線 |
 | `web/src/main.tsx` | `masterSources` を渡す(オンラインは `createOnlineMasterSource`) |
 | 画面(`screens/*.tsx`) | **P4-16 では変えない**(capabilities を省いたマスタ = 今までどおり) |
+
+## 追記2(2026-09-23、Web レーン): 画面側(P4-16b)の決定
+
+A-1〜A-8 は P4-16(型と取得口)の正。ここから先は画面側(A-5 の実装)を書くにあたって決めたこと。
+**最優先の制約は A-2 と同じ**: `capabilities` を省いたマスタ(オフラインの例データ・既存テストの fixture)では、
+今までの見た目・挙動を1つも変えない。
+
+### A-9. BalanceScreen(タイプバランス)は「使える/使えない」を画面ごと切り替える
+
+A-5 は計算画面・逆算画面しか決めていなかったが、`web/src/screens/BalanceScreen.tsx` も
+`master.species` / `master.moves` / `master.abilities` を同期的に使う(パーティ・仮想敵の
+ポケモン・特性・技の選択、結果表の ID → 名前の解決)。オンラインでは `species`・`moves`・`abilities` が
+空配列なので、メンバー選択欄が常に空になり画面が実質使えない。この画面についての決定が ADR に無かった。
+
+調べて分かったこと:
+
+- この画面の4つの診断のうち、**技に依存しないのは防御相性(analyze)だけ**。攻撃範囲(coverage)は技が要り、
+  仮想敵(threats)の「与える倍率」「抜群」と、おすすめタイプ(recommendations)の「攻撃範囲の穴」も技から決まる。
+- balance API の `moveIds` は `minItems: 0`(services/balance/api/openapi.yaml)なので、技が空でも
+  threats / recommendations の呼び出し自体は**成功する**。ただし返るのは「与える倍率は全部ゼロ」
+  「攻撃範囲の穴は18タイプ全部」という、入力不足に由来する**誤解を招く診断**になる。
+- つまり技だけを無効化して残りを出すと、4機能のうち1つしか成立しないうえ、残り3つが「穴だらけ」の
+  誤った結果を出す。ADR-0304 §4 の方針(壊れた結果を返すより機能を絞って正直に出す)に正面から反する。
+
+**決定**: BalanceScreen は `capabilities.speciesList` と `capabilities.moves` が**両方 true のマスタでだけ**動かす。
+どちらかが false のときは:
+
+- 画面の先頭に `masterOnlineText.balanceUnavailable` を出す。
+- パーティ・仮想敵の入力(ポケモン・特性・技1〜技4・追加・削除)は A-5 の技と同じ作法で
+  **残すが全部 `disabled`** にする(欄ごと消して両モードで画面の構造を変えない)。
+- balance API を1本も呼ばない(analyze / coverage / threats / recommendations のすべて)。
+- `capabilities.effects` はこの判定に入れない。balance API は ID だけを送り、持ち物・特性の効果データを使わないため
+  (`effects` だけが false のマスタでは、BalanceScreen は今までどおり動く)。
+
+却下した案:
+
+- **(a) BalanceScreen にも種族検索を広げる**: 技が無い以上4機能のうち1つしか成立せず、しかも threats /
+  recommendations が誤解を招く結果を出す。検索欄を6枠 × 2(パーティ・仮想敵)へ広げる実装コストも小さくない。
+  P4-17 で技が戻れば同じ作業を「意味のある形で」行えるので、今やる理由が無い。
+- **(c) 技に依存する表示だけ隠す**: 「メンバーは選べるのに診断がほとんど出ない」画面になり、
+  なぜ出ないのかが利用者に伝わらない(技の欄が空である理由も伝わらない)。
+
+**P4-17 への申し送り**: `capabilities.moves` を true にするときは、BalanceScreen にも A-10 の種族検索を広げる
+(パーティ・仮想敵の各枠)。そのとき**オンラインは BalanceScreen にとって「正しい方の」モード**になる:
+balance-svc は自前の read model を持ち、オフラインの架空の例データの key(`9001-000` など)が今そこで
+引けるのは P4-12a で例データを read model へ書き出したからで、実データの key を送るオンラインの方が本来の姿になる。
+
+### A-10. 画面に検索を渡す経路と、種族の検索欄の見え方
+
+`ScreenProps`(`web/src/app/screens.tsx`)に `masterSearch?: MasterSpeciesSearch` を足す。App は今選ばれている
+取得口が検索付きなら(`isSearchableMasterSource`)その `search` を渡し、そうでなければ渡さない。
+`MasterSource` / `MasterData` の型は変えない(P4-16 で確定済み)。**省略可**なので、既存の画面テストの
+`<CalcScreen engine master />` のような使い方は1行も変えずに今までどおり動く。
+
+`capabilities.speciesList === false` のとき、ドロップダウンの代わりに出す検索欄:
+
+- **accessible name は今までのスロットのラベルのまま**(「攻撃側のポケモン」「防御側のポケモン」
+  「自分のポケモン」「相手のポケモン」)。役割も `combobox` のまま(`<select>` から `role="combobox"` の
+  テキスト入力へ)なので、利用者・テストからの引き方が両モードで変わらない。
+- `placeholder` に `masterOnlineText.speciesSearchLabel`、補足の `speciesSearchHint` は `aria-describedby` で結ぶ。
+- 候補は `role="listbox"` の中の `role="option"`(WAI-ARIA Authoring Practices の Combobox パターン。
+  入力欄は `aria-expanded` と `aria-controls` を持つ)。
+- パラメータは A-4 の定数をそのまま使う。**`SPECIES_SEARCH_DEBOUNCE_MS` の使い手がこの検索欄**
+  (P4-16 の積み残し(4)「未使用なら削除か使用を確認」への答え: 使う)。
+- 状態ごとの文言: 入力前 `speciesSearchEmpty` / 0件 `speciesSearchNoResult` / 上限に達した
+  `speciesSearchTruncated` / 検索・解決の失敗 `speciesSearchFailed`。
+- 入力が変わったら前の検索を `AbortController` で取り消し、古い応答で新しい候補を上書きしない
+  (画面の他の非同期処理と同じ作法。CalcScreen.tsx の `cancelled` と同じ考え方)。
+- 候補を選んだら `resolveSpecies(key)` を引き、**種族と一緒に返る特性を画面が覚える**(A-1 後半)。
+  `MasterData.abilities` は空のままなので、`defaultAbility` に渡すのは画面が覚えた特性になる。
+- `speciesList === false` なのに `masterSearch` が渡されていない(組み合わせの誤り)ときは、空のドロップダウンを
+  出さずに検索欄を `disabled` にして `speciesSearchFailed` を出す(選択肢ゼロの欄を黙って出さない)。
+
+### A-11. 逆算画面の持ち物候補(A-5 の補足)
+
+A-5 は「逆算画面の持ち物候補を `disabled` にする」と書いたが、実際の `ReverseScreen` に持ち物候補の**操作**は無い
+(`domain/reverseItems.ts` の `reverseItemCandidates` が `master.items` の効果データから候補を自動で組む)。
+`capabilities.effects === false` では効果データが無いので候補は「持ち物なし」だけになる。これは壊れた結果ではなく
+**前提の狭い正しい結果**なので、逆算そのものは実行し、`masterOnlineText.itemCandidatesUnavailable` を添えて
+「持ち物の候補を探索していない」ことを明示する。計算画面はトグルという操作があるので、A-5 のとおり `disabled` にする。

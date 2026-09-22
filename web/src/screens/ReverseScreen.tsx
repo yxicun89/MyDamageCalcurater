@@ -46,7 +46,7 @@ import type {
   ReverseSide,
 } from "../engine/types";
 import { calcScreenText, reverseResultText, reverseScreenText } from "../i18n/ja";
-import type { MasterData, MasterSpecies } from "../master/types";
+import type { MasterData, MasterSpecies, MasterSpeciesSearch } from "../master/types";
 import { prefersReducedMotion } from "../ui/motion";
 import "./ReverseScreen.css";
 
@@ -70,6 +70,11 @@ const DEFAULT_MOVE_CATEGORY: MoveCategory = "physical";
 export interface ReverseScreenProps {
   readonly engine: CalcEngine;
   readonly master: MasterData;
+  /**
+   * P4-16b(ADR-0304 A-10): 種族を都度引く口。`master.capabilities.speciesList` が false のとき、
+   * 自分・相手のポケモンの選択をドロップダウンから検索欄に替えるために使う。省略は「検索できない」。
+   */
+  readonly masterSearch?: MasterSpeciesSearch;
 }
 
 /**
