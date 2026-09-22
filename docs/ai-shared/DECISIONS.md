@@ -482,7 +482,6 @@ Decision: 最新 main の統合検証(MT-1)と check-publishable 自己テスト
 Reason: 必須の test・lint・build・公開前検査、および golden・全種族・WASM・balance の非クラスタ検証が成功したため。
 Impact: 整備レーンの次回開始点は MT-3。データ・API・Web・タイプバランス各レーンの再開を確認したため、本 worktree は削除する。
 
-<<<<<<< HEAD
 ## 2026-09-22: iOS の ADR を 0500 に振り直し(レーンごとの番号帯。データレーンの規則に従う)
 Decision: `docs/adr/0017-ios-app-architecture.md` を `docs/adr/0500-ios-app-architecture.md`(ADR-0500)に改名し、ios/・plan.md の M3 節・CURRENT_STATE.md の iOS 欄の参照を更新した。
 上の iOS のエントリ(2026-09-21)に書いた「ADR-0017」は iOS の構成の ADR のことで、以後は ADR-0500 と読む(main の ADR-0017 は balance TB3)。
@@ -495,7 +494,6 @@ Decision: (1) 逆算の観測(与えたダメージ = 相手 HP の減少%(整�
 P6-1・P6-2a・契約追従をまとめて出す。逆算・構築は次の PR。
 Reason: 日中にユーザーへ質問し、既定案(推奨)どおりの回答を得た。
 Impact: P6-2b の画面仕様、PR の区切り。
-=======
 ## 2026-09-22: 素早さ比較を3つ目のサービスとして新しいレーン(6本目)で作る(ユーザー決定)
 Decision: 素早さ比較サービス(`services/speed/`)を新しい「素早さ」レーンで作る(`~/MyDamageCalcurater-speed`、ブランチ `feat/speed-<stage名>`、ADR は `0600〜`)。
 画面は Web に独立したタブ。素早さの画面は `web/src/speed/` を素早さレーンの持ち物にし、アプリの骨組み(タブの登録)は自分の1項目を足すだけにする。
@@ -503,6 +501,16 @@ Decision: 素早さ比較サービス(`services/speed/`)を新しい「素早さ
 Reason: ユーザーが素早さ比較サイトの使い勝手(表と見比べて自分の数値を算出する)を改善したいと依頼し、表の行・入力・担当(タイプバランスの次ではなく新しいレーン)・画面の置き場所に回答した。
 Impact: COORDINATION.md のレーン表・ADR の帯・起動の目安、CURRENT_STATE.md の Speed 欄、plan.md の「SP: 素早さ比較」(SP0〜SP4)。データレーンの P2-3 の read model(`pokedex export`)に、素早さの種族値が含まれていること(ポケモンの read model に baseStats があれば足りる)。
 
+## 2026-09-22: 素早さ比較の未確定4点をユーザーが回答(素早さレーン)
+Decision: (1) 右のオプションは SP 0〜32・性格の補正3通り・ランク -6〜+6・スカーフ、または実数値の直接入力 (2) 同じ実数値は同速としてまとめて表示 (3) 表は既定のレギュレーションの使用可能集合 (4) `web/` の骨組みが無い間は `web/src/speed/` の画面部品とテストだけ先に作り、タブ登録は骨組みができてから1項目足す。いずれも既定案どおり。
+Reason: 素早さレーンの着手時に AskUserQuestion で確認した。
+Impact: docs/plan.md「SP: 素早さ比較」の未確定を確定に更新。docs/speed-design.md・ADR-0600 に反映。
+
+## 2026-09-22: 素早さ SP0 の設計(素早さレーンの判断)
+Decision: services/speed は engine に `replace` で依存し、実数値・ランクは `engine.RealStats` / `engine.EffectiveStat` を呼ぶ。engine に無いこだわりスカーフ(×1.5)だけを speed のコアが 4096 基準の補正 6144・五捨五超入で持つ(ランクの後。Showdown の順)。GitOps の overlay と Argo CD Application は、イメージの digest が決まる SP4 で作る(ADR-0600)。
+提案(データレーンへ。既定案: 今は何もしない): engine に素早さの持ち物補正(スカーフ)の公開関数を足すなら、speed はそれを呼ぶように切り替える。足さない場合は speed の1式のままでよい。
+Reason: engine はデータレーンの範囲で、Champions に無い効果をダメージ計算の engine に入れない方針のため。表の行としてスカーフはユーザーの仕様で必要。
+Impact: ADR-0600、docs/speed-design.md。
 
 ## 2026-09-21: Web レーンの構成(ADR-0300)と、他レーンへの提案2件(Web レーン、Claude Code。既定案で進行・ユーザー未確認)
 Decision: (1) Web は計算を `CalcEngine` の後ろに置き、WASM(ADR-0011 の JSON 契約)で先に作る。マスタは `MasterData` の後ろに置き、
@@ -570,4 +578,3 @@ up.sh は `pokecalc/calc:local` / `pokecalc/gateway:local` をビルド・import
 up.sh の最後で `make api-docker-build` と `k3d image import` を呼ぶ形にするかは、up.sh の持ち主(データレーン・整備レーン)の判断に任せる。API レーンは scripts/up.sh を変えない。
 Reason: critic の推奨。共有スクリプトは他レーンの範囲のため。
 Impact: `api-k3d-deploy` は他レーンのリソースに触れないよう、常に API 専用の overlay(deploy/k8s/overlays/local-api)だけを適用する(ADR-0203)。
->>>>>>> origin/main

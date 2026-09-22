@@ -4,5 +4,6 @@ use (
 	./engine
 	./services
 	./services/balance
+	./services/speed
 	./tools
 )

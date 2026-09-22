@@ -40,10 +40,10 @@ Next: (1) データレーンの `pokedex export`(P2-3。nameJa・abilityIds・�
 
 ## Speed
 Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
-Active: なし
-Branch: feat/speed-s0(作業ディレクトリ ~/MyDamageCalcurater-speed)
-Status: 未着手(2026-09-22 にレーンを新設。ユーザーの仕様は docs/plan.md の「SP: 素早さ比較」と DECISIONS.md)
-Next: SP0 から。docs/speed-design.md(設計の正)と ADR-0600 を書き、services/speed の基盤(タイプバランスの services/balance と同じ構成: 純粋な Go のコア・HTTP API・自前の openapi・Kustomize)を作る。種族の素早さ種族値と使用可能集合は pokedex の read model(データレーン P2-3 の `pokedex export`)から読む。それまでは架空データで作る。実数値の式は engine の公開 API(RealStats 等)を呼ぶだけで、自前で持たない
+Active: Claude Code
+Branch: feat/speed-s1(SP0 は feat/speed-s0 → PR で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
+Status: SP0 完了(ADR-0600。services/speed の基盤: engine を呼ぶ素早さの計算コア・スカーフ ×1.5 の五捨五超入・架空データの read model `SPEED_POKEMON_PATH`・`GET /api/speed/v1/pokemon`・Kustomize base/local・Dockerfile(ルートがコンテキスト)・smoke)。ユーザー回答4点は plan.md に反映済み
+Next: SP1(表。ADR-0601: 6 行のプリセット・速い順・同速の段・`presets` クエリでの絞り込み・`GET /api/speed/v1/table`)→ SP2(自分の位置)→ SP3(`web/src/speed/` の画面部品。Web の骨組みが無い間は部品とテストだけ)→ SP4(pokedex の read model・k3d・GitOps)。検討: 404/405 を `{code,message}` にそろえるか(SP0 critic 軽微)
 
 ## Maintenance
 Lane: 整備(Claude の上限時に Codex が進める。COORDINATION.md「Claude の上限時の Codex」)

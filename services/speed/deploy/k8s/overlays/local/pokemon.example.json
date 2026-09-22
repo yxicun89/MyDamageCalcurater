@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "regulationId": "example",
+  "pokemon": [
+    {"pokemonId": "9001-000", "nameJa": "テストカソウドリ", "types": ["fire", "flying"], "baseSpeed": 100},
+    {"pokemonId": "9002-000", "nameJa": "テストミズハネウオ", "types": ["water"], "baseSpeed": 81},
+    {"pokemonId": "9003-000", "nameJa": "テストイワゴロンタ", "types": ["rock", "ground"], "baseSpeed": 45},
+    {"pokemonId": "9004-000", "nameJa": "テストデンキツネビ", "types": ["electric"], "baseSpeed": 130},
+    {"pokemonId": "9005-000", "nameJa": "テストクサモグリン", "types": ["grass", "poison"], "baseSpeed": 81},
+    {"pokemonId": "9006-000", "nameJa": "テストコオリクジラン", "types": ["ice", "water"], "baseSpeed": 60},
+    {"pokemonId": "9007-000", "nameJa": "テストハガネカブトン", "types": ["steel", "bug"], "baseSpeed": 30},
+    {"pokemonId": "9008-000", "nameJa": "テストユウレイネコマ", "types": ["ghost", "fairy"], "baseSpeed": 110}
+  ]
+}
