@@ -59,6 +59,11 @@ type Move struct {
 	Priority     int8
 }
 
+type MoveEffect struct {
+	MoveID string
+	Effect json.RawMessage
+}
+
 type Nature struct {
 	ID           string
 	NameJa       string

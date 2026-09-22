@@ -683,7 +683,13 @@ func assertAllFieldsSet(t *testing.T, name string, v any) {
 	}
 }
 
-// zeroAllowed はゼロ値が正しい値であるフィールド(フォルム0 = 基本の姿)。
+// zeroAllowed はゼロ値が正しい値であるフィールド(フォルム0 = 基本の姿、追加効果なしの技)。
 func zeroAllowed(structName, field string) bool {
-	return structName == "engine.Species" && field == "Form"
+	if structName == "engine.Species" && field == "Form" {
+		return true
+	}
+	if structName == "engine.Move" && field == "Effect" {
+		return true
+	}
+	return false
 }

@@ -84,16 +84,37 @@ type ShowdownSpecies struct {
 }
 
 // ShowdownMove は Showdown の技1件。Accuracy 0 は必中(calc の `accuracy: true`)。
+// Self/Secondary/Secondaries は追加効果(命中時のランク変化。ADR-0107 決定6)。
+// 取得元の表現のまま持つ(ID化・正準化は convert で行う)。
 type ShowdownMove struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`
-	Type          string  `json:"type"`
-	Category      string  `json:"category"`
-	BasePower     int     `json:"basePower"`
-	Accuracy      int     `json:"accuracy"`
-	PP            int     `json:"pp"`
-	Priority      int     `json:"priority"`
-	IsNonstandard *string `json:"isNonstandard"`
+	ID            string             `json:"id"`
+	Name          string             `json:"name"`
+	Type          string             `json:"type"`
+	Category      string             `json:"category"`
+	BasePower     int                `json:"basePower"`
+	Accuracy      int                `json:"accuracy"`
+	PP            int                `json:"pp"`
+	Priority      int                `json:"priority"`
+	IsNonstandard *string            `json:"isNonstandard"`
+	Self          *ShowdownBoosts    `json:"self"`
+	Secondary     *ShowdownSecondary `json:"secondary"`
+	// Secondaries は取得元の配列そのまま(要素数は2以上のこともある)。boosts を伴う要素の件数を
+	// 数えるのは convert 側(ID化・正準化は Go 側という方針。ADR-0101 §3)。
+	// boosts を持たない要素(状態異常・ひるみ等)は決定3・6 の対象外(ADR-0107 2026-09-23 追記)。
+	Secondaries []ShowdownSecondary `json:"secondaries"`
+}
+
+// ShowdownBoosts は技のトップレベル self.boosts(命中すれば必ず発動)。
+type ShowdownBoosts struct {
+	Boosts map[string]int `json:"boosts"`
+}
+
+// ShowdownSecondary は技の secondary(確率つきの追加効果)。
+// Self があれば使用者自身のランク変化、Boosts があれば対象のランク変化(ADR-0107「調査」)。
+type ShowdownSecondary struct {
+	Chance int             `json:"chance"`
+	Self   *ShowdownBoosts `json:"self"`
+	Boosts map[string]int  `json:"boosts"`
 }
 
 // ShowdownItem は Showdown の持ち物1件。

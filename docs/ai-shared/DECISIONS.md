@@ -853,6 +853,23 @@ Decision:
 Reason: ユーザー回答(AskUserQuestion、2026-09-23)。両方とも「無期限に持ち続けない」方向で統一。
 Impact: #103 は主担当の API・データレーンへ、#111 は主担当のデータレーンへタイプバランスレーンから連絡済み。着手のブロッカーが外れたので、それぞれの実装レーンで ADR を書いて進めてよい。
 
+## 2026-09-23: P5-6(技の追加効果)の設計とその判定レーンへの申し送り(データレーン)
+Decision: 判定レーンからの提案(2026-09-22)を受けて実装した P5-6(ADR-0107)の設計と、判定レーン向けの申し送り。
+- 効果 JSON の形は判定レーンの既定案(`{"secondary":{"chance":...,"self":{"boosts":...}}}`)から `{"Chance":100,"Target":"self","Stages":{"spe":1}}` に変更(item/ability の既存効果 JSON と同じ流儀に揃えるため)。
+- 確率が100%でない追加効果は、engine が乱数を持たず「発動した場合の値」だけを返す(ADR-0107 決定1)。実際に発動するかどうかの判定・不発時との出し分けは判定レーンの責務。
+- 取得元は Showdown 1本(実測で自己完結。calc 0.12.0 は真偽値だけで使えない)。実データで97件(2エントリ以上を持つ技は0件、accuracy/evasion は必ず単独)。
+- 公開: `MasterMove.effect` は pokedex-svc の内部 API(calc-svc だけが読む)止まり。**判定レーンが技IDからランク変化を自動で出すには、公開 API に技1件を引く経路(getMove 等)がもう1段要る**。判定レーンの要件が固まってから、API レーンと合わせて追加する(既定案。今回は追加しない)。
+- balance の read model(services/balance)には影響なし(schema・loader 未変更。番人テストで今後の誤追加を検知する)。
+Reason: 判定レーンの提案を実装するにあたり、取得元の実データを調査した結果、提案時のデータ形式・取得方針から変更が必要だった。
+Impact: docs/plan.md P5-6・docs/adr/0107。判定レーンは JD1(ADR-0701 の Individual.ranks 方式)をそのまま使い続けてよい。公開APIの拡張が要るときはデータレーン・API レーンに依頼すること。
+
+## 2026-09-23(追記): P5-6 の独立レビュー指摘の反映(データレーン)
+Decision: critic の FAIL 指摘を反映した(PASS 前提の修正。ADR-0107 に追記節で記録)。
+- accuracy/evasion が atk 等の engine が持つステータスと同じエントリに混ざっても、常に `KindMoveEffectUnsupportedStat` の警告を残すようにした(以前は stages が空のときしか警告を積まず、混在時に無音で消えていた)。
+- `secondaries` の判定基準を「配列の件数」から「boosts(自分・相手とも)を伴う要素の件数」に変更した。実データで firefang/icefang/thunderfang/triplearrows が secondaries を2件持つが中身は火傷・氷結・麻痺・ひるみでランク変化ではなく、そのままだと `import-dry-run` が実運用で必ずこの4技を blocker にし続けていた。`ShowdownMove.Secondaries` を `int` から `[]ShowdownSecondary` に変え、件数の判定を Go 側(`secondaryBoostCount`)に置いてテスト可能にした。
+Reason: 独立レビュー(critic)の指摘。詳細は docs/adr/0107 の「追記(2026-09-23)」節。
+Impact: docs/adr/0107・services/pokedex/importer(convert_move_effects.go・snapshot.go)・tools/importer/fetch-showdown.mjs。他レーンへの影響なし。
+
 ## 2026-09-23: Web オンライン MasterSource — getSpecies.learnset の ID→実体化を提案(Web レーンからデータ/API レーンへ)
 Decision(Webレーンの設計。ADR-0304): オンラインモードの種族・技選択は検索ベース UI にする(`searchSpecies`/`searchMoves` が
 `limit<=200` 固定・ページングパラメータ無しのため、種族349件・技515件は一括取得できないと実クラスタで確認した。

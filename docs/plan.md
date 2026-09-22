@@ -141,7 +141,7 @@
 - [ ] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰)
 - [ ] P5-4 team-svc(構築 CRUD、Showdown 形式入出力)
 - [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー
-- [~] P5-6 技の追加効果(使用者自身のランク変化。例: ニトロチャージで自分の素早さ+1)を engine の Move・マスタ・importer・export に足す(判定レーンからの提案。DECISIONS.md 2026-09-22。ADR-0005 に沿い、追加効果の対象=self/target・確率・ランク変化量をデータとして持つ)。優先度は低く、判定レーンの JD1 は今のデータのままで動く(呼び出し側が Individual.ranks で指定)ため、着手は他の M1 残作業の後でよい
+- [x] P5-6 技の追加効果(使用者自身のランク変化。例: ニトロチャージで自分の素早さ+1)を engine の Move・マスタ・importer・export に足す(判定レーンからの提案。DECISIONS.md 2026-09-22。ADR-0005 に沿い、追加効果の対象=self/target・確率・ランク変化量をデータとして持つ。ADR-0107。critic PASS。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。公開APIへの露出は判定レーンの要件確定後)
 
 ## M3: iOS
 - [x] P6-1 Xcode プロジェクト、swift-openapi-generator、デザイントークン(ADR-0500。`make ios-test` = 生成物の一致・XCTest・XCUITest・Info.plist の接続先。critic PASS)

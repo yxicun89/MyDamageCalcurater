@@ -79,6 +79,7 @@ type Output struct {
 	Abilities           []NamedRow
 	Items               []NamedRow
 	Moves               []MoveRow
+	MoveEffects         []EffectRow
 	Species             []SpeciesRow
 	Natures             []NatureRow
 	ItemEffects         []EffectRow
@@ -122,6 +123,12 @@ func Convert(in Input) (Output, Report, error) {
 	}
 	warnings = append(warnings, moveWarnings...)
 
+	moveEffectRows, moveEffectWarnings, moveEffectBlockers, err := buildMoveEffects(in.Showdown.Moves, moveConv.Included)
+	if err != nil {
+		return Output{}, Report{}, err
+	}
+	warnings = append(warnings, moveEffectWarnings...)
+
 	speciesConv, speciesWarnings, speciesBlockers, err := convertSpecies(in, typesConv.NameToID, includedItems, usedOverrideSpecies)
 	if err != nil {
 		return Output{}, Report{}, err
@@ -134,8 +141,8 @@ func Convert(in Input) (Output, Report, error) {
 	}
 	warnings = append(warnings, natureWarnings...)
 
-	if len(moveBlockers)+len(speciesBlockers)+len(natureBlockers) > 0 {
-		blockers := append(append(append([]Finding{}, moveBlockers...), speciesBlockers...), natureBlockers...)
+	if len(moveBlockers)+len(speciesBlockers)+len(natureBlockers)+len(moveEffectBlockers) > 0 {
+		blockers := append(append(append(append([]Finding{}, moveBlockers...), speciesBlockers...), natureBlockers...), moveEffectBlockers...)
 		sortFindings(warnings)
 		sortFindings(blockers)
 		return Output{}, Report{Warnings: warnings, Blockers: blockers}, ErrBlocked
@@ -226,6 +233,7 @@ func Convert(in Input) (Output, Report, error) {
 		Abilities:           abilityRows,
 		Items:               itemRows,
 		Moves:               moveConv.Rows,
+		MoveEffects:         moveEffectRows,
 		Species:             speciesConv.Rows,
 		Natures:             natureRows,
 		ItemEffects:         itemEffectRows,
@@ -257,6 +265,10 @@ func validateOutputMapsToEngine(out Output, chart engine.TypeChart) error {
 	for _, e := range out.AbilityEffects {
 		abilityEffects[e.ID] = e.Effect
 	}
+	moveEffects := map[string][]byte{}
+	for _, e := range out.MoveEffects {
+		moveEffects[e.ID] = e.Effect
+	}
 
 	for _, r := range out.Species {
 		if _, err := master.Species(r.SpeciesRow, r.Abilities, chart); err != nil {
@@ -264,7 +276,7 @@ func validateOutputMapsToEngine(out Output, chart engine.TypeChart) error {
 		}
 	}
 	for _, r := range out.Moves {
-		row := master.MoveRow{ID: r.ID, NameJa: r.NameJa, Type: r.Type, Category: r.Category, Power: r.Power, Priority: r.Priority}
+		row := master.MoveRow{ID: r.ID, NameJa: r.NameJa, Type: r.Type, Category: r.Category, Power: r.Power, Priority: r.Priority, Effect: moveEffects[r.ID]}
 		if _, err := master.Move(row, chart); err != nil {
 			return fmt.Errorf("%w: 技 %s を engine の型に写像できない: %v", ErrInvalidData, r.ID, err)
 		}

@@ -55,6 +55,10 @@ func (s *Server) buildMasterExport(ctx context.Context) (api.MasterExport, error
 	if err != nil {
 		return api.MasterExport{}, err
 	}
+	moveEffects, err := s.q.ListMoveEffects(ctx)
+	if err != nil {
+		return api.MasterExport{}, err
+	}
 	items, err := s.q.ListItems(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
@@ -85,6 +89,10 @@ func (s *Server) buildMasterExport(ctx context.Context) (api.MasterExport, error
 	}
 	for key := range abilitiesBySpecies {
 		sort.Slice(abilitiesBySpecies[key], func(i, j int) bool { return abilitiesBySpecies[key][i].Slot < abilitiesBySpecies[key][j].Slot })
+	}
+	moveEffectByID := map[string]store.MoveEffect{}
+	for _, e := range moveEffects {
+		moveEffectByID[e.MoveID] = e
 	}
 	itemEffectByID := map[string]store.ItemEffect{}
 	for _, e := range itemEffects {
@@ -123,9 +131,13 @@ func (s *Server) buildMasterExport(ctx context.Context) (api.MasterExport, error
 	}
 	masterMoves := make([]api.MasterMove, 0, len(moves))
 	for _, m := range moves {
+		effect, err := masterEffectFor(moveEffectByID[m.ID].Effect)
+		if err != nil {
+			return api.MasterExport{}, err
+		}
 		masterMoves = append(masterMoves, api.MasterMove{
 			Id: m.ID, NameJa: m.NameJa, Type: api.PokeType(m.Type), Category: api.MoveCategory(m.Category),
-			Power: int(m.Power), Priority: int(m.Priority),
+			Power: int(m.Power), Priority: int(m.Priority), Effect: effect,
 		})
 	}
 	masterItems := make([]api.MasterItem, 0, len(items))

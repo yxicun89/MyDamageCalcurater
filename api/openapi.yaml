@@ -1006,8 +1006,8 @@ components:
 
     MasterMove:
       type: object
-      description: moves テーブルの行(計算に使う列だけ)
-      required: [id, nameJa, type, category, power, priority]
+      description: moves テーブルの行(計算に使う列だけ)+ move_effects の effect(ADR-0107)
+      required: [id, nameJa, type, category, power, priority, effect]
       properties:
         id: { type: string }
         nameJa: { type: string }
@@ -1015,6 +1015,12 @@ components:
         category: { $ref: '#/components/schemas/MoveCategory' }
         power: { type: integer }
         priority: { type: integer }
+        effect:
+          allOf: [ { $ref: '#/components/schemas/MasterEffect' } ]
+          description: |
+            技の追加効果(命中時のランク変化。ADR-0107)。null は追加効果なし。
+            ダメージ計算はこの値を読まない(ADR-0107 決定2)。発動するかどうかの判定も engine は行わず、
+            「発動した場合の変化量」と「その確率」を持つだけ(ADR-0107 決定1)。
 
     MasterEffect:
       type: object

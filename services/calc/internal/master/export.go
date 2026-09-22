@@ -230,9 +230,13 @@ func buildMoves(list []api.MasterMove, chart engine.TypeChart) (map[string]engin
 		if _, dup := out[m.Id]; dup {
 			return nil, fmt.Errorf("%w: 技IDが重複している: %q", ErrInvalidMaster, m.Id)
 		}
+		effect, err := effectBytes(m.Effect)
+		if err != nil {
+			return nil, fmt.Errorf("%w: 技 %q の効果を読めない: %v", ErrInvalidMaster, m.Id, err)
+		}
 		row := sharedmaster.MoveRow{
 			ID: m.Id, NameJa: m.NameJa, Type: string(m.Type), Category: string(m.Category),
-			Power: m.Power, Priority: m.Priority,
+			Power: m.Power, Priority: m.Priority, Effect: effect,
 		}
 		mv, err := sharedmaster.Move(row, chart)
 		if err != nil {

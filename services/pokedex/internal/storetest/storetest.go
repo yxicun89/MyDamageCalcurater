@@ -38,6 +38,7 @@ type Querier struct {
 	Species             []store.Species
 	SpeciesAbilities    []store.SpeciesAbility
 	Moves               []store.Move
+	MoveEffects         []store.MoveEffect
 	Items               []store.Item
 	ItemEffects         []store.ItemEffect
 	Abilities           []store.Ability
@@ -127,6 +128,13 @@ func (q *Querier) ListMoves(context.Context) ([]store.Move, error) {
 		return nil, err
 	}
 	return append([]store.Move(nil), q.Moves...), nil
+}
+
+func (q *Querier) ListMoveEffects(context.Context) ([]store.MoveEffect, error) {
+	if err := q.record("ListMoveEffects", nil); err != nil {
+		return nil, err
+	}
+	return append([]store.MoveEffect(nil), q.MoveEffects...), nil
 }
 
 func (q *Querier) ListItems(context.Context) ([]store.Item, error) {

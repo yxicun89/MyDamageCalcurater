@@ -96,7 +96,7 @@ func readAll(t *testing.T, paths map[int]string) string {
 var requiredTables = []string{
 	"types", "type_chart",
 	"abilities", "items", "moves", "species", "species_abilities",
-	"item_effects", "ability_effects", "learnsets",
+	"item_effects", "ability_effects", "move_effects", "learnsets",
 	"regulations", "regulation_species", "regulation_moves", "regulation_items", "regulation_abilities",
 	"data_versions",
 }
