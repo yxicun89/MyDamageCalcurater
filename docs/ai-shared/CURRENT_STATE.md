@@ -25,8 +25,13 @@ verify-m1.md を完成版にした: P2-2c/d・P2-3・P3-3 が main に入り、k
 計算・逆算・タイプバランス(仮想敵・おすすめタイプ含む)を実地確認(pokedex-svc は実データ投入済みだが、
 gateway/calc-svc のマスタ参照先はまだ pokedex-svc に向いていない。API レーンの依頼 d が一時停止中)。
 P4-5 は Chrome で確認済み(Safari は未確認。人間の作業)
-Next: (1) pokedex-svc の公開 API から Web のオンライン MasterSource を作る(ADR-0301 §4。gateway/calc の
-pokedex 配線待ちなので、API レーンの依頼 d が進んでから本格着手するのが自然)。
+Next: (1) pokedex-svc の公開 API から Web のオンライン MasterSource を作る(ADR-0301 §4)に着手。設計を ADR-0304 として
+まとめた: 種族(349件)・技(515件)は `searchSpecies`/`searchMoves` の `limit<=200` 上限とページング手段の欠如により
+一括取得できないと実クラスタで確認したため、検索ベースの選択 UI にする。持ち物(166件)・性格(25件)は1回の取得で
+足りるので一覧のまま。加えて `getSpecies.learnset` が技の ID 配列しか返さず、技を ID で解決する公開手段が無いため、
+技の実体化(名前・タイプ・分類)は Web 単独では作れないと判明。既定案(`learnset` を `Move[]` に変える)を DECISIONS.md で
+データ/API レーンへ提案済み(2026-09-23、急ぎではない)。実装は ADR-0304 §4 の段階どおり進める: まず種族・持ち物・性格の
+オンライン MasterSource を作り、技を要する操作(ダメージ技選択等)はオンラインモードで無効化した状態にする。
 (2) 続いて P5-5(構築ビルダー等)は record/team の API 待ち。
 (3) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
 

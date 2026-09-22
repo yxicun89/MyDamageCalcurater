@@ -112,6 +112,9 @@
 - ~~P4-13 素早さ比較の画面~~ → 取り消し(ユーザー決定 2026-09-22: 素早さレーンの SP3 のまま。Web は P4-10 の URL の仕組みで `/speed` を足せる形を用意する)
 - [x] P4-14 手順書の書き方の改善: docs/verify-m1.md を上から順に実行するだけで済む形にし、各コマンドの塊は必ずリポジトリのルートへの `cd` から始める(make の実行場所で迷わない)。k3d(コンテナ)で動かす手順を主にする(ユーザー要望 2026-09-22)
 - [x] P4-15 `make gen-ts` の再生成: main に別レーンの TB6(技範囲チェッカー)の openapi 追加が入っており、`web/src/api/balance.gen.ts` がまだ反映していなかった(P4-12b の範囲外と確認済み・critic PASS の指摘事項)。move-range の型が追加されただけで typecheck/test/lint は変化なし
+- [ ] P4-16 Web のオンライン MasterSource(ADR-0301 §4・ADR-0304)。種族は `searchSpecies` の検索ベース選択、持ち物・性格は
+  全件取得の一覧。技は `getSpecies.learnset` の ID→実体化がデータ/API レーンの対応待ち(DECISIONS.md 提案済み)のため、
+  この段階ではオンラインモードで技選択を無効化(技を要する操作を案内付きで止める)。技対応後に P4-17 として引き継ぐ
 
 ## M2: 保存・構築
 - [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)

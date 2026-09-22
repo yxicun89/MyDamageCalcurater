@@ -818,3 +818,21 @@ Impact: 今後 gateway の README を §8 の5節だけに削る場合は、ま�
 Decision: P6-2d(構築から個体を呼び出す配線)を PR #119 で main にマージした(critic PASS。make test / lint / build / check-publishable / ios-test が成功)。
 Reason: P6-2c に続く区切り。P6-2(計算画面・逆算・構築)がすべて完了した。
 Impact: 続き(P6-3 シミュレータテストの総仕上げ・P6-4 実機インストール手順書)は同じブランチ feat/ios-p6 で進める。
+
+## 2026-09-23: Web オンライン MasterSource — getSpecies.learnset の ID→実体化を提案(Web レーンからデータ/API レーンへ)
+Decision(Webレーンの設計。ADR-0304): オンラインモードの種族・技選択は検索ベース UI にする(`searchSpecies`/`searchMoves` が
+`limit<=200` 固定・ページングパラメータ無しのため、種族349件・技515件は一括取得できないと実クラスタで確認した。
+持ち物166件・性格25件は1回の取得で足りるので一覧のままでよい)。
+提案(データ/API レーンへ。既定案: `getSpecies` の応答の `learnset` を技ID配列 (`string[]`) から `Move` 実体の配列に変える):
+`searchMoves` は日本語名の前方一致でしか技を引けず、技を ID で個別解決する公開エンドポイントも無いため、
+`getSpecies` の `learnset`(ID配列)を人が読める技名・タイプ・分類に解決する手段が公開 API に無い。
+`services/pokedex/internal/httpapi/search.go` の `getSpecies` は `ListSpeciesLearnset` で ID を得た後そのまま返しており、
+`store.Queries.ListMoves` 相当の材料は既にあるので、ハンドラ内で ID→実体に解決してから返す変更は実装コストが小さいはず、
+というのが Web レーンの推測(データ/API レーンでの実際の見積もりを優先する)。代案(ADR-0304 §3 案B)は
+`GET /api/pokedex/moves/{id}` 等の個別解決エンドポイント追加。どちらでも Web 側の対応は小さく変わるだけなので、
+実装しやすい方を選んでよい。
+Reason: 技の一覧が515件で `limit` 上限(200)を超え、offset/cursor 等のページング手段も無いため、オンラインモードで
+「その種族が覚えられる技」を正しく出す手立てが、既存の公開 API の組み合わせだけでは無い(名前検索と ID の突き合わせが原理的にできない)。
+Impact: 返答・実装があるまで、Web のオンラインモードは種族・持ち物・性格の選択を先に作り、技を必要とする操作
+(ダメージ技の選択等)は「オンライン未対応」として無効化した状態で進める(ADR-0304 §4)。この提案が承認・実装され次第、
+Web 側は技も検索/一覧に切り替える。急ぎではない(ブロッカーにはしていない)。
