@@ -17,7 +17,11 @@ COORDINATION.md は `web/src/speed/` を素早さレーンの持ち物と定め�
   balance の `web/src/api/balanceClient.ts`・`balance.gen.ts` とは違うディレクトリにする(`web/src/api/` は Web レーンの持ち物として扱う)。
 - **3か所 + 2か所の最小の追記**(Web レーンと合意。2026-09-22):
   1. `web/src/app/routes.ts` の `SCREEN_ROUTES` に `{ id: "speed", segment: "speed", label: appText.speedTabLabel }`
-  2. `web/src/i18n/ja.ts` の `appText` に `speedTabLabel`
+  2. `web/src/i18n/ja.ts` の `appText` に `speedTabLabel`。加えて画面・クライアントの文言(`speedClientText`・`speedPresetText`・
+     `speedScreenText`)を ja.ts の末尾に足す(coding-rules §2「表示文言は各クライアントの文言資源に」。既存の `balanceScreenText` と
+     同じ置き場所。2026-09-22 実装時に判明: 当初の「1項目」は `appText.speedTabLabel` だけを指していたが、画面本体の文言まで
+     screens.tsx や speed/ の中には置けない〈ja.ts が文言の単一の正〉ため、この3ブロックも合わせて追記する。DECISIONS.md に記録し
+     Web レーンへ通知済み)
   3. `web/src/app/screens.tsx` の `SCREEN_COMPONENTS` に `speed: SpeedScreen`
   4. 同じ `screens.tsx` の `ScreenProps` に `speedClient: SpeedClient` を1フィールド追加(既存の `client: BalanceClient` は触らない。
      P4-12a で `client` が balance 専用の型になったため、素早さは別フィールドで持つ)
@@ -41,8 +45,12 @@ interface SpeedClient {
 パスは `api/speed/v1/pokemon`・`api/speed/v1/table`・`api/speed/v1/position`(services/speed/api/openapi.yaml のまま)。
 
 ### 4. 画面の構成(SpeedScreen.tsx)
-- マウント時に `pokemon()` と `table()`(presets 省略 = 全6行)を1回ずつ呼ぶ。両方が揃うまで **左の表だけ** ローディング表示にする
-  (balance と同じく、複数呼び出しは独立でエラーを混ぜない。ADR-0303 §9)。
+- マウント時に `pokemon()` と `table()`(presets 省略 = 全6行)を1回ずつ呼ぶ。`pokemon()`・`table()` は互いに独立で、
+  片方のエラーがもう片方の表示を消さない(balance と同じ。ADR-0303 §9)。左の表の読み込み中表示は `table()` だけで決まる
+  (右のポケモンの選択肢は `pokemon()` が届き次第すぐ使える。2026-09-22 実装時に訂正: 「両方揃うまで」ではなく `table()` 単独)。
+- **絞り込み(道具・ランク。ユーザー確定仕様。docs/plan.md「SP: 素早さ比較」)**: 左の表の上に6つのプリセットのチェックボックスを置き、
+  選んだものだけで `table(presets)` を呼び直す(全選択なら `presets` を省略)。契約上 `presets` は1つ以上必須(ADR-0601 §4)なので、
+  最後の1つは外せない(チェックボックスを `disabled` にし、理由を文言で示す)。
 - **左(表)**: `table()` の `tiers`(段)をそのまま速い順に描画する。1段 = 1行。同じ段に複数 `entries` があれば「同速」のバッジを付け、
   段の中の各エントリを横に並べる(pokemonId 昇順・プリセット順はサーバー側で確定済みなので並べ替え直さない)。
   各エントリは、CalcScreen の `type-emblem`(`data-testid="type-emblem"`。`backgroundColor: var(--type-<id>)`)と同じ形の

@@ -248,6 +248,10 @@ export const speedScreenText = {
   loadingNotice: "読み込み中",
   /** 段の素早さの実数値。 */
   tierSpeedLabel: (speed: number): string => `素早さ ${String(speed)}`,
+  /** 左の表の絞り込み(道具・ランク。ADR-0601 §4、docs/plan.md「SP: 素早さ比較」の確定仕様)。 */
+  filterGroupLabel: "表の絞り込み",
+  /** 絞り込みで最後の1つを外そうとしたとき(契約上、presets は1つ以上。ADR-0601 §4)。 */
+  filterMinimumNotice: "少なくとも1つは選ぶ必要があります",
   /** 同じ段に2行以上あるとき(同速)のバッジ。右の結果の同速の一覧の見出しにも使う。 */
   tieLabel: "同速",
   /** 右の結果で同速の行が無いとき。 */

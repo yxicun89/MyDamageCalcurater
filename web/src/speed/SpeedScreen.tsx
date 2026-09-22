@@ -58,6 +58,16 @@ function deriveRequestState<T>(currentKey: string, completed: Completed<T> | nul
 /** 自分のポケモンで選べる調整(preset の3つ。scarf は別入力。ADR-0602 §5)。 */
 const MINIMAL_PRESET_IDS: readonly Schemas["MinimalPresetId"][] = ["uninvested", "neutral-max", "max"];
 
+/** 左の表の6行すべて(ADR-0601 §2 の順)。絞り込みのチェックボックスと table() の既定に使う。 */
+const ALL_PRESET_IDS: readonly Schemas["PresetId"][] = [
+  "uninvested",
+  "neutral-max",
+  "max",
+  "max-scarf",
+  "max-plus1",
+  "max-plus2",
+];
+
 /** 性格補正の3値(ADR-0600 §3)。 */
 const NATURE_IDS: readonly Schemas["NatureId"][] = ["minus", "neutral", "plus"];
 
@@ -168,7 +178,12 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
   const [pokemonState, setPokemonState] = useState<FetchState<Schemas["PokemonListResponse"]>>({
     status: "loading",
   });
-  const [tableState, setTableState] = useState<FetchState<Schemas["TableResponse"]>>({ status: "loading" });
+  // 左の表の絞り込み(道具・ランク。ユーザー確定仕様。docs/plan.md「SP: 素早さ比較」・ADR-0601 §4)。
+  // 既定は全6行選択(= 絞り込みなし)。絞り込みを変えるたびに table() を呼び直すので、position() と同じ
+  // key(presetsKey)方式にする(effect の中で setState を同期的に呼ばない。react-hooks/set-state-in-effect)。
+  const [selectedPresets, setSelectedPresets] = useState<ReadonlySet<Schemas["PresetId"]>>(
+    () => new Set(ALL_PRESET_IDS),
+  );
 
   // A1/A2: マウント時に pokemon() と table() を1回ずつ呼ぶ(table は presets を省く = 全6行)。
   // 2つは互いに独立(片方のエラーがもう片方の表示を消さない。ADR-0604 §4)。
@@ -187,20 +202,47 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
     };
   }, [speedClient]);
 
+  // 選択された行だけを ADR-0601 §2 の順で並べたもの。全6行選択なら table() には省略して渡す
+  // (presets: [] は契約上 400 invalid_request になるため、絞り込み UI 側で最低1つを保証する)。
+  const activePresets = ALL_PRESET_IDS.filter((id) => selectedPresets.has(id));
+  const presetsKey = activePresets.join(",");
+
+  const [completedTable, setCompletedTable] = useState<Completed<Schemas["TableResponse"]> | null>(null);
+
   useEffect(() => {
     let cancelled = false;
-    void speedClient.table().then((result) => {
-      if (cancelled) {
-        return;
+    const presetsArg = activePresets.length === ALL_PRESET_IDS.length ? undefined : activePresets;
+    void speedClient.table(presetsArg).then((result) => {
+      if (!cancelled) {
+        setCompletedTable({ key: presetsKey, result });
       }
-      setTableState(
-        result.ok ? { status: "success", value: result.value } : { status: "error", error: result.error },
-      );
     });
     return () => {
       cancelled = true;
     };
-  }, [speedClient]);
+    // presetsKey が絞り込みの内容そのものを表すので、これだけを見る(activePresets は毎レンダー新しい
+    // 配列参照になるため依存に含めない。position の requestKey と同じ考え方)。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speedClient, presetsKey]);
+
+  // table() は常に何らかの presets で呼ぶので idle にはならない(位置の request===null に相当するものが無い)。
+  const tableState: RequestState<Schemas["TableResponse"]> = deriveRequestState(presetsKey, completedTable);
+
+  /** 絞り込みのチェックボックスの切り替え。最後の1つは外せない(契約上 presets は1つ以上)。 */
+  function toggleFilterPreset(id: Schemas["PresetId"]): void {
+    setSelectedPresets((current) => {
+      if (current.has(id) && current.size === 1) {
+        return current;
+      }
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
 
   const [self, setSelf] = useState<SelfState>(initialSelfState);
 
@@ -245,6 +287,34 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
   return (
     <div className="speed-screen">
       <section className="speed-table" aria-label={speedScreenText.tableRegionLabel}>
+        <div
+          role="group"
+          aria-label={speedScreenText.filterGroupLabel}
+          className="speed-table__filter"
+          data-testid="speed-filter"
+        >
+          {ALL_PRESET_IDS.map((id) => {
+            const checked = selectedPresets.has(id);
+            const lastOne = checked && selectedPresets.size === 1;
+            return (
+              <label key={id} className="speed-table__filter-option">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={lastOne}
+                  onChange={() => {
+                    toggleFilterPreset(id);
+                  }}
+                />
+                {speedPresetText[id]}
+              </label>
+            );
+          })}
+          {selectedPresets.size === 1 && (
+            <p className="speed-screen__notice">{speedScreenText.filterMinimumNotice}</p>
+          )}
+        </div>
+
         {tableState.status === "loading" && (
           <p className="speed-screen__notice">{speedScreenText.loadingNotice}</p>
         )}
@@ -498,9 +568,9 @@ function TierRow({ tier, selfTie }: TierRowProps) {
       className={selfTie ? "speed-tier speed-tier--self" : "speed-tier"}
       data-testid="speed-tier"
       data-speed={tier.speed}
-      aria-label={selfTie ? speedScreenText.selfTierLabel : undefined}
       {...extraProps}
     >
+      {selfTie && <span className="speed-tier__self-label">{speedScreenText.selfTierLabel}</span>}
       <span className="speed-tier__speed">{speedScreenText.tierSpeedLabel(tier.speed)}</span>
       {tier.entries.length > 1 && <span className="speed-tier__tie">{speedScreenText.tieLabel}</span>}
       <ul className="speed-tier__entries">
@@ -539,7 +609,8 @@ function PositionResult({ value }: PositionResultProps) {
       <p>{speedScreenText.fasterLabel(value.faster)}</p>
       <p>{speedScreenText.slowerLabel(value.slower)}</p>
       <div>
-        <h3>{speedScreenText.tieLabel}</h3>
+        {/* BalanceScreen と同じく見出し要素は使わない(h1 の直下でレベルを飛ばさないため)。 */}
+        <p className="speed-self__result-label">{speedScreenText.tieLabel}</p>
         {value.tie.length === 0 ? (
           <p>{speedScreenText.noTieLabel}</p>
         ) : (

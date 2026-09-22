@@ -196,6 +196,63 @@ describe("A1/A2 マウント時の呼び出し", () => {
   });
 });
 
+// ---- 左の表の絞り込み(道具・ランク。ユーザー確定仕様。docs/plan.md「SP: 素早さ比較」) ----
+
+describe("表の絞り込み", () => {
+  test("チェックを外すと、外した行を除いた presets で table() を呼び直す", async () => {
+    const { user, client } = renderScreen();
+    await resolveInitial(client);
+    expect(client.tableCalls).toHaveLength(1);
+
+    const filter = within(tableRegion()).getByRole("group", { name: speedScreenText.filterGroupLabel });
+    await user.click(within(filter).getByRole("checkbox", { name: speedPresetText["max-scarf"] }));
+
+    expect(client.tableCalls).toHaveLength(2);
+    expect(lastOf(client.tableCalls, "table").args).toEqual([
+      "uninvested",
+      "neutral-max",
+      "max",
+      "max-plus1",
+      "max-plus2",
+    ]);
+  });
+
+  test("全部選び直すと presets を省いて呼ぶ(全6行)", async () => {
+    const { user, client } = renderScreen();
+    await resolveInitial(client);
+    const filter = within(tableRegion()).getByRole("group", { name: speedScreenText.filterGroupLabel });
+    const scarfCheckbox = within(filter).getByRole("checkbox", { name: speedPresetText["max-scarf"] });
+
+    await user.click(scarfCheckbox);
+    await flush(() => {
+      lastOf(client.tableCalls, "table").resolve({ ok: true, value: tableResponse });
+    });
+    await user.click(scarfCheckbox);
+
+    expect(lastOf(client.tableCalls, "table").args).toBeUndefined();
+  });
+
+  test("最後の1つは外せない(契約上 presets は1つ以上)", async () => {
+    const { user, client } = renderScreen();
+    await resolveInitial(client);
+    const filter = within(tableRegion()).getByRole("group", { name: speedScreenText.filterGroupLabel });
+
+    for (const id of ["neutral-max", "max", "max-scarf", "max-plus1", "max-plus2"] as const) {
+      await user.click(within(filter).getByRole("checkbox", { name: speedPresetText[id] }));
+      await flush(() => {
+        lastOf(client.tableCalls, "table").resolve({ ok: true, value: tableResponse });
+      });
+    }
+    const callsBeforeLast = client.tableCalls.length;
+    const lastCheckbox = within(filter).getByRole("checkbox", { name: speedPresetText.uninvested });
+
+    expect(lastCheckbox).toBeDisabled();
+    expect(within(filter).getByText(speedScreenText.filterMinimumNotice)).toBeInTheDocument();
+    await user.click(lastCheckbox);
+    expect(client.tableCalls).toHaveLength(callsBeforeLast);
+  });
+});
+
 // ---- A3・A4: 左の表 ----
 
 describe("A3/A4 左の表(段・同速・タイプ色のエンブレム)", () => {
