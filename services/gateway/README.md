@@ -55,7 +55,12 @@ make api-smoke          # gateway 経由のスモーク(http://localhost:8080。
 - `/api/pokedex/*` は base の既定 `GATEWAY_POKEDEX_URL=http://pokedex`(ADR-0206)で pokedex-svc に転送する。
   `make up` の直後(DB 未投入)は pokedex-svc が **503 `master_unavailable`** を返す。初回だけ `make import-k8s` で
   マスタを投入すると **200** になる(calc-svc も同じ pokedex-svc からマスタを取るので、投入されるまで
-  `/readyz` が 503 のままになる。ADR-0204 §3)。
+  `/readyz` が 503 のままになる。ADR-0204 §3)。**calc-svc が Ready にならない間は `make api-k3d-deploy` の
+  `kubectl rollout status` が `--timeout=120s` で失敗する**。先に `make import-k8s` でマスタを投入してから
+  `make api-k3d-deploy` を実行する。
+- `make api-smoke` の1行目が `api smoke: master=pokedex species=… move=… nature=…` であれば pokedex-svc への配線を
+  実際に検証できている。`master=example`(架空 ID)のときは pokedex-svc が未投入・未接続のフォールバックで、
+  配線そのものは確認できていない。
 - `/`(Web の静的配信。ADR-0205)は Web レーンの Service `web` がまだデプロイされていなければ **503**、デプロイ済みなら **200**。
 - k3d を使わない開発ループは `make dev`(calc-svc と gateway をローカルで起動。`DEV_GATEWAY_PORT` / `DEV_CALC_PORT` で変更可。
   calc-svc はファイル方式 `CALC_MASTER_PATH` のまま。ADR-0206 §2)。

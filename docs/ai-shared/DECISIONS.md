@@ -740,3 +740,16 @@ Impact: Web が move-range を呼ぶ画面を作るときに、まず `make gen-
 Decision: COORDINATION.md の「Claude の上限時の Codex」節、plan.md の「整備レーン」節(MT-1〜MT-7)、CURRENT_STATE.md の Maintenance 欄を削除する。
 Reason: ユーザーが「Codex はこのプロジェクトで必ず使う必要はなく、有効活用したい程度の感覚。ノイズになるなら消した方がいい」と判断した。整備タスク(MT-3〜MT-7)は文書の整合性などの低優先度の掃除作業で、M1 の完成に影響しない。今後はレーンの作業を Claude だけで進める。
 Impact: 今後、Claude が利用枠の上限に達しても Codex を自動的に起動する仕組みは無い。Codex を使いたい場合は、その都度ユーザーが判断してレーンを直接担当させる(通常のレーン運用と同じ)。MT-1・MT-2(統合検証・check-publishable の自己テスト修正)はすでに完了して main に入っているので、成果は失われない。
+
+## 2026-09-22: calc・gateway を pokedex-svc につなぐ(データレーンからの依頼d。ADR-0206。PR #87)
+Decision: base(local overlay を含む)の calc に `CALC_MASTER_URL=http://pokedex`、gateway に `GATEWAY_POKEDEX_URL=http://pokedex` を設定した。
+共有 Kustomize Component(`deploy/k8s/overlays/local/api`。`local`/`local-api` の両 overlay から参照)を分岐させると「最後に apply した方が勝つ」状態になるため、
+設定は分岐させず base に1か所だけ置いた(local/local-api どちらも同じ内容の Deployment になる)。ファイル方式(`CALC_MASTER_PATH`)は `make dev` とテストの fallback にのみ残す。
+`services/gateway/scripts/smoke.sh` は、マスタのハードコード禁止規約(CLAUDE.md)を守るため、固定の架空 ID をやめ、`/api/pokedex/*` から実際に種族・技・性格を動的に発見する形にした。
+依頼原文は「smoke の /api/pokedex を 503→200 に」だったが、実装は「200(pokedex-svc に実接続)または 503 `upstream_unavailable`/`master_unavailable`(pokedex-svc 未接続。ADR-0205 の web と同じ扱い)を成功」とする条件付きにした
+(`make dev`・pokedex-svc 未デプロイのクラスタでも smoke が意味のある形で動くようにするため。ADR-0205 の web の前例と揃えた)。
+Reason: データレーンの依頼。critic PASS(NG無し)。設計の詳細・却下案は ADR-0206。
+Impact: **他レーンへの申し送り**: `make up` 直後(pokedex の DB 未投入)は calc-svc が pokedex-svc からマスタを取得できず Ready にならないため、
+Web・iOS レーンのローカル k3d 環境でも calc を使う画面(ダメージ計算)が動かない。初回だけ `make import-k8s` でマスタを投入すること
+(データレーンの docs/runbooks/data.md 参照)。`make api-k3d-deploy` も、マスタ未投入のクラスタでは `kubectl rollout status` が120秒でタイムアウトして失敗するので、
+先に `make import-k8s` を実行すること。`make api-smoke` の出力1行目が `master=pokedex …` であれば実際に pokedex-svc へつながっている確認になる(`master=example` はフォールバック)。
