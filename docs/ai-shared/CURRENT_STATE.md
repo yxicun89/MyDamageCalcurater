@@ -34,11 +34,13 @@ pokedex 配線待ちなので、API レーンの依頼 d が進んでから本�
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
 Active: Claude Code
 Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
-Status: P6-1(ADR-0500)・P6-2a 計算画面・契約追従・P6-2b 逆算画面・生成の internal タグ除外・DOC-ios は main に統合済み(PR #31・#53)。
-P6-2c 構築ビルダー(一覧・編集画面・ニックネーム・XCUITest)は完了(critic 2回目 PASS)。`make ios-test`(XCTest 244件・
-XCUITest 10件)が緑。api/openapi.yaml 側の ADR-0105(pokedex)更新に追従して `make ios-gen` 済み。ブランチにあり未 PR。
-Next: PR(P6-2b・internal タグ除外・P6-2c をまとめて main へ)→ P6-2d(構築から個体を呼び出す配線。plan.md 参照)→
-P6-3(`make ios-test` の総仕上げ)→ P6-4(手順書は AGENTS.md「手順書の書き方」)。
+Status: **M3(iPhone で使える)は完了**。P6-1(ADR-0500)・P6-2a 計算画面・契約追従・P6-2b 逆算画面・P6-2c 構築ビルダー
+(一覧・編集・ニックネーム)・P6-2d(構築から個体を呼び出す配線)・生成の internal タグ除外・DOC-ios は main に統合済み
+(PR #31・#53・#91・#119)。`make ios-test`(gen-check・XCTest 284件・XCUITest 12件・Info.plist 検査)が緑(P6-3)。
+P6-4 の手順書 `docs/runbooks/ios-device-install.md` を作成しコミット済み(ブランチにあり PR 作成中)。
+Next: PR を main へ。その後は M3 完了なので、ユーザーからの新規要望待ち(実機インストール・署名は手順書どおり
+人間が行う)。将来の候補: engine の Champions マスタが pokedex-svc 経由になったら iOS のモック/実マスタの
+差し替え動作を再確認、Web の record/team-svc(M2)が進んだら iOS の構築を端末内保存から API 保存へ移行するかを検討。
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)

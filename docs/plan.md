@@ -126,10 +126,12 @@
 - [x] P6-2d 構築から個体を呼び出す配線(`TeamMemberConverter.makeIndividual` を `CalcViewModel` / `ReverseViewModel` の
   「構築から呼び出す」ボタンとして実際につなぐ。requirements.md「自分側のプリセット」。ADR-0501「P6-2c」4章で範囲外と
   明記し、ここに積んだ。`BuildSource<Preset>` で自分側の出どころを直和にし、計算画面・逆算画面の両側に配線。
-  `swift test`(274件)・`make ios-test`(XCUITest 12件)成功。実装時に見つけたバグと回避は
-  ADR-0501「P6-2d」9章に記録。critic PASS 待ち)
-- [ ] P6-3 シミュレータテスト(`make ios-test`)
-- [ ] P6-4 Tailscale serve の手順書 → **人間が実機インストール**
+  `swift test`(275件)・`make ios-test`(unit 284件・XCUITest 12件)成功。実装時に見つけたバグと回避は
+  ADR-0501「P6-2d」9〜11章に記録。critic PASS。PR #119 で main に統合済み)
+- [x] P6-3 シミュレータテスト(`make ios-test`。gen-check・XCTest・XCUITest・Info.plist の検査を1コマンドで実行し、
+  P6-1〜P6-2d の各タスクで継続して緑を確認済み。iPhone 18 Pro シミュレータ)
+- [x] P6-4 Tailscale serve の手順書 `docs/runbooks/ios-device-install.md` を作成 → **人間が実機インストール**(署名・
+  Tailscale ログイン・実機への配線・外出先での確認は手順書どおり人間が行う。AI が代行しない)
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)。Argo CD の実同期もローカル k3d で確認済み(ADR-0018: Git 変更 32fbb9e → manual sync → Pod の image digest 一致)
