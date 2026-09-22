@@ -503,3 +503,9 @@ Impact: 他のレーンのルートの `make test` / `lint` / `build` で Web �
 Decision: PR #22(Web P4-1〜P4-5)と PR #28(P4-6 Playwright E2E・make test への Web の組み込み・verify-m1.md ドラフト)を main に統合した。
 Reason: 独立レビュー(critic)PASS と、make test / lint / build・E2E の通過を確認した後(COORDINATION.md「main への統合」)。
 Impact: 残りは P4-5 のブラウザ実機確認(人間)と P4-7 の完成(P2-2c/d・P2-3・P3-3 を待つ)。
+
+## 2026-09-22: 逆算の表示は型でまとめない/次は design.md の演出(P4-8)(ユーザー回答)
+Decision: (1) 逆算の候補は engine の順に1件ずつカード表示し、目安の型の名前を併記する(型でまとめない)。design.md「画面: 逆算」を改めた。
+(2) Web レーンの次の作業は design.md「動き」の演出(P4-8。操作時のみ、視差効果を減らす設定で無効)。
+Reason: ユーザー回答。逆算の結果(性格 × 持ち物ごとの SP 範囲)では型が一意に決まらないため。
+Impact: design.md の1行、plan.md に P4-8、ADR-0300 §7 の持ち越しの記述を更新。iOS(M3)も同じ表示方針に従う。
