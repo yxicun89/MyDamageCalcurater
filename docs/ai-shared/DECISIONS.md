@@ -598,6 +598,17 @@ up.sh の最後で `make api-docker-build` と `k3d image import` を呼ぶ形�
 Reason: critic の推奨。共有スクリプトは他レーンの範囲のため。
 Impact: `api-k3d-deploy` は他レーンのリソースに触れないよう、常に API 専用の overlay(deploy/k8s/overlays/local-api)だけを適用する(ADR-0203)。
 
+## 2026-09-22: iOS レーンの統合(PR #31)
+Decision: P6-1(ADR-0500)・P6-2a 計算画面・P3-1/P3-2 の契約変更への追従を PR #31 で main にマージした(critic はそれぞれ PASS。make test / lint / build / check-publishable / ios-test が成功)。
+Reason: ユーザー回答(2026-09-22)「契約追従が緑になったら PR」。
+Impact: 続き(P6-2b 逆算画面・P6-2c 構築)は同じブランチ feat/ios-p6 で進める。
+
+## 2026-09-22: iOS の API 生成は pokedex・calc タグだけにする(API レーンからの連絡への回答)
+Decision: `ios/tools/openapi-gen/openapi-generator-config.yaml` に `filter.tags: [pokedex, calc]` を入れ、`internal` タグ(`GET /internal/pokedex/master`。ADR-0204)を iOS の生成物に含めない。
+feat/api-master-adapter の api/openapi.yaml でも生成物がいまと同一になることを確認した(internal の型は出ない)。
+Reason: サーバー間の API で、gateway も公開せずアプリは呼ばない。生成すると使わない型が増え、internal の変更のたびに iOS の生成物がずれる。
+Impact: iOS がアプリで新しいタグ(例: 構築の team)を使うときは、この設定に足してから `make ios-gen` する。
+
 ## 2026-09-22: 素早さ SP0 を PR #32 で main に統合(素早さレーン)
 Decision: SP0(ADR-0600)を PR #32 で統合した。critic は1回目 NG(smoke の架空名)→ 修正後 PASS。make test・lint・build・check-publishable・smoke が成功。
 Impact: 素早さレーンは SP1(feat/speed-s1)へ。
@@ -648,6 +659,17 @@ Impact(データレーンへの提案。既定案): (1) pokedex-svc(P2-3)で `GE
 (2) natures テーブル(id, name_ja, plus, minus)を追加し、/api/pokedex/natures と内部 API の両方で使う。(3) MasterExport の species には showdownId を含める(共通マスタの Species が形式を検証するため。nameEn は含めない)。
 API レーンの後続: pokedex-svc のデプロイ後に calc の local overlay を URL 方式(`CALC_MASTER_URL=http://pokedex`)に切り替える。
 Web / iOS へ: openapi に tag `internal` の操作と Master* の型が増える(web/src/api/openapi.gen.ts はこの PR で再生成済み)。iOS は生成し直すか、生成設定で `internal` タグを除外する。
+
+## 2026-09-22: 無効・吸収の特性は後続タスク P2-3b で engine と効果定義に足す(ユーザー決定)
+Decision: ふゆう・ちょすい等の「特定のタイプの技を無効・吸収する特性」は、P2-3 には入れず、後続の P2-3b で engine の効果定義(AbilityEffect)・DB・importer・export に足す。ダメージ計算でも 0 になり、ゴールデンと照合する。
+Reason: 今の効果定義に無いため、タイプバランスの判定にもダメージ計算にも反映されていない。ユーザーが「後続タスクで足す」を選んだ。
+Impact: plan.md に P2-3b。タイプバランスレーンは P2-3b が入るまで、タイプ由来の相性と倍率を変える特性だけで判断する。
+
+
+## 2026-09-22: PR #30(API P3-3)・PR #42(API P3-4 マスタを pokedex-svc の内部 API から)を main に統合
+Decision: どちらも critic PASS、make test・lint・build・check-publishable 0 件・api-kustomize・make gen 差分なし、k3d の api-smoke 成功、開いている他の PR と未マージのブランチとの重なりが無いこと(#42 のときは #39 がドキュメントのみ)を確認してマージした。
+Reason: ユーザーの指示(テストが通り他レーンを確認済みならマージしてよい)。
+Impact: API レーンの Phase 3 と P3-4 は完了。次は Web レーンの依頼(GATEWAY_WEB_URL)と DOC-api。
 
 
 ## 2026-09-22: Web P4-9 を統合(PR #35)

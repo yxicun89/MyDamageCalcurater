@@ -30,5 +30,10 @@
     {"slug": "normal", "names": {"ja-Hrkt": "テストノーマル"}},
     {"slug": "fire", "names": {"ja-Hrkt": "テストほのお"}},
     {"slug": "water", "names": {"ja-Hrkt": "テストみず"}}
+  ],
+  "natures": [
+    {"slug": "test-brave", "names": {"ja-Hrkt": "テストゆうかん", "ja": "テスト勇敢"}},
+    {"slug": "test-calm", "names": {"ja": "テストおだやか"}},
+    {"slug": "test-quiet", "names": {"ja-Hrkt": "テストひかえめ"}}
   ]
 }

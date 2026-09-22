@@ -4,31 +4,31 @@
 Lane: データ(engine・マスタ・pokedex。どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
 Branch: feat/claude-p1-engine(作業ディレクトリ ~/MyDamageCalcurater)
-Status: Phase 1・P2-1・P1-10・Phase R(R-2-9 の公開用クリーンコピーは公開時に実施)・R-3・P1-13(タイプ相性表のデータ化。ADR-0013)・P1-11(表示%の分離)・P1-12(逆算の再設計。ADR-0010 §R)・P2-1b(ゴールデンを Champions へ)・P2-1c(技の使用可否の裁定)・P2-2a(pokedex のスキーマと migrate。ADR-0100)・P2-2b(importer の取得・変換・投入。ADR-0101)・P2-2c(照合と差分報告・版の固定・習得技は進化前から継がない。ADR-0103。実データの dry-run が通る)・P2-2d(マスタの定期取込の CronJob。毎週土曜 12:00 JST・固定版だけ投入・新しい版は報告だけ。ADR-0104)は完了(critic レビュー済み)
-Next: DOC-data(engine・pokedex・importer・golden の README と docs/runbooks/data.md)→ P2-3(pokedex-svc。内部 API・natures・balance/speed 向けの export を含む) → P3-1〜3 → P4-1〜7。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)、P2-1c の裁定
+Status: Phase 1・P2-1・P1-10・Phase R・P1-13・P1-11・P1-12・P2-1b・P2-1c・P2-2a・P2-2b・P2-2c・P2-2d・P2-3(pokedex-svc。内部 API・公開 API・natures・balance/speed 向け export。ADR-0105)は完了(critic レビュー済み)
+Next: P2-3b(無効・吸収の特性を engine・DB・export に足す)→ P3-1〜3(API レーンが実装中。gateway を pokedex-svc に向ける依頼は main 統合後に送る)→ P4-1〜7。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)、P2-1c の裁定
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
 Active: Claude Code
-Branch: feat/api-master-adapter(作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: Phase 3 完了(PR #14・#23・#30)。P3-4 calc-svc のマスタを pokedex-svc の内部 API(MasterExport)から受け取る形に変更(ADR-0204。critic PASS)。k3d と dev はファイル方式
-Next: (1) Web レーンの依頼: gateway に任意の GATEWAY_WEB_URL(設定時は /api・/assets・/healthz 以外を Service web:80 へ転送。k3d の local overlay は http://web)。(2) pokedex-svc(P2-3。データレーンが /internal/pokedex/master・natures・showdownId を受け入れ済み)が main に入ったら、calc の local overlay を URL 方式(CALC_MASTER_URL=http://pokedex)に、gateway に GATEWAY_POKEDEX_URL を設定し smoke の /api/pokedex を 503→200 に。(3) 手順書(gateway・calc の README)を AGENTS.md「手順書の書き方」に合わせる
+Branch: feat/api-gateway-web(作業ディレクトリ ~/MyDamageCalcurater-api)
+Status: Phase 3 完了(PR #14・#23・#30)、P3-4 マスタを pokedex-svc の内部 API から(ADR-0204。PR #42)。gateway の GATEWAY_WEB_URL(ADR-0205)は critic PASS(NG 2回のあと3回目)。origin/main を取り込み中
+Next: (1) GATEWAY_WEB_URL(P3-5)の PR → main。(2) データレーンの依頼 a〜c: openapi の /api/pokedex/* の description(503 は pokedex-svc 自身の master_unavailable もある・検索は既定レギュレーションの使用可能集合を ID 順・format は v1 で無影響・getSpecies は集合外も返し learnset は使用可能な技だけ・404 not_found・limit 範囲外は 400 invalid_input)と MasterSpeciesAbility.slot を 1..4 に。(3) DOC-api(calc・gateway の README を coding-rules §8 に、docs/runbooks/api.md)。(4) pokedex-svc(P2-3)が main に入ったら、gateway に GATEWAY_POKEDEX_URL=http://pokedex、calc の local overlay を CALC_MASTER_URL=http://pokedex に、smoke の /api/pokedex を 503→200 に
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
 Active: Claude Code
 Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
-Status: P4-1〜P4-6・P4-8〜P4-11 完了(critic PASS)。P4-11 で Web をコンテナ(nginx)にし k3d に載せた(`make web-k3d-deploy`・`web-k3d-open`・`web-k3d-smoke`。ADR-0302)。
-P4-5 は Chrome で確認済み(Safari は未確認)。P4-7 は verify-m1.md のドラフト
-Next: P4-14 と DOC-web(verify-m1.md を AGENTS.md「手順書の書き方」の形に・k3d を主に、web/README.md)。続いて P4-12 タイプバランスの画面。
-gateway が Web に転送する GATEWAY_WEB_URL は API レーンが実装中(入ったら local overlay の値と手順を追従)
+Status: P4-1〜P4-6・P4-8〜P4-11・P4-12a(タイプバランス画面の防御相性・攻撃範囲。ADR-0303)・P4-14・DOC-web 完了(critic PASS。main 統合済み)。
+GATEWAY_WEB_URL(API レーンの ADR-0205)が main に入り、k3d の http://localhost:8080 で画面(/calc・/reverse・/balance)と API が揃うことを実地確認し verify-m1.md に反映。
+P4-5 は Chrome で確認済み(Safari は未確認)。P4-7 は verify-m1.md のドラフト(pokedex-svc・契約テストを待つ)
+Next: P4-12b(仮想敵 threats・おすすめタイプ recommendations)。続いて P5-5(構築ビルダー等)は record/team の API 待ち
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
 Active: Claude Code
 Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
-Status: P6-1(ADR-0500)・P6-2a 計算画面・P3-1/P3-2 の契約変更への追従(逆算も API で呼ぶ)は完了(critic PASS)。`make ios-test`(ios-gen-check・XCTest 119 件・XCUITest 5 件・Info.plist)が緑。iOS 27 / Swift 6.4
-Next: P6-2b 逆算画面(観測はテンキー入力。与えたダメージ = 相手 HP の減少%(整数)、受けたダメージ = 自分 HP の減少量)→ P6-2c 構築(端末内保存の TeamStore、Showdown 形式は後回し)→ P6-3 → P6-4。ViewModel は PokeCalcCore で XCTest、主要操作は XCUITest
+Status: P6-1(ADR-0500)・P6-2a 計算画面・契約追従は main に統合済み(PR #31)。P6-2b 逆算画面(critic PASS)・生成の internal タグ除外・DOC-ios(ios/README.md を coding-rules §8 の形に、ADR-0501・docs/runbooks/ios.md。critic PASS)はブランチにあり未 PR。`make ios-test`(XCTest 174 件・XCUITest 9 件)が緑
+Next: PR(P6-2b・internal タグ除外・DOC-ios をまとめて main へ)→ P6-2c 構築(端末内保存の TeamStore、Showdown 形式は後回し)→ P6-3 → P6-4(手順書は AGENTS.md「手順書の書き方」)
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)

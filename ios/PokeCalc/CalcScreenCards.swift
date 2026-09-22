@@ -95,11 +95,11 @@ struct DefenderCardView: View {
 /// 3段目はタイプバッジ(批評 M3a・再レビュー対応: 名前を縮小(0.5)して1行に詰め込むと
 /// 小さすぎたり(18 Pro で約9pt)、幅が足りず省略記号になったりした(17e・大きい文字)。
 /// まず幅を確保してから、最後の手段として控えめに縮小する)。
-private struct SpeciesHeaderMenuLabel: View {
+struct SpeciesHeaderMenuLabel: View {
     let species: SpeciesSummary?
     /// 種族が (まだ) 無いときのプレースホルダ(読み込み中・0件時)。`Menu` の `accessibilityLabel`
-    /// 側(呼び出し元)からも参照するので `fileprivate` にする。
-    fileprivate static let placeholderName = "-"
+    /// 側(呼び出し元)からも参照する。逆算画面(`ReverseScreenCards.swift`)も再利用するので internal にする。
+    static let placeholderName = "-"
     /// 名前は2行まで折り返せるようにしたうえで、それでも収まらない極端なケースだけ控えめに
     /// 縮小する(最後の手段。design.md には数値指定が無いため実装側で決める)。
     private static let nameMinimumScaleFactor = 0.85

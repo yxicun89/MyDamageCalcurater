@@ -59,6 +59,15 @@ type Move struct {
 	Priority     int8
 }
 
+type Nature struct {
+	ID           string
+	NameJa       string
+	NameJaSource string
+	NameEn       string
+	Plus         sql.NullString
+	Minus        sql.NullString
+}
+
 type Regulation struct {
 	ID            string
 	NameJa        string

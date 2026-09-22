@@ -185,3 +185,120 @@ VALUES (?, ?);
 -- name: InsertDataVersion :exec
 INSERT INTO data_versions (source, version, checksum, imported_at)
 VALUES (?, ?, ?, ?);
+
+-- ---------------------------------------------------------------------------------------------
+-- 性格(000006。ADR-0105 §4)
+
+-- name: ListNatures :many
+SELECT id, name_ja, name_ja_source, name_en, plus, minus
+FROM natures
+ORDER BY id;
+
+-- name: DeleteNatures :exec
+DELETE FROM natures;
+
+-- name: InsertNature :exec
+INSERT INTO natures (id, name_ja, name_ja_source, name_en, plus, minus)
+VALUES (?, ?, ?, ?, ?, ?);
+
+-- ---------------------------------------------------------------------------------------------
+-- 内部 API GET /internal/pokedex/master と pokedex export の全件読み出し(ADR-0105 §2・§5)。
+-- 使用可能集合で絞らない(絞り込みは export と検索が集合テーブルで行う)。
+
+-- name: ListSpecies :many
+SELECT `key`, dex_no, form, showdown_id, name_ja, name_ja_source, name_en, type1, type2,
+       base_hp, base_atk, base_def, base_spa, base_spd, base_spe,
+       is_mega, base_species_key, required_item_id
+FROM species
+ORDER BY `key`;
+
+-- name: ListAllSpeciesAbilities :many
+SELECT species_key, slot, ability_id
+FROM species_abilities
+ORDER BY species_key, slot;
+
+-- name: ListItems :many
+SELECT id, name_ja, name_ja_source, name_en
+FROM items
+ORDER BY id;
+
+-- name: ListItemEffects :many
+SELECT item_id, effect
+FROM item_effects
+ORDER BY item_id;
+
+-- name: ListAbilities :many
+SELECT id, name_ja, name_ja_source, name_en
+FROM abilities
+ORDER BY id;
+
+-- name: ListAbilityEffects :many
+SELECT ability_id, effect
+FROM ability_effects
+ORDER BY ability_id;
+
+-- name: GetDefaultRegulation :one
+SELECT id, name_ja, is_default, starts_on, ends_on
+FROM regulations
+WHERE is_default = 1;
+
+-- name: ListRegulationSpeciesKeys :many
+SELECT species_key
+FROM regulation_species
+WHERE regulation_id = ?
+ORDER BY species_key;
+
+-- name: ListRegulationMoveIDs :many
+SELECT move_id
+FROM regulation_moves
+WHERE regulation_id = ?
+ORDER BY move_id;
+
+-- name: ListRegulationAbilityIDs :many
+SELECT ability_id
+FROM regulation_abilities
+WHERE regulation_id = ?
+ORDER BY ability_id;
+
+-- ---------------------------------------------------------------------------------------------
+-- 公開の検索 API(/api/pokedex/*。ADR-0105 §3)。pattern は呼び出し側が LIKE の特殊文字(\ % _)を
+-- \ でエスケープし、末尾に % を付けた前方一致のパターン。name_ja の照合順序は utf8mb4_ja_0900_as_cs
+-- (ADR-0100 §2。ひらがなとカタカナを区別しない)。
+
+-- name: SearchSpecies :many
+SELECT s.`key`, s.dex_no, s.form, s.name_ja, s.type1, s.type2
+FROM species s
+JOIN regulation_species rs ON rs.species_key = s.`key`
+WHERE rs.regulation_id = sqlc.arg(regulation_id) AND s.name_ja LIKE sqlc.arg(pattern)
+ORDER BY s.dex_no, s.form
+LIMIT ?;
+
+-- name: SearchMoves :many
+SELECT m.id, m.name_ja, m.type, m.category, m.power, m.priority
+FROM moves m
+JOIN regulation_moves rm ON rm.move_id = m.id
+WHERE rm.regulation_id = sqlc.arg(regulation_id) AND m.name_ja LIKE sqlc.arg(pattern)
+ORDER BY m.name_ja, m.id
+LIMIT ?;
+
+-- name: SearchItems :many
+SELECT i.id, i.name_ja
+FROM items i
+JOIN regulation_items ri ON ri.item_id = i.id
+WHERE ri.regulation_id = sqlc.arg(regulation_id) AND i.name_ja LIKE sqlc.arg(pattern)
+ORDER BY i.name_ja, i.id
+LIMIT ?;
+
+-- name: ListSpeciesAbilityNames :many
+SELECT sa.slot, a.id, a.name_ja
+FROM species_abilities sa
+JOIN abilities a ON a.id = sa.ability_id
+WHERE sa.species_key = ?
+ORDER BY sa.slot;
+
+-- name: ListSpeciesLearnset :many
+SELECT l.move_id
+FROM learnsets l
+JOIN regulation_moves rm ON rm.move_id = l.move_id
+WHERE l.species_key = sqlc.arg(species_key) AND rm.regulation_id = sqlc.arg(regulation_id)
+ORDER BY l.move_id;

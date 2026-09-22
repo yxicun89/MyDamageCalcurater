@@ -31,9 +31,9 @@ func envWith(mutate func(map[string]string)) map[string]string {
 
 // 環境変数の名前は運用(k8s の manifest・README)が依存するので固定する。
 func TestEnvNames(t *testing.T) {
-	got := []string{envAddr, envCalcURL, envPokedexURL, envAssetsURL, envCORSAllowedOrigins, envUpstreamTimeout}
+	got := []string{envAddr, envCalcURL, envPokedexURL, envAssetsURL, envCORSAllowedOrigins, envUpstreamTimeout, envWebURL}
 	want := []string{"GATEWAY_ADDR", "GATEWAY_CALC_URL", "GATEWAY_POKEDEX_URL", "GATEWAY_ASSETS_URL",
-		"GATEWAY_CORS_ALLOWED_ORIGINS", "GATEWAY_UPSTREAM_TIMEOUT"}
+		"GATEWAY_CORS_ALLOWED_ORIGINS", "GATEWAY_UPSTREAM_TIMEOUT", "GATEWAY_WEB_URL"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("環境変数名 = %q, want %q", got, want)
 	}
@@ -41,9 +41,9 @@ func TestEnvNames(t *testing.T) {
 
 // wantConfig は config の比較用の平たい形(*url.URL は String で比べる。nil は "")。
 type wantConfig struct {
-	addr, calc, pokedex, assets string
-	origins                     []string
-	timeout                     time.Duration
+	addr, calc, pokedex, assets, web string
+	origins                          []string
+	timeout                          time.Duration
 }
 
 func flatten(c config) wantConfig {
@@ -58,13 +58,14 @@ func flatten(c config) wantConfig {
 		calc:    str(c.Gateway.CalcURL, c.Gateway.CalcURL == nil),
 		pokedex: str(c.Gateway.PokedexURL, c.Gateway.PokedexURL == nil),
 		assets:  str(c.Gateway.AssetsURL, c.Gateway.AssetsURL == nil),
+		web:     str(c.Gateway.WebURL, c.Gateway.WebURL == nil),
 		origins: c.Gateway.CORSAllowedOrigins,
 		timeout: c.Gateway.UpstreamTimeout,
 	}
 }
 
 func equalConfig(a, b wantConfig) bool {
-	return a.addr == b.addr && a.calc == b.calc && a.pokedex == b.pokedex && a.assets == b.assets &&
+	return a.addr == b.addr && a.calc == b.calc && a.pokedex == b.pokedex && a.assets == b.assets && a.web == b.web &&
 		slices.Equal(a.origins, b.origins) && a.timeout == b.timeout
 }
 
@@ -79,6 +80,7 @@ func TestLoadConfig(t *testing.T) {
 		{"最小(CALC_URL だけ)は既定値", envWith(nil), defaults},
 		{"空の任意値は未設定と同じ", envWith(func(e map[string]string) {
 			e[envAddr], e[envPokedexURL], e[envAssetsURL], e[envCORSAllowedOrigins], e[envUpstreamTimeout] = "", "", "", "", ""
+			e[envWebURL] = ""
 		}), defaults},
 		{"すべて指定", envWith(func(e map[string]string) {
 			e[envAddr] = "127.0.0.1:9090"
@@ -86,15 +88,23 @@ func TestLoadConfig(t *testing.T) {
 			e[envAssetsURL] = "http://minio.example.test:9000"
 			e[envCORSAllowedOrigins] = "https://app.example.test, http://localhost:5173"
 			e[envUpstreamTimeout] = "250ms"
+			e[envWebURL] = "http://web.example.test:8080"
 		}), wantConfig{
 			addr: "127.0.0.1:9090", calc: testCalcURL,
 			pokedex: "http://pokedex.example.test:8080", assets: "http://minio.example.test:9000",
+			web:     "http://web.example.test:8080",
 			origins: []string{"https://app.example.test", "http://localhost:5173"}, timeout: 250 * time.Millisecond,
 		}},
 		{"https の上流", envWith(func(e map[string]string) { e[envCalcURL] = "https://calc.example.test" }),
 			wantConfig{addr: ":8080", calc: "https://calc.example.test", timeout: 10 * time.Second}},
 		{"許可オリジン1つ", envWith(func(e map[string]string) { e[envCORSAllowedOrigins] = "https://app.example.test" }),
 			wantConfig{addr: ":8080", calc: testCalcURL, origins: []string{"https://app.example.test"}, timeout: 10 * time.Second}},
+		// ADR-0205: GATEWAY_WEB_URL は任意。k3d の local overlay は Service 名 web(80 番)を指す。
+		{"WEB_URL は Service 名", envWith(func(e map[string]string) { e[envWebURL] = "http://web" }),
+			wantConfig{addr: ":8080", calc: testCalcURL, web: "http://web", timeout: 10 * time.Second}},
+		{"WEB_URL は https も可", envWith(func(e map[string]string) { e[envWebURL] = "https://web.example.test" }),
+			wantConfig{addr: ":8080", calc: testCalcURL, web: "https://web.example.test", timeout: 10 * time.Second}},
+		{"WEB_URL が空は未設定", envWith(func(e map[string]string) { e[envWebURL] = "" }), defaults},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -128,6 +138,13 @@ func TestLoadConfigRejects(t *testing.T) {
 		{"CALC_URL が解析できない", envWith(func(e map[string]string) { e[envCalcURL] = "http://calc.example.test:port" })},
 		{"POKEDEX_URL が不正", envWith(func(e map[string]string) { e[envPokedexURL] = "::" })},
 		{"ASSETS_URL が http(s) でない", envWith(func(e map[string]string) { e[envAssetsURL] = "s3://bucket" })},
+		// ADR-0205: GATEWAY_WEB_URL は http/https・ホスト必須・クエリ無し。
+		{"WEB_URL にスキームが無い", envWith(func(e map[string]string) { e[envWebURL] = "web" })},
+		{"WEB_URL にスキームが無い(//host)", envWith(func(e map[string]string) { e[envWebURL] = "//web" })},
+		{"WEB_URL が http(s) でない", envWith(func(e map[string]string) { e[envWebURL] = "ftp://web.example.test" })},
+		{"WEB_URL にホストが無い", envWith(func(e map[string]string) { e[envWebURL] = "http://" })},
+		{"WEB_URL にクエリがある", envWith(func(e map[string]string) { e[envWebURL] = "http://web?x=1" })},
+		{"WEB_URL が解析できない", envWith(func(e map[string]string) { e[envWebURL] = "http://web:port" })},
 		{"CORS が *", envWith(func(e map[string]string) { e[envCORSAllowedOrigins] = "*" })},
 		{"CORS に * が混ざる", envWith(func(e map[string]string) { e[envCORSAllowedOrigins] = "https://app.example.test,*" })},
 		{"CORS のオリジンにパスがある", envWith(func(e map[string]string) { e[envCORSAllowedOrigins] = "https://app.example.test/app" })},

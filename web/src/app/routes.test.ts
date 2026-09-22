@@ -8,11 +8,14 @@ import { appText } from "../i18n/ja";
 import { DEFAULT_SCREEN, SCREEN_ROUTES, documentTitle, pathForScreen, screenFromPath } from "./routes";
 
 describe("ルート表", () => {
-  test("計算 → calc、逆算 → reverse の順に並び、表示名は appText の語", () => {
+  // P4-12a(ADR-0303 §2): タイプバランス(/balance)を逆算の後ろに足す。
+  test("計算 → calc、逆算 → reverse、タイプバランス → balance の順に並び、表示名は appText の語", () => {
     expect(SCREEN_ROUTES.map((route) => [route.id, route.segment, route.label])).toEqual([
       ["calc", "calc", appText.calcTabLabel],
       ["reverse", "reverse", appText.reverseTabLabel],
+      ["balance", "balance", appText.balanceTabLabel],
     ]);
+    expect(appText.balanceTabLabel).toBe("タイプバランス");
   });
 
   test("既定の画面は計算", () => {
@@ -36,6 +39,8 @@ describe("パス → 画面(screenFromPath)", () => {
     // base が付くときは、base からの相対で読む。
     ["/app/reverse", "/app/", "reverse"],
     ["/app/calc", "/app/", "calc"],
+    ["/balance", "/", "balance"],
+    ["/app/balance", "/app/", "balance"],
   ] as const)("%s(base %s)は %s", (pathname, base, expected) => {
     expect(screenFromPath(pathname, base)).toBe(expected);
   });
@@ -78,6 +83,7 @@ describe("文書のタイトル(documentTitle)", () => {
   test.each([
     ["calc", "計算 | pokecalc"],
     ["reverse", "逆算 | pokecalc"],
+    ["balance", "タイプバランス | pokecalc"],
   ] as const)("%s は「%s」", (id, expected) => {
     expect(documentTitle(id)).toBe(expected);
   });

@@ -3,6 +3,10 @@
 
 IOS_SIMULATOR ?= iPhone 18 Pro
 IOS_DESTINATION ?= platform=iOS Simulator,name=$(IOS_SIMULATOR)
+# ios-sim-run の既定(手順書 docs/runbooks/ios.md)
+IOS_SCREEN ?= root
+IOS_APPEARANCE ?= light
+IOS_CONTENT_SIZE ?= large
 
 .PHONY: ios-gen
 ios-gen: ## Swift の API クライアントを openapi.yaml から生成(ios/)
@@ -13,7 +17,11 @@ ios-gen-check: ## Swift の生成物が openapi.yaml と一致するか
 	@./ios/scripts/openapi-gen.sh --check
 
 .PHONY: ios-test
-ios-test: ios-gen-check ios-test-unit ios-test-ui ios-check-infoplist ## iOS シミュレータでテスト(XCTest + XCUITest + Info.plist 検査)
+ios-test: ios-lint ios-gen-check ios-test-unit ios-test-ui ios-check-infoplist ## iOS シミュレータでテスト(XCTest + XCUITest + Info.plist 検査)
+
+.PHONY: ios-lint
+ios-lint: ## ios/scripts の構文チェック(ルートの make lint は scripts/*.sh しか見ないため個別に持つ)
+	@for script in ios/scripts/*.sh; do bash -n "$$script" || exit; done
 
 .PHONY: ios-test-unit
 ios-test-unit: ## PokeCalcKit の XCTest をシミュレータで実行
@@ -32,3 +40,7 @@ ios-check-infoplist: ## POKECALC_API_BASE_URL を渡してビルドし、成果�
 .PHONY: ios-swift-test
 ios-swift-test: ## PokeCalcKit の XCTest を macOS で実行(Xcode 無しでも可)
 	@cd ios/PokeCalcKit && swift test
+
+.PHONY: ios-sim-run
+ios-sim-run: ## アプリをシミュレータでモック起動(IOS_SCREEN=root|calc|reverse IOS_APPEARANCE IOS_CONTENT_SIZE)
+	@./ios/scripts/sim-run.sh "$(IOS_SIMULATOR)" "$(IOS_SCREEN)" "$(IOS_APPEARANCE)" "$(IOS_CONTENT_SIZE)"

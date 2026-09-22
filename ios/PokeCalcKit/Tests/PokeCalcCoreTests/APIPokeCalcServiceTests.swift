@@ -635,7 +635,7 @@ final class APIPokeCalcServiceTests: XCTestCase {
         XCTAssertEqual(Set(observations[0].keys), ["damage"])
         XCTAssertEqual(observations[0]["damage"] as? Int, 12)
 
-        // 空の itemCandidates と maxCandidates の 0 は openapi の既定値と同じ意味なので送らない(省略する。README 受け入れ条件 4)
+        // 空の itemCandidates と maxCandidates の 0 は openapi の既定値と同じ意味なので送らない(省略する。ADR-0501 の受け入れ条件 4)
         XCTAssertNil(body["itemCandidates"], "空の itemCandidates は省略する")
         XCTAssertNil(body["maxCandidates"], "maxCandidates の 0 は省略する")
         // 急所の既定は false を明示して送る
