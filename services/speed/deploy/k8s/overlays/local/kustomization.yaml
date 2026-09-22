@@ -5,7 +5,8 @@ resources:
   - ../../base
 # SP0 (ADR-0600 §4): the local-only fictional pokemon read model, mounted as a
 # read-only file so SPEED_POKEMON_PATH resolves and /api/speed/v1/pokemon answers
-# 200 instead of 503. Not set in base (the GitOps overlay is added in SP4). The
+# 200 instead of 503. Not set in base (the GitOps overlay is added once an image digest exists;
+# ADR-0603). The
 # source of truth for this file is testdata/pokemon.example.json (kept in sync by
 # a Go test in internal/master, since Kustomize's load restrictor forbids
 # referencing files outside this overlay's directory tree — balance と同じ).

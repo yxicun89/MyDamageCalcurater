@@ -23,7 +23,9 @@
 ## 影響
 - 架空データの local overlay(`make speed-k3d-deploy`)はそのまま残す(pokedex-svc の実データ投入が要らない開発ループ用)。
   どちらを最後に適用したかで k3d の speed の中身が決まる(balance と同じ運用)。
-- GitOps の overlay と Argo CD Application は、この ADR の対象外(ADR-0600 §2 のとおり、イメージの digest が決まる段階で別途作る)。
+- GitOps の overlay と Argo CD Application は、この ADR の対象外(**ADR-0600 §2 の「SP4 で作る」を変更し**、イメージの digest が決まる段階で
+  別途作る。理由は ADR-0600 §2 のまま: digest はレジストリに初めて置いたときに決まり、先に作れないため)。docs/speed-design.md §8 の段階表・
+  docs/plan.md にフォローアップとして残す(未着手のまま SP4 の完了で追跡から落とさない)。
 - クラウドでの実データの配布は、デプロイ先が決まったときに別に決める。
 - 空の roster(0 件)の扱いは、pokedex export が「1 件以上」を返す前提(ADR-0105)であればこの ADR の対象外(SP1 critic の軽微。
   実データで 0 件になる状況が起きたら別途決める)。

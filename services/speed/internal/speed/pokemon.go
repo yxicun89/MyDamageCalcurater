@@ -16,8 +16,8 @@ type Roster struct {
 	Pokemon      []Pokemon
 }
 
-// PokemonProvider は read model の差し替え境界。SP0〜SP3 は speed 内の架空データ、
-// SP4 で pokedex の read model の adapter に差し替える(ADR-0600 §4)。
+// PokemonProvider は read model の差し替え境界(ADR-0600 §4)。SP0〜SP3 は speed 内の架空データ、
+// SP4 以降は pokedex export の実データ(同じ形式・同じ loader。adapter の差し替えは無い。ADR-0603 §5)。
 // 返す Roster は呼び出し側が変更してもよい複製であること。
 type PokemonProvider interface {
 	Roster() (Roster, error)

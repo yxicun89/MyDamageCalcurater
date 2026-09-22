@@ -13,7 +13,7 @@ flowchart LR
   end
   Engine["engine<br/>RealStats / EffectiveStat"] --> Core
   RM["read model(JSON)<br/>ポケモン(種族値・日本語名)"] -->|"SPEED_POKEMON_PATH"| Master
-  Pokedex["pokedex export<br/>(データレーン。SP4)"] -.-> RM
+  Pokedex["pokedex export<br/>(データレーン。ADR-0603)"] -.-> RM
 ```
 
 ## ディレクトリ
