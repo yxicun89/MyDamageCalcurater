@@ -442,3 +442,14 @@ Decision: 素早さ比較サービス(`services/speed/`)を新しい「素早さ
 仕様(ユーザー回答): 左 = 速い順の全体の表、右 = 自分のポケモン、自分の位置を視覚的に示す。表は各ポケモン6行(無振り / 準速 / 最速 / 最速スカーフ / 最速+1 / 最速+2)。右は「無振り / 準速 / 最速」+スカーフ on/off の最小の選択で計算でき、オプションで好きな数値でも算出できる。
 Reason: ユーザーが素早さ比較サイトの使い勝手(表と見比べて自分の数値を算出する)を改善したいと依頼し、表の行・入力・担当(タイプバランスの次ではなく新しいレーン)・画面の置き場所に回答した。
 Impact: COORDINATION.md のレーン表・ADR の帯・起動の目安、CURRENT_STATE.md の Speed 欄、plan.md の「SP: 素早さ比較」(SP0〜SP4)。データレーンの P2-3 の read model(`pokedex export`)に、素早さの種族値が含まれていること(ポケモンの read model に baseStats があれば足りる)。
+
+## 2026-09-22: 素早さ比較の未確定4点をユーザーが回答(素早さレーン)
+Decision: (1) 右のオプションは SP 0〜32・性格の補正3通り・ランク -6〜+6・スカーフ、または実数値の直接入力 (2) 同じ実数値は同速としてまとめて表示 (3) 表は既定のレギュレーションの使用可能集合 (4) `web/` の骨組みが無い間は `web/src/speed/` の画面部品とテストだけ先に作り、タブ登録は骨組みができてから1項目足す。いずれも既定案どおり。
+Reason: 素早さレーンの着手時に AskUserQuestion で確認した。
+Impact: docs/plan.md「SP: 素早さ比較」の未確定を確定に更新。docs/speed-design.md・ADR-0600 に反映。
+
+## 2026-09-22: 素早さ SP0 の設計(素早さレーンの判断)
+Decision: services/speed は engine に `replace` で依存し、実数値・ランクは `engine.RealStats` / `engine.EffectiveStat` を呼ぶ。engine に無いこだわりスカーフ(×1.5)だけを speed のコアが 4096 基準の補正 6144・五捨五超入で持つ(ランクの後。Showdown の順)。GitOps の overlay と Argo CD Application は、イメージの digest が決まる SP4 で作る(ADR-0600)。
+提案(データレーンへ。既定案: 今は何もしない): engine に素早さの持ち物補正(スカーフ)の公開関数を足すなら、speed はそれを呼ぶように切り替える。足さない場合は speed の1式のままでよい。
+Reason: engine はデータレーンの範囲で、Champions に無い効果をダメージ計算の engine に入れない方針のため。表の行としてスカーフはユーザーの仕様で必要。
+Impact: ADR-0600、docs/speed-design.md。
