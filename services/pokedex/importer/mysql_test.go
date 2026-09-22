@@ -339,3 +339,39 @@ func rekey(out importer.Output, from, to string, form int) importer.Output {
 	}
 	return next
 }
+
+// TestRunSchemaNotReady は migrate が済んでいない DB(data_versions が無い)で、Run / NewSQLStore が
+// ErrSchemaNotReady を返し、テーブルを作らずに何も書かないこと(ADR-0104 §9)。
+func TestRunSchemaNotReady(t *testing.T) {
+	conn := freshImportDB(t) // Up まで済んだ DB。ここから全部戻して「migrate 前」にする
+	dsn := os.Getenv("POKEDEX_TEST_DSN")
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pokedexdb.DownAll(dsn, cfg.DBName); err != nil {
+		t.Fatalf("DownAll: %v", err)
+	}
+	out, versions := fixtureOutput(t)
+	ctx := context.Background()
+
+	if _, err := importer.NewSQLStore(conn).AppliedVersions(ctx); !errors.Is(err, importer.ErrSchemaNotReady) {
+		t.Fatalf("AppliedVersions: err = %v, want ErrSchemaNotReady", err)
+	}
+	applied, err := importer.Run(ctx, conn, out, versions, time.Now().UTC(), true)
+	if !errors.Is(err, importer.ErrSchemaNotReady) {
+		t.Fatalf("Run: err = %v, want ErrSchemaNotReady", err)
+	}
+	if applied {
+		t.Error("migrate 前の DB に投入したと返した")
+	}
+	var n int
+	if err := conn.QueryRow(
+		"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name <> 'schema_migrations'",
+	).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("migrate 前の DB にテーブルが %d 個できた(importer はテーブルを作らない)", n)
+	}
+}

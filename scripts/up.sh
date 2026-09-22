@@ -6,6 +6,7 @@ cd "$(dirname "$0")/.."
 
 CLUSTER="${CLUSTER:-pokecalc}"
 POKEDEX_MIGRATE_IMAGE="${POKEDEX_MIGRATE_IMAGE:-pokecalc/pokedex-migrate:0.1.0}"
+POKEDEX_IMPORTER_IMAGE="${POKEDEX_IMPORTER_IMAGE:-pokecalc/pokedex-importer:0.1.0}"
 
 if k3d cluster list 2>/dev/null | awk '{print $1}' | grep -qx "$CLUSTER"; then
   echo "k3d クラスタ '$CLUSTER' は既に存在します"
@@ -66,5 +67,24 @@ kubectl -n pokecalc rollout status statefulset/mysql --timeout=180s
 echo "pokedex-migrate Job の完了を待ちます..."
 kubectl -n pokecalc wait --for=condition=complete job/pokedex-migrate --timeout=300s
 
+# pokedex-import(CronJob。ADR-0104)が使うイメージも build して k3d に import する。
+# CronJob の spec は apply で更新できる(Job と違い事前の delete は不要)。
+echo "pokedex-import(importer)イメージを build して k3d に import します..."
+docker build -f services/pokedex/Dockerfile --target importer -t "$POKEDEX_IMPORTER_IMAGE" .
+k3d image import "$POKEDEX_IMPORTER_IMAGE" -c "$CLUSTER"
+
+# override(日本語名の上書き。任意・Git 管理外の実データ)があるときだけ ConfigMap を作成/更新する。
+# 無いときは何もしない(既存の ConfigMap も消さない。消すのは人。ADR-0104 §7)。
+if [ -f "data/local/name_ja_overrides.json" ]; then
+  echo "override(data/local/name_ja_overrides.json)から ConfigMap 'pokedex-name-overrides' を作成/更新します..."
+  kubectl -n pokecalc create configmap pokedex-name-overrides \
+    --from-file="name_ja_overrides.json=data/local/name_ja_overrides.json" \
+    --dry-run=client -o yaml | kubectl apply -f -
+else
+  echo "override(data/local/name_ja_overrides.json)が無いので ConfigMap 'pokedex-name-overrides' は作成しません"
+fi
+
 echo
 echo "完了。gateway 実装後は http://localhost:8080 で計算画面にアクセスできます。"
+echo "pokedex-import の初回投入は 'make import-k8s' で手動で1回流してください" \
+  "(CronJob は週1回・土曜 12:00 JST に自動実行されます。初回はネットワークが要るため自動では流しません)。"

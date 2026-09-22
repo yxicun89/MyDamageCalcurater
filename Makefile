@@ -65,9 +65,11 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@cd services && $(GO) vet ./...
 	@cd tools && $(GO) vet ./...
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
+	@for script in tools/importer/*.sh; do sh -n "$$script" || exit; done
 	@node --check tools/golden/generate.mjs
 	@node --check scripts/wasm-conformance.mjs
 	@for script in tools/importer/*.mjs; do node --check "$$script" || exit; done
+	@$(MAKE) --no-print-directory k8s-render
 	@$(MAKE) --no-print-directory check-publishable
 	@$(MAKE) --no-print-directory check-publishable-selftest
 
@@ -158,6 +160,25 @@ import-dry-run: ## マスタデータの変換・報告だけ行う(DB には触
 .PHONY: import-fetch
 import-fetch: ## 取得元(calc/Showdown/PokeAPI)から実データを取得する(ネットワークが要る。先に tools/importer で npm ci)
 	@cd tools/importer && npm ci && node fetch.mjs
+
+.PHONY: import-check-upstream
+import-check-upstream: ## 上流(calc/Showdown/PokeAPI)の最新版を検出して報告する(ネットワークが要る。取り込みはしない)
+	@cd tools/importer && npm ci && node check-upstream.mjs
+
+.PHONY: import-k8s
+import-k8s: ## k3d 上の CronJob pokedex-import を手動で1回流す(週1回の定期実行とは別に)
+	@current_context="$$(kubectl config current-context)"; \
+	if [ "$$current_context" != "k3d-$(CLUSTER)" ]; then \
+		echo "import-k8s: 現在の kubectl context '$$current_context' が 'k3d-$(CLUSTER)' ではない(別クラスタへ流してしまうため中断)" >&2; \
+		exit 1; \
+	fi; \
+	kubectl -n pokecalc create job --from=cronjob/pokedex-import "pokedex-import-manual-$$(date +%Y%m%d%H%M%S)"
+
+.PHONY: k8s-render
+k8s-render: ## kustomize で local / cloud overlay が描画できることを確かめる(apply はしない)
+	@kubectl kustomize deploy/k8s/overlays/local >/dev/null
+	@kubectl kustomize deploy/k8s/overlays/cloud >/dev/null
+	@echo "k8s-render: local / cloud overlay の描画を確認"
 
 .PHONY: assets
 assets: ## 画像を WebP 2サイズに変換して MinIO へ
