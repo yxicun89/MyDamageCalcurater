@@ -196,6 +196,11 @@ func TestWebRejectsInternalMethodsAndDotSegments(t *testing.T) {
 		{"エンコードされたドットセグメント", http.MethodGet, "/%2e%2e/api/calc", http.Header{}},
 		{"一部だけエンコードされたドットセグメント", http.MethodGet, "/static/.%2e/index.html", http.Header{}},
 		{"エンコードされたスラッシュを含むドットセグメント", http.MethodGet, "/static%2f..%2findex.html", http.Header{}},
+
+		// critic 指摘: 連続スラッシュで firstPathSegment が "" になり、isReservedPath の抜け道になって
+		// /internal・/api が Web に転送されてしまわないこと(ADR-0205)。
+		{"連続スラッシュで /internal へ", http.MethodGet, "//internal/pokedex/master", http.Header{}},
+		{"連続スラッシュで /api/calc へ", http.MethodGet, "//api/calc", http.Header{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -118,9 +118,11 @@ func (g *gateway) serve(c *echo.Context) error {
 		return c.NoContent(http.StatusNoContent)
 	}
 
-	// 2. ドットセグメントは拒否(どの上流にも送らない)。gateway 自身の応答。
+	// 2. ドットセグメント・空セグメント(連続スラッシュ)は拒否(どの上流にも送らない)。gateway 自身の応答。
+	// 空セグメントは WebURL の有無によらず拒否する(ADR-0205: "//internal/..." が isReservedPath の
+	// 抜け道になって Web へ転送されるのを、ルーティングより前にここで防ぐ)。
 	path := r.URL.Path
-	if hasDotSegment(path) {
+	if hasDotSegment(path) || hasEmptySegment(path) {
 		return g.ownError(c, origin, allowed, newError(api.NotFound, "%s", msgNotFound))
 	}
 

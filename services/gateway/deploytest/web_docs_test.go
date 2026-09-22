@@ -21,6 +21,16 @@ func TestWebUpstreamIsDocumented(t *testing.T) {
 	if !found {
 		t.Error("services/gateway/README.md の環境変数の表に `GATEWAY_WEB_URL` の行が無い")
 	}
+	foundRouting := false
+	for _, line := range strings.Split(readme, "\n") {
+		if strings.HasPrefix(line, "| それ以外") && strings.Contains(line, "GATEWAY_WEB_URL") {
+			foundRouting = true
+			break
+		}
+	}
+	if !foundRouting {
+		t.Error("services/gateway/README.md のルーティング表の「それ以外」の行が GATEWAY_WEB_URL に触れていない")
+	}
 	adr := readRepoFile(t, "docs/adr/0205-gateway-web-upstream.md")
 	if !strings.Contains(adr, "GATEWAY_WEB_URL") {
 		t.Error("docs/adr/0205-gateway-web-upstream.md に GATEWAY_WEB_URL の記述が無い")

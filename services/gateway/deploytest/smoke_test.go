@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -257,6 +258,54 @@ func TestSmokeScriptRetriesThroughGatewayNotYetListening(t *testing.T) {
 	}
 	if err != nil {
 		t.Fatalf("smoke.sh が失敗した(接続拒否からの再試行が壊れている): %v\n%s", err, out)
+	}
+}
+
+// flakyGatewayHandler は最初の n 回のリクエスト(パスによらない全体の呼び出し回数)に 502 Bad Gateway を
+// 返し、それ以降は next にそのまま委ねる。ロールアウト直後、Traefik がまだ終了中の Pod に振り分けて
+// 502 を返す状況を模す(critic 指摘の回帰テスト)。
+type flakyGatewayHandler struct {
+	remaining int64 // atomic。開始値が n。0 未満になったら next に委ねる。
+	next      http.Handler
+}
+
+func (f *flakyGatewayHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if atomic.AddInt64(&f.remaining, -1) >= 0 {
+		w.WriteHeader(http.StatusBadGateway)
+		return
+	}
+	f.next.ServeHTTP(w, r)
+}
+
+// AC-S6 回帰(critic 指摘): ロールアウト直後、前段(Traefik を模した flakyGatewayHandler)が最初の数回だけ
+// 502 を返しても、smoke.sh の各リクエストが 000/502 を再試行する(request_with_retry を全リクエストに
+// 使うようにした)ので成功する。以前は最初の1件のリクエストにしか再試行を適用していなかったため、
+// 2件目以降で 502 に当たると失敗していた。
+func TestSmokeScriptRetriesThroughTransientBadGateway(t *testing.T) {
+	h := buildDefaultGatewayHandler(t)
+	srv := httptest.NewServer(&flakyGatewayHandler{remaining: 2, next: h})
+	t.Cleanup(srv.Close)
+
+	out, err := runSmoke(t, srv.URL, "5")
+	if err != nil {
+		t.Fatalf("smoke.sh が失敗(一時的な 502 は再試行して乗り越えるべき): %v\n%s", err, out)
+	}
+}
+
+// AC-S6 回帰: 502 が再試行の上限を超えて続く場合は smoke.sh も失敗する(再試行が無限にならず、
+// 本物の障害を見逃さないこと)。
+func TestSmokeScriptFailsOnPersistentBadGateway(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	t.Cleanup(srv.Close)
+
+	out, err := runSmoke(t, srv.URL, "2")
+	if err == nil {
+		t.Fatalf("smoke.sh が成功した(502 が続くなら失敗するべき):\n%s", out)
+	}
+	if !strings.Contains(out, "HTTP 502") {
+		t.Errorf("smoke.sh の出力に %q が無い:\n%s", "HTTP 502", out)
 	}
 }
 

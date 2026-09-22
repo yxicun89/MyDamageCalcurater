@@ -164,6 +164,9 @@ func TestUnroutedPathsAreNotFound(t *testing.T) {
 		{"内部 API /internal(接頭辞だけ)", http.MethodGet, "/internal", http.Header{}},
 		{"ドットセグメントで /api/pokedex から /internal へ", http.MethodGet, "/api/pokedex/../../internal/pokedex/master", validHeaders()},
 		{"エンコードされたドットセグメントで /internal へ", http.MethodGet, "/api/pokedex/%2e%2e/%2e%2e/internal/pokedex/master", validHeaders()},
+		// critic 指摘(ADR-0205): 連続スラッシュで空セグメントができるパスも 404(WebURL 未設定でも同じ扱い)。
+		{"連続スラッシュで /internal へ", http.MethodGet, "//internal/pokedex/master", http.Header{}},
+		{"連続スラッシュで /api/calc へ", http.MethodGet, "//api/calc", validHeaders()},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
