@@ -106,7 +106,10 @@ func baseExport(t *testing.T) api.MasterExport {
 		Abilities: []api.MasterAbility{
 			{Id: "testplain", NameJa: "テストとくせい"},
 			{Id: "testthick", NameJa: "テストぶあつい", Effect: effect(map[string]any{
-				"DefResistType": map[string]any{"fire": 2048}})},
+				"DefResistType":  map[string]any{"fire": 2048},
+				"DefImmuneTypes": []any{"ground"},
+				"DefAbsorbTypes": map[string]any{"water": map[string]any{"HealNumerator": 1, "HealDenominator": 4}},
+			})},
 		},
 		// ファイルの並びと ID の昇順をわざとずらす(代表の選び方が並びに依存しないことを見る)。
 		// 性格の ID の形式は calc-svc では検査しない(旧テストの ID をそのまま使う)。
@@ -309,9 +312,17 @@ func TestLookupReturnsCopiesOfEffects(t *testing.T) {
 	thick, _ := store.Ability("testthick")
 	thick.Effect.DefResistType[engine.TypeFire] = 9999
 	thick.Effect.StabMod = 9999
+	thick.Effect.DefImmuneTypes[0] = engine.TypeWater
+	thick.Effect.DefAbsorbTypes[engine.TypeWater] = engine.AbsorbEffect{HealNumerator: 9999}
 	again2, _ := store.Ability("testthick")
 	if again2.Effect.DefResistType[engine.TypeFire] != 2048 || again2.Effect.StabMod != 0 {
 		t.Errorf("Ability の Effect の書き換えが Store に漏れた: %+v", again2.Effect)
+	}
+	if len(again2.Effect.DefImmuneTypes) != 1 || again2.Effect.DefImmuneTypes[0] != engine.TypeGround {
+		t.Errorf("Ability の DefImmuneTypes の書き換えが Store に漏れた: %+v", again2.Effect.DefImmuneTypes)
+	}
+	if got := again2.Effect.DefAbsorbTypes[engine.TypeWater]; got.HealNumerator != 1 || got.HealDenominator != 4 {
+		t.Errorf("Ability の DefAbsorbTypes の書き換えが Store に漏れた: %+v", again2.Effect.DefAbsorbTypes)
 	}
 }
 
