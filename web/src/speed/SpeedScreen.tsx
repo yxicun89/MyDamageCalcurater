@@ -145,30 +145,24 @@ function parseIntOr(raw: string, fallback: number): number {
   return Number.isNaN(parsed) ? fallback : parsed;
 }
 
-/** 段の間の境界(faster/slower の件数から決める位置。ADR-0604 §4)。afterSpeed が無ければ表の先頭、
- *  beforeSpeed が無ければ表の末尾。 */
+/** 段の間の境界。afterSpeed が無ければ表の先頭、beforeSpeed が無ければ表の末尾。 */
 interface Boundary {
   readonly afterSpeed?: number;
   readonly beforeSpeed?: number;
 }
 
-/** 境界は「段」ではなく「行」の数で数える(段の entries.length を累計する。ADR-0604 §4)。 */
-function computeBoundary(tiers: readonly Schemas["SpeedTier"][], faster: number): Boundary {
-  if (faster <= 0) {
-    return { beforeSpeed: tiers[0]?.speed };
+/**
+ * 境界は、表示中の段(絞り込み後の tiers)の実数値と自分の実数値を直接比べて決める。
+ * `faster`/`slower`/`tie` は契約上つねに全6行の表を基準にした値(ADR-0602 §3)なので、絞り込みで表示行数が
+ * 減ると基準が合わなくなる。絞り込みの有無によらず正しく引けるよう、tiers の speed だけを見る
+ * (Web で自分の素早さを計算し直さない方針は保つ。2026-09-22 critic 指摘で computeBoundary から差し替え)。
+ */
+function computeBoundary(tiers: readonly Schemas["SpeedTier"][], ownSpeed: number): Boundary {
+  const index = tiers.findIndex((tier) => tier.speed < ownSpeed);
+  if (index === -1) {
+    return { afterSpeed: tiers.at(-1)?.speed };
   }
-  let cumulative = 0;
-  for (let index = 0; index < tiers.length; index += 1) {
-    const tier = tiers[index];
-    if (tier === undefined) {
-      break;
-    }
-    cumulative += tier.entries.length;
-    if (cumulative >= faster) {
-      return { afterSpeed: tier.speed, beforeSpeed: tiers[index + 1]?.speed };
-    }
-  }
-  return { afterSpeed: tiers.at(-1)?.speed };
+  return { afterSpeed: tiers[index - 1]?.speed, beforeSpeed: tiers[index]?.speed };
 }
 
 /**
@@ -283,6 +277,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
   const modeGroupName = useId();
   const presetGroupName = useId();
   const natureGroupName = useId();
+  const filterMinimumNoticeId = useId();
 
   return (
     <div className="speed-screen">
@@ -301,8 +296,11 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
                 <input
                   type="checkbox"
                   checked={checked}
-                  disabled={lastOne}
+                  aria-disabled={lastOne}
+                  aria-describedby={lastOne ? filterMinimumNoticeId : undefined}
                   onChange={() => {
+                    // aria-disabled はキーボード操作を止めないため、切り替え側(toggleFilterPreset)にも
+                    // 「最後の1つは外せない」ガードを持たせている(二重のガード)。
                     toggleFilterPreset(id);
                   }}
                 />
@@ -311,7 +309,9 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
             );
           })}
           {selectedPresets.size === 1 && (
-            <p className="speed-screen__notice">{speedScreenText.filterMinimumNotice}</p>
+            <p id={filterMinimumNoticeId} className="speed-screen__notice">
+              {speedScreenText.filterMinimumNotice}
+            </p>
           )}
         </div>
 
@@ -504,19 +504,20 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
   );
 }
 
-/** 左の表の行(段 + 境界の印)。境界は position の応答(tie が無いとき)から作る(ADR-0604 §4)。 */
+/**
+ * 左の表の行(段 + 境界の印)。強調・境界は表示中(絞り込み後)の tiers の実数値と自分の実数値を直接比べて
+ * 決める(`positionState.value.tie`・`faster` は全6行基準なので、絞り込みで表示行数が変わると使えない。
+ * 2026-09-22 critic 指摘で修正)。同じ実数値の段が表示されていればそれを強調し、無ければ境界を引く。
+ */
 function renderTierRows(
   tiers: readonly Schemas["SpeedTier"][],
   positionState: RequestState<Schemas["PositionResponse"]>,
 ): ReactNode[] {
+  const ownSpeed: number | null = positionState.status === "success" ? positionState.value.speed : null;
   const selfTieSpeed: number | null =
-    positionState.status === "success" && positionState.value.tie.length > 0
-      ? positionState.value.speed
-      : null;
+    ownSpeed !== null && tiers.some((tier) => tier.speed === ownSpeed) ? ownSpeed : null;
   const boundary: Boundary | null =
-    positionState.status === "success" && positionState.value.tie.length === 0
-      ? computeBoundary(tiers, positionState.value.faster)
-      : null;
+    ownSpeed !== null && selfTieSpeed === null ? computeBoundary(tiers, ownSpeed) : null;
 
   const rows: ReactNode[] = [];
   if (boundary !== null && boundary.afterSpeed === undefined) {

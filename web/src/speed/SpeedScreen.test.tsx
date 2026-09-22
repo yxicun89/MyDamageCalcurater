@@ -246,10 +246,14 @@ describe("表の絞り込み", () => {
     const callsBeforeLast = client.tableCalls.length;
     const lastCheckbox = within(filter).getByRole("checkbox", { name: speedPresetText.uninvested });
 
-    expect(lastCheckbox).toBeDisabled();
+    // aria-disabled(disabled ではない)。キーボードでは到達できるが、切り替えは無視される(二重のガード)。
+    expect(lastCheckbox).toHaveAttribute("aria-disabled", "true");
+    expect(lastCheckbox).toBeEnabled();
     expect(within(filter).getByText(speedScreenText.filterMinimumNotice)).toBeInTheDocument();
+    expect(lastCheckbox).toHaveAccessibleDescription(speedScreenText.filterMinimumNotice);
     await user.click(lastCheckbox);
     expect(client.tableCalls).toHaveLength(callsBeforeLast);
+    expect(lastCheckbox).toBeChecked();
   });
 });
 
@@ -611,6 +615,79 @@ describe("A7 自分の位置の表示(強調・境界線)", () => {
 
     expect(within(tableRegion()).queryByTestId("speed-boundary")).toBeNull();
     expect(tiers().every((tier) => tier.getAttribute("data-self") === null)).toBe(true);
+  });
+
+  // 2026-09-22 critic 指摘: faster/slower は契約上つねに全6行基準だが、絞り込みで表示行数が変わると
+  // 基準が合わなくなる。境界・強調は表示中の tiers の実数値だけで決めること(faster 件数を使わない)。
+
+  test("絞り込み中は、表示中の段の実数値だけで境界を決める(faster 件数は使わない)", async () => {
+    const { user, client } = renderScreen();
+    await resolveInitial(client);
+
+    // max-scarf を外す → 300(BIRD,max-scarf のみ)の段が消え、200 は FISH,max-scarf が抜けて BIRD,max だけになる。
+    const filter = within(tableRegion()).getByRole("group", { name: speedScreenText.filterGroupLabel });
+    await user.click(within(filter).getByRole("checkbox", { name: speedPresetText["max-scarf"] }));
+    await flush(() => {
+      lastOf(client.tableCalls, "table").resolve({
+        ok: true,
+        value: {
+          regulationId: "example",
+          presets: ["uninvested", "neutral-max", "max", "max-plus1", "max-plus2"],
+          tiers: [
+            { speed: 200, entries: [entry(BIRD, "max")] },
+            { speed: 150, entries: [entry(FISH, "max")] },
+            { speed: 100, entries: [entry(GRASS, "uninvested")] },
+          ],
+        },
+      });
+    });
+
+    // faster/slower は全6行基準の値(300・200×2行・150・100 に対して 180 は faster=3・slower=2)をそのまま
+    // サーバーから受け取るが、表示は絞り込み後の3段だけなので、200 の直後・150 の直前に境界が来るはず。
+    await positionWith(user, client, { speed: 180, faster: 3, slower: 2, tie: [], pokemon: BIRD });
+
+    const boundary = within(tableRegion()).getByTestId("speed-boundary");
+    expect(boundary).toHaveAttribute("data-after-speed", "200");
+    expect(boundary).toHaveAttribute("data-before-speed", "150");
+    expect(tiers().map((tier) => tier.getAttribute("data-self"))).toEqual([null, null, null]);
+  });
+
+  test("同速の段が絞り込みで表示されていなければ、強調せず境界線を出す", async () => {
+    const { user, client } = renderScreen();
+    await resolveInitial(client);
+
+    // max-scarf だけに絞り込む → 300(BIRD,max-scarf)・200(FISH,max-scarf)だけが残り、150・100 は消える。
+    const filter = within(tableRegion()).getByRole("group", { name: speedScreenText.filterGroupLabel });
+    for (const id of ["uninvested", "neutral-max", "max", "max-plus1", "max-plus2"] as const) {
+      await user.click(within(filter).getByRole("checkbox", { name: speedPresetText[id] }));
+      await flush(() => {
+        lastOf(client.tableCalls, "table").resolve({
+          ok: true,
+          value: {
+            regulationId: "example",
+            presets: ["max-scarf"],
+            tiers: [
+              { speed: 300, entries: [entry(BIRD, "max-scarf")] },
+              { speed: 200, entries: [entry(FISH, "max-scarf")] },
+            ],
+          },
+        });
+      });
+    }
+
+    // サーバーは全6行基準で 150 に同速(tie)があると返すが、150 の段は絞り込みで表示されていない。
+    await positionWith(user, client, {
+      speed: 150,
+      faster: 2,
+      slower: 2,
+      tie: [entry(FISH, "max")],
+      pokemon: BIRD,
+    });
+
+    expect(tiers().every((tier) => tier.getAttribute("data-self") === null)).toBe(true);
+    const boundary = within(tableRegion()).getByTestId("speed-boundary");
+    expect(boundary).toHaveAttribute("data-after-speed", "200");
+    expect(boundary).not.toHaveAttribute("data-before-speed");
   });
 });
 
