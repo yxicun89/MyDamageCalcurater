@@ -16,6 +16,7 @@ const (
 	InternalError     ErrorCode = "internal_error"
 	InvalidRequest    ErrorCode = "invalid_request"
 	MasterUnavailable ErrorCode = "master_unavailable"
+	UnknownPokemon    ErrorCode = "unknown_pokemon"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
@@ -26,6 +27,8 @@ func (e ErrorCode) Valid() bool {
 	case InvalidRequest:
 		return true
 	case MasterUnavailable:
+		return true
+	case UnknownPokemon:
 		return true
 	default:
 		return false
@@ -47,30 +50,93 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
+// Defines values for MinimalPresetId.
+const (
+	MinimalPresetIdMax        MinimalPresetId = "max"
+	MinimalPresetIdNeutralMax MinimalPresetId = "neutral-max"
+	MinimalPresetIdUninvested MinimalPresetId = "uninvested"
+)
+
+// Valid indicates whether the value is a known member of the MinimalPresetId enum.
+func (e MinimalPresetId) Valid() bool {
+	switch e {
+	case MinimalPresetIdMax:
+		return true
+	case MinimalPresetIdNeutralMax:
+		return true
+	case MinimalPresetIdUninvested:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NatureId.
+const (
+	Minus   NatureId = "minus"
+	Neutral NatureId = "neutral"
+	Plus    NatureId = "plus"
+)
+
+// Valid indicates whether the value is a known member of the NatureId enum.
+func (e NatureId) Valid() bool {
+	switch e {
+	case Minus:
+		return true
+	case Neutral:
+		return true
+	case Plus:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PositionRequestMode.
+const (
+	Custom PositionRequestMode = "custom"
+	Preset PositionRequestMode = "preset"
+	Raw    PositionRequestMode = "raw"
+)
+
+// Valid indicates whether the value is a known member of the PositionRequestMode enum.
+func (e PositionRequestMode) Valid() bool {
+	switch e {
+	case Custom:
+		return true
+	case Preset:
+		return true
+	case Raw:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PresetId.
 const (
-	Max        PresetId = "max"
-	MaxPlus1   PresetId = "max-plus1"
-	MaxPlus2   PresetId = "max-plus2"
-	MaxScarf   PresetId = "max-scarf"
-	NeutralMax PresetId = "neutral-max"
-	Uninvested PresetId = "uninvested"
+	PresetIdMax        PresetId = "max"
+	PresetIdMaxPlus1   PresetId = "max-plus1"
+	PresetIdMaxPlus2   PresetId = "max-plus2"
+	PresetIdMaxScarf   PresetId = "max-scarf"
+	PresetIdNeutralMax PresetId = "neutral-max"
+	PresetIdUninvested PresetId = "uninvested"
 )
 
 // Valid indicates whether the value is a known member of the PresetId enum.
 func (e PresetId) Valid() bool {
 	switch e {
-	case Max:
+	case PresetIdMax:
 		return true
-	case MaxPlus1:
+	case PresetIdMaxPlus1:
 		return true
-	case MaxPlus2:
+	case PresetIdMaxPlus2:
 		return true
-	case MaxScarf:
+	case PresetIdMaxScarf:
 		return true
-	case NeutralMax:
+	case PresetIdNeutralMax:
 		return true
-	case Uninvested:
+	case PresetIdUninvested:
 		return true
 	default:
 		return false
@@ -94,6 +160,19 @@ type Health struct {
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
 
+// MinimalPresetId A preset one can pick for one's own pokemon (ADR-0602 §5): the three rows of ADR-0601 §2 that carry
+// no Choice Scarf, because `scarf` is chosen separately in a position request. The SP, nature and rank
+// of each are the ones PresetId describes.
+//
+// Example: max
+type MinimalPresetId string
+
+// NatureId The effect of the nature on speed (ADR-0600 §3, the same meaning as the core's NatureEffect):
+// minus = speed-down, neutral = no nature change, plus = speed-up.
+//
+// Example: plus
+type NatureId string
+
 // PokemonListResponse defines model for PokemonListResponse.
 type PokemonListResponse struct {
 	// Pokemon The available pokemon, sorted by pokemonId in ascending order.
@@ -103,6 +182,96 @@ type PokemonListResponse struct {
 	//
 	// Example: example
 	RegulationId string `json:"regulationId"`
+}
+
+// PositionRequest One's own pokemon, in one of the three shapes of ADR-0602 §2. Only `mode` is always required;
+// which of the other fields must be present, and which must be absent, depends on `mode`.
+type PositionRequest struct {
+	// Mode Which shape the request has (ADR-0602 §2).
+	// preset: pokemonId + preset + scarf. custom: pokemonId + sp + nature + rank + scarf.
+	// raw: value, with an optional pokemonId for display only.
+	//
+	//
+	// Example: preset
+	Mode PositionRequestMode `json:"mode"`
+
+	// Nature The effect of the nature on speed (ADR-0600 §3, the same meaning as the core's NatureEffect):
+	// minus = speed-down, neutral = no nature change, plus = speed-up.
+	//
+	//
+	// Example: plus
+	Nature *NatureId `json:"nature,omitempty"`
+
+	// PokemonId The pokemon of the read model. Required for preset and custom (its base speed is the input of
+	// the formula); optional for raw, where it only resolves the name and types of the response.
+	//
+	//
+	// Example: 9001-000
+	PokemonId *string `json:"pokemonId,omitempty"`
+
+	// Preset A preset one can pick for one's own pokemon (ADR-0602 §5): the three rows of ADR-0601 §2 that carry
+	// no Choice Scarf, because `scarf` is chosen separately in a position request. The SP, nature and rank
+	// of each are the ones PresetId describes.
+	//
+	//
+	// Example: max
+	Preset *MinimalPresetId `json:"preset,omitempty"`
+
+	// Rank The speed rank (custom only), -6 to +6 (ADR-0600 §3).
+	//
+	// Example: 1
+	Rank *int `json:"rank,omitempty"`
+
+	// Scarf Whether one's own pokemon holds a Choice Scarf (preset and custom only).
+	//
+	// Example: false
+	Scarf *bool `json:"scarf,omitempty"`
+
+	// Sp The speed SP (custom only). The upper bound is the per-stat SP cap of the domain
+	// (CLAUDE.md のドメイン規約・ADR-0600 §3。コアは engine.MaxSPPerStat を使う)。
+	//
+	//
+	// Example: 32
+	Sp *int `json:"sp,omitempty"`
+
+	// Value The in-battle speed itself (raw only), used as given. Accepted values are the theoretical
+	// minimum and maximum of the formula of ADR-0600 §3 over every base speed, SP, nature, rank and
+	// Choice Scarf (ADR-0602 §3); the service derives those bounds from the formula, so they are
+	// deliberately not repeated here as numbers.
+	//
+	//
+	// Example: 301
+	Value *int `json:"value,omitempty"`
+}
+
+// PositionRequestMode Which shape the request has (ADR-0602 §2).
+// preset: pokemonId + preset + scarf. custom: pokemonId + sp + nature + rank + scarf.
+// raw: value, with an optional pokemonId for display only.
+//
+// Example: preset
+type PositionRequestMode string
+
+// PositionResponse defines model for PositionResponse.
+type PositionResponse struct {
+	// Faster The number of table rows strictly faster than `speed`.
+	//
+	// Example: 12
+	Faster  int           `json:"faster"`
+	Pokemon *SpeedPokemon `json:"pokemon,omitempty"`
+
+	// Slower The number of table rows strictly slower than `speed`.
+	//
+	// Example: 30
+	Slower int `json:"slower"`
+
+	// Speed The in-battle speed of one's own pokemon (ADR-0602 §3).
+	//
+	// Example: 301
+	Speed int `json:"speed"`
+
+	// Tie The table rows with exactly this speed, sorted as a tier is (pokemonId ascending, then the
+	// preset order of ADR-0601 §2). An empty array means no speed tie.
+	Tie []SpeedTableEntry `json:"tie"`
 }
 
 // PresetId A row preset of the speed table (ADR-0601 §2), listed in the table order. Display names are client
@@ -190,6 +359,12 @@ type ListPokemonParams struct {
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
+// GetSpeedPositionParams defines parameters for GetSpeedPosition.
+type GetSpeedPositionParams struct {
+	XDeviceId  DeviceId  `json:"X-Device-Id"`
+	XSessionId SessionId `json:"X-Session-Id"`
+}
+
 // GetSpeedTableParams defines parameters for GetSpeedTable.
 type GetSpeedTableParams struct {
 	// Presets The rows to include, comma separated (ADR-0601 §4). Omitted means all six presets.
@@ -200,6 +375,9 @@ type GetSpeedTableParams struct {
 	XSessionId SessionId   `json:"X-Session-Id"`
 }
 
+// GetSpeedPositionJSONRequestBody defines body for GetSpeedPosition for application/json ContentType.
+type GetSpeedPositionJSONRequestBody = PositionRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// PublicHealth Ingress smoke check
@@ -208,6 +386,9 @@ type ServerInterface interface {
 	// ListPokemon List the pokemon available in the default regulation
 	// (GET /api/speed/v1/pokemon)
 	ListPokemon(ctx *echo.Context, params ListPokemonParams) error
+	// GetSpeedPosition Locate one's own pokemon in the speed table
+	// (POST /api/speed/v1/position)
+	GetSpeedPosition(ctx *echo.Context, params GetSpeedPositionParams) error
 	// GetSpeedTable Get the speed table of the default regulation
 	// (GET /api/speed/v1/table)
 	GetSpeedTable(ctx *echo.Context, params GetSpeedTableParams) error
@@ -275,6 +456,54 @@ func (w *ServerInterfaceWrapper) ListPokemon(ctx *echo.Context) error {
 
 	// Invoke the callback with all the unmarshaled arguments
 	err = w.Handler.ListPokemon(ctx, params)
+	return err
+}
+
+// GetSpeedPosition converts echo context to params.
+func (w *ServerInterfaceWrapper) GetSpeedPosition(ctx *echo.Context) error {
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSpeedPositionParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Device-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Device-Id")]; found {
+		var XDeviceId DeviceId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
+		}
+
+		params.XDeviceId = XDeviceId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Device-Id is required, but not found"))
+	}
+	// ------------- Required header parameter "X-Session-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Session-Id")]; found {
+		var XSessionId SessionId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
+		}
+
+		params.XSessionId = XSessionId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Session-Id is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.GetSpeedPosition(ctx, params)
 	return err
 }
 
@@ -392,5 +621,6 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 	router.GET(options.BaseURL+"/api/speed/healthz", wrapper.PublicHealth, options.OperationMiddlewares["publicHealth"]...)
 	router.GET(options.BaseURL+"/api/speed/v1/pokemon", wrapper.ListPokemon, options.OperationMiddlewares["listPokemon"]...)
 	router.GET(options.BaseURL+"/api/speed/v1/table", wrapper.GetSpeedTable, options.OperationMiddlewares["getSpeedTable"]...)
+	router.POST(options.BaseURL+"/api/speed/v1/position", wrapper.GetSpeedPosition, options.OperationMiddlewares["getSpeedPosition"]...)
 
 }
