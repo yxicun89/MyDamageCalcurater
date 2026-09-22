@@ -51,7 +51,7 @@ speed にも適用し、`main` への push だけでクラスタの speed の中
   前提にしており、Kustomize の load restrictor で overlay の外を参照できないため。ADR-0603 §1 と同じ制約)。そのため、GitOps で同期した
   speed は `SPEED_POKEMON_PATH` が未設定になり、`/healthz` は 200 でも **ポケモンを使う API(`/api/speed/v1/pokemon`・`table`・
   `position`)はすべて 503 `master_unavailable`** になる(ADR-0600 §4)。実データを GitOps でどう配るか(ConfigMap・Secret・Volume 等)は
-  クラウドのデプロイ先が決まってから別途決める(§1 の「クラウドでの実データの配布」と同じ未決事項)。
+  クラウドのデプロイ先が決まってから別途決める(§1 の「クラウド(本番相当)のレジストリは別途決める」と同じく、クラウド移行時にまとめて扱う未決事項)。
 - `speed-k3d-deploy`・`speed-k3d-deploy-readmodel`(架空データ・実データの local overlay)を **GitOps の同期のあとに** 実行すると、
   Argo CD からは Application が OutOfSync になる(manual sync なので自動では戻らない。balance のメモ〈docs/ai-shared/CURRENT_STATE.md
   の Type Balance Checker 欄〉と同じ運用)。GitOps の状態に戻すときは Argo CD で Sync する。
