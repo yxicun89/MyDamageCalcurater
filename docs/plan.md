@@ -112,6 +112,28 @@
 - ~~P4-13 素早さ比較の画面~~ → 取り消し(ユーザー決定 2026-09-22: 素早さレーンの SP3 のまま。Web は P4-10 の URL の仕組みで `/speed` を足せる形を用意する)
 - [x] P4-14 手順書の書き方の改善: docs/verify-m1.md を上から順に実行するだけで済む形にし、各コマンドの塊は必ずリポジトリのルートへの `cd` から始める(make の実行場所で迷わない)。k3d(コンテナ)で動かす手順を主にする(ユーザー要望 2026-09-22)
 - [x] P4-15 `make gen-ts` の再生成: main に別レーンの TB6(技範囲チェッカー)の openapi 追加が入っており、`web/src/api/balance.gen.ts` がまだ反映していなかった(P4-12b の範囲外と確認済み・critic PASS の指摘事項)。move-range の型が追加されただけで typecheck/test/lint は変化なし
+- [x] P4-16 Web のオンライン MasterSource の基盤(ADR-0301 §4・ADR-0304 A-1〜A-8。critic PASS。範囲は ADR-0304 A-7 の
+  段階分割どおり): `MasterData.capabilities?`(省略時は既存どおり全機能あり)、`createOnlineMasterSource`(持ち物・
+  性格を全件取得、種族は `searchSpecies`/`getSpecies` を都度引く検索専用インターフェース、技・持ち物候補比較・特性一覧は
+  公開 API に無いデータに依存するため capabilities で明示的に無効を伝える)、`App.tsx`/`main.tsx` の配線。
+  実装時に見つけた重大バグ(`baseUrl: "/"`(本番の既定)で `new URL(path, baseUrl)` が Invalid URL 例外を投げ、
+  オンラインモードが常に失敗する)を修正し回帰テストを追加(critic 指摘。文字列連結に変更)。画面側は未着手
+- [ ] P4-16b Web のオンライン MasterSource の画面側(ADR-0304 A-5・A-7): 種族の検索コンボボックス、技選択・持ち物候補比較・
+  特性一覧が使えないときの無効化と案内表示(`i18n/ja.ts` の `masterOnlineText` を使う)。`web/src/screens/*.tsx` が対象。
+  併せて拾う軽微な積み残し(P4-16 の2回目 critic PASS で指摘。ブロッカーではない): (1) `onlineSource.ts` の
+  AbortError 再送出に検証テストが無い(検索キャンセル実装時に signal で reject するテストを追加)。
+  (2) `response.json()` 側の catch は abort を汎用エラーに潰す(fetch 側と同じ扱いに揃える)。
+  (3) `onlineSource.test.ts` の `urlOf` に基点を足した副作用で、`natures`/`species` の呼び出しは絶対 URL の
+  origin を検査していない(`items` のみ検査済み)。(4) `SPECIES_SEARCH_DEBOUNCE_MS` が未使用なら削除か使用を確認
+- [ ] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら
+  `capabilities.moves` を true にして技を復活させる
+- [ ] P4-18 Codex コードレビューの issue(Web レーン主担当。タイプバランスレーンから 2026-09-23 に連絡・`gh issue view <番号>`)。
+  優先: #99(bug, accessibility)ライトテーマのエラー文字色がコントラスト基準未達(iOS と共有デザイントークン同期が必要)、
+  #113(improvement)逆算の数値入力で古い計算要求を抑止・キャンセル(200ms debounce・AbortSignal。iOS・API と連携)。
+  次点: #98(bug)モバイル幅で計算・逆算画面が横に溢れる、#67(bug)2xx の契約外 JSON で API クライアントが例外を投げる(防御的処理)。
+  連携(他レーン主担当。Web は連携のみ): #71(データ+Web+iOS 攻撃側プリセット単一化)・#72(API+Web ルート make e2e を Playwright へ)・
+  #78(API+Web 特性の無効・吸収の境界反映)・#110(主担当 API。calc 候補配列の上限)・#103(主担当 API・データ。M2保存データの
+  保持期間。ユーザー決定 2026-09-23 で needs-decision は解消済み。DECISIONS.md参照。Web は連携のみで主担当ではない)
 
 ## M2: 保存・構築
 - [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)
@@ -231,6 +253,7 @@
 
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)
+- [x] issue #110(セキュリティ。Codex レビュー)の API レーン担当分: `POST /api/calc/bulk`・`/api/calc/reverse` の候補・観測配列に件数上限が無く、1MiB未満の小さな本文で計算量を増幅できた(2,000×2,000 で約9.4秒)。契約(`maxItems`/`uniqueItems`/`maximum`。ADR-0208)を追加し、calc-svc の生成ラッパは検証しないため(実測確認済み)自前検証をID解決・engine呼び出しより前に実装。critic PASS、実HTTPで境界値と再現手順の解消(0.9ms・engine未到達)を確認。engine/wasmapi(データレーン)・Web・iOSへの追従は DECISIONS.md に既定案付きで依頼(issue はレーンの完了までクローズしない)
 - MySQL の manifest に MYSQL_DATABASE が無く、初回起動時に pokedex DB が自動作成されない実バグを発見(データレーンが k3d に初めて実デプロイした際に発生)。deploy/k8s/overlays/local/mysql/statefulset.yaml に MYSQL_DATABASE: pokedex を追加し、layout_test.go に検知テストを追加して修正(2026-09-22)。**新規クラスタでは直るが、この修正前にすでに初期化済みの PVC は MYSQL_DATABASE の効果を受けない**(コンテナ起動時にしか実行されない仕様のため)。既存の PVC に対しては CREATE DATABASE を手動実行するしかない。docs/runbooks/data.md に一言注記するとよい
 - P2-3 の critic の軽微(2026-09-22。未反映の4件): `check-publishable.sh` の `B_KEYVALUE_ALLOW` を self-test の基準リポジトリにも播く / `maxCatalogAbilityCount` が balance の schema・loader と三重管理(テストで検出はできる) / natures-mismatch のエラー案内が Showdown 側だけを見て `make import-fetch` の案内が出ないことがある / `TestPublicInputValidation` の 400 応答を契約検証(kin-openapi)に通す
 

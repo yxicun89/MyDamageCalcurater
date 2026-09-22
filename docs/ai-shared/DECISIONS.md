@@ -862,3 +862,49 @@ Decision: 判定レーンからの提案(2026-09-22)を受けて実装した P5-
 - balance の read model(services/balance)には影響なし(schema・loader 未変更。番人テストで今後の誤追加を検知する)。
 Reason: 判定レーンの提案を実装するにあたり、取得元の実データを調査した結果、提案時のデータ形式・取得方針から変更が必要だった。
 Impact: docs/plan.md P5-6・docs/adr/0107。判定レーンは JD1(ADR-0701 の Individual.ranks 方式)をそのまま使い続けてよい。公開APIの拡張が要るときはデータレーン・API レーンに依頼すること。
+
+## 2026-09-23(追記): P5-6 の独立レビュー指摘の反映(データレーン)
+Decision: critic の FAIL 指摘を反映した(PASS 前提の修正。ADR-0107 に追記節で記録)。
+- accuracy/evasion が atk 等の engine が持つステータスと同じエントリに混ざっても、常に `KindMoveEffectUnsupportedStat` の警告を残すようにした(以前は stages が空のときしか警告を積まず、混在時に無音で消えていた)。
+- `secondaries` の判定基準を「配列の件数」から「boosts(自分・相手とも)を伴う要素の件数」に変更した。実データで firefang/icefang/thunderfang/triplearrows が secondaries を2件持つが中身は火傷・氷結・麻痺・ひるみでランク変化ではなく、そのままだと `import-dry-run` が実運用で必ずこの4技を blocker にし続けていた。`ShowdownMove.Secondaries` を `int` から `[]ShowdownSecondary` に変え、件数の判定を Go 側(`secondaryBoostCount`)に置いてテスト可能にした。
+Reason: 独立レビュー(critic)の指摘。詳細は docs/adr/0107 の「追記(2026-09-23)」節。
+Impact: docs/adr/0107・services/pokedex/importer(convert_move_effects.go・snapshot.go)・tools/importer/fetch-showdown.mjs。他レーンへの影響なし。
+
+## 2026-09-23: Web オンライン MasterSource — getSpecies.learnset の ID→実体化を提案(Web レーンからデータ/API レーンへ)
+Decision(Webレーンの設計。ADR-0304): オンラインモードの種族・技選択は検索ベース UI にする(`searchSpecies`/`searchMoves` が
+`limit<=200` 固定・ページングパラメータ無しのため、種族349件・技515件は一括取得できないと実クラスタで確認した。
+持ち物166件・性格25件は1回の取得で足りるので一覧のままでよい)。
+提案(データ/API レーンへ。既定案: `getSpecies` の応答の `learnset` を技ID配列 (`string[]`) から `Move` 実体の配列に変える):
+`searchMoves` は日本語名の前方一致でしか技を引けず、技を ID で個別解決する公開エンドポイントも無いため、
+`getSpecies` の `learnset`(ID配列)を人が読める技名・タイプ・分類に解決する手段が公開 API に無い。
+`services/pokedex/internal/httpapi/search.go` の `getSpecies` は `ListSpeciesLearnset` で ID を得た後そのまま返しており、
+`store.Queries.ListMoves` 相当の材料は既にあるので、ハンドラ内で ID→実体に解決してから返す変更は実装コストが小さいはず、
+というのが Web レーンの推測(データ/API レーンでの実際の見積もりを優先する)。代案(ADR-0304 §3 案B)は
+`GET /api/pokedex/moves/{id}` 等の個別解決エンドポイント追加。どちらでも Web 側の対応は小さく変わるだけなので、
+実装しやすい方を選んでよい。
+Reason: 技の一覧が515件で `limit` 上限(200)を超え、offset/cursor 等のページング手段も無いため、オンラインモードで
+「その種族が覚えられる技」を正しく出す手立てが、既存の公開 API の組み合わせだけでは無い(名前検索と ID の突き合わせが原理的にできない)。
+Impact: 返答・実装があるまで、Web のオンラインモードは種族・持ち物・性格の選択を先に作り、技を必要とする操作
+(ダメージ技の選択等)は「オンライン未対応」として無効化した状態で進める(ADR-0304 §4)。この提案が承認・実装され次第、
+Web 側は技も検索/一覧に切り替える。急ぎではない(ブロッカーにはしていない)。
+## 2026-09-23: calc の候補・観測件数に上限を置く(issue #110。API レーンから データ/Web/iOS レーンへ)
+Decision: api/openapi.yaml に maxItems / uniqueItems / maximum を入れた(presets 8+unique、itemVariants 64+unique、
+itemCandidates 64+unique、observations 16、maxCandidates 0..128)。calc-svc は生成ラッパの schema 検証に依存できない
+(oapi-codegen の echo5/strict サーバーはヘッダしか検証しないことを生成物と実測で確認)ため、ID 解決・engine 呼び出しより
+前に自前で検証し 400 invalid_input で拒否する。presets の重複だけは既存どおり duplicate_preset(件数 9 以上は invalid_input が先)。
+新しい ErrorCode は足さない。設計は ADR-0208。critic PASS(実HTTPで境界値・issueの再現手順の解消を確認: 2,000×2,000が9.43秒→0.9ms)。
+Reason: 1MiB 未満の本文で presets × itemVariants、itemCandidates × 33SP × observations × 16rolls の全組合せを計算させられる
+(issue #110)。maxCandidates は出力を切るだけで計算量が減らず、本文サイズ制限も gateway の 10 秒タイムアウトもサーバー内部の
+増幅を止めない。
+Impact(依頼):
+- データレーン(engine): engine.CalcBulk / CalcReverse にも同じ防御上限(presets 8 / ItemVariants 64 / ItemCandidates 64 /
+  Observations 16 / MaxCandidates 0 または 1..128)を置いてください。HTTP を通らない直接呼び出し・WASM でも巨大入力を計算しない
+  ようにするためです。上限超過は engine の sentinel(命名はデータレーンの判断)。engine の純粋性は保てます(定数と sentinel だけ)。
+- データレーン(engine/wasmapi): 同じ上限を wasmapi の語彙で invalid_input 相当に写し、HTTP/WASM parity テストを足してください。
+  HTTP 側の code は invalid_input です(presets 重複だけ duplicate_preset)。
+- Web レーン: 観測追加 UI を 16 件で無効化(理由表示・アクセシビリティ通知)。持ち物候補が 64 件を超える場合は黙って切り捨てず、
+  明示的なエラーか仕様で決めた決定的な絞り込みにしてください。生成型(openapi.gen.ts)の差分はコメントのみで型は変わりません。
+- iOS レーン: 同様の対応(観測 16 件上限・候補 64 件超の扱い)。
+- 残存リスク(このADRの範囲外): 同時実行数・レート制限は扱っていない。上限ちょうどの reverse は約22.6msのCPUを要するため、
+  calc-svc の CPU limit(200m)は理論上 約9 req/s 程度で飽和しうる。レート制限は gateway かクラスタ側の別課題。
+- issue #110 は API レーンの分だけでは閉じない。engine/WASM・Web・iOS が追従してから閉じる。

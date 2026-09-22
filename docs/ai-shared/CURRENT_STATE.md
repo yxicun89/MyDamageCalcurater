@@ -11,10 +11,10 @@ Next: main へ PR。その後は他レーン(Codexレビュー issue #106 排他
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
-Active: なし
-Branch: (次は main から feat/api-<名前> を切る。作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: Phase 3 完了(PR #14・#23・#30)、P3-4〜P3-6(ADR-0204/0205/0206。PR #42/#54/#87)、DOC-api(README・手順書。PR #117)は main に統合済み
-Next: 特に無し。他レーン(データ・Web・iOS)からの依頼待ち
+Active: Claude Code
+Branch: feat/api-issue110-limits(PR で main へ。作業ディレクトリ ~/MyDamageCalcurater-api)
+Status: Phase 3 完了、P3-4〜P3-6・DOC-api は main に統合済み。issue #110(セキュリティ。Codex レビュー)の API レーン担当分(契約の maxItems/uniqueItems・calc-svc の自前検証。ADR-0208)は critic PASS。PR 作成待ち
+Next: (1) issue #110 の PR を main へ(マージ後、他レーンへ依頼: engine/wasmapi に同じ防御上限、Web/iOS の観測16件・候補64件UI。DECISIONS.md に既定案あり。issue はレーンの完了までクローズしない)。(2) issue #103(M2保存データの保持・削除・端末ID境界。ユーザー決定=一定期間の自動失効。ADR作成。データレーンと調整)
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
@@ -26,11 +26,19 @@ exportBalanceReadModel に absorb と ADR-0106 §決定7の出力順・無効優
 verify-m1.md を完成版にした: P2-2c/d・P2-3・P3-3 が main に入り、k3d(gateway 経由 http://localhost:8080)で
 計算・逆算・タイプバランス(仮想敵・おすすめタイプ含む)を実地確認(pokedex-svc は実データ投入済みだが、
 gateway/calc-svc のマスタ参照先はまだ pokedex-svc に向いていない。API レーンの依頼 d が一時停止中)。
-P4-5 は Chrome で確認済み(Safari は未確認。人間の作業)
-Next: (1) pokedex-svc の公開 API から Web のオンライン MasterSource を作る(ADR-0301 §4。gateway/calc の
-pokedex 配線待ちなので、API レーンの依頼 d が進んでから本格着手するのが自然)。
-(2) 続いて P5-5(構築ビルダー等)は record/team の API 待ち。
-(3) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
+P4-5 は Chrome で確認済み(Safari は未確認。人間の作業)。
+**P4-16(オンライン MasterSource の基盤。ADR-0304)完了・main 統合済み(PR #128)**: `createOnlineMasterSource`
+(持ち物・性格を全件取得、種族は `searchSpecies`/`getSpecies` の検索専用インターフェース)、
+`MasterData.capabilities`(技選択・持ち物候補比較・特性一覧は公開 API の欠落により明示的に無効化)、
+`App.tsx`/`main.tsx` の配線。critic 1回目 FAIL で重大バグ発見(`apiBaseUrl()` の既定値 `"/"` で
+`new URL(path, baseUrl)` が例外を投げ、オンラインモードが常に失敗していた)→ 修正・回帰テスト追加 → 2回目 critic PASS。
+既存のオフライン・全画面・既存752件のテストは無変更。技の ID→実体化(`getSpecies.learnset`)は公開 API に手段が無く、
+データ/API レーンへ既定案付きで提案済み(DECISIONS.md 2026-09-23、未回答・急ぎではない)。
+Next: (1) P4-16b(画面側。ADR-0304 A-5): 種族の検索コンボボックス、技選択・持ち物候補比較・特性一覧が使えないときの
+無効化と案内表示(`web/src/screens/*.tsx` が対象。plan.md に軽微な積み残し4件も記録済み)。
+(2) P4-18(Codexレビュー issue。タイプバランスレーンから連絡): 優先 #99(アクセシビリティ)・#113(debounce/cancel)。
+(3) 続いて P5-5(構築ビルダー等)は record/team の API 待ち。
+(4) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)

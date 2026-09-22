@@ -185,4 +185,22 @@ final class LocalTeamStoreTests: XCTestCase {
         }
         XCTAssertEqual(error?.code, PokeCalcError.Code.teamDuplicateMoves)
     }
+
+    /// issue #101: 負の SP を含むチームは `TeamValidator` を経由して却下され、永続化されない
+    /// (`LocalTeamStore.save` は `TeamValidator.firstViolation` の結果をそのまま投げるだけなので、
+    /// バリデータ側の修正がそのままここに効く)。
+    func testSaveRejectsTeamWithNegativeSP() async throws {
+        let store = LocalTeamStore(defaults: defaults)
+        let invalidMember = TeamMember(
+            speciesKey: "test-species-alpha", natureId: "test-nature-neutral",
+            sp: StatBlock(hp: -1, atk: 0, def: 0, spa: 0, spd: 0, spe: 0)
+        )
+        let error = await assertThrowsPokeCalcError("save negative SP") {
+            try await store.save(Team(name: "テストチーム", members: [invalidMember]))
+        }
+        XCTAssertEqual(error?.code, PokeCalcError.Code.teamSPInvalid)
+
+        let listed = try await store.list()
+        XCTAssertEqual(listed, [], "無効なチームは保存されない")
+    }
 }

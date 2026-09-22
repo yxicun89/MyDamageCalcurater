@@ -123,6 +123,31 @@ export const appText = {
 } as const;
 
 /**
+ * P4-16: オンラインのマスタ(pokedex-svc の公開 API。ADR-0304)で、公開 API の制約により使えない機能の案内と、
+ * 種族の検索 UI の文言。画面は MasterCapabilities(master/types.ts)が false の機能について、
+ * 操作を無効にしたうえでここの文言を添える(黙って空の選択肢を出さない。ADR-0304 §4)。
+ */
+export const masterOnlineText = {
+  /** capabilities.moves が false のとき、技の選択に添える案内。 */
+  movesUnavailable:
+    "オンラインでは技を選べません(技の一覧に未対応のため、ダメージ計算はオフラインで行ってください)",
+  /** capabilities.effects が false のとき、持ち物の候補比較(計算画面・逆算画面)に添える案内。 */
+  itemCandidatesUnavailable: "オンラインでは持ち物の候補を比較できません(持ち物の効果データに未対応)",
+  /** capabilities.speciesList が false のときの種族の検索欄のラベル。 */
+  speciesSearchLabel: "ポケモンを名前で検索",
+  /** 検索欄の補足(前方一致・1文字から)。 */
+  speciesSearchHint: "日本語名の先頭の文字を入力すると候補が出ます",
+  /** 入力前(空のクエリ)の案内。候補は出さない(空 = 全件にしない)。 */
+  speciesSearchEmpty: "名前を入力してください",
+  /** 前方一致で1件も無いとき。 */
+  speciesSearchNoResult: "一致するポケモンがありません",
+  /** 候補が上限(SPECIES_SEARCH_LIMIT)に達したとき、全件ではないことを明示する。 */
+  speciesSearchTruncated: "候補が多いため一部だけ表示しています。名前をもう少し入力してください",
+  /** 検索・種族の取得に失敗したとき(自動でオフラインには切り替えない。ADR-0301 §4)。 */
+  speciesSearchFailed: "ポケモンの検索に失敗しました",
+} as const;
+
+/**
  * P4-12a: balance API のクライアント(api/balanceClient.ts、ADR-0303 §1・§6)の文言。
  * 通信できない・応答が読めない・エラー本文の形が不正なとき(自動でオフラインへは切り替えない)。
  */

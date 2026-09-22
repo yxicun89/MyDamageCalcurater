@@ -142,12 +142,23 @@ public final class TeamEditViewModel {
         }
     }
 
+    /// 種族変更で `abilityId` が旧種族の特性のまま残らないようにする(issue #100)。現在の `abilityId` が
+    /// 新種族の `detail.abilities` にまだあれば保持し、無ければ新種族の先頭特性へ差し替える(候補が空なら
+    /// `nil`)。表示(`abilityOptionsByMember`)・保存値(`team.members[index].abilityId`)・計算入力
+    /// (`TeamMemberConverter`)を常に一致させるため(既定案どおり)。
     private func applySpeciesChange(_ detail: SpeciesDetail, speciesKey: String, toMemberID id: String) {
         guard let index = team.members.firstIndex(where: { $0.id == id }) else { return }
         let options = moveOptions(from: detail)
         team.members[index].speciesKey = speciesKey
         team.members[index].moveIds = team.members[index].moveIds.filter { moveId in
             options.contains(where: { $0.id == moveId })
+        }
+        let currentAbilityId = team.members[index].abilityId
+        let abilityStillValid = currentAbilityId.map { abilityId in
+            detail.abilities.contains(where: { $0.id == abilityId })
+        } ?? false
+        if !abilityStillValid {
+            team.members[index].abilityId = detail.abilities.first?.id
         }
         moveOptionsByMember[id] = options
         abilityOptionsByMember[id] = detail.abilities
