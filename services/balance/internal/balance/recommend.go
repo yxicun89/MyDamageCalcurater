@@ -1,11 +1,13 @@
 package balance
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"sort"
+)
 
-// TB5 おすすめタイプと該当ポケモン(ADR-0401)。
-//
-// spec-writer が置いたコンパイル用のスタブ。RecommendTypes は zero 値を返すだけで、
-// 実装は implementer が ADR-0401 §2〜4 と recommend_test.go に従って書く。
+// TB5 おすすめタイプと該当ポケモン(ADR-0401)。TB1〜4 の計算(CalculateDefenseWithAbility /
+// CalculateDefense / AnalyzeCoverage の attackTypesOf と同じ考え方)を再利用する。
 
 const (
 	// DefaultRecommendationLimit is the number of candidates returned when the request has no limit (ADR-0401 §3).
@@ -85,6 +87,314 @@ type Recommendation struct {
 // every pokemon of the read model. abilities may be nil: AbilityOptions is then empty.
 // limit must be MinRecommendationLimit..MaxRecommendationLimit.
 func RecommendTypes(chart TypeChartProvider, members []Combatant, catalog []CatalogPokemon, abilities AbilityProvider, limit int) (Recommendation, error) {
-	// TODO(implementer): ADR-0401 の実装。
-	return Recommendation{}, nil
+	if len(members) < 1 || len(members) > MaxMembers {
+		return Recommendation{}, ErrMemberCount
+	}
+	if limit < MinRecommendationLimit || limit > MaxRecommendationLimit {
+		return Recommendation{}, ErrRecommendationLimit
+	}
+	if chart == nil {
+		return Recommendation{}, ErrNilTypeChart
+	}
+	for _, member := range members {
+		if err := validateDefenseTypes(member.Types); err != nil {
+			return Recommendation{}, err
+		}
+	}
+	for _, member := range members {
+		if err := validateCombatantMoves(member.Moves); err != nil {
+			return Recommendation{}, err
+		}
+	}
+	for _, member := range members {
+		if err := validateCombatantAbility(member.Ability); err != nil {
+			return Recommendation{}, err
+		}
+	}
+
+	allTypes := AllTypes()
+
+	defenseHoles, err := recommendDefenseHoles(chart, members, allTypes)
+	if err != nil {
+		return Recommendation{}, err
+	}
+	offenseHoles, err := recommendOffenseHoles(chart, members, allTypes)
+	if err != nil {
+		return Recommendation{}, err
+	}
+
+	candidates, err := recommendCandidates(chart, defenseHoles, offenseHoles, allTypes)
+	if err != nil {
+		return Recommendation{}, err
+	}
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+	for i := range candidates {
+		candidates[i].Pokemon = matchingPokemon(catalog, candidates[i].Types)
+	}
+
+	var abilityOptions []AbilityOption
+	if abilities != nil {
+		abilityOptions = make([]AbilityOption, len(defenseHoles))
+		for i, attack := range defenseHoles {
+			pokemon, err := abilityOptionsFor(chart, attack, catalog, abilities)
+			if err != nil {
+				return Recommendation{}, err
+			}
+			abilityOptions[i] = AbilityOption{AttackType: attack, Pokemon: pokemon}
+		}
+	}
+
+	return Recommendation{
+		DefenseHoles:   defenseHoles,
+		OffenseHoles:   offenseHoles,
+		Candidates:     candidates,
+		AbilityOptions: abilityOptions,
+	}, nil
+}
+
+// recommendDefenseHoles finds every attack type that no member resists or is immune to,
+// with the members' abilities applied (ADR-0401 §2, TB1/TB3 rules).
+func recommendDefenseHoles(chart TypeChartProvider, members []Combatant, allTypes []TypeID) ([]TypeID, error) {
+	var holes []TypeID
+	for _, attack := range allTypes {
+		covered := false
+		for _, member := range members {
+			result, err := CalculateDefenseWithAbility(chart, attack, member.Types, member.Ability)
+			if err != nil {
+				return nil, err
+			}
+			category, err := ClassifyEffectiveness(result.Effectiveness)
+			if err != nil {
+				return nil, err
+			}
+			if category == CategoryResist || category == CategoryQuadResist || category == CategoryImmune {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			holes = append(holes, attack)
+		}
+	}
+	return holes, nil
+}
+
+// recommendOffenseHoles finds every single defense type the party's own moves cannot hit at
+// x1 or more (ADR-0401 §2, TB2's teamCoverage). A party without any attack move has no
+// offense hole at all (§7.1: a team of only status moves counts the same as no move).
+func recommendOffenseHoles(chart TypeChartProvider, members []Combatant, allTypes []TypeID) ([]TypeID, error) {
+	memberAttackTypes := make([][]TypeID, len(members))
+	hasAttack := false
+	for i, member := range members {
+		memberAttackTypes[i] = attackTypesOf(member.Moves)
+		if len(memberAttackTypes[i]) > 0 {
+			hasAttack = true
+		}
+	}
+	if !hasAttack {
+		return nil, nil
+	}
+
+	var holes []TypeID
+	for _, defense := range allTypes {
+		effective := false
+		for _, attackTypes := range memberAttackTypes {
+			for _, attackType := range attackTypes {
+				matchup, err := chart.Matchup(attackType, defense)
+				if err != nil {
+					return nil, fmt.Errorf("type chart matchup %s/%s: %w", attackType, defense, err)
+				}
+				if matchup >= MultiplierNormal {
+					effective = true
+					break
+				}
+			}
+			if effective {
+				break
+			}
+		}
+		if !effective {
+			holes = append(holes, defense)
+		}
+	}
+	return holes, nil
+}
+
+// allRecommendationCombos returns the 171 candidate type sets (18 single, 153 dual) in
+// canonical order: every single type first (canonical order), then duals by their first
+// then second type (both canonical order). This is also the ADR-0401 §3 tie-break order,
+// so a stable sort by (total desc, weaknesses asc) alone reproduces it for ties.
+func allRecommendationCombos(allTypes []TypeID) [][]TypeID {
+	combos := make([][]TypeID, 0, len(allTypes)+len(allTypes)*(len(allTypes)-1)/2)
+	for _, t := range allTypes {
+		combos = append(combos, []TypeID{t})
+	}
+	for i := 0; i < len(allTypes); i++ {
+		for j := i + 1; j < len(allTypes); j++ {
+			combos = append(combos, []TypeID{allTypes[i], allTypes[j]})
+		}
+	}
+	return combos
+}
+
+// recommendCandidates scores every type-set combination against the holes (ADR-0401 §3) and
+// returns the ones that fill at least one hole, in the final order (candidates without any
+// hole are left out before the limit is applied by the caller).
+func recommendCandidates(chart TypeChartProvider, defenseHoles, offenseHoles, allTypes []TypeID) ([]TypeCandidate, error) {
+	var candidates []TypeCandidate
+	for _, combo := range allRecommendationCombos(allTypes) {
+		var defenseCovered []TypeID
+		for _, attack := range defenseHoles {
+			result, err := CalculateDefense(chart, attack, combo)
+			if err != nil {
+				return nil, err
+			}
+			if result.Multiplier < MultiplierNormal {
+				defenseCovered = append(defenseCovered, attack)
+			}
+		}
+
+		var offenseCovered []TypeID
+		for _, defense := range offenseHoles {
+			hit := false
+			for _, own := range combo {
+				matchup, err := chart.Matchup(own, defense)
+				if err != nil {
+					return nil, fmt.Errorf("type chart matchup %s/%s: %w", own, defense, err)
+				}
+				if matchup >= MultiplierNormal {
+					hit = true
+					break
+				}
+			}
+			if hit {
+				offenseCovered = append(offenseCovered, defense)
+			}
+		}
+
+		if len(defenseCovered)+len(offenseCovered) == 0 {
+			continue
+		}
+
+		weaknesses := 0
+		for _, attack := range allTypes {
+			result, err := CalculateDefense(chart, attack, combo)
+			if err != nil {
+				return nil, err
+			}
+			if result.Multiplier >= MultiplierDouble {
+				weaknesses++
+			}
+		}
+
+		candidates = append(candidates, TypeCandidate{
+			Types:          combo,
+			DefenseCovered: defenseCovered,
+			OffenseCovered: offenseCovered,
+			Weaknesses:     weaknesses,
+		})
+	}
+
+	sort.SliceStable(candidates, func(i, j int) bool {
+		ti := len(candidates[i].DefenseCovered) + len(candidates[i].OffenseCovered)
+		tj := len(candidates[j].DefenseCovered) + len(candidates[j].OffenseCovered)
+		if ti != tj {
+			return ti > tj
+		}
+		return candidates[i].Weaknesses < candidates[j].Weaknesses
+	})
+	return candidates, nil
+}
+
+// matchingPokemon returns every catalog pokemon whose type set equals comboTypes (in any
+// order), pokemonId ascending (ADR-0401 §4).
+func matchingPokemon(catalog []CatalogPokemon, comboTypes []TypeID) []RecommendedPokemon {
+	want := typeSet(comboTypes)
+	matched := make([]CatalogPokemon, 0, len(catalog))
+	for _, pokemon := range catalog {
+		if typeSetEqual(typeSet(pokemon.Types), want) {
+			matched = append(matched, pokemon)
+		}
+	}
+	sort.Slice(matched, func(i, j int) bool { return matched[i].PokemonID < matched[j].PokemonID })
+
+	result := make([]RecommendedPokemon, len(matched))
+	for i, pokemon := range matched {
+		types := make([]TypeID, len(pokemon.Types))
+		copy(types, pokemon.Types)
+		result[i] = RecommendedPokemon{PokemonID: pokemon.PokemonID, NameJa: pokemon.NameJa, Types: types}
+	}
+	return result
+}
+
+func typeSet(types []TypeID) map[TypeID]struct{} {
+	set := make(map[TypeID]struct{}, len(types))
+	for _, t := range types {
+		set[t] = struct{}{}
+	}
+	return set
+}
+
+func typeSetEqual(a, b map[TypeID]struct{}) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for t := range a {
+		if _, ok := b[t]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// abilityOptionsFor lists, for one defense hole (attack), the catalog pokemon that one of
+// their abilities takes below x1 while their types alone do not (ADR-0401 §4), pokemonId
+// ascending then abilityId ascending (§7.3). An abilityId the provider does not know is
+// skipped (§7.2: an export inconsistency does not fail the whole endpoint); any other
+// provider failure is propagated.
+func abilityOptionsFor(chart TypeChartProvider, attack TypeID, catalog []CatalogPokemon, abilities AbilityProvider) ([]AbilityPokemon, error) {
+	sorted := make([]CatalogPokemon, len(catalog))
+	copy(sorted, catalog)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].PokemonID < sorted[j].PokemonID })
+
+	var result []AbilityPokemon
+	one := Effectiveness{Num: 1, Den: 1}
+	for _, pokemon := range sorted {
+		base, err := CalculateDefense(chart, attack, pokemon.Types)
+		if err != nil {
+			return nil, err
+		}
+		// Types alone already cover the hole: not an ability option (ADR-0401 §4).
+		if base.Multiplier < MultiplierNormal {
+			continue
+		}
+
+		abilityIDs := make([]string, len(pokemon.AbilityIDs))
+		copy(abilityIDs, pokemon.AbilityIDs)
+		sort.Strings(abilityIDs)
+		for _, abilityID := range abilityIDs {
+			ability, err := abilities.Ability(abilityID)
+			if err != nil {
+				if errors.Is(err, ErrUnknownAbility) {
+					continue
+				}
+				return nil, err
+			}
+			withAbility, err := CalculateDefenseWithAbility(chart, attack, pokemon.Types, &ability)
+			if err != nil {
+				return nil, err
+			}
+			if withAbility.Effectiveness.Cmp(one) < 0 {
+				result = append(result, AbilityPokemon{
+					PokemonID:  pokemon.PokemonID,
+					NameJa:     pokemon.NameJa,
+					AbilityID:  abilityID,
+					Multiplier: withAbility.Effectiveness,
+				})
+			}
+		}
+	}
+	return result, nil
 }
