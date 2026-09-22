@@ -265,7 +265,7 @@ func TestDamageRejectsInvalidBody(t *testing.T) {
 }
 
 // TestDamageOnConnectionError: 誰も待ち受けていない上流は ErrUpstreamUnavailable で、
-// 文面に上流の URL(deadBaseURL)を含まない(ADR-0700 §3。受け入れ条件5)。
+// 文面に上流の URL・アドレスを含まない(ADR-0700 §3。受け入れ条件5)。
 func TestDamageOnConnectionError(t *testing.T) {
 	t.Parallel()
 
@@ -276,6 +276,19 @@ func TestDamageOnConnectionError(t *testing.T) {
 	if strings.Contains(err.Error(), deadBaseURL) {
 		t.Errorf("エラーが上流の URL を漏らしている: %s", err.Error())
 	}
+	assertNoUpstreamAuthority(t, err.Error(), deadBaseURL)
+}
+
+// TestDamageOnDNSError: ホスト名が解決できない上流も ErrUpstreamUnavailable で、
+// 文面にホスト名を含まない(*net.DNSError.Error() はホスト名を埋め込むため別経路で検査)。
+func TestDamageOnDNSError(t *testing.T) {
+	t.Parallel()
+
+	_, err := newCalc(t, deadHostBaseURL, testTimeout).Damage(t.Context(), requestContext, exampleCalcRequest())
+	if !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Fatalf("err = %v, want ErrUpstreamUnavailable", err)
+	}
+	assertNoUpstreamAuthority(t, err.Error(), deadHostBaseURL)
 }
 
 // TestDamageTimesOut: 答えない上流を設定のタイムアウトで打ち切り、文面に上流の URL を含まない
@@ -298,4 +311,5 @@ func TestDamageTimesOut(t *testing.T) {
 	if strings.Contains(err.Error(), server.URL) {
 		t.Errorf("エラーが上流の URL を漏らしている: %s", err.Error())
 	}
+	assertNoUpstreamAuthority(t, err.Error(), server.URL)
 }

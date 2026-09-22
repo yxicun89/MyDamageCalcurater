@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -122,12 +123,27 @@ func send(ctx context.Context, httpClient *http.Client, req *http.Request, rc Re
 	return resp, nil
 }
 
-// transportFailureReason describes a Do error without the request URL httpClient.Do embeds
-// in *url.Error's own Error() text (ADR-0700 §3: never put the upstream URL in the message).
+// transportFailureReason classifies a Do error into a fixed vocabulary that never contains
+// an address or hostname (ADR-0700 §3: never put the upstream URL in the message). Both
+// *net.DNSError.Error() and *net.OpError.Error() embed the address they were dialing, so
+// this deliberately avoids ever calling those two types' Error() method; only the innermost
+// syscall-level error (e.g. "connect: connection refused"), which names no host, is safe to
+// pass through.
 func transportFailureReason(err error) string {
 	var urlErr *url.Error
-	if errors.As(err, &urlErr) && urlErr.Err != nil {
-		return urlErr.Err.Error()
+	if !errors.As(err, &urlErr) {
+		return "transport error"
+	}
+	if urlErr.Timeout() {
+		return "timeout"
+	}
+	var dnsErr *net.DNSError
+	if errors.As(urlErr.Err, &dnsErr) {
+		return "dns lookup failed"
+	}
+	var opErr *net.OpError
+	if errors.As(urlErr.Err, &opErr) && opErr.Err != nil {
+		return opErr.Err.Error()
 	}
 	return "transport error"
 }

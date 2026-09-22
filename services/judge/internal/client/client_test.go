@@ -3,6 +3,8 @@ package client
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 )
@@ -40,6 +42,27 @@ func blockingServer(t *testing.T) *httptest.Server {
 
 // deadBaseURL は誰も待ち受けていないアドレス(接続エラーの検査に使う)。
 const deadBaseURL = "http://127.0.0.1:1"
+
+// deadHostBaseURL は解決できないホスト名(RFC 2606 の予約 TLD .invalid。DNS エラーの検査に使う)。
+const deadHostBaseURL = "http://judge-upstream.invalid:8080"
+
+// assertNoUpstreamAuthority は、message に rawURL の authority(host[:port])やホスト名が
+// 含まれていないことを確かめる(ADR-0700 §3。受け入れ条件5)。scheme+path の文字列一致だけでは
+// *net.OpError/*net.DNSError が Addr・ホスト名を自前で埋め込むケースを見逃すため、authority
+// 単体でも検査する。
+func assertNoUpstreamAuthority(t *testing.T, message, rawURL string) {
+	t.Helper()
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		t.Fatalf("テストの前提が壊れている: url.Parse(%q): %v", rawURL, err)
+	}
+	if strings.Contains(message, u.Host) {
+		t.Errorf("エラーが上流のアドレス(%s)を漏らしている: %s", u.Host, message)
+	}
+	if hostname := u.Hostname(); hostname != "" && strings.Contains(message, hostname) {
+		t.Errorf("エラーが上流のホスト名(%s)を漏らしている: %s", hostname, message)
+	}
+}
 
 // TestNewRejectsInvalidConfig: base URL とタイムアウトは起動時に検証する(ADR-0700 §3)。
 // 設定ミスを起動時に気づけるようにし、リクエストのたびに失敗させない。

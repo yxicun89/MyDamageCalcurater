@@ -203,7 +203,7 @@ func TestSpeciesRejectsOversizedBody(t *testing.T) {
 }
 
 // TestSpeciesOnConnectionError: 誰も待ち受けていない上流は ErrUpstreamUnavailable で、
-// 文面に上流の URL(deadBaseURL)を含まない(ADR-0700 §3。受け入れ条件5)。
+// 文面に上流の URL・アドレスを含まない(ADR-0700 §3。受け入れ条件5)。
 func TestSpeciesOnConnectionError(t *testing.T) {
 	t.Parallel()
 
@@ -214,6 +214,19 @@ func TestSpeciesOnConnectionError(t *testing.T) {
 	if strings.Contains(err.Error(), deadBaseURL) {
 		t.Errorf("エラーが上流の URL を漏らしている: %s", err.Error())
 	}
+	assertNoUpstreamAuthority(t, err.Error(), deadBaseURL)
+}
+
+// TestSpeciesOnDNSError: ホスト名が解決できない上流も ErrUpstreamUnavailable で、
+// 文面にホスト名を含まない(*net.DNSError.Error() はホスト名を埋め込むため別経路で検査)。
+func TestSpeciesOnDNSError(t *testing.T) {
+	t.Parallel()
+
+	_, err := newPokedex(t, deadHostBaseURL, testTimeout).Species(t.Context(), requestContext, "9001-000")
+	if !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Fatalf("err = %v, want ErrUpstreamUnavailable", err)
+	}
+	assertNoUpstreamAuthority(t, err.Error(), deadHostBaseURL)
 }
 
 // TestSpeciesTimesOut: 答えない上流を設定のタイムアウトで打ち切る(ADR-0700 §2)。
@@ -236,6 +249,7 @@ func TestSpeciesTimesOut(t *testing.T) {
 	if strings.Contains(err.Error(), server.URL) {
 		t.Errorf("エラーが上流の URL を漏らしている: %s", err.Error())
 	}
+	assertNoUpstreamAuthority(t, err.Error(), server.URL)
 }
 
 // TestSpeciesHonorsCallerContext: 呼び出し元の context が終わったら、設定のタイムアウトを待たずに戻り、
