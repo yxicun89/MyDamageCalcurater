@@ -668,3 +668,8 @@ Web レーンは P4-10 の URL で画面を切り替える仕組み(ルート表
 タイプバランスの画面(P4-12)は、担当が決まっていないので Web レーンが作る。
 Reason: 上の「Web の画面・コンテナ化・手順書の方針」で P4-13 を Web に置いたが、素早さの画面は既に素早さレーンの範囲と決まっていた(素早さレーンの指摘)。ユーザーが素早さレーンのままを選んだ。
 Impact: plan.md の P4-13 を取り消し。素早さレーンの SP3 はそのまま。
+
+## 2026-09-22: 各レーンのメインセッションは Sonnet で起動する(ユーザー決定)
+Decision: Claude Code の各レーンのメインセッションは `--model sonnet` で起動し、設計の判断が重いときだけ `/model opus` に切り替えて戻す。サブエージェントの割り当て(spec-writer・critic は Opus、implementer は Sonnet、quick-scanner は Haiku)は変えない。
+Reason: 6レーンのメインセッションをすべて Opus で動かすと、Max プランでも5時間の利用枠に達する。ユーザーが「メインだけ Sonnet にする」を選んだ。
+Impact: CLAUDE.md のワークフロー、COORDINATION.md の起動の目安。動いているセッションは `/model sonnet` で切り替える。
