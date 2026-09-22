@@ -48,19 +48,17 @@ Next: (1) データレーンが export(data/generated/readmodel)を再生成し�
 ## Speed
 Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
 Active: Claude Code
-Branch: feat/speed-sp4(SP2 は feat/speed-sp2 → PR #83 で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
-Status: SP0〜SP2 は完了・main に統合(PR #32・#36・#52・#83)。SP4(pokedex export の read model を k3d の speed に読ませる配線。ADR-0603。
-balance の ADR-0403 と同じ形: `cmd/checkreadmodel`・`scripts/k3d-deploy-readmodel.sh`・`scripts/smoke-readmodel.sh`・`deploy/k8s/overlays/local-readmodel`)は
-critic PASS(2回目。1回目 NG 重要1件〈ADR-0600 §2 と ADR-0603 の GitOps 記述の矛盾。ADR-0600 に変更履歴を追記・docs/speed-design.md の段階表から
-GitOps を SP5 として分離・plan.md に SP5 を追加して修正〉)。fixture データ(testdata/pokemon.example.json)で k3d への実配線・非回帰(架空データの
-local overlay)を確認済み。**実データ(pokedex-svc の DB)での最終確認は未実施**(DSN の取り扱いがこのセッションの権限で扱えないため。
+Branch: feat/speed-sp3(SP4 は feat/speed-sp4 → PR #86 で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
+Status: SP0〜SP2・SP4(pokedex export の read model を k3d の speed に読ませる配線。ADR-0603。critic PASS。fixture データで k3d への
+実配線・非回帰を確認済み)は完了・main に統合(PR #32・#36・#52・#83・#86)。SP3(Web の素早さ画面。ADR-0604。左=速い順の表
+〈道具・ランクの絞り込み付き〉・右=自分のポケモン〈preset/custom/raw〉。web/src/speed/ の中に SpeedScreen・speedClient・生成型を置き、
+web/src/app/{routes.ts,screens.tsx}・i18n/ja.ts・App.tsx に最小限の追記〈Web レーンと合意〉)は critic PASS(3回目。1回目 NG 重要2件
+〈絞り込みUIの見送りが未記録・ja.ts追記範囲がADR合意を超過〉・2回目 NG 重要1件〈絞り込み UI 追加で境界線が誤った位置に出る回帰〉を
+修正)。PR 作成待ち。**SP4 の実データ(pokedex-svc の DB)での最終確認は未実施**(DSN の取り扱いがこのセッションの権限で扱えないため。
 `make pokedex-export`(データレーンの docs/runbooks/data.md の手順で DB を用意した状態で、POKEDEX_DATABASE_DSN を設定して実行)→
-`make speed-k3d-deploy-readmodel && make speed-smoke-readmodel` を人間または権限のあるセッションで実行して確認する)。PR 作成待ち
-Next: SP4 の PR を作って main に統合(実データでの最終確認は、DSN を扱えるセッションで PR 前後どちらでもよい)→ SP3(`web/src/speed/` の画面は
-素早さレーンのまま。タブ登録は3か所に1件ずつ: web/src/app/routes.ts の SCREEN_ROUTES・web/src/i18n/ja.ts の appText.speedTabLabel・
-web/src/app/screens.tsx の SCREEN_COMPONENTS。P4-10 は PR #44 で main に統合済み。テストの例は web/src/App.routing.test.tsx と
-web/e2e/routing.spec.ts)→ SP5(GitOps。ADR-0603 で SP4 から分離。イメージの digest が決まる段階で着手)。SP4 までに決めた: 空の roster の
+`make speed-k3d-deploy-readmodel && make speed-smoke-readmodel` を、DSN を扱えるセッションか人間が実行して確認する)。空の roster の
 扱いは pokedex export が1件以上を返す前提のまま(ADR-0603 影響。実データで0件になる状況が起きたら別途決める)
+Next: SP3 の PR を作って main に統合 → SP5(GitOps。ADR-0603 で SP4 から分離。イメージの digest が決まる段階で着手)
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

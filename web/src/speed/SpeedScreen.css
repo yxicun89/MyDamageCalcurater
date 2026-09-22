@@ -1,0 +1,207 @@
+/*
+ * SP3: 素早さ比較の画面(docs/adr/0604-speed-sp3-web-screen.md)。左 = 速い順の表、右 = 自分のポケモン。
+ * 色は必ず tokens.css の CSS 変数で参照する(web/src/styles/noColorLiterals.test.ts)。
+ * 自分の位置の強調・境界線は --danger を使わず、控えめな強調(枠線・背景)にする(ADR-0604 §4)。
+ * 常時動くアニメーションは入れない(CLAUDE.md ドメイン規約)。
+ */
+
+.speed-screen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-5);
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+/* 左: 速い順の全体の表。 */
+.speed-table {
+  flex: 2 1 320px;
+  min-width: 0;
+}
+
+/* 左の表の絞り込み(道具・ランク。ユーザー確定仕様)。 */
+.speed-table__filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.speed-table__filter-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.speed-table__tiers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.speed-tier {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--bg-glass-blur));
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-primary);
+}
+
+/* 自分と同じ段(position の tie)。控えめな枠線と背景でだけ示す(ADR-0604 §4)。 */
+.speed-tier--self {
+  border-width: 2px;
+  border-color: var(--text-secondary);
+}
+
+.speed-tier__speed {
+  font-size: var(--font-size-heading);
+}
+
+.speed-tier__tie {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.speed-tier__entries {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.speed-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* タイプ色のエンブレム(画像は必須にしない。CLAUDE.md ドメイン規約・CalcScreen.css と同じ形)。 */
+.speed-entry__emblem {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-pill);
+}
+
+.speed-entry__preset {
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+}
+
+/* 自分の行が挟まる境界(同速が無いとき)。 */
+.speed-boundary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-top: 2px solid var(--text-secondary);
+  padding-top: var(--space-1);
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+/* 右: 自分のポケモン。 */
+.speed-self {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.speed-self__modes {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.speed-self__mode {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-primary);
+}
+
+.speed-self__mode--selected {
+  border-color: var(--text-secondary);
+}
+
+.speed-self__field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-primary);
+}
+
+.speed-self__field select,
+.speed-self__field input[type="number"] {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  padding: var(--space-2) var(--space-3);
+}
+
+.speed-self__result {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--bg-glass-blur));
+  padding: var(--space-3);
+}
+
+.speed-self__speed {
+  font-size: var(--font-size-result);
+}
+
+.speed-self__result-label {
+  margin: var(--space-3) 0 var(--space-1);
+  font-weight: bold;
+}
+
+/* 自分と同じ段(position の tie)の読み上げ用の語。見た目には出さない(強調はボーダーで表す。ADR-0604 §4)。 */
+.speed-tier__self-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.speed-screen__notice,
+.speed-screen__error {
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-secondary);
+}

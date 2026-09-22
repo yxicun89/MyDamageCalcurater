@@ -114,6 +114,8 @@ export const appText = {
   reverseTabLabel: "逆算",
   /** P4-12a: タイプバランスのタブ(ADR-0303 §2)。 */
   balanceTabLabel: "タイプバランス",
+  /** SP3: 素早さ比較のタブ(ADR-0604 §2)。 */
+  speedTabLabel: "素早さ",
   /** 計算モード(オフライン = WASM / オンライン = API)の切り替え(P4-5、ADR-0301 §4)。 */
   calcModeGroupLabel: "計算モード",
   calcModeOfflineLabel: "オフライン(WASM)",
@@ -213,6 +215,71 @@ export const balanceScreenText = {
   /** 特性で補えるポケモンの1件(「名前(特性名 ×倍率)」)。 */
   abilityOptionEntryLabel: (name: string, ability: string, multiplier: string): string =>
     `${name}(${ability} ${multiplier})`,
+} as const;
+
+/**
+ * SP3: speed API のクライアント(speed/speedClient.ts、ADR-0604 §3)の文言。
+ * 通信できない・応答が読めない・エラー本文の形が不正なとき(自動の切り替え先は持たない)。
+ */
+export const speedClientText = {
+  unavailable: "素早さの API に接続できません",
+} as const;
+
+/**
+ * SP3: 素早さの表の行(PresetId。ADR-0601 §2、docs/speed-design.md §5)の表示名。
+ * 表示名は契約に含めず、クライアントの文言資源が持つ(services/speed/api/openapi.yaml の PresetId の説明)。
+ * MinimalPresetId(自分のポケモンで選べる3つ)も同じ語を使う。
+ */
+export const speedPresetText = {
+  uninvested: "無振り",
+  "neutral-max": "準速",
+  max: "最速",
+  "max-scarf": "最速スカーフ",
+  "max-plus1": "最速+1",
+  "max-plus2": "最速+2",
+} as const;
+
+/** SP3: 素早さ比較の画面(speed/SpeedScreen.tsx、ADR-0604 §4)の文言。 */
+export const speedScreenText = {
+  /** 左(速い順の全体の表)・右(自分のポケモン)の領域の名前(ADR-0604 §1)。 */
+  tableRegionLabel: "素早さの表",
+  selfRegionLabel: "自分のポケモン",
+  /** 表がそろうまでの表示(左だけ。右の入力は先に使える。ADR-0604 §4)。 */
+  loadingNotice: "読み込み中",
+  /** 段の素早さの実数値。 */
+  tierSpeedLabel: (speed: number): string => `素早さ ${String(speed)}`,
+  /** 左の表の絞り込み(道具・ランク。ADR-0601 §4、docs/plan.md「SP: 素早さ比較」の確定仕様)。 */
+  filterGroupLabel: "表の絞り込み",
+  /** 絞り込みで最後の1つを外そうとしたとき(契約上、presets は1つ以上。ADR-0601 §4)。 */
+  filterMinimumNotice: "少なくとも1つは選ぶ必要があります",
+  /** 同じ段に2行以上あるとき(同速)のバッジ。右の結果の同速の一覧の見出しにも使う。 */
+  tieLabel: "同速",
+  /** 右の結果で同速の行が無いとき。 */
+  noTieLabel: "同速なし",
+  /** 左の表で、自分と同じ段を強調したときに読み上げる語。 */
+  selfTierLabel: "自分と同速",
+  /** 左の表で、自分の行が挟まる境界に引く印。 */
+  selfBoundaryLabel: "ここに自分が入る",
+  /** 行の中の区切り(「名前・調整」)。 */
+  entrySeparator: "・",
+  // ---- 右(自分のポケモン)の入力(ADR-0604 §4) ----
+  modeGroupLabel: "入力の方法",
+  modeLabel: { preset: "プリセット", custom: "カスタム", raw: "実数値" } as const,
+  pokemonLabel: "ポケモン",
+  /** ポケモンを選んでいないときの選択肢(raw では選ばなくてよい)。 */
+  unselectedOption: "未選択",
+  presetGroupLabel: "調整",
+  scarfLabel: "こだわりスカーフ",
+  spLabel: "素早さ SP",
+  natureGroupLabel: "性格補正",
+  natureLabel: { minus: "下降", neutral: "補正なし", plus: "上昇" } as const,
+  rankLabel: "ランク",
+  rawValueLabel: "実数値",
+  // ---- 右(自分のポケモン)の結果(ADR-0604 §4) ----
+  positionLoadingNotice: "位置を計算中",
+  selfSpeedLabel: (speed: number): string => `実数値 ${String(speed)}`,
+  fasterLabel: (rows: number): string => `自分より速い ${String(rows)}行`,
+  slowerLabel: (rows: number): string => `自分より遅い ${String(rows)}行`,
 } as const;
 
 /**

@@ -67,3 +67,15 @@ test("未知のパスを開くと /calc に置き換わる", async ({ page }) =>
   await expect(page).toHaveURL(/\/calc$/);
   await expect(tab(page, "計算")).toHaveAttribute("aria-selected", "true");
 });
+
+// SP3(ADR-0604 §2): 素早さ比較のタブ。/speed を直接開ける(SPA のフォールバック)。
+// speed-svc はこの構成では動いていないので、API は失敗するが画面(右の自分の入力)は出る(ADR-0604 §4)。
+test("/speed を直接開くと素早さタブが選択され、自分のポケモンの入力が出る", async ({ page }) => {
+  const response = await page.goto("/speed");
+  expect(response?.status()).toBe(200);
+  await waitForTabs(page);
+  await expect(tab(page, "素早さ")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("region", { name: "自分のポケモン", exact: true })).toBeVisible();
+  await expect(page).toHaveTitle("素早さ | pokecalc");
+  expect(pathOf(page)).toBe("/speed");
+});
