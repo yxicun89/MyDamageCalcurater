@@ -818,3 +818,12 @@ Impact: 今後 gateway の README を §8 の5節だけに削る場合は、ま�
 Decision: ADR-0701(`POST /api/judge/v1/outspeed-and-ko`。素早さの求め方・こだわりスカーフ・性格解決・上流呼び出し順序・エラー対応表)を PR #118 で main に統合した。critic は2回目で PASS(1回目 NG 重要3件: 上流エラーのログ未記録・pokedex 400 の扱いが ADR 未記載・defender 側スカーフ/種族差の未検証。いずれも修正し、期待値は実行結果で検算済み)。
 Reason: `make test`・`make lint`・`make build`(ルート)が緑、critic PASS、他レーンの範囲外変更なし(COORDINATION.md の共有ファイル規約の範囲内)を確認してマージした。
 Impact: 判定レーンのブランチを `feat/judge-jd2` に切り替えた(JD1 の `feat/judge-jd1` は削除)。JD2(複数の相手候補・場の効果・画面)は plan.md の方針どおり、着手前にユーザーへ確認する。
+
+## 2026-09-22: JD2〜JD5 の範囲・順序をユーザーが確定。API レーンへの依頼(既定案付き。判定レーン)
+Decision: ユーザーが「複数の相手候補・相手の技を含めた返り討ち判定・場の効果(トリックルーム等)・Web/iOS の画面」の4項目すべてを対象と回答した(技の追加効果によるランク変化の自動反映は対象外のまま)。
+判定レーンは技術的な依存関係から順序を JD2(場の効果)→ JD3(複数の相手候補)→ JD4(返り討ち判定)→ JD5(画面)に決めた(docs/judge-design.md §3)。
+**API レーンへの依頼(既定案。今回は提案の記録のみで、api/openapi.yaml は変更していない)**: JD4(相手の技を含めた返り討ち判定)には技の優先度(`priority`)が要るが、
+`GET /api/pokedex/moves` は日本語名の前方一致検索のみで、moveId 1件を引く detail endpoint が無い。`GET /api/pokedex/species/{key}` と同じ形で
+`GET /api/pokedex/moves/{key}` を追加してほしい(species の `SpeciesDetail` に相当する `MoveDetail` を返す。既存の `Move` スキーマで足りるはず)。
+Reason: judge が上流から priority を引く手段が無いと、先に動く側を正しく決められず JD4 が実装できない。
+Impact: 優先度は低い(JD2・JD3 は依頼を待たずに進められる)。着手は JD3 完了後でよい。API レーンが実装したら plan.md の JD4 の行を進められる。
