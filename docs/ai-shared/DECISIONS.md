@@ -571,3 +571,8 @@ up.sh の最後で `make api-docker-build` と `k3d image import` を呼ぶ形�
 Reason: critic の推奨。共有スクリプトは他レーンの範囲のため。
 Impact: `api-k3d-deploy` は他レーンのリソースに触れないよう、常に API 専用の overlay(deploy/k8s/overlays/local-api)だけを適用する(ADR-0203)。
 >>>>>>> origin/main
+
+## 2026-09-22: iOS レーンの統合(PR #31)
+Decision: P6-1(ADR-0500)・P6-2a 計算画面・P3-1/P3-2 の契約変更への追従を PR #31 で main にマージした(critic はそれぞれ PASS。make test / lint / build / check-publishable / ios-test が成功)。
+Reason: ユーザー回答(2026-09-22)「契約追従が緑になったら PR」。
+Impact: 続き(P6-2b 逆算画面・P6-2c 構築)は同じブランチ feat/ios-p6 で進める。
