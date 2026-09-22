@@ -158,7 +158,9 @@
 - [x] SP2 自分のポケモンの位置(ADR-0602。critic PASS。preset/custom/raw の3モード・faster/slower/tie・POST /api/speed/v1/position)
 - [x] SP3 Web の素早さ画面(ADR-0604。critic PASS。左右の配置・自分の位置の強調・表の絞り込み。`web/src/speed/`)
 - [~] SP4 pokedex の read model(データレーン P2-3)への切り替えと k3d の疎通(ADR-0603。配線は実装・fixture データで疎通確認済み。実データでの最終確認は critic 後)
-- [ ] SP5 GitOps(digest 固定の overlay と Argo CD Application。ADR-0603 で SP4 から分離。イメージの digest が決まる段階で着手)
+- [x] SP5 GitOps(ADR-0605。critic PASS。digest 固定の overlay・Argo CD Application・balance-registry と Argo CD を共有。
+  `speed-gitops-template-check` まで実行して確認済み。クラスタへの実際の適用〈speed-argocd-app・registry-push・sync〉は
+  人間の確認のもとで別途。手順は docs/runbooks/speed.md の節5〜10)
 
 ## JD: 判定(判定レーン。設計は docs/judge-design.md。2026-09-22 ユーザー要望)
 「ニトチャ+メイン技で素早さ抜ける+そのポケモンを倒せるか」を1回の入力で確認する。engine を直接呼び、pokedex-svc と calc-svc の公開 API だけに依存する(speed-svc には依存しない)。
@@ -169,7 +171,7 @@
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
 各レーンが自分の範囲の README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)と、動かして確かめられるレーンは手順書(`docs/runbooks/<レーン>.md`。AGENTS.md「手順書の書き方」に従う)を書く。全体図は `docs/architecture.md`。
 - [x] DOC-data: `engine/README.md`・`services/pokedex/README.md`・`tools/importer/README.md`・`tools/golden/README.md`、手順書 `docs/runbooks/data.md`(migrate・import・dry-run の確認)
-- [ ] DOC-api: `services/calc/README.md`・`services/gateway/README.md` を §8 の形に、手順書 `docs/runbooks/api.md`(k3d での疎通)
+- [x] DOC-api: `services/calc/README.md`・`services/gateway/README.md` を §8 の形に、手順書 `docs/runbooks/api.md`(k3d での疎通)。critic PASS
 - [x] DOC-web: `web/README.md`、手順書(`docs/verify-m1.md` の画面の部分と重複させない。M1 の完了報告は verify-m1.md にまとめる)
 - [x] DOC-tb: `services/balance/README.md` を §8 の形に、手順書 `docs/runbooks/balance.md`
 - [x] DOC-speed: `services/speed/README.md` を §8 の形に、手順書 `docs/runbooks/speed.md`(k3d での疎通を確認済み)

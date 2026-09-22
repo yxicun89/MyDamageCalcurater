@@ -1,61 +1,43 @@
 # calc-svc
 
-ダメージ計算・一括計算・逆算の HTTP サービス(ステートレス)。契約は `api/openapi.yaml` の `calc` タグ、設計は
-[ADR-0200](../../docs/adr/0016-calc-svc-api-contract.md)・[ADR-0204](../../docs/adr/0204-calc-master-from-pokedex-internal-api.md)。
-計算は `engine/` の公開 API を呼ぶだけで、独自の式を持たない。
+ダメージ計算・一括計算・逆算の HTTP サービス(ステートレス)。契約は `api/openapi.yaml` の `calc` タグ。
+計算は `engine/` の公開 API を呼ぶだけで、独自の式を持たない。マスタは起動時に pokedex-svc の内部 API(または
+テスト用ファイル)から読み、メモリに載せる。
 
-## 起動
-
-マスタ一式(`MasterExport`。下記)は `CALC_MASTER_URL` か `CALC_MASTER_PATH` の**ちょうど1つ**で渡す。
-k3d(base・local・local-api のどの overlay でも)は **URL 方式**(`CALC_MASTER_URL=http://pokedex`。ADR-0206)。
-ファイル方式(`CALC_MASTER_PATH`)は `make dev` とテスト専用。
-
-| 環境変数 | 必須 | 意味 |
-|---|---|---|
-| `CALC_ADDR` | いいえ(既定 `:8080`) | 待ち受けアドレス |
-| `CALC_MASTER_URL` | どちらか一方 | pokedex-svc のベース URL。`GET {URL}/internal/pokedex/master` からマスタ一式を取得する |
-| `CALC_MASTER_PATH` | どちらか一方 | マスタ一式(`MasterExport` の形)の JSON ファイル(`make dev`・テスト用) |
-
-`CALC_TYPECHART_PATH` は廃止した(タイプ相性表は `MasterExport` に含まれる)。設定されていると起動しない。
-
-- **ファイル方式**(`CALC_MASTER_PATH`): 起動時に読み込む。読めない・契約違反なら非ゼロで終了する
-  (既定データへのフォールバックはしない。ADR-0013)。`/readyz` は最初から `200`。
-- **URL 方式**(`CALC_MASTER_URL`): HTTP サーバはすぐ起動し、バックグラウンドで取得を指数バックオフ再試行する。
-  取得できるまで calc の3操作と `GET /readyz` は `503 master_unavailable`、`GET /healthz` は `200`。
-  取得後は再取得しない(マスタの更新は `kubectl rollout restart` で反映する)。
-
-```sh
-cd services
-# ファイル方式
-CALC_MASTER_PATH=calc/testdata/master.example.json go run ./calc/cmd/calc
-
-# URL 方式(pokedex-svc の内部 API から取得する)
-CALC_MASTER_URL=http://pokedex go run ./calc/cmd/calc
+```mermaid
+flowchart LR
+  GW["gateway"] -->|"/api/calc, /api/calc/bulk, /api/calc/reverse"| HTTP
+  subgraph calc["calc-svc"]
+    HTTP["internal/httpapi<br/>検証・ID解決・応答"] --> Engine["engine<br/>CalcDamage/CalcBulk/CalcReverse"]
+    Source["internal/master<br/>Source(File/HTTP)"] --> Store["MemoryStore"] --> HTTP
+  end
+  Pokedex["pokedex-svc<br/>GET /internal/pokedex/master"] -.->|"CALC_MASTER_URL"| Source
+  File["testdata/master.example.json<br/>(架空データ)"] -.->|"CALC_MASTER_PATH"| Source
 ```
 
-`GET /healthz` は `200 {"status":"ok"}`(liveness)。`GET /readyz` はマスタを読み込み済みなら `200 {"status":"ok"}`、
-まだなら `503 master_unavailable`(readiness)。どちらも運用エンドポイントで openapi には載せない。
+## ディレクトリ
 
-## マスタ一式(MasterExport)
+| パス | 役割 |
+|---|---|
+| `internal/httpapi` | `api.ServerInterface` の実装。厳格デコード・列挙検証・ID解決・engine呼び出し・応答の変換 |
+| `internal/master` | `Store`(Species/Move/Item/Ability/Nature/TypeChart)と、`MasterExport` からの読み込み(`export.go`)、入手元 `Source`(ファイル・HTTP) |
+| `cmd/calc` | 起動・環境変数の読み込み・URL方式のバックオフ再取得・graceful shutdown |
+| `calctest` | 他サービスのテストから calc-svc の実物を起動するための口(gateway の契約テスト等が使う) |
+| `testdata/master.example.json` | 架空データの `MasterExport`(ファイル方式・`make dev`・テストの fallback で使う) |
 
-正本は pokedex-svc の DB(ADR-0100)。契約は `api/openapi.yaml` の `GET /internal/pokedex/master`
-(タグ `internal`。gateway は公開しない)が返す `MasterExport`。形は pokedex の DB の行
-(`services/internal/master` の `TypeRow` / `TypeChartRow` / `SpeciesRow` + `SpeciesAbilityRow` / `MoveRow` /
-`ItemRow` / `AbilityRow`)に対応する。相性表・種族・技・持ち物・特性の値の検証(ID の形式・範囲・組の整合・
-効果定義)は共通マスタ(`services/internal/master`)の写像で行う。性格(`natures`)だけは、まだ pokedex に
-テーブルが無いため calc-svc 側で検証する(ID が空・重複でない、`plus`/`minus` が `StatKey` で HP を指さない)。
+## よく使うコマンド(リポジトリのルートで)
 
-実データはコミットしない(ADR-0002)。例 [`testdata/master.example.json`](testdata/master.example.json) は
-架空データ + 相性表(ファイル方式・`make dev`・`calctest`・契約テスト・スモークの fallback で使う。ADR-0206)。
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make test lint build          # engine・services 全体の一部として実行される
+make api-docker-build         # イメージのビルド
+make api-kustomize            # k8s マニフェストが描画できるか
+```
 
-k3d では pokedex-svc(ADR-0105)の内部 API からマスタを取る。`make up` の直後は DB が未投入なので、初回だけ
-`make import-k8s` を実行するまで `/readyz` が `503 master_unavailable` のままになる(ADR-0204 §3)。
+ローカルでの起動・k3d への疎通確認は [`docs/runbooks/api.md`](../../docs/runbooks/api.md)。
 
-- `FromExport`(`internal/master/export.go`)がロード時にエラーにするもの: `schemaVersion` が 1 でない・
-  `dataVersion` が空、種類ごとの ID の重複、種族/技/持ち物/特性/性格の値の不正(共通マスタ・engine の検証)、
-  種族の特性・メガの元種族・メガストーンが対応する一覧に無い、性格の不正。すべて `ErrInvalidMaster` に包み、
-  該当すれば共通マスタの `ErrInvalidRow` / `ErrInvalidEffect`、`engine.ErrInvalidTypeChart` も `errors.Is` で判別できる。
-- `DecodeExport` は厳格デコード(未知のフィールド・後続データ・必須のトップレベルフィールドの欠落/null を拒否)。
-  効果定義(`item_effects` / `ability_effects` の JSON)の数値は字面のまま保つ(`5324.0` を `5324` に丸めない)。
-- 性格 ID の写像(`Store.NatureID`): 無補正は「無補正の性格(plus == minus)を ID の昇順で並べた最初」、それ以外は
-  (plus, minus) が一致する性格。該当なしは `natureId: null`。
+## 関連 ADR
+
+- [ADR-0200](../../docs/adr/0200-calc-svc-api-contract.md) calc-svc の API 契約とマスタ境界
+- [ADR-0204](../../docs/adr/0204-calc-master-from-pokedex-internal-api.md) マスタを pokedex-svc の内部 API から受け取る(起動時1回・準備状態・`/readyz`)
+- [ADR-0206](../../docs/adr/0206-wire-to-pokedex-svc.md) k3d を pokedex-svc につなぐ

@@ -44,24 +44,25 @@ P6-3(`make ios-test` の総仕上げ)→ P6-4(手順書は AGENTS.md「手順書
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
 Active: なし(TB6 完了・main 統合済み。次はユーザー指示待ち)
 Branch: 次は main から feat/tb-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
-Status: 設計書(docs/type-balance-design.md)の TB0〜TB6 はすべて main に統合済み(TB6: 技範囲チェッカー、PR #65)。P2-3b(特性の無効・吸収)は main に engine 側の実装が入った(ADR-0106。データレーンの別ライン)ので、balance の read model 再生成待ちは解消に近づいている見込み。メガフォームの nameJa が英語表記のままの件はデータレーンへ確認候補として残る(ブロッカーではない)
-Next: (1) データレーンが export(data/generated/readmodel)を再生成したら `make balance-k3d-deploy-readmodel && make balance-smoke-readmodel` で実データ確認(特性の無効・吸収を含む)する。(2) Web レーンが `make gen-ts` を実行して `web/src/api/balance.gen.ts` に move-range の型を反映する。設計書の TB0〜TB6 はすべて完了、以後はユーザーからの新規要望待ち
+Status: 設計書(docs/type-balance-design.md)の TB0〜TB6 はすべて main に統合済み(TB6: 技範囲チェッカー、PR #65)。P2-3b(特性の無効・吸収)の実データ確認を完了(2026-09-23): データレーンが再生成した export(348 pokemon・moves・216 abilities)で `make balance-k3d-deploy-readmodel && make balance-smoke-readmodel` を実行し、`POST .../team-balance/analyze` でチリーン(levitate)への ground 攻撃が `{"category":"immune","effect":"immune","multiplier":"0","source":"ability"}` になること、`POST .../move-range/analyze`(thunderbolt)の `walledByAbility` にエモンガ(motordrive)が正しく含まれることを実データで確認済み。メガフォームの nameJa が英語表記のままの件はデータレーンへ確認候補として残る(ブロッカーではない)
+Next: (Web レーンは `make gen-ts` 実行済み。`web/src/api/balance.gen.ts` に move-range の型が反映済みであることを確認した)設計書の TB0〜TB6 はすべて完了・実データ確認済み、以後はユーザーからの新規要望待ち
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
 
 ## Speed
 Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
-Active: Claude Code
-Branch: feat/speed-sp3(SP4 は feat/speed-sp4 → PR #86 で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
-Status: SP0〜SP2・SP4(pokedex export の read model を k3d の speed に読ませる配線。ADR-0603。critic PASS。fixture データで k3d への
-実配線・非回帰を確認済み)は完了・main に統合(PR #32・#36・#52・#83・#86)。SP3(Web の素早さ画面。ADR-0604。左=速い順の表
-〈道具・ランクの絞り込み付き〉・右=自分のポケモン〈preset/custom/raw〉。web/src/speed/ の中に SpeedScreen・speedClient・生成型を置き、
-web/src/app/{routes.ts,screens.tsx}・i18n/ja.ts・App.tsx に最小限の追記〈Web レーンと合意〉)は critic PASS(3回目。1回目 NG 重要2件
-〈絞り込みUIの見送りが未記録・ja.ts追記範囲がADR合意を超過〉・2回目 NG 重要1件〈絞り込み UI 追加で境界線が誤った位置に出る回帰〉を
-修正)。PR 作成待ち。**SP4 の実データ(pokedex-svc の DB)での最終確認は未実施**(DSN の取り扱いがこのセッションの権限で扱えないため。
-`make pokedex-export`(データレーンの docs/runbooks/data.md の手順で DB を用意した状態で、POKEDEX_DATABASE_DSN を設定して実行)→
-`make speed-k3d-deploy-readmodel && make speed-smoke-readmodel` を、DSN を扱えるセッションか人間が実行して確認する)。空の roster の
-扱いは pokedex export が1件以上を返す前提のまま(ADR-0603 影響。実データで0件になる状況が起きたら別途決める)
-Next: SP3 の PR を作って main に統合 → SP5(GitOps。ADR-0603 で SP4 から分離。イメージの digest が決まる段階で着手)
+Active: なし(SP0〜SP3・SP5 完了。残る SP4 の実データ確認は人間/DSN を扱えるセッション待ちのため一区切り)
+Branch: feat/speed-next2(main から作成済み。SP5 は feat/speed-sp5 → PR #97、CURRENT_STATE 更新は PR #114 で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
+Status: SP0〜SP3・SP5 は完了・main に統合(PR #32・#36・#52・#83・#86・#93・#97)。**SP4(pokedex export の read model を k3d の
+speed に読ませる配線。ADR-0603)は配線の実装・critic PASS・fixture データでの k3d 疎通確認まで完了**しているが、**実データ
+(pokedex-svc の DB)での最終確認だけが未実施**(`POKEDEX_DATABASE_DSN` の取り扱いが auto mode のセッションでは権限上できない
+ため。credential materialization としてブロックされた)。SP5 は実際の Argo CD への適用(`speed-argocd-app`・`speed-registry-push`・
+sync)も同じ理由で未実施(ADR-0605 §4。共有クラスタへの変更のため人間の確認のもとで)
+Next: **人間または DB の認証情報を扱えるセッションへ**: (1) `make pokedex-export`(データレーンの docs/runbooks/data.md の手順で
+DB を用意し `POKEDEX_DATABASE_DSN` を設定)→ `make speed-k3d-deploy-readmodel && make speed-smoke-readmodel` で SP4 の実データ確認。
+(2) 任意で docs/runbooks/speed.md 節5〜10(Argo CD への Application 適用・レジストリへの push・sync)。
+どちらも素早さレーンの実装作業としては完了しており、残るのはクラスタ操作の実行確認だけ。空の roster の扱いは pokedex export が
+1件以上を返す前提のまま(ADR-0603 影響。実データで0件になる状況が起きたら別途決める)。balance-registry → pokecalc-registry への
+改名提案はタイプバランスレーンへ既定案で提示済み(DECISIONS.md 2026-09-23)。次に新しい素早さの要望が出たら、このレーンで続ける
 
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
