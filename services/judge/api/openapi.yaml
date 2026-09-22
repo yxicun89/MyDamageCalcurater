@@ -50,9 +50,14 @@ paths:
         「自分が相手より素早いか(outspeeds / speedTie)」と「その技で相手を倒せるか(ko)」を
         1 回の request で返す(ADR-0701 §1)。
 
-        素早さは 実数値(engine.RealStats)→ ランク補正 → こだわりスカーフ(×1.5・五捨五超入)の順で求める
-        (ADR-0701 §2)。状態異常(麻痺など)による素早さの変化は JD1 では扱わないため、
+        素早さは 実数値(engine.RealStats)→ ランク補正 → 素早さ補正(追い風 ×2・こだわりスカーフ ×1.5)の
+        順で求める(ADR-0701 §2・ADR-0702 §2)。補正は 4096 基準で 1 つに連結してから 1 回だけ
+        五捨五超入する(各補正ごとに丸めない)。状態異常(麻痺など)による素早さの変化は扱わないため、
         Individual に status は無い。ko は calc-svc の計算結果をそのまま転記する(judge は確定数を再計算しない)。
+
+        場の効果は 2 つの欄に分かれる(ADR-0702 §1)。ダメージに効く weather / terrain / screens は
+        field に入れ、judge は解釈せず calc-svc へそのまま転送する。素早さにしか効かない
+        トリックルーム・追い風は speedField に入れ、judge だけが解釈して calc-svc には送らない。
 
         検査順(ADR-0701 §5。上流は逐次で呼ぶ):
         ヘッダー (400) → body が 1 つの JSON か・上限 8 KiB (400 / 413)
@@ -282,8 +287,9 @@ components:
           default: false
     FieldState:
       description: |
-        場の状態。judge は解釈せず calc-svc の field にそのまま転送する(省略時は送らない)。
+        ダメージに効く場の状態。judge は解釈せず calc-svc の field にそのまま転送する(省略時は送らない)。
         意味の正はルートの api/openapi.yaml の FieldState。
+        素早さにしか効かないトリックルーム・追い風はここに入れない(speedField。ADR-0702 §1)。
       type: object
       properties:
         weather:
@@ -294,6 +300,33 @@ components:
           $ref: '#/components/schemas/Screens'
         defenderScreens:
           $ref: '#/components/schemas/Screens'
+    SpeedField:
+      description: |
+        素早さの判定にだけ効く場の効果(ADR-0702 §1)。judge が自分で解釈し、calc-svc には送らない。
+        トリックルーム・追い風はダメージに関与せず、calc-svc は場の効果として weather / terrain /
+        screens しか理解しないため、calc-svc へ転送する field とは別の欄にする。
+        speedField 自体を省略した場合も、個々の欄を省略した場合も、すべて false(場の効果なし)
+        として扱う。したがって speedField を送らない request の挙動は JD1 と同じになる。
+      type: object
+      properties:
+        trickRoom:
+          description: |
+            トリックルームがかかっているか。トリックルームは素早さの実数値そのものを変えないため、
+            attackerSpeed / defenderSpeed は変わらない。変わるのは outspeeds(どちらが先に動くか)の
+            比較の向きだけで、true のときは「遅い方が先に動く」= attackerSpeed < defenderSpeed に
+            なる(ADR-0702 §3)。speedTie(同速)は反転しない。
+          type: boolean
+          default: false
+        attackerTailwind:
+          description: |
+            自分の側に追い風がかかっているか。追い風は実数値そのものを ×2 する(ADR-0702 §2)ため、
+            attackerSpeed にも反映される。
+          type: boolean
+          default: false
+        defenderTailwind:
+          description: 相手の側に追い風がかかっているか。相手の戦闘中の素早さを ×2 する。
+          type: boolean
+          default: false
     OutspeedAndKoRequest:
       type: object
       required:
@@ -318,6 +351,8 @@ components:
           minLength: 1
         field:
           $ref: '#/components/schemas/FieldState'
+        speedField:
+          $ref: '#/components/schemas/SpeedField'
     KOChance:
       description: |
         確定数 / 乱数 n 発。calc-svc の KOChance をそのまま転記する(judge は再計算しない)。
@@ -350,17 +385,23 @@ components:
       properties:
         outspeeds:
           description: |
-            自分の戦闘中の素早さが相手より厳密に大きいか。同速は false で、speedTie が true になる
-            (真偽値 1 つに丸めない。ADR-0700 §6-1)。
+            自分が相手より先に動くか(ADR-0700 §6-1・ADR-0702 §3)。トリックルームが無ければ
+            attackerSpeed > defenderSpeed、speedField.trickRoom が true なら
+            attackerSpeed < defenderSpeed。同速は false で、speedTie が true になる
+            (真偽値 1 つに丸めない)。
           type: boolean
         speedTie:
-          description: 双方の戦闘中の素早さが等しいか。outspeeds と同時に true にはならない。
+          description: |
+            双方の戦闘中の素早さが等しいか。outspeeds と同時に true にはならない。
+            同速はトリックルームの有無に関わらず行動順が決まらないため、trickRoom では反転しない。
           type: boolean
         attackerSpeed:
-          description: 自分の戦闘中の素早さ(ランク・こだわりスカーフ適用後)。
+          description: |
+            自分の戦闘中の素早さ(ランク・追い風・こだわりスカーフ適用後)。
+            トリックルームは実数値を変えないので、この値には現れない(ADR-0702 §2)。
           type: integer
         defenderSpeed:
-          description: 相手の戦闘中の素早さ(ランク・こだわりスカーフ適用後)。
+          description: 相手の戦闘中の素早さ(ランク・追い風・こだわりスカーフ適用後)。
           type: integer
         ko:
           $ref: '#/components/schemas/KOChance'
