@@ -1,6 +1,9 @@
 package balance
 
-import "errors"
+import (
+	"errors"
+	"sort"
+)
 
 // TB6 技範囲チェッカー(ADR-0404)。技 ID だけ(ポケモンは指定しない)の攻撃範囲と、
 // その技構成を半減以下で受けられる実在ポケモンを返す。
@@ -72,6 +75,134 @@ type MoveRangeAnalysis struct {
 // moves are the resolved moves (MinMoveRangeMoves..MaxMoveRangeMoves, distinct moveId, at
 // least one non-status move). catalog is every pokemon of the read model. abilities may be
 // nil: WalledByAbility is then empty.
+//
+// Validation order (ADR-0404 §4.2): move count (MinMoveRangeMoves..MaxMoveRangeMoves) → chart
+// nil → validateCombatantMoves (duplicate moveId, move category, attack move type) → at least
+// one non-status move.
 func AnalyzeMoveRange(chart TypeChartProvider, moves []Move, catalog []CatalogPokemon, abilities AbilityProvider) (MoveRangeAnalysis, error) {
-	return MoveRangeAnalysis{}, nil
+	if len(moves) < MinMoveRangeMoves || len(moves) > MaxMoveRangeMoves {
+		return MoveRangeAnalysis{}, ErrMoveRangeMoveCount
+	}
+	if chart == nil {
+		return MoveRangeAnalysis{}, ErrNilTypeChart
+	}
+	if err := validateCombatantMoves(moves); err != nil {
+		return MoveRangeAnalysis{}, err
+	}
+
+	attackTypes := attackTypesOf(moves)
+	if len(attackTypes) == 0 {
+		return MoveRangeAnalysis{}, ErrMoveRangeNoAttackMove
+	}
+
+	// typeChart is the same calculation as one member's DefenseCoverage in TB2 (ADR-0404 §3:
+	// do not re-derive the attack-type/best-matchup composition), reused by calling
+	// AnalyzeCoverage for a single virtual member holding this move set.
+	coverage, err := AnalyzeCoverage(chart, []CoverageMember{{PokemonID: "move-range", Moves: moves}})
+	if err != nil {
+		return MoveRangeAnalysis{}, err
+	}
+	member := coverage.Members[0]
+	typeChart := make([]MoveRangeEntry, len(member.Coverage))
+	for i, entry := range member.Coverage {
+		// attackTypes is non-empty (checked above), so AnalyzeCoverage always sets BestMultiplier.
+		typeChart[i] = MoveRangeEntry{
+			DefenseType:    entry.DefenseType,
+			BestMultiplier: *entry.BestMultiplier,
+			Effective:      entry.Effective,
+			SuperEffective: entry.SuperEffective,
+		}
+	}
+
+	walledBy, walledByAbility, err := moveRangeWalledBy(chart, attackTypes, catalog, abilities)
+	if err != nil {
+		return MoveRangeAnalysis{}, err
+	}
+
+	return MoveRangeAnalysis{
+		AttackTypes:     member.AttackTypes,
+		TypeChart:       typeChart,
+		WalledBy:        walledBy,
+		WalledByAbility: walledByAbility,
+	}, nil
+}
+
+// moveRangeWalledByThreshold is the ADR-0404 §2 basis for "walled": x1/2 or less.
+var moveRangeWalledByThreshold = Effectiveness{Num: 1, Den: 2}
+
+// moveRangeWalledBy computes WalledBy and WalledByAbility (ADR-0404 §2・§3): for each catalog
+// pokemon (pokemonId ascending), the largest multiplier the move set deals to its actual types
+// over every attack type. A pokemon that is not walled by its types alone is then checked,
+// abilityId ascending, against each of its read model abilities (skipping one the provider does
+// not know, ADR-0401 §7.2); abilities is a separate pass and left empty when abilities is nil.
+func moveRangeWalledBy(chart TypeChartProvider, attackTypes []TypeID, catalog []CatalogPokemon, abilities AbilityProvider) ([]WalledByPokemon, []WalledByAbilityPokemon, error) {
+	sorted := make([]CatalogPokemon, len(catalog))
+	copy(sorted, catalog)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].PokemonID < sorted[j].PokemonID })
+
+	var walledBy []WalledByPokemon
+	var walledByAbility []WalledByAbilityPokemon
+	for _, pokemon := range sorted {
+		best, err := moveRangeBestEffectiveness(chart, attackTypes, pokemon.Types, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		if best.Cmp(moveRangeWalledByThreshold) <= 0 {
+			types := make([]TypeID, len(pokemon.Types))
+			copy(types, pokemon.Types)
+			walledBy = append(walledBy, WalledByPokemon{
+				PokemonID:      pokemon.PokemonID,
+				NameJa:         pokemon.NameJa,
+				Types:          types,
+				BestMultiplier: best,
+			})
+			continue
+		}
+		if abilities == nil {
+			continue
+		}
+
+		abilityIDs := make([]string, len(pokemon.AbilityIDs))
+		copy(abilityIDs, pokemon.AbilityIDs)
+		sort.Strings(abilityIDs)
+		for _, abilityID := range abilityIDs {
+			ability, err := abilities.Ability(abilityID)
+			if err != nil {
+				if errors.Is(err, ErrUnknownAbility) {
+					// export inconsistency: skip only this ability (ADR-0401 §7.2).
+					continue
+				}
+				return nil, nil, err
+			}
+			withAbility, err := moveRangeBestEffectiveness(chart, attackTypes, pokemon.Types, &ability)
+			if err != nil {
+				return nil, nil, err
+			}
+			if withAbility.Cmp(moveRangeWalledByThreshold) <= 0 {
+				walledByAbility = append(walledByAbility, WalledByAbilityPokemon{
+					PokemonID:      pokemon.PokemonID,
+					NameJa:         pokemon.NameJa,
+					AbilityID:      abilityID,
+					BestMultiplier: withAbility,
+				})
+			}
+		}
+	}
+	return walledBy, walledByAbility, nil
+}
+
+// moveRangeBestEffectiveness is the largest multiplier defenseTypes takes from any of
+// attackTypes (with ability applied when not nil; CalculateDefenseWithAbility accepts nil).
+func moveRangeBestEffectiveness(chart TypeChartProvider, attackTypes, defenseTypes []TypeID, ability *Ability) (Effectiveness, error) {
+	var best Effectiveness
+	for i, attack := range attackTypes {
+		result, err := CalculateDefenseWithAbility(chart, attack, defenseTypes, ability)
+		if err != nil {
+			return Effectiveness{}, err
+		}
+		if i == 0 || result.Effectiveness.Cmp(best) > 0 {
+			best = result.Effectiveness
+		}
+	}
+	return best, nil
 }
