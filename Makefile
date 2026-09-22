@@ -234,6 +234,7 @@ deps-outdated: ## 古くなった依存の一覧を表示する(ネットワー�
 
 include services/balance/Makefile
 include services/speed/Makefile
+include services/judge/Makefile
 include services/gateway/Makefile
 include web/Makefile
 include ios/Makefile

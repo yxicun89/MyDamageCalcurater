@@ -24,14 +24,14 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(git push *)",
-      "Bash(gh pr create *)"
+      "Bash(gh pr create *)",
+      "Bash(gh pr merge *)"
     ],
     "ask": [
       "Bash(k3d cluster delete *)",
       "Bash(kubectl delete namespace *)",
       "Bash(kubectl delete pvc *)",
       "Bash(brew uninstall *)",
-      "Bash(gh pr merge *)",
       "Bash(git push * --delete*)",
       "Bash(git push --delete*)"
     ],

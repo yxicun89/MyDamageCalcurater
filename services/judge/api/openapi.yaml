@@ -1,0 +1,90 @@
+openapi: 3.0.3
+info:
+  title: pokecalc judge API
+  version: 0.1.0
+  description: |
+    判定(素早さ×ダメージ連動)の独立サービスの契約。
+    「自分のポケモンが相手を素早さで抜けて、かつ使う技で倒せるか」を 1 回の request で判定する。
+    JD0 はヘルスチェックだけを持つ。判定の endpoint(POST /api/judge/v1/outspeed-and-ko)は
+    request の形が確定する JD1 で足す(ADR-0700 §5)。
+    契約の正は docs/adr/0700-judge-jd0-foundation.md と docs/judge-design.md。
+servers:
+  - url: /
+paths:
+  /healthz:
+    get:
+      operationId: health
+      summary: Pod health check
+      description: |
+        Pod 自身が生きているかだけを返す。上流(pokedex-svc・calc-svc)の設定・疎通には依存しない
+        (ADR-0700 §5): 上流が落ちている間に readiness を落とすと judge まで巻き込んで落ちるため。
+        上流が使えないことは、判定の endpoint が 503 upstream_unavailable で表す。
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /api/judge/healthz:
+    get:
+      operationId: publicHealth
+      summary: Ingress smoke check
+      description: |
+        judge 自身の Ingress(/api/judge prefix。ADR-0700 §6-3)越しの疎通確認。
+        本文は /healthz と同じで、上流には依存しない。
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+components:
+  parameters:
+    DeviceId:
+      name: X-Device-Id
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    SessionId:
+      name: X-Session-Id
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+  schemas:
+    Health:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        message:
+          type: string
+    ErrorCode:
+      description: |
+        エラーの区分。judge は上流の事情(HTTP のステータス・接続エラーの文面・URL)をそのまま返さず、
+        ADR-0700 §3 の対応表でこの列挙に畳む。
+        invalid_request: ヘッダー・request body が契約に合わない。
+        upstream_unavailable: pokedex-svc / calc-svc に接続できない・タイムアウト・5xx・契約に合わない応答。
+        internal_error: 想定外の内部エラー(message は固定文言で、内部の詳細を返さない)。
+      type: string
+      enum:
+        - invalid_request
+        - upstream_unavailable
+        - internal_error
