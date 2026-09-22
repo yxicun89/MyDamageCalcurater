@@ -153,7 +153,7 @@
 - [ ] DOC-api: `services/calc/README.md`・`services/gateway/README.md` を §8 の形に、手順書 `docs/runbooks/api.md`(k3d での疎通)
 - [x] DOC-web: `web/README.md`、手順書(`docs/verify-m1.md` の画面の部分と重複させない。M1 の完了報告は verify-m1.md にまとめる)
 - [x] DOC-tb: `services/balance/README.md` を §8 の形に、手順書 `docs/runbooks/balance.md`
-- [ ] DOC-speed: `services/speed/README.md`、手順書 `docs/runbooks/speed.md`
+- [x] DOC-speed: `services/speed/README.md` を §8 の形に、手順書 `docs/runbooks/speed.md`(k3d での疎通を確認済み)
 - [ ] DOC-ios: `ios/README.md`、手順書(シミュレータでの確認。実機インストールは P6-4)
 - [ ] DOC-arch: `docs/architecture.md` を各レーンの変化に合わせて保つ(整備レーンの MT-3 でも確かめる)
 
