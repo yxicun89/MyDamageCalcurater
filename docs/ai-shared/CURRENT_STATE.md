@@ -18,16 +18,15 @@ Next: データレーン依頼 d(gateway の /api/pokedex/* を pokedex-svc(Serv
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
 Active: Claude Code(ユーザー指示で再開)
 Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
-Status: P4-1〜P4-6・P4-8〜P4-12(仮想敵 threats・おすすめタイプ recommendations を含む。ADR-0303)・P4-14・P4-15・DOC-web 完了(critic PASS。main 統合待ち)。
+Status: P4-1〜P4-6・P4-8〜P4-12(仮想敵 threats・おすすめタイプ recommendations を含む。ADR-0303)・P4-14・P4-15・DOC-web 完了(critic PASS。main 統合済み。PR #82)。
 GATEWAY_WEB_URL(API レーンの ADR-0205)が main に入り、k3d の http://localhost:8080 で画面(/calc・/reverse・/balance)と API が揃うことを実地確認し verify-m1.md に反映。
+データレーンの依頼(P2-3b・ADR-0106)に追従: `web/src/engine/types.ts` の AbilityEffect に defImmuneTypes・defAbsorbTypes を追加し、
+`web/src/master/exportBalanceReadModel.ts` に absorb と ADR-0106 §決定7の出力順(immune→absorb→type_multiplier→super_effective_multiplier)・
+無効優先(immune が absorb に勝つ)を実装。本物の engine.wasm を再ビルドし、無効・吸収が実際にダメージを0にすることを結合テストで確認済み(critic PASS)。未コミット。
 P4-5 は Chrome で確認済み(Safari は未確認)。P4-7 は verify-m1.md のドラフト(pokedex-svc は main 済み。契約テスト P3-3 を待つ)
-P2-3(pokedex-svc)が main に入った(PR #57)。オンライン時の MasterSource(ADR-0301 §4)に着手できる状態
-Next: (1) P4-12b を PR にして main へ(critic PASS。web 684 テスト・e2e/e2e:balance 緑)。
-(2) その後、データレーンの依頼(P2-3b・ADR-0106。main 済み): AbilityEffect に defImmuneTypes・defAbsorbTypes を追加
-(`web/src/engine/types.ts`)。`web/src/master/exportBalanceReadModel.ts` の BalanceAbilityEffect に absorb を追加し、
-toBalanceAbilityEffects の出力順を ADR-0106 §決定7(immune→absorb→type_multiplier→super_effective_multiplier)に合わせる。
-(3) pokedex-svc の公開 API から Web のオンライン MasterSource を作る(ADR-0301 §4)。P4-7(verify-m1.md の完成版)・Safari での P4-5 確認もこの後。
-(4) 続いて P5-5(構築ビルダー等)は record/team の API 待ち
+Next: (1) 上記 ADR-0106 追従分をコミット・PR して main へ。
+(2) pokedex-svc の公開 API から Web のオンライン MasterSource を作る(ADR-0301 §4)。P4-7(verify-m1.md の完成版)・Safari での P4-5 確認もこの後。
+(3) 続いて P5-5(構築ビルダー等)は record/team の API 待ち
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
