@@ -18,8 +18,10 @@ Next: P3-3(gateway 経由の契約テストと k3d のスモーク: calc・gatew
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
 Active: Claude Code
 Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
-Status: P4-1〜P4-5 完了・PR #22 で main に統合(critic PASS。WASM で計算・架空の例マスタ・API / WASM 切り替え。ADR-0300 / ADR-0301)。P4-5 のブラウザ実機確認(Chrome・Safari)は人間待ち
-Next: P4-6 Playwright E2E(offline / online。online は例データを書き出して calc-svc を起動)と、Web のテストを make test / make lint に組み込む(ユーザー決定 2026-09-22: node_modules が無ければ npm ci)。続いて P4-7 docs/verify-m1.md
+Status: P4-1〜P4-6 完了(critic PASS。P4-1〜P4-5 は PR #22 で main 済み)。Web のテストはルートの make test / lint / build に含まれる。
+P4-5 のブラウザ実機確認(Chrome・Safari)は人間待ち。P4-7 は docs/verify-m1.md のドラフト(M1 の残りを待つ)
+Next: P4-7 の完成(P2-2c/d・P2-3 pokedex-svc・P3-3 が main に入ったら、オンラインのときにマスタを API から読む MasterSource を作り、verify-m1.md §4 を手順に置き換える)。
+持ち越し: 逆算の「型名でまとめる表示」と絞り込みの演出(ADR-0300 §7)、攻撃側プリセットの engine への移設(データレーンへの提案)
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
