@@ -848,3 +848,18 @@ func TestRecommendationsWithExampleReadModels(t *testing.T) {
 		t.Errorf("defenseHoles = %d, candidates = %d, want 17 (ice resists only ice) and 10", len(response.DefenseHoles), len(response.Candidates))
 	}
 }
+
+// ADR-0401 §7.1: a party whose moves are all status moves has no offense hole (no attack to judge by).
+func TestRecommendationsStatusMovesOnlyHaveNoOffenseHoles(t *testing.T) {
+	t.Parallel()
+
+	deps := recFullDependencies()
+	deps.Moves = testMoves{"move-9006": fictionalMove("move-9006", balance.TypeGrass, balance.MoveCategoryStatus)}
+	recorder := postRecommendations(t, New(deps), `{"members":[{"pokemonId":"9001-000","moveIds":["move-9006"]}]}`)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), `"offenseHoles":[]`) {
+		t.Errorf("offenseHoles must be [] for a status-only party; body=%s", recorder.Body.String())
+	}
+}

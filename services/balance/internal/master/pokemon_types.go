@@ -143,8 +143,8 @@ func parseCatalogNameJa(pokemonID string, raw *string) (string, error) {
 }
 
 // parseCatalogAbilityIDs validates an optional abilityIds (ADR-0401 §5): 0..3 entries,
-// each matching the AbilityId format (ADR-0017 §2), no duplicates. Omitted or null decodes
-// to nil, same as an explicit empty array (both give a non-nil, zero-length result).
+// each matching the AbilityId format (ADR-0017 §2), no duplicates. Omitted, null and an
+// explicit empty array all give a non-nil, zero-length result.
 func parseCatalogAbilityIDs(pokemonID string, raw *[]string) ([]string, error) {
 	if raw == nil {
 		return []string{}, nil

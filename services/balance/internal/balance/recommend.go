@@ -37,7 +37,7 @@ type PokemonCatalog interface {
 	AllPokemon() ([]CatalogPokemon, error)
 }
 
-// RecommendedPokemon is one pokemon whose type set equals the candidate's.
+// RecommendedPokemon is one pokemon listed for a candidate (ADR-0401 §8).
 type RecommendedPokemon struct {
 	PokemonID string
 	NameJa    string
@@ -51,7 +51,8 @@ type RecommendedPokemon struct {
 // Types are in canonical order. DefenseCovered are the defense holes the candidate takes below
 // x1 by its types alone; OffenseCovered are the offense holes its own types hit at x1 or more
 // (both in canonical order). Weaknesses is the number of attack types hitting it at x2 or more.
-// Pokemon are the catalog pokemon with the same type set, pokemonId ascending.
+// Pokemon are the catalog pokemon for the candidate (ADR-0401 §8: a single type also lists the
+// pokemon containing it that still take its defense holes), exact matches first, then pokemonId.
 type TypeCandidate struct {
 	Types          []TypeID
 	DefenseCovered []TypeID
@@ -212,6 +213,9 @@ func recommendOffenseHoles(chart TypeChartProvider, members []Combatant, allType
 				if err != nil {
 					return nil, fmt.Errorf("type chart matchup %s/%s: %w", attackType, defense, err)
 				}
+				if !matchup.ValidSingleType() {
+					return nil, fmt.Errorf("type chart matchup %s/%s returned invalid multiplier %d", attackType, defense, matchup)
+				}
 				if matchup >= MultiplierNormal {
 					effective = true
 					break
@@ -269,6 +273,9 @@ func recommendCandidates(chart TypeChartProvider, defenseHoles, offenseHoles, al
 				matchup, err := chart.Matchup(own, defense)
 				if err != nil {
 					return nil, fmt.Errorf("type chart matchup %s/%s: %w", own, defense, err)
+				}
+				if !matchup.ValidSingleType() {
+					return nil, fmt.Errorf("type chart matchup %s/%s returned invalid multiplier %d", own, defense, matchup)
 				}
 				if matchup >= MultiplierNormal {
 					hit = true

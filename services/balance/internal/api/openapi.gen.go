@@ -479,7 +479,7 @@ type RecommendationsResponse struct {
 	// DefenseHoles Attack types that no member resists or is immune to, in canonical type order.
 	DefenseHoles []TypeId `json:"defenseHoles"`
 
-	// OffenseHoles Single defense types the party cannot hit at x1 or more, in canonical type order. Empty when no member has a move.
+	// OffenseHoles Single defense types the party cannot hit at x1 or more, in canonical type order. Empty when no member has an attack move (status moves do not count).
 	OffenseHoles []TypeId `json:"offenseHoles"`
 }
 
@@ -590,7 +590,7 @@ type TypeCandidate struct {
 	// OffenseCovered The offense holes this type set's own types hit at x1 or more, in canonical type order.
 	OffenseCovered []TypeId `json:"offenseCovered"`
 
-	// Pokemon Every pokemon of the read model whose type set equals `types` (in any order), pokemonId ascending.
+	// Pokemon The pokemon for this candidate (ADR-0401 §8). A dual type set lists the exact matches; a single type also lists the pokemon containing it that still take its defenseCovered below x1. Exact matches first, then pokemonId ascending.
 	Pokemon []CandidatePokemon `json:"pokemon"`
 
 	// Types One or two types in canonical type order.

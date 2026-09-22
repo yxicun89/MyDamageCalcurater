@@ -219,6 +219,8 @@ func TestRecommendTypesOffenseHoles(t *testing.T) {
 		{name: "normal and fire moves on two members", members: []balance.Combatant{fairyWall, combatant("9002-000", types(balance.TypeDark), nil, physical("move-9005", balance.TypeNormal)), combatant("9003-000", types(balance.TypeDark), nil, attack("move-9001", balance.TypeFire))}, want: "rock/steel/fairy"},
 		{name: "a member's own types are not attacks", members: []balance.Combatant{fairyWall, combatant("9002-000", types(balance.TypeFighting), nil, physical("move-9005", balance.TypeNormal))}, want: "rock/ghost/steel/fairy"},
 		{name: "no move at all: no offense hole", members: []balance.Combatant{fairyWall, combatant("9002-000", types(balance.TypeDark), nil)}, want: ""},
+		// ADR-0401 §7.1: status moves are not attacks, so a party with status moves only has no offense hole either.
+		{name: "status moves only: no offense hole", members: []balance.Combatant{fairyWall, combatant("9002-000", types(balance.TypeDark), nil, status("move-9012", balance.TypePsychic))}, want: ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

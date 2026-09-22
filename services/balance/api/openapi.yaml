@@ -229,14 +229,15 @@ paths:
         defenseHoles are the attack types (canonical order) that no member resists or is immune to
         (resist + immune = 0 in the analyze team summary, member abilities included). offenseHoles are the
         single defense types (canonical order) whose team coverage bestMultiplier is null or below x1; a party
-        without any move has no offenseHoles. Each of the 171 defense type sets (18 single + 153 dual) is a
+        without any attack move (status moves do not count) has no offenseHoles. Each of the 171 defense type sets (18 single + 153 dual) is a
         candidate: defenseCovered are the defenseHoles it takes below x1 (types only, no ability),
         offenseCovered are the offenseHoles its own types hit at x1 or more, and weaknesses is the number of
         attack types that hit it at x2 or more. Candidates that fill no hole are left out. The order is
         defenseCovered + offenseCovered (descending), then weaknesses (ascending), then the canonical order
         (single types first, then dual types by their first and second type). At most `limit` (default 10)
-        candidates are returned. pokemon lists every pokemon of the read model whose type set equals the
-        candidate's (pokemonId ascending). abilityOptions lists, per defense hole, the pokemon that one of their
+        candidates are returned. pokemon lists, for a dual-type candidate, the pokemon whose type set equals it;
+        for a single-type candidate, the pokemon that contain its type, except those whose other type no longer
+        takes one of its defenseCovered below x1 (exact matches first, then pokemonId ascending; ADR-0401 §8). abilityOptions lists, per defense hole, the pokemon that one of their
         abilities (abilityIds of the read model) takes below x1 while their types alone do not; it is empty
         when the ability read model is not configured (ADR-0401).
       parameters:
@@ -895,7 +896,7 @@ components:
           items:
             $ref: '#/components/schemas/TypeId'
         offenseHoles:
-          description: Single defense types the party cannot hit at x1 or more, in canonical type order. Empty when no member has a move.
+          description: Single defense types the party cannot hit at x1 or more, in canonical type order. Empty when no member has an attack move (status moves do not count).
           type: array
           minItems: 0
           maxItems: 18
@@ -952,7 +953,7 @@ components:
           minimum: 0
           maximum: 18
         pokemon:
-          description: Every pokemon of the read model whose type set equals `types` (in any order), pokemonId ascending.
+          description: The pokemon for this candidate (ADR-0401 §8). A dual type set lists the exact matches; a single type also lists the pokemon containing it that still take its defenseCovered below x1. Exact matches first, then pokemonId ascending.
           type: array
           items:
             $ref: '#/components/schemas/CandidatePokemon'
