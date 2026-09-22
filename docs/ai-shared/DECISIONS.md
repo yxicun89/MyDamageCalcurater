@@ -721,3 +721,8 @@ Reason: spec-writer(ADR-0106)が3点を既定案として報告し、いずれ�
 Impact: export に immune/absorb が出るようになり、TB3/TB5 の結果が変わる(balanceのschema・loaderは対応済みで依頼不要)。
 Web レーンへの依頼(ADR-0106 §他レーンへの依頼): `web/src/engine/types.ts` の `AbilityEffect` に `defImmuneTypes`/`defAbsorbTypes` を追加(足さないと WASM 経由の計算だけ無効・吸収が効かない)、`web/src/master/exportBalanceReadModel.ts` の `BalanceAbilityEffect` に `absorb` を追加し §7 の順序で出す。
 API(calc)レーンへの依頼(P2-3b の critic 指摘): `services/calc/internal/master/master.go` の `copyAbilityEffect` が `DefResistType` しかディープコピーしておらず、`DefImmuneTypes`/`DefAbsorbTypes` が共有マスタと同じメモリを指す。コピーを足し、`TestLookupReturnsCopiesOfEffects` に両フィールドの書き換えケースを足す。
+
+## 2026-09-22: 整備レーン(Claude の上限時の Codex)の仕組みを削除する(ユーザー決定)
+Decision: COORDINATION.md の「Claude の上限時の Codex」節、plan.md の「整備レーン」節(MT-1〜MT-7)、CURRENT_STATE.md の Maintenance 欄を削除する。
+Reason: ユーザーが「Codex はこのプロジェクトで必ず使う必要はなく、有効活用したい程度の感覚。ノイズになるなら消した方がいい」と判断した。整備タスク(MT-3〜MT-7)は文書の整合性などの低優先度の掃除作業で、M1 の完成に影響しない。今後はレーンの作業を Claude だけで進める。
+Impact: 今後、Claude が利用枠の上限に達しても Codex を自動的に起動する仕組みは無い。Codex を使いたい場合は、その都度ユーザーが判断してレーンを直接担当させる(通常のレーン運用と同じ)。MT-1・MT-2(統合検証・check-publishable の自己テスト修正)はすでに完了して main に入っているので、成果は失われない。
