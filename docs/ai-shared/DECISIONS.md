@@ -770,7 +770,7 @@ Web・iOS レーンのローカル k3d 環境でも calc を使う画面(ダメ�
 先に `make import-k8s` を実行すること。`make api-smoke` の出力1行目が `master=pokedex …` であれば実際に pokedex-svc へつながっている確認になる(`master=example` はフォールバック)。
 
 ## 2026-09-23: 素早さ SP5(GitOps)の設計。balance-registry の共有と改名の提案(タイプバランスレーンへ)
-Decision: SP5(GitOps。ADR-0605)は speed 専用のクラスタ内レジストリを新設せず、balance が構築した balance-registry(services/balance/deploy/local-registry/。TB0・ADR-0018)を push 先として共有する(k3d ノードの containerd が localhost:5000 の1レジストリしか信頼しないため)。speed のファイルは変更しない(services/speed/scripts/local-registry-push.sh から kubectl -n balance-registry port-forward するだけ)。Argo CD も TB0 で導入済みの1インスタンスを共有し、speed が再インストールすることはしない。
+Decision: SP5(GitOps。ADR-0605)は speed 専用のクラスタ内レジストリを新設せず、balance が構築した balance-registry(services/balance/deploy/local-registry/。TB0・ADR-0018)を push 先として共有する(k3d ノードの containerd が localhost:5000 の1レジストリしか信頼しないため)。services/balance/ のファイルは変更しない(services/speed/scripts/local-registry-push.sh から kubectl -n balance-registry port-forward するだけ)。Argo CD も TB0 で導入済みの1インスタンスを共有し、speed が再インストールすることはしない。
 提案(タイプバランスレーンへ。既定案: 今は何もしない): balance-registry という名前は今後クラスタ全体で共有されるとわかりにくいので、都合の良いときに pokecalc-registry へ改名することを検討してほしい。急ぎではない。
 Reason: hostPort 5000 はノードにつき1つの Pod しか持てず、Argo CD も1クラスタに複数動かす理由が無いため。
 Impact: ADR-0605。services/balance/ は変更しない。

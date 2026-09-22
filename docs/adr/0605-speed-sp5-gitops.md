@@ -33,15 +33,28 @@ speed にも適用し、`main` への push だけでクラスタの speed の中
   **automated sync は無効のまま**(TB0 の判断を踏襲。手動 sync で確認する)。
 - `services/speed/scripts/check-gitops.sh`(`template`/`ready` の2モード)・`argocd-local-app.sh`・`local-registry-push.sh`・
   `publish-image.sh` は balance の同名スクリプトの構造をそのまま speed 向けに移植する(`docs/adr/0018-*.md`・
-  `services/balance/scripts/` を写経元とする)。相違点は次の2つだけ:
+  `services/balance/scripts/` を写経元とする)。相違点は次の3つ:
   - `local-registry-push.sh`・`publish-image.sh` の `docker build` は **speed の Dockerfile がリポジトリのルートをビルドコンテキストに
     要求する**ため(ADR-0600 §2。engine を含む)、`docker build -f services/speed/Dockerfile .`(`-t "$balance_dir"` 相当の
     ディレクトリ指定ではなくルート)にする。
   - `kubectl -n balance-registry port-forward`(balance-registry の namespace)を使う(§1)。Mac 側の port-forward は
     `SPEED_REGISTRY_PORT`(既定 5002。balance の 5001 と衝突しないよう1つ空ける)。
+  - `local-registry-push.sh` の未コミット差分の検査(`-dirty` の判定)は `services/speed` に加えて **`engine` も見る**
+    (balance は自分のディレクトリだけ見る)。speed の Dockerfile は `engine` と `services/speed` の2つだけを COPY するので
+    (ADR-0600 §2)、ビルド入力と dirty 判定の対象を過不足なく一致させるため。
 - Makefile: `speed-gitops-template-check`・`speed-gitops-check`・`speed-registry-push`・`speed-argocd-app`・`speed-docker-push`
   を追加する(balance の `balance-registry-apply` に相当するものは無い。専用レジストリを持たないため)。
   `speed-kustomize` に `overlays/gitops` の描画確認を追加する(ADR-0600 §2 の「GitOps は SP4 で作る」を変更した ADR-0603 の続き)。
+
+### 2a. 影響と制約(balance の ADR-0018「影響と制約」と同じ考え方)
+- **GitOps の overlay(`overlays/gitops`)は read model をマウントしない**(local-readmodel overlay の ConfigMap は Git 管理外の実データを
+  前提にしており、Kustomize の load restrictor で overlay の外を参照できないため。ADR-0603 §1 と同じ制約)。そのため、GitOps で同期した
+  speed は `SPEED_POKEMON_PATH` が未設定になり、`/healthz` は 200 でも **ポケモンを使う API(`/api/speed/v1/pokemon`・`table`・
+  `position`)はすべて 503 `master_unavailable`** になる(ADR-0600 §4)。実データを GitOps でどう配るか(ConfigMap・Secret・Volume 等)は
+  クラウドのデプロイ先が決まってから別途決める(§1 の「クラウドでの実データの配布」と同じ未決事項)。
+- `speed-k3d-deploy`・`speed-k3d-deploy-readmodel`(架空データ・実データの local overlay)を **GitOps の同期のあとに** 実行すると、
+  Argo CD からは Application が OutOfSync になる(manual sync なので自動では戻らない。balance のメモ〈docs/ai-shared/CURRENT_STATE.md
+  の Type Balance Checker 欄〉と同じ運用)。GitOps の状態に戻すときは Argo CD で Sync する。
 
 ### 3. 適用の手順(手順書 docs/runbooks/speed.md に反映)
 balance の手順書(`docs/runbooks/balance.md`)と同じ順序: テスト・lint → `speed-k3d-deploy`(既存)で疎通 → (GitOps を確かめるときだけ)

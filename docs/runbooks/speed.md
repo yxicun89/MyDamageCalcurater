@@ -37,7 +37,7 @@ SPEED_URL=http://localhost:8080 make speed-smoke-readmodel
 
 ## 4. GitOps(digest 固定)で確かめる
 
-GitOps を確かめるときだけ、以降の 4〜9 を続ける。5〜9 はクラスタと共有の Argo CD を変えるので、
+GitOps を確かめるときだけ、以降の 4〜10 を続ける。5〜10 はクラスタと共有の Argo CD を変えるので、
 **人の確認のもとで実行する**(ADR-0605 §4。SP5 を作った作業では 4 までしか実行していない)。
 4 はクラスタを変えないので、いつ実行してもよい。
 
@@ -47,7 +47,20 @@ make speed-gitops-template-check
 ```
 確認: 最後の行が `speed GitOps template: valid`。
 
-## 5. リポジトリの認証を登録する(初回だけ。人が自分のターミナルで)
+## 5. Argo CD を入れる(初回だけ。すでに `argocd` namespace にあればとばす)
+
+speed 専用の Argo CD は入れない(ADR-0605 §1・§3。クラスタに1つの共有インスタンスを使う)。balance の手順(TB0)で
+すでに入れていればこの節はとばす。`argocd` CLI(節 9 で使う)も入れておく(`brew install argocd`)。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl get namespace argocd 2>/dev/null || kubectl create namespace argocd
+kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.3/manifests/install.yaml
+kubectl -n argocd rollout status deployment/argocd-server --timeout=300s
+```
+確認: `deployment "argocd-server" successfully rolled out`。
+
+## 6. リポジトリの認証を登録する(初回だけ。人が自分のターミナルで)
 
 balance で `repo-pokecalc` を登録済みならこの節はとばす(同じ Argo CD・同じリポジトリを使う)。
 GitHub で、このリポジトリだけ・Contents: Read-only の fine-grained token を作ってから実行する。トークンは画面に出さずに貼り付けて Enter。
@@ -62,7 +75,7 @@ read -rs PAT && kubectl -n argocd create secret generic repo-pokecalc \
 ```
 確認: `secret/repo-pokecalc labeled`。
 
-## 6. Application を作る(初回だけ)
+## 7. Application を作る(初回だけ)
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
@@ -71,7 +84,7 @@ make speed-argocd-app
 確認: `application.argoproj.io/pokecalc-speed created`(2回目以降は `unchanged`)。
 `pokecalc-balance` は別の Application なので、この操作では変わらない。
 
-## 7. イメージを push して digest を GitOps の定義に書く
+## 8. イメージを push して digest を GitOps の定義に書く
 
 `crane` が要る(`brew install crane`)。push 先は balance レーンのクラスタ内レジストリ(`balance-registry` namespace)。
 
@@ -81,10 +94,10 @@ digest=$(make -s speed-registry-push 2>/dev/null | tail -1 | sed 's/.*@//')
 sed -i '' "s/digest: .*/digest: ${digest}/" services/speed/deploy/k8s/overlays/gitops/kustomization.yaml
 git diff services/speed/deploy/k8s/overlays/gitops/kustomization.yaml
 ```
-確認: diff の `digest:` が `sha256:` で始まる値に変わる(変わらなければ同じイメージなので、8 と 9 は不要)。
+確認: diff の `digest:` が `sha256:` で始まる値に変わる(変わらなければ同じイメージなので、9 と 10 は不要)。
 この変更をブランチに commit し、PR で main に入れる。
 
-## 8. 同期する(main に入った後)
+## 9. 同期する(main に入った後)
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
@@ -95,7 +108,7 @@ kubectl config set-context --current --namespace=default
 ```
 確認: 出力に `Sync Status: Synced to main (<main の commit>)` と `Phase: Succeeded`。
 
-## 9. Pod が更新されたことを確かめる
+## 10. Pod が更新されたことを確かめる
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
@@ -105,5 +118,7 @@ grep digest services/speed/deploy/k8s/overlays/gitops/kustomization.yaml
 for i in $(seq 1 15); do code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/speed/healthz); [ "$code" = 200 ] && break; sleep 2; done; echo "health=$code"
 ```
 確認: 2つ目と3つ目の `sha256:` の値が一致し、最後が `health=200`(ロールアウト直後の 502 は再試行で消える)。
+この overlay は read model をマウントしないので、`/api/speed/v1/pokemon` 等は `503 master_unavailable` のままでよい
+(ADR-0605 §2a。実データを GitOps でどう配るかは未決)。
 
 local の read model で動かす状態に戻すときは 2 をもう一度実行する(Argo CD の Application は OutOfSync になる)。
