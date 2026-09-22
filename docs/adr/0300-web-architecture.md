@@ -134,12 +134,14 @@ requirements.md「A特化 / A振り(補正なし)/ 無振り」を次の3件に�
 - 計算の正しさ(数値)は Web では見ない(ゴールデンと Go/WASM 一致テストの役割)。Web が見るのは
   「正しい入力を組み立て、返ってきた値を加工せずに表示する」こと。
 
-### 9. Makefile への組み込み
+### 9. Makefile への組み込み(2026-09-22 追記: ユーザー決定で改訂。P4-6)
 
 - ルートの `Makefile` には `include web/Makefile` の1行だけを足し、ターゲットは `web-` 接頭辞(COORDINATION.md の共有ファイル規約)。
-- `make test` / `make lint` には**まだ含めない**。含めると、`web/node_modules` の無い他のレーンの作業ディレクトリで
-  ルートの `make test` が失敗する。含めるかどうかは DECISIONS.md に提案する(既定案: P4-6 で E2E を入れるときに、
-  `node_modules` が無ければ `npm ci` してから実行する形で `make test` / `make lint` に加える)。
+- **`make test` / `make lint` / `make build` に Web を含める**(ユーザー決定 2026-09-22。当初の既定案「まだ含めない」を改める)。
+  `web/Makefile` が `test: web-test` などの前提条件を足す(balance と同じ形)。`web/node_modules/.package-lock.json` が
+  `package-lock.json` より古い・無いときだけ `npm ci` する(`web-deps`)ので、他のレーンの作業ディレクトリでも初回は自動で依存が入る。
+- E2E(Playwright)は `make web-e2e`(オフライン)/ `make web-e2e-online`(例データを書き出して calc-svc を起動。要 Go)。
+  ブラウザの起動が要るので `make test` には含めない。初回は `make web-e2e-install` で chromium を入れる。ルートの `make e2e`(`scripts/e2e.sh`、k3d のスモーク)へのつなぎ込みは DECISIONS.md に提案する。
 
 ## 却下・保留
 
