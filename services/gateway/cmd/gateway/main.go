@@ -6,6 +6,7 @@
 //	GATEWAY_CALC_URL              calc-svc の基底 URL。必須
 //	GATEWAY_POKEDEX_URL           pokedex-svc の基底 URL。任意(未設定なら /api/pokedex/* は 503)
 //	GATEWAY_ASSETS_URL            画像配信の基底 URL。任意(未設定なら /assets/* は 404)
+//	GATEWAY_WEB_URL               Web の静的配信の基底 URL。任意(設定時は予約パス以外の GET / HEAD を転送。ADR-0205)
 //	GATEWAY_CORS_ALLOWED_ORIGINS  カンマ区切りの許可オリジン(完全一致)。任意。"*" は起動エラー
 //	GATEWAY_UPSTREAM_TIMEOUT      上流の応答ヘッダを待つ上限(Go の duration)。既定 10s
 package main
@@ -35,7 +36,6 @@ const (
 	envCORSAllowedOrigins = "GATEWAY_CORS_ALLOWED_ORIGINS"
 	envUpstreamTimeout    = "GATEWAY_UPSTREAM_TIMEOUT"
 	// envWebURL は Web の静的配信の基底 URL(任意。ADR-0205)。
-	// TODO(ADR-0205): implementer が loadConfig で読む(spec-writer のスタブ。今は読まれない)。
 	envWebURL = "GATEWAY_WEB_URL"
 
 	// defaultAddr は GATEWAY_ADDR が未設定・空のときの待ち受けアドレス。
@@ -94,6 +94,14 @@ func loadConfig(lookup func(string) (string, bool)) (config, error) {
 		}
 	}
 
+	var web *url.URL
+	if raw, ok := lookup(envWebURL); ok && raw != "" {
+		web, err = parseWebURL(raw)
+		if err != nil {
+			return config{}, fmt.Errorf("%w: %s が不正: %v", errInvalidConfig, envWebURL, err)
+		}
+	}
+
 	origins, err := parseCORSOrigins(lookup)
 	if err != nil {
 		return config{}, err
@@ -123,6 +131,7 @@ func loadConfig(lookup func(string) (string, bool)) (config, error) {
 			CalcURL:            calc,
 			PokedexURL:         pokedex,
 			AssetsURL:          assets,
+			WebURL:             web,
 			CORSAllowedOrigins: origins,
 			UpstreamTimeout:    timeout,
 		},
@@ -140,6 +149,19 @@ func parseUpstreamURL(raw string) (*url.URL, error) {
 	}
 	if u.Host == "" {
 		return nil, fmt.Errorf("ホストが無い: %q", raw)
+	}
+	return u, nil
+}
+
+// parseWebURL は GATEWAY_WEB_URL を解析する(絶対 URL・スキームは http/https・ホストあり。加えてクエリを
+// 含めない。ADR-0205)。
+func parseWebURL(raw string) (*url.URL, error) {
+	u, err := parseUpstreamURL(raw)
+	if err != nil {
+		return nil, err
+	}
+	if u.RawQuery != "" {
+		return nil, fmt.Errorf("クエリを含められない: %q", raw)
 	}
 	return u, nil
 }

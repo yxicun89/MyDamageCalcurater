@@ -16,6 +16,7 @@ const (
 	routeCalc
 	routePokedex
 	routeAssets
+	routeWeb
 )
 
 // パスの前方一致に使う定数。
@@ -25,6 +26,31 @@ const (
 	prefixPokedex = "/api/pokedex/"
 	prefixAssets  = "/assets/"
 )
+
+// reservedFirstSegments は先頭セグメントがこれと完全一致するパスを Web に流さない予約語(ADR-0205)。
+// /apix・/internals のように予約語で始まるだけの別名は含まない(セグメント単位の判定)。
+var reservedFirstSegments = map[string]bool{"api": true, "assets": true, "healthz": true, "internal": true}
+
+// firstPathSegment はパスの先頭セグメントを返す("/api/calc" なら "api"。"/" や "" なら ""）。
+func firstPathSegment(path string) string {
+	path = strings.TrimPrefix(path, "/")
+	if i := strings.Index(path, "/"); i >= 0 {
+		return path[:i]
+	}
+	return path
+}
+
+// isReservedPath は先頭セグメントが予約語(api・assets・healthz・internal)と完全一致するかを返す
+// (ADR-0205: matchRoute が拾えなかった予約パス — /api・/api/unknown・/internal 等 — は Web に流さず
+// 404 のままにする)。
+func isReservedPath(path string) bool {
+	return reservedFirstSegments[firstPathSegment(path)]
+}
+
+// isWebEligibleMethod は Web への転送を許すメソッド(GET / HEAD のみ。ADR-0205: 静的配信に書き込みは要らない)。
+func isWebEligibleMethod(method string) bool {
+	return method == http.MethodGet || method == http.MethodHead
+}
 
 // matchRoute はメソッドとパスからルートを決める。一致しない(未知のパス・許さないメソッド)場合は
 // (routeNone, false)。ヘッダ検証・上流の有無はここでは見ない(判定順序は ADR-0202 §3)。

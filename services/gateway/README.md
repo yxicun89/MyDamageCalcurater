@@ -12,6 +12,7 @@
 | `GATEWAY_CALC_URL` | はい | calc-svc の基底 URL(http / https) |
 | `GATEWAY_POKEDEX_URL` | いいえ | pokedex-svc の基底 URL。未設定なら `/api/pokedex/*` は 503 `upstream_unavailable` |
 | `GATEWAY_ASSETS_URL` | いいえ | 画像配信(MinIO)の基底 URL。未設定なら `/assets/*` は 404 `not_found` |
+| `GATEWAY_WEB_URL` | いいえ | Web の静的配信(nginx)の基底 URL(ADR-0205)。設定時は `/api`・`/assets`・`/healthz`・`/internal` のどれにも当たらない GET / HEAD を転送する。未設定なら従来どおりそれらのパスは 404 `not_found` |
 | `GATEWAY_CORS_ALLOWED_ORIGINS` | いいえ | カンマ区切りの許可オリジン(完全一致)。空なら CORS ヘッダを付けない。`*` は起動エラー |
 | `GATEWAY_UPSTREAM_TIMEOUT` | いいえ(既定 `10s`) | 上流の応答ヘッダを待つ上限(Go の duration)。超えたら 503 `upstream_unavailable` |
 
@@ -34,7 +35,7 @@ go run ./gateway/cmd/gateway
 | `/api/pokedex/*` | pokedex-svc | あり |
 | `/assets/*`(GET / HEAD) | assets の上流 | なし(`<img>` はヘッダを送れない) |
 | `GET /healthz` | gateway 自身(`200 {"status":"ok"}`。openapi には載せない) | なし |
-| それ以外(`/api/balance` を含む。ADR-0012) | なし(404 `not_found`) | ― |
+| それ以外(`/api/balance` を含む。ADR-0012) | `GATEWAY_WEB_URL` 未設定なら 404 `not_found`。設定時は GET / HEAD を Web へ転送(ADR-0205) | なし |
 
 - ヘッダの欠落・空は 400 `missing_header`、UUID でない値(正準形 8-4-4-4-12 以外)・重複は 400 `invalid_header`。
 - 上流に接続できない・タイムアウトは 503 `upstream_unavailable`。上流の応答(4xx / 5xx を含む)は書き換えずに返す。
@@ -54,4 +55,5 @@ make api-smoke          # gateway 経由のスモーク(http://localhost:8080。
 - `/api/pokedex/*` は pokedex-svc(P2-3)ができるまで上流が未設定なので **503 `upstream_unavailable`**。pokedex-svc を載せて
   `GATEWAY_POKEDEX_URL` を設定したら **200** に変わる(`services/gateway/scripts/smoke.sh` の期待値と
   `TestManifestGatewayLocalConfig` を一緒に変える)。
+- `/`(Web の静的配信。ADR-0205)は Web レーンの Service `web` がまだデプロイされていなければ **503**、デプロイ済みなら **200**。
 - k3d を使わない開発ループは `make dev`(calc-svc と gateway をローカルで起動。`DEV_GATEWAY_PORT` / `DEV_CALC_PORT` で変更可)。

@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 # API レーンのスモーク(ADR-0203 §5。test-strategy.md L5)。gateway 経由で calc-svc の3操作・ヘッダ検証・
-# pokedex 未設定の 503 を確かめる。k3d 上では `make api-smoke`、`make dev` の上では API_URL を渡して使う。
+# pokedex 未設定の 503・Web の静的配信(ADR-0205。デプロイ前は 503、デプロイ後は 200)を確かめる。
+# k3d 上では `make api-smoke`、`make dev` の上では API_URL を渡して使う。
 #
 # 環境変数:
 #   API_URL             gateway の基底 URL(既定 http://localhost:8080。k3d の loadbalancer)
@@ -135,7 +136,24 @@ expect_error 503 upstream_unavailable "GET /api/pokedex/natures (pokedex-svc not
 request GET /internal/pokedex/master "" none
 expect_error 404 not_found "GET /internal/pokedex/master (internal API must not be exposed by the gateway)"
 
-# 7. 任意: balance がデプロイされているとき、/api/balance は balance の Ingress に届く(gateway の `/` が奪わない)。
+# 7. Web の静的配信(ADR-0205)。gateway の後ろに置かれていれば 200、Web レーンの Service がまだ無ければ
+#    503 upstream_unavailable(接続不可)。それ以外(404 や他の 5xx)は Web を後ろに置けていないので失敗。
+#    「まだデプロイされていない」の 503 は本来の状態でありうるので、request_with_retry ではなく
+#    request を使う(再試行で消えない)。
+request GET / "" none
+case "$status" in
+  200) web_result=200 ;;
+  503)
+    if grep -qF '"code":"upstream_unavailable"' "$body_file"; then
+      web_result=503
+    else
+      fail "GET /"
+    fi
+    ;;
+  *) fail "GET /" ;;
+esac
+
+# 8. 任意: balance がデプロイされているとき、/api/balance は balance の Ingress に届く(gateway の `/` が奪わない)。
 check_balance=no
 case "$balance_mode" in
   on) check_balance=yes ;;
@@ -154,4 +172,4 @@ if [ "$check_balance" = yes ]; then
   balance_result=200
 fi
 
-echo "api smoke: calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=503 internal=404 balance=$balance_result"
+echo "api smoke: calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=503 internal=404 balance=$balance_result web=$web_result"
