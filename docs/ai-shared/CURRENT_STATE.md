@@ -10,10 +10,10 @@ Next: P5-6(技の追加効果によるランク変化。判定レーンからの
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
-Active: なし
-Branch: (次は main から feat/api-<名前> を切る。作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: Phase 3 完了(PR #14・#23・#30)、P3-4〜P3-6(ADR-0204/0205/0206。PR #42/#54/#87)、DOC-api(README・手順書。PR #117)は main に統合済み
-Next: 特に無し。他レーン(データ・Web・iOS)からの依頼待ち
+Active: Claude Code
+Branch: feat/api-issue110-limits(PR で main へ。作業ディレクトリ ~/MyDamageCalcurater-api)
+Status: Phase 3 完了、P3-4〜P3-6・DOC-api は main に統合済み。issue #110(セキュリティ。Codex レビュー)の API レーン担当分(契約の maxItems/uniqueItems・calc-svc の自前検証。ADR-0208)は critic PASS。PR 作成待ち
+Next: (1) issue #110 の PR を main へ(マージ後、他レーンへ依頼: engine/wasmapi に同じ防御上限、Web/iOS の観測16件・候補64件UI。DECISIONS.md に既定案あり。issue はレーンの完了までクローズしない)。(2) issue #103(M2保存データの保持・削除・端末ID境界。ユーザー決定=一定期間の自動失効。ADR作成。データレーンと調整)
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)

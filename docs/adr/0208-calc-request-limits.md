@@ -1,6 +1,6 @@
 # ADR-0208: calc の候補・観測件数の上限
 
-- 状態: 提案(2026-09-23。issue #110 の API レーン担当部分。受け入れ条件とテストは spec-writer が先に書き、実装は implementer)
+- 状態: 採用(2026-09-23。issue #110 の API レーン担当部分。critic PASS。実 HTTP で境界値と issue の再現手順(2,000×2,000 が 9.43 秒 → 0.9 ms・engine 未到達)を確認済み)
 - 日付: 2026-09-23
 - 関連: issue #110、ADR-0200(calc-svc の API 契約・エラー語彙)、ADR-0009(一括計算)、ADR-0010 §R(逆算)、
   ADR-0011(WASM 境界)、ADR-0202(gateway の上流タイムアウト 10 秒)
@@ -146,3 +146,7 @@ Codex のセキュリティレビュー(監査ベース `264ae5963bb7e867a88ff5c
 - calc-svc の `services/calc/internal/httpapi`(検証の追加。implementer の担当)。
 - engine・wasmapi・Web・iOS は §4 の依頼として別レーンが追従する。
 - 64 件・16 件を超える要求を送っていたクライアントは 400 になる(現行 UI は上限内なので実害は無い見込み)。
+- **残存リスク(本 ADR の範囲外)**: 本 ADR が防ぐのは「1リクエストあたりの計算量の増幅」であり、**同時実行数・レート制限は扱わない**。
+  上限ちょうどの reverse は約 22.6ms の CPU を要する(critic 実測)ため、calc-svc の CPU limit(`deploy/k8s/base/calc/deployment.yaml` の `200m`)は
+  理論上 約9 req/s 程度で飽和しうる(クラウドの遅い vCPU ではさらに少ない)。レート制限・同時実行数の制御は gateway かクラスタ側の別課題とする。
+  実機で重ければ `itemCandidates`/`itemVariants` の上限を 32 に下げる余地を残す(§1)。

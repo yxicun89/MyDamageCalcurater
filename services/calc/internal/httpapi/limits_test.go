@@ -393,6 +393,19 @@ func TestRequestLimitsRunBeforeStoreLookup(t *testing.T) {
 
 	tooManyPresets := bulkBody("test-nothing", append(append([]any{}, allPresets...), "none"), nil)
 
+	dupItemVariantsBulk := bulkBody("test-nothing", nil, []any{"testorb", "testorb"})
+	dupItemVariantsBulk["defenderSpeciesKey"] = speciesUnknown
+
+	dupNullReverse := reverseCases(t, inner)[0].httpBody()
+	dupNullReverse["moveId"] = "test-nothing"
+	dupNullReverse["unknownSpeciesKey"] = speciesUnknown
+	dupNullReverse["itemCandidates"] = []any{nil, nil}
+
+	overMaxCandidatesReverse := reverseCases(t, inner)[0].httpBody()
+	overMaxCandidatesReverse["moveId"] = "test-nothing"
+	overMaxCandidatesReverse["unknownSpeciesKey"] = speciesUnknown
+	overMaxCandidatesReverse["maxCandidates"] = limitMaxCandidates + 1
+
 	tests := []struct {
 		name string
 		path string
@@ -400,8 +413,11 @@ func TestRequestLimitsRunBeforeStoreLookup(t *testing.T) {
 	}{
 		{"bulk の itemVariants 65 件(未知の種族・技を含む)", "/api/calc/bulk", overLimitBulk},
 		{"bulk の presets 9 件(未知の技を含む)", "/api/calc/bulk", tooManyPresets},
+		{"bulk の itemVariants に重複(未知の種族を含む)", "/api/calc/bulk", dupItemVariantsBulk},
 		{"reverse の itemCandidates 65 件(未知の種族・技を含む)", "/api/calc/reverse", overLimitReverse},
 		{"reverse の observations 17 件(未知の種族を含む)", "/api/calc/reverse", tooManyObservations},
+		{"reverse の itemCandidates に null の重複(未知の種族を含む)", "/api/calc/reverse", dupNullReverse},
+		{"reverse の maxCandidates が上限超過(未知の種族を含む)", "/api/calc/reverse", overMaxCandidatesReverse},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
