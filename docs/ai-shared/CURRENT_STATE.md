@@ -64,16 +64,20 @@ web/e2e/routing.spec.ts)→ SP5(GitOps。ADR-0603 で SP4 から分離。イメ�
 
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
-Active: Claude Code
-Branch: feat/judge-jd0(作業ディレクトリ ~/MyDamageCalcurater-judge)
-Status: JD0 の spec-writer まで完了。ADR-0700(基盤・上流の呼び方・エラーの正規化・受け入れ条件8件)を採用し、docs/judge-design.md §4 の
+Active: なし
+Branch: feat/judge-jd0(作業ディレクトリ ~/MyDamageCalcurater-judge。PR 作成待ち)
+Status: JD0(基盤)完了。ADR-0700(基盤・上流の呼び方・エラーの正規化・受け入れ条件8件)を採用し、docs/judge-design.md §4 の
 未決事項5件をすべて決定に変えた(同速は `outspeeds` と `speedTie` を別に返す / JD1 は自分が殴る側だけ / 独自 Ingress `/api/judge`(gateway は変更しない) /
-ADR 帯 0700 / 技の追加効果は request の `ranks` で受ける)。`services/judge/` に契約(api/openapi.yaml。JD0 は healthz のみ)・go.mod・Makefile・README と、
-**失敗する状態のテスト**(internal/httpapi/server_test.go・internal/client/{client,pokedex,calc}_test.go・cmd/api/config_test.go)を置いた。
-ルート Makefile に `include services/judge/Makefile`、go.work に `./services/judge` を追記済み。実装は未了なので `make judge-test` はコンパイルエラーで落ちる(想定どおり)
-Next: implementer が JD0 のテストを通す最小実装を書く(`make judge-gen` → `internal/api` の生成 → `internal/client`(Pokedex・Calc・4つの番兵エラー)→
-`internal/httpapi`(healthz)→ `cmd/api`(環境変数・graceful shutdown))。そのあと critic → deploy/k8s(base の Deployment・Service・Ingress `/api/judge`)と
-Dockerfile を足して `judge-kustomize` / `judge-docker-build` を Makefile に追加 → PR。JD1 は ADR-0700 §5 のとおり endpoint を契約に足すところから
+ADR 帯 0700 / 技の追加効果は request の `ranks` で受ける)。`internal/client`(pokedex-svc・calc-svc への HTTP クライアント。request スコープの timeout・
+4つの番兵エラー・1MiB上限・ヘッダー転送)・`internal/httpapi`(healthz)・`cmd/api` を実装。critic 3回目で PASS(1・2回目 NG は接続エラー・DNS失敗時に
+上流の URL・host:port・ホスト名がエラー文面に漏れていた件。`*net.OpError`/`*net.DNSError` の `Error()` を呼ばず固定語彙に分類して解消)。
+deploy/k8s(base の Deployment・Service・Ingress `/api/judge`)・Dockerfile・scripts/smoke.sh・Makefile の `judge-kustomize`/`judge-docker-build`/
+`judge-k3d-deploy`/`judge-smoke` も追加し、`docker build` とコンテナ起動(healthz 200)を確認済み(k3d への実デプロイは未確認)。
+`make test`/`make lint`/`make build`(ルート)が緑。JD1 の endpoint(`POST /api/judge/v1/outspeed-and-ko`)は ADR-0700 §5 の判断により
+JD0 の契約に含めていない(契約にあるのに404を作らないため)
+Next: PR を作って main へ統合(このセッションの残タスク)。その後 JD1 に着手: `services/judge/api/openapi.yaml` に
+`POST /api/judge/v1/outspeed-and-ko` を足すところから(quick-scanner → spec-writer → implementer → critic)。JD1 の response は
+`outspeeds`・`speedTie`・`ko` の3つ(ADR-0700 §6-1・§6-5)
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

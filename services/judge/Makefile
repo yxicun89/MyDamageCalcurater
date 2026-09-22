@@ -4,9 +4,7 @@ JUDGE_DIR ?= services/judge
 JUDGE_IMAGE ?= pokecalc/judge:local
 JUDGE_URL ?= http://localhost:8080
 
-# Kustomize・Docker・smoke のターゲット(judge-kustomize / judge-docker-build / judge-k3d-deploy /
-# judge-smoke)は、deploy/k8s と Dockerfile ができた段階で足す(ADR-0700 §1。speed の Makefile と同じ形)。
-.PHONY: judge-gen judge-test judge-lint judge-build
+.PHONY: judge-gen judge-test judge-lint judge-build judge-kustomize judge-docker-build judge-k3d-deploy judge-smoke
 
 # ルートの make test / lint / build に judge を含める(ADR-0700 §1。speed と同じ)。
 # レシピを持たない前提条件の追加なので、ルートの既存ターゲットのレシピは変わらない。
@@ -26,3 +24,19 @@ judge-lint:
 
 judge-build:
 	@cd $(JUDGE_DIR) && GOWORK=off $(GO) build ./...
+
+judge-kustomize:
+	@kubectl kustomize $(JUDGE_DIR)/deploy/k8s/overlays/local >/dev/null
+
+# engine を含むため、ビルドコンテキストはリポジトリのルート(ADR-0700 §1。speed と同じ形)。
+judge-docker-build:
+	@docker build -f $(JUDGE_DIR)/Dockerfile -t $(JUDGE_IMAGE) .
+
+judge-k3d-deploy: judge-docker-build ## k3d へ judge を直接デプロイ(local overlay)
+	@k3d image import $(JUDGE_IMAGE) --cluster $(CLUSTER)
+	@kubectl apply -k $(JUDGE_DIR)/deploy/k8s/overlays/local
+	@kubectl -n pokecalc rollout restart deployment/judge
+	@kubectl -n pokecalc rollout status deployment/judge --timeout=120s
+
+judge-smoke:
+	@JUDGE_URL=$(JUDGE_URL) $(JUDGE_DIR)/scripts/smoke.sh

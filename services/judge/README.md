@@ -4,7 +4,7 @@
 新しい計算式は持たない。素早さの実数値は engine を直接呼び、ダメージと確定数は calc-svc の公開 API の結果をそのまま使う。
 HTTP の契約の正は [`api/openapi.yaml`](api/openapi.yaml)。設計の正は [`docs/judge-design.md`](../../docs/judge-design.md)。
 
-**現在の状態: JD0(基盤)。実装は未了で、`make judge-test` は失敗する。** 受け入れ条件は ADR-0700。
+**現在の状態: JD0(基盤)完了。** `make judge-test`・`judge-lint`・`judge-build` は緑(critic PASS)。受け入れ条件は ADR-0700。JD1(判定 API 本体)は未着手。
 
 ```mermaid
 flowchart LR
@@ -28,6 +28,8 @@ flowchart LR
 | `internal/httpapi` | HTTP の検証・判定順・応答の変換 |
 | `internal/api` | oapi-codegen の生成物(手で書かない) |
 | `cmd/api` | 起動・環境変数の読み込み・graceful shutdown |
+| `deploy/k8s` | Kustomize(base / overlays/local)。judge は `/api/judge` prefix の自分の Ingress を持つ(gateway は変更しない) |
+| `scripts/smoke.sh` | k3d へのデプロイ後の疎通確認 |
 
 ## エンドポイント
 
@@ -42,6 +44,8 @@ flowchart LR
 cd "$(git rev-parse --show-toplevel)"
 make judge-gen                           # OpenAPI を変えたら(internal/api を生成)
 make judge-test judge-lint judge-build   # ルートの make test / lint / build にも含まれる
+make judge-kustomize                     # deploy/k8s/overlays/local の描画を確認
+make judge-k3d-deploy && make judge-smoke  # k3d へデプロイして healthz を確認
 ```
 
 ## 環境変数
