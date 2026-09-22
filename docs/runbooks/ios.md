@@ -16,7 +16,7 @@ make ios-test | grep '^ios-'
 cd "$(git rev-parse --show-toplevel)"
 make ios-sim-run IOS_SCREEN=root
 ```
-確認: 開いたスクリーンショット(`ios/build/screenshots/root-light-large.png`)に「モックデータで動作中」と「計算する」「逆算する」のボタンがある。
+確認: 開いたスクリーンショット(`ios/build/screenshots/root-light-large.png`)に「モックデータで動作中」と「計算する」「逆算する」「構築」のボタンがある。
 
 ## 3. 計算画面を開く
 
@@ -34,16 +34,25 @@ make ios-sim-run IOS_SCREEN=reverse
 ```
 確認: 「与えたダメージ / 受けたダメージ」の切り替え、カード2枚、空の観測の行(単位 %)と「観測を追加」がある。
 
-## 5. ダークモードと大きい文字で崩れないことを見る
+## 5. 構築画面を開く
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make ios-sim-run IOS_SCREEN=team
+```
+確認: 「まだ構築がありません。「新規作成」から始めましょう。」と「新規作成」がある(初回はチームが無いので一覧は空)。
+
+## 6. ダークモードと大きい文字で崩れないことを見る
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 make ios-sim-run IOS_SCREEN=calc IOS_APPEARANCE=dark IOS_CONTENT_SIZE=extra-extra-large
 make ios-sim-run IOS_SCREEN=reverse IOS_APPEARANCE=dark IOS_CONTENT_SIZE=accessibility-large
+make ios-sim-run IOS_SCREEN=team IOS_APPEARANCE=dark IOS_CONTENT_SIZE=extra-extra-large
 ```
 確認: 背景が黒に近く文字が白い。文字が1字ずつ縦に折り返したり「…」で切れたりしていない(accessibility-large ではカードが縦に並ぶ)。
 
-## 6. シミュレータを標準の表示に戻す
+## 7. シミュレータを標準の表示に戻す
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"

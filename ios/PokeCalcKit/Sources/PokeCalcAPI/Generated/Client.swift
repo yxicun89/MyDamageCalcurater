@@ -47,6 +47,10 @@ public struct Client: APIProtocol {
     }
     /// ポケモンを日本語名で前方一致検索
     ///
+    /// 既定のレギュレーション(コードに書かず DB から引く。ADR-0105)の使用可能集合だけを返す(並びは ID 順)。
+    /// `format` は v1 では結果に影響しない(使用可能集合は形式で分かれていない)。
+    ///
+    ///
     /// - Remark: HTTP `GET /api/pokedex/species`.
     /// - Remark: Generated from `#/paths//api/pokedex/species/get(searchSpecies)`.
     public func searchSpecies(_ input: Operations.SearchSpecies.Input) async throws -> Operations.SearchSpecies.Output {
@@ -177,6 +181,10 @@ public struct Client: APIProtocol {
     }
     /// 種族の詳細(タイプ・種族値・特性・覚える技)
     ///
+    /// 使用可能集合の外の種族も返す(絞り込みは検索の仕事)。`abilities` は slot 順、
+    /// `learnset` は習得技 ∩ 既定のレギュレーションの使用可能な技(ID 昇順)。
+    ///
+    ///
     /// - Remark: HTTP `GET /api/pokedex/species/{key}`.
     /// - Remark: Generated from `#/paths//api/pokedex/species/{key}/get(getSpecies)`.
     public func getSpecies(_ input: Operations.GetSpecies.Input) async throws -> Operations.GetSpecies.Output {
@@ -237,7 +245,7 @@ public struct Client: APIProtocol {
                     return .ok(.init(body: body))
                 case 404:
                     let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
-                    let body: Components.Responses._Error.Body
+                    let body: Operations.GetSpecies.Output.NotFound.Body
                     let chosenContentType = try converter.bestContentType(
                         received: contentType,
                         options: [
@@ -309,6 +317,8 @@ public struct Client: APIProtocol {
         )
     }
     /// 技を日本語名で前方一致検索
+    ///
+    /// 既定のレギュレーションの使用可能集合だけを返す(並びは ID 順。ADR-0105)。
     ///
     /// - Remark: HTTP `GET /api/pokedex/moves`.
     /// - Remark: Generated from `#/paths//api/pokedex/moves/get(searchMoves)`.
@@ -433,6 +443,8 @@ public struct Client: APIProtocol {
     }
     /// 持ち物を日本語名で前方一致検索
     ///
+    /// 既定のレギュレーションの使用可能集合だけを返す(並びは ID 順。ADR-0105)。
+    ///
     /// - Remark: HTTP `GET /api/pokedex/items`.
     /// - Remark: Generated from `#/paths//api/pokedex/items/get(searchItems)`.
     public func searchItems(_ input: Operations.SearchItems.Input) async throws -> Operations.SearchItems.Output {
@@ -555,6 +567,8 @@ public struct Client: APIProtocol {
         )
     }
     /// 性格の一覧(補正する能力)
+    ///
+    /// 使用可能集合で絞らない(全性格。並びは ID 順。ADR-0105)。
     ///
     /// - Remark: HTTP `GET /api/pokedex/natures`.
     /// - Remark: Generated from `#/paths//api/pokedex/natures/get(listNatures)`.

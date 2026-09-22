@@ -34,8 +34,11 @@ pokedex 配線待ちなので、API レーンの依頼 d が進んでから本�
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
 Active: Claude Code
 Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
-Status: P6-1(ADR-0500)・P6-2a 計算画面・契約追従は main に統合済み(PR #31)。P6-2b 逆算画面(critic PASS)・生成の internal タグ除外・DOC-ios(ios/README.md を coding-rules §8 の形に、ADR-0501・docs/runbooks/ios.md。critic PASS)はブランチにあり未 PR。`make ios-test`(XCTest 174 件・XCUITest 9 件)が緑
-Next: PR(P6-2b・internal タグ除外・DOC-ios をまとめて main へ)→ P6-2c 構築(端末内保存の TeamStore、Showdown 形式は後回し)→ P6-3 → P6-4(手順書は AGENTS.md「手順書の書き方」)
+Status: P6-1(ADR-0500)・P6-2a 計算画面・契約追従・P6-2b 逆算画面・生成の internal タグ除外・DOC-ios は main に統合済み(PR #31・#53)。
+P6-2c 構築ビルダー(一覧・編集画面・ニックネーム・XCUITest)は完了(critic 2回目 PASS)。`make ios-test`(XCTest 244件・
+XCUITest 10件)が緑。api/openapi.yaml 側の ADR-0105(pokedex)更新に追従して `make ios-gen` 済み。ブランチにあり未 PR。
+Next: PR(P6-2b・internal タグ除外・P6-2c をまとめて main へ)→ P6-2d(構築から個体を呼び出す配線。plan.md 参照)→
+P6-3(`make ios-test` の総仕上げ)→ P6-4(手順書は AGENTS.md「手順書の書き方」)。
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)

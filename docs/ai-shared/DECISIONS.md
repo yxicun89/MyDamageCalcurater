@@ -709,6 +709,11 @@ Decision: メインセッションは Sonnet で起動し、重い設計の判�
 Reason: ユーザーが確認の質問に改めて答えた(前回の回答「メインだけ Sonnet」は意図と違った)。
 Impact: CLAUDE.md・COORDINATION.md を更新。
 
+## 2026-09-22: iOS レーンの統合(PR #53)
+Decision: P6-2b 逆算画面・internal タグ除外・DOC-ios(ios/README.md を coding-rules §8 の形に、ADR-0501・docs/runbooks/ios.md)を PR #53 で main にマージした(critic はそれぞれ PASS。make test / lint / build / check-publishable / ios-test が成功)。
+Reason: ユーザー回答(2026-09-22)「契約追従が緑になったら PR」の続き。P6-2b が完了し DOC-ios の割り当て(データレーンより)も完了したため区切りで統合した。
+Impact: 続き(P6-2c 構築)は同じブランチ feat/ios-p6 で進める。
+
 ## 2026-09-22: 素早さ DOC-speed を PR #52 で main に統合(素早さレーン)
 Decision: README(coding-rules §8 の形)と手順書 docs/runbooks/speed.md(AGENTS.md「手順書の書き方」)を PR #52 で統合した。speed-k3d-deploy ターゲットを追加し、実際に k3d へデプロイして smoke まで確認した。文書のみのため critic レビューは省略。
 Impact: 素早さレーンの次は SP2(feat/speed-sp2)。
