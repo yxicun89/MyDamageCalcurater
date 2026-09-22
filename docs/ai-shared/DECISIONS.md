@@ -498,3 +498,8 @@ Decision: (1) ユーザー決定どおり、`web/Makefile` が `test: web-test` 
 gateway 経由のオンライン E2E(`VITE_API_BASE_URL` を gateway に向ける)は P3-3 の後に Web レーンが足す。
 Reason: P4-6 の完了条件と、ユーザー回答(2026-09-22)の反映。
 Impact: 他のレーンのルートの `make test` / `lint` / `build` で Web のテスト・型検査・ビルドも走る(初回は npm ci ぶん遅い)。
+
+## 2026-09-22: Web の統合記録(PR #22・#28)
+Decision: PR #22(Web P4-1〜P4-5)と PR #28(P4-6 Playwright E2E・make test への Web の組み込み・verify-m1.md ドラフト)を main に統合した。
+Reason: 独立レビュー(critic)PASS と、make test / lint / build・E2E の通過を確認した後(COORDINATION.md「main への統合」)。
+Impact: 残りは P4-5 のブラウザ実機確認(人間)と P4-7 の完成(P2-2c/d・P2-3・P3-3 を待つ)。
