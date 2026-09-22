@@ -2,8 +2,7 @@
 //
 // 画面(View)は生成型(PokeCalcAPI)を直接使わず、この型と `PokeCalcService` だけに依存する。
 // 生成型 ↔ ドメインの写像は `APIPokeCalcService` の中の1か所に置く(このファイルは写像を持たない)。
-// 逆算(Reverse*)は ADR-0010 §R の形(いまの api/openapi.yaml の `ReverseCandidate` とは別の形。
-// 契約は P3-1 で追従する)。
+// 逆算(Reverse*)は ADR-0010 §R の形。api/openapi.yaml も P3-1(ADR-0200)でこの形になった。
 
 // MARK: - Lv50・個体値31固定(CLAUDE.md ドメイン規約)
 
@@ -59,7 +58,7 @@ public enum ReverseSide: String, CaseIterable, Sendable, Hashable {
     case defender, attacker
 }
 
-/// 逆算で探索する性格クラス(ADR-0010 §R1)。下降補正は探索しないので2つだけ。
+/// 逆算で探索する性格クラス(openapi `NatureClass`。ADR-0010 §R1)。下降補正は探索しないので2つだけ。
 /// `CaseIterable` の順序がそのまま順位(§R4 の定義順)に使われる。
 public enum NatureClass: String, CaseIterable, Sendable, Hashable {
     case neutral, plus
@@ -139,6 +138,18 @@ public struct Individual: Equatable, Sendable {
         self.ranks = ranks
         self.teraType = teraType
         self.status = status
+    }
+}
+
+/// 性格補正の構造値(openapi `NatureModifier`)。`plus` が +10%、`minus` が -10% を受ける能力。
+/// 無補正は両方 nil。HP を指すことはない。
+public struct NatureModifier: Equatable, Sendable {
+    public var plus: StatKey?
+    public var minus: StatKey?
+
+    public init(plus: StatKey? = nil, minus: StatKey? = nil) {
+        self.plus = plus
+        self.minus = minus
     }
 }
 
@@ -277,11 +288,13 @@ public struct CalcResult: Equatable, Sendable {
     public var effectiveness: Double
     /// タイプ一致。
     public var stab: Bool
+    /// 使った技の分類(openapi `CalcResult.category`。必須)。
+    public var category: MoveCategory
     public var ko: KOChance
 
     public init(
         rolls: [Int], minDamage: Int, maxDamage: Int, minPercent: Double, maxPercent: Double,
-        defenderHP: Int, effectiveness: Double, stab: Bool, ko: KOChance
+        defenderHP: Int, effectiveness: Double, stab: Bool, category: MoveCategory, ko: KOChance
     ) {
         self.rolls = rolls
         self.minDamage = minDamage
@@ -291,6 +304,7 @@ public struct CalcResult: Equatable, Sendable {
         self.defenderHP = defenderHP
         self.effectiveness = effectiveness
         self.stab = stab
+        self.category = category
         self.ko = ko
     }
 }
@@ -342,17 +356,42 @@ public struct BulkCalcRequest: Sendable {
     }
 }
 
+/// 一括計算の1行で使った防御側の調整(openapi `BulkDefender`。ADR-0200 §1)。
+public struct BulkDefender: Equatable, Sendable {
+    /// 能力ポイント。
+    public var sp: StatBlock
+    public var nature: NatureModifier
+    /// `nature` と一致するマスタの性格 ID。該当する性格がマスタに無ければ nil(ADR-0200 §2)。
+    public var natureId: String?
+    /// 実数値(Lv50・個体値31)。クライアントでは計算しない(サーバーの値をそのまま運ぶ)。
+    public var stats: StatBlock
+
+    public init(sp: StatBlock, nature: NatureModifier, natureId: String?, stats: StatBlock) {
+        self.sp = sp
+        self.nature = nature
+        self.natureId = natureId
+        self.stats = stats
+    }
+}
+
 public struct BulkCalcRow: Equatable, Sendable {
     public var preset: DefenderPreset
     /// 表示名(例 HB振り / HB特化 / H振り+B補正)。
     public var presetLabel: String
+    /// この行の防御側の持ち物(持ち物なしは nil)。
     public var itemId: String?
+    /// この行で使った防御側の調整(openapi `BulkCalcRow.defender`。必須)。
+    public var defender: BulkDefender
     public var result: CalcResult
 
-    public init(preset: DefenderPreset, presetLabel: String, itemId: String? = nil, result: CalcResult) {
+    public init(
+        preset: DefenderPreset, presetLabel: String, itemId: String? = nil,
+        defender: BulkDefender, result: CalcResult
+    ) {
         self.preset = preset
         self.presetLabel = presetLabel
         self.itemId = itemId
+        self.defender = defender
         self.result = result
     }
 }
@@ -394,9 +433,13 @@ public struct SPRange: Equatable, Sendable {
     }
 }
 
-/// 逆算候補(ADR-0010 §R3)。1候補 = (性格クラス, 持ち物)。
+/// 逆算候補(openapi `ReverseCandidate`。ADR-0010 §R3)。1候補 = (性格クラス, 持ち物)。
 public struct ReverseCandidate: Equatable, Sendable {
     public var natureClass: NatureClass
+    /// 性格クラスの代表の補正(neutral = 両方 nil、plus = 関連ステータス +10%。ADR-0010 §R)。
+    public var nature: NatureModifier
+    /// `nature` と一致するマスタの性格 ID(`BulkDefender.natureId` と同じ規則)。該当なしは nil。
+    public var natureId: String?
     public var itemId: String?
     /// 昇順・互いに素・隣接しない(極大連続区間)。空にならない。
     public var ranges: [SPRange]
@@ -411,10 +454,13 @@ public struct ReverseCandidate: Equatable, Sendable {
     public var maxPercent: Double
 
     public init(
-        natureClass: NatureClass, itemId: String?, ranges: [SPRange], spCount: Int,
+        natureClass: NatureClass, nature: NatureModifier, natureId: String?, itemId: String?,
+        ranges: [SPRange], spCount: Int,
         exact: Bool, mismatch: Int, support: Int, minPercent: Double, maxPercent: Double
     ) {
         self.natureClass = natureClass
+        self.nature = nature
+        self.natureId = natureId
         self.itemId = itemId
         self.ranges = ranges
         self.spCount = spCount
@@ -446,8 +492,8 @@ public struct ReverseResult: Equatable, Sendable {
     }
 }
 
-/// 逆算の要求。ADR-0500 §3: いまの openapi `ReverseRequest` は P3-1 で置き換わる決定済みの形
-/// (`ReverseCandidate.matchScore` 等)なので、ドメインは先に ADR-0010 §R の形にしておく。
+/// 逆算の要求(openapi `ReverseRequest`。ADR-0010 §R)。
+/// 場(field)は `CalcRequest` と同じ理由(P6 の画面で未使用)で持たない。
 public struct ReverseRequest: Sendable {
     public var format: Format
     public var side: ReverseSide
@@ -459,10 +505,15 @@ public struct ReverseRequest: Sendable {
     /// 持ち物候補(`nil` は「持ち物なし」)。空は「持ち物なし」の1通りと同じ。
     public var itemCandidates: [String?]
     public var observations: [DamageObservation]
+    /// 急所(openapi `options.critical`)。
+    public var critical: Bool
+    /// 返す候補数の上限。0 は無制限(openapi の既定値)。
+    public var maxCandidates: Int
 
     public init(
         format: Format, side: ReverseSide, known: Individual, unknownSpeciesKey: String, moveId: String,
-        itemCandidates: [String?] = [], observations: [DamageObservation]
+        itemCandidates: [String?] = [], observations: [DamageObservation],
+        critical: Bool = false, maxCandidates: Int = 0
     ) {
         self.format = format
         self.side = side
@@ -471,5 +522,7 @@ public struct ReverseRequest: Sendable {
         self.moveId = moveId
         self.itemCandidates = itemCandidates
         self.observations = observations
+        self.critical = critical
+        self.maxCandidates = maxCandidates
     }
 }

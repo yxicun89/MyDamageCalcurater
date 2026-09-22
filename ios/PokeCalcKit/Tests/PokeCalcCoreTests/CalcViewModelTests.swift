@@ -251,7 +251,7 @@ final class CalcViewModelTests: XCTestCase {
     /// 応答で見分けられる行を返す(presetLabel に目印を入れる)。
     private func markedResult(_ mark: String, for request: BulkCalcRequest) -> BulkCalcResult {
         BulkCalcResult(defenderSpeciesKey: request.defenderSpeciesKey, rows: [
-            BulkCalcRow(preset: .hp, presetLabel: mark, itemId: nil, result: StubPokeCalcService.echoCalcResult),
+            BulkCalcRow(preset: .hp, presetLabel: mark, itemId: nil, defender: testBulkDefender, result: StubPokeCalcService.echoCalcResult),
         ])
     }
 
@@ -337,7 +337,6 @@ final class CalcViewModelTests: XCTestCase {
 
     func testCalcFailureBecomesScreenErrorAndClearsRows() async throws {
         let cases: [(name: String, error: PokeCalcError, expected: CalcScreenError)] = [
-            ("API 未対応", PokeCalcError(code: PokeCalcError.Code.apiUnsupported, message: "テスト"), .apiUnsupported),
             ("通信失敗", PokeCalcError(code: PokeCalcError.Code.transport, message: "テスト"), .transport),
             ("応答の形が不正", PokeCalcError(code: PokeCalcError.Code.decode, message: "テスト"), .unexpectedResponse),
             ("サーバーの code", PokeCalcError(code: "invalid_input", message: "テスト入力が不正"),
@@ -513,10 +512,10 @@ final class CalcViewModelTests: XCTestCase {
     private nonisolated static func rowWithEffectiveness(_ value: Double, preset: DefenderPreset, label: String) -> BulkCalcRow {
         let result = CalcResult(
             rolls: Array(repeating: 10, count: 16), minDamage: 10, maxDamage: 10,
-            minPercent: 10.0, maxPercent: 10.0, defenderHP: 100, effectiveness: value, stab: false,
+            minPercent: 10.0, maxPercent: 10.0, defenderHP: 100, effectiveness: value, stab: false, category: .physical,
             ko: KOChance(hits: 10, guaranteed: true, chancePercent: 0, displayChancePercent: 100)
         )
-        return BulkCalcRow(preset: preset, presetLabel: label, itemId: nil, result: result)
+        return BulkCalcRow(preset: preset, presetLabel: label, itemId: nil, defender: testBulkDefender, result: result)
     }
 
     func testMoveEffectivenessIsTheUniformRowValueOrNilWhenMixed() async throws {
@@ -566,7 +565,6 @@ final class CalcScreenErrorTests: XCTestCase {
 
     func testMappingFromErrors() {
         let cases: [(name: String, error: any Error, expected: CalcScreenError)] = [
-            ("API 未対応", PokeCalcError(code: PokeCalcError.Code.apiUnsupported, message: "m"), .apiUnsupported),
             ("通信失敗", PokeCalcError(code: PokeCalcError.Code.transport, message: "m"), .transport),
             ("デコード失敗", PokeCalcError(code: PokeCalcError.Code.decode, message: "m"), .unexpectedResponse),
             ("サーバーの not_found", PokeCalcError(code: "not_found", message: "テストが無い"),
@@ -582,14 +580,14 @@ final class CalcScreenErrorTests: XCTestCase {
     }
 
     func testMessagesAreShowableAndDistinguishable() {
-        let apiUnsupported = CalcScreenError.apiUnsupported.message
         let transport = CalcScreenError.transport.message
         let unexpected = CalcScreenError.unexpectedResponse.message
         let service = CalcScreenError.service(code: "test_code", message: "テストの説明").message
-        for message in [apiUnsupported, transport, unexpected, service] {
+        for message in [transport, unexpected, service] {
             XCTAssertFalse(message.isEmpty)
         }
-        XCTAssertEqual(Set([apiUnsupported, transport, unexpected, service]).count, 4, "種類ごとに別の文言")
+        // apiUnsupported は P3-1 で逆算が API 対応し、生成元が無くなったので削除した(ADR-0500 §3)
+        XCTAssertEqual(Set([transport, unexpected, service]).count, 3, "種類ごとに別の文言")
         // サーバーのエラーは原因が分かるように code と説明を含める
         XCTAssertTrue(service.contains("test_code"), service)
         XCTAssertTrue(service.contains("テストの説明"), service)

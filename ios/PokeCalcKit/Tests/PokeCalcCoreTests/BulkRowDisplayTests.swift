@@ -15,7 +15,7 @@ final class BulkRowDisplayTests: XCTestCase {
         CalcResult(
             rolls: Array(repeating: 1, count: 16), minDamage: 1, maxDamage: 1,
             minPercent: minPercent, maxPercent: maxPercent, defenderHP: 100,
-            effectiveness: effectiveness, stab: false, ko: ko
+            effectiveness: effectiveness, stab: false, category: .physical, ko: ko
         )
     }
 
@@ -121,7 +121,7 @@ final class BulkRowDisplayTests: XCTestCase {
 
     func testRowDisplayFromBulkRow() throws {
         let row = BulkCalcRow(
-            preset: .hbFull, presetLabel: "テスト特化ラベル", itemId: itemB.id,
+            preset: .hbFull, presetLabel: "テスト特化ラベル", itemId: itemB.id, defender: testBulkDefender,
             result: result(minPercent: 44.3, maxPercent: 52.5, ko: ko(hits: 2, guaranteed: false, raw: 7.77, display: 7.8))
         )
         let display = BulkRowDisplay(row: row, items: [itemA, itemB])
@@ -142,7 +142,7 @@ final class BulkRowDisplayTests: XCTestCase {
         // M4: `moveEffectiveness`(CalcViewModel)が全行の一致を見られるよう、丸めずそのまま運ぶ。
         for value in [0.0, 0.25, 0.5, 1.0, 2.0, 4.0] {
             let row = BulkCalcRow(
-                preset: .none, presetLabel: "x", itemId: nil,
+                preset: .none, presetLabel: "x", itemId: nil, defender: testBulkDefender,
                 result: result(minPercent: 10, maxPercent: 20, ko: ko(hits: 1, guaranteed: true, display: 100), effectiveness: value)
             )
             let display = BulkRowDisplay(row: row, items: [])
@@ -166,9 +166,9 @@ final class BulkRowDisplayTests: XCTestCase {
         // XCUITest の accessibilityIdentifier(`calcResultRow-<id>`)に使う。形は README の約束どおり
         // `<preset の rawValue>@<itemId。nil は ->`。
         let base = result(minPercent: 1, maxPercent: 2, ko: ko(hits: 0, guaranteed: false, display: 0))
-        let plain = BulkRowDisplay(row: BulkCalcRow(preset: .hb, presetLabel: "x", itemId: nil, result: base), items: [itemA])
-        let withItem = BulkRowDisplay(row: BulkCalcRow(preset: .hb, presetLabel: "x", itemId: itemA.id, result: base), items: [itemA])
-        let other = BulkRowDisplay(row: BulkCalcRow(preset: .hp, presetLabel: "x", itemId: nil, result: base), items: [itemA])
+        let plain = BulkRowDisplay(row: BulkCalcRow(preset: .hb, presetLabel: "x", itemId: nil, defender: testBulkDefender, result: base), items: [itemA])
+        let withItem = BulkRowDisplay(row: BulkCalcRow(preset: .hb, presetLabel: "x", itemId: itemA.id, defender: testBulkDefender, result: base), items: [itemA])
+        let other = BulkRowDisplay(row: BulkCalcRow(preset: .hp, presetLabel: "x", itemId: nil, defender: testBulkDefender, result: base), items: [itemA])
         XCTAssertEqual(plain.id, "hb@-")
         XCTAssertEqual(withItem.id, "hb@test-item-a")
         XCTAssertEqual(other.id, "hp@-")

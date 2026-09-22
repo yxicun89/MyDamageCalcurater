@@ -8,8 +8,8 @@
 
 ## 背景
 
-M3 は「iPhone で使える」。サーバー(P3)と構築 API(P5-4)はまだ無く、`api/openapi.yaml` の逆算の契約は
-P3-1 で ADR-0010 §R の形へ変わることが決まっている。iOS レーンは契約を変更できないので、契約が変わっても
+M3 は「iPhone で使える」。着手時(2026-09-21)はサーバー(P3)と構築 API(P5-4)が無く、`api/openapi.yaml` の逆算の契約は
+P3-1 で ADR-0010 §R の形へ変わることが決まっていた(2026-09-22 に P3-1・P3-2 が main に入り、§R の形になった)。iOS レーンは契約を変更できないので、契約が変わっても
 画面を作り直さずに済む境界が要る。Xcode 27 と iOS 27 シミュレータは導入済みだが、XcodeGen などのプロジェクト生成ツールは無い。
 
 ## 決定
@@ -47,9 +47,11 @@ ios/
   実装は2つ: `APIPokeCalcService`(生成クライアント。全要求に `X-Device-Id` / `X-Session-Id` を付ける)と `MockPokeCalcService`。
 - 生成型 ↔ ドメインの写像は `APIPokeCalcService` の中の1か所に置く。契約が変わったら写像だけを直す。
 - **逆算**のドメインの型は ADR-0010 §R の形(性格クラス × 持ち物ごとの SP 範囲、`exact`・`assumedHpSp`)にする。
-  いまの `api/openapi.yaml` の `ReverseCandidate`(`matchScore` 等)は P3-1 で廃止が決まっているので写像しない。
-  `APIPokeCalcService` の逆算は、契約が更新されるまで「API が未対応」のエラーを返す(画面はその旨を表示する)。
-- エラーは `PokeCalcError`(`code` は OpenAPI の `Error.code` をそのまま運ぶ)。
+  当初は契約が旧形(`matchScore` 等)だったので「API 未対応」を返していた(ユーザー回答 2026-09-21: P3-1 まで)。
+  P3-1(ADR-0200)で契約が §R の形になったので、2026-09-22 から要求・応答を写像して API で逆算する。
+- エラーは `PokeCalcError`。`code` は OpenAPI の `ErrorCode` の rawValue を文字列のまま運ぶ(enum にしない)。
+  同じ `code` にクライアント由来の `client_*` も載せるため、また画面が分岐するのは一部の値だけのため。
+  生成型との同期は `DomainTypesTests` で確かめる。
 
 ### 4. モック(サーバーができるまで)
 - `MockPokeCalcService` は**架空データ**(名前は「テスト」で始める。実在のポケモン・技・持ち物の名前や数値を使わない。ADR-0002)を
@@ -82,5 +84,5 @@ ios/
 - 画面のスクリーンショット(ライト/ダーク)は手元で撮って確認し、Git には入れない。
 
 ## 影響
-- `api/openapi.yaml` は変更しない。P3-1 で逆算・一括計算の契約が変わったら `make ios-gen` と写像の更新だけで追従する。
-- 構築 API・Showdown 形式・逆算の API 接続は、契約ができた後の iOS レーンのタスクとして残る。
+- `api/openapi.yaml` は変更しない。契約が変わったら `make ios-gen` と写像の更新だけで追従する(P3-1・P3-2 の変更には 2026-09-22 に追従した)。
+- 構築 API・Showdown 形式は、team-svc の契約ができた後の iOS レーンのタスクとして残る(逆算の API 接続は P3-1 の後に対応済み)。

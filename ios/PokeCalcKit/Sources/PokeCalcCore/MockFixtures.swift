@@ -53,6 +53,10 @@ struct MockFixtures {
             let chancePercent: Double
             let displayChancePercent: Double
         }
+        /// 防御側の実数値(openapi `BulkDefender.stats`)。一括計算の行にだけ要る(`"single"` エントリには無い)。
+        struct StatsEntry: Decodable {
+            let hp: Int, atk: Int, def: Int, spa: Int, spd: Int, spe: Int
+        }
         let rolls: [Int]
         let minDamage: Int
         let maxDamage: Int
@@ -62,6 +66,7 @@ struct MockFixtures {
         let effectiveness: Double
         let stab: Bool
         let ko: KOEntry
+        let stats: StatsEntry?
     }
 
     let species: [SpeciesEntry]

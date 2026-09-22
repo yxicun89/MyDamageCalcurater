@@ -16,8 +16,6 @@ public struct PokeCalcError: Error, Equatable, Sendable {
 
     /// クライアント側で作るエラーコード(1か所に集約。coding-rules §2)。
     public enum Code {
-        /// 逆算は契約更新(P3-1)まで API 実装が対応しない(ADR-0500 §3)。
-        public static let apiUnsupported = "client_api_unsupported"
         /// 通信できない(接続失敗・タイムアウト等)。HTTP 応答が無い失敗すべて。
         public static let transport = "client_transport_error"
         /// 応答は受け取ったが期待した形の JSON にデコードできない。`transport`(接続できない)とは
@@ -45,8 +43,8 @@ public struct PokeCalcError: Error, Equatable, Sendable {
         /// 同じ語彙を選ぶ。
         public static let notFound = "not_found"
         /// サーバーの語彙を真似た「入力が不正」。WASM 境界のエラー語彙 `engine/wasmapi` の
-        /// `CodeInvalidInput` と同じ値(HTTP と WASM で code を共通化する予定。plan.md P3-1)。
-        /// なお openapi の `Error.code` の例は `invalid_request` で、語彙は P3-1 で確定する。
+        /// `CodeInvalidInput`、および openapi `ErrorCode.invalid_input` と同じ値
+        /// (HTTP と WASM で code を共通化する。ADR-0200)。
         public static let invalidInput = "invalid_input"
         /// モックのフィクスチャ(`Resources/*.json`)自体が読み込めない。サーバーには無い、
         /// クライアント(モック実装)だけの内部エラーなので `client_` 接頭辞を付ける。

@@ -32,3 +32,10 @@ func assertThrowsPokeCalcError<T>(
 
 /// 全 SP 0 の能力ポイント。
 let zeroSP = StatBlock(hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0)
+
+/// 一括計算の行を組み立てるテスト用の防御側(値に意味は無い。行の整形・ViewModel は defender を使わない)。
+/// `BulkCalcRow.defender` が契約で必須になった(ADR-0200 §1)ので、行を作るテストはこれを渡す。
+let testBulkDefender = BulkDefender(
+    sp: zeroSP, nature: NatureModifier(), natureId: "test-nature-neutral",
+    stats: StatBlock(hp: 100, atk: 50, def: 50, spa: 50, spd: 50, spe: 50)
+)

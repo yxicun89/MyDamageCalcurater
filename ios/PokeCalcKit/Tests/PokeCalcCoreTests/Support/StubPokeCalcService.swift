@@ -128,7 +128,7 @@ actor StubPokeCalcService: PokeCalcService {
     /// テストで使う決め打ちの計算結果。数値に意味は無い(ViewModel はそのまま整形するだけ)。
     static let echoCalcResult = CalcResult(
         rolls: Array(repeating: 10, count: 16), minDamage: 10, maxDamage: 10,
-        minPercent: 10.0, maxPercent: 10.0, defenderHP: 100, effectiveness: 1, stab: false,
+        minPercent: 10.0, maxPercent: 10.0, defenderHP: 100, effectiveness: 1, stab: false, category: .physical,
         ko: KOChance(hits: 10, guaranteed: true, chancePercent: 0, displayChancePercent: 100)
     )
 
@@ -140,7 +140,7 @@ actor StubPokeCalcService: PokeCalcService {
         for preset in presets {
             for itemId in variants {
                 rows.append(BulkCalcRow(
-                    preset: preset, presetLabel: "テスト調整-\(preset.rawValue)", itemId: itemId, result: echoCalcResult
+                    preset: preset, presetLabel: "テスト調整-\(preset.rawValue)", itemId: itemId, defender: testBulkDefender, result: echoCalcResult
                 ))
             }
         }

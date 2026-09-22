@@ -470,3 +470,10 @@ Decision: `docs/adr/0017-ios-app-architecture.md` を `docs/adr/0500-ios-app-arc
 上の iOS のエントリ(2026-09-21)に書いた「ADR-0017」は iOS の構成の ADR のことで、以後は ADR-0500 と読む(main の ADR-0017 は balance TB3)。
 Reason: main の ADR-0017(balance TB3)と番号が衝突した。後から統合する側(iOS)が振り直す(COORDINATION.md)。
 Impact: ios/ と文書の参照のみ。
+
+## 2026-09-22: iOS の逆算画面の観測入力と PR の区切り(ユーザー回答)
+Decision: (1) 逆算の観測(与えたダメージ = 相手 HP の減少%(整数)、受けたダメージ = 自分 HP の減少量(実点数))はテンキーで数値入力する
+(requirements.md「数値の直接入力は原則しない」の例外。観測値は選択肢から選べないため)。(2) main への PR は、P6-2 の契約追従が緑になった時点で
+P6-1・P6-2a・契約追従をまとめて出す。逆算・構築は次の PR。
+Reason: 日中にユーザーへ質問し、既定案(推奨)どおりの回答を得た。
+Impact: P6-2b の画面仕様、PR の区切り。

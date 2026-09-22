@@ -70,7 +70,7 @@ public struct MockPokeCalcService: PokeCalcService {
     // MARK: - 計算
 
     public func calcDamage(_ request: CalcRequest) async throws -> CalcResult {
-        guard fixtures.moves.contains(where: { $0.id == request.moveId }) else {
+        guard let move = fixtures.moves.first(where: { $0.id == request.moveId }) else {
             throw Self.notFoundError("技", request.moveId)
         }
         guard fixtures.species.contains(where: { $0.key == request.attacker.speciesKey }) else {
@@ -79,7 +79,8 @@ public struct MockPokeCalcService: PokeCalcService {
         guard fixtures.species.contains(where: { $0.key == request.defender.speciesKey }) else {
             throw Self.notFoundError("種族", request.defender.speciesKey)
         }
-        return try cannedResult(forKey: Self.singleResultKey)
+        let category = try Self.domainMoveCategory(move.category)
+        return try cannedResult(forKey: Self.singleResultKey, category: category)
     }
 
     public func calcBulk(_ request: BulkCalcRequest) async throws -> BulkCalcResult {
@@ -96,14 +97,17 @@ public struct MockPokeCalcService: PokeCalcService {
         let presets = request.presets.isEmpty ? Self.defaultPresets(for: category) : request.presets
         // 省略時は「素の1通り」(openapi `BulkCalcRequest.itemVariants` の description)。
         let itemVariants = request.itemVariants.isEmpty ? [String?.none] : request.itemVariants
+        let domainNatures = try fixtures.natures.map(Self.domainNature)
 
         // 行の順序は「プリセット優先」(presets × itemVariants。plan.md P3-1)。
         var rows: [BulkCalcRow] = []
         for preset in presets {
-            let result = try cannedResult(forKey: preset.rawValue)
+            let result = try cannedResult(forKey: preset.rawValue, category: category)
+            let stats = try cannedDefenderStats(forKey: preset.rawValue)
+            let defender = Self.defenderForRow(preset: preset, natures: domainNatures, stats: stats)
             let label = Self.presetLabel(preset)
             for itemId in itemVariants {
-                rows.append(BulkCalcRow(preset: preset, presetLabel: label, itemId: itemId, result: result))
+                rows.append(BulkCalcRow(preset: preset, presetLabel: label, itemId: itemId, defender: defender, result: result))
             }
         }
         return BulkCalcResult(defenderSpeciesKey: request.defenderSpeciesKey, rows: rows)
@@ -116,6 +120,48 @@ public struct MockPokeCalcService: PokeCalcService {
         case .special: return [.none, .hp, .hdBoost, .hd, .hdFull]
         case .status: return [.none, .hp]
         }
+    }
+
+    /// 防御側プリセットの SP・性格補正のカタログ(ADR-0009)。UI 文言ではなくデータの規則なので、
+    /// `presetLabel` と同じ理由でここに1か所持つ(辞書 + `??` ではなく網羅 switch)。
+    private static func defenderSPAndNature(_ preset: DefenderPreset) -> (sp: StatBlock, nature: NatureModifier) {
+        let full = 32
+        let zero = StatBlock(hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0)
+        switch preset {
+        case .none:
+            return (zero, NatureModifier())
+        case .hp:
+            return (StatBlock(hp: full, atk: 0, def: 0, spa: 0, spd: 0, spe: 0), NatureModifier())
+        case .hbBoost:
+            return (StatBlock(hp: full, atk: 0, def: 0, spa: 0, spd: 0, spe: 0), NatureModifier(plus: .def, minus: .atk))
+        case .hb:
+            return (StatBlock(hp: full, atk: 0, def: full, spa: 0, spd: 0, spe: 0), NatureModifier())
+        case .hbFull:
+            return (StatBlock(hp: full, atk: 0, def: full, spa: 0, spd: 0, spe: 0), NatureModifier(plus: .def, minus: .atk))
+        case .hdBoost:
+            return (StatBlock(hp: full, atk: 0, def: 0, spa: 0, spd: 0, spe: 0), NatureModifier(plus: .spd, minus: .atk))
+        case .hd:
+            return (StatBlock(hp: full, atk: 0, def: 0, spa: 0, spd: full, spe: 0), NatureModifier())
+        case .hdFull:
+            return (StatBlock(hp: full, atk: 0, def: 0, spa: 0, spd: full, spe: 0), NatureModifier(plus: .spd, minus: .atk))
+        }
+    }
+
+    /// 一括計算の1行の `defender`(openapi `BulkCalcRow.defender`。必須。ADR-0200 §1)。
+    /// SP・性格補正はカタログどおり、natureId は補正が一致するモックの性格を ID 昇順の最初で選ぶ
+    /// (ADR-0200 §2)、実数値(stats)はフィクスチャの値をそのまま使う(式は書かない。coding-rules §2)。
+    private static func defenderForRow(preset: DefenderPreset, natures: [Nature], stats: StatBlock) -> BulkDefender {
+        let (sp, nature) = defenderSPAndNature(preset)
+        return BulkDefender(sp: sp, nature: nature, natureId: Self.natureID(for: nature, in: natures), stats: stats)
+    }
+
+    /// ADR-0200 §2 の natureId の規則: (plus, minus) が一致するマスタの性格のうち ID 昇順の最初。無ければ nil。
+    private static func natureID(for nature: NatureModifier, in natures: [Nature]) -> String? {
+        natures
+            .filter { $0.plus == nature.plus && $0.minus == nature.minus }
+            .map(\.id)
+            .sorted()
+            .first
     }
 
     /// 防御側プリセットの表示名(ADR-0009)。UI 文言なのでマスタ扱いではなく、ここに1か所で持つ。
@@ -149,15 +195,18 @@ public struct MockPokeCalcService: PokeCalcService {
         let category = try Self.domainMoveCategory(move.category)
         let stat = Self.reverseStat(side: request.side, category: category)
         let assumedHPSP = request.side == .defender ? Self.assumedDefenderHPSP : Self.assumedAttackerHPSP
-        let result = try cannedResult(forKey: Self.singleResultKey)
+        let result = try cannedResult(forKey: Self.singleResultKey, category: category)
+        let domainNatures = try fixtures.natures.map(Self.domainNature)
 
         // §R1: 候補 = (性格クラス, 持ち物)。空の持ち物候補は「持ち物なし」の1通り。
         let items = request.itemCandidates.isEmpty ? [String?.none] : request.itemCandidates
         var candidates: [ReverseCandidate] = []
         for natureClass in NatureClass.allCases {
+            let nature = Self.representativeNature(for: natureClass, stat: stat)
+            let natureId = Self.natureID(for: nature, in: domainNatures)
             for itemId in items {
                 candidates.append(ReverseCandidate(
-                    natureClass: natureClass, itemId: itemId,
+                    natureClass: natureClass, nature: nature, natureId: natureId, itemId: itemId,
                     ranges: [SPRange(min: Self.minSP, max: Self.maxSP)],
                     spCount: Self.maxSP - Self.minSP + 1,
                     exact: true, mismatch: 0, support: Self.mockSupport,
@@ -181,16 +230,42 @@ public struct MockPokeCalcService: PokeCalcService {
         }
     }
 
+    /// ADR-0010 §R: 性格クラスの代表補正。neutral は無補正、plus は「関連ステータス +10% / atk -10%」
+    /// (関連ステータスが atk 自身のときだけ spa を下降にする。ADR-0010 §R1、engine の natureForClass と同じ規則)。
+    private static func representativeNature(for natureClass: NatureClass, stat: StatKey) -> NatureModifier {
+        switch natureClass {
+        case .neutral:
+            return NatureModifier()
+        case .plus:
+            let minus: StatKey = stat == .atk ? .spa : .atk
+            return NatureModifier(plus: stat, minus: minus)
+        }
+    }
+
     // MARK: - 決め打ちの計算結果
 
-    private func cannedResult(forKey key: String) throws -> CalcResult {
+    private func cannedResultEntry(forKey key: String) throws -> MockFixtures.CalcResultEntry {
         guard let entry = fixtures.calcResultsByKey[key] else {
             throw PokeCalcError(code: PokeCalcError.Code.fixtureMissing, message: "計算結果フィクスチャが無い: \(key)")
         }
+        return entry
+    }
+
+    /// openapi `BulkCalcRow.defender.stats`(実数値)。フィクスチャの値をそのまま使う(式は書かない)。
+    private func cannedDefenderStats(forKey key: String) throws -> StatBlock {
+        let entry = try cannedResultEntry(forKey: key)
+        guard let stats = entry.stats else {
+            throw PokeCalcError(code: PokeCalcError.Code.fixtureMissing, message: "実数値フィクスチャが無い: \(key)")
+        }
+        return StatBlock(hp: stats.hp, atk: stats.atk, def: stats.def, spa: stats.spa, spd: stats.spd, spe: stats.spe)
+    }
+
+    private func cannedResult(forKey key: String, category: MoveCategory) throws -> CalcResult {
+        let entry = try cannedResultEntry(forKey: key)
         return CalcResult(
             rolls: entry.rolls, minDamage: entry.minDamage, maxDamage: entry.maxDamage,
             minPercent: entry.minPercent, maxPercent: entry.maxPercent, defenderHP: entry.defenderHP,
-            effectiveness: entry.effectiveness, stab: entry.stab,
+            effectiveness: entry.effectiveness, stab: entry.stab, category: category,
             ko: KOChance(
                 hits: entry.ko.hits, guaranteed: entry.ko.guaranteed,
                 chancePercent: entry.ko.chancePercent, displayChancePercent: entry.ko.displayChancePercent

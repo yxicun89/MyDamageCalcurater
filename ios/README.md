@@ -65,7 +65,7 @@ xcodebuild build -project ios/PokeCalc.xcodeproj -scheme PokeCalc -destination '
 | URL が不正(スキーム無し・http(s) 以外・ホスト無し) | 起動時にエラー(黙ってモックに落とさない) |
 
 モックはダメージを**計算しない**。架空データの結果を要求の形(プリセット・持ち物の組合せ)に合わせて返すだけで、
-画面にはモックで動いていることを表示する。逆算は API の契約更新(P3-1)まで API 実装では「API 未対応」エラーになる。
+画面にはモックで動いていることを表示する。
 
 接続先は `ios/PokeCalc/Config/PokeCalc.xcconfig` の `POKECALC_API_BASE_URL` で設定する。
 **`/api` を含めない**(生成クライアントの各操作は `/api/calc` `/api/pokedex/species` のように
@@ -84,7 +84,7 @@ POKECALC_API_BASE_URL = https:/$()/pokecalc.example.invalid
    文字サイズ 28/17/15/12、角丸 20/999/12、余白 4/8/12/16/24。SwiftUI の `Color` / `Font` を返すアクセサがある。
 3. `APIPokeCalcService` は生成クライアント経由で、全操作に `X-Device-Id` / `X-Session-Id` を付け、パス・メソッド・クエリ(`q` / `limit`)・
    リクエスト JSON(`presets` / `itemVariants` / `sp` など)をドメインから正しく写し、200 の JSON をドメインへ、エラー body を
-   `PokeCalcError`(`code` 保持)へ写す。通信失敗も `PokeCalcError`。逆算は HTTP を送らずに「API 未対応」の `PokeCalcError`。
+   `PokeCalcError`(`code` 保持)へ写す。通信失敗も `PokeCalcError`。逆算も同じ写像で API を呼ぶ(P6-2 契約追従)。
 4. `ClientIdentity`: 端末 ID は初回だけ作って UserDefaults に保存(以後同じ・UUID 形式・壊れた値は作り直す)、セッション ID はインスタンスごとに新しい UUID。
 5. `AppConfiguration` が上の表どおりにモック/API/エラーを決める。
 6. `MockPokeCalcService`: 架空データの `nameJa` がすべて「テスト」で始まる。一括計算は既定プリセット(物理5・特殊5・変化2。ADR-0009)、
@@ -142,7 +142,7 @@ View は `PokeCalc/{CalcScreenView,CalcScreenCards,CalcScreenResults,CalcScreenS
    変えたとき、古い方の species 応答が新しい方より後に届いても `moveOptions`・要求を上書きしない)。
    組み立て・`species(key:)` の失敗で `error` を立てる経路も同じ番号で守るため、失敗直後に古い `calcBulk` の
    成功が届いても `error` は消えない(批評 M2)。
-8. **エラー**: `CalcScreenError(_:)` で `apiUnsupported` / `transport` / `unexpectedResponse`(デコード失敗と PokeCalcError 以外)/
+8. **エラー**: `CalcScreenError(_:)` で `transport` / `unexpectedResponse`(デコード失敗と PokeCalcError 以外)/
    `service(code:message:)`(サーバーの code とクライアントの `natureUnavailable` 等)に分け、`message` は種類ごとに別の文言
    (`service` は code と説明を含む)。計算が失敗したら `error` を立てて `rows` を空にし、次の成功で `error` を消す。
    マスタの読み込み失敗・性格が無い・種族が2つ未満のときは `error` を立て、計算しない。
@@ -250,3 +250,23 @@ View は `PokeCalc/{CalcScreenView,CalcScreenCards,CalcScreenResults,CalcScreenS
 - `StubPokeCalcService` の待ち合わせ上限を 3000ms → 10000ms に延ばした(CI 環境の遅延でのフレーク対策。批評「任意」)。
 - 計算画面を起動時にいきなり開く環境変数 `POKECALC_OPEN_CALC_SCREEN_AT_LAUNCH=1`(`RootView`)を追加した。
   XCUITest を介さずスクリーンショットを撮る用途専用で、通常の起動やモック/API の判定には影響しない。
+
+## P6-2 契約追従の受け入れ条件(P3-1 / P3-2 の api/openapi.yaml。ADR-0200 / ADR-0202)
+
+1. エラー応答の `Error.code`(`ErrorCode` enum)は rawValue の文字列のまま `PokeCalcError.code` に入る(ドメインは enum に写さない。
+   同じ `code` にクライアント側の `client_*` も入るため)。全8操作の 503 `upstream_unavailable`、計算系(calc / bulk / reverse)の
+   500 `internal` と 503 `master_unavailable`、400 / 404 / default を写す。`ErrorCode` に無い code は `client_decode_error`。
+   `PokeCalcError.Code` のサーバー語彙(`not_found` / `invalid_input`)は契約の `ErrorCode` にあり、`client_*` は契約と衝突しない
+   (`DomainTypesTests`)。
+2. `CalcResult.category`(必須)がドメインの `CalcResult.category: MoveCategory` に入る(1対1・一括の各行)。欠けた応答はデコード失敗。
+3. `BulkCalcRow.defender`(必須)がドメインの `BulkDefender{sp, nature: NatureModifier, natureId: String?, stats}` に入る。
+   natureId の null と無補正(plus / minus とも null)を落とさない。欠けた応答はデコード失敗。
+4. 逆算は `POST /api/calc/reverse` を送る(ヘッダー付き)。要求は format・side(defender / attacker)・known・unknownSpeciesKey・
+   moveId・options.critical・itemCandidates(null を含めてその順)・observations(percent / percentTenths / damage の
+   ちょうど1つのキー)・maxCandidates。応答は side・stat・assumedHpSp・exactCount と、候補(natureClass・nature・natureId・
+   itemId・ranges・spCount・exact・mismatch・support・表示%)を順序どおりに写す。「API 未対応」は返さない。
+5. モックは同じ形を返す(計算はしない): `category` は要求した技の分類、`defender` の SP・性格補正は ADR-0009 のカタログどおりで
+   natureId は補正が一致するモックの性格(ID 昇順の最初。無ければ nil)、逆算候補の `nature` は neutral = 無補正 /
+   plus = {関連ステータス, atk}(関連が atk なら spa)。
+6. 既存の計算画面のテスト(`CalcViewModelTests` / `BulkRowDisplayTests` ほか)は、構築コードに `category` / `defender` を
+   足しただけで、検査内容はそのまま通る。

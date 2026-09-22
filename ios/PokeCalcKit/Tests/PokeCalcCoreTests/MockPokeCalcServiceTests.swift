@@ -180,6 +180,59 @@ final class MockPokeCalcServiceTests: XCTestCase {
         assertRowsWellFormed(result.rows, "持ち物の差し替え")
     }
 
+    // MARK: - P6-2 契約追従: category・defender(形だけ。モックは計算しない)
+
+    /// openapi `CalcResult.category`(必須): 1対1・一括の各行とも、要求した技の分類を返す。
+    func testCalcResultCategoryIsTheRequestedMoveCategory() async throws {
+        let context = try await fixtureContext()
+        let defender = Individual(speciesKey: context.defenderKey, natureId: context.neutralNatureID, sp: zeroSP)
+        for category in MoveCategory.allCases {
+            let move = try XCTUnwrap(context.moves.first { $0.category == category }, "\(category)")
+            let single = try await mock.calcDamage(CalcRequest(format: .single, attacker: context.attacker,
+                                                               defender: defender, moveId: move.id))
+            XCTAssertEqual(single.category, category, "calcDamage \(category)")
+            let bulk = try await mock.calcBulk(BulkCalcRequest(
+                format: .single, attacker: context.attacker, defenderSpeciesKey: context.defenderKey, moveId: move.id))
+            XCTAssertTrue(bulk.rows.allSatisfy { $0.result.category == category }, "calcBulk \(category)")
+        }
+    }
+
+    /// openapi `BulkCalcRow.defender`(必須): 各行の SP と性格補正は ADR-0009 のカタログどおり
+    /// (カタログは SP と性格だけで定義されるデータなので、形として検査できる。ダメージ・実数値の式は検査しない)。
+    /// natureId は補正が一致するモックの性格 ID(無補正は ID 昇順の最初。ADR-0200 §2)、無ければ nil。
+    /// 実数値(stats)は 6 つとも正の値(モックは実数値を計算しない。値の正しさは検査しない)。
+    func testCalcBulkRowsCarryDefenderFromPresetCatalog() async throws {
+        let context = try await fixtureContext()
+        let natures = try await mock.natures()
+        let itemID = try XCTUnwrap(context.items.first?.id)
+        let full = 32
+        let expected: [String: (sp: StatBlock, nature: NatureModifier)] = [
+            "none": (zeroSP, NatureModifier()),
+            "hp": (StatBlock(hp: full, atk: 0, def: 0, spa: 0, spd: 0, spe: 0), NatureModifier()),
+            "hb_boost": (StatBlock(hp: full, atk: 0, def: 0, spa: 0, spd: 0, spe: 0), NatureModifier(plus: .def, minus: .atk)),
+            "hb": (StatBlock(hp: full, atk: 0, def: full, spa: 0, spd: 0, spe: 0), NatureModifier()),
+            "hb_full": (StatBlock(hp: full, atk: 0, def: full, spa: 0, spd: 0, spe: 0), NatureModifier(plus: .def, minus: .atk)),
+            "hd_boost": (StatBlock(hp: full, atk: 0, def: 0, spa: 0, spd: 0, spe: 0), NatureModifier(plus: .spd, minus: .atk)),
+            "hd": (StatBlock(hp: full, atk: 0, def: 0, spa: 0, spd: full, spe: 0), NatureModifier()),
+            "hd_full": (StatBlock(hp: full, atk: 0, def: 0, spa: 0, spd: full, spe: 0), NatureModifier(plus: .spd, minus: .atk)),
+        ]
+        XCTAssertEqual(Set(expected.keys), Set(DefenderPreset.allCases.map(\.rawValue)), "カタログの網羅")
+        let result = try await mock.calcBulk(BulkCalcRequest(
+            format: .single, attacker: context.attacker, defenderSpeciesKey: context.defenderKey,
+            moveId: context.physicalMove.id, presets: try presets(DefenderPreset.allCases.map(\.rawValue)),
+            itemVariants: [nil, itemID]))
+        XCTAssertEqual(result.rows.count, DefenderPreset.allCases.count * 2)
+        for row in result.rows {
+            let name = "\(row.preset.rawValue)@\(row.itemId ?? "-")"
+            let want = try XCTUnwrap(expected[row.preset.rawValue], name)
+            XCTAssertEqual(row.defender.sp, want.sp, name)
+            XCTAssertEqual(row.defender.nature, want.nature, name)
+            XCTAssertEqual(row.defender.natureId, expectedNatureID(for: row.defender.nature, in: natures), name)
+            let stats = row.defender.stats
+            XCTAssertTrue([stats.hp, stats.atk, stats.def, stats.spa, stats.spd, stats.spe].allSatisfy { $0 > 0 }, name)
+        }
+    }
+
     func testCalcBulkRejectsUnknownIDs() async throws {
         let context = try await fixtureContext()
         let unknownAttacker = Individual(speciesKey: "0000-999", natureId: context.neutralNatureID, sp: zeroSP)
@@ -257,6 +310,36 @@ final class MockPokeCalcServiceTests: XCTestCase {
             XCTAssertEqual(result.stat, testCase.stat, label)
             XCTAssertEqual(result.assumedHPSP, testCase.assumedHPSP, label)
             assertReverseResultWellFormed(result, label)
+        }
+    }
+
+    /// openapi `ReverseCandidate.nature` / `natureId`(必須・natureId は nullable): 性格クラスの代表補正は
+    /// neutral = 無補正、plus = {plus: 関連ステータス, minus: atk}(関連が atk のときだけ minus: spa。ADR-0010 §R)。
+    /// natureId は補正が一致するモックの性格 ID(無補正は ID 昇順の最初)、無ければ nil。
+    func testReverseCandidatesCarryRepresentativeNature() async throws {
+        let context = try await fixtureContext()
+        let natures = try await mock.natures()
+        let cases: [(side: ReverseSide, category: MoveCategory)] = [
+            (.defender, .physical), (.defender, .special), (.attacker, .physical), (.attacker, .special),
+        ]
+        for testCase in cases {
+            let move = try XCTUnwrap(context.moves.first { $0.category == testCase.category })
+            let result = try await mock.reverse(ReverseRequest(
+                format: .single, side: testCase.side, known: context.attacker,
+                unknownSpeciesKey: context.defenderKey, moveId: move.id,
+                itemCandidates: [], observations: [.percent(40)]))
+            let label = "\(testCase.side.rawValue)/\(testCase.category.rawValue)"
+            for candidate in result.candidates {
+                let name = "\(label) \(candidate.natureClass.rawValue)"
+                switch candidate.natureClass {
+                case .neutral:
+                    XCTAssertEqual(candidate.nature, NatureModifier(), name)
+                case .plus:
+                    let minus: StatKey = result.stat == .atk ? .spa : .atk
+                    XCTAssertEqual(candidate.nature, NatureModifier(plus: result.stat, minus: minus), name)
+                }
+                XCTAssertEqual(candidate.natureId, expectedNatureID(for: candidate.nature, in: natures), name)
+            }
         }
     }
 
@@ -368,6 +451,15 @@ final class MockPokeCalcServiceTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(candidate.support, 0, name, file: file, line: line)
             XCTAssertLessThanOrEqual(candidate.minPercent, candidate.maxPercent, name, file: file, line: line)
         }
+    }
+
+    /// ADR-0200 §2 の natureId の規則: (plus, minus) が一致するマスタの性格のうち ID 昇順の最初。無ければ nil。
+    private func expectedNatureID(for nature: NatureModifier, in natures: [Nature]) -> String? {
+        natures
+            .filter { $0.plus == nature.plus && $0.minus == nature.minus }
+            .map(\.id)
+            .sorted()
+            .first
     }
 
     private func visitNameJa(in object: Any, _ visit: (String) -> Void) {

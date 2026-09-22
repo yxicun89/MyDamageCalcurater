@@ -36,6 +36,8 @@ public struct APIPokeCalcService: PokeCalcService {
         switch output {
         case .ok(let ok):
             return try ok.body.json.map(Self.domainSpeciesSummary)
+        case .serviceUnavailable(let response):
+            throw try Self.domainErrorFromSchema(response.body.json)
         case .default(_, let error):
             throw try Self.domainError(error)
         }
@@ -53,6 +55,8 @@ public struct APIPokeCalcService: PokeCalcService {
             return try Self.domainSpeciesDetail(ok.body.json)
         case .notFound(let error):
             throw try Self.domainError(error)
+        case .serviceUnavailable(let response):
+            throw try Self.domainErrorFromSchema(response.body.json)
         case .default(_, let error):
             throw try Self.domainError(error)
         }
@@ -68,6 +72,8 @@ public struct APIPokeCalcService: PokeCalcService {
         switch output {
         case .ok(let ok):
             return try ok.body.json.map(Self.domainMove)
+        case .serviceUnavailable(let response):
+            throw try Self.domainErrorFromSchema(response.body.json)
         case .default(_, let error):
             throw try Self.domainError(error)
         }
@@ -83,6 +89,8 @@ public struct APIPokeCalcService: PokeCalcService {
         switch output {
         case .ok(let ok):
             return try ok.body.json.map { Item(id: $0.id, nameJa: $0.nameJa) }
+        case .serviceUnavailable(let response):
+            throw try Self.domainErrorFromSchema(response.body.json)
         case .default(_, let error):
             throw try Self.domainError(error)
         }
@@ -97,6 +105,8 @@ public struct APIPokeCalcService: PokeCalcService {
         switch output {
         case .ok(let ok):
             return try ok.body.json.map(Self.domainNature)
+        case .serviceUnavailable(let response):
+            throw try Self.domainErrorFromSchema(response.body.json)
         case .default(_, let error):
             throw try Self.domainError(error)
         }
@@ -116,6 +126,10 @@ public struct APIPokeCalcService: PokeCalcService {
             return try Self.domainCalcResult(ok.body.json)
         case .badRequest(let error):
             throw try Self.domainError(error)
+        case .internalServerError(let error):
+            throw try Self.domainError(error)
+        case .serviceUnavailable(let response):
+            throw try Self.domainErrorFromSchema(response.body.json)
         case .default(_, let error):
             throw try Self.domainError(error)
         }
@@ -133,15 +147,35 @@ public struct APIPokeCalcService: PokeCalcService {
             return try Self.domainBulkCalcResult(ok.body.json)
         case .badRequest(let error):
             throw try Self.domainError(error)
+        case .internalServerError(let error):
+            throw try Self.domainError(error)
+        case .serviceUnavailable(let response):
+            throw try Self.domainErrorFromSchema(response.body.json)
         case .default(_, let error):
             throw try Self.domainError(error)
         }
     }
 
-    /// 逆算は契約更新(P3-1)まで未対応。いまの openapi `ReverseCandidate`(`matchScore` 等)は
-    /// 廃止が決まっているので写像しない。HTTP は送らない(ADR-0500 §3)。
+    /// 逆算(ADR-0010 §R・P3-1 で契約が確定)。要求・応答は1か所で写す(ADR-0500 §3)。
     public func reverse(_ request: ReverseRequest) async throws -> ReverseResult {
-        throw PokeCalcError(code: PokeCalcError.Code.apiUnsupported, message: "逆算は API 契約の更新(P3-1)まで未対応")
+        let output = try await send {
+            try await client.calcReverse(.init(
+                headers: .init(xDeviceId: identity.deviceID, xSessionId: identity.sessionID),
+                body: .json(Self.generatedReverseRequest(request))
+            ))
+        }
+        switch output {
+        case .ok(let ok):
+            return try Self.domainReverseResult(ok.body.json)
+        case .badRequest(let error):
+            throw try Self.domainError(error)
+        case .internalServerError(let error):
+            throw try Self.domainError(error)
+        case .serviceUnavailable(let response):
+            throw try Self.domainErrorFromSchema(response.body.json)
+        case .default(_, let error):
+            throw try Self.domainError(error)
+        }
     }
 
     // MARK: - 通信失敗 → PokeCalcError
@@ -186,8 +220,14 @@ public struct APIPokeCalcService: PokeCalcService {
     }
 
     private static func domainError(_ response: Components.Responses._Error) throws -> PokeCalcError {
-        let body = try response.body.json
-        return PokeCalcError(code: body.code, message: body.message)
+        try Self.domainErrorFromSchema(response.body.json)
+    }
+
+    /// 503 は5つの pokedex 操作では `Components.Responses._Error` ではなく、そのパスだけの
+    /// inline body(`Output.ServiceUnavailable.Body.json: Components.Schemas._Error`)で届く
+    /// (openapi の `#/responses/Error` を再利用していないため)。同じ形なので写像は共通にする。
+    private static func domainErrorFromSchema(_ error: Components.Schemas._Error) -> PokeCalcError {
+        PokeCalcError(code: error.code.rawValue, message: error.message)
     }
 
     // MARK: - 応答 → ドメイン
@@ -239,7 +279,8 @@ public struct APIPokeCalcService: PokeCalcService {
         CalcResult(
             rolls: result.rolls, minDamage: result.minDamage, maxDamage: result.maxDamage,
             minPercent: result.minPercent, maxPercent: result.maxPercent, defenderHP: result.defenderHP,
-            effectiveness: result.effectiveness, stab: result.stab, ko: domainKOChance(result.ko)
+            effectiveness: result.effectiveness, stab: result.stab,
+            category: domainMoveCategory(result.category.value1), ko: domainKOChance(result.ko)
         )
     }
 
@@ -250,8 +291,66 @@ public struct APIPokeCalcService: PokeCalcService {
     private static func domainBulkCalcRow(_ row: Components.Schemas.BulkCalcRow) -> BulkCalcRow {
         BulkCalcRow(
             preset: domainDefenderPreset(row.preset), presetLabel: row.presetLabel,
-            itemId: row.itemId, result: domainCalcResult(row.result)
+            itemId: row.itemId, defender: domainBulkDefender(row.defender), result: domainCalcResult(row.result)
         )
+    }
+
+    private static func domainBulkDefender(_ defender: Components.Schemas.BulkDefender) -> BulkDefender {
+        BulkDefender(
+            sp: domainStatBlock(defender.sp.value1),
+            nature: domainNatureModifier(defender.nature),
+            natureId: defender.natureId,
+            stats: domainStatBlock(defender.stats.value1)
+        )
+    }
+
+    private static func domainNatureModifier(_ nature: Components.Schemas.NatureModifier) -> NatureModifier {
+        NatureModifier(
+            plus: nature.plus.map { domainStatKey($0.value1) },
+            minus: nature.minus.map { domainStatKey($0.value1) }
+        )
+    }
+
+    // MARK: - 逆算(ADR-0010 §R)応答 → ドメイン
+
+    private static func domainReverseResult(_ result: Components.Schemas.ReverseResult) -> ReverseResult {
+        ReverseResult(
+            side: domainReverseSide(result.side),
+            stat: domainStatKey(result.stat.value1),
+            assumedHPSP: result.assumedHpSp,
+            candidates: result.candidates.map(domainReverseCandidate),
+            exactCount: result.exactCount
+        )
+    }
+
+    private static func domainReverseCandidate(_ candidate: Components.Schemas.ReverseCandidate) -> ReverseCandidate {
+        ReverseCandidate(
+            natureClass: domainNatureClass(candidate.natureClass),
+            nature: domainNatureModifier(candidate.nature),
+            natureId: candidate.natureId,
+            itemId: candidate.itemId,
+            ranges: candidate.ranges.map { SPRange(min: $0.min, max: $0.max) },
+            spCount: candidate.spCount,
+            exact: candidate.exact,
+            mismatch: candidate.mismatch,
+            support: candidate.support,
+            minPercent: candidate.minPercent,
+            maxPercent: candidate.maxPercent
+        )
+    }
+
+    private static func domainReverseSide(_ side: Components.Schemas.ReverseSide) -> ReverseSide {
+        switch side {
+        case .defender: return .defender
+        case .attacker: return .attacker
+        }
+    }
+
+    private static func domainNatureClass(_ natureClass: Components.Schemas.NatureClass) -> NatureClass {
+        switch natureClass {
+        case .neutral: return .neutral
+        case .plus: return .plus
+        }
     }
 
     // MARK: - ドメイン → 要求
@@ -301,6 +400,37 @@ public struct APIPokeCalcService: PokeCalcService {
             presets: request.presets.isEmpty ? nil : request.presets.map(generatedDefenderPreset),
             itemVariants: request.itemVariants.isEmpty ? nil : request.itemVariants
         )
+    }
+
+    /// openapi `ReverseRequest`(ADR-0010 §R): itemCandidates の省略と maxCandidates == 0 は既定値と
+    /// 同じ意味なので、送るときは省く。
+    private static func generatedReverseRequest(_ request: ReverseRequest) -> Components.Schemas.ReverseRequest {
+        .init(
+            format: generatedFormat(request.format),
+            side: generatedReverseSide(request.side),
+            known: .init(value1: generatedIndividual(request.known)),
+            unknownSpeciesKey: .init(value1: request.unknownSpeciesKey),
+            moveId: request.moveId,
+            options: .init(critical: request.critical),
+            itemCandidates: request.itemCandidates.isEmpty ? nil : request.itemCandidates,
+            observations: request.observations.map(generatedObservation),
+            maxCandidates: request.maxCandidates == 0 ? nil : request.maxCandidates
+        )
+    }
+
+    private static func generatedObservation(_ observation: DamageObservation) -> Components.Schemas.Observation {
+        switch observation {
+        case .percent(let value): return .init(percent: value)
+        case .percentTenths(let value): return .init(percentTenths: value)
+        case .damage(let value): return .init(damage: value)
+        }
+    }
+
+    private static func generatedReverseSide(_ side: ReverseSide) -> Components.Schemas.ReverseSide {
+        switch side {
+        case .defender: return .defender
+        case .attacker: return .attacker
+        }
     }
 
     // MARK: - enum の写像(契約とドメインの enum は同じ値集合。DomainTypesTests が同期を固定する)

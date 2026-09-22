@@ -9,6 +9,12 @@ import XCTest
 /// `APIPokeCalcService`(ADR-0500 §3): 生成された `Client` と偽の transport で、
 /// ドメイン ↔ HTTP(api/openapi.yaml)の写像を検証する。期待値は openapi.yaml のパス・パラメータ名・スキーマから書く。
 /// フィクスチャは架空(名前は「テスト」で始める。ADR-0002)。
+///
+/// P6-2 契約追従(ADR-0200 / ADR-0202 の P3-1・P3-2)で期待値を更新した:
+/// - `Error.code` が `ErrorCode` enum になり、全操作に 503、計算系に 500 が増えた。
+/// - `CalcResult.category`・`BulkCalcRow.defender` が必須になった。
+/// - 逆算の契約が ADR-0010 §R の形になったので、「HTTP を送らず API 未対応を返す」テストを
+///   要求・応答の写像のテストに置き換えた(ADR-0500 §3 の「P3-1 までは API 未対応」の条件が満たされた)。
 final class APIPokeCalcServiceTests: XCTestCase {
 
     private let deviceID = "0B7A2D2E-5C1F-4E43-9D0A-3F7E1B6C2A11"
@@ -38,7 +44,7 @@ final class APIPokeCalcServiceTests: XCTestCase {
     private static let calcResultJSON = """
     {"rolls":[40,40,41,41,42,42,43,43,44,44,45,45,46,46,47,48],
      "minDamage":40,"maxDamage":48,"minPercent":30.3,"maxPercent":36.4,"defenderHP":132,
-     "effectiveness":2,"stab":true,
+     "effectiveness":2,"stab":true,"category":"physical",
      "ko":{"hits":3,"guaranteed":false,"chancePercent":12.34,"displayChancePercent":12.3}}
     """
 
@@ -66,13 +72,42 @@ final class APIPokeCalcServiceTests: XCTestCase {
      {"id":"test-nature-atk","nameJa":"テストせいかくA","plus":"atk","minus":"spa"}]
     """
 
+    /// 行1: 性格補正あり(+def/-atk)で、マスタに該当する性格が無い(natureId null)。
+    /// 行2: 無補正(plus/minus とも null)で、natureId あり。
     private static var bulkJSON: String {
         """
         {"defenderSpeciesKey":"9002-000","rows":[
-          {"preset":"hb_full","presetLabel":"テスト表示名1","itemId":null,"result":\(calcResultJSON)},
-          {"preset":"none","presetLabel":"テスト表示名2","itemId":"test-item-a","result":\(calcResultJSON)}
+          {"preset":"hb_full","presetLabel":"テスト表示名1","itemId":null,
+           "defender":{"sp":{"hp":32,"atk":0,"def":32,"spa":0,"spd":0,"spe":0},
+                       "nature":{"plus":"def","minus":"atk"},"natureId":null,
+                       "stats":{"hp":151,"atk":81,"def":122,"spa":70,"spd":85,"spe":90}},
+           "result":\(calcResultJSON)},
+          {"preset":"none","presetLabel":"テスト表示名2","itemId":"test-item-a",
+           "defender":{"sp":{"hp":0,"atk":0,"def":0,"spa":0,"spd":0,"spe":0},
+                       "nature":{"plus":null,"minus":null},"natureId":"test-nature-neutral",
+                       "stats":{"hp":119,"atk":90,"def":80,"spa":70,"spd":85,"spe":90}},
+           "result":\(calcResultJSON)}
         ]}
         """
+    }
+
+    /// openapi `ReverseResult`(ADR-0010 §R3)。候補1: neutral・持ち物なし・exact・区間2つ・natureId あり。
+    /// 候補2: plus(+spa/-atk)・持ち物あり・exact でない・natureId null。
+    private static let reverseJSON = """
+    {"side":"attacker","stat":"spa","assumedHpSp":0,"exactCount":1,"candidates":[
+      {"natureClass":"neutral","nature":{"plus":null,"minus":null},"natureId":"test-nature-neutral",
+       "itemId":null,"ranges":[{"min":0,"max":3},{"min":6,"max":32}],"spCount":31,
+       "exact":true,"mismatch":0,"support":44,"minPercent":38.2,"maxPercent":47.9},
+      {"natureClass":"plus","nature":{"plus":"spa","minus":"atk"},"natureId":null,
+       "itemId":"test-item-a","ranges":[{"min":0,"max":0}],"spCount":1,
+       "exact":false,"mismatch":7,"support":0,"minPercent":51.5,"maxPercent":61.1}
+    ]}
+    """
+
+    private var reverseRequest: ReverseRequest {
+        ReverseRequest(format: .single, side: .defender, known: attacker,
+                       unknownSpeciesKey: "9002-000", moveId: "test-move-physical",
+                       itemCandidates: [nil], observations: [.percent(40)])
     }
 
     // MARK: - (1) 全操作で端末 ID とセッション ID が付く
@@ -84,6 +119,7 @@ final class APIPokeCalcServiceTests: XCTestCase {
                                           defenderSpeciesKey: "9002-000", moveId: "test-move-physical")
         let calcRequest = CalcRequest(format: .single, attacker: attacker, defender: defender,
                                       moveId: "test-move-physical")
+        let reverseRequest = reverseRequest
         let cases: [(name: String, json: String, method: String, path: String,
                      call: @Sendable (APIPokeCalcService) async throws -> Void)] = [
             ("searchSpecies", Self.speciesSummaryJSON, "GET", "/api/pokedex/species",
@@ -100,6 +136,9 @@ final class APIPokeCalcServiceTests: XCTestCase {
              { _ = try await $0.calcDamage(calcRequest) }),
             ("calcBulk", Self.bulkJSON, "POST", "/api/calc/bulk",
              { _ = try await $0.calcBulk(bulkRequest) }),
+            // P3-1 で逆算も HTTP を送るようになった(以前は送らなかった。ADR-0500 §3)
+            ("reverse", Self.reverseJSON, "POST", "/api/calc/reverse",
+             { _ = try await $0.reverse(reverseRequest) }),
         ]
         for testCase in cases {
             let transport = RecordingTransport(json: testCase.json)
@@ -247,10 +286,80 @@ final class APIPokeCalcServiceTests: XCTestCase {
         XCTAssertEqual(result.defenderHP, 132)
         XCTAssertEqual(result.effectiveness, 2, accuracy: 1e-9)
         XCTAssertTrue(result.stab)
+        XCTAssertEqual(result.category, .physical)
         XCTAssertEqual(result.ko.hits, 3)
         XCTAssertFalse(result.ko.guaranteed)
         XCTAssertEqual(result.ko.chancePercent, 12.34, accuracy: 1e-9, "engine の生値(画面には出さないが落とさない)")
         XCTAssertEqual(result.ko.displayChancePercent, 12.3, accuracy: 1e-9)
+    }
+
+    /// openapi `CalcResult.category`(必須)→ ドメインの `MoveCategory`。3分類すべてを写す。
+    /// 一括計算の各行の result も同じ写像を通る。
+    func testCalcResultCategoryMapsAllMoveCategories() async throws {
+        for category in ["physical", "special", "status"] {
+            let json = Self.calcResultJSON.replacingOccurrences(of: #""category":"physical""#,
+                                                                with: #""category":"\#(category)""#)
+            let service = try makeService(transport: RecordingTransport(json: json))
+            let result = try await service.calcDamage(CalcRequest(format: .single, attacker: attacker,
+                                                                  defender: defender, moveId: "test-move-physical"))
+            XCTAssertEqual(result.category.rawValue, category)
+
+            let bulkJSON = Self.bulkJSON.replacingOccurrences(of: #""category":"physical""#,
+                                                              with: #""category":"\#(category)""#)
+            let bulkService = try makeService(transport: RecordingTransport(json: bulkJSON))
+            let bulk = try await bulkService.calcBulk(BulkCalcRequest(
+                format: .single, attacker: attacker, defenderSpeciesKey: "9002-000", moveId: "test-move-physical"))
+            XCTAssertEqual(bulk.rows.map(\.result.category.rawValue), [category, category])
+        }
+    }
+
+    /// openapi `CalcResult.category` は必須。欠けた応答は契約違反なのでデコード失敗(`decode`)にする。
+    func testCalcResultWithoutCategoryIsDecodeError() async throws {
+        let json = Self.calcResultJSON.replacingOccurrences(of: #""category":"physical","#, with: "")
+        XCTAssertFalse(json.contains("category"), "フィクスチャの置換が効いていない")
+        let service = try makeService(transport: RecordingTransport(json: json))
+        let error = await assertThrowsPokeCalcError("category 欠落") {
+            try await service.calcDamage(CalcRequest(format: .single, attacker: attacker,
+                                                     defender: defender, moveId: "test-move-physical"))
+        }
+        XCTAssertEqual(error?.code, PokeCalcError.Code.decode)
+    }
+
+    /// openapi `BulkCalcRow.defender`(`BulkDefender{sp, nature{plus,minus}, natureId, stats}`)→ ドメイン。
+    /// natureId の null・無補正(plus/minus とも null)を落とさない。実数値はサーバーの値をそのまま運ぶ。
+    func testCalcBulkResponseMapsDefender() async throws {
+        let service = try makeService(transport: RecordingTransport(json: Self.bulkJSON))
+        let result = try await service.calcBulk(BulkCalcRequest(
+            format: .single, attacker: attacker, defenderSpeciesKey: "9002-000", moveId: "test-move-physical"))
+        XCTAssertEqual(result.rows.count, 2)
+        let boosted = result.rows[0].defender
+        XCTAssertEqual(boosted.sp, StatBlock(hp: 32, atk: 0, def: 32, spa: 0, spd: 0, spe: 0))
+        XCTAssertEqual(boosted.nature, NatureModifier(plus: .def, minus: .atk))
+        XCTAssertNil(boosted.natureId, "マスタに該当する性格が無いときは null のまま")
+        XCTAssertEqual(boosted.stats, StatBlock(hp: 151, atk: 81, def: 122, spa: 70, spd: 85, spe: 90))
+
+        let neutral = result.rows[1].defender
+        XCTAssertEqual(neutral.sp, StatBlock(hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0))
+        XCTAssertNil(neutral.nature.plus, "無補正は plus も minus も null")
+        XCTAssertNil(neutral.nature.minus)
+        XCTAssertEqual(neutral.nature, NatureModifier())
+        XCTAssertEqual(neutral.natureId, "test-nature-neutral")
+        XCTAssertEqual(neutral.stats, StatBlock(hp: 119, atk: 90, def: 80, spa: 70, spd: 85, spe: 90))
+    }
+
+    /// openapi `BulkCalcRow.defender` は必須。欠けた応答はデコード失敗(`decode`)にする。
+    func testCalcBulkRowWithoutDefenderIsDecodeError() async throws {
+        let json = """
+        {"defenderSpeciesKey":"9002-000","rows":[
+          {"preset":"none","presetLabel":"テスト表示名","itemId":null,"result":\(Self.calcResultJSON)}
+        ]}
+        """
+        let service = try makeService(transport: RecordingTransport(json: json))
+        let error = await assertThrowsPokeCalcError("defender 欠落") {
+            try await service.calcBulk(BulkCalcRequest(
+                format: .single, attacker: self.attacker, defenderSpeciesKey: "9002-000", moveId: "test-move-physical"))
+        }
+        XCTAssertEqual(error?.code, PokeCalcError.Code.decode)
     }
 
     /// openapi `BulkCalcResult` → ドメイン。行の順序・preset・presetLabel・itemId(null 含む)を保つ。
@@ -323,22 +432,53 @@ final class APIPokeCalcServiceTests: XCTestCase {
 
     // MARK: - (4) エラーの写像
 
-    /// openapi `responses.Error`(400 / 404 / default)の body `{code, message}` → `PokeCalcError`。
-    /// code はサーバーの値をそのまま運ぶ(ADR-0500 §3)。
+    /// openapi `Error{code: ErrorCode, message}` → `PokeCalcError`。`code` は ErrorCode の rawValue の文字列
+    /// (ADR-0500 §3。ドメインは enum に写さない。DomainTypesTests の決定を参照)。
+    /// 期待値の変更理由: 契約の `Error.code` が `ErrorCode` enum になった(P3-1)。以前の例
+    /// `searchSpecies 503 unavailable` は語彙に無くなったので `upstream_unavailable` に置き換え、
+    /// 全操作の 503 と計算系の 500・503 `master_unavailable` を追加した。
     func testErrorResponsesMapToPokeCalcErrorKeepingCode() async throws {
         let calcRequest = CalcRequest(format: .single, attacker: attacker, defender: defender,
                                       moveId: "test-move-physical")
         let bulkRequest = BulkCalcRequest(format: .single, attacker: attacker,
                                           defenderSpeciesKey: "9002-000", moveId: "test-move-physical")
-        let cases: [(name: String, status: Int, code: String,
-                     call: @Sendable (APIPokeCalcService) async throws -> Void)] = [
-            ("calcDamage 400", 400, "invalid_input", { _ = try await $0.calcDamage(calcRequest) }),
-            ("calcDamage 500", 500, "internal", { _ = try await $0.calcDamage(calcRequest) }),
-            ("calcBulk 400", 400, "unknown_preset", { _ = try await $0.calcBulk(bulkRequest) }),
-            ("species 404", 404, "not_found", { _ = try await $0.species(key: "9999-000") }),
-            ("searchSpecies 503", 503, "unavailable", { _ = try await $0.searchSpecies(query: "", limit: 5) }),
-            ("natures 500", 500, "internal", { _ = try await $0.natures() }),
+        let reverseRequest = reverseRequest
+        let operations: [(name: String, call: @Sendable (APIPokeCalcService) async throws -> Void)] = [
+            ("searchSpecies", { _ = try await $0.searchSpecies(query: "", limit: 5) }),
+            ("species", { _ = try await $0.species(key: "9999-000") }),
+            ("searchMoves", { _ = try await $0.searchMoves(query: "", limit: 5) }),
+            ("searchItems", { _ = try await $0.searchItems(query: "", limit: 5) }),
+            ("natures", { _ = try await $0.natures() }),
+            ("calcDamage", { _ = try await $0.calcDamage(calcRequest) }),
+            ("calcBulk", { _ = try await $0.calcBulk(bulkRequest) }),
+            ("reverse", { _ = try await $0.reverse(reverseRequest) }),
         ]
+        let calcOperations: Set<String> = ["calcDamage", "calcBulk", "reverse"]
+
+        var cases: [(name: String, status: Int, code: String,
+                     call: @Sendable (APIPokeCalcService) async throws -> Void)] = []
+        // openapi: 全操作に 503(gateway から下流に届かない。ADR-0202)
+        for operation in operations {
+            cases.append(("\(operation.name) 503", 503, "upstream_unavailable", operation.call))
+        }
+        // openapi: 計算系(calc / bulk / reverse)に 500 と 503 `master_unavailable`
+        for operation in operations where calcOperations.contains(operation.name) {
+            cases.append(("\(operation.name) 500", 500, "internal", operation.call))
+            cases.append(("\(operation.name) 503 master", 503, "master_unavailable", operation.call))
+        }
+        let specificCases: [(name: String, status: Int, code: String,
+                             call: @Sendable (APIPokeCalcService) async throws -> Void)] = [
+            ("calcDamage 400", 400, "invalid_input", { _ = try await $0.calcDamage(calcRequest) }),
+            ("calcBulk 400", 400, "unknown_preset", { _ = try await $0.calcBulk(bulkRequest) }),
+            ("calcBulk 400 duplicate", 400, "duplicate_preset", { _ = try await $0.calcBulk(bulkRequest) }),
+            ("reverse 400 observation", 400, "invalid_observation", { _ = try await $0.reverse(reverseRequest) }),
+            ("reverse 400 no observation", 400, "no_observation", { _ = try await $0.reverse(reverseRequest) }),
+            ("species 404", 404, "not_found", { _ = try await $0.species(key: "9999-000") }),
+            // 個別の定義が無いステータスは default(openapi `responses.Error`)で受ける
+            ("natures 500 (default)", 500, "internal", { _ = try await $0.natures() }),
+            ("searchSpecies 400 (default)", 400, "invalid_header", { _ = try await $0.searchSpecies(query: "", limit: 5) }),
+        ]
+        cases += specificCases
         for testCase in cases {
             let json = #"{"code":"\#(testCase.code)","message":"テスト用のエラー"}"#
             let service = try makeService(transport: RecordingTransport(status: testCase.status, json: json))
@@ -346,6 +486,17 @@ final class APIPokeCalcServiceTests: XCTestCase {
             XCTAssertEqual(error?.code, testCase.code, testCase.name)
             XCTAssertEqual(error?.message, "テスト用のエラー", testCase.name)
         }
+    }
+
+    /// 契約の `ErrorCode` に無い code を返すエラー応答は、契約違反の応答としてデコード失敗(`decode`)にする
+    /// (生成型の enum でデコードできないため。サーバーの語彙を黙って別のコードに読み替えない)。
+    func testErrorResponseWithUnknownCodeIsDecodeError() async throws {
+        let json = #"{"code":"test_unknown_code","message":"テスト用のエラー"}"#
+        let service = try makeService(transport: RecordingTransport(status: 503, json: json))
+        let error = await assertThrowsPokeCalcError("unknown code") {
+            try await service.searchSpecies(query: "", limit: 5)
+        }
+        XCTAssertEqual(error?.code, PokeCalcError.Code.decode)
     }
 
     /// 接続できないなど HTTP 応答が無い失敗も `PokeCalcError` にする(画面は1種類のエラーだけを扱う)。
@@ -409,18 +560,139 @@ final class APIPokeCalcServiceTests: XCTestCase {
         XCTAssertEqual(error?.code, PokeCalcError.Code.decode)
     }
 
-    // MARK: - (5) 逆算は API 未対応
+    // MARK: - (5) 逆算(ADR-0010 §R の契約。P3-1)
 
-    /// ADR-0500 §3: いまの契約の `ReverseCandidate` は P3-1 で廃止が決まっているので写像しない。
-    /// 契約が更新されるまで、HTTP を送らずに「API 未対応」のエラーを返す。
-    func testReverseThrowsAPIUnsupportedWithoutSendingHTTP() async throws {
-        let transport = RecordingTransport(json: "{}")
+    /// openapi `ReverseRequest`(side=defender): 既知側 = 自分の攻撃側。known は `Individual` の形、
+    /// unknownSpeciesKey・moveId・options.critical・itemCandidates(null を含めてその順)・
+    /// observations(3種類それぞれちょうど1つのキー)・maxCandidates を送る。
+    func testReverseRequestBodyMapsDefenderSide() async throws {
+        let transport = RecordingTransport(json: Self.reverseJSON)
         let service = try makeService(transport: transport)
-        let request = ReverseRequest(format: .single, side: .defender, known: attacker,
-                                     unknownSpeciesKey: "9002-000", moveId: "test-move-physical",
-                                     itemCandidates: [nil], observations: [.percent(40)])
-        let error = await assertThrowsPokeCalcError("reverse") { try await service.reverse(request) }
-        XCTAssertEqual(error?.code, PokeCalcError.Code.apiUnsupported)
-        XCTAssertEqual(transport.requests.count, 0, "HTTP を送らない")
+        _ = try await service.reverse(ReverseRequest(
+            format: .single, side: .defender, known: attacker,
+            unknownSpeciesKey: "9002-000", moveId: "test-move-physical",
+            itemCandidates: [nil, "test-item-a"],
+            observations: [.percent(40), .percentTenths(453), .damage(57)],
+            critical: true, maxCandidates: 5))
+        let sent = try XCTUnwrap(transport.requests.first)
+        XCTAssertEqual(sent.operationID, "calcReverse")
+        let body = try sent.jsonBody()
+
+        XCTAssertEqual(body["format"] as? String, "single")
+        XCTAssertEqual(body["side"] as? String, "defender")
+        XCTAssertEqual(body["unknownSpeciesKey"] as? String, "9002-000")
+        XCTAssertEqual(body["moveId"] as? String, "test-move-physical")
+        XCTAssertEqual(body["maxCandidates"] as? Int, 5)
+        let options = try XCTUnwrap(body["options"] as? [String: Any])
+        XCTAssertEqual(options["critical"] as? Bool, true)
+
+        let known = try XCTUnwrap(body["known"] as? [String: Any])
+        XCTAssertEqual(known["speciesKey"] as? String, "9001-000")
+        XCTAssertEqual(known["natureId"] as? String, "test-nature-atk")
+        XCTAssertEqual(known["itemId"] as? String, "test-item-a")
+        XCTAssertEqual(known["level"] as? Int, 50)
+        XCTAssertEqual(known["sp"] as? [String: Int],
+                       ["hp": 2, "atk": 32, "def": 0, "spa": 0, "spd": 0, "spe": 32])
+
+        let items = try XCTUnwrap(body["itemCandidates"] as? [Any])
+        XCTAssertEqual(items.count, 2)
+        XCTAssertTrue(items[0] is NSNull, "持ち物なしは null")
+        XCTAssertEqual(items[1] as? String, "test-item-a")
+
+        let observations = try XCTUnwrap(body["observations"] as? [[String: Any]])
+        XCTAssertEqual(observations.count, 3)
+        XCTAssertEqual(Set(observations[0].keys), ["percent"], "ちょうど1つのキー")
+        XCTAssertEqual(observations[0]["percent"] as? Int, 40)
+        XCTAssertEqual(Set(observations[1].keys), ["percentTenths"])
+        XCTAssertEqual(observations[1]["percentTenths"] as? Int, 453)
+        XCTAssertEqual(Set(observations[2].keys), ["damage"])
+        XCTAssertEqual(observations[2]["damage"] as? Int, 57)
+    }
+
+    /// openapi `ReverseRequest`(side=attacker): 既知側 = 自分の防御側。known に防御側の個体を送る。
+    /// itemCandidates の空・maxCandidates の 0 は既定値と同じ意味なので、省略するか既定値を送る。
+    func testReverseRequestBodyMapsAttackerSideAndDefaults() async throws {
+        let transport = RecordingTransport(json: Self.reverseJSON)
+        let service = try makeService(transport: transport)
+        _ = try await service.reverse(ReverseRequest(
+            format: .double, side: .attacker, known: defender,
+            unknownSpeciesKey: "9001-000", moveId: "test-move-special",
+            observations: [.damage(12)]))
+        let body = try XCTUnwrap(transport.requests.first).jsonBody()
+
+        XCTAssertEqual(body["format"] as? String, "double")
+        XCTAssertEqual(body["side"] as? String, "attacker")
+        XCTAssertEqual(body["unknownSpeciesKey"] as? String, "9001-000")
+        XCTAssertEqual(body["moveId"] as? String, "test-move-special")
+        let known = try XCTUnwrap(body["known"] as? [String: Any])
+        XCTAssertEqual(known["speciesKey"] as? String, "9002-000")
+        XCTAssertEqual(known["natureId"] as? String, "test-nature-neutral")
+        XCTAssertEqual(known["sp"] as? [String: Int],
+                       ["hp": 32, "atk": 0, "def": 32, "spa": 0, "spd": 2, "spe": 0])
+        XCTAssertNil(known["itemId"] as? String, "持ち物なしは itemId を送らない(または null)")
+        let observations = try XCTUnwrap(body["observations"] as? [[String: Any]])
+        XCTAssertEqual(observations.count, 1)
+        XCTAssertEqual(Set(observations[0].keys), ["damage"])
+        XCTAssertEqual(observations[0]["damage"] as? Int, 12)
+
+        // 空の itemCandidates と maxCandidates の 0 は openapi の既定値と同じ意味なので送らない(省略する。README 受け入れ条件 4)
+        XCTAssertNil(body["itemCandidates"], "空の itemCandidates は省略する")
+        XCTAssertNil(body["maxCandidates"], "maxCandidates の 0 は省略する")
+        // 急所の既定は false を明示して送る
+        let sentOptions = try XCTUnwrap(body["options"] as? [String: Any])
+        XCTAssertEqual(sentOptions["critical"] as? Bool, false)
+    }
+
+    /// openapi `ReverseResult` → ドメイン。side・stat・assumedHpSp・exactCount と、候補の順序・
+    /// natureClass・nature(無補正の null/null を含む)・natureId(null を含む)・itemId(null を含む)・
+    /// ranges・spCount・exact・mismatch・support・表示%を保つ(並べ替えない。順序は §R4 でサーバーが決める)。
+    func testReverseResponseMapsToDomain() async throws {
+        let service = try makeService(transport: RecordingTransport(json: Self.reverseJSON))
+        let result = try await service.reverse(reverseRequest)
+
+        XCTAssertEqual(result.side, .attacker)
+        XCTAssertEqual(result.stat, .spa)
+        XCTAssertEqual(result.assumedHPSP, 0)
+        XCTAssertEqual(result.exactCount, 1)
+        XCTAssertEqual(result.candidates.count, 2)
+
+        let first = result.candidates[0]
+        XCTAssertEqual(first.natureClass, .neutral)
+        XCTAssertEqual(first.nature, NatureModifier())
+        XCTAssertEqual(first.natureId, "test-nature-neutral")
+        XCTAssertNil(first.itemId)
+        XCTAssertEqual(first.ranges, [SPRange(min: 0, max: 3), SPRange(min: 6, max: 32)])
+        XCTAssertEqual(first.spCount, 31)
+        XCTAssertTrue(first.exact)
+        XCTAssertEqual(first.mismatch, 0)
+        XCTAssertEqual(first.support, 44)
+        XCTAssertEqual(first.minPercent, 38.2, accuracy: 1e-9)
+        XCTAssertEqual(first.maxPercent, 47.9, accuracy: 1e-9)
+
+        let second = result.candidates[1]
+        XCTAssertEqual(second.natureClass, .plus)
+        XCTAssertEqual(second.nature, NatureModifier(plus: .spa, minus: .atk))
+        XCTAssertNil(second.natureId, "マスタに該当する性格が無いときは null のまま")
+        XCTAssertEqual(second.itemId, "test-item-a")
+        XCTAssertEqual(second.ranges, [SPRange(min: 0, max: 0)])
+        XCTAssertEqual(second.spCount, 1)
+        XCTAssertFalse(second.exact)
+        XCTAssertEqual(second.mismatch, 7)
+        XCTAssertEqual(second.support, 0)
+        XCTAssertEqual(second.minPercent, 51.5, accuracy: 1e-9)
+        XCTAssertEqual(second.maxPercent, 61.1, accuracy: 1e-9)
+    }
+
+    /// `side=defender` の応答(assumedHpSp=32)も写す。
+    func testReverseResponseMapsDefenderSide() async throws {
+        let json = Self.reverseJSON
+            .replacingOccurrences(of: #""side":"attacker","stat":"spa","assumedHpSp":0"#,
+                                  with: #""side":"defender","stat":"def","assumedHpSp":32"#)
+        XCTAssertTrue(json.contains(#""assumedHpSp":32"#), "フィクスチャの置換が効いていない")
+        let service = try makeService(transport: RecordingTransport(json: json))
+        let result = try await service.reverse(reverseRequest)
+        XCTAssertEqual(result.side, .defender)
+        XCTAssertEqual(result.stat, .def)
+        XCTAssertEqual(result.assumedHPSP, 32)
     }
 }
