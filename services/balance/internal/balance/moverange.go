@@ -9,8 +9,7 @@ import (
 // TB6 技範囲チェッカー(ADR-0404)。技 ID だけ(ポケモンは指定しない)の攻撃範囲と、
 // その技構成を半減以下で受けられる実在ポケモンを返す。
 //
-// このファイルは spec-writer が置いたコンパイル用のスタブ(契約と失敗するテストが先)。
-// 実装は AnalyzeMoveRange の中身だけで、型・エラー・並びの契約は ADR-0404 §2・§3 の正である。
+// 型・エラー・並びの契約は ADR-0404 §2・§3 の正である。
 
 const (
 	// MinMoveRangeMoves and MaxMoveRangeMoves bound the request moveIds (ADR-0404 §2).

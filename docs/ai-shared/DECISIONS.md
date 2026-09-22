@@ -724,6 +724,6 @@ API(calc)レーンへの依頼(P2-3b の critic 指摘): `services/calc/internal
 
 ## 2026-09-22: TB6 実装後の web の生成コードの再生成はWeb レーンの申し送り(タイプバランスレーンから)
 Decision: TB6(technical range checker。ADR-0404)で `services/balance/api/openapi.yaml` に `/api/balance/v1/move-range/analyze` を追加した。
-`web/src/api/balance.gen.ts`(`make gen-ts` の生成物)は `web/` の範囲でこのレーンからは変更しない。Web レーンが必要になったタイミングで `make gen-ts` を再実行してほしい。
+`web/src/api/balance.gen.ts`(`make gen-ts` の生成物)は `web/` の範囲でこのレーンからは変更しない。**TB6 が main に入ってから**、Web レーンが必要になったタイミングで `make gen-ts` を再実行してほしい。
 Reason: AGENTS.md「タイプバランスレーンの範囲」により web/ は範囲外(critic 指摘)。
 Impact: Web が move-range を呼ぶ画面を作るときに、まず `make gen-ts` を実行して型を最新化する必要がある。

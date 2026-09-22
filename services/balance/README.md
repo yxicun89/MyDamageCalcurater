@@ -68,5 +68,5 @@ make balance-sync-typechart                    # testdata/golden/typechart.json 
 [0015](../../docs/adr/0015-balance-type-chart-from-data.md)(相性表)・[0016](../../docs/adr/0016-balance-tb2-offense-coverage.md)・
 [0017](../../docs/adr/0017-balance-tb3-ability-effects.md)・[0018](../../docs/adr/0018-balance-local-gitops-verification.md)(GitOps)・
 [0400](../../docs/adr/0400-balance-tb4-threat-check.md)・[0401](../../docs/adr/0401-balance-tb5-recommend-types.md)・
-[0404](../../docs/adr/0404-balance-tb6-move-range-checker.md)・
-[0402](../../docs/adr/0402-balance-read-model-json-schema.md)(JSON Schema)・[0403](../../docs/adr/0403-balance-readmodel-wiring.md)(実データの配線)。直接依存とライセンスは [`DEPENDENCIES.md`](DEPENDENCIES.md)。
+[0402](../../docs/adr/0402-balance-read-model-json-schema.md)(JSON Schema)・[0403](../../docs/adr/0403-balance-readmodel-wiring.md)(実データの配線)・
+[0404](../../docs/adr/0404-balance-tb6-move-range-checker.md)(技範囲チェッカー)。直接依存とライセンスは [`DEPENDENCIES.md`](DEPENDENCIES.md)。
