@@ -45,16 +45,20 @@ type CalcMove struct {
 }
 
 // ShowdownSnapshot は Showdown の champions mod から抽出した正規化スナップショット。
+// Learnsets は種族ID→技ID→その技を学習できる学習元のうち最大の世代番号(ADR-0103 §7)。
+// 例えば学習元の符号が "9M"(第9世代マシン)・"7L12"(第7世代レベル12)・"8E"(第8世代タマゴ技)なら、
+// 先頭の数字が世代。同じ技に複数の学習元があれば最大値を採る(フォーマットの minSourceGen 以上の
+// 学習元が1つでもあれば学習可能に足りるため)。
 type ShowdownSnapshot struct {
-	SchemaVersion int                 `json:"schemaVersion"`
-	Source        string              `json:"source"`
-	Version       string              `json:"version"`
-	Mod           string              `json:"mod"`
-	Species       []ShowdownSpecies   `json:"species"`
-	Moves         []ShowdownMove      `json:"moves"`
-	Items         []ShowdownItem      `json:"items"`
-	Abilities     []ShowdownAbility   `json:"abilities"`
-	Learnsets     map[string][]string `json:"learnsets"`
+	SchemaVersion int                       `json:"schemaVersion"`
+	Source        string                    `json:"source"`
+	Version       string                    `json:"version"`
+	Mod           string                    `json:"mod"`
+	Species       []ShowdownSpecies         `json:"species"`
+	Moves         []ShowdownMove            `json:"moves"`
+	Items         []ShowdownItem            `json:"items"`
+	Abilities     []ShowdownAbility         `json:"abilities"`
+	Learnsets     map[string]map[string]int `json:"learnsets"`
 }
 
 // ShowdownSpecies は Showdown の種族1件。
@@ -71,6 +75,8 @@ type ShowdownSpecies struct {
 	RequiredItem  string            `json:"requiredItem"`
 	FormeOrder    []string          `json:"formeOrder"`
 	IsNonstandard *string           `json:"isNonstandard"`
+	// Prevo は進化前の種族の Showdown 名(無ければ空)。習得技の継承(ADR-0103 §7)に使う。
+	Prevo string `json:"prevo"`
 }
 
 // ShowdownMove は Showdown の技1件。Accuracy 0 は必中(calc の `accuracy: true`)。
@@ -91,6 +97,8 @@ type ShowdownItem struct {
 	ID            string  `json:"id"`
 	Name          string  `json:"name"`
 	IsNonstandard *string `json:"isNonstandard"`
+	// Hooks はその持ち物のデータオブジェクトが持つ、on で始まる関数のプロパティ名の昇順(無ければ空。ADR-0103 §6)。
+	Hooks []string `json:"hooks"`
 }
 
 // ShowdownAbility は Showdown の特性1件。
@@ -98,6 +106,8 @@ type ShowdownAbility struct {
 	ID            string  `json:"id"`
 	Name          string  `json:"name"`
 	IsNonstandard *string `json:"isNonstandard"`
+	// Hooks は ShowdownItem.Hooks と同じ(ADR-0103 §6)。
+	Hooks []string `json:"hooks"`
 }
 
 // PokeAPISnapshot は PokeAPI の CSV から抽出した名前だけのスナップショット。
@@ -143,13 +153,21 @@ type RegulationsFile struct {
 }
 
 // RegulationDef は1レギュレーションの定義。
+// InheritFromPrevo は習得技の解決(ADR-0103 §7)で進化前(prevo)の学習元をたどるかどうか。
+// Showdown の `learnsetParent` は mod によって進化前をたどるかが変わる(champions は常にたどらない。
+// §10 の実データ確認で判明)ため、Go にモード名をハードコードせずレギュレーションの定義に持たせる。
+// M-C は false(自分の学習元、無ければ基本種の学習元を1段だけ)。true なら進化前も何段でもたどる。
+// MinSourceGen(学習元として認める最小の世代番号。Showdown の TeamValidator の `minSourceGen` に対応)
+// は InheritFromPrevo の値に関わらず常に効く(自分の学習元にも適用する絞り込みのため)。
 type RegulationDef struct {
-	ID          string `json:"id"`
-	NameJa      string `json:"nameJa"`
-	IsDefault   bool   `json:"isDefault"`
-	StartsOn    string `json:"startsOn"`
-	EndsOn      string `json:"endsOn"`
-	ShowdownMod string `json:"showdownMod"`
+	ID               string `json:"id"`
+	NameJa           string `json:"nameJa"`
+	IsDefault        bool   `json:"isDefault"`
+	StartsOn         string `json:"startsOn"`
+	EndsOn           string `json:"endsOn"`
+	ShowdownMod      string `json:"showdownMod"`
+	InheritFromPrevo bool   `json:"inheritFromPrevo"`
+	MinSourceGen     int    `json:"minSourceGen"`
 }
 
 // Config は data/importer/config.json(取得元の版・除外・日本語名の言語優先順)。
@@ -159,6 +177,34 @@ type Config struct {
 	ExcludeCalcSpecies []string          `json:"excludeCalcSpecies"`
 	ExcludeTypes       []string          `json:"excludeTypes"`
 	NameJaLanguages    []string          `json:"nameJaLanguages"`
+	// Reconcile は照合の設定(ADR-0103 §5・§6・§9)。任意(無ければ Convert 単体は従来どおり動く。
+	// Reconcile 関数は必須にする)。有れば厳格に検証する。
+	Reconcile *ReconcileConfig `json:"reconcile"`
+}
+
+// ReconcileConfig は Config.Reconcile(ADR-0103 §11)。
+type ReconcileConfig struct {
+	EffectHooks []string `json:"effectHooks"`
+	Verdicts    Verdicts `json:"verdicts"`
+}
+
+// Verdicts は P2-1c の裁定の反映の確認に使う値(ADR-0103 §5)。
+type Verdicts struct {
+	Basis map[string]string `json:"basis"`
+	Moves MoveVerdicts      `json:"moves"`
+}
+
+// MoveVerdicts は技の使用可否の裁定の3区分(ADR-0103 §5)。
+type MoveVerdicts struct {
+	CalcOnlyExcluded     VerdictCount `json:"calcOnlyExcluded"`
+	ShowdownOnlyIncluded VerdictCount `json:"showdownOnlyIncluded"`
+	StatusTypeMismatch   VerdictCount `json:"statusTypeMismatch"`
+}
+
+// VerdictCount は1区分の期待件数と ID 集合のハッシュ(ADR-0103 §5)。
+type VerdictCount struct {
+	Count     int    `json:"count"`
+	IDsSHA256 string `json:"idsSha256"`
 }
 
 // Input は LoadInput が読み込む一式。

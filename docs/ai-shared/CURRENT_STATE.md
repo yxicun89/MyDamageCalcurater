@@ -4,8 +4,8 @@
 Lane: データ(engine・マスタ・pokedex。どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
 Branch: feat/claude-p1-engine(作業ディレクトリ ~/MyDamageCalcurater)
-Status: Phase 1・P2-1・P1-10・Phase R(R-2-9 の公開用クリーンコピーは公開時に実施)・R-3・P1-13(タイプ相性表のデータ化。ADR-0013)・P1-11(表示%の分離)・P1-12(逆算の再設計。ADR-0010 §R)・P2-1b(ゴールデンを Champions へ)・P2-1c(技の使用可否の裁定)・P2-2a(pokedex のスキーマと migrate。ADR-0100)・P2-2b(importer の取得・変換・投入。ADR-0101。実データの取得は未実施で版はプレースホルダ=取り込みは明示的に止まる)は完了(critic レビュー済み)
-Next: P2-2c(照合と差分報告。実データの取得と版の固定を含む) → P2-2d → P2-3 → P3-1〜3 → P4-1〜7。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)、P2-1c の裁定
+Status: Phase 1・P2-1・P1-10・Phase R(R-2-9 の公開用クリーンコピーは公開時に実施)・R-3・P1-13(タイプ相性表のデータ化。ADR-0013)・P1-11(表示%の分離)・P1-12(逆算の再設計。ADR-0010 §R)・P2-1b(ゴールデンを Champions へ)・P2-1c(技の使用可否の裁定)・P2-2a(pokedex のスキーマと migrate。ADR-0100)・P2-2b(importer の取得・変換・投入。ADR-0101)・P2-2c(照合と差分報告・版の固定・習得技は進化前から継がない。ADR-0103。実データの dry-run が通る)は完了(critic レビュー済み)
+Next: P2-2d(CronJob と make import)→ P2-3(pokedex-svc。内部 API・natures・balance/speed 向けの export を含む) → P3-1〜3 → P4-1〜7。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)、P2-1c の裁定
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
@@ -16,12 +16,12 @@ Next: (1) Web レーンの依頼: gateway に任意の GATEWAY_WEB_URL(設定時
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
-Active: Claude Code
+Active: なし
 Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
-Status: P4-1〜P4-6 完了(critic PASS。P4-1〜P4-5 は PR #22 で main 済み)。Web のテストはルートの make test / lint / build に含まれる。
-P4-5 のブラウザ実機確認(Chrome・Safari)は人間待ち。P4-7 は docs/verify-m1.md のドラフト(M1 の残りを待つ)
-Next: P4-7 の完成(P2-2c/d・P2-3 pokedex-svc・P3-3 が main に入ったら、オンラインのときにマスタを API から読む MasterSource を作り、verify-m1.md §4 を手順に置き換える)。
-持ち越し: 逆算の「型名でまとめる表示」と絞り込みの演出(ADR-0300 §7)、攻撃側プリセットの engine への移設(データレーンへの提案)
+Status: P4-1〜P4-6・P4-8・P4-9 完了・main に統合(PR #22・#28・#33 と P4-9 の PR。critic PASS)。Web のテストはルートの make test / lint / build に含まれる。
+人間待ち: P4-5 のブラウザ実機確認(Chrome・Safari。手順は docs/verify-m1.md §2)。P4-7 は verify-m1.md のドラフト(M1 の残りを待つ)
+Next: (1) P4-7 の完成: P2-2c/d・P2-3 pokedex-svc・P3-3 が main に入ったら、オンラインのときにマスタを API から読む MasterSource を作り(ADR-0301 §4)、
+verify-m1.md §4 を手順に置き換える。(2) P5-5(M2 の Web: 履歴・よく計算する相手・構築ビルダー)は record/team の API を待つ
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
@@ -34,16 +34,16 @@ Next: P6-2b 逆算画面(観測はテンキー入力。与えたダメージ = �
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
 Active: Claude Code
 Branch: 次は main から feat/tb-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
-Status: TB0〜TB4 は完了・main に統合済み。TB5 は完了し PR で統合する(TB5 おすすめタイプと該当ポケモン /recommendations。ADR-0401、§8 はユーザー回答による範囲の変更)。balance は Echo v5.3.1。ポケモン・技・特性は temporary の read model(架空データの example。実データは BALANCE_*_PATH でマウント)。k3d には Argo CD v3.5.3・クラスタ内レジストリ・Application pokecalc-balance(manual sync)。新しい ADR はタイプバランスの帯 0400〜
-Next: (1) データレーンの `pokedex export`(P2-3。nameJa・abilityIds・レギュレーションで絞る・特性の read model。受諾済み)が main に入ったら、balance の read model をそれに差し替え、実データで TB5 を確認する。(2) 軽微の残り: HTTP で相性表が失敗したときの 500 テスト、typed nil の provider、read model の JSON Schema、CoverageMultiplier の nullable enum、HTTP 層の検証・422 変換の重複(analyze・coverage・threats・recommendations)、recommend の穴の算出を AnalyzeDefense/AnalyzeCoverage の集計に寄せる。(3) Web / iOS から balance を使う画面は各レーンの範囲(必要なら DECISIONS.md で依頼)
+Status: TB0〜TB5 と整備(ADR-0402 の read model の JSON Schema を含む)は完了・main に統合済み。balance は Echo v5.3.1。ポケモン・技・特性は temporary の read model(架空データの example。実データは BALANCE_*_PATH でマウント)。k3d には Argo CD v3.5.3・クラスタ内レジストリ・Application pokecalc-balance(manual sync)。新しい ADR はタイプバランスの帯 0400〜
+Next: データレーンの `pokedex export`(P2-3。nameJa・abilityIds・レギュレーションで絞る・特性の read model。受諾済み。形は services/balance/schema/ の JSON Schema)が main に入ったら、balance の read model をそれに差し替え、実データで TB5 を確認する。それまでは待ち(ブロッカーではない)。Web / iOS から balance を使う画面は各レーンの範囲(必要なら DECISIONS.md で依頼)
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
 
 ## Speed
 Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
-Active: なし
-Branch: feat/speed-s0(作業ディレクトリ ~/MyDamageCalcurater-speed)
-Status: 未着手(2026-09-22 にレーンを新設。ユーザーの仕様は docs/plan.md の「SP: 素早さ比較」と DECISIONS.md)
-Next: SP0 から。docs/speed-design.md(設計の正)と ADR-0600 を書き、services/speed の基盤(タイプバランスの services/balance と同じ構成: 純粋な Go のコア・HTTP API・自前の openapi・Kustomize)を作る。種族の素早さ種族値と使用可能集合は pokedex の read model(データレーン P2-3 の `pokedex export`)から読む。それまでは架空データで作る。実数値の式は engine の公開 API(RealStats 等)を呼ぶだけで、自前で持たない
+Active: Claude Code
+Branch: 次は main から feat/speed-s2 を切る(SP1 は feat/speed-s1 → PR で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
+Status: SP0(ADR-0600。基盤・計算コア・read model・一覧 API・Kustomize)と SP1(ADR-0601。6 行のプリセット・速い順・同速の段・`presets` での絞り込み・`GET /api/speed/v1/table`)は完了・main に統合
+Next: SP2(自分の位置: 最小の選択 = プリセット uninvested / neutral-max / max + スカーフ on/off、オプション = SP 0〜32・性格3通り・ランク -6〜+6・スカーフ、または実数値の直接入力 → 実数値と表の中の位置(速い段・同速の段・遅い段の境目))→ SP3(`web/src/speed/`。web/ は main にできたので、画面部品を作りタブを1項目登録)→ SP4(pokedex の read model・k3d・GitOps)。SP4 までに決める: 空の roster の扱い(いまは read model が空を拒否。pokedex の adapter では 503 か空配列か。SP1 critic 軽微)
 
 ## Maintenance
 Lane: 整備(Claude の上限時に Codex が進める。COORDINATION.md「Claude の上限時の Codex」)

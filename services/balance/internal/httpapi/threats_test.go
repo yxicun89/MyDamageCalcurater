@@ -629,6 +629,7 @@ func TestThreatsInternalErrors(t *testing.T) {
 		{name: "move provider failure", deps: Dependencies{TypeChart: testTypeChart(), PokemonTypes: threatPokemonTypes, Moves: failingMoves{err: errors.New("move backend exploded at /secret/moves.json")}, Abilities: fictionalAbilities}},
 		{name: "ability provider failure", deps: Dependencies{TypeChart: testTypeChart(), PokemonTypes: threatPokemonTypes, Moves: threatMoves, Abilities: failingAbilities{err: errors.New("ability backend exploded at /secret/abilities.json")}}},
 		{name: "nil type chart", deps: Dependencies{PokemonTypes: threatPokemonTypes, Moves: threatMoves, Abilities: fictionalAbilities}},
+		{name: "type chart matchup failure", deps: Dependencies{TypeChart: failingChart{err: errors.New("type chart backend exploded")}, PokemonTypes: threatPokemonTypes, Moves: threatMoves, Abilities: fictionalAbilities}},
 		{name: "invalid ability effect from provider", deps: Dependencies{TypeChart: testTypeChart(), PokemonTypes: threatPokemonTypes, Moves: threatMoves, Abilities: testAbilities{
 			"ability-9001": fictionalAbility("ability-9001", balance.AbilityEffect{Kind: "heal", AttackType: balance.TypeFire}),
 		}}},

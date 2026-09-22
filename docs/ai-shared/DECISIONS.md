@@ -414,6 +414,25 @@ Reason: ユーザーが「既存のタイプバランスチェッカーはおす
 Impact: plan.md に TB5。使用可能なポケモンの集合と日本語名はマスタ(データレーンの P2-2。レギュレーション依存)から引く必要がある。それまでは TB1 と同じ temporary の read model を広げる(架空データの example)。
 
 
+## 2026-09-22: P2-2c の2点と ADR 番号の帯の承認、データレーンは Claude で続ける(ユーザー回答)
+Decision: (1) 進化前から継ぐ習得技は、取得データに「学習した世代」の情報を足し、Showdown のチーム検証(M-C は現行世代由来の学習元のみ認める)と同じ判定で絞る(実データの標本 5/5 件が Showdown 本体と食い違ったため)。
+(2) P2-1c の裁定の件数・集合が将来の取込で実データと食い違ったら、取り込みを止める(既定案どおり)。
+(3) ADR 番号のレーンごとの帯(データ 0100〜 / API 0200〜 / Web 0300〜 / タイプバランス 0400〜 / iOS 0500〜 / 素早さ 0600〜)を承認。
+(4) データレーンは Claude で続ける。Claude の上限の間に起動した Codex はデータレーンでは止め、Codex は上限の間の整備だけに使う(ユーザー: 「codex は claude のレートリミットの間だけ整備する作業をさせたかった」)。
+Reason: ユーザーが確認の質問に回答した。
+Impact: ADR-0103 の習得技の継承を案 b で実装し直す。COORDINATION.md の「Claude の上限時の Codex」の1本目(クリティカルパスのレーン)の扱いは、ユーザーの意図(整備だけ)に合わせて次の文書整理で見直す。
+
+## 2026-09-22: 習得技は進化前から継がない(Champions のルールに合わせる。ユーザー決定。直前の「案 b」を改める)
+Decision: 習得技は自分の学習元だけを使い、自分の学習元が無いフォーム・メガだけ基本種の学習元を1段使う。進化前(prevo)からは継がない。
+Reason: 案 b(学習した世代で絞る)を実装して実データで確かめたところ、Showdown 本体の検証と 5/5 件食い違った。Showdown のソース(learnsetParent)は champions の mod では進化前をたどらず、実データに9世代より古い学習元は無かった(世代の条件は効果が無かった)。ユーザーが「継承をやめて Showdown に合わせる」を選んだ。
+Impact: ADR-0103 §7 を改訂。継承を前提にしたテストは、Champions では継がないことを確かめるテストに書き換える(弱めない)。
+
+## 2026-09-22: API レーンの依頼(内部 API・性格のマスタ・showdownId)を受ける(データレーン)
+Decision: P2-3 で pokedex-svc に `GET /internal/pokedex/master`(ADR-0204 の契約。クラスタ内だけ、未投入なら 503)を実装し、species に showdownId を含める。
+性格は、ADR-0100 の「マスタにせず engine の固定」を改め、`natures`(id, name_ja, plus, minus)をマスタに加える(新しい migration と importer)。
+Reason: calc-svc がマスタを pokedex-svc から受け取る形になり(ユーザー決定 2026-09-22、API レーン)、性格の ID → 補正と日本語名が必要になった。ADR-0013 §2 の「表・一覧はデータ」とも合う。
+Impact: plan.md の P2-3 に小項目を追加。ADR-0100 に更新の注記を足す(P2-3 で)。
+
 ## 2026-09-22: TB4(仮想敵診断)の仕様(ユーザー回答と既定案)
 Decision: 仮想敵を最大 6 体(pokemonId・技 ID 最大 4・特性は任意)で入力し、各仮想敵 × 自分の各メンバーの受ける最大倍率(incoming)と与える最大倍率(outgoing)、
 安全に受けられる人数(incoming < 1)・打ちやすい人数(outgoing ≥ 2)を返す。新 endpoint `/api/balance/v1/team-balance/threats`。詳細は ADR-0400。
@@ -482,7 +501,6 @@ Decision: 最新 main の統合検証(MT-1)と check-publishable 自己テスト
 Reason: 必須の test・lint・build・公開前検査、および golden・全種族・WASM・balance の非クラスタ検証が成功したため。
 Impact: 整備レーンの次回開始点は MT-3。データ・API・Web・タイプバランス各レーンの再開を確認したため、本 worktree は削除する。
 
-<<<<<<< HEAD
 ## 2026-09-22: iOS の ADR を 0500 に振り直し(レーンごとの番号帯。データレーンの規則に従う)
 Decision: `docs/adr/0017-ios-app-architecture.md` を `docs/adr/0500-ios-app-architecture.md`(ADR-0500)に改名し、ios/・plan.md の M3 節・CURRENT_STATE.md の iOS 欄の参照を更新した。
 上の iOS のエントリ(2026-09-21)に書いた「ADR-0017」は iOS の構成の ADR のことで、以後は ADR-0500 と読む(main の ADR-0017 は balance TB3)。
@@ -495,7 +513,6 @@ Decision: (1) 逆算の観測(与えたダメージ = 相手 HP の減少%(整�
 P6-1・P6-2a・契約追従をまとめて出す。逆算・構築は次の PR。
 Reason: 日中にユーザーへ質問し、既定案(推奨)どおりの回答を得た。
 Impact: P6-2b の画面仕様、PR の区切り。
-=======
 ## 2026-09-22: 素早さ比較を3つ目のサービスとして新しいレーン(6本目)で作る(ユーザー決定)
 Decision: 素早さ比較サービス(`services/speed/`)を新しい「素早さ」レーンで作る(`~/MyDamageCalcurater-speed`、ブランチ `feat/speed-<stage名>`、ADR は `0600〜`)。
 画面は Web に独立したタブ。素早さの画面は `web/src/speed/` を素早さレーンの持ち物にし、アプリの骨組み(タブの登録)は自分の1項目を足すだけにする。
@@ -503,6 +520,16 @@ Decision: 素早さ比較サービス(`services/speed/`)を新しい「素早さ
 Reason: ユーザーが素早さ比較サイトの使い勝手(表と見比べて自分の数値を算出する)を改善したいと依頼し、表の行・入力・担当(タイプバランスの次ではなく新しいレーン)・画面の置き場所に回答した。
 Impact: COORDINATION.md のレーン表・ADR の帯・起動の目安、CURRENT_STATE.md の Speed 欄、plan.md の「SP: 素早さ比較」(SP0〜SP4)。データレーンの P2-3 の read model(`pokedex export`)に、素早さの種族値が含まれていること(ポケモンの read model に baseStats があれば足りる)。
 
+## 2026-09-22: 素早さ比較の未確定4点をユーザーが回答(素早さレーン)
+Decision: (1) 右のオプションは SP 0〜32・性格の補正3通り・ランク -6〜+6・スカーフ、または実数値の直接入力 (2) 同じ実数値は同速としてまとめて表示 (3) 表は既定のレギュレーションの使用可能集合 (4) `web/` の骨組みが無い間は `web/src/speed/` の画面部品とテストだけ先に作り、タブ登録は骨組みができてから1項目足す。いずれも既定案どおり。
+Reason: 素早さレーンの着手時に AskUserQuestion で確認した。
+Impact: docs/plan.md「SP: 素早さ比較」の未確定を確定に更新。docs/speed-design.md・ADR-0600 に反映。
+
+## 2026-09-22: 素早さ SP0 の設計(素早さレーンの判断)
+Decision: services/speed は engine に `replace` で依存し、実数値・ランクは `engine.RealStats` / `engine.EffectiveStat` を呼ぶ。engine に無いこだわりスカーフ(×1.5)だけを speed のコアが 4096 基準の補正 6144・五捨五超入で持つ(ランクの後。Showdown の順)。GitOps の overlay と Argo CD Application は、イメージの digest が決まる SP4 で作る(ADR-0600)。
+提案(データレーンへ。既定案: 今は何もしない): engine に素早さの持ち物補正(スカーフ)の公開関数を足すなら、speed はそれを呼ぶように切り替える。足さない場合は speed の1式のままでよい。
+Reason: engine はデータレーンの範囲で、Champions に無い効果をダメージ計算の engine に入れない方針のため。表の行としてスカーフはユーザーの仕様で必要。
+Impact: ADR-0600、docs/speed-design.md。
 
 ## 2026-09-21: Web レーンの構成(ADR-0300)と、他レーンへの提案2件(Web レーン、Claude Code。既定案で進行・ユーザー未確認)
 Decision: (1) Web は計算を `CalcEngine` の後ろに置き、WASM(ADR-0011 の JSON 契約)で先に作る。マスタは `MasterData` の後ろに置き、
@@ -570,7 +597,33 @@ up.sh は `pokecalc/calc:local` / `pokecalc/gateway:local` をビルド・import
 up.sh の最後で `make api-docker-build` と `k3d image import` を呼ぶ形にするかは、up.sh の持ち主(データレーン・整備レーン)の判断に任せる。API レーンは scripts/up.sh を変えない。
 Reason: critic の推奨。共有スクリプトは他レーンの範囲のため。
 Impact: `api-k3d-deploy` は他レーンのリソースに触れないよう、常に API 専用の overlay(deploy/k8s/overlays/local-api)だけを適用する(ADR-0203)。
->>>>>>> origin/main
+
+## 2026-09-22: 素早さ SP0 を PR #32 で main に統合(素早さレーン)
+Decision: SP0(ADR-0600)を PR #32 で統合した。critic は1回目 NG(smoke の架空名)→ 修正後 PASS。make test・lint・build・check-publishable・smoke が成功。
+Impact: 素早さレーンは SP1(feat/speed-s1)へ。
+
+## 2026-09-22: Web の統合記録(PR #22・#28)
+Decision: PR #22(Web P4-1〜P4-5)と PR #28(P4-6 Playwright E2E・make test への Web の組み込み・verify-m1.md ドラフト)を main に統合した。
+Reason: 独立レビュー(critic)PASS と、make test / lint / build・E2E の通過を確認した後(COORDINATION.md「main への統合」)。
+Impact: 残りは P4-5 のブラウザ実機確認(人間)と P4-7 の完成(P2-2c/d・P2-3・P3-3 を待つ)。
+
+## 2026-09-22: 逆算の表示は型でまとめない/次は design.md の演出(P4-8)(ユーザー回答)
+Decision: (1) 逆算の候補は engine の順に1件ずつカード表示し、目安の型の名前を併記する(型でまとめない)。design.md「画面: 逆算」を改めた。
+(2) Web レーンの次の作業は design.md「動き」の演出(P4-8。操作時のみ、視差効果を減らす設定で無効)。
+Reason: ユーザー回答。逆算の結果(性格 × 持ち物ごとの SP 範囲)では型が一意に決まらないため。
+Impact: design.md の1行、plan.md に P4-8、ADR-0300 §7 の持ち越しの記述を更新。iOS(M3)も同じ表示方針に従う。
+
+## 2026-09-22: Web P4-8 を統合(PR #33)
+Decision: P4-8(design.md「動き」の演出)と逆算の表示方針・design.md の演出の値を PR #33 で main に統合した。Web レーンは他レーン(P2-3・P3-3)待ちで一時停止。
+Reason: critic PASS、make test / lint / build・E2E の通過を確認。
+Impact: Web レーンの Active を「なし」にした。続きは CURRENT_STATE.md の Web 欄の Next。
+
+## 2026-09-22: 手順書の書き方を全レーン共通のルールにする(ユーザー決定。Web レーンのセッションで受領)
+Decision: 人が実行する手順書は、上から下へ1回読めば終わる形にし(節の間を行き来させない)、動作を伴うコマンドと必要最低限の確認点だけを書く
+(行動を伴わない説明は ADR や設計の節へ)。コマンドの塊はリポジトリのルートへの `cd` から始め、ローカルの手順は k3d(コンテナ)を主にする。
+AGENTS.md に「手順書の書き方」節を追加し、CLAUDE.md の「最初に読むもの」から参照した。
+Reason: ユーザーが「手順書を上下に行き来するのは手間」「行動を伴わない説明は要らない」「make の実行場所で迷う」「全レーンに共有して」と指示した。
+Impact: 全レーン・両 AI に適用。既存の手順書は、各レーンが次に触るときにこの形に直す(Web は docs/verify-m1.md を P4-14 で直す)。
 
 ## 2026-09-22: calc-svc のマスタを pokedex-svc の内部 API から受け取る(ユーザー決定。ADR-0204)
 Decision: calc-svc のマスタの入手元を pokedex-svc の内部 API `GET /internal/pokedex/master`(契約は api/openapi.yaml の tag `internal`、operationId `getMasterExport`、200 は MasterExport、503 は master_unavailable)にする。

@@ -4,7 +4,20 @@
 // 今の技の分類から導出する(P4-3、ADR-0300 §5)。
 // 返ってきた値は加工せずに表示する(ADR-0300 §8)。技の相性・確定数の言葉も engine の値をそのまま使う。
 
-import { useEffect, useId, useMemo, useState, type ReactElement, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type AnimationEvent,
+  type CSSProperties,
+  type PointerEvent,
+  type ReactElement,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import {
   ATTACKER_PRESET_KEYS,
   DEFAULT_ATTACKER_PRESET,
@@ -23,6 +36,7 @@ import {
 } from "../domain/requests";
 import type {
   BulkResult,
+  BulkRow,
   CalcEngine,
   EngineError,
   EngineResult,
@@ -32,7 +46,142 @@ import type {
 } from "../engine/types";
 import { calcScreenText, isTypeId, typeNameJa } from "../i18n/ja";
 import type { MasterData, MasterSpecies } from "../master/types";
+import { prefersReducedMotion } from "../ui/motion";
 import "./CalcScreen.css";
+
+/**
+ * 攻守入れ替えの演出(design.md「動き」: カードが入れ替わる(0.35秒))を、animationend が来なくても
+ * (タブが裏にある等)必ず終わらせるまでの最大待ち時間。CSS の --duration-swap(styles/tokens.css)を
+ * 少し上回る値にする(animationend が実際に来るまでの余裕。CSS の秒数そのものを TS に複製しない)。
+ */
+const SWAP_ANIMATION_MAX_WAIT_MS = 1000;
+
+/**
+ * 確定数バッジの弾み(design.md「動き」: --duration-pulse 0.4秒)を、animationend が来なくても
+ * (タブが裏にある等)必ず終わらせるまでの最大待ち時間。CSS の --duration-pulse を上回る値にする
+ * (animationend が実際に来るまでの余裕。CSS の秒数そのものを TS に複製しない。P4-9)。
+ */
+const KO_PULSE_ANIMATION_MAX_WAIT_MS = 1000;
+
+/** ホロ効果のカード内の位置(0〜100%)。 */
+interface HoloPosition {
+  readonly xPercent: number;
+  readonly yPercent: number;
+}
+
+/** ホロ効果の CSS カスタムプロパティ(--holo-x/--holo-y)込みのインラインスタイル。 */
+interface HoloStyle extends CSSProperties {
+  readonly "--holo-x"?: string;
+  readonly "--holo-y"?: string;
+}
+
+/** 値を [0, 100] に収める(design.md「動き」: ホロ効果はカード内の位置(%)に連動)。 */
+function clampPercent(value: number): number {
+  return Math.min(100, Math.max(0, value));
+}
+
+/** 確定数バッジの弾みを、行ごとに追跡するためのキー(preset・itemId の組。CalcScreen.tsx の行の識別と同じ考え方)。 */
+function koRowKey(row: BulkRow): string {
+  return `${row.preset}-${row.itemId}`;
+}
+
+/**
+ * 同時に光るカードを1枚だけにするための共有 ref(CalcScreen が1つ作り、両方のカードの useHoloCard に渡す)。
+ * 値は「今光っているカードを消す関数」。state ではなく ref にするのは、これが変わったときに
+ * CalcScreen まで再レンダーする必要が無いため(ホロの状態はカードの中に閉じる。CalcScreen.holoRender.test.tsx)。
+ */
+type ActiveHoloClearRef = RefObject<(() => void) | null>;
+
+interface HoloCard {
+  readonly isHolo: boolean;
+  readonly style: HoloStyle | undefined;
+  readonly onPointerMove: (event: PointerEvent<HTMLElement>) => void;
+  readonly onPointerLeave: () => void;
+}
+
+/**
+ * ホロ効果(design.md「動き」)。状態はこのカードの中だけに持ち、CalcScreen を再レンダーしない
+ * (CalcScreen.holoRender.test.tsx「ホロの pointermove で画面全体を描き直さない」)。
+ * 位置の反映は requestAnimationFrame で1フレームに1回へ間引く(1回の予約につき最後の位置だけ反映する。
+ * P4-9)。ポインタが離れた・画面から消えたら、予約中のフレームを取り消す。mouse・pen 以外(touch)では
+ * 何もしない(design.md「動き」: ホロはポインタ操作のときだけ)。
+ */
+function useHoloCard(activeClearRef: ActiveHoloClearRef): HoloCard {
+  const [position, setPosition] = useState<HoloPosition | null>(null);
+  const frameIdRef = useRef<number | null>(null);
+  const pendingPositionRef = useRef<HoloPosition | null>(null);
+
+  // このカードを消す関数(常に同じ参照にする。activeClearRef との比較に使うため)。
+  const clear = useCallback((): void => {
+    if (frameIdRef.current !== null) {
+      cancelAnimationFrame(frameIdRef.current);
+      frameIdRef.current = null;
+    }
+    pendingPositionRef.current = null;
+    setPosition(null);
+  }, []);
+
+  // 画面から消えたら、予約中のフレームを取り消す(回しっぱなしにしない)。このカードが今光っている
+  // カードだったときは、共有 ref も片付ける(消えたカードの clear を後から呼ばないように)。
+  useEffect(() => {
+    return () => {
+      if (frameIdRef.current !== null) {
+        cancelAnimationFrame(frameIdRef.current);
+        frameIdRef.current = null;
+      }
+      if (activeClearRef.current === clear) {
+        activeClearRef.current = null;
+      }
+    };
+  }, [activeClearRef, clear]);
+
+  function applyPendingPosition(): void {
+    frameIdRef.current = null;
+    const next = pendingPositionRef.current;
+    pendingPositionRef.current = null;
+    if (next === null) {
+      return;
+    }
+    // 光り始めるとき: 前に光っていたカード(自分以外)があれば消す(同時に光るのは1枚だけ)。
+    // カードを移るときはブラウザが先に pointerleave を送り、前のカードの予約は取り消されている前提
+    // (同じフレーム内で A→B→A と動いて leave が来ない場合は、予約順で B が光ることがある)。
+    if (activeClearRef.current !== clear) {
+      activeClearRef.current?.();
+      activeClearRef.current = clear;
+    }
+    setPosition(next);
+  }
+
+  function onPointerMove(event: PointerEvent<HTMLElement>): void {
+    if (event.pointerType !== "mouse" && event.pointerType !== "pen") {
+      return;
+    }
+    if (prefersReducedMotion()) {
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    pendingPositionRef.current = {
+      xPercent: clampPercent(((event.clientX - rect.left) / rect.width) * 100),
+      yPercent: clampPercent(((event.clientY - rect.top) / rect.height) * 100),
+    };
+    if (frameIdRef.current === null) {
+      frameIdRef.current = requestAnimationFrame(applyPendingPosition);
+    }
+  }
+
+  return {
+    isHolo: position !== null,
+    style:
+      position === null
+        ? undefined
+        : {
+            "--holo-x": `${String(Math.round(position.xPercent))}%`,
+            "--holo-y": `${String(Math.round(position.yPercent))}%`,
+          },
+    onPointerMove,
+    onPointerLeave: clear,
+  };
+}
 
 /** 技を選んでいないときの、攻撃側プリセット表示用の仮の分類(A/C 表記の既定は物理と同じ)。 */
 const DEFAULT_MOVE_CATEGORY: MoveCategory = "physical";
@@ -97,6 +246,25 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
   // (effect の中で同期的に setState すると react-hooks/set-state-in-effect に引っかかるため)。
   const [completed, setCompleted] = useState<CompletedCalc | null>(null);
 
+  // 確定数が変わった瞬間にバッジを弾ませる(design.md「動き」)。直近に処理した completed と、
+  // 行のキー(koRowKey)ごとの確定数の文字を state に持つ。新しい completed が来たときだけ
+  // (レンダー中に前回の completed と比べて)更新する(react-hooks/set-state-in-effect を避けるため、
+  // effect ではなくレンダー本体で行う。React の「レンダー中に state を調整する」パターン)。
+  const [koPulse, setKoPulse] = useState<{
+    readonly lastCompleted: CompletedCalc | null;
+    readonly koTexts: ReadonlyMap<string, string>;
+    readonly pulsingKeys: ReadonlySet<string>;
+  }>({ lastCompleted: null, koTexts: new Map(), pulsingKeys: new Set() });
+
+  // 攻守入れ替えの演出(design.md「動き」)。animationend で外すほか、来なかったときのタイマーでも外す。
+  const [swapping, setSwapping] = useState(false);
+  const swapFallbackTimerRef = useRef<number | null>(null);
+
+  // ホロ効果(design.md「動き」、P4-9)。状態はカード(useHoloCard)の中に持つ。ここでは
+  // 「同時に光るのは1枚だけ」を保つための共有 ref だけを持つ(ref なので、これが変わっても
+  // CalcScreen までは再レンダーしない。CalcScreen.holoRender.test.tsx)。
+  const activeHoloClearRef = useRef<(() => void) | null>(null);
+
   const attackerSpecies = useMemo(
     () => master.species.find((species) => species.key === attackerKey) ?? null,
     [master.species, attackerKey],
@@ -128,6 +296,20 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
     setMoveId((prev) => resolveMoveId(species, master.moves, prev));
   }
 
+  /** タイマーが残っていれば止める(2回目の入れ替えで前のタイマーが後から発火しないように)。 */
+  function clearSwapFallbackTimer(): void {
+    if (swapFallbackTimerRef.current !== null) {
+      window.clearTimeout(swapFallbackTimerRef.current);
+      swapFallbackTimerRef.current = null;
+    }
+  }
+
+  /** 攻守入れ替えの演出を終える(animationend か、フォールバックのタイマーから呼ぶ)。 */
+  function endSwapAnimation(): void {
+    clearSwapFallbackTimer();
+    setSwapping(false);
+  }
+
   function swap(): void {
     const newAttackerSpecies = defenderSpecies;
     setAttackerKey(defenderKey);
@@ -135,7 +317,85 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
     setAttackerItemId(defenderItemId);
     setDefenderItemId(attackerItemId);
     setMoveId((prev) => resolveMoveId(newAttackerSpecies, master.moves, prev));
+
+    if (!prefersReducedMotion()) {
+      setSwapping(true);
+      clearSwapFallbackTimer();
+      swapFallbackTimerRef.current = window.setTimeout(endSwapAnimation, SWAP_ANIMATION_MAX_WAIT_MS);
+    }
   }
+
+  // アンマウント時にフォールバックのタイマーを片付ける(回しっぱなしにしない)。
+  useEffect(() => {
+    return () => {
+      clearSwapFallbackTimer();
+    };
+  }, []);
+
+  // 確定数が変わった瞬間にバッジを弾ませる(design.md「動き」)。新しい成功結果が届いたときだけ判定する
+  // (completed の参照が変わるのは calcBulk の応答が届いたときだけ)。
+  if (completed !== null && completed !== koPulse.lastCompleted) {
+    if (completed.result.ok) {
+      const reduceMotion = prefersReducedMotion();
+      const nextKoTexts = new Map(koPulse.koTexts);
+      const changedKeys = new Set<string>();
+      for (const row of completed.result.value.rows) {
+        const key = koRowKey(row);
+        const koText = formatKO(row.result.ko);
+        const previousText = koPulse.koTexts.get(key);
+        if (!reduceMotion && previousText !== undefined && previousText !== koText) {
+          changedKeys.add(key);
+        }
+        nextKoTexts.set(key, koText);
+      }
+      setKoPulse({ lastCompleted: completed, koTexts: nextKoTexts, pulsingKeys: changedKeys });
+    } else {
+      setKoPulse((prev) => ({ ...prev, lastCompleted: completed, pulsingKeys: new Set() }));
+    }
+  }
+  const pulsingKeys = koPulse.pulsingKeys;
+
+  /** 確定数バッジの is-pulsing を外す(animationend。バブリングで子要素のアニメーションと混ざらないよう currentTarget と比べる)。 */
+  function handleKoAnimationEnd(key: string) {
+    return (event: AnimationEvent<HTMLSpanElement>): void => {
+      if (event.target !== event.currentTarget) {
+        return;
+      }
+      setKoPulse((prev) => {
+        if (!prev.pulsingKeys.has(key)) {
+          return prev;
+        }
+        const next = new Set(prev.pulsingKeys);
+        next.delete(key);
+        return { ...prev, pulsingKeys: next };
+      });
+    };
+  }
+
+  // 確定数バッジの弾みは animationend が来なくても(タブが裏にある等)最大待ちで必ず外す(P4-9)。
+  // 弾み始めるたび(pulsingKeys が変わるたび)に掛け直す(前のタイマーが次の弾みを打ち切らないように)。
+  // 視差効果を減らす設定では pulsingKeys が常に空なので、このタイマーも動かない。
+  useEffect(() => {
+    if (pulsingKeys.size === 0) {
+      return;
+    }
+    const keysToClear = pulsingKeys;
+    const timer = window.setTimeout(() => {
+      setKoPulse((prev) => {
+        if (prev.pulsingKeys.size === 0) {
+          return prev;
+        }
+        const next = new Set(prev.pulsingKeys);
+        for (const key of keysToClear) {
+          next.delete(key);
+        }
+        return { ...prev, pulsingKeys: next };
+      });
+    }, KO_PULSE_ANIMATION_MAX_WAIT_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [pulsingKeys]);
 
   // 攻撃側・防御側・ダメージ技が揃ったら calcBulk を呼ぶ(ADR-0300 §2・§6)。
   // setState は応答が届いたとき(.then のコールバック)だけで行い、effect の本体では呼ばない
@@ -234,6 +494,9 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
           selectedItemId={attackerItemId}
           onSpeciesChange={selectAttacker}
           onItemChange={setAttackerItemId}
+          isSwapping={swapping}
+          onSwapAnimationEnd={endSwapAnimation}
+          activeHoloClearRef={activeHoloClearRef}
         >
           {attackerSpecies !== null && (
             <AttackerPresetSelector
@@ -256,6 +519,9 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
           selectedItemId={defenderItemId}
           onSpeciesChange={setDefenderKey}
           onItemChange={setDefenderItemId}
+          isSwapping={swapping}
+          onSwapAnimationEnd={endSwapAnimation}
+          activeHoloClearRef={activeHoloClearRef}
         />
       </div>
 
@@ -272,7 +538,13 @@ export function CalcScreen({ engine, master }: CalcScreenProps) {
         {calcScreenText.compareItemCandidatesLabel}
       </label>
 
-      <ResultsSection outcome={outcome} items={master.items} moveType={move?.type} />
+      <ResultsSection
+        outcome={outcome}
+        items={master.items}
+        moveType={move?.type}
+        pulsingKeys={pulsingKeys}
+        onKoAnimationEnd={handleKoAnimationEnd}
+      />
     </div>
   );
 }
@@ -289,6 +561,11 @@ interface SpeciesCardProps {
   readonly onItemChange: (id: string) => void;
   /** カードの中に足す追加要素(攻撃側プリセットの選択。防御側カードは渡さない)。 */
   readonly children?: ReactNode;
+  /** 攻守入れ替えの演出中か(design.md「動き」)。 */
+  readonly isSwapping: boolean;
+  readonly onSwapAnimationEnd: () => void;
+  /** ホロ効果(design.md「動き」、P4-9): 同時に光るのは1枚だけにするための、カード間で共有する ref。 */
+  readonly activeHoloClearRef: ActiveHoloClearRef;
 }
 
 /** 攻撃側・防御側の共通カード: ポケモン・持ち物の選択と、選んだ種族の名前・タイプ・エンブレム。 */
@@ -303,11 +580,30 @@ function SpeciesCard({
   onSpeciesChange,
   onItemChange,
   children,
+  isSwapping,
+  onSwapAnimationEnd,
+  activeHoloClearRef,
 }: SpeciesCardProps) {
   const species = speciesList.find((candidate) => candidate.key === selectedSpeciesKey) ?? null;
   const primaryType = species?.types[0];
+  const holo = useHoloCard(activeHoloClearRef);
+  const className = ["calc-card", isSwapping ? "is-swapping" : "", holo.isHolo ? "is-holo" : ""]
+    .filter((part) => part !== "")
+    .join(" ");
   return (
-    <section className="calc-card" aria-label={regionLabel}>
+    <section
+      className={className}
+      aria-label={regionLabel}
+      style={holo.style}
+      onAnimationEnd={(event) => {
+        // バブリングで子要素のアニメーション(バッジの弾み等)と混ざらないよう currentTarget と比べる。
+        if (event.target === event.currentTarget) {
+          onSwapAnimationEnd();
+        }
+      }}
+      onPointerMove={holo.onPointerMove}
+      onPointerLeave={holo.onPointerLeave}
+    >
       <select
         aria-label={speciesSelectLabel}
         value={selectedSpeciesKey}
@@ -435,13 +731,22 @@ interface ResultsSectionProps {
   readonly items: readonly Item[];
   /** ダメージバーの色に使う、選ばれている技のタイプ(design.md: バーは技のタイプ色)。 */
   readonly moveType: string | undefined;
+  /** 確定数が変わって弾ませる行のキー(koRowKey)の集合(design.md「動き」)。 */
+  readonly pulsingKeys: ReadonlySet<string>;
+  readonly onKoAnimationEnd: (key: string) => (event: AnimationEvent<HTMLSpanElement>) => void;
 }
 
 /**
  * 計算結果の表示(ADR-0300 §8: 返ってきた値を加工せずに表示する)。loading は、新しい入力に対する
  * 応答をまだ待っている間、古い行を出さないための表示(CalcScreen.test.tsx「入力を変えたら…」)。
  */
-function ResultsSection({ outcome, items, moveType }: ResultsSectionProps): ReactElement | null {
+function ResultsSection({
+  outcome,
+  items,
+  moveType,
+  pulsingKeys,
+  onKoAnimationEnd,
+}: ResultsSectionProps): ReactElement | null {
   switch (outcome.status) {
     case "idle":
       return null;
@@ -460,7 +765,15 @@ function ResultsSection({ outcome, items, moveType }: ResultsSectionProps): Reac
         </p>
       );
     case "success":
-      return <ResultsList result={outcome.result} items={items} moveType={moveType} />;
+      return (
+        <ResultsList
+          result={outcome.result}
+          items={items}
+          moveType={moveType}
+          pulsingKeys={pulsingKeys}
+          onKoAnimationEnd={onKoAnimationEnd}
+        />
+      );
     default: {
       // 判別 union の網羅性チェック(コーディング規約 §4 TypeScript「判別 union は網羅性を検査する」)。
       // eslint の switch-exhaustiveness-check に加え、実行時にも未知の状態を検出する。
@@ -474,6 +787,8 @@ interface ResultsListProps {
   readonly result: BulkResult;
   readonly items: readonly Item[];
   readonly moveType: string | undefined;
+  readonly pulsingKeys: ReadonlySet<string>;
+  readonly onKoAnimationEnd: (key: string) => (event: AnimationEvent<HTMLSpanElement>) => void;
 }
 
 /** 最大100%の一括表示予算(design.md のダメージバー)。100%を超える分は頭打ちにする。 */
@@ -484,7 +799,7 @@ const DAMAGE_BAR_MAX_PERCENT = 100;
  * 持ち物のバリアントが変わっても同じ値になる(防御側の種族・技のタイプだけで決まる)ため、行ごとに
  * 繰り返さず、結果全体の先頭行の値を1回だけ表示する。
  */
-function ResultsList({ result, items, moveType }: ResultsListProps) {
+function ResultsList({ result, items, moveType, pulsingKeys, onKoAnimationEnd }: ResultsListProps) {
   const firstRow = result.rows[0];
   const barColor =
     moveType === undefined || moveType === "" ? "var(--text-secondary)" : `var(--type-${moveType})`;
@@ -502,13 +817,17 @@ function ResultsList({ result, items, moveType }: ResultsListProps) {
               ? calcScreenText.noItemRowLabel
               : (items.find((item) => item.id === row.itemId)?.nameJa ?? row.itemId);
           const barValue = Math.min(row.result.maxPercent, DAMAGE_BAR_MAX_PERCENT);
+          const koKey = koRowKey(row);
+          const koClassName = `calc-results__ko${pulsingKeys.has(koKey) ? " is-pulsing" : ""}`;
           return (
             // preset・itemId の組は行内で一意ではない場合がある(同じ preset で持ち物違い)ため index も足す。
             <li key={`${row.preset}-${row.itemId}-${String(index)}`} className="calc-results__row">
               <span className="calc-results__preset">{row.presetLabel}</span>
               <span className="calc-results__item">{itemLabel}</span>
               <span className="calc-results__percent">{formatPercentRange(row.result)}</span>
-              <span className="calc-results__ko">{formatKO(row.result.ko)}</span>
+              <span className={koClassName} onAnimationEnd={onKoAnimationEnd(koKey)}>
+                {formatKO(row.result.ko)}
+              </span>
               <div
                 role="meter"
                 aria-valuemin={0}

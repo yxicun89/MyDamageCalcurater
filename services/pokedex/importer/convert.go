@@ -182,18 +182,23 @@ func Convert(in Input) (Output, Report, error) {
 	}
 	warnings = append(warnings, abilityEffectWarnings...)
 
-	learnsetRows := buildLearnsets(in.Showdown.Learnsets, speciesConv.Rows, speciesConv.BaseSpeciesName, moveConv.Included)
-
-	speciesKeys := make([]string, 0, len(speciesConv.Rows))
-	for _, sp := range speciesConv.Rows {
-		speciesKeys = append(speciesKeys, sp.Key)
+	learnsetRules, err := regulationLearnsetRules(in.Regulations)
+	if err != nil {
+		return Output{}, Report{}, err
 	}
+	learnsetRows, _, err := buildLearnsets(in.Showdown.Species, in.Showdown.Learnsets, speciesConv.Rows, moveConv.Included, learnsetRules)
+	if err != nil {
+		return Output{}, Report{}, err
+	}
+
 	moveIDs := make([]string, 0, len(moveConv.Rows))
 	for _, m := range moveConv.Rows {
 		moveIDs = append(moveIDs, m.ID)
 	}
 
-	regRows, regSpecies, regMoves, regItems, regAbilities, err := buildRegulations(in.Regulations, in.Showdown.Mod, speciesKeys, moveIDs, itemIDs, abilityIDs)
+	regRows, regSpecies, regMoves, regItems, regAbilities, err := buildRegulations(
+		in.Regulations, in.Showdown.Mod, speciesConv.RegulationKeys, moveIDs, itemIDs, speciesConv.RegulationAbilityIDs,
+	)
 	if err != nil {
 		return Output{}, Report{}, err
 	}

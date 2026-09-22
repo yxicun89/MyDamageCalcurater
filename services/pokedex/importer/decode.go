@@ -19,6 +19,8 @@ var (
 	regulationIDPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 	datePattern         = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}$`)
 	commitPattern       = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	sha256HexPattern    = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	effectHookPattern   = regexp.MustCompile(`^on[A-Z][A-Za-z]*$`)
 )
 
 // pendingPrefix は「版・mod がまだ固定されていない」プレースホルダの目印(取り違えたまま
@@ -166,6 +168,9 @@ func DecodeRegulationsFile(raw []byte) (RegulationsFile, error) {
 		if isPendingPlaceholder(r.ShowdownMod) {
 			return RegulationsFile{}, fmt.Errorf("%w: レギュレーション %q の showdownMod が未固定のプレースホルダのまま: %q", ErrInvalidInput, r.ID, r.ShowdownMod)
 		}
+		if r.MinSourceGen < 1 {
+			return RegulationsFile{}, fmt.Errorf("%w: レギュレーション %q の minSourceGen が不正(1以上であること): %d", ErrInvalidInput, r.ID, r.MinSourceGen)
+		}
 	}
 	return f, nil
 }
@@ -198,5 +203,50 @@ func DecodeConfig(raw []byte) (Config, error) {
 			return Config{}, fmt.Errorf("%w: sources.%s の版が commit(40桁の16進)の形式でない: %q", ErrInvalidInput, source, version)
 		}
 	}
+	if c.Reconcile != nil {
+		if err := validateReconcileConfig(c.Reconcile, c.Sources); err != nil {
+			return Config{}, err
+		}
+	}
 	return c, nil
+}
+
+// validateReconcileConfig は Config.Reconcile を厳格に検証する(ADR-0103 §5・§9)。
+func validateReconcileConfig(r *ReconcileConfig, sources map[string]string) error {
+	if len(r.EffectHooks) == 0 {
+		return fmt.Errorf("%w: reconcile.effectHooks が空", ErrInvalidInput)
+	}
+	for _, h := range r.EffectHooks {
+		if !effectHookPattern.MatchString(h) {
+			return fmt.Errorf("%w: reconcile.effectHooks の形式が不正: %q", ErrInvalidInput, h)
+		}
+	}
+	for _, key := range sortedKeysRaw(r.Verdicts.Basis) {
+		if _, ok := sources[key]; !ok {
+			return fmt.Errorf("%w: reconcile.verdicts.basis のキー %q が sources に無い", ErrInvalidInput, key)
+		}
+		version := r.Verdicts.Basis[key]
+		if version == "" {
+			return fmt.Errorf("%w: reconcile.verdicts.basis.%s の版が空", ErrInvalidInput, key)
+		}
+		if isPendingPlaceholder(version) {
+			return fmt.Errorf("%w: reconcile.verdicts.basis.%s の版が未固定のプレースホルダのまま: %q", ErrInvalidInput, key, version)
+		}
+	}
+	for _, vc := range []struct {
+		name  string
+		count VerdictCount
+	}{
+		{"calcOnlyExcluded", r.Verdicts.Moves.CalcOnlyExcluded},
+		{"showdownOnlyIncluded", r.Verdicts.Moves.ShowdownOnlyIncluded},
+		{"statusTypeMismatch", r.Verdicts.Moves.StatusTypeMismatch},
+	} {
+		if vc.count.Count < 0 {
+			return fmt.Errorf("%w: reconcile.verdicts.moves.%s.count が負: %d", ErrInvalidInput, vc.name, vc.count.Count)
+		}
+		if !sha256HexPattern.MatchString(vc.count.IDsSHA256) {
+			return fmt.Errorf("%w: reconcile.verdicts.moves.%s.idsSha256 の形式が不正(64桁の小文字16進であること): %q", ErrInvalidInput, vc.name, vc.count.IDsSHA256)
+		}
+	}
+	return nil
 }

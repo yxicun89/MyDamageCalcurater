@@ -193,6 +193,24 @@
   padding: 0;
 }
 
+/* 観測を2件以上入れて届いた結果は「絞り込み」の動き(design.md「画面: 逆算」「観測を追加すると候補が
+   絞られるアニメーション」)。JS(ReverseScreen.tsx)が付け、animationend で外す。1件目の結果には付けない
+   (最初の推定は絞り込みではない)。 */
+.reverse-results__list.is-narrowing {
+  animation: results-narrow var(--duration-narrow) var(--ease-spring);
+}
+
+@keyframes results-narrow {
+  0% {
+    opacity: 0.4;
+    transform: scaleY(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
 .reverse-results__row {
   display: grid;
   grid-template-columns: auto 1fr auto;

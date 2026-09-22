@@ -50,6 +50,34 @@
   padding: var(--space-4);
 }
 
+/* 攻守入れ替え: 両方のカードに付く(design.md「動き」: カードが入れ替わる(0.35秒))。
+   JS(CalcScreen.tsx)がクリックで付け、animationend か、それが来ないとき(裏タブ等)のタイマーで外す。 */
+.calc-card.is-swapping {
+  animation: card-swap var(--duration-swap) var(--ease-spring);
+}
+
+@keyframes card-swap {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.97);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ホロ効果: 選択中のカード1枚だけ、ポインタ位置に連動するハイライト(design.md「動き」)。
+   --holo-x / --holo-y は JS(CalcScreen.tsx)がポインタ位置(0〜100%)から計算してインラインで設定する。 */
+.calc-card.is-holo {
+  background-image: radial-gradient(
+    circle at var(--holo-x, 50%) var(--holo-y, 50%),
+    var(--holo-highlight),
+    transparent 60%
+  );
+}
+
 .calc-card select {
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-input);
@@ -197,9 +225,28 @@
 }
 
 .calc-results__ko {
+  display: inline-block;
   font-size: var(--font-size-body);
   color: var(--text-secondary);
   text-align: right;
+}
+
+/* 確定数が変わった瞬間にバッジが弾む(design.md「動き」)。JS(CalcScreen.tsx)が変化した行だけに
+   is-pulsing を付け、animationend で外す。常時は回さない(CLAUDE.md ドメイン規約)。 */
+.calc-results__ko.is-pulsing {
+  animation: ko-pulse var(--duration-pulse) var(--ease-spring);
+}
+
+@keyframes ko-pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .calc-results__bar {
@@ -214,7 +261,7 @@
   height: 100%;
   border-radius: var(--radius-pill);
   /* ダメージバーの伸び縮み(design.md「動き」: spring アニメーションで減る)。 */
-  transition: width var(--duration-swap) ease;
+  transition: width var(--duration-swap) var(--ease-spring);
 }
 
 /* ネイティブのラジオは隠しているので、キーボード操作のフォーカス位置をラベル側に出す(WCAG 2.4.7)。 */

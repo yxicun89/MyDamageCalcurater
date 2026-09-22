@@ -1,0 +1,314 @@
+openapi: 3.0.3
+info:
+  title: pokecalc speed API
+  version: 0.2.0
+  description: |
+    素早さ比較の独立サービスの契約。
+    SP0 はヘルスチェックと、既定のレギュレーションで使用可能なポケモンの一覧(素早さ種族値つき)を返す。
+    SP1 は素早さの表(各ポケモン 6 行のプリセットを速い順に並べ、同じ値を 1 つの段にまとめたもの)を返す。
+    自分の位置(SP2)の endpoint は SP2 の ADR で足す。
+    契約の正は docs/adr/0600-speed-sp0-foundation.md・docs/adr/0601-speed-sp1-table.md と docs/speed-design.md。
+servers:
+  - url: /
+paths:
+  /healthz:
+    get:
+      operationId: health
+      summary: Pod health check
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /api/speed/healthz:
+    get:
+      operationId: publicHealth
+      summary: Ingress smoke check
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /api/speed/v1/pokemon:
+    get:
+      operationId: listPokemon
+      summary: List the pokemon available in the default regulation
+      description: |
+        Returns the pokemon of the service-local read model (ADR-0600 §4), which is the available set of
+        one regulation, sorted by pokemonId in ascending order (ADR-0600 §5).
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: The available pokemon with their base speed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PokemonListResponse'
+        '400':
+          description: X-Device-Id or X-Session-Id is missing, empty, or invalid (invalid_request)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: The pokemon read model is not configured (master_unavailable)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: An unexpected internal error (internal_error). The message is a fixed string; no internal detail is returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/speed/v1/table:
+    get:
+      operationId: getSpeedTable
+      summary: Get the speed table of the default regulation
+      description: |
+        Returns, for every pokemon of the service-local read model (ADR-0600 §4), one row per selected preset
+        (ADR-0601 §2), grouped into tiers of the same speed (ADR-0601 §3). Tiers are sorted by speed in
+        descending order; inside a tier, entries are sorted by pokemonId ascending, then by the preset order
+        of ADR-0601 §2. A tier with two or more entries is a speed tie.
+        Check order: headers (400) → query (400) → read model absent (503) → 200 (ADR-0601 §5).
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+        - name: presets
+          in: query
+          required: false
+          description: |
+            The rows to include, comma separated (ADR-0601 §4). Omitted means all six presets.
+            The order given does not affect the result. An unknown ID, a duplicate, or an empty value
+            (`presets=`) is 400 invalid_request.
+          style: form
+          explode: false
+          schema:
+            type: array
+            minItems: 1
+            uniqueItems: true
+            items:
+              $ref: '#/components/schemas/PresetId'
+          example:
+            - max-scarf
+      responses:
+        '200':
+          description: The speed table
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TableResponse'
+        '400':
+          description: X-Device-Id or X-Session-Id is missing, empty, or invalid, or presets is unknown, duplicated, or empty (invalid_request)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: The pokemon read model is not configured (master_unavailable)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: An unexpected internal error (internal_error). The message is a fixed string; no internal detail is returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  parameters:
+    DeviceId:
+      name: X-Device-Id
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    SessionId:
+      name: X-Session-Id
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+  schemas:
+    Health:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+    PokemonListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - regulationId
+        - pokemon
+      properties:
+        regulationId:
+          description: The regulation whose available set the list is (ADR-0600 §4).
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          example: example
+        pokemon:
+          description: The available pokemon, sorted by pokemonId in ascending order.
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SpeedPokemon'
+    SpeedPokemon:
+      type: object
+      additionalProperties: false
+      required:
+        - pokemonId
+        - nameJa
+        - types
+        - baseSpeed
+      properties:
+        pokemonId:
+          type: string
+          maxLength: 8
+          pattern: '^\d{4}-\d{3}$'
+          example: 9001-000
+        nameJa:
+          type: string
+          minLength: 1
+          example: テストカソウドリ
+        types:
+          description: One or two lowercase type IDs, for display only (the 18 types are not listed in the contract).
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            type: string
+            pattern: '^[a-z]+$'
+            example: fire
+        baseSpeed:
+          type: integer
+          minimum: 1
+          maximum: 255
+          example: 100
+    PresetId:
+      description: |
+        A row preset of the speed table (ADR-0601 §2), listed in the table order. Display names are client
+        resources and are not part of the contract.
+        uninvested = SP 0, neutral nature; neutral-max = SP 32, neutral; max = SP 32, speed-up nature;
+        max-scarf = max with Choice Scarf; max-plus1 = max at +1; max-plus2 = max at +2.
+      type: string
+      enum:
+        - uninvested
+        - neutral-max
+        - max
+        - max-scarf
+        - max-plus1
+        - max-plus2
+      example: max-scarf
+    TableResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - regulationId
+        - presets
+        - tiers
+      properties:
+        regulationId:
+          description: The regulation whose available set the table is (ADR-0600 §4).
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          example: example
+        presets:
+          description: The presets actually used, in the order of ADR-0601 §2 (not the query order).
+          type: array
+          minItems: 1
+          maxItems: 6
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/PresetId'
+        tiers:
+          description: Tiers of the same speed, sorted by speed in descending order.
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SpeedTier'
+    SpeedTier:
+      type: object
+      additionalProperties: false
+      required:
+        - speed
+        - entries
+      properties:
+        speed:
+          description: The in-battle speed shared by every entry of the tier.
+          type: integer
+          minimum: 1
+          example: 250
+        entries:
+          description: |
+            The rows with this speed, sorted by pokemonId ascending, then by the preset order of ADR-0601 §2.
+            Two or more entries mean a speed tie.
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SpeedTableEntry'
+    SpeedTableEntry:
+      type: object
+      additionalProperties: false
+      required:
+        - pokemonId
+        - nameJa
+        - types
+        - baseSpeed
+        - preset
+      properties:
+        pokemonId:
+          type: string
+          maxLength: 8
+          pattern: '^\d{4}-\d{3}$'
+          example: 9001-000
+        nameJa:
+          type: string
+          minLength: 1
+          example: テストカソウドリ
+        types:
+          description: One or two lowercase type IDs, for display only (the 18 types are not listed in the contract).
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            type: string
+            pattern: '^[a-z]+$'
+            example: fire
+        baseSpeed:
+          type: integer
+          minimum: 1
+          maximum: 255
+          example: 100
+        preset:
+          $ref: '#/components/schemas/PresetId'
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        message:
+          type: string
+    ErrorCode:
+      type: string
+      enum:
+        - invalid_request
+        - master_unavailable
+        - internal_error

@@ -261,6 +261,18 @@ func TestDecodeRejectsInvalidValues(t *testing.T) {
 			_, err := importer.DecodeConfig([]byte(`{"schemaVersion":1,"sources":{"pokeapi":"PENDING-PIN-COMMIT"},"excludeCalcSpecies":[],"excludeTypes":[],"nameJaLanguages":["ja"]}`))
 			return err
 		}()},
+		{"レギュレーションの minSourceGen が0(ADR-0103 §7・§9)", func() error {
+			_, err := importer.DecodeRegulationsFile([]byte(`{"schemaVersion":1,"regulations":[{"id":"test-reg","nameJa":"テストレギュ","isDefault":true,"startsOn":"","endsOn":"","showdownMod":"m","minSourceGen":0}]}`))
+			return err
+		}()},
+		{"レギュレーションの minSourceGen が無い(欠落を黙って0のまま通さない。ADR-0103 §7・§9)", func() error {
+			_, err := importer.DecodeRegulationsFile([]byte(`{"schemaVersion":1,"regulations":[{"id":"test-reg","nameJa":"テストレギュ","isDefault":true,"startsOn":"","endsOn":"","showdownMod":"m"}]}`))
+			return err
+		}()},
+		{"レギュレーションの minSourceGen が負(ADR-0103 §7・§9)", func() error {
+			_, err := importer.DecodeRegulationsFile([]byte(`{"schemaVersion":1,"regulations":[{"id":"test-reg","nameJa":"テストレギュ","isDefault":true,"startsOn":"","endsOn":"","showdownMod":"m","minSourceGen":-1}]}`))
+			return err
+		}()},
 	}
 	for _, tt := range tests {
 		if !errors.Is(tt.err, importer.ErrInvalidInput) {
