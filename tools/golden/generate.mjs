@@ -159,6 +159,37 @@ championsFixed.push(vector(genC,'ko-four-hits','Snorlax','Snorlax','Body Slam',{
 // misty-dragon: 攻撃側を Haxorus → Goodra(接地したドラゴン単タイプ)に差し替え。
 championsFixed.push(vector(genC,'misty-dragon','Goodra','Snorlax','Dragon Claw',{terrain:'misty'}));
 
+// --- 特性によるタイプの無効・吸収(ADR-0106 §決定8) ---------------------------------
+// Champions の random の特性プールには足さない(プールを変えると乱数列が動き、
+// random.jsonl.gz 10,000件すべての期待値が変わってしまうため)。専用ベクタだけを
+// championsFixed に足す。特性ごとに「無効/吸収」「対照(別タイプ)」「組合せ
+// (急所・壁・天候・ランク)」の3件。Dry Skin・Storm Drain は入れない(ADR-0106 §限界1・2)。
+const immunityCases = [
+  {slug:'levitate', ability:'Levitate', attacker:'Garchomp', defender:'Snorlax',
+    blockedMove:'Earth Power', controlMove:'Flamethrower', comboOptions:{critical:true, d:{ability:'Levitate'}}},
+  {slug:'earth-eater', ability:'Earth Eater', attacker:'Garchomp', defender:'Snorlax',
+    blockedMove:'Drill Run', controlMove:'Flamethrower', comboOptions:{screen:'AuroraVeil', d:{ability:'Earth Eater'}}},
+  {slug:'water-absorb', ability:'Water Absorb', attacker:'Charizard', defender:'Blastoise',
+    blockedMove:'Surf', controlMove:'Body Slam', comboOptions:{weather:'sun', d:{ability:'Water Absorb'}}},
+  {slug:'volt-absorb', ability:'Volt Absorb', attacker:'Charizard', defender:'Blastoise',
+    blockedMove:'Thunderbolt', controlMove:'Body Slam',
+    comboOptions:{a:{ranks:{atk:6,spa:6}}, d:{ability:'Volt Absorb'}}},
+  {slug:'motor-drive', ability:'Motor Drive', attacker:'Charizard', defender:'Blastoise',
+    blockedMove:'Thunderbolt', controlMove:'Body Slam', comboOptions:{critical:true, d:{ability:'Motor Drive'}}},
+  {slug:'lightning-rod', ability:'Lightning Rod', attacker:'Charizard', defender:'Blastoise',
+    blockedMove:'Thunderbolt', controlMove:'Body Slam', comboOptions:{screen:'Reflect', d:{ability:'Lightning Rod'}}},
+  {slug:'flash-fire', ability:'Flash Fire', attacker:'Metagross', defender:'Goodra',
+    blockedMove:'Flamethrower', controlMove:'Body Slam', comboOptions:{weather:'rain', d:{ability:'Flash Fire'}}},
+  {slug:'sap-sipper', ability:'Sap Sipper', attacker:'Metagross', defender:'Garchomp',
+    blockedMove:'Energy Ball', controlMove:'Body Slam',
+    comboOptions:{a:{ranks:{atk:6,spa:6}}, d:{ability:'Sap Sipper'}}},
+];
+for (const c of immunityCases) {
+  championsFixed.push(vector(genC,`${c.slug}/immune`,c.attacker,c.defender,c.blockedMove,{d:{ability:c.ability}}));
+  championsFixed.push(vector(genC,`${c.slug}/control`,c.attacker,c.defender,c.controlMove,{d:{ability:c.ability}}));
+  championsFixed.push(vector(genC,`${c.slug}/combined`,c.attacker,c.defender,c.blockedMove,c.comboOptions));
+}
+
 // --- legacy-effects の固定部分(gen9。元の種族のまま) --------------------------
 const legacyScenarios = [
   ['choiceband',{a:{item:'Choice Band'}}],
@@ -370,7 +401,7 @@ const metadata={
     {scope:'species',names:excludedSpeciesNames,reason:'Internal calc-only pseudo-form; not a selectable in-game form (P2-1b)'},
     {scope:'species',names:[...genC.species].filter(s=>s.baseStats.hp===1).map(s=>s.name),reason:'HP=1 special mechanic is outside Champions SP formula; not present in the current Champions set'},
     {scope:'moves',reason:'Only the listed fixed-power single-hit moves; excludes variable/fixed damage, multi-hit, forced criticals, alternate attack/defense stats, screen removal, terrain-specific move mechanics, tera/Z/Max moves'},
-    {scope:'abilities/items',reason:'Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors'},
+    {scope:'abilities/items',reason:'Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2)'},
     {scope:'terrain',reason:'Flying species excluded from terrain-enabled random/fixed cases; ADR-0005 assumes grounded, no Levitate/Air Balloon admitted'},
     {scope:'battle',reason:'No double/tera/Dynamax/form transformations or unsupported status effects'},
     {scope:'KO',reason:'Smogon residual/consumable multi-turn model differs from ADR-0006; direct smogonKO cross-check only residual/consumable-free fixed cases with 1-4 hits'},

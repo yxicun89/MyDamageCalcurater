@@ -336,13 +336,62 @@ func itemsToEngine(path string, ds []*itemDTO) ([]*engine.Item, error) {
 	return out, nil
 }
 
+// absorbEffectDTO は防御側が吸収したときの副次効果(ADR-0106 §決定2)。
+// ゼロ値({})は「吸収するが副次効果は持たない」(もらいび等)を表す正しい値。
+type absorbEffectDTO struct {
+	HealNumerator   int    `json:"healNumerator"`
+	HealDenominator int    `json:"healDenominator"`
+	BoostStat       string `json:"boostStat"`
+	BoostStages     int    `json:"boostStages"`
+}
+
+func (e absorbEffectDTO) toEngine(path string) (engine.AbsorbEffect, error) {
+	var out engine.AbsorbEffect
+	hasNum, hasDen := e.HealNumerator != 0, e.HealDenominator != 0
+	if hasNum != hasDen {
+		return engine.AbsorbEffect{}, fail(CodeInvalidInput,
+			"%s: healNumerator と healDenominator は組で指定する", path)
+	}
+	if hasNum {
+		if e.HealDenominator < 1 || e.HealDenominator > 16 {
+			return engine.AbsorbEffect{}, fail(CodeInvalidInput, "%s.healDenominator は1..16の範囲", path)
+		}
+		if e.HealNumerator < 1 || e.HealNumerator > e.HealDenominator {
+			return engine.AbsorbEffect{}, fail(CodeInvalidInput,
+				"%s.healNumerator は1..healDenominatorの範囲", path)
+		}
+		out.HealNumerator, out.HealDenominator = e.HealNumerator, e.HealDenominator
+	}
+	hasStat, hasStages := e.BoostStat != "", e.BoostStages != 0
+	if hasStat != hasStages {
+		return engine.AbsorbEffect{}, fail(CodeInvalidInput,
+			"%s: boostStat と boostStages は組で指定する", path)
+	}
+	if hasStat {
+		if e.BoostStat == string(engine.StatHP) {
+			return engine.AbsorbEffect{}, enumError(path+".boostStat", e.BoostStat)
+		}
+		stat, err := parseStatKey(path+".boostStat", e.BoostStat, false)
+		if err != nil {
+			return engine.AbsorbEffect{}, err
+		}
+		if e.BoostStages < 1 || e.BoostStages > 6 {
+			return engine.AbsorbEffect{}, fail(CodeInvalidInput, "%s.boostStages は1..6の範囲", path)
+		}
+		out.BoostStat, out.BoostStages = stat, e.BoostStages
+	}
+	return out, nil
+}
+
 type abilityEffectDTO struct {
-	StabMod              int            `json:"stabMod"`
-	OffBoostType         string         `json:"offBoostType"`
-	OffBoostTypeMod      int            `json:"offBoostTypeMod"`
-	DefResistType        map[string]int `json:"defResistType"`
-	ReduceSuperEffective int            `json:"reduceSuperEffective"`
-	IgnoresBurn          bool           `json:"ignoresBurn"`
+	StabMod              int                        `json:"stabMod"`
+	OffBoostType         string                     `json:"offBoostType"`
+	OffBoostTypeMod      int                        `json:"offBoostTypeMod"`
+	DefResistType        map[string]int             `json:"defResistType"`
+	DefImmuneTypes       []string                   `json:"defImmuneTypes"`
+	DefAbsorbTypes       map[string]absorbEffectDTO `json:"defAbsorbTypes"`
+	ReduceSuperEffective int                        `json:"reduceSuperEffective"`
+	IgnoresBurn          bool                       `json:"ignoresBurn"`
 }
 
 func (e abilityEffectDTO) toEngine(path string) (*engine.AbilityEffect, error) {
@@ -362,6 +411,46 @@ func (e abilityEffectDTO) toEngine(path string) (*engine.AbilityEffect, error) {
 				return nil, err
 			}
 			out.DefResistType[t] = e.DefResistType[k]
+		}
+	}
+	// immuneSet は defAbsorbTypes との重複検査に使う(同じタイプを両方に書くのは不正。ADR-0106 §決定1)。
+	immuneSet := make(map[engine.Type]bool, len(e.DefImmuneTypes))
+	if e.DefImmuneTypes != nil {
+		if len(e.DefImmuneTypes) == 0 {
+			return nil, fail(CodeInvalidInput, "%s.defImmuneTypes は空にできない", path)
+		}
+		out.DefImmuneTypes = make([]engine.Type, 0, len(e.DefImmuneTypes))
+		for i, v := range e.DefImmuneTypes {
+			t, err := parseType(fmt.Sprintf("%s.defImmuneTypes[%d]", path, i), v, false)
+			if err != nil {
+				return nil, err
+			}
+			if immuneSet[t] {
+				return nil, fail(CodeInvalidInput, "%s.defImmuneTypes にタイプ %q が重複している", path, v)
+			}
+			immuneSet[t] = true
+			out.DefImmuneTypes = append(out.DefImmuneTypes, t)
+		}
+	}
+	if e.DefAbsorbTypes != nil {
+		if len(e.DefAbsorbTypes) == 0 {
+			return nil, fail(CodeInvalidInput, "%s.defAbsorbTypes は空にできない", path)
+		}
+		out.DefAbsorbTypes = make(map[engine.Type]engine.AbsorbEffect, len(e.DefAbsorbTypes))
+		for _, k := range sortedKeys(e.DefAbsorbTypes) {
+			t, err := parseType(path+".defAbsorbTypes", k, false)
+			if err != nil {
+				return nil, err
+			}
+			if immuneSet[t] {
+				return nil, fail(CodeInvalidInput,
+					"%s.defAbsorbTypes と defImmuneTypes に同じタイプ %q がある", path, k)
+			}
+			abs, err := e.DefAbsorbTypes[k].toEngine(fmt.Sprintf("%s.defAbsorbTypes.%s", path, k))
+			if err != nil {
+				return nil, err
+			}
+			out.DefAbsorbTypes[t] = abs
 		}
 	}
 	return out, nil

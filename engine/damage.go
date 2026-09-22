@@ -70,6 +70,16 @@ type DamageInput struct {
 	TypeChart TypeChart
 }
 
+// NullifyKind は特性でダメージが 0 になった理由(ADR-0106)。"" は無効化されていない。
+// タイプ由来の無効(Effectiveness == 0)はここには含めない(ADR-0017 §5・oracle champions.ts L262)。
+type NullifyKind string
+
+const (
+	NullifyNone   NullifyKind = ""
+	NullifyImmune NullifyKind = "immune"
+	NullifyAbsorb NullifyKind = "absorb"
+)
+
 // DamageResult はダメージ計算の結果。確定数は P1-5 で付与する。
 type DamageResult struct {
 	Rolls         [16]int // 16段階の乱数ダメージ(非減少)
@@ -77,7 +87,25 @@ type DamageResult struct {
 	STAB          bool    // タイプ一致
 	Category      MoveCategory
 	DefenderHP    int
-	KO            KOChance // 確定数/乱数n発
+	KO            KOChance    // 確定数/乱数n発
+	Nullified     NullifyKind // 特性による無効・吸収でダメージが0のとき(ADR-0106)
+}
+
+// abilityNullification は防御側の特性がその攻撃タイプを無効・吸収するかを返す。
+// 無効(DefImmuneTypes)が吸収(DefAbsorbTypes)に勝つ(ADR-0106 §決定1: 不正な重複入力でも結果を揺らさない)。
+func abilityNullification(e *AbilityEffect, moveType Type) NullifyKind {
+	if e == nil {
+		return NullifyNone
+	}
+	for _, t := range e.DefImmuneTypes {
+		if t == moveType {
+			return NullifyImmune
+		}
+	}
+	if _, ok := e.DefAbsorbTypes[moveType]; ok {
+		return NullifyAbsorb
+	}
+	return NullifyNone
 }
 
 // MinDamage / MaxDamage は 16段階の下限・上限。
@@ -185,8 +213,14 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 	res.Effectiveness = eff.Multiplier()
 	_, res.STAB = stabModifier(in, moveType)
 
-	// 変化技・威力0・無効相性はダメージ0。
-	if in.Move.Category == CategoryStatus || in.Move.Power <= 0 || eff.IsImmune() {
+	// タイプ由来の無効が先(oracle champions.ts L262 / ADR-0017 §5)。
+	// 同じタイプを特性でも無効にしている場合は、タイプ由来として報告する(Nullified は空のまま)。
+	if !eff.IsImmune() {
+		res.Nullified = abilityNullification(in.Defender.Ability.Effect, moveType)
+	}
+
+	// 変化技・威力0・無効相性・特性による無効/吸収はダメージ0。
+	if in.Move.Category == CategoryStatus || in.Move.Power <= 0 || eff.IsImmune() || res.Nullified != NullifyNone {
 		return res, nil
 	}
 
