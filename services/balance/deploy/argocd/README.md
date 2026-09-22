@@ -64,9 +64,9 @@ cd "$(git rev-parse --show-toplevel)"
 kubectl -n pokecalc rollout status deployment/balance --timeout=120s
 kubectl -n pokecalc get deploy balance -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
 grep digest services/balance/deploy/k8s/overlays/gitops/kustomization.yaml
-curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/api/balance/healthz
+for i in $(seq 1 15); do code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/balance/healthz); [ "$code" = 200 ] && break; sleep 2; done; echo "health=$code"
 ```
-確認: 2つ目と3つ目の `sha256:` の値が一致し、最後が `200`。
+確認: 2つ目と3つ目の `sha256:` の値が一致し、最後が `health=200`(ロールアウト直後の 502 は再試行で消える)。
 
 ## 7. local の read model で動かす状態に戻す(必要なとき)
 
