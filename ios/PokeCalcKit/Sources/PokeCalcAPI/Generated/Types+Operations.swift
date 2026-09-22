@@ -13,6 +13,10 @@ public import struct Foundation.Date
 public enum Operations {
     /// ポケモンを日本語名で前方一致検索
     ///
+    /// 既定のレギュレーション(コードに書かず DB から引く。ADR-0105)の使用可能集合だけを返す(並びは ID 順)。
+    /// `format` は v1 では結果に影響しない(使用可能集合は形式で分かれていない)。
+    ///
+    ///
     /// - Remark: HTTP `GET /api/pokedex/species`.
     /// - Remark: Generated from `#/paths//api/pokedex/species/get(searchSpecies)`.
     public enum SearchSpecies {
@@ -26,6 +30,8 @@ public enum Operations {
                 public var q: Swift.String?
                 /// - Remark: Generated from `#/paths/api/pokedex/species/GET/query/format`.
                 public var format: Components.Schemas.Format?
+                /// 範囲外・整数でない値は 400 `invalid_input`
+                ///
                 /// - Remark: Generated from `#/paths/api/pokedex/species/GET/query/limit`.
                 public var limit: Swift.Int?
                 /// Creates a new `Query`.
@@ -33,7 +39,7 @@ public enum Operations {
                 /// - Parameters:
                 ///   - q: 日本語名の前方一致(空なら全件・limit まで)
                 ///   - format:
-                ///   - limit:
+                ///   - limit: 範囲外・整数でない値は 400 `invalid_input`
                 public init(
                     q: Swift.String? = nil,
                     format: Components.Schemas.Format? = nil,
@@ -170,7 +176,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202)
+            /// gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
             ///
             /// - Remark: Generated from `#/paths//api/pokedex/species/get(searchSpecies)/responses/503`.
             ///
@@ -245,6 +251,10 @@ public enum Operations {
     }
     /// 種族の詳細(タイプ・種族値・特性・覚える技)
     ///
+    /// 使用可能集合の外の種族も返す(絞り込みは検索の仕事)。`abilities` は slot 順、
+    /// `learnset` は習得技 ∩ 既定のレギュレーションの使用可能な技(ID 昇順)。
+    ///
+    ///
     /// - Remark: HTTP `GET /api/pokedex/species/{key}`.
     /// - Remark: Generated from `#/paths//api/pokedex/species/{key}/get(getSpecies)`.
     public enum GetSpecies {
@@ -252,14 +262,14 @@ public enum Operations {
         public struct Input: Sendable, Hashable {
             /// - Remark: Generated from `#/paths/api/pokedex/species/{key}/GET/path`.
             public struct Path: Sendable, Hashable {
-                /// {図鑑番号4桁}-{フォルム3桁} 例 0445-000
+                /// {図鑑番号4桁}-{フォルム3桁} 例 0445-000。形式が違えば 400 `invalid_input`
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/species/{key}/GET/path/key`.
                 public var key: Components.Schemas.SpeciesKey
                 /// Creates a new `Path`.
                 ///
                 /// - Parameters:
-                ///   - key: {図鑑番号4桁}-{フォルム3桁} 例 0445-000
+                ///   - key: {図鑑番号4桁}-{フォルム3桁} 例 0445-000。形式が違えば 400 `invalid_input`
                 public init(key: Components.Schemas.SpeciesKey) {
                     self.key = key
                 }
@@ -362,17 +372,45 @@ public enum Operations {
                     }
                 }
             }
-            /// エラー
+            public struct NotFound: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/pokedex/species/{key}/GET/responses/404/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/pokedex/species/{key}/GET/responses/404/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetSpecies.Output.NotFound.Body
+                /// Creates a new `NotFound`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetSpecies.Output.NotFound.Body) {
+                    self.body = body
+                }
+            }
+            /// 該当する種族が無い(`not_found`)
             ///
             /// - Remark: Generated from `#/paths//api/pokedex/species/{key}/get(getSpecies)/responses/404`.
             ///
             /// HTTP response code: `404 notFound`.
-            case notFound(Components.Responses._Error)
+            case notFound(Operations.GetSpecies.Output.NotFound)
             /// The associated value of the enum case if `self` is `.notFound`.
             ///
             /// - Throws: An error if `self` is not `.notFound`.
             /// - SeeAlso: `.notFound`.
-            public var notFound: Components.Responses._Error {
+            public var notFound: Operations.GetSpecies.Output.NotFound {
                 get throws {
                     switch self {
                     case let .notFound(response):
@@ -413,7 +451,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202)
+            /// gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
             ///
             /// - Remark: Generated from `#/paths//api/pokedex/species/{key}/get(getSpecies)/responses/503`.
             ///
@@ -488,6 +526,8 @@ public enum Operations {
     }
     /// 技を日本語名で前方一致検索
     ///
+    /// 既定のレギュレーションの使用可能集合だけを返す(並びは ID 順。ADR-0105)。
+    ///
     /// - Remark: HTTP `GET /api/pokedex/moves`.
     /// - Remark: Generated from `#/paths//api/pokedex/moves/get(searchMoves)`.
     public enum SearchMoves {
@@ -495,15 +535,19 @@ public enum Operations {
         public struct Input: Sendable, Hashable {
             /// - Remark: Generated from `#/paths/api/pokedex/moves/GET/query`.
             public struct Query: Sendable, Hashable {
+                /// 日本語名の前方一致(空なら全件・limit まで)
+                ///
                 /// - Remark: Generated from `#/paths/api/pokedex/moves/GET/query/q`.
                 public var q: Swift.String?
+                /// 範囲外・整数でない値は 400 `invalid_input`
+                ///
                 /// - Remark: Generated from `#/paths/api/pokedex/moves/GET/query/limit`.
                 public var limit: Swift.Int?
                 /// Creates a new `Query`.
                 ///
                 /// - Parameters:
-                ///   - q:
-                ///   - limit:
+                ///   - q: 日本語名の前方一致(空なら全件・limit まで)
+                ///   - limit: 範囲外・整数でない値は 400 `invalid_input`
                 public init(
                     q: Swift.String? = nil,
                     limit: Swift.Int? = nil
@@ -638,7 +682,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202)
+            /// gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
             ///
             /// - Remark: Generated from `#/paths//api/pokedex/moves/get(searchMoves)/responses/503`.
             ///
@@ -713,6 +757,8 @@ public enum Operations {
     }
     /// 持ち物を日本語名で前方一致検索
     ///
+    /// 既定のレギュレーションの使用可能集合だけを返す(並びは ID 順。ADR-0105)。
+    ///
     /// - Remark: HTTP `GET /api/pokedex/items`.
     /// - Remark: Generated from `#/paths//api/pokedex/items/get(searchItems)`.
     public enum SearchItems {
@@ -720,15 +766,19 @@ public enum Operations {
         public struct Input: Sendable, Hashable {
             /// - Remark: Generated from `#/paths/api/pokedex/items/GET/query`.
             public struct Query: Sendable, Hashable {
+                /// 日本語名の前方一致(空なら全件・limit まで)
+                ///
                 /// - Remark: Generated from `#/paths/api/pokedex/items/GET/query/q`.
                 public var q: Swift.String?
+                /// 範囲外・整数でない値は 400 `invalid_input`
+                ///
                 /// - Remark: Generated from `#/paths/api/pokedex/items/GET/query/limit`.
                 public var limit: Swift.Int?
                 /// Creates a new `Query`.
                 ///
                 /// - Parameters:
-                ///   - q:
-                ///   - limit:
+                ///   - q: 日本語名の前方一致(空なら全件・limit まで)
+                ///   - limit: 範囲外・整数でない値は 400 `invalid_input`
                 public init(
                     q: Swift.String? = nil,
                     limit: Swift.Int? = nil
@@ -863,7 +913,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202)
+            /// gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
             ///
             /// - Remark: Generated from `#/paths//api/pokedex/items/get(searchItems)/responses/503`.
             ///
@@ -937,6 +987,8 @@ public enum Operations {
         }
     }
     /// 性格の一覧(補正する能力)
+    ///
+    /// 使用可能集合で絞らない(全性格。並びは ID 順。ADR-0105)。
     ///
     /// - Remark: HTTP `GET /api/pokedex/natures`.
     /// - Remark: Generated from `#/paths//api/pokedex/natures/get(listNatures)`.
@@ -1063,7 +1115,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// gateway から pokedex-svc に届かない(`upstream_unavailable`。ADR-0202)
+            /// gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
             ///
             /// - Remark: Generated from `#/paths//api/pokedex/natures/get(listNatures)/responses/503`.
             ///
