@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -37,9 +38,10 @@ const (
 
 // stack は gateway の構成の変え方。
 type stack struct {
-	calcDown       bool    // calc の上流を閉じたサーバにする(接続拒否 → 503)
-	pokedexAnswers bool    // pokedex の上流を 200 を返す偽物にする(スモークは 503 を期待するので落ちるべき)
-	web            webMode // Web の上流の状態(ゼロ値は k3d で Web 未デプロイのとき)
+	calcDown bool             // calc の上流を閉じたサーバにする(接続拒否 → 503)
+	pokedex  pokedexMode      // pokedex の上流の状態(ゼロ値は GATEWAY_POKEDEX_URL 未設定。ADR-0206)
+	record   *pokedexRecorder // 非 nil なら pokedex が受けたパスを記録する(スモークが本当に引きに行ったかの確認)
+	web      webMode          // Web の上流の状態(ゼロ値は k3d で Web 未デプロイのとき)
 }
 
 // closedURL は「さっきまで待ち受けていたが今は閉じた」アドレス(接続拒否になる)。
@@ -92,11 +94,13 @@ func startStack(t *testing.T, s stack) string {
 	}
 
 	cfg := httpapi.Config{CalcURL: calcURL, UpstreamTimeout: 5 * time.Second, WebURL: webURLFor(t, s.web)}
-	if s.pokedexAnswers {
-		pokedex := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[]`))
-		}))
+	if s.pokedex != pokedexUnset {
+		var upstream http.Handler = newPokedexStub(t, s.pokedex)
+		if s.record != nil {
+			s.record.next = upstream
+			upstream = s.record
+		}
+		pokedex := httptest.NewServer(upstream)
 		t.Cleanup(pokedex.Close)
 		cfg.PokedexURL = mustURL(t, pokedex.URL)
 	}
@@ -334,7 +338,6 @@ func TestSmokeScriptFailsOnBrokenStack(t *testing.T) {
 		wantText string
 	}{
 		{"calc に届かない(503)", stack{calcDown: true}, "HTTP 503"},
-		{"pokedex が答える(503 の確認が効いている)", stack{pokedexAnswers: true}, "/api/pokedex/natures"},
 		// ADR-0205: gateway が `/` を 404 にする(GATEWAY_WEB_URL 未設定)なら、Web を後ろに置けていないので失敗。
 		{"gateway が / を 404 にする(GATEWAY_WEB_URL 未設定)", stack{web: webUnset}, "api smoke: GET / "},
 		{"Web が 500 を返す(200 でも 503 upstream_unavailable でもない)", stack{web: webBroken}, "api smoke: GET / "},
@@ -347,6 +350,113 @@ func TestSmokeScriptFailsOnBrokenStack(t *testing.T) {
 			}
 			if !strings.Contains(out, tt.wantText) {
 				t.Errorf("smoke.sh の出力に %q が無い:\n%s", tt.wantText, out)
+			}
+		})
+	}
+}
+
+// --- ADR-0206: マスタの入手元(pokedex-svc)につないだときのスモーク ---------------------------------
+
+// AC-P6(ADR-0206 §3): pokedex-svc に繋がっている構成では、計算に使う ID(無補正の性格・種族・威力のある
+// 物理技)を公開 API から取り直して calc・bulk・reverse を叩き、成功する。偽 pokedex-svc は calc-svc と同じ
+// 例のマスタから応答を作るので、引いた ID はそのまま計算に使える(k3d では pokedex-svc の DB が同じ役)。
+//
+// 「引いた」と名乗るだけで実際は架空 ID を使っている、という空振りを防ぐため、(1) 出力の入手元と ID が
+// 例のマスタから選んだ期待値と一致すること (2) /api/pokedex/species と /api/pokedex/moves を実際に
+// 叩いていること の両方を確かめる。
+func TestSmokeScriptDiscoversIdsFromPokedex(t *testing.T) {
+	rec := &pokedexRecorder{}
+	out, err := runSmoke(t, startStack(t, stack{pokedex: pokedexServesMaster, record: rec}), "3")
+	if err != nil {
+		t.Fatalf("smoke.sh が失敗: %v\n%s", err, out)
+	}
+	wantNature, wantSpecies, wantMove := discoveredIDs(t)
+	for _, want := range []string{
+		"pokedex=200",
+		"master=pokedex",
+		"species=" + wantSpecies,
+		"move=" + wantMove,
+		"nature=" + wantNature,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("smoke.sh の出力に %q が無い:\n%s", want, out)
+		}
+	}
+	for _, want := range []string{"/api/pokedex/natures", "/api/pokedex/species", "/api/pokedex/moves"} {
+		if !slices.Contains(rec.Paths(), want) {
+			t.Errorf("smoke.sh が %s を叩いていない(実際に pokedex から ID を引くこと): %q", want, rec.Paths())
+		}
+	}
+}
+
+// AC-P6(ADR-0206 §3): 候補の先頭の技が、一覧では威力のある物理技に見えるのに計算するとダメージが 0 になる
+// (本物では相性で無効になる組み合わせ)場合でも、次の候補を試して成功する。
+func TestSmokeScriptTriesAnotherMoveWhenTheFirstDealsNoDamage(t *testing.T) {
+	out, err := runSmoke(t, startStack(t, stack{pokedex: pokedexFirstMoveUnusable}), "3")
+	if err != nil {
+		t.Fatalf("smoke.sh が失敗(先頭の候補が駄目なら次を試すべき): %v\n%s", err, out)
+	}
+	_, _, wantMove := discoveredIDs(t)
+	if !strings.Contains(out, "move="+wantMove) {
+		t.Errorf("smoke.sh の出力に %q が無い(ダメージの出る技に切り替わること):\n%s", "move="+wantMove, out)
+	}
+}
+
+// AC-P7(ADR-0206 §4): /api/pokedex/natures の状態ごとの扱い。200 と 503(upstream_unavailable /
+// master_unavailable)は成功、それ以外は失敗。DB 未投入(master_unavailable)のときは初回の投入
+// (`make import-k8s`)が要ることを出力する。
+func TestSmokeScriptPokedexStates(t *testing.T) {
+	tests := []struct {
+		name     string
+		mode     pokedexMode
+		wantPass bool
+		wantText []string
+	}{
+		{"未設定(make dev・pokedex-svc の無いクラスタ)", pokedexUnset, true, []string{"pokedex=503", "master=example"}},
+		{"投入済み", pokedexServesMaster, true, []string{"pokedex=200", "master=pokedex"}},
+		{"DB 未投入(master_unavailable)", pokedexEmptyDB, true, []string{"pokedex=503", "master=example", "make import-k8s"}},
+		{"500(未知の最終状態)", pokedexServerError, false, []string{"/api/pokedex/natures"}},
+		{"404(ルートが無い)", pokedexNotFound, false, []string{"/api/pokedex/natures"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := runSmoke(t, startStack(t, stack{pokedex: tt.mode}), "1")
+			if tt.wantPass && err != nil {
+				t.Fatalf("smoke.sh が失敗(成功するべき): %v\n%s", err, out)
+			}
+			if !tt.wantPass && err == nil {
+				t.Fatalf("smoke.sh が成功した(失敗するべき):\n%s", out)
+			}
+			for _, want := range tt.wantText {
+				if !strings.Contains(out, want) {
+					t.Errorf("smoke.sh の出力に %q が無い:\n%s", want, out)
+				}
+			}
+		})
+	}
+}
+
+// AC-P8(ADR-0206 §4): pokedex が 200 でも、計算に使える ID を引けないなら失敗する(確認が空振りしない)。
+// 旧 TestSmokeScriptFailsOnBrokenStack の「pokedex が答える」の行の移行先。
+func TestSmokeScriptFailsOnUnusablePokedexData(t *testing.T) {
+	tests := []struct {
+		name     string
+		mode     pokedexMode
+		wantText string
+	}{
+		{"無補正の性格が無い", pokedexNoNeutralNature, "/api/pokedex/natures"},
+		{"種族が空", pokedexNoSpecies, "/api/pokedex/species"},
+		{"威力のある物理技が無い", pokedexNoDamagingMove, "/api/pokedex/moves"},
+		{"どの候補の技もダメージが 0", pokedexOnlyUnusableMoves, "/api/calc"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := runSmoke(t, startStack(t, stack{pokedex: tt.mode}), "1")
+			if err == nil {
+				t.Fatalf("smoke.sh が成功した(使えないデータでは失敗するべき):\n%s", out)
+			}
+			if !strings.Contains(out, tt.wantText) {
+				t.Errorf("smoke.sh の出力に %q が無い(何を引けなかったのか分かること):\n%s", tt.wantText, out)
 			}
 		})
 	}
