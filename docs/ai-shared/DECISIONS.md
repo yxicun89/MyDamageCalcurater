@@ -597,7 +597,6 @@ up.sh は `pokecalc/calc:local` / `pokecalc/gateway:local` をビルド・import
 up.sh の最後で `make api-docker-build` と `k3d image import` を呼ぶ形にするかは、up.sh の持ち主(データレーン・整備レーン)の判断に任せる。API レーンは scripts/up.sh を変えない。
 Reason: critic の推奨。共有スクリプトは他レーンの範囲のため。
 Impact: `api-k3d-deploy` は他レーンのリソースに触れないよう、常に API 専用の overlay(deploy/k8s/overlays/local-api)だけを適用する(ADR-0203)。
->>>>>>> origin/main
 
 ## 2026-09-22: iOS レーンの統合(PR #31)
 Decision: P6-1(ADR-0500)・P6-2a 計算画面・P3-1/P3-2 の契約変更への追従を PR #31 で main にマージした(critic はそれぞれ PASS。make test / lint / build / check-publishable / ios-test が成功)。
@@ -660,6 +659,11 @@ Impact(データレーンへの提案。既定案): (1) pokedex-svc(P2-3)で `GE
 (2) natures テーブル(id, name_ja, plus, minus)を追加し、/api/pokedex/natures と内部 API の両方で使う。(3) MasterExport の species には showdownId を含める(共通マスタの Species が形式を検証するため。nameEn は含めない)。
 API レーンの後続: pokedex-svc のデプロイ後に calc の local overlay を URL 方式(`CALC_MASTER_URL=http://pokedex`)に切り替える。
 Web / iOS へ: openapi に tag `internal` の操作と Master* の型が増える(web/src/api/openapi.gen.ts はこの PR で再生成済み)。iOS は生成し直すか、生成設定で `internal` タグを除外する。
+
+## 2026-09-22: PR #30(API P3-3)・PR #42(API P3-4 マスタを pokedex-svc の内部 API から)を main に統合
+Decision: どちらも critic PASS、make test・lint・build・check-publishable 0 件・api-kustomize・make gen 差分なし、k3d の api-smoke 成功、開いている他の PR と未マージのブランチとの重なりが無いこと(#42 のときは #39 がドキュメントのみ)を確認してマージした。
+Reason: ユーザーの指示(テストが通り他レーンを確認済みならマージしてよい)。
+Impact: API レーンの Phase 3 と P3-4 は完了。次は Web レーンの依頼(GATEWAY_WEB_URL)と DOC-api。
 
 
 ## 2026-09-22: Web P4-9 を統合(PR #35)

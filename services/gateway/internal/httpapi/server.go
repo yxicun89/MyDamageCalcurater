@@ -33,6 +33,9 @@ type Config struct {
 	PokedexURL *url.URL
 	// AssetsURL は画像配信(MinIO)の基底 URL。nil なら /assets/* は 404 not_found。
 	AssetsURL *url.URL
+	// WebURL は Web の静的配信(nginx)の基底 URL(ADR-0205)。設定されていれば /api・/assets/*・/healthz・
+	// /internal のどれにも当たらない GET / HEAD を転送する。nil なら従来どおり(それらのパスは 404 not_found)。
+	WebURL *url.URL
 	// CORSAllowedOrigins は Origin と完全一致で照合する許可オリジン。空なら CORS ヘッダを付けない。
 	CORSAllowedOrigins []string
 	// UpstreamTimeout は上流の応答ヘッダを待つ上限。超えたら 503 upstream_unavailable。0 以下は不正。
@@ -48,6 +51,7 @@ type gateway struct {
 	calcProxy    *httputil.ReverseProxy
 	pokedexProxy *httputil.ReverseProxy // nil なら /api/pokedex/* は 503(PokedexURL 未設定)
 	assetsProxy  *httputil.ReverseProxy // nil なら /assets/* は 404(AssetsURL 未設定)
+	webProxy     *httputil.ReverseProxy // nil なら予約パス以外の GET / HEAD は 404(WebURL 未設定。ADR-0205)
 }
 
 // NewHandler は gateway の HTTP ハンドラ全体を組み立てる。Config が不正なら ErrInvalidConfig を包んで返す。
@@ -63,6 +67,9 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	}
 	if cfg.AssetsURL != nil {
 		g.assetsProxy = newReverseProxy(cfg.AssetsURL, cfg.UpstreamTimeout, cfg.transport, g.originAllowed)
+	}
+	if cfg.WebURL != nil {
+		g.webProxy = newReverseProxy(cfg.WebURL, cfg.UpstreamTimeout, cfg.transport, g.originAllowed)
 	}
 
 	e := echo.New()
@@ -111,16 +118,23 @@ func (g *gateway) serve(c *echo.Context) error {
 		return c.NoContent(http.StatusNoContent)
 	}
 
-	// 2. ドットセグメントは拒否(どの上流にも送らない)。gateway 自身の応答。
+	// 2. ドットセグメント・空セグメント(連続スラッシュ)は拒否(どの上流にも送らない)。gateway 自身の応答。
+	// 空セグメントは WebURL の有無によらず拒否する(ADR-0205: "//internal/..." が isReservedPath の
+	// 抜け道になって Web へ転送されるのを、ルーティングより前にここで防ぐ)。
 	path := r.URL.Path
-	if hasDotSegment(path) {
+	if hasDotSegment(path) || hasEmptySegment(path) {
 		return g.ownError(c, origin, allowed, newError(api.NotFound, "%s", msgNotFound))
 	}
 
 	// 3. ルーティング(未知のパス・許さないメソッドはヘッダが無くても 404)。gateway 自身の応答。
+	// WebURL 設定時は、予約パス(/api・/assets・/healthz・/internal のセグメント)のどれにも当たらない
+	// GET / HEAD を Web への転送(routeWeb)として扱う(ADR-0205)。
 	kind, matched := matchRoute(r.Method, path)
 	if !matched {
-		return g.ownError(c, origin, allowed, newError(api.NotFound, "%s", msgNotFound))
+		if g.webProxy == nil || !isWebEligibleMethod(r.Method) || isReservedPath(path) {
+			return g.ownError(c, origin, allowed, newError(api.NotFound, "%s", msgNotFound))
+		}
+		kind = routeWeb
 	}
 	if kind == routeHealthz {
 		if allowed {
@@ -150,6 +164,8 @@ func (g *gateway) serve(c *echo.Context) error {
 			return g.ownError(c, origin, allowed, newError(api.NotFound, "%s", msgNotFound))
 		}
 		g.assetsProxy.ServeHTTP(c.Response(), r)
+	case routeWeb:
+		g.webProxy.ServeHTTP(c.Response(), r)
 	}
 	return nil
 }

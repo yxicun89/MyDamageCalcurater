@@ -10,9 +10,9 @@ Next: DOC-data(engine・pokedex・importer・golden の README と docs/runbooks
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
 Active: Claude Code
-Branch: feat/api-master-adapter(作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: Phase 3 完了(PR #14・#23・#30)。P3-4 calc-svc のマスタを pokedex-svc の内部 API(MasterExport)から受け取る形に変更(ADR-0204。critic PASS)。k3d と dev はファイル方式
-Next: (1) Web レーンの依頼: gateway に任意の GATEWAY_WEB_URL(設定時は /api・/assets・/healthz 以外を Service web:80 へ転送。k3d の local overlay は http://web)。(2) pokedex-svc(P2-3。データレーンが /internal/pokedex/master・natures・showdownId を受け入れ済み)が main に入ったら、calc の local overlay を URL 方式(CALC_MASTER_URL=http://pokedex)に、gateway に GATEWAY_POKEDEX_URL を設定し smoke の /api/pokedex を 503→200 に。(3) 手順書(gateway・calc の README)を AGENTS.md「手順書の書き方」に合わせる
+Branch: feat/api-gateway-web(作業ディレクトリ ~/MyDamageCalcurater-api)
+Status: Phase 3 完了(PR #14・#23・#30)、P3-4 マスタを pokedex-svc の内部 API から(ADR-0204。PR #42)。gateway の GATEWAY_WEB_URL(ADR-0205)は critic PASS(NG 2回のあと3回目)。origin/main を取り込み中
+Next: (1) GATEWAY_WEB_URL(P3-5)の PR → main。(2) データレーンの依頼 a〜c: openapi の /api/pokedex/* の description(503 は pokedex-svc 自身の master_unavailable もある・検索は既定レギュレーションの使用可能集合を ID 順・format は v1 で無影響・getSpecies は集合外も返し learnset は使用可能な技だけ・404 not_found・limit 範囲外は 400 invalid_input)と MasterSpeciesAbility.slot を 1..4 に。(3) DOC-api(calc・gateway の README を coding-rules §8 に、docs/runbooks/api.md)。(4) pokedex-svc(P2-3)が main に入ったら、gateway に GATEWAY_POKEDEX_URL=http://pokedex、calc の local overlay を CALC_MASTER_URL=http://pokedex に、smoke の /api/pokedex を 503→200 に
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
