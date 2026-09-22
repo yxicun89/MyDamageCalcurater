@@ -18,10 +18,10 @@ Next: (1) GATEWAY_WEB_URL(P3-5)の PR → main。(2) データレーンの依頼
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
 Active: Claude Code
 Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
-Status: P4-1〜P4-6・P4-8〜P4-11 完了(critic PASS)。P4-11 で Web をコンテナ(nginx)にし k3d に載せた(`make web-k3d-deploy`・`web-k3d-open`・`web-k3d-smoke`。ADR-0302)。
-P4-5 は Chrome で確認済み(Safari は未確認)。P4-7 は verify-m1.md のドラフト
-Next: P4-14 と DOC-web(verify-m1.md を AGENTS.md「手順書の書き方」の形に・k3d を主に、web/README.md)。続いて P4-12 タイプバランスの画面。
-gateway が Web に転送する GATEWAY_WEB_URL は API レーンが実装中(入ったら local overlay の値と手順を追従)
+Status: P4-1〜P4-6・P4-8〜P4-11・P4-12a(タイプバランス画面の防御相性・攻撃範囲。ADR-0303)・P4-14・DOC-web 完了(critic PASS。main 統合済み)。
+GATEWAY_WEB_URL(API レーンの ADR-0205)が main に入り、k3d の http://localhost:8080 で画面(/calc・/reverse・/balance)と API が揃うことを実地確認し verify-m1.md に反映。
+P4-5 は Chrome で確認済み(Safari は未確認)。P4-7 は verify-m1.md のドラフト(pokedex-svc・契約テストを待つ)
+Next: P4-12b(仮想敵 threats・おすすめタイプ recommendations)。続いて P5-5(構築ビルダー等)は record/team の API 待ち
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
