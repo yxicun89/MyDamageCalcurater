@@ -740,3 +740,9 @@ Impact: Web が move-range を呼ぶ画面を作るときに、まず `make gen-
 Decision: COORDINATION.md の「Claude の上限時の Codex」節、plan.md の「整備レーン」節(MT-1〜MT-7)、CURRENT_STATE.md の Maintenance 欄を削除する。
 Reason: ユーザーが「Codex はこのプロジェクトで必ず使う必要はなく、有効活用したい程度の感覚。ノイズになるなら消した方がいい」と判断した。整備タスク(MT-3〜MT-7)は文書の整合性などの低優先度の掃除作業で、M1 の完成に影響しない。今後はレーンの作業を Claude だけで進める。
 Impact: 今後、Claude が利用枠の上限に達しても Codex を自動的に起動する仕組みは無い。Codex を使いたい場合は、その都度ユーザーが判断してレーンを直接担当させる(通常のレーン運用と同じ)。MT-1・MT-2(統合検証・check-publishable の自己テスト修正)はすでに完了して main に入っているので、成果は失われない。
+
+## 2026-09-22: 素早さ SP3 の設計(素早さレーンの判断)と Web レーンへの提案(既定案)
+Decision: SpeedScreen・SpeedClient・speed.gen.ts は web/src/speed/ の中だけに置く(web/src/api/ は使わない)。ScreenProps に balance専用のclientとは別に speedClient: SpeedClient を1フィールド追加し、App.tsx に speedClient の作成と ActiveScreen への1引数を追加する(Web レーンに既定案として提示・進行中)。
+提案(Web レーンへ。既定案: 今は何もしない): speed.gen.ts の再生成は npx openapi-typescript を手動実行してコミットする。make gen-ts への組み込みは Web レーンの都合の良いときにお任せする。
+Reason: P4-12a で ScreenProps.client が BalanceClient 専用の型になっており、以前の「props は {engine, master}」の案内より後の変更のため。ディレクトリでのレーン境界(web/src/speed/)を保つため。
+Impact: ADR-0604。web/src/app/screens.tsx・web/src/App.tsx に最小限の追記(Web レーンと合意のうえ進行)。
