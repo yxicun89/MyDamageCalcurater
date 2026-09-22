@@ -129,30 +129,39 @@ schema の `description` に書く。方針は ADR-0402。
 HTTP の path・必須 header・handler interface は service-local OpenAPI から生成し、実装を
 `api.ServerInterface` へコンパイル時に適合させる。
 
-## ローカル検証
+## ローカル検証(k3d)
 
-リポジトリルートから実行する。
+前提: k3d の `pokecalc` クラスタが起動している(`make up`)。
+
+1. テストと静的検査を通す。
+   ```sh
+   cd "$(git rev-parse --show-toplevel)"
+   make test lint build check-publishable
+   ```
+   確認: 最後の行が `check-publishable: 0 件` で、エラーで止まらない。
+
+2. k3d にデプロイして疎通を確かめる。
+   ```sh
+   cd "$(git rev-parse --show-toplevel)"
+   make balance-k3d-deploy
+   make balance-smoke
+   ```
+   確認: 最後の行が `balance smoke: health=200 analyze=200 unknown=422 coverage=200 unknown_move=422 ability=200 unknown_ability=422 threats=200 threats_unknown_move=422 recommendations=200`。
+   1回目がロールアウト直後で失敗したら `make balance-smoke` をもう一度実行する。
+
+## ローカル検証(ホストで直接。開発用)
 
 ```sh
-make -f services/balance/Makefile balance-gen
-make -f services/balance/Makefile balance-test
-make -f services/balance/Makefile balance-lint
-make -f services/balance/Makefile balance-build
-make -f services/balance/Makefile balance-kustomize
-make -f services/balance/Makefile balance-gitops-template-check
+cd "$(git rev-parse --show-toplevel)"
+make balance-gen balance-test balance-lint balance-build balance-kustomize balance-gitops-template-check
 ```
+確認: `balance GitOps template: valid` が出て、エラーで止まらない。
 
-`balance-k3d-deploy` は、ルートの `deploy/k3d.yaml` と基盤 Kustomize により `pokecalc` クラスタ・
-Namespace が作成済みであることを前提とする。共有 Namespace は balance 側では所有しない。
+## ローカルの構成(説明)
 
-local overlay(`deploy/k8s/overlays/local`)は架空データの example
-(`deploy/k8s/overlays/local/pokemon-types.example.json`・`moves.example.json`・`abilities.example.json`、それぞれ
-`testdata/pokemon-types.example.json`・`testdata/moves.example.json`・`testdata/abilities.example.json` と同一内容)を
-ConfigMap としてマウントし、`BALANCE_POKEMON_TYPES_PATH` / `BALANCE_MOVES_PATH` / `BALANCE_ABILITIES_PATH` を
-設定する。base と gitops overlay には設定しない。
-`balance-smoke` は analyze・coverage・threats が 200(架空ID)と 422(未登録ID)を返すことを確認する。
-
-Argo CD 用には local image を参照しない専用 overlay(`deploy/k8s/overlays/gitops`)がある。image はクラスタ内レジストリの
-`localhost:5000/pokecalc/balance@sha256:...`(digest 固定)。Application の repoURL は Git に書かず、`make balance-argocd-app` が
-適用時に `git remote get-url origin` から埋め込む。private repository の credential や Secret は Git へ入れない。
-手順は [`deploy/argocd/README.md`](deploy/argocd/README.md)、方式は ADR-0018。
+- `balance-k3d-deploy` は、ルートの `deploy/k3d.yaml` と基盤 Kustomize で `pokecalc` クラスタ・Namespace が作成済みであることを前提とする。
+  共有 Namespace は balance 側では所有しない。
+- local overlay(`deploy/k8s/overlays/local`)は架空データの example(`testdata/*.example.json` と同一内容の複製)を ConfigMap でマウントし、
+  `BALANCE_POKEMON_TYPES_PATH` / `BALANCE_MOVES_PATH` / `BALANCE_ABILITIES_PATH` を設定する。base と gitops overlay には設定しない。
+- Argo CD 用の gitops overlay(`deploy/k8s/overlays/gitops`)の image はクラスタ内レジストリの `localhost:5000/pokecalc/balance@sha256:...`(digest 固定)。
+  Application の repoURL は Git に書かず、適用時に `git remote get-url origin` から埋め込む。手順は [`deploy/argocd/README.md`](deploy/argocd/README.md)、方式は ADR-0018。
