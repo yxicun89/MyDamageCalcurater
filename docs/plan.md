@@ -152,6 +152,12 @@
 - [ ] SP3 Web の素早さ画面(左右の配置・自分の位置の強調。`web/src/speed/`)
 - [ ] SP4 pokedex の read model(データレーン P2-3)への切り替えと k3d の疎通
 
+## JD: 判定(判定レーン。設計は docs/judge-design.md。2026-09-22 ユーザー要望)
+「ニトチャ+メイン技で素早さ抜ける+そのポケモンを倒せるか」を1回の入力で確認する。engine を直接呼び、pokedex-svc と calc-svc の公開 API だけに依存する(speed-svc には依存しない)。
+- [ ] JD0 基盤(ディレクトリ構成・pokedex-svc/calc-svc への HTTP クライアント・ヘルスチェック)
+- [ ] JD1 抜けるか+倒せるかの最小構成(自分と相手の Individual・使う技 → outspeeds・ko)。着手前に docs/judge-design.md §4 の未決事項(同速の扱い・相手の技を含めるか・gateway 経由か)を確認する
+- [ ] JD2 以降(複数の相手候補・場の効果・画面)は JD1 完了後にユーザーへ確認して確定する
+
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
 各レーンが自分の範囲の README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)と、動かして確かめられるレーンは手順書(`docs/runbooks/<レーン>.md`。AGENTS.md「手順書の書き方」に従う)を書く。全体図は `docs/architecture.md`。
 - [x] DOC-data: `engine/README.md`・`services/pokedex/README.md`・`tools/importer/README.md`・`tools/golden/README.md`、手順書 `docs/runbooks/data.md`(migrate・import・dry-run の確認)

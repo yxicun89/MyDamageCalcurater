@@ -35,7 +35,7 @@ Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
 Active: なし(ユーザー指示で一時停止。P2-3 の実データ確認は完了。再開はユーザーの指示があってから)
 Branch: 次は main から feat/tb-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
 Status: TB0〜TB5・整備・実データ配線(ADR-0403)は完了・main に統合済み。データレーンの pokedex export(PR #57)を実データで確認済み: 348 種・516 技・特性のマスタで analyze/recommendations が 200(例: フシギバナ、あついしぼう持ちのカビゴン・マンムーが氷技の弱点を軽減する候補として正しく出た)。メガフォームの nameJa が英語表記のまま(Venusaur-Mega 等)なのはデータレーン側の日本語名収集の余地(ブロッカーではない)
-Next: 一時停止中。再開したら: (1) 上記メガフォームの nameJa の件をデータレーンに確認するか判断。(2) 軽微の残り(HTTP 層の検証・422 変換の重複整理、read model の JSON Schema の細部)。(3) TB6 以降は未定(設計書 TB0〜TB5 で完了)
+Next: 設計書(docs/type-balance-design.md)の TB0〜TB5 はすべて完了。メガフォームの nameJa が英語表記のままの件はデータレーンへ確認候補として残すのみ(ブロッカーではない)。追加機能(技範囲チェッカー等)は ADR を書いてから着手
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
 
 ## Speed
@@ -51,6 +51,13 @@ Active: なし
 Branch: なし(次回は origin/main から新しい fix/maint-<名前> を切る)
 Status: MT-1(統合検証)・MT-2(check-publishable の自己テスト修正・lint 組み込み)は PR #24 で main に統合済み
 Next: docs/plan.md の整備レーン MT-3 から順に進める
+
+## Judge(判定。素早さ×ダメージ連動)
+Lane: 判定(どの AI が進めてもよい。COORDINATION.md)
+Active: なし
+Branch: feat/judge-j0(作業ディレクトリ ~/MyDamageCalcurater-judge。git worktree。origin/main から作成済み)
+Status: 未着手(2026-09-22 にレーンを新設。ユーザー要望)。設計は docs/judge-design.md(起草のみ。ADR は未作成)
+Next: docs/judge-design.md §4 の未決事項(同速の扱い・相手の技を含めるか・gateway 経由か)を確認してから JD0(基盤)→ JD1(抜ける+倒せるの最小構成)。engine を直接呼び、pokedex-svc と calc-svc の公開 API だけに依存する(speed-svc には依存しない)
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

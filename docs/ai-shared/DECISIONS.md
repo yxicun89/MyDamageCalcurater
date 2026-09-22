@@ -708,3 +708,10 @@ Impact: CLAUDE.md のワークフロー、COORDINATION.md の起動の目安。�
 Decision: メインセッションは Sonnet で起動し、重い設計の判断のときだけ Opus。spec-writer・critic は engine・逆算・DB・API 契約に関わるときだけ Opus(既定)、文書・k8s・スクリプト・軽い修正では Sonnet で呼ぶ。利用枠が厳しいときは M1 のレーン(データ・API・Web)を優先し、他のレーンは区切りで止める。
 Reason: ユーザーが確認の質問に改めて答えた(前回の回答「メインだけ Sonnet」は意図と違った)。
 Impact: CLAUDE.md・COORDINATION.md を更新。
+
+## 2026-09-22: 判定レーン(素早さ×ダメージ連動)を新設(ユーザー要望)
+Decision: 「ニトチャ+メイン技で素早さ抜ける+そのポケモンを倒せるか」を1回で判定する新レーン「判定」を追加する(`~/MyDamageCalcurater-judge`、`feat/judge-<stage名>`、ADR 帯 `0700〜`)。
+判定サービスは speed-svc に依存しない(SP2 未着手のため)。engine を直接呼んで実数値(素早さ)を計算し、pokedex-svc の公開 API(種族値)・calc-svc の公開 API(`/api/calc` の KOChance)だけに依存する。
+相手側も「具体的な調整を入力できる形」(ユーザー回答。極限スピードではなく個別の性格・SP・持ち物を指定する)。
+Reason: ユーザーが「新しいレーンを作る」「相手の具体的な調整を入力」と回答した。
+Impact: docs/judge-design.md(起草)、COORDINATION.md・CURRENT_STATE.md・plan.md にレーンを登録。ADR・実装は判定レーンの最初のセッションが行う(このセッションはタイプバランス担当のため実装しない)。
