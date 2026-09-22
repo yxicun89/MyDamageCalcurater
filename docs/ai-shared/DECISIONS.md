@@ -813,3 +813,8 @@ gateway の README には「環境変数」「ルーティング」の2節も残
 `services/speed/README.md`(既存)にも同種の「エンドポイント」「環境変数」節があり、同じ運用パターンとして許容した。
 Reason: critic 指摘(coding-rules §7「規約から外れるときは理由を書く」)。
 Impact: 今後 gateway の README を §8 の5節だけに削る場合は、まず上記2テストの検査方法(README の文言ではなく実装から生成する等)を変える必要がある。
+
+## 2026-09-23: iOS レーンの統合(PR #119)
+Decision: P6-2d(構築から個体を呼び出す配線)を PR #119 で main にマージした(critic PASS。make test / lint / build / check-publishable / ios-test が成功)。
+Reason: P6-2c に続く区切り。P6-2(計算画面・逆算・構築)がすべて完了した。
+Impact: 続き(P6-3 シミュレータテストの総仕上げ・P6-4 実機インストール手順書)は同じブランチ feat/ios-p6 で進める。
