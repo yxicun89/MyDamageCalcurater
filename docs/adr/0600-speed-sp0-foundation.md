@@ -26,6 +26,7 @@
   ベースイメージは balance と同じ golang 1.27-alpine の digest 固定 → scratch、非 root。
 - Kustomize は `deploy/k8s/base`(Deployment・Service・Ingress `/api/speed`)と `overlays/local`(架空データの read model を ConfigMap でマウント)。
   **GitOps の overlay と Argo CD Application は SP4 で作る**(イメージの digest はレジストリに初めて置いたときに決まり、digest 固定の overlay を先に作れないため)。
+  (2026-09-22 ADR-0603 で変更: 「SP4 で作る」ではなく、digest が決まる段階〈SP4 完了後の別作業〉に先送り。理由は変わらない)
 
 ### 3. 素早さの計算コア
 入力: 素早さ種族値(1〜255)・素早さ SP(0〜`engine.MaxSPPerStat`)・性格の補正(`minus` / `neutral` / `plus`)・ランク(-6〜+6)・スカーフの有無。

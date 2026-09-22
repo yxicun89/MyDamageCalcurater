@@ -1,5 +1,6 @@
-# gateway(クライアントの唯一の入口。ADR-0202)。GATEWAY_CALC_URL は calc の Service 名(クラウドでも同じ)。
-# GATEWAY_POKEDEX_URL・GATEWAY_ASSETS_URL は pokedex-svc・画像配信ができるまで未設定(→ 503 / 404。ADR-0203 §3)。
+# gateway(クライアントの唯一の入口。ADR-0202)。GATEWAY_CALC_URL・GATEWAY_POKEDEX_URL は calc・pokedex の
+# Service 名(クラウドでも同じなので base に置く。ADR-0206 §1)。GATEWAY_ASSETS_URL は画像配信ができるまで
+# 未設定(→ 404。ADR-0203 §3)。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -29,6 +30,8 @@ spec:
           env:
             - name: GATEWAY_CALC_URL
               value: http://calc
+            - name: GATEWAY_POKEDEX_URL
+              value: http://pokedex
             # limits.memory の 64Mi に対して少し余裕を持たせた値(GC が OOMKill の前に働くように)。
             - name: GOMEMLIMIT
               value: 56MiB

@@ -115,6 +115,16 @@ func copyAbilityEffect(e *engine.AbilityEffect) *engine.AbilityEffect {
 			out.DefResistType[k] = v
 		}
 	}
+	if e.DefImmuneTypes != nil {
+		out.DefImmuneTypes = make([]engine.Type, len(e.DefImmuneTypes))
+		copy(out.DefImmuneTypes, e.DefImmuneTypes)
+	}
+	if e.DefAbsorbTypes != nil {
+		out.DefAbsorbTypes = make(map[engine.Type]engine.AbsorbEffect, len(e.DefAbsorbTypes))
+		for k, v := range e.DefAbsorbTypes {
+			out.DefAbsorbTypes[k] = v
+		}
+	}
 	return &out
 }
 

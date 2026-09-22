@@ -11,17 +11,24 @@ Next: P2-3b(無効・吸収の特性を engine・DB・export に足す)→ P3-1�
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
 Active: なし
 Branch: (次は main から feat/api-<名前> を切る。作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: Phase 3 完了(PR #14・#23・#30)、P3-4 マスタを pokedex-svc の内部 API から(ADR-0204。PR #42)、P3-5 gateway の GATEWAY_WEB_URL(ADR-0205。PR #54)、pokedex-svc の契約 description を ADR-0105 に合わせる(PR #59)は main に統合済み。ユーザー指示(2026-09-22)により利用枠をデータレーンに集中させるため一旦停止
-Next: データレーン依頼 d(gateway の /api/pokedex/* を pokedex-svc(Service 名 pokedex、ポート80)へ、calc の local overlay を CALC_MASTER_URL=http://pokedex の URL 方式へ切り替え)。疎通確認には pokedex-svc の実データ投入が要る(データレーンの docs/runbooks/data.md の手順: make up → make import-fetch/import-dry-run → make import または make import-k8s → kubectl -n pokecalc get deploy pokedex で Ready 確認)。その後は DOC-api(calc・gateway の README を coding-rules §8 に、docs/runbooks/api.md)
+Status: Phase 3 完了(PR #14・#23・#30)、P3-4 マスタを pokedex-svc の内部 API から(ADR-0204。PR #42)、P3-5 gateway の GATEWAY_WEB_URL(ADR-0205。PR #54)、pokedex-svc の契約 description(PR #59)、copyAbilityEffect のディープコピー修正(P2-3b critic 指摘。PR #81)、P3-6 calc・gateway を pokedex-svc につなぐ(ADR-0206。critic PASS。PR #87)は main に統合済み
+Next: DOC-api(calc・gateway の README を coding-rules §8 に、docs/runbooks/api.md)
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
-Active: Claude Code
+Active: Claude Code(ユーザー指示で再開)
 Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
-Status: P4-1〜P4-6・P4-8〜P4-11・P4-12a(タイプバランス画面の防御相性・攻撃範囲。ADR-0303)・P4-14・DOC-web 完了(critic PASS。main 統合済み)。
-GATEWAY_WEB_URL(API レーンの ADR-0205)が main に入り、k3d の http://localhost:8080 で画面(/calc・/reverse・/balance)と API が揃うことを実地確認し verify-m1.md に反映。
-P4-5 は Chrome で確認済み(Safari は未確認)。P4-7 は verify-m1.md のドラフト(pokedex-svc・契約テストを待つ)
-Next: P4-12b(仮想敵 threats・おすすめタイプ recommendations)。続いて P5-5(構築ビルダー等)は record/team の API 待ち
+Status: P4-1〜P4-6・P4-8〜P4-12(仮想敵 threats・おすすめタイプ recommendations を含む。ADR-0303)・P4-14・P4-15・DOC-web・P4-7(M1 完了報告)完了(critic PASS。main 統合済み。PR #82・#84)。
+データレーンの依頼(P2-3b・ADR-0106)にも追従済み(PR #84): AbilityEffect に defImmuneTypes・defAbsorbTypes、
+exportBalanceReadModel に absorb と ADR-0106 §決定7の出力順・無効優先。本物の engine.wasm で無効・吸収を結合テスト確認済み。
+verify-m1.md を完成版にした: P2-2c/d・P2-3・P3-3 が main に入り、k3d(gateway 経由 http://localhost:8080)で
+計算・逆算・タイプバランス(仮想敵・おすすめタイプ含む)を実地確認(pokedex-svc は実データ投入済みだが、
+gateway/calc-svc のマスタ参照先はまだ pokedex-svc に向いていない。API レーンの依頼 d が一時停止中)。
+P4-5 は Chrome で確認済み(Safari は未確認。人間の作業)
+Next: (1) pokedex-svc の公開 API から Web のオンライン MasterSource を作る(ADR-0301 §4。gateway/calc の
+pokedex 配線待ちなので、API レーンの依頼 d が進んでから本格着手するのが自然)。
+(2) 続いて P5-5(構築ビルダー等)は record/team の API 待ち。
+(3) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
@@ -44,9 +51,19 @@ Next: (1) データレーンが export(data/generated/readmodel)を再生成し�
 ## Speed
 Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
 Active: Claude Code
-Branch: feat/speed-s2(main から作成済み。SP1 は feat/speed-s1 → PR で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
-Status: SP0(ADR-0600。基盤・計算コア・read model・一覧 API・Kustomize)と SP1(ADR-0601。6 行のプリセット・速い順・同速の段・`presets` での絞り込み・`GET /api/speed/v1/table`)は完了・main に統合。DOC-speed(README・手順書 docs/runbooks/speed.md。k3d 疎通を確認済み)も完了
-Next: SP2(自分の位置: 最小の選択 = プリセット uninvested / neutral-max / max + スカーフ on/off、オプション = SP 0〜32・性格3通り・ランク -6〜+6・スカーフ、または実数値の直接入力 → 実数値と表の中の位置(速い段・同速の段・遅い段の境目))→ SP3(`web/src/speed/` の画面は素早さレーンのまま(ユーザー決定。Web の P4-13 は取り消し)。タブ・URL は Web の P4-10 のルート表(1か所)に `/speed` の1項目を足すだけ。P4-10 は PR #44 で main に統合済み。足すのは3か所に1件ずつ(App.tsx は触らない): web/src/app/routes.ts の SCREEN_ROUTES に `{ id: "speed", segment: "speed", label: appText.speedTabLabel }`、web/src/i18n/ja.ts の appText に speedTabLabel、web/src/app/screens.tsx の SCREEN_COMPONENTS に `speed: SpeedScreen`(props は ScreenProps = {engine, master}。使わなくてよい)。テストの例は web/src/App.routing.test.tsx と web/e2e/routing.spec.ts)→ SP4(pokedex の read model・k3d・GitOps)。SP4 までに決める: 空の roster の扱い(いまは read model が空を拒否。pokedex の adapter では 503 か空配列か。SP1 critic 軽微)。SP4 の read model: データレーン P2-3 の pokedex export(ADR-0105)が素早さ専用の `data/generated/readmodel/speed-pokemon.json` を ADR-0600 §4 の形(baseSpeed。既定レギュレーションの使用可能集合・ID 昇順)で出す。SP4 はそれを `SPEED_POKEMON_PATH` で読む(adapter の差し替えは不要の見込み。local overlay への載せ方と k3d の疎通を行う)。P2-3 が main に入るまでは架空データ
+Branch: feat/speed-sp4(SP2 は feat/speed-sp2 → PR #83 で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
+Status: SP0〜SP2 は完了・main に統合(PR #32・#36・#52・#83)。SP4(pokedex export の read model を k3d の speed に読ませる配線。ADR-0603。
+balance の ADR-0403 と同じ形: `cmd/checkreadmodel`・`scripts/k3d-deploy-readmodel.sh`・`scripts/smoke-readmodel.sh`・`deploy/k8s/overlays/local-readmodel`)は
+critic PASS(2回目。1回目 NG 重要1件〈ADR-0600 §2 と ADR-0603 の GitOps 記述の矛盾。ADR-0600 に変更履歴を追記・docs/speed-design.md の段階表から
+GitOps を SP5 として分離・plan.md に SP5 を追加して修正〉)。fixture データ(testdata/pokemon.example.json)で k3d への実配線・非回帰(架空データの
+local overlay)を確認済み。**実データ(pokedex-svc の DB)での最終確認は未実施**(DSN の取り扱いがこのセッションの権限で扱えないため。
+`make pokedex-export`(データレーンの docs/runbooks/data.md の手順で DB を用意した状態で、POKEDEX_DATABASE_DSN を設定して実行)→
+`make speed-k3d-deploy-readmodel && make speed-smoke-readmodel` を人間または権限のあるセッションで実行して確認する)。PR 作成待ち
+Next: SP4 の PR を作って main に統合(実データでの最終確認は、DSN を扱えるセッションで PR 前後どちらでもよい)→ SP3(`web/src/speed/` の画面は
+素早さレーンのまま。タブ登録は3か所に1件ずつ: web/src/app/routes.ts の SCREEN_ROUTES・web/src/i18n/ja.ts の appText.speedTabLabel・
+web/src/app/screens.tsx の SCREEN_COMPONENTS。P4-10 は PR #44 で main に統合済み。テストの例は web/src/App.routing.test.tsx と
+web/e2e/routing.spec.ts)→ SP5(GitOps。ADR-0603 で SP4 から分離。イメージの digest が決まる段階で着手)。SP4 までに決めた: 空の roster の
+扱いは pokedex export が1件以上を返す前提のまま(ADR-0603 影響。実データで0件になる状況が起きたら別途決める)
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

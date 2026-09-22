@@ -145,6 +145,37 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/balance/v1/move-range/analyze": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Analyze the offensive range of a move set and who walls it
+     * @description Takes one to four moveIds only (no pokemon: a move set alone decides the offensive range,
+     *     ADR-0404 §1). Status moves do not contribute to the range; a request whose moves are all
+     *     status moves is rejected (400 invalid_request), so the range is never empty.
+     *     attackTypes are the types of the non-status moves (deduplicated, canonical order).
+     *     typeChart has one entry per single defense type (canonical order) with the best multiplier
+     *     of the move set against it, and whether that is effective (x1 or more) / super effective (x2);
+     *     it is the same calculation as one member's coverage entry in TB2.
+     *     walledBy lists every pokemon of the read model whose own types (a single or dual type,
+     *     abilities not considered) take the move set at x1/2 or less, pokemonId ascending.
+     *     walledByAbility separately lists the pokemon whose types alone do NOT reach x1/2 or less but
+     *     one of their read model abilityIds does (an immunity or absorption counts too), pokemonId
+     *     then abilityId ascending; it is empty when the ability read model is not configured.
+     */
+    post: operations["analyzeMoveRange"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -440,6 +471,69 @@ export interface components {
       /** @description The ability that takes attackType below x1. */
       abilityId: components["schemas"]["AbilityId"];
       multiplier: components["schemas"]["DefenseMultiplier"];
+    };
+    /** @description A move set on its own (ADR-0404 §2). No pokemon is named. */
+    MoveRangeRequest: {
+      /** @description One to four moveIds. Duplicates are rejected (400). */
+      moveIds: components["schemas"]["MoveId"][];
+    };
+    MoveRangeResponse: {
+      /** @description Types of the non-status moves, without duplicates, in canonical type order. Never empty. */
+      attackTypes: components["schemas"]["TypeId"][];
+      /** @description One entry per single defense type, in canonical type order (normal ... fairy). */
+      typeChart: components["schemas"]["MoveRangeTypeEntry"][];
+      /**
+       * @description The read model pokemon whose own types take the move set at x1/2 or less (abilities not
+       *     considered), pokemonId ascending. Empty when no pokemon walls the move set.
+       */
+      walledBy: components["schemas"]["WalledByPokemon"][];
+      /**
+       * @description Pairs of a pokemon and one of its read model abilityIds that take the move set at x1/2 or
+       *     less while its types alone do not, pokemonId then abilityId ascending. Empty when the
+       *     ability read model is not configured.
+       */
+      walledByAbility: components["schemas"]["WalledByAbilityPokemon"][];
+    };
+    /**
+     * @description bestMultiplier is the best multiplier of the move set's attack moves against this single
+     *     defense type; it always has a value (a request without any attack move is rejected with 400).
+     *     effective = bestMultiplier is x1 or more; superEffective = bestMultiplier is x2.
+     */
+    MoveRangeTypeEntry: {
+      defenseType: components["schemas"]["TypeId"];
+      bestMultiplier: components["schemas"]["MoveRangeMultiplier"];
+      effective: boolean;
+      superEffective: boolean;
+    };
+    /**
+     * @description Exact display form of a single-type offensive multiplier. Unlike CoverageMultiplier it is
+     *     never null: the move set always has at least one attack move (ADR-0404 §2).
+     * @enum {string}
+     */
+    MoveRangeMultiplier: "0" | "1/2" | "1" | "2";
+    /**
+     * @description One read model pokemon that walls the move set by its types alone. bestMultiplier is the
+     *     largest multiplier the move set deals to its actual (single or dual) types, so it is x1/2 or less.
+     */
+    WalledByPokemon: {
+      /** @example 9001-000 */
+      pokemonId: string;
+      nameJa?: components["schemas"]["PokemonNameJa"];
+      /** @description The pokemon's types in the read model order. */
+      types: components["schemas"]["TypeId"][];
+      bestMultiplier: components["schemas"]["DefenseMultiplier"];
+    };
+    /**
+     * @description One read model pokemon and one of its abilities that bring the move set to x1/2 or less while
+     *     its types alone do not. bestMultiplier is the largest multiplier with that ability applied.
+     */
+    WalledByAbilityPokemon: {
+      /** @example 9001-000 */
+      pokemonId: string;
+      nameJa?: components["schemas"]["PokemonNameJa"];
+      /** @description The ability that brings the move set to x1/2 or less. */
+      abilityId: components["schemas"]["AbilityId"];
+      bestMultiplier: components["schemas"]["DefenseMultiplier"];
     };
   };
   responses: never;
@@ -797,6 +891,88 @@ export interface operations {
        * @description The pokemon read model is not configured, or any member names a moveId while the move read model
        *     is not configured, or any member names an abilityId while the ability read model is not configured
        *     (master_unavailable). A missing ability read model alone only empties abilityOptions.
+       */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  analyzeMoveRange: {
+    parameters: {
+      query?: never;
+      header: {
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MoveRangeRequest"];
+      };
+    };
+    responses: {
+      /** @description Offensive range of the move set and the pokemon that wall it */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MoveRangeResponse"];
+        };
+      };
+      /**
+       * @description Invalid request or missing request context (invalid_request / missing_request_context):
+       *     moveIds absent, empty, more than four, malformed, duplicated, or resolving to status moves only.
+       */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Request body exceeds the 16 KiB limit */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /**
+       * @description A moveId is not registered in the move read model (unknown_move, "unknown moveId: <ID>").
+       *     The first one in request order is reported.
+       */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description An unexpected internal error (internal_error). The message is a fixed string. */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /**
+       * @description The move read model is not configured, or the pokemon read model (catalog) is not
+       *     configured (master_unavailable). The move read model is checked first, since moveIds are
+       *     always required. A missing ability read model alone only empties walledByAbility.
        */
       503: {
         headers: {

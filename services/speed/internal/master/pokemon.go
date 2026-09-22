@@ -35,7 +35,8 @@ const (
 )
 
 // PokemonReadModel は起動時に 1 度だけ読み込む、1 つのレギュレーションの使用可能集合。
-// SP4 で pokedex の read model の adapter に差し替える。
+// SP0〜SP3 は speed 内の架空データ、SP4 以降は pokedex export の実データ(同じ形式・同じ
+// loader。adapter の差し替えは無い。ADR-0603 §5)。
 type PokemonReadModel struct {
 	regulationID string
 	pokemon      []speed.Pokemon

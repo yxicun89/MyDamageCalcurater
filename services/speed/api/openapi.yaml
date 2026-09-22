@@ -1,13 +1,14 @@
 openapi: 3.0.3
 info:
   title: pokecalc speed API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     素早さ比較の独立サービスの契約。
     SP0 はヘルスチェックと、既定のレギュレーションで使用可能なポケモンの一覧(素早さ種族値つき)を返す。
     SP1 は素早さの表(各ポケモン 6 行のプリセットを速い順に並べ、同じ値を 1 つの段にまとめたもの)を返す。
-    自分の位置(SP2)の endpoint は SP2 の ADR で足す。
-    契約の正は docs/adr/0600-speed-sp0-foundation.md・docs/adr/0601-speed-sp1-table.md と docs/speed-design.md。
+    SP2 は自分のポケモンの実数値と、その表の中の位置(自分より速い行の数・同速の行・遅い行の数)を返す。
+    契約の正は docs/adr/0600-speed-sp0-foundation.md・docs/adr/0601-speed-sp1-table.md・
+    docs/adr/0602-speed-sp2-position.md と docs/speed-design.md。
 servers:
   - url: /
 paths:
@@ -107,6 +108,75 @@ paths:
                 $ref: '#/components/schemas/TableResponse'
         '400':
           description: X-Device-Id or X-Session-Id is missing, empty, or invalid, or presets is unknown, duplicated, or empty (invalid_request)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: The pokemon read model is not configured (master_unavailable)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: An unexpected internal error (internal_error). The message is a fixed string; no internal detail is returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/speed/v1/position:
+    post:
+      operationId: getSpeedPosition
+      summary: Locate one's own pokemon in the speed table
+      description: |
+        Returns the in-battle speed of one's own pokemon and where it falls in the speed table of the
+        default regulation (ADR-0602 §3). The table is always the full six presets of ADR-0601 §2:
+        `faster` and `slower` count its rows above and below the given speed, and `tie` lists the rows
+        with exactly that speed (empty means no speed tie).
+
+        The input has three shapes, selected by `mode` (ADR-0602 §2):
+        `preset` needs pokemonId, preset and scarf (the minimal choice: the SP, nature and rank of the
+        chosen row of ADR-0601 §2, with the Choice Scarf switched independently);
+        `custom` needs pokemonId, sp, nature, rank and scarf;
+        `raw` needs value, the in-battle speed itself, and may name pokemonId for display only (its base
+        speed is not used). A field the chosen mode does not need, a missing required field, a pokemonId
+        not matching the NNNN-NNN format, or a value out of range is 400 invalid_request. A JSON `null`
+        for an optional field is treated the same as omitting it.
+
+        Check order: headers (400) → body (400, or 413 request_too_large over 4 KiB) → read model
+        absent (503) → unknown pokemonId (422) → 200.
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PositionRequest'
+      responses:
+        '200':
+          description: The speed of one's own pokemon and its position in the table
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PositionResponse'
+        '400':
+          description: |
+            X-Device-Id or X-Session-Id is missing, empty, or invalid, or the body is not one JSON object,
+            or the fields do not match the given mode, or a value is out of range (invalid_request)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: Request body exceeds the 4 KiB limit (request_too_large)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: pokemonId is not in the read model (unknown_pokemon)
           content:
             application/json:
               schema:
@@ -296,6 +366,122 @@ components:
           example: 100
         preset:
           $ref: '#/components/schemas/PresetId'
+    MinimalPresetId:
+      description: |
+        A preset one can pick for one's own pokemon (ADR-0602 §5): the three rows of ADR-0601 §2 that carry
+        no Choice Scarf, because `scarf` is chosen separately in a position request. The SP, nature and rank
+        of each are the ones PresetId describes.
+      type: string
+      enum:
+        - uninvested
+        - neutral-max
+        - max
+      example: max
+    NatureId:
+      description: |
+        The effect of the nature on speed (ADR-0600 §3, the same meaning as the core's NatureEffect):
+        minus = speed-down, neutral = no nature change, plus = speed-up.
+      type: string
+      enum:
+        - minus
+        - neutral
+        - plus
+      example: plus
+    PositionRequest:
+      description: |
+        One's own pokemon, in one of the three shapes of ADR-0602 §2. Only `mode` is always required;
+        which of the other fields must be present, and which must be absent, depends on `mode`.
+      type: object
+      additionalProperties: false
+      required:
+        - mode
+      properties:
+        mode:
+          description: |
+            Which shape the request has (ADR-0602 §2).
+            preset: pokemonId + preset + scarf. custom: pokemonId + sp + nature + rank + scarf.
+            raw: value, with an optional pokemonId for display only.
+          type: string
+          enum:
+            - preset
+            - custom
+            - raw
+          example: preset
+        pokemonId:
+          description: |
+            The pokemon of the read model. Required for preset and custom (its base speed is the input of
+            the formula); optional for raw, where it only resolves the name and types of the response.
+          type: string
+          maxLength: 8
+          pattern: '^\d{4}-\d{3}$'
+          example: 9001-000
+        preset:
+          $ref: '#/components/schemas/MinimalPresetId'
+        scarf:
+          description: Whether one's own pokemon holds a Choice Scarf (preset and custom only).
+          type: boolean
+          example: false
+        sp:
+          description: |
+            The speed SP (custom only). The upper bound is the per-stat SP cap of the domain
+            (CLAUDE.md のドメイン規約・ADR-0600 §3。コアは engine.MaxSPPerStat を使う)。
+          type: integer
+          minimum: 0
+          maximum: 32
+          example: 32
+        nature:
+          $ref: '#/components/schemas/NatureId'
+        rank:
+          description: The speed rank (custom only), -6 to +6 (ADR-0600 §3).
+          type: integer
+          minimum: -6
+          maximum: 6
+          example: 1
+        value:
+          description: |
+            The in-battle speed itself (raw only), used as given. Accepted values are the theoretical
+            minimum and maximum of the formula of ADR-0600 §3 over every base speed, SP, nature, rank and
+            Choice Scarf (ADR-0602 §3); the service derives those bounds from the formula, so they are
+            deliberately not repeated here as numbers.
+          type: integer
+          minimum: 1
+          example: 301
+    PositionResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - speed
+        - faster
+        - slower
+        - tie
+      properties:
+        speed:
+          description: The in-battle speed of one's own pokemon (ADR-0602 §3).
+          type: integer
+          minimum: 1
+          example: 301
+        pokemon:
+          description: |
+            The pokemon the request named, for display. Present only when the request had a pokemonId,
+            so a raw request without one has no pokemon field (ADR-0602 §4).
+          $ref: '#/components/schemas/SpeedPokemon'
+        faster:
+          description: The number of table rows strictly faster than `speed`.
+          type: integer
+          minimum: 0
+          example: 12
+        slower:
+          description: The number of table rows strictly slower than `speed`.
+          type: integer
+          minimum: 0
+          example: 30
+        tie:
+          description: |
+            The table rows with exactly this speed, sorted as a tier is (pokemonId ascending, then the
+            preset order of ADR-0601 §2). An empty array means no speed tie.
+          type: array
+          items:
+            $ref: '#/components/schemas/SpeedTableEntry'
     Error:
       type: object
       required:
@@ -310,5 +496,7 @@ components:
       type: string
       enum:
         - invalid_request
+        - unknown_pokemon
+        - request_too_large
         - master_unavailable
         - internal_error

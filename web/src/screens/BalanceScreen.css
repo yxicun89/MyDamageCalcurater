@@ -58,6 +58,38 @@
   font-size: var(--font-size-body);
 }
 
+/* 仮想敵1体分の結果(表と人数の集計)のまとまり。節の区切りを分かりやすくする。 */
+.balance-screen__threat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border-top: 1px solid var(--border-hairline);
+  padding-top: var(--space-4);
+}
+
+.balance-screen__threat > p {
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* おすすめタイプの節(穴のテキスト・候補の表・特性で補える表)。 */
+.balance-screen__recommendations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border-top: 1px solid var(--border-hairline);
+  padding-top: var(--space-4);
+}
+
+.balance-screen__recommendations > p {
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-primary);
+  margin: 0;
+}
+
 .balance-screen__error {
   color: var(--danger);
 }

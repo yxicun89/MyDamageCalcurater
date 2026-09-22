@@ -714,6 +714,15 @@ Decision: P6-2b 逆算画面・internal タグ除外・DOC-ios(ios/README.md を
 Reason: ユーザー回答(2026-09-22)「契約追従が緑になったら PR」の続き。P6-2b が完了し DOC-ios の割り当て(データレーンより)も完了したため区切りで統合した。
 Impact: 続き(P6-2c 構築)は同じブランチ feat/ios-p6 で進める。
 
+## 2026-09-22: 素早さ DOC-speed を PR #52 で main に統合(素早さレーン)
+Decision: README(coding-rules §8 の形)と手順書 docs/runbooks/speed.md(AGENTS.md「手順書の書き方」)を PR #52 で統合した。speed-k3d-deploy ターゲットを追加し、実際に k3d へデプロイして smoke まで確認した。文書のみのため critic レビューは省略。
+Impact: 素早さレーンの次は SP2(feat/speed-sp2)。
+
+## 2026-09-22: 素早さレーンを一時停止(ユーザー指示。データレーンへ利用枠を集中)
+Decision: 利用枠の残りをデータレーンに集中させるため、素早さレーンのセッションを一旦停止した。SP2(ADR-0602)は実装済み・critic 1回目 NG の重要3件を修正済み(コミット 7aff455)だが、critic の再確認は開始直後に停止したため未完了。作業ツリーはクリーンで全 push 済み(make test/lint/build/check-publishable は成功)。
+Reason: ユーザー指示(データレーンのセッション経由で伝達)。
+Impact: 再開はユーザー指示があってから。次にやることは CURRENT_STATE.md の Speed 欄の Next(critic の再確認から)。
+
 ## 2026-09-22: 判定レーン(素早さ×ダメージ連動)を新設(ユーザー要望)
 Decision: 「ニトチャ+メイン技で素早さ抜ける+そのポケモンを倒せるか」を1回で判定する新レーン「判定」を追加する(`~/MyDamageCalcurater-judge`、`feat/judge-<stage名>`、ADR 帯 `0700〜`)。
 判定サービスは speed-svc に依存しない(SP2 未着手のため)。engine を直接呼んで実数値(素早さ)を計算し、pokedex-svc の公開 API(種族値)・calc-svc の公開 API(`/api/calc` の KOChance)だけに依存する。
@@ -736,3 +745,16 @@ Impact: Web が move-range を呼ぶ画面を作るときに、まず `make gen-
 Decision: COORDINATION.md の「Claude の上限時の Codex」節、plan.md の「整備レーン」節(MT-1〜MT-7)、CURRENT_STATE.md の Maintenance 欄を削除する。
 Reason: ユーザーが「Codex はこのプロジェクトで必ず使う必要はなく、有効活用したい程度の感覚。ノイズになるなら消した方がいい」と判断した。整備タスク(MT-3〜MT-7)は文書の整合性などの低優先度の掃除作業で、M1 の完成に影響しない。今後はレーンの作業を Claude だけで進める。
 Impact: 今後、Claude が利用枠の上限に達しても Codex を自動的に起動する仕組みは無い。Codex を使いたい場合は、その都度ユーザーが判断してレーンを直接担当させる(通常のレーン運用と同じ)。MT-1・MT-2(統合検証・check-publishable の自己テスト修正)はすでに完了して main に入っているので、成果は失われない。
+
+## 2026-09-22: calc・gateway を pokedex-svc につなぐ(データレーンからの依頼d。ADR-0206。PR #87)
+Decision: base(local overlay を含む)の calc に `CALC_MASTER_URL=http://pokedex`、gateway に `GATEWAY_POKEDEX_URL=http://pokedex` を設定した。
+共有 Kustomize Component(`deploy/k8s/overlays/local/api`。`local`/`local-api` の両 overlay から参照)を分岐させると「最後に apply した方が勝つ」状態になるため、
+設定は分岐させず base に1か所だけ置いた(local/local-api どちらも同じ内容の Deployment になる)。ファイル方式(`CALC_MASTER_PATH`)は `make dev` とテストの fallback にのみ残す。
+`services/gateway/scripts/smoke.sh` は、マスタのハードコード禁止規約(CLAUDE.md)を守るため、固定の架空 ID をやめ、`/api/pokedex/*` から実際に種族・技・性格を動的に発見する形にした。
+依頼原文は「smoke の /api/pokedex を 503→200 に」だったが、実装は「200(pokedex-svc に実接続)または 503 `upstream_unavailable`/`master_unavailable`(pokedex-svc 未接続。ADR-0205 の web と同じ扱い)を成功」とする条件付きにした
+(`make dev`・pokedex-svc 未デプロイのクラスタでも smoke が意味のある形で動くようにするため。ADR-0205 の web の前例と揃えた)。
+Reason: データレーンの依頼。critic PASS(NG無し)。設計の詳細・却下案は ADR-0206。
+Impact: **他レーンへの申し送り**: `make up` 直後(pokedex の DB 未投入)は calc-svc が pokedex-svc からマスタを取得できず Ready にならないため、
+Web・iOS レーンのローカル k3d 環境でも calc を使う画面(ダメージ計算)が動かない。初回だけ `make import-k8s` でマスタを投入すること
+(データレーンの docs/runbooks/data.md 参照)。`make api-k3d-deploy` も、マスタ未投入のクラスタでは `kubectl rollout status` が120秒でタイムアウトして失敗するので、
+先に `make import-k8s` を実行すること。`make api-smoke` の出力1行目が `master=pokedex …` であれば実際に pokedex-svc へつながっている確認になる(`master=example` はフォールバック)。

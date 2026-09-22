@@ -13,7 +13,7 @@ flowchart LR
   end
   Engine["engine<br/>RealStats / EffectiveStat"] --> Core
   RM["read model(JSON)<br/>ポケモン(種族値・日本語名)"] -->|"SPEED_POKEMON_PATH"| Master
-  Pokedex["pokedex export<br/>(データレーン。SP4)"] -.-> RM
+  Pokedex["pokedex export<br/>(データレーン。ADR-0603)"] -.-> RM
 ```
 
 ## ディレクトリ
@@ -21,14 +21,14 @@ flowchart LR
 | パス | 役割 |
 |---|---|
 | `api/openapi.yaml` | 外部 API 契約の正(`make speed-gen` で `internal/api` を生成) |
-| `internal/speed` | 純粋 Go のコア。`Speed`(実数値・ランクは engine、スカーフだけ自前)、`Presets`/`BuildTable`(表の組み立て) |
+| `internal/speed` | 純粋 Go のコア。`Speed`(実数値・ランクは engine、スカーフだけ自前)、`Presets`/`BuildTable`(表の組み立て)、`Position`(自分の位置) |
 | `internal/master` | read model(ポケモン)の loader。検証に失敗したら起動しない |
-| `internal/httpapi` | HTTP の検証・判定順(400 → 503 → 200、それ以外は 500)・応答の変換 |
+| `internal/httpapi` | HTTP の検証・判定順(400 → 413 → 503 → 422 → 200、それ以外は 500)・応答の変換 |
 | `internal/api` | oapi-codegen の生成物(手で書かない) |
 | `cmd/api` | 起動・環境変数の読み込み・graceful shutdown |
 | `testdata/` | 架空データの example(実データは Git に置かない) |
-| `deploy/` | Kustomize(base / local。GitOps は SP4) |
-| `scripts/` | smoke |
+| `deploy/` | Kustomize(base / local=架空データ / local-readmodel=pokedex export の実データ。ADR-0603) |
+| `scripts/` | smoke・k3d への read model デプロイ |
 
 ## エンドポイント
 
@@ -36,6 +36,7 @@ flowchart LR
 |---|---|---|
 | `GET .../pokemon` | 使用可能なポケモン一覧(pokemonId 昇順) | 0600 |
 | `GET .../table` | 6 行のプリセット(`presets` で絞り込み)を速い順の段にまとめて返す。同じ値は同速として 1 段 | 0601 |
+| `POST .../position` | 自分のポケモン(`mode`: preset / custom / raw)の実数値と、表の中の位置(速い行数・同速の行・遅い行数) | 0602 |
 
 ## よく使うコマンド
 
@@ -45,7 +46,10 @@ make speed-test speed-lint speed-build   # ルートの make test / lint / build
 make speed-gen                           # OpenAPI を変えたら
 make speed-kustomize
 make speed-docker-build
+make speed-k3d-deploy-readmodel && make speed-smoke-readmodel   # pokedex export の実データで動かす(ADR-0603)
 ```
+
+read model の実データは `SPEED_READMODEL_DIR`(既定 `data/generated/readmodel`)の `speed-pokemon.json`。Git には置かない。
 
 ## 環境変数
 
@@ -57,4 +61,5 @@ make speed-docker-build
 ## 関連 ADR
 
 [0012](../../docs/adr/0012-domain-service-boundaries.md)(サービス境界)・[0600](../../docs/adr/0600-speed-sp0-foundation.md)(基盤・計算・read model)・
-[0601](../../docs/adr/0601-speed-sp1-table.md)(表の6行・速い順・同速)。直接依存とライセンスは [`DEPENDENCIES.md`](DEPENDENCIES.md)。
+[0601](../../docs/adr/0601-speed-sp1-table.md)(表の6行・速い順・同速)・[0602](../../docs/adr/0602-speed-sp2-position.md)(自分の位置)・[0603](../../docs/adr/0603-speed-sp4-readmodel-wiring.md)(read model の配線)。
+直接依存とライセンスは [`DEPENDENCIES.md`](DEPENDENCIES.md)。

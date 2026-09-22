@@ -22,7 +22,7 @@ import {
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
 import { fileWasmLoader, requireWasmArtifacts } from "../test/fileWasmLoader";
-import type { BulkRequest, CalcEngine, Item, Move } from "./types";
+import type { Ability, BulkRequest, CalcEngine, Item, Move } from "./types";
 import { createWasmEngine } from "./wasmEngine";
 
 /** ADR-0009 §1 の既定カタログ(presetKeys 省略時、技の分類で選ばれる5行)の Key と順序。 */
@@ -256,4 +256,86 @@ describe("calcBulk(攻撃側プリセット。P4-3)", () => {
       expect(xFull[0]).toBeGreaterThan(none[0] ?? Number.POSITIVE_INFINITY);
     },
   );
+});
+
+// P2-3b(ADR-0106): AbilityEffect に defImmuneTypes・defAbsorbTypes を追加。
+// この境界(engine/wasmapi/dto.go の abilityEffectDTO)は WASM も HTTP も共有しているので、
+// ここで確かめるのは「Web が組み立てた defImmuneTypes/defAbsorbTypes が本物の engine.wasm に通り、
+// 無効・吸収としてダメージを 0 にする」こと(足さないとブラウザだけ無効・吸収が効かなくなる。データレーン依頼)。
+describe("特性による無効・吸収(P2-3b。ADR-0106)", () => {
+  test("defImmuneTypes に技のタイプを入れると、相性で通っていた技もダメージが 0 になる", async () => {
+    const { attacker, defender, move } = matchup("physical");
+    const baseline = await engine.calc(
+      buildCalcRequest({
+        attacker: attackerOf(attacker),
+        defender: attackerOf(defender),
+        move,
+        typeChart: master.typeChart,
+      }),
+    );
+    expect(baseline).toMatchObject({ ok: true });
+    if (!baseline.ok) {
+      return;
+    }
+    // 前提: 特性を足す前は普通にダメージが通る(この技のタイプが相性表ですでに無効ではないことの確認)。
+    expect(baseline.value.maxDamage).toBeGreaterThan(0);
+
+    const immuneAbility: Ability = {
+      id: "test-immune",
+      nameJa: "テストむこうタイプ",
+      effect: { defImmuneTypes: [move.type] },
+    };
+    const result = await engine.calc(
+      buildCalcRequest({
+        attacker: attackerOf(attacker),
+        defender: { ...attackerOf(defender), ability: immuneAbility },
+        move,
+        typeChart: master.typeChart,
+      }),
+    );
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(result.value.rolls.every((roll) => roll === 0)).toBe(true);
+      expect(result.value.minDamage).toBe(0);
+      expect(result.value.maxDamage).toBe(0);
+    }
+  });
+
+  test("defAbsorbTypes に技のタイプを入れると、相性で通っていた技もダメージが 0 になる", async () => {
+    const { attacker, defender, move } = matchup("special");
+    const baseline = await engine.calc(
+      buildCalcRequest({
+        attacker: attackerOf(attacker),
+        defender: attackerOf(defender),
+        move,
+        typeChart: master.typeChart,
+      }),
+    );
+    expect(baseline).toMatchObject({ ok: true });
+    if (!baseline.ok) {
+      return;
+    }
+    expect(baseline.value.maxDamage).toBeGreaterThan(0);
+
+    const absorbAbility: Ability = {
+      id: "test-absorb",
+      nameJa: "テストきゅうしゅう",
+      // 副次効果(回復)込みでも、ダメージ計算機はその値を読まずに 0 を返す(ADR-0106 §決定4)。
+      effect: { defAbsorbTypes: { [move.type]: { healNumerator: 1, healDenominator: 4 } } },
+    };
+    const result = await engine.calc(
+      buildCalcRequest({
+        attacker: attackerOf(attacker),
+        defender: { ...attackerOf(defender), ability: absorbAbility },
+        move,
+        typeChart: master.typeChart,
+      }),
+    );
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(result.value.rolls.every((roll) => roll === 0)).toBe(true);
+      expect(result.value.minDamage).toBe(0);
+      expect(result.value.maxDamage).toBe(0);
+    }
+  });
 });

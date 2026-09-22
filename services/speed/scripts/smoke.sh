@@ -109,4 +109,50 @@ if [ "$invalid_presets_status" != "400" ] || ! grep -qF '"code":"invalid_request
   exit 1
 fi
 
-echo "speed smoke: health=200 pokemon=200 (count=8) missing_headers=400 table=200 (tiers=7, tie 219) invalid_presets=400"
+# SP2 (ADR-0602 §3/§4): one's own position in the table. 9002-000 at max is 146, which 9005-000 also
+# reaches (same base speed 81), so the tie holds both rows and faster/slower split the remaining 46 of
+# the 48 rows (8 pokemon x 6 presets).
+position_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  "$base_url/api/speed/v1/position" \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  -H 'Content-Type: application/json' \
+  -d '{"mode":"preset","pokemonId":"9002-000","preset":"max","scarf":false}' || printf '000')
+if [ "$position_status" != "200" ]; then
+  echo "speed position failed: HTTP $position_status" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+for key in '"speed":146' '"faster":29' '"slower":17' '"pokemonId":"9005-000"'; do
+  if ! grep -qF "$key" "$body_file"; then
+    echo "speed position body is missing $key" >&2
+    cat "$body_file" >&2
+    exit 1
+  fi
+done
+
+invalid_position_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  "$base_url/api/speed/v1/position" \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  -H 'Content-Type: application/json' \
+  -d '{"mode":"preset","pokemonId":"9002-000","preset":"max","scarf":false,"sp":32}')
+if [ "$invalid_position_status" != "400" ] || ! grep -qF '"code":"invalid_request"' "$body_file"; then
+  echo "speed position with a field the mode does not need: HTTP $invalid_position_status, want 400 invalid_request" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+
+unknown_position_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  "$base_url/api/speed/v1/position" \
+  -H 'X-Device-Id: smoke-device' \
+  -H 'X-Session-Id: smoke-session' \
+  -H 'Content-Type: application/json' \
+  -d '{"mode":"preset","pokemonId":"9999-000","preset":"max","scarf":false}')
+if [ "$unknown_position_status" != "422" ] || ! grep -qF '"code":"unknown_pokemon"' "$body_file"; then
+  echo "speed position with an unknown pokemonId: HTTP $unknown_position_status, want 422 unknown_pokemon" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+
+echo "speed smoke: health=200 pokemon=200 (count=8) missing_headers=400 table=200 (tiers=7, tie 219) invalid_presets=400 position=200 (146, 29/2/17) invalid_position=400 unknown_pokemon=422"

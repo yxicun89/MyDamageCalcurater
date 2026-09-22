@@ -121,6 +121,16 @@ func isKnownPreset(id PresetID) bool {
 	return false
 }
 
+// presetByID は presetDefinitions から id の定義を返す(SP2 の MinimalPresets・Position が使う)。
+func presetByID(id PresetID) (Preset, bool) {
+	for _, p := range presetDefinitions {
+		if p.ID == id {
+			return p, true
+		}
+	}
+	return Preset{}, false
+}
+
 // BuildTable は roster の各ポケモンについて presets の各行の素早さを Speed で計算し、同じ値を 1 つの段に
 // まとめた表を返す(ADR-0601 §3)。段は素早さの降順、段の中は pokemonId の昇順 → ADR-0601 §2 の順。
 // presets の検証は NormalizePresets と同じ。Speed のエラー(種族値の範囲外など)は包んで返す。

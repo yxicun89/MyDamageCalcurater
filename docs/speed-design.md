@@ -80,4 +80,5 @@ Ingress は `/api/speed`(balance の `/api/balance` と同じ形)。
 | SP1 | 表(6 行の生成・速い順・同速のまとめ・絞り込みの API) |
 | SP2 | 自分のポケモンの位置(最小の選択 + オプション → 実数値 → 表の中の位置) |
 | SP3 | Web の素早さ画面(`web/src/speed/`。左右の配置・自分の位置の強調)。Web の骨組みが無い間は画面部品とテストだけ先に作る(2026-09-22 ユーザー回答) |
-| SP4 | pokedex の read model への切り替え、k3d の疎通、GitOps(digest 固定の overlay と Argo CD Application) |
+| SP4 | pokedex の read model への切り替え、k3d の疎通(ADR-0603) |
+| SP5 | GitOps(digest 固定の overlay と Argo CD Application)。イメージの digest が決まる段階で着手(2026-09-22 ADR-0603 で SP4 から分離) |
