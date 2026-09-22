@@ -16,7 +16,7 @@ Next: 他レーン待ち。(1) データレーンの pokedex-svc(P2-3)が main �
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
-Active: なし
+Active: Claude Code
 Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
 Status: P4-1〜P4-6・P4-8 完了・main に統合(PR #22・#28・#33。critic PASS)。Web のテストはルートの make test / lint / build に含まれる。
 人間待ち: P4-5 のブラウザ実機確認(Chrome・Safari。手順は docs/verify-m1.md §2)。P4-7 は verify-m1.md のドラフト(M1 の残りを待つ)
