@@ -205,3 +205,13 @@
 
 ### Next
 - export ができたら read model を差し替えて実データで確認
+
+## 2026-09-22 タイプバランスレーン(Claude Code): 整備
+
+### Done
+- TB5 を PR #29 で統合
+- 整備: HTTP の 500 テスト、typed nil の provider の正規化(Ptr/Func 等のみ。nil slice/map は空の値)、read model の JSON Schema 4つ(ADR-0402)、HTTP 層の検証・解決・422 変換を validate.go に共通化、おすすめの穴を AnalyzeDefense/AnalyzeCoverage から導出、x/text を最新に。CoverageMultiplier の enum に null を入れる案は oapi-codegen が "<nil>" の定数を作るため不採用(ADR-0016 追記)
+- critic FAIL(ADR 無し・schema の説明の誤り)→ 修正
+
+### Next
+- pokedex export を待って read model を差し替え
