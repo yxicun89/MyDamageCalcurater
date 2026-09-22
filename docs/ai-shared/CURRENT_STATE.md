@@ -66,13 +66,16 @@ Next: SP3 の PR を作って main に統合 → SP5(GitOps。ADR-0603 で SP4 �
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
 Active: Claude Code
-Branch: feat/judge-jd1(作業ディレクトリ ~/MyDamageCalcurater-judge。JD0 の feat/judge-jd0 は PR #92 で main に統合済み・削除)
-Status: JD0(基盤)は main に統合済み(PR #92)。ADR-0700(基盤・上流の呼び方・エラーの正規化・受け入れ条件8件)、docs/judge-design.md §4 の
-決定事項5件(同速は `outspeeds`/`speedTie` を別に返す / JD1 は自分が殴る側だけ / 独自 Ingress `/api/judge` / ADR 帯 0700 / 技の追加効果は
-request の `ranks` で受ける)、`internal/client`・`internal/httpapi`・`cmd/api`・deploy/k8s・Dockerfile が入っている。
-Next: JD1 着手。`services/judge/api/openapi.yaml` に `POST /api/judge/v1/outspeed-and-ko` を足すところから
-(quick-scanner → spec-writer → implementer → critic)。response は `outspeeds`・`speedTie`・`ko` の3つ(ADR-0700 §6-1・§6-5)。
-request は自分・相手の `Individual`(既存の `api/openapi.yaml` の型を再利用)+ moveId + field(judge-design.md §3 JD1)
+Branch: feat/judge-jd1(作業ディレクトリ ~/MyDamageCalcurater-judge。PR 作成待ち。JD0 の feat/judge-jd0 は PR #92 で main に統合済み・削除)
+Status: JD0(基盤。PR #92)に続き JD1(判定 API 本体)完了。ADR-0701: `POST /api/judge/v1/outspeed-and-ko` を実装。
+素早さは `engine.EffectiveStat`(実数値→ランク)→ こだわりスカーフ(×6144/4096 五捨五超入。既定 item ID `choicescarf`、
+`JUDGE_CHOICE_SCARF_ITEM_ID` で上書き可)。性格は新設 `Pokedex.Natures`(`GET /api/pokedex/natures`。1リクエスト1回で
+attacker・defender 両方を解決)。上流呼び出しは逐次(natures→species×2→calc。並列化しない。検査順を契約に書き
+エラーの勝ち負けを固定するため)。response は `outspeeds`・`speedTie`・`attackerSpeed`・`defenderSpeed`・`ko`。
+critic 2回目で PASS(1回目 NG 重要3件: 上流エラーのログ未記録・pokedex 400 の扱いが ADR 未記載・defender 側スカーフ/
+種族差のテスト欠如。すべて修正・テスト追加済み)。`make test`/`make lint`/`make build`(ルート)が緑
+Next: PR を作って main へ統合(このセッションの残タスク)。JD2 以降(複数の相手候補・場の効果・画面)は
+plan.md の方針どおり、着手前にユーザーへ確認する
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠
