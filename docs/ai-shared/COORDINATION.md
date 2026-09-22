@@ -79,6 +79,11 @@ git status --short --branch        # 未コミット・未 push が無いか
 ローカルで `git merge` して `origin/main` へ直接 `push` することは、main への直接 push を拒否する deny ルールで従来どおり止まる。
 main への統合は必ず PR(`gh pr create` → `gh pr merge`)を経由する。
 
+**注意(2026-09-23 に判明)**: `.claude/settings.json`(このリポジトリに Git 管理されている、全ワークツリー共通のプロジェクト設定)は
+ユーザーのグローバル設定より優先される。当初グローバル設定だけ `gh pr merge` を allow にしたが、プロジェクト側の `.claude/settings.json` に
+`gh pr merge` の ask ルールが残っていたため実際には確認を求められ続けていた。プロジェクト側も allow に揃えたので、以後は両方が allow の状態。
+権限設定を変えるときは、グローバル設定だけでなくこのプロジェクトの `.claude/settings.json`(Git 管理下)も確認すること。
+
 条件(すべて満たすとき PR を作ってマージしてよい):
 1. そのレーンのテストが通る。ダメージ計算は `make test` と、計算を変えたら `make test-golden`、WASM 境界を変えたら `make test-wasm`。
    タイプバランスは `docs/type-balance-test-strategy.md` に沿ったテスト(未作成の間は `services/balance` のテスト全件)。
