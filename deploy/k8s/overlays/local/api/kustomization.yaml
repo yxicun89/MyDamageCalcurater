@@ -1,13 +1,11 @@
-# local overlay 専用の Kustomize Component(ADR-0203 §3)。calc-svc に例のマスタと相性表を渡し、
+# local overlay 専用の Kustomize Component(ADR-0203 §3。ADR-0204 §4)。calc-svc に例のマスタ一式を渡し、
 # gateway に Vite の開発サーバのオリジンを CORS で許可する。base はどちらも持たない
 # (base は環境変数だけで動く必要があるため。クラウドは別の渡し方をする)。
 #
-# master.example.json・typechart.example.json は元ファイル(単一の正)のコピー。Kustomize の load
-# restrictor が overlay の外のファイルを読めないためコピーしている。元ファイルが変わったら
-# コピーし直す(services/calc/cmd/calc/manifest_test.go の TestManifestCalcLocalDataFromOverlayCopies が
-# バイト一致を固定する):
+# master.example.json は元ファイル(単一の正。相性表を含む MasterExport の形)のコピー。Kustomize の load
+# restrictor が overlay の外のファイルを読めないためコピーしている。元ファイルが変わったらコピーし直す
+# (services/calc/cmd/calc/manifest_test.go の TestManifestCalcLocalDataFromOverlayCopies がバイト一致を固定する):
 #   cp services/calc/testdata/master.example.json deploy/k8s/overlays/local/api/master.example.json
-#   cp testdata/golden/typechart.json deploy/k8s/overlays/local/api/typechart.example.json
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 
@@ -15,9 +13,6 @@ configMapGenerator:
   - name: calc-master-example
     files:
       - master.json=master.example.json
-  - name: calc-typechart
-    files:
-      - typechart.json=typechart.example.json
 
 patches:
   - path: calc-patch.yaml

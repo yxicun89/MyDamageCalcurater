@@ -2,16 +2,15 @@
 // (ADR-0202 §テスト)。calc-svc の httpapi / master は services/calc/internal にあり、Go の internal 規則で
 // calc の外からは import できないため、この薄い入口だけを公開する。本番コードから使わない。
 //
-// マスタは services/calc/testdata/master.example.json(架空データ)、相性表は testdata/golden/typechart.json
-// (数値と英語 ID のみ。ADR-0015 と同じ扱い)を読む。パスはこのファイルの位置から解決するので、
-// 呼び出し側のテストの作業ディレクトリに依存しない。
+// マスタは services/calc/testdata/master.example.json(MasterExport の形の架空データ。相性表を含む。ADR-0204)を読む。
+// パスはこのファイルの位置から解決するので、呼び出し側のテストの作業ディレクトリに依存しない。
 package calctest
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"runtime"
 
@@ -24,12 +23,12 @@ import (
 const (
 	SpeciesAttacker = "9001-000" // テストモン(normal)
 	SpeciesDefender = "9002-000" // テストガード(water/steel)
-	MovePhysical    = "test-beam"
-	NatureAtkUp     = "test-atk-up"
-	NatureNeutral   = "test-neutral-a"
+	MovePhysical    = "testbeam"
+	NatureAtkUp     = "testatkup"
+	NatureNeutral   = "testneutrala"
 )
 
-// NewExampleHandler は例のマスタと共有の相性表で calc-svc の HTTP ハンドラ(httpapi.NewHandler)を作る。
+// NewExampleHandler は例のマスタで calc-svc の HTTP ハンドラ(httpapi.NewHandler)を作る。
 func NewExampleHandler() (http.Handler, error) {
 	_, self, _, ok := runtime.Caller(0)
 	if !ok {
@@ -37,29 +36,14 @@ func NewExampleHandler() (http.Handler, error) {
 	}
 	calcDir := filepath.Dir(filepath.Dir(self)) // services/calc
 	masterPath := filepath.Join(calcDir, "testdata", "master.example.json")
-	chartPath := filepath.Join(calcDir, "..", "..", "testdata", "golden", "typechart.json")
 
-	mf, err := os.Open(masterPath)
-	if err != nil {
-		return nil, fmt.Errorf("calctest: 例のマスタを開けない: %w", err)
-	}
-	defer mf.Close()
-	snapshot, err := master.LoadSnapshot(mf)
+	export, err := master.FileSource{Path: masterPath}.Fetch(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("calctest: 例のマスタを読めない: %w", err)
 	}
-	tf, err := os.Open(chartPath)
+	store, err := master.FromExport(export)
 	if err != nil {
-		return nil, fmt.Errorf("calctest: 相性表を開けない: %w", err)
-	}
-	defer tf.Close()
-	chart, err := master.LoadTypeChart(tf)
-	if err != nil {
-		return nil, fmt.Errorf("calctest: 相性表を読めない: %w", err)
-	}
-	store, err := master.New(snapshot, chart)
-	if err != nil {
-		return nil, fmt.Errorf("calctest: マスタの整合性検査に失敗: %w", err)
+		return nil, fmt.Errorf("calctest: 例のマスタの検証に失敗: %w", err)
 	}
 	return httpapi.NewHandler(store), nil
 }

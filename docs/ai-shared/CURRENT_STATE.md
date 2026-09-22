@@ -9,10 +9,10 @@ Next: P2-2d(CronJob と make import)→ P2-3(pokedex-svc。内部 API・natures�
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
-Active: なし
-Branch: (次の作業で main から feat/api-<名前> を切る。作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: Phase 3 完了。P3-1(ADR-0200・0201。PR #14)・P3-2 gateway(ADR-0202。PR #23)・P3-3 契約表と k3d のデプロイ・スモーク(ADR-0203。critic PASS)。k3d の既存クラスタで make api-k3d-deploy && make api-smoke 成功
-Next: 他レーン待ち。(1) データレーンの pokedex-svc(P2-3)が main に入ったら、gateway の local overlay に GATEWAY_POKEDEX_URL を設定し、smoke.sh の /api/pokedex の期待値 503→200 と TestManifestGatewayLocalConfig を変える。(2) 共通マスタ(P2-2a の services/internal/master)の写像が入ったら calc-svc の暫定 Store(services/calc/internal/master)を差し替える。(3) Web(P4-5)・iOS から API 契約の要望があれば DECISIONS.md で受ける
+Active: Claude Code
+Branch: feat/api-master-adapter(作業ディレクトリ ~/MyDamageCalcurater-api)
+Status: Phase 3 完了(PR #14・#23・#30)。P3-4 calc-svc のマスタを pokedex-svc の内部 API(MasterExport)から受け取る形に変更(ADR-0204。critic PASS)。k3d と dev はファイル方式
+Next: (1) Web レーンの依頼: gateway に任意の GATEWAY_WEB_URL(設定時は /api・/assets・/healthz 以外を Service web:80 へ転送。k3d の local overlay は http://web)。(2) pokedex-svc(P2-3。データレーンが /internal/pokedex/master・natures・showdownId を受け入れ済み)が main に入ったら、calc の local overlay を URL 方式(CALC_MASTER_URL=http://pokedex)に、gateway に GATEWAY_POKEDEX_URL を設定し smoke の /api/pokedex を 503→200 に。(3) 手順書(gateway・calc の README)を AGENTS.md「手順書の書き方」に合わせる
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)

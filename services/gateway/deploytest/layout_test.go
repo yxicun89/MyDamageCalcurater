@@ -246,7 +246,7 @@ func expandVars(makefile, recipe string) string {
 	return out
 }
 
-// AC-S7: scripts/dev.sh は占位ではなく、例のマスタで calc-svc と gateway を起動し、Ctrl-C で両方を止める。
+// AC-S7: scripts/dev.sh は占位ではなく、例のマスタ(ファイル方式。ADR-0204)で calc-svc と gateway を起動し、Ctrl-C で両方を止める。
 // 実際の起動は手動の確認(`make dev` の後に API_URL を渡して smoke.sh を流す。ADR-0203 §6)。
 func TestDevScript(t *testing.T) {
 	const path = "scripts/dev.sh"
@@ -256,12 +256,17 @@ func TestDevScript(t *testing.T) {
 	}
 	for _, want := range []string{
 		"./calc/cmd/calc", "./gateway/cmd/gateway",
-		"CALC_MASTER_PATH", "CALC_TYPECHART_PATH", "master.example.json", "testdata/golden/typechart.json",
+		"CALC_MASTER_PATH", "master.example.json",
 		"GATEWAY_CALC_URL", "DEV_CALC_PORT", "DEV_GATEWAY_PORT", "trap",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("%s に %q が無い", path, want)
 		}
+	}
+	// ADR-0204: 相性表は MasterExport(例のマスタ)に含まれる。CALC_TYPECHART_PATH は廃止で、
+	// 設定されていると calc-svc は起動しない。
+	if strings.Contains(src, "CALC_TYPECHART_PATH") {
+		t.Errorf("%s に廃止した CALC_TYPECHART_PATH が残っている(ADR-0204)", path)
 	}
 	if out, err := exec.Command("bash", "-n", deploytest.RepoPath(t, path)).CombinedOutput(); err != nil {
 		t.Errorf("bash -n %s: %v\n%s", path, err, out)

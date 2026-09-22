@@ -23,11 +23,11 @@ device_id=00000000-0000-4000-8000-00000000d001
 session_id=00000000-0000-4000-8000-00000000d002
 
 # 例のマスタの架空の ID(services/calc/calctest と同じ値)。
-attacker='{"speciesKey":"9001-000","natureId":"test-atk-up","sp":{"hp":0,"atk":32,"def":0,"spa":0,"spd":0,"spe":32}}'
-defender='{"speciesKey":"9002-000","natureId":"test-neutral-a","sp":{"hp":32,"atk":0,"def":0,"spa":0,"spd":0,"spe":0}}'
-calc_body='{"format":"single","attacker":'"$attacker"',"defender":'"$defender"',"moveId":"test-beam"}'
-bulk_body='{"format":"single","attacker":'"$attacker"',"defenderSpeciesKey":"9002-000","moveId":"test-beam"}'
-reverse_body='{"format":"single","side":"defender","known":'"$attacker"',"unknownSpeciesKey":"9002-000","moveId":"test-beam","observations":[{"percent":18}]}'
+attacker='{"speciesKey":"9001-000","natureId":"testatkup","sp":{"hp":0,"atk":32,"def":0,"spa":0,"spd":0,"spe":32}}'
+defender='{"speciesKey":"9002-000","natureId":"testneutrala","sp":{"hp":32,"atk":0,"def":0,"spa":0,"spd":0,"spe":0}}'
+calc_body='{"format":"single","attacker":'"$attacker"',"defender":'"$defender"',"moveId":"testbeam"}'
+bulk_body='{"format":"single","attacker":'"$attacker"',"defenderSpeciesKey":"9002-000","moveId":"testbeam"}'
+reverse_body='{"format":"single","side":"defender","known":'"$attacker"',"unknownSpeciesKey":"9002-000","moveId":"testbeam","observations":[{"percent":18}]}'
 
 body_file=$(mktemp)
 trap 'rm -f "$body_file"' EXIT
@@ -131,7 +131,11 @@ expect_error 400 invalid_header "POST /api/calc with a non-UUID session id"
 request GET /api/pokedex/natures
 expect_error 503 upstream_unavailable "GET /api/pokedex/natures (pokedex-svc not deployed yet)"
 
-# 6. 任意: balance がデプロイされているとき、/api/balance は balance の Ingress に届く(gateway の `/` が奪わない)。
+# 6. サービス間の内部 API(/internal/*。ADR-0204)は gateway が外に出さない(ヘッダの有無によらず 404 not_found)。
+request GET /internal/pokedex/master "" none
+expect_error 404 not_found "GET /internal/pokedex/master (internal API must not be exposed by the gateway)"
+
+# 7. 任意: balance がデプロイされているとき、/api/balance は balance の Ingress に届く(gateway の `/` が奪わない)。
 check_balance=no
 case "$balance_mode" in
   on) check_balance=yes ;;
@@ -150,4 +154,4 @@ if [ "$check_balance" = yes ]; then
   balance_result=200
 fi
 
-echo "api smoke: calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=503 balance=$balance_result"
+echo "api smoke: calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=503 internal=404 balance=$balance_result"

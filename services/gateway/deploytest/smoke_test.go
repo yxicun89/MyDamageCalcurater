@@ -110,13 +110,13 @@ func TestSmokeScriptIsPOSIXShell(t *testing.T) {
 	}
 }
 
-// AC-S6: calc-svc と gateway がそろっていて pokedex が未設定なら成功する。
+// AC-S6: calc-svc と gateway がそろっていて pokedex が未設定なら成功する。内部 API(/internal/*)は 404(ADR-0204)。
 func TestSmokeScriptPassesAgainstGatewayAndCalc(t *testing.T) {
 	out, err := runSmoke(t, startStack(t, stack{}), "3")
 	if err != nil {
 		t.Fatalf("smoke.sh が失敗: %v\n%s", err, out)
 	}
-	want := "api smoke: calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=503 balance=skipped"
+	want := "api smoke: calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=503 internal=404 balance=skipped"
 	if !strings.Contains(out, want) {
 		t.Errorf("smoke.sh の出力に %q が無い:\n%s", want, out)
 	}
