@@ -1,0 +1,17 @@
+# Web レーンだけを k3d に載せるための overlay(P4-11。deploy/k8s/overlays/local-api/kustomization.yaml と同じ考え方)。
+#
+# クラスタ全体の立ち上げ(namespace・mysql・pokedex-migrate Job を含む)は `make up`(scripts/up.sh)が担う。
+# `deploy/k8s/overlays/local`(共有)を丸ごと apply すると、pokedex-migrate Job の再実行(spec.template は
+# immutable なので既存 Job と食い違うと失敗する)や mysql の意図しない上書きを引き起こしうる
+# (k3d クラスタは他レーンと共有)。
+#
+# `web/Makefile` の `web-k3d-deploy` は常にここ(base/web と、local overlay の Component `local/web` の
+# イメージタグ差し替えだけ)を適用する。他レーンのリソース(namespace・mysql・pokedex-migrate Job・
+# calc・gateway 等)には一切触らない。
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: pokecalc
+resources:
+  - ../../base/web
+components:
+  - ../local/web

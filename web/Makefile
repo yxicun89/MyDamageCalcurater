@@ -51,3 +51,42 @@ web-e2e: wasm web-deps ## Web の E2E(Playwright・chromium。オフライン = 
 .PHONY: web-e2e-online
 web-e2e-online: wasm web-deps ## Web の E2E(オンライン = API。例データで calc-svc も起動する。要 Go)
 	@cd $(WEB_DIR) && npm run e2e:online
+
+# --- P4-11: コンテナ(k3d)---
+# 既定の WEB_URL(web-k3d-smoke)は `web-k3d-open` の port-forward の宛先(localhost:5173)に合わせる。
+WEB_URL ?= http://localhost:5173
+
+.PHONY: web-docker-build
+web-docker-build: ## Web のコンテナイメージ(nginx。engine.wasm を含む)を local タグでビルドする(コンテキストはリポジトリルート)
+	@docker build -f web/Dockerfile -t pokecalc/web:local .
+
+.PHONY: web-e2e-container
+web-e2e-container: web-docker-build web-deps ## 作ったイメージを docker run で起動し、配信設定(SPA・MIME・キャッシュ・gzip)を E2E で確かめる
+	@cd $(WEB_DIR) && npm run e2e:container
+
+# クラスタ全体の立ち上げ(namespace・mysql・pokedex-migrate Job を含む)は `make up`(scripts/up.sh)が担う。
+# `deploy/k8s/overlays/local`(共有)を丸ごと apply すると、他レーンの Job・DB を意図せず巻き込みうる
+# (k3d クラスタは他レーンと共有。services/gateway/Makefile の api-k3d-deploy と同じ考え方)。Web レーンは
+# 専用 overlay `deploy/k8s/overlays/local-web`(base/web と Component local/web だけ)で
+# 自分の Deployment だけを apply する。
+.PHONY: web-k3d-deploy
+web-k3d-deploy: web-docker-build ## k3d(既存クラスタ。make up 済み)へ Web だけをデプロイする
+	@test "$$(kubectl config current-context)" = "k3d-$(CLUSTER)" || { echo "web-k3d-deploy: kubectl のコンテキストが k3d-$(CLUSTER) ではない" >&2; exit 1; }
+	@k3d image import pokecalc/web:local --cluster $(CLUSTER)
+	@kubectl apply -k deploy/k8s/overlays/local-web
+	@kubectl -n pokecalc rollout restart deployment/web
+	@kubectl -n pokecalc rollout status deployment/web --timeout=120s
+
+.PHONY: web-k3d-open
+web-k3d-open: ## Web の Service へ port-forward する(localhost:5173。Ctrl-C で終了)
+	@kubectl -n pokecalc port-forward svc/web 5173:80
+
+.PHONY: web-k3d-smoke
+web-k3d-smoke: ## k3d 上の Web をスモーク(既定 http://localhost:5173。WEB_URL で上書き)
+	@WEB_URL=$(WEB_URL) web/scripts/k3d-smoke.sh
+
+.PHONY: web-kustomize
+web-kustomize: ## base・local・local-web overlay が描画できることを確かめる(apply しない)
+	@kubectl kustomize deploy/k8s/base >/dev/null
+	@kubectl kustomize deploy/k8s/overlays/local >/dev/null
+	@kubectl kustomize deploy/k8s/overlays/local-web >/dev/null

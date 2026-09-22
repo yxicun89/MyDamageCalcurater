@@ -16,12 +16,12 @@ Next: (1) Web レーンの依頼: gateway に任意の GATEWAY_WEB_URL(設定時
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
-Active: なし
+Active: Claude Code
 Branch: feat/web-p4(作業ディレクトリ ~/MyDamageCalcurater-web)
-Status: P4-1〜P4-6・P4-8・P4-9 完了・main に統合(PR #22・#28・#33 と P4-9 の PR。critic PASS)。Web のテストはルートの make test / lint / build に含まれる。
-人間待ち: P4-5 のブラウザ実機確認(Chrome・Safari。手順は docs/verify-m1.md §2)。P4-7 は verify-m1.md のドラフト(M1 の残りを待つ)
-Next: (1) P4-7 の完成: P2-2c/d・P2-3 pokedex-svc・P3-3 が main に入ったら、オンラインのときにマスタを API から読む MasterSource を作り(ADR-0301 §4)、
-verify-m1.md §4 を手順に置き換える。(2) P5-5(M2 の Web: 履歴・よく計算する相手・構築ビルダー)は record/team の API を待つ
+Status: P4-1〜P4-6・P4-8〜P4-11 完了(critic PASS)。P4-11 で Web をコンテナ(nginx)にし k3d に載せた(`make web-k3d-deploy`・`web-k3d-open`・`web-k3d-smoke`。ADR-0302)。
+P4-5 は Chrome で確認済み(Safari は未確認)。P4-7 は verify-m1.md のドラフト
+Next: P4-14 と DOC-web(verify-m1.md を AGENTS.md「手順書の書き方」の形に・k3d を主に、web/README.md)。続いて P4-12 タイプバランスの画面。
+gateway が Web に転送する GATEWAY_WEB_URL は API レーンが実装中(入ったら local overlay の値と手順を追従)
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
