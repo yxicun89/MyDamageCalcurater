@@ -755,6 +755,9 @@ func TestRecommendationsInternalErrors(t *testing.T) {
 			d.Abilities = failingAbilities{err: errors.New("ability backend exploded at /secret/abilities.json")}
 		}), body: recBody},
 		{name: "nil type chart", deps: withDeps(func(d *Dependencies) { d.TypeChart = nil })},
+		{name: "type chart matchup failure", deps: withDeps(func(d *Dependencies) {
+			d.TypeChart = failingChart{err: errors.New("type chart backend exploded")}
+		})},
 		{name: "invalid member ability effect from provider", deps: withDeps(func(d *Dependencies) {
 			d.Abilities = testAbilities{"ability-9003": fictionalAbility("ability-9003", balance.AbilityEffect{Kind: "heal", AttackType: balance.TypeFire})}
 		}), body: withAbilityBody},

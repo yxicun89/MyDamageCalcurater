@@ -35,17 +35,11 @@ func threats(c *echo.Context, deps Dependencies) error {
 		})
 	}
 
-	if len(request.Members) < 1 || len(request.Members) > balance.MaxMembers {
-		return c.JSON(http.StatusBadRequest, api.Error{
-			Code:    api.InvalidRequest,
-			Message: "members must contain between one and six entries",
-		})
+	if err := validateCount(c, len(request.Members), "members"); err != nil {
+		return err
 	}
-	if len(request.Threats) < 1 || len(request.Threats) > balance.MaxMembers {
-		return c.JSON(http.StatusBadRequest, api.Error{
-			Code:    api.InvalidRequest,
-			Message: "threats must contain between one and six entries",
-		})
+	if err := validateCount(c, len(request.Threats), "threats"); err != nil {
+		return err
 	}
 
 	var hasMoveID, hasAbilityID bool
@@ -53,10 +47,7 @@ func threats(c *echo.Context, deps Dependencies) error {
 		for _, entry := range side {
 			entryHasMoveID, entryHasAbilityID, err := validateThreatsEntry(entry)
 			if err != nil {
-				return c.JSON(http.StatusBadRequest, api.Error{
-					Code:    api.InvalidRequest,
-					Message: err.Error(),
-				})
+				return badRequest(c, err.Error())
 			}
 			hasMoveID = hasMoveID || entryHasMoveID
 			hasAbilityID = hasAbilityID || entryHasAbilityID
@@ -86,25 +77,25 @@ func threats(c *echo.Context, deps Dependencies) error {
 
 	memberCombatants, err := resolveThreatsPokemon(deps, request.Members)
 	if err != nil {
-		return threatsResolveError(c, err)
+		return resolveError(c, err)
 	}
 	threatCombatants, err := resolveThreatsPokemon(deps, request.Threats)
 	if err != nil {
-		return threatsResolveError(c, err)
+		return resolveError(c, err)
 	}
 
 	if err := resolveThreatsMoves(deps, request.Members, memberCombatants); err != nil {
-		return threatsResolveError(c, err)
+		return resolveError(c, err)
 	}
 	if err := resolveThreatsMoves(deps, request.Threats, threatCombatants); err != nil {
-		return threatsResolveError(c, err)
+		return resolveError(c, err)
 	}
 
 	if err := resolveThreatsAbilities(deps, request.Members, memberCombatants); err != nil {
-		return threatsResolveError(c, err)
+		return resolveError(c, err)
 	}
 	if err := resolveThreatsAbilities(deps, request.Threats, threatCombatants); err != nil {
-		return threatsResolveError(c, err)
+		return resolveError(c, err)
 	}
 
 	analysis, err := balance.AnalyzeThreats(deps.TypeChart, memberCombatants, threatCombatants)
@@ -117,35 +108,22 @@ func threats(c *echo.Context, deps Dependencies) error {
 
 // validateThreatsEntry checks one member or threat entry (ADR-0400 §2/§6): the
 // pokemonId format, the moveIds presence/count/format/duplicates (mirrors coverage's
-// per-member checks, ADR-0016 §6.1: a missing or null moveIds decodes to a nil
-// slice, so this also rejects the field's omission or an explicit JSON null), and
-// the abilityId format when present. hasMoveID/hasAbilityID report whether the
-// entry names at least one, for the 503 checks.
+// per-member checks via the shared validateMoveIDs, ADR-0016 §6.1: a missing or null
+// moveIds decodes to a nil slice, so this also rejects the field's omission or an
+// explicit JSON null), and the abilityId format when present. hasMoveID/hasAbilityID
+// report whether the entry names at least one, for the 503 checks.
 func validateThreatsEntry(entry api.ThreatsRequestPokemon) (hasMoveID, hasAbilityID bool, err error) {
-	if !pokemonIDPattern.MatchString(entry.PokemonId) {
-		return false, false, errors.New("pokemonId must use the NNNN-NNN format")
+	if err := validatePokemonID(entry.PokemonId); err != nil {
+		return false, false, err
 	}
-	if entry.MoveIds == nil {
-		return false, false, errors.New("moveIds is required")
+	hasMoveID, err = validateMoveIDs(entry.MoveIds)
+	if err != nil {
+		return false, false, err
 	}
-	if len(entry.MoveIds) > balance.MaxMovesPerMember {
-		return false, false, errors.New("a member must have at most four moves")
-	}
-	seen := make(map[string]struct{}, len(entry.MoveIds))
-	for _, moveID := range entry.MoveIds {
-		if len(moveID) > maxMoveIDLength || !moveIDPattern.MatchString(moveID) {
-			return false, false, errors.New("moveId must match ^[a-z0-9]+(-[a-z0-9]+)*$ and be at most 40 characters")
-		}
-		if _, ok := seen[moveID]; ok {
-			return false, false, errors.New("moveIds must be distinct within a member")
-		}
-		seen[moveID] = struct{}{}
-	}
-	hasMoveID = len(entry.MoveIds) > 0
 
 	if entry.AbilityId != nil {
-		if len(*entry.AbilityId) > maxAbilityIDLength || !abilityIDPattern.MatchString(*entry.AbilityId) {
-			return hasMoveID, false, errors.New("abilityId must match ^[a-z0-9]+(-[a-z0-9]+)*$ and be at most 40 characters")
+		if err := validateAbilityIDFormat(*entry.AbilityId); err != nil {
+			return hasMoveID, false, err
 		}
 		hasAbilityID = true
 	}
@@ -203,34 +181,6 @@ func resolveThreatsAbilities(deps Dependencies, entries []api.ThreatsRequestPoke
 		combatants[i].Ability = &ability
 	}
 	return nil
-}
-
-// threatsResolveError maps a ResolveMembers/ResolveMoves/ResolveAbility error to its
-// 422 response, or to internalError for anything else (ADR-0400 §4/ADR-0014 §5.6:
-// the message names only the request ID, never adapter detail).
-func threatsResolveError(c *echo.Context, err error) error {
-	var unknownPokemon *balance.UnknownPokemonError
-	if errors.As(err, &unknownPokemon) {
-		return c.JSON(http.StatusUnprocessableEntity, api.Error{
-			Code:    api.UnknownPokemon,
-			Message: "unknown pokemonId: " + unknownPokemon.PokemonID,
-		})
-	}
-	var unknownMove *balance.UnknownMoveError
-	if errors.As(err, &unknownMove) {
-		return c.JSON(http.StatusUnprocessableEntity, api.Error{
-			Code:    api.UnknownMove,
-			Message: "unknown moveId: " + unknownMove.MoveID,
-		})
-	}
-	var unknownAbility *balance.UnknownAbilityError
-	if errors.As(err, &unknownAbility) {
-		return c.JSON(http.StatusUnprocessableEntity, api.Error{
-			Code:    api.UnknownAbility,
-			Message: "unknown abilityId: " + unknownAbility.AbilityID,
-		})
-	}
-	return internalError(c, err)
 }
 
 func toThreatsResponse(analysis balance.ThreatAnalysis) api.ThreatsResponse {

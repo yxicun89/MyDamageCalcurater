@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pokecalc.example.com/schema/balance/moves.schema.json",
+  "title": "balance move read model",
+  "description": "The moveId -> type/category read model consumed by BALANCE_MOVES_PATH (ADR-0016 §3). This is the canonical shape the data lane's `pokedex export` must produce; services/balance/internal/master/moves.go is the executable version of the same contract. Not expressible here: moveId must be unique across `moves` entries (a cross-array uniqueness constraint); the loader rejects duplicates, this schema does not.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "moves"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "description": "The only accepted value."
+    },
+    "moves": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "typeId": {
+      "type": "string",
+      "enum": [
+        "normal", "fire", "water", "electric", "grass", "ice",
+        "fighting", "poison", "ground", "flying", "psychic", "bug",
+        "rock", "ghost", "dragon", "dark", "steel", "fairy"
+      ]
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["moveId", "type", "category"],
+      "properties": {
+        "moveId": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "maxLength": 40
+        },
+        "type": { "$ref": "#/$defs/typeId" },
+        "category": {
+          "type": "string",
+          "enum": ["physical", "special", "status"]
+        }
+      }
+    }
+  }
+}

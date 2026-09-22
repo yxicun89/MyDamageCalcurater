@@ -17,6 +17,8 @@ damage-calc とは兄弟サービスで、互いの実行時 API には依存し
 - `internal/httpapi`: health・analyze・coverage・threats・recommendations の実装
 - `cmd/api`: プロセス起動・`BALANCE_POKEMON_TYPES_PATH` / `BALANCE_MOVES_PATH` / `BALANCE_ABILITIES_PATH` の
   読み込み・graceful shutdown
+- `schema/`: 4つの read model(ポケモンタイプ・技・特性・タイプ相性表)の JSON Schema(draft 2020-12)。
+  データレーンの `pokedex export` が出す形の正。`schema/schema_test.go` が example とタイプ相性表を検証する
 - `deploy`: balance 専用 Kustomize と manual-sync の Argo CD Application
 - `DEPENDENCIES.md`: 公開前確認用の直接依存・利用理由・license
 
@@ -48,6 +50,12 @@ ID は `9001-000` 以降)だけで、実 Pokémon マスタはコミットしな
 同じく temporary adapter。倍率は既約分数(`balance.Effectiveness`、float は使わない)で持つ。Git に置くのは
 schema と架空データの example(`testdata/abilities.example.json`、ID は `ability-9001` 以降)だけ
 (ADR-0002・ADR-0017 §2)。
+
+4つの read model すべての JSON Schema(draft 2020-12)を `schema/` に置く: `pokemon-types.schema.json`
+(ADR-0014 §2・ADR-0401 §5)、`moves.schema.json`(ADR-0016 §3)、`abilities.schema.json`(ADR-0017 §2)、
+`type-chart.schema.json`(ADR-0015)。データレーンの `pokedex export` が出すべき形の正はこの schema で、
+各 loader(`internal/master`)はその実装。schema で表せない制約(既約分数のまま持つ・ID の重複禁止など)は
+schema の `description` に書く。
 
 ## HTTP 契約
 

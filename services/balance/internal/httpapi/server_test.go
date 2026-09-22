@@ -5,7 +5,19 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"example.com/pokecalc/services/balance/internal/balance"
 )
+
+// failingChart is a fake TypeChartProvider whose Matchup always fails, shared by
+// analyze/coverage/threats/recommendations to exercise the 500 internal_error path when
+// the type chart itself is broken (not merely absent), e.g. ADR-0014 §5.5 / ADR-0016 §4 /
+// ADR-0400 §4 / ADR-0401 §6.
+type failingChart struct{ err error }
+
+func (f failingChart) Matchup(balance.TypeID, balance.TypeID) (balance.Multiplier, error) {
+	return 0, f.err
+}
 
 func TestHealth(t *testing.T) {
 	t.Parallel()
