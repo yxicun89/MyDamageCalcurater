@@ -1,0 +1,86 @@
+// P4-2: 架空の例データ(ADR-0300 §3)。物理・特殊・変化がそれぞれあり、ダメージ技のタイプは3種類以上。
+
+import type { Move } from "../../engine/types";
+
+export const exampleMoves: Move[] = [
+  {
+    id: "example-move-tackle",
+    nameJa: "テストたいあたり",
+    type: "normal",
+    category: "physical",
+    power: 40,
+    priority: 0,
+  },
+  {
+    id: "example-move-firepunch",
+    nameJa: "テストかえんパンチ",
+    type: "fire",
+    category: "physical",
+    power: 75,
+    priority: 0,
+  },
+  {
+    id: "example-move-waterblast",
+    nameJa: "テストみずでっぽう",
+    type: "water",
+    category: "special",
+    power: 65,
+    priority: 0,
+  },
+  {
+    id: "example-move-thunder",
+    nameJa: "テストかみなり",
+    type: "electric",
+    category: "special",
+    power: 90,
+    priority: 0,
+  },
+  {
+    id: "example-move-leafcutter",
+    nameJa: "テストはっぱカッター",
+    type: "grass",
+    category: "physical",
+    power: 55,
+    priority: 0,
+  },
+  {
+    id: "example-move-dragonpulse",
+    nameJa: "テストりゅうのはどう",
+    type: "dragon",
+    category: "special",
+    power: 85,
+    priority: 0,
+  },
+  {
+    id: "example-move-rockslide",
+    nameJa: "テストいわおとし",
+    type: "rock",
+    category: "physical",
+    power: 50,
+    priority: 0,
+  },
+  {
+    id: "example-move-steelwing",
+    nameJa: "テストてつのつばさ",
+    type: "steel",
+    category: "physical",
+    power: 70,
+    priority: 0,
+  },
+  {
+    id: "example-move-wingattack",
+    nameJa: "テストつばさでうつ",
+    type: "flying",
+    category: "physical",
+    power: 60,
+    priority: 0,
+  },
+  {
+    id: "example-move-growl",
+    nameJa: "テストなきごえ",
+    type: "normal",
+    category: "status",
+    power: 0,
+    priority: 0,
+  },
+];

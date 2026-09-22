@@ -432,3 +432,86 @@ Decision: ADR-0401 §2〜§7 の既定案(防御の穴 = 耐性・無効が 0 �
 候補がふさぐ防御の穴を等倍未満で受けられなくなるものは除く。複合タイプの候補はタイプの集合が一致するものだけ。各ポケモンに `exactMatch` を付け、一致するものを先に並べる。
 Reason: ユーザーが 10 時台の確認の質問に「そのタイプを含むポケモンも出す」と回答した(上の「TB5 の詳細は既定案で進める」を置き換える)。
 Impact: ADR-0401 §8、OpenAPI の `CandidatePokemon.exactMatch`。
+
+## 2026-09-22: PR #14(API P3-1 calc-svc・依存の最新化)を main に統合
+Decision: 他レーンの状況(開いている PR は #14 のみ、Web・iOS の未マージの変更は api/openapi.yaml・services と競合しない)を確認し、main を取り込んで再検証(make test 12 件・lint・build・check-publishable 0 件・make gen 差分なし)してからマージした。
+Reason: ユーザーが「テストとか諸々通っているならマージしていい。他のレーンの状況確認してから」と回答した。
+Impact: Web(P4-5)・iOS は新しい api/openapi.yaml(category・BulkCalcRow.defender・逆算の新形・ErrorCode)に追従できる。
+
+## 2026-09-22: ADR 番号の帯(データ 0100〜 / API 0200〜 / Web 0300〜 / タイプバランス 0400〜 / iOS 0500〜)をユーザーが承認
+Decision: データレーンが深夜に既定案で決めた ADR 番号の帯の規則を、ユーザーが「他レーンと整合するなら承認してOK」と承認した。API レーンは 0200 / 0201 / 0202 を使っており整合している。
+Reason: ユーザー回答(API レーンのセッションで受領)。
+Impact: COORDINATION.md の規則は確定。gateway の ADR は 0020 → 0202 に振り直した。
+
+## 2026-09-22: check-publishable の自己テストを lint に含める(整備レーン MT-2 の既定案)
+Decision: `scripts/check-publishable.sh --self-test` の既知の失敗2件を修正し、`make lint` から `make check-publishable-selftest` を実行する。A は任意のホーム相対パスを検出し、利用者名を含まない共有の worktree と権限定義のプレースホルダだけを許可する。E は自己テストへ実際に禁止される GitHub module path を投入する。
+Reason: 検査規則そのものの退行を通常の lint で検出し、自己テストが安全な値を投入して偽陰性になっていた状態を解消するため。plan.md の既定案どおり進めた。
+Impact: `make lint` の所要時間が自己テスト分だけ約6秒増える。A〜F の違反検出・値の非表示・正常系を毎回確認する。
+
+## 2026-09-22: 整備レーン MT-1 / MT-2 を PR #24 で main に統合
+Decision: 最新 main の統合検証(MT-1)と check-publishable 自己テストの修正・lint 組み込み(MT-2)を PR #24 で main に統合した。MT-2 の独立レビューは PASS(重大・重要・軽微 0件)。
+Reason: 必須の test・lint・build・公開前検査、および golden・全種族・WASM・balance の非クラスタ検証が成功したため。
+Impact: 整備レーンの次回開始点は MT-3。データ・API・Web・タイプバランス各レーンの再開を確認したため、本 worktree は削除する。
+
+## 2026-09-22: 素早さ比較を3つ目のサービスとして新しいレーン(6本目)で作る(ユーザー決定)
+Decision: 素早さ比較サービス(`services/speed/`)を新しい「素早さ」レーンで作る(`~/MyDamageCalcurater-speed`、ブランチ `feat/speed-<stage名>`、ADR は `0600〜`)。
+画面は Web に独立したタブ。素早さの画面は `web/src/speed/` を素早さレーンの持ち物にし、アプリの骨組み(タブの登録)は自分の1項目を足すだけにする。
+仕様(ユーザー回答): 左 = 速い順の全体の表、右 = 自分のポケモン、自分の位置を視覚的に示す。表は各ポケモン6行(無振り / 準速 / 最速 / 最速スカーフ / 最速+1 / 最速+2)。右は「無振り / 準速 / 最速」+スカーフ on/off の最小の選択で計算でき、オプションで好きな数値でも算出できる。
+Reason: ユーザーが素早さ比較サイトの使い勝手(表と見比べて自分の数値を算出する)を改善したいと依頼し、表の行・入力・担当(タイプバランスの次ではなく新しいレーン)・画面の置き場所に回答した。
+Impact: COORDINATION.md のレーン表・ADR の帯・起動の目安、CURRENT_STATE.md の Speed 欄、plan.md の「SP: 素早さ比較」(SP0〜SP4)。データレーンの P2-3 の read model(`pokedex export`)に、素早さの種族値が含まれていること(ポケモンの read model に baseStats があれば足りる)。
+
+
+## 2026-09-21: Web レーンの構成(ADR-0300)と、他レーンへの提案2件(Web レーン、Claude Code。既定案で進行・ユーザー未確認)
+Decision: (1) Web は計算を `CalcEngine` の後ろに置き、WASM(ADR-0011 の JSON 契約)で先に作る。マスタは `MasterData` の後ろに置き、
+pokedex-svc ができるまで架空の例データ(名前は `テスト`、ID は `example-`、図鑑番号 9001 以降)。タイプ相性表だけは
+`testdata/golden/typechart.json` を Vite の別名で複製せずに読む(Web は読むだけで変更しない)。
+(2) **提案(データレーン宛て)**: 攻撃側プリセット(無振り / A(C)特化 / A(C)振り。ADR-0300 §5)は、いまは Web が持つ。
+防御プリセット(ADR-0009)と同じく engine が持つ方が一貫し、iOS(M3)も同じ定義を使うので、既定案は
+「データレーンが `AttackerPresetCatalog()` を engine と WASM 境界に足し、Web はそれに切り替える」。急がない(M3 より前ならよい)。
+(3) **提案(全レーン宛て)**: Web のテスト(`make web-test` / `web-lint`)は、まだ `make test` / `make lint` に含めない
+(含めると `web/node_modules` の無い他のレーンの作業ディレクトリでルートの `make test` が失敗する)。
+既定案は「P4-6 で、`node_modules` が無ければ `npm ci` してから実行する形で `make test` / `make lint` に加える」。
+Reason: 4レーン制で API・データの成果を待たずに Web を進めるため(COORDINATION.md「レーン間の依存と共有ファイル」)。
+Impact: ルートの Makefile には `include web/Makefile` の1行だけを足した(ターゲットは `web-` 接頭辞)。engine・openapi.yaml は変更しない。
+docs/design.md に bg.glass のぼかし量(Web は 20px。iOS はシステムのマテリアル)を1行追記した(P4-1)。
+異議があれば追記すること(既定案で進む原則)。
+
+## 2026-09-21: 言語・ミドルウェア・依存のバージョンは最新にする(ユーザー決定。Web レーンのセッションで受領)
+Decision: 「アップデートの手間を減らすため、ミドルウェアやプログラミング言語等のバージョンは全て最新にする」。新しく入れる依存・イメージ・ツールは
+その時点の最新の安定版を選び、完全固定(lockfile・digest)は従来どおり続ける。互換性の都合で最新にできないものは、理由と追従の条件を ADR か本ファイルに書く。
+Web レーンの反映: TypeScript を 7.0.2 に上げる(型検査は TS 7 のネイティブ版)。typescript-eslint 8.70 は TS 7 の API に未対応のため、
+ESLint が読む `typescript` だけ公式の互換パッケージ `@typescript/typescript6` を別名で入れる(typescript-eslint が TS 7 に対応したら外す)。他の依存は確認時点で最新。
+確認時点の最新: Go 1.27.1(go.mod は 1.27 で最新)、Node.js 26.9.0(この Mac を 26.4.0 から上げ、`web/.node-version` と `web/package.json` の `engines` で固定)。
+Reason: ユーザー指示(2026-09-21)。
+Impact: 各レーンは自分の範囲の依存・イメージ(MySQL・TiDB・NATS・k3d 等を含む)を次の区切りで最新に揃える。他レーンのファイルは各レーンが変更する。
+
+## 2026-09-22: Web P4-5 の方針(ADR-0301)と、API レーンへの連絡(Web レーン、Claude Code。既定案で進行・ユーザー未確認。深夜)
+Decision: (1) 画面は解決済みの実体のまま、API 実装が実体 → ID に写す(解決層は MasterData の1か所)。写像の表は ADR-0301 §2。
+(2) 計算モードの既定はオフライン(WASM)。オンラインは pokedex-svc(P2-3)と gateway(P3-2)が揃ってマスタを API から読めるようになったら既定を見直す。
+API に届かないとき自動で WASM に切り替えない(どちらの結果か分からなくなるため)。
+(3) Web の例データの種族キーを `SpeciesKey`(`9001-000` の形)に合わせる(ADR-0300 §3 を改める)。
+(4) **API レーンへ**: ルート Makefile の `gen-ts` を実装した(`web/src/api/openapi.gen.ts` を生成してコミット)。`make gen` に含まれるので、
+`api/openapi.yaml` を変えたら一度 `make web-install` してから `make gen` する(web の依存が無いと gen-ts は失敗する。スキップしない)。
+Reason: ADR-0011 §10 の持ち越し(P4-5)。API の契約(ADR-0200)が main に入ったため。
+Impact: 他レーンのファイルは変更しない(gen-ts は Web の持ち物のターゲット)。
+
+## 2026-09-22: Web レーンの確認事項4件(ユーザー回答)と PR #22 の統合
+Decision: (1) PR #22(Web P4-1〜P4-5)を main にマージする。(2) Web のテスト(web-test・web-lint)をルートの `make test` / `make lint` に含める。
+`web/node_modules` が無ければ `npm ci` してから実行する(P4-6 で実装)。(3) 計算モードの既定はオフライン(WASM)のまま(ADR-0301 §4)。
+pokedex-svc と gateway が揃ったら見直す。(4) `gen-ts` は web の依存が無ければ失敗させる(ADR-0301 §7)。API レーンは `make gen` の前に一度 `make web-install`。
+Reason: 夜の間に既定案で進めた判断を、朝の最初の区切りでまとめて確認した(COORDINATION.md「人間への質問」)。
+Impact: (2) により、他のレーンのルートの `make test` / `make lint` でも Web のテストが走る(初回は npm ci の分だけ遅い)。
+
+## 2026-09-22: Claude の上限時の Codex は整備レーンだけにする(ユーザー決定。前エントリの「最大2本」を改める)
+Decision: Claude の上限時に Codex で進めるのは整備レーンだけ。Codex はレーン(データ・API・Web・タイプバランス・iOS・素早さ)の作業を引き継がない。
+Reason: ユーザーが「Codex は Claude のレートリミットの間だけ整備する作業をさせたかった」と述べた。上限の間に Codex がデータレーンを引き継いだ結果、Claude の再開後に同じディレクトリで2つの AI が動く状態になった(データレーンの Codex はユーザーの指示で停止)。
+Impact: COORDINATION.md の「Claude の上限時の Codex」を整備レーンだけに改訂。
+
+## 2026-09-22: Web の E2E(P4-6)とルートの make への組み込み(Web レーン、Claude Code)
+Decision: (1) ユーザー決定どおり、`web/Makefile` が `test: web-test` / `lint: web-lint` / `build: web-build` を足した。依存が無い・lockfile より古いときは自動で `npm ci`。
+(2) E2E は `make web-e2e`(オフライン = WASM。`/api` を遮断しても計算できること、engine.wasm は初回の計算まで読まないこと)と
+`make web-e2e-online`(例データを書き出して calc-svc を `go run` で起動し、オンラインとオフラインの結果の行が一致すること)。chromium のみ。
+(3) **提案(API レーン宛て、既定案)**: ルートの `make e2e`(`scripts/e2e.sh`。P3-3 の k3d スモーク)の最後で `make web-e2e` を呼ぶ。
+gateway 経由のオンライン E2E(`VITE_API_BASE_URL` を gateway に向ける)は P3-3 の後に Web レーンが足す。
+Reason: P4-6 の完了条件と、ユーザー回答(2026-09-22)の反映。
+Impact: 他のレーンのルートの `make test` / `lint` / `build` で Web のテスト・型検査・ビルドも走る(初回は npm ci ぶん遅い)。

@@ -37,10 +37,10 @@ gen-sql: ## pokedex の DB 行の型・クエリを sqlc から生成(ADR-0100 �
 	@echo "gen-sql: services/pokedex/internal/store を生成"
 
 .PHONY: gen-ts
-gen-ts: ## TypeScript 型を openapi.yaml から生成
-	@if [ -f web/package.json ]; then \
-		echo "gen-ts: (P4 以降で openapi-typescript を実装)"; \
-	else echo "gen-ts: web 未作成"; fi
+gen-ts: ## TypeScript 型を openapi.yaml から生成(web/src/api/openapi.gen.ts。要 make web-install)
+	@test -x web/node_modules/.bin/openapi-typescript || { echo "gen-ts: web の依存が無い(先に make web-install)" >&2; exit 1; }
+	@cd web && npx --no-install openapi-typescript ../api/openapi.yaml -o src/api/openapi.gen.ts >/dev/null && npx --no-install prettier --write src/api/openapi.gen.ts >/dev/null
+	@echo "gen-ts: web/src/api/openapi.gen.ts を生成"
 
 ## --- テスト -----------------------------------------------------------
 .PHONY: test
@@ -69,6 +69,7 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@node --check scripts/wasm-conformance.mjs
 	@for script in tools/importer/*.mjs; do node --check "$$script" || exit; done
 	@$(MAKE) --no-print-directory check-publishable
+	@$(MAKE) --no-print-directory check-publishable-selftest
 
 .PHONY: build
 build: ## 実装済みGoモジュールをビルド(Web/WASMは後続タスク)
@@ -208,3 +209,4 @@ deps-outdated: ## 古くなった依存の一覧を表示する(ネットワー�
 	@if [ -f web/package.json ]; then cd web && (npm outdated || true); else echo "(web/package.json が無い。未作成)"; fi
 
 include services/balance/Makefile
+include web/Makefile

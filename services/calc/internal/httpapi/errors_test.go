@@ -148,15 +148,16 @@ func TestMissingHeaders(t *testing.T) {
 	}
 }
 
-// R1: ヘッダの重複(同名ヘッダを複数個)は missing_header ではなく invalid_input にする
-// (ADR-0200 §1.6: missing_header はヘッダ欠落・空に限定する)。
-func TestDuplicateHeaderIsInvalidInput(t *testing.T) {
+// R1: ヘッダの重複(同名ヘッダを複数個)は missing_header ではなく invalid_header にする
+// (ADR-0200 §1.6: missing_header はヘッダ欠落・空に限定する)。当初は invalid_input だったが、
+// gateway と語彙を揃えるため ADR-0202 で invalid_header に変更した(期待値の変更。テストは弱めていない)。
+func TestDuplicateHeaderIsInvalidHeader(t *testing.T) {
 	h := NewHandler(newFakeStore(t))
 	header := validHeaders()
 	header.Add("X-Device-Id", testDeviceID) // 同じ名前のヘッダをもう1つ足す
 	rec := serve(t, h, http.MethodPost, "/api/calc", header, mustJSON(t, calcBody()))
 	assertContract(t, http.MethodPost, "/api/calc", header, mustJSON(t, calcBody()), rec, false)
-	assertError(t, rec, http.StatusBadRequest, "invalid_input")
+	assertError(t, rec, http.StatusBadRequest, "invalid_header")
 }
 
 // AC-7: pokedex の操作は calc-svc の担当外なので 404 not_found(Error 形式・契約どおり)。
