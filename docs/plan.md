@@ -119,7 +119,12 @@
   実装時に見つけた重大バグ(`baseUrl: "/"`(本番の既定)で `new URL(path, baseUrl)` が Invalid URL 例外を投げ、
   オンラインモードが常に失敗する)を修正し回帰テストを追加(critic 指摘。文字列連結に変更)。画面側は未着手
 - [ ] P4-16b Web のオンライン MasterSource の画面側(ADR-0304 A-5・A-7): 種族の検索コンボボックス、技選択・持ち物候補比較・
-  特性一覧が使えないときの無効化と案内表示(`i18n/ja.ts` の `masterOnlineText` を使う)。`web/src/screens/*.tsx` が対象
+  特性一覧が使えないときの無効化と案内表示(`i18n/ja.ts` の `masterOnlineText` を使う)。`web/src/screens/*.tsx` が対象。
+  併せて拾う軽微な積み残し(P4-16 の2回目 critic PASS で指摘。ブロッカーではない): (1) `onlineSource.ts` の
+  AbortError 再送出に検証テストが無い(検索キャンセル実装時に signal で reject するテストを追加)。
+  (2) `response.json()` 側の catch は abort を汎用エラーに潰す(fetch 側と同じ扱いに揃える)。
+  (3) `onlineSource.test.ts` の `urlOf` に基点を足した副作用で、`natures`/`species` の呼び出しは絶対 URL の
+  origin を検査していない(`items` のみ検査済み)。(4) `SPECIES_SEARCH_DEBOUNCE_MS` が未使用なら削除か使用を確認
 - [ ] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら
   `capabilities.moves` を true にして技を復活させる
 - [ ] P4-18 Codex コードレビューの issue(Web レーン主担当。タイプバランスレーンから 2026-09-23 に連絡・`gh issue view <番号>`)。
