@@ -25,10 +25,15 @@ gateway が Web に転送する GATEWAY_WEB_URL は API レーンが実装中(�
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
-Active: Claude Code
+Active: なし(2026-09-22 ユーザー指示: 利用枠をデータレーンに集中させるため一時停止。再開はユーザー指示から)
 Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
-Status: P6-1(ADR-0500)・P6-2a 計算画面・契約追従は main に統合済み(PR #31)。P6-2b 逆算画面(critic PASS)・生成の internal タグ除外・DOC-ios(ios/README.md を coding-rules §8 の形に、ADR-0501・docs/runbooks/ios.md。critic PASS)はブランチにあり未 PR。`make ios-test`(XCTest 174 件・XCUITest 9 件)が緑
-Next: PR(P6-2b・internal タグ除外・DOC-ios をまとめて main へ)→ P6-2c 構築(端末内保存の TeamStore、Showdown 形式は後回し)→ P6-3 → P6-4(手順書は AGENTS.md「手順書の書き方」)
+Status: P6-1(ADR-0500)・P6-2a 計算画面・契約追従・P6-2b 逆算画面・生成の internal タグ除外・DOC-ios は main に統合済み(PR #31・#53)。
+P6-2c 構築ビルダーは着手中で **未コミット完了・未 push の壁がある WIP**(コミット `023af6c`)。`swift build --build-tests` が失敗する状態のまま停止した
+(ドメイン・TeamStore・ViewModel は書いたが2つのブロッカーで未検証)。
+Next: P6-2c の再開はコミット `023af6c` のメッセージに次のとおり詳細あり。
+(1) `LocalTeamStore.swift` の actor init に非 Sendable な `UserDefaults` を渡す箇所の Swift 6 concurrency エラー(`@unchecked Sendable` ボックス型で包むのが本命)。
+(2) spec-writer のテストに構文バグ2件(`TeamListViewModelTests.swift:79,105`・`LocalTeamStoreTests.swift:124-125`。`await` が `XCTAssertEqual` の autoclosure 引数内にあり Swift の構文エラー。`let` で受けてから渡す形に直す。検証内容は変えない)。
+直ったら `swift test` → View(team list/edit 画面・RootView への導線)→ XCUITest → `make ios-test` / `make check-publishable` → critic → PR(P6-2c 構築の 完了条件は plan.md 参照)→ P6-3 → P6-4(手順書は AGENTS.md「手順書の書き方」)
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
