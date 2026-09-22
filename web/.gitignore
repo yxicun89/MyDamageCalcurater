@@ -1,0 +1,4 @@
+# Playwright の成果物(P4-6。ルートの .gitignore は共有なので Web の持ち物はここに置く)
+playwright-report/
+test-results/
+blob-report/
