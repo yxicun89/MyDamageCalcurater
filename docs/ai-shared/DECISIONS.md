@@ -727,3 +727,7 @@ Decision: TB6(technical range checker。ADR-0404)で `services/balance/api/opena
 `web/src/api/balance.gen.ts`(`make gen-ts` の生成物)は `web/` の範囲でこのレーンからは変更しない。**TB6 が main に入ってから**、Web レーンが必要になったタイミングで `make gen-ts` を再実行してほしい。
 Reason: AGENTS.md「タイプバランスレーンの範囲」により web/ は範囲外(critic 指摘)。
 Impact: Web が move-range を呼ぶ画面を作るときに、まず `make gen-ts` を実行して型を最新化する必要がある。
+## 2026-09-22: 整備レーン(Claude の上限時の Codex)の仕組みを削除する(ユーザー決定)
+Decision: COORDINATION.md の「Claude の上限時の Codex」節、plan.md の「整備レーン」節(MT-1〜MT-7)、CURRENT_STATE.md の Maintenance 欄を削除する。
+Reason: ユーザーが「Codex はこのプロジェクトで必ず使う必要はなく、有効活用したい程度の感覚。ノイズになるなら消した方がいい」と判断した。整備タスク(MT-3〜MT-7)は文書の整合性などの低優先度の掃除作業で、M1 の完成に影響しない。今後はレーンの作業を Claude だけで進める。
+Impact: 今後、Claude が利用枠の上限に達しても Codex を自動的に起動する仕組みは無い。Codex を使いたい場合は、その都度ユーザーが判断してレーンを直接担当させる(通常のレーン運用と同じ)。MT-1・MT-2(統合検証・check-publishable の自己テスト修正)はすでに完了して main に入っているので、成果は失われない。
