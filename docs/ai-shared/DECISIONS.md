@@ -645,3 +645,8 @@ Impact(データレーンへの提案。既定案): (1) pokedex-svc(P2-3)で `GE
 (2) natures テーブル(id, name_ja, plus, minus)を追加し、/api/pokedex/natures と内部 API の両方で使う。(3) MasterExport の species には showdownId を含める(共通マスタの Species が形式を検証するため。nameEn は含めない)。
 API レーンの後続: pokedex-svc のデプロイ後に calc の local overlay を URL 方式(`CALC_MASTER_URL=http://pokedex`)に切り替える。
 Web / iOS へ: openapi に tag `internal` の操作と Master* の型が増える(web/src/api/openapi.gen.ts はこの PR で再生成済み)。iOS は生成し直すか、生成設定で `internal` タグを除外する。
+
+## 2026-09-22: 無効・吸収の特性は後続タスク P2-3b で engine と効果定義に足す(ユーザー決定)
+Decision: ふゆう・ちょすい等の「特定のタイプの技を無効・吸収する特性」は、P2-3 には入れず、後続の P2-3b で engine の効果定義(AbilityEffect)・DB・importer・export に足す。ダメージ計算でも 0 になり、ゴールデンと照合する。
+Reason: 今の効果定義に無いため、タイプバランスの判定にもダメージ計算にも反映されていない。ユーザーが「後続タスクで足す」を選んだ。
+Impact: plan.md に P2-3b。タイプバランスレーンは P2-3b が入るまで、タイプ由来の相性と倍率を変える特性だけで判断する。

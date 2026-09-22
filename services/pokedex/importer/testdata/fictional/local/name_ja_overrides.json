@@ -4,5 +4,6 @@
   "moves": {"teststrike": "テストうわがき"},
   "items": {"testberry": "テストのみ"},
   "abilities": {},
-  "types": {}
+  "types": {},
+  "natures": {"testquiet": "テストれいせい", "testunknownnature": "テストみとうろく"}
 }

@@ -69,12 +69,13 @@
   - [x] P2-2b importer の取得・変換(calc 0.12.0 Champions・Showdown champions mod・PokeAPI の日本語名+override → `data/generated/`)と DB への投入(冪等)
   - [x] P2-2c 照合と差分報告(calc と Showdown の差分、P2-1c の裁定の反映)
   - [x] P2-2d CronJob(週1回・版に変化が無ければ取り込まない)と `make import`
-- [ ] P2-3 pokedex-svc(検索・詳細・持ち物/技一覧、日本語名で前方一致)
+- [x] P2-3 pokedex-svc(検索・詳細・持ち物/技一覧、日本語名で前方一致)
   - calc-svc 向けの内部 API `GET /internal/pokedex/master`(契約は api/openapi.yaml の MasterExport。ADR-0204。API レーンの依頼): Ingress に出さずクラスタ内の Service だけ、DB に未投入なら 503 `master_unavailable`、使用可能集合で絞らない、effect は item_effects / ability_effects の JSON をそのまま、species に showdownId を含める
   - 性格のマスタ `natures`(id, name_ja, plus, minus)を追加する(API レーンの依頼。ADR-0100 の「性格は engine の固定」を改める。新しい migration と importer の取得・変換。日本語名は PokeAPI+override)
   - balance 向けの read model の出力(`pokedex export`。ADR-0100 §8)。タイプバランスレーンの依頼(TB5。ADR-0401 §5 の形、schemaVersion 1 のまま省略可能な項目を足す): 各ポケモンに `nameJa` と `abilityIds`(隠れ特性を含む)、出力を既定のレギュレーションの使用可能集合に絞る、特性の read model(ADR-0017 の正規化された効果)も同じ export で出す。出力は `services/balance/schema/` の JSON Schema(ADR-0402)に合うことをテストで確かめる(整数は `2` の形。`2.0` は不可)
 
 ### Phase 3 API
+- [ ] P2-3b 無効・吸収の特性(ふゆう・ちょすい等)を engine の効果定義(AbilityEffect)と DB・importer・export に足す。ダメージ計算でも 0 になるようにし、ゴールデン(oracle)と照合する(2026-09-22 ユーザー決定。タイプバランスの判定にも反映される)
 - [x] P3-1 calc-svc(起動時にマスタをメモリへ読み込み)。契約の変更・マスタ境界・受け入れ条件は ADR-0200(critic PASS。マスタは暫定の `Store` と架空データ。共通マスタ P2-2a が main に入ったら差し替え)
   - 一括計算(`/api/calc/bulk`)の対応: API の `presets`(enum 配列)→ engine の `PresetKeys`。`presets: []` と省略はどちらも既定セット
   - `api/openapi.yaml` の description を先に直して `make gen`(絶対ルール1): 「変化技は none/hp の2件のみ返す」「行の順序はプリセット優先(presets × itemVariants)」「`presets: []` は省略と同じ」。`BulkCalcRow.preset` は enum のみ(engine のカスタム `Presets` は API に出さない)
@@ -142,7 +143,7 @@
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
 各レーンが自分の範囲の README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)と、動かして確かめられるレーンは手順書(`docs/runbooks/<レーン>.md`。AGENTS.md「手順書の書き方」に従う)を書く。全体図は `docs/architecture.md`。
-- [ ] DOC-data: `engine/README.md`・`services/pokedex/README.md`・`tools/importer/README.md`・`tools/golden/README.md`、手順書 `docs/runbooks/data.md`(migrate・import・dry-run の確認)
+- [x] DOC-data: `engine/README.md`・`services/pokedex/README.md`・`tools/importer/README.md`・`tools/golden/README.md`、手順書 `docs/runbooks/data.md`(migrate・import・dry-run の確認)
 - [ ] DOC-api: `services/calc/README.md`・`services/gateway/README.md` を §8 の形に、手順書 `docs/runbooks/api.md`(k3d での疎通)
 - [ ] DOC-web: `web/README.md`、手順書(`docs/verify-m1.md` の画面の部分と重複させない。M1 の完了報告は verify-m1.md にまとめる)
 - [x] DOC-tb: `services/balance/README.md` を §8 の形に、手順書 `docs/runbooks/balance.md`

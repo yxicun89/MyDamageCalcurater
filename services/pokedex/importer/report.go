@@ -54,6 +54,10 @@ const (
 	KindOverrideUnused FindingKind = "override-unused"
 	KindEffectUnused   FindingKind = "effect-unused"
 
+	// KindNatureMismatch は性格(natures)の補正が Showdown と calc で食い違う、または片方にしか
+	// 無いとき(ADR-0105 §4)。ID は Showdown の ID か、calc にしかない性格名の toID。
+	KindNatureMismatch FindingKind = "nature-mismatch"
+
 	// 以下は Reconcile が追加する指摘の種類(ADR-0103 §9)。
 
 	// KindVerdictMismatch は P2-1c の裁定(件数・ID集合のハッシュ)と実データが食い違ったとき。

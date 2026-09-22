@@ -80,6 +80,7 @@ type Output struct {
 	Items               []NamedRow
 	Moves               []MoveRow
 	Species             []SpeciesRow
+	Natures             []NatureRow
 	ItemEffects         []EffectRow
 	AbilityEffects      []EffectRow
 	Learnsets           []LearnsetRow
@@ -99,6 +100,7 @@ func Convert(in Input) (Output, Report, error) {
 	usedOverrideItems := map[string]bool{}
 	usedOverrideAbilities := map[string]bool{}
 	usedOverrideTypes := map[string]bool{}
+	usedOverrideNatures := map[string]bool{}
 
 	typesConv, typeWarnings, err := convertTypes(in, usedOverrideTypes)
 	if err != nil {
@@ -126,8 +128,14 @@ func Convert(in Input) (Output, Report, error) {
 	}
 	warnings = append(warnings, speciesWarnings...)
 
-	if len(moveBlockers)+len(speciesBlockers) > 0 {
-		blockers := append(append([]Finding{}, moveBlockers...), speciesBlockers...)
+	natureRows, natureWarnings, natureBlockers, err := convertNatures(in, usedOverrideNatures)
+	if err != nil {
+		return Output{}, Report{}, err
+	}
+	warnings = append(warnings, natureWarnings...)
+
+	if len(moveBlockers)+len(speciesBlockers)+len(natureBlockers) > 0 {
+		blockers := append(append(append([]Finding{}, moveBlockers...), speciesBlockers...), natureBlockers...)
 		sortFindings(warnings)
 		sortFindings(blockers)
 		return Output{}, Report{Warnings: warnings, Blockers: blockers}, ErrBlocked
@@ -208,6 +216,7 @@ func Convert(in Input) (Output, Report, error) {
 	warnings = append(warnings, checkOverrideUnused(in.Overrides.Items, usedOverrideItems)...)
 	warnings = append(warnings, checkOverrideUnused(in.Overrides.Abilities, usedOverrideAbilities)...)
 	warnings = append(warnings, checkOverrideUnused(in.Overrides.Types, usedOverrideTypes)...)
+	warnings = append(warnings, checkOverrideUnused(in.Overrides.Natures, usedOverrideNatures)...)
 
 	sortFindings(warnings)
 
@@ -218,6 +227,7 @@ func Convert(in Input) (Output, Report, error) {
 		Items:               itemRows,
 		Moves:               moveConv.Rows,
 		Species:             speciesConv.Rows,
+		Natures:             natureRows,
 		ItemEffects:         itemEffectRows,
 		AbilityEffects:      abilityEffectRows,
 		Learnsets:           learnsetRows,

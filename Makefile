@@ -165,6 +165,10 @@ import-fetch: ## 取得元(calc/Showdown/PokeAPI)から実データを取得す�
 import-check-upstream: ## 上流(calc/Showdown/PokeAPI)の最新版を検出して報告する(ネットワークが要る。取り込みはしない)
 	@cd tools/importer && npm ci && node check-upstream.mjs
 
+.PHONY: pokedex-export
+pokedex-export: ## balance/speed 向けの read model を4ファイル書く(POKEDEX_DATABASE_DSN が必須。出力先 data/generated/readmodel/)
+	@cd services && $(GO) run ./pokedex/cmd/pokedex export -out ../data/generated/readmodel
+
 .PHONY: import-k8s
 import-k8s: ## k3d 上の CronJob pokedex-import を手動で1回流す(週1回の定期実行とは別に)
 	@current_context="$$(kubectl config current-context)"; \
