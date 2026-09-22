@@ -3,7 +3,7 @@
 - 状態: 採用(2026-09-22。方式はユーザー回答「ローカル k3d で試す」。細部はタイプバランスレーンの判断)
 - 日付: 2026-09-22
 - 関連: docs/type-balance-design.md §4「GitOps / Argo CD」・§14、DECISIONS.md「Argo CD を共通デプロイ基盤にする」「最新の安定版」、
-  services/balance/deploy/argocd/README.md、COORDINATION.md(リモートの URL・認証情報を文書・コミットに書かない)
+  docs/runbooks/balance.md、COORDINATION.md(リモートの URL・認証情報を文書・コミットに書かない)
 
 ## 背景
 TB0 の最後の項目「Git 変更 → Argo CD 同期 → Pod 更新」は、Argo CD・配布イメージの置き場所・private リポジトリの認証が無く未実施だった。
