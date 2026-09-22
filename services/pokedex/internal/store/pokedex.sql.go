@@ -75,6 +75,15 @@ func (q *Queries) DeleteMegaSpecies(ctx context.Context) error {
 	return err
 }
 
+const deleteMoveEffects = `-- name: DeleteMoveEffects :exec
+DELETE FROM move_effects
+`
+
+func (q *Queries) DeleteMoveEffects(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteMoveEffects)
+	return err
+}
+
 const deleteMoves = `-- name: DeleteMoves :exec
 DELETE FROM moves
 `
@@ -457,6 +466,21 @@ func (q *Queries) InsertMove(ctx context.Context, arg InsertMoveParams) error {
 		arg.Pp,
 		arg.Priority,
 	)
+	return err
+}
+
+const insertMoveEffect = `-- name: InsertMoveEffect :exec
+INSERT INTO move_effects (move_id, effect)
+VALUES (?, ?)
+`
+
+type InsertMoveEffectParams struct {
+	MoveID string
+	Effect json.RawMessage
+}
+
+func (q *Queries) InsertMoveEffect(ctx context.Context, arg InsertMoveEffectParams) error {
+	_, err := q.db.ExecContext(ctx, insertMoveEffect, arg.MoveID, arg.Effect)
 	return err
 }
 
@@ -851,6 +875,35 @@ func (q *Queries) ListItems(ctx context.Context) ([]Item, error) {
 			&i.NameJaSource,
 			&i.NameEn,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMoveEffects = `-- name: ListMoveEffects :many
+SELECT move_id, effect
+FROM move_effects
+ORDER BY move_id
+`
+
+func (q *Queries) ListMoveEffects(ctx context.Context) ([]MoveEffect, error) {
+	rows, err := q.db.QueryContext(ctx, listMoveEffects)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MoveEffect
+	for rows.Next() {
+		var i MoveEffect
+		if err := rows.Scan(&i.MoveID, &i.Effect); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

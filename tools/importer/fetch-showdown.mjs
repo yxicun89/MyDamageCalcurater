@@ -94,6 +94,24 @@ const moves = [...dex.moves.all()].map((m) => ({
   pp: m.pp,
   priority: m.priority,
   isNonstandard: toNonstandard(m),
+  // 追加効果(命中時のランク変化。ADR-0107 決定6)。取得元の表現のまま出す
+  // (ID化・正準化は Go 側の変換で行う)。
+  self: m.self?.boosts ? { boosts: m.self.boosts } : null,
+  secondary: m.secondary
+    ? {
+        chance: m.secondary.chance,
+        self: m.secondary.self?.boosts ? { boosts: m.secondary.self.boosts } : null,
+        boosts: m.secondary.boosts ?? null,
+      }
+    : null,
+  // secondaries は取得元の表現のまま出す(ID化・正準化は Go 側。ADR-0101 §3)。
+  // boosts を伴う要素の件数を数えるのは Go 側(services/pokedex/importer)の責務(2026-09-23 追記)。
+  secondaries: Array.isArray(m.secondaries)
+    ? m.secondaries.map((s) => ({
+        self: s.self?.boosts ? { boosts: s.self.boosts } : null,
+        boosts: s.boosts ?? null,
+      }))
+    : [],
 }));
 
 const items = [...dex.items.all()].map((i) => ({

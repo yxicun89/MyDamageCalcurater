@@ -727,7 +727,7 @@ export interface components {
       slot: number;
       abilityId: string;
     };
-    /** @description moves テーブルの行(計算に使う列だけ) */
+    /** @description moves テーブルの行(計算に使う列だけ)+ move_effects の effect(ADR-0107) */
     MasterMove: {
       id: string;
       nameJa: string;
@@ -735,6 +735,12 @@ export interface components {
       category: components["schemas"]["MoveCategory"];
       power: number;
       priority: number;
+      /**
+       * @description 技の追加効果(命中時のランク変化。ADR-0107)。null は追加効果なし。
+       *     ダメージ計算はこの値を読まない(ADR-0107 決定2)。発動するかどうかの判定も engine は行わず、
+       *     「発動した場合の変化量」と「その確率」を持つだけ(ADR-0107 決定1)。
+       */
+      effect: components["schemas"]["MasterEffect"];
     };
     /**
      * @description 効果定義(item_effects / ability_effects の JSON をそのまま。ADR-0005)。null は補正なし。

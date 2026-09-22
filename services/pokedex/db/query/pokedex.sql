@@ -28,6 +28,11 @@ SELECT id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp
 FROM moves
 ORDER BY id;
 
+-- name: ListMoveEffects :many
+SELECT move_id, effect
+FROM move_effects
+ORDER BY move_id;
+
 -- name: GetItem :one
 SELECT id, name_ja, name_ja_source, name_en
 FROM items
@@ -97,6 +102,9 @@ DELETE FROM item_effects;
 -- name: DeleteAbilityEffects :exec
 DELETE FROM ability_effects;
 
+-- name: DeleteMoveEffects :exec
+DELETE FROM move_effects;
+
 -- name: DeleteMegaSpecies :exec
 DELETE FROM species WHERE is_mega = 1;
 
@@ -156,6 +164,10 @@ VALUES (?, ?);
 
 -- name: InsertAbilityEffect :exec
 INSERT INTO ability_effects (ability_id, effect)
+VALUES (?, ?);
+
+-- name: InsertMoveEffect :exec
+INSERT INTO move_effects (move_id, effect)
 VALUES (?, ?);
 
 -- name: InsertLearnset :exec

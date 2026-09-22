@@ -7,6 +7,7 @@ import (
 )
 
 // MoveRow は moves テーブルの行(engine が使わない accuracy・pp・name_en は含まない)。
+// Effect は move_effects に行が無ければ nil(空スライスも「効果なし」として扱う)。
 type MoveRow struct {
 	ID       string
 	NameJa   string
@@ -14,6 +15,7 @@ type MoveRow struct {
 	Category string
 	Power    int
 	Priority int
+	Effect   []byte
 }
 
 // moveCategories は moves.category として許される値(ADR-0100 §3)。
@@ -50,6 +52,14 @@ func Move(row MoveRow, chart engine.TypeChart) (engine.Move, error) {
 	if row.Priority < -7 || row.Priority > 5 {
 		return engine.Move{}, fmt.Errorf("%w: 優先度が範囲外(-7..5): %d", ErrInvalidRow, row.Priority)
 	}
+	var effect *engine.MoveEffect
+	if len(row.Effect) > 0 {
+		e, err := DecodeMoveEffect(row.Effect)
+		if err != nil {
+			return engine.Move{}, err
+		}
+		effect = e
+	}
 	return engine.Move{
 		ID:       row.ID,
 		NameJa:   row.NameJa,
@@ -57,5 +67,6 @@ func Move(row MoveRow, chart engine.TypeChart) (engine.Move, error) {
 		Category: category,
 		Power:    row.Power,
 		Priority: row.Priority,
+		Effect:   effect,
 	}, nil
 }

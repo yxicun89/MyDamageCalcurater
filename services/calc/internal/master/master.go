@@ -61,10 +61,15 @@ func (s *MemoryStore) Species(key string) (engine.Species, bool) {
 	return sp, true
 }
 
-// Move は Store を実装する。
+// Move は Store を実装する。Effect(内部の map を含む)はコピーを返す(呼び出し側が書き換えても
+// Store に影響しない、という doc の約束を Effect にも適用する)。
 func (s *MemoryStore) Move(id string) (engine.Move, bool) {
 	mv, ok := s.moves[id]
-	return mv, ok
+	if !ok {
+		return engine.Move{}, false
+	}
+	mv.Effect = copyMoveEffect(mv.Effect)
+	return mv, true
 }
 
 // Item は Store を実装する。Effect(内部の map を含む)はコピーを返す(呼び出し側が書き換えても
@@ -98,6 +103,21 @@ func copyItemEffect(e *engine.ItemEffect) *engine.ItemEffect {
 		out.StatMods = make(map[engine.StatKey]int, len(e.StatMods))
 		for k, v := range e.StatMods {
 			out.StatMods[k] = v
+		}
+	}
+	return &out
+}
+
+// copyMoveEffect は *engine.MoveEffect のディープコピーを返す(nil は nil のまま)。
+func copyMoveEffect(e *engine.MoveEffect) *engine.MoveEffect {
+	if e == nil {
+		return nil
+	}
+	out := *e
+	if e.Stages != nil {
+		out.Stages = make(map[engine.StatKey]int, len(e.Stages))
+		for k, v := range e.Stages {
+			out.Stages[k] = v
 		}
 	}
 	return &out
