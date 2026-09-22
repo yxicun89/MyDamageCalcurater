@@ -108,6 +108,8 @@ export const appText = {
   masterLoadError: "マスタデータの読み込みに失敗しました",
   /** 計算・逆算の切り替えタブ(P4-4、ADR-0300 §7)。 */
   tabsLabel: "画面の切り替え",
+  /** サイト名(index.html の <title> と同じ。文書タイトルの接尾辞)。 */
+  siteTitle: "pokecalc",
   calcTabLabel: "計算",
   reverseTabLabel: "逆算",
   /** 計算モード(オフライン = WASM / オンライン = API)の切り替え(P4-5、ADR-0301 §4)。 */
