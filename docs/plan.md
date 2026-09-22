@@ -115,6 +115,12 @@
 - [ ] P4-16 Web のオンライン MasterSource(ADR-0301 §4・ADR-0304)。種族は `searchSpecies` の検索ベース選択、持ち物・性格は
   全件取得の一覧。技は `getSpecies.learnset` の ID→実体化がデータ/API レーンの対応待ち(DECISIONS.md 提案済み)のため、
   この段階ではオンラインモードで技選択を無効化(技を要する操作を案内付きで止める)。技対応後に P4-17 として引き継ぐ
+- [ ] P4-18 Codex コードレビューの issue(Web レーン主担当。タイプバランスレーンから 2026-09-23 に連絡・`gh issue view <番号>`)。
+  優先: #99(bug, accessibility)ライトテーマのエラー文字色がコントラスト基準未達(iOS と共有デザイントークン同期が必要)、
+  #113(improvement)逆算の数値入力で古い計算要求を抑止・キャンセル(200ms debounce・AbortSignal。iOS・API と連携)。
+  次点: #98(bug)モバイル幅で計算・逆算画面が横に溢れる、#67(bug)2xx の契約外 JSON で API クライアントが例外を投げる(防御的処理)。
+  連携(他レーン主担当。Web は連携のみ): #71(データ+Web+iOS 攻撃側プリセット単一化)・#72(API+Web ルート make e2e を Playwright へ)・
+  #78(API+Web 特性の無効・吸収の境界反映)・#110(主担当 API。calc 候補配列の上限)。#103 は needs-decision でユーザー決定待ち、着手しない
 
 ## M2: 保存・構築
 - [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)
