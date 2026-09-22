@@ -22,7 +22,30 @@
    端末 ID とセッション ID は計算と同じもの(`X-Device-Id` / `X-Session-Id`)を付ける。
 6. **オフライン**: balance はサーバーでしか計算しない(engine.wasm に含まれない)。通信できないときはエラーを出す(計算画面のように WASM へは切り替えない)。
 
+## P4-12b: 仮想敵(threats)とおすすめタイプ(recommendations)
+
+- 状態: 採用(Web レーン、2026-09-22。ADR-0400(threats)・ADR-0401(recommendations)を読み、画面側の詳細を決める)
+
+7. **同じ画面の下に2節を足す**(タブは増やさない。design.md §10「将来: 攻撃範囲タブ」は見送り、まず1画面で完結させる)。
+   - **仮想敵の診断**: P4-12a のメンバー(自分のパーティ)に加えて、`仮想敵n` を最大6体(ポケモン・特性・技1〜4)で入力する
+     `MemberFields` と同じ構造の入力群(見出しだけ変える。実装は共通コンポーネント化してよい)。
+     自分のパーティに1体以上・仮想敵に1体以上そろったら `threats` を呼ぶ。
+     表示は仮想敵ごとに1つの表(行=自分のメンバー、列=受ける倍率(incoming)・与える倍率(outgoing))。
+     `safe`/`superEffective` は **応答の真偽値をそのまま文字にする**(`安全`/`注意`、`抜群`/`ふつう`)。倍率の値から閾値を
+     Web 側で計算し直さない(`incoming < 1` かどうかの判定はしない)。仮想敵ごとに `safeMembers`/`superEffectiveMembers` の集計も表示する。
+   - **おすすめタイプ**: 新しい入力は無く、P4-12a の自分のパーティ(species・moves・ability)をそのまま `recommendations` に渡す。
+     パーティに1体以上そろったら呼ぶ(`limit` は省略。既定10件)。表示は `defenseHoles`/`offenseHoles`(タイプの一覧)、
+     `candidates` の表(タイプの組・defenseCovered・offenseCovered・該当ポケモンの一覧)、`abilityOptions`(防御の穴ごとの特性で補えるポケモン)。
+     並び替え・件数のフィルタは行わない(応答の順のまま)。
+8. **API クライアントの拡張**: `BalanceClient` に `threats(members, threats)` と `recommendations(members, limit?)` を足す。
+   実装・エラーの扱い(`balance_unavailable`・封筒の素通し・例外を投げない)は `analyze`/`coverage` と同じ。
+9. **古い応答の扱い**: 4つの呼び出し(analyze・coverage・threats・recommendations)はそれぞれ独立に「入力を変えたら計算中に戻し、
+   古い応答は無視する」(P4-12a の analyze と同じパターン)。1つの呼び出しの遅延が他の表示をブロックしない。
+
 ## 却下
 
 - **Web で相性を計算する**: balance-svc の計算(特性・集計・おすすめ)と二重になる。
 - **balance に一覧の API を足してもらう**: 種族の一覧は pokedex が正で、balance に持たせると重複する。pokedex の read model に揃えば一覧は Web の MasterData と一致する。
+- **safe/superEffective を倍率の文字列から Web 側で再判定する**(P4-12b §7): 「1」と「3/2」のどちらが弱点か等の閾値判断を
+  TS に持ち込むと、balance-svc の定義(ADR-0400 §3「incoming < 1」「outgoing ≥ 2」)と二重管理になる。応答の真偽値を使う。
+- **仮想敵をタブや別画面に分ける**(P4-12b §7): 自分のパーティを再入力させないため、同じ画面・同じパーティ入力を共有する。
