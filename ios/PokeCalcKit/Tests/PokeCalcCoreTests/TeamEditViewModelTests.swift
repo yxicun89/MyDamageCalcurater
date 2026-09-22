@@ -230,6 +230,16 @@ final class TeamEditViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.team.members.first?.teraType)
     }
 
+    /// 前後空白を落とし、空になったら nil にする(`setName` と同じ規則)。
+    func testSetMemberNicknameTrimsAndTreatsBlankAsNil() async {
+        let (viewModel, _) = await loadedViewModel()
+        viewModel.setMemberNickname(id: "member-alpha", nickname: "  テストのニックネーム  ")
+        XCTAssertEqual(viewModel.team.members.first?.nickname, "テストのニックネーム")
+
+        viewModel.setMemberNickname(id: "member-alpha", nickname: "   ")
+        XCTAssertNil(viewModel.team.members.first?.nickname)
+    }
+
     // MARK: - setMemberSP
 
     func testSetMemberSPWithinLimitsSucceeds() async {

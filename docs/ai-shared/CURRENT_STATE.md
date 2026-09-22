@@ -28,12 +28,10 @@ Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
 Active: Claude Code
 Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
 Status: P6-1(ADR-0500)・P6-2a 計算画面・契約追従・P6-2b 逆算画面・生成の internal タグ除外・DOC-ios は main に統合済み(PR #31・#53)。
-P6-2c 構築ビルダーは着手中で **未コミット完了・未 push の壁がある WIP**(コミット `023af6c`)。`swift build --build-tests` が失敗する状態のまま停止した
-(ドメイン・TeamStore・ViewModel は書いたが2つのブロッカーで未検証)。
-Next: P6-2c の再開はコミット `023af6c` のメッセージに次のとおり詳細あり。
-(1) `LocalTeamStore.swift` の actor init に非 Sendable な `UserDefaults` を渡す箇所の Swift 6 concurrency エラー(`@unchecked Sendable` ボックス型で包むのが本命)。
-(2) spec-writer のテストに構文バグ2件(`TeamListViewModelTests.swift:79,105`・`LocalTeamStoreTests.swift:124-125`。`await` が `XCTAssertEqual` の autoclosure 引数内にあり Swift の構文エラー。`let` で受けてから渡す形に直す。検証内容は変えない)。
-直ったら `swift test` → View(team list/edit 画面・RootView への導線)→ XCUITest → `make ios-test` / `make check-publishable` → critic → PR(P6-2c 構築の 完了条件は plan.md 参照)→ P6-3 → P6-4(手順書は AGENTS.md「手順書の書き方」)
+P6-2c 構築ビルダー(一覧・編集画面・ニックネーム・XCUITest)は完了(critic 2回目 PASS)。`make ios-test`(XCTest 244件・
+XCUITest 10件)が緑。api/openapi.yaml 側の ADR-0105(pokedex)更新に追従して `make ios-gen` 済み。ブランチにあり未 PR。
+Next: PR(P6-2b・internal タグ除外・P6-2c をまとめて main へ)→ P6-2d(構築から個体を呼び出す配線。plan.md 参照)→
+P6-3(`make ios-test` の総仕上げ)→ P6-4(手順書は AGENTS.md「手順書の書き方」)。
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)

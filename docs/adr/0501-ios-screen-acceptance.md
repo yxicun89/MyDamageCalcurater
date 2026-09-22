@@ -560,6 +560,71 @@ XCUITest はモック(`MockPokeCalcService` + `LocalTeamStore`。起動時 `POKE
 
 ### 7. 確認事項(未決のまま残った判断はここに書く。次の implementer/critic が変えてよい)
 
-- `TeamMember.nickname` を持つかどうかはユーザーに未確認(spec-writer の判断で「持つ」とした。上記1章)。
-  実装後の動作確認で不要と分かれば消してよい(フィールド1つなので戻すコストは小さい)。
-- メンバーの並べ替えを本当に要るかは未確認(範囲外とした。requirements.md に明記が無いため)。
+- **`TeamMember.nickname`(解決)**: critic 指摘(coding-rules §3「使われていない機構を作らない」)を受け、
+  消さずに配線した。`TeamEditViewModel.setMemberNickname(id:nickname:)`(前後空白を落とし、空なら nil。
+  `setName` と同じ規則)と `TeamEditMemberCard.nicknameField`(identifier `memberNickname-<id>`。5章の
+  identifier 契約には無い追加)。テストは `TeamEditViewModelTests.testSetMemberNicknameTrimsAndTreatsBlankAsNil`。
+- メンバーの並べ替えを本当に要るかは未確認のまま(範囲外とした。requirements.md に明記が無いため)。
+- **(P6-2c 続き。View/XCUITest の実装で決めたこと)** 以下は implementer(View/XCUITest 担当)が
+  ADR に無かった判断をした箇所。次の critic/implementer が変えてよい。
+  - **画面の見た目**: design.md に構築ビルダーの節が無いため、方向性 C「カード/ホロのコレクション風」の
+    トークン(カード角丸20・チップ999・余白4/8/12/16/24・タイプ色・Liquid Glass)を Calc/Reverse 画面と
+    同じ部品(`glassCard`・`MenuLabelChip`・`SpeciesHeaderMenuLabel`・`ErrorBannerView` 等)を再利用して
+    組んだ。一覧の行はチーム名・「メンバー n/6」・6個のドット(埋まった数だけ塗る)で構成し、タイプ色は
+    使わない(一覧画面はマスタ[種族]を読まない設計[3章]なので、行に種族のタイプ色エンブレムを出そうとすると
+    一覧 VM がマスタ依存を持つことになり、3章の「一覧だけ見たいときも編集用のマスタ読み込みが要ることに
+    なり無駄」という判断に反する。実データが無いので無彩色のドットで数だけ示すことにした)。
+  - **`ErrorBannerView` の identifier 化**: 既存の `ErrorBannerView`(`CalcScreenResults.swift`)は
+    `accessibilityIdentifier` が `"calcErrorMessage"` に決め打ちで、逆算画面もそのまま流用していた。
+    構築は `teamListErrorMessage` / `teamEditErrorMessage` を持つ必要がある(5章)ため、
+    `identifier: String = "calcErrorMessage"` という既定引数を追加した(Calc/Reverse の呼び出し側は
+    無変更のまま挙動を維持)。
+  - **`NavigationStack` を入れ子にしない**: 最初 `TeamListView` に専用の `NavigationStack` を持たせて
+    実装したところ、実機(シミュレータ)で一覧画面の中身が描画されず、SwiftUI が代わりに小さな
+    `exclamationmark.triangle.fill`(「警告」)のプレースホルダだけを表示する不具合に遭遇した
+    (XCUITest が `teamListScreen` を見つけられず timeout。`xcrun simctl launch` で直接起動して
+    アクセシビリティツリーをダンプして特定した)。`NavigationStack` の入れ子は SwiftUI が推奨しない
+    パターンで、`RootView` の `NavigationStack` の中に別の `NavigationStack` を作らず、`TeamListView`
+    は `RootView` が持つ同じ `path: NavigationPath` を `@Binding` で共有する形に直した
+    (`navigationDestination(for:)` は宣言した場所に関わらず最も近い祖先の `NavigationStack` に登録される
+    ため、`TeamListView` 自身が `.navigationDestination(for: String.self)` を宣言してもスタックは
+    増えない)。次にこのパターンで詰まったときのために `TeamListView.swift` の冒頭コメントに残した。
+  - **`.alert` 内 `TextField` の `accessibilityIdentifier` は効かない**: 新規作成アラートの名前欄に
+    `.accessibilityIdentifier("createTeamNameField")` を付けたが、SwiftUI の `.alert` は中身を
+    UIKit の `UIAlertController`/`UITextField` に変換して描画するため、この identifier は実機
+    (シミュレータ)のアクセシビリティツリーに反映されなかった(XCUITest で `waitForExistence` が
+    timeout し、`app.debugDescription` で `TextField` に identifier が付いていないことを確認して特定)。
+    identifier の指定はコードから削除し、XCUITest 側は `app.alerts.textFields.firstMatch`
+    (アラートに入力欄は1つしか無い)で辿る形にした。ADR 5章の identifier 表にはこの欄の名前を
+    書いていなかったので、契約を満たせないという問題ではないが、次に `.alert` へ独自 identifier を
+    付けたくなったときのためにここに残す。
+  - **SP ステッパーのラベル幅で折り返る不具合**: 実装直後の実機スクリーンショットで、能力ポイントの
+    ステータス名(「こうげき」「ぼうぎょ」「とくこう」「とくぼう」)が `.frame(width: 56)` の固定幅で
+    2行に折り返っていた(このアプリで繰り返し起きているカードヘッダー折り返しと同じ種類の不具合。
+    `TeamEditMemberCard.spStepper` 参照)。`.lineLimit(1)` + `.fixedSize()` + `.frame(minWidth: 64,
+    alignment: .leading)`(固定 `width` をやめ、下限だけ揃える)に直し、iPhone 18 Pro
+    ライト/ダーク・iPhone 17e ダーク+extra-extra-large の全パターンで1行に収まることを確認した。
+  - **新規作成の UI フロー**: `TeamListViewModel.createTeam(name:)` を活かすため、一覧画面の
+    「新規作成」ボタンは `.alert` で名前を聞いてから作成・保存し、成功したら編集画面へ遷移する形にした
+    (「一覧を開く→新規作成→名前を付けて保存→一覧に出る→…」という5章の XCUITest の粒度と一致)。
+  - **`RootView` の `LocalTeamStore`**: `AppEnvironment` は計算/逆算が使う `PokeCalcService` の
+    生成元なので、契約の異なる `TeamStore` はそこに混ぜず、`RootView` が `@State` で個別に持つ形にした。
+    `POKECALC_USE_MOCK=1`(XCUITest・スクリーンショット撮影)のときは専用の `UserDefaults` suite
+    (`PokeCalcTeamsUITest`)を起動のたびに空にする(前回の実行の構築が残らないようにする実装判断。
+    モックは決定的であるべきという方針[P6-1章]を `LocalTeamStore` にも広げた)。通常起動
+    (`POKECALC_USE_MOCK` 無し)は `UserDefaults.standard` にそのまま保存し、構築は端末に残る。
+  - **起動時に構築一覧を開く環境変数**: Calc/Reverse と同じパターン(`POKECALC_OPEN_CALC_SCREEN_AT_LAUNCH`
+    等)で `POKECALC_OPEN_TEAM_LIST_SCREEN_AT_LAUNCH` を追加し、`ios/scripts/sim-run.sh` の
+    `<画面>` 引数に `team` を足した(手順書のスクリーンショット撮影用。5章の識別子契約には無い追加だが、
+    Calc/Reverse で確立済みの手順に構築だけ抜けるのを避けた)。
+  - **(critic 2回目レビュー前。orchestrator が直接修正)`RootView` の init 副作用**: `_teamStore =
+    State(initialValue: Self.makeTeamStore())` は `RootView.init` が呼ばれるたびに `makeTeamStore()`
+    の式そのものを評価する(`@State` が使い回すのは戻り値だけ)。モック時の `makeTeamStore()` は専用
+    `UserDefaults` suite を `removePersistentDomain` で消去する副作用を持っていたため、SwiftUI が
+    `RootView` を再生成するたび(親の再描画のたび)に、起動後に作った構築が消える不具合になりえた
+    (`PokeCalcApp.swift` が同じ理由で避けている副作用)。修正: 消去の副作用を `static let
+    mockTeamStoreDefaults`(プロセスで1回だけ評価される)に閉じ込めた。`makeTeamStore()` 自体は
+    副作用を持たない。
+  - **(同上)`TeamEditView` に読み込み中インジケータが無かった**: `TeamListView.loadingSlot` と同じ
+    (高さ固定・`viewModel.isLoading` のときだけ表示)ものを追加した(identifier
+    `teamEditLoadingIndicator`。5章の契約には無い追加)。

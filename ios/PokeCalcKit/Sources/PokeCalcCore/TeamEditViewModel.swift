@@ -208,6 +208,13 @@ public final class TeamEditViewModel {
         updateMember(id: id) { $0.teraType = teraType }
     }
 
+    /// 前後空白を落とし、空になったら nil にする(`TeamListViewModel.createTeam` のチーム名と同じ
+    /// 規則)。ニックネームは任意項目なので空を「未設定」として扱う。
+    public func setMemberNickname(id: String, nickname: String) {
+        let trimmed = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        updateMember(id: id) { $0.nickname = trimmed.isEmpty ? nil : trimmed }
+    }
+
     private func updateMember(id: String, _ mutate: (inout TeamMember) -> Void) {
         guard let index = team.members.firstIndex(where: { $0.id == id }) else { return }
         mutate(&team.members[index])

@@ -1,18 +1,20 @@
 # iOS(SwiftUI)
 
-iPhone 向けのダメージ計算アプリ(計算画面・逆算画面。構築は P6-2c)。gateway 経由で calc / pokedex の API を呼び、接続先が無いときは架空データのモックで動く。
+iPhone 向けのダメージ計算アプリ(計算画面・逆算画面・構築ビルダー)。gateway 経由で calc / pokedex の API を呼び、接続先が無いときは架空データのモックで動く。
 API クライアントは `api/openapi.yaml` から swift-openapi-generator で生成し、手で書かない(契約は変更しない)。
 シミュレータでの確認は [docs/runbooks/ios.md](../docs/runbooks/ios.md)。設計は [ADR-0500](../docs/adr/0500-ios-app-architecture.md)、見た目は [docs/design.md](../docs/design.md)。
 
 ```mermaid
 flowchart LR
   subgraph App["PokeCalc(アプリ。View だけ)"]
-    Views["計算画面 / 逆算画面"]
+    Views["計算画面 / 逆算画面 / 構築画面"]
   end
   subgraph Kit["PokeCalcKit(Swift Package)"]
-    VM["ViewModel(CalcViewModel / ReverseViewModel)"] --> Service["PokeCalcService(プロトコル)"]
+    VM["ViewModel(Calc / Reverse / TeamList / TeamEdit)"] --> Service["PokeCalcService(プロトコル)"]
+    VM --> TeamStore["TeamStore(プロトコル。構築は端末内保存)"]
     APIImpl["APIPokeCalcService"] -.->|実装| Service
     Mock["MockPokeCalcService<br/>(架空データ。計算しない)"] -.->|実装| Service
+    LocalStore["LocalTeamStore<br/>(UserDefaults)"] -.->|実装| TeamStore
     APIImpl --> Gen["PokeCalcAPI<br/>(生成物)"]
     Design["PokeCalcDesign<br/>(デザイントークン)"]
   end
@@ -43,7 +45,7 @@ flowchart LR
 cd "$(git rev-parse --show-toplevel)"
 make ios-test                        # 生成物の一致・XCTest・XCUITest(シミュレータ)・Info.plist の検査
 make ios-gen                         # api/openapi.yaml を変えたら(ルートの make gen には含めない)
-make ios-sim-run IOS_SCREEN=calc     # モックで起動してスクリーンショット(root / calc / reverse)
+make ios-sim-run IOS_SCREEN=calc     # モックで起動してスクリーンショット(root / calc / reverse / team)
 cd ios/PokeCalcKit && swift test     # ロジックだけを macOS で手早く
 ```
 
