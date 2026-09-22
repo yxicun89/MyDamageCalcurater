@@ -37,13 +37,13 @@ flowchart LR
 
 ## よく使うコマンド(リポジトリのルートで)
 
-| コマンド                                                           | すること                                                                                      |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
-| `make web-dev`                                                     | 開発サーバー(`http://localhost:5173`。WASM で計算)                                            |
-| `make web-test` / `make web-lint` / `make web-build`               | 単体テスト / 型検査・lint / ビルドと配信サイズ予算(`make test`・`lint`・`build` にも含まれる) |
-| `make web-e2e` / `make web-e2e-online` / `make web-e2e-container`  | E2E(オフライン / calc-svc 相手 / コンテナ相手)                                                |
-| `make web-k3d-deploy` → `make web-k3d-open` → `make web-k3d-smoke` | k3d に載せて開き、確かめる                                                                    |
-| `make gen-ts`                                                      | `api/openapi.yaml` から API の型を生成                                                        |
+| コマンド                                                                                   | すること                                                                                      |
+| ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `make web-dev`                                                                             | 開発サーバー(`http://localhost:5173`。WASM で計算)                                            |
+| `make web-test` / `make web-lint` / `make web-build`                                       | 単体テスト / 型検査・lint / ビルドと配信サイズ予算(`make test`・`lint`・`build` にも含まれる) |
+| `make web-e2e` / `make web-e2e-online` / `make web-e2e-container` / `make web-e2e-balance` | E2E(オフライン / calc-svc 相手 / コンテナ相手 / balance-svc 相手)                             |
+| `make web-k3d-deploy` → `make web-k3d-open` → `make web-k3d-smoke`                         | k3d に載せて開き、確かめる                                                                    |
+| `make gen-ts`                                                                              | `api/openapi.yaml` から API の型を生成                                                        |
 
 動作確認の手順は [docs/verify-m1.md](../docs/verify-m1.md)。
 

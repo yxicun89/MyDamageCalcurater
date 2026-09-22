@@ -112,10 +112,71 @@ export const appText = {
   siteTitle: "pokecalc",
   calcTabLabel: "計算",
   reverseTabLabel: "逆算",
+  /** P4-12a: タイプバランスのタブ(ADR-0303 §2)。 */
+  balanceTabLabel: "タイプバランス",
   /** 計算モード(オフライン = WASM / オンライン = API)の切り替え(P4-5、ADR-0301 §4)。 */
   calcModeGroupLabel: "計算モード",
   calcModeOfflineLabel: "オフライン(WASM)",
   calcModeOnlineLabel: "オンライン(API)",
+} as const;
+
+/**
+ * P4-12a: balance API のクライアント(api/balanceClient.ts、ADR-0303 §1・§6)の文言。
+ * 通信できない・応答が読めない・エラー本文の形が不正なとき(自動でオフラインへは切り替えない)。
+ */
+export const balanceClientText = {
+  unavailable: "タイプバランスの API に接続できません",
+} as const;
+
+/**
+ * P4-12a: タイプバランスの倍率の表示(domain/balanceLabels.ts、ADR-0303 §2、docs/type-balance-design.md §10)。
+ * 倍率は色だけで表さず、語も文字で出す。
+ */
+export const balanceLabelText = {
+  /** DefenseCategory(balance.gen.ts)→ 語。値の範囲は balance-svc が既に判定済みなので Web では判定し直さない。 */
+  defenseCategoryWord: {
+    quad_weak: "弱点",
+    weak: "弱点",
+    neutral: "等倍",
+    resist: "耐性",
+    quad_resist: "耐性",
+    immune: "無効",
+  } as const,
+  /** CoverageMultiplier(null を除く)→ 語。 */
+  coverageWord: {
+    "0": "無効",
+    "1/2": "いまひとつ",
+    "1": "等倍",
+    "2": "抜群",
+  } as const,
+  /** CoverageMultiplier が null(攻撃技なし)のときの表示。 */
+  coverageNoAttackMove: "攻撃技なし",
+} as const;
+
+/** P4-12a: タイプバランスの画面(screens/BalanceScreen.tsx、ADR-0303 §2)の文言。 */
+export const balanceScreenText = {
+  memberGroupLabel: (n: number): string => `メンバー${String(n)}`,
+  addMemberLabel: "メンバーを追加",
+  removeMemberLabel: (n: number): string => `メンバー${String(n)}を削除`,
+  speciesLabel: "ポケモン",
+  abilityLabel: "特性",
+  moveLabel: (slot: number): string => `技${String(slot)}`,
+  noMoveOption: "なし",
+  loadingNotice: "計算中",
+  defenseTableLabel: "防御相性",
+  teamSummaryTableLabel: "チームの集計",
+  coverageTableLabel: "攻撃範囲",
+  memberColumnLabel: "メンバー",
+  attackTypeColumnLabel: "攻撃タイプ",
+  weakColumnLabel: "弱点",
+  quadWeakColumnLabel: "うち×4",
+  resistColumnLabel: "耐性",
+  immuneColumnLabel: "無効",
+  neutralColumnLabel: "等倍",
+  defenseTypeColumnLabel: "防御タイプ",
+  bestMultiplierColumnLabel: "最大倍率",
+  effectiveColumnLabel: "有効",
+  superEffectiveColumnLabel: "抜群",
 } as const;
 
 /**

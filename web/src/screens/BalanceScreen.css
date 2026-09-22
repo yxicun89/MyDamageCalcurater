@@ -1,0 +1,98 @@
+/*
+ * タイプバランス画面(docs/adr/0303-web-balance-screen.md)。色は必ず tokens.css の CSS 変数で参照する
+ * (web/src/styles/noColorLiterals.test.ts)。タイプ色は補助(倍率は必ず文字でも出す。ADR-0303 §2)。
+ * 常時動くアニメーションは入れない(CLAUDE.md ドメイン規約)。
+ */
+
+.balance-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+.balance-screen__members {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.balance-member {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--bg-glass-blur));
+  padding: var(--space-4);
+}
+
+.balance-member legend {
+  font-family: var(--font-family);
+  font-size: var(--font-size-heading);
+  color: var(--text-primary);
+  padding: 0 var(--space-1);
+}
+
+.balance-member select {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  padding: var(--space-2) var(--space-3);
+}
+
+.balance-member__remove {
+  margin-left: auto;
+}
+
+.balance-screen__notice,
+.balance-screen__error {
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+}
+
+.balance-screen__error {
+  color: var(--danger);
+}
+
+.balance-screen table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-primary);
+}
+
+.balance-screen caption {
+  text-align: left;
+  font-size: var(--font-size-heading);
+  padding-bottom: var(--space-2);
+}
+
+.balance-screen th,
+.balance-screen td {
+  border-bottom: 1px solid var(--border-hairline);
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  /* 数字の桁揃え(docs/design.md「文字」)。 */
+  font-variant-numeric: tabular-nums;
+}
+
+/* 攻撃タイプの列見出し(防御相性の表)。下線をタイプ色にして補助にする(倍率は文字でも出す)。 */
+.balance-screen th[scope="col"] {
+  border-bottom-width: 2px;
+}
+
+/* 防御タイプの行見出し(チームの集計・攻撃範囲の表)。左のふちをタイプ色にする。 */
+.balance-screen th[scope="row"] {
+  border-left-width: 3px;
+  border-left-style: solid;
+  border-left-color: var(--border-hairline);
+}

@@ -1,0 +1,156 @@
+// P4-12a(ADR-0303 §4): Web の例データを balance-svc の read model(services/balance/schema/ の3つ)にも書き出す。
+// pokedex の read model に揃うまでの間、ローカルと E2E ではこの出力で balance-svc を起動し、Web の例データの ID
+// (pokemonId = 種族キー・moveId・abilityId)がそのまま balance の API に通るようにする。
+// 特性は、engine の効果定義から balance の正規化された効果(無効・タイプ倍率・弱点半減倍率)に写せるものだけを書く。
+// 写せる効果が無い特性(effect が null、または全ての効果が写せない)は effects: [] にする。
+
+import type { Ability, AbilityEffect } from "../engine/types";
+import type { MasterData } from "./types";
+
+/** balance の read model の schemaVersion(services/balance/schema/*.schema.json)。 */
+const BALANCE_SCHEMA_VERSION = 1;
+
+/** ADR-0017 §3: 効果の分数は 4096 分の m(engine の固定小数の基準)。 */
+const FIXED_POINT_BASE = 4096;
+
+/** services/balance/schema/abilities.schema.json の factor(既約分数の分子・分母)の範囲。 */
+const FACTOR_MIN = 1;
+const FACTOR_MAX = 16;
+
+/** balance の pokemon-types.schema.json の1件。 */
+export interface BalancePokemonTypeEntry {
+  readonly pokemonId: string;
+  readonly nameJa: string;
+  readonly types: readonly string[];
+  readonly abilityIds: readonly string[];
+}
+
+/** balance の pokemon-types.schema.json(BALANCE_POKEMON_TYPES_PATH)。 */
+export interface BalancePokemonTypes {
+  readonly schemaVersion: 1;
+  readonly pokemon: readonly BalancePokemonTypeEntry[];
+}
+
+/** balance の moves.schema.json の1件。 */
+export interface BalanceMoveEntry {
+  readonly moveId: string;
+  readonly type: string;
+  readonly category: string;
+}
+
+/** balance の moves.schema.json(BALANCE_MOVES_PATH)。 */
+export interface BalanceMoves {
+  readonly schemaVersion: 1;
+  readonly moves: readonly BalanceMoveEntry[];
+}
+
+/** balance の abilities.schema.json の効果(ADR-0017 §2)。 */
+export type BalanceAbilityEffect =
+  | { readonly kind: "immune"; readonly attackType: string }
+  | {
+      readonly kind: "type_multiplier";
+      readonly attackType: string;
+      readonly numerator: number;
+      readonly denominator: number;
+    }
+  | { readonly kind: "super_effective_multiplier"; readonly numerator: number; readonly denominator: number };
+
+/** balance の abilities.schema.json の1件。 */
+export interface BalanceAbilityEntry {
+  readonly abilityId: string;
+  readonly effects: readonly BalanceAbilityEffect[];
+}
+
+/** balance の abilities.schema.json(BALANCE_ABILITIES_PATH)。 */
+export interface BalanceAbilities {
+  readonly schemaVersion: 1;
+  readonly abilities: readonly BalanceAbilityEntry[];
+}
+
+/** MasterData を balance の pokemon-types.schema.json の形にする(learnset・baseStats は書かない)。 */
+export function toBalancePokemonTypes(master: MasterData): BalancePokemonTypes {
+  return {
+    schemaVersion: BALANCE_SCHEMA_VERSION,
+    pokemon: master.species.map((species) => ({
+      pokemonId: species.key,
+      nameJa: species.nameJa,
+      types: species.types,
+      abilityIds: species.abilities,
+    })),
+  };
+}
+
+/** MasterData を balance の moves.schema.json の形にする(変化技も含める)。 */
+export function toBalanceMoves(master: MasterData): BalanceMoves {
+  return {
+    schemaVersion: BALANCE_SCHEMA_VERSION,
+    moves: master.moves.map((move) => ({ moveId: move.id, type: move.type, category: move.category })),
+  };
+}
+
+/** 整数の既約分数(gcd で約分する。0除算はここでは起きない: 呼び出し側が分母 4096・分子>0 を渡す)。 */
+function reduceFraction(numerator: number, denominator: number): { numerator: number; denominator: number } {
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+  const divisor = gcd(numerator, denominator);
+  return { numerator: numerator / divisor, denominator: denominator / divisor };
+}
+
+/** 既約分数の分子・分母がどちらも services/balance/schema/abilities.schema.json の factor の範囲(1〜16)に収まるか。 */
+function isFactorInRange(value: number): boolean {
+  return value >= FACTOR_MIN && value <= FACTOR_MAX;
+}
+
+/**
+ * AbilityEffect を balance の効果(defResistType・reduceSuperEffective だけ)に写す。
+ * defResistType はタイプ相性表のタイプ順(typeOrder)で並べ、reduceSuperEffective はその後に置く
+ * (ADR-0303 §4)。既約分数が 1〜16 に収まらない効果は書かない。stabMod など防御相性に関係しない
+ * 効果は写さない。
+ */
+function toBalanceAbilityEffects(
+  effect: AbilityEffect | null,
+  typeOrder: readonly string[],
+): BalanceAbilityEffect[] {
+  if (effect === null) {
+    return [];
+  }
+  const effects: BalanceAbilityEffect[] = [];
+  const defResistType = effect.defResistType;
+  if (defResistType !== undefined) {
+    for (const attackType of typeOrder) {
+      const value = defResistType[attackType];
+      if (value === undefined) {
+        continue;
+      }
+      if (value === 0) {
+        effects.push({ kind: "immune", attackType });
+        continue;
+      }
+      const { numerator, denominator } = reduceFraction(value, FIXED_POINT_BASE);
+      if (isFactorInRange(numerator) && isFactorInRange(denominator)) {
+        effects.push({ kind: "type_multiplier", attackType, numerator, denominator });
+      }
+    }
+  }
+  if (effect.reduceSuperEffective !== undefined) {
+    const { numerator, denominator } = reduceFraction(effect.reduceSuperEffective, FIXED_POINT_BASE);
+    if (isFactorInRange(numerator) && isFactorInRange(denominator)) {
+      effects.push({ kind: "super_effective_multiplier", numerator, denominator });
+    }
+  }
+  return effects;
+}
+
+/**
+ * MasterData を balance の abilities.schema.json の形にする。特性はすべて書き(analyze はどの特性も選べる
+ * ようにするため)、写せる効果が無い特性は effects: [] にする(ADR-0303 §4)。
+ */
+export function toBalanceAbilities(master: MasterData): BalanceAbilities {
+  const typeOrder = master.typeChart.types;
+  return {
+    schemaVersion: BALANCE_SCHEMA_VERSION,
+    abilities: master.abilities.map((ability: Ability) => ({
+      abilityId: ability.id,
+      effects: toBalanceAbilityEffects(ability.effect, typeOrder),
+    })),
+  };
+}

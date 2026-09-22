@@ -21,17 +21,27 @@ export const baseConfig: UserConfig = {
 };
 
 export default defineConfig(({ mode }) => {
-  // API_PROXY_TARGET は開発サーバーのプロキシだけが読む Node 側の値。`VITE_` 接頭辞を付けないので
-  // クライアントのバンドルには入らない。VITE_API_BASE_URL(ブラウザで読む基点 URL。api/config.ts)とは別(ADR-0301 §4)。
+  // API_PROXY_TARGET・BALANCE_PROXY_TARGET は開発サーバーのプロキシだけが読む Node 側の値。`VITE_` 接頭辞を
+  // 付けないのでクライアントのバンドルには入らない。VITE_API_BASE_URL(ブラウザで読む基点 URL。api/config.ts)
+  // とは別(ADR-0301 §4)。BALANCE_PROXY_TARGET は P4-12a(ADR-0303 §5)の balance API 用で、/api とは別の
+  // 転送先に送る。
   const env = loadEnv(mode, process.cwd(), "");
-  const proxyTarget = env.API_PROXY_TARGET ?? "";
-  // 開発時、/api を calc-svc(または gateway)へ転送する(ADR-0301 §4)。未設定(空)なら転送しない
-  // (VITE_API_BASE_URL の既定 "/" のまま、同じオリジンに /api があるものとして扱う)。
-  if (proxyTarget === "") {
+  const apiProxyTarget = env.API_PROXY_TARGET ?? "";
+  const balanceProxyTarget = env.BALANCE_PROXY_TARGET ?? "";
+  // /api/balance は /api より前に置く(Vite のプロキシは定義順に前方一致で選ぶため、/api が先だと
+  // balance への要求が calc に行ってしまう)。
+  const proxy: Record<string, { target: string; changeOrigin: boolean }> = {};
+  if (balanceProxyTarget !== "") {
+    proxy["/api/balance"] = { target: balanceProxyTarget, changeOrigin: true };
+  }
+  if (apiProxyTarget !== "") {
+    proxy["/api"] = { target: apiProxyTarget, changeOrigin: true };
+  }
+  if (Object.keys(proxy).length === 0) {
     return baseConfig;
   }
   return {
     ...baseConfig,
-    server: { ...baseConfig.server, proxy: { "/api": { target: proxyTarget, changeOrigin: true } } },
+    server: { ...baseConfig.server, proxy },
   };
 });

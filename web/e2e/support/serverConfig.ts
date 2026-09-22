@@ -20,6 +20,12 @@ export const ONLINE_PORT = 4318;
 /** オンライン用に起動する calc-svc のポート。 */
 export const CALC_SVC_PORT = 18317;
 
+/** P4-12a: タイプバランス(balance API)用の preview サーバーのポート。 */
+export const BALANCE_PORT = 4320;
+
+/** P4-12a: タイプバランスの E2E で起動する balance-svc のポート。 */
+export const BALANCE_SVC_PORT = 18318;
+
 /** 本番ビルドを作って preview で配るコマンド(ポートは呼び出し側が決める)。 */
 export function previewCommand(port: number): string {
   return `npx vite build && npx vite preview --host 127.0.0.1 --port ${port} --strictPort`;
