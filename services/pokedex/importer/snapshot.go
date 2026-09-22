@@ -26,6 +26,8 @@ type CalcSnapshot struct {
 	Moves         []CalcMove                `json:"moves"`
 	Items         []string                  `json:"items"`
 	Abilities     []string                  `json:"abilities"`
+	// Natures は性格(ADR-0105 §4)。無補正は Plus==Minus(calc は無補正を「同じ能力の上昇と下降」で表す。ID を持たない)。
+	Natures []CalcNature `json:"natures"`
 }
 
 // CalcSpecies は calc の種族1件。
@@ -59,6 +61,8 @@ type ShowdownSnapshot struct {
 	Items         []ShowdownItem            `json:"items"`
 	Abilities     []ShowdownAbility         `json:"abilities"`
 	Learnsets     map[string]map[string]int `json:"learnsets"`
+	// Natures は性格(ADR-0105 §4)。補正の正。無補正は Plus/Minus とも省略(空文字)。
+	Natures []ShowdownNature `json:"natures"`
 }
 
 // ShowdownSpecies は Showdown の種族1件。
@@ -121,6 +125,8 @@ type PokeAPISnapshot struct {
 	Items         []PokeAPIName `json:"items"`
 	Abilities     []PokeAPIName `json:"abilities"`
 	Types         []PokeAPIName `json:"types"`
+	// Natures は性格の日本語名(ADR-0105 §4)。
+	Natures []PokeAPIName `json:"natures"`
 }
 
 // PokeAPIName は PokeAPI の1エントリ(スラッグ + 言語別の名前)。
@@ -137,6 +143,7 @@ type NameOverrides struct {
 	Items         map[string]string `json:"items"`
 	Abilities     map[string]string `json:"abilities"`
 	Types         map[string]string `json:"types"`
+	Natures       map[string]string `json:"natures"`
 }
 
 // EffectsFile は data/importer/effects.json(効果定義。人が管理する正)。

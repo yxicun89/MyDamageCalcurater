@@ -67,5 +67,11 @@
     "testleaf": {"testglare": 9, "testsplash": 9},
     "testshield": {"teststrike": 9, "testrevived": 9},
     "testbug": {"teststrike": 9}
-  }
+  },
+  "natures": [
+    {"id": "testbrave", "name": "Testbrave", "plus": "atk", "minus": "spe"},
+    {"id": "testcalm", "name": "Testcalm", "plus": "spd", "minus": "atk"},
+    {"id": "testneutral", "name": "Testneutral"},
+    {"id": "testquiet", "name": "Testquiet", "plus": "spa", "minus": "spe"}
+  ]
 }

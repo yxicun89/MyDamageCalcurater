@@ -30,5 +30,11 @@
     {"name": "Test Banned", "type": "Water", "category": "Special", "basePower": 80, "priority": 0}
   ],
   "items": ["Testmonite", "Test Orb", "Test Berry"],
-  "abilities": ["Test Blaze", "Test Guard", "Test Leaf", "Test Stance"]
+  "abilities": ["Test Blaze", "Test Guard", "Test Leaf", "Test Stance"],
+  "natures": [
+    {"name": "Testbrave", "plus": "atk", "minus": "spe"},
+    {"name": "Testcalm", "plus": "spd", "minus": "atk"},
+    {"name": "Testneutral", "plus": "atk", "minus": "atk"},
+    {"name": "Testquiet", "plus": "spa", "minus": "spe"}
+  ]
 }

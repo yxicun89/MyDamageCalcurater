@@ -90,6 +90,7 @@ func Apply(ctx context.Context, db *sql.DB, out Output, versions []SourceVersion
 		q.DeleteMegaSpecies, q.DeleteRemainingSpecies,
 		q.DeleteMoves, q.DeleteItems, q.DeleteAbilities,
 		q.DeleteTypeChart, q.DeleteTypes,
+		q.DeleteNatures,
 		q.DeleteDataVersions,
 	}
 	for _, del := range deletes {
@@ -204,6 +205,14 @@ func Apply(ctx context.Context, db *sql.DB, out Output, versions []SourceVersion
 	}
 	for _, m := range out.RegulationAbilities {
 		if err := q.InsertRegulationAbility(ctx, store.InsertRegulationAbilityParams{RegulationID: m.RegulationID, AbilityID: m.MemberID}); err != nil {
+			return err
+		}
+	}
+	for _, n := range out.Natures {
+		if err := q.InsertNature(ctx, store.InsertNatureParams{
+			ID: n.ID, NameJa: n.NameJa, NameJaSource: n.NameJaSource, NameEn: n.NameEn,
+			Plus: strToNull(n.Plus), Minus: strToNull(n.Minus),
+		}); err != nil {
 			return err
 		}
 	}

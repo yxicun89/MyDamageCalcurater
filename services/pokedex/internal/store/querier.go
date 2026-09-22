@@ -17,6 +17,7 @@ type Querier interface {
 	DeleteLearnsets(ctx context.Context) error
 	DeleteMegaSpecies(ctx context.Context) error
 	DeleteMoves(ctx context.Context) error
+	DeleteNatures(ctx context.Context) error
 	DeleteRegulationAbilities(ctx context.Context) error
 	DeleteRegulationItems(ctx context.Context) error
 	DeleteRegulationMoves(ctx context.Context) error
@@ -29,6 +30,7 @@ type Querier interface {
 	GetAbility(ctx context.Context, id string) (Ability, error)
 	GetAbilityEffect(ctx context.Context, abilityID string) (AbilityEffect, error)
 	GetDataVersion(ctx context.Context, source string) (DataVersion, error)
+	GetDefaultRegulation(ctx context.Context) (GetDefaultRegulationRow, error)
 	GetItem(ctx context.Context, id string) (Item, error)
 	GetItemEffect(ctx context.Context, itemID string) (ItemEffect, error)
 	GetSpeciesByKey(ctx context.Context, key string) (Species, error)
@@ -39,6 +41,7 @@ type Querier interface {
 	InsertItemEffect(ctx context.Context, arg InsertItemEffectParams) error
 	InsertLearnset(ctx context.Context, arg InsertLearnsetParams) error
 	InsertMove(ctx context.Context, arg InsertMoveParams) error
+	InsertNature(ctx context.Context, arg InsertNatureParams) error
 	InsertRegulation(ctx context.Context, arg InsertRegulationParams) error
 	InsertRegulationAbility(ctx context.Context, arg InsertRegulationAbilityParams) error
 	InsertRegulationItem(ctx context.Context, arg InsertRegulationItemParams) error
@@ -48,17 +51,41 @@ type Querier interface {
 	InsertSpeciesAbility(ctx context.Context, arg InsertSpeciesAbilityParams) error
 	InsertType(ctx context.Context, arg InsertTypeParams) error
 	InsertTypeChart(ctx context.Context, arg InsertTypeChartParams) error
+	ListAbilities(ctx context.Context) ([]Ability, error)
+	ListAbilityEffects(ctx context.Context) ([]AbilityEffect, error)
+	ListAllSpeciesAbilities(ctx context.Context) ([]SpeciesAbility, error)
 	ListDataVersions(ctx context.Context) ([]DataVersion, error)
+	ListItemEffects(ctx context.Context) ([]ItemEffect, error)
+	ListItems(ctx context.Context) ([]Item, error)
 	ListMoves(ctx context.Context) ([]Move, error)
+	// ---------------------------------------------------------------------------------------------
+	// 性格(000006。ADR-0105 §4)
+	ListNatures(ctx context.Context) ([]Nature, error)
+	ListRegulationAbilityIDs(ctx context.Context, regulationID string) ([]string, error)
+	ListRegulationMoveIDs(ctx context.Context, regulationID string) ([]string, error)
+	ListRegulationSpeciesKeys(ctx context.Context, regulationID string) ([]string, error)
 	ListRegulations(ctx context.Context) ([]ListRegulationsRow, error)
+	// ---------------------------------------------------------------------------------------------
+	// 内部 API GET /internal/pokedex/master と pokedex export の全件読み出し(ADR-0105 §2・§5)。
+	// 使用可能集合で絞らない(絞り込みは export と検索が集合テーブルで行う)。
+	ListSpecies(ctx context.Context) ([]Species, error)
 	ListSpeciesAbilities(ctx context.Context, speciesKey string) ([]SpeciesAbility, error)
+	ListSpeciesAbilityNames(ctx context.Context, speciesKey string) ([]ListSpeciesAbilityNamesRow, error)
 	// 冪等な投入(importer.Apply。ADR-0101 §9)。全置き換えを1トランザクションで行う。
 	// 自己参照の外部キー(species.base_species_key)があるので、削除はメガを先・挿入はメガを後にする。
 	ListSpeciesKeys(ctx context.Context) ([]ListSpeciesKeysRow, error)
+	ListSpeciesLearnset(ctx context.Context, arg ListSpeciesLearnsetParams) ([]string, error)
 	ListTypeChart(ctx context.Context) ([]TypeChart, error)
 	// sqlc のクエリ(ADR-0100 §1)。services/internal/master(DB行→engine型の写像)が
 	// 受け取る素朴な行の型(TypeRow・SpeciesRow 等)にそのまま詰め替えられる列の並びにする。
 	ListTypes(ctx context.Context) ([]Type, error)
+	SearchItems(ctx context.Context, arg SearchItemsParams) ([]SearchItemsRow, error)
+	SearchMoves(ctx context.Context, arg SearchMovesParams) ([]SearchMovesRow, error)
+	// ---------------------------------------------------------------------------------------------
+	// 公開の検索 API(/api/pokedex/*。ADR-0105 §3)。pattern は呼び出し側が LIKE の特殊文字(\ % _)を
+	// \ でエスケープし、末尾に % を付けた前方一致のパターン。name_ja の照合順序は utf8mb4_ja_0900_as_cs
+	// (ADR-0100 §2。ひらがなとカタカナを区別しない)。
+	SearchSpecies(ctx context.Context, arg SearchSpeciesParams) ([]SearchSpeciesRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

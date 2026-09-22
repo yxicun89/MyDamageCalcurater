@@ -84,6 +84,15 @@ func (q *Queries) DeleteMoves(ctx context.Context) error {
 	return err
 }
 
+const deleteNatures = `-- name: DeleteNatures :exec
+DELETE FROM natures
+`
+
+func (q *Queries) DeleteNatures(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteNatures)
+	return err
+}
+
 const deleteRegulationAbilities = `-- name: DeleteRegulationAbilities :exec
 DELETE FROM regulation_abilities
 `
@@ -210,6 +219,33 @@ func (q *Queries) GetDataVersion(ctx context.Context, source string) (DataVersio
 		&i.Version,
 		&i.Checksum,
 		&i.ImportedAt,
+	)
+	return i, err
+}
+
+const getDefaultRegulation = `-- name: GetDefaultRegulation :one
+SELECT id, name_ja, is_default, starts_on, ends_on
+FROM regulations
+WHERE is_default = 1
+`
+
+type GetDefaultRegulationRow struct {
+	ID        string
+	NameJa    string
+	IsDefault bool
+	StartsOn  sql.NullTime
+	EndsOn    sql.NullTime
+}
+
+func (q *Queries) GetDefaultRegulation(ctx context.Context) (GetDefaultRegulationRow, error) {
+	row := q.db.QueryRowContext(ctx, getDefaultRegulation)
+	var i GetDefaultRegulationRow
+	err := row.Scan(
+		&i.ID,
+		&i.NameJa,
+		&i.IsDefault,
+		&i.StartsOn,
+		&i.EndsOn,
 	)
 	return i, err
 }
@@ -424,6 +460,32 @@ func (q *Queries) InsertMove(ctx context.Context, arg InsertMoveParams) error {
 	return err
 }
 
+const insertNature = `-- name: InsertNature :exec
+INSERT INTO natures (id, name_ja, name_ja_source, name_en, plus, minus)
+VALUES (?, ?, ?, ?, ?, ?)
+`
+
+type InsertNatureParams struct {
+	ID           string
+	NameJa       string
+	NameJaSource string
+	NameEn       string
+	Plus         sql.NullString
+	Minus        sql.NullString
+}
+
+func (q *Queries) InsertNature(ctx context.Context, arg InsertNatureParams) error {
+	_, err := q.db.ExecContext(ctx, insertNature,
+		arg.ID,
+		arg.NameJa,
+		arg.NameJaSource,
+		arg.NameEn,
+		arg.Plus,
+		arg.Minus,
+	)
+	return err
+}
+
 const insertRegulation = `-- name: InsertRegulation :exec
 INSERT INTO regulations (id, name_ja, is_default, starts_on, ends_on)
 VALUES (?, ?, ?, ?, ?)
@@ -613,6 +675,98 @@ func (q *Queries) InsertTypeChart(ctx context.Context, arg InsertTypeChartParams
 	return err
 }
 
+const listAbilities = `-- name: ListAbilities :many
+SELECT id, name_ja, name_ja_source, name_en
+FROM abilities
+ORDER BY id
+`
+
+func (q *Queries) ListAbilities(ctx context.Context) ([]Ability, error) {
+	rows, err := q.db.QueryContext(ctx, listAbilities)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Ability
+	for rows.Next() {
+		var i Ability
+		if err := rows.Scan(
+			&i.ID,
+			&i.NameJa,
+			&i.NameJaSource,
+			&i.NameEn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAbilityEffects = `-- name: ListAbilityEffects :many
+SELECT ability_id, effect
+FROM ability_effects
+ORDER BY ability_id
+`
+
+func (q *Queries) ListAbilityEffects(ctx context.Context) ([]AbilityEffect, error) {
+	rows, err := q.db.QueryContext(ctx, listAbilityEffects)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AbilityEffect
+	for rows.Next() {
+		var i AbilityEffect
+		if err := rows.Scan(&i.AbilityID, &i.Effect); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllSpeciesAbilities = `-- name: ListAllSpeciesAbilities :many
+SELECT species_key, slot, ability_id
+FROM species_abilities
+ORDER BY species_key, slot
+`
+
+func (q *Queries) ListAllSpeciesAbilities(ctx context.Context) ([]SpeciesAbility, error) {
+	rows, err := q.db.QueryContext(ctx, listAllSpeciesAbilities)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SpeciesAbility
+	for rows.Next() {
+		var i SpeciesAbility
+		if err := rows.Scan(&i.SpeciesKey, &i.Slot, &i.AbilityID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDataVersions = `-- name: ListDataVersions :many
 SELECT source, version, checksum, imported_at
 FROM data_versions
@@ -633,6 +787,69 @@ func (q *Queries) ListDataVersions(ctx context.Context) ([]DataVersion, error) {
 			&i.Version,
 			&i.Checksum,
 			&i.ImportedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listItemEffects = `-- name: ListItemEffects :many
+SELECT item_id, effect
+FROM item_effects
+ORDER BY item_id
+`
+
+func (q *Queries) ListItemEffects(ctx context.Context) ([]ItemEffect, error) {
+	rows, err := q.db.QueryContext(ctx, listItemEffects)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ItemEffect
+	for rows.Next() {
+		var i ItemEffect
+		if err := rows.Scan(&i.ItemID, &i.Effect); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listItems = `-- name: ListItems :many
+SELECT id, name_ja, name_ja_source, name_en
+FROM items
+ORDER BY id
+`
+
+func (q *Queries) ListItems(ctx context.Context) ([]Item, error) {
+	rows, err := q.db.QueryContext(ctx, listItems)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Item
+	for rows.Next() {
+		var i Item
+		if err := rows.Scan(
+			&i.ID,
+			&i.NameJa,
+			&i.NameJaSource,
+			&i.NameEn,
 		); err != nil {
 			return nil, err
 		}
@@ -687,6 +904,135 @@ func (q *Queries) ListMoves(ctx context.Context) ([]Move, error) {
 	return items, nil
 }
 
+const listNatures = `-- name: ListNatures :many
+
+SELECT id, name_ja, name_ja_source, name_en, plus, minus
+FROM natures
+ORDER BY id
+`
+
+// ---------------------------------------------------------------------------------------------
+// 性格(000006。ADR-0105 §4)
+func (q *Queries) ListNatures(ctx context.Context) ([]Nature, error) {
+	rows, err := q.db.QueryContext(ctx, listNatures)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Nature
+	for rows.Next() {
+		var i Nature
+		if err := rows.Scan(
+			&i.ID,
+			&i.NameJa,
+			&i.NameJaSource,
+			&i.NameEn,
+			&i.Plus,
+			&i.Minus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRegulationAbilityIDs = `-- name: ListRegulationAbilityIDs :many
+SELECT ability_id
+FROM regulation_abilities
+WHERE regulation_id = ?
+ORDER BY ability_id
+`
+
+func (q *Queries) ListRegulationAbilityIDs(ctx context.Context, regulationID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listRegulationAbilityIDs, regulationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var ability_id string
+		if err := rows.Scan(&ability_id); err != nil {
+			return nil, err
+		}
+		items = append(items, ability_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRegulationMoveIDs = `-- name: ListRegulationMoveIDs :many
+SELECT move_id
+FROM regulation_moves
+WHERE regulation_id = ?
+ORDER BY move_id
+`
+
+func (q *Queries) ListRegulationMoveIDs(ctx context.Context, regulationID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listRegulationMoveIDs, regulationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var move_id string
+		if err := rows.Scan(&move_id); err != nil {
+			return nil, err
+		}
+		items = append(items, move_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRegulationSpeciesKeys = `-- name: ListRegulationSpeciesKeys :many
+SELECT species_key
+FROM regulation_species
+WHERE regulation_id = ?
+ORDER BY species_key
+`
+
+func (q *Queries) ListRegulationSpeciesKeys(ctx context.Context, regulationID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listRegulationSpeciesKeys, regulationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var species_key string
+		if err := rows.Scan(&species_key); err != nil {
+			return nil, err
+		}
+		items = append(items, species_key)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRegulations = `-- name: ListRegulations :many
 SELECT id, name_ja, is_default, starts_on, ends_on
 FROM regulations
@@ -716,6 +1062,60 @@ func (q *Queries) ListRegulations(ctx context.Context) ([]ListRegulationsRow, er
 			&i.IsDefault,
 			&i.StartsOn,
 			&i.EndsOn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSpecies = `-- name: ListSpecies :many
+
+SELECT ` + "`" + `key` + "`" + `, dex_no, form, showdown_id, name_ja, name_ja_source, name_en, type1, type2,
+       base_hp, base_atk, base_def, base_spa, base_spd, base_spe,
+       is_mega, base_species_key, required_item_id
+FROM species
+ORDER BY ` + "`" + `key` + "`" + `
+`
+
+// ---------------------------------------------------------------------------------------------
+// 内部 API GET /internal/pokedex/master と pokedex export の全件読み出し(ADR-0105 §2・§5)。
+// 使用可能集合で絞らない(絞り込みは export と検索が集合テーブルで行う)。
+func (q *Queries) ListSpecies(ctx context.Context) ([]Species, error) {
+	rows, err := q.db.QueryContext(ctx, listSpecies)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Species
+	for rows.Next() {
+		var i Species
+		if err := rows.Scan(
+			&i.Key,
+			&i.DexNo,
+			&i.Form,
+			&i.ShowdownID,
+			&i.NameJa,
+			&i.NameJaSource,
+			&i.NameEn,
+			&i.Type1,
+			&i.Type2,
+			&i.BaseHp,
+			&i.BaseAtk,
+			&i.BaseDef,
+			&i.BaseSpa,
+			&i.BaseSpd,
+			&i.BaseSpe,
+			&i.IsMega,
+			&i.BaseSpeciesKey,
+			&i.RequiredItemID,
 		); err != nil {
 			return nil, err
 		}
@@ -760,6 +1160,43 @@ func (q *Queries) ListSpeciesAbilities(ctx context.Context, speciesKey string) (
 	return items, nil
 }
 
+const listSpeciesAbilityNames = `-- name: ListSpeciesAbilityNames :many
+SELECT sa.slot, a.id, a.name_ja
+FROM species_abilities sa
+JOIN abilities a ON a.id = sa.ability_id
+WHERE sa.species_key = ?
+ORDER BY sa.slot
+`
+
+type ListSpeciesAbilityNamesRow struct {
+	Slot   uint8
+	ID     string
+	NameJa string
+}
+
+func (q *Queries) ListSpeciesAbilityNames(ctx context.Context, speciesKey string) ([]ListSpeciesAbilityNamesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSpeciesAbilityNames, speciesKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSpeciesAbilityNamesRow
+	for rows.Next() {
+		var i ListSpeciesAbilityNamesRow
+		if err := rows.Scan(&i.Slot, &i.ID, &i.NameJa); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSpeciesKeys = `-- name: ListSpeciesKeys :many
 
 SELECT ` + "`" + `key` + "`" + `, showdown_id
@@ -786,6 +1223,42 @@ func (q *Queries) ListSpeciesKeys(ctx context.Context) ([]ListSpeciesKeysRow, er
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSpeciesLearnset = `-- name: ListSpeciesLearnset :many
+SELECT l.move_id
+FROM learnsets l
+JOIN regulation_moves rm ON rm.move_id = l.move_id
+WHERE l.species_key = ? AND rm.regulation_id = ?
+ORDER BY l.move_id
+`
+
+type ListSpeciesLearnsetParams struct {
+	SpeciesKey   string
+	RegulationID string
+}
+
+func (q *Queries) ListSpeciesLearnset(ctx context.Context, arg ListSpeciesLearnsetParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listSpeciesLearnset, arg.SpeciesKey, arg.RegulationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var move_id string
+		if err := rows.Scan(&move_id); err != nil {
+			return nil, err
+		}
+		items = append(items, move_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -847,6 +1320,162 @@ func (q *Queries) ListTypes(ctx context.Context) ([]Type, error) {
 			&i.SortOrder,
 			&i.NameJa,
 			&i.NameJaSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchItems = `-- name: SearchItems :many
+SELECT i.id, i.name_ja
+FROM items i
+JOIN regulation_items ri ON ri.item_id = i.id
+WHERE ri.regulation_id = ? AND i.name_ja LIKE ?
+ORDER BY i.name_ja, i.id
+LIMIT ?
+`
+
+type SearchItemsParams struct {
+	RegulationID string
+	Pattern      string
+	Limit        int32
+}
+
+type SearchItemsRow struct {
+	ID     string
+	NameJa string
+}
+
+func (q *Queries) SearchItems(ctx context.Context, arg SearchItemsParams) ([]SearchItemsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchItems, arg.RegulationID, arg.Pattern, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchItemsRow
+	for rows.Next() {
+		var i SearchItemsRow
+		if err := rows.Scan(&i.ID, &i.NameJa); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchMoves = `-- name: SearchMoves :many
+SELECT m.id, m.name_ja, m.type, m.category, m.power, m.priority
+FROM moves m
+JOIN regulation_moves rm ON rm.move_id = m.id
+WHERE rm.regulation_id = ? AND m.name_ja LIKE ?
+ORDER BY m.name_ja, m.id
+LIMIT ?
+`
+
+type SearchMovesParams struct {
+	RegulationID string
+	Pattern      string
+	Limit        int32
+}
+
+type SearchMovesRow struct {
+	ID       string
+	NameJa   string
+	Type     string
+	Category string
+	Power    uint16
+	Priority int8
+}
+
+func (q *Queries) SearchMoves(ctx context.Context, arg SearchMovesParams) ([]SearchMovesRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchMoves, arg.RegulationID, arg.Pattern, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchMovesRow
+	for rows.Next() {
+		var i SearchMovesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.NameJa,
+			&i.Type,
+			&i.Category,
+			&i.Power,
+			&i.Priority,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchSpecies = `-- name: SearchSpecies :many
+
+SELECT s.` + "`" + `key` + "`" + `, s.dex_no, s.form, s.name_ja, s.type1, s.type2
+FROM species s
+JOIN regulation_species rs ON rs.species_key = s.` + "`" + `key` + "`" + `
+WHERE rs.regulation_id = ? AND s.name_ja LIKE ?
+ORDER BY s.dex_no, s.form
+LIMIT ?
+`
+
+type SearchSpeciesParams struct {
+	RegulationID string
+	Pattern      string
+	Limit        int32
+}
+
+type SearchSpeciesRow struct {
+	Key    string
+	DexNo  uint16
+	Form   uint16
+	NameJa string
+	Type1  string
+	Type2  sql.NullString
+}
+
+// ---------------------------------------------------------------------------------------------
+// 公開の検索 API(/api/pokedex/*。ADR-0105 §3)。pattern は呼び出し側が LIKE の特殊文字(\ % _)を
+// \ でエスケープし、末尾に % を付けた前方一致のパターン。name_ja の照合順序は utf8mb4_ja_0900_as_cs
+// (ADR-0100 §2。ひらがなとカタカナを区別しない)。
+func (q *Queries) SearchSpecies(ctx context.Context, arg SearchSpeciesParams) ([]SearchSpeciesRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchSpecies, arg.RegulationID, arg.Pattern, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchSpeciesRow
+	for rows.Next() {
+		var i SearchSpeciesRow
+		if err := rows.Scan(
+			&i.Key,
+			&i.DexNo,
+			&i.Form,
+			&i.NameJa,
+			&i.Type1,
+			&i.Type2,
 		); err != nil {
 			return nil, err
 		}
