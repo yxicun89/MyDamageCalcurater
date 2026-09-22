@@ -24,7 +24,8 @@ speed にも適用し、`main` への push だけでクラスタの speed の中
 - クラウド(本番相当)のレジストリは別途決める(このレジストリはローカル k3d の検証専用。ADR-0018 §結論のまま)。
 
 ### 2. GitOps の overlay と Argo CD Application(balance と同じ形)
-- `services/speed/deploy/k8s/overlays/gitops/kustomization.yaml`: `newTag` ではなく `newDigest`(digest 固定)。
+- `services/speed/deploy/k8s/overlays/gitops/kustomization.yaml`: `newTag` ではなく `digest`(kustomize の images フィールド名。digest 固定。
+  balance の overlay と同じキー名。実装時の確認: `newDigest` という語はここでは使わず `digest:` を使う)。
   digest のプレースホルダは `sha256:` + 64桁の `0`(balance と同じ)。
 - `services/speed/deploy/argocd/application.yaml`: `metadata.name: pokecalc-speed`、`spec.source.path:
   services/speed/deploy/k8s/overlays/gitops`、`repoURL` はプレースホルダ `https://git.example.invalid/pokecalc.git`
