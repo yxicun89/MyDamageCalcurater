@@ -9,10 +9,10 @@ Next: P2-2c(照合と差分報告。実データの取得と版の固定を含�
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
-Active: Claude Code
-Branch: feat/api-p3-smoke(作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: P3-1(ADR-0200・0201。PR #14)と P3-2 gateway(ADR-0202。PR #23)は main に統合済み。P3-3(契約表・k3d のデプロイとスモーク。ADR-0203)は実装済み・k3d のスモーク成功、critic の指摘を反映中
-Next: P3-3 の critic 再レビュー → PR → Phase 3 完了(feat/api-p3・feat/api-p3-gateway・feat/api-p3-smoke を削除)。その後は pokedex-svc(P2-3)が入ったら gateway の GATEWAY_POKEDEX_URL と smoke の 503→200、共通マスタ(P2-2a の services/internal/master)が入ったら calc-svc の Store の差し替え
+Active: なし
+Branch: (次の作業で main から feat/api-<名前> を切る。作業ディレクトリ ~/MyDamageCalcurater-api)
+Status: Phase 3 完了。P3-1(ADR-0200・0201。PR #14)・P3-2 gateway(ADR-0202。PR #23)・P3-3 契約表と k3d のデプロイ・スモーク(ADR-0203。critic PASS)。k3d の既存クラスタで make api-k3d-deploy && make api-smoke 成功
+Next: 他レーン待ち。(1) データレーンの pokedex-svc(P2-3)が main に入ったら、gateway の local overlay に GATEWAY_POKEDEX_URL を設定し、smoke.sh の /api/pokedex の期待値 503→200 と TestManifestGatewayLocalConfig を変える。(2) 共通マスタ(P2-2a の services/internal/master)の写像が入ったら calc-svc の暫定 Store(services/calc/internal/master)を差し替える。(3) Web(P4-5)・iOS から API 契約の要望があれば DECISIONS.md で受ける
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
