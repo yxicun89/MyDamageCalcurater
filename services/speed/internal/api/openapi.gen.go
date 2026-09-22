@@ -16,6 +16,7 @@ const (
 	InternalError     ErrorCode = "internal_error"
 	InvalidRequest    ErrorCode = "invalid_request"
 	MasterUnavailable ErrorCode = "master_unavailable"
+	RequestTooLarge   ErrorCode = "request_too_large"
 	UnknownPokemon    ErrorCode = "unknown_pokemon"
 )
 
@@ -27,6 +28,8 @@ func (e ErrorCode) Valid() bool {
 	case InvalidRequest:
 		return true
 	case MasterUnavailable:
+		return true
+	case RequestTooLarge:
 		return true
 	case UnknownPokemon:
 		return true

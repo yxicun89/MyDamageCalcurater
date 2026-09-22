@@ -128,6 +128,23 @@ func TestPositionChecksHeadersBeforeBody(t *testing.T) {
 	}
 }
 
+// TestPositionRejectsOversizedBody: maxPositionBodyBytes(4 KiB)を超える body は 413
+// request_too_large(balance の decodeJSONBody と同じ形。ADR-0602 §4)。
+func TestPositionRejectsOversizedBody(t *testing.T) {
+	t.Parallel()
+
+	oversized := fmt.Sprintf(`{"mode":"raw","value":200,"pokemonId":"%s"}`, strings.Repeat("9", maxPositionBodyBytes))
+	for _, deps := range []Dependencies{{Pokemon: exampleProvider(t)}, {}} {
+		recorder := serve(deps, newPositionRequest(validHeaders, oversized))
+		if recorder.Code != http.StatusRequestEntityTooLarge {
+			t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusRequestEntityTooLarge, recorder.Body.String())
+		}
+		if body := decodeError(t, recorder); body.Code != api.RequestTooLarge {
+			t.Errorf("code = %q, want %q", body.Code, api.RequestTooLarge)
+		}
+	}
+}
+
 // TestPositionRejectsInvalidBody: JSON の形、mode ごとの必須フィールドの過不足、値の範囲は 400 invalid_request
 // (ADR-0602 §2・§4)。read model があってもなくても body の検査が先なので、両方で確かめる。
 func TestPositionRejectsInvalidBody(t *testing.T) {
@@ -163,6 +180,9 @@ func TestPositionRejectsInvalidBody(t *testing.T) {
 		{"preset: max-plus2 は選べない", `{"mode":"preset","pokemonId":"9001-000","preset":"max-plus2","scarf":false}`},
 		{"preset: 未知の preset", `{"mode":"preset","pokemonId":"9001-000","preset":"fastest","scarf":false}`},
 		{"preset: preset が空文字", `{"mode":"preset","pokemonId":"9001-000","preset":"","scarf":false}`},
+		// pokemonId の形式(NNNN-NNN)。read model に無いだけの場合(422)とは区別する(下の
+		// TestPositionUnknownPokemon)。
+		{"preset: pokemonId の形式が不正", `{"mode":"preset","pokemonId":"zzz","preset":"max","scarf":false}`},
 
 		// mode=custom は pokemonId・sp・nature・rank・scarf の 5 つちょうど。
 		{"custom: rank が無い", `{"mode":"custom","pokemonId":"9001-000","sp":32,"nature":"plus","scarf":false}`},
@@ -178,6 +198,7 @@ func TestPositionRejectsInvalidBody(t *testing.T) {
 		{"custom: rank が下限未満", `{"mode":"custom","pokemonId":"9001-000","sp":32,"nature":"plus","rank":-7,"scarf":false}`},
 		{"custom: 未知の nature", `{"mode":"custom","pokemonId":"9001-000","sp":32,"nature":"fast","rank":0,"scarf":false}`},
 		{"custom: nature が空文字", `{"mode":"custom","pokemonId":"9001-000","sp":32,"nature":"","rank":0,"scarf":false}`},
+		{"custom: pokemonId の形式が不正", `{"mode":"custom","pokemonId":"zzz","sp":32,"nature":"plus","rank":0,"scarf":false}`},
 
 		// mode=raw は value(必須)と pokemonId(任意)だけ。
 		{"raw: value が無い", `{"mode":"raw"}`},
@@ -191,6 +212,7 @@ func TestPositionRejectsInvalidBody(t *testing.T) {
 		// 範囲の端はテスト側でも書き写さず、コアの導出(ADR-0602 §3)から作る。
 		{"raw: value が最小未満", fmt.Sprintf(`{"mode":"raw","value":%d}`, minRaw-1)},
 		{"raw: value が最大超え", fmt.Sprintf(`{"mode":"raw","value":%d}`, maxRaw+1)},
+		{"raw: pokemonId の形式が不正(名前・タイプの解決だけに使う分でも形式は検査する)", `{"mode":"raw","value":200,"pokemonId":"zzz"}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

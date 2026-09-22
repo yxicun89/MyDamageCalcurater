@@ -139,10 +139,12 @@ paths:
         chosen row of ADR-0601 §2, with the Choice Scarf switched independently);
         `custom` needs pokemonId, sp, nature, rank and scarf;
         `raw` needs value, the in-battle speed itself, and may name pokemonId for display only (its base
-        speed is not used). A field the chosen mode does not need, a missing required field, or a value
-        out of range is 400 invalid_request.
+        speed is not used). A field the chosen mode does not need, a missing required field, a pokemonId
+        not matching the NNNN-NNN format, or a value out of range is 400 invalid_request. A JSON `null`
+        for an optional field is treated the same as omitting it.
 
-        Check order: headers (400) → body (400) → read model absent (503) → unknown pokemonId (422) → 200.
+        Check order: headers (400) → body (400, or 413 request_too_large over 4 KiB) → read model
+        absent (503) → unknown pokemonId (422) → 200.
       parameters:
         - $ref: '#/components/parameters/DeviceId'
         - $ref: '#/components/parameters/SessionId'
@@ -163,6 +165,12 @@ paths:
           description: |
             X-Device-Id or X-Session-Id is missing, empty, or invalid, or the body is not one JSON object,
             or the fields do not match the given mode, or a value is out of range (invalid_request)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: Request body exceeds the 4 KiB limit (request_too_large)
           content:
             application/json:
               schema:
@@ -489,5 +497,6 @@ components:
       enum:
         - invalid_request
         - unknown_pokemon
+        - request_too_large
         - master_unavailable
         - internal_error

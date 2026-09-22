@@ -15,12 +15,23 @@ import (
 // body の中身を検証しないので、mode ごとの必須・余計なフィールド・範囲の検査はここで自前に行う。
 var errInvalidPositionBody = errors.New("request body does not match the given mode")
 
-// getSpeedPosition implements POST /api/speed/v1/position (ADR-0602 §4): body (400) → read model
-// absent (503) → unknown pokemonId (422) → 200. Header の検査は requireRequestContext ミドルウェア
-// (New で登録)が body より先に行う。
+// errPositionBodyTooLarge は body が maxPositionBodyBytes を超えたことを表す(balance の
+// errRequestTooLarge と同じ形)。
+var errPositionBodyTooLarge = errors.New("request body exceeds the size limit")
+
+// getSpeedPosition implements POST /api/speed/v1/position (ADR-0602 §4): body(400。サイズ超過は
+// 413)→ read model absent(503)→ unknown pokemonId(422)→ 200. Header の検査は
+// requireRequestContext ミドルウェア(New で登録)が body より先に行う。
 func getSpeedPosition(c *echo.Context, deps Dependencies) error {
+	c.Request().Body = http.MaxBytesReader(c.Response(), c.Request().Body, maxPositionBodyBytes)
 	body, err := decodeJSONBody[api.PositionRequest](c.Request())
 	if err != nil {
+		if errors.Is(err, errPositionBodyTooLarge) {
+			return c.JSON(http.StatusRequestEntityTooLarge, api.Error{
+				Code:    api.RequestTooLarge,
+				Message: err.Error(),
+			})
+		}
 		return c.JSON(http.StatusBadRequest, api.Error{
 			Code:    api.InvalidRequest,
 			Message: err.Error(),
@@ -63,17 +74,26 @@ func getSpeedPosition(c *echo.Context, deps Dependencies) error {
 }
 
 // decodeJSONBody は body を厳密な JSON として T に詰め替える(balance の decodeJSONBody と同じ形。
-// 未知フィールドは拒否、1 つの JSON 値だけを許す)。生成コードは body の形を検証しないため、speed
-// 側で新設する(ADR-0602 §2 の申し送り)。
+// 未知フィールドは拒否、1 つの JSON 値だけを許す、http.MaxBytesReader が既に設定した上限を超えたら
+// errPositionBodyTooLarge)。生成コードは body の形を検証しないため、speed 側で新設する
+// (ADR-0602 §2 の申し送り)。
 func decodeJSONBody[T any](request *http.Request) (T, error) {
 	var body T
 	decoder := json.NewDecoder(request.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&body); err != nil {
+		var maxBytesError *http.MaxBytesError
+		if errors.As(err, &maxBytesError) {
+			return body, errPositionBodyTooLarge
+		}
 		return body, errors.New("request body must be a single valid JSON object")
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		var maxBytesError *http.MaxBytesError
+		if errors.As(err, &maxBytesError) {
+			return body, errPositionBodyTooLarge
+		}
 		return body, errors.New("request body must contain exactly one JSON object")
 	}
 	return body, nil
@@ -105,6 +125,9 @@ func positionRequestFromPreset(body api.PositionRequest) (speed.PositionRequest,
 	if body.Sp != nil || body.Nature != nil || body.Rank != nil || body.Value != nil {
 		return speed.PositionRequest{}, errInvalidPositionBody
 	}
+	if !pokemonIDPattern.MatchString(*body.PokemonId) {
+		return speed.PositionRequest{}, errInvalidPositionBody
+	}
 	if !body.Preset.Valid() {
 		return speed.PositionRequest{}, errInvalidPositionBody
 	}
@@ -124,6 +147,9 @@ func positionRequestFromCustom(body api.PositionRequest) (speed.PositionRequest,
 		return speed.PositionRequest{}, errInvalidPositionBody
 	}
 	if body.Preset != nil || body.Value != nil {
+		return speed.PositionRequest{}, errInvalidPositionBody
+	}
+	if !pokemonIDPattern.MatchString(*body.PokemonId) {
 		return speed.PositionRequest{}, errInvalidPositionBody
 	}
 
@@ -159,6 +185,9 @@ func positionRequestFromRaw(body api.PositionRequest) (speed.PositionRequest, er
 
 	req := speed.PositionRequest{Mode: speed.PositionModeRaw, Value: *body.Value}
 	if body.PokemonId != nil {
+		if !pokemonIDPattern.MatchString(*body.PokemonId) {
+			return speed.PositionRequest{}, errInvalidPositionBody
+		}
 		req.PokemonID = *body.PokemonId
 	}
 	return req, nil
