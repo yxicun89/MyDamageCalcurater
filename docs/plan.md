@@ -95,7 +95,8 @@
   - WASM 境界との契約差分の解消(ADR-0011 §10 の持ち越し): Web に「ID → 実体(種族・技・持ち物・特性)」の解決層を1つ置き、オンライン(API に ID を送る=`moveId` など)とオフライン(WASM に解決済みの `move` / `Individual` を渡す)で同じ型を共有する。`openapi-typescript` の生成型と ADR-0011 §3 の DTO の対応表を作る。`minPercent`/`maxPercent` の整数化・`category`・`BulkCalcRow.defender`・エラー `code` 語彙の共通化(P3-1 で契約側を直した後)に Web 側を追従させる。WASM の遅延ロード(オンラインは API、オフラインだけ WASM)にするかを決める(ADR-0011 §11)
   - **ブラウザ実機確認**(P1-9 は Node + wasm_exec.js までの確認。仕様ブロッカーではない): Chrome と Safari で、`.wasm` の MIME type / `WebAssembly.instantiateStreaming` / キャッシュ / Service Worker との干渉 / 初回ロード(約4.6MB・gzip 1.3MB)/ メモリ を確認する
 - [x] P4-6 Playwright E2E(主要フロー)。`make web-e2e`(オフライン)/ `make web-e2e-online`(calc-svc)。Web のテストを `make test` / `lint` / `build` に組み込み(ADR-0300 §9)
-- [!] P4-7 **M1 完了報告**: 動作確認手順を `docs/verify-m1.md` に書く。**ドラフト**(いま確認できる範囲: 自動テスト・オフライン/オンラインの画面)。P2-2c/d・P2-3・P3-3 が main に入ったら完成版にする
+- [x] P4-7 **M1 完了報告**: 動作確認手順を `docs/verify-m1.md` に書く。P2-2c/d・P2-3・P3-3 が main に入り、自動テスト一式・k3d(gateway 経由の `http://localhost:8080`)での計算・逆算・タイプバランス(仮想敵・おすすめタイプ含む)を実地確認して完成版にした。
+  実マスタでの計算・Web のオンライン用 MasterSource は M1 の定義(ブラウザで計算できる)の外側の作業として verify-m1.md の「未完了」に記録(gateway の pokedex 配線は API レーンの依頼 d 待ち)
 
 - [x] P4-8 design.md「動き」の演出(操作したときだけ): 確定数が変わった瞬間にバッジが弾む、攻守入れ替えでカードが入れ替わる(0.35秒)、選択中のカード1枚だけのホロ(ポインタ位置に連動)、逆算で観測を追加したときの絞り込みの動き、ダメージバーの spring。OS の「視差効果を減らす」で全演出を無効化(ユーザー決定 2026-09-22)
 

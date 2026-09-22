@@ -7,6 +7,14 @@
 import type { Ability, AbilityEffect } from "../engine/types";
 import type { MasterData } from "./types";
 
+// P2-3b(ADR-0106)追記: engine.AbilityEffect に defImmuneTypes・defAbsorbTypes が増えたので、
+// balance の read model にも "immune"・"absorb" を書く(ADR-0106 §決定7)。
+// engine 側の無効は defImmuneTypes が正で、defResistType はあくまで倍率(0 を書いても DefResistType が
+// ダメージを 0 にすることはなく、最低1ダメージの床で 1 になる。ADR-0106「却下した案」参照)。
+// ただし P4-12a で作ったこのエクスポータは defResistType[t] === 0 を無効の書き方として受け付けており、
+// 既存テストがそれを固定しているため、当面は両方の書き方を immune に写す(engine の規約ではなく、
+// この Web ローカルのエクスポータ固有の互換対応)。
+
 /** balance の read model の schemaVersion(services/balance/schema/*.schema.json)。 */
 const BALANCE_SCHEMA_VERSION = 1;
 
@@ -47,6 +55,7 @@ export interface BalanceMoves {
 /** balance の abilities.schema.json の効果(ADR-0017 §2)。 */
 export type BalanceAbilityEffect =
   | { readonly kind: "immune"; readonly attackType: string }
+  | { readonly kind: "absorb"; readonly attackType: string }
   | {
       readonly kind: "type_multiplier";
       readonly attackType: string;
@@ -101,10 +110,12 @@ function isFactorInRange(value: number): boolean {
 }
 
 /**
- * AbilityEffect を balance の効果(defResistType・reduceSuperEffective だけ)に写す。
- * defResistType はタイプ相性表のタイプ順(typeOrder)で並べ、reduceSuperEffective はその後に置く
- * (ADR-0303 §4)。既約分数が 1〜16 に収まらない効果は書かない。stabMod など防御相性に関係しない
- * 効果は写さない。
+ * AbilityEffect を balance の効果(defResistType・defImmuneTypes・defAbsorbTypes・reduceSuperEffective)に
+ * 写す。出力順は ADR-0106 §決定7: immune(タイプ順)→ absorb(タイプ順)→ type_multiplier(タイプ順)→
+ * super_effective_multiplier。既約分数が 1〜16 に収まらない効果は書かない。stabMod など防御相性に
+ * 関係しない効果は写さない。副次効果(回復・能力上昇)は absorb の行に出さない(ADR-0106 §決定7)。
+ * defResistType[t] === 0 も immune として受け付けるのは engine の規約ではなく、このエクスポータが
+ * P4-12a から持つローカルな書き方(engine 側の無効は defImmuneTypes が正。上のコメント参照)。
  */
 function toBalanceAbilityEffects(
   effect: AbilityEffect | null,
@@ -115,14 +126,40 @@ function toBalanceAbilityEffects(
   }
   const effects: BalanceAbilityEffect[] = [];
   const defResistType = effect.defResistType;
+
+  // 無効(immune): defImmuneTypes(ADR-0106)と defResistType の 0(P4-12a からの書き方)の両方を受け付け、
+  // 同じタイプが両方にあっても1件にまとめる。
+  const immuneTypes = new Set<string>(effect.defImmuneTypes ?? []);
+  if (defResistType !== undefined) {
+    for (const attackType of typeOrder) {
+      if (defResistType[attackType] === 0) {
+        immuneTypes.add(attackType);
+      }
+    }
+  }
+  for (const attackType of typeOrder) {
+    if (immuneTypes.has(attackType)) {
+      effects.push({ kind: "immune", attackType });
+    }
+  }
+
+  // 吸収(absorb): defAbsorbTypes のキーだけを見る。副次効果(回復・能力上昇)は balance に出さない。
+  // 同じタイプが immune と absorb の両方にあるのは不正な入力(WASM 境界が拒否する。ADR-0106 §決定1)だが、
+  // それでも結果が割れないよう engine と同じ優先規則にする: 無効が吸収に勝つ(immune を絶対に落とさない)。
+  const defAbsorbTypes = effect.defAbsorbTypes;
+  if (defAbsorbTypes !== undefined) {
+    for (const attackType of typeOrder) {
+      if (attackType in defAbsorbTypes && !immuneTypes.has(attackType)) {
+        effects.push({ kind: "absorb", attackType });
+      }
+    }
+  }
+
+  // タイプ倍率(type_multiplier): defResistType の 0 以外の値(0 は上で immune に回した)。
   if (defResistType !== undefined) {
     for (const attackType of typeOrder) {
       const value = defResistType[attackType];
-      if (value === undefined) {
-        continue;
-      }
-      if (value === 0) {
-        effects.push({ kind: "immune", attackType });
+      if (value === undefined || value === 0) {
         continue;
       }
       const { numerator, denominator } = reduceFraction(value, FIXED_POINT_BASE);
@@ -131,6 +168,8 @@ function toBalanceAbilityEffects(
       }
     }
   }
+
+  // 弱点半減倍率(super_effective_multiplier): 最後。
   if (effect.reduceSuperEffective !== undefined) {
     const { numerator, denominator } = reduceFraction(effect.reduceSuperEffective, FIXED_POINT_BASE);
     if (isFactorInRange(numerator) && isFactorInRange(denominator)) {
