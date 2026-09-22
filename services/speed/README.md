@@ -17,6 +17,20 @@ API の契約は [api/openapi.yaml](api/openapi.yaml)(変更後は `make speed-g
    read model 未設定で 503 `master_unavailable`、正常なら 200 で pokemonId の昇順。provider のエラーは 500 `internal_error` の固定文言で、内部の文言を返さない。
 7. **ビルド・検査**: `make speed-test` / `make speed-lint` / `make speed-build` が通り、ルートの `make test` / `lint` / `build` に含まれる。
 
+## SP1 の受け入れ条件(ADR-0601)
+
+1. **プリセット**: `speed.Presets()` が 6 つの行の型を ADR-0601 §2 の順(`uninvested` / `neutral-max` / `max` / `max-scarf` / `max-plus1` / `max-plus2`)で返し、
+   各行の SP・性格の補正・ランク・スカーフが §2 の表と一致する。ID は OpenAPI の `PresetId` の enum と同じ順・同じ文字列。
+2. **表の組み立て**: `speed.BuildTable(roster, presets)` が各ポケモン × 指定のプリセットを `speed.Speed` で計算し、同じ値を 1 つの段にまとめる。
+   段は素早さの降順、段の中は pokemonId の昇順 → §2 の順(別のポケモン・別のプリセットでも値が同じなら同じ段)。
+3. **絞り込み**: 指定したプリセットの行だけを出し、指定の順は結果に影響しない。空・未知・重複は sentinel エラー
+   (`ErrNoPresets` / `ErrUnknownPreset` / `ErrDuplicatePreset`)。roster の種族値が不正なら `Speed` のエラーを包んで返す。
+4. **API**: `GET /api/speed/v1/table?presets=...` は ヘッダー(400)→ クエリ(未知・重複・`presets=` の空・キーの繰り返しは 400 `invalid_request`)
+   → read model 未設定(503 `master_unavailable`)→ 200 の順に判定する。provider・計算のエラーは 500 `internal_error` の固定文言。
+5. **レスポンス**: `presets` 省略時は 6 行すべて。レスポンスの `presets` は実際に使った行を §2 の順で返す。
+   例の read model では 35 段・48 行で、種族値 81 の `9002-000` と `9005-000` の行は同じ段(同速)に並ぶ。
+6. **スモーク**: `make speed-smoke` が表の 200 と同速の段(`presets=max-scarf` の 219)・未知のプリセットの 400 を確かめる。
+
 ## コマンド
 
 ```

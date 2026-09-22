@@ -43,7 +43,13 @@
 - `presets` は実際に使った行の ID(§2 の順)。
 - ヘッダー(400)→ クエリ(400)→ read model 未設定(503 `master_unavailable`)→ 200。provider のエラー・計算のエラー(read model が検証済みなので通常起きない)は 500 固定文言。
 
-### 6. 404 / 405 の応答(SP0 critic の軽微)
+### 6. 細部
+- コアは `Presets()`(定義の複製)・`NormalizePresets`(空 `ErrNoPresets`・未知 `ErrUnknownPreset`・重複 `ErrDuplicatePreset`。§2 の順に並べ直す)・`BuildTable` を公開する。
+  HTTP はクエリを read model より先に検査する(provider が nil でもクエリが不正なら 400)。
+- OpenAPI の `presets` クエリは minItems 1・uniqueItems、`SpeedTier.speed` は minimum 1。
+- テストの期待値は ADR-0600 §6 と同じ限定的な例外として、SP1 の表(コア・HTTP)でも §2 の行と ADR-0600 §3 の式から手で導いた値を使う(過程をコメントに書く)。
+
+### 7. 404 / 405 の応答(SP0 critic の軽微)
 契約に無いパス・メソッドへの 404 / 405 は Echo の既定の応答(`{"message": ...}`)のままにする(balance と同じ)。クライアントは契約にあるパスだけを呼ぶので、
 ErrorCode を増やしてまで揃える利点が無い。
 

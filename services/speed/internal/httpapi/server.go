@@ -54,6 +54,11 @@ func (h handler) ListPokemon(c *echo.Context, _ api.ListPokemonParams) error {
 	return listPokemon(c, h.deps)
 }
 
+// GetSpeedTable implements GET /api/speed/v1/table (ADR-0601 §5). SP1 の実装待ち。
+func (h handler) GetSpeedTable(c *echo.Context, params api.GetSpeedTableParams) error {
+	panic("unimplemented")
+}
+
 func health(c *echo.Context) error {
 	return c.JSON(http.StatusOK, api.Health{Status: api.Ok})
 }
