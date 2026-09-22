@@ -93,7 +93,7 @@ func (c reverseCase) engineInput(t *testing.T, f *fakeStore) engine.ReverseInput
 }
 
 // truthRolls は「真値」の相手で1発撃ったときの engine の結果(観測を作るため)。
-func truthRolls(t *testing.T, f *fakeStore, in engine.DamageInput) engine.DamageResult {
+func truthRolls(t testing.TB, f *fakeStore, in engine.DamageInput) engine.DamageResult {
 	t.Helper()
 	in.Format, in.TypeChart = engine.FormatSingle, f.chart
 	in.Field = engine.Field{Weather: engine.WeatherNone, Terrain: engine.TerrainNone}
@@ -104,7 +104,7 @@ func truthRolls(t *testing.T, f *fakeStore, in engine.DamageInput) engine.Damage
 	return res
 }
 
-func reverseCases(t *testing.T, f *fakeStore) []reverseCase {
+func reverseCases(t testing.TB, f *fakeStore) []reverseCase {
 	t.Helper()
 	atkKnown := indiv{speciesKey: speciesAttacker, natureID: natureAtkUp, sp: engine.Stats{Atk: 32, Spe: 32}}
 	defKnown := indiv{speciesKey: speciesDefender, natureID: natureNeutral, sp: engine.Stats{HP: 32, SpD: 32}}

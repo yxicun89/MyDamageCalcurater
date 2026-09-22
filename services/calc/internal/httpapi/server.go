@@ -227,6 +227,9 @@ func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
 		return err
 	}
+	if err := checkBulkLimits(req); err != nil {
+		return err
+	}
 	format, err := parseFormat(req.Format)
 	if err != nil {
 		return err
@@ -278,6 +281,9 @@ func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) er
 	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
 		return err
 	}
+	if err := checkReverseLimits(req); err != nil {
+		return err
+	}
 	format, err := parseFormat(req.Format)
 	if err != nil {
 		return err
@@ -313,9 +319,6 @@ func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) er
 		return err
 	}
 	maxCandidates := derefInt(req.MaxCandidates)
-	if maxCandidates < 0 {
-		return newError(api.InvalidInput, "maxCandidates は 0 以上でなければならない: %d", maxCandidates)
-	}
 
 	res, err := engine.CalcReverse(engine.ReverseInput{
 		Format: format, Side: engine.ReverseSide(req.Side), Known: known, UnknownSpecies: species,
