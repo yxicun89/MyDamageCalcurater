@@ -13,7 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"testing"
 	"time"
 
@@ -219,7 +219,7 @@ func buildDefaultGatewayHandler(t *testing.T) http.Handler {
 //
 // 修正前は request() が `status=$(curl ... || printf '000')` としており、curl 自身が接続拒否時に
 // 書き出す "000"(-w '%{http_code}')に、失敗時の `printf '000'` がさらに連結されて "000000" になっていた。
-// その値は case の 000/404/502/503 のどれにも一致せず、request_with_retry が「再試行不要な最終ステータス」
+// その値は case の 000/502 のどれにも一致せず、request_with_retry が「再試行不要な最終ステータス」
 // と誤認して即座に打ち切っていた(=このテストが無ければ壊れたまま気づけない)。
 func TestSmokeScriptRetriesThroughGatewayNotYetListening(t *testing.T) {
 	if _, err := exec.LookPath("curl"); err != nil {
@@ -261,29 +261,46 @@ func TestSmokeScriptRetriesThroughGatewayNotYetListening(t *testing.T) {
 	}
 }
 
-// flakyGatewayHandler は最初の n 回のリクエスト(パスによらない全体の呼び出し回数)に 502 Bad Gateway を
-// 返し、それ以降は next にそのまま委ねる。ロールアウト直後、Traefik がまだ終了中の Pod に振り分けて
-// 502 を返す状況を模す(critic 指摘の回帰テスト)。
-type flakyGatewayHandler struct {
-	remaining int64 // atomic。開始値が n。0 未満になったら next に委ねる。
-	next      http.Handler
+// perPathFlaky は「メソッド + パス」ごとに最初の1回だけ 502 Bad Gateway を返し、そのメソッド+パスへの
+// 以降のリクエストは next にそのまま委ねる。ロールアウト直後、Traefik がまだ終了中の Pod に振り分けて
+// 特定のリクエストだけ一時的に 502 を返す状況を模す。
+//
+// critic 指摘: 以前は「全体で最初の n 回」に 502 を返す実装だった。すべてのリクエストは最初に
+// POST /api/calc(step1)を叩くので、n=2 だとその再試行だけで 502 を使い切ってしまい、step2 以降が
+// 一度も 502 に遭遇しない。その結果、request_with_retry を最初の1件(POST /api/calc)にしか使っていない
+// 修正前の smoke.sh でもこのテストは(空振りで)成功してしまい、回帰を検出できていなかった。
+// メソッド+パスごとに初回だけ落とすことで、step2 以降の異なるパス(bulk・reverse・pokedex・internal・`/`)も
+// それぞれ少なくとも1回は 502 に遭遇し、各リクエストで再試行しているかを検証できる。
+type perPathFlaky struct {
+	next http.Handler
+
+	mu   sync.Mutex
+	seen map[string]bool
 }
 
-func (f *flakyGatewayHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if atomic.AddInt64(&f.remaining, -1) >= 0 {
+func newPerPathFlaky(next http.Handler) *perPathFlaky {
+	return &perPathFlaky{next: next, seen: map[string]bool{}}
+}
+
+func (f *perPathFlaky) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	key := r.Method + " " + r.URL.Path
+	f.mu.Lock()
+	first := !f.seen[key]
+	f.seen[key] = true
+	f.mu.Unlock()
+	if first {
 		w.WriteHeader(http.StatusBadGateway)
 		return
 	}
 	f.next.ServeHTTP(w, r)
 }
 
-// AC-S6 回帰(critic 指摘): ロールアウト直後、前段(Traefik を模した flakyGatewayHandler)が最初の数回だけ
-// 502 を返しても、smoke.sh の各リクエストが 000/502 を再試行する(request_with_retry を全リクエストに
-// 使うようにした)ので成功する。以前は最初の1件のリクエストにしか再試行を適用していなかったため、
-// 2件目以降で 502 に当たると失敗していた。
+// AC-S6 回帰(critic 指摘): ロールアウト直後、前段(Traefik を模した perPathFlaky)がそれぞれのパスへの
+// 最初のリクエストだけ 502 を返しても、smoke.sh の各リクエストが 000/502 を再試行する
+// (request_with_retry をすべてのリクエストに使うようにした)ので成功する。
 func TestSmokeScriptRetriesThroughTransientBadGateway(t *testing.T) {
 	h := buildDefaultGatewayHandler(t)
-	srv := httptest.NewServer(&flakyGatewayHandler{remaining: 2, next: h})
+	srv := httptest.NewServer(newPerPathFlaky(h))
 	t.Cleanup(srv.Close)
 
 	out, err := runSmoke(t, srv.URL, "5")
