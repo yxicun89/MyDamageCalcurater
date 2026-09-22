@@ -33,6 +33,10 @@ type Config struct {
 	PokedexURL *url.URL
 	// AssetsURL は画像配信(MinIO)の基底 URL。nil なら /assets/* は 404 not_found。
 	AssetsURL *url.URL
+	// WebURL は Web の静的配信(nginx)の基底 URL(ADR-0205)。設定されていれば /api・/assets/*・/healthz・
+	// /internal のどれにも当たらない GET / HEAD を転送する。nil なら従来どおり(それらのパスは 404 not_found)。
+	// TODO(ADR-0205): implementer が転送を実装する(spec-writer のスタブ。今は読まれない)。
+	WebURL *url.URL
 	// CORSAllowedOrigins は Origin と完全一致で照合する許可オリジン。空なら CORS ヘッダを付けない。
 	CORSAllowedOrigins []string
 	// UpstreamTimeout は上流の応答ヘッダを待つ上限。超えたら 503 upstream_unavailable。0 以下は不正。

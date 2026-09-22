@@ -34,6 +34,9 @@ const (
 	envAssetsURL          = "GATEWAY_ASSETS_URL"
 	envCORSAllowedOrigins = "GATEWAY_CORS_ALLOWED_ORIGINS"
 	envUpstreamTimeout    = "GATEWAY_UPSTREAM_TIMEOUT"
+	// envWebURL は Web の静的配信の基底 URL(任意。ADR-0205)。
+	// TODO(ADR-0205): implementer が loadConfig で読む(spec-writer のスタブ。今は読まれない)。
+	envWebURL = "GATEWAY_WEB_URL"
 
 	// defaultAddr は GATEWAY_ADDR が未設定・空のときの待ち受けアドレス。
 	defaultAddr = ":8080"
