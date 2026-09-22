@@ -216,22 +216,8 @@ func Apply(ctx context.Context, db *sql.DB, out Output, versions []SourceVersion
 	return tx.Commit()
 }
 
-// Run は AppliedVersions → NeedsImport(force なら常に投入)→ Apply の順に実行する。
-// 取り込んだら true を返す。
+// Run は RunStore(ctx, NewSQLStore(db), ...) と同じ挙動(AppliedVersions → NeedsImport
+// (force なら常に投入)→ Apply の順)。取り込んだら true を返す(ADR-0104 §10)。
 func Run(ctx context.Context, db *sql.DB, out Output, versions []SourceVersion, now time.Time, force bool) (bool, error) {
-	applied, err := AppliedVersions(ctx, db)
-	if err != nil {
-		return false, err
-	}
-	needs, err := NeedsImport(applied, versions)
-	if err != nil {
-		return false, err
-	}
-	if !needs && !force {
-		return false, nil
-	}
-	if err := Apply(ctx, db, out, versions, now); err != nil {
-		return false, err
-	}
-	return true, nil
+	return RunStore(ctx, NewSQLStore(db), out, versions, now, force)
 }

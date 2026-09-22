@@ -1,0 +1,13 @@
+# docker build のビルドコンテキストから除外する(ADR-0104 §6)。
+# 実データ(第三者データ・生成物)・手元の依存・秘密をイメージに入れない(ADR-0002)。
+data/generated/
+data/local/
+**/node_modules
+.git
+.env
+.env.*
+!.env.example
+web/dist/
+ios/build/
+ios/DerivedData/
+*.wasm
