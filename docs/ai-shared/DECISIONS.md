@@ -617,3 +617,8 @@ Impact: design.md の1行、plan.md に P4-8、ADR-0300 §7 の持ち越しの�
 Decision: P4-8(design.md「動き」の演出)と逆算の表示方針・design.md の演出の値を PR #33 で main に統合した。Web レーンは他レーン(P2-3・P3-3)待ちで一時停止。
 Reason: critic PASS、make test / lint / build・E2E の通過を確認。
 Impact: Web レーンの Active を「なし」にした。続きは CURRENT_STATE.md の Web 欄の Next。
+
+## 2026-09-22: Web P4-9 を統合(PR #35)
+Decision: P4-9(P4-8 の軽微な改善3件)を PR #35 で main に統合した。Web レーンは他レーン(P2-3・P3-3)待ちで一時停止(Active: なし)。
+Reason: critic PASS、make test / lint / build・E2E の通過を確認。
+Impact: 続きは CURRENT_STATE.md の Web 欄の Next。
