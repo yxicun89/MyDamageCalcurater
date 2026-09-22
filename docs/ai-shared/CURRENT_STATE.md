@@ -40,11 +40,10 @@ Next: データレーンの pokedex export(ADR-0105)が main に入ったら、`
 
 ## Speed
 Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
-Active: Claude Code
+Active: なし(ユーザー指示 2026-09-22: 利用枠をデータレーンに集中させるため一時停止。再開はユーザー指示後)
 Branch: feat/speed-sp2(DOC-speed は feat/speed-s2 → PR #52 で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
-Status: SP0(ADR-0600。基盤・計算コア・read model・一覧 API・Kustomize)と SP1(ADR-0601。6 行のプリセット・速い順・同速の段・`presets` での絞り込み・`GET /api/speed/v1/table`)は完了・main に統合。DOC-speed(README・手順書 docs/runbooks/speed.md。k3d 疎通を確認済み)も完了(PR #52)
-Next: SP2(自分の位置: 最小の選択 = プリセット uninvested / neutral-max / max + スカーフ on/off、オプション = SP 0〜32・性格3通り・ランク -6〜+6・スカーフ、または実数値の直接入力 → 実数値と表の中の位置(速い段・同速の段・遅い段の境目))→ SP3(`web/src/speed/` の画面は素早さレーンのまま(ユーザー決定。Web の P4-13 は取り消し)。タブ・URL は Web の P4-10 のルート表(1か所)に `/speed` の1項目を足すだけ。P4-10 は PR #44 で main に統合済み。足すのは3か所に1件ずつ(App.tsx は触らない): web/src/app/routes.ts の SCREEN_ROUTES に `{ id: "speed", segment: "speed", label: appText.speedTabLabel }`、web/src/i18n/ja.ts の appText に speedTabLabel、web/src/app/screens.tsx の SCREEN_COMPONENTS に `speed: SpeedScreen`(props は ScreenProps = {engine, master}。使わなくてよい)。テストの例は web/src/App.routing.test.tsx と web/e2e/routing.spec.ts)→ SP4(pokedex の read model・k3d・GitOps)。SP4 までに決める: 空の roster の扱い(いまは read model が空を拒否。pokedex の adapter では 503 か空配列か。SP1 critic 軽微)。SP4 の read model: データレーン P2-3 の pokedex export(ADR-0105)が素早さ専用の `data/generated/readmodel/speed-pokemon.json` を ADR-0600 §4 の形(baseSpeed。既定レギュレーションの使用可能集合・ID 昇順)で出す。SP4 はそれを `SPEED_POKEMON_PATH` で読む(adapter の差し替えは不要の見込み。local overlay への載せ方と k3d の疎通を行う)。P2-3 が main に入るまでは架空データ
-
+Status: SP0(ADR-0600)・SP1(ADR-0601)・DOC-speed は完了・main に統合(PR #32・#36・#52)。SP2(自分の位置。ADR-0602。preset/custom/raw の3モード・faster/slower/tie・POST /api/speed/v1/position)は実装済み(コミット 3c25a52)。critic 1回目 NG(重要3件: body サイズ上限が無い・pokemonId の構文検証が無く契約と食い違う・plan.md 未更新)→ 修正済み(コミット 7aff455。413 request_too_large・pokemonIDPattern による400・plan.md 更新。make test/lint/build/check-publishable 成功、docker で413・形式不正400を実機確認)。**critic の再確認は開始直後に停止した(未完了)**
+Next: **critic の再確認から**(feat/speed-sp2 の最新コミットに対して、重要3件の修正を再レビュー。前回指摘の軽微7件のうち a は対応済み、b〜g は対応不要と判断済み)→ PASS なら PR を作って main に統合 → SP3(`web/src/speed/` の画面は素早さレーンのまま。タブ登録は3か所に1件ずつ: web/src/app/routes.ts の SCREEN_ROUTES・web/src/i18n/ja.ts の appText.speedTabLabel・web/src/app/screens.tsx の SCREEN_COMPONENTS。P4-10 は PR #44 で main に統合済み。テストの例は web/src/App.routing.test.tsx と web/e2e/routing.spec.ts)→ SP4(pokedex の read model への切り替え・k3d・GitOps。**P2-3 は PR #57(コミット 5b4b0de)で main に統合済み**。`data/generated/readmodel/speed-pokemon.json` が speed の loader の全条件を満たすことをデータレーンが確認済みなので、SP4 は SPEED_POKEMON_PATH をこのファイルに向ける配線から始められる)。SP4 までに決める: 空の roster の扱い(いまは read model が空を拒否。SP1 critic 軽微)
 ## Maintenance
 Lane: 整備(Claude の上限時に Codex が進める。COORDINATION.md「Claude の上限時の Codex」)
 Active: なし
