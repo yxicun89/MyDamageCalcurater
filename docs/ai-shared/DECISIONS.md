@@ -840,3 +840,15 @@ Reason: 丸めの規約(CLAUDE.md「4096基準の固定小数と五捨五超入�
 Impact: judge は engine の非公開 `chainMods` / `pokeRound` を呼べないため、同じ式を `internal/judge` に名前付き定数で持つ(ADR-0600 §3・ADR-0701 §2 と同じ扱い)。
 `CompareSpeed` は引数を 1 つ(`SpeedField`)足す形に変えた(既存テストの期待値は変えていない)。麻痺(`status`)は連結の後に別枠で掛かり、ダメージ側にも効くため JD2 に含めない。
 実装(implementer)は未着手で、`make judge-test` は失敗したままにしてある。
+
+## 2026-09-23: iOS レーンの統合(PR #119)
+Decision: P6-2d(構築から個体を呼び出す配線)を PR #119 で main にマージした(critic PASS。make test / lint / build / check-publishable / ios-test が成功)。
+Reason: P6-2c に続く区切り。P6-2(計算画面・逆算・構築)がすべて完了した。
+Impact: 続き(P6-3 シミュレータテストの総仕上げ・P6-4 実機インストール手順書)は同じブランチ feat/ios-p6 で進める。
+
+## 2026-09-23: Codexレビュー issue #103・#111 の needs-decision をユーザーが決定
+Decision:
+- #103(M2保存データ〈record-svc/team-svc〉の保持・削除・端末ID境界): **一定期間の自動失効**にする(例: 未使用90日。具体的な日数は実装レーンの提案に任せる)。無期限保持はしない。
+- #111(importer PVC〈現在2Gi〉の容量上限・保持方針): **古いキャッシュを自動削除**する(直近N世代のみ保持。世代数は実装レーンの提案に任せる)。容量拡張だけで対症療法にはしない。
+Reason: ユーザー回答(AskUserQuestion、2026-09-23)。両方とも「無期限に持ち続けない」方向で統一。
+Impact: #103 は主担当の API・データレーンへ、#111 は主担当のデータレーンへタイプバランスレーンから連絡済み。着手のブロッカーが外れたので、それぞれの実装レーンで ADR を書いて進めてよい。

@@ -119,6 +119,7 @@
 - [ ] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰)
 - [ ] P5-4 team-svc(構築 CRUD、Showdown 形式入出力)
 - [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー
+- [~] P5-6 技の追加効果(使用者自身のランク変化。例: ニトロチャージで自分の素早さ+1)を engine の Move・マスタ・importer・export に足す(判定レーンからの提案。DECISIONS.md 2026-09-22。ADR-0005 に沿い、追加効果の対象=self/target・確率・ランク変化量をデータとして持つ)。優先度は低く、判定レーンの JD1 は今のデータのままで動く(呼び出し側が Individual.ranks で指定)ため、着手は他の M1 残作業の後でよい
 
 ## M3: iOS
 - [x] P6-1 Xcode プロジェクト、swift-openapi-generator、デザイントークン(ADR-0500。`make ios-test` = 生成物の一致・XCTest・XCUITest・Info.plist の接続先。critic PASS)
@@ -126,10 +127,12 @@
 - [x] P6-2d 構築から個体を呼び出す配線(`TeamMemberConverter.makeIndividual` を `CalcViewModel` / `ReverseViewModel` の
   「構築から呼び出す」ボタンとして実際につなぐ。requirements.md「自分側のプリセット」。ADR-0501「P6-2c」4章で範囲外と
   明記し、ここに積んだ。`BuildSource<Preset>` で自分側の出どころを直和にし、計算画面・逆算画面の両側に配線。
-  `swift test`(274件)・`make ios-test`(XCUITest 12件)成功。実装時に見つけたバグと回避は
-  ADR-0501「P6-2d」9章に記録。critic PASS 待ち)
-- [ ] P6-3 シミュレータテスト(`make ios-test`)
-- [ ] P6-4 Tailscale serve の手順書 → **人間が実機インストール**
+  `swift test`(275件)・`make ios-test`(unit 284件・XCUITest 12件)成功。実装時に見つけたバグと回避は
+  ADR-0501「P6-2d」9〜11章に記録。critic PASS。PR #119 で main に統合済み)
+- [x] P6-3 シミュレータテスト(`make ios-test`。gen-check・XCTest・XCUITest・Info.plist の検査を1コマンドで実行し、
+  P6-1〜P6-2d の各タスクで継続して緑を確認済み。iPhone 18 Pro シミュレータ)
+- [x] P6-4 Tailscale serve の手順書 `docs/runbooks/ios-device-install.md` を作成 → **人間が実機インストール**(署名・
+  Tailscale ログイン・実機への配線・外出先での確認は手順書どおり人間が行う。AI が代行しない)
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)。Argo CD の実同期もローカル k3d で確認済み(ADR-0018: Git 変更 32fbb9e → manual sync → Pod の image digest 一致)
@@ -159,7 +162,9 @@
 - [x] SP1 素早さの表(ADR-0601。critic PASS。6行の生成・速い順の並び・同速の扱い・絞り込みの API)
 - [x] SP2 自分のポケモンの位置(ADR-0602。critic PASS。preset/custom/raw の3モード・faster/slower/tie・POST /api/speed/v1/position)
 - [x] SP3 Web の素早さ画面(ADR-0604。critic PASS。左右の配置・自分の位置の強調・表の絞り込み。`web/src/speed/`)
-- [~] SP4 pokedex の read model(データレーン P2-3)への切り替えと k3d の疎通(ADR-0603。配線は実装・fixture データで疎通確認済み。実データでの最終確認は critic 後)
+- [x] SP4 pokedex の read model(データレーン P2-3)への切り替えと k3d の疎通(ADR-0603。critic PASS。2026-09-24 ユーザーが実データで確認:
+  `make pokedex-export`(348 pokemon)→ `make speed-k3d-deploy-readmodel` → `make speed-smoke-readmodel` が
+  `speed readmodel smoke: pokemon=0003-000 list=200 table=200` で成功)
 - [x] SP5 GitOps(ADR-0605。critic PASS。digest 固定の overlay・Argo CD Application・balance-registry と Argo CD を共有。
   `speed-gitops-template-check` まで実行して確認済み。クラスタへの実際の適用〈speed-argocd-app・registry-push・sync〉は
   人間の確認のもとで別途。手順は docs/runbooks/speed.md の節5〜10)
