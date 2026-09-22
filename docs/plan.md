@@ -158,12 +158,14 @@
 - [x] SP2 自分のポケモンの位置(ADR-0602。critic PASS。preset/custom/raw の3モード・faster/slower/tie・POST /api/speed/v1/position)
 - [x] SP3 Web の素早さ画面(ADR-0604。critic PASS。左右の配置・自分の位置の強調・表の絞り込み。`web/src/speed/`)
 - [~] SP4 pokedex の read model(データレーン P2-3)への切り替えと k3d の疎通(ADR-0603。配線は実装・fixture データで疎通確認済み。実データでの最終確認は critic 後)
-- [ ] SP5 GitOps(digest 固定の overlay と Argo CD Application。ADR-0603 で SP4 から分離。イメージの digest が決まる段階で着手)
+- [x] SP5 GitOps(ADR-0605。critic PASS。digest 固定の overlay・Argo CD Application・balance-registry と Argo CD を共有。
+  `speed-gitops-template-check` まで実行して確認済み。クラスタへの実際の適用〈speed-argocd-app・registry-push・sync〉は
+  人間の確認のもとで別途。手順は docs/runbooks/speed.md の節5〜10)
 
 ## JD: 判定(判定レーン。設計は docs/judge-design.md。2026-09-22 ユーザー要望)
 「ニトチャ+メイン技で素早さ抜ける+そのポケモンを倒せるか」を1回の入力で確認する。engine を直接呼び、pokedex-svc と calc-svc の公開 API だけに依存する(speed-svc には依存しない)。
-- [ ] JD0 基盤(ディレクトリ構成・pokedex-svc/calc-svc への HTTP クライアント・ヘルスチェック)
-- [ ] JD1 抜けるか+倒せるかの最小構成(自分と相手の Individual・使う技 → outspeeds・ko)。着手前に docs/judge-design.md §4 の未決事項(同速の扱い・相手の技を含めるか・gateway 経由か)を確認する
+- [x] JD0 基盤(ディレクトリ構成・pokedex-svc/calc-svc への HTTP クライアント・ヘルスチェック)。受け入れ条件と契約は ADR-0700(docs/judge-design.md §4 の未決事項はここで全部決めた)。critic PASS(3回目。1・2回目 NG は上流エラー文面への URL/host:port/ホスト名の漏洩を修正)
+- [ ] JD1 抜けるか+倒せるかの最小構成(自分と相手の Individual・使う技 → outspeeds・speedTie・ko)。endpoint(POST /api/judge/v1/outspeed-and-ko)は JD1 で services/judge/api/openapi.yaml に足す(ADR-0700 §5)
 - [ ] JD2 以降(複数の相手候補・場の効果・画面)は JD1 完了後にユーザーへ確認して確定する
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)

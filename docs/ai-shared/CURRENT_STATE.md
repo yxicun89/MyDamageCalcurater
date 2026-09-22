@@ -51,17 +51,37 @@ Next: (1) データレーンが export(data/generated/readmodel)を再生成し�
 ## Speed
 Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
 Active: Claude Code
-Branch: feat/speed-sp3(SP4 は feat/speed-sp4 → PR #86 で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
-Status: SP0〜SP2・SP4(pokedex export の read model を k3d の speed に読ませる配線。ADR-0603。critic PASS。fixture データで k3d への
-実配線・非回帰を確認済み)は完了・main に統合(PR #32・#36・#52・#83・#86)。SP3(Web の素早さ画面。ADR-0604。左=速い順の表
-〈道具・ランクの絞り込み付き〉・右=自分のポケモン〈preset/custom/raw〉。web/src/speed/ の中に SpeedScreen・speedClient・生成型を置き、
-web/src/app/{routes.ts,screens.tsx}・i18n/ja.ts・App.tsx に最小限の追記〈Web レーンと合意〉)は critic PASS(3回目。1回目 NG 重要2件
-〈絞り込みUIの見送りが未記録・ja.ts追記範囲がADR合意を超過〉・2回目 NG 重要1件〈絞り込み UI 追加で境界線が誤った位置に出る回帰〉を
-修正)。PR 作成待ち。**SP4 の実データ(pokedex-svc の DB)での最終確認は未実施**(DSN の取り扱いがこのセッションの権限で扱えないため。
-`make pokedex-export`(データレーンの docs/runbooks/data.md の手順で DB を用意した状態で、POKEDEX_DATABASE_DSN を設定して実行)→
-`make speed-k3d-deploy-readmodel && make speed-smoke-readmodel` を、DSN を扱えるセッションか人間が実行して確認する)。空の roster の
-扱いは pokedex export が1件以上を返す前提のまま(ADR-0603 影響。実データで0件になる状況が起きたら別途決める)
-Next: SP3 の PR を作って main に統合 → SP5(GitOps。ADR-0603 で SP4 から分離。イメージの digest が決まる段階で着手)
+Branch: feat/speed-sp5(SP3 は feat/speed-sp3 → PR #93 で main に統合。作業ディレクトリ ~/MyDamageCalcurater-speed)
+Status: SP0〜SP4(SP4: pokedex export の read model を k3d の speed に読ませる配線。ADR-0603)は完了・main に統合
+(PR #32・#36・#52・#83・#86・#93)。**SP4 の実データ(pokedex-svc の DB)での最終確認は未実施のまま**(DSN の取り扱いがこのセッションの
+権限で扱えないため。`make pokedex-export` で `data/generated/readmodel/speed-pokemon.json` を用意した状態で
+`make speed-k3d-deploy-readmodel && make speed-smoke-readmodel` を、DSN を扱えるセッションか人間が実行して確認する)。
+SP5(GitOps。ADR-0605。digest 固定の overlay・Argo CD Application `pokecalc-speed`・balance-registry と Argo CD を新設せず共有)は
+critic PASS(1回目 NG 重大1〈plan.md/CURRENT_STATE 未更新〉・重要3〈read model 未マウントで 503 になる制約が ADR に未記載・
+DECISIONS.md の記述が意図と逆・手順書に Argo CD 導入の前提が無い〉を修正)。**`speed-gitops-template-check`(クラスタを変更しない)
+までのみ実行済み**。`speed-argocd-app`・`speed-registry-push`・実際の `kubectl apply`・sync は未実施(ADR-0605 §4 のとおり、
+共有クラスタへの変更のため人間の確認のもとで別途)。PR 作成待ち
+Next: SP5 の PR を作って main に統合 → (任意・人間の確認のもとで)実際に Argo CD へ Application を適用し sync して疎通確認
+(docs/runbooks/speed.md 節5〜10)。空の roster の扱いは pokedex export が1件以上を返す前提のまま(ADR-0603 影響。実データで
+0件になる状況が起きたら別途決める)。balance-registry → pokecalc-registry への改名提案はタイプバランスレーンへ既定案で提示済み
+(DECISIONS.md 2026-09-23)
+
+## Judge
+Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
+Active: なし
+Branch: feat/judge-jd0(作業ディレクトリ ~/MyDamageCalcurater-judge。PR 作成待ち)
+Status: JD0(基盤)完了。ADR-0700(基盤・上流の呼び方・エラーの正規化・受け入れ条件8件)を採用し、docs/judge-design.md §4 の
+未決事項5件をすべて決定に変えた(同速は `outspeeds` と `speedTie` を別に返す / JD1 は自分が殴る側だけ / 独自 Ingress `/api/judge`(gateway は変更しない) /
+ADR 帯 0700 / 技の追加効果は request の `ranks` で受ける)。`internal/client`(pokedex-svc・calc-svc への HTTP クライアント。request スコープの timeout・
+4つの番兵エラー・1MiB上限・ヘッダー転送)・`internal/httpapi`(healthz)・`cmd/api` を実装。critic 3回目で PASS(1・2回目 NG は接続エラー・DNS失敗時に
+上流の URL・host:port・ホスト名がエラー文面に漏れていた件。`*net.OpError`/`*net.DNSError` の `Error()` を呼ばず固定語彙に分類して解消)。
+deploy/k8s(base の Deployment・Service・Ingress `/api/judge`)・Dockerfile・scripts/smoke.sh・Makefile の `judge-kustomize`/`judge-docker-build`/
+`judge-k3d-deploy`/`judge-smoke` も追加し、`docker build` とコンテナ起動(healthz 200)を確認済み(k3d への実デプロイは未確認)。
+`make test`/`make lint`/`make build`(ルート)が緑。JD1 の endpoint(`POST /api/judge/v1/outspeed-and-ko`)は ADR-0700 §5 の判断により
+JD0 の契約に含めていない(契約にあるのに404を作らないため)
+Next: PR を作って main へ統合(このセッションの残タスク)。その後 JD1 に着手: `services/judge/api/openapi.yaml` に
+`POST /api/judge/v1/outspeed-and-ko` を足すところから(quick-scanner → spec-writer → implementer → critic)。JD1 の response は
+`outspeeds`・`speedTie`・`ko` の3つ(ADR-0700 §6-1・§6-5)
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

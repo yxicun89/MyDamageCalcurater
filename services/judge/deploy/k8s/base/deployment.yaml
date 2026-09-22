@@ -1,0 +1,66 @@
+# judge-svc(素早さ×ダメージ連動の判定。ADR-0700)。pokedex-svc・calc-svc は Service 名が
+# どの環境でも同じ(pokedex・calc。ADR-0105 §6・ADR-0204 §5)なので base に置く。
+# healthz は上流の設定・疎通に依存しない(ADR-0700 §5)ため、readiness も healthz を見る。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: judge
+  labels:
+    app.kubernetes.io/name: judge
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: judge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: judge
+        app.kubernetes.io/part-of: pokecalc
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: judge
+          image: pokecalc/judge:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: JUDGE_POKEDEX_BASE_URL
+              value: http://pokedex
+            - name: JUDGE_CALC_BASE_URL
+              value: http://calc
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
