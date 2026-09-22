@@ -202,13 +202,17 @@ func TestSpeciesRejectsOversizedBody(t *testing.T) {
 	}
 }
 
-// TestSpeciesOnConnectionError: 誰も待ち受けていない上流は ErrUpstreamUnavailable。
+// TestSpeciesOnConnectionError: 誰も待ち受けていない上流は ErrUpstreamUnavailable で、
+// 文面に上流の URL(deadBaseURL)を含まない(ADR-0700 §3。受け入れ条件5)。
 func TestSpeciesOnConnectionError(t *testing.T) {
 	t.Parallel()
 
 	_, err := newPokedex(t, deadBaseURL, testTimeout).Species(t.Context(), requestContext, "9001-000")
 	if !errors.Is(err, ErrUpstreamUnavailable) {
 		t.Fatalf("err = %v, want ErrUpstreamUnavailable", err)
+	}
+	if strings.Contains(err.Error(), deadBaseURL) {
+		t.Errorf("エラーが上流の URL を漏らしている: %s", err.Error())
 	}
 }
 
@@ -229,9 +233,13 @@ func TestSpeciesTimesOut(t *testing.T) {
 	if elapsed > time.Second {
 		t.Errorf("%v 待った。設定のタイムアウト %v で打ち切ること", elapsed, shortTimeout)
 	}
+	if strings.Contains(err.Error(), server.URL) {
+		t.Errorf("エラーが上流の URL を漏らしている: %s", err.Error())
+	}
 }
 
-// TestSpeciesHonorsCallerContext: 呼び出し元の context が終わったら、設定のタイムアウトを待たずに戻る
+// TestSpeciesHonorsCallerContext: 呼び出し元の context が終わったら、設定のタイムアウトを待たずに戻り、
+// context.Canceled を errors.Is で辿れつつ ErrUpstreamUnavailable の番兵も付く(ADR-0700 §3)。
 // (judge の API ハンドラが client の接続断で打ち切れるようにするため)。
 func TestSpeciesHonorsCallerContext(t *testing.T) {
 	t.Parallel()
@@ -249,6 +257,9 @@ func TestSpeciesHonorsCallerContext(t *testing.T) {
 	}
 	if !errors.Is(err, context.Canceled) {
 		t.Errorf("err = %v, want it to wrap context.Canceled", err)
+	}
+	if !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Errorf("err = %v, want it to also wrap ErrUpstreamUnavailable", err)
 	}
 	if elapsed > time.Second {
 		t.Errorf("%v 待った。呼び出し元の context が終わったらすぐ戻ること", elapsed)

@@ -264,7 +264,8 @@ func TestDamageRejectsInvalidBody(t *testing.T) {
 	}
 }
 
-// TestDamageOnConnectionError: 誰も待ち受けていない上流は ErrUpstreamUnavailable。
+// TestDamageOnConnectionError: 誰も待ち受けていない上流は ErrUpstreamUnavailable で、
+// 文面に上流の URL(deadBaseURL)を含まない(ADR-0700 §3。受け入れ条件5)。
 func TestDamageOnConnectionError(t *testing.T) {
 	t.Parallel()
 
@@ -272,9 +273,13 @@ func TestDamageOnConnectionError(t *testing.T) {
 	if !errors.Is(err, ErrUpstreamUnavailable) {
 		t.Fatalf("err = %v, want ErrUpstreamUnavailable", err)
 	}
+	if strings.Contains(err.Error(), deadBaseURL) {
+		t.Errorf("エラーが上流の URL を漏らしている: %s", err.Error())
+	}
 }
 
-// TestDamageTimesOut: 答えない上流を設定のタイムアウトで打ち切る(ADR-0700 §2)。
+// TestDamageTimesOut: 答えない上流を設定のタイムアウトで打ち切り、文面に上流の URL を含まない
+// (ADR-0700 §2・§3)。
 func TestDamageTimesOut(t *testing.T) {
 	t.Parallel()
 
@@ -289,5 +294,8 @@ func TestDamageTimesOut(t *testing.T) {
 	}
 	if elapsed > time.Second {
 		t.Errorf("%v 待った。設定のタイムアウト %v で打ち切ること", elapsed, shortTimeout)
+	}
+	if strings.Contains(err.Error(), server.URL) {
+		t.Errorf("エラーが上流の URL を漏らしている: %s", err.Error())
 	}
 }

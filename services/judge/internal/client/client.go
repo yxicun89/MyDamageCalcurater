@@ -95,10 +95,11 @@ func buildHTTPClient(config Config) (string, *http.Client, error) {
 }
 
 // send validates rc, attaches the forwarded identity headers, and executes req.
-// It normalizes the outcome to the ADR-0700 §3 sentinels: a connection failure or the
-// client's own timeout becomes ErrUpstreamUnavailable, while the caller's own ctx ending
-// (e.g. the judge API handler's client disconnecting) is returned as-is so callers can
-// still see context.Canceled / context.DeadlineExceeded via errors.Is.
+// It normalizes the outcome to the ADR-0700 §3 sentinels: a connection failure, the
+// client's own timeout, and the caller's own ctx ending (e.g. the judge API handler's
+// client disconnecting) all fold into ErrUpstreamUnavailable, wrapping the underlying
+// cause so callers can still distinguish context.Canceled / context.DeadlineExceeded via
+// errors.Is. The upstream request URL is never part of the message (ADR-0700 §3).
 func send(ctx context.Context, httpClient *http.Client, req *http.Request, rc RequestContext) (*http.Response, error) {
 	if err := rc.validate(); err != nil {
 		return nil, err
@@ -109,9 +110,9 @@ func send(ctx context.Context, httpClient *http.Client, req *http.Request, rc Re
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, fmt.Errorf("request context ended: %w", ctxErr)
+			return nil, fmt.Errorf("%w: %w", ErrUpstreamUnavailable, ctxErr)
 		}
-		return nil, fmt.Errorf("%w: %v", ErrUpstreamUnavailable, err)
+		return nil, fmt.Errorf("%w: %s", ErrUpstreamUnavailable, transportFailureReason(err))
 	}
 
 	if statusErr := statusToError(resp.StatusCode); statusErr != nil {
@@ -119,6 +120,16 @@ func send(ctx context.Context, httpClient *http.Client, req *http.Request, rc Re
 		return nil, statusErr
 	}
 	return resp, nil
+}
+
+// transportFailureReason describes a Do error without the request URL httpClient.Do embeds
+// in *url.Error's own Error() text (ADR-0700 §3: never put the upstream URL in the message).
+func transportFailureReason(err error) string {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) && urlErr.Err != nil {
+		return urlErr.Err.Error()
+	}
+	return "transport error"
 }
 
 // statusToError maps an upstream status code to the ADR-0700 §3 table. http.StatusOK maps
