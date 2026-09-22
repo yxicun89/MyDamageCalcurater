@@ -24,6 +24,8 @@ export const SCREEN_ROUTES = [
   { id: "reverse", segment: "reverse", label: appText.reverseTabLabel },
   // P4-12a(ADR-0303 §2): タイプバランス。
   { id: "balance", segment: "balance", label: appText.balanceTabLabel },
+  // SP3(ADR-0604 §2): 素早さ比較。
+  { id: "speed", segment: "speed", label: appText.speedTabLabel },
 ] as const satisfies readonly ScreenRoute[];
 
 /** 画面 ID(SCREEN_ROUTES から導出する。手で union を書かない)。 */
