@@ -453,10 +453,15 @@ func TestLocalMySQLManifests(t *testing.T) {
 		t.Fatalf("deploy/k8s/overlays/local/mysql が読めない: %v", err)
 	}
 	s := all.String()
-	for _, want := range []string{"kind: StatefulSet", "image: mysql:9.7.2@sha256:", "volumeClaimTemplates", "kind: Service"} {
+	for _, want := range []string{"kind: StatefulSet", "image: mysql:9.7.2@sha256:", "volumeClaimTemplates", "kind: Service", "MYSQL_DATABASE"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("MySQL の manifest に %q が無い", want)
 		}
+	}
+	// pokedex-dsn(scripts/up.sh が作る secret)は DB 名 pokedex を指す。MYSQL_DATABASE が
+	// 無いと初回起動時に DB が作られず、migrate が「Unknown database」で失敗し続ける。
+	if !strings.Contains(s, "value: pokedex") {
+		t.Error("MySQL の manifest の MYSQL_DATABASE が pokedex を指していない(scripts/up.sh の pokedex-dsn と食い違う)")
 	}
 	if !strings.Contains(readRepoFile(t, "deploy/k8s/overlays/local/kustomization.yaml"), "mysql") {
 		t.Error("overlays/local/kustomization.yaml が mysql を参照していない")

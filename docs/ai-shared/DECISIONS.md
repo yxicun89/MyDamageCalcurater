@@ -750,3 +750,16 @@ Impact: docs/judge-design.md §4 が「未決事項」から「決定事項」�
 現状、engine の `Move`・pokedex-svc/calc-svc の公開 API のいずれにも、技の追加効果によるランク変化を表すデータが無いことを確認した。そのため JD1 は「技を撃った後のランク」を呼び出し側(Web/iOS)が `Individual.ranks` に指定する形にした(ADR-0700 §6-5)。ユーザーの元の要望(「ニトチャ+メイン技で素早さ抜けるか」を一発で)を完全に満たすには、技 ID から自動でランク変化を出せることが要る。
 既定案: ADR-0005(データ駆動の効果定義)に沿って、技の効果定義に「追加効果(対象=self/target・確率・ランク変化量)」を足す(例: `{"secondary": {"chance": 100, "self": {"boosts": {"spe": 1}}}}`)。importer と export に通し、calc-svc の `MasterMove` 経由で judge が読めるようにする。
 優先度: 低(JD1 は現状のデータで出せる)。着手は M1 の後でよい。確率が 100% でない追加効果の扱い(発動時/不発時の両方を返すか)は、その実装時に判定レーンと合わせて決める。
+
+## 2026-09-22: calc・gateway を pokedex-svc につなぐ(データレーンからの依頼d。ADR-0206。PR #87)
+Decision: base(local overlay を含む)の calc に `CALC_MASTER_URL=http://pokedex`、gateway に `GATEWAY_POKEDEX_URL=http://pokedex` を設定した。
+共有 Kustomize Component(`deploy/k8s/overlays/local/api`。`local`/`local-api` の両 overlay から参照)を分岐させると「最後に apply した方が勝つ」状態になるため、
+設定は分岐させず base に1か所だけ置いた(local/local-api どちらも同じ内容の Deployment になる)。ファイル方式(`CALC_MASTER_PATH`)は `make dev` とテストの fallback にのみ残す。
+`services/gateway/scripts/smoke.sh` は、マスタのハードコード禁止規約(CLAUDE.md)を守るため、固定の架空 ID をやめ、`/api/pokedex/*` から実際に種族・技・性格を動的に発見する形にした。
+依頼原文は「smoke の /api/pokedex を 503→200 に」だったが、実装は「200(pokedex-svc に実接続)または 503 `upstream_unavailable`/`master_unavailable`(pokedex-svc 未接続。ADR-0205 の web と同じ扱い)を成功」とする条件付きにした
+(`make dev`・pokedex-svc 未デプロイのクラスタでも smoke が意味のある形で動くようにするため。ADR-0205 の web の前例と揃えた)。
+Reason: データレーンの依頼。critic PASS(NG無し)。設計の詳細・却下案は ADR-0206。
+Impact: **他レーンへの申し送り**: `make up` 直後(pokedex の DB 未投入)は calc-svc が pokedex-svc からマスタを取得できず Ready にならないため、
+Web・iOS レーンのローカル k3d 環境でも calc を使う画面(ダメージ計算)が動かない。初回だけ `make import-k8s` でマスタを投入すること
+(データレーンの docs/runbooks/data.md 参照)。`make api-k3d-deploy` も、マスタ未投入のクラスタでは `kubectl rollout status` が120秒でタイムアウトして失敗するので、
+先に `make import-k8s` を実行すること。`make api-smoke` の出力1行目が `master=pokedex …` であれば実際に pokedex-svc へつながっている確認になる(`master=example` はフォールバック)。

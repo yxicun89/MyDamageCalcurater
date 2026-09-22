@@ -1,6 +1,6 @@
 # ADR-0206: calc・gateway を pokedex-svc につなぐ
 
-- 状態: 提案(2026-09-22。受け入れ条件とテストは spec-writer が先に書き、実装は implementer。データレーンからの依頼)
+- 状態: 採用・実装済み(2026-09-22。データレーンからの依頼。critic PASS。k3d の共有クラスタ(pokedex-svc 投入済み)で `make api-k3d-deploy && make api-smoke` を確認: `master=pokedex species=0003-000 move=highhorsepower nature=bashful`・`pokedex=200`)
 - 日付: 2026-09-22
 - 関連: ADR-0012 §6(サービス境界と実行時依存)、ADR-0100(pokedex のスキーマ)、ADR-0104(importer の CronJob と `make import`)、
   ADR-0105(pokedex-svc の公開 API・内部 API)、ADR-0200(calc-svc の契約)、ADR-0202(gateway のルーティング)、
