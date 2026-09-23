@@ -45,7 +45,7 @@ gen-ts: ## TypeScript 型を openapi.yaml から生成(web/src/api/openapi.gen.t
 
 ## --- テスト -----------------------------------------------------------
 .PHONY: test
-test: test-engine test-services test-tools ## 全ユニットテスト(実装済みGoモジュール)
+test: test-engine test-services test-tools test-scripts ## 全ユニットテスト(実装済みGoモジュール・ルート scripts/ のシェル)
 
 .PHONY: test-engine
 test-engine: ## engine のユニットテスト
@@ -58,6 +58,10 @@ test-services: ## services のユニットテスト
 .PHONY: test-tools
 test-tools:
 	@cd tools && $(GO) test ./...
+
+.PHONY: test-scripts
+test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入。ADR-0405。クラスタ・ネットワークに触らない)
+	@./scripts/argocd-bootstrap_test.sh
 
 .PHONY: lint
 lint: ## gofmt / go vet / shell・Node構文チェック

@@ -180,6 +180,7 @@
 - [x] TB 整備(2026-09-22): HTTP の 500 テスト、typed nil の provider の正規化、read model の JSON Schema(ADR-0402)、HTTP 層の検証の共通化、おすすめの穴を既存の集計から導出
 - [x] TB 実データの配線(2026-09-22。データレーンの依頼): pokedex export の read model を ConfigMap で k3d の balance に読ませる(ADR-0403)、abilityIds の上限を 4 に
 - [x] TB6 技範囲チェッカー(2026-09-22 ユーザー要望。ADR-0404): 技 ID(最大4つ)から18タイプの一貫判定を出し、その技構成を半減以下で受けられる実在ポケモンを図鑑から具体名で列挙する。特性で半減以下になるポケモンは別枠
+- [x] Codexレビュー issue #105 対応(2026-09-23。ADR-0405): Argo CD 導入物(install.yaml・同梱3イメージ)をコミットSHA・SHA-256・digestで固定する `scripts/argocd-bootstrap.sh` を新設し、balance/speed 両runbookの重複した生URL直apply手順を1本化。自動テスト `scripts/argocd-bootstrap_test.sh`(`make test-scripts`)。
 
 ### ブロッカー(タイプバランスレーン)
 (なし。Argo CD の実同期は 2026-09-22 に解消)
@@ -267,6 +268,7 @@
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)
 - [x] issue #110(セキュリティ。Codex レビュー)の API レーン担当分: `POST /api/calc/bulk`・`/api/calc/reverse` の候補・観測配列に件数上限が無く、1MiB未満の小さな本文で計算量を増幅できた(2,000×2,000 で約9.4秒)。契約(`maxItems`/`uniqueItems`/`maximum`。ADR-0208)を追加し、calc-svc の生成ラッパは検証しないため(実測確認済み)自前検証をID解決・engine呼び出しより前に実装。critic PASS、実HTTPで境界値と再現手順の解消(0.9ms・engine未到達)を確認。engine/wasmapi(データレーン)・Web・iOSへの追従は DECISIONS.md に既定案付きで依頼(issue はレーンの完了までクローズしない)
+- [x] issue #110 のデータレーン担当分: `engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ件数・範囲の上限(presets 8・itemVariants 64・itemCandidates 64・observations 16・maxCandidates 0..128)を追加(ADR-0108)。HTTP を経由しない直接呼び出し・WASM でも計算量を増幅できないようにした。wasmapi は DTO 変換より前に同じ検査を重ねて置き、複数の違反が重なっても HTTP と同じ `invalid_input` が先に出るようにした(parity)。`MaxCandidates` の負の値は、従来「無制限」扱いだったのを ADR-0208 の契約(`minimum: 0`)に合わせて拒否するよう変更(既存テストの期待値を更新。理由は ADR-0108 決定4)。critic PASS(1往復)。Web・iOS の追従(観測16件でUI無効化・持ち物候補64件超の扱い)は ADR-0208 §4 のまま未着手
 - MySQL の manifest に MYSQL_DATABASE が無く、初回起動時に pokedex DB が自動作成されない実バグを発見(データレーンが k3d に初めて実デプロイした際に発生)。deploy/k8s/overlays/local/mysql/statefulset.yaml に MYSQL_DATABASE: pokedex を追加し、layout_test.go に検知テストを追加して修正(2026-09-22)。**新規クラスタでは直るが、この修正前にすでに初期化済みの PVC は MYSQL_DATABASE の効果を受けない**(コンテナ起動時にしか実行されない仕様のため)。既存の PVC に対しては CREATE DATABASE を手動実行するしかない。docs/runbooks/data.md に一言注記するとよい
 - P2-3 の critic の軽微(2026-09-22。未反映の4件): `check-publishable.sh` の `B_KEYVALUE_ALLOW` を self-test の基準リポジトリにも播く / `maxCatalogAbilityCount` が balance の schema・loader と三重管理(テストで検出はできる) / natures-mismatch のエラー案内が Showdown 側だけを見て `make import-fetch` の案内が出ないことがある / `TestPublicInputValidation` の 400 応答を契約検証(kin-openapi)に通す
 

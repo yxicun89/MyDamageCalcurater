@@ -42,6 +42,8 @@ const (
 	// CodeInvalidEnum は列挙(タイプ・分類・天候・フィールド・状態異常・ステータスキー・形式)の値が不正。
 	CodeInvalidEnum = "invalid_enum"
 	// CodeInvalidInput は engine の入力検証エラー(Individual.Validate 由来: SP 範囲/合計・ランク・性格・タイプ数・レベル)。
+	// presets/itemVariants/itemCandidates/observations の件数上限・maxCandidates の範囲超過も
+	// ここに写す(issue #110。ADR-0208 §2・ADR-0108。新しいコードは足さない)。
 	CodeInvalidInput = "invalid_input"
 	// CodeUnknownPreset は engine.ErrUnknownPreset。
 	CodeUnknownPreset = "unknown_preset"
@@ -164,6 +166,13 @@ func errorResponse(err error) string {
 		{engine.ErrTypeChartMissing, CodeTypeChartMissing},
 		{engine.ErrInvalidTypeChart, CodeInvalidTypeChart},
 		{engine.ErrUnknownType, CodeUnknownType},
+		// 件数・範囲の上限(issue #110。ADR-0208 §2 と同じく新しいコードは足さず invalid_input に写す。
+		// ADR-0108)。
+		{engine.ErrTooManyPresets, CodeInvalidInput},
+		{engine.ErrTooManyItemVariants, CodeInvalidInput},
+		{engine.ErrTooManyItemCandidates, CodeInvalidInput},
+		{engine.ErrTooManyObservations, CodeInvalidInput},
+		{engine.ErrInvalidMaxCandidates, CodeInvalidInput},
 	}
 	for _, s := range sentinels {
 		if errors.Is(err, s.err) {
