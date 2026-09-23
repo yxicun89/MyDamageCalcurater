@@ -1061,6 +1061,17 @@ Impact:
   `api/openapi.yaml` を編集して `make gen` を忘れた一瞬は検知できない。これはリポジトリの契約テスト全体に共通する
   前提で本ADR固有の欠陥ではないため、この ADR の範囲では対応しない(ADR-0210 §8)
 
+### 追記(2026-09-23): Web・iOSレーンから確認回答
+- Webレーンから確認回答: `web/src/api/config.ts` の `apiBaseUrl()` は既定値が同一オリジン `"/"` で、
+  `VITE_API_BASE_URL` での上書き設計。public な固定値は持っていない。CORS 許可オリジンも gateway(Go)側の
+  設定でWebにハードコードは無い。既に依頼の条件を満たしている。plan.md P4-20 に記録済み(Webレーンのブランチ
+  `feat/web-p4` のコミット `6c0b073`。まだ main 未統合)。残るのは実際の tailnet 名をデプロイ時に
+  `VITE_API_BASE_URL` に設定する運用作業のみ
+- iOSレーンから確認回答: `Info.plist` 等のソース(ビルド生成物を除く)に `NSAppTransportSecurity`/ATS例外は
+  入っていない。`tailscale serve` がHTTPS終端する前提のまま平文許可を作らない制約を継続して守る
+- **運用レーンが到達経路(§2.1 候補1 or 候補2)を選定・導入したら、Web・iOSレーンへ実際の tailnet 名/接続先の
+  設定を連絡すること**(両レーンとも「連絡が来たら着手」で待機中)
+
 ## 2026-09-23: issue #106(手動importとCronJobの同時実行)を main へ統合(データレーン)
 Decision: PR #155(`feat/claude-p1-engine` → `main`)をマージした。`tools/importer/cronjob.sh` に
 flockベースの排他制御(ADR-0109)。critic PASS(指摘なし)。
