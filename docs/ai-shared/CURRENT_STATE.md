@@ -84,16 +84,14 @@ dataVersion・rollout一本化)はデータレーンが主担当で、連絡が�
 
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
-Active: Claude Code
-Branch: feat/judge-jd2(作業ディレクトリ ~/MyDamageCalcurater-judge。PR 作成待ち。JD1 の feat/judge-jd1 は PR #118 で main に統合済み・削除)
-Status: JD0(基盤。PR #92)・JD1(判定 API 本体。PR #118)は main に統合済み。JD2(場の効果: トリックルーム・追い風)も完了。
-`speedField`(trickRoom・attackerTailwind・defenderTailwind)を `POST /api/judge/v1/outspeed-and-ko` に追加した(ADR-0702)。
-追い風は実数値を×2、こだわりスカーフとの併用は4096基準で1つに連結してから1回だけ五捨五超入(補正ごとに丸めない。
-@smogon/calc 0.12.0 の `getFinalSpeed`/`chainMods`/`pokeRound` を実際に読んで確認・独立検算済み)。トリックルームは
-実数値を変えず `outspeeds`(自分が先に動くか)の向きだけ反転、`speedTie` は反転しない。critic PASS(1回目)。
+Active: なし
+Branch: feat/judge-jd3(作業ディレクトリ ~/MyDamageCalcurater-judge。JD2 の feat/judge-jd2 は PR #127 で main に統合済み・削除)
+Status: JD0(基盤。PR #92)・JD1(判定API本体。PR #118)・JD2(場の効果。PR #127)は main に統合済み。
+`POST /api/judge/v1/outspeed-and-ko` は `speedField`(trickRoom・attackerTailwind・defenderTailwind)に対応済み(ADR-0702)。
 JD2〜JD5 の範囲・順序はユーザー回答で確定済み(judge-design.md §3): JD2 場の効果→JD3 複数の相手候補→JD4 返り討ち判定
 (pokedex-svc の技 detail endpoint が無く API レーンへ依頼中。DECISIONS.md)→JD5 Web/iOS 画面
-Next: PR を作って main へ統合(このセッションの残タスク)。その後 JD3(複数の相手候補を一度に判定)に着手
+Next: JD3(複数の相手候補を一度に判定)に着手。攻撃側(自分・技)は1つに固定し、相手候補(`Individual` の配列)を
+受け取って候補ごとに JD1+JD2 の判定を配列で返す(TB4 の仮想敵診断と同じ「1つに対し複数」の形。judge-design.md §3)
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

@@ -917,3 +917,8 @@ fixture 整形崩れの3点。いずれも ADR-0107 の「追記(2026-09-23)」�
 Reason: 独立レビュー PASS・`make test`(790件)/`lint`/`build`/`test-golden`/`test-all-species`/`test-wasm` すべて green。
 Impact: 判定レーンは JD1(ADR-0701 の Individual.ranks 方式)のまま。技IDからランク変化を自動で出す
 公開APIの拡張は、判定レーンの要件が固まってから別途(データ・APIレーン)。
+
+## 2026-09-22: 判定 JD2(場の効果)を PR #127 で main に統合
+Decision: ADR-0702(`speedField`。トリックルーム・追い風。素早さ補正の連結・丸めを @smogon/calc 0.12.0 で確認)を PR #127 で main に統合した。critic は1回目で PASS。
+Reason: `make test`・`make lint`・`make build`(ルート)が緑、critic PASS、他レーンの範囲外変更なし(COORDINATION.md の共有ファイル規約の範囲内)を確認してマージした。
+Impact: 判定レーンのブランチを `feat/judge-jd3` に切り替えた(JD2 の `feat/judge-jd2` は削除)。次は JD3(複数の相手候補を一度に判定)。
