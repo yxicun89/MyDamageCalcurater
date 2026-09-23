@@ -67,7 +67,7 @@ v1 は**個人利用 + Tailscale 内**に固定する(requirements.md §3「可�
 | 4 | `teams` / `team_members`(構築) | 構築ビルダー | TiDB team DB | `device_id` | **`max(devices.last_seen_at, 行.updated_at)` から540日**(§4。team-svc も計算イベントを購読して自分の `devices.last_seen_at` を更新する) | 失効ジョブ / 利用者の個別削除 / 端末単位の全削除 | 同上 | 同上(構築名・ニックネーム・個体の中身は出さない) |
 | 5 | `devices`(端末ごとの `last_seen_at` と削除の墓石 `purged_at`。record DB と team DB がそれぞれ自分の分を持つ) | 失効判定・削除後のイベント再出現の抑止(§7) | TiDB record DB / team DB | `device_id` | **行自体**はその端末のデータ(#1〜#4)が全て無くなってから30日で失効ジョブが消す(使われ続ける端末の行は消えない)。**`purged_at` の値**は削除のたびに更新され(§5.2)、30日経過後もクリアしない(§7 の「30日」は判定に使う猶予の長さであり、値の寿命ではない) | 失効ジョブ(行自体) | 同上。**バックアップに必ず含める**(§9) | 端末 ID・`last_seen_at`・`purged_at` |
 | 5b | **purge journal**(削除要求を受け付けた端末 ID と時刻だけの追記専用ログ。record DB / team DB がそれぞれ持つ**うえ**で、DB のバックアップ世代とは独立の場所〈P7-4 が決める。§9-2〉にも同時に追記する) | バックアップ復元時に、復元世代より後に来た削除要求を再適用するため(§9) | TiDB record DB / team DB + P7-4 が決める独立の保存先 | `device_id` | **90日**(#7 のバックアップ復元の想定範囲より長く取る) | 期限切れの行の削除(データを含まないので保持コストは小さい) | **DB のバックアップとは別に、独立の保存先で必ず保持する**(DB 側の世代が全損しても journal だけは残る想定。§9-2) | 端末 ID・削除要求の受付時刻 |
-| 6 | NATS JetStream の計算イベント(calc-svc → record-svc の中継) | 非同期保存(requirements.md §4) | JetStream のストリーム | subject に `device_id` を含む | **`max_age` 7日**、ack 済みは破棄 | ack / `max_age` | **バックアップの対象にしない**(復元で再生しない) | ストリーム名・シーケンス番号・consumer 名 |
+| 6 | NATS JetStream の計算イベント(calc-svc → record-svc **と team-svc**〈§4〉の中継) | 非同期保存(requirements.md §4)・record は保存本体、team は `devices.last_seen_at` の更新だけ | JetStream のストリーム | subject に `device_id` を含む | **`max_age` 7日**、**両方の consumer が ack したら破棄**(record と team は別々の durable consumer を持つので、片方の ack ではストリームから消えない。P5-2) | ack / `max_age` | **バックアップの対象にしない**(復元で再生しない) | ストリーム名・シーケンス番号・consumer 名 |
 | 7 | バックアップ(MySQL / TiDB。P7-4) | 障害復旧 | P7-4 で決める保存先 | ― | **30日(世代の上限)** | 世代の失効 | ― | 世代 ID・取得時刻・対象 DB |
 
 **ログに残さない**(どの分類でも共通。coding-rules §1): 個体の中身(種族・技・持ち物・特性・性格・SP)、ダメージの数値、
@@ -327,8 +327,9 @@ engine・wasmapi の語彙(WASM 境界と共通の側)には混ぜない。
 - record-svc は `devices.purged_at`(削除を受け付けた時刻)を持つ。
 - イベントの消費側は、`occurred_at <= purged_at` のイベントを**保存せずに ack して捨てる**(再配送させない)。
 - `occurred_at > purged_at` のイベントは通常どおり保存する(削除の後に行った計算は残る。利用者の期待どおり)。
-- 墓石は**削除から30日**保持する(#5)。JetStream の `max_age` は7日(#6)なので、
-  30日は「未処理のまま残りうる最長の期間」より十分に長い。この関係(墓石の保持 > `max_age`)を壊さないこと。
+- `occurred_at <= purged_at` の判定に使う猶予は**30日**(#5。`purged_at` の値自体はクリアしない。#5 の注記)。
+  JetStream の `max_age` は7日(#6)なので、30日は「未処理のまま残りうる最長の期間」より十分に長い。
+  この関係(判定の猶予30日 > `max_age`7日)を壊さないこと。
 - `occurred_at` は calc-svc がイベントに載せる発生時刻を使う(record-svc の受信時刻ではない)。
   受信時刻で判定すると、削除直前に発生したイベントが削除後に受信されて生き残る。
 - 墓石は端末 ID と時刻だけで、利用者のデータを含まない(だから削除要求の後も持てる)。
