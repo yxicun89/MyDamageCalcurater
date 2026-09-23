@@ -8,7 +8,9 @@ info:
     judge は自分の契約を自分で持つ(ADR-0012)。ルートの api/openapi.yaml を $ref せず、
     同じ意味のスキーマをここで定義する。欄の意味の正はルートの api/openapi.yaml にある。
     契約の正は docs/adr/0700-judge-jd0-foundation.md(基盤)・
-    docs/adr/0701-judge-jd1-outspeed-and-ko.md(判定)と docs/judge-design.md。
+    docs/adr/0701-judge-jd1-outspeed-and-ko.md(判定)・
+    docs/adr/0702-judge-jd2-field-effects.md(場の効果)・
+    docs/adr/0703-judge-jd3-multiple-candidates.md(複数の相手候補)と docs/judge-design.md。
 servers:
   - url: /
 paths:
@@ -44,11 +46,16 @@ paths:
   /api/judge/v1/outspeed-and-ko:
     post:
       operationId: outspeedAndKo
-      summary: 素早さで抜けるか + その技で倒せるか
+      summary: 素早さで抜けるか + その技で倒せるか(相手候補ごとに)
       description: |
-        自分(attacker)と相手(defender)の調整、および自分が使う技 1 つを受け取り、
-        「自分が相手より素早いか(outspeeds / speedTie)」と「その技で相手を倒せるか(ko)」を
-        1 回の request で返す(ADR-0701 §1)。
+        自分(attacker)の調整と自分が使う技 1 つ、および相手候補(defenders。1〜6 件)を受け取り、
+        候補ごとに「自分が相手より素早いか(outspeeds / speedTie)」と「その技で相手を倒せるか(ko)」を
+        判定して matchups の配列で返す(ADR-0701 §1・ADR-0703 §1)。攻撃側と技は 1 つに固定する。
+
+        matchups は defenders と**同じ順序・同じ件数**で、各行は defenderIndex(defenders 配列の位置。
+        0 始まり)を持つ。attackerSpeed はどの行でも同じ値になるが、行を自己完結させるために
+        各行が持つ(ADR-0703 §2)。同じ speciesKey が候補に重複していても取りまとめず、
+        候補の数だけ素直に上流を引く(ADR-0703 §6)。
 
         素早さは 実数値(engine.RealStats)→ ランク補正 → 素早さ補正(追い風 ×2・こだわりスカーフ ×1.5)の
         順で求める(ADR-0701 §2・ADR-0702 §2)。補正は 4096 基準で 1 つに連結してから 1 回だけ
@@ -59,12 +66,20 @@ paths:
         field に入れ、judge は解釈せず calc-svc へそのまま転送する。素早さにしか効かない
         トリックルーム・追い風は speedField に入れ、judge だけが解釈して calc-svc には送らない。
 
-        検査順(ADR-0701 §5。上流は逐次で呼ぶ):
+        検査順(ADR-0701 §5 を ADR-0703 §4 が拡張した形。上流は逐次で呼ぶ):
         ヘッダー (400) → body が 1 つの JSON か・上限 8 KiB (400 / 413)
-        → sp・ranks・format・必須文字列の範囲 (400。ここまで上流を 1 回も呼ばない)
-        → 性格の一覧 (503) → natureId が一覧に無い (422 unknown_nature)
-        → attacker の種族 (422 unknown_species / 503) → defender の種族 (同じ)
-        → ダメージ計算 (400 / 503) → 200。
+        → defenders の件数が 1〜6 か (400)
+        → attacker と各 defender の sp・ranks・format・必須文字列の範囲
+           (400。最初に範囲外だった候補の index で止める。ここまで上流を 1 回も呼ばない)
+        → 性格の一覧 (1 リクエストにつき 1 回だけ。503)
+        → natureId が一覧に無い (422 unknown_nature。attacker → defenders を index 昇順に見て最初の 1 件)
+        → attacker の種族 (422 unknown_species / 503)
+        → defenders の種族 (index 昇順。最初に失敗した候補で打ち切る)
+        → ダメージ計算 (index 昇順。最初に失敗した候補で打ち切る。400 / 503) → 200。
+
+        **エラーは最初に失敗した候補で全体を打ち切る**(部分的な成功は返さない。ADR-0703 §3)。
+        どの候補で失敗したかは、エラーの message に defenders[<index>] の形で入る
+        (上流の URL・本文は入らない。ADR-0700 §3 は保たれる)。
       parameters:
         - $ref: '#/components/parameters/DeviceId'
         - $ref: '#/components/parameters/SessionId'
@@ -76,7 +91,7 @@ paths:
               $ref: '#/components/schemas/OutspeedAndKoRequest'
       responses:
         '200':
-          description: 素早さの比較結果と確定数
+          description: 相手候補ごとの素早さの比較結果と確定数(defenders と同じ順序・同じ件数)
           content:
             application/json:
               schema:
@@ -84,8 +99,8 @@ paths:
         '400':
           description: |
             X-Device-Id / X-Session-Id が無い・空、body が 1 つの JSON オブジェクトでない・未知の欄がある、
-            必須の欄が無い、sp / ranks / format が範囲外、または calc-svc が計算要求を受け付けなかった
-            (invalid_request。ADR-0701 §6)
+            必須の欄が無い、defenders が 1 件未満・6 件超、sp / ranks / format が範囲外、
+            または calc-svc が計算要求を受け付けなかった(invalid_request。ADR-0701 §6・ADR-0703 §4)
           content:
             application/json:
               schema:
@@ -290,6 +305,7 @@ components:
         ダメージに効く場の状態。judge は解釈せず calc-svc の field にそのまま転送する(省略時は送らない)。
         意味の正はルートの api/openapi.yaml の FieldState。
         素早さにしか効かないトリックルーム・追い風はここに入れない(speedField。ADR-0702 §1)。
+        すべての相手候補に同じ field が使われる(候補ごとに天候を変えることはできない。ADR-0703 §5)。
       type: object
       properties:
         weather:
@@ -307,6 +323,8 @@ components:
         screens しか理解しないため、calc-svc へ転送する field とは別の欄にする。
         speedField 自体を省略した場合も、個々の欄を省略した場合も、すべて false(場の効果なし)
         として扱う。したがって speedField を送らない request の挙動は JD1 と同じになる。
+        **1 リクエストに 1 つだけで、すべての相手候補に同じように適用される**(ADR-0703 §5)。
+        候補ごとに追い風の有無を変えることはできない。
       type: object
       properties:
         trickRoom:
@@ -324,7 +342,9 @@ components:
           type: boolean
           default: false
         defenderTailwind:
-          description: 相手の側に追い風がかかっているか。相手の戦闘中の素早さを ×2 する。
+          description: |
+            相手の側に追い風がかかっているか。相手の戦闘中の素早さを ×2 する。
+            すべての相手候補に同じように適用される(ADR-0703 §5)。
           type: boolean
           default: false
     OutspeedAndKoRequest:
@@ -332,21 +352,29 @@ components:
       required:
         - format
         - attacker
-        - defender
+        - defenders
         - moveId
       properties:
         format:
           $ref: '#/components/schemas/Format'
         attacker:
-          description: 自分の個体。JD1 は自分が攻撃する側だけを扱う(ADR-0700 §6-2)。
+          description: 自分の個体。攻撃側は 1 つに固定する(ADR-0700 §6-2・ADR-0703 §1)。
           allOf:
             - $ref: '#/components/schemas/Individual'
-        defender:
-          description: 相手の個体。
-          allOf:
-            - $ref: '#/components/schemas/Individual'
+        defenders:
+          description: |
+            相手候補の一覧(ADR-0703 §1)。1〜6 件。判定は候補ごとに行われ、
+            matchups がこの配列と同じ順序・同じ件数で返る。
+            上限 6 件は「手持ちの数」に合わせた慣習(services/balance の members / threats と同じ)で、
+            1 リクエストの逐次の上流呼び出し数(natures 1 + attacker の種族 1 + 候補の種族 N + 計算 N)を
+            読める範囲に抑えるために置く。同じ speciesKey が重複していても取りまとめない。
+          type: array
+          minItems: 1
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/Individual'
         moveId:
-          description: 自分が使う技(1 つ)。
+          description: 自分が使う技(1 つ)。すべての候補に対して同じ技で判定する。
           type: string
           minLength: 1
         field:
@@ -377,12 +405,40 @@ components:
     OutspeedAndKoResponse:
       type: object
       required:
+        - matchups
+      properties:
+        matchups:
+          description: |
+            相手候補ごとの判定結果(ADR-0703 §2)。request の defenders と**同じ順序・同じ件数**で、
+            i 番目の行の defenderIndex は i になる。部分的な成功は返さない(どれか 1 つの候補で
+            失敗したら request 全体がエラーになる。ADR-0703 §3)。
+          type: array
+          minItems: 1
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/Matchup'
+    Matchup:
+      description: |
+        相手候補 1 件ぶんの判定結果(ADR-0703 §2)。attackerSpeed はどの行でも同じ値になるが、
+        行だけを見て「何対何で抜けているか」が分かるように各行が持つ
+        (ルートの api/openapi.yaml の BulkCalcRow が各行に防御側の実数値を持たせているのと同じ形)。
+      type: object
+      required:
+        - defenderIndex
         - outspeeds
         - speedTie
         - attackerSpeed
         - defenderSpeed
         - ko
       properties:
+        defenderIndex:
+          description: |
+            この行が対応する request の defenders の位置(0 始まり)。matchups は defenders と
+            同じ順序で返るので i 番目は必ず i になるが、行を並べ替えて表示する画面が
+            対応を取り違えないように明示する。
+          type: integer
+          minimum: 0
+          maximum: 5
         outspeeds:
           description: |
             自分が相手より先に動くか(ADR-0700 §6-1・ADR-0702 §3)。トリックルームが無ければ
@@ -399,9 +455,10 @@ components:
           description: |
             自分の戦闘中の素早さ(ランク・追い風・こだわりスカーフ適用後)。
             トリックルームは実数値を変えないので、この値には現れない(ADR-0702 §2)。
+            攻撃側は 1 つに固定なので、すべての matchups で同じ値になる。
           type: integer
         defenderSpeed:
-          description: 相手の戦闘中の素早さ(ランク・追い風・こだわりスカーフ適用後)。
+          description: この候補の戦闘中の素早さ(ランク・追い風・こだわりスカーフ適用後)。
           type: integer
         ko:
           $ref: '#/components/schemas/KOChance'

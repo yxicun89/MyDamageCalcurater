@@ -917,3 +917,72 @@ fixture 整形崩れの3点。いずれも ADR-0107 の「追記(2026-09-23)」�
 Reason: 独立レビュー PASS・`make test`(790件)/`lint`/`build`/`test-golden`/`test-all-species`/`test-wasm` すべて green。
 Impact: 判定レーンは JD1(ADR-0701 の Individual.ranks 方式)のまま。技IDからランク変化を自動で出す
 公開APIの拡張は、判定レーンの要件が固まってから別途(データ・APIレーン)。
+
+## 2026-09-22: 判定 JD2(場の効果)を PR #127 で main に統合
+Decision: ADR-0702(`speedField`。トリックルーム・追い風。素早さ補正の連結・丸めを @smogon/calc 0.12.0 で確認)を PR #127 で main に統合した。critic は1回目で PASS。
+Reason: `make test`・`make lint`・`make build`(ルート)が緑、critic PASS、他レーンの範囲外変更なし(COORDINATION.md の共有ファイル規約の範囲内)を確認してマージした。
+Impact: 判定レーンのブランチを `feat/judge-jd3` に切り替えた(JD2 の `feat/judge-jd2` は削除)。次は JD3(複数の相手候補を一度に判定)。
+
+## 2026-09-23: 判定 JD3 で outspeed-and-ko の契約を破壊的に変更する(判定レーン)
+Decision: `POST /api/judge/v1/outspeed-and-ko` の request の `defender`(単数)を `defenders`(Individual[]、1〜6件)に、
+response の単数の5欄(outspeeds/speedTie/attackerSpeed/defenderSpeed/ko)を `matchups`(defenders と同じ順序・同じ件数の
+Matchup 配列。各行が defenderIndex を持つ)に置き換えた。版は上げない(v1 のまま)。設計は ADR-0703。
+Reason: JD5(Web/iOS の画面)が未着手で judge-svc を呼ぶクライアントが1つも無く、gateway もルートの api/openapi.yaml も
+judge を含まない(ADR-0700 §6-3・ADR-0701 §7)ため、壊れるものが無い。互換のために単数の defender を残すと同じ問いに
+入口が2つでき、response も単数・配列の2形態になる。judge-design.md §3 が JD5 を最後に置いたのは、まさにこの変更を
+クライアントが付く前に済ませるため。
+Impact:
+- 他レーンへの影響は無い(ルートの api/openapi.yaml・gateway・Web・iOS のいずれも judge の型を生成していない)。
+- JD5 に着手する時点の契約は `defenders` / `matchups` の形になる。JD5 を Web/iOS レーンに依頼する場合は
+  services/judge/api/openapi.yaml を参照先として渡す。
+- 候補のどれかで失敗したら request 全体を打ち切り、部分成功は返さない。エラーの message は
+  どの候補かを `defenders[<index>]` の形で示す(上流の URL・本文は含めないので ADR-0700 §3 は保たれる)。
+
+## 2026-09-23: issue #110 のデータレーン担当分(engine/wasmapi)を実装(データレーン)
+Decision: 上記「calc の候補・観測件数に上限を置く」の依頼(API レーンから)に応え、
+`engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ値の上限を実装した
+(presets 8 / itemVariants 64 / itemCandidates 64 / observations 16 / maxCandidates 0..128。ADR-0108)。
+- 検証は選択・内容検証(selectPresets・validateObservations)より前、`engine/wasmapi` では DTO 変換
+  より前に置き、HTTP と同じ `invalid_input` が複数の違反が重なっても先に出るようにした(parity)。
+- `MaxCandidates` が負のとき、従来「無制限」だった挙動を「不正(ErrInvalidMaxCandidates)」に変更した
+  (ADR-0208 の契約が `minimum: 0` のため。既存テスト `TestReverseOrderDeterministic` の期待値を更新。
+  理由は ADR-0108 決定4)。
+- 新しい ErrorCode は足さず、5つの engine sentinel をすべて `wasmapi.CodeInvalidInput` に写した
+  (ADR-0208 §2 と同じ判断)。
+- 独立レビュー PASS(1往復。指摘: 古いフィールドコメントの修正、plan.md 未更新、wasmapi の DTO 変換順を
+  上限検査より前に揃える、境界値テストの補強)。`make test`(790件)/`lint`/`build`/`test-golden`/
+  `test-all-species`/`test-wasm` すべて green。
+Reason: HTTP を経由しない直接呼び出し(ネイティブ Go)・WASM(ブラウザ)は calc-svc の検証を通らないため、
+上限が無いままだと issue #110 の計算量増幅がそのまま残る。
+Impact: issue #110 は Web・iOS レーンの追従(観測16件でUI無効化・持ち物候補64件超の扱い)が残っている限り
+クローズしない。docs/plan.md の改善要望節・ADR-0108 参照。
+
+## 2026-09-23: issue #110 のデータレーン担当分を main へ統合(データレーン)
+Decision: PR #138(`feat/claude-p1-engine` → `main`)をマージした。`engine.CalcBulk`/`CalcReverse`・
+`engine/wasmapi` への件数・範囲の上限(presets 8/itemVariants 64/itemCandidates 64/observations 16/
+maxCandidates 0..128。ADR-0108)。critic 1往復で PASS。
+Reason: 独立レビュー PASS・`make test`(833件)/`lint`/`build`/`test-golden`/`test-all-species`/
+`test-wasm` すべて green。
+Impact: issue #110 は Web・iOS レーンの追従(観測16件でUI無効化・持ち物候補64件超の扱い。
+ADR-0208 §4)が残っている限りクローズしない。
+
+## 2026-09-23: 判定 JD3(複数の相手候補)を PR #143 で main に統合、JD4 は API レーンの依頼を待つ(判定レーン)
+Decision: ADR-0703(`defenders`/`matchups` への破壊的変更)を PR #143 で main に統合した。critic は1回目で PASS。
+判定レーンのブランチを `feat/judge-jd4` に切り替えた(JD3 の `feat/judge-jd3` は削除)。
+JD4(相手の技を含めた返り討ち判定)は、技の優先度を pokedex-svc から個別取得する `GET /api/pokedex/moves/{key}`
+(2026-09-22 に API レーンへ既定案付きで依頼済み。上記参照)が無いと実装できない。ユーザーに「両者優先度0の限定で
+先に進める」か「API レーンの実装を待つ」かを確認し、**待つ**を選択した。
+Reason: 優先度の間違いは「先制されて落とされるのに安全と言う」誤判定を生みうるため、判定ツールとしての信頼性を
+優先度0の限定より優先した(ユーザー判断)。
+Impact: 判定レーンは API レーンが `GET /api/pokedex/moves/{key}` を実装するまで新規実装を止める(plan.md のブロッカー節)。
+`feat/judge-jd4` は作成済み・空のまま。API レーンへの依頼は優先度低(JD2・JD3 は待たずに進められた)ままなので、
+API レーンが気づいたタイミングで着手してもらってよい。
+
+## 2026-09-23: リモートブランチの `--delete`(git push --delete)も自動承認にする(ユーザー決定)
+Decision: Claude Code のユーザー設定ファイル(グローバル)とこのプロジェクトの `.claude/settings.json`(Git管理下)の両方で、
+`git push * --delete*`/`git push --delete*` を ask から削除した(広い `Bash(git push *)` の allow がそのまま効くようになる)。
+main への直接push・force push・`--mirror`・`--all` は引き続き禁止のまま。`rm` も変更していない。
+Reason: ユーザーの言葉「まだ承認出るので許可したい」。PR マージ後のフィーチャーブランチ削除は本セッションの通常フローで
+毎回発生しており、確認プロンプトが挟まる運用負荷が大きかったため。
+Impact: COORDINATION.md の運用上の注意を更新した。`gh pr merge` に続きリモートブランチ削除も人間が目を通す機会が無くなるため、
+PR作成前のテスト・lint・check-publishable・critic PASS確認の重要性は変わらず高いまま。

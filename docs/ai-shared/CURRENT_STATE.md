@@ -7,7 +7,8 @@ Branch: feat/claude-p1-engine(作業ディレクトリ ~/MyDamageCalcurater)
 Status: Phase 1・P2-1・P1-10・Phase R・P1-13・P1-11・P1-12・P2-1b・P2-1c・P2-2a・P2-2b・P2-2c・P2-2d・P2-3(pokedex-svc。内部 API・公開 API・natures・balance/speed 向け export。ADR-0105)は完了(critic レビュー済み)
 Status(追記): P2-3b(無効・吸収の特性)も完了・main 統合済み(ADR-0106)。calc・gateway の pokedex-svc 接続(API レーンの依頼)も PR #87 で解決済み(api-smoke で master=pokedex 確認済み)。
 Status(追記): P5-6(技の追加効果によるランク変化。ADR-0107)完了・critic PASS(1往復)・**main 統合済み(PR #132)**。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。`move_effects` 別表・`MasterMove.effect`(内部API)まで。公開APIへの露出(判定レーンが技IDからランク変化を引く経路)は判定レーンの要件確定後に別途対応。
-Next: (1) issue #110(API レーンから依頼。DECISIONS.md 2026-09-23): `engine.CalcBulk`/`CalcReverse` に同じ防御上限(presets 8/ItemVariants 64/ItemCandidates 64/Observations 16/MaxCandidates 0..128)を置き、`engine/wasmapi` にも invalid_input 相当の上限と HTTP/WASM parity テストを足す。(2) Codexレビュー issue #106(排他制御)を優先、続いて #104/#109/#112。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)
+Status(追記): issue #110 のデータレーン担当分(ADR-0108)完了・critic PASS(1往復)・**main 統合済み(PR #138)**。`engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ件数・範囲の上限を追加し、wasmapi は DTO 変換より前に検査して HTTP との parity を確保。issue #110 は Web・iOS レーンの追従が残っている限りクローズしない。
+Next: (1) Codexレビュー issue #106(排他制御)を優先、続いて #104/#109/#112。(2) 他レーンからの依頼待ち。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
@@ -40,6 +41,13 @@ P4-5 は Chrome で確認済み(Safari は未確認。人間の作業)。
 critic 1回目 FAIL(検索候補が1件でも「候補が多い」と誤案内する文言バグ、BalanceScreen のガードが実質未検証だった点)
 を修正・テスト強化して2回目 PASS。既存803件は無変更・新規30件追加(833件)。
 キーボード操作・CSS 等の残りは P4-16c として plan.md に理由付きで分離(ブロッカーではない)。
+**P4-19(issue #110 セキュリティ。ADR-0300 §10)も完了・main 統合済み(PR #142)**: 持ち物候補
+(defenderItemVariants・reverseItemCandidates)を配列を作る最終地点で64件に決定的に絞り込み(選んだ持ち物は
+落とさない)、観測は16件で「観測を追加」を disabled+role="status"案内。critic PASS(セキュリティ関連のため
+境界値を重点検証: candidates 0〜80件×選択パターン×compareON/OFFの約1.2万ケース網羅探索と変異テスト5件で、
+itemVariants/itemCandidates が常に64以下・observationsが17件目を作れないことを確認)。既存857件は無変更・
+新規9件追加(866件)。データレーンの engine/wasmapi 側(ADR-0108・PR #138)も main 統合済み。issue #110 は
+iOS の追従待ちで Web 単独ではクローズしない。
 Next: (1) P4-16c(検索欄のキーボード操作・CSS 等。plan.md 参照)。
 (2) P4-18(Codexレビュー issue。タイプバランスレーンから連絡): 優先 #99(アクセシビリティ)・#113(debounce/cancel)。
 (3) P4-17: 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら技を復活。
@@ -60,10 +68,11 @@ Next: PR を main へ。その後は M3 完了なので、ユーザーからの�
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
-Active: なし(TB6 完了・main 統合済み。次はユーザー指示待ち)
+Active: なし(TB6・issue #105 対応 完了・main 統合済み。次はユーザー指示待ち)
 Branch: 次は main から feat/tb-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
-Status: 設計書(docs/type-balance-design.md)の TB0〜TB6 はすべて main に統合済み(TB6: 技範囲チェッカー、PR #65)。P2-3b(特性の無効・吸収)の実データ確認を完了(2026-09-23): データレーンが再生成した export(348 pokemon・moves・216 abilities)で `make balance-k3d-deploy-readmodel && make balance-smoke-readmodel` を実行し、`POST .../team-balance/analyze` でチリーン(levitate)への ground 攻撃が `{"category":"immune","effect":"immune","multiplier":"0","source":"ability"}` になること、`POST .../move-range/analyze`(thunderbolt)の `walledByAbility` にエモンガ(motordrive)が正しく含まれることを実データで確認済み。メガフォームの nameJa が英語表記のままの件はデータレーンへ確認候補として残る(ブロッカーではない)
-Next: (Web レーンは `make gen-ts` 実行済み。`web/src/api/balance.gen.ts` に move-range の型が反映済みであることを確認した)設計書の TB0〜TB6 はすべて完了・実データ確認済み、以後はユーザーからの新規要望待ち
+Status: 設計書(docs/type-balance-design.md)の TB0〜TB6 はすべて main に統合済み(TB6: 技範囲チェッカー、PR #65)。P2-3b(特性の無効・吸収)の実データ確認を完了(2026-09-23): データレーンが再生成した export(348 pokemon・moves・216 abilities)で `make balance-k3d-deploy-readmodel && make balance-smoke-readmodel` を実行し、`POST .../team-balance/analyze` でチリーン(levitate)への ground 攻撃が `{"category":"immune","effect":"immune","multiplier":"0","source":"ability"}` になること、`POST .../move-range/analyze`(thunderbolt)の `walledByAbility` にエモンガ(motordrive)が正しく含まれることを実データで確認済み。メガフォームの nameJa が英語表記のままの件はデータレーンへ確認候補として残る(ブロッカーではない)。
+**Codexレビュー issue #105(Argo CD導入のハッシュ・digest固定)対応も完了**(2026-09-23。ADR-0405。PR #140): `scripts/argocd-bootstrap.sh`(balance/speed共有)を新設し、balance・speed 両runbookの生URL直applyを置き換えた。実クラスタ(k3d-pokecalc)で実行し、argocd-server/dex/redisの3イメージがdigest参照に切り替わること・既存Applicationが無傷であることを確認済み
+Next: (Web レーンは `make gen-ts` 実行済み。`web/src/api/balance.gen.ts` に move-range の型が反映済みであることを確認した)設計書の TB0〜TB6・issue #105 はすべて完了・実データ/実クラスタ確認済み、以後はユーザーからの新規要望待ち
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
 
 ## Speed
@@ -76,24 +85,21 @@ DSN のホストを `127.0.0.1` に付け替えて `make pokedex-export`(348 pok
 `make speed-smoke-readmodel` を実行(初回はロールアウト直後で 504、再実行で `speed readmodel smoke: pokemon=0003-000 list=200 table=200`)。
 SP5 の実際の Argo CD への適用(`speed-argocd-app`・`speed-registry-push`・sync)は未実施のまま(ADR-0605 §4。共有クラスタへの変更のため
 人間の確認のもとで、必要になったときに)
-Next: 特に無し。他レーンからの依頼(Codexレビュー issue #105・#108。上記)かユーザーからの新規要望待ち。balance-registry →
-pokecalc-registry への改名提案はタイプバランスレーンへ既定案で提示済み(DECISIONS.md 2026-09-23)。
-Codexレビューissue(2026-09-23、タイプバランスレーンから連絡): #105(Argo CD導入・digest固定の共有スクリプト化)はタイプバランスレーンが
-主担当で進め、できたら docs/runbooks/speed.md の該当節をその呼び出しに差し替えるだけになる見込み(今は着手不要)。#108(read model の
-dataVersion・rollout一本化)はデータレーンが主担当で、連絡が来たら合わせる(今は着手不要)
+Next: 特に無し。#105(Argo CD導入・digest固定の共有スクリプト化)はタイプバランスレーンが完了し、docs/runbooks/speed.md 節5を
+scripts/argocd-bootstrap.sh の呼び出しに差し替え済み(2026-09-24 確認・追加対応不要)。#108(read model のdataVersion・rollout一本化)は
+データレーンが主担当で、連絡が来たら合わせる(今は着手不要)。他は balance-registry → pokecalc-registry への改名提案(タイプバランス
+レーンへ既定案で提示済み。DECISIONS.md 2026-09-23)かユーザーからの新規要望待ち。
 
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
-Active: Claude Code
-Branch: feat/judge-jd2(作業ディレクトリ ~/MyDamageCalcurater-judge。PR 作成待ち。JD1 の feat/judge-jd1 は PR #118 で main に統合済み・削除)
-Status: JD0(基盤。PR #92)・JD1(判定 API 本体。PR #118)は main に統合済み。JD2(場の効果: トリックルーム・追い風)も完了。
-`speedField`(trickRoom・attackerTailwind・defenderTailwind)を `POST /api/judge/v1/outspeed-and-ko` に追加した(ADR-0702)。
-追い風は実数値を×2、こだわりスカーフとの併用は4096基準で1つに連結してから1回だけ五捨五超入(補正ごとに丸めない。
-@smogon/calc 0.12.0 の `getFinalSpeed`/`chainMods`/`pokeRound` を実際に読んで確認・独立検算済み)。トリックルームは
-実数値を変えず `outspeeds`(自分が先に動くか)の向きだけ反転、`speedTie` は反転しない。critic PASS(1回目)。
-JD2〜JD5 の範囲・順序はユーザー回答で確定済み(judge-design.md §3): JD2 場の効果→JD3 複数の相手候補→JD4 返り討ち判定
-(pokedex-svc の技 detail endpoint が無く API レーンへ依頼中。DECISIONS.md)→JD5 Web/iOS 画面
-Next: PR を作って main へ統合(このセッションの残タスク)。その後 JD3(複数の相手候補を一度に判定)に着手
+Active: なし(JD4 が API レーン依存でブロック中。plan.md のブロッカー節参照)
+Branch: feat/judge-jd4(作業ディレクトリ ~/MyDamageCalcurater-judge。main から作成済み・空。JD3 の feat/judge-jd3 は PR #143 で main に統合済み・削除)
+Status: JD0(基盤。PR #92)・JD1(判定API本体。PR #118)・JD2(場の効果。PR #127)・JD3(複数の相手候補。PR #143。ADR-0703)は完了。
+`POST /api/judge/v1/outspeed-and-ko` は `defenders`(1〜6件)→`matchups`(配列)の一括判定・`speedField`(トリックルーム・
+追い風)に対応済み。**JD4(相手の技を含めた返り討ち判定)はブロック中**: 技の優先度を pokedex-svc から個別取得する
+`GET /api/pokedex/moves/{key}` が無く、API レーンへ依頼済み(DECISIONS.md 2026-09-22)だが未着手。ユーザーが
+「API レーンの実装を待つ」を選択(2026-09-23。優先度の間違いによる誤判定〈先制されて落とされるのに安全と言う〉を避けるため)
+Next: API レーンが `GET /api/pokedex/moves/{key}` を実装したら JD4 に着手。それまで判定レーンは新規実装を止める
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

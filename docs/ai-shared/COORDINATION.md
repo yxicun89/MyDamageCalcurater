@@ -62,13 +62,13 @@ git status --short --branch        # 未コミット・未 push が無いか
 ### 承認省略の設定と運用上の注意(2026-09-23 ユーザー決定)
 
 ユーザーの Claude Code グローバル設定(ユーザー設定ファイル。全レーン共通)で、次を**確認なし**にしている。
-- `git push`(feature ブランチへの push)
+- `git push`(feature ブランチへの push。リモートブランチの `--delete` を含む。2026-09-23 追記: 当初は確認要にしていたが、
+  マージ後のブランチ削除のたびに確認が挟まる運用負荷が大きいためユーザーが allow へ変更)
 - `gh pr create`
 - `gh pr merge`
 
-一方、次は**引き続き禁止**(deny。実行されない)または**確認が要る**(ask)。
-- 禁止: main への直接 push(`git push … main` 系すべて)・force push(`--force`/`-f`/`+refspec`)・`--mirror`・`--all`
-- 確認が要る: リモートブランチの `--delete`
+一方、次は**引き続き禁止**(deny。実行されない)。
+- main への直接 push(`git push … main` 系すべて)・force push(`--force`/`-f`/`+refspec`)・`--mirror`・`--all`
 - `rm` は変更していない。auto mode の既定判断のまま(危険なものは引き続き確認を求める)
 
 **この設定により、`gh pr merge` の直前にユーザーが目を通す機会が無くなる**。したがって、PR を作る前に必ず次を自分で確認してから進める(これまで以上に重要):

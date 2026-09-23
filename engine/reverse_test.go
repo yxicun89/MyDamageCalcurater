@@ -1189,9 +1189,12 @@ func TestReverseOrderDeterministic(t *testing.T) {
 	if limited.ExactCount != first.ExactCount {
 		t.Errorf("MaxCandidates=3 の ExactCount = %d, want %d(切り取り前の値)", limited.ExactCount, first.ExactCount)
 	}
+	// MaxCandidates が負は 0(無制限)ではなく不正として拒否する(issue #110。ADR-0208 §4・ADR-0108。
+	// 2026-09-23 に「負は無制限」から変更: HTTP 契約(ADR-0208 §1)が負を invalid_input にしており、
+	// 直接呼び出し・WASM でも同じ結論にする)。
 	in.MaxCandidates = -1
-	if neg, err := calcReverse(in); err != nil || len(neg.Candidates) != len(first.Candidates) {
-		t.Errorf("MaxCandidates=-1 は無制限: 候補数 = %d, want %d (err=%v)", len(neg.Candidates), len(first.Candidates), err)
+	if _, err := calcReverse(in); !errors.Is(err, ErrInvalidMaxCandidates) {
+		t.Errorf("MaxCandidates=-1: err = %v, want ErrInvalidMaxCandidates", err)
 	}
 }
 
@@ -1396,6 +1399,22 @@ func TestReverseValidationErrors(t *testing.T) {
 		{"2件目だけ不正", func(in *ReverseInput) {
 			in.Observations = []Observation{{Percent: 40}, {Percent: 0}}
 		}, ErrInvalidObservation},
+		// 件数・範囲の上限(issue #110。ADR-0208 §4・ADR-0108)。
+		{"ItemCandidates が上限超過", func(in *ReverseInput) {
+			in.ItemCandidates = make([]*Item, MaxReverseItemCandidates+1)
+		}, ErrTooManyItemCandidates},
+		{"Observations が上限超過(内容はすべて不正でも件数エラーが先)", func(in *ReverseInput) {
+			// 中身をすべて不正(Percent=0 は未指定扱い)にすることで、件数の検査が
+			// validateObservations(観測1件ごとの内容検証)より前にあることを確かめる。
+			// 中身が正しい観測だけでは、検査の順序に依らずどちらのエラーにもなりうる。
+			obs := make([]Observation, MaxReverseObservations+1)
+			for i := range obs {
+				obs[i] = Observation{Percent: 0}
+			}
+			in.Observations = obs
+		}, ErrTooManyObservations},
+		{"MaxCandidates が負", func(in *ReverseInput) { in.MaxCandidates = -1 }, ErrInvalidMaxCandidates},
+		{"MaxCandidates が上限超過", func(in *ReverseInput) { in.MaxCandidates = MaxReverseMaxCandidates + 1 }, ErrInvalidMaxCandidates},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1415,6 +1434,32 @@ func TestReverseValidationErrors(t *testing.T) {
 			if _, err := calcReverse(in); err != nil {
 				t.Errorf("%+v を拒否した: %v", o, err)
 			}
+		}
+	})
+	t.Run("上限ちょうどの件数・範囲は受け付ける(issue #110。ADR-0108)", func(t *testing.T) {
+		in := valid()
+		in.ItemCandidates = make([]*Item, MaxReverseItemCandidates)
+		for i := range in.ItemCandidates {
+			in.ItemCandidates[i] = &Item{ID: fmt.Sprintf("item%d", i)}
+		}
+		obs := make([]Observation, MaxReverseObservations)
+		for i := range obs {
+			obs[i] = Observation{Percent: 40}
+		}
+		in.Observations = obs
+		in.MaxCandidates = MaxReverseMaxCandidates
+		res, err := calcReverse(in)
+		if err != nil {
+			t.Fatalf("上限ちょうどの入力が失敗した: %v", err)
+		}
+		// 性格クラス2 × 持ち物候補64 = 128 件がちょうど MaxCandidates(128)と一致するので、
+		// 上限で切り取られても件数は変わらない。
+		want := len(reverseClasses) * MaxReverseItemCandidates
+		if want != MaxReverseMaxCandidates {
+			t.Fatalf("テストの前提が崩れている: 性格クラス×持ち物候補 = %d, MaxReverseMaxCandidates = %d", want, MaxReverseMaxCandidates)
+		}
+		if len(res.Candidates) != want {
+			t.Errorf("候補数 = %d, want %d", len(res.Candidates), want)
 		}
 	})
 	t.Run("既知側の個体が不正なら CalcDamage と同じエラー", func(t *testing.T) {

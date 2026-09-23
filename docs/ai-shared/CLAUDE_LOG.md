@@ -256,3 +256,20 @@
 
 ### Next
 ユーザーからの新規要望待ち(タイプバランス設計書 TB0〜TB6 はすべて完了・実データ確認済み)
+
+## 2026-09-23 タイプバランスレーン(Claude Code): Codexレビューissueの分配、issue #105対応
+
+### Done
+- Codexレビューで登録された open issue 29件を確認し、担当レーンごとにSendMessageで依頼を送信(データ・API・Web・iOS・素早さ)
+- needs-decision だった #103・#111 をユーザーに確認し、決定をDECISIONS.mdに記録(PR #125)。担当レーンへ着手可を連絡
+- issue #105(Argo CD導入のハッシュ・digest固定): ADR-0405を書き、quick-scanner相当の調査→spec-writer→implementer→critic(PASS)の順で実装。
+  `scripts/argocd-bootstrap.sh`(balance/speed共有)を新設し、install.yamlのSHA-256検証・argocd/dex/redisの3イメージのdigest固定・
+  balance/speed両runbookの重複した生URL直apply手順の一本化を実施。実クラスタ(k3d-pokecalc)で実行し、3イメージがdigest参照に
+  切り替わること・既存Applicationが無傷であることを確認(PR #140)
+- API・データレーン間のセッション名変更に伴う連絡を複数回中継
+
+### Open issues
+なし
+
+### Next
+ユーザーからの新規要望待ち

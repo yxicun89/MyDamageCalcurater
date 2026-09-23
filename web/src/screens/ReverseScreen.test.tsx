@@ -16,7 +16,7 @@ import { resolveAttackerPreset } from "../domain/attackerPresets";
 import { firstDamagingMove, learnsetMoves } from "../domain/moves";
 import { NEUTRAL_NATURE, ZERO_SP, defaultAbility, toEngineSpecies } from "../domain/requests";
 import { reverseItemCandidates } from "../domain/reverseItems";
-import type { Move, ReverseRequest, ReverseResult } from "../engine/types";
+import type { Item, Move, ReverseRequest, ReverseResult } from "../engine/types";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
 import {
@@ -150,7 +150,7 @@ describe("与えたダメージ(side defender)", () => {
     expect(request.unknownSpecies).not.toHaveProperty("learnset");
     expect(request.move).toEqual(move);
     expect(request.typeChart).toBe(master.typeChart);
-    expect(request.itemCandidates).toEqual(reverseItemCandidates("defender", master.items, move));
+    expect(request.itemCandidates).toEqual(reverseItemCandidates("defender", master.items, move).candidates);
     expect(request.itemCandidates?.[0]).toBeNull();
     expect(request).not.toHaveProperty("maxCandidates");
   });
@@ -236,7 +236,7 @@ describe("受けたダメージ(side attacker)", () => {
     expect(request.known.nature).toEqual(NEUTRAL_NATURE);
     expect(request.unknownSpecies).toEqual(toEngineSpecies(theirs));
     expect(request.move).toEqual(move);
-    expect(request.itemCandidates).toEqual(reverseItemCandidates("attacker", master.items, move));
+    expect(request.itemCandidates).toEqual(reverseItemCandidates("attacker", master.items, move).candidates);
     expect(request).not.toHaveProperty("maxCandidates");
   });
 
@@ -634,5 +634,100 @@ describe("結果の表示", () => {
 
       expect(await expectBackToLoading()).toBeInTheDocument();
     });
+  });
+});
+
+// P4-19(issue #110、ADR-0208、DECISIONS.md 2026-09-23): 候補・観測の件数上限。
+// 期待値(16件・64通り)は api/openapi.yaml の maxItems から直接書く(実装の写しにしない)。
+// 定数とのずれは domain/requestLimits.test.ts が openapi.yaml を読んで検出する。
+describe("件数の上限(issue #110)", () => {
+  const observationLimitReason = "観測は16件までです。追加するには、どれかの行を削除してください";
+  const itemsTruncatedNotice = "持ち物の候補が多いため、先頭から64通りまでで計算しています";
+
+  /** 観測が count 行になるまで「観測を追加」を押す(初期状態は1行)。 */
+  async function addObservationsUntil(user: UserEvent, count: number): Promise<void> {
+    for (let rows = 1; rows < count; rows += 1) {
+      await user.click(addObservationButton());
+    }
+  }
+
+  test("15件(上限-1)までは追加でき、理由は出ない", async () => {
+    const { user } = renderScreen();
+    await addObservationsUntil(user, 15);
+    expect(screen.getByRole("textbox", { name: "観測15" })).toBeInTheDocument();
+    expect(addObservationButton()).toBeEnabled();
+    expect(screen.queryByText(observationLimitReason)).toBeNull();
+  });
+
+  test("16件(上限)に達すると「観測を追加」が無効になり、理由がスクリーンリーダーにも伝わる", async () => {
+    const { user } = renderScreen();
+    await addObservationsUntil(user, 16);
+    expect(screen.getByRole("textbox", { name: "観測16" })).toBeInTheDocument();
+    expect(addObservationButton()).toBeDisabled();
+
+    // 理由は live region(role=status)で読み上げられ、ボタンからも aria-describedby で指す
+    const reason = screen.getByRole("status");
+    expect(reason).toHaveTextContent(observationLimitReason);
+    expect(addObservationButton()).toHaveAttribute("aria-describedby", reason.id);
+  });
+
+  test("上限に達した後は行が増えない(上限+1 にならない)", async () => {
+    const { user } = renderScreen();
+    await addObservationsUntil(user, 16);
+    await user.click(addObservationButton());
+    expect(screen.queryByRole("textbox", { name: "観測17" })).toBeNull();
+  });
+
+  test("1行削除すると再び追加でき、理由も消える", async () => {
+    const { user } = renderScreen();
+    await addObservationsUntil(user, 16);
+    await user.click(screen.getByRole("button", { name: "観測16を削除" }));
+    expect(screen.queryByRole("textbox", { name: "観測16" })).toBeNull();
+    expect(addObservationButton()).toBeEnabled();
+    expect(screen.queryByText(observationLimitReason)).toBeNull();
+  });
+
+  /** 物理・特殊のどちらの技でも防御側の候補になる架空の持ち物を count 件(マスタの順)。 */
+  function defenseItems(count: number): Item[] {
+    return Array.from({ length: count }, (_value, index) => ({
+      id: `example-many-def-${String(index)}`,
+      nameJa: `テスト防御${String(index)}`,
+      effect: { statMods: { def: 6144, spd: 6144 } },
+    }));
+  }
+
+  function renderWithItems(count: number): { user: UserEvent; engine: FakeEngine } {
+    const user = userEvent.setup();
+    const engine = createFakeEngine();
+    render(<ReverseScreen engine={engine} master={{ ...master, items: defenseItems(count) }} />);
+    return { user, engine };
+  }
+
+  async function observeOnce(user: UserEvent): Promise<void> {
+    await choosePair(user, speciesAt(0), speciesAt(1));
+    await user.type(observationInput(1), "45");
+  }
+
+  test("持ち物候補がちょうど64通り(なし + 63件)なら全部送り、絞り込みの案内は出さない", async () => {
+    const { user, engine } = renderWithItems(63);
+    await observeOnce(user);
+    await waitFor(() => {
+      expect(lastRequest(engine).itemCandidates).toHaveLength(64);
+    });
+    expect(screen.queryByText(itemsTruncatedNotice)).toBeNull();
+  });
+
+  test("持ち物候補が64通りを超えるときは64通りに絞って送り、絞り込んだことを画面に出す", async () => {
+    const { user, engine } = renderWithItems(64);
+    await observeOnce(user);
+    await waitFor(() => {
+      expect(lastRequest(engine).itemCandidates).toHaveLength(64);
+    });
+    // 先頭は持ち物なし、続きはマスタの順のまま(並べ替え・間引きをしない)
+    const sent = lastRequest(engine).itemCandidates;
+    expect(sent?.[0]).toBeNull();
+    expect(sent?.[1]?.id).toBe("example-many-def-0");
+    expect(sent?.at(-1)?.id).toBe("example-many-def-62");
+    expect(screen.getByText(itemsTruncatedNotice)).toBeInTheDocument();
   });
 });

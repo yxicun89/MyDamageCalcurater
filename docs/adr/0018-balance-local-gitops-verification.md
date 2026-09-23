@@ -13,6 +13,8 @@ TB0 の最後の項目「Git 変更 → Argo CD 同期 → Pod 更新」は、Ar
 ## 決定
 1. **Argo CD** は 2026-09-22 時点の最新の安定版 **v3.5.3** を、版を固定した公式 install manifest で `argocd` namespace に入れる
    (`kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.3/manifests/install.yaml`)。
+   **この導入経路は ADR-0405(2026-09-23)で `scripts/argocd-bootstrap.sh` に置き換えた**(取得した install.yaml の SHA-256 検証、
+   同梱イメージ〈argocd-server・dex・redis〉の digest 固定を追加。issue #105)。ここに残る URL 直 apply の記述は経緯として残す。
 2. **イメージの置き場所**は、クラスタ内のレジストリ(`services/balance/deploy/local-registry`。registry 3.1.1、digest 固定、hostPort 5000、emptyDir)。
    ノードの containerd は `localhost:5000` を平文で pull できる(containerd は localhost を HTTP で許可する)ので、クラスタの作り直しも
    containerd の設定変更も要らない。Mac からは `kubectl port-forward`(Mac 側は既定で 5001。macOS の AirPlay 受信が 5000 を使うことがあるため)経由で `crane` で push する(Docker Desktop のデーモンからは Mac の
