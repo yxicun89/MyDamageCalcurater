@@ -18,7 +18,13 @@ import {
 } from "../domain/attackerPresets";
 import { formatMoveCategory, formatPercentRange } from "../domain/format";
 import { firstDamagingMove, learnsetMoves } from "../domain/moves";
-import { defaultObservationUnit, parseObservation, type ObservationUnit } from "../domain/observations";
+import {
+  canAddObservation,
+  defaultObservationUnit,
+  parseObservation,
+  type ObservationUnit,
+} from "../domain/observations";
+import { MAX_ITEM_CANDIDATES, MAX_OBSERVATIONS } from "../domain/requestLimits";
 import {
   NEUTRAL_NATURE,
   ZERO_SP,
@@ -45,7 +51,13 @@ import type {
   ReverseResult,
   ReverseSide,
 } from "../engine/types";
-import { calcScreenText, masterOnlineText, reverseResultText, reverseScreenText } from "../i18n/ja";
+import {
+  calcScreenText,
+  masterOnlineText,
+  requestLimitText,
+  reverseResultText,
+  reverseScreenText,
+} from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type {
   MasterData,
@@ -146,6 +158,8 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   // P4-16b(ADR-0304 A-2・A-5・A-10・A-11): 使える機能。capabilities を省いたマスタは全部使える。
   const capabilities = masterCapabilities(master);
   const { speciesFor, abilitiesFor, register: registerSpeciesResolution } = useSpeciesResolutions();
+  // P4-19(issue 110): 観測の上限に達した理由(role="status")の id。ボタンの aria-describedby から指す。
+  const observationLimitReasonId = useId();
   const [side, setSide] = useState<ReverseSide>("defender");
   const [mySpeciesKey, setMySpeciesKey] = useState("");
   const [theirsSpeciesKey, setTheirsSpeciesKey] = useState("");
@@ -191,6 +205,16 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   const move = useMemo(
     () => moveOptions.find((candidate) => candidate.id === moveId) ?? null,
     [moveOptions, moveId],
+  );
+  // P4-19(issue 110、ADR-0208): 持ち物候補(itemCandidates)を組み立て、上限で絞り込んだかを画面に出す。
+  // useEffect の依存に truncated を含む新しい配列を毎回作らないよう、ここで useMemo にする
+  // (react-hooks/set-state-in-effect の無限ループを避ける)。
+  const itemCandidatesResult = useMemo(
+    () =>
+      move === null
+        ? { candidates: [null], truncated: false }
+        : reverseItemCandidates(side, master.items, move),
+    [side, master.items, move],
   );
 
   const parsedObservations = useMemo(
@@ -250,6 +274,9 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   }
 
   function addObservation(): void {
+    if (!canAddObservation(observations.length)) {
+      return;
+    }
     const row = newObservationRow(nextRowId(), defaultObservationUnit(side));
     setObservations((prev) => [...prev, row]);
   }
@@ -296,7 +323,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
       unknownSpecies: theirsSpecies,
       move,
       typeChart: master.typeChart,
-      itemCandidates: reverseItemCandidates(side, master.items, move),
+      itemCandidates: itemCandidatesResult.candidates,
       observations: validObservations,
     });
     void engine.calcReverse(request).then((result) => {
@@ -329,6 +356,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     hasInvalidObservation,
     validObservations,
     abilitiesFor,
+    itemCandidatesResult,
   ]);
 
   // 「絞り込み」の演出(design.md「画面: 逆算」)。新しい成功結果が届いたとき(completed の参照が
@@ -477,6 +505,11 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
       {!capabilities.effects && (
         <p className="reverse-screen__notice">{masterOnlineText.itemCandidatesUnavailable}</p>
       )}
+      {itemCandidatesResult.truncated && (
+        <p className="reverse-screen__notice">
+          {requestLimitText.itemCandidatesTruncated(MAX_ITEM_CANDIDATES)}
+        </p>
+      )}
 
       <div className="reverse-observations">
         {observations.map((row, index) => (
@@ -497,9 +530,19 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
             }}
           />
         ))}
-        <button type="button" onClick={addObservation}>
+        <button
+          type="button"
+          onClick={addObservation}
+          disabled={!canAddObservation(observations.length)}
+          aria-describedby={canAddObservation(observations.length) ? undefined : observationLimitReasonId}
+        >
           {reverseScreenText.addObservationLabel}
         </button>
+        {!canAddObservation(observations.length) && (
+          <p id={observationLimitReasonId} role="status" className="reverse-screen__notice">
+            {requestLimitText.observationLimitReached(MAX_OBSERVATIONS)}
+          </p>
+        )}
       </div>
 
       <ResultsSection

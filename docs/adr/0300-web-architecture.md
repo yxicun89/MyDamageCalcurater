@@ -149,6 +149,29 @@ requirements.md「A特化 / A振り(補正なし)/ 無振り」を次の3件に�
 - E2E(Playwright)は `make web-e2e`(オフライン)/ `make web-e2e-online`(例データを書き出して calc-svc を起動。要 Go)。
   ブラウザの起動が要るので `make test` には含めない。初回は `make web-e2e-install` で chromium を入れる。ルートの `make e2e`(`scripts/e2e.sh`、k3d のスモーク)へのつなぎ込みは DECISIONS.md に提案する。
 
+### 10. 候補・観測の件数上限の扱い(2026-09-23 追記。P4-19。issue 110 / ADR-0208 への追従)
+
+API レーンが `api/openapi.yaml` に上限を入れた(`itemVariants` / `itemCandidates` は null を含めて 64、
+`observations` は 16。ADR-0208、DECISIONS.md 2026-09-23)。engine(WASM)にも同じ上限が入るので、
+オフラインでも上限超過は失敗する。Web は**上限を超える入力をそもそも作らない**。
+
+- **値の正は `api/openapi.yaml`**。実行時に YAML は読めないので `web/src/domain/requestLimits.ts` に写し、
+  `requestLimits.test.ts` が openapi.yaml を読んで一致を検査する(コーディング規約 §2 の「同期を検査するテスト」)。
+  画面・ドメインの他の場所に 64 / 16 を直書きしない。
+- **絞り込みは決定的に、先頭から**。§6・§7 の「マスタの順序をそのまま使う(並べ替えない)」を崩さず、末尾から落とす
+  (`limitToMax`)。同じマスタ・同じ技からは常に同じ候補になる。
+- **黙って切り捨てない**。落とした候補があるかを `truncated` で返し、画面が文言(`requestLimitText`)で明示する。
+  P4-16b の `speciesSearchTruncated` と同じ UX(絞り込んだ事実を必ず見せる)。
+- **上限を適用するのは最終的な配列を作る1か所**: 一括計算は `defenderItemVariants`(null と「選んだ持ち物」を足して
+  配列を確定させるのはここだけなので、分類だけを行う `defensiveItemCandidates` には上限を置かない。
+  上限を2か所に分けて「64 − 予約枠」を見積もるより、確定した配列を1か所で切るほうが境界を間違えない)。
+  逆算は `reverseItemCandidates`(null を先頭に付けて配列を確定させるのがここ)。
+- **利用者が選んだ持ち物は落とさない**。`defenderItemVariants` が切るときは、選んだ持ち物が落ちる位置にあれば
+  最後に残る1枠をその持ち物に使う(マスタの順序は崩さない)。選んだ行が比較表から消えるほうが実害が大きいため。
+- **観測は 16 件で「観測を追加」を `disabled` にする**(`canAddObservation`)。理由は `role="status"` の live region で
+  読み上げ、ボタンからも `aria-describedby` で指す(無効なボタンは焦点を取れず説明が読まれないことがあるため、
+  両方を使う)。1行削除すれば再び追加できる。
+
 ## 却下・保留
 
 - **Web で engine を TypeScript に書き直す / 一部の計算を JS で持つ**: 計算は WASM(同じ engine)か API だけ。

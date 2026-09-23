@@ -144,8 +144,20 @@
   #113(improvement)逆算の数値入力で古い計算要求を抑止・キャンセル(200ms debounce・AbortSignal。iOS・API と連携)。
   次点: #98(bug)モバイル幅で計算・逆算画面が横に溢れる、#67(bug)2xx の契約外 JSON で API クライアントが例外を投げる(防御的処理)。
   連携(他レーン主担当。Web は連携のみ): #71(データ+Web+iOS 攻撃側プリセット単一化)・#72(API+Web ルート make e2e を Playwright へ)・
-  #78(API+Web 特性の無効・吸収の境界反映)・#110(主担当 API。calc 候補配列の上限)・#103(主担当 API・データ。M2保存データの
-  保持期間。ユーザー決定 2026-09-23 で needs-decision は解消済み。DECISIONS.md参照。Web は連携のみで主担当ではない)
+  #78(API+Web 特性の無効・吸収の境界反映)・#110(Web の担当分は P4-19 へ分離。DECISIONS.md 2026-09-23 参照)・
+  #103(主担当 API・データ。M2保存データの保持期間。ユーザー決定 2026-09-23 で needs-decision は解消済み。
+  DECISIONS.md参照。Web は連携のみで主担当ではない)
+- [x] P4-19 issue #110(セキュリティ。ADR-0300 §10。critic PASS: 境界値の網羅探索〈約1.2万ケース〉と変異テスト5件で
+  `itemVariants`/`itemCandidates` が常に64以下・`observations` が17件目を作れないことを確認済み)。
+  `domain/requestLimits.ts` に上限3定数(`api/openapi.yaml` の `maxItems` との同期をテストで検査)と
+  `limitToMax()`。`defenderItemVariants`・`reverseItemCandidates` が配列を作る最終地点で決定的に絞り込み、
+  選んだ持ち物は落とさない。逆算の「観測を追加」は16件で disabled + `role="status"` の理由表示。
+  絞り込みが起きたら計算・逆算の両画面に文言を明示(`requestLimitText`)。
+  残る軽微(ブロッカーではない。次に触るときに拾う): (1) `addObservation()` 自体のガード(ボタンの disabled とは
+  別の多層防御)を直接検証するテストが無い。(2) 観測上限到達時の `role="status"` 要素が条件付きマウントで、
+  常時マウント+中身の出し入れの方が読み上げが安定する可能性。(3) `ReverseScreen.tsx` の `move === null` 分岐に
+  「先頭は必ず null」の知識の小さな複製がある(実際には使われない経路)。
+  issue #110 は engine/WASM・iOS の追従待ちで、Web 単独ではクローズしない(DECISIONS.md 参照)
 
 ## M2: 保存・構築
 - [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)
