@@ -5,7 +5,7 @@
 import type { ComponentType } from "react";
 import type { BalanceClient } from "../api/balanceClient";
 import type { CalcEngine } from "../engine/types";
-import type { MasterData } from "../master/types";
+import type { MasterData, MasterSpeciesSearch } from "../master/types";
 import { BalanceScreen } from "../screens/BalanceScreen";
 import { CalcScreen } from "../screens/CalcScreen";
 import { ReverseScreen } from "../screens/ReverseScreen";
@@ -23,6 +23,12 @@ export interface ScreenProps {
   readonly master: MasterData;
   readonly client: BalanceClient;
   readonly speedClient: SpeedClient;
+  /**
+   * P4-16b(ADR-0304 A-10): 種族を都度引く口。App は今選ばれているマスタの取得口が検索付きのとき
+   * (`isSearchableMasterSource`)だけ渡す。`master.capabilities.speciesList` が false の画面は、
+   * ポケモンのドロップダウンの代わりにこの口で検索する。素早さの画面は master 自体を使わない。
+   */
+  readonly masterSearch?: MasterSpeciesSearch;
 }
 
 /** 画面 ID ごとのコンポーネント。 */

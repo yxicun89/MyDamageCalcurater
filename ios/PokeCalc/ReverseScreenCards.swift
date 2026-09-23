@@ -9,25 +9,26 @@ import SwiftUI
 /// 自分のカード: 種族セレクタ(ヘッダーがそのまま Menu ラベル。タイプバッジ込み)+ 持ち物セレクタ。
 struct ReverseMyCardView: View {
     let viewModel: ReverseViewModel
+    @State private var isSpeciesSearchPresented = false
 
-    private var species: SpeciesSummary? {
-        viewModel.speciesOptions.first(where: { $0.key == viewModel.mySpeciesKey })
-    }
+    private var species: SpeciesSummary? { viewModel.mySpecies }
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
-            Menu {
-                ForEach(viewModel.speciesOptions, id: \.key) { option in
-                    Button(option.nameJa) {
-                        Task { await viewModel.selectMySpecies(key: option.key) }
-                    }
-                }
+            // issue #68: `Menu` ではなく検索シートで選ぶ(`CalcScreenCards` と同じ理由)。
+            Button {
+                isSpeciesSearchPresented = true
             } label: {
                 SpeciesHeaderMenuLabel(species: species)
             }
             .accessibilityIdentifier("reverseMySpeciesPicker")
             .accessibilityLabel(species?.nameJa ?? SpeciesHeaderMenuLabel.placeholderName)
             .accessibilityHint("ポケモンを変える")
+            .sheet(isPresented: $isSpeciesSearchPresented) {
+                SpeciesSearchSheet(viewModel: viewModel) { option in
+                    Task { await viewModel.selectMySpecies(key: option.key) }
+                }
+            }
 
             Menu {
                 Button(BulkRowDisplay.itemLabel(itemId: nil, items: viewModel.itemOptions)) {
@@ -54,25 +55,25 @@ struct ReverseMyCardView: View {
 /// 相手のカード: 種族セレクタだけ(相手の SP・性格は逆算の対象なので入力しない)。
 struct ReverseOpponentCardView: View {
     let viewModel: ReverseViewModel
+    @State private var isSpeciesSearchPresented = false
 
-    private var species: SpeciesSummary? {
-        viewModel.speciesOptions.first(where: { $0.key == viewModel.opponentSpeciesKey })
-    }
+    private var species: SpeciesSummary? { viewModel.opponentSpecies }
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
-            Menu {
-                ForEach(viewModel.speciesOptions, id: \.key) { option in
-                    Button(option.nameJa) {
-                        Task { await viewModel.selectOpponentSpecies(key: option.key) }
-                    }
-                }
+            Button {
+                isSpeciesSearchPresented = true
             } label: {
                 SpeciesHeaderMenuLabel(species: species)
             }
             .accessibilityIdentifier("reverseOpponentSpeciesPicker")
             .accessibilityLabel(species?.nameJa ?? SpeciesHeaderMenuLabel.placeholderName)
             .accessibilityHint("ポケモンを変える")
+            .sheet(isPresented: $isSpeciesSearchPresented) {
+                SpeciesSearchSheet(viewModel: viewModel) { option in
+                    Task { await viewModel.selectOpponentSpecies(key: option.key) }
+                }
+            }
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)

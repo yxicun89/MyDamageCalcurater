@@ -10,6 +10,7 @@ import SwiftUI
 /// ダメージ計算画面。
 struct CalcScreenView: View {
     @State private var viewModel: CalcViewModel
+    @State private var isMoveSearchPresented = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private let backendDescription: String
@@ -165,13 +166,11 @@ struct CalcScreenView: View {
         }
     }
 
+    /// issue #68: 技の一覧も数百件になりうるため、`Menu` ではなく検索シートで選ぶ(ADR-0501
+    /// 「issue #68」1章「判断」)。入口の identifier(`movePicker`)は変えない。
     private var moveSelector: some View {
-        Menu {
-            ForEach(viewModel.moveOptions, id: \.id) { move in
-                Button(move.nameJa) {
-                    Task { await viewModel.selectMove(id: move.id) }
-                }
-            }
+        Button {
+            isMoveSearchPresented = true
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: SpacingToken.x1) {
@@ -196,6 +195,11 @@ struct CalcScreenView: View {
             .glassCard(cornerRadius: RadiusToken.input)
         }
         .accessibilityIdentifier("movePicker")
+        .sheet(isPresented: $isMoveSearchPresented) {
+            MoveSearchSheet(viewModel: viewModel, options: viewModel.moveOptions) { move in
+                Task { await viewModel.selectMove(id: move.id) }
+            }
+        }
     }
 
     private var loadingSlot: some View {

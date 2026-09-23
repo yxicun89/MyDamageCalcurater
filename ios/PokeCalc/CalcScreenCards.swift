@@ -10,28 +10,30 @@ import SwiftUI
 /// プリセットのチップはカードの外(`CalcScreenView` がカード行の直下に画面幅いっぱいで置く。批評 M3c)。
 struct AttackerCardView: View {
     let viewModel: CalcViewModel
+    @State private var isSpeciesSearchPresented = false
 
-    private var species: SpeciesSummary? {
-        viewModel.speciesOptions.first(where: { $0.key == viewModel.attackerSpeciesKey })
-    }
+    private var species: SpeciesSummary? { viewModel.attackerSpecies }
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
-            Menu {
-                ForEach(viewModel.speciesOptions, id: \.key) { option in
-                    Button(option.nameJa) {
-                        Task { await viewModel.selectAttacker(speciesKey: option.key) }
-                    }
-                }
+            // issue #68: 種族の一覧が数百件になりうるため、`Menu` ではなく検索シートで選ぶ
+            // (ADR-0501「issue #68」1章「判断」)。入口の identifier は変えない。
+            Button {
+                isSpeciesSearchPresented = true
             } label: {
                 SpeciesHeaderMenuLabel(species: species)
             }
             .accessibilityIdentifier("attackerSpeciesPicker")
-            // `Menu` はラベルの中身を個別の要素としてではなく、1つのボタンにまとめてしまう
-            // (子の `accessibilityIdentifier` は外から見えない)。XCUITest が種族名の入れ替わりを
-            // 検査できるよう、ボタン自体のラベルを種族名にする(批評 M3d 対応の副作用)。
+            // 子の `accessibilityIdentifier` は外から見えない(検索シートでも同じ制約を踏まえて
+            // 別 identifier を振っている)。XCUITest が種族名の入れ替わりを検査できるよう、
+            // ボタン自体のラベルを種族名にする(批評 M3d 対応の副作用)。
             .accessibilityLabel(species?.nameJa ?? SpeciesHeaderMenuLabel.placeholderName)
             .accessibilityHint("ポケモンを変える")
+            .sheet(isPresented: $isSpeciesSearchPresented) {
+                SpeciesSearchSheet(viewModel: viewModel) { option in
+                    Task { await viewModel.selectAttacker(speciesKey: option.key) }
+                }
+            }
 
             Menu {
                 Button(BulkRowDisplay.itemLabel(itemId: nil, items: viewModel.itemOptions)) {
@@ -61,25 +63,25 @@ struct AttackerCardView: View {
 /// 持ち物・プリセットは持たない。
 struct DefenderCardView: View {
     let viewModel: CalcViewModel
+    @State private var isSpeciesSearchPresented = false
 
-    private var species: SpeciesSummary? {
-        viewModel.speciesOptions.first(where: { $0.key == viewModel.defenderSpeciesKey })
-    }
+    private var species: SpeciesSummary? { viewModel.defenderSpecies }
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
-            Menu {
-                ForEach(viewModel.speciesOptions, id: \.key) { option in
-                    Button(option.nameJa) {
-                        Task { await viewModel.selectDefender(speciesKey: option.key) }
-                    }
-                }
+            Button {
+                isSpeciesSearchPresented = true
             } label: {
                 SpeciesHeaderMenuLabel(species: species)
             }
             .accessibilityIdentifier("defenderSpeciesPicker")
             .accessibilityLabel(species?.nameJa ?? SpeciesHeaderMenuLabel.placeholderName)
             .accessibilityHint("ポケモンを変える")
+            .sheet(isPresented: $isSpeciesSearchPresented) {
+                SpeciesSearchSheet(viewModel: viewModel) { option in
+                    Task { await viewModel.selectDefender(speciesKey: option.key) }
+                }
+            }
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)

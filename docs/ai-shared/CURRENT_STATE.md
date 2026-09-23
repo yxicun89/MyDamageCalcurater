@@ -34,11 +34,17 @@ P4-5 は Chrome で確認済み(Safari は未確認。人間の作業)。
 `new URL(path, baseUrl)` が例外を投げ、オンラインモードが常に失敗していた)→ 修正・回帰テスト追加 → 2回目 critic PASS。
 既存のオフライン・全画面・既存752件のテストは無変更。技の ID→実体化(`getSpecies.learnset`)は公開 API に手段が無く、
 データ/API レーンへ既定案付きで提案済み(DECISIONS.md 2026-09-23、未回答・急ぎではない)。
-Next: (1) P4-16b(画面側。ADR-0304 A-5): 種族の検索コンボボックス、技選択・持ち物候補比較・特性一覧が使えないときの
-無効化と案内表示(`web/src/screens/*.tsx` が対象。plan.md に軽微な積み残し4件も記録済み)。
+**P4-16b(画面側。ADR-0304 A-9〜A-11)も完了・main 統合済み(PR #134)**: CalcScreen・ReverseScreen は技・持ち物候補比較が
+無効なとき disabled+案内、種族一覧が無効なとき検索欄(`SpeciesSearchField`)。BalanceScreen は `speciesList`・`moves`
+が両方そろうまで画面ごと無効化し balance API を1本も呼ばない(A-9。技が空のまま誤解を招く診断を返さないため)。
+critic 1回目 FAIL(検索候補が1件でも「候補が多い」と誤案内する文言バグ、BalanceScreen のガードが実質未検証だった点)
+を修正・テスト強化して2回目 PASS。既存803件は無変更・新規30件追加(833件)。
+キーボード操作・CSS 等の残りは P4-16c として plan.md に理由付きで分離(ブロッカーではない)。
+Next: (1) P4-16c(検索欄のキーボード操作・CSS 等。plan.md 参照)。
 (2) P4-18(Codexレビュー issue。タイプバランスレーンから連絡): 優先 #99(アクセシビリティ)・#113(debounce/cancel)。
-(3) 続いて P5-5(構築ビルダー等)は record/team の API 待ち。
-(4) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
+(3) P4-17: 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら技を復活。
+(4) 続いて P5-5(構築ビルダー等)は record/team の API 待ち。
+(5) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)

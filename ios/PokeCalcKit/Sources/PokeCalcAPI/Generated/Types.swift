@@ -65,6 +65,8 @@ public protocol APIProtocol: Sendable {
     /// - **行の順序はプリセット優先**(presets × itemVariants。プリセットごとに itemVariants の順に並ぶ)。
     ///   行数は `len(presets) × len(itemVariants)`(itemVariants 省略時は 1)。
     /// - 各行の `defender` は、その行で使った防御側の SP・性格補正・実数値(ADR-0011 §3 の WASM 境界と同じ形)。
+    /// - 件数の上限(ADR-0208): `presets` は 8 件以下、`itemVariants` は 64 件以下で重複なし。
+    ///   超えたものは ID の解決・計算より前に 400 `invalid_input` で拒否する(本文の 1MiB 制限とは別)。
     ///
     ///
     /// - Remark: HTTP `POST /api/calc/bulk`.
@@ -80,6 +82,9 @@ public protocol APIProtocol: Sendable {
     /// - 候補は「性格クラス(neutral / plus)× itemCandidates」の全組合せで、説明できない候補も最も近い SP 付きで返す。
     /// - 並びは Mismatch 昇順 → Support 降順 → SPCount 降順 → 定義順(性格クラス neutral→plus、itemCandidates の添字)の
     ///   全順序(ADR-0010 §R4)。`maxCandidates` は並べた後に上から切る。`exactCount` は切る前の値。
+    /// - 件数の上限(ADR-0208): `itemCandidates` は 64 件以下で重複なし、`observations` は 16 件以下、
+    ///   `maxCandidates` は 0〜128。超えたものは ID の解決・計算より前に 400 `invalid_input` で拒否する
+    ///   (`maxCandidates` は返却件数だけの上限で、計算量は減らないため別に上限を置く)。
     /// 正確さより候補の提示を優先する。複数観測で絞り込む。
     ///
     ///
@@ -186,6 +191,8 @@ extension APIProtocol {
     /// - **行の順序はプリセット優先**(presets × itemVariants。プリセットごとに itemVariants の順に並ぶ)。
     ///   行数は `len(presets) × len(itemVariants)`(itemVariants 省略時は 1)。
     /// - 各行の `defender` は、その行で使った防御側の SP・性格補正・実数値(ADR-0011 §3 の WASM 境界と同じ形)。
+    /// - 件数の上限(ADR-0208): `presets` は 8 件以下、`itemVariants` は 64 件以下で重複なし。
+    ///   超えたものは ID の解決・計算より前に 400 `invalid_input` で拒否する(本文の 1MiB 制限とは別)。
     ///
     ///
     /// - Remark: HTTP `POST /api/calc/bulk`.
@@ -209,6 +216,9 @@ extension APIProtocol {
     /// - 候補は「性格クラス(neutral / plus)× itemCandidates」の全組合せで、説明できない候補も最も近い SP 付きで返す。
     /// - 並びは Mismatch 昇順 → Support 降順 → SPCount 降順 → 定義順(性格クラス neutral→plus、itemCandidates の添字)の
     ///   全順序(ADR-0010 §R4)。`maxCandidates` は並べた後に上から切る。`exactCount` は切る前の値。
+    /// - 件数の上限(ADR-0208): `itemCandidates` は 64 件以下で重複なし、`observations` は 16 件以下、
+    ///   `maxCandidates` は 0〜128。超えたものは ID の解決・計算より前に 400 `invalid_input` で拒否する
+    ///   (`maxCandidates` は返却件数だけの上限で、計算量は減らないため別に上限を置く)。
     /// 正確さより候補の提示を優先する。複数観測で絞り込む。
     ///
     ///

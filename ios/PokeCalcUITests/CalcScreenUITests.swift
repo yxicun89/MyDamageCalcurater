@@ -13,6 +13,15 @@ final class CalcScreenUITests: XCTestCase {
     /// `Resources/species.json` の2番目。計算画面の既定の攻撃側(先頭の種族)とは別の種族にして、
     /// 構築から呼び出したときに種族が実際に変わったことを検査できるようにする(P6-2d)。
     private static let secondMockSpeciesName = "テストモンに"
+    private static let secondMockSpeciesKey = "9002-000"
+    /// `Resources/species.json` の3番目(issue #68: 種族検索シートで打ってから選ぶ確認用)。
+    private static let thirdMockSpeciesName = "テストモンさん"
+    private static let thirdMockSpeciesKey = "9003-000"
+    /// `Resources/moves.json` のうち、既定の攻撃側(1番目の種族)の learnset にある技
+    /// (issue #68: 技検索シートで打ってから選ぶ確認用。先頭の物理技とは別の技にして、選び直したことを
+    /// 検査できるようにする)。
+    private static let searchableAttackerMoveName = "テストわざとくしゅA"
+    private static let searchableAttackerMoveID = "test-move-special-a"
     /// P6-2d のテスト用の構築ビルダーで付けるニックネーム(画面上の他の文字列と重複しない値にして
     /// `Menu` の項目をラベルで一意に選べるようにする)。
     private static let mockMemberNickname = "テストこたいP6"
@@ -53,8 +62,9 @@ final class CalcScreenUITests: XCTestCase {
         let addMemberButton = element(app, "addMemberButton")
         XCTAssertTrue(addMemberButton.waitForExistence(timeout: Self.existenceTimeout))
         addMemberButton.tap()
-        // 計算画面の既定の攻撃側(先頭の種族)とは別の種族を選ぶ(呼び出しで種族が変わったことを
-        // 検査できるように)。
+        // issue #68: 種族は検索シート経由で選ぶ(`Menu` ではなくなった)。計算画面の既定の攻撃側
+        // (先頭の種族)とは別の種族を選ぶ(呼び出しで種族が変わったことを検査できるように)。
+        XCTAssertTrue(element(app, "speciesSearchSheet").waitForExistence(timeout: Self.existenceTimeout))
         let speciesOption = app.buttons[Self.secondMockSpeciesName]
         XCTAssertTrue(speciesOption.waitForExistence(timeout: Self.existenceTimeout))
         speciesOption.tap()
@@ -210,5 +220,61 @@ final class CalcScreenUITests: XCTestCase {
         let presetSelectedAgain = NSPredicate(format: "isSelected == true")
         expectation(for: presetSelectedAgain, evaluatedWith: presetButton, handler: nil)
         waitForExpectations(timeout: Self.existenceTimeout)
+    }
+
+    /// issue #68: `attackerSpeciesPicker` をタップすると `speciesSearchSheet` が出て、検索欄に打つと
+    /// 候補が絞られ、1件タップするとシートが閉じて選択が反映される(ADR-0501「issue #68」8章)。
+    /// モックの架空種族は3件しか無いが、シート・検索の仕組みそのものが動くことを見る(unit test 側が
+    /// `MasterSearchField` の200件規模の絞り込みを固定しているので、ここでは流れの確認に絞る)。
+    func testAttackerSpeciesSearchSheetFiltersAndSelects() {
+        let app = launchCalcScreen()
+
+        let attackerPicker = element(app, "attackerSpeciesPicker")
+        XCTAssertTrue(attackerPicker.waitForExistence(timeout: Self.existenceTimeout))
+        attackerPicker.tap()
+
+        XCTAssertTrue(element(app, "speciesSearchSheet").waitForExistence(timeout: Self.existenceTimeout))
+        // `.accessibilityIdentifier("speciesSearchField")` は `.searchable()` の List 自体には付くが
+        // (`element(app, "speciesSearchField")` で見つかる)、実際にタップ・入力できる `UISearchBar` の
+        // テキストフィールドには渡らない(実装時に確認した制約。`Menu` の子の identifier が渡らないのと
+        // 同種の UIKit 橋渡しの制約)。XCUITest は `.searchFields`(システムの検索欄の型)で辿る。
+        let field = app.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: Self.existenceTimeout))
+        field.tap()
+        field.typeText(Self.thirdMockSpeciesName)
+
+        let result = element(app, "speciesSearchResult-\(Self.thirdMockSpeciesKey)")
+        XCTAssertTrue(result.waitForExistence(timeout: Self.existenceTimeout))
+        // 絞り込まれて、打った語と一致しない種族(2番目)は結果一覧から消えているはず。
+        // `app.buttons[secondMockSpeciesName]` のようにラベルの文字列だけで探すと、シートの裏に
+        // 隠れている防御側カードのヘッダー(既定の防御側 = 2番目の種族。ラベルが同じ文字列)を
+        // 誤って拾ってしまう(要素はシートの下でも `exists` が true のまま)。検索結果一覧に**限定**
+        // した identifier(`speciesSearchResult-<key>`)で確かめる。
+        XCTAssertFalse(element(app, "speciesSearchResult-\(Self.secondMockSpeciesKey)").exists)
+        result.tap()
+
+        XCTAssertFalse(element(app, "speciesSearchSheet").exists, "選ぶとシートが閉じる")
+        XCTAssertEqual(attackerPicker.label, Self.thirdMockSpeciesName, "選択が攻撃側カードに反映される")
+    }
+
+    /// issue #68: `movePicker` も同じ流れ(検索シート)で選べる。
+    func testMoveSearchSheetFiltersAndSelects() {
+        let app = launchCalcScreen()
+
+        let movePicker = element(app, "movePicker")
+        XCTAssertTrue(movePicker.waitForExistence(timeout: Self.existenceTimeout))
+        movePicker.tap()
+
+        XCTAssertTrue(element(app, "moveSearchSheet").waitForExistence(timeout: Self.existenceTimeout))
+        let field = app.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: Self.existenceTimeout))
+        field.tap()
+        field.typeText(Self.searchableAttackerMoveName)
+
+        let result = element(app, "moveSearchResult-\(Self.searchableAttackerMoveID)")
+        XCTAssertTrue(result.waitForExistence(timeout: Self.existenceTimeout))
+        result.tap()
+
+        XCTAssertFalse(element(app, "moveSearchSheet").exists, "選ぶとシートが閉じる")
     }
 }

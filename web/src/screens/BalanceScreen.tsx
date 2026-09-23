@@ -21,8 +21,9 @@ import {
   superEffectiveLabel,
 } from "../domain/balanceLabels";
 import { learnsetMoves } from "../domain/moves";
-import { balanceScreenText, typeNameJa } from "../i18n/ja";
-import type { MasterData } from "../master/types";
+import { balanceScreenText, masterOnlineText, typeNameJa } from "../i18n/ja";
+import { masterCapabilities } from "../master/capabilities";
+import type { MasterData, MasterSpeciesSearch } from "../master/types";
 import "./BalanceScreen.css";
 
 type Schemas = components["schemas"];
@@ -35,6 +36,12 @@ type RecommendationsMembers = Schemas["RecommendationsRequest"]["members"];
 export interface BalanceScreenProps {
   readonly master: MasterData;
   readonly client: BalanceClient;
+  /**
+   * P4-16b(ADR-0304 A-9・A-10): 種族を都度引く口。この画面は
+   * `capabilities.speciesList` と `capabilities.moves` が両方そろうまで使えない(A-9)ので、
+   * 今は受け取るだけで使わない。技が戻る P4-17 で、各枠の検索欄に使う。
+   */
+  readonly masterSearch?: MasterSpeciesSearch;
 }
 
 /** 技の枠数(services/balance/api/openapi.yaml の moveIds の maxItems)。 */
@@ -178,6 +185,10 @@ function useMemberListActions(setList: Dispatch<SetStateAction<MemberState[]>>):
 
 /** タイプバランスの画面(ADR-0303 §2・§7)。 */
 export function BalanceScreen({ master, client }: BalanceScreenProps) {
+  // P4-16b(ADR-0304 A-9): speciesList・moves が両方そろうまで画面ごと使えない(技が空のまま
+  // threats/recommendations を呼ぶと誤解を招く診断になるため。effects はこの判定に入れない)。
+  const capabilities = masterCapabilities(master);
+  const balanceAvailable = capabilities.speciesList && capabilities.moves;
   const [members, setMembers] = useState<MemberState[]>(() => [emptyMember(0)]);
   const memberActions = useMemberListActions(setMembers);
 
@@ -250,7 +261,9 @@ export function BalanceScreen({ master, client }: BalanceScreenProps) {
   // ポケモンを選んだメンバーが1人もいなければ呼ばない。setState は .then の中だけで行う(CalcScreen.tsx と
   // 同じ作法)。応答が届く前に入力が変わったら(cancelled)、古い応答は無視する。
   useEffect(() => {
-    if (analyzeMembers.length === 0) {
+    // P4-16b(ADR-0304 A-9): speciesList・moves のどちらかが使えなければ、balance API を1本も呼ばない
+    // (誤解を招く診断を出さない)。
+    if (!balanceAvailable || analyzeMembers.length === 0) {
       return;
     }
     let cancelled = false;
@@ -265,11 +278,11 @@ export function BalanceScreen({ master, client }: BalanceScreenProps) {
     // analyzeKey が種族・特性の内容そのものを表すので、これだけを見る(members を直接見ると
     // 技だけの変更でも実行され直してしまう)。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, analyzeKey]);
+  }, [client, analyzeKey, balanceAvailable]);
 
   // 攻撃技(変化技でない技)を選んだメンバーが1人もいなければ呼ばない。
   useEffect(() => {
-    if (coverageKey === "") {
+    if (!balanceAvailable || coverageKey === "") {
       return;
     }
     let cancelled = false;
@@ -283,11 +296,11 @@ export function BalanceScreen({ master, client }: BalanceScreenProps) {
     };
     // coverageKey が送る内容そのものを表す(空なら呼ばない)。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, coverageKey]);
+  }, [client, coverageKey, balanceAvailable]);
 
   // P4-12b: パーティ1体以上・仮想敵1体以上そろわなければ呼ばない(ADR-0400 §1)。
   useEffect(() => {
-    if (threatsKey === "") {
+    if (!balanceAvailable || threatsKey === "") {
       return;
     }
     let cancelled = false;
@@ -301,11 +314,11 @@ export function BalanceScreen({ master, client }: BalanceScreenProps) {
     };
     // threatsKey が送る内容そのものを表す(空なら呼ばない)。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, threatsKey]);
+  }, [client, threatsKey, balanceAvailable]);
 
   // P4-12b: パーティ1体以上そろえば呼ぶ(仮想敵の入力では呼び直さない。ADR-0303 §7)。
   useEffect(() => {
-    if (recommendationsKey === "") {
+    if (!balanceAvailable || recommendationsKey === "") {
       return;
     }
     let cancelled = false;
@@ -319,7 +332,7 @@ export function BalanceScreen({ master, client }: BalanceScreenProps) {
     };
     // recommendationsKey が送る内容そのものを表す(空なら呼ばない。仮想敵は含まない)。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, recommendationsKey]);
+  }, [client, recommendationsKey, balanceAvailable]);
 
   // idle・loading は入力から毎レンダー導出する(CalcScreen.tsx と同じ作法)。
   const analyzeState: RequestState<Schemas["AnalyzeResponse"]> =
@@ -337,6 +350,9 @@ export function BalanceScreen({ master, client }: BalanceScreenProps) {
 
   return (
     <div className="balance-screen">
+      {/* P4-16b(ADR-0304 A-9): speciesList・moves のどちらかが使えないときは画面ごと使えない案内を出し、
+          入力は残すが全部 disabled にする(balance API は1本も呼ばない)。 */}
+      {!balanceAvailable && <p className="balance-screen__notice">{masterOnlineText.balanceUnavailable}</p>}
       <div className="balance-screen__members">
         {members.map((member, index) => (
           <MemberFields
@@ -346,6 +362,7 @@ export function BalanceScreen({ master, client }: BalanceScreenProps) {
             member={member}
             master={master}
             removable={members.length > 1}
+            disabled={!balanceAvailable}
             onSelectSpecies={(speciesKey) => {
               memberActions.selectSpecies(master, index, speciesKey);
             }}
@@ -361,7 +378,11 @@ export function BalanceScreen({ master, client }: BalanceScreenProps) {
           />
         ))}
       </div>
-      <button type="button" onClick={memberActions.add} disabled={members.length >= MAX_MEMBERS}>
+      <button
+        type="button"
+        onClick={memberActions.add}
+        disabled={!balanceAvailable || members.length >= MAX_MEMBERS}
+      >
         {balanceScreenText.addMemberLabel}
       </button>
 
@@ -374,6 +395,7 @@ export function BalanceScreen({ master, client }: BalanceScreenProps) {
             member={threat}
             master={master}
             removable={threats.length > 1}
+            disabled={!balanceAvailable}
             onSelectSpecies={(speciesKey) => {
               threatActions.selectSpecies(master, index, speciesKey);
             }}
@@ -389,7 +411,11 @@ export function BalanceScreen({ master, client }: BalanceScreenProps) {
           />
         ))}
       </div>
-      <button type="button" onClick={threatActions.add} disabled={threats.length >= MAX_MEMBERS}>
+      <button
+        type="button"
+        onClick={threatActions.add}
+        disabled={!balanceAvailable || threats.length >= MAX_MEMBERS}
+      >
         {balanceScreenText.addThreatLabel}
       </button>
 
@@ -454,6 +480,8 @@ interface MemberFieldsProps {
   readonly member: MemberState;
   readonly master: MasterData;
   readonly removable: boolean;
+  /** P4-16b(ADR-0304 A-9): 画面が使えないとき(speciesList・moves のどちらかが false)、欄を全部 disabled にする。 */
+  readonly disabled: boolean;
   readonly onSelectSpecies: (speciesKey: string) => void;
   readonly onSelectAbility: (abilityId: string) => void;
   readonly onSelectMove: (slot: number, moveId: string) => void;
@@ -470,6 +498,7 @@ function MemberFields({
   member,
   master,
   removable,
+  disabled,
   onSelectSpecies,
   onSelectAbility,
   onSelectMove,
@@ -483,6 +512,7 @@ function MemberFields({
       <select
         aria-label={balanceScreenText.speciesLabel}
         value={member.speciesKey}
+        disabled={disabled}
         onChange={(event) => {
           onSelectSpecies(event.target.value);
         }}
@@ -497,6 +527,7 @@ function MemberFields({
       <select
         aria-label={balanceScreenText.abilityLabel}
         value={member.abilityId}
+        disabled={disabled}
         onChange={(event) => {
           onSelectAbility(event.target.value);
         }}
@@ -512,6 +543,7 @@ function MemberFields({
           key={slot}
           aria-label={balanceScreenText.moveLabel(slot + 1)}
           value={member.moveIds[slot] ?? ""}
+          disabled={disabled}
           onChange={(event) => {
             onSelectMove(slot, event.target.value);
           }}
@@ -525,7 +557,7 @@ function MemberFields({
         </select>
       ))}
       {removable && (
-        <button type="button" onClick={onRemove} className="balance-member__remove">
+        <button type="button" onClick={onRemove} disabled={disabled} className="balance-member__remove">
           {removeLabel}
         </button>
       )}
