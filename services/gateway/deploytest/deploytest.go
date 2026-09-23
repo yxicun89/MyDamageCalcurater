@@ -201,10 +201,12 @@ type Deployment struct {
 
 // PodSpec は Pod の spec の一部。
 type PodSpec struct {
-	AutomountServiceAccountToken *bool              `yaml:"automountServiceAccountToken"`
-	SecurityContext              PodSecurityContext `yaml:"securityContext"`
-	Containers                   []Container        `yaml:"containers"`
-	Volumes                      []Volume           `yaml:"volumes"`
+	AutomountServiceAccountToken *bool `yaml:"automountServiceAccountToken"`
+	// HostNetwork は true だとノードのネットワーク namespace を直接使い、Service を介さず公開しうる(ADR-0210 §2)。
+	HostNetwork     bool               `yaml:"hostNetwork"`
+	SecurityContext PodSecurityContext `yaml:"securityContext"`
+	Containers      []Container        `yaml:"containers"`
+	Volumes         []Volume           `yaml:"volumes"`
 }
 
 // PodSecurityContext は Pod の securityContext の一部。
@@ -234,6 +236,8 @@ type Container struct {
 type ContainerPort struct {
 	Name          string `yaml:"name"`
 	ContainerPort int    `yaml:"containerPort"`
+	// HostPort はノードのポートへ直接バインドし、Service を介さず公開しうる(ADR-0210 §2)。
+	HostPort int `yaml:"hostPort"`
 }
 
 // EnvVar は環境変数(valueFrom は使っているかどうかだけ見る)。
@@ -300,9 +304,11 @@ type Volume struct {
 type Service struct {
 	Spec struct {
 		// Type は空なら ClusterIP(k8s の既定)。ADR-0210 §2 は LoadBalancer / NodePort を作らないことを求める。
-		Type     string            `yaml:"type"`
-		Selector map[string]string `yaml:"selector"`
-		Ports    []struct {
+		Type string `yaml:"type"`
+		// ExternalIPs は type に関わらずノードの外部 IP へ直接公開できる(ADR-0210 §2)。
+		ExternalIPs []string          `yaml:"externalIPs"`
+		Selector    map[string]string `yaml:"selector"`
+		Ports       []struct {
 			Name       string    `yaml:"name"`
 			Port       int       `yaml:"port"`
 			TargetPort yaml.Node `yaml:"targetPort"`

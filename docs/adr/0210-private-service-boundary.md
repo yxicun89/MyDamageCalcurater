@@ -1,6 +1,6 @@
 # ADR-0210: 私設サービスの境界(issue #148)
 
-- 状態: 提案(2026-09-23。issue #148 の API レーン担当分の設計。実装〈Kustomize の書き換え〉は未着手で、静的テストは失敗したままにしてある)
+- 状態: 採用(2026-09-23。issue #148 の API レーン担当分。critic PASS。cloud overlay から gateway の Ingress を除去する削除 patch を実装し、AC-B1〜B3 は緑。`kubectl kustomize deploy/k8s/overlays/cloud` に Ingress・LoadBalancer・NodePort が無いことを確認済み)
 - 日付: 2026-09-23
 - 関連: issue #148(監査ベース `705183e30f6a2afb9d4e322a20cab1079b86e615`)、
   docs/ai-shared/DECISIONS.md 2026-09-23「issue #148(クラウド公開前のアクセス境界・認証方針)をユーザーが決定」、
@@ -101,6 +101,8 @@ ADR-0209 §2 は「端末 ID は秘密でないので、失効・再発行の概
 
 `deploy/k8s/overlays/cloud` の描画結果に、**`kind: Ingress` を1つも含めない**。
 Service の `spec.type` は `ClusterIP`(既定)だけで、**`LoadBalancer` も `NodePort` も作らない**。
+同じ理由で、`Service.spec.externalIPs`・Pod の `hostNetwork: true`・コンテナの `hostPort` も使わない
+(いずれも Service の type に関わらずノードの外部 IP やネットワークを直接公開しうる経路のため)。
 クラウドでの到達経路は Ingress Controller ではなく、**tailnet に直接参加する経路**にする。
 
 到達経路の第一候補(実装は別タスク・運用レーンと共同):
@@ -111,6 +113,14 @@ Service の `spec.type` は `ClusterIP`(既定)だけで、**`LoadBalancer` も 
 どちらも tailnet の内側にだけ名前と到達性を作り、クラウドの public な L4/L7 ロードバランサーを作らない。
 どちらを採るかは provider(AWS/GCP)を決めるときに運用レーンと決める(§7)。この ADR は
 「**public な入口を作らない**」「**cloud overlay に hostless HTTP Ingress を残さない**」の2点だけを固定する。
+
+**候補1(Tailscale Operator の `tailscale` ingressClass)を採る場合の注意**: この方式は `kind: Ingress` を
+Kubernetes リソースとして作る(ただし `ingressClassName: tailscale` で、public な Ingress Controller には
+渡らない)。§5 の AC-B1・AC-B2 は現状「`kind: Ingress` を1つも含めない」という条件で書いており、
+候補1を採用する時点でこの条件とテストは**そのままでは矛盾する**。候補1に進むときは、AC-B1・AC-B2 を
+「`ingressClassName` が `tailscale`(または private であることが明らかな値)以外の Ingress が無い」という
+条件に改めるか、`tailscale` ingressClass の Ingress を検査から除外する追記をこの ADR に行うこと。
+テストの条件を先に緩めてはいけない(絶対ルール6)。
 
 #### 2.2 却下した案: Ingress に host 制約と TLS を足す
 
@@ -229,13 +239,18 @@ issue #148 の共通の受け入れ条件「全経路で TLS を終端し、HTTP
 
 1. **構造の検査(常に走る)**: `deploytest` に `OverlayObjects`(`resources` / `components` を再帰的に辿り、
    `$patch: delete` の削除 patch を適用して「残るオブジェクト」を返す)を足し、cloud overlay に
-   Ingress が残らないこと・`LoadBalancer` / `NodePort` の Service が無いことを検査する。
-   さらに overlay 配下のファイルを本文検索して、patch で `type: LoadBalancer` / `NodePort` を後付けしていないことも見る
+   Ingress が残らないこと・`LoadBalancer` / `NodePort` の Service が無いこと・Service の `externalIPs`・
+   Deployment の `hostNetwork: true`・コンテナの `hostPort` が無いことを検査する。
+   さらに overlay 配下のファイルを本文検索して、patch でこれらを後付けしていないことも見る
    (`OverlayObjects` は削除以外の patch を適用しないため、その穴を本文検索で塞ぐ)。
 2. **描画の検査(`kubectl` があるときだけ。無ければ skip)**: `kubectl kustomize deploy/k8s/overlays/cloud` の
-   出力に `kind: Ingress` と `type: LoadBalancer` / `type: NodePort` が無いことを検査する。
+   出力に `kind: Ingress`・`type: LoadBalancer`・`type: NodePort`・`externalIPs`・`hostNetwork: true`・
+   `hostPort` が無いことを検査する。
    実装手段に依存しない「意図そのもの」の検査で、1 の再現の限界(削除以外の patch を見ない)を補う。
    `smoke_test.go` が curl の無い環境で skip する前例に合わせる。
+   (critic のレビューで見つかった穴: `externalIPs`・`hostNetwork`・`hostPort` は当初この2層をすり抜けた。
+   `Service`/`PodSpec`/`ContainerPort` にフィールドを足し、変異テスト(値を注入して赤になることを確認)で
+   検出を確かめた上でこの版に反映した)
 
 加えて `base/gateway/ingress.yaml` の先頭コメントが §2.3 の内容(local / k3d 専用・cloud では使わない・ADR-0210)を
 持つことを検査する(`web_docs_test.go` / `pokedex_docs_test.go` と同じ文書検査のパターン)。
@@ -261,7 +276,7 @@ ADR-0209 §1 は「v1 は個人利用 + Tailscale 内に固定する」とし、
 (§4.3 の `TestContractHasNoAuthentication` が落ちる)、gateway のレート制限・同時実行数・監査ログ、
 Web / iOS のトークン保管、認証なしで許す endpoint の列挙。
 
-### 7. 他レーンへの依頼(DECISIONS.md 用の文案は §8)
+### 7. 他レーンへの依頼(DECISIONS.md への転記は 2026-09-23 の追記エントリ)
 
 | レーン | 依頼 |
 |---|---|
@@ -276,14 +291,20 @@ Web / iOS のトークン保管、認証なしで許す endpoint の列挙。
 - レート制限・同時実行数(ADR-0208 の残存リスク。private でも学習目的で入れてよいが別タスク)。
 - 監視・ログ・バックアップの runbook 本体(運用レーン・P7-4)。
 - Web / iOS の接続設定の実装。
+- **`make gen` の生成物ドリフト検査**: `TestContractHasNoAuthentication`(§4.3・G5)は `api.GetSwagger()` 経由で
+  仕様を読む。これは `api/openapi.yaml` を編集した直後・`make gen` 前の一時的な状態には効かないが、
+  この契約テストの弱点は本 ADR 固有ではなく、`services/*/internal/httpapi/contract_test.go` など既存の契約テスト
+  全てに共通する前提(絶対ルール1「API変更は必ず openapi.yaml から」で `make gen` が徹底される前提)。
+  この ADR だけこの1テストを直読みに変えるのは既存パターンと不整合になるため見送り、リポジトリ共通の
+  生成物ドリフト検査(CI での `make gen` 後 `git diff --exit-code` 等)は別タスクとして残す。
 
 ## 受け入れ条件
 
 | AC | 内容 | 担当テスト / 確認 |
 |---|---|---|
-| **AC-B1** | `deploy/k8s/overlays/cloud` から到達するオブジェクトに `kind: Ingress` が1つも無く、Service の `spec.type` は `ClusterIP`(既定)だけ(`LoadBalancer` / `NodePort` が無い) | `deploytest.TestCloudOverlayHasNoPublicEntrypoint`(**現状は赤**) |
-| **AC-B2** | `kubectl kustomize deploy/k8s/overlays/cloud` の描画結果に `kind: Ingress`・`type: LoadBalancer`・`type: NodePort` が無い(kubectl が無ければ skip) | `deploytest.TestCloudOverlayRenderHasNoPublicEntrypoint`(**現状は赤**) |
-| **AC-B3** | `deploy/k8s/base/gateway/ingress.yaml` の先頭コメントに「local / k3d 専用」「cloud overlay では使わない」「ADR-0210」がある | `deploytest.TestBaseGatewayIngressIsDocumentedAsLocalOnly`(**現状は赤**) |
+| **AC-B1** | `deploy/k8s/overlays/cloud` から到達するオブジェクトに `kind: Ingress` が1つも無く、Service の `spec.type` は `ClusterIP`(既定)だけ(`LoadBalancer` / `NodePort` が無い)。Service の `externalIPs`・Deployment の `hostNetwork: true`・コンテナの `hostPort` も無い | `deploytest.TestCloudOverlayHasNoPublicEntrypoint`(緑) |
+| **AC-B2** | `kubectl kustomize deploy/k8s/overlays/cloud` の描画結果に `kind: Ingress`・`type: LoadBalancer`・`type: NodePort`・`externalIPs`・`hostNetwork: true`・`hostPort` が無い(kubectl が無ければ skip) | `deploytest.TestCloudOverlayRenderHasNoPublicEntrypoint`(緑) |
+| **AC-B3** | `deploy/k8s/base/gateway/ingress.yaml` の先頭コメントに「local / k3d 専用」「cloud overlay では使わない」「ADR-0210」がある | `deploytest.TestBaseGatewayIngressIsDocumentedAsLocalOnly`(緑) |
 | **AC-B4** | `deploy/k8s/overlays/local` / `local-api` の到達経路は変わらない(gateway の Ingress は local では従来どおり存在する) | 既存 `cmd/gateway.TestManifestGatewayIngress` が緑のまま |
 | **AC-B5** | gateway は `Authorization` / `Cookie` / `X-Api-Key` を見ない(付けても付けなくても同じ結果。これらを理由に 401 / 403 を返さない)。端末 ID を変えても同じ本文が同じ上流へ同じ内容で届く。不正・欠落の端末 ID は 400 で 401 / 403 ではない | `httpapi.TestDeviceIDIsNotAuthentication`(緑) |
 | **AC-B6** | 許可外オリジン・`Origin` 無しでも 200 で上流に届く(CORS ヘッダは付かない) | `httpapi.TestCORSIsNotAccessControl`(緑) |
@@ -304,8 +325,13 @@ Web / iOS のトークン保管、認証なしで許す endpoint の列挙。
 - [x] ADR-0012(`/api/balance` は balance の Ingress に最長一致で届く)は local の話で、cloud に Ingress を出さない決定と衝突しない
       (cloud に balance を入れるときは §7 の依頼どおり同じ制約を適用する)。
 - [x] ADR-0104 §8(cloud で CronJob を suspend)と §2 の cloud overlay の変更は同じファイルを触るが、目的が独立している。
+- [x] §2.1 の到達経路候補1(Tailscale Operator の `tailscale` ingressClass)は `kind: Ingress` を作るため、
+      現状の AC-B1・AC-B2(Ingress が1つも無い)と将来衝突する。候補1に進むときの対応(条件の改定。テストを先に
+      緩めない)を §2.1 に明記した。
 - [x] 絶対ルール1(API 変更は openapi.yaml から)に触れない(この ADR は API 契約を変えない。AC-B8)。
 - [x] 絶対ルール6(テストを消さない・弱めない)を守る: 既存テストは1つも変えず、AC-B4 で local の経路が変わらないことを固定する。
+- [x] §5・AC-B1・AC-B2 の検査範囲(`externalIPs`・`hostNetwork`・`hostPort`)は §2.1 の決定文と一致する
+      (critic レビューで見つかった穴。`hostNetwork: true` を注入する変異テストで実際に赤くなることを確認した上でこの版に反映)。
 
 ## 却下した案(§2.2・§3.2 以外)
 

@@ -41,15 +41,36 @@ func TestCloudOverlayHasNoPublicEntrypoint(t *testing.T) {
 				"private overlay 経由のみの方針では公開の入口を作らない(ADR-0210 §2)",
 				CloudOverlayDir, o.Name, o.File)
 		}
-		if o.Kind != "Service" {
-			continue
-		}
-		var svc Service
-		o.Decode(t, &svc)
-		for _, bad := range publicServiceTypes {
-			if strings.EqualFold(svc.Spec.Type, bad) {
-				t.Errorf("%s の Service %q が type: %s(%s 由来)。公開 IP を作らない(ADR-0210 §2)",
-					CloudOverlayDir, o.Name, svc.Spec.Type, o.File)
+		switch o.Kind {
+		case "Service":
+			var svc Service
+			o.Decode(t, &svc)
+			for _, bad := range publicServiceTypes {
+				if strings.EqualFold(svc.Spec.Type, bad) {
+					t.Errorf("%s の Service %q が type: %s(%s 由来)。公開 IP を作らない(ADR-0210 §2)",
+						CloudOverlayDir, o.Name, svc.Spec.Type, o.File)
+				}
+			}
+			if len(svc.Spec.ExternalIPs) > 0 {
+				t.Errorf("%s の Service %q が externalIPs を設定している(%s 由来)。"+
+					"type に関わらずノード外部 IP へ直接公開しない(ADR-0210 §2)", CloudOverlayDir, o.Name, o.File)
+			}
+		case "Deployment":
+			var dep Deployment
+			o.Decode(t, &dep)
+			podSpec := dep.Spec.Template.Spec
+			if podSpec.HostNetwork {
+				t.Errorf("%s の Deployment %q が hostNetwork: true(%s 由来)。"+
+					"ノードのネットワークを直接使わない(ADR-0210 §2)", CloudOverlayDir, o.Name, o.File)
+			}
+			for _, c := range podSpec.Containers {
+				for _, p := range c.Ports {
+					if p.HostPort != 0 {
+						t.Errorf("%s の Deployment %q のコンテナ %q が hostPort: %d(%s 由来)。"+
+							"ノードのポートへ直接バインドしない(ADR-0210 §2)",
+							CloudOverlayDir, o.Name, c.Name, p.HostPort, o.File)
+					}
+				}
 			}
 		}
 	}
@@ -70,6 +91,15 @@ func TestCloudOverlayHasNoPublicEntrypoint(t *testing.T) {
 			if regexp.MustCompile(`(?m)^\s*type:\s*` + bad + `\s*$`).MatchString(body) {
 				t.Errorf("%s が type: %s を設定している。公開 IP を作らない(ADR-0210 §2)", rel, bad)
 			}
+		}
+		if regexp.MustCompile(`(?m)^\s*externalIPs:\s*$`).MatchString(body) {
+			t.Errorf("%s が externalIPs を設定している。type に関わらずノード外部 IP へ直接公開しない(ADR-0210 §2)", rel)
+		}
+		if regexp.MustCompile(`(?m)^\s*hostNetwork:\s*true\s*$`).MatchString(body) {
+			t.Errorf("%s が hostNetwork: true を設定している。ノードのネットワークを直接使わない(ADR-0210 §2)", rel)
+		}
+		if regexp.MustCompile(`(?m)^\s*hostPort:\s*[1-9][0-9]*\s*$`).MatchString(body) {
+			t.Errorf("%s が hostPort を設定している。ノードのポートへ直接バインドしない(ADR-0210 §2)", rel)
 		}
 	}
 }
@@ -98,6 +128,18 @@ func TestCloudOverlayRenderHasNoPublicEntrypoint(t *testing.T) {
 			t.Errorf("kubectl kustomize %s の描画結果に type: %s がある。公開 IP を作らない(ADR-0210 §2)",
 				CloudOverlayDir, bad)
 		}
+	}
+	if regexp.MustCompile(`(?m)^\s*externalIPs:\s*$`).MatchString(rendered) {
+		t.Errorf("kubectl kustomize %s の描画結果に externalIPs がある。"+
+			"type に関わらずノード外部 IP へ直接公開しない(ADR-0210 §2)", CloudOverlayDir)
+	}
+	if regexp.MustCompile(`(?m)^\s*hostNetwork:\s*true\s*$`).MatchString(rendered) {
+		t.Errorf("kubectl kustomize %s の描画結果に hostNetwork: true がある。"+
+			"ノードのネットワークを直接使わない(ADR-0210 §2)", CloudOverlayDir)
+	}
+	if regexp.MustCompile(`(?m)^\s*hostPort:\s*[1-9][0-9]*\s*$`).MatchString(rendered) {
+		t.Errorf("kubectl kustomize %s の描画結果に hostPort がある。"+
+			"ノードのポートへ直接バインドしない(ADR-0210 §2)", CloudOverlayDir)
 	}
 }
 
