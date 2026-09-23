@@ -148,11 +148,23 @@
   保持期間。ユーザー決定 2026-09-23 で needs-decision は解消済み。DECISIONS.md参照。Web は連携のみで主担当ではない)
 
 ## M2: 保存・構築
-- [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)
-- [ ] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)
-- [ ] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰)
-- [ ] P5-4 team-svc(構築 CRUD、Showdown 形式入出力)
-- [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー
+
+**P5-1〜P5-4 の前提(先に決めた設計。issue #103・ADR-0209「M2 保存データの保持・削除・端末 ID 境界」に従う)**:
+端末 ID は認証ではなくデータの分割キー / 生の計算イベントは作成から90日・構築とお気に入りは端末の最終アクセスから540日で失効 /
+端末単位の全削除はサービスごとに1本(`DELETE /api/record/device-data`・`DELETE /api/team/device-data`。冪等・`partial` の繰り返し)/
+削除の墓石(`devices.purged_at`)で JetStream の遅延イベントの復活を防ぐ。受け入れ条件は ADR-0209 の AC-D / AC-P / AC-R / AC-L。
+
+- [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)。
+  スキーマは ADR-0209 §3 に従う(`devices` テーブル〈`last_seen_at`・`purged_at`〉、全表に `device_id`、
+  `favorites` は `calc_events` を参照せず個体スナップショットを自分で持つ)。保持日数は環境変数で渡し、起動時に検証する
+- [ ] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)。
+  ストリームの `max_age` は7日、イベントに発生時刻(`occurred_at`)を載せる(ADR-0209 §7・#6)
+- [ ] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰)。
+  ADR-0209 §5.3 の契約を `api/openapi.yaml` に入れて `make gen`(`store_unavailable` の追加を含む)→
+  分離(§6)・全削除(§5)・失効ジョブ(§4)・ログ(§3)を実装。時間減衰の半減期は保持期間90日より短くする
+- [ ] P5-4 team-svc(構築 CRUD、Showdown 形式入出力)。
+  ADR-0209 §5.3 の `deleteTeamDeviceData` と §6 の分離規則(他端末のリソース ID は 404 `not_found`)を含む
+- [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー。ADR-0209 §8 の文言と「この端末のデータを削除」の UI を含む
 - [x] P5-6 技の追加効果(使用者自身のランク変化。例: ニトロチャージで自分の素早さ+1)を engine の Move・マスタ・importer・export に足す(判定レーンからの提案。DECISIONS.md 2026-09-22。ADR-0005 に沿い、追加効果の対象=self/target・確率・ランク変化量をデータとして持つ。ADR-0107。critic PASS。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。公開APIへの露出は判定レーンの要件確定後)
 
 ## M3: iOS
@@ -229,7 +241,8 @@
 - [ ] P7-1 kube-prometheus-stack / Loki、各サービスのメトリクス
 - [ ] P7-2 SLO(計算API p99 < 100ms、可用性)とダッシュボード
 - [ ] P7-3 ArgoCD(GitOps)
-- [ ] P7-4 MySQL/TiDB バックアップと復元テスト
+- [ ] P7-4 MySQL/TiDB バックアップと復元テスト(ADR-0209 §9 を要件に含める: バックアップに `devices`〈墓石〉を含める /
+  Ready の前に墓石の再適用と失効ジョブの強制実行 / JetStream は再生しない / 世代30日。受け入れ条件は AC-B1〜B3)
 
 ## ブロッカー
 (ここに止まった理由と試したことを書く)
