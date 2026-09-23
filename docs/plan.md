@@ -144,8 +144,16 @@
   #113(improvement)逆算の数値入力で古い計算要求を抑止・キャンセル(200ms debounce・AbortSignal。iOS・API と連携)。
   次点: #98(bug)モバイル幅で計算・逆算画面が横に溢れる、#67(bug)2xx の契約外 JSON で API クライアントが例外を投げる(防御的処理)。
   連携(他レーン主担当。Web は連携のみ): #71(データ+Web+iOS 攻撃側プリセット単一化)・#72(API+Web ルート make e2e を Playwright へ)・
-  #78(API+Web 特性の無効・吸収の境界反映)・#110(主担当 API。calc 候補配列の上限)・#103(主担当 API・データ。M2保存データの
-  保持期間。ユーザー決定 2026-09-23 で needs-decision は解消済み。DECISIONS.md参照。Web は連携のみで主担当ではない)
+  #78(API+Web 特性の無効・吸収の境界反映)・#110(Web の担当分は P4-19 へ分離。DECISIONS.md 2026-09-23 参照)・
+  #103(主担当 API・データ。M2保存データの保持期間。ユーザー決定 2026-09-23 で needs-decision は解消済み。
+  DECISIONS.md参照。Web は連携のみで主担当ではない)
+- [ ] P4-19 issue #110(セキュリティ。API レーンの契約変更 PR #130 が main 統合済み。DECISIONS.md 2026-09-23
+  「calc の候補・観測件数に上限を置く」に基づく Web レーンの依頼分。API レーンから直接連絡あり):
+  (1) 逆算画面の「観測を追加」を16件(`api/openapi.yaml` の `observations.maxItems`)で無効化し、理由を表示する
+  (アクセシビリティ通知。`aria-live` 等)。(2) 持ち物候補(`defensiveItemCandidates`・`reverseItemCandidates`)が
+  64件(`itemVariants`/`itemCandidates` の `maxItems`。null要素を含む)を超える場合、黙って切り捨てず決定的に
+  絞り込み(マスタの順序をそのまま使う既存の規約どおり先頭から)、絞り込んだことを画面に明示する
+  (P4-16b の `speciesSearchTruncated` と同じ UX パターンを踏襲できる)
 
 ## M2: 保存・構築
 - [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)
