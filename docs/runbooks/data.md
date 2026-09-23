@@ -48,7 +48,43 @@ unset pw
 ```
 確認: 画面にパスワードは出ず、0 より大きい数値が1行表示される。
 
-## 6. 後片付け(クラスタは残したまま止める)
+## 6. 手動実行と CronJob の重複を確かめる(issue #106 / ADR-0109)
+
+`make import-k8s` の手動 Job と CronJob `pokedex-import` の定期 Job が同時に走っても、片方だけが最後まで処理を
+進め、もう片方はロックを取れずに終わることを確かめる(`services/pokedex/importer/cronjob_lock_test.go` の
+ネイティブ Go の統合テストとは別に、実物の CronJob・PVC・busybox の `flock` で確認する)。
+
+### 6a. 定期実行が動いている間に手動実行を重ねる
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc create job --from=cronjob/pokedex-import pokedex-import-manual-race1
+kubectl -n pokecalc create job --from=cronjob/pokedex-import pokedex-import-manual-race2
+kubectl -n pokecalc wait --for=condition=complete job/pokedex-import-manual-race1 job/pokedex-import-manual-race2 --timeout=600s || true
+kubectl -n pokecalc get jobs pokedex-import-manual-race1 pokedex-import-manual-race2
+```
+確認: 2つの Job がどちらも最終的に `COMPLETIONS` 1/1 になる(ロックに負けた側は終了コード1で
+1〜2回自動再試行してから成功する。`kubectl -n pokecalc get pods -l job-name=pokedex-import-manual-race1`・
+`...race2` の `RESTARTS` 列のどちらかが 0 より大きければ、実際に排他が働いた証拠)。
+
+### 6b. Pod のログでロック競合を確認する(秘密が出ていないことも見る)
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc logs -l job-name=pokedex-import-manual-race1 --all-containers --prefix | grep -i 'ロック\|lock' || true
+kubectl -n pokecalc logs -l job-name=pokedex-import-manual-race2 --all-containers --prefix | grep -i 'ロック\|lock' || true
+```
+確認: どちらかの Job のログに、ロックを取れず諦めた旨のメッセージが出ている(DSN・パスワード等の秘密は出ない)。
+
+### 6c. 後片付け
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc delete job pokedex-import-manual-race1 pokedex-import-manual-race2
+```
+確認: 両方とも `job.batch "pokedex-import-manual-raceN" deleted` と表示される。
+
+## 7. 後片付け(クラスタは残したまま止める)
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"

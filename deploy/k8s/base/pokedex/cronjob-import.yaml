@@ -15,7 +15,9 @@ spec:
   # 週1回・土曜 12:00(日本時間)。ノート PC 上で動く k3d が起動している可能性の高い時間帯。
   schedule: "0 12 * * 6"
   timeZone: Asia/Tokyo
-  # 手動実行(make import-k8s)と重なっても同時に投入しない(取得のキャッシュ書き込みが競合する)。
+  # 同じ CronJob が作る定期 Job 同士の重複だけを防ぐ(k8s の concurrencyPolicy の仕様上、
+  # make import-k8s が作る手動 Job はこの対象にならない)。手動実行と CronJob の定期実行が
+  # 重なった場合の排他は tools/importer/cronjob.sh 内の flock で行う(ADR-0109)。
   concurrencyPolicy: Forbid
   # 7日未満(次の予定と重ねない)。クラスタが予定時刻に止まっていても6日以内に起動すれば追いつく。
   startingDeadlineSeconds: 518400
