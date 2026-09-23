@@ -1012,3 +1012,11 @@ Impact(Web/iOS レーン): ADR-0209 §8 の文言と削除 UI をお願いした
 履歴は記録から90日、お気に入りと構築は最後に使った日から18か月です」(4) ボタン「この端末のデータを削除」→ 確認「元に戻せません」
 → record と team の両方が completed になってから「削除しました」。partial は続けて再送、503 は「サーバーに届きませんでした」。
 API が実装されるまでは文言と画面だけ先に置いてよい。
+
+## 2026-09-23: issue #148(クラウド公開前のアクセス境界・認証方針)をユーザーが決定
+Decision: 私設サービスを維持する(issue #148の既定案どおり)。Tailscale等のprivate overlay networkだけからgatewayへ到達させ、
+public LoadBalancer/Ingressは作らない。端末IDは引き続き認証ではなく、`docs/requirements.md`の「自分1人・認証なし」の前提を変えない。
+Reason: ユーザー回答(AskUserQuestion、2026-09-23)。OIDC等の本格認証導入は今のところ不要と判断。
+Impact: 主担当のAPI・Web・iOS・運用レーンへ連絡し、issue #148の共通の受け入れ条件(ADRへの記録、`overlays/cloud`のhostless Ingressが
+無検討で公開されない静的テスト、private案でのtailnet/ACL・失効手順のrunbook化、CORS・端末IDを認証として扱わない回帰テスト)に沿って
+進めてもらう。データ・タイプバランス・素早さレーンは連携(今のところ追加対応は無い見込み)。
