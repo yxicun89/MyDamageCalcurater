@@ -8,7 +8,8 @@ Status: Phase 1・P2-1・P1-10・Phase R・P1-13・P1-11・P1-12・P2-1b・P2-1c
 Status(追記): P2-3b(無効・吸収の特性)も完了・main 統合済み(ADR-0106)。calc・gateway の pokedex-svc 接続(API レーンの依頼)も PR #87 で解決済み(api-smoke で master=pokedex 確認済み)。
 Status(追記): P5-6(技の追加効果によるランク変化。ADR-0107)完了・critic PASS(1往復)・**main 統合済み(PR #132)**。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。`move_effects` 別表・`MasterMove.effect`(内部API)まで。公開APIへの露出(判定レーンが技IDからランク変化を引く経路)は判定レーンの要件確定後に別途対応。
 Status(追記): issue #110 のデータレーン担当分(ADR-0108)完了・critic PASS(1往復)・**main 統合済み(PR #138)**。`engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ件数・範囲の上限を追加し、wasmapi は DTO 変換より前に検査して HTTP との parity を確保。issue #110 は Web・iOS レーンの追従が残っている限りクローズしない。
-Next: (1) Codexレビュー issue #106(排他制御)を優先、続いて #104/#109/#112。(2) 他レーンからの依頼待ち。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)
+Status(追記): issue #106(排他制御)完了・critic PASS・**main 統合済み(PR #155)**。`tools/importer/cronjob.sh` に `flock`(非ブロッキング)を追加し、手動Job(`make import-k8s`)と定期CronJobの同時実行を防ぐ(ADR-0109)。Docker(Linux)で実際の排他動作を確認済み。k3dでの手動確認(docs/runbooks/data.md §6)は未実行のまま残っている。
+Next: (1) Codexレビュー issue #104/#109/#112。(2) k3dが動いているときに issue #106 の手動確認(docs/runbooks/data.md §6)を行う。(3) 他レーンからの依頼待ち。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
@@ -28,30 +29,22 @@ verify-m1.md を完成版にした: P2-2c/d・P2-3・P3-3 が main に入り、k
 計算・逆算・タイプバランス(仮想敵・おすすめタイプ含む)を実地確認(pokedex-svc は実データ投入済みだが、
 gateway/calc-svc のマスタ参照先はまだ pokedex-svc に向いていない。API レーンの依頼 d が一時停止中)。
 P4-5 は Chrome で確認済み(Safari は未確認。人間の作業)。
-**P4-16(オンライン MasterSource の基盤。ADR-0304)完了・main 統合済み(PR #128)**: `createOnlineMasterSource`
-(持ち物・性格を全件取得、種族は `searchSpecies`/`getSpecies` の検索専用インターフェース)、
-`MasterData.capabilities`(技選択・持ち物候補比較・特性一覧は公開 API の欠落により明示的に無効化)、
-`App.tsx`/`main.tsx` の配線。critic 1回目 FAIL で重大バグ発見(`apiBaseUrl()` の既定値 `"/"` で
-`new URL(path, baseUrl)` が例外を投げ、オンラインモードが常に失敗していた)→ 修正・回帰テスト追加 → 2回目 critic PASS。
-既存のオフライン・全画面・既存752件のテストは無変更。技の ID→実体化(`getSpecies.learnset`)は公開 API に手段が無く、
-データ/API レーンへ既定案付きで提案済み(DECISIONS.md 2026-09-23、未回答・急ぎではない)。
-**P4-16b(画面側。ADR-0304 A-9〜A-11)も完了・main 統合済み(PR #134)**: CalcScreen・ReverseScreen は技・持ち物候補比較が
-無効なとき disabled+案内、種族一覧が無効なとき検索欄(`SpeciesSearchField`)。BalanceScreen は `speciesList`・`moves`
-が両方そろうまで画面ごと無効化し balance API を1本も呼ばない(A-9。技が空のまま誤解を招く診断を返さないため)。
-critic 1回目 FAIL(検索候補が1件でも「候補が多い」と誤案内する文言バグ、BalanceScreen のガードが実質未検証だった点)
-を修正・テスト強化して2回目 PASS。既存803件は無変更・新規30件追加(833件)。
-キーボード操作・CSS 等の残りは P4-16c として plan.md に理由付きで分離(ブロッカーではない)。
-**P4-19(issue #110 セキュリティ。ADR-0300 §10)も完了・main 統合済み(PR #142)**: 持ち物候補
-(defenderItemVariants・reverseItemCandidates)を配列を作る最終地点で64件に決定的に絞り込み(選んだ持ち物は
-落とさない)、観測は16件で「観測を追加」を disabled+role="status"案内。critic PASS(セキュリティ関連のため
-境界値を重点検証: candidates 0〜80件×選択パターン×compareON/OFFの約1.2万ケース網羅探索と変異テスト5件で、
-itemVariants/itemCandidates が常に64以下・observationsが17件目を作れないことを確認)。既存857件は無変更・
-新規9件追加(866件)。データレーンの engine/wasmapi 側(ADR-0108・PR #138)も main 統合済み。issue #110 は
-iOS の追従待ちで Web 単独ではクローズしない。
-Next: (1) P4-16c(検索欄のキーボード操作・CSS 等。plan.md 参照)。
-(2) P4-18(Codexレビュー issue。タイプバランスレーンから連絡): 優先 #99(アクセシビリティ)・#113(debounce/cancel)。
-(3) P4-17: 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら技を復活。
-(4) 続いて P5-5(構築ビルダー等)は record/team の API 待ち。
+**P4-16・P4-16b・P4-16c(オンライン MasterSource。ADR-0304)完了・main 統合済み(PR #128・#134・#153)**:
+`createOnlineMasterSource`(持ち物・性格を全件取得、種族は検索専用インターフェース)、`MasterData.capabilities`
+(公開 API に無い機能を明示的に無効化)、画面側(CalcScreen・ReverseScreen は技・持ち物候補比較が無効なとき
+disabled+案内、種族一覧が無効なとき検索欄 `SpeciesSearchField`。BalanceScreen は speciesList・moves が両方
+そろうまで画面ごと無効化)、検索欄のキーボード操作(WAI-ARIA "List Autocomplete with Automatic Selection")と
+CSS。3段階とも critic 1回目 FAIL→修正→2回目 PASS で完了(重大バグ・文言バグ・IME変換中のキー横取りなど、
+いずれも critic が発見)。既存752件は無変更のまま最終907件。技の ID→実体化(`getSpecies.learnset`)は公開 API
+に手段が無く、データ/API レーンへ既定案付きで提案済み(DECISIONS.md 2026-09-23、未回答・急ぎではない)。
+**P4-19(issue #110 セキュリティ。ADR-0300 §10)も完了・main 統合済み(PR #142)**: 持ち物候補を配列を作る
+最終地点で64件に決定的に絞り込み、観測は16件で disabled+案内。critic PASS(境界値の網羅探索と変異テストで
+上限超過が起きないことを確認)。データレーンの engine/wasmapi 側(ADR-0108・PR #138)も main 統合済み。
+issue #110 は iOS の追従待ちで Web 単独ではクローズしない。
+Next: (1) P4-18(Codexレビュー issue。タイプバランスレーンから連絡): 優先 #99(アクセシビリティ)・
+#113(debounce/cancel)。(2) P4-17: 技の ID 解決が入ったら技を復活。(3) P4-20: issue #148(アクセス境界・
+認証方針)。中心は運用/API レーンで Web は ADR の「接続方法」節への記載程度(依頼が来てから着手)。
+(4) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち)。
 (5) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
 
 ## iOS

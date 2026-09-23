@@ -125,18 +125,14 @@
   無効(案内 + 入力を全部 disabled + balance API を呼ばない。A-9)。検索を画面へ渡す経路は `ScreenProps.masterSearch?`
   (A-10)。P4-16 の積み残し(1)(2)(response.json 側の AbortError 再送出)も本タスクで解消・回帰テスト追加。
   (3)(4)は影響が無い軽微事項のため P4-16c にまとめて送る
-- [ ] P4-16c P4-16b の critic 指摘で今回見送った残り(ブロッカーではないが今回中に必須ではないため分離。
-  critic の許容どおり明記): (1) 種族の検索候補がキーボードで選べない(↑↓/Enter/Escape・`aria-activedescendant`
-  が無い。WAI-ARIA Combobox パターン未実装。`web/src/screens/SpeciesSearchField.tsx`)。(2) 検索欄に CSS が無い
-  (`species-search__*` のクラスが未スタイルのまま。`docs/design.md` に沿った見た目を用意する)。
-  (3) `onlineSource.test.ts` の `urlOf` に基点を足した副作用で `natures`/`species` の呼び出しが絶対 URL の origin を
-  検査していない(`items` のみ検査済み)。(4) 検索中に入力を空へ戻した直後に古い検索が届くケースの未カバー
-  (`createDeferredSpeciesSearch` で1件追加)。(5) `aria-controls` の参照先が閉じているとき DOM に無い・
-  `aria-selected` が常に false。(6) P4-16b の2回目 critic PASS の指摘: `BalanceScreen.online.test.tsx` の
-  A-9 回帰テストは `analyze`/`recommendations` のガード削除は検知するが `coverage`/`threats` のガード削除は
-  検知しない(技1つ・仮想敵1体も選んでから capabilities を切り替える形にすれば4つとも覆える)。
-  (7) `CalcScreen.online.test.tsx` の truncated 肯定側テストに候補件数(`SPECIES_SEARCH_LIMIT` 件)のアサーションが無い
-  (否定側と非対称)
+- [x] P4-16c P4-16b の critic 指摘で見送った残り(ADR-0304 A-12): 種族の検索候補を↑↓/Enter/Escape で操作できる
+  WAI-ARIA "List Autocomplete with Automatic Selection" パターンを実装(`web/src/screens/SpeciesSearchField.tsx`)、
+  `SpeciesSearchField.css` を design.md トークンのみで新規作成、`aria-controls`/`aria-activedescendant` は候補
+  非表示時に属性ごと外す。加えて(3)`onlineSource.test.ts` の origin 未検査、(4)入力を空に戻した直後の遅延応答、
+  (6)`BalanceScreen.online.test.tsx` の A-9 ガードが coverage/threats を検知していなかった点、(7)truncated
+  肯定側テストの非対称、をテスト強化で解消。critic 1回目 FAIL(IME変換中のEnter・矢印キーを誤って候補選択に
+  使ってしまう退行を発見)→ `isComposing` ガード追加・`preventDefault()` は処理したときだけに修正・回帰テスト
+  2件追加(907件)→再確認予定
 - [ ] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら
   `capabilities.moves` を true にして技を復活させる
 - [ ] P4-18 Codex コードレビューの issue(Web レーン主担当。タイプバランスレーンから 2026-09-23 に連絡・`gh issue view <番号>`)。
@@ -158,6 +154,11 @@
   常時マウント+中身の出し入れの方が読み上げが安定する可能性。(3) `ReverseScreen.tsx` の `move === null` 分岐に
   「先頭は必ず null」の知識の小さな複製がある(実際には使われない経路)。
   issue #110 は engine/WASM・iOS の追従待ちで、Web 単独ではクローズしない(DECISIONS.md 参照)
+- [ ] P4-20 issue #148(クラウド公開前のアクセス境界・認証方針。主担当 API・Web・iOS・運用。ユーザー決定
+  2026-09-23「私設サービスを維持する」。DECISIONS.md参照): 中心は Ingress・TLS・overlay・gateway の運用レーン
+  作業で `web/` 本体への変更は今のところ見込み薄。Web の分担は ADR に記録する「Web の接続方法」の節への記載と、
+  端末IDを認証であるかのように誤解させる表示・文言が無いことの確認(現状そのような UI は無いはず)。
+  ADR 作成が API/運用レーンで進んでから、依頼が来た時点で着手する(今は着手しない)
 
 ## M2: 保存・構築
 
@@ -312,7 +313,8 @@ endpoint(`GET /api/pokedex/moves/{key}`)が無いと実装できない。API レ
 (ここに要望と対応状況を書く)
 - [x] issue #110(セキュリティ。Codex レビュー)の API レーン担当分: `POST /api/calc/bulk`・`/api/calc/reverse` の候補・観測配列に件数上限が無く、1MiB未満の小さな本文で計算量を増幅できた(2,000×2,000 で約9.4秒)。契約(`maxItems`/`uniqueItems`/`maximum`。ADR-0208)を追加し、calc-svc の生成ラッパは検証しないため(実測確認済み)自前検証をID解決・engine呼び出しより前に実装。critic PASS、実HTTPで境界値と再現手順の解消(0.9ms・engine未到達)を確認。engine/wasmapi(データレーン)・Web・iOSへの追従は DECISIONS.md に既定案付きで依頼(issue はレーンの完了までクローズしない)
 - [x] issue #110 のデータレーン担当分: `engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ件数・範囲の上限(presets 8・itemVariants 64・itemCandidates 64・observations 16・maxCandidates 0..128)を追加(ADR-0108)。HTTP を経由しない直接呼び出し・WASM でも計算量を増幅できないようにした。wasmapi は DTO 変換より前に同じ検査を重ねて置き、複数の違反が重なっても HTTP と同じ `invalid_input` が先に出るようにした(parity)。`MaxCandidates` の負の値は、従来「無制限」扱いだったのを ADR-0208 の契約(`minimum: 0`)に合わせて拒否するよう変更(既存テストの期待値を更新。理由は ADR-0108 決定4)。critic PASS(1往復)。Web・iOS の追従(観測16件でUI無効化・持ち物候補64件超の扱い)は ADR-0208 §4 のまま未着手
-- [x] issue #148(クラウド公開前のアクセス境界・認証方針。ユーザー決定「私設サービスを維持する」)の API レーン担当分: `deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定(ADR-0210)。TLS 終端は gateway/クラスタの Ingress では行わず Tailscale(`tailscale serve`)に任せる方針を決定。端末IDが認証として機能しないこと・CORSが到達制御でないことの回帰テストを追加(`TestDeviceIDIsNotAuthentication`・`TestCORSIsNotAccessControl`・`TestContractHasNoAuthentication`)。`base`のgateway Ingress本体は local(k3d)専用として残し、先頭コメントで明記。ADR-0209 §1(クラウド公開へ進む判断)は「公開しない」で確定した旨を追記。critic PASS(1往復)。運用(tailnet ACL・失効手順のrunbook)・Web/iOS(接続先をtailnet名に)への依頼はDECISIONS.mdに既定案付きで記録(issue はレーンの完了までクローズしない)
+- [x] issue #148(クラウド公開前のアクセス境界・認証方針。ユーザー決定「私設サービスを維持する」)の API レーン担当分: `deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定(ADR-0210)。TLS 終端は gateway/クラスタの Ingress では行わず Tailscale(`tailscale serve`)に任せる方針を決定。端末IDが認証として機能しないこと・CORSが到達制御でないことの回帰テストを追加(`TestDeviceIDIsNotAuthentication`・`TestCORSIsNotAccessControl`・`TestContractHasNoAuthentication`)。`base`のgateway Ingress本体は local(k3d)専用として残し、先頭コメントで明記。ADR-0209 §1(クラウド公開へ進む判断)は「公開しない」で確定した旨を追記。critic PASS。運用(tailnet ACL・失効手順のrunbook)・Web/iOS(接続先をtailnet名に)への依頼はDECISIONS.mdに既定案付きで記録(issue はレーンの完了までクローズしない)
+- [x] issue #106(データ・運用レーン。Codex レビュー)手動 import Job(`make import-k8s`)と定期 CronJob が同時実行できる問題: `concurrencyPolicy: Forbid` は同じ CronJob が作る Job 同士にしか効かず、`kubectl create job --from=cronjob/...` が作る独立した手動 Job とは排他しないため、共有 PVC(`pokedex-import-cache`)上の取得キャッシュ・DB 投入が競合しうる実バグだった。`tools/importer/cronjob.sh` に busybox の `flock`(非ブロッキング)を `fetch.mjs` 呼び出しより前に追加し、取得〜投入の全工程をアプリ側で排他(ADR-0109)。ロック取得失敗は既存の終了コード規約どおり終了コード1(再試行可能)にし、`cronjob-import.yaml`(podFailurePolicy・concurrencyPolicy とも既存のまま)・`services/pokedex/cmd/import`(Go CLI)・Makefile は無変更。2プロセス同時起動の統合テスト(`cronjob_lock_test.go`)を追加し、Docker(Linux・busybox flock)で実際にロックが機能することを確認済み(macOS はローカルに flock が無いため自動 Skip)。critic PASS。k3d での手動確認手順は docs/runbooks/data.md §6 に追記(未実行)
 - MySQL の manifest に MYSQL_DATABASE が無く、初回起動時に pokedex DB が自動作成されない実バグを発見(データレーンが k3d に初めて実デプロイした際に発生)。deploy/k8s/overlays/local/mysql/statefulset.yaml に MYSQL_DATABASE: pokedex を追加し、layout_test.go に検知テストを追加して修正(2026-09-22)。**新規クラスタでは直るが、この修正前にすでに初期化済みの PVC は MYSQL_DATABASE の効果を受けない**(コンテナ起動時にしか実行されない仕様のため)。既存の PVC に対しては CREATE DATABASE を手動実行するしかない。docs/runbooks/data.md に一言注記するとよい
 - P2-3 の critic の軽微(2026-09-22。未反映の4件): `check-publishable.sh` の `B_KEYVALUE_ALLOW` を self-test の基準リポジトリにも播く / `maxCatalogAbilityCount` が balance の schema・loader と三重管理(テストで検出はできる) / natures-mismatch のエラー案内が Showdown 側だけを見て `make import-fetch` の案内が出ないことがある / `TestPublicInputValidation` の 400 応答を契約検証(kin-openapi)に通す
 
