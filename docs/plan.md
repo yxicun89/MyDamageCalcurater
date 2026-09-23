@@ -154,11 +154,16 @@
   常時マウント+中身の出し入れの方が読み上げが安定する可能性。(3) `ReverseScreen.tsx` の `move === null` 分岐に
   「先頭は必ず null」の知識の小さな複製がある(実際には使われない経路)。
   issue #110 は engine/WASM・iOS の追従待ちで、Web 単独ではクローズしない(DECISIONS.md 参照)
-- [ ] P4-20 issue #148(クラウド公開前のアクセス境界・認証方針。主担当 API・Web・iOS・運用。ユーザー決定
-  2026-09-23「私設サービスを維持する」。DECISIONS.md参照): 中心は Ingress・TLS・overlay・gateway の運用レーン
-  作業で `web/` 本体への変更は今のところ見込み薄。Web の分担は ADR に記録する「Web の接続方法」の節への記載と、
-  端末IDを認証であるかのように誤解させる表示・文言が無いことの確認(現状そのような UI は無いはず)。
-  ADR 作成が API/運用レーンで進んでから、依頼が来た時点で着手する(今は着手しない)
+- [ ] P4-20 issue #148(クラウド公開前のアクセス境界・認証方針。ADR-0210。API レーン担当分は完了・main 統合済み
+  〈PR #157〉。DECISIONS.md 2026-09-23 参照)。API レーンからの具体的な依頼2件(ADR-0210 §4・§7):
+  (1) API の base URL を tailnet の MagicDNS 名にし、public な既定値を持たないこと (2) CORS 許可オリジンも
+  tailnet 上の名前だけにすること。
+  現状確認済み: `web/src/api/config.ts` の `apiBaseUrl()` の既定値は同一オリジン `"/"`(public な固定値ではない。
+  `VITE_API_BASE_URL` 環境変数で上書きする設計。ADR-0301 §4)なのでコード自体は既に条件を満たしている。
+  CORS の許可オリジン一覧は gateway(Go・API レーンの持ち物)側の設定で、Web 側にハードコードは無い(確認済み)。
+  残るのは実際の tailnet MagicDNS 名を `VITE_API_BASE_URL` にデプロイ時設定するという**運用/設定の話**で、
+  運用レーンが到達経路(Tailscale Operator の ingressClass か subnet router + tailscale serve か)を選び、
+  実際の名前が決まってから。今はコード変更不要。着手のタイミングは運用レーンの選定後
 
 ## M2: 保存・構築
 
