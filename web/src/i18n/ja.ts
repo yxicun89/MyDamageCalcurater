@@ -337,6 +337,19 @@ export const statLetterJa: Record<StatKey, string> = {
 };
 
 /**
+ * P4-19(issue 110、ADR-0208): 候補・観測の件数上限(domain/requestLimits.ts)に当たったときの案内。
+ * 計算画面と逆算画面が同じ文言を使う(件数は定数から渡し、文言に埋め込まない)。
+ */
+export const requestLimitText = {
+  /** 持ち物候補を上限で絞り込んだとき。黙って切り捨てず、絞り込んだことを必ず出す。 */
+  itemCandidatesTruncated: (max: number): string =>
+    `持ち物の候補が多いため、先頭から${String(max)}通りまでで計算しています`,
+  /** 観測が上限に達して「観測を追加」を無効にしたときの理由。 */
+  observationLimitReached: (max: number): string =>
+    `観測は${String(max)}件までです。追加するには、どれかの行を削除してください`,
+} as const;
+
+/**
  * 逆算画面(P4-4、ADR-0300 §7、ADR-0010 §R)の入力まわりの文言。
  * n を含む語は行番号(1始まり)から作る関数にする(観測は複数行あるため)。
  */

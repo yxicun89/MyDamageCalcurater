@@ -289,6 +289,124 @@ describe("defenderItemVariants(防御側の持ち物の選択と「持ち物の�
       [null, choiceItem, defenseItem, berry],
     ],
   ] as const)("%s", (_label, selectedItem, compare, expected) => {
-    expect(defenderItemVariants({ selectedItem, compare, candidates })).toEqual(expected);
+    // P4-19 で戻り値が {variants, truncated} になった。上限に届かない件数なので truncated は false。
+    expect(defenderItemVariants({ selectedItem, compare, candidates })).toEqual({
+      variants: expected,
+      truncated: false,
+    });
+  });
+});
+
+// P4-19(issue #110、ADR-0208): itemVariants は null(持ち物なし)を含めて 64 通りまで
+// (api/openapi.yaml の BulkCalcRequest.itemVariants の maxItems)。超えると API は 400 invalid_input、
+// engine も上限超過で失敗するので、画面に渡す前に決定的に絞り込み、絞り込んだことを truncated で伝える。
+// 期待値の 64 は契約から直接書く(定数とのずれは requestLimits.test.ts が検出する)。
+describe("defenderItemVariants(64通りの上限。マスタの順のまま先頭から残し、選んだ持ち物は落とさない)", () => {
+  /** 防御を上げる架空の持ち物を count 件(マスタの順)。 */
+  function defenseItems(count: number): Item[] {
+    return Array.from({ length: count }, (_value, index) => ({
+      id: `example-def-${String(index)}`,
+      nameJa: `テスト防御${String(index)}`,
+      effect: { statMods: { def: 6144 } },
+    }));
+  }
+
+  function variantIds(result: ReturnType<typeof defenderItemVariants>): Array<string | null> {
+    return (result.variants ?? []).map((item) => item?.id ?? null);
+  }
+
+  describe("持ち物を選んでいないとき(なし + 候補)", () => {
+    test("なしを含めて 63 通り(上限-1)はそのまま", () => {
+      const result = defenderItemVariants({
+        selectedItem: null,
+        compare: true,
+        candidates: defenseItems(62),
+      });
+      expect(result.variants).toHaveLength(63);
+      expect(result.truncated).toBe(false);
+    });
+
+    test("なしを含めてちょうど 64 通り(上限)はそのまま。切ったことにしない", () => {
+      const result = defenderItemVariants({
+        selectedItem: null,
+        compare: true,
+        candidates: defenseItems(63),
+      });
+      expect(result.variants).toHaveLength(64);
+      expect(result.truncated).toBe(false);
+      expect(variantIds(result).at(-1)).toBe("example-def-62");
+    });
+
+    test("なしを含めて 65 通り(上限+1)は末尾を落として 64 通りにし、truncated を立てる", () => {
+      const candidates = defenseItems(64);
+      const result = defenderItemVariants({ selectedItem: null, compare: true, candidates });
+      expect(result.variants).toHaveLength(64);
+      expect(result.truncated).toBe(true);
+      expect(variantIds(result)).toEqual([null, ...candidates.slice(0, 63).map((item) => item.id)]);
+    });
+  });
+
+  describe("候補に無い持ち物を選んでいるとき(なし + 選んだ持ち物 + 候補)", () => {
+    test("ちょうど 64 通り(上限)はそのまま", () => {
+      const result = defenderItemVariants({
+        selectedItem: choiceItem,
+        compare: true,
+        candidates: defenseItems(62),
+      });
+      expect(result.variants).toHaveLength(64);
+      expect(result.truncated).toBe(false);
+      expect(variantIds(result)[1]).toBe(choiceItem.id);
+    });
+
+    test("65 通り(上限+1)になるときは末尾の候補を落とし、選んだ持ち物は残す", () => {
+      const candidates = defenseItems(63);
+      const result = defenderItemVariants({ selectedItem: choiceItem, compare: true, candidates });
+      expect(result.variants).toHaveLength(64);
+      expect(result.truncated).toBe(true);
+      expect(variantIds(result)).toEqual([
+        null,
+        choiceItem.id,
+        ...candidates.slice(0, 62).map((item) => item.id),
+      ]);
+    });
+  });
+
+  test("候補の中の持ち物を選んでいて、その持ち物が切られる位置にあるときは、最後の1枠をその持ち物に使う", () => {
+    const candidates = defenseItems(64);
+    // マスタの順で最後(index 63)の持ち物を選ぶ。先頭から 63 件だけ残すと落ちてしまう位置。
+    const selectedItem = candidates[63];
+    if (selectedItem === undefined) {
+      throw new Error("候補の作り方が想定と違う");
+    }
+    const result = defenderItemVariants({ selectedItem, compare: true, candidates });
+    expect(result.variants).toHaveLength(64);
+    expect(result.truncated).toBe(true);
+    // 先頭 62 件 + 選んだ持ち物(マスタの順で後ろなので末尾)。落ちるのは example-def-62。
+    expect(variantIds(result)).toEqual([
+      null,
+      ...candidates.slice(0, 62).map((item) => item.id),
+      selectedItem.id,
+    ]);
+    expect(variantIds(result)).not.toContain("example-def-62");
+  });
+
+  test("絞り込んでも重複を作らない(itemVariants は uniqueItems。ADR-0208)", () => {
+    const candidates = defenseItems(64);
+    const selectedItem = candidates[63];
+    if (selectedItem === undefined) {
+      throw new Error("候補の作り方が想定と違う");
+    }
+    const ids = variantIds(defenderItemVariants({ selectedItem, compare: true, candidates }));
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  test("「候補も比較」が切りのときは、選んだ持ち物の1通りだけなので上限に当たらない", () => {
+    const result = defenderItemVariants({
+      selectedItem: choiceItem,
+      compare: false,
+      candidates: defenseItems(200),
+    });
+    expect(result.variants).toEqual([choiceItem]);
+    expect(result.truncated).toBe(false);
   });
 });

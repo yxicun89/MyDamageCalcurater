@@ -918,6 +918,26 @@ Reason: 独立レビュー PASS・`make test`(790件)/`lint`/`build`/`test-golde
 Impact: 判定レーンは JD1(ADR-0701 の Individual.ranks 方式)のまま。技IDからランク変化を自動で出す
 公開APIの拡張は、判定レーンの要件が固まってから別途(データ・APIレーン)。
 
+## 2026-09-22: 判定 JD2(場の効果)を PR #127 で main に統合
+Decision: ADR-0702(`speedField`。トリックルーム・追い風。素早さ補正の連結・丸めを @smogon/calc 0.12.0 で確認)を PR #127 で main に統合した。critic は1回目で PASS。
+Reason: `make test`・`make lint`・`make build`(ルート)が緑、critic PASS、他レーンの範囲外変更なし(COORDINATION.md の共有ファイル規約の範囲内)を確認してマージした。
+Impact: 判定レーンのブランチを `feat/judge-jd3` に切り替えた(JD2 の `feat/judge-jd2` は削除)。次は JD3(複数の相手候補を一度に判定)。
+
+## 2026-09-23: 判定 JD3 で outspeed-and-ko の契約を破壊的に変更する(判定レーン)
+Decision: `POST /api/judge/v1/outspeed-and-ko` の request の `defender`(単数)を `defenders`(Individual[]、1〜6件)に、
+response の単数の5欄(outspeeds/speedTie/attackerSpeed/defenderSpeed/ko)を `matchups`(defenders と同じ順序・同じ件数の
+Matchup 配列。各行が defenderIndex を持つ)に置き換えた。版は上げない(v1 のまま)。設計は ADR-0703。
+Reason: JD5(Web/iOS の画面)が未着手で judge-svc を呼ぶクライアントが1つも無く、gateway もルートの api/openapi.yaml も
+judge を含まない(ADR-0700 §6-3・ADR-0701 §7)ため、壊れるものが無い。互換のために単数の defender を残すと同じ問いに
+入口が2つでき、response も単数・配列の2形態になる。judge-design.md §3 が JD5 を最後に置いたのは、まさにこの変更を
+クライアントが付く前に済ませるため。
+Impact:
+- 他レーンへの影響は無い(ルートの api/openapi.yaml・gateway・Web・iOS のいずれも judge の型を生成していない)。
+- JD5 に着手する時点の契約は `defenders` / `matchups` の形になる。JD5 を Web/iOS レーンに依頼する場合は
+  services/judge/api/openapi.yaml を参照先として渡す。
+- 候補のどれかで失敗したら request 全体を打ち切り、部分成功は返さない。エラーの message は
+  どの候補かを `defenders[<index>]` の形で示す(上流の URL・本文は含めないので ADR-0700 §3 は保たれる)。
+
 ## 2026-09-23: issue #110 のデータレーン担当分(engine/wasmapi)を実装(データレーン)
 Decision: 上記「calc の候補・観測件数に上限を置く」の依頼(API レーンから)に応え、
 `engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ値の上限を実装した
@@ -959,3 +979,58 @@ Decision: `tools/importer/cronjob.sh`にbusyboxの`flock`(非ブロッキング)
 Reason: issue #106(Codexレビュー)。`make test`/`lint`/`build`/`k8s-render`すべてgreen。
 Impact: k3dでの手動確認手順(2プロセス同時起動)をdocs/runbooks/data.md §6に追記したが、実クラスタでの
 実行はまだ行っていない(次にk3dクラスタを使う機会に確認)。他レーンへの影響なし。
+
+## 2026-09-23: 判定 JD3(複数の相手候補)を PR #143 で main に統合、JD4 は API レーンの依頼を待つ(判定レーン)
+Decision: ADR-0703(`defenders`/`matchups` への破壊的変更)を PR #143 で main に統合した。critic は1回目で PASS。
+判定レーンのブランチを `feat/judge-jd4` に切り替えた(JD3 の `feat/judge-jd3` は削除)。
+JD4(相手の技を含めた返り討ち判定)は、技の優先度を pokedex-svc から個別取得する `GET /api/pokedex/moves/{key}`
+(2026-09-22 に API レーンへ既定案付きで依頼済み。上記参照)が無いと実装できない。ユーザーに「両者優先度0の限定で
+先に進める」か「API レーンの実装を待つ」かを確認し、**待つ**を選択した。
+Reason: 優先度の間違いは「先制されて落とされるのに安全と言う」誤判定を生みうるため、判定ツールとしての信頼性を
+優先度0の限定より優先した(ユーザー判断)。
+Impact: 判定レーンは API レーンが `GET /api/pokedex/moves/{key}` を実装するまで新規実装を止める(plan.md のブロッカー節)。
+`feat/judge-jd4` は作成済み・空のまま。API レーンへの依頼は優先度低(JD2・JD3 は待たずに進められた)ままなので、
+API レーンが気づいたタイミングで着手してもらってよい。
+
+## 2026-09-23: リモートブランチの `--delete`(git push --delete)も自動承認にする(ユーザー決定)
+Decision: Claude Code のユーザー設定ファイル(グローバル)とこのプロジェクトの `.claude/settings.json`(Git管理下)の両方で、
+`git push * --delete*`/`git push --delete*` を ask から削除した(広い `Bash(git push *)` の allow がそのまま効くようになる)。
+main への直接push・force push・`--mirror`・`--all` は引き続き禁止のまま。`rm` も変更していない。
+Reason: ユーザーの言葉「まだ承認出るので許可したい」。PR マージ後のフィーチャーブランチ削除は本セッションの通常フローで
+毎回発生しており、確認プロンプトが挟まる運用負荷が大きかったため。
+Impact: COORDINATION.md の運用上の注意を更新した。`gh pr merge` に続きリモートブランチ削除も人間が目を通す機会が無くなるため、
+PR作成前のテスト・lint・check-publishable・critic PASS確認の重要性は変わらず高いまま。
+
+## 2026-09-23: issue #103 の設計を ADR-0209 で確定(API レーン。critic PASS(NG 2回のあと3回目))
+Decision: M2 保存データの保持・削除・端末ID境界を ADR-0209 で確定した。端末IDは認証ではなくデータの分割キー(セッションIDは
+分割キーにしない) / v1 は個人利用+Tailscale 内に固定し公開前に認証を別ADRで必須決定 / 生の計算イベントは作成から90日・推薦の
+集計は生イベントと同時に失効・構築とお気に入りは `max(devices.last_seen_at, 行.updated_at)` から540日(record-svc・team-svc
+どちらも calc-svc の計算イベントを購読して自分の DB の `devices.last_seen_at` を更新する。record 側だけでは計算だけ使い続け
+構築画面を開かない端末の team データが誤って失効するため) / 端末単位の全削除はサービスごとに1本
+(DELETE /api/record/device-data・DELETE /api/team/device-data。冪等・同期・partial の繰り返し・`purged_at` は削除要求のたびに
+現在時刻へ更新) / 削除の墓石 `devices.purged_at` で JetStream の遅延イベントの復活を防ぎ、purge journal(#5b。DB のバックアップ
+世代とは独立の保存先に同時追記)でバックアップ世代取得後に来た削除要求もリストア時に再適用する。
+openapi.yaml は端末ID/セッションIDの description だけ変更し、record/team のパスは P5-3/P5-4 で入れる(単一の
+api.ServerInterface のため、今足すと calc-svc/pokedex-svc に常に404の空メソッドが増え、gateway も未ルーティングで常に404になる)。
+Reason: ユーザー決定(2026-09-23「一定期間で自動失効。無期限保持はしない」)の具体化。issue #103 の受け入れ条件。
+Impact(データレーン): P5-1 の TiDB スキーマは ADR-0209 §3 に従う。devices テーブル(last_seen_at・purged_at)と purge journal
+テーブルを record DB と team DB にそれぞれ持ち、purge journal は DB とは別の独立した保存先(P7-4 が決める)にも同時に書く。
+全表に device_id を置く。favorites は calc_events を外部キーで参照せず個体スナップショットを自分で持つ(90日と540日の差が
+矛盾するため)。保持日数はコードに埋めず環境変数で渡し起動時に検証する。P5-2 はストリームの max_age を7日にし、イベントに
+発生時刻 occurred_at を載せ、record-svc と team-svc は別々の durable consumer を持つ(同じ consumer を共有すると配送が分かれ
+record-svc が計算イベントを取りこぼす)。P7-4 はバックアップに devices(墓石)と purge journal を必ず含め、復元は Ready の前に
+墓石の再適用・purge journal の再適用・失効ジョブの強制実行を行い、JetStream は再生しない。
+Impact(Web/iOS レーン): ADR-0209 §8 の文言と削除 UI をお願いしたい(Web は P5-5、iOS は P6-5)。(1)「アカウントはありません。
+履歴・お気に入り・構築はこの端末に割り当てた ID でサーバーに保存しています」(2)「ID が変わると(Web: サイトデータ消去 / iOS:
+アプリの再インストール)前のデータは開けません。元に戻す方法はありません」(3)「開けなくなったデータは自動的に消えます。計算の
+履歴は記録から90日、お気に入りと構築は最後に使った日から18か月です」(4) ボタン「この端末のデータを削除」→ 確認「元に戻せません」
+→ record と team の両方が completed になってから「削除しました」。partial は続けて再送、503 は「サーバーに届きませんでした」。
+API が実装されるまでは文言と画面だけ先に置いてよい。
+
+## 2026-09-23: issue #148(クラウド公開前のアクセス境界・認証方針)をユーザーが決定
+Decision: 私設サービスを維持する(issue #148の既定案どおり)。Tailscale等のprivate overlay networkだけからgatewayへ到達させ、
+public LoadBalancer/Ingressは作らない。端末IDは引き続き認証ではなく、`docs/requirements.md`の「自分1人・認証なし」の前提を変えない。
+Reason: ユーザー回答(AskUserQuestion、2026-09-23)。OIDC等の本格認証導入は今のところ不要と判断。
+Impact: 主担当のAPI・Web・iOS・運用レーンへ連絡し、issue #148の共通の受け入れ条件(ADRへの記録、`overlays/cloud`のhostless Ingressが
+無検討で公開されない静的テスト、private案でのtailnet/ACL・失効手順のrunbook化、CORS・端末IDを認証として扱わない回帰テスト)に沿って
+進めてもらう。データ・タイプバランス・素早さレーンは連携(今のところ追加対応は無い見込み)。

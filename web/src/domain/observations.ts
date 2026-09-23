@@ -3,6 +3,7 @@
 // engine に渡す Observation は percent / damage のちょうど1つを持つ(percentTenths は画面から使わない)。
 
 import type { Observation, ReverseSide } from "../engine/types";
+import { MAX_OBSERVATIONS } from "./requestLimits";
 
 /** 観測の入力単位。percent = 整数%、damage = HP の実点数。 */
 export type ObservationUnit = "percent" | "damage";
@@ -51,6 +52,14 @@ export function parseObservation(unit: ObservationUnit, text: string): ParsedObs
     return { status: "invalid" };
   }
   return { status: "valid", observation: { damage: value } };
+}
+
+/**
+ * 観測をもう1行追加できるか(P4-19。上限は MAX_OBSERVATIONS = api/openapi.yaml の
+ * `ReverseRequest.observations` の maxItems。ADR-0208)。上限に達したら画面は追加を無効にし、理由を出す。
+ */
+export function canAddObservation(currentCount: number): boolean {
+  return currentCount < MAX_OBSERVATIONS;
 }
 
 /** 対象側の既定の観測単位: 与えたダメージ(defender)は%、受けたダメージ(attacker)は HP の実点数。 */

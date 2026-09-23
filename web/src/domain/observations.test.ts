@@ -3,7 +3,7 @@
 // engine に渡す Observation は percent / damage のちょうど1つを持つ(percentTenths は画面から使わない)。
 
 import { describe, expect, test } from "vitest";
-import { defaultObservationUnit, parseObservation } from "./observations";
+import { canAddObservation, defaultObservationUnit, parseObservation } from "./observations";
 
 describe("parseObservation(%)", () => {
   test.each([
@@ -46,5 +46,19 @@ describe("defaultObservationUnit", () => {
   test("与えたダメージ(defender)は%、受けたダメージ(attacker)は HP の実点数", () => {
     expect(defaultObservationUnit("defender")).toBe("percent");
     expect(defaultObservationUnit("attacker")).toBe("damage");
+  });
+});
+
+// P4-19(issue #110、ADR-0208): 観測は 16 件まで(api/openapi.yaml の ReverseRequest.observations の maxItems)。
+// 期待値の 16 は契約から直接書く(実装の写しにしない)。定数とのずれは requestLimits.test.ts が検出する。
+describe("canAddObservation(観測の件数上限)", () => {
+  test.each([
+    [0, true],
+    [1, true],
+    [15, true],
+    [16, false],
+    [17, false],
+  ])("いま %d 件のとき、追加できるか = %s", (currentCount, expected) => {
+    expect(canAddObservation(currentCount)).toBe(expected);
   });
 });

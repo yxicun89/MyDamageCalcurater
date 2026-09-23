@@ -188,7 +188,7 @@ describe("calcReverse(与えたダメージ = side defender)", () => {
       percentObservation(rollAt(calc, 0), calc.defenderHP),
       percentObservation(rollAt(calc, calc.rolls.length - 1), calc.defenderHP),
     ];
-    const itemCandidates = reverseItemCandidates("defender", master.items, move);
+    const { candidates: itemCandidates } = reverseItemCandidates("defender", master.items, move);
     return {
       request: (obs) =>
         buildReverseRequest({
@@ -232,7 +232,7 @@ describe("calcReverse(受けたダメージ = side attacker)", () => {
     const defender = individual(mine);
     const truth = unknownTruth(theirs, { ...ZERO_SP, spa: trueSp });
     const calc = await calcOrThrow(truth, defender, move);
-    const itemCandidates = reverseItemCandidates("attacker", master.items, move);
+    const { candidates: itemCandidates } = reverseItemCandidates("attacker", master.items, move);
     const result = await reverseOrThrow(
       buildReverseRequest({
         side: "attacker",

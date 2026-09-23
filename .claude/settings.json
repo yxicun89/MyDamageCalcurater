@@ -31,9 +31,7 @@
       "Bash(k3d cluster delete *)",
       "Bash(kubectl delete namespace *)",
       "Bash(kubectl delete pvc *)",
-      "Bash(brew uninstall *)",
-      "Bash(git push * --delete*)",
-      "Bash(git push --delete*)"
+      "Bash(brew uninstall *)"
     ],
     "deny": [
       "Bash(git reset --hard *)",

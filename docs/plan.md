@@ -144,15 +144,46 @@
   #113(improvement)逆算の数値入力で古い計算要求を抑止・キャンセル(200ms debounce・AbortSignal。iOS・API と連携)。
   次点: #98(bug)モバイル幅で計算・逆算画面が横に溢れる、#67(bug)2xx の契約外 JSON で API クライアントが例外を投げる(防御的処理)。
   連携(他レーン主担当。Web は連携のみ): #71(データ+Web+iOS 攻撃側プリセット単一化)・#72(API+Web ルート make e2e を Playwright へ)・
-  #78(API+Web 特性の無効・吸収の境界反映)・#110(主担当 API。calc 候補配列の上限)・#103(主担当 API・データ。M2保存データの
-  保持期間。ユーザー決定 2026-09-23 で needs-decision は解消済み。DECISIONS.md参照。Web は連携のみで主担当ではない)
+  #78(API+Web 特性の無効・吸収の境界反映)・#110(Web の担当分は P4-19 へ分離。DECISIONS.md 2026-09-23 参照)・
+  #103(主担当 API・データ。M2保存データの保持期間。ユーザー決定 2026-09-23 で needs-decision は解消済み。
+  DECISIONS.md参照。Web は連携のみで主担当ではない)
+- [x] P4-19 issue #110(セキュリティ。ADR-0300 §10。critic PASS: 境界値の網羅探索〈約1.2万ケース〉と変異テスト5件で
+  `itemVariants`/`itemCandidates` が常に64以下・`observations` が17件目を作れないことを確認済み)。
+  `domain/requestLimits.ts` に上限3定数(`api/openapi.yaml` の `maxItems` との同期をテストで検査)と
+  `limitToMax()`。`defenderItemVariants`・`reverseItemCandidates` が配列を作る最終地点で決定的に絞り込み、
+  選んだ持ち物は落とさない。逆算の「観測を追加」は16件で disabled + `role="status"` の理由表示。
+  絞り込みが起きたら計算・逆算の両画面に文言を明示(`requestLimitText`)。
+  残る軽微(ブロッカーではない。次に触るときに拾う): (1) `addObservation()` 自体のガード(ボタンの disabled とは
+  別の多層防御)を直接検証するテストが無い。(2) 観測上限到達時の `role="status"` 要素が条件付きマウントで、
+  常時マウント+中身の出し入れの方が読み上げが安定する可能性。(3) `ReverseScreen.tsx` の `move === null` 分岐に
+  「先頭は必ず null」の知識の小さな複製がある(実際には使われない経路)。
+  issue #110 は engine/WASM・iOS の追従待ちで、Web 単独ではクローズしない(DECISIONS.md 参照)
 
 ## M2: 保存・構築
-- [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)
-- [ ] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)
-- [ ] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰)
-- [ ] P5-4 team-svc(構築 CRUD、Showdown 形式入出力)
-- [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー
+
+**P5-1〜P5-4 の前提(先に決めた設計。issue #103・ADR-0209「M2 保存データの保持・削除・端末 ID 境界」に従う)**:
+端末 ID は認証ではなくデータの分割キー / 生の計算イベントは作成から90日・構築とお気に入りは `max(devices.last_seen_at, 行.updated_at)` から540日で失効 /
+端末単位の全削除はサービスごとに1本(`DELETE /api/record/device-data`・`DELETE /api/team/device-data`。冪等・`partial` の繰り返し)/
+削除の墓石(`devices.purged_at`)で JetStream の遅延イベントの復活を防ぐ。受け入れ条件は ADR-0209 の AC-D / AC-P / AC-R / AC-L。
+
+- [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)。
+  スキーマは ADR-0209 §3 に従う(`devices` テーブル〈`last_seen_at`・`purged_at`〉、**purge journal テーブル〈#5b。
+  DB 側とは別に DB 外の独立した保存先〈P7-4 が決める〉にも同時に追記する〉**、全表に `device_id`、
+  `favorites` は `calc_events` を参照せず個体スナップショットを自分で持つ)。保持日数は環境変数で渡し、起動時に検証する
+- [ ] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)。
+  ストリームの `max_age` は7日、イベントに発生時刻(`occurred_at`)を載せる(ADR-0209 §7・#6)。
+  record-svc と team-svc(P5-4)は**別々の durable consumer**を持つ(同じ consumer を共有すると配送が分かれ
+  record-svc が計算イベントを取りこぼす。ADR-0209 §4)
+- [ ] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰)。
+  ADR-0209 §5.3 の契約を `api/openapi.yaml` に入れて `make gen`(`store_unavailable` の追加を含む)→
+  分離(§6)・全削除(§5)・失効ジョブ(§4)・ログ(§3)を実装。時間減衰の半減期は保持期間90日より短くする。
+  gateway に `/api/record/*` のルーティングと CORS の `DELETE` 許可を追加(ADR-0209 §10・ADR-0202 への追記)
+- [ ] P5-4 team-svc(構築 CRUD、Showdown 形式入出力)。
+  ADR-0209 §5.3 の `deleteTeamDeviceData` と §6 の分離規則(他端末のリソース ID は 404 `not_found`)を含む。
+  **P5-2 のイベントを購読し、自分の DB の `devices.last_seen_at` だけを更新する**(計算 API だけを使い続ける端末の
+  構築が誤って失効しないため。ADR-0209 §4。イベントの中身〈個体・計算結果〉は保存しない)。
+  gateway に `/api/team/*` のルーティングと CORS の `DELETE`/`PUT` 許可を追加(ADR-0209 §10・ADR-0202 への追記)
+- [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー。ADR-0209 §8 の文言と「この端末のデータを削除」の UI を含む
 - [x] P5-6 技の追加効果(使用者自身のランク変化。例: ニトロチャージで自分の素早さ+1)を engine の Move・マスタ・importer・export に足す(判定レーンからの提案。DECISIONS.md 2026-09-22。ADR-0005 に沿い、追加効果の対象=self/target・確率・ランク変化量をデータとして持つ。ADR-0107。critic PASS。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。公開APIへの露出は判定レーンの要件確定後)
 
 ## M3: iOS
@@ -167,6 +198,7 @@
   P6-1〜P6-2d の各タスクで継続して緑を確認済み。iPhone 18 Pro シミュレータ)
 - [x] P6-4 Tailscale serve の手順書 `docs/runbooks/ios-device-install.md` を作成 → **人間が実機インストール**(署名・
   Tailscale ログイン・実機への配線・外出先での確認は手順書どおり人間が行う。AI が代行しない)
+- [ ] P6-5 ADR-0209 §8 の文言と「この端末のデータを削除」の UI(issue #103。record-svc / team-svc の全削除 API 実装後)
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)。Argo CD の実同期もローカル k3d で確認済み(ADR-0018: Git 変更 32fbb9e → manual sync → Pod の image digest 一致)
@@ -180,6 +212,7 @@
 - [x] TB 整備(2026-09-22): HTTP の 500 テスト、typed nil の provider の正規化、read model の JSON Schema(ADR-0402)、HTTP 層の検証の共通化、おすすめの穴を既存の集計から導出
 - [x] TB 実データの配線(2026-09-22。データレーンの依頼): pokedex export の read model を ConfigMap で k3d の balance に読ませる(ADR-0403)、abilityIds の上限を 4 に
 - [x] TB6 技範囲チェッカー(2026-09-22 ユーザー要望。ADR-0404): 技 ID(最大4つ)から18タイプの一貫判定を出し、その技構成を半減以下で受けられる実在ポケモンを図鑑から具体名で列挙する。特性で半減以下になるポケモンは別枠
+- [x] Codexレビュー issue #105 対応(2026-09-23。ADR-0405): Argo CD 導入物(install.yaml・同梱3イメージ)をコミットSHA・SHA-256・digestで固定する `scripts/argocd-bootstrap.sh` を新設し、balance/speed 両runbookの重複した生URL直apply手順を1本化。自動テスト `scripts/argocd-bootstrap_test.sh`(`make test-scripts`)。
 
 ### ブロッカー(タイプバランスレーン)
 (なし。Argo CD の実同期は 2026-09-22 に解消)
@@ -211,8 +244,11 @@
   技の追加効果の自動反映は対象外のまま。順序は docs/judge-design.md §3(JD2 場の効果 → JD3 複数の相手候補 → JD4 返り討ち判定 → JD5 画面)
 - [x] JD2 場の効果(トリックルーム・追い風)。judge だけが解釈する `speedField` を outspeed-and-ko に追加(ADR-0702)。
   丸め方(4096基準で連結してから1回だけ五捨五超入)は @smogon/calc 0.12.0 の実装を読んで確認・独立検算した。critic PASS(1回目)
-- [ ] JD3 複数の相手候補を一度に判定(攻撃側1つ・相手候補の配列 → 候補ごとの判定結果の配列)
-- [ ] JD4 相手の技を含めた返り討ち判定。技の優先度を pokedex-svc から引く endpoint が無いため、まず API レーンへ依頼を出す(DECISIONS.md に既定案)
+- [x] JD3 複数の相手候補を一度に判定(攻撃側1つ・相手候補の配列 → 候補ごとの判定結果の配列。ADR-0703)。
+  request の defender(単数)を defenders(1〜6件)に、response を matchups(配列)に破壊的変更(クライアント未着手のため安全)。critic PASS(1回目)
+- [!] JD4 相手の技を含めた返り討ち判定。技の優先度を pokedex-svc から引く endpoint(`GET /api/pokedex/moves/{key}`)が無いため、
+  API レーンへ依頼済み(DECISIONS.md 2026-09-22 に既定案)。**ブロック中**: ユーザーが「API レーンの実装を待つ」を選択(2026-09-23)。
+  API レーンが endpoint を実装したら着手する
 - [ ] JD5 Web/iOS の画面(judge-svc を呼ぶ。担当は着手時に判断)
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
@@ -229,10 +265,19 @@
 - [ ] P7-1 kube-prometheus-stack / Loki、各サービスのメトリクス
 - [ ] P7-2 SLO(計算API p99 < 100ms、可用性)とダッシュボード
 - [ ] P7-3 ArgoCD(GitOps)
-- [ ] P7-4 MySQL/TiDB バックアップと復元テスト
+- [ ] P7-4 MySQL/TiDB バックアップと復元テスト(ADR-0209 §9 を要件に含める: バックアップに `devices`〈墓石〉を含める /
+  purge journal(#5b。世代取得後の削除要求。保持90日)をバックアップ世代と別に保持し復元時に再適用 /
+  Ready の前に墓石の再適用・purge journal の再適用・失効ジョブの強制実行 / JetStream は再生しない / 世代30日。
+  受け入れ条件は AC-B1〜B3・AC-B2b)
 
 ## ブロッカー
 (ここに止まった理由と試したことを書く)
+
+**判定レーン(2026-09-23)**: JD4(相手の技を含めた返り討ち判定)は、技の優先度(priority)を pokedex-svc から個別取得する
+endpoint(`GET /api/pokedex/moves/{key}`)が無いと実装できない。API レーンへ依頼済み(DECISIONS.md 2026-09-22 に既定案付き)だが
+未着手。ユーザーに「両者優先度0の限定で先に進める」か「API レーンの実装を待つ」か確認し、**待つ**を選択した(2026-09-23)。
+判定レーンは API レーンが endpoint を実装するまで新規実装を止める(`feat/judge-jd4` は作成済み・空。作業ディレクトリ
+~/MyDamageCalcurater-judge はこの間、他の判定レーンのタスクが無ければアイドル)。
 
 **【人間の確認待ち】(Web レーン、2026-09-22 深夜に記載)**
 - **P4-5 のブラウザ実機確認**(仕様ブロッカーではない。作業は止めない。**Chrome は 2026-09-22 に確認済み**、残りは Safari): `make web-dev` で開き、Chrome と Safari で計算・逆算が動くこと、
