@@ -65,13 +65,12 @@ make speed-gitops-template-check
 ## 5. Argo CD を入れる(初回だけ。すでに `argocd` namespace にあればとばす)
 
 speed 専用の Argo CD は入れない(ADR-0605 §1・§3。クラスタに1つの共有インスタンスを使う)。balance の手順(TB0)で
-すでに入れていればこの節はとばす。`argocd` CLI(節 9 で使う)も入れておく(`brew install argocd`)。
+すでに入れていればこの節はとばす(`scripts/argocd-bootstrap.sh` は namespace 作成が冪等なので、再実行しても壊れない。ADR-0405)。
+`argocd` CLI(節 9 で使う)も入れておく(`brew install argocd`)。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-kubectl get namespace argocd 2>/dev/null || kubectl create namespace argocd
-kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.3/manifests/install.yaml
-kubectl -n argocd rollout status deployment/argocd-server --timeout=300s
+./scripts/argocd-bootstrap.sh
 ```
 確認: `deployment "argocd-server" successfully rolled out`。
 
