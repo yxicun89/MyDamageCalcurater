@@ -36,11 +36,11 @@ GitOps(Argo CD)を確かめるときだけ、以降の 3〜9 を続ける(3〜5 
 
 ## 3. Argo CD を入れる(初回だけ)
 
+コミットSHA固定の取得・ハッシュ検証・イメージの digest 固定は `scripts/argocd-bootstrap.sh` にまとめてある(ADR-0405)。
+
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-kubectl create namespace argocd
-kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.3/manifests/install.yaml
-kubectl -n argocd rollout status deployment/argocd-server --timeout=300s
+./scripts/argocd-bootstrap.sh
 ```
 確認: `deployment "argocd-server" successfully rolled out`。
 
