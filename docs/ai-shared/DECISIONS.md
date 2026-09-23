@@ -1034,3 +1034,10 @@ Reason: ユーザー回答(AskUserQuestion、2026-09-23)。OIDC等の本格認�
 Impact: 主担当のAPI・Web・iOS・運用レーンへ連絡し、issue #148の共通の受け入れ条件(ADRへの記録、`overlays/cloud`のhostless Ingressが
 無検討で公開されない静的テスト、private案でのtailnet/ACL・失効手順のrunbook化、CORS・端末IDを認証として扱わない回帰テスト)に沿って
 進めてもらう。データ・タイプバランス・素早さレーンは連携(今のところ追加対応は無い見込み)。
+
+## 2026-09-23: issue #106(手動importとCronJobの同時実行)を main へ統合(データレーン)
+Decision: PR #155(`feat/claude-p1-engine` → `main`)をマージした。`tools/importer/cronjob.sh` に
+flockベースの排他制御(ADR-0109)。critic PASS(指摘なし)。
+Reason: 独立レビュー PASS・`make test`(866件)/`lint`/`build`/`k8s-render` すべて green。Docker上の
+Linuxで統合テスト2件が実際にPASSすることを確認済み。
+Impact: k3dクラスタでの手動確認(docs/runbooks/data.md §6)はまだ実行していない。他レーンへの影響なし。
