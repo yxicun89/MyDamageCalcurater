@@ -85,11 +85,10 @@ DSN のホストを `127.0.0.1` に付け替えて `make pokedex-export`(348 pok
 `make speed-smoke-readmodel` を実行(初回はロールアウト直後で 504、再実行で `speed readmodel smoke: pokemon=0003-000 list=200 table=200`)。
 SP5 の実際の Argo CD への適用(`speed-argocd-app`・`speed-registry-push`・sync)は未実施のまま(ADR-0605 §4。共有クラスタへの変更のため
 人間の確認のもとで、必要になったときに)
-Next: 特に無し。他レーンからの依頼(Codexレビュー issue #105・#108。上記)かユーザーからの新規要望待ち。balance-registry →
-pokecalc-registry への改名提案はタイプバランスレーンへ既定案で提示済み(DECISIONS.md 2026-09-23)。
-Codexレビューissue(2026-09-23、タイプバランスレーンから連絡): #105(Argo CD導入・digest固定の共有スクリプト化)はタイプバランスレーンが
-主担当で進め、できたら docs/runbooks/speed.md の該当節をその呼び出しに差し替えるだけになる見込み(今は着手不要)。#108(read model の
-dataVersion・rollout一本化)はデータレーンが主担当で、連絡が来たら合わせる(今は着手不要)
+Next: 特に無し。#105(Argo CD導入・digest固定の共有スクリプト化)はタイプバランスレーンが完了し、docs/runbooks/speed.md 節5を
+scripts/argocd-bootstrap.sh の呼び出しに差し替え済み(2026-09-24 確認・追加対応不要)。#108(read model のdataVersion・rollout一本化)は
+データレーンが主担当で、連絡が来たら合わせる(今は着手不要)。他は balance-registry → pokecalc-registry への改名提案(タイプバランス
+レーンへ既定案で提示済み。DECISIONS.md 2026-09-23)かユーザーからの新規要望待ち。
 
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
