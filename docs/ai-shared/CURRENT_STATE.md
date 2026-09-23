@@ -93,15 +93,14 @@ dataVersion・rollout一本化)はデータレーンが主担当で、連絡が�
 
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
-Active: Claude Code
-Branch: feat/judge-jd3(作業ディレクトリ ~/MyDamageCalcurater-judge。PR 作成待ち。JD2 の feat/judge-jd2 は PR #127 で main に統合済み・削除)
-Status: JD0(基盤。PR #92)・JD1(判定API本体。PR #118)・JD2(場の効果。PR #127)・JD3(複数の相手候補。ADR-0703)は完了。
-`POST /api/judge/v1/outspeed-and-ko` の request の `defender`(単数)を `defenders`(1〜6件の配列)に、response を
-`matchups`(配列。`defenderIndex`・`outspeeds`・`speedTie`・`attackerSpeed`・`defenderSpeed`・`ko`)に破壊的変更した
-(クライアントがまだ無い=JD5未着手なので安全と判断。ADR-0703 §7)。上流は natures 1回+attacker種族1回+候補種族N回+
-calcN回の逐次、最初に失敗した候補で全体を打ち切る(部分成功なし)。critic PASS(1回目)。`internal/judge` は無変更
-Next: JD4(相手の技を含めた返り討ち判定)に着手。技の優先度(priority)が要るが pokedex-svc に個別取得endpointが無く、
-API レーンへ依頼中(DECISIONS.md 2026-09-22)。依頼が通るまで「両者優先度0」の限定で進めるか待つかを最初に判断する
+Active: なし(JD4 が API レーン依存でブロック中。plan.md のブロッカー節参照)
+Branch: feat/judge-jd4(作業ディレクトリ ~/MyDamageCalcurater-judge。main から作成済み・空。JD3 の feat/judge-jd3 は PR #143 で main に統合済み・削除)
+Status: JD0(基盤。PR #92)・JD1(判定API本体。PR #118)・JD2(場の効果。PR #127)・JD3(複数の相手候補。PR #143。ADR-0703)は完了。
+`POST /api/judge/v1/outspeed-and-ko` は `defenders`(1〜6件)→`matchups`(配列)の一括判定・`speedField`(トリックルーム・
+追い風)に対応済み。**JD4(相手の技を含めた返り討ち判定)はブロック中**: 技の優先度を pokedex-svc から個別取得する
+`GET /api/pokedex/moves/{key}` が無く、API レーンへ依頼済み(DECISIONS.md 2026-09-22)だが未着手。ユーザーが
+「API レーンの実装を待つ」を選択(2026-09-23。優先度の間違いによる誤判定〈先制されて落とされるのに安全と言う〉を避けるため)
+Next: API レーンが `GET /api/pokedex/moves/{key}` を実装したら JD4 に着手。それまで判定レーンは新規実装を止める
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠
