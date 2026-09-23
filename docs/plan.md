@@ -226,7 +226,9 @@
   丸め方(4096基準で連結してから1回だけ五捨五超入)は @smogon/calc 0.12.0 の実装を読んで確認・独立検算した。critic PASS(1回目)
 - [x] JD3 複数の相手候補を一度に判定(攻撃側1つ・相手候補の配列 → 候補ごとの判定結果の配列。ADR-0703)。
   request の defender(単数)を defenders(1〜6件)に、response を matchups(配列)に破壊的変更(クライアント未着手のため安全)。critic PASS(1回目)
-- [ ] JD4 相手の技を含めた返り討ち判定。技の優先度を pokedex-svc から引く endpoint が無いため、まず API レーンへ依頼を出す(DECISIONS.md に既定案)
+- [!] JD4 相手の技を含めた返り討ち判定。技の優先度を pokedex-svc から引く endpoint(`GET /api/pokedex/moves/{key}`)が無いため、
+  API レーンへ依頼済み(DECISIONS.md 2026-09-22 に既定案)。**ブロック中**: ユーザーが「API レーンの実装を待つ」を選択(2026-09-23)。
+  API レーンが endpoint を実装したら着手する
 - [ ] JD5 Web/iOS の画面(judge-svc を呼ぶ。担当は着手時に判断)
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
@@ -247,6 +249,12 @@
 
 ## ブロッカー
 (ここに止まった理由と試したことを書く)
+
+**判定レーン(2026-09-23)**: JD4(相手の技を含めた返り討ち判定)は、技の優先度(priority)を pokedex-svc から個別取得する
+endpoint(`GET /api/pokedex/moves/{key}`)が無いと実装できない。API レーンへ依頼済み(DECISIONS.md 2026-09-22 に既定案付き)だが
+未着手。ユーザーに「両者優先度0の限定で先に進める」か「API レーンの実装を待つ」か確認し、**待つ**を選択した(2026-09-23)。
+判定レーンは API レーンが endpoint を実装するまで新規実装を止める(`feat/judge-jd4` は作成済み・空。作業ディレクトリ
+~/MyDamageCalcurater-judge はこの間、他の判定レーンのタスクが無ければアイドル)。
 
 **【人間の確認待ち】(Web レーン、2026-09-22 深夜に記載)**
 - **P4-5 のブラウザ実機確認**(仕様ブロッカーではない。作業は止めない。**Chrome は 2026-09-22 に確認済み**、残りは Safari): `make web-dev` で開き、Chrome と Safari で計算・逆算が動くこと、

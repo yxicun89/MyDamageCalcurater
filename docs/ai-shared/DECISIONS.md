@@ -966,6 +966,18 @@ Reason: 独立レビュー PASS・`make test`(833件)/`lint`/`build`/`test-golde
 Impact: issue #110 は Web・iOS レーンの追従(観測16件でUI無効化・持ち物候補64件超の扱い。
 ADR-0208 §4)が残っている限りクローズしない。
 
+## 2026-09-23: 判定 JD3(複数の相手候補)を PR #143 で main に統合、JD4 は API レーンの依頼を待つ(判定レーン)
+Decision: ADR-0703(`defenders`/`matchups` への破壊的変更)を PR #143 で main に統合した。critic は1回目で PASS。
+判定レーンのブランチを `feat/judge-jd4` に切り替えた(JD3 の `feat/judge-jd3` は削除)。
+JD4(相手の技を含めた返り討ち判定)は、技の優先度を pokedex-svc から個別取得する `GET /api/pokedex/moves/{key}`
+(2026-09-22 に API レーンへ既定案付きで依頼済み。上記参照)が無いと実装できない。ユーザーに「両者優先度0の限定で
+先に進める」か「API レーンの実装を待つ」かを確認し、**待つ**を選択した。
+Reason: 優先度の間違いは「先制されて落とされるのに安全と言う」誤判定を生みうるため、判定ツールとしての信頼性を
+優先度0の限定より優先した(ユーザー判断)。
+Impact: 判定レーンは API レーンが `GET /api/pokedex/moves/{key}` を実装するまで新規実装を止める(plan.md のブロッカー節)。
+`feat/judge-jd4` は作成済み・空のまま。API レーンへの依頼は優先度低(JD2・JD3 は待たずに進められた)ままなので、
+API レーンが気づいたタイミングで着手してもらってよい。
+
 ## 2026-09-23: リモートブランチの `--delete`(git push --delete)も自動承認にする(ユーザー決定)
 Decision: Claude Code のユーザー設定ファイル(グローバル)とこのプロジェクトの `.claude/settings.json`(Git管理下)の両方で、
 `git push * --delete*`/`git push --delete*` を ask から削除した(広い `Bash(git push *)` の allow がそのまま効くようになる)。
