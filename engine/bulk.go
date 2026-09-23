@@ -24,6 +24,22 @@ var (
 	ErrDuplicatePreset = errors.New("防御側プリセットが重複している")
 	// ErrInvalidPreset はプリセット定義そのものが不正(SP 範囲・合計、性格、キー空)。
 	ErrInvalidPreset = errors.New("防御側プリセットの定義が不正")
+	// ErrTooManyPresets は Presets / PresetKeys の件数が MaxBulkPresets を超えている
+	// (issue #110。ADR-0208 §4・ADR-0108)。HTTP を経由しない直接呼び出し・WASM でも
+	// 行数(len(presets) × len(itemVariants))を増幅させないための防御。
+	ErrTooManyPresets = errors.New("防御側プリセットの件数が上限を超えている")
+	// ErrTooManyItemVariants は ItemVariants の件数が MaxBulkItemVariants を超えている
+	// (issue #110。ADR-0208 §4・ADR-0108)。
+	ErrTooManyItemVariants = errors.New("持ち物バリアントの件数が上限を超えている")
+)
+
+// 件数の上限(issue #110。ADR-0208 §1 の契約値と同じ。ADR-0108)。
+const (
+	// MaxBulkPresets は Presets / PresetKeys それぞれの件数上限。
+	// DefenderPreset の enum は8値なので「全種類を1回ずつ」が上限になる。
+	MaxBulkPresets = 8
+	// MaxBulkItemVariants は ItemVariants の件数上限。
+	MaxBulkItemVariants = 64
 )
 
 // PresetKey は防御側の代表調整のキー。OpenAPI の DefenderPreset enum と1対1に対応する。
@@ -196,6 +212,18 @@ func selectPresets(in BulkInput) ([]DefenderPreset, error) {
 // 各行は同じ入力に対する CalcDamage と完全に一致しなければならない。
 // エラー時は部分的な行を返さない。
 func CalcBulk(in BulkInput) (BulkResult, error) {
+	// 件数の上限は、プリセットの選別・検証(selectPresets)より前に見る(issue #110。
+	// ADR-0208 §4・ADR-0108)。巨大な入力に対して以降の一切の追加の仕事をしないため。
+	if len(in.Presets) > MaxBulkPresets {
+		return BulkResult{}, fmt.Errorf("%w: %d 件", ErrTooManyPresets, len(in.Presets))
+	}
+	if len(in.PresetKeys) > MaxBulkPresets {
+		return BulkResult{}, fmt.Errorf("%w: %d 件", ErrTooManyPresets, len(in.PresetKeys))
+	}
+	if len(in.ItemVariants) > MaxBulkItemVariants {
+		return BulkResult{}, fmt.Errorf("%w: %d 件", ErrTooManyItemVariants, len(in.ItemVariants))
+	}
+
 	presets, err := selectPresets(in)
 	if err != nil {
 		return BulkResult{}, err

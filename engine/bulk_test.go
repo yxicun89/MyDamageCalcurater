@@ -5,6 +5,7 @@ package engine
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -714,6 +715,30 @@ func TestCalcBulkErrors(t *testing.T) {
 		{"防御側種族のタイプが無い", func(in *BulkInput) {
 			in.DefenderSpecies.Types = nil
 		}, nil},
+		// 件数の上限(issue #110。ADR-0208 §4・ADR-0108)。
+		{"Presets が上限超過", func(in *BulkInput) {
+			in.Presets = make([]DefenderPreset, MaxBulkPresets+1)
+			for i := range in.Presets {
+				in.Presets[i] = DefenderPreset{Key: PresetKey(fmt.Sprintf("p%d", i))}
+			}
+		}, ErrTooManyPresets},
+		{"PresetKeys が上限超過", func(in *BulkInput) {
+			in.PresetKeys = make([]PresetKey, MaxBulkPresets+1)
+			for i := range in.PresetKeys {
+				in.PresetKeys[i] = PresetKey(fmt.Sprintf("p%d", i))
+			}
+		}, ErrTooManyPresets},
+		{"PresetKeys が上限超過(すべて同じキーの重複でも件数エラーが先)", func(in *BulkInput) {
+			// 中身をすべて同じキーの重複にすることで、件数の検査が selectPresets の重複検査
+			// より前にあることを確かめる。重複が無ければ、検査の順序に依らずどちらのエラーにもなりうる。
+			in.PresetKeys = make([]PresetKey, MaxBulkPresets+1)
+			for i := range in.PresetKeys {
+				in.PresetKeys[i] = PresetNone
+			}
+		}, ErrTooManyPresets},
+		{"ItemVariants が上限超過", func(in *BulkInput) {
+			in.ItemVariants = make([]*Item, MaxBulkItemVariants+1)
+		}, ErrTooManyItemVariants},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -735,6 +760,46 @@ func TestCalcBulkErrors(t *testing.T) {
 				t.Errorf("エラー時は部分的な行を返さないこと: %v", rowKeys(res.Rows))
 			}
 		})
+	}
+}
+
+// TestCalcBulkAtLimitSucceeds は上限ちょうどの件数(PresetKeys 8 × ItemVariants 64)が
+// エラーにならず、上限内の最大の行数(512行)を返すこと(issue #110。ADR-0208 §1・§4・ADR-0108)。
+func TestCalcBulkAtLimitSucceeds(t *testing.T) {
+	in := bulkInput(CategoryPhysical, TypeWater)
+	in.PresetKeys = []PresetKey{
+		PresetNone, PresetHP, PresetHBBoost, PresetHB, PresetHBFull, PresetHDBoost, PresetHD, PresetHDFull,
+	}
+	if len(in.PresetKeys) != MaxBulkPresets {
+		t.Fatalf("テストの前提が崩れている: PresetKeys の件数 = %d, want %d", len(in.PresetKeys), MaxBulkPresets)
+	}
+	in.ItemVariants = make([]*Item, MaxBulkItemVariants)
+	for i := range in.ItemVariants {
+		in.ItemVariants[i] = &Item{ID: fmt.Sprintf("item%d", i)}
+	}
+	res, err := calcBulk(in)
+	if err != nil {
+		t.Fatalf("上限ちょうどの入力が失敗した: %v", err)
+	}
+	if want := MaxBulkPresets * MaxBulkItemVariants; len(res.Rows) != want {
+		t.Fatalf("行数 = %d, want %d", len(res.Rows), want)
+	}
+}
+
+// TestCalcBulkCustomPresetsAtLimitSucceeds は TestCalcBulkAtLimitSucceeds の Presets
+// (カスタム定義。PresetKeys を使わない経路)版(issue #110。ADR-0108)。
+func TestCalcBulkCustomPresetsAtLimitSucceeds(t *testing.T) {
+	in := bulkInput(CategoryPhysical, TypeWater)
+	in.Presets = make([]DefenderPreset, MaxBulkPresets)
+	for i := range in.Presets {
+		in.Presets[i] = DefenderPreset{Key: PresetKey(fmt.Sprintf("p%d", i))}
+	}
+	res, err := calcBulk(in)
+	if err != nil {
+		t.Fatalf("上限ちょうどの Presets が失敗した: %v", err)
+	}
+	if len(res.Rows) != MaxBulkPresets {
+		t.Fatalf("行数 = %d, want %d", len(res.Rows), MaxBulkPresets)
 	}
 }
 

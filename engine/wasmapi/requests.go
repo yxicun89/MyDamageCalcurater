@@ -122,6 +122,20 @@ type bulkResultDTO struct {
 }
 
 func (r *bulkRequest) run() (bulkResultDTO, error) {
+	// 件数の上限は DTO の変換より前に見る(issue #110。ADR-0208 §3・ADR-0108 決定3)。
+	// engine.CalcBulk も同じ上限を検査するが(直接呼び出し用の防御)、ここで先に見ておくと
+	// 「複数の違反が重なったとき HTTP と同じ invalid_input が先に出る」という parity が
+	// DTO 変換の失敗(未知の enum 等)より優先される形になる。
+	if len(r.Presets) > engine.MaxBulkPresets {
+		return bulkResultDTO{}, fail(CodeInvalidInput, "presets は %d 件以下でなければならない: %d 件", engine.MaxBulkPresets, len(r.Presets))
+	}
+	if len(r.PresetKeys) > engine.MaxBulkPresets {
+		return bulkResultDTO{}, fail(CodeInvalidInput, "presetKeys は %d 件以下でなければならない: %d 件", engine.MaxBulkPresets, len(r.PresetKeys))
+	}
+	if len(r.ItemVariants) > engine.MaxBulkItemVariants {
+		return bulkResultDTO{}, fail(CodeInvalidInput, "itemVariants は %d 件以下でなければならない: %d 件", engine.MaxBulkItemVariants, len(r.ItemVariants))
+	}
+
 	format, err := parseFormat(r.Format)
 	if err != nil {
 		return bulkResultDTO{}, err
@@ -260,6 +274,18 @@ type reverseResultDTO struct {
 }
 
 func (r *reverseRequest) run() (reverseResultDTO, error) {
+	// 件数・範囲の上限は DTO の変換より前に見る(issue #110。ADR-0208 §3・ADR-0108 決定3)。
+	// bulkRequest.run と同じ理由(parity が DTO 変換の失敗より優先される)。
+	if len(r.ItemCandidates) > engine.MaxReverseItemCandidates {
+		return reverseResultDTO{}, fail(CodeInvalidInput, "itemCandidates は %d 件以下でなければならない: %d 件", engine.MaxReverseItemCandidates, len(r.ItemCandidates))
+	}
+	if len(r.Observations) > engine.MaxReverseObservations {
+		return reverseResultDTO{}, fail(CodeInvalidInput, "observations は %d 件以下でなければならない: %d 件", engine.MaxReverseObservations, len(r.Observations))
+	}
+	if r.MaxCandidates < 0 || r.MaxCandidates > engine.MaxReverseMaxCandidates {
+		return reverseResultDTO{}, fail(CodeInvalidInput, "maxCandidates は 0..%d でなければならない: %d", engine.MaxReverseMaxCandidates, r.MaxCandidates)
+	}
+
 	format, err := parseFormat(r.Format)
 	if err != nil {
 		return reverseResultDTO{}, err
