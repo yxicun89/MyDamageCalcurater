@@ -147,7 +147,7 @@ Ingress を含まない粒度に分解する)は implementer の判断に任せ�
 
 **gateway 自身でも、クラスタ内の Ingress でも TLS を終端しない。** 外部からの入口で HTTPS を終端するのは
 **Tailscale**(`tailscale serve` / Tailscale Operator)で、tailnet 内の通信は WireGuard で暗号化される。
-証明書は Tailscale が tailnet の MagicDNS 名(`*.ts.net`)に対して自動発行・自動更新し、
+証明書は Tailscale が tailnet の MagicDNS 名(Tailscale が管理するドメインサフィックス配下)に対して自動発行・自動更新し、
 **証明書と鍵は Git にもクラスタの Secret にも入らない**(coding-rules「秘密値を Git に置かない」を構造的に満たす)。
 
 issue #148 の共通の受け入れ条件「全経路で TLS を終端し、HTTP から HTTPS へ転送し、証明書更新と
