@@ -304,3 +304,27 @@ A-5 は「逆算画面の持ち物候補を `disabled` にする」と書いた�
 `capabilities.effects === false` では効果データが無いので候補は「持ち物なし」だけになる。これは壊れた結果ではなく
 **前提の狭い正しい結果**なので、逆算そのものは実行し、`masterOnlineText.itemCandidatesUnavailable` を添えて
 「持ち物の候補を探索していない」ことを明示する。計算画面はトグルという操作があるので、A-5 のとおり `disabled` にする。
+
+### A-12. 検索欄のキーボード操作と見た目(P4-16c。A-10 の具体化)
+
+A-10 は「WAI-ARIA Authoring Practices の Combobox パターンに合わせる」とだけ書いたが、P4-16b の実装は
+`onClick` だけで、キーボードでは候補を選べなかった(critic 指摘)。パターンのうちどの形を採るかは
+他に合わせるべき既存 UI が無いので、ここで決める(P4-16c の受け入れ条件。テストで固定する)。
+
+**採るのは "List Autocomplete with Automatic Selection"**(候補が出たら先頭が選ばれている形)。
+入力の途中でも Enter だけで一番上の候補を確定でき、`aria-selected` が常にちょうど1件 true になる。
+
+- `ArrowDown` / `ArrowUp`: 1件ずつ移動し、**端で止まる**(ループしない)。候補が入れ替わるたびに先頭へ戻す。
+- `Enter`: ハイライト中の候補を確定する(`selectCandidate`)。候補が出ていなければ何もしない。
+- `Escape`: 候補を閉じる。**入力の文字は消さない**。閉じたときに候補は捨て、`ArrowDown` では戻さない
+  (検索はデバウンス付きの非同期なので、復活させると入力文字と候補がずれたまま出る。入力を変えれば再検索される)。
+- ハイライトは3つで示す: 入力欄の `aria-activedescendant`、候補の `aria-selected`、見た目のクラス
+  (`species-search__option--active`)。
+- `aria-controls` は候補を出しているときだけ付ける(閉じているときに付けると IDREF の参照先が DOM に無い)。
+- マウスのクリックは今までどおり(キーボードと排他ではない)。フォーカスが外れたときに閉じる処理は**入れない**
+  (blur はクリックより先に起きるため、閉じると既存のクリックでの選択を壊す)。
+
+見た目(`web/src/screens/SpeciesSearchField.css`)は docs/design.md のトークンだけで書く
+(入力の角丸 `--radius-input`、余白 `--space-*`、色は `--text-*` / `--border-hairline` / `--bg-*`)。
+候補一覧は素の箇条書きの既定を消し、最大の高さ + `overflow-y: auto` にする(`SPECIES_SEARCH_LIMIT` = 50件出るため)。
+常時動くアニメーションは入れない(CLAUDE.md ドメイン規約)。
