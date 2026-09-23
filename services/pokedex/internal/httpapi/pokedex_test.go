@@ -1,7 +1,7 @@
 package httpapi_test
 
-// 公開の検索 API(/api/pokedex/*。契約は api/openapi.yaml の searchSpecies / getSpecies / searchMoves / searchItems /
-// listNatures。ADR-0105 §3)のテスト。LIKE の評価・照合順序は DB の仕事なので、ここでは偽の Querier に渡る
+// 公開の検索 API(/api/pokedex/*。契約は api/openapi.yaml の searchSpecies / getSpecies / searchMoves / getMove /
+// searchItems / listNatures。ADR-0105 §3)のテスト。LIKE の評価・照合順序は DB の仕事なので、ここでは偽の Querier に渡る
 // パターン・件数・レギュレーションと、応答の形・エラーを確かめる(実際の前方一致は db の -tags mysql のテスト)。
 
 import (
@@ -36,6 +36,7 @@ func TestPublicEndpointsMatchContract(t *testing.T) {
 		"/api/pokedex/species/9001-001",
 		"/api/pokedex/moves",
 		"/api/pokedex/moves?q=" + url.QueryEscape("テスト") + "&limit=2",
+		"/api/pokedex/moves/teststrike",
 		"/api/pokedex/items",
 		"/api/pokedex/items?q=" + url.QueryEscape("テスト"),
 		"/api/pokedex/natures",
@@ -185,6 +186,45 @@ func TestGetSpecies(t *testing.T) {
 	assertError(t, do(t, h, http.MethodGet, "/api/pokedex/species/9099-000", true), http.StatusNotFound, api.NotFound)
 }
 
+// AC-P4b: 技の詳細。判定レーンが優先度(priority)を個別に引くための経路(2026-09-22 の依頼)。
+// レギュレーションの外の技も引ける(絞り込みは検索の仕事)。無い技は 404 not_found。
+func TestGetMove(t *testing.T) {
+	q := storetest.New()
+	h := newHandler(t, q)
+
+	rec := do(t, h, http.MethodGet, "/api/pokedex/moves/teststrike", true)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d\nbody=%s", rec.Code, rec.Body.String())
+	}
+	var m api.Move
+	decodeStrict(t, rec.Body.Bytes(), &m)
+	want := api.Move{Id: "teststrike", NameJa: "テストうちこみ", Type: api.PokeTypeNormal, Category: api.Physical, Power: 40}
+	priority := 1
+	want.Priority = &priority
+	if !reflect.DeepEqual(m, want) {
+		t.Errorf("move = %+v, want %+v", m, want)
+	}
+
+	rec = do(t, h, http.MethodGet, "/api/pokedex/moves/testbanned", true)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("レギュレーションの外の技の詳細 = %d, want 200\nbody=%s", rec.Code, rec.Body.String())
+	}
+	var banned api.Move
+	decodeStrict(t, rec.Body.Bytes(), &banned)
+	if banned.Id != "testbanned" || banned.NameJa != "テストきんじて" {
+		t.Errorf("testbanned = %+v, want id/nameJa がすり替わっていないこと", banned)
+	}
+
+	assertError(t, do(t, h, http.MethodGet, "/api/pokedex/moves/unknownmove", true), http.StatusNotFound, api.NotFound)
+
+	// 未投入(技0件)は searchMoves 等の一覧系と違い 503 ではなく 404(GetDefaultRegulation を経由しないため。
+	// api/openapi.yaml の getMove の説明どおり)。
+	empty := storetest.New()
+	empty.Moves = nil
+	hEmpty := newHandler(t, empty)
+	assertError(t, do(t, hEmpty, http.MethodGet, "/api/pokedex/moves/teststrike", true), http.StatusNotFound, api.NotFound)
+}
+
 // AC-P5: 性格の一覧(natures テーブル)。無補正は plus / minus とも null。
 func TestListNatures(t *testing.T) {
 	h := newHandler(t, storetest.New())
@@ -216,6 +256,7 @@ func TestPublicInputValidation(t *testing.T) {
 		{"ヘッダ無し(種族)", "/api/pokedex/species", false, api.MissingHeader},
 		{"ヘッダ無し(詳細)", "/api/pokedex/species/9001-000", false, api.MissingHeader},
 		{"ヘッダ無し(技)", "/api/pokedex/moves", false, api.MissingHeader},
+		{"ヘッダ無し(技詳細)", "/api/pokedex/moves/teststrike", false, api.MissingHeader},
 		{"ヘッダ無し(持ち物)", "/api/pokedex/items", false, api.MissingHeader},
 		{"ヘッダ無し(性格)", "/api/pokedex/natures", false, api.MissingHeader},
 		{"limit=0", "/api/pokedex/species?limit=0", true, api.InvalidInput},
@@ -231,7 +272,7 @@ func TestPublicInputValidation(t *testing.T) {
 			assertError(t, do(t, h, http.MethodGet, tt.target, tt.withHeaders), http.StatusBadRequest, tt.code)
 			for _, c := range q.Calls {
 				switch c.Method {
-				case "SearchSpecies", "SearchMoves", "SearchItems", "GetSpeciesByKey":
+				case "SearchSpecies", "SearchMoves", "SearchItems", "GetSpeciesByKey", "GetMove":
 					t.Errorf("入力が不正なのに %s を呼んだ", c.Method)
 				}
 			}
@@ -253,6 +294,7 @@ func TestPublicUnavailable(t *testing.T) {
 		{"性格が空", "/api/pokedex/natures", func(q *storetest.Querier) { q.Natures = nil }},
 		{"DB に接続できない(種族)", "/api/pokedex/species", func(q *storetest.Querier) { q.Err = storetest.ErrDB }},
 		{"DB に接続できない(詳細)", "/api/pokedex/species/9001-000", func(q *storetest.Querier) { q.Err = storetest.ErrDB }},
+		{"DB に接続できない(技詳細)", "/api/pokedex/moves/teststrike", func(q *storetest.Querier) { q.Err = storetest.ErrDB }},
 		{"DB に接続できない(性格)", "/api/pokedex/natures", func(q *storetest.Querier) { q.Err = storetest.ErrDB }},
 		{"検索のクエリだけ失敗", "/api/pokedex/moves", func(q *storetest.Querier) {
 			q.ErrByMethod = map[string]error{"SearchMoves": storetest.ErrDB}

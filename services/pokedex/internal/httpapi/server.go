@@ -25,7 +25,7 @@ func NewServer(q store.Querier) *Server {
 }
 
 // NewHandler は pokedex-svc の HTTP ハンドラ全体を組み立てる。
-// pokedex の6操作(検索5 + 内部 API 1。生成ラッパ経由)、calc の3操作(直接 404。calc-svc の R1 と対称)、
+// pokedex の7操作(検索6 + 内部 API 1。生成ラッパ経由)、calc の3操作(直接 404。calc-svc の R1 と対称)、
 // GET /healthz(DB に触れない運用エンドポイント)、panic の回復(500 internal)、echo の既定エラー
 // (ルート無し・メソッド違い)を Error 形式に揃えるエラーハンドラを含む。
 // serve は起動時に DB へ接続しない(sql.Open だけ)。DB が無くても起動し、DB を使う操作が 503 を返す。
@@ -40,7 +40,7 @@ func NewHandler(q store.Querier) http.Handler {
 	return e
 }
 
-// registerPokedexRoutes は pokedex-svc の担当(検索5操作 + 内部 API)だけを、生成ラッパ
+// registerPokedexRoutes は pokedex-svc の担当(検索6操作 + 内部 API)だけを、生成ラッパ
 // (api.ServerInterfaceWrapper。公開操作は必須ヘッダ X-Device-Id / X-Session-Id の有無を検証してから
 // Server を呼ぶ。内部 API はヘッダを要求しない)経由で登録する。
 func registerPokedexRoutes(e *echo.Echo, srv *Server) {
@@ -48,6 +48,7 @@ func registerPokedexRoutes(e *echo.Echo, srv *Server) {
 	e.GET("/api/pokedex/species", wrapper.SearchSpecies)
 	e.GET("/api/pokedex/species/:key", wrapper.GetSpecies)
 	e.GET("/api/pokedex/moves", wrapper.SearchMoves)
+	e.GET("/api/pokedex/moves/:key", wrapper.GetMove)
 	e.GET("/api/pokedex/items", wrapper.SearchItems)
 	e.GET("/api/pokedex/natures", wrapper.ListNatures)
 	e.GET("/internal/pokedex/master", wrapper.GetMasterExport)
