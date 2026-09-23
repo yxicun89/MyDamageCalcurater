@@ -9,6 +9,7 @@
 // 先頭は必ず null(持ち物なし)、続きはマスタの順のまま(並べ替えない)。
 
 import type { Item, Move, ReverseSide, StatKey } from "../engine/types";
+import { MAX_ITEM_CANDIDATES, limitToMax } from "./requestLimits";
 import { NEUTRAL_MODIFIER, isDefensiveItemCandidate } from "./requests";
 
 /**
@@ -58,6 +59,7 @@ export function reverseItemCandidates(
   move: Move,
 ): ReverseItemCandidates {
   const isCandidate = side === "defender" ? isDefensiveItemCandidate : isAttackerCandidate;
-  // P4-19: 未実装(spec-writer のスタブ)。MAX_ITEM_CANDIDATES での絞り込みは implementer が入れる。
-  return { candidates: [null, ...items.filter((item) => isCandidate(item, move))], truncated: false };
+  const full: ReadonlyArray<Item | null> = [null, ...items.filter((item) => isCandidate(item, move))];
+  const limited = limitToMax(full, MAX_ITEM_CANDIDATES);
+  return { candidates: limited.values, truncated: limited.truncated };
 }

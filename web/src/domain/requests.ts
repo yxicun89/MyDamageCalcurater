@@ -20,6 +20,7 @@ import type {
   TypeChart,
 } from "../engine/types";
 import type { MasterSpecies } from "../master/types";
+import { MAX_ITEM_VARIANTS, limitToMax } from "./requestLimits";
 
 /** バトルのレベル。Lv50 固定(CLAUDE.md ドメイン規約)。 */
 export const BATTLE_LEVEL = 50;
@@ -177,11 +178,20 @@ export function defenderItemVariants(input: DefenderItemVariantsInput): Defender
   if (!compare) {
     return { variants: selectedItem === null ? undefined : [selectedItem], truncated: false };
   }
-  // P4-19: 未実装(spec-writer のスタブ)。MAX_ITEM_VARIANTS での絞り込みは implementer が入れる。
-  if (selectedItem === null || candidates.some((item) => item.id === selectedItem.id)) {
-    return { variants: [null, ...candidates], truncated: false };
+  const selectedIncludedInCandidates =
+    selectedItem === null || candidates.some((item) => item.id === selectedItem.id);
+  const full: ReadonlyArray<Item | null> = selectedIncludedInCandidates
+    ? [null, ...candidates]
+    : [null, selectedItem, ...candidates];
+  const limited = limitToMax(full, MAX_ITEM_VARIANTS);
+  if (!limited.truncated || selectedItem === null) {
+    return { variants: limited.values, truncated: limited.truncated };
   }
-  return { variants: [null, selectedItem, ...candidates], truncated: false };
+  // 絞り込みで選んだ持ち物が落ちた場合、最後の1枠をその持ち物に使う(選んだ持ち物は必ず残す)。
+  if (limited.values.some((item) => item?.id === selectedItem.id)) {
+    return { variants: limited.values, truncated: limited.truncated };
+  }
+  return { variants: [...limited.values.slice(0, -1), selectedItem], truncated: true };
 }
 
 export interface BuildReverseRequestInput {

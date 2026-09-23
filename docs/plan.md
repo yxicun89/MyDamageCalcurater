@@ -147,13 +147,17 @@
   #78(API+Web 特性の無効・吸収の境界反映)・#110(Web の担当分は P4-19 へ分離。DECISIONS.md 2026-09-23 参照)・
   #103(主担当 API・データ。M2保存データの保持期間。ユーザー決定 2026-09-23 で needs-decision は解消済み。
   DECISIONS.md参照。Web は連携のみで主担当ではない)
-- [ ] P4-19 issue #110(セキュリティ。API レーンの契約変更 PR #130 が main 統合済み。DECISIONS.md 2026-09-23
-  「calc の候補・観測件数に上限を置く」に基づく Web レーンの依頼分。API レーンから直接連絡あり):
-  (1) 逆算画面の「観測を追加」を16件(`api/openapi.yaml` の `observations.maxItems`)で無効化し、理由を表示する
-  (アクセシビリティ通知。`aria-live` 等)。(2) 持ち物候補(`defensiveItemCandidates`・`reverseItemCandidates`)が
-  64件(`itemVariants`/`itemCandidates` の `maxItems`。null要素を含む)を超える場合、黙って切り捨てず決定的に
-  絞り込み(マスタの順序をそのまま使う既存の規約どおり先頭から)、絞り込んだことを画面に明示する
-  (P4-16b の `speciesSearchTruncated` と同じ UX パターンを踏襲できる)
+- [x] P4-19 issue #110(セキュリティ。ADR-0300 §10。critic PASS: 境界値の網羅探索〈約1.2万ケース〉と変異テスト5件で
+  `itemVariants`/`itemCandidates` が常に64以下・`observations` が17件目を作れないことを確認済み)。
+  `domain/requestLimits.ts` に上限3定数(`api/openapi.yaml` の `maxItems` との同期をテストで検査)と
+  `limitToMax()`。`defenderItemVariants`・`reverseItemCandidates` が配列を作る最終地点で決定的に絞り込み、
+  選んだ持ち物は落とさない。逆算の「観測を追加」は16件で disabled + `role="status"` の理由表示。
+  絞り込みが起きたら計算・逆算の両画面に文言を明示(`requestLimitText`)。
+  残る軽微(ブロッカーではない。次に触るときに拾う): (1) `addObservation()` 自体のガード(ボタンの disabled とは
+  別の多層防御)を直接検証するテストが無い。(2) 観測上限到達時の `role="status"` 要素が条件付きマウントで、
+  常時マウント+中身の出し入れの方が読み上げが安定する可能性。(3) `ReverseScreen.tsx` の `move === null` 分岐に
+  「先頭は必ず null」の知識の小さな複製がある(実際には使われない経路)。
+  issue #110 は engine/WASM・iOS の追従待ちで、Web 単独ではクローズしない(DECISIONS.md 参照)
 
 ## M2: 保存・構築
 - [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)

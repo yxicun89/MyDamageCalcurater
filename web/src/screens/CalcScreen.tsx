@@ -27,6 +27,7 @@ import {
 } from "../domain/attackerPresets";
 import { formatEffectiveness, formatKO, formatMoveCategory, formatPercentRange } from "../domain/format";
 import { firstDamagingMove, learnsetMoves } from "../domain/moves";
+import { MAX_ITEM_VARIANTS } from "../domain/requestLimits";
 import {
   buildBulkRequest,
   buildIndividual,
@@ -44,7 +45,7 @@ import type {
   Move,
   MoveCategory,
 } from "../engine/types";
-import { calcScreenText, isTypeId, masterOnlineText, typeNameJa } from "../i18n/ja";
+import { calcScreenText, isTypeId, masterOnlineText, requestLimitText, typeNameJa } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type {
   MasterData,
@@ -307,6 +308,13 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     () => attackerMoves.find((candidate) => candidate.id === moveId) ?? null,
     [attackerMoves, moveId],
   );
+  // P4-19(issue 110、ADR-0208): 防御側の持ち物の通り(itemVariants)を組み立て、上限で絞り込んだかを
+  // 画面に出す。useEffect の依存に truncated を含む新しい配列を毎回作らないよう、ここで useMemo にする
+  // (react-hooks/set-state-in-effect の無限ループを避ける)。
+  const itemVariantsResult = useMemo(() => {
+    const candidates = move === null ? [] : defensiveItemCandidates(master.items, move);
+    return defenderItemVariants({ selectedItem: defenderItem, compare: compareItems, candidates });
+  }, [master.items, move, defenderItem, compareItems]);
 
   function selectAttacker(key: string): void {
     setAttackerKey(key);
@@ -447,13 +455,7 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
       item: attackerItem,
       ability: defaultAbility(attackerSpecies, abilitiesFor(master.abilities, attackerKey)),
     });
-    const candidates = defensiveItemCandidates(master.items, move);
-    // P4-19: 絞り込みが起きたこと(truncated)を画面に出すのは implementer が入れる(いまは渡す配列だけ使う)。
-    const { variants: itemVariants } = defenderItemVariants({
-      selectedItem: defenderItem,
-      compare: compareItems,
-      candidates,
-    });
+    const { variants: itemVariants } = itemVariantsResult;
     const request = buildBulkRequest({
       attacker: attackerIndividual,
       defenderSpecies,
@@ -492,6 +494,7 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     compareItems,
     attackerPresetKey,
     abilitiesFor,
+    itemVariantsResult,
   ]);
 
   // idle・status-move は選ばれている入力から直接決まる。completed が無い、または今の入力と違う入力の
@@ -586,6 +589,9 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
       </label>
       {!capabilities.effects && (
         <p className="calc-screen__notice">{masterOnlineText.itemCandidatesUnavailable}</p>
+      )}
+      {itemVariantsResult.truncated && (
+        <p className="calc-screen__notice">{requestLimitText.itemCandidatesTruncated(MAX_ITEM_VARIANTS)}</p>
       )}
 
       <ResultsSection
