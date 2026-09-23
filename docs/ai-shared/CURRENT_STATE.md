@@ -41,6 +41,13 @@ P4-5 は Chrome で確認済み(Safari は未確認。人間の作業)。
 critic 1回目 FAIL(検索候補が1件でも「候補が多い」と誤案内する文言バグ、BalanceScreen のガードが実質未検証だった点)
 を修正・テスト強化して2回目 PASS。既存803件は無変更・新規30件追加(833件)。
 キーボード操作・CSS 等の残りは P4-16c として plan.md に理由付きで分離(ブロッカーではない)。
+**P4-19(issue #110 セキュリティ。ADR-0300 §10)も完了・main 統合済み(PR #142)**: 持ち物候補
+(defenderItemVariants・reverseItemCandidates)を配列を作る最終地点で64件に決定的に絞り込み(選んだ持ち物は
+落とさない)、観測は16件で「観測を追加」を disabled+role="status"案内。critic PASS(セキュリティ関連のため
+境界値を重点検証: candidates 0〜80件×選択パターン×compareON/OFFの約1.2万ケース網羅探索と変異テスト5件で、
+itemVariants/itemCandidates が常に64以下・observationsが17件目を作れないことを確認)。既存857件は無変更・
+新規9件追加(866件)。データレーンの engine/wasmapi 側(ADR-0108・PR #138)も main 統合済み。issue #110 は
+iOS の追従待ちで Web 単独ではクローズしない。
 Next: (1) P4-16c(検索欄のキーボード操作・CSS 等。plan.md 参照)。
 (2) P4-18(Codexレビュー issue。タイプバランスレーンから連絡): 優先 #99(アクセシビリティ)・#113(debounce/cancel)。
 (3) P4-17: 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら技を復活。
