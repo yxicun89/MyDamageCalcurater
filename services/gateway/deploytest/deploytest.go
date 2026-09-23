@@ -299,6 +299,8 @@ type Volume struct {
 // Service は v1 Service の一部。
 type Service struct {
 	Spec struct {
+		// Type は空なら ClusterIP(k8s の既定)。ADR-0210 §2 は LoadBalancer / NodePort を作らないことを求める。
+		Type     string            `yaml:"type"`
 		Selector map[string]string `yaml:"selector"`
 		Ports    []struct {
 			Name       string    `yaml:"name"`
