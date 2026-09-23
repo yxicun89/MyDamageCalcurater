@@ -296,7 +296,8 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
       unknownSpecies: theirsSpecies,
       move,
       typeChart: master.typeChart,
-      itemCandidates: reverseItemCandidates(side, master.items, move),
+      // P4-19: 絞り込みが起きたこと(truncated)を画面に出すのは implementer が入れる(いまは候補だけ使う)。
+      itemCandidates: reverseItemCandidates(side, master.items, move).candidates,
       observations: validObservations,
     });
     void engine.calcReverse(request).then((result) => {

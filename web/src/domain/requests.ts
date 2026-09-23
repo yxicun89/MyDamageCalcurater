@@ -139,6 +139,9 @@ export function isDefensiveItemCandidate(item: Item, move: Move): boolean {
 /**
  * 防御側の持ち物の差し替え候補(ADR-0300 §6)。ID・名前では選ばず、効果データから選ぶ
  * (isDefensiveItemCandidate)。マスタの順序をそのまま使う(並べ替えない)。
+ *
+ * ここでは件数を絞らない(分類だけを行う)。engine・API に渡す通り数の上限(MAX_ITEM_VARIANTS)は、
+ * null と「選んだ持ち物」を足して最終的な配列を作る defenderItemVariants が1か所で適用する(P4-19)。
  */
 export function defensiveItemCandidates(items: readonly Item[], move: Move): Item[] {
   return items.filter((item) => isDefensiveItemCandidate(item, move));
@@ -153,21 +156,32 @@ export interface DefenderItemVariantsInput {
   readonly candidates: readonly Item[];
 }
 
+/** 一括計算に渡す itemVariants と、上限(MAX_ITEM_VARIANTS)で落とした候補があるか(P4-19)。 */
+export interface DefenderItemVariants {
+  /** 渡す通り(長さは MAX_ITEM_VARIANTS 以下)。undefined は「itemVariants を渡さない」。 */
+  readonly variants: ReadonlyArray<Item | null> | undefined;
+  /** 上限を超えて落とした候補があるか。画面はこれを利用者に明示する(黙って切り捨てない)。 */
+  readonly truncated: boolean;
+}
+
 /**
  * 一括計算に渡す itemVariants を、選んだ持ち物と「候補も比較」のトグルから決める(ADR-0300 §6)。
- * 比較なしで持ち物も選ばなければ undefined を返す(engine に itemVariants を渡さず、既定の持ち物なし5行にする)。
+ * 比較なしで持ち物も選ばなければ variants は undefined(engine に itemVariants を渡さず、既定の持ち物なし5行にする)。
+ *
+ * P4-19(ADR-0208): null を含めた通り数が MAX_ITEM_VARIANTS を超えるときは末尾の候補から落とす。
+ * ただし利用者が選んだ持ち物は必ず残す(落ちる位置にあるときは、最後に残る1枠をその持ち物に使う。
+ * マスタの順序は崩さない)。
  */
-export function defenderItemVariants(
-  input: DefenderItemVariantsInput,
-): ReadonlyArray<Item | null> | undefined {
+export function defenderItemVariants(input: DefenderItemVariantsInput): DefenderItemVariants {
   const { selectedItem, compare, candidates } = input;
   if (!compare) {
-    return selectedItem === null ? undefined : [selectedItem];
+    return { variants: selectedItem === null ? undefined : [selectedItem], truncated: false };
   }
+  // P4-19: 未実装(spec-writer のスタブ)。MAX_ITEM_VARIANTS での絞り込みは implementer が入れる。
   if (selectedItem === null || candidates.some((item) => item.id === selectedItem.id)) {
-    return [null, ...candidates];
+    return { variants: [null, ...candidates], truncated: false };
   }
-  return [null, selectedItem, ...candidates];
+  return { variants: [null, selectedItem, ...candidates], truncated: false };
 }
 
 export interface BuildReverseRequestInput {

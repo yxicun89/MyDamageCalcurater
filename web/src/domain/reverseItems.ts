@@ -37,15 +37,27 @@ function isAttackerCandidate(item: Item, move: Move): boolean {
   return (effect.statMods?.[relevantStat] ?? 0) > NEUTRAL_MODIFIER;
 }
 
+/** 逆算に渡す持ち物候補と、上限(MAX_ITEM_CANDIDATES)で落とした候補があるか(P4-19)。 */
+export interface ReverseItemCandidates {
+  /** 先頭は必ず null(持ち物なし)。長さは MAX_ITEM_CANDIDATES 以下。 */
+  readonly candidates: ReadonlyArray<Item | null>;
+  /** 上限を超えて落とした候補があるか。画面はこれを利用者に明示する(黙って切り捨てない)。 */
+  readonly truncated: boolean;
+}
+
 /**
  * 逆算で探索する持ち物候補(先頭は必ず null = 持ち物なし)。マスタの順序をそのまま使う(並べ替えない)。
  * 返す `Item` は渡された実体をそのまま(コピーしない。engine に解決済みの効果を渡すため)。
+ *
+ * P4-19(ADR-0208): null を含めた通り数が MAX_ITEM_CANDIDATES を超えるときは、末尾の候補から落として
+ * 上限に収める(超えたまま送ると API は 400 invalid_input、engine は上限超過で失敗する)。
  */
 export function reverseItemCandidates(
   side: ReverseSide,
   items: readonly Item[],
   move: Move,
-): ReadonlyArray<Item | null> {
+): ReverseItemCandidates {
   const isCandidate = side === "defender" ? isDefensiveItemCandidate : isAttackerCandidate;
-  return [null, ...items.filter((item) => isCandidate(item, move))];
+  // P4-19: 未実装(spec-writer のスタブ)。MAX_ITEM_CANDIDATES での絞り込みは implementer が入れる。
+  return { candidates: [null, ...items.filter((item) => isCandidate(item, move))], truncated: false };
 }

@@ -448,7 +448,8 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
       ability: defaultAbility(attackerSpecies, abilitiesFor(master.abilities, attackerKey)),
     });
     const candidates = defensiveItemCandidates(master.items, move);
-    const itemVariants = defenderItemVariants({
+    // P4-19: 絞り込みが起きたこと(truncated)を画面に出すのは implementer が入れる(いまは渡す配列だけ使う)。
+    const { variants: itemVariants } = defenderItemVariants({
       selectedItem: defenderItem,
       compare: compareItems,
       candidates,
