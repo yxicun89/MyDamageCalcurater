@@ -14,7 +14,7 @@
 // 検索そのもの(デバウンス・取り消し・失敗の表示)は CalcScreen.online.test.tsx / ReverseScreen.online.test.tsx
 // が画面ごしに確かめているので、ここでは重複させず、キーボードと ARIA だけを見る。
 
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type { Ability } from "../engine/types";
@@ -269,6 +269,26 @@ describe("AC-3 Enter はハイライト中の候補を確定する", () => {
 
     expect(view.search.resolvedKeys).toEqual([]);
     expect(view.onResolved).not.toHaveBeenCalled();
+  });
+
+  test("IME変換中のEnterは候補選択に使わない(変換確定と候補選択を混同しない。critic指摘)", async () => {
+    const view = renderWithCandidates(3);
+    await view.open();
+
+    fireEvent.keyDown(comboboxInput(), { key: "Enter", isComposing: true });
+
+    expect(view.search.resolvedKeys).toEqual([]);
+    expect(view.onResolved).not.toHaveBeenCalled();
+    expect(screen.getAllByRole("option")).toHaveLength(3);
+  });
+
+  test("IME変換中のArrowDownはハイライトを動かさない", async () => {
+    const view = renderWithCandidates(3);
+    await view.open();
+
+    fireEvent.keyDown(comboboxInput(), { key: "ArrowDown", isComposing: true });
+
+    expect(highlightedOption()).toHaveTextContent(fixtureSpecies(0).nameJa);
   });
 });
 

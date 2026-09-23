@@ -1,0 +1,76 @@
+/*
+ * 種族の検索欄(screens/SpeciesSearchField.tsx。ADR-0304 A-10・A-12)。色は必ず tokens.css の CSS 変数
+ * (--*)で参照し、ここに 16 進の色リテラルを書かない(web/src/styles/noColorLiterals.test.ts)。
+ * 常時動くアニメーションは置かない(CLAUDE.md ドメイン規約、web/src/styles/motion.test.ts)。
+ */
+
+.species-search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  position: relative;
+}
+
+.species-search input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  padding: var(--space-2) var(--space-3);
+}
+
+/* キーボードのフォーカス位置が見えるようにする(WCAG 2.4.7)。CalcScreen.css の
+   .calc-preset__option:has(...:focus-visible) と同じ見え方(--text-primary の outline)。 */
+.species-search input:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+.species-search__hint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+}
+
+.species-search__status {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+}
+
+/* 候補一覧(role="listbox")。最大 SPECIES_SEARCH_LIMIT(50件)出ることがあるのでスクロールにする。
+   素の箇条書きの既定(マーカー・余白)は消す。 */
+.species-search__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  background: var(--bg-base);
+}
+
+.species-search__option {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-body);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+/* マウスのホバー(見た目だけ。キーボードのハイライトとは別の規則: species-search__option--active)。 */
+.species-search__option:hover {
+  background: var(--border-hairline);
+}
+
+/* キーボードでハイライト中の候補(aria-activedescendant が指すもの。ADR-0304 A-12
+   「List Autocomplete with Automatic Selection」)。ホバーと見分けが付くよう反転させる
+   (design.md にアクセントトークンは無いため、CalcScreen.css の .calc-preset__option--selected と同じ考え方)。 */
+.species-search__option--active {
+  background: var(--text-primary);
+  color: var(--bg-base);
+}

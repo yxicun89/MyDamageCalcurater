@@ -328,3 +328,9 @@ A-10 は「WAI-ARIA Authoring Practices の Combobox パターンに合わせる
 (入力の角丸 `--radius-input`、余白 `--space-*`、色は `--text-*` / `--border-hairline` / `--bg-*`)。
 候補一覧は素の箇条書きの既定を消し、最大の高さ + `overflow-y: auto` にする(`SPECIES_SEARCH_LIMIT` = 50件出るため)。
 常時動くアニメーションは入れない(CLAUDE.md ドメイン規約)。
+
+**追記(P4-16c 実装後。critic 指摘): IME 変換中は上のキー操作を素通しする**。この欄は日本語の種族名を打つ欄で、
+`event.nativeEvent.isComposing === true` のときの `Enter`/矢印キーは IME の変換操作であって候補選択ではない
+(`onKeyDown` の先頭でガードし、何もせず return する)。無視すると変換確定の Enter で
+ハイライト中の候補を誤って選んでしまう。`preventDefault()` も「実際に処理したとき」だけ呼ぶ(候補が無いときの
+キャレット移動等の既定動作を妨げない。`App.tsx` の `handleTabKeyDown` と同じ作法)。

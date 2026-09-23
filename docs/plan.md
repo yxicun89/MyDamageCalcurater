@@ -125,18 +125,14 @@
   無効(案内 + 入力を全部 disabled + balance API を呼ばない。A-9)。検索を画面へ渡す経路は `ScreenProps.masterSearch?`
   (A-10)。P4-16 の積み残し(1)(2)(response.json 側の AbortError 再送出)も本タスクで解消・回帰テスト追加。
   (3)(4)は影響が無い軽微事項のため P4-16c にまとめて送る
-- [ ] P4-16c P4-16b の critic 指摘で今回見送った残り(ブロッカーではないが今回中に必須ではないため分離。
-  critic の許容どおり明記): (1) 種族の検索候補がキーボードで選べない(↑↓/Enter/Escape・`aria-activedescendant`
-  が無い。WAI-ARIA Combobox パターン未実装。`web/src/screens/SpeciesSearchField.tsx`)。(2) 検索欄に CSS が無い
-  (`species-search__*` のクラスが未スタイルのまま。`docs/design.md` に沿った見た目を用意する)。
-  (3) `onlineSource.test.ts` の `urlOf` に基点を足した副作用で `natures`/`species` の呼び出しが絶対 URL の origin を
-  検査していない(`items` のみ検査済み)。(4) 検索中に入力を空へ戻した直後に古い検索が届くケースの未カバー
-  (`createDeferredSpeciesSearch` で1件追加)。(5) `aria-controls` の参照先が閉じているとき DOM に無い・
-  `aria-selected` が常に false。(6) P4-16b の2回目 critic PASS の指摘: `BalanceScreen.online.test.tsx` の
-  A-9 回帰テストは `analyze`/`recommendations` のガード削除は検知するが `coverage`/`threats` のガード削除は
-  検知しない(技1つ・仮想敵1体も選んでから capabilities を切り替える形にすれば4つとも覆える)。
-  (7) `CalcScreen.online.test.tsx` の truncated 肯定側テストに候補件数(`SPECIES_SEARCH_LIMIT` 件)のアサーションが無い
-  (否定側と非対称)
+- [x] P4-16c P4-16b の critic 指摘で見送った残り(ADR-0304 A-12): 種族の検索候補を↑↓/Enter/Escape で操作できる
+  WAI-ARIA "List Autocomplete with Automatic Selection" パターンを実装(`web/src/screens/SpeciesSearchField.tsx`)、
+  `SpeciesSearchField.css` を design.md トークンのみで新規作成、`aria-controls`/`aria-activedescendant` は候補
+  非表示時に属性ごと外す。加えて(3)`onlineSource.test.ts` の origin 未検査、(4)入力を空に戻した直後の遅延応答、
+  (6)`BalanceScreen.online.test.tsx` の A-9 ガードが coverage/threats を検知していなかった点、(7)truncated
+  肯定側テストの非対称、をテスト強化で解消。critic 1回目 FAIL(IME変換中のEnter・矢印キーを誤って候補選択に
+  使ってしまう退行を発見)→ `isComposing` ガード追加・`preventDefault()` は処理したときだけに修正・回帰テスト
+  2件追加(907件)→再確認予定
 - [ ] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら
   `capabilities.moves` を true にして技を復活させる
 - [ ] P4-18 Codex コードレビューの issue(Web レーン主担当。タイプバランスレーンから 2026-09-23 に連絡・`gh issue view <番号>`)。
