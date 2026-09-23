@@ -84,14 +84,15 @@ dataVersion・rollout一本化)はデータレーンが主担当で、連絡が�
 
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
-Active: なし
-Branch: feat/judge-jd3(作業ディレクトリ ~/MyDamageCalcurater-judge。JD2 の feat/judge-jd2 は PR #127 で main に統合済み・削除)
-Status: JD0(基盤。PR #92)・JD1(判定API本体。PR #118)・JD2(場の効果。PR #127)は main に統合済み。
-`POST /api/judge/v1/outspeed-and-ko` は `speedField`(trickRoom・attackerTailwind・defenderTailwind)に対応済み(ADR-0702)。
-JD2〜JD5 の範囲・順序はユーザー回答で確定済み(judge-design.md §3): JD2 場の効果→JD3 複数の相手候補→JD4 返り討ち判定
-(pokedex-svc の技 detail endpoint が無く API レーンへ依頼中。DECISIONS.md)→JD5 Web/iOS 画面
-Next: JD3(複数の相手候補を一度に判定)に着手。攻撃側(自分・技)は1つに固定し、相手候補(`Individual` の配列)を
-受け取って候補ごとに JD1+JD2 の判定を配列で返す(TB4 の仮想敵診断と同じ「1つに対し複数」の形。judge-design.md §3)
+Active: Claude Code
+Branch: feat/judge-jd3(作業ディレクトリ ~/MyDamageCalcurater-judge。PR 作成待ち。JD2 の feat/judge-jd2 は PR #127 で main に統合済み・削除)
+Status: JD0(基盤。PR #92)・JD1(判定API本体。PR #118)・JD2(場の効果。PR #127)・JD3(複数の相手候補。ADR-0703)は完了。
+`POST /api/judge/v1/outspeed-and-ko` の request の `defender`(単数)を `defenders`(1〜6件の配列)に、response を
+`matchups`(配列。`defenderIndex`・`outspeeds`・`speedTie`・`attackerSpeed`・`defenderSpeed`・`ko`)に破壊的変更した
+(クライアントがまだ無い=JD5未着手なので安全と判断。ADR-0703 §7)。上流は natures 1回+attacker種族1回+候補種族N回+
+calcN回の逐次、最初に失敗した候補で全体を打ち切る(部分成功なし)。critic PASS(1回目)。`internal/judge` は無変更
+Next: JD4(相手の技を含めた返り討ち判定)に着手。技の優先度(priority)が要るが pokedex-svc に個別取得endpointが無く、
+API レーンへ依頼中(DECISIONS.md 2026-09-22)。依頼が通るまで「両者優先度0」の限定で進めるか待つかを最初に判断する
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠
