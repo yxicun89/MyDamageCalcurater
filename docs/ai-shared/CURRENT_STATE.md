@@ -12,10 +12,10 @@ Next: (1) Codexレビュー issue #106(排他制御)を優先、続いて #104/#
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
-Active: Claude Code
-Branch: feat/api-issue103-retention(PR で main へ。作業ディレクトリ ~/MyDamageCalcurater-api)
-Status: Phase 3・issue #110(セキュリティ。ADR-0208。PR #130)は main に統合済み(データレーン・Webレーン担当分もそれぞれ main 統合済み)。issue #103(M2保存データの保持・削除・端末ID境界。ADR-0209)は critic NG(必須指摘)を2回受けて反映し、PR作成待ち
-Next: (1) issue #103 の ADR-0209 を critic 再レビュー(3回目)→ PASS なら PR を main へ(データレーン・Web・iOSレーンへの依頼を DECISIONS.md に既定案あり)。(2) その後は他レーンからの依頼待ち
+Active: なし
+Branch: (次は main から feat/api-<名前> を切る。作業ディレクトリ ~/MyDamageCalcurater-api)
+Status: Phase 3・issue #110(ADR-0208。PR #130)・issue #103の設計(M2保存データの保持・削除・端末ID境界。ADR-0209。critic PASS。PR #150)は main に統合済み
+Next: 他レーンからの依頼待ち。issue #103の依頼(データ・Web・iOSレーンへ)はDECISIONS.mdに記録済み
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)

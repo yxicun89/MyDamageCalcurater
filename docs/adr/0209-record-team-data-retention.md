@@ -1,6 +1,6 @@
 # ADR-0209: M2 保存データの保持・削除・端末 ID 境界
 
-- 状態: 提案(2026-09-23。issue #103 の設計。受け入れ条件は spec-writer が先に書き、critic の独立レビュー待ち。record-svc / team-svc の実装は P5-3 / P5-4 で、この ADR に従う)
+- 状態: 採用(2026-09-23。issue #103 の設計。critic PASS(NG 2回のあと3回目)。record-svc / team-svc の実装は P5-3 / P5-4 で、この ADR に従う)
 - 日付: 2026-09-23
 - 関連: issue #103(監査ベース `264ae5963bb7e867a88ff5c79fade257a10edeb4`)、
   ADR-0012(サービス境界)、ADR-0200(API 契約とエラー語彙)、ADR-0202(gateway のルーティングとヘッダ検証)、
