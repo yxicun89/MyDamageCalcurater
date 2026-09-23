@@ -14,12 +14,12 @@ Next: (1) Codexレビュー issue #104/#109/#112。(2) 他レーンからの依�
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
-Active: Claude Code(P3-7 の critic レビュー対応中)
-Branch: fix/api-judge-move-detail(作業ディレクトリ ~/MyDamageCalcurater-api。main 未統合。次は main から feat/api-<名前> か fix/api-<名前> を切る)
+Active: なし
+Branch: (次は main から feat/api-<名前> か fix/api-<名前> を切る。作業ディレクトリ ~/MyDamageCalcurater-api)
 Status: Phase 3・issue #110(ADR-0208。PR #130)・issue #103の設計(M2保存データの保持・削除・端末ID境界。ADR-0209。critic PASS。PR #150)は main に統合済み
 Status(追記): issue #148のAPIレーン担当分(ADR-0210。私設サービスの境界)完了・critic PASS・**main 統合済み(PR #157)**。`deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定。端末ID/CORSを認証・到達制御として扱わない回帰テストも追加。
-Status(追記): P3-7 `GET /api/pokedex/moves/{key}`(getMove)を実装(判定レーン JD4 の依頼。ADR-0105 §3 追記)。契約・`services/pokedex/`(データレーンの範囲。越境理由と触ったファイル一覧は DECISIONS.md)まで一括実装。**まだ main 未統合**(critic 2回目レビューの指摘対応中。PR 未提出)。
-Next: P3-7 の critic 指摘(レーン間の記録の整合)を直したら PR 提出・main 統合。統合後にgetMove 実装の再レビュー依頼(データレーンへ)・iOS再生成依頼(DECISIONS.md記録済み)が有効になる。issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)もDECISIONS.mdに記録済み
+Status(追記): P3-7 `GET /api/pokedex/moves/{key}`(getMove)を実装(判定レーン JD4 の依頼。ADR-0105 §3 追記)。契約・`services/pokedex/`(データレーンの範囲。越境理由と触ったファイル一覧は DECISIONS.md)まで一括実装。critic PASS(3往復)・**main 統合済み(PR #161)**。判定レーンは JD4 に着手可。
+Next: 他レーンからの依頼待ち。issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ)・iOS再生成依頼はDECISIONS.mdに記録済み
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
@@ -88,17 +88,15 @@ scripts/argocd-bootstrap.sh の呼び出しに差し替え済み(2026-09-24 確�
 
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
-Active: なし(JD4 は main に getMove が入り次第 着手可。下記参照)
+Active: なし(JD4 着手可。下記参照)
 Branch: feat/judge-jd4(作業ディレクトリ ~/MyDamageCalcurater-judge。main から作成済み・空。JD3 の feat/judge-jd3 は PR #143 で main に統合済み・削除)
 Status: JD0(基盤。PR #92)・JD1(判定API本体。PR #118)・JD2(場の効果。PR #127)・JD3(複数の相手候補。PR #143。ADR-0703)は完了。
 `POST /api/judge/v1/outspeed-and-ko` は `defenders`(1〜6件)→`matchups`(配列)の一括判定・`speedField`(トリックルーム・
 追い風)に対応済み。
-Status(追記2026-09-23): **JD4 のブロックは解消**。API レーンが `GET /api/pokedex/moves/{key}`(getMove)を
-`fix/api-judge-move-detail` ブランチで実装済み(P3-7・ADR-0105 §3 追記・DECISIONS.md 2026-09-23)。**まだ main には
-入っていない**(PR 提出前。critic 2回目レビュー中)。`priority` は既存の `Move.priority`(`int`)フィールドのまま。
-Next: API レーンの PR が main に入ったのを確認してから(`git show origin/main:api/openapi.yaml | grep getMove` 等)
-JD4(相手の技を含めた返り討ち判定)に着手。まだ main に無ければ、API レーンの `fix/api-judge-move-detail` の
-状況を確認するか、DECISIONS.md の続報を待つ
+Status(追記2026-09-23): **JD4 のブロックは解消**。API レーンが `GET /api/pokedex/moves/{key}`(getMove)を実装し
+**main 統合済み(P3-7・PR #161・ADR-0105 §3 追記・DECISIONS.md 2026-09-23)**。`priority` は既存の
+`Move.priority`(`int`)フィールドのまま。
+Next: JD4(相手の技を含めた返り討ち判定)に着手(`feat/judge-jd4`)
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

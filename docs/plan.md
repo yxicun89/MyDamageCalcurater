@@ -86,7 +86,7 @@
 - [x] P3-4 calc-svc のマスタを pokedex-svc の内部 API(`GET /internal/pokedex/master`・MasterExport)から受け取る形に変更(ユーザー決定 2026-09-22。ADR-0204)。k3d と dev は同じ形のファイル(架空データ)。pokedex-svc(P2-3)のデプロイ後に local overlay を URL 方式へ切り替える(API レーンの後続)
 - [x] P3-5 gateway の `GATEWAY_WEB_URL`(Web レーンの依頼。設定時は `/api`・`/assets`・`/healthz`・`/internal` 以外への GET/HEAD を Web の Service へ転送。k3d の local は `http://web`。ADR-0205)
 - [x] P3-6 calc・gateway を pokedex-svc につなぐ(データレーンからの依頼。ADR-0206)。base に `CALC_MASTER_URL=http://pokedex` / `GATEWAY_POKEDEX_URL=http://pokedex`、local overlay の Component から calc へのファイル方式の patch・ConfigMap を削除、`services/gateway/scripts/smoke.sh` が `/api/pokedex/*` から計算に使う ID を実際に引くように変更。k3d(`make api-k3d-deploy && make api-smoke`)で pokedex-svc(投入済み)への接続を確認済み(`master=pokedex species=0003-000 move=highhorsepower nature=bashful` / `pokedex=200`)
-- [~] P3-7 `GET /api/pokedex/moves/{key}`(`getMove`)を追加(判定レーンの JD4 の依頼。2026-09-22・2026-09-23の DECISIONS.md。ADR-0105 §3 追記): 技1件を ID で引く。`getSpecies` と同様に使用可能集合で絞らない。マスタ未投入(0件)は`GetDefaultRegulation`を経由しないため 503 ではなく 404 `not_found`(searchMoves 等の一覧系と異なる。契約に明記)。`services/pokedex/`(データレーンの範囲)への実装まで API レーンが一括して行った理由: `api.ServerInterface` にメソッドが増えるため、スタブだけ置いて main に入れると「200 を約束する契約なのに実装が無い」状態になり、完全な実装より悪いと判断(既存の GetSpecies/GetItem パターンの写し。新規の設計判断はしていない)。データレーンへ触ったファイルの一覧を添えて再レビューを依頼(DECISIONS.md)。ブランチ `fix/api-judge-move-detail` で実装済み・critic レビュー中(PR 未提出。main 統合後にこの行を `[x]` へ更新する)
+- [x] P3-7 `GET /api/pokedex/moves/{key}`(`getMove`)を追加(判定レーンの JD4 の依頼。2026-09-22・2026-09-23の DECISIONS.md。ADR-0105 §3 追記): 技1件を ID で引く。`getSpecies` と同様に使用可能集合で絞らない。マスタ未投入(0件)は`GetDefaultRegulation`を経由しないため 503 ではなく 404 `not_found`(searchMoves 等の一覧系と異なる。契約に明記)。`services/pokedex/`(データレーンの範囲)への実装まで API レーンが一括して行った理由: `api.ServerInterface` にメソッドが増えるため、スタブだけ置いて main に入れると「200 を約束する契約なのに実装が無い」状態になり、完全な実装より悪いと判断(既存の GetSpecies/GetItem パターンの写し。新規の設計判断はしていない)。データレーンへ触ったファイルの一覧を添えて再レビューを依頼(DECISIONS.md)。critic PASS(3往復)。**main 統合済み(PR #161)**
 
 ### Phase 4 Web
 - [x] P4-1 デザイントークン(docs/design.md)を CSS 変数に実装(ADR-0300 §4。web/src/styles/tokens.css)
@@ -249,8 +249,7 @@
 - [x] JD3 複数の相手候補を一度に判定(攻撃側1つ・相手候補の配列 → 候補ごとの判定結果の配列。ADR-0703)。
   request の defender(単数)を defenders(1〜6件)に、response を matchups(配列)に破壊的変更(クライアント未着手のため安全)。critic PASS(1回目)
 - [ ] JD4 相手の技を含めた返り討ち判定。技の優先度を pokedex-svc から引く endpoint(`GET /api/pokedex/moves/{key}`)は
-  API レーンが `fix/api-judge-move-detail` で実装済み(2026-09-23。P3-7・DECISIONS.md)。**まだ main 未統合**(PR 提出前)。
-  main に入り次第、判定レーンは着手可(main の `api/openapi.yaml` に `getMove` があることを確認してから)
+  API レーンが実装し **main 統合済み(2026-09-23。P3-7・PR #161・DECISIONS.md)**。判定レーンは着手可
 - [ ] JD5 Web/iOS の画面(judge-svc を呼ぶ。担当は着手時に判断)
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
@@ -274,12 +273,6 @@
 
 ## ブロッカー
 (ここに止まった理由と試したことを書く)
-
-**解消見込み(2026-09-23。判定レーン→API レーン)**: JD4(相手の技を含めた返り討ち判定)は、技の優先度(priority)を
-pokedex-svc から個別取得する endpoint(`GET /api/pokedex/moves/{key}`)が無いと実装できず、ユーザーが「API レーンの
-実装を待つ」を選択してブロック中だった。API レーンが `getMove` を `fix/api-judge-move-detail` で実装済み(P3-7。
-ADR-0105 §3 追記。DECISIONS.md)。**main へはまだ未統合**(PR 提出前)。main に入り次第、判定レーンは着手可
-(`feat/judge-jd4`)。
 
 **【人間の確認待ち】(Web レーン、2026-09-22 深夜に記載)**
 - **P4-5 のブラウザ実機確認**(仕様ブロッカーではない。作業は止めない。**Chrome は 2026-09-22 に確認済み**、残りは Safari): `make web-dev` で開き、Chrome と Safari で計算・逆算が動くこと、
