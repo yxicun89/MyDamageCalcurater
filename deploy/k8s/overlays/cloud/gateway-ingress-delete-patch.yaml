@@ -1,0 +1,10 @@
+# base/gateway/ingress.yaml は host 指定なし・TLS なしの HTTP Ingress で、k3d 同梱の Traefik で
+# localhost:8080 から受けるための local 専用の経路(deploy/k8s/base/gateway/ingress.yaml のコメント・ADR-0210)。
+# クラウドの一般的な Ingress Controller にそのまま渡すと公開ロードバランサーになりうるため、
+# cloud overlay の描画結果からは取り除く(public な入口を作らない。ADR-0210 §2)。
+# クラウドでの到達経路は tailnet 経由(ADR-0210 §2.1。別タスク・運用レーンと共同)。
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gateway
+$patch: delete

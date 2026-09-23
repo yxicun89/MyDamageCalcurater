@@ -1035,6 +1035,32 @@ Impact: 主担当のAPI・Web・iOS・運用レーンへ連絡し、issue #148�
 無検討で公開されない静的テスト、private案でのtailnet/ACL・失効手順のrunbook化、CORS・端末IDを認証として扱わない回帰テスト)に沿って
 進めてもらう。データ・タイプバランス・素早さレーンは連携(今のところ追加対応は無い見込み)。
 
+## 2026-09-23: issue #148 の API レーン担当分が完了(ADR-0210 §7 を転記)
+Decision: ADR-0210(私設サービスの境界)を「採用」で確定。`deploy/k8s/overlays/cloud` から gateway の Ingress を
+削除 patch で除去し、public な Ingress・LoadBalancer・NodePort・`externalIPs`・`hostNetwork: true`・`hostPort` が
+無いことを構造検査(`OverlayObjects`)と `kubectl kustomize` 実描画検査の2層で固定した(critic PASS。変異テストで
+`hostNetwork: true` を注入し実際に赤くなることを確認済み)。TLS 終端は gateway/クラスタの Ingress では行わず、
+到達経路そのものを Tailscale(候補: Operator の `tailscale` ingressClass、または subnet router + `tailscale serve`)に
+委ねる方針。端末IDが認証でないこと・CORSが到達制御でないことを固定する回帰テストを追加
+(`TestDeviceIDIsNotAuthentication` / `TestCORSIsNotAccessControl` / `TestContractHasNoAuthentication`)。
+Reason: ADR-0210 §2・§3・§7(critic レビュー2026-09-23 PASS)。
+Impact:
+- 運用レーンへ依頼: (1) tailnet の ACL(利用端末の tag と運用者の分離)を設計・導入すること (2) 端末紛失・鍵漏えい時の
+  失効手順を runbook 化すること(ADR-0210 §1.3) (3) クラウドでの到達経路(§2.1 候補1: Tailscale Operator の
+  `tailscale` ingressClass、候補2: subnet router + `tailscale serve`)をどちらか選び導入すること。**候補1を選ぶ場合は
+  `kind: Ingress` が実際に生成されるため、ADR-0210 の AC-B1・AC-B2(`deploytest` の
+  `TestCloudOverlayHasNoPublicEntrypoint` / `TestCloudOverlayRenderHasNoPublicEntrypoint`)の条件を
+  「`ingressClassName` が `tailscale` 以外の Ingress が無い」に改める追記が先に必要(ADR-0210 §2.1)。
+  テストの条件を先に緩めない(CLAUDE.md 絶対ルール6)** (4) 監視・ログの収集経路が public IP を作らないこと
+- Webレーンへ依頼: API の base URL を tailnet の MagicDNS 名にし、public な既定値を持たないこと。CORS 許可オリジンも
+  tailnet 上の名前だけにすること(ADR-0210 §4)
+- iOSレーンへ依頼: 同上。`tailscale serve` が HTTPS を終端するので ATS の例外(平文許可)を作らないこと
+- データ・タイプバランス・素早さレーンへの追加対応は無し(各レーンの `services/*/deploy/k8s/base/ingress.yaml` は
+  現時点で root の cloud overlay に含まれていないため。root に含める日が来たら同じ制約を適用する。ADR-0210 §7)
+- 既知の限界(対応不要・記録のみ): `TestContractHasNoAuthentication` は生成物(`api.GetSwagger()`)経由で契約を読むため、
+  `api/openapi.yaml` を編集して `make gen` を忘れた一瞬は検知できない。これはリポジトリの契約テスト全体に共通する
+  前提で本ADR固有の欠陥ではないため、この ADR の範囲では対応しない(ADR-0210 §8)
+
 ## 2026-09-23: issue #106(手動importとCronJobの同時実行)を main へ統合(データレーン)
 Decision: PR #155(`feat/claude-p1-engine` → `main`)をマージした。`tools/importer/cronjob.sh` に
 flockベースの排他制御(ADR-0109)。critic PASS(指摘なし)。
