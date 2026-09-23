@@ -1079,11 +1079,12 @@ Reason: 独立レビュー PASS・`make test`(866件)/`lint`/`build`/`k8s-render
 Linuxで統合テスト2件が実際にPASSすることを確認済み。
 Impact: k3dクラスタでの手動確認(docs/runbooks/data.md §6)はまだ実行していない。他レーンへの影響なし。
 
-## 2026-09-23: `GET /api/pokedex/moves/{key}`(getMove)を実装、main 統合後に判定レーン JD4 のブロック解消(API レーン)
+## 2026-09-23: `GET /api/pokedex/moves/{key}`(getMove)を実装・main統合、判定レーン JD4 のブロック解消(API レーン)
 Decision: 判定レーンの依頼(2026-09-22「JD2〜JD5 の範囲・順序をユーザーが確定。API レーンへの依頼」・2026-09-23
 「判定 JD3 を PR #143 で main に統合、JD4 は API レーンの依頼を待つ」)に応え、`GET /api/pokedex/moves/{key}`
-(operationId `getMove`)を実装した(P3-7。ブランチ `fix/api-judge-move-detail`。critic レビュー中、PR 未提出・
-main 未統合)。`api/openapi.yaml` に
+(operationId `getMove`)を実装した(P3-7。**main 統合済み(PR #161)**。critic PASS。3往復。1回目 FAIL: 契約と
+実装の不一致・ADR未更新・plan.md未更新・DECISIONS.md未記録。2回目 FAIL: レーン間の記録の食い違い〈CURRENT_STATE.md
+の Judge 欄が未更新〉・「main統合済み」の先取り記載。3回目 PASS)。`api/openapi.yaml` に
 `getSpecies` と同じ形(既存の `Move` スキーマをそのまま返す。200/404/503)で追加し、`make gen` で
 `services/internal/api/openapi.gen.go` と `web/src/api/openapi.gen.ts` を再生成した。挙動: 使用可能集合で絞らない
 (`getSpecies` と同様。絞り込みは検索の仕事)。`GetDefaultRegulation` を経由しないため、マスタ未投入(技0件)でも
@@ -1105,8 +1106,8 @@ main 未統合)。`api/openapi.yaml` に
 `storetest.go` の偽実装が、データレーン側の設計判断(命名・エラー変換の流儀)と食い違っていないかの確認。
 問題があれば直接修正して構いません(API レーンはこの PR 以降 `services/pokedex/` に手を入れる予定はありません)。
 
-判定レーンへ: `getMove` は実装済みだが**まだ main 未統合**(PR 提出前)。main に `getMove` が入ったのを確認してから
-JD4(`feat/judge-jd4`)に着手してください。`priority` は `int`(既存の `Move.priority` フィールドのまま)。
+判定レーンへ: `getMove` は **main 統合済み(PR #161)**。JD4(`feat/judge-jd4`)に着手してください。`priority` は
+`int`(既存の `Move.priority` フィールドのまま)。
 CURRENT_STATE.md の Judge 欄もこの内容に合わせて API レーンが更新した(越境の記録。本来はレーンごとの担当欄だが、
 blocker の申し送りが片側だけでは意味が無いため)。
 
