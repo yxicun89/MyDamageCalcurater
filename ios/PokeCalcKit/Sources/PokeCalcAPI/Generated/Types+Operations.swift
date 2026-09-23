@@ -57,10 +57,17 @@ public enum Operations {
                 /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
                 /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
                 ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/species/GET/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
                 /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/species/GET/header/X-Session-Id`.
@@ -281,10 +288,17 @@ public enum Operations {
                 /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
                 /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
                 ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/species/{key}/GET/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
                 /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/species/{key}/GET/header/X-Session-Id`.
@@ -563,10 +577,17 @@ public enum Operations {
                 /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
                 /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
                 ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/moves/GET/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
                 /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/moves/GET/header/X-Session-Id`.
@@ -794,10 +815,17 @@ public enum Operations {
                 /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
                 /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
                 ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/items/GET/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
                 /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/items/GET/header/X-Session-Id`.
@@ -1001,10 +1029,17 @@ public enum Operations {
                 /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
                 /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
                 ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/natures/GET/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
                 /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/api/pokedex/natures/GET/header/X-Session-Id`.
@@ -1201,10 +1236,17 @@ public enum Operations {
                 /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
                 /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
                 ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/calc/POST/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
                 /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/api/calc/POST/header/X-Session-Id`.
@@ -1472,10 +1514,17 @@ public enum Operations {
                 /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
                 /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
                 ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/calc/bulk/POST/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
                 /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/api/calc/bulk/POST/header/X-Session-Id`.
@@ -1745,10 +1794,17 @@ public enum Operations {
                 /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
                 /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
                 ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
                 ///
                 /// - Remark: Generated from `#/paths/api/calc/reverse/POST/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
                 /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/api/calc/reverse/POST/header/X-Session-Id`.
