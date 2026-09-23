@@ -936,3 +936,12 @@ Reason: HTTP を経由しない直接呼び出し(ネイティブ Go)・WASM(ブ
 上限が無いままだと issue #110 の計算量増幅がそのまま残る。
 Impact: issue #110 は Web・iOS レーンの追従(観測16件でUI無効化・持ち物候補64件超の扱い)が残っている限り
 クローズしない。docs/plan.md の改善要望節・ADR-0108 参照。
+
+## 2026-09-23: issue #110 のデータレーン担当分を main へ統合(データレーン)
+Decision: PR #138(`feat/claude-p1-engine` → `main`)をマージした。`engine.CalcBulk`/`CalcReverse`・
+`engine/wasmapi` への件数・範囲の上限(presets 8/itemVariants 64/itemCandidates 64/observations 16/
+maxCandidates 0..128。ADR-0108)。critic 1往復で PASS。
+Reason: 独立レビュー PASS・`make test`(833件)/`lint`/`build`/`test-golden`/`test-all-species`/
+`test-wasm` すべて green。
+Impact: issue #110 は Web・iOS レーンの追従(観測16件でUI無効化・持ち物候補64件超の扱い。
+ADR-0208 §4)が残っている限りクローズしない。
