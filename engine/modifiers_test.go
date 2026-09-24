@@ -63,6 +63,35 @@ func TestScreenMod(t *testing.T) {
 	}
 }
 
+// TestScreensReflectAndAuroraVeilTogether はリフレクター(ひかりのかべ)とオーロラベールが同時に張られていても
+// 軽減が1回(×0.5)だけであることを固定する(issue #77。@smogon/calc も二重に掛けない)。
+func TestScreensReflectAndAuroraVeilTogether(t *testing.T) {
+	tests := []struct {
+		name     string
+		category MoveCategory
+		screens  Screens
+		want     int
+	}{
+		{"physical reflect + aurora veil", CategoryPhysical, Screens{Reflect: true, AuroraVeil: true}, 45},
+		{"special light screen + aurora veil", CategorySpecial, Screens{LightScreen: true, AuroraVeil: true}, 45},
+		{"all three physical", CategoryPhysical, Screens{Reflect: true, LightScreen: true, AuroraVeil: true}, 45},
+		{"aurora veil only physical", CategoryPhysical, Screens{AuroraVeil: true}, 45},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, tt.category, TypeNormal)
+			in.Field.DefenderScreens = tt.screens
+			r, err := calcDamage(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if r.Rolls[15] != tt.want { // 90×0.5。二重に掛けると 22
+				t.Fatalf("rolls[15]=%d want %d", r.Rolls[15], tt.want)
+			}
+		})
+	}
+}
+
 func TestItemChoiceBand(t *testing.T) {
 	// 攻撃を1.5倍にする持ち物(Atk×1.5): 200→300、base=(22*100*300/100)/50+2=134
 	in := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeNormal)
@@ -127,6 +156,13 @@ func TestItemResistBerry(t *testing.T) {
 	r2, _ := calcDamage(in2)
 	if r2.Rolls[15] != 90 { // 等倍90のまま(未発動)
 		t.Errorf("resist berry should not trigger on neutral rolls[15]=%d want 90", r2.Rolls[15])
+	}
+	// ノーマルの半減きのみは等倍でも発動する(issue #303)。ノーマル→エスパー等倍 90 → ×0.5=45
+	in3 := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeNormal)
+	in3.Defender.Item = &Item{ID: "chilan", Effect: &ItemEffect{ResistBerryType: TypeNormal}}
+	r3, _ := calcDamage(in3)
+	if r3.Rolls[15] != 45 {
+		t.Errorf("normal resist berry should trigger on neutral rolls[15]=%d want 45", r3.Rolls[15])
 	}
 }
 

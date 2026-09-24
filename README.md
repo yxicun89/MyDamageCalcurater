@@ -53,8 +53,7 @@ make build
 ```
 
 ゴールデンテストは `tools/golden` の外部計算実装から生成したベクタと照合します。
-期待値の再生成時は同ディレクトリで `npm ci` により lockfile に従って依存を導入し、
-ルートから `make golden-generate` を実行します。通常の Go 側の照合はコミット済みベクタを使います。
+期待値の再生成はルートから `make golden-generate` を実行します(lockfile に従う `npm ci` も行います)。通常の Go 側の照合はコミット済みベクタを使います。
 [テスト戦略](docs/test-strategy.md) も参照してください。
 
 `make lint` は Go の整形・vet と shell/Node の構文、`make build` は実装済み Go モジュールを確認します。

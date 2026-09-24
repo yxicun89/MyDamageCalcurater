@@ -5,13 +5,14 @@
 - 計算の正しさは **外部の実装(@smogon/calc)との照合** で担保する。自分で期待値を手計算しない
 - 「全ポケモン網羅」は **安いテストは全組合せ、高いテストはサンプリング** で現実的な時間に収める
 - 目標実行時間: `make test` < 1分 / `make test-golden` < 3分 / `make test-all-species` < 10分
+- `make test` は `make test-golden` を含む(issue #303。golden は約 3〜5 秒で、`make test` 全体は実測 35 秒 → 38 秒。補正・丸めを壊す変更を `make test-golden` の実行忘れで見逃さないため)。`make test-all-species`(約 30 秒)は目標 1 分に近づくので分けたまま
 
 ## レイヤー
 
 | レイヤー | 対象 | ツール | 実行 |
 |---|---|---|---|
 | L1 ユニット | engine の各関数、各サービスのロジック | go test(テーブル駆動) | `make test` |
-| L2 ゴールデン | ダメージ計算・実数値 | tools/golden → testdata/golden | `make test-golden` |
+| L2 ゴールデン | ダメージ計算・実数値 | tools/golden → testdata/golden | `make test-golden`(`make test` にも含む) |
 | L3 網羅・性質 | 全ポケモン | go test + 性質テスト | `make test-all-species` |
 | L4 契約 | API が openapi.yaml に準拠 | kin-openapi のバリデータ | `make test` |
 | L5 E2E | k3d 上の全体 | スモーク(curl)+ Playwright | `make e2e` |

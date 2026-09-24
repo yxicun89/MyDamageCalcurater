@@ -15,8 +15,7 @@ flowchart LR
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-cd tools/golden && npm ci   # 初回のみ
-make golden-generate        # 期待値の再生成(計算ロジックを変えたら)
+make golden-generate        # npm ci(package-lock.json どおり)→ 期待値の再生成(計算ロジックを変えたら)
 make test-golden            # 生成済みベクタで engine を照合
 ```
 

@@ -19,7 +19,7 @@
 
 | ターゲット | 前提条件(全 Makefile の合算) | 追加のレシピ |
 |---|---|---|
-| `test` | test-engine test-services test-tools test-scripts balance-test speed-test judge-test web-test | なし |
+| `test` | test-engine test-golden test-services test-tools test-scripts balance-test speed-test judge-test web-test | なし |
 | `lint` | speed-lint judge-lint web-lint balance-lint | あり(gofmt・vet・構文検査・k8s-render・check-publishable・selftest。`Makefile:67-80`) |
 | `build` | speed-build judge-build web-build balance-build | あり(engine・services・tools の go build) |
 | `gen` | gen-go gen-sql gen-ts | なし |
@@ -44,14 +44,14 @@
 | `gen-go` | 30 | — | `cd services && $(GO) tool oapi-codegen -config internal/api/cfg.yaml ../api/openapi.yaml ⏎ echo "gen-go: services/internal/api/openapi.gen.go を生成"` | 生成物を書換 |
 | `gen-sql` | 35 | — | `cd tools && $(GO) tool sqlc generate -f ../services/pokedex/db/sqlc.yaml ⏎ echo "gen-sql: services/pokedex/internal/store を生成"` | 生成物を書換 |
 | `gen-ts` | 40 | — | `test -x web/node_modules/.bin/openapi-typescript \|\| { echo "gen-ts: web の依存が無い(先に make web-install)" >&2; exit 1; } ⏎ cd web && npx --no-install openapi-typescript ../…` | 生成物を書換 |
-| `test` | 48 | test-engine test-services test-tools test-scripts | (レシピなし) | なし(前提条件のみ) |
+| `test` | 48 | test-engine test-golden test-services test-tools test-scripts | (レシピなし) | なし(前提条件のみ) |
 | `test-engine` | 51 | — | `cd engine && $(GO) test ./...` | なし(読み取り/検査) |
 | `test-services` | 55 | — | `cd services && $(GO) test ./...` | なし(読み取り/検査) |
 | `test-tools` | 59 | — | `cd tools && $(GO) test ./...` | なし(読み取り/検査) |
 | `test-scripts` | 63 | — | `./scripts/argocd-bootstrap_test.sh` | なし(PATH 上の偽 curl/kubectl で検査。クラスタ・ネットワーク非接触) |
-| `lint` | 67 | — | `test -z "$$(gofmt -l engine services tools)" \|\| { gofmt -l engine services tools; exit 1; } ⏎ cd engine && $(GO) vet ./... ⏎ cd services && $(GO) vet ./... ⏎ cd tools …` | ファイル非変更。$(MAKE) で k8s-render・check-publishable(-selftest)も再帰実行 |
+| `lint` | 67 | — | `test -z "$$(gofmt -l engine services tools)" \|\| { gofmt -l engine services tools; exit 1; } ⏎ cd engine && $(GO) vet ./... ⏎ cd engine && $(GO) vet -tags golden ./... ⏎ cd engine && $(GO) vet -tags allspecies ./... ⏎ cd services && $(GO) vet ./... ⏎ cd tools …` | ファイル非変更。$(MAKE) で k8s-render・check-publishable(-selftest)も再帰実行 |
 | `build` | 82 | — | `cd engine && $(GO) build ./... ⏎ cd services && $(GO) build ./... ⏎ cd tools && $(GO) build ./...` | なし(読み取り/検査) |
-| `golden-generate` | 88 | — | `cd tools/golden && npm run generate` | testdata/golden/ を再生成(@smogon/calc 0.12.0。要 npm ci 済み) |
+| `golden-generate` | 88 | — | `cd tools/golden && npm ci && npm run generate` | testdata/golden/ を再生成(@smogon/calc 0.12.0。lockfile どおりに npm ci してから。ネットワークが要る) |
 | `test-golden` | 92 | — | `cd engine && $(GO) test -tags golden ./... -run Golden` | なし(読み取り/検査) |
 | `test-all-species` | 96 | — | `cd engine && $(GO) test -tags allspecies ./... -run AllSpecies` | なし(読み取り/検査) |
 | `migrate-up` | 101 | — | `cd services && $(GO) run ./pokedex/cmd/migrate up` | **DB 書込(migrate)** |
