@@ -88,7 +88,7 @@ public enum ColorToken {
         dark: RGBA(red: 0xFF, green: 0xFF, blue: 0xFF, alpha: 0.10)
     )
     public static let danger = ColorPair(
-        light: RGBA(red: 0xE5, green: 0x48, blue: 0x4D, alpha: 1.0),
+        light: RGBA(red: 0xCD, green: 0x1D, blue: 0x23, alpha: 1.0),
         dark: RGBA(red: 0xFF, green: 0x63, blue: 0x69, alpha: 1.0)
     )
 }

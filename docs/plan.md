@@ -228,12 +228,15 @@
   〈黙って切り捨てず明示的なエラーか決定的な絞り込み〉に揃える)。DECISIONS.md 2026-09-23「calc の候補・観測件数
   に上限を置く」参照。P6-5(issue #113)の critic サイクル完了後に着手
 - [ ] P6-7 ADR-0209 §8 の文言と「この端末のデータを削除」の UI(issue #103。record-svc / team-svc の全削除 API 実装後)
-- [ ] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼:
-  `ios/PokeCalcKit/Sources/PokeCalcDesign/PokeCalcDesign.swift` の `ColorToken.danger` ライト値
-  (現 `RGBA(red: 0xE5, green: 0x48, blue: 0x4D, alpha: 1.0)`)を `0xCD, 0x1D, 0x23` に更新し、
-  `ios/PokeCalcKit/Tests/PokeCalcDesignTests/DesignTokenTests.swift` の旧値を書き換え、Web と同様に
-  コントラスト比を検査するテストを追加する(値は design.md「デザイントークン」が正。DECISIONS.md
-  2026-09-24 参照)。issue #99 は iOS 側完了までクローズしない
+- [x] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼された
+  内容どおり `ColorToken.danger` のライト値を `0xE5,0x48,0x4D` → `0xCD,0x1D,0x23` に更新し、
+  `DesignTokenTests.swift` の旧値も書き換えた。`ios/PokeCalcKit/Tests/PokeCalcDesignTests/ColorContrast.swift`
+  (WCAG相対輝度・コントラスト比。`web/src/test/colorContrast.ts` と同じ算出式の独立実装)・
+  `DangerContrastTests.swift`(ライト・ダーク × bg.base・bg.glass合成の4組。Web の `contrast.test.ts` と同じ
+  組み合わせ)を新規追加。旧値に戻すと `3.59:1`/`3.82:1` で実際に red になることを確認済み(有効なテスト)。
+  `swift test`(PokeCalcDesignTests 13件・PokeCalcCoreTests 323件)・`make ios-test`(unit 336件・XCUITest 16件・
+  Info.plist 検査)・`make lint`(check-publishable 含む)すべて成功。軽微な作業のため spec-writer/critic の
+  サブエージェントは使わずメインで実施(CLAUDE.md「軽微な作業はメインのみでよい」)
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)。Argo CD の実同期もローカル k3d で確認済み(ADR-0018: Git 変更 32fbb9e → manual sync → Pod の image digest 一致)
@@ -281,8 +284,17 @@
   丸め方(4096基準で連結してから1回だけ五捨五超入)は @smogon/calc 0.12.0 の実装を読んで確認・独立検算した。critic PASS(1回目)
 - [x] JD3 複数の相手候補を一度に判定(攻撃側1つ・相手候補の配列 → 候補ごとの判定結果の配列。ADR-0703)。
   request の defender(単数)を defenders(1〜6件)に、response を matchups(配列)に破壊的変更(クライアント未着手のため安全)。critic PASS(1回目)
-- [ ] JD4 相手の技を含めた返り討ち判定。技の優先度を pokedex-svc から引く endpoint(`GET /api/pokedex/moves/{key}`)は
-  API レーンが実装し **main 統合済み(2026-09-23。P3-7・PR #161・DECISIONS.md)**。判定レーンは着手可
+- [x] JD4 相手の技を含めた返り討ち判定(正は ADR-0704)。
+  技の優先度を引く endpoint(`GET /api/pokedex/moves/{key}`)は API レーンが実装し main 統合済み(2026-09-23。P3-7・PR #161)。
+  決定: `defenders` の要素を `DefenderCandidate`(`Individual` + 必須 `moveId`)へ・`ko` を `attackerKo` に改名して
+  `defenderKo`・`attackerMovePriority`/`defenderMovePriority`/`attackerMovesFirst`/`turnOrderTie` を追加(破壊的変更。
+  クライアント未着手のため安全)/ 先制判定は優先度優先(トリックルームは優先度に影響しない)で `internal/judge` に
+  `CompareTurnOrder` を新設 / 逆方向の calc では `field` の screens を入れ替える / 検査順に attacker と候補の技の解決を挿入し
+  `unknown_move`(422)を追加(攻撃側の未知の技も JD4 からは 422)。critic PASS(1回目)
+  - 軽微な積み残し(critic 指摘。ブロッカーではない): `attacker`(単数の `Individual`)の欄名は
+    `encoding/json` の大文字小文字を無視したフォールバックマッチングの対象のままで、`defenders` の候補
+    (JD2/JD4 で allow-list 化済み)と厳しさが左右で食い違う。実害は小さい(値は正しい欄に入る)が、
+    JD5 着手前に `attacker` 側にも同じ allow-list を広げると契約全体で一貫する
 - [ ] JD5 Web/iOS の画面(judge-svc を呼ぶ。担当は着手時に判断)
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
@@ -342,6 +354,7 @@
 - [x] issue #110 のデータレーン担当分: `engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ件数・範囲の上限(presets 8・itemVariants 64・itemCandidates 64・observations 16・maxCandidates 0..128)を追加(ADR-0108)。HTTP を経由しない直接呼び出し・WASM でも計算量を増幅できないようにした。wasmapi は DTO 変換より前に同じ検査を重ねて置き、複数の違反が重なっても HTTP と同じ `invalid_input` が先に出るようにした(parity)。`MaxCandidates` の負の値は、従来「無制限」扱いだったのを ADR-0208 の契約(`minimum: 0`)に合わせて拒否するよう変更(既存テストの期待値を更新。理由は ADR-0108 決定4)。critic PASS(1往復)。Web・iOS の追従(観測16件でUI無効化・持ち物候補64件超の扱い)は ADR-0208 §4 のまま未着手
 - [x] issue #148(クラウド公開前のアクセス境界・認証方針。ユーザー決定「私設サービスを維持する」)の API レーン担当分: `deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定(ADR-0210)。TLS 終端は gateway/クラスタの Ingress では行わず Tailscale(`tailscale serve`)に任せる方針を決定。端末IDが認証として機能しないこと・CORSが到達制御でないことの回帰テストを追加(`TestDeviceIDIsNotAuthentication`・`TestCORSIsNotAccessControl`・`TestContractHasNoAuthentication`)。`base`のgateway Ingress本体は local(k3d)専用として残し、先頭コメントで明記。ADR-0209 §1(クラウド公開へ進む判断)は「公開しない」で確定した旨を追記。critic PASS。運用(tailnet ACL・失効手順のrunbook)・Web/iOS(接続先をtailnet名に)への依頼はDECISIONS.mdに既定案付きで記録(issue はレーンの完了までクローズしない)
 - [x] issue #106(データ・運用レーン。Codex レビュー)手動 import Job(`make import-k8s`)と定期 CronJob が同時実行できる問題: `concurrencyPolicy: Forbid` は同じ CronJob が作る Job 同士にしか効かず、`kubectl create job --from=cronjob/...` が作る独立した手動 Job とは排他しないため、共有 PVC(`pokedex-import-cache`)上の取得キャッシュ・DB 投入が競合しうる実バグだった。`tools/importer/cronjob.sh` に busybox の `flock`(非ブロッキング)を `fetch.mjs` 呼び出しより前に追加し、取得〜投入の全工程をアプリ側で排他(ADR-0109)。ロック取得失敗は既存の終了コード規約どおり終了コード1(再試行可能)にし、`cronjob-import.yaml`(podFailurePolicy・concurrencyPolicy とも既存のまま)・`services/pokedex/cmd/import`(Go CLI)・Makefile は無変更。2プロセス同時起動の統合テスト(`cronjob_lock_test.go`)を追加し、Docker(Linux・busybox flock)で実際にロックが機能することを確認済み(macOS はローカルに flock が無いため自動 Skip)。critic PASS。k3d での手動確認手順は docs/runbooks/data.md §6 に追記し、2026-09-23 に実クラスタで実施: 2つの手動 Job を同時作成し、片方が「別の import が実行中」のログで即座に終了コード1、`backoffLimit` の再試行で成功したことを確認(秘密は出力に含まれない)
+- [x] issue #69(データ/APIレーン)技・持ち物検索の並びがOpenAPI契約と一致しない: `api/openapi.yaml` の `searchMoves`/`searchItems` の description が「並びは ID 順」としていたが、`services/pokedex/db/query/pokedex.sql` の `SearchMoves`/`SearchItems` は導入時(P2-3)から一貫して `ORDER BY <table>.name_ja, <table>.id`(日本語名の照合順序が正。ADR-0105 §3 に「技・持ち物は name_ja, id」と既に明記されており、SQL 側もこれに一致していた)。つまり誤っていたのは契約の説明文だけで、SQL・ADR は無変更(新規 ADR は不要)。`searchSpecies`(`dex_no, form`。SpeciesKey が固定幅ゼロ埋めのためこれは文字列としての ID 順と一致)と `listNatures`(`ORDER BY id`)は元から契約どおりで対象外。契約の description を実態(名前順・同順位は ID)に訂正して `make gen`・`make ios-gen`(絶対ルール1。iOS 生成物は getMove〈P3-7〉分も含めて追従していなかったため合わせて解消)。DB 層(`db.TestSearchMovesAndItemsOrderIsNameJaNotID`。実 MySQL で確認、`-tags mysql`)と httpapi 層(`TestSearchMovesAndItemsPreserveGivenOrderAndLimitCutsThatOrder`。ハンドラが並べ替えず、`limit` がその並びの先頭から切ることを固定。ID 順に並べ替えてから切ると集合自体が変わることを変異テストで確認済み)の両方にテストを追加。critic PASS(1往復)
 - MySQL の manifest に MYSQL_DATABASE が無く、初回起動時に pokedex DB が自動作成されない実バグを発見(データレーンが k3d に初めて実デプロイした際に発生)。deploy/k8s/overlays/local/mysql/statefulset.yaml に MYSQL_DATABASE: pokedex を追加し、layout_test.go に検知テストを追加して修正(2026-09-22)。**新規クラスタでは直るが、この修正前にすでに初期化済みの PVC は MYSQL_DATABASE の効果を受けない**(コンテナ起動時にしか実行されない仕様のため)。既存の PVC に対しては CREATE DATABASE を手動実行するしかない。docs/runbooks/data.md に一言注記するとよい
 - P2-3 の critic の軽微(2026-09-22。未反映の4件): `check-publishable.sh` の `B_KEYVALUE_ALLOW` を self-test の基準リポジトリにも播く / `maxCatalogAbilityCount` が balance の schema・loader と三重管理(テストで検出はできる) / natures-mismatch のエラー案内が Showdown 側だけを見て `make import-fetch` の案内が出ないことがある / `TestPublicInputValidation` の 400 応答を契約検証(kin-openapi)に通す
 

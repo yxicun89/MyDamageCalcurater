@@ -1,6 +1,6 @@
 # アーキテクチャ(全体図)
 
-ポケモンチャンピオンズ向けのダメージ計算・タイプバランス・素早さ比較。計算の中心は純粋な Go の `engine` で、
+ポケモンチャンピオンズ向けのダメージ計算・タイプバランス・素早さ比較・判定。計算の中心は純粋な Go の `engine` で、
 サーバー(calc-svc)とブラウザ(WASM)の両方から同じコードを使う。細部は各 README、決定の理由は `docs/adr/`。
 
 ```mermaid
@@ -16,6 +16,7 @@ flowchart LR
     Pokedex["pokedex-svc<br/>services/pokedex"]
     Balance["balance-svc<br/>services/balance"]
     Speed["speed-svc<br/>services/speed"]
+    Judge["judge-svc<br/>services/judge"]
     MySQL[("MySQL<br/>pokedex DB")]
     Import["importer CronJob<br/>(週1回)"]
   end
@@ -26,6 +27,7 @@ flowchart LR
   GW --> Calc & Pokedex
   Web -- Ingress /api/balance --> Balance
   Web -- Ingress /api/speed --> Speed
+  Web -- Ingress /api/judge --> Judge
   Calc -- 内部API: マスタ --> Pokedex
   Pokedex --> MySQL
   Import --> MySQL
@@ -33,6 +35,8 @@ flowchart LR
   WASM -. 同じコード .-> Engine
   Balance -. read model(JSON) .-> Pokedex
   Speed -. read model(JSON) .-> Pokedex
+  Judge -- 公開API --> Pokedex
+  Judge -- 公開API --> Calc
 ```
 
 ## コンポーネント
@@ -42,11 +46,12 @@ flowchart LR
 | engine | ダメージ・確定数・一括計算・逆算・実数値(I/O なし) | データ | [engine/](../engine/README.md) |
 | pokedex-svc / importer | マスタの DB・取込(calc・Showdown・PokeAPI)・マスタ API | データ | [services/pokedex/](../services/pokedex/README.md) |
 | calc-svc | 計算 API(engine を呼ぶだけ) | API | [services/calc/](../services/calc/README.md) |
-| gateway | ダメージ計算の入口(ルーティング・端末ID・/assets)。balance・speed は各自の Ingress で公開 | API | [services/gateway/](../services/gateway/README.md) |
+| gateway | ダメージ計算の入口(ルーティング・端末ID・/assets)。balance・speed・judge は各自の Ingress で公開 | API | [services/gateway/](../services/gateway/README.md) |
 | balance-svc | 構築のタイプバランス | タイプバランス | [services/balance/](../services/balance/README.md) |
 | speed-svc | 素早さ比較 | 素早さ | [services/speed/](../services/speed/README.md) |
-| Web | 画面(API とオフライン WASM を切り替え) | Web | [web/](../web/README.md) |
-| iOS | iPhone アプリ | iOS | [ios/](../ios/README.md) |
+| judge-svc | 素早さ×ダメージ連動の判定(抜けるか・倒せるか)。pokedex-svc・calc-svc の公開 API を呼ぶだけ | 判定 | [services/judge/](../services/judge/README.md) |
+| Web | 画面(API とオフライン WASM を切り替え)。計算・逆算・タイプバランス・素早さの画面を持つ | Web | [web/](../web/README.md) |
+| iOS | iPhoneアプリ。ダメージ計算・逆算・構築のみ(タイプバランス・素早さ・判定は未着手) | iOS | [ios/](../ios/README.md) |
 
 ## データの流れ(マスタ)
 

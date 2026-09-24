@@ -1171,6 +1171,65 @@ Impact: `docs/plan.md` P3-7 追加・JD4 のブロッカーを解消として更
 `docs/adr/0107-move-secondary-rank-changes.md` 決定8に追記(`effect` の公開は依然未決)、
 `docs/adr/0304-web-online-mastersource.md` §3 に追記(この実装は§3の欠落の解決策ではない)。
 
+## 2026-09-24: 判定レーン JD4(返り討ち判定)の契約を確定・テスト先行(判定レーン)
+Decision: `getMove` の main 統合(2026-09-23)を受けて JD4 に着手し、**ADR-0704** で契約と受け入れ条件を確定した。
+実装はまだで、失敗するテストだけを先に置いた(spec-writer の範囲)。決めたことは次の 5 つ。
+- request: `defenders` の要素を `Individual` → **`DefenderCandidate`**(`Individual` の全欄 + **必須の `moveId`**)。
+  attacker は `Individual` のまま、攻撃側の技は request 直下の `moveId` のまま。
+- 先制判定: **優先度が違えば優先度が高い方が必ず先に動く(トリックルームの影響を受けない)**。優先度が同じときだけ
+  素早さで決まり(トリックルーム中は反転。JD2 の `CompareSpeed` が計算済み)、両方同じなら `turnOrderTie`。
+  `internal/judge` に純粋な `CompareTurnOrder(attackerPriority, defenderPriority, SpeedComparison) TurnOrder` を新設する
+  (既存の `CompareSpeed` / `outspeeds` / `speedTie` の意味と値は変えない)。
+- response: `ko` を **`attackerKo`** に改名し、`defenderKo`・`attackerMovePriority`・`defenderMovePriority`・
+  `attackerMovesFirst`・`turnOrderTie` を追加。judge は「勝てる/負ける」の真偽値には丸めない。
+- 逆方向(相手→自分)の calc では **`field.attackerScreens` と `field.defenderScreens` を入れ替えて**送る
+  (壁は場の各側にあり、どちらが殴るかで場所は変わらない。天候・地形は入れ替えない)。入れ替え忘れはエラーにならず
+  結果だけが静かに間違うので、テストで直接確かめる。
+- エラーに **`unknown_move`(422)** を追加。attacker の技も上流で解決するようになったため、
+  **攻撃側の未知の技は JD3 までの 400 `invalid_request` から 422 `unknown_move` に変わる**(応答の変化点)。
+Reason: JD4 は「抜けて倒せる」だけでは見落とす「相手が先に動いて自分が落ちる」を拾うための段階で、
+技の優先度と逆方向のダメージが要る。どちらも `getMove`(API レーン)が入ったことで実装できるようになった。
+破壊的変更(`DefenderCandidate`・`ko` の改名)は JD5(Web/iOS)が未着手でクライアントが 1 つも無いため今は安全
+(ADR-0703 §7 の根拠の延長。名前を揃えられる最後の機会)。
+Impact: `services/judge/api/openapi.yaml` と `make judge-gen` の生成物を更新済み。`make judge-test` は
+**意図的に失敗する状態**(`judge.CompareTurnOrder` / `client.Pokedex.Move` が未実装、`api.Matchup.Ko` が
+`AttackerKo` に変わったことによるコンパイルエラー)。次の implementer が ADR-0704 の受け入れ条件どおりに実装する。
+`docs/judge-design.md` §3 JD4 と `docs/plan.md` の JD4 行も更新した。他レーンへの依頼は無い
+(ルートの `api/openapi.yaml` は変更していない)。
+
+## 2026-09-24: 判定レーン JD4 の実装・critic PASS(判定レーン)
+Decision: ADR-0704 のとおり implementer が実装し(`internal/judge/turnorder.go` 新設・`internal/client/pokedex.go` に
+`Pokedex.Move`・`internal/httpapi/outspeed.go` の検査順拡張と逆方向calc)、critic が1回目でPASSした(必須はドキュメント
+更新のみで、コード修正は不要との判定)。軽微指摘のうち低コストな2件(`CompareTurnOrder` が `CompareSpeed` の不変条件に
+暗黙依存していた点の明示化、テストコメントの誤り修正)も併せて対応した。
+Reason: `make judge-test`/`judge-lint`/`judge-build`・ルートの `make test`(engine・全サービス・web 907 tests)すべて緑、
+critic PASS、他レーンの範囲外変更なし。
+Impact: JD0〜JD4 が完了。判定レーンのブランチは `feat/judge-jd4` のまま PR 作成へ進む。軽微な積み残し(`attacker` 単数の
+欄が `defenders` 候補と違い大文字小文字を厳密に検査していない非対称)は plan.md に記録し、今回のブロッカーにはしない。
+JD5(Web/iOS 画面)は着手前にユーザーへ確認する(judge-design.md §3 の方針どおり)。
+
+## 2026-09-24: issue #69(技・持ち物検索の並びがOpenAPI契約と一致しない)を修正(API レーン)
+Decision: `api/openapi.yaml` の `searchMoves`/`searchItems` の description が「並びは ID 順」としていたが、
+実装(`services/pokedex/db/query/pokedex.sql` の `SearchMoves`/`SearchItems`。`ORDER BY <table>.name_ja, <table>.id`)は
+P2-3 導入時から一貫して日本語名の照合順序(同順位は ID)だった。ADR-0105 §3 は既に「技・持ち物は name_ja, id」と
+正しく明記していたため、**誤っていたのは契約の説明文だけ**(SQL・ADR は無変更・新規 ADR も不要)。`searchSpecies`
+(`dex_no, form`)は SpeciesKey が固定幅ゼロ埋めのため文字列としての ID 順と一致し対象外、`listNatures`
+(`ORDER BY id`)も元から契約どおりで対象外。
+契約の description を実態に合わせて訂正し、`make gen`・`make ios-gen` を実行(絶対ルール1)。
+**iOS の生成物は PR #161(getMove。P3-7)の分も含めて `make ios-gen` が漏れており未追従だった
+(`make ios-gen-check` が失敗する状態だった)。今回まとめて解消した**(API レーンの取りこぼしの修復のため
+同一コミットに含めた。iOS レーンの範囲への継続的な変更ではない)。
+テストは2層: DB 層(`db.TestSearchMovesAndItemsOrderIsNameJaNotID`。`-tags mysql`。実 MySQL
+〈kubectl port-forward で `pokecalc` クラスタの `svc/mysql` に接続、使い捨ての `pokedex_test` DB を都度作成・削除〉で
+確認)と httpapi 層(`TestSearchMovesAndItemsPreserveGivenOrderAndLimitCutsThatOrder`。ハンドラが行順を並べ替えず、
+`limit` がその並びの先頭から切ることを固定。ID 順に並べ替えてから切ると集合自体が変わることを issue の指摘どおり
+変異テストで確認: 一時的に `ORDER BY m.id` に変えて DB 層のテストが落ちることを確認 → revert、一時的に
+ハンドラへ `sort.Slice`(ID順)を差し込んで httpapi 層のテストが落ちることを確認 → revert)。
+Reason: issue #69。契約(`api/openapi.yaml`)が唯一の正であるべきなのに実態とずれていた
+(クライアントが契約どおり ID 順を前提にできない・limit 境界で返る集合自体が変わりうる)。
+Impact: `docs/plan.md` の改善要望に issue #69 の行を追加。データ・Web・iOS レーンへの追加対応は無し
+(SQL・ADR は無変更、iOS 生成物は本コミットで追従済み)。issue #69 はこの PR のマージでクローズしてよい。
+
 ## 2026-09-24: getMove(P3-7)のAPIレーン越境実装をレビュー(データレーン)
 Decision: APIレーンからの依頼(2026-09-23「services/pokedex/の再レビュー」)に応え、
 `services/pokedex/db/query/pokedex.sql`(GetMove)・`internal/httpapi/search.go`(GetMoveハンドラ)・

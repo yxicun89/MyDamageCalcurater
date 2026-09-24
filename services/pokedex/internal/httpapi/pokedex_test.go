@@ -150,6 +150,64 @@ func TestSearchResponses(t *testing.T) {
 	}
 }
 
+// AC-P2b(issue #69): ハンドラは DB(ここでは偽の Querier)が返した行順をそのまま JSON に出し、
+// 独自に並べ替えない。並びの正は SQL 側(name_ja, id。db.TestSearchMovesAndItemsOrderIsNameJaNotID
+// で実 MySQL で確認済み)。ここでは「ハンドラ層が勝手に ID 順へ並べ替えていないか」と、
+// 「limit がその並びの先頭から切ること(ID 順で切ると別集合になる)」を固定する。
+func TestSearchMovesAndItemsPreserveGivenOrderAndLimitCutsThatOrder(t *testing.T) {
+	q := storetest.New()
+	// 実 MySQL で確認した name_ja 順(shield → splash → flame。ID のアルファベット順 flame < shield < splash とは逆)を
+	// そのまま Querier に与える(storetest はスライス順をそのまま返すため、ここでは「DB が既に name_ja 順で返した」を模す)。
+	q.Moves = []store.Move{
+		{ID: "testshield", NameJa: "テストシールド", Type: "normal", Category: "status", Priority: 4},
+		{ID: "testsplash", NameJa: "テストスプラッシュ", Type: "water", Category: "physical", Power: 80},
+		{ID: "testflame", NameJa: "テストフレイム", Type: "fire", Category: "special", Power: 90},
+	}
+	q.RegulationMoves = map[string][]string{storetest.DefaultRegulationID: {"testflame", "testshield", "testsplash"}}
+	q.Items = []store.Item{
+		{ID: "testorb", NameJa: "テストオーブ"},
+		{ID: "teststone", NameJa: "テストストーン"},
+		{ID: "testplain", NameJa: "テストただのもの"},
+	}
+	q.RegulationItems = map[string][]string{storetest.DefaultRegulationID: {"testorb", "testplain", "teststone"}}
+	h := newHandler(t, q)
+
+	var moves []api.Move
+	decodeStrict(t, do(t, h, http.MethodGet, "/api/pokedex/moves", true).Body.Bytes(), &moves)
+	var moveIDs []string
+	for _, m := range moves {
+		moveIDs = append(moveIDs, m.Id)
+	}
+	wantMoveOrder := []string{"testshield", "testsplash", "testflame"}
+	if !reflect.DeepEqual(moveIDs, wantMoveOrder) {
+		t.Errorf("moves の並び = %v, want %v(ハンドラが ID 順へ並べ替えていないか)", moveIDs, wantMoveOrder)
+	}
+
+	var items []api.Item
+	decodeStrict(t, do(t, h, http.MethodGet, "/api/pokedex/items", true).Body.Bytes(), &items)
+	var itemIDs []string
+	for _, it := range items {
+		itemIDs = append(itemIDs, it.Id)
+	}
+	wantItemOrder := []string{"testorb", "teststone", "testplain"}
+	if !reflect.DeepEqual(itemIDs, wantItemOrder) {
+		t.Errorf("items の並び = %v, want %v(ハンドラが ID 順へ並べ替えていないか)", itemIDs, wantItemOrder)
+	}
+
+	// limit=2: name_ja 順の先頭2件(shield, splash)。ID 順に並べ替えてから切っていれば
+	// {testflame, testshield} という別集合になってしまう(issue #69 が最も問題視した点)。
+	var limited []api.Move
+	decodeStrict(t, do(t, h, http.MethodGet, "/api/pokedex/moves?limit=2", true).Body.Bytes(), &limited)
+	var limitedIDs []string
+	for _, m := range limited {
+		limitedIDs = append(limitedIDs, m.Id)
+	}
+	wantLimited := []string{"testshield", "testsplash"}
+	if !reflect.DeepEqual(limitedIDs, wantLimited) {
+		t.Errorf("limit=2 の集合 = %v, want %v(name_ja 順の先頭2件。ID 順で切ると別集合になる)", limitedIDs, wantLimited)
+	}
+}
+
 // AC-P4: 種族の詳細。レギュレーションの外の種族も引ける(詳細はマスタの参照)。特性は slot 順の {id, nameJa}、
 // learnset は習得技 ∩ 既定のレギュレーションの使用可能な技(ID 昇順)。無い種族は 404 not_found。
 func TestGetSpecies(t *testing.T) {
