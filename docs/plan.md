@@ -301,8 +301,19 @@
   - 軽微な積み残し(critic 指摘。ブロッカーではない): `attacker`(単数の `Individual`)の欄名は
     `encoding/json` の大文字小文字を無視したフォールバックマッチングの対象のままで、`defenders` の候補
     (JD2/JD4 で allow-list 化済み)と厳しさが左右で食い違う。実害は小さい(値は正しい欄に入る)が、
-    JD5 着手前に `attacker` 側にも同じ allow-list を広げると契約全体で一貫する
-- [ ] JD5 Web/iOS の画面(judge-svc を呼ぶ。担当は着手時に判断)
+    `attacker` 側にも同じ allow-list を広げると契約全体で一貫する(JD5 完了時点でも未着手)
+- [x] JD5 Web の画面(judge-svc を呼ぶ。ADR-0705。critic PASS〈2回目。1回目 NG は古い応答〈A8〉テストが
+  実際にはレースを検証していなかった点を、送信ボタンの disabled が反映される前に2回叩いて実際に2本
+  同時に送る形へ修正〉)
+  - 担当は**判定レーン自体**(2026-09-24 ユーザー決定。DECISIONS.md)。素早さレーンが `web/src/speed/` を自分で作った前例に倣い、
+    持ち物は `web/src/judge/`(`judgeClient.ts`・`judge.gen.ts`・`JudgeScreen.tsx`)だけ。共有ファイルへの追記は
+    `app/routes.ts` 1件・`app/screens.tsx`(import と `ScreenProps.judgeClient`)・`i18n/ja.ts` の文言・`App.tsx` の client 受け渡しに限る
+  - 設計の正は ADR-0705: 送信ボタンでだけ判定を呼ぶ(1回で上流 3+4N 回のため打鍵ごとに呼ばない)/ 技は **ID の自由入力**
+    (ADR-0304 §3: ID から技を引く公開 API が無い)/ 相手側の追い風は**全候補共通の1つ**(ADR-0703 §5)/
+    `field`(天候・地形・壁)は JD5 の対象外 / 画面も「勝ち・負け」に丸めない(ADR-0700 §6-1・ADR-0704 §3)
+  - 失敗するテストを先に置いた(spec-writer): `web/src/judge/judgeClient.test.ts`・`web/src/judge/JudgeScreen.test.tsx`・
+    `web/src/app/routes.test.ts`(judge タブの登録)。`judge.gen.ts` は生成済み
+  - iOS は Web を出してから改めて判断する(DECISIONS.md 2026-09-24)
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
 各レーンが自分の範囲の README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)と、動かして確かめられるレーンは手順書(`docs/runbooks/<レーン>.md`。AGENTS.md「手順書の書き方」に従う)を書く。全体図は `docs/architecture.md`。

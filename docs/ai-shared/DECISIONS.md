@@ -1244,6 +1244,32 @@ Decision: ADR-0704(`DefenderCandidate`・`CompareTurnOrder`・逆方向calcのsc
 Reason: `make test`・`make lint`・`make build`(ルート)が緑、critic PASS、他レーンの範囲外変更なし(COORDINATION.md の共有ファイル規約の範囲内)を確認してマージした。
 Impact: 判定レーンのブランチを `feat/judge-jd5` に切り替えた(JD4 の `feat/judge-jd4` は削除)。JD0〜JD4 がすべて完了し、`POST /api/judge/v1/outspeed-and-ko` は素早さ判定・複数候補・場の効果・返り討ち判定まで対応済み。残るは JD5(Web/iOS の画面)のみ。
 
+## 2026-09-24: JD5(judge-svc を呼ぶ画面)の担当をユーザーが判定レーン自体に決定
+Decision: 「判定レーン自体で作る」「Web レーンに依頼する」「今は着手しない」の3択でユーザーに確認し、**判定レーン自体で作る**を選択した。
+Reason: ユーザー回答(2026-09-24)。
+Impact: JD5 は判定レーンのセッションが Web(`web/src/judge/` のような自分のディレクトリ)を担当する。COORDINATION.md の「素早さレーン」の前例(`web/src/speed/` を素早さレーン自身が作り、タブ登録の3か所だけ共有ファイルに1件ずつ足す)に倣う。iOS 側は判定レーンの範囲内かは着手時に改めて判断する(まずは Web を優先)。
+
+## 2026-09-24: 判定 JD5(Web 画面)の設計を確定し、受け入れ条件と失敗するテストを先に置いた(判定レーン)
+Decision: ADR-0705 を採用した。主な決定:
+- 持ち物は `web/src/judge/`(`judgeClient.ts`・`judge.gen.ts`・`JudgeScreen.tsx`)だけ。共有ファイルへの追記は
+  `web/src/app/routes.ts` 1件・`web/src/app/screens.tsx`(import と `ScreenProps.judgeClient`)・`web/src/i18n/ja.ts` の文言・
+  `web/src/App.tsx` の client 受け渡しの4か所に限る(ADR-0604 §2 の素早さレーンの前例どおり)。他の画面のファイルは変更しない。
+- 技は **ID の自由入力**(ドロップダウンにしない)。オンラインでは `capabilities.moves` が false で、
+  技 ID から技を引く公開 API が無いため(ADR-0304 §3 の既知の欠落)。未知の ID は judge が 422 `unknown_move` で返すので、
+  黙って誤った判定を出すことはない。技の一覧 API が付いたら `<select>` に差し替える。
+- 相手側の追い風(`defenderTailwind`)は**全候補共通のチェックボックス1つ**。`speedField` は 1 リクエストに 1 つで
+  すべての候補に同じように適用される(ADR-0702 §1・ADR-0703 §5)ため、候補ごとの UI を置くと契約に送れない入力になる。
+- 判定は送信ボタンでだけ呼ぶ(1 リクエストが上流を最大 27 回逐次で叩くため、打鍵ごとに呼ばない)。
+- `field`(天候・地形・壁)は JD5 の対象外。画面も「勝ち / 負け」に丸めない(ADR-0700 §6-1・ADR-0704 §3)。
+- `judge.gen.ts` は `make gen-ts`(Web レーンの持ち物)を変えず、`npx openapi-typescript ../services/judge/api/openapi.yaml`
+  を手で実行してコミットする(ADR-0604 §2 と同じ)。**Web レーンへの提案**: 素早さ・判定の 2 本がたまったので、
+  `make gen-ts` に組み込むかを Web レーンの都合で判断してよい。
+Reason: 2026-09-24 のユーザー決定(JD5 の担当は判定レーン自体)を受け、spec-writer の段で受け入れ条件と失敗するテストを先に置いた。
+Impact: `docs/adr/0705-judge-jd5-web-screen.md`(新規)、`web/src/judge/`(生成型・スタブ・テスト)、
+`web/src/i18n/ja.ts`(`appText.judgeTabLabel`・`judgeClientText`・`judgeErrorText`・`judgeScreenText` を追記)、
+`web/src/app/routes.test.ts`(judge タブの登録のケース。登録前なので**意図的に失敗する**)。
+実装(`judgeClient.ts` / `JudgeScreen.tsx` の中身と画面登録の 3 ファイル)は次の implementer が入れる。
+
 ## 2026-09-24: issue #73(OpenAPIとengineの防御プリセット集合を同期検査する)を修正(API レーン)
 Decision: `api/openapi.yaml` の `DefenderPreset` enum と `engine.DefenderPresetCatalog()`(`engine/bulk.go`)は
 1対1対応が前提(`services/calc/internal/httpapi/convert.go` の `presetKeysFrom` は変換テーブルを持たず、契約の
