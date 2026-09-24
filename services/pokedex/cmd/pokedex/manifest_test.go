@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"example.com/pokecalc/services/gateway/deploytest"
 )
@@ -34,8 +35,9 @@ type pokedexDeployment struct {
 				Labels map[string]string `yaml:"labels"`
 			} `yaml:"metadata"`
 			Spec struct {
-				AutomountServiceAccountToken *bool `yaml:"automountServiceAccountToken"`
-				SecurityContext              struct {
+				AutomountServiceAccountToken  *bool  `yaml:"automountServiceAccountToken"`
+				TerminationGracePeriodSeconds *int64 `yaml:"terminationGracePeriodSeconds"`
+				SecurityContext               struct {
 					RunAsNonRoot   *bool `yaml:"runAsNonRoot"`
 					SeccompProfile struct {
 						Type string `yaml:"type"`
@@ -178,6 +180,29 @@ func TestManifestPokedexDeployment(t *testing.T) {
 	}
 	if len(sc.Capabilities.Drop) != 1 || sc.Capabilities.Drop[0] != "ALL" {
 		t.Errorf("capabilities.drop = %v, want [ALL]", sc.Capabilities.Drop)
+	}
+}
+
+// AC-K6(issue #109 / ADR-0111 決定3): terminationGracePeriodSeconds を明示し、main.go の
+// shutdownTimeout 定数より長い。値を2箇所にハードコードする代わりに不等式で比較することで、
+// どちらか一方だけを変更したときに検知できるようにする(main.go の shutdownTimeout 定数と
+// 手で同期する必要はない。このテストが直接参照する)。
+func TestPokedexTerminationGracePeriodExceedsShutdownTimeout(t *testing.T) {
+	objs := deploytest.BaseObjects(t, pokedexService)
+	var d pokedexDeployment
+	deploytest.Find(t, objs, "Deployment", pokedexService).Decode(t, &d)
+
+	grace := d.Spec.Template.Spec.TerminationGracePeriodSeconds
+	if grace == nil {
+		t.Fatal("terminationGracePeriodSeconds が無い(既定の30秒に暗黙で頼らず明示すること。ADR-0111 決定3)")
+	}
+	if *grace <= 0 {
+		t.Fatalf("terminationGracePeriodSeconds = %d, want 正の値", *grace)
+	}
+	got := time.Duration(*grace) * time.Second
+	if got <= shutdownTimeout {
+		t.Errorf("terminationGracePeriodSeconds = %v, want shutdownTimeout(%v)より長い(main.go の shutdownTimeout 定数と比較)",
+			got, shutdownTimeout)
 	}
 }
 
