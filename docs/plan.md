@@ -295,7 +295,9 @@
     `encoding/json` の大文字小文字を無視したフォールバックマッチングの対象のままで、`defenders` の候補
     (JD2/JD4 で allow-list 化済み)と厳しさが左右で食い違う。実害は小さい(値は正しい欄に入る)が、
     JD5 着手前に `attacker` 側にも同じ allow-list を広げると契約全体で一貫する
-- [ ] JD5 Web の画面(judge-svc を呼ぶ。設計確定・受け入れ条件とテストまで済み。実装はこれから)
+- [x] JD5 Web の画面(judge-svc を呼ぶ。ADR-0705。critic PASS〈2回目。1回目 NG は古い応答〈A8〉テストが
+  実際にはレースを検証していなかった点を、送信ボタンの disabled が反映される前に2回叩いて実際に2本
+  同時に送る形へ修正〉)
   - 担当は**判定レーン自体**(2026-09-24 ユーザー決定。DECISIONS.md)。素早さレーンが `web/src/speed/` を自分で作った前例に倣い、
     持ち物は `web/src/judge/`(`judgeClient.ts`・`judge.gen.ts`・`JudgeScreen.tsx`)だけ。共有ファイルへの追記は
     `app/routes.ts` 1件・`app/screens.tsx`(import と `ScreenProps.judgeClient`)・`i18n/ja.ts` の文言・`App.tsx` の client 受け渡しに限る

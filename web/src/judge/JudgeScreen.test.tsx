@@ -12,7 +12,7 @@
 //   A9 マスタ: speciesList が false なら検索欄、技は master.moves が空でも ID で入力できる(ADR-0304 §3)
 // 架空データだけを使う(実マスタ・実データは使わない。CLAUDE.md ドメイン規約・ADR-0002)。
 
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { describe, expect, test } from "vitest";
 import { MAX_SP_PER_STAT, MAX_SP_TOTAL } from "../domain/requests";
@@ -729,25 +729,32 @@ describe("A7 送信前の検査(judge を呼ばずに理由を出す)", () => {
 // ---- A8: 古い応答(受け入れ条件8) ----
 
 describe("A8 古い応答は無視する", () => {
-  test("先に送った request の応答が後から届いても、後の応答を上書きしない", async () => {
+  test("先に送った request の応答が後から届いても、後で送った方の応答を上書きしない", async () => {
     const { user, client } = renderScreen();
     await fillMinimalForm(user);
 
-    await user.click(submitButton());
-    const first = lastCall(client);
-
-    // 1件目の応答が届く前に、入力を変えてもう一度送れる状態にする。
-    await flush(() => {
-      first.resolve({ ok: true, value: { matchups: [matchup(0, { attackerKo: ko(4, true, 100) })] } });
+    const button = submitButton();
+    // 送信ボタンは判定中は disabled になる(二重送信を防ぐ主な仕組み)が、React の状態更新が
+    // 画面に反映される前に2回叩かれた場合の備え(連番ガード。ADR-0705 §7)を直接確かめるため、
+    // ここでは userEvent ではなく fireEvent で disabled が反映される前に2回連続で叩く
+    // (同じ act() の中で同期的に呼ぶことで、両方とも disabled になる前に onClick を通す)。
+    act(() => {
+      fireEvent.click(button);
+      fireEvent.click(button);
     });
-    await user.clear(within(candidate(1)).getByLabelText(judgeScreenText.moveIdLabel));
-    await user.type(within(candidate(1)).getByLabelText(judgeScreenText.moveIdLabel), "test-defender-move-9");
-    await user.click(submitButton());
-    const second = lastCall(client);
     expect(client.calls).toHaveLength(2);
+    const [first, second] = client.calls;
+    if (first === undefined || second === undefined) {
+      throw new Error("2回の送信が記録されていない");
+    }
 
+    // 後から送った方(second)を先に解決し、続いて先に送った方(first)を解決する。
+    // 連番ガードが無ければ、後から届いた first の応答が second の結果を上書きしてしまう。
     await flush(() => {
       second.resolve({ ok: true, value: { matchups: [matchup(0, { attackerKo: ko(2, true, 100) })] } });
+    });
+    await flush(() => {
+      first.resolve({ ok: true, value: { matchups: [matchup(0, { attackerKo: ko(4, true, 100) })] } });
     });
 
     await waitFor(() => {

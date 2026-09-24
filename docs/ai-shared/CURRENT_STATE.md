@@ -98,15 +98,20 @@ scripts/argocd-bootstrap.sh の呼び出しに差し替え済み(2026-09-24 確�
 レーンへ既定案で提示済み。DECISIONS.md 2026-09-23)かユーザーからの新規要望待ち。
 
 ## Judge
-Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
-Active: なし
-Branch: feat/judge-jd5(作業ディレクトリ ~/MyDamageCalcurater-judge。main から作成済み・空。JD4 の feat/judge-jd4 は PR #169 で main に統合済み・削除)
+Lane: 判定(素早さ×ダメージ連動。`services/judge/`・`web/src/judge/`。どの AI が進めてもよい)
+Active: Claude Code
+Branch: feat/judge-jd5(作業ディレクトリ ~/MyDamageCalcurater-judge。PR 作成待ち)
 Status: JD0(基盤。PR #92)・JD1(判定API本体。PR #118)・JD2(場の効果。PR #127)・JD3(複数の相手候補。PR #143)・
-JD4(返り討ち判定。PR #169。ADR-0704)はすべて完了。`POST /api/judge/v1/outspeed-and-ko` は複数候補・場の効果・
-返り討ち判定まで対応済み。残るは **JD5(Web/iOS の画面)のみ**。担当(判定レーン内で作るか、Web/iOS レーンに
-依頼するか)は着手時に判断する方針(judge-design.md §3)
-Next: JD5 の担当をユーザーへ確認してから着手。軽微な積み残し: `attacker`単数の`Individual`にも`defenders`候補と
-同じ大文字小文字厳密なキー検査を広げると契約全体で一貫する(plan.md 参照)
+JD4(返り討ち判定。PR #169)・**JD5(Web の画面。ADR-0705)はすべて完了**。担当はユーザー決定で判定レーン自体
+(2026-09-24)。`web/src/judge/`(judgeClient.ts・judge.gen.ts・JudgeScreen.tsx)を新設、共有ファイルへの追記は
+`app/routes.ts`・`app/screens.tsx`・`i18n/ja.ts`・`App.tsx`(+ `App.routing.test.tsx`・タブ末尾追加の不可避な
+追従として `App.test.tsx`)の4〜5か所のみ。技はID自由入力(ADR-0304 §3の技一覧APIの欠落を踏襲)、相手側の
+追い風は全候補共通の1チェックボックス(ADR-0703 §5)、送信ボタンでのみ呼ぶ(1回で上流最大27回)。
+critic PASS(2回目。1回目NGは「古い応答」テストが実際にはレースを検証していなかった点。送信ボタンのdisabled
+が反映される前に2回叩いて実際に2本同時送信するテストに修正。本番コードの変更は無し)
+Next: PR を作って main へ統合(このセッションの残タスク)。JD0〜JD5すべて完了。軽微な積み残し: `attacker`単数の
+`Individual`にも`defenders`候補と同じ大文字小文字厳密なキー検査を広げると契約全体で一貫する(plan.md 参照)。
+iOS版JD5は着手時に改めて判断(ADR-0705 却下案)
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠
