@@ -134,10 +134,37 @@
   肯定側テストの非対称、をテスト強化で解消。critic 1回目 FAIL(IME変換中のEnter・矢印キーを誤って候補選択に
   使ってしまう退行を発見)→ `isComposing` ガード追加・`preventDefault()` は処理したときだけに修正・回帰テスト
   2件追加(907件)→再確認予定
-- [ ] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案)は
-  **2026-09-24 に API レーンが `GET /api/pokedex/moves/batch`(`getMovesByIds`)で回答・実装済み**
-  (ADR-0105 §3・ADR-0304 §3・DECISIONS.md 2026-09-24 参照。下の改善要望にも記載)。Web 側の対応
-  (`capabilities.moves` を true にして技を復活させる)はこれから
+- [x] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案)— **完了。critic PASS**。
+  2026-09-24 に API レーンが `GET /api/pokedex/moves/batch`(`getMovesByIds`)で回答・実装済み
+  (ADR-0105 §3・ADR-0304 §3・DECISIONS.md 2026-09-24 参照)。Web 側は ADR-0304 **A-13** の設計どおり実装:
+  **`capabilities.moves` は true にしない**(true にすると BalanceScreen が「有効なのに技が選べない」壊れた
+  状態になるため)。技は `resolveSpecies` が種族・特性と一緒に解決して返し(`MasterSpeciesResolution.moves`)、
+  技セレクトの disabled は「いま技の候補があるか」で決める。`learnset` は64件ずつに分割して `getMovesByIds`
+  を並列に複数回呼ぶ(API レーンが実データで確認: 349種族中151種族・43%が64件超、最大106件。稀な例外では
+  なく主経路として実装・テスト)。
+  critic レビュー: チャンク分割・結合順序・1回でも失敗したら全体失敗、を変異テストで確認(全滅)。
+  重要指摘1件(攻守入れ替え・与えた/受けた切り替え後の**選択中の技**〈候補一覧だけでなく実際にリクエストに
+  乗る技〉がテストされていなかった。`<select>` の DOM 値は state が壊れていても先頭候補にフォールバック
+  表示するため見逃しやすい経路)を受け、実際のリクエストを検査する回帰テストを2件追加(CalcScreen の
+  攻守入れ替え・ReverseScreen の与えた/受けた切り替え)し、指摘された3つの変異すべてで実際に落ちることを
+  確認。既存1192件は無変更・新規28件追加(1220件。うち2件は critic 指摘を受けて既存アサーションに追記して強化)。
+  BalanceScreen の種族検索・技選択は P4-17b として積み残し(下記)
+- [x] P4-17b BalanceScreen(タイプバランス)の種族検索・技選択をオンラインでも使えるようにする
+  (ADR-0304 A-9 の申し送り・A-13.5 の積み残し)。パーティ・仮想敵の各枠(6枠 × 2)に A-10 の種族検索を広げ、
+  枠ごとに解決した learnset から技を4つまで選べるようにする。spec-writer が ADR-0304 追記5(A-14)に
+  設計を記録し、失敗するテスト13件を追加: 可否の判定を `speciesList && moves` から「入力の口があるか」
+  (`(speciesList || masterSearch) && (moves || (!speciesList && masterSearch))`)に置き換え、12枠で
+  `useSpeciesResolutions` を共有し、`moveById` の「実体不明の技 ID を攻撃技と誤判定する」不具合を直す。
+  implementer が `web/src/screens/BalanceScreen.tsx` を A-14 のとおり実装(ゲート条件・
+  `useSpeciesResolutions()` の12枠共有・`MemberFields` のドロップダウン/検索欄の出し分け・
+  `moveById`/`hasDamagingMove` の fail-closed 化・結果表の名前解決)。critic PASS(mutation testing で
+  ゲート条件・fail-closed 判定・`registerSpeciesResolution` 呼び出し漏れ等の主要な変異を全て検知することを確認)。
+  critic 指摘の軽微3件はその場で直接修正: (1) A-14.1 の表7行のうち未カバーだった2行
+  (`NO_SPECIES_LIST`+検索口あり・容量そろい+検索口ありの2組み合わせ)のテストを追加、
+  (2) `useMemberListActions.resolveSpecies` を index ではなく `member.id` で引くように変更
+  (検索の解決を待つ間に他の枠が削除されると index が別の枠を指しうる競合を根治)、
+  (3) `MemberFields` 内の特性名解決の重複ロジックを `findAbilityName` 呼び出しに統一。
+  `cd web && npx vitest run` は1243/1243 green(新規15件)、`npx tsc --noEmit`・`npx eslint` ともにエラー無し。
 - [x] P4-18(Web 分。Codex コードレビューの issue。タイプバランスレーンから 2026-09-23 に連絡・
   `gh issue view <番号>`)。**#99(bug, accessibility)ライトテーマのエラー文字色がコントラスト基準未達 —
   Web 分・iOS 分とも完了、issue クローズ済み**: danger のライト値を `#E5484D`→`#CD1D23`(WCAG 2.2 SC 1.4.3
@@ -206,10 +233,22 @@
 端末単位の全削除はサービスごとに1本(`DELETE /api/record/device-data`・`DELETE /api/team/device-data`。冪等・`partial` の繰り返し)/
 削除の墓石(`devices.purged_at`)で JetStream の遅延イベントの復活を防ぐ。受け入れ条件は ADR-0209 の AC-D / AC-P / AC-R / AC-L。
 
-- [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)。
-  スキーマは ADR-0209 §3 に従う(`devices` テーブル〈`last_seen_at`・`purged_at`〉、**purge journal テーブル〈#5b。
-  DB 側とは別に DB 外の独立した保存先〈P7-4 が決める〉にも同時に追記する〉**、全表に `device_id`、
-  `favorites` は `calc_events` を参照せず個体スナップショットを自分で持つ)。保持日数は環境変数で渡し、起動時に検証する
+- [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成。バージョン・リソース上限・DB/ユーザーの
+  分け方・migration ツールの流用は ADR-0211 で確定)。**このタスクの範囲は `devices`〈`last_seen_at`・`purged_at`・
+  `orphaned_since`〉と purge journal の2表とプロビジョニングまで**(`favorites`・`teams`・`team_members`・
+  `calc_events` 等の業務テーブルは P5-3/P5-4 で追加する。ADR-0211「背景」で当初案から縮小)。
+  purge journal〈#5b。DB 側とは別に DB 外の独立した保存先〈P7-4 が決める〉にも同時に追記する〉は、
+  その独立保存先が無い P5-3〜P7-4 の間は未充足のままになる既知のギャップ(ADR-0209 追記・ADR-0211 §6 参照)。
+  保持日数・墓石猶予の環境変数名と既定値は ADR-0211 §7 で確定し、起動時検証コード自体は P5-3/P5-4 で書く。
+  **実装状況(2026-09-25)**: `services/internal/dbmigrate` の切り出し・`services/record`・`services/team`
+  のスキーマ/migrate CLI(PR #205)、TiDB Operator の k8s マニフェスト(TidbCluster・TidbInitializer)・
+  `up.sh` 配線・回帰テストまで実装済み(critic 2ラウンドで裏取り。TiDB Operator v1.6.6 の実ソースまで
+  確認して `passwordSecret` のキー名・初期化用イメージ・namespace・資格情報境界の誤りを修正済み)。
+  **残作業**: 共有 k3d クラスタへの実適用(AC-T3・AC-T8)は未実施(他レーンが使う共有クラスタへの影響を
+  先に確認する必要があるため、このセッションでは意図的に見送った。次に `make up` を実行するときに
+  TidbCluster・TidbInitializer が実際に Ready/Completed になることを確認する)。TidbInitializer の
+  `tnir/mysqlclient` イメージは amd64 専用(上流がそれしか提供していない)で、Apple Silicon の k3d
+  ノードでの起動可否(QEMU エミュレーション経由)も未確認
 - [ ] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)。
   ストリームの `max_age` は7日、イベントに発生時刻(`occurred_at`)を載せる(ADR-0209 §7・#6)。
   record-svc と team-svc(P5-4)は**別々の durable consumer**を持つ(同じ consumer を共有すると配送が分かれ
@@ -280,6 +319,20 @@
   攻撃側の learnset の ID 集合 + ダメージ技」の3条件に直し、回帰・変更理由・stage-2 解決ループの世代保護の回帰テストを
   4本追加(いずれも該当箇所を戻すと実際に red になることを確認済み)。`swift test` 383件・`make ios-test`
   (unit 396件・XCUITest 17件・Info.plist 検査)すべて成功。**issue #68 は iOS 側を閉じてよい**(ADR 7章)
+- [x] P6-10 `TeamEditViewModel.load()` の技解決を `getMovesByIds`(main に追加済み。web は P4-17 で採用済み)の
+  一括呼び出しに切り替えた(旧実装は `move(id:)` をメンバーごとに個別呼び出し)。`PokeCalcService.moves(ids:)` を
+  追加(`APIPokeCalcService`: `RequestLimits.maxMoveBatchIds` = 64 件ずつに分割・重複除去・空配列で無呼び出し・
+  404 は無い写像、`MockPokeCalcService`: 未知 ID を省く)、`load()` は全メンバーの `species(key:)` 後に未知の技を
+  集めて1回で解決する2段構成に書き換えた(`withTaskGroup` は不要になった)。Calc/Reverse の `move(id:)` は
+  変えていない(stage-2 の短絡評価の意味が変わるため。理由は ADR 4章)。方針・受け入れ条件は
+  ADR-0501「getMovesByIds による構築編集の技の一括解決」。既存の `TeamEditViewModelMoveLookupTests`(7件)は
+  1行も編集せず、`StubPokeCalcService` 側の拡張(`moveLookups` の共有記録・`moveBatchModeOverride` が未設定なら
+  `moveLookupMode` に従う近似。ADR 3章・3.1章)だけで green を保った。実装完了後の critic 1回目は FAIL
+  だったが、指摘はテストの網羅不足のみ(実装は問題なしと判定): 分割の境界テストを `RequestLimits.maxMoveBatchIds`
+  基準の表駆動に直し(ミューテーションテストで実際に red になることを確認)、`load()` の Task を保留中の一括解決
+  ごと cancel するテストを追加、`species(key:)` が途中で失敗したときの挙動差分を ADR に明記、古くなったテストの
+  ヘッダーコメントを修正(ADR 8章)。`swift test`(399件・0失敗)・`make ios-test`
+  (`ios-test-unit` 412件・`ios-test-ui` 17件・Info.plist 検査、すべて成功。終了コード0)ともに green
 - [ ] P6-7 ADR-0209 §8 の文言と「この端末のデータを削除」の UI(issue #103。record-svc / team-svc の全削除 API 実装後)
 - [x] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼された
   内容どおり `ColorToken.danger` のライト値を `0xE5,0x48,0x4D` → `0xCD,0x1D,0x23` に更新し、

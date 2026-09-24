@@ -317,15 +317,32 @@ func TestMakefileTargets(t *testing.T) {
 	if !strings.Contains(targets["test-db"], "-tags mysql") || !strings.Contains(targets["test-db"], "POKEDEX_TEST_DSN") {
 		t.Errorf("test-db は -tags mysql で走り、POKEDEX_TEST_DSN が無ければ失敗すること: %q", targets["test-db"])
 	}
-	if !strings.Contains(targets["migrate-down"], "CONFIRM_DESTROY") {
-		t.Errorf("migrate-down は CONFIRM_DESTROY を要求すること: %q", targets["migrate-down"])
+	// CONFIRM_DESTROY を「要求する」とは、値が空のとき失敗する実際のガード(-z "$(CONFIRM_DESTROY)")が
+	// あることで、変数名が -confirm へそのまま渡っているだけ(値が空でも渡ってしまう)では不十分
+	// (mutation テストで確認: ガードを消しても文字列 "CONFIRM_DESTROY" 自体は -confirm 引数に残るため、
+	// 単純な文字列一致では見逃す)。
+	requiresConfirmDestroyGuard := regexp.MustCompile(`-z\s+"\$\(CONFIRM_DESTROY\)"`)
+	if !requiresConfirmDestroyGuard.MatchString(targets["migrate-down"]) {
+		t.Errorf("migrate-down は CONFIRM_DESTROY が空のとき失敗するガードを持つこと: %q", targets["migrate-down"])
 	}
+	// record-svc・team-svc も自分の cmd/migrate down ターゲット(migrate-down-record・
+	// migrate-down-team)を持つ(ADR-0211 §4)。pokedex だけを許す特別扱いではなく、
+	// 「down を呼ぶターゲットは全て CONFIRM_DESTROY を要求する」という不変条件そのものを
+	// 検査する(down を呼ぶターゲット名を1つに限定しない)。
+	isOwnDownTarget := regexp.MustCompile(`^migrate-down(-\w+)?$`)
+	downTarget := regexp.MustCompile(`cmd/migrate\s+down`)
 	for name, body := range targets {
-		if name == "migrate-down" {
+		if downTarget.MatchString(body) {
+			if !requiresConfirmDestroyGuard.MatchString(body) {
+				t.Errorf("ターゲット %s が cmd/migrate down を呼ぶのに CONFIRM_DESTROY が空のとき失敗するガードを持たない", name)
+			}
 			continue
 		}
-		if strings.Contains(body, "migrate-down") || regexp.MustCompile(`cmd/migrate\s+down`).MatchString(body) {
-			t.Errorf("ターゲット %s が down を呼んでいる(down は人間の確認つきの migrate-down だけ)", name)
+		if isOwnDownTarget.MatchString(name) {
+			continue
+		}
+		if strings.Contains(body, "migrate-down") {
+			t.Errorf("ターゲット %s が down を呼んでいる(down は人間の確認つきの migrate-down 系ターゲットだけ)", name)
 		}
 	}
 	for _, name := range []string{"test", "test-services"} {
@@ -404,7 +421,12 @@ func TestUpScriptCreatesMigrateJobOnlyOnce(t *testing.T) {
 		t.Error("scripts/up.sh が deploy/k8s/base/pokedex を単独で apply している" +
 			"(namespace が付かず default に Job ができる。overlay 経由の1か所だけにする)")
 	}
-	applyOverlay := regexp.MustCompile(`apply\s+-k\s+deploy/k8s/overlays/local\b`)
+	// `deploy/k8s/overlays/local` ちょうど(`/tidb` 等のサブディレクトリの apply とは別に
+	// 数える。ADR-0211 §3.2 実装時の追記: TiDB は CRD が無いとき非致命的に失敗させるため、
+	// base・mysql を含むこの apply とは別のコマンドにしている)。`\b` だけだと
+	// `overlays/local/tidb` の `local` 直後の `/` も語境界に一致してしまうため、
+	// 直後が空白であることまで要求する。
+	applyOverlay := regexp.MustCompile(`apply\s+-k\s+deploy/k8s/overlays/local\s`)
 	if n := len(applyOverlay.FindAllString(s, -1)); n != 1 {
 		t.Errorf("overlays/local の apply が %d 回ある(1回だけであること)", n)
 	}
@@ -839,5 +861,56 @@ func TestUpScriptKeepsSecretValuesOutOfArgvAndLogs(t *testing.T) {
 	}
 	if strings.Contains(block, "mktemp") && !strings.Contains(block, "trap") {
 		t.Error("Secret の値を一時ファイルに書くなら trap で必ず消す")
+	}
+}
+
+// TestUpScriptAppliesRecordTeamJobsWithNamespace は record/team の migrate Job が
+// pokecalc namespace に確実に入ることを検査する(ADR-0211 §3.2・§9。critic レビューで
+// 判明: job-migrate.yaml は kustomize の namespace transformer を経由しない単独 apply の
+// ため、`-n pokecalc` を明示しないと k3d の既定 namespace〈default〉に作られてしまう)。
+func TestUpScriptAppliesRecordTeamJobsWithNamespace(t *testing.T) {
+	s := readRepoFile(t, "scripts/up.sh")
+	for _, svc := range []string{"record", "team"} {
+		re := regexp.MustCompile(`kubectl\s+-n\s+pokecalc\s+apply\s+-f\s+deploy/k8s/base/` + svc + `/job-migrate\.yaml`)
+		if !re.MatchString(s) {
+			t.Errorf("scripts/up.sh が deploy/k8s/base/%s/job-migrate.yaml を -n pokecalc 付きで apply していない", svc)
+		}
+	}
+}
+
+// TestTidbOverlayHasNamespace は deploy/k8s/overlays/local/tidb が独立した kustomization
+// として apply される(メインの overlays/local には含めない。ADR-0211 §3.2 実装時の追記)ため、
+// 自分自身で namespace: pokecalc を明示していることを検査する(無いと TidbCluster/
+// TidbInitializer が既定 namespace に作られ、up.sh の -n pokecalc な待ち・削除と食い違う)。
+func TestTidbOverlayHasNamespace(t *testing.T) {
+	s := readRepoFile(t, "deploy/k8s/overlays/local/tidb/kustomization.yaml")
+	if !regexp.MustCompile(`(?m)^namespace:\s*pokecalc\s*$`).MatchString(s) {
+		t.Error("deploy/k8s/overlays/local/tidb/kustomization.yaml に namespace: pokecalc が無い")
+	}
+}
+
+// TestRecordTeamJobsDoNotCrossReferenceSecrets は ADR-0211 AC-T7(record の Pod からは
+// record-db-auth だけを参照し、team-db-auth・tidb-root-auth のキーを一切参照しない。team も対称)を
+// 検査する(CLAUDE.md 絶対ルール4「サービスは自分のDBにだけ触る」を資格情報の面から固定する)。
+func TestRecordTeamJobsDoNotCrossReferenceSecrets(t *testing.T) {
+	cases := []struct {
+		file      string
+		forbidden []string
+	}{
+		{"deploy/k8s/base/record/job-migrate.yaml", []string{"team-db-auth", "tidb-root-auth"}},
+		{"deploy/k8s/base/team/job-migrate.yaml", []string{"record-db-auth", "tidb-root-auth"}},
+	}
+	for _, tc := range cases {
+		s := readRepoFile(t, tc.file)
+		for _, name := range tc.forbidden {
+			// secretKeyRef.name の値としての参照だけを見る(コメントで「参照しない」と
+			// 説明のために名前を書いているだけの行は誤検知しない)。YAML は値を引用符で
+			// 囲んでも囲まなくても同じ意味になるため、任意の引用符も許す(critic 2回目レビューで
+			// 指摘: 引用符付き `name: "tidb-root-auth"` だと素通りしていた)。
+			re := regexp.MustCompile(`name:\s*["']?` + name + `\b`)
+			if re.MatchString(s) {
+				t.Errorf("%s が secretKeyRef.name として %s を参照している(自分の Secret 以外を参照しない。ADR-0211 AC-T7)", tc.file, name)
+			}
+		}
 	}
 }

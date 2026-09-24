@@ -22,6 +22,19 @@ contract_max_items() {
   ' "$openapi"
 }
 
+# paths.<path>.get.parameters[].(name==<name>).schema.maxItems を取り出す(見つからなければ空)。
+# `getMovesByIds` の `ids` のように、component.schemas のプロパティではなく1つのオペレーションの
+# クエリパラメータとして maxItems を持つケース用(ADR-0501「getMovesByIds による構築編集の技の
+# 一括解決」1章)。paths の各エントリはトップレベルから2スペース、`- name: <name>` は8スペース、
+# その配下の `schema.maxItems` は12スペースの固定インデント(api/openapi.yaml のスタイル)を前提にする。
+contract_query_max_items() {
+  awk -v path="$1" -v name="$2" '
+    /^  [^ ]/ { in_path = ($0 == "  " path ":"); in_param = 0; next }
+    in_path && /^        - name: / { in_param = ($0 == "        - name: " name); next }
+    in_path && in_param && /^            maxItems:/ { print $2; exit }
+  ' "$openapi"
+}
+
 # RequestLimits.swift の `public static let <name> = <数値>` の値(見つからなければ空)。
 swift_limit() {
   sed -n "s/^ *public static let $1 = \([0-9][0-9]*\)$/\1/p" "$limits_swift"
@@ -42,9 +55,26 @@ check() {
   fi
 }
 
+# check の「クエリパラメータ版」(components.schemas ではなく paths.<path>.get のクエリパラメータの
+# maxItems と照合する。`getMovesByIds` の `ids` 用)。
+check_query() {
+  local path="$1" name="$2" limit_name="$3"
+  local contract ios
+  contract="$(contract_query_max_items "$path" "$name")"
+  ios="$(swift_limit "$limit_name")"
+  if [ -z "$contract" ] || [ -z "$ios" ]; then
+    echo "ios-check-request-limits: $path クエリ $name.maxItems または RequestLimits.$limit_name が見つからない" >&2
+    status=1
+  elif [ "$contract" != "$ios" ]; then
+    echo "ios-check-request-limits: $path クエリ $name.maxItems=$contract と RequestLimits.$limit_name=$ios が違う" >&2
+    status=1
+  fi
+}
+
 check ReverseRequest observations maxObservations
 check ReverseRequest itemCandidates maxItemCandidates
 check BulkCalcRequest itemVariants maxItemVariants
+check_query /api/pokedex/moves/batch ids maxMoveBatchIds
 
 if [ "$status" -eq 0 ]; then
   echo "ios-check-request-limits: OK(RequestLimits は api/openapi.yaml と一致)"

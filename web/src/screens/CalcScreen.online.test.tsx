@@ -5,15 +5,31 @@
 //   - 技が無い(moves: false): 技のセレクトは残すが disabled・選択肢は空・案内を出す・計算しない
 //   - 効果データが無い(effects: false): 「持ち物の候補も比較」を disabled にして案内・持ち物の選択は残す
 //   - 種族の一覧が無い(speciesList: false): ドロップダウンの代わりに検索欄(A-4 のパラメータ・A-10 の形)
+//   - P4-17(ADR-0304 §3 の解消・A-13): オンラインのマスタでも、種族を選べばその種族の技を選べる
+//     (技は resolveSpecies が learnset を解決して返す)。技セレクトの disabled は capabilities.moves では
+//     なく「いま技の候補があるか」で決まる
 //   - capabilities を省いた既存のマスタでは、今までどおり(この画面の既存テストと同じ見え方)
 
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { beforeAll, describe, expect, test, vi } from "vitest";
+import { firstDamagingMove, learnsetMoves } from "../domain/moves";
+import type { Move } from "../engine/types";
 import { masterOnlineText } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
-import { SPECIES_SEARCH_DEBOUNCE_MS, SPECIES_SEARCH_LIMIT } from "../master/onlineSource";
-import type { MasterCapabilities, MasterData, MasterSpecies, MasterSpeciesSearch } from "../master/types";
+import {
+  MOVES_BATCH_MAX_IDS,
+  ONLINE_MASTER_CAPABILITIES,
+  SPECIES_SEARCH_DEBOUNCE_MS,
+  SPECIES_SEARCH_LIMIT,
+} from "../master/onlineSource";
+import type {
+  MasterCapabilities,
+  MasterData,
+  MasterSpecies,
+  MasterSpeciesResolution,
+  MasterSpeciesSearch,
+} from "../master/types";
 import { createFakeEngine, type FakeEngine } from "../test/fakeEngine";
 import {
   createDeferredSpeciesSearch,
@@ -29,9 +45,9 @@ beforeAll(async () => {
   example = await exampleMasterSource.load();
 });
 
-/** 種族だけ検索で引くマスタ(P4-17 の形)。技・効果データはある。 */
+/** 種族だけ検索で引くマスタ(技・効果データはある想定の形。実際のオンラインは ONLINE_MASTER_CAPABILITIES)。 */
 const SEARCH_ONLY: MasterCapabilities = { speciesList: false, moves: true, effects: true };
-/** 技だけ使えないマスタ(ADR-0304 §3 の欠落そのもの)。 */
+/** 技の全件一覧が無く、種族ごとの解決もできないマスタ(技をどこからも引けない形)。 */
 const NO_MOVES: MasterCapabilities = { speciesList: true, moves: false, effects: true };
 /** 持ち物・特性の効果データだけ無いマスタ(ADR-0304 A-1)。 */
 const NO_EFFECTS: MasterCapabilities = { speciesList: true, moves: true, effects: false };
@@ -404,5 +420,262 @@ describe("capabilities を省いたマスタ(オフライン相当)は今まで�
     for (const species of example.species) {
       expect(within(select).getByRole("option", { name: species.nameJa })).toHaveValue(species.key);
     }
+  });
+});
+
+// ---- P4-17: オンラインのマスタでも技を選べる(ADR-0304 §3 の解消・A-13) ----
+
+/** 実際のオンライン(種族一覧・技一覧・効果データのどれも無い)マスタ。 */
+function onlineMaster(): MasterData {
+  return limitedMaster(example, ONLINE_MASTER_CAPABILITIES);
+}
+
+/**
+ * オンライン相当の検索口。resolveSpecies が種族・特性に加えて **learnset を解決した技**を返す
+ * (本物の onlineSource は getMovesByIds でこれを作る)。
+ */
+function onlineSearch(species: readonly MasterSpecies[] = example.species): FakeSpeciesSearch {
+  return createFakeSpeciesSearch({ species, abilities: example.abilities, moves: example.moves });
+}
+
+/** 例データの技(index 番目)を、ID・名前だけ変えて複製する(件数の境界値を作るため)。 */
+function moveFixture(index: number): Move {
+  const base = example.moves[0];
+  if (base === undefined) {
+    throw new Error("例データに技が無い");
+  }
+  return { ...base, id: `example-move-p417-${String(index)}`, nameJa: `テスト学習技${String(index)}` };
+}
+
+/** 指定した技を覚える架空の種族(learnset に、技の母集団に無い ID を混ぜられる)。 */
+function speciesLearning(moves: readonly Move[], unknownMoveIds: readonly string[] = []): MasterSpecies {
+  return {
+    ...speciesAt(0),
+    key: "9999-000",
+    dexNo: 9999,
+    nameJa: "テストたくさんおぼえる",
+    learnset: [...moves.map((move) => move.id), ...unknownMoveIds],
+  };
+}
+
+/** 検索口の母集団に custom を足し、技の母集団も moves にした検索口。 */
+function searchLearning(custom: MasterSpecies, moves: readonly Move[]): FakeSpeciesSearch {
+  return createFakeSpeciesSearch({
+    species: [custom, ...example.species],
+    abilities: example.abilities,
+    moves: [...example.moves, ...moves],
+  });
+}
+
+/** resolveSpecies が返す想定の解決結果(deferred な検索口の応答に使う)。 */
+function resolutionOf(species: MasterSpecies): MasterSpeciesResolution {
+  return {
+    species,
+    abilities: example.abilities.filter((ability) => species.abilities.includes(ability.id)),
+    moves: learnsetMoves(species, example.moves),
+  };
+}
+
+/** いま技セレクトに並んでいる技の名前。 */
+function moveOptionNames(): string[] {
+  return within(moveSelect())
+    .queryAllByRole("option")
+    .map((option) => option.textContent);
+}
+
+describe("オンラインのマスタ(種族も技も一覧が無い)で技が戻る(P4-17)", () => {
+  test("攻撃側を選ぶ前は、技セレクトは残るが disabled で案内を出す", () => {
+    renderScreen(onlineMaster(), onlineSearch());
+    expect(moveSelect()).toBeDisabled();
+    expect(within(moveSelect()).queryAllByRole("option")).toHaveLength(0);
+    expect(screen.getByText(masterOnlineText.movesUnavailable)).toBeInTheDocument();
+  });
+
+  test("検索で攻撃側を選ぶと技セレクトが有効になり、learnset の技が順どおり並ぶ", async () => {
+    const rendered = renderScreen(onlineMaster(), onlineSearch());
+    const attacker = speciesAt(0);
+
+    await chooseBySearch(rendered, attackerCard(), "攻撃側のポケモン", attacker);
+
+    await waitFor(() => {
+      expect(moveSelect()).not.toBeDisabled();
+    });
+    // 名前・分類・威力まで解決できている(ID の羅列ではない)ことを、既存の表示規則ごと確かめる。
+    const expected = learnsetMoves(attacker, example.moves);
+    expect(expected.length).toBeGreaterThan(0);
+    expect(within(moveSelect()).getAllByRole("option")).toHaveLength(expected.length);
+    for (const move of expected) {
+      expect(within(moveSelect()).getByRole("option", { name: new RegExp(move.nameJa) })).toBeInTheDocument();
+    }
+    expect(screen.queryByText(masterOnlineText.movesUnavailable)).toBeNull();
+  });
+
+  test("防御側だけを選んでも技は出ない(技は常に攻撃側の learnset から選ぶ。ADR-0010)", async () => {
+    const rendered = renderScreen(onlineMaster(), onlineSearch());
+
+    await chooseBySearch(rendered, defenderCard(), "防御側のポケモン", speciesAt(1));
+
+    expect(moveSelect()).toBeDisabled();
+    expect(within(moveSelect()).queryAllByRole("option")).toHaveLength(0);
+  });
+
+  test("種族の解決中(技がまだ届いていない間)は disabled のままで、解決したら有効になる", async () => {
+    const search = createDeferredSpeciesSearch();
+    const rendered = renderScreen(onlineMaster(), search);
+    const attacker = speciesAt(0);
+    const input = within(attackerCard()).getByRole("combobox", { name: "攻撃側のポケモン" });
+
+    await rendered.user.type(input, attacker.nameJa);
+    rendered.advance(SPECIES_SEARCH_DEBOUNCE_MS);
+    const searchCall = search.searchCalls[0];
+    if (searchCall === undefined) {
+      throw new Error("検索が呼ばれていない");
+    }
+    act(() => {
+      searchCall.resolve([attacker]);
+    });
+    await rendered.user.click(await within(attackerCard()).findByRole("option", { name: attacker.nameJa }));
+
+    // 種族を選んだ直後。resolveSpecies(= 技の解決)はまだ応答していない。
+    expect(search.resolveCalls).toHaveLength(1);
+    expect(moveSelect()).toBeDisabled();
+    expect(screen.getByText(masterOnlineText.movesUnavailable)).toBeInTheDocument();
+
+    const resolveCall = search.resolveCalls[0];
+    if (resolveCall === undefined) {
+      throw new Error("resolveSpecies が呼ばれていない");
+    }
+    act(() => {
+      resolveCall.resolve(resolutionOf(attacker));
+    });
+
+    await waitFor(() => {
+      expect(moveSelect()).not.toBeDisabled();
+    });
+  });
+
+  test("技の解決に失敗したら種族の選択ごと失敗し、技セレクトは disabled のまま(ADR-0304 A-13)", async () => {
+    const search = createDeferredSpeciesSearch();
+    const rendered = renderScreen(onlineMaster(), search);
+    const attacker = speciesAt(0);
+    const input = within(attackerCard()).getByRole("combobox", { name: "攻撃側のポケモン" });
+
+    await rendered.user.type(input, attacker.nameJa);
+    rendered.advance(SPECIES_SEARCH_DEBOUNCE_MS);
+    const searchCall = search.searchCalls[0];
+    if (searchCall === undefined) {
+      throw new Error("検索が呼ばれていない");
+    }
+    act(() => {
+      searchCall.resolve([attacker]);
+    });
+    await rendered.user.click(await within(attackerCard()).findByRole("option", { name: attacker.nameJa }));
+
+    const resolveCall = search.resolveCalls[0];
+    if (resolveCall === undefined) {
+      throw new Error("resolveSpecies が呼ばれていない");
+    }
+    act(() => {
+      // 技の一括解決(getMovesByIds)の失敗は resolveSpecies 全体の失敗になる。
+      resolveCall.reject(new Error("テストの技の解決失敗"));
+    });
+
+    expect(await within(attackerCard()).findByText(masterOnlineText.speciesSearchFailed)).toBeInTheDocument();
+    // 種族そのものが選ばれていない(カードに名前が出ない)。
+    expect(within(attackerCard()).queryByRole("heading", { name: attacker.nameJa })).toBeNull();
+    expect(moveSelect()).toBeDisabled();
+    expect(rendered.engine.bulkRequests).toHaveLength(0);
+  });
+
+  // 境界値: 分割の上限ちょうど / 上限+1 / 上限×2+1。画面は分割を知らないが、取りこぼしを検知する。
+  test.each([MOVES_BATCH_MAX_IDS, MOVES_BATCH_MAX_IDS + 1, MOVES_BATCH_MAX_IDS * 2 + 1])(
+    "learnset が %i 件の種族でも、全件が技セレクトに出る",
+    async (learnsetSize) => {
+      const moves = Array.from({ length: learnsetSize }, (_unused, index) => moveFixture(index));
+      const species = speciesLearning(moves);
+      const rendered = renderScreen(onlineMaster(), searchLearning(species, moves));
+
+      await chooseBySearch(rendered, attackerCard(), "攻撃側のポケモン", species);
+
+      await waitFor(() => {
+        expect(within(moveSelect()).queryAllByRole("option")).toHaveLength(learnsetSize);
+      });
+      // 先頭・末尾まで漏れていないこと(件数だけだと並び順の取り違えを見逃す)。
+      const first = moves[0];
+      const last = moves.at(-1);
+      if (first === undefined || last === undefined) {
+        throw new Error("技の fixture が空");
+      }
+      const names = moveOptionNames();
+      expect(names.at(0) ?? "").toContain(first.nameJa);
+      expect(names.at(-1) ?? "").toContain(last.nameJa);
+    },
+  );
+
+  test("解決で返らなかった ID(マスタに無い技)は技セレクトに出ない", async () => {
+    const moves = [moveFixture(0), moveFixture(1)];
+    const species = speciesLearning(moves, ["example-move-p417-not-in-master"]);
+    const rendered = renderScreen(onlineMaster(), searchLearning(species, moves));
+
+    await chooseBySearch(rendered, attackerCard(), "攻撃側のポケモン", species);
+
+    await waitFor(() => {
+      expect(within(moveSelect()).queryAllByRole("option")).toHaveLength(moves.length);
+    });
+    expect(species.learnset).toHaveLength(moves.length + 1);
+  });
+
+  test("攻守そろうと計算し、攻撃側の learnset の最初のダメージ技を送る", async () => {
+    const rendered = renderScreen(onlineMaster(), onlineSearch());
+    const attacker = speciesAt(0);
+    const defender = speciesAt(1);
+
+    await chooseBySearch(rendered, attackerCard(), "攻撃側のポケモン", attacker);
+    await chooseBySearch(rendered, defenderCard(), "防御側のポケモン", defender);
+
+    await waitFor(() => {
+      expect(rendered.engine.bulkRequests).not.toHaveLength(0);
+    });
+    const request = rendered.engine.bulkRequests.at(-1);
+    expect(request?.attacker.species.key).toBe(attacker.key);
+    expect(request?.defenderSpecies.key).toBe(defender.key);
+    expect(request?.move).toEqual(firstDamagingMove(attacker, example.moves));
+  });
+
+  test("攻守入れ替えのあとは、新しい攻撃側(元の防御側)の技が出る", async () => {
+    const rendered = renderScreen(onlineMaster(), onlineSearch());
+    const attacker = speciesAt(0);
+    const defender = speciesAt(1);
+
+    await chooseBySearch(rendered, attackerCard(), "攻撃側のポケモン", attacker);
+    await chooseBySearch(rendered, defenderCard(), "防御側のポケモン", defender);
+    await waitFor(() => {
+      expect(moveSelect()).not.toBeDisabled();
+    });
+
+    await rendered.user.click(screen.getByRole("button", { name: "攻守入れ替え" }));
+
+    const expected = learnsetMoves(defender, example.moves);
+    expect(expected.length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(within(moveSelect()).getAllByRole("option")).toHaveLength(expected.length);
+    });
+    for (const move of expected) {
+      expect(within(moveSelect()).getByRole("option", { name: new RegExp(move.nameJa) })).toBeInTheDocument();
+    }
+
+    // critic指摘(P4-17): 候補一覧だけでなく、選択中の技(moveId)自体が新しい攻撃側の learnset から
+    // 選ばれていることも確かめる(候補は useMemo で作り直されるが、選択中の値は別ロジックで更新されるため、
+    // 候補一覧の検査だけでは resolveMoveId に渡す一覧の取り違えを見逃す)。
+    const beforeSwapAttackerOnlyMoves = learnsetMoves(attacker, example.moves).filter(
+      (move) => !expected.some((defenderMove) => defenderMove.id === move.id),
+    );
+    expect(beforeSwapAttackerOnlyMoves.length).toBeGreaterThan(0);
+    await waitFor(() => {
+      const request = rendered.engine.bulkRequests.at(-1);
+      expect(expected.map((move) => move.id)).toContain(request?.move.id);
+    });
+    const requestAfterSwap = rendered.engine.bulkRequests.at(-1);
+    expect(beforeSwapAttackerOnlyMoves.map((move) => move.id)).not.toContain(requestAfterSwap?.move.id);
   });
 });

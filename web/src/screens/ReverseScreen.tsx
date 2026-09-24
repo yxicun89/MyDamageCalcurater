@@ -159,7 +159,7 @@ function resolveMoveId(species: MasterSpecies | null, moves: readonly Move[], cu
 export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenProps) {
   // P4-16b(ADR-0304 A-2・A-5・A-10・A-11): 使える機能。capabilities を省いたマスタは全部使える。
   const capabilities = masterCapabilities(master);
-  const { speciesFor, abilitiesFor, register: registerSpeciesResolution } = useSpeciesResolutions();
+  const { speciesFor, abilitiesFor, movesFor, register: registerSpeciesResolution } = useSpeciesResolutions();
   // P4-19(issue 110): 観測の上限に達した理由(role="status")の id。ボタンの aria-describedby から指す。
   const observationLimitReasonId = useId();
   const [side, setSide] = useState<ReverseSide>("defender");
@@ -206,10 +206,17 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   );
   // 技は常に攻撃側(自分を攻撃側にする defender、相手を攻撃側にする attacker)の learnset から選ぶ。
   const moveSourceSpecies = side === "defender" ? mySpecies : theirsSpecies;
+  const moveSourceKey = side === "defender" ? mySpeciesKey : theirsSpeciesKey;
   const moveOptions = useMemo(
-    () => (moveSourceSpecies === null ? [] : learnsetMoves(moveSourceSpecies, master.moves)),
-    [moveSourceSpecies, master.moves],
+    () =>
+      moveSourceSpecies === null
+        ? []
+        : learnsetMoves(moveSourceSpecies, movesFor(master.moves, moveSourceKey)),
+    [moveSourceSpecies, master.moves, moveSourceKey, movesFor],
   );
+  // P4-17(ADR-0304 A-13): 技セレクトが使えるのは capabilities.moves が true、または今の攻撃側の技の
+  // 候補が1件以上あるとき。案内の表示条件もこれと同じにする(CalcScreen.tsx と同じ考え方)。
+  const movesAvailable = capabilities.moves || moveOptions.length > 0;
   const move = useMemo(
     () => moveOptions.find((candidate) => candidate.id === moveId) ?? null,
     [moveOptions, moveId],
@@ -294,7 +301,8 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     // 対象側が変わると、観測したダメージの意味(与えた/受けた)が変わるので入力をやり直す(空の1行に戻す)。
     replaceObservations([newObservationRow(nextRowId(), defaultObservationUnit(nextSide))], "immediate");
     const sourceSpecies = nextSide === "defender" ? mySpecies : theirsSpecies;
-    setMoveId((prev) => resolveMoveId(sourceSpecies, master.moves, prev));
+    const sourceKey = nextSide === "defender" ? mySpeciesKey : theirsSpeciesKey;
+    setMoveId((prev) => resolveMoveId(sourceSpecies, movesFor(master.moves, sourceKey), prev));
   }
 
   function selectMySpecies(key: string): void {
@@ -302,7 +310,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     setMySpeciesKey(key);
     if (side === "defender") {
       const species = speciesFor(master.species, key);
-      setMoveId((prev) => resolveMoveId(species, master.moves, prev));
+      setMoveId((prev) => resolveMoveId(species, movesFor(master.moves, key), prev));
     }
   }
 
@@ -311,31 +319,33 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     setTheirsSpeciesKey(key);
     if (side === "attacker") {
       const species = speciesFor(master.species, key);
-      setMoveId((prev) => resolveMoveId(species, master.moves, prev));
+      setMoveId((prev) => resolveMoveId(species, movesFor(master.moves, key), prev));
     }
   }
 
   /**
-   * P4-16b(ADR-0304 A-10): 検索で自分の種族が解決したとき。resolution.species をそのまま使う
-   * (register の setState は非同期なので、直後に speciesFor で引き直すと古い覚え書きのままになる。
-   * CalcScreen.tsx の handleAttackerResolved と同じ考え方)。
+   * P4-16b/P4-17(ADR-0304 A-10・A-13): 検索で自分の種族が解決したとき。resolution.species・
+   * resolution.moves をそのまま使う(register の setState は非同期なので、直後に movesFor/speciesFor で
+   * 引き直すと古い覚え書きのままになる。CalcScreen.tsx の handleAttackerResolved と同じ考え方)。
    */
   function handleMineResolved(resolution: MasterSpeciesResolution): void {
     flushObservationDebounce();
     registerSpeciesResolution(resolution);
     setMySpeciesKey(resolution.species.key);
     if (side === "defender") {
-      setMoveId((prev) => resolveMoveId(resolution.species, master.moves, prev));
+      // movesFor(master.moves, key) は使わない(register の setState 直後はまだ古い覚え書きのまま)。
+      // movesFor が最終的に返す形(master.moves + 解決で覚えた分)をここで直接組み立てる。
+      setMoveId((prev) => resolveMoveId(resolution.species, [...master.moves, ...resolution.moves], prev));
     }
   }
 
-  /** P4-16b(ADR-0304 A-10): 検索で相手の種族が解決したとき。 */
+  /** P4-16b/P4-17(ADR-0304 A-10・A-13): 検索で相手の種族が解決したとき。 */
   function handleTheirsResolved(resolution: MasterSpeciesResolution): void {
     flushObservationDebounce();
     registerSpeciesResolution(resolution);
     setTheirsSpeciesKey(resolution.species.key);
     if (side === "attacker") {
-      setMoveId((prev) => resolveMoveId(resolution.species, master.moves, prev));
+      setMoveId((prev) => resolveMoveId(resolution.species, [...master.moves, ...resolution.moves], prev));
     }
   }
 
@@ -613,8 +623,8 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
         </section>
       </div>
 
-      <MoveSelect moves={moveOptions} value={moveId} onChange={selectMove} disabled={!capabilities.moves} />
-      {!capabilities.moves && <p className="reverse-screen__notice">{masterOnlineText.movesUnavailable}</p>}
+      <MoveSelect moves={moveOptions} value={moveId} onChange={selectMove} disabled={!movesAvailable} />
+      {!movesAvailable && <p className="reverse-screen__notice">{masterOnlineText.movesUnavailable}</p>}
       {!capabilities.effects && (
         <p className="reverse-screen__notice">{masterOnlineText.itemCandidatesUnavailable}</p>
       )}
@@ -743,7 +753,10 @@ interface MoveSelectProps {
   readonly moves: readonly Move[];
   readonly value: string;
   readonly onChange: (moveId: string) => void;
-  /** P4-16b(ADR-0304 A-5): capabilities.moves が false のとき、欄は残すが disabled にする。 */
+  /**
+   * P4-16b/P4-17(ADR-0304 A-5・A-13): 技の候補が1件も無いとき、欄は残すが disabled にする
+   * (capabilities.moves 単体ではなく、呼び出し側が「いま攻撃側の技の候補があるか」で決めた値を渡す)。
+   */
   readonly disabled?: boolean;
 }
 

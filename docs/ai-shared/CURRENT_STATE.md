@@ -27,7 +27,23 @@ Status(追記): issue #69(検索の並びがOpenAPI契約と一致しない)・i
 Status(追記): issue #113(入力変更時の古い計算要求を抑止・キャンセル)のAPIレーン連携分(「クライアントのcancel伝播」)を修正。gatewayの`ReverseProxy.ErrorHandler`がクライアントの要求中断(`context.Canceled`)を上流障害と区別せず「上流に到達できない」WARN・503 `upstream_unavailable`を返していたのを、クライアント起因のときは何もしない(応答を書かない)よう修正(ADR-0202 §5 追記・AC-G10)。**限界**: gateway→calc-svcへのcontextキャンセル伝播自体は効くが、calc-svc・engineはcontextを見ないため(engineを純粋に保つ絶対ルール2)、issue本文の「calc-svc CPU消費も止める」は未達成のまま(中断された逆算は完走する。ADR-0208の上限で最悪計算量は有界)。Web欄の「APIレーンの連携分が残っているか未確認」はこれで解消(Web欄の更新はWebレーンに委ねる)。issue #113はWeb・iOS・APIすべてのレーン分が完了としてクローズ可能と判断(詳細はDECISIONS.md)
 Status(追記): P4-17(ADR-0304 §3。技のID解決の欠落)を解消・**main 統合済み(PR #196)**。`GET /api/pokedex/moves/batch`(`getMovesByIds`)を新設。ADR-0304が当初推していた案A(`learnset`を`Move[]`に変える)は不採用: iOS(M3)が`learnset: string[]`前提の出荷済み機能を持つため、型変更より新エンドポイント新設の方が契約変更として小さいと判断。critic PASS(3往復)。
 Status(追記): `learnset`が64件を超える場合の実データを確認(クラスタ復旧後)。**349種族中151種族(43%)が64件超・最大106件**で、まれな例外ではなく日常的なケース。Web側の分割呼び出しは主経路として実装が必要と訂正・連絡済み(DECISIONS.md 2026-09-24)。
-Next: 他レーンからの依頼待ち。issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
+Status(追記): M2 P5-1(record-svc/team-svc用TiDB)着手。ADR-0211でバージョン固定(TiDB v8.5.8・TiDB Operator v1.6.6)・
+ローカル/k3dプロビジョニング・DB/ユーザー分離・migrationツール共通化・スキーマ・保持日数の環境変数契約を確定
+(critic 3ラウンド。**main 統合済み PR #204**)。実装は`services/internal/dbmigrate`への切り出し(pokedexのUp/DownAll/Versionを
+`fs.FS`引数化し、pokedexは薄いラッパーに)・grants.goへの`AppPrivileges`追加・services/record・services/teamの
+devices/purge_journal migrationとmigrate CLI(app/migratorの2ロール)まで完了(critic 2ラウンド。**main 統合済み PR #205**)。
+TiDB Operatorのk8sマニフェスト(TidbCluster・TidbInitializer)・`up.sh`配線(bootstrap非致命化・Secret作成・
+namespace・完了待ちの順序)・Makefileのmigrate-up/down/version-record/team・tidb-local-upターゲットも完了
+(critic 2ラウンド。**main 統合済み PR #266**。1回目FAILはTiDB Operator v1.6.6の実ソースを取得して
+裏取りした結果判明した`passwordSecret`のキー名誤り・初期化用imageの誤り・namespace不一致・AC-T7違反、
+2回目FAILは新設したk8s-renderがクラスタ未起動環境で失敗/ハングする退行)。
+**残**: 共有k3dクラスタへの実適用(AC-T3・AC-T8)は、他レーンが使う共有クラスタへの影響を先に確認する
+必要があるため意図的に未実施。次の`make up`実行時にTidbCluster/TidbInitializerが実際にReady/Completedに
+なることを確認すること(TidbInitializerが使う`tnir/mysqlclient`はamd64専用イメージのため、Apple Silicon
+のk3dノードでの起動可否も未確認)。`grants_tidb_test.go`・`migrate_tidb_test.go`(`-tags tidb`)も
+このサンドボックスでは実TiDBに対して未実行(tiup playgroundのpdがdarwin/arm64でクラッシュ)。
+`make test-db`により検証してからP5-1完了とする
+Next: M2 P5-1の実機確認(次のmake up時にTidbCluster/TidbInitializerのReady/Completedを確認)→P5-2(NATS JetStream)へ進む。他レーンからの依頼待ち。issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
@@ -64,10 +80,28 @@ danger のライト値を `#E5484D`→`#CD1D23` に変更(WCAG 2.2 SC 1.4.3 の4
 mutation テスト9件で確認)。iOS 側も完了(`fix: iOS の計算・逆算で古い計算要求をキャンセル・観測入力を
 debounce (issue #113)`。`LatestTaskRunner.swift`・`CalcInput.swift`)。**issue #113 自体はまだ open**
 (API レーンの「クライアントのcancel伝播」連携分が残っているかは未確認。Web・iOS とも自レーン分は完了)。
-P4-17(技の ID 解決)は、API レーンが判定レーン JD4 向けに `GET /api/pokedex/moves/{key}`(getMove)を
-main 統合したが(PR #161)、種族1体あたり技20〜30件ぶんのラウンドトリップが要るため ADR-0304 §3 の欠落は
-**まだ解消していない**(API レーン自身が ADR-0304 に追記済み)。案A(`learnset` を `Move[]` にする)か
-`getMove` のバッチ解決化が API レーンへの未決の提案のまま。
+**P4-17(技の ID 解決。ADR-0304 A-13)完了・main 統合済み(PR #202)**: API レーンが新設した
+`GET /api/pokedex/moves/batch`(`getMovesByIds`)を使い、オンラインモードの技選択を復活させた。
+`resolveSpecies` が learnset を技の実体に解決して返す設計(`MasterSpeciesResolution.moves`)。`learnset` が
+64件を超える場合はチャンク分割して並列に複数回呼ぶ(API レーンが実データで確認: 349種族中151種族・43%が
+64件超・最大106件。稀な例外ではなく主経路として実装・テスト)。`capabilities.moves` の意味は変えずオンラインで
+`false` のまま(`true` にすると BalanceScreen が「有効なのに技が選べない」壊れた状態になるため)。技セレクトの
+disabled 判定は「今の種族の技候補があるか」に変更。critic レビュー: チャンク分割・結合順序・全体失敗の扱いを
+mutation テストで確認(全滅)。重要指摘1件(攻守入れ替え・与えた/受けた切り替え後の選択中の技〈候補一覧だけで
+なく実際にリクエストに乗る技〉が未検証。`<select>` の DOM 値は状態が壊れていても先頭候補にフォールバック表示
+するため見逃しやすい)を受け、実際のリクエストを検査する形に既存テスト2件を強化。既存1192件は無変更・新規
+28件追加(1220件)。BalanceScreen 自体の種族検索・技選択は P4-17b として積み残し(下記で完了)。
+**P4-17b(BalanceScreen のオンライン対応。ADR-0304 A-14)完了・main 統合済み(PR #207)**: P4-17 で
+`capabilities.moves` が永続的に false のままと決まった結果、従来のゲート `speciesList && moves` では
+BalanceScreen がオンラインで永久に使えなかった。可否の判定を「一覧がそろっているか」から「入力の口が
+あるか」(`(speciesList || masterSearch) && (moves || (!speciesList && masterSearch))`)に置き換え、
+パーティ・仮想敵の12枠(6枠×2)それぞれで種族検索→技解決(`useSpeciesResolutions` を1画面で共有)を
+独立に行えるようにした。`moveById`/`hasDamagingMove` を fail-closed に直し、実体不明の技 ID を攻撃技と
+誤判定して誤解を招く診断(coverage の誤呼び出し)を出さないようにした。critic PASS(mutation testing で
+ゲート条件・fail-closed 判定・種族解決の登録漏れ等の主要な変異を全て検知)。critic 指摘の軽微3件は
+その場で直接修正: 種族解決の適用を index ではなく枠の id で引くよう変更(検索解決を待つ間に他の枠が
+削除されると index が別の枠を指しうる競合の根治)、A-14.1 の境界表(7パターン)の未カバー2行のテスト追加、
+特性名解決の重複ロジックの統一。新規15件追加(1243件)。
 **P4-21(issue #67・#98)完了・main 統合済み(PR #189・#192)。Codexレビューissue(P4-18・P4-21)はこれで
 すべて完了**:
 - #67(2xxの契約外JSONでAPIクライアントが例外を投げる): `apiEngine.ts`・`balanceClient.ts` の `postJson` を
@@ -82,11 +116,12 @@ main 統合したが(PR #161)、種族1体あたり技20〜30件ぶんのラウ�
   作業中に発見した無関係の既存退行(JD5の判定タブ追加で `a11y.spec.ts` が壊れていた)を別途修正・main統合済み
   (PR #191)。
   最終テスト数: 既存1166件は無変更のまま vitest 1184件・Playwright 31件、すべて green。
-Next: (1) P4-17: 技の ID 解決の欠落が解消されたら技を復活。(2) P4-20: issue #148(アクセス境界・認証方針)。
-Web 側は既にコード上で条件を満たしていることを確認済み(apiBaseUrl の既定値は同一オリジン、CORSはgateway側の
-設定)。実際のtailnet名が決まってから運用レーンより連絡が来る想定。(3) 続いて P5-5(構築ビルダー等)は
-record/team の API 待ち(M2。人間の /phase キックオフ待ち)。(4) 人間へのお願い: docs/verify-m1.md §4 を
-Safari で確認(P4-5)。(5) 他レーンからの依頼待ち
+Next: (1) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
+(apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより
+連絡が来る想定。(2) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち。
+2026-09-24 時点で record/team-svc の DB マイグレーション・TiDB 導入方針〈ADR-0211〉はデータレーンで進行中)。
+(3) 人間へのお願い: docs/verify-m1.md §4 を
+Safari で確認(P4-5)。(4) 他レーンからの依頼待ち
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
@@ -111,8 +146,9 @@ issue #68 の残り(一度も検索結果に出ていない選択中の技IDを�
 実装して解消(ADR-0501「issue #68 の残り」。持ち物の先頭ページが上限に達したら黙って切り捨てず案内を出す。critic
 1周目 FAIL〈逆算の古いエラー消去条件の退行〉→修正→2周目 PASS。**PR #199 で main 統合済み、issue #68 クローズ済み**)。
 issue #110 は API・データ・Web・iOS すべて完了したためクローズ済み(2026-09-24)。
-Next: (1) 任意: 構築編集の load で技をメンバーごとに `getMove` 最大4件 → main に入った `getMovesByIds`(まとめ取り)へ置き換え(急ぎではない)。
-(2) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。#71(攻撃側プリセット
+P6-10(構築編集の load の技解決を `getMovesByIds` のまとめ取り1回へ。ADR-0501「getMovesByIds による構築編集の技の一括解決」。
+critic 1周目 FAIL〈分割境界のテスト不足〉→テスト追加→2周目 PASS)完了。
+Next: (1) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。#71(攻撃側プリセット
 単一化)は engine 側の `AttackerPreset` カタログ新設(データレーン)が前提のため iOS からは未着手。将来の候補:
 engine の Champions マスタが pokedex-svc 経由になったら iOS のモック/実マスタの差し替え動作を再確認、Web の
 record/team-svc(M2)が進んだら iOS の構築を端末内保存から API 保存へ移行するかを検討。

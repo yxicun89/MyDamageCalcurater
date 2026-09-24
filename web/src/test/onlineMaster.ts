@@ -3,7 +3,7 @@
 // 画面は「オンラインかどうか」ではなく capabilities の各項目で分岐する(ADR-0304 A-2)ので、
 // ここでも項目ごとに欠けさせられるようにし、「種族だけ検索・技はある」(P4-17 の形)も作れるようにする。
 
-import type { Ability } from "../engine/types";
+import type { Ability, Move } from "../engine/types";
 import type {
   MasterCapabilities,
   MasterData,
@@ -48,6 +48,11 @@ export interface FakeSpeciesSearchOptions {
   readonly species: readonly MasterSpecies[];
   /** resolveSpecies が種族と一緒に返す特性(種族の abilities の ID で引く)。 */
   readonly abilities: readonly Ability[];
+  /**
+   * P4-17: resolveSpecies が種族と一緒に返す技の母集団(種族の learnset の ID で引く)。
+   * 省略すると技を解決しない(P4-17 より前に書かれた呼び出し側のまま = 技は MasterData.moves から引く)。
+   */
+  readonly moves?: readonly Move[];
   /** 1回に返す件数の上限(既定は母集団の全件。上限に達した表示の検査で使う)。 */
   readonly limit?: number;
 }
@@ -83,7 +88,13 @@ export function createFakeSpeciesSearch(options: FakeSpeciesSearchOptions): Fake
         const ability = options.abilities.find((candidate) => candidate.id === id);
         return ability === undefined ? [] : [ability];
       });
-      const resolution: MasterSpeciesResolution = { species, abilities };
+      // P4-17: 本物(getMovesByIds)と同じく、learnset の順のまま、母集団に無い ID は詰めて省く。
+      const movePopulation = options.moves ?? [];
+      const moves = species.learnset.flatMap((id) => {
+        const move = movePopulation.find((candidate) => candidate.id === id);
+        return move === undefined ? [] : [move];
+      });
+      const resolution: MasterSpeciesResolution = { species, abilities, moves };
       return Promise.resolve(resolution);
     },
   };

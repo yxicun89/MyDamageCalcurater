@@ -1,0 +1,87 @@
+# record の migrate を流す Job(up のみ。ADR-0211 §5)。サービスの起動時には自動 migrate
+# しない(複数レプリカの競合を避けるため)。down を流す経路はここに置かない。
+# pokedex の job-migrate.yaml と違い、この Job は deploy/k8s/overlays/local の kustomize
+# resources には含めない(ADR-0211 §3.2・「影響」)。TidbInitializer(record・team の DB 作成・
+# root パスワード設定)が完了する前にこの Job が動き出すと Unknown database / 認証エラーで
+# 失敗しうるため、up.sh が TidbInitializer の完了を待った後に `kubectl apply -f` で個別に適用する。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: record-migrate
+  labels:
+    app.kubernetes.io/name: record-migrate
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  backoffLimit: 3
+  # TiDB が起動しないときに initContainer が待ち続けないよう、Job 全体に上限を置く。
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: record-migrate
+        app.kubernetes.io/part-of: pokecalc
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      # up.sh が TidbInitializer の完了を待ってから apply するため(ADR-0211 §3.2)、この時点で
+      # record DB・root パスワードは既に存在する。ここでは TiDB サーバへの到達性だけを確かめる
+      # (pokedex の wait-for-mysql と同じ簡潔さでよい。DB・ユーザーの実在は外側の待ちで保証済み)。
+      # 認証情報を渡さない: `mysqladmin ping` は認証に失敗しても(Access denied)サーバが
+      # 応答していれば終了コード0を返す仕様のため、到達性の確認に資格情報は要らない。
+      # record の Pod に record-db-auth 以外の Secret(tidb-root-auth・team-db-auth)を
+      # 一切マウントしない(ADR-0211 AC-T7。critic レビューで指摘・修正)。
+      initContainers:
+        - name: wait-for-tidb
+          image: mysql:9.7.2@sha256:29abb0a179982e4a8928138bfc7f918af9eda64e7eeb1b1d084c1720a20159e6
+          command:
+            - sh
+            - -c
+            - |
+              until mysqladmin ping -h pokecalc-tidb-tidb -P 4000 --silent; do
+                echo "record-migrate: waiting for tidb..."
+                sleep 2
+              done
+          securityContext:
+            runAsUser: 999
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+      containers:
+        - name: migrate
+          image: pokecalc/record-migrate:0.1.0
+          imagePullPolicy: IfNotPresent
+          # ADR-0211 §4: root(record-provision-dsn)は app・migrator の2ユーザーの
+          # プロビジョニング専用。実際のスキーマ migration(Up)は record_migrator
+          # (record-migrator-dsn)で行う。app の DSN はユーザー名・パスワードを知る
+          # (GRANT 対象を作る)ためだけに渡し、このコンテナ自身がその DSN で接続することはない。
+          env:
+            - name: RECORD_PROVISION_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: record-db-auth
+                  key: record-provision-dsn
+            - name: RECORD_DATABASE_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: record-db-auth
+                  key: record-migrator-dsn
+            - name: RECORD_APP_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: record-db-auth
+                  key: record-app-dsn
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault

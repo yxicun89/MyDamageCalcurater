@@ -8,15 +8,20 @@
 //   - 持ち物・特性は公開 API に効果データが無いので effect は null(capabilities.effects が false)
 //   - 持ち物が limit ちょうど返ってきたら、打ち切られた可能性を黙って無視せず失敗する
 //   - 種族は searchSpecies(前方一致・limit=50)で都度引き、空クエリでは fetch しない
-//   - resolveSpecies は getSpecies を引き、learnset の ID を順序どおり保つ(技の実体化は API レーン待ち)
+//   - resolveSpecies は getSpecies を引き、learnset の ID を順序どおり保つ
+//   - P4-17: resolveSpecies は learnset を getMovesByIds(GET /api/pokedex/moves/batch?ids=...)で技の実体に
+//     解決する。ids は契約上1〜64件なので、64件ずつに分割して複数回引く(ADR-0304 §3 追記・A-13)
 //   - 通信・応答の失敗は reject する(空のマスタで握りつぶさない。ADR-0301 §4 と同じ考え方)
 
 import typeChartData from "@typechart";
-import { expect, test, vi } from "vitest";
+import { readFile } from "node:fs/promises";
+import { describe, expect, test, vi } from "vitest";
 import type { ClientIds } from "../api/clientIds";
 import type { components } from "../api/openapi.gen";
+import { localPath } from "../test/localPath";
 import {
   ITEMS_FETCH_LIMIT,
+  MOVES_BATCH_MAX_IDS,
   ONLINE_MASTER_CAPABILITIES,
   SPECIES_SEARCH_LIMIT,
   createOnlineMasterSource,
@@ -38,6 +43,7 @@ const PATHS = {
   species: "/api/pokedex/species",
   items: "/api/pokedex/items",
   natures: "/api/pokedex/natures",
+  movesBatch: "/api/pokedex/moves/batch",
 } as const;
 
 const itemsResponse: Schemas["Item"][] = [
@@ -72,6 +78,29 @@ const speciesDetail: Schemas["SpeciesDetail"] = {
   learnset: ["example-move-firepunch", "example-move-tackle", "example-move-growl"],
 };
 
+/**
+ * getMovesByIds が引く技のマスタ(架空)。`example-move-growl` はわざと**含めない**:
+ * 契約どおり「マスタに無い ID は黙って省く」ことを確かめるため(ADR-0304 §3 追記)。
+ */
+const moveMaster: Schemas["Move"][] = [
+  {
+    id: "example-move-firepunch",
+    nameJa: "テストほのおのパンチ",
+    type: "fire",
+    category: "physical",
+    power: 75,
+    priority: 0,
+  },
+  {
+    id: "example-move-tackle",
+    nameJa: "テストたいあたり",
+    type: "normal",
+    category: "physical",
+    power: 40,
+    priority: 0,
+  },
+];
+
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
@@ -100,8 +129,11 @@ function absoluteUrlOf(input: RequestInfo | URL): URL {
   return new URL(typeof input === "string" ? input : input.url);
 }
 
+/** 1つのパスの応答(引いた URL を見て決められる。getMovesByIds は ids に応じて返すため)。 */
+type Route = (url: URL) => Response;
+
 /** パスごとに応答を決める fake fetch(応答を用意していないパスを引いたらテストを落とす)。 */
-function routedFetch(routes: Partial<Record<string, () => Response>>) {
+function routedFetch(routes: Partial<Record<string, Route>>) {
   return vi.fn<typeof fetch>((input) => {
     const url = urlOf(input);
     const route =
@@ -109,19 +141,42 @@ function routedFetch(routes: Partial<Record<string, () => Response>>) {
     if (route === undefined) {
       throw new Error(`テストが用意していないパスを引いた: ${url.pathname}`);
     }
-    return Promise.resolve(route());
+    return Promise.resolve(route(url));
   });
 }
 
+/**
+ * getMovesByIds の応答を契約どおりに作る(api/openapi.yaml の /api/pokedex/moves/batch):
+ * ids の順のまま返し、マスタに無い ID は**詰めて省く**(エラーにしない)。
+ */
+function movesBatchRoute(master: readonly Schemas["Move"][]): Route {
+  return (url) => {
+    const ids = url.searchParams.getAll("ids");
+    return jsonResponse(
+      200,
+      ids.flatMap((id) => master.filter((move) => move.id === id)),
+    );
+  };
+}
+
 /** 既定(すべて成功)の fake fetch。 */
-function okFetch(overrides: Partial<Record<string, () => Response>> = {}) {
+function okFetch(overrides: Partial<Record<string, Route>> = {}) {
   return routedFetch({
     [PATHS.items]: () => jsonResponse(200, itemsResponse),
     [PATHS.natures]: () => jsonResponse(200, naturesResponse),
     [PATHS.species]: () => jsonResponse(200, speciesSummaries),
+    [PATHS.movesBatch]: movesBatchRoute(moveMaster),
     detail: () => jsonResponse(200, speciesDetail),
     ...overrides,
   });
+}
+
+/** moves/batch への呼び出しの ids(呼ばれた順)。 */
+function batchIdCalls(fetchMock: ReturnType<typeof okFetch>): string[][] {
+  return fetchMock.mock.calls
+    .map(([input]) => urlOf(input))
+    .filter((url) => url.pathname === PATHS.movesBatch)
+    .map((url) => url.searchParams.getAll("ids"));
 }
 
 function createSource(fetchImpl: typeof fetch): SearchableMasterSource {
@@ -224,9 +279,12 @@ test("load の相性表は P1-13 のデータ(オフラインと同じ単一の�
   expect(master.typeChart).toEqual(typeChartFromData(typeChartData));
 });
 
-test("load は使える機能(capabilities)を報告する(種族は検索・技は未対応・効果データなし)", async () => {
+test("load は使える機能(capabilities)を報告する(種族・技は一覧にできない・効果データなし)", async () => {
   const master = await createSource(okFetch()).load();
   expect(master.capabilities).toEqual(ONLINE_MASTER_CAPABILITIES);
+  // P4-17 でも moves は false のまま。この項目の意味は「MasterData.moves が**全件**そろっているか」で、
+  // searchMoves の limit 上限200 < 実データ515件という事実は技の ID 解決が入っても変わらない
+  // (ADR-0304 §1・A-13)。種族ごとの技は resolveSpecies が返す(下の P4-17 の節)。
   expect(ONLINE_MASTER_CAPABILITIES).toEqual({ speciesList: false, moves: false, effects: false });
 });
 
@@ -300,11 +358,12 @@ test("searchSpecies は失敗を握りつぶさない(空配列にしない)", a
   await expect(createSource(fetchMock).search.searchSpecies("テスト")).rejects.toThrow(Error);
 });
 
-test("resolveSpecies は基点 URL から種族の key のパスを引く", async () => {
+test("resolveSpecies は基点 URL から種族の key のパスを引き、続けて技の一括解決を引く", async () => {
   const fetchMock = okFetch();
   await createSource(fetchMock).search.resolveSpecies("9001-000");
   const paths = fetchMock.mock.calls.map(([input]) => urlOf(input).pathname);
-  expect(paths).toEqual([`${PATHS.species}/9001-000`]);
+  // P4-17: 技の ID は種族の応答(learnset)が来てから決まるので、必ず詳細 → moves/batch の順になる。
+  expect(paths).toEqual([`${PATHS.species}/9001-000`, PATHS.movesBatch]);
   const { input } = callTo(fetchMock, `${PATHS.species}/9001-000`);
   expect(absoluteUrlOf(input).origin).toBe(new URL(BASE_URL).origin);
 });
@@ -319,7 +378,8 @@ test("resolveSpecies は種族を MasterSpecies に写す(特性は ID の配列
     types: ["fire"],
     baseStats: { hp: 100, atk: 110, def: 90, spa: 80, spd: 85, spe: 95 },
     abilities: ["example-ability-blaze", "example-ability-none"],
-    // 技の実体化は公開 API に無い(ADR-0304 §3)。ID はそのまま保ち、API レーンの対応後に解決できるようにする。
+    // learnset は ID のまま保つ(公開 API の SpeciesDetail.learnset は P4-17 でも string[] のまま。
+    // 技の実体は resolution.moves に入る)。
     learnset: ["example-move-firepunch", "example-move-tackle", "example-move-growl"],
   });
 });
@@ -395,4 +455,160 @@ test("性格・種族の取得先も基点 URL の origin を使う(相対パス
   for (const [input] of fetchMock.mock.calls) {
     expect(urlOf(input).origin).toBe(base.origin);
   }
+});
+
+// ---- P4-17: learnset の ID を技の実体に解決する(ADR-0304 §3 の解消・A-13) ----
+
+/** 学習技が count 件ある架空の種族の詳細(ID は `example-move-0` …)。 */
+function detailWithLearnset(count: number): Schemas["SpeciesDetail"] {
+  return {
+    ...speciesDetail,
+    learnset: Array.from({ length: count }, (_unused, index) => `example-move-${String(index)}`),
+  };
+}
+
+/** detailWithLearnset の learnset に対応する技のマスタ(全件あるので1件も省かれない)。 */
+function moveMasterFor(count: number): Schemas["Move"][] {
+  return Array.from({ length: count }, (_unused, index): Schemas["Move"] => ({
+    id: `example-move-${String(index)}`,
+    nameJa: `テスト技${String(index)}`,
+    type: "normal",
+    category: "physical",
+    power: 40,
+    priority: 0,
+  }));
+}
+
+/** learnset が count 件ある種族を解決する fake fetch(技のマスタも同じ件数そろえる)。 */
+function learnsetFetch(count: number) {
+  return okFetch({
+    detail: () => jsonResponse(200, detailWithLearnset(count)),
+    [PATHS.movesBatch]: movesBatchRoute(moveMasterFor(count)),
+  });
+}
+
+test("MOVES_BATCH_MAX_IDS は契約(api/openapi.yaml の ids の maxItems)と同じ", async () => {
+  // 契約と定数がずれたら 400 invalid_input を踏む。Go 側(pokedex-svc)と同じく同期をテストで固定する。
+  const contract = await readFile(localPath("../../../api/openapi.yaml", import.meta.url), "utf8");
+  const fromBatchPath = contract.slice(contract.indexOf("/api/pokedex/moves/batch:"));
+  expect(fromBatchPath).not.toBe("");
+  expect(/maxItems:\s*(\d+)/.exec(fromBatchPath)?.[1]).toBe(String(MOVES_BATCH_MAX_IDS));
+});
+
+test("resolveSpecies は learnset の ID を ids に並べて moves/batch を引く", async () => {
+  const fetchMock = okFetch();
+  await createSource(fetchMock).search.resolveSpecies("9001-000");
+
+  expect(batchIdCalls(fetchMock)).toEqual([
+    ["example-move-firepunch", "example-move-tackle", "example-move-growl"],
+  ]);
+  // 繰り返しクエリ(?ids=a&ids=b)であって、カンマ区切りの1件ではない(契約の `in: query` の配列)。
+  expect(callTo(fetchMock, PATHS.movesBatch).url.searchParams.get("ids")).toBe("example-move-firepunch");
+});
+
+test("resolveSpecies は技を実体(名前・タイプ・分類・威力・優先度)にして返す(ADR-0304 A-13)", async () => {
+  const resolved = await createSource(okFetch()).search.resolveSpecies("9001-000");
+  expect(resolved.moves).toEqual(moveMaster);
+});
+
+test("優先度は応答の値をそのまま写す(先制技を 0 に潰さない)", async () => {
+  const quick: Schemas["Move"] = {
+    id: "example-move-firepunch",
+    nameJa: "テストさきどりパンチ",
+    type: "fire",
+    category: "physical",
+    power: 40,
+    priority: 1,
+  };
+  const fetchMock = okFetch({ [PATHS.movesBatch]: movesBatchRoute([quick]) });
+  const resolved = await createSource(fetchMock).search.resolveSpecies("9001-000");
+  expect(resolved.moves).toEqual([quick]);
+});
+
+test("応答に含まれない ID(マスタに無い技)は詰めて省く(エラーにしない)", async () => {
+  const resolved = await createSource(okFetch()).search.resolveSpecies("9001-000");
+  // learnset は3件だが moveMaster に growl が無いので2件。learnset 自体は3件のまま残す。
+  expect(resolved.moves.map((move) => move.id)).toEqual(["example-move-firepunch", "example-move-tackle"]);
+  expect(resolved.species.learnset).toHaveLength(3);
+});
+
+test("learnset が空なら moves/batch を引かない(ids 省略は 400 invalid_input)", async () => {
+  const fetchMock = okFetch({ detail: () => jsonResponse(200, detailWithLearnset(0)) });
+  const resolved = await createSource(fetchMock).search.resolveSpecies("9001-000");
+
+  expect(batchIdCalls(fetchMock)).toEqual([]);
+  expect(resolved.moves).toEqual([]);
+});
+
+describe("learnset が64件を超えても全件を解決する(1回で収まる前提を置かない。ADR-0304 §3 追記)", () => {
+  // 境界値: 1件 / ちょうど上限 / 上限+1 / 上限×2 / 上限×2+1。
+  test.each([
+    [1, 1],
+    [MOVES_BATCH_MAX_IDS, 1],
+    [MOVES_BATCH_MAX_IDS + 1, 2],
+    [MOVES_BATCH_MAX_IDS * 2, 2],
+    [MOVES_BATCH_MAX_IDS * 2 + 1, 3],
+  ])("learnset %i 件は moves/batch を %i 回に分ける", async (learnsetSize, expectedCalls) => {
+    const fetchMock = learnsetFetch(learnsetSize);
+    const resolved = await createSource(fetchMock).search.resolveSpecies("9001-000");
+    const calls = batchIdCalls(fetchMock);
+
+    expect(calls).toHaveLength(expectedCalls);
+    // 1回あたりの ids は契約の範囲(1〜64件)に必ず収まる。
+    for (const ids of calls) {
+      expect(ids.length).toBeGreaterThanOrEqual(1);
+      expect(ids.length).toBeLessThanOrEqual(MOVES_BATCH_MAX_IDS);
+    }
+    // 分割しても取りこぼさず、learnset の順のまま並ぶ(チャンクの応答を順につなぐ)。
+    expect(calls.flat()).toEqual(resolved.species.learnset);
+    expect(resolved.moves.map((move) => move.id)).toEqual(resolved.species.learnset);
+  });
+});
+
+test("分割した moves/batch には1つの AbortSignal をそのまま渡す(種族の解決1回ぶんとして取り消せる)", async () => {
+  const fetchMock = learnsetFetch(MOVES_BATCH_MAX_IDS + 1);
+  const controller = new AbortController();
+  await createSource(fetchMock).search.resolveSpecies("9001-000", controller.signal);
+
+  const signals = fetchMock.mock.calls.map(([, init]) => (init ?? {}).signal);
+  expect(signals).toHaveLength(3); // 詳細1回 + moves/batch 2回
+  for (const signal of signals) {
+    expect(signal).toBe(controller.signal);
+  }
+});
+
+test("マスタ未投入で 200 [] が返っても失敗しない(技なしとして解決する)", async () => {
+  // 契約: moves/batch は searchMoves と異なり 503 ではなく空配列を返す。
+  const fetchMock = okFetch({ [PATHS.movesBatch]: () => jsonResponse(200, []) });
+  const resolved = await createSource(fetchMock).search.resolveSpecies("9001-000");
+  expect(resolved.moves).toEqual([]);
+  expect(resolved.species.key).toBe("9001-000");
+});
+
+test("技の解決に失敗したら resolveSpecies 全体が失敗する(種族だけ返さない。ADR-0304 A-13)", async () => {
+  const error: Schemas["Error"] = { code: "upstream_unavailable", message: "pokedex に届かない" };
+  const fetchMock = okFetch({ [PATHS.movesBatch]: () => jsonResponse(503, error) });
+  await expect(createSource(fetchMock).search.resolveSpecies("9001-000")).rejects.toThrow(Error);
+});
+
+test("分割した moves/batch の1回でも失敗したら resolveSpecies 全体が失敗する", async () => {
+  const master = moveMasterFor(MOVES_BATCH_MAX_IDS + 1);
+  let calls = 0;
+  const fetchMock = okFetch({
+    detail: () => jsonResponse(200, detailWithLearnset(MOVES_BATCH_MAX_IDS + 1)),
+    [PATHS.movesBatch]: (url) => {
+      calls += 1;
+      // 2回目(最後のチャンク)だけ失敗させる。1回目の成功で握りつぶさないこと。
+      return calls === 1 ? movesBatchRoute(master)(url) : jsonResponse(503, { code: "x", message: "y" });
+    },
+  });
+  await expect(createSource(fetchMock).search.resolveSpecies("9001-000")).rejects.toThrow(Error);
+});
+
+test("moves/batch にも端末 ID・セッション ID を付ける", async () => {
+  const fetchMock = okFetch();
+  await createSource(fetchMock).search.resolveSpecies("9001-000");
+  const { init } = callTo(fetchMock, PATHS.movesBatch);
+  expect(headerOf(init, "X-Device-Id")).toBe(ids.deviceId);
+  expect(headerOf(init, "X-Session-Id")).toBe(ids.sessionId);
 });

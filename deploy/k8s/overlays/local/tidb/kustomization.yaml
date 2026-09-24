@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# base/mysql の overlay と同じ pokecalc namespace(独立した kustomization としてメインの
+# overlays/local とは別に apply するため、ここでも明示する必要がある。critic レビューで
+# 判明: これが無いと TidbCluster/TidbInitializer が current context の既定 namespace
+# 〈k3d では default〉に作られ、up.sh の `-n pokecalc` な待ち・削除と食い違う)。
+namespace: pokecalc
+resources:
+  - tidbcluster.yaml
+  - tidbinitializer.yaml

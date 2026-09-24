@@ -109,10 +109,11 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
                 learnsetIdsByMember[member.id] = detail.learnset
                 recomputeMoveOptions(forMember: member.id)
                 abilityOptionsByMember[member.id] = detail.abilities
-                // 保存済みの技のうち、まだ見ていないものだけ `move(id:)` で解決する(A4: 失敗しても
-                // `error` を立てず、`moveIds` も変えない。5章)。
-                await resolveUnknownMoves(member.moveIds)
             }
+            // 全メンバーの `species(key:)` が終わった後、保存済みの技のうちまだ見ていないものを
+            // 全メンバー分まとめて `moves(ids:)` で1回だけ解決する(A3: 失敗しても `error` を立てず、
+            // `moveIds` も変えない。ADR-0501「getMovesByIds による構築編集の技の一括解決」A2)。
+            await resolveUnknownMoves(team.members.flatMap(\.moveIds))
             error = nil
         } catch {
             self.error = TeamScreenError(error)
@@ -222,28 +223,16 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
         }
     }
 
-    /// `moveIds` のうち技の辞書にまだ無いものだけ `move(id:)` で解決し、辞書に入れる(ADR-0501
-    /// 「issue #68 の残り」5章)。並行に投げてよい(1体最大 `TeamLimits.maxMovesPerMember` 件)。
-    /// 失敗(404・通信失敗)は無視する(A4: `error` を立てない・`moveIds` を変えない・その ID を
-    /// 解決しないままにする)。
+    /// 渡された `moveIds`(全メンバー分)のうち技の辞書にまだ無いものを集めて重複除去し、
+    /// `moves(ids:)` を1回(64件以下なら)呼んで辞書に入れる(ADR-0501「getMovesByIds による
+    /// 構築編集の技の一括解決」A2)。未知の ID が無ければ呼ばない。失敗(通信失敗・キャンセルを
+    /// 含む)は無視する(A3: `error` を立てない・`moveIds` を変えない・その ID を解決しないままにする)。
     private func resolveUnknownMoves(_ moveIds: [String]) async {
-        let missingIds = moveIds.filter { moveDictionary[$0] == nil }
+        var seen = Set<String>()
+        let missingIds = moveIds.filter { moveDictionary[$0] == nil && seen.insert($0).inserted }
         guard !missingIds.isEmpty else { return }
-        let service = self.service
-        let resolved = await withTaskGroup(of: (String, Move?).self) { group in
-            for id in missingIds {
-                group.addTask {
-                    let move = try? await service.move(id: id)
-                    return (id, move)
-                }
-            }
-            var results: [(String, Move?)] = []
-            for await entry in group { results.append(entry) }
-            return results
-        }
-        for (id, move) in resolved {
-            if let move { moveDictionary[id] = move }
-        }
+        guard let resolved = try? await service.moves(ids: missingIds) else { return }
+        for move in resolved { moveDictionary[move.id] = move }
     }
 
     private func nextMemberSpeciesToken(for id: String) -> Int {

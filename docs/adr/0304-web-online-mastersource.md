@@ -251,6 +251,8 @@ SearchableMasterSource extends MasterSource { readonly search: MasterSpeciesSear
   `i18n/ja.ts` の `masterOnlineText`、`App.tsx` の配線(A-6)。
 - **P4-16b(次)**: 画面側(A-5)。種族の検索コンボボックス、技・持ち物候補の無効化と案内の描画。
 - **P4-17**: §3 の技の ID 解決が API レーンで入ったあと、`capabilities.moves` を true にして技を復活させる。
+  **(2026-09-24 追記: この行は A-13 で置き換えた。`capabilities.moves` は false のままにし、技は
+  `resolveSpecies` が種族と一緒に解決する。理由は A-13.1)**
 
 `api/openapi.yaml` はこのタスクでは変えない(必要な変更は §3 の技のID解決 = API レーンの持ち物。
 当時は案A を提案していたが、2026-09-24 に `GET /api/pokedex/moves/batch` の新設で解決済み。§3 末尾の追記参照)。
@@ -376,3 +378,221 @@ A-10 は「WAI-ARIA Authoring Practices の Combobox パターンに合わせる
 (`onKeyDown` の先頭でガードし、何もせず return する)。無視すると変換確定の Enter で
 ハイライト中の候補を誤って選んでしまう。`preventDefault()` も「実際に処理したとき」だけ呼ぶ(候補が無いときの
 キャレット移動等の既定動作を妨げない。`App.tsx` の `handleTabKeyDown` と同じ作法)。
+
+## 追記4(2026-09-24、Web レーン): P4-17 — 技の復活(§3 の欠落の解消を受けて)
+
+API レーンが `GET /api/pokedex/moves/batch`(`getMovesByIds`)を新設し(§3 末尾の追記・ADR-0105 §3)、
+§4 段階3の「技はオンライン未対応」の前提が消えた。**A-7 の「P4-17: `capabilities.moves` を true にして技を
+復活させる」は、この A-13 で置き換える**(true にはしない。理由は A-13.1)。
+
+### A-13. 技は「種族と一緒に解決する」。`capabilities.moves` の意味は変えない
+
+#### 1. `capabilities.moves` は false のまま(意味を変えない)
+
+この項目の意味は `speciesList` と対になる「`MasterData.moves` が**全件**そろっているか」であり、
+`searchMoves` の limit 上限200 < 実データ515件という §1 の事実は、技の ID 解決が入っても変わらない。
+`getMovesByIds` が解決するのは「**既に確定した ID の集合**」だけで、全件の一覧ではない。
+
+true にする案を却下した理由: `capabilities.moves` は BalanceScreen の `balanceAvailable`(A-9)も決めている。
+true にすると BalanceScreen は「有効」に見えるのに `master.moves` が空のままで、各枠の技セレクトが
+1件も選べない**壊れた状態**になる(A-9 が避けたかったものそのもの)。この画面の技検索 UI は P4-17b に送る
+(下の 5)。
+
+#### 2. 技セレクトの有効・無効は「いま技の候補があるか」で決める
+
+A-5 は技セレクトの `disabled` を `capabilities.moves === false` に結び付けていたが、P4-17 からは
+**攻撃側の種族が解決済みなら技を選べる**ので、この条件では足りない。判定を1つに決める:
+
+- **技セレクトが使えるのは `capabilities.moves === true`、または攻撃側の技の候補が1件以上あるとき**
+  (`learnsetMoves(攻撃側の種族, 解決済みの技を足した一覧)` が空でないとき)。
+- `masterOnlineText.movesUnavailable` は、**技セレクトが `disabled` のときとちょうど同じ条件**で出す
+  (A-5 の「欄は残して disabled + 案内」の作法は変えない)。文言はオンラインかどうかに触れない形に改めた
+  (画面はモードの名前を持たない。A-2)。
+- 結果として「種族が未選択」「検索で選んだ直後、技がまだ届いていない間(解決中)」「解決したが技を
+  1つも覚えない」の3つで disabled になる。オフライン相当のマスタ(`capabilities` 省略)は今までどおり
+  常に有効で、この変更の影響を受けない。
+- 技は**常に攻撃側**の learnset から選ぶ(ADR-0010)。攻守入れ替え(計算画面)と「与えた/受けた」の
+  切り替え(逆算画面)では、技の出どころも新しい攻撃側に付いて変わる。
+
+#### 3. 技は `resolveSpecies` が種族・特性と一緒に返す(`MasterSpeciesResolution.moves`)
+
+種族の検索・解決の経路(A-10)をもう1本増やさない。1回の `resolveSpecies` で種族・特性・技がそろう。
+画面は `speciesResolution.ts`(A-10 の覚え書き)に `movesFor(master.moves, key)` を足し、
+`abilitiesFor` と同じ形で「全件の一覧 + 解決で覚えた分」を返す(`domain/moves.ts` の `learnsetMoves` は無変更)。
+
+**技の解決に失敗したら `resolveSpecies` 全体を失敗させる**(種族・特性だけ返さない)。技の無い種族を
+選べてしまうと、その後の計算・逆算が「技が選べないのに種族だけ入っている」壊れた状態になる。
+§4 の「壊れた結果を返すよりは機能を絞って正直に出す」に合わせ、種族の選択自体を失敗として
+`speciesSearchFailed` を出す(検索欄の既存の失敗表示。A-10 の経路をそのまま使う)。
+
+#### 4. 64件ずつに分割して呼ぶ(1回で収まる前提を置かない)
+
+`ids` は契約上1〜64件(`MOVES_BATCH_MAX_IDS`。65件以上・省略は 400 `invalid_input`)。
+**1種族の learnset が64件に収まる保証は無い**(API レーンも実データ未確認。§3 末尾の追記の明示の依頼)ので、
+`learnset` を64件ずつに分けて複数回呼び、応答をチャンクの順につなぐ。分割した呼び出しは**並列でよい**
+(1種族の解決の中の話で、issue #110 が懸念した「1リクエストでの増幅」には当たらない)。
+`AbortSignal` は**全チャンクに同じものを渡す**(1回の `resolveSpecies` として取り消せるように)。
+`learnset` が空なら1回も呼ばない(`ids` の省略は 400)。
+定数 `MOVES_BATCH_MAX_IDS` は契約の `maxItems` と一致することをテストで固定する
+(pokedex-svc 側の同期テストと同じ考え方)。
+
+#### 5. BalanceScreen は据え置き(P4-17b へ)
+
+A-9 の決定(`speciesList` と `moves` が両方 true のマスタでだけ動かす)は**そのまま**。1 のとおり
+`capabilities.moves` は false のままなので、オンラインでは今までどおり画面ごと無効化され、
+balance API も呼ばない。A-9 の「P4-17 への申し送り」(各枠に種族検索を広げる)は **P4-17b** として
+`docs/plan.md` に積み残す。この画面は枠ごとに技を**4つまで**選ぶので、種族検索 + 種族ごとの技解決を
+6枠 × 2(パーティ・仮想敵)へ広げる設計が別途要る(計算画面の「攻撃側1体ぶん」とは規模が違う)。
+「有効なのに技が選べない」状態にしないことは回帰テストで固定した(`BalanceScreen.online.test.tsx`)。
+
+#### 6. 変更するファイル(implementer 向け)
+
+| ファイル | 変更 |
+|---|---|
+| `web/src/master/types.ts` | `MasterSpeciesResolution.moves`(済。spec-writer)・`capabilities.moves` の doc |
+| `web/src/master/onlineSource.ts` | `MOVES_BATCH_MAX_IDS`(済)、`resolveSpecies` の技解決(分割呼び出し) |
+| `web/src/screens/speciesResolution.ts` | `movesFor` を足す(`abilitiesFor` と同じ形) |
+| `web/src/screens/CalcScreen.tsx` | `movesFor` を使う(`attackerMoves`・`resolveMoveId` の呼び出し3か所・攻守入れ替え)、技セレクトの `disabled` と案内の条件(2) |
+| `web/src/screens/ReverseScreen.tsx` | 同上(`moveOptions`・`selectSide`・`selectMySpecies`/`selectTheirsSpecies`・`handleMineResolved`/`handleTheirsResolved`) |
+| `web/src/i18n/ja.ts` | `movesUnavailable` の文言(済。spec-writer) |
+| `web/src/screens/BalanceScreen.tsx` | **変えない**(5。回帰テストのみ) |
+| `web/src/domain/moves.ts` | **変えない**(呼び出し側が渡す一覧を変えるだけ) |
+
+`api/openapi.yaml`・`services/`・`engine/`・`ios/` はこのタスクで変えない(API レーンが対応済み)。
+
+## 追記5(2026-09-24、Web レーン): P4-17b — BalanceScreen の種族検索・技選択
+
+A-13.5 で P4-17b に積み残した「BalanceScreen にも種族検索を広げる」の設計。A-9 の決定(`speciesList` と
+`moves` が両方 true でなければ画面ごと無効)を**この A-14 で置き換える**。A-13.1 の決定(`capabilities.moves`
+は false のまま)は変えない。
+
+### A-14. BalanceScreen は「入力の口があるか」で使える/使えないを決める
+
+#### 1. ゲート条件を「一覧がそろっているか」から「入力の口があるか」に変える
+
+A-9 の `capabilities.speciesList && capabilities.moves` は、A-13.1 で `capabilities.moves` が永続的に false と
+決まった結果、**オンラインではこの画面が永久に使えない**ことを意味していた。A-9 が避けたかったのは
+「技を1つも選べないまま threats / recommendations を呼び、全部ゼロ・穴だらけの診断を出す」ことだが、
+P4-17 で技は種族の解決と一緒に届くようになった(A-13.3)ので、オンラインで種族を選んだメンバーは
+**オフラインで「まだ技を選んでいないメンバー」と同じ状態**に帰着する。これは今のオフラインでも普通に起きる
+状態(種族だけ選んで threats を呼ぶ)であり、A-9 の懸念はもう当てはまらない。残るのは
+「技をどうやっても選べない」マスタだけで、そこは今までどおり止める。
+
+**決定**: 画面の可否は次の式で決める(`capabilities` は `masterCapabilities(master)`、
+`masterSearch` は props)。
+
+```ts
+// 種族を選ぶ口: 全件の一覧(ドロップダウン)か、検索欄(A-10)。
+const speciesInputAvailable = capabilities.speciesList || masterSearch !== undefined;
+// 技を選ぶ口: 全件の一覧か、検索で種族と一緒に届く技(A-13.3)。後者は「種族を検索で選ぶ」経路でしか
+// 届かないので、speciesList が true(ドロップダウン)のときは検索口があっても技は届かない。
+const moveInputAvailable = capabilities.moves || (!capabilities.speciesList && masterSearch !== undefined);
+const balanceAvailable = speciesInputAvailable && moveInputAvailable;
+```
+
+この式が決める境界(テストで固定する):
+
+| `speciesList` | `moves` | `masterSearch` | 画面 | 理由 |
+|---|---|---|---|---|
+| true | true | 任意 | **使える** | オフライン相当。今までどおり(`capabilities` 省略を含む) |
+| false | false | あり | **使える** | **P4-17b で変わるところ**。種族は検索、技は解決と一緒に届く |
+| false | false | なし | 使えない | 種族を選ぶ口が無い(組み合わせの誤り。A-10 と同じ扱い) |
+| false | true | なし | 使えない | 同上 |
+| false | true | あり | 使える | 種族は検索、技は全件の一覧 |
+| true | false | なし | 使えない | 技をどうやっても選べない(A-9 の懸念がそのまま残る形) |
+| true | false | あり | 使えない | 種族はドロップダウンで選ぶので `resolveSpecies` が走らず、技が永久に届かない |
+
+`balanceAvailable` が false のときの見せ方は A-9 のまま変えない(`masterOnlineText.balanceUnavailable` を出し、
+入力は残すが全部 `disabled`、balance API を1本も呼ばない)。`capabilities.effects` を判定に入れないのも A-9 のまま。
+
+却下した案:
+
+- **(a) `balanceAvailable` を丸ごと廃止し、常に画面を動かす**: `speciesList: true / moves: false / masterSearch なし`
+  のマスタで「技の欄が永久に空なのに診断は出る」状態が残り、A-9 の懸念がそのまま再発する。
+- **(b) `masterSearch !== undefined` だけを見る**: 上の表の最終行(ドロップダウン + 検索口)を取りこぼす。
+  この組み合わせでは検索欄が描かれないので `resolveSpecies` が1度も走らず、技が届かない。
+- **(c) 「技を選んだメンバーが1人もいないと threats / recommendations を呼ばない」に変える**: 呼び出しの条件を
+  ADR-0400 §1・ADR-0303 §7 から動かすことになり、**オフラインの既存の挙動が変わる**(A-2 の最優先の制約に反する)。
+
+`masterOnlineText.balanceUnavailable` の文言は、条件が「オンラインかどうか」から「入力の口があるか」に変わった
+ので、モードの名前に触れない形に直す(A-2)。
+
+#### 2. 12枠(メンバー6 + 仮想敵6)を独立に解決する
+
+`useSpeciesResolutions()`(A-10・A-13.3)の覚え書きは `Map<speciesKey, MasterSpeciesResolution>` なので、
+**1画面に1つ持てば12枠で共有できる**(枠ごとに持つ必要は無い。同じ種族を2枠で選んでも1件で足りる)。
+`speciesResolution.ts` は変更しない。
+
+- `MemberFields` に `speciesListAvailable` / `masterSearch` / `onSpeciesResolved` を足し、CalcScreen の
+  `SpeciesCard`(A-10)と同じく `speciesListAvailable ? <select> : <SpeciesSearchField label={speciesLabel} …>` で
+  出し分ける。accessible name は今までのラベル(`balanceScreenText.speciesLabel` =「ポケモン」)のままにする。
+- `MemberFields` が種族・特性・技を引くのは `master.*` からではなく、画面から渡す
+  `speciesFor(master.species, member.speciesKey)` / `abilitiesFor(master.abilities, member.speciesKey)` /
+  `movesFor(master.moves, member.speciesKey)` に変える(4 も参照)。
+- `useMemberListActions` に `resolveSpecies(index, resolution)` を足す。既存の `selectSpecies` と同じく
+  種族 key・既定の特性(`resolution.species.abilities[0] ?? ""`)を入れ、技の枠は空に戻す。
+  **`movesFor` / `abilitiesFor` をこの中で呼ばない**: `register()` の `setState` は非同期で、直後はまだ古い
+  覚え書きのままだから(CalcScreen の `handleAttackerResolved` と同じ理由)。必要な実体は `resolution` が持っている。
+- 画面側のハンドラは `registerSpeciesResolution(resolution)` と `memberActions.resolveSpecies(index, resolution)`
+  (仮想敵は `threatActions`)を呼ぶ。メンバーと仮想敵で同じ `MemberListActions` の形を保つ(ADR-0303 §7)。
+- 結果表の ID → 名前(`findSpeciesName` / `findAbilityName`)も `speciesFor` / `abilitiesFor` を通す。
+  オンラインで `master.species` が空だと、選んだメンバーの行見出しが key(`9001-000`)のまま出てしまうため。
+  おすすめタイプの候補のように**利用者が選んでいない**種族は解決されていないので、今までどおり
+  応答の `nameJa`(あれば)か ID を出す。
+
+#### 3. `moveById` は「選んだメンバーが引ける技」から組み、不明な ID は攻撃技と見なさない
+
+現在の `hasDamagingMove`(coverage を呼ぶかどうかの判定)は `master.moves` の全件から作った Map で技の
+分類を引き、`moveById.get(moveId)?.category !== "status"` と書いている。この式は**技が見つからないとき
+`undefined !== "status"` が true になり、「変化技ではない = 攻撃技」と誤判定する**。オンラインでは
+`master.moves` が空なので、変化技しか選んでいないメンバーでも coverage を呼んでしまう
+(=「攻撃技が無いのに攻撃範囲の診断を出す」。まさに A-9 が避けたかった誤解を招く診断)。
+
+**決定**: 判定を2か所直す。
+
+```ts
+// (1) 参照する一覧を、選んだメンバーが実際に引ける技にする(master.moves + 解決で覚えた分)。
+const moveById = new Map(
+  members.flatMap((member) => movesFor(master.moves, member.speciesKey)).map((move) => [move.id, move]),
+);
+// (2) 実体が分からない ID は攻撃技と見なさない(fail-closed)。
+const hasDamagingMove = members.some((member) =>
+  member.moveIds.some((moveId) => {
+    const move = moveById.get(moveId);
+    return move !== undefined && move.category !== "status";
+  }),
+);
+```
+
+`speciesResolution.ts` に「解決済みの技を全部返す」accessor を足す案は採らない: 必要なのは
+**今このパーティが選びうる技**だけで、12枠すべての解決結果をかき集めると仮想敵の種族の技まで混ざる
+(coverage は自分のパーティの話。ADR-0303 §7)。`movesFor` を枠ごとに呼んで合成すれば過不足が無い。
+
+fail-closed(実体不明を攻撃技と見なさない)にする理由: 技セレクトの選択肢は解決済みの learnset からしか
+作られないので、実体不明の ID は本来現れない。現れたなら入力側が壊れているので、**呼ばない**方が
+「壊れた結果を返すより機能を絞って正直に出す」(§4)に合う。
+
+#### 4. 技セレクトの選択肢と有効・無効(A-13.2 をこの画面に当てはめる)
+
+- 選択肢は `learnsetMoves(species, movesFor(master.moves, member.speciesKey))`(今は `master.moves` を
+  直接渡しているので、検索で解決した技が1件も出ない)。
+- 枠ごとの有効・無効は A-13.2 と同じ式: `capabilities.moves || その枠の技の候補が1件以上`。
+  オフライン(`capabilities` 省略)は `capabilities.moves === true` なので**今までどおり常に有効**で、
+  「種族未選択でも技の欄は押せる(選択肢は『なし』だけ)」という既存の見え方は1つも変わらない。
+- **`masterOnlineText.movesUnavailable` はこの画面では出さない**(A-13.2 の「disabled と同じ条件で案内を出す」
+  から意図的に外れる)。枠が12個あるので、同じ案内が最大12回並んで画面が読めなくなる。この画面では
+  技の欄が `fieldset`(「メンバーn」)の中でポケモンの欄と並んでおり、ポケモンが空 → 技が空、の対応が
+  その場で読み取れる。計算画面は技の欄が1つで、かつ攻撃側のカードから離れているので案内が要る、という違い。
+
+#### 5. 変更するファイル(implementer 向け)
+
+| ファイル | 変更 |
+|---|---|
+| `web/src/screens/BalanceScreen.tsx` | ゲート条件(1)、`masterSearch` を使う、`useSpeciesResolutions` の導入、`MemberFields` の出し分け(2)、`moveById`(3)、技セレクト(4)、結果表の名前解決(2) |
+| `web/src/i18n/ja.ts` | `balanceUnavailable` の文言(済。spec-writer) |
+| `web/src/screens/speciesResolution.ts` | **変えない**(2: Map なので12枠で共有できる) |
+| `web/src/screens/SpeciesSearchField.tsx` | **変えない**(`masterSearch === undefined` の自己無効化だけで足りる) |
+| `web/src/domain/moves.ts` | **変えない**(呼び出し側が渡す一覧を変えるだけ) |
+| `web/src/app/screens.tsx` / `web/src/App.tsx` | **変えない**(`masterSearch` は既に全画面へ渡している) |
+
+`api/openapi.yaml`・`services/`・`engine/`・`ios/` はこのタスクで変えない。
