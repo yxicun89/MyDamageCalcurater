@@ -9,8 +9,9 @@ test("タブは矢印キー・Home・End で選択とフォーカスが移り、
   const calcTab = page.getByRole("tab", { name: "計算", exact: true });
   const reverseTab = page.getByRole("tab", { name: "逆算", exact: true });
   const balanceTab = page.getByRole("tab", { name: "タイプバランス", exact: true });
-  // SP3(ADR-0604 §2): タブの並びは 計算 → 逆算 → タイプバランス → 素早さ(4件、素早さが末尾)。
   const speedTab = page.getByRole("tab", { name: "素早さ", exact: true });
+  // JD5(ADR-0705 §1): タブの並びは 計算 → 逆算 → タイプバランス → 素早さ → 判定(5件、判定が末尾)。
+  const judgeTab = page.getByRole("tab", { name: "判定", exact: true });
 
   await calcTab.focus();
   await expect(calcTab).toHaveAttribute("aria-selected", "true");
@@ -34,19 +35,24 @@ test("タブは矢印キー・Home・End で選択とフォーカスが移り、
   await expect(speedTab).toHaveAttribute("aria-selected", "true");
   await expect(balanceTab).toHaveAttribute("aria-selected", "false");
 
+  await page.keyboard.press("ArrowRight");
+  await expect(judgeTab).toBeFocused();
+  await expect(judgeTab).toHaveAttribute("aria-selected", "true");
+  await expect(speedTab).toHaveAttribute("aria-selected", "false");
+
   // 末尾から ArrowRight で先頭へ回り込む。
   await page.keyboard.press("ArrowRight");
   await expect(calcTab).toBeFocused();
   await expect(combobox(page, "攻撃側のポケモン")).toBeVisible();
 
   await page.keyboard.press("End");
-  await expect(speedTab).toBeFocused();
+  await expect(judgeTab).toBeFocused();
   await page.keyboard.press("Home");
   await expect(calcTab).toBeFocused();
   // 先頭から ArrowLeft で末尾へ回り込む。
   await page.keyboard.press("ArrowLeft");
-  await expect(speedTab).toBeFocused();
-  await expect(speedTab).toHaveAttribute("aria-selected", "true");
+  await expect(judgeTab).toBeFocused();
+  await expect(judgeTab).toHaveAttribute("aria-selected", "true");
 });
 
 test("Tab キーは選択中のタブにだけ止まる(ロービング tabIndex)", async ({ page }) => {
