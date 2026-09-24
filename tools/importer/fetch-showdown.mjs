@@ -6,11 +6,11 @@
 //
 // 手順: codeload の tarball を data/generated/.cache/showdown/<commit>/ に取得しキャッシュする
 // (同じ commit は再取得しない)→ 展開 → `npm ci && node build` → 生成された `Dex` を
-// `Dex.mod(<mod>)` で使う。tar 展開は依存を増やさないため system の `tar` コマンドを使う。
-import { createHash } from 'node:crypto';
+// `Dex.mod(<mod>)` で使う。キャッシュの中断回復は showdown-cache.mjs。tar 展開は依存を増やさないため system の `tar` コマンドを使う。
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { ensureShowdownSource } from './showdown-cache.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const config = JSON.parse(readFileSync(`${root}data/importer/config.json`, 'utf8'));
@@ -29,29 +29,25 @@ if (!mod || /^PENDING/i.test(mod)) {
 }
 
 const cacheDir = `${root}data/generated/.cache/showdown/${commit}/`;
-const tarballPath = `${cacheDir}source.tar.gz`;
-const extractDir = `${cacheDir}src/`;
-mkdirSync(cacheDir, { recursive: true });
+const url = `https://codeload.github.com/smogon/pokemon-showdown/tar.gz/${commit}`;
 
-if (!existsSync(tarballPath)) {
-  const url = `https://codeload.github.com/smogon/pokemon-showdown/tar.gz/${commit}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Showdown tarball を取得できない: ${res.status} ${url}`);
-  const buf = Buffer.from(await res.arrayBuffer());
-  writeFileSync(tarballPath, buf);
-  const sha256 = createHash('sha256').update(buf).digest('hex');
-  writeFileSync(`${cacheDir}meta.json`, JSON.stringify({ commit, fetchedAt: new Date().toISOString(), sha256, url }, null, 2));
-  console.log(`fetch-showdown: tarball を取得してキャッシュした(sha256=${sha256})`);
-} else {
-  console.log('fetch-showdown: キャッシュ済みの tarball を使う');
-}
-
-if (!existsSync(extractDir)) {
-  mkdirSync(extractDir, { recursive: true });
-  execFileSync('tar', ['-xzf', tarballPath, '--strip-components=1', '-C', extractDir]);
-  execFileSync('npm', ['ci', '--omit=dev'], { cwd: extractDir, stdio: 'inherit' });
-  execFileSync('node', ['build'], { cwd: extractDir, stdio: 'inherit' });
-}
+// 取得・展開・build は一時名で行い検証後に公開する(中断しても次回自己回復。issue #102)。
+const extractDir = await ensureShowdownSource({
+  cacheDir,
+  commit,
+  url,
+  deps: {
+    download: async () => {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Showdown tarball を取得できない: ${res.status} ${url}`);
+      return Buffer.from(await res.arrayBuffer());
+    },
+    extract: (tarball, dir) => execFileSync('tar', ['-xzf', tarball, '--strip-components=1', '-C', dir]),
+    install: (dir) => execFileSync('npm', ['ci', '--omit=dev'], { cwd: dir, stdio: 'inherit' }),
+    build: (dir) => execFileSync('node', ['build'], { cwd: dir, stdio: 'inherit' }),
+    log: console.log,
+  },
+});
 
 // 固定した Showdown は CommonJS として build される。ESM からの dynamic import では
 // named export が直接見える版と default に包まれる版があるため、両方を受ける。
