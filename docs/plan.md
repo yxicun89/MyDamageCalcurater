@@ -427,7 +427,7 @@
   変化に合わせて保つ(単発の完了ではなく継続する運用)
 
 ## M4: 運用
-- [ ] P7-1 kube-prometheus-stack / Loki、各サービスのメトリクス(実クラスタ確認待ち)
+- [x] P7-1 kube-prometheus-stack / Loki、各サービスのメトリクス
   - [x] メトリクス計測(ADR-0406 §1〜3。2026-09-24): gateway・pokedex・calc(`services/internal/httpmetrics`)、
     balance・speed・judge(各自 `internal/httpmetrics` に複製)すべてに `GET /metrics`(Prometheus text format、
     `http_requests_total{method,path,status}` / `http_request_duration_seconds{method,path}`、path はルーティング
@@ -444,9 +444,14 @@
     トップレベル `lokiCanary.enabled: false` を追加(`helm template` で StatefulSet/DaemonSet が描画されなくなることを
     確認)。あわせて `check-publishable` が実際には B(秘密らしき文字列の誤検知4件)で失敗していたのを
     `scripts/check-publishable.sh` の許可リストとコメント・runbook の書き方を直して解消。
-    **実クラスタ(k3d)への `helm upgrade --install` 適用・Grafana/Prometheus の動作確認はまだ**(このタスクでは実クラスタ・
-    実ネットワークに触らない方針だったため。上記の chunks-cache/results-cache/lokiCanary の修正は `helm template` の
-    描画確認のみで、実クラスタでの Pod 起動確認はまだ。人が実クラスタで確認する)
+    Grafana に Loki データソース(`grafana.additionalDataSources`)を追加、runbook のパスワード一時ファイルに
+    `umask 077`+`mktemp -d` を適用(他ユーザーに読める権限で残らないように)。
+    **実クラスタ(k3d)で `scripts/observability-bootstrap.sh` を実行して確認済み(2026-09-25)**: 全8 Pod が
+    Pending なく Running(chunks-cache/results-cache/lokiCanary は描画されない)、`storage-loki-0` PVC が Bound、
+    6つの ServiceMonitor が適用され、balance・calc・gateway(直近に再デプロイ済みで `/metrics` を持つイメージ)への
+    scrape が Prometheus targets で `up`(judge・pokedex・speed は `/metrics` 追加前の古いイメージのままのため
+    404。各レーンが次に再デプロイすれば up になる見込み)。Grafana は Loki・Prometheus・Alertmanager の3
+    データソースを認識、Loki への クエリで `pokecalc` namespace の実ログ(Alloy 経由)を取得できることを確認
 - [ ] P7-2 SLO(計算API p99 < 100ms、可用性)とダッシュボード
 - [ ] P7-3 ArgoCD(GitOps)
 - [ ] P7-4 MySQL/TiDB バックアップと復元テスト(ADR-0209 §9 を要件に含める: バックアップに `devices`〈墓石〉を含める /
