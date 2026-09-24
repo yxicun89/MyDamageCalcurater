@@ -1,6 +1,6 @@
 # 判定(素早さ×ダメージ連動) 設計書(判定レーン)
 
-- 更新日: 2026-09-23
+- 更新日: 2026-09-24
 - 状態: 起草(ユーザー要望を受けてタイプバランスレーンのセッションが起草。設計の正はこの文書と `docs/adr/0700〜`(判定レーンの帯))
 - ユーザーの要望: 「ニトチャ+メイン技で素早さ抜ける+そのポケモンを倒せるか」を1回の入力で確認したい
 
@@ -93,14 +93,29 @@ Client (Web/iOS)
   - natures の解決は候補が増えても1リクエスト1回のまま。種族と calc は候補ごとに **index 昇順の逐次**で、
     **最初に失敗した候補で全体を打ち切る**(部分成功は返さない)。message にはどの候補かを `defenders[<index>]` で示す。
   - `field`・`speedField` は1リクエストに1つで、すべての候補に同じように適用される。同じ `speciesKey` の重複除去はしない。
-- **JD4: 相手の技を含めた返り討ち判定**。相手の moveId も受け取り、優先度(`priority`)と素早さから先に動く側を決め、
-  相手が先に動くなら相手→自分の順で `KOChance` を評価する。**技の優先度を pokedex-svc から個別に引く endpoint が今は無い**
-  ため、データ/API レーンへの依頼(`GET /api/pokedex/moves/{key}` のような detail endpoint。DECISIONS.md に既定案を記録する)を
-  先に出し、依頼が通るまでは「両者の技は優先度0」という限定つきで進めるか、依頼が通ってから着手するかは、JD3 完了時点で改めて決める。
+- **JD4: 相手の技を含めた返り討ち判定。設計確定(正は ADR-0704)**。相手候補ごとに moveId も受け取り、
+  優先度(`priority`)と素早さから先に動く側を決め、自分→相手・相手→自分の**両方向**の `KOChance` を返す。
+  前提だった `GET /api/pokedex/moves/{key}`(`getMove`)は API レーンが実装して **main 統合済み**
+  (2026-09-23。plan.md P3-7・DECISIONS.md)なので、「優先度0で限定つき」案は不要になった。
+  - request の `defenders` の要素を `Individual` から **`DefenderCandidate`**(`Individual` の全欄 + **必須の `moveId`**)に
+    変える。attacker は `Individual` のままで、攻撃側の技は request 直下の `moveId` のまま(ADR-0704 §1)。
+  - **先制判定のルール**: 優先度が違えば優先度が高い方が必ず先に動き、**トリックルームの影響を受けない**。
+    優先度が同じときだけ素早さで決まる(トリックルーム中は比較が反転する。JD2 の `CompareSpeed` が計算済み)。
+    優先度も素早さも同じなら「どちらが先か決まらない」(`turnOrderTie`)。純粋な
+    `judge.CompareTurnOrder(attackerPriority, defenderPriority, SpeedComparison) TurnOrder` をコアに足す(ADR-0704 §2)。
+  - response の `Matchup` に `attackerMovePriority` / `defenderMovePriority` / `attackerMovesFirst` /
+    `turnOrderTie` / `defenderKo` を足し、既存の `ko` を **`attackerKo` に改名**する(ADR-0704 §3)。
+    `outspeeds` / `speedTie`(素早さそのものの比較)の意味と値は JD1〜JD3 から変えない。
+  - **逆方向(相手→自分)の計算では `field` の `attackerScreens` と `defenderScreens` を入れ替えて** calc-svc に送る
+    (壁は場の各側に張られていて、どちらが殴るかで場所は変わらない。天候・地形は入れ替えない。ADR-0704 §4)。
+  - 上流は逐次のまま。性格 1 + 種族 (1+N) + 技 (1+N) + 計算 2N 回で、attacker の技も引くようになったため
+    **攻撃側の未知の技は 422 `unknown_move`** になる(JD3 までは calc-svc の 400 が `invalid_request` に畳まれていた。ADR-0704 §7)。
+  - `DefenderCandidate` への変更も `ko` の改名も破壊的変更だが、JD5(クライアント)が未着手で壊れるものが無いため
+    今は安全(ADR-0703 §7 と同じ根拠。ADR-0704 §8)。
 - **JD5: Web/iOS の画面**。judge-svc を呼ぶ画面。(1)〜(3)(可能なら(4)も)の API が固まってから着手する
   (先に画面を作ると API 変更のたびに作り直しになるため)。担当(判定レーン内で作るか、Web/iOS レーンに依頼するか)は着手時に判断する。
 
-## 4. 決定事項(1〜5 は JD0 で確定。正は ADR-0700。JD1 の決定は ADR-0701、JD2 は ADR-0702、JD3 は ADR-0703)
+## 4. 決定事項(1〜5 は JD0 で確定。正は ADR-0700。JD1 の決定は ADR-0701、JD2 は ADR-0702、JD3 は ADR-0703、JD4 は ADR-0704)
 
 1. **同速(実数値が同じ)の扱い: 決定** — `outspeeds`(自分が相手より**厳密に**速いか)と `speedTie`(実数値が同じか)を別のフィールドで返す。
    根拠: 同速は「抜けている」でも「抜けられている」でもなく、真偽値1つに丸めると画面で区別できない。同速を真偽に丸めない ADR-0602 の `tie` に倣う。

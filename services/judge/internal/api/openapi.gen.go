@@ -16,6 +16,7 @@ const (
 	InternalError       ErrorCode = "internal_error"
 	InvalidRequest      ErrorCode = "invalid_request"
 	RequestTooLarge     ErrorCode = "request_too_large"
+	UnknownMove         ErrorCode = "unknown_move"
 	UnknownNature       ErrorCode = "unknown_nature"
 	UnknownSpecies      ErrorCode = "unknown_species"
 	UpstreamUnavailable ErrorCode = "upstream_unavailable"
@@ -29,6 +30,8 @@ func (e ErrorCode) Valid() bool {
 	case InvalidRequest:
 		return true
 	case RequestTooLarge:
+		return true
+	case UnknownMove:
 		return true
 	case UnknownNature:
 		return true
@@ -128,12 +131,51 @@ func (e Weather) Valid() bool {
 	}
 }
 
+// DefenderCandidate 相手候補 1 件(ADR-0704 §1)。Individual の全欄に加えて、**この候補が撃ち返してくる技
+// moveId を必ず持つ**。judge はその技の優先度(GET /api/pokedex/moves/{key} の priority)で
+// 先に動く側を決め、その技で自分がどれだけ削られるか(defenderKo)を計算する。
+//
+// Individual を allOf で継承せずに欄を書き下しているのは意図的で、生成される型を素の
+// オブジェクトのまま保つため(ADR-0704 §1)。欄の意味は Individual と同じで、正は
+// ルートの api/openapi.yaml にある。attacker は技を 1 つだけ持ち(request 直下の moveId)、
+// 候補は候補ごとに違う技を持つので、型を分けて「候補は必ず技を持つ」を required で表す。
+type DefenderCandidate struct {
+	// AbilityId 特性 ID。judge は解釈せず calc-svc にそのまま渡す。
+	AbilityId *string `json:"abilityId,omitempty"`
+
+	// ItemId 持ち物 ID。judge は calc-svc にそのまま渡すほか、こだわりスカーフの ID
+	// (既定 choicescarf。ADR-0701 §3)と一致するときだけ素早さに ×1.5 を掛ける。
+	ItemId *string `json:"itemId,omitempty"`
+
+	// MoveId この候補が使う技(1 つ)。優先度は GET /api/pokedex/moves/{key} で引き、
+	// この技によるダメージは calc-svc を逆方向(この候補が攻撃側・自分が防御側)で
+	// 呼んで求める(ADR-0704 §4)。マスタに無ければ 422 unknown_move。
+	MoveId string `json:"moveId"`
+
+	// NatureId 性格 ID。GET /api/pokedex/natures の一覧で補正する能力に解決する(ADR-0701 §4)。
+	NatureId string `json:"natureId"`
+
+	// Ranks ランク補正(-6..+6)。HP は持たない。judge は「技の追加効果を適用した後のランク」を
+	// 呼び出し側が入れたものとして受け取る(ADR-0700 §6-5)。
+	Ranks *RankBlock `json:"ranks,omitempty"`
+
+	// Sp 6 ステータスの値。judge では Individual.sp(能力ポイント。各 0..32・合計 <= 66)に使う。
+	// 意味の正はルートの api/openapi.yaml の StatBlock。
+	Sp StatBlock `json:"sp"`
+
+	// SpeciesKey {図鑑番号4桁}-{フォルム3桁}。意味の正はルートの api/openapi.yaml の SpeciesKey。
+	//
+	// Example: 0445-000
+	SpeciesKey SpeciesKey `json:"speciesKey"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	// Code エラーの区分。judge は上流の事情(HTTP のステータス・接続エラーの文面・URL)をそのまま返さず、
 	// ADR-0700 §3・ADR-0701 §6 の対応表でこの列挙に畳む。
 	// invalid_request: ヘッダー・request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
 	// unknown_species: speciesKey が pokedex-svc のマスタに無い。
+	// unknown_move: moveId が pokedex-svc の技のマスタに無い(攻撃側・候補側のどちらも。ADR-0704 §6)。
 	// unknown_nature: natureId が性格の一覧に無い。
 	// request_too_large: request body が上限(8 KiB)を超えている。
 	// upstream_unavailable: pokedex-svc / calc-svc が未設定・接続できない・タイムアウト・5xx・契約に合わない応答。
@@ -146,6 +188,7 @@ type Error struct {
 // ADR-0700 §3・ADR-0701 §6 の対応表でこの列挙に畳む。
 // invalid_request: ヘッダー・request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
 // unknown_species: speciesKey が pokedex-svc のマスタに無い。
+// unknown_move: moveId が pokedex-svc の技のマスタに無い(攻撃側・候補側のどちらも。ADR-0704 §6)。
 // unknown_nature: natureId が性格の一覧に無い。
 // request_too_large: request body が上限(8 KiB)を超えている。
 // upstream_unavailable: pokedex-svc / calc-svc が未設定・接続できない・タイムアウト・5xx・契約に合わない応答。
@@ -220,6 +263,21 @@ type KOChance struct {
 // 行だけを見て「何対何で抜けているか」が分かるように各行が持つ
 // (ルートの api/openapi.yaml の BulkCalcRow が各行に防御側の実数値を持たせているのと同じ形)。
 type Matchup struct {
+	// AttackerKo 自分の技がこの候補に与えるダメージの確定数(JD3 までの ko。ADR-0704 §3 で改名)。
+	// calc-svc を順方向(自分が攻撃側)で呼んだ結果をそのまま転記する。
+	AttackerKo KOChance `json:"attackerKo"`
+
+	// AttackerMovePriority 自分が使う技(request 直下の moveId)の優先度。GET /api/pokedex/moves/{key} の
+	// priority をそのまま転記する(ADR-0704 §2・§3)。画面が「なぜ先に動くのか
+	// (速いからか、先制技だからか)」を説明できるように返す。
+	AttackerMovePriority int `json:"attackerMovePriority"`
+
+	// AttackerMovesFirst 自分が先に動くか(ADR-0704 §2)。**優先度が違えば優先度が高い方が先**で、
+	// 素早さもトリックルームも見ない。優先度が同じときだけ outspeeds(トリックルーム
+	// 反映済み)に従う。turnOrderTie が true のときは false になる
+	// (どちらが先か決まらないので「自分が先」とは言えない)。
+	AttackerMovesFirst bool `json:"attackerMovesFirst"`
+
 	// AttackerSpeed 自分の戦闘中の素早さ(ランク・追い風・こだわりスカーフ適用後)。
 	// トリックルームは実数値を変えないので、この値には現れない(ADR-0702 §2)。
 	// 攻撃側は 1 つに固定なので、すべての matchups で同じ値になる。
@@ -230,23 +288,34 @@ type Matchup struct {
 	// 対応を取り違えないように明示する。
 	DefenderIndex int `json:"defenderIndex"`
 
+	// DefenderKo この候補の技(defenders[i].moveId)が自分に与えるダメージの確定数(ADR-0704 §3)。
+	// calc-svc を逆方向(この候補が攻撃側・自分が防御側)で呼んだ結果をそのまま転記する。
+	// 逆方向では field の attackerScreens / defenderScreens を入れ替えて送る(ADR-0704 §4)。
+	// 行動順に関わらず必ず計算する(自分が先に動いて倒しきれなかったときの被害も知りたいため)。
+	DefenderKo KOChance `json:"defenderKo"`
+
+	// DefenderMovePriority この候補が使う技(defenders[i].moveId)の優先度。同じく priority の転記。
+	DefenderMovePriority int `json:"defenderMovePriority"`
+
 	// DefenderSpeed この候補の戦闘中の素早さ(ランク・追い風・こだわりスカーフ適用後)。
 	DefenderSpeed int `json:"defenderSpeed"`
 
-	// Ko 確定数 / 乱数 n 発。calc-svc の KOChance をそのまま転記する(judge は再計算しない)。
-	// 意味の正はルートの api/openapi.yaml の KOChance と ADR-0006・ADR-0010。
-	// engine の生値 chancePercent は画面に出す値ではないので judge は返さない。
-	Ko KOChance `json:"ko"`
-
-	// Outspeeds 自分が相手より先に動くか(ADR-0700 §6-1・ADR-0702 §3)。トリックルームが無ければ
-	// attackerSpeed > defenderSpeed、speedField.trickRoom が true なら
-	// attackerSpeed < defenderSpeed。同速は false で、speedTie が true になる
-	// (真偽値 1 つに丸めない)。
+	// Outspeeds **素早さの比較で**自分が先に動く側か(ADR-0700 §6-1・ADR-0702 §3。値の意味は
+	// JD1〜JD3 から変わらない)。トリックルームが無ければ attackerSpeed > defenderSpeed、
+	// speedField.trickRoom が true なら attackerSpeed < defenderSpeed。同速は false で、
+	// speedTie が true になる(真偽値 1 つに丸めない)。
+	// 技の優先度まで含めた最終的な行動順は attackerMovesFirst / turnOrderTie で、
+	// 優先度が違えばこの欄と食い違う(ADR-0704 §2)。
 	Outspeeds bool `json:"outspeeds"`
 
 	// SpeedTie 双方の戦闘中の素早さが等しいか。outspeeds と同時に true にはならない。
 	// 同速はトリックルームの有無に関わらず行動順が決まらないため、trickRoom では反転しない。
 	SpeedTie bool `json:"speedTie"`
+
+	// TurnOrderTie 優先度も戦闘中の素早さも同じで、どちらが先に動くかが決まらないか。
+	// attackerMovesFirst と同時に true にはならない(真偽値 1 つに丸めない。ADR-0700 §6-1)。
+	// 優先度が違えば素早さが同じでも false になる(速さの同速 speedTie とは別の欄)。
+	TurnOrderTie bool `json:"turnOrderTie"`
 }
 
 // OutspeedAndKoRequest defines model for OutspeedAndKoRequest.
@@ -255,11 +324,12 @@ type OutspeedAndKoRequest struct {
 	Attacker Individual `json:"attacker"`
 
 	// Defenders 相手候補の一覧(ADR-0703 §1)。1〜6 件。判定は候補ごとに行われ、
-	// matchups がこの配列と同じ順序・同じ件数で返る。
+	// matchups がこの配列と同じ順序・同じ件数で返る。要素は DefenderCandidate で、
+	// **候補ごとに自分の技 moveId を持つ**(JD4 の破壊的変更。ADR-0704 §1・§8)。
 	// 上限 6 件は「手持ちの数」に合わせた慣習(services/balance の members / threats と同じ)で、
-	// 1 リクエストの逐次の上流呼び出し数(natures 1 + attacker の種族 1 + 候補の種族 N + 計算 N)を
+	// 1 リクエストの逐次の上流呼び出し数(性格 1 + 種族 (1+N) + 技 (1+N) + 計算 2N)を
 	// 読める範囲に抑えるために置く。同じ speciesKey が重複していても取りまとめない。
-	Defenders []Individual `json:"defenders"`
+	Defenders []DefenderCandidate `json:"defenders"`
 
 	// Field ダメージに効く場の状態。judge は解釈せず calc-svc の field にそのまま転送する(省略時は送らない)。
 	// 意味の正はルートの api/openapi.yaml の FieldState。
@@ -270,7 +340,9 @@ type OutspeedAndKoRequest struct {
 	// Format 対戦形式。calc-svc にそのまま渡す。
 	Format Format `json:"format"`
 
-	// MoveId 自分が使う技(1 つ)。すべての候補に対して同じ技で判定する。
+	// MoveId 自分(attacker)が使う技(1 つ)。すべての候補に対して同じ技で判定する。
+	// JD4 からは優先度を引くために GET /api/pokedex/moves/{key} でも解決するので、
+	// マスタに無ければ calc-svc に届く前に 422 unknown_move になる(ADR-0704 §7)。
 	MoveId string `json:"moveId"`
 
 	// SpeedField 素早さの判定にだけ効く場の効果(ADR-0702 §1)。judge が自分で解釈し、calc-svc には送らない。
@@ -373,7 +445,7 @@ type ServerInterface interface {
 	// PublicHealth Ingress smoke check
 	// (GET /api/judge/healthz)
 	PublicHealth(ctx *echo.Context) error
-	// OutspeedAndKo 素早さで抜けるか + その技で倒せるか(相手候補ごとに)
+	// OutspeedAndKo 素早さで抜けるか + 倒せるか + 返り討ちに遭わないか(相手候補ごとに)
 	// (POST /api/judge/v1/outspeed-and-ko)
 	OutspeedAndKo(ctx *echo.Context, params OutspeedAndKoParams) error
 	// Health Pod health check

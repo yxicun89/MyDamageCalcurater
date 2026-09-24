@@ -99,15 +99,18 @@ scripts/argocd-bootstrap.sh の呼び出しに差し替え済み(2026-09-24 確�
 
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
-Active: なし(JD4 着手可。下記参照)
-Branch: feat/judge-jd4(作業ディレクトリ ~/MyDamageCalcurater-judge。main から作成済み・空。JD3 の feat/judge-jd3 は PR #143 で main に統合済み・削除)
-Status: JD0(基盤。PR #92)・JD1(判定API本体。PR #118)・JD2(場の効果。PR #127)・JD3(複数の相手候補。PR #143。ADR-0703)は完了。
-`POST /api/judge/v1/outspeed-and-ko` は `defenders`(1〜6件)→`matchups`(配列)の一括判定・`speedField`(トリックルーム・
-追い風)に対応済み。
-Status(追記2026-09-23): **JD4 のブロックは解消**。API レーンが `GET /api/pokedex/moves/{key}`(getMove)を実装し
-**main 統合済み(P3-7・PR #161・ADR-0105 §3 追記・DECISIONS.md 2026-09-23)**。`priority` は既存の
-`Move.priority`(`int`)フィールドのまま。
-Next: JD4(相手の技を含めた返り討ち判定)に着手(`feat/judge-jd4`)
+Active: Claude Code
+Branch: feat/judge-jd4(作業ディレクトリ ~/MyDamageCalcurater-judge。PR 作成待ち)
+Status: JD0(基盤。PR #92)・JD1(判定API本体。PR #118)・JD2(場の効果。PR #127)・JD3(複数の相手候補。PR #143)・
+JD4(相手の技を含めた返り討ち判定。ADR-0704)は完了。`defenders` の要素を `DefenderCandidate`(`Individual`+必須
+`moveId`)に、`Matchup` を `attackerKo`/`defenderKo`/`attackerMovePriority`/`defenderMovePriority`/
+`attackerMovesFirst`/`turnOrderTie` に破壊的変更(クライアント未着手のため安全)。先制判定は `internal/judge` の
+新設 `CompareTurnOrder`(優先度が違えば優先度のみで決定・トリックルームは優先度に影響しない)。逆方向calcでは
+`field.attackerScreens`/`defenderScreens` を入れ替える(weather/terrainは不変)。攻撃側の技も `getMove` で検証する
+ようになり、未知技がJD1〜3の400からJD4では422 `unknown_move`に変わる(変化点)。critic PASS(1回目)。
+`internal/judge`は`CompareTurnOrder`追加のみでJD1/JD2の`CompareSpeed`/`Speed`は無変更
+Next: PR を作って main へ統合(このセッションの残タスク)。その後 JD5(Web/iOS の画面)に着手するかはユーザーへ確認。
+軽微な積み残し: `attacker`単数の`Individual`にも`defenders`候補と同じ大文字小文字厳密なキー検査を広げると契約全体で一貫する
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠
