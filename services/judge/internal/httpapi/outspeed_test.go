@@ -2621,7 +2621,8 @@ func TestOutspeedAndKoRejectsMissingCandidateMove(t *testing.T) {
 }
 
 // TestOutspeedAndKoRejectsUnknownCandidateField: 候補の欄は DefenderCandidate のものだけ。
-// 綴り違いや余計な欄は 400(既存の DisallowUnknownFields のまま)。
+// defenders の要素は json.RawMessage で受けるため外側の DisallowUnknownFields() は届かず、
+// candidateWireKeys の allow-list(大文字小文字を厳密に区別)が綴り違いや余計な欄を 400 で弾く。
 func TestOutspeedAndKoRejectsUnknownCandidateField(t *testing.T) {
 	t.Parallel()
 

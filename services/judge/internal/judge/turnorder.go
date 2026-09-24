@@ -21,5 +21,8 @@ func CompareTurnOrder(attackerPriority, defenderPriority int, speed SpeedCompari
 	if attackerPriority != defenderPriority {
 		return TurnOrder{AttackerMovesFirst: attackerPriority > defenderPriority}
 	}
-	return TurnOrder{AttackerMovesFirst: speed.Outspeeds, Tie: speed.SpeedTie}
+	// speed.Outspeeds and speed.SpeedTie are never both true (CompareSpeed's own invariant), but
+	// AttackerMovesFirst && Tie must not happen here either; don't depend on that invariant
+	// holding across a future CompareSpeed change (ADR-0704 §3 受け入れ条件3).
+	return TurnOrder{AttackerMovesFirst: speed.Outspeeds && !speed.SpeedTie, Tie: speed.SpeedTie}
 }

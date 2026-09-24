@@ -248,14 +248,17 @@
   丸め方(4096基準で連結してから1回だけ五捨五超入)は @smogon/calc 0.12.0 の実装を読んで確認・独立検算した。critic PASS(1回目)
 - [x] JD3 複数の相手候補を一度に判定(攻撃側1つ・相手候補の配列 → 候補ごとの判定結果の配列。ADR-0703)。
   request の defender(単数)を defenders(1〜6件)に、response を matchups(配列)に破壊的変更(クライアント未着手のため安全)。critic PASS(1回目)
-- [ ] JD4 相手の技を含めた返り討ち判定(**設計確定・テスト先行。正は ADR-0704**。実装はこれから)。
-  技の優先度を引く endpoint(`GET /api/pokedex/moves/{key}`)は API レーンが実装し
-  **main 統合済み(2026-09-23。P3-7・PR #161・DECISIONS.md)**。ブロッカーは解消済み。
+- [x] JD4 相手の技を含めた返り討ち判定(正は ADR-0704)。
+  技の優先度を引く endpoint(`GET /api/pokedex/moves/{key}`)は API レーンが実装し main 統合済み(2026-09-23。P3-7・PR #161)。
   決定: `defenders` の要素を `DefenderCandidate`(`Individual` + 必須 `moveId`)へ・`ko` を `attackerKo` に改名して
   `defenderKo`・`attackerMovePriority`/`defenderMovePriority`/`attackerMovesFirst`/`turnOrderTie` を追加(破壊的変更。
   クライアント未着手のため安全)/ 先制判定は優先度優先(トリックルームは優先度に影響しない)で `internal/judge` に
   `CompareTurnOrder` を新設 / 逆方向の calc では `field` の screens を入れ替える / 検査順に attacker と候補の技の解決を挿入し
-  `unknown_move`(422)を追加(攻撃側の未知の技も JD4 からは 422)
+  `unknown_move`(422)を追加(攻撃側の未知の技も JD4 からは 422)。critic PASS(1回目)
+  - 軽微な積み残し(critic 指摘。ブロッカーではない): `attacker`(単数の `Individual`)の欄名は
+    `encoding/json` の大文字小文字を無視したフォールバックマッチングの対象のままで、`defenders` の候補
+    (JD2/JD4 で allow-list 化済み)と厳しさが左右で食い違う。実害は小さい(値は正しい欄に入る)が、
+    JD5 着手前に `attacker` 側にも同じ allow-list を広げると契約全体で一貫する
 - [ ] JD5 Web/iOS の画面(judge-svc を呼ぶ。担当は着手時に判断)
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
