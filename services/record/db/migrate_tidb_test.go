@@ -4,7 +4,8 @@ package db
 
 // migrate 一式(Up/DownAll/Version)の実 TiDB での検査(ADR-0211 AC-T2・AC-T4)。
 // `make test-db` だけが実行する。pokedex-svc の grants_mysql_test.go の
-// TestMigratorRunsFullMigration を、record の2表・2ロール向けに書き直したもの。
+// TestMigratorRunsFullMigration を、このサービスの2表(devices・purge_journal)・
+// 2ロール(app・migrator)向けに書き直したもの(record-svc・team-svc で同一内容)。
 
 import (
 	"database/sql"
@@ -68,17 +69,9 @@ func TestMigratorRunsFullMigrationAndOnlyOwnTables(t *testing.T) {
 		t.Fatalf("migrator で Up 後の版 = %d dirty=%v ok=%v err=%v, want %d", v, dirty, ok, err, versions[len(versions)-1])
 	}
 
-	got := userTables(t, root, cfg.DBName)
 	want := append([]string(nil), requiredTables...)
 	sort.Strings(want)
-	if len(got) != len(want) {
-		t.Fatalf("Up 後のテーブル = %v, want ちょうど %v(pokedex 等のテーブルが混ざっていないこと)", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("Up 後のテーブル = %v, want ちょうど %v", got, want)
-		}
-	}
+	assertExactTables(t, "Up 後", userTables(t, root, cfg.DBName), want)
 
 	// AC-T2: up → down → up が冪等に成功する。
 	if err := DownAll(roles.migrator.DSN, cfg.DBName); err != nil {
@@ -87,8 +80,19 @@ func TestMigratorRunsFullMigrationAndOnlyOwnTables(t *testing.T) {
 	if err := Up(roles.migrator.DSN); err != nil {
 		t.Fatalf("migrator で再 Up: %v", err)
 	}
-	got2 := userTables(t, root, cfg.DBName)
-	if len(got2) != len(want) {
-		t.Fatalf("再 Up 後のテーブル = %v, want ちょうど %v", got2, want)
+	assertExactTables(t, "再 Up 後", userTables(t, root, cfg.DBName), want)
+}
+
+// assertExactTables は got が want(名前順)とちょうど一致することを確認する
+// (pokedex 等のテーブルが混ざっていないこと。ADR-0211 AC-T4)。
+func assertExactTables(t *testing.T, when string, got, want []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("%sのテーブル = %v, want ちょうど %v", when, got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("%sのテーブル = %v, want ちょうど %v", when, got, want)
+		}
 	}
 }
