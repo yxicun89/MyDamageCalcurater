@@ -42,6 +42,7 @@ func TestRolePrivilegeConstants(t *testing.T) {
 		{"ReaderPrivileges", ReaderPrivileges, []string{"SELECT"}},
 		{"ImporterPrivileges", ImporterPrivileges, []string{"SELECT", "INSERT", "UPDATE", "DELETE"}},
 		{"MigratorPrivileges", MigratorPrivileges, []string{"SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "DROP", "INDEX", "REFERENCES"}},
+		{"AppPrivileges", AppPrivileges, []string{"SELECT", "INSERT", "UPDATE", "DELETE"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -45,7 +45,7 @@ tiup playground v8.5.8 --host 127.0.0.1 --db.port 4000 --pd.port 2379 --without-
   `CREATE DATABASE IF NOT EXISTS record; CREATE DATABASE IF NOT EXISTS team;` を実行する
   (root はパスワード無し。tiup playground の既定)。`IF NOT EXISTS` なので複数回起動しても安全
   (既存データを壊さない)。`tiup playground` 自体を毎回まっさらにするか(既定の揮発)、
-  `--tag pokecalc` を付けて `~/.tiup/data/pokecalc` に永続化するかは開発者の選択に委ねる
+  `--tag pokecalc` を付けて tiup のデータディレクトリに永続化するかは開発者の選択に委ねる
   (揮発させても実害は次回起動時に `make migrate-up` をもう一度叩き直すだけで、DB 名の再作成は
   `tidb-local-up.sh` が毎回冪等に行うため手順が増えない)。
 - 停止は人間が明示的に行う(`Ctrl+C` または `tiup clean local`。CLAUDE.md「クラスタ削除・DBのデータ削除」は
@@ -104,7 +104,7 @@ Pod と資源を取り合う本リポジトリでは上限を明示する):
   `storageClassName` は指定しない(k3d 既定の `local-path` を使う。mysql overlay と同じ判断)。
 - `TidbInitializer`(TiDB Operator が正式にサポートする「初回だけ SQL を流す」CR。tiup playground には
   相当物が無いため §2 は別手段〈使い捨て `mysql` クライアント〉を使うが、k3d 側はこちらを使う)で
-  root パスワードを設定し(`passwordSecret: tidb-root-auth`。値は `up.sh` が `openssl rand -hex 16` で
+  root パスワードを設定し(`passwordSecret` フィールドに Secret 名 `tidb-root-auth` を指定する。値は `up.sh` が `openssl rand -hex 16` で
   生成し、`kubectl -n pokecalc get secret tidb-root-auth` が既に無いときだけ作る。mysql-auth と同じ流儀)、
   `initSql: "CREATE DATABASE IF NOT EXISTS record; CREATE DATABASE IF NOT EXISTS team;"` を実行する。
   **`tidb-root-auth` はどのサービス Pod にも一切マウントしない**(§4)。

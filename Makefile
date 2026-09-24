@@ -68,6 +68,8 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@test -z "$$(gofmt -l engine services tools)" || { gofmt -l engine services tools; exit 1; }
 	@cd engine && $(GO) vet ./...
 	@cd services && $(GO) vet ./...
+	@cd services && $(GO) vet -tags mysql ./pokedex/...
+	@cd services && $(GO) vet -tags tidb ./record/... ./team/...
 	@cd tools && $(GO) vet ./...
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 	@for script in tools/importer/*.sh; do sh -n "$$script" || exit; done
@@ -114,12 +116,21 @@ migrate-down: ## pokedex の DB を全て戻す(破壊的。CONFIRM_DESTROY=<DB�
 	@cd services && $(GO) run ./pokedex/cmd/migrate down -confirm "$(CONFIRM_DESTROY)"
 
 .PHONY: test-db
-test-db: ## pokedex の DB を使うテスト(POKEDEX_TEST_DSN が必須。make test には含めない)
+test-db: ## pokedex(MySQL)・record/team(TiDB)のDBを使うテスト(POKEDEX_TEST_DSN・RECORD_TEST_DSN・TEAM_TEST_DSN が必須。make test には含めない。ADR-0211)
 	@if [ -z "$(POKEDEX_TEST_DSN)" ]; then \
 		echo "test-db: POKEDEX_TEST_DSN が設定されていない(スキップせず失敗する)" >&2; \
 		exit 1; \
 	fi
+	@if [ -z "$(RECORD_TEST_DSN)" ]; then \
+		echo "test-db: RECORD_TEST_DSN が設定されていない(スキップせず失敗する)" >&2; \
+		exit 1; \
+	fi
+	@if [ -z "$(TEAM_TEST_DSN)" ]; then \
+		echo "test-db: TEAM_TEST_DSN が設定されていない(スキップせず失敗する)" >&2; \
+		exit 1; \
+	fi
 	@cd services && $(GO) test -tags mysql -p 1 ./pokedex/...
+	@cd services && $(GO) test -tags tidb -p 1 ./record/... ./team/...
 
 .PHONY: db-local-up
 db-local-up: ## make dev 用に docker で mysql:9.7.2 を 127.0.0.1:3306 に起動する(パスワードは .env)

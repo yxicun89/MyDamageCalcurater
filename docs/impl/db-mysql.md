@@ -66,11 +66,12 @@ sequenceDiagram
 | 項目 | 内容 | 根拠 |
 |---|---|---|
 | ライブラリ | `golang-migrate/migrate/v4`(mysql driver・iofs source)。公式 CLI は使わず自前の `cmd/migrate`(理由は ADR-0100 §1) | `services/pokedex/db/migrate.go:1-18` |
-| SQL の持ち方 | `migrations/*.sql` を `//go:embed` でバイナリに埋め込む(実行版とコードが一致) | `migrate.go:20-23` |
-| 接続 | `mysql.ParseDSN` → `MultiStatements = true` を付けて `sql.Open` | `migrate.go:32-41` |
+| 実行ロジック本体 | `Up`/`DownAll`/`Version`/`newMigrate` は共通パッケージに切り出し、`fs.FS` を引数に取る(record-svc・team-svc も同じ実装を再利用。ADR-0211 §5) | `services/internal/dbmigrate/migrate.go` |
+| SQL の持ち方 | `migrations/*.sql` を `//go:embed` でバイナリに埋め込む(実行版とコードが一致)。サービスごとの `db/migrate.go` は自分の `embed.FS` を `dbmigrate` に渡す薄いラッパー | `services/pokedex/db/migrate.go:19` |
+| 接続 | `mysql.ParseDSN` → `MultiStatements = true` を付けて `sql.Open` | `services/internal/dbmigrate/migrate.go:28-33` |
 | コマンド | `migrate up` / `migrate version` / `migrate down -confirm <DB名>` | `cmd/migrate/main.go:1-9` |
-| `down` の防護 | `-confirm` が空、または DSN の DB 名と不一致なら**接続前に** `ErrDownNotConfirmed`。k8s・スクリプトからは呼ばない | `migrate.go:80-89` |
-| 適用済みの記録 | golang-migrate の管理テーブル(既定名 `schema_migrations`。ライブラリの既定で、実クラスタでは未確認) | `migrate.go:45` |
+| `down` の防護 | `-confirm` が空、または DSN の DB 名と不一致なら**接続前に** `ErrDownNotConfirmed`。k8s・スクリプトからは呼ばない | `services/internal/dbmigrate/migrate.go:76-88`(各サービスの `db/migrate.go` が再エクスポート) |
+| 適用済みの記録 | golang-migrate の管理テーブル(既定名 `schema_migrations`。ライブラリの既定で、実クラスタでは未確認) | `services/internal/dbmigrate/migrate.go:52` |
 | Job の image | `pokecalc/pokedex-migrate:0.1.0`(`FROM scratch`、`ENTRYPOINT /pokedex-migrate`、`CMD up`。down はイメージに含めない意図) | `services/pokedex/Dockerfile:16-22` |
 | make | `migrate-up` `migrate-version`(要 `POKEDEX_DATABASE_DSN`)、`migrate-down`(要 `CONFIRM_DESTROY=<DB名>`) | `Makefile:100-115` |
 
