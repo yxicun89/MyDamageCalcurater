@@ -11,6 +11,9 @@ const typeChartPath = fileURLToPath(new URL("../testdata/golden/typechart.json",
  */
 export const baseConfig: UserConfig = {
   plugins: [react()],
+  // /assets/ は gateway が画像配信用に予約している(ADR-0205・CLAUDE.md)。ビルド成果物を同じ接頭辞に置くと
+  // gateway 経由(:8080)で JS/CSS が 404 になり白画面になるので、別の接頭辞に出す(ADR-0305)。
+  build: { assetsDir: "static" },
   resolve: {
     alias: { "@typechart": typeChartPath },
   },

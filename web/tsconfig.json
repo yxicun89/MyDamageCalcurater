@@ -25,9 +25,11 @@
     "vitest.config.ts",
     "vitest.wasm.config.ts",
     "e2e",
+    "e2e-k3d",
     "playwright.config.ts",
     "playwright.online.config.ts",
     "playwright.container.config.ts",
-    "playwright.balance.config.ts"
+    "playwright.balance.config.ts",
+    "playwright.k3d.config.ts"
   ]
 }

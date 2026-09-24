@@ -15,7 +15,8 @@
     "e2e": "playwright test",
     "e2e:online": "playwright test --config playwright.online.config.ts",
     "e2e:container": "playwright test --config playwright.container.config.ts",
-    "e2e:balance": "playwright test --config playwright.balance.config.ts"
+    "e2e:balance": "playwright test --config playwright.balance.config.ts",
+    "e2e:k3d": "playwright test --config playwright.k3d.config.ts"
   },
   "dependencies": {
     "react": "19.3.0",

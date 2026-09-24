@@ -1,6 +1,7 @@
 # 動作確認との対応表
 
-- 対象: [../verify-m1.md](../verify-m1.md) §1〜§4、`make web-k3d-smoke`、`make api-smoke`、他レーンの smoke / e2e。
+- 対象: [../verify-m1.md](../verify-m1.md) §1〜§7、`make web-k3d-smoke`、`make api-smoke`、`make web-k3d-e2e`、他レーンの smoke / e2e。
+- 2026-09-25 に verify-m1.md を再構成した(§3 初回準備・§4 `make deploy-latest`・§5 自動確認・§6 ブラウザ〈6-1 オフライン / 6-2 オンライン〉・§7 iOS)。本書の §1 の表の「画面確認 #n」は旧 §4 の番号で、新しい §6-1 の 1〜9 と §6-2 に対応する。
 - 基準: `origin/main` 取り込み後(3379b03 + 更新)。行番号は同時点。
 - 詳細は重複させずリンク: コマンドの裏側 [runbook-commands.md](runbook-commands.md) / ターゲット [make-targets.md](make-targets.md) / ルート・ステータス [api-endpoints.md](api-endpoints.md) / 処理フロー [request-flows.md](request-flows.md) / リソースとポート [k8s-local.md](k8s-local.md) / DB [db-mysql.md](db-mysql.md) / 環境変数 [config-env.md](config-env.md)。
 - 略記: `gw` = `services/gateway/internal/httpapi`、`calc` = `services/calc/internal/httpapi`、`pdx` = `services/pokedex/internal/httpapi`。
@@ -59,7 +60,7 @@
 
 ## 2. `make web-k3d-smoke`(`web/scripts/k3d-smoke.sh`)
 
-- 接続先: `WEB_URL`(既定 `localhost:5173` = `make web-k3d-open` の port-forward → `svc/web:80` → Pod `:8080`(nginx)。**gateway を通らない**)。ステータスと Content-Type だけを curl で見る。1 つでも NG なら exit 1。
+- 接続先: `WEB_URL`(既定 `localhost:8080` = ブラウザで開く入口。k3d loadbalancer → Traefik → gateway → `svc/web:80` → Pod `:8080`(nginx))。診断用に Web だけを確かめるときは `make web-k3d-open` の後に `WEB_URL=http://localhost:5173` を渡す(gateway を通らない)。ステータスと Content-Type だけを curl で見る。1 つでも NG なら exit 1。
 
 | # | 行 | チェック | 期待 | 検証する実装 | ADR / 補足 |
 |---|---|---|---|---|---|
@@ -69,8 +70,9 @@
 | 3 | `:57` | `/reverse` | 200 `text/html` | SPA フォールバック(URL で画面を切り替えるため) | ADR-0300 §1 |
 | 4 | `:58` | `/engine.wasm` | 200 `application/wasm` | `nginx.conf:53`。イメージに `engine.wasm` が含まれる(`web/Dockerfile`) | ADR-0011 §6・§11(`instantiateStreaming` の条件) |
 | 5 | `:59` | `/wasm_exec.js` | 200 | `nginx.conf:59` | — |
-| 6 | `:60` | `/assets/no-such-file.js` | **404** | `nginx.conf:46` `location ^~ /assets/`。JS の代わりに HTML を返して壊れるのを防ぐ | — |
-| 7 | `:61` | `/api/calc` | **404** | `nginx.conf:32,35`。`/api` は gateway の担当で web は転送しない | DECISIONS.md 2026-09-22。**`WEB_URL` を 8080 にすると gateway の 400 になり NG(想定外の使い方)** |
+| 6 | `:60` | `/static/no-such-file.js` | **404** | `nginx.conf` `location ^~ /static/`。JS の代わりに HTML を返して壊れるのを防ぐ(ADR-0305) | — |
+| 7 | `:61` | `/api/no-such-endpoint` | **404** | 8080 では gateway の予約パス(`isReservedPath`)、5173 では `nginx.conf` の `location ^~ /api/`。どちらも画面(index.html)で代用しない | — |
+| 8 | `:63-70` | index.html が読む JS(`/static/*.js`) | **200** | 8080 では gateway が Web に転送できること(予約パスと衝突すると 404 → 白画面。issue #268・ADR-0305) | — |
 
 出力の読み方: `OK  <説明>: <パス> -> <status>`、NG は `NG  <説明>: <パス> のステータスが … (期待 …)`。最終行 `web smoke: すべて成功(<URL>)`。
 
@@ -110,7 +112,7 @@
 | 症状 | どの層 | 主な原因 | 見るコマンド |
 |---|---|---|---|
 | `000` / `connection refused`(8080) | ホスト → k3d の loadbalancer | クラスタ停止、8080 が別プロセスに占有(`lsof -nP -iTCP:8080 -sTCP:LISTEN`) | `k3d cluster list`、`docker ps`(`k3d-pokecalc-serverlb`)、[runbooks/api.md](../runbooks/api.md) §6(`make dev` は `DEV_GATEWAY_PORT` で避ける) |
-| `000`(5173) | ホスト | **`make web-k3d-open`(port-forward)未実行** | 別ターミナルで `make web-k3d-open`。`lsof -nP -iTCP:5173 -sTCP:LISTEN` |
+| `000`(8080) | ホスト | k3d クラスタ・loadbalancer が止まっている、またはポート競合 | `k3d cluster list`、`lsof -nP -iTCP:8080 -sTCP:LISTEN`。診断用の 5173 なら `make web-k3d-open` 未実行 |
 | `502`(rollout 直後) | Traefik | 終了中の Pod に振り分け。smoke は自動再試行 | 待つ。続くなら `kubectl -n pokecalc rollout status deployment/<名前>`、`get endpoints` |
 | `503` + JSON `upstream_unavailable` | gateway → 上流 | gateway が上流(calc/pokedex/web)に接続できない・`GATEWAY_UPSTREAM_TIMEOUT` 超過。`GATEWAY_POKEDEX_URL` / `GATEWAY_WEB_URL` 未設定でも同じ(`gw/server.go:32`) | `kubectl -n pokecalc get pods,endpoints`、`logs deployment/gateway`、`kubectl -n pokecalc exec deploy/gateway -- env`([config-env.md](config-env.md)) |
 | `503` + JSON `master_unavailable` | calc / pokedex | pokedex の DB が未投入・不完全、または calc がまだマスタを取得できていない(`calc/readiness.go:21`) | `make import-k8s` → `wait`。`kubectl -n pokecalc logs deployment/calc`(起動時の取得。[request-flows.md](request-flows.md) §4)、`get pods`(pokedex Running か) |
@@ -122,14 +124,13 @@
 | `400` + `unknown_species` 等(`unknown_*`) | calc(`convert.go:117,165`) | マスタに無い ID(例データの ID を実マスタに送った等) | pokedex の `GET /api/pokedex/species` で ID を確認 |
 | `400` + `missing_request_context` / `invalid_request` | balance / speed・judge | ヘッダ欠落・不正のコードがサービスごとに異なる([architecture.md](architecture.md) §6) | 各サービスの表([api-endpoints.md](api-endpoints.md) §6・§7) |
 | `422` + `unknown_pokemon` / `unknown_move` / `unknown_ability` | balance / speed | read model に無い ID | `data/generated/readmodel`(balance/speed の read model) |
-| 画面が白い(200 だが空) | web | `engine.wasm` 未同梱・MIME 違い、API モードで例データ ID を送る(ADR-0301 §4) | ブラウザの Network / Console。`make web-k3d-smoke` の項目 4・5 |
+| 画面が白い(200 だが空) | web / gateway | index.html が読む `/static/*.js` が 404(予約パスとの衝突。issue #268)、`engine.wasm` 未同梱・MIME 違い、API モードで例データ ID を送る(ADR-0301 §4) | ブラウザの Network / Console。`make web-k3d-smoke` の項目 4・5・8 |
 
 ## 5. 既知の失敗パターン(根拠つき)
 
 | パターン | 症状 | 根拠 | 対処 |
 |---|---|---|---|
-| port-forward 未実行 | `NG  http://localhost:5173/healthz に 30 回つながらなかった` | `web/Makefile:61,85-86`、`web/scripts/k3d-smoke.sh:22-28` | `make web-k3d-open` を別ターミナルで先に実行(`verify-m1.md` §3 に追記済み) |
-| 8080 を Web 直の smoke に使う | `/api/calc のステータスが 400(期待 404)` の 1 件 NG | `k3d-smoke.sh:61`、gateway が `/api/*` を検証 | 5173 で実行する |
+| 診断用 5173 で port-forward 未実行 | `NG  http://localhost:5173/healthz に 30 回つながらなかった` | `web/Makefile:61,85-86`、`web/scripts/k3d-smoke.sh:22-28` | `WEB_URL` を付けずに実行する(既定 8080)。5173 を使うときだけ `make web-k3d-open` を先に実行 |
 | rollout 直後 | 一過性の 000 / 502 | `smoke.sh:76-90`、ADR-0203 §5 | 自動再試行(既定 30 回・1 秒間隔) |
 | pokedex 未投入 | `pokedex=503` / `master_unavailable`、`master=example` | `smoke.sh:118-150`、ADR-0206 | `make import-fetch && make import-k8s`([db-mysql.md](db-mysql.md) §5) |
 | pokedex 未接続 | 503 `upstream_unavailable` | `gw/server.go:32`、ADR-0206 | `GATEWAY_POKEDEX_URL` と pokedex Service を確認 |
@@ -161,7 +162,7 @@
 ## カバレッジ
 
 - **読んだ**: `docs/verify-m1.md` 全体、`web/scripts/k3d-smoke.sh` 全体、`services/gateway/scripts/smoke.sh` 全体、balance/speed/judge の `smoke*.sh`(先頭とステータス判定の行)、`web/e2e/*.spec.ts` の `test(` 定義行、`web/nginx.conf` の location、`web/src/App.tsx` のタブ・キー・popstate 部分、各画面の関数定義行、ADR-0202〜0206 の該当節、`docs/runbooks/api.md` の該当行。実応答は `curl localhost:8080`(読み取りのみ)で確認。
-- **件数の突き合わせ**: web-k3d-smoke のチェック 8(healthz 待機 + `check` 7)= `k3d-smoke.sh:55-61` の 7 行 + 待機。api-smoke の表 10 行(0・0a・1〜3・4a・4b・5〜7)= `smoke.sh` の検査ブロックと対応(0a は natures 以外の 2 リクエストをまとめた行)。Web e2e の `test(` 定義 = a11y 2 + balance 2 + calc 4 + container 8 + offline 1 + online 2 + reverse 3 + routing 5 = 27。iOS の `func test` = Kit 332 + UI 16。
+- **件数の突き合わせ**: web-k3d-smoke のチェック 9(healthz 待機 + `check` 8)= `k3d-smoke.sh:55-70` の 8 項目 + 待機。api-smoke の表 10 行(0・0a・1〜3・4a・4b・5〜7)= `smoke.sh` の検査ブロックと対応(0a は natures 以外の 2 リクエストをまとめた行)。Web e2e の `test(` 定義 = a11y 2 + balance 2 + calc 4 + container 8 + offline 1 + online 2 + reverse 3 + routing 5 = 27。iOS の `func test` = Kit 332 + UI 16。
 - **読んでいない / 確認していない**:
   - `make test` が束ねる各 `*_test.go` の中身(コンポーネントとの対応はターゲット単位まで)。
   - balance / speed の smoke の各リクエスト本文と `jq` 部分(ステータス期待値のみ)。
