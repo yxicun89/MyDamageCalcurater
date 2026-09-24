@@ -111,6 +111,7 @@
 | [0302-web-container](adr/0302-web-container.md) | ADR-0302: Web をコンテナで配信する(nginx・k3d・gateway の後ろ) |
 | [0303-web-balance-screen](adr/0303-web-balance-screen.md) | ADR-0303: タイプバランスの画面(P4-12)— balance API をそのまま使う・例データの ID を揃える |
 | [0304-web-online-mastersource](adr/0304-web-online-mastersource.md) | ADR-0304: Web のオンライン MasterSource — 検索ベースの選択 UI と、技の ID 解決の API ギャップ |
+| [0305-web-build-assets-dir](adr/0305-web-build-assets-dir.md) | ADR-0305: Web のビルド成果物を `/static/` に出す(gateway の予約パス `/assets/` との衝突を解消) |
 | [0400-balance-tb4-threat-check](adr/0400-balance-tb4-threat-check.md) | ADR-0400: balance TB4 仮想敵診断 |
 | [0401-balance-tb5-recommend-types](adr/0401-balance-tb5-recommend-types.md) | ADR-0401: balance TB5 おすすめタイプと該当ポケモン |
 | [0402-balance-read-model-json-schema](adr/0402-balance-read-model-json-schema.md) | ADR-0402: balance の read model の形を JSON Schema で公開する |

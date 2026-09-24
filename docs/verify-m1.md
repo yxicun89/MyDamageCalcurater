@@ -47,24 +47,14 @@ make import-k8s
 → `import-dry-run` の最後の行が `blockers: none`。`import-k8s` が作った Job が `condition met` で終わる
 (`make up` の最後に出る案内どおり、実データの初回投入は手動で1回だけ行う。週1回の自動実行は土曜 12:00 JST)。
 
-`web-k3d-smoke` は `localhost:5173`(Web の Service への port-forward)を叩く。**別のターミナルで先に port-forward を張る**(Ctrl-C で終了):
-
-```sh
-cd "$(git rev-parse --show-toplevel)"
-make web-k3d-open
-```
-
-元のターミナルで:
-
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 make web-k3d-smoke
 make api-smoke
 ```
-→ `web-k3d-smoke` は `web smoke: すべて成功`。`api-smoke` の最終行に `calc=200 bulk=200 reverse=200 pokedex=200 web=200 balance=200` が出る(gateway が `/` 等を Web に転送する。ADR-0205)。
+→ `web-k3d-smoke` は `web smoke: すべて成功(http://localhost:8080)`。`api-smoke` の最終行に `calc=200 bulk=200 reverse=200 pokedex=200 web=200 balance=200` が出る。
+どちらもブラウザで開くのと同じ入口 `localhost:8080`(k3d → Traefik → gateway。gateway が `/api/*` をバックエンドへ、それ以外を Web へ転送する。ADR-0205)を通る。
 `missing_header=400`・`invalid_header=400`・`internal=404` は異常系を意図して確かめた結果で、この値が正常。
-
-- `web-k3d-smoke` に `WEB_URL=http://localhost:8080`(gateway 経由)を渡すと、`/api/calc` が gateway の 400 を返し「/api は Web では配信しない」の1件が NG になる(この項目は Web 直(5173)前提)。
 
 ## 4. 画面の確認(Chrome と Safari の両方で)
 

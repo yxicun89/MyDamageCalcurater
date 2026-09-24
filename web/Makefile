@@ -57,8 +57,9 @@ web-e2e-balance: wasm web-deps ## Web の E2E(タイプバランス = balance AP
 	@cd $(WEB_DIR) && npm run e2e:balance
 
 # --- P4-11: コンテナ(k3d)---
-# 既定の WEB_URL(web-k3d-smoke)は `web-k3d-open` の port-forward の宛先(localhost:5173)に合わせる。
-WEB_URL ?= http://localhost:5173
+# 既定の WEB_URL(web-k3d-smoke)は利用者がブラウザで開く入口(k3d の loadbalancer → gateway。localhost:8080)。
+# Web だけを直接確かめるとき(診断用)は `make web-k3d-open` の port-forward 先 http://localhost:5173 を渡す。
+WEB_URL ?= http://localhost:8080
 
 .PHONY: web-docker-build
 web-docker-build: ## Web のコンテナイメージ(nginx。engine.wasm を含む)を local タグでビルドする(コンテキストはリポジトリルート)
@@ -82,11 +83,11 @@ web-k3d-deploy: web-docker-build ## k3d(既存クラスタ。make up 済み)へ 
 	@kubectl -n pokecalc rollout status deployment/web --timeout=120s
 
 .PHONY: web-k3d-open
-web-k3d-open: ## Web の Service へ port-forward する(localhost:5173。Ctrl-C で終了)
+web-k3d-open: ## 診断用: gateway を通さず Web の Service へ port-forward する(localhost:5173。Ctrl-C で終了)
 	@kubectl -n pokecalc port-forward svc/web 5173:80
 
 .PHONY: web-k3d-smoke
-web-k3d-smoke: ## k3d 上の Web をスモーク(既定 http://localhost:5173。WEB_URL で上書き)
+web-k3d-smoke: ## k3d 上の Web をスモーク(既定 http://localhost:8080 = gateway 経由。WEB_URL で上書き)
 	@WEB_URL=$(WEB_URL) web/scripts/k3d-smoke.sh
 
 .PHONY: web-kustomize

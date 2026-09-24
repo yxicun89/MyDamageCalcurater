@@ -3,8 +3,8 @@
 # 画面(/ と /reverse。SPA のフォールバック)・engine.wasm の MIME・/healthz を curl で確かめ、1項目1行で結果を出す。
 #
 # 環境変数:
-#   WEB_URL            Web の基底 URL。既定 http://localhost:5173(`make web-k3d-open` の port-forward)。
-#                      gateway が /api 以外を Web に転送するようになったら http://localhost:8080 を渡す。
+#   WEB_URL            Web の基底 URL。既定 http://localhost:8080(利用者が開く入口。k3d → gateway → web)。
+#                      Web だけを直接確かめるとき(診断用)は `make web-k3d-open` の http://localhost:5173 を渡す。
 #   WEB_SMOKE_RETRIES  ロールアウト直後・port-forward 直後の接続失敗を再試行する回数(既定 30。1秒間隔)。
 #
 # 失敗が1つでもあれば非ゼロで終わる(スキップして成功扱いにしない)。
@@ -12,7 +12,7 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-base_url=${WEB_URL:-http://localhost:5173}
+base_url=${WEB_URL:-http://localhost:8080}
 base_url=${base_url%/}
 retries=${WEB_SMOKE_RETRIES:-30}
 failures=0
@@ -57,8 +57,17 @@ check "トップ" / 200 text/html
 check "逆算を直接開く(SPA のフォールバック)" /reverse 200 text/html
 check "engine.wasm の MIME" /engine.wasm 200 application/wasm
 check "wasm_exec.js" /wasm_exec.js 200
-check "無いアセットは 404(index.html で代用しない)" /assets/no-such-file.js 404
-check "/api は Web では配信しない(gateway の担当)" /api/calc 404
+check "無いアセットは 404(index.html で代用しない)" /static/no-such-file.js 404
+check "未知の /api/* は画面(index.html)で代用しない" /api/no-such-endpoint 404
+
+# index.html が読む JS が実際に返ること(gateway 経由では予約パスと衝突すると 404 → 白画面になる。issue #268)。
+entry_js=$(curl -sS "$base_url/" | sed -n 's/.*src="\(\/[^"]*\.js\)".*/\1/p' | head -n 1)
+if [ -z "$entry_js" ]; then
+  echo "NG  index.html が読む JS: / から script の src が見つからない"
+  failures=$((failures + 1))
+else
+  check "index.html が読む JS" "$entry_js" 200
+fi
 
 if [ "$failures" -gt 0 ]; then
   echo "web smoke: $failures 件失敗($base_url)" >&2

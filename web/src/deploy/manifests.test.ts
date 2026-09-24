@@ -227,9 +227,9 @@ describe("web/nginx.conf", () => {
     expect(/gzip_types[^;]*application\/wasm/.exec(conf)).not.toBeNull();
   });
 
-  test("/assets/* は immutable で長く、index.html・engine.wasm・wasm_exec.js は no-cache", () => {
+  test("/static/* は immutable で長く、index.html・engine.wasm・wasm_exec.js は no-cache", () => {
     const conf = nginx();
-    expect(conf).toMatch(/location\s+(\^~\s+)?\/assets\/[\s\S]*?immutable/);
+    expect(conf).toMatch(/location\s+(\^~\s+)?\/static\/[\s\S]*?immutable/);
     expect(conf).toMatch(/no-cache/);
     for (const file of ["index\\.html", "engine\\.wasm", "wasm_exec\\.js"]) {
       expect(conf, file).toMatch(new RegExp(file));

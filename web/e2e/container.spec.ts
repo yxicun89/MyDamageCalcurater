@@ -11,7 +11,7 @@ const WASM_MAGIC = [0x00, 0x61, 0x73, 0x6d];
 /** index.html にだけある印(アプリを差し込む要素)。404 を index.html で代用していないかの判定にも使う。 */
 const APP_ROOT = '<div id="root"';
 
-/** ハッシュ付きの /assets/* を「長く」キャッシュさせるとみなす max-age の下限(30日)。 */
+/** ハッシュ付きの /static/* を「長く」キャッシュさせるとみなす max-age の下限(30日)。 */
 const LONG_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
 function header(response: APIResponse, name: string): string {
@@ -41,10 +41,10 @@ test.describe("SPA のフォールバック", () => {
     });
   }
 
-  test("無い /assets/* は index.html で代用せず 404 を返す(JS の代わりに HTML が返って壊れるのを防ぐ)", async ({
+  test("無い /static/* は index.html で代用せず 404 を返す(JS の代わりに HTML が返って壊れるのを防ぐ)", async ({
     request,
   }) => {
-    const response = await request.get("/assets/does-not-exist-0000.js");
+    const response = await request.get("/static/does-not-exist-0000.js");
     expect(response.status()).toBe(404);
     expect(await response.text()).not.toContain(APP_ROOT);
   });
@@ -78,10 +78,10 @@ test.describe("engine.wasm と wasm_exec.js", () => {
   });
 });
 
-test("ハッシュ付きの /assets/*.js は immutable で長くキャッシュさせる", async ({ request }) => {
+test("ハッシュ付きの /static/*.js は immutable で長くキャッシュさせる", async ({ request }) => {
   const html = await (await request.get("/")).text();
-  const match = /(?:src|href)="(\/assets\/[^"]+\.js)"/.exec(html);
-  expect(match?.[1], "index.html から /assets/*.js が見つからない").toBeDefined();
+  const match = /(?:src|href)="(\/static\/[^"]+\.js)"/.exec(html);
+  expect(match?.[1], "index.html から /static/*.js が見つからない").toBeDefined();
   const response = await request.get(match?.[1] ?? "");
   expect(response.status()).toBe(200);
   expect(header(response, "content-type")).toContain("javascript");
