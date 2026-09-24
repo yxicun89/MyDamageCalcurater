@@ -103,7 +103,7 @@ paths:
       tags: [pokedex]
       operationId: searchMoves
       summary: 技を日本語名で前方一致検索
-      description: 既定のレギュレーションの使用可能集合だけを返す(並びは ID 順。ADR-0105)。
+      description: 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
       parameters:
         - $ref: '#/components/parameters/DeviceId'
         - $ref: '#/components/parameters/SessionId'
@@ -173,7 +173,7 @@ paths:
       tags: [pokedex]
       operationId: searchItems
       summary: 持ち物を日本語名で前方一致検索
-      description: 既定のレギュレーションの使用可能集合だけを返す(並びは ID 順。ADR-0105)。
+      description: 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
       parameters:
         - $ref: '#/components/parameters/DeviceId'
         - $ref: '#/components/parameters/SessionId'

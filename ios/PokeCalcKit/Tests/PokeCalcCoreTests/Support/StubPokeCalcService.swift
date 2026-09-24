@@ -137,6 +137,72 @@ actor StubPokeCalcService: PokeCalcService {
         resolveReverse(at: index, with: .success(Self.echoReverseResult(for: reverseRequests[index])))
     }
 
+    // MARK: - テストからの操作(キャンセルの観測。issue #113)
+
+    /// Task cancel を受け取った `reverse` の要求番号(`reverseRequests` の添字)。
+    private(set) var cancelledReverseRequests: Set<Int> = []
+    /// Task cancel を受け取った `calcBulk` の要求番号(`bulkRequests` の添字)。
+    private(set) var cancelledBulkRequests: Set<Int> = []
+    /// Task cancel を受け取った `species(key:)` の要求番号(`speciesRequests` の添字。critic 指摘:
+    /// master 取得中のキャンセルも `reverse`/`calcBulk` と同じ形で観測できる必要がある)。
+    private(set) var cancelledSpeciesRequests: Set<Int> = []
+
+    /// 保留中(`.manual`)の `reverse` が Task cancel を受けたときの処理。
+    /// `APIPokeCalcService` が URLSession のキャンセルを `CancellationError` として投げ直すのと
+    /// 同じ形を作る(ViewModel から見た「送信済みの要求が cancel された」状況)。
+    func cancelPendingReverse(at index: Int) {
+        cancelledReverseRequests.insert(index)
+        if let continuation = pendingReverse.removeValue(forKey: index) {
+            continuation.resume(throwing: CancellationError())
+        }
+    }
+
+    /// `cancelPendingReverse` の `calcBulk` 版。
+    func cancelPendingBulk(at index: Int) {
+        cancelledBulkRequests.insert(index)
+        if let continuation = pendingBulk.removeValue(forKey: index) {
+            continuation.resume(throwing: CancellationError())
+        }
+    }
+
+    /// `cancelPendingReverse` の `species(key:)` 版。
+    func cancelPendingSpecies(at index: Int) {
+        cancelledSpeciesRequests.insert(index)
+        if let continuation = pendingSpecies.removeValue(forKey: index) {
+            continuation.resume(throwing: CancellationError())
+        }
+    }
+
+    /// `index` 番目の `reverse` が cancel されるまで待つ(壁時計の固定待ちをしない。1ms ポーリング)。
+    func waitForReverseCancellation(at index: Int, file: StaticString = #filePath, line: UInt = #line) async throws {
+        for _ in 0..<Self.waitPollLimit {
+            if cancelledReverseRequests.contains(index) { return }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTFail("reverse の要求 \(index) が cancel されなかった", file: file, line: line)
+        throw PokeCalcError(code: "test_timeout", message: "reverse のキャンセル待ちがタイムアウト")
+    }
+
+    /// `waitForReverseCancellation` の `calcBulk` 版。
+    func waitForBulkCancellation(at index: Int, file: StaticString = #filePath, line: UInt = #line) async throws {
+        for _ in 0..<Self.waitPollLimit {
+            if cancelledBulkRequests.contains(index) { return }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTFail("calcBulk の要求 \(index) が cancel されなかった", file: file, line: line)
+        throw PokeCalcError(code: "test_timeout", message: "calcBulk のキャンセル待ちがタイムアウト")
+    }
+
+    /// `waitForReverseCancellation` の `species(key:)` 版。
+    func waitForSpeciesCancellation(at index: Int, file: StaticString = #filePath, line: UInt = #line) async throws {
+        for _ in 0..<Self.waitPollLimit {
+            if cancelledSpeciesRequests.contains(index) { return }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTFail("species の要求 \(index) が cancel されなかった", file: file, line: line)
+        throw PokeCalcError(code: "test_timeout", message: "species のキャンセル待ちがタイムアウト")
+    }
+
     /// `reverse` がちょうど `count` 回以上呼ばれるまで待つ。
     func waitForReverseRequests(count: Int, file: StaticString = #filePath, line: UInt = #line) async throws {
         for _ in 0..<Self.waitPollLimit {
@@ -336,8 +402,18 @@ actor StubPokeCalcService: PokeCalcService {
         case .immediate:
             return try lookupSpecies(key: key)
         case .manual:
-            return try await withCheckedThrowingContinuation { continuation in
-                pendingSpecies[index] = continuation
+            // 保留中に Task cancel を受けたら `CancellationError` を投げて終える(issue #113。
+            // `reverse`/`calcBulk` と同じ形。critic 指摘: master 取得中のキャンセルも観測できる必要がある)。
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<SpeciesDetail, any Error>) in
+                    if cancelledSpeciesRequests.contains(index) {
+                        continuation.resume(throwing: CancellationError())
+                    } else {
+                        pendingSpecies[index] = continuation
+                    }
+                }
+            } onCancel: {
+                Task { await self.cancelPendingSpecies(at: index) }
             }
         }
     }
@@ -386,8 +462,18 @@ actor StubPokeCalcService: PokeCalcService {
         case .immediate:
             return try bulkResponder(request).get()
         case .manual:
-            return try await withCheckedThrowingContinuation { continuation in
-                pendingBulk[index] = continuation
+            // 保留中に Task cancel を受けたら `CancellationError` を投げて終える(issue #113。
+            // 実装の `APIPokeCalcService` が URLSession のキャンセルでそうするのと同じ)。
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<BulkCalcResult, any Error>) in
+                    if cancelledBulkRequests.contains(index) {
+                        continuation.resume(throwing: CancellationError())
+                    } else {
+                        pendingBulk[index] = continuation
+                    }
+                }
+            } onCancel: {
+                Task { await self.cancelPendingBulk(at: index) }
             }
         }
     }
@@ -403,8 +489,17 @@ actor StubPokeCalcService: PokeCalcService {
         case .manual:
             let index = reverseRequests.count
             reverseRequests.append(request)
-            return try await withCheckedThrowingContinuation { continuation in
-                pendingReverse[index] = continuation
+            // `calcBulk` と同じ理由でキャンセルを観測する(issue #113)。
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ReverseResult, any Error>) in
+                    if cancelledReverseRequests.contains(index) {
+                        continuation.resume(throwing: CancellationError())
+                    } else {
+                        pendingReverse[index] = continuation
+                    }
+                }
+            } onCancel: {
+                Task { await self.cancelPendingReverse(at: index) }
             }
         }
     }
