@@ -334,6 +334,15 @@
   ヘッダーコメントを修正(ADR 8章)。`swift test`(399件・0失敗)・`make ios-test`
   (`ios-test-unit` 412件・`ios-test-ui` 17件・Info.plist 検査、すべて成功。終了コード0)ともに green
 - [ ] P6-7 ADR-0209 §8 の文言と「この端末のデータを削除」の UI(issue #103。record-svc / team-svc の全削除 API 実装後)
+- [x] P6-11 issue #334: 攻撃側プリセットの表示名(`AttackerPreset.label`)が技の分類(物理/特殊)に追従せず、
+  特殊技でも「A特化」のままになる不具合を直した。表記は Web(`attackerPresetText`)の出荷済み文言に揃えた
+  (「A振り(無補正)」等)。受け入れ条件・判断・実装結果は ADR-0501「P6-11」。
+  `AttackerPreset.label(for:)`(`relevantStat(for:)` の atk/spa から文字 A/C を引く。文字・接尾辞は1箇所にまとめた)を実装し、
+  `CalcScreenView.presetSegmentedRow`・`ReverseScreenView.presetSegmentedRow`(`case .defender:`)を
+  `label(for: category)` に切り替えた。既存の分類なし `label` は削除していない(旧テスト維持)。
+  `swift test`(PokeCalcKit)400件0失敗、`make ios-test`
+  (`ios-test-unit` 413件・`ios-test-ui` 18件(新規 `testSelectingSpecialMoveShowsCLetterPresetLabel` を含む)、
+  すべて成功。終了コード0)ともに green
 - [x] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼された
   内容どおり `ColorToken.danger` のライト値を `0xE5,0x48,0x4D` → `0xCD,0x1D,0x23` に更新し、
   `DesignTokenTests.swift` の旧値も書き換えた。`ios/PokeCalcKit/Tests/PokeCalcDesignTests/ColorContrast.swift`

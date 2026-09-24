@@ -144,10 +144,13 @@ struct ReverseScreenView: View {
     private var presetSegmentedRow: some View {
         switch viewModel.side {
         case .defender:
+            // ラベルは自分の技の分類(A/C)に依存する。技の読み込み前は物理扱いで暫定表示する
+            // (`.attacker` 側の HB/HD 表示と同じ理由)。
+            let category = viewModel.selectedMove?.category ?? .physical
             HStack(spacing: SpacingToken.x2) {
                 ForEach(AttackerPreset.allCases, id: \.self) { preset in
                     PresetPillButton(
-                        title: preset.label, isSelected: viewModel.attackerPreset == preset,
+                        title: preset.label(for: category), isSelected: viewModel.attackerPreset == preset,
                         identifier: "reverseAttackerPreset-\(preset.rawValue)"
                     ) {
                         viewModel.scheduleLatest { await $0.selectAttackerPreset(preset) }

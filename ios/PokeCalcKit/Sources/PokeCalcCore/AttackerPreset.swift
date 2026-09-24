@@ -12,7 +12,10 @@ public enum AttackerPreset: String, CaseIterable, Sendable, Hashable {
     /// 無振り: SP 0 + 無補正性格。
     case none
 
-    /// 画面に出す表示名(docs/requirements.md と同じ言葉)。
+    /// 画面に出す表示名(docs/requirements.md と同じ言葉)。技の分類によらず固定の文字列を返すため、
+    /// 特殊技でも「A特化」のままになる不具合がある(issue #334)。呼び出し側は `label(for:)` に置き換える
+    /// (`AttackerPresetTests.testCasesAreOrderedAndLabeledAsRequirements` が旧文言を固定しているため、
+    /// この property 自体は残す。ADR-0501「P6-11」参照)。
     public var label: String {
         switch self {
         case .aFull: return "A特化"
@@ -20,6 +23,33 @@ public enum AttackerPreset: String, CaseIterable, Sendable, Hashable {
         case .none: return "無振り"
         }
     }
+
+    /// 画面に出す表示名。技の分類で「A」(物理・変化)/「C」(特殊)の文字を切り替える(issue #334)。
+    /// Web(`web/src/i18n/ja.ts` の `attackerPresetText`)と同じ語を使う: A振り/C振り は「(無補正)」を付ける
+    /// (requirements.md の「A振り(補正なし)」とは表記が異なるが、クライアント間で語を揃えるため
+    /// Web の出荷済み表記に合わせる。ADR-0501「P6-11」の判断)。
+    public func label(for moveCategory: MoveCategory) -> String {
+        let letter = Self.statLetter(for: Self.relevantStat(for: moveCategory))
+        switch self {
+        case .aFull: return letter + Self.fullSuffix
+        case .aMax: return letter + Self.xSuffix
+        case .none: return "無振り"
+        }
+    }
+
+    /// 関連ステータス(atk/spa)を画面用の1文字に変える(Web の `statLetterJa` と同じ対応)。
+    private static func statLetter(for stat: StatKey) -> String {
+        switch stat {
+        case .atk: return "A"
+        case .spa: return "C"
+        default: return ""
+        }
+    }
+
+    /// 特化の接尾辞(Web の `attackerPresetText.fullSuffix` と同じ語)。
+    private static let fullSuffix = "特化"
+    /// 振り(無補正)の接尾辞(Web の `attackerPresetText.xSuffix` と同じ語)。
+    private static let xSuffix = "振り(無補正)"
 
     /// 技の分類から、振る/参照する関連ステータスを決める(ADR-0010 §2 と同じ規則。
     /// 変化技はダメージを出さないので物理と同じ atk 扱いにし、`MockPokeCalcService.reverseStat` と揃える)。
