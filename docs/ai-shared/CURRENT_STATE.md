@@ -64,10 +64,17 @@ danger のライト値を `#E5484D`→`#CD1D23` に変更(WCAG 2.2 SC 1.4.3 の4
 mutation テスト9件で確認)。iOS 側も完了(`fix: iOS の計算・逆算で古い計算要求をキャンセル・観測入力を
 debounce (issue #113)`。`LatestTaskRunner.swift`・`CalcInput.swift`)。**issue #113 自体はまだ open**
 (API レーンの「クライアントのcancel伝播」連携分が残っているかは未確認。Web・iOS とも自レーン分は完了)。
-P4-17(技の ID 解決)は、API レーンが判定レーン JD4 向けに `GET /api/pokedex/moves/{key}`(getMove)を
-main 統合したが(PR #161)、種族1体あたり技20〜30件ぶんのラウンドトリップが要るため ADR-0304 §3 の欠落は
-**まだ解消していない**(API レーン自身が ADR-0304 に追記済み)。案A(`learnset` を `Move[]` にする)か
-`getMove` のバッチ解決化が API レーンへの未決の提案のまま。
+**P4-17(技の ID 解決。ADR-0304 A-13)完了・main 統合済み(PR #202)**: API レーンが新設した
+`GET /api/pokedex/moves/batch`(`getMovesByIds`)を使い、オンラインモードの技選択を復活させた。
+`resolveSpecies` が learnset を技の実体に解決して返す設計(`MasterSpeciesResolution.moves`)。`learnset` が
+64件を超える場合はチャンク分割して並列に複数回呼ぶ(API レーンが実データで確認: 349種族中151種族・43%が
+64件超・最大106件。稀な例外ではなく主経路として実装・テスト)。`capabilities.moves` の意味は変えずオンラインで
+`false` のまま(`true` にすると BalanceScreen が「有効なのに技が選べない」壊れた状態になるため)。技セレクトの
+disabled 判定は「今の種族の技候補があるか」に変更。critic レビュー: チャンク分割・結合順序・全体失敗の扱いを
+mutation テストで確認(全滅)。重要指摘1件(攻守入れ替え・与えた/受けた切り替え後の選択中の技〈候補一覧だけで
+なく実際にリクエストに乗る技〉が未検証。`<select>` の DOM 値は状態が壊れていても先頭候補にフォールバック表示
+するため見逃しやすい)を受け、実際のリクエストを検査する形に既存テスト2件を強化。既存1192件は無変更・新規
+28件追加(1220件)。BalanceScreen 自体の種族検索・技選択は P4-17b として積み残し。
 **P4-21(issue #67・#98)完了・main 統合済み(PR #189・#192)。Codexレビューissue(P4-18・P4-21)はこれで
 すべて完了**:
 - #67(2xxの契約外JSONでAPIクライアントが例外を投げる): `apiEngine.ts`・`balanceClient.ts` の `postJson` を
@@ -82,10 +89,11 @@ main 統合したが(PR #161)、種族1体あたり技20〜30件ぶんのラウ�
   作業中に発見した無関係の既存退行(JD5の判定タブ追加で `a11y.spec.ts` が壊れていた)を別途修正・main統合済み
   (PR #191)。
   最終テスト数: 既存1166件は無変更のまま vitest 1184件・Playwright 31件、すべて green。
-Next: (1) P4-17: 技の ID 解決の欠落が解消されたら技を復活。(2) P4-20: issue #148(アクセス境界・認証方針)。
-Web 側は既にコード上で条件を満たしていることを確認済み(apiBaseUrl の既定値は同一オリジン、CORSはgateway側の
-設定)。実際のtailnet名が決まってから運用レーンより連絡が来る想定。(3) 続いて P5-5(構築ビルダー等)は
-record/team の API 待ち(M2。人間の /phase キックオフ待ち)。(4) 人間へのお願い: docs/verify-m1.md §4 を
+Next: (1) P4-17b: BalanceScreen の種族検索・技選択をオンラインでも使えるようにする(ADR-0304 A-9 の申し送り)。
+(2) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
+(apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより
+連絡が来る想定。(3) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち)。
+(4) 人間へのお願い: docs/verify-m1.md §4 を
 Safari で確認(P4-5)。(5) 他レーンからの依頼待ち
 
 ## iOS
