@@ -151,8 +151,10 @@
   BalanceScreen の種族検索・技選択は P4-17b として積み残し(下記)
 - [ ] P4-17b BalanceScreen(タイプバランス)の種族検索・技選択をオンラインでも使えるようにする
   (ADR-0304 A-9 の申し送り・A-13.5 の積み残し)。パーティ・仮想敵の各枠(6枠 × 2)に A-10 の種族検索を広げ、
-  枠ごとに解決した learnset から技を4つまで選べるようにする。それまではオンラインでは画面ごと無効のまま
-  (`capabilities.speciesList && capabilities.moves` の判定は変えない。回帰テストで固定済み)
+  枠ごとに解決した learnset から技を4つまで選べるようにする。**spec-writer 完了(ADR-0304 追記5 = A-14 に
+  設計を記録・失敗するテスト13件を追加)**: 可否の判定を `speciesList && moves` から「入力の口があるか」
+  (`(speciesList || masterSearch) && (moves || (!speciesList && masterSearch))`)に置き換え、12枠で
+  `useSpeciesResolutions` を共有し、`moveById` の「実体不明の技 ID を攻撃技と誤判定する」不具合を直す
 - [x] P4-18(Web 分。Codex コードレビューの issue。タイプバランスレーンから 2026-09-23 に連絡・
   `gh issue view <番号>`)。**#99(bug, accessibility)ライトテーマのエラー文字色がコントラスト基準未達 —
   Web 分・iOS 分とも完了、issue クローズ済み**: danger のライト値を `#E5484D`→`#CD1D23`(WCAG 2.2 SC 1.4.3
