@@ -246,6 +246,53 @@ func TestConstraintsRejectInvalidRows(t *testing.T) {
 	}
 }
 
+// TestSpeciesAbilitiesSlot4RoundTrip は species_abilities.slot=4(Showdown の "S"。ADR-0103 §12)の
+// 挿入成功と読み戻しを検査する(issue #76)。TestConstraintsRejectInvalidRows のスロット5拒否・
+// 特性重複拒否は負方向だけで、migration 000005 が広げた slot 4 の正方向を検査していなかった。
+func TestSpeciesAbilitiesSlot4RoundTrip(t *testing.T) {
+	conn := freshDB(t)
+	seed(t, conn)
+
+	// トランザクション内で確認しロールバックする(他のテストの freshDB が呼ぶ DownAll は、
+	// slot=4 の行が残っていると migration 000005 の down で CHECK を作り直せず失敗するため)。
+	tx, err := conn.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback() //nolint:errcheck // 確認用トランザクションなので必ず戻す
+
+	// 9001-000 は seed で slot 1(testability)・slot 3(testhidden)しか使っていない。
+	// 既存の特性 testguard を slot 4 として追加できること。
+	if _, err := tx.Exec(`INSERT INTO species_abilities (species_key, slot, ability_id) VALUES ('9001-000', 4, 'testguard')`); err != nil {
+		t.Fatalf("slot 4 の挿入が失敗(1..4 を許容する CHECK のはず): %v", err)
+	}
+
+	rows, err := tx.Query(`SELECT slot, ability_id FROM species_abilities WHERE species_key = '9001-000' ORDER BY slot`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var got []master.SpeciesAbilityRow
+	for rows.Next() {
+		var a master.SpeciesAbilityRow
+		if err := rows.Scan(&a.Slot, &a.AbilityID); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, a)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	want := []master.SpeciesAbilityRow{
+		{Slot: 1, AbilityID: "testability"},
+		{Slot: 3, AbilityID: "testhidden"},
+		{Slot: 4, AbilityID: "testguard"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("読み戻し = %+v, want %+v", got, want)
+	}
+}
+
 // TestMegaItemCannotBeDeletedWhileReferenced はメガの持ち物が参照中は消せないこと(FK は RESTRICT。ADR-0100 §2)。
 func TestMegaItemCannotBeDeletedWhileReferenced(t *testing.T) {
 	conn := freshDB(t)
