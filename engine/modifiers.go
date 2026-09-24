@@ -133,7 +133,7 @@ func offensiveStatMod(in DamageInput, atkKey StatKey) int {
 			mods = append(mods, m)
 		}
 	}
-	return chainMods(mods)
+	return chainMods(mods, statModBounds)
 }
 
 // defensiveStatMod は防御側の持ち物による防御実数値倍率を返す。
@@ -144,7 +144,7 @@ func defensiveStatMod(in DamageInput, defKey StatKey) int {
 			mods = append(mods, m)
 		}
 	}
-	return chainMods(mods)
+	return chainMods(mods, statModBounds)
 }
 
 func weatherDefenseMod(in DamageInput, defKey StatKey) int {
@@ -167,7 +167,7 @@ func powerModifier(in DamageInput) int {
 			mods = append(mods, e.PowerMod)
 		}
 	}
-	return chainMods(mods)
+	return chainMods(mods, powerModBounds)
 }
 
 func itemEffect(i *Item) *ItemEffect {

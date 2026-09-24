@@ -44,17 +44,34 @@ func pokeRound(value, mod int) int {
 	return v / Modifier4096
 }
 
+// modBounds は連結した補正のクランプ範囲(両端を含む)。
+type modBounds struct {
+	lower, upper int
+}
+
+// 連結した補正のクランプ範囲。@smogon/calc 0.12.0 の chainMods の呼び出し(champions / gen789)と同じ値。
+// 現在のマスタの補正集合では届かないが、補正を足したときに oracle と黙って乖離しないように持つ(issue #77)。
+var (
+	// finalModBounds は「その他補正」(壁・持ち物・特性・半減きのみ)の範囲 ×0.01〜×32。
+	finalModBounds = modBounds{lower: 41, upper: 131072}
+	// powerModBounds は威力補正の範囲 ×0.01〜×512。
+	powerModBounds = modBounds{lower: 41, upper: 2097152}
+	// statModBounds は攻撃・防御の実数値補正の範囲 ×0.1〜×32。
+	statModBounds = modBounds{lower: 410, upper: 131072}
+)
+
 // chainMods は複数の 4096基準補正を連結して1つの補正にまとめる(@smogon-calc 互換)。
 // 各ステップは (M*mod + modifierRoundHalf) >> 12 = 切り上げ寄りの丸め。最終適用は pokeRound で行う。
 // 壁・持ち物・特性など「その他補正」はこの方式で1回にまとめないとゴールデンと一致しない。
-func chainMods(mods []int) int {
+// 結果は bounds の範囲にクランプする(oracle と同じ)。
+func chainMods(mods []int, bounds modBounds) int {
 	m := Modifier4096
 	for _, mod := range mods {
 		if mod != Modifier4096 {
 			m = (m*mod + modifierRoundHalf) >> 12
 		}
 	}
-	return m
+	return min(max(m, bounds.lower), bounds.upper)
 }
 
 // DamageInput はダメージ計算の入力。
@@ -242,7 +259,7 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 	stabMod, _ := stabModifier(in, moveType)
 	burnMod := burnModifier(in)
 
-	otherMod := chainMods(otherModifiers(in, eff))
+	otherMod := chainMods(otherModifiers(in, eff), finalModBounds)
 
 	for i := 0; i < 16; i++ {
 		d := base * (85 + i) / 100 // 乱数(floor)

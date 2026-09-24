@@ -49,9 +49,9 @@
 | `test-services` | 55 | — | `cd services && $(GO) test ./...` | なし(読み取り/検査) |
 | `test-tools` | 59 | — | `cd tools && $(GO) test ./...` | なし(読み取り/検査) |
 | `test-scripts` | 63 | — | `./scripts/argocd-bootstrap_test.sh` | なし(PATH 上の偽 curl/kubectl で検査。クラスタ・ネットワーク非接触) |
-| `lint` | 67 | — | `test -z "$$(gofmt -l engine services tools)" \|\| { gofmt -l engine services tools; exit 1; } ⏎ cd engine && $(GO) vet ./... ⏎ cd services && $(GO) vet ./... ⏎ cd tools …` | ファイル非変更。$(MAKE) で k8s-render・check-publishable(-selftest)も再帰実行 |
+| `lint` | 67 | — | `test -z "$$(gofmt -l engine services tools)" \|\| { gofmt -l engine services tools; exit 1; } ⏎ cd engine && $(GO) vet ./... ⏎ cd engine && $(GO) vet -tags golden ./... ⏎ cd engine && $(GO) vet -tags allspecies ./... ⏎ cd services && $(GO) vet ./... ⏎ cd tools …` | ファイル非変更。$(MAKE) で k8s-render・check-publishable(-selftest)も再帰実行 |
 | `build` | 82 | — | `cd engine && $(GO) build ./... ⏎ cd services && $(GO) build ./... ⏎ cd tools && $(GO) build ./...` | なし(読み取り/検査) |
-| `golden-generate` | 88 | — | `cd tools/golden && npm run generate` | testdata/golden/ を再生成(@smogon/calc 0.12.0。要 npm ci 済み) |
+| `golden-generate` | 88 | — | `cd tools/golden && npm ci && npm run generate` | testdata/golden/ を再生成(@smogon/calc 0.12.0。lockfile どおりに npm ci してから。ネットワークが要る) |
 | `test-golden` | 92 | — | `cd engine && $(GO) test -tags golden ./... -run Golden` | なし(読み取り/検査) |
 | `test-all-species` | 96 | — | `cd engine && $(GO) test -tags allspecies ./... -run AllSpecies` | なし(読み取り/検査) |
 | `migrate-up` | 101 | — | `cd services && $(GO) run ./pokedex/cmd/migrate up` | **DB 書込(migrate)** |
