@@ -826,6 +826,11 @@ func TestConvertRejectsBrokenTypeChart(t *testing.T) {
 		{"表が空", func(in *importer.Input) {
 			in.Calc.TypeChart = map[string]map[string]int{}
 		}},
+		{"全タイプのキーはあるが中身がすべて空(effectiveness が取れなかった形)", func(in *importer.Input) {
+			for atk := range in.Calc.TypeChart {
+				in.Calc.TypeChart[atk] = map[string]int{}
+			}
+		}},
 		{"防御側に types に無いタイプ名がある", func(in *importer.Input) {
 			in.Calc.TypeChart["Fire"]["Testunknown"] = 4
 		}},

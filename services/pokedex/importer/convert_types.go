@@ -118,5 +118,10 @@ func convertTypeChart(table map[string]map[string]int, order []string, nameToID 
 			rows = append(rows, master.TypeChartRow{AttackType: atkID, DefenseType: defID, Code: table[atkName][defName]})
 		}
 	}
+	// キーはそろっていても中身がすべて空(取得側で effectiveness が取れず空オブジェクトに落ちた形)
+	// なら、全組み合わせ等倍になる。等倍でない組が1つも無いタイプ相性は無いので止める。
+	if len(order) > 0 && len(rows) == 0 {
+		return nil, fmt.Errorf("%w: calc の相性表に等倍でない組が1件も無い(取り込むタイプ %d 件。取得元の形の変化を疑う)", ErrInvalidData, len(order))
+	}
 	return rows, nil
 }
