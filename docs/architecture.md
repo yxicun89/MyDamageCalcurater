@@ -17,7 +17,11 @@ flowchart LR
     Balance["balance-svc<br/>services/balance"]
     Speed["speed-svc<br/>services/speed"]
     Judge["judge-svc<br/>services/judge"]
+    Record["record-svc<br/>services/record<br/>(計画中。M2)"]
+    Team["team-svc<br/>services/team<br/>(計画中。M2)"]
     MySQL[("MySQL<br/>pokedex DB")]
+    TiDB[("TiDB<br/>record DB・team DB<br/>(計画中。M2)")]
+    NATS[("NATS JetStream<br/>(計画中。M2)")]
     Import["importer CronJob<br/>(週1回)"]
   end
   Engine["engine (純粋 Go)<br/>engine/"]
@@ -37,6 +41,11 @@ flowchart LR
   Speed -. read model(JSON) .-> Pokedex
   Judge -- 公開API --> Pokedex
   Judge -- 公開API --> Calc
+  GW -. "/api/record・/api/team(計画中)" .-> Record & Team
+  Calc -. "計算イベント発行(計画中)" .-> NATS
+  NATS -. "購読(計画中)" .-> Record & Team
+  Record -.-> TiDB
+  Team -.-> TiDB
 ```
 
 ## コンポーネント
@@ -52,6 +61,8 @@ flowchart LR
 | judge-svc | 素早さ×ダメージ連動の判定(抜けるか・倒せるか)。pokedex-svc・calc-svc の公開 API を呼ぶだけ | 判定 | [services/judge/](../services/judge/README.md) |
 | Web | 画面(API とオフライン WASM を切り替え)。計算・逆算・タイプバランス・素早さの画面を持つ | Web | [web/](../web/README.md) |
 | iOS | iPhoneアプリ。ダメージ計算・逆算・構築のみ(タイプバランス・素早さ・判定は未着手) | iOS | [ios/](../ios/README.md) |
+| record-svc(計画中) | 計算履歴・お気に入り(TiDB record DB)。calc-svc の計算イベントを NATS JetStream 経由で非同期に受ける | 未定(M2) | — |
+| team-svc(計画中) | 構築 CRUD(TiDB team DB。Showdown 形式入出力) | 未定(M2) | — |
 
 ## データの流れ(マスタ)
 
@@ -65,3 +76,15 @@ flowchart LR
 
 - 実マスタ・スナップショットは Git に入れない(ADR-0002)。Git にあるのはコード・schema・架空データ・版の記録だけ。
 - 動作確認の手順は `docs/runbooks/`、進捗は `docs/plan.md`、AI の運用は `docs/ai-shared/COORDINATION.md`。
+
+## Kustomize overlay
+
+`deploy/k8s/base`(gateway・calc・pokedex・web の Deployment/Service/Ingress)と、balance・speed・judge 各サービス自身の
+`deploy/k8s/base`(独立した Ingress)を、環境ごとの overlay で組み合わせる。
+
+| overlay | 用途 |
+|---|---|
+| `overlays/local` | ローカル k3d(`make up`)。架空データの read model・DB を含む |
+| `overlays/cloud` | 私設サービスとして維持する前提(issue #148。ADR-0209 §1・ADR-0210)。gateway の Ingress を `$patch: delete` で除去し public Ingress・LoadBalancer・NodePort を持たない。到達は Tailscale(`tailscale serve`)に任せる |
+
+record-svc・team-svc(M2)の overlay は実装時に追加する。
