@@ -14,6 +14,7 @@ Status(追記): 2026-09-24、getMove(P3-7。APIレーンが`services/pokedex/`�
 Status(追記): issue #104(DB資格情報の最小権限分離)完了・critic PASS(1往復)・**main 統合済み(PR #176)**。`pokedex_reader`/`pokedex_importer`/`pokedex_migrator`の3ロールに分離(ADR-0110)。実クラスタで`SHOW GRANTS`により権限が過不足なく一致することを確認済み。既存クラスタからの無停止移行も実地確認済み。
 Status(追記): issue #109(HTTPタイムアウト・graceful shutdown)完了・critic PASS(1往復。指摘なし)・**main 統合済み(PR #178)**。`newHTTPServer`/`serve`/`runServe`の3層分離(ADR-0111。services/balanceと同じ値)。`terminationGracePeriodSeconds: 30`を追加。実クラスタで再デプロイ・確認済み。
 Status(追記): issue #112(DB接続プール上限)完了・critic PASS(1往復。軽微指摘1件反映)。4環境変数を`services/pokedex/db.OpenPool`経由で適用(ADR-0112)。実クラスタで再デプロイ・確認済み。**main 統合済み(PR #180)**。**これでデータレーン主担当のCodexレビューissue(#104・#106・#109・#112)はすべて完了・main統合済み**。
+Status(追記): issue #102(importer の中断キャッシュ自己回復。ADR-0113)を修正。`showdown-cache.mjs` へ切り出し、一時名+検証+rename。テスト7件を `make test-tools` に接続。
 Next: 他レーンからの依頼待ち。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)
 
 ## API

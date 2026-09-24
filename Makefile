@@ -58,6 +58,7 @@ test-services: ## services のユニットテスト
 .PHONY: test-tools
 test-tools:
 	@cd tools && $(GO) test ./...
+	@node --test tools/importer/showdown-cache.test.mjs
 
 .PHONY: test-scripts
 test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入。ADR-0405。クラスタ・ネットワークに触らない)
