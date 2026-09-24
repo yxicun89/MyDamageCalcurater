@@ -5,11 +5,9 @@
 // 通信できない・応答が読めない・エラー本文の形が不正なときは judge_unavailable(Web 側のコード)にする。
 // 基点 URL(api/config.ts の apiBaseUrl)・端末 ID/セッション ID(api/clientIds.ts の ClientIds)は
 // Web レーン共通のヘルパーをそのまま使う(ADR-0705 §1。あちらは変更しない)。
-//
-// **この時点では未実装のスタブ**(JD5 は spec-writer が受け入れ条件とテストを先に書く段階)。
-// 実装は judgeClient.test.ts を通す形で implementer が入れる。型・パス・コードは契約(ADR-0705 §3)の正。
 
 import type { ClientIds } from "../api/clientIds";
+import { judgeClientText } from "../i18n/ja";
 import type { components } from "./judge.gen";
 
 type Schemas = components["schemas"];
@@ -53,11 +51,65 @@ export const JUDGE_PATHS = {
 /** 通信できない・応答が読めない・エラー本文の形が不正なときの Web 側のコード(ADR-0705 §3)。 */
 export const JUDGE_UNAVAILABLE_CODE = "judge_unavailable";
 
+/** judge_unavailable の失敗(自動の切り替え先は持たない。判定はサーバーでしか行わない)。 */
+export function judgeUnavailableError(): JudgeError {
+  return { code: JUDGE_UNAVAILABLE_CODE, message: judgeClientText.unavailable };
+}
+
+/** サーバーのエラー本文({code, message})の形をしているかの型ガード(speedClient.ts と同じ形)。 */
+function isErrorBody(value: unknown): value is Schemas["Error"] {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return typeof record.code === "string" && typeof record.message === "string";
+}
+
+/** judge_unavailable の失敗(通信できない・応答が読めない・エラー本文の形が不正)。 */
+function unavailableResult<T>(): JudgeResult<T> {
+  return { ok: false, error: judgeUnavailableError() };
+}
+
 /**
- * judge API のクライアント実装(ADR-0705 §3)。
- * **未実装**: judgeClient.test.ts の受け入れ条件を満たす実装を implementer が入れる。
+ * judge API のクライアント実装(ADR-0705 §3)。応答をそのまま運び、Web で判定し直さない。
+ * 通信・応答の失敗は judge_unavailable にし、自動の切り替え先へは移らない。
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- 未実装のスタブ(implementer が input を使う)
 export function createJudgeClient(input: CreateJudgeClientInput): JudgeClient {
-  throw new Error("createJudgeClient is not implemented yet (JD5)");
+  const { baseUrl, fetch: fetchImpl, ids } = input;
+
+  /** JSON を POST し、応答(成功の値、または境界のエラー封筒)を返す。例外を投げない。 */
+  async function postJson<T>(path: string, body: unknown): Promise<JudgeResult<T>> {
+    let response: Response;
+    try {
+      response = await fetchImpl(`${baseUrl}${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Device-Id": ids.deviceId,
+          "X-Session-Id": ids.sessionId,
+        },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      return unavailableResult();
+    }
+    let parsed: unknown;
+    try {
+      parsed = await response.json();
+    } catch {
+      return unavailableResult();
+    }
+    if (!response.ok) {
+      return isErrorBody(parsed)
+        ? { ok: false, error: { code: parsed.code, message: parsed.message } }
+        : unavailableResult();
+    }
+    return { ok: true, value: parsed as T };
+  }
+
+  return {
+    outspeedAndKo(request) {
+      return postJson(JUDGE_PATHS.outspeedAndKo, request);
+    },
+  };
 }

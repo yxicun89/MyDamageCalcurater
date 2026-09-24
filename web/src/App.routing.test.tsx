@@ -273,3 +273,32 @@ describe("SP3 素早さのタブ", () => {
     expect(await screen.findByRole("region", { name: "自分のポケモン" })).toBeInTheDocument();
   });
 });
+
+// JD5(ADR-0705 §1): 判定の画面。ルート表に1件足し、タブ「判定」と /judge で開く。
+// 画面は「判定する」を押すまで judge API を呼ばない(ADR-0705 §7)ので、ここでは fetch が呼ばれないことを確かめる。
+describe("JD5 判定のタブ", () => {
+  test("タブ「判定」があり、/judge を直接開くと選択され、自分のポケモンの領域を出す(judge はまだ呼ばない)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    setPath("/judge");
+    render(<App engine={createFakeEngine()} />);
+
+    expect(await screen.findByRole("tab", { name: "判定" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "計算" })).toHaveAttribute("aria-selected", "false");
+    expect(await screen.findByRole("region", { name: "自分のポケモン" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/judge");
+    expect(document.title).toBe("判定 | pokecalc");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test("判定のタブのクリックで /judge を pushState し、画面を切り替える", async () => {
+    const user = userEvent.setup();
+    render(<App engine={createFakeEngine()} />);
+    await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
+    const pushSpy = vi.spyOn(window.history, "pushState");
+
+    await user.click(screen.getByRole("tab", { name: "判定" }));
+    expect(window.location.pathname).toBe("/judge");
+    expect(pushSpy).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole("region", { name: "自分のポケモン" })).toBeInTheDocument();
+  });
+});
