@@ -69,7 +69,12 @@ make build
 変更した Go ファイルは `gofmt` します。`make fmt` は広い範囲を変更するため、既存差分がある場合は
 変更ファイルに絞ってください。API 変更は `api/openapi.yaml` が先で、その後 `make gen` です。
 
-`make dev` / `make e2e` / `make wasm` / `make ios-test` / `make import` / `make assets` や
+`make e2e` は常時3件(`web-e2e`・`web-e2e-online`・`web-e2e-balance`。k3d クラスタ不要)の Playwright を必ず実行し、
+kubectl の現在のコンテキストが `k3d-$CLUSTER` のときだけ既存クラスタが要る3件(`api-smoke`・`web-k3d-smoke`・`web-k3d-e2e`)
+を追加で実行します。クラスタが無ければスキップして成功しますが、`E2E_REQUIRE_K3D=1` を付けるとスキップせず失敗で
+終わります(リリース前などクラスタ分まで確かめたいとき用)。詳細は [ADR-0306](docs/adr/0306-root-e2e-wiring.md)。
+
+`make dev` / `make wasm` / `make ios-test` / `make import` / `make assets` や
 TypeScript・sqlc の生成は未実装部分があります。Makefile・スクリプトの内容を確認してください。
 正常終了でも未実装メッセージやテスト 0 件を合格として記録しません。
 Web の package.json とアプリが整備されたら、そこに定義された test/lint/typecheck/build を確認します。
