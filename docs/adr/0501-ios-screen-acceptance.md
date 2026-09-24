@@ -1346,3 +1346,217 @@ View 側(`ios/PokeCalc`)で置き換える呼び出し(裸の `Task {` をやめ
   A7 を守れば通り続ける。もし実装の途中でこれらが落ちたら、それは A7 を破った合図なので、
   テストを直さず実装を直すこと。
 - 演出・reduced motion・アクセシビリティ通知の挙動は変えない(issue #113 の受け入れ条件)。
+
+## issue #110 の受け入れ条件(iOS 側。calc の候補・観測の件数上限。実装完了)
+
+- 関連: issue #110(API レーン主担当)、ADR-0208、PR #130(`api/openapi.yaml` に上限を追加)、PR #142(Web の対応)、
+  docs/ai-shared/DECISIONS.md 2026-09-23「calc の候補・観測件数に上限を置く」、docs/plan.md P6-6
+- 契約は**変えない**(`api/openapi.yaml` は API レーンのもの。iOS は追従するだけ)。
+
+### 0. 何が壊れているか
+
+`api/openapi.yaml` は `ReverseRequest.observations` に `maxItems: 16`、`ReverseRequest.itemCandidates` と
+`BulkCalcRequest.itemVariants` に `maxItems: 64` + `uniqueItems: true` を持つ。超えると API は 400 `invalid_input`。
+iOS は上限を一切見ていないので、次の2つが黙って壊れる:
+
+1. `ReverseViewModel.addObservation()` は無制限に行を足せる。17行目以降に有効な値を入れた瞬間、逆算が
+   400 になって画面がエラーに落ちる(利用者から見ると「観測を足したら計算が止まった」)。
+2. 持ち物候補(`toggleOpponentItemCandidate`)と、計算画面の比較トグル(`toggleDefenderItemComparison`)は
+   持ち物マスタ全件(実データで 166 件)から選べる。64 を超えた時点で同じく 400 になる。
+
+engine(WASM)・calc-svc・Web は対応済みで、iOS だけが残っている。上限に当たることが分かるのは要求を
+組み立てる画面側だけなので、ここで止めて**理由を見せる**(黙って壊れない・黙って切り捨てない)。
+
+### 1. 受け入れ条件(検証可能な形)
+
+- **A1** `PokeCalcCore` の `RequestLimits` が `maxObservations = 16` / `maxItemCandidates = 64` /
+  `maxItemVariants = 64` を持ち、値は `api/openapi.yaml` の同名フィールドの `maxItems` と一致する。
+  ViewModel・View のどこにも 16 / 64 / 63 を直書きしない(coding-rules §2)。
+- **A2** 観測の行は最大 `RequestLimits.maxObservations` 行。行数がそれに達すると
+  `ReverseViewModel.observationsReachedLimit == true` になり、`addObservation()` は**何もしない**
+  (行数も各行の id も変わらず、`reverse` も呼ばれない)。
+- **A3** 上限に達した状態から行を1つ削ると `observationsReachedLimit` は false に戻り、また追加できる。
+- **A4** `ReverseRequest.observations` の件数は常に `maxObservations` 以下(16行すべてに有効値を入れても超えない)。
+- **A5** 相手の持ち物候補は、送る配列の先頭に入る「持ち物なし」(null)を**1件と数えて**
+  `maxItemCandidates` を超えない。したがってトグルで選べる ID の数は `maxSelectableItemCandidates`
+  (= `maxItemCandidates - 1` = 63)。`ReverseRequest.itemCandidates` は常に 64 件以下・重複なし。
+- **A6** 選択が `maxSelectableItemCandidates` に達しているとき、`toggleOpponentItemCandidate(itemId:)` の
+  **ON 操作は拒否**される(`opponentItemCandidateIds` が変わらず、`reverse` も呼ばれない)。
+  **OFF(選択解除)は常に通る**。解除すると `opponentItemCandidatesReachedLimit` が false に戻り、
+  従来どおり再計算が1回走る。
+- **A7** 上限に達していないときの振る舞いは何も変わらない(マスタ順・null 先頭・トグル1回で計算1回・
+  観測の追加/削除/検証・エラーの出し分け)。既存テストは1つも変更せず緑のままであること。
+- **A8** 計算画面の `comparedDefenderItemIds` → `BulkCalcRequest.itemVariants` も A5・A6 と同じ規則
+  (`maxItemVariants` / `comparedDefenderItemsReachedLimit` / ON 拒否 / OFF 常時可 / 要求は 64 件以下)。
+
+### 2. 判断: 定数の置き場所は `RequestLimits`(`ReverseLimits` ではない)
+
+新規ファイル `PokeCalcKit/Sources/PokeCalcCore/RequestLimits.swift` に `public enum RequestLimits` を1つ置く。
+依頼時の仮称は `ReverseLimits` だったが、**逆算専用ではない**ことが調査で分かったので名前を変えた:
+`BulkCalcRequest.itemVariants` の 64 件は計算画面(`CalcViewModel`)の比較トグルが踏みうる(6章)。
+Web の `web/src/domain/requestLimits.ts` と同じ発想・同じ粒度にして、レーン間で語彙をそろえる。
+既存の `ObservationLimits`(`ObservationInput.swift`)とは別物なので統合しない: あちらは観測**値**の
+範囲(1〜100% など)、こちらは配列の**件数**の上限で、正とする契約の場所も違う。
+
+`api/openapi.yaml` を実行時に読めないのは Web と同じなので、この定数は契約の**写し**である。
+ただし `PokeCalcCoreTests` は `make ios-test-unit` でシミュレータ上でも走り、そこからリポジトリのファイルを
+読めることを前提にできない(サンドボックス)ので、YAML との突き合わせは XCTest ではなくホスト側の
+`ios/scripts/check-request-limits.sh`(`make ios-check-request-limits`。`make ios-test` の一部)で行う。
+担保は (1) このスクリプトが `api/openapi.yaml` の3つの `maxItems` と `RequestLimits` の値を比べ、ずれ・欠落で
+失敗する(定数・契約を書き換える変異4通りで失敗することを確認済み)、(2) XCTest は 16 / 64 を**リテラルで**
+固定する、(3) 本 ADR と定数のコメントに「正は `api/openapi.yaml`」と書く、の3点。
+(当初は Web の `requestLimits.test.ts` に任せる案だったが、あれは Web の定数しか見ないので iOS の写しのずれは
+検出できない。引き継ぎ時の検証で気づき、iOS 側にも検査を置いた。)
+
+### 3. 判断: null 枠を勘定に入れる(選べるのは 63 件)
+
+`ReverseViewModel.buildRequest` は候補が1つでもあれば `[nil] + opponentItemCandidateIds` を送る
+(`CalcViewModel` の `itemVariants` も同じ)。`uniqueItems` は null どうしの重複も禁じているので、
+null は**1件として数える**。そこで
+
+```swift
+public static let maxSelectableItemCandidates = maxItemCandidates - 1  // 63
+public static let maxSelectableItemVariants = maxItemVariants - 1      // 63
+```
+
+を派生させ、トグル側はこちらを見る。64 件選ばせてから送信時に1件落とす、という実装は A6 の
+「選んだのに反映されない状態を作らない」に反するので採らない。
+
+### 4. 判断: 観測は「追加ボタンを無効化 + 理由表示」(Web と同じ)
+
+観測行の追加は明示的な1操作で、上限に当たるのは `addObservation()` の1か所だけなので、Web の
+`canAddObservation` と同じ「その操作をさせない」方式にする。ViewModel は
+`observationsReachedLimit: Bool`(issue #68 の `speciesSearchReachedLimit` / `moveSearchReachedLimit` と
+同じ `…ReachedLimit` の語彙)を1つだけ公開し、View が `.disabled(viewModel.observationsReachedLimit)` と
+理由文言の表示に使う。`canAddObservation` のような否定形の別名は作らない(同じ事実に2つ名前を付けない)。
+
+`addObservation()` 自体にも `guard` を置く(View を直さなくても不正な状態を作れないようにする。
+XCTest は ViewModel だけを叩くので、ここに guard が無いと A2 を確かめられない)。
+
+行数(≤16)を抑えれば、実際に送る有効な観測(`currentSendKey`)は必ずそれ以下になるので、
+送信直前の再チェックは要らない(A4 はこの不変条件の確認)。
+
+### 5. 判断: 持ち物候補は (b)「上限で ON 操作を拒否」。Web の決定的な切り捨てとは**あえて変える**
+
+依頼の選択肢 (a)(Web と同じ、送信直前にマスタ順で先頭 64 件へ絞り込み + 絞り込んだことを表示)ではなく
+**(b)** を採る。理由:
+
+- Web の `reverseItemCandidates()` が切り捨て方式なのは、Web の候補選択がチェックボックス群の
+  「選択状態」から毎回導出されるためで、iOS のトグルとは操作の粒度が違う。iOS は1タップ = 1トグルなので、
+  「タップして選択状態になったのに、送るときには落ちている」という状態を作らずに済む。
+- (b) なら `opponentItemCandidateIds`(画面が選択中と見せている集合)と要求の `itemCandidates` が
+  常に一致する。(a) だと2つがずれ、`ReverseResultDisplay` が候補の持ち物名を引くときの前提も
+  「表示と要求は同じ集合」から崩れる。ずれる状態を作らないほうが、後から読む人にとって安全。
+- 上限に達したことは `opponentItemCandidatesReachedLimit` で画面に出す(黙って拒否しない)。
+  DECISIONS.md 2026-09-23 の要件「黙って切り捨てず、明示的なエラーか決定的な絞り込み」は、
+  (b)(= そもそも超えさせない + 理由表示)でも満たす。
+
+Web と iOS で**画面の振る舞いが違う**ことは承知のうえの判断で、ここに記録しておく。どちらも
+「64 件を超えた要求を送らない」「利用者が理由に気づける」という issue #110 の要求は満たす。
+
+63 件も選ぶのは現実的な操作ではない(実データの持ち物は 166 件で、逆算の候補として意味があるのは
+数件〜十数件)。上限は「壊れないための柵」であって、通常の操作では踏まない。
+
+### 6. 判断: `itemVariants` も iOS の対象(使っている)
+
+依頼時点では「iOS が `itemVariants` を使っているか未確認」だったが、使っている:
+`CalcViewModel.buildRequest`(現 486〜491 行)が `comparedDefenderItemIds` から
+`[nil] + ids` を組み立てて `BulkCalcRequest.itemVariants` に入れている。入口は
+`toggleDefenderItemComparison(itemId:)` で、こちらも持ち物マスタ全件からトグルできる。
+したがって逆算と**同じ**規則を計算画面にも入れる(A8)。「iOS は使っていないので対応不要」とは書けない。
+
+### 7. 今回対応しないもの(理由つき)
+
+- **`presets`(8 件 + unique)**: `CalcViewModel.buildRequest` は常に `presets: []`(既定セット)を送り、
+  画面にプリセットを複数選ぶ入口が無い。iOS から上限を踏む経路が存在しないので何もしない。
+- **`maxCandidates`(0〜128)**: `ReverseViewModel.buildRequest` は定数 `0`(全件)しか送らず、
+  画面から変えられない。範囲外の値を作れないので何もしない。
+- **`Generated/`・`api/openapi.yaml`**: 触らない。生成型(`[Swift.String?]?`)は件数を表現できないので、
+  上限は手書きの `RequestLimits` で持つしかない(`make gen` は不要)。
+- **`observations` の重複**: 契約は `uniqueItems` を付けていない(同じ観測の繰り返しは矛盾しない)ので、
+  重複の抑止はしない。
+
+### 8. implementer が足す API(テストが固定している名前)
+
+新規 `PokeCalcKit/Sources/PokeCalcCore/RequestLimits.swift`:
+
+```swift
+public enum RequestLimits {
+    public static let maxObservations = 16          // ReverseRequest.observations.maxItems
+    public static let maxItemCandidates = 64        // ReverseRequest.itemCandidates.maxItems
+    public static let maxItemVariants = 64          // BulkCalcRequest.itemVariants.maxItems
+    /// 送る配列の先頭に入る null(持ち物なし)の1件を除いた、トグルで選べる ID の数(3章)。
+    public static let maxSelectableItemCandidates = maxItemCandidates - 1
+    public static let maxSelectableItemVariants = maxItemVariants - 1
+}
+
+/// 上限に達したことを画面に出す文言(`MasterSearchLabels` と同じ理由でコードに1か所持つ)。
+public enum RequestLimitLabels {
+    public static let observationsReachedLimit: String
+    public static let itemCandidatesReachedLimit: String
+    public static let itemVariantsReachedLimit: String
+}
+```
+
+文言は件数を `RequestLimits` から埋め込む(数字を文字列に直書きしない)。XCTest は「空でないこと」と
+「その件数が文言に含まれること」だけを固定し、言い回しは実装者が `docs/design.md` の調子に合わせてよい
+(既定案: `"観測は最大16件までです"` / `"持ち物の候補は「持ち物なし」を含めて最大64件までです"` /
+`"比較する持ち物は「持ち物なし」を含めて最大64件までです"`)。
+
+ViewModel に足すメンバー:
+
+| メンバー | 画面 | 意味 |
+|---|---|---|
+| `var observationsReachedLimit: Bool` | Reverse | 観測行が `maxObservations` に達した(`private(set)` でなく計算プロパティでよい) |
+| `func addObservation()`(既存)に guard | Reverse | 上限に達していたら何もしない(A2) |
+| `var opponentItemCandidatesReachedLimit: Bool` | Reverse | 選択が `maxSelectableItemCandidates` に達した |
+| `func toggleOpponentItemCandidate(itemId:)`(既存)に guard | Reverse | 上限到達中の ON を拒否。**早期 return は `beginInput()` より前**に置き、要求も世代も動かさない(A6) |
+| `var comparedDefenderItemsReachedLimit: Bool` | Calc | 選択が `maxSelectableItemVariants` に達した |
+| `func toggleDefenderItemComparison(itemId:)`(既存)に guard | Calc | 同上。現在の実装は先頭で `beginInput()` を呼ぶので、**guard をその前に移す** |
+
+### 9. accessibilityIdentifier と文言(View の担当)
+
+| identifier | 要素 |
+|---|---|
+| `reverseAddObservationButton`(既存) | 上限に達したら `.disabled(true)` にする |
+| `reverseObservationLimitHint` | 観測の上限の理由文言(上限に達したときだけ出す) |
+| `reverseItemCandidateLimitHint` | 相手の持ち物候補の上限の理由文言(同上) |
+| `calcItemVariantLimitHint` | 計算画面の比較トグルの上限の理由文言(同上) |
+| `reverseOpponentItemToggle-<id>` / `defenderItemToggle-<id>`(既存) | 未選択のチップは上限到達中 `.disabled(true)`。**選択済みのチップは常に有効**(解除できる) |
+
+文言は `danger` ではなく `textSecondary` で出す(エラーではなく案内。`MasterSearchLabels` の案内文言と
+同じ扱い。`ErrorBannerView` / `calcErrorMessage` は使わない)。`ChipButton` に `isEnabled: Bool = true` を
+足して `.disabled(!isEnabled)` と見た目の減光を足す(既存の呼び出しは既定値でそのまま動く)。
+
+XCUITest の追加は任意(範囲外)。既存の XCUITest は上限に達しない操作しかしないので、影響しない。
+
+### 10. XCTest(spec-writer が追加。実装完了。critic 指摘で1本ずつ追補)
+
+新規3ファイル。すべて `StubPokeCalcService`(数値やモックの JSON に依存しない)。
+
+- `RequestLimitsTests.swift` — A1。契約値をリテラルで固定し、派生値(63)と文言の件数埋め込みを確かめる。
+- `ReverseViewModelLimitTests.swift` — A2〜A7。
+  1. `testObservationRowsCanGrowUpToTheLimit`
+  2. `testAddObservationBeyondTheLimitIsIgnored`
+  3. `testRemovingAnObservationBelowTheLimitAllowsAddingAgain`
+  4. `testRequestNeverExceedsTheObservationLimit`
+  5. `testSelectingUpToTheItemCandidateLimitKeepsTheRequestWithinTheContract`
+  6. `testTogglingOnBeyondTheItemCandidateLimitIsRejectedWithoutRequesting`
+  7. `testDeselectingIsAlwaysAllowedEvenAtTheLimit`
+  8. `testTogglingBelowTheLimitStillWorksAsBefore`(回帰)
+  9. `testRejectedToggleDoesNotAdvanceGenerationOfAnInFlightReverse`(critic 指摘の回帰。8章「早期 return は
+     `beginInput()` より前」を固定する。`reverse` を `.manual` にして進行中にした状態で ON 拒否を挟み、
+     その進行中の応答がちゃんと反映される〈`isLoading` が解ける〉ことを確かめる。guard を
+     `beginInput()` の後ろへ動かすミューテーションで実際に red になることを確認済み)
+- `CalcViewModelLimitTests.swift` — A8。5〜8 と同じ4本を `itemVariants` 側で、9 と同じ趣旨の
+  `testRejectedToggleDoesNotAdvanceGenerationOfAnInFlightCalc` を追加。
+
+テスト用の架物: `StubMaster.makeService(items:)` に `RequestLimits.maxItemCandidates + 6` 件の架空の持ち物を
+渡す(`StubPokeCalcService` / `StubMaster` は**変更しない**。既存の下ごしらえで足りる)。
+
+### 11. 範囲外・申し送り
+
+- `api/openapi.yaml`・`engine/`・`services/`・`web/` は触らない。`make gen` も不要(7章)。
+- 既存テスト(`ReverseViewModelTests` / `CalcViewModelTests` / 各 `…SearchTests` / `…CancellationTests`)は
+  **変更しない**。A7 を守れば通り続ける。落ちたらテストではなく実装を直すこと。
+- 上限に達したときに「どれを外せばよいか」を提案する、といった手助けは今回やらない(まず壊れないこと)。

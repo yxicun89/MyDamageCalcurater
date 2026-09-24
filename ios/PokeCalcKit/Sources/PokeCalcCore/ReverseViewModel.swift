@@ -249,8 +249,21 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
 
     // MARK: - 観測の操作(規則5: 送る観測の列が変わったときだけ reverse を1回呼ぶ)
 
-    /// 観測欄を1行追加する(空の行。送る観測は変わらないので計算しない)。
+    /// 観測欄が上限(`RequestLimits.maxObservations`)に達しているか(issue #110 A2)。
+    public var observationsReachedLimit: Bool {
+        observations.count >= RequestLimits.maxObservations
+    }
+
+    /// 相手の持ち物候補の選択が上限(`RequestLimits.maxSelectableItemCandidates`)に達しているか
+    /// (issue #110 A5・A6)。
+    public var opponentItemCandidatesReachedLimit: Bool {
+        toggledOpponentItemIds.count >= RequestLimits.maxSelectableItemCandidates
+    }
+
+    /// 観測欄を1行追加する(空の行。送る観測は変わらないので計算しない)。上限に達していたら何もしない
+    /// (issue #110 A2)。
     public func addObservation() {
+        guard !observationsReachedLimit else { return }
         observations.append(freshObservationRow())
     }
 
@@ -404,10 +417,12 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
     }
 
     /// 相手の持ち物候補のトグル。`opponentItemCandidateIds` はトグルした順ではなく持ち物マスタの順。
+    /// 上限到達中の ON 操作は拒否する(OFF は常に通す。issue #110 A6)。
     public func toggleOpponentItemCandidate(itemId: String) async {
         if toggledOpponentItemIds.contains(itemId) {
             toggledOpponentItemIds.remove(itemId)
         } else {
+            guard !opponentItemCandidatesReachedLimit else { return }
             toggledOpponentItemIds.insert(itemId)
         }
         opponentItemCandidateIds = itemOptions.map(\.id).filter { toggledOpponentItemIds.contains($0) }

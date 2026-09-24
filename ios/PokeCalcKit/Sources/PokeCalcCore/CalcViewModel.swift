@@ -78,6 +78,12 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     /// `comparedDefenderItemIds` を作るための、トグルされた持ち物 ID の集合(順序は持たない)。
     private var toggledDefenderItemIds: Set<String> = []
 
+    /// 比較する持ち物の選択が上限(`RequestLimits.maxSelectableItemVariants`)に達しているか
+    /// (issue #110 A8)。
+    public var comparedDefenderItemsReachedLimit: Bool {
+        toggledDefenderItemIds.count >= RequestLimits.maxSelectableItemVariants
+    }
+
     // MARK: - 構築から個体を呼び出す(P6-2d)
 
     /// 構築の一覧から作った選択肢(メンバーが0体の構築は含まない)。`teamStore` が nil、
@@ -253,13 +259,15 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     }
 
     /// 比較する持ち物のトグル。`comparedDefenderItemIds` はトグルした順ではなく持ち物マスタの順(規則5)。
+    /// 上限到達中の ON 操作は拒否する(OFF は常に通す。issue #110 A8)。
     public func toggleDefenderItemComparison(itemId: String) async {
-        let token = beginInput()
         if toggledDefenderItemIds.contains(itemId) {
             toggledDefenderItemIds.remove(itemId)
         } else {
+            guard !comparedDefenderItemsReachedLimit else { return }
             toggledDefenderItemIds.insert(itemId)
         }
+        let token = beginInput()
         comparedDefenderItemIds = itemOptions.map(\.id).filter { toggledDefenderItemIds.contains($0) }
         await recalculate(token: token)
     }
