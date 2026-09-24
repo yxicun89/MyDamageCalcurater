@@ -27,6 +27,10 @@ prometheus:
     # kube-prometheus-stack の release ラベルを持たない。既定(release ラベル必須)のままだと
     # 拾われないため、release ラベルを問わず全 ServiceMonitor を対象にする。
     serviceMonitorSelectorNilUsesHelmValues: false
+    # 同じ理由で、計算API SLO の PrometheusRule(deploy/k8s/base/observability/prometheusrules/)も
+    # release ラベルを持たない。既定のままだと拾われないため、release ラベルを問わず全 PrometheusRule を
+    # 対象にする(ADR-0407 §3)。
+    ruleSelectorNilUsesHelmValues: false
 
 alertmanager:
   ingress:

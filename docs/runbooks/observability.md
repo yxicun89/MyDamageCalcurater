@@ -61,7 +61,8 @@ kubectl -n observability port-forward svc/kube-prometheus-stack-prometheus 9090:
 `http://localhost:9090/targets` で6サービス(balance・speed・judge・gateway・pokedex・calc)の ServiceMonitor が
 `UP` になっていることを確認する。Grafana の Explore で データソース `Loki` を選び、適当なクエリ(例
 `{namespace="pokecalc"}`)で各サービスのログが表示されることを確認する(Alloy が正しく Loki へ送れているかの確認)。
-終わったら `kill %1 %2` で port-forward を止める。
+計算API の SLO(ADR-0407。P7-2)は、Grafana のダッシュボード一覧から `calc-slo` を開くと、p99レイテンシ(100msの
+しきい値線つき)と可用性の時系列・直近値が見られる。終わったら `kill %1 %2` で port-forward を止める。
 
 ## 6. バージョンを上げるとき
 
