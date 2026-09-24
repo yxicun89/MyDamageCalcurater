@@ -128,6 +128,13 @@ func TestItemResistBerry(t *testing.T) {
 	if r2.Rolls[15] != 90 { // 等倍90のまま(未発動)
 		t.Errorf("resist berry should not trigger on neutral rolls[15]=%d want 90", r2.Rolls[15])
 	}
+	// ノーマルの半減きのみは等倍でも発動する(issue #303)。ノーマル→エスパー等倍 90 → ×0.5=45
+	in3 := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeNormal)
+	in3.Defender.Item = &Item{ID: "chilan", Effect: &ItemEffect{ResistBerryType: TypeNormal}}
+	r3, _ := calcDamage(in3)
+	if r3.Rolls[15] != 45 {
+		t.Errorf("normal resist berry should trigger on neutral rolls[15]=%d want 45", r3.Rolls[15])
+	}
 }
 
 func TestAbilityAdaptability(t *testing.T) {

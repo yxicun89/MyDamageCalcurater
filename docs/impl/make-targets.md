@@ -19,7 +19,7 @@
 
 | ターゲット | 前提条件(全 Makefile の合算) | 追加のレシピ |
 |---|---|---|
-| `test` | test-engine test-services test-tools test-scripts balance-test speed-test judge-test web-test | なし |
+| `test` | test-engine test-golden test-services test-tools test-scripts balance-test speed-test judge-test web-test | なし |
 | `lint` | speed-lint judge-lint web-lint balance-lint | あり(gofmt・vet・構文検査・k8s-render・check-publishable・selftest。`Makefile:67-80`) |
 | `build` | speed-build judge-build web-build balance-build | あり(engine・services・tools の go build) |
 | `gen` | gen-go gen-sql gen-ts | なし |
@@ -44,7 +44,7 @@
 | `gen-go` | 30 | — | `cd services && $(GO) tool oapi-codegen -config internal/api/cfg.yaml ../api/openapi.yaml ⏎ echo "gen-go: services/internal/api/openapi.gen.go を生成"` | 生成物を書換 |
 | `gen-sql` | 35 | — | `cd tools && $(GO) tool sqlc generate -f ../services/pokedex/db/sqlc.yaml ⏎ echo "gen-sql: services/pokedex/internal/store を生成"` | 生成物を書換 |
 | `gen-ts` | 40 | — | `test -x web/node_modules/.bin/openapi-typescript \|\| { echo "gen-ts: web の依存が無い(先に make web-install)" >&2; exit 1; } ⏎ cd web && npx --no-install openapi-typescript ../…` | 生成物を書換 |
-| `test` | 48 | test-engine test-services test-tools test-scripts | (レシピなし) | なし(前提条件のみ) |
+| `test` | 48 | test-engine test-golden test-services test-tools test-scripts | (レシピなし) | なし(前提条件のみ) |
 | `test-engine` | 51 | — | `cd engine && $(GO) test ./...` | なし(読み取り/検査) |
 | `test-services` | 55 | — | `cd services && $(GO) test ./...` | なし(読み取り/検査) |
 | `test-tools` | 59 | — | `cd tools && $(GO) test ./...` | なし(読み取り/検査) |

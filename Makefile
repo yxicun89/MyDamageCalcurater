@@ -45,7 +45,7 @@ gen-ts: ## TypeScript 型を openapi.yaml から生成(web/src/api/openapi.gen.t
 
 ## --- テスト -----------------------------------------------------------
 .PHONY: test
-test: test-engine test-services test-tools test-scripts ## 全ユニットテスト(実装済みGoモジュール・ルート scripts/ のシェル)
+test: test-engine test-golden test-services test-tools test-scripts ## 全ユニットテスト(実装済みGoモジュール・engine のゴールデン・ルート scripts/ のシェル)
 
 .PHONY: test-engine
 test-engine: ## engine のユニットテスト

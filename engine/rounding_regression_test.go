@@ -57,3 +57,29 @@ func TestCalcDamageRejectsInvalidLevelAndStats(t *testing.T) {
 		t.Error("accepted negative base stat")
 	}
 }
+
+// TestChainModsRoundHalfUp は補正の連結の各ステップが (M*mod + 2048) >> 12(0.5 を切り上げる丸め)で
+// あることを固定する(@smogon/calc の chainMods と同じ。issue #303)。切り捨てに変わると golden が無くても落ちる。
+func TestChainModsRoundHalfUp(t *testing.T) {
+	tests := []struct {
+		name string
+		mods []int
+		want int
+	}{
+		{"empty is identity", nil, Modifier4096},
+		{"4096 is skipped", []int{Modifier4096, 5324}, 5324},
+		// 4915×5324/4096 = 6388.54… → 6389(切り捨てなら 6388)
+		{"fraction above half rounds up", []int{4915, 5324}, 6389},
+		// 2048×6145/4096 = 3072.5 ちょうど → 3073(連結は半分ちょうども切り上げる。pokeRound とは逆)
+		{"exact half rounds up", []int{ModifierHalf, 6145}, 3073},
+		// 5324×5324/4096 = 6920.16… → 6920
+		{"fraction below half rounds down", []int{5324, 5324}, 6920},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := chainMods(tt.mods); got != tt.want {
+				t.Fatalf("chainMods(%v)=%d want %d", tt.mods, got, tt.want)
+			}
+		})
+	}
+}
