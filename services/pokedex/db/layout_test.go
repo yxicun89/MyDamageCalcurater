@@ -863,3 +863,52 @@ func TestUpScriptKeepsSecretValuesOutOfArgvAndLogs(t *testing.T) {
 		t.Error("Secret の値を一時ファイルに書くなら trap で必ず消す")
 	}
 }
+
+// TestUpScriptAppliesRecordTeamJobsWithNamespace は record/team の migrate Job が
+// pokecalc namespace に確実に入ることを検査する(ADR-0211 §3.2・§9。critic レビューで
+// 判明: job-migrate.yaml は kustomize の namespace transformer を経由しない単独 apply の
+// ため、`-n pokecalc` を明示しないと k3d の既定 namespace〈default〉に作られてしまう)。
+func TestUpScriptAppliesRecordTeamJobsWithNamespace(t *testing.T) {
+	s := readRepoFile(t, "scripts/up.sh")
+	for _, svc := range []string{"record", "team"} {
+		re := regexp.MustCompile(`kubectl\s+-n\s+pokecalc\s+apply\s+-f\s+deploy/k8s/base/` + svc + `/job-migrate\.yaml`)
+		if !re.MatchString(s) {
+			t.Errorf("scripts/up.sh が deploy/k8s/base/%s/job-migrate.yaml を -n pokecalc 付きで apply していない", svc)
+		}
+	}
+}
+
+// TestTidbOverlayHasNamespace は deploy/k8s/overlays/local/tidb が独立した kustomization
+// として apply される(メインの overlays/local には含めない。ADR-0211 §3.2 実装時の追記)ため、
+// 自分自身で namespace: pokecalc を明示していることを検査する(無いと TidbCluster/
+// TidbInitializer が既定 namespace に作られ、up.sh の -n pokecalc な待ち・削除と食い違う)。
+func TestTidbOverlayHasNamespace(t *testing.T) {
+	s := readRepoFile(t, "deploy/k8s/overlays/local/tidb/kustomization.yaml")
+	if !regexp.MustCompile(`(?m)^namespace:\s*pokecalc\s*$`).MatchString(s) {
+		t.Error("deploy/k8s/overlays/local/tidb/kustomization.yaml に namespace: pokecalc が無い")
+	}
+}
+
+// TestRecordTeamJobsDoNotCrossReferenceSecrets は ADR-0211 AC-T7(record の Pod からは
+// record-db-auth だけを参照し、team-db-auth・tidb-root-auth のキーを一切参照しない。team も対称)を
+// 検査する(CLAUDE.md 絶対ルール4「サービスは自分のDBにだけ触る」を資格情報の面から固定する)。
+func TestRecordTeamJobsDoNotCrossReferenceSecrets(t *testing.T) {
+	cases := []struct {
+		file      string
+		forbidden []string
+	}{
+		{"deploy/k8s/base/record/job-migrate.yaml", []string{"team-db-auth", "tidb-root-auth"}},
+		{"deploy/k8s/base/team/job-migrate.yaml", []string{"record-db-auth", "tidb-root-auth"}},
+	}
+	for _, tc := range cases {
+		s := readRepoFile(t, tc.file)
+		for _, name := range tc.forbidden {
+			// secretKeyRef.name の値としての参照だけを見る(コメントで「参照しない」と
+			// 説明のために名前を書いているだけの行は誤検知しない)。
+			re := regexp.MustCompile(`name:\s*` + name + `\b`)
+			if re.MatchString(s) {
+				t.Errorf("%s が secretKeyRef.name として %s を参照している(自分の Secret 以外を参照しない。ADR-0211 AC-T7)", tc.file, name)
+			}
+		}
+	}
+}

@@ -456,3 +456,27 @@ TiDB クラスタ・データ自体の新規作成(クラスタ削除・DB の�
   kustomize overlay の `resources` に含めず、TidbInitializer 完了待ちの後に個別 apply する運用に修正
   (含めると Initializer 完了前に Job が動き出し `Unknown database` で失敗しうるため)。
   `job/<initializer名>` のプレースホルダ表記を明確化。
+- 2026-09-24 k8s マニフェスト・`up.sh` 配線の実装(critic レビュー)で判明した、設計時には
+  気づけなかった実装上の誤りを修正:
+  - `TidbInitializer` の `passwordSecret` は Secret の**キー名をそのままユーザー名として**扱う
+    (TiDB Operator v1.6.6 のソース `pkg/manager/member/startscript/v1/template.go` で確認)。
+    キー名を `root-password` としていたのは誤りで、`root` に修正(§3.2・`scripts/up.sh` の
+    `tidb-root-auth` 作成箇所)。
+  - `TidbInitializer` の `image` に `mysql:9.7.2`(サーバイメージ)を指定していたのは誤り。
+    Operator の初期化スクリプトは python + `MySQLdb` を要求する(同ソース `pkg/manager/member/
+    tidb_init_manager.go`)ため、上流の `examples/initialize`・`manifests/initializer` が指す
+    `tnir/mysqlclient` に変更し、digest を固定した(§3.2)。
+  - `deploy/k8s/overlays/local/tidb/kustomization.yaml` に `namespace: pokecalc` が無く、
+    独立した kustomization として apply すると k3d の既定 namespace(`default`)に作られ、
+    `up.sh` の `-n pokecalc` な待ち・削除と食い違っていたため追加。
+  - record/team の migrate Job の initContainer が到達性確認のためだけに `tidb-root-auth` を
+    参照していたのは AC-T7 違反(§4 の「root 相当は migrate Job にだけ渡る」という境界は
+    「自分の Secret の migrate Job」を指し、他サービスの Secret ではない)。`mysqladmin ping` は
+    認証に失敗してもサーバが応答していれば成功する(終了コード0)仕様のため、資格情報無しの
+    到達性確認に変更した。
+  あわせて、このクラスの誤り(namespace 不一致・資格情報の越境)を静的に検出する回帰テストを
+  `services/pokedex/db/layout_test.go` に追加(`TestUpScriptAppliesRecordTeamJobsWithNamespace`・
+  `TestTidbOverlayHasNamespace`・`TestRecordTeamJobsDoNotCrossReferenceSecrets`)。
+  `scripts/check-publishable.sh` の B(秘密らしき文字列)許可リストに `tidb-root-auth`(Secret 名の
+  参照)を追加し、シェル変数参照の許可条件を「値の末尾が `${...}`」から「値の全体が `${...}`」に
+  絞った(本物の値へ無害な変数参照を継ぎ足す細工を通さないため。self-test に確認ケースを追加)。

@@ -1,7 +1,9 @@
 # クラスタ起動後に1回だけ root パスワードを設定し、record・team の2 DB を作る
 # (ADR-0211 §3.2。TiDB Operator が正式にサポートする初期化用 CR)。
-# up.sh は、record/team の migrate Job を適用する前にこの Job(<metadata.name>-tidb-initializer)の
+# up.sh は、record/team の migrate Job を適用する前にこの CR の `.status.phase == "Completed"` の
 # 完了を待つ(順序を誤ると migrate Job が Unknown database / 認証エラーで失敗しうる。ADR-0211 §3.2)。
+# 内部で作られる実際の Job 名は TiDB Operator の命名規則で `<cluster名>-tidb-initializer`
+# (この ADR の `cluster.name: pokecalc-tidb` なら `pokecalc-tidb-tidb-initializer`)。
 apiVersion: pingcap.com/v1alpha1
 kind: TidbInitializer
 metadata:
@@ -10,9 +12,20 @@ metadata:
     app.kubernetes.io/name: pokecalc-tidb-initializer
     app.kubernetes.io/part-of: pokecalc
 spec:
-  image: mysql:9.7.2@sha256:29abb0a179982e4a8928138bfc7f918af9eda64e7eeb1b1d084c1720a20159e6
+  # TiDB Operator の初期化スクリプト(initContainer は nc、本体は python + MySQLdb)を実行できる
+  # イメージが必要(mysql サーバイメージには無い。critic レビューで判明・TiDB Operator v1.6.6 の
+  # ソース〈pkg/manager/member/tidb_init_manager.go・startscript/v1/template.go〉で確認済み)。
+  # 上流の examples/initialize・manifests/initializer が指す tnir/mysqlclient を使う
+  # (PingCAP 公式のサンプルが指す唯一の選択肢。上流自身がタグ止めのため、このリポジトリの
+  # 方針〈依存は最新安定版を固定〉に合わせて digest を固定する。amd64 専用イメージのため、
+  # Apple Silicon の k3d ノードでは QEMU エミュレーションで動く。1回だけの初期化 Job なので
+  # 実用上は許容する)。
+  image: tnir/mysqlclient@sha256:47b6a7d399acc60587a02b4171dcf8aef74e7737f80975644959a21dd1e0b234
   imagePullPolicy: IfNotPresent
   cluster:
     name: pokecalc-tidb
   initSql: "CREATE DATABASE IF NOT EXISTS record; CREATE DATABASE IF NOT EXISTS team;"
+  # Secret のキー名がそのままユーザー名として扱われる(TiDB Operator の仕様。
+  # tidbInitStartScriptTpl が /etc/tidb/password 配下のファイル名をユーザー名とみなす)。
+  # root のパスワードを設定するにはキー名を "root" にする必要がある(scripts/up.sh 参照)。
   passwordSecret: tidb-root-auth

@@ -232,10 +232,13 @@ import-k8s: ## k3d 上の CronJob pokedex-import を手動で1回流す(週1回�
 	kubectl -n pokecalc create job --from=cronjob/pokedex-import "pokedex-import-manual-$$(date +%Y%m%d%H%M%S)"
 
 .PHONY: k8s-render
-k8s-render: ## kustomize で local / cloud overlay が描画できることを確かめる(apply はしない)
+k8s-render: ## kustomize で local / cloud / tidb overlay が描画できることを確かめる(apply はしない)
 	@kubectl kustomize deploy/k8s/overlays/local >/dev/null
 	@kubectl kustomize deploy/k8s/overlays/cloud >/dev/null
-	@echo "k8s-render: local / cloud overlay の描画を確認"
+	@kubectl kustomize deploy/k8s/overlays/local/tidb >/dev/null
+	@kubectl apply --dry-run=client -f deploy/k8s/base/record/job-migrate.yaml -o yaml >/dev/null
+	@kubectl apply --dry-run=client -f deploy/k8s/base/team/job-migrate.yaml -o yaml >/dev/null
+	@echo "k8s-render: local / cloud / tidb overlay・record/team migrate Job の描画を確認"
 
 .PHONY: assets
 assets: ## 画像を WebP 2サイズに変換して MinIO へ

@@ -27,6 +27,10 @@ spec:
       # up.sh が TidbInitializer の完了を待ってから apply するため(ADR-0211 §3.2)、この時点で
       # team DB・root パスワードは既に存在する。ここでは TiDB サーバへの到達性だけを確かめる
       # (pokedex の wait-for-mysql と同じ簡潔さでよい。DB・ユーザーの実在は外側の待ちで保証済み)。
+      # 認証情報を渡さない: `mysqladmin ping` は認証に失敗しても(Access denied)サーバが
+      # 応答していれば終了コード0を返す仕様のため、到達性の確認に資格情報は要らない。
+      # team の Pod に team-db-auth 以外の Secret(tidb-root-auth・record-db-auth)を
+      # 一切マウントしない(ADR-0211 AC-T7。critic レビューで指摘・修正)。
       initContainers:
         - name: wait-for-tidb
           image: mysql:9.7.2@sha256:29abb0a179982e4a8928138bfc7f918af9eda64e7eeb1b1d084c1720a20159e6
@@ -34,16 +38,10 @@ spec:
             - sh
             - -c
             - |
-              until mysqladmin ping -h pokecalc-tidb-tidb -P 4000 -u root --silent; do
+              until mysqladmin ping -h pokecalc-tidb-tidb -P 4000 --silent; do
                 echo "team-migrate: waiting for tidb..."
                 sleep 2
               done
-          env:
-            - name: MYSQL_PWD
-              valueFrom:
-                secretKeyRef:
-                  name: tidb-root-auth
-                  key: root-password
           securityContext:
             runAsUser: 999
             runAsNonRoot: true

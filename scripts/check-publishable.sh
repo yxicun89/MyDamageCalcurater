@@ -37,12 +37,14 @@ readonly -a A_EXCLUDES=(":(exclude)docs/audit-r1.md")
 
 # B(秘密らしき文字列「キー名=値」)の許可(ERE)。値そのものではなく、k8s の Secret/Key の
 # *名前*(pokedex-svc の manifest 検査。ADR-0105 §6・用途別の最小権限。ADR-0110)を指す
-# 定数だけを対象にする(秘密の値ではない)。
-# 2つ目の代替(`\$\{[A-Za-z_][A-Za-z0-9_]*\}$`)は、scripts/up.sh が Secret の manifest を
-# heredoc で組み立てる行(例: `root-password: "${tidb_root_pw_value}"`。ADR-0211 §3.2)を許す。
-# シェル変数の埋め込みは実行時に openssl rand 等で生成した値に置き換わるため、Git 上のこの行自体には
-# 秘密の値が無い(hardcode されたパスワード文字列ではないことをこの ERE の形で保証する)。
-readonly B_KEYVALUE_ALLOW='=[[:space:]]*"(mysql-auth|pokedex-dsn|pokedex-reader-dsn|pokedex-importer-dsn|pokedex-migrator-dsn|mysql-root-password)$|\$\{[A-Za-z_][A-Za-z0-9_]*\}$'
+# 定数だけを対象にする(秘密の値ではない)。`tidb-root-auth` は ADR-0211 §3.2 の
+# TidbInitializer が参照する Secret 名(`passwordSecret: tidb-root-auth`。値ではなく名前)。
+# 3つ目の代替(`[:=][[:space:]]*"?\$\{[A-Za-z_][A-Za-z0-9_]*\}$`)は、scripts/up.sh が Secret の
+# manifest を heredoc で組み立てる行(例: `root: "${tidb_root_pw_value}"`。ADR-0211 §3.2)を許す。
+# 値の**全体**が単一のシェル変数参照であることまで要求する(区切り文字の直後から `${...}` が
+# 始まり、他の文字を挟まない)。`password: "realsecret${x}"` のように本物の値へ無害な変数参照を
+# 継ぎ足して検出を逃れる細工は、この形では通らない(self-test で確認)。
+readonly B_KEYVALUE_ALLOW='=[[:space:]]*"(mysql-auth|pokedex-dsn|pokedex-reader-dsn|pokedex-importer-dsn|pokedex-migrator-dsn|mysql-root-password)$|:[[:space:]]*tidb-root-auth$|[:=][[:space:]]*"?\$\{[A-Za-z_][A-Za-z0-9_]*\}$'
 
 # 許可するメールアドレス(ERE。一致した文字列全体に対して評価)。
 #   noreply@anthropic.com : コミットの共同著者表記(公開情報)
@@ -445,6 +447,18 @@ selftest_expect_hits() {
   done
 }
 
+# selftest_expect_no_hit 名前 除外パターン... — 出力にそのファイル名の検出行が無いこと
+# (許可リストが効いて誤検知していないことの確認。selftest_expect_hits の逆)。
+selftest_expect_no_hit() {
+  local name="$1" excluded
+  shift
+  for excluded in "$@"; do
+    if printf '%s\n' "$SELFTEST_OUTPUT" | grep -Fq -- "$excluded"; then
+      selftest_fail "$name: 許可リストが効かず誤検知している: $excluded"
+    fi
+  done
+}
+
 # selftest_expect_no_leak 名前 値... — 出力に値そのものが含まれないこと。
 selftest_expect_no_leak() {
   local name="$1" value
@@ -502,9 +516,17 @@ selftest() {
   selftest_add "token: $gh" "$dir" b4.txt
   selftest_add "key: $sk" "$dir" b5.txt
   selftest_add "auth: $jwt" "$dir" b6.txt
+  # b8: シェル変数参照だけの行(scripts/up.sh が Secret manifest を heredoc で組み立てる形。
+  # ADR-0211 §3.2)は許可リストで見逃す(値がハードコードされた秘密ではないため)。
+  selftest_add 'root: "${tidb_root_pw_value}"' "$dir" b8.txt
+  # b9: 本物の値らしき文字列の末尾に無害な変数参照を継ぎ足しただけでは許可リストをすり抜けない
+  # こと(b8 の許可条件が「値の末尾が変数参照」ではなく「値の全体が変数参照」であることの確認)。
+  local sneaky="hunter2secretvalue"
+  selftest_add "password: \"${sneaky}\${x}\"" "$dir" b9.txt
   selftest_run "B" "$dir"
-  selftest_expect_hits "B" b1.txt:1 b7.txt:1 b2.txt:1 b3.txt:1 b4.txt:1 b5.txt:1 b6.txt:1
-  selftest_expect_no_leak "B" "$pw" "$aws" "$gh" "$sk" "$jwt" "RSA PRIVATE"
+  selftest_expect_hits "B" b1.txt:1 b7.txt:1 b2.txt:1 b3.txt:1 b4.txt:1 b5.txt:1 b6.txt:1 b9.txt:1
+  selftest_expect_no_hit "B" b8.txt
+  selftest_expect_no_leak "B" "$pw" "$aws" "$gh" "$sk" "$jwt" "RSA PRIVATE" "$sneaky"
 
   echo "自己テスト: C 追跡してはいけないファイル・サイズ・テキスト以外"
   dir="$(selftest_new_repo c)"

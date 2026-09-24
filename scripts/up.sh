@@ -48,6 +48,9 @@ if [ "$tidb_ready" = "1" ]; then
     echo "Secret 'tidb-root-auth' は既に存在します(既存のパスワードをそのまま使います)..."
   else
     echo "Secret 'tidb-root-auth' が無いので乱数で作成します..."
+    # キー名は "root"("root-password" 等ではない)。TidbInitializer の passwordSecret は
+    # キー名をそのままユーザー名として扱うため("root" というキーが root ユーザーのパスワードになる。
+    # critic レビューで判明・TiDB Operator のソースで確認済み。ADR-0211 §3.2 追記参照)。
     tidb_root_pw_value="$(openssl rand -hex 16)"
     tidb_root_auth_manifest="$(mktemp)"
     chmod 600 "$tidb_root_auth_manifest"
@@ -60,7 +63,7 @@ metadata:
   namespace: pokecalc
 type: Opaque
 stringData:
-  root-password: "${tidb_root_pw_value}"
+  root: "${tidb_root_pw_value}"
 SECRET_MANIFEST
     kubectl apply -f "$tidb_root_auth_manifest"
     rm -f "$tidb_root_auth_manifest"
@@ -219,11 +222,19 @@ if [ "$tidb_ready" = "1" ]; then
   # root パスワードは tidb-root-auth の値を使い(このコマンド内では表示しない)、
   # ここで新しく生成するのは app・migrator の2ロールぶんのパスワードだけ(ADR-0211 §4)。
   # 各サービスの Secret は分ける(record が team のキーを参照できる形にしない。ADR-0211 §4 却下案)。
-  tidb_root_pw="$(kubectl -n pokecalc get secret tidb-root-auth -o jsonpath='{.data.root-password}' | base64 -d)"
+  tidb_root_pw="$(kubectl -n pokecalc get secret tidb-root-auth -o jsonpath='{.data.root}' | base64 -d)"
   tidb_host="${TIDB_CLUSTER_NAME}-tidb"
 
   create_db_auth_secret() {
     # 引数: secret名 db名 provisionキー migratorキー appキー
+    #
+    # 既知の制約(mysql-auth の前例とは非対称): この分岐は app・migrator の欠けているキーだけを
+    # 補うが、provision キー(root パスワードを埋め込んだ DSN)は既存なら補わない。tidb-root-auth の
+    # root パスワードが(例えば tidb-root-auth を作り直して)変わっても、既存の
+    # record-db-auth/team-db-auth の provision キーは古いパスワードのままになりうる
+    # (record/team の migrate Job のプロビジョニングだけが影響を受け、通常運用の app/migrator の
+    # DSN には影響しない)。mysql-auth は MySQL 自体の root パスワードを1本の Secret 内で
+    # 完結して管理するため、この非対称は起きない。
     local secret_name="$1" db_name="$2" provision_key="$3" migrator_key="$4" app_key="$5"
     if kubectl -n pokecalc get secret "$secret_name" >/dev/null 2>&1; then
       echo "Secret '${secret_name}' は既に存在します(無いキーだけ追記します)..."
@@ -244,9 +255,11 @@ if [ "$tidb_ready" = "1" ]; then
       if [ -n "$patch_entries" ]; then
         local patch_file; patch_file="$(mktemp)"
         chmod 600 "$patch_file"
+        trap 'rm -f "$patch_file"' EXIT
         { printf 'stringData:\n'; printf '%s' "$patch_entries"; } > "$patch_file"
         kubectl -n pokecalc patch secret "$secret_name" --type=merge --patch-file "$patch_file"
         rm -f "$patch_file"
+        trap - EXIT
       else
         echo "追加するキーはありません(app・migratorぶん全て既にあります)"
       fi
@@ -257,6 +270,7 @@ if [ "$tidb_ready" = "1" ]; then
       migrator_pw_value="$(openssl rand -hex 16)"
       local manifest; manifest="$(mktemp)"
       chmod 600 "$manifest"
+      trap 'rm -f "$manifest"' EXIT
       cat > "$manifest" <<SECRET_MANIFEST
 apiVersion: v1
 kind: Secret
@@ -271,6 +285,7 @@ stringData:
 SECRET_MANIFEST
       kubectl apply -f "$manifest"
       rm -f "$manifest"
+      trap - EXIT
     fi
   }
 
@@ -291,12 +306,23 @@ SECRET_MANIFEST
   kubectl -n pokecalc delete job record-migrate team-migrate --ignore-not-found
 
   echo "record-migrate・team-migrate Job を適用します..."
-  kubectl apply -f deploy/k8s/base/record/job-migrate.yaml
-  kubectl apply -f deploy/k8s/base/team/job-migrate.yaml
+  # job-migrate.yaml は kustomize を経由しない単独 apply のため、namespace は明示の -n が必要
+  # (metadata.namespace を持たない。pokedex-migrate は overlay の namespace transformer に乗るが、
+  # この2つは overlay の resources に含めないため付かない。critic レビューで判明)。
+  if ! kubectl -n pokecalc apply -f deploy/k8s/base/record/job-migrate.yaml \
+    || ! kubectl -n pokecalc apply -f deploy/k8s/base/team/job-migrate.yaml; then
+    echo "警告: record-migrate・team-migrate Job の適用に失敗しました" >&2
+    tidb_ready=0
+  fi
+fi
 
+if [ "$tidb_ready" = "1" ]; then
   echo "record-migrate・team-migrate Job の完了を待ちます..."
-  kubectl -n pokecalc wait --for=condition=complete job/record-migrate --timeout=300s
-  kubectl -n pokecalc wait --for=condition=complete job/team-migrate --timeout=300s
+  if ! kubectl -n pokecalc wait --for=condition=complete job/record-migrate --timeout=300s \
+    || ! kubectl -n pokecalc wait --for=condition=complete job/team-migrate --timeout=300s; then
+    echo "警告: record-migrate・team-migrate Job が完了しませんでした" >&2
+    tidb_ready=0
+  fi
 fi
 
 # pokedex-import(CronJob。ADR-0104)が使うイメージも build して k3d に import する。
