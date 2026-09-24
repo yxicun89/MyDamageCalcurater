@@ -90,6 +90,10 @@ web-k3d-open: ## 診断用: gateway を通さず Web の Service へ port-forwar
 web-k3d-smoke: ## k3d 上の Web をスモーク(既定 http://localhost:8080 = gateway 経由。WEB_URL で上書き)
 	@WEB_URL=$(WEB_URL) web/scripts/k3d-smoke.sh
 
+.PHONY: web-k3d-e2e
+web-k3d-e2e: web-deps ## ブラウザで開く入口(既定 http://localhost:8080)を実ブラウザで操作し、オフライン・オンラインの計算結果が出るか確かめる
+	@cd $(WEB_DIR) && K3D_URL=$(WEB_URL) npm run e2e:k3d
+
 .PHONY: web-kustomize
 web-kustomize: ## base・local・local-web overlay が描画できることを確かめる(apply しない)
 	@kubectl kustomize deploy/k8s/base >/dev/null
