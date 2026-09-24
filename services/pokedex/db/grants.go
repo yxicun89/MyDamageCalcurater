@@ -44,7 +44,7 @@ type RoleGrant struct {
 // Provision 自体は cloud overlay 等 up.sh 以外の生成元も受け付ける汎用の関数のため、
 // 接続前に文字種・長さを検査する(ADR-0110 実装時の申し送り2)。
 var (
-	passwordPattern = regexp.MustCompile(`^[A-Za-z0-9]{16,}$`)
+	pwPattern       = regexp.MustCompile(`^[A-Za-z0-9]{16,}$`)
 	usernamePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
 	dbNamePattern   = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
 )
@@ -74,8 +74,8 @@ func validatePrivileges(privs string) error {
 }
 
 type validatedRole struct {
-	user, password string
-	privileges     string
+	user, pw   string
+	privileges string
 }
 
 // validateRoles は接続する前に rootDSN・roles すべてを検査する。危険な値があれば
@@ -102,7 +102,7 @@ func validateRoles(rootDSN string, roles []RoleGrant) (dbName string, rootUser s
 		if !usernamePattern.MatchString(cfg.User) {
 			return "", "", nil, invalidGrant("ロールのユーザー名が不正")
 		}
-		if !passwordPattern.MatchString(cfg.Passwd) {
+		if !pwPattern.MatchString(cfg.Passwd) {
 			return "", "", nil, invalidGrant("ロールのパスワードが不正")
 		}
 		if cfg.DBName != rootCfg.DBName {
@@ -118,7 +118,7 @@ func validateRoles(rootDSN string, roles []RoleGrant) (dbName string, rootUser s
 		if err := validatePrivileges(r.Privileges); err != nil {
 			return "", "", nil, err
 		}
-		out = append(out, validatedRole{user: cfg.User, password: cfg.Passwd, privileges: r.Privileges})
+		out = append(out, validatedRole{user: cfg.User, pw: cfg.Passwd, privileges: r.Privileges})
 	}
 	return rootCfg.DBName, rootCfg.User, out, nil
 }
@@ -153,10 +153,10 @@ func Provision(rootDSN string, roles []RoleGrant) error {
 	defer conn.Close()
 
 	for _, r := range validated {
-		if _, err := conn.Exec(fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%%' IDENTIFIED BY '%s'", r.user, r.password)); err != nil {
+		if _, err := conn.Exec(fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%%' IDENTIFIED BY '%s'", r.user, r.pw)); err != nil {
 			return fmt.Errorf("pokedex/db: CREATE USER %s: %w", r.user, err)
 		}
-		if _, err := conn.Exec(fmt.Sprintf("ALTER USER '%s'@'%%' IDENTIFIED BY '%s'", r.user, r.password)); err != nil {
+		if _, err := conn.Exec(fmt.Sprintf("ALTER USER '%s'@'%%' IDENTIFIED BY '%s'", r.user, r.pw)); err != nil {
 			return fmt.Errorf("pokedex/db: ALTER USER %s: %w", r.user, err)
 		}
 		if _, err := conn.Exec(fmt.Sprintf("REVOKE ALL PRIVILEGES, GRANT OPTION FROM '%s'@'%%'", r.user)); err != nil {

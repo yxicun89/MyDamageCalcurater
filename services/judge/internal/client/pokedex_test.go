@@ -518,3 +518,297 @@ func TestNaturesErrorDoesNotLeakUpstreamDetail(t *testing.T) {
 		t.Errorf("エラーが上流の URL を漏らしている: %s", message)
 	}
 }
+
+// --- JD4: 技の優先度の取得(ADR-0704 §9)。先に動く側を決めるには技の priority が要り、
+// それを引けるのは API レーンが main に入れた GET /api/pokedex/moves/{key}(getMove)だけ。
+// judge が読むのは id と priority だけで、威力・タイプ・分類は読まない(ダメージは calc-svc が計算する)。
+// ------------------------------------------------------------------------------------
+
+// validMoveBody は pokedex-svc の GET /api/pokedex/moves/{key} の 200 の本文
+// (ルートの api/openapi.yaml の Move)を模した架空データ。実マスタは使わない。
+func validMoveBody() []byte {
+	return []byte(`{
+      "id": "test-move",
+      "nameJa": "テストわざ",
+      "type": "fire",
+      "category": "physical",
+      "power": 90,
+      "priority": 0
+    }`)
+}
+
+// TestMoveDecodesUpstreamResponse: 200 の本文から judge が使う欄(ID と優先度)を取り出し、
+// 呼び出し元の X-Device-Id・X-Session-Id をそのまま上流へ転送する(ADR-0700 §2・ADR-0704 §9)。
+func TestMoveDecodesUpstreamResponse(t *testing.T) {
+	t.Parallel()
+
+	var gotMethod, gotPath, gotDevice, gotSession string
+	server := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		gotDevice = r.Header.Get("X-Device-Id")
+		gotSession = r.Header.Get("X-Session-Id")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(validMoveBody())
+	})
+
+	got, err := newPokedex(t, server.URL, testTimeout).Move(t.Context(), requestContext, "test-move")
+	if err != nil {
+		t.Fatalf("Move: %v", err)
+	}
+
+	want := Move{ID: "test-move", Priority: 0}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Move = %+v, want %+v", got, want)
+	}
+	if gotMethod != http.MethodGet {
+		t.Errorf("method = %q, want GET", gotMethod)
+	}
+	if gotPath != "/api/pokedex/moves/test-move" {
+		t.Errorf("path = %q, want /api/pokedex/moves/test-move", gotPath)
+	}
+	if gotDevice != requestContext.DeviceID || gotSession != requestContext.SessionID {
+		t.Errorf("headers = (%q, %q), want (%q, %q)", gotDevice, gotSession, requestContext.DeviceID, requestContext.SessionID)
+	}
+}
+
+// TestMoveTranscribesPriority: 優先度は上流の値をそのまま持つ(judge は技の表を持たない。
+// CLAUDE.md のドメイン規約)。正・0・負のいずれも素通しする。
+func TestMoveTranscribesPriority(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		body string
+		want int
+	}{
+		{"優先度 0(通常の技)", `{"id":"test-move","nameJa":"テストわざ","type":"fire","category":"physical","power":90,"priority":0}`, 0},
+		{"優先度 +1(先制技)", `{"id":"test-quick","nameJa":"テストでんこう","type":"normal","category":"physical","power":40,"priority":1}`, 1},
+		{"優先度 +4", `{"id":"test-protect","nameJa":"テストまもる","type":"normal","category":"status","power":0,"priority":4}`, 4},
+		{"優先度 -6(最後に動く技)", `{"id":"test-last","nameJa":"テストさきおくり","type":"normal","category":"status","power":0,"priority":-6}`, -6},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tt.body))
+			})
+
+			got, err := newPokedex(t, server.URL, testTimeout).Move(t.Context(), requestContext, "test-move")
+			if err != nil {
+				t.Fatalf("Move: %v", err)
+			}
+			if got.Priority != tt.want {
+				t.Errorf("Priority = %d, want %d", got.Priority, tt.want)
+			}
+		})
+	}
+}
+
+// TestMoveRequiresRequestContext: 端末 ID・セッション ID が無いまま上流を呼ばない(Species と同じ)。
+func TestMoveRequiresRequestContext(t *testing.T) {
+	t.Parallel()
+
+	called := false
+	server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(validMoveBody())
+	})
+
+	_, err := newPokedex(t, server.URL, testTimeout).Move(t.Context(), RequestContext{}, "test-move")
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Errorf("err = %v, want ErrInvalidRequest", err)
+	}
+	if called {
+		t.Error("上流を呼んでいる。端末 ID が無い要求は judge の中で止める")
+	}
+}
+
+// TestMoveNormalizesUpstreamStatus: 上流のステータスを ADR-0700 §3 の番兵エラーに畳む。
+// 404 は ErrNotFound で、httpapi がそれを 422 unknown_move に写す(ADR-0704 §6)。
+// getMove はマスタ未投入(技 0 件)でも 404 を返す契約なので、404 は「技が無い」だけを意味する。
+func TestMoveNormalizesUpstreamStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		want   error
+	}{
+		{"500", http.StatusInternalServerError, `{"code":"internal","message":"boom"}`, ErrUpstreamUnavailable},
+		{"502", http.StatusBadGateway, "", ErrUpstreamUnavailable},
+		{"503", http.StatusServiceUnavailable, `{"code":"master_unavailable","message":"db"}`, ErrUpstreamUnavailable},
+		{"404(技が無い)", http.StatusNotFound, `{"code":"not_found","message":"no such move"}`, ErrNotFound},
+		{"400", http.StatusBadRequest, `{"code":"missing_header","message":"no device id"}`, ErrInvalidRequest},
+		{"204", http.StatusNoContent, "", ErrUpstreamInvalidResponse},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			})
+
+			_, err := newPokedex(t, server.URL, testTimeout).Move(t.Context(), requestContext, "test-move")
+			if !errors.Is(err, tt.want) {
+				t.Errorf("err = %v, want %v", err, tt.want)
+			}
+		})
+	}
+}
+
+// TestMoveRejectsInvalidBody: 200 でも本文が契約に合わなければ ErrUpstreamInvalidResponse。
+// **priority が無い応答も拒む**(ADR-0704 §9): ルートの契約では priority は default 0 だが、
+// judge にとっては JD4 が依存する唯一の値で、黙って 0 に倒すと先制技を普通の技として扱った
+// 判定を正しい顔で返してしまう(ADR-0700 §4 の「欠けた欄を 0 で埋めない」と同じ立場)。
+func TestMoveRejectsInvalidBody(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"壊れた JSON", `{"id": "test-move"`},
+		{"JSON ですらない", `<html>502 Bad Gateway</html>`},
+		{"オブジェクトではなく配列", `[{"id":"test-move","priority":0}]`},
+		{"id が無い", `{"nameJa":"テストわざ","type":"fire","category":"physical","power":90,"priority":0}`},
+		{"id が空文字", `{"id":"","nameJa":"テストわざ","type":"fire","category":"physical","power":90,"priority":0}`},
+		{"priority が無い", `{"id":"test-move","nameJa":"テストわざ","type":"fire","category":"physical","power":90}`},
+		{"priority が null", `{"id":"test-move","nameJa":"テストわざ","type":"fire","category":"physical","power":90,"priority":null}`},
+		{"priority が数値でない", `{"id":"test-move","nameJa":"テストわざ","type":"fire","category":"physical","power":90,"priority":"1"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tt.body))
+			})
+
+			_, err := newPokedex(t, server.URL, testTimeout).Move(t.Context(), requestContext, "test-move")
+			if !errors.Is(err, ErrUpstreamInvalidResponse) {
+				t.Errorf("err = %v, want ErrUpstreamInvalidResponse", err)
+			}
+		})
+	}
+}
+
+// TestMoveRejectsOversizedBody: 本文の上限(1 MiB。ADR-0700 §2)は技でも同じ。
+func TestMoveRejectsOversizedBody(t *testing.T) {
+	t.Parallel()
+
+	const overLimit = 1<<20 + 1
+	server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"nameJa": "` + strings.Repeat("x", overLimit) + `"}`))
+	})
+
+	_, err := newPokedex(t, server.URL, testTimeout).Move(t.Context(), requestContext, "test-move")
+	if !errors.Is(err, ErrUpstreamInvalidResponse) {
+		t.Errorf("err = %v, want ErrUpstreamInvalidResponse", err)
+	}
+}
+
+// TestMoveOnConnectionError: 誰も待ち受けていない上流は ErrUpstreamUnavailable で、
+// 文面に上流の URL・アドレスを含まない(ADR-0700 §3)。
+func TestMoveOnConnectionError(t *testing.T) {
+	t.Parallel()
+
+	_, err := newPokedex(t, deadBaseURL, testTimeout).Move(t.Context(), requestContext, "test-move")
+	if !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Fatalf("err = %v, want ErrUpstreamUnavailable", err)
+	}
+	if strings.Contains(err.Error(), deadBaseURL) {
+		t.Errorf("エラーが上流の URL を漏らしている: %s", err.Error())
+	}
+	assertNoUpstreamAuthority(t, err.Error(), deadBaseURL)
+}
+
+// TestMoveOnDNSError: ホスト名が解決できない上流も ErrUpstreamUnavailable で、
+// 文面にホスト名を含まない(Species / Natures と同じ検査)。
+func TestMoveOnDNSError(t *testing.T) {
+	t.Parallel()
+
+	_, err := newPokedex(t, deadHostBaseURL, testTimeout).Move(t.Context(), requestContext, "test-move")
+	if !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Fatalf("err = %v, want ErrUpstreamUnavailable", err)
+	}
+	assertNoUpstreamAuthority(t, err.Error(), deadHostBaseURL)
+}
+
+// TestMoveTimesOut: 答えない上流を設定のタイムアウトで打ち切る(ADR-0700 §2)。
+func TestMoveTimesOut(t *testing.T) {
+	t.Parallel()
+
+	server := blockingServer(t)
+
+	start := time.Now()
+	_, err := newPokedex(t, server.URL, shortTimeout).Move(t.Context(), requestContext, "test-move")
+	elapsed := time.Since(start)
+
+	if !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Errorf("err = %v, want ErrUpstreamUnavailable", err)
+	}
+	if elapsed > time.Second {
+		t.Errorf("%v 待った。設定のタイムアウト %v で打ち切ること", elapsed, shortTimeout)
+	}
+	assertNoUpstreamAuthority(t, err.Error(), server.URL)
+}
+
+// TestMoveHonorsCallerContext: 呼び出し元の context が終わったら、設定のタイムアウトを待たずに戻る
+// (Species と同じ。judge の API ハンドラが client の接続断で打ち切れるようにするため)。
+func TestMoveHonorsCallerContext(t *testing.T) {
+	t.Parallel()
+
+	server := blockingServer(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	start := time.Now()
+	_, err := newPokedex(t, server.URL, time.Minute).Move(ctx, requestContext, "test-move")
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("err = nil, want an error")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("err = %v, want it to wrap context.Canceled", err)
+	}
+	if !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Errorf("err = %v, want it to also wrap ErrUpstreamUnavailable", err)
+	}
+	if elapsed > time.Second {
+		t.Errorf("%v 待った。呼び出し元の context が終わったらすぐ戻ること", elapsed)
+	}
+}
+
+// TestMoveErrorDoesNotLeakUpstreamDetail: エラーの文面に上流の本文・URL を入れない(ADR-0700 §3)。
+func TestMoveErrorDoesNotLeakUpstreamDetail(t *testing.T) {
+	t.Parallel()
+
+	const upstreamDetail = "dsn dbhost03 svcaccount internal-only-detail"
+	server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"code":"internal_error","message":"` + upstreamDetail + `"}`))
+	})
+
+	_, err := newPokedex(t, server.URL, testTimeout).Move(t.Context(), requestContext, "test-move")
+	if !errors.Is(err, ErrUpstreamUnavailable) {
+		t.Fatalf("err = %v, want ErrUpstreamUnavailable", err)
+	}
+	message := err.Error()
+	if strings.Contains(message, upstreamDetail) {
+		t.Errorf("エラーが上流の本文を漏らしている: %s", message)
+	}
+	if strings.Contains(message, server.URL) {
+		t.Errorf("エラーが上流の URL を漏らしている: %s", message)
+	}
+}

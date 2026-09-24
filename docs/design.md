@@ -19,9 +19,14 @@ iOS(SwiftUI の Color/Font 拡張)と Web(CSS 変数)で同じ名前・同じ値
 | text.primary | #14161A | #F2F3F5 |
 | text.secondary | #5C6270 | #A3A9B6 |
 | border.hairline | 黒 8% | 白 10% |
-| danger | #E5484D | #FF6369 |
+| danger | #CD1D23 | #FF6369 |
 
 - bg.glass のぼかし: Web は `backdrop-filter: blur(20px)`(`--bg-glass-blur`)。iOS はシステムのマテリアル
+- danger のライト値(2026-09-24、issue #99): 旧 `#E5484D` は bg.base・bg.glass のどちらに対しても
+  WCAG 2.2 SC 1.4.3(通常文字 4.5:1)を満たさなかった(3.59:1 / 3.82:1)。色相・彩度は変えず明度だけ下げ、
+  `#CD1D23`(bg.base に対して5.07:1、bg.glass 合成後で5.40:1)にした。ダーク値 `#FF6369` は元々基準を
+  満たしており(bg.base に対して6.56:1、bg.glass 合成後で6.13:1)変更していない。iOS 側の同名トークン
+  (`PokeCalcDesign.swift`)もこの値に合わせること(DECISIONS.md 2026-09-24 でiOSレーンへ依頼済み)
 
 ### タイプ色(自作パレット)
 | タイプ | 色 | タイプ | 色 | タイプ | 色 |

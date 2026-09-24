@@ -1127,6 +1127,65 @@ Impact: `docs/plan.md` P3-7 追加・JD4 のブロッカーを解消として更
 `docs/adr/0107-move-secondary-rank-changes.md` 決定8に追記(`effect` の公開は依然未決)、
 `docs/adr/0304-web-online-mastersource.md` §3 に追記(この実装は§3の欠落の解決策ではない)。
 
+## 2026-09-24: 判定レーン JD4(返り討ち判定)の契約を確定・テスト先行(判定レーン)
+Decision: `getMove` の main 統合(2026-09-23)を受けて JD4 に着手し、**ADR-0704** で契約と受け入れ条件を確定した。
+実装はまだで、失敗するテストだけを先に置いた(spec-writer の範囲)。決めたことは次の 5 つ。
+- request: `defenders` の要素を `Individual` → **`DefenderCandidate`**(`Individual` の全欄 + **必須の `moveId`**)。
+  attacker は `Individual` のまま、攻撃側の技は request 直下の `moveId` のまま。
+- 先制判定: **優先度が違えば優先度が高い方が必ず先に動く(トリックルームの影響を受けない)**。優先度が同じときだけ
+  素早さで決まり(トリックルーム中は反転。JD2 の `CompareSpeed` が計算済み)、両方同じなら `turnOrderTie`。
+  `internal/judge` に純粋な `CompareTurnOrder(attackerPriority, defenderPriority, SpeedComparison) TurnOrder` を新設する
+  (既存の `CompareSpeed` / `outspeeds` / `speedTie` の意味と値は変えない)。
+- response: `ko` を **`attackerKo`** に改名し、`defenderKo`・`attackerMovePriority`・`defenderMovePriority`・
+  `attackerMovesFirst`・`turnOrderTie` を追加。judge は「勝てる/負ける」の真偽値には丸めない。
+- 逆方向(相手→自分)の calc では **`field.attackerScreens` と `field.defenderScreens` を入れ替えて**送る
+  (壁は場の各側にあり、どちらが殴るかで場所は変わらない。天候・地形は入れ替えない)。入れ替え忘れはエラーにならず
+  結果だけが静かに間違うので、テストで直接確かめる。
+- エラーに **`unknown_move`(422)** を追加。attacker の技も上流で解決するようになったため、
+  **攻撃側の未知の技は JD3 までの 400 `invalid_request` から 422 `unknown_move` に変わる**(応答の変化点)。
+Reason: JD4 は「抜けて倒せる」だけでは見落とす「相手が先に動いて自分が落ちる」を拾うための段階で、
+技の優先度と逆方向のダメージが要る。どちらも `getMove`(API レーン)が入ったことで実装できるようになった。
+破壊的変更(`DefenderCandidate`・`ko` の改名)は JD5(Web/iOS)が未着手でクライアントが 1 つも無いため今は安全
+(ADR-0703 §7 の根拠の延長。名前を揃えられる最後の機会)。
+Impact: `services/judge/api/openapi.yaml` と `make judge-gen` の生成物を更新済み。`make judge-test` は
+**意図的に失敗する状態**(`judge.CompareTurnOrder` / `client.Pokedex.Move` が未実装、`api.Matchup.Ko` が
+`AttackerKo` に変わったことによるコンパイルエラー)。次の implementer が ADR-0704 の受け入れ条件どおりに実装する。
+`docs/judge-design.md` §3 JD4 と `docs/plan.md` の JD4 行も更新した。他レーンへの依頼は無い
+(ルートの `api/openapi.yaml` は変更していない)。
+
+## 2026-09-24: 判定レーン JD4 の実装・critic PASS(判定レーン)
+Decision: ADR-0704 のとおり implementer が実装し(`internal/judge/turnorder.go` 新設・`internal/client/pokedex.go` に
+`Pokedex.Move`・`internal/httpapi/outspeed.go` の検査順拡張と逆方向calc)、critic が1回目でPASSした(必須はドキュメント
+更新のみで、コード修正は不要との判定)。軽微指摘のうち低コストな2件(`CompareTurnOrder` が `CompareSpeed` の不変条件に
+暗黙依存していた点の明示化、テストコメントの誤り修正)も併せて対応した。
+Reason: `make judge-test`/`judge-lint`/`judge-build`・ルートの `make test`(engine・全サービス・web 907 tests)すべて緑、
+critic PASS、他レーンの範囲外変更なし。
+Impact: JD0〜JD4 が完了。判定レーンのブランチは `feat/judge-jd4` のまま PR 作成へ進む。軽微な積み残し(`attacker` 単数の
+欄が `defenders` 候補と違い大文字小文字を厳密に検査していない非対称)は plan.md に記録し、今回のブロッカーにはしない。
+JD5(Web/iOS 画面)は着手前にユーザーへ確認する(judge-design.md §3 の方針どおり)。
+
+## 2026-09-24: issue #69(技・持ち物検索の並びがOpenAPI契約と一致しない)を修正(API レーン)
+Decision: `api/openapi.yaml` の `searchMoves`/`searchItems` の description が「並びは ID 順」としていたが、
+実装(`services/pokedex/db/query/pokedex.sql` の `SearchMoves`/`SearchItems`。`ORDER BY <table>.name_ja, <table>.id`)は
+P2-3 導入時から一貫して日本語名の照合順序(同順位は ID)だった。ADR-0105 §3 は既に「技・持ち物は name_ja, id」と
+正しく明記していたため、**誤っていたのは契約の説明文だけ**(SQL・ADR は無変更・新規 ADR も不要)。`searchSpecies`
+(`dex_no, form`)は SpeciesKey が固定幅ゼロ埋めのため文字列としての ID 順と一致し対象外、`listNatures`
+(`ORDER BY id`)も元から契約どおりで対象外。
+契約の description を実態に合わせて訂正し、`make gen`・`make ios-gen` を実行(絶対ルール1)。
+**iOS の生成物は PR #161(getMove。P3-7)の分も含めて `make ios-gen` が漏れており未追従だった
+(`make ios-gen-check` が失敗する状態だった)。今回まとめて解消した**(API レーンの取りこぼしの修復のため
+同一コミットに含めた。iOS レーンの範囲への継続的な変更ではない)。
+テストは2層: DB 層(`db.TestSearchMovesAndItemsOrderIsNameJaNotID`。`-tags mysql`。実 MySQL
+〈kubectl port-forward で `pokecalc` クラスタの `svc/mysql` に接続、使い捨ての `pokedex_test` DB を都度作成・削除〉で
+確認)と httpapi 層(`TestSearchMovesAndItemsPreserveGivenOrderAndLimitCutsThatOrder`。ハンドラが行順を並べ替えず、
+`limit` がその並びの先頭から切ることを固定。ID 順に並べ替えてから切ると集合自体が変わることを issue の指摘どおり
+変異テストで確認: 一時的に `ORDER BY m.id` に変えて DB 層のテストが落ちることを確認 → revert、一時的に
+ハンドラへ `sort.Slice`(ID順)を差し込んで httpapi 層のテストが落ちることを確認 → revert)。
+Reason: issue #69。契約(`api/openapi.yaml`)が唯一の正であるべきなのに実態とずれていた
+(クライアントが契約どおり ID 順を前提にできない・limit 境界で返る集合自体が変わりうる)。
+Impact: `docs/plan.md` の改善要望に issue #69 の行を追加。データ・Web・iOS レーンへの追加対応は無し
+(SQL・ADR は無変更、iOS 生成物は本コミットで追従済み)。issue #69 はこの PR のマージでクローズしてよい。
+
 ## 2026-09-24: getMove(P3-7)のAPIレーン越境実装をレビュー(データレーン)
 Decision: APIレーンからの依頼(2026-09-23「services/pokedex/の再レビュー」)に応え、
 `services/pokedex/db/query/pokedex.sql`(GetMove)・`internal/httpapi/search.go`(GetMoveハンドラ)・
@@ -1163,3 +1222,46 @@ Reason: issue #104(Codexレビュー)。公開HTTP Podが侵害されてもDDL�
 Impact: cloud overlay実装時は同じ4つのDSNキー名(pokedex-dsn〈provision〉・
 pokedex-reader-dsn・pokedex-importer-dsn・pokedex-migrator-dsn)をSecretの契約として踏襲することを
 推奨として記録(実装はP7系のクラウド移行タスクで扱う)。他レーンへの影響なし。
+
+## 2026-09-24: issue #99(ライトテーマの danger コントラスト不足)の Web レーン担当分が完了。iOS レーンへ依頼
+Decision: danger のライト値を `#E5484D` → `#CD1D23` に変更した(色相・彩度は変えず明度だけ下げる。WCAG 2.2
+SC 1.4.3 の通常文字基準4.5:1を、bg.base単体(5.07:1)・bg.glassをbg.baseに重ねた合成色(5.40:1)の両方で満たす。
+ダーク値 `#FF6369` は元から基準を満たしており〈bg.base 6.56:1・glass合成 6.13:1〉変更していない)。
+`docs/design.md`「デザイントークン」に理由・数値を記録。`web/src/test/colorContrast.ts`(WCAG相対輝度・
+コントラスト比の計算。既知の参照値で検算済み)・`web/src/styles/contrast.test.ts`(design.md から値を読み、
+ライト・ダーク×bg.base・bg.glass合成の4組を検査)を新規追加。critic PASS(独立実装での検算・変異テストで
+実効性を確認済み)。
+Reason: issue #99(Codexレビュー。タイプバランスレーンから2026-09-23連絡)。ライトテーマの danger 文字色が
+WCAG基準を満たさず、弱視・低コントラスト環境の利用者がエラー文言を読み取りにくい状態だった。
+Impact: **iOSレーンへ依頼**: `ios/PokeCalcKit/Sources/PokeCalcDesign/PokeCalcDesign.swift`(`ColorToken.danger`
+のライト値。現在 `RGBA(red: 0xE5, green: 0x48, blue: 0x4D, alpha: 1.0)`)と
+`ios/PokeCalcKit/Tests/PokeCalcDesignTests/DesignTokenTests.swift`(同じ旧値を手書きで期待値にしている36行目
+付近)を `0xCD, 0x1D, 0x23` に更新し、Web と同様にコントラスト比を検査するテストを追加してほしい(値は
+design.md「デザイントークン」が正)。issue #99 は iOS 側が完了するまでクローズしない。
+
+## 2026-09-24: 判定 JD4(返り討ち判定)を PR #169 で main に統合(判定レーン)
+Decision: ADR-0704(`DefenderCandidate`・`CompareTurnOrder`・逆方向calcのscreens入れ替え・`unknown_move`)を PR #169 で main に統合した。critic は1回目で PASS。
+Reason: `make test`・`make lint`・`make build`(ルート)が緑、critic PASS、他レーンの範囲外変更なし(COORDINATION.md の共有ファイル規約の範囲内)を確認してマージした。
+Impact: 判定レーンのブランチを `feat/judge-jd5` に切り替えた(JD4 の `feat/judge-jd4` は削除)。JD0〜JD4 がすべて完了し、`POST /api/judge/v1/outspeed-and-ko` は素早さ判定・複数候補・場の効果・返り討ち判定まで対応済み。残るは JD5(Web/iOS の画面)のみ。
+
+## 2026-09-24: issue #73(OpenAPIとengineの防御プリセット集合を同期検査する)を修正(API レーン)
+Decision: `api/openapi.yaml` の `DefenderPreset` enum と `engine.DefenderPresetCatalog()`(`engine/bulk.go`)は
+1対1対応が前提(`services/calc/internal/httpapi/convert.go` の `presetKeysFrom` は変換テーブルを持たず、契約の
+列挙値をそのまま `engine.PresetKey` に型変換するだけ)だが、これを固定する回帰テストが無かった
+(実際のズレは無かった。issue #73 が問題にしていたのは「テストの欠落」自体)。
+`services/calc/internal/httpapi/preset_sync_test.go`(`TestDefenderPresetEnumMatchesEngineCatalog`)を追加。
+同パッケージの既存 `vocabulary_test.go`(`wasmapi.Code*` の一覧を手で列挙し、コメントで「新しい code を足したら
+ここにも足すこと」と注意喚起する流儀)は**意図的に踏襲しなかった**: 手で列挙した一覧は自分自身の陳腐化
+(足し忘れ)を検出できないため、契約(埋め込まれた spec。`contract_test.go` の `loadContract` を再利用)から
+`DefenderPreset` の enum を直接読み、`engine.DefenderPresetCatalog()` のキー集合・件数・順序
+(契約の description が「耐久が上がる順」と明記。ADR-0009 §1 は8件・順序も規定)と比較する方式にした。
+`engine/bulk.go`・`api/openapi.yaml` は無変更(新規 ADR も不要。ADR-0009 §1 が既に決定済みの内容を機械検査で
+固定しただけ)。
+critic 1回目 FAIL: 件数不一致を `if len(a) == len(b) { 順序比較 }` で黙って skip していたため、集合としては
+一致するが列としては崩れている変異(例: `PresetHP` の行を2重にして9件にする。集合は8件のopenapi enumと一致
+してしまう)を見逃す穴があった。修正: 件数不一致を明示的な失敗にしてから列を比較するよう変更し、重複変異・
+順序入れ替え変異の両方を実際に検知することを確認(確認後 revert)。2回目相当で PASS。
+Reason: issue #73。片方だけにプリセットを追加・削除しても通常の生成・ユニットテストでは同期漏れを検出できず、
+「APIが受け付けるがengineが解決できない」「engineのプリセットをAPIから指定できない」状態を作り得た。
+Impact: `docs/plan.md` の改善要望に issue #73 の行を追加。データレーンへの追加対応は無し(engine は無変更、
+実バグではなく回帰テストの欠落だった)。issue #73 はこの PR のマージでクローズしてよい。

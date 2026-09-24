@@ -35,7 +35,7 @@ const (
 	fakeMigratorDSN  = "pokedex_migrator:migrPW0000000000000000@tcp(127.0.0.1:1)/pokedex_fake"
 )
 
-var fakePasswords = []string{"provPW0000000000000000", "readPW0000000000000000", "impoPW0000000000000000", "migrPW0000000000000000"}
+var fakePWs = []string{"provPW0000000000000000", "readPW0000000000000000", "impoPW0000000000000000", "migrPW0000000000000000"}
 
 type harness struct {
 	env    map[string]string
@@ -83,7 +83,7 @@ func (h *harness) cliEnv() cliEnv {
 func (h *harness) assertNoSecrets(t *testing.T) {
 	t.Helper()
 	out := h.stdout.String() + h.stderr.String()
-	for _, pw := range fakePasswords {
+	for _, pw := range fakePWs {
 		if strings.Contains(out, pw) {
 			t.Errorf("出力にパスワードが出ている: %q", out)
 		}

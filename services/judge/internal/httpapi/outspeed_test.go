@@ -30,14 +30,20 @@ const (
 // 架空の種族・性格・技(実マスタは使わない。CLAUDE.md のドメイン規約)。
 // 既定ではどの種族も素早さ種族値 100 で、差は調整(SP・性格・ランク・持ち物)だけで決まる。
 // 候補ごとに種族値を変えたいテストは upstreams.baseSpeeds で指定する。
+// 技は既定ではどれも優先度 0 で、優先度を変えたいテストは upstreams.movePriorities で指定する
+// (JD4。ADR-0704 §2)。
 const (
 	attackerSpeciesKey  = "9001-000"
 	defenderSpeciesKey  = "9002-000"
 	defender2SpeciesKey = "9003-000"
 	defender3SpeciesKey = "9004-000"
-	testMoveID          = "test-move"
-	naturePlusSpeID     = "test-plus-spe"
-	natureNeutralID     = "test-neutral"
+	// testMoveID は attacker が使う技(request 直下の moveId)。
+	testMoveID = "test-move"
+	// defenderMoveID は相手候補が撃ち返してくる既定の技(JD4。ADR-0704 §1)。
+	// 順方向(testMoveID)と逆方向(候補の技)を取り違えていないか見分けるため、必ず別の ID にする。
+	defenderMoveID  = "test-defender-move"
+	naturePlusSpeID = "test-plus-spe"
+	natureNeutralID = "test-neutral"
 )
 
 // speciesBody は pokedex-svc の SpeciesDetail を模した架空の本文。
@@ -45,6 +51,13 @@ func speciesBody(key string, baseSpeed int) string {
 	return `{"key":"` + key + `","dexNo":9001,"form":0,"nameJa":"テストポケモン",
 	  "types":["fire"],"baseStats":{"hp":78,"atk":84,"def":78,"spa":109,"spd":85,"spe":` +
 		strconv.Itoa(baseSpeed) + `},"abilities":[{"id":"test-ability","nameJa":"テストとくせい"}]}`
+}
+
+// moveBody は pokedex-svc の GET /api/pokedex/moves/{key}(Move)を模した架空の本文
+// (JD4。ADR-0704 §9)。judge が読むのは id と priority だけ。
+func moveBody(key string, priority int) string {
+	return `{"id":"` + key + `","nameJa":"テストわざ","type":"fire","category":"physical",` +
+		`"power":90,"priority":` + strconv.Itoa(priority) + `}`
 }
 
 func mustJSON(v any) []byte {
@@ -85,21 +98,29 @@ type upstreams struct {
 	naturesBody   string
 	speciesStatus int
 	speciesBody   string
+	moveStatus    int
+	moveBody      string
 	calcStatus    int
 	calcBody      string
 	attackerSpeed int // attacker の種族の素早さ種族値(0 なら 100)
 	defenderSpeed int // defenderSpeciesKey の素早さ種族値(0 なら 100)
 
-	// JD3: 候補ごとの差し替え(ADR-0703)。キーは speciesKey で、
-	// calcFail / calcKO は「その計算要求の defender.speciesKey」で引く。
+	// JD3: 候補ごとの差し替え(ADR-0703)。キーは speciesKey。
 	baseSpeeds  map[string]int          // speciesKey → 素早さ種族値
 	speciesFail map[string]stubResponse // speciesKey → その種族の取得だけを失敗させる
-	calcFail    map[string]stubResponse // defender の speciesKey → その計算だけを失敗させる
-	calcKO      map[string]string       // defender の speciesKey → 返す ko の JSON
+
+	// JD4: 技ごとの差し替え(ADR-0704)。calcFail / calcKO は calcRoute(「技 → 防御側の種族」)で引く。
+	// 同じ候補に対して順方向(自分の技)と逆方向(候補の技)の 2 回 calc を呼ぶので、
+	// defender.speciesKey だけでは向きを区別できない。
+	movePriorities map[string]int          // moveId → priority(未指定は 0)
+	moveFail       map[string]stubResponse // moveId → その技の取得だけを失敗させる
+	calcFail       map[string]stubResponse // calcRoute → その計算だけを失敗させる
+	calcKO         map[string]string       // calcRoute → 返す ko の JSON
 
 	// 記録。
 	naturesCalls int
 	speciesKeys  []string
+	moveKeys     []string
 	calcBodies   []map[string]any
 	deviceIDs    []string
 	sessionIDs   []string
@@ -119,35 +140,67 @@ func (u *upstreams) counts() (natures int, speciesKeys []string, calcCalls int) 
 	return u.naturesCalls, append([]string(nil), u.speciesKeys...), len(u.calcBodies)
 }
 
-// calcDefenderKeys は calc-svc に送られた defender.speciesKey を呼ばれた順に返す
-// (ADR-0703 §4: 候補は index 昇順に計算する)。
-func (u *upstreams) calcDefenderKeys() []string {
+// moveCalls は GET /api/pokedex/moves/{key} に渡された技の ID を呼ばれた順に返す
+// (JD4: attacker の技 → 各候補の技を index 昇順。ADR-0704 §5)。
+func (u *upstreams) moveCalls() []string {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	keys := make([]string, 0, len(u.calcBodies))
-	for _, body := range u.calcBodies {
-		keys = append(keys, calcDefenderSpeciesKey(body))
-	}
-	return keys
+	return append([]string(nil), u.moveKeys...)
 }
 
-func (u *upstreams) lastCalcBody(t *testing.T) map[string]any {
+// calcRoutes は calc-svc に届いた計算要求を呼ばれた順に「技 → 防御側の種族」で返す
+// (ADR-0703 §4: 候補は index 昇順。ADR-0704 §5: 候補ごとに順方向 → 逆方向)。
+func (u *upstreams) calcRoutes() []string {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	routes := make([]string, 0, len(u.calcBodies))
+	for _, body := range u.calcBodies {
+		routes = append(routes, calcRoute(body))
+	}
+	return routes
+}
+
+// calcBodyAt は i 番目の計算要求の body を返す(順方向・逆方向の中身を個別に見るため)。
+func (u *upstreams) calcBodyAt(t *testing.T, i int) map[string]any {
 	t.Helper()
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	if len(u.calcBodies) == 0 {
-		t.Fatal("calc-svc が呼ばれていない")
+	if i >= len(u.calcBodies) {
+		t.Fatalf("calc-svc は %d 回しか呼ばれていない(%d 回目を見ようとした)", len(u.calcBodies), i+1)
 	}
-	return u.calcBodies[len(u.calcBodies)-1]
+	return u.calcBodies[i]
 }
 
 func calcDefenderSpeciesKey(body map[string]any) string {
-	defender, ok := body["defender"].(map[string]any)
+	return calcSideSpeciesKey(body, "defender")
+}
+
+func calcSideSpeciesKey(body map[string]any, side string) string {
+	individual, ok := body[side].(map[string]any)
 	if !ok {
 		return ""
 	}
-	key, _ := defender["speciesKey"].(string)
+	key, _ := individual["speciesKey"].(string)
 	return key
+}
+
+// calcRoute は 1 回の計算要求を「技 → 防御側の種族」で表す(JD4)。順方向は
+// 「自分の技 → 候補の種族」、逆方向は「候補の技 → 自分の種族」になるので、
+// この 1 本の文字列で候補と向きの両方を指せる。
+func calcRoute(body map[string]any) string {
+	moveID, _ := body["moveId"].(string)
+	return moveID + "->" + calcDefenderSpeciesKey(body)
+}
+
+// forwardRoute は自分 → その候補(順方向。attackerKo を求める計算)の calcRoute。
+func forwardRoute(defenderSpeciesKey string) string {
+	return testMoveID + "->" + defenderSpeciesKey
+}
+
+// reverseRoute はその候補 → 自分(逆方向。defenderKo を求める計算)の calcRoute。
+// 逆方向の防御側は常に attacker なので、候補の技 ID で一意に指せる(ADR-0704 §4)。
+func reverseRoute(candidateMoveID string) string {
+	return candidateMoveID + "->" + attackerSpeciesKey
 }
 
 func writeStub(w http.ResponseWriter, status int, body string) {
@@ -203,6 +256,18 @@ func newUpstreams(t *testing.T, u *upstreams) Dependencies {
 				baseSpeed = explicit
 			}
 			writeStub(w, http.StatusOK, speciesBody(key, baseSpeed))
+		case strings.HasPrefix(r.URL.Path, "/api/pokedex/moves/"):
+			key := strings.TrimPrefix(r.URL.Path, "/api/pokedex/moves/")
+			u.moveKeys = append(u.moveKeys, key)
+			if fail, ok := u.moveFail[key]; ok {
+				writeStub(w, fail.status, fail.body)
+				return
+			}
+			if u.moveBody != "" || u.moveStatus != 0 {
+				writeStub(w, u.moveStatus, u.moveBody)
+				return
+			}
+			writeStub(w, http.StatusOK, moveBody(key, u.movePriorities[key]))
 		default:
 			writeStub(w, http.StatusNotFound, `{"code":"not_found","message":"no route"}`)
 		}
@@ -219,12 +284,12 @@ func newUpstreams(t *testing.T, u *upstreams) Dependencies {
 		_ = json.Unmarshal(raw, &body)
 		u.calcBodies = append(u.calcBodies, body)
 
-		defenderKey := calcDefenderSpeciesKey(body)
-		if fail, ok := u.calcFail[defenderKey]; ok {
+		route := calcRoute(body)
+		if fail, ok := u.calcFail[route]; ok {
 			writeStub(w, fail.status, fail.body)
 			return
 		}
-		if ko, ok := u.calcKO[defenderKey]; ok {
+		if ko, ok := u.calcKO[route]; ok {
 			writeStub(w, http.StatusOK, `{"minDamage":1,"maxDamage":2,"defenderHP":172,"ko":`+ko+`}`)
 			return
 		}
@@ -255,7 +320,7 @@ func sp(spe int) map[string]any {
 	return map[string]any{"hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": spe}
 }
 
-// individual は 1 個体ぶんの request の欄。候補を並べるときに使う。
+// individual は 1 個体ぶんの request の欄(Individual)。attacker に使う。
 func individual(speciesKey, natureID string, spSpe int) map[string]any {
 	return map[string]any{
 		"speciesKey": speciesKey,
@@ -264,26 +329,45 @@ func individual(speciesKey, natureID string, spSpe int) map[string]any {
 	}
 }
 
+// candidate は相手候補 1 件ぶんの request の欄(DefenderCandidate)。JD4 から候補は
+// **自分が撃ち返す技 moveId を必ず持つ**(ADR-0704 §1)。
+func candidate(speciesKey, natureID string, spSpe int, moveID string) map[string]any {
+	c := individual(speciesKey, natureID, spSpe)
+	c["moveId"] = moveID
+	return c
+}
+
 // validBody は 200 になる request body(相手候補 1 件)。attacker は最速(SP32・上昇補正)= 167、
-// 候補は無振り無補正 = 120 で、attacker が抜ける。
+// 候補は無振り無補正 = 120 で、attacker が抜ける。双方の技は優先度 0。
 func validBody() map[string]any {
 	return map[string]any{
 		"format":    "single",
 		"attacker":  individual(attackerSpeciesKey, naturePlusSpeID, 32),
-		"defenders": []any{individual(defenderSpeciesKey, natureNeutralID, 0)},
+		"defenders": []any{candidate(defenderSpeciesKey, natureNeutralID, 0, defenderMoveID)},
 		"moveId":    testMoveID,
 	}
 }
 
 // bodyWithDefenders は attacker / moveId はそのままに、相手候補だけを差し替える(JD3)。
+// moveId を持たない候補には **候補ごとに違う架空の技**を補う(JD4)。候補全員が同じ技だと
+// 逆方向の計算の取り違え(どの候補の技で自分が削られたか)が緑のまま通るため、
+// 既定でも候補ごとに別の ID にしておく。技を明示したいテストは candidate(...) で渡す。
 func bodyWithDefenders(defenders ...map[string]any) map[string]any {
 	body := validBody()
 	list := make([]any, 0, len(defenders))
-	for _, d := range defenders {
+	for i, d := range defenders {
+		if _, present := d["moveId"]; !present {
+			d["moveId"] = candidateMoveID(i)
+		}
 		list = append(list, d)
 	}
 	body["defenders"] = list
 	return body
+}
+
+// candidateMoveID は i 番目の候補の既定の技 ID(架空)。
+func candidateMoveID(i int) string {
+	return defenderMoveID + "-" + strconv.Itoa(i)
 }
 
 func attackerOf(body map[string]any) map[string]any {
@@ -409,9 +493,10 @@ func assertNoUpstreamDetail(t *testing.T, body string, rawURLs ...string) {
 func assertNoUpstreamCalls(t *testing.T, stub *upstreams) {
 	t.Helper()
 	natures, speciesKeys, calcCalls := stub.counts()
-	if natures+len(speciesKeys)+calcCalls != 0 {
-		t.Errorf("上流を呼んでいる(natures=%d species=%v calc=%d)。request の検査は上流より先(ADR-0701 §5)",
-			natures, speciesKeys, calcCalls)
+	moveKeys := stub.moveCalls()
+	if natures+len(speciesKeys)+len(moveKeys)+calcCalls != 0 {
+		t.Errorf("上流を呼んでいる(natures=%d species=%v moves=%v calc=%d)。request の検査は上流より先(ADR-0701 §5)",
+			natures, speciesKeys, moveKeys, calcCalls)
 	}
 }
 
@@ -433,12 +518,17 @@ func TestOutspeedAndKo(t *testing.T) {
 
 	got := onlyMatchup(t, recorder)
 	want := api.Matchup{
-		DefenderIndex: 0,
-		Outspeeds:     true,
-		SpeedTie:      false,
-		AttackerSpeed: 167,
-		DefenderSpeed: 120,
-		Ko:            api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100},
+		DefenderIndex:        0,
+		Outspeeds:            true,
+		SpeedTie:             false,
+		AttackerSpeed:        167,
+		DefenderSpeed:        120,
+		AttackerMovePriority: 0,
+		DefenderMovePriority: 0,
+		AttackerMovesFirst:   true,
+		TurnOrderTie:         false,
+		AttackerKo:           api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100},
+		DefenderKo:           api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100},
 	}
 	if got != want {
 		t.Errorf("matchups[0] = %+v, want %+v", got, want)
@@ -452,16 +542,21 @@ func TestOutspeedAndKo(t *testing.T) {
 	if !reflect.DeepEqual(speciesKeys, wantKeys) {
 		t.Errorf("species の呼び出し = %v, want %v(attacker → 候補を index 昇順)", speciesKeys, wantKeys)
 	}
-	if calcCalls != 1 {
-		t.Errorf("calc-svc を %d 回呼んでいる。候補 1 件なら 1 回にする", calcCalls)
+	// JD4: 技の優先度も引く(attacker → 候補を index 昇順。ADR-0704 §5)。
+	wantMoves := []string{testMoveID, defenderMoveID}
+	if !reflect.DeepEqual(stub.moveCalls(), wantMoves) {
+		t.Errorf("moves の呼び出し = %v, want %v(attacker の技 → 候補の技)", stub.moveCalls(), wantMoves)
+	}
+	if calcCalls != 2 {
+		t.Errorf("calc-svc を %d 回呼んでいる。候補 1 件なら順方向 + 逆方向 = 2 回(ADR-0704 §4)", calcCalls)
 	}
 
 	// 端末 ID・セッション ID は呼び出し元のものをそのまま全ての上流へ転送する(ADR-0700 §2)。
 	stub.mu.Lock()
 	devices, sessions := stub.deviceIDs, stub.sessionIDs
 	stub.mu.Unlock()
-	if len(devices) != 4 {
-		t.Errorf("上流を %d 回呼んでいる。natures 1 + species 2 + calc 1 = 4 回にする", len(devices))
+	if len(devices) != 7 {
+		t.Errorf("上流を %d 回呼んでいる。natures 1 + species 2 + moves 2 + calc 2 = 7 回にする", len(devices))
 	}
 	for i := range devices {
 		if devices[i] != testDeviceID || sessions[i] != testSessionID {
@@ -469,8 +564,8 @@ func TestOutspeedAndKo(t *testing.T) {
 		}
 	}
 
-	// calc-svc へは judge の request をそのまま組み替えて渡す(1 候補 = 1 回の 1vs1 計算)。
-	body := stub.lastCalcBody(t)
+	// 順方向(1 回目)の calc へは judge の request をそのまま組み替えて渡す(1 候補 = 1 回の 1vs1 計算)。
+	body := stub.calcBodyAt(t, 0)
 	if body["format"] != "single" {
 		t.Errorf("calc の format = %v, want single", body["format"])
 	}
@@ -486,6 +581,17 @@ func TestOutspeedAndKo(t *testing.T) {
 	}
 	if attacker["speciesKey"] != attackerSpeciesKey || attacker["natureId"] != naturePlusSpeID {
 		t.Errorf("calc の attacker = %v, want speciesKey=%s natureId=%s", attacker, attackerSpeciesKey, naturePlusSpeID)
+	}
+	// calc には候補の moveId をそのまま混ぜない(候補の技は逆方向の moveId として送る。ADR-0704 §4)。
+	if defender, ok := body["defender"].(map[string]any); ok {
+		if value, present := defender["moveId"]; present {
+			t.Errorf("calc の defender に moveId = %v を送っている。calc-svc の Individual に技の欄は無い", value)
+		}
+	}
+	// 逆方向(2 回目)は役割が入れ替わる(ADR-0704 §4。詳細は TestOutspeedAndKoReverseCalc)。
+	reverse := stub.calcBodyAt(t, 1)
+	if reverse["moveId"] != defenderMoveID {
+		t.Errorf("逆方向の calc の moveId = %v, want %s(候補の技)", reverse["moveId"], defenderMoveID)
 	}
 }
 
@@ -620,7 +726,8 @@ func TestOutspeedAndKoChoiceScarf(t *testing.T) {
 					tt.wantSpeed, tt.wantDefSpeed, tt.wantOutspeeds, tt.wantSpeedTie)
 			}
 			// スカーフの持ち物 ID は calc-svc にもそのまま渡す(ダメージ側の効果は calc-svc が持つ)。
-			calcBody := stub.lastCalcBody(t)
+			// 見るのは順方向(1 回目)の計算要求(逆方向では attacker / defender が入れ替わる)。
+			calcBody := stub.calcBodyAt(t, 0)
 			if tt.itemID != "" {
 				attackerSent := calcBody["attacker"].(map[string]any)
 				if attackerSent["itemId"] != tt.itemID {
@@ -666,34 +773,60 @@ func TestOutspeedAndKoAsymmetricBaseSpeed(t *testing.T) {
 	}
 }
 
-// TestOutspeedAndKoTranscribesKO: ko は calc-svc の値をそのまま転記する(judge は確定数を
-// 再計算しない。ADR-0701 受け入れ条件1)。画面に出さない chancePercent は返さない(ADR-0010)。
+// TestOutspeedAndKoTranscribesKO: attackerKo / defenderKo は calc-svc の値をそのまま転記する
+// (judge は確定数を再計算しない。ADR-0701 受け入れ条件1・ADR-0704 §3)。
+// **順方向と逆方向で違う値**を返すスタブで、2 つを取り違えていないことも確かめる。
+// 画面に出さない chancePercent は返さない(ADR-0010)。
 func TestOutspeedAndKoTranscribesKO(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
-		ko   string
-		want api.KOChance
+		name           string
+		forwardKO      string
+		reverseKO      string
+		wantAttackerKO api.KOChance
+		wantDefenderKO api.KOChance
 	}{
-		{"確定2発", `{"hits":2,"guaranteed":true,"chancePercent":0,"displayChancePercent":100}`,
-			api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100}},
-		{"乱数1発", `{"hits":1,"guaranteed":false,"chancePercent":87.4321,"displayChancePercent":87.4}`,
-			api.KOChance{Hits: 1, Guaranteed: false, DisplayChancePercent: 87.4}},
-		{"倒せない", `{"hits":0,"guaranteed":false,"chancePercent":0,"displayChancePercent":0}`,
-			api.KOChance{Hits: 0, Guaranteed: false, DisplayChancePercent: 0}},
+		{
+			"自分は確定2発・相手は乱数1発",
+			`{"hits":2,"guaranteed":true,"chancePercent":0,"displayChancePercent":100}`,
+			`{"hits":1,"guaranteed":false,"chancePercent":87.4321,"displayChancePercent":87.4}`,
+			api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100},
+			api.KOChance{Hits: 1, Guaranteed: false, DisplayChancePercent: 87.4},
+		},
+		{
+			"自分は倒せない・相手は確定1発(返り討ち)",
+			`{"hits":0,"guaranteed":false,"chancePercent":0,"displayChancePercent":0}`,
+			`{"hits":1,"guaranteed":true,"chancePercent":0,"displayChancePercent":100}`,
+			api.KOChance{Hits: 0, Guaranteed: false, DisplayChancePercent: 0},
+			api.KOChance{Hits: 1, Guaranteed: true, DisplayChancePercent: 100},
+		},
+		{
+			"自分は確定1発・相手は倒せない",
+			`{"hits":1,"guaranteed":true,"chancePercent":0,"displayChancePercent":100}`,
+			`{"hits":0,"guaranteed":false,"chancePercent":0,"displayChancePercent":0}`,
+			api.KOChance{Hits: 1, Guaranteed: true, DisplayChancePercent: 100},
+			api.KOChance{Hits: 0, Guaranteed: false, DisplayChancePercent: 0},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			stub := &upstreams{calcBody: `{"minDamage":1,"maxDamage":2,"defenderHP":172,"ko":` + tt.ko + `}`}
+			stub := &upstreams{calcKO: map[string]string{
+				forwardRoute(defenderSpeciesKey): tt.forwardKO,
+				reverseRoute(defenderMoveID):     tt.reverseKO,
+			}}
 			recorder := postOutspeed(newUpstreams(t, stub), validBody(), nil)
 			if recorder.Code != http.StatusOK {
 				t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
 			}
-			if got := onlyMatchup(t, recorder).Ko; got != tt.want {
-				t.Errorf("ko = %+v, want %+v", got, tt.want)
+			got := onlyMatchup(t, recorder)
+			if got.AttackerKo != tt.wantAttackerKO {
+				t.Errorf("attackerKo = %+v, want %+v(自分の技 → 候補)", got.AttackerKo, tt.wantAttackerKO)
+			}
+			if got.DefenderKo != tt.wantDefenderKO {
+				t.Errorf("defenderKo = %+v, want %+v(候補の技 → 自分)", got.DefenderKo, tt.wantDefenderKO)
 			}
 
 			var raw struct {
@@ -705,12 +838,18 @@ func TestOutspeedAndKoTranscribesKO(t *testing.T) {
 			if len(raw.Matchups) != 1 {
 				t.Fatalf("matchups の件数 = %d, want 1", len(raw.Matchups))
 			}
-			ko, ok := raw.Matchups[0]["ko"].(map[string]any)
-			if !ok {
-				t.Fatalf("ko = %v, want an object", raw.Matchups[0]["ko"])
+			// JD3 までの ko という欄は残っていない(ADR-0704 §3 の改名)。
+			if value, present := raw.Matchups[0]["ko"]; present {
+				t.Errorf("matchups に ko = %v が残っている。attackerKo に改名した(ADR-0704 §3)", value)
 			}
-			if _, present := ko["chancePercent"]; present {
-				t.Error("ko に chancePercent を返している。画面に出す値ではない(ADR-0010)")
+			for _, key := range []string{"attackerKo", "defenderKo"} {
+				ko, ok := raw.Matchups[0][key].(map[string]any)
+				if !ok {
+					t.Fatalf("%s = %v, want an object", key, raw.Matchups[0][key])
+				}
+				if _, present := ko["chancePercent"]; present {
+					t.Errorf("%s に chancePercent を返している。画面に出す値ではない(ADR-0010)", key)
+				}
 			}
 		})
 	}
@@ -737,9 +876,11 @@ func TestOutspeedAndKoForwardsField(t *testing.T) {
 			t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
 		}
 
-		field, ok := stub.lastCalcBody(t)["field"].(map[string]any)
+		// 順方向(1 回目)はそのまま転送する。逆方向の壁の入れ替えは
+		// TestOutspeedAndKoReverseCalcSwapsScreens で別に確かめる(ADR-0704 §4)。
+		field, ok := stub.calcBodyAt(t, 0)["field"].(map[string]any)
 		if !ok {
-			t.Fatalf("calc の field = %v, want an object", stub.lastCalcBody(t)["field"])
+			t.Fatalf("calc の field = %v, want an object", stub.calcBodyAt(t, 0)["field"])
 		}
 		if field["weather"] != "sun" || field["terrain"] != "electric" {
 			t.Errorf("calc の field = %v, want weather=sun terrain=electric", field)
@@ -758,8 +899,12 @@ func TestOutspeedAndKoForwardsField(t *testing.T) {
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
 		}
-		if value, present := stub.lastCalcBody(t)["field"]; present {
-			t.Errorf("calc に field = %v を送っている。未指定なら送らない", value)
+		// 順方向・逆方向のどちらにも送らない(ADR-0704 §4 は壁の入れ替えだけを決めた。
+		// 省略された field を逆方向で作り出さない)。
+		for i := 0; i < 2; i++ {
+			if value, present := stub.calcBodyAt(t, i)["field"]; present {
+				t.Errorf("calc %d 回目に field = %v を送っている。未指定なら送らない", i, value)
+			}
 		}
 	})
 
@@ -781,9 +926,10 @@ func TestOutspeedAndKoForwardsField(t *testing.T) {
 		stub.mu.Lock()
 		bodies := append([]map[string]any(nil), stub.calcBodies...)
 		stub.mu.Unlock()
-		if len(bodies) != 2 {
-			t.Fatalf("calc を %d 回呼んでいる。候補 2 件なら 2 回", len(bodies))
+		if len(bodies) != 4 {
+			t.Fatalf("calc を %d 回呼んでいる。候補 2 件なら (順方向 + 逆方向) × 2 = 4 回", len(bodies))
 		}
+		// 天候は場全体の状態なので、候補にも向きにもよらず同じものが届く(ADR-0703 §5・ADR-0704 §4)。
 		for i, sent := range bodies {
 			field, ok := sent["field"].(map[string]any)
 			if !ok || field["weather"] != "rain" {
@@ -935,8 +1081,9 @@ func TestOutspeedAndKoUnknownNature(t *testing.T) {
 		assertStatusAndCode(t, recorder, http.StatusUnprocessableEntity, api.UnknownNature)
 		assertBlamesAttacker(t, recorder)
 
-		if _, speciesKeys, calcCalls := stub.counts(); len(speciesKeys)+calcCalls != 0 {
-			t.Error("性格を解決できていないのに種族・calc-svc を呼んでいる")
+		_, speciesKeys, calcCalls := stub.counts()
+		if len(speciesKeys)+len(stub.moveCalls())+calcCalls != 0 {
+			t.Error("性格を解決できていないのに種族・技・calc-svc を呼んでいる")
 		}
 	})
 
@@ -953,8 +1100,9 @@ func TestOutspeedAndKoUnknownNature(t *testing.T) {
 		assertStatusAndCode(t, recorder, http.StatusUnprocessableEntity, api.UnknownNature)
 		assertBlamesCandidate(t, recorder, 1)
 
-		if _, speciesKeys, calcCalls := stub.counts(); len(speciesKeys)+calcCalls != 0 {
-			t.Error("性格を解決できていないのに種族・calc-svc を呼んでいる")
+		_, speciesKeys, calcCalls := stub.counts()
+		if len(speciesKeys)+len(stub.moveCalls())+calcCalls != 0 {
+			t.Error("性格を解決できていないのに種族・技・calc-svc を呼んでいる")
 		}
 	})
 }
@@ -974,6 +1122,10 @@ func TestOutspeedAndKoUnknownSpecies(t *testing.T) {
 	assertStatusAndCode(t, recorder, http.StatusUnprocessableEntity, api.UnknownSpecies)
 	if _, _, calcCalls := stub.counts(); calcCalls != 0 {
 		t.Error("種族を引けていないのに calc-svc を呼んでいる(ADR-0701 §5 の検査順)")
+	}
+	// attacker の種族で止まるので、技もまだ引いていない(ADR-0704 §5 の検査順)。
+	if moves := stub.moveCalls(); len(moves) != 0 {
+		t.Errorf("技を %v 回引いている。attacker の種族で打ち切る", moves)
 	}
 }
 
@@ -1411,12 +1563,15 @@ func TestOutspeedAndKoDoesNotForwardSpeedField(t *testing.T) {
 			t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
 		}
 
-		calc := stub.lastCalcBody(t)
-		if value, present := calc["speedField"]; present {
-			t.Errorf("calc に speedField = %v を送っている。calc-svc は解釈できない(ADR-0702 §1)", value)
-		}
-		if value, present := calc["field"]; present {
-			t.Errorf("calc に field = %v を送っている。request で指定していない", value)
+		// 順方向・逆方向のどちらにも送らない(JD4 で計算が 2 本になっても変わらない)。
+		for i := 0; i < 2; i++ {
+			calc := stub.calcBodyAt(t, i)
+			if value, present := calc["speedField"]; present {
+				t.Errorf("calc %d 回目に speedField = %v を送っている。calc-svc は解釈できない(ADR-0702 §1)", i, value)
+			}
+			if value, present := calc["field"]; present {
+				t.Errorf("calc %d 回目に field = %v を送っている。request で指定していない", i, value)
+			}
 		}
 	})
 
@@ -1433,21 +1588,23 @@ func TestOutspeedAndKoDoesNotForwardSpeedField(t *testing.T) {
 			t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
 		}
 
-		calc := stub.lastCalcBody(t)
-		if value, present := calc["speedField"]; present {
-			t.Errorf("calc に speedField = %v を送っている(ADR-0702 §1)", value)
-		}
-		field, ok := calc["field"].(map[string]any)
-		if !ok {
-			t.Fatalf("calc の field = %v, want an object", calc["field"])
-		}
-		if field["weather"] != "sun" {
-			t.Errorf("calc の field.weather = %v, want sun(ADR-0701 受け入れ条件6 は変わらない)", field["weather"])
-		}
-		// トリックルーム・追い風が field に紛れ込んでいないこと。
-		for _, key := range []string{"trickRoom", "attackerTailwind", "defenderTailwind"} {
-			if value, present := field[key]; present {
-				t.Errorf("calc の field に %s = %v が混ざっている", key, value)
+		for i := 0; i < 2; i++ {
+			calc := stub.calcBodyAt(t, i)
+			if value, present := calc["speedField"]; present {
+				t.Errorf("calc %d 回目に speedField = %v を送っている(ADR-0702 §1)", i, value)
+			}
+			field, ok := calc["field"].(map[string]any)
+			if !ok {
+				t.Fatalf("calc %d 回目の field = %v, want an object", i, calc["field"])
+			}
+			if field["weather"] != "sun" {
+				t.Errorf("calc %d 回目の field.weather = %v, want sun(ADR-0701 受け入れ条件6 は変わらない)", i, field["weather"])
+			}
+			// トリックルーム・追い風が field に紛れ込んでいないこと。
+			for _, key := range []string{"trickRoom", "attackerTailwind", "defenderTailwind"} {
+				if value, present := field[key]; present {
+					t.Errorf("calc %d 回目の field に %s = %v が混ざっている", i, key, value)
+				}
 			}
 		}
 	})
@@ -1459,13 +1616,16 @@ func TestOutspeedAndKoSpeedFieldOmittedMatchesJD1(t *testing.T) {
 	t.Parallel()
 
 	// JD1 と同じ条件: attacker = 167、候補 = 120 で抜ける。
+	// JD4 で足した欄は、どちらの技も優先度 0 なので素早さの結果と一致する(ADR-0704 §2)。
 	want := api.Matchup{
-		DefenderIndex: 0,
-		Outspeeds:     true,
-		SpeedTie:      false,
-		AttackerSpeed: 167,
-		DefenderSpeed: 120,
-		Ko:            api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100},
+		DefenderIndex:      0,
+		Outspeeds:          true,
+		SpeedTie:           false,
+		AttackerSpeed:      167,
+		DefenderSpeed:      120,
+		AttackerMovesFirst: true,
+		AttackerKo:         api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100},
+		DefenderKo:         api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100},
 	}
 
 	tests := []struct {
@@ -1561,10 +1721,15 @@ func TestOutspeedAndKoMultipleDefenders(t *testing.T) {
 			defenderSpeciesKey:  100,
 			defender3SpeciesKey: 130,
 		},
+		// 順方向(自分 → 各候補)と逆方向(各候補 → 自分)で、候補ごとに違う値を返す。
+		// すべて同じ値だと、行の取り違えも向きの取り違えも緑のまま通る(ADR-0703・ADR-0704 テストの期待値)。
 		calcKO: map[string]string{
-			defender2SpeciesKey: `{"hits":1,"guaranteed":true,"chancePercent":0,"displayChancePercent":100}`,
-			defenderSpeciesKey:  `{"hits":2,"guaranteed":false,"chancePercent":50,"displayChancePercent":50}`,
-			defender3SpeciesKey: `{"hits":0,"guaranteed":false,"chancePercent":0,"displayChancePercent":0}`,
+			forwardRoute(defender2SpeciesKey): `{"hits":1,"guaranteed":true,"chancePercent":0,"displayChancePercent":100}`,
+			forwardRoute(defenderSpeciesKey):  `{"hits":2,"guaranteed":false,"chancePercent":50,"displayChancePercent":50}`,
+			forwardRoute(defender3SpeciesKey): `{"hits":0,"guaranteed":false,"chancePercent":0,"displayChancePercent":0}`,
+			reverseRoute(candidateMoveID(0)):  `{"hits":3,"guaranteed":true,"chancePercent":0,"displayChancePercent":100}`,
+			reverseRoute(candidateMoveID(1)):  `{"hits":4,"guaranteed":false,"chancePercent":25,"displayChancePercent":25}`,
+			reverseRoute(candidateMoveID(2)):  `{"hits":1,"guaranteed":true,"chancePercent":0,"displayChancePercent":100}`,
 		},
 	}
 	recorder := postOutspeed(newUpstreams(t, stub), body, nil)
@@ -1572,21 +1737,28 @@ func TestOutspeedAndKoMultipleDefenders(t *testing.T) {
 		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
 	}
 
+	// どちらの技も優先度 0 なので、attackerMovesFirst / turnOrderTie は素早さの結果と一致する。
 	want := []api.Matchup{
 		{
 			DefenderIndex: 0, Outspeeds: true, SpeedTie: false,
 			AttackerSpeed: 120, DefenderSpeed: 110,
-			Ko: api.KOChance{Hits: 1, Guaranteed: true, DisplayChancePercent: 100},
+			AttackerMovesFirst: true, TurnOrderTie: false,
+			AttackerKo: api.KOChance{Hits: 1, Guaranteed: true, DisplayChancePercent: 100},
+			DefenderKo: api.KOChance{Hits: 3, Guaranteed: true, DisplayChancePercent: 100},
 		},
 		{
 			DefenderIndex: 1, Outspeeds: false, SpeedTie: true,
 			AttackerSpeed: 120, DefenderSpeed: 120,
-			Ko: api.KOChance{Hits: 2, Guaranteed: false, DisplayChancePercent: 50},
+			AttackerMovesFirst: false, TurnOrderTie: true,
+			AttackerKo: api.KOChance{Hits: 2, Guaranteed: false, DisplayChancePercent: 50},
+			DefenderKo: api.KOChance{Hits: 4, Guaranteed: false, DisplayChancePercent: 25},
 		},
 		{
 			DefenderIndex: 2, Outspeeds: false, SpeedTie: false,
 			AttackerSpeed: 120, DefenderSpeed: 150,
-			Ko: api.KOChance{Hits: 0, Guaranteed: false, DisplayChancePercent: 0},
+			AttackerMovesFirst: false, TurnOrderTie: false,
+			AttackerKo: api.KOChance{Hits: 0, Guaranteed: false, DisplayChancePercent: 0},
+			DefenderKo: api.KOChance{Hits: 1, Guaranteed: true, DisplayChancePercent: 100},
 		},
 	}
 	got := decodeResponse(t, recorder).Matchups
@@ -1594,7 +1766,7 @@ func TestOutspeedAndKoMultipleDefenders(t *testing.T) {
 		t.Errorf("matchups = %+v, want %+v", got, want)
 	}
 
-	// 上流は natures 1 + attacker の種族 1 + 候補の種族 3 + calc 3(ADR-0703 §1)。
+	// 上流は natures 1 + 種族 (1+3) + 技 (1+3) + calc 2×3(ADR-0703 §1・ADR-0704 §5)。
 	natures, speciesKeys, calcCalls := stub.counts()
 	if natures != 1 {
 		t.Errorf("natures を %d 回呼んでいる。候補が増えても 1 回(ADR-0703 §1)", natures)
@@ -1603,12 +1775,21 @@ func TestOutspeedAndKoMultipleDefenders(t *testing.T) {
 	if !reflect.DeepEqual(speciesKeys, wantSpecies) {
 		t.Errorf("species の呼び出し = %v, want %v(attacker → 候補を index 昇順。ADR-0703 §4)", speciesKeys, wantSpecies)
 	}
-	if calcCalls != 3 {
-		t.Errorf("calc を %d 回呼んでいる。候補 3 件なら 3 回", calcCalls)
+	wantMoves := []string{testMoveID, candidateMoveID(0), candidateMoveID(1), candidateMoveID(2)}
+	if !reflect.DeepEqual(stub.moveCalls(), wantMoves) {
+		t.Errorf("moves の呼び出し = %v, want %v(attacker の技 → 候補の技を index 昇順。ADR-0704 §5)", stub.moveCalls(), wantMoves)
 	}
-	wantCalcOrder := []string{defender2SpeciesKey, defenderSpeciesKey, defender3SpeciesKey}
-	if !reflect.DeepEqual(stub.calcDefenderKeys(), wantCalcOrder) {
-		t.Errorf("calc の defender = %v, want %v(index 昇順)", stub.calcDefenderKeys(), wantCalcOrder)
+	if calcCalls != 6 {
+		t.Errorf("calc を %d 回呼んでいる。候補 3 件なら (順方向 + 逆方向) × 3 = 6 回", calcCalls)
+	}
+	wantCalcOrder := []string{
+		forwardRoute(defender2SpeciesKey), reverseRoute(candidateMoveID(0)),
+		forwardRoute(defenderSpeciesKey), reverseRoute(candidateMoveID(1)),
+		forwardRoute(defender3SpeciesKey), reverseRoute(candidateMoveID(2)),
+	}
+	if !reflect.DeepEqual(stub.calcRoutes(), wantCalcOrder) {
+		t.Errorf("calc の呼び出し = %v, want %v(index 昇順・候補ごとに順方向 → 逆方向。ADR-0704 §5)",
+			stub.calcRoutes(), wantCalcOrder)
 	}
 }
 
@@ -1652,8 +1833,13 @@ func TestOutspeedAndKoMatchupOrderFollowsDefenders(t *testing.T) {
 	if !reflect.DeepEqual(speciesKeys, wantSpecies) {
 		t.Errorf("species の呼び出し = %v, want %v(重複除去はしない)", speciesKeys, wantSpecies)
 	}
-	if calcCalls != 2 {
-		t.Errorf("calc を %d 回呼んでいる。候補 2 件なら 2 回(調整が違えば結果も違う)", calcCalls)
+	if calcCalls != 4 {
+		t.Errorf("calc を %d 回呼んでいる。候補 2 件なら (順方向 + 逆方向) × 2 = 4 回(調整が違えば結果も違う)", calcCalls)
+	}
+	// 技も同じで、候補の数だけ素直に引く(同じ moveId でもまとめない。ADR-0704 却下した案)。
+	wantMoves := []string{testMoveID, candidateMoveID(0), candidateMoveID(1)}
+	if !reflect.DeepEqual(stub.moveCalls(), wantMoves) {
+		t.Errorf("moves の呼び出し = %v, want %v", stub.moveCalls(), wantMoves)
 	}
 }
 
@@ -1688,8 +1874,12 @@ func TestOutspeedAndKoNaturesCalledOnceForEveryCandidate(t *testing.T) {
 			if len(speciesKeys) != count+1 {
 				t.Errorf("species を %d 回呼んでいる。attacker 1 + 候補 %d = %d 回", len(speciesKeys), count, count+1)
 			}
-			if calcCalls != count {
-				t.Errorf("calc を %d 回呼んでいる。候補の数だけ %d 回", calcCalls, count)
+			if moves := stub.moveCalls(); len(moves) != count+1 {
+				t.Errorf("moves を %d 回呼んでいる。attacker の技 1 + 候補 %d = %d 回(ADR-0704 §5)",
+					len(moves), count, count+1)
+			}
+			if calcCalls != 2*count {
+				t.Errorf("calc を %d 回呼んでいる。候補の数 × (順方向 + 逆方向) = %d 回", calcCalls, 2*count)
 			}
 		})
 	}
@@ -1838,6 +2028,11 @@ func TestOutspeedAndKoStopsAtFirstFailingCandidate(t *testing.T) {
 		if !reflect.DeepEqual(speciesKeys, wantSpecies) {
 			t.Errorf("species の呼び出し = %v, want %v(3 番目の候補は引かない)", speciesKeys, wantSpecies)
 		}
+		// 技は「その候補の種族 → その候補の技」の順なので、失敗した候補の技は引かない(ADR-0704 §5)。
+		wantMoves := []string{testMoveID, candidateMoveID(0)}
+		if !reflect.DeepEqual(stub.moveCalls(), wantMoves) {
+			t.Errorf("moves の呼び出し = %v, want %v(種族で失敗した候補の技は引かない)", stub.moveCalls(), wantMoves)
+		}
 		if calcCalls != 0 {
 			t.Errorf("calc を %d 回呼んでいる。種族が揃う前に計算しない(ADR-0703 §4)", calcCalls)
 		}
@@ -1867,7 +2062,7 @@ func TestOutspeedAndKoStopsAtFirstFailingCandidate(t *testing.T) {
 
 		stub := &upstreams{
 			calcFail: map[string]stubResponse{
-				defender2SpeciesKey: {http.StatusBadRequest, `{"code":"unknown_move","message":"no such move"}`},
+				forwardRoute(defender2SpeciesKey): {http.StatusBadRequest, `{"code":"unknown_move","message":"no such move"}`},
 			},
 		}
 		recorder := postOutspeed(newUpstreams(t, stub), threeDefenders(), nil)
@@ -1876,17 +2071,50 @@ func TestOutspeedAndKoStopsAtFirstFailingCandidate(t *testing.T) {
 		assertBlamesCandidate(t, recorder, 1)
 		assertNoUpstreamDetail(t, recorder.Body.String(), stub.pokedexURL, stub.calcURL)
 
-		// 種族は 4 件すべて引いた後に calc へ進む(ADR-0703 §4 の 2 段階)。
+		// 種族も技も 4 件すべて引いた後に calc へ進む(ADR-0703 §4 の 2 段階。ADR-0704 §5)。
 		_, speciesKeys, calcCalls := stub.counts()
 		if len(speciesKeys) != 4 {
 			t.Errorf("species を %d 回呼んでいる。attacker 1 + 候補 3 = 4 回", len(speciesKeys))
 		}
-		if calcCalls != 2 {
-			t.Errorf("calc を %d 回呼んでいる。2 番目で打ち切るので 2 回(3 番目は呼ばない)", calcCalls)
+		if moves := stub.moveCalls(); len(moves) != 4 {
+			t.Errorf("moves を %d 回呼んでいる。attacker の技 1 + 候補 3 = 4 回", len(moves))
 		}
-		wantCalcOrder := []string{defenderSpeciesKey, defender2SpeciesKey}
-		if !reflect.DeepEqual(stub.calcDefenderKeys(), wantCalcOrder) {
-			t.Errorf("calc の defender = %v, want %v", stub.calcDefenderKeys(), wantCalcOrder)
+		if calcCalls != 3 {
+			t.Errorf("calc を %d 回呼んでいる。候補 0 の 2 本 + 候補 1 の順方向で打ち切るので 3 回", calcCalls)
+		}
+		// 候補 1 の順方向で失敗するので、その逆方向も候補 2 も呼ばない(ADR-0703 §3)。
+		wantCalcOrder := []string{
+			forwardRoute(defenderSpeciesKey), reverseRoute(candidateMoveID(0)),
+			forwardRoute(defender2SpeciesKey),
+		}
+		if !reflect.DeepEqual(stub.calcRoutes(), wantCalcOrder) {
+			t.Errorf("calc の呼び出し = %v, want %v", stub.calcRoutes(), wantCalcOrder)
+		}
+	})
+
+	t.Run("2 番目の候補の逆方向の計算を calc が 400 で拒否する", func(t *testing.T) {
+		t.Parallel()
+
+		// 逆方向(候補の技 → 自分)だけを失敗させる。順方向は成功しているので、
+		// 「順方向さえ通れば候補を成功扱いにする」実装だと落ちる(ADR-0704 §4)。
+		stub := &upstreams{
+			calcFail: map[string]stubResponse{
+				reverseRoute(candidateMoveID(1)): {http.StatusBadRequest, `{"code":"unknown_move","message":"no such move"}`},
+			},
+		}
+		recorder := postOutspeed(newUpstreams(t, stub), threeDefenders(), nil)
+
+		assertStatusAndCode(t, recorder, http.StatusBadRequest, api.InvalidRequest)
+		assertBlamesCandidate(t, recorder, 1)
+		assertNoUpstreamDetail(t, recorder.Body.String(), stub.pokedexURL, stub.calcURL)
+
+		wantCalcOrder := []string{
+			forwardRoute(defenderSpeciesKey), reverseRoute(candidateMoveID(0)),
+			forwardRoute(defender2SpeciesKey), reverseRoute(candidateMoveID(1)),
+		}
+		if !reflect.DeepEqual(stub.calcRoutes(), wantCalcOrder) {
+			t.Errorf("calc の呼び出し = %v, want %v(逆方向の失敗でも 3 番目の候補は計算しない)",
+				stub.calcRoutes(), wantCalcOrder)
 		}
 	})
 
@@ -1895,14 +2123,14 @@ func TestOutspeedAndKoStopsAtFirstFailingCandidate(t *testing.T) {
 
 		stub := &upstreams{
 			calcFail: map[string]stubResponse{
-				defender2SpeciesKey: {http.StatusServiceUnavailable, `{"code":"master_unavailable","message":"no master"}`},
+				forwardRoute(defender2SpeciesKey): {http.StatusServiceUnavailable, `{"code":"master_unavailable","message":"no master"}`},
 			},
 		}
 		recorder := postOutspeed(newUpstreams(t, stub), threeDefenders(), nil)
 
 		assertStatusAndCode(t, recorder, http.StatusServiceUnavailable, api.UpstreamUnavailable)
-		if _, _, calcCalls := stub.counts(); calcCalls != 2 {
-			t.Errorf("calc を %d 回呼んでいる。2 番目で打ち切るので 2 回", calcCalls)
+		if _, _, calcCalls := stub.counts(); calcCalls != 3 {
+			t.Errorf("calc を %d 回呼んでいる。候補 1 の順方向で打ち切るので 3 回", calcCalls)
 		}
 	})
 
@@ -1911,7 +2139,7 @@ func TestOutspeedAndKoStopsAtFirstFailingCandidate(t *testing.T) {
 
 		stub := &upstreams{
 			calcFail: map[string]stubResponse{
-				defender3SpeciesKey: {http.StatusBadRequest, `{"code":"unknown_move","message":"no such move"}`},
+				forwardRoute(defender3SpeciesKey): {http.StatusBadRequest, `{"code":"unknown_move","message":"no such move"}`},
 			},
 		}
 		recorder := postOutspeed(newUpstreams(t, stub), threeDefenders(), nil)
@@ -1964,13 +2192,15 @@ func TestOutspeedAndKoSpeedFieldAppliesToEveryCandidate(t *testing.T) {
 		}
 
 		// attacker 120 → 240。候補 110 / 120 / 150 → 220 / 240 / 300。
+		// 技はすべて優先度 0 なので、行動順は素早さの結果と一致する。
+		defaultKO := api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100}
 		want := []api.Matchup{
 			{DefenderIndex: 0, Outspeeds: true, AttackerSpeed: 240, DefenderSpeed: 220,
-				Ko: api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100}},
+				AttackerMovesFirst: true, AttackerKo: defaultKO, DefenderKo: defaultKO},
 			{DefenderIndex: 1, SpeedTie: true, AttackerSpeed: 240, DefenderSpeed: 240,
-				Ko: api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100}},
+				TurnOrderTie: true, AttackerKo: defaultKO, DefenderKo: defaultKO},
 			{DefenderIndex: 2, AttackerSpeed: 240, DefenderSpeed: 300,
-				Ko: api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100}},
+				AttackerKo: defaultKO, DefenderKo: defaultKO},
 		}
 		if got := decodeResponse(t, recorder).Matchups; !reflect.DeepEqual(got, want) {
 			t.Errorf("matchups = %+v, want %+v", got, want)
@@ -2030,6 +2260,624 @@ func TestOutspeedAndKoSpeedFieldAppliesToEveryCandidate(t *testing.T) {
 				t.Errorf("matchups[%d] outspeeds/speedTie = %v/%v, want true/false(180 は 110/120/150 をすべて抜く)",
 					i, matchup.Outspeeds, matchup.SpeedTie)
 			}
+		}
+	})
+}
+
+// --- JD4: 相手の技を含めた返り討ち判定。ADR-0704 ---
+
+// screenFlag は calc-svc に届いた field の screens の 1 欄を読む。judge のクライアントは
+// false の欄を送らない(omitempty)ので、欄が無い = false として扱う。
+func screenFlag(t *testing.T, field map[string]any, side, key string) bool {
+	t.Helper()
+	screens, ok := field[side].(map[string]any)
+	if !ok {
+		return false
+	}
+	value, _ := screens[key].(bool)
+	return value
+}
+
+func calcField(t *testing.T, body map[string]any) map[string]any {
+	t.Helper()
+	field, ok := body["field"].(map[string]any)
+	if !ok {
+		t.Fatalf("calc の field = %v, want an object", body["field"])
+	}
+	return field
+}
+
+// TestOutspeedAndKoReverseCalcSwapsRoles: 逆方向の計算は「その候補が攻撃側・自分が防御側」で、
+// 技はその候補の moveId になる(ADR-0704 §4・受け入れ条件4)。順方向と役割が入れ替わるだけで、
+// 個体の中身(調整・持ち物・特性)はそのまま運ばれる。
+func TestOutspeedAndKoReverseCalcSwapsRoles(t *testing.T) {
+	t.Parallel()
+
+	body := validBody()
+	attacker := attackerOf(body)
+	attacker["itemId"] = "test-attacker-item"
+	attacker["abilityId"] = "test-attacker-ability"
+	defender := defenderAt(body, 0)
+	defender["itemId"] = "test-defender-item"
+	defender["abilityId"] = "test-defender-ability"
+	defender["ranks"] = map[string]any{"atk": 2}
+
+	stub := &upstreams{}
+	recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	forward := stub.calcBodyAt(t, 0)
+	reverse := stub.calcBodyAt(t, 1)
+
+	if forward["moveId"] != testMoveID {
+		t.Errorf("順方向の moveId = %v, want %s(自分の技)", forward["moveId"], testMoveID)
+	}
+	if reverse["moveId"] != defenderMoveID {
+		t.Errorf("逆方向の moveId = %v, want %s(候補の技)", reverse["moveId"], defenderMoveID)
+	}
+	if reverse["format"] != "single" {
+		t.Errorf("逆方向の format = %v, want single(向きで変わらない)", reverse["format"])
+	}
+
+	reverseAttacker, ok := reverse["attacker"].(map[string]any)
+	if !ok {
+		t.Fatalf("逆方向の attacker = %v, want an object", reverse["attacker"])
+	}
+	if reverseAttacker["speciesKey"] != defenderSpeciesKey {
+		t.Errorf("逆方向の attacker.speciesKey = %v, want %s(候補が攻撃側になる)",
+			reverseAttacker["speciesKey"], defenderSpeciesKey)
+	}
+	if reverseAttacker["itemId"] != "test-defender-item" || reverseAttacker["abilityId"] != "test-defender-ability" {
+		t.Errorf("逆方向の attacker = %v, want 候補の持ち物・特性", reverseAttacker)
+	}
+	ranks, ok := reverseAttacker["ranks"].(map[string]any)
+	if !ok || ranks["atk"] != float64(2) {
+		t.Errorf("逆方向の attacker.ranks = %v, want atk=2(候補のランクを運ぶ)", reverseAttacker["ranks"])
+	}
+
+	reverseDefender, ok := reverse["defender"].(map[string]any)
+	if !ok {
+		t.Fatalf("逆方向の defender = %v, want an object", reverse["defender"])
+	}
+	if reverseDefender["speciesKey"] != attackerSpeciesKey {
+		t.Errorf("逆方向の defender.speciesKey = %v, want %s(自分が防御側になる)",
+			reverseDefender["speciesKey"], attackerSpeciesKey)
+	}
+	if reverseDefender["itemId"] != "test-attacker-item" || reverseDefender["abilityId"] != "test-attacker-ability" {
+		t.Errorf("逆方向の defender = %v, want 自分の持ち物・特性", reverseDefender)
+	}
+	// 候補の技は Individual の欄としては送らない(calc-svc の Individual に技の欄は無い)。
+	if value, present := reverseAttacker["moveId"]; present {
+		t.Errorf("逆方向の attacker に moveId = %v を送っている。技は body 直下の moveId で表す", value)
+	}
+}
+
+// TestOutspeedAndKoReverseCalcSwapsScreens: 壁は「どちらの側に張られているか」を表すので、
+// 逆方向の計算では attackerScreens と defenderScreens を入れ替えて送る(ADR-0704 §4・受け入れ条件4)。
+// 天候・地形は場全体の状態なので入れ替えない。入れ替えを忘れると、自分の壁が相手を守る
+// 計算になり、エラーも出ないまま結果だけが静かに間違う。
+func TestOutspeedAndKoReverseCalcSwapsScreens(t *testing.T) {
+	t.Parallel()
+
+	t.Run("両側に違う壁があるとき入れ替わる", func(t *testing.T) {
+		t.Parallel()
+
+		body := validBody()
+		body["field"] = map[string]any{
+			"weather":         "sun",
+			"terrain":         "grassy",
+			"attackerScreens": map[string]any{"reflect": true},
+			"defenderScreens": map[string]any{"lightScreen": true, "auroraVeil": true},
+		}
+
+		stub := &upstreams{}
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+		}
+
+		forward := calcField(t, stub.calcBodyAt(t, 0))
+		if !screenFlag(t, forward, "attackerScreens", "reflect") {
+			t.Errorf("順方向の field.attackerScreens = %v, want reflect=true(そのまま転送する)", forward["attackerScreens"])
+		}
+		if screenFlag(t, forward, "attackerScreens", "lightScreen") {
+			t.Errorf("順方向の field.attackerScreens = %v に相手側の壁が混ざっている", forward["attackerScreens"])
+		}
+		if !screenFlag(t, forward, "defenderScreens", "lightScreen") || !screenFlag(t, forward, "defenderScreens", "auroraVeil") {
+			t.Errorf("順方向の field.defenderScreens = %v, want lightScreen=true auroraVeil=true", forward["defenderScreens"])
+		}
+
+		reverse := calcField(t, stub.calcBodyAt(t, 1))
+		if !screenFlag(t, reverse, "defenderScreens", "reflect") {
+			t.Errorf("逆方向の field.defenderScreens = %v, want reflect=true(自分の側の壁は防御側に回る。ADR-0704 §4)",
+				reverse["defenderScreens"])
+		}
+		if screenFlag(t, reverse, "attackerScreens", "reflect") {
+			t.Errorf("逆方向の field.attackerScreens = %v に自分の壁が残っている。入れ替えていない(ADR-0704 §4)",
+				reverse["attackerScreens"])
+		}
+		if !screenFlag(t, reverse, "attackerScreens", "lightScreen") || !screenFlag(t, reverse, "attackerScreens", "auroraVeil") {
+			t.Errorf("逆方向の field.attackerScreens = %v, want lightScreen=true auroraVeil=true(相手側の壁が攻撃側に回る)",
+				reverse["attackerScreens"])
+		}
+		// 天候・地形は場全体の状態なので向きで変わらない。
+		if reverse["weather"] != "sun" || reverse["terrain"] != "grassy" {
+			t.Errorf("逆方向の field = %v, want weather=sun terrain=grassy(入れ替えない)", reverse)
+		}
+	})
+
+	t.Run("片側だけの壁も向こう側に移る", func(t *testing.T) {
+		t.Parallel()
+
+		body := validBody()
+		body["field"] = map[string]any{"attackerScreens": map[string]any{"reflect": true}}
+
+		stub := &upstreams{}
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+		}
+
+		reverse := calcField(t, stub.calcBodyAt(t, 1))
+		if !screenFlag(t, reverse, "defenderScreens", "reflect") {
+			t.Errorf("逆方向の field.defenderScreens = %v, want reflect=true", reverse["defenderScreens"])
+		}
+		if screenFlag(t, reverse, "attackerScreens", "reflect") {
+			t.Errorf("逆方向の field.attackerScreens = %v。指定の無かった側に壁を作らない", reverse["attackerScreens"])
+		}
+	})
+}
+
+// TestOutspeedAndKoTurnOrder: 先に動く側は **優先度が違えば優先度が高い方**で、素早さも
+// トリックルームも見ない。優先度が同じときだけ素早さ(outspeeds)で決まり、優先度も素早さも
+// 同じなら turnOrderTie(ADR-0704 §2・受け入れ条件3)。
+// attacker は種族値 100・無振り無補正 = 120 に固定し、候補の種族値で速さを作る。
+func TestOutspeedAndKoTurnOrder(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name              string
+		attackerPriority  int
+		defenderPriority  int
+		defenderBaseSpeed int // 90 → 110(自分が速い) / 100 → 120(同速) / 130 → 150(自分が遅い)
+		trickRoom         bool
+		wantMovesFirst    bool
+		wantTurnOrderTie  bool
+		wantOutspeeds     bool
+		wantSpeedTie      bool
+	}{
+		{"同優先度・自分が速い", 0, 0, 90, false, true, false, true, false},
+		{"同優先度・自分が遅い", 0, 0, 130, false, false, false, false, false},
+		{"同優先度・同速は turnOrderTie", 0, 0, 100, false, false, true, false, true},
+		// JD4 の主眼: 素早さで負けていても先制技なら先に動く。
+		{"遅くても先制技なら先に動く", 1, 0, 130, false, true, false, false, false},
+		{"速くても相手が先制技なら後になる", 0, 1, 90, false, false, false, true, false},
+		// 優先度で決まるなら同速でも tie にならない(speedTie は true のまま)。
+		{"同速でも先制技なら先に動く", 1, 0, 100, false, true, false, false, true},
+		{"同速でも相手が先制技なら後になる", 0, 1, 100, false, false, false, false, true},
+		// トリックルームは優先度に影響しない(ADR-0704 §2)。
+		{"トリックルーム中でも先制技が勝つ", 1, 0, 90, true, true, false, false, false},
+		{"トリックルーム中・同優先度なら遅い方が先", 0, 0, 90, true, false, false, false, false},
+		{"トリックルーム中・同優先度で自分が遅ければ先に動く", 0, 0, 130, true, true, false, true, false},
+		{"トリックルーム中でも相手の先制技が勝つ", 0, 1, 130, true, false, false, true, false},
+		// 優先度 0 を特別扱いしない。
+		{"負の優先度どうしでも高い方が先", -1, -6, 130, false, true, false, false, false},
+		{"自分だけ後攻技(優先度 -6)なら速くても後", -6, 0, 90, false, false, false, true, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			body := bodyWithDefenders(candidate(defenderSpeciesKey, natureNeutralID, 0, defenderMoveID))
+			attackerOf(body)["natureId"] = natureNeutralID
+			attackerOf(body)["sp"] = sp(0)
+			if tt.trickRoom {
+				body["speedField"] = map[string]any{"trickRoom": true}
+			}
+
+			stub := &upstreams{
+				baseSpeeds: map[string]int{
+					attackerSpeciesKey: 100,
+					defenderSpeciesKey: tt.defenderBaseSpeed,
+				},
+				movePriorities: map[string]int{
+					testMoveID:     tt.attackerPriority,
+					defenderMoveID: tt.defenderPriority,
+				},
+			}
+			recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+			}
+
+			got := onlyMatchup(t, recorder)
+			if got.AttackerMovesFirst != tt.wantMovesFirst || got.TurnOrderTie != tt.wantTurnOrderTie {
+				t.Errorf("attackerMovesFirst/turnOrderTie = %v/%v, want %v/%v",
+					got.AttackerMovesFirst, got.TurnOrderTie, tt.wantMovesFirst, tt.wantTurnOrderTie)
+			}
+			if got.AttackerMovesFirst && got.TurnOrderTie {
+				t.Error("attackerMovesFirst と turnOrderTie が同時に true になっている(ADR-0704 §2)")
+			}
+			// 素早さの比較(JD1〜JD3 の意味)は優先度では変わらない。
+			if got.Outspeeds != tt.wantOutspeeds || got.SpeedTie != tt.wantSpeedTie {
+				t.Errorf("outspeeds/speedTie = %v/%v, want %v/%v(素早さの比較は優先度で変わらない)",
+					got.Outspeeds, got.SpeedTie, tt.wantOutspeeds, tt.wantSpeedTie)
+			}
+			// 優先度はそのまま転記する(画面が「なぜ先に動くのか」を出せるように)。
+			if got.AttackerMovePriority != tt.attackerPriority || got.DefenderMovePriority != tt.defenderPriority {
+				t.Errorf("attackerMovePriority/defenderMovePriority = %d/%d, want %d/%d",
+					got.AttackerMovePriority, got.DefenderMovePriority, tt.attackerPriority, tt.defenderPriority)
+			}
+		})
+	}
+}
+
+// TestOutspeedAndKoTurnOrderPerCandidate: 優先度は候補ごとに違う(候補ごとに技が違う)。
+// 攻撃側の技は 1 つなので attackerMovePriority は全行で同じ値になる。
+func TestOutspeedAndKoTurnOrderPerCandidate(t *testing.T) {
+	t.Parallel()
+
+	body := bodyWithDefenders(
+		candidate(defenderSpeciesKey, natureNeutralID, 0, "test-move-priority-plus"),
+		candidate(defender2SpeciesKey, natureNeutralID, 0, "test-move-priority-zero"),
+		candidate(defender3SpeciesKey, natureNeutralID, 0, "test-move-priority-minus"),
+	)
+	attackerOf(body)["natureId"] = natureNeutralID
+	attackerOf(body)["sp"] = sp(0)
+
+	stub := &upstreams{
+		// すべて同じ種族値 100(= 120)にして、差が優先度だけから出るようにする。
+		baseSpeeds: map[string]int{
+			attackerSpeciesKey: 100, defenderSpeciesKey: 100,
+			defender2SpeciesKey: 100, defender3SpeciesKey: 100,
+		},
+		movePriorities: map[string]int{
+			testMoveID:                 0,
+			"test-move-priority-plus":  1,
+			"test-move-priority-zero":  0,
+			"test-move-priority-minus": -1,
+		},
+	}
+	recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	got := decodeResponse(t, recorder).Matchups
+	if len(got) != 3 {
+		t.Fatalf("matchups の件数 = %d, want 3", len(got))
+	}
+	// 全員同速(120 対 120)なので、行動順は優先度だけで決まる。
+	wantFirst := []bool{false, false, true}
+	wantTie := []bool{false, true, false}
+	wantDefenderPriority := []int{1, 0, -1}
+	for i, matchup := range got {
+		if matchup.AttackerMovePriority != 0 {
+			t.Errorf("matchups[%d].attackerMovePriority = %d, want 0(攻撃側の技は 1 つ)", i, matchup.AttackerMovePriority)
+		}
+		if matchup.DefenderMovePriority != wantDefenderPriority[i] {
+			t.Errorf("matchups[%d].defenderMovePriority = %d, want %d", i, matchup.DefenderMovePriority, wantDefenderPriority[i])
+		}
+		if matchup.AttackerMovesFirst != wantFirst[i] || matchup.TurnOrderTie != wantTie[i] {
+			t.Errorf("matchups[%d] attackerMovesFirst/turnOrderTie = %v/%v, want %v/%v",
+				i, matchup.AttackerMovesFirst, matchup.TurnOrderTie, wantFirst[i], wantTie[i])
+		}
+		// 素早さは全員同速なので、速さの欄は 3 行とも同じ(優先度の影響を受けない)。
+		if !matchup.SpeedTie || matchup.Outspeeds {
+			t.Errorf("matchups[%d] outspeeds/speedTie = %v/%v, want false/true", i, matchup.Outspeeds, matchup.SpeedTie)
+		}
+	}
+}
+
+// TestOutspeedAndKoRejectsMissingCandidateMove: 候補の moveId は必須(ADR-0704 §1・受け入れ条件1)。
+// 無い・空・文字列でない request は上流を 1 回も呼ばずに 400 で、message は最初に不正だった候補を示す。
+func TestOutspeedAndKoRejectsMissingCandidateMove(t *testing.T) {
+	t.Parallel()
+
+	threeCandidates := func() map[string]any {
+		return bodyWithDefenders(
+			candidate(defenderSpeciesKey, natureNeutralID, 0, candidateMoveID(0)),
+			candidate(defender2SpeciesKey, natureNeutralID, 0, candidateMoveID(1)),
+			candidate(defender3SpeciesKey, natureNeutralID, 0, candidateMoveID(2)),
+		)
+	}
+
+	tests := []struct {
+		name      string
+		mutate    func(map[string]any)
+		wantIndex int
+	}{
+		{"2 番目の候補に moveId が無い", func(body map[string]any) {
+			delete(defenderAt(body, 1), "moveId")
+		}, 1},
+		{"3 番目の候補の moveId が空", func(body map[string]any) {
+			defenderAt(body, 2)["moveId"] = ""
+		}, 2},
+		{"候補の moveId が文字列でない", func(body map[string]any) {
+			defenderAt(body, 0)["moveId"] = 1
+		}, 0},
+		{"複数が不正なら最初の候補", func(body map[string]any) {
+			delete(defenderAt(body, 1), "moveId")
+			delete(defenderAt(body, 2), "moveId")
+		}, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			body := threeCandidates()
+			tt.mutate(body)
+
+			stub := &upstreams{}
+			recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+			assertStatusAndCode(t, recorder, http.StatusBadRequest, api.InvalidRequest)
+			assertBlamesCandidate(t, recorder, tt.wantIndex)
+			assertNoUpstreamCalls(t, stub)
+		})
+	}
+}
+
+// TestOutspeedAndKoRejectsUnknownCandidateField: 候補の欄は DefenderCandidate のものだけ。
+// defenders の要素は json.RawMessage で受けるため外側の DisallowUnknownFields() は届かず、
+// candidateWireKeys の allow-list(大文字小文字を厳密に区別)が綴り違いや余計な欄を 400 で弾く。
+func TestOutspeedAndKoRejectsUnknownCandidateField(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		key   string
+		value any
+	}{
+		{"moveId の綴り違い", "moveid", "test-x"},
+		{"複数の技は受け取らない", "moveIds", []any{"test-x", "test-y"}},
+		{"技の優先度を呼び出し側が指定することはできない", "movePriority", 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			body := validBody()
+			defenderAt(body, 0)[tt.key] = tt.value
+
+			stub := &upstreams{}
+			recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+			assertStatusAndCode(t, recorder, http.StatusBadRequest, api.InvalidRequest)
+			assertNoUpstreamCalls(t, stub)
+		})
+	}
+}
+
+// TestOutspeedAndKoUnknownMove: moveId がマスタに無ければ 422 unknown_move(ADR-0704 §6)。
+// **攻撃側の技も JD4 からは上流で検証される**ので、JD3 までの 400 invalid_request
+// (calc-svc の 400 に畳まれていた)から変わる(ADR-0704 §7)。
+func TestOutspeedAndKoUnknownMove(t *testing.T) {
+	t.Parallel()
+
+	const notFound = `{"code":"not_found","message":"no such move"}`
+
+	t.Run("attacker の技", func(t *testing.T) {
+		t.Parallel()
+
+		stub := &upstreams{moveFail: map[string]stubResponse{
+			testMoveID: {http.StatusNotFound, notFound},
+		}}
+		recorder := postOutspeed(newUpstreams(t, stub), validBody(), nil)
+
+		assertStatusAndCode(t, recorder, http.StatusUnprocessableEntity, api.UnknownMove)
+		assertBlamesAttacker(t, recorder)
+		assertNoUpstreamDetail(t, recorder.Body.String(), stub.pokedexURL, stub.calcURL)
+
+		// attacker の技で打ち切るので、候補の種族も calc も呼ばない(ADR-0704 §5)。
+		_, speciesKeys, calcCalls := stub.counts()
+		if !reflect.DeepEqual(speciesKeys, []string{attackerSpeciesKey}) {
+			t.Errorf("species の呼び出し = %v, want [%s](attacker の技で打ち切る)", speciesKeys, attackerSpeciesKey)
+		}
+		if calcCalls != 0 {
+			t.Errorf("calc を %d 回呼んでいる。技を解決できていないのに計算しない", calcCalls)
+		}
+	})
+
+	t.Run("候補の技", func(t *testing.T) {
+		t.Parallel()
+
+		stub := &upstreams{moveFail: map[string]stubResponse{
+			candidateMoveID(1): {http.StatusNotFound, notFound},
+			candidateMoveID(2): {http.StatusNotFound, notFound},
+		}}
+		body := bodyWithDefenders(
+			individual(defenderSpeciesKey, natureNeutralID, 0),
+			individual(defender2SpeciesKey, natureNeutralID, 0),
+			individual(defender3SpeciesKey, natureNeutralID, 0),
+		)
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+		assertStatusAndCode(t, recorder, http.StatusUnprocessableEntity, api.UnknownMove)
+		assertBlamesCandidate(t, recorder, 1)
+		assertNoUpstreamDetail(t, recorder.Body.String(), stub.pokedexURL, stub.calcURL)
+
+		// 最初に失敗した候補で打ち切る(3 番目の種族・技は引かない。ADR-0703 §3・ADR-0704 §5)。
+		_, speciesKeys, calcCalls := stub.counts()
+		wantSpecies := []string{attackerSpeciesKey, defenderSpeciesKey, defender2SpeciesKey}
+		if !reflect.DeepEqual(speciesKeys, wantSpecies) {
+			t.Errorf("species の呼び出し = %v, want %v", speciesKeys, wantSpecies)
+		}
+		wantMoves := []string{testMoveID, candidateMoveID(0), candidateMoveID(1)}
+		if !reflect.DeepEqual(stub.moveCalls(), wantMoves) {
+			t.Errorf("moves の呼び出し = %v, want %v", stub.moveCalls(), wantMoves)
+		}
+		if calcCalls != 0 {
+			t.Errorf("calc を %d 回呼んでいる。技が揃う前に計算しない(ADR-0704 §5)", calcCalls)
+		}
+	})
+}
+
+// TestOutspeedAndKoMoveUpstreamFailures: 技の取得の失敗も ADR-0701 §6 の対応表に従う
+// (404 だけが 422 unknown_move で、ほかは 503 upstream_unavailable。ADR-0704 §6)。
+func TestOutspeedAndKoMoveUpstreamFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		stub       func() *upstreams
+		wantStatus int
+		wantCode   api.ErrorCode
+	}{
+		{
+			"技の取得が 500",
+			func() *upstreams {
+				return &upstreams{moveStatus: http.StatusInternalServerError, moveBody: `{"code":"internal","message":"boom"}`}
+			},
+			http.StatusServiceUnavailable, api.UpstreamUnavailable,
+		},
+		{
+			"技の取得が 503",
+			func() *upstreams {
+				return &upstreams{moveStatus: http.StatusServiceUnavailable, moveBody: `{"code":"master_unavailable","message":"no master"}`}
+			},
+			http.StatusServiceUnavailable, api.UpstreamUnavailable,
+		},
+		{
+			// pokedex の 400 は calc-svc の 400 と違って invalid_request にしない(ADR-0701 §6・ADR-0704 §6)。
+			"技の取得が 400",
+			func() *upstreams {
+				return &upstreams{moveStatus: http.StatusBadRequest, moveBody: `{"code":"invalid_input","message":"bad key"}`}
+			},
+			http.StatusServiceUnavailable, api.UpstreamUnavailable,
+		},
+		{
+			"技の本文が壊れた JSON",
+			func() *upstreams { return &upstreams{moveBody: `{"id":`} },
+			http.StatusServiceUnavailable, api.UpstreamUnavailable,
+		},
+		{
+			// priority が無い応答を 0 と読むと、先制技を普通の技として扱った判定を
+			// 正しい顔で返してしまう(ADR-0704 §9)。
+			"技に priority が無い",
+			func() *upstreams {
+				return &upstreams{moveBody: `{"id":"test-move","nameJa":"テストわざ","type":"fire","category":"physical","power":90}`}
+			},
+			http.StatusServiceUnavailable, api.UpstreamUnavailable,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			stub := tt.stub()
+			recorder := postOutspeed(newUpstreams(t, stub), validBody(), nil)
+
+			assertStatusAndCode(t, recorder, tt.wantStatus, tt.wantCode)
+			assertNoUpstreamDetail(t, recorder.Body.String(), stub.pokedexURL, stub.calcURL)
+			if _, _, calcCalls := stub.counts(); calcCalls != 0 {
+				t.Errorf("calc を %d 回呼んでいる。技を解決できていないのに計算しない", calcCalls)
+			}
+		})
+	}
+}
+
+// TestOutspeedAndKoMoveCheckOrder: 技の解決を挟んでも検査順は固定(ADR-0704 §5)。
+// 逐次で呼ぶので、複数の原因が同時にあってもどれが返るかが入力だけから決まる。
+func TestOutspeedAndKoMoveCheckOrder(t *testing.T) {
+	t.Parallel()
+
+	const notFound = `{"code":"not_found","message":"no such"}`
+
+	t.Run("attacker の種族は attacker の技より先", func(t *testing.T) {
+		t.Parallel()
+
+		stub := &upstreams{
+			speciesFail: map[string]stubResponse{attackerSpeciesKey: {http.StatusNotFound, notFound}},
+			moveFail:    map[string]stubResponse{testMoveID: {http.StatusNotFound, notFound}},
+		}
+		recorder := postOutspeed(newUpstreams(t, stub), validBody(), nil)
+
+		// どちらも解決できないが、検査順どおり unknown_species が返る。
+		assertStatusAndCode(t, recorder, http.StatusUnprocessableEntity, api.UnknownSpecies)
+		assertBlamesAttacker(t, recorder)
+		if moves := stub.moveCalls(); len(moves) != 0 {
+			t.Errorf("技を %v 引いている。attacker の種族で打ち切る", moves)
+		}
+	})
+
+	t.Run("attacker の技は候補の種族より先", func(t *testing.T) {
+		t.Parallel()
+
+		stub := &upstreams{
+			speciesFail: map[string]stubResponse{defenderSpeciesKey: {http.StatusNotFound, notFound}},
+			moveFail:    map[string]stubResponse{testMoveID: {http.StatusNotFound, notFound}},
+		}
+		recorder := postOutspeed(newUpstreams(t, stub), validBody(), nil)
+
+		assertStatusAndCode(t, recorder, http.StatusUnprocessableEntity, api.UnknownMove)
+		assertBlamesAttacker(t, recorder)
+		if _, speciesKeys, _ := stub.counts(); !reflect.DeepEqual(speciesKeys, []string{attackerSpeciesKey}) {
+			t.Errorf("species の呼び出し = %v, want [%s](attacker の技で打ち切る)", speciesKeys, attackerSpeciesKey)
+		}
+	})
+
+	t.Run("同じ候補の中では種族が技より先", func(t *testing.T) {
+		t.Parallel()
+
+		stub := &upstreams{
+			speciesFail: map[string]stubResponse{defenderSpeciesKey: {http.StatusNotFound, notFound}},
+			moveFail:    map[string]stubResponse{candidateMoveID(0): {http.StatusNotFound, notFound}},
+		}
+		body := bodyWithDefenders(individual(defenderSpeciesKey, natureNeutralID, 0))
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+		assertStatusAndCode(t, recorder, http.StatusUnprocessableEntity, api.UnknownSpecies)
+		assertBlamesCandidate(t, recorder, 0)
+		if moves := stub.moveCalls(); !reflect.DeepEqual(moves, []string{testMoveID}) {
+			t.Errorf("moves の呼び出し = %v, want [%s](種族で失敗した候補の技は引かない)", moves, testMoveID)
+		}
+	})
+
+	t.Run("前の候補の技は次の候補の種族より先", func(t *testing.T) {
+		t.Parallel()
+
+		// 候補 0 の技と候補 1 の種族がどちらも 404。候補ごとに「種族 → 技」を回すので、
+		// 候補 0 の技の失敗が勝つ(ADR-0704 §5)。
+		stub := &upstreams{
+			speciesFail: map[string]stubResponse{defender2SpeciesKey: {http.StatusNotFound, notFound}},
+			moveFail:    map[string]stubResponse{candidateMoveID(0): {http.StatusNotFound, notFound}},
+		}
+		body := bodyWithDefenders(
+			individual(defenderSpeciesKey, natureNeutralID, 0),
+			individual(defender2SpeciesKey, natureNeutralID, 0),
+		)
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+		assertStatusAndCode(t, recorder, http.StatusUnprocessableEntity, api.UnknownMove)
+		assertBlamesCandidate(t, recorder, 0)
+		_, speciesKeys, _ := stub.counts()
+		wantSpecies := []string{attackerSpeciesKey, defenderSpeciesKey}
+		if !reflect.DeepEqual(speciesKeys, wantSpecies) {
+			t.Errorf("species の呼び出し = %v, want %v(2 番目の候補の種族は引かない)", speciesKeys, wantSpecies)
+		}
+	})
+
+	t.Run("全候補の技が揃うまで計算しない", func(t *testing.T) {
+		t.Parallel()
+
+		// 最後の候補の技だけが 404。それより前の候補の計算を 1 回も始めていないこと。
+		stub := &upstreams{
+			moveFail: map[string]stubResponse{candidateMoveID(2): {http.StatusNotFound, notFound}},
+		}
+		body := bodyWithDefenders(
+			individual(defenderSpeciesKey, natureNeutralID, 0),
+			individual(defender2SpeciesKey, natureNeutralID, 0),
+			individual(defender3SpeciesKey, natureNeutralID, 0),
+		)
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+		assertStatusAndCode(t, recorder, http.StatusUnprocessableEntity, api.UnknownMove)
+		assertBlamesCandidate(t, recorder, 2)
+		if routes := stub.calcRoutes(); len(routes) != 0 {
+			t.Errorf("calc を %v 回呼んでいる。全候補の種族・技が揃ってから計算する(ADR-0704 §5)", routes)
 		}
 	})
 }

@@ -16,7 +16,9 @@
   --text-secondary: #5c6270;
   /* border.hairline は黒 8%(design.md)。 */
   --border-hairline: rgba(0, 0, 0, 0.08);
-  --danger: #e5484d;
+  /* issue #99(2026-09-24): 旧 #e5484d は通常文字の WCAG 2.2 SC 1.4.3(4.5:1)を満たさなかった。
+     明度だけ下げて#cd1d23 にした(design.md「デザイントークン」の注記参照)。 */
+  --danger: #cd1d23;
   /* ホロ効果のハイライト色(design.md「動き」: 選択中のカード1枚だけ、ポインタ位置に連動)。白の半透明。 */
   --holo-highlight: rgba(255, 255, 255, 0.35);
 

@@ -46,9 +46,19 @@ CSS。3段階とも critic 1回目 FAIL→修正→2回目 PASS で完了(重大
 最終地点で64件に決定的に絞り込み、観測は16件で disabled+案内。critic PASS(境界値の網羅探索と変異テストで
 上限超過が起きないことを確認)。データレーンの engine/wasmapi 側(ADR-0108・PR #138)も main 統合済み。
 issue #110 は iOS の追従待ちで Web 単独ではクローズしない。
-Next: (1) P4-18(Codexレビュー issue。タイプバランスレーンから連絡): 優先 #99(アクセシビリティ)・
-#113(debounce/cancel)。(2) P4-17: 技の ID 解決が入ったら技を復活。(3) P4-20: issue #148(アクセス境界・
-認証方針)。中心は運用/API レーンで Web は ADR の「接続方法」節への記載程度(依頼が来てから着手)。
+**P4-18 issue #99(ライトテーマの danger コントラスト不足)の Web 分も完了・main 統合済み(PR #164)**:
+danger のライト値を `#E5484D`→`#CD1D23` に変更(WCAG 2.2 SC 1.4.3 の4.5:1を bg.base・bg.glass 合成後の
+両方で満たす)。`web/src/test/colorContrast.ts`・`web/src/styles/contrast.test.ts` を新規追加。critic PASS
+(独立実装での検算・変異テストで確認)。iOS 側(`PokeCalcDesign.swift`)はまだ旧値のままで DECISIONS.md で
+依頼済み(issue #99 自体は iOS 側完了までクローズしない)。
+P4-17(技の ID 解決)は、API レーンが判定レーン JD4 向けに `GET /api/pokedex/moves/{key}`(getMove)を
+main 統合したが(PR #161)、種族1体あたり技20〜30件ぶんのラウンドトリップが要るため ADR-0304 §3 の欠落は
+**まだ解消していない**(API レーン自身が ADR-0304 に追記済み)。案A(`learnset` を `Move[]` にする)か
+`getMove` のバッチ解決化が API レーンへの未決の提案のまま。
+Next: (1) P4-18 の残り: #113(逆算の数値入力で古い計算要求を抑止・キャンセル。200ms debounce・AbortSignal。
+iOS・API と連携)に着手中。(2) P4-17: 技の ID 解決の欠落が解消されたら技を復活。(3) P4-20: issue #148
+(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み(apiBaseUrl の既定値は
+同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより連絡が来る想定。
 (4) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち)。
 (5) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
 
@@ -90,15 +100,14 @@ scripts/argocd-bootstrap.sh の呼び出しに差し替え済み(2026-09-24 確�
 
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
-Active: なし(JD4 着手可。下記参照)
-Branch: feat/judge-jd4(作業ディレクトリ ~/MyDamageCalcurater-judge。main から作成済み・空。JD3 の feat/judge-jd3 は PR #143 で main に統合済み・削除)
-Status: JD0(基盤。PR #92)・JD1(判定API本体。PR #118)・JD2(場の効果。PR #127)・JD3(複数の相手候補。PR #143。ADR-0703)は完了。
-`POST /api/judge/v1/outspeed-and-ko` は `defenders`(1〜6件)→`matchups`(配列)の一括判定・`speedField`(トリックルーム・
-追い風)に対応済み。
-Status(追記2026-09-23): **JD4 のブロックは解消**。API レーンが `GET /api/pokedex/moves/{key}`(getMove)を実装し
-**main 統合済み(P3-7・PR #161・ADR-0105 §3 追記・DECISIONS.md 2026-09-23)**。`priority` は既存の
-`Move.priority`(`int`)フィールドのまま。
-Next: JD4(相手の技を含めた返り討ち判定)に着手(`feat/judge-jd4`)
+Active: なし
+Branch: feat/judge-jd5(作業ディレクトリ ~/MyDamageCalcurater-judge。main から作成済み・空。JD4 の feat/judge-jd4 は PR #169 で main に統合済み・削除)
+Status: JD0(基盤。PR #92)・JD1(判定API本体。PR #118)・JD2(場の効果。PR #127)・JD3(複数の相手候補。PR #143)・
+JD4(返り討ち判定。PR #169。ADR-0704)はすべて完了。`POST /api/judge/v1/outspeed-and-ko` は複数候補・場の効果・
+返り討ち判定まで対応済み。残るは **JD5(Web/iOS の画面)のみ**。担当(判定レーン内で作るか、Web/iOS レーンに
+依頼するか)は着手時に判断する方針(judge-design.md §3)
+Next: JD5 の担当をユーザーへ確認してから着手。軽微な積み残し: `attacker`単数の`Individual`にも`defenders`候補と
+同じ大文字小文字厳密なキー検査を広げると契約全体で一貫する(plan.md 参照)
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

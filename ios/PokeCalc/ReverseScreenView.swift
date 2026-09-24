@@ -55,6 +55,8 @@ struct ReverseScreenView: View {
             }
         }
         .task { await viewModel.load() }
+        // 画面破棄で保持中の入力 Task を止める(issue #113 A6)。
+        .onDisappear { viewModel.cancelPendingWork() }
     }
 
     private var backendBadge: some View {
@@ -101,7 +103,7 @@ struct ReverseScreenView: View {
     /// どちらの並び(横に2分割/縦積み)でも、セグメントは常に幅いっぱいに広がる。
     private func sideSwitchButton(side: ReverseSide, isSelected: Bool) -> some View {
         Button {
-            Task { await viewModel.selectSide(side) }
+            viewModel.scheduleLatest { await $0.selectSide(side) }
         } label: {
             Text(side == .defender ? "与えたダメージ" : "受けたダメージ")
                 .font(TextStyleToken.body.font)
@@ -148,7 +150,7 @@ struct ReverseScreenView: View {
                         title: preset.label, isSelected: viewModel.attackerPreset == preset,
                         identifier: "reverseAttackerPreset-\(preset.rawValue)"
                     ) {
-                        Task { await viewModel.selectAttackerPreset(preset) }
+                        viewModel.scheduleLatest { await $0.selectAttackerPreset(preset) }
                     }
                 }
             }
@@ -161,7 +163,7 @@ struct ReverseScreenView: View {
                         title: preset.label(for: category), isSelected: viewModel.knownDefenderPreset == preset,
                         identifier: "reverseKnownDefenderPreset-\(preset.rawValue)"
                     ) {
-                        Task { await viewModel.selectKnownDefenderPreset(preset) }
+                        viewModel.scheduleLatest { await $0.selectKnownDefenderPreset(preset) }
                     }
                 }
             }
@@ -182,7 +184,7 @@ struct ReverseScreenView: View {
             selection: currentSideSelection,
             identifierPrefix: "reverseTeam"
         ) { teamID, memberID in
-            await viewModel.selectTeamIndividual(teamID: teamID, memberID: memberID)
+            viewModel.scheduleLatest { await $0.selectTeamIndividual(teamID: teamID, memberID: memberID) }
         }
     }
 
@@ -216,7 +218,7 @@ struct ReverseScreenView: View {
         .accessibilityIdentifier("reverseMovePicker")
         .sheet(isPresented: $isMoveSearchPresented) {
             MoveSearchSheet(viewModel: viewModel, options: viewModel.moveOptions) { move in
-                Task { await viewModel.selectMove(id: move.id) }
+                viewModel.scheduleLatest { await $0.selectMove(id: move.id) }
             }
         }
     }
@@ -234,7 +236,7 @@ struct ReverseScreenView: View {
                             isSelected: viewModel.opponentItemCandidateIds.contains(item.id),
                             identifier: "reverseOpponentItemToggle-\(item.id)"
                         ) {
-                            Task { await viewModel.toggleOpponentItemCandidate(itemId: item.id) }
+                            viewModel.scheduleLatest { await $0.toggleOpponentItemCandidate(itemId: item.id) }
                         }
                     }
                 }

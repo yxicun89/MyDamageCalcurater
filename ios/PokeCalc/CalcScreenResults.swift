@@ -66,7 +66,7 @@ struct ResultsSectionView: View {
                             isSelected: viewModel.comparedDefenderItemIds.contains(item.id),
                             identifier: "defenderItemToggle-\(item.id)"
                         ) {
-                            Task { await viewModel.toggleDefenderItemComparison(itemId: item.id) }
+                            viewModel.scheduleLatest { await $0.toggleDefenderItemComparison(itemId: item.id) }
                         }
                     }
                 }
