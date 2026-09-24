@@ -6,6 +6,7 @@ package wasmapi_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"go/build"
 	"math"
 	"strings"
@@ -389,6 +390,35 @@ func TestErrorEnvelopeCodes(t *testing.T) {
 			return mustJSON(t, r)
 		}, wasmapi.CodeInvalidPreset},
 
+		// 件数の上限(issue #110。ADR-0208 §4・ADR-0108。HTTP と同じ invalid_input に写す)。
+		{"presets が上限超過(9件)", "calcBulk", func(t *testing.T) string {
+			r := baseBulk()
+			presets := make([]any, 9)
+			for i := range presets {
+				presets[i] = map[string]any{"key": fmt.Sprintf("p%d", i)}
+			}
+			r["presets"] = presets
+			return mustJSON(t, r)
+		}, wasmapi.CodeInvalidInput},
+		{"presetKeys が上限超過(9件)", "calcBulk", func(t *testing.T) string {
+			r := baseBulk()
+			keys := make([]any, 9)
+			for i := range keys {
+				keys[i] = fmt.Sprintf("p%d", i)
+			}
+			r["presetKeys"] = keys
+			return mustJSON(t, r)
+		}, wasmapi.CodeInvalidInput},
+		{"itemVariants が上限超過(65件)", "calcBulk", func(t *testing.T) string {
+			r := baseBulk()
+			variants := make([]any, 65)
+			for i := range variants {
+				variants[i] = map[string]any{"id": fmt.Sprintf("item%d", i)}
+			}
+			r["itemVariants"] = variants
+			return mustJSON(t, r)
+		}, wasmapi.CodeInvalidInput},
+
 		{"逆算の対象側が不正", "calcReverse", func(t *testing.T) string {
 			r := baseReverse()
 			r["side"] = "both"
@@ -435,6 +465,36 @@ func TestErrorEnvelopeCodes(t *testing.T) {
 			r["observations"] = []any{map[string]any{"percentTenths": 1001}}
 			return mustJSON(t, r)
 		}, wasmapi.CodeInvalidObservation},
+
+		// 件数・範囲の上限(issue #110。ADR-0208 §4・ADR-0108。HTTP と同じ invalid_input に写す)。
+		{"itemCandidates が上限超過(65件)", "calcReverse", func(t *testing.T) string {
+			r := baseReverse()
+			cands := make([]any, 65)
+			for i := range cands {
+				cands[i] = map[string]any{"id": fmt.Sprintf("item%d", i)}
+			}
+			r["itemCandidates"] = cands
+			return mustJSON(t, r)
+		}, wasmapi.CodeInvalidInput},
+		{"observations が上限超過(17件)", "calcReverse", func(t *testing.T) string {
+			r := baseReverse()
+			obs := make([]any, 17)
+			for i := range obs {
+				obs[i] = map[string]any{"percent": 40}
+			}
+			r["observations"] = obs
+			return mustJSON(t, r)
+		}, wasmapi.CodeInvalidInput},
+		{"maxCandidates が負", "calcReverse", func(t *testing.T) string {
+			r := baseReverse()
+			r["maxCandidates"] = -1
+			return mustJSON(t, r)
+		}, wasmapi.CodeInvalidInput},
+		{"maxCandidates が上限超過(129)", "calcReverse", func(t *testing.T) string {
+			r := baseReverse()
+			r["maxCandidates"] = 129
+			return mustJSON(t, r)
+		}, wasmapi.CodeInvalidInput},
 
 		// タイプ相性表(ADR-0011 §13 / ADR-0013)。境界は既定の表を補わない。
 		{"相性表が無い(calc)", "calc", func(t *testing.T) string {
@@ -529,6 +589,73 @@ func TestErrorEnvelopeCodes(t *testing.T) {
 			}
 		})
 	}
+}
+
+// decodeSuccess は成功封筒であることを確かめ、result の生 JSON を返す。
+func decodeSuccess(t *testing.T, resp string) json.RawMessage {
+	t.Helper()
+	var env struct {
+		Result json.RawMessage `json:"result"`
+		Error  *errorView      `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(resp), &env); err != nil {
+		t.Fatalf("レスポンスが JSON ではない: %v\n%s", err, resp)
+	}
+	if env.Error != nil {
+		t.Fatalf("成功するはずが error 封筒: code=%q message=%q", env.Error.Code, env.Error.Message)
+	}
+	return env.Result
+}
+
+// TestLimitsAtBoundarySucceed は件数・範囲がちょうど上限の calcBulk / calcReverse が
+// 成功し、上限内の最大の件数を返すこと(issue #110。ADR-0208 §1・§4・ADR-0108)。
+// TestErrorEnvelopeCodes 側は「上限+1 は失敗する」側だけなので、成功側をここで固定する。
+func TestLimitsAtBoundarySucceed(t *testing.T) {
+	t.Run("calcBulk", func(t *testing.T) {
+		r := baseBulk()
+		r["presetKeys"] = []any{"none", "hp", "hb_boost", "hb", "hb_full", "hd_boost", "hd", "hd_full"}
+		variants := make([]any, 64)
+		for i := range variants {
+			variants[i] = map[string]any{"id": fmt.Sprintf("item%d", i)}
+		}
+		r["itemVariants"] = variants
+
+		var result struct {
+			Rows []json.RawMessage `json:"rows"`
+		}
+		if err := json.Unmarshal(decodeSuccess(t, invoke(t, "calcBulk", mustJSON(t, r))), &result); err != nil {
+			t.Fatalf("result が契約と違う: %v", err)
+		}
+		if want := 8 * 64; len(result.Rows) != want {
+			t.Errorf("rows の件数 = %d, want %d", len(result.Rows), want)
+		}
+	})
+
+	t.Run("calcReverse", func(t *testing.T) {
+		r := baseReverse()
+		cands := make([]any, 64)
+		for i := range cands {
+			cands[i] = map[string]any{"id": fmt.Sprintf("item%d", i)}
+		}
+		r["itemCandidates"] = cands
+		obs := make([]any, 16)
+		for i := range obs {
+			obs[i] = map[string]any{"percent": 40}
+		}
+		r["observations"] = obs
+		r["maxCandidates"] = 128
+
+		var result struct {
+			Candidates []json.RawMessage `json:"candidates"`
+		}
+		if err := json.Unmarshal(decodeSuccess(t, invoke(t, "calcReverse", mustJSON(t, r))), &result); err != nil {
+			t.Fatalf("result が契約と違う: %v", err)
+		}
+		// 性格クラス2 × 持ち物候補64 = 128 件がちょうど maxCandidates(128)と一致する。
+		if want := 2 * 64; len(result.Candidates) != want {
+			t.Errorf("candidates の件数 = %d, want %d", len(result.Candidates), want)
+		}
+	})
 }
 
 // TestEmptyEnumMeansDefault は、空文字を既定値として許す列挙(ADR-0011 §4 の表)が

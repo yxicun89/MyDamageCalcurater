@@ -290,6 +290,35 @@ func (q *Queries) GetItemEffect(ctx context.Context, itemID string) (ItemEffect,
 	return i, err
 }
 
+const getMove = `-- name: GetMove :one
+SELECT id, name_ja, type, category, power, priority
+FROM moves
+WHERE id = ?
+`
+
+type GetMoveRow struct {
+	ID       string
+	NameJa   string
+	Type     string
+	Category string
+	Power    uint16
+	Priority int8
+}
+
+func (q *Queries) GetMove(ctx context.Context, id string) (GetMoveRow, error) {
+	row := q.db.QueryRowContext(ctx, getMove, id)
+	var i GetMoveRow
+	err := row.Scan(
+		&i.ID,
+		&i.NameJa,
+		&i.Type,
+		&i.Category,
+		&i.Power,
+		&i.Priority,
+	)
+	return i, err
+}
+
 const getSpeciesByKey = `-- name: GetSpeciesByKey :one
 SELECT ` + "`" + `key` + "`" + `, dex_no, form, showdown_id, name_ja, name_ja_source, name_en, type1, type2,
        base_hp, base_atk, base_def, base_spa, base_spd, base_spe,

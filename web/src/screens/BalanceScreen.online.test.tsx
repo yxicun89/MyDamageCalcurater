@@ -11,6 +11,8 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { beforeAll, describe, expect, test } from "vitest";
 import type { BalanceClient } from "../api/balanceClient";
+import { learnsetMoves } from "../domain/moves";
+import type { Move } from "../engine/types";
 import { masterOnlineText } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
 import { ONLINE_MASTER_CAPABILITIES } from "../master/onlineSource";
@@ -34,6 +36,17 @@ function speciesAt(index: number): MasterSpecies {
     throw new Error(`例データに ${index} 番目の種族が無い`);
   }
   return species;
+}
+
+/** 攻撃技を1つ以上覚える種族と、その技(coverage は攻撃技を選んだメンバーがいないと呼ばれない)。 */
+function speciesWithDamagingMove(): { species: MasterSpecies; move: Move } {
+  for (const species of example.species) {
+    const move = learnsetMoves(species, example.moves).find((candidate) => candidate.category !== "status");
+    if (move !== undefined) {
+      return { species, move };
+    }
+  }
+  throw new Error("例データに攻撃技を覚える種族が無い");
 }
 
 /** 呼び出しの有無だけを見る fake(応答は返さない = 画面は計算中のまま)。 */
@@ -164,5 +177,35 @@ describe("A-9 のガードが実際に効いていること(critic 指摘の回�
       await Promise.resolve();
     });
     expect(client.calls.length).toBe(callsBeforeSwitch);
+  });
+
+  test("技・仮想敵まで選んだ状態で切り替わっても、4つの診断すべてを呼び直さない(P4-16c(6))", async () => {
+    // 上のテストはポケモンしか選ばないので、coverage(攻撃技が要る)・threats(仮想敵が要る)は
+    // ガードが無くても呼ばれない = ガード削除を検知できない。ここでは4つとも実際に呼ばれた状態を作り、
+    // capabilities が切り替わったあとに1本も増えないことを確かめる(critic 指摘の回帰ガード)。
+    const { user, client, rerenderMaster } = renderScreen(example);
+    const { species, move } = speciesWithDamagingMove();
+
+    await user.selectOptions(within(memberGroup(1)).getByRole("combobox", { name: "ポケモン" }), species.key);
+    await user.selectOptions(within(memberGroup(1)).getByRole("combobox", { name: "技1" }), move.id);
+    await user.selectOptions(
+      within(threatGroup(1)).getByRole("combobox", { name: "ポケモン" }),
+      speciesAt(1).key,
+    );
+
+    await waitFor(() => {
+      expect(client.calls).toEqual(
+        expect.arrayContaining(["analyze", "coverage", "threats", "recommendations"]),
+      );
+    });
+    const callsBeforeSwitch = [...client.calls];
+
+    rerenderMaster(limitedMaster(example, ONLINE_MASTER_CAPABILITIES));
+
+    expect(screen.getByText(masterOnlineText.balanceUnavailable)).toBeInTheDocument();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(client.calls).toEqual(callsBeforeSwitch);
   });
 });

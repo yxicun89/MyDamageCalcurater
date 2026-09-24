@@ -1,7 +1,7 @@
 # 素早さ比較 設計書(素早さレーン)
 
-- 更新日: 2026-09-22
-- 状態: SP0 で起草。設計の正はこの文書と `docs/adr/0600〜`(素早さレーンの帯)
+- 更新日: 2026-09-24
+- 状態: SP0〜SP5 すべて完了(main 統合済み。実データでの疎通も確認済み)。設計の正はこの文書と `docs/adr/0600〜`(素早さレーンの帯)
 - ユーザーの仕様: `docs/plan.md` の「SP: 素早さ比較」と `docs/ai-shared/DECISIONS.md`(2026-09-22)
 
 ## 1. 目的
@@ -23,12 +23,19 @@
 services/speed/
 ├─ api/openapi.yaml        # speed 自身の API 契約(ルートの api/openapi.yaml とは別。balance と同じ)
 ├─ cmd/api/                # 起動・設定の読み込み(環境変数)
+├─ cmd/checkreadmodel/     # デプロイ前に read model をサービスと同じ loader で検証するツール(ADR-0603)
 ├─ internal/api/           # oapi-codegen の生成物(手で編集しない。make speed-gen)
 ├─ internal/speed/         # 純粋な Go のコア(I/O なし。engine を呼ぶ)
 ├─ internal/httpapi/       # Echo の HTTP アダプタ(検証・エラー変換)
-├─ internal/master/        # read model の読み込み(暫定: 架空データの JSON。SP4 で pokedex の read model へ)
+├─ internal/master/        # read model の読み込み(SP0〜SP3 は架空データ、SP4 以降は pokedex export の実データ。同じ loader)
 ├─ testdata/               # 架空データの example
-└─ deploy/k8s/             # Kustomize(base / overlays/local)
+├─ scripts/                # smoke・k3d への read model デプロイ・GitOps の検査・イメージの push
+└─ deploy/
+   ├─ k8s/base                    # Deployment・Service・Ingress /api/speed
+   ├─ k8s/overlays/local          # 架空データの read model(ConfigMap)
+   ├─ k8s/overlays/local-readmodel # pokedex export の実データ(ADR-0603)
+   ├─ k8s/overlays/gitops         # digest 固定(ADR-0605)
+   └─ argocd/                     # Argo CD Application pokecalc-speed(ADR-0605)
 ```
 
 Ingress は `/api/speed`(balance の `/api/balance` と同じ形)。
@@ -68,17 +75,22 @@ Ingress は `/api/speed`(balance の `/api/balance` と同じ形)。
 
 ## 7. データ(read model)
 
-- SP0〜SP3 は speed 内の暫定の read model(架空データの JSON。`SPEED_POKEMON_PATH`)。形式は ADR-0600 §4。
-- SP4 でデータレーンの P2-3 の read model(`pokedex export`)に差し替える。必要なのは各ポケモンの ID・日本語名・タイプ・素早さ種族値と、レギュレーションの使用可能集合。
+- SP0〜SP3 は speed 内の暫定の read model(架空データの JSON。`SPEED_POKEMON_PATH`)を使っていた。形式は ADR-0600 §4。
+- SP4 でデータレーンの P2-3 の read model(`pokedex export` の `speed-pokemon.json`)に切り替えた(ADR-0603)。同じ形式・同じ
+  loader(`master.LoadPokemonFile`)で読むだけで、adapter の差し替えは無い。2026-09-24 に実データ(348 pokemon)で疎通確認済み
+  (`docs/runbooks/speed.md` 節3)。
 - 実マスタ・公式画像はコミットしない(ADR-0002)。画像が無くてもタイプ色のエンブレムで成立させる(Web 側)。
 
-## 8. 段階
+## 8. 段階(2026-09-24 時点で SP0〜SP5 すべて完了)
 
-| 段階 | 内容 |
-|---|---|
-| SP0 | この文書・ADR-0600・services/speed の基盤(コアの素早さ計算・read model・`/healthz`・ポケモン一覧 API・Kustomize) |
-| SP1 | 表(6 行の生成・速い順・同速のまとめ・絞り込みの API) |
-| SP2 | 自分のポケモンの位置(最小の選択 + オプション → 実数値 → 表の中の位置) |
-| SP3 | Web の素早さ画面(`web/src/speed/`。左右の配置・自分の位置の強調)。Web の骨組みが無い間は画面部品とテストだけ先に作る(2026-09-22 ユーザー回答) |
-| SP4 | pokedex の read model への切り替え、k3d の疎通(ADR-0603) |
-| SP5 | GitOps(digest 固定の overlay と Argo CD Application)。イメージの digest が決まる段階で着手(2026-09-22 ADR-0603 で SP4 から分離) |
+| 段階 | 内容 | ADR |
+|---|---|---|
+| SP0 | この文書・services/speed の基盤(コアの素早さ計算・read model・`/healthz`・ポケモン一覧 API・Kustomize) | ADR-0600 |
+| SP1 | 表(6 行の生成・速い順・同速のまとめ・絞り込みの API) | ADR-0601 |
+| SP2 | 自分のポケモンの位置(最小の選択 + オプション → 実数値 → 表の中の位置) | ADR-0602 |
+| SP3 | Web の素早さ画面(`web/src/speed/`。左右の配置・自分の位置の強調・表の絞り込み UI) | ADR-0604 |
+| SP4 | pokedex の read model への切り替え、k3d の疎通(実データで確認済み) | ADR-0603 |
+| SP5 | GitOps(digest 固定の overlay と Argo CD Application `pokecalc-speed`。balance のクラスタ内レジストリ・Argo CD を共有) | ADR-0605 |
+
+実際にクラスタへ Argo CD の Application を適用する操作(`docs/runbooks/speed.md` 節5〜10)は、共有クラスタへの変更のため
+人間の確認のもとで必要になったときに行う(まだ実施していない)。

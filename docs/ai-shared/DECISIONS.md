@@ -917,3 +917,245 @@ fixture 整形崩れの3点。いずれも ADR-0107 の「追記(2026-09-23)」�
 Reason: 独立レビュー PASS・`make test`(790件)/`lint`/`build`/`test-golden`/`test-all-species`/`test-wasm` すべて green。
 Impact: 判定レーンは JD1(ADR-0701 の Individual.ranks 方式)のまま。技IDからランク変化を自動で出す
 公開APIの拡張は、判定レーンの要件が固まってから別途(データ・APIレーン)。
+
+## 2026-09-22: 判定 JD2(場の効果)を PR #127 で main に統合
+Decision: ADR-0702(`speedField`。トリックルーム・追い風。素早さ補正の連結・丸めを @smogon/calc 0.12.0 で確認)を PR #127 で main に統合した。critic は1回目で PASS。
+Reason: `make test`・`make lint`・`make build`(ルート)が緑、critic PASS、他レーンの範囲外変更なし(COORDINATION.md の共有ファイル規約の範囲内)を確認してマージした。
+Impact: 判定レーンのブランチを `feat/judge-jd3` に切り替えた(JD2 の `feat/judge-jd2` は削除)。次は JD3(複数の相手候補を一度に判定)。
+
+## 2026-09-23: 判定 JD3 で outspeed-and-ko の契約を破壊的に変更する(判定レーン)
+Decision: `POST /api/judge/v1/outspeed-and-ko` の request の `defender`(単数)を `defenders`(Individual[]、1〜6件)に、
+response の単数の5欄(outspeeds/speedTie/attackerSpeed/defenderSpeed/ko)を `matchups`(defenders と同じ順序・同じ件数の
+Matchup 配列。各行が defenderIndex を持つ)に置き換えた。版は上げない(v1 のまま)。設計は ADR-0703。
+Reason: JD5(Web/iOS の画面)が未着手で judge-svc を呼ぶクライアントが1つも無く、gateway もルートの api/openapi.yaml も
+judge を含まない(ADR-0700 §6-3・ADR-0701 §7)ため、壊れるものが無い。互換のために単数の defender を残すと同じ問いに
+入口が2つでき、response も単数・配列の2形態になる。judge-design.md §3 が JD5 を最後に置いたのは、まさにこの変更を
+クライアントが付く前に済ませるため。
+Impact:
+- 他レーンへの影響は無い(ルートの api/openapi.yaml・gateway・Web・iOS のいずれも judge の型を生成していない)。
+- JD5 に着手する時点の契約は `defenders` / `matchups` の形になる。JD5 を Web/iOS レーンに依頼する場合は
+  services/judge/api/openapi.yaml を参照先として渡す。
+- 候補のどれかで失敗したら request 全体を打ち切り、部分成功は返さない。エラーの message は
+  どの候補かを `defenders[<index>]` の形で示す(上流の URL・本文は含めないので ADR-0700 §3 は保たれる)。
+
+## 2026-09-23: issue #110 のデータレーン担当分(engine/wasmapi)を実装(データレーン)
+Decision: 上記「calc の候補・観測件数に上限を置く」の依頼(API レーンから)に応え、
+`engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ値の上限を実装した
+(presets 8 / itemVariants 64 / itemCandidates 64 / observations 16 / maxCandidates 0..128。ADR-0108)。
+- 検証は選択・内容検証(selectPresets・validateObservations)より前、`engine/wasmapi` では DTO 変換
+  より前に置き、HTTP と同じ `invalid_input` が複数の違反が重なっても先に出るようにした(parity)。
+- `MaxCandidates` が負のとき、従来「無制限」だった挙動を「不正(ErrInvalidMaxCandidates)」に変更した
+  (ADR-0208 の契約が `minimum: 0` のため。既存テスト `TestReverseOrderDeterministic` の期待値を更新。
+  理由は ADR-0108 決定4)。
+- 新しい ErrorCode は足さず、5つの engine sentinel をすべて `wasmapi.CodeInvalidInput` に写した
+  (ADR-0208 §2 と同じ判断)。
+- 独立レビュー PASS(1往復。指摘: 古いフィールドコメントの修正、plan.md 未更新、wasmapi の DTO 変換順を
+  上限検査より前に揃える、境界値テストの補強)。`make test`(790件)/`lint`/`build`/`test-golden`/
+  `test-all-species`/`test-wasm` すべて green。
+Reason: HTTP を経由しない直接呼び出し(ネイティブ Go)・WASM(ブラウザ)は calc-svc の検証を通らないため、
+上限が無いままだと issue #110 の計算量増幅がそのまま残る。
+Impact: issue #110 は Web・iOS レーンの追従(観測16件でUI無効化・持ち物候補64件超の扱い)が残っている限り
+クローズしない。docs/plan.md の改善要望節・ADR-0108 参照。
+
+## 2026-09-23: issue #110 のデータレーン担当分を main へ統合(データレーン)
+Decision: PR #138(`feat/claude-p1-engine` → `main`)をマージした。`engine.CalcBulk`/`CalcReverse`・
+`engine/wasmapi` への件数・範囲の上限(presets 8/itemVariants 64/itemCandidates 64/observations 16/
+maxCandidates 0..128。ADR-0108)。critic 1往復で PASS。
+Reason: 独立レビュー PASS・`make test`(833件)/`lint`/`build`/`test-golden`/`test-all-species`/
+`test-wasm` すべて green。
+Impact: issue #110 は Web・iOS レーンの追従(観測16件でUI無効化・持ち物候補64件超の扱い。
+ADR-0208 §4)が残っている限りクローズしない。
+
+## 2026-09-23: issue #106(手動importとCronJobの同時実行)を実装(データレーン)
+Decision: `tools/importer/cronjob.sh`にbusyboxの`flock`(非ブロッキング)を`fetch.mjs`呼び出しより前に追加し、
+取得(Node)〜投入(Go)の全工程を1本のロックでアプリ側排他した(ADR-0109)。`concurrencyPolicy: Forbid`は
+「同じCronJobが作るJob同士の重複防止」に役割を限定し、手動Job(`make import-k8s`)との排他はflockが担う
+(kubernetesのconcurrencyPolicyは異なるJob作成元をまたいで効かないため。ADR-0104 §5のコメントは不正確だった
+ので訂正の追記をした)。ロック取得失敗は既存の終了コード規約(ADR-0104 §3)の1(再試行可能)にし、
+`cronjob-import.yaml`のpodFailurePolicy・`services/pokedex/cmd/import`(Go CLI)・Makefileは無変更。
+環境変数`IMPORT_APP_DIR`・`IMPORT_LOCK_FILE`でテストから差し替え可能にした。
+2プロセス同時起動の統合テスト(`cronjob_lock_test.go`)を追加し、Docker(golang:1.27.1-alpine。busybox flock)で
+実際に排他が機能することを確認(macOSはflockが無いため自動Skip)。critic PASS。
+Reason: issue #106(Codexレビュー)。`make test`/`lint`/`build`/`k8s-render`すべてgreen。
+Impact: k3dでの手動確認手順(2プロセス同時起動)をdocs/runbooks/data.md §6に追記したが、実クラスタでの
+実行はまだ行っていない(次にk3dクラスタを使う機会に確認)。他レーンへの影響なし。
+
+## 2026-09-23: 判定 JD3(複数の相手候補)を PR #143 で main に統合、JD4 は API レーンの依頼を待つ(判定レーン)
+Decision: ADR-0703(`defenders`/`matchups` への破壊的変更)を PR #143 で main に統合した。critic は1回目で PASS。
+判定レーンのブランチを `feat/judge-jd4` に切り替えた(JD3 の `feat/judge-jd3` は削除)。
+JD4(相手の技を含めた返り討ち判定)は、技の優先度を pokedex-svc から個別取得する `GET /api/pokedex/moves/{key}`
+(2026-09-22 に API レーンへ既定案付きで依頼済み。上記参照)が無いと実装できない。ユーザーに「両者優先度0の限定で
+先に進める」か「API レーンの実装を待つ」かを確認し、**待つ**を選択した。
+Reason: 優先度の間違いは「先制されて落とされるのに安全と言う」誤判定を生みうるため、判定ツールとしての信頼性を
+優先度0の限定より優先した(ユーザー判断)。
+Impact: 判定レーンは API レーンが `GET /api/pokedex/moves/{key}` を実装するまで新規実装を止める(plan.md のブロッカー節)。
+`feat/judge-jd4` は作成済み・空のまま。API レーンへの依頼は優先度低(JD2・JD3 は待たずに進められた)ままなので、
+API レーンが気づいたタイミングで着手してもらってよい。
+
+## 2026-09-23: リモートブランチの `--delete`(git push --delete)も自動承認にする(ユーザー決定)
+Decision: Claude Code のユーザー設定ファイル(グローバル)とこのプロジェクトの `.claude/settings.json`(Git管理下)の両方で、
+`git push * --delete*`/`git push --delete*` を ask から削除した(広い `Bash(git push *)` の allow がそのまま効くようになる)。
+main への直接push・force push・`--mirror`・`--all` は引き続き禁止のまま。`rm` も変更していない。
+Reason: ユーザーの言葉「まだ承認出るので許可したい」。PR マージ後のフィーチャーブランチ削除は本セッションの通常フローで
+毎回発生しており、確認プロンプトが挟まる運用負荷が大きかったため。
+Impact: COORDINATION.md の運用上の注意を更新した。`gh pr merge` に続きリモートブランチ削除も人間が目を通す機会が無くなるため、
+PR作成前のテスト・lint・check-publishable・critic PASS確認の重要性は変わらず高いまま。
+
+## 2026-09-23: issue #103 の設計を ADR-0209 で確定(API レーン。critic PASS(NG 2回のあと3回目))
+Decision: M2 保存データの保持・削除・端末ID境界を ADR-0209 で確定した。端末IDは認証ではなくデータの分割キー(セッションIDは
+分割キーにしない) / v1 は個人利用+Tailscale 内に固定し公開前に認証を別ADRで必須決定 / 生の計算イベントは作成から90日・推薦の
+集計は生イベントと同時に失効・構築とお気に入りは `max(devices.last_seen_at, 行.updated_at)` から540日(record-svc・team-svc
+どちらも calc-svc の計算イベントを購読して自分の DB の `devices.last_seen_at` を更新する。record 側だけでは計算だけ使い続け
+構築画面を開かない端末の team データが誤って失効するため) / 端末単位の全削除はサービスごとに1本
+(DELETE /api/record/device-data・DELETE /api/team/device-data。冪等・同期・partial の繰り返し・`purged_at` は削除要求のたびに
+現在時刻へ更新) / 削除の墓石 `devices.purged_at` で JetStream の遅延イベントの復活を防ぎ、purge journal(#5b。DB のバックアップ
+世代とは独立の保存先に同時追記)でバックアップ世代取得後に来た削除要求もリストア時に再適用する。
+openapi.yaml は端末ID/セッションIDの description だけ変更し、record/team のパスは P5-3/P5-4 で入れる(単一の
+api.ServerInterface のため、今足すと calc-svc/pokedex-svc に常に404の空メソッドが増え、gateway も未ルーティングで常に404になる)。
+Reason: ユーザー決定(2026-09-23「一定期間で自動失効。無期限保持はしない」)の具体化。issue #103 の受け入れ条件。
+Impact(データレーン): P5-1 の TiDB スキーマは ADR-0209 §3 に従う。devices テーブル(last_seen_at・purged_at)と purge journal
+テーブルを record DB と team DB にそれぞれ持ち、purge journal は DB とは別の独立した保存先(P7-4 が決める)にも同時に書く。
+全表に device_id を置く。favorites は calc_events を外部キーで参照せず個体スナップショットを自分で持つ(90日と540日の差が
+矛盾するため)。保持日数はコードに埋めず環境変数で渡し起動時に検証する。P5-2 はストリームの max_age を7日にし、イベントに
+発生時刻 occurred_at を載せ、record-svc と team-svc は別々の durable consumer を持つ(同じ consumer を共有すると配送が分かれ
+record-svc が計算イベントを取りこぼす)。P7-4 はバックアップに devices(墓石)と purge journal を必ず含め、復元は Ready の前に
+墓石の再適用・purge journal の再適用・失効ジョブの強制実行を行い、JetStream は再生しない。
+Impact(Web/iOS レーン): ADR-0209 §8 の文言と削除 UI をお願いしたい(Web は P5-5、iOS は P6-5)。(1)「アカウントはありません。
+履歴・お気に入り・構築はこの端末に割り当てた ID でサーバーに保存しています」(2)「ID が変わると(Web: サイトデータ消去 / iOS:
+アプリの再インストール)前のデータは開けません。元に戻す方法はありません」(3)「開けなくなったデータは自動的に消えます。計算の
+履歴は記録から90日、お気に入りと構築は最後に使った日から18か月です」(4) ボタン「この端末のデータを削除」→ 確認「元に戻せません」
+→ record と team の両方が completed になってから「削除しました」。partial は続けて再送、503 は「サーバーに届きませんでした」。
+API が実装されるまでは文言と画面だけ先に置いてよい。
+
+## 2026-09-23: issue #148(クラウド公開前のアクセス境界・認証方針)をユーザーが決定
+Decision: 私設サービスを維持する(issue #148の既定案どおり)。Tailscale等のprivate overlay networkだけからgatewayへ到達させ、
+public LoadBalancer/Ingressは作らない。端末IDは引き続き認証ではなく、`docs/requirements.md`の「自分1人・認証なし」の前提を変えない。
+Reason: ユーザー回答(AskUserQuestion、2026-09-23)。OIDC等の本格認証導入は今のところ不要と判断。
+Impact: 主担当のAPI・Web・iOS・運用レーンへ連絡し、issue #148の共通の受け入れ条件(ADRへの記録、`overlays/cloud`のhostless Ingressが
+無検討で公開されない静的テスト、private案でのtailnet/ACL・失効手順のrunbook化、CORS・端末IDを認証として扱わない回帰テスト)に沿って
+進めてもらう。データ・タイプバランス・素早さレーンは連携(今のところ追加対応は無い見込み)。
+
+## 2026-09-23: issue #148 の API レーン担当分が完了(ADR-0210 §7 を転記)
+Decision: ADR-0210(私設サービスの境界)を「採用」で確定。`deploy/k8s/overlays/cloud` から gateway の Ingress を
+削除 patch で除去し、public な Ingress・LoadBalancer・NodePort・`externalIPs`・`hostNetwork: true`・`hostPort` が
+無いことを構造検査(`OverlayObjects`)と `kubectl kustomize` 実描画検査の2層で固定した(critic PASS。変異テストで
+`hostNetwork: true` を注入し実際に赤くなることを確認済み)。TLS 終端は gateway/クラスタの Ingress では行わず、
+到達経路そのものを Tailscale(候補: Operator の `tailscale` ingressClass、または subnet router + `tailscale serve`)に
+委ねる方針。端末IDが認証でないこと・CORSが到達制御でないことを固定する回帰テストを追加
+(`TestDeviceIDIsNotAuthentication` / `TestCORSIsNotAccessControl` / `TestContractHasNoAuthentication`)。
+Reason: ADR-0210 §2・§3・§7(critic レビュー2026-09-23 PASS)。
+Impact:
+- 運用レーンへ依頼: (1) tailnet の ACL(利用端末の tag と運用者の分離)を設計・導入すること (2) 端末紛失・鍵漏えい時の
+  失効手順を runbook 化すること(ADR-0210 §1.3) (3) クラウドでの到達経路(§2.1 候補1: Tailscale Operator の
+  `tailscale` ingressClass、候補2: subnet router + `tailscale serve`)をどちらか選び導入すること。**候補1を選ぶ場合は
+  `kind: Ingress` が実際に生成されるため、ADR-0210 の AC-B1・AC-B2(`deploytest` の
+  `TestCloudOverlayHasNoPublicEntrypoint` / `TestCloudOverlayRenderHasNoPublicEntrypoint`)の条件を
+  「`ingressClassName` が `tailscale` 以外の Ingress が無い」に改める追記が先に必要(ADR-0210 §2.1)。
+  テストの条件を先に緩めない(CLAUDE.md 絶対ルール6)** (4) 監視・ログの収集経路が public IP を作らないこと
+- Webレーンへ依頼: API の base URL を tailnet の MagicDNS 名にし、public な既定値を持たないこと。CORS 許可オリジンも
+  tailnet 上の名前だけにすること(ADR-0210 §4)
+- iOSレーンへ依頼: 同上。`tailscale serve` が HTTPS を終端するので ATS の例外(平文許可)を作らないこと
+- データ・タイプバランス・素早さレーンへの追加対応は無し(各レーンの `services/*/deploy/k8s/base/ingress.yaml` は
+  現時点で root の cloud overlay に含まれていないため。root に含める日が来たら同じ制約を適用する。ADR-0210 §7)
+- 既知の限界(対応不要・記録のみ): `TestContractHasNoAuthentication` は生成物(`api.GetSwagger()`)経由で契約を読むため、
+  `api/openapi.yaml` を編集して `make gen` を忘れた一瞬は検知できない。これはリポジトリの契約テスト全体に共通する
+  前提で本ADR固有の欠陥ではないため、この ADR の範囲では対応しない(ADR-0210 §8)
+
+### 追記(2026-09-23): Web・iOSレーンから確認回答
+- Webレーンから確認回答: `web/src/api/config.ts` の `apiBaseUrl()` は既定値が同一オリジン `"/"` で、
+  `VITE_API_BASE_URL` での上書き設計。public な固定値は持っていない。CORS 許可オリジンも gateway(Go)側の
+  設定でWebにハードコードは無い。既に依頼の条件を満たしている。plan.md P4-20 に記録済み(Webレーンのブランチ
+  `feat/web-p4` のコミット `6c0b073`。まだ main 未統合)。残るのは実際の tailnet 名をデプロイ時に
+  `VITE_API_BASE_URL` に設定する運用作業のみ
+- iOSレーンから確認回答: `Info.plist` 等のソース(ビルド生成物を除く)に `NSAppTransportSecurity`/ATS例外は
+  入っていない。`tailscale serve` がHTTPS終端する前提のまま平文許可を作らない制約を継続して守る
+- **運用レーンが到達経路(§2.1 候補1 or 候補2)を選定・導入したら、Web・iOSレーンへ実際の tailnet 名/接続先の
+  設定を連絡すること**(両レーンとも「連絡が来たら着手」で待機中)
+
+## 2026-09-23: issue #106(手動importとCronJobの同時実行)を main へ統合(データレーン)
+Decision: PR #155(`feat/claude-p1-engine` → `main`)をマージした。`tools/importer/cronjob.sh` に
+flockベースの排他制御(ADR-0109)。critic PASS(指摘なし)。
+Reason: 独立レビュー PASS・`make test`(866件)/`lint`/`build`/`k8s-render` すべて green。Docker上の
+Linuxで統合テスト2件が実際にPASSすることを確認済み。
+Impact: k3dクラスタでの手動確認(docs/runbooks/data.md §6)はまだ実行していない。他レーンへの影響なし。
+
+## 2026-09-23: `GET /api/pokedex/moves/{key}`(getMove)を実装・main統合、判定レーン JD4 のブロック解消(API レーン)
+Decision: 判定レーンの依頼(2026-09-22「JD2〜JD5 の範囲・順序をユーザーが確定。API レーンへの依頼」・2026-09-23
+「判定 JD3 を PR #143 で main に統合、JD4 は API レーンの依頼を待つ」)に応え、`GET /api/pokedex/moves/{key}`
+(operationId `getMove`)を実装した(P3-7。**main 統合済み(PR #161)**。critic PASS。3往復。1回目 FAIL: 契約と
+実装の不一致・ADR未更新・plan.md未更新・DECISIONS.md未記録。2回目 FAIL: レーン間の記録の食い違い〈CURRENT_STATE.md
+の Judge 欄が未更新〉・「main統合済み」の先取り記載。3回目 PASS)。`api/openapi.yaml` に
+`getSpecies` と同じ形(既存の `Move` スキーマをそのまま返す。200/404/503)で追加し、`make gen` で
+`services/internal/api/openapi.gen.go` と `web/src/api/openapi.gen.ts` を再生成した。挙動: 使用可能集合で絞らない
+(`getSpecies` と同様。絞り込みは検索の仕事)。`GetDefaultRegulation` を経由しないため、マスタ未投入(技0件)でも
+`searchMoves`/`listNatures` と異なり 503 ではなく 404 `not_found` になる(契約の description に明記。ADR-0105 §3 追記)。
+
+**越境の記録(COORDINATION.md「他のレーンの範囲のファイルは変更しない」の例外)**: `api.ServerInterface` に
+メソッドが増えるため、`services/pokedex/`(データレーンの範囲)側にも実装が無いと `var _ api.ServerInterface =
+(*Server)(nil)` でコンパイルが壊れ、main が緑を保てない。スタブ(404)だけ置く案は「200 を約束する契約なのに
+実装が無い」状態で main に入れることになり完全な実装より悪いと判断し、`getSpecies`/`GetItem` パターンをそのまま
+写す形で API レーンが完全実装まで行った(新規の設計判断はしていない)。触った pokedex 側のファイル:
+- `services/pokedex/db/query/pokedex.sql`(`GetMove :one` を追加。`GetItem` と同じ形)
+- `services/pokedex/internal/httpapi/search.go`(`Server.GetMove` ハンドラを追加)
+- `services/pokedex/internal/httpapi/server.go`(ルート登録・コメントの操作数を6→7に修正)
+- `services/pokedex/internal/httpapi/pokedex_test.go`(`TestGetMove` 追加、関連テーブルに `getMove` の行を追加)
+- `services/pokedex/internal/storetest/storetest.go`(偽の `GetMove` を追加。フィクスチャデータは無変更)
+- `services/pokedex/internal/store/*`(sqlc の生成物。`make gen` の出力)
+
+データレーンへ依頼: 上記ファイルを再レビューしてください。特に `search.go` の `GetMove` ハンドラと
+`storetest.go` の偽実装が、データレーン側の設計判断(命名・エラー変換の流儀)と食い違っていないかの確認。
+問題があれば直接修正して構いません(API レーンはこの PR 以降 `services/pokedex/` に手を入れる予定はありません)。
+
+判定レーンへ: `getMove` は **main 統合済み(PR #161)**。JD4(`feat/judge-jd4`)に着手してください。`priority` は
+`int`(既存の `Move.priority` フィールドのまま)。
+CURRENT_STATE.md の Judge 欄もこの内容に合わせて API レーンが更新した(越境の記録。本来はレーンごとの担当欄だが、
+blocker の申し送りが片側だけでは意味が無いため)。
+
+Webレーンへ: ADR-0304 §3(技 ID 解決の欠落)は**まだ解消していません**。今回追加した `getMove` は技1件だけを
+返すため、`learnset` の解決にそのまま使うと種族1体あたり技20〜30件ぶんのラウンドトリップが要るという、
+ADR-0304 §3 の案Bの欠点がそのまま残ります。案A(`getSpecies.learnset` を `Move` 実体の配列にする)か、
+`getMove` にバッチ解決(`ids` クエリ)を足すかは、引き続き API レーンへの未決の提案のままです。
+
+iOSレーンへ依頼: `api/openapi.yaml` に `getMove` を追加したため、`ios/PokeCalcKit/Sources/PokeCalcAPI/Generated/`
+の生成物が古くなっています。`make ios-gen`(または既存の再生成手順)を実行し、`make ios-test` の
+`ios-gen-check` を通してください(過去の追従例: commit `40caa49`)。API レーンからは `ios/` に触れません。
+
+Reason: judge が上流から priority を引く手段が無いと、先に動く側を正しく決められず JD4 が実装できない
+(2026-09-22 の依頼の Reason と同じ)。cross-lane 実装の判断理由は上記越境の記録のとおり。
+Impact: `docs/plan.md` P3-7 追加・JD4 のブロッカーを解消として更新。`docs/adr/0105-...md` §3・受け入れ条件に
+`getMove` を追記、`docs/adr/0200-calc-svc-api-contract.md` の「pokedex の5操作」を6操作に訂正、
+`docs/adr/0107-move-secondary-rank-changes.md` 決定8に追記(`effect` の公開は依然未決)、
+`docs/adr/0304-web-online-mastersource.md` §3 に追記(この実装は§3の欠落の解決策ではない)。
+
+## 2026-09-24: getMove(P3-7)のAPIレーン越境実装をレビュー(データレーン)
+Decision: APIレーンからの依頼(2026-09-23「services/pokedex/の再レビュー」)に応え、
+`services/pokedex/db/query/pokedex.sql`(GetMove)・`internal/httpapi/search.go`(GetMoveハンドラ)・
+`internal/httpapi/server.go`(ルート登録)・`internal/httpapi/pokedex_test.go`(TestGetMove)・
+`internal/storetest/storetest.go`(偽実装)を確認した。**修正不要と判断**:
+- `GetMove`ハンドラのエラー変換(`sql.ErrNoRows`→`api.NotFound`、それ以外→`unavailable`)は
+  既存の`GetSpecies`と完全に同じ流儀
+- `storetest.Querier.GetMove`の偽実装(`record`呼び出し→線形探索→`sql.ErrNoRows`)は
+  `GetSpeciesByKey`の偽実装と同じパターン
+- `TestGetMove`はレギュレーション外の技・未知の技・マスタ未投入(0件→404、他の一覧系の503と違う
+  点も含め)を網羅しており、データレーンのテスト密度の基準を満たす
+- `api/openapi.yaml`のdescriptionも404/503の使い分けを明記しており、ADR-0105 §3追記の内容と一致
+`make build`/`go vet`/`go test ./...`(services全体)すべてgreenを確認済み。
+Reason: APIレーンの越境実装(3往復critic PASS済み)に対する独立確認。データレーン側の設計判断
+(命名・エラー変換)と食い違いがないかを見るのが依頼内容だった。
+Impact: 追加の修正なし。判定レーンはJD4に着手してよい(APIレーン側で既に確認済み)。
+
+## 2026-09-24: issue #99(ライトテーマの danger コントラスト不足)の Web レーン担当分が完了。iOS レーンへ依頼
+Decision: danger のライト値を `#E5484D` → `#CD1D23` に変更した(色相・彩度は変えず明度だけ下げる。WCAG 2.2
+SC 1.4.3 の通常文字基準4.5:1を、bg.base単体(5.07:1)・bg.glassをbg.baseに重ねた合成色(5.40:1)の両方で満たす。
+ダーク値 `#FF6369` は元から基準を満たしており〈bg.base 6.56:1・glass合成 6.13:1〉変更していない)。
+`docs/design.md`「デザイントークン」に理由・数値を記録。`web/src/test/colorContrast.ts`(WCAG相対輝度・
+コントラスト比の計算。既知の参照値で検算済み)・`web/src/styles/contrast.test.ts`(design.md から値を読み、
+ライト・ダーク×bg.base・bg.glass合成の4組を検査)を新規追加。critic PASS(独立実装での検算・変異テストで
+実効性を確認済み)。
+Reason: issue #99(Codexレビュー。タイプバランスレーンから2026-09-23連絡)。ライトテーマの danger 文字色が
+WCAG基準を満たさず、弱視・低コントラスト環境の利用者がエラー文言を読み取りにくい状態だった。
+Impact: **iOSレーンへ依頼**: `ios/PokeCalcKit/Sources/PokeCalcDesign/PokeCalcDesign.swift`(`ColorToken.danger`
+のライト値。現在 `RGBA(red: 0xE5, green: 0x48, blue: 0x4D, alpha: 1.0)`)と
+`ios/PokeCalcKit/Tests/PokeCalcDesignTests/DesignTokenTests.swift`(同じ旧値を手書きで期待値にしている36行目
+付近)を `0xCD, 0x1D, 0x23` に更新し、Web と同様にコントラスト比を検査するテストを追加してほしい(値は
+design.md「デザイントークン」が正)。issue #99 は iOS 側が完了するまでクローズしない。

@@ -6,7 +6,8 @@
 
 import { describe, expect, test } from "vitest";
 import type { Item, Move } from "../engine/types";
-import { reverseItemCandidates } from "./reverseItems";
+import { MAX_ITEM_CANDIDATES } from "./requestLimits";
+import { reverseItemCandidates, type ReverseItemCandidates } from "./reverseItems";
 
 function move(category: Move["category"], type = "fire"): Move {
   return { id: `m-${category}`, nameJa: "わざ", type, category, power: 80, priority: 0 };
@@ -56,8 +57,9 @@ const all: readonly Item[] = [
   waterBoost,
 ];
 
-function ids(candidates: ReadonlyArray<Item | null>): Array<string | null> {
-  return candidates.map((item) => item?.id ?? null);
+/** 候補の ID(持ち物なしは null)。P4-19 で戻り値が {candidates, truncated} になったので、ここで取り出す。 */
+function ids(result: ReverseItemCandidates): Array<string | null> {
+  return result.candidates.map((item) => item?.id ?? null);
 }
 
 describe("reverseItemCandidates(防御側)", () => {
@@ -123,6 +125,52 @@ describe("reverseItemCandidates(攻撃側)", () => {
 });
 
 test("渡した Item の実体をそのまま返す(engine に解決済みの効果を渡すため。コピーしない)", () => {
-  const [, first] = reverseItemCandidates("defender", all, move("physical", "fire"));
+  const [, first] = reverseItemCandidates("defender", all, move("physical", "fire")).candidates;
   expect(first).toBe(defUp);
+});
+
+// P4-19(issue #110、ADR-0208): itemCandidates は null(持ち物なし)を含めて 64 通りまで
+// (api/openapi.yaml の ReverseRequest.itemCandidates の maxItems)。超えると API は 400 invalid_input、
+// engine も上限超過で失敗するので、画面に渡す前に決定的に絞り込み、絞り込んだことを truncated で伝える。
+// 期待値の 64 は契約から直接書く(定数とのずれは requestLimits.test.ts が検出する)。
+describe("reverseItemCandidates(64通りの上限。マスタの順のまま先頭から残す)", () => {
+  /** 物理・特殊のどちらの技でも候補になる、架空の防御系の持ち物を count 件(マスタの順)。 */
+  function defenseItems(count: number): Item[] {
+    return Array.from({ length: count }, (_value, index) => ({
+      id: `def-${String(index)}`,
+      nameJa: `テスト防御${String(index)}`,
+      effect: { statMods: { def: 6144, spd: 6144 } },
+    }));
+  }
+
+  test("null を含めて 63 通り(上限-1)はそのまま", () => {
+    const result = reverseItemCandidates("defender", defenseItems(62), move("physical"));
+    expect(result.candidates).toHaveLength(63);
+    expect(result.truncated).toBe(false);
+  });
+
+  test("null を含めてちょうど 64 通り(上限)はそのまま。切ったことにしない", () => {
+    const result = reverseItemCandidates("defender", defenseItems(63), move("physical"));
+    expect(result.candidates).toHaveLength(64);
+    expect(result.truncated).toBe(false);
+    expect(ids(result).at(-1)).toBe("def-62");
+  });
+
+  test("null を含めて 65 通り(上限+1)になるときは末尾を落として 64 通りにし、truncated を立てる", () => {
+    const items = defenseItems(64);
+    const result = reverseItemCandidates("defender", items, move("physical"));
+    expect(result.candidates).toHaveLength(MAX_ITEM_CANDIDATES);
+    expect(result.truncated).toBe(true);
+    // 先頭は必ず持ち物なし、続きはマスタの順のまま先頭から(並べ替え・間引きをしない)
+    expect(ids(result)).toEqual([null, ...items.slice(0, 63).map((item) => item.id)]);
+  });
+
+  test("候補が大幅に多くても上限までに収め、同じ入力からは同じ結果になる(決定的)", () => {
+    const items = defenseItems(200);
+    const first = reverseItemCandidates("defender", items, move("special"));
+    const second = reverseItemCandidates("defender", items, move("special"));
+    expect(first.candidates).toHaveLength(MAX_ITEM_CANDIDATES);
+    expect(ids(first)).toEqual(ids(second));
+    expect(first.truncated).toBe(true);
+  });
 });

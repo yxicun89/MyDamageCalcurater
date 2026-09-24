@@ -33,6 +33,26 @@ var (
 	// ErrInvalidObservation は観測の指定が不正(Percent・PercentTenths・Damage のうち
 	// ちょうど1つでない、または範囲外)。
 	ErrInvalidObservation = errors.New("観測の指定が不正")
+	// ErrTooManyItemCandidates は ItemCandidates の件数が MaxReverseItemCandidates を超えている
+	// (issue #110。ADR-0208 §4・ADR-0108)。HTTP を経由しない直接呼び出し・WASM でも
+	// 探索コスト(性格クラス × 持ち物 × 33 SP × 観測 × 16 ロール)を増幅させないための防御。
+	ErrTooManyItemCandidates = errors.New("持ち物候補の件数が上限を超えている")
+	// ErrTooManyObservations は Observations の件数が MaxReverseObservations を超えている
+	// (issue #110。ADR-0208 §4・ADR-0108)。
+	ErrTooManyObservations = errors.New("観測の件数が上限を超えている")
+	// ErrInvalidMaxCandidates は MaxCandidates が 0(無制限)でも 1..MaxReverseMaxCandidates
+	// の範囲内でもない(負・上限超過。issue #110。ADR-0208 §4・ADR-0108)。
+	ErrInvalidMaxCandidates = errors.New("MaxCandidates の範囲が不正")
+)
+
+// 件数の上限(issue #110。ADR-0208 §1 の契約値と同じ。ADR-0108)。
+const (
+	// MaxReverseItemCandidates は ItemCandidates の件数上限。
+	MaxReverseItemCandidates = 64
+	// MaxReverseObservations は Observations の件数上限(minItems 1 は validateObservations が別に見る)。
+	MaxReverseObservations = 16
+	// MaxReverseMaxCandidates は MaxCandidates が 0(無制限)でないときに許される上限。
+	MaxReverseMaxCandidates = 128
 )
 
 // ReverseSide はどちら側の調整を逆算するか。
@@ -154,7 +174,8 @@ type ReverseInput struct {
 	ItemCandidates []*Item
 	// Observations は1件以上。すべて同じ技・同じ場・同じ既知側に対する別々の1発。
 	Observations []Observation
-	// MaxCandidates は返す候補数の上限。0 以下は無制限。
+	// MaxCandidates は返す候補数の上限。0 は無制限。1..MaxReverseMaxCandidates は上限として使う。
+	// 負・MaxReverseMaxCandidates 超過は ErrInvalidMaxCandidates(issue #110。ADR-0108 決定4)。
 	MaxCandidates int
 }
 
@@ -280,6 +301,17 @@ func collapseSPRanges(xs []int) []SPRange {
 func CalcReverse(in ReverseInput) (ReverseResult, error) {
 	if in.Side != SideDefender && in.Side != SideAttacker {
 		return ReverseResult{}, fmt.Errorf("%w: %q", ErrInvalidReverseSide, in.Side)
+	}
+	// 件数・範囲の上限は、観測の中身の検証より前に見る(issue #110。ADR-0208 §4・ADR-0108)。
+	// 巨大な入力に対して以降の一切の追加の仕事をしないため。
+	if len(in.ItemCandidates) > MaxReverseItemCandidates {
+		return ReverseResult{}, fmt.Errorf("%w: %d 件", ErrTooManyItemCandidates, len(in.ItemCandidates))
+	}
+	if len(in.Observations) > MaxReverseObservations {
+		return ReverseResult{}, fmt.Errorf("%w: %d 件", ErrTooManyObservations, len(in.Observations))
+	}
+	if in.MaxCandidates < 0 || in.MaxCandidates > MaxReverseMaxCandidates {
+		return ReverseResult{}, fmt.Errorf("%w: %d", ErrInvalidMaxCandidates, in.MaxCandidates)
 	}
 	if err := validateObservations(in.Observations); err != nil {
 		return ReverseResult{}, err

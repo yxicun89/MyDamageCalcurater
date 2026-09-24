@@ -291,3 +291,10 @@ func run(args []string, env cliEnv) int // main は os.Exit(run(os.Args[1:], 本
 `docker pull` で確認。2026-09-22 時点)。`web/package.json` の `engines.node`(`26.9.0`)と同じ版に揃えた
 (§6 の推奨どおり)。`docker build --target importer` で実際にビルドし、コンテナ内で
 `sh -n tools/importer/cronjob.sh` の構文と `/app/pokedex-import -h` の起動、`USER node` での実行を確認した。
+
+## 追記(issue #106 / ADR-0109。2026-09-23)
+
+§5 の `concurrencyPolicy: Forbid` の理由欄「手動実行(`make import-k8s`)と重なっても同時に投入しない」は不正確
+だった。Kubernetes の `concurrencyPolicy` は**同じ CronJob が作る Job 同士**にしか働かず、`make import-k8s`
+(`kubectl create job --from=cronjob/...`)が作る独立した Job とは排他しない。実際の排他(`cronjob.sh` での
+`flock`)は ADR-0109 を参照。`Forbid` 自体は「同じ CronJob の Job 同士の重複防止」という限定された役割のまま維持する。
