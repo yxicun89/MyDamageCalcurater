@@ -50,8 +50,8 @@
 
 | コマンド | 出現 | 裏で走るもの | 場所 | つなぐもの / 失敗時 |
 |---|---|---|---|---|
-| `make web-k3d-open` | verify §3(追記済み) | `kubectl -n pokecalc port-forward svc/web 5173:80`(**前面で常駐**。別ターミナル。Ctrl-C で終了) | host → k3d(svc/web) | `localhost:5173` → web Service:80 → Pod:8080。gateway は通らない |
-| `make web-k3d-smoke` | verify §3 | `web/scripts/k3d-smoke.sh`: `WEB_URL`(既定 `http://localhost:5173`)の `/healthz` を 1 秒間隔で最大 30 回待ち、その後 `/` `/reverse` `/engine.wasm` `/wasm_exec.js` `/assets/no-such-file.js`(404 期待)`/api/calc`(404 期待。gateway の担当)を curl | host → 5173 | **port-forward が無いと `/healthz に 30 回つながらなかった` で失敗**(今回の原因)。8080 を渡すと `/api/calc` が gateway の 400 を返し 1 件 NG |
+| `make web-k3d-open` | (診断用。verify には無い) | `kubectl -n pokecalc port-forward svc/web 5173:80`(**前面で常駐**。別ターミナル。Ctrl-C で終了) | host → k3d(svc/web) | `localhost:5173` → web Service:80 → Pod:8080。gateway を通さず Web(nginx)だけを確かめるときに使う |
+| `make web-k3d-smoke` | verify §3 | `web/scripts/k3d-smoke.sh`: `WEB_URL`(既定 `http://localhost:8080` = ブラウザで開く入口。k3d → Traefik → gateway → web)の `/healthz` を 1 秒間隔で最大 30 回待ち、その後 `/` `/reverse` `/engine.wasm` `/wasm_exec.js` `/static/no-such-file.js`(404 期待)`/api/no-such-endpoint`(404 期待)と、index.html が読む JS(200 期待。issue #268)を curl | host → 8080 | 読み取りのみ。Web だけを診断するときは `WEB_URL=http://localhost:5173`(`make web-k3d-open` の後) |
 | `make api-smoke` | verify §3、api §5 | `services/gateway/scripts/smoke.sh`(`API_URL` 既定 `http://localhost:8080`)。順序と各項目は [verify-mapping.md(D)](verify-mapping.md) | host → 8080 | 8080 → Traefik → gateway。最終行に `calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=200 internal=404 balance=200 web=200`。**400・404 は異常系を確かめた結果で正常** |
 | `curl -s http://localhost:18080/healthz` | api §6 | `make dev` の gateway への疎通 | host | 期待 `{"status":"ok"}` |
 | `DEV_GATEWAY_PORT=18080 DEV_CALC_PORT=18081 make dev` | api §6 | `scripts/dev.sh`: `go build` した calc・gateway を**ホストで**起動。calc は `services/calc/testdata/master.example.json`(架空データ)、gateway は `GATEWAY_CALC_URL=http://127.0.0.1:<calc>`・`GATEWAY_CORS_ALLOWED_ORIGINS=http://localhost:5173` | host のみ(k8s・DB を使わない) | Ctrl-C で両方停止。どちらかが落ちれば残りも止めて非ゼロ終了。k3d 稼働中は 8080 が衝突するため port を変える |
@@ -110,6 +110,6 @@
 
 - 読んだ範囲: 上記 8 文書の全コードブロック(README 6、verify-m1 全、api・data・balance・speed・ios・ios-device の全ブロックを機械抽出。抽出結果の行 = 表の行に全件対応)、`scripts/{up,dev,db-local-up,wasm,doctor,e2e}.sh`、`web/scripts/k3d-smoke.sh` 全行、`services/gateway/scripts/smoke.sh` 全行、`web/playwright*.ts`・`web/e2e/support/serverConfig.ts` の起動コマンド、`services/{balance,speed}/scripts/*.sh` と `ios/scripts/*.sh` の冒頭・外部コマンド行。
 - 読めていない箇所: `scripts/check-publishable.sh` の全検査項目、`services/{balance,speed}/scripts/smoke*.sh` の判定の細部、`check-gitops.sh` の判定、`ios/scripts/*.sh` の内部、`tools/importer/fetch*.mjs`・`check-upstream.mjs`、`argocd-bootstrap.sh` の後半(冒頭・固定値のみ確認)。
-- 実行して確認したもの: `web-k3d-smoke`(5173 の port-forward あり/なし、8080 指定)。それ以外は静的に読んだ内容で、実行はしていない。
+- 実行して確認したもの: `web-k3d-smoke`(既定 8080。2026-09-25、ADR-0305 の後)。それ以外は静的に読んだ内容で、実行はしていない。
 - 未実装・スタブ: `make e2e`(`scripts/e2e.sh` は echo のみ。P4-6)、`make assets`(echo のみ)。judge は `healthz` のみ(JD0)。
 - 手順書に記載が無いが存在するコマンド: `judge-k3d-deploy`/`judge-smoke`(§5 に記載)、`make down`(クラスタ削除。人間の確認)、`migrate-*`(db-mysql.md)。
