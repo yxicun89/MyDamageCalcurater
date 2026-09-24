@@ -46,21 +46,28 @@ CSS。3段階とも critic 1回目 FAIL→修正→2回目 PASS で完了(重大
 最終地点で64件に決定的に絞り込み、観測は16件で disabled+案内。critic PASS(境界値の網羅探索と変異テストで
 上限超過が起きないことを確認)。データレーンの engine/wasmapi 側(ADR-0108・PR #138)も main 統合済み。
 issue #110 は iOS の追従待ちで Web 単独ではクローズしない。
-**P4-18 issue #99(ライトテーマの danger コントラスト不足)の Web 分も完了・main 統合済み(PR #164)**:
+**P4-18 issue #99(ライトテーマの danger コントラスト不足)完了・issueクローズ済み**: Web 分(PR #164)は
 danger のライト値を `#E5484D`→`#CD1D23` に変更(WCAG 2.2 SC 1.4.3 の4.5:1を bg.base・bg.glass 合成後の
 両方で満たす)。`web/src/test/colorContrast.ts`・`web/src/styles/contrast.test.ts` を新規追加。critic PASS
-(独立実装での検算・変異テストで確認)。iOS 側(`PokeCalcDesign.swift`)はまだ旧値のままで DECISIONS.md で
-依頼済み(issue #99 自体は iOS 側完了までクローズしない)。
+(独立実装での検算・変異テストで確認)。iOS 側も完了(`fix: ライトテーマの danger コントラスト不足を修正
+(issue #99)`。`PokeCalcDesign.swift`・`ColorContrast.swift`・`DangerContrastTests.swift`)。issue #99 は
+クローズ済み。
+**issue #113(逆算の古い計算要求の抑止・キャンセル)は Web 分完了・main 統合済み(PR #174)**: 観測のテキスト
+編集のみ200msのtrailing debounce、確定操作は待たない。`CalcEngine` に任意引数 `signal?: AbortSignal` を
+追加、取り消しは `REQUEST_ABORTED_CODE` で区別(ADR-0300 §11)。critic PASS(非同期・競合状態を重点検証。
+mutation テスト9件で確認)。iOS 側も完了(`fix: iOS の計算・逆算で古い計算要求をキャンセル・観測入力を
+debounce (issue #113)`。`LatestTaskRunner.swift`・`CalcInput.swift`)。**issue #113 自体はまだ open**
+(API レーンの「クライアントのcancel伝播」連携分が残っているかは未確認。Web・iOS とも自レーン分は完了)。
 P4-17(技の ID 解決)は、API レーンが判定レーン JD4 向けに `GET /api/pokedex/moves/{key}`(getMove)を
 main 統合したが(PR #161)、種族1体あたり技20〜30件ぶんのラウンドトリップが要るため ADR-0304 §3 の欠落は
 **まだ解消していない**(API レーン自身が ADR-0304 に追記済み)。案A(`learnset` を `Move[]` にする)か
 `getMove` のバッチ解決化が API レーンへの未決の提案のまま。
-Next: (1) P4-18 の残り: #113(逆算の数値入力で古い計算要求を抑止・キャンセル。200ms debounce・AbortSignal。
-iOS・API と連携)に着手中。(2) P4-17: 技の ID 解決の欠落が解消されたら技を復活。(3) P4-20: issue #148
-(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み(apiBaseUrl の既定値は
-同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより連絡が来る想定。
-(4) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち)。
-(5) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
+Next: (1) P4-18 は Web 分すべて完了(#99・#113 とも main 統合済み)。次点の #98(モバイル幅の横溢れ)・
+#67(APIクライアントの防御的エラー処理)に着手するか判断。(2) P4-17: 技の ID 解決の欠落が解消されたら技を
+復活。(3) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを
+確認済み(apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用
+レーンより連絡が来る想定。(4) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase
+キックオフ待ち)。(5) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
