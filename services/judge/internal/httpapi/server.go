@@ -10,6 +10,7 @@ import (
 
 	"example.com/pokecalc/services/judge/internal/api"
 	"example.com/pokecalc/services/judge/internal/client"
+	"example.com/pokecalc/services/judge/internal/httpmetrics"
 	"github.com/labstack/echo/v5"
 )
 
@@ -34,6 +35,9 @@ type Dependencies struct {
 func New(deps Dependencies) *echo.Echo {
 	e := echo.New()
 	e.HTTPErrorHandler = writeHTTPError
+	m := httpmetrics.New()
+	e.Use(m.Middleware())
+	e.GET(httpmetrics.Path, m.Handler())
 	api.RegisterHandlersWithOptions(e, handler{deps: deps}, api.RegisterHandlersOptions{
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
 			"outspeedAndKo": {requireRequestContext},

@@ -11,6 +11,7 @@ import (
 
 	"example.com/pokecalc/services/calc/internal/master"
 	"example.com/pokecalc/services/internal/api"
+	"example.com/pokecalc/services/internal/httpmetrics"
 )
 
 // StoreFunc は、マスタを読み込み済みならその Store を、まだなら nil を返す(並行に呼ばれても安全であること)。
@@ -22,8 +23,11 @@ type StoreFunc func() master.Store
 // GET /healthz は 200 を返す。current が Store を返すようになったら NewHandler と同じに振る舞う。
 func NewDeferredHandler(current StoreFunc) http.Handler {
 	e := echo.New()
-	e.Use(recoverMiddleware)
 	e.HTTPErrorHandler = httpErrorHandler
+	m := httpmetrics.New()
+	e.Use(m.Middleware())
+	e.Use(recoverMiddleware)
+	e.GET(httpmetrics.Path, m.Handler())
 
 	registerDeferredCalcRoutes(e, current)
 	registerPokedexNotFoundRoutes(e)

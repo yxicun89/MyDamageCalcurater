@@ -21,6 +21,7 @@ import (
 	"example.com/pokecalc/engine"
 	"example.com/pokecalc/services/calc/internal/master"
 	"example.com/pokecalc/services/internal/api"
+	"example.com/pokecalc/services/internal/httpmetrics"
 )
 
 // messageInternal は回復した panic・想定外の失敗に付ける固定文。
@@ -49,8 +50,11 @@ func NewServer(store master.Store) *Server {
 // (ルート無し・メソッド違い)を Error 形式({"code","message"})に揃えるエラーハンドラを含む。
 func NewHandler(store master.Store) http.Handler {
 	e := echo.New()
-	e.Use(recoverMiddleware)
 	e.HTTPErrorHandler = httpErrorHandler
+	m := httpmetrics.New()
+	e.Use(m.Middleware())
+	e.Use(recoverMiddleware)
+	e.GET(httpmetrics.Path, m.Handler())
 
 	registerCalcRoutes(e, NewServer(store))
 	registerPokedexNotFoundRoutes(e)
