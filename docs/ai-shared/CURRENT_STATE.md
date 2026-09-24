@@ -66,12 +66,18 @@ P4-17(技の ID 解決)は、API レーンが判定レーン JD4 向けに `GET 
 main 統合したが(PR #161)、種族1体あたり技20〜30件ぶんのラウンドトリップが要るため ADR-0304 §3 の欠落は
 **まだ解消していない**(API レーン自身が ADR-0304 に追記済み)。案A(`learnset` を `Move[]` にする)か
 `getMove` のバッチ解決化が API レーンへの未決の提案のまま。
-Next: (1) P4-18 は Web 分すべて完了(#99・#113 とも main 統合済み)。次点の #98(モバイル幅の横溢れ)・
-#67(APIクライアントの防御的エラー処理)に着手するか判断。(2) P4-17: 技の ID 解決の欠落が解消されたら技を
-復活。(3) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを
-確認済み(apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用
-レーンより連絡が来る想定。(4) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase
-キックオフ待ち)。(5) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
+**P4-21 issue #67(2xxの契約外JSONでAPIクライアントが例外を投げる)完了・main 統合済み(PR #189)**:
+`apiEngine.ts`・`balanceClient.ts` の `postJson` を型ガード経由にし(`as Schemas[...]` の型アサーションを
+除去)、契約外の2xxで例外を投げず `engine_unavailable`/`balance_unavailable` を返すようにした(ADR-0301 §4・
+ADR-0303 §6)。calc側は写像関数が読む全フィールドを再帰的に検査、balance側は画面がたどる形だけを検査
+(leafスカラー・enumは見ない。契約の二重管理を避けるため)。critic PASS(mutation テスト12件で型ガードの
+過不足なしを確認)。既存1034件は無変更・新規143件追加(1166件)。
+Next: (1) P4-21 の残り: #98(モバイル幅で計算・逆算画面が横に溢れる)。CSS の狭幅 media query + Playwright の
+320/375px 回帰テストが必要。(2) P4-17: 技の ID 解決の欠落が解消されたら技を復活。(3) P4-20: issue #148
+(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み(apiBaseUrl の既定値は
+同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより連絡が来る想定。
+(4) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち)。
+(5) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
