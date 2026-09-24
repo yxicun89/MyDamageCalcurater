@@ -10,15 +10,19 @@ import { DEFAULT_SCREEN, SCREEN_ROUTES, documentTitle, pathForScreen, screenFrom
 describe("ルート表", () => {
   // P4-12a(ADR-0303 §2): タイプバランス(/balance)を逆算の後ろに足す。
   // SP3(ADR-0604 §2): 素早さ比較(/speed)をタイプバランスの後ろに足す。
-  test("計算 → calc、逆算 → reverse、タイプバランス → balance、素早さ → speed の順に並び、表示名は appText の語", () => {
+  // JD5(ADR-0705 §1): 判定(/judge)を素早さの後ろに足す。判定レーンの持ち物は web/src/judge/ の中だけで、
+  // 共有ファイルへの追記はこの1件・screens.tsx の1件・ja.ts の文言・App.tsx の client の受け渡しに限る。
+  test("計算 → calc、逆算 → reverse、タイプバランス → balance、素早さ → speed、判定 → judge の順に並び、表示名は appText の語", () => {
     expect(SCREEN_ROUTES.map((route) => [route.id, route.segment, route.label])).toEqual([
       ["calc", "calc", appText.calcTabLabel],
       ["reverse", "reverse", appText.reverseTabLabel],
       ["balance", "balance", appText.balanceTabLabel],
       ["speed", "speed", appText.speedTabLabel],
+      ["judge", "judge", appText.judgeTabLabel],
     ]);
     expect(appText.balanceTabLabel).toBe("タイプバランス");
     expect(appText.speedTabLabel).toBe("素早さ");
+    expect(appText.judgeTabLabel).toBe("判定");
   });
 
   test("既定の画面は計算", () => {
@@ -44,6 +48,10 @@ describe("パス → 画面(screenFromPath)", () => {
     ["/app/calc", "/app/", "calc"],
     ["/balance", "/", "balance"],
     ["/app/balance", "/app/", "balance"],
+    // JD5(ADR-0705 §1): 判定の画面。
+    ["/judge", "/", "judge"],
+    ["/judge/", "/", "judge"],
+    ["/app/judge", "/app/", "judge"],
   ] as const)("%s(base %s)は %s", (pathname, base, expected) => {
     expect(screenFromPath(pathname, base)).toBe(expected);
   });

@@ -116,6 +116,8 @@ export const appText = {
   balanceTabLabel: "タイプバランス",
   /** SP3: 素早さ比較のタブ(ADR-0604 §2)。 */
   speedTabLabel: "素早さ",
+  /** JD5: 判定(抜けて倒せるか・返り討ちに遭うか)のタブ(ADR-0705 §1)。 */
+  judgeTabLabel: "判定",
   /** 計算モード(オフライン = WASM / オンライン = API)の切り替え(P4-5、ADR-0301 §4)。 */
   calcModeGroupLabel: "計算モード",
   calcModeOfflineLabel: "オフライン(WASM)",
@@ -311,6 +313,94 @@ export const speedScreenText = {
   selfSpeedLabel: (speed: number): string => `実数値 ${String(speed)}`,
   fasterLabel: (rows: number): string => `自分より速い ${String(rows)}行`,
   slowerLabel: (rows: number): string => `自分より遅い ${String(rows)}行`,
+} as const;
+
+/**
+ * JD5: judge API のクライアント(judge/judgeClient.ts、ADR-0705 §3)の文言。
+ * 通信できない・応答が読めない・エラー本文の形が不正なとき(自動の切り替え先は持たない)。
+ */
+export const judgeClientText = {
+  unavailable: "判定の API に接続できません",
+} as const;
+
+/**
+ * JD5: 判定のエラーの見出し(ADR-0705 §8)。services/judge/api/openapi.yaml の ErrorCode と、
+ * Web 側の judge_unavailable(judgeClient.ts)に 1 対 1 で対応する。
+ * サーバーの message(どの候補で失敗したかが `defenders[<index>]` の形で入る。ADR-0703 §3)は
+ * この見出しとは別に、補助の行として画面が出す。未知のコードは message だけを出す。
+ */
+export const judgeErrorText = {
+  invalid_request: "入力の形が正しくありません",
+  unknown_species: "このポケモンはマスタにありません",
+  unknown_move: "この技の ID はマスタにありません",
+  unknown_nature: "この性格はマスタにありません",
+  request_too_large: "入力が大きすぎます",
+  upstream_unavailable: "判定に必要なサービスに接続できません",
+  internal_error: "判定に失敗しました",
+  /** Web 側のコード(judgeClient.ts。通信できない・応答が読めない)。 */
+  judge_unavailable: "判定の API に接続できません",
+} as const;
+
+/**
+ * JD5: 判定の画面(judge/JudgeScreen.tsx、ADR-0705 §4・§6・§8)の文言。
+ * 判定そのもの(素早さ・行動順・確定数)は judge-svc が返した値をそのまま出す。
+ * 画面は「勝ち」「負け」に丸めた語を持たない(ADR-0700 §6-1・ADR-0704 §3 の立場を画面でも保つ)。
+ */
+export const judgeScreenText = {
+  // ---- 領域(ADR-0705 §4) ----
+  attackerRegionLabel: "自分のポケモン",
+  defendersRegionLabel: "相手の候補",
+  resultRegionLabel: "判定結果",
+  // ---- 個体の入力。自分側と候補で同じ語を使う(候補は候補の group で絞り込む。ADR-0705 §4) ----
+  speciesLabel: "ポケモン",
+  natureLabel: "性格",
+  abilityLabel: "特性",
+  itemLabel: "持ち物",
+  moveIdLabel: "技の ID",
+  /** 技を一覧から選べない理由(ADR-0304 §3 の既知の欠落。ADR-0705 §5)。 */
+  moveIdHint: "技は ID で入力します(ID から技を引く API がまだありません)",
+  unselectedOption: "未選択",
+  spLabel: (stat: StatKey): string => `${statLetterJa[stat]} のポイント`,
+  rankLabel: (stat: StatKey): string => `${statLetterJa[stat]} のランク`,
+  formatLabel: "対戦形式",
+  formatOption: { single: "シングル", double: "ダブル" } as const,
+  // ---- 場の効果(speedField。ADR-0705 §6) ----
+  speedFieldGroupLabel: "場の効果",
+  trickRoomLabel: "トリックルーム",
+  attackerTailwindLabel: "自分の側の追い風",
+  defenderTailwindLabel: "相手の側の追い風",
+  /** 相手側の追い風が候補ごとではない理由(ADR-0703 §5・ADR-0705 §6)。 */
+  defenderTailwindNotice: "相手の側の追い風は、すべての相手候補に同じように適用されます",
+  // ---- 相手候補の増減(ADR-0705 §4) ----
+  candidateGroupLabel: (n: number): string => `相手候補${n}`,
+  addCandidateLabel: "相手候補を追加",
+  removeCandidateLabel: (n: number): string => `相手候補${n}を削除`,
+  maxCandidatesNotice: (max: number): string => `相手候補は${max}件までです`,
+  // ---- 送信(ADR-0705 §7) ----
+  submitLabel: "判定する",
+  loadingNotice: "判定中",
+  emptyResultNotice: "「判定する」を押すと結果が出ます",
+  // 送信前の検査(契約の範囲と同じ。違反していれば judge を呼ばずに理由を出す)。
+  spRangeMessage: (max: number): string => `能力ポイントは0〜${max}の整数で入力してください`,
+  spTotalMessage: (max: number): string => `能力ポイントの合計は${max}までです`,
+  rankRangeMessage: "ランクは-6〜+6の整数で入力してください",
+  requiredMessage: "ポケモン・性格・技の ID をすべて入力してください",
+  // ---- 結果(ADR-0705 §8)。judge の値をそのまま出す ----
+  speedLabel: (attacker: number, defender: number): string => `素早さ ${attacker} 対 ${defender}`,
+  priorityLabel: (attacker: number, defender: number): string => `優先度 ${attacker} 対 ${defender}`,
+  outspeedsTrueLabel: "素早さで上回る",
+  outspeedsFalseLabel: "素早さで下回る",
+  /** 同速(outspeeds と同時に true にならない。真偽値1つに丸めない。ADR-0700 §6-1)。 */
+  speedTieLabel: "同速",
+  attackerMovesFirstLabel: "自分が先に動く",
+  defenderMovesFirstLabel: "相手が先に動く",
+  /** 優先度も素早さも同じで行動順が決まらないとき(ADR-0704 §2)。 */
+  turnOrderTieLabel: "どちらが先に動くか決まらない",
+  attackerKoLabel: "自分の技で相手を",
+  defenderKoLabel: "相手の技で自分が",
+  koGuaranteed: (hits: number): string => `確定${hits}発`,
+  koRandom: (hits: number, percent: number): string => `乱数${hits}発(${percent}%)`,
+  koNone: "倒せない",
 } as const;
 
 /**
