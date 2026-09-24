@@ -318,7 +318,7 @@ public struct Client: APIProtocol {
     }
     /// 技を日本語名で前方一致検索
     ///
-    /// 既定のレギュレーションの使用可能集合だけを返す(並びは ID 順。ADR-0105)。
+    /// 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
     ///
     /// - Remark: HTTP `GET /api/pokedex/moves`.
     /// - Remark: Generated from `#/paths//api/pokedex/moves/get(searchMoves)`.
@@ -582,7 +582,7 @@ public struct Client: APIProtocol {
     }
     /// 持ち物を日本語名で前方一致検索
     ///
-    /// 既定のレギュレーションの使用可能集合だけを返す(並びは ID 順。ADR-0105)。
+    /// 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
     ///
     /// - Remark: HTTP `GET /api/pokedex/items`.
     /// - Remark: Generated from `#/paths//api/pokedex/items/get(searchItems)`.
