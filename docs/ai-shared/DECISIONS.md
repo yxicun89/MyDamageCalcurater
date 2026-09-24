@@ -1143,3 +1143,23 @@ Decision: APIレーンからの依頼(2026-09-23「services/pokedex/の再レビ
 Reason: APIレーンの越境実装(3往復critic PASS済み)に対する独立確認。データレーン側の設計判断
 (命名・エラー変換)と食い違いがないかを見るのが依頼内容だった。
 Impact: 追加の修正なし。判定レーンはJD4に着手してよい(APIレーン側で既に確認済み)。
+
+## 2026-09-24: issue #104(pokedexのDB資格情報を用途別の最小権限へ分離)を実装(データレーン)
+Decision: server(検索API)・importer(CronJob)・migrate(Job)がすべて同じroot相当の資格情報
+(Secret `mysql-auth`/`pokedex-dsn`)を使っていた実リスクを解消した。`pokedex_reader`(SELECT専用)・
+`pokedex_importer`(SELECT/INSERT/UPDATE/DELETE)・`pokedex_migrator`(+DDL)の3ロールを作り、
+各Podに必要最小限のDSNだけを渡す(ADR-0110)。`services/pokedex/db.Provision`が冪等・
+ローテーション対応で3ユーザーを作成・GRANT(接続前にパスワード・ユーザー名・DB名・権限を
+正規表現で検証し、root自身を対象にする入力は`ErrInvalidRoleGrant`で拒否)。`cmd/migrate up`は
+`POKEDEX_PROVISION_DSN`があるときだけプロビジョニングしてから実際のmigrationを行う
+(無ければ後方互換で直接migration。ローカルmake dev/make test-dbは対象外)。`scripts/up.sh`は
+新規クラスタで4DSNを一度に作成、既存クラスタは無いキーだけ`kubectl patch`で追記(値を
+argv/ログに出さない設計)。critic PASS(1往復。軽微指摘のうち3件を反映。詳細はADR-0110追記)。
+**実クラスタ(k3d-pokecalc)で`make up`を実行し、`SHOW GRANTS`で3ユーザーの権限がADR決定1と
+過不足なく一致することを確認済み**。既存クラスタからの無停止移行(Secretへのキー追記のみ、
+DB・PVC再作成不要)も実地確認済み。
+Reason: issue #104(Codexレビュー)。公開HTTP Podが侵害されてもDDL・ユーザー管理へ直結しないように
+するため。`make test`/`test-db`/`lint`/`k8s-render`すべてgreen。
+Impact: cloud overlay実装時は同じ4つのDSNキー名(pokedex-dsn〈provision〉・
+pokedex-reader-dsn・pokedex-importer-dsn・pokedex-migrator-dsn)をSecretの契約として踏襲することを
+推奨として記録(実装はP7系のクラウド移行タスクで扱う)。他レーンへの影響なし。

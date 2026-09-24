@@ -67,7 +67,7 @@ spec:
                   valueFrom:
                     secretKeyRef:
                       name: mysql-auth
-                      key: pokedex-dsn
+                      key: pokedex-importer-dsn
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
