@@ -186,3 +186,52 @@ func normalizeNatureStat(v *string) (string, error) {
 	}
 	return *v, nil
 }
+
+// --- JD4: 技の優先度の取得(ADR-0704 §9) ---------------------------------------------
+
+// Move is judge's own copy of the pokedex fields it reads for a move: the field meaning is
+// defined by Move in the root api/openapi.yaml, not here. judge reads only id and priority
+// (power/type/category aren't needed; calc-svc computes damage).
+type Move struct {
+	ID       string
+	Priority int
+}
+
+// Move calls GET {base}/api/pokedex/moves/{key} and extracts the fields judge reads (id and
+// priority; ADR-0704 §9).
+func (p *Pokedex) Move(ctx context.Context, rc RequestContext, key string) (Move, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/api/pokedex/moves/"+key, nil)
+	if err != nil {
+		return Move{}, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
+	}
+
+	resp, err := send(ctx, p.http, req, rc)
+	if err != nil {
+		return Move{}, err
+	}
+
+	var wire moveWire
+	if err := decodeUpstreamJSON(resp, &wire); err != nil {
+		return Move{}, err
+	}
+	return wire.toMove()
+}
+
+// moveWire mirrors just the fields judge reads from Move. Priority is a pointer so a
+// present-but-zero priority (a normal move) is never confused with a field the upstream left
+// out: silently defaulting a missing priority to 0 would make a priority move judge as a
+// normal one, with a correct-looking result (ADR-0704 §9).
+type moveWire struct {
+	ID       string `json:"id"`
+	Priority *int   `json:"priority"`
+}
+
+func (w moveWire) toMove() (Move, error) {
+	if w.ID == "" {
+		return Move{}, fmt.Errorf("%w: move response has no id", ErrUpstreamInvalidResponse)
+	}
+	if w.Priority == nil {
+		return Move{}, fmt.Errorf("%w: move response has no priority", ErrUpstreamInvalidResponse)
+	}
+	return Move{ID: w.ID, Priority: *w.Priority}, nil
+}

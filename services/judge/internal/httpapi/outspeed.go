@@ -45,15 +45,15 @@ const (
 // investment", but a missing sp must still be rejected). Same reasoning as
 // internal/client's speciesWire/statBlockWire.
 //
-// Defenders は JD3(ADR-0703 §1)で単数の defender を置き換えた欄。要素は非ポインタでよい: 配列内の
-// null 要素はゼロ値の individualWire になり、toIndividualInput が speciesKey 欠如として自然に弾く。
+// Defenders は JD3(ADR-0703 §1)で単数の defender を置き換えた欄。要素は raw JSON のまま持ち、
+// parseCandidateWire が自前でキー集合を検査してから DefenderCandidate に変換する(JD4。下記)。
 type outspeedRequestWire struct {
-	Format     *string          `json:"format"`
-	Attacker   *individualWire  `json:"attacker"`
-	Defenders  []individualWire `json:"defenders"`
-	MoveID     *string          `json:"moveId"`
-	Field      *api.FieldState  `json:"field"`
-	SpeedField json.RawMessage  `json:"speedField"`
+	Format     *string           `json:"format"`
+	Attacker   *individualWire   `json:"attacker"`
+	Defenders  []json.RawMessage `json:"defenders"`
+	MoveID     *string           `json:"moveId"`
+	Field      *api.FieldState   `json:"field"`
+	SpeedField json.RawMessage   `json:"speedField"`
 }
 
 type individualWire struct {
@@ -63,6 +63,61 @@ type individualWire struct {
 	Ranks      *rankBlockWire `json:"ranks"`
 	AbilityID  *string        `json:"abilityId"`
 	ItemID     *string        `json:"itemId"`
+}
+
+// defenderCandidateWire mirrors DefenderCandidate(ADR-0704 §1): individualWire の全欄に加えて、
+// この候補が撃ち返す技 moveId を持つ。MoveID は json.RawMessage で受け、型検査
+// (文字列かどうか)は decodeRequiredString に任せる: *string にすると「数値が来た」場合に
+// この構造体の Unmarshal 自体が失敗し、defenders[<index>] の帰属を失ってしまう(assertBlamesCandidate)。
+type defenderCandidateWire struct {
+	individualWire
+	MoveID json.RawMessage `json:"moveId"`
+}
+
+// candidateWireKeys is the exact (case-sensitive) allow-list for a defenders[] element's own
+// keys, checked separately from decoder.DisallowUnknownFields(): encoding/json's per-object
+// field matching falls back to a case-insensitive match for a key with no exact match (e.g.
+// "moveid" folding onto the "moveId" field), silently overwriting it instead of rejecting the
+// typo (same concern as speedFieldKeys, ADR-0702 受け入れ条件7・ADR-0704 テストの期待値).
+var candidateWireKeys = map[string]bool{
+	"speciesKey": true, "natureId": true, "sp": true, "ranks": true,
+	"abilityId": true, "itemId": true, "moveId": true,
+}
+
+// parseCandidateWire validates one defenders[] element's key set exactly (candidateWireKeys)
+// before decoding it into defenderCandidateWire, so a case-typo'd or unrelated key is rejected
+// instead of silently accepted or silently overwriting a known field.
+func parseCandidateWire(raw json.RawMessage) (defenderCandidateWire, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return defenderCandidateWire{}, errInvalidOutspeedBody
+	}
+	for key := range fields {
+		if !candidateWireKeys[key] {
+			return defenderCandidateWire{}, errInvalidOutspeedBody
+		}
+	}
+	var wire defenderCandidateWire
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		return defenderCandidateWire{}, errInvalidOutspeedBody
+	}
+	return wire, nil
+}
+
+// decodeRequiredString decodes raw as a required non-empty JSON string. A missing key (raw ==
+// nil), an explicit null, an empty string, or a non-string value are all rejected.
+func decodeRequiredString(raw json.RawMessage) (string, bool) {
+	if raw == nil {
+		return "", false
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return "", false
+	}
+	if s == "" {
+		return "", false
+	}
+	return s, true
 }
 
 type statBlockWire struct {
@@ -87,7 +142,7 @@ type rankBlockWire struct {
 type outspeedRequest struct {
 	format     string
 	attacker   individualInput
-	defenders  []individualInput
+	defenders  []defenderInput
 	moveID     string
 	field      *api.FieldState
 	speedField speedFieldInput
@@ -110,13 +165,21 @@ type individualInput struct {
 	itemID     string
 }
 
+// defenderInput is one DefenderCandidate after validation (ADR-0704 §1): individualInput plus
+// the move this candidate uses to strike back.
+type defenderInput struct {
+	individualInput
+	moveID string
+}
+
 // outspeedAndKo implements POST /api/judge/v1/outspeed-and-ko, in the fixed check order ADR-0701
-// §5 / ADR-0703 §4 require (also documented in api/openapi.yaml): header (middleware, ahead of
-// this) → body shape/size → defenders count (1..6) → sp/ranks/format/required-string range
-// (attacker, then defenders index-ascending; no upstream call yet) → natures (once) → unknown
-// natureId (attacker, then defenders index-ascending) → attacker species → defenders species
-// (all, index-ascending) → calc (all, index-ascending) → 200. Any candidate failure stops the
-// whole request (ADR-0703 §3: no partial success).
+// §5 / ADR-0703 §4 / ADR-0704 §5 require (also documented in api/openapi.yaml): header
+// (middleware, ahead of this) → body shape/size → defenders count (1..6) → sp/ranks/format/
+// required-string range (attacker, then defenders index-ascending; no upstream call yet) →
+// natures (once) → unknown natureId (attacker, then defenders index-ascending) → attacker
+// species → attacker move → defenders species/move (per candidate: species then move,
+// index-ascending) → calc (per candidate: forward then reverse, index-ascending) → 200. Any
+// candidate failure stops the whole request (ADR-0703 §3: no partial success).
 func outspeedAndKo(c *echo.Context, deps Dependencies, params api.OutspeedAndKoParams) error {
 	c.Request().Body = http.MaxBytesReader(c.Response(), c.Request().Body, maxOutspeedBodyBytes)
 	wire, err := decodeOutspeedBody(c.Request())
@@ -176,15 +239,27 @@ func outspeedAndKo(c *echo.Context, deps Dependencies, params api.OutspeedAndKoP
 		return writeSpeciesError(c, err, "attacker")
 	}
 
-	// defenders の種族を index 昇順ですべて引き終えてから calc へ進む(ADR-0703 §4: 候補ごとに
-	// 「種族 → calc」を回さない)。
+	attackerMove, err := deps.Pokedex.Move(ctx, rc, req.moveID)
+	if err != nil {
+		return writeMoveError(c, err, "attacker")
+	}
+
+	// 候補ごとに「種族 → 技」を続けて解決し、全候補が揃うまで calc へ進まない
+	// (ADR-0704 §5: 同じ候補の中で続けてよいが、候補 0 の calc が候補 1 の種族より先に走ってはいけない)。
 	defenderSpecies := make([]client.Species, len(req.defenders))
+	defenderMoves := make([]client.Move, len(req.defenders))
 	for i, defender := range req.defenders {
 		species, err := deps.Pokedex.Species(ctx, rc, defender.speciesKey)
 		if err != nil {
 			return writeSpeciesError(c, err, candidateLabel(i))
 		}
 		defenderSpecies[i] = species
+
+		move, err := deps.Pokedex.Move(ctx, rc, defender.moveID)
+		if err != nil {
+			return writeMoveError(c, err, candidateLabel(i))
+		}
+		defenderMoves[i] = move
 	}
 
 	matchups := make([]api.Matchup, len(req.defenders))
@@ -214,10 +289,13 @@ func outspeedAndKo(c *echo.Context, deps Dependencies, params api.OutspeedAndKoP
 			return internalError(c, err)
 		}
 
-		result, err := deps.Calc.Damage(ctx, rc, client.CalcRequest{
+		turnOrder := judge.CompareTurnOrder(attackerMove.Priority, defenderMoves[i].Priority, comparison)
+
+		// 順方向(自分 → この候補。ADR-0704 §4)。
+		forward, err := deps.Calc.Damage(ctx, rc, client.CalcRequest{
 			Format:   req.format,
 			Attacker: toClientIndividual(req.attacker),
-			Defender: toClientIndividual(defender),
+			Defender: toClientIndividual(defender.individualInput),
 			MoveID:   req.moveID,
 			Field:    toClientField(req.field),
 		})
@@ -225,16 +303,38 @@ func outspeedAndKo(c *echo.Context, deps Dependencies, params api.OutspeedAndKoP
 			return writeCalcError(c, err, candidateLabel(i))
 		}
 
+		// 逆方向(この候補 → 自分。役割が入れ替わるので attacker/defender/moveId/field の壁を
+		// 入れ替えて送る。ADR-0704 §4)。
+		reverse, err := deps.Calc.Damage(ctx, rc, client.CalcRequest{
+			Format:   req.format,
+			Attacker: toClientIndividual(defender.individualInput),
+			Defender: toClientIndividual(req.attacker),
+			MoveID:   defender.moveID,
+			Field:    toReverseClientField(req.field),
+		})
+		if err != nil {
+			return writeCalcError(c, err, candidateLabel(i))
+		}
+
 		matchups[i] = api.Matchup{
-			DefenderIndex: i,
-			Outspeeds:     comparison.Outspeeds,
-			SpeedTie:      comparison.SpeedTie,
-			AttackerSpeed: comparison.AttackerSpeed,
-			DefenderSpeed: comparison.DefenderSpeed,
-			Ko: api.KOChance{
-				Hits:                 result.KO.Hits,
-				Guaranteed:           result.KO.Guaranteed,
-				DisplayChancePercent: result.KO.DisplayChancePercent,
+			DefenderIndex:        i,
+			Outspeeds:            comparison.Outspeeds,
+			SpeedTie:             comparison.SpeedTie,
+			AttackerSpeed:        comparison.AttackerSpeed,
+			DefenderSpeed:        comparison.DefenderSpeed,
+			AttackerMovePriority: attackerMove.Priority,
+			DefenderMovePriority: defenderMoves[i].Priority,
+			AttackerMovesFirst:   turnOrder.AttackerMovesFirst,
+			TurnOrderTie:         turnOrder.Tie,
+			AttackerKo: api.KOChance{
+				Hits:                 forward.KO.Hits,
+				Guaranteed:           forward.KO.Guaranteed,
+				DisplayChancePercent: forward.KO.DisplayChancePercent,
+			},
+			DefenderKo: api.KOChance{
+				Hits:                 reverse.KO.Hits,
+				Guaranteed:           reverse.KO.Guaranteed,
+				DisplayChancePercent: reverse.KO.DisplayChancePercent,
 			},
 		}
 	}
@@ -296,9 +396,13 @@ func toOutspeedRequest(wire outspeedRequestWire) (outspeedRequest, error) {
 		return outspeedRequest{}, fmt.Errorf("%w: attacker", errInvalidOutspeedBody)
 	}
 
-	defenders := make([]individualInput, len(wire.Defenders))
-	for i, wireDefender := range wire.Defenders {
-		defender, err := toIndividualInput(wireDefender)
+	defenders := make([]defenderInput, len(wire.Defenders))
+	for i, raw := range wire.Defenders {
+		candidateWire, err := parseCandidateWire(raw)
+		if err != nil {
+			return outspeedRequest{}, fmt.Errorf("%w: %s", errInvalidOutspeedBody, candidateLabel(i))
+		}
+		defender, err := toDefenderInput(candidateWire)
 		if err != nil {
 			return outspeedRequest{}, fmt.Errorf("%w: %s", errInvalidOutspeedBody, candidateLabel(i))
 		}
@@ -397,6 +501,20 @@ func toIndividualInput(wire individualWire) (individualInput, error) {
 	return input, nil
 }
 
+// toDefenderInput validates a DefenderCandidate: the shared Individual fields (via
+// toIndividualInput) plus the required, non-empty moveId (ADR-0704 §1・受け入れ条件1).
+func toDefenderInput(wire defenderCandidateWire) (defenderInput, error) {
+	individual, err := toIndividualInput(wire.individualWire)
+	if err != nil {
+		return defenderInput{}, err
+	}
+	moveID, ok := decodeRequiredString(wire.MoveID)
+	if !ok {
+		return defenderInput{}, errInvalidOutspeedBody
+	}
+	return defenderInput{individualInput: individual, moveID: moveID}, nil
+}
+
 // toStats requires all 6 stats to be present (StatBlock is required in the contract); a
 // missing stat is a shape error, not a 0 value (ADR-0701 §5).
 func toStats(wire *statBlockWire) (engine.Stats, error) {
@@ -484,6 +602,19 @@ func toClientField(wire *api.FieldState) *client.FieldState {
 	return field
 }
 
+// toReverseClientField builds the field sent to calc-svc for the reverse calc (this candidate →
+// self): attackerScreens and defenderScreens swap because the attacking side swaps, but weather/
+// terrain don't (they're whole-field state, not tied to either side. ADR-0704 §4). nil stays
+// nil (a request without field sends no field in either direction).
+func toReverseClientField(wire *api.FieldState) *client.FieldState {
+	field := toClientField(wire)
+	if field == nil {
+		return nil
+	}
+	field.AttackerScreens, field.DefenderScreens = field.DefenderScreens, field.AttackerScreens
+	return field
+}
+
 func toClientScreens(wire *api.Screens) *client.Screens {
 	if wire == nil {
 		return nil
@@ -520,6 +651,19 @@ func writeSpeciesError(c *echo.Context, err error, who string) error {
 		return c.JSON(http.StatusUnprocessableEntity, api.Error{
 			Code:    api.UnknownSpecies,
 			Message: fmt.Sprintf("speciesKey is not in the pokedex master (%s)", who),
+		})
+	}
+	return writeUpstreamError(c, err)
+}
+
+// writeMoveError maps a Pokedex.Move failure to the ADR-0704 §6 table: ErrNotFound is
+// unknown_move (422); everything else folds into upstream_unavailable, same as writeSpeciesError.
+// who names the failing side (attacker's own move, or defenders[<index>]'s move; ADR-0703 §3).
+func writeMoveError(c *echo.Context, err error, who string) error {
+	if errors.Is(err, client.ErrNotFound) {
+		return c.JSON(http.StatusUnprocessableEntity, api.Error{
+			Code:    api.UnknownMove,
+			Message: fmt.Sprintf("moveId is not in the pokedex master (%s)", who),
 		})
 	}
 	return writeUpstreamError(c, err)
