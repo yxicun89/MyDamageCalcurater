@@ -32,11 +32,18 @@ Status(追記): M2 P5-1(record-svc/team-svc用TiDB)着手。ADR-0211でバージ
 (critic 3ラウンド。**main 統合済み PR #204**)。実装は`services/internal/dbmigrate`への切り出し(pokedexのUp/DownAll/Versionを
 `fs.FS`引数化し、pokedexは薄いラッパーに)・grants.goへの`AppPrivileges`追加・services/record・services/teamの
 devices/purge_journal migrationとmigrate CLI(app/migratorの2ロール)まで完了(critic 2ラウンド。**main 統合済み PR #205**)。
-**残**: TiDB Operatorのk8sマニフェスト(TidbCluster・TidbInitializer)・`up.sh`配線・Makefileのmigrate-up/down/version
-ターゲット(ADR-0211「影響」)。`grants_tidb_test.go`・`migrate_tidb_test.go`(`-tags tidb`)はこのサンドボックスでは
-実TiDBに対して未実行(tiup playgroundのpdがdarwin/arm64でクラッシュ)。k3dのTidbClusterか動作するtiup環境で
-`make test-db`により検証してから完了とする
-Next: M2 P5-1の残り(k8sマニフェスト・up.sh配線・Makefileターゲット)に着手。他レーンからの依頼待ち。issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
+TiDB Operatorのk8sマニフェスト(TidbCluster・TidbInitializer)・`up.sh`配線(bootstrap非致命化・Secret作成・
+namespace・完了待ちの順序)・Makefileのmigrate-up/down/version-record/team・tidb-local-upターゲットも完了
+(critic 2ラウンド。**main 統合済み PR #266**。1回目FAILはTiDB Operator v1.6.6の実ソースを取得して
+裏取りした結果判明した`passwordSecret`のキー名誤り・初期化用imageの誤り・namespace不一致・AC-T7違反、
+2回目FAILは新設したk8s-renderがクラスタ未起動環境で失敗/ハングする退行)。
+**残**: 共有k3dクラスタへの実適用(AC-T3・AC-T8)は、他レーンが使う共有クラスタへの影響を先に確認する
+必要があるため意図的に未実施。次の`make up`実行時にTidbCluster/TidbInitializerが実際にReady/Completedに
+なることを確認すること(TidbInitializerが使う`tnir/mysqlclient`はamd64専用イメージのため、Apple Silicon
+のk3dノードでの起動可否も未確認)。`grants_tidb_test.go`・`migrate_tidb_test.go`(`-tags tidb`)も
+このサンドボックスでは実TiDBに対して未実行(tiup playgroundのpdがdarwin/arm64でクラッシュ)。
+`make test-db`により検証してからP5-1完了とする
+Next: M2 P5-1の実機確認(次のmake up時にTidbCluster/TidbInitializerのReady/Completedを確認)→P5-2(NATS JetStream)へ進む。他レーンからの依頼待ち。issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
