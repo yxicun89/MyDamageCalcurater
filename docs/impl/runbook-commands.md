@@ -27,17 +27,19 @@
 | `make web-e2e-container` | verify §2 | `web-docker-build`(`docker build -f web/Dockerfile -t pokecalc/web:local .`)→ `npm run e2e:container`(`docker rm -f` → `docker run --rm --pull never --read-only --tmpfs /tmp --user 101:101 --cap-drop ALL -p 127.0.0.1:4319:8080`) | host + docker | k8s の Deployment と同じ制約で nginx を検証(本番配信の確認)。イメージ作成 |
 | `(cd engine && go vet ./... && go build ./...)` ほか 2 行 | README | `make lint`/`build` を使わずモジュール単位で確認 | host | — |
 
-## 2. k3d の作成とデプロイ(verify §3・api §2〜4・data §1)
+## 2. k3d の作成とデプロイ(verify §3・§4・api §2〜4・data §1)
 
 | コマンド | 出現 | 裏で走るもの | 場所 | つなぐもの / 副作用 / 失敗時 |
 |---|---|---|---|---|
 | `make up` | verify §3、api §2、data §1、ios-device §1 | `scripts/up.sh`。順に: ① `k3d cluster create --config deploy/k3d.yaml`(無ければ。`8080:80` を serverlb に公開)② context が `k3d-pokecalc` か検査 ③ `kubectl apply -f base/namespace.yaml` ④ Secret `mysql-auth` を無ければ乱数で作成 ⑤ `docker build --target migrate` / `server` → `k3d image import` ⑥ `kubectl delete job pokedex-migrate --ignore-not-found` ⑦ `kubectl apply -k deploy/k8s/overlays/local` ⑧ `rollout status statefulset/mysql`(180s)⑨ `wait job/pokedex-migrate --for=condition=complete`(300s)⑩ `docker build --target importer` → import ⑪ `data/local/name_ja_overrides.json` があれば ConfigMap 作成 | host → docker → k3d | **クラスタ作成+全 apply。** つなぐもの: pokedex/migrate/import → mysql:3306。calc・gateway・web の image は作らない(`:local` は次の 2 コマンドで import。[k8s-local.md §4](k8s-local.md))。失敗時: `kubectl -n pokecalc get pods,jobs`、`logs job/pokedex-migrate`、`docker ps`(OrbStack/Docker 起動) |
-| `make api-k3d-deploy` | verify §3、api §4 | `api-docker-build`(`docker build -f services/{calc,gateway}/Dockerfile -t pokecalc/{calc,gateway}:local .`)→ `k3d image import`(両 image)→ `kubectl apply -k deploy/k8s/overlays/local-api` → `rollout restart deployment/calc deployment/gateway` → `rollout status`(各 120s) | host → k3d(ns pokecalc) | calc・gateway だけを更新(他レーンの Job・mysql に触れない)。つなぐもの: gateway →(env)`http://calc`・`http://pokedex`・`http://web`、calc → `http://pokedex` |
-| `make web-k3d-deploy` | verify §3 | context 検査 → `docker build -f web/Dockerfile -t pokecalc/web:local .` → `k3d image import` → `kubectl apply -k overlays/local-web` → `rollout restart deployment/web` → `rollout status`(120s) | host → k3d | web だけを更新。web Service:80 → Pod:8080 |
+| `make api-k3d-deploy` | verify §4(`make deploy-latest` の中)、api §4 | `api-docker-build`(`docker build -f services/{calc,gateway}/Dockerfile -t pokecalc/{calc,gateway}:local .`)→ `k3d image import`(両 image)→ `kubectl apply -k deploy/k8s/overlays/local-api` → `rollout restart deployment/calc deployment/gateway` → `rollout status`(各 120s) | host → k3d(ns pokecalc) | calc・gateway だけを更新(他レーンの Job・mysql に触れない)。つなぐもの: gateway →(env)`http://calc`・`http://pokedex`・`http://web`、calc → `http://pokedex` |
+| `make web-k3d-deploy` | verify §4(`make deploy-latest` の中) | context 検査 → `docker build -f web/Dockerfile -t pokecalc/web:local .` → `k3d image import` → `kubectl apply -k overlays/local-web` → `rollout restart deployment/web` → `rollout status`(120s) | host → k3d | web だけを更新。web Service:80 → Pod:8080 |
 | `kubectl -n pokecalc get pods` | verify §3 | Pod 一覧の読み取り | host → k3d | 期待: `calc gateway web balance pokedex mysql-0` が `Running`(balance は `balance-k3d-deploy` 済みの場合) |
 | `make import-fetch` | verify §3、data §2 | `cd tools/importer && npm ci && node fetch.mjs`(calc 0.12.0・Showdown・PokeAPI の**版固定**の取得) | host | `data/generated/`(Git 管理外)を書く。**外部ネットワーク** |
 | `make import-dry-run` | verify §3、data §3 | `cd services && go run ./pokedex/cmd/import -data ../data -dry-run` | host | DB 非接触。最終行 `blockers: none` を確認(食い違いがあれば exit 3 でブロック報告) |
 | `make import-k8s` | verify §3、api §3、data §4 | context 検査 → `kubectl -n pokecalc create job --from=cronjob/pokedex-import pokedex-import-manual-$(date +%Y%m%d%H%M%S)` | host → k3d | **Job 作成**。Job は `cronjob.sh`(flock→fetch→check-upstream→`pokedex-import`)で全置換投入(**k3d 内から外部ネットワークに出る**)。stdout に Job 名 |
+| `make pokedex-export`(+ `kubectl port-forward svc/mysql 3306:3306`) | verify §3、speed §3 | `cd services && go run ./pokedex/cmd/pokedex export -out ../data/generated/readmodel`(`POKEDEX_DATABASE_DSN` は Secret `mysql-auth` の `pokedex-dsn` を `127.0.0.1` に付け替えたもの) | host → k3d(port-forward で mysql:3306) | `data/generated/readmodel/` に balance・speed 用の read model を書く |
+| `make deploy-latest` | verify §4 | `scripts/k3d-deploy-latest.sh`: context 検査 → pokedex(server)を build・import・rollout restart → `api-k3d-deploy` → `web-k3d-deploy` → `judge-k3d-deploy` → read model があれば `balance-k3d-deploy-readmodel`・`speed-k3d-deploy-readmodel`(無ければ非ゼロで終了) | host → k3d(ns pokecalc) | 7 Deployment のイメージをいまのチェックアウトの内容に入れ替える |
 | `created=$(make import-k8s)` `job_name=$(echo "$created" \| grep -o 'pokedex-import-manual-[0-9]*' \| tail -1)` | api §3、data §4 | 出力から Job 名を取り出す(シェルの文字列処理) | host | — |
 | `kubectl -n pokecalc wait --for=condition=complete "job/$job_name" --timeout=600s` | api §3、data §4 | 完了待ち | host → k3d | 期待: `condition met`。失敗時は `kubectl logs job/$job_name`、exit code は [db-mysql.md §5](db-mysql.md) |
 | `kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.mysql-root-password}' \| base64 -d` → `kubectl -n pokecalc exec mysql-0 -- env MYSQL_PWD="$pw" mysql -u root -N -e "SELECT COUNT(*) FROM pokedex.species;"` → `unset pw` | data §5 | Secret から root pw を取り出し、`mysql-0` 内の mysql クライアントで件数を数える | host → k3d(mysql-0) | 読み取り専用。パスワードは環境変数で渡し、画面に出さない |
@@ -46,22 +48,23 @@
 | `kubectl -n pokecalc delete job pokedex-import-manual-race1 pokedex-import-manual-race2` | data §6 | 検証用 Job の削除(ここでは Job のみ。DB データは消えない) | host → k3d | Job・Pod を削除 |
 | `k3d cluster stop pokecalc` | api §7、data §7 | クラスタのコンテナを停止 | host → docker | データは保持(PVC 残る)。`make down`(= `k3d cluster delete`)は別物・人間の確認が要る |
 
-## 3. 動作確認(smoke。verify §3 末尾)
+## 3. 動作確認(smoke。verify §5)
 
 | コマンド | 出現 | 裏で走るもの | 場所 | つなぐもの / 失敗時 |
 |---|---|---|---|---|
-| `make web-k3d-open` | verify §3(追記済み) | `kubectl -n pokecalc port-forward svc/web 5173:80`(**前面で常駐**。別ターミナル。Ctrl-C で終了) | host → k3d(svc/web) | `localhost:5173` → web Service:80 → Pod:8080。gateway は通らない |
-| `make web-k3d-smoke` | verify §3 | `web/scripts/k3d-smoke.sh`: `WEB_URL`(既定 `http://localhost:5173`)の `/healthz` を 1 秒間隔で最大 30 回待ち、その後 `/` `/reverse` `/engine.wasm` `/wasm_exec.js` `/assets/no-such-file.js`(404 期待)`/api/calc`(404 期待。gateway の担当)を curl | host → 5173 | **port-forward が無いと `/healthz に 30 回つながらなかった` で失敗**(今回の原因)。8080 を渡すと `/api/calc` が gateway の 400 を返し 1 件 NG |
-| `make api-smoke` | verify §3、api §5 | `services/gateway/scripts/smoke.sh`(`API_URL` 既定 `http://localhost:8080`)。順序と各項目は [verify-mapping.md(D)](verify-mapping.md) | host → 8080 | 8080 → Traefik → gateway。最終行に `calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=200 internal=404 balance=200 web=200`。**400・404 は異常系を確かめた結果で正常** |
+| `make web-k3d-open` | (診断用。verify には無い) | `kubectl -n pokecalc port-forward svc/web 5173:80`(**前面で常駐**。別ターミナル。Ctrl-C で終了) | host → k3d(svc/web) | `localhost:5173` → web Service:80 → Pod:8080。gateway を通さず Web(nginx)だけを確かめるときに使う |
+| `make web-k3d-smoke` | verify §5 | `web/scripts/k3d-smoke.sh`: `WEB_URL`(既定 `http://localhost:8080` = ブラウザで開く入口。k3d → Traefik → gateway → web)の `/healthz` を 1 秒間隔で最大 30 回待ち、その後 `/` `/reverse` `/engine.wasm` `/wasm_exec.js` `/static/no-such-file.js`(404 期待)`/api/no-such-endpoint`(404 期待)と、index.html が読む JS(200 期待。issue #268)を curl | host → 8080 | 読み取りのみ。Web だけを診断するときは `WEB_URL=http://localhost:5173`(`make web-k3d-open` の後) |
+| `make api-smoke` | verify §5、api §5 | `services/gateway/scripts/smoke.sh`(`API_URL` 既定 `http://localhost:8080`)。順序と各項目は [verify-mapping.md(D)](verify-mapping.md) | host → 8080 | 8080 → Traefik → gateway。最終行に `calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=200 internal=404 balance=200 web=200`。**400・404 は異常系を確かめた結果で正常** |
+| `make web-k3d-e2e` | verify §5 | `cd web && K3D_URL=$(WEB_URL) npm run e2e:k3d`(`playwright.k3d.config.ts`・`e2e-k3d/k3d.spec.ts`。サーバーは起動しない) | host の chromium → 8080 → gateway → web / calc / pokedex | 読み取りのみ。オフライン(例データ)とオンライン(実マスタ)で計算結果が画面に出ることを確かめる |
 | `curl -s http://localhost:18080/healthz` | api §6 | `make dev` の gateway への疎通 | host | 期待 `{"status":"ok"}` |
 | `DEV_GATEWAY_PORT=18080 DEV_CALC_PORT=18081 make dev` | api §6 | `scripts/dev.sh`: `go build` した calc・gateway を**ホストで**起動。calc は `services/calc/testdata/master.example.json`(架空データ)、gateway は `GATEWAY_CALC_URL=http://127.0.0.1:<calc>`・`GATEWAY_CORS_ALLOWED_ORIGINS=http://localhost:5173` | host のみ(k8s・DB を使わない) | Ctrl-C で両方停止。どちらかが落ちれば残りも止めて非ゼロ終了。k3d 稼働中は 8080 が衝突するため port を変える |
 
-## 4. 画面の確認(verify §4。ブラウザ)
+## 4. 画面の確認(verify §6(ブラウザ)・§7(iOS)。ブラウザ)
 
 | 操作 | 場所 | 経路 |
 |---|---|---|
 | `http://localhost:8080` を開く(Chrome・Safari) | ブラウザ → host:8080 | serverlb → Traefik → Ingress `gateway`(`/`)→ gateway → `/`は `GATEWAY_WEB_URL=http://web` へ転送。`/api/*` は gateway が検証して calc・pokedex へ。`/api/balance` は Ingress が直接 balance へ |
-| 計算タブ・逆算タブ・タイプバランスタブ(verify §4 の 1〜13) | 同上 | 計算・逆算は **ブラウザ内 WASM**(HTTP を使わない。ADR-0011)またはオンライン時に gateway の API。タイプバランスは `/api/balance/*` |
+| 計算タブ・逆算タブ・タイプバランスタブ(verify §6-1・§6-2) | 同上 | 計算・逆算は **ブラウザ内 WASM**(HTTP を使わない。ADR-0011)またはオンライン時に gateway の API。タイプバランスは `/api/balance/*` |
 | `http://localhost:8080/reverse` を直接開く | 同上 | gateway → web の SPA フォールバック(`web/nginx.conf`) |
 
 ## 5. レーン別 runbook(balance / speed / judge)
@@ -110,6 +113,6 @@
 
 - 読んだ範囲: 上記 8 文書の全コードブロック(README 6、verify-m1 全、api・data・balance・speed・ios・ios-device の全ブロックを機械抽出。抽出結果の行 = 表の行に全件対応)、`scripts/{up,dev,db-local-up,wasm,doctor,e2e}.sh`、`web/scripts/k3d-smoke.sh` 全行、`services/gateway/scripts/smoke.sh` 全行、`web/playwright*.ts`・`web/e2e/support/serverConfig.ts` の起動コマンド、`services/{balance,speed}/scripts/*.sh` と `ios/scripts/*.sh` の冒頭・外部コマンド行。
 - 読めていない箇所: `scripts/check-publishable.sh` の全検査項目、`services/{balance,speed}/scripts/smoke*.sh` の判定の細部、`check-gitops.sh` の判定、`ios/scripts/*.sh` の内部、`tools/importer/fetch*.mjs`・`check-upstream.mjs`、`argocd-bootstrap.sh` の後半(冒頭・固定値のみ確認)。
-- 実行して確認したもの: `web-k3d-smoke`(5173 の port-forward あり/なし、8080 指定)。それ以外は静的に読んだ内容で、実行はしていない。
+- 実行して確認したもの: `web-k3d-smoke`(既定 8080。2026-09-25、ADR-0305 の後)。それ以外は静的に読んだ内容で、実行はしていない。
 - 未実装・スタブ: `make e2e`(`scripts/e2e.sh` は echo のみ。P4-6)、`make assets`(echo のみ)。judge は `healthz` のみ(JD0)。
 - 手順書に記載が無いが存在するコマンド: `judge-k3d-deploy`/`judge-smoke`(§5 に記載)、`make down`(クラスタ削除。人間の確認)、`migrate-*`(db-mysql.md)。

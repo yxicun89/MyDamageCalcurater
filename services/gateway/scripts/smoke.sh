@@ -280,7 +280,16 @@ expect_error 404 not_found "GET /internal/pokedex/master (internal API must not 
 #    request_with_retry を使っても(000/502 しか再試行しないので)再試行で消えることはない。
 request_with_retry GET / "" none
 case "$status" in
-  200) web_result=200 ;;
+  200)
+    web_result=200
+    # index.html が読む JS も gateway 経由で 200 であること(予約パス /assets/ との衝突で白画面になった。issue #268)。
+    entry_js=$(sed -n 's/.*src="\(\/[^"]*\.js\)".*/\1/p' "$body_file" | head -n 1)
+    if [ -z "$entry_js" ]; then
+      fail "GET /: index.html に script の src が無い"
+    fi
+    request_with_retry GET "$entry_js" "" none
+    expect_status 200 "GET $entry_js (index.html が読む JS)"
+    ;;
   503)
     if grep -qF '"code":"upstream_unavailable"' "$body_file"; then
       web_result=503

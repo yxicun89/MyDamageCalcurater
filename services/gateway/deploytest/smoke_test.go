@@ -31,10 +31,17 @@ type webMode int
 
 const (
 	webNotDeployed webMode = iota // WebURL は閉じたサーバ(接続拒否 → 503)。スモークは成功するべき
-	webServes                     // WebURL は 200 の HTML を返す偽の nginx。スモークは成功するべき
+	webServes                     // WebURL は 200 の HTML(script の src を含む)とその JS を返す偽の nginx。スモークは成功するべき
 	webUnset                      // WebURL 未設定(`/` は 404)。スモークは落ちるべき
 	webBroken                     // WebURL は 500 を返す偽物(200 でも 503 upstream_unavailable でもない)。落ちるべき
+	// webEntryJSMissing は index.html(200)はあるが、そこが読む JS が 404 の偽の nginx(issue #268 と同じ壊れ方:
+	// assetsDir の衝突等で JS だけ 404 になり白画面になる)。smoke.sh の「index.html が読む JS を実際に取得して
+	// 200」の検査が、このケースを本当に検知できることを確認するためのモード。スモークは落ちるべき。
+	webEntryJSMissing
 )
+
+// webEntryJSPath は偽の nginx が index.html に埋め込む script の src(webServes・webEntryJSMissing で共通)。
+const webEntryJSPath = "/static/entry.js"
 
 // stack は gateway の構成の変え方。
 type stack struct {
@@ -65,9 +72,30 @@ func webURLFor(t *testing.T, mode webMode) *url.URL {
 		t.Cleanup(srv.Close)
 		return mustURL(t, srv.URL)
 	}
+	// serveWithEntryJS は index.html(script の src を含む)を 200 で返し、その JS(webEntryJSPath)を
+	// jsStatus で返す偽の nginx(issue #268: 予約パスとの衝突で JS だけ 404 になり白画面になった構成の再現)。
+	serveWithEntryJS := func(jsStatus int) *url.URL {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == webEntryJSPath {
+				w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+				w.WriteHeader(jsStatus)
+				if jsStatus == http.StatusOK {
+					_, _ = w.Write([]byte("// test entry\n"))
+				}
+				return
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`<!doctype html><title>test</title><script type="module" src="` + webEntryJSPath + `"></script>`))
+		}))
+		t.Cleanup(srv.Close)
+		return mustURL(t, srv.URL)
+	}
 	switch mode {
 	case webServes:
-		return respond(http.StatusOK)
+		return serveWithEntryJS(http.StatusOK)
+	case webEntryJSMissing:
+		return serveWithEntryJS(http.StatusNotFound)
 	case webBroken:
 		return respond(http.StatusInternalServerError)
 	case webUnset:
@@ -194,6 +222,20 @@ func TestSmokeScriptAcceptsWebDeployed(t *testing.T) {
 	want := "internal=404 balance=skipped web=200"
 	if !strings.Contains(out, want) {
 		t.Errorf("smoke.sh の出力に %q が無い:\n%s", want, out)
+	}
+}
+
+// AC-S6 回帰(issue #268): index.html は 200 だが、そこが読む JS が 404(assetsDir の衝突で白画面になったのと
+// 同じ壊れ方)なら、smoke.sh は「JS が 200 でない」ことを検知して失敗するべき(検査が空振りしないことの確認。
+// このテストが無いと、上の TestSmokeScriptAcceptsWebDeployed が緑でも script check 自体が働いているかは
+// 確認できない)。
+func TestSmokeScriptFailsWhenEntryJSMissing(t *testing.T) {
+	out, err := runSmoke(t, startStack(t, stack{web: webEntryJSMissing}), "3")
+	if err == nil {
+		t.Fatalf("smoke.sh が成功してしまった(index.html の JS が 404 なのを検知できていない):\n%s", out)
+	}
+	if !strings.Contains(out, "index.html が読む JS") {
+		t.Errorf("smoke.sh の出力に JS 取得の失敗メッセージが無い:\n%s", out)
 	}
 }
 

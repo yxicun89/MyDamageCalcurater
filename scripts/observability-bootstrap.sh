@@ -5,7 +5,8 @@
 # 手順: helm repo add/update → helm pull --version <固定版> -d <mktemp -d> → .tgz の SHA-256 を3つとも検証
 # (1つでも不一致なら1つもインストールしない。chart ごとに検証してすぐ入れる、はしない)
 # → namespace observability を冪等に作成 → 検証済み .tgz から helm upgrade --install --version <固定版>
-# → kubectl apply -k deploy/k8s/base/observability(ServiceMonitor。kube-prometheus-stack の CRD が要るので後)
+# → kubectl apply -k deploy/k8s/base/observability(ServiceMonitor・PrometheusRule・ダッシュボードConfigMap。
+#    kube-prometheus-stack の CRD が要るので後。ADR-0407 §3〜4)
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
@@ -91,7 +92,7 @@ helm upgrade alloy "$alloy_tgz" --install \
   --version "$ALLOY_VERSION" -n "$NAMESPACE" -f "$VALUES_DIR/alloy.yaml"
 
 # ServiceMonitor は kube-prometheus-stack の CRD が要るので、導入した後に適用する。
-echo "observability-bootstrap: ServiceMonitor を適用します" >&2
+echo "observability-bootstrap: ServiceMonitor・PrometheusRule・ダッシュボードを適用します" >&2
 kubectl apply -k "$OBSERVABILITY_KUSTOMIZATION"
 
 echo "observability-bootstrap: 完了しました" >&2

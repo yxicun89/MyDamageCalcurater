@@ -452,7 +452,21 @@
     scrape が Prometheus targets で `up`(judge・pokedex・speed は `/metrics` 追加前の古いイメージのままのため
     404。各レーンが次に再デプロイすれば up になる見込み)。Grafana は Loki・Prometheus・Alertmanager の3
     データソースを認識、Loki への クエリで `pokecalc` namespace の実ログ(Alloy 経由)を取得できることを確認
-- [ ] P7-2 SLO(計算API p99 < 100ms、可用性)とダッシュボード
+- [x] P7-2 SLO(計算API p99 < 100ms、可用性)とダッシュボード(ADR-0407。実装・自動テスト済み、実クラスタ未確認)。
+  P7-1(ADR-0406)の `http_requests_total`・`http_request_duration_seconds`(job="calc"、計算3エンドポイント
+  `/api/calc`・`/api/calc/bulk`・`/api/calc/reverse`)だけで計算でき、calc-svc へのコード追加は無し。
+  `deploy/k8s/base/observability/prometheusrules/calc-slo.yaml` に記録ルール2つ(p99・可用性。アラートは
+  作らない)、`deploy/k8s/base/observability/dashboards/`(`calc-slo.json` + `kustomization.yaml` の
+  `configMapGenerator`、`grafana_dashboard: "1"` ラベル)にダッシュボード(p99/可用性の時系列2つ+直近値の
+  stat 2つ、すべて記録ルール参照で生クエリなし)。`values/kube-prometheus-stack.yaml` に
+  `ruleSelectorNilUsesHelmValues: false` を追加(ServiceMonitor と同じ理由)。親 kustomization の resources に
+  `prometheusrules/calc-slo.yaml`・`dashboards/` を追加。新規 `scripts/observability-slo_test.sh`(48件)が
+  全件成功、既存 `scripts/observability-bootstrap_test.sh`(192件)も壊れていない。`make test`・`make lint`・
+  `make build`・`make check-publishable` 成功、`kubectl kustomize deploy/k8s/base/observability` の描画結果に
+  PrometheusRule 1つ・`grafana_dashboard: "1"` の ConfigMap 1つを確認。**実クラスタ(k3d-pokecalc)で確認済み**
+  (2026-09-25。独立レビュー時): `scripts/observability-bootstrap.sh` を再実行し、`/api/v1/rules` で記録ルール
+  2本とも `health: ok`(p99 ≈ 5ms、可用性 = 1)、`/api/calc` へ不正な入力を30件送っても4xxは可用性に数えられない
+  ことを確認(ADR §1どおり)。Grafana sidecarがダッシュボード(uid `calc-slo`)を読み込み、パネル4つが表示された
 - [ ] P7-3 ArgoCD(GitOps)
 - [ ] P7-4 MySQL/TiDB バックアップと復元テスト(ADR-0209 §9 を要件に含める: バックアップに `devices`〈墓石〉を含める /
   purge journal(#5b。世代取得後の削除要求。保持90日)をバックアップ世代と別に保持し復元時に再適用 /

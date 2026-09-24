@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 
 const JS_BUDGET_GZIP_BYTES = 300 * 1024;
-const distAssets = fileURLToPath(new URL("../dist/assets/", import.meta.url));
+const distAssets = fileURLToPath(new URL("../dist/static/", import.meta.url));
 
 function listJsFiles(dir) {
   return readdirSync(dir)
@@ -18,11 +18,11 @@ let files;
 try {
   files = listJsFiles(distAssets);
 } catch {
-  console.error("check-bundle-size: dist/assets が無い(先に vite build を実行する)");
+  console.error("check-bundle-size: dist/static が無い(先に vite build を実行する)");
   process.exit(1);
 }
 if (files.length === 0) {
-  console.error("check-bundle-size: dist/assets に JS が無い");
+  console.error("check-bundle-size: dist/static に JS が無い");
   process.exit(1);
 }
 const total = files.reduce((sum, path) => sum + gzipSync(readFileSync(path), { level: 9 }).length, 0);
