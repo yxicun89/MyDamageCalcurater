@@ -25,11 +25,15 @@ const (
 	ImporterPrivileges = "SELECT, INSERT, UPDATE, DELETE"
 	// MigratorPrivileges は migrate(Job)用。DDL を含むが CREATE USER 等のグローバル権限は含まない。
 	MigratorPrivileges = "SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES"
+	// AppPrivileges は record-svc / team-svc 本体・失効 CronJob 用(ADR-0211 §4)。値は ImporterPrivileges
+	// と同じだが、pokedex の importer 都合で ImporterPrivileges の値が変わったときに record/team の
+	// app 権限が無関係に変わらないよう、意図的に別の定数として持つ。
+	AppPrivileges = "SELECT, INSERT, UPDATE, DELETE"
 )
 
 // ErrInvalidRoleGrant は Provision への入力が安全でないときに返す(実際に接続する前に判定する)。
 // errors.Is で判定できる。エラー文にパスワード・DSN を含めない。
-var ErrInvalidRoleGrant = errors.New("pokedex/db: invalid role grant")
+var ErrInvalidRoleGrant = errors.New("db: invalid role grant")
 
 // RoleGrant は1ユーザーぶんのプロビジョニング指定(ADR-0110 決定4)。
 type RoleGrant struct {
@@ -148,22 +152,22 @@ func Provision(rootDSN string, roles []RoleGrant) error {
 	}
 	conn, err := sql.Open("mysql", rootCfg.FormatDSN())
 	if err != nil {
-		return fmt.Errorf("pokedex/db: root DSN で接続できない: %w", err)
+		return fmt.Errorf("db: root DSN で接続できない: %w", err)
 	}
 	defer conn.Close()
 
 	for _, r := range validated {
 		if _, err := conn.Exec(fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%%' IDENTIFIED BY '%s'", r.user, r.pw)); err != nil {
-			return fmt.Errorf("pokedex/db: CREATE USER %s: %w", r.user, err)
+			return fmt.Errorf("db: CREATE USER %s: %w", r.user, err)
 		}
 		if _, err := conn.Exec(fmt.Sprintf("ALTER USER '%s'@'%%' IDENTIFIED BY '%s'", r.user, r.pw)); err != nil {
-			return fmt.Errorf("pokedex/db: ALTER USER %s: %w", r.user, err)
+			return fmt.Errorf("db: ALTER USER %s: %w", r.user, err)
 		}
 		if _, err := conn.Exec(fmt.Sprintf("REVOKE ALL PRIVILEGES, GRANT OPTION FROM '%s'@'%%'", r.user)); err != nil {
-			return fmt.Errorf("pokedex/db: REVOKE ALL %s: %w", r.user, err)
+			return fmt.Errorf("db: REVOKE ALL %s: %w", r.user, err)
 		}
 		if _, err := conn.Exec(fmt.Sprintf("GRANT %s ON `%s`.* TO '%s'@'%%'", r.privileges, dbName, r.user)); err != nil {
-			return fmt.Errorf("pokedex/db: GRANT %s: %w", r.user, err)
+			return fmt.Errorf("db: GRANT %s: %w", r.user, err)
 		}
 	}
 	return nil
