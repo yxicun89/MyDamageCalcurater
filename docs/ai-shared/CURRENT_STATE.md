@@ -72,12 +72,12 @@ Status: **M3(iPhone で使える)は完了**。P6-1(ADR-0500)・P6-2a 計算画�
 検証漏れ、PR #131)、#68(検索上限200件。種族・技ピッカーを `Menu` 一括取得から `.searchable()` 検索UIへ変更。
 Web の ADR-0304 と同じ方針。PR #136)、#113(Web/iOS/API共同主担当。入力操作ごとの計算Taskを最新の1つだけ保持し
 新入力・画面破棄で先行Taskをcancel、逆算の観測文字入力に200msのtrailing debounce。`CancellationError`は画面
-エラーにしない。PR #166。1周目critic FAIL→2周目PASS)。`make ios-test`(gen-check・XCTest 332件・XCUITest 16件・
-Info.plist 検査)が緑。issue #68 は既知の制約(一度も検索結果に出ていない技IDは名前解決できない)をコメントで
-記録した上でクローズせず残す。
+エラーにしない。PR #166。1周目critic FAIL→2周目PASS)、#99(ライトテーマの danger コントラスト不足。
+`ColorToken.danger`のライト値を`#E5484D`→`#CD1D23`に変更。Web PR #164 と同じ値。PR #170。issue #99 は
+Web・iOS 両方完了でクローズ済み)。`make ios-test`(gen-check・XCTest 336件・XCUITest 16件・Info.plist 検査)が緑。
+issue #68 は既知の制約(一度も検索結果に出ていない技IDは名前解決できない)をコメントで記録した上でクローズせず残す。
 Next: (1) P6-6(issue #110の iOS側追従。観測16件上限・持ち物候補64件超の扱い。API レーンから依頼済み)。
-(2) issue #99の iOS側(`ColorToken.danger`のライト値を`#CD1D23`へ。Web レーンから2026-09-24依頼)。
-(3) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。#71(攻撃側プリセット
+(2) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。#71(攻撃側プリセット
 単一化)は engine 側の `AttackerPreset` カタログ新設(データレーン)が前提のため iOS からは未着手。将来の候補:
 engine の Champions マスタが pokedex-svc 経由になったら iOS のモック/実マスタの差し替え動作を再確認、Web の
 record/team-svc(M2)が進んだら iOS の構築を端末内保存から API 保存へ移行するかを検討。
