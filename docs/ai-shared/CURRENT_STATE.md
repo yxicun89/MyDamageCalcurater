@@ -74,7 +74,7 @@ Next: (1) P4-18 は Web 分すべて完了(#99・#113 とも main 統合済み)�
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
-Active: Claude Code
+Active: なし(P6-6 完了・main 統合済み。残る P6-7 は record/team の API 待ち)
 Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
 Status: **M3(iPhone で使える)は完了**。P6-1(ADR-0500)・P6-2a 計算画面・契約追従・P6-2b 逆算画面・P6-2c 構築ビルダー
 (一覧・編集・ニックネーム)・P6-2d(構築から個体を呼び出す配線)・P6-3・P6-4(手順書 `docs/runbooks/ios-device-install.md`)・
@@ -90,11 +90,10 @@ Web・iOS 両方完了でクローズ済み)、P6-6(issue #110の iOS側追従�
 観測は追加ボタンを無効化、持ち物候補・比較トグルは上限到達中のON操作だけ拒否(OFFは常時可。Webの
 決定的切り捨てとはあえて変えた判断はADR参照)。critic指摘でguardの位置(`beginInput()`より前)を固定する
 回帰テストを追補。引き継ぎ検証で契約との同期検査 `ios/scripts/check-request-limits.sh` と観測上限の XCUITest を
-追加)。`make ios-test`(gen-check・件数上限の同期検査・XCTest 340件〈xcresult 集計353件〉・XCUITest 17件・Info.plist 検査)が緑。
+追加。**PR #186 で main 統合済み**)。`make ios-test`(gen-check・件数上限の同期検査・XCTest 340件〈xcresult 集計353件〉・XCUITest 17件・Info.plist 検査)が緑。
 issue #68 は既知の制約(一度も検索結果に出ていない技IDは名前解決できない)をコメントで記録した上でクローズせず残す。
-issue #110 は Web・iOS 両方完了でクローズする(iOS 側は実装完了、統合待ち)。
-Next: (1) P6-6 のPR作成・main統合。
-(2) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。#71(攻撃側プリセット
+issue #110 は API・データ・Web・iOS すべて完了したためクローズ済み(2026-09-24)。
+Next: (1) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。#71(攻撃側プリセット
 単一化)は engine 側の `AttackerPreset` カタログ新設(データレーン)が前提のため iOS からは未着手。将来の候補:
 engine の Champions マスタが pokedex-svc 経由になったら iOS のモック/実マスタの差し替え動作を再確認、Web の
 record/team-svc(M2)が進んだら iOS の構築を端末内保存から API 保存へ移行するかを検討。
