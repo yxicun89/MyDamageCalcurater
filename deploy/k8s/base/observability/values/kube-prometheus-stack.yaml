@@ -1,0 +1,33 @@
+# kube-prometheus-stack chart の values(ADR-0406 §4)。
+# ローカル k3d 専用: Grafana・Prometheus・Alertmanager の Ingress は作らない
+# (kubectl port-forward でのみアクセスする。issue #148「私設サービスを維持する」)。
+
+grafana:
+  ingress:
+    enabled: false
+  # 管理者パスワードはここに書かない。導入前にユーザーが手動で Secret を作る(ADR-0018 §5 と同じ扱い。
+  # 手順は docs/runbooks/observability.md の「2. Grafana の管理者パスワードを登録する」を参照)。
+  admin:
+    existingSecret: grafana-admin-credentials
+    userKey: admin-user
+    passwordKey: admin-password
+  # Loki(observability namespace内。scripts/observability-bootstrap.sh が同じnamespaceへ導入する)を
+  # Grafana のデータソースとして登録する。無いと Alloy が送ったログを Grafana から見られない。
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      access: proxy
+      url: http://loki.observability.svc.cluster.local:3100
+
+prometheus:
+  ingress:
+    enabled: false
+  prometheusSpec:
+    # observability 側の ServiceMonitor(deploy/k8s/base/observability/servicemonitors/)は
+    # kube-prometheus-stack の release ラベルを持たない。既定(release ラベル必須)のままだと
+    # 拾われないため、release ラベルを問わず全 ServiceMonitor を対象にする。
+    serviceMonitorSelectorNilUsesHelmValues: false
+
+alertmanager:
+  ingress:
+    enabled: false

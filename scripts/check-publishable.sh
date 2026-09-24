@@ -38,7 +38,11 @@ readonly -a A_EXCLUDES=(":(exclude)docs/audit-r1.md")
 # B(秘密らしき文字列「キー名=値」)の許可(ERE)。値そのものではなく、k8s の Secret/Key の
 # *名前*(pokedex-svc の manifest 検査。ADR-0105 §6・用途別の最小権限。ADR-0110)を指す
 # 定数だけを対象にする(秘密の値ではない)。
-readonly B_KEYVALUE_ALLOW='=[[:space:]]*"(mysql-auth|pokedex-dsn|pokedex-reader-dsn|pokedex-importer-dsn|pokedex-migrator-dsn|mysql-root-password)$'
+# 2つ目の候補群(:区切り)は kube-prometheus-stack chart の values(ADR-0406 §4)が要求する
+# Secret 名・キー名そのもの(grafana.admin.existingSecret / passwordKey。chart 側の仕様で
+# 変更できない定数)を許可する。実際のパスワード値はこの values ファイルに書かない
+# (docs/runbooks/observability.md の手順でユーザーが別途 Secret を作る)。
+readonly B_KEYVALUE_ALLOW='=[[:space:]]*"(mysql-auth|pokedex-dsn|pokedex-reader-dsn|pokedex-importer-dsn|pokedex-migrator-dsn|mysql-root-password)$|:[[:space:]]*(grafana-admin-credentials|admin-password)$'
 
 # 許可するメールアドレス(ERE。一致した文字列全体に対して評価)。
 #   noreply@anthropic.com : コミットの共同著者表記(公開情報)

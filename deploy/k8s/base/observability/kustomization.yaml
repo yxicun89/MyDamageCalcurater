@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# 監視スタック側の追加マニフェスト(ADR-0406 §4〜5)。helm の values は values/ に置き、ここには含めない。
+# deploy/k8s/base/kustomization.yaml には足さない(cloud overlay に混入するのを防ぐ。ADR-0406 §5)。
+# scripts/observability-bootstrap.sh が kube-prometheus-stack 導入後にこのディレクトリを apply -k する。
+resources:
+  - servicemonitors/balance.yaml
+  - servicemonitors/calc.yaml
+  - servicemonitors/gateway.yaml
+  - servicemonitors/judge.yaml
+  - servicemonitors/pokedex.yaml
+  - servicemonitors/speed.yaml
