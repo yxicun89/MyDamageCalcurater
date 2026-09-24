@@ -1126,3 +1126,29 @@ Impact: `docs/plan.md` P3-7 追加・JD4 のブロッカーを解消として更
 `getMove` を追記、`docs/adr/0200-calc-svc-api-contract.md` の「pokedex の5操作」を6操作に訂正、
 `docs/adr/0107-move-secondary-rank-changes.md` 決定8に追記(`effect` の公開は依然未決)、
 `docs/adr/0304-web-online-mastersource.md` §3 に追記(この実装は§3の欠落の解決策ではない)。
+
+## 2026-09-24: 判定レーン JD4(返り討ち判定)の契約を確定・テスト先行(判定レーン)
+Decision: `getMove` の main 統合(2026-09-23)を受けて JD4 に着手し、**ADR-0704** で契約と受け入れ条件を確定した。
+実装はまだで、失敗するテストだけを先に置いた(spec-writer の範囲)。決めたことは次の 5 つ。
+- request: `defenders` の要素を `Individual` → **`DefenderCandidate`**(`Individual` の全欄 + **必須の `moveId`**)。
+  attacker は `Individual` のまま、攻撃側の技は request 直下の `moveId` のまま。
+- 先制判定: **優先度が違えば優先度が高い方が必ず先に動く(トリックルームの影響を受けない)**。優先度が同じときだけ
+  素早さで決まり(トリックルーム中は反転。JD2 の `CompareSpeed` が計算済み)、両方同じなら `turnOrderTie`。
+  `internal/judge` に純粋な `CompareTurnOrder(attackerPriority, defenderPriority, SpeedComparison) TurnOrder` を新設する
+  (既存の `CompareSpeed` / `outspeeds` / `speedTie` の意味と値は変えない)。
+- response: `ko` を **`attackerKo`** に改名し、`defenderKo`・`attackerMovePriority`・`defenderMovePriority`・
+  `attackerMovesFirst`・`turnOrderTie` を追加。judge は「勝てる/負ける」の真偽値には丸めない。
+- 逆方向(相手→自分)の calc では **`field.attackerScreens` と `field.defenderScreens` を入れ替えて**送る
+  (壁は場の各側にあり、どちらが殴るかで場所は変わらない。天候・地形は入れ替えない)。入れ替え忘れはエラーにならず
+  結果だけが静かに間違うので、テストで直接確かめる。
+- エラーに **`unknown_move`(422)** を追加。attacker の技も上流で解決するようになったため、
+  **攻撃側の未知の技は JD3 までの 400 `invalid_request` から 422 `unknown_move` に変わる**(応答の変化点)。
+Reason: JD4 は「抜けて倒せる」だけでは見落とす「相手が先に動いて自分が落ちる」を拾うための段階で、
+技の優先度と逆方向のダメージが要る。どちらも `getMove`(API レーン)が入ったことで実装できるようになった。
+破壊的変更(`DefenderCandidate`・`ko` の改名)は JD5(Web/iOS)が未着手でクライアントが 1 つも無いため今は安全
+(ADR-0703 §7 の根拠の延長。名前を揃えられる最後の機会)。
+Impact: `services/judge/api/openapi.yaml` と `make judge-gen` の生成物を更新済み。`make judge-test` は
+**意図的に失敗する状態**(`judge.CompareTurnOrder` / `client.Pokedex.Move` が未実装、`api.Matchup.Ko` が
+`AttackerKo` に変わったことによるコンパイルエラー)。次の implementer が ADR-0704 の受け入れ条件どおりに実装する。
+`docs/judge-design.md` §3 JD4 と `docs/plan.md` の JD4 行も更新した。他レーンへの依頼は無い
+(ルートの `api/openapi.yaml` は変更していない)。
