@@ -130,16 +130,20 @@ BalanceScreen がオンラインで永久に使えなかった。可否の判定
 `k3d-$CLUSTER`のときだけ`api-smoke`→`web-k3d-smoke`→`web-k3d-e2e`を追加実行するよう`scripts/e2e.sh`を実装。
 クラスタが無ければ黙らずスキップを明示、`E2E_REQUIRE_K3D=1`でスキップさせない逃げ道も用意。critic PASS
 (mutation testing 4件で全て検知)。`scripts/e2e_test.sh`(新規80件)を`make test-scripts`に追加。
-Next: (1) issue #71のWeb側(`web/src/domain/attackerPresets.ts`とデータレーンのengine/presets/attacker.json
-〈PR #346・ADR-0114〉の一致を確かめる契約テスト追加。データレーンより依頼済み、2026-09-25)。(2) P4-20:
-issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み(apiBaseUrl の
-既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより連絡が来る想定。
-(3) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち。2026-09-24
-時点で record/team-svc の DB マイグレーション・TiDB 導入方針〈ADR-0211〉はデータレーンで進行中)。
-(4) issue #274(計算画面で急所・やけど・天候・フィールド・ランク・壁・特性を指定できない)は未着手。iOSが
+**issue #71のWeb側(攻撃側プリセット単一化。ADR-0114)完了・main統合済み(PR #352)**:
+`web/src/domain/attackerPresets.contract.test.ts`を新規追加。毎回`engine/presets/attacker.json`を読み、
+カタログ(順序・既定値・relevantStat・boostMinus・relevantSp・nature)から導いた期待値と
+`resolveAttackerPreset`の実際の出力を突き合わせる契約テスト(現状の値は一致済み、実装変更なし)。
+JSONを一時的に書き換えるmutationで実際に検知することを確認済み。新規17件追加。iOSの追従が済めば
+データレーンが#71をcloseする想定(2026-09-25時点、Web側は完了を連絡済み)。
+Next: (1) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
+(apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより
+連絡が来る想定。(2) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち。
+2026-09-24 時点で record/team-svc の DB マイグレーション・TiDB 導入方針〈ADR-0211〉はデータレーンで進行中)。
+(3) issue #274(計算画面で急所・やけど・天候・フィールド・ランク・壁・特性を指定できない)は未着手。iOSが
 既定案(「詳細」折りたたみ)で先行する予定で、決めた語をDECISIONS.mdに書く想定(2026-09-25、iOSレーンへ返信済み)。
-(5) 人間へのお願い: docs/verify-m1.md §4 を
-Safari で確認(P4-5)。(6) 他レーンからの依頼待ち
+(4) 人間へのお願い: docs/verify-m1.md §4 を
+Safari で確認(P4-5)。(5) 他レーンからの依頼待ち
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
