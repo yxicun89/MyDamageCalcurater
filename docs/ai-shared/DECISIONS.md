@@ -1218,3 +1218,8 @@ Impact: **iOSレーンへ依頼**: `ios/PokeCalcKit/Sources/PokeCalcDesign/PokeC
 `ios/PokeCalcKit/Tests/PokeCalcDesignTests/DesignTokenTests.swift`(同じ旧値を手書きで期待値にしている36行目
 付近)を `0xCD, 0x1D, 0x23` に更新し、Web と同様にコントラスト比を検査するテストを追加してほしい(値は
 design.md「デザイントークン」が正)。issue #99 は iOS 側が完了するまでクローズしない。
+
+## 2026-09-24: 判定 JD4(返り討ち判定)を PR #169 で main に統合(判定レーン)
+Decision: ADR-0704(`DefenderCandidate`・`CompareTurnOrder`・逆方向calcのscreens入れ替え・`unknown_move`)を PR #169 で main に統合した。critic は1回目で PASS。
+Reason: `make test`・`make lint`・`make build`(ルート)が緑、critic PASS、他レーンの範囲外変更なし(COORDINATION.md の共有ファイル規約の範囲内)を確認してマージした。
+Impact: 判定レーンのブランチを `feat/judge-jd5` に切り替えた(JD4 の `feat/judge-jd4` は削除)。JD0〜JD4 がすべて完了し、`POST /api/judge/v1/outspeed-and-ko` は素早さ判定・複数候補・場の効果・返り討ち判定まで対応済み。残るは JD5(Web/iOS の画面)のみ。
