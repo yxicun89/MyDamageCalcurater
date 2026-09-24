@@ -136,26 +136,27 @@
   2件追加(907件)→再確認予定
 - [ ] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら
   `capabilities.moves` を true にして技を復活させる
-- [ ] P4-18 Codex コードレビューの issue(Web レーン主担当。タイプバランスレーンから 2026-09-23 に連絡・`gh issue view <番号>`)。
-  優先: **#99(bug, accessibility)ライトテーマのエラー文字色がコントラスト基準未達 — Web 分は完了(2026-09-24。
-  critic PASS)**: danger のライト値を `#E5484D`→`#CD1D23`(WCAG 2.2 SC 1.4.3 の4.5:1を bg.base・bg.glass 合成後
-  の両方で満たす。色相・彩度は変えず明度だけ下げた)。`docs/design.md`「デザイントークン」に理由・数値を記録、
-  `web/src/test/colorContrast.ts`(WCAG相対輝度・コントラスト比の計算)・`web/src/styles/contrast.test.ts`
-  (ライト・ダーク×bg.base・bg.glass合成の4組を検査)を新規追加。**iOS 側(`PokeCalcDesign.swift`・
-  `DesignTokenTests.swift`)はまだ旧値のまま**で、iOSレーンへ DECISIONS.md で依頼済み。iOS 側が終わるまで
-  issue #99 自体はクローズしない。
-  **#113(improvement)逆算の数値入力で古い計算要求を抑止・キャンセル — Web 分は完了(2026-09-24。critic PASS。
+- [x] P4-18(Web 分。Codex コードレビューの issue。タイプバランスレーンから 2026-09-23 に連絡・
+  `gh issue view <番号>`)。**#99(bug, accessibility)ライトテーマのエラー文字色がコントラスト基準未達 —
+  Web 分・iOS 分とも完了、issue クローズ済み**: danger のライト値を `#E5484D`→`#CD1D23`(WCAG 2.2 SC 1.4.3
+  の4.5:1を bg.base・bg.glass 合成後の両方で満たす。色相・彩度は変えず明度だけ下げた)。
+  `web/src/test/colorContrast.ts`・`web/src/styles/contrast.test.ts` を新規追加。critic PASS(独立実装での
+  検算・変異テストで確認)。iOS 側も `PokeCalcDesign.swift`・`ColorContrast.swift`・`DangerContrastTests.swift`
+  で対応済み(commit `23e5c5e`)。
+  **#113(improvement)逆算の数値入力で古い計算要求を抑止・キャンセル — Web 分・iOS 分とも完了(critic PASS。
   ADR-0300 §11)**: 観測のテキスト編集のみ200msのtrailing debounce(確定操作は待たない)、`CalcEngine` に
   任意引数 `signal?: AbortSignal` を追加(API実装はfetchへ配線、WASM実装は開始前にのみ検査)、取り消しを
   `REQUEST_ABORTED_CODE` で `engine_unavailable` と区別。既存929件は無変更・新規26件追加(953件)。
-  iOS・API レーン担当分は別途(同じ200ms契約に各レーンの区切りで追従)。
+  iOS 側も `LatestTaskRunner.swift`・`CalcInput.swift` で対応済み(commit `492b6d3`)。**issue 自体はまだ
+  open**(API レーンの「クライアントのcancel伝播」連携分が残っているか未確認)。
   残る軽微(次に触るときに拾う。ブロッカーではない): 種族・技・プリセット選択でも確定操作として即座に
   flush することの回帰テストが無い(実装は正しいがテスト未カバー。`ReverseScreen.debounce.test.tsx`)。
-  次点: #98(bug)モバイル幅で計算・逆算画面が横に溢れる、#67(bug)2xx の契約外 JSON で API クライアントが例外を投げる(防御的処理)。
   連携(他レーン主担当。Web は連携のみ): #71(データ+Web+iOS 攻撃側プリセット単一化)・#72(API+Web ルート make e2e を Playwright へ)・
   #78(API+Web 特性の無効・吸収の境界反映)・#110(Web の担当分は P4-19 へ分離。DECISIONS.md 2026-09-23 参照)・
   #103(主担当 API・データ。M2保存データの保持期間。ユーザー決定 2026-09-23 で needs-decision は解消済み。
   DECISIONS.md参照。Web は連携のみで主担当ではない)
+- [ ] P4-21 Codex コードレビューの次点 issue(P4-18 で優先分が完了したため分離): #98(bug)モバイル幅で
+  計算・逆算画面が横に溢れる、#67(bug)2xx の契約外 JSON で API クライアントが例外を投げる(防御的処理)
 - [x] P4-19 issue #110(セキュリティ。ADR-0300 §10。critic PASS: 境界値の網羅探索〈約1.2万ケース〉と変異テスト5件で
   `itemVariants`/`itemCandidates` が常に64以下・`observations` が17件目を作れないことを確認済み)。
   `domain/requestLimits.ts` に上限3定数(`api/openapi.yaml` の `maxItems` との同期をテストで検査)と
