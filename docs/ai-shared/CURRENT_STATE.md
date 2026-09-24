@@ -117,12 +117,29 @@ BalanceScreen がオンラインで永久に使えなかった。可否の判定
   作業中に発見した無関係の既存退行(JD5の判定タブ追加で `a11y.spec.ts` が壊れていた)を別途修正・main統合済み
   (PR #191)。
   最終テスト数: 既存1166件は無変更のまま vitest 1184件・Playwright 31件、すべて green。
-Next: (1) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
-(apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより
-連絡が来る想定。(2) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち。
-2026-09-24 時点で record/team-svc の DB マイグレーション・TiDB 導入方針〈ADR-0211〉はデータレーンで進行中)。
-(3) 人間へのお願い: docs/verify-m1.md §4 を
-Safari で確認(P4-5)。(4) 他レーンからの依頼待ち
+**issue #268(gateway経由:8080の白画面)の検証テスト修正・main統合済み(PR #338。実装は別セッション)**:
+`services/gateway/scripts/smoke.sh` に追加された「index.htmlが読むJSを実際に取得して200」の検査により、
+`TestSmokeScriptAcceptsWebDeployed` のfixtureがscript srcの無いHTMLを返していて落ちていた(タイプバランス
+レーンが検証・指摘)。fixtureにscript srcとその配信先を持たせ、JSが404のケースで検知できることの回帰テスト
+(`TestSmokeScriptFailsWhenEntryJSMissing`)も追加。
+**issue #334(相性表記の倍率併記。iOSとの語の統一)完了・main統合済み(PR #341)**: iOSのDisplayLabels.swiftの語
+(「ばつぐん(×2)」「いまひとつ(×0.5)」)にWeb側を揃えた(「効果は」接頭辞は削除)。format.test.tsの0.25/0.5・
+2/4のケースが倍率を書き分けるようになり検証強化。新規0件(既存アサーション4件の強化)。
+**issue #72(ルートmake e2eが未実装スタブ)完了・main統合済み(PR #350。ADR-0306)**: k3dクラスタ不要な3件
+(`web-e2e`→`web-e2e-online`→`web-e2e-balance`)を必ずこの順で実行し、kubectlの現在のコンテキストが
+`k3d-$CLUSTER`のときだけ`api-smoke`→`web-k3d-smoke`→`web-k3d-e2e`を追加実行するよう`scripts/e2e.sh`を実装。
+クラスタが無ければ黙らずスキップを明示、`E2E_REQUIRE_K3D=1`でスキップさせない逃げ道も用意。critic PASS
+(mutation testing 4件で全て検知)。`scripts/e2e_test.sh`(新規80件)を`make test-scripts`に追加。
+Next: (1) issue #71のWeb側(`web/src/domain/attackerPresets.ts`とデータレーンのengine/presets/attacker.json
+〈PR #346・ADR-0114〉の一致を確かめる契約テスト追加。データレーンより依頼済み、2026-09-25)。(2) P4-20:
+issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み(apiBaseUrl の
+既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより連絡が来る想定。
+(3) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち。2026-09-24
+時点で record/team-svc の DB マイグレーション・TiDB 導入方針〈ADR-0211〉はデータレーンで進行中)。
+(4) issue #274(計算画面で急所・やけど・天候・フィールド・ランク・壁・特性を指定できない)は未着手。iOSが
+既定案(「詳細」折りたたみ)で先行する予定で、決めた語をDECISIONS.mdに書く想定(2026-09-25、iOSレーンへ返信済み)。
+(5) 人間へのお願い: docs/verify-m1.md §4 を
+Safari で確認(P4-5)。(6) 他レーンからの依頼待ち
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
