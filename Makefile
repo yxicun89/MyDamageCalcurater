@@ -115,6 +115,39 @@ migrate-down: ## pokedex の DB を全て戻す(破壊的。CONFIRM_DESTROY=<DB�
 	fi
 	@cd services && $(GO) run ./pokedex/cmd/migrate down -confirm "$(CONFIRM_DESTROY)"
 
+## --- record/team DB(migrate。ADR-0211 §4・§5) ------------------------
+.PHONY: migrate-up-record
+migrate-up-record: ## record の DB を最新版まで migrate する(RECORD_DATABASE_DSN が必須)
+	@cd services && $(GO) run ./record/cmd/migrate up
+
+.PHONY: migrate-version-record
+migrate-version-record: ## record の migrate バージョンを表示する(RECORD_DATABASE_DSN が必須)
+	@cd services && $(GO) run ./record/cmd/migrate version
+
+.PHONY: migrate-down-record
+migrate-down-record: ## record の DB を全て戻す(破壊的。CONFIRM_DESTROY=<DB名> が必須。人間の確認)
+	@if [ -z "$(CONFIRM_DESTROY)" ]; then \
+		echo "migrate-down-record: CONFIRM_DESTROY=<DB名> を指定すること(全テーブルを消す破壊的操作)。人間が確認すること" >&2; \
+		exit 1; \
+	fi
+	@cd services && $(GO) run ./record/cmd/migrate down -confirm "$(CONFIRM_DESTROY)"
+
+.PHONY: migrate-up-team
+migrate-up-team: ## team の DB を最新版まで migrate する(TEAM_DATABASE_DSN が必須)
+	@cd services && $(GO) run ./team/cmd/migrate up
+
+.PHONY: migrate-version-team
+migrate-version-team: ## team の migrate バージョンを表示する(TEAM_DATABASE_DSN が必須)
+	@cd services && $(GO) run ./team/cmd/migrate version
+
+.PHONY: migrate-down-team
+migrate-down-team: ## team の DB を全て戻す(破壊的。CONFIRM_DESTROY=<DB名> が必須。人間の確認)
+	@if [ -z "$(CONFIRM_DESTROY)" ]; then \
+		echo "migrate-down-team: CONFIRM_DESTROY=<DB名> を指定すること(全テーブルを消す破壊的操作)。人間が確認すること" >&2; \
+		exit 1; \
+	fi
+	@cd services && $(GO) run ./team/cmd/migrate down -confirm "$(CONFIRM_DESTROY)"
+
 .PHONY: test-db
 test-db: ## pokedex(MySQL)・record/team(TiDB)のDBを使うテスト(POKEDEX_TEST_DSN・RECORD_TEST_DSN・TEAM_TEST_DSN が必須。make test には含めない。ADR-0211)
 	@if [ -z "$(POKEDEX_TEST_DSN)" ]; then \
@@ -135,6 +168,10 @@ test-db: ## pokedex(MySQL)・record/team(TiDB)のDBを使うテスト(POKEDEX_TE
 .PHONY: db-local-up
 db-local-up: ## make dev 用に docker で mysql:9.7.2 を 127.0.0.1:3306 に起動する(パスワードは .env)
 	@./scripts/db-local-up.sh
+
+.PHONY: tidb-local-up
+tidb-local-up: ## make dev 用に tiup playground で TiDB v8.5.8 を 127.0.0.1:4000 に起動し record・team の DB を作る(ADR-0211 §2)
+	@./scripts/tidb-local-up.sh
 
 ## --- クラスタ / ローカル ---------------------------------------------
 .PHONY: up

@@ -317,15 +317,32 @@ func TestMakefileTargets(t *testing.T) {
 	if !strings.Contains(targets["test-db"], "-tags mysql") || !strings.Contains(targets["test-db"], "POKEDEX_TEST_DSN") {
 		t.Errorf("test-db は -tags mysql で走り、POKEDEX_TEST_DSN が無ければ失敗すること: %q", targets["test-db"])
 	}
-	if !strings.Contains(targets["migrate-down"], "CONFIRM_DESTROY") {
-		t.Errorf("migrate-down は CONFIRM_DESTROY を要求すること: %q", targets["migrate-down"])
+	// CONFIRM_DESTROY を「要求する」とは、値が空のとき失敗する実際のガード(-z "$(CONFIRM_DESTROY)")が
+	// あることで、変数名が -confirm へそのまま渡っているだけ(値が空でも渡ってしまう)では不十分
+	// (mutation テストで確認: ガードを消しても文字列 "CONFIRM_DESTROY" 自体は -confirm 引数に残るため、
+	// 単純な文字列一致では見逃す)。
+	requiresConfirmDestroyGuard := regexp.MustCompile(`-z\s+"\$\(CONFIRM_DESTROY\)"`)
+	if !requiresConfirmDestroyGuard.MatchString(targets["migrate-down"]) {
+		t.Errorf("migrate-down は CONFIRM_DESTROY が空のとき失敗するガードを持つこと: %q", targets["migrate-down"])
 	}
+	// record-svc・team-svc も自分の cmd/migrate down ターゲット(migrate-down-record・
+	// migrate-down-team)を持つ(ADR-0211 §4)。pokedex だけを許す特別扱いではなく、
+	// 「down を呼ぶターゲットは全て CONFIRM_DESTROY を要求する」という不変条件そのものを
+	// 検査する(down を呼ぶターゲット名を1つに限定しない)。
+	isOwnDownTarget := regexp.MustCompile(`^migrate-down(-\w+)?$`)
+	downTarget := regexp.MustCompile(`cmd/migrate\s+down`)
 	for name, body := range targets {
-		if name == "migrate-down" {
+		if downTarget.MatchString(body) {
+			if !requiresConfirmDestroyGuard.MatchString(body) {
+				t.Errorf("ターゲット %s が cmd/migrate down を呼ぶのに CONFIRM_DESTROY が空のとき失敗するガードを持たない", name)
+			}
 			continue
 		}
-		if strings.Contains(body, "migrate-down") || regexp.MustCompile(`cmd/migrate\s+down`).MatchString(body) {
-			t.Errorf("ターゲット %s が down を呼んでいる(down は人間の確認つきの migrate-down だけ)", name)
+		if isOwnDownTarget.MatchString(name) {
+			continue
+		}
+		if strings.Contains(body, "migrate-down") {
+			t.Errorf("ターゲット %s が down を呼んでいる(down は人間の確認つきの migrate-down 系ターゲットだけ)", name)
 		}
 	}
 	for _, name := range []string{"test", "test-services"} {
@@ -404,7 +421,12 @@ func TestUpScriptCreatesMigrateJobOnlyOnce(t *testing.T) {
 		t.Error("scripts/up.sh が deploy/k8s/base/pokedex を単独で apply している" +
 			"(namespace が付かず default に Job ができる。overlay 経由の1か所だけにする)")
 	}
-	applyOverlay := regexp.MustCompile(`apply\s+-k\s+deploy/k8s/overlays/local\b`)
+	// `deploy/k8s/overlays/local` ちょうど(`/tidb` 等のサブディレクトリの apply とは別に
+	// 数える。ADR-0211 §3.2 実装時の追記: TiDB は CRD が無いとき非致命的に失敗させるため、
+	// base・mysql を含むこの apply とは別のコマンドにしている)。`\b` だけだと
+	// `overlays/local/tidb` の `local` 直後の `/` も語境界に一致してしまうため、
+	// 直後が空白であることまで要求する。
+	applyOverlay := regexp.MustCompile(`apply\s+-k\s+deploy/k8s/overlays/local\s`)
 	if n := len(applyOverlay.FindAllString(s, -1)); n != 1 {
 		t.Errorf("overlays/local の apply が %d 回ある(1回だけであること)", n)
 	}

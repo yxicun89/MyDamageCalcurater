@@ -1,0 +1,69 @@
+# record-svc / team-svc 用の TiDB クラスタ(ADR-0211 §3.2)。PD/TiKV/TiDB 各1レプリカの
+# 最小構成。CPU/メモリの request/limit は他サービスと資源を取り合う共有 k3d クラスタでの
+# 上限として明示する(上流の examples/basic/tidb-cluster.yaml は明示していないが、
+# 個人開発の共有クラスタではリソース上限を明示する。CLAUDE.md「k3d は最小構成」)。
+# pvReclaimPolicy: Retain のため、このリソースを削除しても PD/TiKV の PVC は残る
+# (PVC の削除はデータ削除そのもの。CLAUDE.md「クラスタ削除・DBのデータ削除」の人間確認事項)。
+apiVersion: pingcap.com/v1alpha1
+kind: TidbCluster
+metadata:
+  name: pokecalc-tidb
+  labels:
+    app.kubernetes.io/name: pokecalc-tidb
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  version: v8.5.8
+  timezone: UTC
+  pvReclaimPolicy: Retain
+  enableDynamicConfiguration: true
+  configUpdateStrategy: RollingUpdate
+  discovery: {}
+  helper:
+    image: alpine:3.21.0
+  pd:
+    baseImage: pingcap/pd
+    maxFailoverCount: 0
+    replicas: 1
+    requests:
+      storage: "1Gi"
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "300m"
+      memory: "512Mi"
+    config: {}
+  tikv:
+    baseImage: pingcap/tikv
+    maxFailoverCount: 0
+    # 1台構成のため、アップグレード時に region leader を移せない(ADR-0211 §3.2 の上流例と同じ理由)。
+    evictLeaderTimeout: 1m
+    replicas: 1
+    requests:
+      storage: "1Gi"
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+    config:
+      storage:
+        # 個人開発規模でディスクを使い切らないための設定(上流の basic 例と同じ)。
+        reserve-space: "0MB"
+      rocksdb:
+        # 一部の Kubernetes クラスタでの "too many open files" を避ける(上流の basic 例と同じ)。
+        max-open-files: 256
+      raftdb:
+        max-open-files: 256
+  tidb:
+    baseImage: pingcap/tidb
+    maxFailoverCount: 0
+    replicas: 1
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "300m"
+      memory: "512Mi"
+    service:
+      type: ClusterIP
+    config: {}

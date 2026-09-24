@@ -1,0 +1,18 @@
+# クラスタ起動後に1回だけ root パスワードを設定し、record・team の2 DB を作る
+# (ADR-0211 §3.2。TiDB Operator が正式にサポートする初期化用 CR)。
+# up.sh は、record/team の migrate Job を適用する前にこの Job(<metadata.name>-tidb-initializer)の
+# 完了を待つ(順序を誤ると migrate Job が Unknown database / 認証エラーで失敗しうる。ADR-0211 §3.2)。
+apiVersion: pingcap.com/v1alpha1
+kind: TidbInitializer
+metadata:
+  name: pokecalc
+  labels:
+    app.kubernetes.io/name: pokecalc-tidb-initializer
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  image: mysql:9.7.2@sha256:29abb0a179982e4a8928138bfc7f918af9eda64e7eeb1b1d084c1720a20159e6
+  imagePullPolicy: IfNotPresent
+  cluster:
+    name: pokecalc-tidb
+  initSql: "CREATE DATABASE IF NOT EXISTS record; CREATE DATABASE IF NOT EXISTS team;"
+  passwordSecret: tidb-root-auth

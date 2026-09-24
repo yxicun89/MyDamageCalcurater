@@ -38,7 +38,11 @@ readonly -a A_EXCLUDES=(":(exclude)docs/audit-r1.md")
 # B(秘密らしき文字列「キー名=値」)の許可(ERE)。値そのものではなく、k8s の Secret/Key の
 # *名前*(pokedex-svc の manifest 検査。ADR-0105 §6・用途別の最小権限。ADR-0110)を指す
 # 定数だけを対象にする(秘密の値ではない)。
-readonly B_KEYVALUE_ALLOW='=[[:space:]]*"(mysql-auth|pokedex-dsn|pokedex-reader-dsn|pokedex-importer-dsn|pokedex-migrator-dsn|mysql-root-password)$'
+# 2つ目の代替(`\$\{[A-Za-z_][A-Za-z0-9_]*\}$`)は、scripts/up.sh が Secret の manifest を
+# heredoc で組み立てる行(例: `root-password: "${tidb_root_pw_value}"`。ADR-0211 §3.2)を許す。
+# シェル変数の埋め込みは実行時に openssl rand 等で生成した値に置き換わるため、Git 上のこの行自体には
+# 秘密の値が無い(hardcode されたパスワード文字列ではないことをこの ERE の形で保証する)。
+readonly B_KEYVALUE_ALLOW='=[[:space:]]*"(mysql-auth|pokedex-dsn|pokedex-reader-dsn|pokedex-importer-dsn|pokedex-migrator-dsn|mysql-root-password)$|\$\{[A-Za-z_][A-Za-z0-9_]*\}$'
 
 # 許可するメールアドレス(ERE。一致した文字列全体に対して評価)。
 #   noreply@anthropic.com : コミットの共同著者表記(公開情報)
