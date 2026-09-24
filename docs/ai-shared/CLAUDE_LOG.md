@@ -273,3 +273,25 @@
 
 ### Next
 ユーザーからの新規要望待ち
+
+## 2026-09-24〜25 タイプバランスレーン(Claude Code): M4 P7-1(監視スタック)
+
+### Done
+- 別セッション(damage calculation bug resolution)からM4 P7-1・P7-2への着手依頼があり、ユーザー本人に確認して承認を得た
+- ADR-0406を書き、P7-1(メトリクス計測 §1〜3、kube-prometheus-stack/Loki/Alloy導入 §4〜5)をquick-scanner→spec-writer→
+  implementer→criticの通常フローで実装
+- メトリクス計測(PR #201): 6サービスに`GET /metrics`。critic 1回目FAIL(method正規化漏れ、カーディナリティ無制限)
+  →修正→2回目PASS
+- スタック導入(PR #336): `scripts/observability-bootstrap.sh`(ADR-0405と同じ取得→SHA-256検証→適用の流儀)。
+  critic 1回目FAIL(重大1件: check-publishable誤検知未解消のまま完了報告、重要3件: lokiの構成がk3dで動かない・
+  誤ったlokiCanaryキー・plan.mdの完了表記が早い)→ 修正(implementerがセッション制限で中断したため私が引き継いで完了)
+  →2回目critic PASS→軽微指摘3件(ADR記述の精度・パスワード一時ファイルの権限・GrafanaのLokiデータソース欠落)も対応
+- 実クラスタ(k3d-pokecalc)で`scripts/observability-bootstrap.sh`を実際に実行し、全Pod起動・PVC Bound・
+  6 ServiceMonitor適用・balance(自レーンを再デプロイ)/calc/gatewayのscrapeがup・GrafanaのLokiデータソースで
+  実ログ取得まで確認
+
+### Open issues
+なし(judge/pokedex/speedの`/metrics`未反映は各レーンの次回再デプロイで解消見込み。ブロッカーではない)
+
+### Next
+M4 P7-2(SLO: 計算API p99<100ms・可用性、ダッシュボード)に着手
