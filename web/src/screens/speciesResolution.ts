@@ -7,15 +7,20 @@
 // resolveSpecies で返った実体をここに足していく。
 
 import { useCallback, useState } from "react";
-import type { Ability } from "../engine/types";
+import type { Ability, Move } from "../engine/types";
 import type { MasterSpecies, MasterSpeciesResolution } from "../master/types";
 
-/** 検索で解決した種族・特性の覚え書き(CalcScreen.tsx・ReverseScreen.tsx で共有する形)。 */
+/** 検索で解決した種族・特性・技の覚え書き(CalcScreen.tsx・ReverseScreen.tsx で共有する形)。 */
 export interface SpeciesResolutions {
   /** 種族を key で引く。master.species(全件)に無ければ、検索で解決した種族から探す。 */
   readonly speciesFor: (masterSpeciesList: readonly MasterSpecies[], key: string) => MasterSpecies | null;
   /** 特性の一覧(master.abilities に、検索で解決した特性を足したもの)。defaultAbility に渡す。 */
   readonly abilitiesFor: (masterAbilities: readonly Ability[], key: string) => readonly Ability[];
+  /**
+   * P4-17(ADR-0304 A-13): 技の一覧(master.moves に、検索で解決した技を足したもの)。
+   * learnsetMoves にそのまま渡せる形(abilitiesFor と同じ「全件の一覧 + 解決で覚えた分」)。
+   */
+  readonly movesFor: (masterMoves: readonly Move[], key: string) => readonly Move[];
   /** resolveSpecies の結果を覚える。 */
   readonly register: (resolution: MasterSpeciesResolution) => void;
 }
@@ -46,5 +51,13 @@ export function useSpeciesResolutions(): SpeciesResolutions {
     [resolved],
   );
 
-  return { speciesFor, abilitiesFor, register };
+  const movesFor = useCallback(
+    (masterMoves: readonly Move[], key: string): readonly Move[] => {
+      const extra = resolved.get(key)?.moves;
+      return extra === undefined ? masterMoves : [...masterMoves, ...extra];
+    },
+    [resolved],
+  );
+
+  return { speciesFor, abilitiesFor, movesFor, register };
 }

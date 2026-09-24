@@ -32,8 +32,11 @@ export interface MasterCapabilities {
    */
   readonly speciesList: boolean;
   /**
-   * MasterData.moves が使えるか。false なら技を選べない(`getSpecies.learnset` は技の ID 配列だけを返し、
-   * ID から技の実体を引く公開 API が無い。ADR-0304 §3。データ/API レーンの対応待ち)。
+   * MasterData.moves が**全件**そろっているか(speciesList と同じ「一覧として使えるか」の意味)。
+   * false でも技を選べないとは限らない: P4-17 以降、`MasterSpeciesSearch.resolveSpecies` が
+   * その種族の learnset を解決して返すので、**種族を選んだあとなら技を選べる**(ADR-0304 A-13)。
+   * false のときに使えないのは「全技の一覧が要る機能」(タイプバランスの診断。A-9)だけ。
+   * オンラインは `searchMoves` の limit 上限200 < 実データ515件のため false のまま(ADR-0304 §1)。
    */
   readonly moves: boolean;
   /**
@@ -82,13 +85,21 @@ export interface MasterSpeciesSummary {
 }
 
 /**
- * resolveSpecies の結果(P4-16)。種族の実体と、その種族の特性の実体。
- * 特性は「全件の一覧を引く公開 API が無い」ため種族ごとに付いてきて、呼び出し側が MasterData.abilities に
- * 足していく(defaultAbility が species.abilities の ID を引けるようにするため)。
+ * resolveSpecies の結果(P4-16)。種族の実体と、その種族の特性・技の実体。
+ * 特性・技は「全件の一覧を引く公開 API が無い」ため種族ごとに付いてきて、呼び出し側が
+ * MasterData.abilities / MasterData.moves に足していく(defaultAbility が species.abilities の ID を、
+ * learnsetMoves が species.learnset の ID を引けるようにするため)。
  */
 export interface MasterSpeciesResolution {
   readonly species: MasterSpecies;
   readonly abilities: readonly Ability[];
+  /**
+   * P4-17(ADR-0304 §3 の解消・A-13): species.learnset の ID を解決した技の実体。
+   * learnset の順のまま、マスタに無い ID は詰めて省く(`getMovesByIds` の契約と同じ)。
+   * 種族・特性が解決できても技が解決できなければ resolveSpecies 自体を失敗させる(A-13)ので、
+   * この配列が空なのは「その種族が技を1つも覚えない(または learnset が空)」ときだけ。
+   */
+  readonly moves: readonly Move[];
 }
 
 /**

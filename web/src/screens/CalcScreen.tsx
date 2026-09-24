@@ -251,7 +251,7 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
   // P4-16b(ADR-0304 A-2・A-9・A-10): 使える機能。capabilities を省いたマスタ(オフライン相当)は全部使える。
   const capabilities = masterCapabilities(master);
   // 検索で解決した種族・特性の覚え書き(capabilities.speciesList が true のときは常に空のまま。ADR-0304 A-10)。
-  const { speciesFor, abilitiesFor, register: registerSpeciesResolution } = useSpeciesResolutions();
+  const { speciesFor, abilitiesFor, movesFor, register: registerSpeciesResolution } = useSpeciesResolutions();
   const [attackerKey, setAttackerKey] = useState("");
   const [defenderKey, setDefenderKey] = useState("");
   const [attackerItemId, setAttackerItemId] = useState("");
@@ -301,9 +301,13 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     [master.items, defenderItemId],
   );
   const attackerMoves = useMemo(
-    () => (attackerSpecies === null ? [] : learnsetMoves(attackerSpecies, master.moves)),
-    [attackerSpecies, master.moves],
+    () =>
+      attackerSpecies === null ? [] : learnsetMoves(attackerSpecies, movesFor(master.moves, attackerKey)),
+    [attackerSpecies, master.moves, attackerKey, movesFor],
   );
+  // P4-17(ADR-0304 A-13): 技セレクトが使えるのは capabilities.moves が true、または攻撃側の技の候補が
+  // 1件以上あるとき(種族が解決済みで learnset が1件以上ある)。案内の表示条件もこれと同じにする。
+  const movesAvailable = capabilities.moves || attackerMoves.length > 0;
   const move = useMemo(
     () => attackerMoves.find((candidate) => candidate.id === moveId) ?? null,
     [attackerMoves, moveId],
@@ -319,17 +323,20 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
   function selectAttacker(key: string): void {
     setAttackerKey(key);
     const species = speciesFor(master.species, key);
-    setMoveId((prev) => resolveMoveId(species, master.moves, prev));
+    setMoveId((prev) => resolveMoveId(species, movesFor(master.moves, key), prev));
   }
 
   /**
-   * P4-16b(ADR-0304 A-10): 検索で攻撃側の種族が解決したとき。resolution.species をそのまま使う
-   * (register の setState は非同期なので、直後に speciesFor で引き直すと古い覚え書きのままになる)。
+   * P4-16b/P4-17(ADR-0304 A-10・A-13): 検索で攻撃側の種族が解決したとき。resolution.species・
+   * resolution.moves をそのまま使う(register の setState は非同期なので、直後に movesFor/speciesFor で
+   * 引き直すと古い覚え書きのままになる。既存の種族の扱いと同じ理由)。
    */
   function handleAttackerResolved(resolution: MasterSpeciesResolution): void {
     registerSpeciesResolution(resolution);
     setAttackerKey(resolution.species.key);
-    setMoveId((prev) => resolveMoveId(resolution.species, master.moves, prev));
+    // movesFor(master.moves, key) は使わない(register の setState 直後はまだ古い覚え書きのまま)。
+    // movesFor が最終的に返す形(master.moves + 解決で覚えた分)をここで直接組み立てる。
+    setMoveId((prev) => resolveMoveId(resolution.species, [...master.moves, ...resolution.moves], prev));
   }
 
   /** P4-16b(ADR-0304 A-10): 検索で防御側の種族が解決したとき(防御側は技を持たないので moveId は変えない)。 */
@@ -354,11 +361,12 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
 
   function swap(): void {
     const newAttackerSpecies = defenderSpecies;
+    const newAttackerMoves = movesFor(master.moves, defenderKey);
     setAttackerKey(defenderKey);
     setDefenderKey(attackerKey);
     setAttackerItemId(defenderItemId);
     setDefenderItemId(attackerItemId);
-    setMoveId((prev) => resolveMoveId(newAttackerSpecies, master.moves, prev));
+    setMoveId((prev) => resolveMoveId(newAttackerSpecies, newAttackerMoves, prev));
 
     if (!prefersReducedMotion()) {
       setSwapping(true);
@@ -573,8 +581,8 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
         />
       </div>
 
-      <MoveSelect moves={attackerMoves} value={moveId} onChange={setMoveId} disabled={!capabilities.moves} />
-      {!capabilities.moves && <p className="calc-screen__notice">{masterOnlineText.movesUnavailable}</p>}
+      <MoveSelect moves={attackerMoves} value={moveId} onChange={setMoveId} disabled={!movesAvailable} />
+      {!movesAvailable && <p className="calc-screen__notice">{masterOnlineText.movesUnavailable}</p>}
 
       <label className="calc-screen__compare">
         <input
@@ -779,7 +787,10 @@ interface MoveSelectProps {
   readonly moves: readonly Move[];
   readonly value: string;
   readonly onChange: (moveId: string) => void;
-  /** P4-16b(ADR-0304 A-5): capabilities.moves が false のとき、欄は残すが disabled にする。 */
+  /**
+   * P4-16b/P4-17(ADR-0304 A-5・A-13): 技の候補が1件も無いとき、欄は残すが disabled にする
+   * (capabilities.moves 単体ではなく、呼び出し側が「いま攻撃側の技の候補があるか」で決めた値を渡す)。
+   */
   readonly disabled?: boolean;
 }
 

@@ -130,9 +130,13 @@ export const appText = {
  * 操作を無効にしたうえでここの文言を添える(黙って空の選択肢を出さない。ADR-0304 §4)。
  */
 export const masterOnlineText = {
-  /** capabilities.moves が false のとき、技の選択に添える案内。 */
-  movesUnavailable:
-    "オンラインでは技を選べません(技の一覧に未対応のため、ダメージ計算はオフラインで行ってください)",
+  /**
+   * 技の候補が1件も無いとき(= 技のセレクトが disabled のとき)に添える案内。
+   * P4-17(ADR-0304 A-13)で表示条件が変わった: 以前は `capabilities.moves === false` で常に出していたが、
+   * 技は種族の解決と一緒に届くようになったので、「攻撃側がまだ決まっていない・解決中・その種族が技を
+   * 1つも覚えない」ときだけ出す。オンラインかどうかには触れない(画面はモードの名前を持たない。A-2)。
+   */
+  movesUnavailable: "技の候補がありません(ダメージを与える側のポケモンを選ぶと、覚える技が出ます)",
   /** capabilities.effects が false のとき、持ち物の候補比較(計算画面・逆算画面)に添える案内。 */
   itemCandidatesUnavailable: "オンラインでは持ち物の候補を比較できません(持ち物の効果データに未対応)",
   /** capabilities.speciesList が false のときの種族の検索欄のラベル。 */

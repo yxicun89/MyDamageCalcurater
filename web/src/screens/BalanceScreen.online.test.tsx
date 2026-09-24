@@ -209,3 +209,23 @@ describe("A-9 のガードが実際に効いていること(critic 指摘の回�
     expect(client.calls).toEqual(callsBeforeSwitch);
   });
 });
+
+describe("P4-17 の後もオンラインでは無効のまま(ADR-0304 A-13 の回帰ガード)", () => {
+  // P4-17 で計算画面・逆算画面の技は戻ったが、それは「種族を選ぶと、その種族の learnset が解決される」
+  // 経路であって、技の**全件一覧**は今も取れない。この画面は全件一覧(各枠の技を選ぶ UI)を前提にしており、
+  // 技検索 UI は P4-17b の積み残しなので、ここを「有効なのに技が1つも選べない」状態にしてはいけない。
+  test("ONLINE_MASTER_CAPABILITIES.moves は false のまま(全件一覧は取れない)", () => {
+    expect(ONLINE_MASTER_CAPABILITIES.moves).toBe(false);
+  });
+
+  test("オンラインのマスタでは、案内を出したまま技の枠も disabled にする", () => {
+    const master = limitedMaster(example, ONLINE_MASTER_CAPABILITIES);
+    renderScreen(master);
+
+    expect(master.moves).toEqual([]);
+    expect(screen.getByText(masterOnlineText.balanceUnavailable)).toBeInTheDocument();
+    for (const slot of [1, 2, 3, 4]) {
+      expect(within(memberGroup(1)).getByRole("combobox", { name: `技${String(slot)}` })).toBeDisabled();
+    }
+  });
+});
