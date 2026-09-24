@@ -239,6 +239,147 @@ function isErrorBody(value: unknown): value is Schemas["Error"] {
   return typeof record.code === "string" && typeof record.message === "string";
 }
 
+// ---- 応答の実行時検証(issue 67、ADR-0301 §4 追記) ----
+//
+// HTTP 200 で JSON として読めても、本文が契約(api/openapi.yaml)の応答の形とは限らない。写像関数
+// (mapCalcResult など)が実際に読むフィールドだけを、存在すること・JS 上の種類が合うことを再帰的に
+// 検査する型ガードをここに置く。列挙の値そのもの・数値の範囲・配列の件数・余分なフィールドは見ない
+// (サーバーが語彙を増やしても Web を壊さないため)。写像が `??` で既定値を補うフィールド
+// (ko.chancePercent・itemId・nature.plus/minus)は、欠落・null を許す。
+
+/** オブジェクト(配列・null を除く)かどうか。 */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === "number";
+}
+
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === "boolean";
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+/** 配列で、すべての要素が guard を満たすか。 */
+function isArrayOf<T>(value: unknown, guard: (item: unknown) => item is T): value is T[] {
+  return Array.isArray(value) && value.every(guard);
+}
+
+/** 写像が `??` で既定値を補う・捨てるフィールド用: 欠落・null は許し、あるなら型が合うこと。 */
+function isOptionalNullable(value: unknown, guard: (item: unknown) => boolean): boolean {
+  return value === undefined || value === null || guard(value);
+}
+
+const STAT_KEYS = ["hp", "atk", "def", "spa", "spd", "spe"] as const;
+
+/** 6ステータスの値(種族値・実数値・SP などに共用)。すべて数値。 */
+function isStatBlock(value: unknown): value is Schemas["StatBlock"] {
+  return isRecord(value) && STAT_KEYS.every((key) => isNumber(value[key]));
+}
+
+/**
+ * 性格補正の構造値。plus/minus は契約では必須だが、写像(mapNatureModifier)は `?? ""` で
+ * 既定値を補うので、欠落・null を許す(ADR-0301 §4 追記)。
+ */
+function isNatureModifier(value: unknown): value is Schemas["NatureModifier"] {
+  return (
+    isRecord(value) && isOptionalNullable(value.plus, isString) && isOptionalNullable(value.minus, isString)
+  );
+}
+
+/**
+ * 確定数/乱数n発。chancePercent は写像(mapCalcResult)が `?? 0` で既定値を補うので、
+ * 他の欠落許容フィールド(itemId・nature.plus/minus)と同じく欠落・null を許す(ADR-0301 §4 追記)。
+ */
+function isKoChance(value: unknown): value is Schemas["KOChance"] {
+  return (
+    isRecord(value) &&
+    isNumber(value.hits) &&
+    isBoolean(value.guaranteed) &&
+    isOptionalNullable(value.chancePercent, isNumber) &&
+    isNumber(value.displayChancePercent)
+  );
+}
+
+/** mapCalcResult が読むフィールドをすべて検査する(入れ子の ko も同じ規則)。 */
+function isCalcResult(value: unknown): value is Schemas["CalcResult"] {
+  return (
+    isRecord(value) &&
+    isArrayOf(value.rolls, isNumber) &&
+    isNumber(value.minDamage) &&
+    isNumber(value.maxDamage) &&
+    isNumber(value.minPercent) &&
+    isNumber(value.maxPercent) &&
+    isNumber(value.defenderHP) &&
+    isNumber(value.effectiveness) &&
+    isBoolean(value.stab) &&
+    isString(value.category) &&
+    isKoChance(value.ko)
+  );
+}
+
+/** BulkDefender: sp・stats は StatBlock、nature は NatureModifier(natureId は捨てるので見ない)。 */
+function isBulkDefender(value: unknown): value is Schemas["BulkDefender"] {
+  return (
+    isRecord(value) && isStatBlock(value.sp) && isNatureModifier(value.nature) && isStatBlock(value.stats)
+  );
+}
+
+/** BulkCalcRow: itemId は省略時 "" で埋める(欠落・null を許す)。result は CalcResult と同じ規則で再帰的に検査。 */
+function isBulkCalcRow(value: unknown): value is Schemas["BulkCalcRow"] {
+  return (
+    isRecord(value) &&
+    isString(value.preset) &&
+    isString(value.presetLabel) &&
+    isOptionalNullable(value.itemId, isString) &&
+    isBulkDefender(value.defender) &&
+    isCalcResult(value.result)
+  );
+}
+
+/** mapBulkResult が読むフィールドをすべて検査する。 */
+function isBulkCalcResult(value: unknown): value is Schemas["BulkCalcResult"] {
+  return isRecord(value) && isString(value.defenderSpeciesKey) && isArrayOf(value.rows, isBulkCalcRow);
+}
+
+/** SP の区間(min・max とも数値)。 */
+function isSpRange(value: unknown): value is Schemas["SPRange"] {
+  return isRecord(value) && isNumber(value.min) && isNumber(value.max);
+}
+
+/** ReverseCandidate: itemId は省略時 "" で埋める(欠落・null を許す)。 */
+function isReverseCandidate(value: unknown): value is Schemas["ReverseCandidate"] {
+  return (
+    isRecord(value) &&
+    isString(value.natureClass) &&
+    isNatureModifier(value.nature) &&
+    isOptionalNullable(value.itemId, isString) &&
+    isArrayOf(value.ranges, isSpRange) &&
+    isNumber(value.spCount) &&
+    isBoolean(value.exact) &&
+    isNumber(value.mismatch) &&
+    isNumber(value.support) &&
+    isNumber(value.minPercent) &&
+    isNumber(value.maxPercent)
+  );
+}
+
+/** mapReverseResult が読むフィールドをすべて検査する。 */
+function isReverseResult(value: unknown): value is Schemas["ReverseResult"] {
+  return (
+    isRecord(value) &&
+    isString(value.side) &&
+    isString(value.stat) &&
+    isNumber(value.assumedHpSp) &&
+    isNumber(value.exactCount) &&
+    isArrayOf(value.candidates, isReverseCandidate)
+  );
+}
+
 /**
  * 計算の API 実装(ADR-0301)。画面が渡す実体の DTO を実体 → ID に写して POST し、応答を DTO に戻す。
  * 性格が解決できない・engine のカスタムプリセット定義は fetch せずに失敗を返す。通信・応答の失敗は
@@ -252,8 +393,15 @@ export function createApiEngine(input: CreateApiEngineInput): CalcEngine {
    * signal(issue 113、ADR-0300 §11・ADR-0301 §4 追記): 渡さなければ init に signal を付けない。
    * 呼ぶ前に abort 済みなら fetch せずに request_aborted を返す。fetch・本文の読み取りが abort で
    * 失敗したときも request_aborted にする(abort していない通信失敗は従来どおり engine_unavailable)。
+   * guard(issue 67、ADR-0301 §4 追記): 2xx の本文を実行時に検証し、契約外なら engine_unavailable
+   * にする(本文が読めたうえでの契約違反は、abort 済みでも engine_unavailable。通信は成立しているため)。
    */
-  async function postJson(path: string, body: unknown, signal?: AbortSignal): Promise<EngineResult<unknown>> {
+  async function postJson<T>(
+    path: string,
+    body: unknown,
+    guard: (value: unknown) => value is T,
+    signal?: AbortSignal,
+  ): Promise<EngineResult<T>> {
     if (isAborted(signal)) {
       return abortedError();
     }
@@ -286,6 +434,9 @@ export function createApiEngine(input: CreateApiEngineInput): CalcEngine {
         ? { ok: false, error: { code: parsed.code, message: parsed.message } }
         : unavailableError();
     }
+    if (!guard(parsed)) {
+      return unavailableError();
+    }
     return { ok: true, value: parsed };
   }
 
@@ -310,11 +461,11 @@ export function createApiEngine(input: CreateApiEngineInput): CalcEngine {
       if (options !== undefined) {
         body.options = options;
       }
-      const response = await postJson(CALC_PATHS.calc, body, signal);
+      const response = await postJson(CALC_PATHS.calc, body, isCalcResult, signal);
       if (!response.ok) {
         return response;
       }
-      return { ok: true, value: mapCalcResult(response.value as Schemas["CalcResult"]) };
+      return { ok: true, value: mapCalcResult(response.value) };
     },
 
     async calcBulk(request: BulkRequest, signal?: AbortSignal): Promise<EngineResult<BulkResult>> {
@@ -347,11 +498,11 @@ export function createApiEngine(input: CreateApiEngineInput): CalcEngine {
       if (request.itemVariants !== undefined) {
         body.itemVariants = request.itemVariants.map((item) => item?.id ?? null);
       }
-      const response = await postJson(CALC_PATHS.bulk, body, signal);
+      const response = await postJson(CALC_PATHS.bulk, body, isBulkCalcResult, signal);
       if (!response.ok) {
         return response;
       }
-      return { ok: true, value: mapBulkResult(response.value as Schemas["BulkCalcResult"]) };
+      return { ok: true, value: mapBulkResult(response.value) };
     },
 
     async calcReverse(request: ReverseRequest, signal?: AbortSignal): Promise<EngineResult<ReverseResult>> {
@@ -380,11 +531,11 @@ export function createApiEngine(input: CreateApiEngineInput): CalcEngine {
       if (request.itemCandidates !== undefined) {
         body.itemCandidates = request.itemCandidates.map((item) => item?.id ?? null);
       }
-      const response = await postJson(CALC_PATHS.reverse, body, signal);
+      const response = await postJson(CALC_PATHS.reverse, body, isReverseResult, signal);
       if (!response.ok) {
         return response;
       }
-      return { ok: true, value: mapReverseResult(response.value as Schemas["ReverseResult"]) };
+      return { ok: true, value: mapReverseResult(response.value) };
     },
   };
 }
