@@ -115,8 +115,6 @@ const terrainNames = {none:undefined,electric:'Electric',grassy:'Grassy',misty:'
 function vector(gen, label, a, d, moveName, options={}) {
   const attack=individual(gen, a, options.a), defend=individual(gen, d, options.d);
   const weather=options.weather || 'none', terrain=options.terrain || 'none';
-  // ADR-0005 assumes grounded combatants. Restrict terrain cases in advance accordingly.
-  if (terrain!=='none') assert(!attack.p.hasType('Flying') && !defend.p.hasType('Flying'));
   const screen=options.screen;
   const m = new Move(gen, moveName, {isCrit:!!options.critical});
   assert(m.bp>0 && m.hits===1);
@@ -166,7 +164,7 @@ championsFixed.push(vector(genC,'misty-dragon','Goodra','Snorlax','Dragon Claw',
 // (急所・壁・天候・ランク)」の3件。Dry Skin・Storm Drain は入れない(ADR-0106 §限界1・2)。
 const immunityCases = [
   {slug:'levitate', ability:'Levitate', attacker:'Garchomp', defender:'Snorlax',
-    blockedMove:'Earth Power', controlMove:'Flamethrower', comboOptions:{critical:true, d:{ability:'Levitate'}}},
+    blockedMove:'Earth Power', controlMove:'Flamethrower', comboOptions:{critical:true, terrain:'misty', d:{ability:'Levitate'}}},
   {slug:'earth-eater', ability:'Earth Eater', attacker:'Garchomp', defender:'Snorlax',
     blockedMove:'Drill Run', controlMove:'Flamethrower', comboOptions:{screen:'AuroraVeil', d:{ability:'Earth Eater'}}},
   {slug:'water-absorb', ability:'Water Absorb', attacker:'Charizard', defender:'Blastoise',
@@ -188,6 +186,32 @@ for (const c of immunityCases) {
   championsFixed.push(vector(genC,`${c.slug}/immune`,c.attacker,c.defender,c.blockedMove,{d:{ability:c.ability}}));
   championsFixed.push(vector(genC,`${c.slug}/control`,c.attacker,c.defender,c.controlMove,{d:{ability:c.ability}}));
   championsFixed.push(vector(genC,`${c.slug}/combined`,c.attacker,c.defender,c.blockedMove,c.comboOptions));
+}
+
+// --- フィールドの接地判定(issue #231 / ADR-0116) ----------------------------------
+// 威力を上げる補正(エレキ・グラス・サイコ)は攻撃側、ミストのドラゴン半減は防御側が接地しているときだけ
+// (oracle: util.isGrounded = ひこうタイプでない かつ Levitate でない かつ Air Balloon でない)。
+// 浮いている側(ひこうタイプ・ふゆう)と、反対側だけが浮いている対照を両方置く。
+const groundingCases = [
+  ['electric-flying-attacker','Charizard','Snorlax','Thunderbolt',{terrain:'electric'}],
+  ['grassy-flying-attacker','Corviknight','Snorlax','Energy Ball',{terrain:'grassy'}],
+  ['psychic-flying-attacker','Talonflame','Snorlax','Psychic',{terrain:'psychic'}],
+  ['electric-levitate-attacker','Pikachu','Snorlax','Thunderbolt',{terrain:'electric',a:{ability:'Levitate'}}],
+  ['psychic-levitate-attacker','Gengar','Snorlax','Psychic',{terrain:'psychic',a:{ability:'Levitate'}}],
+  ['misty-flying-defender','Goodra','Dragonite','Dragon Claw',{terrain:'misty'}],
+  ['misty-levitate-defender','Goodra','Snorlax','Dragon Pulse',{terrain:'misty',d:{ability:'Levitate'}}],
+  // 対照: 反対側だけが浮いている(補正は掛かる)。
+  ['electric-flying-defender','Pikachu','Corviknight','Thunderbolt',{terrain:'electric'}],
+  ['grassy-levitate-defender','Garchomp','Snorlax','Energy Ball',{terrain:'grassy',d:{ability:'Levitate'}}],
+  ['misty-flying-attacker','Dragonite','Snorlax','Dragon Claw',{terrain:'misty'}],
+  ['misty-levitate-attacker','Garchomp','Snorlax','Dragon Claw',{terrain:'misty',a:{ability:'Levitate'}}],
+];
+for (const [slug,a,d,m,options] of groundingCases) {
+  const v=vector(genC,`terrain-grounding/${slug}`,a,d,m,options);
+  // 意図した側が浮いている/接地していることを oracle 側でも確かめる(種族の差し替えで黙って崩れないように)。
+  const airborne = side => {const p=individual(genC, side==='a'?a:d, options[side]).p; return p.hasType('Flying')||p.hasAbility('Levitate');};
+  assert.equal(airborne('a')||airborne('d'), true, `terrain-grounding/${slug} に浮いている側が無い`);
+  championsFixed.push(v);
 }
 
 // --- legacy-effects の固定部分(gen9。元の種族のまま) --------------------------
@@ -237,11 +261,10 @@ function randomSP(rng){
   return sp;
 }
 const randomCases=[];
-const grounded=species.filter(s=>!s.types.includes('Flying'));
 for(let i=0;i<10000;i++) {
   const terrain=pick(['none','electric','grassy','misty','psychic']);
-  const pool=terrain==='none'?species:grounded;
-  const a=pick(pool),d=pick(pool),m=pick(moves);
+  // issue #231 / ADR-0116: 地形ありでもひこうタイプを除外しない(接地判定を検証する)。
+  const a=pick(species),d=pick(species),m=pick(moves);
   // legacy 効果(Choice Band / Choice Specs / Assault Vest / Steelworker)はプールから除外(ADR-0002 §決定2)。
   const attackItem=pick(['','Life Orb','Expert Belt','Charcoal','Muscle Band','Wise Glasses']);
   const defendItem=pick(['','Occa Berry','Chilan Berry']);
@@ -263,7 +286,6 @@ const legacySpeciesPool = species.filter(s => {
   return s9 && sameBaseStatsAndTypes(s, s9);
 });
 assert(legacySpeciesPool.length > 0, 'legacy-effects 用の種族プールが空(Champions と gen9 の交差が無い)');
-const legacyGrounded = legacySpeciesPool.filter(s=>!s.types.includes('Flying'));
 // Champions のメイン random(seed=0x504f4b45)とは別の乱数列(metadata.oracles[].seed に記録)。
 const legacyRandomSeed = 0x4c454741; // "LEGA"
 let legacyState = legacyRandomSeed;
@@ -294,8 +316,7 @@ let legacyCaseIndex=0;
 for (const layer of legacyRandomLayers) {
   for(let i=0;i<layer.count;i++) {
     const terrain=legacyPick(['none','electric','grassy','misty','psychic']);
-    const pool=terrain==='none'?legacySpeciesPool:legacyGrounded;
-    const a=legacyPick(pool),d=legacyPick(pool),m=legacyPick(layer.moves);
+    const a=legacyPick(legacySpeciesPool),d=legacyPick(legacySpeciesPool),m=legacyPick(layer.moves);
     let attackItem=legacyPick(['','Life Orb','Expert Belt','Charcoal','Muscle Band','Wise Glasses']);
     let defendItem=legacyPick(['','Occa Berry','Chilan Berry']);
     let attackAbility=legacyPick(['','Adaptability','Water Bubble']);
@@ -402,7 +423,7 @@ const metadata={
     {scope:'species',names:[...genC.species].filter(s=>s.baseStats.hp===1).map(s=>s.name),reason:'HP=1 special mechanic is outside Champions SP formula; not present in the current Champions set'},
     {scope:'moves',reason:'Only the listed fixed-power single-hit moves; excludes variable/fixed damage, multi-hit, forced criticals, alternate attack/defense stats, screen removal, terrain-specific move mechanics, tera/Z/Max moves'},
     {scope:'abilities/items',reason:'Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2)'},
-    {scope:'terrain',reason:'Flying species excluded from terrain-enabled random/fixed cases; ADR-0005 assumes grounded, no Levitate/Air Balloon admitted'},
+    {scope:'terrain',reason:'Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Psychic Terrain priority block, Terrain Pulse etc.) are outside the move list'},
     {scope:'battle',reason:'No double/tera/Dynamax/form transformations or unsupported status effects'},
     {scope:'KO',reason:'Smogon residual/consumable multi-turn model differs from ADR-0006; direct smogonKO cross-check only residual/consumable-free fixed cases with 1-4 hits'},
   ],

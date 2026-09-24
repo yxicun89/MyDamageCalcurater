@@ -408,6 +408,7 @@ func fullAbilityEffect() engine.AbilityEffect {
 		DefAbsorbTypes:       map[engine.Type]engine.AbsorbEffect{"water": {HealNumerator: 1, HealDenominator: 4}},
 		ReduceSuperEffective: 3072,
 		IgnoresBurn:          true,
+		Airborne:             true,
 	}
 }
 
@@ -453,6 +454,8 @@ func TestAbilityEffectRoundTrip(t *testing.T) {
 		{"全フィールド", fullAbilityEffect()},
 		{"タイプ一致補正だけ", engine.AbilityEffect{StabMod: 8192}},
 		{"やけど無視だけ", engine.AbilityEffect{IgnoresBurn: true}},
+		{"浮いているだけ(ADR-0116)", engine.AbilityEffect{Airborne: true}},
+		{"無効と浮いているの組合せ(ふゆうの形。表にあるタイプで)", engine.AbilityEffect{DefImmuneTypes: []engine.Type{"grass"}, Airborne: true}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -567,6 +570,8 @@ func TestDecodeAbilityEffectRejectsInvalidJSON(t *testing.T) {
 		{"攻撃強化の倍率だけ", `{"OffBoostTypeMod":6144}`},
 		{"攻撃強化のタイプが表に無い", `{"OffBoostType":"testunknown","OffBoostTypeMod":6144}`},
 		{"後続のデータ", `{"StabMod":8192}x`},
+		{"浮いているが false(省略で表す)", `{"Airborne":false}`},
+		{"浮いているが真偽値でない", `{"Airborne":1}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

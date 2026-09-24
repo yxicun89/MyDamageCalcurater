@@ -52,15 +52,19 @@ const goldenImmunityMinPerAbility = 3
 // goldenUnchangedFiles は、この変更で1バイトも変わってはいけないゴールデンと、その sha256
 // (P2-3b の作業開始時点。testdata/golden/metadata.json の files より)。
 //
+// 更新履歴: issue #231(ADR-0116)で random.jsonl.gz と legacy-effects.jsonl.gz を意図して
+// 再生成した(地形ありのケースからひこうタイプを除外していたのを外し、接地判定を検証するため。
+// 乱数列は同じで、種族プールだけが変わる)。値はその再生成後のもの。
+//
 // 無効・吸収の追加は fixed.json にベクタを足すだけで、Champions の random の特性プールも
 // legacy-effects も相性表も触らない(ADR-0002 §決定 2・ADR-0106 §決定 8)。ここが変わったら、
 // 生成器の乱数列が動いたか、既存の期待値を書き換えたかのどちらかで、どちらも P2-3b では誤り。
 var goldenUnchangedFiles = map[string]string{
-	"random.jsonl.gz":          "8a074328e0e2d5ba606b7f4da8f64852b6c8c949d2db2f1409d99d0b3c47d559",
+	"random.jsonl.gz":          "ac0120d1abc50267a837b41f4a6b102608f153f4609712ececbeda91fb7421b9",
 	"attack-species.jsonl.gz":  "521f11af3cb8a57d3c03ffd933424a5ef25868a9d9be18fb708aa3d93d2e0339",
 	"defense-species.jsonl.gz": "c28659dab4c9f6be0483582890f960a2ac710daa21979713d01a3db5d19b5507",
 	"stats-species.jsonl.gz":   "587d63614467798da38a361c50f0963b95196600e6aa8572688e03386943fa85",
-	"legacy-effects.jsonl.gz":  "5dd0fcfd40baf01ac884315c69f2d26dd11bec8ee0bcff27930b5522c78c2d68",
+	"legacy-effects.jsonl.gz":  "00c950bbead7ce8e20351bcab731ac7944606419b78d33f924803342172df725",
 	"typechart.json":           "962b20126fb1996c13b05de4533fa94f90266cb08cc5e9ab3d093a038efa2228",
 }
 

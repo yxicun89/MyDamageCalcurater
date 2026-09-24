@@ -72,7 +72,7 @@
     },
     {
       "scope": "terrain",
-      "reason": "Flying species excluded from terrain-enabled random/fixed cases; ADR-0005 assumes grounded, no Levitate/Air Balloon admitted"
+      "reason": "Grounding (ADR-0115) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Psychic Terrain priority block, Terrain Pulse etc.) are outside the move list"
     },
     {
       "scope": "battle",
@@ -129,12 +129,12 @@
   ],
   "files": {
     "fixed.json": {
-      "count": 196,
-      "sha256": "1e113aa921417cd10577f8b151736d2ac28f247a1ded11ac43dfa38fa691fcbb"
+      "count": 207,
+      "sha256": "b2918310fafc126b356d8c6f468d4baa2383b5d218181417ef0f111b89228683"
     },
     "random.jsonl.gz": {
       "count": 10000,
-      "sha256": "8a074328e0e2d5ba606b7f4da8f64852b6c8c949d2db2f1409d99d0b3c47d559"
+      "sha256": "ac0120d1abc50267a837b41f4a6b102608f153f4609712ececbeda91fb7421b9"
     },
     "attack-species.jsonl.gz": {
       "count": 7160,
@@ -150,7 +150,7 @@
     },
     "legacy-effects.jsonl.gz": {
       "count": 3851,
-      "sha256": "5dd0fcfd40baf01ac884315c69f2d26dd11bec8ee0bcff27930b5522c78c2d68"
+      "sha256": "00c950bbead7ce8e20351bcab731ac7944606419b78d33f924803342172df725"
     },
     "typechart.json": {
       "count": 324,
