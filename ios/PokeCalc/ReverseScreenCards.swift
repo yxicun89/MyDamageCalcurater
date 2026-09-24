@@ -26,17 +26,17 @@ struct ReverseMyCardView: View {
             .accessibilityHint("ポケモンを変える")
             .sheet(isPresented: $isSpeciesSearchPresented) {
                 SpeciesSearchSheet(viewModel: viewModel) { option in
-                    Task { await viewModel.selectMySpecies(key: option.key) }
+                    viewModel.scheduleLatest { await $0.selectMySpecies(key: option.key) }
                 }
             }
 
             Menu {
                 Button(BulkRowDisplay.itemLabel(itemId: nil, items: viewModel.itemOptions)) {
-                    Task { await viewModel.selectMyItem(id: nil) }
+                    viewModel.scheduleLatest { await $0.selectMyItem(id: nil) }
                 }
                 ForEach(viewModel.itemOptions, id: \.id) { item in
                     Button(item.nameJa) {
-                        Task { await viewModel.selectMyItem(id: item.id) }
+                        viewModel.scheduleLatest { await $0.selectMyItem(id: item.id) }
                     }
                 }
             } label: {
@@ -71,7 +71,7 @@ struct ReverseOpponentCardView: View {
             .accessibilityHint("ポケモンを変える")
             .sheet(isPresented: $isSpeciesSearchPresented) {
                 SpeciesSearchSheet(viewModel: viewModel) { option in
-                    Task { await viewModel.selectOpponentSpecies(key: option.key) }
+                    viewModel.scheduleLatest { await $0.selectOpponentSpecies(key: option.key) }
                 }
             }
         }

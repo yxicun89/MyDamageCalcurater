@@ -20,6 +20,12 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     /// 変えずに通すため、また nil のときは `UserDefaults` に触れずに済むため。
     private let teamStore: (any TeamStore)?
 
+    // MARK: - 入力 Task の管理(issue #113。ADR-0501「issue #113 の受け入れ条件(iOS 側)」3章・8章)
+
+    /// 画面からの入力操作の Task を1つだけ保持する(計算画面はすべて確定操作なので debounce は
+    /// 持たせない。3章「判断」)。
+    private let inputTaskRunner = LatestTaskRunner()
+
     // MARK: - 検索(issue #68。ADR-0501「issue #68」3〜6章・10章)
 
     /// 種族・技の検索欄1つ分の状態機械(デバウンス・世代保護は `MasterSearchField` に任せる)。
@@ -153,9 +159,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
             try reselectMove(preferringCurrent: nil)
         } catch {
             guard token == latestRequestToken else { return }
-            self.error = CalcScreenError(error)
-            rows = []
-            isLoading = false
+            handleInputFailure(error)
             return
         }
         await recalculate(token: token)
@@ -201,9 +205,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
             try reselectMove(preferringCurrent: selection.individual.moveId)
         } catch {
             guard token == latestRequestToken else { return }
-            self.error = CalcScreenError(error)
-            rows = []
-            isLoading = false
+            handleInputFailure(error)
             return
         }
         guard token == latestRequestToken else { return }
@@ -346,6 +348,40 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         return parts.joined(separator: " / ")
     }
 
+    // MARK: - 入力 Task の管理(issue #113。ADR-0501「issue #113 の受け入れ条件(iOS 側)」8章)
+
+    /// 確定操作(select・toggle・入れ替え・構築からの呼び出し)用。先行 Task を cancel し、
+    /// ただちに `operation` を呼ぶ(A1・A4)。View は
+    /// `viewModel.scheduleLatest { await $0.selectAttackerItem(id: id) }` の形で呼ぶ(`[weak viewModel]`
+    /// を書かせないため、`self` を引数で渡す。8章「判断」)。
+    @discardableResult
+    public func scheduleLatest(_ operation: @escaping @MainActor @Sendable (CalcViewModel) async -> Void) -> Task<Void, Never> {
+        inputTaskRunner.schedule(debounce: .zero) { [weak self] in
+            guard let self else { return }
+            await operation(self)
+        }
+    }
+
+    /// 保持中の入力 Task を cancel する(A6。View は `.onDisappear` で呼ぶ)。
+    public func cancelPendingWork() {
+        inputTaskRunner.cancel()
+    }
+
+    /// 入力操作から生まれる**すべての** `catch`(`species(key:)`・`calcBulk` のどちらが投げた
+    /// エラーでも)が使う共通処理(issue #113 A5。ADR-0501「issue #113」5章「ViewModel の各 catch は、
+    /// キャンセルとそれ以外を分ける」)。`CancellationError` は画面のエラーにしない(`rows` も消さず、
+    /// 表示中の最後の結果を残す。`isLoading` だけ解く)。それ以外は `error` を立てて `rows` を空にする。
+    /// 呼び出し元は `guard token == latestRequestToken else { return }` の後にこれを呼ぶこと。
+    private func handleInputFailure(_ error: Error) {
+        guard !(error is CancellationError) else {
+            isLoading = false
+            return
+        }
+        self.error = CalcScreenError(error)
+        rows = []
+        isLoading = false
+    }
+
     // MARK: - 内部
 
     /// 入力操作の入口。世代を1つ進めて返す。以降その操作から生まれる `await` はすべてこの番号で
@@ -368,9 +404,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
             try reselectMove(preferringCurrent: previousMoveId)
         } catch {
             guard token == latestRequestToken else { return }
-            self.error = CalcScreenError(error)
-            rows = []
-            isLoading = false
+            handleInputFailure(error)
             return
         }
         await recalculate(token: token)
@@ -425,9 +459,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
             request = try buildRequest()
         } catch {
             guard token == latestRequestToken else { return }
-            self.error = CalcScreenError(error)
-            rows = []
-            isLoading = false
+            handleInputFailure(error)
             return
         }
         await performCalc(request, token: token)
@@ -471,9 +503,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
             isLoading = false
         } catch {
             guard token == latestRequestToken else { return }
-            self.error = CalcScreenError(error)
-            rows = []
-            isLoading = false
+            handleInputFailure(error)
         }
     }
 }
