@@ -260,6 +260,18 @@ func (q *Querier) GetSpeciesByKey(_ context.Context, key string) (store.Species,
 	return store.Species{}, sql.ErrNoRows
 }
 
+func (q *Querier) GetMove(_ context.Context, id string) (store.GetMoveRow, error) {
+	if err := q.record("GetMove", id); err != nil {
+		return store.GetMoveRow{}, err
+	}
+	for _, m := range q.Moves {
+		if m.ID == id {
+			return store.GetMoveRow{ID: m.ID, NameJa: m.NameJa, Type: m.Type, Category: m.Category, Power: m.Power, Priority: m.Priority}, nil
+		}
+	}
+	return store.GetMoveRow{}, sql.ErrNoRows
+}
+
 func (q *Querier) ListSpeciesAbilityNames(_ context.Context, speciesKey string) ([]store.ListSpeciesAbilityNamesRow, error) {
 	if err := q.record("ListSpeciesAbilityNames", speciesKey); err != nil {
 		return nil, err

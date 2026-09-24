@@ -12,7 +12,7 @@ import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { beforeAll, describe, expect, test } from "vitest";
 import { defaultAbility, defensiveItemCandidates, toEngineSpecies } from "../domain/requests";
 import { firstDamagingMove, learnsetMoves } from "../domain/moves";
-import type { BulkRequest, Move } from "../engine/types";
+import type { BulkRequest, Item, Move } from "../engine/types";
 import { typeNameJa, type TypeId } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
@@ -722,5 +722,52 @@ describe("攻撃側のプリセット(P4-3)", () => {
       sp: { hp: 0, atk: 0, def: 0, spa: 32, spd: 0, spe: 0 },
       nature: { plus: "spa", minus: "atk" },
     });
+  });
+});
+
+// P4-19(issue #110、ADR-0208、DECISIONS.md 2026-09-23): itemVariants は「持ち物なし」を含めて 64 通りまで
+// (api/openapi.yaml の BulkCalcRequest.itemVariants の maxItems)。超えたまま送ると API は 400 invalid_input、
+// engine も上限超過で失敗するので、画面に渡す前に先頭から絞り込み、絞り込んだことを利用者に出す。
+// 期待値の 64 は契約から直接書く(定数とのずれは domain/requestLimits.test.ts が検出する)。
+describe("持ち物候補の件数の上限(issue #110)", () => {
+  const itemsTruncatedNotice = "持ち物の候補が多いため、先頭から64通りまでで計算しています";
+
+  /** 物理・特殊のどちらの技でも防御側の候補になる架空の持ち物を count 件(マスタの順)。 */
+  function defenseItems(count: number): Item[] {
+    return Array.from({ length: count }, (_value, index) => ({
+      id: `example-many-def-${String(index)}`,
+      nameJa: `テスト防御${String(index)}`,
+      effect: { statMods: { def: 6144, spd: 6144 } },
+    }));
+  }
+
+  async function compareWithItems(count: number): Promise<FakeEngine> {
+    const user = userEvent.setup();
+    const engine = createFakeEngine();
+    render(<CalcScreen engine={engine} master={{ ...master, items: defenseItems(count) }} />);
+    await choosePair(user, speciesAt(0), speciesAt(1));
+    await user.click(screen.getByRole("checkbox", { name: "持ち物の候補も比較" }));
+    return engine;
+  }
+
+  test("ちょうど64通り(なし + 63件)なら全部渡し、絞り込みの案内は出さない", async () => {
+    const engine = await compareWithItems(63);
+    await waitFor(() => {
+      expect(lastRequest(engine).itemVariants).toHaveLength(64);
+    });
+    expect(screen.queryByText(itemsTruncatedNotice)).toBeNull();
+  });
+
+  test("64通りを超えるときは64通りに絞って渡し、絞り込んだことを画面に出す", async () => {
+    const engine = await compareWithItems(64);
+    await waitFor(() => {
+      expect(lastRequest(engine).itemVariants).toHaveLength(64);
+    });
+    // 先頭は持ち物なし、続きはマスタの順のまま(並べ替え・間引きをしない)
+    const sent = lastRequest(engine).itemVariants;
+    expect(sent?.[0]).toBeNull();
+    expect(sent?.[1]?.id).toBe("example-many-def-0");
+    expect(sent?.at(-1)?.id).toBe("example-many-def-62");
+    expect(screen.getByText(itemsTruncatedNotice)).toBeInTheDocument();
   });
 });

@@ -88,6 +88,18 @@ function urlOf(input: RequestInfo | URL): URL {
   return new URL(typeof input === "string" ? input : input.url, "http://localhost/");
 }
 
+/**
+ * fetch の第1引数を、基点を足さずに URL にする(相対パスなら TypeError で落ちる)。
+ * urlOf のダミーの基点は相対パスを黙って吸収してしまうので、「基点 URL を使っているか」を見るときは
+ * こちらを使う(P4-16c(3)。BASE_URL の origin はダミーの基点と別のホストにしてある)。
+ */
+function absoluteUrlOf(input: RequestInfo | URL): URL {
+  if (input instanceof URL) {
+    return input;
+  }
+  return new URL(typeof input === "string" ? input : input.url);
+}
+
 /** パスごとに応答を決める fake fetch(応答を用意していないパスを引いたらテストを落とす)。 */
 function routedFetch(routes: Partial<Record<string, () => Response>>) {
   return vi.fn<typeof fetch>((input) => {
@@ -116,12 +128,15 @@ function createSource(fetchImpl: typeof fetch): SearchableMasterSource {
   return createOnlineMasterSource({ baseUrl: BASE_URL, fetch: fetchImpl, ids });
 }
 
-/** fetch の呼び出しのうち、pathname が一致する最初のものを返す。 */
-function callTo(fetchMock: ReturnType<typeof okFetch>, pathname: string): { url: URL; init: RequestInit } {
+/** fetch の呼び出しのうち、pathname が一致する最初のもの(input は fetch に渡った生の値)。 */
+function callTo(
+  fetchMock: ReturnType<typeof okFetch>,
+  pathname: string,
+): { url: URL; init: RequestInit; input: RequestInfo | URL } {
   for (const [input, init] of fetchMock.mock.calls) {
     const url = urlOf(input);
     if (url.pathname === pathname) {
-      return { url, init: init ?? {} };
+      return { url, init: init ?? {}, input };
     }
   }
   throw new Error(`${pathname} への fetch が無い`);
@@ -149,11 +164,13 @@ test("持ち物は基点 URL からの相対パスを limit=200(公開 API の�
   expect(url.searchParams.has("q")).toBe(false);
 });
 
-test("性格はクエリなしで引く(listNatures は無条件に全件)", async () => {
+test("性格は基点 URL からの相対パスをクエリなしで引く(listNatures は無条件に全件)", async () => {
   const fetchMock = okFetch();
   await createSource(fetchMock).load();
-  const { url } = callTo(fetchMock, PATHS.natures);
+  const { url, input } = callTo(fetchMock, PATHS.natures);
   expect([...url.searchParams.keys()]).toEqual([]);
+  // 持ち物と同じく、基点 URL の origin から引く(P4-16c(3))。
+  expect(absoluteUrlOf(input).origin).toBe(new URL(BASE_URL).origin);
 });
 
 test("基点 URL が同じオリジン(api/config.ts の既定 '/')でも load できる(new URL(path, '/') は Invalid URL になる)", async () => {
@@ -248,12 +265,13 @@ test("searchSpecies は空のクエリでは fetch せず空を返す(空 = 全�
   expect(fetchMock).not.toHaveBeenCalled();
 });
 
-test("searchSpecies は前方一致の q と limit=50 で引く", async () => {
+test("searchSpecies は基点 URL から、前方一致の q と limit=50 で引く", async () => {
   const fetchMock = okFetch();
   await createSource(fetchMock).search.searchSpecies("テスト");
-  const { url } = callTo(fetchMock, PATHS.species);
+  const { url, input } = callTo(fetchMock, PATHS.species);
   expect(url.searchParams.get("q")).toBe("テスト");
   expect(url.searchParams.get("limit")).toBe(String(SPECIES_SEARCH_LIMIT));
+  expect(absoluteUrlOf(input).origin).toBe(new URL(BASE_URL).origin);
 });
 
 test("searchSpecies は前後の空白を落としてから引く", async () => {
@@ -282,11 +300,13 @@ test("searchSpecies は失敗を握りつぶさない(空配列にしない)", a
   await expect(createSource(fetchMock).search.searchSpecies("テスト")).rejects.toThrow(Error);
 });
 
-test("resolveSpecies は種族の key のパスを引く", async () => {
+test("resolveSpecies は基点 URL から種族の key のパスを引く", async () => {
   const fetchMock = okFetch();
   await createSource(fetchMock).search.resolveSpecies("9001-000");
   const paths = fetchMock.mock.calls.map(([input]) => urlOf(input).pathname);
   expect(paths).toEqual([`${PATHS.species}/9001-000`]);
+  const { input } = callTo(fetchMock, `${PATHS.species}/9001-000`);
+  expect(absoluteUrlOf(input).origin).toBe(new URL(BASE_URL).origin);
 });
 
 test("resolveSpecies は種族を MasterSpecies に写す(特性は ID の配列・learnset は応答の順のまま)", async () => {

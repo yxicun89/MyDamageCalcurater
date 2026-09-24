@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -32,17 +33,27 @@ var errInvalidOutspeedBody = errors.New("request body does not match the outspee
 // services/speed's pokemonIDPattern precedent: the generated code doesn't validate it).
 var speciesKeyPattern = regexp.MustCompile(`^[0-9]{4}-[0-9]{3}$`)
 
+// minDefenders/maxDefenders: ADR-0703 §1 の defenders の件数の上下限。oapi-codegen の生成コードは
+// minItems/maxItems を検証しないので、httpapi 側が自前で検査する。
+const (
+	minDefenders = 1
+	maxDefenders = 6
+)
+
 // outspeedRequestWire mirrors OutspeedAndKoRequest with every field a pointer so a missing key
 // is distinguishable from an explicit zero value (e.g. sp.spe: 0 is a legitimate "no
 // investment", but a missing sp must still be rejected). Same reasoning as
 // internal/client's speciesWire/statBlockWire.
+//
+// Defenders は JD3(ADR-0703 §1)で単数の defender を置き換えた欄。要素は非ポインタでよい: 配列内の
+// null 要素はゼロ値の individualWire になり、toIndividualInput が speciesKey 欠如として自然に弾く。
 type outspeedRequestWire struct {
-	Format     *string         `json:"format"`
-	Attacker   *individualWire `json:"attacker"`
-	Defender   *individualWire `json:"defender"`
-	MoveID     *string         `json:"moveId"`
-	Field      *api.FieldState `json:"field"`
-	SpeedField json.RawMessage `json:"speedField"`
+	Format     *string          `json:"format"`
+	Attacker   *individualWire  `json:"attacker"`
+	Defenders  []individualWire `json:"defenders"`
+	MoveID     *string          `json:"moveId"`
+	Field      *api.FieldState  `json:"field"`
+	SpeedField json.RawMessage  `json:"speedField"`
 }
 
 type individualWire struct {
@@ -72,11 +83,11 @@ type rankBlockWire struct {
 }
 
 // outspeedRequest is the validated, range-checked request (ADR-0701 §5: everything here is
-// confirmed without calling an upstream).
+// confirmed without calling an upstream). defenders は 1〜6 件(ADR-0703 §1)。
 type outspeedRequest struct {
 	format     string
 	attacker   individualInput
-	defender   individualInput
+	defenders  []individualInput
 	moveID     string
 	field      *api.FieldState
 	speedField speedFieldInput
@@ -100,9 +111,12 @@ type individualInput struct {
 }
 
 // outspeedAndKo implements POST /api/judge/v1/outspeed-and-ko, in the fixed check order ADR-0701
-// §5 requires (also documented in api/openapi.yaml): header (middleware, ahead of this) → body
-// shape/size → sp/ranks/format/required-string range (no upstream call yet) → natures (once) →
-// unknown natureId → attacker species → defender species → calc → 200.
+// §5 / ADR-0703 §4 require (also documented in api/openapi.yaml): header (middleware, ahead of
+// this) → body shape/size → defenders count (1..6) → sp/ranks/format/required-string range
+// (attacker, then defenders index-ascending; no upstream call yet) → natures (once) → unknown
+// natureId (attacker, then defenders index-ascending) → attacker species → defenders species
+// (all, index-ascending) → calc (all, index-ascending) → 200. Any candidate failure stops the
+// whole request (ADR-0703 §3: no partial success).
 func outspeedAndKo(c *echo.Context, deps Dependencies, params api.OutspeedAndKoParams) error {
 	c.Request().Body = http.MaxBytesReader(c.Response(), c.Request().Body, maxOutspeedBodyBytes)
 	wire, err := decodeOutspeedBody(c.Request())
@@ -145,69 +159,92 @@ func outspeedAndKo(c *echo.Context, deps Dependencies, params api.OutspeedAndKoP
 
 	attackerNature, err := natureTable.Lookup(req.attacker.natureID)
 	if err != nil {
-		return writeUnknownNature(c)
+		return writeUnknownNature(c, "attacker")
 	}
-	defenderNature, err := natureTable.Lookup(req.defender.natureID)
-	if err != nil {
-		return writeUnknownNature(c)
+
+	defenderNatures := make([]engine.Nature, len(req.defenders))
+	for i, defender := range req.defenders {
+		nature, err := natureTable.Lookup(defender.natureID)
+		if err != nil {
+			return writeUnknownNature(c, candidateLabel(i))
+		}
+		defenderNatures[i] = nature
 	}
 
 	attackerSpecies, err := deps.Pokedex.Species(ctx, rc, req.attacker.speciesKey)
 	if err != nil {
-		return writeSpeciesError(c, err)
-	}
-	defenderSpecies, err := deps.Pokedex.Species(ctx, rc, req.defender.speciesKey)
-	if err != nil {
-		return writeSpeciesError(c, err)
+		return writeSpeciesError(c, err, "attacker")
 	}
 
-	comparison, err := judge.CompareSpeed(
-		judge.Individual{
-			BaseSpeed: attackerSpecies.BaseStats.Spe,
-			Nature:    attackerNature,
-			SP:        req.attacker.sp,
-			Ranks:     req.attacker.ranks,
-			Scarf:     judge.IsChoiceScarf(req.attacker.itemID, deps.ChoiceScarfItemID),
-			Tailwind:  req.speedField.attackerTailwind,
-		},
-		judge.Individual{
-			BaseSpeed: defenderSpecies.BaseStats.Spe,
-			Nature:    defenderNature,
-			SP:        req.defender.sp,
-			Ranks:     req.defender.ranks,
-			Scarf:     judge.IsChoiceScarf(req.defender.itemID, deps.ChoiceScarfItemID),
-			Tailwind:  req.speedField.defenderTailwind,
-		},
-		judge.SpeedField{TrickRoom: req.speedField.trickRoom},
-	)
-	if err != nil {
-		// req はここまでに自前で範囲を検証済みなので、残るのは pokedex-svc が契約に反する
-		// 種族値(例えば spe: 0)を返した場合だけ(想定外)。
-		return internalError(c, err)
+	// defenders の種族を index 昇順ですべて引き終えてから calc へ進む(ADR-0703 §4: 候補ごとに
+	// 「種族 → calc」を回さない)。
+	defenderSpecies := make([]client.Species, len(req.defenders))
+	for i, defender := range req.defenders {
+		species, err := deps.Pokedex.Species(ctx, rc, defender.speciesKey)
+		if err != nil {
+			return writeSpeciesError(c, err, candidateLabel(i))
+		}
+		defenderSpecies[i] = species
 	}
 
-	result, err := deps.Calc.Damage(ctx, rc, client.CalcRequest{
-		Format:   req.format,
-		Attacker: toClientIndividual(req.attacker),
-		Defender: toClientIndividual(req.defender),
-		MoveID:   req.moveID,
-		Field:    toClientField(req.field),
-	})
-	if err != nil {
-		return writeCalcError(c, err)
+	matchups := make([]api.Matchup, len(req.defenders))
+	for i, defender := range req.defenders {
+		comparison, err := judge.CompareSpeed(
+			judge.Individual{
+				BaseSpeed: attackerSpecies.BaseStats.Spe,
+				Nature:    attackerNature,
+				SP:        req.attacker.sp,
+				Ranks:     req.attacker.ranks,
+				Scarf:     judge.IsChoiceScarf(req.attacker.itemID, deps.ChoiceScarfItemID),
+				Tailwind:  req.speedField.attackerTailwind,
+			},
+			judge.Individual{
+				BaseSpeed: defenderSpecies[i].BaseStats.Spe,
+				Nature:    defenderNatures[i],
+				SP:        defender.sp,
+				Ranks:     defender.ranks,
+				Scarf:     judge.IsChoiceScarf(defender.itemID, deps.ChoiceScarfItemID),
+				Tailwind:  req.speedField.defenderTailwind,
+			},
+			judge.SpeedField{TrickRoom: req.speedField.trickRoom},
+		)
+		if err != nil {
+			// req はここまでに自前で範囲を検証済みなので、残るのは pokedex-svc が契約に反する
+			// 種族値(例えば spe: 0)を返した場合だけ(想定外)。
+			return internalError(c, err)
+		}
+
+		result, err := deps.Calc.Damage(ctx, rc, client.CalcRequest{
+			Format:   req.format,
+			Attacker: toClientIndividual(req.attacker),
+			Defender: toClientIndividual(defender),
+			MoveID:   req.moveID,
+			Field:    toClientField(req.field),
+		})
+		if err != nil {
+			return writeCalcError(c, err, candidateLabel(i))
+		}
+
+		matchups[i] = api.Matchup{
+			DefenderIndex: i,
+			Outspeeds:     comparison.Outspeeds,
+			SpeedTie:      comparison.SpeedTie,
+			AttackerSpeed: comparison.AttackerSpeed,
+			DefenderSpeed: comparison.DefenderSpeed,
+			Ko: api.KOChance{
+				Hits:                 result.KO.Hits,
+				Guaranteed:           result.KO.Guaranteed,
+				DisplayChancePercent: result.KO.DisplayChancePercent,
+			},
+		}
 	}
 
-	return c.JSON(http.StatusOK, api.OutspeedAndKoResponse{
-		Outspeeds:     comparison.Outspeeds,
-		SpeedTie:      comparison.SpeedTie,
-		AttackerSpeed: comparison.AttackerSpeed,
-		DefenderSpeed: comparison.DefenderSpeed,
-		Ko: api.KOChance{
-			Hits:                 result.KO.Hits,
-			Guaranteed:           result.KO.Guaranteed,
-			DisplayChancePercent: result.KO.DisplayChancePercent,
-		},
-	})
+	return c.JSON(http.StatusOK, api.OutspeedAndKoResponse{Matchups: matchups})
+}
+
+// candidateLabel は ADR-0703 §3 の「どの候補で失敗したか」を示す message の断片。
+func candidateLabel(index int) string {
+	return fmt.Sprintf("defenders[%d]", index)
 }
 
 // decodeOutspeedBody は body を厳密な JSON として outspeedRequestWire に詰め替える
@@ -235,13 +272,19 @@ func decodeOutspeedBody(request *http.Request) (outspeedRequestWire, error) {
 	return body, nil
 }
 
-// toOutspeedRequest validates format/attacker/defender/moveId and the sp/ranks range of both
-// individuals, all without calling an upstream (ADR-0701 §5).
+// toOutspeedRequest validates defenders count/format/attacker/moveId and the sp/ranks range of
+// attacker and every defender, all without calling an upstream (ADR-0701 §5・ADR-0703 §4). The
+// defenders count is checked before any range check (ADR-0703 §4: a 7th candidate wins over a
+// range error in candidate 1), and range errors name attacker or the failing defenders[<index>]
+// (ADR-0703 §3), attacker first, then defenders index-ascending, stopping at the first failure.
 func toOutspeedRequest(wire outspeedRequestWire) (outspeedRequest, error) {
+	if len(wire.Defenders) < minDefenders || len(wire.Defenders) > maxDefenders {
+		return outspeedRequest{}, errInvalidOutspeedBody
+	}
 	if wire.Format == nil || !api.Format(*wire.Format).Valid() {
 		return outspeedRequest{}, errInvalidOutspeedBody
 	}
-	if wire.Attacker == nil || wire.Defender == nil {
+	if wire.Attacker == nil {
 		return outspeedRequest{}, errInvalidOutspeedBody
 	}
 	if wire.MoveID == nil || *wire.MoveID == "" {
@@ -250,11 +293,16 @@ func toOutspeedRequest(wire outspeedRequestWire) (outspeedRequest, error) {
 
 	attacker, err := toIndividualInput(*wire.Attacker)
 	if err != nil {
-		return outspeedRequest{}, err
+		return outspeedRequest{}, fmt.Errorf("%w: attacker", errInvalidOutspeedBody)
 	}
-	defender, err := toIndividualInput(*wire.Defender)
-	if err != nil {
-		return outspeedRequest{}, err
+
+	defenders := make([]individualInput, len(wire.Defenders))
+	for i, wireDefender := range wire.Defenders {
+		defender, err := toIndividualInput(wireDefender)
+		if err != nil {
+			return outspeedRequest{}, fmt.Errorf("%w: %s", errInvalidOutspeedBody, candidateLabel(i))
+		}
+		defenders[i] = defender
 	}
 
 	speedField, err := toSpeedFieldInput(wire.SpeedField)
@@ -265,7 +313,7 @@ func toOutspeedRequest(wire outspeedRequestWire) (outspeedRequest, error) {
 	return outspeedRequest{
 		format:     *wire.Format,
 		attacker:   attacker,
-		defender:   defender,
+		defenders:  defenders,
 		moveID:     *wire.MoveID,
 		field:      wire.Field,
 		speedField: speedField,
@@ -454,23 +502,24 @@ func toClientScreens(wire *api.Screens) *client.Screens {
 }
 
 // writeUnknownNature answers 422 unknown_nature (ADR-0701 §6): a natureId that isn't in the
-// nature list, for either side.
-func writeUnknownNature(c *echo.Context) error {
+// nature list, for either side. who is "attacker" or "defenders[<index>]" (ADR-0703 §3): index
+// never appears for an attacker-side failure, and a candidate failure always names its index.
+func writeUnknownNature(c *echo.Context, who string) error {
 	return c.JSON(http.StatusUnprocessableEntity, api.Error{
 		Code:    api.UnknownNature,
-		Message: "natureId is not in the nature list",
+		Message: fmt.Sprintf("natureId is not in the nature list (%s)", who),
 	})
 }
 
 // writeSpeciesError maps a Pokedex.Species failure to the ADR-0701 §6 table: ErrNotFound is
 // unknown_species (422); everything else (unreachable/timeout/5xx/invalid response, or a
 // pokedex-svc 400 the contract doesn't expect at this point) folds into upstream_unavailable,
-// same as writeUpstreamError.
-func writeSpeciesError(c *echo.Context, err error) error {
+// same as writeUpstreamError. who names the failing side (ADR-0703 §3).
+func writeSpeciesError(c *echo.Context, err error, who string) error {
 	if errors.Is(err, client.ErrNotFound) {
 		return c.JSON(http.StatusUnprocessableEntity, api.Error{
 			Code:    api.UnknownSpecies,
-			Message: "speciesKey is not in the pokedex master",
+			Message: fmt.Sprintf("speciesKey is not in the pokedex master (%s)", who),
 		})
 	}
 	return writeUpstreamError(c, err)
@@ -479,12 +528,13 @@ func writeSpeciesError(c *echo.Context, err error) error {
 // writeCalcError maps a Calc.Damage failure to the ADR-0701 §6 table: calc-svc's own 400
 // (unknown move/item/ability, SP over budget, ...) folds into invalid_request, because judge
 // cannot distinguish which one it was without reading calc-svc's body (ADR-0700 §3). Everything
-// else folds into upstream_unavailable.
-func writeCalcError(c *echo.Context, err error) error {
+// else folds into upstream_unavailable. who names the candidate the calc call was for
+// (ADR-0703 §3; calc is always for one of the defenders, never attacker alone).
+func writeCalcError(c *echo.Context, err error, who string) error {
 	if errors.Is(err, client.ErrInvalidRequest) {
 		return c.JSON(http.StatusBadRequest, api.Error{
 			Code:    api.InvalidRequest,
-			Message: "calc-svc did not accept the calculation request",
+			Message: fmt.Sprintf("calc-svc did not accept the calculation request (%s)", who),
 		})
 	}
 	return writeUpstreamError(c, err)

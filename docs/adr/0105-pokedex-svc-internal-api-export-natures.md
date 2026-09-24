@@ -23,7 +23,7 @@ API レーン(calc-svc が起動時に取るマスタ一式 `GET /internal/poked
 | パス | 内容 |
 |---|---|
 | `services/pokedex/cmd/pokedex/` | 1つのバイナリ `pokedex`。サブコマンド `serve`(HTTP)と `export -out <dir>`(read model の出力)。設定は環境変数 `POKEDEX_DATABASE_DSN`(必須)・`POKEDEX_ADDR`(既定 `:8080`) |
-| `services/pokedex/internal/httpapi/` | Echo v5 の HTTP 境界。生成物 `services/internal/api`(API レーンの `make gen` の出力)の `ServerInterface` を実装し、`ServerInterfaceWrapper` で公開5操作を登録する。**新しい生成物を作らない・生成型を手書きしない** |
+| `services/pokedex/internal/httpapi/` | Echo v5 の HTTP 境界。生成物 `services/internal/api`(API レーンの `make gen` の出力)の `ServerInterface` を実装し、`ServerInterfaceWrapper` で公開操作(検索5 + `getMove`。2026-09-23 追記)を登録する。**新しい生成物を作らない・生成型を手書きしない** |
 | `services/pokedex/internal/readmodel/` | `pokedex export` の中身(DB → balance・speed 向けの JSON)。HTTP に依存しない |
 | `services/pokedex/internal/store/` | sqlc の生成物(既存。§2 のクエリを追加して再生成済み) |
 | `services/pokedex/internal/storetest/` | テスト専用の偽の `store.Querier` と架空データ(本番のコードから import しない) |
@@ -78,6 +78,15 @@ API レーン(calc-svc が起動時に取るマスタ一式 `GET /internal/poked
 - `getSpecies`: キーの形式(`^[0-9]{4}-[0-9]{3}$`)が違えば DB を呼ばずに 400 `invalid_input`。無ければ 404 `not_found`。
   **使用可能集合の外の種族も返す**(詳細はマスタの参照。一覧に出すかどうかは検索の仕事)。`abilities` は slot 順の `{id, nameJa}`、
   `learnset` は習得技 ∩ 既定のレギュレーションの使用可能な技(ID 昇順。`ListSpeciesLearnset`)。
+- `getMove`(2026-09-23 追記。判定レーン JD4 の依頼。DECISIONS.md 2026-09-22・2026-09-23): 技1件を ID で引く。
+  `getSpecies` と同じく既定のレギュレーションで絞らない(**使用可能集合の外の技も返す**。絞り込みは検索の仕事)。
+  `GetDefaultRegulation` を経由しないため、`searchMoves`/`listNatures` と異なり **マスタが未投入(技が0件)でも
+  503 ではなく 404 `not_found`** になる(単一行取得は「レギュレーションが無い」と「この ID の技が無い」を区別しない)。
+  DB 自体に届かない失敗は 503 `master_unavailable`。`docs/adr/0107-move-secondary-rank-changes.md` §未決事項の
+  「技 ID 1件を引く経路が無い」を解消する形として `GET /api/pokedex/moves/{key}` を採った(案:検索経由ではなく詳細
+  エンドポイントを新設)。**`docs/adr/0304-web-online-mastersource.md` §3 の「学習技(learnset)を技の実体にする」
+  案(案A)は依然として未決のまま**(この getMove の追加は Web レーンのその欠落への回答ではない。案Aと案B
+  〈このADRのgetMove〉は別々に採用しうる)。
 - `listNatures`: natures の全件(ID 昇順)。0行なら 503 `master_unavailable`。
 - DB の失敗はすべて 503 `master_unavailable`。入力の検証(400)は DB を呼ぶ前に行う。
 
@@ -166,6 +175,7 @@ importer の `testdata/fictional` にも natures(4件。無補正1件・fallback
 | AC-I4 | 未投入(data_versions / types / natures が空)・DB の失敗・効果の JSON の不正は 503 master_unavailable(契約どおり・内部情報なし) | `TestMasterExportUnavailable` |
 | AC-I5〜I8 | ヘッダの有無で変わらない・GET 以外 404。/healthz は DB に触れない。calc の操作・未知のパスは 404 not_found。panic は 500 internal | `TestMasterExportHeadersAndMethods` / `TestHealthzDoesNotTouchDB` / `TestCalcRoutesAndUnknownPathsAreNotFound` / `TestPanicIsInternalError` |
 | AC-P1〜P5 | 公開 API: 契約どおり。パターンのエスケープ・limit の既定・既定のレギュレーション。応答の中身・[]。詳細(集合の外も引ける・learnset は集合で絞る・404)。性格の一覧 | `TestPublicEndpointsMatchContract` / `TestSearchPassesPatternLimitAndRegulation` / `TestSearchResponses` / `TestGetSpecies` / `TestListNatures` |
+| AC-P4b | `getMove`(2026-09-23 追記): 集合の外の技も引ける・未知の ID は404・未投入(0件)も404(searchMoves と違い503にならない) | `TestGetMove` |
 | AC-P6〜P7 | 入力の検証(missing_header / invalid_input / invalid_enum。DB を呼ばない)。未投入・DB の失敗は 503 | `TestPublicInputValidation` / `TestPublicUnavailable` |
 | AC-P2(DB) | 検索クエリの前方一致・ひらがな/カタカナの同一視・集合での絞り込み・LIMIT | `db.TestSearchSpeciesPrefixAndRegulation`(-tags mysql) |
 | AC-N1〜N3 | natures の変換(Showdown が正・名前の優先順・Warnings)。calc との不一致は Blocker。不正は ErrInvalidData。件数を仮定しない | `importer.TestConvertNatures` / `TestConvertNaturesNameFindings` / `TestConvertNaturesNameLanguageOrder` / `TestConvertBlocksOnNatureMismatch` / `TestConvertRejectsInvalidNatures` / `TestConvertNaturesDoNotAssumeCount` |

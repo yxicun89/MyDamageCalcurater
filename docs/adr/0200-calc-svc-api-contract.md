@@ -72,7 +72,8 @@ engine は性格を構造値 `{Plus, Minus}` で持ち、ID を持たない。ca
   実態に合わせて訂正: critic 指摘 R2)。一致は `httpapi.TestWasmCodesAreValidErrorCodes` /
   `TestErrorCodeVocabularyMatchesWasm` で固定する。panic は回復して 500 `internal`(Go の内部情報を message に出さない)。
   sentinel に無い想定外のエラーは 500 `internal` の固定文だけを返し、詳細は `log/slog` にだけ残す(critic 指摘 O4)。
-  **pokedex の5操作(searchSpecies / getSpecies / searchMoves / searchItems / listNatures)は生成ラッパ
+  **pokedex の6操作(searchSpecies / getSpecies / searchMoves / getMove / searchItems / listNatures。getMove は
+  2026-09-23 追記。ADR-0105 §3)は生成ラッパ
   (`api.ServerInterfaceWrapper`。ヘッダの必須検証に加え q/limit/format などのクエリも解析する)を経由させず、
   `NewHandler` が直接 404 `not_found` を返す echo ハンドラを登録する**(calc の3操作だけがラッパ経由。critic 指摘 R1)。
   経由させると、ヘッダ欠落やクエリの型不一致(例 `limit=abc`)が `missing_header` / `invalid_json` 等に化けてしまい、

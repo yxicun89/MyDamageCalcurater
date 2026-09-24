@@ -550,6 +550,56 @@ func TestCronJobScriptOrder(t *testing.T) {
 	}
 }
 
+// --- AC(issue #106 / ADR-0109): cronjob.sh の相互排他 ---------------------------------
+
+// TestCronJobScriptLocksBeforeFetch は cronjob.sh が flock で非ブロッキングに排他し、
+// ロックが取れなければ fetch.mjs(取得キャッシュへの書き込み)より前に諦めて終わることを固定する。
+// 実行時の動作(2プロセス同時起動で片方だけが処理を進めること)は cronjob_lock_test.go の統合テストが見る。
+// 現時点(spec-writer)では cronjob.sh はロックを持たないため、このテストは失敗する。
+func TestCronJobScriptLocksBeforeFetch(t *testing.T) {
+	s := readRepo(t, cronJobScript)
+
+	if !regexp.MustCompile(`\bflock\b`).MatchString(s) {
+		t.Fatalf("%s: flock で排他していない(issue #106 / ADR-0109)", cronJobScript)
+	}
+	if !regexp.MustCompile(`flock\s+-n\b`).MatchString(s) {
+		t.Errorf("%s: flock は非ブロッキング(-n)で使うこと(他のプロセスの処理が終わるまで待たず、諦めて exit 1)", cronJobScript)
+	}
+
+	idx := func(re string) int {
+		loc := regexp.MustCompile(re).FindStringIndex(s)
+		if loc == nil {
+			return -1
+		}
+		return loc[0]
+	}
+	lock := idx(`flock\s+-n`)
+	fetch := idx(`node\s+\S*fetch\.mjs`)
+	if lock < 0 {
+		t.Fatalf("%s: flock -n が見つからない", cronJobScript)
+	}
+	if fetch < 0 {
+		t.Fatalf("%s: fetch.mjs の呼び出しが見つからない", cronJobScript)
+	}
+	if !(lock < fetch) {
+		t.Errorf("%s: ロック取得は fetch.mjs(取得キャッシュへの書き込み)より前であること", cronJobScript)
+	}
+
+	if !strings.Contains(s, "IMPORT_LOCK_FILE") {
+		t.Errorf("%s: ロックファイルの場所を環境変数 IMPORT_LOCK_FILE で上書きできること(テストから差し替えるため。ADR-0109 §2)", cronJobScript)
+	}
+	if !strings.Contains(s, "IMPORT_APP_DIR") {
+		t.Errorf("%s: /app のパスを環境変数 IMPORT_APP_DIR(既定 /app)で上書きできること(テストから差し替えるため。ADR-0109 §2)", cronJobScript)
+	}
+	if !regexp.MustCompile(`exit\s+1\b`).MatchString(s) {
+		t.Errorf("%s: ロック取得の失敗は終了コード1(再試行で直りうる失敗。ADR-0104 §3・ADR-0109 §4)", cronJobScript)
+	}
+	// stale lock 対策: mkdir でロックを表現する方式(ADR-0109 で却下)を使っていないことを固定する。
+	if regexp.MustCompile(`mkdir\s+[^\n]*\.lock`).MatchString(s) {
+		t.Errorf("%s: mkdir でロックを表現しない(プロセスが SIGKILL されると stale lock が残る。flock を使う。ADR-0109 §3)", cronJobScript)
+	}
+}
+
 // --- AC8: Makefile -------------------------------------------------------------------
 
 // layoutMakeTargets は Makefile の「ターゲット: 依存」行とレシピを集める(include は見ない)。

@@ -280,6 +280,9 @@ describe("種族の一覧が無いマスタ(capabilities.speciesList === false�
     expect(
       await within(attackerCard()).findByText(masterOnlineText.speciesSearchTruncated),
     ).toBeInTheDocument();
+    // 否定側のテストと対称に、候補の件数も見る(P4-16c(7)。案内の文言だけを見ていると、
+    // 候補を1件も出さずに案内だけ出す実装でも緑になる)。
+    expect(await within(attackerCard()).findAllByRole("option")).toHaveLength(SPECIES_SEARCH_LIMIT);
   });
 
   test("候補が SPECIES_SEARCH_LIMIT 未満なら、全件ではないことを明示しない(critic 指摘の回帰ガード)", async () => {
@@ -347,6 +350,36 @@ describe("種族の一覧が無いマスタ(capabilities.speciesList === false�
 
     expect(await within(attackerCard()).findByRole("option", { name: fresh.nameJa })).toBeInTheDocument();
     expect(within(attackerCard()).queryByRole("option", { name: stale.nameJa })).toBeNull();
+  });
+
+  test("入力を空へ戻したあとに前の検索が届いても、候補を出さない(P4-16c(4))", async () => {
+    // 「入力中 → 全部消す」の直後に、取り消したはずの検索が遅れて応答するケース。
+    // 取り消しを見ずに setState する実装だと、空の入力欄の下に候補が出たままになる。
+    const search = createDeferredSpeciesSearch();
+    const rendered = renderScreen(limitedMaster(example, SEARCH_ONLY), search);
+    const input = within(attackerCard()).getByRole("combobox", { name: "攻撃側のポケモン" });
+    const stale = speciesAt(0);
+
+    await rendered.user.type(input, "テスト");
+    rendered.advance(SPECIES_SEARCH_DEBOUNCE_MS);
+    expect(search.searchCalls).toHaveLength(1);
+
+    await rendered.user.clear(input);
+    rendered.advance(SPECIES_SEARCH_DEBOUNCE_MS);
+    // 空の入力では検索し直さない(空 = 全件にしない)。
+    expect(search.searchCalls).toHaveLength(1);
+
+    const pending = search.searchCalls[0];
+    if (pending === undefined) {
+      throw new Error("検索が呼ばれていない");
+    }
+    expect(pending.signal?.aborted).toBe(true);
+    act(() => {
+      pending.resolve([stale]);
+    });
+
+    expect(within(attackerCard()).queryAllByRole("option")).toHaveLength(0);
+    expect(within(attackerCard()).getByText(masterOnlineText.speciesSearchEmpty)).toBeInTheDocument();
   });
 
   test("検索口が渡されていなければ、空のドロップダウンを出さず検索欄を disabled にする", () => {

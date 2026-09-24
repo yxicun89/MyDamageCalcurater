@@ -165,7 +165,7 @@ func TestPokedexRoutesAreNotFound(t *testing.T) {
 	h := NewHandler(newFakeStore(t))
 	for _, path := range []string{
 		"/api/pokedex/species", "/api/pokedex/species?q=テ", "/api/pokedex/species/9001-000",
-		"/api/pokedex/moves", "/api/pokedex/items", "/api/pokedex/natures",
+		"/api/pokedex/moves", "/api/pokedex/moves/teststrike", "/api/pokedex/items", "/api/pokedex/natures",
 	} {
 		t.Run(path, func(t *testing.T) {
 			header := validHeaders()

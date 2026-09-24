@@ -1159,3 +1159,190 @@ critic レビュー前の自己検証で、`CalcScreenUITests.testAttackerSpecie
 (`secondMockSpeciesName` と同じラベル)を表示しており、シートに隠れていても `exists` は true のままだった。
 検索結果一覧に**限定**した identifier(`speciesSearchResult-<key>`)で確かめる形に直し、両方とも green に
 なることを確認した(修正後の値・意味は変えていない。検査の対象を正確にしただけ)。
+
+## issue #113 の受け入れ条件(iOS 側。入力変更時の古い計算要求の抑止・キャンセル。実装完了)
+
+- 日付: 2026-09-23 / 担当レーン: iOS(issue #113 は Web・iOS・API の共同主担当) / 関連: issue #113、
+  issue #68(「issue #68 の受け入れ条件」3章)、ADR-0304(Web レーンの同じ課題)、docs/plan.md P6-5
+- 範囲: `ios/` 配下だけ。Web の `AbortSignal`・`CalcEngine` の cancel signal 境界は別レーンの担当で、
+  iOS からは着手しない。**`api/openapi.yaml` は変更しない**(この課題はクライアント側の並行制御だけで、
+  契約の変更を必要としない)。`engine/` も触らない。
+
+### 0. 何が壊れているか
+
+- `ios/PokeCalc/ReverseScreenObservations.swift` の観測欄は、有効な文字入力のたびに裸の
+  `Task { await viewModel.recalculateAfterObservationEdit() }` を起動する。`4` → `45` と打つと
+  **両方の値で `reverse` が飛ぶ**(中間値の計算・通信・calc-svc の CPU が無駄になる)。
+- `ReverseViewModel` / `CalcViewModel` は `latestRequestToken` で「古い**応答**の反映」だけを防いでいる。
+  進行中の Task を保持していないので、**送信済みの要求を cancel できない**。
+- 画面を pop しても、View が作った裸の `Task` は生き残る(`.task` と違い構造化されていない)。
+- `APIPokeCalcService.send` はキャンセルを `CancellationError` のまま投げ直す(実装済み)。しかし ViewModel の
+  `catch` は何でも `CalcScreenError(error)` に写すため、**キャンセルが「応答の形が想定と違います」として
+  画面に出る**(`.unexpectedResponse`)。
+
+### 1. 受け入れ条件(iOS 側。検証可能な形)
+
+1. **A1 最新の1つ**: `ReverseViewModel` / `CalcViewModel` は画面からの入力操作の Task を1つだけ保持し、
+   次の入力操作を受けたとき先行 Task を cancel する。cancel は送信済みの `reverse` / `calcBulk` まで
+   伝わる(テストの stub が要求単位でキャンセルを観測できる)。
+2. **A2 debounce**: 逆算の観測欄の文字入力は trailing debounce(既定 200ms)で計算を予約する。
+   待機中に次の入力が来たら、**先行分は `reverse` を呼ばずに終わる**。素早い `4` → `45` では
+   `reverse` がちょうど1回、`observations == [.percent(45)]` で呼ばれる。
+3. **A3 同期の即時性**: `setObservationText(id:text:)` による `observations[i].text` の反映と検証
+   (`observation` / `error`)は debounce の影響を受けず、いままでどおり同期で終わる。
+4. **A4 確定操作は待たない**: select・toggle・行削除・側の切り替え・構築からの呼び出しは debounce せず
+   ただちに開始する。ただし A1 の「最新の1つ」には従う(先行 Task は cancel する)。
+5. **A5 cancel はエラーではない**: `CancellationError`(`APIPokeCalcService` が URLSession のキャンセルを
+   写したものを含む)を `error` に変換しない。`result` / `rows` も消さない。自分が最新の要求のときだけ
+   `isLoading` を false に戻す。実通信失敗は従来どおり `.transport` として表示する。
+6. **A6 画面破棄**: `cancelPendingWork()` で保持中の Task を cancel でき、以後その Task は画面の状態を
+   書き換えない。View は `.onDisappear` で呼ぶ。
+7. **A7 既存の契約を変えない**: 既存の `async` メソッド(`editObservation` / `selectMove` / `selectAttackerItem` 等)は
+   「await したら計算まで終わっている」という意味のまま。`latestRequestToken` による古い応答の無視も残す
+   (cancel が間に合わなかったときの最終防衛)。既存テストは1行も変えない。
+
+### 2. 判断: ViewModel が「最新の1つ」の入力 Task を持つ(View の裸の `Task {}` をやめる)
+
+issue #113 の既定案どおり、**Task の所有者を View から ViewModel へ移す**。View は
+`Task { await viewModel.selectMove(id:) }` の代わりに `viewModel.scheduleLatest { await $0.selectMove(id: id) }` を呼ぶ。
+
+- 理由(a): 裸の `Task` は View が消えても止まらない。ViewModel が持てば `cancelPendingWork()` 1つで止められる。
+- 理由(b): 「最新の1つ」を ViewModel の不変条件にできる(View が何個 Task を作るかに依存しない)。
+- 理由(c): 計算の入口(`recalculateIfPossible` / `recalculate`)は非公開のままで、公開 API の意味
+  (A7)を変えずに済む。
+- **却下した案**: `.task(id:)` で観測の送信値を監視する(検索欄と同じ形)。送る観測の列は
+  `[DamageObservation]` の配列で `id:` に渡す安定した値を作りにくく、さらに select・toggle 側の Task は
+  `.task(id:)` の管理外に残る。画面破棄の cancel が「一部だけ効く」状態になるので取らない。
+
+### 3. 判断: debounce は逆算の観測欄だけ。計算画面は Task 管理だけ
+
+計算画面(`CalcScreenView` / `CalcScreenCards` / `CalcScreenResults`)の入力はすべて選択・トグル
+(種族・技・持ち物・プリセット・入れ替え・構築からの呼び出し)で、**1文字ごとに計算へ渡る自由入力が無い**
+(種族・技の検索欄は計算ではなく `searchSpecies`/`searchMoves` を呼ぶ別の経路で、issue #68 の
+`MasterSearchField` が担当する)。したがって `CalcViewModel` には debounce を入れず、A1・A5・A6 の
+Task 管理だけを入れる。`TeamEditViewModel` は計算を呼ばない(`calcBulk`/`reverse` を使わない)ので対象外。
+
+### 4. 判断: debounce は 200ms・注入可能にする
+
+issue #113 が Web と共有する契約値をそのまま使う。`MasterSearch.debounceInterval`(検索の 250ms)とは
+別の定数にする — 用途(検索の絞り込み vs 計算)も値も違い、片方を変えたときにもう片方が黙って
+変わってはいけないため。
+
+```swift
+public enum CalcInput {
+    /// 文字入力を計算へ渡すまでの trailing debounce(issue #113 の契約値)。
+    public static let debounceInterval: Duration = .milliseconds(200)
+}
+```
+
+`ReverseViewModel.init(..., calcDebounce: Duration = CalcInput.debounceInterval)` で注入可能にし、
+テストは `.zero`(待たない)または `.seconds(30)`(「debounce されていたら終わらない」ことの確認)を渡す。
+壁時計の固定待ちをテストに書かない(issue #68 の `searchDebounce` と同じ手法)。
+
+### 5. 判断: `CancellationError` の扱い
+
+ViewModel の各 `catch` は、キャンセルとそれ以外を分ける:
+
+- `error` は触らない(`CalcScreenError` に写さない)。`result` / `rows` も消さない
+  (画面を離れる・入力を打ち直すだけで、いま出ている結果が「エラー」に化けてはいけない)。
+- `token == latestRequestToken`(＝自分がまだ最新)のときだけ `isLoading = false` に戻す。
+  新しい入力に追い越されているときは、新しい Task が `isLoading` を持っているので触らない。
+- 判定は `error is CancellationError`。`APIPokeCalcService` が `URLError(.cancelled)` や
+  `ClientError` を `CancellationError` へ正規化済みなので、ViewModel は URL 系の型を知らなくてよい。
+- **「各」は `reverse`/`calcBulk` を包む catch だけでなく、`species(key:)`(learnset の読み直し)を
+  包む catch も含む(`CalcViewModel.load`/`selectTeamIndividual`/`applyAttackerChangeAndRecalculate`、
+  `ReverseViewModel.load`/`selectTeamIndividual`/`reloadAttackingMovesAndRecalculate`)。`scheduleLatest`
+  導入後は種族変更・入れ替え・構築呼び出しの操作もすべて cancel されうる(8章)ため、これらの経路の
+  1つでも見落とすと A5 が破れる(critic 指摘。実装は各 ViewModel 内の private `handleInputFailure(_:)`
+  に集約して見落としを防ぐ)。
+
+### 6. 判断: 画面破棄は `.onDisappear` → `cancelPendingWork()`
+
+`ReverseScreenView` / `CalcScreenView` は `NavigationStack` に push される View で、`@State` の ViewModel は
+pop で破棄される。`.task { await viewModel.load() }` は構造化されているので pop で自動 cancel されるが、
+ViewModel が持つ入力 Task は自動では止まらない。`deinit` は使わない(`@MainActor` 隔離のプロパティを
+`deinit` から触れない)。したがって **View が `.onDisappear { viewModel.cancelPendingWork() }` を呼ぶ**。
+検索シート(`.sheet`)の表示は presenter の `onDisappear` を起こさないので、シートを開いただけで
+計算が止まることはない。
+
+### 7. 判断: issue #68 の `MasterSearchField` は今回は統合しない
+
+「issue #68」3章は、素朴なデバウンス + 世代トークンを #113 の基盤で置き換えてよいと書いている。
+今回は**置き換えない**。理由:
+
+- 検索欄は View 側の `.task(id: viewModel.speciesQuery)` が前の検索 Task を cancel し、画面破棄でも
+  自動で止まる(構造化済み)。#113 が要求する2つの性質(先行 cancel・画面破棄で停止)を検索欄は
+  すでに満たしており、置き換えても振る舞いは変わらない。
+- 意味が違う: 検索は 250ms・空クエリは即時に先頭ページへ戻す・失敗を `error` にしない。計算は 200ms・
+  失敗を `error` にする。1つの部品にまとめると分岐だらけの「似て非なるもの」になる(coding-rules §3)。
+- issue #68 のテスト3ファイルが緑で、振る舞いを変えない統合のためにそれらを書き換えるのは
+  絶対ルール6(テストを弱めない)の精神に反する。
+
+共有するのは**語彙と規則**だけにする: trailing debounce・待ち時間は init 引数で注入・世代トークンは
+最終防衛として残す。3つ目の利用者が出たら共通化を検討する(そのときに `MasterSearchField` と
+`CalcInput` を1つの部品へ寄せる)。
+
+### 8. implementer が足す API(テストが固定している名前)
+
+`PokeCalcCore`(新規ファイル1つ + 2つの ViewModel への追加):
+
+| メンバー | 画面 | 意味 |
+|---|---|---|
+| `enum CalcInput { static let debounceInterval: Duration }` | 共通 | 200ms(3章) |
+| `init(..., calcDebounce: Duration = CalcInput.debounceInterval)` | Reverse | debounce の注入(テストは `.zero`) |
+| `@discardableResult func scheduleRecalculationAfterObservationEdit() -> Task<Void, Never>` | Reverse | 観測の文字入力。先行 Task を cancel し、debounce 後に最新の1つだけ計算する |
+| `@discardableResult func scheduleLatest(_ operation: @escaping @MainActor @Sendable (Self) async -> Void) -> Task<Void, Never>` | Reverse / Calc | 確定操作。先行 Task を cancel してただちに開始する |
+| `func cancelPendingWork()` | Reverse / Calc | 保持中の Task を cancel する(`.onDisappear`) |
+
+- `Task<Void, Never>` を返すのは、テストが `await task.value` / `task.isCancelled` で決定的に待てるようにするため
+  (View は `@discardableResult` で捨てる)。
+- `scheduleLatest` が ViewModel 自身を引数で渡すのは、View 側で `[weak viewModel]` を書かせないため
+  (Task は ViewModel が保持するので、クロージャが強参照を持つと循環が生まれうる)。
+- 内部の共通部品として「最新の1つの Task を保持する」小さな型(`MasterSearchField` と同じ `internal` の
+  状態機械。例: `LatestTaskRunner`)を作ってよい。`schedule(debounce:operation:)` / `cancel()` を持ち、
+  開始前に `Task.isCancelled` を確認してから `operation` を呼ぶ(待機中に捨てられた分は**要求を出さない**)。
+
+View 側(`ios/PokeCalc`)で置き換える呼び出し(裸の `Task {` をやめる):
+`ReverseScreenObservations.swift`(観測の文字入力 → `scheduleRecalculationAfterObservationEdit()`、
+行削除 → `scheduleLatest`)、`ReverseScreenView.swift`・`ReverseScreenCards.swift`・`CalcScreenView.swift`・
+`CalcScreenCards.swift`・`CalcScreenResults.swift`(すべて `scheduleLatest`)、`TeamSourceMenuRow.swift`
+(`onSelect` を同期クロージャにし、呼び出し側の画面で `scheduleLatest` に包む)。
+`TeamEditView` / `TeamListView` は対象外(計算を呼ばない)。
+両画面に `.onDisappear { viewModel.cancelPendingWork() }` を足す。
+
+### 9. XCTest(spec-writer が追加済み。実装前は red)
+
+新規2ファイル + stub の下ごしらえ。すべて `StubPokeCalcService`(壁時計の固定待ちをしない)。
+
+- `ReverseViewModelCancellationTests.swift`
+  1. `testObservationDebounceIntervalIsTwoHundredMilliseconds` — 契約値(A2)。
+  2. `testRapidObservationEditsCalculateOnlyTheFinalValueOnce` — `4` → `45` で `reverse` は1回・値は 45、
+     先行 Task は `isCancelled`(A1・A2)。
+  3. `testSynchronousTextUpdateIsNotDelayedByTheDebounce` — debounce 待機中でも `text`/`observation` は
+     反映済み、要求は0件。その間に `cancelPendingWork()` すると要求を出さずに終わる(A3・A6)。
+     壁時計に依存しないよう、待ち時間は実際の 200ms ではなく「十分長い値」を注入する。
+  4. `testNewObservationEditCancelsTheInFlightReverseRequest` — 送信済みの古い要求が cancel され、
+     新しい要求だけが結果になる(A1・A5)。
+  5. `testCancelPendingWorkCancelsTheInFlightRequestWithoutShowingError` — cancel で `error` が立たず、
+     `isLoading` が解け、**前の結果が残る**(A5・A6)。
+  6. `testConfirmedSelectionIsNotDebounced` — `calcDebounce: .seconds(30)` でも確定操作はすぐ要求を出す(A4)。
+  7. `testScheduleLatestCancelsThePreviousInFlightRequest` — 確定操作どうしでも「最新の1つ」(A1・A4)。
+- `CalcViewModelCancellationTests.swift`
+  1. `testScheduleLatestCancelsThePreviousInFlightCalc` — `calcBulk` の先行要求が cancel される(A1)。
+  2. `testCancelPendingWorkDoesNotTurnCancellationIntoAScreenError` — cancel で `error` が立たず、
+     `rows` が残る(A5・A6)。
+- `Support/StubPokeCalcService.swift` に追加(既存の振る舞いは変えない): `.manual` の `reverse` / `calcBulk` を
+  `withTaskCancellationHandler` で包み、cancel されたら `CancellationError` で continuation を終える。
+  `cancelledReverseRequests` / `cancelledBulkRequests`(要求番号の集合)、
+  `waitForReverseCancellation(at:)` / `waitForBulkCancellation(at:)`、`cancelPendingReverse(at:)` /
+  `cancelPendingBulk(at:)` を公開する。cancel されなかった要求の挙動は従来どおりなので、既存テストに影響しない。
+
+### 10. 範囲外・申し送り
+
+- Web(`web/`)・`services/`・`engine/`・`api/openapi.yaml` は触らない。
+- XCUITest の追加は今回の範囲に含めない(debounce はミリ秒単位の振る舞いで、UI テストで安定して
+  観測できない)。`accessibilityIdentifier` の契約も変えない。
+- 既存テスト(`ReverseViewModelTests` / `CalcViewModelTests` / 各 `…SearchTests`)は**変更しない**。
+  A7 を守れば通り続ける。もし実装の途中でこれらが落ちたら、それは A7 を破った合図なので、
+  テストを直さず実装を直すこと。
+- 演出・reduced motion・アクセシビリティ通知の挙動は変えない(issue #113 の受け入れ条件)。

@@ -34,6 +34,7 @@ type Querier interface {
 	GetDefaultRegulation(ctx context.Context) (GetDefaultRegulationRow, error)
 	GetItem(ctx context.Context, id string) (Item, error)
 	GetItemEffect(ctx context.Context, itemID string) (ItemEffect, error)
+	GetMove(ctx context.Context, id string) (GetMoveRow, error)
 	GetSpeciesByKey(ctx context.Context, key string) (Species, error)
 	InsertAbility(ctx context.Context, arg InsertAbilityParams) error
 	InsertAbilityEffect(ctx context.Context, arg InsertAbilityEffectParams) error

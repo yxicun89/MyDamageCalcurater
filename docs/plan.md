@@ -86,6 +86,7 @@
 - [x] P3-4 calc-svc のマスタを pokedex-svc の内部 API(`GET /internal/pokedex/master`・MasterExport)から受け取る形に変更(ユーザー決定 2026-09-22。ADR-0204)。k3d と dev は同じ形のファイル(架空データ)。pokedex-svc(P2-3)のデプロイ後に local overlay を URL 方式へ切り替える(API レーンの後続)
 - [x] P3-5 gateway の `GATEWAY_WEB_URL`(Web レーンの依頼。設定時は `/api`・`/assets`・`/healthz`・`/internal` 以外への GET/HEAD を Web の Service へ転送。k3d の local は `http://web`。ADR-0205)
 - [x] P3-6 calc・gateway を pokedex-svc につなぐ(データレーンからの依頼。ADR-0206)。base に `CALC_MASTER_URL=http://pokedex` / `GATEWAY_POKEDEX_URL=http://pokedex`、local overlay の Component から calc へのファイル方式の patch・ConfigMap を削除、`services/gateway/scripts/smoke.sh` が `/api/pokedex/*` から計算に使う ID を実際に引くように変更。k3d(`make api-k3d-deploy && make api-smoke`)で pokedex-svc(投入済み)への接続を確認済み(`master=pokedex species=0003-000 move=highhorsepower nature=bashful` / `pokedex=200`)
+- [x] P3-7 `GET /api/pokedex/moves/{key}`(`getMove`)を追加(判定レーンの JD4 の依頼。2026-09-22・2026-09-23の DECISIONS.md。ADR-0105 §3 追記): 技1件を ID で引く。`getSpecies` と同様に使用可能集合で絞らない。マスタ未投入(0件)は`GetDefaultRegulation`を経由しないため 503 ではなく 404 `not_found`(searchMoves 等の一覧系と異なる。契約に明記)。`services/pokedex/`(データレーンの範囲)への実装まで API レーンが一括して行った理由: `api.ServerInterface` にメソッドが増えるため、スタブだけ置いて main に入れると「200 を約束する契約なのに実装が無い」状態になり、完全な実装より悪いと判断(既存の GetSpecies/GetItem パターンの写し。新規の設計判断はしていない)。データレーンへ触ったファイルの一覧を添えて再レビューを依頼(DECISIONS.md)。critic PASS(3往復)。**main 統合済み(PR #161)**
 
 ### Phase 4 Web
 - [x] P4-1 デザイントークン(docs/design.md)を CSS 変数に実装(ADR-0300 §4。web/src/styles/tokens.css)
@@ -125,34 +126,77 @@
   無効(案内 + 入力を全部 disabled + balance API を呼ばない。A-9)。検索を画面へ渡す経路は `ScreenProps.masterSearch?`
   (A-10)。P4-16 の積み残し(1)(2)(response.json 側の AbortError 再送出)も本タスクで解消・回帰テスト追加。
   (3)(4)は影響が無い軽微事項のため P4-16c にまとめて送る
-- [ ] P4-16c P4-16b の critic 指摘で今回見送った残り(ブロッカーではないが今回中に必須ではないため分離。
-  critic の許容どおり明記): (1) 種族の検索候補がキーボードで選べない(↑↓/Enter/Escape・`aria-activedescendant`
-  が無い。WAI-ARIA Combobox パターン未実装。`web/src/screens/SpeciesSearchField.tsx`)。(2) 検索欄に CSS が無い
-  (`species-search__*` のクラスが未スタイルのまま。`docs/design.md` に沿った見た目を用意する)。
-  (3) `onlineSource.test.ts` の `urlOf` に基点を足した副作用で `natures`/`species` の呼び出しが絶対 URL の origin を
-  検査していない(`items` のみ検査済み)。(4) 検索中に入力を空へ戻した直後に古い検索が届くケースの未カバー
-  (`createDeferredSpeciesSearch` で1件追加)。(5) `aria-controls` の参照先が閉じているとき DOM に無い・
-  `aria-selected` が常に false。(6) P4-16b の2回目 critic PASS の指摘: `BalanceScreen.online.test.tsx` の
-  A-9 回帰テストは `analyze`/`recommendations` のガード削除は検知するが `coverage`/`threats` のガード削除は
-  検知しない(技1つ・仮想敵1体も選んでから capabilities を切り替える形にすれば4つとも覆える)。
-  (7) `CalcScreen.online.test.tsx` の truncated 肯定側テストに候補件数(`SPECIES_SEARCH_LIMIT` 件)のアサーションが無い
-  (否定側と非対称)
+- [x] P4-16c P4-16b の critic 指摘で見送った残り(ADR-0304 A-12): 種族の検索候補を↑↓/Enter/Escape で操作できる
+  WAI-ARIA "List Autocomplete with Automatic Selection" パターンを実装(`web/src/screens/SpeciesSearchField.tsx`)、
+  `SpeciesSearchField.css` を design.md トークンのみで新規作成、`aria-controls`/`aria-activedescendant` は候補
+  非表示時に属性ごと外す。加えて(3)`onlineSource.test.ts` の origin 未検査、(4)入力を空に戻した直後の遅延応答、
+  (6)`BalanceScreen.online.test.tsx` の A-9 ガードが coverage/threats を検知していなかった点、(7)truncated
+  肯定側テストの非対称、をテスト強化で解消。critic 1回目 FAIL(IME変換中のEnter・矢印キーを誤って候補選択に
+  使ってしまう退行を発見)→ `isComposing` ガード追加・`preventDefault()` は処理したときだけに修正・回帰テスト
+  2件追加(907件)→再確認予定
 - [ ] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら
   `capabilities.moves` を true にして技を復活させる
 - [ ] P4-18 Codex コードレビューの issue(Web レーン主担当。タイプバランスレーンから 2026-09-23 に連絡・`gh issue view <番号>`)。
-  優先: #99(bug, accessibility)ライトテーマのエラー文字色がコントラスト基準未達(iOS と共有デザイントークン同期が必要)、
+  優先: **#99(bug, accessibility)ライトテーマのエラー文字色がコントラスト基準未達 — Web 分は完了(2026-09-24。
+  critic PASS)**: danger のライト値を `#E5484D`→`#CD1D23`(WCAG 2.2 SC 1.4.3 の4.5:1を bg.base・bg.glass 合成後
+  の両方で満たす。色相・彩度は変えず明度だけ下げた)。`docs/design.md`「デザイントークン」に理由・数値を記録、
+  `web/src/test/colorContrast.ts`(WCAG相対輝度・コントラスト比の計算)・`web/src/styles/contrast.test.ts`
+  (ライト・ダーク×bg.base・bg.glass合成の4組を検査)を新規追加。**iOS 側(`PokeCalcDesign.swift`・
+  `DesignTokenTests.swift`)はまだ旧値のまま**で、iOSレーンへ DECISIONS.md で依頼済み。iOS 側が終わるまで
+  issue #99 自体はクローズしない。
   #113(improvement)逆算の数値入力で古い計算要求を抑止・キャンセル(200ms debounce・AbortSignal。iOS・API と連携)。
   次点: #98(bug)モバイル幅で計算・逆算画面が横に溢れる、#67(bug)2xx の契約外 JSON で API クライアントが例外を投げる(防御的処理)。
   連携(他レーン主担当。Web は連携のみ): #71(データ+Web+iOS 攻撃側プリセット単一化)・#72(API+Web ルート make e2e を Playwright へ)・
-  #78(API+Web 特性の無効・吸収の境界反映)・#110(主担当 API。calc 候補配列の上限)・#103(主担当 API・データ。M2保存データの
-  保持期間。ユーザー決定 2026-09-23 で needs-decision は解消済み。DECISIONS.md参照。Web は連携のみで主担当ではない)
+  #78(API+Web 特性の無効・吸収の境界反映)・#110(Web の担当分は P4-19 へ分離。DECISIONS.md 2026-09-23 参照)・
+  #103(主担当 API・データ。M2保存データの保持期間。ユーザー決定 2026-09-23 で needs-decision は解消済み。
+  DECISIONS.md参照。Web は連携のみで主担当ではない)
+- [x] P4-19 issue #110(セキュリティ。ADR-0300 §10。critic PASS: 境界値の網羅探索〈約1.2万ケース〉と変異テスト5件で
+  `itemVariants`/`itemCandidates` が常に64以下・`observations` が17件目を作れないことを確認済み)。
+  `domain/requestLimits.ts` に上限3定数(`api/openapi.yaml` の `maxItems` との同期をテストで検査)と
+  `limitToMax()`。`defenderItemVariants`・`reverseItemCandidates` が配列を作る最終地点で決定的に絞り込み、
+  選んだ持ち物は落とさない。逆算の「観測を追加」は16件で disabled + `role="status"` の理由表示。
+  絞り込みが起きたら計算・逆算の両画面に文言を明示(`requestLimitText`)。
+  残る軽微(ブロッカーではない。次に触るときに拾う): (1) `addObservation()` 自体のガード(ボタンの disabled とは
+  別の多層防御)を直接検証するテストが無い。(2) 観測上限到達時の `role="status"` 要素が条件付きマウントで、
+  常時マウント+中身の出し入れの方が読み上げが安定する可能性。(3) `ReverseScreen.tsx` の `move === null` 分岐に
+  「先頭は必ず null」の知識の小さな複製がある(実際には使われない経路)。
+  issue #110 は engine/WASM・iOS の追従待ちで、Web 単独ではクローズしない(DECISIONS.md 参照)
+- [ ] P4-20 issue #148(クラウド公開前のアクセス境界・認証方針。ADR-0210。API レーン担当分は完了・main 統合済み
+  〈PR #157〉。DECISIONS.md 2026-09-23 参照)。API レーンからの具体的な依頼2件(ADR-0210 §4・§7):
+  (1) API の base URL を tailnet の MagicDNS 名にし、public な既定値を持たないこと (2) CORS 許可オリジンも
+  tailnet 上の名前だけにすること。
+  現状確認済み: `web/src/api/config.ts` の `apiBaseUrl()` の既定値は同一オリジン `"/"`(public な固定値ではない。
+  `VITE_API_BASE_URL` 環境変数で上書きする設計。ADR-0301 §4)なのでコード自体は既に条件を満たしている。
+  CORS の許可オリジン一覧は gateway(Go・API レーンの持ち物)側の設定で、Web 側にハードコードは無い(確認済み)。
+  残るのは実際の tailnet MagicDNS 名を `VITE_API_BASE_URL` にデプロイ時設定するという**運用/設定の話**で、
+  運用レーンが到達経路(Tailscale Operator の ingressClass か subnet router + tailscale serve か)を選び、
+  実際の名前が決まってから。今はコード変更不要。着手のタイミングは運用レーンの選定後
 
 ## M2: 保存・構築
-- [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)
-- [ ] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)
-- [ ] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰)
-- [ ] P5-4 team-svc(構築 CRUD、Showdown 形式入出力)
-- [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー
+
+**P5-1〜P5-4 の前提(先に決めた設計。issue #103・ADR-0209「M2 保存データの保持・削除・端末 ID 境界」に従う)**:
+端末 ID は認証ではなくデータの分割キー / 生の計算イベントは作成から90日・構築とお気に入りは `max(devices.last_seen_at, 行.updated_at)` から540日で失効 /
+端末単位の全削除はサービスごとに1本(`DELETE /api/record/device-data`・`DELETE /api/team/device-data`。冪等・`partial` の繰り返し)/
+削除の墓石(`devices.purged_at`)で JetStream の遅延イベントの復活を防ぐ。受け入れ条件は ADR-0209 の AC-D / AC-P / AC-R / AC-L。
+
+- [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)。
+  スキーマは ADR-0209 §3 に従う(`devices` テーブル〈`last_seen_at`・`purged_at`〉、**purge journal テーブル〈#5b。
+  DB 側とは別に DB 外の独立した保存先〈P7-4 が決める〉にも同時に追記する〉**、全表に `device_id`、
+  `favorites` は `calc_events` を参照せず個体スナップショットを自分で持つ)。保持日数は環境変数で渡し、起動時に検証する
+- [ ] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)。
+  ストリームの `max_age` は7日、イベントに発生時刻(`occurred_at`)を載せる(ADR-0209 §7・#6)。
+  record-svc と team-svc(P5-4)は**別々の durable consumer**を持つ(同じ consumer を共有すると配送が分かれ
+  record-svc が計算イベントを取りこぼす。ADR-0209 §4)
+- [ ] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰)。
+  ADR-0209 §5.3 の契約を `api/openapi.yaml` に入れて `make gen`(`store_unavailable` の追加を含む)→
+  分離(§6)・全削除(§5)・失効ジョブ(§4)・ログ(§3)を実装。時間減衰の半減期は保持期間90日より短くする。
+  gateway に `/api/record/*` のルーティングと CORS の `DELETE` 許可を追加(ADR-0209 §10・ADR-0202 への追記)
+- [ ] P5-4 team-svc(構築 CRUD、Showdown 形式入出力)。
+  ADR-0209 §5.3 の `deleteTeamDeviceData` と §6 の分離規則(他端末のリソース ID は 404 `not_found`)を含む。
+  **P5-2 のイベントを購読し、自分の DB の `devices.last_seen_at` だけを更新する**(計算 API だけを使い続ける端末の
+  構築が誤って失効しないため。ADR-0209 §4。イベントの中身〈個体・計算結果〉は保存しない)。
+  gateway に `/api/team/*` のルーティングと CORS の `DELETE`/`PUT` 許可を追加(ADR-0209 §10・ADR-0202 への追記)
+- [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー。ADR-0209 §8 の文言と「この端末のデータを削除」の UI を含む
 - [x] P5-6 技の追加効果(使用者自身のランク変化。例: ニトロチャージで自分の素早さ+1)を engine の Move・マスタ・importer・export に足す(判定レーンからの提案。DECISIONS.md 2026-09-22。ADR-0005 に沿い、追加効果の対象=self/target・確率・ランク変化量をデータとして持つ。ADR-0107。critic PASS。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。公開APIへの露出は判定レーンの要件確定後)
 
 ## M3: iOS
@@ -167,6 +211,29 @@
   P6-1〜P6-2d の各タスクで継続して緑を確認済み。iPhone 18 Pro シミュレータ)
 - [x] P6-4 Tailscale serve の手順書 `docs/runbooks/ios-device-install.md` を作成 → **人間が実機インストール**(署名・
   Tailscale ログイン・実機への配線・外出先での確認は手順書どおり人間が行う。AI が代行しない)
+- [x] P6-5 issue #113(Web/iOS/API共同主担当)の iOS 側: `ReverseViewModel`/`CalcViewModel` が最新の入力 Task を1つ
+  (`LatestTaskRunner`)保持し、新入力時・画面破棄時(`.onDisappear` → `cancelPendingWork()`)に先行 Task を cancel
+  する。`ReverseScreenObservations` の観測文字入力に 200ms の trailing debounce(`CalcInput.debounceInterval`)を
+  適用(同期的な TextField 表示・入力検証は即時のまま)。方針は ADR-0501「issue #113」に確定(受け入れ条件
+  A1〜A7・追加する API・View の置き換え先)。`CancellationError` は画面 error にしない catch を、`reverse`/
+  `calcBulk` を包む catch だけでなく `species(key:)`(learnset の読み直し)を包む catch も含めて全経路に適用
+  (1周目の critic 指摘で漏れを修正。各 ViewModel の private `handleInputFailure(_:)` に集約)。
+  `swift test` 323件・`make ios-test`(unit 332件・XCUITest 16件・Info.plist 検査)成功。判断: debounce は逆算の観測欄
+  だけ(計算画面は Task 管理のみ。自由文字入力が無いため)、`MasterSearchField`(issue #68)は今回統合しない
+  (理由は ADR 7章)。1周目の critic FAIL(A5 未達)は修正済み・2周目 critic PASS。main の `getMove` 追加に追従し
+  iOS 生成物も再生成済み。PR #166 で main に統合済み)
+- [ ] P6-6 issue #110(API レーン主担当。PR #130 で契約に上限追加済み: presets 8+unique・itemVariants/
+  itemCandidates 64+unique・observations 16・maxCandidates 上限128)の iOS 側追従。API レーンから 2026-09-23 に
+  依頼: 観測追加UIを16件で無効化(理由表示)、持ち物候補が64件を超える場合の扱いを決める(Web レーンの対応
+  〈黙って切り捨てず明示的なエラーか決定的な絞り込み〉に揃える)。DECISIONS.md 2026-09-23「calc の候補・観測件数
+  に上限を置く」参照。P6-5(issue #113)の critic サイクル完了後に着手
+- [ ] P6-7 ADR-0209 §8 の文言と「この端末のデータを削除」の UI(issue #103。record-svc / team-svc の全削除 API 実装後)
+- [ ] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼:
+  `ios/PokeCalcKit/Sources/PokeCalcDesign/PokeCalcDesign.swift` の `ColorToken.danger` ライト値
+  (現 `RGBA(red: 0xE5, green: 0x48, blue: 0x4D, alpha: 1.0)`)を `0xCD, 0x1D, 0x23` に更新し、
+  `ios/PokeCalcKit/Tests/PokeCalcDesignTests/DesignTokenTests.swift` の旧値を書き換え、Web と同様に
+  コントラスト比を検査するテストを追加する(値は design.md「デザイントークン」が正。DECISIONS.md
+  2026-09-24 参照)。issue #99 は iOS 側完了までクローズしない
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)。Argo CD の実同期もローカル k3d で確認済み(ADR-0018: Git 変更 32fbb9e → manual sync → Pod の image digest 一致)
@@ -180,6 +247,7 @@
 - [x] TB 整備(2026-09-22): HTTP の 500 テスト、typed nil の provider の正規化、read model の JSON Schema(ADR-0402)、HTTP 層の検証の共通化、おすすめの穴を既存の集計から導出
 - [x] TB 実データの配線(2026-09-22。データレーンの依頼): pokedex export の read model を ConfigMap で k3d の balance に読ませる(ADR-0403)、abilityIds の上限を 4 に
 - [x] TB6 技範囲チェッカー(2026-09-22 ユーザー要望。ADR-0404): 技 ID(最大4つ)から18タイプの一貫判定を出し、その技構成を半減以下で受けられる実在ポケモンを図鑑から具体名で列挙する。特性で半減以下になるポケモンは別枠
+- [x] Codexレビュー issue #105 対応(2026-09-23。ADR-0405): Argo CD 導入物(install.yaml・同梱3イメージ)をコミットSHA・SHA-256・digestで固定する `scripts/argocd-bootstrap.sh` を新設し、balance/speed 両runbookの重複した生URL直apply手順を1本化。自動テスト `scripts/argocd-bootstrap_test.sh`(`make test-scripts`)。
 
 ### ブロッカー(タイプバランスレーン)
 (なし。Argo CD の実同期は 2026-09-22 に解消)
@@ -211,8 +279,10 @@
   技の追加効果の自動反映は対象外のまま。順序は docs/judge-design.md §3(JD2 場の効果 → JD3 複数の相手候補 → JD4 返り討ち判定 → JD5 画面)
 - [x] JD2 場の効果(トリックルーム・追い風)。judge だけが解釈する `speedField` を outspeed-and-ko に追加(ADR-0702)。
   丸め方(4096基準で連結してから1回だけ五捨五超入)は @smogon/calc 0.12.0 の実装を読んで確認・独立検算した。critic PASS(1回目)
-- [ ] JD3 複数の相手候補を一度に判定(攻撃側1つ・相手候補の配列 → 候補ごとの判定結果の配列)
-- [ ] JD4 相手の技を含めた返り討ち判定。技の優先度を pokedex-svc から引く endpoint が無いため、まず API レーンへ依頼を出す(DECISIONS.md に既定案)
+- [x] JD3 複数の相手候補を一度に判定(攻撃側1つ・相手候補の配列 → 候補ごとの判定結果の配列。ADR-0703)。
+  request の defender(単数)を defenders(1〜6件)に、response を matchups(配列)に破壊的変更(クライアント未着手のため安全)。critic PASS(1回目)
+- [ ] JD4 相手の技を含めた返り討ち判定。技の優先度を pokedex-svc から引く endpoint(`GET /api/pokedex/moves/{key}`)は
+  API レーンが実装し **main 統合済み(2026-09-23。P3-7・PR #161・DECISIONS.md)**。判定レーンは着手可
 - [ ] JD5 Web/iOS の画面(judge-svc を呼ぶ。担当は着手時に判断)
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
@@ -229,7 +299,10 @@
 - [ ] P7-1 kube-prometheus-stack / Loki、各サービスのメトリクス
 - [ ] P7-2 SLO(計算API p99 < 100ms、可用性)とダッシュボード
 - [ ] P7-3 ArgoCD(GitOps)
-- [ ] P7-4 MySQL/TiDB バックアップと復元テスト
+- [ ] P7-4 MySQL/TiDB バックアップと復元テスト(ADR-0209 §9 を要件に含める: バックアップに `devices`〈墓石〉を含める /
+  purge journal(#5b。世代取得後の削除要求。保持90日)をバックアップ世代と別に保持し復元時に再適用 /
+  Ready の前に墓石の再適用・purge journal の再適用・失効ジョブの強制実行 / JetStream は再生しない / 世代30日。
+  受け入れ条件は AC-B1〜B3・AC-B2b)
 
 ## ブロッカー
 (ここに止まった理由と試したことを書く)
@@ -266,6 +339,9 @@
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)
 - [x] issue #110(セキュリティ。Codex レビュー)の API レーン担当分: `POST /api/calc/bulk`・`/api/calc/reverse` の候補・観測配列に件数上限が無く、1MiB未満の小さな本文で計算量を増幅できた(2,000×2,000 で約9.4秒)。契約(`maxItems`/`uniqueItems`/`maximum`。ADR-0208)を追加し、calc-svc の生成ラッパは検証しないため(実測確認済み)自前検証をID解決・engine呼び出しより前に実装。critic PASS、実HTTPで境界値と再現手順の解消(0.9ms・engine未到達)を確認。engine/wasmapi(データレーン)・Web・iOSへの追従は DECISIONS.md に既定案付きで依頼(issue はレーンの完了までクローズしない)
+- [x] issue #110 のデータレーン担当分: `engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ件数・範囲の上限(presets 8・itemVariants 64・itemCandidates 64・observations 16・maxCandidates 0..128)を追加(ADR-0108)。HTTP を経由しない直接呼び出し・WASM でも計算量を増幅できないようにした。wasmapi は DTO 変換より前に同じ検査を重ねて置き、複数の違反が重なっても HTTP と同じ `invalid_input` が先に出るようにした(parity)。`MaxCandidates` の負の値は、従来「無制限」扱いだったのを ADR-0208 の契約(`minimum: 0`)に合わせて拒否するよう変更(既存テストの期待値を更新。理由は ADR-0108 決定4)。critic PASS(1往復)。Web・iOS の追従(観測16件でUI無効化・持ち物候補64件超の扱い)は ADR-0208 §4 のまま未着手
+- [x] issue #148(クラウド公開前のアクセス境界・認証方針。ユーザー決定「私設サービスを維持する」)の API レーン担当分: `deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定(ADR-0210)。TLS 終端は gateway/クラスタの Ingress では行わず Tailscale(`tailscale serve`)に任せる方針を決定。端末IDが認証として機能しないこと・CORSが到達制御でないことの回帰テストを追加(`TestDeviceIDIsNotAuthentication`・`TestCORSIsNotAccessControl`・`TestContractHasNoAuthentication`)。`base`のgateway Ingress本体は local(k3d)専用として残し、先頭コメントで明記。ADR-0209 §1(クラウド公開へ進む判断)は「公開しない」で確定した旨を追記。critic PASS。運用(tailnet ACL・失効手順のrunbook)・Web/iOS(接続先をtailnet名に)への依頼はDECISIONS.mdに既定案付きで記録(issue はレーンの完了までクローズしない)
+- [x] issue #106(データ・運用レーン。Codex レビュー)手動 import Job(`make import-k8s`)と定期 CronJob が同時実行できる問題: `concurrencyPolicy: Forbid` は同じ CronJob が作る Job 同士にしか効かず、`kubectl create job --from=cronjob/...` が作る独立した手動 Job とは排他しないため、共有 PVC(`pokedex-import-cache`)上の取得キャッシュ・DB 投入が競合しうる実バグだった。`tools/importer/cronjob.sh` に busybox の `flock`(非ブロッキング)を `fetch.mjs` 呼び出しより前に追加し、取得〜投入の全工程をアプリ側で排他(ADR-0109)。ロック取得失敗は既存の終了コード規約どおり終了コード1(再試行可能)にし、`cronjob-import.yaml`(podFailurePolicy・concurrencyPolicy とも既存のまま)・`services/pokedex/cmd/import`(Go CLI)・Makefile は無変更。2プロセス同時起動の統合テスト(`cronjob_lock_test.go`)を追加し、Docker(Linux・busybox flock)で実際にロックが機能することを確認済み(macOS はローカルに flock が無いため自動 Skip)。critic PASS。k3d での手動確認手順は docs/runbooks/data.md §6 に追記し、2026-09-23 に実クラスタで実施: 2つの手動 Job を同時作成し、片方が「別の import が実行中」のログで即座に終了コード1、`backoffLimit` の再試行で成功したことを確認(秘密は出力に含まれない)
 - MySQL の manifest に MYSQL_DATABASE が無く、初回起動時に pokedex DB が自動作成されない実バグを発見(データレーンが k3d に初めて実デプロイした際に発生)。deploy/k8s/overlays/local/mysql/statefulset.yaml に MYSQL_DATABASE: pokedex を追加し、layout_test.go に検知テストを追加して修正(2026-09-22)。**新規クラスタでは直るが、この修正前にすでに初期化済みの PVC は MYSQL_DATABASE の効果を受けない**(コンテナ起動時にしか実行されない仕様のため)。既存の PVC に対しては CREATE DATABASE を手動実行するしかない。docs/runbooks/data.md に一言注記するとよい
 - P2-3 の critic の軽微(2026-09-22。未反映の4件): `check-publishable.sh` の `B_KEYVALUE_ALLOW` を self-test の基準リポジトリにも播く / `maxCatalogAbilityCount` が balance の schema・loader と三重管理(テストで検出はできる) / natures-mismatch のエラー案内が Showdown 側だけを見て `make import-fetch` の案内が出ないことがある / `TestPublicInputValidation` の 400 応答を契約検証(kin-openapi)に通す
 

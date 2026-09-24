@@ -63,9 +63,9 @@ private struct ReverseObservationRowView: View {
                         set: { newValue in
                             // テキストの反映・検証は同期(批評対応: `Task { await ... }` だけで包むと
                             // `TextField` への反映が1フレーム遅れる)。逆算の呼び出しが要るときだけ
-                            // `Task` の中で非同期に行う。
+                            // debounce つきで予約する(issue #113 A2)。
                             if viewModel.setObservationText(id: row.id, text: newValue) {
-                                Task { await viewModel.recalculateAfterObservationEdit() }
+                                viewModel.scheduleRecalculationAfterObservationEdit()
                             }
                         }
                     )
@@ -85,7 +85,7 @@ private struct ReverseObservationRowView: View {
                     .foregroundStyle(ColorToken.textSecondary.color)
 
                 Button {
-                    Task { await viewModel.removeObservation(id: row.id) }
+                    viewModel.scheduleLatest { await $0.removeObservation(id: row.id) }
                 } label: {
                     // danger はエラー表示用の色(design.md「色を持つのはタイプだけ」の例外は danger のみ)。
                     // 削除はエラーではない通常の操作なので textSecondary にする。
