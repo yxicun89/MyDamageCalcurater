@@ -231,15 +231,24 @@ struct ReverseScreenView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: SpacingToken.x2) {
                     ForEach(viewModel.itemOptions, id: \.id) { item in
+                        let isSelected = viewModel.opponentItemCandidateIds.contains(item.id)
                         ChipButton(
                             title: item.nameJa,
-                            isSelected: viewModel.opponentItemCandidateIds.contains(item.id),
-                            identifier: "reverseOpponentItemToggle-\(item.id)"
+                            isSelected: isSelected,
+                            identifier: "reverseOpponentItemToggle-\(item.id)",
+                            // 選択済みのチップは上限に達していても常に有効(解除できる。issue #110 A6・9章)。
+                            isEnabled: isSelected || !viewModel.opponentItemCandidatesReachedLimit
                         ) {
                             viewModel.scheduleLatest { await $0.toggleOpponentItemCandidate(itemId: item.id) }
                         }
                     }
                 }
+            }
+            if viewModel.opponentItemCandidatesReachedLimit {
+                Text(RequestLimitLabels.itemCandidatesReachedLimit)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .accessibilityIdentifier("reverseItemCandidateLimitHint")
             }
         }
     }

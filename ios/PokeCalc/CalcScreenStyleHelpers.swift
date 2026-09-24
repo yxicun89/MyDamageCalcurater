@@ -15,6 +15,8 @@ enum CalcScreenMetrics {
     static let compactMinimumScaleFactor: CGFloat = 0.7
     /// カード・チップ・ダメージバーのトラックに使うヘアライン枠線の太さ。
     static let hairlineBorderWidth: CGFloat = 1
+    /// 件数上限に達して選べなくなったチップの減光(issue #110。ADR-0501「issue #110」9章)。
+    static let disabledChipOpacity: Double = 0.4
 }
 
 /// design.md「Liquid Glass 系のクリーン」の角丸カード背景。requirements のビジュアル B・ADR-0500 §1

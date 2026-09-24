@@ -17,11 +17,15 @@ ios-gen-check: ## Swift の生成物が openapi.yaml と一致するか
 	@./ios/scripts/openapi-gen.sh --check
 
 .PHONY: ios-test
-ios-test: ios-lint ios-gen-check ios-test-unit ios-test-ui ios-check-infoplist ## iOS シミュレータでテスト(XCTest + XCUITest + Info.plist 検査)
+ios-test: ios-lint ios-gen-check ios-check-request-limits ios-test-unit ios-test-ui ios-check-infoplist ## iOS シミュレータでテスト(XCTest + XCUITest + Info.plist 検査)
 
 .PHONY: ios-lint
 ios-lint: ## ios/scripts の構文チェック(ルートの make lint は scripts/*.sh しか見ないため個別に持つ)
 	@for script in ios/scripts/*.sh; do bash -n "$$script" || exit; done
+
+.PHONY: ios-check-request-limits
+ios-check-request-limits: ## RequestLimits(件数上限の写し)が api/openapi.yaml の maxItems と一致するか(issue #110)
+	@./ios/scripts/check-request-limits.sh
 
 .PHONY: ios-test-unit
 ios-test-unit: ## PokeCalcKit の XCTest をシミュレータで実行

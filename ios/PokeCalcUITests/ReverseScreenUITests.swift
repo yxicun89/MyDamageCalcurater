@@ -131,6 +131,32 @@ final class ReverseScreenUITests: XCTestCase {
         XCTAssertFalse(element(app, "reverseCandidateRow-neutral@-").exists, "不正な行があるうちは候補を出さない")
     }
 
+    /// issue #110(ADR-0501「issue #110」9章): 観測欄が上限(16行)に達すると `reverseAddObservationButton` が
+    /// 無効になり、理由 `reverseObservationLimitHint` が出る。上限の手前では理由は出ない。
+    /// 行数は XCUITest から `RequestLimits` を参照できないので、`reverseObservationField-<n>` の最後の番号で数える
+    /// (開いた直後の1行 + 15回の追加 = 16行。値の正は `RequestLimits.maxObservations` と XCTest)。
+    func testAddObservationButtonIsDisabledWithReasonAtTheLimit() {
+        let app = launchReverseScreen()
+        let addButton = element(app, "reverseAddObservationButton")
+        XCTAssertTrue(addButton.waitForExistence(timeout: Self.existenceTimeout))
+
+        let maxObservations = 16
+        for _ in 1..<maxObservations {
+            XCTAssertFalse(element(app, "reverseObservationLimitHint").exists, "上限の手前では理由を出さない")
+            XCTAssertTrue(addButton.isEnabled)
+            addButton.tap()
+        }
+        XCTAssertTrue(element(app, "reverseObservationField-\(maxObservations - 1)").waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(element(app, "reverseObservationLimitHint").waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertFalse(addButton.isEnabled, "上限に達したら追加ボタンは無効")
+        XCTAssertFalse(element(app, "reverseObservationField-\(maxObservations)").exists)
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "reverse-observation-limit"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
     /// `reverseOpponentItemToggle-<モックの持ち物 ID>` をタップすると候補が 2 → 4 になる
     /// (性格クラス2 × {持ち物なし, その持ち物})。
     func testTogglingOpponentItemCandidateAddsRows() {

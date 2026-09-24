@@ -225,15 +225,31 @@
   A1〜A7・追加する API・View の置き換え先)。`CancellationError` は画面 error にしない catch を、`reverse`/
   `calcBulk` を包む catch だけでなく `species(key:)`(learnset の読み直し)を包む catch も含めて全経路に適用
   (1周目の critic 指摘で漏れを修正。各 ViewModel の private `handleInputFailure(_:)` に集約)。
-  `swift test` 323件・`make ios-test`(unit・XCUITest 16件・Info.plist 検査)成功。判断: debounce は逆算の観測欄
+  `swift test` 323件・`make ios-test`(unit 332件・XCUITest 16件・Info.plist 検査)成功。判断: debounce は逆算の観測欄
   だけ(計算画面は Task 管理のみ。自由文字入力が無いため)、`MasterSearchField`(issue #68)は今回統合しない
-  (理由は ADR 7章)。1周目の critic FAIL(A5 未達)は修正済み・再レビュー待ち。
-  PR 未作成(このブランチ `fix/ios-issue-113-debounce-cancel` のまま)
-- [ ] P6-6 issue #110(API レーン主担当。PR #130 で契約に上限追加済み: presets 8+unique・itemVariants/
+  (理由は ADR 7章)。1周目の critic FAIL(A5 未達)は修正済み・2周目 critic PASS。main の `getMove` 追加に追従し
+  iOS 生成物も再生成済み。PR #166 で main に統合済み)
+- [x] P6-6 issue #110(API レーン主担当。PR #130 で契約に上限追加済み: presets 8+unique・itemVariants/
   itemCandidates 64+unique・observations 16・maxCandidates 上限128)の iOS 側追従。API レーンから 2026-09-23 に
   依頼: 観測追加UIを16件で無効化(理由表示)、持ち物候補が64件を超える場合の扱いを決める(Web レーンの対応
   〈黙って切り捨てず明示的なエラーか決定的な絞り込み〉に揃える)。DECISIONS.md 2026-09-23「calc の候補・観測件数
-  に上限を置く」参照。P6-5(issue #113)の critic サイクル完了後に着手
+  に上限を置く」参照。方針は ADR-0501「issue #110 の受け入れ条件(iOS 側)」に確定(受け入れ条件 A1〜A8):
+  件数の定数は `PokeCalcCore` の `RequestLimits`(+ 理由文言 `RequestLimitLabels`)に1か所で持つ。観測は 16 行で
+  追加ボタンを無効化(`observationsReachedLimit`)。持ち物候補は Web の「送信直前に切り捨て」ではなく
+  **上限到達中の ON トグルを拒否**する(選んだのに送られない状態を作らないため。ADR 5章)。送る配列の先頭の
+  null(持ち物なし)も1件と数えるので選べるのは 63 件。計算画面の `itemVariants`(比較トグル)も同じ規則
+  (iOS は `itemVariants` を使っている)。`presets`/`maxCandidates` は iOS から上限を踏めないので対応不要。
+  implementer 実装完了(`RequestLimits`/`RequestLimitLabels` 追加、`ReverseViewModel`/`CalcViewModel` の
+  `…ReachedLimit` + guard、View 側の disabled とヒント文言・`ChipButton.isEnabled`)。critic 指摘で、
+  上限到達中の ON 拒否 guard が `beginInput()` より前にあることを固定する回帰テストを
+  `CalcViewModelLimitTests`/`ReverseViewModelLimitTests` にそれぞれ1本追加(guard を後ろに動かすミューテーションで
+  実際に red になることを確認済み)。`swift test` 340件・`make ios-test`(unit 340件・XCUITest 16件・
+  Info.plist 検査)成功。critic PASS。引き継ぎ時の検証(2026-09-24)で、iOS の写し `RequestLimits` と契約の
+  ずれを検出する検査が無い(Web の `requestLimits.test.ts` は Web の定数しか見ない)ことに気づき、
+  `ios/scripts/check-request-limits.sh`(`make ios-check-request-limits`。`make ios-test` に組み込み)を追加。
+  観測上限の XCUITest `testAddObservationButtonIsDisabledWithReasonAtTheLimit`(ボタン無効+理由表示。
+  ライト/ダークのスクリーンショットで崩れ・文字切れなしを目視確認)も追加。`make ios-test`(unit 353件〈xcresult 集計。XCTest 実行数は340件〉・XCUITest
+  17件・Info.plist 検査)成功
 - [ ] P6-7 ADR-0209 §8 の文言と「この端末のデータを削除」の UI(issue #103。record-svc / team-svc の全削除 API 実装後)
 - [x] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼された
   内容どおり `ColorToken.danger` のライト値を `0xE5,0x48,0x4D` → `0xCD,0x1D,0x23` に更新し、

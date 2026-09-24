@@ -846,6 +846,12 @@ Decision: P6-2d(構築から個体を呼び出す配線)を PR #119 で main に
 Reason: P6-2c に続く区切り。P6-2(計算画面・逆算・構築)がすべて完了した。
 Impact: 続き(P6-3 シミュレータテストの総仕上げ・P6-4 実機インストール手順書)は同じブランチ feat/ios-p6 で進める。
 
+## 2026-09-23: iOS レーンの統合(PR #122)・M3 完了
+Decision: P6-3(make ios-test の確認)・P6-4(実機インストール手順書 docs/runbooks/ios-device-install.md)を PR #122 で main にマージした。
+これにより M3(iPhone で使える)の Phase 6 タスクがすべて完了した。
+Reason: P6-1〜P6-2d に続く最後の区切り。
+Impact: iOS レーンはユーザーからの新規要望待ち。実機インストール・署名は手順書どおり人間が行う。
+
 ## 2026-09-23: Codexレビュー issue #103・#111 の needs-decision をユーザーが決定
 Decision:
 - #103(M2保存データ〈record-svc/team-svc〉の保持・削除・端末ID境界): **一定期間の自動失効**にする(例: 未使用90日。具体的な日数は実装レーンの提案に任せる)。無期限保持はしない。
@@ -887,6 +893,29 @@ Reason: 技の一覧が515件で `limit` 上限(200)を超え、offset/cursor �
 Impact: 返答・実装があるまで、Web のオンラインモードは種族・持ち物・性格の選択を先に作り、技を必要とする操作
 (ダメージ技の選択等)は「オンライン未対応」として無効化した状態で進める(ADR-0304 §4)。この提案が承認・実装され次第、
 Web 側は技も検索/一覧に切り替える。急ぎではない(ブロッカーにはしていない)。
+## 2026-09-23: iOS レーンの統合(PR #131)。Codex レビュー issue #100・#101 を修正
+Decision: 型バランスレーンから共有された Codex レビュー issue のうち iOS 主担当の #100(種族変更後の特性ID残留)・#101(負のSPの検証漏れ)を fix/ios-issue-100-101 ブランチで修正し、PR #131 で main にマージした(critic PASS。修正前に新規テストが実際に失敗することを確認済み)。
+Reason: データ整合性のバグで、#103 のような「needs-decision」ではなく独立して修正できる内容だったため。
+Impact: 残る iOS 関連 issue: #68(検索上限200件の欠落。契約変更の要否を検討中)、#113(Web/iOS共同主担当の入力デバウンス・キャンセル。次に着手)。連携issue #71・#99・#110 は他レーンが主担当。#103 は着手しない(ユーザー決定待ち)。
+
+## 2026-09-23: issue #71(攻撃側プリセットの単一化)はデータレーン(engine)が先に動く必要がある(iOSレーンからの確認)
+Decision(提案・未着手): #71 は ADR-0009 の `DefenderPresetCatalog`(engine)と同じ形で、engine に
+`AttackerPreset` 相当の共有カタログを新設し、Web・iOS はそれと同期していることを golden/契約テストで
+保証する設計だと理解した。engine 側の新設が前提のため、iOS からは着手しない(`engine/` はデータレーンの
+範囲)。データレーンが着手したら、iOS 側の `AttackerPreset.swift` の値・順序をそのカタログと突き合わせる
+テストを追加する形で追従する。
+Impact: iOS はブロックしない(現状の重複定義のまま動作は正しい)。データレーンの着手を待つ。
+
+## 2026-09-23: issue #68(検索上限200件)は Web と同じ「検索ベースUI」で対応する(契約変更なし)
+Decision: `api/openapi.yaml` の `limit` は `maximum: 200` で固定されており(iOS レーンは契約を変更できない)、
+「全件を一度に取得」する限り200件超のマスタ(技515件・種族349件。Web レーンの調査で判明)を取りこぼす。
+Web レーンが同じ理由でオンラインモードを検索ベースUIにする決定(ADR-0304)をしているのと同じ方針を iOS でも
+採る: 種族・技・持ち物の選択を「起動時に一括取得して一覧から選ぶ」から「入力した文字列で `q` 検索する」に
+変える(`searchSpecies`/`searchMoves`/`searchItems` の `q` パラメータは既にある。使っていなかっただけ)。
+持ち物(166件)・性格(25件)は200件以内なので一覧のままでよい(Web と同じ整理)。
+Reason: 契約変更なしで完全に直せる範囲が存在するため、API/データレーンを待たずに着手できる。
+Impact: CalcViewModel/ReverseViewModel/TeamEditViewModel の種族・技ピッカーを検索UIに変える設計変更(#68 対応として着手)。
+
 ## 2026-09-23: calc の候補・観測件数に上限を置く(issue #110。API レーンから データ/Web/iOS レーンへ)
 Decision: api/openapi.yaml に maxItems / uniqueItems / maximum を入れた(presets 8+unique、itemVariants 64+unique、
 itemCandidates 64+unique、observations 16、maxCandidates 0..128)。calc-svc は生成ラッパの schema 検証に依存できない
@@ -917,6 +946,21 @@ fixture 整形崩れの3点。いずれも ADR-0107 の「追記(2026-09-23)」�
 Reason: 独立レビュー PASS・`make test`(790件)/`lint`/`build`/`test-golden`/`test-all-species`/`test-wasm` すべて green。
 Impact: 判定レーンは JD1(ADR-0701 の Individual.ranks 方式)のまま。技IDからランク変化を自動で出す
 公開APIの拡張は、判定レーンの要件が固まってから別途(データ・APIレーン)。
+
+## 2026-09-23: iOS レーンの統合(PR #136)。issue #68(検索上限200件)を検索UIで解消
+Decision: 2026-09-23 の「issue #68 は Web と同じ検索ベースUIで対応する」方針どおり実装した(契約変更なし)。
+CalcScreen・ReverseScreen・TeamEdit の種族・技ピッカーを `Menu`(起動時一括取得)から `.searchable()` + シート
+(`searchSpecies`/`searchMoves` の `q` パラメータを使う)に置き換えた。`fix/ios-issue-68-search` ブランチで
+PR #136 として main にマージした(critic PASS。`swift test` 312/312・`make ios-test` 321/321 unit + 16/16 UI・
+`check-publishable` 0件を確認済み)。同ブランチで issue #100(種族変更後の特性ID残留)・#101(負のSPの検証漏れ)も
+先に修正済み(PR #131 で統合)。
+Reason: 検索ベースUIへの変更で205件超の技・種族も選択できるようになったが、`TeamEditViewModel.applySpeciesChange`
+の学習技フィルタが `moveOptions`(検索結果由来)を見ていたため、種族変更時に「検索したことのない技」が誤って
+全消去される副作用があった。生の learnset ID 集合を見るよう修正して解消した。
+Impact: issue #68 はコメントで既知の制約を記録した上でクローズせずに残す(一度も検索結果に現れていない技IDは
+名前解決できない。根本対応には `getSpecies` の学習技名 enrichment が必要。データ/APIレーンへの提案は上の
+「Webレーンの設計(ADR-0304)」欄の提案と同じ内容で、iOS も乗る)。残る iOS 関連 issue: #113(Web/iOS共同主担当の
+入力デバウンス・キャンセル。次に着手予定)。#71・#99・#110 は他レーンが主担当。#103 は着手しない。
 
 ## 2026-09-22: 判定 JD2(場の効果)を PR #127 で main に統合
 Decision: ADR-0702(`speedField`。トリックルーム・追い風。素早さ補正の連結・丸めを @smogon/calc 0.12.0 で確認)を PR #127 で main に統合した。critic は1回目で PASS。
@@ -1238,6 +1282,38 @@ Impact: **iOSレーンへ依頼**: `ios/PokeCalcKit/Sources/PokeCalcDesign/PokeC
 `ios/PokeCalcKit/Tests/PokeCalcDesignTests/DesignTokenTests.swift`(同じ旧値を手書きで期待値にしている36行目
 付近)を `0xCD, 0x1D, 0x23` に更新し、Web と同様にコントラスト比を検査するテストを追加してほしい(値は
 design.md「デザイントークン」が正)。issue #99 は iOS 側が完了するまでクローズしない。
+
+## 2026-09-24: iOS レーンの統合(PR #166)。issue #113(入力変更時の古い計算要求のキャンセル・debounce)の iOS 側を解消
+Decision: `ReverseViewModel`/`CalcViewModel` が入力操作ごとの計算 Task を最新の1つだけ保持する
+(`LatestTaskRunner`)実装にした。新しい入力・画面破棄(`.onDisappear` → `cancelPendingWork()`)で先行 Task を
+cancel し、送信済みの `reverse`/`calcBulk` まで実際にキャンセルが伝播することをテストで確認済み。逆算の観測
+文字入力には200msの trailing debounce(`CalcInput.debounceInterval`)を適用した(同期的な TextField 表示・
+入力検証は即時のまま)。`CancellationError` は画面エラーに変換せず、`result`/`rows` も消さない(各 ViewModel の
+private `handleInputFailure(_:)` に全 catch を統一)。`fix/ios-issue-113-debounce-cancel` ブランチで PR #166 として
+main にマージした(critic 1周目 FAIL→2周目 PASS。`swift test` 323/323・`make ios-test` unit 332/332 + UI 16/16・
+`check-publishable` 0件を確認済み)。同 PR で main の `getMove` 追加分に追従し iOS 生成物も再生成済み。
+Reason: 1周目の critic 指摘: `reverse`/`calcBulk` を包む catch だけキャンセル対応していたが、
+`species(key:)`(種族変更・攻守入れ替え・構築からの呼び出し等、計6箇所)を包む catch が素通りで
+`CancellationError` を画面エラーに変換していた退行があった。`handleInputFailure` への集約で解消。
+Impact: issue #113 は iOS 側が完了。Web・API 側の対応(`AbortSignal`・`CalcEngine` の cancel signal 境界)は
+別レーンの担当のまま。issue #68 の `MasterSearchField`(素朴なデバウンス+世代トークン)は意味論が違う
+(検索は250ms・空クエリ即時・失敗を error にしない)ため統合していない(理由は ADR-0501「issue #113」7章)。
+残る iOS 関連: P6-6(issue #110 の iOS 側追従。観測16件上限・持ち物候補64件超の扱い。次に着手)、
+P6-7(issue #103・ADR-0209 §8 の削除 UI。record-svc/team-svc 実装待ち)、issue #99 の iOS 側
+(`ColorToken.danger` のライト値更新。Web レーンから依頼済み・上のエントリ参照)。
+
+## 2026-09-24: iOS レーンの統合(PR #170)。issue #99(ライトテーマの danger コントラスト不足)の iOS 側が完了、issue クローズ
+Decision: Web レーンの依頼(2026-09-24「issue #99 の Web レーン担当分が完了。iOS レーンへ依頼」)どおり、
+`ColorToken.danger` のライト値を `#E5484D` → `#CD1D23` に更新した(Web レーンが PR #164 で確定した値と同じ)。
+`web/src/test/colorContrast.ts` と同じ算出式(WCAG相対輝度・コントラスト比)を独立実装した
+`ios/PokeCalcKit/Tests/PokeCalcDesignTests/ColorContrast.swift`、ライト・ダーク×bg.base・bg.glass合成の4組を
+検査する `DangerContrastTests.swift` を新規追加した。旧値に戻すと3.59:1/3.82:1で実際に red になることを
+確認済み。`fix/ios-issue-99-danger-contrast` ブランチで PR #170 として main にマージした(`swift test`
+PokeCalcDesignTests 13/13・PokeCalcCoreTests 323/323・`make ios-test` unit 336/336 + UI 16/16・
+`check-publishable` 0件を確認済み)。軽微な作業のため spec-writer/critic のサブエージェントは使わずメインで実施。
+Reason: Web・iOS 両方の対応が揃ったため issue #99 の受け入れ条件を満たした。
+Impact: issue #99 はコメント(Web PR #164・iOS PR #170 の要約、両プラットフォームの新値でのコントラスト比)を
+残してクローズした。残る iOS 関連: P6-6(issue #110 の iOS 側追従)、P6-7(issue #103。record-svc/team-svc 実装待ち)。
 
 ## 2026-09-24: 判定 JD4(返り討ち判定)を PR #169 で main に統合(判定レーン)
 Decision: ADR-0704(`DefenderCandidate`・`CompareTurnOrder`・逆方向calcのscreens入れ替え・`unknown_move`)を PR #169 で main に統合した。critic は1回目で PASS。

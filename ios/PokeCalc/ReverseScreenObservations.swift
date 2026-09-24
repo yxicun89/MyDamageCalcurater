@@ -33,8 +33,15 @@ struct ReverseObservationListView: View {
                     .foregroundStyle(ColorToken.textPrimary.color)
             }
             .buttonStyle(.plain)
+            .disabled(viewModel.observationsReachedLimit)
             .padding(.top, SpacingToken.x1)
             .accessibilityIdentifier("reverseAddObservationButton")
+            if viewModel.observationsReachedLimit {
+                Text(RequestLimitLabels.observationsReachedLimit)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .accessibilityIdentifier("reverseObservationLimitHint")
+            }
         }
     }
 }

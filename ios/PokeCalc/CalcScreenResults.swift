@@ -61,15 +61,24 @@ struct ResultsSectionView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: SpacingToken.x2) {
                     ForEach(viewModel.itemOptions, id: \.id) { item in
+                        let isSelected = viewModel.comparedDefenderItemIds.contains(item.id)
                         ChipButton(
                             title: item.nameJa,
-                            isSelected: viewModel.comparedDefenderItemIds.contains(item.id),
-                            identifier: "defenderItemToggle-\(item.id)"
+                            isSelected: isSelected,
+                            identifier: "defenderItemToggle-\(item.id)",
+                            // 選択済みのチップは上限に達していても常に有効(解除できる。issue #110 A8・9章)。
+                            isEnabled: isSelected || !viewModel.comparedDefenderItemsReachedLimit
                         ) {
                             viewModel.scheduleLatest { await $0.toggleDefenderItemComparison(itemId: item.id) }
                         }
                     }
                 }
+            }
+            if viewModel.comparedDefenderItemsReachedLimit {
+                Text(RequestLimitLabels.itemVariantsReachedLimit)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .accessibilityIdentifier("calcItemVariantLimitHint")
             }
         }
     }
@@ -186,10 +195,13 @@ struct DamageBarView: View {
 }
 
 /// トグル/選択チップ。design.md「背景は無彩色。色を持つのはタイプだけ」。
+/// `isEnabled`(既定 true): issue #110。件数上限に達した未選択チップを無効化するための減光
+/// (ADR-0501「issue #110」9章)。既存の呼び出し元は既定値のまま変更不要。
 struct ChipButton: View {
     let title: String
     let isSelected: Bool
     let identifier: String
+    var isEnabled: Bool = true
     let action: () -> Void
 
     var body: some View {
@@ -209,6 +221,8 @@ struct ChipButton: View {
                 .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
         }
         .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : CalcScreenMetrics.disabledChipOpacity)
         .accessibilityIdentifier(identifier)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
