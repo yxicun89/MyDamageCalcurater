@@ -11,6 +11,7 @@ import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { beforeAll, describe, expect, test, vi } from "vitest";
 import { masterOnlineText } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
+import { OBSERVATION_INPUT_DEBOUNCE_MS } from "../domain/observations";
 import { SPECIES_SEARCH_DEBOUNCE_MS } from "../master/onlineSource";
 import type { MasterCapabilities, MasterData, MasterSpecies, MasterSpeciesSearch } from "../master/types";
 import { createFakeEngine, type FakeEngine } from "../test/fakeEngine";
@@ -98,6 +99,8 @@ describe("技が使えないマスタ(capabilities.moves === false)", () => {
       speciesAt(1).key,
     );
     await rendered.user.type(observationInput(), "50");
+    // P4-18(issue 113): 観測の数値入力は 200ms 待ってから計算する。
+    rendered.advance(OBSERVATION_INPUT_DEBOUNCE_MS);
 
     expect(rendered.engine.reverseRequests).toHaveLength(0);
     expect(screen.queryByRole("list", { name: "推定結果" })).toBeNull();
@@ -121,6 +124,8 @@ describe("効果データが無いマスタ(capabilities.effects === false。ADR
       speciesAt(1).key,
     );
     await rendered.user.type(observationInput(), "50");
+    // P4-18(issue 113): 観測の数値入力は 200ms 待ってから計算する。
+    rendered.advance(OBSERVATION_INPUT_DEBOUNCE_MS);
 
     await waitFor(() => {
       expect(rendered.engine.reverseRequests).not.toHaveLength(0);
@@ -154,6 +159,8 @@ describe("種族の一覧が無いマスタ(capabilities.speciesList === false)"
     expect(within(moveSelect()).getAllByRole("option").length).toBeGreaterThan(0);
 
     await rendered.user.type(observationInput(), "50");
+    // P4-18(issue 113): 観測の数値入力は 200ms 待ってから計算する。
+    rendered.advance(OBSERVATION_INPUT_DEBOUNCE_MS);
 
     await waitFor(() => {
       expect(rendered.engine.reverseRequests).not.toHaveLength(0);
