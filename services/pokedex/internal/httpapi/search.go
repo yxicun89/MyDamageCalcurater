@@ -22,6 +22,10 @@ const (
 	defaultSearchLimit = 50
 	minSearchLimit     = 1
 	maxSearchLimit     = 200
+
+	// maxBatchIDsCount は getMovesByIds の ids の件数上限(契約の maxItems と同じ。ADR-0208 の
+	// 前例どおり、生成ラッパは配列のスキーマを検証しないためハンドラで自前に検査する)。
+	maxBatchIDsCount = 64
 )
 
 // speciesKeyPattern は getSpecies の path パラメータの形式({図鑑番号4桁}-{フォルム3桁})。
@@ -213,6 +217,40 @@ func (s *Server) GetMove(ctx *echo.Context, key string, params api.GetMoveParams
 		Power: int(row.Power), Priority: &priority,
 	}
 	return ctx.JSON(http.StatusOK, move)
+}
+
+// GetMovesByIds は GET /api/pokedex/moves/batch。getMove の複数版(ADR-0304 §3)。
+// getMove と同様に既定のレギュレーションで絞らない。見つからなかった ID は黙って省き、
+// 応答は ids と同じ順にする(DB の IN 句は順序を保証しないため、ここで並べ替える)。
+func (s *Server) GetMovesByIds(ctx *echo.Context, params api.GetMovesByIdsParams) error {
+	if len(params.Ids) == 0 {
+		return newError(api.InvalidInput, "ids が空: 1〜%d 件でなければならない", maxBatchIDsCount)
+	}
+	if len(params.Ids) > maxBatchIDsCount {
+		return newError(api.InvalidInput, "ids は %d 件以下でなければならない: %d 件", maxBatchIDsCount, len(params.Ids))
+	}
+
+	rows, err := s.q.GetMovesByIDs(ctx.Request().Context(), params.Ids)
+	if err != nil {
+		return unavailable("GetMovesByIDs", err)
+	}
+	byID := make(map[string]store.GetMovesByIDsRow, len(rows))
+	for _, r := range rows {
+		byID[r.ID] = r
+	}
+	out := make([]api.Move, 0, len(params.Ids))
+	for _, id := range params.Ids {
+		r, ok := byID[id]
+		if !ok {
+			continue
+		}
+		priority := int(r.Priority)
+		out = append(out, api.Move{
+			Id: r.ID, NameJa: r.NameJa, Type: api.PokeType(r.Type), Category: api.MoveCategory(r.Category),
+			Power: int(r.Power), Priority: &priority,
+		})
+	}
+	return ctx.JSON(http.StatusOK, out)
 }
 
 // ListNatures は GET /api/pokedex/natures。0行なら 503 master_unavailable。

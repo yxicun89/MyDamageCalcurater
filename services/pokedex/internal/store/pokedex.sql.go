@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -317,6 +318,61 @@ func (q *Queries) GetMove(ctx context.Context, id string) (GetMoveRow, error) {
 		&i.Priority,
 	)
 	return i, err
+}
+
+const getMovesByIDs = `-- name: GetMovesByIDs :many
+SELECT id, name_ja, type, category, power, priority
+FROM moves
+WHERE id IN (/*SLICE:ids*/?)
+`
+
+type GetMovesByIDsRow struct {
+	ID       string
+	NameJa   string
+	Type     string
+	Category string
+	Power    uint16
+	Priority int8
+}
+
+func (q *Queries) GetMovesByIDs(ctx context.Context, ids []string) ([]GetMovesByIDsRow, error) {
+	query := getMovesByIDs
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetMovesByIDsRow
+	for rows.Next() {
+		var i GetMovesByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.NameJa,
+			&i.Type,
+			&i.Category,
+			&i.Power,
+			&i.Priority,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getSpeciesByKey = `-- name: GetSpeciesByKey :one

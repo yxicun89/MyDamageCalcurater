@@ -44,7 +44,7 @@ func NewServer(store master.Store) *Server {
 }
 
 // NewHandler は calc-svc の HTTP ハンドラ全体を組み立てる。
-// calc の3操作(生成ラッパ経由)、pokedex の6操作(直接 404。R1)、GET /healthz
+// calc の3操作(生成ラッパ経由)、pokedex の7操作(直接 404。R1)、GET /healthz
 // (openapi に載せない運用エンドポイント)、panic の回復(500 internal)、echo の既定エラー
 // (ルート無し・メソッド違い)を Error 形式({"code","message"})に揃えるエラーハンドラを含む。
 func NewHandler(store master.Store) http.Handler {
@@ -74,16 +74,22 @@ func registerCalcRoutes(e *echo.Echo, srv *Server) {
 	e.POST("/api/calc/reverse", wrapper.CalcReverse)
 }
 
-// registerPokedexNotFoundRoutes は calc-svc の担当外(pokedex)の6操作を、生成ラッパを
+// registerPokedexNotFoundRoutes は calc-svc の担当外(pokedex)の7操作を、生成ラッパを
 // 経由させずに直接 404 not_found で応答する(critic 指摘 R1)。生成ラッパはヘッダの必須検証に
 // 加えて q/limit/format などのクエリパラメータも解析するため、そこを経由させると
 // ヘッダ欠落やクエリの型不一致(例 limit=abc)が missing_header / invalid_json 等に化けてしまい、
 // 「担当外の操作は常に not_found」という契約に反する。
+// echo v5.3.1 のルーターは静的セグメントをパラメータより優先するため、`/api/pokedex/moves/batch` は
+// `/api/pokedex/moves/:key`(`key="batch"`)に食われない。恒久テストが固定しているのは「食われないこと」
+// 自体(pokedex-svc 側の `TestGetMovesByIds`)で、登録順を入れ替えても同じ結果になることは調査時に
+// 使い捨てテストで確認しただけ(恒久テストには含まれない)。calc-svc はどちらに食われても同じ 404 not_found
+// を返すため、この順序非依存はここでは区別して検証できない。
 func registerPokedexNotFoundRoutes(e *echo.Echo) {
 	h := func(c *echo.Context) error { return notFoundForPokedex() }
 	e.GET("/api/pokedex/species", h)
 	e.GET("/api/pokedex/species/:key", h)
 	e.GET("/api/pokedex/moves", h)
+	e.GET("/api/pokedex/moves/batch", h)
 	e.GET("/api/pokedex/moves/:key", h)
 	e.GET("/api/pokedex/items", h)
 	e.GET("/api/pokedex/natures", h)
@@ -359,5 +365,10 @@ func (s *Server) GetSpecies(ctx *echo.Context, key api.SpeciesKey, params api.Ge
 
 // GetMove は pokedex の操作。calc-svc の担当外なので 404 not_found。
 func (s *Server) GetMove(ctx *echo.Context, key string, params api.GetMoveParams) error {
+	return notFoundForPokedex()
+}
+
+// GetMovesByIds は pokedex の操作。calc-svc の担当外なので 404 not_found。
+func (s *Server) GetMovesByIds(ctx *echo.Context, params api.GetMovesByIdsParams) error {
 	return notFoundForPokedex()
 }

@@ -89,6 +89,30 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/pokedex/moves/batch": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * 技を ID のまとめ取りで解決する
+     * @description `getMove` の複数版。`getSpecies` の `learnset`(ID配列)のような、既に確定した ID の集合を
+     *     1回の呼び出しで実体(名前・タイプ・分類・威力・優先度)に解決するための経路
+     *     (ADR-0304 §3。Web のオンライン学習技表示の欠落の解消)。`getMove` と同様に既定のレギュレーションで
+     *     絞らない(使用可能集合の外の技も返す)。マスタに無い ID は黙って省く(部分一致は無い。エラーにしない)。
+     *     応答の順序は `ids` と同じ(見つからなかった ID は詰めて省く)。
+     */
+    get: operations["getMovesByIds"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/pokedex/items": {
     parameters: {
       query?: never;
@@ -253,7 +277,7 @@ export interface components {
      *     | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
      *     | unknown_field | 契約にないフィールド | 400 |
      *     | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-     *     | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208) | 400 |
+     *     | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む | 400 |
      *     | unknown_preset | 未知の防御側プリセット | 400 |
      *     | duplicate_preset | 防御側プリセットの重複 | 400 |
      *     | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -1060,6 +1084,63 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  getMovesByIds: {
+    parameters: {
+      query: {
+        /**
+         * @description 技の ID の配列(繰り返しクエリ。例 `?ids=highhorsepower&ids=tackle`)。1〜64件。
+         *     パラメータ自体の省略・65件以上は 400 `invalid_input`。1件の集合が64件を超える場合(例:
+         *     `getSpecies` の `learnset` が64件を超える種族)は、呼び出し側が64件ずつに分割して複数回
+         *     呼ぶこと(1回で必ず収まる集合サイズの保証はしない)。空文字列の要素・重複した ID は
+         *     エラーにせず、マスタに無い ID と同様にその要素だけ結果から省く(一致すれば重複したまま返る)
+         */
+        ids: string[];
+      };
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 見つかった技の一覧(ids の順。見つからなかった ID は省く。マスタ未投入で0件のときも `searchMoves` と異なり 503 ではなく空配列 `[]`) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Move"][];
         };
       };
       /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */

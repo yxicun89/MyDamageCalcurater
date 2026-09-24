@@ -1,6 +1,7 @@
 # ADR-0304: Web のオンライン MasterSource — 検索ベースの選択 UI と、技の ID 解決の API ギャップ
 
-- 状態: 提案(Web レーン、2026-09-23。§3 の技解決の既定案は DECISIONS.md でデータ/API レーンへ提案中・未確認。
+- 状態: 提案(Web レーン、2026-09-23。§3 の技解決の欠落は **2026-09-24 に API レーンが `GET /api/pokedex/moves/batch`
+  〈`getMovesByIds`〉を新設して解決済み**〈§3 末尾の追記・却下・保留節を参照。当初推していた案A は不採用〉。
   型の設計は「追記(2026-09-23)」で確定し、P4-16 の受け入れ条件・テストの正になっている)
 - 日付: 2026-09-23
 - 関連: plan.md Next(1)、ADR-0301 §4(オンライン用 MasterSource は「まだ作れない」として持ち越した宿題)、
@@ -64,7 +65,8 @@ learnset を人が読める形で出せない**。これは Web 側だけでは�
 
 次のいずれかを既定案として提案する(どちらでも Web 側の対応は小さく変わるだけ):
 
-- **案A(既定として推す)**: `getSpecies` の応答の `learnset` を、ID配列 (`string[]`) から `Move` 実体の配列に変える
+- **案A(既定として推す。→ 2026-09-24 不採用。理由・却下の詳細は本節末尾の追記と「却下・保留」節)**:
+  `getSpecies` の応答の `learnset` を、ID配列 (`string[]`) から `Move` 実体の配列に変える
   (`ListSpeciesLearnset` が返す ID をそのままハンドラ内で `Move` に解決してから返す。`ListMoves` 相当の材料は
   既に store にあるため実装コストは小さいはず)。種族を1回引けば技も揃うので、追加のラウンドトリップが要らない。
   破壊的変更なので `api/openapi.yaml` のスキーマ変更として扱う(API レーンの持ち物)。
@@ -84,6 +86,28 @@ Web 側が暗黙に依存することになるため、素直に壊れやすい�
 技20〜30件ぶんのラウンドトリップが要るという、上の案Bの欠点がそのまま残る。案A(`getSpecies` の `learnset`
 を `Move` 実体の配列にする)か、`getMove` 側に `ids` のバッチ解決を足すかは、依然として API レーンへの
 未決の提案のまま(§3 は据え置き)。
+
+**追記(2026-09-24。決定): 案Aではなく `getMove` のバッチ解決を採用した**。この ADR の当初の推奨(§3 冒頭)は
+案A(`learnset` を `Move[]` にする)だったが、その後 iOS レーン(M3)が `SpeciesDetail.learnset` を `string[]`
+のまま前提にした**実際に動く機能**を先に作り込んでいた(`ios/PokeCalcKit/Sources/PokeCalcCore/CalcViewModel.swift`・
+`ReverseViewModel.swift`・`TeamEditViewModel.swift` が `detail.learnset` を ID 集合として扱い、別途検索した
+技候補との積集合を取る設計。XCTest 多数でカバー済み)。この状態で `learnset` の型を破壊的に変えると、
+Web がまだ使っていない機能のために、iOS の**既に完成し出荷済みの**機能を壊して書き直させることになり、
+「契約変更が小さい方」という基準では案Aの方が明らかに大きい変更になった。
+`GET /api/pokedex/moves/batch?ids=...`(`getMovesByIds`)を新設して解決した: `learnset`(またはその他の ID 配列)を
+1回の呼び出しで `Move[]` に解決できる。既存の `SpeciesDetail.learnset` は無変更なので iOS への影響はゼロ。
+ids は1〜64件。64 という値自体は根拠が無い数字ではなく issue #110 の教訓(候補・観測配列には必ず上限を置く。
+ADR-0208)を踏まえた保守的な初期値で、ADR-0208 の itemVariants/itemCandidates とは「1回のクエリで増幅させない」
+という考え方だけを借りている(持ち物の分類数を根拠にした64ではない。技の learnset の実際の分布はこの ADR の
+時点で実データ検証していない)。契約の `maxItems` は生成ラッパが検証しないため
+`services/pokedex/internal/httpapi/search.go` で自前検査(ADR-0208 の前例)。見つからなかった
+ID は黙って省き、応答の順序は `ids` と同じにする(DB の `IN` 句は順序を保証しないためハンドラで並べ替える)。
+`getMove` と同様に既定のレギュレーションで絞らない。ADR-0105 §3 に追記。
+Web レーンへ: `getSpecies` の `learnset`(ID配列)を `GET /api/pokedex/moves/batch?ids=<learnsetのID一覧>`
+に渡せば `Move[]` が返る。**`learnset` が1種族で64件を超える場合の実データ確認はまだ行っていない**
+(20〜30件という見積もりは本 ADR の§3が書いた目算で、実クラスタでの検証記録は無い)。安全側に倒すため、
+Web 側は `learnset` の件数が64件を超えていたら64件ずつに分割して複数回呼ぶ実装にすること(1回で必ず収まる
+という前提を置かない)。これで§4 段階3の「技はオンライン未対応」を解消できる。
 
 ### 4. 段階的な導入(技解決の欠落が解消されるまで)
 
@@ -105,14 +129,23 @@ Web 側が暗黙に依存することになるため、素直に壊れやすい�
 - **技名の先頭文字を総当たりして515件を集める回避策**: §3 で却下理由を記載(壊れやすい・実装詳細への暗黙依存)。
 - **`getMasterExport`(internal-only)をそのまま公開する**: ADR-0204 の設計(calc-svc からの内部利用に限定)を崩す。
   gateway の Ingress 経由で任意のクライアントに全マスタを晒す変更になり、影響が大きすぎる。
+- **案A(`getSpecies.learnset` を ID配列から `Move[]` に変える。2026-09-24 却下)**: §3 が当初「既定として推す」と
+  していた案。却下理由: iOS レーン(M3。既に main 統合・出荷済み)の `CalcViewModel`・`ReverseViewModel`・
+  `TeamEditViewModel` が `SpeciesDetail.learnset` を `string[]` のまま前提にした機能(learnset を ID 集合として
+  保持し、別途検索した技候補との積集合を取る設計。XCTest で広くカバー済み)を既に作り込んでおり、`learnset` の
+  型を破壊的に変えると Web がまだ有効化していない機能のために iOS の完成済み機能を壊すことになる。「契約変更が
+  小さい方」という基準では、代わりに採用した `GET /api/pokedex/moves/batch`(`getMovesByIds`。ADR-0105 §3・
+  §3 末尾の追記)の方が明らかに小さかった。**この却下理由が解消しない限り(= iOS が learnset の型変更を許容する
+  形に作り直されない限り)案Aを復活させない**。
 
 ## 影響
 
 - `web/src/master/`: 新しい `MasterSource` 実装(検索ベースの種族選択、持ち物・性格は全件取得、技は当面据え置き)。
 - `web/src/App.tsx`: オンラインモード選択時の `masterSource` の差し替え(ADR-0301 §4 の既定見直しの一部)。
 - 画面側: 種族選択 UI がオンライン/オフラインで一覧/検索に分かれる(コンポーネントの分岐が増える)。
-- データ/API レーンへの依頼(DECISIONS.md に転記): `getSpecies.learnset` を `Move[]` に変える(案A、既定)。
-  返答があるまで、Web のオンラインモードは技選択を無効化した状態で先に進める。
+- データ/API レーンへの依頼(DECISIONS.md に転記): 当初は `getSpecies.learnset` を `Move[]` に変える案A を既定で
+  提案した(**2026-09-24 追記: 不採用。`GET /api/pokedex/moves/batch` を新設して解決した。理由は §3 末尾の追記と
+  「却下・保留」節を参照**)。返答があるまで、Web のオンラインモードは技選択を無効化した状態で先に進める。
 
 ## 追記(2026-09-23、Web レーン): 実際の TypeScript インターフェース設計
 
@@ -217,8 +250,8 @@ SearchableMasterSource extends MasterSource { readonly search: MasterSpeciesSear
 - **P4-16b(次)**: 画面側(A-5)。種族の検索コンボボックス、技・持ち物候補の無効化と案内の描画。
 - **P4-17**: §3 の技の ID 解決が API レーンで入ったあと、`capabilities.moves` を true にして技を復活させる。
 
-`api/openapi.yaml` はこのタスクでは変えない(必要な変更は §3 の案A = データ/API レーンの持ち物で、
-DECISIONS.md で提案済み・未回答)。
+`api/openapi.yaml` はこのタスクでは変えない(必要な変更は §3 の技のID解決 = API レーンの持ち物。
+当時は案A を提案していたが、2026-09-24 に `GET /api/pokedex/moves/batch` の新設で解決済み。§3 末尾の追記参照)。
 
 ### A-8. 変更する既存ファイル(implementer 向け)
 

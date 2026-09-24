@@ -165,7 +165,8 @@ func TestPokedexRoutesAreNotFound(t *testing.T) {
 	h := NewHandler(newFakeStore(t))
 	for _, path := range []string{
 		"/api/pokedex/species", "/api/pokedex/species?q=テ", "/api/pokedex/species/9001-000",
-		"/api/pokedex/moves", "/api/pokedex/moves/teststrike", "/api/pokedex/items", "/api/pokedex/natures",
+		"/api/pokedex/moves", "/api/pokedex/moves/teststrike", "/api/pokedex/moves/batch?ids=teststrike",
+		"/api/pokedex/items", "/api/pokedex/natures",
 	} {
 		t.Run(path, func(t *testing.T) {
 			header := validHeaders()
@@ -193,6 +194,16 @@ func TestPokedexRoutesAreNotFound(t *testing.T) {
 		header := validHeaders()
 		header.Add("X-Device-Id", testDeviceID) // 同じ名前のヘッダをもう1つ足す(値の個数が1でなくなる)
 		rec := serve(t, h, http.MethodGet, "/api/pokedex/species", header, nil)
+		assertError(t, rec, http.StatusNotFound, "not_found")
+	})
+	// /api/pokedex/moves/batch は ids が必須。生成ラッパ経由で登録してしまった場合、calc-svc の
+	// errorBodyFor は同名ヘッダ重複以外の生成ラッパ由来の 400 をすべて missing_header に写すため
+	// (server.go の errorBodyFor 参照。pokedex-svc 側は同じ失敗を invalid_input に写すので、
+	// サービスによって写し先が違う)、ヘッダ・ids のどちらが原因でも 400 missing_header に化ける。
+	// ヘッダも ids も無い状態で not_found のままなら、生成ラッパを経由していない証拠になる
+	// (R1。誤って wrapper.GetMovesByIds 経由で登録してしまった場合の検知)。
+	t.Run("技まとめ取り(ヘッダ・ids とも無し)でも not_found", func(t *testing.T) {
+		rec := serve(t, h, http.MethodGet, "/api/pokedex/moves/batch", http.Header{}, nil)
 		assertError(t, rec, http.StatusNotFound, "not_found")
 	})
 }

@@ -1501,3 +1501,75 @@ Impact: `docs/plan.md` の改善要望に issue #113 のAPIレーン連携分を
 計算式・gateway/calcのtimeout値・横断rate limitを明示的に除外しているため、上記の限界(calc-svc CPUは
 止まらない)を残したまま**issue #113 はWeb・iOS・APIのすべてのレーン分が完了したとしてこのPRのマージで
 クローズしてよい**と判断。他レーンへの追加対応は無し。
+
+## 2026-09-24: P4-17(技のID解決の欠落)を解消。案Aではなくバッチ解決を採用(API レーン → Web レーンへ回答)
+Decision: タイプバランスレーンからの中継依頼(判定レーンJD4の連携に続き、P4-17がAPIレーンの決定待ちで
+止まっているとの連絡)を受け、ADR-0304 §3の欠落(`getSpecies.learnset`がID配列のままで技の実体〈名前・タイプ・
+分類〉に解決する手段が公開APIに無い)を解消した。
+ADR-0304 §3が当初推していた**案A**(`learnset`をID配列からMove実体配列に変える。破壊的変更)は**採らなかった**。
+調査した結果、iOS(M3。すでにmain統合・出荷済み)の`CalcViewModel`・`ReverseViewModel`・`TeamEditViewModel`が
+`SpeciesDetail.learnset`を`string[]`のまま前提にした機能(learnsetをID集合として保持し、別途検索した技候補との
+積集合を取ってmoveOptionsを作る設計)を既に作り込んでおり、XCTestで広くカバーされていた。この状態で`learnset`
+の型を破壊的に変えると、Webがまだ有効化していない機能のためにiOSの完成済み機能を壊して書き直させることになり、
+依頼にあった「契約変更が小さい方」という基準では案Aの方が明らかに大きい変更だった。
+代わりに**`GET /api/pokedex/moves/batch?ids=...`(`getMovesByIds`)を新設**した:
+- `getMove`の複数版。既存の`SpeciesDetail.learnset`は無変更(iOSへの影響ゼロ)。
+- `ids`は1〜64件(64の根拠は下の「critic 2回目FAIL」の訂正を参照。ADR-0208のitemVariants/itemCandidatesとは
+  「1回のクエリで増幅させない」という自前検査の設計だけを借りている〈持ち物の分類数が根拠のADR-0208の64を
+  そのまま転用したものではない〉)。件数の上限(`maxItems`)は生成ラッパが配列のスキーマを検証しないため
+  `services/pokedex/internal/httpapi/search.go`で自前検査(ADR-0208の前例。DBを呼ぶ前に400 `invalid_input`)。
+  `ids`自体の欠落(`minItems`/`required`)は生成ラッパが先に400にする(ハンドラの`len(ids)==0`は防御的な
+  二重検査。実測で確認)。
+- 見つからなかったIDは黙って省く。応答の順序は`ids`と同じ(DBの`IN`句は順序を保証しないためハンドラで並べ替え。
+  偶然の一致でないことを変異テストで確認: フィクスチャの並び順とテストの要求順が異なることを利用)。
+- `getMove`と同様に既定のレギュレーションで絞らない(使用可能集合の外の技も返す)。
+- ルーティング: echo v5.3.1のルーターは静的セグメントをパラメータより優先するため`/api/pokedex/moves/batch`は
+  `/api/pokedex/moves/:key`(`key="batch"`)に食われない(**登録順には依存しない**。逆順に登録しても同じ結果に
+  なることを使い捨てテストで確認済み)。
+- 契約(`api/openapi.yaml`)を先に変更して`make gen`・`make ios-gen`(絶対ルール1)。calc-svcの担当外スタブ・
+  pokedex-svcの実装・storetestの偽実装・httpapi層のテスト(`TestGetMovesByIds`)を一式追加。
+ADR-0105 §3・ADR-0304 §3に追記(案Aは不採用の理由込みで記録)。
+Reason: 依頼(P4-17をM2より先に決めて実装。契約変更が小さい方を既定案にしてよい)。iOSの既存機能への影響を
+実際に確認した結果、案Aは「小さい方」ではなかったため、依頼の既定条件どおりバッチ解決を選んだ。
+Impact: `docs/plan.md`の改善要望にP4-17の行を追加。Webレーンへ: `getSpecies`の`learnset`を
+`GET /api/pokedex/moves/batch?ids=<learnsetのID一覧>`に渡せば`Move[]`が返るので、ADR-0304 §4段階3の
+「技はオンライン未対応」を解消できる。**ただし1種族のlearnsetが64件を超える場合の実データ確認はまだ行って
+いない**(20〜30件はADR-0304 §3の目算で実測記録は無い)。安全側に倒し、**Web側はlearnsetが64件を超えたら
+64件ずつ分割して複数回呼ぶ実装にすること**(1回で必ず収まる前提は置かない。ADR-0304 §3参照)。
+iOS・データ・運用レーンへの追加対応は無し。critic 1回目FAIL(必須3件。いずれもコメント・ドキュメントの
+事実誤り: 存在しない`routing_test.go`への参照、echoのルーティングがコード登録順に依存するかのような誤った
+説明、`maxItems`/`minItems`を生成ラッパが検証しないという説明のうち`minItems`〈必須パラメータの欠落〉は
+実際には生成ラッパが先に400にするため不正確だった。実装・テストへの指摘は無し)→ 修正済み。推奨事項
+(non-blocking)も反映済み: ADR-0304の§3冒頭・影響節・却下保留節に案A不採用の理由への参照を追加(将来
+案Aが理由を知らずに復活するのを防ぐ)、calc-svc側にR1検知テスト(ヘッダ・ids とも無しでも not_found であること。
+生成ラッパ経由で誤登録すると400に化けることを変異テストで確認)、ids ちょうど64件で成功するテスト(off-by-one
+の取り違えを検知。変異テストで確認)、契約descriptionの空要素・重複の扱いの明記。
+→ **critic 2回目FAIL(必須3件)**:
+1. ADR-0304・DECISIONS.md・plan.mdが「1種族のlearnsetは20〜30件で64件上限に収まる」と未検証のまま約束していた。
+   `ListSpeciesLearnset`はLIMIT無しで全件返すため、レギュレーション合法技との積集合が64件を超える種族が
+   実在する可能性を否定できない(k3dクラスタが停止中で実データ確認できず)。対応: 「1回で必ず収まる」という
+   約束を削除し、64件超の場合はWeb側が64件ずつ分割して複数回呼ぶ設計にすることを明記(ADR-0304 §3・
+   ADR-0105 §3・api/openapi.yamlのids descriptionに追記)。あわせて64という値の根拠を「ADR-0208の
+   itemVariants/itemCandidatesの流用」ではなく「issue #110の教訓〈候補配列に上限を置く〉を踏まえた
+   保守的な初期値」として独立に記録し直した(ADR-0208の64は持ち物の分類数が根拠で、技のlearnsetとは無関係)。
+2. `errors_test.go`のコメントが「生成ラッパ経由なら400 invalid_input」としていたが、calc-svcの
+   `errorBodyFor`は生成ラッパ由来の400を(同名ヘッダ重複以外)すべて`missing_header`に写す
+   (`invalid_input`はpokedex-svc側の写し替え)。コメントをサービスごとの写し替えが正しく分かる表現に修正。
+3. 契約(`api/openapi.yaml`)の`maxItems: 64`とGo定数`maxBatchIDsCount`の同期を確かめるテストが無かった
+   (ADR-0208の前例`TestContractDefinesRequestLimits`は同期テストまで含むのに、今回はテスト側に64を
+   ハードコードしていて契約から追従しない片手落ちだった)。`api.GetSwagger()`から契約の`maxItems`を読む
+   `contractQueryParamMaxItems`ヘルパーを追加し、`TestGetMovesByIds`の境界値をハードコードではなく契約から
+   導くように変更。変異テスト(契約側だけ`maxItems: 32`に変更してGo定数を64のまま残す)で実際に検知することを
+   確認(確認後revert)。
+軽微(推奨)も反映: `services/calc/internal/httpapi/server.go`のルーティング順序非依存コメントを、calc側では
+`:key`に食われても同じ404になるため区別して検証できない旨に訂正、ADR-0304の状態行(ヘッダ)を解決済みに更新、
+`api/openapi.yaml`のErrorCode語彙表に`getMovesByIds`の`ids`件数超過を追記、マスタ未投入時に503でなく
+200`[]`になることをADR-0105・契約の両方に明記。
+→ **critic 3回目PASS**。commit前に直すよう指示された重要2件を反映: (1) `docs/plan.md`のWeb欄(P4-17の行)が
+「データ/API レーンへの依頼...未回答」のまま古くなっていたのを、2026-09-24にAPIレーンが`getMovesByIds`で
+回答・実装済みである旨に更新(チェックはWeb側の対応〈`capabilities.moves`〉が残るため`[ ]`のまま)。
+(2) `TestGetMovesByIds`に、doc化したが未検証だった3つの挙動のテストを追加: マスタ未投入(技0件)→200`[]`
+(`getMove`の404とは異なる。`empty.Moves = nil`で確認)、重複した`ids`→重複したまま返る(`teststrike`を
+2回指定→2件)、空文字列の要素→エラーにせず黙って省く(`ids=&ids=teststrike`→1件)。
+併せて軽微な指摘(登録順を入れ替えても同じ結果になるのは恒久テストではなく調査時の使い捨てテストでの
+確認だと明記、DECISIONS.mdの64の根拠説明を統一)も反映。critic「重大なし」。
