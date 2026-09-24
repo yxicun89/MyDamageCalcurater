@@ -647,6 +647,8 @@ func TestConvertNamesJa(t *testing.T) {
 
 // TestConvertRejectsDuplicateSourceIDs は、取得元に同じ ID の行が2つあると、どちらかを黙って
 // 採らずに止めること(#311)。calc は toID(名前)、Showdown は id、PokeAPI は toID(slug) で数える。
+// どのケースも重複検査(checkUniqueSourceIDs)が無いと通ってしまう形にする(他の検査で止まる
+// calc のタイプ名の重複は対象外)。
 func TestConvertRejectsDuplicateSourceIDs(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -671,8 +673,10 @@ func TestConvertRejectsDuplicateSourceIDs(t *testing.T) {
 		{"calc の特性名", func(t *testing.T, in *importer.Input) {
 			in.Calc.Abilities = append(in.Calc.Abilities, in.Calc.Abilities[0])
 		}},
-		{"calc のタイプ名", func(t *testing.T, in *importer.Input) {
-			in.Calc.Types = append(in.Calc.Types, "Fire")
+		{"calc の性格名(補正だけ違う複製を先頭に足す)", func(t *testing.T, in *importer.Input) {
+			dup := in.Calc.Natures[0]
+			dup.Plus, dup.Minus = dup.Minus, dup.Plus
+			in.Calc.Natures = append([]importer.CalcNature{dup}, in.Calc.Natures...)
 		}},
 		{"Showdown の技 id", func(t *testing.T, in *importer.Input) {
 			in.Showdown.Moves = append(in.Showdown.Moves, *showdownMove(t, in, "testflame"))
@@ -685,6 +689,11 @@ func TestConvertRejectsDuplicateSourceIDs(t *testing.T) {
 		}},
 		{"Showdown の特性 id", func(t *testing.T, in *importer.Input) {
 			in.Showdown.Abilities = append(in.Showdown.Abilities, in.Showdown.Abilities[0])
+		}},
+		{"Showdown の性格 id(補正だけ違う複製を先頭に足す)", func(t *testing.T, in *importer.Input) {
+			dup := in.Showdown.Natures[0]
+			dup.Plus, dup.Minus = dup.Minus, dup.Plus
+			in.Showdown.Natures = append([]importer.ShowdownNature{dup}, in.Showdown.Natures...)
 		}},
 		{"PokeAPI の技 slug(toID が同じで別名)", func(t *testing.T, in *importer.Input) {
 			in.PokeAPI.Moves = append(in.PokeAPI.Moves, importer.PokeAPIName{Slug: "testflame", Names: map[string]string{"ja-Hrkt": "テストべつめい"}})
