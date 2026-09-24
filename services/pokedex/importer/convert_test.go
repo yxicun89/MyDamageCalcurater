@@ -6,7 +6,10 @@ package importer_test
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -184,6 +187,73 @@ func TestConvertMovesFollowP21cRules(t *testing.T) {
 
 // 持ち物は技と同じ規則(ADR-0101 §5)。calc だけの持ち物は除外の警告、Showdown だけで
 // 使用可の持ち物は補完の警告(どちらも取り込む集合には規則どおり反映される)。
+// TestConvertRejectsMoveValuesOutOfDBRange は、取得元の PP・命中が DB の CHECK の範囲外なら
+// 変換の段階で止めること(#310: pp=300 が uint8 の桁あふれで 44 として保存されていた)。
+// 命中 0 は必中(NULL で保存)。両方にある技と Showdown だけの技の両方の経路を確かめる。
+func TestConvertRejectsMoveValuesOutOfDBRange(t *testing.T) {
+	tests := []struct {
+		field  string
+		value  int
+		wantOK bool
+	}{
+		{"pp", 0, false}, {"pp", 1, true}, {"pp", 64, true}, {"pp", 65, false}, {"pp", 300, false},
+		{"accuracy", -1, false}, {"accuracy", 0, true}, {"accuracy", 1, true}, {"accuracy", 100, true}, {"accuracy", 101, false},
+	}
+	for _, moveID := range []string{"testflame", "testsplash"} {
+		for _, tt := range tests {
+			t.Run(fmt.Sprintf("%s/%s=%d", moveID, tt.field, tt.value), func(t *testing.T) {
+				in := loadFixture(t)
+				m := showdownMove(t, &in, moveID)
+				if tt.field == "pp" {
+					m.PP = tt.value
+				} else {
+					m.Accuracy = tt.value
+				}
+				out, _, err := importer.Convert(in)
+				if !tt.wantOK {
+					if !errors.Is(err, importer.ErrInvalidData) {
+						t.Fatalf("err = %v, want ErrInvalidData", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("Convert: %v", err)
+				}
+				for _, r := range out.Moves {
+					if r.ID == moveID && ((tt.field == "pp" && r.PP != tt.value) || (tt.field == "accuracy" && r.Accuracy != tt.value)) {
+						t.Errorf("%s の %s が %+v に化けた", moveID, tt.field, r)
+					}
+				}
+			})
+		}
+	}
+}
+
+// TestMoveRangesMatchMigrationCheck は、importer が持つ PP・命中の範囲が moves の CHECK
+// (ADR-0100 §3。migration が正)と一致すること(#310)。
+func TestMoveRangesMatchMigrationCheck(t *testing.T) {
+	raw, err := os.ReadFile("../db/migrations/000002_create_master.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name     string
+		pattern  string
+		min, max int
+	}{
+		{"pp", `chk_moves_pp CHECK \(pp BETWEEN (\d+) AND (\d+)\)`, importer.MovePPMin, importer.MovePPMax},
+		{"accuracy", `chk_moves_accuracy CHECK \(accuracy IS NULL OR accuracy BETWEEN (\d+) AND (\d+)\)`, importer.MoveAccuracyMin, importer.MoveAccuracyMax},
+	} {
+		m := regexp.MustCompile(tt.pattern).FindStringSubmatch(string(raw))
+		if m == nil {
+			t.Fatalf("migration に %s の CHECK が見つからない(制約名・形が変わったらこのテストも直す)", tt.name)
+		}
+		if got := m[1] + ".." + m[2]; got != fmt.Sprintf("%d..%d", tt.min, tt.max) {
+			t.Errorf("%s: importer の範囲 %d..%d と migration の CHECK %s が食い違う", tt.name, tt.min, tt.max, got)
+		}
+	}
+}
+
 func TestConvertItemsFollowSameRuleAsMoves(t *testing.T) {
 	in := loadFixture(t)
 	in.Calc.Items = append(in.Calc.Items, "Test Onlycalc")
