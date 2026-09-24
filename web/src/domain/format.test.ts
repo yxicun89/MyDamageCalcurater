@@ -55,11 +55,11 @@ describe("formatKO", () => {
 describe("formatEffectiveness(engine の結果の effectiveness をそのまま言葉にする。TS で相性を計算しない)", () => {
   test.each([
     [0, "効果なし"],
-    [0.25, "効果はいまひとつ"],
-    [0.5, "効果はいまひとつ"],
+    [0.25, "いまひとつ(×0.25)"],
+    [0.5, "いまひとつ(×0.5)"],
     [1, "等倍"],
-    [2, "効果はばつぐん"],
-    [4, "効果はばつぐん"],
+    [2, "ばつぐん(×2)"],
+    [4, "ばつぐん(×4)"],
   ])("%s → %s", (value, expected) => {
     expect(formatEffectiveness(value)).toBe(expected);
   });

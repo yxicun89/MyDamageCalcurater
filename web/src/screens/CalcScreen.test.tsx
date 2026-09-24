@@ -343,7 +343,7 @@ describe("結果の表示(engine の値を加工せずに出す)", () => {
 
   test("技の相性は結果の effectiveness から出す(TS で相性を計算しない)", async () => {
     await renderWithRows();
-    expect(screen.getByText("効果はばつぐん")).toBeInTheDocument();
+    expect(screen.getByText("ばつぐん(×2)")).toBeInTheDocument();
   });
 
   test("engine のエラーは message を role=alert で出し、結果の行を出さない", async () => {
