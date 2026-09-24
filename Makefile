@@ -14,7 +14,7 @@ GATEWAY_URL ?= http://localhost:8080
 
 .PHONY: help
 help: ## このヘルプを表示
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+	@grep -hE '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
 ## --- 環境 -------------------------------------------------------------
@@ -61,9 +61,10 @@ test-tools:
 	@node --test tools/importer/showdown-cache.test.mjs
 
 .PHONY: test-scripts
-test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406。クラスタ・ネットワークに触らない)
+test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406・計算API SLO ADR-0407。クラスタ・ネットワークに触らない)
 	@./scripts/argocd-bootstrap_test.sh
 	@./scripts/observability-bootstrap_test.sh
+	@./scripts/observability-slo_test.sh
 
 .PHONY: lint
 lint: ## gofmt / go vet / shell・Node構文チェック
@@ -179,6 +180,10 @@ tidb-local-up: ## make dev 用に tiup playground で TiDB v8.5.8 を 127.0.0.1:
 .PHONY: up
 up: ## k3d クラスタ作成 + 全デプロイ
 	@./scripts/up.sh
+
+.PHONY: deploy-latest
+deploy-latest: ## いまのチェックアウトで全サービスを作り直して k3d へ入れ替える(make up 済みが前提。動作確認の前に毎回)
+	@./scripts/k3d-deploy-latest.sh
 
 .PHONY: down
 down: ## k3d クラスタ削除

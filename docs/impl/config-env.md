@@ -123,7 +123,7 @@
 | `CLUSTER` | `pokecalc` | `Makefile:12`・`services/{balance,speed,judge}/Makefile:2` | k3d クラスタ名(context は `k3d-$CLUSTER` を要求) |
 | `GATEWAY_URL` | `http://localhost:8080` | `Makefile:13` | gateway の URL |
 | `API_CLUSTER`・`API_URL` | `$(CLUSTER)`・`http://localhost:8080` | `services/gateway/Makefile:8-9` | `api-k3d-deploy`・`api-smoke` |
-| `WEB_DIR`(`:=`)・`WEB_URL` | `web`・`http://localhost:5173` | `web/Makefile:4,61` | `web-k3d-smoke` の宛先 |
+| `WEB_DIR`(`:=`)・`WEB_URL` | `web`・`http://localhost:8080`(gateway 経由。診断時は 5173) | `web/Makefile:4,61` | `web-k3d-smoke` の宛先 |
 | `BALANCE_DIR`・`BALANCE_IMAGE`・`BALANCE_URL`・`BALANCE_REGISTRY_PORT` | `services/balance`・`pokecalc/balance:local`・`http://localhost:8080`・`5001` | `services/balance/Makefile:3-7` | balance の build・smoke・ローカルレジストリ |
 | `SPEED_DIR`・`SPEED_IMAGE`・`SPEED_URL`・`SPEED_READMODEL_DIR`・`SPEED_REGISTRY_PORT` | `services/speed`・`pokecalc/speed:local`・`http://localhost:8080`・`data/generated/readmodel`・`5002` | `services/speed/Makefile:3-10` | 同上 |
 | `JUDGE_DIR`・`JUDGE_IMAGE`・`JUDGE_URL` | `services/judge`・`pokecalc/judge:local`・`http://localhost:8080` | `services/judge/Makefile:3-5` | 同上 |
@@ -139,7 +139,7 @@
 | `scripts/dev.sh:25-26` | `DEV_CALC_PORT=8081`・`DEV_GATEWAY_PORT=8080`(k3d と衝突するときは変える) |
 | `scripts/db-local-up.sh:8,16,18` | `ENV_FILE=.env`・`POKEDEX_MYSQL_CONTAINER=pokecalc-mysql-local`・`MYSQL_ROOT_PASSWORD`(空なら失敗) |
 | `services/gateway/scripts/smoke.sh:22-25` | `API_URL=http://localhost:8080`・`API_SMOKE_RETRIES=30`・`API_SMOKE_BALANCE=auto`(`on`/`off`)・`API_SMOKE_NAMESPACE=pokecalc` |
-| `web/scripts/k3d-smoke.sh:15,17` | `WEB_URL=http://localhost:5173`・`WEB_SMOKE_RETRIES=30` |
+| `web/scripts/k3d-smoke.sh:15,17` | `WEB_URL=http://localhost:8080`・`WEB_SMOKE_RETRIES=30` |
 | `services/balance/scripts/*.sh` | `BALANCE_DIR=services/balance`・`BALANCE_URL=http://localhost:8080`・`BALANCE_READMODEL_DIR=data/generated/readmodel`・`BALANCE_IMAGE=pokecalc/balance:local`・`CLUSTER=pokecalc`・`BALANCE_REGISTRY_PORT=5001`・`BALANCE_RELEASE_IMAGE`(空)・`BALANCE_PLATFORMS=linux/amd64,linux/arm64`・`BALANCE_GITOPS_REPO_URL`(既定 = ファイル内の値 / `git remote get-url origin`) |
 | `services/speed/scripts/*.sh` | `SPEED_DIR=services/speed`・`SPEED_URL=http://localhost:8080`・`SPEED_READMODEL_DIR=data/generated/readmodel`・`SPEED_IMAGE=pokecalc/speed:local`・`CLUSTER=pokecalc`・`SPEED_REGISTRY_PORT=5002`・`SPEED_RELEASE_IMAGE`(空)・`SPEED_PLATFORMS=linux/amd64,linux/arm64`・`SPEED_GITOPS_REPO_URL`(同上) |
 | `services/judge/scripts/smoke.sh:5` | `JUDGE_URL=http://localhost:8080` |

@@ -61,6 +61,19 @@
 - `/assets/*`・`/healthz`・CORS プリフライト(OPTIONS + `Access-Control-Request-Method`)には課さない(`<img>` はヘッダを送れない。
   プリフライトにはブラウザが独自ヘッダを付けない)。
 - 検証を通ったリクエストのヘッダは書き換えずに上流へ転送する(大文字の UUID も大文字のまま)。
+- **追記(2026-09-25。issue #326「転送ヘッダ」)**:
+  - 検証済みの `X-Device-Id` / `X-Session-Id` は `/api/*` の上流(calc・pokedex)へ**必ず**届ける。クライアントが
+    `Connection: X-Device-Id, X-Session-Id` と列挙すると、`ReverseProxy` は `Rewrite` の前に hop-by-hop として消す
+    (上流は `missing_header` を返し、record/team が gateway の検証を前提にすると空の ID を受ける)。`Rewrite` で受信側の
+    値(検証済みでちょうど1つ)を `Set` し直す。値は書き換えない(大文字もそのまま)。`/assets/*`・Web への転送は
+    ヘッダを検証しないので付け直さない。拒否(400 `invalid_header`)ではなく付け直しを選んだのは、`Connection` の
+    列挙は HTTP として正しく、検証済みのリクエストを別理由で落とす必要がないため。
+  - クライアントが送った `X-Real-Ip` と `Forwarded` はどの上流にも転送しない(偽装したクライアント IP を上流が信じない
+    ように)。`X-Forwarded-For` は従来どおり `SetXForwarded` が gateway の直前の相手の IP で付け直す(§5)。
+  - **対象外(人間の判断待ち)**: k3d / 公開構成では gateway の直前は Traefik なので、`X-Forwarded-For` に入るのは
+    Traefik の Pod IP で、実際のクライアント IP は上流に残らない。信頼するプロキシ(Traefik)を設定で持ち、そこからの
+    `X-Forwarded-For` だけ引き継ぐかは、公開構成と合わせて決める(issue #246・#326。既定案: 公開時に
+    `GATEWAY_TRUSTED_PROXIES` の CIDR 一覧を足し、その範囲からの接続に限って `X-Forwarded-For` の右端を採る)。
 
 ### 5. 上流の失敗
 
@@ -89,6 +102,14 @@
   総当たり探索)は最後まで完走する。1リクエストあたりの最悪計算量は ADR-0208(件数・範囲の上限)で
   有界なので、実害は「無駄な計算がその上限の範囲で起こりうる」程度に留まる。engine への `context`
   導入が必要になったときは別 ADR で扱う。
+- **追記(2026-09-25。issue #209「`Expect: 100-continue` で上流の 4xx/5xx が 200 になる」)**: gateway→上流の
+  リクエストからは `Expect` ヘッダを取り除く(`Rewrite` で `pr.Out.Header.Del("Expect")`)。上流が `100 Continue` を
+  返すと `ReverseProxy` はそれを `WriteHeader(100)` で転送するが、Echo の `Response` は最初の `WriteHeader` で commit
+  され、続く上流のステータスを捨てて(`echo: response already written to client`)既定の 200 を出していた。
+  `Expect` が無ければ `http.Transport` は本文を即送り、上流は 1xx を返さない。クライアント側の `Expect` には gateway の
+  `http.Server` が本文を読むときに自動で `100 Continue` を返すので、クライアントから見た挙動は変わらない。
+  却下: `echo.UnwrapResponse` で素の `ResponseWriter` を渡す案(1xx は正しく転送されるが、`httpmetrics` が Echo の
+  `Response.Status` を読むため status のメトリクスが壊れ、追加の対処が要る)。
 
 ### 6. CORS
 
@@ -138,6 +159,8 @@ calc-svc は同名ヘッダの重複を `invalid_input` にしていた(ADR-0200
 | AC-G8 | 契約: invalid_header が ErrorCode にある。gateway のエラー(missing_header / invalid_header / not_found / upstream_unavailable)が契約どおり。上流が calc-svc の実物(架空マスタ)のとき calc・bulk・reverse の成功と calc-svc の 400 が gateway 経由で契約どおり | `TestContractHasInvalidHeader` / `TestGatewayErrorsMatchContract` / `TestRealCalcThroughGatewayMatchesContract` |
 | AC-G9 | 起動: 環境変数名、必須・既定・任意の読み込み、不正な URL・`*`・オリジンでない値・不正なタイムアウトは errInvalidConfig、run は /healthz に答え ctx の終了で nil で止まる、設定不正なら待ち受けずにエラー | `cmd/gateway.TestEnvNames` / `TestLoadConfig` / `TestLoadConfigRejects` / `TestRunServesAndStopsOnContextCancel` / `TestRunFailsOnInvalidConfig` |
 | AC-G10(2026-09-24追記。issue #113) | クライアントが要求を中断した(`context.Canceled`)ときは `upstream_unavailable` を書かない(応答なし)。自前のタイムアウト(別のエラー文言)とは区別される | `TestClientCancelIsNotUpstreamUnavailable` |
+| AC-G11(2026-09-25追記。issue #209) | `Expect: 100-continue` 付きのリクエストでも、上流(calc・pokedex・Web)のステータスと本文がそのまま返る。上流に `Expect` は届かず、Echo の二重 `WriteHeader` のログが出ない | `TestExpectContinueKeepsUpstreamStatus` |
+| AC-G12(2026-09-25追記。issue #326) | `Connection` に `X-Device-Id` / `X-Session-Id` を列挙しても、calc・pokedex に検証済みの値がちょうど1つずつ届く。クライアントの `X-Real-Ip` / `Forwarded` はどの上流(calc・pokedex・assets・Web)にも届かず、`X-Forwarded-For` は gateway が付け直す | `TestVerifiedIDsSurviveConnectionHeader` / `TestClientIPHeadersAreNotForwarded` |
 | AC-C1 | calc-svc: 同名ヘッダの重複は 400 invalid_header(§9) | `services/calc/internal/httpapi.TestDuplicateHeaderIsInvalidHeader` |
 
 calc-svc の実物は `services/calc/calctest`(`NewExampleHandler`。例のマスタと共有の相性表で `httpapi.NewHandler` を作る)で起動する。

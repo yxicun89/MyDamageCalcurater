@@ -507,9 +507,11 @@ export const resultText = {
   randomPrefix: "乱数",
   hitsSuffix: "発",
   cannotKO: "倒せない",
+  // issue 334(付随項目): iOS の DisplayLabels.swift(「ばつぐん(×2)」のように倍率併記)に語を揃えた。
+  // 「効果は」の接頭辞は外している(iOS 側に合わせ、Web からも申し送り済み)。
   effectivenessNone: "効果なし",
-  effectivenessNotVery: "効果はいまひとつ",
+  effectivenessNotVery: (multiplier: number): string => `いまひとつ(×${multiplier})`,
   effectivenessNeutral: "等倍",
-  effectivenessSuper: "効果はばつぐん",
+  effectivenessSuper: (multiplier: number): string => `ばつぐん(×${multiplier})`,
   moveCategory: { physical: "物理", special: "特殊", status: "変化" },
 } as const;
