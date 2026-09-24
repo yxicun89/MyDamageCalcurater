@@ -15,7 +15,9 @@ struct TeamSourceMenuRow: View {
     let teamOptions: [TeamPickerGroup]
     let selection: TeamIndividualSelection?
     let identifierPrefix: String
-    let onSelect: (String, String) async -> Void
+    /// 同期クロージャ(issue #113。ADR-0501「issue #113 の受け入れ条件(iOS 側)」8章):
+    /// Task の起動・保持は呼び出し側の画面が `scheduleLatest` で行う。
+    let onSelect: (String, String) -> Void
 
     /// 選べる個体が1体も無い(構築が無い・`teamStore` が無い・読み込み失敗)。7章「判断」:
     /// 行ごと消さず無効にして案内文を添える。
@@ -44,7 +46,7 @@ struct TeamSourceMenuRow: View {
                     Section(group.name) {
                         ForEach(group.members) { member in
                             Button(member.displayName) {
-                                Task { await onSelect(group.id, member.id) }
+                                onSelect(group.id, member.id)
                             }
                             .accessibilityIdentifier("\(identifierPrefix)Member-\(group.id)-\(member.id)")
                         }

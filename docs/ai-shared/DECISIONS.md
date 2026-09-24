@@ -1152,3 +1152,69 @@ Impact: `services/judge/api/openapi.yaml` と `make judge-gen` の生成物を�
 `AttackerKo` に変わったことによるコンパイルエラー)。次の implementer が ADR-0704 の受け入れ条件どおりに実装する。
 `docs/judge-design.md` §3 JD4 と `docs/plan.md` の JD4 行も更新した。他レーンへの依頼は無い
 (ルートの `api/openapi.yaml` は変更していない)。
+
+## 2026-09-24: 判定レーン JD4 の実装・critic PASS(判定レーン)
+Decision: ADR-0704 のとおり implementer が実装し(`internal/judge/turnorder.go` 新設・`internal/client/pokedex.go` に
+`Pokedex.Move`・`internal/httpapi/outspeed.go` の検査順拡張と逆方向calc)、critic が1回目でPASSした(必須はドキュメント
+更新のみで、コード修正は不要との判定)。軽微指摘のうち低コストな2件(`CompareTurnOrder` が `CompareSpeed` の不変条件に
+暗黙依存していた点の明示化、テストコメントの誤り修正)も併せて対応した。
+Reason: `make judge-test`/`judge-lint`/`judge-build`・ルートの `make test`(engine・全サービス・web 907 tests)すべて緑、
+critic PASS、他レーンの範囲外変更なし。
+Impact: JD0〜JD4 が完了。判定レーンのブランチは `feat/judge-jd4` のまま PR 作成へ進む。軽微な積み残し(`attacker` 単数の
+欄が `defenders` 候補と違い大文字小文字を厳密に検査していない非対称)は plan.md に記録し、今回のブロッカーにはしない。
+JD5(Web/iOS 画面)は着手前にユーザーへ確認する(judge-design.md §3 の方針どおり)。
+
+## 2026-09-24: issue #69(技・持ち物検索の並びがOpenAPI契約と一致しない)を修正(API レーン)
+Decision: `api/openapi.yaml` の `searchMoves`/`searchItems` の description が「並びは ID 順」としていたが、
+実装(`services/pokedex/db/query/pokedex.sql` の `SearchMoves`/`SearchItems`。`ORDER BY <table>.name_ja, <table>.id`)は
+P2-3 導入時から一貫して日本語名の照合順序(同順位は ID)だった。ADR-0105 §3 は既に「技・持ち物は name_ja, id」と
+正しく明記していたため、**誤っていたのは契約の説明文だけ**(SQL・ADR は無変更・新規 ADR も不要)。`searchSpecies`
+(`dex_no, form`)は SpeciesKey が固定幅ゼロ埋めのため文字列としての ID 順と一致し対象外、`listNatures`
+(`ORDER BY id`)も元から契約どおりで対象外。
+契約の description を実態に合わせて訂正し、`make gen`・`make ios-gen` を実行(絶対ルール1)。
+**iOS の生成物は PR #161(getMove。P3-7)の分も含めて `make ios-gen` が漏れており未追従だった
+(`make ios-gen-check` が失敗する状態だった)。今回まとめて解消した**(API レーンの取りこぼしの修復のため
+同一コミットに含めた。iOS レーンの範囲への継続的な変更ではない)。
+テストは2層: DB 層(`db.TestSearchMovesAndItemsOrderIsNameJaNotID`。`-tags mysql`。実 MySQL
+〈kubectl port-forward で `pokecalc` クラスタの `svc/mysql` に接続、使い捨ての `pokedex_test` DB を都度作成・削除〉で
+確認)と httpapi 層(`TestSearchMovesAndItemsPreserveGivenOrderAndLimitCutsThatOrder`。ハンドラが行順を並べ替えず、
+`limit` がその並びの先頭から切ることを固定。ID 順に並べ替えてから切ると集合自体が変わることを issue の指摘どおり
+変異テストで確認: 一時的に `ORDER BY m.id` に変えて DB 層のテストが落ちることを確認 → revert、一時的に
+ハンドラへ `sort.Slice`(ID順)を差し込んで httpapi 層のテストが落ちることを確認 → revert)。
+Reason: issue #69。契約(`api/openapi.yaml`)が唯一の正であるべきなのに実態とずれていた
+(クライアントが契約どおり ID 順を前提にできない・limit 境界で返る集合自体が変わりうる)。
+Impact: `docs/plan.md` の改善要望に issue #69 の行を追加。データ・Web・iOS レーンへの追加対応は無し
+(SQL・ADR は無変更、iOS 生成物は本コミットで追従済み)。issue #69 はこの PR のマージでクローズしてよい。
+
+## 2026-09-24: getMove(P3-7)のAPIレーン越境実装をレビュー(データレーン)
+Decision: APIレーンからの依頼(2026-09-23「services/pokedex/の再レビュー」)に応え、
+`services/pokedex/db/query/pokedex.sql`(GetMove)・`internal/httpapi/search.go`(GetMoveハンドラ)・
+`internal/httpapi/server.go`(ルート登録)・`internal/httpapi/pokedex_test.go`(TestGetMove)・
+`internal/storetest/storetest.go`(偽実装)を確認した。**修正不要と判断**:
+- `GetMove`ハンドラのエラー変換(`sql.ErrNoRows`→`api.NotFound`、それ以外→`unavailable`)は
+  既存の`GetSpecies`と完全に同じ流儀
+- `storetest.Querier.GetMove`の偽実装(`record`呼び出し→線形探索→`sql.ErrNoRows`)は
+  `GetSpeciesByKey`の偽実装と同じパターン
+- `TestGetMove`はレギュレーション外の技・未知の技・マスタ未投入(0件→404、他の一覧系の503と違う
+  点も含め)を網羅しており、データレーンのテスト密度の基準を満たす
+- `api/openapi.yaml`のdescriptionも404/503の使い分けを明記しており、ADR-0105 §3追記の内容と一致
+`make build`/`go vet`/`go test ./...`(services全体)すべてgreenを確認済み。
+Reason: APIレーンの越境実装(3往復critic PASS済み)に対する独立確認。データレーン側の設計判断
+(命名・エラー変換)と食い違いがないかを見るのが依頼内容だった。
+Impact: 追加の修正なし。判定レーンはJD4に着手してよい(APIレーン側で既に確認済み)。
+
+## 2026-09-24: issue #99(ライトテーマの danger コントラスト不足)の Web レーン担当分が完了。iOS レーンへ依頼
+Decision: danger のライト値を `#E5484D` → `#CD1D23` に変更した(色相・彩度は変えず明度だけ下げる。WCAG 2.2
+SC 1.4.3 の通常文字基準4.5:1を、bg.base単体(5.07:1)・bg.glassをbg.baseに重ねた合成色(5.40:1)の両方で満たす。
+ダーク値 `#FF6369` は元から基準を満たしており〈bg.base 6.56:1・glass合成 6.13:1〉変更していない)。
+`docs/design.md`「デザイントークン」に理由・数値を記録。`web/src/test/colorContrast.ts`(WCAG相対輝度・
+コントラスト比の計算。既知の参照値で検算済み)・`web/src/styles/contrast.test.ts`(design.md から値を読み、
+ライト・ダーク×bg.base・bg.glass合成の4組を検査)を新規追加。critic PASS(独立実装での検算・変異テストで
+実効性を確認済み)。
+Reason: issue #99(Codexレビュー。タイプバランスレーンから2026-09-23連絡)。ライトテーマの danger 文字色が
+WCAG基準を満たさず、弱視・低コントラスト環境の利用者がエラー文言を読み取りにくい状態だった。
+Impact: **iOSレーンへ依頼**: `ios/PokeCalcKit/Sources/PokeCalcDesign/PokeCalcDesign.swift`(`ColorToken.danger`
+のライト値。現在 `RGBA(red: 0xE5, green: 0x48, blue: 0x4D, alpha: 1.0)`)と
+`ios/PokeCalcKit/Tests/PokeCalcDesignTests/DesignTokenTests.swift`(同じ旧値を手書きで期待値にしている36行目
+付近)を `0xCD, 0x1D, 0x23` に更新し、Web と同様にコントラスト比を検査するテストを追加してほしい(値は
+design.md「デザイントークン」が正)。issue #99 は iOS 側が完了するまでクローズしない。

@@ -31,17 +31,17 @@ struct AttackerCardView: View {
             .accessibilityHint("ポケモンを変える")
             .sheet(isPresented: $isSpeciesSearchPresented) {
                 SpeciesSearchSheet(viewModel: viewModel) { option in
-                    Task { await viewModel.selectAttacker(speciesKey: option.key) }
+                    viewModel.scheduleLatest { await $0.selectAttacker(speciesKey: option.key) }
                 }
             }
 
             Menu {
                 Button(BulkRowDisplay.itemLabel(itemId: nil, items: viewModel.itemOptions)) {
-                    Task { await viewModel.selectAttackerItem(id: nil) }
+                    viewModel.scheduleLatest { await $0.selectAttackerItem(id: nil) }
                 }
                 ForEach(viewModel.itemOptions, id: \.id) { item in
                     Button(item.nameJa) {
-                        Task { await viewModel.selectAttackerItem(id: item.id) }
+                        viewModel.scheduleLatest { await $0.selectAttackerItem(id: item.id) }
                     }
                 }
             } label: {
@@ -79,7 +79,7 @@ struct DefenderCardView: View {
             .accessibilityHint("ポケモンを変える")
             .sheet(isPresented: $isSpeciesSearchPresented) {
                 SpeciesSearchSheet(viewModel: viewModel) { option in
-                    Task { await viewModel.selectDefender(speciesKey: option.key) }
+                    viewModel.scheduleLatest { await $0.selectDefender(speciesKey: option.key) }
                 }
             }
         }
