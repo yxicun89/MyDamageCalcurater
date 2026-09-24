@@ -149,10 +149,22 @@
   攻守入れ替え・ReverseScreen の与えた/受けた切り替え)し、指摘された3つの変異すべてで実際に落ちることを
   確認。既存1192件は無変更・新規28件追加(1220件。うち2件は critic 指摘を受けて既存アサーションに追記して強化)。
   BalanceScreen の種族検索・技選択は P4-17b として積み残し(下記)
-- [ ] P4-17b BalanceScreen(タイプバランス)の種族検索・技選択をオンラインでも使えるようにする
+- [x] P4-17b BalanceScreen(タイプバランス)の種族検索・技選択をオンラインでも使えるようにする
   (ADR-0304 A-9 の申し送り・A-13.5 の積み残し)。パーティ・仮想敵の各枠(6枠 × 2)に A-10 の種族検索を広げ、
-  枠ごとに解決した learnset から技を4つまで選べるようにする。それまではオンラインでは画面ごと無効のまま
-  (`capabilities.speciesList && capabilities.moves` の判定は変えない。回帰テストで固定済み)
+  枠ごとに解決した learnset から技を4つまで選べるようにする。spec-writer が ADR-0304 追記5(A-14)に
+  設計を記録し、失敗するテスト13件を追加: 可否の判定を `speciesList && moves` から「入力の口があるか」
+  (`(speciesList || masterSearch) && (moves || (!speciesList && masterSearch))`)に置き換え、12枠で
+  `useSpeciesResolutions` を共有し、`moveById` の「実体不明の技 ID を攻撃技と誤判定する」不具合を直す。
+  implementer が `web/src/screens/BalanceScreen.tsx` を A-14 のとおり実装(ゲート条件・
+  `useSpeciesResolutions()` の12枠共有・`MemberFields` のドロップダウン/検索欄の出し分け・
+  `moveById`/`hasDamagingMove` の fail-closed 化・結果表の名前解決)。critic PASS(mutation testing で
+  ゲート条件・fail-closed 判定・`registerSpeciesResolution` 呼び出し漏れ等の主要な変異を全て検知することを確認)。
+  critic 指摘の軽微3件はその場で直接修正: (1) A-14.1 の表7行のうち未カバーだった2行
+  (`NO_SPECIES_LIST`+検索口あり・容量そろい+検索口ありの2組み合わせ)のテストを追加、
+  (2) `useMemberListActions.resolveSpecies` を index ではなく `member.id` で引くように変更
+  (検索の解決を待つ間に他の枠が削除されると index が別の枠を指しうる競合を根治)、
+  (3) `MemberFields` 内の特性名解決の重複ロジックを `findAbilityName` 呼び出しに統一。
+  `cd web && npx vitest run` は1243/1243 green(新規15件)、`npx tsc --noEmit`・`npx eslint` ともにエラー無し。
 - [x] P4-18(Web 分。Codex コードレビューの issue。タイプバランスレーンから 2026-09-23 に連絡・
   `gh issue view <番号>`)。**#99(bug, accessibility)ライトテーマのエラー文字色がコントラスト基準未達 —
   Web 分・iOS 分とも完了、issue クローズ済み**: danger のライト値を `#E5484D`→`#CD1D23`(WCAG 2.2 SC 1.4.3
@@ -307,6 +319,20 @@
   攻撃側の learnset の ID 集合 + ダメージ技」の3条件に直し、回帰・変更理由・stage-2 解決ループの世代保護の回帰テストを
   4本追加(いずれも該当箇所を戻すと実際に red になることを確認済み)。`swift test` 383件・`make ios-test`
   (unit 396件・XCUITest 17件・Info.plist 検査)すべて成功。**issue #68 は iOS 側を閉じてよい**(ADR 7章)
+- [x] P6-10 `TeamEditViewModel.load()` の技解決を `getMovesByIds`(main に追加済み。web は P4-17 で採用済み)の
+  一括呼び出しに切り替えた(旧実装は `move(id:)` をメンバーごとに個別呼び出し)。`PokeCalcService.moves(ids:)` を
+  追加(`APIPokeCalcService`: `RequestLimits.maxMoveBatchIds` = 64 件ずつに分割・重複除去・空配列で無呼び出し・
+  404 は無い写像、`MockPokeCalcService`: 未知 ID を省く)、`load()` は全メンバーの `species(key:)` 後に未知の技を
+  集めて1回で解決する2段構成に書き換えた(`withTaskGroup` は不要になった)。Calc/Reverse の `move(id:)` は
+  変えていない(stage-2 の短絡評価の意味が変わるため。理由は ADR 4章)。方針・受け入れ条件は
+  ADR-0501「getMovesByIds による構築編集の技の一括解決」。既存の `TeamEditViewModelMoveLookupTests`(7件)は
+  1行も編集せず、`StubPokeCalcService` 側の拡張(`moveLookups` の共有記録・`moveBatchModeOverride` が未設定なら
+  `moveLookupMode` に従う近似。ADR 3章・3.1章)だけで green を保った。実装完了後の critic 1回目は FAIL
+  だったが、指摘はテストの網羅不足のみ(実装は問題なしと判定): 分割の境界テストを `RequestLimits.maxMoveBatchIds`
+  基準の表駆動に直し(ミューテーションテストで実際に red になることを確認)、`load()` の Task を保留中の一括解決
+  ごと cancel するテストを追加、`species(key:)` が途中で失敗したときの挙動差分を ADR に明記、古くなったテストの
+  ヘッダーコメントを修正(ADR 8章)。`swift test`(399件・0失敗)・`make ios-test`
+  (`ios-test-unit` 412件・`ios-test-ui` 17件・Info.plist 検査、すべて成功。終了コード0)ともに green
 - [ ] P6-7 ADR-0209 §8 の文言と「この端末のデータを削除」の UI(issue #103。record-svc / team-svc の全削除 API 実装後)
 - [x] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼された
   内容どおり `ColorToken.danger` のライト値を `0xE5,0x48,0x4D` → `0xCD,0x1D,0x23` に更新し、

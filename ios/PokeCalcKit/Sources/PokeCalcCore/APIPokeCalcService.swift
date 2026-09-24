@@ -102,6 +102,38 @@ public struct APIPokeCalcService: PokeCalcService {
         }
     }
 
+    /// `getMovesByIds`(`move(id:)` の複数版。ADR-0501「getMovesByIds による構築編集の技の一括解決」1章)。
+    /// `ids` を重複除去し、空なら通信せず `[]` を返す。`RequestLimits.maxMoveBatchIds` 件ずつに分割して
+    /// `client.getMovesByIds` を順に呼び、応答を渡した順に連結する(並行に投げる必要は無い。1章「実装者への
+    /// 注意」)。404 は無い(マスタに無い ID は 200 の応答から黙って省かれるだけ)ので `.ok` 以外は
+    /// 他の pokedex 操作と同じ写像(`domainErrorFromSchema` / `domainError`)。
+    public func moves(ids: [String]) async throws -> [Move] {
+        var seen = Set<String>()
+        let dedupedIds = ids.filter { seen.insert($0).inserted }
+        guard !dedupedIds.isEmpty else { return [] }
+
+        var result: [Move] = []
+        for start in stride(from: 0, to: dedupedIds.count, by: RequestLimits.maxMoveBatchIds) {
+            let end = min(start + RequestLimits.maxMoveBatchIds, dedupedIds.count)
+            let chunk = Array(dedupedIds[start..<end])
+            let output = try await send {
+                try await client.getMovesByIds(.init(
+                    query: .init(ids: chunk),
+                    headers: .init(xDeviceId: identity.deviceID, xSessionId: identity.sessionID)
+                ))
+            }
+            switch output {
+            case .ok(let ok):
+                result.append(contentsOf: try ok.body.json.map(Self.domainMove))
+            case .serviceUnavailable(let response):
+                throw try Self.domainErrorFromSchema(response.body.json)
+            case .default(_, let error):
+                throw try Self.domainError(error)
+            }
+        }
+        return result
+    }
+
     public func searchItems(query: String, limit: Int) async throws -> [Item] {
         let output = try await send {
             try await client.searchItems(.init(

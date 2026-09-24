@@ -14,6 +14,13 @@ public protocol PokeCalcService: Sendable {
     /// 検索結果に一度も現れていない「選択中の技」の名前を解決するためだけに使う
     /// (learnset 全件の実体化には使わない。ADR-0501「issue #68 の残り」)。
     func move(id: String) async throws -> Move
+    /// 技を ID の集合でまとめて解決する(openapi `getMovesByIds`。`move(id:)` の複数版)。
+    /// マスタに無い ID は結果から黙って省く(エラーにしない。404 は無い)。重複した ID は入力からも
+    /// 応答からも1つにまとめる。`ids` が `RequestLimits.maxMoveBatchIds` を超えるときは、呼び出し側で
+    /// 待たずにこの実装がその件数ずつに分割して複数回呼ぶ(呼び出し元は分割を意識しない)。
+    /// `ids` が空なら通信せず空配列を返す。応答の順序は渡した `ids`(重複除去後)の順
+    /// (ADR-0501「getMovesByIds による構築編集の技の一括解決」)。
+    func moves(ids: [String]) async throws -> [Move]
     /// 持ち物を日本語名で前方一致検索。
     func searchItems(query: String, limit: Int) async throws -> [Item]
     /// 性格の一覧(補正する能力)。
