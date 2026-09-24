@@ -523,7 +523,7 @@
 
 - P2-2d の critic の軽微(2026-09-22): `cronjob_layout_test.go` の「消さない」検査を secret・statefulset・configmap にも広げる / `make lint` が kubectl に依存する(kubectl の無い環境では失敗する)/ upstream の `checkedAt` が未来でも fresh 扱い / **コンテナの中で取得スクリプト(Showdown の build 等)を実際に流した記録が無い。初回の `make import-k8s` で確かめる**
 
-- `services/pokedex/db/mysql_test.go` に「species_abilities.slot = 4 が入る」ことを確かめるケースを足す(P2-2c の critic の軽微。000005 は使い捨てコンテナで手動確認済み)
+- [x] issue #76(データレーン)`services/pokedex/db/mysql_test.go` に「species_abilities.slot = 4 が入る」ことを確かめるケースを足す(P2-2c の critic の軽微。000005 は使い捨てコンテナで手動確認済みだったが自動テストが無かった): `TestConstraintsRejectInvalidRows` のスロット5拒否・特性重複拒否は負方向だけだったため、`TestSpeciesAbilitiesSlot4RoundTrip` を追加し slot 4 への挿入成功と読み戻し(`SELECT ... ORDER BY slot`)を固定。確認・ロールバックはトランザクション内(コミットして残すと、他テストの `freshDB` が呼ぶ `DownAll` が migration 000005 の down〈CHECK を 1..3 へ戻す〉で失敗するため)。migration 000005 の CHECK を一時的に `(1,2,3)` に戻して新テストが失敗することを確認した上で revert(退行検知の実効性を確認)。`-tags mysql`(使い捨て MySQL コンテナ、pin 済み `mysql:9.7.2`)・`make test`・`make lint` 成功
 
 - [x] `scripts/check-publishable.sh --self-test` の既存の失敗2件を MT-2 で修正し、`make lint` に自己テストを追加(2026-09-22)
 
