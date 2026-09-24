@@ -9,6 +9,7 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"example.com/pokecalc/services/internal/api"
+	"example.com/pokecalc/services/internal/httpmetrics"
 	"example.com/pokecalc/services/pokedex/internal/store"
 )
 
@@ -31,8 +32,11 @@ func NewServer(q store.Querier) *Server {
 // serve は起動時に DB へ接続しない(sql.Open だけ)。DB が無くても起動し、DB を使う操作が 503 を返す。
 func NewHandler(q store.Querier) http.Handler {
 	e := echo.New()
-	e.Use(recoverMiddleware)
 	e.HTTPErrorHandler = httpErrorHandler
+	m := httpmetrics.New()
+	e.Use(m.Middleware())
+	e.Use(recoverMiddleware)
+	e.GET(httpmetrics.Path, m.Handler())
 
 	registerPokedexRoutes(e, NewServer(q))
 	registerCalcNotFoundRoutes(e)

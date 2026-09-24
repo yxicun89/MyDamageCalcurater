@@ -13,6 +13,7 @@ import (
 
 	"example.com/pokecalc/services/balance/internal/api"
 	"example.com/pokecalc/services/balance/internal/balance"
+	"example.com/pokecalc/services/balance/internal/httpmetrics"
 	"github.com/labstack/echo/v5"
 )
 
@@ -102,6 +103,9 @@ func New(deps Dependencies) *echo.Echo {
 	deps = normalizeDependencies(deps)
 	e := echo.New()
 	e.HTTPErrorHandler = writeHTTPError
+	m := httpmetrics.New()
+	e.Use(m.Middleware())
+	e.GET(httpmetrics.Path, m.Handler())
 	api.RegisterHandlersWithOptions(e, handler{deps: deps}, api.RegisterHandlersOptions{
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
 			"analyzeTeamBalance":  {requireRequestContext},

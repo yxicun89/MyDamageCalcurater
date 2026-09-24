@@ -365,6 +365,13 @@
 
 ## M4: 運用
 - [ ] P7-1 kube-prometheus-stack / Loki、各サービスのメトリクス
+  - [x] メトリクス計測(ADR-0406 §1〜3。2026-09-24): gateway・pokedex・calc(`services/internal/httpmetrics`)、
+    balance・speed・judge(各自 `internal/httpmetrics` に複製)すべてに `GET /metrics`(Prometheus text format、
+    `http_requests_total{method,path,status}` / `http_request_duration_seconds{method,path}`、path はルーティング
+    パターン)を追加。`github.com/prometheus/client_golang` v1.24.1 を4 go.mod に追加。`make test`/`make lint`/
+    `make build`/`make check-publishable` 確認済み
+  - [ ] kube-prometheus-stack / Loki の導入(ADR-0406 §4〜5。`scripts/observability-bootstrap.sh`・
+    `deploy/k8s/base/observability/`・ServiceMonitor)は未着手(別タスク)
 - [ ] P7-2 SLO(計算API p99 < 100ms、可用性)とダッシュボード
 - [ ] P7-3 ArgoCD(GitOps)
 - [ ] P7-4 MySQL/TiDB バックアップと復元テスト(ADR-0209 §9 を要件に含める: バックアップに `devices`〈墓石〉を含める /

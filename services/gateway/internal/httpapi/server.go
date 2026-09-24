@@ -17,6 +17,7 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"example.com/pokecalc/services/internal/api"
+	"example.com/pokecalc/services/internal/httpmetrics"
 )
 
 // ErrInvalidConfig は Config が不正(CalcURL が無い等)なときに NewHandler が包んで返すエラー。
@@ -74,7 +75,10 @@ func NewHandler(cfg Config) (http.Handler, error) {
 
 	e := echo.New()
 	e.HTTPErrorHandler = httpErrorHandler
+	m := httpmetrics.New()
+	e.Use(m.Middleware())
 	e.Use(g.recoverMiddleware)
+	e.GET(httpmetrics.Path, m.Handler())
 	e.Any("/*", g.serve)
 	return e, nil
 }
