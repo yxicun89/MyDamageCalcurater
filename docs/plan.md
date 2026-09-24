@@ -234,6 +234,12 @@
   `resolveAttackerPreset` の実際の出力を突き合わせる契約テスト(現状の値は一致済み)。JSON の値を書き換える
   mutation で実際に検知することを確認(3件 fail)、確認後に復元。新規17件追加(1262件)。`web/src/domain/
   attackerPresets.ts` 自体は変更していない(engine への実装移管は別タスク)。
+- [x] issue #333(375px幅でタブの名前が1文字ずつ縦に折り返す)。**完了(2026-09-25。Web レーン)**: `App.css` の
+  `.app-tabs__list` に `overflow-x: auto`、`.app-tabs__tab` に `white-space: nowrap`・`flex-shrink: 0` を追加
+  (既定案どおり)。回帰テスト(`web/e2e/mobile.spec.ts`、320・375px)を追加: 高さの比較では「全タブが同じだけ
+  折り返す」ケースを見逃す(このissueがまさにそれ)ため、各タブのテキストノードを `Range.getClientRects()`
+  で数えて1行であることを直接確認する形にした。CSSを戻すと実際に検知することを確認(確認後に復元)。
+  `web/e2e/a11y.spec.ts`(タブのキーボード操作)・vitest 1262件・lintは無回帰。
 
 ## M2: 保存・構築
 

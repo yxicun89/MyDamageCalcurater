@@ -16,11 +16,14 @@
 }
 
 /* 計算・逆算の切り替えタブ(P4-4)。色は tokens.css の CSS 変数だけを参照する。 */
+/* issue #333: 狭い幅ではタブの合計幅がページ幅を超えうる。タブ列だけを横スクロールさせ(ページ全体は
+   溢れさせない。design.md「幅への対応」)、各タブの文字は折り返さない。 */
 .app-tabs__list {
   display: flex;
   justify-content: center;
   gap: var(--space-2);
   padding: var(--space-4) var(--space-4) 0;
+  overflow-x: auto;
 }
 
 .app-tabs__tab {
@@ -33,6 +36,8 @@
   font-size: var(--font-size-body);
   padding: var(--space-2) var(--space-4);
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
   /* 選択の切り替えはタップへの反応だけ(design.md「動き」、CLAUDE.md ドメイン規約)。 */
   transition:
     background-color var(--duration-swap) ease,

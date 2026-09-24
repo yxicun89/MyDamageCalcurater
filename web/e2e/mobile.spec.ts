@@ -189,6 +189,31 @@ for (const width of NARROW_WIDTHS) {
       }
     });
 
+    test("タブの名前が1文字ずつ縦に折り返さない(issue #333)", async ({ page }) => {
+      await openCalcScreen(page);
+
+      const tabs = page.getByRole("tab");
+      const count = await tabs.count();
+      expect(count, "タブが1つも無い").toBeGreaterThan(0);
+      for (let i = 0; i < count; i += 1) {
+        const tab = tabs.nth(i);
+        const label = (await tab.textContent())?.trim() ?? `${String(i)}番目`;
+        // 高さの比較では「全タブが同じだけ折り返す」ケースを見逃す(issue #333 はまさにこれ)。
+        // 文字テキストの行ボックス数を直接数える(1行なら1、折り返せば2以上)。
+        const lineCount = await tab.evaluate((el) => {
+          const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+          const textNode = walker.nextNode();
+          if (textNode === null) {
+            return 0;
+          }
+          const range = document.createRange();
+          range.selectNodeContents(textNode);
+          return range.getClientRects().length;
+        });
+        expect(lineCount, `タブ「${label}」が複数行に折り返している`).toBeLessThanOrEqual(1);
+      }
+    });
+
     test("計算画面: カードは縦積みで、攻撃側 → 攻守入れ替え → 防御側 の順に並ぶ", async ({ page }) => {
       await openCalcScreen(page);
 
