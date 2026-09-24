@@ -89,6 +89,33 @@ func validateAgainstContract(t *testing.T, method, target string, withHeaders bo
 	}
 }
 
+// contractQueryParamMaxItems は path(operation)の query パラメータ name の maxItems を契約
+// (埋め込まれた spec)から読む。テスト側に上限の数値をハードコードせず、契約が唯一の正であることを
+// 保つ(絶対ルール1。契約の maxItems を変えたらこのテストの期待値も自動で追従する)。
+func contractQueryParamMaxItems(t *testing.T, path, method, name string) int {
+	t.Helper()
+	doc, err := api.GetSwagger()
+	if err != nil {
+		t.Fatalf("契約を読めない: %v", err)
+	}
+	item := doc.Paths.Find(path)
+	if item == nil {
+		t.Fatalf("契約に %s が無い", path)
+	}
+	op := item.GetOperation(method)
+	if op == nil {
+		t.Fatalf("契約に %s %s が無い", method, path)
+	}
+	param := op.Parameters.GetByInAndName("query", name)
+	if param == nil || param.Schema == nil || param.Schema.Value == nil {
+		t.Fatalf("契約に %s %s のクエリパラメータ %s が無い", method, path, name)
+	}
+	if param.Schema.Value.MaxItems == nil {
+		t.Fatalf("契約の %s %s の %s に maxItems が無い", method, path, name)
+	}
+	return int(*param.Schema.Value.MaxItems)
+}
+
 // decodeError は Error 形式の本文を読む(未知のフィールドを拒否)。
 func decodeError(t *testing.T, rec *httptest.ResponseRecorder) api.Error {
 	t.Helper()

@@ -1060,6 +1060,245 @@ public enum Operations {
             }
         }
     }
+    /// 技を ID のまとめ取りで解決する
+    ///
+    /// `getMove` の複数版。`getSpecies` の `learnset`(ID配列)のような、既に確定した ID の集合を
+    /// 1回の呼び出しで実体(名前・タイプ・分類・威力・優先度)に解決するための経路
+    /// (ADR-0304 §3。Web のオンライン学習技表示の欠落の解消)。`getMove` と同様に既定のレギュレーションで
+    /// 絞らない(使用可能集合の外の技も返す)。マスタに無い ID は黙って省く(部分一致は無い。エラーにしない)。
+    /// 応答の順序は `ids` と同じ(見つからなかった ID は詰めて省く)。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/pokedex/moves/batch`.
+    /// - Remark: Generated from `#/paths//api/pokedex/moves/batch/get(getMovesByIds)`.
+    public enum GetMovesByIds {
+        public static let id: Swift.String = "getMovesByIds"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/pokedex/moves/batch/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// 技の ID の配列(繰り返しクエリ。例 `?ids=highhorsepower&ids=tackle`)。1〜64件。
+                /// パラメータ自体の省略・65件以上は 400 `invalid_input`。1件の集合が64件を超える場合(例:
+                /// `getSpecies` の `learnset` が64件を超える種族)は、呼び出し側が64件ずつに分割して複数回
+                /// 呼ぶこと(1回で必ず収まる集合サイズの保証はしない)。空文字列の要素・重複した ID は
+                /// エラーにせず、マスタに無い ID と同様にその要素だけ結果から省く(一致すれば重複したまま返る)
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/pokedex/moves/batch/GET/query/ids`.
+                public var ids: [Swift.String]
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - ids: 技の ID の配列(繰り返しクエリ。例 `?ids=highhorsepower&ids=tackle`)。1〜64件。
+                public init(ids: [Swift.String]) {
+                    self.ids = ids
+                }
+            }
+            public var query: Operations.GetMovesByIds.Input.Query
+            /// - Remark: Generated from `#/paths/api/pokedex/moves/batch/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/pokedex/moves/batch/GET/header/X-Device-Id`.
+                public var xDeviceId: Components.Parameters.DeviceId
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/pokedex/moves/batch/GET/header/X-Session-Id`.
+                public var xSessionId: Components.Parameters.SessionId
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetMovesByIds.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///   - accept:
+                public init(
+                    xDeviceId: Components.Parameters.DeviceId,
+                    xSessionId: Components.Parameters.SessionId,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetMovesByIds.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.xDeviceId = xDeviceId
+                    self.xSessionId = xSessionId
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetMovesByIds.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.GetMovesByIds.Input.Query,
+                headers: Operations.GetMovesByIds.Input.Headers
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/pokedex/moves/batch/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/pokedex/moves/batch/GET/responses/200/content/application\/json`.
+                    case json([Components.Schemas.Move])
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: [Components.Schemas.Move] {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetMovesByIds.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetMovesByIds.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 見つかった技の一覧(ids の順。見つからなかった ID は省く。マスタ未投入で0件のときも `searchMoves` と異なり 503 ではなく空配列 `[]`)
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/moves/batch/get(getMovesByIds)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetMovesByIds.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetMovesByIds.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/pokedex/moves/batch/GET/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/pokedex/moves/batch/GET/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetMovesByIds.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetMovesByIds.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/moves/batch/get(getMovesByIds)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.GetMovesByIds.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.GetMovesByIds.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/moves/batch/get(getMovesByIds)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// 持ち物を日本語名で前方一致検索
     ///
     /// 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。

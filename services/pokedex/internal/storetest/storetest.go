@@ -272,6 +272,20 @@ func (q *Querier) GetMove(_ context.Context, id string) (store.GetMoveRow, error
 	return store.GetMoveRow{}, sql.ErrNoRows
 }
 
+func (q *Querier) GetMovesByIDs(_ context.Context, ids []string) ([]store.GetMovesByIDsRow, error) {
+	if err := q.record("GetMovesByIDs", ids); err != nil {
+		return nil, err
+	}
+	in := set(ids)
+	var out []store.GetMovesByIDsRow
+	for _, m := range q.Moves {
+		if in[m.ID] {
+			out = append(out, store.GetMovesByIDsRow{ID: m.ID, NameJa: m.NameJa, Type: m.Type, Category: m.Category, Power: m.Power, Priority: m.Priority})
+		}
+	}
+	return out, nil
+}
+
 func (q *Querier) ListSpeciesAbilityNames(_ context.Context, speciesKey string) ([]store.ListSpeciesAbilityNamesRow, error) {
 	if err := q.record("ListSpeciesAbilityNames", speciesKey); err != nil {
 		return nil, err

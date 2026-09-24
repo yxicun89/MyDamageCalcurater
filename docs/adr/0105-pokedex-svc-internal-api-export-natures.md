@@ -23,7 +23,7 @@ API レーン(calc-svc が起動時に取るマスタ一式 `GET /internal/poked
 | パス | 内容 |
 |---|---|
 | `services/pokedex/cmd/pokedex/` | 1つのバイナリ `pokedex`。サブコマンド `serve`(HTTP)と `export -out <dir>`(read model の出力)。設定は環境変数 `POKEDEX_DATABASE_DSN`(必須)・`POKEDEX_ADDR`(既定 `:8080`) |
-| `services/pokedex/internal/httpapi/` | Echo v5 の HTTP 境界。生成物 `services/internal/api`(API レーンの `make gen` の出力)の `ServerInterface` を実装し、`ServerInterfaceWrapper` で公開操作(検索5 + `getMove`。2026-09-23 追記)を登録する。**新しい生成物を作らない・生成型を手書きしない** |
+| `services/pokedex/internal/httpapi/` | Echo v5 の HTTP 境界。生成物 `services/internal/api`(API レーンの `make gen` の出力)の `ServerInterface` を実装し、`ServerInterfaceWrapper` で公開操作(検索5 + `getMove` + `getMovesByIds`。2026-09-23・2026-09-24 追記)を登録する。**新しい生成物を作らない・生成型を手書きしない** |
 | `services/pokedex/internal/readmodel/` | `pokedex export` の中身(DB → balance・speed 向けの JSON)。HTTP に依存しない |
 | `services/pokedex/internal/store/` | sqlc の生成物(既存。§2 のクエリを追加して再生成済み) |
 | `services/pokedex/internal/storetest/` | テスト専用の偽の `store.Querier` と架空データ(本番のコードから import しない) |
@@ -84,9 +84,28 @@ API レーン(calc-svc が起動時に取るマスタ一式 `GET /internal/poked
   503 ではなく 404 `not_found`** になる(単一行取得は「レギュレーションが無い」と「この ID の技が無い」を区別しない)。
   DB 自体に届かない失敗は 503 `master_unavailable`。`docs/adr/0107-move-secondary-rank-changes.md` §未決事項の
   「技 ID 1件を引く経路が無い」を解消する形として `GET /api/pokedex/moves/{key}` を採った(案:検索経由ではなく詳細
-  エンドポイントを新設)。**`docs/adr/0304-web-online-mastersource.md` §3 の「学習技(learnset)を技の実体にする」
-  案(案A)は依然として未決のまま**(この getMove の追加は Web レーンのその欠落への回答ではない。案Aと案B
-  〈このADRのgetMove〉は別々に採用しうる)。
+  エンドポイントを新設)。
+- `getMovesByIds`(2026-09-24 追記。ADR-0304 §3 の決定): `GET /api/pokedex/moves/batch?ids=...`。`getMove` の複数版。
+  `getSpecies` の `learnset`(ID配列)を1回の呼び出しで `Move[]` に解決するための経路(**`docs/adr/0304-web-online-mastersource.md`
+  §3 の「学習技を技の実体にする」欠落は、`learnset` の型を変える案A ではなくこちらで解消した**。理由: iOS(M3)が
+  `SpeciesDetail.learnset` を `string[]` のまま前提にした機能を先に出荷済みで、案Aは iOS の完成済み機能を壊す
+  破壊的変更になり「契約変更が小さい方」の基準に反するため)。`getMove` と同様に既定のレギュレーションで絞らず、
+  見つからなかった ID は黙って省き、応答は `ids` の順(DB の `IN` 句は順序を保証しないためハンドラで並べ替える)。
+  `ids` は1〜64件。64 は issue #110 の教訓(候補・観測配列には必ず上限を置く。ADR-0208)を踏まえた保守的な
+  初期値で、ADR-0208 の itemVariants/itemCandidates とは「1回のクエリで増幅させない」という考え方だけを
+  借りている(持ち物の分類数が根拠のADR-0208の64をそのまま転用したものではない。技の learnset が実データで
+  何件まであるかはこの時点で検証していない。**ADR-0304 §3 参照**: 64件を超える learnset がある場合、
+  呼び出し側〈Web〉が分割して複数回呼ぶ設計にした。1回で必ず収まる前提は置いていない)。
+  件数の上限(`maxItems`)は生成ラッパが配列のスキーマを検証しないため、`services/pokedex/internal/httpapi/search.go`
+  で自前に検査する(ADR-0208 の前例。DB を呼ぶ前に 400 `invalid_input`)。`ids` パラメータ自体の欠落
+  (`minItems`/`required`)は生成ラッパが先に 400 にする(ハンドラの `len(ids)==0` の検査は HTTP 経由では
+  通常到達しない防御的な二重検査)。マスタ未投入(技0件)は `searchMoves` と異なり 503 ではなく 200 `[]`
+  になる(`GetDefaultRegulation` を経由しないため。`getMove` の404とも異なる。全件が「見つからない」の
+  延長として扱われる)。
+  ルーティング: echo v5.3.1 のルーターは静的セグメントをパラメータより優先するため、`/api/pokedex/moves/batch`
+  は `/api/pokedex/moves/:key`(`key="batch"`)に食われない。`TestGetMovesByIds` が固定しているのは
+  「食われないこと」自体(現在の登録順で)。登録順を入れ替えても同じ結果になることは調査時に使い捨てテストで
+  確認しただけで、恒久テストには含まれない。
 - `listNatures`: natures の全件(ID 昇順)。0行なら 503 `master_unavailable`。
 - DB の失敗はすべて 503 `master_unavailable`。入力の検証(400)は DB を呼ぶ前に行う。
 
@@ -176,6 +195,7 @@ importer の `testdata/fictional` にも natures(4件。無補正1件・fallback
 | AC-I5〜I8 | ヘッダの有無で変わらない・GET 以外 404。/healthz は DB に触れない。calc の操作・未知のパスは 404 not_found。panic は 500 internal | `TestMasterExportHeadersAndMethods` / `TestHealthzDoesNotTouchDB` / `TestCalcRoutesAndUnknownPathsAreNotFound` / `TestPanicIsInternalError` |
 | AC-P1〜P5 | 公開 API: 契約どおり。パターンのエスケープ・limit の既定・既定のレギュレーション。応答の中身・[]。詳細(集合の外も引ける・learnset は集合で絞る・404)。性格の一覧 | `TestPublicEndpointsMatchContract` / `TestSearchPassesPatternLimitAndRegulation` / `TestSearchResponses` / `TestGetSpecies` / `TestListNatures` |
 | AC-P4b | `getMove`(2026-09-23 追記): 集合の外の技も引ける・未知の ID は404・未投入(0件)も404(searchMoves と違い503にならない) | `TestGetMove` |
+| AC-P4c | `getMovesByIds`(2026-09-24 追記): 応答は `ids` の順・未知の ID は省く・集合の外の技も引ける・`ids` 1〜64件の範囲外は400・`/moves/batch` が `/moves/:key` に食われない | `TestGetMovesByIds` |
 | AC-P6〜P7 | 入力の検証(missing_header / invalid_input / invalid_enum。DB を呼ばない)。未投入・DB の失敗は 503 | `TestPublicInputValidation` / `TestPublicUnavailable` |
 | AC-P2(DB) | 検索クエリの前方一致・ひらがな/カタカナの同一視・集合での絞り込み・LIMIT | `db.TestSearchSpeciesPrefixAndRegulation`(-tags mysql) |
 | AC-N1〜N3 | natures の変換(Showdown が正・名前の優先順・Warnings)。calc との不一致は Blocker。不正は ErrInvalidData。件数を仮定しない | `importer.TestConvertNatures` / `TestConvertNaturesNameFindings` / `TestConvertNaturesNameLanguageOrder` / `TestConvertBlocksOnNatureMismatch` / `TestConvertRejectsInvalidNatures` / `TestConvertNaturesDoNotAssumeCount` |
