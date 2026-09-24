@@ -3,16 +3,19 @@
 // 期待するリクエスト本文・応答は openapi-typescript の生成型(openapi.gen.ts)で書き、契約とのずれを typecheck で検出する。
 
 import { describe, expect, test, vi } from "vitest";
-import type {
-  BulkRequest,
-  CalcRequest,
-  CalcResult,
-  DefenderPreset,
-  Individual,
-  Move,
-  ReverseRequest,
-  Species,
-  TypeChart,
+import {
+  REQUEST_ABORTED_CODE,
+  type BulkRequest,
+  type CalcEngine,
+  type CalcRequest,
+  type CalcResult,
+  type DefenderPreset,
+  type EngineResult,
+  type Individual,
+  type Move,
+  type ReverseRequest,
+  type Species,
+  type TypeChart,
 } from "../engine/types";
 import type { MasterNature } from "../master/types";
 import { createApiEngine } from "./apiEngine";
@@ -635,5 +638,115 @@ describe("エラーの写し(ADR-0301 §2 の表・§4)", () => {
         expect(result.error.message).not.toBe("");
       }
     }
+  });
+});
+
+// issue 113(P4-18): 入力が変わったときに、画面が先行の計算を取り消せること。
+// API 実装は signal を fetch にそのまま渡し、取り消しは engine_unavailable(API が使えない)と区別して
+// REQUEST_ABORTED_CODE で返す(ADR-0300 §11・ADR-0301 §4 追記)。
+describe("計算の取り消し(AbortSignal。issue 113)", () => {
+  type CallWithSignal = (engine: CalcEngine, signal?: AbortSignal) => Promise<EngineResult<unknown>>;
+
+  /** 3つの計算を同じ形で呼ぶ表(成功の応答本文は、その計算が読める形にする)。 */
+  const callsWithSignal: ReadonlyArray<readonly [string, CallWithSignal, unknown]> = [
+    ["calc", (engine, signal) => engine.calc(calcRequest, signal), apiCalcResult],
+    ["calcBulk", (engine, signal) => engine.calcBulk(bulkRequest, signal), apiBulkResult],
+    ["calcReverse", (engine, signal) => engine.calcReverse(reverseRequest, signal), apiReverseResult],
+  ];
+
+  /** fake の fetch の n 番目の呼び出しに渡った init.signal。 */
+  function sentSignal(fetchMock: ReturnType<typeof fakeFetch>, index = 0): AbortSignal | null | undefined {
+    const call = fetchMock.mock.calls[index];
+    if (call === undefined) {
+      throw new Error(`fetch の ${String(index + 1)} 回目の呼び出しが無い`);
+    }
+    return call[1]?.signal;
+  }
+
+  /** fetch / Response.json が abort されたときに投げる例外(ブラウザと同じ DOMException)。 */
+  function abortException(): DOMException {
+    return new DOMException("The operation was aborted.", "AbortError");
+  }
+
+  test.each(callsWithSignal)("%s: 渡した signal をそのまま fetch に渡す", async (_label, call, body) => {
+    const controller = new AbortController();
+    const fetchMock = fakeFetch(() => Promise.resolve(jsonResponse(body)));
+    const result = await call(engineWith(fetchMock), controller.signal);
+    expect(result.ok).toBe(true);
+    expect(sentSignal(fetchMock)).toBe(controller.signal);
+  });
+
+  test.each(callsWithSignal)(
+    "%s: signal を渡さなければ init に signal を付けない",
+    async (_label, call, body) => {
+      const fetchMock = fakeFetch(() => Promise.resolve(jsonResponse(body)));
+      await call(engineWith(fetchMock));
+      expect(sentSignal(fetchMock) ?? undefined).toBeUndefined();
+    },
+  );
+
+  test.each(callsWithSignal)(
+    "%s: すでに abort 済みの signal なら fetch せずに request_aborted を返す",
+    async (_label, call, body) => {
+      const controller = new AbortController();
+      controller.abort();
+      const fetchMock = fakeFetch(() => Promise.resolve(jsonResponse(body)));
+      const result = await call(engineWith(fetchMock), controller.signal);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe(REQUEST_ABORTED_CODE);
+        expect(result.error.message).not.toBe("");
+      }
+    },
+  );
+
+  test.each(callsWithSignal)(
+    "%s: 送信後に abort されたら request_aborted にする(engine_unavailable を表示させない)",
+    async (_label, call) => {
+      const controller = new AbortController();
+      const fetchMock = fakeFetch(() => {
+        controller.abort();
+        return Promise.reject(abortException());
+      });
+      const result = await call(engineWith(fetchMock), controller.signal);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe(REQUEST_ABORTED_CODE);
+      }
+    },
+  );
+
+  test("応答の本文を読んでいる途中で abort されても request_aborted にする", async () => {
+    const controller = new AbortController();
+    const fetchMock = fakeFetch(() => {
+      controller.abort();
+      // 本文の読み取り(response.json())が abort で reject する応答。
+      const aborted = {
+        ok: true,
+        status: 200,
+        json: () => Promise.reject(abortException()),
+      } as unknown as Response;
+      return Promise.resolve(aborted);
+    });
+    const result = await engineWith(fetchMock).calcReverse(reverseRequest, controller.signal);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe(REQUEST_ABORTED_CODE);
+    }
+  });
+
+  test("abort していない通信の失敗は、signal を渡していても従来どおり engine_unavailable", async () => {
+    const controller = new AbortController();
+    const fetchMock = fakeFetch(() => Promise.reject(new TypeError("Failed to fetch")));
+    const result = await engineWith(fetchMock).calcReverse(reverseRequest, controller.signal);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("engine_unavailable");
+    }
+  });
+
+  test("取り消しの code は engine_unavailable と別の値(画面が見分けられる)", () => {
+    expect(REQUEST_ABORTED_CODE).not.toBe("engine_unavailable");
   });
 });

@@ -5,21 +5,22 @@
 // エラーは境界の封筒({code, message})のまま運ぶ。通信できない・応答が読めないときは engine_unavailable にし、
 // 自動でオフラインへフォールバックしない(ADR-0301 §4。切り替えは利用者が選ぶ)。
 
-import { apiEngineText } from "../i18n/ja";
-import type {
-  BulkRequest,
-  BulkResult,
-  BulkRow,
-  CalcEngine,
-  CalcRequest,
-  CalcResult,
-  EngineResult,
-  Field,
-  Individual,
-  Nature,
-  ReverseCandidate,
-  ReverseRequest,
-  ReverseResult,
+import { apiEngineText, engineAbortText } from "../i18n/ja";
+import {
+  REQUEST_ABORTED_CODE,
+  type BulkRequest,
+  type BulkResult,
+  type BulkRow,
+  type CalcEngine,
+  type CalcRequest,
+  type CalcResult,
+  type EngineResult,
+  type Field,
+  type Individual,
+  type Nature,
+  type ReverseCandidate,
+  type ReverseRequest,
+  type ReverseResult,
 } from "../engine/types";
 import type { MasterData } from "../master/types";
 import type { ClientIds } from "./clientIds";
@@ -40,6 +41,15 @@ export interface CreateApiEngineInput {
 /** 性格補正(Nature)が無補正(plus・minus とも "")かどうか。 */
 function isNeutralNature(nature: Nature): boolean {
   return nature.plus === "" && nature.minus === "";
+}
+
+/**
+ * signal が abort 済みか(issue 113)。関数越しにすることで、await をまたいだ後の再チェックを
+ * TypeScript の(誤った)narrowing で「あり得ない比較」と拒否されないようにする(signal.aborted は
+ * ミュータブルな getter で、直前のチェックの後も変わり得るため)。
+ */
+function isAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
 }
 
 /**
@@ -66,6 +76,14 @@ function unknownNatureError<T>(): EngineResult<T> {
 /** engine_unavailable の失敗(通信できない・応答が読めない・エラー本文の形が不正。ADR-0301 §4)。 */
 function unavailableError<T>(): EngineResult<T> {
   return { ok: false, error: { code: "engine_unavailable", message: apiEngineText.unavailable } };
+}
+
+/**
+ * request_aborted の失敗(画面が新しい入力で取り消した計算。issue 113、ADR-0300 §11・ADR-0301 §4 追記)。
+ * engine_unavailable(API が使えない)とは区別する: 取り消しは engine・API の失敗ではない。
+ */
+function abortedError<T>(): EngineResult<T> {
+  return { ok: false, error: { code: REQUEST_ABORTED_CODE, message: engineAbortText.aborted } };
 }
 
 /** invalid_preset の失敗(engine のカスタムプリセット定義は API に送れない。ADR-0301 §2)。fetch しない。 */
@@ -229,11 +247,19 @@ function isErrorBody(value: unknown): value is Schemas["Error"] {
 export function createApiEngine(input: CreateApiEngineInput): CalcEngine {
   const { baseUrl, fetch: fetchImpl, master, ids } = input;
 
-  /** JSON を POST し、応答(成功の値、または境界のエラー封筒)を返す。例外を投げない。 */
-  async function postJson(path: string, body: unknown): Promise<EngineResult<unknown>> {
+  /**
+   * JSON を POST し、応答(成功の値、または境界のエラー封筒)を返す。例外を投げない。
+   * signal(issue 113、ADR-0300 §11・ADR-0301 §4 追記): 渡さなければ init に signal を付けない。
+   * 呼ぶ前に abort 済みなら fetch せずに request_aborted を返す。fetch・本文の読み取りが abort で
+   * 失敗したときも request_aborted にする(abort していない通信失敗は従来どおり engine_unavailable)。
+   */
+  async function postJson(path: string, body: unknown, signal?: AbortSignal): Promise<EngineResult<unknown>> {
+    if (isAborted(signal)) {
+      return abortedError();
+    }
     let response: Response;
     try {
-      response = await fetchImpl(`${baseUrl}${path}`, {
+      const init: RequestInit = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -241,15 +267,19 @@ export function createApiEngine(input: CreateApiEngineInput): CalcEngine {
           "X-Session-Id": ids.sessionId,
         },
         body: JSON.stringify(body),
-      });
+      };
+      if (signal !== undefined) {
+        init.signal = signal;
+      }
+      response = await fetchImpl(`${baseUrl}${path}`, init);
     } catch {
-      return unavailableError();
+      return isAborted(signal) ? abortedError() : unavailableError();
     }
     let parsed: unknown;
     try {
       parsed = await response.json();
     } catch {
-      return unavailableError();
+      return isAborted(signal) ? abortedError() : unavailableError();
     }
     if (!response.ok) {
       return isErrorBody(parsed)
@@ -260,7 +290,7 @@ export function createApiEngine(input: CreateApiEngineInput): CalcEngine {
   }
 
   return {
-    async calc(request: CalcRequest): Promise<EngineResult<CalcResult>> {
+    async calc(request: CalcRequest, signal?: AbortSignal): Promise<EngineResult<CalcResult>> {
       const attacker = mapIndividual(master.natures, request.attacker);
       const defender = mapIndividual(master.natures, request.defender);
       if (attacker === undefined || defender === undefined) {
@@ -280,14 +310,14 @@ export function createApiEngine(input: CreateApiEngineInput): CalcEngine {
       if (options !== undefined) {
         body.options = options;
       }
-      const response = await postJson(CALC_PATHS.calc, body);
+      const response = await postJson(CALC_PATHS.calc, body, signal);
       if (!response.ok) {
         return response;
       }
       return { ok: true, value: mapCalcResult(response.value as Schemas["CalcResult"]) };
     },
 
-    async calcBulk(request: BulkRequest): Promise<EngineResult<BulkResult>> {
+    async calcBulk(request: BulkRequest, signal?: AbortSignal): Promise<EngineResult<BulkResult>> {
       // engine のカスタムプリセット定義(SP・性格を任意に決めたもの)は API の DefenderPreset(文字列)で
       // 表せない(ADR-0301 §2)。presetKeys(名前の一覧)は API の presets にそのまま写す。
       if (request.presets !== undefined) {
@@ -317,14 +347,14 @@ export function createApiEngine(input: CreateApiEngineInput): CalcEngine {
       if (request.itemVariants !== undefined) {
         body.itemVariants = request.itemVariants.map((item) => item?.id ?? null);
       }
-      const response = await postJson(CALC_PATHS.bulk, body);
+      const response = await postJson(CALC_PATHS.bulk, body, signal);
       if (!response.ok) {
         return response;
       }
       return { ok: true, value: mapBulkResult(response.value as Schemas["BulkCalcResult"]) };
     },
 
-    async calcReverse(request: ReverseRequest): Promise<EngineResult<ReverseResult>> {
+    async calcReverse(request: ReverseRequest, signal?: AbortSignal): Promise<EngineResult<ReverseResult>> {
       const known = mapIndividual(master.natures, request.known);
       if (known === undefined) {
         return unknownNatureError();
@@ -350,7 +380,7 @@ export function createApiEngine(input: CreateApiEngineInput): CalcEngine {
       if (request.itemCandidates !== undefined) {
         body.itemCandidates = request.itemCandidates.map((item) => item?.id ?? null);
       }
-      const response = await postJson(CALC_PATHS.reverse, body);
+      const response = await postJson(CALC_PATHS.reverse, body, signal);
       if (!response.ok) {
         return response;
       }

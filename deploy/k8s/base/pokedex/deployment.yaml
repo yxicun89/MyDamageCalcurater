@@ -20,6 +20,8 @@ spec:
         app.kubernetes.io/part-of: pokecalc
     spec:
       automountServiceAccountToken: false
+      # shutdownTimeout(main.go。10秒)より長い。ADR-0111 決定3。
+      terminationGracePeriodSeconds: 30
       containers:
         - name: pokedex
           image: pokecalc/pokedex:0.1.0
@@ -33,7 +35,17 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: mysql-auth
-                  key: pokedex-dsn
+                  key: pokedex-reader-dsn
+            # DB 接続プールの上限・寿命(既定値のまま明示。秘密ではないので value: を使う。
+            # issue #112・ADR-0112 決定5。main.go の default* 定数と一致させる)。
+            - name: POKEDEX_DB_MAX_OPEN_CONNS
+              value: "10"
+            - name: POKEDEX_DB_MAX_IDLE_CONNS
+              value: "5"
+            - name: POKEDEX_DB_CONN_MAX_IDLE_TIME
+              value: "5m"
+            - name: POKEDEX_DB_CONN_MAX_LIFETIME
+              value: "30m"
           readinessProbe:
             httpGet:
               path: /healthz

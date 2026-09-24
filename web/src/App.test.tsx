@@ -206,11 +206,16 @@ describe("P4-4 タブの ARIA 配線とキーボード操作", () => {
     const calcTab = await screen.findByRole("tab", { name: "計算" });
     const reverseTab = screen.getByRole("tab", { name: "逆算" });
 
-    // SP3: 最後のタブは素早さ(ADR-0604 §2)。タイプバランスは End の1つ手前。
+    // JD5: 最後のタブは判定(ADR-0705 §1)。素早さ・タイプバランスは End からそれぞれ1・2つ手前。
     const balanceTab = screen.getByRole("tab", { name: "タイプバランス" });
     const speedTab = screen.getByRole("tab", { name: "素早さ" });
+    const judgeTab = screen.getByRole("tab", { name: "判定" });
     calcTab.focus();
     await user.keyboard("{End}");
+    expect(judgeTab).toHaveAttribute("aria-selected", "true");
+    expect(judgeTab).toHaveFocus();
+
+    await user.keyboard("{ArrowLeft}");
     expect(speedTab).toHaveAttribute("aria-selected", "true");
     expect(speedTab).toHaveFocus();
 

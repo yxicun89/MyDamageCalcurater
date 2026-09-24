@@ -1247,6 +1247,26 @@ Reason: APIレーンの越境実装(3往復critic PASS済み)に対する独立�
 (命名・エラー変換)と食い違いがないかを見るのが依頼内容だった。
 Impact: 追加の修正なし。判定レーンはJD4に着手してよい(APIレーン側で既に確認済み)。
 
+## 2026-09-24: issue #104(pokedexのDB資格情報を用途別の最小権限へ分離)を実装(データレーン)
+Decision: server(検索API)・importer(CronJob)・migrate(Job)がすべて同じroot相当の資格情報
+(Secret `mysql-auth`/`pokedex-dsn`)を使っていた実リスクを解消した。`pokedex_reader`(SELECT専用)・
+`pokedex_importer`(SELECT/INSERT/UPDATE/DELETE)・`pokedex_migrator`(+DDL)の3ロールを作り、
+各Podに必要最小限のDSNだけを渡す(ADR-0110)。`services/pokedex/db.Provision`が冪等・
+ローテーション対応で3ユーザーを作成・GRANT(接続前にパスワード・ユーザー名・DB名・権限を
+正規表現で検証し、root自身を対象にする入力は`ErrInvalidRoleGrant`で拒否)。`cmd/migrate up`は
+`POKEDEX_PROVISION_DSN`があるときだけプロビジョニングしてから実際のmigrationを行う
+(無ければ後方互換で直接migration。ローカルmake dev/make test-dbは対象外)。`scripts/up.sh`は
+新規クラスタで4DSNを一度に作成、既存クラスタは無いキーだけ`kubectl patch`で追記(値を
+argv/ログに出さない設計)。critic PASS(1往復。軽微指摘のうち3件を反映。詳細はADR-0110追記)。
+**実クラスタ(k3d-pokecalc)で`make up`を実行し、`SHOW GRANTS`で3ユーザーの権限がADR決定1と
+過不足なく一致することを確認済み**。既存クラスタからの無停止移行(Secretへのキー追記のみ、
+DB・PVC再作成不要)も実地確認済み。
+Reason: issue #104(Codexレビュー)。公開HTTP Podが侵害されてもDDL・ユーザー管理へ直結しないように
+するため。`make test`/`test-db`/`lint`/`k8s-render`すべてgreen。
+Impact: cloud overlay実装時は同じ4つのDSNキー名(pokedex-dsn〈provision〉・
+pokedex-reader-dsn・pokedex-importer-dsn・pokedex-migrator-dsn)をSecretの契約として踏襲することを
+推奨として記録(実装はP7系のクラウド移行タスクで扱う)。他レーンへの影響なし。
+
 ## 2026-09-24: issue #99(ライトテーマの danger コントラスト不足)の Web レーン担当分が完了。iOS レーンへ依頼
 Decision: danger のライト値を `#E5484D` → `#CD1D23` に変更した(色相・彩度は変えず明度だけ下げる。WCAG 2.2
 SC 1.4.3 の通常文字基準4.5:1を、bg.base単体(5.07:1)・bg.glassをbg.baseに重ねた合成色(5.40:1)の両方で満たす。
@@ -1294,3 +1314,126 @@ PokeCalcDesignTests 13/13・PokeCalcCoreTests 323/323・`make ios-test` unit 336
 Reason: Web・iOS 両方の対応が揃ったため issue #99 の受け入れ条件を満たした。
 Impact: issue #99 はコメント(Web PR #164・iOS PR #170 の要約、両プラットフォームの新値でのコントラスト比)を
 残してクローズした。残る iOS 関連: P6-6(issue #110 の iOS 側追従)、P6-7(issue #103。record-svc/team-svc 実装待ち)。
+
+## 2026-09-24: 判定 JD4(返り討ち判定)を PR #169 で main に統合(判定レーン)
+Decision: ADR-0704(`DefenderCandidate`・`CompareTurnOrder`・逆方向calcのscreens入れ替え・`unknown_move`)を PR #169 で main に統合した。critic は1回目で PASS。
+Reason: `make test`・`make lint`・`make build`(ルート)が緑、critic PASS、他レーンの範囲外変更なし(COORDINATION.md の共有ファイル規約の範囲内)を確認してマージした。
+Impact: 判定レーンのブランチを `feat/judge-jd5` に切り替えた(JD4 の `feat/judge-jd4` は削除)。JD0〜JD4 がすべて完了し、`POST /api/judge/v1/outspeed-and-ko` は素早さ判定・複数候補・場の効果・返り討ち判定まで対応済み。残るは JD5(Web/iOS の画面)のみ。
+
+## 2026-09-24: JD5(judge-svc を呼ぶ画面)の担当をユーザーが判定レーン自体に決定
+Decision: 「判定レーン自体で作る」「Web レーンに依頼する」「今は着手しない」の3択でユーザーに確認し、**判定レーン自体で作る**を選択した。
+Reason: ユーザー回答(2026-09-24)。
+Impact: JD5 は判定レーンのセッションが Web(`web/src/judge/` のような自分のディレクトリ)を担当する。COORDINATION.md の「素早さレーン」の前例(`web/src/speed/` を素早さレーン自身が作り、タブ登録の3か所だけ共有ファイルに1件ずつ足す)に倣う。iOS 側は判定レーンの範囲内かは着手時に改めて判断する(まずは Web を優先)。
+
+## 2026-09-24: 判定 JD5(Web 画面)の設計を確定し、受け入れ条件と失敗するテストを先に置いた(判定レーン)
+Decision: ADR-0705 を採用した。主な決定:
+- 持ち物は `web/src/judge/`(`judgeClient.ts`・`judge.gen.ts`・`JudgeScreen.tsx`)だけ。共有ファイルへの追記は
+  `web/src/app/routes.ts` 1件・`web/src/app/screens.tsx`(import と `ScreenProps.judgeClient`)・`web/src/i18n/ja.ts` の文言・
+  `web/src/App.tsx` の client 受け渡しの4か所に限る(ADR-0604 §2 の素早さレーンの前例どおり)。他の画面のファイルは変更しない。
+- 技は **ID の自由入力**(ドロップダウンにしない)。オンラインでは `capabilities.moves` が false で、
+  技 ID から技を引く公開 API が無いため(ADR-0304 §3 の既知の欠落)。未知の ID は judge が 422 `unknown_move` で返すので、
+  黙って誤った判定を出すことはない。技の一覧 API が付いたら `<select>` に差し替える。
+- 相手側の追い風(`defenderTailwind`)は**全候補共通のチェックボックス1つ**。`speedField` は 1 リクエストに 1 つで
+  すべての候補に同じように適用される(ADR-0702 §1・ADR-0703 §5)ため、候補ごとの UI を置くと契約に送れない入力になる。
+- 判定は送信ボタンでだけ呼ぶ(1 リクエストが上流を最大 27 回逐次で叩くため、打鍵ごとに呼ばない)。
+- `field`(天候・地形・壁)は JD5 の対象外。画面も「勝ち / 負け」に丸めない(ADR-0700 §6-1・ADR-0704 §3)。
+- `judge.gen.ts` は `make gen-ts`(Web レーンの持ち物)を変えず、`npx openapi-typescript ../services/judge/api/openapi.yaml`
+  を手で実行してコミットする(ADR-0604 §2 と同じ)。**Web レーンへの提案**: 素早さ・判定の 2 本がたまったので、
+  `make gen-ts` に組み込むかを Web レーンの都合で判断してよい。
+Reason: 2026-09-24 のユーザー決定(JD5 の担当は判定レーン自体)を受け、spec-writer の段で受け入れ条件と失敗するテストを先に置いた。
+Impact: `docs/adr/0705-judge-jd5-web-screen.md`(新規)、`web/src/judge/`(生成型・スタブ・テスト)、
+`web/src/i18n/ja.ts`(`appText.judgeTabLabel`・`judgeClientText`・`judgeErrorText`・`judgeScreenText` を追記)、
+`web/src/app/routes.test.ts`(judge タブの登録のケース。登録前なので**意図的に失敗する**)。
+実装(`judgeClient.ts` / `JudgeScreen.tsx` の中身と画面登録の 3 ファイル)は次の implementer が入れる。
+
+## 2026-09-24: issue #73(OpenAPIとengineの防御プリセット集合を同期検査する)を修正(API レーン)
+Decision: `api/openapi.yaml` の `DefenderPreset` enum と `engine.DefenderPresetCatalog()`(`engine/bulk.go`)は
+1対1対応が前提(`services/calc/internal/httpapi/convert.go` の `presetKeysFrom` は変換テーブルを持たず、契約の
+列挙値をそのまま `engine.PresetKey` に型変換するだけ)だが、これを固定する回帰テストが無かった
+(実際のズレは無かった。issue #73 が問題にしていたのは「テストの欠落」自体)。
+`services/calc/internal/httpapi/preset_sync_test.go`(`TestDefenderPresetEnumMatchesEngineCatalog`)を追加。
+同パッケージの既存 `vocabulary_test.go`(`wasmapi.Code*` の一覧を手で列挙し、コメントで「新しい code を足したら
+ここにも足すこと」と注意喚起する流儀)は**意図的に踏襲しなかった**: 手で列挙した一覧は自分自身の陳腐化
+(足し忘れ)を検出できないため、契約(埋め込まれた spec。`contract_test.go` の `loadContract` を再利用)から
+`DefenderPreset` の enum を直接読み、`engine.DefenderPresetCatalog()` のキー集合・件数・順序
+(契約の description が「耐久が上がる順」と明記。ADR-0009 §1 は8件・順序も規定)と比較する方式にした。
+`engine/bulk.go`・`api/openapi.yaml` は無変更(新規 ADR も不要。ADR-0009 §1 が既に決定済みの内容を機械検査で
+固定しただけ)。
+critic 1回目 FAIL: 件数不一致を `if len(a) == len(b) { 順序比較 }` で黙って skip していたため、集合としては
+一致するが列としては崩れている変異(例: `PresetHP` の行を2重にして9件にする。集合は8件のopenapi enumと一致
+してしまう)を見逃す穴があった。修正: 件数不一致を明示的な失敗にしてから列を比較するよう変更し、重複変異・
+順序入れ替え変異の両方を実際に検知することを確認(確認後 revert)。2回目相当で PASS。
+Reason: issue #73。片方だけにプリセットを追加・削除しても通常の生成・ユニットテストでは同期漏れを検出できず、
+「APIが受け付けるがengineが解決できない」「engineのプリセットをAPIから指定できない」状態を作り得た。
+Impact: `docs/plan.md` の改善要望に issue #73 の行を追加。データレーンへの追加対応は無し(engine は無変更、
+実バグではなく回帰テストの欠落だった)。issue #73 はこの PR のマージでクローズしてよい。
+
+## 2026-09-24: issue #104(pokedexのDB資格情報を用途別の最小権限へ分離)を main へ統合(データレーン)
+Decision: PR #176(`feat/claude-p1-engine` → `main`)をマージした。`pokedex_reader`/
+`pokedex_importer`/`pokedex_migrator`の3ロール分離(ADR-0110)。critic PASS(1往復)。
+Reason: 独立レビュー PASS・`make test`(911件)/`test-db`/`lint`/`k8s-render`すべてgreen。
+実クラスタでSHOW GRANTSにより権限確認済み、既存クラスタからの無停止移行も実地確認済み。
+Impact: 他レーンへの影響なし。cloud overlay実装時はSecretのDSNキー名を契約として踏襲する
+ことを推奨(ADR-0110決定8)。
+
+## 2026-09-24: issue #109(pokedex HTTPサーバーにタイムアウトとgraceful shutdownを追加)を実装(データレーン)
+Decision: pokedex-svcだけがcalc/gateway/balance/judgeの運用契約(明示的なhttp.Server・タイムアウト・
+signal.NotifyContextによるgraceful shutdown)から外れていたリスクを解消した。services/balanceと
+同じ値(readHeaderTimeout=5s・readTimeout=10s・writeTimeout=15s・idleTimeout=60s・
+maxHeaderBytes=16KiB・shutdownTimeout=10s)で`newHTTPServer`/`serve`/`runServe`の3層に分離
+(ADR-0111)。既存の`run(args) int`(サブコマンド振り分け)との名前衝突を`runServe`への改名と
+`runServeCmd`の新設で解消(calc-svcにはこの衝突が無いため見落としやすい点。spec-writerが発見)。
+`deployment.yaml`に`terminationGracePeriodSeconds: 30`を追加し、main.goの`shutdownTimeout`定数
+より長いことをハードコードせず不等式でmanifestテストに固定。critic PASS(1往復。指摘なし)。
+**実クラスタ(k3d-pokecalc)でpokedexを再ビルド・再デプロイし、terminationGracePeriodSecondsが
+実際に30になっていること・api-smokeが正常応答することを確認済み**。
+Reason: issue #109(Codexレビュー)。低速・不完全な接続がリソースを無期限に保持しうる可用性リスクと、
+Kubernetesのrollout・node drainで処理中リクエストが即座に打ち切られる問題を解消するため。
+`make test`(953件)/`lint`/`build`/`k8s-render`すべてgreen。`-race`・`-count=3`でも安定確認済み。
+Impact: HTTPパス・公開OpenAPI・DBクエリ・マスタ内容は無変更。readiness/liveness probeの改善は
+issue #107の範囲(今回は対象外)。他レーンへの影響なし。
+
+## 2026-09-24: issue #109(pokedex HTTPタイムアウト・graceful shutdown)を main へ統合(データレーン)
+Decision: PR #178(`feat/claude-p1-engine` → `main`)をマージした。`newHTTPServer`/`serve`/
+`runServe`の3層分離(ADR-0111)。critic PASS(1往復、指摘なし)。
+Reason: 独立レビュー PASS・`make test`(953件)/`lint`/`build`/`k8s-render`すべてgreen。
+実クラスタでterminationGracePeriodSeconds=30・api-smoke正常応答を確認済み。
+Impact: 他レーンへの影響なし。readiness/livenessの改善はissue #107の範囲(今回は対象外)。
+
+## 2026-09-24: issue #112(pokedexのDB接続プールに上限と寿命を設定)を実装(データレーン)
+Decision: `services/pokedex/cmd/pokedex/main.go`が`sql.Open`後に接続プールを一切調整せず
+(Go標準の既定はMaxOpenConns無制限)、突発的な同時要求がそのままMySQL接続数に転嫁されていた
+リスクを解消した。4環境変数(POKEDEX_DB_MAX_OPEN_CONNS=10・POKEDEX_DB_MAX_IDLE_CONNS=5・
+POKEDEX_DB_CONN_MAX_IDLE_TIME=5m・POKEDEX_DB_CONN_MAX_LIFETIME=30m)を追加し、
+services/pokedex/db.OpenPool(プール生成を1か所に集約。P7-1のメトリクス化に備える)経由で
+適用(ADR-0112)。検証はsql.Openより前、エラー文にDSNを含めない。exportサブコマンドは
+ForExport()でMaxOpenConns=1に上書き(逐次処理の実態に合わせる。無制限の別経路を残さない)。
+deployment.yamlに4環境変数を既定値のまま明示し、runbookにreplica数を増やすときの接続予算の
+注記を追加。critic PASS(1往復。軽微指摘1件〈idle==openの境界値テスト〉を反映)。
+**実クラスタ(k3d-pokecalc)でpokedexを再ビルド・再デプロイし、4環境変数が実際に設定されていること・
+api-smokeが正常応答することを確認済み**。
+Reason: issue #112(Codexレビュー)。突発的な同時要求がDB側の接続枠を占有し、importer・migrate・
+運用接続まで巻き込んで失敗させうるリスクを防ぐため。`make test`(953件)/`test-db`/`lint`/`build`/
+`k8s-render`すべてgreen。
+Impact: これでデータレーン主担当のCodexレビューissue(#104・#106・#109・#112)はすべて完了。
+P7-1(メトリクス)実装時はこのプールのStats()を観測に接続できる。他レーンへの影響なし。
+
+## 2026-09-24: issue #112(pokedexのDB接続プールに上限と寿命を設定)を main へ統合(データレーン)
+Decision: PR #180(`feat/claude-p1-engine` → `main`)をマージした。`services/pokedex/db.OpenPool`/
+`PoolConfig`/`ForExport()`(ADR-0112)。critic PASS(1往復。軽微指摘1件〈idle==openの境界値テスト〉は
+`TestLoadConfigPoolAllowsIdleEqualToOpen`を追加して反映済み)。
+Reason: 独立レビュー PASS・`make test`(953件)/`test-db`(実MySQL)/`lint`/`build`/`k8s-render`すべて
+green。実クラスタで4環境変数の設定・api-smoke正常応答を確認済み。
+Impact: これでデータレーン主担当のCodexレビューissue(#104・#106・#109・#112)はすべてmain統合済み。
+他レーンへの影響なし。
+
+## 2026-09-24: 判定 JD5(Web 画面)を PR #182 で main に統合。JD0〜JD5 がすべて完了(判定レーン)
+Decision: ADR-0705(`web/src/judge/` の新設。技ID自由入力・相手側追い風は全候補共通・送信ボタンでのみ呼ぶ・
+判定結果は丸めずそのまま表示)を PR #182 で main に統合した。critic は2回目で PASS(1回目 NG: 「古い応答」
+テストが実際にはレースを検証していなかった。`fireEvent.click` を同じ `act()` 内で2回同期的に呼ぶ形へ修正し、
+ガードを一時的に無効化するとテストが実際に落ちることを変異テストで確認)。
+Reason: `make test`・`make lint`・`make build`(ルート)が緑、critic PASS、他レーンの範囲外変更なし
+(COORDINATION.md の共有ファイル規約の範囲内)を確認してマージした。
+Impact: **judge-design.md §3 が定めた JD0〜JD5 のすべて(基盤・1対1判定・場の効果・複数候補・返り討ち判定・
+Web画面)が完了**した。判定レーンのブランチ `feat/judge-jd5` は削除。次の作業(新規要望・iOS版JD5・plan.mdに
+残る軽微な積み残し〈`attacker`単数の欄の大文字小文字厳密化〉)はユーザーからの新しい指示を待つ。

@@ -139,6 +139,10 @@ export interface FakeEngine extends CalcEngine {
   readonly bulkRequests: BulkRequest[];
   readonly calcRequests: CalcRequest[];
   readonly reverseRequests: ReverseRequest[];
+  /** calcReverse に渡された signal(reverseRequests と同じ順。渡されなければ undefined。issue 113)。 */
+  readonly reverseSignals: Array<AbortSignal | undefined>;
+  /** calcBulk に渡された signal(bulkRequests と同じ順。issue 113)。 */
+  readonly bulkSignals: Array<AbortSignal | undefined>;
 }
 
 type BulkResponder = (request: BulkRequest) => EngineResult<BulkResult>;
@@ -155,20 +159,26 @@ export function createFakeEngine(
   const bulkRequests: BulkRequest[] = [];
   const calcRequests: CalcRequest[] = [];
   const reverseRequests: ReverseRequest[] = [];
+  const reverseSignals: Array<AbortSignal | undefined> = [];
+  const bulkSignals: Array<AbortSignal | undefined> = [];
   return {
     bulkRequests,
     calcRequests,
     reverseRequests,
-    calcBulk(request) {
+    reverseSignals,
+    bulkSignals,
+    calcBulk(request, signal) {
       bulkRequests.push(request);
+      bulkSignals.push(signal);
       return Promise.resolve(respond(request));
     },
     calc(request) {
       calcRequests.push(request);
       return Promise.resolve(ok(calcResult()));
     },
-    calcReverse(request): Promise<EngineResult<ReverseResult>> {
+    calcReverse(request, signal): Promise<EngineResult<ReverseResult>> {
       reverseRequests.push(request);
+      reverseSignals.push(signal);
       return Promise.resolve(respondReverse(request));
     },
   };
@@ -197,6 +207,8 @@ export function createDeferredEngine(): { engine: FakeEngine; pending: PendingBu
 
 export interface PendingReverse {
   readonly request: ReverseRequest;
+  /** 画面が渡した取り消しの signal(issue 113。渡されなければ undefined)。 */
+  readonly signal: AbortSignal | undefined;
   resolve(result: EngineResult<ReverseResult>): void;
 }
 
@@ -206,10 +218,11 @@ export function createDeferredReverseEngine(): { engine: FakeEngine; pending: Pe
   const base = createFakeEngine();
   const engine: FakeEngine = {
     ...base,
-    calcReverse(request) {
+    calcReverse(request, signal) {
       base.reverseRequests.push(request);
+      base.reverseSignals.push(signal);
       return new Promise((resolve) => {
-        pending.push({ request, resolve });
+        pending.push({ request, signal, resolve });
       });
     },
   };
