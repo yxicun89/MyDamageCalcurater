@@ -115,19 +115,28 @@ struct MemberCardView: View {
     }
 
     private var itemPicker: some View {
-        Menu {
-            Button(BulkRowDisplay.itemLabel(itemId: nil, items: viewModel.itemOptions)) {
-                viewModel.setMemberItem(id: member.id, itemId: nil)
-            }
-            ForEach(viewModel.itemOptions, id: \.id) { item in
-                Button(item.nameJa) {
-                    viewModel.setMemberItem(id: member.id, itemId: item.id)
+        VStack(alignment: .leading, spacing: SpacingToken.x1) {
+            Menu {
+                Button(BulkRowDisplay.itemLabel(itemId: nil, items: viewModel.itemOptions)) {
+                    viewModel.setMemberItem(id: member.id, itemId: nil)
                 }
+                ForEach(viewModel.itemOptions, id: \.id) { item in
+                    Button(item.nameJa) {
+                        viewModel.setMemberItem(id: member.id, itemId: item.id)
+                    }
+                }
+            } label: {
+                MenuLabelChip(text: "持ち物: " + BulkRowDisplay.itemLabel(itemId: member.itemId, items: viewModel.itemOptions))
             }
-        } label: {
-            MenuLabelChip(text: "持ち物: " + BulkRowDisplay.itemLabel(itemId: member.itemId, items: viewModel.itemOptions))
+            .accessibilityIdentifier("memberItemPicker-\(member.id)")
+            // 持ち物の一覧が上限に達していても黙って切り捨てない(ADR-0501「issue #68 の残り」6章)。
+            if viewModel.itemOptionsReachedLimit {
+                Text(MasterSearchLabels.itemsTruncated)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .accessibilityIdentifier("memberItemLimitHint-\(member.id)")
+            }
         }
-        .accessibilityIdentifier("memberItemPicker-\(member.id)")
     }
 
     private var abilityOptions: [Ability] {
@@ -218,13 +227,13 @@ struct MemberCardView: View {
     }
 
     /// issue #68: `Menu` ではなく検索シートで選ぶ(`CalcScreenView.moveSelector` と同じ理由)。
-    /// 選択中の技が実体化できない(先頭ページの外にあり、まだ検索していない)ときは、
-    /// `BulkRowDisplay.itemLabel` の「マスタに無い ID はそのまま出す」規則にそろえて ID を出す
-    /// (issue #68・6章「残る穴」: 「技を選択」に見えてしまうと選択済みであることが伝わらないため)。
+    /// 選択中の技の名前は `viewModel.move(forID:)`(一度でも見た技の辞書。先頭ページ・技検索の結果・
+    /// `move(id:)` の応答が合流する)から引く(ADR-0501「issue #68 の残り」5章)。それでも解決できない
+    /// (404・通信失敗)ときは、`BulkRowDisplay.itemLabel` の「マスタに無い ID はそのまま出す」規則に
+    /// そろえて ID を出す(「技を選択」に見えてしまうと選択済みであることが伝わらないため)。
     private func moveSlot(index: Int) -> some View {
         let selectedID = member.moveIds.indices.contains(index) ? member.moveIds[index] : nil
-        let selectedMove = selectedID.flatMap { id in moveOptions.first(where: { $0.id == id }) }
-        let label = selectedID.map { id in selectedMove?.nameJa ?? id } ?? "技を選択"
+        let label = selectedID.map { id in viewModel.move(forID: id)?.nameJa ?? id } ?? "技を選択"
         return Button {
             moveSearchSlot = MoveSlotTarget(index: index)
         } label: {

@@ -1037,6 +1037,7 @@ ViewModel は「同期の文字反映」と「非同期の検索」を分ける 
   Team では技スロットに ID をそのまま出す(`BulkRowDisplay.itemLabel` の「マスタに無い ID は ID のまま」と同じ規則)。
   この穴は DECISIONS.md の提案(`getSpecies.learnset` を `Move` 実体にする)が入れば消える。**follow-up として残す**:
   issue #68 は iOS 側のこの修正だけでは閉じない。
+  (2026-09-24 追記: PR #161 で `getMove` が入ったので、この穴は「issue #68 の残り: getMove による選択中の技の解決」で閉じる。)
 
 ### 7. 変えないもの
 
@@ -1560,3 +1561,245 @@ XCUITest の追加は任意(範囲外)。既存の XCUITest は上限に達し�
 - 既存テスト(`ReverseViewModelTests` / `CalcViewModelTests` / 各 `…SearchTests` / `…CancellationTests`)は
   **変更しない**。A7 を守れば通り続ける。落ちたらテストではなく実装を直すこと。
 - 上限に達したときに「どれを外せばよいか」を提案する、といった手助けは今回やらない(まず壊れないこと)。
+
+## issue #68 の残り: getMove による選択中の技の解決(実装完了)
+
+- 日付: 2026-09-24 / 担当レーン: iOS / 関連: issue #68(「issue #68 の受け入れ条件」6章「残る穴」)、
+  issue #113(「issue #113 の受け入れ条件(iOS 側)」5章)、PR #161(`GET /api/pokedex/moves/{key}` = `getMove` の追加)、
+  ADR-0304(Web レーンの同じ課題)、ADR-0105 §3 追記(`getMove` の 404 の意味)
+- 状態: implementer 実装完了 → critic 1回目 FAIL(11章)→ 指摘を反映して再実装 → `swift test` 383件・
+  `make ios-test`(unit 396件・XCUITest 17件・Info.plist 検査)すべて成功。**issue #68 は iOS 側を閉じてよい**
+  (7章。残る制約は「厳密な learnset 全件の最初」ではないことと持ち物 200 件超のときの follow-up のみで、
+  どちらも「選べない・計算できない」ではない)。
+- 範囲: `ios/` 配下だけ。**`api/openapi.yaml`・生成物(`Generated/`)は変更しない**(`getMove` は PR #161 で契約・
+  生成済みの Swift クライアントにある)。`engine/`・`services/`・`web/` も触らない。
+
+### 0. 何が残っていたか
+
+「issue #68 の受け入れ条件」6章は、技を ID で個別に引く公開エンドポイントが無いことを理由に、次の穴を
+**部分的な修正**として残した: 選択中の技 ID が一度も検索結果に現れていないと名前を解決できない。
+
+- 計算・逆算: 攻撃側の learnset がすべて先頭ページ(`MasterSearch.pageLimit` 件)の外だと、起動直後・種族変更直後に
+  `moveUnavailable`(利用者は技の検索シートで名前を打てば復帰できる)。
+- 計算・逆算: 構築から呼び出した個体の技が先頭ページの外だと、`reselectMove` がそれを候補に見つけられず、
+  **黙って既定の技に置き換える**(6章に書かれていなかった同じ根本原因の症状。今回見つけた)。
+- 構築: 技スロットは `moveOptionsByMember`(直近の技検索 ∩ learnset)から名前を引くので、先頭ページの外の保存済みの技は
+  ID のまま出る。さらに**検索語を変えると先頭ページの技まで ID に化ける**(`TeamEditViewModel` は技の辞書を持たない)。
+
+PR #161 で `getMove`(1回に1つの ID)が入ったので、この穴を閉じる。
+
+### 1. 受け入れ条件(検証可能な形)
+
+1. **A1 サービス**: `PokeCalcService` に `func move(id: String) async throws -> Move` がある。`APIPokeCalcService` は
+   `getMove` を呼び(`X-Device-Id`/`X-Session-Id` 付き・パス `/api/pokedex/moves/{id}`)、404 は `species(key:)` の 404 と
+   同じく body の `code`(`not_found`)をそのまま運ぶ `PokeCalcError` にする。503・default・通信失敗・キャンセルも既存の
+   操作と同じ写像。`MockPokeCalcService` はフィクスチャの技から引き、無ければ `PokeCalcError.Code.notFound`
+   (他の操作と同じ `notFoundError`)。
+2. **A2 解決する**: 計算・逆算で「選ぶべき技」が技の辞書に無いとき、`move(id:)` で解決して辞書に入れ、その技を選ぶ。
+   起動時の再現手順(検索は先頭200件の技だけ・攻撃側の learnset は201件目の技だけ)で `moveUnavailable` にならず、
+   `selectedMove` が名前を持ち、計算(`calcBulk`)/逆算(`reverse`)の `moveId` がその技になる。構築から呼び出した
+   個体の技(learnset にあり・辞書に無い)は、既定の技に置き換えずにその技を選ぶ。構築では、保存済みメンバーの
+   `moveIds` のうち辞書に無いものを `load()` で解決し、`move(forID:)` が名前を返す。
+3. **A3 必要なときだけ**: 選ぶ技が既知の技(先頭ページ・検索結果・過去の解決)で決まるときは `move(id:)` を**呼ばない**。
+   learnset 全件は解決しない。1回の入力操作で呼ぶのは `MasterSearch.maxMoveLookupsPerSelection`(4)回まで。
+4. **A4 失敗は今日の振る舞いに戻る**: `move(id:)` の失敗(404・通信失敗など)は、それ自体を画面のエラーにしない。
+   計算・逆算は今日と同じ結果になる(既定の技が見つからなければ `moveUnavailable`、構築の個体の技が解決できなければ
+   既定の技)。構築は今日と同じく ID のまま出し(`move(forID:)` が nil)、`error` を立てず、`moveIds` も変えない。
+5. **A5 世代・キャンセル**: 解決は入力操作の一部として、その操作の `beginInput()` の世代で守る。応答を待っている間に
+   次の入力が来たら、遅れて届いた応答は `moveId`・`attackerBuildSource`・`error`・`isLoading`・計算要求を変えない。
+   `scheduleLatest` の Task が cancel されたら `move(id:)` にも伝わり、`CancellationError` は画面のエラーにしない
+   (`rows`/`result` を残し、`isLoading` だけ解く。issue #113 A5)。
+6. **A6 持ち物の一覧**: 持ち物は一覧(`Menu`)のまま。`searchItems(query: "", limit: MasterSearch.pageLimit)` の結果が
+   `pageLimit` に達したら、3画面とも `itemOptionsReachedLimit == true` にし、View は `MasterSearchLabels.itemsTruncated` を
+   出す(黙って切り捨てない)。
+7. **A7 既存の契約を変えない**: 既存テストは1行も変えない。`moveOptions` / `moveOptionsByMember` の意味(直近の技検索 ∩
+   learnset)、`selectMove(id:)` のガード(`moveOptions` にある技だけ)、空クエリで API を呼ばない規則は変えない。
+
+### 2. 判断: `move(id:)` の写像は `species(key:)` にそろえる
+
+`getMove` の 404 は契約上 `#/components/schemas/Error` を直接持つ(生成型では `.notFound(response)`)。`species(key:)` の
+`.notFound` と同じく `domainErrorFromSchema` で写し、`code` はサーバーの語彙(`not_found`)のまま運ぶ。
+`PokeCalcError.Code.notFound` は `"not_found"` なので、ViewModel は API/モックを問わず同じ値で分岐できる。
+モックの「無い」も同じ `notFoundError("技", id)`。**404 を空の値や nil に写さない**(「無い」と「壊れた」を ViewModel が
+区別できるように、どちらも throw のまま渡し、区別は ViewModel の側でする。4章)。
+
+### 3. 判断: いつ解決するか(計算・逆算)
+
+解決は `reselectMove` の直前、learnset を読み直した直後(`reloadAttackerMoveOptions` / `reloadMoveOptions` の後)に、
+同じ入力操作の中で行う。経路は learnset を読み直すすべての操作: 計算 = `load`・`selectAttacker`・`swapSides`・
+`selectTeamIndividual`、逆算 = `load`・`selectSide`・攻撃側の種族の変更・`selectTeamIndividual`(与えたダメージ)。
+learnset を読み直さない操作(`selectMove`・持ち物・プリセット・観測・防御側の種族)は解決しない。
+
+手順(判断: `reselectMove` を2段にする):
+
+1. **優先する技**(`reselectMove(preferringCurrent:)` に渡す ID。構築の個体の技・種族変更前の技): それが新しい learnset に
+   あり、辞書に無ければ `move(id:)` で1回だけ解決する。解決できた(または既に辞書にある)なら、**`moveOptions` に無くても**
+   それを選ぶ。判定は「learnset の ID 集合 + 辞書」で行う(「issue #68」6章「その技を持ち続けてよいかの判定は ID 集合で行う」
+   を計算・逆算にも当てる。検索は見えている候補を絞るだけで選択を変えない、という5章の規則とも同じ向き)。
+2. **既定の技**: 今日どおり `moveOptions` から選ぶ(計算 = learnset の順で最初のダメージ技、無ければ最初。逆算 = 最初の
+   ダメージ技)。**`moveOptions` から1つも選べないときだけ**、learnset を先頭から順に見て、辞書にある技はそのまま使い、
+   無い ID は `move(id:)` で1つずつ解決し、条件に合う技(計算 = 最初のダメージ技、逆算 = ダメージ技)が見つかったら止める。
+   `move(id:)` の呼び出しが `MasterSearch.maxMoveLookupsPerSelection` 回に達したら止める。計算は見つからなければ
+   「解決できた最初の技」(規則3の「無ければ learnset の最初」)を選び、それも無ければ `moveUnavailable`。逆算は見つからなければ
+   `moveUnavailable`(変化技は逆算できないのでフォールバックしない)。
+
+解決した `Move` は辞書に入れるだけで `moveOptions` には足さない(`moveOptions` = 検索シートに出す候補の意味を変えない。
+A7)。そのため解決した技は `selectMove(id:)` では選び直せないが、既に選ばれているので困らない。
+
+- **理由(1段目)**: 構築の個体を呼び出したときに、個体の技が黙って別の技に変わるのが今回いちばん実害の大きい症状。
+  1回の `getMove` で直る。
+- **理由(2段目を「選べないときだけ」にする)**: 既知の技で既定が決まる大多数のケースで通信を増やさない(A3)。
+  既定の技の規則(learnset の順で最初のダメージ技)を「既知の技の中で」満たすだけで、全件を解決して厳密な「最初」を
+  探すことはしない(それは learnset 全件の解決になる。5章)。
+- **却下した案**: learnset の先頭1件だけを解決する。計算では変化技を選んでしまい、逆算では選べる技が無くなりやすい。
+- **却下した案**: 解決した技を `moveOptions` に混ぜる。検索語と無関係な技がシートに出て、`moveOptions` の意味が
+  「検索結果 ∩ learnset」から崩れる(既存テストが固定している意味。A7)。
+
+### 4. 判断: 1操作あたりの上限は 4(`MasterSearch.maxMoveLookupsPerSelection = TeamLimits.maxMovesPerMember`)
+
+learnset を先頭から解決していく2段目は、変化技が並ぶ learnset だと往復が増える。歯止めとして1回の入力操作で呼ぶ
+`move(id:)` を上限で打ち切る。値は構築の1体の技スロット数と同じ 4 にし、定数として `TeamLimits.maxMovesPerMember` を
+参照する(どの画面でも「1操作 = 1体分の技」を超える往復をしない、という1つの規則にそろえる。直書きしない)。
+上限で打ち切ったときは今日と同じ振る舞い(計算 = 解決できた最初の技、逆算 = `moveUnavailable`)になり、利用者は
+技の検索シートで名前を打てば復帰できる(「issue #68」6章と同じ逃げ道)。
+
+### 5. 判断: 構築は `load()` で保存済みの技だけを解決し、技の辞書を持つ
+
+- `TeamEditViewModel` に計算・逆算と同じ**技の辞書**(一度でも見た `Move`: 先頭ページ・技検索の結果・`move(id:)` の応答)を
+  持たせ、`public func move(forID id: String) -> Move?` で引く。View(`TeamEditMemberCard.moveSlot`)は `moveOptions` から
+  名前を引くのをやめてこれを使い、nil のときだけ ID を出す(「issue #68」6章の「ID のまま」の規則は nil のときに残る)。
+- 解決するのは `load()` の中で、各メンバーの `species(key:)` の後、`moveIds` のうち辞書に無いものだけ。1体あたり最大4件・
+  6体で最大24件(それでも learnset 全件〈1体 20〜100件〉よりずっと少ない)。並行に投げてよい(`withTaskGroup` 等)。
+  `load()` は解決が終わってから `isLoading = false` にして返る(テストが `await load()` の後で確かめられるように)。
+- `addMember`・`setMemberSpecies`・`addMove` では解決しない: 追加した技は検索結果から選んだものなので辞書にある。
+  種族変更で残る技は `load()` で解決済み。
+- 失敗(404・通信失敗・キャンセル)は `error` を立てない・`moveIds` を変えない・その ID を nil のままにする(A4)。
+  構築の `load()` は `species(key:)` の失敗で `error` を立てる既存の規則を持つが、技の解決の失敗はそれとは別で、
+  メンバーの読み込み(learnset・特性の選択肢)を止めない。
+- 世代: 構築の技の辞書は「ID → その技」の不変な対応なので、遅れて届いた応答を辞書に入れても古い状態で新しい状態を
+  上書きすることにはならない。計算・逆算のような世代の保護は要らない(`moveIds` や選択は解決で変えないため)。
+
+### 6. 判断: 持ち物は一覧のまま。上限に達したら旗と案内を出す(Web の「中断」とは変える)
+
+持ち物は実データで166件(ADR-0304 の件数表)で、`limit=200` の1回の取得で全件が入る。issue #68 は持ち物の名前も挙げているが、
+いま切り捨ては起きていない。持ち物だけを検索ベースにすると `Menu` から検索シートへの UI 変更が要り、今は利益が無い。
+そこで**一覧のまま**にし、将来 `pageLimit` に達したときに黙って切り捨てないことだけを保証する。
+
+- Web(`web/src/master/onlineSource.ts`)は持ち物の応答が `ITEMS_FETCH_LIMIT` ちょうどなら読み込みを**中断**する
+  (「打ち切りの疑い」)。iOS は**中断しない**: 持ち物が選べないだけで計算・逆算の画面全体を止めるのは、補助の
+  失敗で主機能を止めない方針(「issue #68」11章「検索失敗時の扱い」・絶対ルール5と同じ発想)に反するため。
+  「黙って切り捨てない」という目的は Web と同じ。
+- 3画面に `public private(set) var itemOptionsReachedLimit: Bool`(`load()` で `items.count >= MasterSearch.pageLimit`)。
+  既存の `speciesSearchReachedLimit` / `moveSearchReachedLimit` と同じ語彙。
+- View は true のとき持ち物の `Menu` の中(または直下)に `MasterSearchLabels.itemsTruncated`
+  (「持ち物が多すぎて、一覧に出ていない持ち物があります」)を出す。`MasterSearchLabels.truncated`
+  (「名前を入力して絞り込んでください」)は持ち物に検索欄が無いので使わない(別の文言)。
+- 本当に上限を超えたら、そのときに持ち物も検索ベースにする(follow-up。今は起きていないので作らない)。
+
+### 7. issue #68 を閉じてよいか
+
+**閉じてよい**(iOS 側)。種族・技は検索で先頭ページの外も選べ(PR #136)、選択中の技は `getMove` で名前を解決でき(本章)、
+持ち物・性格は上限内で、上限に達したら黙って切り捨てない(6章)。残るのは次の既知の制約で、どれも「選べない・計算できない」
+ではない:
+
+- 既定の技の選び方は「既知の技 + 上限4件の解決」の中での「最初のダメージ技」で、learnset 全体での厳密な最初とは限らない
+  (3章・4章)。learnset 全件を実体化する API(DECISIONS.md 2026-09-23 の `getSpecies.learnset` を `Move` にする提案)が
+  入れば厳密にできる。
+- 持ち物が将来 200 件を超えたら検索ベースへの移行が要る(6章)。
+
+Web 側の同じ issue の扱いは ADR-0304 が持つ(このレーンでは触らない)。
+
+### 8. implementer が足した API(実装済み)
+
+spec-writer が**シグネチャだけ**先に足し(ビルドを通し、テストが振る舞いで red になるように)、implementer が中身を埋めた:
+
+| メンバー | 実装 |
+|---|---|
+| `PokeCalcService.move(id:)`(プロトコル要件) | そのまま |
+| `APIPokeCalcService.move(id:)` | `client.getMove` で実装(2章)。404 は `species(key:)` と同じく `domainErrorFromSchema` |
+| `MockPokeCalcService.move(id:)` | フィクスチャから引く・無ければ `notFoundError("技", id)` |
+| `MasterSearch.maxMoveLookupsPerSelection`(= `TeamLimits.maxMovesPerMember`) | そのまま(4章) |
+| `MasterSearchLabels.itemsTruncated` | そのまま(6章) |
+| `CalcViewModel` / `ReverseViewModel` / `TeamEditViewModel` の `itemOptionsReachedLimit` | `private(set) var`。`load()` で `items.count >= MasterSearch.pageLimit` を反映(6章) |
+| `TeamEditViewModel.move(forID:)` | 技の辞書(`moveDictionary`)から引く(5章) |
+
+ViewModel の内部(3章・5章): 計算・逆算の `reselectMove` を2段の `async throws` にし、`move(id:)` の呼び出しを足した
+(`token` の確認を各 `await` の後に入れる。失敗は `CancellationError` だけ呼び出し元の `handleInputFailure` に投げ直し、
+それ以外は「解決できなかった」として `resolveMove(id:)` が `nil` を返す形で飲み込む)。構築の技の辞書に先頭ページと
+`runMoveSearch()` の結果を合流させ、`load()` で保存済みメンバーの未知の技を `withTaskGroup` で並行解決する。
+
+**critic 指摘と修正(11章に詳細)**: 逆算の `recalculateIfPossible` の「古いエラーを消す」条件は、最初の実装では
+`selectedMove != nil` にしたが、これだけでは不十分だった(`reselectMove` が `moveUnavailable` を投げても `moveId` は
+書き換わらず、辞書には直前の種族の技がまだ残っているため、無関係な入力のたびに `moveUnavailable` を誤って消して
+しまう回帰があった)。`selectedMove` が非 nil であることに加えて、**いまの攻撃側の learnset(ID 集合)にあり**、
+**ダメージ技である**ことまで確かめる形に直した(`moveOptions.contains` に戻すと、ID 解決した技は `moveOptions` に
+入らないため今度は正しく消せないケースが生まれる。11章)。
+
+View(`ios/PokeCalc`。XCUITest は今回必須にしない): `TeamEditMemberCard.moveSlot` の名前を `viewModel.move(forID:)` から
+引く。持ち物の `Menu`(計算・逆算・構築)に `itemOptionsReachedLimit` のときの `MasterSearchLabels.itemsTruncated`
+(textSecondary の caption。他の検索ヒントと同じ見た目)。
+
+### 9. XCTest(実装完了。`swift test` 383件・`make ios-test` unit 396件・XCUITest 17件すべて green)
+
+テスト用の下ごしらえ(既存の振る舞いは変えない):
+
+- `Support/StubPokeCalcService.swift` に `move(id:)` と `MoveLookupMode`(`.notFound` 既定 / `.immediate` / `.manual`)、
+  `moveLookups`(呼ばれた ID の記録)、`setMoveLookupError(_:)`、`resolveMoveLookup(at:with:)`、
+  `cancelPendingMoveLookup(at:)` / `cancelledMoveLookups` / `waitForMoveLookups(count:)` / `waitForMoveLookupCancellation(at:)`。
+  **既定を `.notFound` にした判断**: `move(id:)` を足す前に書かれた既存テスト(`CalcViewModelSearchTests` /
+  `ReverseViewModelSearchTests` の `testMoveOutsideTheFirstPageBecomesSelectableAfterSearching` は「先頭ページの外の技しか
+  覚えない種族にすると `moveUnavailable`、名前で検索すれば復帰」を固定している)を1行も変えずに保つため。その振る舞いは
+  「`getMove` が 404 のときのフォールバック」(A4)として今も正しい。新しいテストは `.immediate` / `.manual` を明示する。
+- `Support/StubMoveLookupMaster.swift`(新規): 先頭ページの外の技しか覚えない種族を**種族一覧の先頭**に置いたサービス
+  (issue の再現手順を `load()` でそのまま起こす)、先頭ページの外の変化技(上限+1個)・ダメージ技、`pageLimit` 件の持ち物。
+
+新規テスト:
+
+- `MoveLookupServiceTests.swift`(A1・7件): `getMove` のパス・ヘッダー・写像・404/503/500 のコード・通信失敗、モックの一致と未知 ID。
+- `CalcViewModelMoveLookupTests.swift`(16件): 起動時の再現手順(A2)、最初のダメージ技の規則(A2)、上限で打ち切り(A3)、
+  既知の技では呼ばない(A3。learnset にマスタに無い ID を含む `StubMaster.alpha` でも呼ばない)、404・通信失敗で
+  `moveUnavailable`(A4)、構築の個体の技を保つ・404 で既定の技(A2・A4)、古い応答で上書きしない・キャンセルは
+  エラーにしない(A5)、stage-2(既定の技の learnset 解決ループ)の世代保護(A5。critic 指摘。11章)、
+  持ち物の上限(A6)、文言・定数。
+- `ReverseViewModelMoveLookupTests.swift`(13件): 計算と同じ趣旨 + 変化技を飛ばす・上限で打ち切ったら `moveUnavailable`、
+  解決した技で観測を入れると `reverse` が通り `error` が残らない、stage-2 の世代保護、`recalculateIfPossible` の
+  古いエラーの消し方の回帰・その理由(critic 指摘。11章)。
+- `TeamEditViewModelMoveLookupTests.swift`(7件): 保存済みの技を `load()` で解決(未知のものだけ)、既知だけなら呼ばない、
+  404・通信失敗で nil・`error` なし・`moveIds` 不変、検索語を変えても既知の技の名前が消えない、持ち物の上限。
+
+### 10. 範囲外・申し送り
+
+- `api/openapi.yaml`・`Generated/`・`engine/`・`services/`・`web/` は触らない(`make gen` 不要)。
+- learnset 全件の実体化(Web が `getMove` を不十分と判断した用途)はしない(3章)。
+- 解決中のローディング表示は増やさない(既存の `isLoading` がその操作の間ずっと立っている)。
+- 既存テストは**変更しない**。実装の途中で既存テストが落ちたら A7 を破った合図なので、テストではなく実装を直す。
+
+### 11. critic 指摘と修正(1回目 FAIL → 反映して再実装)
+
+1回目の実装は `swift test`/`make ios-test` を通していたが、critic レビューで以下が見つかった。
+
+- **MUST(回帰)**: `ReverseViewModel.recalculateIfPossible` の「観測が無いときに古いエラーを消してよいか」の
+  判定を、最初は `if selectedMove != nil { error = nil }` にしていた。これは A7 が固定する「ID 解決した技は
+  `moveOptions` に入らない」を汲んだつもりの直しだったが、**古いエラーが残っていなければならないケースまで
+  消してしまう回帰**があった: `reselectMove` が `moveUnavailable` を投げても `moveId`・技の辞書はそのまま
+  (書き換えるのは成功したときだけ)なので、直前の種族のときに解決済みだった技が辞書に残っている。
+  この技はもう「いまの攻撃側の learnset」には無いのに、`selectedMove != nil` は真になるため、技とは無関係な
+  入力(例: 持ち物の変更)のたびに `moveUnavailable` が誤って消えてしまう
+  (`testStaleResolvedMoveDoesNotClearMoveUnavailableAfterASpeciesChange` が固定。旧条件で実際に red になることを
+  確認済み)。
+  - **修正**: `if let move = selectedMove, attackingLearnsetIds.contains(move.id), move.category != .status { error = nil }`
+    に直した(`selectedMove` が非 nil であることに加え、**いまの攻撃側の learnset の ID 集合にあり**、
+    **ダメージ技である**ことまで確かめる。`reselectMove` が `moveId` を書き換えるのは、常にこの3条件を満たす
+    技のときだけなので、これは「`reselectMove` が実際に選び直せたか」の判定そのものになる)。
+  - `moveOptions.contains` に戻すテストも用意した(`testResolvedMoveStillClearsAStaleReverseFailureWithNoObservations`)。
+    ID 解決した技(`moveOptions` には入らない)については、無関係な失敗(例: 前回の `reverse` の通信失敗)の残りを
+    いつまでも消せなくなり、実際に red になることを確認済み。
+- **OPTIONAL(対応済み)**: `reselectMove` の stage-2(`moveOptions` から既定が決まらないときの learnset 解決ループ)
+  にも、各 `move(id:)` の `await` の後に `token == latestRequestToken` の確認が要る(stage-1 の世代保護は
+  `testStaleLookupResponseDoesNotOverwriteTheNewerSelection` が固定しているが、stage-2 は別の guard なので、
+  それだけでは守れない)。Calc・Reverse それぞれに
+  `testStaleStageTwoLookupResponseDoesNotOverwriteTheNewerSelection` を追加し、guard を外すと実際に red になる
+  (起動時の stage-2 解決が保留中に別の種族へ切り替えても、遅れて届いた解決結果が新しい選択を上書きしてしまう)
+  ことを確認済み。
+- 4本とも追加し、`swift test` 383件・`make ios-test`(unit 396件・XCUITest 17件・Info.plist 検査)がすべて
+  green であることを確認した。既存テストは1行も変えていない。

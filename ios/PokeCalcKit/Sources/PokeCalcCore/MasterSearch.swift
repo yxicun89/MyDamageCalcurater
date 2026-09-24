@@ -14,6 +14,11 @@ public enum MasterSearch {
     /// 1キーストロークごとの検索をまとめる待ち時間(3章)。issue #113 が共有のデバウンス/キャンセル
     /// 基盤を入れるまでの、この修正専用の素朴な実装。
     public static let debounceInterval: Duration = .milliseconds(250)
+    /// 1回の入力操作で「選択中の技」を決めるために `move(id:)` を呼んでよい上限
+    /// (ADR-0501「issue #68 の残り」4章)。learnset 全件を ID で実体化しないための歯止め。
+    /// 値は構築の1体の技スロット数(`TeamLimits.maxMovesPerMember`)と同じにし、どの画面でも
+    /// 1操作あたりの `getMove` の往復がこれを超えないようにする。
+    public static let maxMoveLookupsPerSelection = TeamLimits.maxMovesPerMember
 }
 
 /// 種族・技の検索シートで使う案内文言(10章)。マスタに無い表示専用の文言なので
@@ -25,6 +30,9 @@ public enum MasterSearchLabels {
     public static let truncated = "候補が多いので、名前を入力して絞り込んでください"
     /// 検索結果が0件のときの案内。
     public static let noMatch = "一致する候補がありません"
+    /// 持ち物の一覧(検索欄の無い `Menu`)が `MasterSearch.pageLimit` に達したときの案内
+    /// (ADR-0501「issue #68 の残り」6章。持ち物は名前で絞れないので `truncated` とは別の文言)。
+    public static let itemsTruncated = "持ち物が多すぎて、一覧に出ていない持ち物があります"
 }
 
 // MARK: - View 層が3画面を同じ形で描けるようにするための名目上の抽象(10章の表)

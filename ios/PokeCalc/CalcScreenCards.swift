@@ -48,6 +48,13 @@ struct AttackerCardView: View {
                 MenuLabelChip(text: BulkRowDisplay.itemLabel(itemId: viewModel.attackerItemId, items: viewModel.itemOptions))
             }
             .accessibilityIdentifier("attackerItemPicker")
+            // 持ち物の一覧が上限に達していても黙って切り捨てない(ADR-0501「issue #68 の残り」6章)。
+            if viewModel.itemOptionsReachedLimit {
+                Text(MasterSearchLabels.itemsTruncated)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .accessibilityIdentifier("attackerItemLimitHint")
+            }
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -82,6 +82,26 @@ public struct APIPokeCalcService: PokeCalcService {
         }
     }
 
+    public func move(id: String) async throws -> Move {
+        let output = try await send {
+            try await client.getMove(.init(
+                path: .init(key: id),
+                headers: .init(xDeviceId: identity.deviceID, xSessionId: identity.sessionID)
+            ))
+        }
+        switch output {
+        case .ok(let ok):
+            return try Self.domainMove(ok.body.json)
+        case .notFound(let response):
+            // 404 は species(key:) と同じ inline body(ADR-0501「issue #68 の残り」2章)。
+            throw try Self.domainErrorFromSchema(response.body.json)
+        case .serviceUnavailable(let response):
+            throw try Self.domainErrorFromSchema(response.body.json)
+        case .default(_, let error):
+            throw try Self.domainError(error)
+        }
+    }
+
     public func searchItems(query: String, limit: Int) async throws -> [Item] {
         let output = try await send {
             try await client.searchItems(.init(
