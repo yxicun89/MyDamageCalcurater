@@ -144,7 +144,13 @@
   (ライト・ダーク×bg.base・bg.glass合成の4組を検査)を新規追加。**iOS 側(`PokeCalcDesign.swift`・
   `DesignTokenTests.swift`)はまだ旧値のまま**で、iOSレーンへ DECISIONS.md で依頼済み。iOS 側が終わるまで
   issue #99 自体はクローズしない。
-  #113(improvement)逆算の数値入力で古い計算要求を抑止・キャンセル(200ms debounce・AbortSignal。iOS・API と連携)。
+  **#113(improvement)逆算の数値入力で古い計算要求を抑止・キャンセル — Web 分は完了(2026-09-24。critic PASS。
+  ADR-0300 §11)**: 観測のテキスト編集のみ200msのtrailing debounce(確定操作は待たない)、`CalcEngine` に
+  任意引数 `signal?: AbortSignal` を追加(API実装はfetchへ配線、WASM実装は開始前にのみ検査)、取り消しを
+  `REQUEST_ABORTED_CODE` で `engine_unavailable` と区別。既存929件は無変更・新規26件追加(953件)。
+  iOS・API レーン担当分は別途(同じ200ms契約に各レーンの区切りで追従)。
+  残る軽微(次に触るときに拾う。ブロッカーではない): 種族・技・プリセット選択でも確定操作として即座に
+  flush することの回帰テストが無い(実装は正しいがテスト未カバー。`ReverseScreen.debounce.test.tsx`)。
   次点: #98(bug)モバイル幅で計算・逆算画面が横に溢れる、#67(bug)2xx の契約外 JSON で API クライアントが例外を投げる(防御的処理)。
   連携(他レーン主担当。Web は連携のみ): #71(データ+Web+iOS 攻撃側プリセット単一化)・#72(API+Web ルート make e2e を Playwright へ)・
   #78(API+Web 特性の無効・吸収の境界反映)・#110(Web の担当分は P4-19 へ分離。DECISIONS.md 2026-09-23 参照)・

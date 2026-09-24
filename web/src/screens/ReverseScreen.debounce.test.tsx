@@ -16,6 +16,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import { OBSERVATION_INPUT_DEBOUNCE_MS } from "../domain/observations";
 import { REQUEST_ABORTED_CODE, type Item, type ReverseResult } from "../engine/types";
+import { calcScreenText } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
 import {
@@ -191,6 +192,21 @@ describe("観測の数値を打っている間は計算を始めない(200ms の
     expect(vi.getTimerCount()).toBe(0);
     await flushObservationDebounce();
     expect(engine.reverseRequests).toHaveLength(0);
+  });
+
+  test("前の結果が出ている状態で新しい値を打つと、デバウンスの間は前の結果を出さず「計算中」にする", async () => {
+    renderScreen();
+    choosePair();
+    typeObservation(1, "45");
+    await flushObservationDebounce();
+    await settle();
+    // 前の入力(45)の結果が出ている(「計算中」ではない)ことを確認してから、新しい値を打つ。
+    expect(screen.queryByText(calcScreenText.loadingNotice)).not.toBeInTheDocument();
+
+    typeObservation(1, "50");
+    // requestRows にはまだ「45」時点の値のままなので、observations との不一致(debouncePending)で
+    // 「計算中」に戻る(前の結果〈45 の候補〉をそのまま出し続けない)。
+    expect(screen.getByText(calcScreenText.loadingNotice)).toBeInTheDocument();
   });
 });
 
