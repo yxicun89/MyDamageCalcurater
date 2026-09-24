@@ -1265,3 +1265,11 @@ Reason: issue #73。片方だけにプリセットを追加・削除しても通
 「APIが受け付けるがengineが解決できない」「engineのプリセットをAPIから指定できない」状態を作り得た。
 Impact: `docs/plan.md` の改善要望に issue #73 の行を追加。データレーンへの追加対応は無し(engine は無変更、
 実バグではなく回帰テストの欠落だった)。issue #73 はこの PR のマージでクローズしてよい。
+
+## 2026-09-24: issue #104(pokedexのDB資格情報を用途別の最小権限へ分離)を main へ統合(データレーン)
+Decision: PR #176(`feat/claude-p1-engine` → `main`)をマージした。`pokedex_reader`/
+`pokedex_importer`/`pokedex_migrator`の3ロール分離(ADR-0110)。critic PASS(1往復)。
+Reason: 独立レビュー PASS・`make test`(911件)/`test-db`/`lint`/`k8s-render`すべてgreen。
+実クラスタでSHOW GRANTSにより権限確認済み、既存クラスタからの無停止移行も実地確認済み。
+Impact: 他レーンへの影響なし。cloud overlay実装時はSecretのDSNキー名を契約として踏襲する
+ことを推奨(ADR-0110決定8)。
