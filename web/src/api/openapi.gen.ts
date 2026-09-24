@@ -55,7 +55,7 @@ export interface paths {
     };
     /**
      * 技を日本語名で前方一致検索
-     * @description 既定のレギュレーションの使用可能集合だけを返す(並びは ID 順。ADR-0105)。
+     * @description 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
      */
     get: operations["searchMoves"];
     put?: never;
@@ -98,7 +98,7 @@ export interface paths {
     };
     /**
      * 持ち物を日本語名で前方一致検索
-     * @description 既定のレギュレーションの使用可能集合だけを返す(並びは ID 順。ADR-0105)。
+     * @description 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
      */
     get: operations["searchItems"];
     put?: never;

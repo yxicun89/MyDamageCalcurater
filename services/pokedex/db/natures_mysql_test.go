@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/go-sql-driver/mysql"
@@ -122,6 +123,51 @@ func TestSearchSpeciesPrefixAndRegulation(t *testing.T) {
 	none, err := q.SearchSpecies(ctx, store.SearchSpeciesParams{RegulationID: "test-none", Pattern: "%", Limit: 200})
 	if err != nil || len(none) != 0 {
 		t.Errorf("未知のレギュレーションで %d 件, err=%v", len(none), err)
+	}
+}
+
+// AC-P2: searchMoves / searchItems の並びは name_ja の照合順序(同名は ID)であって ID 順ではないこと
+// (issue #69。api/openapi.yaml の description は以前「ID 順」だったが、実装は一貫して名前順だった)。
+// example_seed.sql の技(testflame/testshield/testsplash)・持ち物(testorb/teststone/testplain)は、
+// ID のアルファベット順と name_ja の五十音順が入れ替わるように選んである
+// (ID順なら testflame/testshield/testsplash・testorb/testplain/teststone になるが、実際は名前順)。
+func TestSearchMovesAndItemsOrderIsNameJaNotID(t *testing.T) {
+	conn := freshDB(t)
+	seed(t, conn)
+	q := store.New(conn)
+	ctx := context.Background()
+
+	reg, err := q.GetDefaultRegulation(ctx)
+	if err != nil {
+		t.Fatalf("GetDefaultRegulation: %v", err)
+	}
+
+	moves, err := q.SearchMoves(ctx, store.SearchMovesParams{RegulationID: reg.ID, Pattern: "%", Limit: 200})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var moveIDs []string
+	for _, m := range moves {
+		moveIDs = append(moveIDs, m.ID)
+	}
+	wantMoveOrder := []string{"testshield", "testsplash", "testflame"} // name_ja 順(シールド・スプラッシュ・フレイム)
+	if !reflect.DeepEqual(moveIDs, wantMoveOrder) {
+		t.Errorf("searchMoves の並び = %v, want %v(name_ja 順。ID 順〈testflame, testshield, testsplash〉になっていないか)",
+			moveIDs, wantMoveOrder)
+	}
+
+	items, err := q.SearchItems(ctx, store.SearchItemsParams{RegulationID: reg.ID, Pattern: "%", Limit: 200})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var itemIDs []string
+	for _, it := range items {
+		itemIDs = append(itemIDs, it.ID)
+	}
+	wantItemOrder := []string{"testorb", "teststone", "testplain"} // name_ja 順(オーブ・ストーン・ただのもの)
+	if !reflect.DeepEqual(itemIDs, wantItemOrder) {
+		t.Errorf("searchItems の並び = %v, want %v(name_ja 順。ID 順〈testorb, testplain, teststone〉になっていないか)",
+			itemIDs, wantItemOrder)
 	}
 }
 
