@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -203,6 +204,62 @@ func TestPokedexTerminationGracePeriodExceedsShutdownTimeout(t *testing.T) {
 	if got <= shutdownTimeout {
 		t.Errorf("terminationGracePeriodSeconds = %v, want shutdownTimeout(%v)より長い(main.go の shutdownTimeout 定数と比較)",
 			got, shutdownTimeout)
+	}
+}
+
+// AC5(issue #112 / ADR-0112): 4つの DB プール環境変数が既定値のまま明示され、main.go の
+// デフォルト定数と一致する(文字列の完全一致ではなく、strconv.Atoi・time.ParseDuration した
+// 値どうしの比較にすることで、値を2箇所にハードコードしない)。
+func TestManifestPokedexDBPoolEnvDefaults(t *testing.T) {
+	objs := deploytest.BaseObjects(t, pokedexService)
+	var d pokedexDeployment
+	deploytest.Find(t, objs, "Deployment", pokedexService).Decode(t, &d)
+	if len(d.Spec.Template.Spec.Containers) == 0 {
+		t.Fatal("コンテナが無い")
+	}
+	env := map[string]string{}
+	for _, e := range d.Spec.Template.Spec.Containers[0].Env {
+		if e.Value != nil {
+			env[e.Name] = *e.Value
+		}
+	}
+
+	intCases := []struct {
+		name string
+		want int
+	}{
+		{envDBMaxOpenConns, defaultDBMaxOpenConns},
+		{envDBMaxIdleConns, defaultDBMaxIdleConns},
+	}
+	for _, tc := range intCases {
+		v, ok := env[tc.name]
+		if !ok {
+			t.Errorf("%s が deployment.yaml に無い", tc.name)
+			continue
+		}
+		n, err := strconv.Atoi(v)
+		if err != nil || n != tc.want {
+			t.Errorf("%s = %q, want %d(main.go の既定値と一致すること)", tc.name, v, tc.want)
+		}
+	}
+
+	durCases := []struct {
+		name string
+		want time.Duration
+	}{
+		{envDBConnMaxIdleTime, defaultDBConnMaxIdleTime},
+		{envDBConnMaxLifetime, defaultDBConnMaxLifetime},
+	}
+	for _, tc := range durCases {
+		v, ok := env[tc.name]
+		if !ok {
+			t.Errorf("%s が deployment.yaml に無い", tc.name)
+			continue
+		}
+		got, err := time.ParseDuration(v)
+		if err != nil || got != tc.want {
+			t.Errorf("%s = %q, want %v(main.go の既定値と一致すること)", tc.name, v, tc.want)
+		}
 	}
 }
 

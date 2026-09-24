@@ -1297,3 +1297,21 @@ Decision: PR #178(`feat/claude-p1-engine` → `main`)をマージした。`newHT
 Reason: 独立レビュー PASS・`make test`(953件)/`lint`/`build`/`k8s-render`すべてgreen。
 実クラスタでterminationGracePeriodSeconds=30・api-smoke正常応答を確認済み。
 Impact: 他レーンへの影響なし。readiness/livenessの改善はissue #107の範囲(今回は対象外)。
+
+## 2026-09-24: issue #112(pokedexのDB接続プールに上限と寿命を設定)を実装(データレーン)
+Decision: `services/pokedex/cmd/pokedex/main.go`が`sql.Open`後に接続プールを一切調整せず
+(Go標準の既定はMaxOpenConns無制限)、突発的な同時要求がそのままMySQL接続数に転嫁されていた
+リスクを解消した。4環境変数(POKEDEX_DB_MAX_OPEN_CONNS=10・POKEDEX_DB_MAX_IDLE_CONNS=5・
+POKEDEX_DB_CONN_MAX_IDLE_TIME=5m・POKEDEX_DB_CONN_MAX_LIFETIME=30m)を追加し、
+services/pokedex/db.OpenPool(プール生成を1か所に集約。P7-1のメトリクス化に備える)経由で
+適用(ADR-0112)。検証はsql.Openより前、エラー文にDSNを含めない。exportサブコマンドは
+ForExport()でMaxOpenConns=1に上書き(逐次処理の実態に合わせる。無制限の別経路を残さない)。
+deployment.yamlに4環境変数を既定値のまま明示し、runbookにreplica数を増やすときの接続予算の
+注記を追加。critic PASS(1往復。軽微指摘1件〈idle==openの境界値テスト〉を反映)。
+**実クラスタ(k3d-pokecalc)でpokedexを再ビルド・再デプロイし、4環境変数が実際に設定されていること・
+api-smokeが正常応答することを確認済み**。
+Reason: issue #112(Codexレビュー)。突発的な同時要求がDB側の接続枠を占有し、importer・migrate・
+運用接続まで巻き込んで失敗させうるリスクを防ぐため。`make test`(953件)/`test-db`/`lint`/`build`/
+`k8s-render`すべてgreen。
+Impact: これでデータレーン主担当のCodexレビューissue(#104・#106・#109・#112)はすべて完了。
+P7-1(メトリクス)実装時はこのプールのStats()を観測に接続できる。他レーンへの影響なし。

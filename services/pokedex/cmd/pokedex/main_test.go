@@ -17,6 +17,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net"
@@ -24,6 +25,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"example.com/pokecalc/services/pokedex/db"
 )
 
 func lookupFrom(env map[string]string) func(string) (string, bool) {
@@ -360,5 +363,215 @@ func TestRunServeReturnsErrorWhenAddrInUse(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "pass@") {
 		t.Errorf("エラーに DSN(パスワード)を含めている: %v", err)
+	}
+}
+
+// --- issue #112 / ADR-0112: pokedex の DB 接続プールに上限と寿命を設定する ---------------------
+//
+// 以下は issue #112(ADR-0112)の受け入れテスト。この時点では実装が無いため失敗する
+// (コンパイルも通らない)。実装者は ADR-0112 の「実装時の申し送り」に従い、少なくとも
+// 次の識別子を main.go に用意すること:
+//
+//	envDBMaxOpenConns, envDBMaxIdleConns, envDBConnMaxIdleTime, envDBConnMaxLifetime string 定数
+//	defaultDBMaxOpenConns, defaultDBMaxIdleConns int 定数(10 / 5)
+//	defaultDBConnMaxIdleTime, defaultDBConnMaxLifetime time.Duration 定数(5分 / 30分)
+//	config 構造体に Pool db.PoolConfig フィールド
+//	loadConfig がこの4変数を読み・検証し・config.Pool を埋める(エラー文に DSN を含めない)
+//	var openPool = db.OpenPool(runServe・runExport はこれ経由で db.OpenPool を呼ぶ)
+//	runExport は openPool(cfg.DSN, cfg.Pool.ForExport()) を呼ぶ
+//
+// db.PoolConfig・db.OpenPool・(db.PoolConfig).ForExport() は services/pokedex/db/pool_test.go・
+// pool_mysql_test.go が要求する(そちらは package db 側の実装)。
+
+const dsnWithCredentials = "user:pass@tcp(mysql:3306)/pokedex"
+
+// AC1: 4つの環境変数の名前と既定値(main.go の定数)。
+func TestPoolEnvNames(t *testing.T) {
+	if envDBMaxOpenConns != "POKEDEX_DB_MAX_OPEN_CONNS" {
+		t.Errorf("envDBMaxOpenConns = %q", envDBMaxOpenConns)
+	}
+	if envDBMaxIdleConns != "POKEDEX_DB_MAX_IDLE_CONNS" {
+		t.Errorf("envDBMaxIdleConns = %q", envDBMaxIdleConns)
+	}
+	if envDBConnMaxIdleTime != "POKEDEX_DB_CONN_MAX_IDLE_TIME" {
+		t.Errorf("envDBConnMaxIdleTime = %q", envDBConnMaxIdleTime)
+	}
+	if envDBConnMaxLifetime != "POKEDEX_DB_CONN_MAX_LIFETIME" {
+		t.Errorf("envDBConnMaxLifetime = %q", envDBConnMaxLifetime)
+	}
+	if defaultDBMaxOpenConns != 10 {
+		t.Errorf("defaultDBMaxOpenConns = %d, want 10", defaultDBMaxOpenConns)
+	}
+	if defaultDBMaxIdleConns != 5 {
+		t.Errorf("defaultDBMaxIdleConns = %d, want 5", defaultDBMaxIdleConns)
+	}
+	if defaultDBConnMaxIdleTime != 5*time.Minute {
+		t.Errorf("defaultDBConnMaxIdleTime = %v, want 5m", defaultDBConnMaxIdleTime)
+	}
+	if defaultDBConnMaxLifetime != 30*time.Minute {
+		t.Errorf("defaultDBConnMaxLifetime = %v, want 30m", defaultDBConnMaxLifetime)
+	}
+}
+
+// AC1: 4変数が未設定なら既定値(10/5/5m/30m)になる。
+func TestLoadConfigPoolDefaults(t *testing.T) {
+	cfg, err := loadConfig(lookupFrom(map[string]string{envDatabaseDSN: fakeDSN}))
+	if err != nil {
+		t.Fatalf("loadConfig: %v", err)
+	}
+	want := db.PoolConfig{
+		MaxOpenConns:    defaultDBMaxOpenConns,
+		MaxIdleConns:    defaultDBMaxIdleConns,
+		ConnMaxIdleTime: defaultDBConnMaxIdleTime,
+		ConnMaxLifetime: defaultDBConnMaxLifetime,
+	}
+	if cfg.Pool != want {
+		t.Errorf("cfg.Pool = %+v, want %+v", cfg.Pool, want)
+	}
+}
+
+// AC1: 4変数を指定すれば、その値がそのまま反映される。
+func TestLoadConfigPoolOverrides(t *testing.T) {
+	env := map[string]string{
+		envDatabaseDSN:       fakeDSN,
+		envDBMaxOpenConns:    "20",
+		envDBMaxIdleConns:    "8",
+		envDBConnMaxIdleTime: "90s",
+		envDBConnMaxLifetime: "2h",
+	}
+	cfg, err := loadConfig(lookupFrom(env))
+	if err != nil {
+		t.Fatalf("loadConfig: %v", err)
+	}
+	want := db.PoolConfig{MaxOpenConns: 20, MaxIdleConns: 8, ConnMaxIdleTime: 90 * time.Second, ConnMaxLifetime: 2 * time.Hour}
+	if cfg.Pool != want {
+		t.Errorf("cfg.Pool = %+v, want %+v", cfg.Pool, want)
+	}
+}
+
+// AC1: 不正な値(0以下の整数・idle>open・0以下の duration・壊れた duration 文字列)は
+// sql.Open より前にエラーになり、エラー文に DSN(パスワード)を含めない。
+func TestLoadConfigPoolRejectsInvalidValues(t *testing.T) {
+	tests := []struct {
+		name    string
+		extra   map[string]string
+		wantErr string
+	}{
+		{"MaxOpenConns が0", map[string]string{envDBMaxOpenConns: "0"}, envDBMaxOpenConns},
+		{"MaxOpenConns が負", map[string]string{envDBMaxOpenConns: "-1"}, envDBMaxOpenConns},
+		{"MaxOpenConns が整数でない", map[string]string{envDBMaxOpenConns: "abc"}, envDBMaxOpenConns},
+		{"MaxIdleConns が0", map[string]string{envDBMaxIdleConns: "0"}, envDBMaxIdleConns},
+		{"MaxIdleConns が整数でない", map[string]string{envDBMaxIdleConns: "abc"}, envDBMaxIdleConns},
+		{"MaxIdleConns が MaxOpenConns を超える", map[string]string{envDBMaxOpenConns: "5", envDBMaxIdleConns: "6"}, envDBMaxIdleConns},
+		{"ConnMaxIdleTime が0", map[string]string{envDBConnMaxIdleTime: "0s"}, envDBConnMaxIdleTime},
+		{"ConnMaxIdleTime が負", map[string]string{envDBConnMaxIdleTime: "-1m"}, envDBConnMaxIdleTime},
+		{"ConnMaxIdleTime の形式が壊れている", map[string]string{envDBConnMaxIdleTime: "five minutes"}, envDBConnMaxIdleTime},
+		{"ConnMaxLifetime が0", map[string]string{envDBConnMaxLifetime: "0"}, envDBConnMaxLifetime},
+		{"ConnMaxLifetime が負", map[string]string{envDBConnMaxLifetime: "-30m"}, envDBConnMaxLifetime},
+		{"ConnMaxLifetime の形式が壊れている", map[string]string{envDBConnMaxLifetime: "not-a-duration"}, envDBConnMaxLifetime},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := map[string]string{envDatabaseDSN: dsnWithCredentials}
+			for k, v := range tt.extra {
+				env[k] = v
+			}
+			_, err := loadConfig(lookupFrom(env))
+			if err == nil {
+				t.Fatalf("loadConfig = nil error, want %s を含むエラー", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("err = %v, want %s を含む", err, tt.wantErr)
+			}
+			if strings.Contains(err.Error(), "pass@") {
+				t.Errorf("エラーに DSN(パスワード)を含めている: %v", err)
+			}
+		})
+	}
+}
+
+// AC1: MaxIdleConns が MaxOpenConns と等しい(境界値)ときはエラーにならない
+// (loadPoolConfig の検査は「MaxIdleConns > MaxOpenConns」の厳密不等号で、等しい場合を拒否しない)。
+func TestLoadConfigPoolAllowsIdleEqualToOpen(t *testing.T) {
+	env := map[string]string{
+		envDatabaseDSN:    dsnWithCredentials,
+		envDBMaxOpenConns: "5",
+		envDBMaxIdleConns: "5",
+	}
+	cfg, err := loadConfig(lookupFrom(env))
+	if err != nil {
+		t.Fatalf("loadConfig = %v, want nil(MaxIdleConns == MaxOpenConns は許可される)", err)
+	}
+	if cfg.Pool.MaxOpenConns != 5 || cfg.Pool.MaxIdleConns != 5 {
+		t.Errorf("Pool = %+v, want MaxOpenConns=5 MaxIdleConns=5", cfg.Pool)
+	}
+}
+
+// AC2・AC3(全体結線): runServe は loadConfig が組み立てた cfg.Pool をそのまま openPool に渡す。
+func TestRunServeUsesConfiguredPool(t *testing.T) {
+	addr := freeAddr(t)
+	env := map[string]string{
+		envDatabaseDSN:    fakeDSN,
+		envAddr:           addr,
+		envDBMaxOpenConns: "3",
+		envDBMaxIdleConns: "2",
+	}
+	var got db.PoolConfig
+	orig := openPool
+	openPool = func(dsn string, cfg db.PoolConfig) (*sql.DB, error) {
+		got = cfg
+		return orig(dsn, cfg)
+	}
+	defer func() { openPool = orig }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- runServe(ctx, lookupFrom(env)) }()
+	waitForListen(t, addr)
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("runServe = %v, want nil", err)
+		}
+	case <-time.After(shutdownTimeout + 5*time.Second):
+		t.Fatal("ctx を終えても runServe が止まらない")
+	}
+
+	want := db.PoolConfig{MaxOpenConns: 3, MaxIdleConns: 2, ConnMaxIdleTime: defaultDBConnMaxIdleTime, ConnMaxLifetime: defaultDBConnMaxLifetime}
+	if got != want {
+		t.Errorf("openPool に渡された cfg = %+v, want %+v", got, want)
+	}
+}
+
+// AC4: runExport は openPool を cfg.Pool.ForExport()(MaxOpenConns=1、MaxIdleConns はそれ以下)
+// で呼ぶ。実 DB が無くても openPool に渡された PoolConfig だけを検証できる
+// (openPool を横取りし、DB 到達の成否は問わない)。
+func TestRunExportUsesExportPoolConfig(t *testing.T) {
+	t.Setenv(envDatabaseDSN, fakeDSN)
+	t.Setenv(envDBMaxOpenConns, "9")
+	t.Setenv(envDBMaxIdleConns, "4")
+
+	var got db.PoolConfig
+	var calls int
+	orig := openPool
+	openPool = func(dsn string, cfg db.PoolConfig) (*sql.DB, error) {
+		calls++
+		got = cfg
+		return orig(dsn, cfg)
+	}
+	defer func() { openPool = orig }()
+
+	dir := t.TempDir()
+	_ = runExport([]string{"-out", dir}) // 実 DB が無いので失敗してよい。cfg の中身だけ見る
+
+	if calls == 0 {
+		t.Fatal("openPool が呼ばれていない")
+	}
+	if got.MaxOpenConns != 1 {
+		t.Errorf("export の MaxOpenConns = %d, want 1", got.MaxOpenConns)
+	}
+	if got.MaxIdleConns > 1 {
+		t.Errorf("export の MaxIdleConns = %d, want 1以下", got.MaxIdleConns)
 	}
 }
