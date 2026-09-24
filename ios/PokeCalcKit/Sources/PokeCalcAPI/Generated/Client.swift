@@ -580,6 +580,129 @@ public struct Client: APIProtocol {
             }
         )
     }
+    /// 技を ID のまとめ取りで解決する
+    ///
+    /// `getMove` の複数版。`getSpecies` の `learnset`(ID配列)のような、既に確定した ID の集合を
+    /// 1回の呼び出しで実体(名前・タイプ・分類・威力・優先度)に解決するための経路
+    /// (ADR-0304 §3。Web のオンライン学習技表示の欠落の解消)。`getMove` と同様に既定のレギュレーションで
+    /// 絞らない(使用可能集合の外の技も返す)。マスタに無い ID は黙って省く(部分一致は無い。エラーにしない)。
+    /// 応答の順序は `ids` と同じ(見つからなかった ID は詰めて省く)。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/pokedex/moves/batch`.
+    /// - Remark: Generated from `#/paths//api/pokedex/moves/batch/get(getMovesByIds)`.
+    public func getMovesByIds(_ input: Operations.GetMovesByIds.Input) async throws -> Operations.GetMovesByIds.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.GetMovesByIds.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/api/pokedex/moves/batch",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                try converter.setHeaderFieldAsURI(
+                    in: &request.headerFields,
+                    name: "X-Device-Id",
+                    value: input.headers.xDeviceId
+                )
+                try converter.setHeaderFieldAsURI(
+                    in: &request.headerFields,
+                    name: "X-Session-Id",
+                    value: input.headers.xSessionId
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "ids",
+                    value: input.query.ids
+                )
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.GetMovesByIds.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            [Components.Schemas.Move].self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                case 503:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.GetMovesByIds.Output.ServiceUnavailable.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas._Error.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .serviceUnavailable(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses._Error.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas._Error.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
     /// 持ち物を日本語名で前方一致検索
     ///
     /// 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。

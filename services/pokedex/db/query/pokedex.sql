@@ -38,6 +38,11 @@ SELECT id, name_ja, type, category, power, priority
 FROM moves
 WHERE id = ?;
 
+-- name: GetMovesByIDs :many
+SELECT id, name_ja, type, category, power, priority
+FROM moves
+WHERE id IN (sqlc.slice(ids));
+
 -- name: GetItem :one
 SELECT id, name_ja, name_ja_source, name_en
 FROM items

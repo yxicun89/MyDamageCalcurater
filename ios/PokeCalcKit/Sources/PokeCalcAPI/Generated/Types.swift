@@ -47,6 +47,18 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/pokedex/moves/{key}`.
     /// - Remark: Generated from `#/paths//api/pokedex/moves/{key}/get(getMove)`.
     func getMove(_ input: Operations.GetMove.Input) async throws -> Operations.GetMove.Output
+    /// 技を ID のまとめ取りで解決する
+    ///
+    /// `getMove` の複数版。`getSpecies` の `learnset`(ID配列)のような、既に確定した ID の集合を
+    /// 1回の呼び出しで実体(名前・タイプ・分類・威力・優先度)に解決するための経路
+    /// (ADR-0304 §3。Web のオンライン学習技表示の欠落の解消)。`getMove` と同様に既定のレギュレーションで
+    /// 絞らない(使用可能集合の外の技も返す)。マスタに無い ID は黙って省く(部分一致は無い。エラーにしない)。
+    /// 応答の順序は `ids` と同じ(見つからなかった ID は詰めて省く)。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/pokedex/moves/batch`.
+    /// - Remark: Generated from `#/paths//api/pokedex/moves/batch/get(getMovesByIds)`.
+    func getMovesByIds(_ input: Operations.GetMovesByIds.Input) async throws -> Operations.GetMovesByIds.Output
     /// 持ち物を日本語名で前方一致検索
     ///
     /// 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
@@ -171,6 +183,26 @@ extension APIProtocol {
     ) async throws -> Operations.GetMove.Output {
         try await getMove(Operations.GetMove.Input(
             path: path,
+            headers: headers
+        ))
+    }
+    /// 技を ID のまとめ取りで解決する
+    ///
+    /// `getMove` の複数版。`getSpecies` の `learnset`(ID配列)のような、既に確定した ID の集合を
+    /// 1回の呼び出しで実体(名前・タイプ・分類・威力・優先度)に解決するための経路
+    /// (ADR-0304 §3。Web のオンライン学習技表示の欠落の解消)。`getMove` と同様に既定のレギュレーションで
+    /// 絞らない(使用可能集合の外の技も返す)。マスタに無い ID は黙って省く(部分一致は無い。エラーにしない)。
+    /// 応答の順序は `ids` と同じ(見つからなかった ID は詰めて省く)。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/pokedex/moves/batch`.
+    /// - Remark: Generated from `#/paths//api/pokedex/moves/batch/get(getMovesByIds)`.
+    public func getMovesByIds(
+        query: Operations.GetMovesByIds.Input.Query,
+        headers: Operations.GetMovesByIds.Input.Headers
+    ) async throws -> Operations.GetMovesByIds.Output {
+        try await getMovesByIds(Operations.GetMovesByIds.Input(
+            query: query,
             headers: headers
         ))
     }
