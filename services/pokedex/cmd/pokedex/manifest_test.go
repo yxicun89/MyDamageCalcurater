@@ -3,7 +3,7 @@ package main
 // pokedex-svc の k8s マニフェスト・イメージ・起動スクリプトの静的検査(ADR-0105 §6)。kubectl・docker を使わず YAML とファイルを読む。
 // 要点: Deployment と Service(ClusterIP・80 番)はクラスタ内だけ。どの Ingress も pokedex を指さない
 // (公開の /api/pokedex/* は gateway 経由。内部 API /internal/pokedex/master は gateway でも 404。ADR-0204)。
-// DSN は Secret mysql-auth の pokedex-dsn から渡し、平文でマニフェストに書かない。
+// DSN は Secret mysql-auth の pokedex-reader-dsn(SELECT 専用の pokedex_reader。ADR-0110)から渡し、平文でマニフェストに書かない。
 
 import (
 	"io/fs"
@@ -20,7 +20,7 @@ const (
 	pokedexService   = "pokedex"
 	pokedexImageRepo = "pokecalc/pokedex"
 	mysqlSecret      = "mysql-auth"
-	mysqlSecretDSN   = "pokedex-dsn"
+	mysqlSecretDSN   = "pokedex-reader-dsn" // ADR-0110 §6: 公開 API は SELECT 専用ユーザー
 )
 
 // pokedexDeployment は Deployment のうち、この検査に要る部分(deploytest.Deployment は valueFrom を読まないため)。

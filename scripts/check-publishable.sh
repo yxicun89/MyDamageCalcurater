@@ -36,8 +36,9 @@ readonly -a CONTENT_EXCLUDES=(
 readonly -a A_EXCLUDES=(":(exclude)docs/audit-r1.md")
 
 # B(秘密らしき文字列「キー名=値」)の許可(ERE)。値そのものではなく、k8s の Secret/Key の
-# *名前*(pokedex-svc の manifest 検査。ADR-0105 §6)を指す定数だけを対象にする(秘密の値ではない)。
-readonly B_KEYVALUE_ALLOW='=[[:space:]]*"(mysql-auth|pokedex-dsn)$'
+# *名前*(pokedex-svc の manifest 検査。ADR-0105 §6・用途別の最小権限。ADR-0110)を指す
+# 定数だけを対象にする(秘密の値ではない)。
+readonly B_KEYVALUE_ALLOW='=[[:space:]]*"(mysql-auth|pokedex-dsn|pokedex-reader-dsn|pokedex-importer-dsn|pokedex-migrator-dsn|mysql-root-password)$'
 
 # 許可するメールアドレス(ERE。一致した文字列全体に対して評価)。
 #   noreply@anthropic.com : コミットの共同著者表記(公開情報)

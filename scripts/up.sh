@@ -28,18 +28,87 @@ echo "namespace を作成します..."
 kubectl apply -f deploy/k8s/base/namespace.yaml
 
 # mysql-auth は値を持つため Git に置かない(ADR-0100 §9)。namespace の作成直後、
-# 他のリソース(mysql・pokedex-migrate)が参照する前に用意する。無いときだけ乱数で
-# 作る(既存は上書きしない)。
+# 他のリソース(mysql・pokedex-migrate)が参照する前に用意する。
+#
+# 用途別の最小権限(ADR-0110・issue #104): root(pokedex-dsn)に加えて、pokedex-svc・importer・
+# migrate それぞれの DB ユーザー用の DSN を持つ。新規クラスタは4つの DSN を一度に作り、
+# 既存クラスタでは無いキーだけを kubectl patch --type=merge で追記する(既存の値は変えない)。
+# 値はコマンドライン引数(--from-literal・-p/--patch)にもログ(set -x)にも出さない。
+root_pw_key="mysql-root-password"
+provision_dsn_key="pokedex-dsn"
+reader_dsn_key="pokedex-reader-dsn"
+importer_dsn_key="pokedex-importer-dsn"
+migrator_dsn_key="pokedex-migrator-dsn"
+
 if kubectl -n pokecalc get secret mysql-auth >/dev/null 2>&1; then
-  echo "Secret 'mysql-auth' は既に存在します(上書きしません)"
+  echo "Secret 'mysql-auth' は既に存在します(無いキーだけ追記します)..."
+
+  # jsonpath はキーが無ければ空文字・終了コード0を返す(kubectl で確認済み)。ここで
+  # コマンド自体が失敗する(API サーバに届かない・権限が無い等)場合は、キーが無いのと
+  # 区別できず「無いので追記する」に倒れて既存のパスワードを意図せず上書きしうるため、
+  # 一時的なエラーは `set -e` にそのまま止めさせる(エラーを黙って握りつぶさない)。
+  existing_reader="$(kubectl -n pokecalc get secret mysql-auth -o jsonpath="{.data.${reader_dsn_key}}")"
+  existing_importer="$(kubectl -n pokecalc get secret mysql-auth -o jsonpath="{.data.${importer_dsn_key}}")"
+  existing_migrator="$(kubectl -n pokecalc get secret mysql-auth -o jsonpath="{.data.${migrator_dsn_key}}")"
+
+  patch_entries=""
+  if [ -z "$existing_reader" ]; then
+    reader_pw_value="$(openssl rand -hex 16)"
+    patch_entries="${patch_entries}  ${reader_dsn_key}: \"pokedex_reader:${reader_pw_value}@tcp(mysql:3306)/pokedex?parseTime=true\"
+"
+  fi
+  if [ -z "$existing_importer" ]; then
+    importer_pw_value="$(openssl rand -hex 16)"
+    patch_entries="${patch_entries}  ${importer_dsn_key}: \"pokedex_importer:${importer_pw_value}@tcp(mysql:3306)/pokedex?parseTime=true\"
+"
+  fi
+  if [ -z "$existing_migrator" ]; then
+    migrator_pw_value="$(openssl rand -hex 16)"
+    patch_entries="${patch_entries}  ${migrator_dsn_key}: \"pokedex_migrator:${migrator_pw_value}@tcp(mysql:3306)/pokedex?parseTime=true\"
+"
+  fi
+
+  if [ -n "$patch_entries" ]; then
+    patch_file="$(mktemp)"
+    chmod 600 "$patch_file"
+    trap 'rm -f "$patch_file"' EXIT
+    {
+      printf 'stringData:\n'
+      printf '%s' "$patch_entries"
+    } > "$patch_file"
+    kubectl -n pokecalc patch secret mysql-auth --type=merge --patch-file "$patch_file"
+    rm -f "$patch_file"
+    trap - EXIT
+  else
+    echo "追加するキーはありません(3ユーザーぶん全て既にあります)"
+  fi
 else
   echo "Secret 'mysql-auth' が無いので乱数で作成します..."
-  root_pw_key="mysql-root-password"
-  dsn_key="pokedex-dsn"
   root_pw_value="$(openssl rand -hex 16)"
-  kubectl -n pokecalc create secret generic mysql-auth \
-    --from-literal="${root_pw_key}=${root_pw_value}" \
-    --from-literal="${dsn_key}=root:${root_pw_value}@tcp(mysql:3306)/pokedex?parseTime=true"
+  reader_pw_value="$(openssl rand -hex 16)"
+  importer_pw_value="$(openssl rand -hex 16)"
+  migrator_pw_value="$(openssl rand -hex 16)"
+
+  mysql_auth_manifest="$(mktemp)"
+  chmod 600 "$mysql_auth_manifest"
+  trap 'rm -f "$mysql_auth_manifest"' EXIT
+  cat > "$mysql_auth_manifest" <<SECRET_MANIFEST
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-auth
+  namespace: pokecalc
+type: Opaque
+stringData:
+  ${root_pw_key}: "${root_pw_value}"
+  ${provision_dsn_key}: "root:${root_pw_value}@tcp(mysql:3306)/pokedex?parseTime=true"
+  ${reader_dsn_key}: "pokedex_reader:${reader_pw_value}@tcp(mysql:3306)/pokedex?parseTime=true"
+  ${importer_dsn_key}: "pokedex_importer:${importer_pw_value}@tcp(mysql:3306)/pokedex?parseTime=true"
+  ${migrator_dsn_key}: "pokedex_migrator:${migrator_pw_value}@tcp(mysql:3306)/pokedex?parseTime=true"
+SECRET_MANIFEST
+  kubectl apply -f "$mysql_auth_manifest"
+  rm -f "$mysql_auth_manifest"
+  trap - EXIT
 fi
 
 # pokedex-migrate は k3d のノードに直接 import する(ADR-0100 §9)。レジストリを介さない

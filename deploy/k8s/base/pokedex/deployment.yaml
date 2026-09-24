@@ -33,7 +33,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: mysql-auth
-                  key: pokedex-dsn
+                  key: pokedex-reader-dsn
           readinessProbe:
             httpGet:
               path: /healthz
