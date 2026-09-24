@@ -226,6 +226,14 @@
   運用レーンが到達経路(Tailscale Operator の ingressClass か subnet router + tailscale serve か)を選び、
   実際の名前が決まってから。今はコード変更不要。着手のタイミングは運用レーンの選定後
 - [x] P4-22 issue #72(ルートの `make e2e` が未実装スタブのまま「テスト0件で成功」する)。**完了(2026-09-25。Web レーン。API+Web 共同担当)**: ADR-0306 に従い `scripts/e2e.sh` を実装(常時3件 `web-e2e`/`web-e2e-online`/`web-e2e-balance` を必ず実行し、kubectl のコンテキストが `k3d-$CLUSTER` のときだけ `api-smoke`/`web-k3d-smoke`/`web-k3d-e2e` を追加実行。`E2E_REQUIRE_K3D=1` あり)。ルート Makefile の `e2e` を `CLUSTER=$(CLUSTER) ./scripts/e2e.sh` に配線、`docs/test-strategy.md`・`README.md` を実装内容に合わせて更新。`bash scripts/e2e_test.sh` は80/80 passed
+- [x] issue #71 の Web 側(攻撃側プリセットの単一化。ADR-0114)。**完了(2026-09-25。Web レーン)**: データレーン
+  が `engine/presets/attacker.json`(embed)を唯一の正にした(PR #346)のを受け、
+  `web/src/domain/attackerPresets.contract.test.ts` を新規追加。ハードコードした期待値と比較する既存の
+  `attackerPresets.test.ts`(Web の今の挙動を固定)とは別に、こちらは毎回 `engine/presets/attacker.json` を
+  読み、カタログの順序・既定値・`relevantStat`/`boostMinus`/`relevantSp`/`nature` から導いた期待値と
+  `resolveAttackerPreset` の実際の出力を突き合わせる契約テスト(現状の値は一致済み)。JSON の値を書き換える
+  mutation で実際に検知することを確認(3件 fail)、確認後に復元。新規17件追加(1262件)。`web/src/domain/
+  attackerPresets.ts` 自体は変更していない(engine への実装移管は別タスク)。
 
 ## M2: 保存・構築
 
