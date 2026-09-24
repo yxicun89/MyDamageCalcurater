@@ -23,7 +23,9 @@ import {
 import { learnsetMoves } from "../domain/moves";
 import { balanceScreenText, masterOnlineText, typeNameJa } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
-import type { MasterData, MasterSpeciesSearch } from "../master/types";
+import type { MasterData, MasterSpeciesResolution, MasterSpeciesSearch } from "../master/types";
+import { SpeciesSearchField } from "./SpeciesSearchField";
+import { useSpeciesResolutions, type SpeciesResolutions } from "./speciesResolution";
 import "./BalanceScreen.css";
 
 type Schemas = components["schemas"];
@@ -37,9 +39,10 @@ export interface BalanceScreenProps {
   readonly master: MasterData;
   readonly client: BalanceClient;
   /**
-   * P4-16b(ADR-0304 A-9・A-10): 種族を都度引く口。この画面は
-   * `capabilities.speciesList` と `capabilities.moves` が両方そろうまで使えない(A-9)ので、
-   * 今は受け取るだけで使わない。技が戻る P4-17 で、各枠の検索欄に使う。
+   * P4-17b(ADR-0304 A-14): 種族を都度引く口。`capabilities.speciesList` が false のマスタでは、
+   * 各枠(メンバー・仮想敵)のポケモン選択をドロップダウンから検索欄に替え、技・特性も
+   * `resolveSpecies` と一緒に解決する(A-14.1・A-14.2)。省略は「検索できない」
+   * (capabilities を省いたマスタ = 今までどおりドロップダウン)。
    */
   readonly masterSearch?: MasterSpeciesSearch;
 }
@@ -103,12 +106,29 @@ function dedupeMoveIds(moveIds: readonly string[]): string[] {
   return result;
 }
 
-function findSpeciesName(master: MasterData, pokemonId: string): string {
-  return master.species.find((candidate) => candidate.key === pokemonId)?.nameJa ?? pokemonId;
+/**
+ * P4-17b(ADR-0304 A-14.2): ID→名前解決も speciesFor を通す(オンラインで master.species が空でも、
+ * 検索で解決したメンバー・仮想敵の種族名が出るように)。
+ */
+function findSpeciesName(
+  speciesFor: SpeciesResolutions["speciesFor"],
+  master: MasterData,
+  pokemonId: string,
+): string {
+  return speciesFor(master.species, pokemonId)?.nameJa ?? pokemonId;
 }
 
-function findAbilityName(master: MasterData, abilityId: string): string {
-  return master.abilities.find((candidate) => candidate.id === abilityId)?.nameJa ?? abilityId;
+/** P4-17b(ADR-0304 A-14.2): abilitiesFor を通す(speciesKey はその特性の持ち主の種族 key)。 */
+function findAbilityName(
+  abilitiesFor: SpeciesResolutions["abilitiesFor"],
+  master: MasterData,
+  speciesKey: string,
+  abilityId: string,
+): string {
+  return (
+    abilitiesFor(master.abilities, speciesKey).find((candidate) => candidate.id === abilityId)?.nameJa ??
+    abilityId
+  );
 }
 
 /**
@@ -127,6 +147,16 @@ interface MemberListActions {
   readonly add: () => void;
   readonly remove: (index: number) => void;
   readonly selectSpecies: (master: MasterData, index: number, speciesKey: string) => void;
+  /**
+   * P4-17b(ADR-0304 A-14.2): 検索で種族が解決したとき。既定の特性を `resolution.species.abilities[0]`
+   * にし、技の枠は空に戻す(selectSpecies と同じ形)。`movesFor`/`abilitiesFor` はここで呼ばない
+   * (register の setState は非同期で、直後はまだ古い覚え書きのまま。resolution の実体をそのまま使う。
+   * CalcScreen.tsx の handleAttackerResolved と同じ理由)。
+   * index ではなく member.id で引く(critic 指摘): 検索の解決を待つ間に別の枠が削除・並び替わると、
+   * index はもう違う枠を指しうる(SpeciesSearchField の解決に中断が無いため)。id は枠の生成時に一度だけ
+   * 割り振られ、削除・並び替えで変わらない。
+   */
+  readonly resolveSpecies: (id: number, resolution: MasterSpeciesResolution) => void;
   readonly selectAbility: (index: number, abilityId: string) => void;
   readonly selectMove: (index: number, slot: number, moveId: string) => void;
 }
@@ -168,6 +198,20 @@ function useMemberListActions(setList: Dispatch<SetStateAction<MemberState[]>>):
         ),
       );
     },
+    resolveSpecies: (id: number, resolution: MasterSpeciesResolution): void => {
+      setList((current) =>
+        current.map((member) =>
+          member.id === id
+            ? {
+                ...member,
+                speciesKey: resolution.species.key,
+                abilityId: resolution.species.abilities[0] ?? "",
+                moveIds: Array.from({ length: MOVE_SLOTS }, () => ""),
+              }
+            : member,
+        ),
+      );
+    },
     selectAbility: (index: number, abilityId: string): void => {
       setList((current) => current.map((member, i) => (i === index ? { ...member, abilityId } : member)));
     },
@@ -184,17 +228,41 @@ function useMemberListActions(setList: Dispatch<SetStateAction<MemberState[]>>):
 }
 
 /** タイプバランスの画面(ADR-0303 §2・§7)。 */
-export function BalanceScreen({ master, client }: BalanceScreenProps) {
-  // P4-16b(ADR-0304 A-9): speciesList・moves が両方そろうまで画面ごと使えない(技が空のまま
-  // threats/recommendations を呼ぶと誤解を招く診断になるため。effects はこの判定に入れない)。
+export function BalanceScreen({ master, client, masterSearch }: BalanceScreenProps) {
+  // P4-17b(ADR-0304 A-14.1): 画面の可否は「一覧がそろっているか」ではなく「入力の口があるか」で決める。
+  // capabilities.moves が永続的に false(A-13.1)なオンラインでも、種族を検索で選べば技は resolveSpecies が
+  // 一緒に解決するため、検索口があれば技を選ぶ口もある(speciesList が true でドロップダウンを使っている
+  // ときは resolveSpecies が走らないので、検索口があっても技は届かない)。
   const capabilities = masterCapabilities(master);
-  const balanceAvailable = capabilities.speciesList && capabilities.moves;
+  const speciesInputAvailable = capabilities.speciesList || masterSearch !== undefined;
+  const moveInputAvailable = capabilities.moves || (!capabilities.speciesList && masterSearch !== undefined);
+  const balanceAvailable = speciesInputAvailable && moveInputAvailable;
+
+  // P4-17b(ADR-0304 A-14.2): 検索で解決した種族・特性・技の覚え書き。Map なので12枠(メンバー6・
+  // 仮想敵6)で1つを共有できる(speciesResolution.ts は変更しない)。
+  const { speciesFor, abilitiesFor, movesFor, register: registerSpeciesResolution } = useSpeciesResolutions();
+
   const [members, setMembers] = useState<MemberState[]>(() => [emptyMember(0)]);
   const memberActions = useMemberListActions(setMembers);
 
   // P4-12b: 仮想敵の枠(メンバーと同じ構造だが独立した状態。ADR-0303 §7)。
   const [threats, setThreats] = useState<MemberState[]>(() => [emptyMember(0)]);
   const threatActions = useMemberListActions(setThreats);
+
+  /**
+   * P4-17b(ADR-0304 A-14.2): 検索でメンバーの種族が解決したとき。枠は id で引く(critic 指摘):
+   * 解決を待つ間に他の枠が削除されると index はもう違う枠を指しうるため。
+   */
+  function handleMemberResolved(id: number, resolution: MasterSpeciesResolution): void {
+    registerSpeciesResolution(resolution);
+    memberActions.resolveSpecies(id, resolution);
+  }
+
+  /** P4-17b(ADR-0304 A-14.2): 検索で仮想敵の種族が解決したとき(同上、id で引く)。 */
+  function handleThreatResolved(id: number, resolution: MasterSpeciesResolution): void {
+    registerSpeciesResolution(resolution);
+    threatActions.resolveSpecies(id, resolution);
+  }
 
   // analyze へ送るメンバー(ポケモンを選んだメンバーだけ、枠の順)。abilityId は空なら省く。
   // analyzeKey は種族・特性が変わったときだけ変わる文字列で、技の変更では変わらない
@@ -208,11 +276,21 @@ export function BalanceScreen({ master, client }: BalanceScreenProps) {
     );
   const analyzeKey = JSON.stringify(analyzeMembers);
 
-  const moveById = new Map(master.moves.map((move) => [move.id, move]));
+  // P4-17b(ADR-0304 A-14.3): 参照する一覧を「選んだメンバーが実際に引ける技」にする(master.moves +
+  // 検索で解決した分)。オンラインでは master.moves が空なので、master.moves だけを見ると実体不明の
+  // ID だらけになる。
+  const moveById = new Map(
+    members.flatMap((member) => movesFor(master.moves, member.speciesKey)).map((move) => [move.id, move]),
+  );
   // coverage を呼ぶかどうかだけの判定(倍率・分類の計算はしない。balance 側の「変化技は除外」の定義が
   // 変わっても、ここは「呼ぶ価値があるか」の目安に過ぎず、応答自体は balance-svc が返す値をそのまま使う)。
+  // 実体が分からない ID は攻撃技と見なさない(fail-closed。A-14.3): 技セレクトの選択肢は解決済みの
+  // learnset からしか作られないので、実体不明の ID が現れたなら入力側が壊れている。
   const hasDamagingMove = members.some((member) =>
-    member.moveIds.some((moveId) => moveId !== "" && moveById.get(moveId)?.category !== "status"),
+    member.moveIds.some((moveId) => {
+      const move = moveById.get(moveId);
+      return move !== undefined && move.category !== "status";
+    }),
   );
   const coverageMembers: CoverageMembers = members
     .filter((member) => member.speciesKey !== "")
@@ -350,7 +428,7 @@ export function BalanceScreen({ master, client }: BalanceScreenProps) {
 
   return (
     <div className="balance-screen">
-      {/* P4-16b(ADR-0304 A-9): speciesList・moves のどちらかが使えないときは画面ごと使えない案内を出し、
+      {/* P4-17b(ADR-0304 A-14.1): ポケモン・技のどちらかを選ぶ口が無いときだけ画面ごと使えない案内を出し、
           入力は残すが全部 disabled にする(balance API は1本も呼ばない)。 */}
       {!balanceAvailable && <p className="balance-screen__notice">{masterOnlineText.balanceUnavailable}</p>}
       <div className="balance-screen__members">
@@ -363,8 +441,17 @@ export function BalanceScreen({ master, client }: BalanceScreenProps) {
             master={master}
             removable={members.length > 1}
             disabled={!balanceAvailable}
+            movesListAvailable={capabilities.moves}
+            speciesListAvailable={capabilities.speciesList}
+            masterSearch={masterSearch}
+            speciesFor={speciesFor}
+            abilitiesFor={abilitiesFor}
+            movesFor={movesFor}
             onSelectSpecies={(speciesKey) => {
               memberActions.selectSpecies(master, index, speciesKey);
+            }}
+            onSpeciesResolved={(resolution) => {
+              handleMemberResolved(member.id, resolution);
             }}
             onSelectAbility={(abilityId) => {
               memberActions.selectAbility(index, abilityId);
@@ -396,8 +483,17 @@ export function BalanceScreen({ master, client }: BalanceScreenProps) {
             master={master}
             removable={threats.length > 1}
             disabled={!balanceAvailable}
+            movesListAvailable={capabilities.moves}
+            speciesListAvailable={capabilities.speciesList}
+            masterSearch={masterSearch}
+            speciesFor={speciesFor}
+            abilitiesFor={abilitiesFor}
+            movesFor={movesFor}
             onSelectSpecies={(speciesKey) => {
               threatActions.selectSpecies(master, index, speciesKey);
+            }}
+            onSpeciesResolved={(resolution) => {
+              handleThreatResolved(threat.id, resolution);
             }}
             onSelectAbility={(abilityId) => {
               threatActions.selectAbility(index, abilityId);
@@ -433,7 +529,7 @@ export function BalanceScreen({ master, client }: BalanceScreenProps) {
 
       {analyzeState.status === "success" && (
         <>
-          <DefenseTable master={master} response={analyzeState.value} />
+          <DefenseTable master={master} speciesFor={speciesFor} response={analyzeState.value} />
           <TeamSummaryTable response={analyzeState.value} />
         </>
       )}
@@ -453,6 +549,7 @@ export function BalanceScreen({ master, client }: BalanceScreenProps) {
             key={`${threat.pokemonId}-${String(index)}`}
             n={threatSlotNumbers[index] ?? index + 1}
             master={master}
+            speciesFor={speciesFor}
             threat={threat}
           />
         ))}
@@ -466,7 +563,7 @@ export function BalanceScreen({ master, client }: BalanceScreenProps) {
         </p>
       )}
       {recommendationsState.status === "success" && (
-        <RecommendationsSection master={master} response={recommendationsState.value} />
+        <RecommendationsSection master={master} abilitiesFor={abilitiesFor} response={recommendationsState.value} />
       )}
     </div>
   );
@@ -480,9 +577,20 @@ interface MemberFieldsProps {
   readonly member: MemberState;
   readonly master: MasterData;
   readonly removable: boolean;
-  /** P4-16b(ADR-0304 A-9): 画面が使えないとき(speciesList・moves のどちらかが false)、欄を全部 disabled にする。 */
+  /** P4-17b(ADR-0304 A-14.1): 画面が使えないとき(speciesInputAvailable・moveInputAvailable のどちらかが false)、欄を全部 disabled にする。 */
   readonly disabled: boolean;
+  /** P4-17b(ADR-0304 A-14.4): 技の一覧が使えるか(capabilities.moves)。枠ごとの技セレクトの有効・無効の判定に使う。 */
+  readonly movesListAvailable: boolean;
+  /** P4-17b(ADR-0304 A-14.2): 種族の一覧が使えるか。false ならドロップダウンの代わりに検索欄を出す。 */
+  readonly speciesListAvailable: boolean;
+  /** 検索口(speciesListAvailable が false のときに使う。省略は「検索できない」)。 */
+  readonly masterSearch: MasterSpeciesSearch | undefined;
+  readonly speciesFor: SpeciesResolutions["speciesFor"];
+  readonly abilitiesFor: SpeciesResolutions["abilitiesFor"];
+  readonly movesFor: SpeciesResolutions["movesFor"];
   readonly onSelectSpecies: (speciesKey: string) => void;
+  /** 検索で種族が解決したとき(speciesListAvailable が false のときに使う)。 */
+  readonly onSpeciesResolved: (resolution: MasterSpeciesResolution) => void;
   readonly onSelectAbility: (abilityId: string) => void;
   readonly onSelectMove: (slot: number, moveId: string) => void;
   readonly onRemove: () => void;
@@ -491,6 +599,8 @@ interface MemberFieldsProps {
 /**
  * 1枠分の入力(ポケモン・特性・技1〜4)。fieldset + legend が role=group とその accessible name になる。
  * 自分のパーティ(メンバー)と仮想敵の両方で使う共通コンポーネント(ADR-0303 §7)。
+ * P4-17b(ADR-0304 A-14.2): 種族・特性・技の参照は master.* を直接見ず、speciesFor/abilitiesFor/movesFor を通す
+ * (検索で解決した分が master.species 等に無くても出るように)。
  */
 function MemberFields({
   groupLabel,
@@ -499,31 +609,48 @@ function MemberFields({
   master,
   removable,
   disabled,
+  movesListAvailable,
+  speciesListAvailable,
+  masterSearch,
+  speciesFor,
+  abilitiesFor,
+  movesFor,
   onSelectSpecies,
+  onSpeciesResolved,
   onSelectAbility,
   onSelectMove,
   onRemove,
 }: MemberFieldsProps) {
-  const species = master.species.find((candidate) => candidate.key === member.speciesKey) ?? null;
-  const moves = species === null ? [] : learnsetMoves(species, master.moves);
+  const species = speciesFor(master.species, member.speciesKey);
+  const moves = species === null ? [] : learnsetMoves(species, movesFor(master.moves, member.speciesKey));
+  // P4-17b(ADR-0304 A-14.4): 枠ごとの技セレクトの有効・無効(A-13.2 をこの画面に当てはめる)。
+  const movesAvailable = movesListAvailable || moves.length > 0;
   return (
     <fieldset className="balance-member">
       <legend>{groupLabel}</legend>
-      <select
-        aria-label={balanceScreenText.speciesLabel}
-        value={member.speciesKey}
-        disabled={disabled}
-        onChange={(event) => {
-          onSelectSpecies(event.target.value);
-        }}
-      >
-        <option value="" hidden />
-        {master.species.map((candidate) => (
-          <option key={candidate.key} value={candidate.key}>
-            {candidate.nameJa}
-          </option>
-        ))}
-      </select>
+      {speciesListAvailable ? (
+        <select
+          aria-label={balanceScreenText.speciesLabel}
+          value={member.speciesKey}
+          disabled={disabled}
+          onChange={(event) => {
+            onSelectSpecies(event.target.value);
+          }}
+        >
+          <option value="" hidden />
+          {master.species.map((candidate) => (
+            <option key={candidate.key} value={candidate.key}>
+              {candidate.nameJa}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <SpeciesSearchField
+          label={balanceScreenText.speciesLabel}
+          masterSearch={masterSearch}
+          onResolved={onSpeciesResolved}
+        />
+      )}
       <select
         aria-label={balanceScreenText.abilityLabel}
         value={member.abilityId}
@@ -534,7 +661,7 @@ function MemberFields({
       >
         {species?.abilities.map((abilityId) => (
           <option key={abilityId} value={abilityId}>
-            {findAbilityName(master, abilityId)}
+            {findAbilityName(abilitiesFor, master, member.speciesKey, abilityId)}
           </option>
         ))}
       </select>
@@ -543,7 +670,7 @@ function MemberFields({
           key={slot}
           aria-label={balanceScreenText.moveLabel(slot + 1)}
           value={member.moveIds[slot] ?? ""}
-          disabled={disabled}
+          disabled={disabled || !movesAvailable}
           onChange={(event) => {
             onSelectMove(slot, event.target.value);
           }}
@@ -567,11 +694,12 @@ function MemberFields({
 
 interface DefenseTableProps {
   readonly master: MasterData;
+  readonly speciesFor: SpeciesResolutions["speciesFor"];
   readonly response: Schemas["AnalyzeResponse"];
 }
 
 /** 防御相性の表(メンバー × 18タイプ)。列の並びは応答の順に従う(タイプの順をコードに持たない)。 */
-function DefenseTable({ master, response }: DefenseTableProps) {
+function DefenseTable({ master, speciesFor, response }: DefenseTableProps) {
   const headerTypes = response.teamSummary.map((entry) => entry.attackType);
   return (
     <table aria-label={balanceScreenText.defenseTableLabel}>
@@ -588,7 +716,7 @@ function DefenseTable({ master, response }: DefenseTableProps) {
       <tbody>
         {response.members.map((member, index) => (
           <tr key={`${member.pokemonId}-${String(index)}`}>
-            <th scope="row">{findSpeciesName(master, member.pokemonId)}</th>
+            <th scope="row">{findSpeciesName(speciesFor, master, member.pokemonId)}</th>
             {headerTypes.map((type) => {
               const entry = member.defense.find((candidate) => candidate.attackType === type);
               return (
@@ -676,6 +804,7 @@ function typeListText(types: readonly Schemas["TypeId"][]): string {
 interface ThreatSectionProps {
   readonly n: number;
   readonly master: MasterData;
+  readonly speciesFor: SpeciesResolutions["speciesFor"];
   readonly threat: Schemas["ThreatResult"];
 }
 
@@ -683,11 +812,11 @@ interface ThreatSectionProps {
  * 仮想敵1体分の結果(region)。行=自分のメンバー、列=受ける倍率・与える倍率・安全・抜群(ADR-0400 §2)。
  * safe/superEffective は応答の真偽値をそのまま語にする(倍率から判定し直さない)。
  */
-function ThreatSection({ n, master, threat }: ThreatSectionProps) {
+function ThreatSection({ n, master, speciesFor, threat }: ThreatSectionProps) {
   return (
     <section
       className="balance-screen__threat"
-      aria-label={balanceScreenText.threatRegionLabel(n, findSpeciesName(master, threat.pokemonId))}
+      aria-label={balanceScreenText.threatRegionLabel(n, findSpeciesName(speciesFor, master, threat.pokemonId))}
     >
       <table aria-label={balanceScreenText.threatMatchupTableLabel}>
         <thead>
@@ -702,7 +831,7 @@ function ThreatSection({ n, master, threat }: ThreatSectionProps) {
         <tbody>
           {threat.matchups.map((matchup, index) => (
             <tr key={`${matchup.pokemonId}-${String(index)}`}>
-              <th scope="row">{findSpeciesName(master, matchup.pokemonId)}</th>
+              <th scope="row">{findSpeciesName(speciesFor, master, matchup.pokemonId)}</th>
               <td>{matchupMultiplierLabel(matchup.incoming)}</td>
               <td>{matchupMultiplierLabel(matchup.outgoing)}</td>
               <td>{safeLabel(matchup.safe)}</td>
@@ -719,11 +848,12 @@ function ThreatSection({ n, master, threat }: ThreatSectionProps) {
 
 interface RecommendationsSectionProps {
   readonly master: MasterData;
+  readonly abilitiesFor: SpeciesResolutions["abilitiesFor"];
   readonly response: Schemas["RecommendationsResponse"];
 }
 
 /** おすすめタイプの結果(region)。防御・攻撃範囲の穴、候補の表、特性で補える表を出す(ADR-0401)。 */
-function RecommendationsSection({ master, response }: RecommendationsSectionProps) {
+function RecommendationsSection({ master, abilitiesFor, response }: RecommendationsSectionProps) {
   return (
     <section
       className="balance-screen__recommendations"
@@ -732,7 +862,7 @@ function RecommendationsSection({ master, response }: RecommendationsSectionProp
       <p>{balanceScreenText.defenseHolesLabel(typeListText(response.defenseHoles))}</p>
       <p>{balanceScreenText.offenseHolesLabel(typeListText(response.offenseHoles))}</p>
       <CandidatesTable candidates={response.candidates} />
-      <AbilityOptionsTable master={master} abilityOptions={response.abilityOptions} />
+      <AbilityOptionsTable master={master} abilitiesFor={abilitiesFor} abilityOptions={response.abilityOptions} />
     </section>
   );
 }
@@ -773,11 +903,12 @@ function CandidatesTable({ candidates }: { readonly candidates: readonly Schemas
 
 interface AbilityOptionsTableProps {
   readonly master: MasterData;
+  readonly abilitiesFor: SpeciesResolutions["abilitiesFor"];
   readonly abilityOptions: readonly Schemas["AbilityOption"][];
 }
 
 /** 特性で補えるポケモンの表(防御の穴ごとに 攻撃タイプ・該当ポケモン。ADR-0401 §4)。 */
-function AbilityOptionsTable({ master, abilityOptions }: AbilityOptionsTableProps) {
+function AbilityOptionsTable({ master, abilitiesFor, abilityOptions }: AbilityOptionsTableProps) {
   return (
     <table aria-label={balanceScreenText.abilityOptionsTableLabel}>
       <thead>
@@ -795,7 +926,7 @@ function AbilityOptionsTable({ master, abilityOptions }: AbilityOptionsTableProp
                   .map((pokemon) =>
                     balanceScreenText.abilityOptionEntryLabel(
                       pokemon.nameJa ?? pokemon.pokemonId,
-                      findAbilityName(master, pokemon.abilityId),
+                      findAbilityName(abilitiesFor, master, pokemon.pokemonId, pokemon.abilityId),
                       multiplierLabel(pokemon.multiplier),
                     ),
                   )
