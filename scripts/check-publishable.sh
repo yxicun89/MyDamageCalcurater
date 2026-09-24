@@ -35,16 +35,18 @@ readonly -a CONTENT_EXCLUDES=(
 #   docs/audit-r1.md : 検査対象のパターン(/Users/ など)を説明する文書で、実際の値ではない
 readonly -a A_EXCLUDES=(":(exclude)docs/audit-r1.md")
 
-# B(秘密らしき文字列「キー名=値」)の許可(ERE)。値そのものではなく、k8s の Secret/Key の
-# *名前*(pokedex-svc の manifest 検査。ADR-0105 §6・用途別の最小権限。ADR-0110)を指す
 # 定数だけを対象にする(秘密の値ではない)。`tidb-root-auth` は ADR-0211 §3.2 の
 # TidbInitializer が参照する Secret 名(`passwordSecret: tidb-root-auth`。値ではなく名前)。
+# `grafana-admin-credentials`・`admin-password` は kube-prometheus-stack chart の values
+# (ADR-0406 §4)が要求する Secret 名・キー名そのもの(grafana.admin.existingSecret / passwordKey。
+# chart 側の仕様で変更できない定数)。実際のパスワード値はこの values ファイルに書かない
+# (docs/runbooks/observability.md の手順でユーザーが別途 Secret を作る)。
 # 3つ目の代替(`[:=][[:space:]]*"?\$\{[A-Za-z_][A-Za-z0-9_]*\}$`)は、scripts/up.sh が Secret の
 # manifest を heredoc で組み立てる行(例: `mysql-root-password: "${mysql_root_pw_value}"`)を許す。
 # 値の**全体**が単一のシェル変数参照であることまで要求する(区切り文字の直後から `${...}` が
 # 始まり、他の文字を挟まない)。`password: "realsecret${x}"` のように本物の値へ無害な変数参照を
 # 継ぎ足して検出を逃れる細工は、この形では通らない(self-test で確認)。
-readonly B_KEYVALUE_ALLOW='=[[:space:]]*"(mysql-auth|pokedex-dsn|pokedex-reader-dsn|pokedex-importer-dsn|pokedex-migrator-dsn|mysql-root-password)$|:[[:space:]]*tidb-root-auth$|[:=][[:space:]]*"?\$\{[A-Za-z_][A-Za-z0-9_]*\}$'
+readonly B_KEYVALUE_ALLOW='=[[:space:]]*"(mysql-auth|pokedex-dsn|pokedex-reader-dsn|pokedex-importer-dsn|pokedex-migrator-dsn|mysql-root-password)$|:[[:space:]]*(tidb-root-auth|grafana-admin-credentials|admin-password)$|[:=][[:space:]]*"?\$\{[A-Za-z_][A-Za-z0-9_]*\}$'
 
 # 許可するメールアドレス(ERE。一致した文字列全体に対して評価)。
 #   noreply@anthropic.com : コミットの共同著者表記(公開情報)

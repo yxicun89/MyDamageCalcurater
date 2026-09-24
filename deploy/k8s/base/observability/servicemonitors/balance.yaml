@@ -1,0 +1,20 @@
+# balance の ServiceMonitor(ADR-0406 §4)。Service(既存の Kustomize base)は変更せず、
+# こちら側からラベルセレクタで参照する。
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: balance
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: balance
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  namespaceSelector:
+    matchNames:
+      - pokecalc
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: balance
+  endpoints:
+    - port: http
+      path: /metrics
