@@ -86,6 +86,7 @@
 - [x] P3-4 calc-svc のマスタを pokedex-svc の内部 API(`GET /internal/pokedex/master`・MasterExport)から受け取る形に変更(ユーザー決定 2026-09-22。ADR-0204)。k3d と dev は同じ形のファイル(架空データ)。pokedex-svc(P2-3)のデプロイ後に local overlay を URL 方式へ切り替える(API レーンの後続)
 - [x] P3-5 gateway の `GATEWAY_WEB_URL`(Web レーンの依頼。設定時は `/api`・`/assets`・`/healthz`・`/internal` 以外への GET/HEAD を Web の Service へ転送。k3d の local は `http://web`。ADR-0205)
 - [x] P3-6 calc・gateway を pokedex-svc につなぐ(データレーンからの依頼。ADR-0206)。base に `CALC_MASTER_URL=http://pokedex` / `GATEWAY_POKEDEX_URL=http://pokedex`、local overlay の Component から calc へのファイル方式の patch・ConfigMap を削除、`services/gateway/scripts/smoke.sh` が `/api/pokedex/*` から計算に使う ID を実際に引くように変更。k3d(`make api-k3d-deploy && make api-smoke`)で pokedex-svc(投入済み)への接続を確認済み(`master=pokedex species=0003-000 move=highhorsepower nature=bashful` / `pokedex=200`)
+- [x] P3-7 `GET /api/pokedex/moves/{key}`(`getMove`)を追加(判定レーンの JD4 の依頼。2026-09-22・2026-09-23の DECISIONS.md。ADR-0105 §3 追記): 技1件を ID で引く。`getSpecies` と同様に使用可能集合で絞らない。マスタ未投入(0件)は`GetDefaultRegulation`を経由しないため 503 ではなく 404 `not_found`(searchMoves 等の一覧系と異なる。契約に明記)。`services/pokedex/`(データレーンの範囲)への実装まで API レーンが一括して行った理由: `api.ServerInterface` にメソッドが増えるため、スタブだけ置いて main に入れると「200 を約束する契約なのに実装が無い」状態になり、完全な実装より悪いと判断(既存の GetSpecies/GetItem パターンの写し。新規の設計判断はしていない)。データレーンへ触ったファイルの一覧を添えて再レビューを依頼(DECISIONS.md)。critic PASS(3往復)。**main 統合済み(PR #161)**
 
 ### Phase 4 Web
 - [x] P4-1 デザイントークン(docs/design.md)を CSS 変数に実装(ADR-0300 §4。web/src/styles/tokens.css)
@@ -252,9 +253,8 @@
   丸め方(4096基準で連結してから1回だけ五捨五超入)は @smogon/calc 0.12.0 の実装を読んで確認・独立検算した。critic PASS(1回目)
 - [x] JD3 複数の相手候補を一度に判定(攻撃側1つ・相手候補の配列 → 候補ごとの判定結果の配列。ADR-0703)。
   request の defender(単数)を defenders(1〜6件)に、response を matchups(配列)に破壊的変更(クライアント未着手のため安全)。critic PASS(1回目)
-- [!] JD4 相手の技を含めた返り討ち判定。技の優先度を pokedex-svc から引く endpoint(`GET /api/pokedex/moves/{key}`)が無いため、
-  API レーンへ依頼済み(DECISIONS.md 2026-09-22 に既定案)。**ブロック中**: ユーザーが「API レーンの実装を待つ」を選択(2026-09-23)。
-  API レーンが endpoint を実装したら着手する
+- [ ] JD4 相手の技を含めた返り討ち判定。技の優先度を pokedex-svc から引く endpoint(`GET /api/pokedex/moves/{key}`)は
+  API レーンが実装し **main 統合済み(2026-09-23。P3-7・PR #161・DECISIONS.md)**。判定レーンは着手可
 - [ ] JD5 Web/iOS の画面(judge-svc を呼ぶ。担当は着手時に判断)
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
@@ -278,12 +278,6 @@
 
 ## ブロッカー
 (ここに止まった理由と試したことを書く)
-
-**判定レーン(2026-09-23)**: JD4(相手の技を含めた返り討ち判定)は、技の優先度(priority)を pokedex-svc から個別取得する
-endpoint(`GET /api/pokedex/moves/{key}`)が無いと実装できない。API レーンへ依頼済み(DECISIONS.md 2026-09-22 に既定案付き)だが
-未着手。ユーザーに「両者優先度0の限定で先に進める」か「API レーンの実装を待つ」か確認し、**待つ**を選択した(2026-09-23)。
-判定レーンは API レーンが endpoint を実装するまで新規実装を止める(`feat/judge-jd4` は作成済み・空。作業ディレクトリ
-~/MyDamageCalcurater-judge はこの間、他の判定レーンのタスクが無ければアイドル)。
 
 **【人間の確認待ち】(Web レーン、2026-09-22 深夜に記載)**
 - **P4-5 のブラウザ実機確認**(仕様ブロッカーではない。作業は止めない。**Chrome は 2026-09-22 に確認済み**、残りは Safari): `make web-dev` で開き、Chrome と Safari で計算・逆算が動くこと、
@@ -319,7 +313,7 @@ endpoint(`GET /api/pokedex/moves/{key}`)が無いと実装できない。API レ
 - [x] issue #110(セキュリティ。Codex レビュー)の API レーン担当分: `POST /api/calc/bulk`・`/api/calc/reverse` の候補・観測配列に件数上限が無く、1MiB未満の小さな本文で計算量を増幅できた(2,000×2,000 で約9.4秒)。契約(`maxItems`/`uniqueItems`/`maximum`。ADR-0208)を追加し、calc-svc の生成ラッパは検証しないため(実測確認済み)自前検証をID解決・engine呼び出しより前に実装。critic PASS、実HTTPで境界値と再現手順の解消(0.9ms・engine未到達)を確認。engine/wasmapi(データレーン)・Web・iOSへの追従は DECISIONS.md に既定案付きで依頼(issue はレーンの完了までクローズしない)
 - [x] issue #110 のデータレーン担当分: `engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ件数・範囲の上限(presets 8・itemVariants 64・itemCandidates 64・observations 16・maxCandidates 0..128)を追加(ADR-0108)。HTTP を経由しない直接呼び出し・WASM でも計算量を増幅できないようにした。wasmapi は DTO 変換より前に同じ検査を重ねて置き、複数の違反が重なっても HTTP と同じ `invalid_input` が先に出るようにした(parity)。`MaxCandidates` の負の値は、従来「無制限」扱いだったのを ADR-0208 の契約(`minimum: 0`)に合わせて拒否するよう変更(既存テストの期待値を更新。理由は ADR-0108 決定4)。critic PASS(1往復)。Web・iOS の追従(観測16件でUI無効化・持ち物候補64件超の扱い)は ADR-0208 §4 のまま未着手
 - [x] issue #148(クラウド公開前のアクセス境界・認証方針。ユーザー決定「私設サービスを維持する」)の API レーン担当分: `deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定(ADR-0210)。TLS 終端は gateway/クラスタの Ingress では行わず Tailscale(`tailscale serve`)に任せる方針を決定。端末IDが認証として機能しないこと・CORSが到達制御でないことの回帰テストを追加(`TestDeviceIDIsNotAuthentication`・`TestCORSIsNotAccessControl`・`TestContractHasNoAuthentication`)。`base`のgateway Ingress本体は local(k3d)専用として残し、先頭コメントで明記。ADR-0209 §1(クラウド公開へ進む判断)は「公開しない」で確定した旨を追記。critic PASS。運用(tailnet ACL・失効手順のrunbook)・Web/iOS(接続先をtailnet名に)への依頼はDECISIONS.mdに既定案付きで記録(issue はレーンの完了までクローズしない)
-- [x] issue #106(データ・運用レーン。Codex レビュー)手動 import Job(`make import-k8s`)と定期 CronJob が同時実行できる問題: `concurrencyPolicy: Forbid` は同じ CronJob が作る Job 同士にしか効かず、`kubectl create job --from=cronjob/...` が作る独立した手動 Job とは排他しないため、共有 PVC(`pokedex-import-cache`)上の取得キャッシュ・DB 投入が競合しうる実バグだった。`tools/importer/cronjob.sh` に busybox の `flock`(非ブロッキング)を `fetch.mjs` 呼び出しより前に追加し、取得〜投入の全工程をアプリ側で排他(ADR-0109)。ロック取得失敗は既存の終了コード規約どおり終了コード1(再試行可能)にし、`cronjob-import.yaml`(podFailurePolicy・concurrencyPolicy とも既存のまま)・`services/pokedex/cmd/import`(Go CLI)・Makefile は無変更。2プロセス同時起動の統合テスト(`cronjob_lock_test.go`)を追加し、Docker(Linux・busybox flock)で実際にロックが機能することを確認済み(macOS はローカルに flock が無いため自動 Skip)。critic PASS。k3d での手動確認手順は docs/runbooks/data.md §6 に追記(未実行)
+- [x] issue #106(データ・運用レーン。Codex レビュー)手動 import Job(`make import-k8s`)と定期 CronJob が同時実行できる問題: `concurrencyPolicy: Forbid` は同じ CronJob が作る Job 同士にしか効かず、`kubectl create job --from=cronjob/...` が作る独立した手動 Job とは排他しないため、共有 PVC(`pokedex-import-cache`)上の取得キャッシュ・DB 投入が競合しうる実バグだった。`tools/importer/cronjob.sh` に busybox の `flock`(非ブロッキング)を `fetch.mjs` 呼び出しより前に追加し、取得〜投入の全工程をアプリ側で排他(ADR-0109)。ロック取得失敗は既存の終了コード規約どおり終了コード1(再試行可能)にし、`cronjob-import.yaml`(podFailurePolicy・concurrencyPolicy とも既存のまま)・`services/pokedex/cmd/import`(Go CLI)・Makefile は無変更。2プロセス同時起動の統合テスト(`cronjob_lock_test.go`)を追加し、Docker(Linux・busybox flock)で実際にロックが機能することを確認済み(macOS はローカルに flock が無いため自動 Skip)。critic PASS。k3d での手動確認手順は docs/runbooks/data.md §6 に追記し、2026-09-23 に実クラスタで実施: 2つの手動 Job を同時作成し、片方が「別の import が実行中」のログで即座に終了コード1、`backoffLimit` の再試行で成功したことを確認(秘密は出力に含まれない)
 - MySQL の manifest に MYSQL_DATABASE が無く、初回起動時に pokedex DB が自動作成されない実バグを発見(データレーンが k3d に初めて実デプロイした際に発生)。deploy/k8s/overlays/local/mysql/statefulset.yaml に MYSQL_DATABASE: pokedex を追加し、layout_test.go に検知テストを追加して修正(2026-09-22)。**新規クラスタでは直るが、この修正前にすでに初期化済みの PVC は MYSQL_DATABASE の効果を受けない**(コンテナ起動時にしか実行されない仕様のため)。既存の PVC に対しては CREATE DATABASE を手動実行するしかない。docs/runbooks/data.md に一言注記するとよい
 - P2-3 の critic の軽微(2026-09-22。未反映の4件): `check-publishable.sh` の `B_KEYVALUE_ALLOW` を self-test の基準リポジトリにも播く / `maxCatalogAbilityCount` が balance の schema・loader と三重管理(テストで検出はできる) / natures-mismatch のエラー案内が Showdown 側だけを見て `make import-fetch` の案内が出ないことがある / `TestPublicInputValidation` の 400 応答を契約検証(kin-openapi)に通す
 

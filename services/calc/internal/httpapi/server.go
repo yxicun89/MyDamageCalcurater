@@ -44,7 +44,7 @@ func NewServer(store master.Store) *Server {
 }
 
 // NewHandler は calc-svc の HTTP ハンドラ全体を組み立てる。
-// calc の3操作(生成ラッパ経由)、pokedex の5操作(直接 404。R1)、GET /healthz
+// calc の3操作(生成ラッパ経由)、pokedex の6操作(直接 404。R1)、GET /healthz
 // (openapi に載せない運用エンドポイント)、panic の回復(500 internal)、echo の既定エラー
 // (ルート無し・メソッド違い)を Error 形式({"code","message"})に揃えるエラーハンドラを含む。
 func NewHandler(store master.Store) http.Handler {
@@ -74,7 +74,7 @@ func registerCalcRoutes(e *echo.Echo, srv *Server) {
 	e.POST("/api/calc/reverse", wrapper.CalcReverse)
 }
 
-// registerPokedexNotFoundRoutes は calc-svc の担当外(pokedex)の5操作を、生成ラッパを
+// registerPokedexNotFoundRoutes は calc-svc の担当外(pokedex)の6操作を、生成ラッパを
 // 経由させずに直接 404 not_found で応答する(critic 指摘 R1)。生成ラッパはヘッダの必須検証に
 // 加えて q/limit/format などのクエリパラメータも解析するため、そこを経由させると
 // ヘッダ欠落やクエリの型不一致(例 limit=abc)が missing_header / invalid_json 等に化けてしまい、
@@ -84,6 +84,7 @@ func registerPokedexNotFoundRoutes(e *echo.Echo) {
 	e.GET("/api/pokedex/species", h)
 	e.GET("/api/pokedex/species/:key", h)
 	e.GET("/api/pokedex/moves", h)
+	e.GET("/api/pokedex/moves/:key", h)
 	e.GET("/api/pokedex/items", h)
 	e.GET("/api/pokedex/natures", h)
 }
@@ -353,5 +354,10 @@ func (s *Server) SearchSpecies(ctx *echo.Context, params api.SearchSpeciesParams
 
 // GetSpecies は pokedex の操作。calc-svc の担当外なので 404 not_found。
 func (s *Server) GetSpecies(ctx *echo.Context, key api.SpeciesKey, params api.GetSpeciesParams) error {
+	return notFoundForPokedex()
+}
+
+// GetMove は pokedex の操作。calc-svc の担当外なので 404 not_found。
+func (s *Server) GetMove(ctx *echo.Context, key string, params api.GetMoveParams) error {
 	return notFoundForPokedex()
 }

@@ -197,6 +197,24 @@ func (s *Server) GetSpecies(ctx *echo.Context, key api.SpeciesKey, params api.Ge
 	return ctx.JSON(http.StatusOK, detail)
 }
 
+// GetMove は GET /api/pokedex/moves/{key}。使用可能集合の外の技も返す(絞り込みは検索の仕事)。
+// 判定レーンが技の優先度(priority)を個別に引くための経路(2026-09-22 の依頼。DECISIONS.md)。
+func (s *Server) GetMove(ctx *echo.Context, key string, params api.GetMoveParams) error {
+	row, err := s.q.GetMove(ctx.Request().Context(), key)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return newError(api.NotFound, "技が無い: %s", key)
+		}
+		return unavailable("GetMove", err)
+	}
+	priority := int(row.Priority)
+	move := api.Move{
+		Id: row.ID, NameJa: row.NameJa, Type: api.PokeType(row.Type), Category: api.MoveCategory(row.Category),
+		Power: int(row.Power), Priority: &priority,
+	}
+	return ctx.JSON(http.StatusOK, move)
+}
+
 // ListNatures は GET /api/pokedex/natures。0行なら 503 master_unavailable。
 func (s *Server) ListNatures(ctx *echo.Context, params api.ListNaturesParams) error {
 	rows, err := s.q.ListNatures(ctx.Request().Context())

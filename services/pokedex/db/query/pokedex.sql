@@ -33,6 +33,11 @@ SELECT move_id, effect
 FROM move_effects
 ORDER BY move_id;
 
+-- name: GetMove :one
+SELECT id, name_ja, type, category, power, priority
+FROM moves
+WHERE id = ?;
+
 -- name: GetItem :one
 SELECT id, name_ja, name_ja_source, name_en
 FROM items

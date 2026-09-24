@@ -8,16 +8,18 @@ Status: Phase 1・P2-1・P1-10・Phase R・P1-13・P1-11・P1-12・P2-1b・P2-1c
 Status(追記): P2-3b(無効・吸収の特性)も完了・main 統合済み(ADR-0106)。calc・gateway の pokedex-svc 接続(API レーンの依頼)も PR #87 で解決済み(api-smoke で master=pokedex 確認済み)。
 Status(追記): P5-6(技の追加効果によるランク変化。ADR-0107)完了・critic PASS(1往復)・**main 統合済み(PR #132)**。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。`move_effects` 別表・`MasterMove.effect`(内部API)まで。公開APIへの露出(判定レーンが技IDからランク変化を引く経路)は判定レーンの要件確定後に別途対応。
 Status(追記): issue #110 のデータレーン担当分(ADR-0108)完了・critic PASS(1往復)・**main 統合済み(PR #138)**。`engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ件数・範囲の上限を追加し、wasmapi は DTO 変換より前に検査して HTTP との parity を確保。issue #110 は Web・iOS レーンの追従が残っている限りクローズしない。
-Status(追記): issue #106(排他制御)完了・critic PASS・**main 統合済み(PR #155)**。`tools/importer/cronjob.sh` に `flock`(非ブロッキング)を追加し、手動Job(`make import-k8s`)と定期CronJobの同時実行を防ぐ(ADR-0109)。Docker(Linux)で実際の排他動作を確認済み。k3dでの手動確認(docs/runbooks/data.md §6)は未実行のまま残っている。
-Next: (1) Codexレビュー issue #104/#109/#112。(2) k3dが動いているときに issue #106 の手動確認(docs/runbooks/data.md §6)を行う。(3) 他レーンからの依頼待ち。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)
+Status(追記): issue #106(排他制御)完了・critic PASS・**main 統合済み(PR #155)**。`tools/importer/cronjob.sh` に `flock`(非ブロッキング)を追加し、手動Job(`make import-k8s`)と定期CronJobの同時実行を防ぐ(ADR-0109)。Docker(Linux)と実クラスタ(k3d)の両方で実際の排他動作を確認済み(2026-09-23。2つの手動Job同時作成→片方がロック競合で即exit 1→backoffLimitで再試行して成功)。
+Status(追記): 2026-09-23、全レーンの main 統合済みの変更をまとめてk3dに再デプロイし、実データ(種族349・技515・move_effects 59件)で計算・一括計算・逆算・タイプバランス・素早さ・判定(JD3複数候補)まで実HTTPで動作確認済み。すべてgreen。既知の制約: 技を個別IDで引く公開APIが無く(`GET /api/pokedex/moves/{id}` は404)、Webのオンライン技選択・持ち物候補比較・判定JD4(相手の技を含めた返り討ち判定)がブロックされたまま。
+Next: (1) Codexレビュー issue #104/#109/#112。(2) 他レーンからの依頼待ち。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
 Active: なし
-Branch: (次は main から feat/api-<名前> を切る。作業ディレクトリ ~/MyDamageCalcurater-api)
+Branch: (次は main から feat/api-<名前> か fix/api-<名前> を切る。作業ディレクトリ ~/MyDamageCalcurater-api)
 Status: Phase 3・issue #110(ADR-0208。PR #130)・issue #103の設計(M2保存データの保持・削除・端末ID境界。ADR-0209。critic PASS。PR #150)は main に統合済み
 Status(追記): issue #148のAPIレーン担当分(ADR-0210。私設サービスの境界)完了・critic PASS・**main 統合済み(PR #157)**。`deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定。端末ID/CORSを認証・到達制御として扱わない回帰テストも追加。
-Next: 他レーンからの依頼待ち。issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)はDECISIONS.mdに記録済み
+Status(追記): P3-7 `GET /api/pokedex/moves/{key}`(getMove)を実装(判定レーン JD4 の依頼。ADR-0105 §3 追記)。契約・`services/pokedex/`(データレーンの範囲。越境理由と触ったファイル一覧は DECISIONS.md)まで一括実装。critic PASS(3往復)・**main 統合済み(PR #161)**。判定レーンは JD4 に着手可。
+Next: 他レーンからの依頼待ち。issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ)・iOS再生成依頼はDECISIONS.mdに記録済み
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
@@ -86,14 +88,15 @@ scripts/argocd-bootstrap.sh の呼び出しに差し替え済み(2026-09-24 確�
 
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
-Active: なし(JD4 が API レーン依存でブロック中。plan.md のブロッカー節参照)
+Active: なし(JD4 着手可。下記参照)
 Branch: feat/judge-jd4(作業ディレクトリ ~/MyDamageCalcurater-judge。main から作成済み・空。JD3 の feat/judge-jd3 は PR #143 で main に統合済み・削除)
 Status: JD0(基盤。PR #92)・JD1(判定API本体。PR #118)・JD2(場の効果。PR #127)・JD3(複数の相手候補。PR #143。ADR-0703)は完了。
 `POST /api/judge/v1/outspeed-and-ko` は `defenders`(1〜6件)→`matchups`(配列)の一括判定・`speedField`(トリックルーム・
-追い風)に対応済み。**JD4(相手の技を含めた返り討ち判定)はブロック中**: 技の優先度を pokedex-svc から個別取得する
-`GET /api/pokedex/moves/{key}` が無く、API レーンへ依頼済み(DECISIONS.md 2026-09-22)だが未着手。ユーザーが
-「API レーンの実装を待つ」を選択(2026-09-23。優先度の間違いによる誤判定〈先制されて落とされるのに安全と言う〉を避けるため)
-Next: API レーンが `GET /api/pokedex/moves/{key}` を実装したら JD4 に着手。それまで判定レーンは新規実装を止める
+追い風)に対応済み。
+Status(追記2026-09-23): **JD4 のブロックは解消**。API レーンが `GET /api/pokedex/moves/{key}`(getMove)を実装し
+**main 統合済み(P3-7・PR #161・ADR-0105 §3 追記・DECISIONS.md 2026-09-23)**。`priority` は既存の
+`Move.priority`(`int`)フィールドのまま。
+Next: JD4(相手の技を含めた返り討ち判定)に着手(`feat/judge-jd4`)
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠
