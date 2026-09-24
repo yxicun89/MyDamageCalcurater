@@ -27,12 +27,7 @@ import type { Move } from "../engine/types";
 import { balanceScreenText, masterOnlineText } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
 import { ONLINE_MASTER_CAPABILITIES, SPECIES_SEARCH_DEBOUNCE_MS } from "../master/onlineSource";
-import type {
-  MasterCapabilities,
-  MasterData,
-  MasterSpecies,
-  MasterSpeciesSearch,
-} from "../master/types";
+import type { MasterCapabilities, MasterData, MasterSpecies, MasterSpeciesSearch } from "../master/types";
 import { createFakeSpeciesSearch, limitedMaster, type FakeSpeciesSearch } from "../test/onlineMaster";
 import { BalanceScreen } from "./BalanceScreen";
 
@@ -553,11 +548,9 @@ describe("12枠(メンバー6・仮想敵6)が独立に検索・解決できる(
       members: [{ pokemonId: species.key, types: ["normal"], defense: [] }],
       teamSummary: [],
     };
-    const rendered = renderScreen(
-      limitedMaster(example, ONLINE_MASTER_CAPABILITIES),
-      onlineSearch(),
-      { analyzeResult },
-    );
+    const rendered = renderScreen(limitedMaster(example, ONLINE_MASTER_CAPABILITIES), onlineSearch(), {
+      analyzeResult,
+    });
 
     await chooseBySearch(rendered, memberGroup(1), species);
 
@@ -637,9 +630,7 @@ describe("A-9 の元の懸念が新しい条件でも再発しないこと(ADR-0
     await chooseBySearch(online, memberGroup(1), speciesAt(0));
     await chooseBySearch(online, threatGroup(1), speciesAt(1));
     await waitFor(() => {
-      expect(online.client.calls).toEqual(
-        expect.arrayContaining(["analyze", "threats", "recommendations"]),
-      );
+      expect(online.client.calls).toEqual(expect.arrayContaining(["analyze", "threats", "recommendations"]));
     });
     // 呼ばれた API の顔ぶれ(重複を除く)が、オフラインで種族だけ選んだときと同じであること。
     // オフライン側の顔ぶれは BalanceScreen.test.tsx が固定しているので、ここでは値で突き合わせる。

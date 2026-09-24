@@ -563,7 +563,11 @@ export function BalanceScreen({ master, client, masterSearch }: BalanceScreenPro
         </p>
       )}
       {recommendationsState.status === "success" && (
-        <RecommendationsSection master={master} abilitiesFor={abilitiesFor} response={recommendationsState.value} />
+        <RecommendationsSection
+          master={master}
+          abilitiesFor={abilitiesFor}
+          response={recommendationsState.value}
+        />
       )}
     </div>
   );
@@ -816,7 +820,10 @@ function ThreatSection({ n, master, speciesFor, threat }: ThreatSectionProps) {
   return (
     <section
       className="balance-screen__threat"
-      aria-label={balanceScreenText.threatRegionLabel(n, findSpeciesName(speciesFor, master, threat.pokemonId))}
+      aria-label={balanceScreenText.threatRegionLabel(
+        n,
+        findSpeciesName(speciesFor, master, threat.pokemonId),
+      )}
     >
       <table aria-label={balanceScreenText.threatMatchupTableLabel}>
         <thead>
@@ -862,7 +869,11 @@ function RecommendationsSection({ master, abilitiesFor, response }: Recommendati
       <p>{balanceScreenText.defenseHolesLabel(typeListText(response.defenseHoles))}</p>
       <p>{balanceScreenText.offenseHolesLabel(typeListText(response.offenseHoles))}</p>
       <CandidatesTable candidates={response.candidates} />
-      <AbilityOptionsTable master={master} abilitiesFor={abilitiesFor} abilityOptions={response.abilityOptions} />
+      <AbilityOptionsTable
+        master={master}
+        abilitiesFor={abilitiesFor}
+        abilityOptions={response.abilityOptions}
+      />
     </section>
   );
 }
