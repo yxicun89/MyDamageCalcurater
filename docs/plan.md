@@ -137,7 +137,13 @@
 - [ ] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら
   `capabilities.moves` を true にして技を復活させる
 - [ ] P4-18 Codex コードレビューの issue(Web レーン主担当。タイプバランスレーンから 2026-09-23 に連絡・`gh issue view <番号>`)。
-  優先: #99(bug, accessibility)ライトテーマのエラー文字色がコントラスト基準未達(iOS と共有デザイントークン同期が必要)、
+  優先: **#99(bug, accessibility)ライトテーマのエラー文字色がコントラスト基準未達 — Web 分は完了(2026-09-24。
+  critic PASS)**: danger のライト値を `#E5484D`→`#CD1D23`(WCAG 2.2 SC 1.4.3 の4.5:1を bg.base・bg.glass 合成後
+  の両方で満たす。色相・彩度は変えず明度だけ下げた)。`docs/design.md`「デザイントークン」に理由・数値を記録、
+  `web/src/test/colorContrast.ts`(WCAG相対輝度・コントラスト比の計算)・`web/src/styles/contrast.test.ts`
+  (ライト・ダーク×bg.base・bg.glass合成の4組を検査)を新規追加。**iOS 側(`PokeCalcDesign.swift`・
+  `DesignTokenTests.swift`)はまだ旧値のまま**で、iOSレーンへ DECISIONS.md で依頼済み。iOS 側が終わるまで
+  issue #99 自体はクローズしない。
   #113(improvement)逆算の数値入力で古い計算要求を抑止・キャンセル(200ms debounce・AbortSignal。iOS・API と連携)。
   次点: #98(bug)モバイル幅で計算・逆算画面が横に溢れる、#67(bug)2xx の契約外 JSON で API クライアントが例外を投げる(防御的処理)。
   連携(他レーン主担当。Web は連携のみ): #71(データ+Web+iOS 攻撃側プリセット単一化)・#72(API+Web ルート make e2e を Playwright へ)・
