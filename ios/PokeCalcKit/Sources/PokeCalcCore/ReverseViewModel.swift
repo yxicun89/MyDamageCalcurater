@@ -29,6 +29,14 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
     /// 構築の永続化(P6-2d)。`CalcViewModel.teamStore` と同じ理由で省略可(既定 nil)。
     private let teamStore: (any TeamStore)?
 
+    // MARK: - 入力 Task の管理(issue #113。ADR-0501「issue #113 の受け入れ条件(iOS 側)」8章)
+
+    /// 観測欄の文字入力から `reverse` を呼ぶまでの trailing debounce(テストは `.zero`/長い値を注入する)。
+    private let calcDebounce: Duration
+    /// 画面からの入力操作の Task を1つだけ保持する(`scheduleRecalculationAfterObservationEdit` /
+    /// `scheduleLatest` が使う。`cancelPendingWork()` で画面破棄時に止める)。
+    private let inputTaskRunner = LatestTaskRunner()
+
     // MARK: - 検索(issue #68。ADR-0501「issue #68」3〜6章・10章。`CalcViewModel` と同じ規則)
 
     private let speciesSearch: MasterSearchField<SpeciesSummary>
@@ -104,9 +112,14 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
     /// 「最新の要求だけを反映する」ための通し番号(`CalcViewModel.beginInput()` と同じ規則)。
     private var latestRequestToken = 0
 
-    public init(service: any PokeCalcService, teamStore: (any TeamStore)? = nil, searchDebounce: Duration = MasterSearch.debounceInterval) {
+    public init(
+        service: any PokeCalcService, teamStore: (any TeamStore)? = nil,
+        searchDebounce: Duration = MasterSearch.debounceInterval,
+        calcDebounce: Duration = CalcInput.debounceInterval
+    ) {
         self.service = service
         self.teamStore = teamStore
+        self.calcDebounce = calcDebounce
         speciesSearch = MasterSearchField(debounce: searchDebounce) { query, limit in
             try await service.searchSpecies(query: query, limit: limit)
         }
@@ -169,9 +182,7 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
             try reselectMove(preferringCurrent: nil)
         } catch {
             guard token == latestRequestToken else { return }
-            self.error = CalcScreenError(error)
-            result = nil
-            isLoading = false
+            handleInputFailure(error)
             return
         }
         // 観測は空の1行から始まるので計算しない状態(規則3。isLoading だけ解く)。
@@ -222,9 +233,7 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
                 try reselectMove(preferringCurrent: selection.individual.moveId)
             } catch {
                 guard token == latestRequestToken else { return }
-                self.error = CalcScreenError(error)
-                result = nil
-                isLoading = false
+                handleInputFailure(error)
                 return
             }
             guard token == latestRequestToken else { return }
@@ -290,6 +299,50 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
     public func editObservation(id: Int, text: String) async {
         guard setObservationText(id: id, text: text) else { return }
         await recalculateAfterObservationEdit()
+    }
+
+    // MARK: - 入力 Task の管理(issue #113。ADR-0501「issue #113 の受け入れ条件(iOS 側)」8章)
+
+    /// 観測欄の文字入力(`setObservationText` が true を返したとき)が呼ぶ、debounce つきの計算予約。
+    /// 先行 Task を cancel し、`calcDebounce` 待ってから `recalculateAfterObservationEdit()` を呼ぶ
+    /// (A1・A2)。待機中に次の入力で cancel された分は `reverse` を呼ばない。
+    @discardableResult
+    public func scheduleRecalculationAfterObservationEdit() -> Task<Void, Never> {
+        inputTaskRunner.schedule(debounce: calcDebounce) { [weak self] in
+            await self?.recalculateAfterObservationEdit()
+        }
+    }
+
+    /// 確定操作(select・toggle・行削除・側の切り替え・構築からの呼び出し)用。先行 Task を cancel し、
+    /// debounce せずただちに `operation` を呼ぶ(A1・A4)。View は
+    /// `viewModel.scheduleLatest { await $0.selectMove(id: id) }` の形で呼ぶ(`[weak viewModel]` を
+    /// 書かせないため、`self` を引数で渡す。8章「判断」)。
+    @discardableResult
+    public func scheduleLatest(_ operation: @escaping @MainActor @Sendable (ReverseViewModel) async -> Void) -> Task<Void, Never> {
+        inputTaskRunner.schedule(debounce: .zero) { [weak self] in
+            guard let self else { return }
+            await operation(self)
+        }
+    }
+
+    /// 保持中の入力 Task を cancel する(A6。View は `.onDisappear` で呼ぶ)。
+    public func cancelPendingWork() {
+        inputTaskRunner.cancel()
+    }
+
+    /// 入力操作から生まれる**すべての** `catch`(`species(key:)`・`reverse` のどちらが投げた
+    /// エラーでも)が使う共通処理(issue #113 A5。ADR-0501「issue #113」5章「ViewModel の各 catch は、
+    /// キャンセルとそれ以外を分ける」)。`CancellationError` は画面のエラーにしない(`result` も消さず、
+    /// 表示中の最後の結果を残す。`isLoading` だけ解く)。それ以外は `error` を立てて `result` を消す。
+    /// 呼び出し元は `guard token == latestRequestToken else { return }` の後にこれを呼ぶこと。
+    private func handleInputFailure(_ error: Error) {
+        guard !(error is CancellationError) else {
+            isLoading = false
+            return
+        }
+        self.error = CalcScreenError(error)
+        result = nil
+        isLoading = false
     }
 
     // MARK: - 側の切り替え(規則7)
@@ -470,9 +523,7 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
             try reselectMove(preferringCurrent: previousMoveId)
         } catch {
             guard token == latestRequestToken else { return }
-            self.error = CalcScreenError(error)
-            result = nil
-            isLoading = false
+            handleInputFailure(error)
             return
         }
         // 技の読み直し・選び直しが成功した = その原因で立っていた古いエラー(例: moveUnavailable)は
@@ -550,9 +601,7 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
             request = try buildRequest(observations: observationsToSend)
         } catch {
             guard token == latestRequestToken else { return }
-            self.error = CalcScreenError(error)
-            result = nil
-            isLoading = false
+            handleInputFailure(error)
             return
         }
         do {
@@ -563,9 +612,7 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
             isLoading = false
         } catch {
             guard token == latestRequestToken else { return }
-            self.error = CalcScreenError(error)
-            result = nil
-            isLoading = false
+            handleInputFailure(error)
         }
     }
 

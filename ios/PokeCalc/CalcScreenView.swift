@@ -68,6 +68,8 @@ struct CalcScreenView: View {
         .background(ColorToken.bgBase.color.ignoresSafeArea())
         .accessibilityIdentifier("calcScreen")
         .task { await viewModel.load() }
+        // 画面破棄で保持中の入力 Task を止める(issue #113 A6)。
+        .onDisappear { viewModel.cancelPendingWork() }
     }
 
     private var backendBadge: some View {
@@ -113,7 +115,7 @@ struct CalcScreenView: View {
 
     private var swapButton: some View {
         Button {
-            Task { await viewModel.swapSides() }
+            viewModel.scheduleLatest { await $0.swapSides() }
         } label: {
             Image(systemName: "arrow.left.arrow.right")
                 .font(TextStyleToken.heading.font)
@@ -133,7 +135,7 @@ struct CalcScreenView: View {
             ForEach(AttackerPreset.allCases, id: \.self) { preset in
                 let isSelected = viewModel.attackerPreset == preset
                 Button {
-                    Task { await viewModel.selectAttackerPreset(preset) }
+                    viewModel.scheduleLatest { await $0.selectAttackerPreset(preset) }
                 } label: {
                     Text(preset.label)
                         .font(TextStyleToken.body.font)
@@ -162,7 +164,7 @@ struct CalcScreenView: View {
             selection: viewModel.attackerBuildSource.teamSelection,
             identifierPrefix: "attackerTeam"
         ) { teamID, memberID in
-            await viewModel.selectTeamIndividual(teamID: teamID, memberID: memberID)
+            viewModel.scheduleLatest { await $0.selectTeamIndividual(teamID: teamID, memberID: memberID) }
         }
     }
 
@@ -197,7 +199,7 @@ struct CalcScreenView: View {
         .accessibilityIdentifier("movePicker")
         .sheet(isPresented: $isMoveSearchPresented) {
             MoveSearchSheet(viewModel: viewModel, options: viewModel.moveOptions) { move in
-                Task { await viewModel.selectMove(id: move.id) }
+                viewModel.scheduleLatest { await $0.selectMove(id: move.id) }
             }
         }
     }

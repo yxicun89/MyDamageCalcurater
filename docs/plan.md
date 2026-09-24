@@ -137,7 +137,13 @@
 - [ ] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら
   `capabilities.moves` を true にして技を復活させる
 - [ ] P4-18 Codex コードレビューの issue(Web レーン主担当。タイプバランスレーンから 2026-09-23 に連絡・`gh issue view <番号>`)。
-  優先: #99(bug, accessibility)ライトテーマのエラー文字色がコントラスト基準未達(iOS と共有デザイントークン同期が必要)、
+  優先: **#99(bug, accessibility)ライトテーマのエラー文字色がコントラスト基準未達 — Web 分は完了(2026-09-24。
+  critic PASS)**: danger のライト値を `#E5484D`→`#CD1D23`(WCAG 2.2 SC 1.4.3 の4.5:1を bg.base・bg.glass 合成後
+  の両方で満たす。色相・彩度は変えず明度だけ下げた)。`docs/design.md`「デザイントークン」に理由・数値を記録、
+  `web/src/test/colorContrast.ts`(WCAG相対輝度・コントラスト比の計算)・`web/src/styles/contrast.test.ts`
+  (ライト・ダーク×bg.base・bg.glass合成の4組を検査)を新規追加。**iOS 側(`PokeCalcDesign.swift`・
+  `DesignTokenTests.swift`)はまだ旧値のまま**で、iOSレーンへ DECISIONS.md で依頼済み。iOS 側が終わるまで
+  issue #99 自体はクローズしない。
   #113(improvement)逆算の数値入力で古い計算要求を抑止・キャンセル(200ms debounce・AbortSignal。iOS・API と連携)。
   次点: #98(bug)モバイル幅で計算・逆算画面が横に溢れる、#67(bug)2xx の契約外 JSON で API クライアントが例外を投げる(防御的処理)。
   連携(他レーン主担当。Web は連携のみ): #71(データ+Web+iOS 攻撃側プリセット単一化)・#72(API+Web ルート make e2e を Playwright へ)・
@@ -155,11 +161,16 @@
   常時マウント+中身の出し入れの方が読み上げが安定する可能性。(3) `ReverseScreen.tsx` の `move === null` 分岐に
   「先頭は必ず null」の知識の小さな複製がある(実際には使われない経路)。
   issue #110 は engine/WASM・iOS の追従待ちで、Web 単独ではクローズしない(DECISIONS.md 参照)
-- [ ] P4-20 issue #148(クラウド公開前のアクセス境界・認証方針。主担当 API・Web・iOS・運用。ユーザー決定
-  2026-09-23「私設サービスを維持する」。DECISIONS.md参照): 中心は Ingress・TLS・overlay・gateway の運用レーン
-  作業で `web/` 本体への変更は今のところ見込み薄。Web の分担は ADR に記録する「Web の接続方法」の節への記載と、
-  端末IDを認証であるかのように誤解させる表示・文言が無いことの確認(現状そのような UI は無いはず)。
-  ADR 作成が API/運用レーンで進んでから、依頼が来た時点で着手する(今は着手しない)
+- [ ] P4-20 issue #148(クラウド公開前のアクセス境界・認証方針。ADR-0210。API レーン担当分は完了・main 統合済み
+  〈PR #157〉。DECISIONS.md 2026-09-23 参照)。API レーンからの具体的な依頼2件(ADR-0210 §4・§7):
+  (1) API の base URL を tailnet の MagicDNS 名にし、public な既定値を持たないこと (2) CORS 許可オリジンも
+  tailnet 上の名前だけにすること。
+  現状確認済み: `web/src/api/config.ts` の `apiBaseUrl()` の既定値は同一オリジン `"/"`(public な固定値ではない。
+  `VITE_API_BASE_URL` 環境変数で上書きする設計。ADR-0301 §4)なのでコード自体は既に条件を満たしている。
+  CORS の許可オリジン一覧は gateway(Go・API レーンの持ち物)側の設定で、Web 側にハードコードは無い(確認済み)。
+  残るのは実際の tailnet MagicDNS 名を `VITE_API_BASE_URL` にデプロイ時設定するという**運用/設定の話**で、
+  運用レーンが到達経路(Tailscale Operator の ingressClass か subnet router + tailscale serve か)を選び、
+  実際の名前が決まってから。今はコード変更不要。着手のタイミングは運用レーンの選定後
 
 ## M2: 保存・構築
 
@@ -200,7 +211,23 @@
   P6-1〜P6-2d の各タスクで継続して緑を確認済み。iPhone 18 Pro シミュレータ)
 - [x] P6-4 Tailscale serve の手順書 `docs/runbooks/ios-device-install.md` を作成 → **人間が実機インストール**(署名・
   Tailscale ログイン・実機への配線・外出先での確認は手順書どおり人間が行う。AI が代行しない)
-- [ ] P6-5 ADR-0209 §8 の文言と「この端末のデータを削除」の UI(issue #103。record-svc / team-svc の全削除 API 実装後)
+- [x] P6-5 issue #113(Web/iOS/API共同主担当)の iOS 側: `ReverseViewModel`/`CalcViewModel` が最新の入力 Task を1つ
+  (`LatestTaskRunner`)保持し、新入力時・画面破棄時(`.onDisappear` → `cancelPendingWork()`)に先行 Task を cancel
+  する。`ReverseScreenObservations` の観測文字入力に 200ms の trailing debounce(`CalcInput.debounceInterval`)を
+  適用(同期的な TextField 表示・入力検証は即時のまま)。方針は ADR-0501「issue #113」に確定(受け入れ条件
+  A1〜A7・追加する API・View の置き換え先)。`CancellationError` は画面 error にしない catch を、`reverse`/
+  `calcBulk` を包む catch だけでなく `species(key:)`(learnset の読み直し)を包む catch も含めて全経路に適用
+  (1周目の critic 指摘で漏れを修正。各 ViewModel の private `handleInputFailure(_:)` に集約)。
+  `swift test` 323件・`make ios-test`(unit・XCUITest 16件・Info.plist 検査)成功。判断: debounce は逆算の観測欄
+  だけ(計算画面は Task 管理のみ。自由文字入力が無いため)、`MasterSearchField`(issue #68)は今回統合しない
+  (理由は ADR 7章)。1周目の critic FAIL(A5 未達)は修正済み・再レビュー待ち。
+  PR 未作成(このブランチ `fix/ios-issue-113-debounce-cancel` のまま)
+- [ ] P6-6 issue #110(API レーン主担当。PR #130 で契約に上限追加済み: presets 8+unique・itemVariants/
+  itemCandidates 64+unique・observations 16・maxCandidates 上限128)の iOS 側追従。API レーンから 2026-09-23 に
+  依頼: 観測追加UIを16件で無効化(理由表示)、持ち物候補が64件を超える場合の扱いを決める(Web レーンの対応
+  〈黙って切り捨てず明示的なエラーか決定的な絞り込み〉に揃える)。DECISIONS.md 2026-09-23「calc の候補・観測件数
+  に上限を置く」参照。P6-5(issue #113)の critic サイクル完了後に着手
+- [ ] P6-7 ADR-0209 §8 の文言と「この端末のデータを削除」の UI(issue #103。record-svc / team-svc の全削除 API 実装後)
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)。Argo CD の実同期もローカル k3d で確認済み(ADR-0018: Git 変更 32fbb9e → manual sync → Pod の image digest 一致)
