@@ -1127,6 +1127,23 @@ Impact: `docs/plan.md` P3-7 追加・JD4 のブロッカーを解消として更
 `docs/adr/0107-move-secondary-rank-changes.md` 決定8に追記(`effect` の公開は依然未決)、
 `docs/adr/0304-web-online-mastersource.md` §3 に追記(この実装は§3の欠落の解決策ではない)。
 
+## 2026-09-24: getMove(P3-7)のAPIレーン越境実装をレビュー(データレーン)
+Decision: APIレーンからの依頼(2026-09-23「services/pokedex/の再レビュー」)に応え、
+`services/pokedex/db/query/pokedex.sql`(GetMove)・`internal/httpapi/search.go`(GetMoveハンドラ)・
+`internal/httpapi/server.go`(ルート登録)・`internal/httpapi/pokedex_test.go`(TestGetMove)・
+`internal/storetest/storetest.go`(偽実装)を確認した。**修正不要と判断**:
+- `GetMove`ハンドラのエラー変換(`sql.ErrNoRows`→`api.NotFound`、それ以外→`unavailable`)は
+  既存の`GetSpecies`と完全に同じ流儀
+- `storetest.Querier.GetMove`の偽実装(`record`呼び出し→線形探索→`sql.ErrNoRows`)は
+  `GetSpeciesByKey`の偽実装と同じパターン
+- `TestGetMove`はレギュレーション外の技・未知の技・マスタ未投入(0件→404、他の一覧系の503と違う
+  点も含め)を網羅しており、データレーンのテスト密度の基準を満たす
+- `api/openapi.yaml`のdescriptionも404/503の使い分けを明記しており、ADR-0105 §3追記の内容と一致
+`make build`/`go vet`/`go test ./...`(services全体)すべてgreenを確認済み。
+Reason: APIレーンの越境実装(3往復critic PASS済み)に対する独立確認。データレーン側の設計判断
+(命名・エラー変換)と食い違いがないかを見るのが依頼内容だった。
+Impact: 追加の修正なし。判定レーンはJD4に着手してよい(APIレーン側で既に確認済み)。
+
 ## 2026-09-24: issue #99(ライトテーマの danger コントラスト不足)の Web レーン担当分が完了。iOS レーンへ依頼
 Decision: danger のライト値を `#E5484D` → `#CD1D23` に変更した(色相・彩度は変えず明度だけ下げる。WCAG 2.2
 SC 1.4.3 の通常文字基準4.5:1を、bg.base単体(5.07:1)・bg.glassをbg.baseに重ねた合成色(5.40:1)の両方で満たす。
