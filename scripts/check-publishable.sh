@@ -40,7 +40,7 @@ readonly -a A_EXCLUDES=(":(exclude)docs/audit-r1.md")
 # 定数だけを対象にする(秘密の値ではない)。`tidb-root-auth` は ADR-0211 §3.2 の
 # TidbInitializer が参照する Secret 名(`passwordSecret: tidb-root-auth`。値ではなく名前)。
 # 3つ目の代替(`[:=][[:space:]]*"?\$\{[A-Za-z_][A-Za-z0-9_]*\}$`)は、scripts/up.sh が Secret の
-# manifest を heredoc で組み立てる行(例: `root: "${tidb_root_pw_value}"`。ADR-0211 §3.2)を許す。
+# manifest を heredoc で組み立てる行(例: `mysql-root-password: "${mysql_root_pw_value}"`)を許す。
 # 値の**全体**が単一のシェル変数参照であることまで要求する(区切り文字の直後から `${...}` が
 # 始まり、他の文字を挟まない)。`password: "realsecret${x}"` のように本物の値へ無害な変数参照を
 # 継ぎ足して検出を逃れる細工は、この形では通らない(self-test で確認)。

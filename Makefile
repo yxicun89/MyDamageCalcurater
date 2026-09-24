@@ -236,9 +236,13 @@ k8s-render: ## kustomize で local / cloud / tidb overlay が描画できるこ�
 	@kubectl kustomize deploy/k8s/overlays/local >/dev/null
 	@kubectl kustomize deploy/k8s/overlays/cloud >/dev/null
 	@kubectl kustomize deploy/k8s/overlays/local/tidb >/dev/null
-	@kubectl apply --dry-run=client -f deploy/k8s/base/record/job-migrate.yaml -o yaml >/dev/null
-	@kubectl apply --dry-run=client -f deploy/k8s/base/team/job-migrate.yaml -o yaml >/dev/null
-	@echo "k8s-render: local / cloud / tidb overlay・record/team migrate Job の描画を確認"
+	@if kubectl cluster-info --request-timeout=3s >/dev/null 2>&1; then \
+		kubectl apply --dry-run=client --request-timeout=10s -f deploy/k8s/base/record/job-migrate.yaml -o yaml >/dev/null; \
+		kubectl apply --dry-run=client --request-timeout=10s -f deploy/k8s/base/team/job-migrate.yaml -o yaml >/dev/null; \
+		echo "k8s-render: local / cloud / tidb overlay・record/team migrate Job の描画を確認"; \
+	else \
+		echo "k8s-render: local / cloud / tidb overlay の描画を確認(クラスタ未起動のため record/team migrate Job の dry-run はスキップ)"; \
+	fi
 
 .PHONY: assets
 assets: ## 画像を WebP 2サイズに変換して MinIO へ

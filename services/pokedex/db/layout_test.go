@@ -904,8 +904,10 @@ func TestRecordTeamJobsDoNotCrossReferenceSecrets(t *testing.T) {
 		s := readRepoFile(t, tc.file)
 		for _, name := range tc.forbidden {
 			// secretKeyRef.name の値としての参照だけを見る(コメントで「参照しない」と
-			// 説明のために名前を書いているだけの行は誤検知しない)。
-			re := regexp.MustCompile(`name:\s*` + name + `\b`)
+			// 説明のために名前を書いているだけの行は誤検知しない)。YAML は値を引用符で
+			// 囲んでも囲まなくても同じ意味になるため、任意の引用符も許す(critic 2回目レビューで
+			// 指摘: 引用符付き `name: "tidb-root-auth"` だと素通りしていた)。
+			re := regexp.MustCompile(`name:\s*["']?` + name + `\b`)
 			if re.MatchString(s) {
 				t.Errorf("%s が secretKeyRef.name として %s を参照している(自分の Secret 以外を参照しない。ADR-0211 AC-T7)", tc.file, name)
 			}
