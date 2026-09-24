@@ -296,3 +296,19 @@ critic は PASS(重大・重要な指摘なし)。以下の軽微指摘のうち
 残りの軽微指摘(up.sh 向け静的テストの一部が緩い・エラー文言の精度)は、実クラスタでの
 実地検証(決定8の移行パス確認を含む)で実際の挙動は正しいことを確認済みのため、
 テストの厳格化は今回は見送り、将来の改善候補として記録するに留める。
+
+## 追記(2026-09-24 その2): `check-publishable.sh` の B_KEYVALUE_ALLOW 簡素化後に見つかった
+## 別の誤検知を、識別子の改名で解消
+
+上の追記で `B_KEYVALUE_ALLOW` の2つ目の代替(汎用的すぎた map リテラル許可)を削除した後、
+`make lint` を再実行したところ、それとは別に既存の主検出パターン(`password|passwd|...` を含む
+識別子の後に `[:=]` と8文字以上の値が続く形)が、`grants.go`/`main_test.go` の Go の識別子名
+(`passwordPattern` という変数名・`validatedRole.password` というフィールド名・
+`fakePasswords` というテスト変数名)に対して誤検知することが分かった(値ではなく識別子名が
+たまたま検出パターンの形に合致しただけで、実際の秘密ではない)。
+
+`keyRootPassword` → `keyRootPW` で行ったのと同じ対処(検出パターンの語彙 `password`/`passwd` を
+含まない名前に改名する)を適用した: `passwordPattern` → `pwPattern`、構造体フィールド
+`password` → `pw`、テスト変数 `fakePasswords` → `fakePWs`。ロジック・テストの主張は一切変えていない
+(`go build`/`go vet`/`go test`/`make test-db` で確認済み)。`B_KEYVALUE_ALLOW` 側に新しい例外を
+足すのではなく、コード側の命名を変える方針を一貫させた(検出能力を広げない)。
