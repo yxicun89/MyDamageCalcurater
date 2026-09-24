@@ -1,0 +1,29 @@
+# 計算API SLO(p99・可用性)の記録ルール(ADR-0407 §1〜3)。
+# 対象は calc-svc の計算3エンドポイント(POST /api/calc・/api/calc/bulk・/api/calc/reverse)のみ。
+# アラート(alert:)はここでは作らない(ADR-0407 §2。多窓バーンレートアラートは先回りしない)。
+# 検査: scripts/observability-slo_test.sh
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: calc-slo
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: calc-slo
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  groups:
+    - name: calc-slo.rules
+      rules:
+        - record: calc_job:calc_request_duration_seconds:p99_5m
+          expr: >-
+            histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket{job="calc",
+            path=~"/api/calc|/api/calc/bulk|/api/calc/reverse"}[5m])) by (le))
+        - record: calc_job:calc_availability_ratio:5m
+          expr: >-
+            sum(rate(http_requests_total{job="calc",
+            path=~"/api/calc|/api/calc/bulk|/api/calc/reverse",
+            status!~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{job="calc",
+            path=~"/api/calc|/api/calc/bulk|/api/calc/reverse"}[5m]))
