@@ -12,7 +12,7 @@
 | 2 件とも **manual sync**(`syncPolicy` なし。`check-gitops.sh` が `automated:` を検出すると失敗) | `services/balance/scripts/check-gitops.sh:44` |
 | 実クラスタの Application は `pokecalc-balance` の **1 件のみ**(OutOfSync / Healthy)。`pokecalc-speed` は未適用 | §7 |
 | ADR-0206 と CLAUDE.md は「Argo CD が main の `deploy/k8s/overlays/local` を見ている」と読める記述だが、**それを見る Application は Git にもクラスタにも無い** | §8 |
-| 未完了: P7-3 ArgoCD(`docs/plan.md:295`)、クラウド側(overlay `cloud` に対応する Application・レジストリ・実データの配布) | §9 |
+| 未完了: P7-3 ArgoCD(`docs/plan.md:331`)、クラウド側(overlay `cloud` に対応する Application・レジストリ・実データの配布) | §9 |
 
 ## 1. Argo CD 本体(どこで何のために動くか)
 
@@ -26,7 +26,7 @@
 | 適用 | `kubectl apply -n argocd --server-side -f -` → `rollout status deployment/argocd-server`(300s)。namespace 作成は冪等 | 同 `:80-83` |
 | 版更新 | スクリプトの定数 5 つを手で更新(自動追従しない。意図的) | ADR-0405 §影響と制約 |
 | テスト | `scripts/argocd-bootstrap_test.sh`(偽の curl・kubectl。`make test-scripts` = `make test` に含む)。実クラスタ・実ネットワークに触れない | `Makefile:63-64` |
-| リポジトリ認証 | 人が `argocd` namespace に Secret `repo-pokecalc`(label `argocd.argoproj.io/secret-type=repository`)を作る。AI は値を見ない・Git に入れない | `docs/runbooks/balance.md` §4、ADR-0018 §5 |
+| リポジトリ認証 | 人が `argocd` namespace に Secret `repo-pokecalc`(label `argocd.argoproj.io/secret-type` に値 `repository`)を作る。AI は値を見ない・Git に入れない | `docs/runbooks/balance.md` §4、ADR-0018 §5 |
 | CLI | `argocd --core app sync`(ログイン不要の core モード。`kubectl` の current namespace を `argocd` に切替えて実行) | `docs/runbooks/balance.md` §7 |
 
 実クラスタの Argo CD ワークロード(全件): `argocd-server`・`argocd-repo-server`・`argocd-application-controller`(StatefulSet)・`argocd-applicationset-controller`・`argocd-notifications-controller`・`argocd-dex-server`・`argocd-redis`。argocd・dex・redis の digest 先頭は `scripts/argocd-bootstrap.sh` の定数と一致(`dd3f47d5a5e4`・`8499afd690c4`・`08ad0b1d2808`)。
@@ -48,7 +48,7 @@
 | overlay | ファイル | 内容 |
 |---|---|---|
 | balance | `services/balance/deploy/k8s/overlays/gitops/kustomization.yaml` | `../../base` + `images: pokecalc/balance → localhost:5000/pokecalc/balance`、`digest: sha256:<実値>`(64 桁の 0 ではない) |
-| balance | 同 `private-registry-patch.example.yaml` | `imagePullSecrets: balance-registry` の例(クラウド用。kustomization からは参照されない) |
+| balance | 同 `private-registry-patch.example.yaml` | `imagePullSecrets` に `balance-registry` を指定する例(クラウド用。kustomization からは参照されない) |
 | speed | `services/speed/deploy/k8s/overlays/gitops/kustomization.yaml` | 同形。`newName: localhost:5000/pokecalc/speed`、**`digest: sha256:000…0`(placeholder のまま)** |
 
 - gitops overlay は read model(ポケモン・技・特性)をマウントしない(Kustomize の load restrictor)。同期した balance は `/healthz` 200 だが analyze / coverage は 503、speed はポケモン API が 503 `master_unavailable`(ADR-0018 §影響、ADR-0605 §2a)。
@@ -144,7 +144,7 @@ flowchart TD
 
 | 項目 | 状態 | 根拠 |
 |---|---|---|
-| P7-3 ArgoCD(GitOps) | 未着手(`[ ]`) | `docs/plan.md:295` |
+| P7-3 ArgoCD(GitOps) | 未着手(`[ ]`) | `docs/plan.md:331` |
 | damage 系(calc・gateway・web・pokedex・mysql)の Application | なし | §5 |
 | judge-svc の gitops overlay・Application・runbook | なし | §5 |
 | `pokecalc-speed` の実クラスタ適用・レジストリ push・sync | 未実施(人間確認待ち) | ADR-0605 §4、`docs/plan.md:264-266` |

@@ -1369,3 +1369,9 @@ Default: `docs/verify-m1.md` は本ブランチで修正済み(`web-k3d-open` �
 Status: 既定案で進行・Web レーンの回答待ち(ユーザー承認済みは verify-m1.md の修正のみ)。
 Reason: k3d の 5173 は port-forward の宛先で、cluster の公開ポートではない(公開は 8080 → Traefik → gateway。`deploy/k3d.yaml`)。
 Impact: `docs/verify-m1.md` §3。`web/scripts/k3d-smoke.sh` は未変更。
+
+## 2026-09-24: 確認場所・PR 統合の方針・コンテキスト節約(ユーザー決定。全レーンへの共有)
+Decision: (1) ユーザーの動作確認・ドキュメント確認は `~/MyDamageCalcurater` の main(マージ後)で行う。(2) 変更は PR 経由で積極的に main へ入れ、GitHub 上で追えるようにする(ローカルの直接マージはしない)。ユーザーの指摘は範囲に合うレーンが対応する。(3) コンテキスト膨張の対策を全レーンで共有する。詳細は COORDINATION.md「ユーザーの確認場所・PR 統合の方針・コンテキスト節約」。
+Default(提案・ユーザー未確認): (a) データレーンの作業を専用 worktree へ移し、`~/MyDamageCalcurater` を main 追従の確認用にする。未コミットの変更が無いことをデータレーンが確認してから行う(2026-09-24 時点で `~/MyDamageCalcurater` には他セッションの未コミット変更 `deploy/k8s/base/pokedex/deployment.yaml` があり、このセッションでは触っていない)。(b) `DECISIONS.md`(約 190KB)の古い節を `docs/ai-shared/archive/` へ退避し、本体は直近分だけにする。追記のみの規約を変えるため、ユーザーの決定後に行う。
+Reason: 確認のたびにレーン別ディレクトリを開くのは手間で、ユーザーが追跡しにくい。起動時に巨大な共有文書を全文読むとセッションの作業量が減る。
+Impact: COORDINATION.md に節を追加、AGENTS.md の開始手順に1句を追記。docs/impl/(実装の場所の索引)を新設(docs/README.md が目次)。コードの変更なし。

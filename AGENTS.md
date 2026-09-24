@@ -13,7 +13,7 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 同じレーンは同時に1セッションだけ。レーン・ディレクトリ・ブランチ・PR での統合・止まるときの作法は
 `docs/ai-shared/COORDINATION.md` を正とする(2026-09-21 ユーザー決定)。
 
-1. 作業開始時: `git fetch origin` し、`origin/main` の `docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md` を読む。
+1. 作業開始時: `git fetch origin` し、`origin/main` の `docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md` を読む(`DECISIONS.md` は巨大なので見出しから自レーンと直近だけ。COORDINATION.md「コンテキストを膨らませない」)。
    続きはレーン欄の `Branch` の最新コミットと `Next` から始める
 2. 作業終了時: 自分のログ(`CLAUDE_LOG.md` / `CODEX_LOG.md`)に追記し、進めたレーンの欄(`Status`・`Next`・`Active`)を更新して commit・push する
 

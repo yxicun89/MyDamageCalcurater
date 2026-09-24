@@ -6,7 +6,7 @@
 
 ## 1. ディレクトリ一覧(git 追跡の全ディレクトリ)
 
-`git ls-files` の全ディレクトリ(154)。`docs/impl` は本書で追加(155 件目)。
+`git ls-files` の全ディレクトリ(155。`docs/impl` を含めて 156)。
 
 | パス | files | 責務 |
 |---|---:|---|
@@ -161,6 +161,7 @@
 | `web/src/master/example` | 5 | 架空の例マスタ(種族・技・持ち物・特性・性格) |
 | `web/src/screens` | 19 | 計算・逆算・タイプバランス画面 |
 | `web/src/speed` | 6 | 素早さ画面と speedClient |
+| `web/src/judge` | 6 | 判定画面(JudgeScreen)と judgeClient(judge-svc の生成型 `judge.gen.ts`)。main 取り込み後に追加(JD5) |
 | `web/src/styles` | 6 | デザイントークン CSS |
 | `web/src/test` | 12 | テスト共通部品 |
 | `web/src/ui` | 2 | UI 補助(motion) |

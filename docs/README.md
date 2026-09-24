@@ -1,6 +1,7 @@
 # docs 目次
 
 - 作業の起点は [plan.md](plan.md)。要件の正は [requirements.md](requirements.md)、テストの正は [test-strategy.md](test-strategy.md)、画面の正は [design.md](design.md)(CLAUDE.md「最初に読むもの」)。
+- `docs/impl/` の `path:行` は作成時点(基準コミットは各文書の冒頭)の行番号。以降の main の変更でずれうるので、関数名で探し直す。
 - 「実装がどこにあり、動作確認で何が起きているか」を追う文書は [impl/](#実装解説impl) にまとめた。
 
 ## 実装解説(impl/)
