@@ -8,6 +8,7 @@ import (
 	"errors"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"example.com/pokecalc/engine"
@@ -627,6 +628,65 @@ func TestConvertTypesAndChart(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("Code(%s, %s) = %d, want %d", tt.atk, tt.def, got, tt.want)
 		}
+	}
+}
+
+// TestConvertRejectsBrokenTypeChart は、calc の相性表のキーが types と食い違うと相性表が黙って
+// 空(全組み合わせ等倍)で投入される問題(#269)の回帰テスト。除外タイプ(excludeTypes)以外の
+// 未知の名前と、取り込むタイプの攻撃側の行(等倍だけでも空オブジェクトで明示される)の欠落を止める。
+func TestConvertRejectsBrokenTypeChart(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(in *importer.Input)
+	}{
+		{"キーを小文字化した(表記の変化)", func(in *importer.Input) {
+			lowered := map[string]map[string]int{}
+			for atk, row := range in.Calc.TypeChart {
+				r := map[string]int{}
+				for def, code := range row {
+					r[strings.ToLower(def)] = code
+				}
+				lowered[strings.ToLower(atk)] = r
+			}
+			in.Calc.TypeChart = lowered
+		}},
+		{"表が空", func(in *importer.Input) {
+			in.Calc.TypeChart = map[string]map[string]int{}
+		}},
+		{"防御側に types に無いタイプ名がある", func(in *importer.Input) {
+			in.Calc.TypeChart["Fire"]["Testunknown"] = 4
+		}},
+		{"攻撃側に types に無いタイプ名がある", func(in *importer.Input) {
+			in.Calc.TypeChart["Testunknown"] = map[string]int{"Fire": 4}
+		}},
+		{"取り込むタイプの攻撃側の行が無い", func(in *importer.Input) {
+			delete(in.Calc.TypeChart, "Normal")
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := loadFixture(t)
+			tt.mutate(&in)
+			_, _, err := importer.Convert(in)
+			if !errors.Is(err, importer.ErrInvalidData) {
+				t.Fatalf("err = %v, want ErrInvalidData", err)
+			}
+		})
+	}
+}
+
+// TestConvertTypeChartIgnoresExcludedTypes は、除外タイプ(excludeTypes)の名前は攻撃側・防御側の
+// どちらに現れても捨ててよく、除外タイプの行が無くてもよいこと(#269)。
+func TestConvertTypeChartIgnoresExcludedTypes(t *testing.T) {
+	in := loadFixture(t)
+	base, _ := convertOK(t, in)
+
+	in = loadFixture(t)
+	in.Calc.TypeChart["Fire"]["???"] = 1
+	delete(in.Calc.TypeChart, "???")
+	out, _ := convertOK(t, in)
+	if !reflect.DeepEqual(out.TypeChart, base.TypeChart) {
+		t.Fatalf("除外タイプの有無で相性表が変わった: got %+v, want %+v", out.TypeChart, base.TypeChart)
 	}
 }
 
