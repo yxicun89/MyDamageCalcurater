@@ -8,6 +8,14 @@ import { MAX_OBSERVATIONS } from "./requestLimits";
 /** 観測の入力単位。percent = 整数%、damage = HP の実点数。 */
 export type ObservationUnit = "percent" | "damage";
 
+/**
+ * 観測の数値を打っている間、計算を始めるまでの待ち時間(ミリ秒。issue 113、ADR-0300 §11)。
+ * 「45」と打つ途中の「4」も有効な観測なので、待たないと1文字ごとに計算が走る。表示と入力の検証は待たずに行い、
+ * 計算だけをこの時間だけ遅らせる(trailing debounce)。選択・単位の切り替え・行の追加や削除は確定した操作なので待たない。
+ * 値は SPECIES_SEARCH_DEBOUNCE_MS(250ms)と別に持つ: 逆算の観測は「打ち終わり」が短く、issue 113 の既定案が 200ms。
+ */
+export const OBSERVATION_INPUT_DEBOUNCE_MS = 200;
+
 /** parseObservation の結果(判別 union)。empty は未入力(不正扱いにしない)。 */
 export type ParsedObservation =
   | { readonly status: "empty" }

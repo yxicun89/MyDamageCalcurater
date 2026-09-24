@@ -7,7 +7,14 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { bulkResultFor, calcResult } from "../test/fakeEngine";
-import type { BulkRequest, CalcRequest, ReverseRequest } from "./types";
+import {
+  REQUEST_ABORTED_CODE,
+  type BulkRequest,
+  type CalcEngine,
+  type CalcRequest,
+  type EngineResult,
+  type ReverseRequest,
+} from "./types";
 import { createWasmEngine, READY_TIMEOUT_MS, type WasmLoader } from "./wasmEngine";
 
 type BoundaryFunction = "calc" | "calcBulk" | "calcReverse";
@@ -308,5 +315,94 @@ describe("起動待ちのタイマー(決着したらポーリング・タイム
       expect(result.error.code).toBe("engine_unavailable");
     }
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+// issue 113(P4-18): 画面が先行の計算を取り消せること。WASM の境界関数はブラウザのメインスレッドで
+// 同期実行するので、始まった計算は途中で止められない。そこで「始める前」に signal を検査し、
+// 取り消し済みなら計算しない(ADR-0300 §11)。始めた計算を取り消せるふりはしない。
+describe("計算の取り消し(AbortSignal。issue 113)", () => {
+  type BoundaryCall = (engine: CalcEngine, signal?: AbortSignal) => Promise<EngineResult<unknown>>;
+
+  const boundaryCalls: ReadonlyArray<readonly [BoundaryFunction, BoundaryCall]> = [
+    ["calc", (engine, signal) => engine.calc(calcRequest, signal)],
+    ["calcBulk", (engine, signal) => engine.calcBulk(bulkRequest, signal)],
+    ["calcReverse", (engine, signal) => engine.calcReverse(reverseRequest, signal)],
+  ];
+
+  /** loadRuntime を test が好きなときまで止めておける loader(読み込み中の取り消しを試すため)。 */
+  function gatedLoader(runtime: FakeRuntime): { loader: WasmLoader; finishLoading: () => void } {
+    let release = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const loader: WasmLoader = {
+      loadRuntime: () => gate.then(() => runtime.loader.loadRuntime()),
+      instantiate: (importObject) => runtime.loader.instantiate(importObject),
+    };
+    return {
+      loader,
+      finishLoading: () => {
+        release();
+      },
+    };
+  }
+
+  test.each(boundaryCalls)(
+    "%s: すでに abort 済みの signal なら、engine.wasm を読み込まず境界も呼ばずに request_aborted",
+    async (_fn, call) => {
+      const runtime = createFakeRuntime();
+      const controller = new AbortController();
+      controller.abort();
+      const result = await call(createWasmEngine(runtime.loader), controller.signal);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe(REQUEST_ABORTED_CODE);
+        expect(result.error.message).not.toBe("");
+      }
+      expect(runtime.counts.loadRuntime).toBe(0);
+      expect(runtime.calls).toHaveLength(0);
+    },
+  );
+
+  test("engine.wasm の読み込み中に abort されたら、読み込み後も境界関数を呼ばない", async () => {
+    const runtime = createFakeRuntime();
+    const { loader, finishLoading } = gatedLoader(runtime);
+    const controller = new AbortController();
+    const pending = createWasmEngine(loader).calcBulk(bulkRequest, controller.signal);
+    controller.abort();
+    finishLoading();
+    const result = await pending;
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe(REQUEST_ABORTED_CODE);
+    }
+    expect(runtime.calls).toHaveLength(0);
+  });
+
+  test.each(boundaryCalls)("%s: abort されていない signal では今までどおり計算する", async (fn, call) => {
+    const runtime = createFakeRuntime();
+    const controller = new AbortController();
+    const result = await call(createWasmEngine(runtime.loader), controller.signal);
+    expect(result.ok).toBe(true);
+    expect(runtime.calls.map((entry) => entry.fn)).toEqual([fn]);
+  });
+
+  test("計算が終わった後に abort しても、返した結果を取り消し扱いにしない(同期処理を取り消せるふりをしない)", async () => {
+    const runtime = createFakeRuntime();
+    const controller = new AbortController();
+    const engine = createWasmEngine(runtime.loader);
+    const pending = engine.calcBulk(bulkRequest, controller.signal);
+    const result = await pending;
+    controller.abort();
+    expect(result.ok).toBe(true);
+    expect(runtime.calls).toHaveLength(1);
+  });
+
+  test.each(boundaryCalls)("%s: signal を渡さなければ今までどおり", async (fn, call) => {
+    const runtime = createFakeRuntime();
+    const result = await call(createWasmEngine(runtime.loader));
+    expect(result.ok).toBe(true);
+    expect(runtime.calls.map((entry) => entry.fn)).toEqual([fn]);
   });
 });
