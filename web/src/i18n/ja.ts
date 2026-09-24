@@ -416,6 +416,15 @@ export const apiEngineText = {
   invalidPreset: "カスタムの防御側プリセット定義は API に送れません",
 } as const;
 
+/**
+ * 取り消した計算(REQUEST_ABORTED_CODE)の message(issue 113、ADR-0300 §11)。
+ * 画面は取り消しをエラーとして出さないので利用者には見えないが、封筒の message を空にしない
+ * (ログ・開発者ツールで理由が分かるようにする)。
+ */
+export const engineAbortText = {
+  aborted: "新しい入力で計算を取り消しました",
+} as const;
+
 /** ステータスの1文字表記(H・A・B・C・D・S)。逆算の SP 範囲・目安の名前の表示に使う(P4-4)。 */
 export const statLetterJa: Record<StatKey, string> = {
   hp: "H",

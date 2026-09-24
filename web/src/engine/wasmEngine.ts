@@ -4,15 +4,17 @@
 // 1回の読み込みを共有する。読み込みに失敗しても例外にせず、次の計算で読み込みをやり直せるようにする
 // (一時的な通信失敗からの回復。CLAUDE.md 絶対ルール5「計算はイベント保存に依存しない」と同じ精神)。
 
-import type {
-  BulkRequest,
-  BulkResult,
-  CalcEngine,
-  CalcRequest,
-  CalcResult,
-  EngineResult,
-  ReverseRequest,
-  ReverseResult,
+import { engineAbortText } from "../i18n/ja";
+import {
+  REQUEST_ABORTED_CODE,
+  type BulkRequest,
+  type BulkResult,
+  type CalcEngine,
+  type CalcRequest,
+  type CalcResult,
+  type EngineResult,
+  type ReverseRequest,
+  type ReverseResult,
 } from "./types";
 
 /** ブラウザ/Node の違いを注入する読み込み口(ADR-0300 §2)。 */
@@ -108,6 +110,24 @@ function invalidResponse<T>(message: string): EngineResult<T> {
   return { ok: false, error: { code: "invalid_response", message } };
 }
 
+/**
+ * signal が abort 済みか(issue 113)。関数越しにすることで、await をまたいだ後の再チェックを
+ * TypeScript の(誤った)narrowing で「あり得ない比較」と拒否されないようにする(signal.aborted は
+ * ミュータブルな getter で、直前のチェックの後も変わり得るため)。
+ */
+function isAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
+}
+
+/**
+ * request_aborted の失敗(画面が新しい入力で取り消した計算。issue 113、ADR-0300 §11)。
+ * WASM の境界関数は同期実行なので、始めた計算は取り消せない。「始める前」に signal が abort 済み
+ * だったときだけ返す(取り消せるふりをしない)。
+ */
+function aborted<T>(): EngineResult<T> {
+  return { ok: false, error: { code: REQUEST_ABORTED_CODE, message: engineAbortText.aborted } };
+}
+
 /** {result} / {error:{code,message}} の封筒を EngineResult に写す(ADR-0011 §5)。壊れた応答は例外にしない。 */
 function parseEnvelope<T>(responseJSON: string): EngineResult<T> {
   let parsed: unknown;
@@ -154,11 +174,26 @@ export function createWasmEngine(loader: WasmLoader): CalcEngine {
     return loading;
   }
 
-  async function callBoundary<T>(fn: BoundaryFunction, request: unknown): Promise<EngineResult<T>> {
+  /**
+   * signal(issue 113、ADR-0300 §11): 「始める前」にだけ検査する。境界関数はブラウザのメインスレッドで
+   * 同期実行するので、読み込み・境界呼び出しを始めた後は取り消せない(取り消せるふりをしない)。
+   * 読み込みは非同期なので、読み込みの前後の2箇所で確認する。
+   */
+  async function callBoundary<T>(
+    fn: BoundaryFunction,
+    request: unknown,
+    signal?: AbortSignal,
+  ): Promise<EngineResult<T>> {
+    if (isAborted(signal)) {
+      return aborted();
+    }
     try {
       await ensureLoaded();
     } catch (error) {
       return unavailable(error);
+    }
+    if (isAborted(signal)) {
+      return aborted();
     }
     const api = globalThis.pokecalc;
     if (api === undefined) {
@@ -174,8 +209,10 @@ export function createWasmEngine(loader: WasmLoader): CalcEngine {
   }
 
   return {
-    calc: (request: CalcRequest) => callBoundary<CalcResult>("calc", request),
-    calcBulk: (request: BulkRequest) => callBoundary<BulkResult>("calcBulk", request),
-    calcReverse: (request: ReverseRequest) => callBoundary<ReverseResult>("calcReverse", request),
+    calc: (request: CalcRequest, signal?: AbortSignal) => callBoundary<CalcResult>("calc", request, signal),
+    calcBulk: (request: BulkRequest, signal?: AbortSignal) =>
+      callBoundary<BulkResult>("calcBulk", request, signal),
+    calcReverse: (request: ReverseRequest, signal?: AbortSignal) =>
+      callBoundary<ReverseResult>("calcReverse", request, signal),
   };
 }

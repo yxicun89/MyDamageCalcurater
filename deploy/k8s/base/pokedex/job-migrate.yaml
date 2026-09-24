@@ -56,12 +56,31 @@ spec:
         - name: migrate
           image: pokecalc/pokedex-migrate:0.1.0
           imagePullPolicy: IfNotPresent
+          # ADR-0110: root(pokedex-dsn)は3ユーザーのプロビジョニング専用。実際のスキーマ
+          # migration(Up)は pokedex_migrator(pokedex-migrator-dsn)で行う。reader/importer
+          # の DSN はユーザー名・パスワードを知る(GRANT 対象を作る)ためだけに渡し、
+          # このコンテナ自身がその DSN で接続することはない。
           env:
-            - name: POKEDEX_DATABASE_DSN
+            - name: POKEDEX_PROVISION_DSN
               valueFrom:
                 secretKeyRef:
                   name: mysql-auth
                   key: pokedex-dsn
+            - name: POKEDEX_DATABASE_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-auth
+                  key: pokedex-migrator-dsn
+            - name: POKEDEX_READER_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-auth
+                  key: pokedex-reader-dsn
+            - name: POKEDEX_IMPORTER_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-auth
+                  key: pokedex-importer-dsn
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

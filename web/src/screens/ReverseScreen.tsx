@@ -6,7 +6,8 @@
 // (side attacker)では相手の learnset になる(ADR-0010 §2)。
 //
 // 観測は行ごとに単位(%/HP)を持ち、無効な行が1つでもあれば engine を呼ばない(古い候補も出さない)。
-// 空行は無視して送る観測から外す(ADR-0010 §R2)。デバウンスはしない(入力のたびに再計算する)。
+// 空行は無視して送る観測から外す(ADR-0010 §R2)。観測の数値テキストの編集だけ 200ms の trailing debounce
+// を挟み、確定した操作(選択・単位切り替え・行の追加や削除)は待たずに計算する(P4-18、issue 113、ADR-0300 §11)。
 
 import { useEffect, useId, useMemo, useRef, useState, type AnimationEvent, type ReactElement } from "react";
 import {
@@ -21,6 +22,7 @@ import { firstDamagingMove, learnsetMoves } from "../domain/moves";
 import {
   canAddObservation,
   defaultObservationUnit,
+  OBSERVATION_INPUT_DEBOUNCE_MS,
   parseObservation,
   type ObservationUnit,
 } from "../domain/observations";
@@ -175,6 +177,12 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   const [observations, setObservations] = useState<ObservationRow[]>(() => [
     newObservationRow(0, defaultObservationUnit("defender")),
   ]);
+  // P4-18(issue 113、ADR-0300 §11): 計算のトリガーに使う「計算用の鏡」。observations(即時側。表示・検証用)
+  // とは別に持ち、テキスト編集(debounced)だけ OBSERVATION_INPUT_DEBOUNCE_MS 遅れて追いつく。参照が
+  // observations と同じ間は「待機中でない」(debouncePending の判定に使う)。確定操作(immediate)は
+  // 両方を同時に更新するので、常に同じ参照になる。
+  const [requestRows, setRequestRows] = useState<ObservationRow[]>(observations);
+  const observationDebounceTimerRef = useRef<number | null>(null);
   const [completed, setCompleted] = useState<CompletedReverse | null>(null);
   // 観測を2件以上入れて届いた結果に「絞り込み」の演出を出す(design.md「画面: 逆算」)。
   // lastCompleted は直近に判定した completed(react-hooks/set-state-in-effect を避けるため、
@@ -227,15 +235,70 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     [parsedObservations],
   );
 
+  // P4-18(issue 113): calcReverse を呼ぶための検証(requestRows 由来)。表示・aria-invalid の検証
+  // (上の parsedObservations/hasInvalidObservation/validObservations)とは別に持つ: 打っている途中の
+  // 値は表示にはすぐ反映するが、計算はデバウンス後の requestRows が追いつくまで始めない。
+  const requestParsedObservations = useMemo(
+    () => requestRows.map((row) => parseObservation(row.unit, row.text)),
+    [requestRows],
+  );
+  const requestHasInvalidObservation = requestParsedObservations.some(
+    (parsed) => parsed.status === "invalid",
+  );
+  const requestValidObservations = useMemo(
+    () =>
+      requestParsedObservations.flatMap((parsed) => (parsed.status === "valid" ? [parsed.observation] : [])),
+    [requestParsedObservations],
+  );
+  // observations と requestRows の参照が違う間は、待機中のデバウンスがある(打ち終わりを待っている)。
+  const debouncePending = observations !== requestRows;
+
+  /**
+   * 観測(observations)を書き換える唯一の通り道(P4-18、issue 113、ADR-0300 §11)。表示(observations)は
+   * 常に即座に更新する。計算のトリガー(requestRows)は timing で分ける:
+   *   - "immediate"(単位切り替え・行の追加/削除・対象側切り替え): 待機中のタイマーを解除し、即座に追いつかせる。
+   *   - "debounced"(テキスト編集): 待機中のタイマーを解除し直し、OBSERVATION_INPUT_DEBOUNCE_MS 後に追いつかせる。
+   */
+  function replaceObservations(next: ObservationRow[], timing: "debounced" | "immediate"): void {
+    setObservations(next);
+    if (observationDebounceTimerRef.current !== null) {
+      window.clearTimeout(observationDebounceTimerRef.current);
+      observationDebounceTimerRef.current = null;
+    }
+    if (timing === "immediate") {
+      setRequestRows(next);
+      return;
+    }
+    observationDebounceTimerRef.current = window.setTimeout(() => {
+      observationDebounceTimerRef.current = null;
+      setRequestRows(next);
+    }, OBSERVATION_INPUT_DEBOUNCE_MS);
+  }
+
+  /**
+   * 観測に触らない確定操作(種族・持ち物・技・プリセットの選択)の前に呼ぶ。待機中のデバウンスがあれば、
+   * タイマーを解除して requestRows を最新の observations に合わせる(取りこぼさず、この操作と一緒に
+   * 1回だけ計算する)。待機中のタイマーが無ければ何もしない(requestRows はすでに observations と同じ)。
+   */
+  function flushObservationDebounce(): void {
+    if (observationDebounceTimerRef.current === null) {
+      return;
+    }
+    window.clearTimeout(observationDebounceTimerRef.current);
+    observationDebounceTimerRef.current = null;
+    setRequestRows(observations);
+  }
+
   function selectSide(nextSide: ReverseSide): void {
     setSide(nextSide);
     // 対象側が変わると、観測したダメージの意味(与えた/受けた)が変わるので入力をやり直す(空の1行に戻す)。
-    setObservations([newObservationRow(nextRowId(), defaultObservationUnit(nextSide))]);
+    replaceObservations([newObservationRow(nextRowId(), defaultObservationUnit(nextSide))], "immediate");
     const sourceSpecies = nextSide === "defender" ? mySpecies : theirsSpecies;
     setMoveId((prev) => resolveMoveId(sourceSpecies, master.moves, prev));
   }
 
   function selectMySpecies(key: string): void {
+    flushObservationDebounce();
     setMySpeciesKey(key);
     if (side === "defender") {
       const species = speciesFor(master.species, key);
@@ -244,6 +307,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   }
 
   function selectTheirsSpecies(key: string): void {
+    flushObservationDebounce();
     setTheirsSpeciesKey(key);
     if (side === "attacker") {
       const species = speciesFor(master.species, key);
@@ -257,6 +321,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
    * CalcScreen.tsx の handleAttackerResolved と同じ考え方)。
    */
   function handleMineResolved(resolution: MasterSpeciesResolution): void {
+    flushObservationDebounce();
     registerSpeciesResolution(resolution);
     setMySpeciesKey(resolution.species.key);
     if (side === "defender") {
@@ -266,6 +331,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
 
   /** P4-16b(ADR-0304 A-10): 検索で相手の種族が解決したとき。 */
   function handleTheirsResolved(resolution: MasterSpeciesResolution): void {
+    flushObservationDebounce();
     registerSpeciesResolution(resolution);
     setTheirsSpeciesKey(resolution.species.key);
     if (side === "attacker") {
@@ -273,40 +339,72 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     }
   }
 
+  /** 自分の持ち物を選ぶ(確定操作。issue 113)。 */
+  function selectMyItem(itemId: string): void {
+    flushObservationDebounce();
+    setMyItemId(itemId);
+  }
+
+  /** 技を選ぶ(確定操作。issue 113)。 */
+  function selectMove(nextMoveId: string): void {
+    flushObservationDebounce();
+    setMoveId(nextMoveId);
+  }
+
+  /** 自分の調整プリセットを選ぶ(確定操作。issue 113)。 */
+  function selectAttackerPreset(key: AttackerPresetKey): void {
+    flushObservationDebounce();
+    setAttackerPresetKey(key);
+  }
+
   function addObservation(): void {
     if (!canAddObservation(observations.length)) {
       return;
     }
     const row = newObservationRow(nextRowId(), defaultObservationUnit(side));
-    setObservations((prev) => [...prev, row]);
+    replaceObservations([...observations, row], "immediate");
   }
 
   function removeObservation(index: number): void {
-    setObservations((prev) => prev.filter((_row, rowIndex) => rowIndex !== index));
+    replaceObservations(
+      observations.filter((_row, rowIndex) => rowIndex !== index),
+      "immediate",
+    );
   }
 
   function updateObservationText(index: number, text: string): void {
-    setObservations((prev) => prev.map((row, rowIndex) => (rowIndex === index ? { ...row, text } : row)));
+    replaceObservations(
+      observations.map((row, rowIndex) => (rowIndex === index ? { ...row, text } : row)),
+      "debounced",
+    );
   }
 
   function updateObservationUnit(index: number, unit: ObservationUnit): void {
-    setObservations((prev) => prev.map((row, rowIndex) => (rowIndex === index ? { ...row, unit } : row)));
+    replaceObservations(
+      observations.map((row, rowIndex) => (rowIndex === index ? { ...row, unit } : row)),
+      "immediate",
+    );
   }
 
   // 自分・相手・技(ダメージ技)・有効な観測が1件以上揃ったら calcReverse を呼ぶ(ADR-0300 §2・§7)。
   // setState は応答が届いたとき(.then のコールバック)だけで行う(react-hooks/set-state-in-effect)。
+  // トリガーは requestRows 由来の値(requestHasInvalidObservation・requestValidObservations)を使う
+  // (P4-18、issue 113): 打っている途中の値では始めず、デバウンス後・確定操作の後に始める。
+  // AbortController は effect ごとに作り、cleanup(依存が変わった・アンマウント)で abort する
+  // (古い計算に「もう要らない」を伝える。ADR-0300 §11)。
   useEffect(() => {
     if (
       mySpecies === null ||
       theirsSpecies === null ||
       move === null ||
       move.category === "status" ||
-      hasInvalidObservation ||
-      validObservations.length === 0
+      requestHasInvalidObservation ||
+      requestValidObservations.length === 0
     ) {
       return;
     }
     let cancelled = false;
+    const controller = new AbortController();
     const { sp, nature } =
       side === "defender"
         ? resolveAttackerPreset(attackerPresetKey, move.category)
@@ -324,9 +422,9 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
       move,
       typeChart: master.typeChart,
       itemCandidates: itemCandidatesResult.candidates,
-      observations: validObservations,
+      observations: requestValidObservations,
     });
-    void engine.calcReverse(request).then((result) => {
+    void engine.calcReverse(request, controller.signal).then((result) => {
       if (!cancelled) {
         setCompleted({
           side,
@@ -335,13 +433,14 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
           move,
           myItem,
           attackerPresetKey,
-          observations: validObservations,
+          observations: requestValidObservations,
           result,
         });
       }
     });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [
     engine,
@@ -353,11 +452,22 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     move,
     myItem,
     attackerPresetKey,
-    hasInvalidObservation,
-    validObservations,
+    requestHasInvalidObservation,
+    requestValidObservations,
     abilitiesFor,
     itemCandidatesResult,
   ]);
+
+  // 画面が消えるときは、待機中の観測デバウンスのタイマーを片付ける(回しっぱなしにしない。
+  // 進行中の計算の abort は上の useEffect の cleanup が担う。issue 113)。
+  useEffect(() => {
+    return () => {
+      if (observationDebounceTimerRef.current !== null) {
+        window.clearTimeout(observationDebounceTimerRef.current);
+        observationDebounceTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // 「絞り込み」の演出(design.md「画面: 逆算」)。新しい成功結果が届いたとき(completed の参照が
   // 変わったとき)だけ判定する。観測が1件だけの結果や、観測を減らして1件に戻った結果では付けない。
@@ -403,6 +513,9 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   } else if (validObservations.length === 0) {
     outcome = { status: "idle" };
   } else if (
+    // P4-18(issue 113): デバウンス待ち(debouncePending)の間は、まだ requestRows に届いていない
+    // 入力があるので「計算中」を出す(表示は待たないが、その入力に対する結果はまだ無い)。
+    debouncePending ||
     completed === null ||
     completed.side !== side ||
     completed.mySpecies !== mySpecies ||
@@ -410,7 +523,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     completed.move !== move ||
     completed.myItem !== myItem ||
     completed.attackerPresetKey !== attackerPresetKey ||
-    completed.observations !== validObservations
+    completed.observations !== requestValidObservations
   ) {
     outcome = { status: "loading" };
   } else {
@@ -454,7 +567,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
               aria-label={reverseScreenText.myItemLabel}
               value={myItemId}
               onChange={(event) => {
-                setMyItemId(event.target.value);
+                selectMyItem(event.target.value);
               }}
             >
               <option value="">{calcScreenText.noItemOption}</option>
@@ -469,7 +582,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
             <MyPresetSelector
               category={move?.category ?? DEFAULT_MOVE_CATEGORY}
               value={attackerPresetKey}
-              onChange={setAttackerPresetKey}
+              onChange={selectAttackerPreset}
             />
           )}
         </section>
@@ -500,7 +613,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
         </section>
       </div>
 
-      <MoveSelect moves={moveOptions} value={moveId} onChange={setMoveId} disabled={!capabilities.moves} />
+      <MoveSelect moves={moveOptions} value={moveId} onChange={selectMove} disabled={!capabilities.moves} />
       {!capabilities.moves && <p className="reverse-screen__notice">{masterOnlineText.movesUnavailable}</p>}
       {!capabilities.effects && (
         <p className="reverse-screen__notice">{masterOnlineText.itemCandidatesUnavailable}</p>

@@ -1203,6 +1203,26 @@ Reason: APIレーンの越境実装(3往復critic PASS済み)に対する独立�
 (命名・エラー変換)と食い違いがないかを見るのが依頼内容だった。
 Impact: 追加の修正なし。判定レーンはJD4に着手してよい(APIレーン側で既に確認済み)。
 
+## 2026-09-24: issue #104(pokedexのDB資格情報を用途別の最小権限へ分離)を実装(データレーン)
+Decision: server(検索API)・importer(CronJob)・migrate(Job)がすべて同じroot相当の資格情報
+(Secret `mysql-auth`/`pokedex-dsn`)を使っていた実リスクを解消した。`pokedex_reader`(SELECT専用)・
+`pokedex_importer`(SELECT/INSERT/UPDATE/DELETE)・`pokedex_migrator`(+DDL)の3ロールを作り、
+各Podに必要最小限のDSNだけを渡す(ADR-0110)。`services/pokedex/db.Provision`が冪等・
+ローテーション対応で3ユーザーを作成・GRANT(接続前にパスワード・ユーザー名・DB名・権限を
+正規表現で検証し、root自身を対象にする入力は`ErrInvalidRoleGrant`で拒否)。`cmd/migrate up`は
+`POKEDEX_PROVISION_DSN`があるときだけプロビジョニングしてから実際のmigrationを行う
+(無ければ後方互換で直接migration。ローカルmake dev/make test-dbは対象外)。`scripts/up.sh`は
+新規クラスタで4DSNを一度に作成、既存クラスタは無いキーだけ`kubectl patch`で追記(値を
+argv/ログに出さない設計)。critic PASS(1往復。軽微指摘のうち3件を反映。詳細はADR-0110追記)。
+**実クラスタ(k3d-pokecalc)で`make up`を実行し、`SHOW GRANTS`で3ユーザーの権限がADR決定1と
+過不足なく一致することを確認済み**。既存クラスタからの無停止移行(Secretへのキー追記のみ、
+DB・PVC再作成不要)も実地確認済み。
+Reason: issue #104(Codexレビュー)。公開HTTP Podが侵害されてもDDL・ユーザー管理へ直結しないように
+するため。`make test`/`test-db`/`lint`/`k8s-render`すべてgreen。
+Impact: cloud overlay実装時は同じ4つのDSNキー名(pokedex-dsn〈provision〉・
+pokedex-reader-dsn・pokedex-importer-dsn・pokedex-migrator-dsn)をSecretの契約として踏襲することを
+推奨として記録(実装はP7系のクラウド移行タスクで扱う)。他レーンへの影響なし。
+
 ## 2026-09-24: issue #99(ライトテーマの danger コントラスト不足)の Web レーン担当分が完了。iOS レーンへ依頼
 Decision: danger のライト値を `#E5484D` → `#CD1D23` に変更した(色相・彩度は変えず明度だけ下げる。WCAG 2.2
 SC 1.4.3 の通常文字基準4.5:1を、bg.base単体(5.07:1)・bg.glassをbg.baseに重ねた合成色(5.40:1)の両方で満たす。
@@ -1249,3 +1269,84 @@ Impact: `docs/adr/0705-judge-jd5-web-screen.md`(新規)、`web/src/judge/`(生�
 `web/src/i18n/ja.ts`(`appText.judgeTabLabel`・`judgeClientText`・`judgeErrorText`・`judgeScreenText` を追記)、
 `web/src/app/routes.test.ts`(judge タブの登録のケース。登録前なので**意図的に失敗する**)。
 実装(`judgeClient.ts` / `JudgeScreen.tsx` の中身と画面登録の 3 ファイル)は次の implementer が入れる。
+
+## 2026-09-24: issue #73(OpenAPIとengineの防御プリセット集合を同期検査する)を修正(API レーン)
+Decision: `api/openapi.yaml` の `DefenderPreset` enum と `engine.DefenderPresetCatalog()`(`engine/bulk.go`)は
+1対1対応が前提(`services/calc/internal/httpapi/convert.go` の `presetKeysFrom` は変換テーブルを持たず、契約の
+列挙値をそのまま `engine.PresetKey` に型変換するだけ)だが、これを固定する回帰テストが無かった
+(実際のズレは無かった。issue #73 が問題にしていたのは「テストの欠落」自体)。
+`services/calc/internal/httpapi/preset_sync_test.go`(`TestDefenderPresetEnumMatchesEngineCatalog`)を追加。
+同パッケージの既存 `vocabulary_test.go`(`wasmapi.Code*` の一覧を手で列挙し、コメントで「新しい code を足したら
+ここにも足すこと」と注意喚起する流儀)は**意図的に踏襲しなかった**: 手で列挙した一覧は自分自身の陳腐化
+(足し忘れ)を検出できないため、契約(埋め込まれた spec。`contract_test.go` の `loadContract` を再利用)から
+`DefenderPreset` の enum を直接読み、`engine.DefenderPresetCatalog()` のキー集合・件数・順序
+(契約の description が「耐久が上がる順」と明記。ADR-0009 §1 は8件・順序も規定)と比較する方式にした。
+`engine/bulk.go`・`api/openapi.yaml` は無変更(新規 ADR も不要。ADR-0009 §1 が既に決定済みの内容を機械検査で
+固定しただけ)。
+critic 1回目 FAIL: 件数不一致を `if len(a) == len(b) { 順序比較 }` で黙って skip していたため、集合としては
+一致するが列としては崩れている変異(例: `PresetHP` の行を2重にして9件にする。集合は8件のopenapi enumと一致
+してしまう)を見逃す穴があった。修正: 件数不一致を明示的な失敗にしてから列を比較するよう変更し、重複変異・
+順序入れ替え変異の両方を実際に検知することを確認(確認後 revert)。2回目相当で PASS。
+Reason: issue #73。片方だけにプリセットを追加・削除しても通常の生成・ユニットテストでは同期漏れを検出できず、
+「APIが受け付けるがengineが解決できない」「engineのプリセットをAPIから指定できない」状態を作り得た。
+Impact: `docs/plan.md` の改善要望に issue #73 の行を追加。データレーンへの追加対応は無し(engine は無変更、
+実バグではなく回帰テストの欠落だった)。issue #73 はこの PR のマージでクローズしてよい。
+
+## 2026-09-24: issue #104(pokedexのDB資格情報を用途別の最小権限へ分離)を main へ統合(データレーン)
+Decision: PR #176(`feat/claude-p1-engine` → `main`)をマージした。`pokedex_reader`/
+`pokedex_importer`/`pokedex_migrator`の3ロール分離(ADR-0110)。critic PASS(1往復)。
+Reason: 独立レビュー PASS・`make test`(911件)/`test-db`/`lint`/`k8s-render`すべてgreen。
+実クラスタでSHOW GRANTSにより権限確認済み、既存クラスタからの無停止移行も実地確認済み。
+Impact: 他レーンへの影響なし。cloud overlay実装時はSecretのDSNキー名を契約として踏襲する
+ことを推奨(ADR-0110決定8)。
+
+## 2026-09-24: issue #109(pokedex HTTPサーバーにタイムアウトとgraceful shutdownを追加)を実装(データレーン)
+Decision: pokedex-svcだけがcalc/gateway/balance/judgeの運用契約(明示的なhttp.Server・タイムアウト・
+signal.NotifyContextによるgraceful shutdown)から外れていたリスクを解消した。services/balanceと
+同じ値(readHeaderTimeout=5s・readTimeout=10s・writeTimeout=15s・idleTimeout=60s・
+maxHeaderBytes=16KiB・shutdownTimeout=10s)で`newHTTPServer`/`serve`/`runServe`の3層に分離
+(ADR-0111)。既存の`run(args) int`(サブコマンド振り分け)との名前衝突を`runServe`への改名と
+`runServeCmd`の新設で解消(calc-svcにはこの衝突が無いため見落としやすい点。spec-writerが発見)。
+`deployment.yaml`に`terminationGracePeriodSeconds: 30`を追加し、main.goの`shutdownTimeout`定数
+より長いことをハードコードせず不等式でmanifestテストに固定。critic PASS(1往復。指摘なし)。
+**実クラスタ(k3d-pokecalc)でpokedexを再ビルド・再デプロイし、terminationGracePeriodSecondsが
+実際に30になっていること・api-smokeが正常応答することを確認済み**。
+Reason: issue #109(Codexレビュー)。低速・不完全な接続がリソースを無期限に保持しうる可用性リスクと、
+Kubernetesのrollout・node drainで処理中リクエストが即座に打ち切られる問題を解消するため。
+`make test`(953件)/`lint`/`build`/`k8s-render`すべてgreen。`-race`・`-count=3`でも安定確認済み。
+Impact: HTTPパス・公開OpenAPI・DBクエリ・マスタ内容は無変更。readiness/liveness probeの改善は
+issue #107の範囲(今回は対象外)。他レーンへの影響なし。
+
+## 2026-09-24: issue #109(pokedex HTTPタイムアウト・graceful shutdown)を main へ統合(データレーン)
+Decision: PR #178(`feat/claude-p1-engine` → `main`)をマージした。`newHTTPServer`/`serve`/
+`runServe`の3層分離(ADR-0111)。critic PASS(1往復、指摘なし)。
+Reason: 独立レビュー PASS・`make test`(953件)/`lint`/`build`/`k8s-render`すべてgreen。
+実クラスタでterminationGracePeriodSeconds=30・api-smoke正常応答を確認済み。
+Impact: 他レーンへの影響なし。readiness/livenessの改善はissue #107の範囲(今回は対象外)。
+
+## 2026-09-24: issue #112(pokedexのDB接続プールに上限と寿命を設定)を実装(データレーン)
+Decision: `services/pokedex/cmd/pokedex/main.go`が`sql.Open`後に接続プールを一切調整せず
+(Go標準の既定はMaxOpenConns無制限)、突発的な同時要求がそのままMySQL接続数に転嫁されていた
+リスクを解消した。4環境変数(POKEDEX_DB_MAX_OPEN_CONNS=10・POKEDEX_DB_MAX_IDLE_CONNS=5・
+POKEDEX_DB_CONN_MAX_IDLE_TIME=5m・POKEDEX_DB_CONN_MAX_LIFETIME=30m)を追加し、
+services/pokedex/db.OpenPool(プール生成を1か所に集約。P7-1のメトリクス化に備える)経由で
+適用(ADR-0112)。検証はsql.Openより前、エラー文にDSNを含めない。exportサブコマンドは
+ForExport()でMaxOpenConns=1に上書き(逐次処理の実態に合わせる。無制限の別経路を残さない)。
+deployment.yamlに4環境変数を既定値のまま明示し、runbookにreplica数を増やすときの接続予算の
+注記を追加。critic PASS(1往復。軽微指摘1件〈idle==openの境界値テスト〉を反映)。
+**実クラスタ(k3d-pokecalc)でpokedexを再ビルド・再デプロイし、4環境変数が実際に設定されていること・
+api-smokeが正常応答することを確認済み**。
+Reason: issue #112(Codexレビュー)。突発的な同時要求がDB側の接続枠を占有し、importer・migrate・
+運用接続まで巻き込んで失敗させうるリスクを防ぐため。`make test`(953件)/`test-db`/`lint`/`build`/
+`k8s-render`すべてgreen。
+Impact: これでデータレーン主担当のCodexレビューissue(#104・#106・#109・#112)はすべて完了。
+P7-1(メトリクス)実装時はこのプールのStats()を観測に接続できる。他レーンへの影響なし。
+
+## 2026-09-24: issue #112(pokedexのDB接続プールに上限と寿命を設定)を main へ統合(データレーン)
+Decision: PR #180(`feat/claude-p1-engine` → `main`)をマージした。`services/pokedex/db.OpenPool`/
+`PoolConfig`/`ForExport()`(ADR-0112)。critic PASS(1往復。軽微指摘1件〈idle==openの境界値テスト〉は
+`TestLoadConfigPoolAllowsIdleEqualToOpen`を追加して反映済み)。
+Reason: 独立レビュー PASS・`make test`(953件)/`test-db`(実MySQL)/`lint`/`build`/`k8s-render`すべて
+green。実クラスタで4環境変数の設定・api-smoke正常応答を確認済み。
+Impact: これでデータレーン主担当のCodexレビューissue(#104・#106・#109・#112)はすべてmain統合済み。
+他レーンへの影響なし。

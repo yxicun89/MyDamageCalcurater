@@ -61,6 +61,9 @@ API レーンの P3-1(ADR-0200)で `api/openapi.yaml` が P1-12 以降の engine
 - **WASM の遅延ロード(ADR-0011 §11 の宿題)**: オンラインのときは WASM を読まない。オフラインで最初に計算したときだけ読む(ADR-0300 §2 のまま)。
   オンラインで API に届かないとき、自動でオフラインに切り替えることはしない(どちらで計算したかが分からなくなるため)。
   エラー(`engine_unavailable`)を出し、切り替えは利用者が選ぶ。
+- **取り消した計算は `engine_unavailable` にしない**(2026-09-24 追記。P4-18、issue 113、ADR-0300 §11)。
+  画面が新しい入力で先行の要求を `AbortSignal` で取り消したときは、`fetch` の失敗を通信不能と同じ扱いにせず、
+  `request_aborted`(`web/src/engine/types.ts` の `REQUEST_ABORTED_CODE`)を返す。自動フォールバックをしない方針は変えない。
 
 ### 5. 架空の例データの ID を契約の形に合わせる
 

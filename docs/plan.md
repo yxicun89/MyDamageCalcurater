@@ -136,20 +136,27 @@
   2件追加(907件)→再確認予定
 - [ ] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案・未回答)が入ったら
   `capabilities.moves` を true にして技を復活させる
-- [ ] P4-18 Codex コードレビューの issue(Web レーン主担当。タイプバランスレーンから 2026-09-23 に連絡・`gh issue view <番号>`)。
-  優先: **#99(bug, accessibility)ライトテーマのエラー文字色がコントラスト基準未達 — Web 分は完了(2026-09-24。
-  critic PASS)**: danger のライト値を `#E5484D`→`#CD1D23`(WCAG 2.2 SC 1.4.3 の4.5:1を bg.base・bg.glass 合成後
-  の両方で満たす。色相・彩度は変えず明度だけ下げた)。`docs/design.md`「デザイントークン」に理由・数値を記録、
-  `web/src/test/colorContrast.ts`(WCAG相対輝度・コントラスト比の計算)・`web/src/styles/contrast.test.ts`
-  (ライト・ダーク×bg.base・bg.glass合成の4組を検査)を新規追加。**iOS 側(`PokeCalcDesign.swift`・
-  `DesignTokenTests.swift`)はまだ旧値のまま**で、iOSレーンへ DECISIONS.md で依頼済み。iOS 側が終わるまで
-  issue #99 自体はクローズしない。
-  #113(improvement)逆算の数値入力で古い計算要求を抑止・キャンセル(200ms debounce・AbortSignal。iOS・API と連携)。
-  次点: #98(bug)モバイル幅で計算・逆算画面が横に溢れる、#67(bug)2xx の契約外 JSON で API クライアントが例外を投げる(防御的処理)。
+- [x] P4-18(Web 分。Codex コードレビューの issue。タイプバランスレーンから 2026-09-23 に連絡・
+  `gh issue view <番号>`)。**#99(bug, accessibility)ライトテーマのエラー文字色がコントラスト基準未達 —
+  Web 分・iOS 分とも完了、issue クローズ済み**: danger のライト値を `#E5484D`→`#CD1D23`(WCAG 2.2 SC 1.4.3
+  の4.5:1を bg.base・bg.glass 合成後の両方で満たす。色相・彩度は変えず明度だけ下げた)。
+  `web/src/test/colorContrast.ts`・`web/src/styles/contrast.test.ts` を新規追加。critic PASS(独立実装での
+  検算・変異テストで確認)。iOS 側も `PokeCalcDesign.swift`・`ColorContrast.swift`・`DangerContrastTests.swift`
+  で対応済み(commit `23e5c5e`)。
+  **#113(improvement)逆算の数値入力で古い計算要求を抑止・キャンセル — Web 分・iOS 分とも完了(critic PASS。
+  ADR-0300 §11)**: 観測のテキスト編集のみ200msのtrailing debounce(確定操作は待たない)、`CalcEngine` に
+  任意引数 `signal?: AbortSignal` を追加(API実装はfetchへ配線、WASM実装は開始前にのみ検査)、取り消しを
+  `REQUEST_ABORTED_CODE` で `engine_unavailable` と区別。既存929件は無変更・新規26件追加(953件)。
+  iOS 側も `LatestTaskRunner.swift`・`CalcInput.swift` で対応済み(commit `492b6d3`)。**issue 自体はまだ
+  open**(API レーンの「クライアントのcancel伝播」連携分が残っているか未確認)。
+  残る軽微(次に触るときに拾う。ブロッカーではない): 種族・技・プリセット選択でも確定操作として即座に
+  flush することの回帰テストが無い(実装は正しいがテスト未カバー。`ReverseScreen.debounce.test.tsx`)。
   連携(他レーン主担当。Web は連携のみ): #71(データ+Web+iOS 攻撃側プリセット単一化)・#72(API+Web ルート make e2e を Playwright へ)・
   #78(API+Web 特性の無効・吸収の境界反映)・#110(Web の担当分は P4-19 へ分離。DECISIONS.md 2026-09-23 参照)・
   #103(主担当 API・データ。M2保存データの保持期間。ユーザー決定 2026-09-23 で needs-decision は解消済み。
   DECISIONS.md参照。Web は連携のみで主担当ではない)
+- [ ] P4-21 Codex コードレビューの次点 issue(P4-18 で優先分が完了したため分離): #98(bug)モバイル幅で
+  計算・逆算画面が横に溢れる、#67(bug)2xx の契約外 JSON で API クライアントが例外を投げる(防御的処理)
 - [x] P4-19 issue #110(セキュリティ。ADR-0300 §10。critic PASS: 境界値の網羅探索〈約1.2万ケース〉と変異テスト5件で
   `itemVariants`/`itemCandidates` が常に64以下・`observations` が17件目を作れないことを確認済み)。
   `domain/requestLimits.ts` に上限3定数(`api/openapi.yaml` の `maxItems` との同期をテストで検査)と
@@ -365,7 +372,11 @@
 - [x] issue #110 のデータレーン担当分: `engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ件数・範囲の上限(presets 8・itemVariants 64・itemCandidates 64・observations 16・maxCandidates 0..128)を追加(ADR-0108)。HTTP を経由しない直接呼び出し・WASM でも計算量を増幅できないようにした。wasmapi は DTO 変換より前に同じ検査を重ねて置き、複数の違反が重なっても HTTP と同じ `invalid_input` が先に出るようにした(parity)。`MaxCandidates` の負の値は、従来「無制限」扱いだったのを ADR-0208 の契約(`minimum: 0`)に合わせて拒否するよう変更(既存テストの期待値を更新。理由は ADR-0108 決定4)。critic PASS(1往復)。Web・iOS の追従(観測16件でUI無効化・持ち物候補64件超の扱い)は ADR-0208 §4 のまま未着手
 - [x] issue #148(クラウド公開前のアクセス境界・認証方針。ユーザー決定「私設サービスを維持する」)の API レーン担当分: `deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定(ADR-0210)。TLS 終端は gateway/クラスタの Ingress では行わず Tailscale(`tailscale serve`)に任せる方針を決定。端末IDが認証として機能しないこと・CORSが到達制御でないことの回帰テストを追加(`TestDeviceIDIsNotAuthentication`・`TestCORSIsNotAccessControl`・`TestContractHasNoAuthentication`)。`base`のgateway Ingress本体は local(k3d)専用として残し、先頭コメントで明記。ADR-0209 §1(クラウド公開へ進む判断)は「公開しない」で確定した旨を追記。critic PASS。運用(tailnet ACL・失効手順のrunbook)・Web/iOS(接続先をtailnet名に)への依頼はDECISIONS.mdに既定案付きで記録(issue はレーンの完了までクローズしない)
 - [x] issue #106(データ・運用レーン。Codex レビュー)手動 import Job(`make import-k8s`)と定期 CronJob が同時実行できる問題: `concurrencyPolicy: Forbid` は同じ CronJob が作る Job 同士にしか効かず、`kubectl create job --from=cronjob/...` が作る独立した手動 Job とは排他しないため、共有 PVC(`pokedex-import-cache`)上の取得キャッシュ・DB 投入が競合しうる実バグだった。`tools/importer/cronjob.sh` に busybox の `flock`(非ブロッキング)を `fetch.mjs` 呼び出しより前に追加し、取得〜投入の全工程をアプリ側で排他(ADR-0109)。ロック取得失敗は既存の終了コード規約どおり終了コード1(再試行可能)にし、`cronjob-import.yaml`(podFailurePolicy・concurrencyPolicy とも既存のまま)・`services/pokedex/cmd/import`(Go CLI)・Makefile は無変更。2プロセス同時起動の統合テスト(`cronjob_lock_test.go`)を追加し、Docker(Linux・busybox flock)で実際にロックが機能することを確認済み(macOS はローカルに flock が無いため自動 Skip)。critic PASS。k3d での手動確認手順は docs/runbooks/data.md §6 に追記し、2026-09-23 に実クラスタで実施: 2つの手動 Job を同時作成し、片方が「別の import が実行中」のログで即座に終了コード1、`backoffLimit` の再試行で成功したことを確認(秘密は出力に含まれない)
+- [x] issue #104(データ・運用レーン。Codex レビュー)pokedex の DB 資格情報を用途別の最小権限へ分離する: server(検索API)・importer(CronJob)・migrate(Job)がすべて root 相当の同じ資格情報(Secret `mysql-auth`/`pokedex-dsn`)を使っており、公開 HTTP Pod が侵害されると DDL・ユーザー管理まで可能だった実リスクだった。`pokedex_reader`(SELECT専用)・`pokedex_importer`(SELECT/INSERT/UPDATE/DELETE)・`pokedex_migrator`(+ CREATE/ALTER/DROP/INDEX/REFERENCES)の3ロールを作り、server/importer/migrateそれぞれに最小限のDSNだけを渡す(ADR-0110)。`services/pokedex/db.Provision`が冪等・ローテーション対応で3ユーザーを作成・GRANT(接続前に正規表現でパスワード・ユーザー名・DB名・権限を検証し、root自身を対象にする入力は拒否)。`services/pokedex/cmd/migrate`の`up`は`POKEDEX_PROVISION_DSN`があるときだけプロビジョニングしてから実際のmigrationを行う(無ければ後方互換で直接migration。ローカルmake dev/make test-dbは対象外)。`scripts/up.sh`は新規クラスタで4DSNを一度に作成、既存クラスタは無いキーだけ`kubectl patch`で追記(値をargv/ログに出さない設計に修正)。critic PASS(1往復。指摘は軽微5件、うちroot保護の抜け穴を塞ぐテスト追加・check-publishable.shの過剰な許可パターン修正・up.shのエラー握り潰し修正の3件を反映)。**実クラスタ(k3d)で実際に`make up`を実行し、`SHOW GRANTS`で3ユーザーの権限がADR決定1と過不足なく一致することを確認済み**。既存クラスタからの無停止移行(Secretへのキー追記のみ)も実地確認済み
+- [x] issue #109(データ・運用レーン。Codex レビュー)pokedex HTTPサーバーにタイムアウトとgraceful shutdownを追加する: `services/pokedex/cmd/pokedex/main.go`の`runServe`が`http.ListenAndServe`を直接呼ぶだけでタイムアウト(ReadHeaderTimeout等)を一切設定せず、SIGINT/SIGTERMも購読しないため、遅い・不完全な接続がリソースを無期限に保持し、Kubernetesのrollout・node drainで処理中リクエストが即座に打ち切られていた実リスクだった(calc/gateway/balance/judgeは既に対応済みでpokedexだけが欠けていた)。`services/balance`と同じ値(readHeaderTimeout=5s・readTimeout=10s・writeTimeout=15s・idleTimeout=60s・maxHeaderBytes=16KiB・shutdownTimeout=10s)で`newHTTPServer`/`serve`/`runServe`の3層に分離(ADR-0111)。既存の`run(args) int`(サブコマンド振り分け)との名前衝突を`runServe`への改名と`runServeCmd`の新設で解消。`deployment.yaml`に`terminationGracePeriodSeconds: 30`を追加し、main.goの`shutdownTimeout`定数より長いことをハードコードせず不等式でmanifestテストに固定。critic PASS(1往復。指摘なし)。ヘッダ未完了接続の切断(生TCP接続で実測)・shutdown中のin-flightリクエスト完了・DSN非露出をすべてテストで固定し、`-race`・`-count=3`でも安定を確認。**実クラスタ(k3d)でpokedexを再ビルド・再デプロイし、`terminationGracePeriodSeconds`が実際に30になっていること・`api-smoke`が正常応答することを確認済み**
+- [x] issue #112(データ・運用レーン。Codex レビュー)pokedexのDB接続プールに上限と寿命を設定する: `services/pokedex/cmd/pokedex/main.go`が`sql.Open`後に`SetMaxOpenConns`等を一度も呼ばず(Go標準の既定は無制限)、突発的な同時要求がそのままMySQL接続数に転嫁され、1 Podでも接続枠を占有しうる実リスクだった。4環境変数(`POKEDEX_DB_MAX_OPEN_CONNS`=10・`POKEDEX_DB_MAX_IDLE_CONNS`=5・`POKEDEX_DB_CONN_MAX_IDLE_TIME`=5m・`POKEDEX_DB_CONN_MAX_LIFETIME`=30m)を追加し、`services/pokedex/db.OpenPool`(プール生成を1か所に集約。P7-1のメトリクス化に備える)経由で適用(ADR-0112)。検証(open/idleは正の整数・idle<=open・durationは正値)は`sql.Open`より前、エラー文にDSNを含めない。`export`サブコマンドは`(PoolConfig).ForExport()`で`MaxOpenConns=1`に上書き(逐次処理の実態に合わせる)。`deployment.yaml`に4環境変数を既定値のまま明示し、`docs/runbooks/data.md`にreplica数を増やすときの接続予算の注記を追加。critic PASS(1往復。軽微指摘1件〈idle==openの境界値テスト追加〉を反映)。実MySQLで同時クエリがMaxOpenConnsを超えないこと(直列化の実測込み)を確認。**実クラスタ(k3d)でpokedexを再ビルド・再デプロイし、4環境変数が実際に設定されていること・`api-smoke`が正常応答することを確認済み**
 - [x] issue #69(データ/APIレーン)技・持ち物検索の並びがOpenAPI契約と一致しない: `api/openapi.yaml` の `searchMoves`/`searchItems` の description が「並びは ID 順」としていたが、`services/pokedex/db/query/pokedex.sql` の `SearchMoves`/`SearchItems` は導入時(P2-3)から一貫して `ORDER BY <table>.name_ja, <table>.id`(日本語名の照合順序が正。ADR-0105 §3 に「技・持ち物は name_ja, id」と既に明記されており、SQL 側もこれに一致していた)。つまり誤っていたのは契約の説明文だけで、SQL・ADR は無変更(新規 ADR は不要)。`searchSpecies`(`dex_no, form`。SpeciesKey が固定幅ゼロ埋めのためこれは文字列としての ID 順と一致)と `listNatures`(`ORDER BY id`)は元から契約どおりで対象外。契約の description を実態(名前順・同順位は ID)に訂正して `make gen`・`make ios-gen`(絶対ルール1。iOS 生成物は getMove〈P3-7〉分も含めて追従していなかったため合わせて解消)。DB 層(`db.TestSearchMovesAndItemsOrderIsNameJaNotID`。実 MySQL で確認、`-tags mysql`)と httpapi 層(`TestSearchMovesAndItemsPreserveGivenOrderAndLimitCutsThatOrder`。ハンドラが並べ替えず、`limit` がその並びの先頭から切ることを固定。ID 順に並べ替えてから切ると集合自体が変わることを変異テストで確認済み)の両方にテストを追加。critic PASS(1往復)
+- [x] issue #73(API/データレーン)OpenAPIとengineの防御プリセット集合を同期検査する: `api/openapi.yaml` の `DefenderPreset` enum と `engine.DefenderPresetCatalog()` は1対1対応が前提(`services/calc/internal/httpapi/convert.go` の `presetKeysFrom` は変換テーブルを持たず契約の列挙値をそのまま `engine.PresetKey` に型変換するだけ)だが、それを固定するテストが無かった。`services/calc/internal/httpapi/preset_sync_test.go`(`TestDefenderPresetEnumMatchesEngineCatalog`)を追加: ハードコードした一覧同士を比較する既存の `vocabulary_test.go` の流儀ではなく、契約(埋め込まれた spec。`loadContract` 経由の kin-openapi)から `DefenderPreset` の enum を直接読み、`engine.DefenderPresetCatalog()` のキー集合・順序(契約の description が「耐久が上がる順」と明記。ADR-0009 §1)と比較する(ハードコードした一覧は「足し忘れ」自体を検出できないため避けた)。変異テストで両方向(engineだけに追加・openapi.yamlだけから削除・件数一致のまま重複させて列としてだけ崩す)を実際に検知することを確認済み(確認後 revert)。critic 1回目FAIL(件数不一致を黙ってskipすると重複を見逃す穴。修正: 件数不一致を明示的な失敗にしてから列を比較)→ 修正 → 2回目相当でPASS
 - MySQL の manifest に MYSQL_DATABASE が無く、初回起動時に pokedex DB が自動作成されない実バグを発見(データレーンが k3d に初めて実デプロイした際に発生)。deploy/k8s/overlays/local/mysql/statefulset.yaml に MYSQL_DATABASE: pokedex を追加し、layout_test.go に検知テストを追加して修正(2026-09-22)。**新規クラスタでは直るが、この修正前にすでに初期化済みの PVC は MYSQL_DATABASE の効果を受けない**(コンテナ起動時にしか実行されない仕様のため)。既存の PVC に対しては CREATE DATABASE を手動実行するしかない。docs/runbooks/data.md に一言注記するとよい
 - P2-3 の critic の軽微(2026-09-22。未反映の4件): `check-publishable.sh` の `B_KEYVALUE_ALLOW` を self-test の基準リポジトリにも播く / `maxCatalogAbilityCount` が balance の schema・loader と三重管理(テストで検出はできる) / natures-mismatch のエラー案内が Showdown 側だけを見て `make import-fetch` の案内が出ないことがある / `TestPublicInputValidation` の 400 応答を契約検証(kin-openapi)に通す
 

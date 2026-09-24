@@ -3,15 +3,17 @@ package main
 // pokedex-svc の k8s マニフェスト・イメージ・起動スクリプトの静的検査(ADR-0105 §6)。kubectl・docker を使わず YAML とファイルを読む。
 // 要点: Deployment と Service(ClusterIP・80 番)はクラスタ内だけ。どの Ingress も pokedex を指さない
 // (公開の /api/pokedex/* は gateway 経由。内部 API /internal/pokedex/master は gateway でも 404。ADR-0204)。
-// DSN は Secret mysql-auth の pokedex-dsn から渡し、平文でマニフェストに書かない。
+// DSN は Secret mysql-auth の pokedex-reader-dsn(SELECT 専用の pokedex_reader。ADR-0110)から渡し、平文でマニフェストに書かない。
 
 import (
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"example.com/pokecalc/services/gateway/deploytest"
 )
@@ -20,7 +22,7 @@ const (
 	pokedexService   = "pokedex"
 	pokedexImageRepo = "pokecalc/pokedex"
 	mysqlSecret      = "mysql-auth"
-	mysqlSecretDSN   = "pokedex-dsn"
+	mysqlSecretDSN   = "pokedex-reader-dsn" // ADR-0110 §6: 公開 API は SELECT 専用ユーザー
 )
 
 // pokedexDeployment は Deployment のうち、この検査に要る部分(deploytest.Deployment は valueFrom を読まないため)。
@@ -34,8 +36,9 @@ type pokedexDeployment struct {
 				Labels map[string]string `yaml:"labels"`
 			} `yaml:"metadata"`
 			Spec struct {
-				AutomountServiceAccountToken *bool `yaml:"automountServiceAccountToken"`
-				SecurityContext              struct {
+				AutomountServiceAccountToken  *bool  `yaml:"automountServiceAccountToken"`
+				TerminationGracePeriodSeconds *int64 `yaml:"terminationGracePeriodSeconds"`
+				SecurityContext               struct {
 					RunAsNonRoot   *bool `yaml:"runAsNonRoot"`
 					SeccompProfile struct {
 						Type string `yaml:"type"`
@@ -178,6 +181,85 @@ func TestManifestPokedexDeployment(t *testing.T) {
 	}
 	if len(sc.Capabilities.Drop) != 1 || sc.Capabilities.Drop[0] != "ALL" {
 		t.Errorf("capabilities.drop = %v, want [ALL]", sc.Capabilities.Drop)
+	}
+}
+
+// AC-K6(issue #109 / ADR-0111 決定3): terminationGracePeriodSeconds を明示し、main.go の
+// shutdownTimeout 定数より長い。値を2箇所にハードコードする代わりに不等式で比較することで、
+// どちらか一方だけを変更したときに検知できるようにする(main.go の shutdownTimeout 定数と
+// 手で同期する必要はない。このテストが直接参照する)。
+func TestPokedexTerminationGracePeriodExceedsShutdownTimeout(t *testing.T) {
+	objs := deploytest.BaseObjects(t, pokedexService)
+	var d pokedexDeployment
+	deploytest.Find(t, objs, "Deployment", pokedexService).Decode(t, &d)
+
+	grace := d.Spec.Template.Spec.TerminationGracePeriodSeconds
+	if grace == nil {
+		t.Fatal("terminationGracePeriodSeconds が無い(既定の30秒に暗黙で頼らず明示すること。ADR-0111 決定3)")
+	}
+	if *grace <= 0 {
+		t.Fatalf("terminationGracePeriodSeconds = %d, want 正の値", *grace)
+	}
+	got := time.Duration(*grace) * time.Second
+	if got <= shutdownTimeout {
+		t.Errorf("terminationGracePeriodSeconds = %v, want shutdownTimeout(%v)より長い(main.go の shutdownTimeout 定数と比較)",
+			got, shutdownTimeout)
+	}
+}
+
+// AC5(issue #112 / ADR-0112): 4つの DB プール環境変数が既定値のまま明示され、main.go の
+// デフォルト定数と一致する(文字列の完全一致ではなく、strconv.Atoi・time.ParseDuration した
+// 値どうしの比較にすることで、値を2箇所にハードコードしない)。
+func TestManifestPokedexDBPoolEnvDefaults(t *testing.T) {
+	objs := deploytest.BaseObjects(t, pokedexService)
+	var d pokedexDeployment
+	deploytest.Find(t, objs, "Deployment", pokedexService).Decode(t, &d)
+	if len(d.Spec.Template.Spec.Containers) == 0 {
+		t.Fatal("コンテナが無い")
+	}
+	env := map[string]string{}
+	for _, e := range d.Spec.Template.Spec.Containers[0].Env {
+		if e.Value != nil {
+			env[e.Name] = *e.Value
+		}
+	}
+
+	intCases := []struct {
+		name string
+		want int
+	}{
+		{envDBMaxOpenConns, defaultDBMaxOpenConns},
+		{envDBMaxIdleConns, defaultDBMaxIdleConns},
+	}
+	for _, tc := range intCases {
+		v, ok := env[tc.name]
+		if !ok {
+			t.Errorf("%s が deployment.yaml に無い", tc.name)
+			continue
+		}
+		n, err := strconv.Atoi(v)
+		if err != nil || n != tc.want {
+			t.Errorf("%s = %q, want %d(main.go の既定値と一致すること)", tc.name, v, tc.want)
+		}
+	}
+
+	durCases := []struct {
+		name string
+		want time.Duration
+	}{
+		{envDBConnMaxIdleTime, defaultDBConnMaxIdleTime},
+		{envDBConnMaxLifetime, defaultDBConnMaxLifetime},
+	}
+	for _, tc := range durCases {
+		v, ok := env[tc.name]
+		if !ok {
+			t.Errorf("%s が deployment.yaml に無い", tc.name)
+			continue
+		}
+		got, err := time.ParseDuration(v)
+		if err != nil || got != tc.want {
+			t.Errorf("%s = %q, want %v(main.go の既定値と一致すること)", tc.name, v, tc.want)
+		}
 	}
 }
 
