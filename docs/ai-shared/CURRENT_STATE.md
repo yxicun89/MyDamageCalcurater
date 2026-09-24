@@ -155,11 +155,18 @@ record/team-svc(M2)が進んだら iOS の構築を端末内保存から API 保
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
-Active: なし(TB6・issue #105 対応 完了・main 統合済み。次はユーザー指示待ち)
+Active: Claude Code(M4 P7-1完了、P7-2に着手予定)
 Branch: 次は main から feat/tb-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
 Status: 設計書(docs/type-balance-design.md)の TB0〜TB6 はすべて main に統合済み(TB6: 技範囲チェッカー、PR #65)。P2-3b(特性の無効・吸収)の実データ確認を完了(2026-09-23): データレーンが再生成した export(348 pokemon・moves・216 abilities)で `make balance-k3d-deploy-readmodel && make balance-smoke-readmodel` を実行し、`POST .../team-balance/analyze` でチリーン(levitate)への ground 攻撃が `{"category":"immune","effect":"immune","multiplier":"0","source":"ability"}` になること、`POST .../move-range/analyze`(thunderbolt)の `walledByAbility` にエモンガ(motordrive)が正しく含まれることを実データで確認済み。メガフォームの nameJa が英語表記のままの件はデータレーンへ確認候補として残る(ブロッカーではない)。
-**Codexレビュー issue #105(Argo CD導入のハッシュ・digest固定)対応も完了**(2026-09-23。ADR-0405。PR #140): `scripts/argocd-bootstrap.sh`(balance/speed共有)を新設し、balance・speed 両runbookの生URL直applyを置き換えた。実クラスタ(k3d-pokecalc)で実行し、argocd-server/dex/redisの3イメージがdigest参照に切り替わること・既存Applicationが無傷であることを確認済み
-Next: (Web レーンは `make gen-ts` 実行済み。`web/src/api/balance.gen.ts` に move-range の型が反映済みであることを確認した)設計書の TB0〜TB6・issue #105 はすべて完了・実データ/実クラスタ確認済み、以後はユーザーからの新規要望待ち
+Codexレビュー issue #105(Argo CD導入のハッシュ・digest固定)対応完了(2026-09-23。ADR-0405。PR #140)。
+**別セッションからの依頼(ユーザー承認済み)で M4 P7-1(kube-prometheus-stack / Loki、各サービスのメトリクス)に着手・完了**
+(2026-09-24〜25。ADR-0406。PR #201・#336): 6サービス(gateway・pokedex・calc・balance・speed・judge)に `GET /metrics`
+(Prometheus text format、method/pathはカーディナリティ対策で正規化)、`scripts/observability-bootstrap.sh` で
+kube-prometheus-stack・Loki(SingleBinary)・Alloy を版・SHA-256固定で導入。実クラスタ(k3d-pokecalc)で実行し、
+全Pod起動・PVC Bound・6 ServiceMonitor適用・balance/calc/gatewayのscrapeがup・GrafanaのLokiデータソースで
+実ログ取得まで確認済み(judge/pokedex/speedは`/metrics`追加前の古いイメージのため404。各レーン再デプロイで解消見込み)。
+Next: M4 P7-2(SLO: 計算API p99<100ms・可用性、ダッシュボード)に着手予定。それ以外はタイプバランス設計書・issue対応は
+すべて完了、以後はユーザーからの新規要望待ち
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
 
 ## Speed

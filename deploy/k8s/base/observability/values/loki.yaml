@@ -1,0 +1,66 @@
+# loki chart の values(ADR-0406 §4)。
+# 個人利用・小規模(chart のコメントにある "up to a few tens of GB/day")向けの SingleBinary 構成。
+# chart の既定 SimpleScalable はオブジェクトストレージ(S3/GCS 等)を前提にするため使わない。
+# ストレージはクラウドに依存しないローカル PVC(filesystem)にする。
+
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+  storage_config:
+    filesystem:
+      directory: /var/loki/chunks
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    size: 10Gi
+
+# SingleBinary モードでは backend/read/write の Deployment は使わない。
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+
+# nginx gateway は不要(Alloy が Loki の Service へ直接書き込む)。
+gateway:
+  enabled: false
+
+# 個人利用の k3d では自己モニタリングは不要。
+monitoring:
+  serviceMonitor:
+    enabled: false
+  selfMonitoring:
+    enabled: false
+
+# キャナリア(loki-canary DaemonSet)は個人利用の k3d では不要。
+# chart のキーは monitoring 配下ではなくトップレベル(chart 既定 enabled: true)。
+lokiCanary:
+  enabled: false
+
+# chunks-cache・results-cache(memcached)は chart 既定で有効になり、既定の memory request が
+# それぞれ 9830Mi・1229Mi と大きい(k3d の servers:1/agents:0 では Pending のまま残る)。
+# 個人利用・小規模の SingleBinary 構成ではキャッシュ無しでも動くため無効化する。
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+
+test:
+  enabled: false

@@ -10,6 +10,9 @@
 |---|---|
 | [impl/architecture.md](impl/architecture.md) | 全ディレクトリの責務、レイヤー、サービス間依存、ワークロード、認証ヘッダー、`/internal` API、マスタの扱い |
 | [impl/request-flows.md](impl/request-flows.md) | calc / bulk / reverse / pokedex / Web 配信 / WASM / judge / balance・speed / importer の処理フロー(ファイル:関数付き) |
+| [impl/damage-engine.md](impl/damage-engine.md) | engine のダメージ計算: 実数値・ダメージ式の全段(丸めの位置)・相性表・効果スキーマ・確定数・bulk・入力検証・未対応の機構 |
+| [impl/reverse-estimation.md](impl/reverse-estimation.md) | 逆算(調整推定): 探索空間・観測の照合・一致度・並び・計算量・結果の型 |
+| [impl/other-calculations.md](impl/other-calculations.md) | タイプバランス・素早さ比較・判定の計算(engine を呼ぶか・使うマスタ) |
 | [impl/api-endpoints.md](impl/api-endpoints.md) | 全ルート(公開契約・各サービス実ルート)、必須ヘッダー、ハンドラ位置、エラーコード |
 | [impl/config-env.md](impl/config-env.md) | 環境変数・ConfigMap・Secret の定義側と参照側 |
 | [impl/runbook-commands.md](impl/runbook-commands.md) | 手順書の全コマンドが裏で起動するもの(場所・接続先・副作用) |

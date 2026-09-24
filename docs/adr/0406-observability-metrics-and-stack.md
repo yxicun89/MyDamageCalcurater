@@ -51,24 +51,54 @@ M1〜M3(計算・タイプバランス・素早さ・判定・iOS)は完了し�
   (自己参照でヒストグラムが汚れるのを防ぐ)。
 - ヘルスチェック(`/healthz` 等)は計測してよい(可用性 SLO の分母に使うため。P7-2 で参照)。
 
-### 4. kube-prometheus-stack・Loki の導入(ローカル k3d 先行検証。ADR-0018 の流儀を踏襲)
-- 配布は公式 Helm chart(`prometheus-community/kube-prometheus-stack`・`grafana/loki`)を使う。バージョンは「最新の安定版を
-  正確に固定する」という既存のユーザー方針(latest-versions policy)に従い、導入時点の最新安定版を `--version` で厳密固定する
-  (`^`/`~` のような範囲指定はしない)。
+### 4. kube-prometheus-stack・Loki の導入(ローカル k3d 先行検証。ADR-0018・ADR-0405 の流儀を踏襲)
+- 配布は公式 Helm chart(`prometheus-community/kube-prometheus-stack`・`grafana/loki`・`grafana/alloy`)を使う。バージョンは
+  「最新の安定版を正確に固定する」という既存のユーザー方針(latest-versions policy)に従い、2026-09-24 時点で取得した最新安定版を
+  `--version` で厳密固定する(`^`/`~` のような範囲指定はしない)。ADR-0405 の manifest ハッシュ固定と同じ精神で、chart の取得物
+  (`.tgz`)の SHA-256 も固定する(Helm の repo index は署名が無く、取得内容そのものの検証手段が chart version pin だけでは
+  無いため)。
+  - `prometheus-community/kube-prometheus-stack` バージョン `91.5.1`(app v0.94.1)。tgz SHA-256:
+    `b6bcf53edcb86fd1385b677d343c3f7366f0ed0d43fa7e7f7988eba28261a69f`
+  - `grafana/loki` バージョン `7.3.0`(app 3.6.12)。tgz SHA-256:
+    `04a339f712d770a1f599f05fc0a5a3cde18e43914e49ae6a49f7171be86bcc09`
+  - `grafana/alloy` バージョン `1.12.1`(app v1.19.2)。tgz SHA-256:
+    `cdd1ec39f99c3c506d5b521156d72236ea143c089f50da6b64398f831734829c`
+  - `grafana/alloy` を追加した理由: Loki 単体はログを受け取るサーバーでしかなく、各 Pod のコンテナログを収集して Loki へ送る
+    エージェントが別途要る。旧来の `grafana/promtail` は上流で非推奨になっているため、後継の Alloy を使う
+    (DaemonSet でノード上のコンテナログを読み、Loki へ push する構成のみを使う。メトリクス収集・OTel 等の他機能は有効化しない)。
 - `scripts/observability-bootstrap.sh`(リポジトリルート。ADR-0405 の `scripts/argocd-bootstrap.sh` と同じ置き場所・同じ流儀)を新設する:
   - `cd "$(git rev-parse --show-toplevel)"` から始める。
-  - `helm repo add`/`helm repo update` で公式リポジトリを追加し、`helm pull <chart> --version <固定版>` で一度ローカルへ取得してから
-    `helm upgrade --install` する(取得と適用を分離することで、取得失敗時に適用へ進まない)。
-  - values は `deploy/k8s/base/observability/values/*.yaml` にコミットする(秘密値を含めない。Grafana の管理者パスワードは
-    ユーザーが手動で Secret に登録する。ADR-0018 §5 の「AI はトークンを見ない」と同じ扱い)。
+  - `helm repo add`/`helm repo update` で公式リポジトリを追加し、`helm pull <chart> --version <固定版> -d <一時ディレクトリ>` で
+    一度ローカルへ取得し、取得した `.tgz` の SHA-256 を上記の期待値と比較する(不一致ならインストール前に非0で終了。
+    ADR-0405 と同じ「取得→検証→適用」の順序)。検証を通った `.tgz` から `helm upgrade --install --version <固定版>` する
+    (`helm repo` 経由の再解決はさせず、検証済みのローカル chart を使う)。
+  - values は `deploy/k8s/base/observability/values/{kube-prometheus-stack,loki,alloy}.yaml` にコミットする(秘密値を含めない。
+    Grafana の管理者パスワードはユーザーが手動で Secret に登録する。ADR-0018 §5 の「AI はトークンを見ない」と同じ扱い)。
   - namespace(`observability`)は冪等に作成する。
-  - Argo CD と同じく **manual** な運用にする(sync/upgrade は都度このスクリプトを実行。自動アップグレードはしない)。
-- ローカル k3d では Grafana・Prometheus UI は `kubectl port-forward` でのみアクセスする(Ingress を作らない。issue #148 の
-  決定と一貫させる)。
+  - Argo CD と同じく **manual** な運用にする(sync/upgrade は都度このスクリプトを実行。自動アップグレードはしない)。バージョンを
+    上げるときは、このスクリプトの3つの版・3つのハッシュを明示的に更新する(ADR-0405 と同じ「無検証追従を防ぐ」ため)。
+- **Loki は `deploymentMode: SingleBinary`(chart の既定は `SimpleScalable` で、素のままではオブジェクトストレージ〈S3/GCS等〉
+  を前提にする)。個人利用・小規模〈chart のコメントにある "up to a few tens of GB/day"〉に合うシングルバイナリ構成にし、
+  ストレージはローカル PVC(filesystem)にする**(クラウドの object storage には依存しない。ADR-0018 §2 のローカル完結の方針と一致)。
+- ローカル k3d では Grafana・Prometheus・Alertmanager の UI は `kubectl port-forward` でのみアクセスする(Ingress を作らない。
+  issue #148 の決定と一貫させる)。
 - 各サービスの `/metrics` は Kubernetes の `ServiceMonitor`(kube-prometheus-stack の CRD)で Prometheus に発見させる。
-  `deploy/k8s/base/observability/servicemonitors/`(または各サービスの `deploy/k8s/base/` 配下に置くか)は実装時に spec-writer が
-  balance/speed/judge の既存 Kustomize 構成と揃うほうを選ぶ。
-- balance-registry のような「クラスタ内レジストリを経由する自前ビルドイメージ」は不要(kube-prometheus-stack・Loki は
+  `/metrics` は各サービスの既存 HTTP サーバー・既存 Service ポート(`http`)上でそのまま動く(P7-1 §1〜3 の実装のとおり、
+  別ポート・別サーバーを立てていないため)。ServiceMonitor は `deploy/k8s/base/observability/servicemonitors/`(6サービス分)に
+  まとめて置く(balance/speed/judge の Kustomize base を書き換えず、observability 側からラベルセレクタで既存 Service を参照する)。
+- kube-prometheus-stack・Loki はデフォルトで多くのコンポーネントを含み、個人の k3d(servers:1・agents:0)では
+  Pending のまま残るものや意味を持たないものがある。無効化は2種類に分ける。
+  (a) **`deploymentMode: SingleBinary` にするために必須のもの**(`gateway.enabled: false`・`monitoring.serviceMonitor`/
+  `selfMonitoring`・`test.enabled: false`・backend/read/write のレプリカ0など。SimpleScalable 用のコンポーネントを
+  SingleBinary構成では使わないため)。
+  (b) **実際に `helm template` で描画を確認して問題が見えたので追加で無効化したもの**(critic レビューで見つかった
+  Loki の chunks-cache/results-cache〈既定 memory request がそれぞれ 9830Mi/1229Mi の StatefulSet。k3d では Pending の
+  まま残る〉と `lokiCanary`〈個人利用では不要な自己監視用 DaemonSet〉を `loki.yaml` で無効化した)。
+  **それ以外は先回りして削らない**: kube-prometheus-stack 側の node-exporter・kube-state-metrics・alertmanager や、
+  Grafana 同梱ダッシュボードのうち etcd/scheduler 等クラウド
+  マネージド環境では取得できない metrics に依存するものは、今回は無効化していない(実クラスタで動かして問題が
+  出た時点で間引く。動く前提で先に削らない)。
+- balance-registry のような「クラスタ内レジストリを経由する自前ビルドイメージ」は不要(kube-prometheus-stack・Loki・Alloy は
   すべて公式配布イメージをそのまま使うため)。
 
 ### 5. cloud overlay への配慮(まだ実クラウドは無い。issue #149 は保留)

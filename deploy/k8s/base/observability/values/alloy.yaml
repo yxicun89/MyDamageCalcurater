@@ -1,0 +1,45 @@
+# alloy chart の values(ADR-0406 §4)。
+# DaemonSet で各ノードのコンテナログを収集し、Loki へ送るだけに使う(メトリクス収集・OTel は有効化しない)。
+
+controller:
+  type: daemonset
+
+alloy:
+  configMap:
+    create: true
+    content: |
+      // 各 Pod のコンテナログを Kubernetes API から検出する。
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      // 名前空間・Pod・コンテナ名をラベルとして残す(Loki 側での絞り込み用)。
+      discovery.relabel "pod_logs" {
+        targets = discovery.kubernetes.pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+      }
+
+      // 検出した Pod のコンテナログを読み取る。
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pod_logs.output
+        forward_to = [loki.write.default.receiver]
+      }
+
+      // クラスタ内の loki Service(observability namespace)へ書き込む。
+      loki.write "default" {
+        endpoint {
+          url = "http://loki.observability.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }
