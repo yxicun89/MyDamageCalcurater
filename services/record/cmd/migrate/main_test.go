@@ -8,14 +8,14 @@ package main
 //	type cliEnv struct {
 //		Stdout, Stderr io.Writer
 //		Getenv         func(string) string
-//		Provision      func(rootDSN string, roles []db.RoleGrant) error
+//		Provision      func(rootDSN string, roles []pokedexdb.RoleGrant) error
 //		Up             func(dsn string) error
 //		Version        func(dsn string) (version uint, dirty bool, ok bool, err error)
 //		DownAll        func(dsn, confirmDatabase string) error
 //	}
 //	func run(args []string, env cliEnv) int
 //
-// main は os.Getenv と db.Provision・recorddb.Up・recorddb.Version・recorddb.DownAll を渡す。
+// main は os.Getenv と pokedexdb.Provision・recorddb.Up・recorddb.Version・recorddb.DownAll を渡す。
 
 import (
 	"bytes"
@@ -24,7 +24,8 @@ import (
 	"strings"
 	"testing"
 
-	"example.com/pokecalc/services/pokedex/db"
+	pokedexdb "example.com/pokecalc/services/pokedex/db"
+	recorddb "example.com/pokecalc/services/record/db"
 )
 
 // 架空の DSN(パスワードは出力に漏れていないかを探す目印)。
@@ -43,7 +44,7 @@ type harness struct {
 
 	calls          []string // "provision" / "up" / "version" / "down" の呼ばれた順
 	provisionRoot  string
-	provisionRoles []db.RoleGrant
+	provisionRoles []pokedexdb.RoleGrant
 	upDSN          string
 	provisionErr   error
 	upErr          error
@@ -56,10 +57,10 @@ func (h *harness) cliEnv() cliEnv {
 		Stdout: &h.stdout,
 		Stderr: &h.stderr,
 		Getenv: func(k string) string { return h.env[k] },
-		Provision: func(rootDSN string, roles []db.RoleGrant) error {
+		Provision: func(rootDSN string, roles []pokedexdb.RoleGrant) error {
 			h.calls = append(h.calls, "provision")
 			h.provisionRoot = rootDSN
-			h.provisionRoles = append([]db.RoleGrant(nil), roles...)
+			h.provisionRoles = append([]pokedexdb.RoleGrant(nil), roles...)
 			return h.provisionErr
 		},
 		Up: func(dsn string) error {
@@ -124,9 +125,9 @@ func TestUpWithProvisionDSNProvisionsThenMigrates(t *testing.T) {
 	if h.provisionRoot != fakeProvisionDSN {
 		t.Error("Provision の root DSN が RECORD_PROVISION_DSN でない")
 	}
-	want := []db.RoleGrant{
-		{DSN: fakeAppDSN, Privileges: db.AppPrivileges},
-		{DSN: fakeMigratorDSN, Privileges: db.MigratorPrivileges},
+	want := []pokedexdb.RoleGrant{
+		{DSN: fakeAppDSN, Privileges: pokedexdb.AppPrivileges},
+		{DSN: fakeMigratorDSN, Privileges: pokedexdb.MigratorPrivileges},
 	}
 	if !reflect.DeepEqual(h.provisionRoles, want) {
 		// DSN を表示しない(パスワードを含むため)。権限だけを並べる。
@@ -209,4 +210,29 @@ func TestVersionNeverProvisions(t *testing.T) {
 		t.Errorf("呼び出し = %v, want [version]", h.calls)
 	}
 	h.assertNoSecrets(t)
+}
+
+// productionEnv は main_test.go の偽 cliEnv を経由しないため、上のテストだけでは
+// 「Up/Version/DownAll に record の関数を渡しているか」を検査できない(pokedex の関数を
+// 誤って渡してもシグネチャが同じでコンパイルが通ってしまう。critic 1回目の指摘)。
+// 関数ポインタの同一性で、record 以外の関数(pokedex の Up 等)を渡していないことを固定する。
+func TestProductionEnvWiresRecordFunctions(t *testing.T) {
+	env := productionEnv()
+	cases := []struct {
+		name string
+		got  uintptr
+		want uintptr
+	}{
+		{"Provision", reflect.ValueOf(env.Provision).Pointer(), reflect.ValueOf(pokedexdb.Provision).Pointer()},
+		{"Up", reflect.ValueOf(env.Up).Pointer(), reflect.ValueOf(recorddb.Up).Pointer()},
+		{"Version", reflect.ValueOf(env.Version).Pointer(), reflect.ValueOf(recorddb.Version).Pointer()},
+		{"DownAll", reflect.ValueOf(env.DownAll).Pointer(), reflect.ValueOf(recorddb.DownAll).Pointer()},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Errorf("productionEnv().%s が record 以外の関数を指している(pokedex の関数の誤配線の疑い)", tc.name)
+			}
+		})
+	}
 }

@@ -163,7 +163,9 @@ func expectOK(t *testing.T, what string, err error) {
 	}
 }
 
-var grantOnDB = regexp.MustCompile("^GRANT (.+) ON `([^`]+)`\\.\\* TO `([^`]+)`@`%`$")
+// grantOnDB は識別子の引用符が MySQL(バッククォート)・TiDB(シングルクォート)のどちらでも
+// 一致するようにする(SHOW GRANTS の出力形式が実装によって違うため)。
+var grantOnDB = regexp.MustCompile("^GRANT (.+) ON [`']([^`']+)[`']\\.\\* TO [`']([^`']+)[`']@[`']%[`']$")
 
 func grantedPrivileges(t *testing.T, conn *sql.DB, user, dbName string) []string {
 	t.Helper()
@@ -172,13 +174,14 @@ func grantedPrivileges(t *testing.T, conn *sql.DB, user, dbName string) []string
 		t.Fatalf("SHOW GRANTS FOR %s: %v", user, err)
 	}
 	defer rows.Close()
+	usageOnly := regexp.MustCompile("^GRANT USAGE ON \\*\\.\\* TO [`']" + regexp.QuoteMeta(user) + "[`']@[`']%[`']$")
 	var privs []string
 	for rows.Next() {
 		var line string
 		if err := rows.Scan(&line); err != nil {
 			t.Fatal(err)
 		}
-		if line == "GRANT USAGE ON *.* TO `"+user+"`@`%`" {
+		if usageOnly.MatchString(line) {
 			continue
 		}
 		if strings.Contains(line, "WITH GRANT OPTION") {
