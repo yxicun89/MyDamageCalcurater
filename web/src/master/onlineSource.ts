@@ -42,6 +42,14 @@ export const SPECIES_SEARCH_LIMIT = 50;
 export const SPECIES_SEARCH_MIN_LENGTH = 1;
 
 /**
+ * P4-17: `GET /api/pokedex/moves/batch`(`getMovesByIds`)に1回で渡せる ID の上限。
+ * 契約(api/openapi.yaml の `ids` の `maxItems`)そのもので、65件以上は 400 `invalid_input` になる。
+ * **1種族の learnset がこの件数に収まる保証は無い**(API レーンも実データ未確認。ADR-0304 §3 追記)ので、
+ * 呼び出し側がこの件数ずつに分割して複数回呼ぶ(ADR-0304 A-13)。
+ */
+export const MOVES_BATCH_MAX_IDS = 64;
+
+/**
  * 種族の検索入力のデバウンス(ミリ秒)。入力1文字ごとに検索を投げない(ADR-0304 §1)。
  * 検索 UI(P4-16b)がこの値を使う。
  */
@@ -203,6 +211,9 @@ export function createOnlineMasterSource(input: CreateOnlineMasterSourceInput): 
       const resolution: MasterSpeciesResolution = {
         species: mapSpeciesDetail(detail),
         abilities: detail.abilities.map(mapAbility),
+        // P4-17 のスタブ(spec-writer)。implementer が learnset を MOVES_BATCH_MAX_IDS 件ずつに分けて
+        // getMovesByIds で解決する(onlineSource.test.ts「P4-17」節が仕様)。
+        moves: [],
       };
       return resolution;
     },

@@ -4,15 +4,23 @@
 //   - 技が無い(moves: false): 技のセレクトは残すが disabled・選択肢は空・案内を出す・逆算しない
 //   - 効果データが無い(effects: false): 持ち物候補を探索していないことを案内する。逆算自体は実行する(A-11)
 //   - 種族の一覧が無い(speciesList: false): 自分・相手とも検索欄になり、解決した種族で逆算する
+//   - P4-17(ADR-0304 §3 の解消・A-13): オンラインのマスタでも、攻撃側の種族を選べばその技を選べる
+//     (「与えた/受けた」の切り替えで、技の出どころも攻撃側の種族に付いて変わる)
 //   - capabilities を省いた既存のマスタでは、今までどおり
 
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { beforeAll, describe, expect, test, vi } from "vitest";
+import { learnsetMoves } from "../domain/moves";
+import type { Move } from "../engine/types";
 import { masterOnlineText } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
 import { OBSERVATION_INPUT_DEBOUNCE_MS } from "../domain/observations";
-import { SPECIES_SEARCH_DEBOUNCE_MS } from "../master/onlineSource";
+import {
+  MOVES_BATCH_MAX_IDS,
+  ONLINE_MASTER_CAPABILITIES,
+  SPECIES_SEARCH_DEBOUNCE_MS,
+} from "../master/onlineSource";
 import type { MasterCapabilities, MasterData, MasterSpecies, MasterSpeciesSearch } from "../master/types";
 import { createFakeEngine, type FakeEngine } from "../test/fakeEngine";
 import { createFakeSpeciesSearch, limitedMaster, type FakeSpeciesSearch } from "../test/onlineMaster";
@@ -193,4 +201,117 @@ describe("capabilities を省いたマスタ(オフライン相当)は今まで�
       expect(within(select).getByRole("option", { name: species.nameJa })).toHaveValue(species.key);
     }
   });
+});
+
+// ---- P4-17: オンラインのマスタでも技を選べる(ADR-0304 §3 の解消・A-13) ----
+
+const sideGroup = () => screen.getByRole("radiogroup", { name: "観測したダメージ" });
+
+/** 実際のオンライン(種族一覧・技一覧・効果データのどれも無い)マスタ。 */
+function onlineMaster(): MasterData {
+  return limitedMaster(example, ONLINE_MASTER_CAPABILITIES);
+}
+
+/** resolveSpecies が learnset を解決した技も返す検索口(本物は getMovesByIds で作る)。 */
+function onlineSearch(species: readonly MasterSpecies[] = example.species): FakeSpeciesSearch {
+  return createFakeSpeciesSearch({ species, abilities: example.abilities, moves: example.moves });
+}
+
+/** 例データの技を、ID・名前だけ変えて複製する(件数の境界値を作るため)。 */
+function moveFixture(index: number): Move {
+  const base = example.moves[0];
+  if (base === undefined) {
+    throw new Error("例データに技が無い");
+  }
+  return { ...base, id: `example-move-p417-${String(index)}`, nameJa: `テスト学習技${String(index)}` };
+}
+
+describe("オンラインのマスタ(種族も技も一覧が無い)で技が戻る(P4-17)", () => {
+  test("攻撃側の種族を選ぶ前は、技のセレクトは残るが disabled で案内を出す", () => {
+    renderScreen(onlineMaster(), onlineSearch());
+    expect(moveSelect()).toBeDisabled();
+    expect(within(moveSelect()).queryAllByRole("option")).toHaveLength(0);
+    expect(screen.getByText(masterOnlineText.movesUnavailable)).toBeInTheDocument();
+  });
+
+  test("「与えたダメージ」では自分(攻撃側)を選ぶと技が出る。相手だけでは出ない", async () => {
+    const rendered = renderScreen(onlineMaster(), onlineSearch());
+    const mine = speciesAt(0);
+
+    await chooseBySearch(rendered, theirCard(), "相手のポケモン", speciesAt(1));
+    expect(moveSelect()).toBeDisabled();
+
+    await chooseBySearch(rendered, myCard(), "自分のポケモン", mine);
+
+    const expected = learnsetMoves(mine, example.moves);
+    expect(expected.length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(moveSelect()).not.toBeDisabled();
+    });
+    expect(within(moveSelect()).getAllByRole("option")).toHaveLength(expected.length);
+    expect(screen.queryByText(masterOnlineText.movesUnavailable)).toBeNull();
+  });
+
+  test("「受けたダメージ」に切り替えると、技は相手(攻撃側)の learnset から出る", async () => {
+    const rendered = renderScreen(onlineMaster(), onlineSearch());
+    const mine = speciesAt(0);
+    const theirs = speciesAt(1);
+
+    await chooseBySearch(rendered, myCard(), "自分のポケモン", mine);
+    await chooseBySearch(rendered, theirCard(), "相手のポケモン", theirs);
+    await rendered.user.click(within(sideGroup()).getByRole("radio", { name: "受けたダメージ" }));
+
+    const expected = learnsetMoves(theirs, example.moves);
+    expect(expected.length).toBeGreaterThan(0);
+    // 自分と相手の learnset の件数が同じだと「切り替わっていない」実装でも緑になるので、件数で区別できることを先に確かめる。
+    expect(expected.length).not.toBe(learnsetMoves(mine, example.moves).length);
+    await waitFor(() => {
+      expect(within(moveSelect()).getAllByRole("option")).toHaveLength(expected.length);
+    });
+    expect(moveSelect()).not.toBeDisabled();
+  });
+
+  test("検索で選んだ種族の技で逆算する(技の実体がリクエストに入る)", async () => {
+    const rendered = renderScreen(onlineMaster(), onlineSearch());
+    const mine = speciesAt(0);
+    const theirs = speciesAt(1);
+
+    await chooseBySearch(rendered, myCard(), "自分のポケモン", mine);
+    await chooseBySearch(rendered, theirCard(), "相手のポケモン", theirs);
+    await rendered.user.type(observationInput(), "50");
+    rendered.advance(OBSERVATION_INPUT_DEBOUNCE_MS);
+
+    await waitFor(() => {
+      expect(rendered.engine.reverseRequests).not.toHaveLength(0);
+    });
+    const request = rendered.engine.reverseRequests.at(-1);
+    expect(request?.known.species.key).toBe(mine.key);
+    expect(learnsetMoves(mine, example.moves).map((move) => move.id)).toContain(request?.move.id);
+  });
+
+  test.each([MOVES_BATCH_MAX_IDS, MOVES_BATCH_MAX_IDS + 1, MOVES_BATCH_MAX_IDS * 2 + 1])(
+    "learnset が %i 件の種族でも、全件が技セレクトに出る",
+    async (learnsetSize) => {
+      const moves = Array.from({ length: learnsetSize }, (_unused, index) => moveFixture(index));
+      const species: MasterSpecies = {
+        ...speciesAt(0),
+        key: "9999-000",
+        dexNo: 9999,
+        nameJa: "テストたくさんおぼえる",
+        learnset: moves.map((move) => move.id),
+      };
+      const search = createFakeSpeciesSearch({
+        species: [species, ...example.species],
+        abilities: example.abilities,
+        moves: [...example.moves, ...moves],
+      });
+      const rendered = renderScreen(onlineMaster(), search);
+
+      await chooseBySearch(rendered, myCard(), "自分のポケモン", species);
+
+      await waitFor(() => {
+        expect(within(moveSelect()).queryAllByRole("option")).toHaveLength(learnsetSize);
+      });
+    },
+  );
 });

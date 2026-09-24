@@ -136,8 +136,16 @@
   2件追加(907件)→再確認予定
 - [ ] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案)は
   **2026-09-24 に API レーンが `GET /api/pokedex/moves/batch`(`getMovesByIds`)で回答・実装済み**
-  (ADR-0105 §3・ADR-0304 §3・DECISIONS.md 2026-09-24 参照。下の改善要望にも記載)。Web 側の対応
-  (`capabilities.moves` を true にして技を復活させる)はこれから
+  (ADR-0105 §3・ADR-0304 §3・DECISIONS.md 2026-09-24 参照。下の改善要望にも記載)。Web 側の対応は
+  spec-writer が受け入れ条件と失敗するテストまで作成済み(ADR-0304 **A-13**)。**`capabilities.moves` は
+  true にしない**(A-13.1。true にすると BalanceScreen が「有効なのに技が選べない」壊れた状態になる)。
+  技は `resolveSpecies` が種族・特性と一緒に解決して返し(`MasterSpeciesResolution.moves`)、技セレクトの
+  disabled は「いま技の候補があるか」で決める。`learnset` は64件ずつに分割して `getMovesByIds` を複数回呼ぶ。
+  実装(`onlineSource.ts` の分割呼び出し・`speciesResolution.ts` の `movesFor`・両画面の判定)はこれから
+- [ ] P4-17b BalanceScreen(タイプバランス)の種族検索・技選択をオンラインでも使えるようにする
+  (ADR-0304 A-9 の申し送り・A-13.5 の積み残し)。パーティ・仮想敵の各枠(6枠 × 2)に A-10 の種族検索を広げ、
+  枠ごとに解決した learnset から技を4つまで選べるようにする。それまではオンラインでは画面ごと無効のまま
+  (`capabilities.speciesList && capabilities.moves` の判定は変えない。回帰テストで固定済み)
 - [x] P4-18(Web 分。Codex コードレビューの issue。タイプバランスレーンから 2026-09-23 に連絡・
   `gh issue view <番号>`)。**#99(bug, accessibility)ライトテーマのエラー文字色がコントラスト基準未達 —
   Web 分・iOS 分とも完了、issue クローズ済み**: danger のライト値を `#E5484D`→`#CD1D23`(WCAG 2.2 SC 1.4.3

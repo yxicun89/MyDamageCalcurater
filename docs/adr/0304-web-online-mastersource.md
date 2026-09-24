@@ -249,6 +249,8 @@ SearchableMasterSource extends MasterSource { readonly search: MasterSpeciesSear
   `i18n/ja.ts` の `masterOnlineText`、`App.tsx` の配線(A-6)。
 - **P4-16b(次)**: 画面側(A-5)。種族の検索コンボボックス、技・持ち物候補の無効化と案内の描画。
 - **P4-17**: §3 の技の ID 解決が API レーンで入ったあと、`capabilities.moves` を true にして技を復活させる。
+  **(2026-09-24 追記: この行は A-13 で置き換えた。`capabilities.moves` は false のままにし、技は
+  `resolveSpecies` が種族と一緒に解決する。理由は A-13.1)**
 
 `api/openapi.yaml` はこのタスクでは変えない(必要な変更は §3 の技のID解決 = API レーンの持ち物。
 当時は案A を提案していたが、2026-09-24 に `GET /api/pokedex/moves/batch` の新設で解決済み。§3 末尾の追記参照)。
@@ -374,3 +376,84 @@ A-10 は「WAI-ARIA Authoring Practices の Combobox パターンに合わせる
 (`onKeyDown` の先頭でガードし、何もせず return する)。無視すると変換確定の Enter で
 ハイライト中の候補を誤って選んでしまう。`preventDefault()` も「実際に処理したとき」だけ呼ぶ(候補が無いときの
 キャレット移動等の既定動作を妨げない。`App.tsx` の `handleTabKeyDown` と同じ作法)。
+
+## 追記4(2026-09-24、Web レーン): P4-17 — 技の復活(§3 の欠落の解消を受けて)
+
+API レーンが `GET /api/pokedex/moves/batch`(`getMovesByIds`)を新設し(§3 末尾の追記・ADR-0105 §3)、
+§4 段階3の「技はオンライン未対応」の前提が消えた。**A-7 の「P4-17: `capabilities.moves` を true にして技を
+復活させる」は、この A-13 で置き換える**(true にはしない。理由は A-13.1)。
+
+### A-13. 技は「種族と一緒に解決する」。`capabilities.moves` の意味は変えない
+
+#### 1. `capabilities.moves` は false のまま(意味を変えない)
+
+この項目の意味は `speciesList` と対になる「`MasterData.moves` が**全件**そろっているか」であり、
+`searchMoves` の limit 上限200 < 実データ515件という §1 の事実は、技の ID 解決が入っても変わらない。
+`getMovesByIds` が解決するのは「**既に確定した ID の集合**」だけで、全件の一覧ではない。
+
+true にする案を却下した理由: `capabilities.moves` は BalanceScreen の `balanceAvailable`(A-9)も決めている。
+true にすると BalanceScreen は「有効」に見えるのに `master.moves` が空のままで、各枠の技セレクトが
+1件も選べない**壊れた状態**になる(A-9 が避けたかったものそのもの)。この画面の技検索 UI は P4-17b に送る
+(下の 5)。
+
+#### 2. 技セレクトの有効・無効は「いま技の候補があるか」で決める
+
+A-5 は技セレクトの `disabled` を `capabilities.moves === false` に結び付けていたが、P4-17 からは
+**攻撃側の種族が解決済みなら技を選べる**ので、この条件では足りない。判定を1つに決める:
+
+- **技セレクトが使えるのは `capabilities.moves === true`、または攻撃側の技の候補が1件以上あるとき**
+  (`learnsetMoves(攻撃側の種族, 解決済みの技を足した一覧)` が空でないとき)。
+- `masterOnlineText.movesUnavailable` は、**技セレクトが `disabled` のときとちょうど同じ条件**で出す
+  (A-5 の「欄は残して disabled + 案内」の作法は変えない)。文言はオンラインかどうかに触れない形に改めた
+  (画面はモードの名前を持たない。A-2)。
+- 結果として「種族が未選択」「検索で選んだ直後、技がまだ届いていない間(解決中)」「解決したが技を
+  1つも覚えない」の3つで disabled になる。オフライン相当のマスタ(`capabilities` 省略)は今までどおり
+  常に有効で、この変更の影響を受けない。
+- 技は**常に攻撃側**の learnset から選ぶ(ADR-0010)。攻守入れ替え(計算画面)と「与えた/受けた」の
+  切り替え(逆算画面)では、技の出どころも新しい攻撃側に付いて変わる。
+
+#### 3. 技は `resolveSpecies` が種族・特性と一緒に返す(`MasterSpeciesResolution.moves`)
+
+種族の検索・解決の経路(A-10)をもう1本増やさない。1回の `resolveSpecies` で種族・特性・技がそろう。
+画面は `speciesResolution.ts`(A-10 の覚え書き)に `movesFor(master.moves, key)` を足し、
+`abilitiesFor` と同じ形で「全件の一覧 + 解決で覚えた分」を返す(`domain/moves.ts` の `learnsetMoves` は無変更)。
+
+**技の解決に失敗したら `resolveSpecies` 全体を失敗させる**(種族・特性だけ返さない)。技の無い種族を
+選べてしまうと、その後の計算・逆算が「技が選べないのに種族だけ入っている」壊れた状態になる。
+§4 の「壊れた結果を返すよりは機能を絞って正直に出す」に合わせ、種族の選択自体を失敗として
+`speciesSearchFailed` を出す(検索欄の既存の失敗表示。A-10 の経路をそのまま使う)。
+
+#### 4. 64件ずつに分割して呼ぶ(1回で収まる前提を置かない)
+
+`ids` は契約上1〜64件(`MOVES_BATCH_MAX_IDS`。65件以上・省略は 400 `invalid_input`)。
+**1種族の learnset が64件に収まる保証は無い**(API レーンも実データ未確認。§3 末尾の追記の明示の依頼)ので、
+`learnset` を64件ずつに分けて複数回呼び、応答をチャンクの順につなぐ。分割した呼び出しは**並列でよい**
+(1種族の解決の中の話で、issue #110 が懸念した「1リクエストでの増幅」には当たらない)。
+`AbortSignal` は**全チャンクに同じものを渡す**(1回の `resolveSpecies` として取り消せるように)。
+`learnset` が空なら1回も呼ばない(`ids` の省略は 400)。
+定数 `MOVES_BATCH_MAX_IDS` は契約の `maxItems` と一致することをテストで固定する
+(pokedex-svc 側の同期テストと同じ考え方)。
+
+#### 5. BalanceScreen は据え置き(P4-17b へ)
+
+A-9 の決定(`speciesList` と `moves` が両方 true のマスタでだけ動かす)は**そのまま**。1 のとおり
+`capabilities.moves` は false のままなので、オンラインでは今までどおり画面ごと無効化され、
+balance API も呼ばない。A-9 の「P4-17 への申し送り」(各枠に種族検索を広げる)は **P4-17b** として
+`docs/plan.md` に積み残す。この画面は枠ごとに技を**4つまで**選ぶので、種族検索 + 種族ごとの技解決を
+6枠 × 2(パーティ・仮想敵)へ広げる設計が別途要る(計算画面の「攻撃側1体ぶん」とは規模が違う)。
+「有効なのに技が選べない」状態にしないことは回帰テストで固定した(`BalanceScreen.online.test.tsx`)。
+
+#### 6. 変更するファイル(implementer 向け)
+
+| ファイル | 変更 |
+|---|---|
+| `web/src/master/types.ts` | `MasterSpeciesResolution.moves`(済。spec-writer)・`capabilities.moves` の doc |
+| `web/src/master/onlineSource.ts` | `MOVES_BATCH_MAX_IDS`(済)、`resolveSpecies` の技解決(分割呼び出し) |
+| `web/src/screens/speciesResolution.ts` | `movesFor` を足す(`abilitiesFor` と同じ形) |
+| `web/src/screens/CalcScreen.tsx` | `movesFor` を使う(`attackerMoves`・`resolveMoveId` の呼び出し3か所・攻守入れ替え)、技セレクトの `disabled` と案内の条件(2) |
+| `web/src/screens/ReverseScreen.tsx` | 同上(`moveOptions`・`selectSide`・`selectMySpecies`/`selectTheirsSpecies`・`handleMineResolved`/`handleTheirsResolved`) |
+| `web/src/i18n/ja.ts` | `movesUnavailable` の文言(済。spec-writer) |
+| `web/src/screens/BalanceScreen.tsx` | **変えない**(5。回帰テストのみ) |
+| `web/src/domain/moves.ts` | **変えない**(呼び出し側が渡す一覧を変えるだけ) |
+
+`api/openapi.yaml`・`services/`・`engine/`・`ios/` はこのタスクで変えない(API レーンが対応済み)。
