@@ -681,6 +681,13 @@ func TestConvertRejectsDuplicateSourceIDs(t *testing.T) {
 		{"Showdown の技 id", func(t *testing.T, in *importer.Input) {
 			in.Showdown.Moves = append(in.Showdown.Moves, *showdownMove(t, in, "testflame"))
 		}},
+		{"Showdown の技 id(正規の行が無い別の版が2つ)", func(t *testing.T, in *importer.Input) {
+			a := *showdownMove(t, in, "testflame")
+			a.ID, a.Name = "testnobase", "Test Nobase One"
+			b := a
+			b.Name = "Test Nobase Two"
+			in.Showdown.Moves = append(in.Showdown.Moves, a, b)
+		}},
 		{"Showdown の種族 id", func(t *testing.T, in *importer.Input) {
 			in.Showdown.Species = append(in.Showdown.Species, *showdownSpecies(t, in, "testleaf"))
 		}},
@@ -1133,5 +1140,32 @@ func TestConvertFoldsShowdownMoveVariants(t *testing.T) {
 				t.Errorf("before=%v: testflame のタイプが版の値で上書きされた: %q(期待 %q)", before, m.Type, wantType)
 			}
 		}
+	}
+}
+
+// TestReconcileUsesFoldedShowdownMoves は、照合(Reconcile)も別の版をまとめた入力で行い、版の値
+// (タイプ)で正規の技の差分が出ないこと(PR #354 の critic 指摘)。
+func TestReconcileUsesFoldedShowdownMoves(t *testing.T) {
+	in := reconcileInput(t)
+	base := *showdownMove(t, &in, "testflame")
+	variant := base
+	variant.Name = base.Name + " Variant"
+	for _, m := range in.Showdown.Moves {
+		if m.Type != base.Type {
+			variant.Type = m.Type
+			break
+		}
+	}
+	_, baseRec, err := importer.Reconcile(reconcileInput(t))
+	if err != nil {
+		t.Fatalf("Reconcile(元の入力): %v", err)
+	}
+	in.Showdown.Moves = append(in.Showdown.Moves, variant)
+	_, rec, err := importer.Reconcile(in)
+	if err != nil {
+		t.Fatalf("Reconcile(版を足した入力): %v", err)
+	}
+	if len(rec.MoveDiffs) != len(baseRec.MoveDiffs) || len(rec.Report.Blockers) != len(baseRec.Report.Blockers) {
+		t.Errorf("版を足すと照合の差分・blocker が変わった: diffs %d → %d, blockers %d → %d", len(baseRec.MoveDiffs), len(rec.MoveDiffs), len(baseRec.Report.Blockers), len(rec.Report.Blockers))
 	}
 }
