@@ -63,6 +63,10 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
     /// 理由で名前は変えない。2章)。
     public private(set) var speciesOptions: [SpeciesSummary] = []
     public private(set) var itemOptions: [Item] = []
+
+    /// 持ち物の一覧(`searchItems(query: "", limit: MasterSearch.pageLimit)` の1回の取得)が上限に達した
+    /// (ADR-0501「issue #68 の残り」6章)。
+    public private(set) var itemOptionsReachedLimit = false
     /// 攻撃側(与えたダメージ = 自分、受けたダメージ = 相手)の「直近の技検索の結果 ∩ learnset の
     /// ID 集合」を learnset の順で並べた、**ダメージ技だけ**の選択肢(変化技は逆算できないので出さない)。
     public private(set) var moveOptions: [Move] = []
@@ -160,6 +164,7 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
             mergeMovesIntoDictionary(moves)
 
             itemOptions = items
+            itemOptionsReachedLimit = items.count >= MasterSearch.pageLimit
 
             guard species.count >= Self.minimumSpeciesCount else {
                 throw PokeCalcError(
@@ -179,7 +184,8 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
 
             try await reloadMoveOptions(token: token)
             guard token == latestRequestToken else { return }
-            try reselectMove(preferringCurrent: nil)
+            try await reselectMove(preferringCurrent: nil, token: token)
+            guard token == latestRequestToken else { return }
         } catch {
             guard token == latestRequestToken else { return }
             handleInputFailure(error)
@@ -230,7 +236,8 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
             do {
                 try await reloadMoveOptions(token: token)
                 guard token == latestRequestToken else { return }
-                try reselectMove(preferringCurrent: selection.individual.moveId)
+                try await reselectMove(preferringCurrent: selection.individual.moveId, token: token)
+                guard token == latestRequestToken else { return }
             } catch {
                 guard token == latestRequestToken else { return }
                 handleInputFailure(error)
@@ -535,7 +542,8 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
             let previousMoveId = moveId
             try await reloadMoveOptions(token: token)
             guard token == latestRequestToken else { return }
-            try reselectMove(preferringCurrent: previousMoveId)
+            try await reselectMove(preferringCurrent: previousMoveId, token: token)
+            guard token == latestRequestToken else { return }
         } catch {
             guard token == latestRequestToken else { return }
             handleInputFailure(error)
@@ -580,17 +588,65 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
         for item in items { moveDictionary[item.id] = item }
     }
 
-    /// `currentMoveId` がいまの `moveOptions` にまだあればそれを残し、無ければ最初のダメージ技を選ぶ。
-    /// `moveOptions` が空(ダメージ技が1つも無い)ときは `moveUnavailable`。
-    private func reselectMove(preferringCurrent currentMoveId: String?) throws {
-        if let currentMoveId, moveOptions.contains(where: { $0.id == currentMoveId }) {
-            moveId = currentMoveId
+    /// `currentMoveId` を2段で選び直す(`CalcViewModel.reselectMove` と同じ規則。ADR-0501「issue #68 の
+    /// 残り」3章)。逆算は**ダメージ技だけ**選べるので、Calc と違い変化技にはフォールバックしない
+    /// (見つからなければ `moveUnavailable`)。
+    ///
+    /// 1. **優先する技**: `currentMoveId` がいまの learnset(ID 集合)にあれば、辞書にあるならそのまま、
+    ///    無ければ `move(id:)` で1回だけ解決する。**ダメージ技のときだけ**選ぶ(`moveOptions` に無くても)。
+    /// 2. **既定の技**: `moveOptions`(検索結果 ∩ learnset ∩ ダメージ技)から選べればその最初。
+    ///    選べないときだけ、learnset を先頭から辞書 or `move(id:)`(上限まで)で解決し、最初のダメージ技を選ぶ。
+    ///
+    /// `token`・`CancellationError` の扱いは `CalcViewModel.reselectMove` と同じ。
+    private func reselectMove(preferringCurrent currentMoveId: String?, token: Int) async throws {
+        if let currentMoveId, attackingLearnsetIds.contains(currentMoveId) {
+            var candidate = moveDictionary[currentMoveId]
+            if candidate == nil {
+                candidate = try await resolveMove(id: currentMoveId)
+                guard token == latestRequestToken else { return }
+            }
+            if let candidate, candidate.category != .status {
+                moveId = candidate.id
+                return
+            }
+            // 変化技、または解決できなかった(A4)ので、下の既定の技に進む。
+        }
+        if let firstMove = moveOptions.first {
+            moveId = firstMove.id
             return
         }
-        guard let firstMove = moveOptions.first else {
-            throw PokeCalcError(code: PokeCalcError.Code.moveUnavailable, message: "覚えるダメージ技がマスタに見つかりません")
+        // 既知の技だけでは既定が決まらない: learnset を先頭から解決し、最初のダメージ技を探す(4章)。
+        var lookups = 0
+        for learnedId in attackingLearnsetIds {
+            let known: Move?
+            if let dictionaryMove = moveDictionary[learnedId] {
+                known = dictionaryMove
+            } else {
+                guard lookups < MasterSearch.maxMoveLookupsPerSelection else { break }
+                lookups += 1
+                let resolved = try await resolveMove(id: learnedId)
+                guard token == latestRequestToken else { return }
+                known = resolved
+            }
+            guard let move = known, move.category != .status else { continue }
+            moveId = move.id
+            return
         }
-        moveId = firstMove.id
+        throw PokeCalcError(code: PokeCalcError.Code.moveUnavailable, message: "覚えるダメージ技がマスタに見つかりません")
+    }
+
+    /// `CalcViewModel.resolveMove` と同じ(`move(id:)` を呼び、成功したら技の辞書に入れて返す。
+    /// 失敗は `nil`、`CancellationError` は投げ直す)。
+    private func resolveMove(id: String) async throws -> Move? {
+        do {
+            let move = try await service.move(id: id)
+            moveDictionary[id] = move
+            return move
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            return nil
+        }
     }
 
     // MARK: - 内部: 逆算を呼ぶ
@@ -603,9 +659,20 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
             result = nil
             isLoading = false
             // 技が選べている(= マスタ起因のエラーではない)なら、計算しない状態に戻ったときに
-            // 古いエラー(前回の reverse 失敗等)を持ち越さない。`moveOptions` が空(moveUnavailable 等)
-            // のときは、その原因がまだ直っていないので消さない。
-            if moveOptions.contains(where: { $0.id == moveId }) {
+            // 古いエラー(前回の reverse 失敗等)を持ち越さない。判定は `moveOptions`(見えている候補)
+            // ではなく解決済みの選択(`selectedMove`)で行う: ID 解決した技は `moveOptions` に入らない
+            // (5章 A7)ため、`moveOptions` で判定すると解決済みでも `moveUnavailable` が残ってしまう
+            // (ADR-0501「issue #68 の残り」8章)。
+            //
+            // ただし `selectedMove != nil` だけでは足りない(critic 指摘: 種族変更で `reselectMove` が
+            // `moveUnavailable` を投げても、`moveId` は直前の種族の技のままで、辞書にはまだその技が
+            // 残っている。`selectedMove` はその「もう攻撃側の learnset に無い」古い技を返してしまい、
+            // 直っていない `moveUnavailable` を消してしまう)。`moveId` がいまの攻撃側の learnset(ID 集合)
+            // にあり、かつダメージ技であることまで確かめる(`reselectMove` が `moveId` を書き換えるのは
+            // 常にこの3条件を満たす技のときだけなので、これは「`reselectMove` が実際に選び直せたか」の
+            // 判定そのものになる)。`moveOptions` が空、または `moveId` が古い技のままのときは、
+            // その原因がまだ直っていないので消さない。
+            if let move = selectedMove, attackingLearnsetIds.contains(move.id), move.category != .status {
                 error = nil
             }
             return

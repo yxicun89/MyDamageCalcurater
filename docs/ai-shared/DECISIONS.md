@@ -1573,3 +1573,32 @@ iOS・データ・運用レーンへの追加対応は無し。critic 1回目FAI
 2回指定→2件)、空文字列の要素→エラーにせず黙って省く(`ids=&ids=teststrike`→1件)。
 併せて軽微な指摘(登録順を入れ替えても同じ結果になるのは恒久テストではなく調査時の使い捨てテストでの
 確認だと明記、DECISIONS.mdの64の根拠説明を統一)も反映。critic「重大なし」。
+
+## 2026-09-24: getMovesByIdsのids上限64件について実データを確認(API レーン → Web レーンへ訂正)
+Decision: PR #196マージ時点でDocker/k3dクラスタが停止しており検証できなかった「1種族のlearnsetが64件を
+超えるか」を、クラスタ復旧後に実クラスタ(k3d-pokecalc)で確認した。
+```
+SELECT COUNT(*) FROM (
+  SELECT l.species_key, COUNT(*) cnt FROM learnsets l
+  JOIN regulation_moves rm ON rm.move_id = l.move_id
+  WHERE rm.regulation_id = (SELECT id FROM regulations WHERE is_default = 1)
+  GROUP BY l.species_key HAVING cnt > 64
+) t;
+```
+結果: 既定のレギュレーション(M-C)で**349種族中151種族(43%)が64件を超え、最大106件**(図鑑番号0475。
+メガ進化フォームも同数)。ADR-0304 §3が当初書いていた「20〜30件」という目算は大幅に外れていた。
+**64件を超えるlearnsetはまれな例外ではなく、ごく普通に起こる**。ADR-0105 §3・ADR-0304 §3を実測値で更新した。
+Reason: 「1回で必ず収まる前提は置かない」という設計(PR #196で既に反映済み)自体は正しかったが、
+「まれなケースの保険」ではなく「日常的に発生する分割呼び出し」であることをWebレーンに正確に伝える必要がある。
+Impact: **Webレーンへ訂正**: `getMovesByIds`の分割呼び出しは例外処理ではなく主経路として実装すること
+(151/349種族=43%で必要になる)。前回の連絡(2026-09-24早め)で「64件超の実データ確認はまだ」と伝えていたが、
+今回確認が取れたので更新する。設計・APIの変更は無し(64件という上限値自体は据え置き。ADR-0105・ADR-0304参照)。
+
+## 2026-09-24: iOS レーンの統合(PR #199)。issue #68 の残り(選択中の技 ID の名前解決)を getMove で解消、issue クローズ
+Decision: ADR-0501「issue #68 の残り」のとおり、`PokeCalcService.move(id:)`(`getMove`)で**選択中の技だけ**を個別に解決する
+(計算・逆算は1操作あたり最大4件、構築編集は保存済みメンバーの未知の技 ID を load 時に)。learnset 全件は解決しない
+(一覧は「検索結果 ∩ learnset」のまま)。失敗時は従来の振る舞い(`moveUnavailable`/ID 表示)に戻す。持ち物の先頭ページが
+検索上限200に達したら黙って切り捨てず案内を出す(Web は読み込みを中止するが、iOS は画面全体を止めない判断。ADR 参照)。
+Reason: 他レーンのセッションから依頼(issue #68 の解消)。PR #136 の後に残っていた穴は、公開 API に技を ID で引く手段が
+無いことが原因だったが、PR #161 の `getMove` で解消できた。critic 1周目 FAIL(逆算の古いエラー消去条件の退行)→修正→2周目 PASS。
+Impact: issue #68 をクローズ。main に `getMovesByIds`(まとめ取り)が入ったので、構築編集の load は将来まとめ取りへ置き換え可能(任意)。

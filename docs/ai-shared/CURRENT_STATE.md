@@ -25,7 +25,8 @@ Status(追記): issue #148のAPIレーン担当分(ADR-0210。私設サービス
 Status(追記): P3-7 `GET /api/pokedex/moves/{key}`(getMove)を実装(判定レーン JD4 の依頼。ADR-0105 §3 追記)。契約・`services/pokedex/`(データレーンの範囲。越境理由と触ったファイル一覧は DECISIONS.md)まで一括実装。critic PASS(3往復)・**main 統合済み(PR #161)**。判定レーンは JD4 に着手し main 統合済み(PR #169)。
 Status(追記): issue #69(検索の並びがOpenAPI契約と一致しない)・issue #73(OpenAPIとengineの防御プリセット集合の同期検査)を修正・**main 統合済み(PR #167・#172)**。いずれも契約・テストの整合修正で、SQL・engine・ADR は無変更(既存の設計は元々正しかった)。両issueともclose済み。
 Status(追記): issue #113(入力変更時の古い計算要求を抑止・キャンセル)のAPIレーン連携分(「クライアントのcancel伝播」)を修正。gatewayの`ReverseProxy.ErrorHandler`がクライアントの要求中断(`context.Canceled`)を上流障害と区別せず「上流に到達できない」WARN・503 `upstream_unavailable`を返していたのを、クライアント起因のときは何もしない(応答を書かない)よう修正(ADR-0202 §5 追記・AC-G10)。**限界**: gateway→calc-svcへのcontextキャンセル伝播自体は効くが、calc-svc・engineはcontextを見ないため(engineを純粋に保つ絶対ルール2)、issue本文の「calc-svc CPU消費も止める」は未達成のまま(中断された逆算は完走する。ADR-0208の上限で最悪計算量は有界)。Web欄の「APIレーンの連携分が残っているか未確認」はこれで解消(Web欄の更新はWebレーンに委ねる)。issue #113はWeb・iOS・APIすべてのレーン分が完了としてクローズ可能と判断(詳細はDECISIONS.md)
-Status(追記): P4-17(ADR-0304 §3。技のID解決の欠落)を解消・**main 統合済み(PR #196)**。`GET /api/pokedex/moves/batch`(`getMovesByIds`)を新設。ADR-0304が当初推していた案A(`learnset`を`Move[]`に変える)は不採用: iOS(M3)が`learnset: string[]`前提の出荷済み機能を持つため、型変更より新エンドポイント新設の方が契約変更として小さいと判断。`learnset`が64件を超える場合の実データ確認は未実施(k3d停止中)のため、超過時はWeb側で分割呼び出しする設計。critic PASS(3往復)。
+Status(追記): P4-17(ADR-0304 §3。技のID解決の欠落)を解消・**main 統合済み(PR #196)**。`GET /api/pokedex/moves/batch`(`getMovesByIds`)を新設。ADR-0304が当初推していた案A(`learnset`を`Move[]`に変える)は不採用: iOS(M3)が`learnset: string[]`前提の出荷済み機能を持つため、型変更より新エンドポイント新設の方が契約変更として小さいと判断。critic PASS(3往復)。
+Status(追記): `learnset`が64件を超える場合の実データを確認(クラスタ復旧後)。**349種族中151種族(43%)が64件超・最大106件**で、まれな例外ではなく日常的なケース。Web側の分割呼び出しは主経路として実装が必要と訂正・連絡済み(DECISIONS.md 2026-09-24)。
 Next: 他レーンからの依頼待ち。issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
 
 ## Web
@@ -106,9 +107,12 @@ Web・iOS 両方完了でクローズ済み)、P6-6(issue #110の iOS側追従�
 決定的切り捨てとはあえて変えた判断はADR参照)。critic指摘でguardの位置(`beginInput()`より前)を固定する
 回帰テストを追補。引き継ぎ検証で契約との同期検査 `ios/scripts/check-request-limits.sh` と観測上限の XCUITest を
 追加。**PR #186 で main 統合済み**)。`make ios-test`(gen-check・件数上限の同期検査・XCTest 340件〈xcresult 集計353件〉・XCUITest 17件・Info.plist 検査)が緑。
-issue #68 は既知の制約(一度も検索結果に出ていない技IDは名前解決できない)をコメントで記録した上でクローズせず残す。
+issue #68 の残り(一度も検索結果に出ていない選択中の技IDを名前解決できない)は P6-9 で `getMove` による個別解決を
+実装して解消(ADR-0501「issue #68 の残り」。持ち物の先頭ページが上限に達したら黙って切り捨てず案内を出す。critic
+1周目 FAIL〈逆算の古いエラー消去条件の退行〉→修正→2周目 PASS。**PR #199 で main 統合済み、issue #68 クローズ済み**)。
 issue #110 は API・データ・Web・iOS すべて完了したためクローズ済み(2026-09-24)。
-Next: (1) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。#71(攻撃側プリセット
+Next: (1) 任意: 構築編集の load で技をメンバーごとに `getMove` 最大4件 → main に入った `getMovesByIds`(まとめ取り)へ置き換え(急ぎではない)。
+(2) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。#71(攻撃側プリセット
 単一化)は engine 側の `AttackerPreset` カタログ新設(データレーン)が前提のため iOS からは未着手。将来の候補:
 engine の Champions マスタが pokedex-svc 経由になったら iOS のモック/実マスタの差し替え動作を再確認、Web の
 record/team-svc(M2)が進んだら iOS の構築を端末内保存から API 保存へ移行するかを検討。

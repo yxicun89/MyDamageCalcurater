@@ -10,6 +10,10 @@ public protocol PokeCalcService: Sendable {
     func species(key: String) async throws -> SpeciesDetail
     /// 技を日本語名で前方一致検索。
     func searchMoves(query: String, limit: Int) async throws -> [Move]
+    /// 技を ID で1件引く(openapi `getMove`。マスタに無ければ `PokeCalcError.Code.notFound`)。
+    /// 検索結果に一度も現れていない「選択中の技」の名前を解決するためだけに使う
+    /// (learnset 全件の実体化には使わない。ADR-0501「issue #68 の残り」)。
+    func move(id: String) async throws -> Move
     /// 持ち物を日本語名で前方一致検索。
     func searchItems(query: String, limit: Int) async throws -> [Item]
     /// 性格の一覧(補正する能力)。

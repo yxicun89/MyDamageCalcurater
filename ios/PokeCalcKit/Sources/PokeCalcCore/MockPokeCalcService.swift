@@ -50,6 +50,13 @@ public struct MockPokeCalcService: PokeCalcService {
             .map(Self.domainMove)
     }
 
+    public func move(id: String) async throws -> Move {
+        guard let entry = fixtures.moves.first(where: { $0.id == id }) else {
+            throw Self.notFoundError("技", id)
+        }
+        return try Self.domainMove(entry)
+    }
+
     public func searchItems(query: String, limit: Int) async throws -> [Item] {
         matchingByPrefix(fixtures.items, query: query, limit: limit, nameJa: { $0.nameJa })
             .map { Item(id: $0.id, nameJa: $0.nameJa) }

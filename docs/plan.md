@@ -270,6 +270,16 @@
   観測上限の XCUITest `testAddObservationButtonIsDisabledWithReasonAtTheLimit`(ボタン無効+理由表示。
   ライト/ダークのスクリーンショットで崩れ・文字切れなしを目視確認)も追加。`make ios-test`(unit 353件〈xcresult 集計。XCTest 実行数は340件〉・XCUITest
   17件・Info.plist 検査)成功
+- [x] P6-9 issue #68 の残り(iOS): 選択中の技が検索結果に一度も現れていないとき、`getMove`(PR #161)で名前を解決する。
+  計算・逆算は起動時・種族変更・構築からの呼び出しで「選ぶべき技」だけを解決(learnset 全件は解決しない。1操作
+  最大 `MasterSearch.maxMoveLookupsPerSelection` = 4 回)、構築は保存済みの技の名前を `load()` で解決。失敗は今日の
+  振る舞い(`moveUnavailable` / ID のまま)。持ち物は一覧のまま、上限到達で `itemOptionsReachedLimit` と案内。
+  方針は ADR-0501「issue #68 の残り」。implementer 実装完了 → critic 1回目 FAIL(`ReverseViewModel.recalculateIfPossible`
+  の古いエラーの消し方が `selectedMove != nil` だけでは不十分で、直前の種族の解決済みの技が辞書に残っているせいで
+  `moveUnavailable` を誤って消す回帰があった。ADR-0501「issue #68 の残り」11章)。判定を「`selectedMove` + いまの
+  攻撃側の learnset の ID 集合 + ダメージ技」の3条件に直し、回帰・変更理由・stage-2 解決ループの世代保護の回帰テストを
+  4本追加(いずれも該当箇所を戻すと実際に red になることを確認済み)。`swift test` 383件・`make ios-test`
+  (unit 396件・XCUITest 17件・Info.plist 検査)すべて成功。**issue #68 は iOS 側を閉じてよい**(ADR 7章)
 - [ ] P6-7 ADR-0209 §8 の文言と「この端末のデータを削除」の UI(issue #103。record-svc / team-svc の全削除 API 実装後)
 - [x] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼された
   内容どおり `ColorToken.danger` のライト値を `0xE5,0x48,0x4D` → `0xCD,0x1D,0x23` に更新し、
