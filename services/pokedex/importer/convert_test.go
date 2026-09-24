@@ -1090,3 +1090,48 @@ func TestConvertIsDeterministic(t *testing.T) {
 		t.Errorf("Moves が ID 順でない")
 	}
 }
+
+// TestConvertFoldsShowdownMoveVariants は、Showdown が同じ id で返す技の別の版(名前が違う)を、
+// toID(名前) == id の正規の1件にまとめ、止めずに警告に出すこと。版が正規の行より前でも後でも同じ。
+// 正規の行の値(タイプ)が採られ、版の値で上書きされない。
+func TestConvertFoldsShowdownMoveVariants(t *testing.T) {
+	baseOut, _ := convertOK(t, loadFixture(t))
+	wantType := ""
+	for _, m := range baseOut.Moves {
+		if m.ID == "testflame" {
+			wantType = m.Type
+		}
+	}
+	if wantType == "" {
+		t.Fatal("fixture の変換結果に testflame が無い")
+	}
+	for _, before := range []bool{false, true} {
+		in := loadFixture(t)
+		base := *showdownMove(t, &in, "testflame")
+		variant := base
+		variant.Name = base.Name + " Variant"
+		for _, m := range in.Showdown.Moves {
+			if m.Type != base.Type {
+				variant.Type = m.Type
+				break
+			}
+		}
+		if variant.Type == base.Type {
+			t.Fatal("fixture に testflame と別のタイプの技が無い")
+		}
+		if before {
+			in.Showdown.Moves = append([]importer.ShowdownMove{variant}, in.Showdown.Moves...)
+		} else {
+			in.Showdown.Moves = append(in.Showdown.Moves, variant)
+		}
+		out, rep := convertOK(t, in)
+		if !hasFinding(rep.Warnings, importer.KindMoveVariantFolded, "testflamevariant") {
+			t.Errorf("before=%v: まとめた版(testflamevariant)が Warnings に無い", before)
+		}
+		for _, m := range out.Moves {
+			if m.ID == "testflame" && m.Type != wantType {
+				t.Errorf("before=%v: testflame のタイプが版の値で上書きされた: %q(期待 %q)", before, m.Type, wantType)
+			}
+		}
+	}
+}

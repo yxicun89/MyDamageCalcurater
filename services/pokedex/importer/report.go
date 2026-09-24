@@ -30,6 +30,10 @@ const (
 	KindMoveTypeMismatch  FindingKind = "move-type-mismatch"
 	KindMoveValueMismatch FindingKind = "move-value-mismatch"
 
+	// KindMoveVariantFolded は、Showdown が同じ id で返した技の別の版(タイプ違い等)を、正規の1件
+	// (toID(名前) == id)にまとめて除いたときの案内(止めない。ADR-0115 追記)。ID は除いた版の toID(名前)。
+	KindMoveVariantFolded FindingKind = "move-variant-folded"
+
 	// KindItemExcluded / KindItemShowdownOnly は持ち物の取り込み判定(ADR-0101 §5「技と同じ規則」)。
 	KindItemExcluded     FindingKind = "item-excluded"
 	KindItemShowdownOnly FindingKind = "item-showdown-only"

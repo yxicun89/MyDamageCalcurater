@@ -67,3 +67,16 @@
   PokeAPI の `items.csv` には toID が同じ `roseli-berry` が2行あるが、片方は日本語名を持たず抽出されない。
   Showdown の id は取得元のオブジェクトのキーなので重複しない。実データの照合結果は変わらない見込みで、
   マージ後に `make import-dry-run` の `blockers: none` を確かめる。
+
+## 追記(2026-09-25): Showdown の技の別の版を正規の1件にまとめる
+
+PR #347 のマージ後、実データの `make import-dry-run` が「Showdown の技 id が重複している」で止まった。Showdown の Dex は
+同じ技のタイプ違いの版(16 件)を、名前は別のまま基本形と同じ id で返す。以前は ID で引く map で後の行が黙って勝っていた。
+
+- 決定: `Convert` の最初(`foldShowdownMoveVariants`。`services/pokedex/importer/convert_variants.go`)で、同じ id の行のうち
+  toID(名前) == id の行がちょうど1件あるときだけ、それを正規として残し、ほかの版は `move-variant-folded` の警告(ID は版の
+  toID(名前)、Detail はまとめ先の id)に出して除く。正規の行が無い・複数ある(完全な重複を含む)ときはまとめず、
+  #311 の重複検査で止める。
+- 確認: 実データで `blockers: none`、技の取り込み件数・照合の verdict は変わらない(`move-variant-folded: 16`)。
+- 反省: 取得元の値に新しい検査を足す変更は、マージ前に実データで `make import-dry-run` を実行して `blockers: none` を確かめる
+  (架空データと固定版の抜き取りだけでは、Dex が返す形の違いを見逃した)。
