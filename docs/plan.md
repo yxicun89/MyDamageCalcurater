@@ -239,7 +239,16 @@
   `calc_events` 等の業務テーブルは P5-3/P5-4 で追加する。ADR-0211「背景」で当初案から縮小)。
   purge journal〈#5b。DB 側とは別に DB 外の独立した保存先〈P7-4 が決める〉にも同時に追記する〉は、
   その独立保存先が無い P5-3〜P7-4 の間は未充足のままになる既知のギャップ(ADR-0209 追記・ADR-0211 §6 参照)。
-  保持日数・墓石猶予の環境変数名と既定値は ADR-0211 §7 で確定し、起動時検証コード自体は P5-3/P5-4 で書く
+  保持日数・墓石猶予の環境変数名と既定値は ADR-0211 §7 で確定し、起動時検証コード自体は P5-3/P5-4 で書く。
+  **実装状況(2026-09-25)**: `services/internal/dbmigrate` の切り出し・`services/record`・`services/team`
+  のスキーマ/migrate CLI(PR #205)、TiDB Operator の k8s マニフェスト(TidbCluster・TidbInitializer)・
+  `up.sh` 配線・回帰テストまで実装済み(critic 2ラウンドで裏取り。TiDB Operator v1.6.6 の実ソースまで
+  確認して `passwordSecret` のキー名・初期化用イメージ・namespace・資格情報境界の誤りを修正済み)。
+  **残作業**: 共有 k3d クラスタへの実適用(AC-T3・AC-T8)は未実施(他レーンが使う共有クラスタへの影響を
+  先に確認する必要があるため、このセッションでは意図的に見送った。次に `make up` を実行するときに
+  TidbCluster・TidbInitializer が実際に Ready/Completed になることを確認する)。TidbInitializer の
+  `tnir/mysqlclient` イメージは amd64 専用(上流がそれしか提供していない)で、Apple Silicon の k3d
+  ノードでの起動可否(QEMU エミュレーション経由)も未確認
 - [ ] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)。
   ストリームの `max_age` は7日、イベントに発生時刻(`occurred_at`)を載せる(ADR-0209 §7・#6)。
   record-svc と team-svc(P5-4)は**別々の durable consumer**を持つ(同じ consumer を共有すると配送が分かれ

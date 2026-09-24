@@ -87,6 +87,15 @@ helm upgrade --install tidb-operator pingcap/tidb-operator \
 
 **3.2 TidbCluster / TidbInitializer(`deploy/k8s/overlays/local/tidb/`)**
 
+**実装時の追記(2026-09-24)**: `deploy/k8s/overlays/local/kustomization.yaml` の `resources` には
+`tidb` を含めない。`kubectl apply -k deploy/k8s/overlays/local`(base・mysql を含む1回の呼び出し)に
+TidbCluster/TidbInitializer を混ぜると、TiDB Operator の CRD が無いとき(§3.1 の bootstrap が
+失敗したとき)に **この1回の apply コマンド全体が失敗し**、mysql・pokedex を含む他サービスの適用まで
+巻き込んで止まる(§3.1「他レーンへの影響を避ける非致命化」の趣旨に反する)。したがって
+`deploy/k8s/overlays/local/tidb` は独立した kustomization のまま(ディレクトリ配置は mysql と対称)、
+`up.sh` から**別の** `kubectl apply -k deploy/k8s/overlays/local/tidb` として非致命的に適用する
+(§3.1 の bootstrap 失敗時と同様、`|| echo 警告 ... 続行` で扱う。「影響」の up.sh 呼び出し順序を参照)。
+
 PD/TiKV/TiDB 各1レプリカ、CPU/メモリ/ストレージの request・limit を明示する(既存の mysql overlay が
 明示している慣習に揃える。上流の `examples/basic/tidb-cluster.yaml` は CPU/メモリを書いていないが、
 それは「どの Kubernetes クラスタでも動く最小例」を優先しているためで、共有の k3d クラスタで他サービスの
@@ -108,17 +117,25 @@ Pod と資源を取り合う本リポジトリでは上限を明示する):
   生成し、`kubectl -n pokecalc get secret tidb-root-auth` が既に無いときだけ作る。mysql-auth と同じ流儀)、
   `initSql: "CREATE DATABASE IF NOT EXISTS record; CREATE DATABASE IF NOT EXISTS team;"` を実行する。
   **`tidb-root-auth` はどのサービス Pod にも一切マウントしない**(§4)。
-- **`TidbInitializer` の完了待ち(順序制約)**: `record`/`team` の migrate Job は、DB が実在し root パスワードが
-  設定済みであることを前提に `RECORD_PROVISION_DSN`(root 相当・`/record` 付き)へ接続する。`TidbCluster` の
-  Ready(TiDB サーバプロセスが起動している)は `TidbInitializer` の完了(root パスワード設定・DB 作成)を
-  保証しない(別の Job として非同期に走る)ため、`up.sh` は
-  `TidbCluster` の Ready 待ち → **`TidbInitializer` が作る Job の完了待ち**
-  (`kubectl -n pokecalc wait --for=condition=complete job/<TidbInitializer が作る Job 名。実装時に確定> --timeout=180s`。
-  Job 名は TiDB Operator の命名規則(例: `<cluster名>-tidb-initializer`)に従う。
-  `up.sh` の pokedex-migrate 完了待ちと同形)→ record/team の migrate Job 適用・完了待ち、の順で待つ
-  (後述「影響」の up.sh 変更点に反映)。この待ちがあるため、record/team の migrate Job 自身の initContainer は
-  pokedex の `mysqladmin ping`(サーバ到達性だけを見る)と同じ簡潔さでよい(DB・ユーザーの実在は
-  外側の up.sh の待ちで保証済みのため、initContainer 側で二重に確かめない)。
+- **`TidbCluster`・`TidbInitializer` の Ready/完了待ち(順序制約。API の実際の形を確認して決定)**:
+  `record`/`team` の migrate Job は、DB が実在し root パスワードが設定済みであることを前提に
+  `RECORD_PROVISION_DSN`(root 相当・`/record` 付き)へ接続する。
+  - `TidbCluster` には(`Job`・多くの Kubernetes 組み込みリソースと違い)`.status.conditions[].type=Ready`
+    のような汎用条件が無い(TiDB Operator v1.6.6 の API 定義で確認済み)。かわりに PD/TiKV/TiDB は
+    それぞれ独立した `StatefulSet`(名前は `<TidbCluster 名>-pd`・`-tikv`・`-tidb`。本 ADR の
+    `metadata.name: pokecalc-tidb` なら `pokecalc-tidb-pd` 等)として作られるため、
+    `kubectl -n pokecalc rollout status statefulset/pokecalc-tidb-pd`(以下 `-tikv`・`-tidb` も同様)を
+    3回呼ぶ(mysql の `rollout status statefulset/mysql` と同じ手段。新しい待ち方を持ち込まない)。
+  - `TidbInitializer` も `Job` ではなく独自の CR で、完了は `.status.phase == "Completed"`
+    (`Pending`/`Running`/`Completed`/`Failed`。TiDB Operator v1.6.6 のソースで確認済み)で表される。
+    `kubectl wait` の `--for=jsonpath=...`(kubectl 1.23+)を使い、
+    `kubectl -n pokecalc wait --for=jsonpath='{.status.phase}'=Completed tidbinitializer/pokecalc --timeout=180s`
+    で待つ(`TidbInitializer` の `metadata.name: pokecalc` を対象にする。Job 名を推測する必要が無い)。
+  - 待つ順序: PD/TiKV/TiDB の `StatefulSet` Ready(3つ)→ `TidbInitializer` の `Completed` → record/team の
+    migrate Job 適用・完了待ち(後述「影響」の up.sh 変更点に反映)。この待ちがあるため、record/team の
+    migrate Job 自身の initContainer は pokedex の `mysqladmin ping`(サーバ到達性だけを見る)と同じ
+    簡潔さでよい(DB・ユーザーの実在は外側の up.sh の待ちで保証済みのため、initContainer 側で
+    二重に確かめない)。
 - **リソースの実測との照合**: 2026-09-24 時点の k3d クラスタ実測(`docker stats`・`kubectl top nodes`)は
   15 CPU / 7.75GiB 中、CPU 使用 11.9%(≈1.8 CPU)・メモリ使用 33%(2.6GiB)。今回追加する limit 合計は
   CPU 1.1 / メモリ 2.03GiB、request 合計は CPU 0.4 / メモリ 1.02GiB。スケジューリングを左右するのは
@@ -351,9 +368,14 @@ gateway が直接ルーティングする中核サービスで、pokedex/calc �
   `services/pokedex/db/grants.go`(`AppPrivileges` 定数を追加。既存の `ReaderPrivileges`/
   `ImporterPrivileges`/`MigratorPrivileges` は変更しない)、
   `scripts/up.sh`(§3.1 の bootstrap 呼び出し〈非致命〉・`tidb-root-auth`/`record-db-auth`/`team-db-auth`
-  Secret 作成・overlays/local/tidb の apply・TidbCluster の Ready 待ち。呼び出し順序は
-  bootstrap → Secret 作成 → overlay apply → TidbCluster Ready 待ち → TidbInitializer Job 完了待ち
-  〈§3.2〉→ record/team migrate Job 適用・完了待ち)、`.env.example`(TiDB ローカル DSN の例を追記)、
+  Secret 作成・`deploy/k8s/overlays/local/tidb` の apply〈非致命。§3.2 実装時の追記〉・TidbCluster の
+  Ready 待ち。呼び出し順序は bootstrap(非致命)→ `tidb-root-auth` 作成 → 通常の overlay apply
+  (base・mysql・pokedex-migrate。既存のまま)→ `deploy/k8s/overlays/local/tidb` の apply(非致命)→
+  PD/TiKV/TiDB の StatefulSet Ready 待ち → TidbInitializer の `Completed` 待ち〈§3.2〉→
+  `record-db-auth`/`team-db-auth` 作成 →
+  record/team migrate Job 適用・完了待ち。TiDB 関連の非致命ステップがどこで失敗しても、それより後の
+  TiDB 関連ステップは実行時にスキップされる〈存在しない Secret・CR に対する待ちにならないよう、
+  各ステップの前に前段の成功を確認する〉)、`.env.example`(TiDB ローカル DSN の例を追記)、
   `Makefile`(`tidb-local-up`・record/team それぞれの `migrate-up`/`migrate-version`。down は pokedex と
   同様に破壊的操作として `CONFIRM_DESTROY` 必須。`test-db` に record/team を追加し、
   `RECORD_TEST_DSN`/`TEAM_TEST_DSN`〈root 相当。`grants_tidb_test.go` 用〉を新しい必須環境変数として追加)。
@@ -374,7 +396,8 @@ gateway が直接ルーティングする中核サービスで、pokedex/calc �
   (pokedex の migration テストと同じ形〈layout_test.go 相当〉で確認する。実 DB 接続が要るテストは
   `test-db` 相当に含め `make test` には含めない。pokedex の慣習と同じ)。
 - AC-T3: k3d で `scripts/tidb-operator-bootstrap.sh` → `deploy/k8s/overlays/local/tidb` の適用後、
-  `TidbCluster` の Ready を `kubectl -n pokecalc get tidbcluster` で確認できる。
+  PD/TiKV/TiDB の `StatefulSet`(`pokecalc-tidb-pd`・`-tikv`・`-tidb`)の Ready を
+  `kubectl -n pokecalc rollout status statefulset/pokecalc-tidb-pd` 等で確認できる。
   PD/TiKV/TiDB の全 Pod が Running を5分以上維持し `restartCount` が増えないこと(TiKV のメモリ limit が
   実運用で厳しすぎないかの確認)。他サービス(balance/judge/speed/web/gateway/calc/pokedex/mysql)の Pod が
   Evicted/OOMKilled にならないことを `kubectl get pods -n pokecalc` で確認する。
@@ -393,9 +416,9 @@ gateway が直接ルーティングする中核サービスで、pokedex/calc �
 - AC-T7: `record-db-auth`・`team-db-auth`・`tidb-root-auth` それぞれについて、どのマニフェスト
   (Deployment/Job)がどの Secret のどのキーを参照するかを一覧し、record 側のマニフェストが
   `team-db-auth`・`tidb-root-auth` のキーを一切参照しないこと(ADR-0110 の資格情報境界の確認と同形)。
-- AC-T8: `up.sh` が `TidbInitializer` の Job 完了を待ってから record/team の migrate Job を適用すること
-  (§3.2 の順序制約)。この待ちを外すと migrate Job が `Unknown database` または認証エラーで失敗しうることを、
-  実装時に一度わざと待ちを外して再現させてから戻す(mutation 確認)。
+- AC-T8: `up.sh` が `TidbInitializer` の `.status.phase == "Completed"` を待ってから record/team の
+  migrate Job を適用すること(§3.2 の順序制約)。この待ちを外すと migrate Job が `Unknown database`
+  または認証エラーで失敗しうることを、実装時に一度わざと待ちを外して再現させてから戻す(mutation 確認)。
 
 ## 人間の確認が必要なこと
 
@@ -433,3 +456,27 @@ TiDB クラスタ・データ自体の新規作成(クラスタ削除・DB の�
   kustomize overlay の `resources` に含めず、TidbInitializer 完了待ちの後に個別 apply する運用に修正
   (含めると Initializer 完了前に Job が動き出し `Unknown database` で失敗しうるため)。
   `job/<initializer名>` のプレースホルダ表記を明確化。
+- 2026-09-24 k8s マニフェスト・`up.sh` 配線の実装(critic レビュー)で判明した、設計時には
+  気づけなかった実装上の誤りを修正:
+  - `TidbInitializer` の `passwordSecret` は Secret の**キー名をそのままユーザー名として**扱う
+    (TiDB Operator v1.6.6 のソース `pkg/manager/member/startscript/v1/template.go` で確認)。
+    キー名を `root-password` としていたのは誤りで、`root` に修正(§3.2・`scripts/up.sh` の
+    `tidb-root-auth` 作成箇所)。
+  - `TidbInitializer` の `image` に `mysql:9.7.2`(サーバイメージ)を指定していたのは誤り。
+    Operator の初期化スクリプトは python + `MySQLdb` を要求する(同ソース `pkg/manager/member/
+    tidb_init_manager.go`)ため、上流の `examples/initialize`・`manifests/initializer` が指す
+    `tnir/mysqlclient` に変更し、digest を固定した(§3.2)。
+  - `deploy/k8s/overlays/local/tidb/kustomization.yaml` に `namespace: pokecalc` が無く、
+    独立した kustomization として apply すると k3d の既定 namespace(`default`)に作られ、
+    `up.sh` の `-n pokecalc` な待ち・削除と食い違っていたため追加。
+  - record/team の migrate Job の initContainer が到達性確認のためだけに `tidb-root-auth` を
+    参照していたのは AC-T7 違反(§4 の「root 相当は migrate Job にだけ渡る」という境界は
+    「自分の Secret の migrate Job」を指し、他サービスの Secret ではない)。`mysqladmin ping` は
+    認証に失敗してもサーバが応答していれば成功する(終了コード0)仕様のため、資格情報無しの
+    到達性確認に変更した。
+  あわせて、このクラスの誤り(namespace 不一致・資格情報の越境)を静的に検出する回帰テストを
+  `services/pokedex/db/layout_test.go` に追加(`TestUpScriptAppliesRecordTeamJobsWithNamespace`・
+  `TestTidbOverlayHasNamespace`・`TestRecordTeamJobsDoNotCrossReferenceSecrets`)。
+  `scripts/check-publishable.sh` の B(秘密らしき文字列)許可リストに `tidb-root-auth`(Secret 名の
+  参照)を追加し、シェル変数参照の許可条件を「値の末尾が `${...}`」から「値の全体が `${...}`」に
+  絞った(本物の値へ無害な変数参照を継ぎ足す細工を通さないため。self-test に確認ケースを追加)。
