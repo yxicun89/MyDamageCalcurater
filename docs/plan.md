@@ -155,8 +155,17 @@
   #78(API+Web 特性の無効・吸収の境界反映)・#110(Web の担当分は P4-19 へ分離。DECISIONS.md 2026-09-23 参照)・
   #103(主担当 API・データ。M2保存データの保持期間。ユーザー決定 2026-09-23 で needs-decision は解消済み。
   DECISIONS.md参照。Web は連携のみで主担当ではない)
-- [ ] P4-21 Codex コードレビューの次点 issue(P4-18 で優先分が完了したため分離): #98(bug)モバイル幅で
-  計算・逆算画面が横に溢れる、#67(bug)2xx の契約外 JSON で API クライアントが例外を投げる(防御的処理)
+- [ ] P4-21 Codex コードレビューの次点 issue(P4-18 で優先分が完了したため分離)。
+  **#67(bug)2xx の契約外 JSON で API クライアントが例外を投げる — 完了(critic PASS)**: `apiEngine.ts`・
+  `balanceClient.ts` の `postJson` を、写像関数/画面が実際に読むフィールドを検査する型ガード経由にし
+  (`response.value as Schemas[...]` の型アサーションを除去)、契約外の2xxは例外を投げず `engine_unavailable`/
+  `balance_unavailable` を返すようにした(ADR-0301 §4・ADR-0303 §6 に追記)。calc側は写像関数が読む全
+  フィールドを再帰的に検査、balance側は画面がたどる形(オブジェクト性・必須配列フィールド)だけを検査
+  (leafスカラー・enum は見ない。契約の二重管理を避けるため。ADR-0303 の「応答をそのまま表示に使う」設計に
+  合わせた)。critic レビュー: mutation テスト12件で型ガードの過不足なし・reject しないこと・abort との
+  混同なしを確認。軽微指摘1件(`ko.chancePercent` の null 許容が ADR 文言と食い違っていた)を修正済み。
+  既存1034件は無変更・新規143件追加(1166件)。
+  残り: #98(bug)モバイル幅で計算・逆算画面が横に溢れる
 - [x] P4-19 issue #110(セキュリティ。ADR-0300 §10。critic PASS: 境界値の網羅探索〈約1.2万ケース〉と変異テスト5件で
   `itemVariants`/`itemCandidates` が常に64以下・`observations` が17件目を作れないことを確認済み)。
   `domain/requestLimits.ts` に上限3定数(`api/openapi.yaml` の `maxItems` との同期をテストで検査)と

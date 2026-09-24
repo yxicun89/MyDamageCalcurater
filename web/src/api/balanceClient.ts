@@ -81,6 +81,100 @@ function unavailableError<T>(): BalanceResult<T> {
   return { ok: false, error: { code: "balance_unavailable", message: balanceClientText.unavailable } };
 }
 
+// ---- 応答の実行時検証(issue 67、ADR-0303 §6 追記) ----
+//
+// balance の応答はそのまま表示に使う(Web で倍率・集計を計算し直さない)ので、検査するのは「画面が
+// たどる形」まで: 応答がオブジェクトであること、契約で必須の最上位フィールドが存在し配列であるべき
+// ところが配列であること、配列の要素がオブジェクトで、要素の必須の配列フィールドが配列であること。
+// leaf のスカラー(表示にそのまま出る文字列・数値・真偽値)と列挙の値までは検査しない(契約の
+// 二重管理を避けるため)。
+
+/** オブジェクト(配列・null を除く)かどうか。 */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** 配列であること(要素の中身までは見ない。leaf のスカラーの配列に使う)。 */
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
+/** 配列で、すべての要素が guard を満たすか。 */
+function isArrayOf<T>(value: unknown, guard: (item: unknown) => item is T): value is T[] {
+  return Array.isArray(value) && value.every(guard);
+}
+
+/** analyze の応答 members[]: defense・types が配列であること。 */
+function isAnalyzeMember(value: unknown): value is Schemas["AnalyzeResponse"]["members"][number] {
+  return isRecord(value) && Array.isArray(value.defense) && Array.isArray(value.types);
+}
+
+/** analyze の応答: members・teamSummary が存在し配列であること(要素はオブジェクト)。 */
+function isAnalyzeResponse(value: unknown): value is Schemas["AnalyzeResponse"] {
+  return (
+    isRecord(value) && isArrayOf(value.members, isAnalyzeMember) && isArrayOf(value.teamSummary, isRecord)
+  );
+}
+
+/** coverage の応答 members[]: coverage・moveIds・attackTypes が配列であること。 */
+function isCoverageMember(value: unknown): value is Schemas["CoverageResponse"]["members"][number] {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.coverage) &&
+    Array.isArray(value.moveIds) &&
+    Array.isArray(value.attackTypes)
+  );
+}
+
+/** coverage の応答: members・teamCoverage が存在し配列であること(要素はオブジェクト)。 */
+function isCoverageResponse(value: unknown): value is Schemas["CoverageResponse"] {
+  return (
+    isRecord(value) && isArrayOf(value.members, isCoverageMember) && isArrayOf(value.teamCoverage, isRecord)
+  );
+}
+
+/** threats の応答 threats[]: matchups・attackTypes が配列であること。 */
+function isThreatResult(value: unknown): value is Schemas["ThreatsResponse"]["threats"][number] {
+  return isRecord(value) && Array.isArray(value.matchups) && Array.isArray(value.attackTypes);
+}
+
+/** threats の応答: threats が存在し配列であること(要素はオブジェクト)。 */
+function isThreatsResponse(value: unknown): value is Schemas["ThreatsResponse"] {
+  return isRecord(value) && isArrayOf(value.threats, isThreatResult);
+}
+
+/** recommendations の応答 candidates[]: types・defenseCovered・offenseCovered・pokemon が配列であること。 */
+function isTypeCandidate(value: unknown): value is Schemas["RecommendationsResponse"]["candidates"][number] {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.types) &&
+    Array.isArray(value.defenseCovered) &&
+    Array.isArray(value.offenseCovered) &&
+    Array.isArray(value.pokemon)
+  );
+}
+
+/** recommendations の応答 abilityOptions[]: pokemon が配列であること。 */
+function isAbilityOption(
+  value: unknown,
+): value is Schemas["RecommendationsResponse"]["abilityOptions"][number] {
+  return isRecord(value) && Array.isArray(value.pokemon);
+}
+
+/**
+ * recommendations の応答: defenseHoles・offenseHoles(leaf のタイプ名の配列。要素は見ない)・
+ * candidates・abilityOptions が存在し、それぞれ配列であること。
+ */
+function isRecommendationsResponse(value: unknown): value is Schemas["RecommendationsResponse"] {
+  return (
+    isRecord(value) &&
+    isUnknownArray(value.defenseHoles) &&
+    isUnknownArray(value.offenseHoles) &&
+    isArrayOf(value.candidates, isTypeCandidate) &&
+    isArrayOf(value.abilityOptions, isAbilityOption)
+  );
+}
+
 /**
  * balance API のクライアント実装(ADR-0303)。応答をそのまま運び、Web で倍率・集計を計算し直さない。
  * 通信・応答の失敗は balance_unavailable にし、自動の切り替え先(WASM 等)へは移らない(ADR-0303 §6)。
@@ -88,8 +182,16 @@ function unavailableError<T>(): BalanceResult<T> {
 export function createBalanceClient(input: CreateBalanceClientInput): BalanceClient {
   const { baseUrl, fetch: fetchImpl, ids } = input;
 
-  /** JSON を POST し、応答(成功の値、または境界のエラー封筒)を返す。例外を投げない。 */
-  async function postJson<T>(path: string, body: unknown): Promise<BalanceResult<T>> {
+  /**
+   * JSON を POST し、応答(成功の値、または境界のエラー封筒)を返す。例外を投げない。
+   * guard(issue 67、ADR-0303 §6 追記): 2xx の本文を実行時に検証し、契約外なら balance_unavailable
+   * にする(画面がたどる形だけを検査。ADR-0303 §6)。
+   */
+  async function postJson<T>(
+    path: string,
+    body: unknown,
+    guard: (value: unknown) => value is T,
+  ): Promise<BalanceResult<T>> {
     let response: Response;
     try {
       response = await fetchImpl(`${baseUrl}${path}`, {
@@ -115,26 +217,29 @@ export function createBalanceClient(input: CreateBalanceClientInput): BalanceCli
         ? { ok: false, error: { code: parsed.code, message: parsed.message } }
         : unavailableError();
     }
-    return { ok: true, value: parsed as T };
+    if (!guard(parsed)) {
+      return unavailableError();
+    }
+    return { ok: true, value: parsed };
   }
 
   return {
     analyze(members) {
       const body: Schemas["AnalyzeRequest"] = { members: [...members] };
-      return postJson(BALANCE_PATHS.analyze, body);
+      return postJson(BALANCE_PATHS.analyze, body, isAnalyzeResponse);
     },
     coverage(members) {
       const body: Schemas["CoverageRequest"] = { members: [...members] };
-      return postJson(BALANCE_PATHS.coverage, body);
+      return postJson(BALANCE_PATHS.coverage, body, isCoverageResponse);
     },
     threats(members, threats) {
       const body: Schemas["ThreatsRequest"] = { members: [...members], threats: [...threats] };
-      return postJson(BALANCE_PATHS.threats, body);
+      return postJson(BALANCE_PATHS.threats, body, isThreatsResponse);
     },
     recommendations(members, limit) {
       const body: RecommendationsBody =
         limit === undefined ? { members: [...members] } : { members: [...members], limit };
-      return postJson(BALANCE_PATHS.recommendations, body);
+      return postJson(BALANCE_PATHS.recommendations, body, isRecommendationsResponse);
     },
   };
 }

@@ -64,6 +64,21 @@ API レーンの P3-1(ADR-0200)で `api/openapi.yaml` が P1-12 以降の engine
 - **取り消した計算は `engine_unavailable` にしない**(2026-09-24 追記。P4-18、issue 113、ADR-0300 §11)。
   画面が新しい入力で先行の要求を `AbortSignal` で取り消したときは、`fetch` の失敗を通信不能と同じ扱いにせず、
   `request_aborted`(`web/src/engine/types.ts` の `REQUEST_ABORTED_CODE`)を返す。自動フォールバックをしない方針は変えない。
+- **契約外の 2xx も `engine_unavailable` にする**(2026-09-24 追記。P4-21、issue 67)。
+  HTTP 200 で JSON として読めても、本文が契約(`api/openapi.yaml`)の応答の形でなければ、写像関数
+  (`mapCalcResult` など)が `result.rolls` や `result.rows.map(...)` で例外になり、「計算は reject しない」
+  という画面の前提(`CalcScreen.tsx` は `.then` しか登録しない)を破る。`createApiEngine` は成功応答を
+  実行時に検証し、契約外なら `engine_unavailable` の `{ok: false}` を返す(§4 の「応答が読めない」に含める)。
+  - **検証の範囲は写像関数が読むフィールド**。読むフィールドは、存在すること・JS 上の種類(数値 / 真偽値 /
+    文字列 / 配列 / オブジェクト)が合うことを要求し、入れ子(`ko`・`rows[]`・`rows[].defender.nature`・
+    `candidates[].ranges[]`)も同じ規則で再帰的に見る。こうすると、成功で返る DTO に `undefined` が入らない。
+  - **列挙の値そのもの・数値の範囲・配列の件数は検査しない**(`category` が未知の文字列でも成功)。
+    サーバーが語彙を増やしたときに Web が壊れないため。余分なフィールドも成功のまま(前方互換)。
+  - **写像が `??` で既定値を補うフィールド(`ko.chancePercent`・`itemId`・`nature.plus/minus`)と、写像が
+    捨てるフィールド(`natureId`)は、欠落・`null` を許す**。サーバー側が `omitempty` で省いた応答を、
+    表示に影響しない項目のせいで落とさないため。
+  - 本文が読めたうえでの契約違反は、`signal` が abort 済みでも `engine_unavailable` にする(通信は成立して
+    おり、取り消しが原因ではないため。古い応答は画面が捨てる)。
 
 ### 5. 架空の例データの ID を契約の形に合わせる
 
@@ -91,6 +106,11 @@ API レーンの P3-1(ADR-0200)で `api/openapi.yaml` が P1-12 以降の engine
 - **画面を ID ベースにして WASM 側で実体に解決する**: WASM 経路に解決層がもう1つ要り、二重になる。
 - **API に届かないとき自動で WASM にフォールバック**: どちらの結果か分からなくなる。明示の切り替えにした。
 - **生成型を使わず手で API の型を書く**: 絶対ルール1に反する。
+- **応答の検証を `try/catch` だけで済ませる**(2026-09-24、issue 67): 写像関数自身のバグも同じ `engine_unavailable` に
+  握りつぶしてしまい、原因が分からなくなる(coding-rules §3「エラーは握りつぶさない」)。
+- **JSON Schema のバリデータ(ajv 等)を `openapi.yaml` から生成して使う**(同): 契約の写しを手で書かずに済むが、
+  依存の追加と `make gen` の配線が要る。検証したい範囲が「写像が読むフィールド」に限られる今は手書きの型ガードにし、
+  balance も含めて検証が広がるようなら改めて検討する。
 - **ブラウザでの実機確認(Chrome・Safari の MIME・instantiateStreaming・キャッシュ・メモリ)**: 人間の作業(plan.md P4-5 の小項目、ブロッカーに記載)。
 
 ## 影響

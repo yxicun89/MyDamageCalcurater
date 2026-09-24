@@ -750,3 +750,265 @@ describe("計算の取り消し(AbortSignal。issue 113)", () => {
     expect(REQUEST_ABORTED_CODE).not.toBe("engine_unavailable");
   });
 });
+
+// ---- issue 67(P4-21): 2xx の契約外 JSON は engine_unavailable にする(ADR-0301 §4 追記) ----
+//
+// HTTP 200 で JSON として読めても、本文が契約(api/openapi.yaml)の応答の形でなければ、写像関数が
+// `result.rolls` や `result.rows.map(...)` で例外になる。画面は「計算は reject しない」前提で `.then` しか
+// 登録していない(CalcScreen.tsx)ので、例外は画面まで伝わって壊れる。そこで応答を実行時に検証し、
+// 契約外なら engine_unavailable(通信・応答の失敗。ADR-0301 §4)の not ok として返す。
+//
+// 検証の範囲は「写像関数(mapCalcResult / mapBulkResult / mapReverseResult)が読むフィールド」:
+//   - 読むフィールドは、存在すること・JS 上の種類(数値 / 真偽値 / 文字列 / 配列 / オブジェクト)が合うこと
+//   - 列挙の値そのもの・数値の範囲・配列の件数は見ない(サーバーが語彙を増やしても Web を壊さないため)
+//   - 写像が `?? ` で既定値を補うフィールド(ko.chancePercent・itemId・nature.plus/minus)と、写像が捨てる
+//     フィールド(natureId)は、欠落・null を許す(Go の omitempty で省かれた応答を落とさないため)
+
+/** 配列の先頭を取り出す(テストの素材づくり。非 null 断言を使わないため)。 */
+function firstOf<T>(items: readonly T[], label: string): T {
+  const [first] = items;
+  if (first === undefined) {
+    throw new Error(`${label} の先頭が無い`);
+  }
+  return first;
+}
+
+const bulkRow = firstOf(apiBulkResult.rows, "apiBulkResult.rows");
+const reverseCandidate = firstOf(apiReverseResult.candidates, "apiReverseResult.candidates");
+
+type EngineCall = (engine: CalcEngine) => Promise<EngineResult<unknown>>;
+
+const calcCall: EngineCall = (engine) => engine.calc(calcRequest);
+const bulkCall: EngineCall = (engine) => engine.calcBulk(bulkRequest);
+const reverseCall: EngineCall = (engine) => engine.calcReverse(reverseRequest);
+
+/** 200 で body を返す fake fetch に対して、呼び出しが engine_unavailable の not ok になること。 */
+async function expectUnavailableFor(call: EngineCall, body: unknown): Promise<void> {
+  const fetchMock = fakeFetch(() => Promise.resolve(jsonResponse(body)));
+  const result = await call(engineWith(fetchMock));
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.error.code).toBe("engine_unavailable");
+    expect(result.error.message).not.toBe("");
+  }
+}
+
+/** 3つの計算に共通の「そもそも応答のオブジェクトでない」本文(境界値)。 */
+const notAnObjectBodies: ReadonlyArray<readonly [string, unknown]> = [
+  ["空オブジェクト {}", {}],
+  ["null", null],
+  ["配列", []],
+  ["文字列", "ok"],
+  ["数値", 42],
+  ["真偽値", true],
+];
+
+describe("2xx の契約外の応答は engine_unavailable(issue 67)", () => {
+  test.each(notAnObjectBodies)("calc: 200 の本文が %s なら engine_unavailable", async (_label, body) => {
+    await expectUnavailableFor(calcCall, body);
+  });
+
+  test.each(notAnObjectBodies)("calcBulk: 200 の本文が %s なら engine_unavailable", async (_label, body) => {
+    await expectUnavailableFor(bulkCall, body);
+  });
+
+  test.each(notAnObjectBodies)(
+    "calcReverse: 200 の本文が %s なら engine_unavailable",
+    async (_label, body) => {
+      await expectUnavailableFor(reverseCall, body);
+    },
+  );
+
+  const invalidCalcBodies: ReadonlyArray<readonly [string, unknown]> = [
+    ["rolls が無い", omit(apiCalcResult, "rolls")],
+    ["rolls が配列でない(文字列)", { ...apiCalcResult, rolls: "60,61" }],
+    ["rolls が配列でない(オブジェクト)", { ...apiCalcResult, rolls: { 0: 60 } }],
+    ["rolls の要素が数値でない", { ...apiCalcResult, rolls: [...apiCalcResult.rolls.slice(0, 15), "75"] }],
+    ["minDamage が数値でない", { ...apiCalcResult, minDamage: "60" }],
+    ["defenderHP が null", { ...apiCalcResult, defenderHP: null }],
+    ["maxPercent が無い", omit(apiCalcResult, "maxPercent")],
+    ["stab が真偽値でない", { ...apiCalcResult, stab: 1 }],
+    ["category が文字列でない", { ...apiCalcResult, category: 3 }],
+    ["ko が無い", omit(apiCalcResult, "ko")],
+    ["ko が配列", { ...apiCalcResult, ko: [] }],
+    ["ko が null", { ...apiCalcResult, ko: null }],
+    ["ko.hits が無い", { ...apiCalcResult, ko: omit(apiCalcResult.ko, "hits") }],
+    [
+      "ko.displayChancePercent が無い",
+      { ...apiCalcResult, ko: omit(apiCalcResult.ko, "displayChancePercent") },
+    ],
+    ["ko.guaranteed が真偽値でない", { ...apiCalcResult, ko: { ...apiCalcResult.ko, guaranteed: "true" } }],
+    [
+      "ko.chancePercent があるが数値でない(任意でも、あるなら型は合うこと)",
+      { ...apiCalcResult, ko: { ...apiCalcResult.ko, chancePercent: "12.34" } },
+    ],
+  ];
+
+  test.each(invalidCalcBodies)("calc: %s なら engine_unavailable", async (_label, body) => {
+    await expectUnavailableFor(calcCall, body);
+  });
+
+  const invalidBulkBodies: ReadonlyArray<readonly [string, unknown]> = [
+    ["rows が無い", omit(apiBulkResult, "rows")],
+    ["rows が配列でない(文字列)", { ...apiBulkResult, rows: "none" }],
+    ["rows が配列でない(オブジェクト)", { ...apiBulkResult, rows: {} }],
+    ["defenderSpeciesKey が無い", omit(apiBulkResult, "defenderSpeciesKey")],
+    ["defenderSpeciesKey が文字列でない", { ...apiBulkResult, defenderSpeciesKey: 9002 }],
+    ["行が空オブジェクト", { ...apiBulkResult, rows: [{}] }],
+    ["行が null", { ...apiBulkResult, rows: [null] }],
+    ["行の presetLabel が文字列でない", { ...apiBulkResult, rows: [{ ...bulkRow, presetLabel: 7 }] }],
+    ["行の itemId が文字列でも null でもない", { ...apiBulkResult, rows: [{ ...bulkRow, itemId: 5 }] }],
+    ["行の result が無い", { ...apiBulkResult, rows: [omit(bulkRow, "result")] }],
+    [
+      "行の result が契約外(入れ子も同じ規則で検査する)",
+      { ...apiBulkResult, rows: [{ ...bulkRow, result: omit(apiCalcResult, "ko") }] },
+    ],
+    ["行の defender が無い", { ...apiBulkResult, rows: [omit(bulkRow, "defender")] }],
+    ["行の defender が文字列", { ...apiBulkResult, rows: [{ ...bulkRow, defender: "hp32" }] }],
+    [
+      "行の defender.nature が無い",
+      { ...apiBulkResult, rows: [{ ...bulkRow, defender: omit(bulkRow.defender, "nature") }] },
+    ],
+    [
+      "行の defender.nature.plus が文字列でも null でもない",
+      {
+        ...apiBulkResult,
+        rows: [{ ...bulkRow, defender: { ...bulkRow.defender, nature: { plus: 1, minus: null } } }],
+      },
+    ],
+    [
+      "行の defender.sp が無い",
+      { ...apiBulkResult, rows: [{ ...bulkRow, defender: omit(bulkRow.defender, "sp") }] },
+    ],
+    [
+      "行の defender.sp のステータスが数値でない",
+      {
+        ...apiBulkResult,
+        rows: [{ ...bulkRow, defender: { ...bulkRow.defender, sp: { ...bulkRow.defender.sp, hp: "32" } } }],
+      },
+    ],
+    [
+      "行の defender.stats が配列",
+      { ...apiBulkResult, rows: [{ ...bulkRow, defender: { ...bulkRow.defender, stats: [] } }] },
+    ],
+  ];
+
+  test.each(invalidBulkBodies)("calcBulk: %s なら engine_unavailable", async (_label, body) => {
+    await expectUnavailableFor(bulkCall, body);
+  });
+
+  const invalidReverseBodies: ReadonlyArray<readonly [string, unknown]> = [
+    ["candidates が無い", omit(apiReverseResult, "candidates")],
+    ["candidates が配列でない(オブジェクト)", { ...apiReverseResult, candidates: {} }],
+    ["candidates が配列でない(文字列)", { ...apiReverseResult, candidates: "none" }],
+    ["side が無い", omit(apiReverseResult, "side")],
+    ["stat が文字列でない", { ...apiReverseResult, stat: 2 }],
+    ["assumedHpSp が無い", omit(apiReverseResult, "assumedHpSp")],
+    ["exactCount が数値でない", { ...apiReverseResult, exactCount: "1" }],
+    ["候補が空オブジェクト", { ...apiReverseResult, candidates: [{}] }],
+    ["候補が null", { ...apiReverseResult, candidates: [null] }],
+    ["候補の nature が無い", { ...apiReverseResult, candidates: [omit(reverseCandidate, "nature")] }],
+    ["候補の ranges が無い", { ...apiReverseResult, candidates: [omit(reverseCandidate, "ranges")] }],
+    [
+      "候補の ranges が配列でない(文字列)",
+      { ...apiReverseResult, candidates: [{ ...reverseCandidate, ranges: "0-3" }] },
+    ],
+    [
+      "候補の ranges の要素に max が無い",
+      { ...apiReverseResult, candidates: [{ ...reverseCandidate, ranges: [{ min: 10 }] }] },
+    ],
+    [
+      "候補の ranges の要素の min が数値でない",
+      { ...apiReverseResult, candidates: [{ ...reverseCandidate, ranges: [{ min: "10", max: 12 }] }] },
+    ],
+    [
+      "候補の exact が真偽値でない",
+      { ...apiReverseResult, candidates: [{ ...reverseCandidate, exact: "true" }] },
+    ],
+    ["候補の support が null", { ...apiReverseResult, candidates: [{ ...reverseCandidate, support: null }] }],
+    ["候補の minPercent が無い", { ...apiReverseResult, candidates: [omit(reverseCandidate, "minPercent")] }],
+  ];
+
+  test.each(invalidReverseBodies)("calcReverse: %s なら engine_unavailable", async (_label, body) => {
+    await expectUnavailableFor(reverseCall, body);
+  });
+
+  test("契約外の 200 でも Promise は reject しない(画面は .then しか登録していない)", async () => {
+    const fetchMock = fakeFetch(() => Promise.resolve(jsonResponse({})));
+    const engine = engineWith(fetchMock);
+    await expect(engine.calc(calcRequest)).resolves.toMatchObject({ ok: false });
+    await expect(engine.calcBulk(bulkRequest)).resolves.toMatchObject({ ok: false });
+    await expect(engine.calcReverse(reverseRequest)).resolves.toMatchObject({ ok: false });
+  });
+
+  test("本文が読めたうえでの契約違反は、abort 済みでも engine_unavailable(通信は成立している)", async () => {
+    const controller = new AbortController();
+    const fetchMock = fakeFetch(() => {
+      controller.abort();
+      return Promise.resolve(jsonResponse({}));
+    });
+    const result = await engineWith(fetchMock).calc(calcRequest, controller.signal);
+    expect(result).toMatchObject({ ok: false, error: { code: "engine_unavailable" } });
+  });
+});
+
+describe("契約どおりの 2xx は従来どおり成功(検証で落とさない。issue 67)", () => {
+  test("余分なフィールドがあっても成功し、DTO には混ぜない(前方互換)", async () => {
+    const fetchMock = fakeFetch(() =>
+      Promise.resolve(
+        jsonResponse({ ...apiCalcResult, futureField: "x", ko: { ...apiCalcResult.ko, futureKo: 1 } }),
+      ),
+    );
+    const result = await engineWith(fetchMock).calc(calcRequest);
+    const expected: CalcResult = { ...apiCalcResult, ko: { ...apiCalcResult.ko, chancePercent: 12.34 } };
+    expect(result).toEqual({ ok: true, value: expected });
+  });
+
+  test("列挙の値そのものは検査しない(契約に無い category でも成功)", async () => {
+    const fetchMock = fakeFetch(() =>
+      Promise.resolve(jsonResponse({ ...apiCalcResult, category: "future" })),
+    );
+    const result = await engineWith(fetchMock).calc(calcRequest);
+    expect(result).toMatchObject({ ok: true, value: { category: "future" } });
+  });
+
+  test("rows が空配列でも成功(件数は検査しない)", async () => {
+    const fetchMock = fakeFetch(() => Promise.resolve(jsonResponse({ ...apiBulkResult, rows: [] })));
+    const result = await engineWith(fetchMock).calcBulk(bulkRequest);
+    expect(result).toEqual({ ok: true, value: { defenderSpeciesKey: "9002-001", rows: [] } });
+  });
+
+  test("candidates が空配列でも成功", async () => {
+    const fetchMock = fakeFetch(() =>
+      Promise.resolve(jsonResponse({ ...apiReverseResult, candidates: [], exactCount: 0 })),
+    );
+    const result = await engineWith(fetchMock).calcReverse(reverseRequest);
+    expect(result).toMatchObject({ ok: true, value: { candidates: [] } });
+  });
+
+  test("行の itemId・defender.natureId が省かれていても成功(既定値を補う / 捨てるフィールド)", async () => {
+    const row = { ...omit(bulkRow, "itemId"), defender: omit(bulkRow.defender, "natureId") };
+    const fetchMock = fakeFetch(() => Promise.resolve(jsonResponse({ ...apiBulkResult, rows: [row] })));
+    const result = await engineWith(fetchMock).calcBulk(bulkRequest);
+    expect(result).toMatchObject({ ok: true, value: { rows: [{ itemId: "" }] } });
+  });
+
+  test('defender.nature の plus・minus が省かれていても無補正("")として成功', async () => {
+    const row = { ...bulkRow, defender: { ...bulkRow.defender, nature: {} } };
+    const fetchMock = fakeFetch(() => Promise.resolve(jsonResponse({ ...apiBulkResult, rows: [row] })));
+    const result = await engineWith(fetchMock).calcBulk(bulkRequest);
+    expect(result).toMatchObject({
+      ok: true,
+      value: { rows: [{ defender: { nature: { plus: "", minus: "" } } }] },
+    });
+  });
+
+  test("候補の natureId・itemId が省かれていても成功", async () => {
+    const candidate = omit(omit(reverseCandidate, "natureId"), "itemId");
+    const fetchMock = fakeFetch(() =>
+      Promise.resolve(jsonResponse({ ...apiReverseResult, candidates: [candidate] })),
+    );
+    const result = await engineWith(fetchMock).calcReverse(reverseRequest);
+    expect(result).toMatchObject({ ok: true, value: { candidates: [{ itemId: "" }] } });
+  });
+});
