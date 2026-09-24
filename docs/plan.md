@@ -221,10 +221,13 @@
 端末単位の全削除はサービスごとに1本(`DELETE /api/record/device-data`・`DELETE /api/team/device-data`。冪等・`partial` の繰り返し)/
 削除の墓石(`devices.purged_at`)で JetStream の遅延イベントの復活を防ぐ。受け入れ条件は ADR-0209 の AC-D / AC-P / AC-R / AC-L。
 
-- [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成)。
-  スキーマは ADR-0209 §3 に従う(`devices` テーブル〈`last_seen_at`・`purged_at`〉、**purge journal テーブル〈#5b。
-  DB 側とは別に DB 外の独立した保存先〈P7-4 が決める〉にも同時に追記する〉**、全表に `device_id`、
-  `favorites` は `calc_events` を参照せず個体スナップショットを自分で持つ)。保持日数は環境変数で渡し、起動時に検証する
+- [ ] P5-1 TiDB(tiup playground で開発、k3d は TiDB Operator 最小構成。バージョン・リソース上限・DB/ユーザーの
+  分け方・migration ツールの流用は ADR-0211 で確定)。**このタスクの範囲は `devices`〈`last_seen_at`・`purged_at`・
+  `orphaned_since`〉と purge journal の2表とプロビジョニングまで**(`favorites`・`teams`・`team_members`・
+  `calc_events` 等の業務テーブルは P5-3/P5-4 で追加する。ADR-0211「背景」で当初案から縮小)。
+  purge journal〈#5b。DB 側とは別に DB 外の独立した保存先〈P7-4 が決める〉にも同時に追記する〉は、
+  その独立保存先が無い P5-3〜P7-4 の間は未充足のままになる既知のギャップ(ADR-0209 追記・ADR-0211 §6 参照)。
+  保持日数・墓石猶予の環境変数名と既定値は ADR-0211 §7 で確定し、起動時検証コード自体は P5-3/P5-4 で書く
 - [ ] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)。
   ストリームの `max_age` は7日、イベントに発生時刻(`occurred_at`)を載せる(ADR-0209 §7・#6)。
   record-svc と team-svc(P5-4)は**別々の durable consumer**を持つ(同じ consumer を共有すると配送が分かれ
