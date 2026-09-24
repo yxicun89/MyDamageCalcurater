@@ -1361,3 +1361,17 @@ Reason: `make test`・`make lint`・`make build`(ルート)が緑、critic PASS�
 Impact: **judge-design.md §3 が定めた JD0〜JD5 のすべて(基盤・1対1判定・場の効果・複数候補・返り討ち判定・
 Web画面)が完了**した。判定レーンのブランチ `feat/judge-jd5` は削除。次の作業(新規要望・iOS版JD5・plan.mdに
 残る軽微な積み残し〈`attacker`単数の欄の大文字小文字厳密化〉)はユーザーからの新しい指示を待つ。
+
+## 2026-09-24: 動作確認手順の抜け(web-k3d-open)と web-k3d-smoke の案内改善の提案(データレーン → Web レーン)
+Lane: データ(docs 作業。専用ブランチ `docs/impl-guide`)→ Web レーンへの提案
+Question: `make web-k3d-smoke` が `localhost:5173` に届かず失敗した(ユーザーの動作確認)。原因は `docs/verify-m1.md` §3 に、5173 の port-forward を張る `make web-k3d-open` の手順が無かったこと。`web/scripts/k3d-smoke.sh` の失敗時の案内も追加してよいか。
+Default: `docs/verify-m1.md` は本ブランチで修正済み(`web-k3d-open` を別ターミナルで先に実行する手順・8080 で確認する場合の注意を追記)。`web/scripts/k3d-smoke.sh` は Web レーンの範囲なので触らない。Web レーンに、接続失敗時に「`make web-k3d-open` を別ターミナルで実行するか、WEB_URL を指定する」という案内を出すことを提案する。
+Status: 既定案で進行・Web レーンの回答待ち(ユーザー承認済みは verify-m1.md の修正のみ)。
+Reason: k3d の 5173 は port-forward の宛先で、cluster の公開ポートではない(公開は 8080 → Traefik → gateway。`deploy/k3d.yaml`)。
+Impact: `docs/verify-m1.md` §3。`web/scripts/k3d-smoke.sh` は未変更。
+
+## 2026-09-24: 確認場所・PR 統合の方針・コンテキスト節約(ユーザー決定。全レーンへの共有)
+Decision: (1) ユーザーの動作確認・ドキュメント確認は `~/MyDamageCalcurater` の main(マージ後)で行う。(2) 変更は PR 経由で積極的に main へ入れ、GitHub 上で追えるようにする(ローカルの直接マージはしない)。ユーザーの指摘は範囲に合うレーンが対応する。(3) コンテキスト膨張の対策を全レーンで共有する。詳細は COORDINATION.md「ユーザーの確認場所・PR 統合の方針・コンテキスト節約」。
+Default(提案・ユーザー未確認): (a) データレーンの作業を専用 worktree へ移し、`~/MyDamageCalcurater` を main 追従の確認用にする。未コミットの変更が無いことをデータレーンが確認してから行う(2026-09-24 時点で `~/MyDamageCalcurater` には他セッションの未コミット変更 `deploy/k8s/base/pokedex/deployment.yaml` があり、このセッションでは触っていない)。(b) `DECISIONS.md`(約 190KB)の古い節を `docs/ai-shared/archive/` へ退避し、本体は直近分だけにする。追記のみの規約を変えるため、ユーザーの決定後に行う。
+Reason: 確認のたびにレーン別ディレクトリを開くのは手間で、ユーザーが追跡しにくい。起動時に巨大な共有文書を全文読むとセッションの作業量が減る。
+Impact: COORDINATION.md に節を追加、AGENTS.md の開始手順に1句を追記。docs/impl/(実装の場所の索引)を新設(docs/README.md が目次)。コードの変更なし。
