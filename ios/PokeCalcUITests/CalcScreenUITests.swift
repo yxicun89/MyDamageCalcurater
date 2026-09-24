@@ -257,6 +257,33 @@ final class CalcScreenUITests: XCTestCase {
         XCTAssertEqual(attackerPicker.label, Self.thirdMockSpeciesName, "選択が攻撃側カードに反映される")
     }
 
+    /// issue #334: 特殊技を選ぶと、攻撃側プリセットの見出しが「A特化」から「C特化」に変わる
+    /// (Web(`web/src/i18n/ja.ts` の `attackerPresetText`)と同じ表記。ADR-0501「P6-11」)。
+    func testSelectingSpecialMoveShowsCLetterPresetLabel() {
+        let app = launchCalcScreen()
+
+        let presetButton = app.buttons["attackerPreset-aFull"]
+        XCTAssertTrue(presetButton.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertEqual(presetButton.label, "A特化", "既定の技は物理なので A特化のはず")
+
+        let movePicker = element(app, "movePicker")
+        XCTAssertTrue(movePicker.waitForExistence(timeout: Self.existenceTimeout))
+        movePicker.tap()
+        XCTAssertTrue(element(app, "moveSearchSheet").waitForExistence(timeout: Self.existenceTimeout))
+        let field = app.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: Self.existenceTimeout))
+        field.tap()
+        field.typeText(Self.searchableAttackerMoveName)
+        let result = element(app, "moveSearchResult-\(Self.searchableAttackerMoveID)")
+        XCTAssertTrue(result.waitForExistence(timeout: Self.existenceTimeout))
+        result.tap()
+
+        // 選び直しは非同期(計算のやり直しを待つ)なので、ラベルが変わるまで待つ。
+        let becameC = NSPredicate(format: "label == %@", "C特化")
+        expectation(for: becameC, evaluatedWith: presetButton, handler: nil)
+        waitForExpectations(timeout: Self.existenceTimeout)
+    }
+
     /// issue #68: `movePicker` も同じ流れ(検索シート)で選べる。
     func testMoveSearchSheetFiltersAndSelects() {
         let app = launchCalcScreen()

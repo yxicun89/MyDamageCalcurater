@@ -137,7 +137,7 @@ struct CalcScreenView: View {
                 Button {
                     viewModel.scheduleLatest { await $0.selectAttackerPreset(preset) }
                 } label: {
-                    Text(preset.label)
+                    Text(preset.label(for: viewModel.selectedMove?.category ?? .physical))
                         .font(TextStyleToken.body.font)
                         .foregroundStyle(isSelected ? ColorToken.bgBase.color : ColorToken.textPrimary.color)
                         .lineLimit(1)

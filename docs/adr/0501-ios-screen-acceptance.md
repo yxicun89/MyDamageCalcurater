@@ -2091,3 +2091,122 @@ implementer が `TeamEditViewModel.load()` を実際に `moves(ids:)` の一括�
 `** TEST SUCCEEDED **`(終了コード0)。`ios-test-unit: 全 412 件 / 成功 412 / 失敗 0 / スキップ 0 / 想定内の失敗 0`
 (`PokeCalcCoreTests` 399件 + `PokeCalcDesignTests` 13件)・`ios-test-ui: 全 17 件 / 成功 17 / 失敗 0`・
 `ios-check-infoplist` 成功。`ios-gen-check`・`ios-check-request-limits`・`ios-lint` を含め全ステップ green。
+
+## P6-11 の受け入れ条件(issue #334: 攻撃側プリセットの表示名が技の分類に追従しない。実装完了)
+
+- 日付: 2026-09-25 / 担当レーン: iOS / 関連: issue #334、issue #71(SP・性格の定義の単一化。本件とは別。#71 は
+  プリセット定義そのものを engine へ移す提案で本件の対象外)、`KnownDefenderPreset.label(for:)`(同じ形の既存実装)、
+  Web `web/src/domain/attackerPresets.ts`・`web/src/i18n/ja.ts` の `attackerPresetText`
+
+### 0. 何が壊れているか
+
+`AttackerPreset.label`(`ios/PokeCalcKit/Sources/PokeCalcCore/AttackerPreset.swift:16-22`)は技の分類を受け取らず、
+常に固定の「A特化」「A振り」「無振り」を返す。実際の SP は `AttackerPreset.build` が技の分類(物理・変化 = atk、
+特殊 = spa)で切り替えているため、特殊技を選んでいるのに見出しは「A」のままという不一致が起きる
+(`CalcScreenView.swift:140`、`ReverseScreenView.swift:150` が `preset.label` を表示)。
+`KnownDefenderPreset.label(for:)`(同じファイル内。逆算「受けたダメージ」の自分側)は最初から技の分類を受け取って
+HB/HD を切り替えており、`AttackerPreset` だけこの形になっていなかった。
+
+### 1. 判断: 表記は Web の出荷済み文言に揃える(requirements.md の文言そのものではない)
+
+issue のゴールは「同じ入力に対して Web と iOS が同じ語で結果を示す」こと。Web は
+`attackerPresetText`(`web/src/i18n/ja.ts:93-102`)で「A特化」「A振り(無補正)」「C特化」「C振り(無補正)」「無振り」を
+既に出荷しているため、iOS もこの語に合わせる。requirements.md 32行目は「A振り(**補正なし**)」と書かれており、
+Web の「(**無補正**)」とは表記ゆれがあるが、これは Web 側が先に出荷した文言を正として扱う(クライアント間の一致を
+優先。ADR は requirements.md の表記を Web に合わせて直すことを Web レーンに提案するだけで、本 ADR ではどちらの
+ドキュメントも書き換えない)。
+
+### 2. 判断: `AttackerPreset.label(for:)` を追加し、`KnownDefenderPreset.label(for:)` と同じ形にする
+
+- 文字(A/C)は `AttackerPreset.relevantStat(for:)` が返す `StatKey`(atk/spa)から決める。分類→文字の対応は
+  1箇所にする(Web の `statLetter`/`fullSuffix`/`xSuffix` の3定数と同じ考え方。分類ごとの switch を複数箇所に
+  重複させない)。
+- 既存の `AttackerPreset.label`(技の分類を受け取らない)は、`AttackerPresetTests.testCasesAreOrderedAndLabeledAsRequirements`
+  が旧文言(「A特化」「A振り」「無振り」)を固定しているため、**削除しない**(CLAUDE.md 絶対ルール6: 既存テストを
+  編集・緩和して通さない。このテストを書き換えたいなら別課題として提案する)。呼び出し側(`CalcScreenView.swift:140`、
+  `ReverseScreenView.swift:150` の `AttackerPreset` 分岐)は `label(for:)` に置き換える。
+- `ReverseScreenView.presetSegmentedRow`(`ios/PokeCalc/ReverseScreenView.swift:141-171`)の `case .attacker:` 側は
+  `KnownDefenderPreset.label(for:)` を既に技の分類つきで呼んでいる(相手の技=`viewModel.selectedMove?.category ?? .physical`)。
+  `case .defender:`(自分が攻撃側。issue の対象)は同じ `viewModel.selectedMove`(この側では自分が選んだ技)の
+  分類を渡せばよい。技が未選択のときは `AttackerPreset.relevantStat(for:)` と同じ既定(物理)にフォールバックする
+  (`ReverseScreenView.swift:159` の `?? .physical` と同じパターン)。
+- `CalcScreenView.presetSegmentedRow`(`ios/PokeCalc/CalcScreenView.swift:134-158`)は `viewModel.selectedMove?.category`
+  (`CalcViewModel.swift:345`)を渡す。未選択時のフォールバックも物理。
+
+### 3. 対象外(issue に記載のその他の差分。iOS 単独では直さない)
+
+- **相性の表記**: iOS(`DisplayLabels.swift:59-72`)は「ばつぐん(×2)」と倍率を併記、Web(`ja.ts:510-513`)は
+  「効果はばつぐん」で倍率なし。issue の既定案は倍率併記への統一を推奨しており、iOS は変更不要(既に倍率を出している)。
+  Web 側を iOS に揃えるかは Web レーンへの提案とする(本 ADR・本タスクでは Web のコードを変更しない)。
+  Web レーンの `docs/ai-shared/CURRENT_STATE.md` の `Next` か `COORDINATION.md` に一言追記することを implementer に依頼する。
+- **防御側の持ち物比較 UI**: iOS は持ち物を1つずつトグル、Web は「持ち物の候補も比較」1つで自動選定。UI の作りの違いで
+  本 issue のスコープ外(issue の「変更範囲 / 対象外」に明記)。
+- **逆算「受けたダメージ」の自分の耐久**: iOS は `KnownDefenderPreset` で選べる、Web は無振り固定。既存の差分で
+  本 issue のスコープ外。
+
+### 4. 受け入れ条件(検証可能な形)
+
+1. `AttackerPreset.label(for:)` が `MoveCategory` を受け取り、物理・変化 = 「A特化」/「A振り(無補正)」、
+   特殊 = 「C特化」/「C振り(無補正)」、`.none` はどの分類でも「無振り」を返す
+   (`AttackerPresetTests.testLabelForCategoryMatchesWebWording`)。
+2. 既存の `AttackerPreset.label`(技の分類なし)は残り、`testCasesAreOrderedAndLabeledAsRequirements` は
+   1行も変更せずに green のまま。
+3. `CalcScreenView` の攻撃側プリセットのピルは、選択中の技の分類が特殊のとき「C特化」「C振り(無補正)」「無振り」を表示する
+   (XCUITest `CalcScreenUITests.testSelectingSpecialMoveShowsCLetterPresetLabel`)。
+4. `ReverseScreenView` の `side == .defender`(与えたダメージ。自分が攻撃側)のプリセット行も同じ規則(自分が選んだ技の
+   分類で A/C を切り替える)に従う(unit test は `AttackerPreset.label(for:)` の網羅で担保。View からの呼び出しは
+   critic レビューで目視確認する)。
+5. 技が未選択のとき(起動直後など)は物理として表示する(`AttackerPreset.relevantStat(for:)` の既定と同じ)。
+6. `swift test`(PokeCalcKit)がすべて成功し、`make ios-test` の unit/XCUITest/gen-check/lint がすべて成功する。
+
+### 5. 追加したテスト(この時点では失敗する。実装はしていない)
+
+- `AttackerPresetTests.testLabelForCategoryMatchesWebWording`
+  (`ios/PokeCalcKit/Tests/PokeCalcCoreTests/AttackerPresetTests.swift`): `AttackerPreset.label(for:)` を
+  9通り(3プリセット × 3分類)のテーブル駆動で確認。`swift test --filter AttackerPresetTests` で確認済み:
+  `aFull`/`aMax` の特殊のケースが `"A特化"`/`"A振り(無補正)"` のまま返っていて `"C特化"`/`"C振り(無補正)"` と
+  一致せず2件 red(物理・変化・`.none` の6件は現状の仮実装でも green。分類を無視しているだけなので当然)。
+  他の既存6テストは無変更のまま green(`swift test` 全体で400件中2件のみ red)。
+- `CalcScreenUITests.testSelectingSpecialMoveShowsCLetterPresetLabel`
+  (`ios/PokeCalcUITests/CalcScreenUITests.swift`): 計算画面を開き、既定の物理技で `attackerPreset-aFull` の
+  ラベルが「A特化」であることを確認した後、`movePicker` の検索シートから特殊技(`Resources/moves.json` の
+  `test-move-special-a`。`testMoveSearchSheetFiltersAndSelects` で使っているのと同じ架空技)を選び、
+  ラベルが「C特化」に変わるまで待って確認する。**未実行**(シミュレータのビルドが要るため spec-writer では
+  走らせていない。implementer が `make ios-test` で実行して red → green を確認すること)。
+
+### 6. 実装者への注意(TODO(implementer) を検索すればコード上の該当箇所が見つかる)
+
+- `AttackerPreset.swift` に追加済みの `label(for:)` は **仮実装**(`moveCategory` を無視して旧来の固定文字列を
+  返しているだけ)。`TODO(implementer)` コメントの通り、`relevantStat(for:)` の結果(`.atk`/`.spa`)から文字を
+  引く実装に直すこと。文字・接尾辞は Web の `attackerPresetText`(`statLetter`/`fullSuffix`/`xSuffix`)のように
+  1箇所にまとめ、`switch moveCategory` を複数箇所に重複させない。
+- `CalcScreenView.swift:140` と `ReverseScreenView.swift:150`(`case .defender:` 側だけ。`case .attacker:` は
+  `KnownDefenderPreset.label(for:)` で対応済み)を `preset.label` → `preset.label(for: category)` に変更し、
+  各画面の「いま選ばれている技の分類」(未選択時は物理)を渡すこと。
+- 相性の表記統一(3章)は本タスクのコード変更には含めない。Web への提案だけ `docs/ai-shared/CURRENT_STATE.md` か
+  `COORDINATION.md` に一言残すこと。
+- 完了条件は4章の受け入れ条件。`swift test` と `make ios-test` の両方を実行し、結果をこの章に追記すること。
+
+### 7. 実装結果(2026-09-25)
+
+- `AttackerPreset.label(for:)`(`ios/PokeCalcKit/Sources/PokeCalcCore/AttackerPreset.swift`)を、6章の指示どおり
+  `relevantStat(for:)` が返す `StatKey`(atk/spa)から文字(A/C)を引く実装に直した。文字・接尾辞は
+  `statLetter(for:)`(private static メソッド)・`fullSuffix`/`xSuffix`(private static 定数)の1箇所にまとめ、
+  Web の `statLetterJa`/`fullSuffix`/`xSuffix` と同じ考え方にした。技の分類を受け取らない旧 `label` は
+  2章の判断どおり削除していない。
+- `CalcScreenView.presetSegmentedRow`(`ios/PokeCalc/CalcScreenView.swift:140` 付近)を
+  `preset.label(for: viewModel.selectedMove?.category ?? .physical)` に変更した。
+- `ReverseScreenView.presetSegmentedRow` の `case .defender:`(`ios/PokeCalc/ReverseScreenView.swift:146` 付近)を
+  `case .attacker:` 側(`KnownDefenderPreset.label(for:)`)と同じパターンで `let category = viewModel.selectedMove?.category ?? .physical`
+  を追加し、`preset.label(for: category)` に変更した。`case .attacker:` 側は無変更。
+- `TODO(implementer)` マーカーを `AttackerPreset.swift`・`CalcScreenUITests.swift` から削除した
+  (テストのロジック自体・「issue #334」の説明コメントは変更していない)。
+- 5章の `AttackerPresetTests.testLabelForCategoryMatchesWebWording` と `CalcScreenUITests.testSelectingSpecialMoveShowsCLetterPresetLabel`
+  は1行も変更していない。
+- 検証結果: `cd ios/PokeCalcKit && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`:
+  400件実行、0件失敗(新規 `testLabelForCategoryMatchesWebWording` を含む)。
+  `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make ios-test`(リポジトリルート):
+  `** TEST SUCCEEDED **`(終了コード0)。`ios-test-unit: 全 413 件 / 成功 413 / 失敗 0`
+  (`PokeCalcCoreTests` 400件 + `PokeCalcDesignTests` 13件)・`ios-test-ui: 全 18 件 / 成功 18 / 失敗 0`
+  (新規 `testSelectingSpecialMoveShowsCLetterPresetLabel` を含む)・`ios-check-infoplist` 成功。
+  `ios-lint`・`ios-gen-check`・`ios-check-request-limits` を含め全ステップ green。
