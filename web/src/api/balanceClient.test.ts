@@ -12,7 +12,7 @@
 
 import { describe, expect, test, vi } from "vitest";
 import type { components } from "./balance.gen";
-import { createBalanceClient } from "./balanceClient";
+import { createBalanceClient, type BalanceClient, type BalanceResult } from "./balanceClient";
 import type { ClientIds } from "./clientIds";
 
 type Schemas = components["schemas"];
@@ -460,5 +460,261 @@ describe("通信・応答の失敗は balance_unavailable(自動の切り替え�
       ids,
     });
     await expect(client.analyze([{ pokemonId: "9001-000" }])).resolves.toMatchObject({ ok: false });
+  });
+});
+
+// ---- issue 67(P4-21): 2xx の契約外 JSON は balance_unavailable にする(ADR-0303 §6 追記) ----
+//
+// balance の応答はそのまま表示に使う(Web で倍率・集計を計算し直さない。ADR-0303 §1)ので、契約外の 200 を
+// ok:true で通すと、例外は画面の描画(`response.teamSummary.map(...)`・`threat.matchups.map(...)` など)で起きる。
+// 画面は「呼び出しは reject しない」前提で `.then` しか登録していない(BalanceScreen.tsx)。そこで応答を
+// クライアントで検証し、契約外なら balance_unavailable の not ok にする。
+//
+// 検証の範囲は「画面がたどる形」まで:
+//   - 応答がオブジェクトであること
+//   - 契約で必須の最上位フィールドが存在し、配列であるべきところが配列であること
+//   - 配列の各要素がオブジェクトであり、要素の必須の配列フィールド(members[].defense・types、
+//     members[].coverage・moveIds・attackTypes、threats[].matchups・attackTypes、
+//     candidates[].types・defenseCovered・offenseCovered・pokemon、abilityOptions[].pokemon)が配列であること
+// leaf のスカラー(表示にそのまま出る文字列・数値・真偽値)と列挙の値までは検査しない。応答をそのまま運ぶ
+// 設計で契約の全項目を TS に書き写すと、契約(services/balance/api/openapi.yaml)の二重管理になるため。
+
+/** 配列の先頭を取り出す(テストの素材づくり。非 null 断言を使わないため)。 */
+function firstOf<T>(items: readonly T[], label: string): T {
+  const [first] = items;
+  if (first === undefined) {
+    throw new Error(`${label} の先頭が無い`);
+  }
+  return first;
+}
+
+const analyzeMember = firstOf(analyzeResponse.members, "analyzeResponse.members");
+const coverageMember = firstOf(coverageResponse.members, "coverageResponse.members");
+const threatResult = firstOf(threatsResponse.threats, "threatsResponse.threats");
+const typeCandidate = firstOf(recommendationsResponse.candidates, "recommendationsResponse.candidates");
+const abilityOption = firstOf(
+  recommendationsResponse.abilityOptions,
+  "recommendationsResponse.abilityOptions",
+);
+
+type BalanceCall = (client: BalanceClient) => Promise<BalanceResult<unknown>>;
+
+const analyzeCall: BalanceCall = (client) => client.analyze([{ pokemonId: "9001-000" }]);
+const coverageCall: BalanceCall = (client) => client.coverage([{ pokemonId: "9001-000", moveIds: [] }]);
+const threatsCall: BalanceCall = (client) =>
+  client.threats([{ pokemonId: "9001-000", moveIds: [] }], [{ pokemonId: "9002-000", moveIds: [] }]);
+const recommendationsCall: BalanceCall = (client) =>
+  client.recommendations([{ pokemonId: "9001-000", moveIds: [] }]);
+
+/** 200 で body を返す fake fetch に対して、呼び出しが balance_unavailable の not ok になること。 */
+async function expectBalanceUnavailable(call: BalanceCall, body: unknown): Promise<void> {
+  const client = createBalanceClient({
+    baseUrl: BASE_URL,
+    fetch: fakeFetch(jsonResponse(200, body)),
+    ids,
+  });
+  const result = await call(client);
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.error.code).toBe("balance_unavailable");
+    expect(result.error.message).not.toBe("");
+  }
+}
+
+/** 4つの呼び出しに共通の「そもそも応答のオブジェクトでない」本文(境界値)。 */
+const notAnObjectBodies: ReadonlyArray<readonly [string, unknown]> = [
+  ["空オブジェクト {}", {}],
+  ["null", null],
+  ["配列", []],
+  ["文字列", "ok"],
+  ["数値", 42],
+  ["真偽値", true],
+];
+
+describe("2xx の契約外の応答は balance_unavailable(issue 67)", () => {
+  const calls: ReadonlyArray<readonly [string, BalanceCall]> = [
+    ["analyze", analyzeCall],
+    ["coverage", coverageCall],
+    ["threats", threatsCall],
+    ["recommendations", recommendationsCall],
+  ];
+
+  for (const [name, call] of calls) {
+    test.each(notAnObjectBodies)(
+      `${name}: 200 の本文が %s なら balance_unavailable`,
+      async (_label, body) => {
+        await expectBalanceUnavailable(call, body);
+      },
+    );
+  }
+
+  const invalidAnalyzeBodies: ReadonlyArray<readonly [string, unknown]> = [
+    ["members が無い", { teamSummary: analyzeResponse.teamSummary }],
+    ["teamSummary が無い", { members: analyzeResponse.members }],
+    ["members が配列でない(文字列)", { ...analyzeResponse, members: "x" }],
+    ["teamSummary が配列でない(オブジェクト)", { ...analyzeResponse, teamSummary: {} }],
+    ["メンバーが null", { ...analyzeResponse, members: [null] }],
+    ["メンバーが文字列", { ...analyzeResponse, members: ["9001-000"] }],
+    [
+      "メンバーの defense が無い",
+      { ...analyzeResponse, members: [{ pokemonId: "9001-000", types: ["fire"] }] },
+    ],
+    [
+      "メンバーの defense が配列でない",
+      { ...analyzeResponse, members: [{ ...analyzeMember, defense: "x" }] },
+    ],
+    ["メンバーの types が配列でない", { ...analyzeResponse, members: [{ ...analyzeMember, types: "fire" }] }],
+    ["集計の要素が null", { ...analyzeResponse, teamSummary: [null] }],
+  ];
+
+  test.each(invalidAnalyzeBodies)("analyze: %s なら balance_unavailable", async (_label, body) => {
+    await expectBalanceUnavailable(analyzeCall, body);
+  });
+
+  const invalidCoverageBodies: ReadonlyArray<readonly [string, unknown]> = [
+    ["members が無い", { teamCoverage: coverageResponse.teamCoverage }],
+    ["teamCoverage が無い", { members: coverageResponse.members }],
+    ["teamCoverage が配列でない(文字列)", { ...coverageResponse, teamCoverage: "x" }],
+    ["メンバーが null", { ...coverageResponse, members: [null] }],
+    [
+      "メンバーの coverage が無い",
+      { ...coverageResponse, members: [{ pokemonId: "9001-000", moveIds: [], attackTypes: [] }] },
+    ],
+    [
+      "メンバーの coverage が配列でない",
+      { ...coverageResponse, members: [{ ...coverageMember, coverage: {} }] },
+    ],
+    [
+      "メンバーの moveIds が配列でない",
+      { ...coverageResponse, members: [{ ...coverageMember, moveIds: "m" }] },
+    ],
+    [
+      "メンバーの attackTypes が配列でない",
+      { ...coverageResponse, members: [{ ...coverageMember, attackTypes: "fire" }] },
+    ],
+  ];
+
+  test.each(invalidCoverageBodies)("coverage: %s なら balance_unavailable", async (_label, body) => {
+    await expectBalanceUnavailable(coverageCall, body);
+  });
+
+  const invalidThreatsBodies: ReadonlyArray<readonly [string, unknown]> = [
+    ["threats が無い", { results: threatsResponse.threats }],
+    ["threats が配列でない(文字列)", { threats: "x" }],
+    ["threats が配列でない(オブジェクト)", { threats: {} }],
+    ["仮想敵が null", { threats: [null] }],
+    [
+      "仮想敵の matchups が無い",
+      {
+        threats: [
+          { pokemonId: "9002-000", attackTypes: ["water"], safeMembers: 0, superEffectiveMembers: 0 },
+        ],
+      },
+    ],
+    ["仮想敵の matchups が配列でない", { threats: [{ ...threatResult, matchups: {} }] }],
+    ["仮想敵の attackTypes が配列でない", { threats: [{ ...threatResult, attackTypes: "water" }] }],
+  ];
+
+  test.each(invalidThreatsBodies)("threats: %s なら balance_unavailable", async (_label, body) => {
+    await expectBalanceUnavailable(threatsCall, body);
+  });
+
+  const invalidRecommendationsBodies: ReadonlyArray<readonly [string, unknown]> = [
+    ["defenseHoles が無い", { ...recommendationsResponse, defenseHoles: undefined }],
+    ["offenseHoles が配列でない(文字列)", { ...recommendationsResponse, offenseHoles: "water" }],
+    ["candidates が無い", { ...recommendationsResponse, candidates: undefined }],
+    ["candidates が配列でない(オブジェクト)", { ...recommendationsResponse, candidates: {} }],
+    ["abilityOptions が無い", { ...recommendationsResponse, abilityOptions: undefined }],
+    ["abilityOptions が配列でない", { ...recommendationsResponse, abilityOptions: "none" }],
+    ["候補が null", { ...recommendationsResponse, candidates: [null] }],
+    [
+      "候補の pokemon が配列でない",
+      { ...recommendationsResponse, candidates: [{ ...typeCandidate, pokemon: {} }] },
+    ],
+    [
+      "候補の types が配列でない",
+      { ...recommendationsResponse, candidates: [{ ...typeCandidate, types: "grass" }] },
+    ],
+    [
+      "候補の defenseCovered が配列でない",
+      { ...recommendationsResponse, candidates: [{ ...typeCandidate, defenseCovered: "water" }] },
+    ],
+    [
+      "特性の選択肢の pokemon が配列でない",
+      { ...recommendationsResponse, abilityOptions: [{ ...abilityOption, pokemon: "x" }] },
+    ],
+  ];
+
+  test.each(invalidRecommendationsBodies)(
+    "recommendations: %s なら balance_unavailable",
+    async (_label, body) => {
+      await expectBalanceUnavailable(recommendationsCall, body);
+    },
+  );
+
+  test("契約外の 200 でも Promise は reject しない(画面は .then しか登録していない)", async () => {
+    const client = createBalanceClient({ baseUrl: BASE_URL, fetch: fakeFetch(jsonResponse(200, {})), ids });
+    await expect(client.analyze([{ pokemonId: "9001-000" }])).resolves.toMatchObject({ ok: false });
+  });
+});
+
+describe("契約どおりの 2xx は従来どおり成功(検証で落とさない。issue 67)", () => {
+  test("余分なフィールドがある応答もそのまま運ぶ(前方互換)", async () => {
+    const body = { ...analyzeResponse, futureField: { note: "x" } };
+    const client = createBalanceClient({ baseUrl: BASE_URL, fetch: fakeFetch(jsonResponse(200, body)), ids });
+    const result = await client.analyze([{ pokemonId: "9001-000" }]);
+    expect(result).toEqual({ ok: true, value: body });
+  });
+
+  test("配列が空の応答も成功(件数は検査しない)", async () => {
+    const empty: Schemas["AnalyzeResponse"] = { members: [], teamSummary: [] };
+    const client = createBalanceClient({
+      baseUrl: BASE_URL,
+      fetch: fakeFetch(jsonResponse(200, empty)),
+      ids,
+    });
+    const result = await client.analyze([{ pokemonId: "9001-000" }]);
+    expect(result).toEqual({ ok: true, value: empty });
+  });
+
+  test("threats・recommendations の空の応答も成功", async () => {
+    const emptyThreats: Schemas["ThreatsResponse"] = { threats: [] };
+    const threatsClient = createBalanceClient({
+      baseUrl: BASE_URL,
+      fetch: fakeFetch(jsonResponse(200, emptyThreats)),
+      ids,
+    });
+    await expect(
+      threatsClient.threats(
+        [{ pokemonId: "9001-000", moveIds: [] }],
+        [{ pokemonId: "9002-000", moveIds: [] }],
+      ),
+    ).resolves.toEqual({ ok: true, value: emptyThreats });
+
+    const emptyRecommendations: Schemas["RecommendationsResponse"] = {
+      defenseHoles: [],
+      offenseHoles: [],
+      candidates: [],
+      abilityOptions: [],
+    };
+    const recommendationsClient = createBalanceClient({
+      baseUrl: BASE_URL,
+      fetch: fakeFetch(jsonResponse(200, emptyRecommendations)),
+      ids,
+    });
+    await expect(
+      recommendationsClient.recommendations([{ pokemonId: "9001-000", moveIds: [] }]),
+    ).resolves.toEqual({ ok: true, value: emptyRecommendations });
+  });
+
+  test("任意のフィールド(abilityId)が省かれた応答も成功", async () => {
+    const body = {
+      ...analyzeResponse,
+      members: [
+        { pokemonId: analyzeMember.pokemonId, types: analyzeMember.types, defense: analyzeMember.defense },
+      ],
+    };
+    const client = createBalanceClient({ baseUrl: BASE_URL, fetch: fakeFetch(jsonResponse(200, body)), ids });
+    await expect(client.analyze([{ pokemonId: "9001-000" }])).resolves.toEqual({ ok: true, value: body });
   });
 });

@@ -21,6 +21,16 @@
    開発サーバーでは `/api/balance` を `BALANCE_PROXY_TARGET` に転送する(`/api` の `API_PROXY_TARGET` と別。`VITE_` 接頭辞なし)。
    端末 ID とセッション ID は計算と同じもの(`X-Device-Id` / `X-Session-Id`)を付ける。
 6. **オフライン**: balance はサーバーでしか計算しない(engine.wasm に含まれない)。通信できないときはエラーを出す(計算画面のように WASM へは切り替えない)。
+   - **契約外の 2xx も `balance_unavailable` にする**(2026-09-24 追記。P4-21、issue 67)。応答をそのまま表示に使う(§1)ので、
+     契約外の 200 を `ok: true` で通すと、例外は画面の描画(`response.teamSummary.map(...)`・`threat.matchups.map(...)` など)で起きる。
+     `createBalanceClient` が成功応答を実行時に検証し、契約外なら `balance_unavailable` の `{ok: false}` を返す(画面は変えない)。
+   - **検証の範囲は「画面がたどる形」**: 応答がオブジェクトであること、契約で必須の最上位フィールドが存在し配列であるべきところが配列であること、
+     配列の各要素がオブジェクトで、要素の必須の配列フィールド(`members[].defense`・`types`、`members[].coverage`・`moveIds`・`attackTypes`、
+     `threats[].matchups`・`attackTypes`、`candidates[].types`・`defenseCovered`・`offenseCovered`・`pokemon`、`abilityOptions[].pokemon`)が配列であること。
+     leaf のスカラー(表示にそのまま出る文字列・数値・真偽値)と列挙の値までは検査しない。計算 API(ADR-0301 §4 追記)は写像関数が
+     読むフィールドを全部検査するが、balance は応答を写さずそのまま運ぶため、全項目を検査すると契約
+     (`services/balance/api/openapi.yaml`)を TS に書き写すことになり、二重管理になる(coding-rules §2)。
+   - 余分なフィールド・空配列は従来どおり成功で、値はそのまま運ぶ(前方互換)。
 
 ## P4-12b: 仮想敵(threats)とおすすめタイプ(recommendations)
 
