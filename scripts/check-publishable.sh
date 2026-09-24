@@ -141,6 +141,19 @@ matches_any_glob() {
   return 1
 }
 
+# looks_like_text パス — NUL バイトが無く、妥当な UTF-8 なら 0(テキストとみなす)。
+# `file --mime-type`(libmagic)はプラットフォーム・版によって .js/.ts/.mjs を
+# application/javascript、まれに無関係な組込み機器の ROM 形式などに誤判定することがある
+# (2026-09 CI(Linux ランナー)導入時に判明。macOS では text/plain と判定されていた)。
+# MIME 判定が TEXT_MIME_GLOBS に無いときの最終確認として使う。NUL バイトはこの確認では
+# テキストとみなさない(git 等と同じ「NUL があれば binary」慣行。空ファイルは事前に
+# inode/x-empty で処理済みなのでここには来ない)。
+looks_like_text() {
+  local path="$1"
+  tr -d '\000' <"$path" | cmp -s - "$path" || return 1
+  iconv -f UTF-8 -t UTF-8 "$path" >/dev/null 2>&1
+}
+
 # ---------------------------------------------------------------------------
 # A. 絶対パス・個人情報
 # ---------------------------------------------------------------------------
@@ -225,9 +238,11 @@ check_c() {
   local mime
   while IFS='|' read -r path mime; do
     mime="${mime# }"
-    if ! matches_any_glob "$mime" "${TEXT_MIME_GLOBS[@]}" && ! matches_any_glob "$path" "${BINARY_AND_LARGE_ALLOW[@]}"; then
-      report C "$path" "テキスト以外のファイル(${mime})"
+    if matches_any_glob "$mime" "${TEXT_MIME_GLOBS[@]}" || matches_any_glob "$path" "${BINARY_AND_LARGE_ALLOW[@]}"; then
+      continue
     fi
+    if looks_like_text "$path"; then continue; fi
+    report C "$path" "テキスト以外のファイル(${mime})"
   done < <(printf '%s\0' "${existing[@]}" | xargs -0 file -N --mime-type -F '|')
 }
 
