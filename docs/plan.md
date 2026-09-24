@@ -357,7 +357,9 @@
 - [x] DOC-tb: `services/balance/README.md` を §8 の形に、手順書 `docs/runbooks/balance.md`
 - [x] DOC-speed: `services/speed/README.md` を §8 の形に、手順書 `docs/runbooks/speed.md`(k3d での疎通を確認済み)
 - [x] DOC-ios: `ios/README.md`(coding-rules §8 の形)、手順書 `docs/runbooks/ios.md`(シミュレータでの確認。実機インストールは P6-4)。受け入れ条件・判断は ADR-0501 へ移動
-- [ ] DOC-arch: `docs/architecture.md` を各レーンの変化に合わせて保つ
+- [x] DOC-arch: `docs/architecture.md` を全レーンの現行構成(gateway・pokedex・calc・balance・speed・judge・record/team〈計画中〉・
+  データの流れ・WASM・Kustomize overlay)に合わせて更新(2026-09-24。素早さレーンが担当。PR #168・#194)。以後も各レーンが自分の
+  変化に合わせて保つ(単発の完了ではなく継続する運用)
 
 ## M4: 運用
 - [ ] P7-1 kube-prometheus-stack / Loki、各サービスのメトリクス
