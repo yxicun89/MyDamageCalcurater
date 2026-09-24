@@ -36,6 +36,17 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/pokedex/moves`.
     /// - Remark: Generated from `#/paths//api/pokedex/moves/get(searchMoves)`.
     func searchMoves(_ input: Operations.SearchMoves.Input) async throws -> Operations.SearchMoves.Output
+    /// 技の詳細(タイプ・分類・威力・優先度)
+    ///
+    /// 使用可能集合の外の技も返す(絞り込みは検索の仕事。既定のレギュレーションを引かないため、
+    /// マスタが未投入で技が0件のときも 404 `not_found` になる。0行を 503 にする searchMoves 等の
+    /// 一覧系とは異なる。ADR-0105 §3 追記)。判定レーンが技の優先度(`priority`)を個別に引くための
+    /// 経路(2026-09-22 の依頼。DECISIONS.md)。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/pokedex/moves/{key}`.
+    /// - Remark: Generated from `#/paths//api/pokedex/moves/{key}/get(getMove)`.
+    func getMove(_ input: Operations.GetMove.Input) async throws -> Operations.GetMove.Output
     /// 持ち物を日本語名で前方一致検索
     ///
     /// 既定のレギュレーションの使用可能集合だけを返す(並びは ID 順。ADR-0105)。
@@ -141,6 +152,25 @@ extension APIProtocol {
     ) async throws -> Operations.SearchMoves.Output {
         try await searchMoves(Operations.SearchMoves.Input(
             query: query,
+            headers: headers
+        ))
+    }
+    /// 技の詳細(タイプ・分類・威力・優先度)
+    ///
+    /// 使用可能集合の外の技も返す(絞り込みは検索の仕事。既定のレギュレーションを引かないため、
+    /// マスタが未投入で技が0件のときも 404 `not_found` になる。0行を 503 にする searchMoves 等の
+    /// 一覧系とは異なる。ADR-0105 §3 追記)。判定レーンが技の優先度(`priority`)を個別に引くための
+    /// 経路(2026-09-22 の依頼。DECISIONS.md)。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/pokedex/moves/{key}`.
+    /// - Remark: Generated from `#/paths//api/pokedex/moves/{key}/get(getMove)`.
+    public func getMove(
+        path: Operations.GetMove.Input.Path,
+        headers: Operations.GetMove.Input.Headers
+    ) async throws -> Operations.GetMove.Output {
+        try await getMove(Operations.GetMove.Input(
+            path: path,
             headers: headers
         ))
     }

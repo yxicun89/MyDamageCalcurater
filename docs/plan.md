@@ -211,7 +211,23 @@
   P6-1〜P6-2d の各タスクで継続して緑を確認済み。iPhone 18 Pro シミュレータ)
 - [x] P6-4 Tailscale serve の手順書 `docs/runbooks/ios-device-install.md` を作成 → **人間が実機インストール**(署名・
   Tailscale ログイン・実機への配線・外出先での確認は手順書どおり人間が行う。AI が代行しない)
-- [ ] P6-5 ADR-0209 §8 の文言と「この端末のデータを削除」の UI(issue #103。record-svc / team-svc の全削除 API 実装後)
+- [x] P6-5 issue #113(Web/iOS/API共同主担当)の iOS 側: `ReverseViewModel`/`CalcViewModel` が最新の入力 Task を1つ
+  (`LatestTaskRunner`)保持し、新入力時・画面破棄時(`.onDisappear` → `cancelPendingWork()`)に先行 Task を cancel
+  する。`ReverseScreenObservations` の観測文字入力に 200ms の trailing debounce(`CalcInput.debounceInterval`)を
+  適用(同期的な TextField 表示・入力検証は即時のまま)。方針は ADR-0501「issue #113」に確定(受け入れ条件
+  A1〜A7・追加する API・View の置き換え先)。`CancellationError` は画面 error にしない catch を、`reverse`/
+  `calcBulk` を包む catch だけでなく `species(key:)`(learnset の読み直し)を包む catch も含めて全経路に適用
+  (1周目の critic 指摘で漏れを修正。各 ViewModel の private `handleInputFailure(_:)` に集約)。
+  `swift test` 323件・`make ios-test`(unit・XCUITest 16件・Info.plist 検査)成功。判断: debounce は逆算の観測欄
+  だけ(計算画面は Task 管理のみ。自由文字入力が無いため)、`MasterSearchField`(issue #68)は今回統合しない
+  (理由は ADR 7章)。1周目の critic FAIL(A5 未達)は修正済み・再レビュー待ち。
+  PR 未作成(このブランチ `fix/ios-issue-113-debounce-cancel` のまま)
+- [ ] P6-6 issue #110(API レーン主担当。PR #130 で契約に上限追加済み: presets 8+unique・itemVariants/
+  itemCandidates 64+unique・observations 16・maxCandidates 上限128)の iOS 側追従。API レーンから 2026-09-23 に
+  依頼: 観測追加UIを16件で無効化(理由表示)、持ち物候補が64件を超える場合の扱いを決める(Web レーンの対応
+  〈黙って切り捨てず明示的なエラーか決定的な絞り込み〉に揃える)。DECISIONS.md 2026-09-23「calc の候補・観測件数
+  に上限を置く」参照。P6-5(issue #113)の critic サイクル完了後に着手
+- [ ] P6-7 ADR-0209 §8 の文言と「この端末のデータを削除」の UI(issue #103。record-svc / team-svc の全削除 API 実装後)
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)。Argo CD の実同期もローカル k3d で確認済み(ADR-0018: Git 変更 32fbb9e → manual sync → Pod の image digest 一致)
