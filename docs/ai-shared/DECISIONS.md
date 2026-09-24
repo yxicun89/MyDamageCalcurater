@@ -1350,3 +1350,14 @@ Reason: 独立レビュー PASS・`make test`(953件)/`test-db`(実MySQL)/`lint`
 green。実クラスタで4環境変数の設定・api-smoke正常応答を確認済み。
 Impact: これでデータレーン主担当のCodexレビューissue(#104・#106・#109・#112)はすべてmain統合済み。
 他レーンへの影響なし。
+
+## 2026-09-24: 判定 JD5(Web 画面)を PR #182 で main に統合。JD0〜JD5 がすべて完了(判定レーン)
+Decision: ADR-0705(`web/src/judge/` の新設。技ID自由入力・相手側追い風は全候補共通・送信ボタンでのみ呼ぶ・
+判定結果は丸めずそのまま表示)を PR #182 で main に統合した。critic は2回目で PASS(1回目 NG: 「古い応答」
+テストが実際にはレースを検証していなかった。`fireEvent.click` を同じ `act()` 内で2回同期的に呼ぶ形へ修正し、
+ガードを一時的に無効化するとテストが実際に落ちることを変異テストで確認)。
+Reason: `make test`・`make lint`・`make build`(ルート)が緑、critic PASS、他レーンの範囲外変更なし
+(COORDINATION.md の共有ファイル規約の範囲内)を確認してマージした。
+Impact: **judge-design.md §3 が定めた JD0〜JD5 のすべて(基盤・1対1判定・場の効果・複数候補・返り討ち判定・
+Web画面)が完了**した。判定レーンのブランチ `feat/judge-jd5` は削除。次の作業(新規要望・iOS版JD5・plan.mdに
+残る軽微な積み残し〈`attacker`単数の欄の大文字小文字厳密化〉)はユーザーからの新しい指示を待つ。
