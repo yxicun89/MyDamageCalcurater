@@ -83,7 +83,18 @@ disabled 判定は「今の種族の技候補があるか」に変更。critic �
 mutation テストで確認(全滅)。重要指摘1件(攻守入れ替え・与えた/受けた切り替え後の選択中の技〈候補一覧だけで
 なく実際にリクエストに乗る技〉が未検証。`<select>` の DOM 値は状態が壊れていても先頭候補にフォールバック表示
 するため見逃しやすい)を受け、実際のリクエストを検査する形に既存テスト2件を強化。既存1192件は無変更・新規
-28件追加(1220件)。BalanceScreen 自体の種族検索・技選択は P4-17b として積み残し。
+28件追加(1220件)。BalanceScreen 自体の種族検索・技選択は P4-17b として積み残し(下記で完了)。
+**P4-17b(BalanceScreen のオンライン対応。ADR-0304 A-14)完了・main 統合済み(PR #207)**: P4-17 で
+`capabilities.moves` が永続的に false のままと決まった結果、従来のゲート `speciesList && moves` では
+BalanceScreen がオンラインで永久に使えなかった。可否の判定を「一覧がそろっているか」から「入力の口が
+あるか」(`(speciesList || masterSearch) && (moves || (!speciesList && masterSearch))`)に置き換え、
+パーティ・仮想敵の12枠(6枠×2)それぞれで種族検索→技解決(`useSpeciesResolutions` を1画面で共有)を
+独立に行えるようにした。`moveById`/`hasDamagingMove` を fail-closed に直し、実体不明の技 ID を攻撃技と
+誤判定して誤解を招く診断(coverage の誤呼び出し)を出さないようにした。critic PASS(mutation testing で
+ゲート条件・fail-closed 判定・種族解決の登録漏れ等の主要な変異を全て検知)。critic 指摘の軽微3件は
+その場で直接修正: 種族解決の適用を index ではなく枠の id で引くよう変更(検索解決を待つ間に他の枠が
+削除されると index が別の枠を指しうる競合の根治)、A-14.1 の境界表(7パターン)の未カバー2行のテスト追加、
+特性名解決の重複ロジックの統一。新規15件追加(1243件)。
 **P4-21(issue #67・#98)完了・main 統合済み(PR #189・#192)。Codexレビューissue(P4-18・P4-21)はこれで
 すべて完了**:
 - #67(2xxの契約外JSONでAPIクライアントが例外を投げる): `apiEngine.ts`・`balanceClient.ts` の `postJson` を
@@ -98,12 +109,12 @@ mutation テストで確認(全滅)。重要指摘1件(攻守入れ替え・与�
   作業中に発見した無関係の既存退行(JD5の判定タブ追加で `a11y.spec.ts` が壊れていた)を別途修正・main統合済み
   (PR #191)。
   最終テスト数: 既存1166件は無変更のまま vitest 1184件・Playwright 31件、すべて green。
-Next: (1) P4-17b: BalanceScreen の種族検索・技選択をオンラインでも使えるようにする(ADR-0304 A-9 の申し送り)。
-(2) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
+Next: (1) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
 (apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより
-連絡が来る想定。(3) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち)。
-(4) 人間へのお願い: docs/verify-m1.md §4 を
-Safari で確認(P4-5)。(5) 他レーンからの依頼待ち
+連絡が来る想定。(2) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち。
+2026-09-24 時点で record/team-svc の DB マイグレーション・TiDB 導入方針〈ADR-0211〉はデータレーンで進行中)。
+(3) 人間へのお願い: docs/verify-m1.md §4 を
+Safari で確認(P4-5)。(4) 他レーンからの依頼待ち
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
