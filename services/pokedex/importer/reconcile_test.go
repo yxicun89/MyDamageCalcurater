@@ -605,6 +605,29 @@ func TestReconcileReportHasNoNames(t *testing.T) {
 	}
 }
 
+// 相性表の件数(取り込むタイプ数・行数)が報告と要約に出る(#269: 相性表が黙って空になって
+// いないかを人が見られるようにする)。
+func TestReconcileSummaryCountsTypeChart(t *testing.T) {
+	out, rec := reconcileOK(t, reconcileInput(t))
+	want := importer.TypeChartSummary{Types: 4, Rows: 9}
+	if rec.Summary.TypeChart != want {
+		t.Errorf("Summary.TypeChart = %+v, want %+v", rec.Summary.TypeChart, want)
+	}
+	if len(out.TypeChart) != want.Rows {
+		t.Errorf("Output の相性表 %d 行と要約の行数 %d が食い違う", len(out.TypeChart), want.Rows)
+	}
+	raw, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"typeChart":{"types":4,"rows":9}`) {
+		t.Errorf("報告の JSON に相性表の件数が無い: %s", raw)
+	}
+	if s := importer.FormatSummary(rec); !strings.Contains(s, "typeChart: types=4 rows=9\n") {
+		t.Errorf("要約に相性表の件数が無い:\n%s", s)
+	}
+}
+
 func TestFormatSummaryMentionsVerdicts(t *testing.T) {
 	_, rec := reconcileOK(t, reconcileInput(t))
 	s := importer.FormatSummary(rec)

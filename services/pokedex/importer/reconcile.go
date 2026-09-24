@@ -31,12 +31,20 @@ type SetSummary struct {
 	Imported         int `json:"imported"`
 }
 
+// TypeChartSummary は相性表の件数(#269)。Rows は等倍を省いた行数で、0 や急な減少は
+// 取得元の表の形の変化を疑う手がかりになる。
+type TypeChartSummary struct {
+	Types int `json:"types"`
+	Rows  int `json:"rows"`
+}
+
 // Summary は件数の要約一式(ADR-0103 §4)。
 type Summary struct {
 	Moves         SetSummary          `json:"moves"`
 	Species       SetSummary          `json:"species"`
 	Items         SetSummary          `json:"items"`
 	Abilities     SetSummary          `json:"abilities"`
+	TypeChart     TypeChartSummary    `json:"typeChart"`
 	WarningCounts map[FindingKind]int `json:"warningCounts"`
 	BlockerCounts map[FindingKind]int `json:"blockerCounts"`
 }
@@ -152,6 +160,7 @@ func Reconcile(in Input) (Output, Reconciliation, error) {
 	partial := convertBlocked || len(verdictBlockers) > 0
 
 	summary := computeSummary(in, out, partial)
+	summary.TypeChart = TypeChartSummary{Types: len(typesConv.Rows), Rows: len(typesConv.ChartRows)}
 
 	warnings := append(append([]Finding{}, convReport.Warnings...), verdictWarnings...)
 	blockers := append(append([]Finding{}, convReport.Blockers...), verdictBlockers...)

@@ -6,8 +6,12 @@ package importer_test
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"reflect"
+	"regexp"
 	"sort"
+	"strings"
 	"testing"
 
 	"example.com/pokecalc/engine"
@@ -183,6 +187,73 @@ func TestConvertMovesFollowP21cRules(t *testing.T) {
 
 // 持ち物は技と同じ規則(ADR-0101 §5)。calc だけの持ち物は除外の警告、Showdown だけで
 // 使用可の持ち物は補完の警告(どちらも取り込む集合には規則どおり反映される)。
+// TestConvertRejectsMoveValuesOutOfDBRange は、取得元の PP・命中が DB の CHECK の範囲外なら
+// 変換の段階で止めること(#310: pp=300 が uint8 の桁あふれで 44 として保存されていた)。
+// 命中 0 は必中(NULL で保存)。両方にある技と Showdown だけの技の両方の経路を確かめる。
+func TestConvertRejectsMoveValuesOutOfDBRange(t *testing.T) {
+	tests := []struct {
+		field  string
+		value  int
+		wantOK bool
+	}{
+		{"pp", 0, false}, {"pp", 1, true}, {"pp", 64, true}, {"pp", 65, false}, {"pp", 300, false},
+		{"accuracy", -1, false}, {"accuracy", 0, true}, {"accuracy", 1, true}, {"accuracy", 100, true}, {"accuracy", 101, false},
+	}
+	for _, moveID := range []string{"testflame", "testsplash"} {
+		for _, tt := range tests {
+			t.Run(fmt.Sprintf("%s/%s=%d", moveID, tt.field, tt.value), func(t *testing.T) {
+				in := loadFixture(t)
+				m := showdownMove(t, &in, moveID)
+				if tt.field == "pp" {
+					m.PP = tt.value
+				} else {
+					m.Accuracy = tt.value
+				}
+				out, _, err := importer.Convert(in)
+				if !tt.wantOK {
+					if !errors.Is(err, importer.ErrInvalidData) {
+						t.Fatalf("err = %v, want ErrInvalidData", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("Convert: %v", err)
+				}
+				for _, r := range out.Moves {
+					if r.ID == moveID && ((tt.field == "pp" && r.PP != tt.value) || (tt.field == "accuracy" && r.Accuracy != tt.value)) {
+						t.Errorf("%s の %s が %+v に化けた", moveID, tt.field, r)
+					}
+				}
+			})
+		}
+	}
+}
+
+// TestMoveRangesMatchMigrationCheck は、importer が持つ PP・命中の範囲が moves の CHECK
+// (ADR-0100 §3。migration が正)と一致すること(#310)。
+func TestMoveRangesMatchMigrationCheck(t *testing.T) {
+	raw, err := os.ReadFile("../db/migrations/000002_create_master.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name     string
+		pattern  string
+		min, max int
+	}{
+		{"pp", `chk_moves_pp CHECK \(pp BETWEEN (\d+) AND (\d+)\)`, importer.MovePPMin, importer.MovePPMax},
+		{"accuracy", `chk_moves_accuracy CHECK \(accuracy IS NULL OR accuracy BETWEEN (\d+) AND (\d+)\)`, importer.MoveAccuracyMin, importer.MoveAccuracyMax},
+	} {
+		m := regexp.MustCompile(tt.pattern).FindStringSubmatch(string(raw))
+		if m == nil {
+			t.Fatalf("migration に %s の CHECK が見つからない(制約名・形が変わったらこのテストも直す)", tt.name)
+		}
+		if got := m[1] + ".." + m[2]; got != fmt.Sprintf("%d..%d", tt.min, tt.max) {
+			t.Errorf("%s: importer の範囲 %d..%d と migration の CHECK %s が食い違う", tt.name, tt.min, tt.max, got)
+		}
+	}
+}
+
 func TestConvertItemsFollowSameRuleAsMoves(t *testing.T) {
 	in := loadFixture(t)
 	in.Calc.Items = append(in.Calc.Items, "Test Onlycalc")
@@ -574,6 +645,118 @@ func TestConvertNamesJa(t *testing.T) {
 	}
 }
 
+// TestConvertRejectsDuplicateSourceIDs は、取得元に同じ ID の行が2つあると、どちらかを黙って
+// 採らずに止めること(#311)。calc は toID(名前)、Showdown は id、PokeAPI は toID(slug) で数える。
+// どのケースも重複検査(checkUniqueSourceIDs)が無いと通ってしまう形にする(他の検査で止まる
+// calc のタイプ名の重複は対象外)。
+func TestConvertRejectsDuplicateSourceIDs(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(t *testing.T, in *importer.Input)
+	}{
+		{"calc の技名(威力だけ違う複製を先頭に足す)", func(t *testing.T, in *importer.Input) {
+			dup := *calcMove(t, in, "Test Flame")
+			dup.BasePower++
+			in.Calc.Moves = append([]importer.CalcMove{dup}, in.Calc.Moves...)
+		}},
+		{"calc の技名(toID が同じ表記違い)", func(t *testing.T, in *importer.Input) {
+			dup := *calcMove(t, in, "Test Flame")
+			dup.Name = "Test-Flame"
+			in.Calc.Moves = append(in.Calc.Moves, dup)
+		}},
+		{"calc の種族名", func(t *testing.T, in *importer.Input) {
+			in.Calc.Species = append(in.Calc.Species, *calcSpecies(t, in, "Testleaf"))
+		}},
+		{"calc の持ち物名", func(t *testing.T, in *importer.Input) {
+			in.Calc.Items = append(in.Calc.Items, in.Calc.Items[0])
+		}},
+		{"calc の特性名", func(t *testing.T, in *importer.Input) {
+			in.Calc.Abilities = append(in.Calc.Abilities, in.Calc.Abilities[0])
+		}},
+		{"calc の性格名(補正だけ違う複製を先頭に足す)", func(t *testing.T, in *importer.Input) {
+			dup := in.Calc.Natures[0]
+			dup.Plus, dup.Minus = dup.Minus, dup.Plus
+			in.Calc.Natures = append([]importer.CalcNature{dup}, in.Calc.Natures...)
+		}},
+		{"Showdown の技 id", func(t *testing.T, in *importer.Input) {
+			in.Showdown.Moves = append(in.Showdown.Moves, *showdownMove(t, in, "testflame"))
+		}},
+		{"Showdown の種族 id", func(t *testing.T, in *importer.Input) {
+			in.Showdown.Species = append(in.Showdown.Species, *showdownSpecies(t, in, "testleaf"))
+		}},
+		{"Showdown の持ち物 id", func(t *testing.T, in *importer.Input) {
+			in.Showdown.Items = append(in.Showdown.Items, in.Showdown.Items[0])
+		}},
+		{"Showdown の特性 id", func(t *testing.T, in *importer.Input) {
+			in.Showdown.Abilities = append(in.Showdown.Abilities, in.Showdown.Abilities[0])
+		}},
+		{"Showdown の性格 id(補正だけ違う複製を先頭に足す)", func(t *testing.T, in *importer.Input) {
+			dup := in.Showdown.Natures[0]
+			dup.Plus, dup.Minus = dup.Minus, dup.Plus
+			in.Showdown.Natures = append([]importer.ShowdownNature{dup}, in.Showdown.Natures...)
+		}},
+		{"PokeAPI の技 slug(toID が同じで別名)", func(t *testing.T, in *importer.Input) {
+			in.PokeAPI.Moves = append(in.PokeAPI.Moves, importer.PokeAPIName{Slug: "testflame", Names: map[string]string{"ja-Hrkt": "テストべつめい"}})
+		}},
+		{"PokeAPI の種族 slug", func(t *testing.T, in *importer.Input) {
+			in.PokeAPI.Species = append(in.PokeAPI.Species, in.PokeAPI.Species[0])
+		}},
+		{"PokeAPI のフォーム slug", func(t *testing.T, in *importer.Input) {
+			in.PokeAPI.Forms = append(in.PokeAPI.Forms, in.PokeAPI.Forms[0])
+		}},
+		{"PokeAPI の持ち物 slug", func(t *testing.T, in *importer.Input) {
+			in.PokeAPI.Items = append(in.PokeAPI.Items, in.PokeAPI.Items[0])
+		}},
+		{"PokeAPI の特性 slug", func(t *testing.T, in *importer.Input) {
+			in.PokeAPI.Abilities = append(in.PokeAPI.Abilities, in.PokeAPI.Abilities[0])
+		}},
+		{"PokeAPI のタイプ slug", func(t *testing.T, in *importer.Input) {
+			in.PokeAPI.Types = append(in.PokeAPI.Types, in.PokeAPI.Types[0])
+		}},
+		{"PokeAPI の性格 slug", func(t *testing.T, in *importer.Input) {
+			in.PokeAPI.Natures = append(in.PokeAPI.Natures, in.PokeAPI.Natures[0])
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := loadFixture(t)
+			tt.mutate(t, &in)
+			_, _, err := importer.Convert(in)
+			if !errors.Is(err, importer.ErrInvalidData) {
+				t.Fatalf("err = %v, want ErrInvalidData", err)
+			}
+		})
+	}
+}
+
+// TestConvertSkipsBlankJaName は、PokeAPI の日本語名が空白だけなら採らず、次の言語・英語名へ
+// 進むこと(#311。DB の CHECK は CHAR_LENGTH > 0 なので空白だけの名前が通ってしまう)。
+func TestConvertSkipsBlankJaName(t *testing.T) {
+	in := loadFixture(t)
+	for i := range in.PokeAPI.Moves {
+		if in.PokeAPI.Moves[i].Slug == "test-flame" {
+			in.PokeAPI.Moves[i].Names = map[string]string{"ja-Hrkt": " \u3000 ", "ja": "テストほのお漢字"}
+		}
+		if in.PokeAPI.Moves[i].Slug == "test-glare" {
+			in.PokeAPI.Moves[i].Names = map[string]string{"ja": "   "}
+		}
+	}
+	out, rep := convertOK(t, in)
+	got := map[string]importer.MoveRow{}
+	for _, m := range out.Moves {
+		got[m.ID] = m
+	}
+	if m := got["testflame"]; m.NameJa != "テストほのお漢字" || m.NameJaSource != "pokeapi" {
+		t.Errorf("testflame = %q(%s), want 次の言語 ja の名前", m.NameJa, m.NameJaSource)
+	}
+	if m := got["testglare"]; m.NameJa != m.NameEn || m.NameJaSource != "fallback_en" {
+		t.Errorf("testglare = %q(%s), want 英語名へのフォールバック", m.NameJa, m.NameJaSource)
+	}
+	if !hasFinding(rep.Warnings, importer.KindNameFallback, "testglare") {
+		t.Error("英語名へのフォールバックが警告に無い")
+	}
+}
+
 func TestConvertNameLanguageOrderComesFromConfig(t *testing.T) {
 	in := loadFixture(t)
 	in.Config.NameJaLanguages = []string{"ja", "ja-Hrkt"}
@@ -627,6 +810,70 @@ func TestConvertTypesAndChart(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("Code(%s, %s) = %d, want %d", tt.atk, tt.def, got, tt.want)
 		}
+	}
+}
+
+// TestConvertRejectsBrokenTypeChart は、calc の相性表のキーが types と食い違うと相性表が黙って
+// 空(全組み合わせ等倍)で投入される問題(#269)の回帰テスト。除外タイプ(excludeTypes)以外の
+// 未知の名前と、取り込むタイプの攻撃側の行(等倍だけでも空オブジェクトで明示される)の欠落を止める。
+func TestConvertRejectsBrokenTypeChart(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(in *importer.Input)
+	}{
+		{"キーを小文字化した(表記の変化)", func(in *importer.Input) {
+			lowered := map[string]map[string]int{}
+			for atk, row := range in.Calc.TypeChart {
+				r := map[string]int{}
+				for def, code := range row {
+					r[strings.ToLower(def)] = code
+				}
+				lowered[strings.ToLower(atk)] = r
+			}
+			in.Calc.TypeChart = lowered
+		}},
+		{"表が空", func(in *importer.Input) {
+			in.Calc.TypeChart = map[string]map[string]int{}
+		}},
+		{"全タイプのキーはあるが中身がすべて空(effectiveness が取れなかった形)", func(in *importer.Input) {
+			for atk := range in.Calc.TypeChart {
+				in.Calc.TypeChart[atk] = map[string]int{}
+			}
+		}},
+		{"防御側に types に無いタイプ名がある", func(in *importer.Input) {
+			in.Calc.TypeChart["Fire"]["Testunknown"] = 4
+		}},
+		{"攻撃側に types に無いタイプ名がある", func(in *importer.Input) {
+			in.Calc.TypeChart["Testunknown"] = map[string]int{"Fire": 4}
+		}},
+		{"取り込むタイプの攻撃側の行が無い", func(in *importer.Input) {
+			delete(in.Calc.TypeChart, "Normal")
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := loadFixture(t)
+			tt.mutate(&in)
+			_, _, err := importer.Convert(in)
+			if !errors.Is(err, importer.ErrInvalidData) {
+				t.Fatalf("err = %v, want ErrInvalidData", err)
+			}
+		})
+	}
+}
+
+// TestConvertTypeChartIgnoresExcludedTypes は、除外タイプ(excludeTypes)の名前は攻撃側・防御側の
+// どちらに現れても捨ててよく、除外タイプの行が無くてもよいこと(#269)。
+func TestConvertTypeChartIgnoresExcludedTypes(t *testing.T) {
+	in := loadFixture(t)
+	base, _ := convertOK(t, in)
+
+	in = loadFixture(t)
+	in.Calc.TypeChart["Fire"]["???"] = 1
+	delete(in.Calc.TypeChart, "???")
+	out, _ := convertOK(t, in)
+	if !reflect.DeepEqual(out.TypeChart, base.TypeChart) {
+		t.Fatalf("除外タイプの有無で相性表が変わった: got %+v, want %+v", out.TypeChart, base.TypeChart)
 	}
 }
 

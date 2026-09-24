@@ -6,6 +6,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { parseCSV } from './pokeapi-csv.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const config = JSON.parse(readFileSync(`${root}data/importer/config.json`, 'utf8'));
@@ -18,33 +19,6 @@ const LANGUAGES = ['ja-Hrkt', 'ja']; // ADR-0101 §3: この2言語だけ出す(
 const cacheDir = `${root}data/generated/.cache/pokeapi/${commit}/`;
 mkdirSync(cacheDir, { recursive: true });
 
-// parseCSV は簡易 RFC4180 パーサ(ダブルクォートで囲まれたカンマ・改行に対応)。
-function parseCSV(text) {
-  const rows = [];
-  let row = [];
-  let field = '';
-  let inQuotes = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inQuotes) {
-      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
-      else if (c === '"') { inQuotes = false; }
-      else { field += c; }
-    } else if (c === '"') {
-      inQuotes = true;
-    } else if (c === ',') {
-      row.push(field); field = '';
-    } else if (c === '\n') {
-      row.push(field); field = ''; rows.push(row); row = [];
-    } else if (c !== '\r') {
-      field += c;
-    }
-  }
-  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
-  const header = rows.shift();
-  return rows.filter((r) => r.length === header.length).map((r) => Object.fromEntries(header.map((h, i) => [h, r[i]])));
-}
-
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ネットワークの礼儀(ADR-0101 §3): 逐次取得し、実際にネットワークへ出たときだけ
@@ -52,7 +26,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function fetchCSV(name) {
   const cachePath = `${cacheDir}${name}`;
   if (existsSync(cachePath)) {
-    return parseCSV(readFileSync(cachePath, 'utf8'));
+    return parseCSV(readFileSync(cachePath, 'utf8'), cachePath);
   }
   const url = `https://raw.githubusercontent.com/PokeAPI/pokeapi/${commit}/data/v2/csv/${name}`;
   const res = await fetch(url);
@@ -60,7 +34,7 @@ async function fetchCSV(name) {
   const text = await res.text();
   writeFileSync(cachePath, text);
   await sleep(300);
-  return parseCSV(text);
+  return parseCSV(text, url);
 }
 
 const languages = await fetchCSV('languages.csv');

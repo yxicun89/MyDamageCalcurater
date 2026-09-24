@@ -12,7 +12,7 @@
 //	1 再試行で直りうる失敗(DB に接続できない・報告を書けない・その他の I/O)
 //	2 使い方・設定の誤り(フラグの誤り・POKEDEX_DATABASE_DSN が無い)
 //	3 人間の対応が要る(ErrBlocked・ErrKeyChanged・ErrInvalidInput・ErrInvalidData・
-//	  master.ErrInvalidEffect・ErrSchemaNotReady)。DB は変えない
+//	  master.ErrInvalidEffect・ErrSchemaNotReady・DB の制約違反)。DB は変えない
 package main
 
 import (
@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 
 	"example.com/pokecalc/services/internal/master"
 	"example.com/pokecalc/services/pokedex/importer"
@@ -162,6 +162,17 @@ func printUpstream(env cliEnv, pinned map[string]string, path string, maxAge tim
 	}
 }
 
+// dataErrorCodes は投入(Apply)で MySQL が返す、データ自体が制約に合わないことを示すエラー番号。
+// 同じ入力で再試行しても同じ結果になるので、終了コード 3(人間の対応が要る)に分類する(#310)。
+// トランザクションは巻き戻るので DB は変わらない。
+var dataErrorCodes = map[uint16]bool{
+	1062: true, // ER_DUP_ENTRY(重複)
+	1264: true, // ER_WARN_DATA_OUT_OF_RANGE(列の型の範囲外。strict モード)
+	1406: true, // ER_DATA_TOO_LONG(列の長さを超える。strict モード)
+	1452: true, // ER_NO_REFERENCED_ROW_2(外部キー違反)
+	3819: true, // ER_CHECK_CONSTRAINT_VIOLATED(CHECK 違反)
+}
+
 // classifyErr は ADR-0104 §3 の終了コード 3(人間の対応が要る。再試行しても同じ。DB は変えない)
 // に当たるかを判定する。それ以外は 1(再試行で直りうる失敗)。
 func classifyErr(err error) int {
@@ -176,6 +187,10 @@ func classifyErr(err error) int {
 		if errors.Is(err, sentinel) {
 			return 3
 		}
+	}
+	var myErr *mysql.MySQLError
+	if errors.As(err, &myErr) && dataErrorCodes[myErr.Number] {
+		return 3
 	}
 	return 1
 }

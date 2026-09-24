@@ -103,6 +103,10 @@ func Convert(in Input) (Output, Report, error) {
 	usedOverrideTypes := map[string]bool{}
 	usedOverrideNatures := map[string]bool{}
 
+	if err := checkUniqueSourceIDs(in); err != nil {
+		return Output{}, Report{}, err
+	}
+
 	typesConv, typeWarnings, err := convertTypes(in, usedOverrideTypes)
 	if err != nil {
 		return Output{}, Report{}, err
