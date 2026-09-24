@@ -142,6 +142,10 @@ func Reconcile(in Input) (Output, Reconciliation, error) {
 	}
 	convertBlocked := errors.Is(convErr, ErrBlocked)
 
+	// 照合も Convert と同じく、Showdown の技の別の版を正規の1件にまとめた入力で行う(ADR-0115 追記)。
+	// まとめる前の入力のままだと、版の行が正規の id の値として比べられ、誤った差分・verdict になりうる。
+	in.Showdown.Moves, _ = foldShowdownMoveVariants(in.Showdown.Moves)
+
 	// 技の判定は種族と独立にできる(ADR-0103 §5)。Convert が種族で止まっても照合する。
 	typesConv, _, err := convertTypes(in, map[string]bool{})
 	if err != nil {

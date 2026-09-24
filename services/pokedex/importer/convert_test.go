@@ -681,6 +681,13 @@ func TestConvertRejectsDuplicateSourceIDs(t *testing.T) {
 		{"Showdown の技 id", func(t *testing.T, in *importer.Input) {
 			in.Showdown.Moves = append(in.Showdown.Moves, *showdownMove(t, in, "testflame"))
 		}},
+		{"Showdown の技 id(正規の行が無い別の版が2つ)", func(t *testing.T, in *importer.Input) {
+			a := *showdownMove(t, in, "testflame")
+			a.ID, a.Name = "testnobase", "Test Nobase One"
+			b := a
+			b.Name = "Test Nobase Two"
+			in.Showdown.Moves = append(in.Showdown.Moves, a, b)
+		}},
 		{"Showdown の種族 id", func(t *testing.T, in *importer.Input) {
 			in.Showdown.Species = append(in.Showdown.Species, *showdownSpecies(t, in, "testleaf"))
 		}},
@@ -1088,5 +1095,77 @@ func TestConvertIsDeterministic(t *testing.T) {
 	}
 	if !sort.SliceIsSorted(first.Moves, func(i, j int) bool { return first.Moves[i].ID < first.Moves[j].ID }) {
 		t.Errorf("Moves が ID 順でない")
+	}
+}
+
+// TestConvertFoldsShowdownMoveVariants は、Showdown が同じ id で返す技の別の版(名前が違う)を、
+// toID(名前) == id の正規の1件にまとめ、止めずに警告に出すこと。版が正規の行より前でも後でも同じ。
+// 正規の行の値(タイプ)が採られ、版の値で上書きされない。
+func TestConvertFoldsShowdownMoveVariants(t *testing.T) {
+	baseOut, _ := convertOK(t, loadFixture(t))
+	wantType := ""
+	for _, m := range baseOut.Moves {
+		if m.ID == "testflame" {
+			wantType = m.Type
+		}
+	}
+	if wantType == "" {
+		t.Fatal("fixture の変換結果に testflame が無い")
+	}
+	for _, before := range []bool{false, true} {
+		in := loadFixture(t)
+		base := *showdownMove(t, &in, "testflame")
+		variant := base
+		variant.Name = base.Name + " Variant"
+		for _, m := range in.Showdown.Moves {
+			if m.Type != base.Type {
+				variant.Type = m.Type
+				break
+			}
+		}
+		if variant.Type == base.Type {
+			t.Fatal("fixture に testflame と別のタイプの技が無い")
+		}
+		if before {
+			in.Showdown.Moves = append([]importer.ShowdownMove{variant}, in.Showdown.Moves...)
+		} else {
+			in.Showdown.Moves = append(in.Showdown.Moves, variant)
+		}
+		out, rep := convertOK(t, in)
+		if !hasFinding(rep.Warnings, importer.KindMoveVariantFolded, "testflamevariant") {
+			t.Errorf("before=%v: まとめた版(testflamevariant)が Warnings に無い", before)
+		}
+		for _, m := range out.Moves {
+			if m.ID == "testflame" && m.Type != wantType {
+				t.Errorf("before=%v: testflame のタイプが版の値で上書きされた: %q(期待 %q)", before, m.Type, wantType)
+			}
+		}
+	}
+}
+
+// TestReconcileUsesFoldedShowdownMoves は、照合(Reconcile)も別の版をまとめた入力で行い、版の値
+// (タイプ)で正規の技の差分が出ないこと(PR #354 の critic 指摘)。
+func TestReconcileUsesFoldedShowdownMoves(t *testing.T) {
+	in := reconcileInput(t)
+	base := *showdownMove(t, &in, "testflame")
+	variant := base
+	variant.Name = base.Name + " Variant"
+	for _, m := range in.Showdown.Moves {
+		if m.Type != base.Type {
+			variant.Type = m.Type
+			break
+		}
+	}
+	_, baseRec, err := importer.Reconcile(reconcileInput(t))
+	if err != nil {
+		t.Fatalf("Reconcile(元の入力): %v", err)
+	}
+	in.Showdown.Moves = append(in.Showdown.Moves, variant)
+	_, rec, err := importer.Reconcile(in)
+	if err != nil {
+		t.Fatalf("Reconcile(版を足した入力): %v", err)
+	}
+	if len(rec.MoveDiffs) != len(baseRec.MoveDiffs) || len(rec.Report.Blockers) != len(baseRec.Report.Blockers) {
+		t.Errorf("版を足すと照合の差分・blocker が変わった: diffs %d → %d, blockers %d → %d", len(baseRec.MoveDiffs), len(rec.MoveDiffs), len(baseRec.Report.Blockers), len(rec.Report.Blockers))
 	}
 }
