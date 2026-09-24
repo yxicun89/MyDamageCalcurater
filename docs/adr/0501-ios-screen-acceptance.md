@@ -1803,3 +1803,291 @@ View(`ios/PokeCalc`。XCUITest は今回必須にしない): `TeamEditMemberCard
   ことを確認済み。
 - 4本とも追加し、`swift test` 383件・`make ios-test`(unit 396件・XCUITest 17件・Info.plist 検査)がすべて
   green であることを確認した。既存テストは1行も変えていない。
+
+## getMovesByIds による構築編集の技の一括解決
+
+- 日付: 2026-09-24 / 担当レーン: iOS / 関連: issue #68(「issue #68 の残り: getMove による選択中の技の解決」
+  5章「構築は `load()` で保存済みの技だけを解決し、技の辞書を持つ」)、issue #113(「issue #113 の受け入れ条件
+  (iOS 側)」5章「Task の所有者」)、PR #199(`PokeCalcService.move(id:)` = `getMove` の追加。main 統合済み)、
+  main の `GET /api/pokedex/moves/batch`(operationId `getMovesByIds`。api/openapi.yaml 171〜214行。
+  生成済み Swift クライアントに既にある。web の同じ課題は ADR-0304 §3)
+- 状態: **実装完了**(spec-writer: 受け入れ条件とテスト → implementer: 実装 → 3.1 の2つ目の衝突を
+  spec-writer が解決 → critic 1回目 FAIL(テストの網羅不足のみ。実装は問題なしと判定)→ 指摘のテストを追加
+  → 再確認。8章「critic 指摘への対応」)。
+- 範囲: `ios/` と本ファイル(`docs/adr/0501-ios-screen-acceptance.md`)・`docs/plan.md` だけ。
+  `api/openapi.yaml`・`Generated/`・`engine/`・`services/`・`web/` は触らない(`getMovesByIds` は既に main の
+  契約・生成物にある。`make gen` 不要)。
+
+### 0. 背景
+
+「issue #68 の残り」5章で `TeamEditViewModel.load()` は、保存済みの各メンバーについて `species(key:)` を呼んだ
+直後に `resolveUnknownMoves(member.moveIds)` を呼び、辞書に無い `moveIds` を `move(id:)`(1件ずつ)の
+`withTaskGroup` で並行解決している(メンバーごとに1回のまとめ役の呼び出し、その中身は ID の数だけ個別の
+HTTP 往復)。1体あたり最大4件・6体で最大24件になり得る(`TeamLimits.maxMovesPerMember` × `TeamLimits.maxMembers`)。
+
+main に `getMovesByIds`(1回の呼び出しで複数の ID をまとめて解決できる。1〜64件、マスタに無い ID は黙って
+省く、404 は無い)が入ったので、`TeamEditViewModel.load()` の技解決を「全メンバー分の未知の技を集めて
+1回(64件以下なら)の `moves(ids:)` にまとめる」形に置き換えられる。往復回数を減らせるだけで、A2〜A4
+(失敗の扱い・世代・`moveIds` を変えない)という既存の振る舞いは変えない。
+
+### 1. 受け入れ条件(検証可能な形)
+
+1. **A1 サービスに `moves(ids:)` を足す**: `PokeCalcService` に
+   `func moves(ids: [String]) async throws -> [Move]` を足す(`move(id:)` の複数版)。
+   - `APIPokeCalcService.moves(ids:)`: `client.getMovesByIds` に写す(`X-Device-Id`/`X-Session-Id` 付き・
+     パス `/api/pokedex/moves/batch`・クエリ `ids` を繰り返しで渡す)。`ids` は**重複除去**してから送る
+     (同じ ID を2回渡しても、送るクエリは1回にまとめる)。空配列なら**通信せず** `[]` を返す。
+     `ids`(重複除去後)が `RequestLimits.maxMoveBatchIds`(= 64。契約の `getMovesByIds.ids.maxItems` の写し)を
+     超えるときは、呼び出し側(`APIPokeCalcService` 自身)がこの件数ずつに分割して複数回呼び、応答を渡した順に
+     連結する(呼び出し元の `TeamEditViewModel` は分割を意識しない。契約の `description` がこの分割を
+     呼び出し側の責務と明記している)。`.serviceUnavailable`/`.default`/通信失敗/キャンセルは他の pokedex 操作と
+     同じ写像(`domainErrorFromSchema`/`domainError`/`PokeCalcError.Code.transport`/`CancellationError` の
+     投げ直し)。**404 は無い**(`getMovesByIds` の `Output` に `.notFound` ケースが無い。マスタに無い ID は
+     200 の応答から黙って省かれるだけ)。
+   - `MockPokeCalcService.moves(ids:)`: フィクスチャの技から `ids`(重複除去後)の順に引き、無ければ省く
+     (`throw` しない。`move(id:)` の 404 と違い「まとめ取りは部分一致・エラーにしない」という契約の
+     `description` どおり)。空配列なら `[]`。
+   - `RequestLimits.maxMoveBatchIds = 64`(`getMovesByIds.ids.maxItems` の写し)を `RequestLimits` に足す。
+     この値は `components.schemas` のプロパティではなく `paths./api/pokedex/moves/batch.get` の
+     **クエリパラメータ**の `maxItems` なので、`ios/scripts/check-request-limits.sh` の既存の
+     `contract_max_items`(`components.schemas.<schema>.properties.<property>.maxItems` だけを awk で辿る)は
+     使えない。別関数 `contract_query_max_items`(`paths.<path>` → `- name: <name>` → `schema.maxItems` を
+     固定インデントで辿る)を足し、`check_query /api/pokedex/moves/batch ids maxMoveBatchIds` で照合する
+     (`make ios-test` の一部。実装済み。2章)。
+2. **A2 構築(`TeamEditViewModel.load()`)は全メンバー分をまとめて1回で解決する**: `load()` は、各メンバーの
+   `species(key:)`(learnset の読み直し)がすべて終わった**後**に、全メンバーの `moveIds` のうち技の辞書
+   (`moveDictionary`)にまだ無いものを**集めて重複除去し**、`moves(ids:)` を1回(64件以下なら)呼ぶ。
+   解決できた技は辞書に入れる(`moveOptionsByMember` には混ぜない。既存の意味を変えない)。
+   - 未知の ID が無ければ `moves(ids:)` を呼ばない(空配列で早期リターンする a1 の規則と合わせて、
+     通信そのものが発生しない)。
+   - 1体あたり最大4件・6体で最大24件(`TeamLimits.maxMovesPerMember` × `TeamLimits.maxMembers`)なので、
+     構築画面からは `RequestLimits.maxMoveBatchIds`(64)を超える呼び出しにはならない(A1 の分割は
+     `APIPokeCalcService` 内部の保険であって、構築側が意識して分割呼び出しを設計する必要は無い)。
+   - **1段目(全メンバーの `species(key:)`)の途中で失敗したら、2段目(`moves(ids:)` の一括呼び出し)は
+     一切行わない**(`load()` の `do`/`catch` は1つで、1段目のどこかで `throw` すると2段目に進まず
+     `catch` に落ちる)。旧実装(メンバーごとのループ内で `resolveUnknownMoves` を呼んでいた)では、
+     N番目のメンバーで `species(key:)` が失敗しても 1〜(N-1)番目のメンバーの技はすでに解決済みのまま
+     残っていた。この差は許容する: `species(key:)` の失敗は `error` を立てて編集画面自体を止める
+     (旧実装でも新実装でも)ので、技が一部だけ解決されているかどうかはユーザーから見て意味を持たない
+     (どのみち `error` 表示になり、再読み込みで `load()` をやり直すことになる)。
+
+3. **A3 失敗は今日の振る舞いのまま**: `moves(ids:)` の失敗(503・通信失敗・キャンセルを含む)は、`error` を
+   立てない・`team.members[*].moveIds` を変えない・解決できなかった ID は `move(forID:)` が `nil` を返す
+   ("issue #68 の残り"5章の A4 をそのまま踏襲。一括呼び出しに変わっても、部分成功/全部失敗の外部からの
+   見え方は「解決できた ID だけ辞書に入る」で変わらない)。
+4. **A4 世代は要らない**: "issue #68 の残り"5章の判断(「構築の技の辞書は ID → その技の不変な対応なので、
+   遅れて届いた応答を辞書に入れても古い状態で新しい状態を上書きすることにはならない」)は `moves(ids:)` に
+   切り替えても変わらない(1回の応答が複数 ID をまとめて運ぶだけで、性質は同じ)。世代保護は追加しない。
+5. **A5 既存テストは1行も変えない**: `TeamEditViewModelMoveLookupTests`("issue #68 の残り"5章で追加済み・
+   green)は変更しない。`TeamEditViewModel.load()` を `moves(ids:)` の一括呼び出しへ切り替えても、それらの
+   テストが green のまま保てるよう `StubPokeCalcService` 側だけを拡張する(3章「既存テストとの整合」)。
+6. **A6 計算・逆算(Calc/Reverse)はこのタスクでは変えない**: `CalcViewModel`/`ReverseViewModel` の
+   `reselectMove` は `move(id:)` を使い続ける(4章「判断」)。
+
+### 2. 実装したもの(すべて `ios/` 配下)
+
+`api/openapi.yaml`・`Generated/` は main に既にあるので変更していない。
+
+1. `PokeCalcCore/RequestLimits.swift`: `RequestLimits.maxMoveBatchIds = 64`。
+2. `ios/scripts/check-request-limits.sh`: `contract_query_max_items`(クエリパラメータ版の `maxItems` 抽出)・
+   `check_query`(照合)を足し、`check_query /api/pokedex/moves/batch ids maxMoveBatchIds` を呼ぶ。
+   `bash ios/scripts/check-request-limits.sh` で確認済み(`ios-check-request-limits: OK`)。
+3. `PokeCalcCoreTests/RequestLimitsTests.swift`: `testMoveBatchLimitMatchesTheOpenAPIContract`(新規テスト。
+   既存の `testLimitsMatchTheOpenAPIContract` 等は変更していない)。
+4. `Support/StubPokeCalcService.swift`: `moves(ids:)` のテスト用実装(3章・3.1章)。
+5. `PokeCalcCore/PokeCalcService.swift`: プロトコル要件 `func moves(ids: [String]) async throws -> [Move]`
+   (ドキュメントコメントに A1 の規則を書いた)。
+6. `PokeCalcCore/APIPokeCalcService.swift`: `moves(ids:)` を実装(重複除去 → 空配列は無通信 →
+   `RequestLimits.maxMoveBatchIds` 件ずつ `stride(from: 0, to:, by:)` で分割 → `client.getMovesByIds` を
+   順に呼び応答を連結。写像は `move(id:)` 等と同じ private static 関数を再利用)。
+   `PokeCalcCore/MockPokeCalcService.swift`: `moves(ids:)` を実装(重複除去した順で `fixtures.moves` から
+   引き、無い ID は省く)。
+7. `PokeCalcCore/TeamEditViewModel.swift`: `load()` を2段に分割(1段目で全メンバーの `species(key:)`・
+   `moveOptionsByMember`/`abilityOptionsByMember` を終わらせ、2段目で全メンバーの `moveIds` をまとめて
+   `resolveUnknownMoves` に渡す)。`resolveUnknownMoves` は `withTaskGroup` をやめ、辞書に無い ID を
+   重複除去してから `service.moves(ids:)` を1回呼び、`try?` で失敗を握りつぶす形に書き換えた(A2・A3)。
+
+### 3. 判断: `StubPokeCalcService` の拡張で既存テストとの衝突を避ける(要レビュー)
+
+依頼者からの指示は「`TeamEditViewModelMoveLookupTests` が `move(id:)` の個別呼び出しをアサートしているなら、
+そのテストは編集せず衝突として報告する」だった。実際に確認した衝突と、ここで採った解決策を明記する
+(implementer・レビューア向けの確認ポイント)。
+
+- **見つかった衝突**: `TeamEditViewModelMoveLookupTests.testSavedMoveOutsideTheFirstPageIsResolvedByIDOnLoad`
+  (44〜45行)は `let lookups = await stub.moveLookups; XCTAssertEqual(lookups, [StubBulkMaster.hiddenMove.id], …)`
+  で、`stub.moveLookups`(`move(id:)` が呼ばれるたびに ID を1件ずつ追記する記録配列)を直接アサートしている。
+  `testNoLookupWhenEverySavedMoveIsAlreadyKnown` も同様に `moveLookups == []` を見る。`load()` が
+  `move(id:)` の代わりに `moves(ids:)` を1回呼ぶ実装に変わると、`moveLookups`(`move(id:)` 専用の記録)は
+  空のままになり、前者のテストは `[] != [hiddenMove.id]` で red になる。
+- **採った解決策(このタスクで実装済み)**: `StubPokeCalcService.moves(ids:)` の実装を、独自の
+  `moveBatchRequests: [[String]]`(1呼び出し = 1エントリ。呼び出しの回数・中身そのものを見たい新しい
+  テスト用)に記録するのに**加えて**、受け取った `ids` をそのまま `moveLookups`(`move(id:)` と共有)にも
+  `append(contentsOf:)` する。つまり `moveLookups` の意味を「`move(id:)` で引いた ID」から
+  「`move(id:)` **または** `moves(ids:)` で引いた ID(引いた経路を問わないフラットな記録)」に広げた。
+  この変更は `StubPokeCalcService.swift`(テスト補助。テスト本体ではない)だけに閉じており、
+  `TeamEditViewModelMoveLookupTests.swift` は1文字も変えていない。`load()` が `moves(ids:)` の一括呼び出しに
+  切り替わったとき、未知の ID の集合が変わらなければ(すなわち A2 の「集めて重複除去」が正しく動けば)
+  `moveLookups` の中身(集合として見た場合)は今と変わらないので、上記2つの既存テストは
+  **編集しなくても green のまま**になる見込み(`testSavedMoveOutsideTheFirstPageIsResolvedByIDOnLoad` は
+  未知の ID が `hiddenMove.id` の1件だけなので、個別呼び出しでも一括呼び出しでも `moveLookups` は
+  `[hiddenMove.id]` に一致する)。
+- **これは「衝突を無かったことにする」のではなく「衝突の解消策を実装してテストで示した」判断**であり、
+  implementer が実際に `load()` を切り替えたあとに `swift test` で
+  `TeamEditViewModelMoveLookupTests` が green のままであることを確認すること。もし green にならない場合
+  (例えば `load()` が `moves(ids:)` を複数回に分けて呼ぶような実装になった、など A2 の想定から外れた場合)は、
+  この解決策が成立しない合図なので、そのテストを編集せずに立ち止まり、人間に確認すること(CLAUDE.md
+  「テストを消したり弱めたりして通さない」)。
+- **却下した代案**: `moveLookups` を触らず `TeamEditViewModelMoveLookupTests` を編集する。依頼者の指示
+  (「do NOT edit it」)に反するため却下。
+
+#### 3.1 実装後に見つかった2つ目の衝突と解決策(2026-09-24 追記)
+
+implementer が `TeamEditViewModel.load()` を実際に `moves(ids:)` の一括呼び出しへ切り替えたあと、
+上の見込み(「`moveLookups` の中身は変わらないので green のまま」)は ID の集合については正しかったが、
+**失敗の再現方法**で別の衝突が見つかった。
+
+- **見つかった衝突**: `TeamEditViewModelMoveLookupTests.testLookupNotFoundLeavesTheIDUnresolvedWithoutAScreenError`
+  (既定の `moveLookupMode = .notFound` のまま、`setMoveLookupMode`/`setMoveLookupError` を呼ばない)と
+  `testLookupTransportFailureLeavesTheIDUnresolvedWithoutAScreenError`
+  (`stub.setMoveLookupMode(.immediate)` の後 `stub.setMoveLookupError(...)` で通信失敗を設定)は、
+  どちらも `move(id:)` 用の設定(`moveLookupMode`/`moveLookupError`)だけで「技を解決できない」状況を
+  作っていた。実装時点の `StubPokeCalcService.moves(ids:)` は独立した `moveBatchMode`(既定
+  `.immediate`)を見ており、`moveLookupMode`/`moveLookupError` を一切参照しなかったため、`load()` が
+  `moves(ids:)` に切り替わると、この2テストの意図(「解決できない環境」「通信失敗」)が
+  `moves(ids:)` には伝わらず、常に成功応答(架空マスタからの解決)が返って red になった
+  (「本来 nil であるべき `move(forID:)` が値を持ってしまう」形の red)。
+- **採った解決策(このタスクで実装済み)**: `StubPokeCalcService` の `moveBatchMode: MoveBatchMode = .immediate`
+  (必須の既定値)を `moveBatchModeOverride: MoveBatchMode?`(既定 `nil`)に変え、`nil` のとき
+  `moves(ids:)` は `move(id:)` と同じ設定(`moveLookupMode`/`moveLookupError`)にそのまま従う
+  (`moveBatchResultFollowingMoveLookupMode(ids:)`)。具体的には:
+  - `moveLookupMode == .notFound`(既定): 実際の `getMovesByIds` は 404 を返さない
+    (マスタに無い ID は結果から黙って省くだけ)ので、`move(id:)` のように `not_found` を `throw` する
+    のではなく、**空配列を返す**(呼び出しは成功するが1件も解決できない = 「解決できない環境」を
+    「まとめ取りでも1件も返らない」という形で近似する)。
+  - `moveLookupMode == .immediate` かつ `moveLookupError` が設定されている: そのエラーを `throw` する
+    (1回の HTTP 応答であるまとめ取りは、`move(id:)` のように ID ごとに成功・失敗を分けられないので、
+    「通信失敗・503」は呼び出し全体を失敗させる近似にする)。
+  - `moveLookupMode == .manual`: `moves(ids:)` 経由はまだ使うテストが無いので、`XCTFail` で気づける
+    ようにするだけに留めた(今後 `TeamEditViewModel.load()` のキャンセル系テストを書くときに、
+    `move(id:)` の `.manual` と同じ保留・解決の形を `moves(ids:)` にも用意するか検討する)。
+  - `setMoveBatchMode(_:)` を明示的に呼んだテスト(このタスクで追加した
+    `TeamEditViewModelMoveBatchLookupTests` の4本はすべて `setMoveBatchMode(.immediate)` を呼んでいる)は、
+    この既定の「`moveLookupMode` に従う」経路を通らず、指定どおりの応答になる(変更不要だった)。
+  この変更も `StubPokeCalcService.swift`(テスト補助)だけに閉じており、
+  `TeamEditViewModelMoveLookupTests.swift`・`TeamEditViewModelMoveBatchLookupTests.swift`・
+  `MoveBatchLookupServiceTests.swift`(`StubPokeCalcService` を使わず `APIPokeCalcService`/
+  `MockPokeCalcService` を直接テストしているため無関係)のいずれも編集していない。
+- **確認結果**: `swift test` 398件すべて green(既存の `TeamEditViewModelMoveLookupTests` 7件・新規の
+  `TeamEditViewModelMoveBatchLookupTests` 4件・`MoveBatchLookupServiceTests` 10件を含む)。implementer の
+  `TeamEditViewModel.swift`・`APIPokeCalcService.swift`・`MockPokeCalcService.swift` の実装(全メンバーの
+  `species(key:)` 後にまとめて `moves(ids:)` を1回呼ぶ・重複除去・分割)は、この2章の受け入れ条件・
+  1章の A1〜A3 のとおりで、テストが誤りを示す箇所は無かった(Sources 側の実装変更は不要だった)。
+
+### 4. 判断: Calc/Reverse は `move(id:)` のまま変えない
+
+`CalcViewModel`/`ReverseViewModel` の `reselectMove`("issue #68 の残り"3章)は、stage-1(構築から呼び出した
+個体の技を1回だけ解決)・stage-2(既定の技が `moveOptions` から決まらないときに learnset を先頭から
+`move(id:)` で1件ずつ解決し、条件に合う技が見つかったら止める)のどちらも「1件ずつ・見つかったら打ち切る」
+逐次探索で、`moves(ids:)` に置き換えると次の理由で意味が変わってしまう。
+
+- stage-2 は「learnset を先頭から見て、**最初に条件(ダメージ技)に合う技が見つかったら止める**」という
+  短絡評価が本質("issue #68 の残り"3章「却下した案」・11章の world stage-2 世代保護の議論はこの短絡評価を
+  前提にしている)。`moves(ids:)` でまとめて全件解決してから先頭から判定する形に変えると、
+  `MasterSearch.maxMoveLookupsPerSelection`(4件)で打ち切っていた「呼びすぎない」歯止め(4章)の意味が
+  「4件解決してみて条件に合わなければ諦める」から「常に(学習セットの残りに関わらず)4件をまとめて取得する」
+  に変わり、変化技が並ぶ learnset で `move(id:)` なら1〜2回で見つかったはずのケースまで常に1回の
+  まとめ取りを行うことになる(通信の往復回数はむしろ多くの実際のケースで減らないか変わらない一方、
+  「必要な分だけ呼ぶ」という A3 の趣旨から外れる)。
+- stage-1 は1件しか解決しないので `moves(ids:)` にする利益が無い(`ids: [id]` の1件配列にしても
+  往復回数は変わらない)。
+- 11章で固定した critic 指摘の回帰テスト(`recalculateIfPossible` の古いエラーの消し方・stage-2 の世代保護)は
+  いずれも `move(id:)` を1件ずつ呼ぶ実装を前提に critic 検証済みであり、`moves(ids:)` に置き換えるとこれらの
+  ガードを作り直してレビューし直す必要がある。今回のタスクの動機(構築の `load()` の往復回数を減らす)に
+  対して割に合わない。
+
+以上から、Calc/Reverse は今回のタスクでは変更しない(`move(id:)` を使い続ける)。将来 stage-2 の性質を
+変えてよいという判断が別途下れば、そのときに別タスクとして検討する。
+
+### 5. XCTest(すべて green。8章の critic 指摘を反映した後の最終形)
+
+- `RequestLimitsTests.swift`: `testMoveBatchLimitMatchesTheOpenAPIContract`(1件。A1。green)。
+- `MoveBatchLookupServiceTests.swift`(新規。A1。10件): `APIPokeCalcService.moves(ids:)` の要求(繰り返し
+  クエリ・ヘッダー・重複除去・空配列で無呼び出し)・分割の境界(`testAPIMovesChunkBoundaries`。表駆動で
+  `RequestLimits.maxMoveBatchIds` の `max`・`max + 1`・`2 * max`・`2 * max + 1` 件 → 1/2/2/3 回の呼び出しに
+  なること・各回の `ids` が空にならないこと・分割しても連結すれば渡した順のままであることを確認。
+  8章 critic 指摘 MUST への対応)・応答の写像・503/500/通信失敗(404 は無い)、
+  `MockPokeCalcService.moves(ids:)`(未知の ID を省く・空配列・重複除去)。
+- `TeamEditViewModelMoveBatchLookupTests.swift`(新規。A2〜A3。5件): 複数メンバーの未知の技を1回の
+  `moves(ids:)` にまとめる・2体が同じ未知の技を持つときの重複除去・全員が既知の技だけなら呼ばない・
+  失敗(通信失敗)で ID のまま `error` なし `moveIds` 不変・**保留中(`.manual`)の一括解決を `load()` の
+  Task ごと cancel しても `error` なし・`moveIds` 不変・`isLoading` が解ける」
+  (`testLoadCancellationDuringPendingBatchLeavesStateUnchanged`。8章 critic 指摘 OPTIONAL(2)への対応)。
+- 既存の `TeamEditViewModelMoveLookupTests.swift` は**1行も変更していない**(7件、全件 green)。
+
+### 6. `swift test` / `make ios-test` の実行結果
+
+`cd ios/PokeCalcKit && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`:
+399件実行、0件失敗(既存 `TeamEditViewModelMoveLookupTests` 7件・新規 `TeamEditViewModelMoveBatchLookupTests`
+5件・`MoveBatchLookupServiceTests` 10件を含む、すべて green)。
+`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make ios-test`(リポジトリルート)の結果は9章。
+
+### 7. 実装者への注意(実装前に書いた申し送り。「現在」は実装前の状態を指す。実装済みの内容は2章・8章)
+
+- `TeamEditViewModel.load()` の `resolveUnknownMoves` を、全メンバーの `species(key:)` が終わった後に
+  1回だけ呼ぶ形へ書き換える(現在は各メンバーのループの中で呼んでいる。ループを2段に分け、1段目で
+  `species(key:)`・learnset の読み直し・`moveOptionsByMember`/`abilityOptionsByMember` の更新を全メンバー分
+  終わらせ、2段目で全メンバーの `moveIds` を集めて未知の ID を `moves(ids:)` に渡す)。
+  `withTaskGroup` は不要になる(1回の `await service.moves(ids:)` で足りる)。
+  失敗時は `try?` などで飲み込み、辞書を更新しない(A3)。
+- `APIPokeCalcService.moves(ids:)` の重複除去・分割・連結、`MockPokeCalcService.moves(ids:)` の重複除去・
+  未知 ID の省略を実装する(1章)。
+  `MoveBatchLookupServiceTests.swift` を green にすることを完了の目安にする。
+  分割の実装は「`ids` を `RequestLimits.maxMoveBatchIds` 件ごとに `chunked` して順に `await` する」形で足り、
+  並行に投げる必要は無い(構築側は現実的に1回で収まるため。2章)。
+  写像(`domainMove`・`domainErrorFromSchema`・`domainError`)は `move(id:)`/`species(key:)` と共通化してよい
+  (`APIPokeCalcService.swift` に既にある private static 関数をそのまま再利用する)。
+- 実装後、`TeamEditViewModelMoveLookupTests.swift`(既存)と
+  `TeamEditViewModelMoveBatchLookupTests.swift`(新規)の両方が green になることを確認する。
+  片方だけ green で他方が red なら、3章の想定(未知 ID の集合が変わらない)が崩れている合図なので、
+  実装を見直すこと(既存テストを編集して通さない。CLAUDE.md 絶対ルール6)。
+- `make ios-test`(gen-check・XCTest・XCUITest・Info.plist 検査・`check-request-limits.sh`)まで通すこと。
+
+### 8. critic 指摘への対応(2026-09-24)
+
+1回目の critic レビューは **FAIL** だったが、指摘はすべてテストの網羅不足に関するもので、実装
+(`APIPokeCalcService.swift`/`MockPokeCalcService.swift`/`TeamEditViewModel.swift`)自体は「1章の A1〜A3の
+とおりで問題なし」という判定だった。指摘への対応:
+
+- **MUST(反映済み)**: `MoveBatchLookupServiceTests.swift` の `testAPIMovesChunksRequestsAtSixtyFiveIds`
+  (65件固定・1ケースのみ)を、`RequestLimits.maxMoveBatchIds` を基準にした表駆動テスト
+  `testAPIMovesChunkBoundaries` に置き換えた(`max`・`max + 1`・`2 * max`・`2 * max + 1` 件 →
+  1/2/2/3 回の呼び出し。各回の `ids` が空でないこと・分割しても連結すれば渡した順のままであることも
+  確認)。`(0..<65)` のような決め打ちの件数は `maxMoveBatchIds` の式に置き換えた。
+  ミューテーションテスト(`APIPokeCalcService.moves(ids:)` の `stride(from: 0, to: dedupedIds.count, by:)` を
+  一時的に `stride(from: 0, through: dedupedIds.count, by:)` に変えると最後の回が空の `ids` になる)で
+  実際に新テストが red になることを確認してから元に戻した。
+- **OPTIONAL(2. 反映済み)**: `TeamEditViewModelMoveBatchLookupTests.swift` に
+  `testLoadCancellationDuringPendingBatchLeavesStateUnchanged` を追加。`setMoveBatchMode(.manual)` で
+  `moves(ids:)` を保留させ、`load()` の Task を `waitForMoveBatchRequests(count: 1)` の後に `cancel()` し、
+  `StubPokeCalcService.moves(ids:)` の `withTaskCancellationHandler` 経由で継続が `CancellationError` を
+  受け取ることを確認する(`error == nil`・`moveIds` 不変・`isLoading == false`・その技は未解決のまま。
+  A3)。これにより `resolveMoveBatch`/`cancelPendingMoveBatch`/`waitForMoveBatchRequests`/
+  `waitForMoveBatchCancellation` が実際に使われるテストが増えた(削除ではなくテスト追加を選んだ)。
+- **OPTIONAL(3. 反映済み)**: 1章 A2 に、1段目(全メンバーの `species(key:)`)の途中で失敗したら2段目
+  (`moves(ids:)` の一括呼び出し)を一切行わない(旧実装は失敗したメンバーより前のメンバーの技は解決済みの
+  まま残っていた)という差分を明記し、`error` が立って編集画面を止めるので実害が無いことを理由として添えた。
+- **OPTIONAL(5. 反映済み)**: `MoveBatchLookupServiceTests.swift`・`TeamEditViewModelMoveBatchLookupTests.swift`
+  のファイル冒頭コメントから、実装済みになった今では誤りとなる「`TODO(implementer)` のプレースホルダ」
+  「まだ `move(id:)` を個別に呼んでいる」「red のままでよい」といった記述を削除した。
+- 本章の追記自体(ADR の状態を「実装完了」にする・2章/5章の記述を実装後の形に直す)も含め、上の対応を
+  1つのタスクとして implementer が行い、再レビューへ引き継ぐ。
+
+### 9. `swift test` / `make ios-test` の最終実行結果(8章の対応後)
+
+`cd ios/PokeCalcKit && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`:
+399件実行、0件失敗。
+
+`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make ios-test`(リポジトリルート):
+`** TEST SUCCEEDED **`(終了コード0)。`ios-test-unit: 全 412 件 / 成功 412 / 失敗 0 / スキップ 0 / 想定内の失敗 0`
+(`PokeCalcCoreTests` 399件 + `PokeCalcDesignTests` 13件)・`ios-test-ui: 全 17 件 / 成功 17 / 失敗 0`・
+`ios-check-infoplist` 成功。`ios-gen-check`・`ios-check-request-limits`・`ios-lint` を含め全ステップ green。

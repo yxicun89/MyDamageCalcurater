@@ -17,6 +17,13 @@ final class RequestLimitsTests: XCTestCase {
         XCTAssertEqual(RequestLimits.maxItemVariants, 64, "BulkCalcRequest.itemVariants.maxItems")
     }
 
+    /// ADR-0501「getMovesByIds による構築編集の技の一括解決」1章。`getMovesByIds` の `ids` は
+    /// `components.schemas` のプロパティではなくクエリパラメータなので、`ios/scripts/check-request-limits.sh`
+    /// 側は別経路(`contract_query_max_items`)で照合する。ここではリテラル値だけ固定する。
+    func testMoveBatchLimitMatchesTheOpenAPIContract() {
+        XCTAssertEqual(RequestLimits.maxMoveBatchIds, 64, "getMovesByIds の ids(クエリ).maxItems")
+    }
+
     /// ADR 3章: 送る配列の先頭に入る null(持ち物なし)も `uniqueItems` の1件なので、
     /// トグルで選べる ID の数は上限より1つ少ない。
     func testSelectableCountsLeaveRoomForTheNoItemEntry() {

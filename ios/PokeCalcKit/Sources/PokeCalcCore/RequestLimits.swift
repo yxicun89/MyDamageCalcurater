@@ -18,6 +18,13 @@ public enum RequestLimits {
     public static let maxSelectableItemCandidates = maxItemCandidates - 1
     /// 同上(計算画面の比較トグル)。
     public static let maxSelectableItemVariants = maxItemVariants - 1
+
+    /// `getMovesByIds` の `ids`(クエリパラメータ)の `maxItems`。1回の呼び出しに渡せる技 ID の上限
+    /// (ADR-0501「getMovesByIds による構築編集の技の一括解決」1章)。`PokeCalcService.moves(ids:)` は
+    /// これを超える集合をこの件数ずつに分割して複数回呼ぶ。`ReverseRequest.observations` 等と違い、
+    /// `components.schemas` のプロパティではなく `paths./api/pokedex/moves/batch.get` のクエリパラメータ
+    /// なので、`check-request-limits.sh` の照合はスキーマの `maxItems` とは別の経路で行う。
+    public static let maxMoveBatchIds = 64
 }
 
 /// 件数の上限に達したことを画面に出す文言(`MasterSearchLabels` と同じ理由でコードに1か所持つ)。

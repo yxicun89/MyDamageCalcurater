@@ -57,6 +57,17 @@ public struct MockPokeCalcService: PokeCalcService {
         return try Self.domainMove(entry)
     }
 
+    /// `getMovesByIds` のモック版(ADR-0501「getMovesByIds による構築編集の技の一括解決」1章)。
+    /// `ids` を重複除去した順で `fixtures.moves` から引き、無い ID は省く(`move(id:)` と違い
+    /// `notFoundError` にしない。まとめ取りは部分一致をエラーにしない、という契約の規則どおり)。
+    public func moves(ids: [String]) async throws -> [Move] {
+        var seen = Set<String>()
+        return try ids
+            .filter { seen.insert($0).inserted }
+            .compactMap { id in fixtures.moves.first(where: { $0.id == id }) }
+            .map(Self.domainMove)
+    }
+
     public func searchItems(query: String, limit: Int) async throws -> [Item] {
         matchingByPrefix(fixtures.items, query: query, limit: limit, nameJa: { $0.nameJa })
             .map { Item(id: $0.id, nameJa: $0.nameJa) }

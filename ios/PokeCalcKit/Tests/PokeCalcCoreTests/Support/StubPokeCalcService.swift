@@ -59,6 +59,17 @@ actor StubPokeCalcService: PokeCalcService {
         case manual
     }
 
+    /// `moves(ids:)`(openapi `getMovesByIds`。ADR-0501「getMovesByIds による構築編集の技の一括解決」)の
+    /// 応答の返し方の**上書き**。`setMoveBatchMode(_:)` を呼ばない(既定 `nil`)限り、`moves(ids:)` は
+    /// `moveLookupMode`/`moveLookupError`(`move(id:)` と共有)にそのまま従う(3章「判断」)。
+    enum MoveBatchMode {
+        /// 要求を受けたらすぐ架空マスタ(`moves`)から `ids` の順(重複除去後)に引き、無ければ省いて返す。
+        /// `setMoveBatchError(_:)` が設定されていればそのエラーを投げる。
+        case immediate
+        /// 応答を保留する。テストが `resolveMoveBatch(at:with:)` で返す。
+        case manual
+    }
+
     enum ReverseMode {
         /// 呼ばれたらテストを失敗させる(P6-2a の計算画面は reverse を使わない)。
         case disallowed
@@ -116,6 +127,17 @@ actor StubPokeCalcService: PokeCalcService {
     private var pendingMoveLookups: [Int: CheckedContinuation<Move, any Error>] = [:]
     /// Task cancel を受け取った `move(id:)` の要求番号(`moveLookups` の添字)。
     private(set) var cancelledMoveLookups: Set<Int> = []
+
+    /// `moves(ids:)` の記録(呼ばれた順。1呼び出し = 1要素で、その要求に渡された `ids` をそのまま持つ。
+    /// `PokeCalcService.moves(ids:)` が内部で複数回に分割して呼べば、ここに複数のエントリが並ぶ)。
+    /// `moveBatchModeOverride` が `nil`(既定)のときは `moveLookupMode`/`moveLookupError` に従う
+    /// (ADR-0501「getMovesByIds による構築編集の技の一括解決」3章「判断」)。
+    private var moveBatchModeOverride: MoveBatchMode?
+    private var moveBatchError: PokeCalcError?
+    private(set) var moveBatchRequests: [[String]] = []
+    private var pendingMoveBatch: [Int: CheckedContinuation<[Move], any Error>] = [:]
+    /// Task cancel を受け取った `moves(ids:)` の要求番号(`moveBatchRequests` の添字)。
+    private(set) var cancelledMoveBatchRequests: Set<Int> = []
 
     init(species: [SpeciesDetail], moves: [Move], items: [Item], natures: [Nature]) {
         speciesDetails = species
@@ -357,6 +379,67 @@ actor StubPokeCalcService: PokeCalcService {
         return move
     }
 
+    // MARK: - テストからの操作(技のまとめ取り。ADR-0501「getMovesByIds による構築編集の技の一括解決」)
+
+    /// `moves(ids:)` の応答モードを明示的に上書きする(既定 `nil` = `moveLookupMode` に従う。3章)。
+    func setMoveBatchMode(_ mode: MoveBatchMode) {
+        moveBatchModeOverride = mode
+    }
+
+    /// 上書きモード(`.immediate`)のときに投げるエラー(通信失敗・503 の再現。nil で解除)。
+    /// 上書きしていない(既定)ときの失敗は `setMoveLookupError(_:)` を使う(`move(id:)` と共有)。
+    func setMoveBatchError(_ error: PokeCalcError?) {
+        moveBatchError = error
+    }
+
+    /// 保留中の `index` 番目(0 始まり、`moveBatchRequests` の添字)の `moves(ids:)` に応答する。
+    func resolveMoveBatch(at index: Int, with result: Result<[Move], PokeCalcError>) {
+        guard let continuation = pendingMoveBatch.removeValue(forKey: index) else {
+            XCTFail("保留中の moves(ids:) が無い: index \(index)")
+            return
+        }
+        continuation.resume(with: result.mapError { $0 as any Error })
+    }
+
+    /// 保留中の `moves(ids:)` が Task cancel を受けたときの処理(`cancelPendingMoveLookup` と同じ形)。
+    func cancelPendingMoveBatch(at index: Int) {
+        cancelledMoveBatchRequests.insert(index)
+        if let continuation = pendingMoveBatch.removeValue(forKey: index) {
+            continuation.resume(throwing: CancellationError())
+        }
+    }
+
+    /// `moves(ids:)` が `count` 回以上呼ばれるまで待つ。
+    func waitForMoveBatchRequests(count: Int, file: StaticString = #filePath, line: UInt = #line) async throws {
+        for _ in 0..<Self.waitPollLimit {
+            if moveBatchRequests.count >= count { return }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTFail("moves(ids:) が \(count) 回呼ばれなかった(\(moveBatchRequests.count) 回)", file: file, line: line)
+        throw PokeCalcError(code: "test_timeout", message: "moves(ids:) の待ち合わせがタイムアウト")
+    }
+
+    /// `index` 番目の `moves(ids:)` が cancel されるまで待つ。
+    func waitForMoveBatchCancellation(at index: Int, file: StaticString = #filePath, line: UInt = #line) async throws {
+        for _ in 0..<Self.waitPollLimit {
+            if cancelledMoveBatchRequests.contains(index) { return }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTFail("moves(ids:) の要求 \(index) が cancel されなかった", file: file, line: line)
+        throw PokeCalcError(code: "test_timeout", message: "moves(ids:) のキャンセル待ちがタイムアウト")
+    }
+
+    /// `.immediate` の既定応答、および手動モードでテストが `resolveMoveBatch` に渡す値を組み立てるのに使う。
+    /// `ids` は重複除去した順に引き、マスタに無い ID は省く(`getMovesByIds` と同じ。エラーにしない)。
+    func lookupMoves(ids: [String]) -> [Move] {
+        var seen = Set<String>()
+        var result: [Move] = []
+        for id in ids where seen.insert(id).inserted {
+            if let move = moves.first(where: { $0.id == id }) { result.append(move) }
+        }
+        return result
+    }
+
     func setSpeciesMode(_ mode: SpeciesMode) {
         speciesMode = mode
     }
@@ -541,6 +624,71 @@ actor StubPokeCalcService: PokeCalcService {
             } onCancel: {
                 Task { await self.cancelPendingMoveLookup(at: index) }
             }
+        }
+    }
+
+    /// `getMovesByIds` のまとめ取り版(ADR-0501「getMovesByIds による構築編集の技の一括解決」)。
+    /// 記録は2か所に残す: `moveBatchRequests`(このメソッドが受けた `ids` そのもの。呼び出し側が
+    /// 分割・重複除去したかどうかをテストが確かめられるように、ここでは何も加工しない)と、
+    /// `moveLookups`(`move(id:)` と共有する「引いた技 ID」のフラットな記録。`TeamEditViewModel` が
+    /// `move(id:)` の個別呼び出しから `moves(ids:)` の一括呼び出しへ切り替わっても、`moveLookups` を
+    /// 固定している既存テスト〈`TeamEditViewModelMoveLookupTests`〉をそのまま緑に保つための橋渡し。
+    /// 「どちらの経路で引いたか」ではなく「どの ID を引いたか」を記録する、という `moveLookups` の
+    /// 意味はここでも変わらない)。
+    ///
+    /// `moveBatchModeOverride` が `nil`(既定)のときは `moveLookupMode`/`moveLookupError` に従う
+    /// (`moveBatchResultFollowingMoveLookupMode`。3章「判断」: `move(id:)` の失敗設定〈既定 `.notFound`・
+    /// `setMoveLookupError(_:)`〉で構築の技解決の失敗も再現できるようにするため。実際の `getMovesByIds`
+    /// 404 を返さないので、`.notFound` は「省く」に変換し、`throw` はしない)。
+    func moves(ids: [String]) async throws -> [Move] {
+        guard !ids.isEmpty else { return [] }
+        let index = moveBatchRequests.count
+        moveBatchRequests.append(ids)
+        moveLookups.append(contentsOf: ids)
+        if let masterError { throw masterError }
+        guard let override = moveBatchModeOverride else {
+            return try moveBatchResultFollowingMoveLookupMode(ids: ids)
+        }
+        switch override {
+        case .immediate:
+            if let moveBatchError { throw moveBatchError }
+            return lookupMoves(ids: ids)
+        case .manual:
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[Move], any Error>) in
+                    if cancelledMoveBatchRequests.contains(index) {
+                        continuation.resume(throwing: CancellationError())
+                    } else {
+                        pendingMoveBatch[index] = continuation
+                    }
+                }
+            } onCancel: {
+                Task { await self.cancelPendingMoveBatch(at: index) }
+            }
+        }
+    }
+
+    /// `moveBatchModeOverride == nil` のときの `moves(ids:)` の中身。`move(id:)` と同じ設定
+    /// (`moveLookupMode`/`moveLookupError`)を、まとめ取り1回の応答として近似する。
+    /// - `.notFound`(既定): 実際の `getMovesByIds` が「マスタに無い ID は結果から黙って省く」のと
+    ///   同じ結果になるよう、`throw` せず空配列を返す(`move(id:)` は ID ごとに `not_found` を
+    ///   `throw` するが、まとめ取りにその形はない)。
+    /// - `.immediate`: `moveLookupError` が設定されていればそれを `throw`(1回の HTTP 応答である
+    ///   まとめ取りは、`move(id:)` のように ID ごとに成功・失敗を分けられないための近似)。
+    ///   無ければ架空マスタから引く。
+    /// - `.manual`: `moves(ids:)` 経由では未対応(今のところ `moveLookupMode = .manual` にするテストは
+    ///   `move(id:)` の個別のキャンセル・世代保護しか確かめておらず、構築の一括解決は通らない)。
+    ///   もし今後そのテストが要れば `setMoveBatchMode(.manual)` で明示的に上書きすること。
+    private func moveBatchResultFollowingMoveLookupMode(ids: [String]) throws -> [Move] {
+        switch moveLookupMode {
+        case .notFound:
+            return []
+        case .immediate:
+            if let moveLookupError { throw moveLookupError }
+            return lookupMoves(ids: ids)
+        case .manual:
+            XCTFail("moveLookupMode = .manual と moves(ids:) の組み合わせは未対応(setMoveBatchMode(_:) で明示的に上書きすること)")
+            return []
         }
     }
 
