@@ -27,17 +27,26 @@
   color: var(--text-primary);
 }
 
+/* 幅への対応(docs/design.md「幅への対応(ブレークポイント)」): 既定(600px 未満)は1列縦積み
+   (自分側カード → 相手側カードの DOM 順のまま。600px 以上で左右2列に戻す)。 */
 .reverse-screen__cards {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: var(--space-3);
+}
+
+@media (min-width: 600px) {
+  .reverse-screen__cards {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
 }
 
 .reverse-card {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  min-width: 0;
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-card);
   background: var(--bg-glass);
@@ -46,6 +55,8 @@
 }
 
 .reverse-card select {
+  width: 100%;
+  min-width: 0;
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-input);
   background: var(--bg-base);
@@ -105,7 +116,7 @@
 
 .reverse-observation {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   column-gap: var(--space-3);
   row-gap: var(--space-1);
@@ -115,6 +126,8 @@
 }
 
 .reverse-observation__input {
+  width: 100%;
+  min-width: 0;
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-input);
   background: var(--bg-base);
