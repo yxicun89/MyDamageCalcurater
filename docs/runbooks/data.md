@@ -3,6 +3,15 @@
 マスタの取得から MySQL への投入までを、ローカルの k3d で確かめる。設計の理由は
 [`services/pokedex/README.md`](../../services/pokedex/README.md)・[`tools/importer/README.md`](../../tools/importer/README.md)。
 
+## replica を増やすときの接続予算(issue #112・ADR-0112)
+
+pokedex の `deploy/k8s/base/pokedex/deployment.yaml` は接続プールの上限
+(`POKEDEX_DB_MAX_OPEN_CONNS`、コードの既定値は `main.go` の `defaultDBMaxOpenConns`)を
+Pod ごとに持つ。`pokedex` の `replicas` を増やす前に、
+`replicas × MaxOpenConns + importer/migrate の接続予算 < DB の max_connections`
+を確認すること(importer の CronJob・migrate の Job も同じ MySQL に別枠で接続する)。
+今回は `max_connections` 自体の変更はしない。
+
 ## 1. k3d を起動する
 
 ```sh

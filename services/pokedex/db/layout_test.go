@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -512,5 +513,331 @@ func TestExampleSeedIsFictional(t *testing.T) {
 		if n, _ := strconv.Atoi(m[1]); n < 9001 {
 			t.Errorf("図鑑番号は 9001 以降(実在の番号を使わない): %s-%s", m[1], m[2])
 		}
+	}
+}
+
+// --- DB 資格情報の最小権限(ADR-0110 §5・§6。issue #104) ---------------------------
+
+// Secret mysql-auth のキー(ADR-0110 §3・§5)。値そのものはテストに書かない。
+const (
+	secretMySQLAuth      = "mysql-auth"
+	keyRootPW            = "mysql-root-password"
+	keyProvisionDSN      = "pokedex-dsn" // root。migrate Job のプロビジョニング専用
+	keyReaderDSN         = "pokedex-reader-dsn"
+	keyImporterDSN       = "pokedex-importer-dsn"
+	keyMigratorDSN       = "pokedex-migrator-dsn"
+	pokedexDeployment    = "deploy/k8s/base/pokedex/deployment.yaml"
+	pokedexMigrateJob    = "deploy/k8s/base/pokedex/job-migrate.yaml"
+	pokedexImportCronJob = "deploy/k8s/base/pokedex/cronjob-import.yaml"
+)
+
+type credEnvVar struct {
+	Name      string  `yaml:"name"`
+	Value     *string `yaml:"value"`
+	ValueFrom *struct {
+		SecretKeyRef *struct {
+			Name string `yaml:"name"`
+			Key  string `yaml:"key"`
+		} `yaml:"secretKeyRef"`
+	} `yaml:"valueFrom"`
+}
+
+type credContainer struct {
+	Name    string       `yaml:"name"`
+	Command []string     `yaml:"command"`
+	Args    []string     `yaml:"args"`
+	Env     []credEnvVar `yaml:"env"`
+	EnvFrom []any        `yaml:"envFrom"`
+}
+
+type credPodSpec struct {
+	InitContainers []credContainer `yaml:"initContainers"`
+	Containers     []credContainer `yaml:"containers"`
+	Volumes        []struct {
+		Name   string `yaml:"name"`
+		Secret *struct {
+			SecretName string `yaml:"secretName"`
+		} `yaml:"secret"`
+	} `yaml:"volumes"`
+}
+
+// credWorkload は Deployment・Job・CronJob の Pod テンプレートを同じ形で読む。
+type credWorkload struct {
+	Kind string `yaml:"kind"`
+	Spec struct {
+		Template struct {
+			Spec credPodSpec `yaml:"spec"`
+		} `yaml:"template"`
+		JobTemplate struct {
+			Spec struct {
+				Template struct {
+					Spec credPodSpec `yaml:"spec"`
+				} `yaml:"template"`
+			} `yaml:"spec"`
+		} `yaml:"jobTemplate"`
+	} `yaml:"spec"`
+}
+
+func loadCredPod(t *testing.T, rel string) credPodSpec {
+	t.Helper()
+	var w credWorkload
+	if err := yaml.Unmarshal([]byte(readRepoFile(t, rel)), &w); err != nil {
+		t.Fatalf("%s: %v", rel, err)
+	}
+	if w.Kind == "CronJob" {
+		return w.Spec.JobTemplate.Spec.Template.Spec
+	}
+	return w.Spec.Template.Spec
+}
+
+// secretEnv はコンテナの env を「名前 → mysql-auth のキー」にする。値の直書き・他 Secret・envFrom は失敗にする。
+func secretEnv(t *testing.T, where string, c credContainer) map[string]string {
+	t.Helper()
+	if len(c.EnvFrom) != 0 {
+		t.Errorf("%s/%s: envFrom で Secret を丸ごと渡さない(必要なキーだけを secretKeyRef で渡す)", where, c.Name)
+	}
+	out := map[string]string{}
+	credName := regexp.MustCompile(`(?i)dsn|password|pwd|secret|token`)
+	for _, e := range c.Env {
+		if credName.MatchString(e.Name) && e.Value != nil {
+			t.Errorf("%s/%s: env %s に値を直接書かない", where, c.Name, e.Name)
+		}
+		if e.ValueFrom == nil || e.ValueFrom.SecretKeyRef == nil {
+			continue
+		}
+		if e.ValueFrom.SecretKeyRef.Name != secretMySQLAuth {
+			t.Errorf("%s/%s: env %s が Secret %s 以外(%s)を参照している", where, c.Name, e.Name, secretMySQLAuth, e.ValueFrom.SecretKeyRef.Name)
+		}
+		out[e.Name] = e.ValueFrom.SecretKeyRef.Key
+	}
+	return out
+}
+
+// AC-7: pokedex-svc(公開 API)は reader の DSN だけを使い、root の資格情報を一切参照しない。
+func TestPokedexDeploymentUsesReaderDSNOnly(t *testing.T) {
+	pod := loadCredPod(t, pokedexDeployment)
+	if len(pod.Containers) == 0 {
+		t.Fatalf("%s にコンテナが無い", pokedexDeployment)
+	}
+	for _, v := range pod.Volumes {
+		if v.Secret != nil && v.Secret.SecretName == secretMySQLAuth {
+			t.Errorf("%s: Secret %s をボリュームで丸ごとマウントしない", pokedexDeployment, secretMySQLAuth)
+		}
+	}
+	for _, c := range append(append([]credContainer(nil), pod.InitContainers...), pod.Containers...) {
+		env := secretEnv(t, pokedexDeployment, c)
+		for name, key := range env {
+			if key == keyProvisionDSN || key == keyRootPW || key == keyImporterDSN || key == keyMigratorDSN {
+				t.Errorf("%s/%s: env %s が %s を参照している(pokedex-svc は %s だけ)", pokedexDeployment, c.Name, name, key, keyReaderDSN)
+			}
+		}
+	}
+	env := secretEnv(t, pokedexDeployment, pod.Containers[0])
+	if got := env["POKEDEX_DATABASE_DSN"]; got != keyReaderDSN {
+		t.Errorf("%s: POKEDEX_DATABASE_DSN のキー = %q, want %s", pokedexDeployment, got, keyReaderDSN)
+	}
+}
+
+// AC-7: migrate Job の主コンテナは4つの DSN をそれぞれ決まったキーから受け取る。
+// wait-for-mysql の initContainer は root パスワード(MYSQL_PWD)のまま変えない(鶏卵。ADR-0110 §6)。
+func TestMigrateJobCredentialWiring(t *testing.T) {
+	pod := loadCredPod(t, pokedexMigrateJob)
+	var migrate *credContainer
+	for i := range pod.Containers {
+		if pod.Containers[i].Name == "migrate" {
+			migrate = &pod.Containers[i]
+		}
+	}
+	if migrate == nil {
+		t.Fatalf("%s に migrate コンテナが無い", pokedexMigrateJob)
+	}
+	got := secretEnv(t, pokedexMigrateJob, *migrate)
+	want := map[string]string{
+		"POKEDEX_PROVISION_DSN": keyProvisionDSN,
+		"POKEDEX_DATABASE_DSN":  keyMigratorDSN,
+		"POKEDEX_READER_DSN":    keyReaderDSN,
+		"POKEDEX_IMPORTER_DSN":  keyImporterDSN,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("%s: migrate の env(名前→キー)= %v, want %v", pokedexMigrateJob, got, want)
+	}
+	for _, a := range append(append([]string(nil), migrate.Command...), migrate.Args...) {
+		if strings.Contains(strings.ToLower(a), "dsn") || strings.Contains(a, "@tcp(") {
+			t.Errorf("%s: DSN をコマンドライン引数で渡さない: %q", pokedexMigrateJob, a)
+		}
+	}
+
+	var waitOK bool
+	for _, c := range pod.InitContainers {
+		env := secretEnv(t, pokedexMigrateJob, c)
+		if c.Name == "wait-for-mysql" && env["MYSQL_PWD"] == keyRootPW {
+			waitOK = true
+		}
+		for name, key := range env {
+			if key == keyProvisionDSN || key == keyReaderDSN || key == keyImporterDSN || key == keyMigratorDSN {
+				t.Errorf("%s/%s: initContainer に DSN(%s ← %s)を渡さない", pokedexMigrateJob, c.Name, name, key)
+			}
+		}
+	}
+	if !waitOK {
+		t.Errorf("%s: wait-for-mysql が MYSQL_PWD ← %s のまま無い(3ユーザーは migrate が作るまで存在しない)", pokedexMigrateJob, keyRootPW)
+	}
+}
+
+// AC-7: root の資格情報(pokedex-dsn・mysql-root-password)を参照するのは migrate Job と
+// local の MySQL(StatefulSet の初期化)だけ。reader/importer/migrator のキーもそれぞれの用途だけが参照する。
+func TestCredentialKeysReferencedOnlyByTheirOwners(t *testing.T) {
+	owners := map[string][]string{
+		keyProvisionDSN: {pokedexMigrateJob},
+		keyRootPW:       {pokedexMigrateJob, "deploy/k8s/overlays/local/mysql/"},
+		keyReaderDSN:    {pokedexDeployment, pokedexMigrateJob},
+		keyImporterDSN:  {pokedexImportCronJob, pokedexMigrateJob},
+		keyMigratorDSN:  {pokedexMigrateJob},
+	}
+	keyRef := regexp.MustCompile(`(?m)^\s*key:\s*["']?([a-z0-9-]+)["']?\s*$`)
+	seen := map[string]bool{}
+	err := filepath.WalkDir(filepath.Join(repoRoot, "deploy"), func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(repoRoot, p)
+		rel = filepath.ToSlash(rel)
+		for _, m := range keyRef.FindAllStringSubmatch(string(b), -1) {
+			allowed, tracked := owners[m[1]]
+			if !tracked {
+				continue
+			}
+			seen[m[1]+" "+rel] = true
+			ok := false
+			for _, a := range allowed {
+				if rel == a || (strings.HasSuffix(a, "/") && strings.HasPrefix(rel, a)) {
+					ok = true
+				}
+			}
+			if !ok {
+				t.Errorf("%s が Secret キー %s を参照している(参照してよいのは %v だけ)", rel, m[1], allowed)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, need := range []string{
+		keyReaderDSN + " " + pokedexDeployment,
+		keyImporterDSN + " " + pokedexImportCronJob,
+		keyMigratorDSN + " " + pokedexMigrateJob,
+		keyProvisionDSN + " " + pokedexMigrateJob,
+	} {
+		if !seen[need] {
+			k, f, _ := strings.Cut(need, " ")
+			t.Errorf("%s が Secret キー %s を参照していない", f, k)
+		}
+	}
+}
+
+// upScriptSecretBlock は scripts/up.sh のうち mysql-auth を扱う部分(最初の言及から pokedex-migrate の build まで)。
+func upScriptSecretBlock(t *testing.T) string {
+	t.Helper()
+	s := readRepoFile(t, "scripts/up.sh")
+	start := strings.Index(s, secretMySQLAuth)
+	end := regexp.MustCompile(`docker build[^\n]*--target migrate`).FindStringIndex(s)
+	if start < 0 || end == nil || end[0] < start {
+		t.Fatal("scripts/up.sh に mysql-auth の作成 → pokedex-migrate の build の順の記述が無い")
+	}
+	return s[start:end[0]]
+}
+
+// AC-6: up.sh は新規クラスタで4つの DSN キー(と root パスワード)を作る。3ユーザーのパスワードは
+// root と別に openssl rand -hex で作る(英数字だけ。db.Provision の入力検査の前提)。
+func TestUpScriptCreatesRoleDSNKeys(t *testing.T) {
+	block := upScriptSecretBlock(t)
+	for _, key := range []string{keyRootPW, keyProvisionDSN, keyReaderDSN, keyImporterDSN, keyMigratorDSN} {
+		if !strings.Contains(block, key) {
+			t.Errorf("scripts/up.sh の mysql-auth の作成に %s が無い", key)
+		}
+	}
+	for _, user := range []string{"pokedex_reader", "pokedex_importer", "pokedex_migrator"} {
+		if !regexp.MustCompile(`\b` + user + `:`).MatchString(block) {
+			t.Errorf("scripts/up.sh が %s の DSN(%s:<password>@...)を作っていない", user, user)
+		}
+	}
+	if n := len(regexp.MustCompile(`openssl rand -hex (\d+)`).FindAllString(block, -1)); n < 2 {
+		// 1 か所の関数/ループで4つ作る書き方も許すが、root と同じ値を使い回していないかは下で見る。
+		if !regexp.MustCompile(`(?s)(for|while)\b.*openssl rand -hex`).MatchString(block) &&
+			!regexp.MustCompile(`(?s)\w+\s*\(\)\s*\{[^}]*openssl rand -hex`).MatchString(block) {
+			t.Errorf("scripts/up.sh が用途別のパスワードを openssl rand -hex で作っていない(%d 回)", n)
+		}
+	}
+	for _, m := range regexp.MustCompile(`openssl rand -hex (\d+)`).FindAllStringSubmatch(block, -1) {
+		if n, _ := strconv.Atoi(m[1]); n < 16 {
+			t.Errorf("openssl rand -hex %s は短い(16 バイト以上。db.Provision は 16 文字以上を要求する)", m[1])
+		}
+	}
+	for _, user := range []string{"pokedex_reader", "pokedex_importer", "pokedex_migrator"} {
+		if regexp.MustCompile(`\b` + user + `:\$\{?root_pw`).MatchString(block) {
+			t.Errorf("scripts/up.sh が %s のパスワードに root のパスワードを使い回している", user)
+		}
+	}
+}
+
+// AC-6: 既存の Secret は作り直さず、無いキーだけを kubectl patch --type=merge で足す(既存キーの値は変えない)。
+func TestUpScriptPatchesMissingKeysOnExistingSecret(t *testing.T) {
+	block := upScriptSecretBlock(t)
+	if regexp.MustCompile(`delete\s+secret\s+mysql-auth`).MatchString(block) {
+		t.Error("scripts/up.sh が mysql-auth を消している(既存 PVC の root パスワードと食い違う。作り直さない)")
+	}
+	patch := regexp.MustCompile(`patch\s+secret\s+mysql-auth[^\n]*`)
+	if !patch.MatchString(block) {
+		t.Fatal("scripts/up.sh に既存 Secret への kubectl patch secret mysql-auth が無い")
+	}
+	if !regexp.MustCompile(`patch\s+secret\s+mysql-auth[^\n]*--type[= ]merge`).MatchString(block) {
+		t.Error("kubectl patch は --type=merge(JSON merge patch。指定したキーだけ足す)で行う")
+	}
+	for _, key := range []string{keyReaderDSN, keyImporterDSN, keyMigratorDSN} {
+		if !regexp.MustCompile(`jsonpath=[^\n]*\{\.data(\.|\['|\[")`+regexp.QuoteMeta(key)).MatchString(block) &&
+			!regexp.MustCompile(`jsonpath=[^\n]*\{\.data\.\$\{?\w+\}?\}`).MatchString(block) {
+			t.Errorf("scripts/up.sh が既存 Secret に %s があるかを jsonpath で確かめていない(あれば上書きしない)", key)
+		}
+	}
+	// patch の中身に root のキーを含めない(既存の値を変えない)。
+	for _, line := range strings.Split(block, "\n") {
+		if strings.Contains(line, "patch") && (strings.Contains(line, keyRootPW) || regexp.MustCompile(`"`+keyProvisionDSN+`"`).MatchString(line)) {
+			t.Errorf("kubectl patch で root のキーを書き換えない: %q", strings.TrimSpace(line))
+		}
+	}
+}
+
+// AC-8: up.sh は Secret の値をログ・コマンドライン引数に出さない。値は標準入力かファイル経由で kubectl に渡す。
+func TestUpScriptKeepsSecretValuesOutOfArgvAndLogs(t *testing.T) {
+	s := readRepoFile(t, "scripts/up.sh")
+	block := upScriptSecretBlock(t)
+	if regexp.MustCompile(`(?m)^\s*set\s+-[a-z]*x`).MatchString(s) {
+		t.Error("scripts/up.sh で set -x しない(コマンドを実行前に表示し、Secret の値がログに出る)")
+	}
+	if regexp.MustCompile(`--from-literal=["']?\$\{?(\w*(pw|pass|dsn)\w*)`).MatchString(block) ||
+		regexp.MustCompile(`--from-literal=["']?[^\n]*\$\{?\w*(pw|pass)\w*`).MatchString(block) {
+		t.Error("mysql-auth の値を --from-literal(コマンドライン引数)で渡さない(ps で見える。--from-env-file・--from-file・標準入力の apply を使う)")
+	}
+	if regexp.MustCompile(`patch\s+secret\s+mysql-auth[^\n]*\s(-p|--patch)[ =]`).MatchString(block) {
+		t.Error("kubectl patch の中身を -p/--patch(コマンドライン引数)で渡さない(--patch-file を使う)")
+	}
+	echoSecret := regexp.MustCompile(`(?i)\b(echo|printf)\b[^\n]*\$\{?\w*(pw|pass|dsn|b64|base64)\w*`)
+	for _, line := range strings.Split(block, "\n") {
+		if !echoSecret.MatchString(line) {
+			continue
+		}
+		// ファイル/標準入力へ流す(> や |)なら表示ではない。
+		if regexp.MustCompile(`[>|]`).MatchString(line) {
+			continue
+		}
+		t.Errorf("Secret の値を表示している: %q", strings.TrimSpace(line))
+	}
+	if strings.Contains(block, "mktemp") && !strings.Contains(block, "trap") {
+		t.Error("Secret の値を一時ファイルに書くなら trap で必ず消す")
 	}
 }

@@ -33,7 +33,7 @@ final class DesignTokenTests: XCTestCase {
              RGBA(red: 0x00, green: 0x00, blue: 0x00, alpha: 0.08),
              RGBA(red: 0xFF, green: 0xFF, blue: 0xFF, alpha: 0.10)),
             ("danger", ColorToken.danger,
-             RGBA(red: 0xE5, green: 0x48, blue: 0x4D, alpha: 1.0),
+             RGBA(red: 0xCD, green: 0x1D, blue: 0x23, alpha: 1.0),
              RGBA(red: 0xFF, green: 0x63, blue: 0x69, alpha: 1.0)),
         ]
         for testCase in cases {

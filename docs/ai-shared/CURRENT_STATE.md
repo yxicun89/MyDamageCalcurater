@@ -11,7 +11,10 @@ Status(追記): issue #110 のデータレーン担当分(ADR-0108)完了・crit
 Status(追記): issue #106(排他制御)完了・critic PASS・**main 統合済み(PR #155)**。`tools/importer/cronjob.sh` に `flock`(非ブロッキング)を追加し、手動Job(`make import-k8s`)と定期CronJobの同時実行を防ぐ(ADR-0109)。Docker(Linux)と実クラスタ(k3d)の両方で実際の排他動作を確認済み(2026-09-23。2つの手動Job同時作成→片方がロック競合で即exit 1→backoffLimitで再試行して成功)。
 Status(追記): 2026-09-23、全レーンの main 統合済みの変更をまとめてk3dに再デプロイし、実データ(種族349・技515・move_effects 59件)で計算・一括計算・逆算・タイプバランス・素早さ・判定(JD3複数候補)まで実HTTPで動作確認済み。すべてgreen。既知の制約: 技を個別IDで引く公開APIが無く(`GET /api/pokedex/moves/{id}` は404)、Webのオンライン技選択・持ち物候補比較・判定JD4(相手の技を含めた返り討ち判定)がブロックされたまま。
 Status(追記): 2026-09-24、getMove(P3-7。APIレーンが`services/pokedex/`へ越境実装)をレビュー。既存の設計判断(命名・エラー変換・テストの流儀)と食い違いなく、修正不要と判断(DECISIONS.md参照)。判定レーンはJD4に着手可能。上記の「技を個別IDで引く公開APIが無い」制約はこれで解消(バッチ解決はまだ無いのでWebのオンライン技選択は引き続きブロック)。
-Next: (1) Codexレビュー issue #104/#109/#112。(2) 他レーンからの依頼待ち。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)
+Status(追記): issue #104(DB資格情報の最小権限分離)完了・critic PASS(1往復)・**main 統合済み(PR #176)**。`pokedex_reader`/`pokedex_importer`/`pokedex_migrator`の3ロールに分離(ADR-0110)。実クラスタで`SHOW GRANTS`により権限が過不足なく一致することを確認済み。既存クラスタからの無停止移行も実地確認済み。
+Status(追記): issue #109(HTTPタイムアウト・graceful shutdown)完了・critic PASS(1往復。指摘なし)・**main 統合済み(PR #178)**。`newHTTPServer`/`serve`/`runServe`の3層分離(ADR-0111。services/balanceと同じ値)。`terminationGracePeriodSeconds: 30`を追加。実クラスタで再デプロイ・確認済み。
+Status(追記): issue #112(DB接続プール上限)完了・critic PASS(1往復。軽微指摘1件反映)。4環境変数を`services/pokedex/db.OpenPool`経由で適用(ADR-0112)。実クラスタで再デプロイ・確認済み。**main 統合済み(PR #180)**。**これでデータレーン主担当のCodexレビューissue(#104・#106・#109・#112)はすべて完了・main統合済み**。
+Next: 他レーンからの依頼待ち。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
@@ -19,8 +22,9 @@ Active: なし
 Branch: (次は main から feat/api-<名前> か fix/api-<名前> を切る。作業ディレクトリ ~/MyDamageCalcurater-api)
 Status: Phase 3・issue #110(ADR-0208。PR #130)・issue #103の設計(M2保存データの保持・削除・端末ID境界。ADR-0209。critic PASS。PR #150)は main に統合済み
 Status(追記): issue #148のAPIレーン担当分(ADR-0210。私設サービスの境界)完了・critic PASS・**main 統合済み(PR #157)**。`deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定。端末ID/CORSを認証・到達制御として扱わない回帰テストも追加。
-Status(追記): P3-7 `GET /api/pokedex/moves/{key}`(getMove)を実装(判定レーン JD4 の依頼。ADR-0105 §3 追記)。契約・`services/pokedex/`(データレーンの範囲。越境理由と触ったファイル一覧は DECISIONS.md)まで一括実装。critic PASS(3往復)・**main 統合済み(PR #161)**。判定レーンは JD4 に着手可。
-Next: 他レーンからの依頼待ち。issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ)・iOS再生成依頼はDECISIONS.mdに記録済み
+Status(追記): P3-7 `GET /api/pokedex/moves/{key}`(getMove)を実装(判定レーン JD4 の依頼。ADR-0105 §3 追記)。契約・`services/pokedex/`(データレーンの範囲。越境理由と触ったファイル一覧は DECISIONS.md)まで一括実装。critic PASS(3往復)・**main 統合済み(PR #161)**。判定レーンは JD4 に着手し main 統合済み(PR #169)。
+Status(追記): issue #69(検索の並びがOpenAPI契約と一致しない)・issue #73(OpenAPIとengineの防御プリセット集合の同期検査)を修正・**main 統合済み(PR #167・#172)**。いずれも契約・テストの整合修正で、SQL・engine・ADR は無変更(既存の設計は元々正しかった)。両issueともclose済み。
+Next: 他レーンからの依頼待ち。issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)はDECISIONS.mdに記録済み
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
@@ -45,21 +49,28 @@ CSS。3段階とも critic 1回目 FAIL→修正→2回目 PASS で完了(重大
 最終地点で64件に決定的に絞り込み、観測は16件で disabled+案内。critic PASS(境界値の網羅探索と変異テストで
 上限超過が起きないことを確認)。データレーンの engine/wasmapi 側(ADR-0108・PR #138)も main 統合済み。
 issue #110 は iOS の追従待ちで Web 単独ではクローズしない。
-**P4-18 issue #99(ライトテーマの danger コントラスト不足)の Web 分も完了・main 統合済み(PR #164)**:
+**P4-18 issue #99(ライトテーマの danger コントラスト不足)完了・issueクローズ済み**: Web 分(PR #164)は
 danger のライト値を `#E5484D`→`#CD1D23` に変更(WCAG 2.2 SC 1.4.3 の4.5:1を bg.base・bg.glass 合成後の
 両方で満たす)。`web/src/test/colorContrast.ts`・`web/src/styles/contrast.test.ts` を新規追加。critic PASS
-(独立実装での検算・変異テストで確認)。iOS 側(`PokeCalcDesign.swift`)はまだ旧値のままで DECISIONS.md で
-依頼済み(issue #99 自体は iOS 側完了までクローズしない)。
+(独立実装での検算・変異テストで確認)。iOS 側も完了(`fix: ライトテーマの danger コントラスト不足を修正
+(issue #99)`。`PokeCalcDesign.swift`・`ColorContrast.swift`・`DangerContrastTests.swift`)。issue #99 は
+クローズ済み。
+**issue #113(逆算の古い計算要求の抑止・キャンセル)は Web 分完了・main 統合済み(PR #174)**: 観測のテキスト
+編集のみ200msのtrailing debounce、確定操作は待たない。`CalcEngine` に任意引数 `signal?: AbortSignal` を
+追加、取り消しは `REQUEST_ABORTED_CODE` で区別(ADR-0300 §11)。critic PASS(非同期・競合状態を重点検証。
+mutation テスト9件で確認)。iOS 側も完了(`fix: iOS の計算・逆算で古い計算要求をキャンセル・観測入力を
+debounce (issue #113)`。`LatestTaskRunner.swift`・`CalcInput.swift`)。**issue #113 自体はまだ open**
+(API レーンの「クライアントのcancel伝播」連携分が残っているかは未確認。Web・iOS とも自レーン分は完了)。
 P4-17(技の ID 解決)は、API レーンが判定レーン JD4 向けに `GET /api/pokedex/moves/{key}`(getMove)を
 main 統合したが(PR #161)、種族1体あたり技20〜30件ぶんのラウンドトリップが要るため ADR-0304 §3 の欠落は
 **まだ解消していない**(API レーン自身が ADR-0304 に追記済み)。案A(`learnset` を `Move[]` にする)か
 `getMove` のバッチ解決化が API レーンへの未決の提案のまま。
-Next: (1) P4-18 の残り: #113(逆算の数値入力で古い計算要求を抑止・キャンセル。200ms debounce・AbortSignal。
-iOS・API と連携)に着手中。(2) P4-17: 技の ID 解決の欠落が解消されたら技を復活。(3) P4-20: issue #148
-(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み(apiBaseUrl の既定値は
-同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより連絡が来る想定。
-(4) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち)。
-(5) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
+Next: (1) P4-18 は Web 分すべて完了(#99・#113 とも main 統合済み)。次点の #98(モバイル幅の横溢れ)・
+#67(APIクライアントの防御的エラー処理)に着手するか判断。(2) P4-17: 技の ID 解決の欠落が解消されたら技を
+復活。(3) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを
+確認済み(apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用
+レーンより連絡が来る想定。(4) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase
+キックオフ待ち)。(5) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
@@ -98,16 +109,16 @@ scripts/argocd-bootstrap.sh の呼び出しに差し替え済み(2026-09-24 確�
 レーンへ既定案で提示済み。DECISIONS.md 2026-09-23)かユーザーからの新規要望待ち。
 
 ## Judge
-Lane: 判定(素早さ×ダメージ連動。`services/judge/`。どの AI が進めてもよい)
-Active: なし(JD4 着手可。下記参照)
-Branch: feat/judge-jd4(作業ディレクトリ ~/MyDamageCalcurater-judge。main から作成済み・空。JD3 の feat/judge-jd3 は PR #143 で main に統合済み・削除)
-Status: JD0(基盤。PR #92)・JD1(判定API本体。PR #118)・JD2(場の効果。PR #127)・JD3(複数の相手候補。PR #143。ADR-0703)は完了。
-`POST /api/judge/v1/outspeed-and-ko` は `defenders`(1〜6件)→`matchups`(配列)の一括判定・`speedField`(トリックルーム・
-追い風)に対応済み。
-Status(追記2026-09-23): **JD4 のブロックは解消**。API レーンが `GET /api/pokedex/moves/{key}`(getMove)を実装し
-**main 統合済み(P3-7・PR #161・ADR-0105 §3 追記・DECISIONS.md 2026-09-23)**。`priority` は既存の
-`Move.priority`(`int`)フィールドのまま。
-Next: JD4(相手の技を含めた返り討ち判定)に着手(`feat/judge-jd4`)
+Lane: 判定(素早さ×ダメージ連動。`services/judge/`・`web/src/judge/`。どの AI が進めてもよい)
+Active: なし(**judge-design.md §3 が定めた JD0〜JD5 すべて完了・main 統合済み**。次のユーザー要望待ち)
+Branch: 次は main から feat/judge-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-judge)
+Status: JD0(基盤。PR #92)・JD1(判定API本体。PR #118)・JD2(場の効果。PR #127)・JD3(複数の相手候補。PR #143)・
+JD4(返り討ち判定。PR #169)・JD5(Web の画面。PR #182。ADR-0705)まで全段階が完了。`POST /api/judge/v1/outspeed-and-ko`
+は自分1体対相手1〜6体の素早さ判定・場の効果(トリックルーム・追い風)・返り討ち判定まで対応し、`web/src/judge/`
+(`/judge` タブ)から呼べる。技はID自由入力(ADR-0304 §3の技一覧APIの欠落を踏襲)、相手側の追い風は全候補共通の
+1チェックボックス(ADR-0703 §5)、送信ボタンでのみ呼ぶ(1回で上流最大27回)。
+Next: 新規要望待ち。軽微な積み残し: `attacker`単数の`Individual`にも`defenders`候補と同じ大文字小文字厳密な
+キー検査を広げると契約全体で一貫する(plan.md 参照)。iOS版JD5は要望が出たら判断(ADR-0705 却下案)
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

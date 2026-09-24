@@ -11,9 +11,10 @@
 
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
-import { beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { resolveAttackerPreset } from "../domain/attackerPresets";
 import { firstDamagingMove, learnsetMoves } from "../domain/moves";
+import { OBSERVATION_INPUT_DEBOUNCE_MS } from "../domain/observations";
 import { NEUTRAL_NATURE, ZERO_SP, defaultAbility, toEngineSpecies } from "../domain/requests";
 import { reverseItemCandidates } from "../domain/reverseItems";
 import type { Item, Move, ReverseRequest, ReverseResult } from "../engine/types";
@@ -34,6 +35,10 @@ let master: MasterData;
 
 beforeAll(async () => {
   master = await exampleMasterSource.load();
+});
+
+afterAll(() => {
+  vi.useRealTimers();
 });
 
 function speciesAt(index: number): MasterSpecies {
@@ -81,10 +86,30 @@ const observationInput = (n: number) => screen.getByRole("textbox", { name: `観
 const unitGroup = (n: number) => screen.getByRole("radiogroup", { name: `観測${String(n)}の単位` });
 const addObservationButton = () => screen.getByRole("button", { name: "観測を追加" });
 
+/**
+ * P4-18(issue 113): 観測の数値入力は 200ms の trailing debounce を挟むので、入力した後は
+ * flushObservationDebounce() でその待ちを終わらせてから計算が始まる。タイマーは fake にし、
+ * 実時間でも進める(shouldAdvanceTime)ことで waitFor / findBy* を今までどおり使う。
+ * デバウンス自体の境界(何 ms で・何回呼ぶか)は ReverseScreen.debounce.test.tsx が決定的に確かめる。
+ */
 function renderScreen(engine: FakeEngine = createFakeEngine()): { user: UserEvent; engine: FakeEngine } {
-  const user = userEvent.setup();
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
   render(<ReverseScreen engine={engine} master={master} />);
   return { user, engine };
+}
+
+/** 観測の数値入力のデバウンスの待ちを終わらせる(issue 113)。 */
+function flushObservationDebounce(): void {
+  act(() => {
+    vi.advanceTimersByTime(OBSERVATION_INPUT_DEBOUNCE_MS);
+  });
+}
+
+/** 観測に数値を打ち、デバウンスの待ちを終わらせる(計算が始まるところまで進める)。 */
+async function typeObservation(user: UserEvent, n: number, text: string): Promise<void> {
+  await user.type(observationInput(n), text);
+  flushObservationDebounce();
 }
 
 async function choosePair(user: UserEvent, mine: MasterSpecies, theirs: MasterSpecies): Promise<void> {
@@ -133,7 +158,7 @@ describe("与えたダメージ(side defender)", () => {
     const move = firstMoveOf(mine);
     const { user, engine } = renderScreen();
     await choosePair(user, mine, theirs);
-    await user.type(observationInput(1), "45");
+    await typeObservation(user, 1, "45");
 
     await waitFor(() => {
       expect(lastRequest(engine).observations).toEqual([{ percent: 45 }]);
@@ -174,7 +199,7 @@ describe("与えたダメージ(side defender)", () => {
     expect(within(presetGroup).getByRole("radio", { name: "無振り" })).toBeChecked();
     const fullLabel = move.category === "special" ? "C特化" : "A特化";
     await user.click(within(presetGroup).getByRole("radio", { name: fullLabel }));
-    await user.type(observationInput(1), "45");
+    await typeObservation(user, 1, "45");
 
     await waitFor(() => {
       expect(lastRequest(engine).observations).toEqual([{ percent: 45 }]);
@@ -192,7 +217,7 @@ describe("与えたダメージ(side defender)", () => {
     const { user, engine } = renderScreen();
     await choosePair(user, speciesAt(0), speciesAt(1));
     await user.selectOptions(myItemSelect(), item.id);
-    await user.type(observationInput(1), "45");
+    await typeObservation(user, 1, "45");
     await waitFor(() => {
       expect(lastRequest(engine).known.item).toEqual(item);
     });
@@ -202,7 +227,7 @@ describe("与えたダメージ(side defender)", () => {
     const { user, engine } = renderScreen();
     await choosePair(user, speciesAt(0), speciesAt(1));
     await user.click(within(unitGroup(1)).getByRole("radio", { name: "HP" }));
-    await user.type(observationInput(1), "30");
+    await typeObservation(user, 1, "30");
     await waitFor(() => {
       expect(lastRequest(engine).observations).toEqual([{ damage: 30 }]);
     });
@@ -224,7 +249,7 @@ describe("受けたダメージ(side attacker)", () => {
       .getAllByRole("option")
       .map((option) => option.getAttribute("value"));
     expect(options).toEqual(learnsetMoves(theirs, master.moves).map((candidate) => candidate.id));
-    await user.type(observationInput(1), "60");
+    await typeObservation(user, 1, "60");
 
     await waitFor(() => {
       expect(lastRequest(engine).observations).toEqual([{ damage: 60 }]);
@@ -242,7 +267,7 @@ describe("受けたダメージ(side attacker)", () => {
 
   test("対象側を切り替えると観測は空の1行に戻り、単位はその側の既定になる", async () => {
     const { user } = renderScreen();
-    await user.type(observationInput(1), "45");
+    await typeObservation(user, 1, "45");
     await user.click(addObservationButton());
     await chooseReceived(user);
     expect(observationInput(1)).toHaveValue("");
@@ -272,7 +297,7 @@ describe("受けたダメージ(side attacker)", () => {
     // moveSelect() の表示値だけだと、選び直しをしなくても(前の技の id が新しい learnset に無いとき)
     // ネイティブの select が黙って先頭の option を表示してしまい、見分けが付かない。engine に渡る技
     // (moveId が実際に新しい learnset の中の id として解決されていること)で確かめる。
-    await user.type(observationInput(1), "60");
+    await typeObservation(user, 1, "60");
     await waitFor(() => {
       expect(lastRequest(engine).move).toEqual(firstMoveOf(theirs));
     });
@@ -283,6 +308,9 @@ describe("受けたダメージ(side attacker)", () => {
 async function pasteInto(user: UserEvent, element: HTMLElement, text: string): Promise<void> {
   await user.click(element);
   await user.paste(text);
+  // 貼り付けも観測のテキストの変更なので、待ちを終わらせてから「engine を呼ばない」ことを確かめる
+  // (待ちのせいで呼ばれていないだけ、を通してしまわないため)。
+  flushObservationDebounce();
 }
 
 describe("観測の入力の検証", () => {
@@ -311,7 +339,7 @@ describe("観測の入力の検証", () => {
   test("有効な行があっても、不正な行が1つでもあれば engine を呼ばない", async () => {
     const { user, engine } = renderScreen();
     await choosePair(user, speciesAt(0), speciesAt(1));
-    await user.type(observationInput(1), "45");
+    await typeObservation(user, 1, "45");
     await waitFor(() => {
       expect(engine.reverseRequests.length).toBeGreaterThan(0);
     });
@@ -330,7 +358,7 @@ describe("観測を追加・削除", () => {
   test("「観測を追加」で行が増え、有効な観測を入力順に送る(空行は送らない)", async () => {
     const { user, engine } = renderScreen();
     await choosePair(user, speciesAt(0), speciesAt(1));
-    await user.type(observationInput(1), "45");
+    await typeObservation(user, 1, "45");
     await user.click(addObservationButton());
     expect(observationInput(2)).toHaveValue("");
     expect(within(unitGroup(2)).getByRole("radio", { name: "%" })).toBeChecked();
@@ -339,7 +367,7 @@ describe("観測を追加・削除", () => {
     });
 
     await user.click(within(unitGroup(2)).getByRole("radio", { name: "HP" }));
-    await user.type(observationInput(2), "50");
+    await typeObservation(user, 2, "50");
     await waitFor(() => {
       expect(lastRequest(engine).observations).toEqual([{ percent: 45 }, { damage: 50 }]);
     });
@@ -348,9 +376,9 @@ describe("観測を追加・削除", () => {
   test("「観測2を削除」で行が消え、残りの観測で計算し直す", async () => {
     const { user, engine } = renderScreen();
     await choosePair(user, speciesAt(0), speciesAt(1));
-    await user.type(observationInput(1), "45");
+    await typeObservation(user, 1, "45");
     await user.click(addObservationButton());
-    await user.type(observationInput(2), "50");
+    await typeObservation(user, 2, "50");
     await waitFor(() => {
       expect(lastRequest(engine).observations).toEqual([{ percent: 45 }, { percent: 50 }]);
     });
@@ -413,7 +441,7 @@ describe("結果の表示", () => {
       await chooseReceived(user);
     }
     await choosePair(user, speciesAt(0), speciesAt(1));
-    await user.type(observationInput(1), "45");
+    await typeObservation(user, 1, "45");
   }
 
   test("防御側は H32 の仮定を出し、候補を engine の順のままカードにする", async () => {
@@ -479,7 +507,7 @@ describe("結果の表示", () => {
     const { engine, pending } = createDeferredReverseEngine();
     const { user } = renderScreen(engine);
     await choosePair(user, speciesAt(0), speciesAt(1));
-    await user.type(observationInput(1), "45");
+    await typeObservation(user, 1, "45");
     expect(await screen.findByText("計算中")).toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "推定結果" })).toBeNull();
 
@@ -504,7 +532,7 @@ describe("結果の表示", () => {
     );
     const { user } = renderScreen(engine);
     await choosePair(user, speciesAt(0), speciesAt(1));
-    await user.type(observationInput(1), "45");
+    await typeObservation(user, 1, "45");
     expect(await screen.findByRole("alert")).toHaveTextContent("観測の入力が不正: テスト");
   });
 
@@ -512,7 +540,10 @@ describe("結果の表示", () => {
     const { engine, pending } = createDeferredReverseEngine();
     const { user } = renderScreen(engine);
     await choosePair(user, speciesAt(0), speciesAt(1));
-    await user.type(observationInput(1), "45");
+    // P4-18(issue 113): 打っている途中の「4」ではもう計算しないので、待ちを2回終わらせて
+    // 「4」の計算と「45」の計算を別々に起こす(古い応答を作る条件は今までと同じ: 先に送った要求が後で届く)。
+    await typeObservation(user, 1, "4");
+    await typeObservation(user, 1, "5");
     await waitFor(() => {
       expect(pending.at(-1)?.request.observations).toEqual([{ percent: 45 }]);
     });
@@ -551,7 +582,7 @@ describe("結果の表示", () => {
     const { user, engine } = renderScreen();
     await choosePair(user, species, speciesAt(1));
     await user.selectOptions(moveSelect(), statusMove.id);
-    await user.type(observationInput(1), "45");
+    await typeObservation(user, 1, "45");
     expect(screen.getByText("変化技はダメージを計算しません")).toBeInTheDocument();
     expect(engine.reverseRequests).toHaveLength(0);
   });
@@ -566,7 +597,7 @@ describe("結果の表示", () => {
       theirs: MasterSpecies,
     ): Promise<void> {
       await choosePair(user, mine, theirs);
-      await user.type(observationInput(1), "45");
+      await typeObservation(user, 1, "45");
       const first = pending.at(-1);
       if (first === undefined) {
         throw new Error("calcReverse が呼ばれていない");
@@ -591,7 +622,7 @@ describe("結果の表示", () => {
       await showInitialResult(user, pending, speciesAt(0), speciesAt(1));
 
       await user.clear(observationInput(1));
-      await user.type(observationInput(1), "50");
+      await typeObservation(user, 1, "50");
 
       expect(await expectBackToLoading()).toBeInTheDocument();
     });
@@ -697,7 +728,8 @@ describe("件数の上限(issue #110)", () => {
   }
 
   function renderWithItems(count: number): { user: UserEvent; engine: FakeEngine } {
-    const user = userEvent.setup();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
     const engine = createFakeEngine();
     render(<ReverseScreen engine={engine} master={{ ...master, items: defenseItems(count) }} />);
     return { user, engine };
@@ -705,7 +737,7 @@ describe("件数の上限(issue #110)", () => {
 
   async function observeOnce(user: UserEvent): Promise<void> {
     await choosePair(user, speciesAt(0), speciesAt(1));
-    await user.type(observationInput(1), "45");
+    await typeObservation(user, 1, "45");
   }
 
   test("持ち物候補がちょうど64通り(なし + 63件)なら全部送り、絞り込みの案内は出さない", async () => {

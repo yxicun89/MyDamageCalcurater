@@ -26,6 +26,7 @@ import { browserWasmLoader } from "./engine/browserWasmLoader";
 import type { CalcEngine } from "./engine/types";
 import { createWasmEngine } from "./engine/wasmEngine";
 import { appText } from "./i18n/ja";
+import { createJudgeClient } from "./judge/judgeClient";
 import { isSearchableMasterSource } from "./master/capabilities";
 import { exampleMasterSource } from "./master/exampleSource";
 import { createSpeedClient } from "./speed/speedClient";
@@ -102,6 +103,11 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   // createSpeedClient 自体は fetch しない(素早さのタブを開くまで呼ばれない。speed/SpeedScreen.tsx)。
   const [speedClient] = useState(() =>
     createSpeedClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
+  );
+  // JD5: judge API のクライアント(ADR-0705 §1・§3)。同じ基点 URL・端末 ID・セッション ID を使う。
+  // createJudgeClient 自体は fetch しない(判定のタブを開くだけでは呼ばれない。judge/JudgeScreen.tsx)。
+  const [judgeClient] = useState(() =>
+    createJudgeClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
   );
 
   // 計算モード(オフライン = WASM / オンライン = API)。既定はオフラインで、選択は localStorage に覚える
@@ -327,6 +333,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
                 master={currentMasterLoad.master}
                 client={balanceClient}
                 speedClient={speedClient}
+                judgeClient={judgeClient}
                 masterSearch={activeMasterSearch}
               />
             </div>

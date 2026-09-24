@@ -300,11 +300,25 @@ export type EngineResult<T> =
   { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: EngineError };
 
 /**
+ * 取り消された計算の code(issue 113、ADR-0300 §11)。`engine_unavailable`(engine・API が使えない)と
+ * 区別する: 画面が新しい入力で先行の計算を取り消したのは engine の失敗ではないので、画面はこれをエラーとして
+ * 表示しない。両方の実装(createApiEngine / createWasmEngine)が同じ code を返す。
+ */
+export const REQUEST_ABORTED_CODE = "request_aborted";
+
+/**
  * 画面が依存する計算の差し替え口(ADR-0300 §2)。WASM 実装(createWasmEngine)と、
  * 将来の API 実装(P4-5)が同じ形で後ろに入る。画面は実装を知らない。
+ *
+ * signal(任意)は「もう要らなくなった計算」を実装に伝える口(issue 113、ADR-0300 §11)。
+ * 渡さなければ従来どおり。渡したときの契約:
+ *   - 呼び出し前に abort 済みなら、実装は計算を始めずに `REQUEST_ABORTED_CODE` の not ok を返す。
+ *   - 始めてしまった処理を取り消せるとは限らない(WASM は同期実行なので取り消せない)。取り消せた場合だけ
+ *     `REQUEST_ABORTED_CODE` を返し、完了した計算の結果を取り消し扱いに書き換えない。
+ *   - どの場合も reject しない(ADR-0011 §5 の EngineResult で成否を運ぶ)。
  */
 export interface CalcEngine {
-  calc(request: CalcRequest): Promise<EngineResult<CalcResult>>;
-  calcBulk(request: BulkRequest): Promise<EngineResult<BulkResult>>;
-  calcReverse(request: ReverseRequest): Promise<EngineResult<ReverseResult>>;
+  calc(request: CalcRequest, signal?: AbortSignal): Promise<EngineResult<CalcResult>>;
+  calcBulk(request: BulkRequest, signal?: AbortSignal): Promise<EngineResult<BulkResult>>;
+  calcReverse(request: ReverseRequest, signal?: AbortSignal): Promise<EngineResult<ReverseResult>>;
 }

@@ -231,12 +231,13 @@ func TestImportCronJobPodSecurityAndWiring(t *testing.T) {
 		}
 	}
 
+	// importer は DML だけの pokedex_importer の DSN を使う(ADR-0110 §6。root の pokedex-dsn は使わない)。
 	var dsnFromSecret bool
 	for _, e := range c.Env {
 		if e.Name == "POKEDEX_DATABASE_DSN" {
 			if e.Value != "" || e.ValueFrom == nil || e.ValueFrom.SecretKeyRef == nil ||
-				e.ValueFrom.SecretKeyRef.Name != "mysql-auth" || e.ValueFrom.SecretKeyRef.Key != "pokedex-dsn" {
-				t.Errorf("POKEDEX_DATABASE_DSN は Secret mysql-auth の pokedex-dsn から渡す: %+v", e)
+				e.ValueFrom.SecretKeyRef.Name != "mysql-auth" || e.ValueFrom.SecretKeyRef.Key != "pokedex-importer-dsn" {
+				t.Errorf("POKEDEX_DATABASE_DSN は Secret mysql-auth の pokedex-importer-dsn から渡す: %+v", e)
 			} else {
 				dsnFromSecret = true
 			}
@@ -247,6 +248,19 @@ func TestImportCronJobPodSecurityAndWiring(t *testing.T) {
 	}
 	if !dsnFromSecret {
 		t.Error("POKEDEX_DATABASE_DSN が無い")
+	}
+	// root・他用途の資格情報をどのコンテナ(initContainer を含む)にも渡さない(ADR-0110 §2・§6)。
+	for _, cc := range append(append([]k8sContainer(nil), pod.InitContainers...), pod.Containers...) {
+		for _, e := range cc.Env {
+			if e.ValueFrom == nil || e.ValueFrom.SecretKeyRef == nil {
+				continue
+			}
+			switch e.ValueFrom.SecretKeyRef.Key {
+			case "pokedex-dsn", "mysql-root-password", "pokedex-reader-dsn", "pokedex-migrator-dsn":
+				t.Errorf("importer の %s/%s が %s を参照している(importer は pokedex-importer-dsn だけ)",
+					cc.Name, e.Name, e.ValueFrom.SecretKeyRef.Key)
+			}
+		}
 	}
 
 	sc := c.SecurityContext

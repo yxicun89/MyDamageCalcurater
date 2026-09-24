@@ -1,0 +1,96 @@
+/*
+ * JD5: 判定の画面(docs/adr/0705-judge-jd5-web-screen.md)。自分のポケモン・相手の候補・判定結果の3領域を
+ * 縦に並べる。色は必ず tokens.css の CSS 変数で参照する(web/src/styles/noColorLiterals.test.ts)。
+ * 常時動くアニメーションは入れない(CLAUDE.md ドメイン規約)。
+ */
+
+.judge-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+.judge-screen__region {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.judge-screen__candidate {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--bg-glass-blur));
+  padding: var(--space-3);
+}
+
+.judge-screen__speed-field {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+}
+
+.judge-individual {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.judge-individual__field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-primary);
+}
+
+.judge-individual__field select,
+.judge-individual__field input[type="number"],
+.judge-individual__field input[type="text"] {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  padding: var(--space-2) var(--space-3);
+}
+
+.judge-individual__hint {
+  flex-basis: 100%;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.judge-screen__notice,
+.judge-screen__error {
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-secondary);
+}
+
+.judge-screen__matchups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.judge-screen__matchup {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--bg-glass-blur));
+  padding: var(--space-3);
+}
+
+.judge-screen__matchup-species {
+  font-size: var(--font-size-heading);
+}
