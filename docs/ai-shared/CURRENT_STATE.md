@@ -107,7 +107,9 @@ Web・iOS 両方完了でクローズ済み)、P6-6(issue #110の iOS側追従�
 決定的切り捨てとはあえて変えた判断はADR参照)。critic指摘でguardの位置(`beginInput()`より前)を固定する
 回帰テストを追補。引き継ぎ検証で契約との同期検査 `ios/scripts/check-request-limits.sh` と観測上限の XCUITest を
 追加。**PR #186 で main 統合済み**)。`make ios-test`(gen-check・件数上限の同期検査・XCTest 340件〈xcresult 集計353件〉・XCUITest 17件・Info.plist 検査)が緑。
-issue #68 は既知の制約(一度も検索結果に出ていない技IDは名前解決できない)をコメントで記録した上でクローズせず残す。
+issue #68 の残り(一度も検索結果に出ていない選択中の技IDを名前解決できない)は P6-9 で `getMove` による個別解決を
+実装して解消(ADR-0501「issue #68 の残り」。持ち物の先頭ページが上限に達したら黙って切り捨てず案内を出す。critic
+1周目 FAIL〈逆算の古いエラー消去条件の退行〉→修正→2周目 PASS)。
 issue #110 は API・データ・Web・iOS すべて完了したためクローズ済み(2026-09-24)。
 Next: (1) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。#71(攻撃側プリセット
 単一化)は engine 側の `AttackerPreset` カタログ新設(データレーン)が前提のため iOS からは未着手。将来の候補:

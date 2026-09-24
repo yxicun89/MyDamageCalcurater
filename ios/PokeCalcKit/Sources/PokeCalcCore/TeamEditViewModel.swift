@@ -24,6 +24,9 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
     private var latestMoveSearchResults: [Move] = []
     /// メンバー id → いまの種族の learnset(ID のみ。6章)。
     private var learnsetIdsByMember: [String: [String]] = [:]
+    /// 一度でも見た技(先頭ページ・技検索の結果・`move(id:)` の応答が合流する。`move(forID:)` はここから
+    /// 引く。ADR-0501「issue #68 の残り」5章)。
+    private var moveDictionary: [String: Move] = [:]
 
     public private(set) var speciesQuery: String = ""
     public private(set) var moveQuery: String = ""
@@ -38,6 +41,10 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
     /// 理由で名前は変えない。2章)。
     public private(set) var speciesOptions: [SpeciesSummary] = []
     public private(set) var itemOptions: [Item] = []
+
+    /// 持ち物の一覧(`searchItems(query: "", limit: MasterSearch.pageLimit)` の1回の取得)が上限に達した
+    /// (ADR-0501「issue #68 の残り」6章)。
+    public private(set) var itemOptionsReachedLimit = false
     public private(set) var natureOptions: [Nature] = []
     /// メンバー id → 「直近の技検索の結果 ∩ そのメンバーの learnset の ID 集合」を learnset の順で
     /// 並べたもの(issue #68・6章。`CalcViewModel.moveOptions` と同じ規則)。
@@ -91,8 +98,10 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
             moveSearch.setFirstPage(moves)
             latestMoveSearchResults = moveSearch.options
             moveSearchReachedLimit = moveSearch.reachedLimit
+            mergeMovesIntoDictionary(moves)
 
             itemOptions = items
+            itemOptionsReachedLimit = items.count >= MasterSearch.pageLimit
 
             for member in team.members {
                 let detail = try await service.species(key: member.speciesKey)
@@ -100,6 +109,9 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
                 learnsetIdsByMember[member.id] = detail.learnset
                 recomputeMoveOptions(forMember: member.id)
                 abilityOptionsByMember[member.id] = detail.abilities
+                // 保存済みの技のうち、まだ見ていないものだけ `move(id:)` で解決する(A4: 失敗しても
+                // `error` を立てず、`moveIds` も変えない。5章)。
+                await resolveUnknownMoves(member.moveIds)
             }
             error = nil
         } catch {
@@ -210,6 +222,30 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
         }
     }
 
+    /// `moveIds` のうち技の辞書にまだ無いものだけ `move(id:)` で解決し、辞書に入れる(ADR-0501
+    /// 「issue #68 の残り」5章)。並行に投げてよい(1体最大 `TeamLimits.maxMovesPerMember` 件)。
+    /// 失敗(404・通信失敗)は無視する(A4: `error` を立てない・`moveIds` を変えない・その ID を
+    /// 解決しないままにする)。
+    private func resolveUnknownMoves(_ moveIds: [String]) async {
+        let missingIds = moveIds.filter { moveDictionary[$0] == nil }
+        guard !missingIds.isEmpty else { return }
+        let service = self.service
+        let resolved = await withTaskGroup(of: (String, Move?).self) { group in
+            for id in missingIds {
+                group.addTask {
+                    let move = try? await service.move(id: id)
+                    return (id, move)
+                }
+            }
+            var results: [(String, Move?)] = []
+            for await entry in group { results.append(entry) }
+            return results
+        }
+        for (id, move) in resolved {
+            if let move { moveDictionary[id] = move }
+        }
+    }
+
     private func nextMemberSpeciesToken(for id: String) -> Int {
         let token = (memberSpeciesGeneration[id] ?? 0) + 1
         memberSpeciesGeneration[id] = token
@@ -305,6 +341,12 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
         speciesDictionary[key]
     }
 
+    /// 一度でも見た技(先頭ページ・検索結果・`move(id:)` の応答)から引く。技スロットの表示名に使う
+    /// (ADR-0501「issue #68 の残り」5章)。無ければ nil(View は ID をそのまま出す)。
+    public func move(forID id: String) -> Move? {
+        moveDictionary[id]
+    }
+
     @discardableResult
     public func setSpeciesQuery(_ text: String) -> Bool {
         let needsSearch = speciesSearch.setQuery(text)
@@ -329,14 +371,14 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
     }
 
     /// メンバーごとの候補(`moveOptionsByMember`)はどれも同じ検索結果から作るので、全メンバー分
-    /// 作り直す(issue #68・6章)。
+    /// 作り直す(issue #68・6章)。検索結果は技の辞書にも合流させる(ADR-0501「issue #68 の残り」5章:
+    /// 検索語を変えても、既に見た技スロットの名前が消えないようにするため)。
     public func runMoveSearch() async {
-        // Team は技の辞書を持たない(issue #68・6章「残る穴」: 実体化できない技はスロットに ID を
-        // そのまま出す規則のため、`moveOptionsByMember` だけを作り直せば足りる)。
-        await moveSearch.run()
+        let results = await moveSearch.run()
         latestMoveSearchResults = moveSearch.options
         isSearchingMoves = moveSearch.isSearching
         moveSearchReachedLimit = moveSearch.reachedLimit
+        if let results { mergeMovesIntoDictionary(results) }
         for memberID in learnsetIdsByMember.keys {
             recomputeMoveOptions(forMember: memberID)
         }
@@ -344,6 +386,10 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
 
     private func mergeSpeciesIntoDictionary(_ items: [SpeciesSummary]) {
         for item in items { speciesDictionary[item.key] = item }
+    }
+
+    private func mergeMovesIntoDictionary(_ items: [Move]) {
+        for item in items { moveDictionary[item.id] = item }
     }
 
     // MARK: - 保存

@@ -44,6 +44,21 @@ actor StubPokeCalcService: PokeCalcService {
         case manual
     }
 
+    /// `move(id:)`(openapi `getMove`)の応答の返し方(ADR-0501「issue #68 の残り」)。
+    enum MoveLookupMode {
+        /// どの ID にも `not_found` を返す(**既定**)。`getMove` で解決できない環境(＝ issue #68 の
+        /// 残りを直す前と同じ条件)を再現する。既定をこれにしているのは、`move(id:)` を足す前に書かれた
+        /// 既存テスト(「解決できないときは moveUnavailable になり、名前で検索すれば復帰できる」)の
+        /// 前提をそのまま保つため。その振る舞いは 404 のときのフォールバック規則として今も正しい。
+        case notFound
+        /// 要求を受けたらすぐ架空マスタ(`moves`)から ID で引いて返す(無ければ `not_found`)。
+        /// `setMoveLookupError(_:)` が設定されていればそのエラーを投げる。
+        case immediate
+        /// 応答を保留する。テストが `resolveMoveLookup(at:with:)` で返す。保留中に Task cancel を
+        /// 受けたら `CancellationError` で終える(`species(key:)` の `.manual` と同じ形)。
+        case manual
+    }
+
     enum ReverseMode {
         /// 呼ばれたらテストを失敗させる(P6-2a の計算画面は reverse を使わない)。
         case disallowed
@@ -93,6 +108,14 @@ actor StubPokeCalcService: PokeCalcService {
     private var moveSearchMode: SearchMode = .immediate
     private(set) var moveSearchCalls: [SearchCall] = []
     private var pendingMoveSearch: [Int: CheckedContinuation<[Move], any Error>] = [:]
+
+    /// `move(id:)` の記録(呼ばれた順の ID)と保留・キャンセルの観測(issue #68 の残り)。
+    private var moveLookupMode: MoveLookupMode = .notFound
+    private var moveLookupError: PokeCalcError?
+    private(set) var moveLookups: [String] = []
+    private var pendingMoveLookups: [Int: CheckedContinuation<Move, any Error>] = [:]
+    /// Task cancel を受け取った `move(id:)` の要求番号(`moveLookups` の添字)。
+    private(set) var cancelledMoveLookups: Set<Int> = []
 
     init(species: [SpeciesDetail], moves: [Move], items: [Item], natures: [Nature]) {
         speciesDetails = species
@@ -278,6 +301,62 @@ actor StubPokeCalcService: PokeCalcService {
         Array(moves.filter { query.isEmpty || $0.nameJa.hasPrefix(query) }.prefix(limit))
     }
 
+    // MARK: - テストからの操作(技の ID 解決。issue #68 の残り)
+
+    func setMoveLookupMode(_ mode: MoveLookupMode) {
+        moveLookupMode = mode
+    }
+
+    /// `.immediate` のときに投げるエラー(通信失敗などの再現。nil で解除)。
+    func setMoveLookupError(_ error: PokeCalcError?) {
+        moveLookupError = error
+    }
+
+    /// 保留中の `index` 番目(0 始まり、`moveLookups` の添字)の `move(id:)` に応答する。
+    func resolveMoveLookup(at index: Int, with result: Result<Move, PokeCalcError>) {
+        guard let continuation = pendingMoveLookups.removeValue(forKey: index) else {
+            XCTFail("保留中の move(id:) が無い: index \(index)")
+            return
+        }
+        continuation.resume(with: result.mapError { $0 as any Error })
+    }
+
+    /// 保留中の `move(id:)` が Task cancel を受けたときの処理(`cancelPendingSpecies` と同じ形)。
+    func cancelPendingMoveLookup(at index: Int) {
+        cancelledMoveLookups.insert(index)
+        if let continuation = pendingMoveLookups.removeValue(forKey: index) {
+            continuation.resume(throwing: CancellationError())
+        }
+    }
+
+    /// `move(id:)` が `count` 回以上呼ばれるまで待つ。
+    func waitForMoveLookups(count: Int, file: StaticString = #filePath, line: UInt = #line) async throws {
+        for _ in 0..<Self.waitPollLimit {
+            if moveLookups.count >= count { return }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTFail("move(id:) が \(count) 回呼ばれなかった(\(moveLookups.count) 回)", file: file, line: line)
+        throw PokeCalcError(code: "test_timeout", message: "move(id:) の待ち合わせがタイムアウト")
+    }
+
+    /// `index` 番目の `move(id:)` が cancel されるまで待つ。
+    func waitForMoveLookupCancellation(at index: Int, file: StaticString = #filePath, line: UInt = #line) async throws {
+        for _ in 0..<Self.waitPollLimit {
+            if cancelledMoveLookups.contains(index) { return }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTFail("move(id:) の要求 \(index) が cancel されなかった", file: file, line: line)
+        throw PokeCalcError(code: "test_timeout", message: "move(id:) のキャンセル待ちがタイムアウト")
+    }
+
+    /// `.immediate` の既定応答、および手動モードでテストが `resolveMoveLookup` に渡す値を組み立てるのに使う。
+    func lookupMove(id: String) throws -> Move {
+        guard let move = moves.first(where: { $0.id == id }) else {
+            throw PokeCalcError(code: PokeCalcError.Code.notFound, message: "テスト: 技が無い \(id)")
+        }
+        return move
+    }
+
     func setSpeciesMode(_ mode: SpeciesMode) {
         speciesMode = mode
     }
@@ -436,6 +515,31 @@ actor StubPokeCalcService: PokeCalcService {
         case .manual:
             return try await withCheckedThrowingContinuation { continuation in
                 pendingMoveSearch[index] = continuation
+            }
+        }
+    }
+
+    func move(id: String) async throws -> Move {
+        let index = moveLookups.count
+        moveLookups.append(id)
+        if let masterError { throw masterError }
+        switch moveLookupMode {
+        case .notFound:
+            throw PokeCalcError(code: PokeCalcError.Code.notFound, message: "テスト: getMove で解決できない \(id)")
+        case .immediate:
+            if let moveLookupError { throw moveLookupError }
+            return try lookupMove(id: id)
+        case .manual:
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Move, any Error>) in
+                    if cancelledMoveLookups.contains(index) {
+                        continuation.resume(throwing: CancellationError())
+                    } else {
+                        pendingMoveLookups[index] = continuation
+                    }
+                }
+            } onCancel: {
+                Task { await self.cancelPendingMoveLookup(at: index) }
             }
         }
     }

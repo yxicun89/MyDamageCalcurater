@@ -43,6 +43,13 @@ struct ReverseMyCardView: View {
                 MenuLabelChip(text: BulkRowDisplay.itemLabel(itemId: viewModel.myItemId, items: viewModel.itemOptions))
             }
             .accessibilityIdentifier("reverseMyItemPicker")
+            // 持ち物の一覧が上限に達していても黙って切り捨てない(ADR-0501「issue #68 の残り」6章)。
+            if viewModel.itemOptionsReachedLimit {
+                Text(MasterSearchLabels.itemsTruncated)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .accessibilityIdentifier("reverseMyItemLimitHint")
+            }
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
