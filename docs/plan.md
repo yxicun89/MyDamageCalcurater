@@ -228,6 +228,15 @@
   〈黙って切り捨てず明示的なエラーか決定的な絞り込み〉に揃える)。DECISIONS.md 2026-09-23「calc の候補・観測件数
   に上限を置く」参照。P6-5(issue #113)の critic サイクル完了後に着手
 - [ ] P6-7 ADR-0209 §8 の文言と「この端末のデータを削除」の UI(issue #103。record-svc / team-svc の全削除 API 実装後)
+- [x] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼された
+  内容どおり `ColorToken.danger` のライト値を `0xE5,0x48,0x4D` → `0xCD,0x1D,0x23` に更新し、
+  `DesignTokenTests.swift` の旧値も書き換えた。`ios/PokeCalcKit/Tests/PokeCalcDesignTests/ColorContrast.swift`
+  (WCAG相対輝度・コントラスト比。`web/src/test/colorContrast.ts` と同じ算出式の独立実装)・
+  `DangerContrastTests.swift`(ライト・ダーク × bg.base・bg.glass合成の4組。Web の `contrast.test.ts` と同じ
+  組み合わせ)を新規追加。旧値に戻すと `3.59:1`/`3.82:1` で実際に red になることを確認済み(有効なテスト)。
+  `swift test`(PokeCalcDesignTests 13件・PokeCalcCoreTests 323件)・`make ios-test`(unit 336件・XCUITest 16件・
+  Info.plist 検査)・`make lint`(check-publishable 含む)すべて成功。軽微な作業のため spec-writer/critic の
+  サブエージェントは使わずメインで実施(CLAUDE.md「軽微な作業はメインのみでよい」)
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)。Argo CD の実同期もローカル k3d で確認済み(ADR-0018: Git 変更 32fbb9e → manual sync → Pod の image digest 一致)
