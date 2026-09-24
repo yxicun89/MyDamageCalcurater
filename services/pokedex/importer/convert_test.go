@@ -645,6 +645,109 @@ func TestConvertNamesJa(t *testing.T) {
 	}
 }
 
+// TestConvertRejectsDuplicateSourceIDs は、取得元に同じ ID の行が2つあると、どちらかを黙って
+// 採らずに止めること(#311)。calc は toID(名前)、Showdown は id、PokeAPI は toID(slug) で数える。
+func TestConvertRejectsDuplicateSourceIDs(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(t *testing.T, in *importer.Input)
+	}{
+		{"calc の技名(威力だけ違う複製を先頭に足す)", func(t *testing.T, in *importer.Input) {
+			dup := *calcMove(t, in, "Test Flame")
+			dup.BasePower++
+			in.Calc.Moves = append([]importer.CalcMove{dup}, in.Calc.Moves...)
+		}},
+		{"calc の技名(toID が同じ表記違い)", func(t *testing.T, in *importer.Input) {
+			dup := *calcMove(t, in, "Test Flame")
+			dup.Name = "Test-Flame"
+			in.Calc.Moves = append(in.Calc.Moves, dup)
+		}},
+		{"calc の種族名", func(t *testing.T, in *importer.Input) {
+			in.Calc.Species = append(in.Calc.Species, *calcSpecies(t, in, "Testleaf"))
+		}},
+		{"calc の持ち物名", func(t *testing.T, in *importer.Input) {
+			in.Calc.Items = append(in.Calc.Items, in.Calc.Items[0])
+		}},
+		{"calc の特性名", func(t *testing.T, in *importer.Input) {
+			in.Calc.Abilities = append(in.Calc.Abilities, in.Calc.Abilities[0])
+		}},
+		{"calc のタイプ名", func(t *testing.T, in *importer.Input) {
+			in.Calc.Types = append(in.Calc.Types, "Fire")
+		}},
+		{"Showdown の技 id", func(t *testing.T, in *importer.Input) {
+			in.Showdown.Moves = append(in.Showdown.Moves, *showdownMove(t, in, "testflame"))
+		}},
+		{"Showdown の種族 id", func(t *testing.T, in *importer.Input) {
+			in.Showdown.Species = append(in.Showdown.Species, *showdownSpecies(t, in, "testleaf"))
+		}},
+		{"Showdown の持ち物 id", func(t *testing.T, in *importer.Input) {
+			in.Showdown.Items = append(in.Showdown.Items, in.Showdown.Items[0])
+		}},
+		{"Showdown の特性 id", func(t *testing.T, in *importer.Input) {
+			in.Showdown.Abilities = append(in.Showdown.Abilities, in.Showdown.Abilities[0])
+		}},
+		{"PokeAPI の技 slug(toID が同じで別名)", func(t *testing.T, in *importer.Input) {
+			in.PokeAPI.Moves = append(in.PokeAPI.Moves, importer.PokeAPIName{Slug: "testflame", Names: map[string]string{"ja-Hrkt": "テストべつめい"}})
+		}},
+		{"PokeAPI の種族 slug", func(t *testing.T, in *importer.Input) {
+			in.PokeAPI.Species = append(in.PokeAPI.Species, in.PokeAPI.Species[0])
+		}},
+		{"PokeAPI のフォーム slug", func(t *testing.T, in *importer.Input) {
+			in.PokeAPI.Forms = append(in.PokeAPI.Forms, in.PokeAPI.Forms[0])
+		}},
+		{"PokeAPI の持ち物 slug", func(t *testing.T, in *importer.Input) {
+			in.PokeAPI.Items = append(in.PokeAPI.Items, in.PokeAPI.Items[0])
+		}},
+		{"PokeAPI の特性 slug", func(t *testing.T, in *importer.Input) {
+			in.PokeAPI.Abilities = append(in.PokeAPI.Abilities, in.PokeAPI.Abilities[0])
+		}},
+		{"PokeAPI のタイプ slug", func(t *testing.T, in *importer.Input) {
+			in.PokeAPI.Types = append(in.PokeAPI.Types, in.PokeAPI.Types[0])
+		}},
+		{"PokeAPI の性格 slug", func(t *testing.T, in *importer.Input) {
+			in.PokeAPI.Natures = append(in.PokeAPI.Natures, in.PokeAPI.Natures[0])
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := loadFixture(t)
+			tt.mutate(t, &in)
+			_, _, err := importer.Convert(in)
+			if !errors.Is(err, importer.ErrInvalidData) {
+				t.Fatalf("err = %v, want ErrInvalidData", err)
+			}
+		})
+	}
+}
+
+// TestConvertSkipsBlankJaName は、PokeAPI の日本語名が空白だけなら採らず、次の言語・英語名へ
+// 進むこと(#311。DB の CHECK は CHAR_LENGTH > 0 なので空白だけの名前が通ってしまう)。
+func TestConvertSkipsBlankJaName(t *testing.T) {
+	in := loadFixture(t)
+	for i := range in.PokeAPI.Moves {
+		if in.PokeAPI.Moves[i].Slug == "test-flame" {
+			in.PokeAPI.Moves[i].Names = map[string]string{"ja-Hrkt": " \u3000 ", "ja": "テストほのお漢字"}
+		}
+		if in.PokeAPI.Moves[i].Slug == "test-glare" {
+			in.PokeAPI.Moves[i].Names = map[string]string{"ja": "   "}
+		}
+	}
+	out, rep := convertOK(t, in)
+	got := map[string]importer.MoveRow{}
+	for _, m := range out.Moves {
+		got[m.ID] = m
+	}
+	if m := got["testflame"]; m.NameJa != "テストほのお漢字" || m.NameJaSource != "pokeapi" {
+		t.Errorf("testflame = %q(%s), want 次の言語 ja の名前", m.NameJa, m.NameJaSource)
+	}
+	if m := got["testglare"]; m.NameJa != m.NameEn || m.NameJaSource != "fallback_en" {
+		t.Errorf("testglare = %q(%s), want 英語名へのフォールバック", m.NameJa, m.NameJaSource)
+	}
+	if !hasFinding(rep.Warnings, importer.KindNameFallback, "testglare") {
+		t.Error("英語名へのフォールバックが警告に無い")
+	}
+}
+
 func TestConvertNameLanguageOrderComesFromConfig(t *testing.T) {
 	in := loadFixture(t)
 	in.Config.NameJaLanguages = []string{"ja", "ja-Hrkt"}
