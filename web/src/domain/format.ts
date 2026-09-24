@@ -36,12 +36,12 @@ export function formatEffectiveness(value: CalcResult["effectiveness"]): string 
     return resultText.effectivenessNone;
   }
   if (value < 1) {
-    return resultText.effectivenessNotVery;
+    return resultText.effectivenessNotVery(value);
   }
   if (value === 1) {
     return resultText.effectivenessNeutral;
   }
-  return resultText.effectivenessSuper;
+  return resultText.effectivenessSuper(value);
 }
 
 /** 技の分類の表示名。 */
