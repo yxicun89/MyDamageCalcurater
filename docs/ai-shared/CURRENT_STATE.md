@@ -45,9 +45,19 @@ CSS。3段階とも critic 1回目 FAIL→修正→2回目 PASS で完了(重大
 最終地点で64件に決定的に絞り込み、観測は16件で disabled+案内。critic PASS(境界値の網羅探索と変異テストで
 上限超過が起きないことを確認)。データレーンの engine/wasmapi 側(ADR-0108・PR #138)も main 統合済み。
 issue #110 は iOS の追従待ちで Web 単独ではクローズしない。
-Next: (1) P4-18(Codexレビュー issue。タイプバランスレーンから連絡): 優先 #99(アクセシビリティ)・
-#113(debounce/cancel)。(2) P4-17: 技の ID 解決が入ったら技を復活。(3) P4-20: issue #148(アクセス境界・
-認証方針)。中心は運用/API レーンで Web は ADR の「接続方法」節への記載程度(依頼が来てから着手)。
+**P4-18 issue #99(ライトテーマの danger コントラスト不足)の Web 分も完了・main 統合済み(PR #164)**:
+danger のライト値を `#E5484D`→`#CD1D23` に変更(WCAG 2.2 SC 1.4.3 の4.5:1を bg.base・bg.glass 合成後の
+両方で満たす)。`web/src/test/colorContrast.ts`・`web/src/styles/contrast.test.ts` を新規追加。critic PASS
+(独立実装での検算・変異テストで確認)。iOS 側(`PokeCalcDesign.swift`)はまだ旧値のままで DECISIONS.md で
+依頼済み(issue #99 自体は iOS 側完了までクローズしない)。
+P4-17(技の ID 解決)は、API レーンが判定レーン JD4 向けに `GET /api/pokedex/moves/{key}`(getMove)を
+main 統合したが(PR #161)、種族1体あたり技20〜30件ぶんのラウンドトリップが要るため ADR-0304 §3 の欠落は
+**まだ解消していない**(API レーン自身が ADR-0304 に追記済み)。案A(`learnset` を `Move[]` にする)か
+`getMove` のバッチ解決化が API レーンへの未決の提案のまま。
+Next: (1) P4-18 の残り: #113(逆算の数値入力で古い計算要求を抑止・キャンセル。200ms debounce・AbortSignal。
+iOS・API と連携)に着手中。(2) P4-17: 技の ID 解決の欠落が解消されたら技を復活。(3) P4-20: issue #148
+(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み(apiBaseUrl の既定値は
+同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより連絡が来る想定。
 (4) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち)。
 (5) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
 
