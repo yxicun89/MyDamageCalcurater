@@ -10,6 +10,15 @@ import (
 	"example.com/pokecalc/services/internal/api"
 )
 
+// 端末 ID・セッション ID のヘッダ名(/api/* で検証し、上流へは検証済みの値を付け直す。ADR-0202 §4)。
+const (
+	headerDeviceID  = "X-Device-Id"
+	headerSessionID = "X-Session-Id"
+)
+
+// verifiedIDHeaders は gateway が検証して上流へ必ず届ける2つのヘッダ。
+var verifiedIDHeaders = [...]string{headerDeviceID, headerSessionID}
+
 // uuidLength は正準形の UUID 文字列("8-4-4-4-12")の長さ。
 const uuidLength = 36
 
@@ -17,8 +26,8 @@ const uuidLength = 36
 // 欠落・空は missing_header、UUID でない値・同名ヘッダの重複は invalid_header。
 // 欠落と不正が同時にあれば missing_header を優先する(ADR-0202 §4)。
 func checkAPIHeaders(h http.Header) error {
-	deviceMissing, deviceInvalid := headerStatus(h, "X-Device-Id")
-	sessionMissing, sessionInvalid := headerStatus(h, "X-Session-Id")
+	deviceMissing, deviceInvalid := headerStatus(h, headerDeviceID)
+	sessionMissing, sessionInvalid := headerStatus(h, headerSessionID)
 
 	if deviceMissing || sessionMissing {
 		return newError(api.MissingHeader, "X-Device-Id / X-Session-Id が無い")

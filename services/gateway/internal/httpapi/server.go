@@ -65,15 +65,15 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	}
 
 	g := &gateway{cfg: cfg}
-	g.calcProxy = newReverseProxy(cfg.CalcURL, cfg.UpstreamTimeout, cfg.transport, g.originAllowed)
+	g.calcProxy = newReverseProxy(cfg.CalcURL, cfg.UpstreamTimeout, cfg.transport, restoreIDs, g.originAllowed)
 	if cfg.PokedexURL != nil {
-		g.pokedexProxy = newReverseProxy(cfg.PokedexURL, cfg.UpstreamTimeout, cfg.transport, g.originAllowed)
+		g.pokedexProxy = newReverseProxy(cfg.PokedexURL, cfg.UpstreamTimeout, cfg.transport, restoreIDs, g.originAllowed)
 	}
 	if cfg.AssetsURL != nil {
-		g.assetsProxy = newReverseProxy(cfg.AssetsURL, cfg.UpstreamTimeout, cfg.transport, g.originAllowed)
+		g.assetsProxy = newReverseProxy(cfg.AssetsURL, cfg.UpstreamTimeout, cfg.transport, keepIDsAsIs, g.originAllowed)
 	}
 	if cfg.WebURL != nil {
-		g.webProxy = newReverseProxy(cfg.WebURL, cfg.UpstreamTimeout, cfg.transport, g.originAllowed)
+		g.webProxy = newReverseProxy(cfg.WebURL, cfg.UpstreamTimeout, cfg.transport, keepIDsAsIs, g.originAllowed)
 	}
 
 	e := echo.New()
