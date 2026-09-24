@@ -20,6 +20,8 @@ spec:
         app.kubernetes.io/part-of: pokecalc
     spec:
       automountServiceAccountToken: false
+      # shutdownTimeout(main.go。10秒)より長い。ADR-0111 決定3。
+      terminationGracePeriodSeconds: 30
       containers:
         - name: pokedex
           image: pokecalc/pokedex:0.1.0
