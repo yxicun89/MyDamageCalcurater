@@ -10,7 +10,9 @@ package httpapi
 // 呼び出し前に Rewrite がこれらのヘッダを削除済みの outbound リクエストに対して働く)。
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -59,6 +61,15 @@ func newReverseProxy(target *url.URL, timeout time.Duration, override http.Round
 		return nil
 	}
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		// クライアントが要求を中断した(ブラウザの AbortSignal・iOS の Task cancel 等。issue #113)。
+		// r.Context() はクライアントの接続が切れると Go の http.Server が自動でキャンセルするため、
+		// これは上流の障害ではなくクライアント起因。誤って「上流に到達できない」と WARN ログに
+		// 出すと運用上のノイズになる。ADR-0202 §5 の「クライアントへは固定文だけ」は上流障害についての
+		// 規定で、クライアント起因の中断はそもそも応答を返す相手が居ないので何もしない(ADR-0202 §5 追記)。
+		if errors.Is(err, context.Canceled) {
+			slog.Debug("gateway: クライアントが要求を中断した", "upstream", target.Host)
+			return
+		}
 		// クライアントへは固定文だけ(Go の内部情報を出さない)。詳細はログにだけ残す(推奨4)。
 		slog.Warn("gateway: 上流に到達できない", "upstream", target.Host, "error", err)
 		// 上流に届かなかった応答にも CORS を付ける(必須2: 接続不可・タイムアウトの 503 で

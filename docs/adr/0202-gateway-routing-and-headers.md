@@ -69,6 +69,26 @@
 - 上流が返したレスポンス(4xx / 5xx を含む)はステータス・ヘッダ・ボディをそのまま返す(gateway は書き換えない。ただし CORS ヘッダは §6 のとおり付け替える)。
 - 転送は `httputil.ReverseProxy` の `Rewrite`(`Director` は非推奨)を使い、`ProxyRequest.SetURL` で Host を上流のホストに書き換え、
   `SetXForwarded` でクライアントが送った `X-Forwarded-For` / `X-Forwarded-Host` / `X-Forwarded-Proto` を信用せず実際の値に付け替える。
+- **追記(2026-09-24。issue #113「クライアントのcancel伝播」)**: クライアントが要求を中断した(ブラウザの
+  `AbortSignal`・iOS の `Task` cancel)ときは `upstream_unavailable` として扱わない。Go の `http.Server` は
+  クライアントの接続が切れると `r.Context()` を `context.Canceled` で終える。`ReverseProxy.ErrorHandler` は
+  `err` が `errors.Is(err, context.Canceled)` のときだけ特別扱いし、上流障害の WARN ログを出さず(Debug に
+  留める。運用上のノイズと誤検知を避けるため)、応答も書かない(クライアントは既に居ないので届かない)。
+  自前のタイムアウト(`GATEWAY_UPSTREAM_TIMEOUT` の `ResponseHeaderTimeout`/dial)が切れたときのエラーは
+  `context.Canceled` にならない(`net/http: timeout awaiting response headers` 等の別のエラーになる。実測で
+  確認済み)ため、この特別扱いは本来の `upstream_unavailable`(タイムアウト・接続不可)とは混同しない。
+  `services/gateway/internal/httpapi/upstream_test.go` の `TestClientCancelIsNotUpstreamUnavailable`
+  (フェイクの RoundTripper 版・実 `http.Transport` 版の両方)で固定。
+  **限界(2026-09-24 の調査で判明。対応はしない)**: gateway → calc-svc への `context` のキャンセル伝播
+  そのものは効く(実測で `r.Context().Done()` が即座に発火することを確認)。しかし
+  `services/calc/` のハンドラは受け取ったリクエストの `context.Context` を一度も見ておらず、
+  `engine`(`engine.CalcReverse`/`CalcBulk` 等)も `context` を受け取らない(絶対ルール2「engine は
+  純粋に保つ」により、キャンセル検査のためだけでも `context` を持ち込む変更はしない判断)。
+  そのため issue #113 の達成目標が挙げる「calc-svc CPU消費も止める」は本追記の範囲では**達成しない**:
+  クライアントが中断しても、gateway は静かに応答を打ち切るだけで、calc-svc 側の計算(特に逆算の
+  総当たり探索)は最後まで完走する。1リクエストあたりの最悪計算量は ADR-0208(件数・範囲の上限)で
+  有界なので、実害は「無駄な計算がその上限の範囲で起こりうる」程度に留まる。engine への `context`
+  導入が必要になったときは別 ADR で扱う。
 
 ### 6. CORS
 
@@ -117,6 +137,7 @@ calc-svc は同名ヘッダの重複を `invalid_input` にしていた(ADR-0200
 | AC-G7 | panic は 500 internal(panic の値を出さない)。Config の不正は ErrInvalidConfig | `TestPanicIsRecoveredAsInternal` / `TestNewHandlerRejectsInvalidConfig` |
 | AC-G8 | 契約: invalid_header が ErrorCode にある。gateway のエラー(missing_header / invalid_header / not_found / upstream_unavailable)が契約どおり。上流が calc-svc の実物(架空マスタ)のとき calc・bulk・reverse の成功と calc-svc の 400 が gateway 経由で契約どおり | `TestContractHasInvalidHeader` / `TestGatewayErrorsMatchContract` / `TestRealCalcThroughGatewayMatchesContract` |
 | AC-G9 | 起動: 環境変数名、必須・既定・任意の読み込み、不正な URL・`*`・オリジンでない値・不正なタイムアウトは errInvalidConfig、run は /healthz に答え ctx の終了で nil で止まる、設定不正なら待ち受けずにエラー | `cmd/gateway.TestEnvNames` / `TestLoadConfig` / `TestLoadConfigRejects` / `TestRunServesAndStopsOnContextCancel` / `TestRunFailsOnInvalidConfig` |
+| AC-G10(2026-09-24追記。issue #113) | クライアントが要求を中断した(`context.Canceled`)ときは `upstream_unavailable` を書かない(応答なし)。自前のタイムアウト(別のエラー文言)とは区別される | `TestClientCancelIsNotUpstreamUnavailable` |
 | AC-C1 | calc-svc: 同名ヘッダの重複は 400 invalid_header(§9) | `services/calc/internal/httpapi.TestDuplicateHeaderIsInvalidHeader` |
 
 calc-svc の実物は `services/calc/calctest`(`NewExampleHandler`。例のマスタと共有の相性表で `httpapi.NewHandler` を作る)で起動する。
