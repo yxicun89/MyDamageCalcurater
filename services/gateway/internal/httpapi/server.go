@@ -9,6 +9,7 @@ package httpapi
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -44,6 +45,8 @@ type Config struct {
 
 	// transport は上流への RoundTripper の差し替え口(テストだけが使う。nil なら既定)。
 	transport http.RoundTripper
+	// logger は Echo のロガーの差し替え口(テストだけが使う。nil なら Echo の既定)。
+	logger *slog.Logger
 }
 
 // gateway は組み立て済みの Config と3つの上流への ReverseProxy を持つ。
@@ -75,6 +78,9 @@ func NewHandler(cfg Config) (http.Handler, error) {
 
 	e := echo.New()
 	e.HTTPErrorHandler = httpErrorHandler
+	if cfg.logger != nil {
+		e.Logger = cfg.logger
+	}
 	m := httpmetrics.New()
 	e.Use(m.Middleware())
 	e.Use(g.recoverMiddleware)

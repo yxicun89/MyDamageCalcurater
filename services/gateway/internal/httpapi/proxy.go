@@ -44,6 +44,11 @@ func newReverseProxy(target *url.URL, timeout time.Duration, override http.Round
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)  // Host も target のホストに書き換わる(推奨3)。
 			pr.SetXForwarded() // X-Forwarded-* はクライアントの値を信用せず付け直す(推奨3)。
+			// gateway→上流では 100-continue を使わない(issue #209。ADR-0202 §5 追記)。上流が 100 Continue を
+			// 返すと ReverseProxy がそれを WriteHeader(100) で転送し、Echo の Response が 100 で commit されて
+			// 続く上流のステータス(4xx/5xx)を捨て、既定の 200 が出てしまう。クライアント側の Expect には
+			// gateway の http.Server が本文を読むときに自動で 100 Continue を返すので、クライアントの挙動は変わらない。
+			pr.Out.Header.Del("Expect")
 		},
 	}
 	if override != nil {
