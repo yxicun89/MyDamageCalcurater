@@ -294,7 +294,7 @@
   - 軽微な積み残し(critic 指摘。ブロッカーではない): `attacker`(単数の `Individual`)の欄名は
     `encoding/json` の大文字小文字を無視したフォールバックマッチングの対象のままで、`defenders` の候補
     (JD2/JD4 で allow-list 化済み)と厳しさが左右で食い違う。実害は小さい(値は正しい欄に入る)が、
-    JD5 着手前に `attacker` 側にも同じ allow-list を広げると契約全体で一貫する
+    `attacker` 側にも同じ allow-list を広げると契約全体で一貫する(JD5 完了時点でも未着手)
 - [x] JD5 Web の画面(judge-svc を呼ぶ。ADR-0705。critic PASS〈2回目。1回目 NG は古い応答〈A8〉テストが
   実際にはレースを検証していなかった点を、送信ボタンの disabled が反映される前に2回叩いて実際に2本
   同時に送る形へ修正〉)
