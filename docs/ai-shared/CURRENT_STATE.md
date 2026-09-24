@@ -66,18 +66,25 @@ P4-17(技の ID 解決)は、API レーンが判定レーン JD4 向けに `GET 
 main 統合したが(PR #161)、種族1体あたり技20〜30件ぶんのラウンドトリップが要るため ADR-0304 §3 の欠落は
 **まだ解消していない**(API レーン自身が ADR-0304 に追記済み)。案A(`learnset` を `Move[]` にする)か
 `getMove` のバッチ解決化が API レーンへの未決の提案のまま。
-**P4-21 issue #67(2xxの契約外JSONでAPIクライアントが例外を投げる)完了・main 統合済み(PR #189)**:
-`apiEngine.ts`・`balanceClient.ts` の `postJson` を型ガード経由にし(`as Schemas[...]` の型アサーションを
-除去)、契約外の2xxで例外を投げず `engine_unavailable`/`balance_unavailable` を返すようにした(ADR-0301 §4・
-ADR-0303 §6)。calc側は写像関数が読む全フィールドを再帰的に検査、balance側は画面がたどる形だけを検査
-(leafスカラー・enumは見ない。契約の二重管理を避けるため)。critic PASS(mutation テスト12件で型ガードの
-過不足なしを確認)。既存1034件は無変更・新規143件追加(1166件)。
-Next: (1) P4-21 の残り: #98(モバイル幅で計算・逆算画面が横に溢れる)。CSS の狭幅 media query + Playwright の
-320/375px 回帰テストが必要。(2) P4-17: 技の ID 解決の欠落が解消されたら技を復活。(3) P4-20: issue #148
-(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み(apiBaseUrl の既定値は
-同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより連絡が来る想定。
-(4) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち)。
-(5) 人間へのお願い: docs/verify-m1.md §4 を Safari で確認(P4-5)
+**P4-21(issue #67・#98)完了・main 統合済み(PR #189・#192)。Codexレビューissue(P4-18・P4-21)はこれで
+すべて完了**:
+- #67(2xxの契約外JSONでAPIクライアントが例外を投げる): `apiEngine.ts`・`balanceClient.ts` の `postJson` を
+  型ガード経由にし(`as Schemas[...]` の型アサーションを除去)、契約外の2xxで例外を投げず
+  `engine_unavailable`/`balance_unavailable` を返すようにした(ADR-0301 §4・ADR-0303 §6)。calc側は写像関数が
+  読む全フィールドを再帰的に検査、balance側は画面がたどる形だけを検査(leafスカラー・enumは見ない)。
+  critic PASS(mutation テスト12件で型ガードの過不足なしを確認)。新規143件追加。
+- #98(モバイル幅で計算・逆算画面が横に溢れる): ブレークポイント600px(`docs/design.md`「幅への対応」に記録)。
+  600px未満はmobile-firstで縦積み(DOM順・フォーカス順は不変)、600px以上は従来の左右配置。伸縮列を
+  `minmax(0, 1fr)` に、カード・selectに `min-width: 0`/`width: 100%` を追加。critic が実ブラウザで13幅×5画面を
+  実測し横溢れゼロを確認。新規34件追加(単体18・E2E16)。
+  作業中に発見した無関係の既存退行(JD5の判定タブ追加で `a11y.spec.ts` が壊れていた)を別途修正・main統合済み
+  (PR #191)。
+  最終テスト数: 既存1166件は無変更のまま vitest 1184件・Playwright 31件、すべて green。
+Next: (1) P4-17: 技の ID 解決の欠落が解消されたら技を復活。(2) P4-20: issue #148(アクセス境界・認証方針)。
+Web 側は既にコード上で条件を満たしていることを確認済み(apiBaseUrl の既定値は同一オリジン、CORSはgateway側の
+設定)。実際のtailnet名が決まってから運用レーンより連絡が来る想定。(3) 続いて P5-5(構築ビルダー等)は
+record/team の API 待ち(M2。人間の /phase キックオフ待ち)。(4) 人間へのお願い: docs/verify-m1.md §4 を
+Safari で確認(P4-5)。(5) 他レーンからの依頼待ち
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
