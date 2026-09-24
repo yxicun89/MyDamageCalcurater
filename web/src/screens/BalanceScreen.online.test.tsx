@@ -454,6 +454,42 @@ describe("検索口があるオンラインのマスタ(P4-17b、ADR-0304 A-14.1
   });
 });
 
+// critic 指摘: A-14.1 の表7行のうち、上の describe.each(使えない3+1行)と「検索口があるオンライン」
+// (両方無し+検索口あり、の1行)以外の残り2行がテストに無かった。実装は正しく「使える」になるが、
+// 表を「テストで固定する」と宣言している以上、1対1にしておく。
+describe("A-14.1の表の残り2行: 技の一覧はあるが種族だけ検索、種族の一覧も技の一覧もあるが検索口もある", () => {
+  test("speciesList: false / moves: true / masterSearch: あり → 使える(検索欄 + 全件の技一覧)", async () => {
+    const rendered = renderScreen(limitedMaster(example, NO_SPECIES_LIST), onlineSearch());
+
+    expect(screen.queryByText(masterOnlineText.balanceUnavailable)).toBeNull();
+    const field = speciesField(memberGroup(1));
+    expect(field).not.toBeDisabled();
+    expect(field).toHaveAttribute("placeholder", masterOnlineText.speciesSearchLabel);
+
+    const species = speciesAt(0);
+    await chooseBySearch(rendered, memberGroup(1), species);
+
+    await waitFor(() => {
+      expect(rendered.client.analyzeCalls.at(-1)).toEqual([
+        { pokemonId: species.key, abilityId: species.abilities[0] },
+      ]);
+    });
+    // moves: true なので、種族解決を待たずに技の一覧(NO_SPECIES_LIST でも master.moves は全件)が使える。
+    expect(moveField(threatGroup(1), 1)).not.toBeDisabled();
+  });
+
+  test("speciesList: true / moves: true / masterSearch: あり → 使える(ドロップダウンのまま。A-13.1 の帰結)", () => {
+    // capabilities を省いたマスタ(オフライン相当。speciesList・moves とも true)に検索口だけ渡す組み合わせ。
+    renderScreen(example, onlineSearch());
+
+    expect(screen.queryByText(masterOnlineText.balanceUnavailable)).toBeNull();
+    // speciesListAvailable が true なので、検索口があってもドロップダウンのまま出す(A-10)。
+    const field = speciesField(memberGroup(1));
+    expect(field.tagName).toBe("SELECT");
+    expect(field).not.toBeDisabled();
+  });
+});
+
 describe("12枠(メンバー6・仮想敵6)が独立に検索・解決できる(ADR-0304 A-14.2)", () => {
   test("メンバー2体を別々に検索して選ぶと、2体とも枠の順で analyze に載る", async () => {
     const rendered = renderScreen(limitedMaster(example, ONLINE_MASTER_CAPABILITIES), onlineSearch());
