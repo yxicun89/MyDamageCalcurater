@@ -1602,3 +1602,10 @@ Decision: ADR-0501「issue #68 の残り」のとおり、`PokeCalcService.move(
 Reason: 他レーンのセッションから依頼(issue #68 の解消)。PR #136 の後に残っていた穴は、公開 API に技を ID で引く手段が
 無いことが原因だったが、PR #161 の `getMove` で解消できた。critic 1周目 FAIL(逆算の古いエラー消去条件の退行)→修正→2周目 PASS。
 Impact: issue #68 をクローズ。main に `getMovesByIds`(まとめ取り)が入ったので、構築編集の load は将来まとめ取りへ置き換え可能(任意)。
+
+## 2026-09-25: 全体レビュー issue の割り当て訂正と、素早さ関連 issue の分担確認
+Decision: 全体レビュー issue #71・#74・#76・#77 は「素早さレーンの担当」として連絡を受けたが、GitHub の issue 本文の「担当レーン」欄を確認したところ実際はデータ・Web・iOS・API・タイプバランスレーンの担当で、素早さは含まれていなかった。データレーンへ差し戻した。
+実際に素早さレーンが担当に含まれる open issue(#263・#237・#236・#108)を洗い出し、タイプバランスレーンと分担を確認: #263(Argo CD Application の project: default・初期admin Secret残存・GitOpsスクリプト重複)はタイプバランスレーンが主担当、#237(needs-decision。GitOps overlayがread modelを持たない。既知の制約はADR-0605 §2a)は既定案(initContainerでpokedex exportを起動時に実行)でタイプバランスレーンがユーザー確認中、#236(端末ID/セッションIDの検証・エラーコード不一致)は共通パッケージの置き場所をタイプバランスレーンがAPIレーンと調整中。
+#237の実装には、pokedex-svcのserverイメージをbalance-registryへdigest固定でpushするという、データレーンへの新しい依頼が発生することが分かった(タイプバランスレーンに共有済み)。
+Reason: issue の担当レーン記載を実際に確認せずに作業を始めると、他レーンの範囲(engine・pokedex・golden・Web/iOSのプリセット定義)に誤って越境するため。
+Impact: 素早さレーンは #263・#237・#236 についてタイプバランスレーン/APIレーンからの連絡待ち。連絡が来たら services/speed/deploy/argocd・scripts・deploy/k8s/overlays/gitops を対応する。
