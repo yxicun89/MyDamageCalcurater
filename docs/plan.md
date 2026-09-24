@@ -134,14 +134,21 @@
   肯定側テストの非対称、をテスト強化で解消。critic 1回目 FAIL(IME変換中のEnter・矢印キーを誤って候補選択に
   使ってしまう退行を発見)→ `isComposing` ガード追加・`preventDefault()` は処理したときだけに修正・回帰テスト
   2件追加(907件)→再確認予定
-- [ ] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案)は
-  **2026-09-24 に API レーンが `GET /api/pokedex/moves/batch`(`getMovesByIds`)で回答・実装済み**
-  (ADR-0105 §3・ADR-0304 §3・DECISIONS.md 2026-09-24 参照。下の改善要望にも記載)。Web 側の対応は
-  spec-writer が受け入れ条件と失敗するテストまで作成済み(ADR-0304 **A-13**)。**`capabilities.moves` は
-  true にしない**(A-13.1。true にすると BalanceScreen が「有効なのに技が選べない」壊れた状態になる)。
-  技は `resolveSpecies` が種族・特性と一緒に解決して返し(`MasterSpeciesResolution.moves`)、技セレクトの
-  disabled は「いま技の候補があるか」で決める。`learnset` は64件ずつに分割して `getMovesByIds` を複数回呼ぶ。
-  実装(`onlineSource.ts` の分割呼び出し・`speciesResolution.ts` の `movesFor`・両画面の判定)はこれから
+- [x] P4-17 技の ID 解決(データ/API レーンへの依頼。DECISIONS.md 2026-09-23 提案)— **完了。critic PASS**。
+  2026-09-24 に API レーンが `GET /api/pokedex/moves/batch`(`getMovesByIds`)で回答・実装済み
+  (ADR-0105 §3・ADR-0304 §3・DECISIONS.md 2026-09-24 参照)。Web 側は ADR-0304 **A-13** の設計どおり実装:
+  **`capabilities.moves` は true にしない**(true にすると BalanceScreen が「有効なのに技が選べない」壊れた
+  状態になるため)。技は `resolveSpecies` が種族・特性と一緒に解決して返し(`MasterSpeciesResolution.moves`)、
+  技セレクトの disabled は「いま技の候補があるか」で決める。`learnset` は64件ずつに分割して `getMovesByIds`
+  を並列に複数回呼ぶ(API レーンが実データで確認: 349種族中151種族・43%が64件超、最大106件。稀な例外では
+  なく主経路として実装・テスト)。
+  critic レビュー: チャンク分割・結合順序・1回でも失敗したら全体失敗、を変異テストで確認(全滅)。
+  重要指摘1件(攻守入れ替え・与えた/受けた切り替え後の**選択中の技**〈候補一覧だけでなく実際にリクエストに
+  乗る技〉がテストされていなかった。`<select>` の DOM 値は state が壊れていても先頭候補にフォールバック
+  表示するため見逃しやすい経路)を受け、実際のリクエストを検査する回帰テストを2件追加(CalcScreen の
+  攻守入れ替え・ReverseScreen の与えた/受けた切り替え)し、指摘された3つの変異すべてで実際に落ちることを
+  確認。既存1192件は無変更・新規28件追加(1220件。うち2件は critic 指摘を受けて既存アサーションに追記して強化)。
+  BalanceScreen の種族検索・技選択は P4-17b として積み残し(下記)
 - [ ] P4-17b BalanceScreen(タイプバランス)の種族検索・技選択をオンラインでも使えるようにする
   (ADR-0304 A-9 の申し送り・A-13.5 の積み残し)。パーティ・仮想敵の各枠(6枠 × 2)に A-10 の種族検索を広げ、
   枠ごとに解決した learnset から技を4つまで選べるようにする。それまではオンラインでは画面ごと無効のまま

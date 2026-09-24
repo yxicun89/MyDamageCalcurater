@@ -269,6 +269,24 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
       expect(within(moveSelect()).getAllByRole("option")).toHaveLength(expected.length);
     });
     expect(moveSelect()).not.toBeDisabled();
+
+    // critic指摘(P4-17): 候補一覧だけでなく、選択中の技(moveId)自体が新しい技の出どころ(相手)の
+    // learnset から選ばれ、実際にその技でリクエストが送られることも確かめる。候補一覧は useMemo で
+    // 作り直されるが、選択中の値の更新ロジックが古い側の key を参照したままだと、moveId が壊れて
+    // (例: 空文字列)いても <select> の DOM 表示は先頭候補にフォールバックするため候補一覧の検査だけでは
+    // 見逃す。実際に逆算を実行させ、送られたリクエストの技を直接検査する。
+    const mineOnlyMoveIds = learnsetMoves(mine, example.moves)
+      .map((move) => move.id)
+      .filter((id) => !expected.some((theirsMove) => theirsMove.id === id));
+    expect(mineOnlyMoveIds.length).toBeGreaterThan(0);
+    await rendered.user.type(observationInput(), "50");
+    rendered.advance(OBSERVATION_INPUT_DEBOUNCE_MS);
+    await waitFor(() => {
+      expect(rendered.engine.reverseRequests).not.toHaveLength(0);
+    });
+    const request = rendered.engine.reverseRequests.at(-1);
+    expect(expected.map((move) => move.id)).toContain(request?.move.id);
+    expect(mineOnlyMoveIds).not.toContain(request?.move.id);
   });
 
   test("検索で選んだ種族の技で逆算する(技の実体がリクエストに入る)", async () => {

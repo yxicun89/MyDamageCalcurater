@@ -1,16 +1,18 @@
-// P4-16: pokedex-svc の公開 API からマスタを読む MasterSource(ADR-0304)。
+// P4-16/P4-17: pokedex-svc の公開 API からマスタを読む MasterSource(ADR-0304)。
 // 公開 API(api/openapi.yaml)の制約:
 //   - searchSpecies / searchMoves / searchItems は limit の上限が 200 でページングが無い。
 //     実データは種族349件・技515件なので一括取得できず、持ち物166件・性格25件だけが1回で全件取れる(ADR-0304 §1)。
-//   - getSpecies.learnset は技の ID 配列だけで、ID から技の実体を引く公開 API が無い(ADR-0304 §3。API レーン待ち)。
-// なので load() は「持ち物・性格・相性表」だけを返し、種族は MasterSpeciesSearch で都度引き、技は使えないことを
-// capabilities で伝える(ADR-0304 §4 の段階的導入)。
+//   - getSpecies.learnset は技の ID 配列だけなので、resolveSpecies が getMovesByIds
+//     (GET /api/pokedex/moves/batch?ids=...)で技の実体に解決する。ids は契約上1〜64件なので、
+//     MOVES_BATCH_MAX_IDS 件ずつに分割して並列に呼ぶ(ADR-0304 §3 追記・A-13)。
+// なので load() は「持ち物・性格・相性表」だけを返し、種族・技は MasterSpeciesSearch.resolveSpecies で
+// 種族ごとに都度引く(ADR-0304 §4 の段階的導入・A-13)。
 // 応答の型は openapi-typescript の生成型(api/openapi.gen.ts)を正とし、手で複製しない(ADR-0301 §6)。
 
 import typeChartData from "@typechart";
 import type { ClientIds } from "../api/clientIds";
 import type { components } from "../api/openapi.gen";
-import type { Ability, Item } from "../engine/types";
+import type { Ability, Item, Move } from "../engine/types";
 import { typeChartFromData } from "./typeChart";
 import type {
   MasterCapabilities,
@@ -77,6 +79,7 @@ const PATHS = {
   species: "api/pokedex/species",
   items: "api/pokedex/items",
   natures: "api/pokedex/natures",
+  movesBatch: "api/pokedex/moves/batch",
 } as const;
 
 /** サーバーのエラー本文({code, message})の形をしているかの型ガード(apiEngine.ts と同じ考え方)。 */
@@ -96,6 +99,18 @@ function mapItem(item: Schemas["Item"]): Item {
 /** 特性(公開 API に効果データが無いので effect は常に null。ADR-0304 §追記 A-1)。 */
 function mapAbility(ability: Schemas["Ability"]): Ability {
   return { id: ability.id, nameJa: ability.nameJa, effect: null };
+}
+
+/** 技(getMovesByIds の応答をそのまま MasterSpeciesResolution.moves に写す。ADR-0304 A-13)。 */
+function mapMove(move: Schemas["Move"]): Move {
+  return {
+    id: move.id,
+    nameJa: move.nameJa,
+    type: move.type,
+    category: move.category,
+    power: move.power,
+    priority: move.priority,
+  };
 }
 
 /** 性格(plus・minus の省略と null をどちらも null にする)。 */
@@ -132,16 +147,32 @@ function mapSpeciesDetail(detail: Schemas["SpeciesDetail"]): MasterSpecies {
 export function createOnlineMasterSource(input: CreateOnlineMasterSourceInput): SearchableMasterSource {
   const { baseUrl, fetch: fetchImpl, ids } = input;
 
+  /**
+   * クエリパラメータを組み立てる。値が配列なら同じキーの繰り返しクエリにする
+   * (`?ids=a&ids=b`。api/openapi.yaml の `getMovesByIds` の `ids`(`in: query` の配列)がこの形。
+   * カンマ区切りの1件にはしない)。
+   */
+  function searchParamsOf(query: Record<string, string | readonly string[]>): URLSearchParams {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      // Array.isArray(value) は使わない(lib.es5 の型が `any[]` を返すため unsafe-argument に引っかかる)。
+      for (const item of typeof value === "string" ? [value] : value) {
+        params.append(key, item);
+      }
+    }
+    return params;
+  }
+
   /** GET し、応答本文(パース済み)を返す。通信・応答の失敗は例外にする(空のマスタで握りつぶさない)。 */
   async function getJson(
     path: string,
-    query?: Record<string, string>,
+    query?: Record<string, string | readonly string[]>,
     signal?: AbortSignal,
   ): Promise<unknown> {
     // new URL(path, baseUrl) は使わない: baseUrl の既定 "/"(api/config.ts)に対して
     // new URL("api/pokedex/items", "/") は TypeError(Invalid URL)を投げる。baseUrl は
     // 末尾スラッシュ1つが保証されているので、他のクライアント(apiEngine.ts 等)と同じ文字列連結にする。
-    const search = query === undefined ? "" : `?${new URLSearchParams(query).toString()}`;
+    const search = query === undefined ? "" : `?${searchParamsOf(query).toString()}`;
     const url = `${baseUrl}${path}${search}`;
     const init: RequestInit = {
       headers: { "X-Device-Id": ids.deviceId, "X-Session-Id": ids.sessionId },
@@ -196,6 +227,25 @@ export function createOnlineMasterSource(input: CreateOnlineMasterSourceInput): 
     };
   }
 
+  /**
+   * learnset(技の ID 配列)を getMovesByIds で技の実体に解決する(ADR-0304 §3 追記・A-13)。
+   * ids は契約上1〜64件なので、MOVES_BATCH_MAX_IDS 件ずつに分割して並列に呼ぶ(1種族の解決の中の話なので
+   * 並列でよい。issue 110 が懸念した「1リクエストでの増幅」には当たらない)。1回でも失敗したら reject する
+   * (Promise.all の既定の挙動)。learnset が空なら1回も呼ばない(ids の省略は 400 invalid_input)。
+   */
+  async function resolveMoves(learnset: readonly string[], signal?: AbortSignal): Promise<Move[]> {
+    if (learnset.length === 0) {
+      return [];
+    }
+    const chunks: string[][] = [];
+    for (let offset = 0; offset < learnset.length; offset += MOVES_BATCH_MAX_IDS) {
+      chunks.push(learnset.slice(offset, offset + MOVES_BATCH_MAX_IDS));
+    }
+    const responses = await Promise.all(chunks.map((ids) => getJson(PATHS.movesBatch, { ids }, signal)));
+    // チャンクの順のまま連結すれば learnset の順のまま(1チャンク内は ids の順で返るのが契約)。
+    return responses.flatMap((raw) => (raw as Schemas["Move"][]).map(mapMove));
+  }
+
   const search: MasterSpeciesSearch = {
     async searchSpecies(query, signal) {
       const trimmed = query.trim();
@@ -208,12 +258,12 @@ export function createOnlineMasterSource(input: CreateOnlineMasterSourceInput): 
     async resolveSpecies(key, signal) {
       const raw = await getJson(`${PATHS.species}/${encodeURIComponent(key)}`, undefined, signal);
       const detail = raw as Schemas["SpeciesDetail"];
+      const learnset = detail.learnset ?? [];
+      const moves = await resolveMoves(learnset, signal);
       const resolution: MasterSpeciesResolution = {
         species: mapSpeciesDetail(detail),
         abilities: detail.abilities.map(mapAbility),
-        // P4-17 のスタブ(spec-writer)。implementer が learnset を MOVES_BATCH_MAX_IDS 件ずつに分けて
-        // getMovesByIds で解決する(onlineSource.test.ts「P4-17」節が仕様)。
-        moves: [],
+        moves,
       };
       return resolution;
     },

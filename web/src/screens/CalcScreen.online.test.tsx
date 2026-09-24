@@ -663,5 +663,19 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
     for (const move of expected) {
       expect(within(moveSelect()).getByRole("option", { name: new RegExp(move.nameJa) })).toBeInTheDocument();
     }
+
+    // critic指摘(P4-17): 候補一覧だけでなく、選択中の技(moveId)自体が新しい攻撃側の learnset から
+    // 選ばれていることも確かめる(候補は useMemo で作り直されるが、選択中の値は別ロジックで更新されるため、
+    // 候補一覧の検査だけでは resolveMoveId に渡す一覧の取り違えを見逃す)。
+    const beforeSwapAttackerOnlyMoves = learnsetMoves(attacker, example.moves).filter(
+      (move) => !expected.some((defenderMove) => defenderMove.id === move.id),
+    );
+    expect(beforeSwapAttackerOnlyMoves.length).toBeGreaterThan(0);
+    await waitFor(() => {
+      const request = rendered.engine.bulkRequests.at(-1);
+      expect(expected.map((move) => move.id)).toContain(request?.move.id);
+    });
+    const requestAfterSwap = rendered.engine.bulkRequests.at(-1);
+    expect(beforeSwapAttackerOnlyMoves.map((move) => move.id)).not.toContain(requestAfterSwap?.move.id);
   });
 });
