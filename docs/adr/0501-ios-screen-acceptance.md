@@ -2903,9 +2903,9 @@ issue は案A(http を拒否してテストを直す)と案B(`NSAllowsLocalNetwo
   `NSExceptionDomains` は `NSAllowsLocalNetworking` とは別のキーで、個々の IP アドレス/CIDR
   範囲を明示的に列挙する仕組みであり、今回のタスクの範囲外(実装しない)。
 - メインセッションが iOS 27 シミュレータ + ローカル Python サーバーで実験した: `NSAllowsLocalNetworking =
-  true` のとき、`http://localhost` / `http://127.0.0.1` / `http://192.168.2.129`(LAN の IPv4)/
+  true` のとき、`http://localhost` / `http://127.0.0.1` / Mac の LAN の IPv4 アドレス(値は記録しない)/
   `http://<Mac のホスト名>.local` はいずれもサーバーに到達した。しかし **`NSAppTransportSecurity` キー自体を
-  一切書かない対照実験でも** `localhost`/`127.0.0.1`/`192.168.2.129` への到達に成功しており、この
+  一切書かない対照実験でも** `localhost`/`127.0.0.1`/LAN の IPv4 アドレスへの到達に成功しており、この
   シミュレータ環境では ATS そのものが(少なくともこれらのホストに対して)効いていない可能性が高い。
   したがって、この実験は「`NSAllowsLocalNetworking` が IP アドレスを通す」ことの確認にはならない
   (対照群と処置群が区別できていないため。実機での確認は「人間の確認が必要なこと」として plan.md に残す)。

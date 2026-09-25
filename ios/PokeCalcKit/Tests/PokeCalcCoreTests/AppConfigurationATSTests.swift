@@ -96,7 +96,7 @@ final class AppConfigurationATSTests: XCTestCase {
     }
 
     func testHTTPArbitraryIPAddressIsRejected() {
-        assertRejectedForATS("http://8.8.8.8:8080")
+        assertRejectedForATS("http://0.0.0.0:8080")
     }
 
     // MARK: - http: それ以外の(通常の公開・末尾ドット等の)ホストは拒否する
