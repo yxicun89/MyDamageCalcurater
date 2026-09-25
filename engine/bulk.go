@@ -6,14 +6,15 @@ package engine
 // 無振り / H振り / H振り+B(D)補正 / HB(HD)振り / HB(HD)特化 を並べて表示する。
 //
 // 設計は ADR-0009:
-//   - プリセット定義は引数(データ)として受け取る。既定値は engine の純粋関数として持ち、
-//     WASM と calc-svc の双方が同じ既定で動く。呼び出し側は Presets で上書きできる。
+//   - プリセット定義は引数(データ)として受け取る。既定値は presets/defender.json を embed して持ち
+//     (2026-09-25 追記)、WASM と calc-svc の双方が同じ既定で動く。呼び出し側は Presets で上書きできる。
 //   - engine に持ち物一覧は持ち込まない。解決済みの *Item を受け取るだけ(ADR-0005)。
 //   - CalcBulk は CalcDamage の合成にすぎない。独自のダメージ計算をしてはならない。
 
 import (
 	"errors"
 	"fmt"
+	"slices"
 )
 
 // プリセット定義・選択の不正。呼び出し側は errors.Is で判別する。
@@ -43,6 +44,8 @@ const (
 )
 
 // PresetKey は防御側の代表調整のキー。OpenAPI の DefenderPreset enum と1対1に対応する。
+// カタログ(値・順序)の正は presets/defender.json。定数は呼び出し側・テストが名指しするために残す
+// (JSON との一致は TestDefenderPresetJSONKeysMatchConstants が確かめる)。
 type PresetKey string
 
 // ADR-0009 §1 のカタログ順(耐久が上がる順)に並べる。
@@ -106,20 +109,12 @@ type BulkResult struct {
 }
 
 // DefenderPresetCatalog は既定のプリセット定義を耐久が上がる順に返す(ADR-0009 §1)。
+// 正は presets/defender.json(defender_preset.go が embed して読む。ADR-0009 2026-09-25 追記)。
 // 呼び出しごとに新しいスライスを返し、呼び出し側の変更が次回に漏れないようにする。
 //
 // 期待値は engine/bulk_test.go の TestDefenderPresetCatalogDefinitions が正。
 func DefenderPresetCatalog() []DefenderPreset {
-	return []DefenderPreset{
-		{Key: PresetNone, Label: "無振り", SP: Stats{}, Nature: NatureNeutral},
-		{Key: PresetHP, Label: "H振り", SP: Stats{HP: MaxSPPerStat}, Nature: NatureNeutral},
-		{Key: PresetHBBoost, Label: "H振り+B補正", SP: Stats{HP: MaxSPPerStat}, Nature: Nature{Plus: StatDef, Minus: StatAtk}, Applies: CategoryPhysical},
-		{Key: PresetHB, Label: "HB振り", SP: Stats{HP: MaxSPPerStat, Def: MaxSPPerStat}, Nature: NatureNeutral, Applies: CategoryPhysical},
-		{Key: PresetHBFull, Label: "HB特化", SP: Stats{HP: MaxSPPerStat, Def: MaxSPPerStat}, Nature: Nature{Plus: StatDef, Minus: StatAtk}, Applies: CategoryPhysical},
-		{Key: PresetHDBoost, Label: "H振り+D補正", SP: Stats{HP: MaxSPPerStat}, Nature: Nature{Plus: StatSpD, Minus: StatAtk}, Applies: CategorySpecial},
-		{Key: PresetHD, Label: "HD振り", SP: Stats{HP: MaxSPPerStat, SpD: MaxSPPerStat}, Nature: NatureNeutral, Applies: CategorySpecial},
-		{Key: PresetHDFull, Label: "HD特化", SP: Stats{HP: MaxSPPerStat, SpD: MaxSPPerStat}, Nature: Nature{Plus: StatSpD, Minus: StatAtk}, Applies: CategorySpecial},
-	}
+	return slices.Clone(defenderPresets)
 }
 
 // DefaultDefenderPresets は技の分類に応じた既定セットを返す。
