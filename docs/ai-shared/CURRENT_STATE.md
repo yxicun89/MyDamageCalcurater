@@ -61,8 +61,19 @@ gatewayルーティング/CORSのDELETE許可まで実装。critic指摘で判�
 手動設定かTidbInitializer再作成が必要)。失効ジョブ(ADR-0209 §4)とrecord-svcのDeployment/Service配線は
 **P5-3bへ切り出し**(plan.md参照。現状k3dでは`/api/record/*`はupstream_unavailableのまま)。
 main未統合(PR #372。P5-2と同じブランチ・PRでまとめている。ユーザーのテスト確認・マージ待ち)。
-Next: PR #372マージ後、P5-3b(失効ジョブ・Deployment配線。優先度低)は後回しにしてP5-4(team-svc)へ進む
-(ユーザー決定2026-09-25「M2をP5-4まで実装しきる」)。データレーンからの依頼(issue #271・#270。
+Status(追記): P5-4(team-svc構築CRUD)実装完了。契約(`api/openapi.yaml`のteam操作。ADR-0213 spec-writer工程)・
+team-svcの保存(TiDB実装。CreateTeam/UpdateTeam/DeleteTeam/GetTeam/ListTeams/PurgeDevice/TouchDevice(FromEvent))・
+NATS購読(`services/team/internal/events`。durable名`team-svc`はrecord-svcと別、イベントのDetailは一切保存しない。
+ADR-0213 §5)・gatewayルーティング/CORSのPUT許可まで実装。critic 1回目FAIL(重要3・軽微6)→修正対応中:
+(1) team_members への3クエリ(loadMembers・UpdateTeam/DeleteTeamのDELETE)にdevice_id絞り込みが抜けていた
+(ADR-0209 §6-1違反。実害は無いが規律違反)のを修正し、device_idが食い違う行を使った回帰テストで固定、
+(2) speciesKey/itemId/abilityId/natureId/teraTypeの文字数上限(DB列幅と対応)を検証せず、超過するとINSERT失敗が
+503 store_unavailableに化けていたのを400 invalid_inputに修正、(3) `services/team/Dockerfile`にserverターゲット
+未追加だったのをrecord-svcと同形で追加。失効ジョブ(ADR-0209 §4)とteam-svcのDeployment/Service配線・
+`GATEWAY_TEAM_URL`は**P5-4bへ切り出し**(plan.md参照。現状k3dでは`/api/team/*`はupstream_unavailableのまま)。
+main未統合(critic再レビュー待ち)。
+Next: critic 2回目レビュー→PASSしたらP5-3・P5-4をまとめてmain統合。その後P5-3b・P5-4b(失効ジョブ・
+Deployment配線。優先度低)は後回しにして次の区切りへ。データレーンからの依頼(issue #271・#270。
 `MasterMove.mechanisms`の公開・calc応答への`unsupported`印。DECISIONS.md 2026-09-25参照)を次の区切りで対応。
 iOSレーンからの提案(issue #274/#272。BulkCalcRequestへの`defenderOverride`追加。DECISIONS.md 2026-09-25
 参照)はM2完了後に着手。issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み

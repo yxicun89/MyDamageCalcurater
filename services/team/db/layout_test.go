@@ -88,8 +88,9 @@ func readAll(t *testing.T, paths map[int]string) string {
 	return strings.ToLower(b.String())
 }
 
-// requiredTables は ADR-0211 §6(ADR-0209 §3 #5・#5b)のテーブル。業務テーブルは P5-3 で追加する。
-var requiredTables = []string{"devices", "purge_journal"}
+// requiredTables は ADR-0211 §6(ADR-0209 §3 #5・#5b)のテーブル。業務テーブル(teams・
+// team_members)は P5-4 で追加する(ADR-0209 §3 #4・§5.2・ADR-0213 §3)。
+var requiredTables = []string{"devices", "purge_journal", "teams", "team_members"}
 
 func TestMigrationsCreateAndDropRequiredTables(t *testing.T) {
 	_, up, down := migrationPairs(t)

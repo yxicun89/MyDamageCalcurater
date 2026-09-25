@@ -412,12 +412,23 @@
   (2) ADR-0209 §4 の失効ジョブ(record 用の日次 CronJob。生イベント90日・お気に入り540日・
   devices 行30日・purge journal 90日を `cmd/record/config.go` の値で判定して消す。冪等・1回の上限あり)を
   実装する。team-svc 側の同等ジョブ(ADR-0211 §7 の `TEAM_*` 環境変数)も合わせて検討する
-- [ ] P5-4 team-svc(構築 CRUD、Showdown 形式入出力)。
+- [x] P5-4 team-svc(構築 CRUD。critic 2ラウンド。1回目 FAIL〈重要3〉→修正→2回目 PASS〈軽微6件も反映済み〉)。
+  **Showdown 形式の入出力はクライアント側(Web P5-5 / iOS レーン)の担当と判断**
+  (ADR-0213 §4。表示名 ⇔ ID の解決は pokedex-svc の検索 API をクライアントが呼べば足り、team-svc の DB を
+  必要としない。サーバーに置くと team-svc → pokedex-svc の同期依存ができ、マスタの障害で構築の保存が止まる)。
   ADR-0209 §5.3 の `deleteTeamDeviceData` と §6 の分離規則(他端末のリソース ID は 404 `not_found`)を含む。
   **P5-2 のイベントを購読し、自分の DB の `devices.last_seen_at` だけを更新する**(計算 API だけを使い続ける端末の
   構築が誤って失効しないため。ADR-0209 §4。イベントの中身〈個体・計算結果〉は保存しない)。
-  gateway に `/api/team/*` のルーティングと CORS の `DELETE`/`PUT` 許可を追加(ADR-0209 §10・ADR-0202 への追記)
-- [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー。ADR-0209 §8 の文言と「この端末のデータを削除」の UI を含む
+  gateway に `/api/team/*` のルーティングと CORS の `PUT` 許可を追加(ADR-0209 §10・ADR-0202 への追記。
+  `DELETE` は P5-3 で追加済み。`PATCH` は部分更新を持たないので足さない)。
+  契約・リソース設計・マスタ照合をしない判断は **ADR-0213**(spec-writer 工程で作成。openapi.yaml へ反映済み)
+- [ ] P5-4b team-svc の残作業(P5-3b と対になるもの)。
+  (1) `deploy/k8s/base/team` に Deployment・Service を追加し、`GATEWAY_TEAM_URL` を配線して k3d で
+  `/api/team/*` が届くようにする(`scripts/up.sh` のイメージビルド対象に `team` を追加)。
+  (2) ADR-0209 §4 の失効ジョブ(team 用の日次 CronJob。構築540日・devices 行30日・purge journal 90日を
+  `TEAM_*` 環境変数で判定して消す。冪等・1回の上限あり)。P5-3b と同じ形なので一緒に実装してよい
+- [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー(**Showdown 形式のインポート/エクスポートを含む**。
+  requirements.md §2・ADR-0213 §4)。ADR-0209 §8 の文言と「この端末のデータを削除」の UI を含む
 - [x] P5-6 技の追加効果(使用者自身のランク変化。例: ニトロチャージで自分の素早さ+1)を engine の Move・マスタ・importer・export に足す(判定レーンからの提案。DECISIONS.md 2026-09-22。ADR-0005 に沿い、追加効果の対象=self/target・確率・ランク変化量をデータとして持つ。ADR-0107。critic PASS。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。公開APIへの露出は判定レーンの要件確定後)
 
 ## M3: iOS
