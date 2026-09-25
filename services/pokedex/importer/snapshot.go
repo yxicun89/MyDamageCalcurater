@@ -102,6 +102,29 @@ type ShowdownMove struct {
 	// 数えるのは convert 側(ID化・正準化は Go 側という方針。ADR-0101 §3)。
 	// boosts を持たない要素(状態異常・ひるみ等)は決定3・6 の対象外(ADR-0107 2026-09-23 追記)。
 	Secondaries []ShowdownSecondary `json:"secondaries"`
+	// Mechanism は技の機構(多段・固定ダメージ・威力変動 等)の判定材料(ADR-0121)。必須:
+	// 無い(古い取得物)と全技が「通常の技」として黙って分類されるので、デコードで拒否する。
+	Mechanism *ShowdownMoveMechanism `json:"mechanism"`
+}
+
+// ShowdownMoveMechanism は技の機構の判定材料。Showdown の技データの表現のまま持つ
+// (分類は convert_move_mechanisms.go。ADR-0121)。
+//   - Multihit: null・回数(数値)・[最小, 最大] のいずれか
+//   - Damage: null・固定ダメージ(数値)・"level"(使用者のレベルと同じ)のいずれか
+//   - OHKO: null・true・タイプ名(そのタイプには効かない一撃必殺)のいずれか
+//   - Hooks: 技のデータオブジェクトが持つ関数のプロパティ名の昇順
+//   - FieldConditions: 天候・フィールドのハンドラがこの技の ID を名指ししている箇所("<状態ID>.<ハンドラ名>" の昇順)
+type ShowdownMoveMechanism struct {
+	Multihit                 json.RawMessage `json:"multihit"`
+	Damage                   json.RawMessage `json:"damage"`
+	OHKO                     json.RawMessage `json:"ohko"`
+	WillCrit                 bool            `json:"willCrit"`
+	OverrideOffensiveStat    string          `json:"overrideOffensiveStat"`
+	OverrideOffensivePokemon string          `json:"overrideOffensivePokemon"`
+	OverrideDefensiveStat    string          `json:"overrideDefensiveStat"`
+	IgnoreDefensive          bool            `json:"ignoreDefensive"`
+	Hooks                    []string        `json:"hooks"`
+	FieldConditions          []string        `json:"fieldConditions"`
 }
 
 // ShowdownBoosts は技のトップレベル self.boosts(命中すれば必ず発動)。

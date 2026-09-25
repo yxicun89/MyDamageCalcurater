@@ -27,7 +27,7 @@ import (
 // masterTables は投入で置き換えるテーブル(ADR-0100 §3。schema_migrations を除く全テーブル)。
 var masterTables = []string{
 	"types", "type_chart", "abilities", "items", "moves", "species", "species_abilities",
-	"item_effects", "ability_effects", "learnsets", "natures",
+	"item_effects", "ability_effects", "move_mechanisms", "learnsets", "natures",
 	"regulations", "regulation_species", "regulation_moves", "regulation_items", "regulation_abilities",
 	"data_versions",
 }
@@ -139,7 +139,7 @@ func TestApplyWritesOutput(t *testing.T) {
 	counts := map[string]int{
 		"types": len(out.Types), "type_chart": len(out.TypeChart), "abilities": len(out.Abilities), "items": len(out.Items),
 		"moves": len(out.Moves), "species": len(out.Species), "item_effects": len(out.ItemEffects),
-		"ability_effects": len(out.AbilityEffects), "learnsets": len(out.Learnsets), "natures": len(out.Natures),
+		"ability_effects": len(out.AbilityEffects), "move_mechanisms": len(out.MoveMechanisms), "learnsets": len(out.Learnsets), "natures": len(out.Natures),
 		"regulations":        len(out.Regulations),
 		"regulation_species": len(out.RegulationSpecies), "regulation_moves": len(out.RegulationMoves),
 		"regulation_items": len(out.RegulationItems), "regulation_abilities": len(out.RegulationAbilities),

@@ -86,6 +86,7 @@ sequenceDiagram
 | 000005 | widen_species_ability_slot | `species_abilities` の CHECK を slot 1〜3 → 1〜4 | CHECK を戻す |
 | 000006 | create_natures | `natures` | DROP |
 | 000007 | create_move_effects | `move_effects` | DROP |
+| 000008 | create_move_mechanisms | `move_mechanisms` | DROP |
 
 ## 4. 接続(DSN)
 
@@ -162,6 +163,7 @@ ID 列は `ascii_bin`、日本語名は `utf8mb4_ja_0900_as_cs`(ADR-0100 §2)。
 | 16 | `data_versions` | `source` | `version` `checksum`(64 桁 hex)`imported_at` DATETIME(6)。取り込み版のスキップ判定に使う | 000004 |
 | 17 | `natures` | `id` | `plus` `minus`(atk/def/spa/spd/spe。両方 NULL = 無補正)。`(plus, minus)` UNIQUE | 000006 |
 | 18 | `move_effects` | `move_id` | `effect` JSON(FK → moves) | 000007 |
+| 19 | `move_mechanisms` | `(move_id, mechanism)` | 技の機構(多段・固定ダメージ・威力変動 等。CHECK で値を固定。行が無い = 通常の技。FK → moves CASCADE。ADR-0121) | 000008 |
 | — | `schema_migrations` | — | golang-migrate が作る(既定名。実 DB では未確認) | migrate |
 
 ## 7. SQL の書き方と生成物
@@ -179,7 +181,7 @@ ID 列は `ascii_bin`、日本語名は `utf8mb4_ja_0900_as_cs`(ADR-0100 §2)。
 |---|---|
 | `make test-db` | `POKEDEX_TEST_DSN` 必須(未設定は**失敗**)。`go test -tags mysql -p 1 ./pokedex/...`。`make test` には含まれない(`Makefile:117-123`) |
 | 架空 seed | `services/pokedex/db/testdata/example_seed.sql`(図鑑番号 9001〜、ID は `test` 始まり、日本語名は「テスト」始まり。実データなし。ADR-0100 §7)。`db/mysql_test.go` が migrate 直後の空 DB に流す |
-| レイアウト検査 | `db/layout_test.go` `move_effects_layout_test.go` `natures_layout_test.go`(DB 不要。migration SQL の構造を検査) |
+| レイアウト検査 | `db/layout_test.go` `move_effects_layout_test.go` `move_mechanisms_layout_test.go` `natures_layout_test.go`(DB 不要。migration SQL の構造を検査) |
 | fake | `internal/storetest`(httpapi のテスト用ストア) |
 
 ## 9. 動作確認で DB を見るとき
