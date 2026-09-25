@@ -102,7 +102,8 @@ gateway(G3・G4)経由で到達。ID ヘッダは `/internal` 以外の 9 操作
 
 ## 7. speed-svc(`services/speed`。Traefik `/api/speed`)/ judge-svc(`services/judge`。Traefik `/api/judge`)
 
-ID ヘッダは非空のみ検証、不足は 400 `invalid_request`(speed `server.go:210`・judge `server.go:79`)。
+ID ヘッダの検証: judge は非空のみ、不足は 400 `invalid_request`(`server.go:79`)。speed は gateway と同じ正準形 UUID
+検証(ADR-0606)、欠落は `missing_header`・不正/重複は `invalid_header`(`requestctx.go`)。
 
 | サービス | # | メソッド | パス | operationId | ID ヘッダ | ハンドラ | 契約のステータス |
 |---|---|---|---|---|---|---|---|
@@ -135,7 +136,7 @@ ID ヘッダは非空のみ検証、不足は 400 `invalid_request`(speed `serve
 |---|---|---|---|---|---|---|---|
 | gateway・calc・pokedex(ルート契約 `ErrorCode`) | `api/openapi.yaml` `ErrorCode`(24 値) | `invalid_json`・`unknown_field`・`invalid_enum`・`invalid_input`・`unknown_preset`・`duplicate_preset`・`invalid_preset`・`invalid_reverse_side`・`no_observation`・`invalid_observation`・`unknown_type`・`missing_header`・`invalid_header`・`unknown_species`/`move`/`item`/`ability`/`nature` | `not_found` | — | — | `internal`・`type_chart_missing`・`invalid_type_chart`(calc `errors.go:42` `statusForCode`) | `master_unavailable`・`upstream_unavailable` |
 | balance | `services/balance/api/openapi.yaml` | `missing_request_context`・`invalid_request` | — | `request_too_large` | `unknown_pokemon`・`unknown_move`・`unknown_ability` | `internal_error` | `master_unavailable` |
-| speed | 同上 | `invalid_request` | — | `request_too_large` | `unknown_pokemon` | `internal_error` | `master_unavailable` |
+| speed | 同上 | `missing_header`・`invalid_header`・`invalid_request` | — | `request_too_large` | `unknown_pokemon` | `internal_error` | `master_unavailable` |
 | judge | 同上 | `invalid_request` | — | `request_too_large` | `unknown_species`・`unknown_nature` | `internal_error` | `upstream_unavailable` |
 
 - 400/404 の切り分けの目安: gateway が返す 400(`missing_header`/`invalid_header`)は ID ヘッダ、404 `not_found` は gateway のルート外(または `/internal/*`)か、上流の担当外。詳細な切り分けは D 章で扱う。

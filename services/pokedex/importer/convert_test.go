@@ -112,6 +112,22 @@ func movesByID(out importer.Output) map[string]importer.MoveRow {
 	return m
 }
 
+// unexcludeCalcSpecies は架空データの設定(excludeCalcSpecies)から name を外す。
+// 前提として設定に name があることも確かめる(架空データが変わって空振りしないように)。
+func unexcludeCalcSpecies(t *testing.T, in *importer.Input, name string) {
+	t.Helper()
+	var kept []string
+	for _, n := range in.Config.ExcludeCalcSpecies {
+		if n != name {
+			kept = append(kept, n)
+		}
+	}
+	if len(kept) == len(in.Config.ExcludeCalcSpecies) {
+		t.Fatalf("前提: 架空データの設定に %s の除外が無い: %v", name, in.Config.ExcludeCalcSpecies)
+	}
+	in.Config.ExcludeCalcSpecies = kept
+}
+
 func speciesByShowdownID(out importer.Output) map[string]importer.SpeciesRow {
 	m := map[string]importer.SpeciesRow{}
 	for _, r := range out.Species {
@@ -367,9 +383,30 @@ func TestConvertSpeciesFormsAndMega(t *testing.T) {
 	if !hasFinding(rep.Warnings, importer.KindSpeciesShowdownOnly, "testshieldblade") {
 		t.Errorf("Showdown だけの testshieldblade が警告(%s)に無い", importer.KindSpeciesShowdownOnly)
 	}
-	// HP 種族値 1 と、設定で除外した calc の内部フォームは取り込まない(P2-1b と同じ種族集合)。
-	if !hasFinding(rep.Warnings, importer.KindSpeciesExcluded, "testbug") {
-		t.Errorf("HP 種族値 1 の testbug が除外の記録(%s)に無い", importer.KindSpeciesExcluded)
+	// 設定(excludeCalcSpecies)で除外した calc の種族は取り込まない(P2-1b と同じ種族集合)。
+	for _, id := range []string{"testbug", "testshieldboth"} {
+		if !hasFinding(rep.Warnings, importer.KindSpeciesExcluded, id) {
+			t.Errorf("設定で除外した %s が除外の記録(%s)に無い", id, importer.KindSpeciesExcluded)
+		}
+	}
+}
+
+// 除外は設定(excludeCalcSpecies)だけで決まり、コードは特定の種族値を特別扱いしない(#251)。
+// HP 種族値 1 の種族も、calc と Showdown の両方にあり設定で除外していなければ取り込む。
+func TestConvertExcludesOnlyConfiguredSpecies(t *testing.T) {
+	in := loadFixture(t)
+	unexcludeCalcSpecies(t, &in, "Testbug")
+
+	out, rep := convertOK(t, in)
+	got, ok := speciesByShowdownID(out)["testbug"]
+	if !ok {
+		t.Fatalf("設定で除外していない HP 種族値 1 の testbug が取り込まれない: %v", keysOf(speciesByShowdownID(out)))
+	}
+	if got.BaseHP != 1 {
+		t.Errorf("testbug の HP 種族値 = %d, want 1", got.BaseHP)
+	}
+	if hasFinding(rep.Warnings, importer.KindSpeciesExcluded, "testbug") {
+		t.Errorf("設定に無い testbug が除外の記録(%s)にある", importer.KindSpeciesExcluded)
 	}
 	if !hasFinding(rep.Warnings, importer.KindSpeciesExcluded, "testshieldboth") {
 		t.Errorf("設定で除外した Testshield-Both が除外の記録(%s)に無い", importer.KindSpeciesExcluded)
@@ -516,8 +553,7 @@ func TestConvertRejectsInconsistentData(t *testing.T) {
 
 func TestConvertAllowsBaseSpeciesWithoutFormeOrder(t *testing.T) {
 	in := loadFixture(t)
-	calcSpecies(t, &in, "Testbug").BaseStats.HP = 40
-	showdownSpecies(t, &in, "testbug").BaseStats.HP = 40
+	unexcludeCalcSpecies(t, &in, "Testbug")
 	showdownSpecies(t, &in, "testbug").FormeOrder = nil
 
 	out, _, err := importer.Convert(in)

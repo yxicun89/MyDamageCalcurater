@@ -25,7 +25,7 @@ get() {
   local path=$1 status
   for _ in $(seq 1 30); do
     status=$(curl -sS -o "$body_file" -w '%{http_code}' "$base_url$path" \
-      -H 'X-Device-Id: smoke-device' -H 'X-Session-Id: smoke-session' || printf '000')
+      -H 'X-Device-Id: 11111111-1111-1111-1111-111111111111' -H 'X-Session-Id: 22222222-2222-2222-2222-222222222222' || printf '000')
     case "$status" in 000|502|503) sleep 1 ;; *) break ;; esac
   done
   echo "$status"

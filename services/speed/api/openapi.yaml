@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: pokecalc speed API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     素早さ比較の独立サービスの契約。
     SP0 はヘルスチェックと、既定のレギュレーションで使用可能なポケモンの一覧(素早さ種族値つき)を返す。
@@ -9,6 +9,8 @@ info:
     SP2 は自分のポケモンの実数値と、その表の中の位置(自分より速い行の数・同速の行・遅い行の数)を返す。
     契約の正は docs/adr/0600-speed-sp0-foundation.md・docs/adr/0601-speed-sp1-table.md・
     docs/adr/0602-speed-sp2-position.md と docs/speed-design.md。
+    0.4.0: X-Device-Id / X-Session-Id を gateway と同じ正準形 UUID で検証し、ヘッダー起因の 400 の code を
+    missing_header / invalid_header に分けた(破壊的変更。ADR-0606)。
 servers:
   - url: /
 paths:
@@ -52,7 +54,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/PokemonListResponse'
         '400':
-          description: X-Device-Id or X-Session-Id is missing, empty, or invalid (invalid_request)
+          description: |
+            X-Device-Id or X-Session-Id is missing or empty (missing_header), or is not a canonical
+            8-4-4-4-12 hex UUID or is sent more than once (invalid_header). If both apply, missing_header wins (ADR-0606 §2)
           content:
             application/json:
               schema:
@@ -107,7 +111,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/TableResponse'
         '400':
-          description: X-Device-Id or X-Session-Id is missing, empty, or invalid, or presets is unknown, duplicated, or empty (invalid_request)
+          description: |
+            X-Device-Id or X-Session-Id is missing or empty (missing_header), or is not a canonical
+            8-4-4-4-12 hex UUID or is sent more than once (invalid_header). If both apply, missing_header wins (ADR-0606 §2).
+            presets is unknown, duplicated, or empty (invalid_request)
           content:
             application/json:
               schema:
@@ -163,8 +170,10 @@ paths:
                 $ref: '#/components/schemas/PositionResponse'
         '400':
           description: |
-            X-Device-Id or X-Session-Id is missing, empty, or invalid, or the body is not one JSON object,
-            or the fields do not match the given mode, or a value is out of range (invalid_request)
+            X-Device-Id or X-Session-Id is missing or empty (missing_header), or is not a canonical
+            8-4-4-4-12 hex UUID or is sent more than once (invalid_header). If both apply, missing_header wins (ADR-0606 §2).
+            The body is not one JSON object, or the fields do not match the given mode, or a value is out
+            of range (invalid_request)
           content:
             application/json:
               schema:
@@ -199,6 +208,10 @@ components:
       name: X-Device-Id
       in: header
       required: true
+      description: |
+        Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+        32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+        the header more than once is invalid_header (ADR-0606, same rule as the gateway).
       schema:
         type: string
         minLength: 1
@@ -206,6 +219,10 @@ components:
       name: X-Session-Id
       in: header
       required: true
+      description: |
+        Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+        32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+        the header more than once is invalid_header (ADR-0606, same rule as the gateway).
       schema:
         type: string
         minLength: 1
@@ -496,6 +513,8 @@ components:
       type: string
       enum:
         - invalid_request
+        - missing_header
+        - invalid_header
         - unknown_pokemon
         - request_too_large
         - master_unavailable

@@ -49,7 +49,7 @@ const (
 // parseCandidateWire が自前でキー集合を検査してから DefenderCandidate に変換する(JD4。下記)。
 type outspeedRequestWire struct {
 	Format     *string           `json:"format"`
-	Attacker   *individualWire   `json:"attacker"`
+	Attacker   json.RawMessage   `json:"attacker"`
 	Defenders  []json.RawMessage `json:"defenders"`
 	MoveID     *string           `json:"moveId"`
 	Field      *api.FieldState   `json:"field"`
@@ -74,14 +74,49 @@ type defenderCandidateWire struct {
 	MoveID json.RawMessage `json:"moveId"`
 }
 
-// candidateWireKeys is the exact (case-sensitive) allow-list for a defenders[] element's own
-// keys, checked separately from decoder.DisallowUnknownFields(): encoding/json's per-object
-// field matching falls back to a case-insensitive match for a key with no exact match (e.g.
-// "moveid" folding onto the "moveId" field), silently overwriting it instead of rejecting the
-// typo (same concern as speedFieldKeys, ADR-0702 受け入れ条件7・ADR-0704 テストの期待値).
-var candidateWireKeys = map[string]bool{
+// individualWireKeys is the exact (case-sensitive) allow-list for an Individual's own keys
+// (attacker's and, via candidateWireKeys below, each defender candidate's), checked separately
+// from decoder.DisallowUnknownFields(): encoding/json's per-object field matching falls back to
+// a case-insensitive match for a key with no exact match (e.g. "specieskey" folding onto the
+// "speciesKey" field), silently overwriting it instead of rejecting the typo. This applies at
+// every nesting level of a single decoder.Decode call, not just the top level, so attacker needs
+// the same allow-list as defenders (same concern as speedFieldKeys, ADR-0702 受け入れ条件7・
+// ADR-0704 テストの期待値・plan.md の JD4/JD5 critic 指摘の積み残し)。
+var individualWireKeys = map[string]bool{
 	"speciesKey": true, "natureId": true, "sp": true, "ranks": true,
-	"abilityId": true, "itemId": true, "moveId": true,
+	"abilityId": true, "itemId": true,
+}
+
+// candidateWireKeys extends individualWireKeys with moveId (a defenders[] element is an
+// Individual plus its own counter move. ADR-0704 §1).
+var candidateWireKeys = func() map[string]bool {
+	keys := make(map[string]bool, len(individualWireKeys)+1)
+	for key := range individualWireKeys {
+		keys[key] = true
+	}
+	keys["moveId"] = true
+	return keys
+}()
+
+// parseIndividualWire validates an Individual's key set exactly (individualWireKeys) before
+// decoding it, so a case-typo'd or unrelated key is rejected instead of silently accepted or
+// silently overwriting a known field. Used for attacker; defenders[] elements go through
+// parseCandidateWire (candidateWireKeys), which additionally allows moveId.
+func parseIndividualWire(raw json.RawMessage) (individualWire, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return individualWire{}, errInvalidOutspeedBody
+	}
+	for key := range fields {
+		if !individualWireKeys[key] {
+			return individualWire{}, errInvalidOutspeedBody
+		}
+	}
+	var wire individualWire
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		return individualWire{}, errInvalidOutspeedBody
+	}
+	return wire, nil
 }
 
 // parseCandidateWire validates one defenders[] element's key set exactly (candidateWireKeys)
@@ -391,7 +426,11 @@ func toOutspeedRequest(wire outspeedRequestWire) (outspeedRequest, error) {
 		return outspeedRequest{}, errInvalidOutspeedBody
 	}
 
-	attacker, err := toIndividualInput(*wire.Attacker)
+	attackerWire, err := parseIndividualWire(wire.Attacker)
+	if err != nil {
+		return outspeedRequest{}, fmt.Errorf("%w: attacker", errInvalidOutspeedBody)
+	}
+	attacker, err := toIndividualInput(attackerWire)
 	if err != nil {
 		return outspeedRequest{}, fmt.Errorf("%w: attacker", errInvalidOutspeedBody)
 	}

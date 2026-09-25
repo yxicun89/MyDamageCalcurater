@@ -1625,3 +1625,23 @@ Impact: ADR-0300 §5 の「engine への移管」提案(2026-09-21)は engine �
 Decision: (1) ルート Makefile の既存ターゲット `test`(ゴールデンを含める)・`lint`(engine の vet に `-tags golden`・`-tags allspecies`)・`golden-generate`(先に npm ci)を変更した。COORDINATION.md は共有 Makefile を「自レーンのターゲットの追加」に限るが、issue #303・#77 が変更範囲として明示しているため。(2) engine の chainMods に @smogon/calc 0.12.0(`mechanics/util.js` の chainMods)と同じ下限・上限のクランプを入れた(最終補正 41..131072、威力 41..2097152、攻撃/防御 410..131072)。ADR-0002(ゴールデンの正は @smogon/calc 0.12.0)に沿って oracle と同じ挙動にそろえる変更で、既存のゴールデン全件一致を確認済み。
 Reason: critic(PR #346)の軽微指摘。規約の外の変更と engine の計算の変更の根拠を記録に残す。
 Impact: `make test` が約 3 秒長くなる(34.7s → 37.6s)。engine の既存の出力は変わらない(クランプの範囲外の値は既存のテストケースに無い)。
+
+## 2026-09-25: フィールドの接地判定は特性の効果 `Airborne` で持つ(データレーン。issue #231・ADR-0116)
+Decision: 接地判定を engine の `isGrounded`(ひこうタイプでない かつ 特性の効果 `Airborne` でない)で入れた。issue の既定案「`DefImmuneTypes` に ground を含むかで代用」は採らず、`AbilityEffect.Airborne` を効果データに足した(ふゆうは `DefImmuneTypes` と両方を持つ)。ふうせん(Champions に在る)は地面技の無効を伴うため今回は入れない。ゴールデンは地形ありのひこう除外を外して random・legacy-effects を再生成した(全件一致、known_diffs なし)。
+Reason: 地面の無効と浮いていることは別の性質で、代理にすると地面を受けても接地している特性で誤る。ふうせんに「浮く」だけを足すと地面技が当たってしまう。
+Impact: calc-svc は `make import` で DB のふゆうに `Airborne` が入るまで旧挙動。`TestNoTypeChartTableInEngineSource` の禁止リストから `TypeFlying` を外した(接地判定が名指しする機構のタイプ)。
+
+## 2026-09-25: issue #236 の speed 側をクローズ(素早さレーン。ADR-0606)
+Decision: speed の `X-Device-Id`/`X-Session-Id` の検証を、gateway の `checkAPIHeaders`/`headerStatus`/`isCanonicalUUID`/`isHexDigit`
+(`services/gateway/internal/httpapi/headers.go`)と一字一句同じ判定になるよう `services/speed/internal/httpapi/requestctx.go`
+に複製した(共通パッケージは新設せず、`httpmetrics` と同じ前例に従う。タイプバランスレーン経由で API レーンと合意済み)。
+これに伴い `services/speed/api/openapi.yaml` の `ErrorCode` に `missing_header`・`invalid_header` を追加し(version 0.4.0)、
+ヘッダー起因の 400 の `code` を旧 `invalid_request` からこの2つに分けた(意図的な契約の破壊的変更。判定順は不変)。
+gateway の `strings.TrimSpace` 相当の緩和はせず、空白だけの値は「空でなく UUID でもない」として `invalid_header` になる
+(gateway と同じ。ただし実通信では net/http がヘッダー値の前後空白を取り除くため、実際には `missing_header` になる)。
+`web/src/speed/speed.gen.ts` を再生成しコミットした(ADR-0604 §2。素早さレーンの持ち物)。`speedClient.ts` は `code` を
+そのまま透過するだけで特別扱いしていないため Web レーン側の追従作業は不要と確認済み。
+Reason: gateway は `/api/balance`・`/api/speed`・`/api/judge` を経由しない(Traefik が直接転送)ため、gateway の検証が
+効かず、balance・speed・judge がそれぞれ緩い非空チェックを持っていた(issue #236)。
+Impact: speed API を直接叩く外部ツール・スクリプトは正準形 UUID 以外のヘッダー値を使えなくなる(`services/speed/scripts/smoke*.sh`
+は正準形 UUID に更新済み)。balance・judge は各レーンが自分の担当で同じ変更を行う(この決定は speed のみ)。

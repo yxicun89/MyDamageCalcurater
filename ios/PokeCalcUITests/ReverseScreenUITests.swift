@@ -95,6 +95,22 @@ final class ReverseScreenUITests: XCTestCase {
         field.typeText(text)
     }
 
+    /// P6-12(issue #71。ADR-0114): 与えたダメージ(既定の側)の自分のプリセットのピルは
+    /// engine/presets/attacker.json の順(無振り → 特化 → 振り)に左から並び、起動直後は default(無振り)だけが選ばれている。
+    func testAttackerPresetPillsFollowCatalogOrderAndDefault() {
+        let app = launchReverseScreen()
+
+        let identifiers = ["reverseAttackerPreset-none", "reverseAttackerPreset-aFull", "reverseAttackerPreset-aMax"]
+        let buttons = identifiers.map { app.buttons[$0] }
+        for (identifier, button) in zip(identifiers, buttons) {
+            XCTAssertTrue(button.waitForExistence(timeout: Self.existenceTimeout), "ピルが無い: \(identifier)")
+        }
+        let minXs = buttons.map(\.frame.minX)
+        XCTAssertEqual(minXs, minXs.sorted(), "左から \(identifiers) の順に並ぶ: \(minXs)")
+        XCTAssertEqual(Set(minXs).count, identifiers.count, "3つが横に並ぶ(重ならない): \(minXs)")
+        XCTAssertEqual(buttons.map(\.isSelected), [true, false, false], "起動直後は無振りだけが選ばれている")
+    }
+
     /// 開いた直後は候補が無く、観測欄が1つだけある。`reverseObservationField-0` に有効な値を入れると
     /// 候補(`neutral@-` / `plus@-`。モックの `echoReverseResult` は性格クラス × 持ち物なしの2件を返す)が出て、
     /// `reversePremise` が見える(モックは defender で H32)。
@@ -223,7 +239,8 @@ final class ReverseScreenUITests: XCTestCase {
         // 既定の側は「与えたダメージ」(自分が攻撃側)。自分のカードは `reverseMySpeciesPicker`。
         let mySpeciesPicker = element(app, "reverseMySpeciesPicker")
         XCTAssertTrue(mySpeciesPicker.waitForExistence(timeout: Self.existenceTimeout))
-        let presetButton = app.buttons["reverseAttackerPreset-aFull"]
+        // 既定は engine/presets/attacker.json の default = 無振り(P6-12 で A特化から変更。ADR-0501「P6-12」5章)
+        let presetButton = app.buttons["reverseAttackerPreset-none"]
         XCTAssertTrue(presetButton.waitForExistence(timeout: Self.existenceTimeout))
         XCTAssertTrue(presetButton.isSelected, "起動直後は既定のプリセットが選ばれている")
 

@@ -20,7 +20,7 @@
     "Solid Rock":{"ReduceSuperEffective":3072},
     "Steelworker":{"OffBoostType":"steel","OffBoostTypeMod":6144},
     "Water Bubble":{"OffBoostType":"water","OffBoostTypeMod":8192,"DefResistType":{"fire":2048}},
-    "Levitate":{"DefImmuneTypes":["ground"]},
+    "Levitate":{"DefImmuneTypes":["ground"],"Airborne":true},
     "Water Absorb":{"DefAbsorbTypes":{"water":{"HealNumerator":1,"HealDenominator":4}}},
     "Volt Absorb":{"DefAbsorbTypes":{"electric":{"HealNumerator":1,"HealDenominator":4}}},
     "Earth Eater":{"DefAbsorbTypes":{"ground":{"HealNumerator":1,"HealDenominator":4}}},

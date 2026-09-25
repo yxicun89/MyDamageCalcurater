@@ -2651,6 +2651,40 @@ func TestOutspeedAndKoRejectsUnknownCandidateField(t *testing.T) {
 	}
 }
 
+// TestOutspeedAndKoRejectsUnknownAttackerField: attacker の欄も DefenderCandidate の候補と同じ
+// 厳密さで検査する(plan.md の JD4/JD5 critic 指摘の積み残し。attacker は json.RawMessage で受け、
+// individualWireKeys の allow-list が綴り違いを 400 で弾く。特に "specieskey" のような大文字小文字
+// 違いは encoding/json の DisallowUnknownFields() だけでは検出できず、fold match で黙って
+// speciesKey を上書きしてしまう〈defenders 側で確立した対策と同じ理由〉)。
+func TestOutspeedAndKoRejectsUnknownAttackerField(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		key   string
+		value any
+	}{
+		{"speciesKey の大文字小文字違い", "specieskey", "9999-000"},
+		{"natureId の綴り違い", "natureid", "test-x"},
+		{"候補にしか無い moveId は attacker には置けない", "moveId", "test-x"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			body := validBody()
+			attackerOf(body)[tt.key] = tt.value
+
+			stub := &upstreams{}
+			recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+			assertStatusAndCode(t, recorder, http.StatusBadRequest, api.InvalidRequest)
+			assertBlamesAttacker(t, recorder)
+			assertNoUpstreamCalls(t, stub)
+		})
+	}
+}
+
 // TestOutspeedAndKoUnknownMove: moveId がマスタに無ければ 422 unknown_move(ADR-0704 §6)。
 // **攻撃側の技も JD4 からは上流で検証される**ので、JD3 までの 400 invalid_request
 // (calc-svc の 400 に畳まれていた)から変わる(ADR-0704 §7)。

@@ -120,6 +120,8 @@ export interface AbilityEffect {
   readonly defAbsorbTypes?: Readonly<Record<string, AbsorbEffect>>;
   readonly reduceSuperEffective?: number;
   readonly ignoresBurn?: boolean;
+  /** 浮いている(ふゆう 等)。フィールドの補正が掛からない(ADR-0116)。地面技の無効は defImmuneTypes で別に持つ。 */
+  readonly airborne?: boolean;
 }
 
 /** 特性。effect が null は補正なし。 */
