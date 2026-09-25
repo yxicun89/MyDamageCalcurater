@@ -23,11 +23,11 @@ func TestAllSpeciesDamageProperties(t *testing.T) {
 		return DamageInput{
 			Format: FormatSingle,
 			Attacker: Individual{
-				Species: Species{Types: []Type{atkType}, BaseStats: Stats{HP: 100, Atk: atkBase, SpA: atkBase}},
+				Species: Species{Types: []Type{atkType}, BaseStats: Stats{HP: 100, Atk: atkBase, Def: 100, SpA: atkBase, SpD: 100, Spe: 100}},
 				Nature:  NatureNeutral, SP: Stats{Atk: atkSP, SpA: atkSP},
 			},
 			Defender: Individual{
-				Species: Species{Types: defTypes, BaseStats: Stats{HP: 100, Def: defBase, SpD: defBase}},
+				Species: Species{Types: defTypes, BaseStats: Stats{HP: 100, Atk: 100, Def: defBase, SpA: 100, SpD: defBase, Spe: 100}},
 				Nature:  NatureNeutral, SP: Stats{Def: defSP, SpD: defSP},
 			},
 			Move: Move{Type: moveType, Category: CategoryPhysical, Power: 80},
@@ -161,11 +161,11 @@ func TestAllSpeciesTerrainGroundedProperty(t *testing.T) {
 		in := DamageInput{
 			Format: FormatSingle,
 			Attacker: Individual{
-				Species: Species{Types: atkTypes, BaseStats: Stats{HP: 100, Atk: 100, SpA: 100}},
+				Species: Species{Types: atkTypes, BaseStats: Stats{HP: 100, Atk: 100, Def: 100, SpA: 100, SpD: 100, Spe: 100}},
 				Nature:  NatureNeutral,
 			},
 			Defender: Individual{
-				Species: Species{Types: defTypes, BaseStats: Stats{HP: 100, Def: 100, SpD: 100}},
+				Species: Species{Types: defTypes, BaseStats: Stats{HP: 100, Atk: 100, Def: 100, SpA: 100, SpD: 100, Spe: 100}},
 				Nature:  NatureNeutral,
 			},
 			Move:  Move{Type: moveType, Category: CategorySpecial, Power: pw},

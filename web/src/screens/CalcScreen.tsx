@@ -729,7 +729,14 @@ function SpeciesCard({
           <h2 className="calc-card__name">{species.nameJa}</h2>
           <ul className="calc-card__types">
             {species.types.map((type) => (
-              <li key={type} className="calc-card__type" style={{ color: `var(--type-${type})` }}>
+              <li
+                key={type}
+                className="calc-card__type"
+                style={{
+                  backgroundColor: `var(--type-${type}, var(--border-hairline))`,
+                  color: `var(--type-${type}-ink, var(--text-primary))`,
+                }}
+              >
                 {/* マスタ由来の type は相性表の18種に限らないので、型ガードで確かめ、
                     未知の ID はそのまま出す(未知データで画面を壊さない)。 */}
                 {isTypeId(type) ? typeNameJa[type] : type}
@@ -895,7 +902,9 @@ const DAMAGE_BAR_MAX_PERCENT = 100;
 function ResultsList({ result, items, moveType, pulsingKeys, onKoAnimationEnd }: ResultsListProps) {
   const firstRow = result.rows[0];
   const barColor =
-    moveType === undefined || moveType === "" ? "var(--text-secondary)" : `var(--type-${moveType})`;
+    moveType === undefined || moveType === ""
+      ? "var(--text-secondary)"
+      : `var(--type-${moveType}, var(--text-secondary))`;
   return (
     <div className="calc-results">
       {firstRow !== undefined && (
@@ -921,14 +930,9 @@ function ResultsList({ result, items, moveType, pulsingKeys, onKoAnimationEnd }:
               <span className={koClassName} onAnimationEnd={onKoAnimationEnd(koKey)}>
                 {formatKO(row.result.ko)}
               </span>
-              <div
-                role="meter"
-                aria-valuemin={0}
-                aria-valuemax={DAMAGE_BAR_MAX_PERCENT}
-                aria-valuenow={barValue}
-                className="calc-results__bar"
-              >
+              <div aria-hidden="true" data-testid="damage-bar" className="calc-results__bar">
                 <div
+                  data-testid="damage-bar-fill"
                   className="calc-results__bar-fill"
                   style={{ width: `${String(barValue)}%`, backgroundColor: barColor }}
                 />

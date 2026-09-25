@@ -110,10 +110,10 @@ export function glassBlurPixels(markdown: string): number {
   return parseFloat(match[1]);
 }
 
-/** タイプ色の表(「タイプ | 色」の組が横に並ぶ)を 日本語名 → #RRGGBB にする。 */
-export function typeColorsByJapaneseName(markdown: string): Map<string, string> {
+/** 「タイプ | 色」の組が横に何列も並ぶ表を 日本語名 → #RRGGBB にする。 */
+function pairedColorTable(section: string, label: string): Map<string, string> {
   const colors = new Map<string, string>();
-  for (const cells of tableRows(sectionOf(markdown, "タイプ色(自作パレット)"))) {
+  for (const cells of tableRows(section)) {
     for (let index = 0; index + 1 < cells.length; index += 2) {
       const name = cells[index];
       const color = cells[index + 1];
@@ -121,12 +121,25 @@ export function typeColorsByJapaneseName(markdown: string): Map<string, string> 
         continue;
       }
       if (!/^#[0-9A-Fa-f]{6}$/.test(color)) {
-        throw new Error(`タイプ色の表の色が #RRGGBB でない: ${name} ${color}`);
+        throw new Error(`${label}の表の色が #RRGGBB でない: ${name} ${color}`);
       }
       colors.set(name, color);
     }
   }
   return colors;
+}
+
+/** タイプ色の表(「タイプ | 色」の組が横に並ぶ)を 日本語名 → #RRGGBB にする。 */
+export function typeColorsByJapaneseName(markdown: string): Map<string, string> {
+  return pairedColorTable(sectionOf(markdown, "タイプ色(自作パレット)"), "タイプ色");
+}
+
+/**
+ * issue #306: 「タイプバッジ」の表(「タイプ | 文字色」の組が横に並ぶ)を 日本語名 → #RRGGBB にする。
+ * バッジの背景はタイプ色そのものなので、ここで引けるのは文字色(ink)だけ。
+ */
+export function typeBadgeInkByJapaneseName(markdown: string): Map<string, string> {
+  return pairedColorTable(sectionOf(markdown, "タイプバッジ"), "タイプバッジの文字色");
 }
 
 /** 「ラベル 数値 / ラベル 数値 …」の並びから、指定ラベルの数値を引く。 */

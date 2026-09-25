@@ -19,6 +19,11 @@ const (
 	MaxSPPerStat = 32
 	// MaxSPTotal は能力ポイント合計の上限。
 	MaxSPTotal = 66
+	// MinBaseStat / MaxBaseStat は種族値(HP を含む全ステータス)の許容範囲(issue #255。ADR-0117)。
+	// 本編の種族値は 1 バイトに収まる。範囲外は Individual.Validate が拒否し、巨大な HP による
+	// 確定数計算の巨大確保(koProbability)や意味の無い結果を防ぐ。
+	MinBaseStat = 1
+	MaxBaseStat = 255
 )
 
 // Format は対戦形式。ダブル固有の補正を後から足せるよう最初から持たせる。

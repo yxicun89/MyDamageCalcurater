@@ -42,7 +42,53 @@ func newRequest(path string, headers map[string]string) *http.Request {
 	return request
 }
 
-var validHeaders = map[string]string{"X-Device-Id": "test-device", "X-Session-Id": "test-session"}
+// testDeviceID / testSessionID は正準形 8-4-4-4-12 の UUID(ADR-0606 §1。gateway と同じ検証を通る値)。
+const (
+	testDeviceID  = "11111111-1111-1111-1111-111111111111"
+	testSessionID = "22222222-2222-2222-2222-222222222222"
+)
+
+var validHeaders = map[string]string{"X-Device-Id": testDeviceID, "X-Session-Id": testSessionID}
+
+// headerCase はヘッダー検証の表の1行(ADR-0606 §2)。3つの API で同じ表を使う。
+type headerCase struct {
+	name    string
+	headers map[string]string
+	want    api.ErrorCode
+}
+
+// headerRejectCases は 400 になるヘッダーの組み合わせ(ADR-0606 §2):
+// 欠落・空は missing_header、UUID でない値は invalid_header、欠落と不正が同時なら missing_header。
+// 空白だけの値は gateway と同じく「空ではない・UUID でない」ので invalid_header(ADR-0606 §1 の一字一句同じ判定)。
+// 同名ヘッダーの重複は map で表せないので、各ファイルの重複テストで別に確かめる。
+var headerRejectCases = []headerCase{
+	{"両方欠落", nil, api.MissingHeader},
+	{"X-Device-Id 欠落", map[string]string{"X-Session-Id": testSessionID}, api.MissingHeader},
+	{"X-Session-Id 欠落", map[string]string{"X-Device-Id": testDeviceID}, api.MissingHeader},
+	{"X-Device-Id 空", map[string]string{"X-Device-Id": "", "X-Session-Id": testSessionID}, api.MissingHeader},
+	{"X-Session-Id 空", map[string]string{"X-Device-Id": testDeviceID, "X-Session-Id": ""}, api.MissingHeader},
+	{"X-Device-Id 空白だけ", map[string]string{"X-Device-Id": "  ", "X-Session-Id": testSessionID}, api.InvalidHeader},
+	{"X-Session-Id 空白だけ", map[string]string{"X-Device-Id": testDeviceID, "X-Session-Id": "  "}, api.InvalidHeader},
+	{"X-Device-Id 欠落と X-Session-Id 不正が同時", map[string]string{"X-Session-Id": "not-a-uuid"}, api.MissingHeader},
+	{"X-Device-Id 空と X-Session-Id 不正が同時", map[string]string{"X-Device-Id": "", "X-Session-Id": "not-a-uuid"}, api.MissingHeader},
+	{"X-Device-Id が UUID でない", map[string]string{"X-Device-Id": "not-a-uuid", "X-Session-Id": testSessionID}, api.InvalidHeader},
+	{"X-Session-Id が UUID でない(旧フィクスチャの値)", map[string]string{"X-Device-Id": testDeviceID, "X-Session-Id": "test-session"}, api.InvalidHeader},
+	{"X-Device-Id がハイフン無し32桁", map[string]string{"X-Device-Id": "11111111111111111111111111111111", "X-Session-Id": testSessionID}, api.InvalidHeader},
+	{"X-Device-Id が波括弧つき", map[string]string{"X-Device-Id": "{" + testDeviceID + "}", "X-Session-Id": testSessionID}, api.InvalidHeader},
+	{"X-Session-Id が urn:uuid: つき", map[string]string{"X-Device-Id": testDeviceID, "X-Session-Id": "urn:uuid:" + testSessionID}, api.InvalidHeader},
+	{"X-Device-Id が1桁足りない", map[string]string{"X-Device-Id": testDeviceID[:35], "X-Session-Id": testSessionID}, api.InvalidHeader},
+	{"X-Device-Id に16進でない文字", map[string]string{"X-Device-Id": "1111111g-1111-1111-1111-111111111111", "X-Session-Id": testSessionID}, api.InvalidHeader},
+	{"両方が UUID でない", map[string]string{"X-Device-Id": "test-device", "X-Session-Id": "test-session"}, api.InvalidHeader},
+}
+
+// headerAcceptIDs は通るべき正準形 UUID(大文字小文字・版を問わない。gateway の TestHeaderValidationAccepts と同じ観点)。
+var headerAcceptIDs = []string{
+	testDeviceID,
+	"ABCDEF01-2345-4678-9ABC-DEF012345678",
+	"abcDEF01-2345-4678-9abc-DEF012345678",
+	"00000000-0000-0000-0000-000000000000",
+	"01890a5d-ac96-774b-bcce-b302099a8057",
+}
 
 func serve(deps Dependencies, request *http.Request) *httptest.ResponseRecorder {
 	recorder := httptest.NewRecorder()
@@ -80,19 +126,7 @@ func TestHealth(t *testing.T) {
 func TestListPokemonRequiresRequestContext(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name    string
-		headers map[string]string
-	}{
-		{"両方欠落", nil},
-		{"X-Device-Id 欠落", map[string]string{"X-Session-Id": "test-session"}},
-		{"X-Session-Id 欠落", map[string]string{"X-Device-Id": "test-device"}},
-		{"X-Device-Id 空", map[string]string{"X-Device-Id": "", "X-Session-Id": "test-session"}},
-		{"X-Session-Id 空", map[string]string{"X-Device-Id": "test-device", "X-Session-Id": ""}},
-		{"X-Device-Id 空白だけ", map[string]string{"X-Device-Id": "  ", "X-Session-Id": "test-session"}},
-		{"X-Session-Id 空白だけ", map[string]string{"X-Device-Id": "test-device", "X-Session-Id": "  "}},
-	}
-	for _, tt := range tests {
+	for _, tt := range headerRejectCases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			// ヘッダーの検査は read model の有無より先(provider があっても 400)。
@@ -100,29 +134,67 @@ func TestListPokemonRequiresRequestContext(t *testing.T) {
 			if recorder.Code != http.StatusBadRequest {
 				t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
 			}
-			if body := decodeError(t, recorder); body.Code != api.InvalidRequest {
-				t.Errorf("code = %q, want %q", body.Code, api.InvalidRequest)
+			if body := decodeError(t, recorder); body.Code != tt.want {
+				t.Errorf("code = %q, want %q", body.Code, tt.want)
 			}
 		})
 	}
 }
 
-// TestListPokemonNormalizesGeneratedParameterErrors: 生成コードが返すパラメータの 400(同じヘッダーの重複)も
-// Error{code: invalid_request} の形にそろえる(balance と同じ)。
-func TestListPokemonNormalizesGeneratedParameterErrors(t *testing.T) {
+// TestListPokemonRejectsDuplicateHeaders: 同名ヘッダーの重複は(値が同じでも別でも)400 invalid_header
+// (ADR-0606 §2。gateway の headerStatus と同じ)。旧契約では生成コードの 400 を invalid_request にそろえていた。
+func TestListPokemonRejectsDuplicateHeaders(t *testing.T) {
 	t.Parallel()
 
-	request := newRequest(pokemonPath, nil)
-	request.Header.Add("X-Device-Id", "first-device")
-	request.Header.Add("X-Device-Id", "second-device")
-	request.Header.Set("X-Session-Id", "test-session")
-	recorder := serve(Dependencies{Pokemon: fakeProvider{roster: unorderedRoster()}}, request)
-
-	if recorder.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+	tests := []struct {
+		name  string
+		setup func(*http.Request)
+	}{
+		{"X-Device-Id の重複(別の値)", func(r *http.Request) {
+			r.Header.Add("X-Device-Id", testDeviceID)
+			r.Header.Add("X-Device-Id", "33333333-3333-3333-3333-333333333333")
+			r.Header.Set("X-Session-Id", testSessionID)
+		}},
+		{"X-Session-Id の重複(同じ値)", func(r *http.Request) {
+			r.Header.Set("X-Device-Id", testDeviceID)
+			r.Header.Add("X-Session-Id", testSessionID)
+			r.Header.Add("X-Session-Id", testSessionID)
+		}},
+		{"X-Device-Id の重複(UUID でない値)", func(r *http.Request) {
+			r.Header.Add("X-Device-Id", "first-device")
+			r.Header.Add("X-Device-Id", "second-device")
+			r.Header.Set("X-Session-Id", testSessionID)
+		}},
 	}
-	if body := decodeError(t, recorder); body.Code != api.InvalidRequest {
-		t.Errorf("code = %q, want %q", body.Code, api.InvalidRequest)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			request := newRequest(pokemonPath, nil)
+			tt.setup(request)
+			recorder := serve(Dependencies{Pokemon: fakeProvider{roster: unorderedRoster()}}, request)
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+			}
+			if body := decodeError(t, recorder); body.Code != api.InvalidHeader {
+				t.Errorf("code = %q, want %q", body.Code, api.InvalidHeader)
+			}
+		})
+	}
+}
+
+// TestListPokemonAcceptsCanonicalUUIDs: 正準形の UUID は大文字小文字・版を問わず通る(ADR-0606 §1)。
+func TestListPokemonAcceptsCanonicalUUIDs(t *testing.T) {
+	t.Parallel()
+
+	for _, id := range headerAcceptIDs {
+		t.Run(id, func(t *testing.T) {
+			t.Parallel()
+			headers := map[string]string{"X-Device-Id": id, "X-Session-Id": id}
+			recorder := serve(Dependencies{Pokemon: fakeProvider{roster: unorderedRoster()}}, newRequest(pokemonPath, headers))
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
+			}
+		})
 	}
 }
 

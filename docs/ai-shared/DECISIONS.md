@@ -1632,7 +1632,7 @@ Reason: 地面の無効と浮いていることは別の性質で、代理にす
 Impact: calc-svc は `make import` で DB のふゆうに `Airborne` が入るまで旧挙動。`TestNoTypeChartTableInEngineSource` の禁止リストから `TypeFlying` を外した(接地判定が名指しする機構のタイプ)。
 
 ## 2026-09-25: 逆算の「受けたダメージ」に防御側プリセットを出す(issue #275。Web レーン。engine への一本化はデータレーンへ申し送り)
-Decision: issue #275(重大度 high)の受け入れ条件とテストを先に書いた(実装は後続)。逆算の `side === "attacker"`
+Decision: issue #275(重大度 high)を実装・critic PASSで完了した。逆算の `side === "attacker"`
 (受けたダメージ = 自分が防御側)で無振り固定だった自分の耐久調整を、防御側プリセット(ADR-0009 §1 のカタログ8件)から
 選べるようにする。**既定は `none`(無振り)のままで、既定のときのリクエストは issue #275 以前と1ビットも変わらない**(回帰テストあり)。
 選択肢は engine の `DefaultDefenderPresets` と同じく技の分類で絞る(物理 = B 系、特殊 = D 系、変化技 = `none`/`hp`)。
@@ -1654,3 +1654,18 @@ API からは取れないので Web 側にも持つしかない。issue #71 と�
 (JSON への一本化)を申し送る。
 Impact: Web レーンの後続作業。engine・API・iOS の変更は無し(生成物の差分なし)。iOS にも同じ穴(逆算の自分側が
 無振り固定)があるかは未確認で、必要なら iOS レーンが同じ受け入れ条件で追随する。
+
+## 2026-09-25: issue #236 の speed 側をクローズ(素早さレーン。ADR-0606)
+Decision: speed の `X-Device-Id`/`X-Session-Id` の検証を、gateway の `checkAPIHeaders`/`headerStatus`/`isCanonicalUUID`/`isHexDigit`
+(`services/gateway/internal/httpapi/headers.go`)と一字一句同じ判定になるよう `services/speed/internal/httpapi/requestctx.go`
+に複製した(共通パッケージは新設せず、`httpmetrics` と同じ前例に従う。タイプバランスレーン経由で API レーンと合意済み)。
+これに伴い `services/speed/api/openapi.yaml` の `ErrorCode` に `missing_header`・`invalid_header` を追加し(version 0.4.0)、
+ヘッダー起因の 400 の `code` を旧 `invalid_request` からこの2つに分けた(意図的な契約の破壊的変更。判定順は不変)。
+gateway の `strings.TrimSpace` 相当の緩和はせず、空白だけの値は「空でなく UUID でもない」として `invalid_header` になる
+(gateway と同じ。ただし実通信では net/http がヘッダー値の前後空白を取り除くため、実際には `missing_header` になる)。
+`web/src/speed/speed.gen.ts` を再生成しコミットした(ADR-0604 §2。素早さレーンの持ち物)。`speedClient.ts` は `code` を
+そのまま透過するだけで特別扱いしていないため Web レーン側の追従作業は不要と確認済み。
+Reason: gateway は `/api/balance`・`/api/speed`・`/api/judge` を経由しない(Traefik が直接転送)ため、gateway の検証が
+効かず、balance・speed・judge がそれぞれ緩い非空チェックを持っていた(issue #236)。
+Impact: speed API を直接叩く外部ツール・スクリプトは正準形 UUID 以外のヘッダー値を使えなくなる(`services/speed/scripts/smoke*.sh`
+は正準形 UUID に更新済み)。balance・judge は各レーンが自分の担当で同じ変更を行う(この決定は speed のみ)。

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -52,6 +53,27 @@ func newHandler(t *testing.T, q store.Querier) http.Handler {
 // (公開 API はヘッダ付き、内部 API はヘッダ無しで送る)。
 func validateAgainstContract(t *testing.T, method, target string, withHeaders bool, rec *httptest.ResponseRecorder) {
 	t.Helper()
+	in := contractRoute(t, method, target, withHeaders)
+	if err := openapi3filter.ValidateRequest(context.Background(), in); err != nil {
+		t.Fatalf("リクエストが契約に合わない: %v", err)
+	}
+	if err := responseContractError(in, rec); err != nil {
+		t.Fatalf("%v\nbody=%s", err, rec.Body.String())
+	}
+}
+
+// validateResponseAgainstContract は応答だけを契約に照らす(リクエストは照らさない)。
+// 400 のように契約に合わないリクエストへの応答も、その操作の応答 schema(Error)に合うかを確かめるために使う(#74)。
+func validateResponseAgainstContract(t *testing.T, method, target string, withHeaders bool, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	if err := responseContractError(contractRoute(t, method, target, withHeaders), rec); err != nil {
+		t.Fatalf("%v\nbody=%s", err, rec.Body.String())
+	}
+}
+
+// contractRoute は method・target に当たる契約の操作を引き、検証の入力を作る(リクエストはまだ照らさない)。
+func contractRoute(t *testing.T, method, target string, withHeaders bool) *openapi3filter.RequestValidationInput {
+	t.Helper()
 	doc, err := api.GetSwagger()
 	if err != nil {
 		t.Fatalf("契約を読めない: %v", err)
@@ -70,23 +92,26 @@ func validateAgainstContract(t *testing.T, method, target string, withHeaders bo
 	if err != nil {
 		t.Fatalf("契約に %s %s が無い: %v", method, target, err)
 	}
-	in := &openapi3filter.RequestValidationInput{
+	return &openapi3filter.RequestValidationInput{
 		Request: req, PathParams: params, Route: route,
 		Options: &openapi3filter.Options{IncludeResponseStatus: true, MultiError: true},
 	}
-	if err := openapi3filter.ValidateRequest(context.Background(), in); err != nil {
-		t.Fatalf("リクエストが契約に合わない: %v", err)
-	}
+}
+
+// responseContractError は応答(status・Content-Type・本文)が契約の操作の応答に合わなければ error を返す。
+// IncludeResponseStatus により、契約に無い status(default も無い操作)も不一致として返す。
+func responseContractError(in *openapi3filter.RequestValidationInput, rec *httptest.ResponseRecorder) error {
 	if ct := rec.Header().Get("Content-Type"); ct == "" {
-		t.Fatalf("Content-Type が無い")
+		return fmt.Errorf("応答(%d)に Content-Type が無い", rec.Code)
 	}
-	err = openapi3filter.ValidateResponse(context.Background(), &openapi3filter.ResponseValidationInput{
+	err := openapi3filter.ValidateResponse(context.Background(), &openapi3filter.ResponseValidationInput{
 		RequestValidationInput: in, Status: rec.Code, Header: rec.Header(),
 		Body: io.NopCloser(bytes.NewReader(rec.Body.Bytes())), Options: in.Options,
 	})
 	if err != nil {
-		t.Fatalf("応答(%d)が契約に合わない: %v\nbody=%s", rec.Code, err, rec.Body.String())
+		return fmt.Errorf("応答(%d)が契約に合わない: %w", rec.Code, err)
 	}
+	return nil
 }
 
 // contractQueryParamMaxItems は path(operation)の query パラメータ name の maxItems を契約
