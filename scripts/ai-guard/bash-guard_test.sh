@@ -395,6 +395,17 @@ test_claude_settings() {
   fi
 }
 
+test_never_executes_the_judged_command() {
+  begin "bash-guard.sh は判定対象のコマンドを一切実行しない(文字列判定だけ。データレーンの指摘)"
+  local marker="$WORK/should-not-exist"
+  rm -f "$marker"
+  # block されるはずのコマンドに「実行されたら分かる」副作用(marker 作成)を仕込む。
+  # bash-guard.sh がこれを eval 等で実際に走らせていれば marker ができてしまう。
+  run_guard "make down && touch $marker"
+  if [ "$GUARD_RC" = 2 ]; then ok; else ng "block されるべき(exit 2)が exit $GUARD_RC"; fi
+  if [ ! -e "$marker" ]; then ok; else ng "判定対象のコマンドが実際に実行された(marker が作られた): $marker"; fi
+}
+
 test_codex_config() {
   begin ".codex/config.toml: PreToolUse(^Bash$)が bash-guard.sh を呼び、承認方針を明示する"
   if [ -f "$CODEX_CONFIG" ]; then ok; else ng ".codex/config.toml が無い"; return; fi
@@ -433,6 +444,7 @@ test_pass_env_substring
 test_pass_wrappers
 test_pass_edge_cases_no_false_positive
 test_pass_non_command_input
+test_never_executes_the_judged_command
 test_claude_settings
 test_codex_config
 
