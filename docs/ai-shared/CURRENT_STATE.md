@@ -247,6 +247,32 @@ JD4(返り討ち判定。PR #169)・JD5(Web の画面。PR #182。ADR-0705)ま�
 Next: 新規要望待ち。軽微な積み残しは解消済み(2026-09-25。`attacker`単数の`Individual`にも`defenders`候補と
 同じ大文字小文字厳密なキー検査〈`individualWireKeys`〉を適用。PR で main へ)。iOS版JD5は要望が出たら判断(ADR-0705 却下案)
 
+## Ops
+Lane: 運用(deploy・scripts・AIエージェントの権限設定。専任セッションなし。空席時は手が空いたレーンが調整役の
+割り当てで代行できる。COORDINATION.md)
+Active: 素早さレーン(調整役「damage calculation bug resolution」からの割り当て。**ユーザーの直接指示ではない**。
+運用の担当欄は変わらず「運用」のまま、今回だけ空席を代行。DECISIONS.md 参照)
+Branch: 次は main から fix/ops-issue273-239 を切る
+Status: 2026-09-25、issue #273・#239(AIエージェントの権限設定が、CLAUDE.mdの「人間の確認が必要」な操作(クラスタ削除・
+DBのデータ削除・main反映・秘密の読み取り)を止められない)に着手。既定案(ADR-0800):
+(1) `.claude/settings.json` の `permissions.allow` から `Bash(make *)`・`Bash(kubectl *)`・`Bash(k3d *)`・`Bash(docker *)`・
+`Bash(git push *)`・`Bash(gh pr merge *)` 等の広い許可を外し、読み取り・非破壊のサブコマンド単位に絞る。
+(2) 主防御として `hooks.PreToolUse`(Bash)から `scripts/ai-guard/bash-guard.sh` を呼び、コマンド文字列を検査して
+該当すれば exit code 2 で無条件 block(`permissions.allow` があっても上書きされない。公式ドキュメントで確認済み)。
+対象: `make down`・`make import`・`make import-k8s`・`make migrate-down*`・`kubectl` での ns/namespace/pvc/pv/
+statefulset/secret の delete・`kubectl get secret`・`.env`/`~/.ssh` を含むコマンド・`k3d cluster delete/rm`・
+`git push` の main 反映(`main`・`:main`・`HEAD:refs/heads/main` 等、書き方によらず)・force push 系・`gh pr merge`。
+(3) `.codex/config.toml` にも同じスクリプトを `[[hooks.PreToolUse]]` から呼ぶ設定を追加し、`approval_policy`・
+`sandbox_mode` を明示する(Codexのpermissionは`deny`のみ対応、`ask`は無い)。
+**影響**: 上記に該当する操作は、どのレーンのセッションでも(Claude Code・Codex とも)AIエージェントからは実行できなく
+なり、人間が自分の端末で実行する必要がある。`make test`・`make lint`・`make build`・`go test`・`kubectl get/describe/logs`・
+featureブランチへの `git push`・`gh pr create` は従来どおり確認なしで通る。各レーンの runbook に `gh pr merge` を
+AIが実行する手順があれば、そこだけ「人間が実行」に変わる(気づき次第、該当レーンへ個別連絡)。
+**このPRは実装後もこのセッションはマージしない**(設定ファイルの変更で全レーンに影響するため、ユーザーの確認・
+承認を経てからのマージとする。ADR-0800 §5)。
+Next: quick-scanner → spec-writer(Opus。セキュリティ影響が大きいため)→ implementer(Sonnet)→ critic(Opus)で実装し、
+PRを作成してユーザーに提示する(マージは求めない)。
+
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠
 - Type: 18タイプの英語小文字ID(fire, water, ...)。表示名・色は docs/design.md のトークンに準拠
