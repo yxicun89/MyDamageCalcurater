@@ -154,6 +154,7 @@ func moveMarks(in DamageInput) []UnsupportedMark {
 //   - 必ず急所: 入力が急所ありなら同じ。
 //   - 防御側のランク無視: 使う側(物理は防御・特殊は特防)のランクが 0 なら同じ。
 //   - 条件で優先度が変わる: engine が優先度を使うのはサイコフィールドの判定だけ(ADR-0123)。
+//     防御側が浮いていて判定に関係しないときも印を付ける(安全側の過検出)。
 //   - 天候・フィールドが名指しする技: engine が持つ場の状態は天候とフィールドだけで、どちらも無ければ
 //     名指しの処理は起きない。
 func mechanismHandled(in DamageInput, m MoveMechanism) bool {

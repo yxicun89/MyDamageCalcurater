@@ -321,10 +321,33 @@ for (const kind of ['items','abilities']) {
 // Champions 世代の全持ち物・全特性を1つずつ攻撃側/防御側に持たせ、持たせないときとダメージが
 // 変わるものを数える(手で列挙しない)。そのうち effects.json に定義が無いものは、
 // unsupported-effects.json に理由付きで登録したものだけを許す(差分は両方向とも失敗にする)。
-// 条件付きの効果も拾えるよう、天候・急所・状態異常・HP・フィールドを変えた3条件で調べる。
+// 条件付きの効果も拾えるよう、天候・急所・状態異常・HP・フィールドを変えた4条件で調べる。
+// 技は代表技(先制度 0・単発・反動なし)に加え、効果の条件になる技の性質を持つ技も使う(ADR-0123 追記):
+// 先制技(優先度で防ぐ特性・優先度を上げる特性)・反動技・連続技・低威力(威力 60 以下で効く特性)・
+// 接触/非接触・パンチ・かみつき・音・波動・弾・切る技・追加効果のある技。oracle の champions.js が
+// 条件に使う move.flags / priority / recoil / hits / bp / secondaries を網羅するように選ぶ(ベクタには使わない)。
+const probeExtraMoveNames = [
+  'Quick Attack','Extreme Speed','Aqua Jet','Bullet Punch','Mach Punch','Ice Shard','Shadow Sneak','Sucker Punch',
+  'Vacuum Wave','Double-Edge','Flare Blitz','Brave Bird','Wild Charge','Head Smash','Bullet Seed','Rock Blast',
+  'Icicle Spear','Boomburst','Leaf Blade','Psycho Cut','Water Pulse','Thunder Fang','Fire Fang',
+];
+const probeMoves = [...moves, ...probeExtraMoveNames.map(n => {
+  const m = genC.moves.get(id(n));
+  assert(m && m.basePower > 0, `調査用の技 ${n} が Champions 世代に無い(改名された可能性。列挙を見直す)`);
+  return m;
+})];
+{
+  const has = pred => probeMoves.some(pred);
+  for (const [label, pred] of [
+    ['先制技', m => m.priority > 0], ['反動技', m => !!m.recoil], ['連続技', m => !!m.multihit],
+    ['威力 60 以下', m => m.basePower <= 60], ['非接触の物理技', m => m.category === 'Physical' && !m.flags.contact],
+    ...['contact','punch','bite','sound','pulse','bullet','slicing'].map(f => [`flags.${f}`, m => !!m.flags[f]]),
+    ['追加効果', m => !!(m.secondaries || m.secondary)],
+  ]) assert(has(pred), `調査用の技に${label}が無い(条件付きの効果を取りこぼす)`);
+}
 const probeAttackers = ['Pikachu','Garchomp'];
 const probeDefenders = ['Snorlax','Tyranitar','Corviknight','Toxapex','Garchomp','Charizard','Gengar','Clefable','Venusaur'];
-for (const m of moves) {
+for (const m of probeMoves) {
   assert(probeDefenders.some(d => effectiveness(m.type, genC.species.get(id(d))) > 1) || m.type === 'Normal',
     `調査用の防御側に ${m.type} 技が抜群になる種族が無い(半減きのみを取りこぼす)`);
 }
@@ -332,6 +355,8 @@ const probeConditions = [
   {field:{}, a:{}, d:{}},
   {field:{weather:'Sand'}, crit:true, a:{status:'brn', hpFraction:3}, d:{}},
   {field:{weather:'Sun', terrain:'Grassy'}, a:{status:'par'}, d:{status:'par'}},
+  // サイコフィールド: 優先度を上げる特性(先制技にした技が接地した相手に防がれる)・シード系の持ち物を拾う。
+  {field:{weather:'Rain', terrain:'Psychic'}, a:{}, d:{}},
 ];
 function probePokemon(name, side, ability, item) {
   const p = new Pokemon(genC, name, {level:50, ivs:stats(31), evs:stats(), nature:'Serious', ability, item,
@@ -341,7 +366,7 @@ function probePokemon(name, side, ability, item) {
 }
 function probeSignature(holder, ability, item) {
   const out = [];
-  for (const cond of probeConditions) for (const a of probeAttackers) for (const d of probeDefenders) for (const m of moves) {
+  for (const cond of probeConditions) for (const a of probeAttackers) for (const d of probeDefenders) for (const m of probeMoves) {
     const A = probePokemon(a, cond.a, holder === 'a' ? ability : '', holder === 'a' ? item : '');
     const D = probePokemon(d, cond.d, holder === 'd' ? ability : '', holder === 'd' ? item : '');
     const r = calculate(genC, A, D, new Move(genC, m.name, {isCrit:!!cond.crit}), new Field({gameType:'Singles', ...cond.field}));
