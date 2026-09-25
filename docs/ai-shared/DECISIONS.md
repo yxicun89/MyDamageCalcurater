@@ -1645,3 +1645,18 @@ Reason: gateway は `/api/balance`・`/api/speed`・`/api/judge` を経由しな
 効かず、balance・speed・judge がそれぞれ緩い非空チェックを持っていた(issue #236)。
 Impact: speed API を直接叩く外部ツール・スクリプトは正準形 UUID 以外のヘッダー値を使えなくなる(`services/speed/scripts/smoke*.sh`
 は正準形 UUID に更新済み)。balance・judge は各レーンが自分の担当で同じ変更を行う(この決定は speed のみ)。
+
+## 2026-09-25: 計算条件の入力 UI(iOS レーン。issue #274 → Web レーンは追従、API レーンへ提案)
+Decision: iOS の計算画面に「詳細」(既定は閉じる)を足し、急所・攻撃側のやけど・天候・フィールド・防御側の壁・攻撃側のランク・攻撃側の特性を置く
+(issue の既定案どおり、常時表示にするものは無し)。文言と並び(左から)は次のとおりで、Web もこれに揃える(ADR-0501「issue #274」3章):
+見出し「詳細」/ トグル「急所」「やけど」/ 天候「なし・はれ・あめ・すなあらし・ゆき」(none, sun, rain, sand, snow)/
+フィールド「なし・エレキフィールド・グラスフィールド・サイコフィールド・ミストフィールド」(none, electric, grassy, psychic, misty。openapi の enum 順とは違う)/
+防御側の壁「リフレクター・ひかりのかべ・オーロラベール」(独立トグル。`field.defenderScreens`)/ 小見出し「天候」「フィールド」「防御側の壁」「攻撃側のランク」「攻撃側の特性」/
+ランク表示「A +1」「C -2」「A ±0」(選択中の技の分類の関連ステータスだけを -6..+6 で編集。atk/spa は別々に保持して両方送る)/ 特性の未指定「指定なし」(abilityId を送らない)。
+既定値は今の要求と同じ(急所 off・やけど off・場なし(`field` は送らない)・ランク 0・プリセット経路の特性は未指定)。条件は入れ替え・種族・技の変更で消さず、
+特性だけは新しい攻撃側が持たなければ「指定なし」に戻す。やけど以外の状態異常と攻撃側の壁は出さない。
+**提案(API レーン)**: `BulkCalcRequest` は `defenderSpeciesKey` しか持たないので、防御側のランク・特性・状態異常を画面から送れない。
+既定案: `BulkCalcRequest` に任意の `defender: { abilityId?, ranks?: RankBlock, status?: StatusCondition }`(全行に同じ値を当てる上書き)を足す。
+入ったら iOS・Web が「詳細」に「防御側のランク(B/D)」「防御側の特性」を足す(別タスク)。
+Reason: issue #274 は Web・iOS 両方が対象で、Web レーンとは「iOS が既定案で先に進め、Web は iOS が記録した文言に追従する」と合意済み。防御側の条件は契約が無く、クライアントだけでは足せない。
+Impact: Web の計算画面(`web/src/screens/CalcScreen.tsx`・`web/src/domain/requests.ts`)は同じ文言・並び・既定で「詳細」を実装する。API レーンは上の提案の採否を決める(採るなら openapi から)。

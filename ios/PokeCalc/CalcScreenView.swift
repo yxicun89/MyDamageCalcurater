@@ -60,6 +60,7 @@ struct CalcScreenView: View {
                 presetSegmentedRow
                 teamSourceRow
                 moveSelector
+                CalcConditionsSection(viewModel: viewModel)
                 loadingSlot
                 ResultsSectionView(viewModel: viewModel, barColor: moveTypeColor)
             }

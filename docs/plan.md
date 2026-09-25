@@ -372,6 +372,17 @@
   JSON を直接読む契約テスト(`AttackerPresetCatalogContractTests`。シミュレータでも読めることを実測済み)を追加。
   受け入れ条件・判断・変えた既存テストの期待値・実装結果は ADR-0501「P6-12」。
   `swift test` 406件0失敗、`make ios-test`(`ios-test-unit` 419件・`ios-test-ui` 20件)すべて成功
+- [x] P6-13 issue #274(iOS 側): 計算画面に「詳細」(既定は閉じる)を足し、急所・攻撃側のやけど・天候・フィールド・防御側の壁・
+  攻撃側のランク(技の分類の関連ステータス)・攻撃側の特性を選べるようにした。既定は今の要求と同じ。防御側のランク・特性・状態異常は
+  bulk の契約に無いので対象外(API レーンへ提案。DECISIONS.md 2026-09-25「計算条件の入力 UI」)。受け入れ条件・判断・文言・実装結果は
+  ADR-0501「issue #274」(9章)。テスト先行(`CalcViewModelConditionsTests`・`CalcConditionsDomainTests`・`APIPokeCalcServiceConditionsTests`・
+  `MockPokeCalcServiceConditionsTests`・XCUITest `CalcConditionsUITests`)で実装し、critic PASS。実装中に accessibilityIdentifier が
+  コンテナに飲まれる不具合と、XCUITest の前方スクロールがランクの +/− ボタンに届かない不具合を見つけて直した(ADR 9章に詳細)。
+  ランクの +/− ボタンに VoiceOver ラベル、「詳細」の各行に Dynamic Type(アクセシビリティ文字サイズで2行に切り替え)を追加。
+  `swift test` 436件0失敗、`make ios-test`(`ios-test-unit` 449件・`ios-test-ui` 22件)すべて成功(並行セッションが同じ
+  シミュレータを使っていた回はブートストラップ失敗になったが、P6-12 と同じ既知の環境要因と確認済み)
+- [ ] P6-14 最大の文字サイズ(accessibility-extra-extra-extra-large)で計算画面の全体が横にはみ出し、左端が切れる(既存の不具合。
+  P6-13 の確認中に発見。2026-09-23 のスクリーンショットでも同じ)。原因の特定と修正、XCUITest か撮影での確認
 - [x] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼された
   内容どおり `ColorToken.danger` のライト値を `0xE5,0x48,0x4D` → `0xCD,0x1D,0x23` に更新し、
   `DesignTokenTests.swift` の旧値も書き換えた。`ios/PokeCalcKit/Tests/PokeCalcDesignTests/ColorContrast.swift`

@@ -17,6 +17,9 @@ enum CalcScreenMetrics {
     static let hairlineBorderWidth: CGFloat = 1
     /// 件数上限に達して選べなくなったチップの減光(issue #110。ADR-0501「issue #110」9章)。
     static let disabledChipOpacity: Double = 0.4
+    /// 「詳細」の攻撃側のランク表示(「A +1」等)の最小幅。値が変わって桁数が増減しても
+    /// ±ボタンの位置がずれないようにする(issue #274。ADR-0501「issue #274」)。
+    static let rankValueMinWidth: CGFloat = 48
 }
 
 /// design.md「Liquid Glass 系のクリーン」の角丸カード背景。requirements のビジュアル B・ADR-0500 §1
