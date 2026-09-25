@@ -120,7 +120,7 @@ sequenceDiagram
 | 3. `node check-upstream.mjs` | 上流の最新版の検出(**失敗しても続行**。ログと報告に出すだけ) | 警告のみ |
 | 4. `pokedex-import -data /app/data -upstream …/latest.json` | 下記 | 下表の exit code |
 
-`pokedex-import`(`cmd/import/main.go`)のフラグ: `-data`(既定 `../data`)`-dry-run` `-force` `-upstream` `-upstream-max-age`(既定 24h)。
+`pokedex-import`(`cmd/import/main.go`)のフラグ: `-data`(既定 `../data`)`-dry-run` `-force` `-typechart`(照合する参照の相性表。既定 `<data>/../testdata/golden/typechart.json`。食い違いは Blocker `type-chart-reference-mismatch`。ADR-0118)`-upstream` `-upstream-max-age`(既定 24h)。
 
 | exit | 意味 | CronJob の扱い(`podFailurePolicy`) |
 |---|---|---|

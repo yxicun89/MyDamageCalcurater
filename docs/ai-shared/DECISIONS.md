@@ -1645,3 +1645,8 @@ Reason: gateway は `/api/balance`・`/api/speed`・`/api/judge` を経由しな
 効かず、balance・speed・judge がそれぞれ緩い非空チェックを持っていた(issue #236)。
 Impact: speed API を直接叩く外部ツール・スクリプトは正準形 UUID 以外のヘッダー値を使えなくなる(`services/speed/scripts/smoke*.sh`
 は正準形 UUID に更新済み)。balance・judge は各レーンが自分の担当で同じ変更を行う(この決定は speed のみ)。
+
+## 2026-09-25: 相性表・効果定義・calc の版の「正」と一致の検査(データレーン。issue #280・ADR-0118)
+Decision: 効果定義の正は `data/importer/effects.json`、`testdata/golden/effects.json` は写しとし、toID で正規化した一致をテストで確かめる(生成物にはしない。生成器の変更がゴールデンの出力を動かしうるため)。相性表の正は importer が取り込む calc スナップショットで、`pokedex-import` の照合が `testdata/golden/typechart.json`(`-typechart`、既定 `<data>/../testdata/golden/typechart.json`)と比べ、食い違いは Blocker `type-chart-reference-mismatch`。calc の版は `data/importer/config.json` の `sources.calc` を正とし、fetch-calc.mjs・tools/importer と tools/golden の依存・ゴールデンの version の一致をテストで確かめる。
+Reason: 片方だけを直しても `make test`・`make test-golden` が通り、ゴールデンが検証した定義・表と本番の DB の定義・表がずれたまま出荷されうる(issue #280)。
+Impact: importer のイメージに `testdata/golden/typechart.json` を焼く。calc の版を上げるときはゴールデンの再生成まで import が止まる(意図どおり)。タイプバランス レーンへ: balance の埋め込みは既存の `TestEmbeddedTypeChartMatchesSharedData` で golden と一致し、本決定で golden ⇔ DB がつながるので、#259 の export 追加は必須ではなくなった(判断は同レーン)。Web(`@typechart`)は変更不要。
