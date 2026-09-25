@@ -153,7 +153,7 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 | `IgnoresBurn` | 攻撃側。やけどの半減を無効 | `dmg:132-134` | #13 |
 | `Airborne` | 両側。浮いている(ふゆう)。接地判定 `isGrounded`(`mod:86`)でフィールドの補正の対象外にする。地面技の無効は `DefImmuneTypes` で別に持つ(ADR-0116) | `mod:86-95` | #7 |
 
-- 効果値の出どころ: calc-svc は DB の効果 JSON を `services/internal/master/effects.go:299` `DecodeItemEffect`・`:380` `DecodeAbilityEffect` で厳格デコード(本番の定義は `data/importer/effects.json`。ADR-0101)。WASM はリクエストの `item.effect` / `ability.effect` を `engine/wasmapi/dto.go:273`・`:398` で変換。
+- 効果値の出どころ: calc-svc は DB の効果 JSON を `services/internal/master/effects.go:305` `DecodeItemEffect`・`:386` `DecodeAbilityEffect` で厳格デコード(本番の定義は `data/importer/effects.json`。ADR-0101。補正値は engine と同じ上限 `MaxEffectModifier` まで)。Champions 世代でダメージに効くのにこの表で表せない持ち物・特性は、理由付きで `tools/golden/unsupported-effects.json` に載せる(ゴールデンの生成器が「効くもの − 定義済み」との一致を確かめる。ADR-0120)。WASM はリクエストの `item.effect` / `ability.effect` を `engine/wasmapi/dto.go:273`・`:398` で変換。
 - 天候・フィールド・壁は「ゲーム機構」なので engine のルールとしてコードに持つ(`mod:1-14` のコメント、ADR-0005)。
 - 技の追加効果 `Move.Effect`(`engine/move_effect.go:22` `MoveEffect`)は `CalcDamage` が読まない。判定側が使うメタデータ(ADR-0107 決定2。`engine/move_effect_test.go:83` `TestCalcDamageIgnoresMoveEffect`)。
 

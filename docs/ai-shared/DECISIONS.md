@@ -1694,3 +1694,8 @@ Reason: issue #260 は「タイプバランス・判定」の両担当。`docs/t
 Impact: タイプバランスレーンへ: `type-balance-design.md` の未対応分(役割分担・レビュー依頼節の履歴化、`/api/damage` 等の
 古い記述、`pokecalc-kit-v2` の別名、実装済みのKustomize/Argo CD分割の未決事項化)はそちらの担当で進めてください。
 両方揃って issue #260 をクローズできます。コード・ADR は無変更(ドキュメントのみ)。
+
+## 2026-09-25: 効果スキーマで表せる持ち物・特性をすべて定義し、表せないものを一覧で固定(データレーン。issue #270・ADR-0120)
+Decision: issue の既定案 A を採り、タイプ強化の持ち物・ノーマルジュエル・半減きのみ・Fire Mane・Heatproof・Purifying Salt・Eelevate を `data/importer/effects.json` と `testdata/golden/effects.json` に足した(値は oracle の実装から)。ゴールデンの生成器が効果ごとに「効く/効かない対照」の組を作り、Champions 世代でダメージが変わるのに定義の無いものは `tools/golden/unsupported-effects.json`(理由付き)と一致しなければ止まる。取込時の補正値に engine と同じ上限 `MaxEffectModifier` を入れた。
+Reason: 定義の無い持ち物・特性が黙って等倍で計算されていた(importer の effect-missing 92 件)。多くは engine を変えずにデータだけで直せる。
+Impact: 実データの dry-run で effect-missing 92→56、effect-no-hook 1→3(ノーマルジュエル・Eelevate。Levitate と同じ理由)。既定案 B(応答の「補正未対応」の印)は #271 の技の印と同じ仕組みでまとめて決める(未決)。タイプバランス レーンへ: readmodel の特性(Heatproof・Purifying Salt・Eelevate)が防御相性に入るようになる。
