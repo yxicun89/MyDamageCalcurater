@@ -318,6 +318,45 @@
   transition: width var(--duration-swap) var(--ease-spring);
 }
 
+/* issue 271 / issue 270(ADR-0123): 印が1件でもある結果の先頭に出す案内。色だけでなく文字で伝える。 */
+.calc-results__unsupported-notice {
+  margin: 0;
+  font-size: var(--font-size-body);
+  color: var(--danger);
+}
+
+/* 行の中の「未対応」の印(design.md「画面: ダメージ計算」)。バーと同じく行いっぱいに広げる。 */
+.calc-results__unsupported {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border-top: 1px solid var(--border-hairline);
+  padding-top: var(--space-1);
+}
+
+.calc-results__unsupported-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: fit-content;
+  font-size: var(--font-size-caption);
+  font-weight: bold;
+  color: var(--danger);
+}
+
+/* アイコンは装飾(design.md: 色・アイコンだけに頼らない)。読み上げには渡さない。 */
+.calc-results__unsupported-icon {
+  line-height: 1;
+}
+
+.calc-results__unsupported-list {
+  margin: 0;
+  padding-inline-start: var(--space-4);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
 /* ネイティブのラジオは隠しているので、キーボード操作のフォーカス位置をラベル側に出す(WCAG 2.4.7)。 */
 .calc-preset__option:has(.calc-preset__input:focus-visible) {
   outline: 2px solid var(--text-primary);

@@ -53,7 +53,9 @@ import {
   reverseGuideNames,
   reverseItemLabel,
 } from "../domain/reverseLabels";
+import { unsupportedMarkLabel } from "../domain/unsupportedLabels";
 import type {
+  Ability,
   CalcEngine,
   EngineError,
   EngineResult,
@@ -70,6 +72,7 @@ import {
   requestLimitText,
   reverseResultText,
   reverseScreenText,
+  unsupportedText,
 } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type {
@@ -674,6 +677,8 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
       <ResultsSection
         outcome={outcome}
         items={master.items}
+        moves={master.moves}
+        abilities={master.abilities}
         narrowing={narrowing}
         onNarrowingAnimationEnd={handleNarrowingAnimationEnd}
       />
@@ -1045,6 +1050,9 @@ function ObservationRowView({
 interface ResultsSectionProps {
   readonly outcome: Outcome;
   readonly items: readonly Item[];
+  /** 「未対応」の印(ADR-0123)の ID を表示名に解決するためのマスタ。 */
+  readonly moves: readonly Move[];
+  readonly abilities: readonly Ability[];
   /** 観測を2件以上入れて届いた結果の「絞り込み」演出(design.md「画面: 逆算」)。 */
   readonly narrowing: boolean;
   readonly onNarrowingAnimationEnd: (event: AnimationEvent<HTMLUListElement>) => void;
@@ -1054,6 +1062,8 @@ interface ResultsSectionProps {
 function ResultsSection({
   outcome,
   items,
+  moves,
+  abilities,
   narrowing,
   onNarrowingAnimationEnd,
 }: ResultsSectionProps): ReactElement | null {
@@ -1080,6 +1090,8 @@ function ResultsSection({
         <ReverseResultsList
           result={outcome.result}
           items={items}
+          moves={moves}
+          abilities={abilities}
           narrowing={narrowing}
           onNarrowingAnimationEnd={onNarrowingAnimationEnd}
         />
@@ -1095,19 +1107,35 @@ function ResultsSection({
 interface ReverseResultsListProps {
   readonly result: ReverseResult;
   readonly items: readonly Item[];
+  readonly moves: readonly Move[];
+  readonly abilities: readonly Ability[];
   readonly narrowing: boolean;
   readonly onNarrowingAnimationEnd: (event: AnimationEvent<HTMLUListElement>) => void;
 }
 
 /** 候補一覧(ADR-0300 §8: engine の順のまま、加工せずに表示)。防御側は H32 前提の注記を添える。 */
-function ReverseResultsList({ result, items, narrowing, onNarrowingAnimationEnd }: ReverseResultsListProps) {
+function ReverseResultsList({
+  result,
+  items,
+  moves,
+  abilities,
+  narrowing,
+  onNarrowingAnimationEnd,
+}: ReverseResultsListProps) {
   const assumptionNote = reverseAssumptionNote(result);
   const listClassName = `reverse-results__list${narrowing ? " is-narrowing" : ""}`;
   // issue 305: 観測を厳密に説明できる候補(exact)が1件も無いとき(exactCount 0 かつ候補が1件以上)。
   // 判定は engine が返した exactCount をそのまま使う(ADR-0300 §8: TS 側で再判定しない)。
   const hasNoExactCandidate = result.exactCount === 0 && result.candidates.length > 0;
+  // issue 271 / issue 270(ADR-0123): 印が1件でもある候補が1つでもあれば、候補一覧の先頭に案内を1つ出す。
+  const hasUnsupported = result.candidates.some((candidate) => candidate.unsupported.length > 0);
   return (
     <div className="reverse-results">
+      {hasUnsupported && (
+        <p role="status" className="reverse-results__unsupported-notice">
+          {unsupportedText.notice}
+        </p>
+      )}
       {hasNoExactCandidate && (
         <p role="status" className="reverse-results__no-exact-notice">
           {reverseResultText.noExactCandidateNotice}
@@ -1155,6 +1183,23 @@ function ReverseResultsList({ result, items, narrowing, onNarrowingAnimationEnd 
                 </span>
                 <span className="reverse-results__percent-value">{formatPercentRange(candidate)}</span>
               </span>
+              {candidate.unsupported.length > 0 && (
+                <div className="reverse-results__unsupported">
+                  <span className="reverse-results__unsupported-badge">
+                    <span aria-hidden="true" className="reverse-results__unsupported-icon">
+                      ⚠
+                    </span>
+                    <span>{unsupportedText.badgeLabel}</span>
+                  </span>
+                  <ul aria-label={unsupportedText.listLabel} className="reverse-results__unsupported-list">
+                    {candidate.unsupported.map((mark, markIndex) => (
+                      <li key={`${mark.target}-${mark.reason}-${mark.id}-${String(markIndex)}`}>
+                        {unsupportedMarkLabel(mark, moves, items, abilities)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </li>
           );
         })}

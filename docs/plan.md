@@ -496,9 +496,19 @@
   受け取る形に**更新**した〈弱めていない: 省略ではなく等値で検査する〉)/
   `web/src/screens/CalcScreen.test.tsx`(+7件。うち6件が red)/ `web/src/screens/ReverseScreen.test.tsx`
   (+5件。うち4件が red)/ `web/src/engine/reverse.wasm.test.ts`(候補が常に `unsupported` を持つ検査を追加)。
-  **Next(implementer)**: `CalcScreen.tsx`・`ReverseScreen.tsx`(+ それぞれの CSS)に表示を実装して
-  red 10件を green にする。ID → 表示名は `master.moves` / `master.items` / `master.abilities` から引き、
-  見つからなければ ID をそのまま出す(`unsupportedText.markLabel` に空文字を渡す)。
+  **実装完了(2026-09-25。implementer)**: `CalcScreen.tsx`・`ReverseScreen.tsx` に表示を実装し、
+  red 10件を含め green にした。ID → 表示名の解決は共通ヘルパー `web/src/domain/unsupportedLabels.ts`
+  (`unsupportedMarkLabel`)を新設し、`master.moves` / `master.items` / `master.abilities` から引く
+  (見つからなければ空文字を `unsupportedText.markLabel` に渡し、ID をそのまま出す設計どおり)。
+  計算画面は行(`BulkRow`)の中に `unsupported` の内容を、逆算画面は候補カード(`ReverseCandidate`)の中に
+  同じ形で出す(engine の順のまま、並べ替え・重複除去なし。ADR-0300 §8)。印が1件でもある行・候補が
+  1つでもあれば一覧先頭に `role="status"` の案内を1つ(issue 305 の作法どおり)。バッジの文字は
+  「未対応」、アイコン(⚠)は `aria-hidden="true"` の装飾のみで意味を持たせず、色は `--danger` の範囲。
+  CSS は `CalcScreen.css`・`ReverseScreen.css` に追加(常時アニメーションなし)。
+  `npx vitest run` 1652件 green(spec-writer時点の1642 passed/10 failedから全green化)・
+  `npm run typecheck` green・`npm run lint`(eslint + prettier)green・`make wasm` 後
+  `npm run e2e` 37件 green。
+  **Next(critic)**: レビュー待ち。
 - [ ] 判定画面(JD5 `JudgeScreen`)の「未対応」の印への追従(issue #271 / #270 の判定レーン分。**上の
   Web レーンの PR の対象外**)。judge の契約は計算・逆算と別の形(`attackerKoUnsupported` /
   `defenderKoUnsupported`。ADR-0708 §1・`web/src/judge/judge.gen.ts`)なので、別タスクとして進める。

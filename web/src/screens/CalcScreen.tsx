@@ -35,7 +35,9 @@ import {
   defenderItemVariants,
   defensiveItemCandidates,
 } from "../domain/requests";
+import { unsupportedMarkLabel } from "../domain/unsupportedLabels";
 import type {
+  Ability,
   BulkResult,
   BulkRow,
   CalcEngine,
@@ -45,7 +47,14 @@ import type {
   Move,
   MoveCategory,
 } from "../engine/types";
-import { calcScreenText, isTypeId, masterOnlineText, requestLimitText, typeNameJa } from "../i18n/ja";
+import {
+  calcScreenText,
+  isTypeId,
+  masterOnlineText,
+  requestLimitText,
+  typeNameJa,
+  unsupportedText,
+} from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type {
   MasterData,
@@ -610,6 +619,8 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
       <ResultsSection
         outcome={outcome}
         items={master.items}
+        moves={master.moves}
+        abilities={master.abilities}
         moveType={move?.type}
         pulsingKeys={pulsingKeys}
         onKoAnimationEnd={handleKoAnimationEnd}
@@ -864,6 +875,9 @@ function MoveSelect({ moves, value, onChange, disabled = false }: MoveSelectProp
 interface ResultsSectionProps {
   readonly outcome: Outcome;
   readonly items: readonly Item[];
+  /** 「未対応」の印(ADR-0123)の ID を表示名に解決するためのマスタ。 */
+  readonly moves: readonly Move[];
+  readonly abilities: readonly Ability[];
   /** ダメージバーの色に使う、選ばれている技のタイプ(design.md: バーは技のタイプ色)。 */
   readonly moveType: string | undefined;
   /** 確定数が変わって弾ませる行のキー(koRowKey)の集合(design.md「動き」)。 */
@@ -878,6 +892,8 @@ interface ResultsSectionProps {
 function ResultsSection({
   outcome,
   items,
+  moves,
+  abilities,
   moveType,
   pulsingKeys,
   onKoAnimationEnd,
@@ -904,6 +920,8 @@ function ResultsSection({
         <ResultsList
           result={outcome.result}
           items={items}
+          moves={moves}
+          abilities={abilities}
           moveType={moveType}
           pulsingKeys={pulsingKeys}
           onKoAnimationEnd={onKoAnimationEnd}
@@ -921,6 +939,8 @@ function ResultsSection({
 interface ResultsListProps {
   readonly result: BulkResult;
   readonly items: readonly Item[];
+  readonly moves: readonly Move[];
+  readonly abilities: readonly Ability[];
   readonly moveType: string | undefined;
   readonly pulsingKeys: ReadonlySet<string>;
   readonly onKoAnimationEnd: (key: string) => (event: AnimationEvent<HTMLSpanElement>) => void;
@@ -934,14 +954,30 @@ const DAMAGE_BAR_MAX_PERCENT = 100;
  * 持ち物のバリアントが変わっても同じ値になる(防御側の種族・技のタイプだけで決まる)ため、行ごとに
  * 繰り返さず、結果全体の先頭行の値を1回だけ表示する。
  */
-function ResultsList({ result, items, moveType, pulsingKeys, onKoAnimationEnd }: ResultsListProps) {
+function ResultsList({
+  result,
+  items,
+  moves,
+  abilities,
+  moveType,
+  pulsingKeys,
+  onKoAnimationEnd,
+}: ResultsListProps) {
   const firstRow = result.rows[0];
   const barColor =
     moveType === undefined || moveType === ""
       ? "var(--text-secondary)"
       : `var(--type-${moveType}, var(--text-secondary))`;
+  // issue 271 / issue 270(ADR-0123): 印が1件でもある行が1つでもあれば、一覧の先頭に案内を1つ出す。
+  // 判定は engine が行ごとに返した unsupported をそのまま使う(ADR-0300 §8: TS 側で再判定しない)。
+  const hasUnsupported = result.rows.some((row) => row.result.unsupported.length > 0);
   return (
     <div className="calc-results">
+      {hasUnsupported && (
+        <p role="status" className="calc-results__unsupported-notice">
+          {unsupportedText.notice}
+        </p>
+      )}
       {firstRow !== undefined && (
         <p className="calc-results__effectiveness">
           <strong>{formatEffectiveness(firstRow.result.effectiveness)}</strong>
@@ -972,6 +1008,23 @@ function ResultsList({ result, items, moveType, pulsingKeys, onKoAnimationEnd }:
                   style={{ width: `${String(barValue)}%`, backgroundColor: barColor }}
                 />
               </div>
+              {row.result.unsupported.length > 0 && (
+                <div className="calc-results__unsupported">
+                  <span className="calc-results__unsupported-badge">
+                    <span aria-hidden="true" className="calc-results__unsupported-icon">
+                      ⚠
+                    </span>
+                    <span>{unsupportedText.badgeLabel}</span>
+                  </span>
+                  <ul aria-label={unsupportedText.listLabel} className="calc-results__unsupported-list">
+                    {row.result.unsupported.map((mark, markIndex) => (
+                      <li key={`${mark.target}-${mark.reason}-${mark.id}-${String(markIndex)}`}>
+                        {unsupportedMarkLabel(mark, moves, items, abilities)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </li>
           );
         })}

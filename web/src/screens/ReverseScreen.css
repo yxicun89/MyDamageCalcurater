@@ -345,3 +345,42 @@
   font-size: var(--font-size-caption);
   color: var(--text-secondary);
 }
+
+/* issue 271 / issue 270(ADR-0123): 印が1件でもある候補一覧の先頭に出す案内。色だけでなく文字で伝える。 */
+.reverse-results__unsupported-notice {
+  margin: 0;
+  font-size: var(--font-size-body);
+  color: var(--danger);
+}
+
+/* 候補カードの中の「未対応」の印(design.md「画面: 逆算」)。 */
+.reverse-results__unsupported {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border-top: 1px solid var(--border-hairline);
+  padding-top: var(--space-1);
+}
+
+.reverse-results__unsupported-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: fit-content;
+  font-size: var(--font-size-caption);
+  font-weight: bold;
+  color: var(--danger);
+}
+
+/* アイコンは装飾(design.md: 色・アイコンだけに頼らない)。読み上げには渡さない。 */
+.reverse-results__unsupported-icon {
+  line-height: 1;
+}
+
+.reverse-results__unsupported-list {
+  margin: 0;
+  padding-inline-start: var(--space-4);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
