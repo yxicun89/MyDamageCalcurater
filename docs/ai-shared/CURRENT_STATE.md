@@ -172,7 +172,16 @@ spec-writer→implementer→critic(PASS、mutation testing 7件で全て検知)�
 マスタ不要画面へengineが静かに伝播するリスクは直接修正、残り2件(再試行中のフィードバック欠如・
 素早さタブでの通知非表示)はplan.mdに申し送り。`npx vitest run App`101/101・`npm test`1605/1605・
 typecheck/lint無回帰。
-Next: オーケストレーターの優先度キュー(2026-09-25時点)で #305 → #248 → #218 の順に着手する。
+**issue #305(逆算で観測を説明できる候補が1つも無くても、その旨が出ず「近い候補」とSP範囲が並ぶだけ)
+完了・main統合済み(2026-09-25。PR #392)**: `result.exactCount === 0 && result.candidates.length > 0`
+のときだけ、結果の先頭に`role="status"`の案内(「入力した観測を説明できる調整がありません」相当)を出し、
+各候補のSP範囲に「参考」の印をテキストで添える(候補一覧自体は消さない)。各候補の%欄には常時「予測」の
+ラベルを添える。一致判定はengineが返す`ReverseResult.exactCount`をそのまま使い、TS側での再判定は追加して
+いない(ADR-0300 §8)。spec-writer→implementer→critic(PASS、mutation testing 5件で全て検知)。
+critic指摘の軽微な1件(role="status"テストの頑健性)は直接修正、他は非ブロッキングのため見送り
+(候補0件時の文言欠如は別issue候補として観察のみ)。`npx vitest run ReverseScreen`94/94・
+`npm test`1611/1611・typecheck/lint無回帰。
+Next: オーケストレーターの優先度キュー(2026-09-25時点)で #248 → #218 の順に着手する。
 その後 #219・#211(APIレーン連携。`mydamagecalcurater-api-67`に契約を確認)、#272・#274(iOSレーンが
 既に確定させた文言・順序に合わせる。DECISIONS.md参照)、#210、#332(devDependencies更新)、#226(README等の
 実装状況の精度確認)。APIレーンがmechanisms/unsupportedの契約を出したら #271・#270(Web側の未対応表示)も追加。
