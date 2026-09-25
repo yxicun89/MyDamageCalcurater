@@ -250,17 +250,31 @@ SpeedScreenのマウント時eager fetchを避けるため全画面の先読み�
 **運用インシデント**: 実装1回目の際、worktree競合で実装者エージェントが`git update-ref`でブランチ参照を
 強制移動する場面があった(データ損失は無し、コーディネーターが検証済み)。次回以降はスキル間で
 worktreeを都度削除してから次段階へ進む運用に修正済み(メモリに記録)。
-Next: オーケストレーターの優先度キュー(2026-09-25時点の繰り上げ)で **#271・#270**(計算・逆算・bulk・
-判定の結果に「未対応」の印を表示。ADR-0123〈13種+zero_power+unsupported_effect〉。API契約〈PR #372〉・
-WASM出力〈PR #381〉・judge契約〈PR #406〉はmain統合済み。design.mdに追記、色だけに頼らない表示)に着手する。
-その後 #219・#211(APIレーン連携。`mydamagecalcurater-api-67`に契約を確認)、#272・#274(#272はPR #402/
-ADR-0126でWASMへ特性が渡る。iOSレーンが確定させた文言・順序に合わせる。DECISIONS.md参照。#274と一緒に
-設計し特性入力UIを重複させない)、#210、#332(devDependencies更新)、#226(README等の実装状況の精度確認)。
-**新規キュー項目(2026-09-25、オーケストレーター経由のユーザー決定)**: issue #328(非公開・私的利用・
-LICENSEなしで決定。design.mdに追記のうえ、既存画面の邪魔にならない位置に出典・非公式である旨を表示。
-文言はiOSレーンが既定案をDECISIONS.mdへ書く予定、Webはそれに合わせる)。issue #284(balance/speed/judgeが
-gatewayの後ろに統一される。APIレーンの転送実装が出たら`/api/balance`・`/api/speed`・`/api/judge`の
-接続先を切り替える)。両方ともキューの末尾。
+**issue #271・#270(計算・逆算・bulkの結果に「未対応」の印を表示)完了・main統合済み(2026-09-25。
+PR #412)**: ADR-0123に沿って`unsupported: UnsupportedMark[]`(target/reason/id)を表示。全行(全候補)に
+共通する印は結果一覧の先頭に1回、一部の行(候補)だけの印はその行だけ(`splitUnsupportedMarks`。
+`web/src/domain/unsupportedLabels.ts`)。色は`--danger`でなく`--text-secondary`(エラーではなく目安の
+ため警告色にしない)。spec-writer→implementer→**critic 1回目PASS**→**レビュー直後にiOSレーンが
+DECISIONS.mdへクロスプラットフォームの文言・配置・色の決定を追加**したため追加のimplementerラウンドで
+整合(iOSの`DisplayLabels.swift`と文言を1件ずつ突き合わせ完全一致)→**critic 2回目PASS**。
+JudgeScreen(JD5)は別contract(`attackerKoUnsupported`/`defenderKoUnsupported`)のため対象外、別タスクとして
+plan.mdに記載。`npx vitest run`1674/1674・`make web-e2e`37/37・typecheck/lint無回帰。opusのセッション
+利用枠上限で両criticともsonnetで代替実施(CLAUDE.mdのモデル割り当て方針どおり)。
+Next: オーケストレーターの見立て(2026-09-25、damage calculation bug resolution)に従い、
+**P5-5(履歴・よく計算する相手・構築ビルダー・ADR-0209 §8「この端末のデータを削除」UI)** に着手する
+(record-svc PR #372・team-svc PR #409がmain統合済み)。判定レーンとShowdown形式インポート/エクスポートの
+分担で合意済み(判定レーンが`web/src/team/showdownFormat.ts`等、Webは構築CRUD本体・履歴・よく使う相手・
+端末データ削除UIを担当。judge worktreeで既にブランチ`feat/web-team-showdown-format`が動いている模様、
+着手時に重複が無いか要確認)。完了時はdocs/verify-m1.md(またはM2用手順書)にM2動作確認手順を追加し、
+make deploy-latestの対象にrecord・team・TiDB・NATSが要るかAPIレーンと確認すること(オーケストレーターの
+依頼)。P5-5の後、#219・#211(APIレーン連携)、#272・#274(PR #411/ADR-0214でAPI分実装済み・PR #402/
+ADR-0126でWASM側実装済み。攻撃側・防御側の特性選択UIを一緒に設計、防御側は省略時に種族の全特性〈最大3件〉
+が自動候補化され行数が増える点を表示に反映)、#210、#332(devDependencies更新)、#226(README等の実装状況の
+精度確認)。**新規キュー項目**: issue #328(非公開・私的利用・LICENSEなしで決定。design.mdに追記のうえ
+既存画面の邪魔にならない位置に出典・非公式である旨を表示。文言はiOSレーンがfeat/ios-p6-18-aboutブランチの
+DECISIONS.mdに記載済み〈非公式注記+データ出典4件。フッターリンク→情報ページの置き場所案あり〉)。
+issue #284(balance/speed/judgeがgatewayの後ろに統一される。APIレーンの転送実装が出たら`/api/balance`・
+`/api/speed`・`/api/judge`の接続先を切り替える)。両方ともキューの末尾。
 (3) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
 (apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより
 連絡が来る想定。(4) P5-5(構築ビルダー等)は record/team の API 待ち(M2。2026-09-24 時点で record/team-svc
