@@ -167,11 +167,12 @@ check_a() {
   scan_content A "絶対パス(/var/folders)" '/var/folders'
   scan_content A "絶対パス(/private/tmp)" '/private/tmp'
   scan_content A "絶対パス(Windows のユーザーフォルダ)" 'C:\\Users'
-  # 量指定子は上限を付ける(RFC 5321/1035 目安のlocal-part 64・label 63・TLD 24)。
+  # local-part の量指定子は上限を付ける(RFC 5321 目安の 64)。ドメイン側は上限を付けない(深いサブドメインを見逃さないため。
+  # 速度の原因は local-part だけで、ドメイン側を無制限にしても 3MB の1行で 0.4 秒程度)。
   # 上限が無いと、@ を含まない巨大な1行(例: 自己テストの big.txt)に対して
   # `[A-Za-z0-9._%+-]+` の後方一致に失敗するたび1文字ずつ後退する O(n^2) の走査になり、
   # Linux の git grep で数分単位に固まる(2026-09 CI 導入時に判明。実データでの誤検知は無い)。
-  scan_content A "メールアドレス" '[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(\.[A-Za-z0-9-]{1,63}){0,8}\.[A-Za-z]{2,24}' "$EMAIL_ALLOW"
+  scan_content A "メールアドレス" '[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}' "$EMAIL_ALLOW"
   scan_content A "端末名" 'MacBook|iMac|Mac mini'
   scan_content A "ネットワーク(.ts.net)" '\.ts\.net'
   scan_content A "ネットワーク(IPv4)" '(^|[^0-9.])([0-9]{1,3}\.){3}[0-9]{1,3}([^0-9.]|$)' "$IPV4_ALLOW"
@@ -182,10 +183,10 @@ check_a() {
 # B. 秘密らしき文字列
 # ---------------------------------------------------------------------------
 check_b() {
-  # キー名の後ろの `[A-Za-z0-9_-]*` も上限を付ける(上と同じ理由。ADR-0114 で判明した
+  # キー名の後ろの `[A-Za-z0-9_-]*` も上限を付ける(上と同じ理由。ADR-0119 で判明した
   # メールアドレス正規表現の O(n^2) 走査と同じ形なので、念のためこちらも塞ぐ)。
   scan_content B "秘密らしき文字列(キー名=値)" \
-    '(password|passwd|secret|api[_-]?key|private[_-]?key|access[_-]?token)[A-Za-z0-9_-]{0,40}['"'"'"]?[[:space:]]*[:=][[:space:]]*['"'"'"]?[^[:space:]'"'"'"]{8,}' \
+    '(password|passwd|secret|api[_-]?key|private[_-]?key|access[_-]?token)[A-Za-z0-9_-]{0,128}['"'"'"]?[[:space:]]*[:=][[:space:]]*['"'"'"]?[^[:space:]'"'"'"]{8,}' \
     "$B_KEYVALUE_ALLOW" i
   scan_content B "秘密らしき文字列(秘密鍵ブロック)" '-----BEGIN [A-Z ]*PRIVATE KEY-----'
   scan_content B "秘密らしき文字列(AWS アクセスキー形式)" 'AKIA[0-9A-Z]{16}'
