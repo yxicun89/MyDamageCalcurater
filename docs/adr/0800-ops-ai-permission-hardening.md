@@ -60,12 +60,22 @@ Claude Code公式ドキュメント(2026-09-25 確認)によれば、`permission
 該当しなければ何も出力せず exit 0(通常の許可フローに委ねる)。**exit 2 を使うのは、JSON の `permissionDecision`
 だけでは `permissions.allow` に上書きされる余地が残るため**(公式ドキュメントが明言)。
 
-### 3. Codex 側にも同じスクリプトを使う
+### 3. Codex 側にも同じスクリプトを使う(**実効性は未検証**)
 `.codex/config.toml` の `[[hooks.PreToolUse]]`(`matcher = "^Bash$"`)から同じ `scripts/ai-guard/bash-guard.sh` を呼ぶ。
 Codex の PreToolUse は `permissionDecision: "ask"` を公式にサポートしない(`allow`/`deny` のみ)ため、Codex 側は
 該当パターンを **常に deny**(exit 2 相当)にする。加えて `.codex/config.toml` に `approval_policy = "on-request"`・
 `sandbox_mode = "workspace-write"` を明示し(未設定だと利用者のグローバル既定に委ねられ、リポジトリ側の意図が保証
 されないため)、フックが対応しない操作(未知のツール等)についても対話的な承認を既定にする。
+
+**注(critic 1回目レビューで判明)**: codex-cli のバイナリ文字列調査で、プロジェクトローカルの hooks 設定は
+「ディレクトリの信頼」と「フックごとの人間の確認(TUI)」の両方が済むまで読み込まれないらしい痕跡
+(`trusted_hash`・"1 hook needs review before it can run."・"Trusting the directory allows project-local
+config, hooks ... to load")が見つかった。加えて、`command` フィールドがシェル経由で `$(git rev-parse
+--show-toplevel)` を展開するか、Codex が Bash 実行時に `tool_name` を `"Bash"` として渡すかは、実際に Codex を
+起動して確認できていない。**したがって現時点では、Codex 側でこのフックが実際に機能することは保証できない**
+(展開されない・`tool_name` が一致しない場合、フックは何も知らせずに無効化される)。設定は「意図の表明」として
+入れるが、有効化には人間が実際に Codex を起動してフックを信頼・確認する手順が要る可能性が高い。実地確認は
+運用レーン(代行中の素早さレーン、または次に担当する AI・人間)の宿題として残す。
 
 ### 4. 1本のPRにまとめる
 「全レーンのAIに効くので運用として1本のPRにしてください」という調整役の指示どおり、`.claude/settings.json`・
