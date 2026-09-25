@@ -184,8 +184,11 @@ P6-10(構築編集の load の技解決を `getMovesByIds` のまとめ取り1�
 critic 1周目 FAIL〈分割境界のテスト不足〉→テスト追加→2周目 PASS)完了。
 P6-11(issue #334。攻撃側プリセットの表示名を技の分類に追従。PR #348、issue クローズ済み)・P6-12(issue #71 の iOS 追従。
 `engine/presets/attacker.json` との契約テスト、並び 無振り→特化→振り、既定を無振りに変更。ADR-0501「P6-12」)完了。
-Next: (1) issue #274(計算画面の条件入力。Web レーンと合意済みで iOS が先行、語は DECISIONS.md に書いて Web が合わせる)。
-(2) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。将来の候補:
+P6-13(issue #274。計算画面の「詳細」: 急所・やけど・天候・フィールド・防御側の壁・攻撃側のランク・特性。PR #377。語は
+DECISIONS.md に記録し Web が合わせる)・P6-14(最大の文字サイズで計算画面が横にはみ出す既存の不具合。結果行の `.fixedSize()` が原因)完了。
+Next: (1) P6-15(P6-14 の軽微な残り)。(2) API レーンが `BulkCalcRequest.defenderOverride`(防御側のランク・特性・状態異常。
+DECISIONS.md 2026-09-25 で採用、M2 の後に実装予定)を入れたら、iOS の「詳細」に防御側の入力を追加。
+(3) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。将来の候補:
 engine の Champions マスタが pokedex-svc 経由になったら iOS のモック/実マスタの差し替え動作を再確認、Web の
 record/team-svc(M2)が進んだら iOS の構築を端末内保存から API 保存へ移行するかを検討。
 

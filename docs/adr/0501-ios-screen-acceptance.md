@@ -2526,3 +2526,179 @@ green)、単体再実行(`-only-testing:PokeCalcUITests/CalcConditionsUITests`)�
   修正し、accessibility-extra-large のスクリーンショットで確認した。あわせて、最大の文字サイズ
   (accessibility-extra-extra-extra-large)では計算画面の**全体**が横にはみ出す(左端が切れる)ことを見つけた。
   この変更の前(2026-09-23)のスクリーンショットでも同じなので既存の不具合で、本節の範囲外として plan.md P6-14 に切り出す。
+
+## P6-14 の受け入れ条件(最大の文字サイズ〈AX5〉での横はみ出し。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+- 日付: 2026-09-25 / 担当レーン: iOS / 関連: 本 ADR「issue #274」8章の追記(不具合の発見)、docs/plan.md P6-14、
+  `CalcScreenView.swift`・`CalcScreenResults.swift`・`ReverseScreenResults.swift`
+
+### 1. 受け入れ条件(検証可能な形)
+
+1. AX5(`.accessibility5` = `UIContentSizeCategory.accessibilityExtraExtraExtraLarge`、起動引数
+   `-UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityXXXL`)で計算画面
+   (`CalcScreenView`)を開いたとき、`calcBackendModeBadge`・`attackerCard`・`defenderCard`・
+   `attackerPreset-*`・`attackerTeamSourceButton`・`movePicker`・`calcConditionsToggle`・
+   `calcResultRow-*` を含む主要な要素すべてが、ウィンドウの `frame`(`minX >= 0` かつ
+   `maxX <= window.maxX`。丸め誤差 1pt 許容)に収まる。左端が切れる(`minX < 0`)状態を再発させない。
+2. 同じ条件で逆算画面(`ReverseScreenView`)・構築一覧画面(`TeamListView`)・構築編集画面
+   (`TeamEditView`)を開いたときも、主要な要素(カード・プリセット・構築元行・技セレクタ・
+   一覧の行・編集画面の入力)が同様にウィンドウ内に収まる。
+3. 上記1・2は、はみ出す原因になっている `Text` が実際に画面へ描画された状態(計算画面は既定の
+   計算結果が1行以上出た状態、逆算画面は候補が1件以上出た状態)で確認する。表示物が無い(空)状態
+   だけを見て「直った」と判定しない。
+4. 既定の文字サイズ(Dynamic Type 既定値)では、上記1・2の同じ要素群が今までどおりウィンドウ内に
+   収まる(回帰させない)。
+5. はみ出しを直す変更は、はみ出す原因の `Text`(`ResultRowView.percentRangeTextView`・`koText`、
+   `ReverseCandidateCardView` の同等の `Text`)を折り返す/縮小する/縦積みにするなど、内容が
+   ウィンドウ幅を超えて要求しない形にする。`accessibilityIdentifier` は変えない
+   (既存 XCUITest・本 ADR の識別子表と衝突させない)。
+6. 直した後も `AttackerPresetTests`・`BulkRowDisplayTests`・`CalcViewModelTests` 等の既存 XCTest、
+   および `CalcScreenUITests`・`ReverseScreenUITests`・`CalcConditionsUITests`・`TeamScreenUITests`
+   の既存 XCUITest がすべて成功する(数値・文言の期待値は変えない)。
+
+### 2. 追加したテスト
+
+`ios/PokeCalcUITests/LargeTextLayoutUITests.swift`(新規)。`POKECALC_USE_MOCK=1` + 起動引数
+`-UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityXXXL` で AX5 を固定し、
+`cardsRow`/`ReverseScreenView.cardsRow` が `dynamicTypeSize >= .accessibility1` で縦積みに切り替わる
+実装を使って起動引数が実際に効いたことも確認する(`assertAX5TookEffect`)。主要な識別子について
+ウィンドウの `frame` からのはみ出しをまとめて検査し(`assertNoHorizontalOverflow`)、はみ出した要素・
+その `frame`・ウィンドウの `frame` を1つの失敗メッセージに列挙する。既定サイズでの同じ検査(回帰確認)
+も対にして入れた。
+
+- `testCalcScreenNoHorizontalOverflowAtDefaultSize` / `testCalcScreenNoHorizontalOverflowAtAX5`
+- `testReverseScreenNoHorizontalOverflowAtDefaultSize` / `testReverseScreenNoHorizontalOverflowAtAX5`
+- `testTeamScreensNoHorizontalOverflowAtDefaultSize` / `testTeamScreensNoHorizontalOverflowAtAX5`
+  (構築を1つ作って編集画面まで進めて検査する。`RootView.makeTeamStore()` が `POKECALC_USE_MOCK=1` の
+  起動のたびに専用 UserDefaults suite を空にするため、他の XCUITest のデータと衝突しない)
+
+2026-09-25 時点の実行結果(`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test
+-project ios/PokeCalc.xcodeproj -scheme PokeCalc -destination 'platform=iOS Simulator,name=iPhone 18 Pro'
+-only-testing:PokeCalcUITests/LargeTextLayoutUITests`): 6件中5件成功、
+`testCalcScreenNoHorizontalOverflowAtAX5` のみ失敗(想定どおり。実装未修正)。既定サイズの計算画面の
+回帰テストは成功しており、既定サイズでは崩れていないことを確認済み。逆算・構築の2画面は AX5 でも
+成功した(§4「未確認・要フォローアップ」参照。原因パターンは共通に存在するが、モックの既定状態では
+再現条件〈候補行が出る状態〉に達しない)。
+
+テスト実装上の注意(申し送り): `ResultRowView`(`CalcScreenResults.swift`)は `glassCard()` のコンテナに
+`.accessibilityElement(children: .contain)` が無く、`CalcConditionsSection.swift` の既存コメントが説明する
+のと同じ理由で、`subtitleText`・`percentRangeTextView`・`koText` の3つの `Text` が個別の
+`accessibilityIdentifier`(`calcResultPercent-*`・`calcResultKO-*` など)を持っているにもかかわらず、
+すべて親の `calcResultRow-<id>` に「飲まれ」て同一 identifier で3件ヒットする(`.frame` を取ろうとすると
+`Multiple matching elements found` で失敗した。実際に本テストの初回実行で踏んだ)。これは P6-14 のはみ出し
+とは別の、識別子まわりの既存の抜け漏れ(`attackerCard`/`defenderCard`/`calcConditionsPanel` は `.contain` が
+付いているので同じ問題は起きない)。本テストはこれを踏まえて同一 identifier の全件の `frame` を見る作りに
+した(`matchingElements`)ので実装はここで直さなくてよいが、`.accessibilityElement(children: .contain)` を
+`ResultRowView`・`ReverseCandidateCardView` にも足すと今後の XCUITest がシンプルになる(任意の改善)。
+
+### 3. 見つかった原因(実装者への引き継ぎ。まだ直していない)
+
+`xcrun xcresulttool` で AX5 失敗時の `frame` を実測(iPhone 18 Pro シミュレータ、ウィンドウ
+`(0, 0, 402, 874)`):
+
+```
+calcBackendModeBadge : minX=-52.0  width=342.3
+attackerCard          : minX=-52.5 width=507.0
+defenderCard          : minX=-52.5 width=507.0
+attackerPreset-none   : minX=-52.5 width=164.3
+attackerPreset-aMax   : maxX=454.5 width=164.3
+attackerTeamSourceButton : minX=-52.0 width=506.0
+movePicker            : minX=-52.0 width=506.0
+calcConditionsToggle  : minX=-52.5 width=507.0
+calcResultRow-none@- [percent text] : minX=-40.0 width=482.0 label="18.0〜26.0%"
+```
+
+- ほぼ全部の要素の幅が 506〜507pt に揃っている(ウィンドウは 402pt)。かつ `minX` は揃って負
+  (-52 前後)で、`maxX - window.maxX` もほぼ同じだけ超過している。これは「個々の要素が勝手に
+  伸びた」のではなく、**`CalcScreenView.body` の `VStack(alignment: .leading)` そのものの幅が
+  506〜507pt まで広がり**、`.frame(maxWidth: .infinity)` を使っている兄弟(カード・プリセットの
+  ピル行・構築元ボタン・技セレクタ・「詳細」トグル)が全員その広がった幅いっぱいに引き伸ばされた
+  結果。さらに `ScrollView`(縦専用。横スクロールを許可していない)は、非スクロール軸(横)で
+  コンテンツがビューポートより大きいとき既定で**中央寄せ**する。ウィンドウ幅402・コンテンツ幅507
+  なら `minX = (402 - 507) / 2 = -52.5` で、実測値と一致する。これが「左端が切れる」(=右にも
+  はみ出しているが、見た目には左端が削れて見える)の直接の理由。
+- `VStack` の幅が広がった発生源は `ResultRowView`(`CalcScreenResults.swift` 106〜121行・140〜151行)
+  の `percentRangeTextView`(`%幅` の `Text`)と `koText` の `Text`。どちらも `.fixedSize()` が付いており、
+  折り返し・縮小をせず「1行に収まる自然な幅」をそのまま親に要求する。AX5 のような巨大な文字サイズでは、
+  この自然な幅がウィンドウ幅を超える(実測: percentRangeTextView だけで幅482pt)。
+  `ResultRowView.body` は `ViewThatFits(in: .horizontal)` で「横並び」「縦積み」の2案を試すが(123〜137行)、
+  **どちらの案にも同じ `percentRangeTextView`(`.fixedSize()`)がそのまま入っている**ため、縦積みにしても
+  幅は縮まらない。両方とも収まらない場合 `ViewThatFits` は最後の案をそのまま(要求どおりの大きさで)描画する
+  仕様なので、結局オーバーサイズの `Text` の幅がそのまま `ResultRowView` → 呼び出し元の `VStack` へ伝播する。
+- 同じパターンが `ReverseCandidateCardView`(`ReverseScreenResults.swift` 59〜63行の
+  `Text(candidate.percentRangeText)...fixedSize()`)にも存在するが、モックの逆算画面は起動直後は観測0件で
+  候補行が描画されないため、本タスクの XCUITest(既定の起動直後の状態を見る)では再現しなかった。観測を
+  1件追加して候補行を出した状態で同じ検査をすると、同じ原因で同様にはみ出す可能性が高い(未検証。§4)。
+
+### 4. 推奨する直し方(実装はしていない。implementer への申し送り)
+
+1. **本命**: `ResultRowView.percentRangeTextView` と `koText`(`ReverseCandidateCardView` の同等の `Text`
+   も同様)から `.fixedSize()` を外すか、`.lineLimit(1).minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)`
+   に置き換える(このファイルの他の `Text` ―`subtitleText`・pill のラベルなど―が既に使っているのと同じ
+   縮小パターン。design.md の「ダメージバーの物差しをそろえる」意図は保ったまま、確定数バッジや%表示が
+   小さくなるだけで済む)。
+2. `ViewThatFits` の2案のどちらでも `percentRangeTextView` が固定幅のままだと1で直しても効果が薄いので、
+   1と揃えて直す。1で幅が縮むなら `ViewThatFits` の「横並び」案がAX5でも選ばれるようになり、縦積み案は
+   より小さい文字サイズ用のままでよい。
+3. 保険として、`CalcScreenView.body` の `VStack`(`ScrollView` の直下)に `.frame(maxWidth: .infinity)` や
+   `containerRelativeFrame(.horizontal)` を付け、個々の子がどれだけ「自然な幅」を要求してもコンテナ自体は
+   画面幅を超えないようにする案もある。ただしこれは症状(はみ出す)を隠すだけで、中身の `Text` はその幅の
+   中でさらに小さく潰れるか省略記号で切れるだけになるため、1・2の「原因側」を直すほうを優先する。
+4. 直したら、5章 (1)〜(3) のテストに加え、逆算画面で観測を1件追加して候補行を出した状態
+   (`ReverseCandidateCardView` 側)も同じ手順で AX5 確認する(§1 の受け入れ条件2・3の対象)。
+
+### 5. 未確認・要フォローアップ
+
+- 本タスクの XCUITest は逆算画面・構築画面を「起動直後の既定状態」でしか AX5 検査していない
+  (逆算は観測0件・候補0件、構築は一覧が空 or 編集画面に入っただけでメンバー未追加)。§3で述べたとおり、
+  `ReverseCandidateCardView` にも同じ `.fixedSize()` パターンがあるため、候補が出た状態
+  (観測を1件入力した状態)での AX5 検査は未実施。implementer は直す際にこのケースも確認すること。
+- 構築編集画面でメンバーを1体追加した状態(`TeamEditMemberCard`)の AX5 検査も未実施。
+
+### 6. 実装結果(implementer、2026-09-25)
+
+§4の推奨1・2どおりに実装した。
+
+1. `ResultRowView.percentRangeTextView`・`koText`(`CalcScreenResults.swift`)と
+   `ReverseCandidateCardView` の `percentRangeText` の `Text`(`ReverseScreenResults.swift`)から
+   `.fixedSize()` を外し、このファイルの他の `Text`(`subtitleText` 等)と同じ
+   `.lineLimit(1).minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)` に置き換えた。
+   これで `ViewThatFits` の「横並び」案(`ResultRowView`)・`HStack`(`ReverseCandidateCardView`)が
+   AX5 でも縮小した文字幅で収まるようになり、`CalcScreenView`/`ReverseScreenView` の `VStack` 全体が
+   広がる連鎖(§3)が起きなくなった。既定サイズでは自然な幅がスケール閾値を超えないため、
+   見た目(%表示の大きさ・改行なし)は変えていない。
+2. `ResultRowView`・`ReverseCandidateCardView` のコンテナに `.accessibilityElement(children: .contain)`
+   を追加(`CalcConditionsSection.calcConditionsPanel` と同じパターン)。§2の申し送りどおり
+   `calcResultPercent-*`/`calcResultKO-*`/`reverseCandidateRange-*`/`reverseCandidateMatch-*` が
+   親の `calcResultRow-*`/`reverseCandidateRow-*` に飲まれず個別要素のまま残ることを確認した。
+   `accessibilityIdentifier` はどちらも変えていない。
+3. `LargeTextLayoutUITests` に AX5 のケースを2件追加した(いずれも実装前に「失敗するはず」だった
+   §5のフォローアップを埋める):
+   - `testReverseScreenWithCandidateNoHorizontalOverflowAtAX5`:
+     `reverseObservationField-0` に "12" を入力して `reverseCandidateRow-neutral@-` を実際に描画した
+     状態で検査(`ReverseScreenUITests.testEnteringObservationShowsCandidatesAndPremise` と同じ操作)。
+   - `testTeamEditScreenWithMemberNoHorizontalOverflowAtAX5`: 構築編集画面でメンバーを1体追加した
+     状態(`TeamEditMemberCard`)を検査。member id が UUID で identifier に入るため、新設の
+     `matchingElementsBeginningWith`/`assertNoHorizontalOverflowForPrefixes`(前方一致版)で
+     `memberCard-`・`memberSP-`・`memberMoveSlot-` 等を検査した。
+   `testCalcScreenNoHorizontalOverflowAtAX5`(既存の失敗していたテスト本体)を含め、
+   `LargeTextLayoutUITests` は8件全て成功した。
+4. `grep fixedSize ios/PokeCalc` で他の使用箇所も確認した。`CalcScreenResults.ChipButton`
+   (横スクロールの `ScrollView(.horizontal)` の中なので、内容が広がっても外側の `VStack` 幅には
+   伝播しない)、`CalcScreenCards.SpeciesHeaderMenuLabel` の名前(`fixedSize(horizontal: false,
+   vertical: true)` で縦方向だけ)、`CalcScreenCards.TypeBadgeView`、`CalcConditionsSection.
+   sectionRowLabel`(既定サイズの1行レイアウト限定。アクセシビリティサイズでは2行レイアウトに
+   切り替わり `fixedSize()` を使わない分岐に入る)、`TeamEditMemberCard.spStepper` のラベルは、
+   いずれも本タスクで追加した AX5 の XCUITest(計算画面・逆算画面〈候補あり〉・構築編集画面
+   〈メンバーあり〉)で実際にはみ出しを起こさず、8件とも成功したため、追加の修正はしていない。
+5. 検証: `swift test`(`ios/PokeCalcKit`)436件0失敗。
+   `xcodebuild test -only-testing:PokeCalcUITests/LargeTextLayoutUITests` 8件0失敗
+   (新設の2件を含む)。`make ios-test`: `ios-test-unit`・`ios-test-ui`(30件0失敗。既存22件+新設8件)・
+   `ios-check-infoplist` すべて成功(終了コード0)。
+6. 気づいた点(修正はしていない・要フォローアップ): `testReverseScreenWithCandidateNoHorizontalOverflowAtAX5`
+   の `xcresult` に、`reverseObservationField-0` をタップした直後(候補描画前・入力前)に
+   1件だけ SwiftUI のランタイム警告「Invalid frame dimension (negative or non-finite).」が記録された。
+   アサーション失敗にはなっておらず(`isAssociatedWithFailure: false`)、テストは成功している。
+   候補カードの描画やテキストフィールドへの入力より前(フォーカス直後)に出ているため、
+   本タスクの `.fixedSize()` の直しとは無関係に見える(AX5 でのキーボード表示アニメーション周りの
+   既知の SwiftUI の挙動の可能性)。原因は特定していない。
