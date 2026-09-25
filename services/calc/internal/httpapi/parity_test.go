@@ -45,32 +45,7 @@ func wasmResult(t *testing.T, out string) any {
 	if env.Error != nil {
 		t.Fatalf("wasmapi が失敗した: %s", out)
 	}
-	return dropEmptyUnsupported(t, env.Result)
-}
-
-// dropEmptyUnsupported は WASM の結果から「未対応」の印(unsupported。ADR-0123)を取り除く。
-// HTTP の契約(api/openapi.yaml)にはまだ印の項目が無い(API レーンに追加を依頼中)ため、比べられない。
-// ここのパリティの入力は印が付かないものだけなので、空でない印が出たら黙って捨てずに失敗させる。
-// HTTP の契約に印が入ったら、この関数を消して印も比べる。
-func dropEmptyUnsupported(t *testing.T, v any) any {
-	t.Helper()
-	switch x := v.(type) {
-	case map[string]any:
-		if u, ok := x["unsupported"]; ok {
-			if arr, isArr := u.([]any); !isArr || len(arr) != 0 {
-				t.Fatalf("WASM の結果に空でない印がある(HTTP の契約に印が無いので比べられない): %v", u)
-			}
-			delete(x, "unsupported")
-		}
-		for k, child := range x {
-			x[k] = dropEmptyUnsupported(t, child)
-		}
-	case []any:
-		for i, child := range x {
-			x[i] = dropEmptyUnsupported(t, child)
-		}
-	}
-	return v
+	return env.Result
 }
 
 func calcWasmBody(t *testing.T, f *fakeStore, c calcCase) map[string]any {
@@ -160,7 +135,7 @@ func reverseWasmBody(t *testing.T, f *fakeStore, c reverseCase) map[string]any {
 // AC-9: 同じ失敗は HTTP と WASM で同じ code。
 func TestErrorCodeParityWithWasm(t *testing.T) {
 	store := newFakeStore(t)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	c := calcCases()[0]
 	rc := reverseCases(t, store)[0]
 
@@ -281,7 +256,7 @@ func TestErrorCodeParityWithWasm(t *testing.T) {
 // AC-9: 同じ入力なら calc の CalcResult は WASM の result と完全に同じ(キーも値も)。
 func TestCalcResultParityWithWasm(t *testing.T) {
 	store := newFakeStore(t)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	for _, c := range calcCases() {
 		t.Run(c.name, func(t *testing.T) {
 			want := wasmResult(t, wasmapi.Calc(string(mustJSON(t, calcWasmBody(t, store, c)))))
@@ -325,7 +300,7 @@ func normalizeBulkRow(row map[string]any) map[string]any {
 // AC-9: 同じ入力なら bulk の各行(preset・持ち物・defender の SP/性格/実数値・result)は WASM と同じ。
 func TestBulkResultParityWithWasm(t *testing.T) {
 	store := newFakeStore(t)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	tests := []struct {
 		name    string
 		moveID  string
@@ -403,7 +378,7 @@ func normalizeReverseCandidate(c map[string]any) map[string]any {
 // side=defender(cases[0])と side=attacker(cases[2])の各1件を見る(TestCalcReverseNatureIDs と同じ選び方)。
 func TestReverseResultParityWithWasm(t *testing.T) {
 	store := newFakeStore(t)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	cases := reverseCases(t, store)
 	for _, c := range []reverseCase{cases[0], cases[2]} {
 		t.Run(c.name, func(t *testing.T) {

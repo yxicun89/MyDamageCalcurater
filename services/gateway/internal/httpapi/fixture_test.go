@@ -120,34 +120,45 @@ func mustParseURL(t *testing.T, raw string) *url.URL {
 	return u
 }
 
-// testEnv は4つの上流の偽物と、それらに向けた gateway のハンドラ。web の偽物は常に起動するが、
-// Config の WebURL に入るのは newWebTestEnv のときだけ(newTestEnv では WebURL 未設定 = 従来どおり)。
+// testEnv は5つの上流の偽物と、それらに向けた gateway のハンドラ。web・record の偽物は常に起動するが、
+// Config の WebURL / RecordURL に入るのは newWebTestEnv / newRecordTestEnv のときだけ
+// (newTestEnv では未設定 = 従来どおり。ADR-0209 §10 の record_routing_test.go が前提にする)。
 type testEnv struct {
-	calc, pokedex, assets, web *fakeUpstream
-	handler                    http.Handler
+	calc, pokedex, assets, web, record *fakeUpstream
+	handler                            http.Handler
 }
 
-// newTestEnv は既定の Config(calc・pokedex・assets の上流・許可オリジン2つ・タイムアウト 2s。WebURL は未設定)で
-// gateway を作る。mutate で Config を書き換えられる(未設定の上流・短いタイムアウト・CORS 無しなど)。
+// newTestEnv は既定の Config(calc・pokedex・assets の上流・許可オリジン2つ・タイムアウト 2s。WebURL・
+// RecordURL は未設定)で gateway を作る。mutate で Config を書き換えられる(未設定の上流・短いタイムアウト・
+// CORS 無しなど)。
 func newTestEnv(t *testing.T, mutate ...func(*Config)) *testEnv {
 	t.Helper()
-	return buildTestEnv(t, false, mutate...)
+	return buildTestEnv(t, false, false, mutate...)
 }
 
 // newWebTestEnv は newTestEnv に加えて WebURL を web の偽物に向けた gateway を作る(ADR-0205)。
 // mutate は WebURL を設定した後に適用する(WebURL を閉じたサーバや遅いサーバに差し替えられる)。
 func newWebTestEnv(t *testing.T, mutate ...func(*Config)) *testEnv {
 	t.Helper()
-	return buildTestEnv(t, true, mutate...)
+	return buildTestEnv(t, true, false, mutate...)
 }
 
-func buildTestEnv(t *testing.T, withWeb bool, mutate ...func(*Config)) *testEnv {
+// newRecordTestEnv は newTestEnv に加えて RecordURL を record の偽物に向けた gateway を作る
+// (ADR-0209 §10)。record_routing_test.go の既定(RecordURL 未設定)を壊さないよう、newTestEnv とは
+// 別のコンストラクタにしてある。
+func newRecordTestEnv(t *testing.T, mutate ...func(*Config)) *testEnv {
+	t.Helper()
+	return buildTestEnv(t, false, true, mutate...)
+}
+
+func buildTestEnv(t *testing.T, withWeb, withRecord bool, mutate ...func(*Config)) *testEnv {
 	t.Helper()
 	env := &testEnv{
 		calc:    newFakeUpstream(t, "calc"),
 		pokedex: newFakeUpstream(t, "pokedex"),
 		assets:  newFakeUpstream(t, "assets"),
 		web:     newFakeUpstream(t, "web"),
+		record:  newFakeUpstream(t, "record"),
 	}
 	cfg := Config{
 		CalcURL:            env.calc.url(t),
@@ -158,6 +169,9 @@ func buildTestEnv(t *testing.T, withWeb bool, mutate ...func(*Config)) *testEnv 
 	}
 	if withWeb {
 		cfg.WebURL = env.web.url(t)
+	}
+	if withRecord {
+		cfg.RecordURL = env.record.url(t)
 	}
 	for _, m := range mutate {
 		m(&cfg)
@@ -170,9 +184,9 @@ func buildTestEnv(t *testing.T, withWeb bool, mutate ...func(*Config)) *testEnv 
 	return env
 }
 
-// upstreams は4つの上流を名前つきで返す(「どこにも届かない」の検査用。web は WebURL 未設定でも含める)。
+// upstreams は5つの上流を名前つきで返す(「どこにも届かない」の検査用。web・record は未設定でも含める)。
 func (e *testEnv) upstreams() []*fakeUpstream {
-	return []*fakeUpstream{e.calc, e.pokedex, e.assets, e.web}
+	return []*fakeUpstream{e.calc, e.pokedex, e.assets, e.web, e.record}
 }
 
 // assertNoUpstreamReached はどの上流にもリクエストが届いていないことを確かめる。

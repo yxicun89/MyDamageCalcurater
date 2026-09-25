@@ -39,6 +39,7 @@ type Querier struct {
 	SpeciesAbilities    []store.SpeciesAbility
 	Moves               []store.Move
 	MoveEffects         []store.MoveEffect
+	MoveMechanisms      []store.MoveMechanism
 	Items               []store.Item
 	ItemEffects         []store.ItemEffect
 	Abilities           []store.Ability
@@ -135,6 +136,13 @@ func (q *Querier) ListMoveEffects(context.Context) ([]store.MoveEffect, error) {
 		return nil, err
 	}
 	return append([]store.MoveEffect(nil), q.MoveEffects...), nil
+}
+
+func (q *Querier) ListMoveMechanisms(context.Context) ([]store.MoveMechanism, error) {
+	if err := q.record("ListMoveMechanisms", nil); err != nil {
+		return nil, err
+	}
+	return append([]store.MoveMechanism(nil), q.MoveMechanisms...), nil
 }
 
 func (q *Querier) ListItems(context.Context) ([]store.Item, error) {
@@ -384,6 +392,12 @@ func New() *Querier {
 			{ID: "teststrike", NameJa: "テストうちこみ", NameJaSource: "override", NameEn: "Test Strike", Type: "normal", Category: "physical", Power: 40, Accuracy: sql.NullInt16{Int16: 100, Valid: true}, Pp: 30, Priority: 1},
 			{ID: "testglare", NameJa: "テストにらみ", NameJaSource: "pokeapi", NameEn: "Test Glare", Type: "normal", Category: "status", Power: 0, Pp: 30, Priority: 0},
 			{ID: "testbanned", NameJa: "テストきんじて", NameJaSource: "pokeapi", NameEn: "Test Banned", Type: "water", Category: "special", Power: 80, Accuracy: sql.NullInt16{Int16: 100, Valid: true}, Pp: 10, Priority: 0},
+		},
+		// testflame は複数の機構を持つ(わざと逆順に入れて、応答が昇順に並び替わることを確認する。ADR-0121)。
+		// teststrike 等は機構を持たない(通常の技。応答は空配列になる)。
+		MoveMechanisms: []store.MoveMechanism{
+			{MoveID: "testflame", Mechanism: "variable_power"},
+			{MoveID: "testflame", Mechanism: "multi_hit"},
 		},
 		Items: []store.Item{
 			{ID: "testorb", NameJa: "テストだま", NameJaSource: "pokeapi", NameEn: "Test Orb"},

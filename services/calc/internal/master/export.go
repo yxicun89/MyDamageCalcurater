@@ -236,7 +236,7 @@ func buildMoves(list []api.MasterMove, chart engine.TypeChart) (map[string]engin
 		}
 		row := sharedmaster.MoveRow{
 			ID: m.Id, NameJa: m.NameJa, Type: string(m.Type), Category: string(m.Category),
-			Power: m.Power, Priority: m.Priority, Effect: effect,
+			Power: m.Power, Priority: m.Priority, Effect: effect, Mechanisms: m.Mechanisms,
 		}
 		mv, err := sharedmaster.Move(row, chart)
 		if err != nil {

@@ -38,11 +38,19 @@ func TestRoutesReachTheirUpstream(t *testing.T) {
 		{"assets 画像(クエリ付き)", http.MethodGet, "/assets/0445-000.webp?v=abc123", http.Header{}, nil,
 			"assets", "/assets/0445-000.webp", "v=abc123"},
 		{"assets HEAD", http.MethodHead, "/assets/0445-000.webp", http.Header{}, nil, "assets", "/assets/0445-000.webp", ""},
+		{"record 全削除(ADR-0209 §10)", http.MethodDelete, "/api/record/device-data", validHeaders(), nil,
+			"record", "/api/record/device-data", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			env := newTestEnv(t)
-			target := map[string]*fakeUpstream{"calc": env.calc, "pokedex": env.pokedex, "assets": env.assets}[tt.upstream]
+			if tt.upstream == "record" {
+				// RecordURL は newTestEnv の既定では未設定(record_routing_test.go の前提を壊さないため)。
+				env = newRecordTestEnv(t)
+			}
+			target := map[string]*fakeUpstream{
+				"calc": env.calc, "pokedex": env.pokedex, "assets": env.assets, "record": env.record,
+			}[tt.upstream]
 			target.respond(upstreamResponse{
 				status: http.StatusOK, contentType: "application/json; charset=utf-8",
 				body:   `{"upstream":"` + tt.upstream + `"}`,

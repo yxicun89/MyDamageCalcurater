@@ -104,6 +104,23 @@ record-svc/team-svc の実装より先に作ることもできる。しかし co
 「片方でも取り違えると発行イベントが静かに保存されなくなる」構造を作るのは、責務の分離として
 悪い。Limits retention なら consumer の存在・設定に発行の成否が依存しないため、この問題自体が起きない。
 
+**実装時の追記(2026-09-25。P5-3 の critic レビュー R-9)**: record-svc の重複排除キー
+(`services/record/internal/events.EventID`。`calc_events.event_id` の一意制約に使う。ADR-0212 §6・
+ADR-0209 AC-R7)は `CALC_EVENTS` ストリームのシーケンス番号だけから組み立てる
+(`"calc-events-" + streamSeq`)。これは「同じメッセージの再配送では常に同じ値になる」という
+at-least-once の重複排除には十分だが、**ストリームを作り直す(delete → 再作成)とシーケンスが1から
+再開する**ため、過去に処理済みの `event_id`(例: `calc-events-42`)と、作り直した後に届く新しい
+イベントの `event_id` が衝突しうる。衝突すると新しいイベントは `calc_events` への `INSERT` が
+一意制約違反になり、record-svc は「重複」と誤認して(`store.Duplicate`)保存せずに ack してしまう
+(サイレントなデータ欠損)。ストリームを作り直す運用(バージョンアップでの `Subjects`/`Retention` の
+再作成、障害復旧での re-provision 等)を行うときは、**同じ操作で record DB の `calc_events`
+テーブルも合わせて空にする**(または record-svc を再作成前に一時停止し、再作成後に空の状態から
+再開する)こと。ストリームの通常の再起動(NATS Pod の再起動・`CreateOrUpdateStream` によるべき等な
+再適用)ではシーケンスは維持されるため、この対応が要るのは「ストリームを明示的に delete して
+作り直す」場合に限る。恒久対策(シーケンス以外の情報を event_id に混ぜる、ストリームの作成時刻を
+含める等)は、実際にストリームの再作成が運用上必要になったとき(P7-4 のバックアップ/復元設計や
+NATS のバージョンアップ手順を書くとき)に判断する。
+
 ### 5. Go クライアントは新 `jetstream` パッケージを使う(legacy の `JetStreamContext` ではない)
 
 nats.go v1.54.0 自身が `JetStreamContext`(`nats.Conn.JetStream()` で得られる旧 API)を
@@ -135,10 +152,17 @@ NATS 自体が完全に無効(`CALC_NATS_URL` 未設定)の場合はこの gorou
 - `CALC_NATS_URL` 環境変数(任意)。未設定なら発行を最初から無効にする(NATS 無しでも calc-svc は
   今までどおり動く。ローカルの単体テストで NATS を用意しなくてよいようにするため)。
 - 設定されていれば起動時に1回だけ接続を試みる(`nats.Connect` に `nats.RetryOnFailedConnect(true)`・
-  `nats.MaxReconnects(-1)`(無限に再接続を試みる)を渡し、**起動時に NATS が落ちていても calc-svc の
-  起動をブロック・失敗させない**)。
-- 発行は `jetstream.Publisher.PublishAsync(subject, payload)`(応答を待たない)を、ハンドラが
-  レスポンスを書き終えた**後**に別 goroutine で行う。
+  `nats.MaxReconnects(-1)`(無限に再接続を試みる)・`nats.Timeout(500 * time.Millisecond)`
+  (`connectTimeout`。nats.go の既定2秒のままだと接続先が無応答〈TCP は繋がるが INFO を返さない等〉の
+  ときに calc-svc の起動〈`newHandler` → `srv.ListenAndServe`〉をその秒数だけ遅らせる。実測して判明。
+  この値は初回接続だけでなく `MaxReconnects(-1)` による再接続1回ごとの上限にもなる)を渡し、
+  **起動時に NATS が落ちていても calc-svc の起動をブロック・失敗させない**)。
+- 発行は `jetstream.Publisher.PublishAsync(subject, payload)`(応答を待たない)を別 goroutine で行う。
+  この関数(`Publish`)自体は `json.Marshal(event)` を同期的に行うだけで、`PublishAsync` の呼び出しと
+  `select` での確認は別 goroutine 側にあるため、ハンドラが `ctx.JSON(...)` を呼ぶ前後どちらで
+  `Publish` を呼んでも「レスポンスを書き終えるまで発行が応答を遅らせない」という目的は保たれる
+  (実装は `services/calc/internal/httpapi/server.go` 参照。`ctx.JSON` の前に呼んでいるが、
+  これは書きやすさの都合であって安全性の理由ではない)。
   **goroutine へ渡す値は、起動前にすべてコピーする**(`params.XDeviceId`・`params.XSessionId` の文字列と、
   イベントに詰める構造体はコピー渡しでよいが、`*echo.Context` そのものは goroutine に持ち出さない。
   echo v5 は `Context` をリクエストごとにプールして使い回すため、ハンドラの return 後に goroutine から
@@ -398,3 +422,22 @@ NATS の StatefulSet/Service は CRD に依存せず、`kubectl kustomize deploy
 - 2026-09-25 第3回 critic レビュー PASS(軽微1件の推奨修正あり)。§5 の `fetchMasterLoop` の出典が
   裸の「§3」(ADR-0212 自身の§3〈k3d の StatefulSet〉と誤読されうる)になっていたのを
   「ADR-0204 §3」に明示し、「関連」に ADR-0202・ADR-0204 を追加した。
+- 2026-09-25 実装(implementer)完了後の critic レビュー(第1回)を受けて改訂:
+  `docs/plan.md` の P5-2 チェックと ADR-0209 §3 #6 への参照追記が未実施だった(CLAUDE.md 絶対ルール8)
+  のを両方とも同じコミットに含めるよう修正。AC-N6 の drain テストがポーリング後に確認していたため
+  drain 自体の破壊を検知できなかったのを、ポーリングを挟まず即 `Shutdown()` してから確認する
+  `TestShutdownDrainsPendingPublish` に差し替えた(mutation テストで5回連続の検知を確認)。
+  AC-N8 の契約テストがコンパイル時チェックのみで、埋め込み型(`api.Individual` 等)の内部フィールド
+  リネームを検知できなかったのを、JSON をリテラル比較する `golden_test.go` を追加して補強した。
+  `nats.Connect` が到達不能なホストに対して既定で約2秒ブロックする実測を受けて
+  `nats.Timeout`(`connectTimeout` = 500ms)を追加し、`TestNewReturnsQuicklyForUnresponsiveHost` で固定。
+  `go.mod`/`go.sum` が `go mod tidy` 未実施だったのを修正。
+  **`CALC_NATS_URL` を `deploy/k8s/base/calc/deployment.yaml` に置いたことで cloud overlay にも
+  同じ値が乗る(cloud には本 ADR のスコープ〈local/k3d まで〉として NATS を用意していない)問題**
+  について: NATS 未到達時も `events.New` は接続をブロックせずに継続し(上記の `connectTimeout` 修正
+  および `RetryOnFailedConnect`/`ensureStreamLoop` の背景再試行により)、`Publish` は `p.ready` が
+  立たない限り何もしない no-op であり続けるため、cloud 環境では calc-svc は
+  「`ensureStreamLoop` が到達不能で warn ログを出し続けるだけ」で HTTP API 自体への影響は無いと判断し、
+  cloud 用に値を分岐させる対応はしない(CLAUDE.md 絶対ルール5)。この判断は
+  `deploy/k8s/base/calc/deployment.yaml` のコメントに記録し、cloud 側に NATS を実際に用意するかどうかは
+  `+α` 判断として後続(P5-3/P5-4 以降、または人間の確認)に委ねる。

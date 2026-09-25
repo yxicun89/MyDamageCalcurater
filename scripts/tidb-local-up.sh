@@ -51,6 +51,16 @@ fi
 echo "tidb-local-up: record・team の DB を作る(既にあれば何もしない)..."
 run_sql "CREATE DATABASE IF NOT EXISTS record; CREATE DATABASE IF NOT EXISTS team;"
 
+# golang-migrate の mysql ドライバは排他ロックの取得(Lock())とバージョン記録(SetVersion())の
+# どちらも SERIALIZABLE 分離レベルのトランザクションを直接要求する(database/mysql/mysql.go。
+# x-no-lock=true で Lock() を無効化しても SetVersion() 側で同じエラーになるため回避できない)。
+# TiDB は SERIALIZABLE をサポートしないため、これが無いと record-migrate・team-migrate が
+# "The isolation level 'SERIALIZABLE' is not supported" で失敗する(P5-3 実装時に判明。
+# deploy/k8s/overlays/local/tidb/tidbinitializer.yaml の initSql にも同じ設定がある。TiDB は
+# global 変数を永続化するので一度設定すれば十分。詳細はADR-0211)。
+echo "tidb-local-up: tidb_skip_isolation_level_check を設定する(golang-migrate 対応)..."
+run_sql "SET GLOBAL tidb_skip_isolation_level_check=1;"
+
 echo "tidb-local-up: 完了。DSN 例(root にパスワードは無い):"
 echo "  root:@tcp(127.0.0.1:${DB_PORT})/record?parseTime=true"
 echo "  root:@tcp(127.0.0.1:${DB_PORT})/team?parseTime=true"
