@@ -176,3 +176,28 @@ job_name=$(echo "$created" | grep -o 'pokedex-import-manual-[0-9]*' | tail -1)
 kubectl -n pokecalc wait --for=condition=complete "job/$job_name" --timeout=600s
 ```
 確認: 最後の行が `job.batch/<job名> condition met`。
+
+## `make migrate-down` の途中で止まったとき(issue #278)
+
+down が失敗すると `version=<V> dirty=true` になる。このとき失敗したのは版 `<V+1>` の down(旧 000005 の down では V = 4)。
+down を流し直すので、全テーブルが消えてよいこと(`make migrate-down` を流したときと同じ判断)を人が確かめてから行う。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc port-forward svc/mysql 13306:3306 >/dev/null 2>&1 &
+pf_pid=$!
+sleep 2
+export POKEDEX_DATABASE_DSN="$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.pokedex-migrator-dsn}' | base64 -d | sed -E 's/@tcp\(mysql:[0-9]+\)/@tcp(127.0.0.1:13306)/')"
+make migrate-version
+```
+確認: `version=<V> dirty=true` が表示される。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make migrate-force FORCE_VERSION=<V+1> CONFIRM_FORCE=pokedex
+make migrate-down CONFIRM_DESTROY=pokedex
+make migrate-version
+kill "$pf_pid"
+unset POKEDEX_DATABASE_DSN pf_pid
+```
+確認: `down: 完了` の後に `version: 未適用`。

@@ -226,3 +226,38 @@ func TestForceOnCleanDB(t *testing.T) {
 		t.Fatalf("force の後の Up(変更なし): %v", err)
 	}
 }
+
+// ADR-0124「影響」: 旧 000005 の down で version=4 dirty=true に止まった DB(000008〜000006 の表は消え、
+// 000005 の CHECK 1..4 と slot 4 の行は残る)は、版 5 に force してから DownAll で最後まで戻せる。
+func TestRecoverDownStuckAtSlot4(t *testing.T) {
+	conn := emptyDB(t)
+	dsn, cfg := testDSN(t)
+	if err := Up(dsn); err != nil {
+		t.Fatal(err)
+	}
+	seed(t, conn)
+	if _, err := conn.Exec(`INSERT INTO species_abilities (species_key, slot, ability_id) VALUES ('9001-000', 4, 'testguard')`); err != nil {
+		t.Fatal(err)
+	}
+	// 旧 down が止まった状態を作る: 000005 より後の版の down を流し、版を 4・dirty にする。
+	versions, _, _ := migrationPairs(t)
+	for i := len(versions) - 1; i >= 0 && versions[i] > 5; i-- {
+		runDownFile(t, conn, versions[i])
+	}
+	if _, err := conn.Exec(`UPDATE schema_migrations SET version = 4, dirty = 1`); err != nil {
+		t.Fatal(err)
+	}
+	if err := DownAll(dsn, cfg.DBName); err == nil {
+		t.Fatal("dirty な DB への DownAll が成功した")
+	}
+
+	if err := Force(dsn, cfg.DBName, 5); err != nil {
+		t.Fatalf("Force(5): %v", err)
+	}
+	if err := DownAll(dsn, cfg.DBName); err != nil {
+		t.Fatalf("force 後の DownAll: %v", err)
+	}
+	if left := userTables(t, conn); len(left) != 0 {
+		t.Fatalf("down の後に残ったテーブル: %v", left)
+	}
+}

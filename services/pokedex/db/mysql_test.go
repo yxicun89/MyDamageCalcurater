@@ -176,6 +176,30 @@ func TestMoveMechanismsDownWithRows(t *testing.T) {
 	}
 }
 
+// TestDownAllWithSlot4Abilities は slot 4 の特性(Showdown の "S"。ADR-0103 §12。実データにある)が
+// 入った DB でも DownAll が最後まで通り、dirty で止まらないこと(issue #278・ADR-0124)。
+func TestDownAllWithSlot4Abilities(t *testing.T) {
+	conn := freshDB(t)
+	seed(t, conn)
+	if _, err := conn.Exec(`INSERT INTO species_abilities (species_key, slot, ability_id) VALUES ('9001-000', 4, 'testguard')`); err != nil {
+		t.Fatalf("slot 4 の行を入れられない: %v", err)
+	}
+
+	dsn, cfg := testDSN(t)
+	if err := DownAll(dsn, cfg.DBName); err != nil {
+		t.Fatalf("slot 4 の行がある DB の DownAll: %v", err)
+	}
+	if _, dirty, ok, err := Version(dsn); err != nil || ok || dirty {
+		t.Fatalf("DownAll の後の版: ok=%v dirty=%v err=%v, want 未適用", ok, dirty, err)
+	}
+	if left := userTables(t, conn); len(left) != 0 {
+		t.Fatalf("down の後に残ったテーブル: %v", left)
+	}
+	if err := Up(dsn); err != nil {
+		t.Fatalf("down の後の Up: %v", err)
+	}
+}
+
 func TestExampleSeedLoads(t *testing.T) {
 	conn := freshDB(t)
 	seed(t, conn)
@@ -294,8 +318,8 @@ func TestSpeciesAbilitiesSlot4RoundTrip(t *testing.T) {
 	conn := freshDB(t)
 	seed(t, conn)
 
-	// トランザクション内で確認しロールバックする(他のテストの freshDB が呼ぶ DownAll は、
-	// slot=4 の行が残っていると migration 000005 の down で CHECK を作り直せず失敗するため)。
+	// トランザクション内で確認しロールバックする(他のテストに slot=4 の行を残さない。
+	// slot=4 の行が残った DB の DownAll は TestDownAllWithSlot4Abilities で確かめる)。
 	tx, err := conn.Begin()
 	if err != nil {
 		t.Fatal(err)
