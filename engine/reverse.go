@@ -205,6 +205,10 @@ type ReverseCandidate struct {
 
 	// MinPercentTenths / MaxPercentTenths は Ranges 全体での想定ダメージ幅(表示%。0.1% 単位)。
 	MinPercentTenths, MaxPercentTenths int
+
+	// Unsupported はこの候補の計算に付いた「未対応」の印(ADR-0123)。SP によらず同じ(技・場・既知側・
+	// 候補の持ち物で決まる)。nil は印なし。
+	Unsupported []UnsupportedMark
 }
 
 // ReverseResult は逆算の結果。Candidates は ADR-0010 §R4 の全順序で並ぶ。
@@ -431,6 +435,7 @@ func CalcReverse(in ReverseInput) (ReverseResult, error) {
 				Support:          support,
 				MinPercentTenths: minT,
 				MaxPercentTenths: maxT,
+				Unsupported:      rolls[0].Unsupported,
 			}
 			if item != nil {
 				c.ItemID = item.ID

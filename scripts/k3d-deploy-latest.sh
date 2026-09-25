@@ -3,7 +3,8 @@
 # 動作確認(docs/verify-m1.md)の前に毎回実行する。古いイメージが残ると、画面は開くのに API が 404 になる
 # (例: pokedex に新しいエンドポイントが無い)ことがあるため。
 #
-# 対象: pokedex(サーバー)・calc・gateway・web・judge・balance・speed。
+# 対象: pokedex の DB(migrate-up)・pokedex(サーバー)・pokedex-importer(CronJob・import-k8s が使う)・
+# calc・gateway・web・judge・balance・speed。
 # balance・speed は実データの read model(data/generated/readmodel。`make pokedex-export` の出力)で入れる。
 # 無ければ balance・speed は入れ替えず、理由を表示して最後に非ゼロで終わる(黙って成功扱いにしない)。
 set -euo pipefail
@@ -13,12 +14,67 @@ cd "$(git rev-parse --show-toplevel)"
 CLUSTER=${CLUSTER:-pokecalc}
 READMODEL_DIR=${READMODEL_DIR:-data/generated/readmodel}
 POKEDEX_SERVER_IMAGE=${POKEDEX_SERVER_IMAGE:-pokecalc/pokedex:0.1.0}
+POKEDEX_IMPORTER_IMAGE=${POKEDEX_IMPORTER_IMAGE:-pokecalc/pokedex-importer:0.1.0}
+MIGRATE_LOCAL_PORT=${MIGRATE_LOCAL_PORT:-13306}
 
 context="$(kubectl config current-context)"
 if [ "$context" != "k3d-$CLUSTER" ]; then
   echo "deploy-latest: kubectl の context が '$context'(期待 k3d-$CLUSTER)。別クラスタへ適用しないよう中断" >&2
   exit 1
 fi
+
+# pokedex の DB を最新の migration まで上げる(新しい表・列を前提にするコードより先に)。
+# migrate の Job は共有の overlay 全体の apply でしか作り直せないので、ここでは mysql へ一時的に
+# port-forward し、Job と同じ4つの DSN(Secret mysql-auth。値は表示しない)で `make migrate-up` を実行する。
+# POKEDEX_PROVISION_DSN(root)を渡すので「用途別ユーザーのプロビジョニング → Up → importer の表ごとの
+# 権限の付け直し」まで1回で行う(ADR-0125。migrator には GRANT の権限が無く、付け直さないと
+# 表を足す migration の後に importer がその表に書けない)。
+echo "== pokedex の DB(migrate-up)"
+command -v nc >/dev/null 2>&1 || { echo "deploy-latest: nc が無い(port-forward の疎通確認に使う)" >&2; exit 1; }
+if nc -z 127.0.0.1 "$MIGRATE_LOCAL_PORT" 2>/dev/null; then
+  echo "deploy-latest: 127.0.0.1:$MIGRATE_LOCAL_PORT は別のプロセスが使用中。MIGRATE_LOCAL_PORT=<空きポート> を付けて再実行する" >&2
+  exit 1
+fi
+kubectl -n pokecalc port-forward svc/mysql "$MIGRATE_LOCAL_PORT:3306" >/dev/null 2>&1 &
+pf_pid=$!
+trap 'kill "$pf_pid" 2>/dev/null || true' EXIT
+ready=0
+for _ in $(seq 1 20); do
+  if ! kill -0 "$pf_pid" 2>/dev/null; then break; fi
+  if nc -z 127.0.0.1 "$MIGRATE_LOCAL_PORT" 2>/dev/null; then ready=1; break; fi
+  sleep 0.5
+done
+if [ "$ready" != 1 ]; then
+  echo "deploy-latest: mysql への port-forward が張れなかった(kubectl -n pokecalc get pods で mysql-0 が Running か確認する)" >&2
+  exit 1
+fi
+# local_dsn <Secret のキー>: DSN の接続先を port-forward 先に付け替えて出力する。キーが無い・付け替えられない
+# ときは理由を stderr に出して非ゼロで返す(値は表示しない)。
+local_dsn() {
+  local key=$1 dsn
+  dsn=$(kubectl -n pokecalc get secret mysql-auth -o jsonpath="{.data.$key}" | base64 -d \
+    | sed -E "s/@tcp\(mysql:[0-9]+\)/@tcp(127.0.0.1:$MIGRATE_LOCAL_PORT)/")
+  case "$dsn" in
+    *"@tcp(127.0.0.1:$MIGRATE_LOCAL_PORT)"*) printf '%s' "$dsn" ;;
+    "") echo "deploy-latest: Secret mysql-auth に $key が無い(make up で作り直す。docs/runbooks/data.md)" >&2; return 1 ;;
+    *) echo "deploy-latest: $key の接続先が想定(mysql:<port>)と違うので付け替えられない" >&2; return 1 ;;
+  esac
+}
+migrator_dsn=$(local_dsn pokedex-migrator-dsn)
+provision_dsn=$(local_dsn pokedex-dsn)
+reader_dsn=$(local_dsn pokedex-reader-dsn)
+importer_dsn=$(local_dsn pokedex-importer-dsn)
+POKEDEX_PROVISION_DSN="$provision_dsn" POKEDEX_READER_DSN="$reader_dsn" POKEDEX_IMPORTER_DSN="$importer_dsn" \
+  POKEDEX_DATABASE_DSN="$migrator_dsn" make --no-print-directory migrate-up
+POKEDEX_DATABASE_DSN="$migrator_dsn" make --no-print-directory migrate-version
+unset migrator_dsn provision_dsn reader_dsn importer_dsn
+kill "$pf_pid" 2>/dev/null || true
+wait "$pf_pid" 2>/dev/null || true
+trap - EXIT
+
+echo "== pokedex-importer(CronJob・make import-k8s が使うイメージ)"
+docker build -q -f services/pokedex/Dockerfile --target importer -t "$POKEDEX_IMPORTER_IMAGE" . >/dev/null
+k3d image import "$POKEDEX_IMPORTER_IMAGE" --cluster "$CLUSTER" >/dev/null
 
 echo "== pokedex"
 docker build -q -f services/pokedex/Dockerfile --target server -t "$POKEDEX_SERVER_IMAGE" . >/dev/null

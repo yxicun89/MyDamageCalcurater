@@ -66,14 +66,16 @@ sequenceDiagram
 | 項目 | 内容 | 根拠 |
 |---|---|---|
 | ライブラリ | `golang-migrate/migrate/v4`(mysql driver・iofs source)。公式 CLI は使わず自前の `cmd/migrate`(理由は ADR-0100 §1) | `services/pokedex/db/migrate.go:1-18` |
-| 実行ロジック本体 | `Up`/`DownAll`/`Version`/`newMigrate` は共通パッケージに切り出し、`fs.FS` を引数に取る(record-svc・team-svc も同じ実装を再利用。ADR-0211 §5) | `services/internal/dbmigrate/migrate.go` |
+| 実行ロジック本体 | `Up`/`DownAll`/`Force`/`Version`/`newRunner` は共通パッケージに切り出し、`fs.FS` を引数に取る(record-svc・team-svc も同じ実装を再利用。ADR-0211 §5) | `services/internal/dbmigrate/migrate.go` |
 | SQL の持ち方 | `migrations/*.sql` を `//go:embed` でバイナリに埋め込む(実行版とコードが一致)。サービスごとの `db/migrate.go` は自分の `embed.FS` を `dbmigrate` に渡す薄いラッパー | `services/pokedex/db/migrate.go:19` |
 | 接続 | `mysql.ParseDSN` → `MultiStatements = true` を付けて `sql.Open` | `services/internal/dbmigrate/migrate.go:28-33` |
-| コマンド | `migrate up` / `migrate version` / `migrate down -confirm <DB名>` | `cmd/migrate/main.go:1-9` |
+| コマンド | `migrate up` / `migrate version` / `migrate down -confirm <DB名>` / `migrate force -version <版> -confirm <DB名>` | `cmd/migrate/main.go:1-10` |
 | `down` の防護 | `-confirm` が空、または DSN の DB 名と不一致なら**接続前に** `ErrDownNotConfirmed`。k8s・スクリプトからは呼ばない | `services/internal/dbmigrate/migrate.go:76-88`(各サービスの `db/migrate.go` が再エクスポート) |
+| `force` の防護 | dirty の復旧専用(issue #221)。`-confirm` 不一致は接続前に `ErrForceNotConfirmed`、負・migrations に無い版は `ErrForceUnknownVersion`(0 は未適用に戻す)、dirty でない DB で今と違う版は `ErrForceNotDirty`。手順は `docs/runbooks/data.md` | `services/internal/dbmigrate/migrate.go`(`Force`) |
+| 失敗時のエラー | migration の SQL 全文を出さず「migration 名: MySQL のエラー」の1行にする(元のエラーは `errors.As` で取れる) | `services/internal/dbmigrate/migrate.go`(`describeMigrationError`) |
 | 適用済みの記録 | golang-migrate の管理テーブル(既定名 `schema_migrations`。ライブラリの既定で、実クラスタでは未確認) | `services/internal/dbmigrate/migrate.go:52` |
 | Job の image | `pokecalc/pokedex-migrate:0.1.0`(`FROM scratch`、`ENTRYPOINT /pokedex-migrate`、`CMD up`。down はイメージに含めない意図) | `services/pokedex/Dockerfile:16-22` |
-| make | `migrate-up` `migrate-version`(要 `POKEDEX_DATABASE_DSN`)、`migrate-down`(要 `CONFIRM_DESTROY=<DB名>`) | `Makefile:100-115` |
+| make | `migrate-up` `migrate-version`(要 `POKEDEX_DATABASE_DSN`)、`migrate-down`(要 `CONFIRM_DESTROY=<DB名>`)、`migrate-force`(要 `FORCE_VERSION=<版> CONFIRM_FORCE=<DB名>`) | `Makefile:100-115` |
 
 ### migrations(全 14 ファイル = 7 版 × up/down)
 
@@ -86,6 +88,7 @@ sequenceDiagram
 | 000005 | widen_species_ability_slot | `species_abilities` の CHECK を slot 1〜3 → 1〜4 | CHECK を戻す |
 | 000006 | create_natures | `natures` | DROP |
 | 000007 | create_move_effects | `move_effects` | DROP |
+| 000008 | create_move_mechanisms | `move_mechanisms` | DROP |
 
 ## 4. 接続(DSN)
 
@@ -124,7 +127,7 @@ sequenceDiagram
 
 | exit | 意味 | CronJob の扱い(`podFailurePolicy`) |
 |---|---|---|
-| 0 | 投入した / 版が同じでスキップ / dry-run | 成功 |
+| 0 | 投入した / 取得元の版と変換結果が同じでスキップ / dry-run | 成功 |
 | 1 | 再試行で直りうる(DB 接続・I/O) | `backoffLimit: 2` で再試行 |
 | 2 | 使い方・設定の誤り(DSN 無し等) | `FailJob`(再試行しない) |
 | 3 | 人間の対応が要る(`ErrBlocked` `ErrKeyChanged` `ErrInvalidInput` `ErrInvalidData` `ErrInvalidEffect` `ErrSchemaNotReady`)。DB は変えない | `FailJob` |
@@ -134,7 +137,7 @@ sequenceDiagram
 | 段 | 場所 | 内容 |
 |---|---|---|
 | Reconcile | `importer/reconcile*.go` | 3 ソース(calc・Showdown・PokeAPI)を照合し、報告を `data/generated/reports/` へ書く。食い違いがあれば `ErrBlocked`(exit 3) |
-| RunStore | `importer/store.go:65-83` | `AppliedVersions`(`data_versions`)→ `NeedsImport` → 版が同じなら**スキップ**(`-force` で強制)。版が読めない(=migrate 未実施かも)ときは `Apply` を呼ばない |
+| RunStore | `importer/store.go` | `AppliedVersions`(`data_versions`)→ 取得元の版に変換結果の版(`importer-output`。`Output` の内容ハッシュ。`importer/output_version.go`。ADR-0122)を足す → `NeedsImport` → すべて同じなら**スキップ**(`-force` で強制)。版が読めない(=migrate 未実施かも)ときは `Apply` を呼ばない |
 | Apply | `importer/apply.go:54-` | **1 トランザクションで全置換**: 全テーブルを FK 順に DELETE → INSERT → `data_versions` 更新 → Commit。自己参照 FK(`species.base_species_key`)のためメガは削除が先・挿入が後 |
 | key の保護 | `apply.go:71-81` | 既存の `showdown_id` の `key` が変わる/別の `showdown_id` が同じ `key` を奪う投入は `ErrKeyChanged` で拒否(team-svc 等が保存した key の指す種族が入れ替わるのを防ぐ) |
 
@@ -159,9 +162,10 @@ ID 列は `ascii_bin`、日本語名は `utf8mb4_ja_0900_as_cs`(ADR-0100 §2)。
 | 13 | `regulation_moves` | `(regulation_id, move_id)` | FK CASCADE | 000003 |
 | 14 | `regulation_items` | `(regulation_id, item_id)` | FK CASCADE | 000003 |
 | 15 | `regulation_abilities` | `(regulation_id, ability_id)` | FK CASCADE | 000003 |
-| 16 | `data_versions` | `source` | `version` `checksum`(64 桁 hex)`imported_at` DATETIME(6)。取り込み版のスキップ判定に使う | 000004 |
+| 16 | `data_versions` | `source` | `version` `checksum`(64 桁 hex)`imported_at` DATETIME(6)。取り込み版のスキップ判定に使う。取得元ごとの行と、変換結果の版の行(`source = importer-output`。ADR-0122) | 000004 |
 | 17 | `natures` | `id` | `plus` `minus`(atk/def/spa/spd/spe。両方 NULL = 無補正)。`(plus, minus)` UNIQUE | 000006 |
 | 18 | `move_effects` | `move_id` | `effect` JSON(FK → moves) | 000007 |
+| 19 | `move_mechanisms` | `(move_id, mechanism)` | 技の機構(多段・固定ダメージ・威力変動 等。CHECK で値を固定。行が無い = 通常の技。FK → moves CASCADE。ADR-0121) | 000008 |
 | — | `schema_migrations` | — | golang-migrate が作る(既定名。実 DB では未確認) | migrate |
 
 ## 7. SQL の書き方と生成物
@@ -179,7 +183,7 @@ ID 列は `ascii_bin`、日本語名は `utf8mb4_ja_0900_as_cs`(ADR-0100 §2)。
 |---|---|
 | `make test-db` | `POKEDEX_TEST_DSN` 必須(未設定は**失敗**)。`go test -tags mysql -p 1 ./pokedex/...`。`make test` には含まれない(`Makefile:117-123`) |
 | 架空 seed | `services/pokedex/db/testdata/example_seed.sql`(図鑑番号 9001〜、ID は `test` 始まり、日本語名は「テスト」始まり。実データなし。ADR-0100 §7)。`db/mysql_test.go` が migrate 直後の空 DB に流す |
-| レイアウト検査 | `db/layout_test.go` `move_effects_layout_test.go` `natures_layout_test.go`(DB 不要。migration SQL の構造を検査) |
+| レイアウト検査 | `db/layout_test.go` `move_effects_layout_test.go` `move_mechanisms_layout_test.go` `natures_layout_test.go`(DB 不要。migration SQL の構造を検査) |
 | fake | `internal/storetest`(httpapi のテスト用ストア) |
 
 ## 9. 動作確認で DB を見るとき

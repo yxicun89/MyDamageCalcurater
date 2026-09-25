@@ -226,6 +226,52 @@
   運用レーンが到達経路(Tailscale Operator の ingressClass か subnet router + tailscale serve か)を選び、
   実際の名前が決まってから。今はコード変更不要。着手のタイミングは運用レーンの選定後
 - [x] P4-22 issue #72(ルートの `make e2e` が未実装スタブのまま「テスト0件で成功」する)。**完了(2026-09-25。Web レーン。API+Web 共同担当)**: ADR-0306 に従い `scripts/e2e.sh` を実装(常時3件 `web-e2e`/`web-e2e-online`/`web-e2e-balance` を必ず実行し、kubectl のコンテキストが `k3d-$CLUSTER` のときだけ `api-smoke`/`web-k3d-smoke`/`web-k3d-e2e` を追加実行。`E2E_REQUIRE_K3D=1` あり)。ルート Makefile の `e2e` を `CLUSTER=$(CLUSTER) ./scripts/e2e.sh` に配線、`docs/test-strategy.md`・`README.md` を実装内容に合わせて更新。`bash scripts/e2e_test.sh` は80/80 passed
+- [x] `make e2e` の `web-e2e-online` 修復・PR1(2026-09-25。Web レーン。issue 無し。ブランチ
+  `fix/web-online-e2e-master-export`)。**完了・critic PASS。ただし `make e2e`(`web-e2e-online`)は
+  まだ緑にならない(PR2 で対応。下記)**。
+  P4-22 で常時実行になった3件のうち `web-e2e-online` が main で壊れていた(calc-svc が起動できない)。原因は
+  ADR-0204(相性表は MasterExport 本体に含める・`CALC_TYPECHART_PATH` は廃止)に Web 側の書き出しが
+  追従していなかったこと: (1) `web/playwright.online.config.ts` が廃止済みの `CALC_TYPECHART_PATH` を渡す
+  → calc-svc が起動を拒否する (2) `web/src/master/exportSnapshot.ts` の `toCalcSnapshot()` の出力が
+  ADR-0204 以前の暫定スキーマのままで、`MasterExport`(`dataVersion`/`types`/`typeChart`、`MasterSpecies` の
+  `showdownId`・`type1`/`type2`・`abilities[{slot, abilityId}]`、`MasterMove.effect`、効果のキーの
+  PascalCase)を満たさない (3) 例データの技・持ち物・特性の ID がハイフンを含み、共通マスタの
+  `codeIDPattern`(`^[a-z0-9]+$`)で弾かれる。calc-svc の契約を正として Web 側を写像する形で修正
+  (契約は緩めていない。`services/`・`api/openapi.yaml`・`testdata/golden/typechart.json` は無変更)。
+  `node scripts/export-example-master.mjs` の出力を実際に `go run ./calc/cmd/calc` に読ませ、
+  `/healthz` 200・`/api/calc` が契約レベルのバリデーションまで到達することを確認済み(=マスタのロード自体は成功)。
+  critic PASS(mutation testing 4件、うち2件〈defAbsorbTypesの入れ子変換・相性表の欠けた組の既定値〉は
+  未到達分岐だったため専用のテストを追加してから確認)。
+  **PR2 に持ち越し(最優先。#308 以降はPR2が緑になるまで着手しない。オーケストレーター決定 2026-09-25)**:
+  `npm run e2e:online` はまだ2件ともタイムアウトする。原因は今回の修正とは別の、P4-16 以降の既存の設計不整合
+  (オンラインモードの `main.tsx` は pokedex-svc の公開API に依存するが、`web-e2e-online` は calc-svc しか
+  起動しない。calc-svc は pokedex ルートを意図的に404で返す設計。`registerPokedexNotFoundRoutes`、
+  critic指摘R1で確定済み)。方針は e2e専用の軽量 pokedex フィクスチャサーバーを Web 側に新設し、
+  `API_PROXY_TARGET` を pokedex パスと calc パスで振り分ける(calc-svc/pokedex-svc 本体には触れない。
+  詳細は ADR-0301 §5 追記)。
+  **申し送り(J1。critic指摘、ブロッカーではない)**: `web/src/master/exportSnapshot.ts` の
+  `CalcSnapshot`/`CalcSnapshotSpecies`等は生成済みの契約型(`web/src/api/openapi.gen.ts` の
+  `components["schemas"]["MasterExport"]`)の手書きの写し。`exportSnapshot.contract.test.ts` が
+  毎回 `api/openapi.yaml` を読んで突き合わせるのでズレは検知できるが、`type CalcSnapshot =
+  Schemas["MasterExport"]` に寄せるか型レベルの一致アサーションを足すと、より一枚岩になる
+  (次に触るときの検討事項)。
+- [x] `make e2e` の `web-e2e-online` 修復・PR2(**完了・critic PASS(2回目。1回目FAIL→修正)、2026-09-25**。
+  Web レーン。issue 無し。ブランチ `fix/web-online-e2e-pokedex-fixture`。ADR-0307)。E2E 専用の軽量 pokedex
+  フィクスチャ(`web/e2e/support/pokedexFixture.ts`。応答生成はHTTPを知らない純粋関数+`pokedexFixtureServer.mjs`
+  でHTTP待ち受け)を新設し、`POKEDEX_PROXY_TARGET` で `/api/pokedex` を `/api`(calc)より前に振り分ける
+  (`vite.config.ts`、既存の`/api/balance`と同じパターン)。`online.spec.ts` を種族の検索欄
+  (ADR-0304 A-4・A-10。`selectMatchupBySearch`)に追従させ、「持ち物の候補も比較」がオンラインでは常時
+  disabled(ADR-0304 A-1)であることを確認する形に更新。calc-svc / pokedex-svc 本体・`api/openapi.yaml`は無変更。
+  **`cd web && npm run e2e:online` を実際に実行し3件とも緑、`npm run e2e`(オフライン)も35件とも緑(無回帰)を
+  実機確認済み**。`cd .. && make e2e` も web-e2e/web-e2e-online/web-e2e-balance すべて緑(k3d起動済み環境では
+  api-smoke/web-k3d-smoke/web-k3d-e2eも緑、参考情報)。
+  **critic 1回目FAIL→修正**: (1) `web/playwright.container.config.ts` に `testMatch` が無く、本PRで新設した
+  `e2e/support/*.test.ts` を拾って `make web-e2e-container` が壊れていたのを、`playwright.config.ts`と同じ
+  `testMatch: ["**/*.spec.ts"]` を追加して修正(`--list` がexit 0・46件を確認)。(2) `POKEDEX_PROXY_TARGET`の
+  振り分けが単体テストで守られておらず(`vite.config.ts`のルールを削除してもvitestが全緑のままだった)、
+  `web/src/deploy/viteProxy.test.ts`に3ケース追加して固定(mutationで実際に検知することを確認)。
+  軽微(learnsetがID昇順でない簡略化)はADR-0307 §3に注記、`pokedexFixtureServer.mjs`のtry/finally化は直接修正。
+  `cd web && npx vitest run` 1598/1598 green、tsc・lintともにエラー無し。
 - [x] issue #71 の Web 側(攻撃側プリセットの単一化。ADR-0114)。**完了(2026-09-25。Web レーン)**: データレーン
   が `engine/presets/attacker.json`(embed)を唯一の正にした(PR #346)のを受け、
   `web/src/domain/attackerPresets.contract.test.ts` を新規追加。ハードコードした期待値と比較する既存の
@@ -466,8 +512,39 @@
   ランクの +/− ボタンに VoiceOver ラベル、「詳細」の各行に Dynamic Type(アクセシビリティ文字サイズで2行に切り替え)を追加。
   `swift test` 436件0失敗、`make ios-test`(`ios-test-unit` 449件・`ios-test-ui` 22件)すべて成功(並行セッションが同じ
   シミュレータを使っていた回はブートストラップ失敗になったが、P6-12 と同じ既知の環境要因と確認済み)
-- [ ] P6-14 最大の文字サイズ(accessibility-extra-extra-extra-large)で計算画面の全体が横にはみ出し、左端が切れる(既存の不具合。
+- [x] P6-14 最大の文字サイズ(accessibility-extra-extra-extra-large)で計算画面の全体が横にはみ出し、左端が切れる(既存の不具合。
   P6-13 の確認中に発見。2026-09-23 のスクリーンショットでも同じ)。原因の特定と修正、XCUITest か撮影での確認
+  - spec-writer(2026-09-25): 受け入れ条件・失敗するテストのみ追加、実装はまだ(ADR-0501「P6-14」)。
+    XCUITest `ios/PokeCalcUITests/LargeTextLayoutUITests.swift` を新規追加。AX5 で
+    `testCalcScreenNoHorizontalOverflowAtAX5` が失敗することを確認済み(既定サイズ・逆算画面・構築画面は成功)。
+    原因は `ResultRowView`(`CalcScreenResults.swift`)の `percentRangeTextView`/`koText` の `.fixedSize()` が
+    AX5 で画面幅を超える自然な幅を要求し、`ViewThatFits` が縦積み案でも縮められず、`CalcScreenView` の
+    `VStack` 全体・`.frame(maxWidth: .infinity)` の兄弟(カード・プリセット・構築元・技セレクタ・「詳細」)
+    まで広がり、非スクロール軸を中央寄せする `ScrollView` の挙動で左端が負の座標に押し出される、という連鎖
+    (実測 frame・推奨修正は ADR 本文)。`ReverseCandidateCardView` にも同じパターンがあるが、モックの既定状態
+    (観測0件)では未再現(要フォローアップ)。implementer は ADR-0501「P6-14」§4 の推奨(`.fixedSize()` を外す/
+    `minimumScaleFactor` に揃える)から着手
+  - implementer(2026-09-25): ADR-0501「P6-14」§4の推奨1・2のとおり、`ResultRowView.percentRangeTextView`/
+    `koText`(`CalcScreenResults.swift`)と `ReverseCandidateCardView` の `percentRangeText`
+    (`ReverseScreenResults.swift`)の `.fixedSize()` を `.lineLimit(1).minimumScaleFactor(
+    CalcScreenMetrics.compactMinimumScaleFactor)` に置き換え、両ファイルのコンテナに
+    `.accessibilityElement(children: .contain)` を追加(識別子は変更なし)。`LargeTextLayoutUITests` に
+    AX5 の2件(`testReverseScreenWithCandidateNoHorizontalOverflowAtAX5`= 観測入力後の候補カード、
+    `testTeamEditScreenWithMemberNoHorizontalOverflowAtAX5` = メンバー追加後の構築編集画面)を追加し、
+    8件全て成功。`grep fixedSize ios/PokeCalc` で他の使用箇所(`ChipButton`・`SpeciesHeaderMenuLabel`・
+    `TypeBadgeView`・`CalcConditionsSection.sectionRowLabel`・`TeamEditMemberCard.spStepper`)も確認したが、
+    追加した AX5 テストでははみ出さなかったため未修正(詳細は ADR-0501「P6-14」6章)。
+    `swift test`(PokeCalcKit)436件0失敗、`xcodebuild -only-testing:PokeCalcUITests/LargeTextLayoutUITests`
+    8件0失敗、`make ios-test`(`ios-test-unit`・`ios-test-ui` 30件〈既存22+新設8〉・`ios-check-infoplist`)
+    すべて成功。気づいた点(未修正・要フォローアップ): 候補カードテストの1回で `reverseObservationField-0`
+    タップ直後に SwiftUI ランタイム警告「Invalid frame dimension (negative or non-finite).」が1件出たが
+    アサーション失敗ではなく、候補描画・入力より前(フォーカス直後)に出ているため今回の修正とは無関係に見える
+    (原因未特定。ADR-0501「P6-14」6章)。
+- [x] P6-15 P6-14 の残り(軽微): (1) 最大の文字サイズで攻撃側プリセットのピル「A振り(無補正)」が「A振り…」と省略される
+  (はみ出しは解消済み。アクセシビリティ域では縦に並べる等で全文を出す)、(2) LargeTextLayoutUITests で「詳細」を開いた状態も検査する、
+  (3) 既定サイズで %・確定数の文字が縮んでいないことを確かめる検査(critic の任意の指摘)
+  完了: アクセシビリティ域でプリセットのピルを縦積みに。「詳細」を開いた AX5 検査と、既定サイズの % が縮まない検査を追加
+  (縮小の変異で red になることを確認)。make ios-test unit 449/449・XCUITest 37/37。critic PASS
 - [x] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼された
   内容どおり `ColorToken.danger` のライト値を `0xE5,0x48,0x4D` → `0xCD,0x1D,0x23` に更新し、
   `DesignTokenTests.swift` の旧値も書き換えた。`ios/PokeCalcKit/Tests/PokeCalcDesignTests/ColorContrast.swift`

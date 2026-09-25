@@ -69,6 +69,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `migrate-up` | 101 | — | `cd services && $(GO) run ./pokedex/cmd/migrate up` | **DB 書込(migrate)** |
 | `migrate-version` | 105 | — | `cd services && $(GO) run ./pokedex/cmd/migrate version` | なし(読み取り/検査) |
 | `migrate-down` | 109 | — | `if [ -z "$(CONFIRM_DESTROY)" ]; then \ ⏎ echo "migrate-down: CONFIRM_DESTROY=<DB名> を指定すること(全テーブルを消す破壊的操作)。人間が確認すること" >&2; \ ⏎ exit 1; \ ⏎ fi ⏎ cd services && $(GO) run…` | **DB 破壊(全テーブル削除)**。CONFIRM_DESTROY=DB名 必須 |
+| `migrate-force` | 124 | — | `if [ -z "$(FORCE_VERSION)" ] \|\| [ -z "$(CONFIRM_FORCE)" ]; then … fi ⏎ cd services && $(GO) run ./pokedex/cmd/migrate force -version … -confirm …` | **DB 書込(schema_migrations の版と dirty)**。FORCE_VERSION・CONFIRM_FORCE 必須(人間の確認) |
 | `test-db` | 117 | — | `if [ -z "$(POKEDEX_TEST_DSN)" ]; then \ ⏎ echo "test-db: POKEDEX_TEST_DSN が設定されていない(スキップせず失敗する)" >&2; \ ⏎ exit 1; \ ⏎ fi ⏎ cd services && $(GO) test -tags mysql -p 1 .…` | DB へ接続してテストが書込(要 POKEDEX_TEST_DSN。未設定は失敗) |
 | `db-local-up` | 125 | — | `./scripts/db-local-up.sh` | docker で mysql:9.7.2 を 127.0.0.1:3306 に起動(既存なら start)。要 .env の MYSQL_ROOT_PASSWORD |
 | `up` | 130 | — | `./scripts/up.sh` | **クラスタ作成+全 apply** |

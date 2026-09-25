@@ -497,6 +497,28 @@ func TestReconcileEffectCoverage(t *testing.T) {
 	}
 }
 
+// 「未対応」の印だけの効果定義(ADR-0123)は、補正を計算していないので網羅性では「定義なし」と数える
+// (印を足しても effect-missing は減らず、ダメージのハンドラが無くても effect-no-hook にしない)。
+func TestReconcileEffectCoverageIgnoresUnsupportedMarks(t *testing.T) {
+	in := reconcileInput(t)
+	sdItem(t, &in, "testmonite").Hooks = []string{"onBasePower"}
+	sdAbility(t, &in, "testblaze").Hooks = []string{"onModifyAtk"}
+	in.Effects.Items["testmonite"] = json.RawMessage(`{"UnsupportedAttacker":true}`)
+	in.Effects.Abilities["testblaze"] = json.RawMessage(`{"UnsupportedAttacker":true}`)
+	in.Effects.Abilities["teststance"] = json.RawMessage(`{"UnsupportedDefender":true}`) // ダメージのハンドラなし
+
+	_, rec := reconcileOK(t, in)
+	if got := rec.EffectCoverage.Items; got.Defined != 2 || !sameStrings(got.MissingIDs, []string{"testmonite"}) {
+		t.Errorf("Items = %+v, want Defined 2・Missing [testmonite]", got)
+	}
+	if got := rec.EffectCoverage.Abilities; got.Defined != 1 || !sameStrings(got.MissingIDs, []string{"testblaze"}) {
+		t.Errorf("Abilities = %+v, want Defined 1・Missing [testblaze]", got)
+	}
+	if hasFinding(rec.Report.Warnings, importer.KindEffectNoHook, "teststance") {
+		t.Error("未対応の印だけの定義を effect-no-hook にした")
+	}
+}
+
 // --- 日本語名(PokeAPI との照合。ADR-0103 §8) ------------------------------------------
 
 func TestReconcileNameStats(t *testing.T) {
@@ -683,6 +705,32 @@ func TestReconcileIsDeterministic(t *testing.T) {
 		out2, rec2 := reconcileOK(t, reconcileInput(t))
 		if !reflect.DeepEqual(out1, out2) || !reflect.DeepEqual(rec1, rec2) {
 			t.Fatal("Reconcile の結果が実行ごとに変わる(map の反復順に依存していないか)")
+		}
+	}
+}
+
+// 技の機構の件数(攻撃技の数・機構を持つ技の数・機構ごとの技の数)が報告と要約に出る(ADR-0121)。
+// 実データの dry-run で分類ごとの件数を人が確かめられるようにする(技の ID は出さない)。
+func TestReconcileSummaryCountsMoveMechanisms(t *testing.T) {
+	_, rec := reconcileOK(t, reconcileInput(t))
+	want := importer.MoveMechanismSummary{
+		Attack:        4,
+		WithMechanism: 3,
+		ByMechanism:   map[string]int{"field_specific": 1, "move_specific": 1, "multi_hit": 1, "variable_power": 1},
+	}
+	if !reflect.DeepEqual(rec.Summary.MoveMechanisms, want) {
+		t.Errorf("Summary.MoveMechanisms = %+v, want %+v", rec.Summary.MoveMechanisms, want)
+	}
+	s := importer.FormatSummary(rec)
+	for _, line := range []string{
+		"moveMechanisms: attack=4 withMechanism=3\n",
+		"moveMechanism field_specific: 1\n",
+		"moveMechanism move_specific: 1\n",
+		"moveMechanism multi_hit: 1\n",
+		"moveMechanism variable_power: 1\n",
+	} {
+		if !strings.Contains(s, line) {
+			t.Errorf("要約に %q が無い:\n%s", line, s)
 		}
 	}
 }

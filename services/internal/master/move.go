@@ -8,6 +8,7 @@ import (
 
 // MoveRow は moves テーブルの行(engine が使わない accuracy・pp・name_en は含まない)。
 // Effect は move_effects に行が無ければ nil(空スライスも「効果なし」として扱う)。
+// Mechanisms は move_mechanisms の機構(ADR-0121)。行が無ければ空(通常の技)。
 type MoveRow struct {
 	ID       string
 	NameJa   string
@@ -16,6 +17,8 @@ type MoveRow struct {
 	Power    int
 	Priority int
 	Effect   []byte
+	// Mechanisms は Move で検証し、昇順に並べて engine.Move.Mechanisms に載せる(未対応の印。ADR-0123)。
+	Mechanisms []string
 }
 
 // moveCategories は moves.category として許される値(ADR-0100 §3)。
@@ -52,6 +55,10 @@ func Move(row MoveRow, chart engine.TypeChart) (engine.Move, error) {
 	if row.Priority < -7 || row.Priority > 5 {
 		return engine.Move{}, fmt.Errorf("%w: 優先度が範囲外(-7..5): %d", ErrInvalidRow, row.Priority)
 	}
+	mechanisms, err := MoveMechanismsOf(row)
+	if err != nil {
+		return engine.Move{}, err
+	}
 	var effect *engine.MoveEffect
 	if len(row.Effect) > 0 {
 		e, err := DecodeMoveEffect(row.Effect)
@@ -61,12 +68,13 @@ func Move(row MoveRow, chart engine.TypeChart) (engine.Move, error) {
 		effect = e
 	}
 	return engine.Move{
-		ID:       row.ID,
-		NameJa:   row.NameJa,
-		Type:     engine.Type(row.Type),
-		Category: category,
-		Power:    row.Power,
-		Priority: row.Priority,
-		Effect:   effect,
+		ID:         row.ID,
+		NameJa:     row.NameJa,
+		Type:       engine.Type(row.Type),
+		Category:   category,
+		Power:      row.Power,
+		Priority:   row.Priority,
+		Effect:     effect,
+		Mechanisms: mechanisms,
 	}, nil
 }

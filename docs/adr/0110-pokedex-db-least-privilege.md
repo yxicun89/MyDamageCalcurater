@@ -312,3 +312,9 @@ critic は PASS(重大・重要な指摘なし)。以下の軽微指摘のうち
 `password` → `pw`、テスト変数 `fakePasswords` → `fakePWs`。ロジック・テストの主張は一切変えていない
 (`go build`/`go vet`/`go test`/`make test-db` で確認済み)。`B_KEYVALUE_ALLOW` 側に新しい例外を
 足すのではなく、コード側の命名を変える方針を一貫させた(検出能力を広げない)。
+
+## 追記(2026-09-25): importer の書き込み権限を表単位にした(ADR-0125)
+
+決定1の `pokedex_importer` の行は ADR-0125 で置き換えた。`SELECT` は `pokedex.*` のまま、`INSERT, UPDATE, DELETE` は
+`schema_migrations` を除く表ごとに付ける(issue #312。importer の資格情報で migrate の状態を壊せないようにする)。
+決定3の「プロビジョニング → 移行」は「プロビジョニング → 移行 → importer の付け直し」になる。

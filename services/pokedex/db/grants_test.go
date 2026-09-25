@@ -107,6 +107,9 @@ func TestProvisionRejectsUnsafeInputBeforeConnecting(t *testing.T) {
 		{"権限に GRANT OPTION", root, []RoleGrant{role("pokedex_reader", fakeRolePass, "pokedex", "SELECT, GRANT OPTION")}},
 		{"権限に CREATE USER", root, []RoleGrant{role("pokedex_reader", fakeRolePass, "pokedex", "SELECT, CREATE USER")}},
 		{"権限に SQL を混ぜる", root, []RoleGrant{role("pokedex_reader", fakeRolePass, "pokedex", "SELECT ON *.* TO x; --")}},
+		// ADR-0125: 表単位の範囲は DML だけ(DDL を表ごとに配らない)。範囲の値も既知のものだけ。
+		{"表単位の範囲に DDL", root, []RoleGrant{{DSN: unreachableDSN("pokedex_importer", fakeRolePass, "pokedex"), Privileges: MigratorPrivileges, Scope: ScopeDataTables}}},
+		{"範囲の値が不正", root, []RoleGrant{{DSN: unreachableDSN("pokedex_importer", fakeRolePass, "pokedex"), Privileges: ImporterPrivileges, Scope: GrantScope(99)}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -129,7 +132,7 @@ func TestProvisionAcceptsValidInputAndReachesConnect(t *testing.T) {
 	root := unreachableDSN("root", fakeRootPass, "pokedex")
 	roles := []RoleGrant{
 		{DSN: unreachableDSN("pokedex_reader", fakeRolePass, "pokedex"), Privileges: ReaderPrivileges},
-		{DSN: unreachableDSN("pokedex_importer", fakeRolePass2, "pokedex"), Privileges: ImporterPrivileges},
+		{DSN: unreachableDSN("pokedex_importer", fakeRolePass2, "pokedex"), Privileges: ImporterPrivileges, Scope: ScopeDataTables},
 		{DSN: unreachableDSN("pokedex_migrator", strings.ToUpper(fakeRolePass), "pokedex"), Privileges: MigratorPrivileges},
 	}
 	err := Provision(root, roles)

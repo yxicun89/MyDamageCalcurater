@@ -14,6 +14,8 @@ package engine
 //   - それ以外の効果(実数値・最終ダメージ・無効/吸収など)は既存の固定シナリオで照合している。
 //     fixed.json に1件以上あること。
 //   - gen9 でだけ照合する legacy 効果(metadata の legacyEffects)は対象外。
+//   - 「未対応」の印だけの定義(UnsupportedAttacker / UnsupportedDefender。ADR-0123)は補正を持たないので対象外で、
+//     ベクタで使われていないことだけを見る。印の側(攻撃側/防御側)が oracle と合うことは生成器が確かめる。
 
 import (
 	"encoding/json"
@@ -63,6 +65,18 @@ func hasTypedEffect(def map[string]json.RawMessage) bool {
 	return false
 }
 
+// goldenUnsupportedFields は「未対応」の印(ADR-0123)。これだけを持つ定義は補正を持たない。
+var goldenUnsupportedFields = map[string]bool{"UnsupportedAttacker": true, "UnsupportedDefender": true}
+
+func isUnsupportedOnly(def map[string]json.RawMessage) bool {
+	for k := range def {
+		if !goldenUnsupportedFields[k] {
+			return false
+		}
+	}
+	return len(def) > 0
+}
+
 func TestGoldenCoversEveryChampionsEffect(t *testing.T) {
 	meta := readGoldenMetadata(t)
 	legacy := map[string]bool{}
@@ -102,6 +116,14 @@ func TestGoldenCoversEveryChampionsEffect(t *testing.T) {
 	for _, group := range []map[string]map[string]json.RawMessage{effects.Items, effects.Abilities} {
 		for _, name := range sortedStrings(group) {
 			if legacy[name] {
+				continue
+			}
+			// 未対応の印だけの定義(ADR-0123)は補正を持たないので照合の対象外。ベクタで使っていないこと
+			// (印の側は生成器が oracle と照合する)。
+			if isUnsupportedOnly(group[name]) {
+				if used[name] != 0 {
+					t.Errorf("%s: 未対応の印だけの定義が fixed.json で使われている", name)
+				}
 				continue
 			}
 			checked++

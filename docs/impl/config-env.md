@@ -129,6 +129,7 @@
 | `JUDGE_DIR`・`JUDGE_IMAGE`・`JUDGE_URL` | `services/judge`・`pokecalc/judge:local`・`http://localhost:8080` | `services/judge/Makefile:3-5` | 同上 |
 | `IOS_SIMULATOR`・`IOS_DESTINATION`・`IOS_SCREEN`・`IOS_APPEARANCE`・`IOS_CONTENT_SIZE` | `iPhone 18 Pro`・`platform=iOS Simulator,name=$(IOS_SIMULATOR)`・`root`・`light`・`large` | `ios/Makefile:4-9` | シミュレータ |
 | `CONFIRM_DESTROY`(引数) | なし | `Makefile:migrate-down` | `migrate-down` に DB 名を必須で渡す(破壊的) |
+| `FORCE_VERSION`・`CONFIRM_FORCE`(引数) | なし | `Makefile:migrate-force` | `migrate-force` に版と DB 名を必須で渡す(dirty の復旧。issue #221) |
 | `POKEDEX_TEST_DSN`(引数/環境) | なし | `Makefile:117` | `make test-db` |
 
 ### シェルスクリプト(`${VAR:-既定}`)

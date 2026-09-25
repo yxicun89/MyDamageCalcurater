@@ -1,6 +1,9 @@
 package importer
 
-import "sort"
+import (
+	"encoding/json"
+	"sort"
+)
 
 // computeEffectCoverage は取り込んだ持ち物・特性を、config.json で選んだダメージに効くハンドラと
 // 効果定義(effects.json)に照らして網羅性を計算する(ADR-0103 §6)。
@@ -28,9 +31,37 @@ func computeEffectCoverage(rc *ReconcileConfig, in Input, out Output) (EffectCov
 		abilityIDs = append(abilityIDs, ability.ID)
 	}
 
-	items, itemWarnings := coverageStats(itemIDs, itemHooks, effectHooks, in.Effects.Items)
-	abilities, abilityWarnings := coverageStats(abilityIDs, abilityHooks, effectHooks, in.Effects.Abilities)
+	items, itemWarnings := coverageStats(itemIDs, itemHooks, effectHooks, computedEffects(in.Effects.Items))
+	abilities, abilityWarnings := coverageStats(abilityIDs, abilityHooks, effectHooks, computedEffects(in.Effects.Abilities))
 	return EffectCoverage{Items: items, Abilities: abilities}, append(itemWarnings, abilityWarnings...)
+}
+
+// unsupportedMarkKeys は効果定義の「未対応」の印(ADR-0123)。これだけを持つ定義は補正を計算しない。
+var unsupportedMarkKeys = map[string]bool{"UnsupportedAttacker": true, "UnsupportedDefender": true}
+
+// computedEffects は効果定義のうち、補正を計算するもの(「未対応」の印だけの定義を除く)を返す。
+// 網羅性(ADR-0103 §6)は「計算に入っているか」の指標なので、印だけの定義は「定義なし」と数える。
+// 値の検証は Convert(master.DecodeItemEffect / DecodeAbilityEffect)が行うので、ここで読めない定義は
+// 計算するもの側に残す(件数を黙って変えない)。
+func computedEffects(defs map[string]json.RawMessage) map[string]json.RawMessage {
+	out := make(map[string]json.RawMessage, len(defs))
+	for id, raw := range defs {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &fields); err == nil && len(fields) > 0 && onlyUnsupportedMarks(fields) {
+			continue
+		}
+		out[id] = raw
+	}
+	return out
+}
+
+func onlyUnsupportedMarks(fields map[string]json.RawMessage) bool {
+	for k := range fields {
+		if !unsupportedMarkKeys[k] {
+			return false
+		}
+	}
+	return true
 }
 
 func coverageStats[T any](ids []string, hooks map[string][]string, effectHooks map[string]bool, definitions map[string]T) (CoverageStats, []Finding) {

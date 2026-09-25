@@ -1733,3 +1733,15 @@ Impact: **API レーンの実装は M2(P5-3 record-svc・P5-4 team-svc)の後に
 `api/openapi.yaml` → `make gen`(Web・iOS 双方の生成物)→ calc-svc の `resolveIndividual` と同じ検証(種族に無い特性・
 状態異常の enum)を防御側オーバーライドにも適用、の順で進める。入ったら iOS・Web が「詳細」に「防御側のランク(B/D)」
 「防御側の特性」「防御側の状態異常」を足す(iOS・Web 側の作業。この決定では扱わない)。
+
+## 2026-09-25: 技の機構(多段・固定ダメージ・威力変動 等)を move_mechanisms 表としてマスタに持つ(データレーン。issue #271-a・ADR-0121)
+Decision: Showdown の技データ(multihit・damage・ohko・willCrit・override*・ignoreDefensive・ハンドラ名)と、天候・フィールドのハンドラが技を名指ししている箇所から、importer が攻撃技の機構を 13 種に機械的に分類し、`move_mechanisms(move_id, mechanism)` に入れる。技名は持たない。分類表に無いハンドラは安全側(move_specific / field_specific)+警告。取得物の `mechanism` は必須(古い取得物は拒否)。
+Reason: 多段・威力変動・固定ダメージ等の技が黙って誤ったダメージになる(#271・#233)。engine の「未対応の印」(D16)の前提になるデータが無かった。
+Impact: 実データで攻撃技 335 のうち 93 が機構を持つ。マージ後に Showdown の取得をやり直す必要がある(同じ commit・キャッシュ使用)。API レーンへ: `MasterMove.mechanisms: string[]` の追加を依頼(`api/openapi.yaml`)。engine・calc-svc への受け渡しは D16。
+
+## 2026-09-25: 正しく計算できない技・持ち物・特性に「未対応」の印を付け、サイコフィールドの先制技を無効にする(データレーン。issue #271-b・#270 案 B・ADR-0123)
+Decision: 400 で拒否せず、数値は通常の式のまま結果に印 `{target, reason, id}` を付ける。技は `engine.Move.Mechanisms`(ADR-0121 の機構。マスタと WASM の両経路)から、急所・防御ランク・サイコフィールド・天候/フィールドの条件で正しくなる4種は誤るときだけ、ほかは常に印を付ける。威力 0 の攻撃技は `zero_power`。持ち物・特性は効果定義に `UnsupportedAttacker` / `UnsupportedDefender` を足し(持ち物 5・特性 51。効く側は生成器が oracle と照合。調査に先制技・反動技・連続技など技の性質の代表を足して取りこぼしを減らした)、効く側で持つときだけ印を付ける。サイコフィールドでは優先度 > 0 の攻撃技が接地した防御側に当たらない(`Nullified = psychic_terrain`。ゴールデン `psychic-priority/*` 6 件)。
+Reason: 多段・威力変動・固定ダメージの技と表せない持ち物・特性が、黙って正しい結果のように見えていた。拒否すると画面で選べなくなる(両 issue の既定案)。
+Impact: 既存の正常な入力の数値は不変(ゴールデン全件一致)。WASM の結果(calc・bulk の各行・reverse の各候補)に `unsupported`(常に配列)が増えた。Web はまだ表示しない。importer の dry-run 出力は不変(印だけの定義は網羅性で「定義なし」と数える)。
+**API レーンへの依頼**(契約は変えていない。既定案は ADR-0123 §7): (1) `MasterMove.mechanisms: string[]`(昇順・通常の技は空配列。ADR-0121 の依頼の再掲)。(2) `CalcResponse`・`BulkRow.result`・`ReverseCandidate` に `unsupported: UnsupportedMark[]`(必須・印なしは `[]`)、`UnsupportedMark = {target: move|attacker_item|attacker_ability|defender_item|defender_ability, reason: <機構 13 種>|zero_power|unsupported_effect, id: string}`。入ったら `services/calc/internal/httpapi/parity_test.go` の `dropEmptyUnsupported` を消して印も比べる。
+**Web / iOS レーンへ**: 印の表示(「未対応」の注記)は各レーンの作業。WASM の形は ADR-0123 §6。
