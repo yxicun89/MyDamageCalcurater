@@ -40,16 +40,22 @@ func TestRoutesReachTheirUpstream(t *testing.T) {
 		{"assets HEAD", http.MethodHead, "/assets/0445-000.webp", http.Header{}, nil, "assets", "/assets/0445-000.webp", ""},
 		{"record 全削除(ADR-0209 §10)", http.MethodDelete, "/api/record/device-data", validHeaders(), nil,
 			"record", "/api/record/device-data", ""},
+		{"team 構築の更新(ADR-0213)", http.MethodPut, "/api/team/teams/11111111-2222-4333-8444-555555555555", validHeaders(), calcBody,
+			"team", "/api/team/teams/11111111-2222-4333-8444-555555555555", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			env := newTestEnv(t)
-			if tt.upstream == "record" {
+			switch tt.upstream {
+			case "record":
 				// RecordURL は newTestEnv の既定では未設定(record_routing_test.go の前提を壊さないため)。
 				env = newRecordTestEnv(t)
+			case "team":
+				// TeamURL は newTestEnv の既定では未設定(team_routing_test.go の前提を壊さないため)。
+				env = newTeamTestEnv(t)
 			}
 			target := map[string]*fakeUpstream{
-				"calc": env.calc, "pokedex": env.pokedex, "assets": env.assets, "record": env.record,
+				"calc": env.calc, "pokedex": env.pokedex, "assets": env.assets, "record": env.record, "team": env.team,
 			}[tt.upstream]
 			target.respond(upstreamResponse{
 				status: http.StatusOK, contentType: "application/json; charset=utf-8",
