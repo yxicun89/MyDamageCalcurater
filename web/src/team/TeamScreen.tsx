@@ -8,7 +8,7 @@
 //   - create()/update()/remove() が成功したら、応答の Team で手元の一覧を書き換える(list を呼び直さない)
 //   - 一覧の読み込みに失敗しても、新規作成のフォームは先に使える(ADR-0309 §4)
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { components } from "../api/openapi.gen";
 import { teamScreenText } from "../i18n/ja";
 import "./TeamScreen.css";
@@ -49,11 +49,15 @@ function initialCreateFormState(): CreateFormState {
   return { name: "", submitting: false, notice: null, error: null };
 }
 
-/** 名前変更フォームの状態(同時に1件だけ開く。開いている構築の id を持つ)。 */
+/**
+ * 名前変更フォームの状態(同時に1件だけ開く。開いている構築の id を持つ)。
+ * notice = 送信前の検査で出す理由、error = update() が返した失敗(CreateFormState と同じ形)。
+ */
 interface RenameState {
   readonly teamId: string;
   readonly name: string;
   readonly submitting: boolean;
+  readonly notice: string | null;
   readonly error: TeamError | null;
 }
 
@@ -99,12 +103,16 @@ function removeTeamFromList(list: ListState, teamId: string): ListState {
  */
 export function TeamScreen({ teamClient }: TeamScreenProps): ReactNode {
   const [list, setList] = useState<ListState>({ status: "loading" });
+  // create()/update()/remove() が一度でも成功したら true にする。list() は mount 時に1回しか呼ばないが、
+  // その応答が書き込みの成功より後に届くと、古いスナップショットで手元の一覧を上書きしてしまう
+  // (サーバーには存在するのに画面から消えて見える)。書き込み成功後に届いた list() 応答は捨てる。
+  const hasWrittenRef = useRef(false);
 
   // マウント時に1回だけ list() を呼ぶ(cancelled フラグで古い応答を捨てる。SpeedScreen.tsx と同じ形)。
   useEffect(() => {
     let cancelled = false;
     void teamClient.list().then((result) => {
-      if (cancelled) {
+      if (cancelled || hasWrittenRef.current) {
         return;
       }
       setList(
@@ -138,6 +146,7 @@ export function TeamScreen({ teamClient }: TeamScreenProps): ReactNode {
     setCreateState((current) => ({ ...current, submitting: true, notice: null, error: null }));
     const result = await teamClient.create({ name: trimmed, members: [] });
     if (result.ok) {
+      hasWrittenRef.current = true;
       setCreateState(initialCreateFormState());
       setList((current) => addCreatedTeam(current, result.value));
     } else {
@@ -148,7 +157,7 @@ export function TeamScreen({ teamClient }: TeamScreenProps): ReactNode {
   const [renameState, setRenameState] = useState<RenameState | null>(null);
 
   function openRename(team: Schemas["Team"]): void {
-    setRenameState({ teamId: team.id, name: team.name, submitting: false, error: null });
+    setRenameState({ teamId: team.id, name: team.name, submitting: false, notice: null, error: null });
   }
 
   function cancelRename(): void {
@@ -159,10 +168,28 @@ export function TeamScreen({ teamClient }: TeamScreenProps): ReactNode {
     if (renameState === null || renameState.teamId !== team.id || renameState.submitting) {
       return;
     }
-    const nextName = renameState.name;
-    setRenameState((current) => (current === null ? current : { ...current, submitting: true, error: null }));
-    const result = await teamClient.update(team.id, { name: nextName, members: team.members });
+    // 送信前の検査は新規作成と同じ範囲(契約と同じ。ADR-0309 §4)。範囲外は update() を呼ばずに理由を出す。
+    const trimmed = renameState.name.trim();
+    if (trimmed === "") {
+      setRenameState((current) =>
+        current === null ? current : { ...current, notice: teamScreenText.nameRequiredNotice, error: null },
+      );
+      return;
+    }
+    if (codePointLength(trimmed) > MAX_TEAM_NAME_LENGTH) {
+      setRenameState((current) =>
+        current === null
+          ? current
+          : { ...current, notice: teamScreenText.nameTooLongNotice(MAX_TEAM_NAME_LENGTH), error: null },
+      );
+      return;
+    }
+    setRenameState((current) =>
+      current === null ? current : { ...current, submitting: true, notice: null, error: null },
+    );
+    const result = await teamClient.update(team.id, { name: trimmed, members: team.members });
     if (result.ok) {
+      hasWrittenRef.current = true;
       setRenameState(null);
       setList((current) => replaceTeam(current, result.value));
     } else {
@@ -189,6 +216,7 @@ export function TeamScreen({ teamClient }: TeamScreenProps): ReactNode {
     setDeleteState((current) => (current === null ? current : { ...current, submitting: true, error: null }));
     const result = await teamClient.remove(teamId);
     if (result.ok) {
+      hasWrittenRef.current = true;
       setDeleteState(null);
       setList((current) => removeTeamFromList(current, teamId));
     } else {
@@ -336,6 +364,7 @@ function TeamRow({
           <button type="button" disabled={renameState.submitting} onClick={onCancelRename}>
             {teamScreenText.renameCancelLabel}
           </button>
+          {renameState.notice !== null && <p className="team-screen__notice">{renameState.notice}</p>}
           {renameState.error !== null && (
             <div role="alert" className="team-screen__error">
               <p>{teamScreenText.renameErrorHeading}</p>

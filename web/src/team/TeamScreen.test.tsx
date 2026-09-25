@@ -328,6 +328,80 @@ describe("AC-3 新規作成(名前だけ・メンバーは空)", () => {
   });
 });
 
+describe("list() 応答と書き込みの競合(critic 指摘: 消えて見えるレースコンディション)", () => {
+  test("list() が届く前に create() が成功すると、後から届いた古い list() の一覧で上書きしない", async () => {
+    const user = userEvent.setup();
+    const client = createFakeTeamClient();
+    render(<TeamScreen teamClient={client} />);
+
+    // list() はまだ保留のまま(応答を流さない)。この間に新規作成が成功する。
+    await user.type(nameField(), "テスト構築C");
+    await user.click(createButton());
+    const created: Schemas["Team"] = {
+      id: "66666666-6666-4666-8666-666666666666",
+      name: "テスト構築C",
+      members: [],
+      createdAt: "2026-09-27T12:00:00Z",
+      updatedAt: "2026-09-27T12:00:00Z",
+    };
+    await flush(() => {
+      lastCall(client.createCalls, "create").resolve({ ok: true, value: created });
+    });
+
+    expect(teamItems().map((item) => item.textContent)).toEqual([expect.stringContaining(created.name)]);
+
+    // list() の応答が、作成より前に取得された古いスナップショット(空)としてあとから届く。
+    await flush(() => {
+      lastCall(client.listCalls, "list").resolve({ ok: true, value: [] });
+    });
+
+    // 古い list() で上書きされず、作成した構築は消えない。
+    expect(teamItems().map((item) => item.textContent)).toEqual([expect.stringContaining(created.name)]);
+    expect(screen.queryByText(teamScreenText.emptyNotice)).toBeNull();
+  });
+
+  test("list() が届く前に update()・remove() が成功しても、後から届いた古い list() の一覧で上書きしない", async () => {
+    const user = userEvent.setup();
+    const client = createFakeTeamClient();
+    render(<TeamScreen teamClient={client} />);
+
+    // list() が解決する前に、TEAM_A を直接与えることはできないので、まず作成→list より先に名前変更を行う。
+    await user.type(nameField(), "テスト構築C");
+    await user.click(createButton());
+    const created: Schemas["Team"] = {
+      id: "77777777-7777-4777-8777-777777777777",
+      name: "テスト構築C",
+      members: [],
+      createdAt: "2026-09-27T12:00:00Z",
+      updatedAt: "2026-09-27T12:00:00Z",
+    };
+    await flush(() => {
+      lastCall(client.createCalls, "create").resolve({ ok: true, value: created });
+    });
+
+    await user.click(
+      within(teamItem(created.name)).getByRole("button", { name: teamScreenText.renameLabel(created.name) }),
+    );
+    const field = screen.getByRole("textbox", { name: teamScreenText.renameFieldLabel(created.name) });
+    await user.clear(field);
+    await user.type(field, "テスト構築C2");
+    await user.click(
+      within(teamItem(created.name)).getByRole("button", { name: teamScreenText.renameSaveLabel }),
+    );
+    const renamed: Schemas["Team"] = { ...created, name: "テスト構築C2", updatedAt: "2026-09-27T13:00:00Z" };
+    await flush(() => {
+      lastCall(client.updateCalls, "update").resolve({ ok: true, value: renamed });
+    });
+
+    // list() の応答が、これらの書き込みより前に取得された古いスナップショット(空)としてあとから届く。
+    await flush(() => {
+      lastCall(client.listCalls, "list").resolve({ ok: true, value: [] });
+    });
+
+    expect(teamItems().map((item) => item.textContent)).toEqual([expect.stringContaining(renamed.name)]);
+  });
+});
+
 describe("AC-4 名前変更(update は全置換なので members も送る)", () => {
   /** 「名前を変更」を押して、その行の入力欄を出す。 */
   async function openRename(user: ReturnType<typeof userEvent.setup>, name: string): Promise<HTMLElement> {
@@ -430,6 +504,52 @@ describe("AC-4 名前変更(update は全置換なので members も送る)", ()
     expect(alert).toHaveTextContent("team not found");
     expect(teamItems()).toHaveLength(1);
     expect(teamItem(TEAM_A.name)).toHaveTextContent(TEAM_A.name);
+  });
+
+  test.each([
+    ["空", ""],
+    ["空白だけ", "   "],
+  ])("%s の名前で保存を押すと update を呼ばず、理由を出す", async (_name, typed) => {
+    const user = userEvent.setup();
+    const client = await renderWithTeams([TEAM_A]);
+
+    const field = await openRename(user, TEAM_A.name);
+    await user.clear(field);
+    if (typed !== "") {
+      await user.type(field, typed);
+    }
+    await user.click(
+      within(teamItem(TEAM_A.name)).getByRole("button", { name: teamScreenText.renameSaveLabel }),
+    );
+
+    expect(client.updateCalls).toHaveLength(0);
+    expect(screen.getByText(teamScreenText.nameRequiredNotice)).toBeInTheDocument();
+    // フォームは開いたまま(理由を見て直せる)。
+    expect(
+      screen.getByRole("textbox", { name: teamScreenText.renameFieldLabel(TEAM_A.name) }),
+    ).toBeInTheDocument();
+  });
+
+  test("50文字までは送り、51文字は送らずに理由を出す(契約の TeamInput.name)", async () => {
+    const user = userEvent.setup();
+    const client = await renderWithTeams([TEAM_A]);
+
+    const field = await openRename(user, TEAM_A.name);
+    await user.clear(field);
+    await user.type(field, "あ".repeat(MAX_TEAM_NAME_LENGTH + 1));
+    await user.click(
+      within(teamItem(TEAM_A.name)).getByRole("button", { name: teamScreenText.renameSaveLabel }),
+    );
+    expect(client.updateCalls).toHaveLength(0);
+    expect(screen.getByText(teamScreenText.nameTooLongNotice(MAX_TEAM_NAME_LENGTH))).toBeInTheDocument();
+
+    await user.clear(field);
+    await user.type(field, "あ".repeat(MAX_TEAM_NAME_LENGTH));
+    await user.click(
+      within(teamItem(TEAM_A.name)).getByRole("button", { name: teamScreenText.renameSaveLabel }),
+    );
+    expect(client.updateCalls).toHaveLength(1);
+    expect(lastCall(client.updateCalls, "update").args.input.name).toHaveLength(MAX_TEAM_NAME_LENGTH);
   });
 });
 

@@ -618,7 +618,15 @@
     App.tsx の teamClient の受け渡し。設計判断(usesMaster を最初から true にする / 削除は `window.confirm` を使わない
     2段階 / クライアントの型)は **ADR-0309**。spec-writer 工程で受け入れ条件と失敗するテストを先に置いた
     (`team/teamClient.test.ts` 37件・`team/TeamScreen.test.tsx` 23件・App 側含め計66件。実装後は全件 green、
-    既存1674件も無回帰。`npm run typecheck`・`npm run lint`(eslint+prettier)・`make wasm && npm run e2e`(37件)も green)
+    既存1674件も無回帰。`npm run typecheck`・`npm run lint`(eslint+prettier)・`make wasm && npm run e2e`(37件)も green)。
+    critic の FAIL 未満の重要指摘2件を修正(2026-09-26): (1) 名前変更(`saveRename`)に新規作成と同じ送信前検査
+    (前後の空白を除いて1〜50文字。範囲外は `update()` を呼ばず理由を出す)が無かったので追加(`RenameState` に
+    `notice` フィールドを追加)。(2) 初回 `list()` 応答が `create()`/`update()`/`remove()` の成功より後に届くと、
+    古いスナップショットで手元の一覧を上書きし、サーバーには存在するのに画面から消えて見えるレースコンディションが
+    あったので、`hasWrittenRef`(書き込みが一度でも成功したら true)で in-flight の `list()` 応答を捨てるようにした。
+    回帰テストを `TeamScreen.test.tsx` に5件追加(名前変更の空/空白/50・51文字、list と create/update の競合2件)。
+    mutation testing で両修正を一時的に無効化し、追加したテストが落ちることを確認済み。全1745件 green・typecheck・
+    lint(eslint+prettier)・`make wasm && npm run e2e`(37件)も green
   - [ ] **P5-5b メンバー編集(PR-A2)**: 6体の枠と個体(種族検索・技・持ち物・特性・性格・SP のグリッド・テラスタイプ)。
     マスタ(種族・技・持ち物・特性の名前解決)を使うのはここから
   - [ ] **P5-5c 履歴・よく計算する相手・端末データの削除(PR-A3 以降)**: record-svc の API と ADR-0209 §8 の文言
