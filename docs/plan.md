@@ -794,6 +794,20 @@
     にテストを3件追加し、それぞれ対応する実装行を一時的に壊して red になることを確認してから元に戻した
     (mutation 確認。詳細は ADR「P6-17」10章)。`swift test` 493 件全件成功、`make ios-test` も全件成功
     (unit 506 件・XCUITest 41 件)。既存テストは1つも編集していない
+- [x] P6-18 issue #328: 「このアプリについて」画面。ルート画面(`RootView.swift`)から到達できる入口
+  (`openAboutScreen`)を作り、非公式であることの注記と、実際に使っているデータの出典・ライセンスの一覧
+  (`@smogon/calc`・Pokémon Showdown・PokeAPI・Pokémon HOME/Champions の公式情報)を表示する。
+  文言は `PokeCalcCore.AboutText` に1か所持つ。Web レーンはこの文言に従う(DECISIONS.md 2026-09-26「P6-18」)。
+  受け入れ条件・判断・identifier は ADR-0501「P6-18」。
+  - spec-writer(2026-09-26): 受け入れ条件・失敗するテストのみ追加、実装はまだ(`AboutText` はプレースホルダ。
+    `swift test` 500件中9件失敗〈すべて新規 `AboutTextTests`〉、既存493件は無傷。XCUITest 3件は
+    `xcodebuild build-for-testing` でビルドのみ確認、実行〈`make ios-test`〉は未実施)
+  - implementer(2026-09-26): `AboutText.unofficialNotice`/`dataSources` を ADR 2〜3章のとおり埋め、
+    `RootView.swift` に `openAboutScreen`(`.topBarTrailing` の `info.circle`)と `AboutScreenRoute` の
+    `navigationDestination` を追加、新規 `ios/PokeCalc/AboutView.swift` で `aboutScreen`/
+    `aboutUnofficialNotice`/`aboutDataSource-<index>` を表示(design.md のトークンのみ・`lineLimit` なし)。
+    `swift test` 500件全件成功、`make ios-test` 全件成功(unit 513件・XCUITest 44件。`AboutScreenUITests` 2件・
+    `LargeTextLayoutUITests.testAboutScreenNoHorizontalOverflowAtAX5` を含む)。既存テストは編集していない。
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)。Argo CD の実同期もローカル k3d で確認済み(ADR-0018: Git 変更 32fbb9e → manual sync → Pod の image digest 一致)
