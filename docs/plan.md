@@ -411,6 +411,66 @@
   (eslint + prettier)いずれも green。**critic PASS**(sonnetで実施。opusのセッション利用枠が一時的に
   上限に達したため、CLAUDE.mdのモデル割り当て方針〈engine・逆算・DB・API契約に関わるときだけOpus〉に従い
   sonnetへ切り替え。mutation testing 2件で全て検知、WASM側の無回帰も`wasmEngine.test`29件で確認済み)。
+- [x] issue #218(重大度 medium。`web/src/App.tsx` がタブごとに `SCREEN_COMPONENTS[tab]` で別のコンポーネント型を
+  描くため、タブを切り替えるたびに前の画面が unmount され、選んだ種族・技・持ち物・プリセット・観測が消える。
+  ブラウザの戻る/進むでも同じ。requirements.md §2「入力の手間を最小にする」に反する)。
+  **完了(2026-09-25。Web レーン。ブランチ `fix/web-tab-state-persistence-218`)**:
+  受け入れ条件と失敗するテストを先に用意した(spec-writer)。設計判断は **ADR-0308**(新規)にまとめた:
+  (1) 5画面を全部 mount する issue の既定案は採らず、**一度でも選ばれたタブの画面だけを mount して以後
+  unmount しない**(`SpeedScreen` はマウント時に speed API を2本呼ぶ〈ADR-0604 §2〉ので、未訪問の画面の
+  通信を起こさない)。(2) 非選択の画面は**ネイティブの `hidden` 属性**で隠し、`role="tabpanel"` は1つのまま
+  (既存の `queryByRole(...).toBeNull()`・`aria-controls` のアサーションを書き換えずに済む。絶対ルール6)。
+  (3) 計算モードの切り替えでマスタが入れ替わったら、マスタを使う画面は**作り直す**(古いマスタで計算した
+  結果が残るのを避ける。ADR-0304 §追記 A-6・issue #308 の既存テストの線を動かさない)。issue の異常系の
+  「他の入力は保持する」は採らず、「マスタに無い種族が選ばれたまま残らない」として満たす。
+  (4) 保持はセッション内だけ(リロードで初期状態。入力をストレージに書かない)。
+  テスト: `web/src/App.tabPersistence.test.tsx`(新規11件。往復・戻る/進む・hidden の隠し方・
+  未訪問の画面の通信なし・マスタ入れ替えでの初期化・リロードでの初期化)、`web/src/App.test.tsx` に往復1件、
+  `web/e2e/routing.spec.ts` に2件(非選択の画面が DOM に残ること・実ブラウザの戻る/進む)。
+  **実装(implementer)**: `web/src/App.tsx` のレンダー部だけを変更(各画面・`app/screens.tsx`・
+  `app/routes.ts` は無変更)。App が新たに持つ state は `visitedTabs`(選ばれたタブの集合)1つだけ
+  (ADR-0308 §影響のとおり)。タブの選択(クリック・キーボード・popstate)はすべて共通の `selectTab` を
+  通し、`setTab` と同時に `visitedTabs` へ足す。`role="tabpanel"` の中で `visitedTabs` に含まれる
+  各タブを1つずつ `<div hidden={...}>` に包んで並べ、選択中でないものだけ `hidden` を付ける(決定2)。
+  決定3(マスタが入れ替わったら作り直す)は、`visitedTabs` 自体をリセットするのではなく、マスタを使う
+  各画面の React `key` に `masterEpoch`(モードごとに別マスタを持つときだけ `mode` の値、単一マスタなら
+  常に `"single"`)を含めて、マスタが実際に入れ替わったときだけ React に作り直させる形にした。
+  `npx vitest run App` 113件・`npm test` 1624件・`npm run typecheck`・`npm run lint`(eslint + prettier)
+  いずれも green(実装前の7 red が0件になり、既存の1617件は無回帰)。`make web-e2e`
+  (`web/e2e/routing.spec.ts` の新規2件を含む)は37件すべて green(a11y.spec.ts も無回帰)。
+  本体コードのコメントに issue 番号を書くときは `#` を付けない(`web/src/styles/noColorLiterals.test.ts` の
+  16進色リテラル検出が `#218` を拾うため。issue #305 と同じ)。
+  **critic FAIL(2点)**: (a) `masterEpoch` はデッドコードだった。固定値にしても全1624件 green(検知
+  できない)。理由: モード切替で取得口(`activeMasterSource`)が変わると `currentMasterLoad` が一旦
+  `null` になり(ADR-0304 §追記 A-6)、`{currentMasterLoad !== null && (...)}` で `.app-tabs`
+  サブツリーごと unmount される(ADR-0304 §追記 A-6 の既存挙動)ため、epoch を key に混ぜなくても
+  取得口が変わる経路では必ずサブツリーが作り直される。(b) `visitedTabs` は App 直下の state のままで、
+  サブツリーの unmount/mount を生き延びるため、マスタ再読み込みのたびに「訪問済みの非選択タブ」が
+  hidden のまま一斉に再マウントされ、SpeedScreen のマウント時 speed API 呼び出しが再度走っていた
+  (critic 実測: 2件→4件)。
+  **critic FAIL への対応(2026-09-25。Web レーン。同ブランチで直接修正)**: `masterEpoch` を削除し、
+  マスタを使う画面・マスタ不要画面(`isMasterlessScreen`)とも `key={id}` に統一(軽微指摘1: 失敗中→
+  成功への「再試行」で SpeedScreen が不要に作り直されるのも解消)。`visitedTabs` の置き場を App 直下から
+  `AppTabPanel`(`.app-tabs` サブツリーの中、`{currentMasterLoad !== null && <AppTabPanel .../>}` の
+  内側に置いた新規の子コンポーネント)へ移した。これにより、取得口が変わって `currentMasterLoad` が
+  `null` を経由するたびに `AppTabPanel` ごと作り直され、`visitedTabs` も選択中のタブだけへ自動的に
+  リセットされる(取得口が変わらない「再試行」では `null` を経由しないので保たれる)。`tab` prop の
+  変化を `visitedTabs` へ反映する処理は、`useEffect` 内の `setState` だと
+  `react-hooks/set-state-in-effect` に触れるため、React の「レンダー中の state 更新」パターン
+  (前回の `tab` を `useState` で覚え、レンダー中に差分を見て `setVisitedTabs` する)で実装した。
+  ADR-0308 決定3に実現手段の説明を追記、状態を「提案」→「採用」に更新。
+  回帰テスト: `web/src/App.tabPersistence.test.tsx` の「計算モードを切り替えてマスタが入れ替わると…」
+  テストに、切替前に攻撃側・防御側の両方を選んで実際に計算結果を出すステップを追加(従来は結果を
+  一度も出さないまま `queryByRole("list", { name: "計算結果" })` が `null` であることを確かめる
+  空振りのアサーションだった)。「素早さタブを訪問後にマスタが入れ替わっても、speed API を呼び直さない」
+  を新規追加(criticのプローブと同型: 素早さタブを訪問→計算タブへ戻る→モード切替で `speedCallCount`
+  が増えないことを確認)。`web/src/App.tabPersistence.test.tsx` は11件→12件。
+  mutation testing 3種(`masterEpoch` 相当の判定〈`AppTabPanel` の再作成条件〉を固定する・`hidden`
+  条件を `false` 固定にする・`visitedTabs` によるフィルタを撤去する)を当て、追加した回帰テストが
+  それぞれ落ちることを確認してから元に戻した。
+  `origin/main` をマージ後、`npx vitest run` 1625件(1624 + 新規1件)・`npm run typecheck`・
+  `npm run lint`(eslint + prettier)いずれも green。
+  **Next(critic)**: レビュー待ち。
 
 ## M2: 保存・構築
 
