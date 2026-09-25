@@ -72,14 +72,20 @@ critic 2ラウンド(1回目FAIL〈重要3・軽微6〉: (1) team_members への
 〈ADR-0209 §6-1違反。実害は無いが規律違反〉のを修正し回帰テストで固定、(2) 文字数上限未検証で入力エラーが
 503 store_unavailableに化けていたのを400 invalid_inputに修正、(3) Dockerfileのserverターゲット欠落を修正
 → 2回目PASS)。実TiDB(`pingcap/tidb --store=unistore`)で全テスト確認済み。失効ジョブとDeployment配線は
-**P5-4bへ切り出し**(plan.md参照)。**main未統合(PR #409。ユーザーのテスト確認・マージ待ち)**。
-Next: PR #409マージ後、キュー順に対応:
-(1) issue #272のAPI分残り(defenderOverride.abilityIdをengineの特性候補に反映・ReverseRequest.unknownAbilityId
-追加。データレーン依頼。engine側はPR #402・ADR-0126で完了済み。DECISIONS.md 2026-09-25参照)、
-(2) issue #284(balance/speed/judgeをgatewayの後ろにまとめる。ユーザー決定・PR #399のDECISIONS.md参照)、
-(3) UnsupportedMark.reason/targetのenum前方互換性の見直し(iOSレーン提案。新しいreason値を足すと古いクライアント
+**P5-4bへ切り出し**(plan.md参照)。**main統合済み(PR #409)**。
+Status(追記): issue 272のAPI分(defenderOverride.abilityId・ReverseRequest.unknownAbilityId。ADR-0214。
+engine側はPR #402・ADR-0126で完了済み)を実装。省略時は種族の全特性(最大3件。4件目=Showdownの特殊枠"S"は
+ADR-0105 §5と同じ判断で落とす)を解決して渡すため、1つしか特性を持たない種族は必ずその特性が効くように
+なる。`BulkCalcRow`・`ReverseCandidate`に`abilityId`/`abilityIds`(必須)を追加。critic 2ラウンド(1回目
+FAIL: 省略時に解決した特性のEffectが実際にengineへ届くことが無テストだった→対照種族ペアのテストを追加して
+修正→2回目PASS)。一括計算・逆算の行数/候補数上限(ADR-0208)が特性分岐で最大3倍まで増えうることを追記。
+**main未統合(PR #411。ユーザーのテスト確認・マージ待ち)**。
+Next: PR #411マージ後、キュー順に対応:
+(1) issue #284(balance/speed/judgeをgatewayの後ろにまとめる。ユーザー決定・PR #399のDECISIONS.md参照)、
+(2) UnsupportedMark.reason/targetのenum前方互換性の見直し(iOSレーン提案。新しいreason値を足すと古いクライアント
 の計算・逆算応答全体がデコード失敗する問題。type:stringに緩める方向で検討中)、
-(4) P5-3b・P5-4b(失効ジョブ・Deployment配線。優先度低)。
+(3) defenderOverride.ranks/status(issue 272残り。優先度低)、(4) P5-3b・P5-4b(失効ジョブ・Deployment配線。
+優先度低)。
 issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。
 60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
 
