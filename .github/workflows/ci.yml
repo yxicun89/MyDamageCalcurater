@@ -1,7 +1,7 @@
 name: CI
 
 # issue #215: main への push・PR で test/lint/build/golden/wasm/kustomize/check-publishable を
-# 機械的に検証する(ADR-0118)。Secret は使わない(private リポジトリの無料枠内で完結させる)。
+# 機械的に検証する(ADR-0119)。Secret は使わない(private リポジトリの無料枠内で完結させる)。
 #
 # 対象外(理由):
 #   - iOS(`make ios-test`): macOS ランナー + Xcode が要り、無料枠(private は月2,000分。macOS ランナーは
