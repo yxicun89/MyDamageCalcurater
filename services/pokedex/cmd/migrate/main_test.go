@@ -12,10 +12,11 @@ package main
 //		Up             func(dsn string) error
 //		Version        func(dsn string) (version uint, dirty bool, ok bool, err error)
 //		DownAll        func(dsn, confirmDatabase string) error
+//		Force          func(dsn, confirmDatabase string, version int) error
 //	}
 //	func run(args []string, env cliEnv) int
 //
-// main は os.Getenv と db.Provision・db.Up・db.Version・db.DownAll を渡す。
+// main は os.Getenv と db.Provision・db.Up・db.Version・db.DownAll・db.Force を渡す。
 
 import (
 	"bytes"
@@ -42,12 +43,16 @@ type harness struct {
 	stdout bytes.Buffer
 	stderr bytes.Buffer
 
-	calls          []string // "provision" / "up" / "version" / "down" の呼ばれた順
+	calls          []string // "provision" / "up" / "version" / "down" / "force" の呼ばれた順
 	provisionRoot  string
 	provisionRoles []db.RoleGrant
 	upDSN          string
 	provisionErr   error
 	upErr          error
+	forceDSN       string
+	forceConfirm   string
+	forceVersion   int
+	forceErr       error
 }
 
 func newHarness(env map[string]string) *harness { return &harness{env: env} }
@@ -75,6 +80,11 @@ func (h *harness) cliEnv() cliEnv {
 		DownAll: func(string, string) error {
 			h.calls = append(h.calls, "down")
 			return nil
+		},
+		Force: func(dsn, confirm string, version int) error {
+			h.calls = append(h.calls, "force")
+			h.forceDSN, h.forceConfirm, h.forceVersion = dsn, confirm, version
+			return h.forceErr
 		},
 	}
 }
@@ -216,4 +226,79 @@ func TestVersionNeverProvisions(t *testing.T) {
 		t.Errorf("呼び出し = %v, want [version]", h.calls)
 	}
 	h.assertNoSecrets(t)
+}
+
+// issue #221: force はフラグ(-version・-confirm)を検査してから Force に渡す。欠け・負数は
+// Force を呼ばずに終了コード 2。Force の拒否(DB 名の不一致・存在しない版・dirty でない)は終了コード 1。
+func TestForceFlags(t *testing.T) {
+	cases := []struct {
+		name      string
+		args      []string
+		forceErr  error
+		wantCode  int
+		wantCall  bool
+		wantInErr string
+	}{
+		{"正常", []string{"force", "-version", "2", "-confirm", "pokedex_fake"}, nil, 0, true, ""},
+		{"0 は未適用に戻す", []string{"force", "-version", "0", "-confirm", "pokedex_fake"}, nil, 0, true, ""},
+		{"-version が無い", []string{"force", "-confirm", "pokedex_fake"}, nil, 2, false, "-version"},
+		{"-version が負", []string{"force", "-version", "-1", "-confirm", "pokedex_fake"}, nil, 2, false, "-version"},
+		{"-version が数でない", []string{"force", "-version", "x", "-confirm", "pokedex_fake"}, nil, 2, false, ""},
+		{"-confirm が無い", []string{"force", "-version", "2"}, nil, 2, false, "-confirm"},
+		{"余分な引数", []string{"force", "-version", "2", "-confirm", "pokedex_fake", "extra"}, nil, 2, false, ""},
+		{"DB 名の不一致", []string{"force", "-version", "2", "-confirm", "other"}, db.ErrForceNotConfirmed, 1, true, ""},
+		{"存在しない版", []string{"force", "-version", "99", "-confirm", "pokedex_fake"}, db.ErrForceUnknownVersion, 1, true, ""},
+		{"dirty でない", []string{"force", "-version", "2", "-confirm", "pokedex_fake"}, db.ErrForceNotDirty, 1, true, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(map[string]string{"POKEDEX_DATABASE_DSN": fakeMigratorDSN, "POKEDEX_PROVISION_DSN": fakeProvisionDSN})
+			h.forceErr = tc.forceErr
+			code := run(tc.args, h.cliEnv())
+			if code != tc.wantCode {
+				t.Errorf("exit = %d, want %d(stderr=%q)", code, tc.wantCode, h.stderr.String())
+			}
+			called := reflect.DeepEqual(h.calls, []string{"force"})
+			if called != tc.wantCall {
+				t.Errorf("呼び出し = %v, want Force を呼ぶ=%v(プロビジョニングもしない)", h.calls, tc.wantCall)
+			}
+			if tc.wantCall && tc.forceErr == nil {
+				if h.forceDSN != fakeMigratorDSN {
+					t.Error("Force に POKEDEX_DATABASE_DSN を渡していない")
+				}
+				if h.forceConfirm != "pokedex_fake" {
+					t.Errorf("Force の確認用 DB 名 = %q", h.forceConfirm)
+				}
+			}
+			if tc.wantInErr != "" && !strings.Contains(h.stderr.String(), tc.wantInErr) {
+				t.Errorf("stderr に %q が無い: %q", tc.wantInErr, h.stderr.String())
+			}
+			if tc.forceErr != nil && h.stderr.Len() == 0 {
+				t.Error("拒否の理由を stderr に出していない")
+			}
+			h.assertNoSecrets(t)
+		})
+	}
+}
+
+// issue #221: force の版は -version の値をそのまま渡す。
+func TestForcePassesVersion(t *testing.T) {
+	h := newHarness(map[string]string{"POKEDEX_DATABASE_DSN": fakeMigratorDSN})
+	if code := run([]string{"force", "-version", "5", "-confirm", "pokedex_fake"}, h.cliEnv()); code != 0 {
+		t.Fatalf("exit = %d(stderr=%q)", code, h.stderr.String())
+	}
+	if h.forceVersion != 5 {
+		t.Errorf("Force の版 = %d, want 5", h.forceVersion)
+	}
+}
+
+// POKEDEX_DATABASE_DSN が無ければ force も何もせず失敗する。
+func TestForceRequiresDatabaseDSN(t *testing.T) {
+	h := newHarness(map[string]string{})
+	if code := run([]string{"force", "-version", "2", "-confirm", "pokedex_fake"}, h.cliEnv()); code == 0 {
+		t.Error("POKEDEX_DATABASE_DSN が無いのに成功した")
+	}
+	if len(h.calls) != 0 {
+		t.Errorf("呼び出し = %v, want なし", h.calls)
+	}
 }

@@ -66,14 +66,16 @@ sequenceDiagram
 | 項目 | 内容 | 根拠 |
 |---|---|---|
 | ライブラリ | `golang-migrate/migrate/v4`(mysql driver・iofs source)。公式 CLI は使わず自前の `cmd/migrate`(理由は ADR-0100 §1) | `services/pokedex/db/migrate.go:1-18` |
-| 実行ロジック本体 | `Up`/`DownAll`/`Version`/`newMigrate` は共通パッケージに切り出し、`fs.FS` を引数に取る(record-svc・team-svc も同じ実装を再利用。ADR-0211 §5) | `services/internal/dbmigrate/migrate.go` |
+| 実行ロジック本体 | `Up`/`DownAll`/`Force`/`Version`/`newRunner` は共通パッケージに切り出し、`fs.FS` を引数に取る(record-svc・team-svc も同じ実装を再利用。ADR-0211 §5) | `services/internal/dbmigrate/migrate.go` |
 | SQL の持ち方 | `migrations/*.sql` を `//go:embed` でバイナリに埋め込む(実行版とコードが一致)。サービスごとの `db/migrate.go` は自分の `embed.FS` を `dbmigrate` に渡す薄いラッパー | `services/pokedex/db/migrate.go:19` |
 | 接続 | `mysql.ParseDSN` → `MultiStatements = true` を付けて `sql.Open` | `services/internal/dbmigrate/migrate.go:28-33` |
-| コマンド | `migrate up` / `migrate version` / `migrate down -confirm <DB名>` | `cmd/migrate/main.go:1-9` |
+| コマンド | `migrate up` / `migrate version` / `migrate down -confirm <DB名>` / `migrate force -version <版> -confirm <DB名>` | `cmd/migrate/main.go:1-10` |
 | `down` の防護 | `-confirm` が空、または DSN の DB 名と不一致なら**接続前に** `ErrDownNotConfirmed`。k8s・スクリプトからは呼ばない | `services/internal/dbmigrate/migrate.go:76-88`(各サービスの `db/migrate.go` が再エクスポート) |
+| `force` の防護 | dirty の復旧専用(issue #221)。`-confirm` 不一致は接続前に `ErrForceNotConfirmed`、負・migrations に無い版は `ErrForceUnknownVersion`(0 は未適用に戻す)、dirty でない DB で今と違う版は `ErrForceNotDirty`。手順は `docs/runbooks/data.md` | `services/internal/dbmigrate/migrate.go`(`Force`) |
+| 失敗時のエラー | migration の SQL 全文を出さず「migration 名: MySQL のエラー」の1行にする(元のエラーは `errors.As` で取れる) | `services/internal/dbmigrate/migrate.go`(`describeMigrationError`) |
 | 適用済みの記録 | golang-migrate の管理テーブル(既定名 `schema_migrations`。ライブラリの既定で、実クラスタでは未確認) | `services/internal/dbmigrate/migrate.go:52` |
 | Job の image | `pokecalc/pokedex-migrate:0.1.0`(`FROM scratch`、`ENTRYPOINT /pokedex-migrate`、`CMD up`。down はイメージに含めない意図) | `services/pokedex/Dockerfile:16-22` |
-| make | `migrate-up` `migrate-version`(要 `POKEDEX_DATABASE_DSN`)、`migrate-down`(要 `CONFIRM_DESTROY=<DB名>`) | `Makefile:100-115` |
+| make | `migrate-up` `migrate-version`(要 `POKEDEX_DATABASE_DSN`)、`migrate-down`(要 `CONFIRM_DESTROY=<DB名>`)、`migrate-force`(要 `FORCE_VERSION=<版> CONFIRM_FORCE=<DB名>`) | `Makefile:100-115` |
 
 ### migrations(全 14 ファイル = 7 版 × up/down)
 

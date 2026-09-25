@@ -3,11 +3,16 @@
 //	migrate up
 //	migrate version
 //	migrate down -confirm <DB名>
+//	migrate force -version <版> -confirm <DB名>
 //
 // DSN(go-sql-driver/mysql 形式)は環境変数 POKEDEX_DATABASE_DSN から読む。
 // down は誤操作によるデータ削除を防ぐため、DSN の DB 名と一致する -confirm を要求する
 // (CLAUDE.md: DB のデータ削除は人間の確認が必要)。他のターゲット・スクリプト・k8s から
 // down を呼ばない。
+//
+// force は途中で失敗して dirty になった DB の dirty を解き、版を指定の値にする(スキーマは変えない。
+// issue #221)。migration の状態を人が書き換える操作なので、down と同じく DB 名の -confirm を要求する。
+// 手順(途中まで作られたテーブルの片付け → force → up)は docs/runbooks/data.md。k8s の Job からは呼ばない。
 //
 // up は POKEDEX_PROVISION_DSN(root 相当)が設定されているとき、実際の migration の前に
 // POKEDEX_READER_DSN・POKEDEX_IMPORTER_DSN・POKEDEX_DATABASE_DSN(migrator)から3ユーザーを
@@ -33,6 +38,7 @@ type cliEnv struct {
 	Up             func(dsn string) error
 	Version        func(dsn string) (version uint, dirty bool, ok bool, err error)
 	DownAll        func(dsn, confirmDatabase string) error
+	Force          func(dsn, confirmDatabase string, version int) error
 }
 
 func main() {
@@ -48,6 +54,7 @@ func productionEnv() cliEnv {
 		Up:        db.Up,
 		Version:   db.Version,
 		DownAll:   db.DownAll,
+		Force:     db.Force,
 	}
 }
 
@@ -64,6 +71,8 @@ func run(args []string, env cliEnv) int {
 		return runVersion(env)
 	case "down":
 		return runDown(args[1:], env)
+	case "force":
+		return runForce(args[1:], env)
 	default:
 		usage(env.Stderr)
 		return 2
@@ -158,6 +167,40 @@ func runDown(args []string, env cliEnv) int {
 	return 0
 }
 
+func runForce(args []string, env cliEnv) int {
+	dsn := env.Getenv("POKEDEX_DATABASE_DSN")
+	if dsn == "" {
+		fmt.Fprintln(env.Stderr, "POKEDEX_DATABASE_DSN が設定されていない")
+		return 1
+	}
+	fs := flag.NewFlagSet("force", flag.ContinueOnError)
+	fs.SetOutput(env.Stderr)
+	// 既定値 -1 は「指定なし」(0 は「未適用に戻す」という意味のある値なので既定値にしない)。
+	version := fs.Int("version", -1, "dirty を解いたあとの版(migrations にある版。0 は未適用に戻す)")
+	confirm := fs.String("confirm", "", "対象の DB 名(人間の確認。DSN の DB 名と一致すること)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() > 0 {
+		fmt.Fprintln(env.Stderr, "force: 余分な引数がある:", strings.Join(fs.Args(), " "))
+		return 2
+	}
+	if *version < 0 {
+		fmt.Fprintln(env.Stderr, "force: -version <版>(0 以上)を指定すること")
+		return 2
+	}
+	if *confirm == "" {
+		fmt.Fprintln(env.Stderr, "force: -confirm <DB名> を指定すること(人間の確認)")
+		return 2
+	}
+	if err := env.Force(dsn, *confirm, *version); err != nil {
+		fmt.Fprintln(env.Stderr, "migrate force:", err)
+		return 1
+	}
+	fmt.Fprintf(env.Stdout, "force: 完了(version=%d dirty=false。続けて migrate up)\n", *version)
+	return 0
+}
+
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "使い方: migrate up | version | down -confirm <DB名>")
+	fmt.Fprintln(w, "使い方: migrate up | version | down -confirm <DB名> | force -version <版> -confirm <DB名>")
 }
