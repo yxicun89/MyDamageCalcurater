@@ -279,6 +279,14 @@
   critic PASS(mutation testing 2/3 kill。`flushObservationDebounce()` を守るテストが無いのは
   `selectAttackerPreset` 側にも元々あった既存の穴で、今回の退行ではない。次に触るときに攻撃側・防御側
   両方へテストを足すとよい)。`cd web && npx vitest run` 1419/1419 green、tsc・lintエラー無し。
+- [ ] issue #304(重大度 medium。計算・逆算・タイプバランスの入力に見えるラベルが無く、初見でどれが
+  攻撃側・防御側・技・観測値か分からない。WCAG 2.2 SC 3.3.2 / SC 2.5.3)。**着手(2026-09-25。Web レーン。
+  ブランチ `fix/web-issue-304-visible-labels`)**: 受け入れ条件と失敗するテストを先に用意した段階
+  (`web/src/screens/visibleLabels.test.tsx`・`web/src/i18n/visibleLabels.test.ts`・
+  `web/src/styles/inputTokens.test.ts`、共通の道具 `web/src/test/accessibleName.ts`)。
+  設計は docs/design.md「入力のラベル」に追記済み(領域の見える見出し・h2/h3 の階層・`label for` の
+  見えるラベル・accessible name は「<見出しの語>の<ラベルの語>」を文言資源で組み立てる・未選択 option の
+  文言・観測欄の説明文・入力/ピルの角丸トークン)。実装はこれから。
 
 ## M2: 保存・構築
 
