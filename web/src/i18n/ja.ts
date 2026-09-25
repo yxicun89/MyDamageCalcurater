@@ -5,7 +5,13 @@
 // (コーディング規約 §2 の「独立した検証」)。
 
 import type { ObservationUnit } from "../domain/observations";
-import type { ReverseSide, StatKey } from "../engine/types";
+import type {
+  ReverseSide,
+  StatKey,
+  UnsupportedMark,
+  UnsupportedReason,
+  UnsupportedTarget,
+} from "../engine/types";
 
 /** 相性表が持つ18タイプの ID(`testdata/golden/typechart.json` の `types` と同じ)。 */
 export type TypeId =
@@ -575,6 +581,64 @@ export const reverseResultText = {
     attackerFullNeutralSuffix: "振り",
     attackerFullPlusSuffix: "特化",
   },
+} as const;
+
+/**
+ * 「未対応」の印(ADR-0123、issue 271 / issue 270)の文言。engine が正しく計算できない技の機構・
+ * 持ち物・特性に付く印で、数値は通常の式のまま返る(拒否しない)。画面は数値を消さず、
+ * 「この結果は正しく計算できていない可能性がある」ことと、その原因(技・持ち物・特性のどれか)を示す。
+ *
+ * 色だけに頼らない(design.md「画面: ダメージ計算」): 印は必ず文字(badgeLabel と markLabel)で出し、
+ * アイコン・色は補助にする(アイコンは aria-hidden)。
+ */
+const unsupportedTargetLabel: Record<UnsupportedTarget, string> = {
+  move: "技",
+  attacker_item: "攻撃側の持ち物",
+  attacker_ability: "攻撃側の特性",
+  defender_item: "防御側の持ち物",
+  defender_ability: "防御側の特性",
+};
+
+/**
+ * 印の理由(15 種)の説明。target のラベルに続けて読む短い語にし、技術用語(機構・スキーマ・engine)は出さない。
+ * 正は ADR-0123 §2 の表と api/openapi.yaml の UnsupportedMark.reason。
+ */
+const unsupportedReasonLabel: Record<UnsupportedReason, string> = {
+  alt_defense_stat: "ふだんと違う能力値で受ける",
+  alt_offense_stat: "ふだんと違う能力値で攻撃する",
+  always_crit: "必ず急所に当たる",
+  effectiveness_change: "相性の決まり方が変わる",
+  field_specific: "天候・フィールドで効果が変わる",
+  fixed_damage: "ダメージが固定",
+  ignore_defense_ranks: "相手の能力ランクを無視する",
+  move_specific: "この技だけの特別な処理がある",
+  multi_hit: "1回で何度も当たる",
+  ohko: "一撃必殺",
+  priority_change: "優先度が変わる",
+  type_change: "タイプが変わる",
+  variable_power: "威力が状況で変わる",
+  zero_power: "威力が技の処理で決まる",
+  unsupported_effect: "ダメージへの影響が未対応",
+};
+
+export const unsupportedText = {
+  /** 印そのものの文字(バッジ)。色・アイコンだけにしない。 */
+  badgeLabel: "未対応",
+  /**
+   * 印が1件でも出ている結果の先頭に置く案内(issue 305 の noExactCandidateNotice と同じ作法)。
+   * 数値は消さずに残すので、「目安」であることを言う。
+   */
+  notice: "「未対応」の印が付いた結果は、正しく計算できていない可能性があります(数値は目安です)",
+  /** 印をまとめた並びの accessible name(行・候補の中で何の並びかが分かるように)。 */
+  listLabel: "未対応の内容",
+  target: unsupportedTargetLabel,
+  reason: unsupportedReasonLabel,
+  /**
+   * 印 1 件の文言。name は ID を解決した表示名(マスタに無ければ空文字を渡す。そのとき ID をそのまま出す)。
+   * 例: 技「テストれんぞくパンチ」: 1回で何度も当たる
+   */
+  markLabel: (mark: UnsupportedMark, name: string): string =>
+    `${unsupportedTargetLabel[mark.target]}「${name === "" ? mark.id : name}」: ${unsupportedReasonLabel[mark.reason]}`,
 } as const;
 
 /** 計算結果の書式(domain/format.ts)で使う語。 */

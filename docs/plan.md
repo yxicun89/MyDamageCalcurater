@@ -471,6 +471,38 @@
   `origin/main` をマージ後、`npx vitest run` 1625件(1624 + 新規1件)・`npm run typecheck`・
   `npm run lint`(eslint + prettier)いずれも green。
   **Next(critic)**: レビュー待ち。
+- [ ] issue #271 / issue #270(重大度 high。多段技・威力可変技・固定ダメージ技〈#271〉や、効果スキーマで
+  表せない持ち物・特性〈#270〉を選ぶと、engine は黙って通常の式で計算し、あたかも正しい結果のように
+  見える。データ / API レーンが ADR-0123 で「印を付ける」方式を採り、計算・逆算・bulk の結果に
+  `unsupported: UnsupportedMark[]`〈印なしは空配列〉を返すようになった)の **Web レーン分**:
+  計算・逆算・一括の結果に「未対応」の印を表示する。ブランチ `feat/web-unsupported-marks-271-270`。
+  **仕様とテストまで完了(2026-09-25。spec-writer)**:
+  受け入れ条件と失敗するテストを先に用意した。設計判断は docs/design.md の「画面: ダメージ計算」・
+  「画面: 逆算」に追記: (1) 印は**行・候補ごと**に出す(防御側の持ち物バリアント・候補ごとに印が変わりうるし、
+  engine が行・候補ごとに返すものを Web でまとめるのは加工になる。ADR-0300 §8)。(2) 印が1件でもあれば
+  一覧の先頭に `role="status"` の案内を1つ(issue 305 の作法と同じ)。(3) **色だけに頼らない**:
+  バッジの「未対応」と「<target>「<対象名>」: <理由>」を必ず文字で出し、アイコンは `aria-hidden`、
+  色は既存トークン `danger` の範囲。
+  配線(実装作業ではない部分)は先に済ませた: `web/src/engine/types.ts` に `UnsupportedTarget`・
+  `UnsupportedReason`・`UnsupportedMark` を新設し `CalcResult`・`ReverseCandidate` に `unsupported` を追加 /
+  `web/src/api/apiEngine.ts` の `mapCalcResult`・`mapReverseCandidate` で写す /
+  `web/src/test/fakeEngine.ts` の fixture に既定値(空配列)/ `web/src/i18n/ja.ts` に `unsupportedText`
+  (target 5 種・reason 15 種の日本語ラベル・案内・`markLabel`)。
+  **WASM(オフライン)は `wasmEngine.ts` の変更なしで印が届くことを実測で確認**(`make wasm` 後、
+  `web/src/engine/wasmEngine.wasm.test.ts` の新規3件が green。`parseEnvelope` が unchecked cast のため)。
+  テスト: `web/src/i18n/unsupported.test.ts`(新規11件・green。ラベルの過不足・文言の検査)/
+  `web/src/api/apiEngine.test.ts`(+3件・green。契約と DTO の型の一致、bulk の行ごと・reverse の候補ごとの
+  素通し。従来「Web は受け取らない」前提で `omit(apiCalcResult, "unsupported")` としていた既存の期待値3か所は、
+  受け取る形に**更新**した〈弱めていない: 省略ではなく等値で検査する〉)/
+  `web/src/screens/CalcScreen.test.tsx`(+7件。うち6件が red)/ `web/src/screens/ReverseScreen.test.tsx`
+  (+5件。うち4件が red)/ `web/src/engine/reverse.wasm.test.ts`(候補が常に `unsupported` を持つ検査を追加)。
+  **Next(implementer)**: `CalcScreen.tsx`・`ReverseScreen.tsx`(+ それぞれの CSS)に表示を実装して
+  red 10件を green にする。ID → 表示名は `master.moves` / `master.items` / `master.abilities` から引き、
+  見つからなければ ID をそのまま出す(`unsupportedText.markLabel` に空文字を渡す)。
+- [ ] 判定画面(JD5 `JudgeScreen`)の「未対応」の印への追従(issue #271 / #270 の判定レーン分。**上の
+  Web レーンの PR の対象外**)。judge の契約は計算・逆算と別の形(`attackerKoUnsupported` /
+  `defenderKoUnsupported`。ADR-0708 §1・`web/src/judge/judge.gen.ts`)なので、別タスクとして進める。
+  文言(`unsupportedText`)と表示の作法(色だけに頼らない・`role="status"` の案内)は上のものを再利用する。
 
 ## M2: 保存・構築
 

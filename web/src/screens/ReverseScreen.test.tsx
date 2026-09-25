@@ -20,8 +20,8 @@ import { firstDamagingMove, learnsetMoves } from "../domain/moves";
 import { OBSERVATION_INPUT_DEBOUNCE_MS } from "../domain/observations";
 import { NEUTRAL_NATURE, ZERO_SP, defaultAbility, toEngineSpecies } from "../domain/requests";
 import { reverseItemCandidates } from "../domain/reverseItems";
-import type { Item, Move, ReverseRequest, ReverseResult } from "../engine/types";
-import { reverseResultText } from "../i18n/ja";
+import type { Item, Move, ReverseRequest, ReverseResult, UnsupportedMark } from "../engine/types";
+import { reverseResultText, unsupportedText } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
 import {
@@ -1000,5 +1000,107 @@ describe("件数の上限(issue #110)", () => {
     expect(sent?.[1]?.id).toBe("example-many-def-0");
     expect(sent?.at(-1)?.id).toBe("example-many-def-62");
     expect(screen.getByText(itemsTruncatedNotice)).toBeInTheDocument();
+  });
+});
+
+// issue 271 / issue 270(Web レーン。ADR-0123): engine が正しく計算できない技・持ち物・特性のときは、
+// 候補と予測%は今までどおり出しつつ「この結果は正しく計算できていない可能性がある」印を候補カードに出す。
+// 置き場所は issue 305 の「近い候補」「参考」と同じく候補カードの中(候補ごとに持ち物が違い、
+// 印も候補ごとに返るため。engine の値を加工せずに出す。ADR-0300 §8)。
+describe("未対応の印(issue 271 / issue 270)", () => {
+  const moveMark = (moveId: string): UnsupportedMark => ({
+    target: "move",
+    reason: "variable_power",
+    id: moveId,
+  });
+  const itemMark = (itemId: string): UnsupportedMark => ({
+    target: "defender_item",
+    reason: "unsupported_effect",
+    id: itemId,
+  });
+
+  function firstItem(): Item {
+    const item = master.items[0];
+    if (item === undefined) {
+      throw new Error("例データに持ち物が無い");
+    }
+    return item;
+  }
+
+  /** 候補ごとの印を決めて画面を描く(与えたダメージ = side defender)。 */
+  async function renderWithMarks(marksByCandidate: ReadonlyArray<readonly UnsupportedMark[]>) {
+    const result: ReverseResult = {
+      side: "defender",
+      stat: "def",
+      assumedHpSp: 32,
+      exactCount: marksByCandidate.length,
+      candidates: marksByCandidate.map((unsupported, index) =>
+        reverseCandidate({
+          natureClass: index === 0 ? "neutral" : "plus",
+          nature: index === 0 ? { plus: "", minus: "" } : { plus: "def", minus: "atk" },
+          unsupported,
+        }),
+      ),
+    };
+    const engine = createFakeEngine(undefined, () => ok(result));
+    const { user } = renderScreen(engine);
+    await choosePair(user, speciesAt(0), speciesAt(1));
+    await typeObservation(user, 1, "45");
+    return candidateCards();
+  }
+
+  test("印が無ければ何も出ない(正常系。今までの見た目を変えない)", async () => {
+    const cards = await renderWithMarks([[], []]);
+    expect(cards).toHaveLength(2);
+    expect(screen.queryByText(unsupportedText.badgeLabel)).toBeNull();
+    expect(screen.queryByText(unsupportedText.notice)).toBeNull();
+  });
+
+  test("印が付いた候補に、「未対応」と対象名・理由を文字で出す", async () => {
+    const move = firstMoveOf(speciesAt(0));
+    const [first] = await renderWithMarks([[moveMark(move.id)], []]);
+    if (first === undefined) {
+      throw new Error("候補カードが無い");
+    }
+    expect(within(first).getByText(unsupportedText.badgeLabel)).toBeInTheDocument();
+    expect(
+      within(first).getByText(unsupportedText.markLabel(moveMark(move.id), move.nameJa)),
+    ).toBeInTheDocument();
+  });
+
+  test("持ち物の印は、その候補にだけ出る(候補ごとに持ち物が違うため)", async () => {
+    const item = firstItem();
+    const [first, second] = await renderWithMarks([[], [itemMark(item.id)]]);
+    if (first === undefined || second === undefined) {
+      throw new Error("候補カードが2件でない");
+    }
+    expect(within(first).queryByText(unsupportedText.badgeLabel)).toBeNull();
+    expect(within(second).getByText(unsupportedText.badgeLabel)).toBeInTheDocument();
+    expect(
+      within(second).getByText(unsupportedText.markLabel(itemMark(item.id), item.nameJa)),
+    ).toBeInTheDocument();
+    // 予測%・SP 範囲は今までどおり両方の候補に出る(印が付いても候補を消さない)
+    for (const card of [first, second]) {
+      expect(within(card).getByText("40.2〜47.8%")).toBeInTheDocument();
+    }
+  });
+
+  test("印が1件でもあれば、候補一覧の先頭に role=status の案内を1つ出す", async () => {
+    const move = firstMoveOf(speciesAt(0));
+    await renderWithMarks([[moveMark(move.id)], [moveMark(move.id)]]);
+    const notice = await screen.findByText(unsupportedText.notice);
+    expect(notice.closest('[role="status"]')).not.toBeNull();
+    expect(screen.getAllByText(unsupportedText.notice)).toHaveLength(1);
+  });
+
+  test("色・アイコンだけに頼らない: 印は支援技術にも読める文字で出す", async () => {
+    const move = firstMoveOf(speciesAt(0));
+    const [first] = await renderWithMarks([[moveMark(move.id)], []]);
+    if (first === undefined) {
+      throw new Error("候補カードが無い");
+    }
+    const mark = within(first).getByText(unsupportedText.markLabel(moveMark(move.id), move.nameJa));
+    expect(mark.closest('[aria-hidden="true"]')).toBeNull();
+    expect(within(first).getByText(unsupportedText.badgeLabel).closest('[aria-hidden="true"]')).toBeNull();
   });
 });
