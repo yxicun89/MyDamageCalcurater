@@ -135,10 +135,22 @@ func hasEmptySegment(path string) bool {
 // balance・speed・judge は自分自身でも同じ検証を複製して持つ(issue #236。各サービスの
 // internal/httpapi/requestctx 相当)が、gateway 経由になったことでここでも先に検証がかかる
 // (二重になるが害はない。複製側の削除は各レーンの判断。issue #284)。
-func requiresHeaderCheck(kind routeKind) bool {
+//
+// 例外: /api/{balance,speed,judge}/healthz(完全一致のみ。前方一致にしない)はヘッダ検証を課さない。
+// 3サービスの契約(services/{balance,speed,judge}/api/openapi.yaml の publicHealth)・ADR-0600/ADR-0700は
+// Ingress 越しの疎通確認用としてヘッダ不要と明記しており、gateway 経由になっても同じ契約を守る必要がある
+// (ADR-0202 §3 追記。issue #284 critic 指摘)。/api/balance/healthzz や /api/balance/healthz/x のような
+// 似た別パスまで緩めないよう完全一致で判定する。
+func requiresHeaderCheck(kind routeKind, path string) bool {
 	switch kind {
-	case routeCalc, routePokedex, routeRecord, routeTeam, routeBalance, routeSpeed, routeJudge:
+	case routeCalc, routePokedex, routeRecord, routeTeam:
 		return true
+	case routeBalance:
+		return path != prefixBalance+"healthz"
+	case routeSpeed:
+		return path != prefixSpeed+"healthz"
+	case routeJudge:
+		return path != prefixJudge+"healthz"
 	default:
 		return false
 	}

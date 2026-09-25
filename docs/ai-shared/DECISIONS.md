@@ -1883,3 +1883,27 @@ Impact: **タイプバランス・素早さ・判定レーンへ**: gatewayに `
 完了し実クラスタで動作確認できてから行うこと(先に撤去すると経路が無くなる)。各サービス自身が持つ
 端末ID・セッションIDの検証(issue #236)は二重になるが害はなく、削除するかどうかは各レーンの判断のまま
 残す。critic レビュー後、deployment.yaml配線と実クラスタ確認を別途行い、完了したら改めて連絡する。
+
+## 2026-09-26: issue #284 critic 1回目 FAIL(重要2件)を修正
+Decision: critic指摘を反映(2回目相当のセルフレビューまで実施)。
+(1) **重要-1**: `/api/{balance,speed,judge}/healthz`(完全一致のみ)がgatewayでヘッダ検証必須になっていたのを
+外した。3サービスの契約(`services/{balance,speed,judge}/api/openapi.yaml`の`publicHealth`)・ADR-0600・
+ADR-0700がIngress越しの疎通確認用としてヘッダ不要と明記しており、gateway経由になっても同じ契約を守る
+必要があるため(このまま出すと、直結Ingress撤去後に各サービス自身のsmoke.sh・ヘルスチェックが400で
+落ちる時限爆弾だった)。`requiresHeaderCheck`にpathを渡すよう変更し、完全一致だけを緩めた
+(`healthzz`・`healthz/x`のような似た別パスは従来どおり検証。前方一致に緩めないことをテストで固定)。
+`balance_speed_judge_routing_test.go`に4テーブルケース×3サービスを追加、ADR-0202 §3・§4に追記。
+(2) **重要-2**: `services/gateway/README.md`のルーティング表が古いまま(record/team/balance/speed/judgeの
+行が無く、catch-allの行に「`/api/balance`を含む」という誤った記述が残っていた)だったのを、5サービス分の
+行と環境変数表を追加して実態に合わせた。
+あわせて軽微指摘2件も反映: `deploy/k8s/base/gateway/ingress.yaml`・`manifest_test.go`の「balanceは
+独自Ingress」コメントに、gateway側のルーティングは実装済みで直結Ingress撤去は別タスクである旨を追記。
+`cmd/gateway/main_test.go`の`TestEnvNames`/`TestLoadConfig`/`TestLoadConfigRejects`にrecord/team/
+balance/speed/judgeの5URLを追加(取り違えmutationがすり抜けていた穴を閉じた。record/teamも含めて
+まとめて追加)。
+Reason: critic(agent a5e87478edf501a11)によるmutation testing・実HTTP確認・契約/ADRの横断チェックで
+発見。健全性チェック済みの既存パターン(record/team)をそのままコピーしたことで、balance/speed/judge
+固有の契約差分(公開healthzの存在)を見落としていた。
+Impact: 上記のIssue #284のエントリの実装内容を本エントリの内容で更新するものと理解すること
+(`requiresHeaderCheck`のシグネチャが`(kind routeKind)`から`(kind routeKind, path string)`に変わった)。
+critic 2回目レビュー予定。

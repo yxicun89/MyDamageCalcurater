@@ -45,9 +45,9 @@
 | `/api/pokedex/*` | pokedex-svc | `/api/pokedex` そのものは 404 |
 | `/api/record/*` | record-svc | `/api/record` そのものは 404(2026-09-25 追記。P5-3・ADR-0209 §10-1)。上流(`GATEWAY_RECORD_URL`)未設定なら 503 `upstream_unavailable` |
 | `/api/team/*` | team-svc | `/api/team` そのもの・`/api/teamx` は 404(2026-09-25 追記。P5-4・ADR-0213 §7)。上流(`GATEWAY_TEAM_URL`)未設定なら 503 `upstream_unavailable` |
-| `/api/balance/*` | balance-svc | `/api/balance` そのもの・`/api/balancex` は 404(2026-09-25 追記。issue #284)。上流(`GATEWAY_BALANCE_URL`)未設定なら 503 `upstream_unavailable`。**旧: 独自の Ingress(ADR-0012)で gateway を経由しなかったが、issue #284 でここに統合した** |
-| `/api/speed/*` | speed-svc | `/api/speed` そのもの・`/api/speedx` は 404(2026-09-25 追記。issue #284)。上流(`GATEWAY_SPEED_URL`)未設定なら 503 `upstream_unavailable` |
-| `/api/judge/*` | judge-svc | `/api/judge` そのもの・`/api/judgex` は 404(2026-09-25 追記。issue #284)。上流(`GATEWAY_JUDGE_URL`)未設定なら 503 `upstream_unavailable` |
+| `/api/balance/*` | balance-svc | `/api/balance` そのもの・`/api/balancex` は 404(2026-09-25 追記。issue #284)。上流(`GATEWAY_BALANCE_URL`)未設定なら 503 `upstream_unavailable`。**旧: 独自の Ingress(ADR-0012)で gateway を経由しなかったが、issue #284 でここに統合した**。**`/api/balance/healthz`(完全一致のみ)はヘッダ検証を課さない(§4 追記)** |
+| `/api/speed/*` | speed-svc | `/api/speed` そのもの・`/api/speedx` は 404(2026-09-25 追記。issue #284)。上流(`GATEWAY_SPEED_URL`)未設定なら 503 `upstream_unavailable`。`/api/speed/healthz`(完全一致のみ)はヘッダ検証を課さない(§4 追記) |
+| `/api/judge/*` | judge-svc | `/api/judge` そのもの・`/api/judgex` は 404(2026-09-25 追記。issue #284)。上流(`GATEWAY_JUDGE_URL`)未設定なら 503 `upstream_unavailable`。`/api/judge/healthz`(完全一致のみ)はヘッダ検証を課さない(§4 追記) |
 | `/assets/*`(GET / HEAD のみ) | assets の上流(MinIO) | それ以外のメソッドは 404 `not_found` |
 | `GET /healthz` | gateway 自身 | 200 `{"status":"ok"}`。openapi に載せない(ADR-0200 と同じ)。上流の `/healthz` は外に出さない |
 | それ以外 | なし | 404 `not_found`(Error 形式) |
@@ -67,6 +67,11 @@
 - 欠落と不正が同時にあれば `missing_header` を優先する。
 - `/assets/*`・`/healthz`・CORS プリフライト(OPTIONS + `Access-Control-Request-Method`)には課さない(`<img>` はヘッダを送れない。
   プリフライトにはブラウザが独自ヘッダを付けない)。
+- **追記(2026-09-26。issue #284 critic 指摘)**: `/api/balance/healthz`・`/api/speed/healthz`・`/api/judge/healthz`
+  (完全一致のみ。前方一致にしない)にも課さない。3サービスの契約(`services/{balance,speed,judge}/api/openapi.yaml`
+  の `publicHealth`)・ADR-0600 §5・ADR-0700 §該当箇所が、Ingress 越しの疎通確認用としてヘッダ不要と明記しており、
+  gateway 経由になっても同じ契約を守る必要があるため。`healthzz`・`healthz/x` のような似た別パスは通常どおり
+  検証する(完全一致であることを `TestBalanceSpeedJudgeHealthzLookalikesStillRequireHeaders` で固定)。
 - 検証を通ったリクエストのヘッダは書き換えずに上流へ転送する(大文字の UUID も大文字のまま)。
 - **追記(2026-09-25。issue #326「転送ヘッダ」)**:
   - 検証済みの `X-Device-Id` / `X-Session-Id` は `/api/*` の上流(calc・pokedex)へ**必ず**届ける。クライアントが

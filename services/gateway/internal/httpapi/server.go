@@ -184,7 +184,7 @@ func (g *gateway) serve(c *echo.Context) error {
 	}
 
 	// 4. /api/* だけヘッダを検証する。失敗は gateway 自身の応答。
-	if requiresHeaderCheck(kind) {
+	if requiresHeaderCheck(kind, path) {
 		if err := checkAPIHeaders(r.Header); err != nil {
 			return g.ownError(c, origin, allowed, err)
 		}

@@ -47,7 +47,8 @@ func TestManifestGatewayWorkload(t *testing.T) {
 }
 
 // AC-S3: gateway の Ingress は traefik・path "/" Prefix・ホスト指定なしで gateway の Service を指す
-// (balance の "/api/balance" は最長一致で balance の Ingress に届く。ADR-0012)。
+// (balance の "/api/balance" は今も最長一致で balance 自身の Ingress に届く。ADR-0012。gateway 側の
+// ルーティングは issue #284 で実装済みだが、直結 Ingress の撤去と URL 配線は別タスク)。
 func TestManifestGatewayIngress(t *testing.T) {
 	var ing deploytest.Ingress
 	deploytest.Find(t, deploytest.BaseObjects(t, gatewayService), "Ingress", gatewayService).Decode(t, &ing)

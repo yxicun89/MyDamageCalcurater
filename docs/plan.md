@@ -1093,7 +1093,14 @@
   今回のスコープ)。新規 `balance_speed_judge_routing_test.go` で3サービス共通のルーティング・404境界・
   ヘッダ検証・実転送を固定、既存の `TestUnroutedPathsAreNotFound` から `/api/balance/defense`(今は503に
   変わるため404の例として不適切)を削除、ADR-0202 §3 の表と関連ADR行を更新(ADR-0012の「balanceは独自の
-  Ingress」の記述を更新し、ADR-0606〈issue #236 のspeed側〉への参照を追加)。critic レビュー予定。
+  Ingress」の記述を更新し、ADR-0606〈issue #236 のspeed側〉への参照を追加)。
+  **critic 1回目FAIL(重要2件)→修正**: (1) `/api/{balance,speed,judge}/healthz`(完全一致)がgatewayで
+  ヘッダ検証必須になっており、3サービスの契約(`publicHealth`)・ADR-0600・ADR-0700の「ヘッダ不要」と食い違う
+  時限爆弾だった→ `requiresHeaderCheck` にpathを渡し完全一致だけ例外にする修正+テーブル駆動テスト4本を追加。
+  (2) `services/gateway/README.md` のルーティング表がrecord/team/balance/speed/judge抜けの古いままだった
+  →5サービス分の行・環境変数を追加。軽微2件(ingress.yaml・manifest_test.goの「独自Ingress」コメントに
+  補足、`main_test.go` の `TestEnvNames`/`TestLoadConfig`/`TestLoadConfigRejects` にrecord/team/balance/
+  speed/judgeの5URLを追加してURL取り違えmutationのすり抜けを閉じた)も反映。critic 2回目レビュー予定。
   タイプバランス・素早さ・判定レーンへ、直結Ingressを撤去できる旨を連絡予定
 - [x] issue #110(セキュリティ。Codex レビュー)の API レーン担当分: `POST /api/calc/bulk`・`/api/calc/reverse` の候補・観測配列に件数上限が無く、1MiB未満の小さな本文で計算量を増幅できた(2,000×2,000 で約9.4秒)。契約(`maxItems`/`uniqueItems`/`maximum`。ADR-0208)を追加し、calc-svc の生成ラッパは検証しないため(実測確認済み)自前検証をID解決・engine呼び出しより前に実装。critic PASS、実HTTPで境界値と再現手順の解消(0.9ms・engine未到達)を確認。engine/wasmapi(データレーン)・Web・iOSへの追従は DECISIONS.md に既定案付きで依頼(issue はレーンの完了までクローズしない)
 - [x] issue #110 のデータレーン担当分: `engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ件数・範囲の上限(presets 8・itemVariants 64・itemCandidates 64・observations 16・maxCandidates 0..128)を追加(ADR-0108)。HTTP を経由しない直接呼び出し・WASM でも計算量を増幅できないようにした。wasmapi は DTO 変換より前に同じ検査を重ねて置き、複数の違反が重なっても HTTP と同じ `invalid_input` が先に出るようにした(parity)。`MaxCandidates` の負の値は、従来「無制限」扱いだったのを ADR-0208 の契約(`minimum: 0`)に合わせて拒否するよう変更(既存テストの期待値を更新。理由は ADR-0108 決定4)。critic PASS(1往復)。Web・iOS の追従(観測16件でUI無効化・持ち物候補64件超の扱い)は ADR-0208 §4 のまま未着手
