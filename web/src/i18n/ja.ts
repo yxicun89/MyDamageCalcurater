@@ -166,6 +166,8 @@ export const appText = {
   speedTabLabel: "素早さ",
   /** JD5: 判定(抜けて倒せるか・返り討ちに遭うか)のタブ(ADR-0705 §1)。 */
   judgeTabLabel: "判定",
+  /** P5-5 PR-A1: 構築ビルダーのタブ(ADR-0309 §1)。 */
+  teamTabLabel: "構築",
   /** 計算モード(オフライン = WASM / オンライン = API)の切り替え(P4-5、ADR-0301 §4)。 */
   calcModeGroupLabel: "計算モード",
   calcModeOfflineLabel: "オフライン(WASM)",
@@ -460,6 +462,57 @@ export const judgeScreenText = {
   koGuaranteed: (hits: number): string => `確定${hits}発`,
   koRandom: (hits: number, percent: number): string => `乱数${hits}発(${percent}%)`,
   koNone: "倒せない",
+} as const;
+
+/**
+ * P5-5 PR-A1: 構築 API のクライアント(team/teamClient.ts)が、通信できない・応答が読めない・
+ * エラー本文の形が不正なときに作る文言(ADR-0309 §3。speedClientText・judgeClientText と同じ形)。
+ * サーバーが返す `Error.message` はそのまま運ぶので、ここには含まない。
+ */
+export const teamClientText = {
+  unavailable: "構築の API に接続できません",
+} as const;
+
+/**
+ * P5-5 PR-A1: 構築ビルダーの画面(team/TeamScreen.tsx、ADR-0309)の文言。
+ * この段階(PR-A1)で扱うのは一覧・新規作成(名前だけ)・名前変更・削除まで。
+ * メンバー(種族・技・持ち物・特性・性格・SP・テラスタイプ)の編集は PR-A2 で足す。
+ */
+export const teamScreenText = {
+  /** 画面全体の領域(role="region" の名前)。 */
+  regionLabel: "構築",
+  /** 一覧(`<ul>`)の名前と、その上の見出し。 */
+  listLabel: "保存した構築",
+  listHeading: "保存した構築",
+  /** 一覧を読み込んでいる間(新規作成のフォームは先に使える。ADR-0309 §4)。 */
+  loadingNotice: "読み込み中",
+  /** 1件も無いとき(エラーと取り違えない案内。ADR-0309 §4)。 */
+  emptyNotice: "保存した構築はまだありません。名前を付けて作成してください",
+  /** 構築1件の要約(メンバー数・最終更新。PR-A1 ではメンバーは常に0体)。 */
+  memberCountLabel: (count: number, max: number): string => `${count}/${max}体`,
+  updatedAtLabel: (date: string): string => `最終更新 ${date}`,
+  // ---- 新規作成 ----
+  createHeading: "新しい構築",
+  nameLabel: "構築名",
+  createLabel: "作成",
+  /** 送信前の検査(契約の TeamInput.name と同じ範囲。前後の空白を除いて1〜50文字)。 */
+  nameRequiredNotice: "構築名を入力してください",
+  nameTooLongNotice: (max: number): string => `構築名は${max}文字までです`,
+  // ---- 名前変更 ----
+  renameLabel: (name: string): string => `「${name}」の名前を変更`,
+  renameFieldLabel: (name: string): string => `「${name}」の新しい構築名`,
+  renameSaveLabel: "名前を保存",
+  renameCancelLabel: "名前の変更をやめる",
+  // ---- 削除(2段階。window.confirm は使わない。ADR-0309 §5)----
+  deleteLabel: (name: string): string => `「${name}」を削除`,
+  deleteConfirmLabel: (name: string): string => `「${name}」の削除を確定`,
+  deleteCancelLabel: (name: string): string => `「${name}」の削除をやめる`,
+  deleteConfirmNotice: (name: string): string => `「${name}」を削除します。取り消せません`,
+  // ---- 失敗(role="alert"。サーバーの message はこの見出しに続けてそのまま出す)----
+  loadErrorHeading: "構築の一覧を読み込めませんでした",
+  createErrorHeading: "構築を作成できませんでした",
+  renameErrorHeading: "構築の名前を変えられませんでした",
+  deleteErrorHeading: "構築を削除できませんでした",
 } as const;
 
 /**

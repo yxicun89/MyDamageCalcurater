@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "./App";
 import type { ClientIds } from "./api/clientIds";
 import { CALC_MODE_STORAGE_KEY } from "./app/calcMode";
+import { teamScreenText } from "./i18n/ja";
 import { exampleMasterSource } from "./master/exampleSource";
 import type { MasterData, MasterSource, MasterSources } from "./master/types";
 import { createFakeEngine } from "./test/fakeEngine";
@@ -241,10 +242,26 @@ describe("issue #308 マスタの読み込みに失敗したときの立て直�
     return { user, online };
   }
 
-  test("失敗してもタブ一覧は消えない(5つの画面すべてが選べる)", async () => {
+  test("失敗してもタブ一覧は消えない(6つの画面すべてが選べる)", async () => {
     await renderOnlineFailure([new Error("テストの読み込み失敗")]);
 
-    expect(tabLabels()).toEqual(["計算", "逆算", "タイプバランス", "素早さ", "判定"]);
+    // P5-5 PR-A1: 構築(/team)を末尾に足した(ADR-0309 §1)。
+    expect(tabLabels()).toEqual(["計算", "逆算", "タイプバランス", "素早さ", "判定", "構築"]);
+  });
+
+  // P5-5 PR-A1(ADR-0309 §1): 構築は usesMaster: true。PR-A2 のメンバー編集で種族・技・持ち物・特性の
+  // 名前解決にマスタが要るため、マスタが読めないときは素早さと違って失敗の案内を出す(構築 API は呼ばない)。
+  test("失敗中は、マスタを使う「構築」の画面は失敗の案内のままで、構築 API を呼ばない", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    const { user } = await renderOnlineFailure([new Error("テストの読み込み失敗")]);
+
+    await user.click(screen.getByRole("tab", { name: "構築" }));
+
+    expect(screen.getByRole("tab", { name: "構築" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: teamScreenText.regionLabel })).toBeNull();
+    const requested = fetchSpy.mock.calls.flatMap(([url]) => (typeof url === "string" ? [url] : []));
+    expect(requested).not.toContain("/api/team/teams");
   });
 
   test("失敗中でも、マスタを使わない「素早さ」の画面はタブを選んで使える", async () => {

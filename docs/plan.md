@@ -606,7 +606,20 @@
   (2) ADR-0209 §4 の失効ジョブ(team 用の日次 CronJob。構築540日・devices 行30日・purge journal 90日を
   `TEAM_*` 環境変数で判定して消す。冪等・1回の上限あり)。P5-3b と同じ形なので一緒に実装してよい
 - [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー(**Showdown 形式のインポート/エクスポートを含む**。
-  requirements.md §2・ADR-0213 §4)。ADR-0209 §8 の文言と「この端末のデータを削除」の UI を含む
+  requirements.md §2・ADR-0213 §4)。ADR-0209 §8 の文言と「この端末のデータを削除」の UI を含む。
+  大きいので PR 単位に割る(2026-09-26。Web レーン)。Showdown 形式は判定レーンが `web/src/team/showdownFormat.ts`
+  として別に担当する(このレーンの範囲外)
+  - [ ] **P5-5a 構築ビルダーの骨格(PR-A1。着手 2026-09-26)**: 構築の一覧・新規作成(名前だけ・メンバーは空)・
+    名前変更・削除だけを作る。契約は `api/openapi.yaml` の `listTeams`/`createTeam`/`getTeam`/`updateTeam`/`deleteTeam`
+    (P5-4 で追加済み。**API は変えない**)。追加するのは Web だけ: `web/src/team/teamClient.ts`(speedClient と同じく
+    例外を投げない `TeamResult<T>`。通信不能は `team_unavailable`)・`web/src/team/TeamScreen.tsx`・ルート表の1件
+    (`/team`、タブ「構築」、`usesMaster: true`)・`app/screens.tsx` の1件・`ja.ts` の文言・App.tsx の client の受け渡し。
+    設計判断(usesMaster を最初から true にする / 削除は `window.confirm` を使わない2段階 / クライアントの型)は **ADR-0309**。
+    spec-writer 工程で受け入れ条件と失敗するテストを先に置いた(`team/teamClient.test.ts` 37件・
+    `team/TeamScreen.test.tsx` 23件・App 側 6件。実装前は red)
+  - [ ] **P5-5b メンバー編集(PR-A2)**: 6体の枠と個体(種族検索・技・持ち物・特性・性格・SP のグリッド・テラスタイプ)。
+    マスタ(種族・技・持ち物・特性の名前解決)を使うのはここから
+  - [ ] **P5-5c 履歴・よく計算する相手・端末データの削除(PR-A3 以降)**: record-svc の API と ADR-0209 §8 の文言
 - [x] P5-6 技の追加効果(使用者自身のランク変化。例: ニトロチャージで自分の素早さ+1)を engine の Move・マスタ・importer・export に足す(判定レーンからの提案。DECISIONS.md 2026-09-22。ADR-0005 に沿い、追加効果の対象=self/target・確率・ランク変化量をデータとして持つ。ADR-0107。critic PASS。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。公開APIへの露出は判定レーンの要件確定後)
 
 ## M3: iOS
