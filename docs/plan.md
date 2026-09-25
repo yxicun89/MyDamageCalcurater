@@ -234,12 +234,17 @@
   `resolveAttackerPreset` の実際の出力を突き合わせる契約テスト(現状の値は一致済み)。JSON の値を書き換える
   mutation で実際に検知することを確認(3件 fail)、確認後に復元。新規17件追加(1262件)。`web/src/domain/
   attackerPresets.ts` 自体は変更していない(engine への実装移管は別タスク)。
-- [x] issue #333(375px幅でタブの名前が1文字ずつ縦に折り返す)。**完了(2026-09-25。Web レーン)**: `App.css` の
-  `.app-tabs__list` に `overflow-x: auto`、`.app-tabs__tab` に `white-space: nowrap`・`flex-shrink: 0` を追加
-  (既定案どおり)。回帰テスト(`web/e2e/mobile.spec.ts`、320・375px)を追加: 高さの比較では「全タブが同じだけ
-  折り返す」ケースを見逃す(このissueがまさにそれ)ため、各タブのテキストノードを `Range.getClientRects()`
-  で数えて1行であることを直接確認する形にした。CSSを戻すと実際に検知することを確認(確認後に復元)。
-  `web/e2e/a11y.spec.ts`(タブのキーボード操作)・vitest 1262件・lintは無回帰。
+- [x] issue #333(375px幅でタブの名前が1文字ずつ縦に折り返す)。**完了(2026-09-25。Web レーン。critic 1回目
+  FAIL→修正→PR #356 で検証済み)**: `App.css` の `.app-tabs__list` に `overflow-x: auto`、`.app-tabs__tab` に
+  `white-space: nowrap`・`flex-shrink: 0` を追加(既定案どおり)。**critic 1回目FAIL**: `justify-content: center`
+  のままだとはみ出した先頭タブ(「計算」)がscrollLeft=0でも画面外に残ったまま戻れない
+  (centered flexbox overflow clipping。320pxで実測再現)。`justify-content: safe center` に修正
+  (docs/design.md「幅への対応」に記録。`safe`キーワードのSafari対応はP4-5のSafari確認〈人間の作業〉と
+  合わせて確認)。回帰テスト(`web/e2e/mobile.spec.ts`、320・375px)を2件に強化: (1)各タブのテキストノードを
+  `Range.getClientRects()`で数えて**ちょうど1行**(`toBe(1)`。0〈ラベル消失〉も1未満として弾く)、
+  (2)タブ列を左端・右端までスクロールし、先頭・末尾のタブが表示領域に収まることを確認(centered flexbox
+  overflow clippingの回帰ガード)。CSSを戻すと両方とも実際に検知することを確認(確認後に復元)。
+  `web/e2e/a11y.spec.ts`(タブのキーボード操作)・vitest 1262件・lintは無回帰(22/22 green)。
 
 ## M2: 保存・構築
 
@@ -504,6 +509,9 @@
 - **P4-5 のブラウザ実機確認**(仕様ブロッカーではない。作業は止めない。**Chrome は 2026-09-22 に確認済み**、残りは Safari): `make web-dev` で開き、Chrome と Safari で計算・逆算が動くこと、
   `.wasm` の MIME type(`application/wasm`)・`WebAssembly.instantiateStreaming`(失敗時は arrayBuffer にフォールバックする実装)・
   キャッシュ・初回ロード(約4.6MB / gzip 1.3MB)・メモリを確認する。既定案: 確認できるまで P4-5 は「実装・自動テスト済み、実機未確認」として扱う。
+  **追加(issue #333、2026-09-25)**: 375px幅未満でタブ列を左端までスクロールし、先頭の「計算」タブが
+  読める・押せることも合わせて確認する(`justify-content: safe center` を使っており、`safe`キーワードの
+  Safari対応をPlaywrightで自動確認できていない。docs/design.md「幅への対応」参照)。
 - **PR #22(Web P4-1〜P4-4)のマージ**: 深夜のため作成のみ(作業はブランチで続けられるので止まらない)。朝に確認してマージする。
 
 **解決済み(2026-09-21 のユーザー決定。詳細は DECISIONS.md / ADR-0002 / requirements.md)**

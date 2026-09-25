@@ -210,8 +210,43 @@ for (const width of NARROW_WIDTHS) {
           range.selectNodeContents(textNode);
           return range.getClientRects().length;
         });
-        expect(lineCount, `タブ「${label}」が複数行に折り返している`).toBeLessThanOrEqual(1);
+        // ラベルが消えている(0)場合と複数行に折り返している(2以上)場合の両方を弾く(critic 指摘)。
+        expect(lineCount, `タブ「${label}」が1行のテキストになっていない(行数: ${String(lineCount)})`).toBe(
+          1,
+        );
       }
+    });
+
+    test("タブ列をスクロールすると、先頭・末尾のタブが表示領域に収まる(issue #333、centered flexbox overflow clippingの回帰)", async ({
+      page,
+    }) => {
+      // critic 指摘: justify-content: center のままだと、はみ出した先頭タブが scrollLeft=0 でも画面外に
+      // 残ったまま戻ってこない(safe center で修正)。折り返しの有無だけを見るテストではこの破綻を検知できない。
+      await openCalcScreen(page);
+      const list = page.locator(".app-tabs__list");
+      const tabs = page.getByRole("tab");
+      const count = await tabs.count();
+      expect(count, "タブが1つも無い").toBeGreaterThan(0);
+
+      await list.evaluate((el) => {
+        el.scrollLeft = 0;
+      });
+      const listBoxStart = await boxOf(list, "タブ列");
+      const firstTabBox = await boxOf(tabs.first(), "先頭タブ");
+      expect(
+        firstTabBox.x,
+        "先頭タブがタブ列の表示領域より左にはみ出している(スクロールしても戻れない)",
+      ).toBeGreaterThanOrEqual(listBoxStart.x - EPSILON);
+
+      await list.evaluate((el) => {
+        el.scrollLeft = el.scrollWidth;
+      });
+      const listBoxEnd = await boxOf(list, "タブ列");
+      const lastTabBox = await boxOf(tabs.last(), "末尾タブ");
+      expect(
+        lastTabBox.x + lastTabBox.width,
+        "末尾タブがタブ列の表示領域より右にはみ出している(スクロールしても届かない)",
+      ).toBeLessThanOrEqual(listBoxEnd.x + listBoxEnd.width + EPSILON);
     });
 
     test("計算画面: カードは縦積みで、攻撃側 → 攻守入れ替え → 防御側 の順に並ぶ", async ({ page }) => {

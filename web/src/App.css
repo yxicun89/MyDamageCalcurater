@@ -17,12 +17,16 @@
 
 /* 計算・逆算の切り替えタブ(P4-4)。色は tokens.css の CSS 変数だけを参照する。 */
 /* issue #333: 狭い幅ではタブの合計幅がページ幅を超えうる。タブ列だけを横スクロールさせ(ページ全体は
-   溢れさせない。design.md「幅への対応」)、各タブの文字は折り返さない。 */
+   溢れさせない。design.md「幅への対応」)、各タブの文字は折り返さない。
+   justify-content は素の center ではなく safe center にする: はみ出したときに普通の center のままだと、
+   先頭側の内容がスクロールしても画面外から戻ってこない(centered flexbox overflow clipping。critic 指摘・
+   実測で再現)。safe center は、はみ出す場合だけ自動的に先頭寄せへ切り替わり、全タブにスクロールで
+   到達できるようにする。 */
 .app-tabs__list {
   display: flex;
-  justify-content: center;
+  justify-content: safe center;
   gap: var(--space-2);
-  padding: var(--space-4) var(--space-4) 0;
+  padding: var(--space-4) var(--space-4) var(--space-2);
   overflow-x: auto;
 }
 
@@ -36,6 +40,8 @@
   font-size: var(--font-size-body);
   padding: var(--space-2) var(--space-4);
   cursor: pointer;
+  /* white-space だけでも折り返さない(nowrap で min-content = max-content になり flex-shrink の余地が無い)。
+     flex-shrink: 0 は将来 box-sizing・padding 等が変わっても縮まないことを明示するための保険として残す。 */
   white-space: nowrap;
   flex-shrink: 0;
   /* 選択の切り替えはタップへの反応だけ(design.md「動き」、CLAUDE.md ドメイン規約)。 */
