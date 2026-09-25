@@ -116,7 +116,7 @@ struct ResultRowView: View {
             .font(TextStyleToken.resultPercent.font)
             .foregroundStyle(ColorToken.textPrimary.color)
             .lineLimit(1)
-            .fixedSize()
+            .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
             .accessibilityIdentifier("calcResultPercent-\(display.id)")
     }
 
@@ -143,7 +143,7 @@ struct ResultRowView: View {
                     .font(TextStyleToken.caption.font)
                     .foregroundStyle(ColorToken.textSecondary.color)
                     .lineLimit(1)
-                    .fixedSize()
+                    .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
                     .padding(.horizontal, SpacingToken.x2)
                     .padding(.vertical, SpacingToken.x1)
                     .background(ColorToken.bgGlass.color, in: Capsule())
@@ -153,6 +153,11 @@ struct ResultRowView: View {
         }
         .padding(SpacingToken.x3)
         .glassCard(cornerRadius: RadiusToken.input)
+        // `.contain`: コンテナ自体を1つの要素として見つけられるようにしつつ、中の各 `Text`
+        // (`subtitleText`・`percentRangeTextView`・`koText`)は個別の要素のままにする
+        // (`CalcConditionsSection.calcConditionsPanel` と同じ理由。無いと `glassCard()` の
+        // コンテナに飲まれて同一 identifier が複数ヒットする。ADR-0501「P6-14」§2 の申し送り)。
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("calcResultRow-\(display.id)")
         .onChange(of: tierChanged) { _, changed in
             guard changed, !reduceMotion else { return }
