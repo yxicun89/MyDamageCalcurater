@@ -7,7 +7,7 @@
     "types": ["fire"],
     "baseStats": { "hp": 80, "atk": 90, "def": 70, "spa": 60, "spd": 65, "spe": 100 },
     "abilities": [{ "id": "test-ability-alpha", "nameJa": "テストとくせいアルファ" }],
-    "learnset": ["test-move-physical-a", "test-move-special-a", "test-move-status-a"]
+    "learnset": ["test-move-physical-a", "test-move-special-a", "test-move-status-a", "test-move-multi-hit"]
   },
   {
     "key": "9002-000",

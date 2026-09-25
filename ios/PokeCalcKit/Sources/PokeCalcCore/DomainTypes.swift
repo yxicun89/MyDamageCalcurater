@@ -321,10 +321,15 @@ public struct CalcResult: Equatable, Sendable {
     /// 使った技の分類(openapi `CalcResult.category`。必須)。
     public var category: MoveCategory
     public var ko: KOChance
+    /// 「正確でない可能性がある」印(openapi `CalcResult.unsupported`。必須・印なしは空。ADR-0123)。
+    /// 数値は印があっても通常の式のまま(サーバーが拒否しない)。表示は `UnsupportedNotice.swift`。
+    public var unsupported: [UnsupportedMark]
 
+    /// `unsupported` は既定で空(P6-17 より前に書かれた呼び出し側・テストをそのまま通すため)。
     public init(
         rolls: [Int], minDamage: Int, maxDamage: Int, minPercent: Double, maxPercent: Double,
-        defenderHP: Int, effectiveness: Double, stab: Bool, category: MoveCategory, ko: KOChance
+        defenderHP: Int, effectiveness: Double, stab: Bool, category: MoveCategory, ko: KOChance,
+        unsupported: [UnsupportedMark] = []
     ) {
         self.rolls = rolls
         self.minDamage = minDamage
@@ -336,6 +341,52 @@ public struct CalcResult: Equatable, Sendable {
         self.stab = stab
         self.category = category
         self.ko = ko
+        self.unsupported = unsupported
+    }
+}
+
+// MARK: - 未対応の印(ADR-0123・ADR-0501「P6-17」)
+
+/// 印の対象(openapi `UnsupportedMark.target`)。値の集合は `UnsupportedMarkDomainTests` が契約と照合する。
+public enum UnsupportedTarget: String, CaseIterable, Sendable, Hashable {
+    case move
+    case attackerItem = "attacker_item"
+    case attackerAbility = "attacker_ability"
+    case defenderItem = "defender_item"
+    case defenderAbility = "defender_ability"
+}
+
+/// 印の理由(openapi `UnsupportedMark.reason`)。技は機構(ADR-0121 の13種)か `zero_power`、
+/// 持ち物・特性は `unsupported_effect`。値の集合は `UnsupportedMarkDomainTests` が契約と照合する。
+public enum UnsupportedReason: String, CaseIterable, Sendable, Hashable {
+    case altDefenseStat = "alt_defense_stat"
+    case altOffenseStat = "alt_offense_stat"
+    case alwaysCrit = "always_crit"
+    case effectivenessChange = "effectiveness_change"
+    case fieldSpecific = "field_specific"
+    case fixedDamage = "fixed_damage"
+    case ignoreDefenseRanks = "ignore_defense_ranks"
+    case moveSpecific = "move_specific"
+    case multiHit = "multi_hit"
+    case ohko
+    case priorityChange = "priority_change"
+    case typeChange = "type_change"
+    case variablePower = "variable_power"
+    case zeroPower = "zero_power"
+    case unsupportedEffect = "unsupported_effect"
+}
+
+/// 「この結果は正確でない可能性がある」印1つ(openapi `UnsupportedMark`。ADR-0123 §2)。
+/// `id` は技・持ち物・特性の ID(`target` で決まる)。
+public struct UnsupportedMark: Equatable, Hashable, Sendable {
+    public var target: UnsupportedTarget
+    public var reason: UnsupportedReason
+    public var id: String
+
+    public init(target: UnsupportedTarget, reason: UnsupportedReason, id: String) {
+        self.target = target
+        self.reason = reason
+        self.id = id
     }
 }
 
@@ -556,11 +607,16 @@ public struct ReverseCandidate: Equatable, Sendable {
     /// `ranges` 全体での想定ダメージ幅(表示%)。
     public var minPercent: Double
     public var maxPercent: Double
+    /// 「正確でない可能性がある」印(openapi `ReverseCandidate.unsupported`。必須・印なしは空。
+    /// SP によらず候補ごとに決まる。ADR-0123 §2)。
+    public var unsupported: [UnsupportedMark]
 
+    /// `unsupported` は既定で空(`CalcResult` と同じ理由)。
     public init(
         natureClass: NatureClass, nature: NatureModifier, natureId: String?, itemId: String?,
         ranges: [SPRange], spCount: Int,
-        exact: Bool, mismatch: Int, support: Int, minPercent: Double, maxPercent: Double
+        exact: Bool, mismatch: Int, support: Int, minPercent: Double, maxPercent: Double,
+        unsupported: [UnsupportedMark] = []
     ) {
         self.natureClass = natureClass
         self.nature = nature
@@ -573,6 +629,7 @@ public struct ReverseCandidate: Equatable, Sendable {
         self.support = support
         self.minPercent = minPercent
         self.maxPercent = maxPercent
+        self.unsupported = unsupported
     }
 }
 
