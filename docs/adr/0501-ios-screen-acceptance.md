@@ -2874,3 +2874,277 @@ testReverseScreenKnownDefenderPresetPillsStackVerticallyAtAX5
   メインセッションで変異テストをして確かめた。% 表示に `.padding(.leading, 300)` を足して縦向きだけ縮ませると、縦 23.3pt / 横 33.7pt で
   テストが red になった(元に戻して確認済み)。高さの比較は縮小を検出できる。
 
+## issue #250 の受け入れ条件(`AppConfiguration` の受理条件と ATS の実行時挙動が食い違う。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+- 日付: 2026-09-25 / 担当レーン: iOS / 関連: 本 ADR §5(`AppConfiguration`)、ADR-0500 §5、docs/plan.md P6-16、
+  `AppConfiguration.swift`・`AppConfigurationTests.swift`(既存。変更しない)・`ios/PokeCalc-Info.plist`・
+  `ios/scripts/check-infoplist.sh`
+
+### 0. 何がずれているか(issue #250 の指摘)
+
+`AppConfiguration`(`ios/PokeCalcKit/Sources/PokeCalcCore/AppConfiguration.swift`)は `acceptedSchemes = ["http",
+"https"]` で、スキームが `http`/`https` でホストがあれば URL を無条件に受理する。一方 `ios/PokeCalc-Info.plist`・
+`PokeCalc.xcodeproj` には `NSAppTransportSecurity` が無い。既定の ATS(App Transport Security)は非 TLS
+(`http`)通信を拒否するため、`AppConfiguration` が受理した `http://localhost:8080` のような接続先が実行時に
+通信できない(`AppConfigurationTests.testBackendSelection` の「http」ケースがまさにこの状態を正常系にしている)。
+issue は案A(http を拒否してテストを直す)と案B(`NSAllowsLocalNetworking` 等で ATS 側を開ける)を挙げ、
+既定案はAとしつつ「ローカル API を http で叩く開発が要るなら案B」としていた。
+
+### 0.5 2026-09-25 の見直し(critic 指摘。IP アドレスを対象から外した)
+
+最初の版の §1〜3 は「`NSAllowsLocalNetworking` は IP アドレスも通す」としていたが、critic
+(メインセッション)のレビューで以下の指摘を受け、**IP アドレスを http の受理範囲から外す**方向に修正した:
+
+- Apple のドキュメントの「iOS 17+, iPadOS 17+, macOS 14+」の節は「ATS no longer allows connections to IP
+  addresses by default. Add individual IP addresses and CIDR ranges in the `NSExceptionDomains` dictionary」
+  であり、これは「`NSAllowsLocalNetworking` があれば IP アドレスも通る」という主張の裏付けにならない。
+  旧版が書いていた「`NSAllowsLocalNetworking`(または `NSExceptionDomains`)無しには通らない」という読みは、
+  「`NSAllowsLocalNetworking` があれば通る」への言い換えとしては文書に無い拡大解釈だった(この読みは撤回)。
+  `NSExceptionDomains` は `NSAllowsLocalNetworking` とは別のキーで、個々の IP アドレス/CIDR
+  範囲を明示的に列挙する仕組みであり、今回のタスクの範囲外(実装しない)。
+- メインセッションが iOS 27 シミュレータ + ローカル Python サーバーで実験した: `NSAllowsLocalNetworking =
+  true` のとき、`http://localhost` / `http://127.0.0.1` / `http://192.168.2.129`(LAN の IPv4)/
+  `http://<Mac のホスト名>.local` はいずれもサーバーに到達した。しかし **`NSAppTransportSecurity` キー自体を
+  一切書かない対照実験でも** `localhost`/`127.0.0.1`/`192.168.2.129` への到達に成功しており、この
+  シミュレータ環境では ATS そのものが(少なくともこれらのホストに対して)効いていない可能性が高い。
+  したがって、この実験は「`NSAllowsLocalNetworking` が IP アドレスを通す」ことの確認にはならない
+  (対照群と処置群が区別できていないため。実機での確認は「人間の確認が必要なこと」として plan.md に残す)。
+- 上記2点により、IP アドレスを http で受理する根拠が無くなったため、**保守的に読んで IP アドレスは
+  http では拒否する**方向に変更した(範囲を Apple の文書の記述〈非修飾ドメイン・`.local` ドメインの2つ〉に
+  絞る。ループバック/プライベート帯だから安全、という判断もしない)。
+
+以下の §1〜3 はこの見直し後の内容。
+
+### 1. 判断(A/B の間。ADR として採用する理由。2026-09-25 見直し後)
+
+**採用**: `https` は任意のホストで受理する。`http` は ATS が `NSAllowsLocalNetworking`
+(`ios/PokeCalc-Info.plist` の `NSAppTransportSecurity` に追加)で実際に通す範囲(**非修飾ホスト名と
+`.local` ドメインのみ。IP アドレスは含めない**。§0.5・§2)だけを `AppConfiguration` も受理する。
+それ以外の `http`(IP アドレス・通常の公開ドメイン)は `AppConfigurationError` にする。
+
+理由:
+
+1. **受理条件 == 実行時の挙動**(issue の「達成する結果」そのもの)。案Aだけだと `make dev`
+   (`http://localhost:8080`)を使ったシミュレータでの開発ループが `AppConfiguration` の時点で塞がれる
+   (`docs/runbooks/ios.md` のモック起動だけになり、`docs/plan.md` P6-16 のようなローカル API 接続の確認が
+   iOS レーンで出来なくなる)。案Bを「`NSAllowsArbitraryLoads`」で丸ごと開けると、`AppConfiguration` が
+   `http://pokecalc-attacker.example` のような通常の公開ドメインへの `http` も受理してしまい、受理条件が
+   ATS の実際の挙動より緩くなる(ATS はそれを拒否しないので矛盾は起きないが、平文通信を野放図に許す設定を
+   コードに残すことになり、望ましくない)。
+2. **`NSAllowsLocalNetworking` の対象範囲は Apple のドキュメントに明記されている**(下記2章)ので、
+   `AppConfiguration` 側の判定をその範囲と1対1に鏡写しにできる。ドキュメントに明記が無い IP アドレスは
+   保守的に対象外とする(§0.5)。「案Bだが無制限には広げない」という issue の既定案の裏にある懸念
+   (平文を野放図に許さない)も満たす。
+3. 既存の `AppConfigurationTests.testBackendSelection` の「http」ケース(`http://localhost:8080` → API)は
+   `localhost` が非修飾ホスト名(後述)なので、この判断でも受理され続ける。**既存テストは変更しない**
+   (タスク指示の禁止事項どおり)。`AppConfigurationTests.swift` に http の IP アドレスを使うケースは無い
+   (implementer が確認済み)ので、この見直しで既存テストが壊れることも無い。
+
+### 2. Apple ドキュメントによる `NSAllowsLocalNetworking` の範囲(判断の根拠。実装が鏡写しにする対象)
+
+`developer.apple.com/documentation/bundleresources/information-property-list/nsapptransportsecurity/
+nsallowslocalnetworking` の Discussion(2026-09-25 に確認)より:
+
+> The `NSAllowsLocalNetworking` key controls whether App Transport Security (ATS) allows your app to connect to:
+> - Unqualified domains
+> - `.local` domains
+> - IP addresses using IPv4 or IPv6
+
+かつ「iOS 17+, iPadOS 17+, macOS 14+」の節(原文どおり引用):
+
+> In iOS 17, iPadOS 17, and macOS 14, ATS no longer allows connections to IP addresses
+> by default. Add individual IP addresses and CIDR ranges in the `NSExceptionDomains` dictionary.
+
+**§0.5 の見直し**: 上の Discussion の箇条書きだけを読むと IP アドレスも `NSAllowsLocalNetworking` の対象に
+見えるが、「iOS 17+」の節はそれと矛盾するように読める内容(IP アドレスへの接続は既定で許可されず、許可するには
+`NSExceptionDomains` に個別に追加する必要がある)を書いている。本アプリの対象は iOS 27(Package.swift の
+`platforms: [.iOS(.v27), .macOS(.v27)]`)であり iOS 17+ の節の対象なので、**IP アドレスは
+`NSAllowsLocalNetworking` だけでは通らない前提で扱う**(`NSExceptionDomains` は今回実装しない。
+個々の IP を列挙する仕組みで、本アプリの「開発時にローカル API を叩く」用途に対して具体的な IP を
+ハードコードすることになり、ドメイン規約(IP・ホストをハードコードしない)にも合わない)。
+
+範囲は次の2つ(**IP アドレスは含めない**。旧版はループバック/プライベート帯に限らず IP アドレス全般を
+含めていたが、§0.5 の理由で撤回した):
+
+1. **非修飾ホスト名**(unqualified domain): ホスト名にドットが無い(例 `localhost`・`pokecalc-router`)。
+   FQDN のルート記法(末尾ドット。例 `localhost.`)はドットを含むため非修飾ホスト名として扱わない
+   (「ドットが無い」という記述をそのまま読んだ結果。ルートドットを特別扱いする根拠が文書に無いため)。
+2. **`.local` ドメイン**(Bonjour。例 `foo.local`。大文字小文字は区別しない)。
+
+上記以外(IP アドレス〈IPv4/IPv6〉、およびドットを含み `.local` でも無いホスト名 = 通常の公開ドメイン。
+例 `127.0.0.1`・`::1`・`example.com`・`pokecalc.example.invalid`)は `NSAllowsLocalNetworking` の対象外。
+これは `http` では実行時に拒否される(はずな)ので、`AppConfiguration` でも受理してはいけない。
+
+### 3. 受け入れ条件(検証可能な形。2026-09-25 見直し後)
+
+1. `https://` の URL はホストを問わず(IP・非修飾・`.local`・通常の公開ドメインいずれも)これまでどおり
+   `.api` として受理する(既存 `AppConfigurationTests` を壊さない)。
+2. `http://` の URL は、ホストが次のいずれかのときだけ `.api` として受理する:
+   - ドットを含まない(非修飾ホスト名。例 `localhost`・`pokecalc-router`。末尾ドットが付くと対象外)
+   - `.local` で終わる(大文字小文字を区別しない。例 `foo.local`・`FOO.LOCAL`)
+3. 上記2に当てはまらない `http://` の URL(**IP アドレス〈IPv4/IPv6。例 `127.0.0.1`・`::1`〉を含む**。
+   ドットを含み `.local` でも無いホスト。例 `http://example.com`)は `AppConfigurationError` を投げる。
+   `reason` は `http` であることと ATS(`NSAllowsLocalNetworking`)が理由であることが分かる文言にする
+   (下記テストが `"http"` と `"ATS"`/`"NSAllowsLocalNetworking"` の文字列を含むことを検査する)。
+   IP アドレスかどうかの判定は文字列の形(ドット・コロンの数)ではなく `inet_pton` 相当
+   (`IPv4Address`/`IPv6Address`〈Network フレームワーク〉)で行う。`URL.host` は
+   `http://[::1]:8080` のようなブラケット付き IPv6 リテラルからブラケットを外した `::1` を返す
+   〈`swift -e` で確認済み〉ので、追加のブラケット除去は不要。
+4. `ios/PokeCalc-Info.plist` に `NSAppTransportSecurity` → `NSAllowsLocalNetworking = true` を追加する。
+   `NSAllowsArbitraryLoads` は追加しない(1章2の理由)。`NSExceptionDomains` も追加しない(2章の理由)。
+5. `ios/scripts/check-infoplist.sh`(`make ios-check-infoplist` → `make ios-test` から実行)が、ビルド成果物の
+   `PokeCalc.app/Info.plist` に `NSAppTransportSecurity.NSAllowsLocalNetworking = true` があり、
+   `NSAppTransportSecurity.NSAllowsArbitraryLoads` が無いことを確かめる(本タスクで検査を追加済み。
+   4 の実装が入るまでは赤くなるのが期待どおり)。
+6. 既存の `AppConfigurationTests`(`testKeyNamesMatchADR`・`testBackendSelection`・`testInvalidBaseURLIsAnError`)
+   はすべて成功し続ける(変更しない。`testBackendSelection` の「http」「モック強制は不正な URL より優先」
+   ケースは `localhost`/`not a url` を使っており、この判断でも従来どおりの結果になる)。
+7. **実機での確認は本タスクの範囲外・人間の確認が必要なこと**として扱う(§0.5 のシミュレータ実験は
+   ATS 自体が効いているか確認できず結論が出せなかったため。CLAUDE.md「人間の確認が必要なこと」に相当する
+   実機検証は自動で進めない)。
+
+### 4. 追加したテスト(spec-writer 時点。§0.5・§7 で IP アドレスの扱いを見直した後の版は §7 参照)
+
+`ios/PokeCalcKit/Tests/PokeCalcCoreTests/AppConfigurationATSTests.swift`(新規ファイル。既存の
+`AppConfigurationTests.swift` は変更していない)。
+
+- `testHTTPLocalhostIsAccepted` / `testHTTPLoopbackIPv4IsAccepted` / `testHTTPLoopbackIPv6IsAccepted`
+- `testHTTPDotLocalHostIsAccepted` / `testHTTPDotLocalHostIsAcceptedCaseInsensitive`
+- `testHTTPUnqualifiedHostnameIsAccepted`
+- `testHTTPArbitraryIPAddressIsAccepted`(2章の「ループバック/プライベート帯に限らない」ことの直接確認)
+- `testHTTPPublicHostIsRejected`(`reason` に `"http"` と `"ATS"`/`"NSAllowsLocalNetworking"` を含むことも検査)
+- `testHTTPPublicHostWithPathIsRejected` / `testHTTPSubdomainOfDotLocalLikeButNotLocalIsRejected`
+  (`local.example.com` は `.local` **では終わらない**ので拒否対象。「`.local` を含む」ではなく
+  「`.local` で終わる」判定にすることの回帰止め)
+- `testHTTPSAnyHostIsAccepted`(https は `example.com`・`127.0.0.1`・`localhost` 等どれでも受理する回帰確認)
+
+2026-09-25 時点の実行結果(`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`、
+`ios/PokeCalcKit` ルート): `PokeCalcCoreTests` 447件中3件失敗(想定どおり。すべて3章3の「拒否すべき」テスト)。
+
+```
+testHTTPPublicHostIsRejected
+  XCTAssertThrowsError failed: did not throw an error
+testHTTPPublicHostWithPathIsRejected
+  XCTAssertThrowsError failed: did not throw an error
+testHTTPSubdomainOfDotLocalLikeButNotLocalIsRejected
+  XCTAssertThrowsError failed: did not throw an error
+```
+
+残り444件(既存の `AppConfigurationTests` を含む)はすべて成功しており、既存テストへの影響は無い。
+
+`ios/scripts/check-infoplist.sh` は本タスクで ATS キーの検査を追加した(シェル構文は `bash -n` で確認済み。
+`plutil -extract` の挙動は一時ファイルで検証済み: キーが無いと空文字列を返し、スクリプトは
+`<キー無し>` としてエラーメッセージに出す)。実際の `xcodebuild` を伴う実行(`make ios-check-infoplist`)は
+`ios/PokeCalc-Info.plist` に `NSAllowsLocalNetworking` が無い現状では失敗する想定のため、
+本タスク(spec-writer)では実行していない(実装後に implementer が実行して確認する)。
+
+### 5. 実装者への注意
+
+- 変更してよいのは `AppConfiguration.swift`(判定ロジック)と `ios/PokeCalc-Info.plist`(ATS キーの追加)。
+  `AppConfigurationTests.swift`・`AppConfigurationATSTests.swift` は変更しないこと(後者はこのタスクの
+  受け入れ条件そのもの)。
+- ホストが IP アドレスかどうかの判定は、IPv4 は `inet_pton(AF_INET, ...)` 相当、IPv6 は
+  `inet_pton(AF_INET6, ...)` 相当(Swift では `IPv4Address`/`IPv6Address`〈Network フレームワーク〉、
+  または `inet_pton` を `Darwin`/`Glibc` 経由で直接呼ぶ、のどちらでもよい。`engine/` ではなく
+  `ios/PokeCalcKit` 側のコードなので絶対ルール2〈engine を純粋に保つ〉の対象外)。文字列を `.` や `:` の
+  個数で判定するような簡易正規表現は誤判定(例 `1.2.3` のような不完全な IP や `2001:db8::1` のような
+  短縮 IPv6 を取りこぼす)の余地があるため避けること。
+- 「非修飾ホスト名」の判定は「ホスト文字列にドット(`.`)が1つも無い」で足りる(`localhost`・
+  `pokecalc-router` はドット無し、`foo.local`・`example.com` はドット有り)。IPv6 アドレスは `:` を含み
+  `.` を含まない場合があるため(例 `::1`)、判定の順序は「IP アドレスか」を先に見てから「非修飾ホスト名か」
+  を見るなど、IPv6 アドレスが誤って「非修飾ホスト名」に分類されても実害は無い実装にする
+  (どちらに転んでも1章の範囲内〈受理〉になるため。逆に IPv4 のドットを含むアドレスが誤って
+  「非修飾ホスト名でない」と判定されて拒否されないよう、IP アドレス判定を独立して行うこと)。
+- `.local` 判定は大文字小文字を無視する(`url.host?.lowercased().hasSuffix(".local")`)。
+- エラーメッセージ(`AppConfigurationError.reason`)は既存の `testInvalidBaseURLIsAnError` の文言パターン
+  (`"\(Self.apiBaseURLInfoKey) が不正な URL: \(trimmed)"` 等)に合わせつつ、3章3のテストが検査する
+  `"http"` と `"ATS"`(または `"NSAllowsLocalNetworking"`)を含める。例:
+  `"\(Self.apiBaseURLInfoKey) は http でホストが ATS(NSAllowsLocalNetworking)の対象外: \(trimmed)"`。
+- `ios/PokeCalc-Info.plist` への追加は plist の `<dict>` に `NSAppTransportSecurity` キーとその値の
+  `<dict>` に `NSAllowsLocalNetworking` → `<true/>` を足すだけ(既存の `PokeCalcAPIBaseURL` キーはそのまま)。
+  `NSAllowsArbitraryLoads` は追加しないこと(3章4・critic が指摘するはず)。
+- 完了条件: `swift test`(`ios/PokeCalcKit`)で `AppConfigurationATSTests` を含む全件成功、
+  `make ios-check-infoplist`(または `make ios-test`)成功、`make ios-test` 全体成功。
+  結果をこの章の後ろに「### 6. 実装結果」として追記し、`docs/plan.md` の P6-16 にチェックを付ける。
+
+### 6. 実装結果(implementer, 2026-09-25)
+
+変更したのは §5 で指定された2ファイルのみ(`AppConfigurationTests.swift`・`AppConfigurationATSTests.swift` は
+変更していない)。
+
+- `ios/PokeCalcKit/Sources/PokeCalcCore/AppConfiguration.swift`
+  - `http` スキームのとき、`isAllowedByNSAllowsLocalNetworking(host:)` で受理範囲を判定する処理を
+    `init` に追加した。判定順は §5 の指示どおり「IP アドレスか」を先に見て、次に `.local`
+    (`host.lowercased().hasSuffix(".local")`)、最後に「ドットを含まない(非修飾ホスト名)」。
+  - IP アドレス判定は `Network` フレームワークの `IPv4Address(_:)`/`IPv6Address(_:)`(`inet_pton` 相当)を
+    使い、文字列のドット・コロンの数による簡易判定は行っていない。
+  - 拒否時の `AppConfigurationError.reason` は
+    `"\(apiBaseURLInfoKey) は http でホストが ATS(NSAllowsLocalNetworking)の対象外: \(trimmed)"`
+    (§5 の例文どおり。`"http"` と `"ATS"`/`"NSAllowsLocalNetworking"` の両方を含む)。
+  - 冒頭のドキュメントコメントの表を、https は常に受理・http は ATS 範囲のみ受理・それ以外の http は
+    エラー、の3行に分けて更新した。
+- `ios/PokeCalc-Info.plist`
+  - `NSAppTransportSecurity` → `NSAllowsLocalNetworking` = `true` を追加。`NSAllowsArbitraryLoads` は
+    追加していない。
+
+検証結果:
+
+- `cd ios/PokeCalcKit && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`:
+  `PokeCalcCoreTests` 447件中 447件成功(0失敗)。`AppConfigurationATSTests` の12件(§4)を含め全件成功。
+  §4 に記録された spec-writer 時点の3件の失敗(`testHTTPPublicHostIsRejected`・
+  `testHTTPPublicHostWithPathIsRejected`・`testHTTPSubdomainOfDotLocalLikeButNotLocalIsRejected`)は解消した。
+- リポジトリルートで `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make ios-test`: 成功
+  (`TEST SUCCEEDED`、終了コード0)。`ios-lint`・`ios-gen-check`・`ios-check-request-limits`・
+  `ios-test-unit`・`ios-test-ui`(全37件成功・失敗0)・`ios-check-infoplist` の全ステップが通った。
+  `ios-check-infoplist` の出力:
+  ```
+  ios-check-infoplist: Info.plist に PokeCalcAPIBaseURL = https://pokecalc-check.example.invalid が入っている
+  ios-check-infoplist: NSAppTransportSecurity.NSAllowsLocalNetworking = true・NSAllowsArbitraryLoads 無し
+  ```
+  (3章5・4章末の「4 の実装が入るまでは赤くなる」が解消し、期待どおり緑になったことを確認)。
+
+### 7. 実装結果の訂正(critic 指摘対応。IP アドレスを http の受理範囲から外した。2026-09-25)
+
+§6 まではメインセッション(critic)のレビュー前の実装で、IP アドレスの http を受理していた。
+critic のレビュー(§0.5 に詳細)を受けて、**IP アドレスは http で拒否する**方向に修正した。
+
+- `ios/PokeCalcKit/Sources/PokeCalcCore/AppConfiguration.swift`
+  - `isAllowedByNSAllowsLocalNetworking(host:)` の IP アドレス判定を「受理」から「拒否」に反転
+    (`isIPAddress(host)` が真なら `return false`)。IPv6 アドレス(`::1` 等)がドット無しの
+    「非修飾ホスト名」に誤って分類されないよう、IP アドレス判定は引き続き最初に行う。
+  - 非修飾ホスト名の判定について、末尾ドット(`localhost.` のような FQDN のルート記法)はドットを含むため
+    非修飾扱いにしないことをコメントに明記(§2 の判断を反映。ロジック自体は元から `host.contains(".")`
+    で対応済みだったため、コード変更は無くコメントのみ追加)。
+  - 冒頭のドキュメントコメントの表と `init` 内のコメントを、IP アドレスが受理範囲から外れたことが分かるように
+    更新した。
+- `ios/PokeCalcKit/Tests/PokeCalcCoreTests/AppConfigurationATSTests.swift`(このタスクの受け入れ条件そのもの
+  なので変更可。`AppConfigurationTests.swift` は変更していない。事前に grep で確認: 同ファイルに http と
+  IP アドレスの組み合わせのケースは無く、この訂正で既存テストが壊れる心配は無かった)。
+  - `testHTTPLoopbackIPv4IsAccepted` → `testHTTPLoopbackIPv4IsRejected`、
+    `testHTTPLoopbackIPv6IsAccepted` → `testHTTPLoopbackIPv6IsRejected`、
+    `testHTTPArbitraryIPAddressIsAccepted` → `testHTTPArbitraryIPAddressIsRejected` に変更し、
+    いずれも `reason` に `"http"` と `"ATS"`/`"NSAllowsLocalNetworking"` を含むことを検査する
+    共通アサーション `assertRejectedForATS(_:)` を使うようにした。
+  - `testHTTPTrailingDotHostIsRejected` を新規追加(`http://localhost.:8080` は拒否。§2 の末尾ドットの
+    判断の回帰止め)。`URL(string: "http://localhost.:8080")!.host` が `"localhost."` を返すことは
+    `swift -e` で事前確認済み。
+  - ヘッダーのドキュメントコメントを §0.5・§1・§2 の内容に合わせて書き直した。
+  - `ios/PokeCalc-Info.plist`・`ios/scripts/check-infoplist.sh` は変更していない(IP アドレスの扱いの変更は
+    `AppConfiguration.swift` 側の判定だけの問題で、ATS キー自体〈`NSAllowsLocalNetworking`〉は
+    IP アドレス以外〈非修飾ホスト名・`.local`〉のために引き続き必要)。
+
+検証結果(2026-09-25、訂正後):
+
+- `cd ios/PokeCalcKit && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`:
+  `PokeCalcCoreTests` 448件中 448件成功(0失敗)。`AppConfigurationATSTests` は12件(§4 の11件 +
+  `testHTTPTrailingDotHostIsRejected` の1件)全件成功、既存の `AppConfigurationTests`(3件)も成功。
+- リポジトリルートで `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make ios-test`: 成功
+  (`TEST SUCCEEDED`、終了コード0)。`ios-test-unit`・`ios-test-ui`(全37件成功・失敗0)・
+  `ios-check-infoplist`(`NSAllowsLocalNetworking = true`・`NSAllowsArbitraryLoads` 無しを確認)を含む
+  全ステップが通った。
+
+実機での確認(§3 の7)は本タスクでは行っていない。人間が実機で `http://<Mac の .local 名>:8080` や
+`http://<開発機のホスト名>:8080`(非修飾ホスト名・`.local` のケース)が実際に通ることを確認し、
+IP アドレス(`http://192.168.x.x:8080` 等)は実機でも拒否されるべき(コード側は拒否する。ATS 側も
+拒否するはずだが未確認)ことを合わせて確認するとよい。
+
