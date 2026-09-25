@@ -130,3 +130,11 @@ down は DROP TABLE だけ(行が入った状態でも通る)。
 Web(`web/src/master/exportSnapshot.ts` の `CalcSnapshotMove`)の例データにも `mechanisms: []` を追加した
 (例データは機構を持つ技を含まない)。iOS 側の生成物(swift-openapi-generator)は iOS レーンでの
 `make ios-gen` 相当の再生成が必要(このタスクでは未実施。DECISIONS.md 参照)。
+
+**`mechanisms` の項目に enum を付けない判断(critic レビューの指摘への回答)**: `UnsupportedMark.reason`
+(公開 API)には技の機構13種を enum として明記しているが、`MasterMove.mechanisms`(内部 API)には意図的に
+enum を付けていない。理由: enum にすると oapi-codegen が `[]string` ではなく専用の Go 型(`[]MasterMoveMechanisms`
+相当)を生成し、pokedex-svc(書き出す側)・calc-svc(受け取って `sharedmaster.MoveRow.Mechanisms []string` に
+渡す側)の両方で `[]string` との相互変換コードが必要になる。値の妥当性は既に
+`services/internal/master.MoveMechanismsOf`(未知の値・重複・変化技での機構混入を拒否)がこの内部 API の
+消費側で検証しているため、契約側の enum は二重検証にしかならず、コードの複雑さに見合わない。

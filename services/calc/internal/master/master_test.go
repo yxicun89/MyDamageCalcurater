@@ -95,7 +95,9 @@ func baseExport(t *testing.T) api.MasterExport {
 		},
 		Moves: []api.MasterMove{
 			{Id: "testbeam", NameJa: "テストビーム", Type: api.PokeTypeNormal, Category: api.Physical, Power: 80, Mechanisms: []string{}},
-			{Id: "testwave", NameJa: "テストウェーブ", Type: api.PokeTypeGrass, Category: api.Special, Power: 90, Mechanisms: []string{}},
+			// わざと逆順(降順)で渡し、MoveMechanismsOf が昇順にソートすることも同時に固定する(ADR-0121)。
+			{Id: "testwave", NameJa: "テストウェーブ", Type: api.PokeTypeGrass, Category: api.Special, Power: 90,
+				Mechanisms: []string{"variable_power", "multi_hit"}},
 		},
 		Items: []api.MasterItem{
 			{Id: "testplainitem", NameJa: "テストのいし"},
@@ -159,7 +161,12 @@ func TestFromExportAndLookup(t *testing.T) {
 	}
 
 	mv, ok := store.Move("testwave")
-	want := engine.Move{ID: "testwave", NameJa: "テストウェーブ", Type: engine.TypeGrass, Category: engine.CategorySpecial, Power: 90}
+	want := engine.Move{
+		ID: "testwave", NameJa: "テストウェーブ", Type: engine.TypeGrass, Category: engine.CategorySpecial, Power: 90,
+		// api.MasterMove.Mechanisms([]string、わざと逆順)が sharedmaster 経由で engine.Move.Mechanisms に
+		// 届き、MoveMechanismsOf が昇順にソートすることを固定する(ADR-0121 §4)。
+		Mechanisms: []engine.MoveMechanism{engine.MechanismMultiHit, engine.MechanismVariablePower},
+	}
 	if !ok || !reflect.DeepEqual(mv, want) {
 		t.Errorf("Move = %+v, %v, want %+v, true", mv, ok, want)
 	}

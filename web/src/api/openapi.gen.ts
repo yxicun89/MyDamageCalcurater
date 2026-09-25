@@ -905,6 +905,11 @@ export interface components {
        * @description 技の機構(move_mechanisms。ADR-0121)。「威力・分類・タイプから通常の式で計算すると誤る」理由の
        *     分類で、1つの技が複数を持つことがある。昇順・重複なし。通常の技(変化技を含む)は空配列。
        *     calc-svc は engine.Move.Mechanisms にそのまま渡す(「未対応」の印の判定に使う。ADR-0123)。
+       *     値は UnsupportedMark.reason の技側13種と同じ(正は engine.AllMoveMechanisms)。ここでは
+       *     enum を付けない(意図的。ADR-0121 実装時の追記を参照): この内部 API は pokedex-svc → calc-svc
+       *     のみで使い、値の妥当性は既に `services/internal/master.MoveMechanismsOf` が検証している。
+       *     enum にすると oapi-codegen が別の Go 型を生成し、両サービスで `[]string` との相互変換が
+       *     必要になるだけで、二重の検証にしかならない。
        */
       mechanisms: string[];
     };
