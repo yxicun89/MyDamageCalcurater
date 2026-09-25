@@ -13,7 +13,12 @@
 //
 // 実データは持たない(架空の例データだけ。CLAUDE.md ドメイン規約・ADR-0002)。
 
+import type { components } from "../../src/api/openapi.gen";
+import type { Move } from "../../src/engine/types";
+import { MOVES_BATCH_MAX_IDS } from "../../src/master/onlineSource";
 import type { MasterData } from "../../src/master/types";
+
+type Schemas = components["schemas"];
 
 /**
  * フィクスチャが受け取る1リクエスト(pokedexFixtureServer.mjs が node:http の IncomingMessage から作る)。
@@ -75,8 +80,199 @@ export const SEARCH_LIMIT_MAX = 200;
  * @param request 受け取ったリクエスト
  */
 export function handlePokedexRequest(master: MasterData, request: FixtureRequest): FixtureResponse {
-  throw new Error(
-    `未実装(PR2・ADR-0307 の実装で埋める): ${request.method} ${request.path}` +
-      `(例データの種族 ${String(master.species.length)}件)`,
-  );
+  if (request.path === "/healthz") {
+    return { status: 200, body: { status: "ok" } };
+  }
+  if (request.method !== "GET") {
+    return notFound();
+  }
+  const headerError = validateHeaders(request.headers);
+  if (headerError !== null) {
+    return headerError;
+  }
+
+  if (request.path === "/api/pokedex/items") {
+    return handleItems(master, request.query);
+  }
+  if (request.path === "/api/pokedex/natures") {
+    return handleNatures(master);
+  }
+  if (request.path === "/api/pokedex/species") {
+    return handleSpeciesSearch(master, request.query);
+  }
+  if (request.path === "/api/pokedex/moves/batch") {
+    return handleMovesBatch(master, request.query);
+  }
+  const speciesDetailMatch = /^\/api\/pokedex\/species\/([^/]+)$/.exec(request.path);
+  if (speciesDetailMatch !== null) {
+    const key = speciesDetailMatch[1];
+    if (key !== undefined) {
+      return handleSpeciesDetail(master, key);
+    }
+  }
+  return notFound();
+}
+
+// --- ヘッダ検証(ADR-0202 の gateway の検証を簡略に再現) --------------------------------------
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function validateHeaders(headers: Readonly<Record<string, string | undefined>>): FixtureResponse | null {
+  const deviceId = headers["x-device-id"];
+  const sessionId = headers["x-session-id"];
+  if (deviceId === undefined || deviceId === "" || sessionId === undefined || sessionId === "") {
+    return errorResponse(400, "missing_header", "X-Device-Id / X-Session-Id が無い");
+  }
+  if (!UUID_PATTERN.test(deviceId) || !UUID_PATTERN.test(sessionId)) {
+    return errorResponse(400, "invalid_header", "X-Device-Id / X-Session-Id が UUID でない");
+  }
+  return null;
+}
+
+// --- 各エンドポイント -----------------------------------------------------------------------
+
+const SPECIES_KEY_PATTERN = /^[0-9]{4}-[0-9]{3}$/;
+
+function handleItems(master: MasterData, query: URLSearchParams): FixtureResponse {
+  const limit = parseLimit(query);
+  if (limit === null) {
+    return errorResponse(400, "invalid_input", "limit が不正");
+  }
+  const filtered = prefixFilter(master.items, query.get("q"), (item) => item.nameJa);
+  const sorted = sortByNameThenId(filtered);
+  const body: Schemas["Item"][] = sorted
+    .slice(0, limit)
+    .map((item) => ({ id: item.id, nameJa: item.nameJa }));
+  return { status: 200, body };
+}
+
+function handleNatures(master: MasterData): FixtureResponse {
+  const sorted = [...master.natures].sort((a, b) => compareStrings(a.id, b.id));
+  const body: Schemas["Nature"][] = sorted.map((nature) => ({
+    id: nature.id,
+    nameJa: nature.nameJa,
+    plus: nature.plus ?? null,
+    minus: nature.minus ?? null,
+  }));
+  return { status: 200, body };
+}
+
+function handleSpeciesSearch(master: MasterData, query: URLSearchParams): FixtureResponse {
+  const limit = parseLimit(query);
+  if (limit === null) {
+    return errorResponse(400, "invalid_input", "limit が不正");
+  }
+  const filtered = prefixFilter(master.species, query.get("q"), (species) => species.nameJa);
+  const sorted = [...filtered].sort((a, b) => compareStrings(a.key, b.key));
+  const body: Schemas["SpeciesSummary"][] = sorted.slice(0, limit).map((species) => ({
+    key: species.key,
+    dexNo: species.dexNo,
+    form: species.form,
+    nameJa: species.nameJa,
+    types: species.types as Schemas["PokeType"][],
+  }));
+  return { status: 200, body };
+}
+
+function handleSpeciesDetail(master: MasterData, key: string): FixtureResponse {
+  if (!SPECIES_KEY_PATTERN.test(key)) {
+    return errorResponse(400, "invalid_input", `speciesKey の形式が不正: ${key}`);
+  }
+  const species = master.species.find((candidate) => candidate.key === key);
+  if (species === undefined) {
+    return errorResponse(404, "not_found", `species が見つからない: ${key}`);
+  }
+  const body: Schemas["SpeciesDetail"] = {
+    key: species.key,
+    dexNo: species.dexNo,
+    form: species.form,
+    nameJa: species.nameJa,
+    types: species.types as Schemas["PokeType"][],
+    baseStats: species.baseStats,
+    abilities: species.abilities.map((id) => resolveAbility(master, id)),
+    learnset: [...species.learnset],
+  };
+  return { status: 200, body };
+}
+
+function handleMovesBatch(master: MasterData, query: URLSearchParams): FixtureResponse {
+  const ids = query.getAll("ids");
+  if (ids.length === 0 || ids.length > MOVES_BATCH_MAX_IDS) {
+    return errorResponse(400, "invalid_input", "ids が不正(1〜64件で指定する)");
+  }
+  const body: Schemas["Move"][] = ids
+    .map((id) => master.moves.find((move) => move.id === id))
+    .filter((move): move is Move => move !== undefined)
+    .map((move) => ({
+      id: move.id,
+      nameJa: move.nameJa,
+      type: move.type as Schemas["PokeType"],
+      category: move.category,
+      power: move.power,
+      priority: move.priority,
+    }));
+  return { status: 200, body };
+}
+
+// --- 補助関数 -------------------------------------------------------------------------------
+
+/** `limit` を検証する。範囲外・整数でなければ null(呼び出し側が 400 invalid_input にする)。 */
+function parseLimit(query: URLSearchParams): number | null {
+  const raw = query.get("limit");
+  if (raw === null) {
+    return SEARCH_LIMIT_DEFAULT;
+  }
+  if (!/^\d+$/.test(raw)) {
+    return null;
+  }
+  const value = Number(raw);
+  if (value < 1 || value > SEARCH_LIMIT_MAX) {
+    return null;
+  }
+  return value;
+}
+
+/** `q` の省略・空は全件、それ以外は前方一致で絞る。 */
+function prefixFilter<T>(list: readonly T[], q: string | null, nameOf: (item: T) => string): T[] {
+  if (q === null || q === "") {
+    return [...list];
+  }
+  return list.filter((item) => nameOf(item).startsWith(q));
+}
+
+function compareStrings(a: string, b: string): number {
+  if (a < b) {
+    return -1;
+  }
+  if (a > b) {
+    return 1;
+  }
+  return 0;
+}
+
+/** `nameJa` の日本語の照合順序の昇順・同順位は `id` 昇順。 */
+function sortByNameThenId<T extends { readonly id: string; readonly nameJa: string }>(
+  list: readonly T[],
+): T[] {
+  return [...list].sort((a, b) => {
+    const byName = a.nameJa.localeCompare(b.nameJa, "ja");
+    return byName !== 0 ? byName : compareStrings(a.id, b.id);
+  });
+}
+
+function resolveAbility(master: MasterData, id: string): Schemas["Ability"] {
+  const ability = master.abilities.find((candidate) => candidate.id === id);
+  if (ability === undefined) {
+    throw new Error(`例データに ability ${id} が無い(species.abilities と abilities のずれ)`);
+  }
+  return { id: ability.id, nameJa: ability.nameJa };
+}
+
+function errorResponse(status: number, code: Schemas["ErrorCode"], message: string): FixtureResponse {
+  const body: Schemas["Error"] = { code, message };
+  return { status, body };
+}
+
+function notFound(): FixtureResponse {
+  return errorResponse(404, "not_found", "担当外の操作、または未知のパス");
 }

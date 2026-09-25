@@ -255,12 +255,23 @@
   毎回 `api/openapi.yaml` を読んで突き合わせるのでズレは検知できるが、`type CalcSnapshot =
   Schemas["MasterExport"]` に寄せるか型レベルの一致アサーションを足すと、より一枚岩になる
   (次に触るときの検討事項)。
-- [ ] `make e2e` の `web-e2e-online` 修復・PR2(**着手 2026-09-25**。Web レーン。issue 無し。ブランチ
-  `fix/web-online-e2e-pokedex-fixture`。ADR-0307)。E2E 専用の軽量 pokedex フィクスチャを
-  `web/e2e/support/` に新設し、`POKEDEX_PROXY_TARGET` で `/api/pokedex` を `/api`(calc)より前に振り分ける。
-  `online.spec.ts` は種族の検索欄(ADR-0304 A-4・A-10)に追従させる。calc-svc / pokedex-svc 本体・
-  `api/openapi.yaml` は無変更。受け入れ条件と失敗するテストを先に置いた段階(spec-writer)。
-  完了条件は `make e2e` の `web-e2e-online` が実際に全件緑になること。
+- [x] `make e2e` の `web-e2e-online` 修復・PR2(**完了・critic PASS(2回目。1回目FAIL→修正)、2026-09-25**。
+  Web レーン。issue 無し。ブランチ `fix/web-online-e2e-pokedex-fixture`。ADR-0307)。E2E 専用の軽量 pokedex
+  フィクスチャ(`web/e2e/support/pokedexFixture.ts`。応答生成はHTTPを知らない純粋関数+`pokedexFixtureServer.mjs`
+  でHTTP待ち受け)を新設し、`POKEDEX_PROXY_TARGET` で `/api/pokedex` を `/api`(calc)より前に振り分ける
+  (`vite.config.ts`、既存の`/api/balance`と同じパターン)。`online.spec.ts` を種族の検索欄
+  (ADR-0304 A-4・A-10。`selectMatchupBySearch`)に追従させ、「持ち物の候補も比較」がオンラインでは常時
+  disabled(ADR-0304 A-1)であることを確認する形に更新。calc-svc / pokedex-svc 本体・`api/openapi.yaml`は無変更。
+  **`cd web && npm run e2e:online` を実際に実行し3件とも緑、`npm run e2e`(オフライン)も35件とも緑(無回帰)を
+  実機確認済み**。`cd .. && make e2e` も web-e2e/web-e2e-online/web-e2e-balance すべて緑(k3d起動済み環境では
+  api-smoke/web-k3d-smoke/web-k3d-e2eも緑、参考情報)。
+  **critic 1回目FAIL→修正**: (1) `web/playwright.container.config.ts` に `testMatch` が無く、本PRで新設した
+  `e2e/support/*.test.ts` を拾って `make web-e2e-container` が壊れていたのを、`playwright.config.ts`と同じ
+  `testMatch: ["**/*.spec.ts"]` を追加して修正(`--list` がexit 0・46件を確認)。(2) `POKEDEX_PROXY_TARGET`の
+  振り分けが単体テストで守られておらず(`vite.config.ts`のルールを削除してもvitestが全緑のままだった)、
+  `web/src/deploy/viteProxy.test.ts`に3ケース追加して固定(mutationで実際に検知することを確認)。
+  軽微(learnsetがID昇順でない簡略化)はADR-0307 §3に注記、`pokedexFixtureServer.mjs`のtry/finally化は直接修正。
+  `cd web && npx vitest run` 1598/1598 green、tsc・lintともにエラー無し。
 - [x] issue #71 の Web 側(攻撃側プリセットの単一化。ADR-0114)。**完了(2026-09-25。Web レーン)**: データレーン
   が `engine/presets/attacker.json`(embed)を唯一の正にした(PR #346)のを受け、
   `web/src/domain/attackerPresets.contract.test.ts` を新規追加。ハードコードした期待値と比較する既存の

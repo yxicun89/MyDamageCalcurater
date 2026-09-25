@@ -78,6 +78,12 @@ calc-svc が起動できるようになったあとも緑にならず、`web/e2e
 `searchMoves` / `getMove` など Web のオンラインが呼ばない操作、405 Method Not Allowed
 (GET 以外と未知のパスはまとめて 404 `not_found` にする)、`master_unavailable` / `upstream_unavailable`。
 
+簡略化(critic 指摘): `GET /api/pokedex/species/{key}` が返す `learnset` は、`api/openapi.yaml` の
+`getSpecies` の説明(習得技 ∩ 使用可能技を ID 昇順)に反し、例データの `learnset` の並びをそのまま返す
+(ID 昇順にソートしていない)。Web は返った順に技の候補を出すだけで並びに意味を持たせていないため実害は
+無いが、本物の pokedex-svc との差分として記録しておく。直すなら `pokedexFixture.contract.test.ts`・
+`pokedexFixture.onlineSource.test.ts` の期待値も ID 昇順に合わせて更新する必要がある。
+
 データは架空の例データだけで、実マスタ・生成済みスナップショットは持たない(CLAUDE.md ドメイン規約・ADR-0002)。
 
 ### 4. プロキシは `POKEDEX_PROXY_TARGET` でパスごとに振り分ける
