@@ -226,6 +226,16 @@
   運用レーンが到達経路(Tailscale Operator の ingressClass か subnet router + tailscale serve か)を選び、
   実際の名前が決まってから。今はコード変更不要。着手のタイミングは運用レーンの選定後
 - [x] P4-22 issue #72(ルートの `make e2e` が未実装スタブのまま「テスト0件で成功」する)。**完了(2026-09-25。Web レーン。API+Web 共同担当)**: ADR-0306 に従い `scripts/e2e.sh` を実装(常時3件 `web-e2e`/`web-e2e-online`/`web-e2e-balance` を必ず実行し、kubectl のコンテキストが `k3d-$CLUSTER` のときだけ `api-smoke`/`web-k3d-smoke`/`web-k3d-e2e` を追加実行。`E2E_REQUIRE_K3D=1` あり)。ルート Makefile の `e2e` を `CLUSTER=$(CLUSTER) ./scripts/e2e.sh` に配線、`docs/test-strategy.md`・`README.md` を実装内容に合わせて更新。`bash scripts/e2e_test.sh` は80/80 passed
+- [ ] `make e2e` の `web-e2e-online` 修復(2026-09-25 着手。Web レーン。issue 無し。ブランチ `fix/web-online-e2e-master-export`)。
+  P4-22 で常時実行になった3件のうち `web-e2e-online` が main で壊れている(calc-svc が起動できない)。原因は
+  ADR-0204(相性表は MasterExport 本体に含める・`CALC_TYPECHART_PATH` は廃止)に Web 側の書き出しが追従していないこと:
+  (1) `web/playwright.online.config.ts` が廃止済みの `CALC_TYPECHART_PATH` を渡す → calc-svc が起動を拒否する
+  (2) `web/src/master/exportSnapshot.ts` の `toCalcSnapshot()` の出力が ADR-0204 以前の暫定スキーマのままで、
+  `MasterExport`(`dataVersion`/`types`/`typeChart`、`MasterSpecies` の `showdownId`・`type1`/`type2`・
+  `abilities[{slot, abilityId}]`、`MasterMove.effect`、効果のキーの PascalCase)を満たさない
+  (3) 例データの技・持ち物・特性の ID がハイフンを含み、共通マスタの `codeIDPattern`(`^[a-z0-9]+$`)で弾かれる。
+  方針は calc-svc の契約を正として Web 側を写像する(緩めない)。spec-writer が受け入れ条件と失敗するテスト
+  (`exportSnapshot.test.ts` の更新・`exportSnapshot.contract.test.ts` の新規)を先に用意済み。
 - [x] issue #71 の Web 側(攻撃側プリセットの単一化。ADR-0114)。**完了(2026-09-25。Web レーン)**: データレーン
   が `engine/presets/attacker.json`(embed)を唯一の正にした(PR #346)のを受け、
   `web/src/domain/attackerPresets.contract.test.ts` を新規追加。ハードコードした期待値と比較する既存の

@@ -1,14 +1,25 @@
-// P4-5: Web の例データを calc-svc のマスタのスナップショット(services/calc/README.md の暫定スキーマ
-// schemaVersion 1)に書き出す(ADR-0301 §5)。calc-svc をその出力で起動すれば、Web の例データの ID が
-// そのまま API に通る(オンラインの動作確認・P4-6 の E2E)。
-// 形の規則: calc-svc のローダーは未知のフィールドをエラーにするので、learnset(画面だけの追加フィールド)と
-// typeChart(CALC_TYPECHART_PATH で別に渡す)は書かない。
+// P4-5: Web の例データを calc-svc のマスタ一式(api/openapi.yaml の MasterExport。ADR-0204)に書き出す
+// (ADR-0301 §5)。calc-svc をその出力で起動すれば、Web の例データの ID がそのまま API に通る
+// (オンラインの動作確認・P4-6 の E2E)。
+//
+// 形の規則(ADR-0204 で変わった点):
+//   - 相性表は MasterExport **本体**に含める(types / typeChart)。CALC_TYPECHART_PATH は廃止され、
+//     設定されていると calc-svc は起動しない(services/calc/cmd/calc/main.go)。
+//   - calc-svc のローダー(services/calc/internal/master/export.go)は未知のフィールドをエラーにするので、
+//     画面だけの追加フィールド(species.learnset)は書かない。種族・技・持ち物・特性・性格は
+//     MasterExport の形(MasterSpecies / MasterMove / MasterItem / MasterAbility / MasterNature)にそろえる。
+//   - 効果(items / abilities の effect)のキーは共通マスタ(services/internal/master/effects.go)が受け付ける
+//     名前(PascalCase)。Web の DTO は camelCase なので、書き出しのときに変換する。
+//
+// 契約そのもの(openapi.yaml の required・PokeType・Go の ID の形式・効果のキー)との突き合わせは
+// exportSnapshot.contract.test.ts(毎回ソースを読む契約テスト)。ここは形と値の対応を固定する。
 
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, describe, expect, test } from "vitest";
+import { typeNameJa, isTypeId } from "../i18n/ja";
 import { localPath } from "../test/localPath";
 import { exampleMasterSource } from "./exampleSource";
 import { toCalcSnapshot } from "./exportSnapshot";
@@ -24,51 +35,196 @@ function sortedKeys(value: object): string[] {
   return Object.keys(value).sort();
 }
 
-describe("toCalcSnapshot(services/calc/README.md のスキーマ schemaVersion 1)", () => {
-  test("最上位は schemaVersion 1 と species・moves・items・abilities・natures だけ(typeChart は書かない)", () => {
+/** Web の DTO(camelCase)の効果を、共通マスタが読む形(PascalCase)にした期待値。 */
+function pascalCaseKeys(effect: object | null): Record<string, unknown> | null {
+  if (effect === null) {
+    return null;
+  }
+  return Object.fromEntries(
+    Object.entries(effect).map(([key, value]) => [`${key.charAt(0).toUpperCase()}${key.slice(1)}`, value]),
+  );
+}
+
+describe("toCalcSnapshot(api/openapi.yaml の MasterExport。ADR-0204)", () => {
+  test("最上位は MasterExport の必須フィールドちょうど(dataVersion・types・typeChart を含む)", () => {
     const snapshot = toCalcSnapshot(master);
     expect(snapshot.schemaVersion).toBe(1);
     expect(sortedKeys(snapshot)).toEqual(
-      ["abilities", "items", "moves", "natures", "schemaVersion", "species"].sort(),
+      [
+        "schemaVersion",
+        "dataVersion",
+        "types",
+        "typeChart",
+        "species",
+        "moves",
+        "items",
+        "abilities",
+        "natures",
+      ].sort(),
     );
   });
 
-  test("種族は key・dexNo・form・nameJa・types・baseStats・abilities だけ(learnset は書かない)", () => {
+  test("dataVersion は空でない識別子で、例データ由来だと分かる(ADR-0002: 架空のデータだと分かる名前)", () => {
     const snapshot = toCalcSnapshot(master);
-    expect(snapshot.species).toHaveLength(master.species.length);
-    snapshot.species.forEach((species, index) => {
-      const source = master.species[index];
-      expect(sortedKeys(species)).toEqual(
-        ["abilities", "baseStats", "dexNo", "form", "key", "nameJa", "types"].sort(),
-      );
-      expect(species).toEqual({
-        key: source?.key,
-        dexNo: source?.dexNo,
-        form: source?.form,
-        nameJa: source?.nameJa,
-        types: source?.types,
-        baseStats: source?.baseStats,
-        abilities: source?.abilities,
+    expect(typeof snapshot.dataVersion).toBe("string");
+    expect(snapshot.dataVersion.length).toBeGreaterThan(0);
+    expect(snapshot.dataVersion).toContain("example");
+    // 同じ入力なら毎回同じ(書き出しの結果が呼ぶたびに変わらない)。
+    expect(toCalcSnapshot(master).dataVersion).toBe(snapshot.dataVersion);
+  });
+
+  describe("types(相性表のタイプ。MasterType)", () => {
+    test("相性表の18タイプを過不足なく、id・sortOrder・nameJa だけで持つ", () => {
+      const snapshot = toCalcSnapshot(master);
+      expect(master.typeChart.types).toHaveLength(18);
+      expect(snapshot.types.map((type) => type.id).sort()).toEqual([...master.typeChart.types].sort());
+      for (const type of snapshot.types) {
+        expect(sortedKeys(type)).toEqual(["id", "nameJa", "sortOrder"].sort());
+      }
+    });
+
+    test("sortOrder は整数で重複しない(services/internal/master の TypeChartData が重複を拒む)", () => {
+      const snapshot = toCalcSnapshot(master);
+      const orders = snapshot.types.map((type) => type.sortOrder);
+      for (const order of orders) {
+        expect(Number.isInteger(order)).toBe(true);
+      }
+      expect(new Set(orders).size).toBe(orders.length);
+    });
+
+    test("nameJa は空でなく、i18n/ja.ts の typeNameJa と一致する", () => {
+      const snapshot = toCalcSnapshot(master);
+      for (const type of snapshot.types) {
+        expect(type.nameJa).not.toBe("");
+        expect(isTypeId(type.id)).toBe(true);
+        if (isTypeId(type.id)) {
+          expect(type.nameJa).toBe(typeNameJa[type.id]);
+        }
+      }
+    });
+  });
+
+  describe("typeChart(相性表の行。MasterTypeChartEntry)", () => {
+    test("18×18=324件を、attackType・defenseType・code だけで持つ(組は重複しない)", () => {
+      const snapshot = toCalcSnapshot(master);
+      expect(snapshot.typeChart).toHaveLength(324);
+      const pairs = new Set<string>();
+      for (const entry of snapshot.typeChart) {
+        expect(sortedKeys(entry)).toEqual(["attackType", "code", "defenseType"].sort());
+        pairs.add(`${entry.attackType}>${entry.defenseType}`);
+      }
+      expect(pairs.size).toBe(snapshot.typeChart.length);
+    });
+
+    test("code は 0/1/2/4 のいずれかで、master.typeChart.effectiveness と一致する(等倍の既定は 2)", () => {
+      const snapshot = toCalcSnapshot(master);
+      for (const entry of snapshot.typeChart) {
+        expect([0, 1, 2, 4]).toContain(entry.code);
+        const expected = master.typeChart.effectiveness[entry.attackType]?.[entry.defenseType] ?? 2;
+        expect(entry.code, `${entry.attackType}→${entry.defenseType}`).toBe(expected);
+      }
+    });
+
+    test("attackType・defenseType は types に載っているタイプだけ", () => {
+      const snapshot = toCalcSnapshot(master);
+      const known = new Set(snapshot.types.map((type) => type.id));
+      for (const entry of snapshot.typeChart) {
+        expect(known).toContain(entry.attackType);
+        expect(known).toContain(entry.defenseType);
+      }
+    });
+  });
+
+  describe("species(MasterSpecies)", () => {
+    test("MasterSpecies の必須フィールドちょうど(learnset も types も書かない)", () => {
+      const snapshot = toCalcSnapshot(master);
+      expect(snapshot.species).toHaveLength(master.species.length);
+      for (const species of snapshot.species) {
+        expect(sortedKeys(species)).toEqual(
+          [
+            "key",
+            "dexNo",
+            "form",
+            "showdownId",
+            "nameJa",
+            "type1",
+            "type2",
+            "baseStats",
+            "isMega",
+            "baseSpeciesKey",
+            "requiredItemId",
+            "abilities",
+          ].sort(),
+        );
+      }
+    });
+
+    test("key・dexNo・form・nameJa・baseStats は例データのまま、タイプは type1 / type2(単タイプは type2 が null)", () => {
+      const snapshot = toCalcSnapshot(master);
+      snapshot.species.forEach((species, index) => {
+        const source = master.species[index];
+        expect(species.key).toBe(source?.key);
+        expect(species.dexNo).toBe(source?.dexNo);
+        expect(species.form).toBe(source?.form);
+        expect(species.nameJa).toBe(source?.nameJa);
+        expect(species.baseStats).toEqual(source?.baseStats);
+        expect(species.type1).toBe(source?.types[0]);
+        expect(species.type2).toBe(source?.types[1] ?? null);
+      });
+    });
+
+    test("例データにメガシンカは無いので isMega は false、baseSpeciesKey・requiredItemId は null", () => {
+      const snapshot = toCalcSnapshot(master);
+      for (const species of snapshot.species) {
+        expect(species.isMega).toBe(false);
+        expect(species.baseSpeciesKey).toBeNull();
+        expect(species.requiredItemId).toBeNull();
+      }
+    });
+
+    test("abilities は slot(1 から連番)と abilityId の行で、例データの順を保つ", () => {
+      const snapshot = toCalcSnapshot(master);
+      snapshot.species.forEach((species, index) => {
+        const source = master.species[index];
+        expect(species.abilities).toEqual(
+          (source?.abilities ?? []).map((abilityId, slotIndex) => ({ slot: slotIndex + 1, abilityId })),
+        );
       });
     });
   });
 
-  test("技は id・nameJa・type・category・power・priority", () => {
+  test("技は MasterMove の必須フィールドちょうど(例データに追加効果は無いので effect は null)", () => {
     const snapshot = toCalcSnapshot(master);
-    expect(snapshot.moves).toEqual(master.moves);
-    for (const move of snapshot.moves) {
-      expect(sortedKeys(move)).toEqual(["category", "id", "nameJa", "power", "priority", "type"].sort());
-    }
+    expect(snapshot.moves).toHaveLength(master.moves.length);
+    snapshot.moves.forEach((move, index) => {
+      const source = master.moves[index];
+      expect(sortedKeys(move)).toEqual(
+        ["category", "effect", "id", "nameJa", "power", "priority", "type"].sort(),
+      );
+      expect(move.effect).toBeNull();
+      expect(move.id).toBe(source?.id);
+      expect(move.nameJa).toBe(source?.nameJa);
+      expect(move.type).toBe(source?.type);
+      expect(move.category).toBe(source?.category);
+      expect(move.power).toBe(source?.power);
+      expect(move.priority).toBe(source?.priority);
+    });
   });
 
   test.each(["items", "abilities"] as const)(
-    "%s は id・nameJa・effect(効果は DTO の形のまま、無ければ null)",
+    "%s は id・nameJa・effect で、効果のキーは共通マスタが読む PascalCase(補正なしは null)",
     (name) => {
       const snapshot = toCalcSnapshot(master);
-      expect(snapshot[name]).toEqual(master[name]);
-      for (const entry of snapshot[name]) {
+      expect(snapshot[name]).toHaveLength(master[name].length);
+      snapshot[name].forEach((entry, index) => {
+        const source = master[name][index];
         expect(sortedKeys(entry)).toEqual(["effect", "id", "nameJa"].sort());
-      }
+        expect(entry.id).toBe(source?.id);
+        expect(entry.nameJa).toBe(source?.nameJa);
+        // 例データの効果は入れ子を持たない(statMods のキーは engine と同じ小文字のまま)。
+        // defAbsorbTypes のような入れ子の効果も同じ規則で変換する必要があるが、例データには無い。
+        expect(entry.effect).toEqual(pascalCaseKeys(source?.effect ?? null));
+      });
     },
   );
 
