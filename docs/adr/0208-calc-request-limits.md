@@ -150,3 +150,16 @@ Codex のセキュリティレビュー(監査ベース `264ae5963bb7e867a88ff5c
   上限ちょうどの reverse は約 22.6ms の CPU を要する(critic 実測)ため、calc-svc の CPU limit(`deploy/k8s/base/calc/deployment.yaml` の `200m`)は
   理論上 約9 req/s 程度で飽和しうる(クラウドの遅い vCPU ではさらに少ない)。レート制限・同時実行数の制御は gateway かクラスタ側の別課題とする。
   実機で重ければ `itemCandidates`/`itemVariants` の上限を 32 に下げる余地を残す(§1)。
+
+**実装時の追記(2026-09-25。ADR-0126・ADR-0214。issue 272 の特性候補)**: 一括計算・逆算に防御側/相手側の
+特性候補(`engine.MaxAbilityCandidates` = 3)が既定で加わったため、行数・候補数の**基本の上限**
+(一括 512 行・逆算 128 件)は変わらないが、特性ごとに結果が違う技では実際の行数・候補数がその最大3倍
+(一括 1536 行・逆算 384 件)まで増えうる。これは新しいクライアント制御の増幅経路ではない:
+特性候補の件数はクライアントが直接指定できる配列ではなく(`defenderOverride.abilityId`/`unknownAbilityId`
+は1件だけ、省略時は種族が実際に持つ特性数で ADR-0214 §2 により3件が上限)、リクエストの中身を変えて
+更に増幅することはできない(§4「本 ADR が防ぐのは1リクエストあたりの計算量の増幅」という前提は保たれる)。
+ADR-0126 の実測(逆算最悪ケースで特性3つのとき約38ms)を基礎コストの底上げとして許容する
+(追加の増幅経路が無いことの確認が本追記の主旨)。**`BenchmarkCalcBulkAtLimit`・`BenchmarkCalcReverseAtLimit`
+(`services/calc/internal/httpapi/limits_test.go`)は現状 fakeStore の1特性種族を使っており、特性3つの
+コストはまだ計測できていない**(critic レビューで指摘。ADR-0214 の実装時点では未対応)。3特性で分岐する
+fixture に変えて計測に含めるのは今後の課題とする。

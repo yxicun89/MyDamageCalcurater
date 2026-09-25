@@ -274,9 +274,95 @@ export interface paths {
      *     `partial` を返すので、同じ要求を `completed` になるまで繰り返す。
      *     削除の時点を墓石として記録し、それ以前に発生した計算イベントが JetStream から
      *     後から届いても保存しない(ADR-0209 §7)。team DB は消さないので、
-     *     クライアントは `DELETE /api/team/device-data` も呼ぶ(P5-4 で追加する)。
+     *     クライアントは `DELETE /api/team/device-data` も呼ぶ。
      */
     delete: operations["deleteRecordDeviceData"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/team/teams": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * この端末の構築を一覧する
+     * @description `X-Device-Id` の端末の構築だけを、更新の新しい順(同時刻は `id` の昇順)で返す
+     *     (ADR-0209 §6-1・§6-3)。他端末の構築は混ざらない。1件も無ければ空配列(404 にしない)。
+     *
+     *     メンバーまで含めた完全な `Team` を返す。ページングは持たない(1端末が持てる構築は
+     *     **100件**で頭打ちなので、一覧は常に有限で小さい。ADR-0213 §2)。
+     */
+    get: operations["listTeams"];
+    put?: never;
+    /**
+     * 構築を1つ作る
+     * @description `id` と `createdAt` / `updatedAt` はサーバーが決める(要求には含めない。含めたら 400 `unknown_field`)。
+     *     1端末が持てる構築は **100件**まで。上限に達している端末からの作成は 400 `invalid_input`(ADR-0213 §2)。
+     */
+    post: operations["createTeam"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/team/teams/{teamId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * 構築を1つ取得する
+     * @description 先に端末 ID で絞ってから `teamId` を照合する(ADR-0209 §6-2)。この端末が持っていない
+     *     `teamId`(他端末のもの・実在しないもの・形式が違うものを区別しない)は 404 `not_found`。
+     */
+    get: operations["getTeam"];
+    /**
+     * 構築を丸ごと置き換える
+     * @description 名前とメンバー全体を要求の内容で置き換える(部分更新・メンバー個別の更新は持たない。ADR-0213 §2)。
+     *     `members` を省略した場合は「メンバーなし」に置き換わる(消し忘れではなく明示の置換として扱う)。
+     *     この端末が持っていない `teamId` は 404 `not_found`(ADR-0209 §6-2)。
+     */
+    put: operations["updateTeam"];
+    post?: never;
+    /**
+     * 構築を1つ削除する
+     * @description 成功は 204(本文なし)。この端末が持っていない `teamId` は 404 `not_found` で、
+     *     同じ構築をもう一度削除しても 404 になる(端末単位の全削除 `deleteTeamDeviceData` とは違い、
+     *     1件の削除は「消した」と「もともと無い」を区別する。ADR-0213 §2)。
+     */
+    delete: operations["deleteTeam"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/team/device-data": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * この端末の構築をすべて削除する
+     * @description X-Device-Id の端末に紐づく team DB の行(構築とその個体)をすべて消す。
+     *     冪等性・`partial` の扱いは deleteRecordDeviceData と同じ(ADR-0209 §5)。
+     *     削除の時点を墓石として記録し、それ以前に発生した計算イベントが JetStream から
+     *     後から届いても `devices.last_seen_at` を進めない(ADR-0209 §7・ADR-0213 §5)。
+     *     record DB は消さないので、クライアントは `DELETE /api/record/device-data` も呼ぶ。
+     */
+    delete: operations["deleteTeamDeviceData"];
     options?: never;
     head?: never;
     patch?: never;
@@ -329,7 +415,7 @@ export interface components {
      *     | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
      *     | unknown_field | 契約にないフィールド | 400 |
      *     | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-     *     | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む | 400 |
+     *     | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
      *     | unknown_preset | 未知の防御側プリセット | 400 |
      *     | duplicate_preset | 防御側プリセットの重複 | 400 |
      *     | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -351,7 +437,7 @@ export interface components {
      *     | unknown_item | itemId がマスタに無い | 400 |
      *     | unknown_ability | abilityId がマスタに無い | 400 |
      *     | unknown_nature | natureId がマスタに無い | 400 |
-     *     | not_found | ルートが無い / このサービスの担当外の操作 | 404 |
+     *     | not_found | ルートが無い / このサービスの担当外の操作 / この端末が持っていないリソース ID(他端末のものか実在しないかを区別しない。403 にしない。ADR-0209 §6-2) | 404 |
      *     | master_unavailable | マスタ(pokedex の MySQL)を参照できない | 503 |
      *     | store_unavailable | 保存データの DB(record / team の TiDB)を参照できない。`master_unavailable` と分けるのは原因も復旧手順も別で、「計算はできるが保存はできない」状態(CLAUDE.md 絶対ルール5)をクライアントが区別できる必要があるため(ADR-0209 §5.3) | 503 |
      *     | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202) | 503 |
@@ -651,6 +737,17 @@ export interface components {
      * @enum {string}
      */
     DefenderPreset: "none" | "hp" | "hb_boost" | "hb" | "hb_full" | "hd_boost" | "hd" | "hd_full";
+    /** @description 防御側の上書き(issue 272。ADR-0126・ADR-0214)。省略した項目は上書きしない。 */
+    DefenderOverride: {
+      /**
+       * @description 防御側の特性を1つに固定する。省略時は防御側の種族が持つ特性(最大3件。4件目がある種族は
+       *     Showdown の特殊枠 `"S"` を落とす。ADR-0105 §5 と同じ判断)をすべて候補として計算し、
+       *     結果が完全に同じになる特性は1行にまとめ、違うときだけ行を分ける(ADR-0126)。
+       *     指定した特性をその種族が持たない場合は 400 `invalid_input`、マスタに無い ID は
+       *     400 `unknown_ability`。
+       */
+      abilityId?: string;
+    };
     BulkCalcRequest: {
       format: components["schemas"]["Format"];
       attacker: components["schemas"]["Individual"];
@@ -658,6 +755,7 @@ export interface components {
       moveId: string;
       field?: components["schemas"]["FieldState"];
       options?: components["schemas"]["CalcOptions"];
+      defenderOverride?: components["schemas"]["DefenderOverride"];
       /**
        * @description 使う防御側プリセットと行の順序。省略と空配列(`[]`)は同じで、技の分類に応じた既定セットになる。
        *     物理技は 5 件(none, hp, hb_boost, hb, hb_full)、
@@ -672,7 +770,9 @@ export interface components {
       /**
        * @description 差し替えて比較する持ち物 ID(省略時は素の1通り)。null 要素は「持ち物なし」。
        *     65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
-       *     行数は `len(presets) × len(itemVariants)` なので、上限は 8 × 64 = 512 行。
+       *     行の基本数は `len(presets) × len(itemVariants)`(上限 8 × 64 = 512)。特性ごとに結果が違う
+       *     ときだけ、その基本数のうち最大3倍(特性の候補数。ADR-0126・ADR-0214)まで行が分かれる。
+       *     結果が同じ特性は1行にまとまるため、特性が効かない技では行数は変わらない。
        */
       itemVariants?: (string | null)[];
     };
@@ -684,6 +784,13 @@ export interface components {
       itemId?: string | null;
       defender: components["schemas"]["BulkDefender"];
       result: components["schemas"]["CalcResult"];
+      /**
+       * @description この行の計算に使った防御側の特性(ADR-0126・ADR-0214)。種族は必ず1件以上の特性を持つため
+       *     常に入る。
+       */
+      abilityId: string;
+      /** @description この行と結果が完全に同じになる特性の ID(abilityId が先頭。渡した/解決した順)。 */
+      abilityIds: string[];
     };
     /**
      * @description 性格補正の構造値。plus が +10%、minus が -10% を受ける能力。無補正は両方 null。
@@ -740,6 +847,13 @@ export interface components {
       known: components["schemas"]["Individual"];
       /** @description 逆算する相手の種族。SP・性格・持ち物は探索対象なので渡さない */
       unknownSpeciesKey: components["schemas"]["SpeciesKey"];
+      /**
+       * @description 相手の特性を1つに固定する(issue 272。ADR-0126・ADR-0214)。省略時は相手の種族が持つ特性
+       *     (最大3件。BulkCalcRequest.defenderOverride.abilityId と同じ既定)をすべて候補にする。
+       *     指定した特性をその種族が持たない場合は 400 `invalid_input`、マスタに無い ID は
+       *     400 `unknown_ability`。
+       */
+      unknownAbilityId?: string;
       /** @description 観測したときの技(side=defender なら自分の技、attacker なら相手の技) */
       moveId: string;
       field?: components["schemas"]["FieldState"];
@@ -756,8 +870,11 @@ export interface components {
        */
       observations: components["schemas"]["Observation"][];
       /**
-       * @description 返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(上限は
-       *     2 性格クラス × 64 itemCandidates = 128 件)。負の値と 129 以上は 400 `invalid_input`。
+       * @description 返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(特性の候補分岐〈ADR-0126・
+       *     ADR-0214〉により最大 2 性格クラス × 3 特性グループ × 64 itemCandidates = 384 件まで増えうる。
+       *     特性が効かない技では従来どおり最大 128 件)。指定できる値自体は 1..128(この上限は変えていない。
+       *     返る件数をこの値で切り詰めるだけで、384 件から絞り込みたいときに使う)。負の値と 129 以上は
+       *     400 `invalid_input`。
        * @default 0
        */
       maxCandidates: number;
@@ -808,6 +925,13 @@ export interface components {
        *     印なしは空配列。
        */
       unsupported: components["schemas"]["UnsupportedMark"][];
+      /**
+       * @description この候補の計算に使った相手の特性(ADR-0126・ADR-0214)。種族は必ず1件以上の特性を持つため
+       *     常に入る。
+       */
+      abilityId: string;
+      /** @description この候補と結果が完全に同じになる特性の ID(abilityId が先頭。渡した/解決した順)。 */
+      abilityIds: string[];
     };
     ReverseResult: {
       side: components["schemas"]["ReverseSide"];
@@ -980,6 +1104,76 @@ export interface components {
         favorites: number;
       };
     };
+    /**
+     * @description 構築の ID(サーバーが発行する UUID。正準形 8-4-4-4-12 の16進)
+     * @example 11111111-2222-4333-8444-555555555555
+     */
+    TeamId: string;
+    /**
+     * @description 構築の1体(ADR-0213 §3)。種族・技・持ち物・特性・性格・SP・テラスタイプは **ID のまま**運び、
+     *     team-svc はマスタに実在するかを検証しない(CLAUDE.md 絶対ルール4)。
+     *     並び順(パーティの何番目か)は `Team.members` の配列の順序そのもので、`slot` は持たない。
+     */
+    TeamMember: {
+      speciesKey: components["schemas"]["SpeciesKey"];
+      /**
+       * @description 任意のニックネーム(文字数は Unicode コードポイントで数える)。空文字は null と同じ「未設定」として扱う。
+       *     利用者の自由入力で個人を特定しうるため、**ログには出さない**(ADR-0209 §3)。
+       */
+      nickname?: string | null;
+      /**
+       * @description 覚えさせる技(最大4つ・同一メンバー内で重複不可。並び順は表示順)
+       * @default []
+       */
+      moveIds: string[];
+      /** @description 持ち物(持たせないときは null) */
+      itemId?: string | null;
+      /** @description 特性(未選択のときは null) */
+      abilityId?: string | null;
+      natureId: string;
+      /** @description 能力ポイント。各 0..32、合計 <= 66(Individual.sp と同じ規則。範囲外は 400 `invalid_input`) */
+      sp: components["schemas"]["StatBlock"];
+      teraType?: components["schemas"]["PokeType"] | null;
+    };
+    /**
+     * @description 構築の作成(`createTeam`)・置換(`updateTeam`)で送る内容。`id` / `createdAt` / `updatedAt` は
+     *     サーバーが決めるので送らない(送ったら 400 `unknown_field`)。
+     */
+    TeamInput: {
+      /** @description 構築名(前後の空白を除いて1文字以上。文字数は Unicode コードポイントで数える) */
+      name: string;
+      /**
+       * @description パーティ(最大6体。省略・空配列は「メンバーなし」)
+       * @default []
+       */
+      members: components["schemas"]["TeamMember"][];
+    };
+    /** @description 保存済みの構築(ADR-0213 §2) */
+    Team: {
+      id: components["schemas"]["TeamId"];
+      name: string;
+      members: components["schemas"]["TeamMember"][];
+      /** Format: date-time */
+      createdAt: string;
+      /**
+       * Format: date-time
+       * @description 最終更新。失効の判定に使う(`max(devices.last_seen_at, updatedAt)` から540日。ADR-0209 §4)
+       */
+      updatedAt: string;
+    };
+    TeamDeletionResult: {
+      status: components["schemas"]["DeletionStatus"];
+      /**
+       * Format: date-time
+       * @description 墓石の時刻。これ以前に発生した計算イベントは以後 last_seen_at を進めない(ADR-0209 §7)
+       */
+      purgedAt: string;
+      /** @description この呼び出しで消した行数(冪等なので2回目は 0 になる) */
+      deleted: {
+        teams: number;
+        teamMembers: number;
+      };
+    };
   };
   responses: {
     /** @description エラー */
@@ -1010,6 +1204,12 @@ export interface components {
      *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
      */
     SessionId: string;
+    /**
+     * @description 構築の ID(作成時にサーバーが発行する UUID。ADR-0213 §2)。
+     *     端末 ID は**パスに含めない**(ヘッダだけが正。ADR-0209 §2・§6-4)。
+     *     この端末が持っていない ID は、他端末のものか実在しないかを区別せず 404 `not_found`(§6-2)。
+     */
+    TeamId: components["schemas"]["TeamId"];
   };
   requestBodies: never;
   headers: never;
@@ -1667,6 +1867,336 @@ export interface operations {
       400: components["responses"]["Error"];
       500: components["responses"]["Error"];
       /** @description record-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`) */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  listTeams: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description この端末の構築(更新の新しい順)。無ければ空配列 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Team"][];
+        };
+      };
+      400: components["responses"]["Error"];
+      /**
+       * @description team-svc が TiDB に届かない(`store_unavailable`)、または gateway から team-svc に届かない
+       *     (`upstream_unavailable`。ADR-0202・ADR-0209 §5.3)
+       */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  createTeam: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TeamInput"];
+      };
+    };
+    responses: {
+      /** @description 作った構築(サーバーが決めた `id` と時刻を含む) */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Team"];
+        };
+      };
+      400: components["responses"]["Error"];
+      500: components["responses"]["Error"];
+      /** @description team-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`) */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  getTeam: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path: {
+        /**
+         * @description 構築の ID(作成時にサーバーが発行する UUID。ADR-0213 §2)。
+         *     端末 ID は**パスに含めない**(ヘッダだけが正。ADR-0209 §2・§6-4)。
+         *     この端末が持っていない ID は、他端末のものか実在しないかを区別せず 404 `not_found`(§6-2)。
+         */
+        teamId: components["parameters"]["TeamId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 構築 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Team"];
+        };
+      };
+      400: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      /** @description team-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`) */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  updateTeam: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path: {
+        /**
+         * @description 構築の ID(作成時にサーバーが発行する UUID。ADR-0213 §2)。
+         *     端末 ID は**パスに含めない**(ヘッダだけが正。ADR-0209 §2・§6-4)。
+         *     この端末が持っていない ID は、他端末のものか実在しないかを区別せず 404 `not_found`(§6-2)。
+         */
+        teamId: components["parameters"]["TeamId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TeamInput"];
+      };
+    };
+    responses: {
+      /** @description 置き換えた後の構築(`updatedAt` は更新される) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Team"];
+        };
+      };
+      400: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      500: components["responses"]["Error"];
+      /** @description team-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`) */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  deleteTeam: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path: {
+        /**
+         * @description 構築の ID(作成時にサーバーが発行する UUID。ADR-0213 §2)。
+         *     端末 ID は**パスに含めない**(ヘッダだけが正。ADR-0209 §2・§6-4)。
+         *     この端末が持っていない ID は、他端末のものか実在しないかを区別せず 404 `not_found`(§6-2)。
+         */
+        teamId: components["parameters"]["TeamId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 削除した(本文なし) */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      /** @description team-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`) */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  deleteTeamDeviceData: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 削除の結果(`partial` なら残りがある) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TeamDeletionResult"];
+        };
+      };
+      400: components["responses"]["Error"];
+      500: components["responses"]["Error"];
+      /** @description team-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`) */
       503: {
         headers: {
           [name: string]: unknown;

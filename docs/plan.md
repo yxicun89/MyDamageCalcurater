@@ -590,12 +590,23 @@
   (2) ADR-0209 §4 の失効ジョブ(record 用の日次 CronJob。生イベント90日・お気に入り540日・
   devices 行30日・purge journal 90日を `cmd/record/config.go` の値で判定して消す。冪等・1回の上限あり)を
   実装する。team-svc 側の同等ジョブ(ADR-0211 §7 の `TEAM_*` 環境変数)も合わせて検討する
-- [ ] P5-4 team-svc(構築 CRUD、Showdown 形式入出力)。
+- [x] P5-4 team-svc(構築 CRUD。critic 2ラウンド。1回目 FAIL〈重要3〉→修正→2回目 PASS〈軽微6件も反映済み〉)。
+  **Showdown 形式の入出力はクライアント側(Web P5-5 / iOS レーン)の担当と判断**
+  (ADR-0213 §4。表示名 ⇔ ID の解決は pokedex-svc の検索 API をクライアントが呼べば足り、team-svc の DB を
+  必要としない。サーバーに置くと team-svc → pokedex-svc の同期依存ができ、マスタの障害で構築の保存が止まる)。
   ADR-0209 §5.3 の `deleteTeamDeviceData` と §6 の分離規則(他端末のリソース ID は 404 `not_found`)を含む。
   **P5-2 のイベントを購読し、自分の DB の `devices.last_seen_at` だけを更新する**(計算 API だけを使い続ける端末の
   構築が誤って失効しないため。ADR-0209 §4。イベントの中身〈個体・計算結果〉は保存しない)。
-  gateway に `/api/team/*` のルーティングと CORS の `DELETE`/`PUT` 許可を追加(ADR-0209 §10・ADR-0202 への追記)
-- [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー。ADR-0209 §8 の文言と「この端末のデータを削除」の UI を含む
+  gateway に `/api/team/*` のルーティングと CORS の `PUT` 許可を追加(ADR-0209 §10・ADR-0202 への追記。
+  `DELETE` は P5-3 で追加済み。`PATCH` は部分更新を持たないので足さない)。
+  契約・リソース設計・マスタ照合をしない判断は **ADR-0213**(spec-writer 工程で作成。openapi.yaml へ反映済み)
+- [ ] P5-4b team-svc の残作業(P5-3b と対になるもの)。
+  (1) `deploy/k8s/base/team` に Deployment・Service を追加し、`GATEWAY_TEAM_URL` を配線して k3d で
+  `/api/team/*` が届くようにする(`scripts/up.sh` のイメージビルド対象に `team` を追加)。
+  (2) ADR-0209 §4 の失効ジョブ(team 用の日次 CronJob。構築540日・devices 行30日・purge journal 90日を
+  `TEAM_*` 環境変数で判定して消す。冪等・1回の上限あり)。P5-3b と同じ形なので一緒に実装してよい
+- [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー(**Showdown 形式のインポート/エクスポートを含む**。
+  requirements.md §2・ADR-0213 §4)。ADR-0209 §8 の文言と「この端末のデータを削除」の UI を含む
 - [x] P5-6 技の追加効果(使用者自身のランク変化。例: ニトロチャージで自分の素早さ+1)を engine の Move・マスタ・importer・export に足す(判定レーンからの提案。DECISIONS.md 2026-09-22。ADR-0005 に沿い、追加効果の対象=self/target・確率・ランク変化量をデータとして持つ。ADR-0107。critic PASS。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。公開APIへの露出は判定レーンの要件確定後)
 
 ## M3: iOS
@@ -764,6 +775,25 @@
   `swift test`(PokeCalcDesignTests 13件・PokeCalcCoreTests 323件)・`make ios-test`(unit 336件・XCUITest 16件・
   Info.plist 検査)・`make lint`(check-publishable 含む)すべて成功。軽微な作業のため spec-writer/critic の
   サブエージェントは使わずメインで実施(CLAUDE.md「軽微な作業はメインのみでよい」)
+- [x] P6-17 issue #271/#270 の iOS 側: API の未対応の印(`CalcResult`・一括計算の各行・`ReverseCandidate` の
+  `unsupported`。ADR-0123)をドメインへ写し、計算画面・逆算画面に「正確でない可能性があります(未対応: …)」の注記を出す。
+  全行共通の印は結果の上に1回、一部の行だけの印はその行に。対象・理由の日本語ラベルは1か所(Web も同じ語。DECISIONS.md)。
+  受け入れ条件・判断・identifier は ADR-0501「P6-17」。
+  - spec-writer(2026-09-25): 受け入れ条件・失敗するテストのみ追加、実装はまだ(`swift test`: 490 件中 27 件失敗
+    〈すべて新しいテスト〉。XCUITest `UnsupportedMarksUITests` 4件は未実行)。モックのフィクスチャに印の付く架空の技・持ち物を追加
+  - implementer(2026-09-25): TODO(implementer) 箇所をすべて実装(ドメイン写像・ラベル・置き場所/文言の
+    整形・ViewModel・モックの印付け・View の注記と identifier)。`swift test` 490 件全件成功(新しい37件を含む)、
+    `make ios-test` 全 41 件の XCUITest 成功(新しい `UnsupportedMarksUITests` 4件を含む)。既存テストは1つも編集していない
+  - critic(2026-09-25): FAIL。(1) 理由ラベルの誤解(`alt_offense_stat`/`alt_defense_stat`/`effectiveness_change`
+    の「特殊」がポケモンの文脈だと特殊技分類に読める)、(2) `UnsupportedPlacement` のテスト漏れ(1行目をそのまま
+    `common` にする実装でも全テストが通ってしまう)、(3) 逆算の既知側の持ち物の target のテスト漏れ、
+    (4) DECISIONS.md の古い記述、を指摘
+  - implementer(2026-09-25、critic 対応): 4件のラベルを修正(`DisplayLabels.swift`・`UnsupportedNoticeTests.swift`・
+    ADR「P6-17」2章・DECISIONS.md を同じ語に揃え、DECISIONS.md の古い「spec-writer 段階」の記述も更新)。
+    `UnsupportedNoticeTests.swift`/`MockPokeCalcServiceUnsupportedTests.swift`(このタスクの新規テストなので編集可)
+    にテストを3件追加し、それぞれ対応する実装行を一時的に壊して red になることを確認してから元に戻した
+    (mutation 確認。詳細は ADR「P6-17」10章)。`swift test` 493 件全件成功、`make ios-test` も全件成功
+    (unit 506 件・XCUITest 41 件)。既存テストは1つも編集していない
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)。Argo CD の実同期もローカル k3d で確認済み(ADR-0018: Git 変更 32fbb9e → manual sync → Pod の image digest 一致)
@@ -1088,12 +1118,20 @@
   Web の例データ(`exportSnapshot.ts`)に `mechanisms: []` を追加(Web は `unsupported` をまだ受け取らない
   設計のまま。`mapCalcResult` 等の明示的フィールド写像により自動的に弾かれる。issue #67 の前方互換どおり)。
   データレーン・Web レーン・iOS レーンへ連絡済み(iOS は生成物の再生成が必要)
-- [ ] issue #274/#272(iOS レーンからの提案。DECISIONS.md 2026-09-25)の API レーン担当分: `BulkCalcRequest` に
-  `defenderOverride: { abilityId?, ranks?: RankBlock, status?: StatusCondition }`(全行に一律で上書き)を追加する。
-  iOS(PR #377)は攻撃側のランク・特性・天候・フィールド・防御側の壁までは実装済みだが、防御側のランク・特性・
-  状態異常は契約に上書き手段が無く未実装のまま(範囲外として明記)。engine 側の変更(`BulkInput` へのオーバーライド
-  追加。プリセット解決後・計算前に当てる)を伴うため ADR-0003 の test-first + 独立 critic の対象。
-  **急ぎではない(iOS レーン明記)。M2(P5-3・P5-4)の後に着手する**。入ったら iOS・Web へ連絡(追従は各レーン)
+- [x] issue #274/#272(iOS レーンからの提案。DECISIONS.md 2026-09-25)の API レーン担当分のうち **abilityId**:
+  `BulkCalcRequest.defenderOverride.abilityId`(ADR-0126・ADR-0214)。データレーンが engine 側
+  (`BulkInput.DefenderAbilities`・`ReverseInput.UnknownAbilities`。PR #402)を実装済みで、API レーンは
+  `defenderOverride.abilityId`(既に採用済みの概念)をその1件として渡す配線と、`ReverseRequest.unknownAbilityId`
+  (新規)・`BulkCalcRow`/`ReverseCandidate` への `abilityId`/`abilityIds`(必須)を実装。省略時は種族の全特性
+  (最大3件。4件目は Showdown の特殊枠 `"S"` として落とす。ADR-0105 §5 と同じ判断)を解決して渡すため、
+  1つしか特性を持たない種族は必ずその特性が効くようになる(issue の境界値の受け入れ条件を満たす)。
+  一括計算・逆算の行数/候補数の上限(ADR-0208)が特性分岐で最大3倍まで増えうることを openapi.yaml と
+  ADR-0208 に追記。critic レビュー予定。**残り(ranks・status の上書き)は別タスクとして残す**(このタスクの
+  スコープ外。abilityId とは独立に追加できる)。入ったら iOS・Web へ連絡(生成物の再生成・追従は各レーン)
+- [ ] issue #274/#272 の API レーン担当分の残り: `defenderOverride.ranks: RankBlock` / `defenderOverride.status:
+  StatusCondition`(全行に一律で上書き)。abilityId(上記)とは独立に追加できる。engine 側の変更
+  (`BulkInput`/`ReverseInput` へのオーバーライド追加。プリセット解決後・計算前に当てる)を伴うため
+  ADR-0003 の test-first + 独立 critic の対象。優先度は低い(iOS レーンから「急ぎではない」と明記済み)
 - [x] issue #110(セキュリティ。Codex レビュー)の API レーン担当分: `POST /api/calc/bulk`・`/api/calc/reverse` の候補・観測配列に件数上限が無く、1MiB未満の小さな本文で計算量を増幅できた(2,000×2,000 で約9.4秒)。契約(`maxItems`/`uniqueItems`/`maximum`。ADR-0208)を追加し、calc-svc の生成ラッパは検証しないため(実測確認済み)自前検証をID解決・engine呼び出しより前に実装。critic PASS、実HTTPで境界値と再現手順の解消(0.9ms・engine未到達)を確認。engine/wasmapi(データレーン)・Web・iOSへの追従は DECISIONS.md に既定案付きで依頼(issue はレーンの完了までクローズしない)
 - [x] issue #110 のデータレーン担当分: `engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ件数・範囲の上限(presets 8・itemVariants 64・itemCandidates 64・observations 16・maxCandidates 0..128)を追加(ADR-0108)。HTTP を経由しない直接呼び出し・WASM でも計算量を増幅できないようにした。wasmapi は DTO 変換より前に同じ検査を重ねて置き、複数の違反が重なっても HTTP と同じ `invalid_input` が先に出るようにした(parity)。`MaxCandidates` の負の値は、従来「無制限」扱いだったのを ADR-0208 の契約(`minimum: 0`)に合わせて拒否するよう変更(既存テストの期待値を更新。理由は ADR-0108 決定4)。critic PASS(1往復)。Web・iOS の追従(観測16件でUI無効化・持ち物候補64件超の扱い)は ADR-0208 §4 のまま未着手
 - [x] issue #148(クラウド公開前のアクセス境界・認証方針。ユーザー決定「私設サービスを維持する」)の API レーン担当分: `deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定(ADR-0210)。TLS 終端は gateway/クラスタの Ingress では行わず Tailscale(`tailscale serve`)に任せる方針を決定。端末IDが認証として機能しないこと・CORSが到達制御でないことの回帰テストを追加(`TestDeviceIDIsNotAuthentication`・`TestCORSIsNotAccessControl`・`TestContractHasNoAuthentication`)。`base`のgateway Ingress本体は local(k3d)専用として残し、先頭コメントで明記。ADR-0209 §1(クラウド公開へ進む判断)は「公開しない」で確定した旨を追記。critic PASS。運用(tailnet ACL・失効手順のrunbook)・Web/iOS(接続先をtailnet名に)への依頼はDECISIONS.mdに既定案付きで記録(issue はレーンの完了までクローズしない)

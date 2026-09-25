@@ -20,8 +20,9 @@ Next: issue #403 の「残りのパッケージ」を依存の順に(D07 共通�
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
-Active: Claude Code(M2完遂の依頼〈2026-09-25〉でP5-2〜P5-4を継続中)
-Branch: feat/api-p5-2-calc-events(作業ディレクトリ ~/MyDamageCalcurater-api。P5-2・P5-3を含む。PR #372)
+Active: Claude Code(M2完遂の依頼〈2026-09-25〉でP5-2〜P5-4完了。次のキュー〈#272・#284等〉へ)
+Branch: feat/api-p5-2-calc-events(作業ディレクトリ ~/MyDamageCalcurater-api。P5-4を含む。PR #409。
+P5-2・P5-3・issue #271/#270はmain統合済み〈PR #372〉)
 Status: Phase 3・issue #110(ADR-0208。PR #130)・issue #103の設計(M2保存データの保持・削除・端末ID境界。ADR-0209。critic PASS。PR #150)は main に統合済み
 Status(追記): issue #148のAPIレーン担当分(ADR-0210。私設サービスの境界)完了・critic PASS・**main 統合済み(PR #157)**。`deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定。端末ID/CORSを認証・到達制御として扱わない回帰テストも追加。
 Status(追記): P3-7 `GET /api/pokedex/moves/{key}`(getMove)を実装(判定レーン JD4 の依頼。ADR-0105 §3 追記)。契約・`services/pokedex/`(データレーンの範囲。越境理由と触ったファイル一覧は DECISIONS.md)まで一括実装。critic PASS(3往復)・**main 統合済み(PR #161)**。判定レーンは JD4 に着手し main 統合済み(PR #169)。
@@ -62,11 +63,31 @@ gatewayルーティング/CORSのDELETE許可まで実装。critic指摘で判�
 手動設定かTidbInitializer再作成が必要)。失効ジョブ(ADR-0209 §4)とrecord-svcのDeployment/Service配線は
 **P5-3bへ切り出し**(plan.md参照。現状k3dでは`/api/record/*`はupstream_unavailableのまま)。
 main未統合(PR #372。P5-2と同じブランチ・PRでまとめている。ユーザーのテスト確認・マージ待ち)。
-Next: PR #372マージ後、P5-3b(失効ジョブ・Deployment配線。優先度低)は後回しにしてP5-4(team-svc)へ進む
-(ユーザー決定2026-09-25「M2をP5-4まで実装しきる」)。データレーンからの依頼(issue #271・#270。
-`MasterMove.mechanisms`の公開・calc応答への`unsupported`印。DECISIONS.md 2026-09-25参照)を次の区切りで対応。
-iOSレーンからの提案(issue #274/#272。BulkCalcRequestへの`defenderOverride`追加。DECISIONS.md 2026-09-25
-参照)はM2完了後に着手。issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
+Status(追記): P5-2・P5-3・issue #271/#270(mechanisms公開・unsupported印)を**main統合済み(PR #372)**。
+Status(追記): **M2(P5-1〜P5-4)完了**。P5-4(team-svc構築CRUD)実装完了。契約(`api/openapi.yaml`のteam操作。
+ADR-0213 spec-writer工程)・team-svcの保存(TiDB実装。CreateTeam/UpdateTeam/DeleteTeam/GetTeam/ListTeams/
+PurgeDevice/TouchDevice(FromEvent))・NATS購読(`services/team/internal/events`。durable名`team-svc`は
+record-svcと別、イベントのDetailは一切保存しない。ADR-0213 §5)・gatewayルーティング/CORSのPUT許可まで実装。
+critic 2ラウンド(1回目FAIL〈重要3・軽微6〉: (1) team_members への3クエリにdevice_id絞り込みが抜けていた
+〈ADR-0209 §6-1違反。実害は無いが規律違反〉のを修正し回帰テストで固定、(2) 文字数上限未検証で入力エラーが
+503 store_unavailableに化けていたのを400 invalid_inputに修正、(3) Dockerfileのserverターゲット欠落を修正
+→ 2回目PASS)。実TiDB(`pingcap/tidb --store=unistore`)で全テスト確認済み。失効ジョブとDeployment配線は
+**P5-4bへ切り出し**(plan.md参照)。**main統合済み(PR #409)**。
+Status(追記): issue 272のAPI分(defenderOverride.abilityId・ReverseRequest.unknownAbilityId。ADR-0214。
+engine側はPR #402・ADR-0126で完了済み)を実装。省略時は種族の全特性(最大3件。4件目=Showdownの特殊枠"S"は
+ADR-0105 §5と同じ判断で落とす)を解決して渡すため、1つしか特性を持たない種族は必ずその特性が効くように
+なる。`BulkCalcRow`・`ReverseCandidate`に`abilityId`/`abilityIds`(必須)を追加。critic 2ラウンド(1回目
+FAIL: 省略時に解決した特性のEffectが実際にengineへ届くことが無テストだった→対照種族ペアのテストを追加して
+修正→2回目PASS)。一括計算・逆算の行数/候補数上限(ADR-0208)が特性分岐で最大3倍まで増えうることを追記。
+**main未統合(PR #411。ユーザーのテスト確認・マージ待ち)**。
+Next: PR #411マージ後、キュー順に対応:
+(1) issue #284(balance/speed/judgeをgatewayの後ろにまとめる。ユーザー決定・PR #399のDECISIONS.md参照)、
+(2) UnsupportedMark.reason/targetのenum前方互換性の見直し(iOSレーン提案。新しいreason値を足すと古いクライアント
+の計算・逆算応答全体がデコード失敗する問題。type:stringに緩める方向で検討中)、
+(3) defenderOverride.ranks/status(issue 272残り。優先度低)、(4) P5-3b・P5-4b(失効ジョブ・Deployment配線。
+優先度低)。
+issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。
+60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
@@ -275,10 +296,15 @@ P6-11(issue #334。攻撃側プリセットの表示名を技の分類に追従�
 `engine/presets/attacker.json` との契約テスト、並び 無振り→特化→振り、既定を無振りに変更。ADR-0501「P6-12」)完了。
 P6-13(issue #274。計算画面の「詳細」: 急所・やけど・天候・フィールド・防御側の壁・攻撃側のランク・特性。PR #377。語は
 DECISIONS.md に記録し Web が合わせる)・P6-14(最大の文字サイズで計算画面が横にはみ出す既存の不具合。結果行の `.fixedSize()` が原因)完了。
-P6-15(アクセシビリティ域でプリセットのピルを縦積み等)完了。
-Next: (1) API レーンが `BulkCalcRequest.defenderOverride`(防御側のランク・特性・状態異常。
+P6-15(アクセシビリティ域でプリセットのピルを縦積み等)・P6-16(issue #250。http は非修飾ホスト名と .local のみ受理、
+NSAllowsLocalNetworking。PR #394/#395)・PR #372 追従の再生成(PR #398)・P6-17(未対応の印〈unsupported〉の表示。
+文言は DECISIONS.md に記録し Web が合わせる)完了。
+Next: (1) 第三者データの出典・非公式の表示(#328 のユーザー決定。文言は iOS が DECISIONS.md に既定案を書き Web が合わせる。Web と合意済み)。
+(2) #272: API レーンが特性の契約(abilityId・unknownAbilityId・defenderOverride.abilityId)を出したら追従。
+(3) API レーンが UnsupportedMark の reason/target を string に緩めたら、未知の値の扱いを追加(P5-4 の後に検討と連絡あり)。
+(4) API レーンが `BulkCalcRequest.defenderOverride`(防御側のランク・特性・状態異常。
 DECISIONS.md 2026-09-25 で採用、M2 の後に実装予定)を入れたら、iOS の「詳細」に防御側の入力を追加。
-(2) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。将来の候補:
+(5) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。将来の候補:
 engine の Champions マスタが pokedex-svc 経由になったら iOS のモック/実マスタの差し替え動作を再確認、Web の
 record/team-svc(M2)が進んだら iOS の構築を端末内保存から API 保存へ移行するかを検討。
 

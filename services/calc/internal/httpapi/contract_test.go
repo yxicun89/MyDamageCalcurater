@@ -132,10 +132,12 @@ func TestContractHelperIsNotVacuous(t *testing.T) {
 		`"ko":{"hits":90,"guaranteed":false,"chancePercent":12.5,"displayChancePercent":12.5},"unsupported":[]}`
 	bulkOK := `{"defenderSpeciesKey":"9002-000","rows":[{"preset":"none","presetLabel":"無振り","itemId":null,` +
 		`"defender":{"sp":{"hp":0,"atk":0,"def":0,"spa":0,"spd":0,"spe":0},"nature":{"plus":null,"minus":null},"natureId":null,` +
-		`"stats":{"hp":170,"atk":80,"def":110,"spa":90,"spd":105,"spe":70}},"result":` + calcOK + `}]}`
+		`"stats":{"hp":170,"atk":80,"def":110,"spa":90,"spd":105,"spe":70}},"result":` + calcOK +
+		`,"abilityId":"test-plain","abilityIds":["test-plain"]}]}`
 	reverseOK := `{"side":"defender","stat":"def","assumedHpSp":32,"exactCount":1,"candidates":[` +
 		`{"natureClass":"plus","nature":{"plus":"def","minus":"atk"},"natureId":"test-def-up","itemId":null,` +
-		`"ranges":[{"min":3,"max":5}],"spCount":3,"exact":true,"mismatch":0,"support":7,"minPercent":40.2,"maxPercent":47.8,"unsupported":[]}]}`
+		`"ranges":[{"min":3,"max":5}],"spCount":3,"exact":true,"mismatch":0,"support":7,"minPercent":40.2,"maxPercent":47.8,"unsupported":[],` +
+		`"abilityId":"test-plain","abilityIds":["test-plain"]}]}`
 
 	tests := []struct {
 		name    string

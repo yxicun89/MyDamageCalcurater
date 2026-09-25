@@ -32,11 +32,17 @@ struct MockFixtures {
         let category: String
         let power: Int
         let priority: Int
+        /// 技の機構(openapi `MasterMove.mechanisms` と同じ値。ADR-0121)。無ければ通常の技。
+        /// モックはこれを未対応の印(`target: move`)にする(ADR-0501「P6-17」4章)。
+        let mechanisms: [String]?
     }
 
     struct ItemEntry: Decodable {
         let id: String
         let nameJa: String
+        /// true なら効果を表せない持ち物(ADR-0123 §4 の `UnsupportedAttacker`/`UnsupportedDefender` に相当)。
+        /// モックは持つ側に応じて `attacker_item` / `defender_item` の印を付ける(ADR-0501「P6-17」4章)。
+        let unsupportedEffect: Bool?
     }
 
     struct NatureEntry: Decodable {
