@@ -654,7 +654,10 @@ describe("結果の表示", () => {
 
   test("全候補が観測と一致しないときは role=status で理由の案内を出す(issue #305)", async () => {
     await renderWithResult(noExactResult);
-    expect(await screen.findByRole("status")).toHaveTextContent(reverseResultText.noExactCandidateNotice);
+    // critic指摘: role="status" は観測の上限の案内(L936付近)にも使われるので、role だけでなく
+    // 文言でも絞り込む(将来 status が複数同時に出るテストを足しても複数マッチで落ちないように)。
+    const notice = await screen.findByText(reverseResultText.noExactCandidateNotice);
+    expect(notice.closest('[role="status"]')).not.toBeNull();
   });
 
   test("全候補が不一致でも候補一覧は消さず、件数分そのまま出す(issue #305)", async () => {
