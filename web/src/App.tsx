@@ -9,7 +9,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import "./App.css";
 import { createApiEngine } from "./api/apiEngine";
-import { createBalanceClient } from "./api/balanceClient";
+import { createBalanceClient, type BalanceClient } from "./api/balanceClient";
 import { apiBaseUrl } from "./api/config";
 import { createClientIds, type ClientIds } from "./api/clientIds";
 import { loadCalcMode, saveCalcMode, type CalcMode } from "./app/calcMode";
@@ -17,6 +17,7 @@ import {
   DEFAULT_SCREEN,
   SCREEN_ROUTES,
   documentTitle,
+  isMasterlessScreen,
   pathForScreen,
   screenFromPath,
   screenLabel,
@@ -26,12 +27,12 @@ import { browserWasmLoader } from "./engine/browserWasmLoader";
 import type { CalcEngine } from "./engine/types";
 import { createWasmEngine } from "./engine/wasmEngine";
 import { appText } from "./i18n/ja";
-import { createJudgeClient } from "./judge/judgeClient";
+import { createJudgeClient, type JudgeClient } from "./judge/judgeClient";
 import { isSearchableMasterSource } from "./master/capabilities";
 import { exampleMasterSource } from "./master/exampleSource";
-import { createSpeedClient } from "./speed/speedClient";
-import type { MasterData, MasterSource, MasterSources } from "./master/types";
-import { SCREEN_COMPONENTS } from "./app/screens";
+import { createSpeedClient, type SpeedClient } from "./speed/speedClient";
+import type { MasterData, MasterSource, MasterSources, MasterSpeciesSearch } from "./master/types";
+import { MASTERLESS_SCREEN_COMPONENTS, SCREEN_COMPONENTS } from "./app/screens";
 
 /** タブの定義順(ロービング tabIndex・矢印キーの移動順。WAI-ARIA Authoring Practices の Tabs パターン)。 */
 const TAB_ORDER: readonly ScreenId[] = SCREEN_ROUTES.map((route) => route.id);
@@ -143,6 +144,11 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   const currentMasterLoad: MasterLoadResult | null =
     masterLoad !== null && masterLoad.source === activeMasterSource ? masterLoad.result : null;
 
+  // issue 308: 「再試行」で同じ取得口(activeMasterSource)を読み直すためのトリガー。値そのものに意味は無く、
+  // 増やすたびに下の effect を再実行させる(activeMasterSource 自体は参照が変わらないので依存配列に足すだけでは
+  // 読み直せない)。
+  const [retryToken, setRetryToken] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
     activeMasterSource.load().then(
@@ -163,7 +169,14 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
     return () => {
       cancelled = true;
     };
-  }, [activeMasterSource]);
+    // retryToken は値を使わない(再実行のためだけの依存。activeMasterSource が変わらない「再試行」でも
+    // このトリガーで effect を再実行する)。
+  }, [activeMasterSource, retryToken]);
+
+  /** issue 308: マスタの読み込みに失敗した画面の「再試行」。今の取得口をもう一度読む。 */
+  function retryMasterLoad(): void {
+    setRetryToken((token) => token + 1);
+  }
 
   // 既定のオンライン(API)エンジンは、natures(性格の一覧)が要るのでマスタの読み込みが終わってから作る
   // (ADR-0301 §2・§4)。createApiEngine 自体は fetch しない(初回の計算まで遅延。ADR-0300 §2 と同じ考え方)。
@@ -180,8 +193,11 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   }, [currentMasterLoad, clientIds]);
 
   // モードごとに使う engine を決める(ADR-0301 §4)。engines > engine(両モードに使う) > 既定の順。
-  // 既定のオンラインは、マスタ読み込み前は使われない(currentMasterLoad が ok になるまで下の画面を描画しない)
-  // ので null のままでもよく、その間は offline のプレースホルダで埋める。
+  // 既定のオンラインは、マスタが読めるまで(currentMasterLoad が ok になるまで)使えないので null のままでもよく、
+  // その間は offline のプレースホルダで埋める。issue 308: マスタの読み込みに失敗した状態でも
+  // マスタ不要の画面(素早さ)は描画するが、その画面には engine 自体を渡さない(MasterlessScreenProps。
+  // ここで offline へ静かに落ちたプレースホルダを渡すと、オンラインを選んでいるのに実は WASM で
+  // 計算しているという、ADR-0301 §4 が禁じる自動フォールバックに見えかねないため)。
   const resolvedEngines: CalcEngines =
     engines ??
     (engine !== undefined
@@ -198,10 +214,15 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
     () => screenFromPath(window.location.pathname, base) ?? DEFAULT_SCREEN,
   );
 
+  /** タブを選ぶ(クリック・キーボード・popstate 共通の入口)。 */
+  function selectTab(nextTab: ScreenId): void {
+    setTab(nextTab);
+  }
+
   // タブ・タブパネルの id(WAI-ARIA Authoring Practices の Tabs パターン: tab の aria-controls が
-  // panel の id を指し、panel の aria-labelledby が選択中の tab の id を指す)。パネルは1つだけ描画し
-  // (非選択側の画面は DOM から外す。App.test.tsx が別タブの combobox が無いことを確かめる)、
-  // 中身を選択中のタブで入れ替える。
+  // panel の id を指し、panel の aria-labelledby が選択中の tab の id を指す)。role="tabpanel" は1つだけ
+  // 描画し、その中に訪れたタブの画面を並べる(issue 218・ADR-0308 決定1・決定2: 非選択側の画面は DOM には
+  // 残すが hidden 属性で隠す。App.test.tsx が別タブの combobox を取得できないことを確かめる)。
   const idBase = useId();
   const tabElementId = (id: ScreenId): string => `${idBase}-tab-${id}`;
   const panelId = `${idBase}-panel`;
@@ -216,7 +237,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
       return;
     }
     window.history.pushState(null, "", pathForScreen(nextTab, base));
-    setTab(nextTab);
+    selectTab(nextTab);
   }
 
   /** ArrowLeft/ArrowRight/Home/End でタブの選択とフォーカスを移動する(automatic activation)。 */
@@ -264,10 +285,10 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
       const next = screenFromPath(window.location.pathname, base);
       if (next === null) {
         window.history.replaceState(null, "", pathForScreen(DEFAULT_SCREEN, base));
-        setTab(DEFAULT_SCREEN);
+        selectTab(DEFAULT_SCREEN);
         return;
       }
-      setTab(next);
+      selectTab(next);
     }
     window.addEventListener("popstate", handlePopState);
     return () => {
@@ -282,9 +303,6 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
     document.title = documentTitle(tab);
   }, [tab]);
 
-  // 選ばれている画面のコンポーネント(app/screens.tsx の対応表から引く)。
-  const ActiveScreen = SCREEN_COMPONENTS[tab];
-
   return (
     <>
       {/* main の外に置く: main の内側だと header は banner ランドマークにならない(HTML-AAM)。 */}
@@ -294,8 +312,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
       </header>
       <main className="app-main">
         {currentMasterLoad === null && <p>{appText.loading}</p>}
-        {currentMasterLoad !== null && !currentMasterLoad.ok && <p role="alert">{appText.masterLoadError}</p>}
-        {currentMasterLoad !== null && currentMasterLoad.ok && (
+        {currentMasterLoad !== null && (
           <div className="app-tabs">
             <div role="tablist" aria-label={appText.tabsLabel} className="app-tabs__list">
               {TAB_ORDER.map((id, index) => {
@@ -328,7 +345,93 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
               })}
             </div>
             <div role="tabpanel" id={panelId} aria-labelledby={tabElementId(tab)} className="app-tabs__panel">
-              <ActiveScreen
+              {/* issue 218(ADR-0308 決定1・2・3): 訪れたタブの画面だけを mount したまま並べ、
+                  選択中でないものは内側の包み要素に hidden を付けて隠す(role=tabpanel 自体は1つのまま)。
+                  訪れたタブの集合(visitedTabs)は AppTabPanel 自身の state に持たせてある。この
+                  {currentMasterLoad !== null && ...} の分岐が false→true になるたびに AppTabPanel は
+                  作り直される(取得口が変わって一旦 currentMasterLoad が null になったとき。
+                  ADR-0304 §追記 A-6)ので、マスタが入れ替わったときは自動的に訪問履歴もリセットされる
+                  (決定3)。「再試行」(取得口は変わらない)では null を経由しないので保たれる。 */}
+              <AppTabPanel
+                tab={tab}
+                currentMasterLoad={currentMasterLoad}
+                resolvedEngine={resolvedEngine}
+                activeMasterSearch={activeMasterSearch}
+                balanceClient={balanceClient}
+                speedClient={speedClient}
+                judgeClient={judgeClient}
+                mode={mode}
+                retryMasterLoad={retryMasterLoad}
+                selectMode={selectMode}
+              />
+            </div>
+          </div>
+        )}
+      </main>
+    </>
+  );
+}
+
+interface AppTabPanelProps {
+  readonly tab: ScreenId;
+  /** currentMasterLoad !== null が確かめられてから渡される(App 側の分岐)。 */
+  readonly currentMasterLoad: MasterLoadResult;
+  readonly resolvedEngine: CalcEngine;
+  readonly activeMasterSearch: MasterSpeciesSearch | undefined;
+  readonly balanceClient: BalanceClient;
+  readonly speedClient: SpeedClient;
+  readonly judgeClient: JudgeClient;
+  readonly mode: CalcMode;
+  readonly retryMasterLoad: () => void;
+  readonly selectMode: (mode: CalcMode) => void;
+}
+
+/**
+ * issue 218(ADR-0308 決定1・2・3): tabpanel の中身(訪れたタブの画面を並べて hidden で隠す)。
+ * 「一度でも選ばれたタブ」の集合(visitedTabs)は、App ではなくこのコンポーネント自身の state に持つ。
+ * これにより、呼び出し側(App)の `{currentMasterLoad !== null && <AppTabPanel .../>}` が
+ * false→true になるたび(= マスタの取得口が変わって一旦 currentMasterLoad が null になり、
+ * 新しいマスタが読み終わったとき。ADR-0304 §追記 A-6)、このコンポーネントごと作り直され、
+ * visitedTabs も自動的に選択中のタブだけへリセットされる(決定3)。「再試行」(取得口は変わらない)では
+ * currentMasterLoad が null を経由しないので、このコンポーネントは作り直されず visitedTabs も保たれる。
+ */
+function AppTabPanel({
+  tab,
+  currentMasterLoad,
+  resolvedEngine,
+  activeMasterSearch,
+  balanceClient,
+  speedClient,
+  judgeClient,
+  mode,
+  retryMasterLoad,
+  selectMode,
+}: AppTabPanelProps) {
+  const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<ScreenId>>(() => new Set([tab]));
+  // tab が変わるたび(クリック・キーボード・popstate)、訪れたタブの集合に足す。effect ではなく
+  // レンダー中に前回の tab との差分を見て setState する(React の「レンダー中の state 更新」パターン。
+  // react-hooks/set-state-in-effect を避けるため。https://react.dev/learn/you-might-not-need-an-effect)。
+  const [prevTab, setPrevTab] = useState(tab);
+  if (tab !== prevTab) {
+    setPrevTab(tab);
+    if (!visitedTabs.has(tab)) {
+      setVisitedTabs(new Set(visitedTabs).add(tab));
+    }
+  }
+
+  return (
+    <>
+      {TAB_ORDER.filter((id) => visitedTabs.has(id)).map((id) => {
+        const hidden = id !== tab;
+        if (currentMasterLoad.ok) {
+          // ok の間は、マスタを使わない画面(素早さ)も含めてこの対応表から引く(既存の
+          // ActiveScreen の描き方のまま。issue 308 のマスタ不要フォールバックは失敗中だけ使う)。
+          // isMasterlessScreen(id) の画面(素早さ)は失敗中の分岐と同じ key(id そのもの)にする
+          // (「再試行」が成功して ok に切り替わっても、同じ SpeedScreen を作り直さないため)。
+          const ScreenComponent = SCREEN_COMPONENTS[id];
+          return (
+            <div key={id} hidden={hidden}>
+              <ScreenComponent
                 engine={resolvedEngine}
                 master={currentMasterLoad.master}
                 client={balanceClient}
@@ -337,10 +440,83 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
                 masterSearch={activeMasterSearch}
               />
             </div>
+          );
+        }
+        if (isMasterlessScreen(id)) {
+          // issue 308: マスタを使わない画面(素早さ)は、失敗中でも master・engine を渡さずに
+          // 描画する(MASTERLESS_SCREEN_COMPONENTS は両方を持たない Props しか要求しない。
+          // ADR-0304 追記6)。key は ok 側の分岐と同じ id にする(上のコメントのとおり)。
+          const MasterlessScreenComponent = MASTERLESS_SCREEN_COMPONENTS[id];
+          return (
+            <div key={id} hidden={hidden}>
+              <MasterlessScreenComponent
+                client={balanceClient}
+                speedClient={speedClient}
+                judgeClient={judgeClient}
+                masterSearch={activeMasterSearch}
+              />
+            </div>
+          );
+        }
+        if (id !== tab) {
+          // マスタを使う画面のうち選択中でないものは、マスタが読めていない間は出せない
+          // (hidden でも実データが無い)。マスタが読めたら次の render で改めて mount する。
+          return null;
+        }
+        return (
+          <div key={`failure-${id}`}>
+            <MasterLoadFailureNotice
+              error={currentMasterLoad.error}
+              showSwitchToOffline={mode === "online"}
+              onRetry={retryMasterLoad}
+              onSwitchToOffline={() => {
+                selectMode("offline");
+              }}
+            />
           </div>
-        )}
-      </main>
+        );
+      })}
     </>
+  );
+}
+
+interface MasterLoadFailureNoticeProps {
+  readonly error: Error;
+  /** オンラインのときだけ「オフラインに切り替える」を出す(自動では切り替えない。ADR-0301 §4)。 */
+  readonly showSwitchToOffline: boolean;
+  readonly onRetry: () => void;
+  readonly onSwitchToOffline: () => void;
+}
+
+/**
+ * issue 308: マスタの読み込みに失敗したときの立て直し。原因(Error の message)を握りつぶさず、
+ * 「再試行」(同じ取得口を読み直す)と、オンラインのときだけ「オフラインに切り替える」を出す。
+ */
+function MasterLoadFailureNotice({
+  error,
+  showSwitchToOffline,
+  onRetry,
+  onSwitchToOffline,
+}: MasterLoadFailureNoticeProps) {
+  return (
+    <div role="alert" className="app-master-error">
+      <p>{appText.masterLoadError}</p>
+      {error.message !== "" && (
+        <p>
+          {appText.masterLoadErrorDetailLabel}: {error.message}
+        </p>
+      )}
+      <div className="app-master-error__actions">
+        <button type="button" className="app-master-error__button" onClick={onRetry}>
+          {appText.masterLoadRetryLabel}
+        </button>
+        {showSwitchToOffline && (
+          <button type="button" className="app-master-error__button" onClick={onSwitchToOffline}>
+            {appText.masterLoadSwitchToOfflineLabel}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 

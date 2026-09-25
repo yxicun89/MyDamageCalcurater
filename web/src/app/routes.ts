@@ -13,6 +13,12 @@ export interface ScreenRoute {
   readonly segment: string;
   /** タブの表示名(appText の語をそのまま使う)。 */
   readonly label: string;
+  /**
+   * issue 308(ADR-0304 追記6): この画面がマスタ(MasterData)を使うか。false の画面は、マスタの
+   * 読み込みに失敗していてもタブを選んで使える(app/screens.tsx の ScreenProps.master は使わない画面だけ
+   * 省略できる)。画面を追加するときは必ずどちらかを書く(省略できないので足し忘れは型エラーになる)。
+   */
+  readonly usesMaster: boolean;
 }
 
 /**
@@ -20,18 +26,29 @@ export interface ScreenRoute {
  * 画面を追加するときはここに1件足す(P4-12 のタイプバランスなど)。
  */
 export const SCREEN_ROUTES = [
-  { id: "calc", segment: "calc", label: appText.calcTabLabel },
-  { id: "reverse", segment: "reverse", label: appText.reverseTabLabel },
+  { id: "calc", segment: "calc", label: appText.calcTabLabel, usesMaster: true },
+  { id: "reverse", segment: "reverse", label: appText.reverseTabLabel, usesMaster: true },
   // P4-12a(ADR-0303 §2): タイプバランス。
-  { id: "balance", segment: "balance", label: appText.balanceTabLabel },
-  // SP3(ADR-0604 §2): 素早さ比較。
-  { id: "speed", segment: "speed", label: appText.speedTabLabel },
+  { id: "balance", segment: "balance", label: appText.balanceTabLabel, usesMaster: true },
+  // SP3(ADR-0604 §2): 素早さ比較。engine(WASM)・master(pokedex のマスタ)のどちらも使わない
+  // (ADR-0604 §5)。issue 308: マスタの読み込みに失敗していても、このタブだけは使える。
+  { id: "speed", segment: "speed", label: appText.speedTabLabel, usesMaster: false },
   // JD5(ADR-0705 §1): 判定(抜けて倒せるか・返り討ちに遭うか)。
-  { id: "judge", segment: "judge", label: appText.judgeTabLabel },
+  { id: "judge", segment: "judge", label: appText.judgeTabLabel, usesMaster: true },
 ] as const satisfies readonly ScreenRoute[];
 
 /** 画面 ID(SCREEN_ROUTES から導出する。手で union を書かない)。 */
 export type ScreenId = (typeof SCREEN_ROUTES)[number]["id"];
+
+/**
+ * issue 308(ADR-0304 追記6): マスタを使わない画面 ID だけの union(usesMaster: false の行から導出する。
+ * 手で union を書かない)。app/screens.tsx の `MASTERLESS_SCREEN_COMPONENTS` が `Record<MasterlessScreenId, ...>`
+ * なので、usesMaster: false の画面を足したのに対応するコンポーネントを登録し忘れると型エラーになる。
+ */
+export type MasterlessScreenId = Extract<
+  (typeof SCREEN_ROUTES)[number],
+  { readonly usesMaster: false }
+>["id"];
 
 /** 既定の画面(未知のパス・"/" のとき)。 */
 export const DEFAULT_SCREEN: ScreenId = "calc";
@@ -67,6 +84,19 @@ export function screenFromPath(pathname: string, base: string): ScreenId | null 
 /** 画面のタブの表示名。 */
 export function screenLabel(id: ScreenId): string {
   return findRoute(id).label;
+}
+
+/** issue 308: この画面がマスタ(MasterData)を使うか。 */
+export function screenUsesMaster(id: ScreenId): boolean {
+  return findRoute(id).usesMaster;
+}
+
+/**
+ * issue 308: id がマスタを使わない画面か(型ガード)。App.tsx はこれで `tab: ScreenId` を
+ * `MasterlessScreenId` に絞り込み、`MASTERLESS_SCREEN_COMPONENTS[tab]` を型キャスト無しで引く。
+ */
+export function isMasterlessScreen(id: ScreenId): id is MasterlessScreenId {
+  return !screenUsesMaster(id);
 }
 
 /** 画面 ID から、base(末尾 "/")付きのパスを作る。screenFromPath の逆。 */

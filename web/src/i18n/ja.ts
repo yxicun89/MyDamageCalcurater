@@ -139,6 +139,15 @@ export const appText = {
   title: "ポケモン ダメージ計算",
   loading: "読み込み中…",
   masterLoadError: "マスタデータの読み込みに失敗しました",
+  /**
+   * issue 308: マスタが読めないときの次の一手。自動でオフラインへ切り替えることはしない
+   * (ADR-0301 §4 の既定方針)ので、画面から操作できるようにする。
+   * 原因は握りつぶさず、受け取った Error の message をこの見出しに続けてそのまま出す
+   * (fetch の失敗・HTTP エラーなど。凝った分類はしない)。
+   */
+  masterLoadErrorDetailLabel: "原因",
+  masterLoadRetryLabel: "再試行",
+  masterLoadSwitchToOfflineLabel: "オフラインに切り替える",
   /** 計算・逆算の切り替えタブ(P4-4、ADR-0300 §7)。 */
   tabsLabel: "画面の切り替え",
   /** サイト名(index.html の <title> と同じ。文書タイトルの接尾辞)。 */
@@ -538,6 +547,18 @@ export const reverseResultText = {
   /** 「関連ステータス上昇」の接尾辞(「B上昇」「C上昇」)。 */
   natureClassPlusSuffix: "上昇",
   closeCandidateLabel: "近い候補",
+  /**
+   * 観測を厳密に説明できる候補(exact)が1件も無いとき(exactCount 0 かつ候補が1件以上)に、
+   * 結果の先頭へ出す案内(issue 305)。候補一覧自体は消さずに残す(要件「候補の提示を優先」)。
+   */
+  noExactCandidateNotice: "入力した観測を説明できる調整がありません(技・持ち物・入力値を確認)",
+  /**
+   * 全候補が観測と一致しないとき、各候補の SP 範囲に添える印(issue 305)。
+   * 見た目だけでなくテキストとして出し、支援技術にも「参考値」であることが伝わるようにする。
+   */
+  referenceRangeLabel: "参考",
+  /** %欄の意味(その候補で撃ったときの予測ダメージ%)を示すラベル(issue 305)。 */
+  predictedPercentLabel: "予測",
   /** 防御側の結果に添える、H の仮定の注記(ADR-0010 §R1: 防御側は H32 前提)。 */
   assumedHpNote: (assumedHpSp: number): string => `H${String(assumedHpSp)} を仮定した結果です`,
   /** 目安の名前(ADR-0010 §R3)の部品。範囲が SP 0 / 32 を含むとき、性格クラスと組んで併記する。 */

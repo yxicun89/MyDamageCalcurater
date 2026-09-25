@@ -352,6 +352,125 @@
   脆さを持つ(今回は宣言順の入れ替え〈値は不変〉で対応。critic が宣言順を戻すと実際に失敗することを
   確認済み)。次にトークンを足すときに同じ値の衝突が再発しうるので、触るときは
   `inputTokens.test.ts` の逆引きを変数名ベースに直すことを検討する。
+- [x] issue #308(重大度 medium。オンラインでマスタの読み込みに失敗すると、タブ一覧ごと消えて
+  `<p role="alert">` 1行だけになり、再試行も切り替えの案内も無い。計算モードは localStorage に残るので
+  リロードしても同じ失敗画面から抜けられない)。**完了(2026-09-25。Web レーン。ブランチ
+  `fix/web-master-load-retry-308`)**: 受け入れ条件と失敗するテストを先に用意
+  (`web/src/App.masterSources.test.tsx` に8件〈既存の失敗時テスト1件を拡張 + 新規7件〉、
+  文言は `web/src/i18n/ja.ts` の `appText` に `masterLoadErrorDetailLabel`・`masterLoadRetryLabel`・
+  `masterLoadSwitchToOfflineLabel` を追加)。方針は自動フォールバックを入れず(ADR-0301 §4)、
+  失敗の案内に原因(受け取った `Error` の message)と「再試行」「オフラインに切り替える」を出し、
+  タブ一覧は失敗中も残して、マスタを使わない「素早さ」画面(ADR-0604 §5)を選べるようにする。
+  実装(ADR-0304 追記6): `web/src/App.tsx` に `retryToken` state(「再試行」で同じ取得口を読み直す
+  トリガー)と `MasterLoadFailureNotice`(原因・再試行・オンラインのときだけ「オフラインに切り替える」)を追加。
+  `app/routes.ts` の `SCREEN_ROUTES` に `usesMaster: boolean` を足し(`screenUsesMaster`・
+  `isMasterlessScreen` を追加)、マスタを使わない画面(素早さ)だけ `app/screens.tsx` の
+  `MASTERLESS_SCREEN_COMPONENTS`(`ScreenProps` から `master` を除いた `MasterlessScreenProps`)経由で
+  失敗中も描画する(`ScreenProps.master` 自体・計算/逆算/タイプバランス/判定の4画面の Props は無変更)。
+  `npx vitest run`(1605/1605)・`npm run typecheck`・`npm run lint`(eslint + prettier)は無回帰。
+  **critic PASS(mutation testing 7件で全て検知)**。指摘のうち次の3件はそのままマージ前に直接反映した:
+  `MasterlessScreenProps` から `engine` も除く(`Omit<ScreenProps, "master" | "engine">`。マスタ失敗中に
+  offline のプレースホルダ engine を静かに渡すと、オンライン選択中なのに実は WASM で計算する形になり
+  ADR-0301 §4 の自動フォールバック禁止に抵触しかねないため)/ JSX 内 IIFE を `MasterlessActiveScreen` の
+  事前算出に書き換え / `error.message` が空文字のときは原因の行ごと出さない。
+  **申し送り(次回以降の改善候補。今回は見送り)**: (1) 「再試行」を押しても応答が届くまで画面が変わらず
+  連打で多重リクエストになりうる(pending state を追加して「読み込み中…」に戻す設計が要る)。
+  (2) 「素早さ」タブを選んでいる間は失敗の通知・再試行ボタンがどこにも出ない(他のタブに移れば出るので
+  受け入れ条件は満たすが、タブパネルの外に出す方が issue の意図に近い)。
+- [x] issue #305(重大度 medium。逆算で観測を厳密に説明できる候補(`exact`)が1件も無くても、その旨の案内が
+  無く、候補ごとの「近い候補」ラベルと SP 範囲だけが並ぶ。%欄が「その候補で撃ったときの予測ダメージ%」で
+  あることの説明も無い)。**完了(2026-09-25。Web レーン。ブランチ `fix/web-reverse-no-exact-candidates-305`)**:
+  受け入れ条件と失敗するテストを先に用意(`web/src/screens/ReverseScreen.test.tsx` の
+  `describe("結果の表示")` に6件追加〈新規の案内・「参考」の印・「予測」のラベルの3件が red、
+  候補一覧を消さないこと・正常系・候補0件の3件は現状の挙動の回帰ガードとして green〉。文言は
+  `web/src/i18n/ja.ts` の `reverseResultText` に `noExactCandidateNotice`・`referenceRangeLabel`・
+  `predictedPercentLabel` を追加)。方針は engine の一致判定に触れず(ADR-0300 §8「Web は返ってきた値を
+  加工せずに表示する」)、`ReverseResult.exactCount` をそのまま見て表示だけを変える。候補一覧は消さずに
+  残す(要件「候補の提示を優先」)。実装: `ReverseScreen.tsx` の `ReverseResultsList` に
+  `exactCount === 0 && candidates.length > 0` のときだけ role=status の案内・SP 範囲への「参考」の印を出し、
+  %欄には常に「予測」のラベルを値と別要素で添える(`"40.2〜47.8%"` の完全一致は維持)。
+  `ReverseScreen.css` に見た目を追加(tokens.css の変数のみ使用。常時アニメーションなし)。
+  `web/src/i18n/ja.ts` と `ReverseScreen.tsx` のコメント中の `issue #305` は
+  `web/src/styles/noColorLiterals.test.ts` の16進色リテラル検出(`#` + 3桁hex)に誤検出されるため
+  `issue 305`(# なし)表記に修正(他の issue コメントと同じ慣習)。
+  `npx vitest run ReverseScreen` 94件・`npm test` 1611件・`npm run typecheck`・`npm run lint`
+  (eslint + prettier)いずれも green。
+- [x] issue #248(重大度 low。計算画面のオンライン計算(`/api/calc/bulk`)に `AbortSignal` を渡しておらず、
+  入力を連続して変えても古い要求が中断されずサーバーに無駄な計算をさせる。gateway の取り消し伝播は
+  issue #113 で実装済みだが、計算画面〈`CalcScreen.tsx`〉は当時 `cancelled` フラグで結果を無視するだけで、
+  逆算画面〈`ReverseScreen.tsx`〉と違って `AbortController` を渡していなかった)。
+  **完了(2026-09-25。Web レーン。メインセッションで直接実装、軽微な作業のため spec-writer/implementer は
+  介さず。CLAUDE.md「軽微な作業はメインのみでよい」)**: `ReverseScreen.tsx` と全く同じ形
+  (effectごとに `AbortController` を作り、`engine.calcBulk(request, controller.signal)` へ渡し、
+  cleanupで `controller.abort()`)を `CalcScreen.tsx` に追加。`web/src/test/fakeEngine.ts` の
+  `PendingBulk`(`createDeferredEngine` が返す)に `signal` フィールドを追加(`PendingReverse` と同じ形。
+  `calcBulk` に渡された signal を記録)。回帰テストは `CalcScreen.test.tsx` の
+  `describe("結果の表示(engine の値を加工せずに出す)")` に1件追加(「入力を変えると、前の calcBulk 要求を
+  abort する」。実装前は red であることを一時的に `CalcScreen.tsx` の変更だけ `git stash` で戻して確認済み)。
+  `npx vitest run CalcScreen.test` 33件・`npm test` 1612件・`npm run typecheck`・`npm run lint`
+  (eslint + prettier)いずれも green。**critic PASS**(sonnetで実施。opusのセッション利用枠が一時的に
+  上限に達したため、CLAUDE.mdのモデル割り当て方針〈engine・逆算・DB・API契約に関わるときだけOpus〉に従い
+  sonnetへ切り替え。mutation testing 2件で全て検知、WASM側の無回帰も`wasmEngine.test`29件で確認済み)。
+- [x] issue #218(重大度 medium。`web/src/App.tsx` がタブごとに `SCREEN_COMPONENTS[tab]` で別のコンポーネント型を
+  描くため、タブを切り替えるたびに前の画面が unmount され、選んだ種族・技・持ち物・プリセット・観測が消える。
+  ブラウザの戻る/進むでも同じ。requirements.md §2「入力の手間を最小にする」に反する)。
+  **完了(2026-09-25。Web レーン。ブランチ `fix/web-tab-state-persistence-218`)**:
+  受け入れ条件と失敗するテストを先に用意した(spec-writer)。設計判断は **ADR-0308**(新規)にまとめた:
+  (1) 5画面を全部 mount する issue の既定案は採らず、**一度でも選ばれたタブの画面だけを mount して以後
+  unmount しない**(`SpeedScreen` はマウント時に speed API を2本呼ぶ〈ADR-0604 §2〉ので、未訪問の画面の
+  通信を起こさない)。(2) 非選択の画面は**ネイティブの `hidden` 属性**で隠し、`role="tabpanel"` は1つのまま
+  (既存の `queryByRole(...).toBeNull()`・`aria-controls` のアサーションを書き換えずに済む。絶対ルール6)。
+  (3) 計算モードの切り替えでマスタが入れ替わったら、マスタを使う画面は**作り直す**(古いマスタで計算した
+  結果が残るのを避ける。ADR-0304 §追記 A-6・issue #308 の既存テストの線を動かさない)。issue の異常系の
+  「他の入力は保持する」は採らず、「マスタに無い種族が選ばれたまま残らない」として満たす。
+  (4) 保持はセッション内だけ(リロードで初期状態。入力をストレージに書かない)。
+  テスト: `web/src/App.tabPersistence.test.tsx`(新規11件。往復・戻る/進む・hidden の隠し方・
+  未訪問の画面の通信なし・マスタ入れ替えでの初期化・リロードでの初期化)、`web/src/App.test.tsx` に往復1件、
+  `web/e2e/routing.spec.ts` に2件(非選択の画面が DOM に残ること・実ブラウザの戻る/進む)。
+  **実装(implementer)**: `web/src/App.tsx` のレンダー部だけを変更(各画面・`app/screens.tsx`・
+  `app/routes.ts` は無変更)。App が新たに持つ state は `visitedTabs`(選ばれたタブの集合)1つだけ
+  (ADR-0308 §影響のとおり)。タブの選択(クリック・キーボード・popstate)はすべて共通の `selectTab` を
+  通し、`setTab` と同時に `visitedTabs` へ足す。`role="tabpanel"` の中で `visitedTabs` に含まれる
+  各タブを1つずつ `<div hidden={...}>` に包んで並べ、選択中でないものだけ `hidden` を付ける(決定2)。
+  決定3(マスタが入れ替わったら作り直す)は、`visitedTabs` 自体をリセットするのではなく、マスタを使う
+  各画面の React `key` に `masterEpoch`(モードごとに別マスタを持つときだけ `mode` の値、単一マスタなら
+  常に `"single"`)を含めて、マスタが実際に入れ替わったときだけ React に作り直させる形にした。
+  `npx vitest run App` 113件・`npm test` 1624件・`npm run typecheck`・`npm run lint`(eslint + prettier)
+  いずれも green(実装前の7 red が0件になり、既存の1617件は無回帰)。`make web-e2e`
+  (`web/e2e/routing.spec.ts` の新規2件を含む)は37件すべて green(a11y.spec.ts も無回帰)。
+  本体コードのコメントに issue 番号を書くときは `#` を付けない(`web/src/styles/noColorLiterals.test.ts` の
+  16進色リテラル検出が `#218` を拾うため。issue #305 と同じ)。
+  **critic FAIL(2点)**: (a) `masterEpoch` はデッドコードだった。固定値にしても全1624件 green(検知
+  できない)。理由: モード切替で取得口(`activeMasterSource`)が変わると `currentMasterLoad` が一旦
+  `null` になり(ADR-0304 §追記 A-6)、`{currentMasterLoad !== null && (...)}` で `.app-tabs`
+  サブツリーごと unmount される(ADR-0304 §追記 A-6 の既存挙動)ため、epoch を key に混ぜなくても
+  取得口が変わる経路では必ずサブツリーが作り直される。(b) `visitedTabs` は App 直下の state のままで、
+  サブツリーの unmount/mount を生き延びるため、マスタ再読み込みのたびに「訪問済みの非選択タブ」が
+  hidden のまま一斉に再マウントされ、SpeedScreen のマウント時 speed API 呼び出しが再度走っていた
+  (critic 実測: 2件→4件)。
+  **critic FAIL への対応(2026-09-25。Web レーン。同ブランチで直接修正)**: `masterEpoch` を削除し、
+  マスタを使う画面・マスタ不要画面(`isMasterlessScreen`)とも `key={id}` に統一(軽微指摘1: 失敗中→
+  成功への「再試行」で SpeedScreen が不要に作り直されるのも解消)。`visitedTabs` の置き場を App 直下から
+  `AppTabPanel`(`.app-tabs` サブツリーの中、`{currentMasterLoad !== null && <AppTabPanel .../>}` の
+  内側に置いた新規の子コンポーネント)へ移した。これにより、取得口が変わって `currentMasterLoad` が
+  `null` を経由するたびに `AppTabPanel` ごと作り直され、`visitedTabs` も選択中のタブだけへ自動的に
+  リセットされる(取得口が変わらない「再試行」では `null` を経由しないので保たれる)。`tab` prop の
+  変化を `visitedTabs` へ反映する処理は、`useEffect` 内の `setState` だと
+  `react-hooks/set-state-in-effect` に触れるため、React の「レンダー中の state 更新」パターン
+  (前回の `tab` を `useState` で覚え、レンダー中に差分を見て `setVisitedTabs` する)で実装した。
+  ADR-0308 決定3に実現手段の説明を追記、状態を「提案」→「採用」に更新。
+  回帰テスト: `web/src/App.tabPersistence.test.tsx` の「計算モードを切り替えてマスタが入れ替わると…」
+  テストに、切替前に攻撃側・防御側の両方を選んで実際に計算結果を出すステップを追加(従来は結果を
+  一度も出さないまま `queryByRole("list", { name: "計算結果" })` が `null` であることを確かめる
+  空振りのアサーションだった)。「素早さタブを訪問後にマスタが入れ替わっても、speed API を呼び直さない」
+  を新規追加(criticのプローブと同型: 素早さタブを訪問→計算タブへ戻る→モード切替で `speedCallCount`
+  が増えないことを確認)。`web/src/App.tabPersistence.test.tsx` は11件→12件。
+  mutation testing 3種(`masterEpoch` 相当の判定〈`AppTabPanel` の再作成条件〉を固定する・`hidden`
+  条件を `false` 固定にする・`visitedTabs` によるフィルタを撤去する)を当て、追加した回帰テストが
+  それぞれ落ちることを確認してから元に戻した。
+  `origin/main` をマージ後、`npx vitest run` 1625件(1624 + 新規1件)・`npm run typecheck`・
+  `npm run lint`(eslint + prettier)いずれも green。
+  **Next(critic)**: レビュー待ち。
 
 ## M2: 保存・構築
 
@@ -556,6 +675,38 @@
   (3) 既定サイズで %・確定数の文字が縮んでいないことを確かめる検査(critic の任意の指摘)
   完了: アクセシビリティ域でプリセットのピルを縦積みに。「詳細」を開いた AX5 検査と、既定サイズの % が縮まない検査を追加
   (縮小の変異で red になることを確認)。make ios-test unit 449/449・XCUITest 37/37。critic PASS
+- [x] P6-16 issue #250: `AppConfiguration` が http/https の URL を受理するが、`ios/PokeCalc-Info.plist` に
+  `NSAppTransportSecurity` が無く ATS が非 TLS 通信を実行時に拒否するため、受理条件と実行時の挙動が食い違っていた。
+  判断(issue の案A・案Bの間。2026-09-25 → 同日 critic 指摘で訂正): `https` は任意のホストで受理。`http` は
+  `NSAllowsLocalNetworking`(`ios/PokeCalc-Info.plist` に追加。`NSAllowsArbitraryLoads` は使わない)が
+  実際に通す範囲(Apple ドキュメント: 非修飾ホスト名・`.local` ドメインの2つ。**IP アドレスは含めない**
+  〈訂正理由は下記〉)だけ受理し、それ以外の http(IP アドレス・通常の公開ドメイン)は
+  `AppConfigurationError` にする。受け入れ条件・追加したテスト・実装者への注意は ADR-0501「issue #250」。
+  spec-writer(2026-09-25): 受け入れ条件・失敗するテストのみ追加、実装はまだ
+  (`AppConfigurationATSTests.swift` 新設。`swift test`: 447件中3件失敗〈拒否すべき3件。想定どおり〉。
+  `ios/scripts/check-infoplist.sh` に ATS キーの検査を追加〈plist にキーが無い現状では失敗する想定〉)。
+  implementer(2026-09-25): `AppConfiguration.swift` に ATS 判定(`isAllowedByNSAllowsLocalNetworking`・
+  `isIPAddress`、`Network` の `IPv4Address`/`IPv6Address` を使用)を追加し、`ios/PokeCalc-Info.plist` に
+  `NSAppTransportSecurity.NSAllowsLocalNetworking = true` を追加(`NSAllowsArbitraryLoads` は追加せず)。
+  `swift test`: `PokeCalcCoreTests` 447/447 成功(`AppConfigurationATSTests` 含む)。
+  `make ios-test`: 成功(exit 0。`ios-test-unit`・`ios-test-ui` 全 37/37・`ios-check-infoplist` とも成功。
+  `NSAllowsLocalNetworking = true`・`NSAllowsArbitraryLoads` 無しを確認)。ADR-0501「issue #250」に
+  「### 6. 実装結果」を追記。
+  **critic(メインセッション、2026-09-25)FAIL → 訂正**: Apple のドキュメントの「iOS 17+ は既定で IP
+  アドレスへの接続を許可しない(`NSExceptionDomains` が必要)」という記述と、実装の「IP アドレスは
+  `NSAllowsLocalNetworking` で受理する」が矛盾していた。critic がシミュレータで実験したが、
+  `NSAppTransportSecurity` キー無しの対照群でも `localhost`/`127.0.0.1`/LAN の IPv4 に到達できてしまい、
+  シミュレータでは ATS の効き自体を確認できず「IP アドレスは通る」ことの裏付けにはならなかった。
+  よって保守的な方針に訂正: **IP アドレス(IPv4/IPv6。ループバック含む)は http では拒否する**
+  (`AppConfigurationError`。非修飾ホスト名・`.local` は従来どおり受理)。
+  `AppConfiguration.swift` の `isAllowedByNSAllowsLocalNetworking` の IP アドレス分岐を受理→拒否に反転し、
+  `AppConfigurationATSTests.swift`(このタスクの受け入れ条件。変更可)の IP 系3テストを
+  `…IsAccepted` → `…IsRejected` に改名(`reason` の文言検査つき)、末尾ドットホスト
+  (`localhost.`)を拒否する回帰テストを追加。`AppConfigurationTests.swift`(既存・変更禁止)には
+  http の IP アドレスケースが無いことを確認済みで、この訂正でも壊れない。
+  検証(訂正後): `swift test` 448/448 成功。`make ios-test` 成功(exit 0。unit/UI/infoplist 全て green)。
+  ADR-0501「issue #250」に §0.5(訂正の経緯・実験内容)と §7(訂正後の実装結果)を追記、
+  §1〜3 を訂正後の内容に更新。実機での ATS 挙動の確認は人間向けタスクとして残す(§3 の7)。
 - [x] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼された
   内容どおり `ColorToken.danger` のライト値を `0xE5,0x48,0x4D` → `0xCD,0x1D,0x23` に更新し、
   `DesignTokenTests.swift` の旧値も書き換えた。`ios/PokeCalcKit/Tests/PokeCalcDesignTests/ColorContrast.swift`
@@ -718,6 +869,69 @@
       ダブルの全体技/壁減衰(issue #288)を明記。`docs/README.md` の目次は既に judge-design.md を指しており
       変更不要。`type-balance-design.md` はタイプバランスレーンの持ち物のため対象外(DECISIONS.mdへ)。
       `bash scripts/check-publishable.sh`(0件)成功を確認。軽微な作業のためメインで対応
+- [x] 判定の応答に calc-svc の「未対応」の印を中継する(issue #271 / #270 の判定レーン分。ADR-0123 §6 の
+      「印を見せる画面・利用者は各レーンの作業」)。judge は `attackerKo` / `defenderKo` を calc-svc から
+      転記するだけなので、多段技・固定ダメージ技・表せない持ち物/特性を選んだときに **誤った確定数が
+      正しい顔で画面に出る**
+  - 設計の正は ADR-0708: `Matchup` に `attackerKoUnsupported` / `defenderKoUnsupported`(必須・印なしは `[]`)を
+    足す(§1)/ **順方向と逆方向の印は絶対にまとめない**(どちらの確定数が疑わしいか画面が区別できるように。§4)/
+    印は `target` / `reason` / `id` をそのまま・同じ並びで中継し、judge は解釈・丸め・`reason` の検査をしない(§4)/
+    `target` の attacker/defender は**その計算から見た**役割(逆方向では入れ替わる。§5)/ judge の契約に
+    `UnsupportedMark` を**複製**する(ルートを `$ref` しない。ADR-0706 §2 の前例。§6)/ calc-svc の応答に
+    `unsupported` が無ければ `ErrUpstreamInvalidResponse` → 503(ADR-0704 §9 の priority と同じ立場。§7)/
+    `internal/judge` は変えない(§8)
+  - 契約は先に更新した(spec-writer): `services/judge/api/openapi.yaml` に `UnsupportedMark`(ルートと同じ
+    target / reason / id・同じ enum)を新設し、`Matchup` の `properties` と `required` に 2 欄を追加。
+    **`make judge-gen` は implementer が実行する**(ADR-0706 と同じ分担)。`web/src/judge/judge.gen.ts` の
+    手動再生成も implementer(ADR-0706 受け入れ条件7・critic 1 回目の NG を再発させない)
+  - 失敗するテストを先に置いた(spec-writer): `internal/httpapi` に
+    `TestOutspeedAndKoTranscribesUnsupportedMarks`(方向ごとに件数も中身も違う印・印なしは `null` でなく `[]`・
+    知らない `reason` も中継)・`TestOutspeedAndKoUnsupportedMarksPerCandidate`(候補 index 1 だけに印)、
+    `TestOutspeedAndKoUpstreamFailures` に `unsupported` 欠落・要素の `reason` 欠落の 2 行、
+    `internal/client` に `TestDamageDecodesUnsupportedMarks`・`TestDamageAcceptsUnknownUnsupportedReason`・
+    `TestDamageRejectsInvalidBody` の 4 行。共有スタブ(`calcBody`・`calcKO` の本文・`validCalcBody`)に
+    `"unsupported":[]` を足した(既存テストの期待値は変えていない)。現行コードでは `internal/httpapi` の
+    3 つの Test が失敗し、`internal/client` は `undefined: UnsupportedMark` でビルドできない状態
+    (それ以外の既存テストは全件通ることを確認済み)
+  - implementer への申し送り: `make judge-gen` 後に `api.Matchup` が配列欄を持つので `==` で比較できなくなる。
+    `outspeed_test.go` の 4 か所の `api.Matchup` リテラル(`TestOutspeedAndKo`・
+    `TestOutspeedAndKoSpeedFieldOmittedMatchesJD1`・`TestOutspeedAndKoMultipleDefenders`・
+    `TestOutspeedAndKoSpeedFieldAppliesToEveryCandidate`)の want に**空配列 2 欄を書き足す**
+    (nil スライスと `[]api.UnsupportedMark{}` は `reflect.DeepEqual` では別物。該当箇所にコメントを残した)
+  - 実装(implementer): `make judge-gen` を実行(`services/judge/internal/api/openapi.gen.go` のみ変更。
+    `Id`(`ID` ではない)・`UnsupportedMarkTarget`/`UnsupportedMarkReason` の文字列型を確認)。
+    `internal/client/calc.go` に `UnsupportedMark{Target, Reason, ID string}`・`CalcResult.Unsupported`
+    を追加し、`calcResultWire.Unsupported *[]unsupportedMarkWire`(nil = 欄が無い → `ErrUpstreamInvalidResponse`。
+    要素の `target`/`reason`/`id` のいずれかが nil でも同じ)を `toUnsupportedMarks` で変換、印なしは
+    `make([]UnsupportedMark, 0, ...)` で空スライス(nil にしない)にした。`internal/httpapi/outspeed.go` に
+    `toAPIUnsupportedMarks(marks []client.UnsupportedMark) []api.UnsupportedMark` を追加し、`Matchup` 組み立てで
+    `forward.Unsupported` → `AttackerKoUnsupported`・`reverse.Unsupported` → `DefenderKoUnsupported`
+    に方向ごとに独立してマップ(共有スライスの使い回しはしない)。spec-writer が申し送った 4 か所の
+    `api.Matchup`/`[]api.Matchup` リテラルに空配列 2 欄(`[]api.UnsupportedMark{}`)を追加。`internal/judge`
+    は変更していない。確認: `GOWORK=off go test ./... -count=1`(全パッケージ成功。新規テスト
+    `TestOutspeedAndKoTranscribesUnsupportedMarks` 全5件・`TestOutspeedAndKoUnsupportedMarksPerCandidate`・
+    `TestOutspeedAndKoUpstreamFailures` の新規2件・`TestDamageDecodesUnsupportedMarks`・
+    `TestDamageAcceptsUnknownUnsupportedReason`・`TestDamageRejectsInvalidBody` の新規4件を含め全件成功)、
+    `gofmt -l services/judge`(空)、`go vet ./...`、`make judge-lint`・`make judge-build`、
+    `bash scripts/check-publishable.sh`(0件)、いずれも成功。`git status --short` で
+    `services/judge/internal/api/openapi.gen.go` 以外の生成物の変化が無いことを確認。
+    `web/` で `npx openapi-typescript ../services/judge/api/openapi.yaml -o src/judge/judge.gen.ts &&
+    npx prettier --write src/judge/judge.gen.ts` を実行し、手書きのヘッダ(1〜6行目)を復元した上で
+    `npm run lint`・`npm test`(65ファイル1612件)成功、`git diff web/src/judge/judge.gen.ts` が
+    `UnsupportedMark` 型と `Matchup` の新 2 欄の追加のみであることを確認。critic レビュー待ち
+  - critic 1回目 NG(ブロッカー1件): `Matchup` に必須欄2つ足したため `web/src/judge/JudgeScreen.test.tsx`・
+    `judgeClient.test.ts` の既存の架空応答リテラルが型として不完全になり、`npm run typecheck`
+    (= ルートの `make lint` が含む)が失敗していた(`npm run lint`〈eslint+prettier〉・`npm test`
+    〈vitest。型検査しない〉では検出できず見落とした)。方向の不変条件(順方向/逆方向を混ぜない)・
+    never-null契約・byte-for-byte中継・上流の壊れた応答→503・スコープ・契約/生成物の整合はすべて
+    critic 自身が変異テスト6種で実際に検証し問題なし(CLAUDE.md絶対ルール違反・テスト弱体化なし)。
+    修正: 両ファイルの `Matchup` リテラルに `attackerKoUnsupported: []`・`defenderKoUnsupported: []` を
+    追加(既存アサーションは変更なし)。ADR-0708 受け入れ条件7にこの手順を明記して再発防止。
+    `cd web && npm run typecheck`・`npm run lint`・`npm test`(65ファイル1612件)、ルート `make lint`
+    (typecheck・eslint・prettier・k8s-render・check-publishable・自己テストすべて含む)成功を確認。
+    critic が「この件はもう一巡回す必要はない」と明示したため round 2 の critic 再レビューは省略し、
+    ADR-0708 の状態を「提案」→「採用」に更新(critic の明示的な判断: ADR-0706/0707 は実装と同時に
+    「採用」でコミットされているのがこのレーンの慣行)
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
 各レーンが自分の範囲の README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)と、動かして確かめられるレーンは手順書(`docs/runbooks/<レーン>.md`。AGENTS.md「手順書の書き方」に従う)を書く。全体図は `docs/architecture.md`。

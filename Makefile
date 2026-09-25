@@ -262,6 +262,10 @@ import-k8s: ## k3d 上の CronJob pokedex-import を手動で1回流す(週1回�
 	fi; \
 	kubectl -n pokecalc create job --from=cronjob/pokedex-import "pokedex-import-manual-$$(date +%Y%m%d%H%M%S)"
 
+.PHONY: pokedex-registry-push
+pokedex-registry-push: ## pokedex(server イメージ)をクラスタ内共有レジストリ balance-registry へ digest 固定で push する(タイプバランスレーン issue #237 の依頼。ADR-0018・ADR-0605 と同じ方式)
+	@./scripts/pokedex-registry-push.sh
+
 .PHONY: k8s-render
 k8s-render: ## kustomize で local / cloud / tidb overlay が描画できることを確かめる(apply はしない)
 	@kubectl kustomize deploy/k8s/overlays/local >/dev/null

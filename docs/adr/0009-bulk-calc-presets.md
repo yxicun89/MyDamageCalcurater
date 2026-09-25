@@ -99,6 +99,7 @@ SP 範囲(`Ranges`)になった(ADR-0010 §R3)。したがって上表の「ADR-
 
 - `Species` = 指定された防御側種族、`Level` = 50(`DefaultLevel`)、`Status` = `none`、`Ranks` = すべて 0
 - `Ability` = ゼロ値(特性なし。特性込みの比較は M2 以降の拡張)
+  → 2026-09-25 追記: `BulkInput.DefenderAbilities` で特性の候補を渡せる。結果が同じ特性は1行にまとめる(ADR-0126)
 - `Item` = 後述の持ち物バリアント(無しは nil)
 
 ### 1-a. `Label`(表示名)の扱い(2026-09-21 ユーザー決定)

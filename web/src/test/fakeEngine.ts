@@ -186,19 +186,22 @@ export function createFakeEngine(
 
 export interface PendingBulk {
   readonly request: BulkRequest;
+  /** 画面が渡した取り消しの signal(issue 248。渡されなければ undefined)。 */
+  readonly signal: AbortSignal | undefined;
   resolve(result: EngineResult<BulkResult>): void;
 }
 
-/** 応答をテストが好きな順に返せる fake(古い応答が新しい表示を上書きしないことの確認用)。 */
+/** 応答をテストが好きな順に返せる fake(古い応答が新しい表示を上書きしないこと・signal の確認用)。 */
 export function createDeferredEngine(): { engine: FakeEngine; pending: PendingBulk[] } {
   const pending: PendingBulk[] = [];
   const base = createFakeEngine();
   const engine: FakeEngine = {
     ...base,
-    calcBulk(request) {
+    calcBulk(request, signal) {
       base.bulkRequests.push(request);
+      base.bulkSignals.push(signal);
       return new Promise((resolve) => {
-        pending.push({ request, resolve });
+        pending.push({ request, signal, resolve });
       });
     },
   };
