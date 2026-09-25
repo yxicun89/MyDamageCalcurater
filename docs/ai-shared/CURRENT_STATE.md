@@ -145,12 +145,26 @@ JSONを一時的に書き換えるmutationで実際に検知することを確�
 **2026-09-25、オーケストレーター(damage calculation bug resolution)から13件のissue消化を依頼された**
 (open 113件中、優先度順): (1) bug: #333(完了・main統合済み。PR #356)・#306(タイプ名コントラスト・
 ダメージバー読み上げ名。完了・main統合済み。PR #362)・#275(逆算「受けたダメージ」で自分の耐久が無振り固定。
-high severity。完了・critic PASS・**PR #366オープン中**、オーケストレーターのマージ待ち)。
-(2) ready-for-implementation: #304・#308・#305・#248・#218・#219(APIレーン連携)・#211(APIレーン連携)・
-#332(devDependencies更新)・#226(README等の実装状況)は未着手。(3) needs-decisionだが「要望済み機能は
-実装しきる」方針で既定案付きで実装: #272(特性選択)・#274(急所・やけど・天候・フィールド・ランク・壁・
-特性の指定。iOSへも連絡済み)・#210(オフライン実データ)は未着手。P5-5はAPIレーンの契約が出たら最優先。
-Next: (1) PR #366のマージ待ち→#71のWeb側(完了・main統合済み。PR #352)。(2) 続けて(2)(3)の残りへ着手。
+high severity。完了・main統合済み。PR #366)。
+(2) ready-for-implementation: #304(完了・main統合済み。PR #375)・#308・#305・#248・#218・
+#219(APIレーン連携)・#211(APIレーン連携)・#332(devDependencies更新)・#226(README等の実装状況)は
+#304以外未着手。(3) needs-decisionだが「要望済み機能は実装しきる」方針で既定案付きで実装: #272(特性選択)・
+#274(急所・やけど・天候・フィールド・ランク・壁・特性の指定。iOSへも連絡済み)・#210(オフライン実データ)は
+未着手。P5-5はAPIレーンの契約が出たら最優先。
+**#71のWeb側(攻撃側プリセット単一化)完了・main統合済み(PR #352)**。
+**`make e2e`のweb-e2e-onlineがmainで壊れていた件(廃止済みCALC_TYPECHART_PATHをcalc-svcが拒否)を発見・
+2PRに分けて修理・両方main統合済み**: PR1(#382、MasterExport追従。ADR-0204/ADR-0301§5追記)で
+`web/src/master/exportSnapshot.ts`をMasterExportの形に全面書き換え(types/typeChart本体化、
+species/moves/items/abilitiesの明示フィールド化、効果のPascalCase変換)、例データのID(move/item/ability)から
+ハイフンを除去(codeIDPattern対応)。PR2(#385、pokedexフィクスチャ。ADR-0307)でpokedex-svc(MySQL必須)の
+代わりにWeb例データから公開API応答を返す軽量フィクスチャ(`e2e/support/pokedexFixture.ts`+
+`pokedexFixtureServer.mjs`)を追加し、`/api/pokedex`を`vite.config.ts`でそちらへ転送。
+両PRとも`npm run e2e:online`実弾実行(3/3 pass)まで確認済み。critic指摘(playwright.container.config.tsの
+testMatch漏れ、POKEDEX_PROXY_TARGETのvite proxyルーティングが無検査だった点等)は全て修正・検証済み。
+Next: オーケストレーターの新しい優先度キュー(2026-09-25時点)で #308 → #305 → #248 → #218 の順に着手する。
+その後 #219・#211(APIレーン連携。`mydamagecalcurater-api-67`に契約を確認)、#272・#274(iOSレーンが
+既に確定させた文言・順序に合わせる。DECISIONS.md参照)、#210、#332(devDependencies更新)、#226(README等の
+実装状況の精度確認)。APIレーンがmechanisms/unsupportedの契約を出したら #271・#270(Web側の未対応表示)も追加。
 (3) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
 (apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより
 連絡が来る想定。(4) P5-5(構築ビルダー等)は record/team の API 待ち(M2。2026-09-24 時点で record/team-svc
