@@ -46,6 +46,22 @@ git -C "$MAIN_REPO" init -q
 git -C "$MAIN_REPO" symbolic-ref HEAD refs/heads/main
 git -C "$MAIN_REPO" -c user.email=bash-guard-test@example.com -c user.name=bash-guard-test commit -q --allow-empty -m init
 
+# OTHER_REPO_MAIN — MAIN_REPO とは別の、ブランチ main の使い捨てリポジトリ。
+# "git -C <dir> push"(宛先省略)・"cd <dir> && git push" が、フック自身の cwd ではなく <dir> の
+# 実際のブランチを見て判定することを確認するために使う(critic 3回目指摘)。
+OTHER_REPO_MAIN="$WORK/other-repo-main"
+mkdir -p "$OTHER_REPO_MAIN"
+git -C "$OTHER_REPO_MAIN" init -q
+git -C "$OTHER_REPO_MAIN" symbolic-ref HEAD refs/heads/main
+git -C "$OTHER_REPO_MAIN" -c user.email=bash-guard-test@example.com -c user.name=bash-guard-test commit -q --allow-empty -m init
+
+# OTHER_REPO_FEATURE — 同様だがブランチが main ではない使い捨てリポジトリ(誤検知しないことの確認用)。
+OTHER_REPO_FEATURE="$WORK/other-repo-feature"
+mkdir -p "$OTHER_REPO_FEATURE"
+git -C "$OTHER_REPO_FEATURE" init -q
+git -C "$OTHER_REPO_FEATURE" symbolic-ref HEAD refs/heads/feature-x
+git -C "$OTHER_REPO_FEATURE" -c user.email=bash-guard-test@example.com -c user.name=bash-guard-test commit -q --allow-empty -m init
+
 # run_guard コマンド文字列 — bash-guard.sh に PreToolUse 形の JSON を渡し、終了コードを GUARD_RC に、
 # stdout・stderr を $WORK/out・$WORK/err に残す。
 run_guard() {
@@ -270,6 +286,50 @@ test_block_k3d_edge_cases() {
   expect_block "k3d --verbose cluster delete pokecalc"
 }
 
+test_block_kubectl_delete_indirect_and_dynamic() {
+  begin "block: kubectl delete -f/-R(ファイル指定・再帰)・all・パイプ/xargs越し・コマンド置換(critic 3回目指摘)"
+  expect_block "kubectl delete -f deploy/k8s/base"
+  expect_block "kubectl delete -f manifest.yaml"
+  expect_block "kubectl delete -R deploy/k8s/base"
+  expect_block "kubectl delete all --all -n pokecalc"
+  expect_block "kubectl get pvc -o name | xargs kubectl delete"
+  expect_block "xargs -r kubectl delete -n pokecalc"
+  expect_block 'kubectl delete $(kubectl get pvc -o name)'
+}
+
+test_block_kubectl_verb_flag_value_confusion() {
+  begin "block: kubectl の動詞判定が値ありフラグの値を誤って動詞と扱わない(critic 3回目指摘)"
+  expect_block "kubectl delete --timeout 60s pvc x"
+  expect_block "kubectl --request-timeout 30s delete pvc x"
+  expect_block "kubectl --cluster k3d-pokecalc delete pvc x"
+  expect_block "kubectl --user admin delete ns pokecalc"
+}
+
+test_block_secret_read_before_redirect_strip() {
+  begin "block: リダイレクト除去(前)の生文字列でも .env/.ssh を検出する(critic 3回目指摘)"
+  expect_block "cat < .env"
+  expect_block "grep KEY < .env"
+  expect_block 'cat <~/.ssh/id_rsa'
+}
+
+test_block_git_push_other_checkout() {
+  begin "block: git push の宛先解決が -C <dir>・cd <dir> && を尊重する(critic 3回目指摘)"
+  expect_block "git -C $OTHER_REPO_MAIN push"
+  expect_block "cd $OTHER_REPO_MAIN && git push"
+}
+
+test_block_command_name_case_and_escape() {
+  begin "block: コマンド名の大文字小文字・エイリアス無効化バックスラッシュを無視する(critic 3回目指摘)"
+  expect_block "GIT push origin main"
+  expect_block '\git push origin main'
+}
+
+test_block_gh_api_merge_variants() {
+  begin "block: gh api の /merges・GraphQL mergePullRequest(critic 3回目指摘)"
+  expect_block "gh api repos/o/r/merges -f base=main -f head=feat/x"
+  expect_block "gh api graphql -f query='mutation { mergePullRequest(...) }'"
+}
+
 # ---- block してはいけないもの(誤検知させない) ----
 
 test_pass_daily_commands() {
@@ -350,6 +410,13 @@ test_pass_edge_cases_no_false_positive() {
   expect_pass "git push origin feat/x 2>&1"
   expect_pass "git push origin feat/x > /dev/null"
   expect_pass "kubectl get pods,configmaps"
+}
+
+test_pass_edge_cases_no_false_positive_v2() {
+  begin "pass: critic 3回目指摘の修正が誤検知しないこと"
+  expect_pass "kubectl delete pod x"
+  expect_pass "kubectl get pods -o name"
+  expect_pass "git -C $OTHER_REPO_FEATURE push"
 }
 
 test_pass_non_command_input() {
@@ -435,6 +502,12 @@ test_block_kubectl_edge_cases
 test_block_gh_edge_cases
 test_block_secret_path_edge_cases
 test_block_k3d_edge_cases
+test_block_kubectl_delete_indirect_and_dynamic
+test_block_kubectl_verb_flag_value_confusion
+test_block_secret_read_before_redirect_strip
+test_block_git_push_other_checkout
+test_block_command_name_case_and_escape
+test_block_gh_api_merge_variants
 test_pass_daily_commands
 test_pass_import_readonly
 test_pass_kubectl_readonly_and_pod_delete
@@ -443,6 +516,7 @@ test_pass_gh_other
 test_pass_env_substring
 test_pass_wrappers
 test_pass_edge_cases_no_false_positive
+test_pass_edge_cases_no_false_positive_v2
 test_pass_non_command_input
 test_never_executes_the_judged_command
 test_claude_settings

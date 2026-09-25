@@ -34,31 +34,46 @@ Claude Code公式ドキュメント(2026-09-25 確認)によれば、`permission
 (`Bash(make *)`・`Bash(kubectl *)`・`Bash(k3d *)`・`Bash(docker *)`・`Bash(git push *)`・`Bash(gh pr merge *)`)を外し、
 非破壊なサブコマンド単位の許可に置き換える(例: `kubectl get *`・`kubectl describe *`・`kubectl logs *`・`kubectl apply *`・
 `make test*`・`make lint*`・`make build*`・`make dev*`・`make doctor*`・`make gen*`・`make wasm*`・`make up`・`make deploy*`
-など、破壊的でない Makefile ターゲット)。`ask` に、issue #239/#273 が列挙した回避形を **プレフィックスだけでなく複数の
-書き方を明示**して追加する(`kubectl * delete pvc *`・`kubectl * delete namespace *`・`kubectl * delete ns *` 等)。
-ただし glob パターンの追加だけでは網羅できない(公式ドキュメントが認める通り)ため、これは補助的な多層防御とし、
-主防御は次の PreToolUse フックに置く。
+など、破壊的でない Makefile ターゲット)。既存の `ask`/`deny` の書き方(先頭一致に近い glob)は維持するが、
+issue #239/#273 が列挙した回避形の網羅的な追加パターンを `permissions.ask` にまでは実装しない(公式ドキュメントが
+認める通り、コマンド文字列の書き方を変える回避は glob の追加だけでは防げず、いたちごっこになるため)。主防御は
+次の PreToolUse フックに置き、`permissions` 側は既存の非破壊許可に絞ることだけを役割とする。
 
 ### 2. PreToolUse フックで実際のコマンド文字列を検査する(主防御)
 `.claude/settings.json` に `hooks.PreToolUse`(matcher: `"Bash"`)を追加し、`scripts/ai-guard/bash-guard.sh`
 (新規。Claude Code・Codex 両方から呼べるよう共通化)を呼ぶ。スクリプトは stdin の JSON から `tool_input.command` を
-読み、正規化(`timeout`・`env`・`nohup` 等の前置ラッパーを剥がす)した上で、次のいずれかに一致したら **exit code 2**
-で無条件に block する(`permissionDecisionReason`/stderr に理由と、人間が自分の端末で実行する想定であることを書く):
+読み、クォート文字とシェルのメタ文字(`&&`・`||`・`;`・`|`・`&`・`(`・`)`・`{`・`}`・`` ` ``・改行・タブ等)を空白に
+置き換えて1本のトークン列に平坦化した上で判定する(`timeout`・`env`・`nohup` 等の前置ラッパー、`bash -c`・`sh -c`・
+サブシェル・`eval` 等の形に関わらず、`git`・`make`・`kubectl`・`k3d`・`gh` のトークンがどの位置に出現しても拾える
+方式。前置きの種類を個別に列挙しない)。コマンド名の比較は大文字小文字を区別せず、エイリアス無効化の先頭 `\` も
+剥がしてから行う。該当するトークンが見つかるたびに、次のいずれかに一致したら **exit code 2** で無条件に block する
+(`permissionDecisionReason`/stderr に理由と、人間が自分の端末で実行する想定であることを書く):
 - クラスタ削除: `k3d cluster (delete|rm)` 相当
 - データ削除: `kubectl` の `delete` で対象が `ns`/`namespace`/`pvc`/`persistentvolumeclaim`/`pv`/`persistentvolume`/
-  `statefulset`/`secret`(引数の順序に依存しない)、`kubectl delete -k` (kustomize 一括削除)
+  `statefulset`/`secret`/`all`(引数の順序に依存しない)、`kubectl delete -k`/`--kustomize`/`-f`/`--filename`/`-R`/
+  `--recursive`(kustomize・ファイル指定・再帰の一括/間接削除)、対象がコマンド上で特定できない(パイプ/xargs越し・
+  コマンド置換/変数展開で動的に決まる・空)場合も安全側でブロックする
 - DB ロールバック: `make migrate-down*`(`CONFIRM_DESTROY` の有無に関わらず)
 - マスタ投入: `make import`・`make import-k8s`(`import-dry-run`・`import-fetch`・`import-check-upstream` は対象外。
   ネットワーク取得・報告のみで DB に触れないため)
 - クラスタ削除(Make経由): `make down`
-- 秘密の読み取り: `kubectl.*get secret`・コマンド文字列に `.env`・`~/.ssh` を含むもの(サブプロセス経由の迂回を含む)
+- 秘密の読み取り: `kubectl.*get secret`・コマンド文字列に `.env`・`.ssh` を含むもの(前置き不問。`$HOME/.ssh`・
+  絶対パスも含む。サブプロセス経由の迂回・リダイレクト対象そのものを指す形を含む)
 - main への反映: `git push` かつ push 先が `main` と解釈できるもの(`main`・`:main`・`main:`・`HEAD:main`・
-  `HEAD:refs/heads/main`・`refs/heads/main`。単語境界チェックで「ドメイン」等の偽陽性は許容し、見逃しを優先して防ぐ)
+  `HEAD:refs/heads/main`・`refs/heads/main`。単語境界チェックで「ドメイン」等の偽陽性は許容し、見逃しを優先して防ぐ。
+  宛先省略・`HEAD`・`@` の場合は現在のブランチを解決する。`git -C <dir> push`・`cd <dir> && git push` の形では
+  フック自身の cwd ではなく `<dir>` を基準に解決する)
 - 強制系の push: `--force`・`-f`(gitのオプションとして)・`+`(refspecの強制記法)・`--mirror`・`--all`
-- `gh pr merge`(main への GitOps 反映を伴うため)
+- `gh pr merge`(main への GitOps 反映を伴うため)、`gh api` での `/merge`・`/merges` パス直叩き・GraphQL の
+  `mergePullRequest`
 
 該当しなければ何も出力せず exit 0(通常の許可フローに委ねる)。**exit 2 を使うのは、JSON の `permissionDecision`
 だけでは `permissions.allow` に上書きされる余地が残るため**(公式ドキュメントが明言)。
+
+**対象外とする既知の限界**: 以下は critic レビューで対象外と明記されたもので、今回のスコープでは対応しない。
+- 変数展開による難読化(例: `B=main; git push origin $B`)
+- `.envrc`(direnv固有ファイル)
+- base64等によるコマンド文字列そのものの難読化
 
 ### 3. Codex 側にも同じスクリプトを使う(**実効性は未検証**)
 `.codex/config.toml` の `[[hooks.PreToolUse]]`(`matcher = "^Bash$"`)から同じ `scripts/ai-guard/bash-guard.sh` を呼ぶ。
@@ -90,7 +105,8 @@ issue #239/#273 が列挙した回避形がすべて block されることを確
 ## 影響(各レーンへ)
 - 今後、`make down`・`make import`・`make import-k8s`・`make migrate-down*`・`kubectl` での ns/pvc/secret 等の削除・
   取得、`git push` の main 反映、`gh pr merge` は、Claude Code・Codex のどちらでも AI エージェントからは実行できなくなる
-  (人間が自分の端末で実行する必要がある)。日常の `make test`・`make lint`・`make build`・`go test`・`kubectl get/describe/logs`・
+  (人間が自分の端末で実行する必要がある)(Codex 側はフックの信頼・確認が済むまで効かない可能性がある。§3参照)。
+  日常の `make test`・`make lint`・`make build`・`go test`・`kubectl get/describe/logs`・
   featureブランチへの `git push`・`gh pr create` は今までどおり確認なしで通る。
 - 既存の各レーンの `docs/runbooks/*.md` に `gh pr merge` を含む手順があれば、その箇所だけ「人間が実行」に変わる
   (レーン自身のセッションが最後まで自動でマージできない)。影響を受けるレーンには気づき次第、個別に連絡する。

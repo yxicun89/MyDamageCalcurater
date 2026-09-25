@@ -69,10 +69,17 @@ flatten_metachars() {
   printf '%s' "$s"
 }
 
-# resolve_current_branch — 現在のブランチ名を返す(判定できなければ空文字)。
+# resolve_current_branch [ディレクトリ] — 現在のブランチ名を返す(判定できなければ空文字)。
 # git push の宛先が省略されている・HEAD/@ の場合にだけ呼ぶ(I/O を使う唯一の箇所。ADR-0800 §2)。
+# ディレクトリが指定されていれば `git -C <dir>` で解決する("git -C <dir> push"・"cd <dir> && git push" の
+# ように宛先解決の基準ディレクトリがフック自身の cwd と異なるケースに対応するため。呼び出し側の check_git 参照)。
 resolve_current_branch() {
-  git rev-parse --abbrev-ref HEAD 2>/dev/null
+  local dir="${1:-}"
+  if [ -n "$dir" ]; then
+    git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null
+  else
+    git rev-parse --abbrev-ref HEAD 2>/dev/null
+  fi
 }
 
 # check_secret_paths 文字列 — ".env"(".env.example" は除く)・".ssh" をどんな前置きでも検出する。
@@ -111,32 +118,23 @@ kubectl_flag_takes_value() {
   esac
 }
 
-# find_kubectl_verb 開始位置 — グローバル配列 W の開始位置(kubectl トークンの index)より後ろから
-# 最初のサブコマンド(delete/get 等)を探し、KV_VERB・KV_VERB_IDX に設定する。
-# フラグ(値あり・値なし・"="自己完結)を読み飛ばす。
+# find_kubectl_verb 開始位置 — グローバル配列 W の開始位置(kubectl トークンの index)より後ろから、
+# 既知のサブコマンド(動詞)集合に一致する最初のトークンを探し、KV_VERB・KV_VERB_IDX に設定する。
+# フラグを個別に読み飛ばそうとはしない(critic 3回目指摘: "--request-timeout 30s delete pvc x" のように
+# 値ありフラグの一覧に無いフラグの値("30s")を動詞と誤認するバグがあったため)。動詞集合に一致するトークンを
+# 見つけるまで前方のトークン(フラグ・その値・グローバルフラグの値)を無条件に読み飛ばす方式にすることで、
+# フラグの値が既知の動詞と偶然一致する極端なケースを除き誤認しない。ADR-0800 §2 の「見逃すより誤検知」方針により、
+# 動詞を見逃すリスクの方を優先して潰す。
 find_kubectl_verb() {
   local start="$1"
   local n=${#W[@]}
-  local i=$((start + 1))
-  local t
+  local i t
   KV_VERB=""
   KV_VERB_IDX=-1
-  while [ "$i" -lt "$n" ]; do
+  for ((i = start + 1; i < n; i++)); do
     t="${W[$i]}"
     case "$t" in
-      -*)
-        case "$t" in
-          *=*) i=$((i + 1)) ;;
-          *)
-            if kubectl_flag_takes_value "$t"; then
-              i=$((i + 2))
-            else
-              i=$((i + 1))
-            fi
-            ;;
-        esac
-        ;;
-      *)
+      get | delete | describe | apply | logs | rollout | exec | cp | edit | patch | scale | expose | create | replace | run | port-forward | top | drain | cordon | uncordon | label | annotate | taint | wait | explain | diff | kustomize | proxy | auth | api-resources | api-versions | cluster-info | completion | config | events | attach | debug | plugin | version)
         KV_VERB="$t"
         KV_VERB_IDX=$i
         return 0
@@ -144,6 +142,42 @@ find_kubectl_verb() {
     esac
   done
   return 1
+}
+
+# kubectl_collect_candidates 開始位置 — グローバル配列 W の開始位置から末尾まで、フラグ(値あり・値なし・
+# "="自己完結。kubectl_flag_takes_value を使う)を読み飛ばした残りのトークンをグローバル配列 CANDIDATES に集める。
+# 値ありフラグの一覧に無い未知のフラグに出会うと、その値を誤って候補に含めてしまうことがあるが
+# (例: "--timeout 60s" の "60s")、以降のトークンも引き続き候補として集め続けるため、本来のリソース種別
+# ("pvc" 等)を見逃さない。呼び出し側は候補が0件(パイプ/xargs等で対象が渡ってくる形)・"$"始まり
+# (コマンド置換・変数展開で動的に決まる形)を安全側でブロックする材料として使う(critic 3回目指摘)。
+CANDIDATES=()
+kubectl_collect_candidates() {
+  local start="$1"
+  local n=${#W[@]}
+  local j t
+  CANDIDATES=()
+  j="$start"
+  while [ "$j" -lt "$n" ]; do
+    t="${W[$j]}"
+    case "$t" in
+      -*)
+        case "$t" in
+          *=*) j=$((j + 1)) ;;
+          *)
+            if kubectl_flag_takes_value "$t"; then
+              j=$((j + 2))
+            else
+              j=$((j + 1))
+            fi
+            ;;
+        esac
+        ;;
+      *)
+        CANDIDATES+=("$t")
+        j=$((j + 1))
+        ;;
+    esac
+  done
 }
 
 # kubectl_resource_is_destructive トークン — "ns,pvc" や "pvc/name"・"statefulsets.apps" のような
@@ -160,7 +194,7 @@ kubectl_resource_is_destructive() {
     base="${seg%%.*}"
     base="$(lower "$base")"
     case "$base" in
-      ns | namespace | namespaces | pvc | persistentvolumeclaim | persistentvolumeclaims | pv | persistentvolume | statefulset | statefulsets | sts | secret | secrets)
+      ns | namespace | namespaces | pvc | persistentvolumeclaim | persistentvolumeclaims | pv | persistentvolume | statefulset | statefulsets | sts | secret | secrets | all)
         return 0
         ;;
     esac
@@ -188,73 +222,63 @@ kubectl_resource_is_secret() {
 }
 
 # check_kubectl 開始位置 — グローバル配列 W の kubectl トークン位置から判定する。
-#   - delete -k / --kustomize は常にブロック
-#   - delete の対象が ns/pvc/pv/statefulset/secret 系ならブロック(pod/job は対象外)
-#   - get の対象が secret(s) ならブロック
+#   - delete -k/--kustomize/-f/--filename/-R/--recursive(まとめて削除・間接指定)は常にブロック
+#   - delete の対象候補(動詞の後ろのフラグ以外のトークン全て)に ns/pvc/pv/statefulset/secret/all が
+#     含まれればブロック(pod/job は対象外)
+#   - delete の対象候補が0件(パイプ/xargs越しの動的な対象)、または "$" 始まり(コマンド置換・変数展開で
+#     動的に決まる対象)ならブロック(対象不明時は安全側でブロックする。critic 3回目指摘)
+#   - get の対象候補に secret(s) が含まれればブロック
 check_kubectl() {
   local start="$1"
   find_kubectl_verb "$start" || return 1
   local verb="$KV_VERB"
   local rstart=$((KV_VERB_IDX + 1))
   local n=${#W[@]}
-  local j t resource
+  local j c
 
   if [ "$verb" = "delete" ]; then
     for ((j = rstart; j < n; j++)); do
       case "${W[$j]}" in
-        -k | --kustomize)
-          BLOCK_REASON="kubectl delete -k/--kustomize はまとめて削除するため常に確認が必要です"
+        -k | --kustomize | -f | --filename | --filename=* | -R | --recursive)
+          BLOCK_REASON="kubectl delete -k/--kustomize/-f/--filename/-R/--recursive はまとめて・間接的に削除するため常に確認が必要です"
           return 0
           ;;
       esac
     done
 
-    resource=""
-    for ((j = rstart; j < n; j++)); do
-      t="${W[$j]}"
-      case "$t" in
-        -*)
-          case "$t" in
-            *=*) : ;;
-            *) kubectl_flag_takes_value "$t" && j=$((j + 1)) ;;
-          esac
-          ;;
-        *)
-          resource="$t"
-          break
+    kubectl_collect_candidates "$rstart"
+
+    if [ "${#CANDIDATES[@]}" -eq 0 ]; then
+      BLOCK_REASON="kubectl delete の対象がコマンド上で特定できません(パイプ/xargs 等からの動的な対象の可能性があるため確認が必要です)"
+      return 0
+    fi
+
+    for c in "${CANDIDATES[@]}"; do
+      case "$c" in
+        \$*)
+          BLOCK_REASON="kubectl delete の対象がコマンド置換/変数展開で動的に決まります(${c})"
+          return 0
           ;;
       esac
     done
-    [ -z "$resource" ] && return 1
-    if kubectl_resource_is_destructive "$resource"; then
-      BLOCK_REASON="kubectl delete の対象に namespace/pvc/pv/statefulset/secret が含まれます(${resource})"
-      return 0
-    fi
+
+    for c in "${CANDIDATES[@]}"; do
+      if kubectl_resource_is_destructive "$c"; then
+        BLOCK_REASON="kubectl delete の対象に namespace/pvc/pv/statefulset/secret/all が含まれます(${c})"
+        return 0
+      fi
+    done
     return 1
   fi
 
   if [ "$verb" = "get" ]; then
-    resource=""
-    for ((j = rstart; j < n; j++)); do
-      t="${W[$j]}"
-      case "$t" in
-        -*)
-          case "$t" in
-            *=*) : ;;
-            *) kubectl_flag_takes_value "$t" && j=$((j + 1)) ;;
-          esac
-          ;;
-        *)
-          resource="$t"
-          break
-          ;;
-      esac
+    kubectl_collect_candidates "$rstart"
+    for c in "${CANDIDATES[@]}"; do
+      if kubectl_resource_is_secret "$c"; then
+        BLOCK_REASON="kubectl get secret は秘密情報を出力するため常に確認が必要です"
+        return 0
+      fi
     done
-    [ -z "$resource" ] && return 1
-    if kubectl_resource_is_secret "$resource"; then
-      BLOCK_REASON="kubectl get secret は秘密情報を出力するため常に確認が必要です"
-      return 0
-    fi
     return 1
   fi
 
@@ -366,8 +390,12 @@ check_gh() {
     local j
     for ((j = start + 1; j < n; j++)); do
       case "${W[$j]}" in
-        */merge | */merge/*)
-          BLOCK_REASON="gh api で /merge を含むパスを叩いています(PR の確定マージに相当します)"
+        */merge | */merge/* | */merges | */merges/*)
+          BLOCK_REASON="gh api で /merge(s) を含むパスを叩いています(PR の確定マージに相当します)"
+          return 0
+          ;;
+        *mergePullRequest*)
+          BLOCK_REASON="gh api で GraphQL の mergePullRequest を呼んでいます(PR の確定マージに相当します)"
           return 0
           ;;
       esac
@@ -384,15 +412,23 @@ check_gh() {
 #       - "main"・"refs/heads/main"(refspec ならコロンの右側)に完全一致すればブロック
 #       - 宛先が無い・HEAD・@ の場合は現在のブランチを解決し、main ならブロック。
 #         解決できない場合も安全側でブロックする。
+#       - 現在のブランチの解決は、"git -C <dir> push" の "<dir>"、無ければ "cd <dir> && ... git push" の
+#         直近の "<dir>"(git トークンより前で最後に現れた "cd" の次のトークン)を基準にする
+#         (critic 3回目指摘: フック自身の cwd で解決すると、別チェックアウトの実際のブランチを見誤る)。
+#         どちらも無ければフックの cwd を使う。
 check_git() {
   local start="$1"
   local n=${#W[@]}
   local i=$((start + 1))
-  local t sub=""
+  local t sub="" c_dir=""
   while [ "$i" -lt "$n" ]; do
     t="${W[$i]}"
     case "$t" in
-      -C | -c | --git-dir | --work-tree | --namespace)
+      -C)
+        c_dir="${W[$((i + 1))]:-}"
+        i=$((i + 2))
+        ;;
+      -c | --git-dir | --work-tree | --namespace)
         i=$((i + 2))
         ;;
       -*)
@@ -405,6 +441,17 @@ check_git() {
     esac
   done
   [ "$sub" = "push" ] || return 1
+
+  local resolve_dir="$c_dir"
+  if [ -z "$resolve_dir" ]; then
+    local k
+    for ((k = start - 1; k >= 0; k--)); do
+      if [ "${W[$k]}" = "cd" ]; then
+        resolve_dir="${W[$((k + 1))]:-}"
+        break
+      fi
+    done
+  fi
 
   local start2=$((i + 1))
   local j
@@ -436,7 +483,7 @@ check_git() {
         return 0
         ;;
       "" | HEAD | @)
-        cur="$(resolve_current_branch)"
+        cur="$(resolve_current_branch "$resolve_dir")"
         if [ -z "$cur" ] || [ "$cur" = "main" ]; then
           BLOCK_REASON="git push の宛先が現在のブランチに解決され、それが main か判定できません(現在のブランチ: ${cur:-不明})"
           return 0
@@ -446,7 +493,7 @@ check_git() {
   done
 
   if [ "$any_dest" = 0 ]; then
-    cur="$(resolve_current_branch)"
+    cur="$(resolve_current_branch "$resolve_dir")"
     if [ -z "$cur" ] || [ "$cur" = "main" ]; then
       BLOCK_REASON="git push に宛先の指定が無く、現在のブランチが main か判定できません(現在のブランチ: ${cur:-不明})"
       return 0
@@ -463,6 +510,12 @@ check_command() {
   local cleaned
   cleaned="$(strip_redirects "$raw")"
 
+  # リダイレクト除去"前"の生の文字列でも .env/.ssh を検査する(strip_redirects が
+  # "cat < .env"・"cat <~/.ssh/id_rsa" のようなリダイレクト対象そのものを消してしまい、
+  # 除去後の文字列だけでは見失うケースがあるため。除去後の文字列でも従来通り検査する)。
+  if check_secret_paths "$raw"; then
+    return 0
+  fi
   if check_secret_paths "$cleaned"; then
     return 0
   fi
@@ -474,7 +527,11 @@ check_command() {
   local n=${#W[@]}
   local i base
   for ((i = 0; i < n; i++)); do
+    # コマンド名の比較は大文字小文字を区別せず、エイリアス無効化の先頭 "\" も剥がしてから行う
+    # ("GIT push origin main"・"\git push origin main" のような形も検出するため)。
     base="${W[$i]##*/}"
+    base="${base#\\}"
+    base="$(lower "$base")"
     case "$base" in
       git)
         check_git "$i" && return 0
