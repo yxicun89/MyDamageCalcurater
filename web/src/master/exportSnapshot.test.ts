@@ -223,15 +223,16 @@ describe("toCalcSnapshot(api/openapi.yaml の MasterExport。ADR-0204)", () => {
     });
   });
 
-  test("技は MasterMove の必須フィールドちょうど(例データに追加効果は無いので effect は null)", () => {
+  test("技は MasterMove の必須フィールドちょうど(例データに追加効果・機構は無いので effect は null・mechanisms は空配列)", () => {
     const snapshot = toCalcSnapshot(master);
     expect(snapshot.moves).toHaveLength(master.moves.length);
     snapshot.moves.forEach((move, index) => {
       const source = master.moves[index];
       expect(sortedKeys(move)).toEqual(
-        ["category", "effect", "id", "nameJa", "power", "priority", "type"].sort(),
+        ["category", "effect", "id", "mechanisms", "nameJa", "power", "priority", "type"].sort(),
       );
       expect(move.effect).toBeNull();
+      expect(move.mechanisms).toEqual([]);
       expect(move.id).toBe(source?.id);
       expect(move.nameJa).toBe(source?.nameJa);
       expect(move.type).toBe(source?.type);

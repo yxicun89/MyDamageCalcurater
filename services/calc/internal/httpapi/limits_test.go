@@ -223,7 +223,7 @@ func TestContractRejectsOverLimitRequests(t *testing.T) {
 func TestCalcBulkRequestLimits(t *testing.T) {
 	store := newFakeStore(t)
 	addFillItems(store, limitItemVariants+1)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 
 	t.Run("presets 8 件・itemVariants 64 件(上限ちょうど)は受理し 512 行", func(t *testing.T) {
 		body := bulkBody(movePhysical, allPresets, itemList(limitItemVariants, true))
@@ -259,7 +259,7 @@ func TestCalcBulkRequestLimits(t *testing.T) {
 func TestCalcReverseRequestLimits(t *testing.T) {
 	store := newFakeStore(t)
 	addFillItems(store, limitItemCandidate+1)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	base := func() map[string]any { return reverseCases(t, store)[0].httpBody() }
 	percent := base()["observations"].([]any)[0].(map[string]any)["percent"].(int)
 	with := func(mutate func(b map[string]any)) []byte {
@@ -422,7 +422,7 @@ func TestRequestLimitsRunBeforeStoreLookup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := &countingStore{inner: newFakeStore(t)}
-			h := NewHandler(store)
+			h := NewHandler(store, nil)
 			rec := post(t, h, tt.path, mustJSON(t, tt.body), false)
 			assertError(t, rec, http.StatusBadRequest, "invalid_input")
 			if store.lookups != 0 {
@@ -440,7 +440,7 @@ func TestRequestLimitsRunBeforeStoreLookup(t *testing.T) {
 func BenchmarkCalcBulkAtLimit(b *testing.B) {
 	store := newFakeStore(b)
 	addFillItems(store, limitItemVariants)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	body := mustJSON(b, bulkBody(movePhysical, allPresets, itemList(limitItemVariants, true)))
 	header := validHeaders()
 	b.ReportAllocs()
@@ -456,7 +456,7 @@ func BenchmarkCalcBulkAtLimit(b *testing.B) {
 func BenchmarkCalcReverseAtLimit(b *testing.B) {
 	store := newFakeStore(b)
 	addFillItems(store, limitItemCandidate)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	body := reverseCases(b, store)[0].httpBody()
 	percent := body["observations"].([]any)[0].(map[string]any)["percent"].(int)
 	body["itemCandidates"] = itemList(limitItemCandidate, true)

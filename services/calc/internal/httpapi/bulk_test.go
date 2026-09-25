@@ -141,7 +141,7 @@ func equalStrings(a, b []string) bool {
 // AC-3: presets の省略と [] はどちらも技の分類に応じた既定セット。変化技は none/hp の2件のみ。
 func TestCalcBulkDefaultPresets(t *testing.T) {
 	store := newFakeStore(t)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	tests := []struct {
 		name     string
 		moveID   string
@@ -171,7 +171,7 @@ func TestCalcBulkDefaultPresets(t *testing.T) {
 // AC-3: presets 指定時はその順、行はプリセット優先(presets × itemVariants)。itemVariants の null は持ち物なし。
 func TestCalcBulkRowOrderIsPresetMajor(t *testing.T) {
 	store := newFakeStore(t)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	body := bulkBody(movePhysical, []any{"hb_full", "none", "hd"}, []any{nil, itemShell, itemOrb})
 	rec := post(t, h, "/api/calc/bulk", mustJSON(t, body), true)
 	var got api.BulkCalcResult
@@ -191,7 +191,7 @@ func TestCalcBulkRowOrderIsPresetMajor(t *testing.T) {
 // AC-3: 性格 ID の写像。無補正 → 代表 ID、+B/-A → 一致する ID、マスタに無い +D/-A → null。
 func TestCalcBulkNatureIDMapping(t *testing.T) {
 	store := newFakeStore(t)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	body := bulkBody(moveSpecial, []any{"none", "hb_boost", "hd_boost"}, nil)
 	rec := post(t, h, "/api/calc/bulk", mustJSON(t, body), true)
 	var got api.BulkCalcResult
@@ -210,7 +210,7 @@ func TestCalcBulkNatureIDMapping(t *testing.T) {
 
 // AC-3: 不正な presets / itemVariants / ID はエラー(部分成功にしない。ADR-0009 §5)。
 func TestCalcBulkErrors(t *testing.T) {
-	h := NewHandler(newFakeStore(t))
+	h := NewHandler(newFakeStore(t), nil)
 	tests := []struct {
 		name       string
 		body       map[string]any

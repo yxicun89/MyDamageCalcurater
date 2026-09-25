@@ -141,7 +141,7 @@ func calcCases() []calcCase {
 // AC-2: 成功時のレスポンスは engine.CalcDamage の結果の写しで、契約どおり。
 func TestCalcDamageMatchesEngine(t *testing.T) {
 	store := newFakeStore(t)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	for _, c := range calcCases() {
 		t.Run(c.name, func(t *testing.T) {
 			want, err := engine.CalcDamage(c.engineInput(t, store))
@@ -159,7 +159,7 @@ func TestCalcDamageMatchesEngine(t *testing.T) {
 // AC-2: 本文の moveId が attacker.moveId より優先される(契約の CalcRequest.moveId)。
 func TestCalcDamageMoveIDTakesPrecedence(t *testing.T) {
 	store := newFakeStore(t)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	c := calcCases()[0]
 	c.attacker.moveID = moveSpecial // 本文の moveId(物理)が勝つ
 	want, err := engine.CalcDamage(c.engineInput(t, store))
@@ -178,7 +178,7 @@ func TestCalcDamageMoveIDTakesPrecedence(t *testing.T) {
 // AC-2: 計算はイベント保存に依存しない(絶対ルール5)。record/team/NATS が無くても 200。
 // ここでは Store 以外の依存を何も渡さずに計算が成功することを固定する。
 func TestCalcDamageNeedsOnlyStore(t *testing.T) {
-	h := NewHandler(newFakeStore(t))
+	h := NewHandler(newFakeStore(t), nil)
 	rec := post(t, h, "/api/calc", mustJSON(t, calcCases()[0].httpBody()), true)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())

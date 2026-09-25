@@ -45,5 +45,5 @@ func NewExampleHandler() (http.Handler, error) {
 	if err != nil {
 		return nil, fmt.Errorf("calctest: 例のマスタの検証に失敗: %w", err)
 	}
-	return httpapi.NewHandler(store), nil
+	return httpapi.NewHandler(store, nil), nil // publisher なし(テスト用途。ADR-0212)
 }

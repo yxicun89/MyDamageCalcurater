@@ -45,8 +45,8 @@ var testRetry = retryPolicy{Initial: 10 * time.Millisecond, Max: 40 * time.Milli
 
 // 環境変数の名前は運用(k8s の manifest・README・scripts/dev.sh)が依存するので固定する。
 func TestEnvNames(t *testing.T) {
-	got := []string{envAddr, envMasterURL, envMasterPath, envTypeChartPath}
-	want := []string{"CALC_ADDR", "CALC_MASTER_URL", "CALC_MASTER_PATH", "CALC_TYPECHART_PATH"}
+	got := []string{envAddr, envMasterURL, envMasterPath, envNatsURL, envTypeChartPath}
+	want := []string{"CALC_ADDR", "CALC_MASTER_URL", "CALC_MASTER_PATH", "CALC_NATS_URL", "CALC_TYPECHART_PATH"}
 	for i := range want {
 		if got[i] != want[i] {
 			t.Errorf("環境変数名 = %q, want %q", got[i], want[i])
@@ -92,6 +92,10 @@ func TestLoadConfig(t *testing.T) {
 		{"URL があり CALC_MASTER_PATH が空なら URL 方式", map[string]string{envMasterURL: "http://pokedex", envMasterPath: ""},
 			withDefaults(config{Addr: ":8080", MasterURL: "http://pokedex"}), false},
 		{"CALC_TYPECHART_PATH が空なら未設定と同じ", with(fileEnv(), envTypeChartPath, ""),
+			withDefaults(config{Addr: ":8080", MasterPath: exampleMasterPath}), false},
+		{"CALC_NATS_URL の指定(ADR-0212)", with(fileEnv(), envNatsURL, "nats://127.0.0.1:4222"),
+			withDefaults(config{Addr: ":8080", MasterPath: exampleMasterPath, NatsURL: "nats://127.0.0.1:4222"}), false},
+		{"CALC_NATS_URL が空なら未設定と同じ(発行を無効化)", with(fileEnv(), envNatsURL, ""),
 			withDefaults(config{Addr: ":8080", MasterPath: exampleMasterPath}), false},
 
 		{"どちらも無い", map[string]string{}, config{}, true},
@@ -224,7 +228,7 @@ func TestNewHandlerServesExampleMaster(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadConfig = %v", err)
 	}
-	h, err := newHandler(context.Background(), cfg)
+	h, _, err := newHandler(context.Background(), cfg)
 	if err != nil {
 		t.Fatalf("newHandler = %v", err)
 	}
@@ -278,7 +282,7 @@ func TestStartupFailsOnBadFiles(t *testing.T) {
 				if err != nil {
 					t.Fatalf("loadConfig = %v; want nil(設定はそろっている)", err)
 				}
-				if h, err := newHandler(context.Background(), cfg); err == nil || h != nil {
+				if h, _, err := newHandler(context.Background(), cfg); err == nil || h != nil {
 					t.Errorf("newHandler = %v, %v; want nil, エラー", h, err)
 				}
 			}
@@ -374,7 +378,7 @@ func TestURLModeBecomesReadyAfterUpstream(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	h, err := newHandler(ctx, urlConfig(srv.URL))
+	h, _, err := newHandler(ctx, urlConfig(srv.URL))
 	if err != nil {
 		t.Fatalf("newHandler(URL 方式) = %v, want nil(上流が準備中でも起動する)", err)
 	}
@@ -445,7 +449,7 @@ func TestURLModeRetriesOnInvalidExport(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	h, err := newHandler(ctx, urlConfig(srv.URL))
+	h, _, err := newHandler(ctx, urlConfig(srv.URL))
 	if err != nil {
 		t.Fatalf("newHandler = %v", err)
 	}
@@ -460,7 +464,7 @@ func TestURLModeRetriesOnInvalidExport(t *testing.T) {
 func TestURLModeStopsRetryingOnCancel(t *testing.T) {
 	fake, srv := newFakePokedex(t) // ready にしない(ずっと 503)
 	ctx, cancel := context.WithCancel(context.Background())
-	h, err := newHandler(ctx, urlConfig(srv.URL))
+	h, _, err := newHandler(ctx, urlConfig(srv.URL))
 	if err != nil {
 		cancel()
 		t.Fatalf("newHandler = %v", err)

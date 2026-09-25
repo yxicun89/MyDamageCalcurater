@@ -14,7 +14,7 @@ import (
 // R4: SP は各 0..32・合計 <=66 の境界(単体ちょうど32、合計ちょうど66)で成功する。
 func TestCalcDamageSPBoundaries(t *testing.T) {
 	store := newFakeStore(t)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	tests := []struct {
 		name string
 		sp   engine.Stats
@@ -41,7 +41,7 @@ func TestCalcDamageSPBoundaries(t *testing.T) {
 // R4: ランクは -6..+6 の境界。+6/-6 は成功、範囲外(-7)は invalid_input。
 func TestCalcDamageRankBoundaries(t *testing.T) {
 	store := newFakeStore(t)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	okTests := []struct {
 		name  string
 		ranks engine.Ranks
@@ -75,7 +75,7 @@ func TestCalcDamageRankBoundaries(t *testing.T) {
 // R4: 無効相性(0倍)は黙って弾かず 200 になり、effectiveness 0・ko.hits 0・表示% 0.0 になる。
 func TestCalcDamageImmuneMatchup(t *testing.T) {
 	store := newFakeStore(t)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	c := calcCase{
 		name:     "無効相性(ノーマル→ゴースト)",
 		attacker: indiv{speciesKey: speciesAttacker, natureID: natureNeutral},
@@ -117,7 +117,7 @@ func TestCalcDamageUnknownTeraType(t *testing.T) {
 		t.Fatalf("engine.NewTypeChart = %v", err)
 	}
 	store.chart = reduced
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 
 	c := calcCases()[0]
 	c.attacker.tera = engine.TypePsychic // 相性表(上)に無いタイプ

@@ -419,18 +419,42 @@
   TidbCluster・TidbInitializer が実際に Ready/Completed になることを確認する)。TidbInitializer の
   `tnir/mysqlclient` イメージは amd64 専用(上流がそれしか提供していない)で、Apple Silicon の k3d
   ノードでの起動可否(QEMU エミュレーション経由)も未確認
-- [ ] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)。
+- [x] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)。
   ストリームの `max_age` は7日、イベントに発生時刻(`occurred_at`)を載せる(ADR-0209 §7・#6)。
   record-svc と team-svc(P5-4)は**別々の durable consumer**を持つ(同じ consumer を共有すると配送が分かれ
   record-svc が計算イベントを取りこぼす。ADR-0209 §4)。
   バージョン固定・ローカル/k3d 導入・ストリーム設定(Retention は Limits。ADR-0209 §3 #6 の
   文言からの意図的な逸脱で理由は ADR-0212 §4)・イベントのワイヤフォーマット(`services/internal/calcevents`。
   `calc` は個体・技・状況・ダメージ幅まで、`calcBulk`/`calcReverse` は envelope のみ)は ADR-0212 で確定
-  (critic 3ラウンド)。実装はこれから
-- [ ] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰)。
+  (critic 3ラウンド)。実装は critic 2ラウンド(第1回 FAIL→修正、第2回 PASS)で実 NATS を使い
+  発行・drain・起動非ブロックまで確認済み。
+  P5-3/P5-4 は `services/internal/calcevents.Event`・ストリーム名 `CALC_EVENTS`・
+  subject `calc.events.<device_id>` をそのまま前提にする(at-least-once 配送。消費側は冪等に実装すること)。
+  **残作業**: P5-1 と同じく、共有 k3d クラスタへの実適用(`deploy/k8s/overlays/local` の NATS
+  StatefulSet が実際に Ready になること・他レーンの Pod に影響しないこと。ADR-0212「人間の確認が
+  必要なこと」・AC-N4)は未実施(このセッションではローカルの `docker run`〈`scripts/nats-local-up.sh`〉
+  でのみ確認した)。次に `make up` を実行するときに確認する
+- [x] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰。critic 2ラウンド。1回目 FAIL〈重大1・重要3〉→修正→2回目 PASS〈軽微4件〉、軽微も反映済み)。
   ADR-0209 §5.3 の契約を `api/openapi.yaml` に入れて `make gen`(`store_unavailable` の追加を含む)→
-  分離(§6)・全削除(§5)・失効ジョブ(§4)・ログ(§3)を実装。時間減衰の半減期は保持期間90日より短くする。
-  gateway に `/api/record/*` のルーティングと CORS の `DELETE` 許可を追加(ADR-0209 §10・ADR-0202 への追記)
+  分離(§6)・全削除(§5)・ログ(§3)を実装。時間減衰の半減期は保持期間90日より短くする。
+  gateway に `/api/record/*` のルーティングと CORS の `DELETE` 許可を追加(ADR-0209 §10・ADR-0202 への追記)。
+  `services/record/internal/store` の TiDB 実装は `services/record/internal/store/tidb_test.go`
+  (`//go:build tidb`。`make test-db`)で実 SQL(一意制約・削除順序・冪等性・時間減衰)を検証済み。
+  **残作業(critic レビューで指摘。R-3・R-4)**:
+  - 失効ジョブ(§4。日次で保持期間超過行を消す CronJob)は未実装。`cmd/record/config.go` の
+    `CalcEventsRetention`/`FavoritesRetention`/`DeviceRowExpiry`/`PurgeJournalRetention` は
+    起動時検証(ADR-0211 §7・AC-R8)のためだけに今は存在し、ジョブ本体からはまだ参照されない
+    (意図的な先取り。コード側にも同じ注記あり)。**P5-3b** として別タスクに切り出す
+  - `deploy/k8s/base/record` に Deployment・Service が無く、`GATEWAY_RECORD_URL` を渡す manifest も
+    無いため、k3d クラスタでは `/api/record/*` が恒久的に 503 になる(migrate Job のみ存在)。
+    **P5-3b** で Deployment・Service・gateway への配線・`scripts/up.sh` のイメージ追加までを行う
+- [ ] P5-3b record-svc の残作業(P5-3 の critic レビューで切り出し。2026-09-25)。
+  (1) `deploy/k8s/base/record` に Deployment・Service を追加し、`GATEWAY_RECORD_URL` を実際に配線して
+  k3d クラスタで `/api/record/*` が届くようにする(`scripts/up.sh` のイメージビルド対象に `record` の
+  `server` ターゲットを追加)。
+  (2) ADR-0209 §4 の失効ジョブ(record 用の日次 CronJob。生イベント90日・お気に入り540日・
+  devices 行30日・purge journal 90日を `cmd/record/config.go` の値で判定して消す。冪等・1回の上限あり)を
+  実装する。team-svc 側の同等ジョブ(ADR-0211 §7 の `TEAM_*` 環境変数)も合わせて検討する
 - [ ] P5-4 team-svc(構築 CRUD、Showdown 形式入出力)。
   ADR-0209 §5.3 の `deleteTeamDeviceData` と §6 の分離規則(他端末のリソース ID は 404 `not_found`)を含む。
   **P5-2 のイベントを購読し、自分の DB の `devices.last_seen_at` だけを更新する**(計算 API だけを使い続ける端末の
@@ -855,6 +879,23 @@
 
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)
+- [x] issue #271/#270(データレーンからの依頼。ADR-0121 §4・ADR-0123 §7。DECISIONS.md 2026-09-25)の API レーン
+  担当分: `api/openapi.yaml` に `MasterMove.mechanisms: string[]`(必須・昇順・通常の技は空配列)と
+  `CalcResult`(`BulkCalcRow.result` も同じ型)・`ReverseCandidate` への `unsupported: UnsupportedMark[]`
+  (必須・印なしは `[]`)を追加(`make gen`)。pokedex-svc の内部マスタ export に `ListMoveMechanisms` を
+  配線(SQL の並びに頼らずこの層で昇順ソート)、calc-svc は `sharedmaster.MoveRow.Mechanisms` にそのまま渡す
+  だけ(検証は既存の `MoveMechanismsOf` が担当)。calc-svc の応答変換(`calcResultFrom`・`reverseResultFrom`)
+  に `unsupportedFrom`(`engine/wasmapi` と同じ変換)を配線し、HTTP/WASM パリティテストの
+  `dropEmptyUnsupported`(印を比較対象から除外する暫定処置)を削除して印も比べるようにした。
+  Web の例データ(`exportSnapshot.ts`)に `mechanisms: []` を追加(Web は `unsupported` をまだ受け取らない
+  設計のまま。`mapCalcResult` 等の明示的フィールド写像により自動的に弾かれる。issue #67 の前方互換どおり)。
+  データレーン・Web レーン・iOS レーンへ連絡済み(iOS は生成物の再生成が必要)
+- [ ] issue #274/#272(iOS レーンからの提案。DECISIONS.md 2026-09-25)の API レーン担当分: `BulkCalcRequest` に
+  `defenderOverride: { abilityId?, ranks?: RankBlock, status?: StatusCondition }`(全行に一律で上書き)を追加する。
+  iOS(PR #377)は攻撃側のランク・特性・天候・フィールド・防御側の壁までは実装済みだが、防御側のランク・特性・
+  状態異常は契約に上書き手段が無く未実装のまま(範囲外として明記)。engine 側の変更(`BulkInput` へのオーバーライド
+  追加。プリセット解決後・計算前に当てる)を伴うため ADR-0003 の test-first + 独立 critic の対象。
+  **急ぎではない(iOS レーン明記)。M2(P5-3・P5-4)の後に着手する**。入ったら iOS・Web へ連絡(追従は各レーン)
 - [x] issue #110(セキュリティ。Codex レビュー)の API レーン担当分: `POST /api/calc/bulk`・`/api/calc/reverse` の候補・観測配列に件数上限が無く、1MiB未満の小さな本文で計算量を増幅できた(2,000×2,000 で約9.4秒)。契約(`maxItems`/`uniqueItems`/`maximum`。ADR-0208)を追加し、calc-svc の生成ラッパは検証しないため(実測確認済み)自前検証をID解決・engine呼び出しより前に実装。critic PASS、実HTTPで境界値と再現手順の解消(0.9ms・engine未到達)を確認。engine/wasmapi(データレーン)・Web・iOSへの追従は DECISIONS.md に既定案付きで依頼(issue はレーンの完了までクローズしない)
 - [x] issue #110 のデータレーン担当分: `engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ件数・範囲の上限(presets 8・itemVariants 64・itemCandidates 64・observations 16・maxCandidates 0..128)を追加(ADR-0108)。HTTP を経由しない直接呼び出し・WASM でも計算量を増幅できないようにした。wasmapi は DTO 変換より前に同じ検査を重ねて置き、複数の違反が重なっても HTTP と同じ `invalid_input` が先に出るようにした(parity)。`MaxCandidates` の負の値は、従来「無制限」扱いだったのを ADR-0208 の契約(`minimum: 0`)に合わせて拒否するよう変更(既存テストの期待値を更新。理由は ADR-0108 決定4)。critic PASS(1往復)。Web・iOS の追従(観測16件でUI無効化・持ち物候補64件超の扱い)は ADR-0208 §4 のまま未着手
 - [x] issue #148(クラウド公開前のアクセス境界・認証方針。ユーザー決定「私設サービスを維持する」)の API レーン担当分: `deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定(ADR-0210)。TLS 終端は gateway/クラスタの Ingress では行わず Tailscale(`tailscale serve`)に任せる方針を決定。端末IDが認証として機能しないこと・CORSが到達制御でないことの回帰テストを追加(`TestDeviceIDIsNotAuthentication`・`TestCORSIsNotAccessControl`・`TestContractHasNoAuthentication`)。`base`のgateway Ingress本体は local(k3d)専用として残し、先頭コメントで明記。ADR-0209 §1(クラウド公開へ進む判断)は「公開しない」で確定した旨を追記。critic PASS。運用(tailnet ACL・失効手順のrunbook)・Web/iOS(接続先をtailnet名に)への依頼はDECISIONS.mdに既定案付きで記録(issue はレーンの完了までクローズしない)

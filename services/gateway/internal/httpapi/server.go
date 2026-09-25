@@ -33,6 +33,8 @@ type Config struct {
 	CalcURL *url.URL
 	// PokedexURL は pokedex-svc の基底 URL。nil なら /api/pokedex/* は 503 upstream_unavailable。
 	PokedexURL *url.URL
+	// RecordURL は record-svc の基底 URL(ADR-0209 §10)。nil なら /api/record/* は 503 upstream_unavailable。
+	RecordURL *url.URL
 	// AssetsURL は画像配信(MinIO)の基底 URL。nil なら /assets/* は 404 not_found。
 	AssetsURL *url.URL
 	// WebURL は Web の静的配信(nginx)の基底 URL(ADR-0205)。設定されていれば /api・/assets/*・/healthz・
@@ -54,6 +56,7 @@ type gateway struct {
 	cfg          Config
 	calcProxy    *httputil.ReverseProxy
 	pokedexProxy *httputil.ReverseProxy // nil なら /api/pokedex/* は 503(PokedexURL 未設定)
+	recordProxy  *httputil.ReverseProxy // nil なら /api/record/* は 503(RecordURL 未設定)
 	assetsProxy  *httputil.ReverseProxy // nil なら /assets/* は 404(AssetsURL 未設定)
 	webProxy     *httputil.ReverseProxy // nil なら予約パス以外の GET / HEAD は 404(WebURL 未設定。ADR-0205)
 }
@@ -68,6 +71,9 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	g.calcProxy = newReverseProxy(cfg.CalcURL, cfg.UpstreamTimeout, cfg.transport, restoreIDs, g.originAllowed)
 	if cfg.PokedexURL != nil {
 		g.pokedexProxy = newReverseProxy(cfg.PokedexURL, cfg.UpstreamTimeout, cfg.transport, restoreIDs, g.originAllowed)
+	}
+	if cfg.RecordURL != nil {
+		g.recordProxy = newReverseProxy(cfg.RecordURL, cfg.UpstreamTimeout, cfg.transport, restoreIDs, g.originAllowed)
 	}
 	if cfg.AssetsURL != nil {
 		g.assetsProxy = newReverseProxy(cfg.AssetsURL, cfg.UpstreamTimeout, cfg.transport, keepIDsAsIs, g.originAllowed)
@@ -169,6 +175,11 @@ func (g *gateway) serve(c *echo.Context) error {
 			return g.ownError(c, origin, allowed, newError(api.UpstreamUnavailable, "%s", msgUpstreamUnavailable))
 		}
 		g.pokedexProxy.ServeHTTP(c.Response(), r)
+	case routeRecord:
+		if g.recordProxy == nil {
+			return g.ownError(c, origin, allowed, newError(api.UpstreamUnavailable, "%s", msgUpstreamUnavailable))
+		}
+		g.recordProxy.ServeHTTP(c.Response(), r)
 	case routeAssets:
 		if g.assetsProxy == nil {
 			return g.ownError(c, origin, allowed, newError(api.NotFound, "%s", msgNotFound))

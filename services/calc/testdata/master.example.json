@@ -149,9 +149,9 @@
     {"key": "9002-001", "dexNo": 9002, "form": 1, "showdownId": "testguardmega", "nameJa": "テストガードメガ", "type1": "water", "type2": "steel", "baseStats": {"hp": 95, "atk": 80, "def": 120, "spa": 90, "spd": 105, "spe": 50}, "isMega": true, "baseSpeciesKey": "9002-000", "requiredItemId": "testguardite", "abilities": [{"slot": 1, "abilityId": "testthick"}]}
   ],
   "moves": [
-    {"id": "testbeam", "nameJa": "テストビーム", "type": "normal", "category": "physical", "power": 80, "priority": 0, "effect": null},
-    {"id": "testwave", "nameJa": "テストウェーブ", "type": "grass", "category": "special", "power": 90, "priority": 0, "effect": null},
-    {"id": "testglare", "nameJa": "テストにらみ", "type": "normal", "category": "status", "power": 0, "priority": 0, "effect": null}
+    {"id": "testbeam", "nameJa": "テストビーム", "type": "normal", "category": "physical", "power": 80, "priority": 0, "effect": null, "mechanisms": []},
+    {"id": "testwave", "nameJa": "テストウェーブ", "type": "grass", "category": "special", "power": 90, "priority": 0, "effect": null, "mechanisms": []},
+    {"id": "testglare", "nameJa": "テストにらみ", "type": "normal", "category": "status", "power": 0, "priority": 0, "effect": null, "mechanisms": []}
   ],
   "items": [
     {"id": "testplainitem", "nameJa": "テストのいし", "effect": null},

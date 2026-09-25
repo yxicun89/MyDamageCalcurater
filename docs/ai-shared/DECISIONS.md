@@ -1715,6 +1715,25 @@ Decision: issue の既定案 A を採り、タイプ強化の持ち物・ノー�
 Reason: 定義の無い持ち物・特性が黙って等倍で計算されていた(importer の effect-missing 92 件)。多くは engine を変えずにデータだけで直せる。
 Impact: 実データの dry-run で effect-missing 92→56、effect-no-hook 1→3(ノーマルジュエル・Eelevate。Levitate と同じ理由)。既定案 B(応答の「補正未対応」の印)は #271 の技の印と同じ仕組みでまとめて決める(未決)。タイプバランス レーンへ: readmodel の特性(Heatproof・Purifying Salt・Eelevate)が防御相性に入るようになる。
 
+## 2026-09-25: issue #274/#272 の「防御側の詳細(ランク・特性・状態異常)」を BulkCalcRequest に足す提案を採用(iOS レーン → API レーン)
+Decision: iOS レーンの提案(PR #377。DECISIONS.md 2026-09-25「issue #274」の「提案(API レーン)」)を、下記の形に少し具体化して受け入れる。
+`BulkCalcRequest` に任意の `defenderOverride: { abilityId?: string, ranks?: RankBlock, status?: StatusCondition }` を追加する
+(コンポーネントスキーマとして新設し、既存の `RankBlock`/`StatusCondition` をそのまま再利用する。`Individual` の同名フィールドと型を揃える)。
+指定した値は生成するすべての行(全プリセット × 全 itemVariants)の防御側に一律で上書きする(プリセットが決める SP・性格・持ち物・種族には触れない)。
+省略時は現状と完全に同じ(何も送らなければ要求は今までどおり)。
+実装は calc-svc だけでなく **engine 側の変更を伴う**(`engine.BulkInput` にオーバーライドを足し、プリセットから作った防御側 `Individual` に
+プリセット解決の後・ダメージ計算の前で当てる。`engine/` は純粋なので DB・HTTP 等の外部依存は増えない。CLAUDE.md 絶対ルール2 に抵触しない)。
+engine を変更するため ADR-0003 の test-first(spec-writer が先にテストを書く)+ 独立 critic の適用対象。
+Reason: iOS が計算画面の「詳細」で防御側のランク・特性・状態異常を選べるようにしたいが(issue #274・#272)、
+`BulkCalcRequest` は `defenderSpeciesKey` しか持たず、防御側プリセット(ADR-0009)が決める SP・性格・持ち物以外の
+上書き手段が契約に無い。名前を `defenderOverride`(anonymous object ではなく再利用可能なコンポーネントスキーマ)にする方が、
+将来 `calcReverse` 等の別操作で同じ形が要るときに使い回しやすい。
+Impact: **API レーンの実装は M2(P5-3 record-svc・P5-4 team-svc)の後に着手する**(iOS レーンからも「急ぎではない」と
+明記されている。docs/plan.md「改善要望」に記録し、着手まで issue はクローズしない)。実装後は
+`api/openapi.yaml` → `make gen`(Web・iOS 双方の生成物)→ calc-svc の `resolveIndividual` と同じ検証(種族に無い特性・
+状態異常の enum)を防御側オーバーライドにも適用、の順で進める。入ったら iOS・Web が「詳細」に「防御側のランク(B/D)」
+「防御側の特性」「防御側の状態異常」を足す(iOS・Web 側の作業。この決定では扱わない)。
+
 ## 2026-09-25: 技の機構(多段・固定ダメージ・威力変動 等)を move_mechanisms 表としてマスタに持つ(データレーン。issue #271-a・ADR-0121)
 Decision: Showdown の技データ(multihit・damage・ohko・willCrit・override*・ignoreDefensive・ハンドラ名)と、天候・フィールドのハンドラが技を名指ししている箇所から、importer が攻撃技の機構を 13 種に機械的に分類し、`move_mechanisms(move_id, mechanism)` に入れる。技名は持たない。分類表に無いハンドラは安全側(move_specific / field_specific)+警告。取得物の `mechanism` は必須(古い取得物は拒否)。
 Reason: 多段・威力変動・固定ダメージ等の技が黙って誤ったダメージになる(#271・#233)。engine の「未対応の印」(D16)の前提になるデータが無かった。
@@ -1726,3 +1745,30 @@ Reason: 多段・威力変動・固定ダメージの技と表せない持ち物
 Impact: 既存の正常な入力の数値は不変(ゴールデン全件一致)。WASM の結果(calc・bulk の各行・reverse の各候補)に `unsupported`(常に配列)が増えた。Web はまだ表示しない。importer の dry-run 出力は不変(印だけの定義は網羅性で「定義なし」と数える)。
 **API レーンへの依頼**(契約は変えていない。既定案は ADR-0123 §7): (1) `MasterMove.mechanisms: string[]`(昇順・通常の技は空配列。ADR-0121 の依頼の再掲)。(2) `CalcResponse`・`BulkRow.result`・`ReverseCandidate` に `unsupported: UnsupportedMark[]`(必須・印なしは `[]`)、`UnsupportedMark = {target: move|attacker_item|attacker_ability|defender_item|defender_ability, reason: <機構 13 種>|zero_power|unsupported_effect, id: string}`。入ったら `services/calc/internal/httpapi/parity_test.go` の `dropEmptyUnsupported` を消して印も比べる。
 **Web / iOS レーンへ**: 印の表示(「未対応」の注記)は各レーンの作業。WASM の形は ADR-0123 §6。
+
+## 2026-09-25: issue #271/#270 の API レーン担当分(mechanisms 公開・unsupported 印)を実装(API レーン → データ・Web・iOS レーンへ)
+Decision: データレーンからの依頼(ADR-0121 §4・ADR-0123 §7)を反映した。
+`api/openapi.yaml`: `MasterMove.mechanisms: string[]`(必須・昇順・通常の技は空配列)を追加。
+新設 `UnsupportedMark`(target/reason/id。ADR-0123 §7 の YAML どおり)を `CalcResult`(`BulkCalcRow.result` も
+`$ref: CalcResult` のため自動的に対象)・`ReverseCandidate` に `unsupported: UnsupportedMark[]`(必須・
+印なしは `[]`)として追加。`make gen` 済み(差分ゼロを確認)。
+`services/pokedex/internal/httpapi/master.go`: `ListMoveMechanisms` を呼び、move_id ごとにまとめてから
+`sort.Strings` で明示的に昇順にする(SQL の `ORDER BY` に頼らず契約の保証をこの層に持たせる)。
+`services/calc/internal/master/export.go`: `api.MasterMove.Mechanisms` を `sharedmaster.MoveRow.Mechanisms` に
+そのまま渡すだけ(検証・`engine.Move.Mechanisms` への変換は既存の `MoveMechanismsOf` が担当。新規ロジックなし)。
+`services/calc/internal/httpapi/convert.go`: `unsupportedFrom`(`engine/wasmapi` の同名関数と同じ変換)を
+新設し、`calcResultFrom`・`reverseResultFrom` に配線(`bulkResultFrom` は `calcResultFrom` を呼ぶため自動的に
+対象)。`parity_test.go` の `dropEmptyUnsupported`(印を比較対象から除外する暫定処置)を削除し、HTTP/WASM で
+`unsupported` を含めてそのまま比較するようにした(全パリティテスト PASS を確認)。
+`services/pokedex/internal/storetest/storetest.go`: `store.Querier` に `ListMoveMechanisms` の埋め込み
+nil-panic ガードを追加(`MoveMechanisms` フィールド + メソッド。他の `List*` と同じパターン)。
+mutation testing で「ソートしない」「空配列にしない」の2点を実際に壊して回帰を確認済み。
+Reason: 両 issue は Web・iOS の表示実装を進めるための前提(データ・engine 側は完了済み)。
+Impact: **データレーンへ**: #271・#270 は API レーン担当分も完了。close 判断はデータレーンに委ねる。
+**Web レーンへ**: `web/src/master/exportSnapshot.ts` の例データに `mechanisms: []` を追加済み(Web 自身の
+持ち物のため軽微な追従。テストも更新済み)。`unsupported` は Web の `CalcResult`(`engine/types`)にまだ無く、
+`apiEngine.ts` の明示的フィールド写像(`mapCalcResult` 等)が自動的に弾くため何もしなくても壊れない
+(issue #67 の前方互換どおり)。表示するかどうか・いつ着手するかは Web レーンの判断。
+**iOS レーンへ**: swift-openapi-generator の生成物の再生成(`make ios-gen` 相当)が必要(このタスクでは
+未実施)。再生成すると `MasterMove.mechanisms`・`CalcResult.unsupported`・`ReverseCandidate.unsupported` が
+必須フィールドとして生成物に増えるため、既存のデコード/モック実装が影響を受ける可能性がある。

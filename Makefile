@@ -76,6 +76,7 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@cd services && $(GO) vet ./...
 	@cd services && $(GO) vet -tags mysql ./pokedex/...
 	@cd services && $(GO) vet -tags tidb ./record/... ./team/...
+	@cd services && $(GO) vet -tags nats ./calc/...
 	@cd tools && $(GO) vet ./...
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 	@for script in tools/importer/*.sh; do sh -n "$$script" || exit; done
@@ -179,6 +180,14 @@ test-db: ## pokedex(MySQL)・record/team(TiDB)のDBを使うテスト(POKEDEX_TE
 	@cd services && $(GO) test -tags mysql -p 1 ./pokedex/...
 	@cd services && $(GO) test -tags tidb -p 1 ./record/... ./team/...
 
+.PHONY: test-nats
+test-nats: ## calc-svcのイベント発行を実NATSで検査する(CALC_TEST_NATS_URL が必須。make test には含めない。ADR-0212)
+	@if [ -z "$(CALC_TEST_NATS_URL)" ]; then \
+		echo "test-nats: CALC_TEST_NATS_URL が設定されていない(スキップせず失敗する)" >&2; \
+		exit 1; \
+	fi
+	@cd services && $(GO) test -tags nats -p 1 ./calc/internal/events/...
+
 .PHONY: db-local-up
 db-local-up: ## make dev 用に docker で mysql:9.7.2 を 127.0.0.1:3306 に起動する(パスワードは .env)
 	@./scripts/db-local-up.sh
@@ -186,6 +195,10 @@ db-local-up: ## make dev 用に docker で mysql:9.7.2 を 127.0.0.1:3306 に起
 .PHONY: tidb-local-up
 tidb-local-up: ## make dev 用に tiup playground で TiDB v8.5.8 を 127.0.0.1:4000 に起動し record・team の DB を作る(ADR-0211 §2)
 	@./scripts/tidb-local-up.sh
+
+.PHONY: nats-local-up
+nats-local-up: ## make dev 用に docker で NATS v2.15.0(JetStream 有効)を 127.0.0.1:4222 に起動する(ADR-0212 §2)
+	@./scripts/nats-local-up.sh
 
 ## --- クラスタ / ローカル ---------------------------------------------
 .PHONY: up
