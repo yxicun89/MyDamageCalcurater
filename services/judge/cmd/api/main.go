@@ -30,6 +30,11 @@ func main() {
 		os.Exit(1)
 	}
 	choiceScarfItemID := choiceScarfItemIDFromEnv(os.LookupEnv)
+	requestTimeout, err := requestTimeoutFromEnv(os.LookupEnv, writeTimeout)
+	if err != nil {
+		slog.Error("judge API failed to configure request timeout", "error", err)
+		os.Exit(1)
+	}
 
 	server := &http.Server{
 		Addr: ":" + port,
@@ -37,6 +42,7 @@ func main() {
 			Pokedex:           upstreams.Pokedex,
 			Calc:              upstreams.Calc,
 			ChoiceScarfItemID: choiceScarfItemID,
+			RequestTimeout:    requestTimeout,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,

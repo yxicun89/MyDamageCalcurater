@@ -314,3 +314,42 @@ docs/requirements.md「相手側の一括表示」)により、カタログを 6
 - ゴールデン照合の範囲が 4 プリセット → **8 プリセット(カタログ全件)**に広がった(§6)。
 - `api/openapi.yaml` の `DefenderPreset` enum に `hb_full` / `hd_full` を追加する必要が生じた。
   初版「`api/openapi.yaml` の変更は不要」は撤回(§影響)。
+
+### 2026-09-25 追記(Web レーン、issue #275): 逆算画面の自分側(防御側)にもカタログを使う
+
+逆算画面(`web/src/screens/ReverseScreen.tsx`)の「受けたダメージ」(`side === "attacker"`、自分が防御側)で、
+自分の耐久調整が無振り固定のまま変えられず、画面にも書かれていなかった(正確性バグ)。このカタログ(§1)を
+Web 側にも複製し(`web/src/domain/defenderPresets.ts`。SP・性格は API にも WASM 境界にも出ないため。§5)、
+自分側カードにプリセット選択を追加した。engine とのズレは `defenderPresets.contract.test.ts`
+(`engine/bulk.go` の `DefenderPresetCatalog()` と `api/openapi.yaml` の enum を実行のたびに読んで突き合わせる
+契約テスト。issue #71 / ADR-0114 の `attackerPresets.contract.test.ts` と同じ発想)で検知する。
+
+追加で、**engine 側には無い Web 限定の規則**として `defenderPresetForCategory(key, category)` を定義した:
+逆算では観測した技の分類に応じて選択肢(物理 = B 系、特殊 = D 系、変化技 = `none`/`hp`)が変わるため、
+分類が変わったときにラジオグループが「1つも選ばれていない」状態にならないよう、対になるプリセットへ
+自動で読み替える(`hb_full` ↔ `hd_full` 等。B 系↔D 系で振り方の意図を保ち、変化技は `hp` まで落とす)。
+これは表示専用の読み替えで、画面の state は元の key を保持したまま持ち回る(物理→変化技→物理と分類を
+戻すと元のプリセットが復活する)。
+
+将来 `engine/presets/defender.json`(攻撃側の `engine/presets/attacker.json` と同じ形)ができたら、
+`defenderPresetForCategory`(Web 限定の読み替え規則)以外はそちらを読む形に一本化する
+(データレーンへの申し送りは `docs/ai-shared/DECISIONS.md` 2026-09-25)。
+
+### 2026-09-25 追記(データレーン): カタログの正を `engine/presets/defender.json` にした
+
+上の申し送りと DECISIONS.md 2026-09-25(Web レーン)を受け、§1 のカタログの正を `engine/presets/defender.json` の
+1ファイルにした。engine は `engine/defender_preset.go` で `//go:embed` して読み、`DefenderPresetCatalog()` はその写しを返す
+(実行時のファイル I/O は無い。CLAUDE.md 絶対ルール2)。§1 の「データファイルは作らない」は、その根拠(WASM への
+同梱の仕組みが要る)が ADR-0114 の embed で解消したため、この追記で置き換える。
+
+- 形: `{"schemaVersion": 1, "presets": [{"key", "label", "sp": {hp, atk, def, spa, spd, spe}, "nature": {"plus", "minus"}, "applies"}]}`。
+  並びが画面とカタログの順序(耐久が上がる順)。無補正の性格は `plus`・`minus` とも `""`、`applies` の `""` は全分類
+- 値・順序・キーは移行前の Go リテラルと同一(`TestDefenderPresetCatalogDefinitions` は変えずに通る。bulk・逆算・ゴールデンの結果は不変)
+- **攻撃側(ADR-0114)との違い**: 表示名 `label` を JSON に持つ。engine が一括計算の行の `PresetLabel` として返し、
+  API の `presetLabel` に出るため(文言を各クライアントに移すと API の出力が変わる)
+- 読み込みは未知フィールド・欠けたフィールド・後続データを拒否し、版・件数(1..`MaxBulkPresets`)・キーの空/重複・SP の範囲と合計・
+  性格(両方空か、HP 以外の異なる2ステータス)・`applies` の値を検証する。壊れていれば初期化時に panic する
+- Go の `PresetKey` 定数は残す(呼び出し側・テストが名指しするため)。JSON のキー列と一致することを
+  `TestDefenderPresetJSONKeysMatchConstants` が確かめる。OpenAPI enum との一致は従来どおり `preset_sync_test.go`(issue #73)
+- Web の `defenderPresets.contract.test.ts` は Go ソースのパーサをやめ、この JSON を読む形に同じ PR で置き換えた
+  (engine 側の変更だけだと Go リテラルが消えて契約テストと CI が落ちるため。比べる項目と期待値は同じ。`defenderPresets.ts` は不変)

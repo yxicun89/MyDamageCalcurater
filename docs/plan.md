@@ -265,6 +265,20 @@
   を持つ前提で書かれているが、2026-09-25時点でiOS側にタイプ色自体がまだ実装されていない
   (`ios/`にタイプ色の16進値0件)。iOS側でタイプ名を表示する画面ができたときに、design.mdの18タイプ分の
   文字色の表を移植する必要がある
+- [x] issue #275(重大度 high。逆算の「受けたダメージ」で自分の耐久が無振り固定・画面にも出ない)。
+  **完了・critic PASS(2026-09-25。Web レーン。ブランチ `fix/web-issue-275-reverse-defender-preset`)**:
+  自分側カードに防御側プリセット(ADR-0009 §1 のカタログ8件)を出し、既定は `none`(無振り)のまま = 既定時の
+  リクエストは今までと同じ(回帰無し)。選択肢は技の分類で絞り(物理 = B 系、特殊 = D 系、変化技 = none/hp)、
+  分類が変わったら対のプリセットへ読み替える(`defenderPresetForCategory`。state は元のキーを保持したまま
+  表示だけ読み替えるので、物理→変化→物理と戻すと元のプリセットが復活する)。新しいテスト:
+  `web/src/domain/defenderPresets.test.ts`(挙動の固定)・`defenderPresets.contract.test.ts`
+  (`engine/bulk.go` の `DefenderPresetCatalog()` と `api/openapi.yaml` の enum を読む契約テスト)・
+  `ReverseScreen.test.tsx`(UI とリクエストの回帰)。engine への一本化
+  (`engine/presets/defender.json`)は DECISIONS.md 2026-09-25 でデータレーンへ申し送り済み、
+  `defenderPresetForCategory`(engine に無いWeb限定の読み替え規則)は ADR-0009 §1 に追記して根拠を残した。
+  critic PASS(mutation testing 2/3 kill。`flushObservationDebounce()` を守るテストが無いのは
+  `selectAttackerPreset` 側にも元々あった既存の穴で、今回の退行ではない。次に触るときに攻撃側・防御側
+  両方へテストを足すとよい)。`cd web && npx vitest run` 1419/1419 green、tsc・lintエラー無し。
 
 ## M2: 保存・構築
 
@@ -496,6 +510,39 @@
     npx prettier --write src/judge/judge.gen.ts`。ADR-0604 §2 の素早さレーンの前例に倣う)、
     差分が契約変更相当の型・doc コメントのみであることを確認、`npm run lint`・`npm test`(1262 件)が通ることを確認。
     ADR-0706 の受け入れ条件7に `judge.gen.ts` の手動再生成を明記して再発防止
+- [x] issue #213(重大度 high)上流(pokedex-svc/calc-svc)が遅いと judge は1リクエスト全体の期限を持たず、
+  逐次呼び出し(最大27回・1回3秒)を律儀に最後まで続け、クライアントは HTTP 000(空応答)を受け取る
+  (JSON の 503 が返らない。全体レビュー指摘。2026-09-24)
+  - 設計の正は ADR-0707: `JUDGE_REQUEST_TIMEOUT`(既定 12 秒)を新設し、`writeTimeout`(15 秒)未満であることを
+    起動時に検証する。ハンドラ(`outspeedAndKo`)の先頭で `ctx` を 1 回だけ `context.WithTimeout` でラップし、
+    以降のすべての上流呼び出しに使い回す(呼び出し順序・逐次であることは変えない。ADR-0703 §3 の維持)。
+    `internal/client` は変更不要(既に `http.NewRequestWithContext` を使っており、`net/http` の context 統合が
+    「進行中の呼び出しを打ち切る」「未着手の呼び出しは即座に失敗する」の両方を自動で満たす)
+  - 失敗するテストを先に置いた(spec-writer): `services/judge/internal/httpapi/outspeed_deadline_test.go`
+    (`TestOutspeedAndKoOverallDeadline`・`TestOutspeedAndKoWithinDeadlineUnaffected`)、
+    `outspeed_test.go` に `upstreams.delay`・`sleepOrCancel` を追加、`cmd/api/config_test.go` に
+    `TestRequestTimeoutFromEnv`。実装前は `go vet` が `deps.RequestTimeout undefined` /
+    `undefined: requestTimeoutFromEnv` の 2 件で失敗する状態だった
+  - 実装(implementer): `cmd/api/config.go` に `requestTimeoutEnv`・`defaultRequestTimeout`(12秒)・
+    `requestTimeoutFromEnv(lookup, writeTimeout)`(`upstreamTimeoutFromEnv` と同じ形 + `writeTimeout` 以上は
+    起動失敗)を追加。`cmd/api/main.go` で呼び出し、`httpapi.Dependencies.RequestTimeout` に渡す(パース失敗は
+    他の設定エラーと同じく `os.Exit(1)`)。`internal/httpapi/server.go` の `Dependencies` に
+    `RequestTimeout time.Duration` を追加(既定 0 は「期限なし」で既存テストに影響しない)。
+    `internal/httpapi/outspeed.go` の `outspeedAndKo` で `ctx := c.Request().Context()` の直後に
+    `deps.RequestTimeout > 0` のときだけ `context.WithTimeout` でラップ。`README.md` に
+    `JUDGE_REQUEST_TIMEOUT` の行を追加。`go vet`・`go test ./...`(新規テスト含め全件)・`gofmt -l`・
+    `make judge-lint`・`make judge-build`・`bash scripts/check-publishable.sh` すべて成功を確認
+    (`TestOutspeedAndKoOverallDeadline` は `-count=5` でも安定して ~0.22s で 503 を返すことを確認済み)
+- [x] issue #329(重大度 low)SP 合計超過(67)の拒否を確かめる回帰テストが無く、`validateSP` の
+      `> engine.MaxSPTotal` を `> engine.MaxSPTotal+1` に変える退行を検出できない(既存の唯一のケースが
+      合計96で境界〈67〉から遠い。全体レビュー第3回指摘。2026-09-25)。テストのみの変更(実装は無変更):
+      `internal/judge/speed_test.go` に合計ちょうど66(受け付ける)・ちょうど67(拒否する。各欄は
+      MaxSPPerStat=32以下のまま)を追加、`internal/httpapi/outspeed_test.go` にも合計67の境界値ケースを
+      追加。mutation test で検証: `validateSP` を `> engine.MaxSPTotal+1` に一時的に変えて新規テスト
+      (`TestSpeedRejectsOutOfRangeInput`・`TestOutspeedAndKoRejectsInvalidRequest` の追加分)が実際に
+      失敗することを確認、復元して `go test ./...`・`gofmt -l`・`make judge-lint`・`make judge-build`・
+      `bash scripts/check-publishable.sh` すべて成功を確認(軽微な作業のため /phase の quick-scanner〜critic
+      は使わずメインで対応。CLAUDE.md「軽微な作業はメインのみでよい」)
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
 各レーンが自分の範囲の README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)と、動かして確かめられるレーンは手順書(`docs/runbooks/<レーン>.md`。AGENTS.md「手順書の書き方」に従う)を書く。全体図は `docs/architecture.md`。

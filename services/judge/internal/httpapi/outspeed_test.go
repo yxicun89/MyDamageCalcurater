@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -105,6 +106,11 @@ type upstreams struct {
 	attackerSpeed int // attacker の種族の素早さ種族値(0 なら 100)
 	defenderSpeed int // defenderSpeciesKey の素早さ種族値(0 なら 100)
 
+	// delay: pokedex-svc・calc-svc のスタブが応答を返す前に一律に待つ時間(issue #213。
+	// ゼロ値なら待たない。「遅いが止まってはいない上流」を再現するテスト専用のフィールドで、
+	// 既存のどのテストも設定しないので、既存の全テストの挙動は変わらない)。
+	delay time.Duration
+
 	// JD3: 候補ごとの差し替え(ADR-0703)。キーは speciesKey。
 	baseSpeeds  map[string]int          // speciesKey → 素早さ種族値
 	speciesFail map[string]stubResponse // speciesKey → その種族の取得だけを失敗させる
@@ -203,6 +209,23 @@ func reverseRoute(candidateMoveID string) string {
 	return candidateMoveID + "->" + attackerSpeciesKey
 }
 
+// sleepOrCancel waits for d (upstreams.delay) or the request's own context ending, whichever
+// comes first (issue #213: a slow-but-not-hanging upstream). It mirrors internal/client/
+// client_test.go's blockingServer, which also races a fixed wait against r.Context().Done()
+// so a canceled client request unblocks the stub immediately instead of always waiting out the
+// full delay. d == 0 (every existing test that doesn't set upstreams.delay) returns immediately.
+func sleepOrCancel(ctx context.Context, d time.Duration) {
+	if d <= 0 {
+		return
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+	}
+}
+
 func writeStub(w http.ResponseWriter, status int, body string) {
 	w.Header().Set("Content-Type", "application/json")
 	if status == 0 {
@@ -225,6 +248,8 @@ func newUpstreams(t *testing.T, u *upstreams) Dependencies {
 	t.Helper()
 
 	pokedex := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sleepOrCancel(r.Context(), u.delay)
+
 		u.mu.Lock()
 		defer u.mu.Unlock()
 		u.record(r)
@@ -275,6 +300,8 @@ func newUpstreams(t *testing.T, u *upstreams) Dependencies {
 	t.Cleanup(pokedex.Close)
 
 	calcServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sleepOrCancel(r.Context(), u.delay)
+
 		u.mu.Lock()
 		defer u.mu.Unlock()
 		u.record(r)
@@ -1002,6 +1029,16 @@ func TestOutspeedAndKoRejectsInvalidRequest(t *testing.T) {
 		{"sp の合計が 66 超", withAttacker(func(a map[string]any) {
 			a["sp"] = map[string]any{"hp": 32, "atk": 32, "def": 32, "spa": 0, "spd": 0, "spe": 0}
 		}), nil},
+		{
+			// issue #329: 上の 96 は 66 から遠く、境界(MaxSPTotal+1)を1つずらす退行を検出できない。
+			// 各欄は 32 以下(MaxSPPerStat の範囲内)のまま合計だけがちょうど 1 超えた 67 で拒否することを
+			// ピン留めする。
+			"sp の合計がちょうど 67(境界値)",
+			withAttacker(func(a map[string]any) {
+				a["sp"] = map[string]any{"hp": 3, "atk": 32, "def": 0, "spa": 0, "spd": 0, "spe": 32}
+			}),
+			nil,
+		},
 		{"ranks が -6 未満", withAttacker(func(a map[string]any) { a["ranks"] = map[string]any{"spe": -7} }), nil},
 		{"ranks が +6 超", withAttacker(func(a map[string]any) { a["ranks"] = map[string]any{"spe": 7} }), nil},
 		// 候補側の欄も同じ検査を受ける。

@@ -55,9 +55,10 @@ make judge-k3d-deploy && make judge-smoke  # k3d へデプロイして healthz �
 | `JUDGE_POKEDEX_BASE_URL` | pokedex-svc のベース URL。未設定なら起動はするが、判定の API は 503 |
 | `JUDGE_CALC_BASE_URL` | calc-svc のベース URL。同上 |
 | `JUDGE_UPSTREAM_TIMEOUT` | 上流 1 回ぶんのタイムアウト(duration。既定 `3s`) |
+| `JUDGE_REQUEST_TIMEOUT` | 判定 1 リクエスト全体の期限(duration。既定 `12s`)。`http.Server` の `WriteTimeout`(既定 15s)未満でなければ起動しない |
 | `PORT` | 待受ポート(既定 8080) |
 
-設定されているのに不正(http/https でない・ホストが無い・タイムアウトが 0 以下)なら起動しない。
+設定されているのに不正(http/https でない・ホストが無い・タイムアウトが 0 以下・`JUDGE_REQUEST_TIMEOUT` が `WriteTimeout` 以上)なら起動しない。
 
 ## 関連 ADR
 

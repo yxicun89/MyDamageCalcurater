@@ -18,6 +18,9 @@ const (
 	upstreamTimeoutEnv     = "JUDGE_UPSTREAM_TIMEOUT"
 	defaultUpstreamTimeout = 3 * time.Second
 
+	requestTimeoutEnv     = "JUDGE_REQUEST_TIMEOUT"
+	defaultRequestTimeout = 12 * time.Second
+
 	choiceScarfItemIDEnv = "JUDGE_CHOICE_SCARF_ITEM_ID"
 )
 
@@ -52,6 +55,32 @@ func upstreamTimeoutFromEnv(lookup func(string) (string, bool)) (time.Duration, 
 	}
 	if d <= 0 {
 		return 0, fmt.Errorf("%s must be positive: %v", upstreamTimeoutEnv, d)
+	}
+	return d, nil
+}
+
+// requestTimeoutFromEnv reads JUDGE_REQUEST_TIMEOUT as a time.Duration (ADR-0707 §1: default
+// 12s, the deadline for one whole outspeed-and-ko request). writeTimeout is main.go's
+// http.Server.WriteTimeout, passed in explicitly rather than assumed, so this function stays
+// testable on its own and main.go stays the single place that owns the constant. The resolved
+// timeout must stay strictly below writeTimeout: otherwise WriteTimeout could fail the response
+// body's write before the request deadline even fires, reviving the empty-reply symptom this
+// ADR exists to fix. Same posture as upstreamTimeoutFromEnv: unset/empty defaults, an invalid
+// duration or a non-positive value fails startup.
+func requestTimeoutFromEnv(lookup func(string) (string, bool), writeTimeout time.Duration) (time.Duration, error) {
+	value, ok := lookup(requestTimeoutEnv)
+	if !ok || value == "" {
+		return defaultRequestTimeout, nil
+	}
+	d, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("%s is not a valid duration: %w", requestTimeoutEnv, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("%s must be positive: %v", requestTimeoutEnv, d)
+	}
+	if d >= writeTimeout {
+		return 0, fmt.Errorf("%s (%v) must be less than the server's write timeout (%v)", requestTimeoutEnv, d, writeTimeout)
 	}
 	return d, nil
 }
