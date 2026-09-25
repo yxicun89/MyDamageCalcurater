@@ -21,6 +21,8 @@ package engine
 import (
 	"errors"
 	"fmt"
+	"reflect"
+	"slices"
 	"sort"
 )
 
@@ -178,18 +180,28 @@ type ReverseInput struct {
 	ItemCandidates []*Item
 	// Observations は1件以上。すべて同じ技・同じ場・同じ既知側に対する別々の1発。
 	Observations []Observation
+	// UnknownAbilities は相手の特性の候補(解決済み。issue #272・ADR-0126)。0..MaxAbilityCandidates 件。
+	// nil / 空は「特性なし」の1通り(従来どおり)。特性は探索の次元ではなく、渡されたものだけを試す。
+	// 結果が同じになる特性は1つの候補にまとめ、違えば候補を分ける。
+	// UnknownSpecies.Abilities が空でなければ、その中の ID だけを受け付ける。
+	UnknownAbilities []Ability
 	// MaxCandidates は返す候補数の上限。0 は無制限。1..MaxReverseMaxCandidates は上限として使う。
 	// 負・MaxReverseMaxCandidates 超過は ErrInvalidMaxCandidates(issue #110。ADR-0108 決定4)。
 	MaxCandidates int
 }
 
-// ReverseCandidate は候補1件(性格クラス × 持ち物。ADR-0010 §R3)。
+// ReverseCandidate は候補1件(性格クラス × 特性 × 持ち物。ADR-0010 §R3・ADR-0126)。
 type ReverseCandidate struct {
 	NatureClass NatureClass
 	// Nature は性格クラスの代表 Nature(構造値)。
 	Nature Nature
 	Item   *Item  // 渡された *Item をそのまま保持する(nil は持ち物なし)
 	ItemID string // Item.ID。Item が nil なら空文字
+	// Ability はこの候補の計算に使った相手の特性(特性なしはゼロ値)。
+	Ability Ability
+	// AbilityIDs はこの候補と結果が完全に同じになる特性の ID(Ability.ID が先頭。渡した順)。
+	// UnknownAbilities を渡さなかったときは nil。
+	AbilityIDs []string
 
 	// Ranges は観測を説明できる SP の集合(昇順・互いに素・隣接しない極大連続区間)。
 	// 空にならない。説明できる SP が無ければ、距離が最小の SP を返す。
@@ -304,7 +316,7 @@ func collapseSPRanges(xs []int) []SPRange {
 
 // CalcReverse は観測ダメージから相手の調整候補を返す。
 // CalcDamage の合成のみで行い、独自のダメージ式は書かない(ADR-0010 §1)。
-// 候補(性格クラス × 持ち物)ごとに CalcDamage を SP 0..32 の33回だけ呼び、
+// 候補(性格クラス × 特性 × 持ち物)ごとに CalcDamage を SP 0..32 の33回だけ呼び、
 // 16ロールを全観測で使い回す。エラー時は部分的な結果を返さない。
 func CalcReverse(in ReverseInput) (ReverseResult, error) {
 	if in.Side != SideDefender && in.Side != SideAttacker {
@@ -341,106 +353,71 @@ func CalcReverse(in ReverseInput) (ReverseResult, error) {
 		assumedHPSP = MaxSPPerStat
 	}
 
-	cands := make([]ReverseCandidate, 0, len(reverseClasses)*len(items))
+	abilities, err := abilityCandidates("UnknownAbilities", in.UnknownSpecies, in.UnknownAbilities)
+	if err != nil {
+		return ReverseResult{}, err
+	}
+
+	// rolls[a][c][i][x] は特性 a・性格クラス c・持ち物 i・SP x の CalcDamage。
+	// 候補ごとに CalcDamage を SP 0..32 の33回だけ呼び、16ロールを全観測で使い回す。
+	rolls := make([][][][MaxSPPerStat + 1]DamageResult, len(abilities))
 	// dealsDamage はどれか1つの候補でダメージが出たか(全候補で 0 なら ErrMoveDealsNoDamage)。
 	dealsDamage := false
-	for _, class := range reverseClasses {
+	for a, ability := range abilities {
+		rolls[a] = make([][][MaxSPPerStat + 1]DamageResult, len(reverseClasses))
+		for ci, class := range reverseClasses {
+			nature := natureForClass(stat, class)
+			rolls[a][ci] = make([][MaxSPPerStat + 1]DamageResult, len(items))
+			for ii, item := range items {
+				for x := 0; x <= MaxSPPerStat; x++ {
+					sp := Stats{}.WithStat(stat, x)
+					if in.Side == SideDefender {
+						sp.HP = MaxSPPerStat
+					}
+					unknown := Individual{
+						Species: in.UnknownSpecies, Level: DefaultLevel, Nature: nature, Ability: ability,
+						SP: sp, Item: item, Status: StatusNone,
+					}
+					dmg := DamageInput{
+						Format: in.Format, Move: in.Move, Field: in.Field, Critical: in.Critical,
+						TypeChart: in.TypeChart,
+					}
+					if in.Side == SideDefender {
+						dmg.Attacker, dmg.Defender = in.Known, unknown
+					} else {
+						dmg.Attacker, dmg.Defender = unknown, in.Known
+					}
+					res, err := CalcDamage(dmg)
+					if err != nil {
+						return ReverseResult{}, fmt.Errorf("逆算の候補(性格クラス=%s, 特性=%q, 持ち物=%q, SP=%d)の計算: %w",
+							class, ability.ID, itemID(item), x, err)
+					}
+					rolls[a][ci][ii][x] = res
+					if res.Rolls[len(res.Rolls)-1] > 0 {
+						dealsDamage = true
+					}
+				}
+			}
+		}
+	}
+	groups := groupAbilities(len(abilities), func(i, j int) bool {
+		return reflect.DeepEqual(rolls[i], rolls[j])
+	})
+
+	cands := make([]ReverseCandidate, 0, len(reverseClasses)*len(groups)*len(items))
+	for ci, class := range reverseClasses {
 		nature := natureForClass(stat, class)
-		for _, item := range items {
-			var rolls [MaxSPPerStat + 1]DamageResult
-			dist := make([]int, MaxSPPerStat+1)
-
-			for x := 0; x <= MaxSPPerStat; x++ {
-				sp := Stats{}.WithStat(stat, x)
-				if in.Side == SideDefender {
-					sp.HP = MaxSPPerStat
+		for _, group := range groups {
+			ids := groupAbilityIDs(abilities, group)
+			for ii, item := range items {
+				c := reverseCandidate(in.Observations, &rolls[group[0]][ci][ii])
+				c.NatureClass, c.Nature, c.Item = class, nature, item
+				c.Ability, c.AbilityIDs = abilities[group[0]], slices.Clone(ids)
+				if item != nil {
+					c.ItemID = item.ID
 				}
-				unknown := Individual{
-					Species: in.UnknownSpecies, Level: DefaultLevel, Nature: nature,
-					SP: sp, Item: item, Status: StatusNone,
-				}
-				dmg := DamageInput{
-					Format: in.Format, Move: in.Move, Field: in.Field, Critical: in.Critical,
-					TypeChart: in.TypeChart,
-				}
-				if in.Side == SideDefender {
-					dmg.Attacker, dmg.Defender = in.Known, unknown
-				} else {
-					dmg.Attacker, dmg.Defender = unknown, in.Known
-				}
-				res, err := CalcDamage(dmg)
-				if err != nil {
-					return ReverseResult{}, fmt.Errorf("逆算の候補(性格クラス=%s, 持ち物=%q, SP=%d)の計算: %w",
-						class, itemID(item), x, err)
-				}
-				rolls[x] = res
-				if res.Rolls[len(res.Rolls)-1] > 0 {
-					dealsDamage = true
-				}
-
-				sum := 0
-				for _, o := range in.Observations {
-					best := -1
-					for _, r := range res.Rolls {
-						d := o.Distance(r, res.DefenderHP)
-						if best < 0 || d < best {
-							best = d
-						}
-					}
-					sum += best
-				}
-				dist[x] = sum
+				cands = append(cands, c)
 			}
-
-			mismatch := dist[0]
-			for _, d := range dist[1:] {
-				if d < mismatch {
-					mismatch = d
-				}
-			}
-			var sps []int
-			for x, d := range dist {
-				if d == mismatch {
-					sps = append(sps, x)
-				}
-			}
-
-			support, minT, maxT := 0, -1, -1
-			for _, x := range sps {
-				res := rolls[x]
-				for _, o := range in.Observations {
-					for _, r := range res.Rolls {
-						if o.Matches(r, res.DefenderHP) {
-							support++
-						}
-					}
-				}
-				lo, hi := res.DisplayPercentRangeTenths()
-				if minT < 0 || lo < minT {
-					minT = lo
-				}
-				if hi > maxT {
-					maxT = hi
-				}
-			}
-
-			c := ReverseCandidate{
-				NatureClass:      class,
-				Nature:           nature,
-				Item:             item,
-				Ranges:           collapseSPRanges(sps),
-				SPCount:          len(sps),
-				Exact:            mismatch == 0,
-				Mismatch:         mismatch,
-				Support:          support,
-				MinPercentTenths: minT,
-				MaxPercentTenths: maxT,
-				Unsupported:      rolls[0].Unsupported,
-			}
-			if item != nil {
-				c.ItemID = item.ID
-			}
-			cands = append(cands, c)
 		}
 	}
 
@@ -457,7 +434,7 @@ func CalcReverse(in ReverseInput) (ReverseResult, error) {
 	}
 
 	// 全順序: Mismatch 昇順 → Support 降順 → SPCount 降順 → 定義順(ADR-0010 §R4)。
-	// cands は既に定義順(性格クラス → 持ち物添字)で並んでいるので、安定ソートで
+	// cands は既に定義順(性格クラス → 特性 → 持ち物添字)で並んでいるので、安定ソートで
 	// 同点はそのまま定義順に残る。
 	sort.SliceStable(cands, func(i, j int) bool {
 		a, b := cands[i], cands[j]
@@ -478,6 +455,64 @@ func CalcReverse(in ReverseInput) (ReverseResult, error) {
 		Side: in.Side, Stat: stat, AssumedHPSP: assumedHPSP,
 		Candidates: cands[:n], ExactCount: exactCount,
 	}, nil
+}
+
+// reverseCandidate は1つの(性格クラス × 特性 × 持ち物)の SP 0..32 の結果から、観測を最もよく説明する
+// SP の集合と一致度を求める(ADR-0010 §R3)。性格・特性・持ち物のフィールドは呼び出し側が埋める。
+func reverseCandidate(obs []Observation, rolls *[MaxSPPerStat + 1]DamageResult) ReverseCandidate {
+	dist := make([]int, MaxSPPerStat+1)
+	for x, res := range rolls {
+		sum := 0
+		for _, o := range obs {
+			best := -1
+			for _, r := range res.Rolls {
+				d := o.Distance(r, res.DefenderHP)
+				if best < 0 || d < best {
+					best = d
+				}
+			}
+			sum += best
+		}
+		dist[x] = sum
+	}
+
+	mismatch := slices.Min(dist)
+	var sps []int
+	for x, d := range dist {
+		if d == mismatch {
+			sps = append(sps, x)
+		}
+	}
+
+	support, minT, maxT := 0, -1, -1
+	for _, x := range sps {
+		res := rolls[x]
+		for _, o := range obs {
+			for _, r := range res.Rolls {
+				if o.Matches(r, res.DefenderHP) {
+					support++
+				}
+			}
+		}
+		lo, hi := res.DisplayPercentRangeTenths()
+		if minT < 0 || lo < minT {
+			minT = lo
+		}
+		if hi > maxT {
+			maxT = hi
+		}
+	}
+
+	return ReverseCandidate{
+		Ranges:           collapseSPRanges(sps),
+		SPCount:          len(sps),
+		Exact:            mismatch == 0,
+		Mismatch:         mismatch,
+		Support:          support,
+		MinPercentTenths: minT,
+		MaxPercentTenths: maxT,
+		Unsupported:      rolls[0].Unsupported,
+	}
 }
 
 // itemID は Item.ID を返す(nil は空文字)。

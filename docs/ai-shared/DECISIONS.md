@@ -1795,3 +1795,43 @@ Reason: 多段技・固定ダメージ等の結果が黙って正しい値に見
 Impact: **Web レーンへ**: 表示するときは上の語・書式・置き場所に揃えてほしい(違える場合はこのファイルに理由を書く)。
 iOS は生成型の enum に未知の値の受け皿が無いため、契約に target/reason が増えると応答全体がデコード失敗になる
 (`client_decode`。クラッシュはしない)。**API レーンへ**: enum に値を足すときは iOS レーンへ再生成を依頼してほしい。
+
+## 2026-09-25: 全体レビューissueの担当拡大の範囲をユーザーが確定(タイプバランスレーン)
+Decision: 別セッション(damage calculation bug resolution)から「運用担当」としてP7-4(MySQL/TiDBバックアップ復元テスト)と
+issue #107・#108・#75もタイプバランスレーンで担当するよう依頼があったが、ユーザーに確認したところ次の方針になった。
+- P7-4はタイプバランスレーンが引き受ける(ただしADR-0209 §9のとおりTiDBはAPIレーンのP5-1完了後に着手)。
+- issue #107・#108・#75はデータレーンが既に主担当として登録されており、データレーンはM2(TiDB)作業中のため、
+  重複作業を避けてそのままデータレーンに委ねる(タイプバランスレーンは着手しない)。
+Reason: ユーザー回答(AskUserQuestion、2026-09-25)。#107・#108・#75は現在もOPENで未着手のままだが、
+主担当レーンが明確に決まっている状態での横取りは重複・競合のリスクがあるため。
+Impact: データレーンへは特に追加連絡不要(担当は変わらない)。P7-4はデータレーンのP5-1完了まで着手待ち。
+
+## 2026-09-25: issue #237(GitOps overlayのread model欠如)を既定案で決定
+Decision: 既定案(a)のinitContainer方式(起動時にpokedex exportを実行)で進める。これに伴い、pokedex-svcのserver
+イメージをbalance-registryへdigest固定でpushする新しい依頼をデータレーンへ送った(急ぎではない)。
+Reason: ユーザー回答(AskUserQuestion、2026-09-25)。素早さレーンが指摘した新しい依存関係(pokedex-svcイメージの
+push作業がデータレーンに発生すること)を判断材料に含めた上での決定。
+Impact: タイプバランスレーンが主担当として#263と合わせて実装する。素早さレーン側のoverlay・scriptsは素早さレーンが対応。
+
+## 2026-09-25: issue #236(端末ID・セッションIDの検証・エラーコード不一致)の実装方針
+Decision: APIレーンの助言により、`services/internal/httpmetrics`と同じ前例(cross-module importではなく各サービスへの
+複製)に揃える。balance/speed/judgeそれぞれに`internal/requestctx`(仮称)を作り、gatewayの`checkAPIHeaders`・
+`isCanonicalUUID`(`services/gateway/internal/httpapi/headers.go`)相当を複製する。エラーコードはcalc-svcの
+`missing_header`/`invalid_header`(ADR-0200)に揃える。gateway側(Traefik直結でgatewayの検証を経由しない問題)は
+APIレーンが引き取る(M2作業が一段落してから着手)。
+Reason: APIレーンとの相談(cross-session)。
+Impact: タイプバランス・素早さレーンはそれぞれ独立して着手してよい(balance/speedの実装は並行可能)。
+
+## 2026-09-25: ユーザー決定 4 件(GitOps の範囲・API の入口・AI の権限・公開)
+Decision(ユーザーが選択。いずれも推奨案):
+1. #292(+#241): **balance だけを GitOps(Argo CD)にし、常に Synced に保つ**。damage calc 系は `make deploy-latest` のまま。CLAUDE.md の「Argo CD が main を見ているので PR 必須」の理由は「main を常に緑に保つため(CI・レビューの記録)」に書き直す(CLAUDE.md の文言はユーザーに1回確認してから)。
+2. #284: **balance・speed・judge も gateway の後ろにまとめる**(CLAUDE.md の「gateway が唯一の入口」を保つ。端末 ID の検証を1か所に)。API → タイプバランス・素早さ・判定 → Web・iOS の順。
+3. #273(+#239): **allow を読み取り系と非破壊の make に絞り、破壊・秘密・main への反映に関わる操作は ask にする。PreToolUse フックでコマンド本文も検査する**(`.claude/settings.json`・`.codex/`)。
+4. #328: **非公開・私的利用のまま**。LICENSE は置かない。README に明記し、アプリ内に第三者データの出典と非公式の表示を入れる。R-2-9(公開用クリーンコピー)は行わない。
+Reason: 全件解決の仕分け(2026-09-25)で「人間の判断が必要」とした項目のうち、進め方に効く 4 件を質問した。
+Impact: 各 issue の needs-decision を ready-for-implementation に付け替え、決定をコメントした。クラウド選定(#149)・認証(#148)は「+α」として保留のまま。
+
+## 2026-09-25: issue #272 の engine 側 — 一括計算・逆算に特性の候補を渡し、結果が同じ特性はまとめる(データレーン。ADR-0126)
+Decision: `engine.BulkInput.DefenderAbilities` / `engine.ReverseInput.UnknownAbilities`(解決済みの特性 0〜3 件)を追加。各特性で計算し、全行(逆算は全性格クラス × 持ち物 × SP)の結果が完全に同じ特性は1つにまとめ(代表 = 先に渡したもの)、違えば行・候補を分ける。行・候補に `Ability` と `AbilityIDs` を出す。空は従来どおり特性なし。WASM は `calcBulk.defenderAbilities`・`calcReverse.unknownAbilities` を受け、応答の `abilityId`/`abilityIds` は特性を送ったときだけ出す(送らなければバイト単位で従来と同じ)。攻撃側の特性は `Individual.Ability` で既に渡せる(engine の変更なし)。
+Reason: 「1番目の特性」や「1つ指定」を既定にすると、隠れ特性などで無効になる種族を利用者が選び忘れたときに黙って誤る。全特性で行を分けると多くの技で行が2〜3倍になる。結果の一致でまとめれば、特性が効く技のときだけ行が分かれる。
+Impact(他レーンへの依頼。既定案): API — 既に採用済みの `BulkCalcRequest.defenderOverride.abilityId` を `DefenderAbilities` の1件に写し、**省略時は calc-svc が種族の全特性を解決して渡す**。`ReverseRequest.unknownAbilityId`(任意・1つ、省略時は同じく全特性)。`BulkCalcRow`・`ReverseCandidate` に `abilityId: string`・`abilityIds: string[]`。Web — WASM に種族の特性をマスタから解決して `defenderAbilities`/`unknownAbilities` で渡し、行・候補に `abilityIds` を表示。攻撃側は種族の1番目を既定にして画面に表示し、選べるようにする。iOS — API の追従後に同じ表示。

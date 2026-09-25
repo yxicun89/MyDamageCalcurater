@@ -173,6 +173,8 @@ func errorResponse(err error) string {
 		{engine.ErrTooManyItemCandidates, CodeInvalidInput},
 		{engine.ErrTooManyObservations, CodeInvalidInput},
 		{engine.ErrInvalidMaxCandidates, CodeInvalidInput},
+		// 特性の候補の不正(issue #272。ADR-0126。新しいコードは API 契約の持ち物なので足さない)。
+		{engine.ErrInvalidAbilityCandidates, CodeInvalidInput},
 		// ダメージを与えられない技の逆算(issue #317。専用の code は API 契約の持ち物なので、
 		// 追加されるまでは invalid_input に写す。ADR-0117 §3)。
 		{engine.ErrMoveDealsNoDamage, CodeInvalidInput},

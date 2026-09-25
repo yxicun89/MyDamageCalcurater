@@ -2,8 +2,8 @@
 
 ## Damage Calculator
 Lane: データ(engine・マスタ・pokedex。どの AI が進めてもよい。COORDINATION.md)
-Active: Claude Code
-Branch: feat/claude-p1-engine(作業ディレクトリ ~/MyDamageCalcurater)
+Active: なし(2026-09-25 のセッションは区切りで終了。次のセッションが #403 から続ける)
+Branch: 次は main から feat/data-<名前> か fix/data-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater は main 追従の確認用。作業は git worktree で)
 Status: Phase 1・P2-1・P1-10・Phase R・P1-13・P1-11・P1-12・P2-1b・P2-1c・P2-2a・P2-2b・P2-2c・P2-2d・P2-3(pokedex-svc。内部 API・公開 API・natures・balance/speed 向け export。ADR-0105)は完了(critic レビュー済み)
 Status(追記): P2-3b(無効・吸収の特性)も完了・main 統合済み(ADR-0106)。calc・gateway の pokedex-svc 接続(API レーンの依頼)も PR #87 で解決済み(api-smoke で master=pokedex 確認済み)。
 Status(追記): P5-6(技の追加効果によるランク変化。ADR-0107)完了・critic PASS(1往復)・**main 統合済み(PR #132)**。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。`move_effects` 別表・`MasterMove.effect`(内部API)まで。公開APIへの露出(判定レーンが技IDからランク変化を引く経路)は判定レーンの要件確定後に別途対応。
@@ -15,7 +15,8 @@ Status(追記): issue #104(DB資格情報の最小権限分離)完了・critic P
 Status(追記): issue #109(HTTPタイムアウト・graceful shutdown)完了・critic PASS(1往復。指摘なし)・**main 統合済み(PR #178)**。`newHTTPServer`/`serve`/`runServe`の3層分離(ADR-0111。services/balanceと同じ値)。`terminationGracePeriodSeconds: 30`を追加。実クラスタで再デプロイ・確認済み。
 Status(追記): issue #112(DB接続プール上限)完了・critic PASS(1往復。軽微指摘1件反映)。4環境変数を`services/pokedex/db.OpenPool`経由で適用(ADR-0112)。実クラスタで再デプロイ・確認済み。**main 統合済み(PR #180)**。**これでデータレーン主担当のCodexレビューissue(#104・#106・#109・#112)はすべて完了・main統合済み**。
 Status(追記): issue #102(importer の中断キャッシュ自己回復。ADR-0113)を修正。`showdown-cache.mjs` へ切り出し、一時名+検証+rename。テスト7件を `make test-tools` に接続。
-Next: 他レーンからの依頼待ち。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)
+Status(追記): 2026-09-25「open issue 全件解決」(3 回の全体レビューの 143 件を仕分け)。データレーンで main に入れた PR: #343(#76)・#346(#303・#77・#71 engine)・#347(#269・#310・#311)・#354(#347 の後退の修正)・#355(#231)・#358(#251・#74 データ)・#359(#255・#317)・#361(CI #215)・#364(#280)・#368(#270 効果データ)・#369(防御プリセット)・#376(#271 技の機構)・#378(deploy-latest の migrate・importer)・#380(#379)・#381(未対応の印)・#384(#221・#278・#312)・#387(#386 MySQL probe)・#401(pokedex イメージの registry push)・#402(#272 engine)。あわせて #338(8080 の白画面 #268・手順書の作り直し)。#271・#270・#272 は API・Web・iOS・判定の表示待ち(各 issue のチェックリスト)。
+Next: issue #403 の「残りのパッケージ」を依存の順に(D07 共通スクリプト・up.sh → D10 → D20 → D11 → D12 → D18〜D32)。後続: 逆算の特性候補の計算量の最適化(ADR-0126 追記)、#349。1 パッケージ = 1 PR、importer に触れたら実データの dry-run、マージ後は make deploy-latest。
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
@@ -214,10 +215,31 @@ WASM無回帰を確認)。`npx vitest run CalcScreen.test`33/33・`npm test`1612
 main統合済み**: Web側の対応は不要(`apiEngine.ts`のmapCalcResult/mapReverseCandidateが明示的フィールド
 写像のため増えたフィールドは自動的に無視される。issue #67の前方互換どおり)。印を画面に表示するかどうかは
 Webレーンの判断(DECISIONS.md 2026-09-25参照)。
-Next: オーケストレーターの優先度キュー(2026-09-25時点)で #218 に着手する。
-その後 #219・#211(APIレーン連携。`mydamagecalcurater-api-67`に契約を確認)、#272・#274(iOSレーンが
-既に確定させた文言・順序に合わせる。DECISIONS.md参照)、#210、#332(devDependencies更新)、#226(README等の
-実装状況の精度確認)、#271・#270(Web側の未対応表示。APIレーンのunsupported契約は既にmain統合済み)。
+**issue #218(タブを切り替えると計算・逆算の入力状態が消える)完了・main統合済み(2026-09-25。PR #407)**:
+ADR-0308に沿って実装。(1) lazy-mount-then-keep-alive(一度選ばれたタブだけmount、以後unmountしない。
+SpeedScreenのマウント時eager fetchを避けるため全画面の先読みはしない) (2) `role="tabpanel"`は1つのまま、
+非選択画面はネイティブ`hidden`属性で隠す (3) 計算モード切り替え(マスタ入れ替え)ではタブの殻ごと
+リセットしてよい(古いマスタの計算結果が残るより安全。ADR-0304 A-6の既存unmount挙動を利用) (4) リロードは
+初期状態(storage不使用)。`visitedTabs`はマスタ取得口が変わるたびに作り直される`AppTabPanel`子コンポーネント
+自身のstateに置き、モード切替時に隠れた素早さタブが余分にAPIを叩かない設計。
+**critic 1回目FAIL(2点、実測込み)**: `masterEpoch`がデッドコードでADR決定3が未検証/マスタ再読み込みの
+たびに隠れた素早さタブが再マウントしてspeed APIを二重に叩く実害(2件→4件を実測)。implementerが
+`masterEpoch`削除・`visitedTabs`の置き場所変更で対応、**critic 2回目PASS**(mutation testing 5種・
+実測プローブで両問題の解消を確認)。`npx vitest run`1625/1625・`make web-e2e`37/37・typecheck/lint無回帰。
+**運用インシデント**: 実装1回目の際、worktree競合で実装者エージェントが`git update-ref`でブランチ参照を
+強制移動する場面があった(データ損失は無し、コーディネーターが検証済み)。次回以降はスキル間で
+worktreeを都度削除してから次段階へ進む運用に修正済み(メモリに記録)。
+Next: オーケストレーターの優先度キュー(2026-09-25時点の繰り上げ)で **#271・#270**(計算・逆算・bulk・
+判定の結果に「未対応」の印を表示。ADR-0123〈13種+zero_power+unsupported_effect〉。API契約〈PR #372〉・
+WASM出力〈PR #381〉・judge契約〈PR #406〉はmain統合済み。design.mdに追記、色だけに頼らない表示)に着手する。
+その後 #219・#211(APIレーン連携。`mydamagecalcurater-api-67`に契約を確認)、#272・#274(#272はPR #402/
+ADR-0126でWASMへ特性が渡る。iOSレーンが確定させた文言・順序に合わせる。DECISIONS.md参照。#274と一緒に
+設計し特性入力UIを重複させない)、#210、#332(devDependencies更新)、#226(README等の実装状況の精度確認)。
+**新規キュー項目(2026-09-25、オーケストレーター経由のユーザー決定)**: issue #328(非公開・私的利用・
+LICENSEなしで決定。design.mdに追記のうえ、既存画面の邪魔にならない位置に出典・非公式である旨を表示。
+文言はiOSレーンが既定案をDECISIONS.mdへ書く予定、Webはそれに合わせる)。issue #284(balance/speed/judgeが
+gatewayの後ろに統一される。APIレーンの転送実装が出たら`/api/balance`・`/api/speed`・`/api/judge`の
+接続先を切り替える)。両方ともキューの末尾。
 (3) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
 (apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより
 連絡が来る想定。(4) P5-5(構築ビルダー等)は record/team の API 待ち(M2。2026-09-24 時点で record/team-svc
