@@ -27,7 +27,7 @@ import (
 // masterTables は投入で置き換えるテーブル(ADR-0100 §3。schema_migrations を除く全テーブル)。
 var masterTables = []string{
 	"types", "type_chart", "abilities", "items", "moves", "species", "species_abilities",
-	"item_effects", "ability_effects", "learnsets", "natures",
+	"item_effects", "ability_effects", "move_mechanisms", "learnsets", "natures",
 	"regulations", "regulation_species", "regulation_moves", "regulation_items", "regulation_abilities",
 	"data_versions",
 }
@@ -139,7 +139,7 @@ func TestApplyWritesOutput(t *testing.T) {
 	counts := map[string]int{
 		"types": len(out.Types), "type_chart": len(out.TypeChart), "abilities": len(out.Abilities), "items": len(out.Items),
 		"moves": len(out.Moves), "species": len(out.Species), "item_effects": len(out.ItemEffects),
-		"ability_effects": len(out.AbilityEffects), "learnsets": len(out.Learnsets), "natures": len(out.Natures),
+		"ability_effects": len(out.AbilityEffects), "move_mechanisms": len(out.MoveMechanisms), "learnsets": len(out.Learnsets), "natures": len(out.Natures),
 		"regulations":        len(out.Regulations),
 		"regulation_species": len(out.RegulationSpecies), "regulation_moves": len(out.RegulationMoves),
 		"regulation_items": len(out.RegulationItems), "regulation_abilities": len(out.RegulationAbilities),
@@ -374,5 +374,53 @@ func TestRunSchemaNotReady(t *testing.T) {
 	}
 	if n != 0 {
 		t.Errorf("migrate 前の DB にテーブルが %d 個できた(importer はテーブルを作らない)", n)
+	}
+}
+
+// 取得元の版が同じでも、変換結果が変われば Run は投入する(issue #379・ADR-0122)。
+// この変更より前の投入(data_versions に変換結果の版が無い DB)も、最初の Run で1回だけ投入し直す。
+func TestRunReimportsWhenOutputChanges(t *testing.T) {
+	conn := freshImportDB(t)
+	out, versions := fixtureOutput(t)
+	ctx := context.Background()
+	t1 := time.Date(2026, 9, 21, 0, 0, 0, 0, time.UTC)
+
+	// 前回の importer の投入を再現: 技の機構が無く、変換結果の版も記録していない。
+	stale := out
+	stale.MoveMechanisms = nil
+	if len(out.MoveMechanisms) == 0 {
+		t.Fatal("架空データに技の機構が無く、変換結果の違いを作れない")
+	}
+	if err := importer.Apply(ctx, conn, stale, versions, t1); err != nil {
+		t.Fatalf("前回の投入: %v", err)
+	}
+
+	applied, err := importer.Run(ctx, conn, out, versions, t1.Add(time.Hour), false)
+	if err != nil || !applied {
+		t.Fatalf("変換結果が変わった Run = (%v, %v), want (true, nil)", applied, err)
+	}
+	var n int
+	if err := conn.QueryRow("SELECT COUNT(*) FROM move_mechanisms").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != len(out.MoveMechanisms) {
+		t.Errorf("move_mechanisms = %d 行, want %d", n, len(out.MoveMechanisms))
+	}
+	want, err := importer.OutputVersion(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotChecksum string
+	if err := conn.QueryRow("SELECT checksum FROM data_versions WHERE source = ?", importer.OutputSource).Scan(&gotChecksum); err != nil {
+		t.Fatalf("変換結果の版が data_versions に無い: %v", err)
+	}
+	if gotChecksum != want.Checksum {
+		t.Errorf("data_versions の変換結果の checksum = %s, want %s", gotChecksum, want.Checksum)
+	}
+
+	// 変換結果が同じなら次はスキップする。
+	applied, err = importer.Run(ctx, conn, out, versions, t1.Add(2*time.Hour), false)
+	if err != nil || applied {
+		t.Fatalf("変換結果が同じ Run = (%v, %v), want (false, nil)", applied, err)
 	}
 }

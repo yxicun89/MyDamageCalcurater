@@ -2332,3 +2332,197 @@ spec 時点の `swift test`(2026-09-25): 406件実行、7テストで失敗10件
   差分に含まれない・種族検索シートのテスト)が1件だけ失敗したが、単体で再実行すると成功(27.9秒)。
   当時は他レーンの並行セッションが同じシミュレータを使っていたための環境要因と判断し、
   並行実行が無い状態で `make ios-test` を再実行して全件成功を確認した。
+
+## issue #274 の受け入れ条件(計算画面の「詳細」: 急所・やけど・天候・フィールド・壁・ランク・特性。実装完了)
+
+- 日付: 2026-09-25 / 担当レーン: iOS(Web は iOS の決定に追従する。docs/ai-shared/DECISIONS.md 2026-09-25「計算条件の入力 UI」)/
+  関連: issue #274、docs/requirements.md §2「補正」、docs/design.md「数値の直接入力は『詳細』を開いたときだけ」、
+  本 ADR「P6-2a」規則3〜7、「P6-2d」、「issue #113」、ADR-0500 §3
+
+### 0. 何が足りないか
+
+engine・API は急所(`options.critical`)・場(`field`: 天候・フィールド・壁)・攻撃側の `ranks`・`status`・`abilityId` を受け付けるが、
+iOS の計算画面はどれも入力できない。`CalcViewModel.buildRequest` は `critical: false` 固定で `field` を持たず、
+プリセット経路の `abilityId` は常に nil、ランク・状態異常は常に既定値。
+
+### 1. 範囲
+
+- 対象(計算画面・`CalcViewModel`): 急所、攻撃側のやけど、天候、フィールド、防御側の壁(リフレクター・ひかりのかべ・オーロラベール)、
+  攻撃側のランク(選択中の技の関連ステータスだけ)、攻撃側の特性。
+- 対象外(制約として記録する):
+  - **防御側のランク・特性・状態異常**: `BulkCalcRequest` は `defenderSpeciesKey` しか持たず、送る場所が契約に無い。
+    API レーンへ提案した(DECISIONS.md の同じ項目。既定案: `BulkCalcRequest` に任意の `defender` 上書き
+    `{ abilityId?, ranks?, status? }` を足し、全行に同じ値を当てる)。契約が入ったら別タスクで UI を足す。
+  - やけど以外の状態異常: ダメージに効くのはやけどだけなので出さない(`StatusCondition` の他の値は送らない)。
+  - 攻撃側の場の壁(`attackerScreens`): シングルのダメージに効かないので出さない(常に既定値)。
+  - 壁の「逆向き」(入れ替え後に壁の側を付け替える): 追いかけない。必要なら後続で。
+  - ダブル固有の補正、1 vs 1(`CalcRequest`)・逆算(`ReverseRequest`)への場の追加(この画面は `calcBulk` だけを使う)。
+  - どの入力を常時表示にするか(issue の「人間の判断」): 既定案どおり**すべて「詳細」の中**(既定は閉じる)。
+
+### 2. 判断: 状態の持ち方と引き継ぎ
+
+- 条件はすべて `CalcViewModel` の画面の状態(`isCritical`・`isAttackerBurned`・`weather`・`terrain`・`defenderScreens`・
+  `attackerRanks`・`attackerAbilityId`)。「P6-2a」規則6(入れ替えでプリセット・持ち物は残す)と同じく、
+  **防御側・技・プリセット・持ち物・比較・攻守入れ替え・構築の呼び出しでは消さない**。例外は特性だけ(下)。
+- **ランク**: `attackerRanks: RankBlock` の atk と spa を別々に持つ。ステッパーが編集するのは `attackerRankStat`
+  (= `AttackerPreset.relevantStat(for: 選択中の技の分類)`。技が無いときは atk)。技を物理 ↔ 特殊に変えると
+  ステッパーの対象が A ↔ C に切り替わるが、もう一方のランクは消さずに持ち続け、要求には atk・spa の両方をそのまま送る
+  (engine は技の分類の関連ステータスだけを使うので結果は変わらない。def/spd/spe は常に 0)。値は -6..+6 に丸める。
+- **やけど**: on のとき `attacker.status = .burn`、off のとき `.none`。構築の個体は状態異常を持たないので、
+  構築を呼んでいても画面の値を使う。
+- **ランク(構築)**: 構築の個体はランクを持たない(`TeamMember` に無い)ので、構築を呼んでいても画面の値を使う。
+- **特性**: 選択肢は攻撃側の `species(key:)` の `abilities`(その順)+「指定なし」(nil。要求に載せない)。
+  - 既定(起動時・プリセット経路)は nil。**これまでの要求と同じ**(プリセット経路は特性を送っていなかった)。
+  - 構築の個体を呼ぶと、その個体の保存された特性を選択状態にする(これまでの `individualForRequest` と同じ値)。
+    利用者が選び直すと上書きする(構築の選択は外れない)。同じ個体を呼び直すと保存された特性に戻る。
+  - 構築 → プリセットに切り替えると nil に戻す(既存 `testSelectingPresetAfterTeamClearsTeamSelection` の「プリセット経路は
+    特性を持たない」を保つ)。プリセット → プリセットでは利用者が選んだ特性を残す。
+  - 攻撃側の種族が変わったとき(選択・入れ替え・構築の呼び出し)は、選択中の特性が新しい種族の `abilities` にあれば残し、
+    無ければ nil に戻す(旧種族の特性を送らない。issue #100 の構築編集と同じ考え方。ただし先頭へは寄せず「指定なし」に戻す。
+    構築の呼び出しだけは上の「保存された特性」を優先する)。
+  - `attackerAbilityOptions` に無い ID は無視する(計算もしない)。
+- **場**: 天候・フィールドは1つ選ぶピル(既定 なし)。壁は3つ独立のトグル(重ねて張れる。`defenderScreens` だけに載る)。
+- **計算の回数**: 値が変わる操作ごとに `calcBulk` をちょうど1回(「P6-2a」規則「入力ごとに計算1回」)。
+  値が変わらない操作(選択中のピルを押し直す・+6 で + を押す・同じ特性を選ぶ)は計算しない。
+  既存の操作(技の変更・種族の変更・入れ替え・構築の呼び出し)の回数は変えない(ランク・特性の付け替えで余計に計算しない)。
+- **世代・キャンセル**: 条件の変更も他の入力と同じく `beginInput()` の世代と `LatestTaskRunner`(`scheduleLatest`)に乗せる。
+  追い越された計算は cancel され、状態(先に変えた条件)は次の要求に積み上がる。
+
+### 3. 判断: 文言・並び(Web も同じにする)
+
+文言はすべて Core の `DisplayLabels.swift` に置く(`CalcConditionLabels`・`WeatherLabel`・`TerrainLabel`・`ScreenKindLabel`・`RankLabel`)。
+並びは各 enum の `allCases` の順(`Terrain` はゲームの並びにし、openapi の enum の順とは違う。値の集合は同じ)。
+
+| 項目 | 文言(左から) |
+|---|---|
+| 折りたたみの見出し | 詳細 |
+| トグル | 急所 / やけど |
+| 天候(`Weather`) | なし / はれ / あめ / すなあらし / ゆき(none, sun, rain, sand, snow) |
+| フィールド(`Terrain`) | なし / エレキフィールド / グラスフィールド / サイコフィールド / ミストフィールド(none, electric, grassy, psychic, misty) |
+| 防御側の壁(`ScreenKind`) | リフレクター / ひかりのかべ / オーロラベール(reflect, lightScreen, auroraVeil) |
+| 小見出し | 天候 / フィールド / 防御側の壁 / 攻撃側のランク / 攻撃側の特性 |
+| ランク | 「A +1」「C -2」「A ±0」(atk → A、spa → C。`AttackerPreset` と同じ文字。符号は ASCII の + と -、0 は ±0) |
+| 特性の未指定 | 指定なし |
+
+「詳細」の中の並び(上から): 急所・やけど(横並びのトグル)→ 攻撃側のランク → 攻撃側の特性 → 天候 → フィールド → 防御側の壁。
+
+### 4. 判断: 写像(`APIPokeCalcService`)
+
+- ドメインに `Weather`・`Terrain`・`ScreenKind`・`Screens`・`FieldState` を足し、`BulkCalcRequest.field: FieldState`(既定 `FieldState()`)を持たせた。
+  既存の呼び出し(`field` を渡さない)はそのまま何もない場になる。
+- `generatedBulkCalcRequest` は `field == FieldState()` のとき `field` を送らない(この機能より前の要求本文と同じにするため。
+  openapi 上も省略と既定は同じ意味)。既定でないときは `weather`・`terrain`・`defenderScreens`(3つの真偽値)を送る
+  (`attackerScreens` は既定なら省略してよい)。
+- `options.critical` はこれまでどおり常に明示で送る。`attacker` の `ranks`・`status`・`abilityId` は既存の `generatedIndividual` がすでに写している。
+- `MockPokeCalcService.calcBulk` は条件を受け付け、条件なしと同じ形の行を返す(モックは計算しない。ADR-0500 §4)。変更不要の見込み。
+
+### 5. 受け入れ条件(検証可能な形)
+
+1. 起動直後の要求はこの機能より前と同じ: `critical == false`・`field == FieldState()`・`attacker.status == .none`・
+   `attacker.ranks == RankBlock()`・`attacker.abilityId == nil`、計算1回。HTTP 本文には `field` が無い
+   (`CalcViewModelConditionsTests.testDefaultsReproduceTheRequestSentBeforeThisFeature`・`APIPokeCalcServiceConditionsTests.testCalcBulkOmitsFieldWhenDefault`)。
+2. 急所・やけど・天候(全5値)・フィールド(全5値)・壁(全3種・重ね掛け)が、それぞれ `critical`・`attacker.status`・`field.weather`・
+   `field.terrain`・`field.defenderScreens` にだけ写り、値が変わるたびに計算1回、変わらない操作は0回
+   (`testCriticalMaps...`・`testBurnMaps...`・`testEveryWeather...`・`testEveryTerrain...`・`testDefenderScreens...`)。
+3. ランクは -6..+6 に丸め、境界を越える操作は計算しない。表示は「A +6」「A -6」「A ±0」(`testRankClampsToContractRangeAndIgnoresNoOpChanges`・
+   `CalcConditionsDomainTests.testRankLabel`)。
+4. 技の分類を変えるとステッパーの対象が A ↔ C に変わり、もう一方のランクは保持され両方送られる。変化技は A
+   (`testRankStepperFollowsMoveCategoryAndKeepsEachStatsRank`・`testStatusMoveEditsAttackRank`)。
+5. 特性は「指定なし」か攻撃側の `abilities` の ID だけを受け付け、種族の変更・入れ替えで新しい種族に無い特性は「指定なし」に戻る
+   (`testAbilityPickerAcceptsOnlyUnspecifiedOrSpeciesAbilities`・`testAttackerSpeciesChangeKeepsAbilityOnlyWhenNewSpeciesHasIt`・`testSwapKeepsConditionsAndDropsAbilityTheNewAttackerLacks`)。
+6. 条件は防御側・プリセット・持ち物・比較・入れ替えで消えない(`testConditionsPersistAcross...`・`testSwapKeeps...`)。
+7. 構築の個体: 保存された特性を選択状態にし、画面のやけど・ランク・場を適用する。特性の上書き・呼び直しで戻る。構築 → プリセットで特性は nil
+   (`testTeamIndividualKeepsSavedAbilityAndScreenConditionsApply`・`testPresetAfterTeamDropsTeamAbilityButKeepsOtherConditions`)。
+8. 条件の変更は `scheduleLatest` で先行の計算を cancel し、先の条件は次の要求に残る(`testConditionChangeCancelsThePreviousInFlightCalcAndAccumulates`)。
+9. `APIPokeCalcService` は場・急所・ランク・やけど・特性を openapi の綴りで送る(`APIPokeCalcServiceConditionsTests` の3件)。モックは条件付きでも同じ形の行を返す
+   (`MockPokeCalcServiceConditionsTests`)。ドメインの enum は openapi と同じ値集合、並びと文言は3章の表(`CalcConditionsDomainTests`)。
+10. XCUITest: 「詳細」は既定で閉じていて、開くと全入力が既定の選択状態で出る。急所・天候・壁・ランクの操作で選択状態・表示が変わり、
+    結果の行は出続ける(`CalcConditionsUITests` の2件)。
+11. 既存のテストは1行も変えずに通る。`swift test` と `make ios-test` がすべて成功する。
+
+### 6. accessibilityIdentifier(XCUITest が参照する)
+
+| 要素 | identifier | 備考 |
+|---|---|---|
+| 折りたたみの開閉ボタン | `calcConditionsToggle` | ラベルは「詳細」。既定は閉じる(View の `@State`) |
+| 開いた中身のコンテナ | `calcConditionsPanel` | 閉じている間は存在しない |
+| 急所 / やけど | `calcCondition-critical` / `calcCondition-burn` | on のとき `.isSelected` |
+| 天候のピル | `calcWeather-<rawValue>` | 選択中だけ `.isSelected` |
+| フィールドのピル | `calcTerrain-<rawValue>` | 同上 |
+| 防御側の壁 | `calcDefenderScreen-<rawValue>` | on のとき `.isSelected` |
+| ランクの値 | `calcAttackerRankValue` | `attackerRankText` をそのまま出す |
+| ランクの −/+ | `calcAttackerRankDecrement` / `calcAttackerRankIncrement` | SwiftUI の `Stepper` ではなく2つのボタン(XCUITest がロケールに依存しないため)。±6 で無効化 |
+| 特性の選択 | `calcAttackerAbilityPicker` | `Menu`。項目は「指定なし」+ 種族の特性名 |
+
+### 7. spec 時点のテスト結果(2026-09-25)
+
+`swift test`(`ios/PokeCalcKit`): 436件実行、23テストが失敗。失敗はすべて本タスクの新しいテスト
+(`CalcViewModelConditionsTests` 16件すべて、`CalcConditionsDomainTests` の並び・文言5件、`APIPokeCalcServiceConditionsTests` 3件中2件。
+`testConditionChangeCancels...` は仮実装では要求が来ないため待機の上限(約19秒)で失敗する)。既存のテストの失敗は0件。
+仮実装のままで通る新テスト(enum の値集合・既定の場・`Screens` の補助・既定の場を送らない・モック)は回帰の番として残す。
+`CalcConditionsUITests` はアプリのビルド(`build-for-testing`)が通ることだけ確認し、実行はしていない(View が未実装なので失敗する)。
+
+### 8. 実装者への注意(`TODO(implementer)` を検索すればコード上の該当箇所が見つかる)
+
+- `CalcViewModel.swift`: 「計算条件」の MARK の仮実装を2章どおりに埋める。各 setter は値が変わらなければ何もしない。変わったら
+  `let token = beginInput()` → 状態を更新 → `await recalculate(token: token)`(既存の `selectAttackerItem` と同じ形)。
+  `buildRequest` で `critical: isCritical`・`field: FieldState(weather:terrain:defenderScreens:)`、攻撃側の `ranks`・`status`・`abilityId` を
+  **プリセット経路と構築経路の両方**に当てる(`individualForRequest` は ranks/status を落とすので、組み立てた後に上書きする)。
+- 特性の選択肢は `reloadAttackerMoveOptions` で `detail.abilities` を `attackerAbilityOptions` に入れ、そこで「新しい種族に無ければ nil」を行う
+  (token・`detail.key` の確認の後。古い応答で書き換えない)。`selectTeamIndividual` は反映後に保存された特性を入れ、
+  `selectAttackerPreset` は直前が `.team` のときだけ nil に戻す。
+- `DisplayLabels.swift`: 3章の表の文言にする。`RankLabel` の文字は `AttackerPreset` の private な `statLetter(for:)` を共有できる形にしてよい
+  (同じ対応を2か所に書かない)。
+- `APIPokeCalcService.swift`: `generatedBulkCalcRequest` に `field` を足す(4章。既定なら nil)。ドメイン → 生成型の enum 写像は既存の
+  `generatedFormat` 等と同じく網羅 switch で書く。
+- View(`CalcScreenView` とその部品): 技セレクタの下・読み込み表示の上に「詳細」の折りたたみを置く。6章の identifier を付け、操作は
+  `viewModel.scheduleLatest { await $0.setCritical(...) }` の形で呼ぶ。開閉にアニメーションを付けるなら操作時のみ(常時動くものは入れない)。
+  色はトークンだけ(選択中のピルは `attackerPreset-*` と同じ表現)。
+- 既存テスト・新しいテストの期待値は変えない。`api/openapi.yaml`・`Generated/`・`engine/`・`web/`・`services/` は触らない。
+- 完了条件は5章。`swift test` と `make ios-test` を実行し、結果をこの章の後ろに追記する。plan.md の P6-13 にチェックを付ける。
+
+### 9. 実装結果(2026-09-25)
+
+8章どおりに実装。`CalcViewModel.swift`(各 setter・`buildRequest`・`reloadAttackerMoveOptions`・`selectTeamIndividual`・
+`selectAttackerPreset`)・`DisplayLabels.swift`(3章の文言。`RankLabel` は `AttackerPreset.statLetter(for:)` を
+`private` から module-internal に変えて共有)・`DomainTypes.swift`(`RankLimits.min/max` を新設し、ランクのクランプと
+View の ±6 無効化が同じ値を参照するようにした)・`APIPokeCalcService.swift`(`generatedBulkCalcRequest` に `field` を追加。
+既定 `FieldState()` は省略)・View(新規 `ios/PokeCalc/CalcConditionsSection.swift`、`CalcScreenView.swift` に組み込み、
+`CalcScreenStyleHelpers.swift` に `rankValueMinWidth` を追加)。`TODO(implementer)` はすべて解消。
+
+実装中に見つけて直した不具合(テストが検出。テスト自体は変えていない):
+
+1. **accessibilityIdentifier がコンテナに飲まれる**: `conditionsPanel` に `.accessibilityElement(children: .contain)` を
+   付けずに `.accessibilityIdentifier("calcConditionsPanel")` を付けていたため、横スクロール(天候・フィールド)の
+   中でない子(急所・やけど・ランク・特性・壁)の identifier がすべて `"calcConditionsPanel"` に上書きされていた
+   (XCUITest の要素ダンプで実際に確認)。`AttackerCardView`/`DefenderCardView` と同じ `.contain` を足して解消。
+2. **`calcAttackerRankIncrement` にスクロールで届かない**: `CalcConditionsUITests` の `scrollUntilHittable` は前方
+   (`swipeUp`)にしかスクロールしない。ランク・特性を「見出しを上・内容を下」の2行で積むと「詳細」パネル全体が
+   縦に伸び、天候・壁を操作したあとランク(パネルの上のほう)へ戻れなくなった。5つの小見出し行(ランク・特性・
+   天候・フィールド・壁)を「見出し+内容を1行」にまとめる `sectionRow(_:content:)` にして、既定の文字サイズでの
+   パネルの高さを抑えて解消(3章の並び順・6章の identifier は変えていない)。
+
+批評(critic)PASS。あわせて、批評指摘で以下も対応:
+
+- ランクの −/+ ボタンに VoiceOver 用の `.accessibilityLabel`(`CalcConditionLabels.rankDecrement`/`rankIncrement`)を追加
+  (アイコンだけのボタンなので、システムの自動読み上げ〈「削除」「追加」〉に頼らない)。
+- Dynamic Type: `sectionRow` が `dynamicTypeSize.isAccessibilitySize` を見て、アクセシビリティ域の文字サイズでは
+  見出しを内容の上に積む2行レイアウトに切り替える(既定サイズは1行のまま。上記2の「パネルを1行に詰めた」変更と
+  両立させるため、切り替えは既定サイズの挙動・identifier を変えずに行った)。
+- `attackerRank`/`setAttackerRank` の `switch attackerRankStat` の `default:` 分岐(`StatKey` の hp/def/spd/spe を
+  網羅するためだけの分岐で実際には来ない)にコメントを足した。
+
+`swift test`(`ios/PokeCalcKit`): 436件実行、0失敗。
+`make ios-test`(シミュレータ): `ios-lint`・`ios-gen-check`・`ios-check-request-limits` OK、`ios-test-unit` 449件成功・0失敗、
+`ios-test-ui` 22件成功・0失敗ですべて green(終了コード0)。
+実装中の検証では、`ios-test-ui` の1回目の全件実行で `CalcConditionsUITests` の2件だけが上記の不具合で失敗し(他の20件は
+green)、単体再実行(`-only-testing:PokeCalcUITests/CalcConditionsUITests`)で2件とも成功したのち、修正を確認した。
+その後の `make ios-test` 再実行は、別レーンの並行セッションが同じシミュレータ(`iPhone 18 Pro`)で `xcodebuild test` を
+実行中だったため `ios-test-ui` がブートストラップの時点で failed(`Early unexpected exit... signal kill`)になったことが
+2回あった(`ps aux` で相手のプロセスを確認。P6-12(7章)と同じ既知の環境要因)。並行実行が無い状態で `make ios-test` を
+実行し、上記の 449/449・22/22 の全件成功を確認した。
+- 追記(メインセッション、2026-09-25): アクセシビリティの文字サイズで見出しを上の行へ移したとき、`sectionRow` の
+  内容がそのまま `VStack` の子になり、ランクの −/値/+ が1つずつ縦に並んでいた。内容を `HStack` で包んで横並びを保つよう
+  修正し、accessibility-extra-large のスクリーンショットで確認した。あわせて、最大の文字サイズ
+  (accessibility-extra-extra-extra-large)では計算画面の**全体**が横にはみ出す(左端が切れる)ことを見つけた。
+  この変更の前(2026-09-23)のスクリーンショットでも同じなので既存の不具合で、本節の範囲外として plan.md P6-14 に切り出す。

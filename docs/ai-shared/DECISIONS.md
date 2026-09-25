@@ -1670,6 +1670,21 @@ Reason: gateway は `/api/balance`・`/api/speed`・`/api/judge` を経由しな
 Impact: speed API を直接叩く外部ツール・スクリプトは正準形 UUID 以外のヘッダー値を使えなくなる(`services/speed/scripts/smoke*.sh`
 は正準形 UUID に更新済み)。balance・judge は各レーンが自分の担当で同じ変更を行う(この決定は speed のみ)。
 
+## 2026-09-25: 計算条件の入力 UI(iOS レーン。issue #274 → Web レーンは追従、API レーンへ提案)
+Decision: iOS の計算画面に「詳細」(既定は閉じる)を足し、急所・攻撃側のやけど・天候・フィールド・防御側の壁・攻撃側のランク・攻撃側の特性を置く
+(issue の既定案どおり、常時表示にするものは無し)。文言と並び(左から)は次のとおりで、Web もこれに揃える(ADR-0501「issue #274」3章):
+見出し「詳細」/ トグル「急所」「やけど」/ 天候「なし・はれ・あめ・すなあらし・ゆき」(none, sun, rain, sand, snow)/
+フィールド「なし・エレキフィールド・グラスフィールド・サイコフィールド・ミストフィールド」(none, electric, grassy, psychic, misty。openapi の enum 順とは違う)/
+防御側の壁「リフレクター・ひかりのかべ・オーロラベール」(独立トグル。`field.defenderScreens`)/ 小見出し「天候」「フィールド」「防御側の壁」「攻撃側のランク」「攻撃側の特性」/
+ランク表示「A +1」「C -2」「A ±0」(選択中の技の分類の関連ステータスだけを -6..+6 で編集。atk/spa は別々に保持して両方送る)/ 特性の未指定「指定なし」(abilityId を送らない)。
+既定値は今の要求と同じ(急所 off・やけど off・場なし(`field` は送らない)・ランク 0・プリセット経路の特性は未指定)。条件は入れ替え・種族・技の変更で消さず、
+特性だけは新しい攻撃側が持たなければ「指定なし」に戻す。やけど以外の状態異常と攻撃側の壁は出さない。
+**提案(API レーン)**: `BulkCalcRequest` は `defenderSpeciesKey` しか持たないので、防御側のランク・特性・状態異常を画面から送れない。
+既定案: `BulkCalcRequest` に任意の `defender: { abilityId?, ranks?: RankBlock, status?: StatusCondition }`(全行に同じ値を当てる上書き)を足す。
+入ったら iOS・Web が「詳細」に「防御側のランク(B/D)」「防御側の特性」を足す(別タスク)。
+Reason: issue #274 は Web・iOS 両方が対象で、Web レーンとは「iOS が既定案で先に進め、Web は iOS が記録した文言に追従する」と合意済み。防御側の条件は契約が無く、クライアントだけでは足せない。
+Impact: Web の計算画面(`web/src/screens/CalcScreen.tsx`・`web/src/domain/requests.ts`)は同じ文言・並び・既定で「詳細」を実装する。API レーンは上の提案の採否を決める(採るなら openapi から)。
+
 ## 2026-09-25: 相性表・効果定義・calc の版の「正」と一致の検査(データレーン。issue #280・ADR-0118)
 Decision: 効果定義の正は `data/importer/effects.json`、`testdata/golden/effects.json` は写しとし、toID で正規化した一致をテストで確かめる(生成物にはしない。生成器の変更がゴールデンの出力を動かしうるため)。相性表の正は importer が取り込む calc スナップショットで、`pokedex-import` の照合が `testdata/golden/typechart.json`(`-typechart`、既定 `<data>/../testdata/golden/typechart.json`)と比べ、食い違いは Blocker `type-chart-reference-mismatch`。calc の版は `data/importer/config.json` の `sources.calc` を正とし、fetch-calc.mjs・tools/importer と tools/golden の依存・ゴールデンの version の一致をテストで確かめる。
 Reason: 片方だけを直しても `make test`・`make test-golden` が通り、ゴールデンが検証した定義・表と本番の DB の定義・表がずれたまま出荷されうる(issue #280)。
@@ -1699,3 +1714,8 @@ Impact: タイプバランスレーンへ: `type-balance-design.md` の未対応
 Decision: issue の既定案 A を採り、タイプ強化の持ち物・ノーマルジュエル・半減きのみ・Fire Mane・Heatproof・Purifying Salt・Eelevate を `data/importer/effects.json` と `testdata/golden/effects.json` に足した(値は oracle の実装から)。ゴールデンの生成器が効果ごとに「効く/効かない対照」の組を作り、Champions 世代でダメージが変わるのに定義の無いものは `tools/golden/unsupported-effects.json`(理由付き)と一致しなければ止まる。取込時の補正値に engine と同じ上限 `MaxEffectModifier` を入れた。
 Reason: 定義の無い持ち物・特性が黙って等倍で計算されていた(importer の effect-missing 92 件)。多くは engine を変えずにデータだけで直せる。
 Impact: 実データの dry-run で effect-missing 92→56、effect-no-hook 1→3(ノーマルジュエル・Eelevate。Levitate と同じ理由)。既定案 B(応答の「補正未対応」の印)は #271 の技の印と同じ仕組みでまとめて決める(未決)。タイプバランス レーンへ: readmodel の特性(Heatproof・Purifying Salt・Eelevate)が防御相性に入るようになる。
+
+## 2026-09-25: 技の機構(多段・固定ダメージ・威力変動 等)を move_mechanisms 表としてマスタに持つ(データレーン。issue #271-a・ADR-0121)
+Decision: Showdown の技データ(multihit・damage・ohko・willCrit・override*・ignoreDefensive・ハンドラ名)と、天候・フィールドのハンドラが技を名指ししている箇所から、importer が攻撃技の機構を 13 種に機械的に分類し、`move_mechanisms(move_id, mechanism)` に入れる。技名は持たない。分類表に無いハンドラは安全側(move_specific / field_specific)+警告。取得物の `mechanism` は必須(古い取得物は拒否)。
+Reason: 多段・威力変動・固定ダメージ等の技が黙って誤ったダメージになる(#271・#233)。engine の「未対応の印」(D16)の前提になるデータが無かった。
+Impact: 実データで攻撃技 335 のうち 93 が機構を持つ。マージ後に Showdown の取得をやり直す必要がある(同じ commit・キャッシュ使用)。API レーンへ: `MasterMove.mechanisms: string[]` の追加を依頼(`api/openapi.yaml`)。engine・calc-svc への受け渡しは D16。

@@ -53,7 +53,9 @@ public enum AttackerPreset: String, CaseIterable, Sendable, Hashable {
     }
 
     /// 関連ステータス(atk/spa)を画面用の1文字に変える(Web の `statLetterJa` と同じ対応)。
-    private static func statLetter(for stat: StatKey) -> String {
+    /// `internal`(既定)にしてあるのは、`RankLabel.text(stat:value:)`(DisplayLabels.swift)が
+    /// 同じ対応を共有するため(issue #274。ADR-0501「issue #274」8章: 同じ対応を2か所に書かない)。
+    static func statLetter(for stat: StatKey) -> String {
         switch stat {
         case .atk: return "A"
         case .spa: return "C"
