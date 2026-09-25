@@ -157,18 +157,20 @@ describe("defenderPresetForCategory(分類が変わったときの読み替え)"
     expect(defenderPresetForCategory(key, category)).toBe(expected);
   });
 
-  test.each(
-    categories.flatMap((category) => DEFENDER_PRESET_KEYS.map((key) => [category, key] as const)),
-  )("%s × %s の結果は、その分類の選択肢に入っている(ラジオが必ず1つ checked になる)", (category, key) => {
-    expect(defenderPresetKeysFor(category)).toContain(defenderPresetForCategory(key, category));
-  });
+  test.each(categories.flatMap((category) => DEFENDER_PRESET_KEYS.map((key) => [category, key] as const)))(
+    "%s × %s の結果は、その分類の選択肢に入っている(ラジオが必ず1つ checked になる)",
+    (category, key) => {
+      expect(defenderPresetKeysFor(category)).toContain(defenderPresetForCategory(key, category));
+    },
+  );
 
-  test.each(
-    categories.flatMap((category) => DEFENDER_PRESET_KEYS.map((key) => [category, key] as const)),
-  )("%s × %s は冪等(同じ分類に読み替え直しても変わらない)", (category, key) => {
-    const once = defenderPresetForCategory(key, category);
-    expect(defenderPresetForCategory(once, category)).toBe(once);
-  });
+  test.each(categories.flatMap((category) => DEFENDER_PRESET_KEYS.map((key) => [category, key] as const)))(
+    "%s × %s は冪等(同じ分類に読み替え直しても変わらない)",
+    (category, key) => {
+      const once = defenderPresetForCategory(key, category);
+      expect(defenderPresetForCategory(once, category)).toBe(once);
+    },
+  );
 
   test("物理 → 特殊 → 物理 と往復しても元のプリセットに戻る(振り方の意図を落とさない)", () => {
     for (const key of defenderPresetKeysFor("physical")) {

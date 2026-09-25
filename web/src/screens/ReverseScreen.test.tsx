@@ -323,9 +323,7 @@ describe("受けたダメージ(side attacker)", () => {
 describe("受けたダメージ(side attacker)の自分の耐久(防御側プリセット。issue #275)", () => {
   /** 指定した分類の技を覚える種族の、その技(相手 = 攻撃側の learnset から選ぶ)。 */
   function moveOf(species: MasterSpecies, category: Move["category"]): Move {
-    const move = learnsetMoves(species, master.moves).find(
-      (candidate) => candidate.category === category,
-    );
+    const move = learnsetMoves(species, master.moves).find((candidate) => candidate.category === category);
     if (move === undefined) {
       throw new Error(`${species.key} が ${category} の技を覚えない`);
     }
@@ -347,11 +345,7 @@ describe("受けたダメージ(side attacker)の自分の耐久(防御側プリ
   }
 
   /** 受けたダメージを選び、自分と相手を選んで、相手の技を1つ選ぶ。 */
-  async function chooseReceivedWithMove(
-    user: UserEvent,
-    theirs: MasterSpecies,
-    move: Move,
-  ): Promise<void> {
+  async function chooseReceivedWithMove(user: UserEvent, theirs: MasterSpecies, move: Move): Promise<void> {
     await chooseReceived(user);
     await choosePair(user, speciesAt(0), theirs);
     await user.selectOptions(moveSelect(), move.id);

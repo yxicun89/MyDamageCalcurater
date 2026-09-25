@@ -118,9 +118,10 @@ function parseCatalog(): GoDefenderPreset[] {
   const consts = parsePresetKeyConsts(source);
   expect(consts.size, "engine/bulk.go の PresetKey 定数を読めない").toBeGreaterThan(0);
 
-  const block = /func DefenderPresetCatalog\(\) \[\]DefenderPreset \{[^{]*\[\]DefenderPreset\{\n([\s\S]*?)\n\t\}\n\}/.exec(
-    source,
-  );
+  const block =
+    /func DefenderPresetCatalog\(\) \[\]DefenderPreset \{[^{]*\[\]DefenderPreset\{\n([\s\S]*?)\n\t\}\n\}/.exec(
+      source,
+    );
   expect(block, "engine/bulk.go の DefenderPresetCatalog() のリテラルを読めない").not.toBeNull();
 
   const entryPattern =

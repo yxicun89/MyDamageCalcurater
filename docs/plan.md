@@ -234,15 +234,20 @@
   `resolveAttackerPreset` の実際の出力を突き合わせる契約テスト(現状の値は一致済み)。JSON の値を書き換える
   mutation で実際に検知することを確認(3件 fail)、確認後に復元。新規17件追加(1262件)。`web/src/domain/
   attackerPresets.ts` 自体は変更していない(engine への実装移管は別タスク)。
-- [ ] issue #275(重大度 high。逆算の「受けたダメージ」で自分の耐久が無振り固定・画面にも出ない)。
-  **着手(2026-09-25。Web レーン。ブランチ `fix/web-issue-275-reverse-defender-preset`)**: 受け入れ条件と
-  失敗するテストを先に置いた段階(実装はこれから)。自分側カードに防御側プリセット(ADR-0009 §1 のカタログ8件)を
-  出し、既定は `none`(無振り)のまま = 既定時のリクエストは今までと同じ。選択肢は技の分類で絞り(物理 = B 系、
-  特殊 = D 系、変化技 = none/hp)、分類が変わったら対のプリセットへ読み替える。新しいテスト:
+- [x] issue #275(重大度 high。逆算の「受けたダメージ」で自分の耐久が無振り固定・画面にも出ない)。
+  **完了・critic PASS(2026-09-25。Web レーン。ブランチ `fix/web-issue-275-reverse-defender-preset`)**:
+  自分側カードに防御側プリセット(ADR-0009 §1 のカタログ8件)を出し、既定は `none`(無振り)のまま = 既定時の
+  リクエストは今までと同じ(回帰無し)。選択肢は技の分類で絞り(物理 = B 系、特殊 = D 系、変化技 = none/hp)、
+  分類が変わったら対のプリセットへ読み替える(`defenderPresetForCategory`。state は元のキーを保持したまま
+  表示だけ読み替えるので、物理→変化→物理と戻すと元のプリセットが復活する)。新しいテスト:
   `web/src/domain/defenderPresets.test.ts`(挙動の固定)・`defenderPresets.contract.test.ts`
   (`engine/bulk.go` の `DefenderPresetCatalog()` と `api/openapi.yaml` の enum を読む契約テスト)・
   `ReverseScreen.test.tsx`(UI とリクエストの回帰)。engine への一本化
-  (`engine/presets/defender.json`)は DECISIONS.md 2026-09-25 でデータレーンへ申し送り。
+  (`engine/presets/defender.json`)は DECISIONS.md 2026-09-25 でデータレーンへ申し送り済み、
+  `defenderPresetForCategory`(engine に無いWeb限定の読み替え規則)は ADR-0009 §1 に追記して根拠を残した。
+  critic PASS(mutation testing 2/3 kill。`flushObservationDebounce()` を守るテストが無いのは
+  `selectAttackerPreset` 側にも元々あった既存の穴で、今回の退行ではない。次に触るときに攻撃側・防御側
+  両方へテストを足すとよい)。`cd web && npx vitest run` 1419/1419 green、tsc・lintエラー無し。
 
 ## M2: 保存・構築
 
