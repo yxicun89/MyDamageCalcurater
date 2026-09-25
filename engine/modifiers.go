@@ -45,6 +45,7 @@ type AbilityEffect struct {
 	DefAbsorbTypes       map[Type]AbsorbEffect // 吸収する攻撃タイプ(ちょすい等)→副次効果。ダメージ0(ADR-0106)
 	ReduceSuperEffective int                   // 抜群技を軽減する特性等: 抜群時に軽減(例 3072)
 	IgnoresBurn          bool                  // こんじょう等: やけどの攻撃半減を無効化
+	Airborne             bool                  // ふゆう等: 浮いていて接地しない(フィールドの補正が掛からない。ADR-0116)。地面技の無効は DefImmuneTypes で別に持つ
 }
 
 func hasType(in Individual, t Type) bool {
@@ -77,23 +78,40 @@ func weatherDamageMod(w Weather, moveType Type) int {
 	return Modifier4096
 }
 
-// terrainDamageMod はフィールドによる技威力倍率を返す(接地している前提)。
-func terrainDamageMod(terr Terrain, moveType Type) int {
+// isGrounded はその個体が接地しているかを返す(フィールドの補正の対象か。ADR-0116)。
+// @smogon/calc 0.12.0 の util.isGrounded のうち engine がモデル化している条件だけを見る:
+// ひこうタイプでない、かつ特性の効果が Airborne(ふゆう等)でない。
+// じゅうりょく・くろいてっきゅう(必ず接地)と、ふうせん(浮く)は未モデル化(ADR-0116 §対象外)。
+// テラスタイプは他の補正と同じく見ない(engine は種族のタイプで相性・一致を判定している)。
+func isGrounded(in Individual) bool {
+	if hasType(in, TypeFlying) {
+		return false
+	}
+	if ae := in.Ability.Effect; ae != nil && ae.Airborne {
+		return false
+	}
+	return true
+}
+
+// terrainDamageMod はフィールドによる技威力倍率を返す。
+// 威力を上げる補正(エレキ・グラス・サイコ)は攻撃側が接地しているとき、
+// ミストフィールドのドラゴン半減は防御側が接地しているときだけ掛かる(ADR-0116)。
+func terrainDamageMod(terr Terrain, moveType Type, attackerGrounded, defenderGrounded bool) int {
 	switch terr {
 	case TerrainElectric:
-		if moveType == TypeElectric {
+		if attackerGrounded && moveType == TypeElectric {
 			return 5325 // ×1.3
 		}
 	case TerrainGrassy:
-		if moveType == TypeGrass {
+		if attackerGrounded && moveType == TypeGrass {
 			return 5325
 		}
 	case TerrainPsychic:
-		if moveType == TypePsychic {
+		if attackerGrounded && moveType == TypePsychic {
 			return 5325
 		}
 	case TerrainMisty:
-		if moveType == TypeDragon {
+		if defenderGrounded && moveType == TypeDragon {
 			return ModifierHalf // ×0.5
 		}
 	}
@@ -158,7 +176,7 @@ func weatherDefenseMod(in DamageInput, defKey StatKey) int {
 }
 
 func powerModifier(in DamageInput) int {
-	mods := []int{terrainDamageMod(in.Field.Terrain, in.Move.Type)}
+	mods := []int{terrainDamageMod(in.Field.Terrain, in.Move.Type, isGrounded(in.Attacker), isGrounded(in.Defender))}
 	if e := itemEffect(in.Attacker.Item); e != nil {
 		if e.BoostType != TypeNone && e.BoostType == in.Move.Type && e.BoostTypeMod != 0 {
 			mods = append(mods, e.BoostTypeMod)
