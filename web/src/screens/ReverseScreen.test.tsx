@@ -1004,9 +1004,12 @@ describe("件数の上限(issue #110)", () => {
 });
 
 // issue 271 / issue 270(Web レーン。ADR-0123): engine が正しく計算できない技・持ち物・特性のときは、
-// 候補と予測%は今までどおり出しつつ「この結果は正しく計算できていない可能性がある」印を候補カードに出す。
-// 置き場所は issue 305 の「近い候補」「参考」と同じく候補カードの中(候補ごとに持ち物が違い、
-// 印も候補ごとに返るため。engine の値を加工せずに出す。ADR-0300 §8)。
+// 候補と予測%は今までどおり出しつつ「この結果は正しく計算できていない可能性がある」印を出す。
+// 置き場所・文言は iOS レーンの決定(docs/ai-shared/DECISIONS.md 2026-09-25「未対応の印の表示」、
+// ADR-0501「P6-17」)に揃える(CalcScreen.test.tsx の同名 describe と同じ考え方):
+//   - **全候補に共通する印**(target・reason・id が同じ)は、候補一覧の**先頭に1回**(role=status)だけ出す。
+//   - **一部の候補だけにある印**(候補ごとに持ち物が違う等)は、その**候補カードだけ**に出す
+//     (issue 305 の「近い候補」「参考」と同じ並びに置く)。
 describe("未対応の印(issue 271 / issue 270)", () => {
   const moveMark = (moveId: string): UnsupportedMark => ({
     target: "move",
@@ -1052,20 +1055,21 @@ describe("未対応の印(issue 271 / issue 270)", () => {
   test("印が無ければ何も出ない(正常系。今までの見た目を変えない)", async () => {
     const cards = await renderWithMarks([[], []]);
     expect(cards).toHaveLength(2);
-    expect(screen.queryByText(unsupportedText.badgeLabel)).toBeNull();
-    expect(screen.queryByText(unsupportedText.notice)).toBeNull();
+    expect(screen.queryByTestId("unsupported-icon")).toBeNull();
   });
 
-  test("印が付いた候補に、「未対応」と対象名・理由を文字で出す", async () => {
+  test("一部の候補だけにある印は、その候補に「未対応: <対象>「<名前>」(<理由>)」の形で出る", async () => {
     const move = firstMoveOf(speciesAt(0));
-    const [first] = await renderWithMarks([[moveMark(move.id)], []]);
-    if (first === undefined) {
-      throw new Error("候補カードが無い");
+    const [first, second] = await renderWithMarks([[moveMark(move.id)], []]);
+    if (first === undefined || second === undefined) {
+      throw new Error("候補カードが2件でない");
     }
-    expect(within(first).getByText(unsupportedText.badgeLabel)).toBeInTheDocument();
-    expect(
-      within(first).getByText(unsupportedText.markLabel(moveMark(move.id), move.nameJa)),
-    ).toBeInTheDocument();
+    const expectedRowLabel = unsupportedText.rowLabel([
+      unsupportedText.markLabel(moveMark(move.id), move.nameJa),
+    ]);
+    expect(within(first).getByText(expectedRowLabel)).toBeInTheDocument();
+    expect(within(second).queryByTestId("unsupported-icon")).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
   test("持ち物の印は、その候補にだけ出る(候補ごとに持ち物が違うため)", async () => {
@@ -1074,23 +1078,63 @@ describe("未対応の印(issue 271 / issue 270)", () => {
     if (first === undefined || second === undefined) {
       throw new Error("候補カードが2件でない");
     }
-    expect(within(first).queryByText(unsupportedText.badgeLabel)).toBeNull();
-    expect(within(second).getByText(unsupportedText.badgeLabel)).toBeInTheDocument();
-    expect(
-      within(second).getByText(unsupportedText.markLabel(itemMark(item.id), item.nameJa)),
-    ).toBeInTheDocument();
+    expect(within(first).queryByTestId("unsupported-icon")).toBeNull();
+    const expectedRowLabel = unsupportedText.rowLabel([
+      unsupportedText.markLabel(itemMark(item.id), item.nameJa),
+    ]);
+    expect(within(second).getByText(expectedRowLabel)).toBeInTheDocument();
     // 予測%・SP 範囲は今までどおり両方の候補に出る(印が付いても候補を消さない)
     for (const card of [first, second]) {
       expect(within(card).getByText("40.2〜47.8%")).toBeInTheDocument();
     }
   });
 
-  test("印が1件でもあれば、候補一覧の先頭に role=status の案内を1つ出す", async () => {
+  // iOS レーンの決定(DECISIONS.md 2026-09-25): 全候補に共通する印は先頭に1回、残りはその候補だけ。
+  test("全候補に共通する印は候補一覧の先頭に1回だけ出て、どの候補にも出ない", async () => {
     const move = firstMoveOf(speciesAt(0));
-    await renderWithMarks([[moveMark(move.id)], [moveMark(move.id)]]);
-    const notice = await screen.findByText(unsupportedText.notice);
+    const [first, second] = await renderWithMarks([[moveMark(move.id)], [moveMark(move.id)]]);
+    if (first === undefined || second === undefined) {
+      throw new Error("候補カードが2件でない");
+    }
+    const expectedNotice = unsupportedText.notice([
+      unsupportedText.markLabel(moveMark(move.id), move.nameJa),
+    ]);
+    const notice = await screen.findByText(expectedNotice);
     expect(notice.closest('[role="status"]')).not.toBeNull();
-    expect(screen.getAllByText(unsupportedText.notice)).toHaveLength(1);
+    expect(screen.getAllByText(expectedNotice)).toHaveLength(1);
+    expect(within(first).queryByTestId("unsupported-icon")).toBeNull();
+    expect(within(second).queryByTestId("unsupported-icon")).toBeNull();
+    expect(screen.getAllByTestId("unsupported-icon")).toHaveLength(1);
+  });
+
+  // 技由来の印(全候補共通になりやすい)+ 持ち物バリアントで変わる印(一部の候補だけ)が混在するケース。
+  test("全候補共通の印と候補固有の印が混在するとき、共通は先頭に、残りはその候補だけに出る", async () => {
+    const move = firstMoveOf(speciesAt(0));
+    const item = firstItem();
+    const commonMark = moveMark(move.id);
+    const candidateOnlyMark = itemMark(item.id);
+    const [first, second] = await renderWithMarks([[commonMark, candidateOnlyMark], [moveMark(move.id)]]);
+    if (first === undefined || second === undefined) {
+      throw new Error("候補カードが2件でない");
+    }
+    const expectedNotice = unsupportedText.notice([unsupportedText.markLabel(commonMark, move.nameJa)]);
+    expect(await screen.findByText(expectedNotice)).toBeInTheDocument();
+    const expectedRowLabel = unsupportedText.rowLabel([
+      unsupportedText.markLabel(candidateOnlyMark, item.nameJa),
+    ]);
+    expect(within(first).getByText(expectedRowLabel)).toBeInTheDocument();
+    expect(within(first).queryByText(unsupportedText.markLabel(commonMark, move.nameJa))).toBeNull();
+    expect(within(second).queryByTestId("unsupported-icon")).toBeNull();
+  });
+
+  test("装飾アイコンは aria-hidden=true で支援技術から隠す", async () => {
+    const move = firstMoveOf(speciesAt(0));
+    const [first] = await renderWithMarks([[moveMark(move.id)], []]);
+    if (first === undefined) {
+      throw new Error("候補カードが無い");
+    }
+    const icon = within(first).getByTestId("unsupported-icon");
+    expect(icon).toHaveAttribute("aria-hidden", "true");
   });
 
   test("色・アイコンだけに頼らない: 印は支援技術にも読める文字で出す", async () => {
@@ -1099,8 +1143,49 @@ describe("未対応の印(issue 271 / issue 270)", () => {
     if (first === undefined) {
       throw new Error("候補カードが無い");
     }
-    const mark = within(first).getByText(unsupportedText.markLabel(moveMark(move.id), move.nameJa));
+    const expectedRowLabel = unsupportedText.rowLabel([
+      unsupportedText.markLabel(moveMark(move.id), move.nameJa),
+    ]);
+    const mark = within(first).getByText(expectedRowLabel);
     expect(mark.closest('[aria-hidden="true"]')).toBeNull();
-    expect(within(first).getByText(unsupportedText.badgeLabel).closest('[aria-hidden="true"]')).toBeNull();
+  });
+
+  // critic 指摘: issue #305 の noExactCandidateNotice(role=status)と、本タスクの unsupportedText.notice
+  // (role=status)が同時に出るケース。両方が独立した role=status の要素として共存することを固定する。
+  test("issue #305 の全候補不一致の案内と、未対応の案内は同時に出せる(両方 role=status)", async () => {
+    const move = firstMoveOf(speciesAt(0));
+    const commonMark = moveMark(move.id);
+    const result: ReverseResult = {
+      side: "defender",
+      stat: "def",
+      assumedHpSp: 32,
+      exactCount: 0,
+      candidates: [
+        reverseCandidate({ natureClass: "neutral", exact: false, mismatch: 3, unsupported: [commonMark] }),
+        reverseCandidate({
+          natureClass: "plus",
+          nature: { plus: "def", minus: "atk" },
+          exact: false,
+          mismatch: 3,
+          unsupported: [moveMark(move.id)],
+        }),
+      ],
+    };
+    const engine = createFakeEngine(undefined, () => ok(result));
+    const { user } = renderScreen(engine);
+    await choosePair(user, speciesAt(0), speciesAt(1));
+    await typeObservation(user, 1, "45");
+
+    const noExactNotice = await screen.findByText(reverseResultText.noExactCandidateNotice);
+    const expectedUnsupportedNotice = unsupportedText.notice([
+      unsupportedText.markLabel(commonMark, move.nameJa),
+    ]);
+    const unsupportedNotice = screen.getByText(expectedUnsupportedNotice);
+
+    expect(noExactNotice.closest('[role="status"]')).not.toBeNull();
+    expect(unsupportedNotice.closest('[role="status"]')).not.toBeNull();
+    // 別々の要素として独立に存在する(どちらかがもう片方を上書き・吸収していない)
+    expect(noExactNotice).not.toBe(unsupportedNotice);
+    expect(screen.getAllByRole("status")).toHaveLength(2);
   });
 });

@@ -588,8 +588,11 @@ export const reverseResultText = {
  * 持ち物・特性に付く印で、数値は通常の式のまま返る(拒否しない)。画面は数値を消さず、
  * 「この結果は正しく計算できていない可能性がある」ことと、その原因(技・持ち物・特性のどれか)を示す。
  *
- * 色だけに頼らない(design.md「画面: ダメージ計算」): 印は必ず文字(badgeLabel と markLabel)で出し、
- * アイコン・色は補助にする(アイコンは aria-hidden)。
+ * 文言・置き場所は iOS レーンの決定(docs/ai-shared/DECISIONS.md 2026-09-25「未対応の印の表示」、
+ * ADR-0501「P6-17」)に揃える: 全行(全候補)に共通する印は結果の上に1回、残りはその行(候補)だけに出す。
+ * 色だけに頼らない(design.md「画面: ダメージ計算」): 印は必ず文字(notice と markLabel)で出し、
+ * アイコン・色は補助にする(アイコンは aria-hidden)。色は補足文と同じ text-secondary を使い、
+ * danger・タイプ色は使わない(数値は通常の式の目安として出ておりエラーではないため)。
  */
 const unsupportedTargetLabel: Record<UnsupportedTarget, string> = {
   move: "技",
@@ -601,44 +604,55 @@ const unsupportedTargetLabel: Record<UnsupportedTarget, string> = {
 
 /**
  * 印の理由(15 種)の説明。target のラベルに続けて読む短い語にし、技術用語(機構・スキーマ・engine)は出さない。
- * 正は ADR-0123 §2 の表と api/openapi.yaml の UnsupportedMark.reason。
+ * 正は ADR-0123 §2 の表と api/openapi.yaml の UnsupportedMark.reason。文言は iOS レーンの表記(DisplayLabels.swift、
+ * DECISIONS.md 2026-09-25)に揃える。「特殊」はダメージ計算の特殊技分類と紛れるため、alt_offense_stat・
+ * alt_defense_stat・effectiveness_change の文言には使わない(iOS critic 指摘 2026-09-25)。
  */
 const unsupportedReasonLabel: Record<UnsupportedReason, string> = {
-  alt_defense_stat: "ふだんと違う能力値で受ける",
-  alt_offense_stat: "ふだんと違う能力値で攻撃する",
-  always_crit: "必ず急所に当たる",
-  effectiveness_change: "相性の決まり方が変わる",
-  field_specific: "天候・フィールドで効果が変わる",
-  fixed_damage: "ダメージが固定",
-  ignore_defense_ranks: "相手の能力ランクを無視する",
-  move_specific: "この技だけの特別な処理がある",
-  multi_hit: "1回で何度も当たる",
+  multi_hit: "多段技",
+  fixed_damage: "固定ダメージ",
   ohko: "一撃必殺",
-  priority_change: "優先度が変わる",
-  type_change: "タイプが変わる",
-  variable_power: "威力が状況で変わる",
+  variable_power: "威力が変化",
+  alt_offense_stat: "攻撃に使う能力値が通常と違う",
+  alt_defense_stat: "防御に使う能力値が通常と違う",
+  always_crit: "必ず急所",
+  ignore_defense_ranks: "防御側のランク変化を無視",
+  type_change: "タイプが変化",
+  effectiveness_change: "相性の求め方が通常と違う",
+  priority_change: "優先度が変化",
+  field_specific: "天候・フィールドで変化",
+  move_specific: "技固有の効果",
   zero_power: "威力が技の処理で決まる",
-  unsupported_effect: "ダメージへの影響が未対応",
+  unsupported_effect: "効果を計算に反映していない",
 };
 
 export const unsupportedText = {
-  /** 印そのものの文字(バッジ)。色・アイコンだけにしない。 */
-  badgeLabel: "未対応",
-  /**
-   * 印が1件でも出ている結果の先頭に置く案内(issue 305 の noExactCandidateNotice と同じ作法)。
-   * 数値は消さずに残すので、「目安」であることを言う。
-   */
-  notice: "「未対応」の印が付いた結果は、正しく計算できていない可能性があります(数値は目安です)",
-  /** 印をまとめた並びの accessible name(行・候補の中で何の並びかが分かるように)。 */
-  listLabel: "未対応の内容",
   target: unsupportedTargetLabel,
   reason: unsupportedReasonLabel,
   /**
-   * 印 1 件の文言。name は ID を解決した表示名(マスタに無ければ空文字を渡す。そのとき ID をそのまま出す)。
-   * 例: 技「テストれんぞくパンチ」: 1回で何度も当たる
+   * 印 1 件の文言(iOS レーンの書式に揃える)。`<対象>「<名前>」(<理由>)`。
+   * name は ID を解決した表示名(マスタに無ければ空文字を渡す。そのとき ID をそのまま出す)。
+   * reason が unsupported_effect のときは、理由の括弧を省く(「効果を計算に反映していない」は
+   * 対象名だけで意味が通るため。iOS レーンの書式と同じ)。
+   * 例: 技「テストれんぞくパンチ」(多段技) / 攻撃側の持ち物「テストどうぐ」
    */
-  markLabel: (mark: UnsupportedMark, name: string): string =>
-    `${unsupportedTargetLabel[mark.target]}「${name === "" ? mark.id : name}」: ${unsupportedReasonLabel[mark.reason]}`,
+  markLabel: (mark: UnsupportedMark, name: string): string => {
+    const target = `${unsupportedTargetLabel[mark.target]}「${name === "" ? mark.id : name}」`;
+    return mark.reason === "unsupported_effect"
+      ? target
+      : `${target}(${unsupportedReasonLabel[mark.reason]})`;
+  },
+  /**
+   * 全行(全候補)に共通する印がある結果の先頭に1回だけ置く案内(iOS レーンの書式)。
+   * markLabels は markLabel で組み立て済みの印の文言(読点区切りで並べる)。
+   */
+  notice: (markLabels: readonly string[]): string =>
+    `この結果は正確でない可能性があります(未対応: ${markLabels.join("、")})`,
+  /**
+   * 一部の行(候補)だけにある印を、その行・候補カードに出す文言(iOS レーンの書式)。
+   * markLabels は markLabel で組み立て済みの印の文言(読点区切りで並べる)。
+   */
+  rowLabel: (markLabels: readonly string[]): string => `未対応: ${markLabels.join("、")}`,
 } as const;
 
 /** 計算結果の書式(domain/format.ts)で使う語。 */

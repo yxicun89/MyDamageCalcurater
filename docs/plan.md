@@ -507,8 +507,25 @@
   CSS は `CalcScreen.css`・`ReverseScreen.css` に追加(常時アニメーションなし)。
   `npx vitest run` 1652件 green(spec-writer時点の1642 passed/10 failedから全green化)・
   `npm run typecheck` green・`npm run lint`(eslint + prettier)green・`make wasm` 後
-  `npm run e2e` 37件 green。
-  **Next(critic)**: レビュー待ち。
+  `npm run e2e` 37件 green。critic PASS 済み。
+  **クロスプラットフォーム決定への追従(2026-09-25。implementer)**: critic PASS 後、iOS レーンのレビューで
+  文言・置き場所・色のクロスプラットフォーム決定(docs/ai-shared/DECISIONS.md 2026-09-25「未対応の印の表示」、
+  ADR-0501「P6-17」)が追加されたため、それに合わせて再修正した。(1) 置き場所:
+  `web/src/domain/unsupportedLabels.ts` に `splitUnsupportedMarks` を新設し、印の内容(target・reason・id)
+  が**全行(全候補)にあるかどうか**で振り分ける形に変更(technicalな target で決め打ちせず、行ごとに
+  常に一覧を出していた旧実装を置き換え)。全行共通の印は結果・候補一覧の先頭に1回、残りはその行・候補だけに
+  出す。(2) 色: `--danger` → 既存の補足文と同じ `--text-secondary`・`--font-size-caption`。(3) 文言:
+  `unsupportedText`(`web/src/i18n/ja.ts`)を全面的に書き直し、`notice`/`rowLabel` を配列を受け取る関数にし、
+  `markLabel` を iOS と同じ `<対象>「<名前>」(<理由>)` 書式(`unsupported_effect` は括弧省略)にした。
+  reason 15 種の文言も iOS の表記に揃え、alt_offense_stat/alt_defense_stat/effectiveness_change に
+  「特殊」を使わない(iOS critic 指摘の適用)。critic の軽微な指摘2件(装飾アイコンの aria-hidden の直接
+  回帰テスト、ReverseScreen で issue #305 の `noExactCandidateNotice` と本件の `notice` が同時に出て
+  独立に共存することの固定テスト)も対応。テストは削除・弱化ではなく新仕様に合わせて書き換え・強化
+  (`splitUnsupportedMarks` 用に `web/src/domain/unsupportedLabels.test.ts` を新設)。
+  `npx vitest run` 1674件 green・`npm run typecheck` green・`npm run lint`(eslint + prettier)green・
+  `make wasm` 後 `npm run e2e` 37件 green。docs/design.md「画面: ダメージ計算」「画面: 逆算」・
+  docs/ai-shared/DECISIONS.md も更新済み。
+  **Next(critic)**: 再レビュー待ち。
 - [ ] 判定画面(JD5 `JudgeScreen`)の「未対応」の印への追従(issue #271 / #270 の判定レーン分。**上の
   Web レーンの PR の対象外**)。judge の契約は計算・逆算と別の形(`attackerKoUnsupported` /
   `defenderKoUnsupported`。ADR-0708 §1・`web/src/judge/judge.gen.ts`)なので、別タスクとして進める。

@@ -35,7 +35,7 @@ import {
   defenderItemVariants,
   defensiveItemCandidates,
 } from "../domain/requests";
-import { unsupportedMarkLabel } from "../domain/unsupportedLabels";
+import { splitUnsupportedMarks, unsupportedMarkLabels } from "../domain/unsupportedLabels";
 import type {
   Ability,
   BulkResult,
@@ -968,14 +968,22 @@ function ResultsList({
     moveType === undefined || moveType === ""
       ? "var(--text-secondary)"
       : `var(--type-${moveType}, var(--text-secondary))`;
-  // issue 271 / issue 270(ADR-0123): 印が1件でもある行が1つでもあれば、一覧の先頭に案内を1つ出す。
-  // 判定は engine が行ごとに返した unsupported をそのまま使う(ADR-0300 §8: TS 側で再判定しない)。
-  const hasUnsupported = result.rows.some((row) => row.result.unsupported.length > 0);
+  // issue 271 / issue 270(ADR-0123。iOS レーンの決定 DECISIONS.md 2026-09-25「未対応の印の表示」に揃える):
+  // 全行に共通する印は結果の先頭に1回、残りはその行だけに出す(technicalな target で決め打ちせず、
+  // 印の内容〈target・reason・id〉が全行にあるかで判定する。ADR-0300 §8: TS 側で数値・判定を加工しない、
+  // ここは「どこに出すか」の割り振りだけを行う)。
+  const { common: commonMarks, perRow: perRowMarks } = splitUnsupportedMarks(
+    result.rows.map((row) => row.result.unsupported),
+  );
+  const commonMarkLabels = unsupportedMarkLabels(commonMarks, moves, items, abilities);
   return (
     <div className="calc-results">
-      {hasUnsupported && (
+      {commonMarkLabels.length > 0 && (
         <p role="status" className="calc-results__unsupported-notice">
-          {unsupportedText.notice}
+          <span aria-hidden="true" data-testid="unsupported-icon" className="calc-results__unsupported-icon">
+            ⚠
+          </span>
+          <span>{unsupportedText.notice(commonMarkLabels)}</span>
         </p>
       )}
       {firstRow !== undefined && (
@@ -992,6 +1000,8 @@ function ResultsList({
           const barValue = Math.min(row.result.maxPercent, DAMAGE_BAR_MAX_PERCENT);
           const koKey = koRowKey(row);
           const koClassName = `calc-results__ko${pulsingKeys.has(koKey) ? " is-pulsing" : ""}`;
+          // 全行に共通する印は先頭の案内が担うので、この行では残り(一部の行だけにある印)だけ出す。
+          const rowMarkLabels = unsupportedMarkLabels(perRowMarks[index] ?? [], moves, items, abilities);
           return (
             // preset・itemId の組は行内で一意ではない場合がある(同じ preset で持ち物違い)ため index も足す。
             <li key={`${row.preset}-${row.itemId}-${String(index)}`} className="calc-results__row">
@@ -1008,22 +1018,17 @@ function ResultsList({
                   style={{ width: `${String(barValue)}%`, backgroundColor: barColor }}
                 />
               </div>
-              {row.result.unsupported.length > 0 && (
-                <div className="calc-results__unsupported">
-                  <span className="calc-results__unsupported-badge">
-                    <span aria-hidden="true" className="calc-results__unsupported-icon">
-                      ⚠
-                    </span>
-                    <span>{unsupportedText.badgeLabel}</span>
+              {rowMarkLabels.length > 0 && (
+                <p className="calc-results__unsupported">
+                  <span
+                    aria-hidden="true"
+                    data-testid="unsupported-icon"
+                    className="calc-results__unsupported-icon"
+                  >
+                    ⚠
                   </span>
-                  <ul aria-label={unsupportedText.listLabel} className="calc-results__unsupported-list">
-                    {row.result.unsupported.map((mark, markIndex) => (
-                      <li key={`${mark.target}-${mark.reason}-${mark.id}-${String(markIndex)}`}>
-                        {unsupportedMarkLabel(mark, moves, items, abilities)}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                  <span>{unsupportedText.rowLabel(rowMarkLabels)}</span>
+                </p>
               )}
             </li>
           );

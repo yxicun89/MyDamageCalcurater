@@ -53,7 +53,7 @@ import {
   reverseGuideNames,
   reverseItemLabel,
 } from "../domain/reverseLabels";
-import { unsupportedMarkLabel } from "../domain/unsupportedLabels";
+import { splitUnsupportedMarks, unsupportedMarkLabels } from "../domain/unsupportedLabels";
 import type {
   Ability,
   CalcEngine,
@@ -1127,13 +1127,24 @@ function ReverseResultsList({
   // issue 305: 観測を厳密に説明できる候補(exact)が1件も無いとき(exactCount 0 かつ候補が1件以上)。
   // 判定は engine が返した exactCount をそのまま使う(ADR-0300 §8: TS 側で再判定しない)。
   const hasNoExactCandidate = result.exactCount === 0 && result.candidates.length > 0;
-  // issue 271 / issue 270(ADR-0123): 印が1件でもある候補が1つでもあれば、候補一覧の先頭に案内を1つ出す。
-  const hasUnsupported = result.candidates.some((candidate) => candidate.unsupported.length > 0);
+  // issue 271 / issue 270(ADR-0123。iOS レーンの決定 DECISIONS.md 2026-09-25「未対応の印の表示」に揃える):
+  // 全候補に共通する印は候補一覧の先頭に1回、残りはその候補だけに出す(CalcScreen.tsx の ResultsList と同じ形)。
+  const { common: commonMarks, perRow: perCandidateMarks } = splitUnsupportedMarks(
+    result.candidates.map((candidate) => candidate.unsupported),
+  );
+  const commonMarkLabels = unsupportedMarkLabels(commonMarks, moves, items, abilities);
   return (
     <div className="reverse-results">
-      {hasUnsupported && (
+      {commonMarkLabels.length > 0 && (
         <p role="status" className="reverse-results__unsupported-notice">
-          {unsupportedText.notice}
+          <span
+            aria-hidden="true"
+            data-testid="unsupported-icon"
+            className="reverse-results__unsupported-icon"
+          >
+            ⚠
+          </span>
+          <span>{unsupportedText.notice(commonMarkLabels)}</span>
         </p>
       )}
       {hasNoExactCandidate && (
@@ -1153,6 +1164,13 @@ function ReverseResultsList({
             result.stat,
             candidate.natureClass,
             candidate.ranges,
+          );
+          // 全候補に共通する印は先頭の案内が担うので、この候補では残り(一部の候補だけにある印)だけ出す。
+          const candidateMarkLabels = unsupportedMarkLabels(
+            perCandidateMarks[index] ?? [],
+            moves,
+            items,
+            abilities,
           );
           return (
             <li
@@ -1183,22 +1201,17 @@ function ReverseResultsList({
                 </span>
                 <span className="reverse-results__percent-value">{formatPercentRange(candidate)}</span>
               </span>
-              {candidate.unsupported.length > 0 && (
-                <div className="reverse-results__unsupported">
-                  <span className="reverse-results__unsupported-badge">
-                    <span aria-hidden="true" className="reverse-results__unsupported-icon">
-                      ⚠
-                    </span>
-                    <span>{unsupportedText.badgeLabel}</span>
+              {candidateMarkLabels.length > 0 && (
+                <p className="reverse-results__unsupported">
+                  <span
+                    aria-hidden="true"
+                    data-testid="unsupported-icon"
+                    className="reverse-results__unsupported-icon"
+                  >
+                    ⚠
                   </span>
-                  <ul aria-label={unsupportedText.listLabel} className="reverse-results__unsupported-list">
-                    {candidate.unsupported.map((mark, markIndex) => (
-                      <li key={`${mark.target}-${mark.reason}-${mark.id}-${String(markIndex)}`}>
-                        {unsupportedMarkLabel(mark, moves, items, abilities)}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                  <span>{unsupportedText.rowLabel(candidateMarkLabels)}</span>
+                </p>
               )}
             </li>
           );
