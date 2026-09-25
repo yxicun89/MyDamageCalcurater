@@ -58,13 +58,14 @@ test-services: ## services のユニットテスト
 .PHONY: test-tools
 test-tools:
 	@cd tools && $(GO) test ./...
-	@node --test tools/importer/showdown-cache.test.mjs
+	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs
 
 .PHONY: test-scripts
-test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406・計算API SLO ADR-0407。クラスタ・ネットワークに触らない)
+test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406・計算API SLO ADR-0407・ルートの e2e ADR-0306。クラスタ・ネットワークに触らない)
 	@./scripts/argocd-bootstrap_test.sh
 	@./scripts/observability-bootstrap_test.sh
 	@./scripts/observability-slo_test.sh
+	@./scripts/e2e_test.sh
 
 .PHONY: lint
 lint: ## gofmt / go vet / shell・Node構文チェック
@@ -197,8 +198,8 @@ dev: ## k8s を使わずローカルで全サービス起動
 
 ## --- e2e / iOS --------------------------------------------------------
 .PHONY: e2e
-e2e: ## k3d 上のスモーク + Playwright
-	@./scripts/e2e.sh
+e2e: ## 常時3件のPlaywright(k3d不要)+ k3d-<CLUSTER>検出時にスモーク+Playwright3件を追加(ADR-0306)
+	@CLUSTER=$(CLUSTER) ./scripts/e2e.sh
 
 # ios-test などの iOS のターゲットは ios/Makefile(末尾で include)
 

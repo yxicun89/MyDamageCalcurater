@@ -286,9 +286,10 @@ func TestTypeChartFixtureMatchesKnownMatchups(t *testing.T) {
 func TestTypeChartFixtureCoversRuleTypes(t *testing.T) {
 	chart := mustTypeChart(t)
 	// engine/modifiers.go のルールが参照するタイプ(機構=コード側。ADR-0013 §2)。
+	// TypeFlying はフィールドの接地判定(ADR-0116)が名指しする。
 	ruleTypes := []Type{
 		TypeFire, TypeWater, TypeElectric, TypeGrass, TypeIce,
-		TypeRock, TypePsychic, TypeDragon, TypeNormal,
+		TypeRock, TypePsychic, TypeDragon, TypeNormal, TypeFlying,
 	}
 	for _, ty := range ruleTypes {
 		if !chart.Has(ty) {
@@ -305,13 +306,14 @@ func TestTypeChartFixtureCoversRuleTypes(t *testing.T) {
 // TestNoTypeChartTableInEngineSource は、相性表(18×18 の値)が engine の
 // コードに書き戻されていないことを確かめる(ADR-0013 §決定1)。
 //
-// 判定の根拠: 機構(天候・フィールド・半減きのみ)が名指しするタイプだけがコードに残る。
-// 下の9タイプはどのルールも名指ししないので、非テストのソースに出てきたら
+// 判定の根拠: 機構(天候・フィールド・接地判定・半減きのみ)が名指しするタイプだけがコードに残る。
+// 下の8タイプはどのルールも名指ししないので、非テストのソースに出てきたら
 // それは相性表(かそれに類する一覧)がコードに入ったということ。
 func TestNoTypeChartTableInEngineSource(t *testing.T) {
 	// ルールが参照しないタイプの定数名。types.go(定数の定義そのもの)は対象外。
 	forbidden := []string{
-		"TypeFighting", "TypePoison", "TypeGround", "TypeFlying", "TypeBug",
+		// TypeFlying は接地判定(ADR-0116: ひこうタイプは浮いている)が名指しするので外した。
+		"TypeFighting", "TypePoison", "TypeGround", "TypeBug",
 		"TypeGhost", "TypeDark", "TypeSteel", "TypeFairy",
 	}
 	entries, err := os.ReadDir(".")

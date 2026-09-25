@@ -20,6 +20,7 @@ flowchart LR
 | `fetch-calc.mjs` | 固定版の `@smogon/calc`(Champions 世代)から抽出 |
 | `fetch-showdown.mjs` | Showdown の Champions mod を取得(版は `config.json`) |
 | `fetch-pokeapi.mjs` | 日本語名などの補完データを取得 |
+| `pokeapi-csv.mjs` | PokeAPI の CSV の読み取り(列数違いの行があれば件数を出して失敗する) |
 | `check-upstream.mjs` | 上流(pinned とは別)の最新版を検出して報告するだけ(取り込みはしない) |
 | `cronjob.sh` | CronJob 用の入口。取得 → 上流検出(失敗は警告のみ)→ 照合・投入(Go) |
 

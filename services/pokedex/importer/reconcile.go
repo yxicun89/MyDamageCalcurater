@@ -31,12 +31,20 @@ type SetSummary struct {
 	Imported         int `json:"imported"`
 }
 
+// TypeChartSummary は相性表の件数(#269)。Rows は等倍を省いた行数で、0 や急な減少は
+// 取得元の表の形の変化を疑う手がかりになる。
+type TypeChartSummary struct {
+	Types int `json:"types"`
+	Rows  int `json:"rows"`
+}
+
 // Summary は件数の要約一式(ADR-0103 §4)。
 type Summary struct {
 	Moves         SetSummary          `json:"moves"`
 	Species       SetSummary          `json:"species"`
 	Items         SetSummary          `json:"items"`
 	Abilities     SetSummary          `json:"abilities"`
+	TypeChart     TypeChartSummary    `json:"typeChart"`
 	WarningCounts map[FindingKind]int `json:"warningCounts"`
 	BlockerCounts map[FindingKind]int `json:"blockerCounts"`
 }
@@ -134,6 +142,10 @@ func Reconcile(in Input) (Output, Reconciliation, error) {
 	}
 	convertBlocked := errors.Is(convErr, ErrBlocked)
 
+	// 照合も Convert と同じく、Showdown の技の別の版を正規の1件にまとめた入力で行う(ADR-0115 追記)。
+	// まとめる前の入力のままだと、版の行が正規の id の値として比べられ、誤った差分・verdict になりうる。
+	in.Showdown.Moves, _ = foldShowdownMoveVariants(in.Showdown.Moves)
+
 	// 技の判定は種族と独立にできる(ADR-0103 §5)。Convert が種族で止まっても照合する。
 	typesConv, _, err := convertTypes(in, map[string]bool{})
 	if err != nil {
@@ -152,6 +164,7 @@ func Reconcile(in Input) (Output, Reconciliation, error) {
 	partial := convertBlocked || len(verdictBlockers) > 0
 
 	summary := computeSummary(in, out, partial)
+	summary.TypeChart = TypeChartSummary{Types: len(typesConv.Rows), Rows: len(typesConv.ChartRows)}
 
 	warnings := append(append([]Finding{}, convReport.Warnings...), verdictWarnings...)
 	blockers := append(append([]Finding{}, convReport.Blockers...), verdictBlockers...)

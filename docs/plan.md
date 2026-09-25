@@ -225,6 +225,26 @@
   残るのは実際の tailnet MagicDNS 名を `VITE_API_BASE_URL` にデプロイ時設定するという**運用/設定の話**で、
   運用レーンが到達経路(Tailscale Operator の ingressClass か subnet router + tailscale serve か)を選び、
   実際の名前が決まってから。今はコード変更不要。着手のタイミングは運用レーンの選定後
+- [x] P4-22 issue #72(ルートの `make e2e` が未実装スタブのまま「テスト0件で成功」する)。**完了(2026-09-25。Web レーン。API+Web 共同担当)**: ADR-0306 に従い `scripts/e2e.sh` を実装(常時3件 `web-e2e`/`web-e2e-online`/`web-e2e-balance` を必ず実行し、kubectl のコンテキストが `k3d-$CLUSTER` のときだけ `api-smoke`/`web-k3d-smoke`/`web-k3d-e2e` を追加実行。`E2E_REQUIRE_K3D=1` あり)。ルート Makefile の `e2e` を `CLUSTER=$(CLUSTER) ./scripts/e2e.sh` に配線、`docs/test-strategy.md`・`README.md` を実装内容に合わせて更新。`bash scripts/e2e_test.sh` は80/80 passed
+- [x] issue #71 の Web 側(攻撃側プリセットの単一化。ADR-0114)。**完了(2026-09-25。Web レーン)**: データレーン
+  が `engine/presets/attacker.json`(embed)を唯一の正にした(PR #346)のを受け、
+  `web/src/domain/attackerPresets.contract.test.ts` を新規追加。ハードコードした期待値と比較する既存の
+  `attackerPresets.test.ts`(Web の今の挙動を固定)とは別に、こちらは毎回 `engine/presets/attacker.json` を
+  読み、カタログの順序・既定値・`relevantStat`/`boostMinus`/`relevantSp`/`nature` から導いた期待値と
+  `resolveAttackerPreset` の実際の出力を突き合わせる契約テスト(現状の値は一致済み)。JSON の値を書き換える
+  mutation で実際に検知することを確認(3件 fail)、確認後に復元。新規17件追加(1262件)。`web/src/domain/
+  attackerPresets.ts` 自体は変更していない(engine への実装移管は別タスク)。
+- [x] issue #333(375px幅でタブの名前が1文字ずつ縦に折り返す)。**完了(2026-09-25。Web レーン。critic 1回目
+  FAIL→修正→PR #356 で検証済み)**: `App.css` の `.app-tabs__list` に `overflow-x: auto`、`.app-tabs__tab` に
+  `white-space: nowrap`・`flex-shrink: 0` を追加(既定案どおり)。**critic 1回目FAIL**: `justify-content: center`
+  のままだとはみ出した先頭タブ(「計算」)がscrollLeft=0でも画面外に残ったまま戻れない
+  (centered flexbox overflow clipping。320pxで実測再現)。`justify-content: safe center` に修正
+  (docs/design.md「幅への対応」に記録。`safe`キーワードのSafari対応はP4-5のSafari確認〈人間の作業〉と
+  合わせて確認)。回帰テスト(`web/e2e/mobile.spec.ts`、320・375px)を2件に強化: (1)各タブのテキストノードを
+  `Range.getClientRects()`で数えて**ちょうど1行**(`toBe(1)`。0〈ラベル消失〉も1未満として弾く)、
+  (2)タブ列を左端・右端までスクロールし、先頭・末尾のタブが表示領域に収まることを確認(centered flexbox
+  overflow clippingの回帰ガード)。CSSを戻すと両方とも実際に検知することを確認(確認後に復元)。
+  `web/e2e/a11y.spec.ts`(タブのキーボード操作)・vitest 1262件・lintは無回帰(22/22 green)。
 
 ## M2: 保存・構築
 
@@ -252,7 +272,11 @@
 - [ ] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)。
   ストリームの `max_age` は7日、イベントに発生時刻(`occurred_at`)を載せる(ADR-0209 §7・#6)。
   record-svc と team-svc(P5-4)は**別々の durable consumer**を持つ(同じ consumer を共有すると配送が分かれ
-  record-svc が計算イベントを取りこぼす。ADR-0209 §4)
+  record-svc が計算イベントを取りこぼす。ADR-0209 §4)。
+  バージョン固定・ローカル/k3d 導入・ストリーム設定(Retention は Limits。ADR-0209 §3 #6 の
+  文言からの意図的な逸脱で理由は ADR-0212 §4)・イベントのワイヤフォーマット(`services/internal/calcevents`。
+  `calc` は個体・技・状況・ダメージ幅まで、`calcBulk`/`calcReverse` は envelope のみ)は ADR-0212 で確定
+  (critic 3ラウンド)。実装はこれから
 - [ ] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰)。
   ADR-0209 §5.3 の契約を `api/openapi.yaml` に入れて `make gen`(`store_unavailable` の追加を含む)→
   分離(§6)・全削除(§5)・失効ジョブ(§4)・ログ(§3)を実装。時間減衰の半減期は保持期間90日より短くする。
@@ -411,10 +435,10 @@
   クライアント未着手のため安全)/ 先制判定は優先度優先(トリックルームは優先度に影響しない)で `internal/judge` に
   `CompareTurnOrder` を新設 / 逆方向の calc では `field` の screens を入れ替える / 検査順に attacker と候補の技の解決を挿入し
   `unknown_move`(422)を追加(攻撃側の未知の技も JD4 からは 422)。critic PASS(1回目)
-  - 軽微な積み残し(critic 指摘。ブロッカーではない): `attacker`(単数の `Individual`)の欄名は
-    `encoding/json` の大文字小文字を無視したフォールバックマッチングの対象のままで、`defenders` の候補
-    (JD2/JD4 で allow-list 化済み)と厳しさが左右で食い違う。実害は小さい(値は正しい欄に入る)が、
-    `attacker` 側にも同じ allow-list を広げると契約全体で一貫する(JD5 完了時点でも未着手)
+  - [x] 軽微な積み残し(critic 指摘)を解消(2026-09-25): `attacker`(単数の `Individual`)の欄名にも
+    `defenders` の候補と同じ `individualWireKeys` allow-list による厳密な大文字小文字検査を適用
+    (`parseIndividualWire` を新設。`candidateWireKeys` は `individualWireKeys` + `moveId` から導出する形に統一)。
+    `TestOutspeedAndKoRejectsUnknownAttackerField` を追加、fix 前に戻して失敗することを確認済み(mutation test)
 - [x] JD5 Web の画面(judge-svc を呼ぶ。ADR-0705。critic PASS〈2回目。1回目 NG は古い応答〈A8〉テストが
   実際にはレースを検証していなかった点を、送信ボタンの disabled が反映される前に2回叩いて実際に2本
   同時に送る形へ修正〉)
@@ -494,6 +518,9 @@
 - **P4-5 のブラウザ実機確認**(仕様ブロッカーではない。作業は止めない。**Chrome は 2026-09-22 に確認済み**、残りは Safari): `make web-dev` で開き、Chrome と Safari で計算・逆算が動くこと、
   `.wasm` の MIME type(`application/wasm`)・`WebAssembly.instantiateStreaming`(失敗時は arrayBuffer にフォールバックする実装)・
   キャッシュ・初回ロード(約4.6MB / gzip 1.3MB)・メモリを確認する。既定案: 確認できるまで P4-5 は「実装・自動テスト済み、実機未確認」として扱う。
+  **追加(issue #333、2026-09-25)**: 375px幅未満でタブ列を左端までスクロールし、先頭の「計算」タブが
+  読める・押せることも合わせて確認する(`justify-content: safe center` を使っており、`safe`キーワードの
+  Safari対応をPlaywrightで自動確認できていない。docs/design.md「幅への対応」参照)。
 - **PR #22(Web P4-1〜P4-4)のマージ**: 深夜のため作成のみ(作業はブランチで続けられるので止まらない)。朝に確認してマージする。
 
 **解決済み(2026-09-21 のユーザー決定。詳細は DECISIONS.md / ADR-0002 / requirements.md)**
@@ -533,7 +560,9 @@
 - [x] issue #113(Web/iOS/APIレーン)入力変更時の古い計算要求を抑止・キャンセルする、のAPIレーン連携分(「クライアントのcancel伝播」): Web/iOSは自レーン分(200ms debounce・AbortSignal/Task cancel)を完了済み(PR #174・iOS側コミット)だったが、実測で調べたところ gateway 側に見落としがあった。クライアントが要求を中断すると Go の `http.Server` が `r.Context()` を `context.Canceled` で終えるが、`services/gateway/internal/httpapi/proxy.go` の `ReverseProxy.ErrorHandler` はこれを区別せず「上流に到達できない」WARN ログを出し 503 `upstream_unavailable` を返していた(実際は上流もgatewayも正常で、クライアントが単に離脱しただけ)。`errors.Is(err, context.Canceled)` のときだけ特別扱いし、WARN ログを出さず(Debug に留める)応答も書かない(相手は既に居ない)ように修正。自前のタイムアウト(`net/http: timeout awaiting response headers`)は別のエラー文言になるため混同しないことを実測で確認。`TestClientCancelIsNotUpstreamUnavailable`(wall-clock sleep 不使用。フェイクRoundTripper版・実`http.Transport`版の両方)を追加、変異テストで実効性を確認。ADR-0202 §5 に追記(AC-G10)。**限界**: gateway→calc-svcへのcontextキャンセル伝播自体は効くが、calc-svcのハンドラ・engineはcontextを見ない(engineを純粋に保つ絶対ルール2)ため、issue本文の「calc-svc CPU消費も止める」は本修正の範囲では未達成(中断された逆算は完走する。ADR-0208の上限で最悪計算量は有界なので実害は限定的。詳細はDECISIONS.md)。issue本文の受け入れ条件・対象範囲はいずれもWeb/iOS固有かgateway/calcのtimeout値等を明示的に除外しており、この限界を残したままissue #113はWeb/iOS/APIすべてのレーン分が完了としてクローズ可
 - [x] P4-17(Web/APIレーン)技のID解決の欠落を解消(ADR-0304 §3): `GET /api/pokedex/moves/batch?ids=...`(`getMovesByIds`)を新設。ADR-0304が当初推していた案A(`getSpecies.learnset`をID配列からMove実体配列に変える)は採らなかった。理由: iOS(M3)が`SpeciesDetail.learnset`を`string[]`のまま前提にした機能(CalcViewModel・ReverseViewModel・TeamEditViewModelがlearnsetをID集合として扱い、検索結果との積集合を取る)を既に出荷済みで、案Aはその完成済み機能を壊す破壊的変更になり「契約変更が小さい方」の基準に反すると判断。新設したエンドポイントは既存のlearnsetを無変更のまま、1回の呼び出しでIDの配列をMove実体の配列に解決する。ids 1〜64件(ADR-0208の前例。生成ラッパは配列のmaxItemsを検証しないため`services/pokedex/internal/httpapi/search.go`で自前検査)、見つからないIDは黙って省く、応答順はidsと同じ(DBのIN句は順序を保証しないためハンドラで並べ替え)、`getMove`と同様に既定のレギュレーションで絞らない。ルーティング(`/moves/batch`が`/moves/:key`に食われないこと)を含めテスト済み(`TestGetMovesByIds`)。ADR-0105 §3・ADR-0304 §3に追記。**ids 64件超の実データ確認はまだ行っていない**(1種族のlearnsetが64件を超える場合はWeb側で分割呼び出しが必要。詳細はADR-0304 §3・DECISIONS.md)。critic 1回目FAIL(コメント・ドキュメントの事実誤り3件。実装・テストへの指摘なし)→ 修正・推奨事項も反映 → 2回目FAIL(1: 64件で1回に収まるという未検証の約束をしていた。実データ確認できず〈k3dクラスタ停止中〉、分割呼び出し前提に書き換えて対応 2: calc-svcのエラーコードのコメントが実際と不一致〈missing_headerが正・invalid_inputは誤り〉 3: 契約のmaxItemsとGo定数64の同期テストが無かった。`api.GetSwagger()`から契約のmaxItemsを読んで期待値にする`contractQueryParamMaxItems`ヘルパーを追加し、変異テスト〈契約だけ32に変更〉で同期の実効性を確認)→ 修正済み → **3回目PASS**(重要2件を反映してcommit: Web欄のP4-17の行が「未回答」のまま古くなっていたのを解決済みに更新、`TestGetMovesByIds`に未検証だった3つの契約どおりの挙動〈マスタ未投入→200 []・重複ids→重複したまま返る・空要素は黙って省く〉のテストを追加。軽微なコメントの言い回しの訂正も反映)。Webレーンへ実装完了を連絡(learnsetの解決に使ってP4-17の技オンライン未対応を解消できる。64件超は分割呼び出しが必要である旨も伝える)
 - MySQL の manifest に MYSQL_DATABASE が無く、初回起動時に pokedex DB が自動作成されない実バグを発見(データレーンが k3d に初めて実デプロイした際に発生)。deploy/k8s/overlays/local/mysql/statefulset.yaml に MYSQL_DATABASE: pokedex を追加し、layout_test.go に検知テストを追加して修正(2026-09-22)。**新規クラスタでは直るが、この修正前にすでに初期化済みの PVC は MYSQL_DATABASE の効果を受けない**(コンテナ起動時にしか実行されない仕様のため)。既存の PVC に対しては CREATE DATABASE を手動実行するしかない。docs/runbooks/data.md に一言注記するとよい
-- P2-3 の critic の軽微(2026-09-22。未反映の4件): `check-publishable.sh` の `B_KEYVALUE_ALLOW` を self-test の基準リポジトリにも播く / `maxCatalogAbilityCount` が balance の schema・loader と三重管理(テストで検出はできる) / natures-mismatch のエラー案内が Showdown 側だけを見て `make import-fetch` の案内が出ないことがある / `TestPublicInputValidation` の 400 応答を契約検証(kin-openapi)に通す
+- P2-3 の critic の軽微(2026-09-22。4件。#74): 未反映は `check-publishable.sh` の `B_KEYVALUE_ALLOW` を self-test の基準リポジトリにも播く、の1件。
+  pokedex 側の3件は対応済み(2026-09-25): readmodel の `maxCatalogAbilityCount` を balance の schema の maxItems と直接比べる同期テスト(balance の loader 側の定数はタイプバランスレーン) /
+  nature-mismatch の Blocker の Detail に `make import-fetch` を含む復旧案内 / `TestPublicInputValidation` の 400 応答を契約検証(kin-openapi)に通す
 
 - P2-2d の critic の軽微(2026-09-22): `cronjob_layout_test.go` の「消さない」検査を secret・statefulset・configmap にも広げる / `make lint` が kubectl に依存する(kubectl の無い環境では失敗する)/ upstream の `checkedAt` が未来でも fresh 扱い / **コンテナの中で取得スクリプト(Showdown の build 等)を実際に流した記録が無い。初回の `make import-k8s` で確かめる**
 

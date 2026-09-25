@@ -85,14 +85,14 @@ flowchart TD
 | 4 | 特性による無効・吸収 | `dmg:218-220` → `dmg:96` `abilityNullification` | — | タイプ由来の無効が先。`DefImmuneTypes` が `DefAbsorbTypes` に勝つ(ADR-0106 §決定1)。結果は `DamageResult.Nullified` |
 | 5 | 0 ダメージの早期終了 | `dmg:223-225` | — | 変化技・`Power <= 0`・相性 0・特性で無効/吸収。Rolls は全 0、`KO.Hits = 0` |
 | 6 | 攻撃・防御の実効値 | `dmg:228` → `dmg:144` `attackDefenseStats` | 下表 | 物理 = A/B、特殊 = C/D(`dmg:146-150`) |
-| 7 | 威力 | `dmg:231` `max(1, pokeRound(威力, powerModifier(in)))` | `pokeRound` 1 回(補正は `chainMods` 済み) | `mod:160` `powerModifier`: フィールド(`mod:81`)→ タイプ強化持ち物 → 分類限定の威力持ち物(ADR-0008 訂正2) |
+| 7 | 威力 | `dmg:231` `max(1, pokeRound(威力, powerModifier(in)))` | `pokeRound` 1 回(補正は `chainMods` 済み) | `mod:178` `powerModifier`: フィールド(`mod:99`。接地している側だけ)→ タイプ強化持ち物 → 分類限定の威力持ち物(ADR-0008 訂正2) |
 | 8 | 基礎ダメージ | `dmg:232` `(((2*L/5+2)*威力*A)/D)/50 + 2` | 各段 floor | L は `EffectiveLevel`(常に 50) |
-| 9 | 天候 | `dmg:235-237` `weatherDamageMod`(`mod:60`) | `pokeRound`(単独) | 晴れ: 炎 ×1.5・水 ×0.5 / 雨: 水 ×1.5・炎 ×0.5 |
+| 9 | 天候 | `dmg:235-237` `weatherDamageMod`(`mod:61`) | `pokeRound`(単独) | 晴れ: 炎 ×1.5・水 ×0.5 / 雨: 水 ×1.5・炎 ×0.5 |
 | 10 | 急所 | `dmg:238-240` `base*3/2` | floor | ランクの一部無視(下表)・壁の貫通(#13) |
 | 11 | 乱数 | `dmg:248` `base*(85+i)/100`、i = 0..15 | floor | 16 ロールを `Rolls[i]` に(非減少) |
 | 12 | 一致 → 相性 | `dmg:250` `pokeRound(d, stab) * Num / Den` | 一致は `pokeRound`、相性は floor(統合しない。ADR-0008 訂正1) | 相性は `Effectiveness` の整数比 |
 | 13 | やけど | `dmg:251` `pokeRound(d, burnModifier)`(`dmg:130`) | `pokeRound` | 物理 × 攻撃側 `Status == burn` × 特性 `IgnoresBurn` でない → 2048 |
-| 14 | その他補正 | `dmg:245`・`dmg:252` `pokeRound(d, chainMods(otherModifiers))`(`mod:183`) | `chainMods` → `pokeRound` 1 回 | 連結順: 壁(急所なら除外)→ 抜群軽減特性 → 攻撃側持ち物の最終倍率 → 半減きのみ(ADR-0008 訂正5) |
+| 14 | その他補正 | `dmg:245`・`dmg:252` `pokeRound(d, chainMods(otherModifiers))`(`mod:201`) | `chainMods` → `pokeRound` 1 回 | 連結順: 壁(急所なら除外)→ 抜群軽減特性 → 攻撃側持ち物の最終倍率 → 半減きのみ(ADR-0008 訂正5) |
 | 15 | 最低 1 | `dmg:253-255` | — | ここに来るのは相性 ≠ 0 のときだけ |
 | 16 | 確定数 | `dmg:258` `ComputeKO(Rolls, DefenderHP)` | float(表示用。ADR-0006) | §8 |
 
@@ -102,9 +102,9 @@ flowchart TD
 |---|---|---|---|
 | a | 急所なら攻撃側の負ランクと防御側の正ランクを 0 にする | `dmg:153-160` | — |
 | b | `RealStats` → `applyStatStage` | `dmg:161-162` | floor |
-| c | 天候の防御補正(砂 × 岩タイプの特防、雪 × 氷タイプの防御 ×1.5)を**持ち物より先に単独で** | `dmg:164` → `mod:150` `weatherDefenseMod` | `pokeRound`(ADR-0008 訂正4) |
-| d | 攻撃側の実数値補正: 攻撃側特性の `OffBoostType` → 防御側特性の `DefResistType` → 攻撃側持ち物の `StatMods[atk/spa]` | `dmg:165` → `mod:121` `offensiveStatMod` | `chainMods` → `pokeRound`、下限 1(ADR-0008 訂正3) |
-| e | 防御側の実数値補正: 防御側持ち物の `StatMods[def/spd]` | `dmg:166` → `mod:140` `defensiveStatMod` | `chainMods` → `pokeRound`、下限 1 |
+| c | 天候の防御補正(砂 × 岩タイプの特防、雪 × 氷タイプの防御 ×1.5)を**持ち物より先に単独で** | `dmg:164` → `mod:168` `weatherDefenseMod` | `pokeRound`(ADR-0008 訂正4) |
+| d | 攻撃側の実数値補正: 攻撃側特性の `OffBoostType` → 防御側特性の `DefResistType` → 攻撃側持ち物の `StatMods[atk/spa]` | `dmg:165` → `mod:139` `offensiveStatMod` | `chainMods` → `pokeRound`、下限 1(ADR-0008 訂正3) |
+| e | 防御側の実数値補正: 防御側持ち物の `StatMods[def/spd]` | `dmg:166` → `mod:158` `defensiveStatMod` | `chainMods` → `pokeRound`、下限 1 |
 
 - ランク → 持ち物の順を固定するテスト: `engine/modifiers_test.go:200` `TestRankThenItemOrder`。天候 → 持ち物: `engine/rounding_regression_test.go:31` `TestWeatherBeforeItemRounding`。
 - 32bit 折り返し(@smogon/calc の OF32)は未実装(ADR-0004「保留」)。
@@ -134,25 +134,26 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 
 | フィールド | 意味 | 適用箇所 | 段 |
 |---|---|---|---|
-| `StatMods[stat]` | 実数値倍率(攻撃側は atk/spa、防御側は def/spd を見る) | `mod:131-134`・`mod:142-146` | #6d・#6e |
-| `PowerMod` + `PowerCategory` | 威力倍率(分類が空なら全分類) | `mod:166-168` | #7 |
-| `BoostType` + `BoostTypeMod` | 技タイプが一致したときの威力倍率 | `mod:163-165` | #7 |
-| `DamageMod` + `OnlySuperEffective` | 最終ダメージ倍率(抜群時のみにできる) | `mod:196-200` | #14 |
-| `ResistBerryType` | 防御側。そのタイプの技が抜群のとき ×0.5。ノーマルタイプは等倍でも発動 | `mod:202-206` | #14 |
+| `StatMods[stat]` | 実数値倍率(攻撃側は atk/spa、防御側は def/spd を見る) | `mod:149-152`・`mod:160-164` | #6d・#6e |
+| `PowerMod` + `PowerCategory` | 威力倍率(分類が空なら全分類) | `mod:184-186` | #7 |
+| `BoostType` + `BoostTypeMod` | 技タイプが一致したときの威力倍率 | `mod:181-183` | #7 |
+| `DamageMod` + `OnlySuperEffective` | 最終ダメージ倍率(抜群時のみにできる) | `mod:214-218` | #14 |
+| `ResistBerryType` | 防御側。そのタイプの技が抜群のとき ×0.5。ノーマルタイプは等倍でも発動 | `mod:220-224` | #14 |
 
-`AbilityEffect`(`mod:39-48`):
+`AbilityEffect`(`mod:39-49`):
 
 | フィールド | 意味 | 適用箇所 | 段 |
 |---|---|---|---|
 | `StabMod` | 攻撃側。一致補正を置き換える(0 は通常の 6144) | `dmg:122-124` | #12 |
-| `OffBoostType` + `OffBoostTypeMod` | 攻撃側。技タイプ一致で攻撃実数値倍率 | `mod:123-125` | #6d |
-| `DefResistType[type]` | 防御側。そのタイプの技の**攻撃側実数値**に掛ける | `mod:126-130` | #6d |
+| `OffBoostType` + `OffBoostTypeMod` | 攻撃側。技タイプ一致で攻撃実数値倍率 | `mod:141-143` | #6d |
+| `DefResistType[type]` | 防御側。そのタイプの技の**攻撃側実数値**に掛ける | `mod:144-148` | #6d |
 | `DefImmuneTypes` | 防御側。そのタイプを無効(ダメージ 0) | `dmg:100-104` | #4 |
 | `DefAbsorbTypes[type]` | 防御側。そのタイプを吸収(ダメージ 0)。`AbsorbEffect`(回復・能力上昇)は**読まない** | `dmg:105-107`、`mod:28-36` | #4 |
-| `ReduceSuperEffective` | 防御側。抜群のときの最終倍率 | `mod:192-194` | #14 |
+| `ReduceSuperEffective` | 防御側。抜群のときの最終倍率 | `mod:210-212` | #14 |
 | `IgnoresBurn` | 攻撃側。やけどの半減を無効 | `dmg:132-134` | #13 |
+| `Airborne` | 両側。浮いている(ふゆう)。接地判定 `isGrounded`(`mod:86`)でフィールドの補正の対象外にする。地面技の無効は `DefImmuneTypes` で別に持つ(ADR-0116) | `mod:86-95` | #7 |
 
-- 効果値の出どころ: calc-svc は DB の効果 JSON を `services/internal/master/effects.go:299` `DecodeItemEffect`・`:380` `DecodeAbilityEffect` で厳格デコード(本番の定義は `data/importer/effects.json`。ADR-0101)。WASM はリクエストの `item.effect` / `ability.effect` を `engine/wasmapi/dto.go:273`・`:397` で変換。
+- 効果値の出どころ: calc-svc は DB の効果 JSON を `services/internal/master/effects.go:299` `DecodeItemEffect`・`:380` `DecodeAbilityEffect` で厳格デコード(本番の定義は `data/importer/effects.json`。ADR-0101)。WASM はリクエストの `item.effect` / `ability.effect` を `engine/wasmapi/dto.go:273`・`:398` で変換。
 - 天候・フィールド・壁は「ゲーム機構」なので engine のルールとしてコードに持つ(`mod:1-14` のコメント、ADR-0005)。
 - 技の追加効果 `Move.Effect`(`engine/move_effect.go:22` `MoveEffect`)は `CalcDamage` が読まない。判定側が使うメタデータ(ADR-0107 決定2。`engine/move_effect_test.go:83` `TestCalcDamageIgnoresMoveEffect`)。
 
@@ -160,12 +161,12 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 
 | 入力 | 効果 | 場所 | 段 |
 |---|---|---|---|
-| `Field.Weather` sun / rain | 技ダメージ ×1.5 / ×0.5 | `mod:60` | #9 |
-| `Field.Weather` sand / snow | 岩の特防 / 氷の防御 ×1.5 | `mod:150` | #6c |
-| `Field.Terrain` electric / grassy / psychic | 同タイプの技の威力 ×1.3(5325) | `mod:81-94` | #7 |
-| `Field.Terrain` misty | ドラゴン技の威力 ×0.5 | `mod:95-98` | #7 |
-| `Field.DefenderScreens` | 物理: リフレクター/オーロラベール、特殊: ひかりのかべ/オーロラベールで ×0.5。急所は貫通 | `mod:105`、`mod:187` | #14 |
-| `Critical` | base ×1.5(floor)、ランクの一部無視、壁無視 | `dmg:238`・`dmg:153`・`mod:187` | #6a・#10・#14 |
+| `Field.Weather` sun / rain | 技ダメージ ×1.5 / ×0.5 | `mod:61` | #9 |
+| `Field.Weather` sand / snow | 岩の特防 / 氷の防御 ×1.5 | `mod:168` | #6c |
+| `Field.Terrain` electric / grassy / psychic | 攻撃側が接地しているとき、同タイプの技の威力 ×1.3(5325) | `mod:99-112`(接地判定 `mod:86` `isGrounded`: ひこうタイプでない かつ特性が `Airborne` でない。ADR-0116) | #7 |
+| `Field.Terrain` misty | 防御側が接地しているとき、ドラゴン技の威力 ×0.5 | `mod:113-116` | #7 |
+| `Field.DefenderScreens` | 物理: リフレクター/オーロラベール、特殊: ひかりのかべ/オーロラベールで ×0.5。急所は貫通 | `mod:123`、`mod:205` | #14 |
+| `Critical` | base ×1.5(floor)、ランクの一部無視、壁無視 | `dmg:238`・`dmg:153`・`mod:205` | #6a・#10・#14 |
 | `Attacker.Status == burn` | 物理技 ×0.5 | `dmg:130` | #13 |
 | `Ranks` | 実数値に倍率(floor) | `st:50` | #6b |
 
@@ -180,7 +181,7 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 | ダメージ% | 最小側 `floor(dmg*1000/HP)`、最大側は四捨五入 `(dmg*2000+HP)/(2HP)`(0.1% 単位) | `engine/display_percent.go:15,24,34` |
 
 - HP は常に**最大 HP**(`RealStats(Defender).HP`。`dmg:205`)。現在 HP・定数ダメージ・回復・急所率・命中率は KO に入らない(ADR-0006 却下・保留)。
-- 小数への変換は境界だけが行う(wasmapi の `tenthPercent` `engine/wasmapi/dto.go:575`、calc-svc の `calcResultFrom`)。
+- 小数への変換は境界だけが行う(wasmapi の `tenthPercent` `engine/wasmapi/dto.go:577`、calc-svc の `calcResultFrom`)。
 
 ## 9. 一括計算 bulk(1 攻撃 × 防御側プリセット × 持ち物)
 
@@ -198,7 +199,7 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 
 ## 10. format(single / double)
 
-- `Format` は `DamageInput`・`BulkInput`・`ReverseInput` に持ち、そのまま `CalcDamage` に渡るが、**`CalcDamage` は読まない**(`dmg:192-260` に参照なし)。壁は形式に関係なく ×0.5(`mod:104` のコメント「シングルは」)。
+- `Format` は `DamageInput`・`BulkInput`・`ReverseInput` に持ち、そのまま `CalcDamage` に渡るが、**`CalcDamage` は読まない**(`dmg:192-260` に参照なし)。壁は形式に関係なく ×0.5(`mod:122` のコメント「シングルは」)。
 - double でも結果が single と同じことはテストで固定されている(`engine/bulk_test.go:639` `TestCalcBulkFormatDouble`)。
 - 意図: ダブル固有の補正を後から足せるよう入力にだけ先に持たせた(`engine/types.go:24`、ADR-0005「M1 での対象外」)。
 
@@ -237,19 +238,19 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 
 | 入力 | 実際の扱い | 根拠 | issue |
 |---|---|---|---|
-| `TeraType` | 表にある ID かの検証だけ。一致判定・相性は素の `Species.Types` | `dmg:184-187`、`dmg:117`、`mod:50` `hasType`、ADR-0005 | #232・#315 |
+| `TeraType` | 表にある ID かの検証だけ。一致判定・相性は素の `Species.Types` | `dmg:184-187`、`dmg:117`、`mod:51` `hasType`、ADR-0005 | #232・#315 |
 | `Format = double` | 計算に使わない(壁 ×0.5 固定・全体技の軽減なし) | §10 | #232・#288 |
-| `Field.AttackerScreens` | どこからも読まれない(`DefenderScreens` だけを見る) | `mod:106` | — |
+| `Field.AttackerScreens` | どこからも読まれない(`DefenderScreens` だけを見る) | `mod:124` | — |
 | `Move.Priority`・`Move.Effect` | ダメージ計算では読まない | `engine/model.go:21`、ADR-0107 決定2 | — |
 | `Species.Abilities` | 参考。計算は `Individual.Ability` を使う | `engine/model.go:16` | #272(Web で特性を選べない) |
 | `AbsorbEffect` の回復・能力上昇 | 読まない(ダメージ 0 だけ) | `mod:28-30`、ADR-0106 §決定4 | — |
 | `Status` の burn 以外 | ダメージに関係しない | `dmg:130` | — |
-| `DamageResult.Nullified` | engine は返すが、wasmapi の結果 DTO と calc-svc の応答に出ない(`calcResultDTO` `engine/wasmapi/dto.go:596` に項目なし。`services/calc` に参照なし) | grep | #78 |
+| `DamageResult.Nullified` | engine は返すが、wasmapi の結果 DTO と calc-svc の応答に出ない(`calcResultDTO` `engine/wasmapi/dto.go:598` に項目なし。`services/calc` に参照なし) | grep | #78 |
 | 効果定義の無い持ち物・特性 | `Effect == nil` = 補正なしで計算 | §6 | #270・#282 |
 
 対応していない機構(ADR-0005「M1 での対象外」・コードで確認できるもの):
 
-- 接地判定: フィールドは常に接地扱い(`mod:80` のコメント)。#231・#289
+- 接地判定の一部: じゅうりょく・くろいてっきゅう(必ず接地)・ふうせん(浮く)は未モデル化(ADR-0116 §対象外)。グラスフィールドの地震・じならし半減、サイコフィールドの先制技無効などフィールド固有の技の処理は #271
 - 固定ダメージ・多段・威力変動・参照ステータスの差し替え: 威力の数値どおり単発で計算(`Power <= 0` は 0 ダメージ。`dmg:223`)。#233・#271
 - 条件付き特性(ADR-0005 の列挙: いかく等)、天候を変える特性、重さ依存技、急所ランク、テラスタルの補正、ダブル固有補正(全体技 ×0.75 など)
 - 多ターンの KO(定数ダメージ・回復・反動)、急所率・命中率(ADR-0006)

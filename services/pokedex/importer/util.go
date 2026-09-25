@@ -18,6 +18,7 @@ func toID(s string) string {
 }
 
 // pokeAPILookup は PokeAPI の1カテゴリ(species/forms/moves/...)を toID(slug) で引けるようにする。
+// toID(slug) の重複は Convert の最初(checkUniqueSourceIDs)で止めるので、ここでは起きない。
 type pokeAPILookup map[string]map[string]string
 
 func newPokeAPILookup(entries []PokeAPIName) pokeAPILookup {
@@ -44,7 +45,8 @@ func resolveJaName(id string, override map[string]string, pokeapiNames map[strin
 		return nameResolution{NameJa: v, Source: "override"}
 	}
 	for _, lang := range languages {
-		if v, ok := pokeapiNames[lang]; ok && v != "" {
+		// 空白だけの名前は採らない(DB の CHECK は CHAR_LENGTH > 0 なので通ってしまう。#311)。
+		if v, ok := pokeapiNames[lang]; ok && strings.TrimSpace(v) != "" {
 			return nameResolution{NameJa: v, Source: "pokeapi"}
 		}
 	}

@@ -1,0 +1,99 @@
+name: CI
+
+# issue #215: main への push・PR で test/lint/build/golden/wasm/kustomize/check-publishable を
+# 機械的に検証する(ADR-0114)。Secret は使わない(private リポジトリの無料枠内で完結させる)。
+#
+# 対象外(理由):
+#   - iOS(`make ios-test`): macOS ランナー + Xcode が要り、無料枠(private は月2,000分。macOS ランナーは
+#     消費倍率10倍)の消費が大きい。署名・実機確認は人間の作業(CLAUDE.md)。
+#   - Playwright e2e(`make e2e` / `web-e2e*`)・k3d へ実際に apply するもの(`make up`・`*-k3d-deploy` 等):
+#     k3d クラスタの起動が要り、GitHub-hosted ランナーだけでは完結しない(#72 で別途検討)。
+#
+# バージョンはワークフローに二重に書かず、リポジトリ内の正から読む:
+#   - Go: go-version-file に go.work(全 Go モジュール共通の `go 1.27.1` を1箇所で宣言している)
+#   - Node: node-version-file に web/.node-version(web/package.json の engines.node と同じ値)
+#
+# `make test` / `make lint` / `make build` は Makefile 側で Web・balance・speed・judge を
+# 前提条件として合成済み(ドキュメント: docs/impl/make-targets.md「test/lint/build の合成結果」)。
+# そのため「go ジョブ」「web ジョブ」に分けると Web 分が二重実行になり無料枠を浪費するので、
+# 1 ジョブにまとめて上から順に実行する。
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: test / lint / build / golden / wasm / kustomize / check-publishable
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: setup go (go.work の go ディレクティブから版を読む)
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: '**/go.sum'
+
+      - name: setup node (web/.node-version から版を読む)
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: web/.node-version
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # deploytest(services/gateway/deploytest)の t.Skip を 0 件にする(kubectl kustomize の描画にも要る)。
+      # 版は https://dl.k8s.io/release/stable.txt(2026-09-25 時点 v1.37.1)に合わせて固定する。
+      - name: setup kubectl (stable.txt の v1.37.1 に固定)
+        uses: azure/setup-kubectl@829323503d1be3d00ca8346e5391ca0b07a9ab0d # v5.1.0
+        with:
+          version: v1.37.1
+
+      # engine・services・tools・balance・speed・judge の単体テスト + Web の vitest(web-deps が
+      # 未インストールなら npm ci を自動実行する)。
+      - name: make test
+        run: make test
+
+      # gofmt・go vet(mysql/tidb タグ含む)・シェル/Node構文・kustomize描画(k8s-render)・
+      # check-publishable(-selftest)・各レーンの lint・Web の tsc/eslint/prettier。
+      - name: make lint
+        run: make lint
+
+      - name: make build
+        run: make build
+
+      # 計算ロジックの @smogon/calc 0.12.0 照合(testdata/golden はコミット済みなのでネットワーク不要)。
+      - name: make test-golden
+        run: make test-golden
+
+      # engine を GOOS=js/GOARCH=wasm でビルドし、ネイティブ Go の結果と Node 上の wasm 実行結果が
+      # バイト一致することを確認する。
+      - name: make test-wasm
+        run: make test-wasm
+
+      # 公開前検査(絶対パス・秘密・追跡禁止ファイル・第三者データ)。make lint に含まれるが、
+      # Actions のログで単独の合否として見えるように明示的に走らせる。
+      - name: make check-publishable
+        run: make check-publishable
+
+      # make lint の k8s-render は base/local/cloud/tidb overlay だけを描画する。ここでは
+      # 各レーン専用 overlay(local-api・local-web・gitops 等)も apply せず描画だけ確認する。
+      - name: kustomize 描画(各レーン。apply はしない)
+        run: |
+          make api-kustomize
+          make web-kustomize
+          make balance-kustomize
+          make speed-kustomize
+          make judge-kustomize
