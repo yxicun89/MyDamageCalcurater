@@ -1029,6 +1029,16 @@ func TestOutspeedAndKoRejectsInvalidRequest(t *testing.T) {
 		{"sp の合計が 66 超", withAttacker(func(a map[string]any) {
 			a["sp"] = map[string]any{"hp": 32, "atk": 32, "def": 32, "spa": 0, "spd": 0, "spe": 0}
 		}), nil},
+		{
+			// issue #329: 上の 96 は 66 から遠く、境界(MaxSPTotal+1)を1つずらす退行を検出できない。
+			// 各欄は 32 以下(MaxSPPerStat の範囲内)のまま合計だけがちょうど 1 超えた 67 で拒否することを
+			// ピン留めする。
+			"sp の合計がちょうど 67(境界値)",
+			withAttacker(func(a map[string]any) {
+				a["sp"] = map[string]any{"hp": 3, "atk": 32, "def": 0, "spa": 0, "spd": 0, "spe": 32}
+			}),
+			nil,
+		},
 		{"ranks が -6 未満", withAttacker(func(a map[string]any) { a["ranks"] = map[string]any{"spe": -7} }), nil},
 		{"ranks が +6 超", withAttacker(func(a map[string]any) { a["ranks"] = map[string]any{"spe": 7} }), nil},
 		// 候補側の欄も同じ検査を受ける。
