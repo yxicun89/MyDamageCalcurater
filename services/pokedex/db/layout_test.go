@@ -372,10 +372,24 @@ func TestNoAutomaticDown(t *testing.T) {
 			t.Errorf("%s: down を流す記述がある: %q", p, b[loc[0]:loc[1]])
 		}
 	}
+	// AI エージェントのコマンドのガード(#273・#239)は、down を「実行する」のではなく「ブロックする」ために
+	// migrate-down 等の文字列を検査用のパターンとして持つ。そのファイルだけを名指しで除く(ディレクトリごと
+	// 除くと、将来 ai-guard に本物の down の実行が入っても検知できなくなるため)。
+	blockListOnly := map[string]bool{
+		"scripts/ai-guard/bash-guard.sh":      true,
+		"scripts/ai-guard/bash-guard_test.sh": true,
+	}
 	for _, dir := range []string{"scripts", "deploy"} {
 		err := filepath.WalkDir(filepath.Join(repoRoot, dir), func(p string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return err
+			}
+			rel, err := filepath.Rel(repoRoot, p)
+			if err != nil {
+				return err
+			}
+			if blockListOnly[filepath.ToSlash(rel)] {
+				return nil
 			}
 			check(p)
 			return nil
