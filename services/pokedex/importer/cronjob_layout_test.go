@@ -450,6 +450,7 @@ func TestImporterImageDockerfile(t *testing.T) {
 		{`COPY\s+--from=build\s+\S*pokedex-import\S*\s`, "Go の pokedex-import を build ステージからコピーする"},
 		{`COPY\s[^\n]*data/importer`, "data/importer(config・effects・regulations)をイメージに焼く"},
 		{`COPY\s[^\n]*tools/importer`, "tools/importer の取得スクリプトを含める"},
+		{`COPY\s+testdata/golden/typechart\.json\s+\./testdata/golden/typechart\.json`, "照合の参照の相性表を data の隣(/app/testdata/golden)に焼く(issue #280・ADR-0118)"},
 		{`(?m)^USER\s+(node|1000)(:\S+)?\s*$`, "非 root(node / 1000)で動かす"},
 		{`cronjob\.sh`, "ENTRYPOINT などで tools/importer/cronjob.sh を起動する"},
 	}
