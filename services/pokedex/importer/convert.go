@@ -103,6 +103,14 @@ func Convert(in Input) (Output, Report, error) {
 	usedOverrideTypes := map[string]bool{}
 	usedOverrideNatures := map[string]bool{}
 
+	folded, variantWarnings := foldShowdownMoveVariants(in.Showdown.Moves)
+	in.Showdown.Moves = folded
+	warnings = append(warnings, variantWarnings...)
+
+	if err := checkUniqueSourceIDs(in); err != nil {
+		return Output{}, Report{}, err
+	}
+
 	typesConv, typeWarnings, err := convertTypes(in, usedOverrideTypes)
 	if err != nil {
 		return Output{}, Report{}, err

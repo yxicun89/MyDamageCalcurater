@@ -15,7 +15,7 @@
 | L2 ゴールデン | ダメージ計算・実数値 | tools/golden → testdata/golden | `make test-golden`(`make test` にも含む) |
 | L3 網羅・性質 | 全ポケモン | go test + 性質テスト | `make test-all-species` |
 | L4 契約 | API が openapi.yaml に準拠 | kin-openapi のバリデータ | `make test` |
-| L5 E2E | k3d 上の全体 | スモーク(curl)+ Playwright | `make e2e` |
+| L5 E2E | 常時3件(オフライン/オンライン/タイプバランスの Playwright。k3d不要)+ k3d-$CLUSTER 検出時に3件追加(スモーク curl・Web の k3d E2E) | `make e2e` |
 | L6 iOS | 画面ロジック | XCTest(シミュレータ) | `make ios-test` |
 | L7 Go/WASM 一致 | ネイティブ Go と WASM の出力 | Node + wasm_exec.js | `make test-wasm` |
 
@@ -99,6 +99,13 @@ P1-6〜P2-1a の間は gen9 の全種族(CAP 等を含む1392種)を参考集合
 - ブラウザでの実動作(MIME・`instantiateStreaming`・キャッシュ・メモリ上限)は範囲外。E2E(P4-5)で確認する
 
 ## E2E(Playwright)
+
+ルートの `make e2e` は常時3件(`web-e2e` オフライン・`web-e2e-online` オンライン・`web-e2e-balance` タイプバランス。
+いずれも k3d クラスタ不要)を必ずこの順で実行し、kubectl の現在のコンテキストが `k3d-$CLUSTER`(既定 `pokecalc`)の
+ときだけ、既存クラスタが要る3件(`api-smoke`・`web-k3d-smoke`・`web-k3d-e2e`)を追加で実行する。
+クラスタが無いときは黙って飛ばさず、飛ばしたターゲット名と用意の仕方(`make up`)を出力する。
+`E2E_REQUIRE_K3D=1` を指定すると、クラスタが無いときはスキップせず失敗で終わる(リリース前の確認用)。
+詳細は ADR-0306。
 
 - ポケモン検索 → 攻撃側/防御側選択 → 技選択 → 一括結果が表示される
 - 攻守入れ替え、プリセット変更で結果が更新される

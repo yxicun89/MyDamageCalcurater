@@ -7,12 +7,15 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-sql-driver/mysql"
 
 	"example.com/pokecalc/services/pokedex/importer"
 )
@@ -281,6 +284,11 @@ func TestRunBlockedExitsNeedsHumanWithoutTouchingDB(t *testing.T) {
 	}
 }
 
+// mysqlErr は Apply が返す MySQL のエラー(sqlc の呼び出し元で包まれた形)を作る。
+func mysqlErr(number uint16) error {
+	return fmt.Errorf("insert: %w", &mysql.MySQLError{Number: number, Message: "test"})
+}
+
 func TestRunExitCodes(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -292,6 +300,12 @@ func TestRunExitCodes(t *testing.T) {
 	}{
 		{name: "migrate が済んでいない", setup: func(h *harness) { h.store.appliedErr = importer.ErrSchemaNotReady }, want: 3, wantOpen: true},
 		{name: "key が変わった(ErrKeyChanged)", setup: func(h *harness) { h.store.applyErr = importer.ErrKeyChanged }, want: 3, wantOpen: true, applyCalls: 1},
+		{name: "DB の CHECK 違反(3819)は再試行しても同じ", setup: func(h *harness) { h.store.applyErr = mysqlErr(3819) }, want: 3, wantOpen: true, applyCalls: 1},
+		{name: "DB の重複(1062)は再試行しても同じ", setup: func(h *harness) { h.store.applyErr = mysqlErr(1062) }, want: 3, wantOpen: true, applyCalls: 1},
+		{name: "DB の外部キー違反(1452)は再試行しても同じ", setup: func(h *harness) { h.store.applyErr = mysqlErr(1452) }, want: 3, wantOpen: true, applyCalls: 1},
+		{name: "DB の値の範囲外(1264)は再試行しても同じ", setup: func(h *harness) { h.store.applyErr = mysqlErr(1264) }, want: 3, wantOpen: true, applyCalls: 1},
+		{name: "DB の値が長すぎる(1406)は再試行しても同じ", setup: func(h *harness) { h.store.applyErr = mysqlErr(1406) }, want: 3, wantOpen: true, applyCalls: 1},
+		{name: "DB のデッドロック(1213)は再試行で直りうる", setup: func(h *harness) { h.store.applyErr = mysqlErr(1213) }, want: 1, wantOpen: true, applyCalls: 1},
 		{name: "DB に接続できない", setup: func(h *harness) { h.openErr = errors.New("dial tcp: connection refused") }, want: 1, wantOpen: true},
 		{name: "版を読めない一時的な失敗", setup: func(h *harness) { h.store.appliedErr = errors.New("driver: bad connection") }, want: 1, wantOpen: true},
 		{name: "DSN が無い", setup: func(h *harness) { delete(h.env, "POKEDEX_DATABASE_DSN") }, want: 2},
