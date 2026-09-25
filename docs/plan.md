@@ -352,6 +352,49 @@
   脆さを持つ(今回は宣言順の入れ替え〈値は不変〉で対応。critic が宣言順を戻すと実際に失敗することを
   確認済み)。次にトークンを足すときに同じ値の衝突が再発しうるので、触るときは
   `inputTokens.test.ts` の逆引きを変数名ベースに直すことを検討する。
+- [x] issue #308(重大度 medium。オンラインでマスタの読み込みに失敗すると、タブ一覧ごと消えて
+  `<p role="alert">` 1行だけになり、再試行も切り替えの案内も無い。計算モードは localStorage に残るので
+  リロードしても同じ失敗画面から抜けられない)。**完了(2026-09-25。Web レーン。ブランチ
+  `fix/web-master-load-retry-308`)**: 受け入れ条件と失敗するテストを先に用意
+  (`web/src/App.masterSources.test.tsx` に8件〈既存の失敗時テスト1件を拡張 + 新規7件〉、
+  文言は `web/src/i18n/ja.ts` の `appText` に `masterLoadErrorDetailLabel`・`masterLoadRetryLabel`・
+  `masterLoadSwitchToOfflineLabel` を追加)。方針は自動フォールバックを入れず(ADR-0301 §4)、
+  失敗の案内に原因(受け取った `Error` の message)と「再試行」「オフラインに切り替える」を出し、
+  タブ一覧は失敗中も残して、マスタを使わない「素早さ」画面(ADR-0604 §5)を選べるようにする。
+  実装(ADR-0304 追記6): `web/src/App.tsx` に `retryToken` state(「再試行」で同じ取得口を読み直す
+  トリガー)と `MasterLoadFailureNotice`(原因・再試行・オンラインのときだけ「オフラインに切り替える」)を追加。
+  `app/routes.ts` の `SCREEN_ROUTES` に `usesMaster: boolean` を足し(`screenUsesMaster`・
+  `isMasterlessScreen` を追加)、マスタを使わない画面(素早さ)だけ `app/screens.tsx` の
+  `MASTERLESS_SCREEN_COMPONENTS`(`ScreenProps` から `master` を除いた `MasterlessScreenProps`)経由で
+  失敗中も描画する(`ScreenProps.master` 自体・計算/逆算/タイプバランス/判定の4画面の Props は無変更)。
+  `npx vitest run`(1605/1605)・`npm run typecheck`・`npm run lint`(eslint + prettier)は無回帰。
+  **critic PASS(mutation testing 7件で全て検知)**。指摘のうち次の3件はそのままマージ前に直接反映した:
+  `MasterlessScreenProps` から `engine` も除く(`Omit<ScreenProps, "master" | "engine">`。マスタ失敗中に
+  offline のプレースホルダ engine を静かに渡すと、オンライン選択中なのに実は WASM で計算する形になり
+  ADR-0301 §4 の自動フォールバック禁止に抵触しかねないため)/ JSX 内 IIFE を `MasterlessActiveScreen` の
+  事前算出に書き換え / `error.message` が空文字のときは原因の行ごと出さない。
+  **申し送り(次回以降の改善候補。今回は見送り)**: (1) 「再試行」を押しても応答が届くまで画面が変わらず
+  連打で多重リクエストになりうる(pending state を追加して「読み込み中…」に戻す設計が要る)。
+  (2) 「素早さ」タブを選んでいる間は失敗の通知・再試行ボタンがどこにも出ない(他のタブに移れば出るので
+  受け入れ条件は満たすが、タブパネルの外に出す方が issue の意図に近い)。
+- [x] issue #305(重大度 medium。逆算で観測を厳密に説明できる候補(`exact`)が1件も無くても、その旨の案内が
+  無く、候補ごとの「近い候補」ラベルと SP 範囲だけが並ぶ。%欄が「その候補で撃ったときの予測ダメージ%」で
+  あることの説明も無い)。**完了(2026-09-25。Web レーン。ブランチ `fix/web-reverse-no-exact-candidates-305`)**:
+  受け入れ条件と失敗するテストを先に用意(`web/src/screens/ReverseScreen.test.tsx` の
+  `describe("結果の表示")` に6件追加〈新規の案内・「参考」の印・「予測」のラベルの3件が red、
+  候補一覧を消さないこと・正常系・候補0件の3件は現状の挙動の回帰ガードとして green〉。文言は
+  `web/src/i18n/ja.ts` の `reverseResultText` に `noExactCandidateNotice`・`referenceRangeLabel`・
+  `predictedPercentLabel` を追加)。方針は engine の一致判定に触れず(ADR-0300 §8「Web は返ってきた値を
+  加工せずに表示する」)、`ReverseResult.exactCount` をそのまま見て表示だけを変える。候補一覧は消さずに
+  残す(要件「候補の提示を優先」)。実装: `ReverseScreen.tsx` の `ReverseResultsList` に
+  `exactCount === 0 && candidates.length > 0` のときだけ role=status の案内・SP 範囲への「参考」の印を出し、
+  %欄には常に「予測」のラベルを値と別要素で添える(`"40.2〜47.8%"` の完全一致は維持)。
+  `ReverseScreen.css` に見た目を追加(tokens.css の変数のみ使用。常時アニメーションなし)。
+  `web/src/i18n/ja.ts` と `ReverseScreen.tsx` のコメント中の `issue #305` は
+  `web/src/styles/noColorLiterals.test.ts` の16進色リテラル検出(`#` + 3桁hex)に誤検出されるため
+  `issue 305`(# なし)表記に修正(他の issue コメントと同じ慣習)。
+  `npx vitest run ReverseScreen` 94件・`npm test` 1611件・`npm run typecheck`・`npm run lint`
+  (eslint + prettier)いずれも green。
 
 ## M2: 保存・構築
 
