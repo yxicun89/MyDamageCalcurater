@@ -1836,6 +1836,19 @@ Decision: `engine.BulkInput.DefenderAbilities` / `engine.ReverseInput.UnknownAbi
 Reason: 「1番目の特性」や「1つ指定」を既定にすると、隠れ特性などで無効になる種族を利用者が選び忘れたときに黙って誤る。全特性で行を分けると多くの技で行が2〜3倍になる。結果の一致でまとめれば、特性が効く技のときだけ行が分かれる。
 Impact(他レーンへの依頼。既定案): API — 既に採用済みの `BulkCalcRequest.defenderOverride.abilityId` を `DefenderAbilities` の1件に写し、**省略時は calc-svc が種族の全特性を解決して渡す**。`ReverseRequest.unknownAbilityId`(任意・1つ、省略時は同じく全特性)。`BulkCalcRow`・`ReverseCandidate` に `abilityId: string`・`abilityIds: string[]`。Web — WASM に種族の特性をマスタから解決して `defenderAbilities`/`unknownAbilities` で渡し、行・候補に `abilityIds` を表示。攻撃側は種族の1番目を既定にして画面に表示し、選べるようにする。iOS — API の追従後に同じ表示。
 
+## 2026-09-26: P6-18(issue #328)の非公式表示・データ出典の既定文言(iOS レーンから Web レーンへ)
+Decision: issue #328 のユーザー決定(2026-09-25「アプリ内に第三者データの出典と非公式の表示を入れる」)に対する既定の文言を iOS レーンが決め、
+Web レーンはこの文言に従う(依頼元との合意どおり)。詳細・受け入れ条件は ADR-0501「P6-18」(spec のみ。実装は未着手)。
+- 非公式の注記(完全一致): 「このアプリは個人が私的に使うための非公式ツールです。任天堂・クリーチャーズ・ゲームフリーク・株式会社ポケモンとは関係ありません。ポケモン・Pokémon および関連する名称は各社の商標です。」
+- データの出典一覧(docs/adr/0002-master-data-source.md「確定した方針 / 責務の分離」表と同じ順・同じ範囲。ADR に書かれていないライセンスは書かない):
+  1. ダメージ計算の検証: `@smogon/calc`(MIT License)
+  2. ポケモン・技・習得技の照合: Pokémon Showdown(MIT License)
+  3. 日本語名・図鑑番号: PokeAPI(ライセンス表記なし。ADR-0002 の調査でデータ自体の利用条件が README に明記されていないため)
+  4. 使用可能なポケモン等の基準: Pokémon HOME・Pokémon Champions の公式情報(ライセンス表記なし)
+Reason: iOS レーンへの依頼(このタスクの指示)どおり、iOS が先に既定案を決めて共有する運用(既存のレーン間の「既定案で進む」原則と同じ)。
+Impact: iOS は `PokeCalcCore.AboutText`(`unofficialNotice`/`dataSources`)にこの文言を1か所持つ(実装は implementer が TODO(implementer) を埋める形で行う。spec 時点ではプレースホルダで `swift test` は新規テストのみ失敗)。
+Web レーンはこの文言・出典の範囲(4件)をそのまま使ってよい。出典を追加・削除する場合は、docs/adr/0002-master-data-source.md の責務分離表・ADR-0501「P6-18」3章・このエントリ・両レーンの実装コードを同時に直すこと(勝手に増減しない)。
+
 ## 2026-09-25: issue 272 の API レーン担当分(defenderOverride.abilityId・unknownAbilityId)を実装(API レーン → データ・Web・iOS レーンへ)
 Decision: データレーンの依頼(ADR-0126・PR #402)を反映した(ADR-0214)。
 `api/openapi.yaml`: 新規スキーマ `DefenderOverride { abilityId?: string }` を `BulkCalcRequest.defenderOverride`
