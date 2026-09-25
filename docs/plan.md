@@ -405,10 +405,12 @@
   cleanupで `controller.abort()`)を `CalcScreen.tsx` に追加。`web/src/test/fakeEngine.ts` の
   `PendingBulk`(`createDeferredEngine` が返す)に `signal` フィールドを追加(`PendingReverse` と同じ形。
   `calcBulk` に渡された signal を記録)。回帰テストは `CalcScreen.test.tsx` の
-  `describe("計算の呼び出し")` に1件追加(「入力を変えると、前の calcBulk 要求を abort する」。
-  実装前は red であることを一時的に `CalcScreen.tsx` の変更だけ `git stash` で戻して確認済み)。
+  `describe("結果の表示(engine の値を加工せずに出す)")` に1件追加(「入力を変えると、前の calcBulk 要求を
+  abort する」。実装前は red であることを一時的に `CalcScreen.tsx` の変更だけ `git stash` で戻して確認済み)。
   `npx vitest run CalcScreen.test` 33件・`npm test` 1612件・`npm run typecheck`・`npm run lint`
-  (eslint + prettier)いずれも green。次の critic レビューで独立検証してから main へ統合する。
+  (eslint + prettier)いずれも green。**critic PASS**(sonnetで実施。opusのセッション利用枠が一時的に
+  上限に達したため、CLAUDE.mdのモデル割り当て方針〈engine・逆算・DB・API契約に関わるときだけOpus〉に従い
+  sonnetへ切り替え。mutation testing 2件で全て検知、WASM側の無回帰も`wasmEngine.test`29件で確認済み)。
 
 ## M2: 保存・構築
 
