@@ -36,6 +36,13 @@ const (
 	// ADR-0204 §3)。
 	createStreamRetryInitial = 500 * time.Millisecond
 	createStreamRetryMax     = 30 * time.Second
+
+	// connectTimeout は初回接続の試行1回ぶんの上限(ADR-0212 AC-N2)。nats.go の既定(2秒)のままだと、
+	// 接続先が無応答(DNS は解決するが応答が返らない等)のとき New がその秒数だけブロックし、
+	// calc-svc の起動(newHandler → srv.ListenAndServe)を遅らせてしまう。RetryOnFailedConnect(true) は
+	// 「サーバ一覧を1周した後」にだけ効くため、1周ぶんの試行時間そのものを短くする必要がある
+	// (critic レビューで実測して判明。MaxReconnects(-1) による再接続の無限リトライ自体はこの値の影響を受けない)。
+	connectTimeout = 500 * time.Millisecond
 )
 
 // streamConfig はストリームの設定そのもの(ADR-0212 §4)。
@@ -71,6 +78,7 @@ func New(natsURL string) *Publisher {
 	nc, err := nats.Connect(natsURL,
 		nats.RetryOnFailedConnect(true),
 		nats.MaxReconnects(-1),
+		nats.Timeout(connectTimeout),
 	)
 	if err != nil {
 		// RetryOnFailedConnect(true) を付けても、URL 自体が不正な場合はここで失敗する。

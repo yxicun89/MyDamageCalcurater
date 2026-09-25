@@ -15,7 +15,6 @@ import (
 // コンパイルできなくなり、ビルド時に検知できる(services/internal/api/client_id_semantics_test.go
 // と同じ「契約が壊れたらビルドで気づく」発想。実行時のアサーションは無くてよい)。
 func TestContractFieldsExist(t *testing.T) {
-	t.Helper()
 	var req api.CalcRequest
 	var result api.CalcResult
 

@@ -248,6 +248,9 @@ func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) erro
 	result := calcResultFrom(res)
 	// イベント発行は非同期・応答をブロックしない(CLAUDE.md 絶対ルール5・ADR-0212 §6)。
 	// req.Attacker.MoveId ではなく req.MoveId(トップレベル)を使う(calc-svc は前者を読まない)。
+	// Publish 自体は ctx.JSON より前に呼ぶ(ADR-0212 §6 の「応答を返した後」という記述と字面は
+	// 異なるが、JSON の marshal はここで同期的に終わるため、echo.Context のプール返却後に
+	// リクエストスコープの値を参照するデータ競合を避けられる。critic レビューで確認済み)。
 	s.publisher.Publish(params.XDeviceId, params.XSessionId, calcevents.OperationCalc, time.Now().UTC(), &calcevents.CalcDetail{
 		Format: string(req.Format), Attacker: req.Attacker, Defender: req.Defender,
 		MoveID: req.MoveId, Field: req.Field, Options: req.Options,

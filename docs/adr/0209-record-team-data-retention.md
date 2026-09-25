@@ -74,6 +74,15 @@ v1 は**個人利用 + Tailscale 内**に固定する(requirements.md §3「可�
 | 6 | NATS JetStream の計算イベント(calc-svc → record-svc **と team-svc**〈§4〉の中継) | 非同期保存(requirements.md §4)・record は保存本体、team は `devices.last_seen_at` の更新だけ | JetStream のストリーム | subject に `device_id` を含む | **`max_age` 7日**、**両方の consumer が ack したら破棄**(record と team は別々の durable consumer を持つので、片方の ack ではストリームから消えない。P5-2) | ack / `max_age` | **バックアップの対象にしない**(復元で再生しない) | ストリーム名・シーケンス番号・consumer 名 |
 | 7 | バックアップ(MySQL / TiDB。P7-4) | 障害復旧 | P7-4 で決める保存先 | ― | **30日(世代の上限)** | 世代の失効 | ― | 世代 ID・取得時刻・対象 DB |
 
+**実装時の追記(2026-09-25。P5-2 実装)**: #6 の「両方の consumer が ack したら破棄」は、
+実際には JetStream の **Limits retention**(`max_age` だけで削除。Interest retention ではない)で実装した
+(ADR-0212 §4)。Interest retention は「consumer が1つも登録されていない・`FilterSubject` が
+一致しない subject では発行と同時に保存すらされない」(NATS Server の実装で確認済み)ため、
+P5-3/P5-4 の durable consumer が揃うまでイベントを静かに失う欠陥がある。Limits retention でも
+「`max_age`(7日)以内に消える」という結論(#6・§7 の判定)自体は変わらず、`*_DEVICE_ROW_EXPIRY_DAYS`
+(30日 > `max_age` 7日。ADR-0211 §7)との関係も崩れない。「両方 ack したら早期に消す」という
+省スペースの最適化だけを行わない(詳細は ADR-0212 §4)。
+
 **ログに残さない**(どの分類でも共通。coding-rules §1): 個体の中身(種族・技・持ち物・特性・性格・SP)、ダメージの数値、
 構築名・ポケモンのニックネーム、お気に入りの中身、リクエスト / レスポンスの本文そのもの。
 理由: 端末 ID・セッション ID はクライアントが作るランダム UUID で、それ自体は個人を特定せず秘密でもないので全体を出してよい。

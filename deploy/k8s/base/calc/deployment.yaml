@@ -31,7 +31,11 @@ spec:
             - name: CALC_MASTER_URL
               value: http://pokedex
             # 任意。NATS が無い/落ちていても calc-svc は今までどおり起動・応答する
-            # (発行が無効になるだけ。ADR-0212 §6・CLAUDE.md 絶対ルール5)。
+            # (発行が無効になるだけ。ADR-0212 §6・CLAUDE.md 絶対ルール5)。base に置くため
+            # cloud overlay にもこの値が乗るが、cloud には NATS を用意していない(+α フェーズで
+            # 決める。ADR-0212 は local/k3d までがスコープ)。その場合 calc-svc は
+            # ensureStreamLoop の再試行が warn ログを出し続けるだけで、計算 API への影響は無い
+            # (critic レビューでの指摘・ADR-0212 変更履歴参照)。
             - name: CALC_NATS_URL
               value: nats://nats:4222
             # limits.memory の 64Mi に対して少し余裕を持たせた値(GC が OOMKill の前に働くように)。

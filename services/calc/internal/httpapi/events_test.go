@@ -4,6 +4,7 @@ package httpapi
 // 偽の実装に差し替えて呼び出し内容だけを検査する(AC-N5)。
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
@@ -136,9 +137,7 @@ func TestFailedCalcDoesNotPublish(t *testing.T) {
 	c := calcCase{name: "fail", attacker: indiv{speciesKey: speciesUnknown, natureID: natureNeutral},
 		defender: indiv{speciesKey: speciesDefender, natureID: natureNeutral}, moveID: movePhysical}
 	rec := post(t, h, "/api/calc", mustJSON(t, c.httpBody()), false)
-	if rec.Code == 200 {
-		t.Fatalf("status = 200, want エラー(存在しない種族)")
-	}
+	assertError(t, rec, http.StatusBadRequest, "unknown_species")
 	if len(pub.calls) != 0 {
 		t.Errorf("失敗したリクエストでイベントが発行された: %+v", pub.calls)
 	}

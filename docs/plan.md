@@ -269,14 +269,17 @@
   TidbCluster・TidbInitializer が実際に Ready/Completed になることを確認する)。TidbInitializer の
   `tnir/mysqlclient` イメージは amd64 専用(上流がそれしか提供していない)で、Apple Silicon の k3d
   ノードでの起動可否(QEMU エミュレーション経由)も未確認
-- [ ] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)。
+- [x] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)。
   ストリームの `max_age` は7日、イベントに発生時刻(`occurred_at`)を載せる(ADR-0209 §7・#6)。
   record-svc と team-svc(P5-4)は**別々の durable consumer**を持つ(同じ consumer を共有すると配送が分かれ
   record-svc が計算イベントを取りこぼす。ADR-0209 §4)。
   バージョン固定・ローカル/k3d 導入・ストリーム設定(Retention は Limits。ADR-0209 §3 #6 の
   文言からの意図的な逸脱で理由は ADR-0212 §4)・イベントのワイヤフォーマット(`services/internal/calcevents`。
   `calc` は個体・技・状況・ダメージ幅まで、`calcBulk`/`calcReverse` は envelope のみ)は ADR-0212 で確定
-  (critic 3ラウンド)。実装はこれから
+  (critic 3ラウンド)。実装は critic 第1回の指摘をすべて反映済み(実 NATS で発行・drain・起動非ブロックまで確認済み)、
+  critic 第2回レビューへ提出予定。
+  P5-3/P5-4 は `services/internal/calcevents.Event`・ストリーム名 `CALC_EVENTS`・
+  subject `calc.events.<device_id>` をそのまま前提にする(at-least-once 配送。消費側は冪等に実装すること)
 - [ ] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰)。
   ADR-0209 §5.3 の契約を `api/openapi.yaml` に入れて `make gen`(`store_unavailable` の追加を含む)→
   分離(§6)・全削除(§5)・失効ジョブ(§4)・ログ(§3)を実装。時間減衰の半減期は保持期間90日より短くする。

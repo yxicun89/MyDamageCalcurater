@@ -87,9 +87,8 @@ func TestPublishStoresMessageWithoutConsumer(t *testing.T) {
 	}
 	p.Publish("device-test-1", "session-test-1", calcevents.OperationCalc, occurredAt, detail)
 
-	// 発行の goroutine(非同期)が確定するのを待つ。Shutdown が確実に待つので、ここでは
-	// Shutdown を先に呼んでから内容を確認する(defer より先に呼び、確認後にもう一度 defer が
-	// 呼ばれても nil セーフではないため、確認は Shutdown 前に MsgGet で行う)。
+	// 発行の goroutine(非同期)が確定するのを、届いたメッセージをポーリングして確認する
+	// (Shutdown の drain 自体は別に TestShutdownDrainsPendingPublish で検査する)。
 	deadline := time.Now().Add(5 * time.Second)
 	var raw jetstream.RawStreamMsg
 	var lastErr error
@@ -197,5 +196,44 @@ func TestPublishEnvelopeOnly(t *testing.T) {
 	}
 	if got.Operation != calcevents.OperationBulk {
 		t.Errorf("Operation = %q, want %q", got.Operation, calcevents.OperationBulk)
+	}
+}
+
+// AC-N6: Shutdown はポーリングで届くのを待たずに呼んでも、発行中の goroutine と JetStream の
+// 未確定分を待ってから接続を閉じる(発行し損ねない)。critic レビューで指摘: 他の2テストは
+// 届くまでポーリングしてから Shutdown を呼ぶため、drain 自体を壊しても検知できなかった。
+// このテストは Publish の直後に(ポーリングを挟まず)即 Shutdown し、Shutdown が返った後に
+// 別の素の接続でメッセージが実際に保存されていることを1回で確認する。
+func TestShutdownDrainsPendingPublish(t *testing.T) {
+	url := testNATSURL(t)
+	deleteStreamIfExists(t, url)
+
+	p := New(url)
+	if p == nil {
+		t.Fatal("New が nil を返した(接続できない)")
+	}
+	waitReady(t, p)
+
+	occurredAt := time.Now().UTC().Truncate(time.Millisecond)
+	p.Publish("device-test-3", "session-test-3", calcevents.OperationCalc, occurredAt, nil)
+	p.Shutdown() // ポーリングしない。drain が効いていなければここで確定前に接続が閉じる。
+
+	nc, err := nats.Connect(url)
+	if err != nil {
+		t.Fatalf("確認用の接続ができない: %v", err)
+	}
+	defer nc.Close()
+	js, err := jetstream.New(nc)
+	if err != nil {
+		t.Fatalf("JetStream を初期化できない: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	stream, err := js.Stream(ctx, calcevents.StreamName)
+	if err != nil {
+		t.Fatalf("ストリームを取得できない: %v", err)
+	}
+	if _, err := stream.GetLastMsgForSubject(ctx, calcevents.Subject("device-test-3")); err != nil {
+		t.Fatalf("Shutdown 後にメッセージが保存されていない(drain が効いていない疑い): %v", err)
 	}
 }

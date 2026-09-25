@@ -215,6 +215,9 @@ func run(ctx context.Context, lookup func(string) (string, bool)) error {
 	}
 	handler, publisher, err := newHandler(ctx, cfg)
 	if err != nil {
+		// newHandler はエラー時も publisher を返しうる(NATS への接続自体は先に試みるため)。
+		// defer の登録前にここで return するので、確実に閉じておく(critic レビューでの指摘)。
+		publisher.Shutdown()
 		return err
 	}
 	// publisher.Shutdown は発行 goroutine と JetStream の未確定分を待ってから閉じる(ADR-0212 §6)。
