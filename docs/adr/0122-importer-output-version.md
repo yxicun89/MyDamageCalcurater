@@ -60,3 +60,8 @@ CronJob も `make import-k8s` も「スキップ」で終わり、新しい表�
 - テスト: `importer/output_version_test.go`(決定性・並び順の無視・全表の網羅・RunStore の判定)、
   `cmd/import/main_test.go`(取得元が同じで変換結果が違えば投入・版の表示)、
   `importer/mysql_test.go` の `TestRunReimportsWhenOutputChanges`(`-tags mysql`。変更前の DB からの再投入とその後のスキップ)。
+
+## 追記(2026-09-25): ハッシュに入る列の条件
+
+ハッシュは行の型を `encoding/json` で直列化して作るので、`json:"-"` の列や非公開(小文字始まり)の列は入らない。
+`Output` の行の型にはタグを付けず、すべて公開フィールドにする(列を足すときもこの条件を守る。PR #380 の critic 軽微指摘)。
