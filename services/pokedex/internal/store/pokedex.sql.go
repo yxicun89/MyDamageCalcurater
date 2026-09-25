@@ -85,6 +85,15 @@ func (q *Queries) DeleteMoveEffects(ctx context.Context) error {
 	return err
 }
 
+const deleteMoveMechanisms = `-- name: DeleteMoveMechanisms :exec
+DELETE FROM move_mechanisms
+`
+
+func (q *Queries) DeleteMoveMechanisms(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteMoveMechanisms)
+	return err
+}
+
 const deleteMoves = `-- name: DeleteMoves :exec
 DELETE FROM moves
 `
@@ -569,6 +578,21 @@ func (q *Queries) InsertMoveEffect(ctx context.Context, arg InsertMoveEffectPara
 	return err
 }
 
+const insertMoveMechanism = `-- name: InsertMoveMechanism :exec
+INSERT INTO move_mechanisms (move_id, mechanism)
+VALUES (?, ?)
+`
+
+type InsertMoveMechanismParams struct {
+	MoveID    string
+	Mechanism string
+}
+
+func (q *Queries) InsertMoveMechanism(ctx context.Context, arg InsertMoveMechanismParams) error {
+	_, err := q.db.ExecContext(ctx, insertMoveMechanism, arg.MoveID, arg.Mechanism)
+	return err
+}
+
 const insertNature = `-- name: InsertNature :exec
 INSERT INTO natures (id, name_ja, name_ja_source, name_en, plus, minus)
 VALUES (?, ?, ?, ?, ?, ?)
@@ -989,6 +1013,35 @@ func (q *Queries) ListMoveEffects(ctx context.Context) ([]MoveEffect, error) {
 	for rows.Next() {
 		var i MoveEffect
 		if err := rows.Scan(&i.MoveID, &i.Effect); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMoveMechanisms = `-- name: ListMoveMechanisms :many
+SELECT move_id, mechanism
+FROM move_mechanisms
+ORDER BY move_id, mechanism
+`
+
+func (q *Queries) ListMoveMechanisms(ctx context.Context) ([]MoveMechanism, error) {
+	rows, err := q.db.QueryContext(ctx, listMoveMechanisms)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MoveMechanism
+	for rows.Next() {
+		var i MoveMechanism
+		if err := rows.Scan(&i.MoveID, &i.Mechanism); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

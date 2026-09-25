@@ -686,3 +686,29 @@ func TestReconcileIsDeterministic(t *testing.T) {
 		}
 	}
 }
+
+// 技の機構の件数(攻撃技の数・機構を持つ技の数・機構ごとの技の数)が報告と要約に出る(ADR-0121)。
+// 実データの dry-run で分類ごとの件数を人が確かめられるようにする(技の ID は出さない)。
+func TestReconcileSummaryCountsMoveMechanisms(t *testing.T) {
+	_, rec := reconcileOK(t, reconcileInput(t))
+	want := importer.MoveMechanismSummary{
+		Attack:        4,
+		WithMechanism: 3,
+		ByMechanism:   map[string]int{"field_specific": 1, "move_specific": 1, "multi_hit": 1, "variable_power": 1},
+	}
+	if !reflect.DeepEqual(rec.Summary.MoveMechanisms, want) {
+		t.Errorf("Summary.MoveMechanisms = %+v, want %+v", rec.Summary.MoveMechanisms, want)
+	}
+	s := importer.FormatSummary(rec)
+	for _, line := range []string{
+		"moveMechanisms: attack=4 withMechanism=3\n",
+		"moveMechanism field_specific: 1\n",
+		"moveMechanism move_specific: 1\n",
+		"moveMechanism multi_hit: 1\n",
+		"moveMechanism variable_power: 1\n",
+	} {
+		if !strings.Contains(s, line) {
+			t.Errorf("要約に %q が無い:\n%s", line, s)
+		}
+	}
+}

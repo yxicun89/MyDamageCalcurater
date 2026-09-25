@@ -80,6 +80,35 @@ const species = [...dex.species.all()].map((s) => ({
   prevo: s.prevo ?? '',
 }));
 
+// 技の機構(ADR-0121)。技のデータオブジェクトが持つ関数のプロパティ名の昇順
+// (on で始まるハンドラと basePowerCallback 等の *Callback。どれがダメージに効くかの判断は Go 側)。
+const moveHooks = (move) => Object.keys(move)
+  .filter((key) => typeof move[key] === 'function')
+  .sort();
+
+// 天候・フィールドの状態(conditions)のハンドラが、技 ID を文字列として名指ししている箇所
+// (例: あるフィールドが特定の技の威力を変える)。技のデータには現れない技固有の処理を拾うため、
+// ハンドラのソースの文字列リテラルを技 ID と突き合わせ、技ごとに "<状態ID>.<ハンドラ名>" の昇順で出す
+// (ADR-0121)。どのハンドラがダメージに効くかの判断は Go 側。
+const moveIDs = new Set([...dex.moves.all()].map((m) => m.id));
+const conditionIDs = new Set([
+  ...Object.keys(dex.data.Conditions ?? {}),
+  ...[...dex.moves.all()].filter((m) => m.condition).map((m) => m.id),
+]);
+const fieldConditionRefs = new Map();
+for (const id of [...conditionIDs].sort()) {
+  const condition = dex.conditions.get(id);
+  if (!condition?.exists || !['Weather', 'Terrain'].includes(condition.effectType)) continue;
+  for (const hook of moveHooks(condition)) {
+    const literals = [...condition[hook].toString().matchAll(/["']([a-z0-9]+)["']/g)].map((x) => x[1]);
+    for (const moveID of new Set(literals)) {
+      if (!moveIDs.has(moveID)) continue;
+      if (!fieldConditionRefs.has(moveID)) fieldConditionRefs.set(moveID, new Set());
+      fieldConditionRefs.get(moveID).add(`${condition.id}.${hook}`);
+    }
+  }
+}
+
 const moves = [...dex.moves.all()].map((m) => ({
   id: m.id,
   name: m.name,
@@ -108,6 +137,20 @@ const moves = [...dex.moves.all()].map((m) => ({
         boosts: s.boosts ?? null,
       }))
     : [],
+  // 技の機構(多段・固定ダメージ・威力変動・参照する能力値の差し替え 等。ADR-0121)の判定材料。
+  // 取得元の表現のまま出す(分類は Go 側の変換で行う)。
+  mechanism: {
+    multihit: m.multihit ?? null,
+    damage: m.damage ?? null,
+    ohko: m.ohko || null,
+    willCrit: m.willCrit === true,
+    overrideOffensiveStat: m.overrideOffensiveStat ?? '',
+    overrideOffensivePokemon: m.overrideOffensivePokemon ?? '',
+    overrideDefensiveStat: m.overrideDefensiveStat ?? '',
+    ignoreDefensive: m.ignoreDefensive === true,
+    hooks: moveHooks(m),
+    fieldConditions: [...(fieldConditionRefs.get(m.id) ?? [])].sort(),
+  },
 }));
 
 const items = [...dex.items.all()].map((i) => ({
