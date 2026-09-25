@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/golang-migrate/migrate/v4/database"
+	mysqlmigrate "github.com/golang-migrate/migrate/v4/database/mysql"
 )
 
 // 架空の migration 一式(版 1・2・5。版の飛びも「存在しない版」の検査に使う)。
@@ -97,5 +98,12 @@ func TestDescribeMigrationError(t *testing.T) {
 	other := errors.New("Dirty database version 2. Fix and force version.")
 	if got := describeMigrationError(other, ""); !errors.Is(got, other) || got.Error() != other.Error() {
 		t.Errorf("SQL 由来でないエラーが変わった: %v", got)
+	}
+}
+
+// MigrationsTable は golang-migrate の既定名と同じ(既に作られた DB の表名を変えない)。
+func TestMigrationsTableIsLibraryDefault(t *testing.T) {
+	if MigrationsTable != mysqlmigrate.DefaultMigrationsTable {
+		t.Errorf("MigrationsTable = %q, want %q(既存の DB の表名)", MigrationsTable, mysqlmigrate.DefaultMigrationsTable)
 	}
 }

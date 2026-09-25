@@ -20,6 +20,11 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
+// MigrationsTable は適用済みの版と dirty を記録する表の名前(golang-migrate の mysql driver の既定名と
+// 同じ値を明示して使う。既に作られた DB の表名を変えないため)。権限の付与(pokedex の importer は
+// 書き換え不可。issue #312)もこの名前を参照する。
+const MigrationsTable = "schema_migrations"
+
 // ErrDownNotConfirmed は DownAll の確認用 DB 名が DSN の DB 名と一致しないときに返す
 // (CLAUDE.md: DB のデータ削除は人間の確認が必要。接続前に拒否する)。
 var ErrDownNotConfirmed = errors.New("dbmigrate: down の確認用 DB 名が DSN の DB 名と一致しない")
@@ -64,7 +69,7 @@ func newRunner(dsn string, fsys fs.FS) (*runner, error) {
 		return nil, fmt.Errorf("db を開けない: %w", err)
 	}
 
-	driver, err := mysqlmigrate.WithInstance(conn, &mysqlmigrate.Config{})
+	driver, err := mysqlmigrate.WithInstance(conn, &mysqlmigrate.Config{MigrationsTable: MigrationsTable})
 	if err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("mysql driver を作れない: %w", err)

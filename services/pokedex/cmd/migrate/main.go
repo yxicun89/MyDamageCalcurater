@@ -18,6 +18,8 @@
 // POKEDEX_READER_DSN・POKEDEX_IMPORTER_DSN・POKEDEX_DATABASE_DSN(migrator)から3ユーザーを
 // プロビジョニングする(ADR-0110 決定3)。設定されていなければプロビジョニングを丸ごと
 // スキップし、今までどおり POKEDEX_DATABASE_DSN で直接 migrate する(ローカル開発との後方互換)。
+// importer の書き込み権限は表単位(schema_migrations を除く。ADR-0125)なので、migration で増えた表に
+// 追随させるため、Up の後に importer だけもう一度プロビジョニングする。
 package main
 
 import (
@@ -86,8 +88,11 @@ func runUp(env cliEnv) int {
 		return 1
 	}
 
-	if provisionDSN := env.Getenv("POKEDEX_PROVISION_DSN"); provisionDSN != "" {
-		roles, missing := rolesFromEnv(env.Getenv, dsn)
+	provisionDSN := env.Getenv("POKEDEX_PROVISION_DSN")
+	var roles []db.RoleGrant
+	if provisionDSN != "" {
+		var missing []string
+		roles, missing = rolesFromEnv(env.Getenv, dsn)
 		if len(missing) > 0 {
 			fmt.Fprintf(env.Stderr, "up: 環境変数が設定されていない: %s\n", strings.Join(missing, ", "))
 			return 2
@@ -102,8 +107,27 @@ func runUp(env cliEnv) int {
 		fmt.Fprintln(env.Stderr, "migrate up:", err)
 		return 1
 	}
+
+	// 表単位の権限のロール(importer。ADR-0125)は、Up で増えた表にも付くよう Up の後に付け直す。
+	if tableScoped := dataTableRoles(roles); len(tableScoped) > 0 {
+		if err := env.Provision(provisionDSN, tableScoped); err != nil {
+			fmt.Fprintln(env.Stderr, "up: migrate 後の権限の付け直しに失敗:", err)
+			return 1
+		}
+	}
 	fmt.Fprintln(env.Stdout, "up: 完了")
 	return 0
+}
+
+// dataTableRoles は roles のうち表単位の権限(db.ScopeDataTables)のものだけを返す。
+func dataTableRoles(roles []db.RoleGrant) []db.RoleGrant {
+	var out []db.RoleGrant
+	for _, r := range roles {
+		if r.Scope == db.ScopeDataTables {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // rolesFromEnv は reader・importer・migrator の順で RoleGrant を組み立てる。migrator の DSN は
@@ -123,7 +147,8 @@ func rolesFromEnv(getenv func(string) string, migratorDSN string) (roles []db.Ro
 	}
 	return []db.RoleGrant{
 		{DSN: readerDSN, Privileges: db.ReaderPrivileges},
-		{DSN: importerDSN, Privileges: db.ImporterPrivileges},
+		// importer は schema_migrations を書き換えられないよう、書き込みを表単位にする(issue #312・ADR-0125)。
+		{DSN: importerDSN, Privileges: db.ImporterPrivileges, Scope: db.ScopeDataTables},
 		{DSN: migratorDSN, Privileges: db.MigratorPrivileges},
 	}, nil
 }

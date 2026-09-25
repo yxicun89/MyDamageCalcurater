@@ -46,13 +46,15 @@ type harness struct {
 	calls          []string // "provision" / "up" / "version" / "down" / "force" の呼ばれた順
 	provisionRoot  string
 	provisionRoles []db.RoleGrant
-	upDSN          string
-	provisionErr   error
-	upErr          error
-	forceDSN       string
-	forceConfirm   string
-	forceVersion   int
-	forceErr       error
+	// provisionRolesByCall は Provision の呼び出しごとのロール(Up の前後で2回呼ばれる)。
+	provisionRolesByCall [][]db.RoleGrant
+	upDSN                string
+	provisionErr         error
+	upErr                error
+	forceDSN             string
+	forceConfirm         string
+	forceVersion         int
+	forceErr             error
 }
 
 func newHarness(env map[string]string) *harness { return &harness{env: env} }
@@ -66,6 +68,7 @@ func (h *harness) cliEnv() cliEnv {
 			h.calls = append(h.calls, "provision")
 			h.provisionRoot = rootDSN
 			h.provisionRoles = append([]db.RoleGrant(nil), roles...)
+			h.provisionRolesByCall = append(h.provisionRolesByCall, h.provisionRoles)
 			return h.provisionErr
 		},
 		Up: func(dsn string) error {
@@ -125,22 +128,32 @@ func TestUpWithoutProvisionDSNSkipsProvisioning(t *testing.T) {
 }
 
 // AC-5: POKEDEX_PROVISION_DSN があれば、root で3ロールをプロビジョニングしてから migrator で Up する。
+// issue #312・ADR-0125: importer は表単位(schema_migrations を除く)の権限なので、Up で増えた表に
+// 追随させるため、Up の後に importer だけもう一度プロビジョニングする。
 func TestUpWithProvisionDSNProvisionsThenMigrates(t *testing.T) {
 	h := newHarness(fullProvisionEnv())
 	if code := run([]string{"up"}, h.cliEnv()); code != 0 {
 		t.Fatalf("exit = %d, want 0(stderr=%q)", code, h.stderr.String())
 	}
-	if !reflect.DeepEqual(h.calls, []string{"provision", "up"}) {
-		t.Fatalf("呼び出し = %v, want [provision up](プロビジョニングが先)", h.calls)
+	if !reflect.DeepEqual(h.calls, []string{"provision", "up", "provision"}) {
+		t.Fatalf("呼び出し = %v, want [provision up provision](プロビジョニングが先、Up の後に表単位のロールを付け直す)", h.calls)
 	}
 	if h.provisionRoot != fakeProvisionDSN {
 		t.Error("Provision の root DSN が POKEDEX_PROVISION_DSN でない")
 	}
+	if len(h.provisionRolesByCall) != 2 {
+		t.Fatalf("Provision の呼び出し回数 = %d, want 2", len(h.provisionRolesByCall))
+	}
+	importer := db.RoleGrant{DSN: fakeImporterDSN, Privileges: db.ImporterPrivileges, Scope: db.ScopeDataTables}
+	if !reflect.DeepEqual(h.provisionRolesByCall[1], []db.RoleGrant{importer}) {
+		t.Error("Up の後の Provision は importer(表単位)だけを渡すこと")
+	}
 	want := []db.RoleGrant{
 		{DSN: fakeReaderDSN, Privileges: db.ReaderPrivileges},
-		{DSN: fakeImporterDSN, Privileges: db.ImporterPrivileges},
+		importer,
 		{DSN: fakeMigratorDSN, Privileges: db.MigratorPrivileges},
 	}
+	h.provisionRoles = h.provisionRolesByCall[0]
 	if !reflect.DeepEqual(h.provisionRoles, want) {
 		// DSN を表示しない(パスワードを含むため)。権限だけを並べる。
 		var got []string
@@ -301,4 +314,29 @@ func TestForceRequiresDatabaseDSN(t *testing.T) {
 	if len(h.calls) != 0 {
 		t.Errorf("呼び出し = %v, want なし", h.calls)
 	}
+}
+
+// issue #312: Up の後の importer の付け直しが失敗したら終了コード 1(新しい表に書けない importer を黙って残さない)。
+func TestUpFailsWhenRegrantAfterUpFails(t *testing.T) {
+	h := newHarness(fullProvisionEnv())
+	env := h.cliEnv()
+	calls := 0
+	env.Provision = func(rootDSN string, roles []db.RoleGrant) error {
+		h.calls = append(h.calls, "provision")
+		calls++
+		if calls == 2 {
+			return errors.New("provision: 接続できない")
+		}
+		return nil
+	}
+	if code := run([]string{"up"}, env); code != 1 {
+		t.Errorf("exit = %d, want 1", code)
+	}
+	if !reflect.DeepEqual(h.calls, []string{"provision", "up", "provision"}) {
+		t.Errorf("呼び出し = %v", h.calls)
+	}
+	if h.stderr.Len() == 0 {
+		t.Error("失敗の理由を stderr に出していない")
+	}
+	h.assertNoSecrets(t)
 }
