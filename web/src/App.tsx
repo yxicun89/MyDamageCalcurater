@@ -31,6 +31,7 @@ import { createJudgeClient, type JudgeClient } from "./judge/judgeClient";
 import { isSearchableMasterSource } from "./master/capabilities";
 import { exampleMasterSource } from "./master/exampleSource";
 import { createSpeedClient, type SpeedClient } from "./speed/speedClient";
+import { createTeamClient, type TeamClient } from "./team/teamClient";
 import type { MasterData, MasterSource, MasterSources, MasterSpeciesSearch } from "./master/types";
 import { MASTERLESS_SCREEN_COMPONENTS, SCREEN_COMPONENTS } from "./app/screens";
 
@@ -109,6 +110,11 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   // createJudgeClient 自体は fetch しない(判定のタブを開くだけでは呼ばれない。judge/JudgeScreen.tsx)。
   const [judgeClient] = useState(() =>
     createJudgeClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
+  );
+  // P5-5 PR-A1: team API のクライアント(ADR-0309 §2・§3)。同じ基点 URL・端末 ID・セッション ID を使う。
+  // createTeamClient 自体は fetch しない(構築のタブを開くまで呼ばれない。team/TeamScreen.tsx)。
+  const [teamClient] = useState(() =>
+    createTeamClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
   );
 
   // 計算モード(オフライン = WASM / オンライン = API)。既定はオフラインで、選択は localStorage に覚える
@@ -360,6 +366,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
                 balanceClient={balanceClient}
                 speedClient={speedClient}
                 judgeClient={judgeClient}
+                teamClient={teamClient}
                 mode={mode}
                 retryMasterLoad={retryMasterLoad}
                 selectMode={selectMode}
@@ -381,6 +388,7 @@ interface AppTabPanelProps {
   readonly balanceClient: BalanceClient;
   readonly speedClient: SpeedClient;
   readonly judgeClient: JudgeClient;
+  readonly teamClient: TeamClient;
   readonly mode: CalcMode;
   readonly retryMasterLoad: () => void;
   readonly selectMode: (mode: CalcMode) => void;
@@ -403,6 +411,7 @@ function AppTabPanel({
   balanceClient,
   speedClient,
   judgeClient,
+  teamClient,
   mode,
   retryMasterLoad,
   selectMode,
@@ -437,6 +446,7 @@ function AppTabPanel({
                 client={balanceClient}
                 speedClient={speedClient}
                 judgeClient={judgeClient}
+                teamClient={teamClient}
                 masterSearch={activeMasterSearch}
               />
             </div>
@@ -453,6 +463,7 @@ function AppTabPanel({
                 client={balanceClient}
                 speedClient={speedClient}
                 judgeClient={judgeClient}
+                teamClient={teamClient}
                 masterSearch={activeMasterSearch}
               />
             </div>
