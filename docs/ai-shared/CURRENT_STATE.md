@@ -2,8 +2,8 @@
 
 ## Damage Calculator
 Lane: データ(engine・マスタ・pokedex。どの AI が進めてもよい。COORDINATION.md)
-Active: Claude Code
-Branch: feat/claude-p1-engine(作業ディレクトリ ~/MyDamageCalcurater)
+Active: なし(2026-09-25 のセッションは区切りで終了。次のセッションが #403 から続ける)
+Branch: 次は main から feat/data-<名前> か fix/data-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater は main 追従の確認用。作業は git worktree で)
 Status: Phase 1・P2-1・P1-10・Phase R・P1-13・P1-11・P1-12・P2-1b・P2-1c・P2-2a・P2-2b・P2-2c・P2-2d・P2-3(pokedex-svc。内部 API・公開 API・natures・balance/speed 向け export。ADR-0105)は完了(critic レビュー済み)
 Status(追記): P2-3b(無効・吸収の特性)も完了・main 統合済み(ADR-0106)。calc・gateway の pokedex-svc 接続(API レーンの依頼)も PR #87 で解決済み(api-smoke で master=pokedex 確認済み)。
 Status(追記): P5-6(技の追加効果によるランク変化。ADR-0107)完了・critic PASS(1往復)・**main 統合済み(PR #132)**。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。`move_effects` 別表・`MasterMove.effect`(内部API)まで。公開APIへの露出(判定レーンが技IDからランク変化を引く経路)は判定レーンの要件確定後に別途対応。
@@ -15,7 +15,8 @@ Status(追記): issue #104(DB資格情報の最小権限分離)完了・critic P
 Status(追記): issue #109(HTTPタイムアウト・graceful shutdown)完了・critic PASS(1往復。指摘なし)・**main 統合済み(PR #178)**。`newHTTPServer`/`serve`/`runServe`の3層分離(ADR-0111。services/balanceと同じ値)。`terminationGracePeriodSeconds: 30`を追加。実クラスタで再デプロイ・確認済み。
 Status(追記): issue #112(DB接続プール上限)完了・critic PASS(1往復。軽微指摘1件反映)。4環境変数を`services/pokedex/db.OpenPool`経由で適用(ADR-0112)。実クラスタで再デプロイ・確認済み。**main 統合済み(PR #180)**。**これでデータレーン主担当のCodexレビューissue(#104・#106・#109・#112)はすべて完了・main統合済み**。
 Status(追記): issue #102(importer の中断キャッシュ自己回復。ADR-0113)を修正。`showdown-cache.mjs` へ切り出し、一時名+検証+rename。テスト7件を `make test-tools` に接続。
-Next: 他レーンからの依頼待ち。人間の確認待ち(plan.md ブロッカー): 観測%の丸め方(整数%表示は確認済み)、公開のタイミング(LICENSE・クリーンコピー)
+Status(追記): 2026-09-25「open issue 全件解決」(3 回の全体レビューの 143 件を仕分け)。データレーンで main に入れた PR: #343(#76)・#346(#303・#77・#71 engine)・#347(#269・#310・#311)・#354(#347 の後退の修正)・#355(#231)・#358(#251・#74 データ)・#359(#255・#317)・#361(CI #215)・#364(#280)・#368(#270 効果データ)・#369(防御プリセット)・#376(#271 技の機構)・#378(deploy-latest の migrate・importer)・#380(#379)・#381(未対応の印)・#384(#221・#278・#312)・#387(#386 MySQL probe)・#401(pokedex イメージの registry push)・#402(#272 engine)。あわせて #338(8080 の白画面 #268・手順書の作り直し)。#271・#270・#272 は API・Web・iOS・判定の表示待ち(各 issue のチェックリスト)。
+Next: issue #403 の「残りのパッケージ」を依存の順に(D07 共通スクリプト・up.sh → D10 → D20 → D11 → D12 → D18〜D32)。後続: 逆算の特性候補の計算量の最適化(ADR-0126 追記)、#349。1 パッケージ = 1 PR、importer に触れたら実データの dry-run、マージ後は make deploy-latest。
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
