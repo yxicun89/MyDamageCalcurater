@@ -313,6 +313,9 @@ func TestCalcReverseErrors(t *testing.T) {
 			b["observations"] = []any{map[string]any{"observedPercent": 40}}
 		}), "unknown_field"},
 		{"maxCandidates が負", with(func(b map[string]any) { b["maxCandidates"] = -1 }), "invalid_input"},
+		// ダメージを与えられない技の観測は候補ではなく 400 invalid_input(issue #317。ADR-0117 §3)。
+		{"変化技の逆算", with(func(b map[string]any) { b["moveId"] = moveStatus }), "invalid_input"},
+		{"無効相性の逆算(ノーマル技 → ゴースト)", with(func(b map[string]any) { b["unknownSpeciesKey"] = speciesGhost }), "invalid_input"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

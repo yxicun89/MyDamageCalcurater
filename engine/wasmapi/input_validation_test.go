@@ -92,3 +92,35 @@ func TestOutOfRangeInputIsInvalidInput(t *testing.T) {
 		})
 	}
 }
+
+// issue #317: ダメージを与えられない技の逆算は、候補ではなく invalid_input になる(ADR-0117 §3)。
+func TestReverseWithNoDamageMoveIsInvalidInput(t *testing.T) {
+	cases := []struct {
+		name    string
+		request func(t *testing.T) string
+	}{
+		{"変化技", func(t *testing.T) string {
+			r := baseReverse()
+			r["move"] = map[string]any{"id": "glare", "nameJa": "テストにらみ", "type": "normal", "category": "status", "power": 0, "priority": 0}
+			return mustJSON(t, r)
+		}},
+		{"威力 0 の攻撃技", func(t *testing.T) string {
+			r := baseReverse()
+			sub(t, r, "move")["power"] = 0
+			return mustJSON(t, r)
+		}},
+		{"タイプ相性の無効(ゴースト)", func(t *testing.T) string {
+			r := baseReverse()
+			sub(t, r, "unknownSpecies")["types"] = []any{"ghost"}
+			return mustJSON(t, r)
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := decodeError(t, invoke(t, "calcReverse", c.request(t)))
+			if got.Code != wasmapi.CodeInvalidInput {
+				t.Errorf("code: got %q want %q(message=%q)", got.Code, wasmapi.CodeInvalidInput, got.Message)
+			}
+		})
+	}
+}
