@@ -48,7 +48,7 @@ extension Components {
         /// | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
         /// | unknown_field | 契約にないフィールド | 400 |
         /// | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-        /// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む | 400 |
+        /// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
         /// | unknown_preset | 未知の防御側プリセット | 400 |
         /// | duplicate_preset | 防御側プリセットの重複 | 400 |
         /// | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -70,7 +70,7 @@ extension Components {
         /// | unknown_item | itemId がマスタに無い | 400 |
         /// | unknown_ability | abilityId がマスタに無い | 400 |
         /// | unknown_nature | natureId がマスタに無い | 400 |
-        /// | not_found | ルートが無い / このサービスの担当外の操作 | 404 |
+        /// | not_found | ルートが無い / このサービスの担当外の操作 / この端末が持っていないリソース ID(他端末のものか実在しないかを区別しない。403 にしない。ADR-0209 §6-2) | 404 |
         /// | master_unavailable | マスタ(pokedex の MySQL)を参照できない | 503 |
         /// | store_unavailable | 保存データの DB(record / team の TiDB)を参照できない。`master_unavailable` と分けるのは原因も復旧手順も別で、「計算はできるが保存はできない」状態(CLAUDE.md 絶対ルール5)をクライアントが区別できる必要があるため(ADR-0209 §5.3) | 503 |
         /// | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202) | 503 |
