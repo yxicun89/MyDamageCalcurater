@@ -7,6 +7,7 @@ package importer_test
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"example.com/pokecalc/services/pokedex/importer"
@@ -63,6 +64,7 @@ func TestConvertBlocksOnNatureMismatch(t *testing.T) {
 		name   string
 		mutate func(in *importer.Input)
 		id     string
+		cause  string // Detail の先頭(食い違いの種類)
 	}{
 		{"補正が違う", func(in *importer.Input) {
 			for i := range in.Calc.Natures {
@@ -70,17 +72,17 @@ func TestConvertBlocksOnNatureMismatch(t *testing.T) {
 					in.Calc.Natures[i].Minus = "spa"
 				}
 			}
-		}, "testbrave"},
+		}, "testbrave", "modifier"},
 		{"calc で補正あり・Showdown で無補正", func(in *importer.Input) {
 			for i := range in.Calc.Natures {
 				if in.Calc.Natures[i].Name == "Testneutral" {
 					in.Calc.Natures[i].Minus = "def"
 				}
 			}
-		}, "testneutral"},
+		}, "testneutral", "modifier"},
 		{"calc にだけある", func(in *importer.Input) {
 			in.Calc.Natures = append(in.Calc.Natures, importer.CalcNature{Name: "Testextra", Plus: "def", Minus: "spe"})
-		}, "testextra"},
+		}, "testextra", "calc-only"},
 		{"Showdown にだけある", func(in *importer.Input) {
 			var kept []importer.CalcNature
 			for _, n := range in.Calc.Natures {
@@ -89,7 +91,7 @@ func TestConvertBlocksOnNatureMismatch(t *testing.T) {
 				}
 			}
 			in.Calc.Natures = kept
-		}, "testcalm"},
+		}, "testcalm", "showdown-only"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -101,6 +103,18 @@ func TestConvertBlocksOnNatureMismatch(t *testing.T) {
 			}
 			if !hasFinding(rep.Blockers, importer.KindNatureMismatch, tt.id) {
 				t.Errorf("Blockers に nature-mismatch(%s)が無い: %+v", tt.id, rep.Blockers)
+			}
+			// 報告(latest.json)だけで次の手が分かるよう、食い違いの種類と再取得を含む復旧案内を Detail に載せる(#74)。
+			for _, f := range rep.Blockers {
+				if f.Kind != importer.KindNatureMismatch || f.ID != tt.id {
+					continue
+				}
+				if !strings.HasPrefix(f.Detail, tt.cause+":") {
+					t.Errorf("Detail = %q, want 先頭が %q", f.Detail, tt.cause+":")
+				}
+				if !strings.Contains(f.Detail, "make import-fetch") {
+					t.Errorf("Detail = %q に再取得(make import-fetch)の案内が無い", f.Detail)
+				}
 			}
 			if !reflect.DeepEqual(out, importer.Output{}) {
 				t.Errorf("ErrBlocked なのに Output がゼロ値でない")
