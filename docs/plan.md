@@ -245,6 +245,26 @@
   (2)タブ列を左端・右端までスクロールし、先頭・末尾のタブが表示領域に収まることを確認(centered flexbox
   overflow clippingの回帰ガード)。CSSを戻すと両方とも実際に検知することを確認(確認後に復元)。
   `web/e2e/a11y.spec.ts`(タブのキーボード操作)・vitest 1262件・lintは無回帰(22/22 green)。
+- [x] issue #306(計算画面のタイプ名のコントラストとダメージバーの読み上げ名。Web レーン)。**完了・critic PASS
+  (2026-09-25)**: ブランチ `fix/web-issue-306-type-badge-contrast`。
+  タイプ名は文字色にタイプ色を使うのをやめてバッジ化し(背景 = タイプ色、文字 = `--type-<id>-ink`)、
+  ダメージバーは %幅 を同じ行に併記済みなので装飾(`aria-hidden`、`role="meter"` を外す)にする方針を
+  `docs/design.md`(「タイプバッジ」の新設・「画面: ダメージ計算」への追記)に記録。
+  失敗するテストを先に追加(`web/src/styles/typeBadgeContrast.test.ts` 新規、`tokens.test.ts`・
+  `CalcScreen.test.tsx`・`web/e2e/calc.spec.ts` を更新)。
+  実装: `web/src/styles/tokens.css` に18タイプ分の `--type-<id>-ink`(design.md 転記、ダークで上書きしない)を追加、
+  `web/src/screens/CalcScreen.tsx` のタイプ名 `<li>` を背景 `var(--type-<id>, var(--border-hairline))`・
+  文字色 `var(--type-<id>-ink, var(--text-primary))` のバッジに変更(未知タイプIDは既定値にフォールバック)、
+  `CalcScreen.css` に `.calc-card__type` のピル装飾を追加、ダメージバーの `div` から
+  `role="meter"`/`aria-value*` を外し `aria-hidden="true"` + `data-testid="damage-bar"`(fill 側は
+  `data-testid="damage-bar-fill"`)に変更。critic指摘の軽微1件(ダメージバーの技タイプ色`var(--type-${moveType})`
+  にフォールバックが無かった。今回の差分ではなく既存コードだが、ついでに`var(--type-${moveType},
+  var(--text-secondary))`へ修正)は直接修正。`cd web && npx vitest run` 1341 passed(0 failed)、
+  `npx tsc --noEmit` エラー無し、`npm run lint` エラー無し。テストファイル・design.md は変更していない。
+  **iOSレーンへの申し送り(critic指摘)**: design.mdの「タイプバッジ」節はiOSも同名トークン(`typeInk(_:)`)
+  を持つ前提で書かれているが、2026-09-25時点でiOS側にタイプ色自体がまだ実装されていない
+  (`ios/`にタイプ色の16進値0件)。iOS側でタイプ名を表示する画面ができたときに、design.mdの18タイプ分の
+  文字色の表を移植する必要がある
 
 ## M2: 保存・構築
 
