@@ -16,8 +16,8 @@ import (
 func calcMetricsHandlers(t *testing.T) map[string]http.Handler {
 	t.Helper()
 	return map[string]http.Handler{
-		"NewHandler":         NewHandler(newFakeStore(t)),
-		"NewDeferredHandler": NewDeferredHandler(func() master.Store { return nil }),
+		"NewHandler":         NewHandler(newFakeStore(t), nil),
+		"NewDeferredHandler": NewDeferredHandler(func() master.Store { return nil }, nil),
 	}
 }
 

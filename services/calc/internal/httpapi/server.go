@@ -15,12 +15,14 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v5"
 
 	"example.com/pokecalc/engine"
 	"example.com/pokecalc/services/calc/internal/master"
 	"example.com/pokecalc/services/internal/api"
+	"example.com/pokecalc/services/internal/calcevents"
 	"example.com/pokecalc/services/internal/httpmetrics"
 )
 
@@ -32,23 +34,40 @@ const messageInternal = "内部エラーが発生した"
 // 読み込みを打ち切り invalid_json にする(無制限に読み込んでメモリを使い切らないため)。
 const maxRequestBodyBytes = 1 << 20 // 1MiB
 
+// EventPublisher は計算イベントの発行(ADR-0212)。*events.Publisher が実装する
+// (nil の *events.Publisher でも安全に呼べる。テストでは偽の実装に差し替える)。
+// 発行は非同期で応答を一切ブロックしない(CLAUDE.md 絶対ルール5)。
+type EventPublisher interface {
+	Publish(deviceID, sessionID, operation string, occurredAt time.Time, detail *calcevents.CalcDetail)
+}
+
+// noopPublisher は EventPublisher の何もしない実装(publisher が渡されないとき用)。
+type noopPublisher struct{}
+
+func (noopPublisher) Publish(string, string, string, time.Time, *calcevents.CalcDetail) {}
+
 // Server は api.ServerInterface を実装する。マスタは Store 経由でだけ引く。
 type Server struct {
-	store master.Store
+	store     master.Store
+	publisher EventPublisher
 }
 
 var _ api.ServerInterface = (*Server)(nil)
 
-// NewServer は Store を使う Server を作る。
-func NewServer(store master.Store) *Server {
-	return &Server{store: store}
+// NewServer は Store と(任意の)EventPublisher を使う Server を作る。publisher が nil なら
+// 何もしない実装に差し替える(呼び出し側で毎回 nil チェックしなくてよいように)。
+func NewServer(store master.Store, publisher EventPublisher) *Server {
+	if publisher == nil {
+		publisher = noopPublisher{}
+	}
+	return &Server{store: store, publisher: publisher}
 }
 
 // NewHandler は calc-svc の HTTP ハンドラ全体を組み立てる。
 // calc の3操作(生成ラッパ経由)、pokedex の7操作(直接 404。R1)、GET /healthz
 // (openapi に載せない運用エンドポイント)、panic の回復(500 internal)、echo の既定エラー
 // (ルート無し・メソッド違い)を Error 形式({"code","message"})に揃えるエラーハンドラを含む。
-func NewHandler(store master.Store) http.Handler {
+func NewHandler(store master.Store, publisher EventPublisher) http.Handler {
 	e := echo.New()
 	e.HTTPErrorHandler = httpErrorHandler
 	m := httpmetrics.New()
@@ -56,7 +75,7 @@ func NewHandler(store master.Store) http.Handler {
 	e.Use(recoverMiddleware)
 	e.GET(httpmetrics.Path, m.Handler())
 
-	registerCalcRoutes(e, NewServer(store))
+	registerCalcRoutes(e, NewServer(store, publisher))
 	registerPokedexNotFoundRoutes(e)
 	e.GET("/healthz", healthzHandler)
 	e.GET("/readyz", readyzHandler)
@@ -226,7 +245,15 @@ func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) erro
 	if err != nil {
 		return errFromEngine(err)
 	}
-	return ctx.JSON(http.StatusOK, calcResultFrom(res))
+	result := calcResultFrom(res)
+	// イベント発行は非同期・応答をブロックしない(CLAUDE.md 絶対ルール5・ADR-0212 §6)。
+	// req.Attacker.MoveId ではなく req.MoveId(トップレベル)を使う(calc-svc は前者を読まない)。
+	s.publisher.Publish(params.XDeviceId, params.XSessionId, calcevents.OperationCalc, time.Now().UTC(), &calcevents.CalcDetail{
+		Format: string(req.Format), Attacker: req.Attacker, Defender: req.Defender,
+		MoveID: req.MoveId, Field: req.Field, Options: req.Options,
+		MinPercent: result.MinPercent, MaxPercent: result.MaxPercent,
+	})
+	return ctx.JSON(http.StatusOK, result)
 }
 
 // CalcBulk は POST /api/calc/bulk。
@@ -280,6 +307,9 @@ func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 	if err != nil {
 		return errFromEngine(err)
 	}
+	// envelope だけを発行する(Detail は付けない。比較検討中の候補で「よく使う相手」の集計を
+	// 汚染しないため。ADR-0212 §7.1)。
+	s.publisher.Publish(params.XDeviceId, params.XSessionId, calcevents.OperationBulk, time.Now().UTC(), nil)
 	return ctx.JSON(http.StatusOK, s.bulkResultFrom(res))
 }
 
@@ -339,6 +369,9 @@ func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) er
 	if err != nil {
 		return errFromEngine(err)
 	}
+	// envelope だけを発行する(総当たり探索であり calc と同じ形の CalcDetail に当てはまらない。
+	// ADR-0212 §7.1)。
+	s.publisher.Publish(params.XDeviceId, params.XSessionId, calcevents.OperationReverse, time.Now().UTC(), nil)
 	return ctx.JSON(http.StatusOK, s.reverseResultFrom(res))
 }
 

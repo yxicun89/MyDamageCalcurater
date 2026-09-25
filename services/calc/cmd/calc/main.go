@@ -28,6 +28,7 @@ import (
 	"syscall"
 	"time"
 
+	"example.com/pokecalc/services/calc/internal/events"
 	"example.com/pokecalc/services/calc/internal/httpapi"
 	"example.com/pokecalc/services/calc/internal/master"
 )
@@ -37,6 +38,8 @@ const (
 	envAddr       = "CALC_ADDR"
 	envMasterURL  = "CALC_MASTER_URL"
 	envMasterPath = "CALC_MASTER_PATH"
+	// envNatsURL は NATS JetStream への計算イベント発行先(ADR-0212 §6)。任意(未設定なら発行しない)。
+	envNatsURL = "CALC_NATS_URL"
 	// envTypeChartPath は廃止した環境変数(ADR-0204)。設定されていたら起動エラーにして、古い設定に気づかせる。
 	envTypeChartPath = "CALC_TYPECHART_PATH"
 
@@ -71,6 +74,7 @@ type config struct {
 	Addr               string
 	MasterURL          string
 	MasterPath         string
+	NatsURL            string        // 任意。空ならイベント発行を無効化する(ADR-0212 §6)
 	MasterRetry        retryPolicy   // 環境変数では変えない(既定値。テストが短くする)
 	MasterFetchTimeout time.Duration // 同上
 }
@@ -85,6 +89,11 @@ func loadConfig(lookup func(string) (string, bool)) (config, error) {
 	addr := defaultAddr
 	if v, ok := lookup(envAddr); ok && v != "" {
 		addr = v
+	}
+
+	var natsURL string
+	if v, ok := lookup(envNatsURL); ok {
+		natsURL = v
 	}
 
 	var masterURL, masterPath string
@@ -109,41 +118,46 @@ func loadConfig(lookup func(string) (string, bool)) (config, error) {
 		Addr:               addr,
 		MasterURL:          masterURL,
 		MasterPath:         masterPath,
+		NatsURL:            natsURL,
 		MasterRetry:        retryPolicy{Initial: defaultMasterRetryInitial, Max: defaultMasterRetryMax},
 		MasterFetchTimeout: defaultMasterFetchTimeout,
 	}, nil
 }
 
-// newHandler は設定に応じて HTTP ハンドラを作る。
+// newHandler は設定に応じて HTTP ハンドラを作る。publisher は呼び出し側(run)がプロセス終了時に
+// Shutdown を呼ぶために返す(ADR-0212 §6。nil にはならない。*events.Publisher は nil でも安全)。
 //   - ファイル方式: マスタを読み込んでから返す。ファイルが無い・壊れている・不正ならエラー(部分的なデータで起動しない)。
 //   - URL 方式: すぐに返し、ctx が続く間バックグラウンドで取得を再試行する(取得・検証の失敗はどちらも再試行)。
-func newHandler(ctx context.Context, cfg config) (http.Handler, error) {
+func newHandler(ctx context.Context, cfg config) (http.Handler, *events.Publisher, error) {
+	publisher := events.New(cfg.NatsURL) // cfg.NatsURL が空なら nil(発行は無効。ADR-0212 §6)
+
 	if cfg.MasterPath != "" {
 		export, err := master.FileSource{Path: cfg.MasterPath}.Fetch(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("マスタファイル %s を読めない: %w", cfg.MasterPath, err)
+			return nil, publisher, fmt.Errorf("マスタファイル %s を読めない: %w", cfg.MasterPath, err)
 		}
 		store, err := master.FromExport(export)
 		if err != nil {
-			return nil, fmt.Errorf("マスタファイル %s の検証に失敗: %w", cfg.MasterPath, err)
+			return nil, publisher, fmt.Errorf("マスタファイル %s の検証に失敗: %w", cfg.MasterPath, err)
 		}
-		return httpapi.NewHandler(store), nil
+		return httpapi.NewHandler(store, publisher), publisher, nil
 	}
 
 	src, err := master.NewHTTPSource(cfg.MasterURL, cfg.MasterFetchTimeout)
 	if err != nil {
-		return nil, fmt.Errorf("%s が不正: %w", envMasterURL, err)
+		return nil, publisher, fmt.Errorf("%s が不正: %w", envMasterURL, err)
 	}
 	var current atomic.Pointer[master.MemoryStore]
 	go fetchMasterLoop(ctx, src, cfg.MasterRetry, &current)
-	return httpapi.NewDeferredHandler(func() master.Store {
+	handler := httpapi.NewDeferredHandler(func() master.Store {
 		s := current.Load()
 		if s == nil {
 			// 型付きの nil を master.Store として返さない(nil 判定が効かなくなるため)。
 			return nil
 		}
 		return s
-	}), nil
+	}, publisher)
+	return handler, publisher, nil
 }
 
 // fetchMasterLoop はマスタ一式が取得・検証できるまで指数バックオフで再試行し、成功したら current に
@@ -199,10 +213,13 @@ func run(ctx context.Context, lookup func(string) (string, bool)) error {
 	if err != nil {
 		return err
 	}
-	handler, err := newHandler(ctx, cfg)
+	handler, publisher, err := newHandler(ctx, cfg)
 	if err != nil {
 		return err
 	}
+	// publisher.Shutdown は発行 goroutine と JetStream の未確定分を待ってから閉じる(ADR-0212 §6)。
+	// defer なのでこの関数の return 直前(= srv.Shutdown が完了した後)に呼ばれる。
+	defer publisher.Shutdown()
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,

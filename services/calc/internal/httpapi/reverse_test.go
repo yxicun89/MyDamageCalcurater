@@ -221,7 +221,7 @@ func assertReverseMatchesEngine(t *testing.T, f *fakeStore, got api.ReverseResul
 // AC-4: 成功時は engine.CalcReverse の結果の写し(順序・範囲・一致度・表示%・性格 ID の写像)。
 func TestCalcReverseMatchesEngine(t *testing.T) {
 	store := newFakeStore(t)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	for _, c := range reverseCases(t, store) {
 		t.Run(c.name, func(t *testing.T) {
 			want, err := engine.CalcReverse(c.engineInput(t, store))
@@ -239,7 +239,7 @@ func TestCalcReverseMatchesEngine(t *testing.T) {
 // AC-4: 性格クラス → 性格 ID の写像を具体値で固定する(defender 物理: plus = +B/-A、attacker 物理: plus = +A/-C)。
 func TestCalcReverseNatureIDs(t *testing.T) {
 	store := newFakeStore(t)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	cases := reverseCases(t, store)
 	want := map[string]map[api.NatureClass]string{
 		cases[0].name: {api.Neutral: natureNeutral, api.Plus: natureDefUp},
@@ -265,7 +265,7 @@ func TestCalcReverseNatureIDs(t *testing.T) {
 // AC-4: 観測・side・ID の不正(ADR-0200 の code 対応)。
 func TestCalcReverseErrors(t *testing.T) {
 	store := newFakeStore(t)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	base := func() map[string]any { return reverseCases(t, store)[0].httpBody() }
 	with := func(mutate func(b map[string]any)) []byte {
 		b := base()

@@ -30,6 +30,10 @@ spec:
           env:
             - name: CALC_MASTER_URL
               value: http://pokedex
+            # 任意。NATS が無い/落ちていても calc-svc は今までどおり起動・応答する
+            # (発行が無効になるだけ。ADR-0212 §6・CLAUDE.md 絶対ルール5)。
+            - name: CALC_NATS_URL
+              value: nats://nats:4222
             # limits.memory の 64Mi に対して少し余裕を持たせた値(GC が OOMKill の前に働くように)。
             - name: GOMEMLIMIT
               value: 56MiB
