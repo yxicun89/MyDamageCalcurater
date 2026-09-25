@@ -549,15 +549,15 @@ export const reverseResultText = {
   closeCandidateLabel: "近い候補",
   /**
    * 観測を厳密に説明できる候補(exact)が1件も無いとき(exactCount 0 かつ候補が1件以上)に、
-   * 結果の先頭へ出す案内(issue #305)。候補一覧自体は消さずに残す(要件「候補の提示を優先」)。
+   * 結果の先頭へ出す案内(issue 305)。候補一覧自体は消さずに残す(要件「候補の提示を優先」)。
    */
   noExactCandidateNotice: "入力した観測を説明できる調整がありません(技・持ち物・入力値を確認)",
   /**
-   * 全候補が観測と一致しないとき、各候補の SP 範囲に添える印(issue #305)。
+   * 全候補が観測と一致しないとき、各候補の SP 範囲に添える印(issue 305)。
    * 見た目だけでなくテキストとして出し、支援技術にも「参考値」であることが伝わるようにする。
    */
   referenceRangeLabel: "参考",
-  /** %欄の意味(その候補で撃ったときの予測ダメージ%)を示すラベル(issue #305)。 */
+  /** %欄の意味(その候補で撃ったときの予測ダメージ%)を示すラベル(issue 305)。 */
   predictedPercentLabel: "予測",
   /** 防御側の結果に添える、H の仮定の注記(ADR-0010 §R1: 防御側は H32 前提)。 */
   assumedHpNote: (assumedHpSp: number): string => `H${String(assumedHpSp)} を仮定した結果です`,
