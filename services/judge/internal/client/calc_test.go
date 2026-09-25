@@ -44,7 +44,23 @@ func validCalcBody() []byte {
       "effectiveness": 2,
       "stab": true,
       "category": "physical",
-      "ko": {"hits": 2, "guaranteed": true, "chancePercent": 0, "displayChancePercent": 100}
+      "ko": {"hits": 2, "guaranteed": true, "chancePercent": 0, "displayChancePercent": 100},
+      "unsupported": []
+    }`)
+}
+
+// unsupportedCalcBody は印が付いた計算結果の本文(ADR-0123 §7-2 の UnsupportedMark)。
+// 技・持ち物・特性の ID はすべて架空(実マスタは使わない。CLAUDE.md のドメイン規約)。
+func unsupportedCalcBody() []byte {
+	return []byte(`{
+      "minDamage": 100,
+      "maxDamage": 115,
+      "defenderHP": 172,
+      "ko": {"hits": 2, "guaranteed": true, "chancePercent": 0, "displayChancePercent": 100},
+      "unsupported": [
+        {"target": "move", "reason": "multi_hit", "id": "test-move"},
+        {"target": "defender_item", "reason": "unsupported_effect", "id": "test-item-vest"}
+      ]
     }`)
 }
 
@@ -165,9 +181,59 @@ func TestDamageDecodesUpstreamResponse(t *testing.T) {
 		MaxDamage:  115,
 		DefenderHP: 172,
 		KO:         KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100},
+		// 印が無い応答(unsupported: [])は **空スライス**になる(nil ではない)。
+		// nil のまま応答まで運ぶと judge の契約で [] と決めた欄が null になる(ADR-0708 §3・§7)。
+		Unsupported: []UnsupportedMark{},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Damage = %+v, want %+v", got, want)
+	}
+}
+
+// TestDamageDecodesUnsupportedMarks: calc-svc の unsupported(ADR-0123)を、target / reason / id を
+// そのまま・同じ並びで取り出す(ADR-0708 §4・受け入れ条件3)。judge は印を解釈しない。
+func TestDamageDecodesUnsupportedMarks(t *testing.T) {
+	t.Parallel()
+
+	server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(unsupportedCalcBody())
+	})
+
+	got, err := newCalc(t, server.URL, testTimeout).Damage(t.Context(), requestContext, exampleCalcRequest())
+	if err != nil {
+		t.Fatalf("Damage: %v", err)
+	}
+
+	want := []UnsupportedMark{
+		{Target: "move", Reason: "multi_hit", ID: "test-move"},
+		{Target: "defender_item", Reason: "unsupported_effect", ID: "test-item-vest"},
+	}
+	if !reflect.DeepEqual(got.Unsupported, want) {
+		t.Errorf("Unsupported = %+v, want %+v(並びも calc-svc が返したまま)", got.Unsupported, want)
+	}
+}
+
+// TestDamageAcceptsUnknownUnsupportedReason: judge は印の意味を持たないので、契約の列挙に無い
+// reason も落とさずそのまま運ぶ(engine が理由を足したときに judge の版で判定が落ちないように。
+// ADR-0708 §4・§6)。
+func TestDamageAcceptsUnknownUnsupportedReason(t *testing.T) {
+	t.Parallel()
+
+	server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"minDamage":100,"maxDamage":115,"defenderHP":172,
+		  "ko":{"hits":2,"guaranteed":true,"displayChancePercent":100},
+		  "unsupported":[{"target":"move","reason":"test-future-reason","id":"test-move"}]}`))
+	})
+
+	got, err := newCalc(t, server.URL, testTimeout).Damage(t.Context(), requestContext, exampleCalcRequest())
+	if err != nil {
+		t.Fatalf("Damage: %v(judge は reason を検査しない。ADR-0708 §4)", err)
+	}
+	want := []UnsupportedMark{{Target: "move", Reason: "test-future-reason", ID: "test-move"}}
+	if !reflect.DeepEqual(got.Unsupported, want) {
+		t.Errorf("Unsupported = %+v, want %+v", got.Unsupported, want)
 	}
 }
 
@@ -246,6 +312,19 @@ func TestDamageRejectsInvalidBody(t *testing.T) {
 		  "ko":{"hits":2,"guaranteed":true}}`},
 		{"defenderHP が無い", `{"minDamage":100,"maxDamage":115,
 		  "ko":{"hits":2,"guaranteed":true,"displayChancePercent":100}}`},
+		// ADR-0708 §7: unsupported は calc-svc の契約で必須。欠けたまま「印なし」に倒すと、
+		// 未対応の入力を「対応済み」と断言した応答を正しい顔で返すことになる。
+		{"unsupported が無い", `{"minDamage":100,"maxDamage":115,"defenderHP":172,
+		  "ko":{"hits":2,"guaranteed":true,"displayChancePercent":100}}`},
+		{"unsupported の要素に target が無い", `{"minDamage":100,"maxDamage":115,"defenderHP":172,
+		  "ko":{"hits":2,"guaranteed":true,"displayChancePercent":100},
+		  "unsupported":[{"reason":"multi_hit","id":"test-move"}]}`},
+		{"unsupported の要素に reason が無い", `{"minDamage":100,"maxDamage":115,"defenderHP":172,
+		  "ko":{"hits":2,"guaranteed":true,"displayChancePercent":100},
+		  "unsupported":[{"target":"move","id":"test-move"}]}`},
+		{"unsupported の要素に id が無い", `{"minDamage":100,"maxDamage":115,"defenderHP":172,
+		  "ko":{"hits":2,"guaranteed":true,"displayChancePercent":100},
+		  "unsupported":[{"target":"move","reason":"multi_hit"}]}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

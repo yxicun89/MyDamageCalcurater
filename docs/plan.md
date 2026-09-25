@@ -798,6 +798,69 @@
       ダブルの全体技/壁減衰(issue #288)を明記。`docs/README.md` の目次は既に judge-design.md を指しており
       変更不要。`type-balance-design.md` はタイプバランスレーンの持ち物のため対象外(DECISIONS.mdへ)。
       `bash scripts/check-publishable.sh`(0件)成功を確認。軽微な作業のためメインで対応
+- [x] 判定の応答に calc-svc の「未対応」の印を中継する(issue #271 / #270 の判定レーン分。ADR-0123 §6 の
+      「印を見せる画面・利用者は各レーンの作業」)。judge は `attackerKo` / `defenderKo` を calc-svc から
+      転記するだけなので、多段技・固定ダメージ技・表せない持ち物/特性を選んだときに **誤った確定数が
+      正しい顔で画面に出る**
+  - 設計の正は ADR-0708: `Matchup` に `attackerKoUnsupported` / `defenderKoUnsupported`(必須・印なしは `[]`)を
+    足す(§1)/ **順方向と逆方向の印は絶対にまとめない**(どちらの確定数が疑わしいか画面が区別できるように。§4)/
+    印は `target` / `reason` / `id` をそのまま・同じ並びで中継し、judge は解釈・丸め・`reason` の検査をしない(§4)/
+    `target` の attacker/defender は**その計算から見た**役割(逆方向では入れ替わる。§5)/ judge の契約に
+    `UnsupportedMark` を**複製**する(ルートを `$ref` しない。ADR-0706 §2 の前例。§6)/ calc-svc の応答に
+    `unsupported` が無ければ `ErrUpstreamInvalidResponse` → 503(ADR-0704 §9 の priority と同じ立場。§7)/
+    `internal/judge` は変えない(§8)
+  - 契約は先に更新した(spec-writer): `services/judge/api/openapi.yaml` に `UnsupportedMark`(ルートと同じ
+    target / reason / id・同じ enum)を新設し、`Matchup` の `properties` と `required` に 2 欄を追加。
+    **`make judge-gen` は implementer が実行する**(ADR-0706 と同じ分担)。`web/src/judge/judge.gen.ts` の
+    手動再生成も implementer(ADR-0706 受け入れ条件7・critic 1 回目の NG を再発させない)
+  - 失敗するテストを先に置いた(spec-writer): `internal/httpapi` に
+    `TestOutspeedAndKoTranscribesUnsupportedMarks`(方向ごとに件数も中身も違う印・印なしは `null` でなく `[]`・
+    知らない `reason` も中継)・`TestOutspeedAndKoUnsupportedMarksPerCandidate`(候補 index 1 だけに印)、
+    `TestOutspeedAndKoUpstreamFailures` に `unsupported` 欠落・要素の `reason` 欠落の 2 行、
+    `internal/client` に `TestDamageDecodesUnsupportedMarks`・`TestDamageAcceptsUnknownUnsupportedReason`・
+    `TestDamageRejectsInvalidBody` の 4 行。共有スタブ(`calcBody`・`calcKO` の本文・`validCalcBody`)に
+    `"unsupported":[]` を足した(既存テストの期待値は変えていない)。現行コードでは `internal/httpapi` の
+    3 つの Test が失敗し、`internal/client` は `undefined: UnsupportedMark` でビルドできない状態
+    (それ以外の既存テストは全件通ることを確認済み)
+  - implementer への申し送り: `make judge-gen` 後に `api.Matchup` が配列欄を持つので `==` で比較できなくなる。
+    `outspeed_test.go` の 4 か所の `api.Matchup` リテラル(`TestOutspeedAndKo`・
+    `TestOutspeedAndKoSpeedFieldOmittedMatchesJD1`・`TestOutspeedAndKoMultipleDefenders`・
+    `TestOutspeedAndKoSpeedFieldAppliesToEveryCandidate`)の want に**空配列 2 欄を書き足す**
+    (nil スライスと `[]api.UnsupportedMark{}` は `reflect.DeepEqual` では別物。該当箇所にコメントを残した)
+  - 実装(implementer): `make judge-gen` を実行(`services/judge/internal/api/openapi.gen.go` のみ変更。
+    `Id`(`ID` ではない)・`UnsupportedMarkTarget`/`UnsupportedMarkReason` の文字列型を確認)。
+    `internal/client/calc.go` に `UnsupportedMark{Target, Reason, ID string}`・`CalcResult.Unsupported`
+    を追加し、`calcResultWire.Unsupported *[]unsupportedMarkWire`(nil = 欄が無い → `ErrUpstreamInvalidResponse`。
+    要素の `target`/`reason`/`id` のいずれかが nil でも同じ)を `toUnsupportedMarks` で変換、印なしは
+    `make([]UnsupportedMark, 0, ...)` で空スライス(nil にしない)にした。`internal/httpapi/outspeed.go` に
+    `toAPIUnsupportedMarks(marks []client.UnsupportedMark) []api.UnsupportedMark` を追加し、`Matchup` 組み立てで
+    `forward.Unsupported` → `AttackerKoUnsupported`・`reverse.Unsupported` → `DefenderKoUnsupported`
+    に方向ごとに独立してマップ(共有スライスの使い回しはしない)。spec-writer が申し送った 4 か所の
+    `api.Matchup`/`[]api.Matchup` リテラルに空配列 2 欄(`[]api.UnsupportedMark{}`)を追加。`internal/judge`
+    は変更していない。確認: `GOWORK=off go test ./... -count=1`(全パッケージ成功。新規テスト
+    `TestOutspeedAndKoTranscribesUnsupportedMarks` 全5件・`TestOutspeedAndKoUnsupportedMarksPerCandidate`・
+    `TestOutspeedAndKoUpstreamFailures` の新規2件・`TestDamageDecodesUnsupportedMarks`・
+    `TestDamageAcceptsUnknownUnsupportedReason`・`TestDamageRejectsInvalidBody` の新規4件を含め全件成功)、
+    `gofmt -l services/judge`(空)、`go vet ./...`、`make judge-lint`・`make judge-build`、
+    `bash scripts/check-publishable.sh`(0件)、いずれも成功。`git status --short` で
+    `services/judge/internal/api/openapi.gen.go` 以外の生成物の変化が無いことを確認。
+    `web/` で `npx openapi-typescript ../services/judge/api/openapi.yaml -o src/judge/judge.gen.ts &&
+    npx prettier --write src/judge/judge.gen.ts` を実行し、手書きのヘッダ(1〜6行目)を復元した上で
+    `npm run lint`・`npm test`(65ファイル1612件)成功、`git diff web/src/judge/judge.gen.ts` が
+    `UnsupportedMark` 型と `Matchup` の新 2 欄の追加のみであることを確認。critic レビュー待ち
+  - critic 1回目 NG(ブロッカー1件): `Matchup` に必須欄2つ足したため `web/src/judge/JudgeScreen.test.tsx`・
+    `judgeClient.test.ts` の既存の架空応答リテラルが型として不完全になり、`npm run typecheck`
+    (= ルートの `make lint` が含む)が失敗していた(`npm run lint`〈eslint+prettier〉・`npm test`
+    〈vitest。型検査しない〉では検出できず見落とした)。方向の不変条件(順方向/逆方向を混ぜない)・
+    never-null契約・byte-for-byte中継・上流の壊れた応答→503・スコープ・契約/生成物の整合はすべて
+    critic 自身が変異テスト6種で実際に検証し問題なし(CLAUDE.md絶対ルール違反・テスト弱体化なし)。
+    修正: 両ファイルの `Matchup` リテラルに `attackerKoUnsupported: []`・`defenderKoUnsupported: []` を
+    追加(既存アサーションは変更なし)。ADR-0708 受け入れ条件7にこの手順を明記して再発防止。
+    `cd web && npm run typecheck`・`npm run lint`・`npm test`(65ファイル1612件)、ルート `make lint`
+    (typecheck・eslint・prettier・k8s-render・check-publishable・自己テストすべて含む)成功を確認。
+    critic が「この件はもう一巡回す必要はない」と明示したため round 2 の critic 再レビューは省略し、
+    ADR-0708 の状態を「提案」→「採用」に更新(critic の明示的な判断: ADR-0706/0707 は実装と同時に
+    「採用」でコミットされているのがこのレーンの慣行)
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
 各レーンが自分の範囲の README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)と、動かして確かめられるレーンは手順書(`docs/runbooks/<レーン>.md`。AGENTS.md「手順書の書き方」に従う)を書く。全体図は `docs/architecture.md`。

@@ -66,13 +66,23 @@ type KOChance struct {
 	DisplayChancePercent float64
 }
 
+// UnsupportedMark is judge's copy of the fields it reads from the root api/openapi.yaml
+// UnsupportedMark (ADR-0123, ADR-0708 §7): target/reason/id, byte-for-byte, judge does not
+// interpret them (ADR-0708 §4).
+type UnsupportedMark struct {
+	Target string
+	Reason string
+	ID     string
+}
+
 // CalcResult is judge's copy of the fields it reads from the root api/openapi.yaml CalcResult
 // (ADR-0700 §4).
 type CalcResult struct {
-	MinDamage  int
-	MaxDamage  int
-	DefenderHP int
-	KO         KOChance
+	MinDamage   int
+	MaxDamage   int
+	DefenderHP  int
+	KO          KOChance
+	Unsupported []UnsupportedMark
 }
 
 // Calc is a client to calc-svc's public API.
@@ -119,17 +129,31 @@ func (c *Calc) Damage(ctx context.Context, rc RequestContext, request CalcReques
 // calcResultWire mirrors just the fields judge reads from CalcResult. Every field is a
 // pointer so a legitimate 0 (e.g. minDamage: 0, a move that deals no damage) is never
 // confused with a field the upstream left out (same reasoning as speciesWire).
+//
+// Unsupported is *[]unsupportedMarkWire (not []unsupportedMarkWire) so a missing "unsupported"
+// key (nil pointer) is distinguishable from an explicit "unsupported": [] (non-nil pointer to
+// an empty slice). ADR-0708 §7: calc-svc's contract makes unsupported required, so a missing key
+// is ErrUpstreamInvalidResponse, not "no marks".
 type calcResultWire struct {
-	MinDamage  *int          `json:"minDamage"`
-	MaxDamage  *int          `json:"maxDamage"`
-	DefenderHP *int          `json:"defenderHP"`
-	KO         *koChanceWire `json:"ko"`
+	MinDamage   *int                   `json:"minDamage"`
+	MaxDamage   *int                   `json:"maxDamage"`
+	DefenderHP  *int                   `json:"defenderHP"`
+	KO          *koChanceWire          `json:"ko"`
+	Unsupported *[]unsupportedMarkWire `json:"unsupported"`
 }
 
 type koChanceWire struct {
 	Hits                 *int     `json:"hits"`
 	Guaranteed           *bool    `json:"guaranteed"`
 	DisplayChancePercent *float64 `json:"displayChancePercent"`
+}
+
+// unsupportedMarkWire mirrors UnsupportedMark(ADR-0123・ADR-0708 §7)。target/reason/id は
+// どれも欠けたら ErrUpstreamInvalidResponse(空文字列は「欠けている」と見なさない。§7)。
+type unsupportedMarkWire struct {
+	Target *string `json:"target"`
+	Reason *string `json:"reason"`
+	ID     *string `json:"id"`
 }
 
 func (w calcResultWire) toCalcResult() (CalcResult, error) {
@@ -143,7 +167,14 @@ func (w calcResultWire) toCalcResult() (CalcResult, error) {
 	if err != nil {
 		return CalcResult{}, err
 	}
-	return CalcResult{MinDamage: *w.MinDamage, MaxDamage: *w.MaxDamage, DefenderHP: *w.DefenderHP, KO: ko}, nil
+	if w.Unsupported == nil {
+		return CalcResult{}, fmt.Errorf("%w: calc response has no unsupported", ErrUpstreamInvalidResponse)
+	}
+	unsupported, err := toUnsupportedMarks(*w.Unsupported)
+	if err != nil {
+		return CalcResult{}, err
+	}
+	return CalcResult{MinDamage: *w.MinDamage, MaxDamage: *w.MaxDamage, DefenderHP: *w.DefenderHP, KO: ko, Unsupported: unsupported}, nil
 }
 
 func (w koChanceWire) toKOChance() (KOChance, error) {
@@ -151,4 +182,18 @@ func (w koChanceWire) toKOChance() (KOChance, error) {
 		return KOChance{}, fmt.Errorf("%w: ko is missing hits/guaranteed/displayChancePercent", ErrUpstreamInvalidResponse)
 	}
 	return KOChance{Hits: *w.Hits, Guaranteed: *w.Guaranteed, DisplayChancePercent: *w.DisplayChancePercent}, nil
+}
+
+// toUnsupportedMarks converts calc-svc の unsupported をそのまま・同じ順で UnsupportedMark に
+// 変換する(ADR-0708 §4: judge は解釈・並べ替え・間引きをしない)。印が無い([])なら**空スライス**
+// を返す(nil にしない。ADR-0708 §3・§7: 契約の [] をそのまま実装が破らないようにする)。
+func toUnsupportedMarks(wire []unsupportedMarkWire) ([]UnsupportedMark, error) {
+	marks := make([]UnsupportedMark, 0, len(wire))
+	for _, m := range wire {
+		if m.Target == nil || m.Reason == nil || m.ID == nil {
+			return nil, fmt.Errorf("%w: unsupported element is missing target/reason/id", ErrUpstreamInvalidResponse)
+		}
+		marks = append(marks, UnsupportedMark{Target: *m.Target, Reason: *m.Reason, ID: *m.ID})
+	}
+	return marks, nil
 }
