@@ -1040,12 +1040,20 @@
   Web の例データ(`exportSnapshot.ts`)に `mechanisms: []` を追加(Web は `unsupported` をまだ受け取らない
   設計のまま。`mapCalcResult` 等の明示的フィールド写像により自動的に弾かれる。issue #67 の前方互換どおり)。
   データレーン・Web レーン・iOS レーンへ連絡済み(iOS は生成物の再生成が必要)
-- [ ] issue #274/#272(iOS レーンからの提案。DECISIONS.md 2026-09-25)の API レーン担当分: `BulkCalcRequest` に
-  `defenderOverride: { abilityId?, ranks?: RankBlock, status?: StatusCondition }`(全行に一律で上書き)を追加する。
-  iOS(PR #377)は攻撃側のランク・特性・天候・フィールド・防御側の壁までは実装済みだが、防御側のランク・特性・
-  状態異常は契約に上書き手段が無く未実装のまま(範囲外として明記)。engine 側の変更(`BulkInput` へのオーバーライド
-  追加。プリセット解決後・計算前に当てる)を伴うため ADR-0003 の test-first + 独立 critic の対象。
-  **急ぎではない(iOS レーン明記)。M2(P5-3・P5-4)の後に着手する**。入ったら iOS・Web へ連絡(追従は各レーン)
+- [x] issue #274/#272(iOS レーンからの提案。DECISIONS.md 2026-09-25)の API レーン担当分のうち **abilityId**:
+  `BulkCalcRequest.defenderOverride.abilityId`(ADR-0126・ADR-0214)。データレーンが engine 側
+  (`BulkInput.DefenderAbilities`・`ReverseInput.UnknownAbilities`。PR #402)を実装済みで、API レーンは
+  `defenderOverride.abilityId`(既に採用済みの概念)をその1件として渡す配線と、`ReverseRequest.unknownAbilityId`
+  (新規)・`BulkCalcRow`/`ReverseCandidate` への `abilityId`/`abilityIds`(必須)を実装。省略時は種族の全特性
+  (最大3件。4件目は Showdown の特殊枠 `"S"` として落とす。ADR-0105 §5 と同じ判断)を解決して渡すため、
+  1つしか特性を持たない種族は必ずその特性が効くようになる(issue の境界値の受け入れ条件を満たす)。
+  一括計算・逆算の行数/候補数の上限(ADR-0208)が特性分岐で最大3倍まで増えうることを openapi.yaml と
+  ADR-0208 に追記。critic レビュー予定。**残り(ranks・status の上書き)は別タスクとして残す**(このタスクの
+  スコープ外。abilityId とは独立に追加できる)。入ったら iOS・Web へ連絡(生成物の再生成・追従は各レーン)
+- [ ] issue #274/#272 の API レーン担当分の残り: `defenderOverride.ranks: RankBlock` / `defenderOverride.status:
+  StatusCondition`(全行に一律で上書き)。abilityId(上記)とは独立に追加できる。engine 側の変更
+  (`BulkInput`/`ReverseInput` へのオーバーライド追加。プリセット解決後・計算前に当てる)を伴うため
+  ADR-0003 の test-first + 独立 critic の対象。優先度は低い(iOS レーンから「急ぎではない」と明記済み)
 - [x] issue #110(セキュリティ。Codex レビュー)の API レーン担当分: `POST /api/calc/bulk`・`/api/calc/reverse` の候補・観測配列に件数上限が無く、1MiB未満の小さな本文で計算量を増幅できた(2,000×2,000 で約9.4秒)。契約(`maxItems`/`uniqueItems`/`maximum`。ADR-0208)を追加し、calc-svc の生成ラッパは検証しないため(実測確認済み)自前検証をID解決・engine呼び出しより前に実装。critic PASS、実HTTPで境界値と再現手順の解消(0.9ms・engine未到達)を確認。engine/wasmapi(データレーン)・Web・iOSへの追従は DECISIONS.md に既定案付きで依頼(issue はレーンの完了までクローズしない)
 - [x] issue #110 のデータレーン担当分: `engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ件数・範囲の上限(presets 8・itemVariants 64・itemCandidates 64・observations 16・maxCandidates 0..128)を追加(ADR-0108)。HTTP を経由しない直接呼び出し・WASM でも計算量を増幅できないようにした。wasmapi は DTO 変換より前に同じ検査を重ねて置き、複数の違反が重なっても HTTP と同じ `invalid_input` が先に出るようにした(parity)。`MaxCandidates` の負の値は、従来「無制限」扱いだったのを ADR-0208 の契約(`minimum: 0`)に合わせて拒否するよう変更(既存テストの期待値を更新。理由は ADR-0108 決定4)。critic PASS(1往復)。Web・iOS の追従(観測16件でUI無効化・持ち物候補64件超の扱い)は ADR-0208 §4 のまま未着手
 - [x] issue #148(クラウド公開前のアクセス境界・認証方針。ユーザー決定「私設サービスを維持する」)の API レーン担当分: `deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定(ADR-0210)。TLS 終端は gateway/クラスタの Ingress では行わず Tailscale(`tailscale serve`)に任せる方針を決定。端末IDが認証として機能しないこと・CORSが到達制御でないことの回帰テストを追加(`TestDeviceIDIsNotAuthentication`・`TestCORSIsNotAccessControl`・`TestContractHasNoAuthentication`)。`base`のgateway Ingress本体は local(k3d)専用として残し、先頭コメントで明記。ADR-0209 §1(クラウド公開へ進む判断)は「公開しない」で確定した旨を追記。critic PASS。運用(tailnet ACL・失効手順のrunbook)・Web/iOS(接続先をtailnet名に)への依頼はDECISIONS.mdに既定案付きで記録(issue はレーンの完了までクローズしない)

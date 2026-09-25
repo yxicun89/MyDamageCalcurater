@@ -299,11 +299,19 @@ func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 	if err := validateIndividual("防御側の種族", engine.Individual{Species: species}); err != nil {
 		return err
 	}
+	var defenderAbilityOverride *string
+	if req.DefenderOverride != nil {
+		defenderAbilityOverride = req.DefenderOverride.AbilityId
+	}
+	defenderAbilities, err := s.resolveAbilityCandidates("defenderOverride", species, defenderAbilityOverride)
+	if err != nil {
+		return err
+	}
 
 	res, err := engine.CalcBulk(engine.BulkInput{
 		Format: format, Attacker: attacker, DefenderSpecies: species, Move: move, Field: field,
 		Critical: criticalFrom(req.Options), PresetKeys: presetKeysFrom(req.Presets), ItemVariants: variants,
-		TypeChart: s.store.TypeChart(),
+		DefenderAbilities: defenderAbilities, TypeChart: s.store.TypeChart(),
 	})
 	if err != nil {
 		return errFromEngine(err)
@@ -361,11 +369,16 @@ func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) er
 		return err
 	}
 	maxCandidates := derefInt(req.MaxCandidates)
+	unknownAbilities, err := s.resolveAbilityCandidates("unknownAbilityId", species, req.UnknownAbilityId)
+	if err != nil {
+		return err
+	}
 
 	res, err := engine.CalcReverse(engine.ReverseInput{
 		Format: format, Side: engine.ReverseSide(req.Side), Known: known, UnknownSpecies: species,
 		Move: move, Field: field, Critical: criticalFrom(req.Options), ItemCandidates: items,
-		Observations: observations, MaxCandidates: maxCandidates, TypeChart: s.store.TypeChart(),
+		Observations: observations, MaxCandidates: maxCandidates, UnknownAbilities: unknownAbilities,
+		TypeChart: s.store.TypeChart(),
 	})
 	if err != nil {
 		return errFromEngine(err)

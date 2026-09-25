@@ -381,6 +381,8 @@ const apiBulkResult: Schemas["BulkCalcResult"] = {
         stats: { hp: 165, atk: 95, def: 100, spa: 115, spd: 105, spe: 90 },
       },
       result: apiCalcResult,
+      abilityId: "example-ability-adapt",
+      abilityIds: ["example-ability-adapt"],
     },
     {
       preset: "hb_boost",
@@ -393,6 +395,8 @@ const apiBulkResult: Schemas["BulkCalcResult"] = {
         stats: { hp: 197, atk: 85, def: 110, spa: 115, spd: 105, spe: 90 },
       },
       result: apiCalcResult,
+      abilityId: "example-ability-adapt",
+      abilityIds: ["example-ability-adapt"],
     },
   ],
 };
@@ -515,6 +519,8 @@ const apiReverseResult: Schemas["ReverseResult"] = {
       minPercent: 40.2,
       maxPercent: 47.8,
       unsupported: [],
+      abilityId: "example-ability-adapt",
+      abilityIds: ["example-ability-adapt"],
     },
     {
       natureClass: "plus",
@@ -529,6 +535,8 @@ const apiReverseResult: Schemas["ReverseResult"] = {
       minPercent: 44.1,
       maxPercent: 52.0,
       unsupported: [],
+      abilityId: "example-ability-adapt",
+      abilityIds: ["example-ability-adapt"],
     },
   ],
 };
