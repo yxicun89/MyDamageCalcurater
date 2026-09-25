@@ -29561,6 +29561,828 @@
     }
   },
   {
+    "id": "psychic-priority/grounded-defender",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Quick Attack"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "quickattack",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 40,
+        "Priority": 1
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "psychic",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "psychic-priority/grounded-defender-special",
+    "oracle": {
+      "attacker": "Gengar",
+      "defender": "Snorlax",
+      "move": "Vacuum Wave"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "gengar",
+          "Types": [
+            "ghost",
+            "poison"
+          ],
+          "BaseStats": {
+            "hp": 60,
+            "atk": 65,
+            "def": 60,
+            "spa": 130,
+            "spd": 75,
+            "spe": 110
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "vacuumwave",
+        "Type": "fighting",
+        "Category": "special",
+        "Power": 40,
+        "Priority": 1
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "psychic",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 135,
+        "atk": 85,
+        "def": 80,
+        "spa": 150,
+        "spd": 95,
+        "spe": 130
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "psychic-priority/grounded-defender-priority2",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Extreme Speed"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "extremespeed",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 80,
+        "Priority": 2
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "psychic",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": true
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "psychic-priority/flying-defender",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Corviknight",
+      "move": "Quick Attack"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "corviknight",
+          "Types": [
+            "flying",
+            "steel"
+          ],
+          "BaseStats": {
+            "hp": 98,
+            "atk": 87,
+            "def": 105,
+            "spa": 53,
+            "spd": 85,
+            "spe": 67
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "quickattack",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 40,
+        "Priority": 1
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "psychic",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        9,
+        9,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        11,
+        11,
+        11,
+        11,
+        11
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 173,
+        "atk": 107,
+        "def": 125,
+        "spa": 73,
+        "spd": 105,
+        "spe": 87
+      },
+      "ko": {
+        "Hits": 16,
+        "Guaranteed": false,
+        "ChancePercent": 0.003195994276333384
+      }
+    }
+  },
+  {
+    "id": "psychic-priority/levitate-defender",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Quick Attack"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Levitate",
+          "Effect": {
+            "DefImmuneTypes": [
+              "ground"
+            ],
+            "Airborne": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "quickattack",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 40,
+        "Priority": 1
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "psychic",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        28,
+        28,
+        28,
+        29,
+        29,
+        29,
+        30,
+        30,
+        30,
+        31,
+        31,
+        31,
+        32,
+        32,
+        32,
+        33
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 8,
+        "Guaranteed": false,
+        "ChancePercent": 94.56380815245211
+      }
+    }
+  },
+  {
+    "id": "psychic-priority/electric-terrain",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Quick Attack"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "quickattack",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 40,
+        "Priority": 1
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "electric",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        28,
+        28,
+        28,
+        29,
+        29,
+        29,
+        30,
+        30,
+        30,
+        31,
+        31,
+        31,
+        32,
+        32,
+        32,
+        33
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 8,
+        "Guaranteed": false,
+        "ChancePercent": 94.56380815245211
+      }
+    }
+  },
+  {
     "id": "effects/babiriberry/berry/steel/apply",
     "oracle": {
       "attacker": "Snorlax",

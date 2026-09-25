@@ -10,6 +10,10 @@ const baseURL = `http://127.0.0.1:${CONTAINER_PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  // Playwright が走らせるのは *.spec.ts だけ。e2e/support/ には vitest が走らせる *.test.ts
+  // (pokedex フィクスチャの契約テスト。ADR-0307)があり、Playwright の既定の testMatch では
+  // それも拾ってしまう(critic 指摘: 実際に make web-e2e-container が壊れることを確認済み)ため明示する。
+  testMatch: ["**/*.spec.ts"],
   // オンライン(API)の spec は calc-svc が要る。/api は gateway の持ち物で、Web のコンテナは転送しない。
   testIgnore: ["**/online.spec.ts", "**/balance.spec.ts"],
   fullyParallel: true,
