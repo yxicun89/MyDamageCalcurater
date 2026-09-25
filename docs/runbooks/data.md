@@ -233,7 +233,7 @@ gitops overlay の initContainer から使う想定(issue #237)。balance・spee
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-make pokedex-registry-push
+POKEDEX_REGISTRY_PUSH_CONFIRM=1 make pokedex-registry-push
 ```
 確認: 最後の行が `localhost:5000/pokecalc/pokedex@sha256:...`(digest 参照)。kubectl の context が `k3d-pokecalc`
 でないときは、別クラスタへ push しないよう理由を出して止まる(apply・delete はしない。push のみ)。

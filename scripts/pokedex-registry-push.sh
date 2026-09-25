@@ -10,6 +10,9 @@
 # 検証用に POKEDEX_REGISTRY_HOST(例 localhost:15000)を指定すると、kubectl の context 検査と
 # 共有クラスタへの port-forward を行わず、そのホストへ直接 push する(使い捨てのローカル
 # registry:2系コンテナ等に向ける。共有クラスタへは検証で push しない)。
+#
+# 共有クラスタへの push は取り違えを防ぐため、宛先を表示したうえで POKEDEX_REGISTRY_PUSH_CONFIRM=1 が
+# 無ければ中断する(実装中に検証用の切り替えを付け忘れて共有クラスタへ push した事故の再発防止)。
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
@@ -50,6 +53,11 @@ else
     echo "pokedex-registry-push: kubectl の context が '$context'(期待 k3d-${cluster})。別クラスタへ push しないよう中断" >&2
     exit 1
   fi
+  echo "pokedex-registry-push: 宛先 = 共有クラスタ(context ${context})の balance-registry、イメージ ${image}" >&2
+  if [ "${POKEDEX_REGISTRY_PUSH_CONFIRM:-}" != 1 ]; then
+    echo "pokedex-registry-push: 共有クラスタへ push するときは POKEDEX_REGISTRY_PUSH_CONFIRM=1 を付けて実行する(検証なら POKEDEX_REGISTRY_HOST=<使い捨てレジストリ>)" >&2
+    exit 1
+  fi
 
   kubectl -n balance-registry port-forward svc/registry "${local_port}:5000" >/dev/null 2>&1 &
   forward_pid=$!
@@ -74,6 +82,7 @@ else
   ref_host="localhost:5000"
 fi
 
+echo "pokedex-registry-push: push ${push_host}/pokecalc/pokedex:${tag}" >&2
 crane push --insecure "$work_dir/image.tar" "${push_host}/pokecalc/pokedex:${tag}" >/dev/null
 digest=$(crane digest --insecure "${push_host}/pokecalc/pokedex:${tag}")
 echo "${ref_host}/pokecalc/pokedex@${digest}"
