@@ -10,6 +10,12 @@
   gap: var(--space-2);
 }
 
+/* 見えるラベル(issue 304)。視覚的に隠さない(clip・width:1px 等を使わない)。 */
+.species-search__label {
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
 .species-search input {
   width: 100%;
   box-sizing: border-box;

@@ -279,14 +279,33 @@
   critic PASS(mutation testing 2/3 kill。`flushObservationDebounce()` を守るテストが無いのは
   `selectAttackerPreset` 側にも元々あった既存の穴で、今回の退行ではない。次に触るときに攻撃側・防御側
   両方へテストを足すとよい)。`cd web && npx vitest run` 1419/1419 green、tsc・lintエラー無し。
-- [ ] issue #304(重大度 medium。計算・逆算・タイプバランスの入力に見えるラベルが無く、初見でどれが
-  攻撃側・防御側・技・観測値か分からない。WCAG 2.2 SC 3.3.2 / SC 2.5.3)。**着手(2026-09-25。Web レーン。
-  ブランチ `fix/web-issue-304-visible-labels`)**: 受け入れ条件と失敗するテストを先に用意した段階
-  (`web/src/screens/visibleLabels.test.tsx`・`web/src/i18n/visibleLabels.test.ts`・
+- [x] issue #304(重大度 medium。計算・逆算・タイプバランスの入力に見えるラベルが無く、初見でどれが
+  攻撃側・防御側・技・観測値か分からない。WCAG 2.2 SC 3.3.2 / SC 2.5.3)。**完了・critic PASS
+  (2026-09-25。Web レーン。ブランチ `fix/web-issue-304-visible-labels`)**: 受け入れ条件と失敗する
+  テストを先に用意(`web/src/screens/visibleLabels.test.tsx`・`web/src/i18n/visibleLabels.test.ts`・
   `web/src/styles/inputTokens.test.ts`、共通の道具 `web/src/test/accessibleName.ts`)。
-  設計は docs/design.md「入力のラベル」に追記済み(領域の見える見出し・h2/h3 の階層・`label for` の
+  設計は docs/design.md「入力のラベル」に記録済み(領域の見える見出し・h2/h3 の階層・`label for` の
   見えるラベル・accessible name は「<見出しの語>の<ラベルの語>」を文言資源で組み立てる・未選択 option の
-  文言・観測欄の説明文・入力/ピルの角丸トークン)。実装はこれから。
+  文言・観測欄の説明文・入力/ピルの角丸トークン)。実装完了(1534/1534 green)。
+  **critic 1回目FAIL→修正**: (1) `web/e2e/mobile.spec.ts` の見出しレベル検査(h2→h3。calc.spec.ts と
+  同じ形)が未追従だったので修正。あわせて同ファイルの `focusedCalcZone` ヘルパーが `[aria-label="攻撃側"]`
+  という属性セレクタで区画を判定していたが、計算画面のカードは `aria-labelledby`(見える h2 を参照)に
+  変わったため引けなくなっていたのを修正(`aria-labelledby` の参照先の文字も見るように)。
+  (2) 逆算の観測欄で、見えるラベルと説明文(hint)がどちらも grid の全幅行を要求するため、`grid` の
+  自動配置で入力欄と単位ラジオ・削除ボタンが別々の行に分かれてしまっていた(jsdom では検出できない
+  レイアウト崩れ。実ブラウザで確認)。hint の DOM 位置を単位ラジオの後ろへ移し(`aria-describedby` は
+  DOM順に依存しないので支援技術への影響なし)、`.reverse-observation__label` に `grid-column: 1 / -1`
+  を追加して解消。`e2e/reverse.spec.ts` の検証メッセージの accessible description の期待値も、
+  hint が `aria-describedby` に加わった分を反映して更新(検証メッセージ自体の確認は維持。弱めていない)。
+  (3) オンラインの種族検索欄(`SpeciesSearchField.tsx`)がplaceholderだけで見えるラベルが無く、
+  issue #304 の症状が本番のオンラインモードに残っていたのを、短い見えるラベル(「ポケモン」)を追加して解消。
+  `npx playwright test`(オフライン、35/35)・vitest(1534/1534)は無回帰。
+  **申し送り(critic指摘の重要事項)**: `web/src/styles/inputTokens.test.ts` は「design.mdの値から
+  `:root` で最初にその値を持つ変数名を逆引きする」設計で、`--radius-input`(12px)と
+  `--font-size-caption`・`--space-3`(いずれも12px)が値を共有するため、`:root` の宣言順に依存する
+  脆さを持つ(今回は宣言順の入れ替え〈値は不変〉で対応。critic が宣言順を戻すと実際に失敗することを
+  確認済み)。次にトークンを足すときに同じ値の衝突が再発しうるので、触るときは
+  `inputTokens.test.ts` の逆引きを変数名ベースに直すことを検討する。
 
 ## M2: 保存・構築
 

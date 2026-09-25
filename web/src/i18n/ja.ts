@@ -4,7 +4,8 @@
 // TypeId のユニオンは手書きの複製だが、相性表と過不足なく一致することを ja.test.ts が検査して同期を保つ
 // (コーディング規約 §2 の「独立した検証」)。
 
-import type { StatKey } from "../engine/types";
+import type { ObservationUnit } from "../domain/observations";
+import type { ReverseSide, StatKey } from "../engine/types";
 
 /** 相性表が持つ18タイプの ID(`testdata/golden/typechart.json` の `types` と同じ)。 */
 export type TypeId =
@@ -59,17 +60,33 @@ export function isTypeId(value: string): value is TypeId {
 }
 
 /**
+ * 領域(カード・枠)の見える見出しの語と、入力欄の見えるラベルの語(issue 304、docs/design.md
+ * 「入力のラベル」)。欄の accessible name は「<領域の見出しの語>の<ラベルの語>」の形に組み立て、
+ * 画面(CalcScreen.tsx・ReverseScreen.tsx)はこの組み立て済みの語だけを使う(同じ日本語を2回書かない)。
+ */
+const attackerRegionLabel = "攻撃側";
+const defenderRegionLabel = "防御側";
+/** 入力欄の見えるラベルの語(短くする。どちら側かは領域の見出しが担う)。 */
+const pokemonFieldLabel = "ポケモン";
+const itemFieldLabel = "持ち物";
+
+/**
  * 計算画面(P4-2)の文言。コーディング規約 §2「UI の文言は文言資源に置く」に従い、
  * 画面・書式のコードはここの語だけを組み合わせ、日本語の文字列リテラルを直接持たない。
  */
 export const calcScreenText = {
-  attackerPokemonLabel: "攻撃側のポケモン",
-  defenderPokemonLabel: "防御側のポケモン",
-  attackerItemLabel: "攻撃側の持ち物",
-  defenderItemLabel: "防御側の持ち物",
+  attackerRegionLabel,
+  defenderRegionLabel,
+  /** 入力欄の見えるラベルの語(select の label に使う。計算・逆算・タイプバランスで共通)。 */
+  pokemonFieldLabel,
+  itemFieldLabel,
+  attackerPokemonLabel: `${attackerRegionLabel}の${pokemonFieldLabel}`,
+  defenderPokemonLabel: `${defenderRegionLabel}の${pokemonFieldLabel}`,
+  attackerItemLabel: `${attackerRegionLabel}の${itemFieldLabel}`,
+  defenderItemLabel: `${defenderRegionLabel}の${itemFieldLabel}`,
   moveLabel: "技",
-  attackerRegionLabel: "攻撃側",
-  defenderRegionLabel: "防御側",
+  /** 種族 select が未選択のとき、hidden の先頭 option に出す文言(空文字にしない。issue 304)。 */
+  speciesPlaceholderOption: "ポケモンを選ぶ",
   noItemOption: "なし",
   noItemRowLabel: "持ち物なし",
   resultsListLabel: "計算結果",
@@ -221,8 +238,13 @@ export const balanceScreenText = {
   memberGroupLabel: (n: number): string => `メンバー${String(n)}`,
   addMemberLabel: "メンバーを追加",
   removeMemberLabel: (n: number): string => `メンバー${String(n)}を削除`,
-  speciesLabel: "ポケモン",
+  /** 同じ物を指すラベルの語は画面をまたいで同じにする(issue 304)。 */
+  speciesLabel: calcScreenText.pokemonFieldLabel,
+  /** critic指摘(issue 304): 未選択の種族optionの文言も、画面をまたいで同じ語を参照する形にする。 */
+  speciesPlaceholderOption: calcScreenText.speciesPlaceholderOption,
   abilityLabel: "特性",
+  /** ポケモンを選ぶまで特性の候補が1件も無いとき、未選択の option に出す文言(issue 304)。 */
+  abilityPlaceholderOption: `${calcScreenText.pokemonFieldLabel}を選ぶと選べます`,
   moveLabel: (slot: number): string => `技${String(slot)}`,
   noMoveOption: "なし",
   loadingNotice: "計算中",
@@ -474,13 +496,29 @@ export const requestLimitText = {
  * 逆算画面(P4-4、ADR-0300 §7、ADR-0010 §R)の入力まわりの文言。
  * n を含む語は行番号(1始まり)から作る関数にする(観測は複数行あるため)。
  */
+/** 逆算画面の領域(カード)の見える見出しの語(issue 304)。 */
+const myRegionLabel = "自分";
+const theirRegionLabel = "相手";
+
+/**
+ * 逆算の観測欄の説明(issue 304、docs/design.md「入力のラベル」)。単位(%/HP)と観測した側
+ * (与えた = defender の HP が減る / 受けた = attacker の HP が減る)の組み合わせで文が変わる。
+ */
+function observationHintLabel(side: ReverseSide, unit: ObservationUnit): string {
+  const target = side === "defender" ? theirRegionLabel : myRegionLabel;
+  const amount = unit === "percent" ? "割合(%)" : "実数値(HP)";
+  return `${target}の HP が減った${amount}`;
+}
+
 export const reverseScreenText = {
   sideGroupLabel: "観測したダメージ",
   sideDefenderLabel: "与えたダメージ",
   sideAttackerLabel: "受けたダメージ",
-  mySpeciesLabel: "自分のポケモン",
-  theirSpeciesLabel: "相手のポケモン",
-  myItemLabel: "自分の持ち物",
+  myRegionLabel,
+  theirRegionLabel,
+  mySpeciesLabel: `${myRegionLabel}の${calcScreenText.pokemonFieldLabel}`,
+  theirSpeciesLabel: `${theirRegionLabel}の${calcScreenText.pokemonFieldLabel}`,
+  myItemLabel: `${myRegionLabel}の${calcScreenText.itemFieldLabel}`,
   myPresetGroupLabel: "自分の調整",
   observationLabel: (n: number): string => `観測${String(n)}`,
   observationUnitGroupLabel: (n: number): string => `観測${String(n)}の単位`,
@@ -491,6 +529,7 @@ export const reverseScreenText = {
   percentInvalidMessage: "1〜100 の整数で入力してください",
   damageInvalidMessage: "1 以上の整数で入力してください",
   resultsListLabel: "推定結果",
+  observationHintLabel,
 } as const;
 
 /** 逆算の結果の表示(domain/reverseLabels.ts)の文言(ADR-0010 §R1・§R3)。 */
