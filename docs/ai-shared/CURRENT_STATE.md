@@ -202,10 +202,22 @@ typecheck/lint無回帰。
 critic指摘の軽微な1件(role="status"テストの頑健性)は直接修正、他は非ブロッキングのため見送り
 (候補0件時の文言欠如は別issue候補として観察のみ)。`npx vitest run ReverseScreen`94/94・
 `npm test`1611/1611・typecheck/lint無回帰。
-Next: オーケストレーターの優先度キュー(2026-09-25時点)で #248 → #218 の順に着手する。
+**issue #248(計算画面のオンライン計算にAbortSignalを渡していない)完了・main統合済み(2026-09-25。
+PR #396)**: `ReverseScreen.tsx`(issue #113)と全く同じ形で`CalcScreen.tsx`のcalcBulk用`useEffect`に
+`AbortController`を追加(effectごとに作り、cleanupで`abort()`)。WASM(オフライン)モードは`signal`を
+無視するだけなので挙動不変。`web/src/test/fakeEngine.ts`の`PendingBulk`に`signal`フィールドを追加
+(`PendingReverse`と対称)。severity低・既存承認済みパターンの横展開のため、CLAUDE.md「軽微な作業は
+メインのみでよい」に従いメインセッションで直接実装し、独立criticでレビュー(1回目はopusのセッション
+利用枠上限で失敗、CLAUDE.mdのモデル割り当て方針に従いsonnetで再実施してPASS。mutation testing 2件・
+WASM無回帰を確認)。`npx vitest run CalcScreen.test`33/33・`npm test`1612/1612・typecheck/lint無回帰。
+**APIレーンのPR #372(issue #271/#270のunsupported: UnsupportedMark[]追加。CalcResult/ReverseCandidate)が
+main統合済み**: Web側の対応は不要(`apiEngine.ts`のmapCalcResult/mapReverseCandidateが明示的フィールド
+写像のため増えたフィールドは自動的に無視される。issue #67の前方互換どおり)。印を画面に表示するかどうかは
+Webレーンの判断(DECISIONS.md 2026-09-25参照)。
+Next: オーケストレーターの優先度キュー(2026-09-25時点)で #218 に着手する。
 その後 #219・#211(APIレーン連携。`mydamagecalcurater-api-67`に契約を確認)、#272・#274(iOSレーンが
 既に確定させた文言・順序に合わせる。DECISIONS.md参照)、#210、#332(devDependencies更新)、#226(README等の
-実装状況の精度確認)。APIレーンがmechanisms/unsupportedの契約を出したら #271・#270(Web側の未対応表示)も追加。
+実装状況の精度確認)、#271・#270(Web側の未対応表示。APIレーンのunsupported契約は既にmain統合済み)。
 (3) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
 (apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより
 連絡が来る想定。(4) P5-5(構築ビルダー等)は record/team の API 待ち(M2。2026-09-24 時点で record/team-svc
