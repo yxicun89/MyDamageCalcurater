@@ -411,10 +411,10 @@
   (eslint + prettier)いずれも green。**critic PASS**(sonnetで実施。opusのセッション利用枠が一時的に
   上限に達したため、CLAUDE.mdのモデル割り当て方針〈engine・逆算・DB・API契約に関わるときだけOpus〉に従い
   sonnetへ切り替え。mutation testing 2件で全て検知、WASM側の無回帰も`wasmEngine.test`29件で確認済み)。
-- [ ] issue #218(重大度 medium。`web/src/App.tsx` がタブごとに `SCREEN_COMPONENTS[tab]` で別のコンポーネント型を
+- [x] issue #218(重大度 medium。`web/src/App.tsx` がタブごとに `SCREEN_COMPONENTS[tab]` で別のコンポーネント型を
   描くため、タブを切り替えるたびに前の画面が unmount され、選んだ種族・技・持ち物・プリセット・観測が消える。
   ブラウザの戻る/進むでも同じ。requirements.md §2「入力の手間を最小にする」に反する)。
-  **着手(2026-09-25。Web レーン。ブランチ `fix/web-tab-state-persistence-218`)**:
+  **完了(2026-09-25。Web レーン。ブランチ `fix/web-tab-state-persistence-218`)**:
   受け入れ条件と失敗するテストを先に用意した(spec-writer)。設計判断は **ADR-0308**(新規)にまとめた:
   (1) 5画面を全部 mount する issue の既定案は採らず、**一度でも選ばれたタブの画面だけを mount して以後
   unmount しない**(`SpeedScreen` はマウント時に speed API を2本呼ぶ〈ADR-0604 §2〉ので、未訪問の画面の
@@ -427,12 +427,24 @@
   テスト: `web/src/App.tabPersistence.test.tsx`(新規11件。往復・戻る/進む・hidden の隠し方・
   未訪問の画面の通信なし・マスタ入れ替えでの初期化・リロードでの初期化)、`web/src/App.test.tsx` に往復1件、
   `web/e2e/routing.spec.ts` に2件(非選択の画面が DOM に残ること・実ブラウザの戻る/進む)。
-  実装前の状態で `npx vitest run` は **7 red / 1617 green**(red は保持と隠し方の7件だけ。
-  「壊していないこと」を見る4件は今も green の回帰ガード)。`npm run typecheck`・`npm run lint` は green。
-  **Next(implementer)**: `web/src/App.tsx` のレンダー部だけを変える(各画面・`app/screens.tsx`・
-  `app/routes.ts` は触らない)。`App.css` に `hidden` を打ち消す `display` を書かないこと。
+  **実装(implementer)**: `web/src/App.tsx` のレンダー部だけを変更(各画面・`app/screens.tsx`・
+  `app/routes.ts` は無変更)。App が新たに持つ state は `visitedTabs`(選ばれたタブの集合)1つだけ
+  (ADR-0308 §影響のとおり)。タブの選択(クリック・キーボード・popstate)はすべて共通の `selectTab` を
+  通し、`setTab` と同時に `visitedTabs` へ足す。`role="tabpanel"` の中で `visitedTabs` に含まれる
+  各タブを1つずつ `<div hidden={...}>` に包んで並べ、選択中でないものだけ `hidden` を付ける(決定2)。
+  決定3(マスタが入れ替わったら作り直す)は、`visitedTabs` 自体をリセットするのではなく、マスタを使う
+  各画面の React `key` に `masterEpoch`(モードごとに別マスタを持つときだけ `mode` の値、単一マスタなら
+  常に `"single"`)を含めて、マスタが実際に入れ替わったときだけ React に作り直させる形にした
+  (`modeMasterSources` が無い既存の P4-5 テスト〈engines だけ渡してモード切り替え〉は master が
+  入れ替わらないので、往復した入力は保持されたまま。マスタを使わない素早さ画面は epoch を key に
+  含めず、モード切り替えで作り直さない)。マスタの読み込みに失敗している間、選択中でないマスタ使用画面は
+  描画しない(マスタが無いので出しようがなく、隠れているので実害も無い)。
+  `npx vitest run App` 113件・`npm test` 1624件・`npm run typecheck`・`npm run lint`(eslint + prettier)
+  いずれも green(実装前の7 red が0件になり、既存の1617件は無回帰)。`make web-e2e`
+  (`web/e2e/routing.spec.ts` の新規2件を含む)は37件すべて green(a11y.spec.ts も無回帰)。
   本体コードのコメントに issue 番号を書くときは `#` を付けない(`web/src/styles/noColorLiterals.test.ts` の
   16進色リテラル検出が `#218` を拾うため。issue #305 と同じ)。
+  **Next(critic)**: レビュー待ち。
 
 ## M2: 保存・構築
 
