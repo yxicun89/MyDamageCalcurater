@@ -223,3 +223,18 @@ kubectl -n pokecalc exec mysql-0 -- env MYSQL_PWD="$pw" mysql -u root -N -e "SHO
 unset pw
 ```
 確認: `` ON `pokedex`.* `` の行は `GRANT SELECT` だけで、`INSERT, UPDATE, DELETE` は表ごとの行にあり、`schema_migrations` の行が無い。
+
+## pokedex イメージを共有レジストリへ push する(タイプバランスレーン issue #237 の依頼)
+
+pokedex(server イメージ。`/pokedex` バイナリ、export サブコマンド持ち。ADR-0105 §5)を、balance・speed と共有する
+クラスタ内レジストリ `balance-registry`(ADR-0018 §2・ADR-0605 §1)へ digest 固定で push する。タイプバランスレーンが
+gitops overlay の initContainer から使う想定(issue #237)。balance・speed の `*-registry-push` と同じ方式
+(`docker save` した tar を `crane` で push。Docker Desktop のデーモンからは Mac の localhost に届かないため)。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make pokedex-registry-push
+```
+確認: 最後の行が `localhost:5000/pokecalc/pokedex@sha256:...`(digest 参照)。kubectl の context が `k3d-pokecalc`
+でないときは、別クラスタへ push しないよう理由を出して止まる(apply・delete はしない。push のみ)。
+この digest 参照を balance・speed の gitops overlay に書くのはタイプバランスレーンの担当(このリポジトリでは行わない)。
