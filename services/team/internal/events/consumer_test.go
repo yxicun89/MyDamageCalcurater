@@ -171,9 +171,9 @@ func calcEvent(deviceID string, at time.Time) calcevents.Event {
 		OccurredAt:    at,
 		Detail: &calcevents.CalcDetail{
 			Format:     "single",
-			MoveID:     secretMoveID,
-			Attacker:   api.Individual{SpeciesKey: secretSpeciesKey, NatureId: secretNatureID},
-			Defender:   api.Individual{SpeciesKey: secretSpeciesKey, NatureId: secretNatureID},
+			MoveID:     forbiddenMoveID,
+			Attacker:   api.Individual{SpeciesKey: forbiddenSpeciesKey, NatureId: forbiddenNatureID},
+			Defender:   api.Individual{SpeciesKey: forbiddenSpeciesKey, NatureId: forbiddenNatureID},
 			MinPercent: 41.5,
 			MaxPercent: 49.25,
 		},
@@ -182,9 +182,9 @@ func calcEvent(deviceID string, at time.Time) calcevents.Event {
 
 // Detail の中身(team-svc が保存もログ出力もしてはいけない値)。
 const (
-	secretSpeciesKey = "9002-000"
-	secretNatureID   = "secret-nature"
-	secretMoveID     = "secret-move"
+	forbiddenSpeciesKey = "9002-000"
+	forbiddenNatureID   = "secret-nature"
+	forbiddenMoveID     = "secret-move"
 )
 
 // AC-R2d / AC-R5: イベント消費で devices.last_seen_at を更新する(計算 API だけを使い続ける端末の
@@ -423,7 +423,7 @@ func TestConsumerLogsDoNotLeakDetail(t *testing.T) {
 	h.Handle(context.Background(), eventID(702), marshal(t, calcEvent(deviceA, baseTime.Add(48*time.Hour))))
 
 	logs := buf.String()
-	for _, forbidden := range []string{secretSpeciesKey, secretNatureID, secretMoveID, "41.5", "49.25", `"detail"`} {
+	for _, forbidden := range []string{forbiddenSpeciesKey, forbiddenNatureID, forbiddenMoveID, "41.5", "49.25", `"detail"`} {
 		if strings.Contains(logs, forbidden) {
 			t.Errorf("ログに計算の中身 %q が出ている(ADR-0209 §3):\n%s", forbidden, logs)
 		}
