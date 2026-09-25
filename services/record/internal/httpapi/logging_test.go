@@ -32,18 +32,18 @@ func captureLogs(t *testing.T) *bytes.Buffer {
 // AC-L1: 成功・失敗のどちらの経路でも、禁止された値がログに出ない。
 func TestLogsDoNotLeakPayload(t *testing.T) {
 	const (
-		secretSpecies  = "9002-000"
-		secretNickname = "テストニックネーム"
-		secretDamage   = "123456"
+		forbiddenSpecies  = "9002-000"
+		forbiddenNickname = "テストニックネーム"
+		forbiddenDamage   = "123456"
 	)
 
 	st := newFakeStore()
 	st.mu.Lock()
 	d := st.state(deviceA)
-	d.aggregates = []store.FrequentOpponent{{SpeciesKey: secretSpecies, Score: 2, Count: 2, LastCalculatedAt: st.now}}
+	d.aggregates = []store.FrequentOpponent{{SpeciesKey: forbiddenSpecies, Score: 2, Count: 2, LastCalculatedAt: st.now}}
 	d.events = []store.CalcEvent{{
-		EventID: "e1", DeviceID: deviceA, DefenderSpeciesKey: secretSpecies,
-		Payload: []byte(`{"nickname":"` + secretNickname + `","maxDamage":` + secretDamage + `}`),
+		EventID: "e1", DeviceID: deviceA, DefenderSpeciesKey: forbiddenSpecies,
+		Payload: []byte(`{"nickname":"` + forbiddenNickname + `","maxDamage":` + forbiddenDamage + `}`),
 	}}
 	st.mu.Unlock()
 
@@ -58,7 +58,7 @@ func TestLogsDoNotLeakPayload(t *testing.T) {
 	serve(t, h, http.MethodGet, pathFrequent, headers(deviceA), nil)
 
 	logs := buf.String()
-	for _, forbidden := range []string{secretSpecies, secretNickname, secretDamage, `"nickname"`} {
+	for _, forbidden := range []string{forbiddenSpecies, forbiddenNickname, forbiddenDamage, `"nickname"`} {
 		if strings.Contains(logs, forbidden) {
 			t.Errorf("ログに出してはいけない値 %q が含まれている(ADR-0209 §3):\n%s", forbidden, logs)
 		}

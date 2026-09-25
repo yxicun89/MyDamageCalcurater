@@ -19,8 +19,8 @@ Next: 他レーンからの依頼待ち。人間の確認待ち(plan.md ブロ�
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
-Active: なし
-Branch: (次は main から feat/api-<名前> か fix/api-<名前> を切る。作業ディレクトリ ~/MyDamageCalcurater-api)
+Active: Claude Code(M2完遂の依頼〈2026-09-25〉でP5-2〜P5-4を継続中)
+Branch: feat/api-p5-2-calc-events(作業ディレクトリ ~/MyDamageCalcurater-api。P5-2・P5-3を含む。PR #372)
 Status: Phase 3・issue #110(ADR-0208。PR #130)・issue #103の設計(M2保存データの保持・削除・端末ID境界。ADR-0209。critic PASS。PR #150)は main に統合済み
 Status(追記): issue #148のAPIレーン担当分(ADR-0210。私設サービスの境界)完了・critic PASS・**main 統合済み(PR #157)**。`deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定。端末ID/CORSを認証・到達制御として扱わない回帰テストも追加。
 Status(追記): P3-7 `GET /api/pokedex/moves/{key}`(getMove)を実装(判定レーン JD4 の依頼。ADR-0105 §3 追記)。契約・`services/pokedex/`(データレーンの範囲。越境理由と触ったファイル一覧は DECISIONS.md)まで一括実装。critic PASS(3往復)・**main 統合済み(PR #161)**。判定レーンは JD4 に着手し main 統合済み(PR #169)。
@@ -47,19 +47,25 @@ namespace・完了待ちの順序)・Makefileのmigrate-up/down/version-record/t
 Status(追記): P5-2(NATS JetStream。calc-svcからのイベント発行)完了・**main統合済み**(ADR-0212。critic 2ラウンド)。
 ストリーム`CALC_EVENTS`・Retentionは意図的にLimits(Interest ではない。理由はADR-0212 §4)・
 `services/internal/calcevents`のワイヤフォーマットを確定。
-Status(追記): P5-3(record-svc)着手・critic 1ラウンドFAIL(重大1・重要3・軽微7件)→修正中。
-`api/openapi.yaml`にrecordの契約(`deleteRecordDeviceData`・`listFrequentOpponents`・`store_unavailable`)を追加、
-record-svcの保存(TiDB実装。SaveCalcEvent/PurgeDevice/TouchDevice/FrequentOpponents)・NATS購読
-(`services/record/internal/events`)・gatewayルーティング/CORSのDELETE許可まで実装。
-critic指摘で判明した重要事項: (1) `services/record/internal/store`にfakeしかテストが無かった欠落を
-`tidb_test.go`(`-tags tidb`。`make test-db`)で解消し実TiDB(ローカルの`tidb-server --store=unistore`)で
-全緑を確認、(2) `frequent_opponents.last_calculated_at`が再配送の順序次第で巻き戻る不具合を`GREATEST`で修正、
-(3) golang-migrateのmysqlドライバがTiDBでSERIALIZABLE分離レベルを要求し失敗する既知の非互換を発見・
-`tidb_skip_isolation_level_check=1`をTidbInitializer/tidb-local-up.shに追加(ADR-0211追記)。
-失効ジョブ(ADR-0209 §4)とrecord-svcのDeployment/Service配線は**P5-3bへ切り出し**(plan.md参照。
-現状k3dでは`/api/record/*`はupstream_unavailableのまま)。
-Next: P5-3のcritic再レビュー→PASSしたらmain統合。その後P5-3b(失効ジョブ・Deployment配線)→
-P5-4(team-svc)へ進む。他レーンからの依頼待ち。issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
+Status(追記): P5-3(record-svc)完了・critic 2ラウンド(1回目FAIL〈重大1・重要3・軽微7件〉→修正→2回目PASS
+〈軽微4件〉、軽微も反映済み)。`api/openapi.yaml`にrecordの契約(`deleteRecordDeviceData`・
+`listFrequentOpponents`・`store_unavailable`)を追加、record-svcの保存(TiDB実装。SaveCalcEvent/
+PurgeDevice/TouchDevice/FrequentOpponents)・NATS購読(`services/record/internal/events`)・
+gatewayルーティング/CORSのDELETE許可まで実装。critic指摘で判明した重要事項: (1)
+`services/record/internal/store`にfakeしかテストが無かった欠落を`tidb_test.go`(`-tags tidb`。
+`make test-db`)で解消し実TiDB(`pingcap/tidb --store=unistore`)で全緑を確認、(2)
+`frequent_opponents.last_calculated_at`が再配送の順序次第で巻き戻る不具合を`GREATEST`で修正・回帰テストで
+修正前に落ちることを確認、(3) golang-migrateのmysqlドライバがTiDBでSERIALIZABLE分離レベルを要求し失敗する
+既知の非互換を発見(`Lock()`と`SetVersion()`の両方が原因で`x-no-lock`でも回避不可)・
+`tidb_skip_isolation_level_check=1`をTidbInitializer/tidb-local-up.shに追加(ADR-0211追記。既存クラスタでは
+手動設定かTidbInitializer再作成が必要)。失効ジョブ(ADR-0209 §4)とrecord-svcのDeployment/Service配線は
+**P5-3bへ切り出し**(plan.md参照。現状k3dでは`/api/record/*`はupstream_unavailableのまま)。
+main未統合(PR #372。P5-2と同じブランチ・PRでまとめている。ユーザーのテスト確認・マージ待ち)。
+Next: PR #372マージ後、P5-3b(失効ジョブ・Deployment配線。優先度低)は後回しにしてP5-4(team-svc)へ進む
+(ユーザー決定2026-09-25「M2をP5-4まで実装しきる」)。データレーンからの依頼(issue #271・#270。
+`MasterMove.mechanisms`の公開・calc応答への`unsupported`印。DECISIONS.md 2026-09-25参照)を次の区切りで対応。
+iOSレーンからの提案(issue #274/#272。BulkCalcRequestへの`defenderOverride`追加。DECISIONS.md 2026-09-25
+参照)はM2完了後に着手。issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
