@@ -659,6 +659,7 @@
 - [x] TB 実データの配線(2026-09-22。データレーンの依頼): pokedex export の read model を ConfigMap で k3d の balance に読ませる(ADR-0403)、abilityIds の上限を 4 に
 - [x] TB6 技範囲チェッカー(2026-09-22 ユーザー要望。ADR-0404): 技 ID(最大4つ)から18タイプの一貫判定を出し、その技構成を半減以下で受けられる実在ポケモンを図鑑から具体名で列挙する。特性で半減以下になるポケモンは別枠
 - [x] Codexレビュー issue #105 対応(2026-09-23。ADR-0405): Argo CD 導入物(install.yaml・同梱3イメージ)をコミットSHA・SHA-256・digestで固定する `scripts/argocd-bootstrap.sh` を新設し、balance/speed 両runbookの重複した生URL直apply手順を1本化。自動テスト `scripts/argocd-bootstrap_test.sh`(`make test-scripts`)。
+- [x] 全体レビュー issue #263・#292 対応(2026-09-25。ADR-0408): AppProject `pokecalc` を新設し balance/speed 両 Application を `project: default` から限定、GitOps スクリプト5本を `scripts/gitops/{argocd-local-app,check-gitops,publish-image,local-registry-push,k3d-deploy-readmodel}.sh`(`SERVICE=` 必須)に共通化、クラスタ内レジストリを `emptyDir` から PVC(`local-path`・2Gi)へ変更して push 済み image の消失を解消。自動テスト `scripts/gitops_test.sh`(`make test-scripts`)。
 
 ### ブロッカー(タイプバランスレーン)
 (なし。Argo CD の実同期は 2026-09-22 に解消)
