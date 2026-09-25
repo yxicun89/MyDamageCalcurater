@@ -130,8 +130,10 @@ ID は `toID(名前)`(小文字英数字以外を落とす)。calc の技は `ty
 
 ### 5. 種族・フォーム・メガ
 
-- **種族集合は calc の Champions 世代**(P2-1b と同じ): calc の全種族から、(a) `config.json` の `excludeCalcSpecies`(calc の名前。現時点で内部フォーム `Aegislash-Both` のみ)と、
-  (b) HP 種族値 1 を除く(いずれも警告 `species-excluded`)。`excludeCalcSpecies` の名前が calc に無ければ `ErrInvalidData`(改名を黙って素通りしない)。
+- **種族集合は calc の Champions 世代**(P2-1b と同じ): calc の全種族から、`config.json` の `excludeCalcSpecies`(calc の名前。現時点で内部フォーム `Aegislash-Both` のみ)
+  を除く(警告 `species-excluded`)。`excludeCalcSpecies` の名前が calc に無ければ `ErrInvalidData`(改名を黙って素通りしない)。
+  除外の判断はこの設定だけに置き、コードは特定の種族値を特別扱いしない(#251 で当初の「HP 種族値 1 も除く」条件を削除。ADR-0002 の
+  「ヌケニンは現行の集合に無いため考慮しない(HP=1 特例の実装も不要)」に合わせた。将来除外が要るなら設定に名前で書く)。
 - **calc ↔ Showdown の対応**: `toID(calc 名) == Showdown の id`、または `toID(calc 名) == toID(Showdown の name + "-" + baseForme)`
   (calc の `Aegislash-Shield` ↔ Showdown の `Aegislash`(baseForme `Shield`) のような既定フォームの表記違い。名前の対応表を持たない)。
   対応が無い calc の種族(除外の設定にも無い)は `ErrInvalidData`。対応した Showdown の `isNonstandard` が null でなければ除外して警告(技の規則1に揃える)。

@@ -79,9 +79,9 @@ func TestExportSatisfiesBalanceSchemas(t *testing.T) {
 }
 
 // pokemon-types.schema.json の abilityIds.maxItems と、readmodel の切り詰め件数(maxCatalogAbilityCount。
-// 未export のためテストからは直接読めず、切り詰めが起きる4件目入りの fixture で振る舞いを確認する)が
-// ずれていないことを確かめる。balance が上限を上げても、こちらが黙って古い上限のまま切り詰め続けないように
-// する(critic の軽微指摘)。schema 側の値が変わったらこのテストを直す。
+// export_test.go の MaxCatalogAbilityCount で読む)が一致することを確かめる。balance が上限を変えても、
+// こちらが黙って古い上限のまま切り詰め続けないようにし、readmodel 側だけを変えたときも止める(#74)。
+// 上限の正は balance の schema。ずれたら readmodel.go の maxCatalogAbilityCount を schema に合わせる。
 func TestBalanceAbilityIdsMaxItemsMatchesReadmodel(t *testing.T) {
 	sch := compileSchema(t, "pokemon-types.schema.json")
 	props, ok := sch.Properties["pokemon"]
@@ -102,10 +102,9 @@ func TestBalanceAbilityIdsMaxItemsMatchesReadmodel(t *testing.T) {
 	if abilityIds.MaxItems == nil {
 		t.Fatal("abilityIds.maxItems が無い")
 	}
-	const wantMaxItems = 4 // readmodel.go の maxCatalogAbilityCount と同じ値を書く(2箇所で手動同期)
-	if got := *abilityIds.MaxItems; got != wantMaxItems {
-		t.Fatalf("schema の abilityIds.maxItems=%d だが readmodel の maxCatalogAbilityCount は %d のまま。"+
-			"readmodel.go の maxCatalogAbilityCount を %d に合わせる", got, wantMaxItems, got)
+	if got, want := *abilityIds.MaxItems, readmodel.MaxCatalogAbilityCount; got != want {
+		t.Fatalf("schema の abilityIds.maxItems=%d だが readmodel の maxCatalogAbilityCount は %d。"+
+			"readmodel.go の maxCatalogAbilityCount を %d に合わせる", got, want, got)
 	}
 }
 

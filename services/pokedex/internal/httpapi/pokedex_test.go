@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"reflect"
 	"strings"
@@ -426,12 +427,46 @@ func TestPublicInputValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			q := storetest.New()
 			h := newHandler(t, q)
-			assertError(t, do(t, h, http.MethodGet, tt.target, tt.withHeaders), http.StatusBadRequest, tt.code)
+			rec := do(t, h, http.MethodGet, tt.target, tt.withHeaders)
+			assertError(t, rec, http.StatusBadRequest, tt.code)
+			// リクエスト自体は契約に合わない(それが 400 の理由)ので、応答だけを契約の 400(Error)に照らす(#74)。
+			validateResponseAgainstContract(t, http.MethodGet, tt.target, tt.withHeaders, rec)
 			for _, c := range q.Calls {
 				switch c.Method {
 				case "SearchSpecies", "SearchMoves", "SearchItems", "GetSpeciesByKey", "GetMove", "GetMovesByIDs":
 					t.Errorf("入力が不正なのに %s を呼んだ", c.Method)
 				}
+			}
+		})
+	}
+}
+
+// 応答だけの契約検証が空振りしていない(契約の Error に合わない 400 の本文を拒否する)ことを確かめる(#74)。
+// 400 は契約上 default(Error)で受けるので、status ではなく本文の形で見る。
+func TestResponseContractCheckIsNotVacuous(t *testing.T) {
+	h := newHandler(t, storetest.New())
+	const target = "/api/pokedex/species?limit=0"
+	good := do(t, h, http.MethodGet, target, true)
+	in := contractRoute(t, http.MethodGet, target, true)
+	if err := responseContractError(in, good); err != nil {
+		t.Fatalf("正しい 400 を拒否した: %v", err)
+	}
+	tests := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"Error の必須項目が無い本文", http.StatusBadRequest, `{}`},
+		{"契約に無いエラーコード", http.StatusBadRequest, `{"code":"no_such_code","message":"x"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			rec.Header().Set("Content-Type", good.Header().Get("Content-Type"))
+			rec.WriteHeader(tt.status)
+			rec.WriteString(tt.body)
+			if err := responseContractError(contractRoute(t, http.MethodGet, target, true), rec); err == nil {
+				t.Errorf("契約に合わない応答(%d %s)が検証を通った", tt.status, tt.body)
 			}
 		})
 	}
