@@ -118,6 +118,57 @@ describe("カード", () => {
       );
     }
   });
+
+  // issue #306: タイプ名は「文字色にタイプ色」ではなくバッジ(背景にタイプ色 + 読める文字色)にする。
+  // タイプ色は背景(bg.base)に対して多くが 4.5:1 に届かないため(design.md「タイプバッジ」)。
+  test("タイプ名はバッジ: 背景が --type-<id>、文字色が --type-<id>-ink(design.md「タイプバッジ」)", async () => {
+    const { user } = renderScreen();
+    const attacker = speciesAt(0);
+    const defender = speciesAt(1);
+    await choosePair(user, attacker, defender);
+
+    for (const [card, species] of [
+      [attackerCard(), attacker],
+      [defenderCard(), defender],
+    ] as const) {
+      for (const type of species.types) {
+        const badge = within(card).getByText(typeNameJa[type as TypeId]);
+        expect(badge).toHaveClass("calc-card__type");
+        expect(badge.style.getPropertyValue("background-color")).toMatch(
+          new RegExp(`^var\\(\\s*--type-${type}\\s*[,)]`),
+        );
+        expect(badge.style.getPropertyValue("color")).toMatch(
+          new RegExp(`^var\\(\\s*--type-${type}-ink\\s*[,)]`),
+        );
+      }
+    }
+  });
+
+  // issue #306 の異常系: マスタ由来の types は相性表の18種に限らない。
+  // 未知の ID では CSS 変数が引けないので、必ず既定値つきの var(...) にして画面を壊さない。
+  test("未知のタイプ ID でもバッジは ID をそのまま出し、色は既定値に落ちる", async () => {
+    const unknownType = "mysteryType";
+    const target = speciesAt(0);
+    const patched: MasterData = {
+      ...master,
+      species: master.species.map((entry) =>
+        entry.key === target.key ? { ...entry, types: [unknownType] } : entry,
+      ),
+    };
+    const user = userEvent.setup();
+    render(<CalcScreen engine={createFakeEngine()} master={patched} />);
+    await user.selectOptions(attackerSpeciesSelect(), target.key);
+
+    const badge = within(attackerCard()).getByText(unknownType);
+    expect(badge).toHaveClass("calc-card__type");
+    // 既定値(`,` の後ろ)を必ず持つこと。`var(--type-mysteryType)` だけだと宣言ごと無効になる。
+    expect(badge.style.getPropertyValue("background-color")).toMatch(
+      new RegExp(`^var\\(\\s*--type-${unknownType}\\s*,`),
+    );
+    expect(badge.style.getPropertyValue("color")).toMatch(
+      new RegExp(`^var\\(\\s*--type-${unknownType}-ink\\s*,`),
+    );
+  });
 });
 
 describe("技セレクタ", () => {
@@ -330,15 +381,38 @@ describe("結果の表示(engine の値を加工せずに出す)", () => {
     });
   });
 
-  test("ダメージバーは最大%を値に持ち、100% を超える分は 100 で頭打ち", async () => {
+  // issue #306: バーは同じ行の %幅 を目で分かる形にしただけなので装飾にする(design.md「画面: ダメージ計算」)。
+  // 名前の無い meter(aria-valuenow だけ)として読み上げられるのを避ける。
+  // 頭打ちの検査は aria-valuenow からバーの幅(見た目そのもの)に移す。検査の強さは落とさない。
+  test("ダメージバーは幅に最大%を持ち、100% を超える分は 100 で頭打ち", async () => {
     const items = await renderWithRows();
-    const values = items.map((item) => {
-      const meter = within(item).getByRole("meter");
-      expect(meter).toHaveAttribute("aria-valuemin", "0");
-      expect(meter).toHaveAttribute("aria-valuemax", "100");
-      return meter.getAttribute("aria-valuenow");
-    });
-    expect(values).toEqual(["85.3", "100", "52.5"]);
+    const widths = items.map((item) =>
+      within(item).getByTestId("damage-bar-fill").style.getPropertyValue("width"),
+    );
+    expect(widths).toEqual(["85.3%", "100%", "52.5%"]);
+  });
+
+  test("ダメージバーは装飾: role=meter を持たず aria-hidden で、aria-value* も残さない", async () => {
+    const items = await renderWithRows();
+    expect(screen.queryAllByRole("meter")).toEqual([]);
+    for (const item of items) {
+      const bar = within(item).getByTestId("damage-bar");
+      expect(bar).toHaveAttribute("aria-hidden", "true");
+      for (const attribute of ["role", "aria-valuemin", "aria-valuemax", "aria-valuenow"]) {
+        expect(bar.hasAttribute(attribute), `${attribute} が残っている`).toBe(false);
+      }
+    }
+  });
+
+  test("バーを装飾にしても、行の読み上げには 調整名・持ち物・%幅・確定数 が残る", async () => {
+    const items = await renderWithRows();
+    const first = items[0];
+    if (first === undefined) {
+      throw new Error("1行目が無い");
+    }
+    for (const text of ["無振り", "持ち物なし", "72.1〜85.3%", "確定2発"]) {
+      expect(first.textContent).toContain(text);
+    }
   });
 
   test("技の相性は結果の effectiveness から出す(TS で相性を計算しない)", async () => {

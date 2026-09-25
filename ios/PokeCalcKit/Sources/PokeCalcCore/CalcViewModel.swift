@@ -70,8 +70,8 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     public private(set) var defenderSpeciesKey: String = ""
     public private(set) var moveId: String = ""
     /// 自分側(攻撃側)の SP・性格などの出どころ(P6-2d。ADR-0501「P6-2d」1章)。既定は
-    /// `AttackerPreset.allCases` の最初(A特化。`AttackerPresetTests` が順序を固定する)。
-    public private(set) var attackerBuildSource: AttackerBuildSource = .preset(.aFull)
+    /// `AttackerPreset.defaultPreset`(無振り。`AttackerPresetTests` が順序を固定する)。
+    public private(set) var attackerBuildSource: AttackerBuildSource = .preset(AttackerPreset.defaultPreset)
     /// `attackerBuildSource.preset` のショートカット。構築の個体を呼んでいる間は nil になる
     /// (ADR-0501「P6-2d」1章「判断」: 既存のテスト・View のピル選択表示を無変更で保つため、
     /// 計算プロパティとして残す。Swift の optional 昇格で `== .aFull` の比較がそのまま成り立つ)。
@@ -160,7 +160,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
             }
             attackerSpeciesKey = species[0].key
             defenderSpeciesKey = species[1].key
-            attackerBuildSource = .preset(.aFull)
+            attackerBuildSource = .preset(AttackerPreset.defaultPreset)
             attackerItemId = nil
             toggledDefenderItemIds = []
             comparedDefenderItemIds = []

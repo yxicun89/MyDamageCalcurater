@@ -5,12 +5,27 @@
 
 /// 自分側の調整プリセット。`CaseIterable` の順序がそのまま画面のセグメントの並び順になる。
 public enum AttackerPreset: String, CaseIterable, Sendable, Hashable {
+    /// 無振り: SP 0 + 無補正性格。
+    case none
     /// A特化(特殊技なら特攻特化): 関連ステータス SP 32 + 上昇性格。
     case aFull
     /// A振り: 関連ステータス SP 32 + 無補正性格。
     case aMax
-    /// 無振り: SP 0 + 無補正性格。
-    case none
+
+    /// `engine/presets/attacker.json` の `presets[].key`(ADR-0114。ADR-0501「P6-12」)。
+    /// case 名(= raw value)は `accessibilityIdentifier`(`attackerPreset-aFull` 等)に使っているので変えず、
+    /// JSON のキーとの対応はこの1か所にだけ書く(`AttackerPresetCatalogContractTests` が JSON と突き合わせる)。
+    public var catalogKey: String {
+        switch self {
+        case .aFull: return "x_full"
+        case .aMax: return "x"
+        case .none: return "none"
+        }
+    }
+
+    /// 既定の選択(`engine/presets/attacker.json` の `default`。ADR-0501「P6-12」3章)。
+    /// `CalcViewModel` / `ReverseViewModel` の初期値と `load()` での再設定はこれを参照し、case を直書きしない。
+    public static let defaultPreset: AttackerPreset = .none
 
     /// 画面に出す表示名(docs/requirements.md と同じ言葉)。技の分類によらず固定の文字列を返すため、
     /// 特殊技でも「A特化」のままになる不具合がある(issue #334)。呼び出し側は `label(for:)` に置き換える

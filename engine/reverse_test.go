@@ -634,7 +634,7 @@ func TestReverseCandidateGrid(t *testing.T) {
 	}{
 		{"防御側・物理は B", SideDefender, CategoryPhysical, StatDef, MaxSPPerStat, Nature{Plus: StatDef, Minus: StatAtk}},
 		{"防御側・特殊は D", SideDefender, CategorySpecial, StatSpD, MaxSPPerStat, Nature{Plus: StatSpD, Minus: StatAtk}},
-		{"防御側・変化技は物理と同じ B", SideDefender, CategoryStatus, StatDef, MaxSPPerStat, Nature{Plus: StatDef, Minus: StatAtk}},
+		// 変化技は逆算の入力エラー(issue #317。TestReverseRejectsMovesThatDealNoDamage)。
 		// 攻撃側の HP は計算に使わないので 0(H の仮定を持たない)。上昇補正の相手は spa。
 		{"攻撃側・物理は A", SideAttacker, CategoryPhysical, StatAtk, 0, Nature{Plus: StatAtk, Minus: StatSpA}},
 		{"攻撃側・特殊は C", SideAttacker, CategorySpecial, StatSpA, 0, Nature{Plus: StatSpA, Minus: StatAtk}},
@@ -1198,50 +1198,73 @@ func TestReverseOrderDeterministic(t *testing.T) {
 	}
 }
 
-// 変化技・無効相性はダメージ 0。エラーにせず、全候補が同点(距離は手計算できる)で定義順に並ぶ。
-func TestReverseZeroDamageMovesKeepDefinitionOrder(t *testing.T) {
+// ダメージを与えられない技の観測は、候補ではなく ErrMoveDealsNoDamage で拒否する(issue #317。ADR-0117 §3)。
+// 観測は必ず正の値(validateObservations)なので、ダメージ 0 しか出ない技では観測を説明できない。
+// 以前は全候補が同点(Mismatch 300、範囲 0..32)の「近い候補」を返していた。
+func TestReverseRejectsMovesThatDealNoDamage(t *testing.T) {
 	items := []*Item{nil, revEviolite(), revVest()}
+	immuneToWater := Ability{ID: "testabsorb", NameJa: "テストきゅうしゅう",
+		Effect: &AbilityEffect{DefImmuneTypes: []Type{TypeWater}}}
+	ghost := revDefenderSpecies()
+	ghost.Types = []Type{TypeGhost}
 	tests := []struct {
 		name    string
+		side    ReverseSide
 		species Species
+		known   Individual
 		move    Move
 	}{
-		{"変化技", revDefenderSpecies(), Move{ID: "status", NameJa: "テストへんか", Type: TypeWater, Category: CategoryStatus}},
-		{"無効相性", revBigHPSpecies(), Move{ID: "immune", NameJa: "テストむこう", Type: TypeGhost, Category: CategoryPhysical, Power: 100}},
+		{"防御側・変化技", SideDefender, revDefenderSpecies(), revKnownAttacker(),
+			Move{ID: "status", NameJa: "テストへんか", Type: TypeWater, Category: CategoryStatus}},
+		{"攻撃側・変化技", SideAttacker, revAttackerSpecies(), revDefender(Stats{HP: 32}, NatureNeutral, nil),
+			Move{ID: "status", NameJa: "テストへんか", Type: TypeWater, Category: CategoryStatus}},
+		{"威力 0 の攻撃技", SideDefender, revDefenderSpecies(), revKnownAttacker(),
+			Move{ID: "fixed", NameJa: "テストこてい", Type: TypeWater, Category: CategorySpecial, Power: 0}},
+		{"威力が負", SideDefender, revDefenderSpecies(), revKnownAttacker(),
+			Move{ID: "neg", NameJa: "テストふ", Type: TypeWater, Category: CategoryPhysical, Power: -1}},
+		// 計算してみて初めて分かる無効: 全候補の全ロールが 0。
+		{"タイプ相性の無効", SideDefender, revBigHPSpecies(), revKnownAttacker(),
+			Move{ID: "immune", NameJa: "テストむこう", Type: TypeGhost, Category: CategoryPhysical, Power: 100}},
+		{"特性の無効(攻撃側を逆算)", SideAttacker, revAttackerSpecies(),
+			func() Individual {
+				d := revDefender(Stats{HP: 32}, NatureNeutral, nil)
+				d.Ability = immuneToWater
+				return d
+			}(),
+			revMove(CategoryPhysical)},
+		{"無効タイプの未知側", SideDefender, ghost, revKnownAttacker(),
+			Move{ID: "normal", NameJa: "テストノーマル", Type: TypeNormal, Category: CategoryPhysical, Power: 100}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res, err := calcReverse(ReverseInput{
-				Format: FormatSingle, Side: SideDefender, Known: revKnownAttacker(),
+				Format: FormatSingle, Side: tt.side, Known: tt.known,
 				UnknownSpecies: tt.species, Move: tt.move,
 				ItemCandidates: items, Observations: []Observation{{Percent: 30}},
 			})
-			if err != nil {
-				t.Fatalf("ダメージ 0 の技でエラーになった: %v", err)
+			if !errors.Is(err, ErrMoveDealsNoDamage) {
+				t.Fatalf("err = %v, want ErrMoveDealsNoDamage(候補 %d 件を返した)", err, len(res.Candidates))
 			}
-			if len(res.Candidates) != len(revClasses)*len(items) {
-				t.Fatalf("候補数 = %d, want %d", len(res.Candidates), len(revClasses)*len(items))
-			}
-			if res.ExactCount != 0 {
-				t.Errorf("ExactCount = %d, want 0", res.ExactCount)
-			}
-			for i, c := range res.Candidates {
-				// ダメージ 0 と 30% の距離: x = 100*0 - 30*HP → |x|/HP = 30 → ×10 = 300(0.1% 単位)。
-				if c.Mismatch != 300 {
-					t.Errorf("候補 %d の Mismatch = %d, want 300", i, c.Mismatch)
-				}
-				// 全 SP が同じ距離なので範囲は 0..32 の1区間、説明できるロールは無い。
-				if !reflect.DeepEqual(c.Ranges, []SPRange{{Min: 0, Max: MaxSPPerStat}}) || c.SPCount != MaxSPPerStat+1 || c.Support != 0 {
-					t.Errorf("候補 %d: Ranges=%+v SPCount=%d Support=%d, want [{0 32}] 33 0", i, c.Ranges, c.SPCount, c.Support)
-				}
-				wantClass := revClasses[i/len(items)]
-				wantItem := revItemID(items[i%len(items)])
-				if c.NatureClass != wantClass || c.ItemID != wantItem {
-					t.Fatalf("候補 %d = (%s,%q), want (%s,%q)(同点は定義順: 性格クラス → 持ち物添字)",
-						i, c.NatureClass, c.ItemID, wantClass, wantItem)
-				}
+			if len(res.Candidates) != 0 {
+				t.Errorf("エラー時に部分的な結果を返した: %d 件", len(res.Candidates))
 			}
 		})
+	}
+}
+
+// 一部の候補だけがダメージ 0(例: 持ち物で結果が変わる)ではなく、少なくとも1つの候補でダメージが
+// 出るなら従来どおり候補を返す。ここでは同じ技で相性が等倍の種族に対して成功することを確かめる。
+func TestReverseDamagingMoveStillSucceeds(t *testing.T) {
+	res, err := calcReverse(ReverseInput{
+		Format: FormatSingle, Side: SideDefender, Known: revKnownAttacker(),
+		UnknownSpecies: revDefenderSpecies(), Move: revMove(CategoryPhysical),
+		ItemCandidates: []*Item{nil, revEviolite()}, Observations: []Observation{{Percent: 30}},
+	})
+	if err != nil {
+		t.Fatalf("CalcReverse: %v", err)
+	}
+	if len(res.Candidates) == 0 {
+		t.Fatal("候補が空")
 	}
 }
 

@@ -43,6 +43,28 @@
   --type-steel: #6e93a8;
   --type-fairy: #e68ad6;
 
+  /* タイプバッジの文字色(docs/design.md「タイプバッジ」、2026-09-25、issue #306)。
+     背景に敷く --type-<id> に対してコントラスト比が高い方(#000000 か #FFFFFF)を選んだ固定値。
+     タイプ色と同じくテーマで切り替えない(ダーク側で上書きしない)。 */
+  --type-normal-ink: #000000;
+  --type-fire-ink: #000000;
+  --type-water-ink: #000000;
+  --type-electric-ink: #000000;
+  --type-grass-ink: #000000;
+  --type-ice-ink: #000000;
+  --type-fighting-ink: #000000;
+  --type-poison-ink: #ffffff;
+  --type-ground-ink: #000000;
+  --type-flying-ink: #000000;
+  --type-psychic-ink: #000000;
+  --type-bug-ink: #000000;
+  --type-rock-ink: #000000;
+  --type-ghost-ink: #ffffff;
+  --type-dragon-ink: #ffffff;
+  --type-dark-ink: #ffffff;
+  --type-steel-ink: #000000;
+  --type-fairy-ink: #000000;
+
   /* 文字(docs/design.md「文字」)。Web の書体は SF Pro Rounded → M PLUS Rounded 1c → system-ui の順。 */
   --font-family: "SF Pro Rounded", "M PLUS Rounded 1c", system-ui, sans-serif;
   --font-size-result: 28px;

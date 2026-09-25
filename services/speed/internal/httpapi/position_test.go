@@ -81,19 +81,7 @@ func TestPositionRequiresRequestContext(t *testing.T) {
 	t.Parallel()
 
 	validBody := `{"mode":"raw","value":200}`
-	tests := []struct {
-		name    string
-		headers map[string]string
-	}{
-		{"両方欠落", nil},
-		{"X-Device-Id 欠落", map[string]string{"X-Session-Id": "test-session"}},
-		{"X-Session-Id 欠落", map[string]string{"X-Device-Id": "test-device"}},
-		{"X-Device-Id 空", map[string]string{"X-Device-Id": "", "X-Session-Id": "test-session"}},
-		{"X-Session-Id 空", map[string]string{"X-Device-Id": "test-device", "X-Session-Id": ""}},
-		{"X-Device-Id 空白だけ", map[string]string{"X-Device-Id": "  ", "X-Session-Id": "test-session"}},
-		{"X-Session-Id 空白だけ", map[string]string{"X-Device-Id": "test-device", "X-Session-Id": "  "}},
-	}
-	for _, tt := range tests {
+	for _, tt := range headerRejectCases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			// ヘッダーの検査は body・read model の有無より先。
@@ -102,29 +90,80 @@ func TestPositionRequiresRequestContext(t *testing.T) {
 				if recorder.Code != http.StatusBadRequest {
 					t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
 				}
-				if body := decodeError(t, recorder); body.Code != api.InvalidRequest {
-					t.Errorf("code = %q, want %q", body.Code, api.InvalidRequest)
+				if body := decodeError(t, recorder); body.Code != tt.want {
+					t.Errorf("code = %q, want %q", body.Code, tt.want)
 				}
 			}
 		})
 	}
 }
 
+// TestPositionRejectsDuplicateHeaders: 同名ヘッダーの重複は 400 invalid_header(ADR-0606 §2)。
+// body が不正・過大でもヘッダーが先(ADR-0602 §4 の順)。
+func TestPositionRejectsDuplicateHeaders(t *testing.T) {
+	t.Parallel()
+
+	for _, body := range []string{`{"mode":"raw","value":200}`, `{"mode":`, strings.Repeat(" ", maxPositionBodyBytes+1)} {
+		t.Run(fmt.Sprintf("body %d bytes", len(body)), func(t *testing.T) {
+			t.Parallel()
+			request := newPositionRequest(validHeaders, body)
+			request.Header.Add("X-Device-Id", testDeviceID)
+			recorder := serve(Dependencies{Pokemon: exampleProvider(t)}, request)
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+			}
+			if got := decodeError(t, recorder); got.Code != api.InvalidHeader {
+				t.Errorf("code = %q, want %q", got.Code, api.InvalidHeader)
+			}
+		})
+	}
+}
+
+// TestPositionAcceptsCanonicalUUIDs: 正準形の UUID は大文字小文字・版を問わず通る(ADR-0606 §1)。
+func TestPositionAcceptsCanonicalUUIDs(t *testing.T) {
+	t.Parallel()
+
+	for _, id := range headerAcceptIDs {
+		t.Run(id, func(t *testing.T) {
+			t.Parallel()
+			headers := map[string]string{"X-Device-Id": id, "X-Session-Id": id}
+			recorder := serve(Dependencies{Pokemon: exampleProvider(t)}, newPositionRequest(headers, `{"mode":"raw","value":200}`))
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
+			}
+		})
+	}
+}
+
 // TestPositionChecksHeadersBeforeBody: ヘッダーと body の両方が不正なら、ヘッダーの 400 を返す
-// (ADR-0602 §4 の判定順)。どちらも invalid_request なので文言で区別する。
+// (ADR-0602 §4 の判定順)。ヘッダーは missing_header / invalid_header、body は invalid_request なので
+// code で区別できる(ADR-0606 §2)。文言(X-Device-Id を含む)も従来どおり確かめる。
 func TestPositionChecksHeadersBeforeBody(t *testing.T) {
 	t.Parallel()
 
-	recorder := serve(Dependencies{Pokemon: exampleProvider(t)}, newPositionRequest(nil, `{"mode":`))
-	if recorder.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+	tests := []struct {
+		name    string
+		headers map[string]string
+		want    api.ErrorCode
+	}{
+		{"欠落", nil, api.MissingHeader},
+		{"UUID でない", map[string]string{"X-Device-Id": testDeviceID, "X-Session-Id": "urn:uuid:" + testSessionID}, api.InvalidHeader},
 	}
-	body := decodeError(t, recorder)
-	if body.Code != api.InvalidRequest {
-		t.Errorf("code = %q, want %q", body.Code, api.InvalidRequest)
-	}
-	if !strings.Contains(body.Message, "X-Device-Id") {
-		t.Errorf("message = %q, want the header check's message (headers are checked before the body)", body.Message)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			recorder := serve(Dependencies{Pokemon: exampleProvider(t)}, newPositionRequest(tt.headers, `{"mode":`))
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+			}
+			body := decodeError(t, recorder)
+			if body.Code != tt.want {
+				t.Errorf("code = %q, want %q", body.Code, tt.want)
+			}
+			if !strings.Contains(body.Message, "X-Device-Id") {
+				t.Errorf("message = %q, want the header check's message (headers are checked before the body)", body.Message)
+			}
+		})
 	}
 }
 
