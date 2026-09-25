@@ -15,6 +15,20 @@ import XCTest
 /// このテストは「要素が画面の外に出ていないか」だけを見る(モックの数値・文言には依存しない。
 /// ADR-0501「XCUITest で確かめること」と同じ粒度)。P6-14 の時点では実装を直していないので、
 /// AX5 のケースは失敗してよい(spec-writer の役目は受け入れ条件とテストを先に書くこと)。
+///
+/// P6-15(ADR-0501「P6-15」): P6-14 の残り3点を追加する。
+/// 1. AX5 で攻撃側プリセットのピル(`A振り(無補正)` 等)が「A振り…」と省略される不具合
+///    (`CalcScreenView.presetSegmentedRow`・`ReverseScreenView.presetSegmentedRow`/`PresetPillButton`
+///    〈`.attacker` 側の `KnownDefenderPreset` のピルも含む〉)。XCUITest は文字が省略記号で切れて
+///    いるかどうかを直接読めないため、「アクセシビリティの文字サイズではピルを縦に積み、各ピルが
+///    画面幅いっぱいに近い幅を持つ」という直し方(`cardsRow` と同じ縦積みパターン)が効いているかを
+///    `assertPresetPillsStackVertically` で間接的に確かめる(pill の `minY` が互いに離れている・
+///    幅がウィンドウ幅の半分を超える)。既定サイズでは今までどおり1行のままであることも
+///    `assertPresetPillsSingleRow` で確かめる(回帰確認)。
+/// 2. AX5 で計算画面の「詳細」(`calcConditionsToggle`)を開いた状態でも横にはみ出さないこと
+///    (issue #274・ADR-0501「issue #274」6章の identifier を検査する)。
+/// 3. 既定サイズで%表示(`calcResultPercent-*`)が `minimumScaleFactor` によって不要に縮んでいない
+///    こと。`testCalcScreenResultPercentNotShrunkAtDefaultSize` のコメント参照。
 @MainActor
 final class LargeTextLayoutUITests: XCTestCase {
     private static let existenceTimeout: TimeInterval = 5
@@ -23,6 +37,9 @@ final class LargeTextLayoutUITests: XCTestCase {
     private static let ax5ContentSizeCategory = "UICTContentSizeCategoryAccessibilityXXXL"
     /// フォントのサブピクセル丸めを許容する程度の小さな余裕(pt)。
     private static let overflowTolerance: CGFloat = 1
+    /// P6-15 (3): 縦向き/横向きでの%表示の高さ比較の許容誤差(pt)。回転に伴う描画の
+    /// サブピクセル差を吸収する程度(`overflowTolerance` より少し広めに取る)。
+    private static let percentHeightTolerance: CGFloat = 3
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -153,6 +170,110 @@ final class LargeTextLayoutUITests: XCTestCase {
         )
     }
 
+    // MARK: - P6-15 (1): プリセットのピルの縦積み(ADR-0501「P6-15」1章)
+
+    /// アクセシビリティの文字サイズでピルが縦に積まれている(= 3等分の1行をやめている)ことを、
+    /// 次の2点で間接的に確かめる。XCUITest は `Text` が省略記号(`…`)で切れているかどうかを
+    /// 直接読めない(`.label` は元の文字列のままで、見た目の省略は反映されない)ため、
+    /// 「積んだ結果、各ピルが画面幅いっぱいに近い幅を持つ」ことを省略が解消した代理指標として使う
+    /// (P6-15 タスク指示: 「pick a robust, meaningful assertion and explain」)。
+    /// 1. 3つのピルの `minY` が互いに大きく離れている(横1行になっていない)
+    /// 2. 各ピルの幅がウィンドウ幅の半分より広い(3等分〈おおよそ1/3〉のままではない)
+    private func assertPresetPillsStackVertically(_ app: XCUIApplication, identifiers: [String], file: StaticString = #filePath, line: UInt = #line) {
+        let windowFrame = app.windows.firstMatch.frame
+        XCTAssertGreaterThan(windowFrame.width, 0, "ウィンドウの frame が取得できない", file: file, line: line)
+
+        let elements = identifiers.map { element(app, $0) }
+        for (identifier, el) in zip(identifiers, elements) {
+            XCTAssertTrue(el.waitForExistence(timeout: Self.existenceTimeout), "ピルが見つからない: \(identifier)", file: file, line: line)
+        }
+        let frames = zip(identifiers, elements.map(\.frame))
+
+        let sortedMinYs = frames.map(\.1.minY).sorted()
+        for i in 1..<sortedMinYs.count {
+            XCTAssertGreaterThan(
+                sortedMinYs[i] - sortedMinYs[i - 1], 10,
+                "AX5 でピルが縦に積まれていない(横1行のままに見える): minYs=\(sortedMinYs) identifiers=\(identifiers)",
+                file: file, line: line
+            )
+        }
+        for (identifier, frame) in frames {
+            XCTAssertGreaterThan(
+                frame.width, windowFrame.width / 2,
+                "AX5 でピル \(identifier) の幅が画面の半分以下(3等分のまま = 省略が直っていない疑い): "
+                    + "frame=\(frame) window=\(windowFrame)",
+                file: file, line: line
+            )
+        }
+    }
+
+    /// 既定の文字サイズでは今までどおり3等分の1行のままであること(回帰確認)。
+    private func assertPresetPillsSingleRow(_ app: XCUIApplication, identifiers: [String], file: StaticString = #filePath, line: UInt = #line) {
+        let windowFrame = app.windows.firstMatch.frame
+        XCTAssertGreaterThan(windowFrame.width, 0, "ウィンドウの frame が取得できない", file: file, line: line)
+
+        let elements = identifiers.map { element(app, $0) }
+        for (identifier, el) in zip(identifiers, elements) {
+            XCTAssertTrue(el.waitForExistence(timeout: Self.existenceTimeout), "ピルが見つからない: \(identifier)", file: file, line: line)
+        }
+        let frames = zip(identifiers, elements.map(\.frame))
+        let minYs = frames.map(\.1.minY)
+        XCTAssertLessThan(
+            (minYs.max() ?? 0) - (minYs.min() ?? 0), Self.overflowTolerance * 2,
+            "既定サイズでピルが横1行になっていない(回帰): minYs=\(minYs) identifiers=\(identifiers)",
+            file: file, line: line
+        )
+        for (identifier, frame) in frames {
+            XCTAssertLessThan(
+                frame.width, windowFrame.width / 2,
+                "既定サイズでピル \(identifier) の幅が画面の半分を超えている(3等分でなくなった回帰疑い): "
+                    + "frame=\(frame) window=\(windowFrame)",
+                file: file, line: line
+            )
+        }
+    }
+
+    // MARK: - P6-15 (2): AX5で「詳細」パネルを開いた状態のはみ出し(issue #274・ADR-0501「issue #274」6章)
+
+    /// issue #274 6章の identifier 表のうち、rawValue が個体・種族に依存しない固定の要素
+    /// (`calcConditionsPanel` 自体・急所/やけど・ランクの値と±・特性の `Menu`)。
+    private static let calcConditionsPanelIdentifiers = [
+        "calcConditionsPanel",
+        "calcCondition-critical",
+        "calcCondition-burn",
+        "calcAttackerRankValue",
+        "calcAttackerRankDecrement",
+        "calcAttackerRankIncrement",
+        "calcAttackerAbilityPicker",
+    ]
+
+    /// 天候・フィールド・防御側の壁(`calcWeather-*`/`calcTerrain-*`/`calcDefenderScreen-*`)は
+    /// `ChipButton.swift` のコメントどおり **横スクロールの `ScrollView(.horizontal)` の中**にある
+    /// (`CalcConditionsSection.weatherSection`/`terrainSection`/`defenderScreensSection`。1行に
+    /// 全部並べる幅が無いための意図的な設計)。横スクロールの中身は「スクロールすれば見える」もので
+    /// あり、`XCUIElement.frame` がウィンドウ幅を超えるのは不具合ではなく想定どおりの挙動
+    /// (実際、最初の実行でこれらを `assertNoHorizontalOverflowForPrefixes` に含めたところ、
+    /// 2つ目以降のチップが `rightCut=true` になり誤検知した。`itemComparisonToggles` の
+    /// `defenderItemToggle-*` が既存の `calcScreenIdentifiers` に入っていないのと同じ理由で対象外にする)。
+    /// このため、はみ出し検査ではなく「(少なくとも1件は)存在する」ことだけ確かめる。
+    private static let calcConditionsPanelScrollableChipPrefixes = [
+        "calcWeather-",
+        "calcTerrain-",
+        "calcDefenderScreen-",
+    ]
+
+    /// AX5 は画面が縦に長くなるため、既定サイズ用の `CalcConditionsUITests.scrollUntilHittable`
+    /// より多くスクロールが要る場合がある(上限を増やしただけの同じ考え方)。
+    private func scrollUntilHittable(_ app: XCUIApplication, _ target: XCUIElement, containerIdentifier: String, maxAttempts: Int = 12, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(target.waitForExistence(timeout: Self.existenceTimeout), "要素が見つからない: \(target)", file: file, line: line)
+        var attempts = 0
+        while !target.isHittable && attempts < maxAttempts {
+            element(app, containerIdentifier).swipeUp()
+            attempts += 1
+        }
+        XCTAssertTrue(target.isHittable, "スクロールしてもタップできない: \(target)", file: file, line: line)
+    }
+
     // MARK: - 計算画面
 
     private static let calcScreenIdentifiers = [
@@ -190,6 +311,98 @@ final class LargeTextLayoutUITests: XCTestCase {
         openCalcScreen(app)
         assertAX5TookEffect(app, attackerIdentifier: "attackerCard", defenderIdentifier: "defenderCard")
         assertNoHorizontalOverflow(app, identifiers: Self.calcScreenIdentifiers)
+    }
+
+    /// `CalcScreenView.presetSegmentedRow` の3つのピル(`AttackerPreset.allCases` の順)。
+    private static let calcAttackerPresetPillIdentifiers = [
+        "attackerPreset-none", "attackerPreset-aFull", "attackerPreset-aMax",
+    ]
+
+    /// P6-15 (1) 本体: AX5 で攻撃側プリセットのピルが縦に積まれ、省略されにくい幅になっていること。
+    /// 現時点(`presetSegmentedRow` が `dynamicTypeSize` を見ていない)では失敗してよい。
+    func testCalcScreenAttackerPresetPillsStackVerticallyAtAX5() {
+        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        openCalcScreen(app)
+        assertAX5TookEffect(app, attackerIdentifier: "attackerCard", defenderIdentifier: "defenderCard")
+        assertPresetPillsStackVertically(app, identifiers: Self.calcAttackerPresetPillIdentifiers)
+    }
+
+    /// P6-15 (1) の回帰確認: 既定サイズでは今までどおり3等分の1行のまま。
+    func testCalcScreenAttackerPresetPillsSingleRowAtDefaultSize() {
+        let app = launchWithMock()
+        openCalcScreen(app)
+        assertPresetPillsSingleRow(app, identifiers: Self.calcAttackerPresetPillIdentifiers)
+    }
+
+    /// P6-15 (2): AX5 で計算画面の「詳細」(`calcConditionsToggle`)を開いた状態でも横にはみ出さないこと
+    /// (issue #274・ADR-0501「issue #274」6章の identifier を検査する)。
+    func testCalcScreenConditionsPanelNoHorizontalOverflowAtAX5() {
+        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        openCalcScreen(app)
+        assertAX5TookEffect(app, attackerIdentifier: "attackerCard", defenderIdentifier: "defenderCard")
+
+        let toggle = element(app, "calcConditionsToggle")
+        scrollUntilHittable(app, toggle, containerIdentifier: "calcScreen")
+        toggle.tap()
+        XCTAssertTrue(element(app, "calcConditionsPanel").waitForExistence(timeout: Self.existenceTimeout))
+
+        assertNoHorizontalOverflow(app, identifiers: Self.calcScreenIdentifiers + Self.calcConditionsPanelIdentifiers)
+        // 横スクロールの中の天候・フィールド・防御側の壁は、存在(少なくとも1件描画されている)だけ確かめる
+        // (`calcConditionsPanelScrollableChipPrefixes` のコメント参照。はみ出し検査の対象外)。
+        for prefix in Self.calcConditionsPanelScrollableChipPrefixes {
+            let firstMatch = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
+            XCTAssertTrue(firstMatch.waitForExistence(timeout: Self.existenceTimeout), "要素が見つからない(前方一致): \(prefix)")
+        }
+    }
+
+    /// P6-15 (3): 既定サイズで%表示(`calcResultPercent-*`)が `minimumScaleFactor` によって
+    /// 不要に縮んでいないこと。`ResultRowView.percentRangeTextView` は `.lineLimit(1) +
+    /// .minimumScaleFactor(0.7)`(`CalcScreenMetrics.compactMinimumScaleFactor`)を使っている
+    /// (ADR-0501「P6-14」6章)。既定サイズでは縮まないはずだが、レイアウトの変更で意図せず
+    /// 縮んでしまっても `.label`(元の文字列のまま)からは気づけない。
+    ///
+    /// フォントの実測 pt 値をハードコードする代わりに、「横幅にまったく制約が無い横向き
+    /// (landscape)」での同じ要素の高さを基準値として使う(P6-15 タスク指示「同じ文字列を、
+    /// 確実に縮まない広い文脈で比較する」)。横向きでは十分な幅があるため `minimumScaleFactor` が
+    /// 働く理由が無く、縦向き(既定)の高さがそれより明確に低ければ、既定サイズなのに縮小されている
+    /// (回帰)と判定できる。iPhone は Info.plist(`INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone`)
+    /// で横向きを許可しているので、この比較が成立する。
+    func testCalcScreenResultPercentNotShrunkAtDefaultSize() {
+        let app = launchWithMock()
+        openCalcScreen(app)
+
+        let identifier = "calcResultPercent-none@-"
+        let percent = element(app, identifier)
+        XCTAssertTrue(percent.waitForExistence(timeout: Self.existenceTimeout), "要素が見つからない: \(identifier)")
+        let portraitWindowWidth = app.windows.firstMatch.frame.width
+        let portraitHeight = percent.frame.height
+        XCTAssertGreaterThan(portraitHeight, 0, "\(identifier) の高さが取得できない")
+
+        addTeardownBlock { XCUIDevice.shared.orientation = .portrait }
+        XCUIDevice.shared.orientation = .landscapeLeft
+        waitForWindowWidthChange(app, from: portraitWindowWidth)
+
+        let percentLandscape = element(app, identifier)
+        XCTAssertTrue(percentLandscape.waitForExistence(timeout: Self.existenceTimeout), "横向きで要素が見つからない: \(identifier)")
+        let landscapeHeight = percentLandscape.frame.height
+        XCTAssertGreaterThan(landscapeHeight, 0, "横向きで \(identifier) の高さが取得できない")
+
+        XCTAssertEqual(
+            portraitHeight, landscapeHeight, accuracy: Self.percentHeightTolerance,
+            "既定サイズ(縦向き)の%表示が、幅に制約の無い横向きより縮んでいる"
+                + "(portrait=\(portraitHeight) landscape=\(landscapeHeight))。"
+                + "minimumScaleFactor によって不要に縮小されている可能性がある"
+        )
+    }
+
+    /// 端末の向きを変えた後、ウィンドウ幅が実際に変わる(=回転が反映された)まで待つ
+    /// (アニメーション中の frame を読んで誤判定しないため)。
+    private func waitForWindowWidthChange(_ app: XCUIApplication, from originalWidth: CGFloat, timeout: TimeInterval = 5) {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if abs(app.windows.firstMatch.frame.width - originalWidth) > 1 { return }
+            usleep(100_000)
+        }
     }
 
     // MARK: - 逆算画面
@@ -246,6 +459,49 @@ final class LargeTextLayoutUITests: XCTestCase {
         XCTAssertTrue(element(app, "reverseCandidateRow-neutral@-").waitForExistence(timeout: Self.existenceTimeout))
 
         assertNoHorizontalOverflow(app, identifiers: Self.reverseScreenIdentifiers + ["reverseCandidateRow-neutral@-"])
+    }
+
+    /// `ReverseScreenView.presetSegmentedRow`(`.defender` 側 = 起動直後の既定。`AttackerPreset`)の
+    /// 3つのピル。
+    private static let reverseAttackerPresetPillIdentifiers = [
+        "reverseAttackerPreset-none", "reverseAttackerPreset-aFull", "reverseAttackerPreset-aMax",
+    ]
+
+    /// 同(`.attacker` 側。`KnownDefenderPreset.allCases` の順)の3つのピル。ラベルは
+    /// `AttackerPreset` より短い(「HB振り」等)が、同じ `PresetPillButton` を使っているため
+    /// 同じ直し方(縦積み)が適用されるはず(P6-15 タスク指示)。
+    private static let reverseKnownDefenderPresetPillIdentifiers = [
+        "reverseKnownDefenderPreset-none", "reverseKnownDefenderPreset-max", "reverseKnownDefenderPreset-full",
+    ]
+
+    /// P6-15 (1): 逆算画面「与えたダメージ」側(既定 = `.defender`)の `AttackerPreset` ピルが
+    /// AX5 で縦に積まれること。現時点では失敗してよい。
+    func testReverseScreenAttackerPresetPillsStackVerticallyAtAX5() {
+        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        openReverseScreen(app)
+        assertAX5TookEffect(app, attackerIdentifier: "reverseMyCard", defenderIdentifier: "reverseOpponentCard")
+        assertPresetPillsStackVertically(app, identifiers: Self.reverseAttackerPresetPillIdentifiers)
+    }
+
+    /// 同、既定サイズでの回帰確認。
+    func testReverseScreenAttackerPresetPillsSingleRowAtDefaultSize() {
+        let app = launchWithMock()
+        openReverseScreen(app)
+        assertPresetPillsSingleRow(app, identifiers: Self.reverseAttackerPresetPillIdentifiers)
+    }
+
+    /// P6-15 (1): 逆算画面「受けたダメージ」側(`.attacker`。`reverseSide-attacker` に切り替える)の
+    /// `KnownDefenderPreset` ピルも同様に AX5 で縦に積まれること。
+    func testReverseScreenKnownDefenderPresetPillsStackVerticallyAtAX5() {
+        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        openReverseScreen(app)
+        assertAX5TookEffect(app, attackerIdentifier: "reverseMyCard", defenderIdentifier: "reverseOpponentCard")
+
+        let attackerSide = element(app, "reverseSide-attacker")
+        XCTAssertTrue(attackerSide.waitForExistence(timeout: Self.existenceTimeout))
+        attackerSide.tap()
+
+        assertPresetPillsStackVertically(app, identifiers: Self.reverseKnownDefenderPresetPillIdentifiers)
     }
 
     // MARK: - 構築(一覧・編集)画面

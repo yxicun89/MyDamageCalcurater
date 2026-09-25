@@ -139,7 +139,9 @@ struct ReverseScreenView: View {
 
     /// 自分のプリセット。与えたダメージ(自分が攻撃側)のときは `AttackerPreset`、受けたダメージ
     /// (自分が防御側)のときは `KnownDefenderPreset` を側で排他的に表示する。カードの外、画面幅いっぱいの
-    /// 3等分のピルで並べる(`CalcScreenView.presetSegmentedRow` と同じ理由)。
+    /// 3等分のピルで並べる(`CalcScreenView.presetSegmentedRow` と同じ理由)。アクセシビリティの
+    /// 大きい文字サイズでは3等分だとラベルが省略されるので縦に積む(P6-15。`presetPillContainer` に
+    /// 分岐をまとめ、両ケースで重複させない)。
     @ViewBuilder
     private var presetSegmentedRow: some View {
         switch viewModel.side {
@@ -147,7 +149,7 @@ struct ReverseScreenView: View {
             // ラベルは自分の技の分類(A/C)に依存する。技の読み込み前は物理扱いで暫定表示する
             // (`.attacker` 側の HB/HD 表示と同じ理由)。
             let category = viewModel.selectedMove?.category ?? .physical
-            HStack(spacing: SpacingToken.x2) {
+            presetPillContainer {
                 ForEach(AttackerPreset.allCases, id: \.self) { preset in
                     PresetPillButton(
                         title: preset.label(for: category), isSelected: viewModel.attackerPreset == preset,
@@ -160,7 +162,7 @@ struct ReverseScreenView: View {
         case .attacker:
             // ラベルは相手の技の分類(HB/HD)に依存する。技の読み込み前は物理扱いで暫定表示する。
             let category = viewModel.selectedMove?.category ?? .physical
-            HStack(spacing: SpacingToken.x2) {
+            presetPillContainer {
                 ForEach(KnownDefenderPreset.allCases, id: \.self) { preset in
                     PresetPillButton(
                         title: preset.label(for: category), isSelected: viewModel.knownDefenderPreset == preset,
@@ -169,6 +171,20 @@ struct ReverseScreenView: View {
                         viewModel.scheduleLatest { await $0.selectKnownDefenderPreset(preset) }
                     }
                 }
+            }
+        }
+    }
+
+    /// `presetSegmentedRow` の2ケース共通のコンテナ(`cardsRow` と同じ分岐を1箇所にまとめる)。
+    @ViewBuilder
+    private func presetPillContainer<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        if dynamicTypeSize >= .accessibility1 {
+            VStack(spacing: SpacingToken.x2) {
+                content()
+            }
+        } else {
+            HStack(spacing: SpacingToken.x2) {
+                content()
             }
         }
     }
