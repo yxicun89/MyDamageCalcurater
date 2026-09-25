@@ -533,6 +533,16 @@
     `JUDGE_REQUEST_TIMEOUT` の行を追加。`go vet`・`go test ./...`(新規テスト含め全件)・`gofmt -l`・
     `make judge-lint`・`make judge-build`・`bash scripts/check-publishable.sh` すべて成功を確認
     (`TestOutspeedAndKoOverallDeadline` は `-count=5` でも安定して ~0.22s で 503 を返すことを確認済み)
+- [x] issue #329(重大度 low)SP 合計超過(67)の拒否を確かめる回帰テストが無く、`validateSP` の
+      `> engine.MaxSPTotal` を `> engine.MaxSPTotal+1` に変える退行を検出できない(既存の唯一のケースが
+      合計96で境界〈67〉から遠い。全体レビュー第3回指摘。2026-09-25)。テストのみの変更(実装は無変更):
+      `internal/judge/speed_test.go` に合計ちょうど66(受け付ける)・ちょうど67(拒否する。各欄は
+      MaxSPPerStat=32以下のまま)を追加、`internal/httpapi/outspeed_test.go` にも合計67の境界値ケースを
+      追加。mutation test で検証: `validateSP` を `> engine.MaxSPTotal+1` に一時的に変えて新規テスト
+      (`TestSpeedRejectsOutOfRangeInput`・`TestOutspeedAndKoRejectsInvalidRequest` の追加分)が実際に
+      失敗することを確認、復元して `go test ./...`・`gofmt -l`・`make judge-lint`・`make judge-build`・
+      `bash scripts/check-publishable.sh` すべて成功を確認(軽微な作業のため /phase の quick-scanner〜critic
+      は使わずメインで対応。CLAUDE.md「軽微な作業はメインのみでよい」)
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
 各レーンが自分の範囲の README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)と、動かして確かめられるレーンは手順書(`docs/runbooks/<レーン>.md`。AGENTS.md「手順書の書き方」に従う)を書く。全体図は `docs/architecture.md`。
