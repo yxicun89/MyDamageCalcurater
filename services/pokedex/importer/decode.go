@@ -89,7 +89,7 @@ func DecodeShowdownSnapshot(raw []byte) (ShowdownSnapshot, error) {
 	// 技の機構の判定材料は必須(ADR-0121)。無いと全技が「通常の技」として黙って分類される。
 	for _, m := range s.Moves {
 		if m.Mechanism == nil {
-			return ShowdownSnapshot{}, fmt.Errorf("%w: 技 %q に mechanism が無い(古いスナップショット。tools/importer の fetch で取り直す)", ErrInvalidInput, m.ID)
+			return ShowdownSnapshot{}, fmt.Errorf("%w: 技 %q に mechanism が無い(ADR-0121 より前の古いスナップショット。`make import-fetch` で取り直す)", ErrInvalidInput, m.ID)
 		}
 	}
 	return s, nil
