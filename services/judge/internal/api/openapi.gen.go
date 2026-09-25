@@ -150,10 +150,18 @@ type DefenderCandidate struct {
 	// MoveId この候補が使う技(1 つ)。優先度は GET /api/pokedex/moves/{key} で引き、
 	// この技によるダメージは calc-svc を逆方向(この候補が攻撃側・自分が防御側)で
 	// 呼んで求める(ADR-0704 §4)。マスタに無ければ 422 unknown_move。
-	MoveId string `json:"moveId"`
+	// 形式が MoveId に合わない値は上流を呼ぶ前に 400 invalid_request で、
+	// message は defenders[<index>] を示す(ADR-0706 §3・§4)。
+	MoveId MoveId `json:"moveId"`
 
-	// NatureId 性格 ID。GET /api/pokedex/natures の一覧で補正する能力に解決する(ADR-0701 §4)。
-	NatureId string `json:"natureId"`
+	// NatureId 性格 ID(Showdown ID: 小文字英数をハイフンで区切る)。GET /api/pokedex/natures の一覧で
+	// 補正する能力に解決する(ADR-0701 §4)。URL には埋めないが、同じ由来の ID を欄ごとに違う
+	// 厳しさで通さないため MoveId と同じ形式で検査する(ADR-0706 §5)。形式に合わない値は
+	// 上流を呼ぶ前に 400 invalid_request、一覧に無いときは 422 unknown_nature。
+	//
+	//
+	// Example: jolly
+	NatureId NatureId `json:"natureId"`
 
 	// Ranks ランク補正(-6..+6)。HP は持たない。judge は「技の追加効果を適用した後のランク」を
 	// 呼び出し側が入れたものとして受け取る(ADR-0700 §6-5)。
@@ -228,8 +236,14 @@ type Individual struct {
 	// と一致するときだけ素早さに ×1.5 を掛ける。
 	ItemId *string `json:"itemId,omitempty"`
 
-	// NatureId 性格 ID。GET /api/pokedex/natures の一覧で補正する能力に解決する(ADR-0701 §4)。
-	NatureId string `json:"natureId"`
+	// NatureId 性格 ID(Showdown ID: 小文字英数をハイフンで区切る)。GET /api/pokedex/natures の一覧で
+	// 補正する能力に解決する(ADR-0701 §4)。URL には埋めないが、同じ由来の ID を欄ごとに違う
+	// 厳しさで通さないため MoveId と同じ形式で検査する(ADR-0706 §5)。形式に合わない値は
+	// 上流を呼ぶ前に 400 invalid_request、一覧に無いときは 422 unknown_nature。
+	//
+	//
+	// Example: jolly
+	NatureId NatureId `json:"natureId"`
 
 	// Ranks ランク補正(-6..+6)。HP は持たない。judge は「技の追加効果を適用した後のランク」を
 	// 呼び出し側が入れたものとして受け取る(ADR-0700 §6-5)。
@@ -318,6 +332,22 @@ type Matchup struct {
 	TurnOrderTie bool `json:"turnOrderTie"`
 }
 
+// MoveId 技 ID(Showdown ID: 小文字英数をハイフンで区切る)。意味の正はルートの api/openapi.yaml の Move.id。
+// judge はこの ID を GET /api/pokedex/moves/{key} の path 要素に埋めるので、形式に合わない値は
+// 上流を呼ぶ前に 400 invalid_request で断る(ADR-0706 §1・§3)。形式は合うがマスタに無いときは
+// 422 unknown_move(ADR-0704 §6)。
+//
+// Example: flamethrower
+type MoveId = string
+
+// NatureId 性格 ID(Showdown ID: 小文字英数をハイフンで区切る)。GET /api/pokedex/natures の一覧で
+// 補正する能力に解決する(ADR-0701 §4)。URL には埋めないが、同じ由来の ID を欄ごとに違う
+// 厳しさで通さないため MoveId と同じ形式で検査する(ADR-0706 §5)。形式に合わない値は
+// 上流を呼ぶ前に 400 invalid_request、一覧に無いときは 422 unknown_nature。
+//
+// Example: jolly
+type NatureId = string
+
 // OutspeedAndKoRequest defines model for OutspeedAndKoRequest.
 type OutspeedAndKoRequest struct {
 	// Attacker 自分の個体。攻撃側は 1 つに固定する(ADR-0700 §6-2・ADR-0703 §1)。
@@ -343,7 +373,9 @@ type OutspeedAndKoRequest struct {
 	// MoveId 自分(attacker)が使う技(1 つ)。すべての候補に対して同じ技で判定する。
 	// JD4 からは優先度を引くために GET /api/pokedex/moves/{key} でも解決するので、
 	// マスタに無ければ calc-svc に届く前に 422 unknown_move になる(ADR-0704 §7)。
-	MoveId string `json:"moveId"`
+	// 形式が MoveId に合わない値は上流を呼ぶ前に 400 invalid_request で、
+	// message は attacker を示す(候補の index を騙らない。ADR-0706 §4)。
+	MoveId MoveId `json:"moveId"`
 
 	// SpeedField 素早さの判定にだけ効く場の効果(ADR-0702 §1)。judge が自分で解釈し、calc-svc には送らない。
 	// トリックルーム・追い風はダメージに関与せず、calc-svc は場の効果として weather / terrain /
