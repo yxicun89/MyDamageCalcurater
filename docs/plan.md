@@ -234,6 +234,13 @@
   `resolveAttackerPreset` の実際の出力を突き合わせる契約テスト(現状の値は一致済み)。JSON の値を書き換える
   mutation で実際に検知することを確認(3件 fail)、確認後に復元。新規17件追加(1262件)。`web/src/domain/
   attackerPresets.ts` 自体は変更していない(engine への実装移管は別タスク)。
+- [ ] issue #306(計算画面のタイプ名のコントラストとダメージバーの読み上げ名。Web レーン)。**着手(2026-09-25。
+  受け入れ条件と失敗するテストまで。実装は未着手)**: ブランチ `fix/web-issue-306-type-badge-contrast`。
+  タイプ名は文字色にタイプ色を使うのをやめてバッジ化し(背景 = タイプ色、文字 = `--type-<id>-ink`)、
+  ダメージバーは %幅 を同じ行に併記済みなので装飾(`aria-hidden`、`role="meter"` を外す)にする方針を
+  `docs/design.md`(「タイプバッジ」の新設・「画面: ダメージ計算」への追記)に記録。
+  失敗するテストを先に追加(`web/src/styles/typeBadgeContrast.test.ts` 新規、`tokens.test.ts`・
+  `CalcScreen.test.tsx`・`web/e2e/calc.spec.ts` を更新)
 
 ## M2: 保存・構築
 

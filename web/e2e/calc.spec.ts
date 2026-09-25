@@ -34,8 +34,10 @@ test("攻撃側・防御側を選ぶと技が自動で選ばれ、既定の5行�
     expect(text).toMatch(PERCENT_RANGE_PATTERN);
     expect(text).toMatch(KO_PATTERN);
   }
-  // 各行にダメージバー(meter)がある。
-  await expect(rows.getByRole("meter")).toHaveCount(DEFAULT_ROW_COUNT);
+  // 各行にダメージバーがある。issue #306 でバーは装飾(aria-hidden)にしたので、
+  // role ではなく testid で数え、支援技術に名前の無い meter が残っていないことも確かめる。
+  await expect(rows.getByTestId("damage-bar")).toHaveCount(DEFAULT_ROW_COUNT);
+  await expect(page.getByRole("meter")).toHaveCount(0);
 });
 
 test("攻撃側の調整を A特化 に変えると、先頭行の最大%が増える", async ({ page }) => {
