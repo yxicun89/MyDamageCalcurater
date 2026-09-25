@@ -136,14 +136,26 @@ BalanceScreen がオンラインで永久に使えなかった。可否の判定
 `resolveAttackerPreset`の実際の出力を突き合わせる契約テスト(現状の値は一致済み、実装変更なし)。
 JSONを一時的に書き換えるmutationで実際に検知することを確認済み。新規17件追加。iOSの追従が済めば
 データレーンが#71をcloseする想定(2026-09-25時点、Web側は完了を連絡済み)。
-Next: (1) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
+**issue #333(375px幅でタブの名前が1文字ずつ縦に折り返す)PR #356オープン中(2026-09-25、マージは
+オーケストレーターが検証後に実施)**: `App.css`の`.app-tabs__list`にoverflow-x: auto・safe center、
+`.app-tabs__tab`にwhite-space: nowrap・flex-shrink: 0。**critic 1回目FAIL**: 素のcenterのままだと
+はみ出した先頭タブがscrollLeft=0でも戻れない(centered flexbox overflow clipping。320pxで実測再現)→
+`justify-content: safe center`に修正、design.mdに記録。safeキーワードのSafari対応はP4-5のSafari確認
+(ブロッカー節)に追記。回帰テスト2件(1行であることの直接確認・スクロールで先頭末尾に到達できることの確認)。
+**2026-09-25、オーケストレーター(damage calculation bug resolution)から13件のissue消化を依頼された**
+(open 113件中、優先度順): (1) bug: #333(完了・PR #356オープン中)・#306(タイプ名コントラスト・
+ダメージバー読み上げ名。spec-writer実行中)・#275(逆算「受けたダメージ」で自分の耐久が無振り固定。
+spec-writer実行中、high severity)。(2) ready-for-implementation: #304・#308・#305・#248・#218・#219
+(APIレーン連携)・#211(APIレーン連携)・#332(devDependencies更新)・#226(README等の実装状況)は未着手。
+(3) needs-decisionだが「要望済み機能は実装しきる」方針で既定案付きで実装: #272(特性選択)・#274(急所・
+やけど・天候・フィールド・ランク・壁・特性の指定。iOSへも連絡済み)・#210(オフライン実データ)は未着手。
+P5-5はAPIレーンの契約が出たら最優先。
+Next: (1) #306・#275のspec-writer完了待ち→implementer→critic。(2) 順次(2)(3)の残りへ。(3) P4-20:
+issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
 (apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより
-連絡が来る想定。(2) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち。
-2026-09-24 時点で record/team-svc の DB マイグレーション・TiDB 導入方針〈ADR-0211〉はデータレーンで進行中)。
-(3) issue #274(計算画面で急所・やけど・天候・フィールド・ランク・壁・特性を指定できない)は未着手。iOSが
-既定案(「詳細」折りたたみ)で先行する予定で、決めた語をDECISIONS.mdに書く想定(2026-09-25、iOSレーンへ返信済み)。
-(4) 人間へのお願い: docs/verify-m1.md §4 を
-Safari で確認(P4-5)。(5) 他レーンからの依頼待ち
+連絡が来る想定。(4) P5-5(構築ビルダー等)は record/team の API 待ち(M2。2026-09-24 時点で record/team-svc
+の DB マイグレーション・TiDB 導入方針〈ADR-0211〉はデータレーンで進行中)。(5) 人間へのお願い:
+docs/verify-m1.md §4 を Safari で確認(P4-5。issue #333のsafeキーワード確認も合わせて)
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
@@ -170,8 +182,10 @@ issue #68 の残り(一度も検索結果に出ていない選択中の技IDを�
 issue #110 は API・データ・Web・iOS すべて完了したためクローズ済み(2026-09-24)。
 P6-10(構築編集の load の技解決を `getMovesByIds` のまとめ取り1回へ。ADR-0501「getMovesByIds による構築編集の技の一括解決」。
 critic 1周目 FAIL〈分割境界のテスト不足〉→テスト追加→2周目 PASS)完了。
-Next: (1) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。#71(攻撃側プリセット
-単一化)は engine 側の `AttackerPreset` カタログ新設(データレーン)が前提のため iOS からは未着手。将来の候補:
+P6-11(issue #334。攻撃側プリセットの表示名を技の分類に追従。PR #348、issue クローズ済み)・P6-12(issue #71 の iOS 追従。
+`engine/presets/attacker.json` との契約テスト、並び 無振り→特化→振り、既定を無振りに変更。ADR-0501「P6-12」)完了。
+Next: (1) issue #274(計算画面の条件入力。Web レーンと合意済みで iOS が先行、語は DECISIONS.md に書いて Web が合わせる)。
+(2) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。将来の候補:
 engine の Champions マスタが pokedex-svc 経由になったら iOS のモック/実マスタの差し替え動作を再確認、Web の
 record/team-svc(M2)が進んだら iOS の構築を端末内保存から API 保存へ移行するかを検討。
 
@@ -214,7 +228,11 @@ GitOps overlayがread modelを持たずbalance/speedの業務APIが全て503。�
 (initContainerでpokedex exportを起動時に実行)でユーザー確認中(タイプバランスレーンが担当)、#236は共通パッケージの置き場所を
 タイプバランスレーンがAPIレーンと相談中。#237の実装には「pokedex-svcのserverイメージをbalance-registryへdigest固定でpush」という
 データレーンへの新しい依頼が発生することをタイプバランスレーンに共有済み。
-Next: #263・#237・#236 はタイプバランスレーン/APIレーンからの連絡待ち(連絡が来たら speed 側の overlay・scripts を対応)。
+Status(追記): 2026-09-25、#236のspeed側を完了(ADR-0606。PR作成中)。gatewayのcheckAPIHeaders/isCanonicalUUIDを
+`services/speed/internal/httpapi/requestctx.go`に複製(httpmetricsと同じ前例。共通パッケージ新設なし、APIレーン合意済み)。
+X-Device-Id/X-Session-Idの検証を正準形UUIDに強化し、エラーcodeを`invalid_request`から`missing_header`/`invalid_header`
+へ分離(契約の破壊的変更)。openapi.yaml 0.4.0・web/src/speed/speed.gen.tsを再生成・critic PASS。balance・judgeは各自対応。
+Next: #263・#237 はタイプバランスレーン/APIレーンからの連絡待ち(連絡が来たら speed 側の overlay・scripts を対応)。
 #105(Argo CD導入・digest固定の共有スクリプト化)は完了・追加対応不要。#108は データレーンからの連絡待ち(今は着手不要)。他は
 balance-registry → pokecalc-registry への改名提案(タイプバランスレーンへ既定案で提示済み。DECISIONS.md 2026-09-23)かユーザーからの
 新規要望待ち。

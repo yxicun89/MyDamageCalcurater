@@ -228,7 +228,7 @@ func convertSpecies(in Input, typeNameToID map[string]string, includedItems map[
 	rawByID := map[string]bool{}
 
 	for _, c := range in.Calc.Species {
-		if c.BaseStats.HP == 1 || excludeSet[c.Name] {
+		if excludeSet[c.Name] {
 			warnings = append(warnings, Finding{Kind: KindSpeciesExcluded, ID: toID(c.Name)})
 			continue
 		}

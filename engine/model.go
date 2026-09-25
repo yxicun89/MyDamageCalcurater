@@ -3,6 +3,8 @@ package engine
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 )
 
 // Species はポケモンの種族データ(マスタから解決済み)。
@@ -135,8 +137,8 @@ func (in Individual) Validate() error {
 		return fmt.Errorf("レベルは %d 固定: %d", DefaultLevel, in.Level)
 	}
 	for _, k := range AllStatKeys() {
-		if in.Species.BaseStats.Get(k) < 0 {
-			return fmt.Errorf("種族値 %s は負にできない", k)
+		if b := in.Species.BaseStats.Get(k); b < MinBaseStat || b > MaxBaseStat {
+			return fmt.Errorf("種族値 %s は %d..%d の範囲外: %d", k, MinBaseStat, MaxBaseStat, b)
 		}
 		v := in.SP.Get(k)
 		if v < 0 || v > MaxSPPerStat {
@@ -157,6 +159,71 @@ func (in Individual) Validate() error {
 	}
 	if len(in.Species.Types) == 0 || len(in.Species.Types) > 2 {
 		return fmt.Errorf("タイプは1〜2個: %d", len(in.Species.Types))
+	}
+	if len(in.Species.Types) == 2 && in.Species.Types[0] == in.Species.Types[1] {
+		// 同じタイプを2つ持つと相性を2回掛けてしまう(等倍が 4/4、抜群が4倍。issue #255)。
+		return fmt.Errorf("タイプ %q が重複している", in.Species.Types[0])
+	}
+	if in.Item != nil && in.Item.Effect != nil {
+		if err := in.Item.Effect.validate(); err != nil {
+			return fmt.Errorf("持ち物 %q の効果: %w", in.Item.ID, err)
+		}
+	}
+	if in.Ability.Effect != nil {
+		if err := in.Ability.Effect.validate(); err != nil {
+			return fmt.Errorf("特性 %q の効果: %w", in.Ability.ID, err)
+		}
+	}
+	return nil
+}
+
+// validateModifier は 4096 基準の補正値 v が MinEffectModifier..MaxEffectModifier に入るかを確かめる。
+// optional のときは 0(補正なし)も許す。
+func validateModifier(name string, v int, optional bool) error {
+	if optional && v == 0 {
+		return nil
+	}
+	if v < MinEffectModifier || v > MaxEffectModifier {
+		return fmt.Errorf("%s は %d..%d の範囲外: %d", name, MinEffectModifier, MaxEffectModifier, v)
+	}
+	return nil
+}
+
+// validate は持ち物の効果の補正値の範囲を確かめる(issue #255)。
+func (e ItemEffect) validate() error {
+	for _, k := range AllStatKeys() {
+		if v, ok := e.StatMods[k]; ok {
+			if err := validateModifier("StatMods["+string(k)+"]", v, false); err != nil {
+				return err
+			}
+		}
+	}
+	for _, f := range []struct {
+		name string
+		v    int
+	}{{"DamageMod", e.DamageMod}, {"PowerMod", e.PowerMod}, {"BoostTypeMod", e.BoostTypeMod}} {
+		if err := validateModifier(f.name, f.v, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validate は特性の効果の補正値の範囲を確かめる(issue #255)。
+func (e AbilityEffect) validate() error {
+	for _, f := range []struct {
+		name string
+		v    int
+	}{{"StabMod", e.StabMod}, {"OffBoostTypeMod", e.OffBoostTypeMod}, {"ReduceSuperEffective", e.ReduceSuperEffective}} {
+		if err := validateModifier(f.name, f.v, true); err != nil {
+			return err
+		}
+	}
+	// キーを整列して走査する(複数の不正があっても報告が毎回同じになるように)。
+	for _, t := range slices.Sorted(maps.Keys(e.DefResistType)) {
+		if err := validateModifier("DefResistType["+string(t)+"]", e.DefResistType[t], false); err != nil {
+			return err
+		}
 	}
 	return nil
 }

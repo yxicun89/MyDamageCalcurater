@@ -33,6 +33,11 @@ type ShowdownNature struct {
 	Minus string `json:"minus,omitempty"`
 }
 
+// natureMismatchRecovery は nature-mismatch の Blocker の Detail に載せる復旧案内(#74)。
+// 片方だけ古いスナップショットが原因のことが多いので、まず両方を取り直す。
+const natureMismatchRecovery = "make import-fetch で calc と Showdown のスナップショットを取り直して再実行する。" +
+	"取り直しても残るなら data/importer/config.json の sources の版の組み合わせを確かめ、ADR-0105 §4 に沿って人間が裁定する"
+
 // natureIDPattern は natures.id の形式(migration 000006 の chk_natures_id と同じ)。
 var natureIDPattern = regexp.MustCompile(`^[a-z0-9]+$`)
 
@@ -104,16 +109,21 @@ func convertNatures(in Input, usedOverride map[string]bool) ([]NatureRow, []Find
 	}
 
 	var blockers []Finding
+	mismatch := func(id, cause string) {
+		blockers = append(blockers, Finding{Kind: KindNatureMismatch, ID: id, Detail: cause + ": " + natureMismatchRecovery})
+	}
 	for _, id := range sortedKeysRaw(ids) {
 		sw, hasSW := showdownByID[id]
 		calc, hasCalc := calcByID[id]
 		switch {
-		case !hasSW || !hasCalc:
-			blockers = append(blockers, Finding{Kind: KindNatureMismatch, ID: id})
+		case !hasSW:
+			mismatch(id, "calc-only")
+		case !hasCalc:
+			mismatch(id, "showdown-only")
 		case (sw.Plus == "" && sw.Minus == "") != (calc.Plus == calc.Minus):
-			blockers = append(blockers, Finding{Kind: KindNatureMismatch, ID: id})
+			mismatch(id, "modifier")
 		case sw.Plus != "" && (sw.Plus != calc.Plus || sw.Minus != calc.Minus):
-			blockers = append(blockers, Finding{Kind: KindNatureMismatch, ID: id})
+			mismatch(id, "modifier")
 		}
 	}
 	if len(blockers) > 0 {

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
-	"strings"
 
 	"example.com/pokecalc/services/speed/internal/api"
 	"example.com/pokecalc/services/speed/internal/httpmetrics"
@@ -70,15 +69,17 @@ func (h handler) ListPokemon(c *echo.Context, _ api.ListPokemonParams) error {
 	return listPokemon(c, h.deps)
 }
 
-// GetSpeedTable implements GET /api/speed/v1/table (ADR-0601 §5): query (400) → read model
-// absent (503) → provider/calc error (500, fixed message) → 200. Header の検査は
-// requireRequestContext ミドルウェア(New で登録)がクエリより先に行う。
+// GetSpeedTable implements GET /api/speed/v1/table (ADR-0601 §5): header
+// (400 missing_header/invalid_header) → query (400 invalid_request) → read model absent
+// (503) → provider/calc error (500, fixed message) → 200. Header の検査は
+// requireRequestContext ミドルウェア(New で登録)がクエリより先に行う(ADR-0606)。
 func (h handler) GetSpeedTable(c *echo.Context, params api.GetSpeedTableParams) error {
 	return getSpeedTable(c, h.deps, params)
 }
 
-// GetSpeedPosition implements POST /api/speed/v1/position (ADR-0602 §4): header (400) → body
-// (400) → read model absent (503) → unknown pokemonId (422) → 200.
+// GetSpeedPosition implements POST /api/speed/v1/position (ADR-0602 §4): header
+// (400 missing_header/invalid_header, ADR-0606) → body (400 invalid_request) → read model
+// absent (503) → unknown pokemonId (422) → 200.
 func (h handler) GetSpeedPosition(c *echo.Context, _ api.GetSpeedPositionParams) error {
 	return getSpeedPosition(c, h.deps)
 }
@@ -213,20 +214,17 @@ func internalError(c *echo.Context, err error) error {
 
 func requireRequestContext(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
-		if strings.TrimSpace(c.Request().Header.Get(deviceIDHeader)) == "" ||
-			strings.TrimSpace(c.Request().Header.Get(sessionIDHeader)) == "" {
-			return c.JSON(http.StatusBadRequest, api.Error{
-				Code:    api.InvalidRequest,
-				Message: "X-Device-Id and X-Session-Id are required",
-			})
+		if apiErr := checkAPIHeaders(c.Request().Header); apiErr != nil {
+			return c.JSON(http.StatusBadRequest, *apiErr)
 		}
 		return next(c)
 	}
 }
 
 // writeHTTPError normalizes any 400 from the generated parameter binding (e.g. a
-// duplicate header) to the same Error{code: invalid_request} shape as the rest of
-// the API (balance と同じ)。
+// duplicate query parameter) to the same Error{code: invalid_request} shape as the
+// rest of the API (balance と同じ)。ヘッダーの検証は requireRequestContext が先に行うため、
+// ここに落ちてくる 400 はヘッダー以外の理由(クエリの重複など)に限られる。
 func writeHTTPError(c *echo.Context, err error) {
 	if response, _ := echo.UnwrapResponse(c.Response()); response != nil && response.Committed {
 		return

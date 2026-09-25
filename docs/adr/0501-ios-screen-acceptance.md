@@ -2210,3 +2210,125 @@ Web の「(**無補正**)」とは表記ゆれがあるが、これは Web 側�
   (`PokeCalcCoreTests` 400件 + `PokeCalcDesignTests` 13件)・`ios-test-ui: 全 18 件 / 成功 18 / 失敗 0`
   (新規 `testSelectingSpecialMoveShowsCLetterPresetLabel` を含む)・`ios-check-infoplist` 成功。
   `ios-lint`・`ios-gen-check`・`ios-check-request-limits` を含め全ステップ green。
+
+## P6-12 の受け入れ条件(issue #71: 攻撃側プリセットを engine/presets/attacker.json に揃える。実装済み)
+
+- 日付: 2026-09-25 / 担当レーン: iOS / 関連: issue #71、ADR-0114「Web・iOS への依頼」、ADR-0500 §6、ADR-0010 §5.3、
+  本 ADR「P6-11」(`label(for:)`)、「issue #110」2章(ホスト側の同期検査)
+
+### 0. 何がずれているか
+
+正は `engine/presets/attacker.json`(ADR-0114)。iOS の `AttackerPreset` は規則(SP・性格)は同じだが、
+キー(`aFull`/`aMax`/`none` ↔ `x_full`/`x`/`none`)、並び順(特化 → 振り → 無振り ↔ 無振り → 特化 → 振り)、
+既定(A特化 ↔ `default: "none"`)が JSON と違う。同期を検査する仕組みも無い。
+
+### 1. 判断: 契約テストは XCTest で JSON を直接読む(ホスト側スクリプトにしない)
+
+- 「issue #110」2章は「XCTest はシミュレータのサンドボックスで走りリポジトリのファイルを読めない」ことを前提に
+  ホスト側スクリプト(`check-request-limits.sh`)を選んだ。今回これを実測した(2026-09-25): `#filePath` からの相対で
+  `engine/presets/attacker.json` を `Data(contentsOf:)` で読む XCTest を `xcodebuild test -scheme PokeCalcKit-Package
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro'` で走らせ、**読めた**(シミュレータのテストプロセスは
+  ホストのファイルシステムをそのまま見る)。macOS の `swift test` でも読める。
+- よって `make ios-test-unit` と `swift test` の両方で走る XCTest(`AttackerPresetCatalogContractTests`)にする。
+  JSON はリポジトリに複製しない。ファイルが無ければ `XCTFail`(スキップしない)。
+- 前提: 実機ではこのテストは走らない(`make ios-test` はシミュレータだけ)。`#filePath` はビルドしたマシンの絶対パスなので、
+  別マシンでビルドした成果物を走らせる運用を始めたらここを見直す。
+- `check-request-limits.sh` を XCTest に移すかは本タスクの対象外(前提が崩れたことだけ記録する)。
+
+### 2. 判断: case 名は変えず、JSON のキーとの対応を `catalogKey` の1か所に書く
+
+- case 名(= raw value)は `accessibilityIdentifier`(`attackerPreset-aFull`・`reverseAttackerPreset-aMax` 等)と
+  XCUITest が参照している。raw value を JSON に揃えると識別子と UI テストが一斉に変わり、得るものが無い。
+- `AttackerPreset.catalogKey: String`(`aFull` → `"x_full"`、`aMax` → `"x"`、`none` → `"none"`)を足し、対応はここにだけ書く。
+  契約テストはこれで JSON と突き合わせる。
+- `allCases` の順(case の宣言順)を JSON の `presets` の順(`none` → `aFull` → `aMax`)にする。画面のピルは
+  `ForEach(AttackerPreset.allCases)` なので、計算画面・逆算画面(与えたダメージ)とも左から「無振り / A(C)特化 / A(C)振り(無補正)」に変わる。
+  Web(ADR-0300 §5)と ADR-0010 §5.3 の attacker の事前順位と同じ並び。
+
+### 3. 判断: 既定は JSON の `default`(無振り)に揃え、1か所で持つ
+
+- `AttackerPreset.defaultPreset`(= `.none`)を足す。`CalcViewModel` / `ReverseViewModel` の `attackerBuildSource` の初期値と、
+  `load()` での再設定(`CalcViewModel.swift` の `attackerBuildSource = .preset(.aFull)`、`ReverseViewModel.swift` の同じ行)は
+  すべて `.preset(AttackerPreset.defaultPreset)` にする。case の直書きを残さない。
+- 起動直後の計算(計算画面)は無振り = SP 0 + 無補正の性格で組み立てる。これまでの A特化(atk 32 + atk 上昇)から変わる。
+  利用者に見える変化なので、Web と同じ既定に揃う利点(同じ入力で同じ結果)を優先した(ADR-0114 の決定どおり)。
+- 既定の組み立てに要る性格は「無補正」になる。マスタに無補正の性格が無ければ起動時に `natureUnavailable`(これまでは上昇性格)。
+
+### 4. 受け入れ条件(検証可能な形)
+
+1. `AttackerPreset.allCases.map(\.catalogKey)` が JSON の `presets[].key` と順序まで一致する
+   (`AttackerPresetCatalogContractTests.testCasesMatchCatalogKeysInOrder`)。
+2. `AttackerPreset.defaultPreset.catalogKey` が JSON の `default` と一致する(`testDefaultMatchesCatalog`)。
+3. `AttackerPreset.relevantStat(for:)` が JSON の `relevantStat` と全分類で一致し、JSON の分類の集合が `MoveCategory.allCases` と同じ
+   (`testRelevantStatMatchesCatalogForEveryCategory`)。
+4. 全プリセット × 全分類で、`AttackerPreset.build` の SP が「関連ステータスだけ `relevantSp`、他は 0」、性格が
+   `boost` なら (plus = 関連ステータス, minus = `boostMinus[関連]`)、`neutral` なら plus/minus とも nil
+   (`testBuildFollowsCatalogSpAndNatureRules`)。JSON は最上位・各プリセットの項目が既知のものだけで、`schemaVersion` が 1、
+   `nature` が boost/neutral のどちらか(`testCatalogHasOnlyKnownFieldsAndVersion`)。
+5. 契約テストは macOS の `swift test` とシミュレータの `make ios-test-unit` の両方で走り、JSON が無ければ失敗する。
+6. 計算画面・逆算画面を開いた直後、自分側のプリセットは無振りが選ばれ、起動時の計算要求は SP 0 + 無補正の性格
+   (`CalcViewModelTests.testLoadSelectsDeterministicDefaultsAndCalculatesOnce`・`ReverseViewModelTests.testLoadSelectsDefaultsWithoutCalculating`)。
+7. 画面のピルは左から 無振り → 特化 → 振り の順に並び、起動直後は無振りだけが選択状態
+   (XCUITest `CalcScreenUITests` / `ReverseScreenUITests` の `testAttackerPresetPillsFollowCatalogOrderAndDefault`)。
+8. `swift test` と `make ios-test` がすべて成功する。
+
+### 5. テストの変更(順序・既定の変更に伴うものだけ。それ以外は弱めていない)
+
+追加:
+
+- `ios/PokeCalcKit/Tests/PokeCalcCoreTests/AttackerPresetCatalogContractTests.swift`(新規。4章 1〜5。5件)
+- `CalcViewModelTests.testMissingFullPresetNatureOnSelectionSetsErrorWithoutCalculating`(下の `testMissingPresetNature...` の
+  旧来の意図「A特化の上昇性格が無ければエラーで計算しない」を、選び直しの経路で残す)
+- `CalcScreenUITests.testAttackerPresetPillsFollowCatalogOrderAndDefault`・`ReverseScreenUITests.testAttackerPresetPillsFollowCatalogOrderAndDefault`
+  (4章 7。ピルの `frame.minX` の順と `isSelected`)
+
+期待値を変えた既存のアサーション(理由はすべて「並び順・既定を JSON に揃えたため」):
+
+| テスト | 変更前 | 変更後 |
+|---|---|---|
+| `AttackerPresetTests.testCasesAreOrderedAndLabeledAsRequirements` | `allCases == [.aFull, .aMax, .none]`、`label` が `["A特化", "A振り", "無振り"]` | `[.none, .aFull, .aMax]`、`["無振り", "A特化", "A振り"]`(文言は同じ。順序だけ) |
+| `CalcViewModelTests.testLoadSelectsDeterministicDefaultsAndCalculatesOnce` | `attackerPreset == .aFull`、要求 `sp(atk: 32)` + `atkUpNature` | `== AttackerPreset.defaultPreset`、要求 `sp()` + `neutralNature` |
+| `CalcViewModelTests.testAttackerWithOnlyStatusMovesFallsBackToFirstLearnsetMove` | 既定のまま `sp(atk: 32)` を確認 | 先に `selectAttackerPreset(.aFull)` してから同じ `sp(atk: 32)` を確認(無振りでは振り先が見えないため) |
+| `CalcViewModelTests.testEachInputChangeCallsCalcBulkExactlyOnceWithTheRightShape` | 起動直後に特殊技を選び A特化の組み立てを確認。件数 2〜7 | 先に `selectAttackerPreset(.aFull)`(計算1回増える)。件数 3〜8。他の期待値は同じ |
+| `CalcViewModelTests.testSwapSidesSwapsSpeciesAndReselectsMoveWithOneCalc` | 既定の A特化が入れ替え後も残ることを確認 | 先に `selectAttackerPreset(.aFull)`(`before` を取る前)。アサーションは同じ |
+| `CalcViewModelTests.testMissingPresetNatureSetsErrorWithoutCalculating` | 性格一覧 `[neutral, spaUp]`(A特化の上昇性格が無い) | `[atkUp, spaUp]`(既定の無振りに要る無補正が無い)。期待(エラー・計算0回)は同じ |
+| `CalcViewModelTeamIndividualTests.testUnknownTeamOrMemberIsIgnored` | `attackerPreset == .aFull` | `== AttackerPreset.defaultPreset` |
+| `ReverseViewModelTests.testLoadSelectsDefaultsWithoutCalculating` | `attackerPreset == .aFull` | `== AttackerPreset.defaultPreset` |
+| `ReverseViewModelTests.testSwitchingToAttackerSideResetsObservationsAndUsesOpponentLearnset` | `attackerPreset == .aFull` | `== AttackerPreset.defaultPreset` |
+| `ReverseViewModelTests.testValidPercentObservationCallsReverseOnceWithDefenderSideRequest` | 既定のまま A特化(`sp(atk: 32)` + `atkUpNature`)を確認 | 観測を入れる前(逆算しない状態)に `selectAttackerPreset(.aFull)`。アサーションは同じ |
+| `ReverseViewModelTeamIndividualTests.testUnknownTeamOrMemberIsIgnored` | `attackerPreset == .aFull` | `== AttackerPreset.defaultPreset` |
+| `CalcScreenUITests.testTeamSourceRowEmptyThenSelectingMemberClearsPresetAndPresetClearsBack` | 起動直後に `attackerPreset-aFull` が選択状態 | `attackerPreset-none`(以降の外れる/戻る確認も同じボタンで) |
+| `ReverseScreenUITests.testTeamSourceRowEmptyThenSelectingMemberClearsPresetAndPresetClearsBack` | `reverseAttackerPreset-aFull` | `reverseAttackerPreset-none` |
+
+P6-11 4章 2 の「`testCasesAreOrderedAndLabeledAsRequirements` は1行も変更しない」は、P6-11 の時点の条件。本タスクで順序の行だけを変えた
+(文言の行は同じ文字列の並べ替えのみ)。
+
+spec 時点の `swift test`(2026-09-25): 406件実行、7テストで失敗10件(アサーション単位)。すべて本タスクの新しい振る舞いのみ
+(契約テスト3件: キー・順序・既定・build の突き合わせ、`testCasesAreOrderedAndLabeledAsRequirements` 2件、
+`testLoadSelectsDeterministicDefaultsAndCalculatesOnce` 2件、`testMissingPresetNatureSetsErrorWithoutCalculating` 1件、
+`testMissingFullPresetNatureOnSelectionSetsErrorWithoutCalculating` 2件)。
+仮の実装(2・3章どおり)を当てて `swift test` 406件 green、シミュレータで契約テスト5件と 4章 7 の UI テスト2件・上表の UI テスト2件・
+`testSelectingSpecialMoveShowsCLetterPresetLabel` が green になることを確かめてから、仮の実装は戻した。
+
+### 6. 実装者への注意(`TODO(implementer)` を検索すればコード上の該当箇所が見つかる)
+
+- `AttackerPreset.swift`: case の宣言順を `none, aFull, aMax` に並べ替える。`catalogKey` を switch で3通り返す
+  (`rawValue` を返す仮実装を消す)。`defaultPreset` を `.none` にする。case 名・raw value は変えない。
+- `CalcViewModel.swift` / `ReverseViewModel.swift`: `.preset(.aFull)` の4か所(プロパティの初期値2・`load()` の再設定2)を
+  `.preset(AttackerPreset.defaultPreset)` にする。「`AttackerPreset.allCases` の最初(A特化)」と書いたドキュメントコメント
+  (`CalcViewModel.swift` の `attackerBuildSource`、`ReverseViewModel.swift` の同じプロパティ)も直す。
+- View(`CalcScreenView` / `ReverseScreenView`)は `allCases` を並べているだけなので変更不要の見込み。
+- 契約テスト・上表の期待値は変えない。JSON(`engine/`)は触らない。
+- 完了条件は4章。`swift test` と `make ios-test` を実行し、結果をこの章の後ろに追記する。
+
+### 7. 実装結果(2026-09-25)
+
+- 2・3章どおりに実装(case 順 `none, aFull, aMax`、`catalogKey`、`defaultPreset = .none`、`CalcViewModel`/`ReverseViewModel` の
+  4か所を `AttackerPreset.defaultPreset` に置換)。View(`CalcScreenView`/`ReverseScreenView`)は `allCases` を並べるだけで変更不要だった。
+- `swift test`(macOS, `ios/PokeCalcKit`): 406件実行、0失敗。
+- `make ios-test`(シミュレータ): `ios-lint`・`ios-gen-check`・`ios-check-request-limits`・`ios-check-infoplist` OK、
+  `ios-test-unit` 419件成功・0失敗、`ios-test-ui` 20件成功・0失敗ですべて green(終了コード0)。
+  1回目の実行では `ReverseScreenUITests.testOpponentSpeciesSearchSheetFiltersAndSelects`(本タスクと無関係。
+  差分に含まれない・種族検索シートのテスト)が1件だけ失敗したが、単体で再実行すると成功(27.9秒)。
+  当時は他レーンの並行セッションが同じシミュレータを使っていたための環境要因と判断し、
+  並行実行が無い状態で `make ios-test` を再実行して全件成功を確認した。

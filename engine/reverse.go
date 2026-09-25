@@ -43,6 +43,10 @@ var (
 	// ErrInvalidMaxCandidates は MaxCandidates が 0(無制限)でも 1..MaxReverseMaxCandidates
 	// の範囲内でもない(負・上限超過。issue #110。ADR-0208 §4・ADR-0108)。
 	ErrInvalidMaxCandidates = errors.New("MaxCandidates の範囲が不正")
+	// ErrMoveDealsNoDamage は技がダメージを与えられないため観測を説明できない(issue #317。ADR-0117 §3)。
+	// 変化技・威力 0 以下の技は探索の前に、タイプ相性・特性の無効で全候補の全ロールが 0 のときは
+	// 探索の後に返す。観測は必ず正の値(validateObservations)なので、ダメージ 0 では説明できない。
+	ErrMoveDealsNoDamage = errors.New("この技ではダメージが出ないため逆算できない")
 )
 
 // 件数の上限(issue #110。ADR-0208 §1 の契約値と同じ。ADR-0108)。
@@ -217,7 +221,7 @@ type ReverseResult struct {
 }
 
 // reverseStat は side と技の分類から逆算する関連ステータスを決める(ADR-0010 §2)。
-// 変化技・未知の分類は物理と同じ扱い。
+// 未知の分類は物理と同じ扱い(変化技は CalcReverse が探索の前に ErrMoveDealsNoDamage で拒否する。#317)。
 func reverseStat(side ReverseSide, category MoveCategory) StatKey {
 	special := category == CategorySpecial
 	switch {
@@ -316,6 +320,10 @@ func CalcReverse(in ReverseInput) (ReverseResult, error) {
 	if err := validateObservations(in.Observations); err != nil {
 		return ReverseResult{}, err
 	}
+	if in.Move.Category == CategoryStatus || in.Move.Power <= 0 {
+		return ReverseResult{}, fmt.Errorf("%w: 技 %q は変化技か威力 0(分類=%s, 威力=%d)",
+			ErrMoveDealsNoDamage, in.Move.ID, in.Move.Category, in.Move.Power)
+	}
 
 	stat := reverseStat(in.Side, in.Move.Category)
 
@@ -330,6 +338,8 @@ func CalcReverse(in ReverseInput) (ReverseResult, error) {
 	}
 
 	cands := make([]ReverseCandidate, 0, len(reverseClasses)*len(items))
+	// dealsDamage はどれか1つの候補でダメージが出たか(全候補で 0 なら ErrMoveDealsNoDamage)。
+	dealsDamage := false
 	for _, class := range reverseClasses {
 		nature := natureForClass(stat, class)
 		for _, item := range items {
@@ -360,6 +370,9 @@ func CalcReverse(in ReverseInput) (ReverseResult, error) {
 						class, itemID(item), x, err)
 				}
 				rolls[x] = res
+				if res.Rolls[len(res.Rolls)-1] > 0 {
+					dealsDamage = true
+				}
 
 				sum := 0
 				for _, o := range in.Observations {
@@ -424,6 +437,11 @@ func CalcReverse(in ReverseInput) (ReverseResult, error) {
 			}
 			cands = append(cands, c)
 		}
+	}
+
+	if !dealsDamage {
+		return ReverseResult{}, fmt.Errorf("%w: 技 %q はどの候補にもダメージが 0(タイプ相性・特性の無効)",
+			ErrMoveDealsNoDamage, in.Move.ID)
 	}
 
 	exactCount := 0

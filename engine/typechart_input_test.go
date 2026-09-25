@@ -125,7 +125,7 @@ func TestCalcBulkRequiresTypeChart(t *testing.T) {
 	in := BulkInput{
 		Format:          FormatSingle,
 		Attacker:        mkIndiv([]Type{typeGamma}, Stats{Atk: 180, SpA: 180}),
-		DefenderSpecies: Species{Key: "0999-000", Types: []Type{typeBeta}, BaseStats: Stats{HP: 100, Def: 80, SpD: 80}},
+		DefenderSpecies: Species{Key: "0999-000", Types: []Type{typeBeta}, BaseStats: Stats{HP: 100, Atk: 100, Def: 80, SpA: 100, SpD: 80, Spe: 100}},
 		Move:            Move{ID: "m", Type: typeAlpha, Category: CategoryPhysical, Power: 100},
 	}
 	if _, err := CalcBulk(in); !errors.Is(err, ErrTypeChartMissing) {
@@ -138,7 +138,7 @@ func TestCalcReverseRequiresTypeChart(t *testing.T) {
 		Format:         FormatSingle,
 		Side:           SideDefender,
 		Known:          mkIndiv([]Type{typeGamma}, Stats{Atk: 180, SpA: 180}),
-		UnknownSpecies: Species{Key: "0997-000", Types: []Type{typeBeta}, BaseStats: Stats{HP: 100, Def: 80, SpD: 80}},
+		UnknownSpecies: Species{Key: "0997-000", Types: []Type{typeBeta}, BaseStats: Stats{HP: 100, Atk: 100, Def: 80, SpA: 100, SpD: 80, Spe: 100}},
 		Move:           Move{ID: "m", Type: typeAlpha, Category: CategoryPhysical, Power: 100},
 		Observations:   []Observation{{Percent: 40}},
 	}
@@ -186,7 +186,7 @@ func TestCalcBulkPassesTypeChartThrough(t *testing.T) {
 		return BulkInput{
 			Format:          FormatSingle,
 			Attacker:        mkIndiv([]Type{typeGamma}, Stats{Atk: 180, SpA: 180}),
-			DefenderSpecies: Species{Key: "0999-000", Types: []Type{typeBeta}, BaseStats: Stats{HP: 100, Def: 80, SpD: 80}},
+			DefenderSpecies: Species{Key: "0999-000", Types: []Type{typeBeta}, BaseStats: Stats{HP: 100, Atk: 100, Def: 80, SpA: 100, SpD: 80, Spe: 100}},
 			Move:            Move{ID: "m", Type: typeAlpha, Category: CategoryPhysical, Power: 100},
 			TypeChart:       chartForCode(t, code),
 		}
@@ -226,7 +226,7 @@ func TestCalcReversePassesTypeChartThrough(t *testing.T) {
 			Format:         FormatSingle,
 			Side:           SideDefender,
 			Known:          mkIndiv([]Type{typeGamma}, Stats{Atk: 180, SpA: 180}),
-			UnknownSpecies: Species{Key: "0997-000", Types: []Type{typeBeta}, BaseStats: Stats{HP: 100, Def: 80, SpD: 80}},
+			UnknownSpecies: Species{Key: "0997-000", Types: []Type{typeBeta}, BaseStats: Stats{HP: 100, Atk: 100, Def: 80, SpA: 100, SpD: 80, Spe: 100}},
 			Move:           Move{ID: "m", Type: typeAlpha, Category: CategoryPhysical, Power: 100},
 			Observations:   []Observation{{Percent: 40}},
 			TypeChart:      chartForCode(t, code),
