@@ -496,6 +496,29 @@
     npx prettier --write src/judge/judge.gen.ts`。ADR-0604 §2 の素早さレーンの前例に倣う)、
     差分が契約変更相当の型・doc コメントのみであることを確認、`npm run lint`・`npm test`(1262 件)が通ることを確認。
     ADR-0706 の受け入れ条件7に `judge.gen.ts` の手動再生成を明記して再発防止
+- [x] issue #213(重大度 high)上流(pokedex-svc/calc-svc)が遅いと judge は1リクエスト全体の期限を持たず、
+  逐次呼び出し(最大27回・1回3秒)を律儀に最後まで続け、クライアントは HTTP 000(空応答)を受け取る
+  (JSON の 503 が返らない。全体レビュー指摘。2026-09-24)
+  - 設計の正は ADR-0707: `JUDGE_REQUEST_TIMEOUT`(既定 12 秒)を新設し、`writeTimeout`(15 秒)未満であることを
+    起動時に検証する。ハンドラ(`outspeedAndKo`)の先頭で `ctx` を 1 回だけ `context.WithTimeout` でラップし、
+    以降のすべての上流呼び出しに使い回す(呼び出し順序・逐次であることは変えない。ADR-0703 §3 の維持)。
+    `internal/client` は変更不要(既に `http.NewRequestWithContext` を使っており、`net/http` の context 統合が
+    「進行中の呼び出しを打ち切る」「未着手の呼び出しは即座に失敗する」の両方を自動で満たす)
+  - 失敗するテストを先に置いた(spec-writer): `services/judge/internal/httpapi/outspeed_deadline_test.go`
+    (`TestOutspeedAndKoOverallDeadline`・`TestOutspeedAndKoWithinDeadlineUnaffected`)、
+    `outspeed_test.go` に `upstreams.delay`・`sleepOrCancel` を追加、`cmd/api/config_test.go` に
+    `TestRequestTimeoutFromEnv`。実装前は `go vet` が `deps.RequestTimeout undefined` /
+    `undefined: requestTimeoutFromEnv` の 2 件で失敗する状態だった
+  - 実装(implementer): `cmd/api/config.go` に `requestTimeoutEnv`・`defaultRequestTimeout`(12秒)・
+    `requestTimeoutFromEnv(lookup, writeTimeout)`(`upstreamTimeoutFromEnv` と同じ形 + `writeTimeout` 以上は
+    起動失敗)を追加。`cmd/api/main.go` で呼び出し、`httpapi.Dependencies.RequestTimeout` に渡す(パース失敗は
+    他の設定エラーと同じく `os.Exit(1)`)。`internal/httpapi/server.go` の `Dependencies` に
+    `RequestTimeout time.Duration` を追加(既定 0 は「期限なし」で既存テストに影響しない)。
+    `internal/httpapi/outspeed.go` の `outspeedAndKo` で `ctx := c.Request().Context()` の直後に
+    `deps.RequestTimeout > 0` のときだけ `context.WithTimeout` でラップ。`README.md` に
+    `JUDGE_REQUEST_TIMEOUT` の行を追加。`go vet`・`go test ./...`(新規テスト含め全件)・`gofmt -l`・
+    `make judge-lint`・`make judge-build`・`bash scripts/check-publishable.sh` すべて成功を確認
+    (`TestOutspeedAndKoOverallDeadline` は `-count=5` でも安定して ~0.22s で 503 を返すことを確認済み)
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
 各レーンが自分の範囲の README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)と、動かして確かめられるレーンは手順書(`docs/runbooks/<レーン>.md`。AGENTS.md「手順書の書き方」に従う)を書く。全体図は `docs/architecture.md`。
