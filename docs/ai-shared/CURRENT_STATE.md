@@ -258,10 +258,14 @@ issue #213(重大度 high。リクエスト全体の期限。ADR-0707)も解消(
 逐次打ち切り規約〈ADR-0703 §3〉は無変更)。`internal/client` は無変更(`http.NewRequestWithContext` の
 既存の context 統合だけで「進行中呼び出しの中断」「未着手呼び出しの即時失敗」の両方が成立)。
 上流が遅くても期限内に503 JSONを返すようになり、クライアントが空応答(HTTP 000)を受け取ることが無くなった。
-issue #329(重大度 low。SP合計67の境界値テスト欠落)も解消(2026-09-25。テストのみ・実装無変更。PR で main へ):
+issue #329(重大度 low。SP合計67の境界値テスト欠落)も解消(2026-09-25。テストのみ・実装無変更。PR #371 main 統合済み):
 `validateSP` の合計超過検査の既存テストが境界〈67〉から遠い(96)ため、
 `> engine.MaxSPTotal` を `+1` する退行を検出できなかった。境界値(合計66は受け付け・67は拒否)の
 テストを `internal/judge`・`internal/httpapi` 両方に追加し、mutation test で実際に検出できることを確認。
+issue #257(重大度 low。smoke.sh が healthz のみ)も解消(2026-09-25。テスト用スクリプトのみ。PR で main へ):
+gateway smoke の ID取得部分を流用し `POST /api/judge/v1/outspeed-and-ko` の 200(hits含む)・
+ヘッダなし400・未知speciesKey 422・7候補400 を実クラスタ(k3d-pokecalc、実データ)で確認済み。
+`Makefile` に `API_URL` を追加、README の古い「JD0完了」表記も修正。
 iOS版JD5は要望が出たら判断(ADR-0705 却下案)
 
 ## Shared Interfaces

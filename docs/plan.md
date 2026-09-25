@@ -543,6 +543,31 @@
       失敗することを確認、復元して `go test ./...`・`gofmt -l`・`make judge-lint`・`make judge-build`・
       `bash scripts/check-publishable.sh` すべて成功を確認(軽微な作業のため /phase の quick-scanner〜critic
       は使わずメインで対応。CLAUDE.md「軽微な作業はメインのみでよい」)
+- [x] issue #257(重大度 low)`services/judge/scripts/smoke.sh` が healthz しか叩かず、k3d 上で
+      pokedex-svc・calc-svc への疎通(業務エンドポイント)を検証していない(balance・speed の smoke と
+      深さが揃っていない。全体レビュー指摘。2026-09-24)。`services/gateway/scripts/smoke.sh` の ID
+      取得部分(`API_URL`=gateway 経由で性格・種族・物理技の実IDを引く。pokedex 未投入なら例の架空ID
+      にフォールバックし「未投入」として区別)を流用し、`JUDGE_URL`(judge 自身の Ingress)へ
+      `POST /api/judge/v1/outspeed-and-ko` を実際に送って 200(`matchups[0].attackerKo.hits` を含む)・
+      ヘッダなし 400 `invalid_request`・未知 speciesKey 422 `unknown_species`(pokedex 到達時のみ)・
+      7候補(上限6超過)400 `invalid_request` を確認するよう拡張。`Makefile` に `API_URL` を追加し
+      `judge-smoke` に配線。README の古い「JD0完了」表記も直した(coding-rules §8)。
+      実クラスタ(k3d-pokecalc。実データ)で `make judge-smoke` を実行して確認済み
+      (`judge smoke: master=pokedex species=0003-000 move=highhorsepower nature=bashful` /
+      `health=200 outspeed=200(hits=4) missing_headers=400 unknown_species=422 too_many_defenders=400`)。
+      `JUDGE_URL` を到達不能にすると exit 1 になることも確認(回帰検出力)。`pokedex-svc` が未投入時の
+      example フォールバック分岐は、共有クラスタの pokedex-svc を落とさずに済ませるため、
+      `services/gateway/scripts/smoke.sh` の同じロジックを流用したことによる構成の裏取りで代える
+      (実際に落として確認はしていない)。軽微な作業のため /phase の quick-scanner〜critic は
+      使わずメインで対応
+- [~] issue #260(担当: タイプバランス・判定。重大度 low)`docs/judge-design.md`・`docs/type-balance-design.md` が
+      実装の後追いになっていない(全体レビュー指摘。2026-09-24)。**判定レーンの分だけ対応**:
+      `judge-design.md` の状態を「起草」→「完了(JD0〜JD5・main統合済み)」に、JD5節を「着手する」から
+      実際の完了内容(ADR-0705・PR #182・担当決定)へ更新、JD1の麻痺の記述(JD2で扱う、が誤り。JD2でも
+      見送りを継続したのが正しい)を訂正、新設の §5「未対応(既知の制限)」に状態異常・素早さ関連特性・
+      ダブルの全体技/壁減衰(issue #288)を明記。`docs/README.md` の目次は既に judge-design.md を指しており
+      変更不要。`type-balance-design.md` はタイプバランスレーンの持ち物のため対象外(DECISIONS.mdへ)。
+      `bash scripts/check-publishable.sh`(0件)成功を確認。軽微な作業のためメインで対応
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
 各レーンが自分の範囲の README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)と、動かして確かめられるレーンは手順書(`docs/runbooks/<レーン>.md`。AGENTS.md「手順書の書き方」に従う)を書く。全体図は `docs/architecture.md`。

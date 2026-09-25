@@ -1683,6 +1683,18 @@ Decision: ADR-0009 §1 のカタログ8件の正を `engine/presets/defender.jso
 Reason: Web が Go ソースを正規表現でパースする契約テストは Go の書き方に依存して壊れやすく、iOS からは読めない。ADR-0114 と同じ理由。
 Impact: engine・calc-svc・WASM の出力は不変(`make test-golden` 全件一致)。OpenAPI・WASM 境界の変更なし。
 
+## 2026-09-25: issue #260 の判定レーン分をクローズ(判定レーン)
+Decision: `docs/judge-design.md` を実装の現状(JD0〜JD5完了・main統合済み)に合わせて更新した: 状態欄を「起草」→「完了」、
+JD5節を「着手する」から実際の完了内容(ADR-0705・PR #182・担当は判定レーン自身)へ、JD1の「麻痺はJD2で扱う」という
+誤った先送り記述を「JD2でも見送りを継続した」に訂正、新設の §5「未対応(既知の制限)」に状態異常・素早さに影響する
+特性(request の abilityId は calc-svc のダメージ計算へ転送されるだけで `internal/judge/speed.go` の実数値計算には
+一切反映しない)・ダブルの全体技/壁減衰(issue #288。engine/modifiers.go の範囲でジャッジレーン単独では解決しない)を明記した。
+Reason: issue #260 は「タイプバランス・判定」の両担当。`docs/type-balance-design.md` はタイプバランスレーンの持ち物のため、
+判定レーンはこの文書自身の範囲(`docs/judge-design.md`)だけを直した(CLAUDE.md「他レーンのファイルを触らない」)。
+Impact: タイプバランスレーンへ: `type-balance-design.md` の未対応分(役割分担・レビュー依頼節の履歴化、`/api/damage` 等の
+古い記述、`pokecalc-kit-v2` の別名、実装済みのKustomize/Argo CD分割の未決事項化)はそちらの担当で進めてください。
+両方揃って issue #260 をクローズできます。コード・ADR は無変更(ドキュメントのみ)。
+
 ## 2026-09-25: 効果スキーマで表せる持ち物・特性をすべて定義し、表せないものを一覧で固定(データレーン。issue #270・ADR-0120)
 Decision: issue の既定案 A を採り、タイプ強化の持ち物・ノーマルジュエル・半減きのみ・Fire Mane・Heatproof・Purifying Salt・Eelevate を `data/importer/effects.json` と `testdata/golden/effects.json` に足した(値は oracle の実装から)。ゴールデンの生成器が効果ごとに「効く/効かない対照」の組を作り、Champions 世代でダメージが変わるのに定義の無いものは `tools/golden/unsupported-effects.json`(理由付き)と一致しなければ止まる。取込時の補正値に engine と同じ上限 `MaxEffectModifier` を入れた。
 Reason: 定義の無い持ち物・特性が黙って等倍で計算されていた(importer の effect-missing 92 件)。多くは engine を変えずにデータだけで直せる。
