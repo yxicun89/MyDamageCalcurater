@@ -1631,6 +1631,30 @@ Decision: 接地判定を engine の `isGrounded`(ひこうタイプでない �
 Reason: 地面の無効と浮いていることは別の性質で、代理にすると地面を受けても接地している特性で誤る。ふうせんに「浮く」だけを足すと地面技が当たってしまう。
 Impact: calc-svc は `make import` で DB のふゆうに `Airborne` が入るまで旧挙動。`TestNoTypeChartTableInEngineSource` の禁止リストから `TypeFlying` を外した(接地判定が名指しする機構のタイプ)。
 
+## 2026-09-25: 逆算の「受けたダメージ」に防御側プリセットを出す(issue #275。Web レーン。engine への一本化はデータレーンへ申し送り)
+Decision: issue #275(重大度 high)を実装・critic PASSで完了した。逆算の `side === "attacker"`
+(受けたダメージ = 自分が防御側)で無振り固定だった自分の耐久調整を、防御側プリセット(ADR-0009 §1 のカタログ8件)から
+選べるようにする。**既定は `none`(無振り)のままで、既定のときのリクエストは issue #275 以前と1ビットも変わらない**(回帰テストあり)。
+選択肢は engine の `DefaultDefenderPresets` と同じく技の分類で絞る(物理 = B 系、特殊 = D 系、変化技 = `none`/`hp`)。
+分類が変わったときは対になるプリセットへ読み替える(`hb_full` ↔ `hd_full` 等。変化技へは `hp` に落とす)。これはラジオの
+checked を必ず1つ残すための Web 側の規則で、engine には無い(`domain/defenderPresets.ts` の `defenderPresetForCategory`)。
+置き場は Web(`web/src/domain/defenderPresets.ts`)。SP・性格の値は API にも WASM 境界にも出ていない
+(`BulkCalcRequest.presets` はキーだけを送り、engine が内部で解決する。ADR-0009 §5)ため、`attackerPresets.ts` と同じく
+Web にも同じ規則を持つ二重定義になる。ズレは契約テスト(`defenderPresets.contract.test.ts`)で検出する:
+`engine/bulk.go` の `DefenderPresetCatalog()` のリテラルと `api/openapi.yaml` の `DefenderPreset` enum を毎回読み、
+キー・順序・SP・性格・`Applies`・表示名(engine の `Label`)を突き合わせる。
+**申し送り(データレーンへの既定案)**: 攻撃側と同じく `engine/presets/defender.json` を作り、embed で読む形に一本化したい
+(ADR-0114 と同じ理由。Go・TS・Swift のテストがそのまま読める)。ADR-0009 §1 は「データファイルは作らない」としていたが、
+その根拠(WASM への同梱の仕組みが要る)は ADR-0114 の `//go:embed` で解消済み。JSON にするならキー・順序・SP・性格・
+`applies` を持ち、表示の文言は各クライアントに残す(攻撃側 JSON と同じ方針)。実現したら Web の契約テストから Go ソースの
+パーサを捨てて JSON を読む形に置き換える(テストの冒頭にその旨を書いてある)。
+Reason: H・B を振った自分のポケモンで受けた値を入れると、自分を無振りとして逆算するため相手の A(C) が過大評価される
+(正確性のバグ)。しかもその仮定が画面のどこにも出ていなかった。防御側プリセットの定義は engine が持っているが、
+API からは取れないので Web 側にも持つしかない。issue #71 と同じ二重定義をまた作ることになるため、今回も同じ出口
+(JSON への一本化)を申し送る。
+Impact: Web レーンの後続作業。engine・API・iOS の変更は無し(生成物の差分なし)。iOS にも同じ穴(逆算の自分側が
+無振り固定)があるかは未確認で、必要なら iOS レーンが同じ受け入れ条件で追随する。
+
 ## 2026-09-25: issue #236 の speed 側をクローズ(素早さレーン。ADR-0606)
 Decision: speed の `X-Device-Id`/`X-Session-Id` の検証を、gateway の `checkAPIHeaders`/`headerStatus`/`isCanonicalUUID`/`isHexDigit`
 (`services/gateway/internal/httpapi/headers.go`)と一字一句同じ判定になるよう `services/speed/internal/httpapi/requestctx.go`
