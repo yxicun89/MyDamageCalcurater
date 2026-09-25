@@ -1773,6 +1773,29 @@ Impact: **データレーンへ**: #271・#270 は API レーン担当分も完�
 未実施)。再生成すると `MasterMove.mechanisms`・`CalcResult.unsupported`・`ReverseCandidate.unsupported` が
 必須フィールドとして生成物に増えるため、既存のデコード/モック実装が影響を受ける可能性がある。
 
+## 2026-09-25: 未対応の印の表示(文言・置き場所)を決めた(iOS レーン → Web レーンへ。issue #271/#270・ADR-0123・ADR-0501「P6-17」)
+Decision: iOS は `unsupported` を計算画面・逆算画面に表示する(P6-17 の implementer で実装済み。critic 指摘を
+受けて2026-09-25 に理由ラベル4件を修正済み)。
+文言: 結果の上 `この結果は正確でない可能性があります(未対応: <印>、<印>)`、行・候補カード `未対応: <印>、<印>`。
+印1つは `<対象>「<名前>」(<理由>)`、理由が `unsupported_effect` のときは `(…)` を省く。
+対象: move=技 / attacker_item=攻撃側の持ち物 / attacker_ability=攻撃側の特性 / defender_item=防御側の持ち物 /
+defender_ability=防御側の特性。理由: multi_hit=多段技 / fixed_damage=固定ダメージ / ohko=一撃必殺 /
+variable_power=威力が変化 / alt_offense_stat=攻撃に使う能力値が通常と違う / alt_defense_stat=防御に使う能力値が通常と違う /
+always_crit=必ず急所 / ignore_defense_ranks=防御側のランク変化を無視 / type_change=タイプが変化 /
+effectiveness_change=相性の求め方が通常と違う /
+priority_change=優先度が変化 / field_specific=天候・フィールドで変化 / move_specific=技固有の効果 /
+zero_power=威力が技の処理で決まる / unsupported_effect=効果を計算に反映していない。
+(「特殊」はポケモンの文脈でダメージ計算の特殊技分類を指すため、alt_offense_stat/alt_defense_stat/
+effectiveness_change の文言には使わない。critic 指摘 2026-09-25)。
+名前はマスタ(技・持ち物・特性)から引き、無ければ ID のまま。置き場所: 全行(全候補)が持つ印は結果の上に1回、
+残りはその行(候補)だけ(target で決め打ちせず「全行にあるか」で決める)。見た目は補足文と同じ caption・text.secondary
+(danger・タイプ色は使わない)、常時アニメーションなし。
+Reason: 多段技・固定ダメージ等の結果が黙って正しい値に見えていた(ADR-0123)。技の印は全行に付くので行ごとに出すと
+同じ文言が5〜10回並ぶ。数値は通常の式の目安として出ておりエラーではないので警告色にしない。
+Impact: **Web レーンへ**: 表示するときは上の語・書式・置き場所に揃えてほしい(違える場合はこのファイルに理由を書く)。
+iOS は生成型の enum に未知の値の受け皿が無いため、契約に target/reason が増えると応答全体がデコード失敗になる
+(`client_decode`。クラッシュはしない)。**API レーンへ**: enum に値を足すときは iOS レーンへ再生成を依頼してほしい。
+
 ## 2026-09-25: 全体レビューissueの担当拡大の範囲をユーザーが確定(タイプバランスレーン)
 Decision: 別セッション(damage calculation bug resolution)から「運用担当」としてP7-4(MySQL/TiDBバックアップ復元テスト)と
 issue #107・#108・#75もタイプバランスレーンで担当するよう依頼があったが、ユーザーに確認したところ次の方針になった。

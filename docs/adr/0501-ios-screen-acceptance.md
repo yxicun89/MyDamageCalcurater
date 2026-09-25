@@ -3148,3 +3148,196 @@ critic のレビュー(§0.5 に詳細)を受けて、**IP アドレスは http 
 IP アドレス(`http://192.168.x.x:8080` 等)は実機でも拒否されるべき(コード側は拒否する。ATS 側も
 拒否するはずだが未確認)ことを合わせて確認するとよい。
 
+
+## P6-17 の受け入れ条件(未対応の印〈ADR-0123〉の表示。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+- 日付: 2026-09-25 / 担当レーン: iOS / 関連: ADR-0123 §2・§6・§7、ADR-0121(機構13種)、docs/plan.md P6-17、
+  DECISIONS.md 2026-09-25「issue #271/#270 の API レーン担当分」・同日「未対応の印の表示(文言・置き場所)を決めた」
+- 背景: API は `CalcResult`(`BulkCalcRow.result` を含む)と `ReverseCandidate` に `unsupported: UnsupportedMark[]`
+  (必須・印なしは `[]`)を返す。`UnsupportedMark = {target, reason, id}`。数値は通常の式のままで、
+  「この結果は正確でない可能性がある」ことだけを示す。iOS はこれまで写像で捨てていた(生成型のデコードは通る)。
+  Web レーンはまだ表示しないので、iOS が先に表示し、文言・置き場所を DECISIONS.md で Web に渡す。
+
+### 1. ドメイン型と写像
+
+1. `PokeCalcCore` に `UnsupportedTarget`(5値)・`UnsupportedReason`(15値)・`UnsupportedMark{target, reason, id}` を置き、
+   `CalcResult.unsupported`・`ReverseCandidate.unsupported`(`[UnsupportedMark]`)を持たせる。両 init の引数は
+   既定 `[]`(既存の呼び出し側・テストを変えない)。
+2. enum の値集合は openapi と一致する。**同期の検査は既存の型と同じ `DomainTypesTests` 方式**(生成型の
+   `Components.Schemas.UnsupportedMark.TargetPayload/ReasonPayload.allCases` と rawValue の集合を比べる XCTest)
+   を採る。生成型は api/openapi.yaml から作られるので、yaml を `#filePath` で読む方式・ホスト側スクリプトより
+   簡単で、他の enum と揃う(`check-request-limits.sh` は `maxItems` の数値用で、enum には使っていない)。
+3. `APIPokeCalcService` は `CalcResult`(一括計算の各行も同じ関数)・`ReverseCandidate` の `unsupported` を、
+   並べ替えず・落とさずに写す(並びはサーバーが ADR-0123 §2 の順で決める)。target/reason の写像は網羅
+   `switch`(`default` なし)。
+4. **契約に無い値(将来の追加)**: 生成型は `@frozen` の String enum で未知の値の受け皿が無いため、
+   `unsupported` に知らない target/reason が1つでもあると応答全体のデコードが失敗し、`PokeCalcError(code: client_decode)`
+   になる(クラッシュはしない。画面は既存のエラー表示)。判断: 生成物(`Generated/`)と生成設定はレーン外なので
+   変えない。値の追加は契約の変更なので、API レーンが enum を足したら iOS は再生成とドメインの enum の追加を
+   同じ変更で行う(再生成すると 2 の同期テストが落ち、3 の網羅 switch がコンパイルエラーになって気付ける)。
+   この挙動は `UnsupportedMarkDomainTests.testUnknown*IsDecodeErrorNotCrash` で固定する。
+
+### 2. 日本語ラベル(`DisplayLabels.swift` の `UnsupportedMarkLabel` の1か所。Web も同じ語)
+
+| target | 表示 | | reason | 表示 |
+|---|---|---|---|---|
+| `move` | 技 | | `multi_hit` | 多段技 |
+| `attacker_item` | 攻撃側の持ち物 | | `fixed_damage` | 固定ダメージ |
+| `attacker_ability` | 攻撃側の特性 | | `ohko` | 一撃必殺 |
+| `defender_item` | 防御側の持ち物 | | `variable_power` | 威力が変化 |
+| `defender_ability` | 防御側の特性 | | `alt_offense_stat` | 攻撃に使う能力値が通常と違う |
+| | | | `alt_defense_stat` | 防御に使う能力値が通常と違う |
+| | | | `always_crit` | 必ず急所 |
+| | | | `ignore_defense_ranks` | 防御側のランク変化を無視 |
+| | | | `type_change` | タイプが変化 |
+| | | | `effectiveness_change` | 相性の求め方が通常と違う |
+| | | | `priority_change` | 優先度が変化 |
+| | | | `field_specific` | 天候・フィールドで変化 |
+| | | | `move_specific` | 技固有の効果 |
+| | | | `zero_power` | 威力が技の処理で決まる |
+| | | | `unsupported_effect` | 効果を計算に反映していない |
+
+- 印1つの文言: `<対象>「<名前>」(<理由>)`(例 `技「テストわざX」(多段技)`)。理由が `unsupported_effect`
+  (持ち物・特性)のときは対象名で意味が通るので `(…)` を付けない(例 `防御側の持ち物「テストどうぐD」`)。
+- 名前はマスタから引く(`UnsupportedMarkNames`): `move` → 技の辞書、`*_item` → 持ち物の一覧、`*_ability` → 特性の一覧。
+  辞書は target の種類で選ぶ。見つからない ID は ID のまま出す(黙って消さない。`BulkRowDisplay.itemLabel` と同じ)。
+  計算画面は `moveDictionary`・`itemOptions`・`attackerAbilityOptions`、逆算画面は技の辞書と `itemOptions`
+  (逆算画面は特性の一覧を持たないので、特性の印は ID のまま。必要になったら足す)。
+- 理由の文言は15個すべて違う(画面で区別できるように)。
+
+### 3. 置き場所と注記の文言(純粋な helper `UnsupportedNotice.swift`)
+
+1. `UnsupportedPlacement(lists)`: 全行(逆算は全候補)が持つ印を `common`(1行目の順)、各行の残りを `perEntry`
+   (行の順・印の順を保つ)にする。行が1つならすべて `common`、行が0なら両方空。同じ行の中の重複は1つにまとめる。
+   - 結果: 技の印・攻撃側の持ち物/特性の印は全行に付くので**結果の上に1回**、持ち物の比較で増えた行の
+     防御側の持ち物の印は**その行だけ**。逆算も同じ(技の印は上に1回、相手の持ち物候補の印はその候補のカード)。
+   - 「技の印は target=move だから上」のような target による決め打ちはしない(全行にあるかどうかだけで決める)。
+     全行にあるものを行ごとに繰り返すと同じ文言が5〜10回並ぶため。
+2. 文言(`UnsupportedNoticeText`。印が無ければ nil = 何も描かない):
+   - 結果の上(`summary`): `この結果は正確でない可能性があります(未対応: <印>、<印>)`
+   - 行・候補カード(`rowNote`): `未対応: <印>、<印>`
+   - 区切りは `、`。
+3. `BulkResultDisplay(result:items:names:)` が行(`BulkRowDisplay.unsupportedNote`)と `unsupportedNotice` を作る。
+   `ReverseResultDisplay(result:items:names:)` が `unsupportedNotice` と `ReverseCandidateDisplay.unsupportedNote` を作る。
+   既存の `BulkRowDisplay(row:items:)`・`ReverseCandidateDisplay(candidate:stat:items:)` は注記 nil のまま(既定引数)。
+4. ViewModel: `CalcViewModel.unsupportedNotice` は `rows` と同時に書き換え、印の無い応答・失敗(`rows` を空にする時)で
+   nil に戻す。`ReverseViewModel.result` は `ReverseResultDisplay` ごと差し替えるので同じ性質になる。
+
+### 4. モック(`MockPokeCalcService`)
+
+- 既定の技・持ち物では印なし(`[]`)。既存の画面・XCUITest は変わらない。
+- 印はフィクスチャから決める(起動の切り替え〈環境変数〉は増やさない):
+  - `moves.json` の任意の `mechanisms`(`MasterMove.mechanisms` と同じ値)。新しい架空の技 `test-move-multi-hit`
+    「テストわざれんぞく」(物理・`["multi_hit"]`)を足し、9001-000 の learnset の**末尾**に入れた(既定の技は変えない)。
+  - `items.json` の任意の `unsupportedEffect: true`。新しい架空の持ち物 `test-item-unsupported`「テストどうぐみたいおう」を
+    **2番目**に足した(既存の XCUITest が使う `test-item-berry` は先頭のまま)。
+- 規則: (1) 技の `mechanisms` を昇順で `target: move`(変化技には付けない。未知の値は `fixtureInvalid`)。
+  (2) 未対応の持ち物を攻撃側が持てば `attacker_item`(全行)、防御側が持てば `defender_item`(一括計算は
+  その行の `itemId`、1対1 は `defender.itemId`)。逆算は side で割り当てる(side=defender: 既知 = 攻撃側・候補 = 防御側、
+  side=attacker: 既知 = 防御側・候補 = 攻撃側)。(3) 並びは ADR-0123 §2(技 → 攻撃側の持ち物 → 防御側の持ち物)。
+  印の条件(急所・天候等。ADR-0123 §3)は再現しない(モックは計算しない方針のまま)。
+
+### 5. 表示と accessibilityIdentifier(View。XCUITest が参照する)
+
+- 見た目: design.md に「未対応」の指定は無いので、既存の補足文(`reverseMyItemLimitHint` 等)と同じ
+  `TextStyleToken.caption` + `ColorToken.textSecondary`。警告色(danger)・タイプ色は使わない(色を持つのはタイプだけ。
+  数値は通常の式の目安として正しく出ており、エラーではないため)。アイコンを付けるなら装飾扱い(`accessibilityHidden`)。
+  常時動くアニメーションは付けない。折り返して全文を出す(`lineLimit` を付けない。AX5 でも横にはみ出さない)。
+- 読み上げ: 注記の `Text` をそのまま1要素にする(ラベル = 表示文言)。
+- identifier:
+
+| identifier | 場所 |
+|---|---|
+| `calcUnsupportedNotice` | 計算画面。結果の行の**上**(全行共通の印がある時だけ) |
+| `calcResultUnsupported-<row id>` | 計算画面の行(`calcResultRow-<row id>` の中。その行だけの印がある時だけ) |
+| `reverseUnsupportedNotice` | 逆算画面。候補カードの**上**(全候補共通の印がある時だけ) |
+| `reverseCandidateUnsupported-<candidate id>` | 逆算の候補カード(`reverseCandidateRow-<id>` の中) |
+
+### 6. 受け入れ条件(検証可能な形)
+
+1. `UnsupportedTarget`/`UnsupportedReason` の値集合が openapi と一致する(`UnsupportedMarkDomainTests`)。
+2. API の応答の `unsupported` が、1対1・一括計算の各行・逆算の各候補で、順序どおり欠けずにドメインへ写る。
+   契約の全 target・全 reason が同じ rawValue に写る。契約に無い値は `client_decode` になる(クラッシュしない)。
+3. 対象5種・理由15種の日本語ラベルが2章の表どおり(`UnsupportedNoticeTests`)。
+4. 置き場所と文言が3章どおり(純粋 helper・`BulkResultDisplay`・`ReverseResultDisplay` のテスト)。
+5. 計算・逆算の ViewModel が名前をマスタから引いて注記を出し、印の無い応答・失敗で注記を消す
+   (`UnsupportedNoticeViewModelTests`)。
+6. モックは既定で印なし、4章の規則で印を付ける(`MockPokeCalcServiceUnsupportedTests`)。
+7. XCUITest(`UnsupportedMarksUITests`): 既定では注記が無い / 多段技で `calcUnsupportedNotice` が結果の上に1回
+   (行には無い)/ 未対応の持ち物の比較でその行だけ `calcResultUnsupported-*` / 逆算で `reverseUnsupportedNotice`
+   が候補の上。文言の数値は検査しない。
+8. 既存の XCTest・XCUITest の期待値は変えない(既存テストの編集なし)。
+
+### 7. 追加したテスト(spec 時点)
+
+- `ios/PokeCalcKit/Tests/PokeCalcCoreTests/UnsupportedMarkDomainTests.swift`(契約の enum との同期・写像・未知の値)
+- `ios/PokeCalcKit/Tests/PokeCalcCoreTests/UnsupportedNoticeTests.swift`(ラベル・名前・置き場所・文言・結果全体の整形)
+- `ios/PokeCalcKit/Tests/PokeCalcCoreTests/UnsupportedNoticeViewModelTests.swift`(計算・逆算の ViewModel)
+- `ios/PokeCalcKit/Tests/PokeCalcCoreTests/MockPokeCalcServiceUnsupportedTests.swift`(モック)
+- `ios/PokeCalcUITests/UnsupportedMarksUITests.swift`(XCUITest 4件)
+
+`swift test`(spec 時点): 490 件中 27 件が失敗(すべて上の新しいテスト。既存テストは全件成功)。
+通る新テストは、置き場所が無い場合・未知の値のデコード失敗・契約の enum 同期・既定値など、
+スケルトンの時点で既に満たしているもの。
+
+### 8. 実装者への注意(`TODO(implementer` を検索すると該当箇所が見つかる)
+
+- 型・引数・プロパティ・フィクスチャ(JSON と `MockFixtures` の任意項目)は spec で追加済み。実装するのは
+  `UnsupportedMarkLabel`(2つの網羅 switch と `text`)、`UnsupportedMarkNames`、`UnsupportedPlacement`、
+  `UnsupportedNoticeText`、`BulkResultDisplay`、`ReverseResultDisplay` の注記、`APIPokeCalcService` の写像、
+  `MockPokeCalcService` の印、`CalcViewModel.performCalc`/`handleInputFailure`、`ReverseViewModel` の `names:`、
+  View(`CalcScreenResults.swift`・`ReverseScreenResults.swift`)の注記と5章の identifier。
+- 行の `.accessibilityElement(children: .contain)` の中に注記の `Text` を置けば `calcResultUnsupported-*` は個別の要素のまま
+  見つかる(P6-14 §2 と同じ)。
+- `LargeTextLayoutUITests` の AX5 はみ出し検査の対象に新しい identifier を足すかは任意(足すなら既存の配列を変えずに
+  別のテストで)。
+- `swift test` に加え、`make ios-test`(XCUITest を含む)で既存 37 件 + 新しい4件が通ることを確かめる。
+
+### 9. 実装結果(implementer: 2026-09-25)
+
+- 8章の TODO(implementer) をすべて実装。`UnsupportedMarkLabel.targetName`/`reasonName`/`text` は2章の表どおりの
+  網羅 switch。`UnsupportedMarkNames.init(moves:items:abilities:)`/`name(for:)` は target の種類で辞書を選び、
+  無ければ `mark.id`。`UnsupportedPlacement` は行ごとに重複除去してから、全行(候補)に共通する印を `common`
+  (1行目の順)、残りを `perEntry` にする(3章の規則)。`UnsupportedNoticeText.summary`/`rowNote` は印が空なら
+  nil。`BulkResultDisplay`/`ReverseResultDisplay` は `UnsupportedPlacement` を使って行・候補ごとの注記を作る。
+  `APIPokeCalcService` は `Components.Schemas.UnsupportedMark.TargetPayload`/`ReasonPayload` を網羅 switch
+  (`default` なし)でドメインへ写す。`MockPokeCalcService` は技の `mechanisms` を昇順で `move` の印、
+  `unsupportedEffect: true` の持ち物を持つ側に応じて `attacker_item`/`defender_item`(逆算は既知側・候補側を
+  side で target に割り当てる)。`CalcViewModel.performCalc` は `BulkResultDisplay` を使い、
+  `handleInputFailure` で `unsupportedNotice` も nil に戻す。`ReverseViewModel` は `names:` にマスタの技・持ち物
+  (特性の一覧は無いので空)を渡す。View は `calcUnsupportedNotice`/`calcResultUnsupported-<id>`/
+  `reverseUnsupportedNotice`/`reverseCandidateUnsupported-<id>` を5章どおりに追加(行・候補カードの
+  `.accessibilityElement(children: .contain)` の中に置いた)。
+- 既存テストは1つも編集していない(テストを弱めた・削除した箇所は無い)。`LargeTextLayoutUITests` の AX5
+  はみ出し検査への追加はしなかった(8章「任意」)。
+- 結果: `cd ios/PokeCalcKit && swift test` は 490 件全件成功(新しい37件を含む。スケルトン時点の27件失敗はすべて解消)。
+  `make ios-test` は unit 503 件・XCUITest 41 件(新しい `UnsupportedMarksUITests` 4件を含む)・
+  Info.plist 検査すべて成功。`swift build` も警告なしで成功。
+
+### 10. critic FAIL への対応(implementer: 2026-09-25)
+
+- critic 指摘1(ラベルの誤解): 「特殊」はポケモンの文脈でダメージ計算の特殊技分類(とくしゅ)を指すため、
+  `alt_offense_stat`/`alt_defense_stat`/`effectiveness_change` の文言に使うと誤読される。2章の表・
+  `UnsupportedMarkLabel.reasonName`・`UnsupportedNoticeTests.expectedReasonNames`・DECISIONS.md
+  (2026-09-25「未対応の印の表示」)を次の3件に修正: `alt_offense_stat`=「攻撃に使う能力値が通常と違う」、
+  `alt_defense_stat`=「防御に使う能力値が通常と違う」、`effectiveness_change`=「相性の求め方が通常と違う」。
+  `ignore_defense_ranks` も「防御ランクを無視」→「防御側のランク変化を無視」(どちらの防御側のランクか明確にする)。
+  15種の文言は引き続きすべて異なる(`testReasonNamesAreDistinct` で固定)。DECISIONS.md の「spec-writer 段階。
+  実装は P6-17 の implementer」という古い記述も「implementer で実装済み」に更新した。
+- critic 指摘2(`UnsupportedPlacement` のテスト漏れ): 既存のテストは「1行目のマークが全行分正しく絞り込まれているか」
+  を、1行目がちょうど最小集合であるケースでしか確かめていなかったため、`common = first`(絞り込みをしない実装)
+  でも全テストが通ってしまっていた。`testPlacementDropsMarkOnlyPresentInFirstRow`
+  (`[[moveMark, defenderItem], [moveMark]]` → `common == [moveMark]`)と `testPlacementCommonOrderFollowsFirstRow`
+  (2行目の並びが違っても `common` は1行目の順)を追加。`UnsupportedNotice.swift` の `commonMarks` を一時的に
+  `first`(フィルタなし)に変えて red になることを確認(`testPlacementDropsMarkOnlyPresentInFirstRow` が失敗、
+  他は影響なし)、直後に元の実装へ戻した。
+- critic 指摘3(逆算の既知側の印のテスト漏れ): 候補側の持ち物の target(`testReverseMarksCandidateItemBySide`)は
+  検査していたが、既知側(自分)の持ち物の target は未検査だった。`testReverseMarksKnownSideItemByRole`
+  (side=defender → 既知=攻撃側 → `attacker_item`、side=attacker → 既知=防御側 → `defender_item`)を追加。
+  `MockPokeCalcService.swift` の `knownTarget` の三項演算子を一時的に反転させて red になることを確認
+  (新テストだけ失敗、`testReverseMarksCandidateItemBySide` は無傷)、直後に元の実装へ戻した。
+- 結果: `cd ios/PokeCalcKit && swift test` は 493 件全件成功(spec 時点の490件 + 新規3件〈`UnsupportedPlacement`の
+  テスト2件・逆算の既知側 target のテスト1件〉)。`make ios-test`(リポジトリルート)は
+  `ios-test-unit: 全 506 件 / 成功 506 / 失敗 0`・`ios-test-ui: 全 41 件 / 成功 41 / 失敗 0`
+  (`UnsupportedMarksUITests` 4件を含む)・`ios-check-infoplist` すべて成功(exit code 0)。既存テストは
+  1つも編集していない。

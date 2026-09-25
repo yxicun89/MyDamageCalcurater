@@ -22,8 +22,12 @@ public struct ReverseCandidateDisplay: Identifiable, Equatable, Sendable {
     public let matchLabel: String
     /// 「12.3〜15.6%」のような想定ダメージ幅。
     public let percentRangeText: String
+    /// この候補だけに付いた未対応の印の注記(無ければ nil。全候補に共通する印は
+    /// `ReverseResultDisplay.unsupportedNotice`。ADR-0501「P6-17」3章)。
+    public let unsupportedNote: String?
 
-    public init(candidate: ReverseCandidate, stat: StatKey, items: [Item]) {
+    public init(candidate: ReverseCandidate, stat: StatKey, items: [Item], unsupportedNote: String? = nil) {
+        self.unsupportedNote = unsupportedNote
         natureClass = candidate.natureClass
         natureClassLabel = Self.natureClassLabel(candidate.natureClass, stat: stat)
         itemId = candidate.itemId
@@ -130,12 +134,22 @@ public struct ReverseResultDisplay: Sendable {
     /// 「相手の HP の SP を 32(H32)と仮定した結果です」。defender だけに出す(attacker は相手の H を
     /// 計算に使わないので前提を出さない。ADR-0010 §R1)。
     public let premiseText: String?
+    /// 全候補に共通する未対応の印の注記(無ければ nil。ADR-0501「P6-17」3章)。
+    public let unsupportedNotice: String?
 
-    public init(result: ReverseResult, items: [Item]) {
+    /// `names` は印の ID → 日本語名(`ReverseViewModel` がマスタから作って渡す)。
+    public init(result: ReverseResult, items: [Item], names: UnsupportedMarkNames = UnsupportedMarkNames()) {
+        let placement = UnsupportedPlacement(result.candidates.map(\.unsupported))
+        unsupportedNotice = UnsupportedNoticeText.summary(placement.common, names: names)
         side = result.side
         stat = result.stat
         assumedHPSP = result.assumedHPSP
-        candidates = result.candidates.map { ReverseCandidateDisplay(candidate: $0, stat: result.stat, items: items) }
+        candidates = zip(result.candidates, placement.perEntry).map { candidate, marks in
+            ReverseCandidateDisplay(
+                candidate: candidate, stat: result.stat, items: items,
+                unsupportedNote: UnsupportedNoticeText.rowNote(marks, names: names)
+            )
+        }
         exactCount = result.exactCount
         exactCountText = "観測と一致: \(result.exactCount) 件 / 候補 \(result.candidates.count) 件"
         premiseText = result.side == .defender

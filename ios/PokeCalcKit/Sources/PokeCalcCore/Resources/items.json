@@ -1,3 +1,4 @@
 [
-  { "id": "test-item-berry", "nameJa": "テストどうぐきのみ" }
+  { "id": "test-item-berry", "nameJa": "テストどうぐきのみ" },
+  { "id": "test-item-unsupported", "nameJa": "テストどうぐみたいおう", "unsupportedEffect": true }
 ]

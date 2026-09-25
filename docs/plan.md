@@ -716,6 +716,25 @@
   `swift test`(PokeCalcDesignTests 13件・PokeCalcCoreTests 323件)・`make ios-test`(unit 336件・XCUITest 16件・
   Info.plist 検査)・`make lint`(check-publishable 含む)すべて成功。軽微な作業のため spec-writer/critic の
   サブエージェントは使わずメインで実施(CLAUDE.md「軽微な作業はメインのみでよい」)
+- [x] P6-17 issue #271/#270 の iOS 側: API の未対応の印(`CalcResult`・一括計算の各行・`ReverseCandidate` の
+  `unsupported`。ADR-0123)をドメインへ写し、計算画面・逆算画面に「正確でない可能性があります(未対応: …)」の注記を出す。
+  全行共通の印は結果の上に1回、一部の行だけの印はその行に。対象・理由の日本語ラベルは1か所(Web も同じ語。DECISIONS.md)。
+  受け入れ条件・判断・identifier は ADR-0501「P6-17」。
+  - spec-writer(2026-09-25): 受け入れ条件・失敗するテストのみ追加、実装はまだ(`swift test`: 490 件中 27 件失敗
+    〈すべて新しいテスト〉。XCUITest `UnsupportedMarksUITests` 4件は未実行)。モックのフィクスチャに印の付く架空の技・持ち物を追加
+  - implementer(2026-09-25): TODO(implementer) 箇所をすべて実装(ドメイン写像・ラベル・置き場所/文言の
+    整形・ViewModel・モックの印付け・View の注記と identifier)。`swift test` 490 件全件成功(新しい37件を含む)、
+    `make ios-test` 全 41 件の XCUITest 成功(新しい `UnsupportedMarksUITests` 4件を含む)。既存テストは1つも編集していない
+  - critic(2026-09-25): FAIL。(1) 理由ラベルの誤解(`alt_offense_stat`/`alt_defense_stat`/`effectiveness_change`
+    の「特殊」がポケモンの文脈だと特殊技分類に読める)、(2) `UnsupportedPlacement` のテスト漏れ(1行目をそのまま
+    `common` にする実装でも全テストが通ってしまう)、(3) 逆算の既知側の持ち物の target のテスト漏れ、
+    (4) DECISIONS.md の古い記述、を指摘
+  - implementer(2026-09-25、critic 対応): 4件のラベルを修正(`DisplayLabels.swift`・`UnsupportedNoticeTests.swift`・
+    ADR「P6-17」2章・DECISIONS.md を同じ語に揃え、DECISIONS.md の古い「spec-writer 段階」の記述も更新)。
+    `UnsupportedNoticeTests.swift`/`MockPokeCalcServiceUnsupportedTests.swift`(このタスクの新規テストなので編集可)
+    にテストを3件追加し、それぞれ対応する実装行を一時的に壊して red になることを確認してから元に戻した
+    (mutation 確認。詳細は ADR「P6-17」10章)。`swift test` 493 件全件成功、`make ios-test` も全件成功
+    (unit 506 件・XCUITest 41 件)。既存テストは1つも編集していない
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)。Argo CD の実同期もローカル k3d で確認済み(ADR-0018: Git 変更 32fbb9e → manual sync → Pod の image digest 一致)

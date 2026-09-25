@@ -201,6 +201,9 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     // MARK: - 計算結果
 
     public private(set) var rows: [BulkRowDisplay] = []
+    /// 全行に共通する未対応の印の注記(結果の上に1回だけ出す。無ければ nil。ADR-0501「P6-17」)。
+    /// `rows` と同じ時に書き換える(失敗で `rows` を空にするときは nil に戻す)。
+    public private(set) var unsupportedNotice: String?
     public private(set) var isLoading = false
     public private(set) var error: CalcScreenError?
 
@@ -500,6 +503,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         }
         self.error = CalcScreenError(error)
         rows = []
+        unsupportedNotice = nil
         isLoading = false
     }
 
@@ -692,7 +696,12 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         do {
             let result = try await service.calcBulk(request)
             guard token == latestRequestToken else { return }
-            rows = result.rows.map { BulkRowDisplay(row: $0, items: itemOptions) }
+            let names = UnsupportedMarkNames(
+                moves: Array(moveDictionary.values), items: itemOptions, abilities: attackerAbilityOptions
+            )
+            let display = BulkResultDisplay(result: result, items: itemOptions, names: names)
+            rows = display.rows
+            unsupportedNotice = display.unsupportedNotice
             error = nil
             isLoading = false
         } catch {
