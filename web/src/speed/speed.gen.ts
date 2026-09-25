@@ -288,11 +288,27 @@ export interface components {
     };
     /** @enum {string} */
     ErrorCode:
-      "invalid_request" | "unknown_pokemon" | "request_too_large" | "master_unavailable" | "internal_error";
+      | "invalid_request"
+      | "missing_header"
+      | "invalid_header"
+      | "unknown_pokemon"
+      | "request_too_large"
+      | "master_unavailable"
+      | "internal_error";
   };
   responses: never;
   parameters: {
+    /**
+     * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+     *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+     *     the header more than once is invalid_header (ADR-0606, same rule as the gateway).
+     */
     DeviceId: string;
+    /**
+     * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+     *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+     *     the header more than once is invalid_header (ADR-0606, same rule as the gateway).
+     */
     SessionId: string;
   };
   requestBodies: never;
@@ -345,7 +361,17 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0606, same rule as the gateway).
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0606, same rule as the gateway).
+         */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -362,7 +388,10 @@ export interface operations {
           "application/json": components["schemas"]["PokemonListResponse"];
         };
       };
-      /** @description X-Device-Id or X-Session-Id is missing, empty, or invalid (invalid_request) */
+      /**
+       * @description X-Device-Id or X-Session-Id is missing or empty (missing_header), or is not a canonical
+       *     8-4-4-4-12 hex UUID or is sent more than once (invalid_header). If both apply, missing_header wins (ADR-0606 §2)
+       */
       400: {
         headers: {
           [name: string]: unknown;
@@ -405,7 +434,17 @@ export interface operations {
         presets?: components["schemas"]["PresetId"][];
       };
       header: {
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0606, same rule as the gateway).
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0606, same rule as the gateway).
+         */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -422,7 +461,11 @@ export interface operations {
           "application/json": components["schemas"]["TableResponse"];
         };
       };
-      /** @description X-Device-Id or X-Session-Id is missing, empty, or invalid, or presets is unknown, duplicated, or empty (invalid_request) */
+      /**
+       * @description X-Device-Id or X-Session-Id is missing or empty (missing_header), or is not a canonical
+       *     8-4-4-4-12 hex UUID or is sent more than once (invalid_header). If both apply, missing_header wins (ADR-0606 §2).
+       *     presets is unknown, duplicated, or empty (invalid_request)
+       */
       400: {
         headers: {
           [name: string]: unknown;
@@ -455,7 +498,17 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0606, same rule as the gateway).
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0606, same rule as the gateway).
+         */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -477,8 +530,10 @@ export interface operations {
         };
       };
       /**
-       * @description X-Device-Id or X-Session-Id is missing, empty, or invalid, or the body is not one JSON object,
-       *     or the fields do not match the given mode, or a value is out of range (invalid_request)
+       * @description X-Device-Id or X-Session-Id is missing or empty (missing_header), or is not a canonical
+       *     8-4-4-4-12 hex UUID or is sent more than once (invalid_header). If both apply, missing_header wins (ADR-0606 §2).
+       *     The body is not one JSON object, or the fields do not match the given mode, or a value is out
+       *     of range (invalid_request)
        */
       400: {
         headers: {

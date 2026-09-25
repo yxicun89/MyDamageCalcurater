@@ -14,8 +14,10 @@ import (
 // Defines values for ErrorCode.
 const (
 	InternalError     ErrorCode = "internal_error"
+	InvalidHeader     ErrorCode = "invalid_header"
 	InvalidRequest    ErrorCode = "invalid_request"
 	MasterUnavailable ErrorCode = "master_unavailable"
+	MissingHeader     ErrorCode = "missing_header"
 	RequestTooLarge   ErrorCode = "request_too_large"
 	UnknownPokemon    ErrorCode = "unknown_pokemon"
 )
@@ -25,9 +27,13 @@ func (e ErrorCode) Valid() bool {
 	switch e {
 	case InternalError:
 		return true
+	case InvalidHeader:
+		return true
 	case InvalidRequest:
 		return true
 	case MasterUnavailable:
+		return true
+	case MissingHeader:
 		return true
 	case RequestTooLarge:
 		return true
@@ -358,13 +364,27 @@ type SessionId = string
 
 // ListPokemonParams defines parameters for ListPokemon.
 type ListPokemonParams struct {
-	XDeviceId  DeviceId  `json:"X-Device-Id"`
+	// XDeviceId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0606, same rule as the gateway).
+	XDeviceId DeviceId `json:"X-Device-Id"`
+
+	// XSessionId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0606, same rule as the gateway).
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
 // GetSpeedPositionParams defines parameters for GetSpeedPosition.
 type GetSpeedPositionParams struct {
-	XDeviceId  DeviceId  `json:"X-Device-Id"`
+	// XDeviceId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0606, same rule as the gateway).
+	XDeviceId DeviceId `json:"X-Device-Id"`
+
+	// XSessionId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0606, same rule as the gateway).
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
@@ -373,9 +393,17 @@ type GetSpeedTableParams struct {
 	// Presets The rows to include, comma separated (ADR-0601 §4). Omitted means all six presets.
 	// The order given does not affect the result. An unknown ID, a duplicate, or an empty value
 	// (`presets=`) is 400 invalid_request.
-	Presets    *[]PresetId `form:"presets,omitempty" json:"presets,omitempty"`
-	XDeviceId  DeviceId    `json:"X-Device-Id"`
-	XSessionId SessionId   `json:"X-Session-Id"`
+	Presets *[]PresetId `form:"presets,omitempty" json:"presets,omitempty"`
+
+	// XDeviceId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0606, same rule as the gateway).
+	XDeviceId DeviceId `json:"X-Device-Id"`
+
+	// XSessionId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0606, same rule as the gateway).
+	XSessionId SessionId `json:"X-Session-Id"`
 }
 
 // GetSpeedPositionJSONRequestBody defines body for GetSpeedPosition for application/json ContentType.
