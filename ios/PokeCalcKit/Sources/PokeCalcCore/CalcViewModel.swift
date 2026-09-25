@@ -88,6 +88,104 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         toggledDefenderItemIds.count >= RequestLimits.maxSelectableItemVariants
     }
 
+    // MARK: - 計算条件(issue #274。ADR-0501「issue #274」)
+
+    /// 急所(既定 false)。
+    public private(set) var isCritical = false
+    /// 攻撃側のやけど(既定 false。true のとき `attacker.status = .burn`)。
+    public private(set) var isAttackerBurned = false
+    /// 天候(既定 `.none`)。
+    public private(set) var weather: Weather = .none
+    /// フィールド(既定 `.none`)。
+    public private(set) var terrain: Terrain = .none
+    /// 防御側の壁(既定はすべて off)。
+    public private(set) var defenderScreens = Screens()
+    /// 攻撃側のランク。画面で変えられるのは atk と spa だけ(技の分類の関連ステータス。他は常に 0)。
+    public private(set) var attackerRanks = RankBlock()
+    /// 攻撃側の特性の選択肢(いまの攻撃側の `species(key:)` の `abilities` の順)。
+    public private(set) var attackerAbilityOptions: [Ability] = []
+    /// 要求に載せる攻撃側の特性(nil は送らない)。
+    public private(set) var attackerAbilityId: String?
+
+    /// ランクのステッパーが編集する能力(選択中の技の分類の関連ステータス。技が無いときは atk)。
+    public var attackerRankStat: StatKey {
+        AttackerPreset.relevantStat(for: selectedMove?.category ?? .physical)
+    }
+
+    /// `attackerRankStat` のいまのランク。
+    public var attackerRank: Int {
+        switch attackerRankStat {
+        case .atk: return attackerRanks.atk
+        case .spa: return attackerRanks.spa
+        // `attackerRankStat`(= `AttackerPreset.relevantStat(for:)`)は atk か spa しか返さないので
+        // ここには来ない。`StatKey` の他ケース(hp/def/spd/spe)を網羅するためだけの分岐。
+        default: return attackerRanks.atk
+        }
+    }
+
+    /// ステッパーの表示(「A +1」など。`RankLabel.text`)。
+    public var attackerRankText: String {
+        RankLabel.text(stat: attackerRankStat, value: attackerRank)
+    }
+
+    public func setCritical(_ isOn: Bool) async {
+        guard isOn != isCritical else { return }
+        let token = beginInput()
+        isCritical = isOn
+        await recalculate(token: token)
+    }
+
+    public func setAttackerBurned(_ isOn: Bool) async {
+        guard isOn != isAttackerBurned else { return }
+        let token = beginInput()
+        isAttackerBurned = isOn
+        await recalculate(token: token)
+    }
+
+    public func selectWeather(_ weather: Weather) async {
+        guard weather != self.weather else { return }
+        let token = beginInput()
+        self.weather = weather
+        await recalculate(token: token)
+    }
+
+    public func selectTerrain(_ terrain: Terrain) async {
+        guard terrain != self.terrain else { return }
+        let token = beginInput()
+        self.terrain = terrain
+        await recalculate(token: token)
+    }
+
+    public func setDefenderScreen(_ kind: ScreenKind, isOn: Bool) async {
+        guard defenderScreens.isOn(kind) != isOn else { return }
+        let token = beginInput()
+        defenderScreens = defenderScreens.setting(kind, to: isOn)
+        await recalculate(token: token)
+    }
+
+    /// `attackerRankStat` のランクを `value`(-6..+6 に丸める)にする。
+    public func setAttackerRank(_ value: Int) async {
+        let clamped = min(RankLimits.max, max(RankLimits.min, value))
+        guard clamped != attackerRank else { return }
+        let token = beginInput()
+        switch attackerRankStat {
+        case .atk: attackerRanks.atk = clamped
+        case .spa: attackerRanks.spa = clamped
+        // `attackerRank` のコメントと同じ理由(atk/spa 以外には来ない)。
+        default: attackerRanks.atk = clamped
+        }
+        await recalculate(token: token)
+    }
+
+    /// nil(指定なし)か `attackerAbilityOptions` にある ID だけを受け付ける。
+    public func selectAttackerAbility(id: String?) async {
+        guard id != attackerAbilityId else { return }
+        if let id, !attackerAbilityOptions.contains(where: { $0.id == id }) { return }
+        let token = beginInput()
+        attackerAbilityId = id
+        await recalculate(token: token)
+    }
+
     // MARK: - 構築から個体を呼び出す(P6-2d)
 
     /// 構築の一覧から作った選択肢(メンバーが0体の構築は含まない)。`teamStore` が nil、
@@ -223,6 +321,9 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         }
         guard token == latestRequestToken else { return }
         attackerBuildSource = .team(selection)
+        // 保存された特性を選択状態にする(`reloadAttackerMoveOptions` が「新種族に無ければ nil」に
+        // 戻した後を上書きする。issue #274。ADR-0501「issue #274」2章・8章)。
+        attackerAbilityId = selection.individual.abilityId
         await recalculate(token: token)
     }
 
@@ -255,6 +356,11 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     /// プリセットを押すと構築の選択は外れる(排他。ADR-0501「P6-2d」1章「判断」)。
     public func selectAttackerPreset(_ preset: AttackerPreset) async {
         let token = beginInput()
+        // 構築から来た特性は外す(直前がプリセット同士の切り替えなら、利用者が選んだ特性を残す。
+        // issue #274。ADR-0501「issue #274」2章・8章)。
+        if attackerBuildSource.teamSelection != nil {
+            attackerAbilityId = nil
+        }
         attackerBuildSource = .preset(preset)
         await recalculate(token: token)
     }
@@ -435,6 +541,13 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         guard token == latestRequestToken, detail.key == attackerSpeciesKey else { return }
         speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
         attackerLearnsetIds = detail.learnset
+        // 特性の選択肢を新しい攻撃側の abilities にする。選択中の特性が新種族に無ければ nil に戻す
+        // (旧種族の特性を送らない。issue #274。ADR-0501「issue #274」2章・8章。構築の呼び出しは
+        // `selectTeamIndividual` がこの後で保存された特性を上書きする)。
+        attackerAbilityOptions = detail.abilities
+        if let abilityId = attackerAbilityId, !detail.abilities.contains(where: { $0.id == abilityId }) {
+            attackerAbilityId = nil
+        }
         recomputeMoveOptions()
     }
 
@@ -547,7 +660,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
             // (`moveUnavailable`: 技が1つも無い、とは原因が違うので別のコードにする)。
             throw PokeCalcError(code: PokeCalcError.Code.selectedMoveMissing, message: "選択中の技が一覧にありません")
         }
-        let attacker: Individual
+        var attacker: Individual
         switch attackerBuildSource {
         case .preset(let preset):
             let build = try AttackerPreset.build(preset, moveCategory: move.category, natures: natureOptions)
@@ -557,13 +670,19 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
             // 種族・持ち物は画面の状態が正。ADR-0501「P6-2d」2章)。
             attacker = selection.individualForRequest(speciesKey: attackerSpeciesKey, itemId: attackerItemId)
         }
+        // 画面の計算条件(急所以外)をプリセット経路・構築経路の両方に当てる(`individualForRequest` は
+        // ranks/status を落とすので、組み立てた後に上書きする。issue #274。ADR-0501「issue #274」4章・8章)。
+        attacker.abilityId = attackerAbilityId
+        attacker.ranks = attackerRanks
+        attacker.status = isAttackerBurned ? .burn : .none
         // 比較する持ち物が1つ以上あれば「持ち物なし」を先頭に含める。無ければ素の1通り(省略。規則5)。
         let itemVariants: [String?] = comparedDefenderItemIds.isEmpty
             ? []
             : [String?.none] + comparedDefenderItemIds.map { $0 as String? }
+        let field = FieldState(weather: weather, terrain: terrain, defenderScreens: defenderScreens)
         return BulkCalcRequest(
             format: .single, attacker: attacker, defenderSpeciesKey: defenderSpeciesKey, moveId: moveId,
-            critical: false, presets: [], itemVariants: itemVariants
+            field: field, critical: isCritical, presets: [], itemVariants: itemVariants
         )
     }
 
