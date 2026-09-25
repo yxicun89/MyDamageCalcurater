@@ -2702,3 +2702,175 @@ calcResultRow-none@- [percent text] : minX=-40.0 width=482.0 label="18.0〜26.0%
    候補カードの描画やテキストフィールドへの入力より前(フォーカス直後)に出ているため、
    本タスクの `.fixedSize()` の直しとは無関係に見える(AX5 でのキーボード表示アニメーション周りの
    既知の SwiftUI の挙動の可能性)。原因は特定していない。
+
+## P6-15 の受け入れ条件(P6-14 の残り3点。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+- 日付: 2026-09-25 / 担当レーン: iOS / 関連: 本 ADR「P6-14」、docs/plan.md P6-15、
+  `CalcScreenView.swift`・`ReverseScreenView.swift`・`CalcConditionsSection.swift`・
+  `CalcScreenResults.swift`
+
+### 0. 対象
+
+docs/plan.md P6-15 の3点。P6-14 で直していない「残り(軽微)」。
+
+1. AX5 で攻撃側プリセットのピル「A振り(無補正)」が「A振り…」と省略される
+   (`CalcScreenView.presetSegmentedRow`・`ReverseScreenView.presetSegmentedRow`/`PresetPillButton`。
+   `.attacker` 側の `KnownDefenderPreset` のピルも同じ部品を使っている)。
+2. `LargeTextLayoutUITests` で計算画面の「詳細」(issue #274)を開いた状態も AX5 で検査する。
+3. 既定サイズで%・確定数の文字が縮んでいないことを確かめる検査(critic の任意の指摘)。
+
+### 1. 受け入れ条件(検証可能な形)
+
+1. AX5(`.accessibility5`)で計算画面の攻撃側プリセット3ピル(`attackerPreset-none`/`aFull`/`aMax`)、
+   および逆算画面の同等のピル(既定の `.defender` 側: `reverseAttackerPreset-*`、`.attacker` 側:
+   `reverseKnownDefenderPreset-*`)は、既定サイズの「画面幅いっぱいの3等分・横1行」をやめ、
+   縦に積む等の形で各ピルがより広い幅を持つ(design.md の縦積みパターン。`cardsRow` が
+   `dynamicTypeSize >= .accessibility1` で横並び→縦積みに切り替えているのと同じ考え方)。
+   XCUITest は `Text` が省略記号で切れているかどうかを直接読めないため、次の2点を代理指標として使う
+   (`assertPresetPillsStackVertically`。P6-15 タスク指示「robust, meaningful assertion」):
+   - 3つのピルの `minY` が(縦積みが効いていれば)互いに 10pt 以上離れている
+   - 各ピルの `frame.width` がウィンドウ幅の半分より広い(3等分〈約1/3〉のままではない)
+2. 既定の文字サイズでは、上記3ピルは今までどおり横1行・3等分のままである(回帰させない。
+   `assertPresetPillsSingleRow`: `minY` の差が2pt未満・各ピルの幅がウィンドウ幅の半分未満)。
+3. `accessibilityIdentifier` は変えない(`attackerPreset-*`・`reverseAttackerPreset-*`・
+   `reverseKnownDefenderPreset-*`。既存 XCUITest・本 ADR の識別子表と衝突させない)。
+4. AX5 で計算画面の「詳細」(`calcConditionsToggle` → `calcConditionsPanel`)を開いた状態でも、
+   issue #274 6章の identifier のうち horizontal スクロールの中に無いもの
+   (`calcConditionsPanel`・`calcCondition-critical`/`burn`・`calcAttackerRankValue`・
+   `calcAttackerRankDecrement`/`Increment`・`calcAttackerAbilityPicker`)がウィンドウの外に
+   はみ出さない(`calcScreenIdentifiers` の主要要素と合わせて検査)。天候・フィールド・防御側の壁
+   (`calcWeather-*`/`calcTerrain-*`/`calcDefenderScreen-*`)は `ScrollView(.horizontal)` の中に
+   ある意図的な設計(`CalcConditionsSection.weatherSection` 等のコメント)なので、はみ出し検査の
+   対象にしない(存在確認だけ行う。2章「テスト実装上の注意」参照)。
+5. 既定の文字サイズで、%表示(`calcResultPercent-*`)が `minimumScaleFactor`(`CalcScreenMetrics.
+   compactMinimumScaleFactor` = 0.7)によって不要に縮んでいない。フォントの実測 pt 値を
+   ハードコードせず、「横幅に制約が無い横向き(landscape)」での同じ要素の高さを基準値として比較する
+   (2章「テスト実装上の注意」参照。iPhone は landscape をサポートしているため成立する)。
+6. 直した後も既存の `LargeTextLayoutUITests`(P6-14 分)・`CalcScreenUITests`・
+   `ReverseScreenUITests`・`CalcConditionsUITests`・`AttackerPresetTests`・`KnownDefenderPresetTests`
+   等の既存 XCTest/XCUITest がすべて成功する(数値・文言の期待値は変えない)。
+
+### 2. 追加したテスト
+
+`ios/PokeCalcUITests/LargeTextLayoutUITests.swift`(既存ファイルへの追加。新規ファイルは作らない)。
+
+- `testCalcScreenAttackerPresetPillsStackVerticallyAtAX5` / `testCalcScreenAttackerPresetPillsSingleRowAtDefaultSize`
+- `testReverseScreenAttackerPresetPillsStackVerticallyAtAX5` / `testReverseScreenAttackerPresetPillsSingleRowAtDefaultSize`
+- `testReverseScreenKnownDefenderPresetPillsStackVerticallyAtAX5`(`.attacker` 側に切り替えてから検査)
+- `testCalcScreenConditionsPanelNoHorizontalOverflowAtAX5`
+- `testCalcScreenResultPercentNotShrunkAtDefaultSize`
+
+テスト実装上の注意(申し送り):
+
+- **ピルの縦積み判定**: 直接「省略されたか」を読む API が無いため、`assertPresetPillsStackVertically`/
+  `assertPresetPillsSingleRow` という2つの共通ヘルパーを新設し、上記1章1・2の代理指標(`minY` の差・
+  幅の比率)で判定する。実装が「縦積み」以外の直し方(例: `ViewThatFits` で改行、フォントをさらに
+  縮小する等)を選んだ場合、この代理指標に合わない可能性がある。もし implementer が縦積み以外の
+  設計にするなら、この2つのヘルパーと該当テストを合わせて見直してよい(ただし「省略されない」という
+  1章の受け入れ条件そのものは変えない)。
+- **「詳細」パネルの検査で踏んだ落とし穴**: 初回実装時、天候・フィールド・防御側の壁の全チップを
+  `assertNoHorizontalOverflowForPrefixes` に含めたところ、`ScrollView(.horizontal)` で2番目以降の
+  チップの `frame.maxX` がウィンドウ幅を大きく超えて誤って失敗した(例: `calcTerrain-*[4/5]` が
+  `frame=(1177, 1006, 339, 67)` で `window=(0,0,402,874)` を大きく超える)。これは
+  `ChipButton`/`CalcConditionsSection` のコメントが明言する意図的な設計(横スクロールで見せる)であり
+  不具合ではない。`itemComparisonToggles` の `defenderItemToggle-*` が P6-14 の
+  `calcScreenIdentifiers` に元から含まれていないのと同じ理由で、このプリフィックスは
+  「はみ出し検査」の対象から外し、「存在するか」だけを確かめる形にした
+  (`calcConditionsPanelScrollableChipPrefixes` のコメント参照)。実装者はこの区別(横スクロールの
+  中の要素とそうでない要素)を保ったまま直してよい。
+- **%表示が縮んでいないことの検査**: `.label` は元の文字列のままで見た目の縮小を反映しないため、
+  「横幅に制約の無い横向き(landscape)」での同じ要素(`calcResultPercent-none@-`)の高さを基準値にし、
+  縦向き(既定)の高さと比較する方式にした(`XCUIDevice.shared.orientation` を使い、
+  `addTeardownBlock` で `.portrait` に戻す。他のテストに向きが持ち越されないようにするため)。
+  フォントの pt 値や行高をハードコードしていないので、`TextStyleToken.resultPercent` のサイズや
+  `CalcScreenMetrics.compactMinimumScaleFactor` の値が変わってもテスト自体は書き直さずに機能する。
+
+2026-09-25 時点の実行結果(`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test
+-project ios/PokeCalc.xcodeproj -scheme PokeCalc -destination 'platform=iOS Simulator,name=iPhone 18 Pro'
+-only-testing:PokeCalcUITests/LargeTextLayoutUITests`): 15件中12件成功・3件失敗。
+
+失敗3件はいずれも1章(1)の本体(想定どおり。`presetSegmentedRow` が `dynamicTypeSize` を見ていないので
+現状は縦積みにならない):
+
+```
+testCalcScreenAttackerPresetPillsStackVerticallyAtAX5
+  XCTAssertGreaterThan failed: ("0.0") is not greater than ("10.0")
+  minYs=[762.83, 762.83, 770.17] identifiers=["attackerPreset-none", "attackerPreset-aFull", "attackerPreset-aMax"]
+
+testReverseScreenAttackerPresetPillsStackVerticallyAtAX5
+  XCTAssertGreaterThan failed: ("0.0") is not greater than ("10.0")
+  minYs=[811.17, 811.17, 818.83] identifiers=["reverseAttackerPreset-none", "reverseAttackerPreset-aFull", "reverseAttackerPreset-aMax"]
+
+testReverseScreenKnownDefenderPresetPillsStackVerticallyAtAX5
+  XCTAssertGreaterThan failed: ("4.0") is not greater than ("10.0")
+  minYs=[811.17, 815.17, 815.17] identifiers=["reverseKnownDefenderPreset-none", "reverseKnownDefenderPreset-max", "reverseKnownDefenderPreset-full"]
+```
+
+3件とも「3つのピルがほぼ同じ `minY`(=横1行のまま)」という、いま直っていない実際の状態どおりの
+理由で失敗している(`testCalcScreenAttackerPresetPillsStackVerticallyAtAX5` の2つは `minY` が完全一致、
+`KnownDefenderPreset` 側は僅差の4ptで、フォントの自然な行高差にすぎず縦積みとは呼べない)。
+
+残り12件はすべて成功。うち次の3件は本タスクで新設し、実装前の時点で green だったもの
+(実装済みの前提を壊していないことの確認・回帰の番として残す):
+
+- `testCalcScreenAttackerPresetPillsSingleRowAtDefaultSize`(既定サイズは今までどおり1行)
+- `testReverseScreenAttackerPresetPillsSingleRowAtDefaultSize`(同上)
+- `testCalcScreenConditionsPanelNoHorizontalOverflowAtAX5`(1章(4)。「詳細」パネル自体は
+  横スクロールの中身を除けば AX5 でもすでにはみ出していなかった)
+- `testCalcScreenResultPercentNotShrunkAtDefaultSize`(1章(5)。P6-14 の実装〈`.fixedSize()` を
+  `minimumScaleFactor` に置き換えた〉のおかげで、既定サイズでは landscape と同じ高さのまま
+  すでに縮んでいない。回帰の番として残す)
+
+既存の8件(P6-14 分)もすべて成功しており、回帰は無い。
+
+### 3. 推奨する直し方(実装はしていない。implementer への申し送り)
+
+1. **本命**: `CalcScreenView.presetSegmentedRow` と `ReverseScreenView.presetSegmentedRow`(3ケースとも)
+   を、`cardsRow`/`sideSwitch` と同じ `if dynamicTypeSize >= .accessibility1 { VStack … } else { HStack … }`
+   の分岐にする。`PresetPillButton`(`ReverseScreenView.swift` 私有型)自体は見た目(`Text` + Capsule)を
+   変えず、呼び出し側の並べ方だけを変える形で十分なはず。
+2. `.lineLimit(1).minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)` はそのまま残してよい
+   (縦積みで幅が増えれば、0.7倍までの縮小で「A振り(無補正)」のような長いラベルも省略されずに収まる
+   可能性が大きく上がる。直接の省略検出はできないため、1章の代理指標〈幅・`minY`〉で確認する)。
+3. `KnownDefenderPreset` 側(ラベルが短い)も同じ分岐に揃えることで、`AttackerPreset`/
+   `KnownDefenderPreset` のどちらの側を表示していても一貫した見た目になる(`presetSegmentedRow` の
+   `@ViewBuilder` の2つの `case` 両方に同じ分岐を入れる)。
+4. 「詳細」パネル(`CalcConditionsSection`)は本タスクの検査で AX5 でも(横スクロールの中身を除けば)
+   はみ出しが無かったため、修正は不要と見られる。ただし念のため実装者は3ピルの直し方を反映した後、
+   `testCalcScreenConditionsPanelNoHorizontalOverflowAtAX5` を再実行して green のままであることを
+   確認すること。
+5. 既定サイズの%表示が縮んでいないことも、直した後に
+   `testCalcScreenResultPercentNotShrunkAtDefaultSize` を再実行して確認すること(今回のピルの直しは
+   `ResultRowView` に触れないので影響しないはずだが、`CalcScreenView.body` の `VStack` 幅の連鎖
+   〈P6-14 §3〉に似た問題を新たに作らないための保険)。
+
+### 4. `swift test` / `xcodebuild test` の実行結果(実装前・spec-writer 時点)
+
+- `swift test`(`ios/PokeCalcKit`): 本タスクは `ios/PokeCalcKit` のソースを変更していないため未実行
+  (対象外。`PokeCalcCore`/`PokeCalcDesign` のテストに影響する変更は無い)。
+- `xcodebuild build-for-testing -scheme PokeCalc`: 成功(`** TEST BUILD SUCCEEDED **`)。
+- `xcodebuild test -only-testing:PokeCalcUITests/LargeTextLayoutUITests`: 2章のとおり15件中12件成功・
+  3件失敗(失敗3件は1章(1)本体。想定どおりの理由)。
+
+### 5. 実装者への注意(まとめ)
+
+- 本体の直しは `CalcScreenView.presetSegmentedRow`・`ReverseScreenView.presetSegmentedRow` の2箇所
+  (3章1)。`accessibilityIdentifier` は変えないこと。
+- 「詳細」パネル・%表示については本タスクの検査で既に green だったので、実装者が新たに壊さないための
+  回帰テストとして扱う(3章4・5)。
+- `LargeTextLayoutUITests` 以外の既存 XCTest/XCUITest(`AttackerPresetTests`・`KnownDefenderPresetTests`・
+  `CalcScreenUITests.testAttackerPresetPillsFollowCatalogOrderAndDefault` 等)も、ピルの並び順・
+  既定選択・`isHittable` を検査している。縦積みにしても `minXs` の昇順チェックのような既定サイズ限定の
+  アサーションには影響しないはずだが、実装後に必ず全体を実行して確認すること。
+- 完了条件: `xcodebuild test -only-testing:PokeCalcUITests/LargeTextLayoutUITests` の15件が全て成功。
+  `make ios-test` も成功させ、結果をこの章の後ろに追記する。plan.md の P6-15 にチェックを付ける。
+
+### 6. 実装結果(2026-09-25)
+
+- 計算画面の `presetSegmentedRow` と逆算画面の `presetPillContainer`(攻撃側プリセット・既知の防御側プリセットの両方)を、
+  `dynamicTypeSize >= .accessibility1` で縦積み、それ未満で従来の横1行にした(`cardsRow`/`sideSwitch` と同じ閾値)。identifier は不変。
+- `LargeTextLayoutUITests` 15/15 成功。`make ios-test`: unit 449/449、XCUITest 37/37、スキップ 0。
+- critic PASS。critic の懸念「`testCalcScreenResultPercentNotShrunkAtDefaultSize` が縮小を見逃して素通りするかもしれない」は、
+  メインセッションで変異テストをして確かめた。% 表示に `.padding(.leading, 300)` を足して縦向きだけ縮ませると、縦 23.3pt / 横 33.7pt で
+  テストが red になった(元に戻して確認済み)。高さの比較は縮小を検出できる。
+

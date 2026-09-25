@@ -499,9 +499,11 @@
     タップ直後に SwiftUI ランタイム警告「Invalid frame dimension (negative or non-finite).」が1件出たが
     アサーション失敗ではなく、候補描画・入力より前(フォーカス直後)に出ているため今回の修正とは無関係に見える
     (原因未特定。ADR-0501「P6-14」6章)。
-- [ ] P6-15 P6-14 の残り(軽微): (1) 最大の文字サイズで攻撃側プリセットのピル「A振り(無補正)」が「A振り…」と省略される
+- [x] P6-15 P6-14 の残り(軽微): (1) 最大の文字サイズで攻撃側プリセットのピル「A振り(無補正)」が「A振り…」と省略される
   (はみ出しは解消済み。アクセシビリティ域では縦に並べる等で全文を出す)、(2) LargeTextLayoutUITests で「詳細」を開いた状態も検査する、
   (3) 既定サイズで %・確定数の文字が縮んでいないことを確かめる検査(critic の任意の指摘)
+  完了: アクセシビリティ域でプリセットのピルを縦積みに。「詳細」を開いた AX5 検査と、既定サイズの % が縮まない検査を追加
+  (縮小の変異で red になることを確認)。make ios-test unit 449/449・XCUITest 37/37。critic PASS
 - [x] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼された
   内容どおり `ColorToken.danger` のライト値を `0xE5,0x48,0x4D` → `0xCD,0x1D,0x23` に更新し、
   `DesignTokenTests.swift` の旧値も書き換えた。`ios/PokeCalcKit/Tests/PokeCalcDesignTests/ColorContrast.swift`

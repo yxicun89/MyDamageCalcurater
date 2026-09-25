@@ -130,30 +130,43 @@ struct CalcScreenView: View {
     }
 
     /// 自分側のプリセット。カードの外、画面幅いっぱいの3等分のピルで並べる(批評 M3c:
-    /// カード内に置くと幅が足りず「無振り」が見切れていた)。
+    /// カード内に置くと幅が足りず「無振り」が見切れていた)。アクセシビリティの大きい文字サイズでは
+    /// 3等分だとラベルが省略されるので縦に積む(P6-15。`cardsRow` と同じ分岐)。
+    @ViewBuilder
     private var presetSegmentedRow: some View {
-        HStack(spacing: SpacingToken.x2) {
-            ForEach(AttackerPreset.allCases, id: \.self) { preset in
-                let isSelected = viewModel.attackerPreset == preset
-                Button {
-                    viewModel.scheduleLatest { await $0.selectAttackerPreset(preset) }
-                } label: {
-                    Text(preset.label(for: viewModel.selectedMove?.category ?? .physical))
-                        .font(TextStyleToken.body.font)
-                        .foregroundStyle(isSelected ? ColorToken.bgBase.color : ColorToken.textPrimary.color)
-                        .lineLimit(1)
-                        .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, SpacingToken.x2)
-                        .background(
-                            Capsule().fill(isSelected ? ColorToken.textPrimary.color : ColorToken.bgGlass.color)
-                        )
-                        .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("attackerPreset-\(preset.rawValue)")
-                .accessibilityAddTraits(isSelected ? .isSelected : [])
+        if dynamicTypeSize >= .accessibility1 {
+            VStack(spacing: SpacingToken.x2) {
+                presetSegmentedRowPills
             }
+        } else {
+            HStack(spacing: SpacingToken.x2) {
+                presetSegmentedRowPills
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var presetSegmentedRowPills: some View {
+        ForEach(AttackerPreset.allCases, id: \.self) { preset in
+            let isSelected = viewModel.attackerPreset == preset
+            Button {
+                viewModel.scheduleLatest { await $0.selectAttackerPreset(preset) }
+            } label: {
+                Text(preset.label(for: viewModel.selectedMove?.category ?? .physical))
+                    .font(TextStyleToken.body.font)
+                    .foregroundStyle(isSelected ? ColorToken.bgBase.color : ColorToken.textPrimary.color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, SpacingToken.x2)
+                    .background(
+                        Capsule().fill(isSelected ? ColorToken.textPrimary.color : ColorToken.bgGlass.color)
+                    )
+                    .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("attackerPreset-\(preset.rawValue)")
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
         }
     }
 
