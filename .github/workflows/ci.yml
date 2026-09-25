@@ -1,7 +1,7 @@
 name: CI
 
 # issue #215: main への push・PR で test/lint/build/golden/wasm/kustomize/check-publishable を
-# 機械的に検証する(ADR-0114)。Secret は使わない(private リポジトリの無料枠内で完結させる)。
+# 機械的に検証する(ADR-0119)。Secret は使わない(private リポジトリの無料枠内で完結させる)。
 #
 # 対象外(理由):
 #   - iOS(`make ios-test`): macOS ランナー + Xcode が要り、無料枠(private は月2,000分。macOS ランナーは
@@ -36,12 +36,18 @@ jobs:
     name: test / lint / build / golden / wasm / kustomize / check-publishable
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # 各ステップにも timeout-minutes を付ける(job 全体の 25 分だけだと、どのコマンドが固まったか
+    # 特定できないまま 25 分待つことになる。2026-09-25: check-publishable の正規表現が O(n^2) 走査に
+    # なり make lint が刺さった事故を受けて追加。ステップ側の上限は job 全体の 25 分より小さく取り、
+    # 単体でどのステップが原因か早く分かるようにする)。
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
 
       - name: setup go (go.work の go ディレクティブから版を読む)
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        timeout-minutes: 5
         with:
           go-version-file: go.work
           cache: true
@@ -49,6 +55,7 @@ jobs:
 
       - name: setup node (web/.node-version から版を読む)
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        timeout-minutes: 5
         with:
           node-version-file: web/.node-version
           cache: npm
@@ -58,6 +65,7 @@ jobs:
       # 版は https://dl.k8s.io/release/stable.txt(2026-09-25 時点 v1.37.1)に合わせて固定する。
       - name: setup kubectl (stable.txt の v1.37.1 に固定)
         uses: azure/setup-kubectl@829323503d1be3d00ca8346e5391ca0b07a9ab0d # v5.1.0
+        timeout-minutes: 5
         with:
           version: v1.37.1
 
@@ -65,28 +73,34 @@ jobs:
       # 未インストールなら npm ci を自動実行する)。
       - name: make test
         run: make test
+        timeout-minutes: 10
 
       # gofmt・go vet(mysql/tidb タグ含む)・シェル/Node構文・kustomize描画(k8s-render)・
       # check-publishable(-selftest)・各レーンの lint・Web の tsc/eslint/prettier。
       - name: make lint
         run: make lint
+        timeout-minutes: 10
 
       - name: make build
         run: make build
+        timeout-minutes: 5
 
       # 計算ロジックの @smogon/calc 0.12.0 照合(testdata/golden はコミット済みなのでネットワーク不要)。
       - name: make test-golden
         run: make test-golden
+        timeout-minutes: 5
 
       # engine を GOOS=js/GOARCH=wasm でビルドし、ネイティブ Go の結果と Node 上の wasm 実行結果が
       # バイト一致することを確認する。
       - name: make test-wasm
         run: make test-wasm
+        timeout-minutes: 5
 
       # 公開前検査(絶対パス・秘密・追跡禁止ファイル・第三者データ)。make lint に含まれるが、
       # Actions のログで単独の合否として見えるように明示的に走らせる。
       - name: make check-publishable
         run: make check-publishable
+        timeout-minutes: 3
 
       # make lint の k8s-render は base/local/cloud/tidb overlay だけを描画する。ここでは
       # 各レーン専用 overlay(local-api・local-web・gitops 等)も apply せず描画だけ確認する。
@@ -97,3 +111,4 @@ jobs:
           make balance-kustomize
           make speed-kustomize
           make judge-kustomize
+        timeout-minutes: 3

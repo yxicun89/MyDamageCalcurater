@@ -93,7 +93,11 @@ test("観測に範囲外の値を入れると、検証メッセージが出て�
   const observation = page.getByRole("textbox", { name: "観測1", exact: true });
   await observation.fill("101");
   await expect(observation).toHaveAttribute("aria-invalid", "true");
-  await expect(observation).toHaveAccessibleDescription("1〜100 の整数で入力してください");
+  // issue #304: aria-describedby は観測欄の説明(hint)と検証メッセージの両方を指すようになった
+  // (与えたダメージ・%単位が既定なので、hint は「相手の HP が減った割合(%)」)。
+  await expect(observation).toHaveAccessibleDescription(
+    "相手の HP が減った割合(%) 1〜100 の整数で入力してください",
+  );
   await expect(page.getByRole("list", { name: "推定結果", exact: true })).toHaveCount(0);
 });
 

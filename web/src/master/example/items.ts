@@ -6,11 +6,11 @@ import type { Item } from "../../engine/types";
 
 export const exampleItems: Item[] = [
   // 防御を1.5倍(6144/4096)にする架空の持ち物。
-  { id: "example-item-def", nameJa: "テストぼうぎょだま", effect: { statMods: { def: 6144 } } },
+  { id: "exampleitemdef", nameJa: "テストぼうぎょだま", effect: { statMods: { def: 6144 } } },
   // 特防を1.5倍にする架空の持ち物。
-  { id: "example-item-spd", nameJa: "テストとくぼうだま", effect: { statMods: { spd: 6144 } } },
+  { id: "exampleitemspd", nameJa: "テストとくぼうだま", effect: { statMods: { spd: 6144 } } },
   // 最終ダメージを約1.3倍(5324/4096)にする架空の持ち物。
-  { id: "example-item-power", nameJa: "テストちからのたま", effect: { damageMod: 5324 } },
+  { id: "exampleitempower", nameJa: "テストちからのたま", effect: { damageMod: 5324 } },
   // ほのおタイプの技を半減する架空のきのみ(example/moves.ts の物理・ほのお技と対応)。
-  { id: "example-item-fireberry", nameJa: "テストひやしのみ", effect: { resistBerryType: "fire" } },
+  { id: "exampleitemfireberry", nameJa: "テストひやしのみ", effect: { resistBerryType: "fire" } },
 ];

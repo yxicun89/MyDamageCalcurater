@@ -38,15 +38,26 @@ type TypeChartSummary struct {
 	Rows  int `json:"rows"`
 }
 
+// MoveMechanismSummary は技の機構の件数(ADR-0121)。Attack は取り込む攻撃技の数、WithMechanism は
+// そのうち機構を1つ以上持つ(通常の式では誤る)技の数、ByMechanism は機構ごとの技の数
+// (1つの技が複数の機構を持つので、合計は WithMechanism 以上になる)。
+type MoveMechanismSummary struct {
+	Attack        int            `json:"attack"`
+	WithMechanism int            `json:"withMechanism"`
+	ByMechanism   map[string]int `json:"byMechanism"`
+}
+
 // Summary は件数の要約一式(ADR-0103 §4)。
 type Summary struct {
-	Moves         SetSummary          `json:"moves"`
-	Species       SetSummary          `json:"species"`
-	Items         SetSummary          `json:"items"`
-	Abilities     SetSummary          `json:"abilities"`
-	TypeChart     TypeChartSummary    `json:"typeChart"`
-	WarningCounts map[FindingKind]int `json:"warningCounts"`
-	BlockerCounts map[FindingKind]int `json:"blockerCounts"`
+	Moves     SetSummary       `json:"moves"`
+	Species   SetSummary       `json:"species"`
+	Items     SetSummary       `json:"items"`
+	Abilities SetSummary       `json:"abilities"`
+	TypeChart TypeChartSummary `json:"typeChart"`
+	// MoveMechanisms は Convert が止まったとき(partial)はゼロ値。
+	MoveMechanisms MoveMechanismSummary `json:"moveMechanisms"`
+	WarningCounts  map[FindingKind]int  `json:"warningCounts"`
+	BlockerCounts  map[FindingKind]int  `json:"blockerCounts"`
 }
 
 // VerdictCount / MoveVerdicts / Verdicts / ReconcileConfig は snapshot.go(Config の一部)。
@@ -135,6 +146,9 @@ func Reconcile(in Input) (Output, Reconciliation, error) {
 		return Output{}, Reconciliation{}, fmt.Errorf("%w: config.reconcile が無い(実データの取り込みでは照合の設定が必須)", ErrInvalidInput)
 	}
 	rc := in.Config.Reconcile
+	if in.ReferenceTypeChart == nil {
+		return Output{}, Reconciliation{}, fmt.Errorf("%w: 参照の相性表が無い(実データの取り込みでは testdata/golden/typechart.json との照合が必須。ADR-0118)", ErrInvalidInput)
+	}
 
 	out, convReport, convErr := Convert(in)
 	if convErr != nil && !errors.Is(convErr, ErrBlocked) {
@@ -161,13 +175,19 @@ func Reconcile(in Input) (Output, Reconciliation, error) {
 
 	verdictChecks, verdictWarnings, verdictBlockers := computeVerdictChecks(rc, in, moveConv.Included)
 
-	partial := convertBlocked || len(verdictBlockers) > 0
+	// 相性表を参照の相性表と比べる(issue #280・ADR-0118)。食い違いは人の裁定が要るので Blocker。
+	typeChartBlockers := CompareReferenceTypeChart(*in.ReferenceTypeChart, in.Config.Sources["calc"], typesConv.MasterRows, typesConv.ChartRows)
+
+	partial := convertBlocked || len(verdictBlockers) > 0 || len(typeChartBlockers) > 0
 
 	summary := computeSummary(in, out, partial)
 	summary.TypeChart = TypeChartSummary{Types: len(typesConv.Rows), Rows: len(typesConv.ChartRows)}
+	if !partial {
+		summary.MoveMechanisms = computeMoveMechanismSummary(out)
+	}
 
 	warnings := append(append([]Finding{}, convReport.Warnings...), verdictWarnings...)
-	blockers := append(append([]Finding{}, convReport.Blockers...), verdictBlockers...)
+	blockers := append(append(append([]Finding{}, convReport.Blockers...), verdictBlockers...), typeChartBlockers...)
 
 	var coverage EffectCoverage
 	var names map[string]NameStats

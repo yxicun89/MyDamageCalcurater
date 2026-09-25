@@ -20,6 +20,13 @@ export const ONLINE_PORT = 4318;
 /** オンライン用に起動する calc-svc のポート。 */
 export const CALC_SVC_PORT = 18317;
 
+/**
+ * PR2(ADR-0307): オンライン用に起動する pokedex フィクスチャのポート。`web-e2e-online` は
+ * pokedex-svc(MySQL 必須)を立てられないので、Web の例データから公開 API の応答を返す軽量サーバーを
+ * 代わりに立て、vite preview の /api/pokedex をここへ転送する(POKEDEX_PROXY_TARGET)。
+ */
+export const POKEDEX_FIXTURE_PORT = 18319;
+
 /** P4-12a: タイプバランス(balance API)用の preview サーバーのポート。 */
 export const BALANCE_PORT = 4320;
 

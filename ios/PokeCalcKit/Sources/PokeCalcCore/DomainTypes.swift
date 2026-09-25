@@ -19,6 +19,14 @@ public enum SPLimits {
     public static let maxTotal = 66
 }
 
+/// ランク補正の範囲(openapi `RankBlock` の contract: minimum -6 / maximum 6)。
+/// `CalcViewModel.setAttackerRank` のクランプと View の ±6 での無効化が同じ値を参照する
+/// (coding-rules §2「同じ定義を複数箇所に書かない」。issue #274)。
+public enum RankLimits {
+    public static let min = -6
+    public static let max = 6
+}
+
 // MARK: - 契約と同期する enum(DomainTypesTests がテストで固定する)
 
 /// シングル/ダブル(openapi `Format`)。
@@ -352,12 +360,84 @@ public struct CalcRequest: Sendable {
     }
 }
 
+// MARK: - 場の状態(issue #274。ADR-0501「issue #274」)
+
+/// 天候(openapi `Weather`)。`allCases` の順が画面のピルの並び(左から)。
+public enum Weather: String, CaseIterable, Sendable, Hashable {
+    case none, sun, rain, sand, snow
+}
+
+/// フィールド(openapi `Terrain`)。`allCases` の順が画面のピルの並び(左から。ゲームの並びに合わせ、
+/// openapi の enum の順とは違う。値の集合は同じ)。
+public enum Terrain: String, CaseIterable, Sendable, Hashable {
+    case none, electric, grassy, psychic, misty
+}
+
+/// 壁の種類(openapi `Screens` のプロパティ名)。`allCases` の順が画面のトグルの並び。
+public enum ScreenKind: String, CaseIterable, Sendable, Hashable {
+    case reflect, lightScreen, auroraVeil
+}
+
+/// 片側の壁(openapi `Screens`)。既定はすべて false。
+public struct Screens: Equatable, Sendable {
+    public var reflect: Bool
+    public var lightScreen: Bool
+    public var auroraVeil: Bool
+
+    public init(reflect: Bool = false, lightScreen: Bool = false, auroraVeil: Bool = false) {
+        self.reflect = reflect
+        self.lightScreen = lightScreen
+        self.auroraVeil = auroraVeil
+    }
+
+    /// `kind` の壁が張られているか。
+    public func isOn(_ kind: ScreenKind) -> Bool {
+        switch kind {
+        case .reflect: return reflect
+        case .lightScreen: return lightScreen
+        case .auroraVeil: return auroraVeil
+        }
+    }
+
+    /// `kind` の壁を `isOn` にした値を返す。
+    public func setting(_ kind: ScreenKind, to isOn: Bool) -> Screens {
+        var copy = self
+        switch kind {
+        case .reflect: copy.reflect = isOn
+        case .lightScreen: copy.lightScreen = isOn
+        case .auroraVeil: copy.auroraVeil = isOn
+        }
+        return copy
+    }
+}
+
+/// 場の状態(openapi `FieldState`)。既定(`FieldState()`)は「何もない場」で、要求では省略と同じ意味。
+public struct FieldState: Equatable, Sendable {
+    public var weather: Weather
+    public var terrain: Terrain
+    /// 攻撃側の場の壁(シングルのダメージには効かない。画面からは変えない。ADR-0501「issue #274」)。
+    public var attackerScreens: Screens
+    public var defenderScreens: Screens
+
+    public init(
+        weather: Weather = .none, terrain: Terrain = .none,
+        attackerScreens: Screens = Screens(), defenderScreens: Screens = Screens()
+    ) {
+        self.weather = weather
+        self.terrain = terrain
+        self.attackerScreens = attackerScreens
+        self.defenderScreens = defenderScreens
+    }
+}
+
 /// 防御側の代表調整すべてに対する一括計算の要求(openapi `BulkCalcRequest`)。
 public struct BulkCalcRequest: Sendable {
     public var format: Format
     public var attacker: Individual
     public var defenderSpeciesKey: String
     public var moveId: String
+    /// 場(天候・フィールド・壁)。既定は何もない場(issue #274)。
+    public var field: FieldState
     public var critical: Bool
     /// 省略(空を含む)は技の分類に応じた既定セット。指定したときはその順に行を返す。
     public var presets: [DefenderPreset]
@@ -366,12 +446,14 @@ public struct BulkCalcRequest: Sendable {
 
     public init(
         format: Format, attacker: Individual, defenderSpeciesKey: String, moveId: String,
+        field: FieldState = FieldState(),
         critical: Bool = false, presets: [DefenderPreset] = [], itemVariants: [String?] = []
     ) {
         self.format = format
         self.attacker = attacker
         self.defenderSpeciesKey = defenderSpeciesKey
         self.moveId = moveId
+        self.field = field
         self.critical = critical
         self.presets = presets
         self.itemVariants = itemVariants

@@ -24,18 +24,22 @@ export const baseConfig: UserConfig = {
 };
 
 export default defineConfig(({ mode }) => {
-  // API_PROXY_TARGET・BALANCE_PROXY_TARGET は開発サーバーのプロキシだけが読む Node 側の値。`VITE_` 接頭辞を
-  // 付けないのでクライアントのバンドルには入らない。VITE_API_BASE_URL(ブラウザで読む基点 URL。api/config.ts)
-  // とは別(ADR-0301 §4)。BALANCE_PROXY_TARGET は P4-12a(ADR-0303 §5)の balance API 用で、/api とは別の
-  // 転送先に送る。
+  // API_PROXY_TARGET・BALANCE_PROXY_TARGET・POKEDEX_PROXY_TARGET は開発サーバーのプロキシだけが読む Node 側の値。
+  // `VITE_` 接頭辞を付けないのでクライアントのバンドルには入らない。VITE_API_BASE_URL(ブラウザで読む基点 URL。
+  // api/config.ts)とは別(ADR-0301 §4)。BALANCE_PROXY_TARGET は P4-12a(ADR-0303 §5)の balance API 用、
+  // POKEDEX_PROXY_TARGET は PR2(ADR-0307)の pokedex フィクスチャ用で、どちらも /api とは別の転送先に送る。
   const env = loadEnv(mode, process.cwd(), "");
   const apiProxyTarget = env.API_PROXY_TARGET ?? "";
   const balanceProxyTarget = env.BALANCE_PROXY_TARGET ?? "";
-  // /api/balance は /api より前に置く(Vite のプロキシは定義順に前方一致で選ぶため、/api が先だと
-  // balance への要求が calc に行ってしまう)。
+  const pokedexProxyTarget = env.POKEDEX_PROXY_TARGET ?? "";
+  // /api/balance・/api/pokedex は /api より前に置く(Vite のプロキシは定義順に前方一致で選ぶため、/api が先だと
+  // balance・pokedex への要求が calc に行ってしまう)。
   const proxy: Record<string, { target: string; changeOrigin: boolean }> = {};
   if (balanceProxyTarget !== "") {
     proxy["/api/balance"] = { target: balanceProxyTarget, changeOrigin: true };
+  }
+  if (pokedexProxyTarget !== "") {
+    proxy["/api/pokedex"] = { target: pokedexProxyTarget, changeOrigin: true };
   }
   if (apiProxyTarget !== "") {
     proxy["/api"] = { target: apiProxyTarget, changeOrigin: true };

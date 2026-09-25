@@ -446,3 +446,31 @@ describe("P4-5 計算モード(オフライン / オンライン)の切り替え
     expect(headAppendChildSpy).not.toHaveBeenCalled();
   });
 });
+
+// issue #218(ADR-0308): タブを切り替えても入力が消えないこと。ここには最小の往復1件だけ置き
+// (上の「別タブの入力欄は取れない」を守る describe と同じファイルで回帰を見るため)、
+// 戻る/進む・遅延マウント・マスタ入れ替え・リロードの扱いは App.tabPersistence.test.tsx で確かめる。
+describe("issue #218 タブの往復で入力が消えない", () => {
+  test("計算タブで選んだ攻撃側・防御側は、逆算タブへ行って戻っても残る", async () => {
+    const master = await exampleMasterSource.load();
+    const [attacker, defender] = master.species;
+    if (attacker === undefined || defender === undefined) {
+      throw new Error("例データに種族が2つ以上要る");
+    }
+    const user = userEvent.setup();
+    render(<App engine={createFakeEngine()} />);
+
+    await user.selectOptions(await screen.findByRole("combobox", { name: "攻撃側のポケモン" }), attacker.key);
+    await user.selectOptions(screen.getByRole("combobox", { name: "防御側のポケモン" }), defender.key);
+
+    await user.click(screen.getByRole("tab", { name: "逆算" }));
+    // 逆算タブを出している間、計算画面の入力欄はアクセシビリティツリーから取れない(既存の保証)。
+    expect(screen.queryByRole("combobox", { name: "攻撃側のポケモン" })).toBeNull();
+    await screen.findByRole("combobox", { name: "自分のポケモン" });
+
+    await user.click(screen.getByRole("tab", { name: "計算" }));
+
+    expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toHaveValue(attacker.key);
+    expect(screen.getByRole("combobox", { name: "防御側のポケモン" })).toHaveValue(defender.key);
+  });
+});

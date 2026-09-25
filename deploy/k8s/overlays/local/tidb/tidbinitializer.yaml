@@ -24,7 +24,17 @@ spec:
   imagePullPolicy: IfNotPresent
   cluster:
     name: pokecalc-tidb
-  initSql: "CREATE DATABASE IF NOT EXISTS record; CREATE DATABASE IF NOT EXISTS team;"
+  # tidb_skip_isolation_level_check はグローバル変数として一度だけ設定すればよい(TiDB は
+  # global 変数を mysql.global_variables に永続化する)。golang-migrate の mysql ドライバは
+  # 排他ロックの取得(Lock())だけでなくバージョン記録(SetVersion())でも SERIALIZABLE 分離レベルの
+  # トランザクションを直接要求する(github.com/golang-migrate/migrate/v4@.../database/mysql/mysql.go。
+  # x-no-lock=true で Lock() を無効化しても SetVersion() 側で同じエラーになるため回避できない)。
+  # TiDB は SERIALIZABLE を(READ COMMITTED や REPEATABLE READ と違って)サポートしないため、これが
+  # 無いと record-migrate・team-migrate の Job が "The isolation level 'SERIALIZABLE' is not
+  # supported" で失敗する(P5-3 実装時、ローカルの TiDB〈unistore 版〉で実際に踏んだ。詳細はADR-0211)。
+  # 注意: このリソースは一度 Completed になると initSql を再実行しない。既存クラスタでは
+  # `SET GLOBAL tidb_skip_isolation_level_check=1` を手動で流すか、作り直すこと(ADR-0211 追記)。
+  initSql: "CREATE DATABASE IF NOT EXISTS record; CREATE DATABASE IF NOT EXISTS team; SET GLOBAL tidb_skip_isolation_level_check=1;"
   # Secret のキー名がそのままユーザー名として扱われる(TiDB Operator の仕様。
   # tidbInitStartScriptTpl が /etc/tidb/password 配下のファイル名をユーザー名とみなす)。
   # root のパスワードを設定するにはキー名を "root" にする必要がある(scripts/up.sh 参照)。

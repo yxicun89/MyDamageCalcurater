@@ -2,11 +2,14 @@
 // engine は fake(ADR-0300 §8)。マスタは架空の例データ(exampleMasterSource)で、特定の名前には依存しない。
 // 確かめること:
 //   - 「与えたダメージ」= side defender(自分 = 攻撃側、技は自分の learnset、自分の調整は攻撃側プリセット)
-//     「受けたダメージ」= side attacker(自分 = 防御側で SP 0・補正なし、技は相手の learnset)
+//     「受けたダメージ」= side attacker(自分 = 防御側、技は相手の learnset、自分の調整は防御側プリセット。
+//     issue #275 で「常に無振り固定・画面から変えられない」を直した。既定は無振りのまま)
 //   - 観測は整数%(1〜100)か HP の実点数(1 以上)。単位は行ごとに「%」「HP」で切り替え、不正な入力は engine を呼ばない
 //   - 「観測を追加」「観測nを削除」、観測はすべての有効な行を順に送る(空行は送らない)
 //   - 持ち物候補は reverseItemCandidates(効果データから)、maxCandidates は送らない
 //   - 結果は engine の順のまま候補カードにし、性格クラス・持ち物・SP 範囲(全部)・目安・近い候補・%幅を出す
+//   - 全候補が観測と一致しない(exactCount 0)ときは role=status の案内を出し、候補一覧は残したまま
+//     SP 範囲に「参考」の印を添える。%欄には「予測」のラベルを添える(issue #305)
 //   - 防御側は H32 の仮定を出す。計算中・エラー(role=alert)・古い応答の無視・変化技
 
 import { act, render, screen, waitFor, within } from "@testing-library/react";
@@ -18,6 +21,7 @@ import { OBSERVATION_INPUT_DEBOUNCE_MS } from "../domain/observations";
 import { NEUTRAL_NATURE, ZERO_SP, defaultAbility, toEngineSpecies } from "../domain/requests";
 import { reverseItemCandidates } from "../domain/reverseItems";
 import type { Item, Move, ReverseRequest, ReverseResult } from "../engine/types";
+import { reverseResultText } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
 import {
@@ -119,6 +123,16 @@ async function choosePair(user: UserEvent, mine: MasterSpecies, theirs: MasterSp
 
 async function chooseReceived(user: UserEvent): Promise<void> {
   await user.click(within(sideGroup()).getByRole("radio", { name: "受けたダメージ" }));
+}
+
+/** 自分側カードの「自分の調整」(与えたダメージ = 攻撃側プリセット、受けたダメージ = 防御側プリセット)。 */
+const myPresetGroup = () => screen.getByRole("radiogroup", { name: "自分の調整" });
+
+/** 「自分の調整」の選択肢の表示名を、画面に出ている順のまま返す。 */
+function myPresetOptionLabels(): string[] {
+  return within(myPresetGroup())
+    .getAllByRole("radio")
+    .map((radio) => (radio.closest("label")?.textContent ?? "").trim());
 }
 
 async function candidateCards(): Promise<HTMLElement[]> {
@@ -235,7 +249,7 @@ describe("与えたダメージ(side defender)", () => {
 });
 
 describe("受けたダメージ(side attacker)", () => {
-  test("自分 = 防御側(SP 0・補正なし)、相手 = 攻撃側、相手の技、攻撃側の持ち物候補、HP の実点数で呼ぶ", async () => {
+  test("自分 = 防御側(既定は無振り)、相手 = 攻撃側、相手の技、攻撃側の持ち物候補、HP の実点数で呼ぶ", async () => {
     const mine = speciesAt(0);
     const theirs = speciesAt(1);
     const move = firstMoveOf(theirs);
@@ -243,8 +257,9 @@ describe("受けたダメージ(side attacker)", () => {
     await chooseReceived(user);
     expect(within(unitGroup(1)).getByRole("radio", { name: "HP" })).toBeChecked();
     await choosePair(user, mine, theirs);
-    // 自分が防御側のときは攻撃側プリセットを出さない(P4-4 の既定は SP 0・補正なし)
-    expect(screen.queryByRole("radiogroup", { name: "自分の調整" })).toBeNull();
+    // issue #275: 自分が防御側のときは、自分の耐久(防御側プリセット)を選べる。既定は無振りで、
+    // そのときのリクエストは issue #275 以前と同じ(SP 0・補正なし)になる(回帰。下の known の検証)。
+    expect(within(myPresetGroup()).getByRole("radio", { name: "無振り" })).toBeChecked();
     const options = within(moveSelect())
       .getAllByRole("option")
       .map((option) => option.getAttribute("value"));
@@ -301,6 +316,127 @@ describe("受けたダメージ(side attacker)", () => {
     await waitFor(() => {
       expect(lastRequest(engine).move).toEqual(firstMoveOf(theirs));
     });
+  });
+});
+
+// issue #275(重大度 high): 「受けたダメージ」のとき、自分(防御側)の耐久調整が無振り固定で画面からも
+// 変えられなかったため、H・B(D)を振った自分で受けた値を入れると相手の A(C) が過大評価されていた。
+// 自分側カードに防御側プリセット(ADR-0009 §1 のカタログ。domain/defenderPresets.ts)を出す。
+// 選択肢は engine の DefaultDefenderPresets と同じく技の分類で絞る(物理 = B 系、特殊 = D 系、変化技 = none/hp)。
+describe("受けたダメージ(side attacker)の自分の耐久(防御側プリセット。issue #275)", () => {
+  /** 指定した分類の技を覚える種族の、その技(相手 = 攻撃側の learnset から選ぶ)。 */
+  function moveOf(species: MasterSpecies, category: Move["category"]): Move {
+    const move = learnsetMoves(species, master.moves).find((candidate) => candidate.category === category);
+    if (move === undefined) {
+      throw new Error(`${species.key} が ${category} の技を覚えない`);
+    }
+    return move;
+  }
+
+  /** 物理技と特殊技を両方覚える種族(技を替えて分類が変わる場面の確認用)。 */
+  function speciesWithBothCategories(): MasterSpecies {
+    for (const species of master.species) {
+      const moves = learnsetMoves(species, master.moves);
+      if (
+        moves.some((move) => move.category === "physical") &&
+        moves.some((move) => move.category === "special")
+      ) {
+        return species;
+      }
+    }
+    throw new Error("例データに物理技と特殊技を両方覚える種族が無い");
+  }
+
+  /** 受けたダメージを選び、自分と相手を選んで、相手の技を1つ選ぶ。 */
+  async function chooseReceivedWithMove(user: UserEvent, theirs: MasterSpecies, move: Move): Promise<void> {
+    await chooseReceived(user);
+    await choosePair(user, speciesAt(0), theirs);
+    await user.selectOptions(moveSelect(), move.id);
+  }
+
+  test("選択肢は技の分類で絞る(特殊技は D 系、物理技は B 系。カタログ順)", async () => {
+    const theirs = speciesWithBothCategories();
+    const { user } = renderScreen();
+    await chooseReceivedWithMove(user, theirs, moveOf(theirs, "special"));
+    expect(myPresetOptionLabels()).toEqual(["無振り", "H振り", "H振り+D補正", "HD振り", "HD特化"]);
+
+    await user.selectOptions(moveSelect(), moveOf(theirs, "physical").id);
+    expect(myPresetOptionLabels()).toEqual(["無振り", "H振り", "H振り+B補正", "HB振り", "HB特化"]);
+  });
+
+  test("HD特化 を選ぶと known の SP・性格がその耐久調整になる(H32/D32・D上昇)", async () => {
+    const theirs = speciesWithBothCategories();
+    const { user, engine } = renderScreen();
+    await chooseReceivedWithMove(user, theirs, moveOf(theirs, "special"));
+    await user.click(within(myPresetGroup()).getByRole("radio", { name: "HD特化" }));
+    await typeObservation(user, 1, "60");
+
+    await waitFor(() => {
+      expect(lastRequest(engine).observations).toEqual([{ damage: 60 }]);
+    });
+    const request = lastRequest(engine);
+    expect(request.side).toBe("attacker");
+    expect(request.known.sp).toEqual({ ...ZERO_SP, hp: 32, spd: 32 });
+    expect(request.known.nature).toEqual({ plus: "spd", minus: "atk" });
+  });
+
+  test("H振り+B補正 を選ぶと known の SP・性格がその耐久調整になる(H32・B上昇)", async () => {
+    const theirs = speciesWithBothCategories();
+    const { user, engine } = renderScreen();
+    await chooseReceivedWithMove(user, theirs, moveOf(theirs, "physical"));
+    await user.click(within(myPresetGroup()).getByRole("radio", { name: "H振り+B補正" }));
+    await typeObservation(user, 1, "60");
+
+    await waitFor(() => {
+      expect(lastRequest(engine).observations).toEqual([{ damage: 60 }]);
+    });
+    expect(lastRequest(engine).known.sp).toEqual({ ...ZERO_SP, hp: 32 });
+    expect(lastRequest(engine).known.nature).toEqual({ plus: "def", minus: "atk" });
+  });
+
+  test("技の分類が変わると、対になる耐久調整に読み替えて選択を残す(HD特化 → HB特化)", async () => {
+    const theirs = speciesWithBothCategories();
+    const { user, engine } = renderScreen();
+    await chooseReceivedWithMove(user, theirs, moveOf(theirs, "special"));
+    await user.click(within(myPresetGroup()).getByRole("radio", { name: "HD特化" }));
+
+    await user.selectOptions(moveSelect(), moveOf(theirs, "physical").id);
+    expect(within(myPresetGroup()).getByRole("radio", { name: "HB特化" })).toBeChecked();
+
+    await typeObservation(user, 1, "60");
+    await waitFor(() => {
+      expect(lastRequest(engine).observations).toEqual([{ damage: 60 }]);
+    });
+    expect(lastRequest(engine).known.sp).toEqual({ ...ZERO_SP, hp: 32, def: 32 });
+    expect(lastRequest(engine).known.nature).toEqual({ plus: "def", minus: "atk" });
+  });
+
+  test("変化技のときは選択肢が 無振り / H振り だけになり、選択は H振り に落ちる", async () => {
+    const { species: theirs, statusMove } = speciesWithStatusMove();
+    const { user } = renderScreen();
+    await chooseReceivedWithMove(user, theirs, moveOf(theirs, "physical"));
+    await user.click(within(myPresetGroup()).getByRole("radio", { name: "HB特化" }));
+
+    await user.selectOptions(moveSelect(), statusMove.id);
+    expect(myPresetOptionLabels()).toEqual(["無振り", "H振り"]);
+    expect(within(myPresetGroup()).getByRole("radio", { name: "H振り" })).toBeChecked();
+  });
+
+  test("観測したダメージの側を切り替えると、自分の調整も攻撃側 ↔ 防御側で入れ替わる", async () => {
+    const mine = speciesAt(0);
+    const { user } = renderScreen();
+    await choosePair(user, mine, speciesAt(1));
+    // 与えたダメージ(自分 = 攻撃側)は攻撃側プリセットのまま(回帰)
+    const attackerFullLabel = firstMoveOf(mine).category === "special" ? "C特化" : "A特化";
+    expect(within(myPresetGroup()).getByRole("radio", { name: attackerFullLabel })).toBeInTheDocument();
+    expect(within(myPresetGroup()).queryByRole("radio", { name: "H振り" })).toBeNull();
+
+    await chooseReceived(user);
+    expect(within(myPresetGroup()).getByRole("radio", { name: "H振り" })).toBeInTheDocument();
+    expect(within(myPresetGroup()).queryByRole("radio", { name: attackerFullLabel })).toBeNull();
+
+    await user.click(within(sideGroup()).getByRole("radio", { name: "与えたダメージ" }));
+    expect(within(myPresetGroup()).getByRole("radio", { name: attackerFullLabel })).toBeInTheDocument();
   });
 });
 
@@ -410,7 +546,7 @@ describe("結果の表示", () => {
       reverseCandidate({
         natureClass: "plus",
         nature: { plus: "def", minus: "atk" },
-        itemId: "example-item-def",
+        itemId: "exampleitemdef",
         ranges: [
           { min: 4, max: 7 },
           { min: 9, max: 12 },
@@ -483,7 +619,7 @@ describe("結果の表示", () => {
         reverseCandidate({
           natureClass: "plus",
           nature: { plus: "spa", minus: "atk" },
-          itemId: "example-item-power",
+          itemId: "exampleitempower",
           ranges: [{ min: 28, max: 32 }],
           spCount: 5,
         }),
@@ -501,6 +637,86 @@ describe("結果の表示", () => {
     expect(within(first).getByText(/C特化/)).toBeInTheDocument();
     expect(within(second).getByText("C 0")).toBeInTheDocument();
     expect(within(second).getByText(/無振り/)).toBeInTheDocument();
+  });
+
+  // issue #305: 観測を厳密に説明できる候補(exact)が1件も無いとき、その旨が分かるようにする。
+  // 一致の判定そのものは engine が返した exact / exactCount をそのまま使う(TS で再計算・再判定しない。
+  // ADR-0300 §8「Web は返ってきた値を加工せずに表示する」)。
+  const noExactResult: ReverseResult = {
+    ...defenderResult,
+    exactCount: 0,
+    candidates: defenderResult.candidates.map((candidate) => ({
+      ...candidate,
+      exact: false,
+      mismatch: 3,
+    })),
+  };
+
+  test("全候補が観測と一致しないときは role=status で理由の案内を出す(issue #305)", async () => {
+    await renderWithResult(noExactResult);
+    // critic指摘: role="status" は観測の上限の案内(L936付近)にも使われるので、role だけでなく
+    // 文言でも絞り込む(将来 status が複数同時に出るテストを足しても複数マッチで落ちないように)。
+    const notice = await screen.findByText(reverseResultText.noExactCandidateNotice);
+    expect(notice.closest('[role="status"]')).not.toBeNull();
+  });
+
+  test("全候補が不一致でも候補一覧は消さず、件数分そのまま出す(issue #305)", async () => {
+    await renderWithResult(noExactResult);
+    const cards = await candidateCards();
+    expect(cards).toHaveLength(noExactResult.candidates.length);
+    const [first, second, third] = cards;
+    if (first === undefined || second === undefined || third === undefined) {
+      throw new Error("候補カードが3件でない");
+    }
+    // 性格クラス・持ち物・SP 範囲・目安は今までどおり出る(SP 範囲には「参考」の印が添わるので部分一致で見る)
+    expect(within(first).getByText("補正なし")).toBeInTheDocument();
+    expect(within(first).getByText("持ち物なし")).toBeInTheDocument();
+    expect(within(first).getByText(/B 0〜3/)).toBeInTheDocument();
+    expect(within(first).getByText(/H振り/)).toBeInTheDocument();
+    expect(within(second).getByText("B上昇")).toBeInTheDocument();
+    expect(within(second).getByText("テストぼうぎょだま")).toBeInTheDocument();
+    expect(within(second).getByText(/B 4〜7, 9〜12/)).toBeInTheDocument();
+    expect(within(third).getByText(/B 32/)).toBeInTheDocument();
+    expect(within(third).getByText(/HB特化/)).toBeInTheDocument();
+    // 個別の「近い候補」ラベルは今までどおり全件に付く(弱めない)
+    expect(screen.getAllByText(reverseResultText.closeCandidateLabel)).toHaveLength(cards.length);
+  });
+
+  test("全候補が不一致のとき、SP 範囲は「参考」と分かる印を添える(issue #305)", async () => {
+    await renderWithResult(noExactResult);
+    const cards = await candidateCards();
+    for (const card of cards) {
+      expect(
+        within(card).getByText(reverseResultText.referenceRangeLabel, { exact: false }),
+      ).toBeInTheDocument();
+    }
+  });
+
+  test("一致する候補が1件以上あるときは案内も「参考」の印も出さない(issue #305 の正常系)", async () => {
+    await renderWithResult(defenderResult);
+    expect(await candidateCards()).toHaveLength(3);
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByText(reverseResultText.noExactCandidateNotice)).toBeNull();
+    expect(screen.queryByText(reverseResultText.referenceRangeLabel, { exact: false })).toBeNull();
+  });
+
+  test("候補が0件のときは全件不一致の案内を出さない(issue #305)", async () => {
+    await renderWithResult({ ...defenderResult, exactCount: 0, candidates: [] });
+    expect(await screen.findByRole("list", { name: "推定結果" })).toBeInTheDocument();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  test("%欄には「予測」のラベルを添える(issue #305)", async () => {
+    await renderWithResult(defenderResult);
+    const [first] = await candidateCards();
+    if (first === undefined) {
+      throw new Error("候補カードが無い");
+    }
+    expect(
+      within(first).getByText(reverseResultText.predictedPercentLabel, { exact: false }),
+    ).toBeInTheDocument();
+    // 値そのものの表記は変えない(ラベルは別の要素に分ける。既存の完全一致の期待値を壊さないため)
+    expect(within(first).getByText("40.2〜47.8%")).toBeInTheDocument();
   });
 
   test("応答を待つ間は「計算中」を出す", async () => {
@@ -636,6 +852,29 @@ describe("結果の表示", () => {
       const presetGroup = screen.getByRole("radiogroup", { name: "自分の調整" });
       const fullLabel = firstMoveOf(mine).category === "special" ? "C特化" : "A特化";
       await user.click(within(presetGroup).getByRole("radio", { name: fullLabel }));
+
+      expect(await expectBackToLoading()).toBeInTheDocument();
+    });
+
+    // issue #275: 受けたダメージのときの自分の耐久(防御側プリセット)も計算のやり直しの対象
+    // (CompletedReverse の比較に入れる)。入れ忘れると古い候補が残る。
+    test("受けたダメージで自分の耐久(防御側プリセット)を変えると", async () => {
+      const { engine, pending } = createDeferredReverseEngine();
+      const { user } = renderScreen(engine);
+      await chooseReceived(user);
+      await choosePair(user, speciesAt(0), speciesAt(1));
+      await typeObservation(user, 1, "60");
+      const first = pending.at(-1);
+      if (first === undefined) {
+        throw new Error("calcReverse が呼ばれていない");
+      }
+      await act(async () => {
+        first.resolve(ok(defenderResult));
+        await Promise.resolve();
+      });
+      expect(await candidateCards()).toHaveLength(3);
+
+      await user.click(within(myPresetGroup()).getByRole("radio", { name: "H振り" }));
 
       expect(await expectBackToLoading()).toBeInTheDocument();
     });

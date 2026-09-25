@@ -36,7 +36,7 @@
 | `POKEDEX_DATABASE_DSN` | `cmd/pokedex/main.go:29`(serve・export)、`cmd/migrate/main.go:30`、`cmd/import/main.go:116` | **必須**(import の `-dry-run` は不要) | — | go-sql-driver/mysql 形式。`parseTime=true` を強制付与。エラー文に DSN を出さない |
 | `POKEDEX_TEST_DSN` | `services/pokedex/db/mysql_test.go:37`・`importer/mysql_test.go:37` | `make test-db` で必須 | — | DB テスト用(`-tags mysql`)。無ければ**失敗**(スキップしない) |
 
-- CLI 引数(環境変数ではない): `pokedex-migrate up|down|version`(`down` は `-confirm <DB名>` 必須。Makefile では `CONFIRM_DESTROY`)、`pokedex serve|export -out <dir>`、`pokedex-import -data <dir> [-dry-run] [-force] [-upstream <file>] [-upstream-max-age 24h]`(`cmd/import/main.go:67-`)。
+- CLI 引数(環境変数ではない): `pokedex-migrate up|down|version`(`down` は `-confirm <DB名>` 必須。Makefile では `CONFIRM_DESTROY`)、`pokedex serve|export -out <dir>`、`pokedex-import -data <dir> [-dry-run] [-force] [-typechart <file>] [-upstream <file>] [-upstream-max-age 24h]`(`-typechart` の既定は `<data>/../testdata/golden/typechart.json`。ADR-0118)(`cmd/import/main.go:67-`)。
 
 ### balance / speed / judge(`PORT` は 3 サービス共通、既定 `8080`)
 
@@ -129,6 +129,7 @@
 | `JUDGE_DIR`・`JUDGE_IMAGE`・`JUDGE_URL` | `services/judge`・`pokecalc/judge:local`・`http://localhost:8080` | `services/judge/Makefile:3-5` | 同上 |
 | `IOS_SIMULATOR`・`IOS_DESTINATION`・`IOS_SCREEN`・`IOS_APPEARANCE`・`IOS_CONTENT_SIZE` | `iPhone 18 Pro`・`platform=iOS Simulator,name=$(IOS_SIMULATOR)`・`root`・`light`・`large` | `ios/Makefile:4-9` | シミュレータ |
 | `CONFIRM_DESTROY`(引数) | なし | `Makefile:migrate-down` | `migrate-down` に DB 名を必須で渡す(破壊的) |
+| `FORCE_VERSION`・`CONFIRM_FORCE`(引数) | なし | `Makefile:migrate-force` | `migrate-force` に版と DB 名を必須で渡す(dirty の復旧。issue #221) |
 | `POKEDEX_TEST_DSN`(引数/環境) | なし | `Makefile:117` | `make test-db` |
 
 ### シェルスクリプト(`${VAR:-既定}`)

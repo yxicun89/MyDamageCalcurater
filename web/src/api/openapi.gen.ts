@@ -230,6 +230,58 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/record/frequent-opponents": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * この端末でよく計算した相手(防御側の種族)を頻度×時間減衰の順に返す
+     * @description `X-Device-Id` の端末の計算イベント(`calc_events`)だけから作った集計を、スコアの降順で返す
+     *     (requirements.md §2「よく使うポケモン」・ADR-0209 §3 #2・§6-3)。他端末のイベントは混ぜない。
+     *
+     *     - スコアは「頻度 × 時間減衰(半減期は record-svc の設定。生イベントの保持期間 90日より短い。ADR-0209 §4)」で、
+     *       絶対値に意味は無い(並び順と相対比較のためだけの値)。
+     *     - 返すのは `speciesKey` だけで、名前・タイプ・画像は返さない(マスタは pokedex-svc の担当。
+     *       CLAUDE.md 絶対ルール4)。クライアントは必要なら `/api/pokedex/species/{key}` を引く。
+     *     - 記録が1件も無い端末は空配列(404 にしない)。
+     */
+    get: operations["listFrequentOpponents"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/record/device-data": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * この端末の記録(計算イベント・集計・お気に入り)をすべて削除する
+     * @description X-Device-Id の端末に紐づく record DB の行をすべて消す(ADR-0209 §5)。冪等で、
+     *     何も無い端末でも 200 `completed` を返す(404 にしない)。1回で消しきれない場合は
+     *     `partial` を返すので、同じ要求を `completed` になるまで繰り返す。
+     *     削除の時点を墓石として記録し、それ以前に発生した計算イベントが JetStream から
+     *     後から届いても保存しない(ADR-0209 §7)。team DB は消さないので、
+     *     クライアントは `DELETE /api/team/device-data` も呼ぶ(P5-4 で追加する)。
+     */
+    delete: operations["deleteRecordDeviceData"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/internal/pokedex/master": {
     parameters: {
       query?: never;
@@ -300,7 +352,8 @@ export interface components {
      *     | unknown_ability | abilityId がマスタに無い | 400 |
      *     | unknown_nature | natureId がマスタに無い | 400 |
      *     | not_found | ルートが無い / このサービスの担当外の操作 | 404 |
-     *     | master_unavailable | マスタを参照できない | 503 |
+     *     | master_unavailable | マスタ(pokedex の MySQL)を参照できない | 503 |
+     *     | store_unavailable | 保存データの DB(record / team の TiDB)を参照できない。`master_unavailable` と分けるのは原因も復旧手順も別で、「計算はできるが保存はできない」状態(CLAUDE.md 絶対ルール5)をクライアントが区別できる必要があるため(ADR-0209 §5.3) | 503 |
      *     | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202) | 503 |
      * @enum {string}
      */
@@ -328,6 +381,7 @@ export interface components {
       | "unknown_nature"
       | "not_found"
       | "master_unavailable"
+      | "store_unavailable"
       | "upstream_unavailable";
     /**
      * @default single
@@ -513,6 +567,40 @@ export interface components {
        */
       displayChancePercent: number;
     };
+    /**
+     * @description 「この結果は正しくない可能性がある」印1つ(ADR-0123)。engine が正しく計算できない技の機構・
+     *     持ち物・特性に、数値は通常の式のまま付ける(400 で拒否しない)。
+     */
+    UnsupportedMark: {
+      /**
+       * @description 印の対象
+       * @enum {string}
+       */
+      target: "move" | "attacker_item" | "attacker_ability" | "defender_item" | "defender_ability";
+      /**
+       * @description 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種)か zero_power(威力0の攻撃技。
+       *     威力が技の処理で決まるため)、持ち物・特性は unsupported_effect(効果スキーマで表せない)。
+       * @enum {string}
+       */
+      reason:
+        | "alt_defense_stat"
+        | "alt_offense_stat"
+        | "always_crit"
+        | "effectiveness_change"
+        | "field_specific"
+        | "fixed_damage"
+        | "ignore_defense_ranks"
+        | "move_specific"
+        | "multi_hit"
+        | "ohko"
+        | "priority_change"
+        | "type_change"
+        | "variable_power"
+        | "zero_power"
+        | "unsupported_effect";
+      /** @description 技・持ち物・特性の ID */
+      id: string;
+    };
     CalcResult: {
       /** @description 16 段階の乱数ダメージ(非減少) */
       rolls: number[];
@@ -545,6 +633,8 @@ export interface components {
       /** @description 使った技の分類(WASM 境界の CalcResult と同じ。Web が型を共有するため) */
       category: components["schemas"]["MoveCategory"];
       ko: components["schemas"]["KOChance"];
+      /** @description この結果に付いた「未対応」の印(ADR-0123)。印なしは空配列(WASM 境界の CalcResult と同じ形)。 */
+      unsupported: components["schemas"]["UnsupportedMark"][];
     };
     /**
      * @description 防御側の代表調整(耐久が上がる順)。SP は能力ポイント(Lv50・個体値31固定)。
@@ -713,6 +803,11 @@ export interface components {
        * @description ranges 全体での想定ダメージ幅の上限(表示%。小数第1位・四捨五入。CalcResult.maxPercent と同じ意味)
        */
       maxPercent: number;
+      /**
+       * @description この候補の計算に付いた「未対応」の印(ADR-0123)。SP によらず同じ(技・場・既知側は候補間で共通)。
+       *     印なしは空配列。
+       */
+      unsupported: components["schemas"]["UnsupportedMark"][];
     };
     ReverseResult: {
       side: components["schemas"]["ReverseSide"];
@@ -806,6 +901,17 @@ export interface components {
        *     「発動した場合の変化量」と「その確率」を持つだけ(ADR-0107 決定1)。
        */
       effect: components["schemas"]["MasterEffect"];
+      /**
+       * @description 技の機構(move_mechanisms。ADR-0121)。「威力・分類・タイプから通常の式で計算すると誤る」理由の
+       *     分類で、1つの技が複数を持つことがある。昇順・重複なし。通常の技(変化技を含む)は空配列。
+       *     calc-svc は engine.Move.Mechanisms にそのまま渡す(「未対応」の印の判定に使う。ADR-0123)。
+       *     値は UnsupportedMark.reason の技側13種と同じ(正は engine.AllMoveMechanisms)。ここでは
+       *     enum を付けない(意図的。ADR-0121 実装時の追記を参照): この内部 API は pokedex-svc → calc-svc
+       *     のみで使い、値の妥当性は既に `services/internal/master.MoveMechanismsOf` が検証している。
+       *     enum にすると oapi-codegen が別の Go 型を生成し、両サービスで `[]string` との相互変換が
+       *     必要になるだけで、二重の検証にしかならない。
+       */
+      mechanisms: string[];
     };
     /**
      * @description 効果定義(item_effects / ability_effects の JSON をそのまま。ADR-0005)。null は補正なし。
@@ -833,6 +939,46 @@ export interface components {
       nameJa: string;
       plus: components["schemas"]["StatKey"] | null;
       minus: components["schemas"]["StatKey"] | null;
+    };
+    /**
+     * @description 「よく使う相手」1件(ADR-0209 §3 #2)。端末内の計算イベントの集計で、他端末のイベントは混ざらない。
+     *     個体の中身(技・持ち物・特性・性格・SP)・ダメージの数値は返さない(集計に使うのは防御側の種族だけ)。
+     */
+    FrequentOpponent: {
+      /** @description 防御側(相手)の種族。名前・タイプは pokedex-svc から引く */
+      speciesKey: components["schemas"]["SpeciesKey"];
+      /**
+       * Format: double
+       * @description 頻度 × 時間減衰。並び順のための相対値で、絶対値に意味は無い(ADR-0209 §4)
+       */
+      score: number;
+      /** @description 減衰をかける前の、集計対象として残っている計算イベントの件数 */
+      count: number;
+      /**
+       * Format: date-time
+       * @description この相手を最後に計算した時刻(イベントの `occurred_at`)
+       */
+      lastCalculatedAt: string;
+    };
+    /**
+     * @description `completed` = この端末のデータは残っていない。`partial` = 1回の上限に達したので残りがある
+     *     (同じ要求を繰り返す。ADR-0209 §5.2)。
+     * @enum {string}
+     */
+    DeletionStatus: "completed" | "partial";
+    RecordDeletionResult: {
+      status: components["schemas"]["DeletionStatus"];
+      /**
+       * Format: date-time
+       * @description 墓石の時刻。これ以前に発生した計算イベントは以後保存しない(ADR-0209 §7)
+       */
+      purgedAt: string;
+      /** @description この呼び出しで消した行数(冪等なので2回目は 0 になる) */
+      deleted: {
+        calcEvents: number;
+        aggregates: number;
+        favorites: number;
+      };
     };
   };
   responses: {
@@ -1416,6 +1562,111 @@ export interface operations {
        * @description 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
        *     gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
        */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  listFrequentOpponents: {
+    parameters: {
+      query?: {
+        /** @description 返す上限。範囲外・整数でない値は 400 `invalid_input` */
+        limit?: number;
+      };
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description スコアの降順(同点は speciesKey の昇順)。記録が無ければ空配列 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FrequentOpponent"][];
+        };
+      };
+      400: components["responses"]["Error"];
+      /**
+       * @description record-svc が TiDB に届かない(`store_unavailable`)、または gateway から record-svc に届かない
+       *     (`upstream_unavailable`。ADR-0202・ADR-0209 §5.3)
+       */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  deleteRecordDeviceData: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 削除の結果(`partial` なら残りがある) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RecordDeletionResult"];
+        };
+      };
+      400: components["responses"]["Error"];
+      500: components["responses"]["Error"];
+      /** @description record-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`) */
       503: {
         headers: {
           [name: string]: unknown;

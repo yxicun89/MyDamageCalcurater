@@ -48,7 +48,7 @@ func assertStatusOK(t *testing.T, rec *httptest.ResponseRecorder, what string) {
 
 // AC-R1: マスタの準備中は calc の3操作が 503 master_unavailable(Error 形式・契約どおり)。
 func TestMasterUnavailableWhileNotReady(t *testing.T) {
-	h := NewDeferredHandler(func() master.Store { return nil })
+	h := NewDeferredHandler(func() master.Store { return nil }, nil)
 	for path, body := range calcOperationBodies(t) {
 		t.Run(path, func(t *testing.T) {
 			rec := post(t, h, path, body, true) // 503 の本文も契約(Error)に照らす
@@ -60,7 +60,7 @@ func TestMasterUnavailableWhileNotReady(t *testing.T) {
 // AC-R1: 準備中でも liveness(/healthz)は 200、readiness(/readyz)は 503 master_unavailable。
 // 担当外のルート(pokedex・未知)は準備状態に関係なく 404 not_found。
 func TestProbesWhileNotReady(t *testing.T) {
-	h := NewDeferredHandler(func() master.Store { return nil })
+	h := NewDeferredHandler(func() master.Store { return nil }, nil)
 
 	rec := serve(t, h, http.MethodGet, "/healthz", http.Header{}, nil)
 	if rec.Code != http.StatusOK {
@@ -80,7 +80,7 @@ func TestProbesWhileNotReady(t *testing.T) {
 // (ハンドラを作り直さない。バックグラウンドの取得が終わった時点で切り替わる)。
 func TestDeferredHandlerBecomesReady(t *testing.T) {
 	src := &switchableStore{store: newFakeStore(t)}
-	h := NewDeferredHandler(src.current)
+	h := NewDeferredHandler(src.current, nil)
 	bodies := calcOperationBodies(t)
 
 	assertError(t, post(t, h, "/api/calc", bodies["/api/calc"], true), http.StatusServiceUnavailable, "master_unavailable")
@@ -100,8 +100,8 @@ func TestDeferredHandlerBecomesReady(t *testing.T) {
 // AC-R2: 準備済みの結果は NewHandler(Store を直接渡す)と同じ(準備状態の包みが計算に影響しない)。
 func TestDeferredHandlerMatchesNewHandler(t *testing.T) {
 	store := newFakeStore(t)
-	direct := NewHandler(store)
-	deferred := NewDeferredHandler(func() master.Store { return store })
+	direct := NewHandler(store, nil)
+	deferred := NewDeferredHandler(func() master.Store { return store }, nil)
 	for path, body := range calcOperationBodies(t) {
 		want := post(t, direct, path, body, true)
 		got := post(t, deferred, path, body, true)
@@ -114,7 +114,7 @@ func TestDeferredHandlerMatchesNewHandler(t *testing.T) {
 
 // AC-R3: NewHandler(起動時に読み込み済み。ファイル方式)の /readyz は常に 200 {"status":"ok"}。
 func TestReadyzWithLoadedStore(t *testing.T) {
-	rec := serve(t, NewHandler(newFakeStore(t)), http.MethodGet, "/readyz", http.Header{}, nil)
+	rec := serve(t, NewHandler(newFakeStore(t), nil), http.MethodGet, "/readyz", http.Header{}, nil)
 	assertStatusOK(t, rec, "/readyz")
 	assertReadyBody(t, rec.Body.Bytes())
 }
@@ -122,7 +122,7 @@ func TestReadyzWithLoadedStore(t *testing.T) {
 // AC-R4: calc-svc は pokedex-svc の内部 API(GET /internal/pokedex/master)を提供しない(担当外は 404 not_found)。
 // 生成物 api.ServerInterface に GetMasterExport が増えたが、ルートには登録しない。
 func TestMasterExportRouteIsNotFound(t *testing.T) {
-	h := NewHandler(newFakeStore(t))
+	h := NewHandler(newFakeStore(t), nil)
 	for _, header := range []http.Header{{}, validHeaders()} {
 		rec := serve(t, h, http.MethodGet, "/internal/pokedex/master", header, nil)
 		assertError(t, rec, http.StatusNotFound, "not_found")

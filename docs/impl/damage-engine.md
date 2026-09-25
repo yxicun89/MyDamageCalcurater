@@ -82,8 +82,8 @@ flowchart TD
 | 1 | 入力検証 | `dmg:193-201` | — | §11。失敗は error(部分結果なし) |
 | 2 | 相性 | `dmg:209` `in.TypeChart.Effectiveness(技タイプ, 防御側 Species.Types)` | 整数比 `Num/Den`(約分しない。`Den = 2^タイプ数`)`tc:58-63` | §5。**テラスタイプは使わない**(§13) |
 | 3 | 一致判定 | `dmg:214` → `dmg:117` `stabModifier` | — | 攻撃側 `Species.Types` に技タイプがあれば 6144、特性 `StabMod` があればその値(例 8192)。技タイプなし(`""`)は不一致 |
-| 4 | 特性による無効・吸収 | `dmg:218-220` → `dmg:96` `abilityNullification` | — | タイプ由来の無効が先。`DefImmuneTypes` が `DefAbsorbTypes` に勝つ(ADR-0106 §決定1)。結果は `DamageResult.Nullified` |
-| 5 | 0 ダメージの早期終了 | `dmg:223-225` | — | 変化技・`Power <= 0`・相性 0・特性で無効/吸収。Rolls は全 0、`KO.Hits = 0` |
+| 4 | 特性による無効・吸収 → サイコフィールドの先制技 | `abilityNullification` → `blockedByPsychicTerrain`(`engine/damage.go`) | — | タイプ由来の無効が先。`DefImmuneTypes` が `DefAbsorbTypes` に勝つ(ADR-0106 §決定1)。その後、優先度 > 0 の攻撃技 × サイコフィールド × 防御側が接地(`isGrounded`)なら無効(ADR-0123。oracle と同じ順)。結果は `DamageResult.Nullified`(`immune` / `absorb` / `psychic_terrain`) |
+| 5 | 0 ダメージの早期終了 | `dmg:223-225` | — | 変化技・`Power <= 0`・相性 0・特性で無効/吸収・サイコフィールド。Rolls は全 0、`KO.Hits = 0` |
 | 6 | 攻撃・防御の実効値 | `dmg:228` → `dmg:144` `attackDefenseStats` | 下表 | 物理 = A/B、特殊 = C/D(`dmg:146-150`) |
 | 7 | 威力 | `dmg:231` `max(1, pokeRound(威力, powerModifier(in)))` | `pokeRound` 1 回(補正は `chainMods` 済み) | `mod:178` `powerModifier`: フィールド(`mod:99`。接地している側だけ)→ タイプ強化持ち物 → 分類限定の威力持ち物(ADR-0008 訂正2) |
 | 8 | 基礎ダメージ | `dmg:232` `(((2*L/5+2)*威力*A)/D)/50 + 2` | 各段 floor | L は `EffectiveLevel`(常に 50) |
@@ -153,7 +153,7 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 | `IgnoresBurn` | 攻撃側。やけどの半減を無効 | `dmg:132-134` | #13 |
 | `Airborne` | 両側。浮いている(ふゆう)。接地判定 `isGrounded`(`mod:86`)でフィールドの補正の対象外にする。地面技の無効は `DefImmuneTypes` で別に持つ(ADR-0116) | `mod:86-95` | #7 |
 
-- 効果値の出どころ: calc-svc は DB の効果 JSON を `services/internal/master/effects.go:299` `DecodeItemEffect`・`:380` `DecodeAbilityEffect` で厳格デコード(本番の定義は `data/importer/effects.json`。ADR-0101)。WASM はリクエストの `item.effect` / `ability.effect` を `engine/wasmapi/dto.go:273`・`:398` で変換。
+- 効果値の出どころ: calc-svc は DB の効果 JSON を `services/internal/master/effects.go:305` `DecodeItemEffect`・`:386` `DecodeAbilityEffect` で厳格デコード(本番の定義は `data/importer/effects.json`。ADR-0101。補正値は engine と同じ上限 `MaxEffectModifier` まで)。Champions 世代でダメージに効くのにこの表で表せない持ち物・特性は、理由付きで `tools/golden/unsupported-effects.json` に載せる(ゴールデンの生成器が「効くもの − 定義済み」との一致を確かめる。ADR-0120)。WASM はリクエストの `item.effect` / `ability.effect` を `engine/wasmapi/dto.go:273`・`:398` で変換。
 - 天候・フィールド・壁は「ゲーム機構」なので engine のルールとしてコードに持つ(`mod:1-14` のコメント、ADR-0005)。
 - 技の追加効果 `Move.Effect`(`engine/move_effect.go:22` `MoveEffect`)は `CalcDamage` が読まない。判定側が使うメタデータ(ADR-0107 決定2。`engine/move_effect_test.go:83` `TestCalcDamageIgnoresMoveEffect`)。
 
@@ -189,7 +189,7 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 |---|---|---|
 | 件数上限 | `Presets`・`PresetKeys` は各 8 以下、`ItemVariants` は 64 以下(選別より前に見る) | `engine/bulk.go:217-225` |
 | プリセットの選択 | `PresetKeys` あり → `Presets`(空ならカタログ)からキーで選ぶ(指定順が行順)/ `Presets` のみ → そのまま / どちらも空 → 技の分類の既定セット | `engine/bulk.go:170` `selectPresets` |
-| 既定カタログ | 8 件(無振り・H・H+B補正・HB・HB特化・H+D補正・HD・HD特化)。物理は B 系、特殊は D 系、変化技は無振りと H だけ | `engine/bulk.go:112` `DefenderPresetCatalog`、`:127` `DefaultDefenderPresets` |
+| 既定カタログ | 8 件(無振り・H・H+B補正・HB・HB特化・H+D補正・HD・HD特化)。物理は B 系、特殊は D 系、変化技は無振りと H だけ | `engine/presets/defender.json`(正。`engine/defender_preset.go` が embed)、`engine/bulk.go` `DefenderPresetCatalog`・`DefaultDefenderPresets` |
 | 検証 | キー空・SP 範囲/合計・性格が HP を指す → `ErrInvalidPreset`。重複 `ErrDuplicatePreset`、未知 `ErrUnknownPreset` | `engine/bulk.go:151` |
 | 防御側の組み立て | Lv50・`Status` なし・ランク 0・**特性なし(ゼロ値)**・テラスなし | `engine/bulk.go:139` `Defender` |
 | 行 | プリセット優先でプリセット × 持ち物(持ち物なしは `nil` の 1 通り)。各行 = 同じ入力の `CalcDamage` | `engine/bulk.go:243-275` |
@@ -212,14 +212,17 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 | SP 各 0..32・合計 ≤ 66 | error | `engine/model.go:141-148` |
 | ランク -6..6 | error | `engine/model.go:149-154` |
 | 性格が HP を指さない | error | `engine/model.go:155` |
-| 種族のタイプが 1〜2 個 | error | `engine/model.go:158` |
+| 種族のタイプが 1〜2 個・重複なし | error | `engine/model.go` `Individual.Validate` |
+| 種族値 `MinBaseStat..MaxBaseStat`(1..255。HP を含む) | error | `engine/model.go` `Individual.Validate`(#255。ADR-0117) |
+| 持ち物・特性の効果の補正値 `MinEffectModifier..MaxEffectModifier`(1..×512。「0 は補正なし」の項目は 0 も可) | error | `engine/model.go` `ItemEffect.validate` / `AbilityEffect.validate`(#255。ADR-0117) |
 | 相性表あり・入力のタイプ ID が表にある | `ErrTypeChartMissing` / `ErrUnknownType` | `dmg:173` |
 | bulk の件数(8 / 8 / 64) | `ErrTooManyPresets` / `ErrTooManyItemVariants` | `engine/bulk.go:36-43,217-225` |
 | reverse の件数(持ち物 64・観測 16・`MaxCandidates` 0..128) | `ErrTooManyItemCandidates` / `ErrTooManyObservations` / `ErrInvalidMaxCandidates` | `engine/reverse.go:49-56,307-315` |
+| reverse の技がダメージを与えられる(変化技・威力 0・全候補で 0 を拒否) | `ErrMoveDealsNoDamage`(境界では `invalid_input`) | `engine/reverse.go` `CalcReverse`(#317。ADR-0117 §3) |
 
 - 件数上限の値は calc-svc の契約(ADR-0208 §1)と同じ値を engine にも置く。HTTP を通らない直接呼び出し・WASM でも計算量を増幅させないため(ADR-0108 決定1〜3)。上限ちょうどの実測は bulk 約 3.0ms・reverse 約 25ms(ADR-0108 §6 が引く ADR-0208 の計測)。
 - wasmapi は同じ件数検査を DTO 変換より前に重ねて置く(`engine/wasmapi/requests.go:129-136,279-286`)。HTTP と WASM で同じ `code`(`invalid_input`)にするため(ADR-0108 決定3・5)。エラーの code 対応は `engine/wasmapi/wasmapi.go:151` `errorResponse`。
-- 検査**していない**もの(#255): 種族値の上限、タイプの重複(`["fire","fire"]` が 2 回掛かる)、効果値の範囲(負・巨大な倍率)、`Move.Effect` の妥当性(`engine/move_effect_test.go:120` `TestCalcDamageAcceptsInvalidMoveEffect`。`MoveEffect.Validate` `engine/move_effect.go:29` は呼び出し側が使う)。HP が巨大だと `koProbability` の配列確保(`engine/ko.go:40`)が比例して増える。
+- 検査**していない**もの: `Move.Effect` の妥当性(`engine/move_effect_test.go:120` `TestCalcDamageAcceptsInvalidMoveEffect`。`MoveEffect.Validate` `engine/move_effect.go:29` は呼び出し側が使う)。種族値の上限・タイプの重複・効果値の範囲は #255 で `Individual.Validate` が見るようにした(HP の上限で `koProbability` の配列確保 `engine/ko.go:40` も頭打ちになる。ADR-0117)。
 
 ## 12. engine の純粋性の保ち方
 
@@ -241,17 +244,27 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 | `TeraType` | 表にある ID かの検証だけ。一致判定・相性は素の `Species.Types` | `dmg:184-187`、`dmg:117`、`mod:51` `hasType`、ADR-0005 | #232・#315 |
 | `Format = double` | 計算に使わない(壁 ×0.5 固定・全体技の軽減なし) | §10 | #232・#288 |
 | `Field.AttackerScreens` | どこからも読まれない(`DefenderScreens` だけを見る) | `mod:124` | — |
-| `Move.Priority`・`Move.Effect` | ダメージ計算では読まない | `engine/model.go:21`、ADR-0107 決定2 | — |
+| `Move.Effect` | ダメージ計算では読まない(`Move.Priority` はサイコフィールドの判定だけに使う。ADR-0123) | `engine/model.go:21`、ADR-0107 決定2 | — |
 | `Species.Abilities` | 参考。計算は `Individual.Ability` を使う | `engine/model.go:16` | #272(Web で特性を選べない) |
 | `AbsorbEffect` の回復・能力上昇 | 読まない(ダメージ 0 だけ) | `mod:28-30`、ADR-0106 §決定4 | — |
 | `Status` の burn 以外 | ダメージに関係しない | `dmg:130` | — |
 | `DamageResult.Nullified` | engine は返すが、wasmapi の結果 DTO と calc-svc の応答に出ない(`calcResultDTO` `engine/wasmapi/dto.go:598` に項目なし。`services/calc` に参照なし) | grep | #78 |
-| 効果定義の無い持ち物・特性 | `Effect == nil` = 補正なしで計算 | §6 | #270・#282 |
+| 効果定義の無い持ち物・特性 | `Effect == nil` = 補正なしで計算。ダメージに効くのに表せないもの(`tools/golden/unsupported-effects.json`)は効果定義に「未対応」の印(`UnsupportedAttacker` / `UnsupportedDefender`)を持ち、効く側で持つと結果に印が付く(下の「未対応の印」) | §6、ADR-0120・ADR-0123 | #270・#282 |
+
+未対応の印(ADR-0123。`engine/unsupported.go`):
+
+engine が通常の式で正しく計算できない入力は、数値を通常の式のまま返し、`DamageResult.Unsupported`(一括計算は各行の `Result`、逆算は各候補の `Unsupported`)に印 `{Target, Reason, ID}` を付ける。WASM の結果には `unsupported`(常に配列)として出る。calc-svc の応答にはまだ出ない(API レーンに契約の追加を依頼中)。
+
+| 対象(`Target`) | 理由(`Reason`) | 付く条件 |
+|---|---|---|
+| `move` | 技の機構(`Move.Mechanisms`。ADR-0121 の 13 種) | `always_crit` は急所なしの入力、`ignore_defense_ranks` は防御側の使う側のランクが 0 でないとき、`priority_change` はサイコフィールド、`field_specific` は天候かフィールドがあるとき。ほかは常に。未知の値も常に |
+| `move` | `zero_power` | 威力 0 の攻撃技(変化技は付けない) |
+| `attacker_item` / `attacker_ability` / `defender_item` / `defender_ability` | `unsupported_effect` | 効果定義の `UnsupportedAttacker`(攻撃側で持つとき)/ `UnsupportedDefender`(防御側で持つとき) |
 
 対応していない機構(ADR-0005「M1 での対象外」・コードで確認できるもの):
 
-- 接地判定の一部: じゅうりょく・くろいてっきゅう(必ず接地)・ふうせん(浮く)は未モデル化(ADR-0116 §対象外)。グラスフィールドの地震・じならし半減、サイコフィールドの先制技無効などフィールド固有の技の処理は #271
-- 固定ダメージ・多段・威力変動・参照ステータスの差し替え: 威力の数値どおり単発で計算(`Power <= 0` は 0 ダメージ。`dmg:223`)。#233・#271
+- 接地判定の一部: じゅうりょく・くろいてっきゅう(必ず接地)・ふうせん(浮く)は未モデル化(ADR-0116 §対象外)。グラスフィールドの地震・じならし半減などフィールド固有の技の処理は未実装で、印(`field_specific`)が付く(#271。サイコフィールドの先制技無効は実装済み。ADR-0123)
+- 固定ダメージ・多段・威力変動・参照ステータスの差し替え: 威力の数値どおり単発で計算し、印を付ける(`Power <= 0` は 0 ダメージ + `zero_power`)。#233・#271
 - 条件付き特性(ADR-0005 の列挙: いかく等)、天候を変える特性、重さ依存技、急所ランク、テラスタルの補正、ダブル固有補正(全体技 ×0.75 など)
 - 多ターンの KO(定数ダメージ・回復・反動)、急所率・命中率(ADR-0006)
 - 32bit 折り返し(ADR-0004 保留)

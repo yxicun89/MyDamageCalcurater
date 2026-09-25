@@ -275,11 +275,14 @@ func TestSpeciesRequiresTypeChart(t *testing.T) {
 
 func TestMoveMapsAllEngineFields(t *testing.T) {
 	c := testChart(t)
-	got, err := master.Move(master.MoveRow{ID: "testflame", NameJa: "テストフレイム", Type: "fire", Category: "special", Power: 90, Priority: 1}, c)
+	got, err := master.Move(master.MoveRow{ID: "testflame", NameJa: "テストフレイム", Type: "fire", Category: "special", Power: 90, Priority: 1,
+		Mechanisms: []string{"variable_power", "multi_hit"}}, c)
 	if err != nil {
 		t.Fatalf("Move: %v", err)
 	}
-	want := engine.Move{ID: "testflame", NameJa: "テストフレイム", Type: "fire", Category: engine.CategorySpecial, Power: 90, Priority: 1}
+	// 機構は昇順に並べて engine.Move に載せる(ADR-0123)。
+	want := engine.Move{ID: "testflame", NameJa: "テストフレイム", Type: "fire", Category: engine.CategorySpecial, Power: 90, Priority: 1,
+		Mechanisms: []engine.MoveMechanism{engine.MechanismMultiHit, engine.MechanismVariablePower}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
@@ -395,6 +398,9 @@ func fullItemEffect() engine.ItemEffect {
 		BoostType:          "fire",
 		BoostTypeMod:       4915,
 		ResistBerryType:    "water",
+		// 未対応の印(ADR-0123)。本番のデータでは補正と混ぜないが(生成器が確かめる)、形としては往復できる。
+		UnsupportedAttacker: true,
+		UnsupportedDefender: true,
 	}
 }
 
@@ -409,6 +415,8 @@ func fullAbilityEffect() engine.AbilityEffect {
 		ReduceSuperEffective: 3072,
 		IgnoresBurn:          true,
 		Airborne:             true,
+		UnsupportedAttacker:  true,
+		UnsupportedDefender:  true,
 	}
 }
 

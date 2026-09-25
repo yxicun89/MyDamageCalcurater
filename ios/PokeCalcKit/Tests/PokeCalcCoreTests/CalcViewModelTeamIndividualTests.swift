@@ -303,7 +303,8 @@ final class CalcViewModelTeamIndividualTests: XCTestCase {
 
         let after = await bulkCount(stub)
         XCTAssertEqual(after, before, "知らない ID では計算しない")
-        XCTAssertEqual(viewModel.attackerPreset, .aFull, "出どころは起動時のまま")
+        // P6-12 で既定が A特化から無振りに変わったため、case の直書きをやめて既定を参照する(ADR-0501「P6-12」5章)
+        XCTAssertEqual(viewModel.attackerPreset, AttackerPreset.defaultPreset, "出どころは起動時のまま")
         XCTAssertNil(viewModel.error)
     }
 

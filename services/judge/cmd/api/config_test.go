@@ -76,6 +76,52 @@ func TestUpstreamTimeoutFromEnv(t *testing.T) {
 	}
 }
 
+// TestRequestTimeoutFromEnv: 1 リクエスト全体の期限(issue #213。既定 12 秒。ADR-0707 §1)。
+// http.Server の WriteTimeout(main.go の writeTimeout。既定 15 秒)より確実に短くする
+// (期限内に 503 の本文を書き終えられるように)ため、writeTimeout 以上の値は起動を失敗させる。
+func TestRequestTimeoutFromEnv(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		env          map[string]string
+		writeTimeout time.Duration
+		want         time.Duration
+		wantErr      bool
+	}{
+		{"未設定なら既定の12秒", nil, writeTimeout, 12 * time.Second, false},
+		{"空文字なら既定の12秒", map[string]string{"JUDGE_REQUEST_TIMEOUT": ""}, writeTimeout, 12 * time.Second, false},
+		{"duration として読む", map[string]string{"JUDGE_REQUEST_TIMEOUT": "5s"}, writeTimeout, 5 * time.Second, false},
+		{"duration でない", map[string]string{"JUDGE_REQUEST_TIMEOUT": "12"}, writeTimeout, 0, true},
+		{"0 は不可", map[string]string{"JUDGE_REQUEST_TIMEOUT": "0s"}, writeTimeout, 0, true},
+		{"負は不可", map[string]string{"JUDGE_REQUEST_TIMEOUT": "-1s"}, writeTimeout, 0, true},
+		{"writeTimeout と同じは不可", map[string]string{"JUDGE_REQUEST_TIMEOUT": "15s"}, writeTimeout, 0, true},
+		{"writeTimeout 超過は不可", map[string]string{"JUDGE_REQUEST_TIMEOUT": "20s"}, writeTimeout, 0, true},
+		{"writeTimeout 未満なら良い(境界)", map[string]string{"JUDGE_REQUEST_TIMEOUT": "14999ms"}, writeTimeout, 14999 * time.Millisecond, false},
+		{"別の writeTimeout でも同じ関係を守る", map[string]string{"JUDGE_REQUEST_TIMEOUT": "3s"}, 4 * time.Second, 3 * time.Second, false},
+		{"別の writeTimeout: 一致は不可", map[string]string{"JUDGE_REQUEST_TIMEOUT": "4s"}, 4 * time.Second, 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := requestTimeoutFromEnv(envLookup(tt.env), tt.writeTimeout)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("err = nil, want an error (env=%v, writeTimeout=%v)", tt.env, tt.writeTimeout)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("err = %v, want nil", err)
+			}
+			if got != tt.want {
+				t.Errorf("requestTimeoutFromEnv = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestUpstreamsFromEnvWithoutBaseURL: 上流の URL が未設定でも起動はする(ADR-0700 §5)。
 // クライアントは nil のままで、ヘルスは 200、判定の API は 503 になる(speed の read model と同じ扱い)。
 func TestUpstreamsFromEnvWithoutBaseURL(t *testing.T) {

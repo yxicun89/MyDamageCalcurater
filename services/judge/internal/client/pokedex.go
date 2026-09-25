@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 )
 
 // Species is judge's own copy of the pokedex fields it reads (ADR-0700 §4): the field
@@ -34,7 +35,7 @@ func NewPokedex(config Config) (*Pokedex, error) {
 // (base stats and types). ctx and the configured Timeout race; whichever ends first wins
 // (ADR-0700 §2).
 func (p *Pokedex) Species(ctx context.Context, rc RequestContext, key string) (Species, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/api/pokedex/species/"+key, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/api/pokedex/species/"+url.PathEscape(key), nil)
 	if err != nil {
 		return Species{}, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
 	}
@@ -200,7 +201,7 @@ type Move struct {
 // Move calls GET {base}/api/pokedex/moves/{key} and extracts the fields judge reads (id and
 // priority; ADR-0704 §9).
 func (p *Pokedex) Move(ctx context.Context, rc RequestContext, key string) (Move, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/api/pokedex/moves/"+key, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/api/pokedex/moves/"+url.PathEscape(key), nil)
 	if err != nil {
 		return Move{}, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
 	}

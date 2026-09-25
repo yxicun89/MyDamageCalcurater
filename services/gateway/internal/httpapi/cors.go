@@ -15,7 +15,8 @@ import (
 
 // corsAllowMethods / corsAllowHeaders / corsMaxAge はプリフライトの応答ヘッダの固定値(ADR-0202 §6)。
 const (
-	corsAllowMethods = "GET, POST, OPTIONS"
+	// DELETE は P5-3(record-svc の全削除 API)で足した(ADR-0209 §10-2・AC-P8)。
+	corsAllowMethods = "GET, POST, DELETE, OPTIONS"
 	corsAllowHeaders = "Content-Type, X-Device-Id, X-Session-Id"
 	corsMaxAge       = "600"
 )

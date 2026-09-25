@@ -39,9 +39,10 @@ final class AttackerPresetTests: XCTestCase {
     // MARK: - 表示名と順序
 
     func testCasesAreOrderedAndLabeledAsRequirements() {
-        // requirements.md「A特化」「A振り(補正なし)」「無振り」の順。画面のセグメントはこの順に並ぶ。
-        XCTAssertEqual(AttackerPreset.allCases, [.aFull, .aMax, .none])
-        XCTAssertEqual(AttackerPreset.allCases.map(\.label), ["A特化", "A振り", "無振り"])
+        // 並び順は engine/presets/attacker.json(無振り → 特化 → 振り。ADR-0114)。画面のセグメントはこの順に並ぶ。
+        // P6-12 で順序だけを JSON に合わせて変えた(旧: A特化 → A振り → 無振り。ADR-0501「P6-12」5章)。文言は変えていない。
+        XCTAssertEqual(AttackerPreset.allCases, [.none, .aFull, .aMax])
+        XCTAssertEqual(AttackerPreset.allCases.map(\.label), ["無振り", "A特化", "A振り"])
     }
 
     /// issue #334: `label(for:)` は技の分類で A/C を切り替える(`KnownDefenderPreset.label(for:)` と同じ形)。

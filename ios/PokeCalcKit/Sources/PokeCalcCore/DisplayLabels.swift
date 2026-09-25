@@ -79,3 +79,74 @@ public enum EffectivenessLabel {
         }
     }
 }
+
+// MARK: - 計算画面の「詳細」(issue #274。ADR-0501「issue #274」)
+
+/// 計算画面の「詳細」(折りたたみ)の見出し・トグルの日本語ラベル。Web レーンも同じ語を使う
+/// (docs/ai-shared/DECISIONS.md 2026-09-25「計算条件の入力 UI」)。
+public enum CalcConditionLabels {
+    public static let sectionTitle = "詳細"
+    public static let critical = "急所"
+    public static let burn = "やけど"
+    public static let weatherTitle = "天候"
+    public static let terrainTitle = "フィールド"
+    public static let defenderScreensTitle = "防御側の壁"
+    public static let rankTitle = "攻撃側のランク"
+    public static let abilityTitle = "攻撃側の特性"
+    /// 特性を指定しない(`abilityId` を送らない)選択肢。
+    public static let abilityUnspecified = "指定なし"
+    /// ランクの −/+ ボタンの VoiceOver 読み上げ(画像だけのボタンなので明示する)。
+    public static let rankDecrement = "ランクを下げる"
+    public static let rankIncrement = "ランクを上げる"
+}
+
+/// 天候の日本語名(openapi `Weather` の5値)。
+public enum WeatherLabel {
+    public static func japaneseName(for weather: Weather) -> String {
+        switch weather {
+        case .none: return "なし"
+        case .sun: return "はれ"
+        case .rain: return "あめ"
+        case .sand: return "すなあらし"
+        case .snow: return "ゆき"
+        }
+    }
+}
+
+/// フィールドの日本語名(openapi `Terrain` の5値)。
+public enum TerrainLabel {
+    public static func japaneseName(for terrain: Terrain) -> String {
+        switch terrain {
+        case .none: return "なし"
+        case .electric: return "エレキフィールド"
+        case .grassy: return "グラスフィールド"
+        case .psychic: return "サイコフィールド"
+        case .misty: return "ミストフィールド"
+        }
+    }
+}
+
+/// 壁の日本語名(openapi `Screens` の3プロパティ)。
+public enum ScreenKindLabel {
+    public static func japaneseName(for kind: ScreenKind) -> String {
+        switch kind {
+        case .reflect: return "リフレクター"
+        case .lightScreen: return "ひかりのかべ"
+        case .auroraVeil: return "オーロラベール"
+        }
+    }
+}
+
+/// ランク補正の表示(「A +1」「C -2」「A ±0」)。文字は `AttackerPreset` と同じ対応(atk → A、spa → C)。
+public enum RankLabel {
+    public static func text(stat: StatKey, value: Int) -> String {
+        let letter = AttackerPreset.statLetter(for: stat)
+        let signedValue: String
+        switch value {
+        case 0: signedValue = "±0"
+        case ..<0: signedValue = "\(value)"
+        default: signedValue = "+\(value)"
+        }
+        return "\(letter) \(signedValue)"
+    }
+}

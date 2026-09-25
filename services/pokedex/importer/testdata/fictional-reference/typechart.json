@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "source": "test-calc",
+  "version": "test-calc-1",
+  "generation": 0,
+  "note": "Fictional reference type chart for importer tests only (same shape as testdata/golden/typechart.json). Matches testdata/fictional/generated/calc.",
+  "excludedTypes": [
+    "???",
+    "stellar"
+  ],
+  "types": [
+    "fire",
+    "grass",
+    "normal",
+    "water"
+  ],
+  "effectiveness": {
+    "fire": {"fire": 1, "grass": 4, "normal": 2, "water": 1},
+    "grass": {"fire": 1, "grass": 1, "normal": 2, "water": 4},
+    "normal": {"fire": 2, "grass": 2, "normal": 2, "water": 2},
+    "water": {"fire": 4, "grass": 1, "normal": 2, "water": 1}
+  }
+}

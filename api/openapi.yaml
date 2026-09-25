@@ -19,6 +19,11 @@ tags:
     description: マスタ参照(種族・技・持ち物・特性・性格)
   - name: calc
     description: ダメージ計算・一括計算・逆算
+  - name: record
+    description: |
+      計算の記録(自動保存された計算イベントから作る「よく使う相手」の集計・お気に入り)と、
+      端末単位の全削除(ADR-0209 §5)。すべて `X-Device-Id` の端末の中だけを見る(ADR-0209 §6)。
+      端末 ID はボディ・クエリ・パスで受け取らない(送られたら 400 `unknown_field`)。
   - name: internal
     description: |
       サービス間の内部 API(ADR-0204)。gateway は公開しない(`/internal/*` は gateway で 404 `not_found`)。
@@ -394,6 +399,80 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
+  /api/record/frequent-opponents:
+    get:
+      tags: [record]
+      operationId: listFrequentOpponents
+      summary: この端末でよく計算した相手(防御側の種族)を頻度×時間減衰の順に返す
+      description: |
+        `X-Device-Id` の端末の計算イベント(`calc_events`)だけから作った集計を、スコアの降順で返す
+        (requirements.md §2「よく使うポケモン」・ADR-0209 §3 #2・§6-3)。他端末のイベントは混ぜない。
+
+        - スコアは「頻度 × 時間減衰(半減期は record-svc の設定。生イベントの保持期間 90日より短い。ADR-0209 §4)」で、
+          絶対値に意味は無い(並び順と相対比較のためだけの値)。
+        - 返すのは `speciesKey` だけで、名前・タイプ・画像は返さない(マスタは pokedex-svc の担当。
+          CLAUDE.md 絶対ルール4)。クライアントは必要なら `/api/pokedex/species/{key}` を引く。
+        - 記録が1件も無い端末は空配列(404 にしない)。
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+        - name: limit
+          in: query
+          description: 返す上限。範囲外・整数でない値は 400 `invalid_input`
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+      responses:
+        '200':
+          description: スコアの降順(同点は speciesKey の昇順)。記録が無ければ空配列
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/FrequentOpponent' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '503':
+          description: |
+            record-svc が TiDB に届かない(`store_unavailable`)、または gateway から record-svc に届かない
+            (`upstream_unavailable`。ADR-0202・ADR-0209 §5.3)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        default:
+          $ref: '#/components/responses/Error'
+
+  /api/record/device-data:
+    delete:
+      tags: [record]
+      operationId: deleteRecordDeviceData
+      summary: この端末の記録(計算イベント・集計・お気に入り)をすべて削除する
+      description: |
+        X-Device-Id の端末に紐づく record DB の行をすべて消す(ADR-0209 §5)。冪等で、
+        何も無い端末でも 200 `completed` を返す(404 にしない)。1回で消しきれない場合は
+        `partial` を返すので、同じ要求を `completed` になるまで繰り返す。
+        削除の時点を墓石として記録し、それ以前に発生した計算イベントが JetStream から
+        後から届いても保存しない(ADR-0209 §7)。team DB は消さないので、
+        クライアントは `DELETE /api/team/device-data` も呼ぶ(P5-4 で追加する)。
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: 削除の結果(`partial` なら残りがある)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecordDeletionResult' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          description: record-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        default:
+          $ref: '#/components/responses/Error'
+
   /internal/pokedex/master:
     get:
       tags: [internal]
@@ -503,14 +582,15 @@ components:
         | unknown_ability | abilityId がマスタに無い | 400 |
         | unknown_nature | natureId がマスタに無い | 400 |
         | not_found | ルートが無い / このサービスの担当外の操作 | 404 |
-        | master_unavailable | マスタを参照できない | 503 |
+        | master_unavailable | マスタ(pokedex の MySQL)を参照できない | 503 |
+        | store_unavailable | 保存データの DB(record / team の TiDB)を参照できない。`master_unavailable` と分けるのは原因も復旧手順も別で、「計算はできるが保存はできない」状態(CLAUDE.md 絶対ルール5)をクライアントが区別できる必要があるため(ADR-0209 §5.3) | 503 |
         | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202) | 503 |
       enum: [invalid_json, unknown_field, invalid_enum, invalid_input,
              unknown_preset, duplicate_preset, invalid_preset,
              invalid_reverse_side, no_observation, invalid_observation,
              type_chart_missing, invalid_type_chart, unknown_type, internal,
              missing_header, invalid_header, unknown_species, unknown_move, unknown_item, unknown_ability, unknown_nature,
-             not_found, master_unavailable, upstream_unavailable]
+             not_found, master_unavailable, store_unavailable, upstream_unavailable]
 
     Format:
       type: string
@@ -719,9 +799,30 @@ components:
             - それ以外: chancePercent を 0.1% 単位に四捨五入し、[0.1, 99.9] に収める
               (確定・不可能と取り違えないため、0.0 と 100.0 はこの2つに予約する)
 
+    UnsupportedMark:
+      type: object
+      description: |
+        「この結果は正しくない可能性がある」印1つ(ADR-0123)。engine が正しく計算できない技の機構・
+        持ち物・特性に、数値は通常の式のまま付ける(400 で拒否しない)。
+      required: [target, reason, id]
+      properties:
+        target:
+          type: string
+          description: 印の対象
+          enum: [move, attacker_item, attacker_ability, defender_item, defender_ability]
+        reason:
+          type: string
+          description: |
+            印の理由。技は機構の値(MasterMove.mechanisms と同じ13種)か zero_power(威力0の攻撃技。
+            威力が技の処理で決まるため)、持ち物・特性は unsupported_effect(効果スキーマで表せない)。
+          enum: [alt_defense_stat, alt_offense_stat, always_crit, effectiveness_change, field_specific,
+                 fixed_damage, ignore_defense_ranks, move_specific, multi_hit, ohko, priority_change,
+                 type_change, variable_power, zero_power, unsupported_effect]
+        id: { type: string, description: 技・持ち物・特性の ID }
+
     CalcResult:
       type: object
-      required: [rolls, minDamage, maxDamage, minPercent, maxPercent, defenderHP, effectiveness, stab, category, ko]
+      required: [rolls, minDamage, maxDamage, minPercent, maxPercent, defenderHP, effectiveness, stab, category, ko, unsupported]
       properties:
         rolls:
           type: array
@@ -757,6 +858,11 @@ components:
           allOf: [ { $ref: '#/components/schemas/MoveCategory' } ]
           description: 使った技の分類(WASM 境界の CalcResult と同じ。Web が型を共有するため)
         ko: { $ref: '#/components/schemas/KOChance' }
+        unsupported:
+          type: array
+          description: |
+            この結果に付いた「未対応」の印(ADR-0123)。印なしは空配列(WASM 境界の CalcResult と同じ形)。
+          items: { $ref: '#/components/schemas/UnsupportedMark' }
 
     DefenderPreset:
       type: string
@@ -947,7 +1053,7 @@ components:
     ReverseCandidate:
       type: object
       description: 候補1件(性格クラス × 持ち物。ADR-0010 §R3)
-      required: [natureClass, nature, natureId, itemId, ranges, spCount, exact, mismatch, support, minPercent, maxPercent]
+      required: [natureClass, nature, natureId, itemId, ranges, spCount, exact, mismatch, support, minPercent, maxPercent, unsupported]
       properties:
         natureClass: { $ref: '#/components/schemas/NatureClass' }
         nature: { $ref: '#/components/schemas/NatureModifier' }
@@ -975,6 +1081,12 @@ components:
           type: number
           format: double
           description: ranges 全体での想定ダメージ幅の上限(表示%。小数第1位・四捨五入。CalcResult.maxPercent と同じ意味)
+        unsupported:
+          type: array
+          description: |
+            この候補の計算に付いた「未対応」の印(ADR-0123)。SP によらず同じ(技・場・既知側は候補間で共通)。
+            印なしは空配列。
+          items: { $ref: '#/components/schemas/UnsupportedMark' }
 
     ReverseResult:
       type: object
@@ -1096,7 +1208,7 @@ components:
     MasterMove:
       type: object
       description: moves テーブルの行(計算に使う列だけ)+ move_effects の effect(ADR-0107)
-      required: [id, nameJa, type, category, power, priority, effect]
+      required: [id, nameJa, type, category, power, priority, effect, mechanisms]
       properties:
         id: { type: string }
         nameJa: { type: string }
@@ -1110,6 +1222,18 @@ components:
             技の追加効果(命中時のランク変化。ADR-0107)。null は追加効果なし。
             ダメージ計算はこの値を読まない(ADR-0107 決定2)。発動するかどうかの判定も engine は行わず、
             「発動した場合の変化量」と「その確率」を持つだけ(ADR-0107 決定1)。
+        mechanisms:
+          type: array
+          description: |
+            技の機構(move_mechanisms。ADR-0121)。「威力・分類・タイプから通常の式で計算すると誤る」理由の
+            分類で、1つの技が複数を持つことがある。昇順・重複なし。通常の技(変化技を含む)は空配列。
+            calc-svc は engine.Move.Mechanisms にそのまま渡す(「未対応」の印の判定に使う。ADR-0123)。
+            値は UnsupportedMark.reason の技側13種と同じ(正は engine.AllMoveMechanisms)。ここでは
+            enum を付けない(意図的。ADR-0121 実装時の追記を参照): この内部 API は pokedex-svc → calc-svc
+            のみで使い、値の妥当性は既に `services/internal/master.MoveMechanismsOf` が検証している。
+            enum にすると oapi-codegen が別の Go 型を生成し、両サービスで `[]string` との相互変換が
+            必要になるだけで、二重の検証にしかならない。
+          items: { type: string }
 
     MasterEffect:
       type: object
@@ -1151,3 +1275,54 @@ components:
         minus:
           nullable: true
           allOf: [ { $ref: '#/components/schemas/StatKey' } ]
+
+    # --- record-svc(ADR-0209 §5.3 から移した契約。P5-3)-------------------------
+
+    FrequentOpponent:
+      type: object
+      description: |
+        「よく使う相手」1件(ADR-0209 §3 #2)。端末内の計算イベントの集計で、他端末のイベントは混ざらない。
+        個体の中身(技・持ち物・特性・性格・SP)・ダメージの数値は返さない(集計に使うのは防御側の種族だけ)。
+      required: [speciesKey, score, count, lastCalculatedAt]
+      properties:
+        speciesKey:
+          allOf: [ { $ref: '#/components/schemas/SpeciesKey' } ]
+          description: 防御側(相手)の種族。名前・タイプは pokedex-svc から引く
+        score:
+          type: number
+          format: double
+          minimum: 0
+          description: 頻度 × 時間減衰。並び順のための相対値で、絶対値に意味は無い(ADR-0209 §4)
+        count:
+          type: integer
+          minimum: 1
+          description: 減衰をかける前の、集計対象として残っている計算イベントの件数
+        lastCalculatedAt:
+          type: string
+          format: date-time
+          description: この相手を最後に計算した時刻(イベントの `occurred_at`)
+
+    DeletionStatus:
+      type: string
+      description: |
+        `completed` = この端末のデータは残っていない。`partial` = 1回の上限に達したので残りがある
+        (同じ要求を繰り返す。ADR-0209 §5.2)。
+      enum: [completed, partial]
+
+    RecordDeletionResult:
+      type: object
+      required: [status, purgedAt, deleted]
+      properties:
+        status: { $ref: '#/components/schemas/DeletionStatus' }
+        purgedAt:
+          type: string
+          format: date-time
+          description: 墓石の時刻。これ以前に発生した計算イベントは以後保存しない(ADR-0209 §7)
+        deleted:
+          type: object
+          description: この呼び出しで消した行数(冪等なので2回目は 0 になる)
+          required: [calcEvents, aggregates, favorites]
+          properties:
+            calcEvents: { type: integer, minimum: 0 }
+            aggregates: { type: integer, minimum: 0 }
+            favorites: { type: integer, minimum: 0 }

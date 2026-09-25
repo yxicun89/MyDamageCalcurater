@@ -23,6 +23,10 @@ type ItemEffect struct {
 	BoostType          Type            // タイプ強化(タイプ技の威力を上げる持ち物)の対象タイプ
 	BoostTypeMod       int             // 例 4915(=約1.2倍)
 	ResistBerryType    Type            // 半減きのみ: このタイプの抜群技を半減(防御側)
+	// UnsupportedAttacker / UnsupportedDefender は、その側で持つとダメージが変わるのに効果スキーマで
+	// 表せない(計算に入れていない)ことの印(ADR-0123)。計算は補正なしで行い、結果に印を付ける。
+	UnsupportedAttacker bool
+	UnsupportedDefender bool
 }
 
 // AbsorbEffect は吸収したときの副次効果(マスタの記述)。ゼロ値は「吸収するが副次効果は持たない」
@@ -46,6 +50,9 @@ type AbilityEffect struct {
 	ReduceSuperEffective int                   // 抜群技を軽減する特性等: 抜群時に軽減(例 3072)
 	IgnoresBurn          bool                  // こんじょう等: やけどの攻撃半減を無効化
 	Airborne             bool                  // ふゆう等: 浮いていて接地しない(フィールドの補正が掛からない。ADR-0116)。地面技の無効は DefImmuneTypes で別に持つ
+	// UnsupportedAttacker / UnsupportedDefender は ItemEffect と同じ「未対応」の印(ADR-0123)。
+	UnsupportedAttacker bool
+	UnsupportedDefender bool
 }
 
 func hasType(in Individual, t Type) bool {

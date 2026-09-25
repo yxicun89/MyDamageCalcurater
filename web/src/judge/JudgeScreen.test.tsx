@@ -209,6 +209,8 @@ function matchup(index: number, overrides: Partial<Schemas["Matchup"]> = {}): Sc
     turnOrderTie: false,
     attackerKo: ko(1 + index, true, 100),
     defenderKo: ko(3 + index, false, 10 + index),
+    attackerKoUnsupported: [],
+    defenderKoUnsupported: [],
     ...overrides,
   };
 }

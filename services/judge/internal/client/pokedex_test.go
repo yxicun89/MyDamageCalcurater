@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -810,5 +811,89 @@ func TestMoveErrorDoesNotLeakUpstreamDetail(t *testing.T) {
 	}
 	if strings.Contains(message, server.URL) {
 		t.Errorf("エラーが上流の URL を漏らしている: %s", message)
+	}
+}
+
+// TestPokedexEscapesKeyInPath: key は URL の path 要素として**必ずエスケープして**埋める
+// (ADR-0706 §5・受け入れ条件6)。httpapi の形式検査(ADR-0706 §1)を通れば制御文字も
+// / ? # も来ないので、これは二重の守りにあたる。素の連結だと、制御文字は
+// net/url のエラー(呼び出し側から見れば 503 upstream_unavailable + 誤った警告ログ)になり、
+// "x?y=1" は /moves/x への問い合わせに静かにすり替わる(issue #234)。
+//
+// 検査は r.URL.EscapedPath() で行う: r.URL.Path(復号後)では a%2Fb と a/b が見分けられず、
+// テストが通ってもパスの区切りに化ける穴が残る。
+func TestPokedexEscapesKeyInPath(t *testing.T) {
+	t.Parallel()
+
+	keys := []struct {
+		name string
+		key  string
+	}{
+		{"制御文字(タブ)", "test\tmove"},
+		{"制御文字(0x7f)", "test\u007fmove"},
+		{"空白", "test move"},
+		{"スラッシュ", "test/move"},
+		{"クエリの開始", "test?move=1"},
+		{"フラグメントの開始", "test#move"},
+		{"パーセント", "test%2fmove"},
+	}
+	for _, tt := range keys {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			t.Run("moves", func(t *testing.T) {
+				var gotEscapedPath string
+				server := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+					gotEscapedPath = r.URL.EscapedPath()
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = w.Write(validMoveBody())
+				})
+
+				if _, err := newPokedex(t, server.URL, testTimeout).Move(t.Context(), requestContext, tt.key); err != nil {
+					t.Fatalf("Move: %v", err)
+				}
+				want := "/api/pokedex/moves/" + url.PathEscape(tt.key)
+				if gotEscapedPath != want {
+					t.Errorf("escaped path = %q, want %q", gotEscapedPath, want)
+				}
+			})
+
+			t.Run("species", func(t *testing.T) {
+				var gotEscapedPath string
+				server := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+					gotEscapedPath = r.URL.EscapedPath()
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = w.Write(validSpeciesBody())
+				})
+
+				if _, err := newPokedex(t, server.URL, testTimeout).Species(t.Context(), requestContext, tt.key); err != nil {
+					t.Fatalf("Species: %v", err)
+				}
+				want := "/api/pokedex/species/" + url.PathEscape(tt.key)
+				if gotEscapedPath != want {
+					t.Errorf("escaped path = %q, want %q", gotEscapedPath, want)
+				}
+			})
+		})
+	}
+}
+
+// TestPokedexDoesNotEscapeValidKey: 正常系の URL は 1 文字も変わらない(ADR-0706 §5)。
+// url.PathEscape は安全な文字をそのまま通すので、Showdown ID は素の連結と同じ path になる。
+func TestPokedexDoesNotEscapeValidKey(t *testing.T) {
+	t.Parallel()
+
+	var gotPath string
+	server := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.EscapedPath()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(validMoveBody())
+	})
+
+	if _, err := newPokedex(t, server.URL, testTimeout).Move(t.Context(), requestContext, "test-move-2"); err != nil {
+		t.Fatalf("Move: %v", err)
+	}
+	if gotPath != "/api/pokedex/moves/test-move-2" {
+		t.Errorf("path = %q, want /api/pokedex/moves/test-move-2", gotPath)
 	}
 }

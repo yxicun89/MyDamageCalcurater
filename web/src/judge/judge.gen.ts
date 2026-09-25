@@ -96,8 +96,10 @@ export interface paths {
      *     検査順(ADR-0701 §5 を ADR-0703 §4・ADR-0704 §5 が拡張した形。上流は逐次で呼ぶ):
      *     ヘッダー (400) → body が 1 つの JSON か・上限 8 KiB (400 / 413)
      *     → defenders の件数が 1〜6 か (400)
-     *     → attacker と各 defender の sp・ranks・format・必須文字列(候補の moveId を含む)の範囲
-     *        (400。最初に範囲外だった候補の index で止める。ここまで上流を 1 回も呼ばない)
+     *     → attacker と各 defender の sp・ranks・format・必須文字列(候補の moveId を含む)の範囲と、
+     *        ID の形式(moveId / natureId が MoveId / NatureId の pattern・maxLength に合うか。ADR-0706 §1)
+     *        (400。attacker を先に見て、次に defenders を index 昇順。最初に範囲外だった候補の index で止める。
+     *         ここまで上流を 1 回も呼ばない。形式が合わない ID は 503 upstream_unavailable にならない。ADR-0706 §3)
      *     → 性格の一覧 (1 リクエストにつき 1 回だけ。503)
      *     → natureId が一覧に無い (422 unknown_nature。attacker → defenders を index 昇順に見て最初の 1 件)
      *     → attacker の種族 (422 unknown_species / 503)
@@ -135,6 +137,22 @@ export interface components {
      * @example 0445-000
      */
     SpeciesKey: string;
+    /**
+     * @description 技 ID(Showdown ID: 小文字英数をハイフンで区切る)。意味の正はルートの api/openapi.yaml の Move.id。
+     *     judge はこの ID を GET /api/pokedex/moves/{key} の path 要素に埋めるので、形式に合わない値は
+     *     上流を呼ぶ前に 400 invalid_request で断る(ADR-0706 §1・§3)。形式は合うがマスタに無いときは
+     *     422 unknown_move(ADR-0704 §6)。
+     * @example flamethrower
+     */
+    MoveId: string;
+    /**
+     * @description 性格 ID(Showdown ID: 小文字英数をハイフンで区切る)。GET /api/pokedex/natures の一覧で
+     *     補正する能力に解決する(ADR-0701 §4)。URL には埋めないが、同じ由来の ID を欄ごとに違う
+     *     厳しさで通さないため MoveId と同じ形式で検査する(ADR-0706 §5)。形式に合わない値は
+     *     上流を呼ぶ前に 400 invalid_request、一覧に無いときは 422 unknown_nature。
+     * @example jolly
+     */
+    NatureId: string;
     /**
      * @description 対戦形式。calc-svc にそのまま渡す。
      * @default single
@@ -175,8 +193,7 @@ export interface components {
      */
     Individual: {
       speciesKey: components["schemas"]["SpeciesKey"];
-      /** @description 性格 ID。GET /api/pokedex/natures の一覧で補正する能力に解決する(ADR-0701 §4)。 */
-      natureId: string;
+      natureId: components["schemas"]["NatureId"];
       sp: components["schemas"]["StatBlock"];
       ranks?: components["schemas"]["RankBlock"];
       /** @description 特性 ID。judge は解釈せず calc-svc にそのまま渡す。 */
@@ -200,8 +217,7 @@ export interface components {
      */
     DefenderCandidate: {
       speciesKey: components["schemas"]["SpeciesKey"];
-      /** @description 性格 ID。GET /api/pokedex/natures の一覧で補正する能力に解決する(ADR-0701 §4)。 */
-      natureId: string;
+      natureId: components["schemas"]["NatureId"];
       sp: components["schemas"]["StatBlock"];
       ranks?: components["schemas"]["RankBlock"];
       /** @description 特性 ID。judge は解釈せず calc-svc にそのまま渡す。 */
@@ -215,8 +231,10 @@ export interface components {
        * @description この候補が使う技(1 つ)。優先度は GET /api/pokedex/moves/{key} で引き、
        *     この技によるダメージは calc-svc を逆方向(この候補が攻撃側・自分が防御側)で
        *     呼んで求める(ADR-0704 §4)。マスタに無ければ 422 unknown_move。
+       *     形式が MoveId に合わない値は上流を呼ぶ前に 400 invalid_request で、
+       *     message は defenders[<index>] を示す(ADR-0706 §3・§4)。
        */
-      moveId: string;
+      moveId: components["schemas"]["MoveId"];
     };
     /**
      * @default none
@@ -296,8 +314,10 @@ export interface components {
        * @description 自分(attacker)が使う技(1 つ)。すべての候補に対して同じ技で判定する。
        *     JD4 からは優先度を引くために GET /api/pokedex/moves/{key} でも解決するので、
        *     マスタに無ければ calc-svc に届く前に 422 unknown_move になる(ADR-0704 §7)。
+       *     形式が MoveId に合わない値は上流を呼ぶ前に 400 invalid_request で、
+       *     message は attacker を示す(候補の index を騙らない。ADR-0706 §4)。
        */
-      moveId: string;
+      moveId: components["schemas"]["MoveId"];
       field?: components["schemas"]["FieldState"];
       speedField?: components["schemas"]["SpeedField"];
     };
@@ -316,6 +336,49 @@ export interface components {
        * @description 画面に出す「hits 回で倒せる確率(%)」。小数第1位(ADR-0010 §3)。
        */
       displayChancePercent: number;
+    };
+    /**
+     * @description 「この確定数は正しくない可能性がある」印 1 つ(ADR-0123・ADR-0708)。engine が正しく計算できない
+     *     技の機構・持ち物・特性に、数値は通常の式のまま付く(400 で拒否されない)。
+     *     意味・条件・並びの正はルートの api/openapi.yaml の UnsupportedMark と ADR-0123 で、
+     *     judge は calc-svc が返した値を**そのまま・同じ順で**中継するだけである(解釈・並べ替え・
+     *     重複除去・真偽値への丸めをしない。ADR-0708 §4)。judge が自分の契約に同じ定義を持つのは、
+     *     ルートの契約を $ref せず契約を独立に版管理するため(ADR-0012・ADR-0706 §2 の前例)。
+     */
+    UnsupportedMark: {
+      /**
+       * @description 印の対象。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
+       *     一致しないことがある(ADR-0708 §5)。attackerKoUnsupported(順方向)では
+       *     attacker_* = 自分・defender_* = その候補、defenderKoUnsupported(逆方向)では
+       *     attacker_* = その候補・defender_* = 自分を指す。
+       * @enum {string}
+       */
+      target: "move" | "attacker_item" | "attacker_ability" | "defender_item" | "defender_ability";
+      /**
+       * @description 印の理由。技は機構の値(13 種)か zero_power(威力 0 の攻撃技)、持ち物・特性は
+       *     unsupported_effect(効果スキーマで表せない)。judge はこの値を検査せず、
+       *     この列挙に無い値もそのまま中継する(engine が理由を足したときに judge の版で落とさない。
+       *     ADR-0708 §4・§6。契約は説明で、judge は印の意味を持たない)。
+       * @enum {string}
+       */
+      reason:
+        | "alt_defense_stat"
+        | "alt_offense_stat"
+        | "always_crit"
+        | "effectiveness_change"
+        | "field_specific"
+        | "fixed_damage"
+        | "ignore_defense_ranks"
+        | "move_specific"
+        | "multi_hit"
+        | "ohko"
+        | "priority_change"
+        | "type_change"
+        | "variable_power"
+        | "zero_power"
+        | "unsupported_effect";
+      /** @description 印が付いた技・持ち物・特性の ID(calc-svc が返したまま)。 */
+      id: string;
     };
     OutspeedAndKoResponse: {
       /**
@@ -392,6 +455,26 @@ export interface components {
        *     行動順に関わらず必ず計算する(自分が先に動いて倒しきれなかったときの被害も知りたいため)。
        */
       defenderKo: components["schemas"]["KOChance"];
+      /**
+       * @description attackerKo(順方向の計算。自分の技 → この候補)に付いた「正しく計算できていない可能性がある」印
+       *     (ADR-0708 §1)。calc-svc の CalcResult.unsupported をそのまま・同じ順で中継する。
+       *     **印が無いときは空配列**(null にも欄の欠落にもしない。ADR-0708 §3)。
+       *     画面はこれが空でないとき、attackerKo を「確定した数」として見せない
+       *     (「この確定数は当てにならないかもしれない」旨を添える。文言は画面の持ち物)。
+       *     自分の技が多段技・威力変動・固定ダメージのとき、またはこの計算で効く持ち物・特性が
+       *     engine の効果スキーマで表せないときに入る。
+       *     target の attacker_* は自分・defender_* はこの候補を指す(ADR-0708 §5)。
+       */
+      attackerKoUnsupported: components["schemas"]["UnsupportedMark"][];
+      /**
+       * @description defenderKo(逆方向の計算。この候補の技 → 自分)に付いた印(ADR-0708 §1)。
+       *     attackerKoUnsupported と同じ形で、**印が無いときは空配列**。
+       *     順方向の印と**まとめない**(どちらの確定数が疑わしいかを画面が区別できるように、
+       *     方向ごとに分けたまま返す。ADR-0708 §4)。
+       *     逆方向では役割が入れ替わるので、target の attacker_* は**この候補**・
+       *     defender_* は**自分**を指す(ADR-0708 §5。自分が持つ防御側で効く持ち物の印はこちらに入る)。
+       */
+      defenderKoUnsupported: components["schemas"]["UnsupportedMark"][];
     };
     Error: {
       code: components["schemas"]["ErrorCode"];

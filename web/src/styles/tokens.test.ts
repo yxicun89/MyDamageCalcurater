@@ -26,6 +26,7 @@ import {
   readDesignDoc,
   sectionOf,
   tokenToCssVariable,
+  typeBadgeInkByJapaneseName,
   typeColorsByJapaneseName,
 } from "../test/designDoc";
 
@@ -160,7 +161,7 @@ describe("タイプ色", () => {
   );
 
   test("相性表の types の全 ID に --type-<id> があり、余分なタイプ色は無い", () => {
-    const defined = [...light.keys()].filter((name) => name.startsWith("--type-"));
+    const defined = [...light.keys()].filter((name) => name.startsWith("--type-") && !name.endsWith("-ink"));
     expect([...defined].sort()).toEqual(
       typeIds()
         .map((id) => `--type-${id}`)
@@ -168,7 +169,28 @@ describe("タイプ色", () => {
     );
   });
 
-  test("タイプ色はライト / ダークで同じ(ダーク側で上書きしない)", () => {
+  // issue #306: タイプバッジの文字色。背景はタイプ色そのものなので、文字色だけを別変数に持つ。
+  test("相性表の types の全 ID に --type-<id>-ink があり、余分な文字色は無い", () => {
+    const defined = [...light.keys()].filter((name) => name.endsWith("-ink"));
+    expect([...defined].sort()).toEqual(
+      typeIds()
+        .map((id) => `--type-${id}-ink`)
+        .sort(),
+    );
+  });
+
+  test.each([...typeBadgeInkByJapaneseName(designDoc).entries()])(
+    "%s: --type-<id>-ink が design.md「タイプバッジ」の文字色 %s",
+    (name, ink) => {
+      const id = idByName.get(name);
+      expect(id, `ja.ts に表示名「${name}」が無い`).toBeDefined();
+      const value = expectVariable(light, `--type-${id ?? ""}-ink`);
+      expect(normalizeColor(value)).toBe(normalizeColor(ink));
+    },
+  );
+
+  // 文字色(--type-<id>-ink)もタイプ色と同じ扱い: テーマで切り替えない(design.md「タイプバッジ」)。
+  test("タイプ色・バッジの文字色はライト / ダークで同じ(ダーク側で上書きしない)", () => {
     const overridden = [...osDark.keys(), ...explicitDark.keys()].filter((name) =>
       name.startsWith("--type-"),
     );

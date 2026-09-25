@@ -6,14 +6,16 @@ package engine
 // 無振り / H振り / H振り+B(D)補正 / HB(HD)振り / HB(HD)特化 を並べて表示する。
 //
 // 設計は ADR-0009:
-//   - プリセット定義は引数(データ)として受け取る。既定値は engine の純粋関数として持ち、
-//     WASM と calc-svc の双方が同じ既定で動く。呼び出し側は Presets で上書きできる。
+//   - プリセット定義は引数(データ)として受け取る。既定値は presets/defender.json を embed して持ち
+//     (2026-09-25 追記)、WASM と calc-svc の双方が同じ既定で動く。呼び出し側は Presets で上書きできる。
 //   - engine に持ち物一覧は持ち込まない。解決済みの *Item を受け取るだけ(ADR-0005)。
 //   - CalcBulk は CalcDamage の合成にすぎない。独自のダメージ計算をしてはならない。
 
 import (
 	"errors"
 	"fmt"
+	"reflect"
+	"slices"
 )
 
 // プリセット定義・選択の不正。呼び出し側は errors.Is で判別する。
@@ -43,6 +45,8 @@ const (
 )
 
 // PresetKey は防御側の代表調整のキー。OpenAPI の DefenderPreset enum と1対1に対応する。
+// カタログ(値・順序)の正は presets/defender.json。定数は呼び出し側・テストが名指しするために残す
+// (JSON との一致は TestDefenderPresetJSONKeysMatchConstants が確かめる)。
 type PresetKey string
 
 // ADR-0009 §1 のカタログ順(耐久が上がる順)に並べる。
@@ -87,6 +91,10 @@ type BulkInput struct {
 	PresetKeys []PresetKey
 	// ItemVariants は差し替えて比較する持ち物(解決済み)。nil / 空は「素の1通り」= 持ち物なし。
 	ItemVariants []*Item
+	// DefenderAbilities は防御側の特性の候補(解決済み。issue #272・ADR-0126)。0..MaxAbilityCandidates 件。
+	// nil / 空は「特性なし」の1通り(従来どおり)。結果が同じになる特性は1行にまとめ、違えば行を分ける。
+	// DefenderSpecies.Abilities が空でなければ、その中の ID だけを受け付ける。
+	DefenderAbilities []Ability
 }
 
 // BulkRow は一括計算の1行(プリセット × 持ち物)。
@@ -95,31 +103,28 @@ type BulkRow struct {
 	PresetLabel string
 	Item        *Item  // 渡された *Item をそのまま保持する(nil は持ち物なし)
 	ItemID      string // Item.ID。Item が nil なら空文字
-	Defender    Individual
-	Result      DamageResult
+	// Ability はこの行の計算に使った防御側の特性(Defender.Ability と同じ。特性なしはゼロ値)。
+	Ability Ability
+	// AbilityIDs はこの行と結果が完全に同じになる特性の ID(Ability.ID が先頭。渡した順)。
+	// DefenderAbilities を渡さなかったときは nil。
+	AbilityIDs []string
+	Defender   Individual
+	Result     DamageResult
 }
 
-// BulkResult は一括計算の結果。Rows の順序はプリセット優先(preset-major)で決定的。
+// BulkResult は一括計算の結果。Rows の順序はプリセット → 特性(グループの代表の渡した順)→ 持ち物で決定的。
 type BulkResult struct {
 	DefenderSpeciesKey string
 	Rows               []BulkRow
 }
 
 // DefenderPresetCatalog は既定のプリセット定義を耐久が上がる順に返す(ADR-0009 §1)。
+// 正は presets/defender.json(defender_preset.go が embed して読む。ADR-0009 2026-09-25 追記)。
 // 呼び出しごとに新しいスライスを返し、呼び出し側の変更が次回に漏れないようにする。
 //
 // 期待値は engine/bulk_test.go の TestDefenderPresetCatalogDefinitions が正。
 func DefenderPresetCatalog() []DefenderPreset {
-	return []DefenderPreset{
-		{Key: PresetNone, Label: "無振り", SP: Stats{}, Nature: NatureNeutral},
-		{Key: PresetHP, Label: "H振り", SP: Stats{HP: MaxSPPerStat}, Nature: NatureNeutral},
-		{Key: PresetHBBoost, Label: "H振り+B補正", SP: Stats{HP: MaxSPPerStat}, Nature: Nature{Plus: StatDef, Minus: StatAtk}, Applies: CategoryPhysical},
-		{Key: PresetHB, Label: "HB振り", SP: Stats{HP: MaxSPPerStat, Def: MaxSPPerStat}, Nature: NatureNeutral, Applies: CategoryPhysical},
-		{Key: PresetHBFull, Label: "HB特化", SP: Stats{HP: MaxSPPerStat, Def: MaxSPPerStat}, Nature: Nature{Plus: StatDef, Minus: StatAtk}, Applies: CategoryPhysical},
-		{Key: PresetHDBoost, Label: "H振り+D補正", SP: Stats{HP: MaxSPPerStat}, Nature: Nature{Plus: StatSpD, Minus: StatAtk}, Applies: CategorySpecial},
-		{Key: PresetHD, Label: "HD振り", SP: Stats{HP: MaxSPPerStat, SpD: MaxSPPerStat}, Nature: NatureNeutral, Applies: CategorySpecial},
-		{Key: PresetHDFull, Label: "HD特化", SP: Stats{HP: MaxSPPerStat, SpD: MaxSPPerStat}, Nature: Nature{Plus: StatSpD, Minus: StatAtk}, Applies: CategorySpecial},
-	}
+	return slices.Clone(defenderPresets)
 }
 
 // DefaultDefenderPresets は技の分類に応じた既定セットを返す。
@@ -135,7 +140,8 @@ func DefaultDefenderPresets(category MoveCategory) []DefenderPreset {
 }
 
 // Defender はプリセットと種族・持ち物から防御側個体を組み立てる。
-// Level=50、Status=none、Ranks=0、Ability=ゼロ値に固定する(ADR-0009)。
+// Level=50、Status=none、Ranks=0、Ability=ゼロ値に固定する(ADR-0009)。特性は CalcBulk が
+// BulkInput.DefenderAbilities から載せる(ADR-0126)。
 func (p DefenderPreset) Defender(species Species, item *Item) Individual {
 	return Individual{
 		Species: species,
@@ -234,43 +240,72 @@ func CalcBulk(in BulkInput) (BulkResult, error) {
 		}
 	}
 
+	abilities, err := abilityCandidates("DefenderAbilities", in.DefenderSpecies, in.DefenderAbilities)
+	if err != nil {
+		return BulkResult{}, err
+	}
+
 	// 持ち物なしの素の1通り。渡されたスライスは書き換えない。
 	variants := in.ItemVariants
 	if len(variants) == 0 {
 		variants = []*Item{nil}
 	}
 
-	rows := make([]BulkRow, 0, len(presets)*len(variants))
-	for _, p := range presets {
+	// results[a][p][v] は特性 a・プリセット p・持ち物 v の CalcDamage。特性のまとめは全行の一致で決める。
+	results := make([][][]DamageResult, len(abilities))
+	for a, ability := range abilities {
+		results[a] = make([][]DamageResult, len(presets))
+		for pi, p := range presets {
+			results[a][pi] = make([]DamageResult, len(variants))
+			for vi, item := range variants {
+				def := p.Defender(in.DefenderSpecies, item)
+				def.Ability = ability
+				res, err := CalcDamage(DamageInput{
+					Format:    in.Format,
+					Attacker:  in.Attacker,
+					Defender:  def,
+					Move:      in.Move,
+					Field:     in.Field,
+					Critical:  in.Critical,
+					TypeChart: in.TypeChart,
+				})
+				if err != nil {
+					return BulkResult{}, fmt.Errorf("防御側プリセット %q・特性 %q の計算: %w", p.Key, ability.ID, err)
+				}
+				results[a][pi][vi] = res
+			}
+		}
+	}
+	groups := groupAbilities(len(abilities), func(i, j int) bool {
+		return reflect.DeepEqual(results[i], results[j])
+	})
+
+	rows := make([]BulkRow, 0, len(presets)*len(groups)*len(variants))
+	for pi, p := range presets {
 		label := p.Label
 		if label == "" {
 			label = string(p.Key)
 		}
-		for _, item := range variants {
-			def := p.Defender(in.DefenderSpecies, item)
-			res, err := CalcDamage(DamageInput{
-				Format:    in.Format,
-				Attacker:  in.Attacker,
-				Defender:  def,
-				Move:      in.Move,
-				Field:     in.Field,
-				Critical:  in.Critical,
-				TypeChart: in.TypeChart,
-			})
-			if err != nil {
-				return BulkResult{}, fmt.Errorf("防御側プリセット %q の計算: %w", p.Key, err)
+		for _, group := range groups {
+			ability := abilities[group[0]]
+			ids := groupAbilityIDs(abilities, group)
+			for vi, item := range variants {
+				def := p.Defender(in.DefenderSpecies, item)
+				def.Ability = ability
+				row := BulkRow{
+					Preset:      p.Key,
+					PresetLabel: label,
+					Item:        item,
+					Ability:     ability,
+					AbilityIDs:  slices.Clone(ids),
+					Defender:    def,
+					Result:      results[group[0]][pi][vi],
+				}
+				if item != nil {
+					row.ItemID = item.ID
+				}
+				rows = append(rows, row)
 			}
-			row := BulkRow{
-				Preset:      p.Key,
-				PresetLabel: label,
-				Item:        item,
-				Defender:    def,
-				Result:      res,
-			}
-			if item != nil {
-				row.ItemID = item.ID
-			}
-			rows = append(rows, row)
 		}
 	}
 	return BulkResult{DefenderSpeciesKey: in.DefenderSpecies.Key, Rows: rows}, nil

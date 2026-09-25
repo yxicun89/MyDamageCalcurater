@@ -433,6 +433,41 @@ public struct APIPokeCalcService: PokeCalcService {
         .init(atk: ranks.atk, def: ranks.def, spa: ranks.spa, spd: ranks.spd, spe: ranks.spe)
     }
 
+    /// 場(issue #274。ADR-0501「issue #274」4章)。`BulkCalcRequest.field` が既定でないときだけ
+    /// `generatedBulkCalcRequest` から呼ばれる。
+    private static func generatedFieldState(_ field: FieldState) -> Components.Schemas.FieldState {
+        .init(
+            weather: generatedWeather(field.weather),
+            terrain: generatedTerrain(field.terrain),
+            attackerScreens: generatedScreens(field.attackerScreens),
+            defenderScreens: generatedScreens(field.defenderScreens)
+        )
+    }
+
+    private static func generatedScreens(_ screens: Screens) -> Components.Schemas.Screens {
+        .init(reflect: screens.reflect, lightScreen: screens.lightScreen, auroraVeil: screens.auroraVeil)
+    }
+
+    private static func generatedWeather(_ weather: Weather) -> Components.Schemas.Weather {
+        switch weather {
+        case .none: return .none
+        case .sun: return .sun
+        case .rain: return .rain
+        case .sand: return .sand
+        case .snow: return .snow
+        }
+    }
+
+    private static func generatedTerrain(_ terrain: Terrain) -> Components.Schemas.Terrain {
+        switch terrain {
+        case .none: return .none
+        case .electric: return .electric
+        case .grassy: return .grassy
+        case .psychic: return .psychic
+        case .misty: return .misty
+        }
+    }
+
     private static func generatedCalcRequest(_ request: CalcRequest) -> Components.Schemas.CalcRequest {
         .init(
             format: generatedFormat(request.format),
@@ -449,6 +484,9 @@ public struct APIPokeCalcService: PokeCalcService {
             attacker: generatedIndividual(request.attacker),
             defenderSpeciesKey: request.defenderSpeciesKey,
             moveId: request.moveId,
+            // 既定の場(`FieldState()`)はこの機能より前の要求本文と同じにするため送らない
+            // (ADR-0501「issue #274」4章「判断」)。
+            field: request.field == FieldState() ? nil : generatedFieldState(request.field),
             options: .init(critical: request.critical),
             // 省略(空配列を含む)は同じ意味(openapi の description)なので、空のときは
             // フィールド自体を送らない(nil のプロパティは JSON エンコード時に省かれる)。

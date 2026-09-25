@@ -156,6 +156,14 @@ func TestMasterExportContent(t *testing.T) {
 	if _, ok := moves["testbanned"]; !ok {
 		t.Errorf("使用可能集合の外の技 testbanned が無い(絞らない)")
 	}
+	// AC-I2 追加(ADR-0121): mechanisms は move_mechanisms から昇順で(fixture はわざと逆順)、
+	// 機構を持たない技は空配列(null にしない)。
+	if got := moves["testflame"].Mechanisms; !reflect.DeepEqual(got, []string{"multi_hit", "variable_power"}) {
+		t.Errorf("testflame.mechanisms = %v, want [multi_hit variable_power](昇順)", got)
+	}
+	if got := moves["teststrike"].Mechanisms; got == nil || len(got) != 0 {
+		t.Errorf("teststrike.mechanisms = %v, want 空配列(機構を持たない技は null にしない)", got)
+	}
 
 	natures := map[string]api.MasterNature{}
 	for _, n := range ex.Natures {

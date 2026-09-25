@@ -104,6 +104,90 @@ func (e Terrain) Valid() bool {
 	}
 }
 
+// Defines values for UnsupportedMarkReason.
+const (
+	AltDefenseStat      UnsupportedMarkReason = "alt_defense_stat"
+	AltOffenseStat      UnsupportedMarkReason = "alt_offense_stat"
+	AlwaysCrit          UnsupportedMarkReason = "always_crit"
+	EffectivenessChange UnsupportedMarkReason = "effectiveness_change"
+	FieldSpecific       UnsupportedMarkReason = "field_specific"
+	FixedDamage         UnsupportedMarkReason = "fixed_damage"
+	IgnoreDefenseRanks  UnsupportedMarkReason = "ignore_defense_ranks"
+	MoveSpecific        UnsupportedMarkReason = "move_specific"
+	MultiHit            UnsupportedMarkReason = "multi_hit"
+	Ohko                UnsupportedMarkReason = "ohko"
+	PriorityChange      UnsupportedMarkReason = "priority_change"
+	TypeChange          UnsupportedMarkReason = "type_change"
+	UnsupportedEffect   UnsupportedMarkReason = "unsupported_effect"
+	VariablePower       UnsupportedMarkReason = "variable_power"
+	ZeroPower           UnsupportedMarkReason = "zero_power"
+)
+
+// Valid indicates whether the value is a known member of the UnsupportedMarkReason enum.
+func (e UnsupportedMarkReason) Valid() bool {
+	switch e {
+	case AltDefenseStat:
+		return true
+	case AltOffenseStat:
+		return true
+	case AlwaysCrit:
+		return true
+	case EffectivenessChange:
+		return true
+	case FieldSpecific:
+		return true
+	case FixedDamage:
+		return true
+	case IgnoreDefenseRanks:
+		return true
+	case MoveSpecific:
+		return true
+	case MultiHit:
+		return true
+	case Ohko:
+		return true
+	case PriorityChange:
+		return true
+	case TypeChange:
+		return true
+	case UnsupportedEffect:
+		return true
+	case VariablePower:
+		return true
+	case ZeroPower:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UnsupportedMarkTarget.
+const (
+	AttackerAbility UnsupportedMarkTarget = "attacker_ability"
+	AttackerItem    UnsupportedMarkTarget = "attacker_item"
+	DefenderAbility UnsupportedMarkTarget = "defender_ability"
+	DefenderItem    UnsupportedMarkTarget = "defender_item"
+	Move            UnsupportedMarkTarget = "move"
+)
+
+// Valid indicates whether the value is a known member of the UnsupportedMarkTarget enum.
+func (e UnsupportedMarkTarget) Valid() bool {
+	switch e {
+	case AttackerAbility:
+		return true
+	case AttackerItem:
+		return true
+	case DefenderAbility:
+		return true
+	case DefenderItem:
+		return true
+	case Move:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Weather.
 const (
 	WeatherNone Weather = "none"
@@ -150,10 +234,18 @@ type DefenderCandidate struct {
 	// MoveId この候補が使う技(1 つ)。優先度は GET /api/pokedex/moves/{key} で引き、
 	// この技によるダメージは calc-svc を逆方向(この候補が攻撃側・自分が防御側)で
 	// 呼んで求める(ADR-0704 §4)。マスタに無ければ 422 unknown_move。
-	MoveId string `json:"moveId"`
+	// 形式が MoveId に合わない値は上流を呼ぶ前に 400 invalid_request で、
+	// message は defenders[<index>] を示す(ADR-0706 §3・§4)。
+	MoveId MoveId `json:"moveId"`
 
-	// NatureId 性格 ID。GET /api/pokedex/natures の一覧で補正する能力に解決する(ADR-0701 §4)。
-	NatureId string `json:"natureId"`
+	// NatureId 性格 ID(Showdown ID: 小文字英数をハイフンで区切る)。GET /api/pokedex/natures の一覧で
+	// 補正する能力に解決する(ADR-0701 §4)。URL には埋めないが、同じ由来の ID を欄ごとに違う
+	// 厳しさで通さないため MoveId と同じ形式で検査する(ADR-0706 §5)。形式に合わない値は
+	// 上流を呼ぶ前に 400 invalid_request、一覧に無いときは 422 unknown_nature。
+	//
+	//
+	// Example: jolly
+	NatureId NatureId `json:"natureId"`
 
 	// Ranks ランク補正(-6..+6)。HP は持たない。judge は「技の追加効果を適用した後のランク」を
 	// 呼び出し側が入れたものとして受け取る(ADR-0700 §6-5)。
@@ -228,8 +320,14 @@ type Individual struct {
 	// と一致するときだけ素早さに ×1.5 を掛ける。
 	ItemId *string `json:"itemId,omitempty"`
 
-	// NatureId 性格 ID。GET /api/pokedex/natures の一覧で補正する能力に解決する(ADR-0701 §4)。
-	NatureId string `json:"natureId"`
+	// NatureId 性格 ID(Showdown ID: 小文字英数をハイフンで区切る)。GET /api/pokedex/natures の一覧で
+	// 補正する能力に解決する(ADR-0701 §4)。URL には埋めないが、同じ由来の ID を欄ごとに違う
+	// 厳しさで通さないため MoveId と同じ形式で検査する(ADR-0706 §5)。形式に合わない値は
+	// 上流を呼ぶ前に 400 invalid_request、一覧に無いときは 422 unknown_nature。
+	//
+	//
+	// Example: jolly
+	NatureId NatureId `json:"natureId"`
 
 	// Ranks ランク補正(-6..+6)。HP は持たない。judge は「技の追加効果を適用した後のランク」を
 	// 呼び出し側が入れたものとして受け取る(ADR-0700 §6-5)。
@@ -267,6 +365,16 @@ type Matchup struct {
 	// calc-svc を順方向(自分が攻撃側)で呼んだ結果をそのまま転記する。
 	AttackerKo KOChance `json:"attackerKo"`
 
+	// AttackerKoUnsupported attackerKo(順方向の計算。自分の技 → この候補)に付いた「正しく計算できていない可能性がある」印
+	// (ADR-0708 §1)。calc-svc の CalcResult.unsupported をそのまま・同じ順で中継する。
+	// **印が無いときは空配列**(null にも欄の欠落にもしない。ADR-0708 §3)。
+	// 画面はこれが空でないとき、attackerKo を「確定した数」として見せない
+	// (「この確定数は当てにならないかもしれない」旨を添える。文言は画面の持ち物)。
+	// 自分の技が多段技・威力変動・固定ダメージのとき、またはこの計算で効く持ち物・特性が
+	// engine の効果スキーマで表せないときに入る。
+	// target の attacker_* は自分・defender_* はこの候補を指す(ADR-0708 §5)。
+	AttackerKoUnsupported []UnsupportedMark `json:"attackerKoUnsupported"`
+
 	// AttackerMovePriority 自分が使う技(request 直下の moveId)の優先度。GET /api/pokedex/moves/{key} の
 	// priority をそのまま転記する(ADR-0704 §2・§3)。画面が「なぜ先に動くのか
 	// (速いからか、先制技だからか)」を説明できるように返す。
@@ -294,6 +402,14 @@ type Matchup struct {
 	// 行動順に関わらず必ず計算する(自分が先に動いて倒しきれなかったときの被害も知りたいため)。
 	DefenderKo KOChance `json:"defenderKo"`
 
+	// DefenderKoUnsupported defenderKo(逆方向の計算。この候補の技 → 自分)に付いた印(ADR-0708 §1)。
+	// attackerKoUnsupported と同じ形で、**印が無いときは空配列**。
+	// 順方向の印と**まとめない**(どちらの確定数が疑わしいかを画面が区別できるように、
+	// 方向ごとに分けたまま返す。ADR-0708 §4)。
+	// 逆方向では役割が入れ替わるので、target の attacker_* は**この候補**・
+	// defender_* は**自分**を指す(ADR-0708 §5。自分が持つ防御側で効く持ち物の印はこちらに入る)。
+	DefenderKoUnsupported []UnsupportedMark `json:"defenderKoUnsupported"`
+
 	// DefenderMovePriority この候補が使う技(defenders[i].moveId)の優先度。同じく priority の転記。
 	DefenderMovePriority int `json:"defenderMovePriority"`
 
@@ -317,6 +433,22 @@ type Matchup struct {
 	// 優先度が違えば素早さが同じでも false になる(速さの同速 speedTie とは別の欄)。
 	TurnOrderTie bool `json:"turnOrderTie"`
 }
+
+// MoveId 技 ID(Showdown ID: 小文字英数をハイフンで区切る)。意味の正はルートの api/openapi.yaml の Move.id。
+// judge はこの ID を GET /api/pokedex/moves/{key} の path 要素に埋めるので、形式に合わない値は
+// 上流を呼ぶ前に 400 invalid_request で断る(ADR-0706 §1・§3)。形式は合うがマスタに無いときは
+// 422 unknown_move(ADR-0704 §6)。
+//
+// Example: flamethrower
+type MoveId = string
+
+// NatureId 性格 ID(Showdown ID: 小文字英数をハイフンで区切る)。GET /api/pokedex/natures の一覧で
+// 補正する能力に解決する(ADR-0701 §4)。URL には埋めないが、同じ由来の ID を欄ごとに違う
+// 厳しさで通さないため MoveId と同じ形式で検査する(ADR-0706 §5)。形式に合わない値は
+// 上流を呼ぶ前に 400 invalid_request、一覧に無いときは 422 unknown_nature。
+//
+// Example: jolly
+type NatureId = string
 
 // OutspeedAndKoRequest defines model for OutspeedAndKoRequest.
 type OutspeedAndKoRequest struct {
@@ -343,7 +475,9 @@ type OutspeedAndKoRequest struct {
 	// MoveId 自分(attacker)が使う技(1 つ)。すべての候補に対して同じ技で判定する。
 	// JD4 からは優先度を引くために GET /api/pokedex/moves/{key} でも解決するので、
 	// マスタに無ければ calc-svc に届く前に 422 unknown_move になる(ADR-0704 §7)。
-	MoveId string `json:"moveId"`
+	// 形式が MoveId に合わない値は上流を呼ぶ前に 400 invalid_request で、
+	// message は attacker を示す(候補の index を騙らない。ADR-0706 §4)。
+	MoveId MoveId `json:"moveId"`
 
 	// SpeedField 素早さの判定にだけ効く場の効果(ADR-0702 §1)。judge が自分で解釈し、calc-svc には送らない。
 	// トリックルーム・追い風はダメージに関与せず、calc-svc は場の効果として weather / terrain /
@@ -421,6 +555,41 @@ type StatBlock struct {
 
 // Terrain defines model for Terrain.
 type Terrain string
+
+// UnsupportedMark 「この確定数は正しくない可能性がある」印 1 つ(ADR-0123・ADR-0708)。engine が正しく計算できない
+// 技の機構・持ち物・特性に、数値は通常の式のまま付く(400 で拒否されない)。
+// 意味・条件・並びの正はルートの api/openapi.yaml の UnsupportedMark と ADR-0123 で、
+// judge は calc-svc が返した値を**そのまま・同じ順で**中継するだけである(解釈・並べ替え・
+// 重複除去・真偽値への丸めをしない。ADR-0708 §4)。judge が自分の契約に同じ定義を持つのは、
+// ルートの契約を $ref せず契約を独立に版管理するため(ADR-0012・ADR-0706 §2 の前例)。
+type UnsupportedMark struct {
+	// Id 印が付いた技・持ち物・特性の ID(calc-svc が返したまま)。
+	Id string `json:"id"`
+
+	// Reason 印の理由。技は機構の値(13 種)か zero_power(威力 0 の攻撃技)、持ち物・特性は
+	// unsupported_effect(効果スキーマで表せない)。judge はこの値を検査せず、
+	// この列挙に無い値もそのまま中継する(engine が理由を足したときに judge の版で落とさない。
+	// ADR-0708 §4・§6。契約は説明で、judge は印の意味を持たない)。
+	Reason UnsupportedMarkReason `json:"reason"`
+
+	// Target 印の対象。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
+	// 一致しないことがある(ADR-0708 §5)。attackerKoUnsupported(順方向)では
+	// attacker_* = 自分・defender_* = その候補、defenderKoUnsupported(逆方向)では
+	// attacker_* = その候補・defender_* = 自分を指す。
+	Target UnsupportedMarkTarget `json:"target"`
+}
+
+// UnsupportedMarkReason 印の理由。技は機構の値(13 種)か zero_power(威力 0 の攻撃技)、持ち物・特性は
+// unsupported_effect(効果スキーマで表せない)。judge はこの値を検査せず、
+// この列挙に無い値もそのまま中継する(engine が理由を足したときに judge の版で落とさない。
+// ADR-0708 §4・§6。契約は説明で、judge は印の意味を持たない)。
+type UnsupportedMarkReason string
+
+// UnsupportedMarkTarget 印の対象。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
+// 一致しないことがある(ADR-0708 §5)。attackerKoUnsupported(順方向)では
+// attacker_* = 自分・defender_* = その候補、defenderKoUnsupported(逆方向)では
+// attacker_* = その候補・defender_* = 自分を指す。
+type UnsupportedMarkTarget string
 
 // Weather defines model for Weather.
 type Weather string

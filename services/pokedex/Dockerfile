@@ -50,6 +50,9 @@ COPY tools/importer/*.mjs ./tools/importer/
 COPY tools/importer/package.json ./tools/importer/package.json
 COPY tools/importer/cronjob.sh ./tools/importer/cronjob.sh
 COPY data/importer/config.json data/importer/effects.json data/importer/regulations.json ./data/importer/
+# 照合の参照の相性表(ゴールデン・balance・Web と同じ表。issue #280・ADR-0118)。pokedex-import は
+# 既定で <data>/../testdata/golden/typechart.json を読むので、data の隣に置く。
+COPY testdata/golden/typechart.json ./testdata/golden/typechart.json
 COPY --from=build /out/pokedex-import /app/pokedex-import
 RUN chmod +x /app/tools/importer/cronjob.sh
 USER node

@@ -5,6 +5,7 @@ namespace: pokecalc
 resources:
   - ../../base
   - mysql
+  - nats
 components:
   - api
   - web

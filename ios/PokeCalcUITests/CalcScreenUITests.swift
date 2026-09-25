@@ -120,6 +120,22 @@ final class CalcScreenUITests: XCTestCase {
         }
     }
 
+    /// P6-12(issue #71。ADR-0114): 攻撃側プリセットのピルは engine/presets/attacker.json の順
+    /// (無振り → 特化 → 振り)に左から並び、起動直後は JSON の default(無振り)だけが選ばれている。
+    func testAttackerPresetPillsFollowCatalogOrderAndDefault() {
+        let app = launchCalcScreen()
+
+        let identifiers = ["attackerPreset-none", "attackerPreset-aFull", "attackerPreset-aMax"]
+        let buttons = identifiers.map { app.buttons[$0] }
+        for (identifier, button) in zip(identifiers, buttons) {
+            XCTAssertTrue(button.waitForExistence(timeout: Self.existenceTimeout), "ピルが無い: \(identifier)")
+        }
+        let minXs = buttons.map(\.frame.minX)
+        XCTAssertEqual(minXs, minXs.sorted(), "左から \(identifiers) の順に並ぶ: \(minXs)")
+        XCTAssertEqual(Set(minXs).count, identifiers.count, "3つが横に並ぶ(重ならない): \(minXs)")
+        XCTAssertEqual(buttons.map(\.isSelected), [true, false, false], "起動直後は無振りだけが選ばれている")
+    }
+
     /// `swapSidesButton` をタップすると2枚のカードの種族名が入れ替わる。
     /// カードのヘッダー(エンブレム・名前・タイプ)は種族セレクタの `Menu` のラベルを兼ねる
     /// (批評 M3d)。`Menu` は中身を1つのボタンにまとめるので、種族名はボタン自体の
@@ -197,7 +213,8 @@ final class CalcScreenUITests: XCTestCase {
 
         let attackerPicker = element(app, "attackerSpeciesPicker")
         XCTAssertTrue(attackerPicker.waitForExistence(timeout: Self.existenceTimeout))
-        let presetButton = app.buttons["attackerPreset-aFull"]
+        // 既定は engine/presets/attacker.json の default = 無振り(P6-12 で A特化から変更。ADR-0501「P6-12」5章)
+        let presetButton = app.buttons["attackerPreset-none"]
         XCTAssertTrue(presetButton.waitForExistence(timeout: Self.existenceTimeout))
         XCTAssertTrue(presetButton.isSelected, "起動直後は既定のプリセットが選ばれている")
 

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "presets": [
+    { "key": "none", "label": "無振り", "sp": { "hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 }, "nature": { "plus": "", "minus": "" }, "applies": "" },
+    { "key": "hp", "label": "H振り", "sp": { "hp": 32, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 }, "nature": { "plus": "", "minus": "" }, "applies": "" },
+    { "key": "hb_boost", "label": "H振り+B補正", "sp": { "hp": 32, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 }, "nature": { "plus": "def", "minus": "atk" }, "applies": "physical" },
+    { "key": "hb", "label": "HB振り", "sp": { "hp": 32, "atk": 0, "def": 32, "spa": 0, "spd": 0, "spe": 0 }, "nature": { "plus": "", "minus": "" }, "applies": "physical" },
+    { "key": "hb_full", "label": "HB特化", "sp": { "hp": 32, "atk": 0, "def": 32, "spa": 0, "spd": 0, "spe": 0 }, "nature": { "plus": "def", "minus": "atk" }, "applies": "physical" },
+    { "key": "hd_boost", "label": "H振り+D補正", "sp": { "hp": 32, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 }, "nature": { "plus": "spd", "minus": "atk" }, "applies": "special" },
+    { "key": "hd", "label": "HD振り", "sp": { "hp": 32, "atk": 0, "def": 0, "spa": 0, "spd": 32, "spe": 0 }, "nature": { "plus": "", "minus": "" }, "applies": "special" },
+    { "key": "hd_full", "label": "HD特化", "sp": { "hp": 32, "atk": 0, "def": 0, "spa": 0, "spd": 32, "spe": 0 }, "nature": { "plus": "spd", "minus": "atk" }, "applies": "special" }
+  ]
+}

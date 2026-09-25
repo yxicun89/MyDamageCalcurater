@@ -1,0 +1,61 @@
+# calc-svc の計算イベント発行先(ADR-0212)。単一バイナリで JetStream を内蔵しており、
+# TiDB のような Operator は要らない(mysql と同じ「単純な StatefulSet」の形。ADR-0212 §3)。
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nats
+  labels:
+    app.kubernetes.io/name: nats
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  serviceName: nats
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nats
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nats
+        app.kubernetes.io/part-of: pokecalc
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: nats
+          image: nats:2.15.0@sha256:cd3fcd4ecdda44e3a66728a5334af0a959bc3979b32810e033d1c547241cd0f4
+          args: ["-js", "-sd", "/data"]
+          ports:
+            - name: client
+              containerPort: 4222
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            tcpSocket:
+              port: client
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: client
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+  # 公式イメージが root(UID 0)前提で動く(mysql と同じ事情。イメージのメタデータに USER が
+  # 無いことを確認済み)ため、mysql の StatefulSet と同様に runAsNonRoot は強制しない
+  # (自前でビルドする calc・pokedex の Dockerfile とは違い、こちらは公式イメージの内部の
+  # ユーザー切り替えに委ねる)。
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

@@ -33,6 +33,11 @@ SELECT move_id, effect
 FROM move_effects
 ORDER BY move_id;
 
+-- name: ListMoveMechanisms :many
+SELECT move_id, mechanism
+FROM move_mechanisms
+ORDER BY move_id, mechanism;
+
 -- name: GetMove :one
 SELECT id, name_ja, type, category, power, priority
 FROM moves
@@ -115,6 +120,9 @@ DELETE FROM ability_effects;
 -- name: DeleteMoveEffects :exec
 DELETE FROM move_effects;
 
+-- name: DeleteMoveMechanisms :exec
+DELETE FROM move_mechanisms;
+
 -- name: DeleteMegaSpecies :exec
 DELETE FROM species WHERE is_mega = 1;
 
@@ -178,6 +186,10 @@ VALUES (?, ?);
 
 -- name: InsertMoveEffect :exec
 INSERT INTO move_effects (move_id, effect)
+VALUES (?, ?);
+
+-- name: InsertMoveMechanism :exec
+INSERT INTO move_mechanisms (move_id, mechanism)
 VALUES (?, ?);
 
 -- name: InsertLearnset :exec

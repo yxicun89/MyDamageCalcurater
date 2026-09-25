@@ -45,7 +45,8 @@ final class APIPokeCalcServiceTests: XCTestCase {
     {"rolls":[40,40,41,41,42,42,43,43,44,44,45,45,46,46,47,48],
      "minDamage":40,"maxDamage":48,"minPercent":30.3,"maxPercent":36.4,"defenderHP":132,
      "effectiveness":2,"stab":true,"category":"physical",
-     "ko":{"hits":3,"guaranteed":false,"chancePercent":12.34,"displayChancePercent":12.3}}
+     "ko":{"hits":3,"guaranteed":false,"chancePercent":12.34,"displayChancePercent":12.3},
+     "unsupported":[]}
     """
 
     private static let speciesSummaryJSON = """
@@ -97,10 +98,10 @@ final class APIPokeCalcServiceTests: XCTestCase {
     {"side":"attacker","stat":"spa","assumedHpSp":0,"exactCount":1,"candidates":[
       {"natureClass":"neutral","nature":{"plus":null,"minus":null},"natureId":"test-nature-neutral",
        "itemId":null,"ranges":[{"min":0,"max":3},{"min":6,"max":32}],"spCount":31,
-       "exact":true,"mismatch":0,"support":44,"minPercent":38.2,"maxPercent":47.9},
+       "exact":true,"mismatch":0,"support":44,"minPercent":38.2,"maxPercent":47.9,"unsupported":[]},
       {"natureClass":"plus","nature":{"plus":"spa","minus":"atk"},"natureId":null,
        "itemId":"test-item-a","ranges":[{"min":0,"max":0}],"spCount":1,
-       "exact":false,"mismatch":7,"support":0,"minPercent":51.5,"maxPercent":61.1}
+       "exact":false,"mismatch":7,"support":0,"minPercent":51.5,"maxPercent":61.1,"unsupported":[]}
     ]}
     """
 

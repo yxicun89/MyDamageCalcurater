@@ -1,8 +1,11 @@
 // P4-5(ADR-0301 §5): 種族の key だけは API の SpeciesKey の形(9001-000)に改め、性格(natures)を足した。
 // P4-2: 架空の例データ(web/src/master/example/)と exampleMasterSource(ADR-0300 §3)。
-// 実マスタを Git に置かない(ADR-0002)ため、名前は「テスト」で始め、ID は「example-」で始め、
+// 実マスタを Git に置かない(ADR-0002)ため、名前は「テスト」で始め、ID は「example」で始め、
 // 図鑑番号は実在と重ならない 9001 以降にする。タイプ相性表だけは架空にせず @typechart を読む。
 // 形(DTO の契約どおりか)は wasmEngine.wasm.test.ts が本物の engine に通して確かめる。
+// P4-5(ADR-0301 §5 追記): 技・持ち物・特性の ID はハイフンを含めない(calc-svc の共通マスタの
+// codeIDPattern が `^[a-z0-9]+$` のみを許すため)。性格の ID は「example-」のまま(calc-svc は
+// 性格の ID の形式を検査しない)。
 
 import typeChartData from "@typechart";
 import { beforeAll, describe, expect, test } from "vitest";
@@ -11,9 +14,10 @@ import { exampleMasterSource } from "./exampleSource";
 import { typeChartFromData } from "./typeChart";
 import type { MasterData } from "./types";
 
-/** 架空データの名前・ID・図鑑番号の規則(ADR-0300 §3)。 */
+/** 架空データの名前・ID・図鑑番号の規則(ADR-0300 §3)。ID は「example」で始める(ADR-0301 §5 追記:
+ * 技・持ち物・特性はハイフンを含めない。性格だけは「example-」のまま)。 */
 const namePrefix = "テスト";
-const idPrefix = "example-";
+const idPrefix = "example";
 const firstFictionalDexNo = 9001;
 /** API の SpeciesKey(api/openapi.yaml。{図鑑番号4桁}-{フォルム3桁})。 */
 const speciesKeyPattern = /^[0-9]{4}-[0-9]{3}$/;
@@ -35,9 +39,9 @@ function expectUnique(values: readonly string[]): void {
 }
 
 describe("共通の規則", () => {
-  // 種族の key は API の SpeciesKey の形(ADR-0301 §5。下の「種族」で確かめる)。それ以外は「example-」で始める。
+  // 種族の key は API の SpeciesKey の形(ADR-0301 §5。下の「種族」で確かめる)。それ以外は「example」で始める。
   test.each(["moves", "items", "abilities", "natures"] as const)(
-    "%s の名前は「テスト」で始まり、ID は「example-」で始まり、ID は重複しない",
+    "%s の名前は「テスト」で始まり、ID は「example」で始まり、ID は重複しない",
     (collection) => {
       const entries = master[collection].map((entry) => ({ id: entry.id, nameJa: entry.nameJa }));
       expect(entries.length).toBeGreaterThan(0);

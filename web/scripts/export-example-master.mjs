@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// P4-5(ADR-0301 §5): Web の架空の例データ(src/master/exampleSource.ts)を calc-svc のマスタの
-// スナップショット(services/calc/README.md の暫定スキーマ schemaVersion 1、src/master/exportSnapshot.ts の
-// toCalcSnapshot)の JSON に書き出す。calc-svc をこの出力で起動すれば、Web の例データの ID がそのまま
-// API に通る(オンラインの動作確認・P4-6 の E2E)。
+// P4-5(ADR-0301 §5、2026-09-25追記でADR-0204のMasterExportに追従): Web の架空の例データ
+// (src/master/exampleSource.ts)を calc-svc のマスタ一式(api/openapi.yaml の MasterExport、
+// src/master/exportSnapshot.ts の toCalcSnapshot)の JSON に書き出す。calc-svc をこの出力で起動すれば、
+// Web の例データの ID がそのまま API に通る(オンラインの動作確認・P4-6 の E2E)。
 // P4-12a(ADR-0303 §4): 同じ例データを balance-svc の read model(pokemon-types・moves・abilities。
 // src/master/exportBalanceReadModel.ts)にも、calc のスナップショットと同じディレクトリに書き出す。
 //

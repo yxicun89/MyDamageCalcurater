@@ -38,6 +38,11 @@ var storeNow = time.Date(2026, 9, 26, 3, 0, 0, 0, time.UTC)
 
 func TestRunStoreDecision(t *testing.T) {
 	pinned := []importer.SourceVersion{sv("calc", "v1", "a"), sv("showdown", "c1", "b")}
+	// 前回の投入で DB に記録される版(取得元の版 + 変換結果の版。ADR-0122)。
+	recorded, err := importer.WithOutputVersion(pinned, importer.Output{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	tests := []struct {
 		name        string
 		applied     []importer.SourceVersion
@@ -45,10 +50,10 @@ func TestRunStoreDecision(t *testing.T) {
 		wantApplied bool
 		wantCalls   int
 	}{
-		{"版と checksum が DB と同じなら何もしない", pinned, false, false, 0},
+		{"版と checksum が DB と同じなら何もしない", recorded, false, false, 0},
 		{"DB が空(初回)なら投入する", nil, false, true, 1},
 		{"DB が固定版と食い違っていれば投入し直す", []importer.SourceVersion{sv("calc", "v0", "a"), sv("showdown", "c1", "b")}, false, true, 1},
-		{"force なら同じ版でも投入する", pinned, true, true, 1},
+		{"force なら同じ版でも投入する", recorded, true, true, 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -64,8 +69,8 @@ func TestRunStoreDecision(t *testing.T) {
 				t.Fatalf("Apply の呼び出し %d 回, want %d", len(s.applyCalls), tt.wantCalls)
 			}
 			if tt.wantCalls == 1 {
-				if ok, _ := importer.NeedsImport(s.applyCalls[0], pinned); ok {
-					t.Errorf("Apply に渡った版 %+v が入力の版 %+v と違う", s.applyCalls[0], pinned)
+				if ok, _ := importer.NeedsImport(s.applyCalls[0], recorded); ok {
+					t.Errorf("Apply に渡った版 %+v が入力の版 %+v と違う", s.applyCalls[0], recorded)
 				}
 			}
 		})

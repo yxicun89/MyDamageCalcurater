@@ -80,8 +80,8 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
     public private(set) var opponentSpeciesKey: String = ""
     public private(set) var moveId: String = ""
     /// 与えたダメージ(自分が攻撃側)のときの自分の出どころ(P6-2d。ADR-0501「P6-2d」4章:
-    /// 両側に入れる)。既定は `AttackerPreset.allCases` の最初(A特化)。
-    public private(set) var attackerBuildSource: AttackerBuildSource = .preset(.aFull)
+    /// 両側に入れる)。既定は `AttackerPreset.defaultPreset`(無振り)。
+    public private(set) var attackerBuildSource: AttackerBuildSource = .preset(AttackerPreset.defaultPreset)
     /// `attackerBuildSource.preset` のショートカット(`CalcViewModel.attackerPreset` と同じ理由で
     /// 計算プロパティにする)。
     public var attackerPreset: AttackerPreset? { attackerBuildSource.preset }
@@ -175,7 +175,7 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
             side = .defender
             mySpeciesKey = species[0].key
             opponentSpeciesKey = species[1].key
-            attackerBuildSource = .preset(.aFull)
+            attackerBuildSource = .preset(AttackerPreset.defaultPreset)
             knownDefenderBuildSource = .preset(.none)
             myItemId = nil
             toggledOpponentItemIds = []

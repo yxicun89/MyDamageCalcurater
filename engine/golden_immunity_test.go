@@ -43,6 +43,7 @@ var goldenImmunityAbilities = map[string]Type{
 	"Motor Drive":   TypeElectric,
 	"Lightning Rod": TypeElectric,
 	"Earth Eater":   TypeGround,
+	"Eelevate":      TypeGround, // issue #270 / ADR-0120
 }
 
 // goldenImmunityMinPerAbility は、特性ごとに fixed.json に入っているべきベクタの最低件数。

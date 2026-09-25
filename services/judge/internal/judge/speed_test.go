@@ -108,6 +108,14 @@ func TestSpeed(t *testing.T) {
 			Individual{BaseSpeed: 73, Nature: engine.NatureNeutral, Scarf: true},
 			139,
 		},
+		{
+			// issue #329: SP 合計はちょうど 66(engine.MaxSPTotal)まで受け付ける境界値。
+			// Spe 以外に振った分(Atk:32・HP:2)は各欄 32 以下(MaxSPPerStat)のまま出力に影響しない。
+			// 100 + 20 + 32 = 152(無補正)。
+			"SP 合計がちょうど 66(境界値・受け付ける)",
+			Individual{BaseSpeed: 100, Nature: engine.NatureNeutral, SP: engine.Stats{Spe: 32, Atk: 32, HP: 2}},
+			152,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -151,6 +159,19 @@ func TestSpeedRejectsOutOfRangeInput(t *testing.T) {
 				BaseSpeed: 100,
 				Nature:    engine.NatureNeutral,
 				SP:        engine.Stats{HP: 32, Atk: 32, Spe: 32},
+			},
+			ErrInvalidSP,
+		},
+		{
+			// issue #329: 上の 96 は 66 から遠く、境界(engine.MaxSPTotal+1)を1つずらす退行を検出できない
+			// (validateSP の `> engine.MaxSPTotal` を `> engine.MaxSPTotal+1` に変えても検出されなかった)。
+			// 各ステータスは 32 以下(MaxSPPerStat の範囲内)のまま合計だけがちょうど 1 超えた 67 で
+			// 拒否することをピン留めする(1ステータス検査ではなく合計検査を確実に踏む)。
+			"SP の合計がちょうど 67(境界値・拒否する)",
+			Individual{
+				BaseSpeed: 100,
+				Nature:    engine.NatureNeutral,
+				SP:        engine.Stats{Spe: 32, Atk: 32, HP: 3},
 			},
 			ErrInvalidSP,
 		},

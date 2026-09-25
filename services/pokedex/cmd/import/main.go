@@ -2,13 +2,16 @@
 // 冪等に投入する CLI(ADR-0101 §11・ADR-0104 §3・§10)。ネットワークには触らない
 // (取得は tools/importer、上流の最新版の検出結果はファイルで受け取るだけ)。
 //
-//	import -data <dir> [-dry-run] [-force] [-upstream <path>] [-upstream-max-age <duration>]
+//	import -data <dir> [-dry-run] [-force] [-typechart <path>] [-upstream <path>] [-upstream-max-age <duration>]
+//
+// 照合では、取り込む相性表を参照の相性表(既定は <data>/../testdata/golden/typechart.json)と比べ、
+// 食い違いは Blocker にする(issue #280・ADR-0118)。
 //
 // DSN(go-sql-driver/mysql 形式)は環境変数 POKEDEX_DATABASE_DSN から読む(-dry-run のときは不要)。
 //
 // 終了コード(CronJob の podFailurePolicy が使う。ADR-0104 §3):
 //
-//	0 成功(投入した・版が同じでスキップ・dry-run)
+//	0 成功(投入した・取得元の版と変換結果が同じでスキップ・dry-run)
 //	1 再試行で直りうる失敗(DB に接続できない・報告を書けない・その他の I/O)
 //	2 使い方・設定の誤り(フラグの誤り・POKEDEX_DATABASE_DSN が無い)
 //	3 人間の対応が要る(ErrBlocked・ErrKeyChanged・ErrInvalidInput・ErrInvalidData・
@@ -69,7 +72,8 @@ func run(args []string, env cliEnv) int {
 	fs.SetOutput(env.Stderr)
 	dataDir := fs.String("data", "../data", "取得済みスナップショット・設定一式のディレクトリ")
 	dryRun := fs.Bool("dry-run", false, "変換と報告だけ行い、DB には触らない")
-	force := fs.Bool("force", false, "取得元の版に変化が無くても投入する")
+	force := fs.Bool("force", false, "取得元の版と変換結果に変化が無くても投入する")
+	typeChartPath := fs.String("typechart", "", "照合する参照の相性表(空なら <data>/../testdata/golden/typechart.json)")
 	upstreamPath := fs.String("upstream", "", "上流の最新版の検出結果ファイル(空なら表示しない)")
 	upstreamMaxAge := fs.Duration("upstream-max-age", 24*time.Hour, "checkedAt がこれより古い検出結果は unknown 扱いにする")
 	if err := fs.Parse(args); err != nil {
@@ -77,6 +81,16 @@ func run(args []string, env cliEnv) int {
 	}
 
 	in, versions, err := importer.LoadInput(*dataDir)
+	if err != nil {
+		fmt.Fprintln(env.Stderr, "import:", err)
+		return classifyErr(err)
+	}
+
+	refPath := *typeChartPath
+	if refPath == "" {
+		refPath = importer.ReferenceTypeChartDefaultPath(*dataDir)
+	}
+	in.ReferenceTypeChart, err = importer.LoadReferenceTypeChart(refPath)
 	if err != nil {
 		fmt.Fprintln(env.Stderr, "import:", err)
 		return classifyErr(err)
@@ -108,6 +122,15 @@ func run(args []string, env cliEnv) int {
 		fmt.Fprintln(env.Stdout, summary)
 	}
 
+	// 変換結果の版(取得元が同じでも、変換ロジックやスキーマの変更で変わる。ADR-0122)。
+	// 投入の判定は RunStore が同じ関数で行う。ここでは kubectl logs と dry-run で比べられるよう表示だけする。
+	outVersion, err := importer.OutputVersion(out)
+	if err != nil {
+		fmt.Fprintln(env.Stderr, "import:", err)
+		return classifyErr(err)
+	}
+	fmt.Fprintf(env.Stdout, "import: 変換結果の版 %s=%s\n", outVersion.Source, outVersion.Version)
+
 	if *dryRun {
 		fmt.Fprintln(env.Stdout, "import: -dry-run のため DB には投入しない")
 		return 0
@@ -134,7 +157,7 @@ func run(args []string, env cliEnv) int {
 	if applied {
 		fmt.Fprintln(env.Stdout, "import: 投入完了")
 	} else {
-		fmt.Fprintln(env.Stdout, "import: 版に変化が無いのでスキップ")
+		fmt.Fprintln(env.Stdout, "import: 取得元の版と変換結果に変化が無いのでスキップ")
 	}
 	return 0
 }

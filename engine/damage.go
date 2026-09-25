@@ -27,6 +27,14 @@ const (
 	ModifierStab = 6144
 	// ModifierAdaptability はタイプ一致補正を上げる特性(てきおうりょく)の一致補正 ×2.0。
 	ModifierAdaptability = 8192
+	// MinEffectModifier / MaxEffectModifier は持ち物・特性の効果(ItemEffect・AbilityEffect)に
+	// 書ける 4096 基準の補正値の範囲 ×1/4096〜×512(issue #255。ADR-0117)。負・0 の倍率は
+	// ロールを非単調にしたり全ロールを 1 に潰したりするため、Individual.Validate が拒否する。
+	// 上限は engine が掛けるいちばん広いクランプ(powerModBounds の上限 ×512)と同じ。それより
+	// 大きい値はどの段階でもクランプされて意味を持たず、連鎖の途中の桁あふれだけを招く。
+	// 「0 は補正なし」と定義された項目の 0 はこの範囲とは別に許す。
+	MinEffectModifier = 1
+	MaxEffectModifier = 512 * Modifier4096
 
 	// modifierWeatherBoost は天候による強化 ×1.5(はれ/あめの技ダメージ、
 	// すなあらし/ゆきの防御実数値)。
@@ -87,14 +95,16 @@ type DamageInput struct {
 	TypeChart TypeChart
 }
 
-// NullifyKind は特性でダメージが 0 になった理由(ADR-0106)。"" は無効化されていない。
-// タイプ由来の無効(Effectiveness == 0)はここには含めない(ADR-0017 §5・oracle champions.ts L262)。
+// NullifyKind はタイプ相性以外の理由でダメージが 0 になった理由(特性は ADR-0106、サイコフィールドは ADR-0123)。
+// "" は無効化されていない。タイプ由来の無効(Effectiveness == 0)はここには含めない(ADR-0017 §5・oracle champions.ts L262)。
 type NullifyKind string
 
 const (
 	NullifyNone   NullifyKind = ""
 	NullifyImmune NullifyKind = "immune"
 	NullifyAbsorb NullifyKind = "absorb"
+	// NullifyPsychicTerrain はサイコフィールドで、優先度が正の技が接地した防御側に当たらない(ADR-0123)。
+	NullifyPsychicTerrain NullifyKind = "psychic_terrain"
 )
 
 // DamageResult はダメージ計算の結果。確定数は P1-5 で付与する。
@@ -105,7 +115,10 @@ type DamageResult struct {
 	Category      MoveCategory
 	DefenderHP    int
 	KO            KOChance    // 確定数/乱数n発
-	Nullified     NullifyKind // 特性による無効・吸収でダメージが0のとき(ADR-0106)
+	Nullified     NullifyKind // 特性による無効・吸収(ADR-0106)・サイコフィールド(ADR-0123)でダメージが0のとき
+	// Unsupported は engine が正しく計算できない技の機構・持ち物・特性の印(ADR-0123)。nil は印なし。
+	// 印があっても Rolls 等は通常の式の値(正しくない可能性がある)。
+	Unsupported []UnsupportedMark
 }
 
 // abilityNullification は防御側の特性がその攻撃タイプを無効・吸収するかを返す。
@@ -123,6 +136,14 @@ func abilityNullification(e *AbilityEffect, moveType Type) NullifyKind {
 		return NullifyAbsorb
 	}
 	return NullifyNone
+}
+
+// blockedByPsychicTerrain は、サイコフィールドで優先度が正の攻撃技が接地した防御側に当たらないかを返す
+// (@smogon/calc 0.12.0 champions.js: move.priority > 0 && field.hasTerrain('Psychic') && isGrounded(defender)。
+// ADR-0121 §5・ADR-0123)。接地の判定は ADR-0116 の isGrounded と同じ。
+func blockedByPsychicTerrain(in DamageInput) bool {
+	return in.Move.Category != CategoryStatus && in.Move.Priority > 0 &&
+		in.Field.Terrain == TerrainPsychic && isGrounded(in.Defender)
 }
 
 // MinDamage / MaxDamage は 16段階の下限・上限。
@@ -218,8 +239,9 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 	}
 
 	res := DamageResult{
-		Category:   in.Move.Category,
-		DefenderHP: RealStats(in.Defender).HP,
+		Category:    in.Move.Category,
+		DefenderHP:  RealStats(in.Defender).HP,
+		Unsupported: unsupportedMarks(in),
 	}
 
 	moveType := in.Move.Type
@@ -234,6 +256,10 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 	// 同じタイプを特性でも無効にしている場合は、タイプ由来として報告する(Nullified は空のまま)。
 	if !eff.IsImmune() {
 		res.Nullified = abilityNullification(in.Defender.Ability.Effect, moveType)
+	}
+	// サイコフィールドの先制技は、タイプ・特性による無効の後に判定する(oracle champions.js と同じ順)。
+	if !eff.IsImmune() && res.Nullified == NullifyNone && blockedByPsychicTerrain(in) {
+		res.Nullified = NullifyPsychicTerrain
 	}
 
 	// 変化技・威力0・無効相性・特性による無効/吸収はダメージ0。

@@ -4,7 +4,7 @@
 新しい計算式は持たない。素早さの実数値は engine を直接呼び、ダメージと確定数は calc-svc の公開 API の結果をそのまま使う。
 HTTP の契約の正は [`api/openapi.yaml`](api/openapi.yaml)。設計の正は [`docs/judge-design.md`](../../docs/judge-design.md)。
 
-**現在の状態: JD0(基盤)完了。** `make judge-test`・`judge-lint`・`judge-build` は緑(critic PASS)。受け入れ条件は ADR-0700。JD1(判定 API 本体)は未着手。
+**現在の状態: JD0〜JD5(基盤・判定API本体・場の効果・複数候補・返り討ち判定・Web画面)完了。** `make judge-test`・`judge-lint`・`judge-build` は緑(critic PASS)。受け入れ条件は ADR-0700〜0707。
 
 ```mermaid
 flowchart LR
@@ -29,14 +29,14 @@ flowchart LR
 | `internal/api` | oapi-codegen の生成物(手で書かない) |
 | `cmd/api` | 起動・環境変数の読み込み・graceful shutdown |
 | `deploy/k8s` | Kustomize(base / overlays/local)。judge は `/api/judge` prefix の自分の Ingress を持つ(gateway は変更しない) |
-| `scripts/smoke.sh` | k3d へのデプロイ後の疎通確認 |
+| `scripts/smoke.sh` | k3d へのデプロイ後の疎通確認(healthz・`outspeed-and-ko` の 200/400/422。issue #257) |
 
 ## エンドポイント
 
 | path | 内容 | ADR |
 |---|---|---|
 | `GET /healthz`・`GET /api/judge/healthz` | 200 `{"status":"ok"}`。上流の設定・疎通に依存しない | 0700 |
-| `POST /api/judge/v1/outspeed-and-ko` | 抜けるか(`outspeeds` / `speedTie`)+ 倒せるか(`ko`)。**JD1 で追加** | JD1 の ADR |
+| `POST /api/judge/v1/outspeed-and-ko` | 抜けるか(`outspeeds` / `speedTie`)+ 倒せるか(`attackerKo`/`defenderKo`)。相手候補は1〜6件、場の効果・返り討ち判定を含む | 0701〜0704 |
 
 ## よく使うコマンド
 
@@ -45,8 +45,12 @@ cd "$(git rev-parse --show-toplevel)"
 make judge-gen                           # OpenAPI を変えたら(internal/api を生成)
 make judge-test judge-lint judge-build   # ルートの make test / lint / build にも含まれる
 make judge-kustomize                     # deploy/k8s/overlays/local の描画を確認
-make judge-k3d-deploy && make judge-smoke  # k3d へデプロイして healthz を確認
+make judge-k3d-deploy && make judge-smoke  # k3d へデプロイして healthz・判定APIの200/400/422を確認
 ```
+
+`judge-smoke` は性格・種族・技の実IDを gateway(`API_URL`。既定 `http://localhost:8080`)経由で pokedex-svc から引く。
+judge 自身は `JUDGE_URL`(既定同じ)で叩く(judge は自分の Ingress を持つので gateway を経由しない)。
+pokedex-svc が未投入なら例の架空 ID にフォールバックする(`services/gateway/scripts/smoke.sh` と同じ流儀)。
 
 ## 環境変数
 
@@ -55,9 +59,10 @@ make judge-k3d-deploy && make judge-smoke  # k3d へデプロイして healthz �
 | `JUDGE_POKEDEX_BASE_URL` | pokedex-svc のベース URL。未設定なら起動はするが、判定の API は 503 |
 | `JUDGE_CALC_BASE_URL` | calc-svc のベース URL。同上 |
 | `JUDGE_UPSTREAM_TIMEOUT` | 上流 1 回ぶんのタイムアウト(duration。既定 `3s`) |
+| `JUDGE_REQUEST_TIMEOUT` | 判定 1 リクエスト全体の期限(duration。既定 `12s`)。`http.Server` の `WriteTimeout`(既定 15s)未満でなければ起動しない |
 | `PORT` | 待受ポート(既定 8080) |
 
-設定されているのに不正(http/https でない・ホストが無い・タイムアウトが 0 以下)なら起動しない。
+設定されているのに不正(http/https でない・ホストが無い・タイムアウトが 0 以下・`JUDGE_REQUEST_TIMEOUT` が `WriteTimeout` 以上)なら起動しない。
 
 ## 関連 ADR
 

@@ -59,6 +59,10 @@ func (s *Server) buildMasterExport(ctx context.Context) (api.MasterExport, error
 	if err != nil {
 		return api.MasterExport{}, err
 	}
+	moveMechanisms, err := s.q.ListMoveMechanisms(ctx)
+	if err != nil {
+		return api.MasterExport{}, err
+	}
 	items, err := s.q.ListItems(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
@@ -93,6 +97,15 @@ func (s *Server) buildMasterExport(ctx context.Context) (api.MasterExport, error
 	moveEffectByID := map[string]store.MoveEffect{}
 	for _, e := range moveEffects {
 		moveEffectByID[e.MoveID] = e
+	}
+	// mechanismsByMoveID: 契約(MasterMove.mechanisms)の「昇順」保証は SQL の ORDER BY に頼らず
+	// ここで明示的にソートする(ADR-0121)。
+	mechanismsByMoveID := map[string][]string{}
+	for _, mm := range moveMechanisms {
+		mechanismsByMoveID[mm.MoveID] = append(mechanismsByMoveID[mm.MoveID], mm.Mechanism)
+	}
+	for id := range mechanismsByMoveID {
+		sort.Strings(mechanismsByMoveID[id])
 	}
 	itemEffectByID := map[string]store.ItemEffect{}
 	for _, e := range itemEffects {
@@ -135,9 +148,13 @@ func (s *Server) buildMasterExport(ctx context.Context) (api.MasterExport, error
 		if err != nil {
 			return api.MasterExport{}, err
 		}
+		mechanisms := mechanismsByMoveID[m.ID]
+		if mechanisms == nil {
+			mechanisms = []string{} // 通常の技は空配列(null にしない。ADR-0121)
+		}
 		masterMoves = append(masterMoves, api.MasterMove{
 			Id: m.ID, NameJa: m.NameJa, Type: api.PokeType(m.Type), Category: api.MoveCategory(m.Category),
-			Power: int(m.Power), Priority: int(m.Priority), Effect: effect,
+			Power: int(m.Power), Priority: int(m.Priority), Effect: effect, Mechanisms: mechanisms,
 		})
 	}
 	masterItems := make([]api.MasterItem, 0, len(items))

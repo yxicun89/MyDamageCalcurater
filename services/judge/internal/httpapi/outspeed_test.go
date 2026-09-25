@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -75,10 +76,17 @@ const naturesBody = `[
 ]`
 
 // calcBody は calc-svc の CalcResult を模した架空の本文。
+// unsupported は calc-svc の契約で必須(印なしは []。ADR-0123 §7-2)なので、既定のスタブも
+// 空配列を返す(ADR-0708 §7: 欄が無い応答は ErrUpstreamInvalidResponse になる)。
 const calcBody = `{"rolls":[100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115],
   "minDamage":100,"maxDamage":115,"minPercent":58.1,"maxPercent":66.8,"defenderHP":172,
   "effectiveness":2,"stab":true,"category":"physical",
-  "ko":{"hits":2,"guaranteed":true,"chancePercent":0,"displayChancePercent":100}}`
+  "ko":{"hits":2,"guaranteed":true,"chancePercent":0,"displayChancePercent":100},
+  "unsupported":[]}`
+
+// defaultKOBody は calcKO を指定しない計算で返す ko(calcBody の ko と同じ値)。
+// calcUnsupported だけを指定したときの ko に使う。
+const defaultKOBody = `{"hits":2,"guaranteed":true,"chancePercent":0,"displayChancePercent":100}`
 
 // stubResponse は 1 つの上流呼び出しだけを差し替えるための応答(JD3: 候補ごとに
 // 成否を変え、「最初に失敗した候補で打ち切る」ことを確かめるのに使う)。
@@ -105,6 +113,11 @@ type upstreams struct {
 	attackerSpeed int // attacker の種族の素早さ種族値(0 なら 100)
 	defenderSpeed int // defenderSpeciesKey の素早さ種族値(0 なら 100)
 
+	// delay: pokedex-svc・calc-svc のスタブが応答を返す前に一律に待つ時間(issue #213。
+	// ゼロ値なら待たない。「遅いが止まってはいない上流」を再現するテスト専用のフィールドで、
+	// 既存のどのテストも設定しないので、既存の全テストの挙動は変わらない)。
+	delay time.Duration
+
 	// JD3: 候補ごとの差し替え(ADR-0703)。キーは speciesKey。
 	baseSpeeds  map[string]int          // speciesKey → 素早さ種族値
 	speciesFail map[string]stubResponse // speciesKey → その種族の取得だけを失敗させる
@@ -116,6 +129,10 @@ type upstreams struct {
 	moveFail       map[string]stubResponse // moveId → その技の取得だけを失敗させる
 	calcFail       map[string]stubResponse // calcRoute → その計算だけを失敗させる
 	calcKO         map[string]string       // calcRoute → 返す ko の JSON
+
+	// ADR-0708: calcRoute → 返す unsupported の JSON(未指定は [])。順方向と逆方向で
+	// 違う印を返し、「どちらの確定数に付いた印か」を取り違えていないか確かめるのに使う。
+	calcUnsupported map[string]string
 
 	// 記録。
 	naturesCalls int
@@ -203,6 +220,23 @@ func reverseRoute(candidateMoveID string) string {
 	return candidateMoveID + "->" + attackerSpeciesKey
 }
 
+// sleepOrCancel waits for d (upstreams.delay) or the request's own context ending, whichever
+// comes first (issue #213: a slow-but-not-hanging upstream). It mirrors internal/client/
+// client_test.go's blockingServer, which also races a fixed wait against r.Context().Done()
+// so a canceled client request unblocks the stub immediately instead of always waiting out the
+// full delay. d == 0 (every existing test that doesn't set upstreams.delay) returns immediately.
+func sleepOrCancel(ctx context.Context, d time.Duration) {
+	if d <= 0 {
+		return
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+	}
+}
+
 func writeStub(w http.ResponseWriter, status int, body string) {
 	w.Header().Set("Content-Type", "application/json")
 	if status == 0 {
@@ -225,6 +259,8 @@ func newUpstreams(t *testing.T, u *upstreams) Dependencies {
 	t.Helper()
 
 	pokedex := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sleepOrCancel(r.Context(), u.delay)
+
 		u.mu.Lock()
 		defer u.mu.Unlock()
 		u.record(r)
@@ -275,6 +311,8 @@ func newUpstreams(t *testing.T, u *upstreams) Dependencies {
 	t.Cleanup(pokedex.Close)
 
 	calcServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sleepOrCancel(r.Context(), u.delay)
+
 		u.mu.Lock()
 		defer u.mu.Unlock()
 		u.record(r)
@@ -289,8 +327,17 @@ func newUpstreams(t *testing.T, u *upstreams) Dependencies {
 			writeStub(w, fail.status, fail.body)
 			return
 		}
-		if ko, ok := u.calcKO[route]; ok {
-			writeStub(w, http.StatusOK, `{"minDamage":1,"maxDamage":2,"defenderHP":172,"ko":`+ko+`}`)
+		ko, hasKO := u.calcKO[route]
+		marks, hasMarks := u.calcUnsupported[route]
+		if hasKO || hasMarks {
+			if !hasKO {
+				ko = defaultKOBody
+			}
+			if !hasMarks {
+				marks = "[]"
+			}
+			writeStub(w, http.StatusOK,
+				`{"minDamage":1,"maxDamage":2,"defenderHP":172,"ko":`+ko+`,"unsupported":`+marks+`}`)
 			return
 		}
 
@@ -529,8 +576,13 @@ func TestOutspeedAndKo(t *testing.T) {
 		TurnOrderTie:         false,
 		AttackerKo:           api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100},
 		DefenderKo:           api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100},
+		// 印が無い正常系はどちらも空配列(null にはしない。ADR-0708 §3)。
+		// nil スライスと []api.UnsupportedMark{} は DeepEqual では別物。
+		AttackerKoUnsupported: []api.UnsupportedMark{},
+		DefenderKoUnsupported: []api.UnsupportedMark{},
 	}
-	if got != want {
+	// api.Matchup は印の配列を持つので == では比べられない(ADR-0708 §1)。
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("matchups[0] = %+v, want %+v", got, want)
 	}
 
@@ -855,6 +907,171 @@ func TestOutspeedAndKoTranscribesKO(t *testing.T) {
 	}
 }
 
+// 架空の持ち物・特性の ID(印の中継の確認にだけ使う。実マスタは使わない。CLAUDE.md のドメイン規約)。
+const (
+	testVestItemID           = "test-item-vest"
+	testUnsupportedAbilityID = "test-ability-unknown"
+	testFutureReason         = "test-future-reason" // engine が将来足す理由(judge の契約の enum に無い値)
+)
+
+// mark は印 1 つを生の JSON(map)の形で作る。
+func mark(target, reason, id string) any {
+	return map[string]any{"target": target, "reason": reason, "id": id}
+}
+
+// rawMatchups は応答を生の JSON として読む。印の欄は「欄が無い」「null」「[]」を
+// 区別する必要があるので、api.Matchup に decode しない(nil スライスと空スライスは
+// len() == 0 で見分けられない。ADR-0708 テストの期待値)。
+func rawMatchups(t *testing.T, recorder *httptest.ResponseRecorder) []map[string]any {
+	t.Helper()
+	var raw struct {
+		Matchups []map[string]any `json:"matchups"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("body をデコードできない: %v; body=%s", err, recorder.Body.String())
+	}
+	return raw.Matchups
+}
+
+// assertMarks は印の欄が want と同じ並び・同じ中身であることを確かめる。欄が無い・null の
+// ときは失敗する(契約では必須の配列で、印が無いときも [] を返す。ADR-0708 §3)。
+func assertMarks(t *testing.T, matchup map[string]any, field string, want []any) {
+	t.Helper()
+	value, present := matchup[field]
+	if !present {
+		t.Fatalf("%s が応答に無い。必須の配列で、印が無いときも [] を返す(ADR-0708 §3)", field)
+	}
+	got, ok := value.([]any)
+	if !ok {
+		t.Fatalf("%s = %v, want 配列。null を返してはいけない(ADR-0708 §3。Go の nil スライスは"+
+			" null に marshal されるので、空スライスを明示的に作る)", field, value)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("%s = %#v, want %#v(calc-svc が返した印を同じ並びでそのまま中継する。ADR-0708 §4)",
+			field, got, want)
+	}
+}
+
+// TestOutspeedAndKoTranscribesUnsupportedMarks: calc-svc の unsupported を、順方向の印は
+// attackerKoUnsupported に・逆方向の印は defenderKoUnsupported に、そのまま・方向ごとに分けて
+// 中継する(ADR-0708 §1・§4・§5。受け入れ条件 1〜3)。
+// TestOutspeedAndKoTranscribesKO と同じ形で、**方向ごとに件数も中身も違う印**を返すスタブにする。
+// 同じ印を両方向に返すと、取り違え・混合・片方の漏れが緑のまま通る。
+func TestOutspeedAndKoTranscribesUnsupportedMarks(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		forwardMarks string // "" なら calc-svc の既定の応答(unsupported は [])
+		reverseMarks string
+		wantAttacker []any
+		wantDefender []any
+	}{
+		{
+			name:         "印が無ければどちらも空配列(null にしない)",
+			wantAttacker: []any{},
+			wantDefender: []any{},
+		},
+		{
+			name:         "自分の技が多段技なら順方向にだけ印が付く",
+			forwardMarks: `[{"target":"move","reason":"multi_hit","id":"` + testMoveID + `"}]`,
+			wantAttacker: []any{mark("move", "multi_hit", testMoveID)},
+			wantDefender: []any{},
+		},
+		{
+			name: "候補の技が固定ダメージなら逆方向にだけ印が付く(2 件・並びもそのまま)",
+			reverseMarks: `[{"target":"move","reason":"fixed_damage","id":"` + defenderMoveID + `"},` +
+				`{"target":"defender_item","reason":"unsupported_effect","id":"` + testVestItemID + `"}]`,
+			wantAttacker: []any{},
+			wantDefender: []any{
+				mark("move", "fixed_damage", defenderMoveID),
+				// 逆方向では防御側 = 自分。自分の持ち物の印はこちらに入る(ADR-0708 §5)。
+				mark("defender_item", "unsupported_effect", testVestItemID),
+			},
+		},
+		{
+			name: "両方向に違う印が付いても混ざらない",
+			forwardMarks: `[{"target":"defender_ability","reason":"unsupported_effect","id":"` +
+				testUnsupportedAbilityID + `"}]`,
+			reverseMarks: `[{"target":"move","reason":"variable_power","id":"` + defenderMoveID + `"}]`,
+			// 順方向の防御側 = その候補。同じ target でも指す個体が向きで変わる(ADR-0708 §5)。
+			wantAttacker: []any{mark("defender_ability", "unsupported_effect", testUnsupportedAbilityID)},
+			wantDefender: []any{mark("move", "variable_power", defenderMoveID)},
+		},
+		{
+			// judge は印の意味を持たないので、契約の enum に無い理由も 503 にせずそのまま通す
+			// (engine が理由を足したときに judge の版で落とさない。ADR-0708 §4・§6)。
+			name:         "judge が知らない reason もそのまま中継する",
+			forwardMarks: `[{"target":"move","reason":"` + testFutureReason + `","id":"` + testMoveID + `"}]`,
+			wantAttacker: []any{mark("move", testFutureReason, testMoveID)},
+			wantDefender: []any{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			stub := &upstreams{calcUnsupported: map[string]string{}}
+			if tt.forwardMarks != "" {
+				stub.calcUnsupported[forwardRoute(defenderSpeciesKey)] = tt.forwardMarks
+			}
+			if tt.reverseMarks != "" {
+				stub.calcUnsupported[reverseRoute(defenderMoveID)] = tt.reverseMarks
+			}
+
+			recorder := postOutspeed(newUpstreams(t, stub), validBody(), nil)
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+			}
+			matchups := rawMatchups(t, recorder)
+			if len(matchups) != 1 {
+				t.Fatalf("matchups の件数 = %d, want 1", len(matchups))
+			}
+			assertMarks(t, matchups[0], "attackerKoUnsupported", tt.wantAttacker)
+			assertMarks(t, matchups[0], "defenderKoUnsupported", tt.wantDefender)
+
+			// 印は確定数を変えない(数値は通常の式のまま。ADR-0123 §1)。
+			got := onlyMatchup(t, recorder)
+			wantKO := api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100}
+			if got.AttackerKo != wantKO || got.DefenderKo != wantKO {
+				t.Errorf("attackerKo = %+v / defenderKo = %+v, want どちらも %+v(印は数値を変えない)",
+					got.AttackerKo, got.DefenderKo, wantKO)
+			}
+		})
+	}
+}
+
+// TestOutspeedAndKoUnsupportedMarksPerCandidate: 印は候補ごとに独立で、ある候補の印が
+// 他の候補の行に漏れない(ADR-0708 受け入れ条件5)。印を付けるのは **index 1 の候補の逆方向だけ**
+// にする(index 0 に付けると「全部の行に同じ配列を入れる」実装が通ってしまう。ADR-0706 のテストと同じ轍)。
+func TestOutspeedAndKoUnsupportedMarksPerCandidate(t *testing.T) {
+	t.Parallel()
+
+	body := bodyWithDefenders(
+		individual(defenderSpeciesKey, natureNeutralID, 0),
+		individual(defender2SpeciesKey, natureNeutralID, 0),
+	)
+	stub := &upstreams{calcUnsupported: map[string]string{
+		reverseRoute(candidateMoveID(1)): `[{"target":"move","reason":"ohko","id":"` +
+			candidateMoveID(1) + `"}]`,
+	}}
+
+	recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+	}
+	matchups := rawMatchups(t, recorder)
+	if len(matchups) != 2 {
+		t.Fatalf("matchups の件数 = %d, want 2", len(matchups))
+	}
+
+	assertMarks(t, matchups[0], "attackerKoUnsupported", []any{})
+	assertMarks(t, matchups[0], "defenderKoUnsupported", []any{})
+	assertMarks(t, matchups[1], "attackerKoUnsupported", []any{})
+	assertMarks(t, matchups[1], "defenderKoUnsupported",
+		[]any{mark("move", "ohko", candidateMoveID(1))})
+}
+
 // TestOutspeedAndKoForwardsField: field は解釈せず calc-svc にそのまま転送し、
 // 省略時は送らない(ADR-0701 受け入れ条件6)。
 func TestOutspeedAndKoForwardsField(t *testing.T) {
@@ -987,8 +1204,14 @@ func TestOutspeedAndKoRejectsInvalidRequest(t *testing.T) {
 			body["format"] = "triple"
 			return body
 		}(), nil},
+		{"moveId が形式に合わない", func() any {
+			body := validBody()
+			body["moveId"] = "test move"
+			return body
+		}(), nil},
 		{"speciesKey が形式に合わない", withAttacker(func(a map[string]any) { a["speciesKey"] = "pikachu" }), nil},
 		{"natureId が空", withAttacker(func(a map[string]any) { a["natureId"] = "" }), nil},
+		{"natureId が形式に合わない", withAttacker(func(a map[string]any) { a["natureId"] = "test/nature" }), nil},
 		{"sp が無い", withAttacker(func(a map[string]any) { delete(a, "sp") }), nil},
 		{"sp の欄が足りない", withAttacker(func(a map[string]any) { a["sp"] = map[string]any{"spe": 32} }), nil},
 		{"sp が負", withAttacker(func(a map[string]any) { a["sp"] = sp(-1) }), nil},
@@ -996,12 +1219,32 @@ func TestOutspeedAndKoRejectsInvalidRequest(t *testing.T) {
 		{"sp の合計が 66 超", withAttacker(func(a map[string]any) {
 			a["sp"] = map[string]any{"hp": 32, "atk": 32, "def": 32, "spa": 0, "spd": 0, "spe": 0}
 		}), nil},
+		{
+			// issue #329: 上の 96 は 66 から遠く、境界(MaxSPTotal+1)を1つずらす退行を検出できない。
+			// 各欄は 32 以下(MaxSPPerStat の範囲内)のまま合計だけがちょうど 1 超えた 67 で拒否することを
+			// ピン留めする。
+			"sp の合計がちょうど 67(境界値)",
+			withAttacker(func(a map[string]any) {
+				a["sp"] = map[string]any{"hp": 3, "atk": 32, "def": 0, "spa": 0, "spd": 0, "spe": 32}
+			}),
+			nil,
+		},
 		{"ranks が -6 未満", withAttacker(func(a map[string]any) { a["ranks"] = map[string]any{"spe": -7} }), nil},
 		{"ranks が +6 超", withAttacker(func(a map[string]any) { a["ranks"] = map[string]any{"spe": 7} }), nil},
 		// 候補側の欄も同じ検査を受ける。
 		{"候補の speciesKey が形式に合わない", func() any {
 			body := validBody()
 			defenderAt(body, 0)["speciesKey"] = "pikachu"
+			return body
+		}(), nil},
+		{"候補の moveId が形式に合わない", func() any {
+			body := validBody()
+			defenderAt(body, 0)["moveId"] = "test?move=1"
+			return body
+		}(), nil},
+		{"候補の natureId が形式に合わない", func() any {
+			body := validBody()
+			defenderAt(body, 0)["natureId"] = "test nature"
 			return body
 		}(), nil},
 		{"候補の sp が無い", func() any {
@@ -1188,6 +1431,25 @@ func TestOutspeedAndKoUpstreamFailures(t *testing.T) {
 		{
 			"calc の ko が欠けている",
 			func() *upstreams { return &upstreams{calcBody: `{"minDamage":1,"maxDamage":2,"defenderHP":172}`} },
+			http.StatusServiceUnavailable, api.UpstreamUnavailable,
+		},
+		{
+			// ADR-0708 §7: 黙って「印なし」に倒すと、未対応の入力を「対応済み」と断言した応答を
+			// 正しい顔で返すことになる(ADR-0704 §9 の priority と同じ立場)。
+			"calc の unsupported が欠けている",
+			func() *upstreams {
+				return &upstreams{calcBody: `{"minDamage":1,"maxDamage":2,"defenderHP":172,` +
+					`"ko":{"hits":2,"guaranteed":true,"chancePercent":0,"displayChancePercent":100}}`}
+			},
+			http.StatusServiceUnavailable, api.UpstreamUnavailable,
+		},
+		{
+			"calc の unsupported の要素に reason が無い",
+			func() *upstreams {
+				return &upstreams{calcBody: `{"minDamage":1,"maxDamage":2,"defenderHP":172,` +
+					`"ko":{"hits":2,"guaranteed":true,"chancePercent":0,"displayChancePercent":100},` +
+					`"unsupported":[{"target":"move","id":"` + testMoveID + `"}]}`}
+			},
 			http.StatusServiceUnavailable, api.UpstreamUnavailable,
 		},
 		{
@@ -1626,6 +1888,9 @@ func TestOutspeedAndKoSpeedFieldOmittedMatchesJD1(t *testing.T) {
 		AttackerMovesFirst: true,
 		AttackerKo:         api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100},
 		DefenderKo:         api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100},
+		// 印が無い正常系はどちらも空配列(null にはしない。ADR-0708 §3)。
+		AttackerKoUnsupported: []api.UnsupportedMark{},
+		DefenderKoUnsupported: []api.UnsupportedMark{},
 	}
 
 	tests := []struct {
@@ -1652,7 +1917,8 @@ func TestOutspeedAndKoSpeedFieldOmittedMatchesJD1(t *testing.T) {
 			if recorder.Code != http.StatusOK {
 				t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
 			}
-			if got := onlyMatchup(t, recorder); got != want {
+			// api.Matchup は印の配列を持つので == では比べられない(ADR-0708 §1)。
+			if got := onlyMatchup(t, recorder); !reflect.DeepEqual(got, want) {
 				t.Errorf("matchups[0] = %+v, want %+v(JD1 と同じ)", got, want)
 			}
 		})
@@ -1738,27 +2004,33 @@ func TestOutspeedAndKoMultipleDefenders(t *testing.T) {
 	}
 
 	// どちらの技も優先度 0 なので、attackerMovesFirst / turnOrderTie は素早さの結果と一致する。
+	// 印が無い正常系は各行とも空配列(null にはしない。ADR-0708 §3。nil スライスと
+	// []api.UnsupportedMark{} は DeepEqual では別物)。
+	noMarks := []api.UnsupportedMark{}
 	want := []api.Matchup{
 		{
 			DefenderIndex: 0, Outspeeds: true, SpeedTie: false,
 			AttackerSpeed: 120, DefenderSpeed: 110,
 			AttackerMovesFirst: true, TurnOrderTie: false,
-			AttackerKo: api.KOChance{Hits: 1, Guaranteed: true, DisplayChancePercent: 100},
-			DefenderKo: api.KOChance{Hits: 3, Guaranteed: true, DisplayChancePercent: 100},
+			AttackerKo:            api.KOChance{Hits: 1, Guaranteed: true, DisplayChancePercent: 100},
+			DefenderKo:            api.KOChance{Hits: 3, Guaranteed: true, DisplayChancePercent: 100},
+			AttackerKoUnsupported: noMarks, DefenderKoUnsupported: noMarks,
 		},
 		{
 			DefenderIndex: 1, Outspeeds: false, SpeedTie: true,
 			AttackerSpeed: 120, DefenderSpeed: 120,
 			AttackerMovesFirst: false, TurnOrderTie: true,
-			AttackerKo: api.KOChance{Hits: 2, Guaranteed: false, DisplayChancePercent: 50},
-			DefenderKo: api.KOChance{Hits: 4, Guaranteed: false, DisplayChancePercent: 25},
+			AttackerKo:            api.KOChance{Hits: 2, Guaranteed: false, DisplayChancePercent: 50},
+			DefenderKo:            api.KOChance{Hits: 4, Guaranteed: false, DisplayChancePercent: 25},
+			AttackerKoUnsupported: noMarks, DefenderKoUnsupported: noMarks,
 		},
 		{
 			DefenderIndex: 2, Outspeeds: false, SpeedTie: false,
 			AttackerSpeed: 120, DefenderSpeed: 150,
 			AttackerMovesFirst: false, TurnOrderTie: false,
-			AttackerKo: api.KOChance{Hits: 0, Guaranteed: false, DisplayChancePercent: 0},
-			DefenderKo: api.KOChance{Hits: 1, Guaranteed: true, DisplayChancePercent: 100},
+			AttackerKo:            api.KOChance{Hits: 0, Guaranteed: false, DisplayChancePercent: 0},
+			DefenderKo:            api.KOChance{Hits: 1, Guaranteed: true, DisplayChancePercent: 100},
+			AttackerKoUnsupported: noMarks, DefenderKoUnsupported: noMarks,
 		},
 	}
 	got := decodeResponse(t, recorder).Matchups
@@ -2194,13 +2466,18 @@ func TestOutspeedAndKoSpeedFieldAppliesToEveryCandidate(t *testing.T) {
 		// attacker 120 → 240。候補 110 / 120 / 150 → 220 / 240 / 300。
 		// 技はすべて優先度 0 なので、行動順は素早さの結果と一致する。
 		defaultKO := api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100}
+		// 印が無い正常系は各行とも空配列(null にはしない。ADR-0708 §3)。
+		noMarks := []api.UnsupportedMark{}
 		want := []api.Matchup{
 			{DefenderIndex: 0, Outspeeds: true, AttackerSpeed: 240, DefenderSpeed: 220,
-				AttackerMovesFirst: true, AttackerKo: defaultKO, DefenderKo: defaultKO},
+				AttackerMovesFirst: true, AttackerKo: defaultKO, DefenderKo: defaultKO,
+				AttackerKoUnsupported: noMarks, DefenderKoUnsupported: noMarks},
 			{DefenderIndex: 1, SpeedTie: true, AttackerSpeed: 240, DefenderSpeed: 240,
-				TurnOrderTie: true, AttackerKo: defaultKO, DefenderKo: defaultKO},
+				TurnOrderTie: true, AttackerKo: defaultKO, DefenderKo: defaultKO,
+				AttackerKoUnsupported: noMarks, DefenderKoUnsupported: noMarks},
 			{DefenderIndex: 2, AttackerSpeed: 240, DefenderSpeed: 300,
-				AttackerKo: defaultKO, DefenderKo: defaultKO},
+				AttackerKo: defaultKO, DefenderKo: defaultKO,
+				AttackerKoUnsupported: noMarks, DefenderKoUnsupported: noMarks},
 		}
 		if got := decodeResponse(t, recorder).Matchups; !reflect.DeepEqual(got, want) {
 			t.Errorf("matchups = %+v, want %+v", got, want)
@@ -2913,5 +3190,241 @@ func TestOutspeedAndKoMoveCheckOrder(t *testing.T) {
 		if routes := stub.calcRoutes(); len(routes) != 0 {
 			t.Errorf("calc を %v 回呼んでいる。全候補の種族・技が揃ってから計算する(ADR-0704 §5)", routes)
 		}
+	})
+}
+
+// --- ADR-0706: ID(moveId / natureId)の形式検証 ------------------------------------------
+// issue #234: 形式の検査が無いと、制御文字を含む moveId は上流 URL の組み立てで落ちて
+// 503 upstream_unavailable + 「上流が落ちている」という誤った警告ログになり、
+// "x?y=1" のような moveId は /moves/x への問い合わせに静かにすり替わる。
+// クライアントの入力ミスは上流を呼ぶ前に 400 invalid_request で返す(ADR-0706 §1・§3)。
+
+// invalidIDSamples は ID に現れてはいけない値(ADR-0706 §1・受け入れ条件1)。
+// 前半は URL の構文を壊す・書き換える文字、後半は Showdown ID の綴りから外れる形。
+var invalidIDSamples = []struct {
+	name string
+	id   string
+}{
+	{"制御文字(タブ)", "test\tmove"},
+	{"制御文字(0x7f)", "test\u007fmove"},
+	{"空白", "test move"},
+	{"スラッシュ", "test/move"},
+	{"クエリの開始", "test?move=1"},
+	{"フラグメントの開始", "test#move"},
+	{"パーセント", "test%2fmove"},
+	{"大文字", "Test-Move"},
+	{"先頭のハイフン", "-test-move"},
+	{"末尾のハイフン", "test-move-"},
+	{"ハイフンの連続", "test--move"},
+}
+
+// idFields は moveId / natureId が現れる 4 か所(ADR-0706 テストの期待値)。
+// どれか 1 か所だけ直った実装を通さないために、4 つすべてを同じ表で回す。
+// wantIndex が -1 なら attacker 側(message は候補の index を騙らない。ADR-0703 §3)。
+var idFields = []struct {
+	name      string
+	mutate    func(body map[string]any, id string)
+	wantIndex int
+}{
+	{"attacker の moveId(request 直下)", func(body map[string]any, id string) { body["moveId"] = id }, -1},
+	{"attacker の natureId", func(body map[string]any, id string) { attackerOf(body)["natureId"] = id }, -1},
+	{"候補の moveId", func(body map[string]any, id string) { defenderAt(body, 1)["moveId"] = id }, 1},
+	{"候補の natureId", func(body map[string]any, id string) { defenderAt(body, 1)["natureId"] = id }, 1},
+}
+
+// twoCandidateBody は候補 2 件の 200 になる request。ID の異常系は **index 1** を不正にして
+// 確かめる(index 0 だと、帰属ラベルを defenders[0] に固定した実装が緑のまま通る)。
+func twoCandidateBody() map[string]any {
+	return bodyWithDefenders(
+		candidate(defenderSpeciesKey, natureNeutralID, 0, candidateMoveID(0)),
+		candidate(defender2SpeciesKey, natureNeutralID, 0, candidateMoveID(1)),
+	)
+}
+
+// assertBlamesSide は attacker 側(index < 0)と候補側で帰属の検査を振り分ける。
+func assertBlamesSide(t *testing.T, recorder *httptest.ResponseRecorder, wantIndex int) {
+	t.Helper()
+	if wantIndex < 0 {
+		assertBlamesAttacker(t, recorder)
+		return
+	}
+	assertBlamesCandidate(t, recorder, wantIndex)
+}
+
+// TestOutspeedAndKoRejectsInvalidIDFormat: moveId / natureId が Showdown ID の形式
+// (^[a-z0-9]+(-[a-z0-9]+)*$)に合わなければ、**上流を 1 回も呼ばずに** 400 invalid_request
+// (ADR-0706 §1・§3・受け入れ条件1・2)。message はどちら側の ID かを示す(ADR-0706 §4)。
+func TestOutspeedAndKoRejectsInvalidIDFormat(t *testing.T) {
+	t.Parallel()
+
+	for _, field := range idFields {
+		t.Run(field.name, func(t *testing.T) {
+			t.Parallel()
+
+			for _, sample := range invalidIDSamples {
+				t.Run(sample.name, func(t *testing.T) {
+					t.Parallel()
+
+					body := twoCandidateBody()
+					field.mutate(body, sample.id)
+
+					stub := &upstreams{}
+					recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+					assertStatusAndCode(t, recorder, http.StatusBadRequest, api.InvalidRequest)
+					assertBlamesSide(t, recorder, field.wantIndex)
+					assertNoUpstreamCalls(t, stub)
+					assertNoUpstreamDetail(t, recorder.Body.String(), stub.pokedexURL, stub.calcURL)
+				})
+			}
+		})
+	}
+}
+
+// TestOutspeedAndKoIDLengthLimit: 長さの上限は 64 文字ちょうどまで通り、65 文字は上流を
+// 1 回も呼ばずに 400(ADR-0706 §1・受け入れ条件4)。上限は「際限なく長い path 要素を
+// 上流へ出さない」ためのもので、正しい形式の ID を落とすためのものではない。
+func TestOutspeedAndKoIDLengthLimit(t *testing.T) {
+	t.Parallel()
+
+	atLimit := strings.Repeat("a", maxIDLength)
+	overLimit := strings.Repeat("a", maxIDLength+1)
+
+	// 上限ちょうどの natureId が「一覧に無い」(422 unknown_nature)で落ちないよう、
+	// その ID を載せた架空の性格一覧を返させる(形式の検査とは別の話)。
+	naturesWithLongID := `[
+	  {"id":"` + naturePlusSpeID + `","nameJa":"テストようき","plus":"spe","minus":"spa"},
+	  {"id":"` + natureNeutralID + `","nameJa":"テストまじめ","plus":null,"minus":null},
+	  {"id":"` + atLimit + `","nameJa":"テストながいせいかく","plus":null,"minus":null}
+	]`
+
+	t.Run("64 文字ちょうどの moveId / natureId は通る", func(t *testing.T) {
+		t.Parallel()
+
+		body := validBody()
+		body["moveId"] = atLimit
+		attackerOf(body)["natureId"] = atLimit
+		defenderAt(body, 0)["moveId"] = atLimit
+		defenderAt(body, 0)["natureId"] = atLimit
+
+		stub := &upstreams{naturesBody: naturesWithLongID}
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200(上限ちょうどは通る); body=%s", recorder.Code, recorder.Body.String())
+		}
+		if moves := stub.moveCalls(); len(moves) != 2 || moves[0] != atLimit || moves[1] != atLimit {
+			t.Errorf("技の呼び出し = %v, want [%s %s](上限ちょうどの ID がそのまま上流に届く)", moves, atLimit, atLimit)
+		}
+	})
+
+	t.Run("65 文字は 400", func(t *testing.T) {
+		t.Parallel()
+
+		for _, field := range idFields {
+			t.Run(field.name, func(t *testing.T) {
+				t.Parallel()
+
+				body := twoCandidateBody()
+				field.mutate(body, overLimit)
+
+				stub := &upstreams{}
+				recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+				assertStatusAndCode(t, recorder, http.StatusBadRequest, api.InvalidRequest)
+				assertBlamesSide(t, recorder, field.wantIndex)
+				assertNoUpstreamCalls(t, stub)
+			})
+		}
+	})
+}
+
+// TestOutspeedAndKoIDFormatCheckOrder: 形式の検査は ADR-0703 §4 の順(attacker → 候補を
+// index 昇順)に従い、最初の 1 件だけを返す(ADR-0706 §4)。body の上限(8 KiB)は
+// 長さの上限より**先**に見るので、巨大な moveId は 400 ではなく 413 のまま(受け入れ条件4)。
+func TestOutspeedAndKoIDFormatCheckOrder(t *testing.T) {
+	t.Parallel()
+
+	t.Run("attacker と候補の両方が不正なら attacker", func(t *testing.T) {
+		t.Parallel()
+
+		body := twoCandidateBody()
+		body["moveId"] = "test move"
+		defenderAt(body, 1)["natureId"] = "test/nature"
+
+		stub := &upstreams{}
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+		assertStatusAndCode(t, recorder, http.StatusBadRequest, api.InvalidRequest)
+		assertBlamesAttacker(t, recorder)
+		assertNoUpstreamCalls(t, stub)
+	})
+
+	t.Run("候補が複数不正なら index の小さい方", func(t *testing.T) {
+		t.Parallel()
+
+		body := twoCandidateBody()
+		defenderAt(body, 0)["moveId"] = "test move"
+		defenderAt(body, 1)["natureId"] = "test/nature"
+
+		stub := &upstreams{}
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+		assertStatusAndCode(t, recorder, http.StatusBadRequest, api.InvalidRequest)
+		assertBlamesCandidate(t, recorder, 0)
+		assertNoUpstreamCalls(t, stub)
+	})
+
+	t.Run("8 KiB を超える moveId は長さの上限より先に 413", func(t *testing.T) {
+		t.Parallel()
+
+		body := validBody()
+		body["moveId"] = strings.Repeat("a", 9*1024)
+
+		stub := &upstreams{}
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+		assertStatusAndCode(t, recorder, http.StatusRequestEntityTooLarge, api.RequestTooLarge)
+		assertNoUpstreamCalls(t, stub)
+	})
+}
+
+// TestOutspeedAndKoAcceptsValidIDFormat: 正常系は変わらない(ADR-0706 受け入れ条件5)。
+// ハイフン区切りの小文字英数はそのまま通り、上流へ渡される ID も変わらない。
+// 形式は合うがマスタに無い技は、今まで通り 400 ではなく 422 unknown_move(ADR-0704 §6)。
+func TestOutspeedAndKoAcceptsValidIDFormat(t *testing.T) {
+	t.Parallel()
+
+	t.Run("数字だけ・ハイフン区切りの ID も通る", func(t *testing.T) {
+		t.Parallel()
+
+		body := validBody()
+		body["moveId"] = "m1"
+		defenderAt(body, 0)["moveId"] = "test-move-2-x9"
+
+		stub := &upstreams{}
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+		}
+		want := []string{"m1", "test-move-2-x9"}
+		if moves := stub.moveCalls(); !reflect.DeepEqual(moves, want) {
+			t.Errorf("技の呼び出し = %v, want %v(ID は加工せずそのまま上流へ渡す)", moves, want)
+		}
+	})
+
+	t.Run("形式は合うがマスタに無い技は 422 unknown_move のまま", func(t *testing.T) {
+		t.Parallel()
+
+		stub := &upstreams{
+			moveFail: map[string]stubResponse{
+				testMoveID: {http.StatusNotFound, `{"code":"not_found","message":"no such move"}`},
+			},
+		}
+		recorder := postOutspeed(newUpstreams(t, stub), validBody(), nil)
+
+		assertStatusAndCode(t, recorder, http.StatusUnprocessableEntity, api.UnknownMove)
+		assertBlamesAttacker(t, recorder)
 	})
 }

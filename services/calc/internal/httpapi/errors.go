@@ -66,6 +66,9 @@ var engineSentinels = []struct {
 	{engine.ErrTypeChartMissing, api.TypeChartMissing},
 	{engine.ErrInvalidTypeChart, api.InvalidTypeChart},
 	{engine.ErrUnknownType, api.UnknownType},
+	// ダメージを与えられない技の逆算(issue #317)。契約に専用の code が無いので invalid_input
+	// (400)に写す。専用の code の追加は API レーンへ依頼(ADR-0117 §3)。
+	{engine.ErrMoveDealsNoDamage, api.InvalidInput},
 }
 
 // errFromEngine は engine が返したエラーを安定した code の httpError に写す。

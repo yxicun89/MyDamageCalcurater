@@ -38,10 +38,44 @@ export function reverseRows(page: Page): Locator {
   return page.getByRole("list", { name: "推定結果", exact: true }).getByRole("listitem");
 }
 
-/** 計算画面で攻撃側・防御側を選ぶ(技は攻撃側の最初のダメージ技が自動で選ばれる)。 */
+/**
+ * 計算画面で攻撃側・防御側を選ぶ(技は攻撃側の最初のダメージ技が自動で選ばれる)。
+ * **種族の一覧がそろうマスタ(オフライン。capabilities.speciesList が true)専用**で、`<select>` を前提にする。
+ * オンラインは selectMatchupBySearch を使う(ADR-0304 §4・ADR-0307)。
+ */
 export async function selectMatchup(page: Page, attackerName: string, defenderName: string): Promise<void> {
   await combobox(page, "攻撃側のポケモン").selectOption({ label: attackerName });
   await combobox(page, "防御側のポケモン").selectOption({ label: defenderName });
+}
+
+/**
+ * PR2(ADR-0307): 種族の検索欄(SpeciesSearchField)で1体選ぶ。capabilities.speciesList が false のマスタ
+ * (オンライン)では、種族のスロットが `<select>` ではなく検索入力になる(ADR-0304 A-4・A-10)。
+ *
+ * 同じ accessible name(`label`)の要素が `<select>` と検索入力の両方になりうるので、まず
+ * `aria-expanded` を持っている(= 検索欄に入れ替わり、マスタの読み込みが終わっている)ことを待ってから
+ * 入力する。候補は入力のデバウンス(SPECIES_SEARCH_DEBOUNCE_MS)後に出るが、Playwright が自動で待つ。
+ */
+export async function selectSpeciesBySearch(page: Page, label: string, name: string): Promise<void> {
+  const input = combobox(page, label);
+  await expect(input).toHaveAttribute("aria-expanded", /^(true|false)$/);
+  await input.fill(name);
+  // 候補リストの accessible name は入力欄と同じ(SpeciesSearchField の <ul aria-label={label}>)なので、
+  // 攻撃側・防御側の候補を取り違えないようリストの中から選ぶ。
+  const listbox = page.getByRole("listbox", { name: label, exact: true });
+  await listbox.getByRole("option", { name, exact: true }).click();
+  // 候補を選ぶと入力欄がその名前に置き換わる(SpeciesSearchField の selectCandidate)。
+  await expect(input).toHaveValue(name);
+}
+
+/** PR2(ADR-0307): 検索欄で攻撃側・防御側を選ぶ(オンライン用の selectMatchup)。 */
+export async function selectMatchupBySearch(
+  page: Page,
+  attackerName: string,
+  defenderName: string,
+): Promise<void> {
+  await selectSpeciesBySearch(page, "攻撃側のポケモン", attackerName);
+  await selectSpeciesBySearch(page, "防御側のポケモン", defenderName);
 }
 
 /** 行の文言から表示%の最小・最大を読む。書式に合わなければ失敗させる。 */

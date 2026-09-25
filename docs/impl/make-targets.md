@@ -4,7 +4,7 @@
 - 読み方: 「前提」= Makefile の前提条件。「副作用」の**太字**はクラスタ・DB・レジストリ・破壊的操作。コマンド単位の実行順は [runbook-commands.md](runbook-commands.md)、リソースは [k8s-local.md](k8s-local.md)。
 - ルート `Makefile` は末尾で 6 本を `include`(`Makefile:239-244`)。ターゲット名は接頭辞でレーン分離(`api-`=gateway/calc、`web-`、`balance-`、`speed-`、`judge-`、`ios-`)。
 
-## CI(GitHub Actions。ADR-0114)
+## CI(GitHub Actions。ADR-0119)
 
 `.github/workflows/ci.yml` が PR と main への push で1ジョブ(ubuntu-latest、Secret 不要)を実行する。
 下表の `test`/`lint`/`build` が Web・balance・speed・judge を合成済みなので、CI も go/web でジョブを
@@ -14,7 +14,7 @@
 `speed-kustomize`・`judge-kustomize`(各レーン専用 overlay)も描画確認する。最後に `make check-publishable`
 を単独ステップとしても走らせる(`make lint` に含まれるが、ログで単独の合否として見せるため)。
 Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-version` を読み、版をワークフローに
-二重に書かない。対象外(iOS・Playwright e2e・k3d への実 apply)は ci.yml 冒頭のコメントと ADR-0114 を参照。
+二重に書かない。対象外(iOS・Playwright e2e・k3d への実 apply)は ci.yml 冒頭のコメントと ADR-0119 を参照。
 
 ## 共通の仕様
 
@@ -46,7 +46,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 
 ## 全ターゲット
 
-### `Makefile`(41 定義)
+### `Makefile`(42 定義)
 
 | ターゲット | 行 | 前提 | 実行内容(レシピ要約) | 副作用 |
 |---|---|---|---|---|
@@ -69,6 +69,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `migrate-up` | 101 | — | `cd services && $(GO) run ./pokedex/cmd/migrate up` | **DB 書込(migrate)** |
 | `migrate-version` | 105 | — | `cd services && $(GO) run ./pokedex/cmd/migrate version` | なし(読み取り/検査) |
 | `migrate-down` | 109 | — | `if [ -z "$(CONFIRM_DESTROY)" ]; then \ ⏎ echo "migrate-down: CONFIRM_DESTROY=<DB名> を指定すること(全テーブルを消す破壊的操作)。人間が確認すること" >&2; \ ⏎ exit 1; \ ⏎ fi ⏎ cd services && $(GO) run…` | **DB 破壊(全テーブル削除)**。CONFIRM_DESTROY=DB名 必須 |
+| `migrate-force` | 124 | — | `if [ -z "$(FORCE_VERSION)" ] \|\| [ -z "$(CONFIRM_FORCE)" ]; then … fi ⏎ cd services && $(GO) run ./pokedex/cmd/migrate force -version … -confirm …` | **DB 書込(schema_migrations の版と dirty)**。FORCE_VERSION・CONFIRM_FORCE 必須(人間の確認) |
 | `test-db` | 117 | — | `if [ -z "$(POKEDEX_TEST_DSN)" ]; then \ ⏎ echo "test-db: POKEDEX_TEST_DSN が設定されていない(スキップせず失敗する)" >&2; \ ⏎ exit 1; \ ⏎ fi ⏎ cd services && $(GO) test -tags mysql -p 1 .…` | DB へ接続してテストが書込(要 POKEDEX_TEST_DSN。未設定は失敗) |
 | `db-local-up` | 125 | — | `./scripts/db-local-up.sh` | docker で mysql:9.7.2 を 127.0.0.1:3306 に起動(既存なら start)。要 .env の MYSQL_ROOT_PASSWORD |
 | `up` | 130 | — | `./scripts/up.sh` | **クラスタ作成+全 apply** |
@@ -83,6 +84,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `import-check-upstream` | 170 | — | `cd tools/importer && npm ci && node check-upstream.mjs` | node_modules 更新(ネットワーク), 外部ネットワーク取得 |
 | `pokedex-export` | 174 | — | `cd services && $(GO) run ./pokedex/cmd/pokedex export -out ../data/generated/readmodel` | DB を読み、data/generated/readmodel に4ファイルを書込 |
 | `import-k8s` | 178 | — | `current_context="$$(kubectl config current-context)"; \ ⏎ if [ "$$current_context" != "k3d-$(CLUSTER)" ]; then \ ⏎ echo "import-k8s: 現在の kubectl context '$$current_con…` | **クラスタに Job 作成**(CronJob pokedex-import から。context 検査あり) |
+| `pokedex-registry-push` | 266 | — | `./scripts/pokedex-registry-push.sh` | docker build(--target server)/save, balance-registry へ port-forward(5003)して crane push(context 検査あり。**クラスタ内レジストリへ push**) |
 | `k8s-render` | 187 | — | `kubectl kustomize deploy/k8s/overlays/local >/dev/null ⏎ kubectl kustomize deploy/k8s/overlays/cloud >/dev/null ⏎ echo "k8s-render: local / cloud overlay の描画を確認"` | なし(kustomize 描画のみ) |
 | `assets` | 193 | — | `echo "assets: (M画像対応 で実装)"` | なし(**スタブ**: echo のみ) |
 | `check-publishable` | 198 | — | `./scripts/check-publishable.sh` | なし(検査のみ) |

@@ -65,6 +65,12 @@ const (
 	// の前提「取得元に2エントリ以上の技は無い」が崩れたことを人に知らせる。決定6 規則6)。
 	KindMoveEffectAmbiguous FindingKind = "move-effect-ambiguous"
 
+	// KindMoveMechanismUnknownHook は技の機構の判定で、ダメージに効くか分からないハンドラ名
+	// (取得元の更新で増えたもの)に出会ったとき(ADR-0121)。安全側(move_specific / field_specific)に
+	// 分類して取り込みは止めない。Detail はハンドラ名(天候・フィールドのものは "<状態ID>.<ハンドラ名>")。
+	// 分類表(convert_move_mechanisms.go)に足して警告を消す。
+	KindMoveMechanismUnknownHook FindingKind = "move-mechanism-unknown-hook"
+
 	// KindNatureMismatch は性格(natures)の補正が Showdown と calc で食い違う、または片方にしか
 	// 無いとき(ADR-0105 §4)。ID は Showdown の ID か、calc にしかない性格名の toID。
 	KindNatureMismatch FindingKind = "nature-mismatch"
@@ -83,6 +89,10 @@ const (
 	KindEffectNoHook FindingKind = "effect-no-hook"
 	// KindFormLearnetDiff は畳んだフォームの習得技(取り込む技に絞る)が代表と違うとき。ID は畳んだフォーム。
 	KindFormLearnsetDiff FindingKind = "form-learnset-diff"
+	// KindTypeChartReferenceMismatch は取り込む相性表(calc スナップショット由来)が参照の相性表
+	// (testdata/golden/typechart.json。ゴールデンテスト・balance・Web が使う)と食い違うとき
+	// (issue #280・ADR-0118)。ID は "version" / "types" / "<攻撃>><防御>"。
+	KindTypeChartReferenceMismatch FindingKind = "type-chart-reference-mismatch"
 )
 
 // Finding は1件の指摘。ID は技・持ち物・特性 ID、種族は showdown_id(calc だけのものは

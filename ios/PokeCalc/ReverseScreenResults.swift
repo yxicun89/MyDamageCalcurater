@@ -60,7 +60,7 @@ private struct ReverseCandidateCardView: View {
                     .font(TextStyleToken.body.font.monospacedDigit())
                     .foregroundStyle(ColorToken.textPrimary.color)
                     .lineLimit(1)
-                    .fixedSize()
+                    .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
             }
             Text(candidate.spRangeText)
                 .font(TextStyleToken.body.font.monospacedDigit())
@@ -81,6 +81,10 @@ private struct ReverseCandidateCardView: View {
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard(cornerRadius: RadiusToken.input)
+        // `.contain`: `ResultRowView`(`CalcScreenResults.swift`)・`CalcConditionsSection.calcConditionsPanel`
+        // と同じ理由(コンテナに飲まれて `reverseCandidateRange-*`/`reverseCandidateMatch-*` が
+        // `reverseCandidateRow-*` に潰れるのを防ぐ)。
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("reverseCandidateRow-\(candidate.id)")
         .transition(.opacity.combined(with: .scale(scale: 0.96)))
     }

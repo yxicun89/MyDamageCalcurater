@@ -1631,6 +1631,30 @@ Decision: 接地判定を engine の `isGrounded`(ひこうタイプでない �
 Reason: 地面の無効と浮いていることは別の性質で、代理にすると地面を受けても接地している特性で誤る。ふうせんに「浮く」だけを足すと地面技が当たってしまう。
 Impact: calc-svc は `make import` で DB のふゆうに `Airborne` が入るまで旧挙動。`TestNoTypeChartTableInEngineSource` の禁止リストから `TypeFlying` を外した(接地判定が名指しする機構のタイプ)。
 
+## 2026-09-25: 逆算の「受けたダメージ」に防御側プリセットを出す(issue #275。Web レーン。engine への一本化はデータレーンへ申し送り)
+Decision: issue #275(重大度 high)を実装・critic PASSで完了した。逆算の `side === "attacker"`
+(受けたダメージ = 自分が防御側)で無振り固定だった自分の耐久調整を、防御側プリセット(ADR-0009 §1 のカタログ8件)から
+選べるようにする。**既定は `none`(無振り)のままで、既定のときのリクエストは issue #275 以前と1ビットも変わらない**(回帰テストあり)。
+選択肢は engine の `DefaultDefenderPresets` と同じく技の分類で絞る(物理 = B 系、特殊 = D 系、変化技 = `none`/`hp`)。
+分類が変わったときは対になるプリセットへ読み替える(`hb_full` ↔ `hd_full` 等。変化技へは `hp` に落とす)。これはラジオの
+checked を必ず1つ残すための Web 側の規則で、engine には無い(`domain/defenderPresets.ts` の `defenderPresetForCategory`)。
+置き場は Web(`web/src/domain/defenderPresets.ts`)。SP・性格の値は API にも WASM 境界にも出ていない
+(`BulkCalcRequest.presets` はキーだけを送り、engine が内部で解決する。ADR-0009 §5)ため、`attackerPresets.ts` と同じく
+Web にも同じ規則を持つ二重定義になる。ズレは契約テスト(`defenderPresets.contract.test.ts`)で検出する:
+`engine/bulk.go` の `DefenderPresetCatalog()` のリテラルと `api/openapi.yaml` の `DefenderPreset` enum を毎回読み、
+キー・順序・SP・性格・`Applies`・表示名(engine の `Label`)を突き合わせる。
+**申し送り(データレーンへの既定案)**: 攻撃側と同じく `engine/presets/defender.json` を作り、embed で読む形に一本化したい
+(ADR-0114 と同じ理由。Go・TS・Swift のテストがそのまま読める)。ADR-0009 §1 は「データファイルは作らない」としていたが、
+その根拠(WASM への同梱の仕組みが要る)は ADR-0114 の `//go:embed` で解消済み。JSON にするならキー・順序・SP・性格・
+`applies` を持ち、表示の文言は各クライアントに残す(攻撃側 JSON と同じ方針)。実現したら Web の契約テストから Go ソースの
+パーサを捨てて JSON を読む形に置き換える(テストの冒頭にその旨を書いてある)。
+Reason: H・B を振った自分のポケモンで受けた値を入れると、自分を無振りとして逆算するため相手の A(C) が過大評価される
+(正確性のバグ)。しかもその仮定が画面のどこにも出ていなかった。防御側プリセットの定義は engine が持っているが、
+API からは取れないので Web 側にも持つしかない。issue #71 と同じ二重定義をまた作ることになるため、今回も同じ出口
+(JSON への一本化)を申し送る。
+Impact: Web レーンの後続作業。engine・API・iOS の変更は無し(生成物の差分なし)。iOS にも同じ穴(逆算の自分側が
+無振り固定)があるかは未確認で、必要なら iOS レーンが同じ受け入れ条件で追随する。
+
 ## 2026-09-25: issue #236 の speed 側をクローズ(素早さレーン。ADR-0606)
 Decision: speed の `X-Device-Id`/`X-Session-Id` の検証を、gateway の `checkAPIHeaders`/`headerStatus`/`isCanonicalUUID`/`isHexDigit`
 (`services/gateway/internal/httpapi/headers.go`)と一字一句同じ判定になるよう `services/speed/internal/httpapi/requestctx.go`
@@ -1645,3 +1669,146 @@ Reason: gateway は `/api/balance`・`/api/speed`・`/api/judge` を経由しな
 効かず、balance・speed・judge がそれぞれ緩い非空チェックを持っていた(issue #236)。
 Impact: speed API を直接叩く外部ツール・スクリプトは正準形 UUID 以外のヘッダー値を使えなくなる(`services/speed/scripts/smoke*.sh`
 は正準形 UUID に更新済み)。balance・judge は各レーンが自分の担当で同じ変更を行う(この決定は speed のみ)。
+
+## 2026-09-25: 計算条件の入力 UI(iOS レーン。issue #274 → Web レーンは追従、API レーンへ提案)
+Decision: iOS の計算画面に「詳細」(既定は閉じる)を足し、急所・攻撃側のやけど・天候・フィールド・防御側の壁・攻撃側のランク・攻撃側の特性を置く
+(issue の既定案どおり、常時表示にするものは無し)。文言と並び(左から)は次のとおりで、Web もこれに揃える(ADR-0501「issue #274」3章):
+見出し「詳細」/ トグル「急所」「やけど」/ 天候「なし・はれ・あめ・すなあらし・ゆき」(none, sun, rain, sand, snow)/
+フィールド「なし・エレキフィールド・グラスフィールド・サイコフィールド・ミストフィールド」(none, electric, grassy, psychic, misty。openapi の enum 順とは違う)/
+防御側の壁「リフレクター・ひかりのかべ・オーロラベール」(独立トグル。`field.defenderScreens`)/ 小見出し「天候」「フィールド」「防御側の壁」「攻撃側のランク」「攻撃側の特性」/
+ランク表示「A +1」「C -2」「A ±0」(選択中の技の分類の関連ステータスだけを -6..+6 で編集。atk/spa は別々に保持して両方送る)/ 特性の未指定「指定なし」(abilityId を送らない)。
+既定値は今の要求と同じ(急所 off・やけど off・場なし(`field` は送らない)・ランク 0・プリセット経路の特性は未指定)。条件は入れ替え・種族・技の変更で消さず、
+特性だけは新しい攻撃側が持たなければ「指定なし」に戻す。やけど以外の状態異常と攻撃側の壁は出さない。
+**提案(API レーン)**: `BulkCalcRequest` は `defenderSpeciesKey` しか持たないので、防御側のランク・特性・状態異常を画面から送れない。
+既定案: `BulkCalcRequest` に任意の `defender: { abilityId?, ranks?: RankBlock, status?: StatusCondition }`(全行に同じ値を当てる上書き)を足す。
+入ったら iOS・Web が「詳細」に「防御側のランク(B/D)」「防御側の特性」を足す(別タスク)。
+Reason: issue #274 は Web・iOS 両方が対象で、Web レーンとは「iOS が既定案で先に進め、Web は iOS が記録した文言に追従する」と合意済み。防御側の条件は契約が無く、クライアントだけでは足せない。
+Impact: Web の計算画面(`web/src/screens/CalcScreen.tsx`・`web/src/domain/requests.ts`)は同じ文言・並び・既定で「詳細」を実装する。API レーンは上の提案の採否を決める(採るなら openapi から)。
+
+## 2026-09-25: 相性表・効果定義・calc の版の「正」と一致の検査(データレーン。issue #280・ADR-0118)
+Decision: 効果定義の正は `data/importer/effects.json`、`testdata/golden/effects.json` は写しとし、toID で正規化した一致をテストで確かめる(生成物にはしない。生成器の変更がゴールデンの出力を動かしうるため)。相性表の正は importer が取り込む calc スナップショットで、`pokedex-import` の照合が `testdata/golden/typechart.json`(`-typechart`、既定 `<data>/../testdata/golden/typechart.json`)と比べ、食い違いは Blocker `type-chart-reference-mismatch`。calc の版は `data/importer/config.json` の `sources.calc` を正とし、fetch-calc.mjs・tools/importer と tools/golden の依存・ゴールデンの version の一致をテストで確かめる。
+Reason: 片方だけを直しても `make test`・`make test-golden` が通り、ゴールデンが検証した定義・表と本番の DB の定義・表がずれたまま出荷されうる(issue #280)。
+Impact: importer のイメージに `testdata/golden/typechart.json` を焼く。calc の版を上げるときはゴールデンの再生成まで import が止まる(意図どおり)。タイプバランス レーンへ: balance の埋め込みは既存の `TestEmbeddedTypeChartMatchesSharedData` で golden と一致し、本決定で golden ⇔ DB がつながるので、#259 の export 追加は必須ではなくなった(判断は同レーン)。Web(`@typechart`)は変更不要。
+
+## 2026-09-25: 防御側プリセットの正を engine/presets/defender.json にした(データレーン。Web レーンの申し送りへの対応)
+Decision: ADR-0009 §1 のカタログ8件の正を `engine/presets/defender.json` にし、`DefenderPresetCatalog()` は embed した JSON から作る(ADR-0009 2026-09-25 追記)。値・順序・キーは不変。攻撃側 JSON と違い `label` も持つ(API の `presetLabel` の出力を変えないため)。
+**Web レーンの持ち物に触れた理由**: `web/src/domain/defenderPresets.contract.test.ts` は `engine/bulk.go` の Go リテラルを読んでいたため、engine だけ変えるとこのテストと CI が落ちる。main を赤くしないよう、同じ PR で読み先を JSON に変えた(比べる項目と期待値は同じ、`defenderPresets.ts` は不変)。
+**連絡(Web レーン)**: 契約テストの読み先を `engine/presets/defender.json` に変えた。`defenderPresets.ts` を JSON の読み込みに置き換えるか(`defenderPresetForCategory` は Web 限定で残る)は Web レーンが決める。
+**連絡(iOS レーン)**: 逆算の自分側に防御側プリセットを出すときは、同じ JSON を契約テストで読める。
+Reason: Web が Go ソースを正規表現でパースする契約テストは Go の書き方に依存して壊れやすく、iOS からは読めない。ADR-0114 と同じ理由。
+Impact: engine・calc-svc・WASM の出力は不変(`make test-golden` 全件一致)。OpenAPI・WASM 境界の変更なし。
+
+## 2026-09-25: issue #260 の判定レーン分をクローズ(判定レーン)
+Decision: `docs/judge-design.md` を実装の現状(JD0〜JD5完了・main統合済み)に合わせて更新した: 状態欄を「起草」→「完了」、
+JD5節を「着手する」から実際の完了内容(ADR-0705・PR #182・担当は判定レーン自身)へ、JD1の「麻痺はJD2で扱う」という
+誤った先送り記述を「JD2でも見送りを継続した」に訂正、新設の §5「未対応(既知の制限)」に状態異常・素早さに影響する
+特性(request の abilityId は calc-svc のダメージ計算へ転送されるだけで `internal/judge/speed.go` の実数値計算には
+一切反映しない)・ダブルの全体技/壁減衰(issue #288。engine/modifiers.go の範囲でジャッジレーン単独では解決しない)を明記した。
+Reason: issue #260 は「タイプバランス・判定」の両担当。`docs/type-balance-design.md` はタイプバランスレーンの持ち物のため、
+判定レーンはこの文書自身の範囲(`docs/judge-design.md`)だけを直した(CLAUDE.md「他レーンのファイルを触らない」)。
+Impact: タイプバランスレーンへ: `type-balance-design.md` の未対応分(役割分担・レビュー依頼節の履歴化、`/api/damage` 等の
+古い記述、`pokecalc-kit-v2` の別名、実装済みのKustomize/Argo CD分割の未決事項化)はそちらの担当で進めてください。
+両方揃って issue #260 をクローズできます。コード・ADR は無変更(ドキュメントのみ)。
+
+## 2026-09-25: 効果スキーマで表せる持ち物・特性をすべて定義し、表せないものを一覧で固定(データレーン。issue #270・ADR-0120)
+Decision: issue の既定案 A を採り、タイプ強化の持ち物・ノーマルジュエル・半減きのみ・Fire Mane・Heatproof・Purifying Salt・Eelevate を `data/importer/effects.json` と `testdata/golden/effects.json` に足した(値は oracle の実装から)。ゴールデンの生成器が効果ごとに「効く/効かない対照」の組を作り、Champions 世代でダメージが変わるのに定義の無いものは `tools/golden/unsupported-effects.json`(理由付き)と一致しなければ止まる。取込時の補正値に engine と同じ上限 `MaxEffectModifier` を入れた。
+Reason: 定義の無い持ち物・特性が黙って等倍で計算されていた(importer の effect-missing 92 件)。多くは engine を変えずにデータだけで直せる。
+Impact: 実データの dry-run で effect-missing 92→56、effect-no-hook 1→3(ノーマルジュエル・Eelevate。Levitate と同じ理由)。既定案 B(応答の「補正未対応」の印)は #271 の技の印と同じ仕組みでまとめて決める(未決)。タイプバランス レーンへ: readmodel の特性(Heatproof・Purifying Salt・Eelevate)が防御相性に入るようになる。
+
+## 2026-09-25: issue #274/#272 の「防御側の詳細(ランク・特性・状態異常)」を BulkCalcRequest に足す提案を採用(iOS レーン → API レーン)
+Decision: iOS レーンの提案(PR #377。DECISIONS.md 2026-09-25「issue #274」の「提案(API レーン)」)を、下記の形に少し具体化して受け入れる。
+`BulkCalcRequest` に任意の `defenderOverride: { abilityId?: string, ranks?: RankBlock, status?: StatusCondition }` を追加する
+(コンポーネントスキーマとして新設し、既存の `RankBlock`/`StatusCondition` をそのまま再利用する。`Individual` の同名フィールドと型を揃える)。
+指定した値は生成するすべての行(全プリセット × 全 itemVariants)の防御側に一律で上書きする(プリセットが決める SP・性格・持ち物・種族には触れない)。
+省略時は現状と完全に同じ(何も送らなければ要求は今までどおり)。
+実装は calc-svc だけでなく **engine 側の変更を伴う**(`engine.BulkInput` にオーバーライドを足し、プリセットから作った防御側 `Individual` に
+プリセット解決の後・ダメージ計算の前で当てる。`engine/` は純粋なので DB・HTTP 等の外部依存は増えない。CLAUDE.md 絶対ルール2 に抵触しない)。
+engine を変更するため ADR-0003 の test-first(spec-writer が先にテストを書く)+ 独立 critic の適用対象。
+Reason: iOS が計算画面の「詳細」で防御側のランク・特性・状態異常を選べるようにしたいが(issue #274・#272)、
+`BulkCalcRequest` は `defenderSpeciesKey` しか持たず、防御側プリセット(ADR-0009)が決める SP・性格・持ち物以外の
+上書き手段が契約に無い。名前を `defenderOverride`(anonymous object ではなく再利用可能なコンポーネントスキーマ)にする方が、
+将来 `calcReverse` 等の別操作で同じ形が要るときに使い回しやすい。
+Impact: **API レーンの実装は M2(P5-3 record-svc・P5-4 team-svc)の後に着手する**(iOS レーンからも「急ぎではない」と
+明記されている。docs/plan.md「改善要望」に記録し、着手まで issue はクローズしない)。実装後は
+`api/openapi.yaml` → `make gen`(Web・iOS 双方の生成物)→ calc-svc の `resolveIndividual` と同じ検証(種族に無い特性・
+状態異常の enum)を防御側オーバーライドにも適用、の順で進める。入ったら iOS・Web が「詳細」に「防御側のランク(B/D)」
+「防御側の特性」「防御側の状態異常」を足す(iOS・Web 側の作業。この決定では扱わない)。
+
+## 2026-09-25: 技の機構(多段・固定ダメージ・威力変動 等)を move_mechanisms 表としてマスタに持つ(データレーン。issue #271-a・ADR-0121)
+Decision: Showdown の技データ(multihit・damage・ohko・willCrit・override*・ignoreDefensive・ハンドラ名)と、天候・フィールドのハンドラが技を名指ししている箇所から、importer が攻撃技の機構を 13 種に機械的に分類し、`move_mechanisms(move_id, mechanism)` に入れる。技名は持たない。分類表に無いハンドラは安全側(move_specific / field_specific)+警告。取得物の `mechanism` は必須(古い取得物は拒否)。
+Reason: 多段・威力変動・固定ダメージ等の技が黙って誤ったダメージになる(#271・#233)。engine の「未対応の印」(D16)の前提になるデータが無かった。
+Impact: 実データで攻撃技 335 のうち 93 が機構を持つ。マージ後に Showdown の取得をやり直す必要がある(同じ commit・キャッシュ使用)。API レーンへ: `MasterMove.mechanisms: string[]` の追加を依頼(`api/openapi.yaml`)。engine・calc-svc への受け渡しは D16。
+
+## 2026-09-25: 正しく計算できない技・持ち物・特性に「未対応」の印を付け、サイコフィールドの先制技を無効にする(データレーン。issue #271-b・#270 案 B・ADR-0123)
+Decision: 400 で拒否せず、数値は通常の式のまま結果に印 `{target, reason, id}` を付ける。技は `engine.Move.Mechanisms`(ADR-0121 の機構。マスタと WASM の両経路)から、急所・防御ランク・サイコフィールド・天候/フィールドの条件で正しくなる4種は誤るときだけ、ほかは常に印を付ける。威力 0 の攻撃技は `zero_power`。持ち物・特性は効果定義に `UnsupportedAttacker` / `UnsupportedDefender` を足し(持ち物 5・特性 51。効く側は生成器が oracle と照合。調査に先制技・反動技・連続技など技の性質の代表を足して取りこぼしを減らした)、効く側で持つときだけ印を付ける。サイコフィールドでは優先度 > 0 の攻撃技が接地した防御側に当たらない(`Nullified = psychic_terrain`。ゴールデン `psychic-priority/*` 6 件)。
+Reason: 多段・威力変動・固定ダメージの技と表せない持ち物・特性が、黙って正しい結果のように見えていた。拒否すると画面で選べなくなる(両 issue の既定案)。
+Impact: 既存の正常な入力の数値は不変(ゴールデン全件一致)。WASM の結果(calc・bulk の各行・reverse の各候補)に `unsupported`(常に配列)が増えた。Web はまだ表示しない。importer の dry-run 出力は不変(印だけの定義は網羅性で「定義なし」と数える)。
+**API レーンへの依頼**(契約は変えていない。既定案は ADR-0123 §7): (1) `MasterMove.mechanisms: string[]`(昇順・通常の技は空配列。ADR-0121 の依頼の再掲)。(2) `CalcResponse`・`BulkRow.result`・`ReverseCandidate` に `unsupported: UnsupportedMark[]`(必須・印なしは `[]`)、`UnsupportedMark = {target: move|attacker_item|attacker_ability|defender_item|defender_ability, reason: <機構 13 種>|zero_power|unsupported_effect, id: string}`。入ったら `services/calc/internal/httpapi/parity_test.go` の `dropEmptyUnsupported` を消して印も比べる。
+**Web / iOS レーンへ**: 印の表示(「未対応」の注記)は各レーンの作業。WASM の形は ADR-0123 §6。
+
+## 2026-09-25: issue #271/#270 の API レーン担当分(mechanisms 公開・unsupported 印)を実装(API レーン → データ・Web・iOS レーンへ)
+Decision: データレーンからの依頼(ADR-0121 §4・ADR-0123 §7)を反映した。
+`api/openapi.yaml`: `MasterMove.mechanisms: string[]`(必須・昇順・通常の技は空配列)を追加。
+新設 `UnsupportedMark`(target/reason/id。ADR-0123 §7 の YAML どおり)を `CalcResult`(`BulkCalcRow.result` も
+`$ref: CalcResult` のため自動的に対象)・`ReverseCandidate` に `unsupported: UnsupportedMark[]`(必須・
+印なしは `[]`)として追加。`make gen` 済み(差分ゼロを確認)。
+`services/pokedex/internal/httpapi/master.go`: `ListMoveMechanisms` を呼び、move_id ごとにまとめてから
+`sort.Strings` で明示的に昇順にする(SQL の `ORDER BY` に頼らず契約の保証をこの層に持たせる)。
+`services/calc/internal/master/export.go`: `api.MasterMove.Mechanisms` を `sharedmaster.MoveRow.Mechanisms` に
+そのまま渡すだけ(検証・`engine.Move.Mechanisms` への変換は既存の `MoveMechanismsOf` が担当。新規ロジックなし)。
+`services/calc/internal/httpapi/convert.go`: `unsupportedFrom`(`engine/wasmapi` の同名関数と同じ変換)を
+新設し、`calcResultFrom`・`reverseResultFrom` に配線(`bulkResultFrom` は `calcResultFrom` を呼ぶため自動的に
+対象)。`parity_test.go` の `dropEmptyUnsupported`(印を比較対象から除外する暫定処置)を削除し、HTTP/WASM で
+`unsupported` を含めてそのまま比較するようにした(全パリティテスト PASS を確認)。
+`services/pokedex/internal/storetest/storetest.go`: `store.Querier` に `ListMoveMechanisms` の埋め込み
+nil-panic ガードを追加(`MoveMechanisms` フィールド + メソッド。他の `List*` と同じパターン)。
+mutation testing で「ソートしない」「空配列にしない」の2点を実際に壊して回帰を確認済み。
+Reason: 両 issue は Web・iOS の表示実装を進めるための前提(データ・engine 側は完了済み)。
+Impact: **データレーンへ**: #271・#270 は API レーン担当分も完了。close 判断はデータレーンに委ねる。
+**Web レーンへ**: `web/src/master/exportSnapshot.ts` の例データに `mechanisms: []` を追加済み(Web 自身の
+持ち物のため軽微な追従。テストも更新済み)。`unsupported` は Web の `CalcResult`(`engine/types`)にまだ無く、
+`apiEngine.ts` の明示的フィールド写像(`mapCalcResult` 等)が自動的に弾くため何もしなくても壊れない
+(issue #67 の前方互換どおり)。表示するかどうか・いつ着手するかは Web レーンの判断。
+**iOS レーンへ**: swift-openapi-generator の生成物の再生成(`make ios-gen` 相当)が必要(このタスクでは
+未実施)。再生成すると `MasterMove.mechanisms`・`CalcResult.unsupported`・`ReverseCandidate.unsupported` が
+必須フィールドとして生成物に増えるため、既存のデコード/モック実装が影響を受ける可能性がある。
+
+## 2026-09-25: 全体レビューissueの担当拡大の範囲をユーザーが確定(タイプバランスレーン)
+Decision: 別セッション(damage calculation bug resolution)から「運用担当」としてP7-4(MySQL/TiDBバックアップ復元テスト)と
+issue #107・#108・#75もタイプバランスレーンで担当するよう依頼があったが、ユーザーに確認したところ次の方針になった。
+- P7-4はタイプバランスレーンが引き受ける(ただしADR-0209 §9のとおりTiDBはAPIレーンのP5-1完了後に着手)。
+- issue #107・#108・#75はデータレーンが既に主担当として登録されており、データレーンはM2(TiDB)作業中のため、
+  重複作業を避けてそのままデータレーンに委ねる(タイプバランスレーンは着手しない)。
+Reason: ユーザー回答(AskUserQuestion、2026-09-25)。#107・#108・#75は現在もOPENで未着手のままだが、
+主担当レーンが明確に決まっている状態での横取りは重複・競合のリスクがあるため。
+Impact: データレーンへは特に追加連絡不要(担当は変わらない)。P7-4はデータレーンのP5-1完了まで着手待ち。
+
+## 2026-09-25: issue #237(GitOps overlayのread model欠如)を既定案で決定
+Decision: 既定案(a)のinitContainer方式(起動時にpokedex exportを実行)で進める。これに伴い、pokedex-svcのserver
+イメージをbalance-registryへdigest固定でpushする新しい依頼をデータレーンへ送った(急ぎではない)。
+Reason: ユーザー回答(AskUserQuestion、2026-09-25)。素早さレーンが指摘した新しい依存関係(pokedex-svcイメージの
+push作業がデータレーンに発生すること)を判断材料に含めた上での決定。
+Impact: タイプバランスレーンが主担当として#263と合わせて実装する。素早さレーン側のoverlay・scriptsは素早さレーンが対応。
+
+## 2026-09-25: issue #236(端末ID・セッションIDの検証・エラーコード不一致)の実装方針
+Decision: APIレーンの助言により、`services/internal/httpmetrics`と同じ前例(cross-module importではなく各サービスへの
+複製)に揃える。balance/speed/judgeそれぞれに`internal/requestctx`(仮称)を作り、gatewayの`checkAPIHeaders`・
+`isCanonicalUUID`(`services/gateway/internal/httpapi/headers.go`)相当を複製する。エラーコードはcalc-svcの
+`missing_header`/`invalid_header`(ADR-0200)に揃える。gateway側(Traefik直結でgatewayの検証を経由しない問題)は
+APIレーンが引き取る(M2作業が一段落してから着手)。
+Reason: APIレーンとの相談(cross-session)。
+Impact: タイプバランス・素早さレーンはそれぞれ独立して着手してよい(balance/speedの実装は並行可能)。
+
+## 2026-09-25: ユーザー決定 4 件(GitOps の範囲・API の入口・AI の権限・公開)
+Decision(ユーザーが選択。いずれも推奨案):
+1. #292(+#241): **balance だけを GitOps(Argo CD)にし、常に Synced に保つ**。damage calc 系は `make deploy-latest` のまま。CLAUDE.md の「Argo CD が main を見ているので PR 必須」の理由は「main を常に緑に保つため(CI・レビューの記録)」に書き直す(CLAUDE.md の文言はユーザーに1回確認してから)。
+2. #284: **balance・speed・judge も gateway の後ろにまとめる**(CLAUDE.md の「gateway が唯一の入口」を保つ。端末 ID の検証を1か所に)。API → タイプバランス・素早さ・判定 → Web・iOS の順。
+3. #273(+#239): **allow を読み取り系と非破壊の make に絞り、破壊・秘密・main への反映に関わる操作は ask にする。PreToolUse フックでコマンド本文も検査する**(`.claude/settings.json`・`.codex/`)。
+4. #328: **非公開・私的利用のまま**。LICENSE は置かない。README に明記し、アプリ内に第三者データの出典と非公式の表示を入れる。R-2-9(公開用クリーンコピー)は行わない。
+Reason: 全件解決の仕分け(2026-09-25)で「人間の判断が必要」とした項目のうち、進め方に効く 4 件を質問した。
+Impact: 各 issue の needs-decision を ready-for-implementation に付け替え、決定をコメントした。クラウド選定(#149)・認証(#148)は「+α」として保留のまま。
+
+## 2026-09-25: issue #272 の engine 側 — 一括計算・逆算に特性の候補を渡し、結果が同じ特性はまとめる(データレーン。ADR-0126)
+Decision: `engine.BulkInput.DefenderAbilities` / `engine.ReverseInput.UnknownAbilities`(解決済みの特性 0〜3 件)を追加。各特性で計算し、全行(逆算は全性格クラス × 持ち物 × SP)の結果が完全に同じ特性は1つにまとめ(代表 = 先に渡したもの)、違えば行・候補を分ける。行・候補に `Ability` と `AbilityIDs` を出す。空は従来どおり特性なし。WASM は `calcBulk.defenderAbilities`・`calcReverse.unknownAbilities` を受け、応答の `abilityId`/`abilityIds` は特性を送ったときだけ出す(送らなければバイト単位で従来と同じ)。攻撃側の特性は `Individual.Ability` で既に渡せる(engine の変更なし)。
+Reason: 「1番目の特性」や「1つ指定」を既定にすると、隠れ特性などで無効になる種族を利用者が選び忘れたときに黙って誤る。全特性で行を分けると多くの技で行が2〜3倍になる。結果の一致でまとめれば、特性が効く技のときだけ行が分かれる。
+Impact(他レーンへの依頼。既定案): API — 既に採用済みの `BulkCalcRequest.defenderOverride.abilityId` を `DefenderAbilities` の1件に写し、**省略時は calc-svc が種族の全特性を解決して渡す**。`ReverseRequest.unknownAbilityId`(任意・1つ、省略時は同じく全特性)。`BulkCalcRow`・`ReverseCandidate` に `abilityId: string`・`abilityIds: string[]`。Web — WASM に種族の特性をマスタから解決して `defenderAbilities`/`unknownAbilities` で渡し、行・候補に `abilityIds` を表示。攻撃側は種族の1番目を既定にして画面に表示し、選べるようにする。iOS — API の追従後に同じ表示。

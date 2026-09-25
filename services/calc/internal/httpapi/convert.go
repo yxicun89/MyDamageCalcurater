@@ -256,6 +256,20 @@ func convertObservations(obs []api.Observation) ([]engine.Observation, error) {
 // 10 で割るだけで、float で近似し直さない(CLAUDE.md 絶対ルール3)。
 func percentFromTenths(v int) float64 { return float64(v) / 10 }
 
+// unsupportedFrom は engine の「未対応」の印を契約の UnsupportedMark に写す(ADR-0123 §7)。
+// 印なしは空配列(null にしない。engine/wasmapi の unsupportedFrom と同じ形)。
+func unsupportedFrom(ms []engine.UnsupportedMark) []api.UnsupportedMark {
+	out := make([]api.UnsupportedMark, 0, len(ms))
+	for _, m := range ms {
+		out = append(out, api.UnsupportedMark{
+			Target: api.UnsupportedMarkTarget(m.Target),
+			Reason: api.UnsupportedMarkReason(m.Reason),
+			Id:     m.ID,
+		})
+	}
+	return out
+}
+
 // calcResultFrom は engine の結果を契約の CalcResult に写す。表示%は tenths を 10 で割るだけ
 // (float で近似しない。CLAUDE.md 絶対ルール3)。
 func calcResultFrom(r engine.DamageResult) api.CalcResult {
@@ -272,6 +286,7 @@ func calcResultFrom(r engine.DamageResult) api.CalcResult {
 			Hits: r.KO.Hits, Guaranteed: r.KO.Guaranteed, ChancePercent: &chance,
 			DisplayChancePercent: percentFromTenths(r.KO.DisplayChancePercentTenths()),
 		},
+		Unsupported: unsupportedFrom(r.Unsupported),
 	}
 }
 
@@ -321,6 +336,7 @@ func (s *Server) reverseResultFrom(res engine.ReverseResult) api.ReverseResult {
 			NatureClass: api.NatureClass(c.NatureClass), Nature: natureModifierFrom(c.Nature), NatureId: natureID,
 			ItemId: itemID, Ranges: ranges, SpCount: c.SPCount, Exact: c.Exact, Mismatch: c.Mismatch, Support: c.Support,
 			MinPercent: percentFromTenths(c.MinPercentTenths), MaxPercent: percentFromTenths(c.MaxPercentTenths),
+			Unsupported: unsupportedFrom(c.Unsupported),
 		})
 	}
 	return api.ReverseResult{

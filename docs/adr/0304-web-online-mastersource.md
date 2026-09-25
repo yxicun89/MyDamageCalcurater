@@ -596,3 +596,73 @@ fail-closed(実体不明を攻撃技と見なさない)にする理由: 技セ�
 | `web/src/app/screens.tsx` / `web/src/App.tsx` | **変えない**(`masterSearch` は既に全画面へ渡している) |
 
 `api/openapi.yaml`・`services/`・`engine/`・`ios/` はこのタスクで変えない。
+
+## 追記6(2026-09-25、Web レーン): issue 308 ― マスタの読み込みに失敗したときの立て直し
+
+A-6 は「読み終わるまで前のモードのマスタで画面を出さない」「オンラインのマスタが読めなくても自動でオフラインに
+戻さない」を決めたが、失敗した**あとの立て直し**(再試行・タブからの離脱・オフラインへの切り替え)は決めていなかった。
+実装は `currentMasterLoad.ok === false` のとき `role=alert` の1行(`appText.masterLoadError`)だけを出し、タブ一覧
+ごと消していた。この状態からは、ページを再読み込みする以外に抜け出す手段が無かった(issue 308)。
+
+### A-15. 失敗中もタブ一覧は残し、マスタを使わない画面はその場で使える
+
+- 失敗時(`currentMasterLoad !== null && !currentMasterLoad.ok`)も `role="tablist"` は描画したままにする。
+  タブの選択・キーボード操作(`navigateToTab`・`handleTabKeyDown`)は元々マスタの状態を見ていないので、
+  そのまま動く。
+- どの画面がマスタを使うかを `app/routes.ts` の `SCREEN_ROUTES` に `usesMaster: boolean` として1列足し(既存の
+  `segment`・`label` と同じ「1か所の正」)、`screenUsesMaster(id)` / `isMasterlessScreen(id)`(型ガード)を添える。
+  現時点で `usesMaster: false` は素早さ(`speed`)だけ(ADR-0604 §5 が元々「engine・master のどちらも使わない」と
+  決めていた画面)。
+- 選択中のタブが `usesMaster: false` なら、失敗中でも `ActiveScreen` 相当の画面を描画する。`usesMaster: true` の
+  4画面(計算・逆算・タイプバランス・判定)が選ばれているときだけ、失敗の案内(下記 A-17)を出す。
+
+### A-16. `ScreenProps.master` は変えない。マスタ不要の画面だけ別の型で受ける
+
+`ScreenProps.master` を省略可(`master?: MasterData`)にする案を最初に試したが、`SCREEN_COMPONENTS:
+Record<ScreenId, ComponentType<ScreenProps>>` に `CalcScreen` 等(それぞれ独立に `master: MasterData` を**必須**で
+宣言している `CalcScreenProps` 等)を代入する箇所で型エラーになった(関数コンポーネントの引数は反変チェックされ、
+`ScreenProps.master` を省略可にすると「`undefined` も来うる」型を要求する側に、`master` を必須のまま受け取る側を
+割り当てられなくなるため)。`calc`/`reverse`/`balance`/`judge` の4画面の型・実装を壊さない、という依頼のとおり
+これらは変えず、代わりに次の設計にした:
+
+- `ScreenProps` は変えない(`master: MasterData` のまま)。
+- `MasterlessScreenProps = Omit<ScreenProps, "master">`(`master` キーそのものを持たない型)を新設し、
+  `MASTERLESS_SCREEN_COMPONENTS: Record<MasterlessScreenId, ComponentType<MasterlessScreenProps>>` に
+  `usesMaster: false` の画面(今は `speed: SpeedScreen`)だけを登録する(`app/screens.tsx`)。
+  `MasterlessScreenId` は `SCREEN_ROUTES` の `usesMaster: false` の行から `Extract` で導出するので、
+  今後 `usesMaster: false` の画面を足して `MASTERLESS_SCREEN_COMPONENTS` への登録を忘れると型エラーになる
+  (`SCREEN_COMPONENTS` が担ってきた「足し忘れは型エラー」という既存の性質をこちらにも及ぼした)。
+- `App.tsx` は `isMasterlessScreen(tab)` で `tab: ScreenId` を `MasterlessScreenId` に絞り込んでから
+  `MASTERLESS_SCREEN_COMPONENTS[tab]` を引く。`as` によるキャストは使わない。
+
+### A-17. 失敗の案内: 原因・再試行・(オンラインのときだけ)オフラインに切り替える
+
+`role="alert"` の中に、`appText.masterLoadError`(見出し)・`appText.masterLoadErrorDetailLabel`(「原因」)+
+`error.message`(握りつぶさずそのまま出す)・「再試行」ボタン・オンラインのときだけ出す「オフラインに切り替える」
+ボタンを置く(`App.tsx` の `MasterLoadFailureNotice`)。
+
+- **再試行**は `activeMasterSource`(今の取得口。オンラインならオンラインのまま)をもう一度読み直す。
+  `activeMasterSource` 自体はモードが変わらない限り参照が変わらないため、依存配列に載せるだけでは
+  `useEffect` を再実行できない。値そのものに意味の無い `retryToken`(数値、押すたびに +1)を追加の依存に足し、
+  ボタンから `setRetryToken` するだけの最小限の実装にした。
+- **オフラインに切り替える**は、ヘッダーの計算モードのラジオと同じ `selectMode("offline")` をそのまま呼ぶ
+  (自動フォールバックではなく、利用者の操作による切り替え。A-6 の方針は変えない)。オフラインのマスタ自体が
+  読めない(`mode === "offline"` で失敗)ときはこのボタンを出さない(条件は `mode === "online"`)。
+
+却下した案:
+
+- **自動リトライ(指数バックオフ等)**: 依頼の範囲外であり、ADR-0301 §4「オンラインのマスタが読めなくても
+  自動でオフラインに戻さない」と同じ理由(失敗の原因を利用者に見せず裏で状態を変えると、原因不明の待ちが増える)
+  で今回も見送った。「再試行」は利用者の操作でだけ起きる。
+- **`ScreenProps.master` を省略可にする**: A-16 で述べたとおり、型エラーで断念した。
+
+## 影響(追記6)
+
+- `web/src/app/routes.ts`: `ScreenRoute.usesMaster`、`SCREEN_ROUTES` 各行、`screenUsesMaster`・
+  `isMasterlessScreen`・`MasterlessScreenId` を追加。
+- `web/src/app/screens.tsx`: `MasterlessScreenProps`・`MASTERLESS_SCREEN_COMPONENTS` を追加(`ScreenProps` 自体は無変更)。
+- `web/src/App.tsx`: `retryToken` state・`retryMasterLoad`・`MasterLoadFailureNotice`、失敗時のタブ描画の分岐。
+- `web/src/App.css`: `.app-master-error` 系のクラスを追加(色は `tokens.css` の変数のみ参照)。
+- `web/src/i18n/ja.ts`: `masterLoadErrorDetailLabel`・`masterLoadRetryLabel`・`masterLoadSwitchToOfflineLabel`
+  (spec-writer が追加済み)。
+- `web/src/app/screens.tsx` / `web/src/App.tsx` 以外の画面ファイル(`CalcScreen.tsx` 等)は無変更(A-16)。

@@ -69,7 +69,7 @@ cd "$(git rev-parse --show-toplevel)"
 git switch main && git pull --ff-only
 make deploy-latest
 ```
-→ 最後に `deploy-latest: 全サービスを <コミット> の内容で入れ替えた` と、`balance`・`calc`・`gateway`・`judge`・`pokedex`・`speed`・`web` の
+→ 途中に `version=<番号> dirty=false`(pokedex の DB を最新の migration まで上げた)、最後に `deploy-latest: 全サービスを <コミット> の内容で入れ替えた` と、`balance`・`calc`・`gateway`・`judge`・`pokedex`・`speed`・`web` の
 7 行(READY が 1)が出る。古いイメージが残ると、画面は開くのに API が 404 になることがある(例: 技の一括取得)。
 
 ## 5. 自動の動作確認(ブラウザで開く入口 8080 を通る)

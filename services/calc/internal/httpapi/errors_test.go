@@ -27,7 +27,7 @@ func attackerOf(b map[string]any) map[string]any { return b["attacker"].(map[str
 
 // AC-5: 入力の不正と ID 不明はすべて 400。code は WASM 境界と共通の語彙 + HTTP だけの unknown_*。
 func TestCalcDamageErrorVocabulary(t *testing.T) {
-	h := NewHandler(newFakeStore(t))
+	h := NewHandler(newFakeStore(t), nil)
 	tests := []struct {
 		name     string
 		body     []byte
@@ -79,7 +79,7 @@ func TestCalcDamageErrorVocabulary(t *testing.T) {
 
 // AC-5: 検証の順序(wasmapi と同じ): 構文 → 列挙 → ID 解決 → 入力検証。複数の不正があるとき先の段の code になる。
 func TestCalcDamageValidationOrder(t *testing.T) {
-	h := NewHandler(newFakeStore(t))
+	h := NewHandler(newFakeStore(t), nil)
 	tests := []struct {
 		name     string
 		body     []byte
@@ -108,7 +108,7 @@ func TestCalcDamageValidationOrder(t *testing.T) {
 
 // AC-6: X-Device-Id / X-Session-Id の欠落・空は 400 missing_header(3操作とも)。UUID 形式は見ない(gateway の仕事)。
 func TestMissingHeaders(t *testing.T) {
-	h := NewHandler(newFakeStore(t))
+	h := NewHandler(newFakeStore(t), nil)
 	bodies := map[string][]byte{
 		"/api/calc":         mustJSON(t, calcBody()),
 		"/api/calc/bulk":    mustJSON(t, bulkBody(movePhysical, nil, nil)),
@@ -152,7 +152,7 @@ func TestMissingHeaders(t *testing.T) {
 // (ADR-0200 §1.6: missing_header はヘッダ欠落・空に限定する)。当初は invalid_input だったが、
 // gateway と語彙を揃えるため ADR-0202 で invalid_header に変更した(期待値の変更。テストは弱めていない)。
 func TestDuplicateHeaderIsInvalidHeader(t *testing.T) {
-	h := NewHandler(newFakeStore(t))
+	h := NewHandler(newFakeStore(t), nil)
 	header := validHeaders()
 	header.Add("X-Device-Id", testDeviceID) // 同じ名前のヘッダをもう1つ足す
 	rec := serve(t, h, http.MethodPost, "/api/calc", header, mustJSON(t, calcBody()))
@@ -162,7 +162,7 @@ func TestDuplicateHeaderIsInvalidHeader(t *testing.T) {
 
 // AC-7: pokedex の操作は calc-svc の担当外なので 404 not_found(Error 形式・契約どおり)。
 func TestPokedexRoutesAreNotFound(t *testing.T) {
-	h := NewHandler(newFakeStore(t))
+	h := NewHandler(newFakeStore(t), nil)
 	for _, path := range []string{
 		"/api/pokedex/species", "/api/pokedex/species?q=テ", "/api/pokedex/species/9001-000",
 		"/api/pokedex/moves", "/api/pokedex/moves/teststrike", "/api/pokedex/moves/batch?ids=teststrike",
@@ -211,7 +211,7 @@ func TestPokedexRoutesAreNotFound(t *testing.T) {
 // AC-7: echo の既定エラーも Error 形式にそろえる。ルートが無いときも、メソッドが違うときも 404 not_found
 // (ErrorCode にメソッド違いの語彙を持たない。ADR-0200)。
 func TestUnknownRoutesAreNotFound(t *testing.T) {
-	h := NewHandler(newFakeStore(t))
+	h := NewHandler(newFakeStore(t), nil)
 	tests := []struct{ method, path string }{
 		{http.MethodGet, "/api/nothing"},
 		{http.MethodPost, "/api/calc/nothing"},
@@ -234,7 +234,7 @@ func TestUnknownRoutesAreNotFound(t *testing.T) {
 func TestPanicIsRecoveredAsInternal(t *testing.T) {
 	store := newFakeStore(t)
 	store.panicOn = true
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	for path, body := range map[string][]byte{
 		"/api/calc":         mustJSON(t, calcBody()),
 		"/api/calc/bulk":    mustJSON(t, bulkBody(movePhysical, nil, nil)),
@@ -261,7 +261,7 @@ func TestPanicIsRecoveredAsInternal(t *testing.T) {
 
 // AC-8: GET /healthz は 200 {"status":"ok"}(openapi に載せない運用エンドポイント。ヘッダ不要)。
 func TestHealthz(t *testing.T) {
-	h := NewHandler(newFakeStore(t))
+	h := NewHandler(newFakeStore(t), nil)
 	rec := serve(t, h, http.MethodGet, "/healthz", http.Header{}, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
@@ -279,7 +279,7 @@ func TestHealthz(t *testing.T) {
 // note を巨大化するだけで、それ以外は成功するはずのリクエストにする(上限を超えたことだけを見る)。
 func TestRequestBodyTooLarge(t *testing.T) {
 	store := newFakeStore(t)
-	h := NewHandler(store)
+	h := NewHandler(store, nil)
 	c := reverseCases(t, store)[0]
 	body := c.httpBody()
 	obs := body["observations"].([]any)

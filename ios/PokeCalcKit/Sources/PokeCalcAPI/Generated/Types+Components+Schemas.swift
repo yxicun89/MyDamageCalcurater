@@ -71,7 +71,8 @@ extension Components {
         /// | unknown_ability | abilityId がマスタに無い | 400 |
         /// | unknown_nature | natureId がマスタに無い | 400 |
         /// | not_found | ルートが無い / このサービスの担当外の操作 | 404 |
-        /// | master_unavailable | マスタを参照できない | 503 |
+        /// | master_unavailable | マスタ(pokedex の MySQL)を参照できない | 503 |
+        /// | store_unavailable | 保存データの DB(record / team の TiDB)を参照できない。`master_unavailable` と分けるのは原因も復旧手順も別で、「計算はできるが保存はできない」状態(CLAUDE.md 絶対ルール5)をクライアントが区別できる必要があるため(ADR-0209 §5.3) | 503 |
         /// | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202) | 503 |
         ///
         ///
@@ -100,6 +101,7 @@ extension Components {
             case unknownNature = "unknown_nature"
             case notFound = "not_found"
             case masterUnavailable = "master_unavailable"
+            case storeUnavailable = "store_unavailable"
             case upstreamUnavailable = "upstream_unavailable"
         }
         /// - Remark: Generated from `#/components/schemas/Format`.
@@ -840,6 +842,79 @@ extension Components {
                 case displayChancePercent
             }
         }
+        /// 「この結果は正しくない可能性がある」印1つ(ADR-0123)。engine が正しく計算できない技の機構・
+        /// 持ち物・特性に、数値は通常の式のまま付ける(400 で拒否しない)。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/UnsupportedMark`.
+        public struct UnsupportedMark: Codable, Hashable, Sendable {
+            /// 印の対象
+            ///
+            /// - Remark: Generated from `#/components/schemas/UnsupportedMark/target`.
+            @frozen public enum TargetPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case move = "move"
+                case attackerItem = "attacker_item"
+                case attackerAbility = "attacker_ability"
+                case defenderItem = "defender_item"
+                case defenderAbility = "defender_ability"
+            }
+            /// 印の対象
+            ///
+            /// - Remark: Generated from `#/components/schemas/UnsupportedMark/target`.
+            public var target: Components.Schemas.UnsupportedMark.TargetPayload
+            /// 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種)か zero_power(威力0の攻撃技。
+            /// 威力が技の処理で決まるため)、持ち物・特性は unsupported_effect(効果スキーマで表せない)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/UnsupportedMark/reason`.
+            @frozen public enum ReasonPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case altDefenseStat = "alt_defense_stat"
+                case altOffenseStat = "alt_offense_stat"
+                case alwaysCrit = "always_crit"
+                case effectivenessChange = "effectiveness_change"
+                case fieldSpecific = "field_specific"
+                case fixedDamage = "fixed_damage"
+                case ignoreDefenseRanks = "ignore_defense_ranks"
+                case moveSpecific = "move_specific"
+                case multiHit = "multi_hit"
+                case ohko = "ohko"
+                case priorityChange = "priority_change"
+                case typeChange = "type_change"
+                case variablePower = "variable_power"
+                case zeroPower = "zero_power"
+                case unsupportedEffect = "unsupported_effect"
+            }
+            /// 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種)か zero_power(威力0の攻撃技。
+            /// 威力が技の処理で決まるため)、持ち物・特性は unsupported_effect(効果スキーマで表せない)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/UnsupportedMark/reason`.
+            public var reason: Components.Schemas.UnsupportedMark.ReasonPayload
+            /// 技・持ち物・特性の ID
+            ///
+            /// - Remark: Generated from `#/components/schemas/UnsupportedMark/id`.
+            public var id: Swift.String
+            /// Creates a new `UnsupportedMark`.
+            ///
+            /// - Parameters:
+            ///   - target: 印の対象
+            ///   - reason: 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種)か zero_power(威力0の攻撃技。
+            ///   - id: 技・持ち物・特性の ID
+            public init(
+                target: Components.Schemas.UnsupportedMark.TargetPayload,
+                reason: Components.Schemas.UnsupportedMark.ReasonPayload,
+                id: Swift.String
+            ) {
+                self.target = target
+                self.reason = reason
+                self.id = id
+            }
+            public enum CodingKeys: String, CodingKey {
+                case target
+                case reason
+                case id
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/CalcResult`.
         public struct CalcResult: Codable, Hashable, Sendable {
             /// 16 段階の乱数ダメージ(非減少)
@@ -902,6 +977,11 @@ extension Components {
             public var category: Components.Schemas.CalcResult.CategoryPayload
             /// - Remark: Generated from `#/components/schemas/CalcResult/ko`.
             public var ko: Components.Schemas.KOChance
+            /// この結果に付いた「未対応」の印(ADR-0123)。印なしは空配列(WASM 境界の CalcResult と同じ形)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/CalcResult/unsupported`.
+            public var unsupported: [Components.Schemas.UnsupportedMark]
             /// Creates a new `CalcResult`.
             ///
             /// - Parameters:
@@ -915,6 +995,7 @@ extension Components {
             ///   - stab: タイプ一致
             ///   - category: 使った技の分類(WASM 境界の CalcResult と同じ。Web が型を共有するため)
             ///   - ko:
+            ///   - unsupported: この結果に付いた「未対応」の印(ADR-0123)。印なしは空配列(WASM 境界の CalcResult と同じ形)。
             public init(
                 rolls: [Swift.Int],
                 minDamage: Swift.Int,
@@ -925,7 +1006,8 @@ extension Components {
                 effectiveness: Swift.Double,
                 stab: Swift.Bool,
                 category: Components.Schemas.CalcResult.CategoryPayload,
-                ko: Components.Schemas.KOChance
+                ko: Components.Schemas.KOChance,
+                unsupported: [Components.Schemas.UnsupportedMark]
             ) {
                 self.rolls = rolls
                 self.minDamage = minDamage
@@ -937,6 +1019,7 @@ extension Components {
                 self.stab = stab
                 self.category = category
                 self.ko = ko
+                self.unsupported = unsupported
             }
             public enum CodingKeys: String, CodingKey {
                 case rolls
@@ -949,6 +1032,7 @@ extension Components {
                 case stab
                 case category
                 case ko
+                case unsupported
             }
         }
         /// 防御側の代表調整(耐久が上がる順)。SP は能力ポイント(Lv50・個体値31固定)。
@@ -1532,6 +1616,12 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseCandidate/maxPercent`.
             public var maxPercent: Swift.Double
+            /// この候補の計算に付いた「未対応」の印(ADR-0123)。SP によらず同じ(技・場・既知側は候補間で共通)。
+            /// 印なしは空配列。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/unsupported`.
+            public var unsupported: [Components.Schemas.UnsupportedMark]
             /// Creates a new `ReverseCandidate`.
             ///
             /// - Parameters:
@@ -1546,6 +1636,7 @@ extension Components {
             ///   - support: ranges の各 SP で各観測を説明できるロールの延べ数
             ///   - minPercent: ranges 全体での想定ダメージ幅の下限(表示%。小数第1位・切り捨て。CalcResult.minPercent と同じ意味)
             ///   - maxPercent: ranges 全体での想定ダメージ幅の上限(表示%。小数第1位・四捨五入。CalcResult.maxPercent と同じ意味)
+            ///   - unsupported: この候補の計算に付いた「未対応」の印(ADR-0123)。SP によらず同じ(技・場・既知側は候補間で共通)。
             public init(
                 natureClass: Components.Schemas.NatureClass,
                 nature: Components.Schemas.NatureModifier,
@@ -1557,7 +1648,8 @@ extension Components {
                 mismatch: Swift.Int,
                 support: Swift.Int,
                 minPercent: Swift.Double,
-                maxPercent: Swift.Double
+                maxPercent: Swift.Double,
+                unsupported: [Components.Schemas.UnsupportedMark]
             ) {
                 self.natureClass = natureClass
                 self.nature = nature
@@ -1570,6 +1662,7 @@ extension Components {
                 self.support = support
                 self.minPercent = minPercent
                 self.maxPercent = maxPercent
+                self.unsupported = unsupported
             }
             public enum CodingKeys: String, CodingKey {
                 case natureClass
@@ -1583,6 +1676,7 @@ extension Components {
                 case support
                 case minPercent
                 case maxPercent
+                case unsupported
             }
         }
         /// - Remark: Generated from `#/components/schemas/ReverseResult`.

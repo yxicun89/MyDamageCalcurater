@@ -251,6 +251,7 @@ type calcResultView struct {
 	STAB          bool        `json:"stab"`
 	Category      string      `json:"category"`
 	KO            koView      `json:"ko"`
+	Unsupported   []markView  `json:"unsupported"` // 「未対応」の印(ADR-0123)
 }
 
 type bulkDefenderView struct {
@@ -290,6 +291,7 @@ type reverseCandidateView struct {
 	Support     int           `json:"support"`
 	MinPercent  json.Number   `json:"minPercent"`
 	MaxPercent  json.Number   `json:"maxPercent"`
+	Unsupported []markView    `json:"unsupported"` // 「未対応」の印(ADR-0123)
 }
 
 type reverseResultView struct {

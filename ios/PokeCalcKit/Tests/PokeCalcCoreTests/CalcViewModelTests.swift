@@ -40,8 +40,9 @@ final class CalcViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.defenderSpeciesKey, StubMaster.beta.key)
         // 技は攻撃側の learnset の順で最初の「ダメージ技」(先頭の変化技は飛ばす)
         XCTAssertEqual(viewModel.moveId, StubMaster.alphaOnlyMove.id)
-        // プリセットは AttackerPreset.allCases の最初(A特化)、持ち物なし、比較なし
-        XCTAssertEqual(viewModel.attackerPreset, .aFull)
+        // プリセットは engine/presets/attacker.json の default(無振り。P6-12 で A特化から変更。ADR-0501「P6-12」5章)、
+        // 持ち物なし、比較なし
+        XCTAssertEqual(viewModel.attackerPreset, AttackerPreset.defaultPreset)
         XCTAssertNil(viewModel.attackerItemId)
         XCTAssertEqual(viewModel.comparedDefenderItemIds, [])
         XCTAssertEqual(viewModel.itemOptions.map(\.id), [StubMaster.itemA.id, StubMaster.itemB.id])
@@ -52,8 +53,9 @@ final class CalcViewModelTests: XCTestCase {
         XCTAssertEqual(request.format, .single)
         XCTAssertFalse(request.critical)
         XCTAssertEqual(request.attacker.speciesKey, StubMaster.alpha.key)
-        XCTAssertEqual(request.attacker.sp, sp(atk: maxStatSP))
-        XCTAssertEqual(request.attacker.natureId, StubMaster.atkUpNature.id)
+        // 無振り = SP 0 + 無補正(P6-12 で既定が変わったため。旧: atk 32 + atk 上昇性格)
+        XCTAssertEqual(request.attacker.sp, sp())
+        XCTAssertEqual(request.attacker.natureId, StubMaster.neutralNature.id)
         XCTAssertNil(request.attacker.itemId)
         XCTAssertEqual(request.defenderSpeciesKey, StubMaster.beta.key)
         XCTAssertEqual(request.moveId, StubMaster.alphaOnlyMove.id)
@@ -81,7 +83,9 @@ final class CalcViewModelTests: XCTestCase {
         let stub = StubMaster.makeService(species: [StubMaster.statusOnly, StubMaster.beta])
         let viewModel = await loadedViewModel(stub)
         XCTAssertEqual(viewModel.moveId, StubMaster.statusMove.id)
-        // 変化技は物理と同じく atk に振る(AttackerPreset.relevantStat)
+        // 変化技は物理と同じく atk に振る(AttackerPreset.relevantStat)。既定の無振り(P6-12)では
+        // SP が 0 で振り先が見えないので、A特化を選んでから確かめる(ADR-0501「P6-12」5章)。
+        await viewModel.selectAttackerPreset(.aFull)
         let request = try await lastRequest(stub)
         XCTAssertEqual(request.attacker.sp, sp(atk: maxStatSP))
     }
@@ -91,11 +95,14 @@ final class CalcViewModelTests: XCTestCase {
     func testEachInputChangeCallsCalcBulkExactlyOnceWithTheRightShape() async throws {
         let stub = StubMaster.makeService()
         let viewModel = await loadedViewModel(stub)
+        // 既定は無振り(engine/presets/attacker.json の default。P6-12)。A特化の組み立てを見るため先に選ぶ。
+        // この選択で計算が1回増えるので、以下の件数は P6-12 より前の値から +1 している(ADR-0501「P6-12」5章)。
+        await viewModel.selectAttackerPreset(.aFull)
 
         // 特殊技にすると関連ステータスが spa になり、A特化の性格は (+spa, -atk)
         await viewModel.selectMove(id: StubMaster.specialMove.id)
         var count = await stub.bulkRequests.count
-        XCTAssertEqual(count, 2)
+        XCTAssertEqual(count, 3)
         var request = try await lastRequest(stub)
         XCTAssertEqual(request.moveId, StubMaster.specialMove.id)
         XCTAssertEqual(request.attacker.sp, sp(spa: maxStatSP))
@@ -103,7 +110,7 @@ final class CalcViewModelTests: XCTestCase {
 
         await viewModel.selectAttackerPreset(.aMax)
         count = await stub.bulkRequests.count
-        XCTAssertEqual(count, 3)
+        XCTAssertEqual(count, 4)
         request = try await lastRequest(stub)
         XCTAssertEqual(viewModel.attackerPreset, .aMax)
         XCTAssertEqual(request.attacker.sp, sp(spa: maxStatSP))
@@ -111,27 +118,27 @@ final class CalcViewModelTests: XCTestCase {
 
         await viewModel.selectAttackerPreset(.none)
         count = await stub.bulkRequests.count
-        XCTAssertEqual(count, 4)
+        XCTAssertEqual(count, 5)
         request = try await lastRequest(stub)
         XCTAssertEqual(request.attacker.sp, sp())
         XCTAssertEqual(request.attacker.natureId, StubMaster.neutralNature.id)
 
         await viewModel.selectAttackerItem(id: StubMaster.itemA.id)
         count = await stub.bulkRequests.count
-        XCTAssertEqual(count, 5)
+        XCTAssertEqual(count, 6)
         request = try await lastRequest(stub)
         XCTAssertEqual(viewModel.attackerItemId, StubMaster.itemA.id)
         XCTAssertEqual(request.attacker.itemId, StubMaster.itemA.id)
 
         await viewModel.selectAttackerItem(id: nil)
         count = await stub.bulkRequests.count
-        XCTAssertEqual(count, 6)
+        XCTAssertEqual(count, 7)
         request = try await lastRequest(stub)
         XCTAssertNil(request.attacker.itemId)
 
         await viewModel.selectDefender(speciesKey: StubMaster.gamma.key)
         count = await stub.bulkRequests.count
-        XCTAssertEqual(count, 7)
+        XCTAssertEqual(count, 8)
         request = try await lastRequest(stub)
         XCTAssertEqual(viewModel.defenderSpeciesKey, StubMaster.gamma.key)
         XCTAssertEqual(request.defenderSpeciesKey, StubMaster.gamma.key)
@@ -212,6 +219,9 @@ final class CalcViewModelTests: XCTestCase {
     func testSwapSidesSwapsSpeciesAndReselectsMoveWithOneCalc() async throws {
         let stub = StubMaster.makeService()
         let viewModel = await loadedViewModel(stub)
+        // 既定は無振り(P6-12)。入れ替えでプリセットが残ることと A特化の組み立てを見るため、先に A特化を選ぶ
+        // (ADR-0501「P6-12」5章)。
+        await viewModel.selectAttackerPreset(.aFull)
         await viewModel.selectAttackerItem(id: StubMaster.itemA.id)
         await viewModel.toggleDefenderItemComparison(itemId: StubMaster.itemB.id)
         let before = await stub.bulkRequests.count
@@ -374,8 +384,9 @@ final class CalcViewModelTests: XCTestCase {
     }
 
     func testMissingPresetNatureSetsErrorWithoutCalculating() async {
-        // 物理技の A特化に要る (+atk, -spa) が一覧に無い
-        let stub = StubMaster.makeService(natures: [StubMaster.neutralNature, StubMaster.spaUpNature])
+        // 既定のプリセット(無振り。P6-12 で A特化から変更)に要る無補正の性格が一覧に無い
+        // (旧: 物理技の A特化に要る (+atk, -spa) が無い。ADR-0501「P6-12」5章)
+        let stub = StubMaster.makeService(natures: [StubMaster.atkUpNature, StubMaster.spaUpNature])
         let viewModel = await loadedViewModel(stub)
         guard case .service(let code, _) = viewModel.error else {
             return XCTFail("性格が無いエラーにならない: \(String(describing: viewModel.error))")
@@ -383,6 +394,25 @@ final class CalcViewModelTests: XCTestCase {
         XCTAssertEqual(code, PokeCalcError.Code.natureUnavailable)
         let count = await stub.bulkRequests.count
         XCTAssertEqual(count, 0, "要求を組み立てられないときは計算しない")
+    }
+
+    /// P6-12 で既定が無振りになり、上の起動時のテストでは A特化の性格欠けを見なくなったので、
+    /// 選び直したときの同じ経路で確かめる(旧テストの意図を残す。ADR-0501「P6-12」5章)。
+    func testMissingFullPresetNatureOnSelectionSetsErrorWithoutCalculating() async {
+        // 物理技の A特化に要る (+atk, -spa) が一覧に無い(無補正はあるので起動時の計算は通る)
+        let stub = StubMaster.makeService(natures: [StubMaster.neutralNature, StubMaster.spaUpNature])
+        let viewModel = await loadedViewModel(stub)
+        XCTAssertNil(viewModel.error, "既定(無振り)は無補正の性格だけで組み立てられる")
+        let before = await stub.bulkRequests.count
+        XCTAssertEqual(before, 1)
+
+        await viewModel.selectAttackerPreset(.aFull)
+        guard case .service(let code, _) = viewModel.error else {
+            return XCTFail("性格が無いエラーにならない: \(String(describing: viewModel.error))")
+        }
+        XCTAssertEqual(code, PokeCalcError.Code.natureUnavailable)
+        let after = await stub.bulkRequests.count
+        XCTAssertEqual(after, before, "要求を組み立てられないときは計算しない")
     }
 
     func testTooFewSpeciesSetsError() async {

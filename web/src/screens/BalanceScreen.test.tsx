@@ -1111,7 +1111,7 @@ describe("recommendations(おすすめタイプ)", () => {
   test("特性で補える表: 防御の穴ごとに ポケモン・特性・倍率 を出す(いなければ「なし」)", async () => {
     const { user, client } = renderScreen();
     await selectSpecies(user, 1, speciesAt(0));
-    const abilityId = "example-ability-none";
+    const abilityId = "exampleabilitynone";
     const abilityOptions: Schemas["AbilityOption"][] = [
       {
         attackType: "fire",

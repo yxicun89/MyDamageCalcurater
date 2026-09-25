@@ -2210,3 +2210,941 @@ Web の「(**無補正**)」とは表記ゆれがあるが、これは Web 側�
   (`PokeCalcCoreTests` 400件 + `PokeCalcDesignTests` 13件)・`ios-test-ui: 全 18 件 / 成功 18 / 失敗 0`
   (新規 `testSelectingSpecialMoveShowsCLetterPresetLabel` を含む)・`ios-check-infoplist` 成功。
   `ios-lint`・`ios-gen-check`・`ios-check-request-limits` を含め全ステップ green。
+
+## P6-12 の受け入れ条件(issue #71: 攻撃側プリセットを engine/presets/attacker.json に揃える。実装済み)
+
+- 日付: 2026-09-25 / 担当レーン: iOS / 関連: issue #71、ADR-0114「Web・iOS への依頼」、ADR-0500 §6、ADR-0010 §5.3、
+  本 ADR「P6-11」(`label(for:)`)、「issue #110」2章(ホスト側の同期検査)
+
+### 0. 何がずれているか
+
+正は `engine/presets/attacker.json`(ADR-0114)。iOS の `AttackerPreset` は規則(SP・性格)は同じだが、
+キー(`aFull`/`aMax`/`none` ↔ `x_full`/`x`/`none`)、並び順(特化 → 振り → 無振り ↔ 無振り → 特化 → 振り)、
+既定(A特化 ↔ `default: "none"`)が JSON と違う。同期を検査する仕組みも無い。
+
+### 1. 判断: 契約テストは XCTest で JSON を直接読む(ホスト側スクリプトにしない)
+
+- 「issue #110」2章は「XCTest はシミュレータのサンドボックスで走りリポジトリのファイルを読めない」ことを前提に
+  ホスト側スクリプト(`check-request-limits.sh`)を選んだ。今回これを実測した(2026-09-25): `#filePath` からの相対で
+  `engine/presets/attacker.json` を `Data(contentsOf:)` で読む XCTest を `xcodebuild test -scheme PokeCalcKit-Package
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro'` で走らせ、**読めた**(シミュレータのテストプロセスは
+  ホストのファイルシステムをそのまま見る)。macOS の `swift test` でも読める。
+- よって `make ios-test-unit` と `swift test` の両方で走る XCTest(`AttackerPresetCatalogContractTests`)にする。
+  JSON はリポジトリに複製しない。ファイルが無ければ `XCTFail`(スキップしない)。
+- 前提: 実機ではこのテストは走らない(`make ios-test` はシミュレータだけ)。`#filePath` はビルドしたマシンの絶対パスなので、
+  別マシンでビルドした成果物を走らせる運用を始めたらここを見直す。
+- `check-request-limits.sh` を XCTest に移すかは本タスクの対象外(前提が崩れたことだけ記録する)。
+
+### 2. 判断: case 名は変えず、JSON のキーとの対応を `catalogKey` の1か所に書く
+
+- case 名(= raw value)は `accessibilityIdentifier`(`attackerPreset-aFull`・`reverseAttackerPreset-aMax` 等)と
+  XCUITest が参照している。raw value を JSON に揃えると識別子と UI テストが一斉に変わり、得るものが無い。
+- `AttackerPreset.catalogKey: String`(`aFull` → `"x_full"`、`aMax` → `"x"`、`none` → `"none"`)を足し、対応はここにだけ書く。
+  契約テストはこれで JSON と突き合わせる。
+- `allCases` の順(case の宣言順)を JSON の `presets` の順(`none` → `aFull` → `aMax`)にする。画面のピルは
+  `ForEach(AttackerPreset.allCases)` なので、計算画面・逆算画面(与えたダメージ)とも左から「無振り / A(C)特化 / A(C)振り(無補正)」に変わる。
+  Web(ADR-0300 §5)と ADR-0010 §5.3 の attacker の事前順位と同じ並び。
+
+### 3. 判断: 既定は JSON の `default`(無振り)に揃え、1か所で持つ
+
+- `AttackerPreset.defaultPreset`(= `.none`)を足す。`CalcViewModel` / `ReverseViewModel` の `attackerBuildSource` の初期値と、
+  `load()` での再設定(`CalcViewModel.swift` の `attackerBuildSource = .preset(.aFull)`、`ReverseViewModel.swift` の同じ行)は
+  すべて `.preset(AttackerPreset.defaultPreset)` にする。case の直書きを残さない。
+- 起動直後の計算(計算画面)は無振り = SP 0 + 無補正の性格で組み立てる。これまでの A特化(atk 32 + atk 上昇)から変わる。
+  利用者に見える変化なので、Web と同じ既定に揃う利点(同じ入力で同じ結果)を優先した(ADR-0114 の決定どおり)。
+- 既定の組み立てに要る性格は「無補正」になる。マスタに無補正の性格が無ければ起動時に `natureUnavailable`(これまでは上昇性格)。
+
+### 4. 受け入れ条件(検証可能な形)
+
+1. `AttackerPreset.allCases.map(\.catalogKey)` が JSON の `presets[].key` と順序まで一致する
+   (`AttackerPresetCatalogContractTests.testCasesMatchCatalogKeysInOrder`)。
+2. `AttackerPreset.defaultPreset.catalogKey` が JSON の `default` と一致する(`testDefaultMatchesCatalog`)。
+3. `AttackerPreset.relevantStat(for:)` が JSON の `relevantStat` と全分類で一致し、JSON の分類の集合が `MoveCategory.allCases` と同じ
+   (`testRelevantStatMatchesCatalogForEveryCategory`)。
+4. 全プリセット × 全分類で、`AttackerPreset.build` の SP が「関連ステータスだけ `relevantSp`、他は 0」、性格が
+   `boost` なら (plus = 関連ステータス, minus = `boostMinus[関連]`)、`neutral` なら plus/minus とも nil
+   (`testBuildFollowsCatalogSpAndNatureRules`)。JSON は最上位・各プリセットの項目が既知のものだけで、`schemaVersion` が 1、
+   `nature` が boost/neutral のどちらか(`testCatalogHasOnlyKnownFieldsAndVersion`)。
+5. 契約テストは macOS の `swift test` とシミュレータの `make ios-test-unit` の両方で走り、JSON が無ければ失敗する。
+6. 計算画面・逆算画面を開いた直後、自分側のプリセットは無振りが選ばれ、起動時の計算要求は SP 0 + 無補正の性格
+   (`CalcViewModelTests.testLoadSelectsDeterministicDefaultsAndCalculatesOnce`・`ReverseViewModelTests.testLoadSelectsDefaultsWithoutCalculating`)。
+7. 画面のピルは左から 無振り → 特化 → 振り の順に並び、起動直後は無振りだけが選択状態
+   (XCUITest `CalcScreenUITests` / `ReverseScreenUITests` の `testAttackerPresetPillsFollowCatalogOrderAndDefault`)。
+8. `swift test` と `make ios-test` がすべて成功する。
+
+### 5. テストの変更(順序・既定の変更に伴うものだけ。それ以外は弱めていない)
+
+追加:
+
+- `ios/PokeCalcKit/Tests/PokeCalcCoreTests/AttackerPresetCatalogContractTests.swift`(新規。4章 1〜5。5件)
+- `CalcViewModelTests.testMissingFullPresetNatureOnSelectionSetsErrorWithoutCalculating`(下の `testMissingPresetNature...` の
+  旧来の意図「A特化の上昇性格が無ければエラーで計算しない」を、選び直しの経路で残す)
+- `CalcScreenUITests.testAttackerPresetPillsFollowCatalogOrderAndDefault`・`ReverseScreenUITests.testAttackerPresetPillsFollowCatalogOrderAndDefault`
+  (4章 7。ピルの `frame.minX` の順と `isSelected`)
+
+期待値を変えた既存のアサーション(理由はすべて「並び順・既定を JSON に揃えたため」):
+
+| テスト | 変更前 | 変更後 |
+|---|---|---|
+| `AttackerPresetTests.testCasesAreOrderedAndLabeledAsRequirements` | `allCases == [.aFull, .aMax, .none]`、`label` が `["A特化", "A振り", "無振り"]` | `[.none, .aFull, .aMax]`、`["無振り", "A特化", "A振り"]`(文言は同じ。順序だけ) |
+| `CalcViewModelTests.testLoadSelectsDeterministicDefaultsAndCalculatesOnce` | `attackerPreset == .aFull`、要求 `sp(atk: 32)` + `atkUpNature` | `== AttackerPreset.defaultPreset`、要求 `sp()` + `neutralNature` |
+| `CalcViewModelTests.testAttackerWithOnlyStatusMovesFallsBackToFirstLearnsetMove` | 既定のまま `sp(atk: 32)` を確認 | 先に `selectAttackerPreset(.aFull)` してから同じ `sp(atk: 32)` を確認(無振りでは振り先が見えないため) |
+| `CalcViewModelTests.testEachInputChangeCallsCalcBulkExactlyOnceWithTheRightShape` | 起動直後に特殊技を選び A特化の組み立てを確認。件数 2〜7 | 先に `selectAttackerPreset(.aFull)`(計算1回増える)。件数 3〜8。他の期待値は同じ |
+| `CalcViewModelTests.testSwapSidesSwapsSpeciesAndReselectsMoveWithOneCalc` | 既定の A特化が入れ替え後も残ることを確認 | 先に `selectAttackerPreset(.aFull)`(`before` を取る前)。アサーションは同じ |
+| `CalcViewModelTests.testMissingPresetNatureSetsErrorWithoutCalculating` | 性格一覧 `[neutral, spaUp]`(A特化の上昇性格が無い) | `[atkUp, spaUp]`(既定の無振りに要る無補正が無い)。期待(エラー・計算0回)は同じ |
+| `CalcViewModelTeamIndividualTests.testUnknownTeamOrMemberIsIgnored` | `attackerPreset == .aFull` | `== AttackerPreset.defaultPreset` |
+| `ReverseViewModelTests.testLoadSelectsDefaultsWithoutCalculating` | `attackerPreset == .aFull` | `== AttackerPreset.defaultPreset` |
+| `ReverseViewModelTests.testSwitchingToAttackerSideResetsObservationsAndUsesOpponentLearnset` | `attackerPreset == .aFull` | `== AttackerPreset.defaultPreset` |
+| `ReverseViewModelTests.testValidPercentObservationCallsReverseOnceWithDefenderSideRequest` | 既定のまま A特化(`sp(atk: 32)` + `atkUpNature`)を確認 | 観測を入れる前(逆算しない状態)に `selectAttackerPreset(.aFull)`。アサーションは同じ |
+| `ReverseViewModelTeamIndividualTests.testUnknownTeamOrMemberIsIgnored` | `attackerPreset == .aFull` | `== AttackerPreset.defaultPreset` |
+| `CalcScreenUITests.testTeamSourceRowEmptyThenSelectingMemberClearsPresetAndPresetClearsBack` | 起動直後に `attackerPreset-aFull` が選択状態 | `attackerPreset-none`(以降の外れる/戻る確認も同じボタンで) |
+| `ReverseScreenUITests.testTeamSourceRowEmptyThenSelectingMemberClearsPresetAndPresetClearsBack` | `reverseAttackerPreset-aFull` | `reverseAttackerPreset-none` |
+
+P6-11 4章 2 の「`testCasesAreOrderedAndLabeledAsRequirements` は1行も変更しない」は、P6-11 の時点の条件。本タスクで順序の行だけを変えた
+(文言の行は同じ文字列の並べ替えのみ)。
+
+spec 時点の `swift test`(2026-09-25): 406件実行、7テストで失敗10件(アサーション単位)。すべて本タスクの新しい振る舞いのみ
+(契約テスト3件: キー・順序・既定・build の突き合わせ、`testCasesAreOrderedAndLabeledAsRequirements` 2件、
+`testLoadSelectsDeterministicDefaultsAndCalculatesOnce` 2件、`testMissingPresetNatureSetsErrorWithoutCalculating` 1件、
+`testMissingFullPresetNatureOnSelectionSetsErrorWithoutCalculating` 2件)。
+仮の実装(2・3章どおり)を当てて `swift test` 406件 green、シミュレータで契約テスト5件と 4章 7 の UI テスト2件・上表の UI テスト2件・
+`testSelectingSpecialMoveShowsCLetterPresetLabel` が green になることを確かめてから、仮の実装は戻した。
+
+### 6. 実装者への注意(`TODO(implementer)` を検索すればコード上の該当箇所が見つかる)
+
+- `AttackerPreset.swift`: case の宣言順を `none, aFull, aMax` に並べ替える。`catalogKey` を switch で3通り返す
+  (`rawValue` を返す仮実装を消す)。`defaultPreset` を `.none` にする。case 名・raw value は変えない。
+- `CalcViewModel.swift` / `ReverseViewModel.swift`: `.preset(.aFull)` の4か所(プロパティの初期値2・`load()` の再設定2)を
+  `.preset(AttackerPreset.defaultPreset)` にする。「`AttackerPreset.allCases` の最初(A特化)」と書いたドキュメントコメント
+  (`CalcViewModel.swift` の `attackerBuildSource`、`ReverseViewModel.swift` の同じプロパティ)も直す。
+- View(`CalcScreenView` / `ReverseScreenView`)は `allCases` を並べているだけなので変更不要の見込み。
+- 契約テスト・上表の期待値は変えない。JSON(`engine/`)は触らない。
+- 完了条件は4章。`swift test` と `make ios-test` を実行し、結果をこの章の後ろに追記する。
+
+### 7. 実装結果(2026-09-25)
+
+- 2・3章どおりに実装(case 順 `none, aFull, aMax`、`catalogKey`、`defaultPreset = .none`、`CalcViewModel`/`ReverseViewModel` の
+  4か所を `AttackerPreset.defaultPreset` に置換)。View(`CalcScreenView`/`ReverseScreenView`)は `allCases` を並べるだけで変更不要だった。
+- `swift test`(macOS, `ios/PokeCalcKit`): 406件実行、0失敗。
+- `make ios-test`(シミュレータ): `ios-lint`・`ios-gen-check`・`ios-check-request-limits`・`ios-check-infoplist` OK、
+  `ios-test-unit` 419件成功・0失敗、`ios-test-ui` 20件成功・0失敗ですべて green(終了コード0)。
+  1回目の実行では `ReverseScreenUITests.testOpponentSpeciesSearchSheetFiltersAndSelects`(本タスクと無関係。
+  差分に含まれない・種族検索シートのテスト)が1件だけ失敗したが、単体で再実行すると成功(27.9秒)。
+  当時は他レーンの並行セッションが同じシミュレータを使っていたための環境要因と判断し、
+  並行実行が無い状態で `make ios-test` を再実行して全件成功を確認した。
+
+## issue #274 の受け入れ条件(計算画面の「詳細」: 急所・やけど・天候・フィールド・壁・ランク・特性。実装完了)
+
+- 日付: 2026-09-25 / 担当レーン: iOS(Web は iOS の決定に追従する。docs/ai-shared/DECISIONS.md 2026-09-25「計算条件の入力 UI」)/
+  関連: issue #274、docs/requirements.md §2「補正」、docs/design.md「数値の直接入力は『詳細』を開いたときだけ」、
+  本 ADR「P6-2a」規則3〜7、「P6-2d」、「issue #113」、ADR-0500 §3
+
+### 0. 何が足りないか
+
+engine・API は急所(`options.critical`)・場(`field`: 天候・フィールド・壁)・攻撃側の `ranks`・`status`・`abilityId` を受け付けるが、
+iOS の計算画面はどれも入力できない。`CalcViewModel.buildRequest` は `critical: false` 固定で `field` を持たず、
+プリセット経路の `abilityId` は常に nil、ランク・状態異常は常に既定値。
+
+### 1. 範囲
+
+- 対象(計算画面・`CalcViewModel`): 急所、攻撃側のやけど、天候、フィールド、防御側の壁(リフレクター・ひかりのかべ・オーロラベール)、
+  攻撃側のランク(選択中の技の関連ステータスだけ)、攻撃側の特性。
+- 対象外(制約として記録する):
+  - **防御側のランク・特性・状態異常**: `BulkCalcRequest` は `defenderSpeciesKey` しか持たず、送る場所が契約に無い。
+    API レーンへ提案した(DECISIONS.md の同じ項目。既定案: `BulkCalcRequest` に任意の `defender` 上書き
+    `{ abilityId?, ranks?, status? }` を足し、全行に同じ値を当てる)。契約が入ったら別タスクで UI を足す。
+  - やけど以外の状態異常: ダメージに効くのはやけどだけなので出さない(`StatusCondition` の他の値は送らない)。
+  - 攻撃側の場の壁(`attackerScreens`): シングルのダメージに効かないので出さない(常に既定値)。
+  - 壁の「逆向き」(入れ替え後に壁の側を付け替える): 追いかけない。必要なら後続で。
+  - ダブル固有の補正、1 vs 1(`CalcRequest`)・逆算(`ReverseRequest`)への場の追加(この画面は `calcBulk` だけを使う)。
+  - どの入力を常時表示にするか(issue の「人間の判断」): 既定案どおり**すべて「詳細」の中**(既定は閉じる)。
+
+### 2. 判断: 状態の持ち方と引き継ぎ
+
+- 条件はすべて `CalcViewModel` の画面の状態(`isCritical`・`isAttackerBurned`・`weather`・`terrain`・`defenderScreens`・
+  `attackerRanks`・`attackerAbilityId`)。「P6-2a」規則6(入れ替えでプリセット・持ち物は残す)と同じく、
+  **防御側・技・プリセット・持ち物・比較・攻守入れ替え・構築の呼び出しでは消さない**。例外は特性だけ(下)。
+- **ランク**: `attackerRanks: RankBlock` の atk と spa を別々に持つ。ステッパーが編集するのは `attackerRankStat`
+  (= `AttackerPreset.relevantStat(for: 選択中の技の分類)`。技が無いときは atk)。技を物理 ↔ 特殊に変えると
+  ステッパーの対象が A ↔ C に切り替わるが、もう一方のランクは消さずに持ち続け、要求には atk・spa の両方をそのまま送る
+  (engine は技の分類の関連ステータスだけを使うので結果は変わらない。def/spd/spe は常に 0)。値は -6..+6 に丸める。
+- **やけど**: on のとき `attacker.status = .burn`、off のとき `.none`。構築の個体は状態異常を持たないので、
+  構築を呼んでいても画面の値を使う。
+- **ランク(構築)**: 構築の個体はランクを持たない(`TeamMember` に無い)ので、構築を呼んでいても画面の値を使う。
+- **特性**: 選択肢は攻撃側の `species(key:)` の `abilities`(その順)+「指定なし」(nil。要求に載せない)。
+  - 既定(起動時・プリセット経路)は nil。**これまでの要求と同じ**(プリセット経路は特性を送っていなかった)。
+  - 構築の個体を呼ぶと、その個体の保存された特性を選択状態にする(これまでの `individualForRequest` と同じ値)。
+    利用者が選び直すと上書きする(構築の選択は外れない)。同じ個体を呼び直すと保存された特性に戻る。
+  - 構築 → プリセットに切り替えると nil に戻す(既存 `testSelectingPresetAfterTeamClearsTeamSelection` の「プリセット経路は
+    特性を持たない」を保つ)。プリセット → プリセットでは利用者が選んだ特性を残す。
+  - 攻撃側の種族が変わったとき(選択・入れ替え・構築の呼び出し)は、選択中の特性が新しい種族の `abilities` にあれば残し、
+    無ければ nil に戻す(旧種族の特性を送らない。issue #100 の構築編集と同じ考え方。ただし先頭へは寄せず「指定なし」に戻す。
+    構築の呼び出しだけは上の「保存された特性」を優先する)。
+  - `attackerAbilityOptions` に無い ID は無視する(計算もしない)。
+- **場**: 天候・フィールドは1つ選ぶピル(既定 なし)。壁は3つ独立のトグル(重ねて張れる。`defenderScreens` だけに載る)。
+- **計算の回数**: 値が変わる操作ごとに `calcBulk` をちょうど1回(「P6-2a」規則「入力ごとに計算1回」)。
+  値が変わらない操作(選択中のピルを押し直す・+6 で + を押す・同じ特性を選ぶ)は計算しない。
+  既存の操作(技の変更・種族の変更・入れ替え・構築の呼び出し)の回数は変えない(ランク・特性の付け替えで余計に計算しない)。
+- **世代・キャンセル**: 条件の変更も他の入力と同じく `beginInput()` の世代と `LatestTaskRunner`(`scheduleLatest`)に乗せる。
+  追い越された計算は cancel され、状態(先に変えた条件)は次の要求に積み上がる。
+
+### 3. 判断: 文言・並び(Web も同じにする)
+
+文言はすべて Core の `DisplayLabels.swift` に置く(`CalcConditionLabels`・`WeatherLabel`・`TerrainLabel`・`ScreenKindLabel`・`RankLabel`)。
+並びは各 enum の `allCases` の順(`Terrain` はゲームの並びにし、openapi の enum の順とは違う。値の集合は同じ)。
+
+| 項目 | 文言(左から) |
+|---|---|
+| 折りたたみの見出し | 詳細 |
+| トグル | 急所 / やけど |
+| 天候(`Weather`) | なし / はれ / あめ / すなあらし / ゆき(none, sun, rain, sand, snow) |
+| フィールド(`Terrain`) | なし / エレキフィールド / グラスフィールド / サイコフィールド / ミストフィールド(none, electric, grassy, psychic, misty) |
+| 防御側の壁(`ScreenKind`) | リフレクター / ひかりのかべ / オーロラベール(reflect, lightScreen, auroraVeil) |
+| 小見出し | 天候 / フィールド / 防御側の壁 / 攻撃側のランク / 攻撃側の特性 |
+| ランク | 「A +1」「C -2」「A ±0」(atk → A、spa → C。`AttackerPreset` と同じ文字。符号は ASCII の + と -、0 は ±0) |
+| 特性の未指定 | 指定なし |
+
+「詳細」の中の並び(上から): 急所・やけど(横並びのトグル)→ 攻撃側のランク → 攻撃側の特性 → 天候 → フィールド → 防御側の壁。
+
+### 4. 判断: 写像(`APIPokeCalcService`)
+
+- ドメインに `Weather`・`Terrain`・`ScreenKind`・`Screens`・`FieldState` を足し、`BulkCalcRequest.field: FieldState`(既定 `FieldState()`)を持たせた。
+  既存の呼び出し(`field` を渡さない)はそのまま何もない場になる。
+- `generatedBulkCalcRequest` は `field == FieldState()` のとき `field` を送らない(この機能より前の要求本文と同じにするため。
+  openapi 上も省略と既定は同じ意味)。既定でないときは `weather`・`terrain`・`defenderScreens`(3つの真偽値)を送る
+  (`attackerScreens` は既定なら省略してよい)。
+- `options.critical` はこれまでどおり常に明示で送る。`attacker` の `ranks`・`status`・`abilityId` は既存の `generatedIndividual` がすでに写している。
+- `MockPokeCalcService.calcBulk` は条件を受け付け、条件なしと同じ形の行を返す(モックは計算しない。ADR-0500 §4)。変更不要の見込み。
+
+### 5. 受け入れ条件(検証可能な形)
+
+1. 起動直後の要求はこの機能より前と同じ: `critical == false`・`field == FieldState()`・`attacker.status == .none`・
+   `attacker.ranks == RankBlock()`・`attacker.abilityId == nil`、計算1回。HTTP 本文には `field` が無い
+   (`CalcViewModelConditionsTests.testDefaultsReproduceTheRequestSentBeforeThisFeature`・`APIPokeCalcServiceConditionsTests.testCalcBulkOmitsFieldWhenDefault`)。
+2. 急所・やけど・天候(全5値)・フィールド(全5値)・壁(全3種・重ね掛け)が、それぞれ `critical`・`attacker.status`・`field.weather`・
+   `field.terrain`・`field.defenderScreens` にだけ写り、値が変わるたびに計算1回、変わらない操作は0回
+   (`testCriticalMaps...`・`testBurnMaps...`・`testEveryWeather...`・`testEveryTerrain...`・`testDefenderScreens...`)。
+3. ランクは -6..+6 に丸め、境界を越える操作は計算しない。表示は「A +6」「A -6」「A ±0」(`testRankClampsToContractRangeAndIgnoresNoOpChanges`・
+   `CalcConditionsDomainTests.testRankLabel`)。
+4. 技の分類を変えるとステッパーの対象が A ↔ C に変わり、もう一方のランクは保持され両方送られる。変化技は A
+   (`testRankStepperFollowsMoveCategoryAndKeepsEachStatsRank`・`testStatusMoveEditsAttackRank`)。
+5. 特性は「指定なし」か攻撃側の `abilities` の ID だけを受け付け、種族の変更・入れ替えで新しい種族に無い特性は「指定なし」に戻る
+   (`testAbilityPickerAcceptsOnlyUnspecifiedOrSpeciesAbilities`・`testAttackerSpeciesChangeKeepsAbilityOnlyWhenNewSpeciesHasIt`・`testSwapKeepsConditionsAndDropsAbilityTheNewAttackerLacks`)。
+6. 条件は防御側・プリセット・持ち物・比較・入れ替えで消えない(`testConditionsPersistAcross...`・`testSwapKeeps...`)。
+7. 構築の個体: 保存された特性を選択状態にし、画面のやけど・ランク・場を適用する。特性の上書き・呼び直しで戻る。構築 → プリセットで特性は nil
+   (`testTeamIndividualKeepsSavedAbilityAndScreenConditionsApply`・`testPresetAfterTeamDropsTeamAbilityButKeepsOtherConditions`)。
+8. 条件の変更は `scheduleLatest` で先行の計算を cancel し、先の条件は次の要求に残る(`testConditionChangeCancelsThePreviousInFlightCalcAndAccumulates`)。
+9. `APIPokeCalcService` は場・急所・ランク・やけど・特性を openapi の綴りで送る(`APIPokeCalcServiceConditionsTests` の3件)。モックは条件付きでも同じ形の行を返す
+   (`MockPokeCalcServiceConditionsTests`)。ドメインの enum は openapi と同じ値集合、並びと文言は3章の表(`CalcConditionsDomainTests`)。
+10. XCUITest: 「詳細」は既定で閉じていて、開くと全入力が既定の選択状態で出る。急所・天候・壁・ランクの操作で選択状態・表示が変わり、
+    結果の行は出続ける(`CalcConditionsUITests` の2件)。
+11. 既存のテストは1行も変えずに通る。`swift test` と `make ios-test` がすべて成功する。
+
+### 6. accessibilityIdentifier(XCUITest が参照する)
+
+| 要素 | identifier | 備考 |
+|---|---|---|
+| 折りたたみの開閉ボタン | `calcConditionsToggle` | ラベルは「詳細」。既定は閉じる(View の `@State`) |
+| 開いた中身のコンテナ | `calcConditionsPanel` | 閉じている間は存在しない |
+| 急所 / やけど | `calcCondition-critical` / `calcCondition-burn` | on のとき `.isSelected` |
+| 天候のピル | `calcWeather-<rawValue>` | 選択中だけ `.isSelected` |
+| フィールドのピル | `calcTerrain-<rawValue>` | 同上 |
+| 防御側の壁 | `calcDefenderScreen-<rawValue>` | on のとき `.isSelected` |
+| ランクの値 | `calcAttackerRankValue` | `attackerRankText` をそのまま出す |
+| ランクの −/+ | `calcAttackerRankDecrement` / `calcAttackerRankIncrement` | SwiftUI の `Stepper` ではなく2つのボタン(XCUITest がロケールに依存しないため)。±6 で無効化 |
+| 特性の選択 | `calcAttackerAbilityPicker` | `Menu`。項目は「指定なし」+ 種族の特性名 |
+
+### 7. spec 時点のテスト結果(2026-09-25)
+
+`swift test`(`ios/PokeCalcKit`): 436件実行、23テストが失敗。失敗はすべて本タスクの新しいテスト
+(`CalcViewModelConditionsTests` 16件すべて、`CalcConditionsDomainTests` の並び・文言5件、`APIPokeCalcServiceConditionsTests` 3件中2件。
+`testConditionChangeCancels...` は仮実装では要求が来ないため待機の上限(約19秒)で失敗する)。既存のテストの失敗は0件。
+仮実装のままで通る新テスト(enum の値集合・既定の場・`Screens` の補助・既定の場を送らない・モック)は回帰の番として残す。
+`CalcConditionsUITests` はアプリのビルド(`build-for-testing`)が通ることだけ確認し、実行はしていない(View が未実装なので失敗する)。
+
+### 8. 実装者への注意(`TODO(implementer)` を検索すればコード上の該当箇所が見つかる)
+
+- `CalcViewModel.swift`: 「計算条件」の MARK の仮実装を2章どおりに埋める。各 setter は値が変わらなければ何もしない。変わったら
+  `let token = beginInput()` → 状態を更新 → `await recalculate(token: token)`(既存の `selectAttackerItem` と同じ形)。
+  `buildRequest` で `critical: isCritical`・`field: FieldState(weather:terrain:defenderScreens:)`、攻撃側の `ranks`・`status`・`abilityId` を
+  **プリセット経路と構築経路の両方**に当てる(`individualForRequest` は ranks/status を落とすので、組み立てた後に上書きする)。
+- 特性の選択肢は `reloadAttackerMoveOptions` で `detail.abilities` を `attackerAbilityOptions` に入れ、そこで「新しい種族に無ければ nil」を行う
+  (token・`detail.key` の確認の後。古い応答で書き換えない)。`selectTeamIndividual` は反映後に保存された特性を入れ、
+  `selectAttackerPreset` は直前が `.team` のときだけ nil に戻す。
+- `DisplayLabels.swift`: 3章の表の文言にする。`RankLabel` の文字は `AttackerPreset` の private な `statLetter(for:)` を共有できる形にしてよい
+  (同じ対応を2か所に書かない)。
+- `APIPokeCalcService.swift`: `generatedBulkCalcRequest` に `field` を足す(4章。既定なら nil)。ドメイン → 生成型の enum 写像は既存の
+  `generatedFormat` 等と同じく網羅 switch で書く。
+- View(`CalcScreenView` とその部品): 技セレクタの下・読み込み表示の上に「詳細」の折りたたみを置く。6章の identifier を付け、操作は
+  `viewModel.scheduleLatest { await $0.setCritical(...) }` の形で呼ぶ。開閉にアニメーションを付けるなら操作時のみ(常時動くものは入れない)。
+  色はトークンだけ(選択中のピルは `attackerPreset-*` と同じ表現)。
+- 既存テスト・新しいテストの期待値は変えない。`api/openapi.yaml`・`Generated/`・`engine/`・`web/`・`services/` は触らない。
+- 完了条件は5章。`swift test` と `make ios-test` を実行し、結果をこの章の後ろに追記する。plan.md の P6-13 にチェックを付ける。
+
+### 9. 実装結果(2026-09-25)
+
+8章どおりに実装。`CalcViewModel.swift`(各 setter・`buildRequest`・`reloadAttackerMoveOptions`・`selectTeamIndividual`・
+`selectAttackerPreset`)・`DisplayLabels.swift`(3章の文言。`RankLabel` は `AttackerPreset.statLetter(for:)` を
+`private` から module-internal に変えて共有)・`DomainTypes.swift`(`RankLimits.min/max` を新設し、ランクのクランプと
+View の ±6 無効化が同じ値を参照するようにした)・`APIPokeCalcService.swift`(`generatedBulkCalcRequest` に `field` を追加。
+既定 `FieldState()` は省略)・View(新規 `ios/PokeCalc/CalcConditionsSection.swift`、`CalcScreenView.swift` に組み込み、
+`CalcScreenStyleHelpers.swift` に `rankValueMinWidth` を追加)。`TODO(implementer)` はすべて解消。
+
+実装中に見つけて直した不具合(テストが検出。テスト自体は変えていない):
+
+1. **accessibilityIdentifier がコンテナに飲まれる**: `conditionsPanel` に `.accessibilityElement(children: .contain)` を
+   付けずに `.accessibilityIdentifier("calcConditionsPanel")` を付けていたため、横スクロール(天候・フィールド)の
+   中でない子(急所・やけど・ランク・特性・壁)の identifier がすべて `"calcConditionsPanel"` に上書きされていた
+   (XCUITest の要素ダンプで実際に確認)。`AttackerCardView`/`DefenderCardView` と同じ `.contain` を足して解消。
+2. **`calcAttackerRankIncrement` にスクロールで届かない**: `CalcConditionsUITests` の `scrollUntilHittable` は前方
+   (`swipeUp`)にしかスクロールしない。ランク・特性を「見出しを上・内容を下」の2行で積むと「詳細」パネル全体が
+   縦に伸び、天候・壁を操作したあとランク(パネルの上のほう)へ戻れなくなった。5つの小見出し行(ランク・特性・
+   天候・フィールド・壁)を「見出し+内容を1行」にまとめる `sectionRow(_:content:)` にして、既定の文字サイズでの
+   パネルの高さを抑えて解消(3章の並び順・6章の identifier は変えていない)。
+
+批評(critic)PASS。あわせて、批評指摘で以下も対応:
+
+- ランクの −/+ ボタンに VoiceOver 用の `.accessibilityLabel`(`CalcConditionLabels.rankDecrement`/`rankIncrement`)を追加
+  (アイコンだけのボタンなので、システムの自動読み上げ〈「削除」「追加」〉に頼らない)。
+- Dynamic Type: `sectionRow` が `dynamicTypeSize.isAccessibilitySize` を見て、アクセシビリティ域の文字サイズでは
+  見出しを内容の上に積む2行レイアウトに切り替える(既定サイズは1行のまま。上記2の「パネルを1行に詰めた」変更と
+  両立させるため、切り替えは既定サイズの挙動・identifier を変えずに行った)。
+- `attackerRank`/`setAttackerRank` の `switch attackerRankStat` の `default:` 分岐(`StatKey` の hp/def/spd/spe を
+  網羅するためだけの分岐で実際には来ない)にコメントを足した。
+
+`swift test`(`ios/PokeCalcKit`): 436件実行、0失敗。
+`make ios-test`(シミュレータ): `ios-lint`・`ios-gen-check`・`ios-check-request-limits` OK、`ios-test-unit` 449件成功・0失敗、
+`ios-test-ui` 22件成功・0失敗ですべて green(終了コード0)。
+実装中の検証では、`ios-test-ui` の1回目の全件実行で `CalcConditionsUITests` の2件だけが上記の不具合で失敗し(他の20件は
+green)、単体再実行(`-only-testing:PokeCalcUITests/CalcConditionsUITests`)で2件とも成功したのち、修正を確認した。
+その後の `make ios-test` 再実行は、別レーンの並行セッションが同じシミュレータ(`iPhone 18 Pro`)で `xcodebuild test` を
+実行中だったため `ios-test-ui` がブートストラップの時点で failed(`Early unexpected exit... signal kill`)になったことが
+2回あった(`ps aux` で相手のプロセスを確認。P6-12(7章)と同じ既知の環境要因)。並行実行が無い状態で `make ios-test` を
+実行し、上記の 449/449・22/22 の全件成功を確認した。
+- 追記(メインセッション、2026-09-25): アクセシビリティの文字サイズで見出しを上の行へ移したとき、`sectionRow` の
+  内容がそのまま `VStack` の子になり、ランクの −/値/+ が1つずつ縦に並んでいた。内容を `HStack` で包んで横並びを保つよう
+  修正し、accessibility-extra-large のスクリーンショットで確認した。あわせて、最大の文字サイズ
+  (accessibility-extra-extra-extra-large)では計算画面の**全体**が横にはみ出す(左端が切れる)ことを見つけた。
+  この変更の前(2026-09-23)のスクリーンショットでも同じなので既存の不具合で、本節の範囲外として plan.md P6-14 に切り出す。
+
+## P6-14 の受け入れ条件(最大の文字サイズ〈AX5〉での横はみ出し。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+- 日付: 2026-09-25 / 担当レーン: iOS / 関連: 本 ADR「issue #274」8章の追記(不具合の発見)、docs/plan.md P6-14、
+  `CalcScreenView.swift`・`CalcScreenResults.swift`・`ReverseScreenResults.swift`
+
+### 1. 受け入れ条件(検証可能な形)
+
+1. AX5(`.accessibility5` = `UIContentSizeCategory.accessibilityExtraExtraExtraLarge`、起動引数
+   `-UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityXXXL`)で計算画面
+   (`CalcScreenView`)を開いたとき、`calcBackendModeBadge`・`attackerCard`・`defenderCard`・
+   `attackerPreset-*`・`attackerTeamSourceButton`・`movePicker`・`calcConditionsToggle`・
+   `calcResultRow-*` を含む主要な要素すべてが、ウィンドウの `frame`(`minX >= 0` かつ
+   `maxX <= window.maxX`。丸め誤差 1pt 許容)に収まる。左端が切れる(`minX < 0`)状態を再発させない。
+2. 同じ条件で逆算画面(`ReverseScreenView`)・構築一覧画面(`TeamListView`)・構築編集画面
+   (`TeamEditView`)を開いたときも、主要な要素(カード・プリセット・構築元行・技セレクタ・
+   一覧の行・編集画面の入力)が同様にウィンドウ内に収まる。
+3. 上記1・2は、はみ出す原因になっている `Text` が実際に画面へ描画された状態(計算画面は既定の
+   計算結果が1行以上出た状態、逆算画面は候補が1件以上出た状態)で確認する。表示物が無い(空)状態
+   だけを見て「直った」と判定しない。
+4. 既定の文字サイズ(Dynamic Type 既定値)では、上記1・2の同じ要素群が今までどおりウィンドウ内に
+   収まる(回帰させない)。
+5. はみ出しを直す変更は、はみ出す原因の `Text`(`ResultRowView.percentRangeTextView`・`koText`、
+   `ReverseCandidateCardView` の同等の `Text`)を折り返す/縮小する/縦積みにするなど、内容が
+   ウィンドウ幅を超えて要求しない形にする。`accessibilityIdentifier` は変えない
+   (既存 XCUITest・本 ADR の識別子表と衝突させない)。
+6. 直した後も `AttackerPresetTests`・`BulkRowDisplayTests`・`CalcViewModelTests` 等の既存 XCTest、
+   および `CalcScreenUITests`・`ReverseScreenUITests`・`CalcConditionsUITests`・`TeamScreenUITests`
+   の既存 XCUITest がすべて成功する(数値・文言の期待値は変えない)。
+
+### 2. 追加したテスト
+
+`ios/PokeCalcUITests/LargeTextLayoutUITests.swift`(新規)。`POKECALC_USE_MOCK=1` + 起動引数
+`-UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityXXXL` で AX5 を固定し、
+`cardsRow`/`ReverseScreenView.cardsRow` が `dynamicTypeSize >= .accessibility1` で縦積みに切り替わる
+実装を使って起動引数が実際に効いたことも確認する(`assertAX5TookEffect`)。主要な識別子について
+ウィンドウの `frame` からのはみ出しをまとめて検査し(`assertNoHorizontalOverflow`)、はみ出した要素・
+その `frame`・ウィンドウの `frame` を1つの失敗メッセージに列挙する。既定サイズでの同じ検査(回帰確認)
+も対にして入れた。
+
+- `testCalcScreenNoHorizontalOverflowAtDefaultSize` / `testCalcScreenNoHorizontalOverflowAtAX5`
+- `testReverseScreenNoHorizontalOverflowAtDefaultSize` / `testReverseScreenNoHorizontalOverflowAtAX5`
+- `testTeamScreensNoHorizontalOverflowAtDefaultSize` / `testTeamScreensNoHorizontalOverflowAtAX5`
+  (構築を1つ作って編集画面まで進めて検査する。`RootView.makeTeamStore()` が `POKECALC_USE_MOCK=1` の
+  起動のたびに専用 UserDefaults suite を空にするため、他の XCUITest のデータと衝突しない)
+
+2026-09-25 時点の実行結果(`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test
+-project ios/PokeCalc.xcodeproj -scheme PokeCalc -destination 'platform=iOS Simulator,name=iPhone 18 Pro'
+-only-testing:PokeCalcUITests/LargeTextLayoutUITests`): 6件中5件成功、
+`testCalcScreenNoHorizontalOverflowAtAX5` のみ失敗(想定どおり。実装未修正)。既定サイズの計算画面の
+回帰テストは成功しており、既定サイズでは崩れていないことを確認済み。逆算・構築の2画面は AX5 でも
+成功した(§4「未確認・要フォローアップ」参照。原因パターンは共通に存在するが、モックの既定状態では
+再現条件〈候補行が出る状態〉に達しない)。
+
+テスト実装上の注意(申し送り): `ResultRowView`(`CalcScreenResults.swift`)は `glassCard()` のコンテナに
+`.accessibilityElement(children: .contain)` が無く、`CalcConditionsSection.swift` の既存コメントが説明する
+のと同じ理由で、`subtitleText`・`percentRangeTextView`・`koText` の3つの `Text` が個別の
+`accessibilityIdentifier`(`calcResultPercent-*`・`calcResultKO-*` など)を持っているにもかかわらず、
+すべて親の `calcResultRow-<id>` に「飲まれ」て同一 identifier で3件ヒットする(`.frame` を取ろうとすると
+`Multiple matching elements found` で失敗した。実際に本テストの初回実行で踏んだ)。これは P6-14 のはみ出し
+とは別の、識別子まわりの既存の抜け漏れ(`attackerCard`/`defenderCard`/`calcConditionsPanel` は `.contain` が
+付いているので同じ問題は起きない)。本テストはこれを踏まえて同一 identifier の全件の `frame` を見る作りに
+した(`matchingElements`)ので実装はここで直さなくてよいが、`.accessibilityElement(children: .contain)` を
+`ResultRowView`・`ReverseCandidateCardView` にも足すと今後の XCUITest がシンプルになる(任意の改善)。
+
+### 3. 見つかった原因(実装者への引き継ぎ。まだ直していない)
+
+`xcrun xcresulttool` で AX5 失敗時の `frame` を実測(iPhone 18 Pro シミュレータ、ウィンドウ
+`(0, 0, 402, 874)`):
+
+```
+calcBackendModeBadge : minX=-52.0  width=342.3
+attackerCard          : minX=-52.5 width=507.0
+defenderCard          : minX=-52.5 width=507.0
+attackerPreset-none   : minX=-52.5 width=164.3
+attackerPreset-aMax   : maxX=454.5 width=164.3
+attackerTeamSourceButton : minX=-52.0 width=506.0
+movePicker            : minX=-52.0 width=506.0
+calcConditionsToggle  : minX=-52.5 width=507.0
+calcResultRow-none@- [percent text] : minX=-40.0 width=482.0 label="18.0〜26.0%"
+```
+
+- ほぼ全部の要素の幅が 506〜507pt に揃っている(ウィンドウは 402pt)。かつ `minX` は揃って負
+  (-52 前後)で、`maxX - window.maxX` もほぼ同じだけ超過している。これは「個々の要素が勝手に
+  伸びた」のではなく、**`CalcScreenView.body` の `VStack(alignment: .leading)` そのものの幅が
+  506〜507pt まで広がり**、`.frame(maxWidth: .infinity)` を使っている兄弟(カード・プリセットの
+  ピル行・構築元ボタン・技セレクタ・「詳細」トグル)が全員その広がった幅いっぱいに引き伸ばされた
+  結果。さらに `ScrollView`(縦専用。横スクロールを許可していない)は、非スクロール軸(横)で
+  コンテンツがビューポートより大きいとき既定で**中央寄せ**する。ウィンドウ幅402・コンテンツ幅507
+  なら `minX = (402 - 507) / 2 = -52.5` で、実測値と一致する。これが「左端が切れる」(=右にも
+  はみ出しているが、見た目には左端が削れて見える)の直接の理由。
+- `VStack` の幅が広がった発生源は `ResultRowView`(`CalcScreenResults.swift` 106〜121行・140〜151行)
+  の `percentRangeTextView`(`%幅` の `Text`)と `koText` の `Text`。どちらも `.fixedSize()` が付いており、
+  折り返し・縮小をせず「1行に収まる自然な幅」をそのまま親に要求する。AX5 のような巨大な文字サイズでは、
+  この自然な幅がウィンドウ幅を超える(実測: percentRangeTextView だけで幅482pt)。
+  `ResultRowView.body` は `ViewThatFits(in: .horizontal)` で「横並び」「縦積み」の2案を試すが(123〜137行)、
+  **どちらの案にも同じ `percentRangeTextView`(`.fixedSize()`)がそのまま入っている**ため、縦積みにしても
+  幅は縮まらない。両方とも収まらない場合 `ViewThatFits` は最後の案をそのまま(要求どおりの大きさで)描画する
+  仕様なので、結局オーバーサイズの `Text` の幅がそのまま `ResultRowView` → 呼び出し元の `VStack` へ伝播する。
+- 同じパターンが `ReverseCandidateCardView`(`ReverseScreenResults.swift` 59〜63行の
+  `Text(candidate.percentRangeText)...fixedSize()`)にも存在するが、モックの逆算画面は起動直後は観測0件で
+  候補行が描画されないため、本タスクの XCUITest(既定の起動直後の状態を見る)では再現しなかった。観測を
+  1件追加して候補行を出した状態で同じ検査をすると、同じ原因で同様にはみ出す可能性が高い(未検証。§4)。
+
+### 4. 推奨する直し方(実装はしていない。implementer への申し送り)
+
+1. **本命**: `ResultRowView.percentRangeTextView` と `koText`(`ReverseCandidateCardView` の同等の `Text`
+   も同様)から `.fixedSize()` を外すか、`.lineLimit(1).minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)`
+   に置き換える(このファイルの他の `Text` ―`subtitleText`・pill のラベルなど―が既に使っているのと同じ
+   縮小パターン。design.md の「ダメージバーの物差しをそろえる」意図は保ったまま、確定数バッジや%表示が
+   小さくなるだけで済む)。
+2. `ViewThatFits` の2案のどちらでも `percentRangeTextView` が固定幅のままだと1で直しても効果が薄いので、
+   1と揃えて直す。1で幅が縮むなら `ViewThatFits` の「横並び」案がAX5でも選ばれるようになり、縦積み案は
+   より小さい文字サイズ用のままでよい。
+3. 保険として、`CalcScreenView.body` の `VStack`(`ScrollView` の直下)に `.frame(maxWidth: .infinity)` や
+   `containerRelativeFrame(.horizontal)` を付け、個々の子がどれだけ「自然な幅」を要求してもコンテナ自体は
+   画面幅を超えないようにする案もある。ただしこれは症状(はみ出す)を隠すだけで、中身の `Text` はその幅の
+   中でさらに小さく潰れるか省略記号で切れるだけになるため、1・2の「原因側」を直すほうを優先する。
+4. 直したら、5章 (1)〜(3) のテストに加え、逆算画面で観測を1件追加して候補行を出した状態
+   (`ReverseCandidateCardView` 側)も同じ手順で AX5 確認する(§1 の受け入れ条件2・3の対象)。
+
+### 5. 未確認・要フォローアップ
+
+- 本タスクの XCUITest は逆算画面・構築画面を「起動直後の既定状態」でしか AX5 検査していない
+  (逆算は観測0件・候補0件、構築は一覧が空 or 編集画面に入っただけでメンバー未追加)。§3で述べたとおり、
+  `ReverseCandidateCardView` にも同じ `.fixedSize()` パターンがあるため、候補が出た状態
+  (観測を1件入力した状態)での AX5 検査は未実施。implementer は直す際にこのケースも確認すること。
+- 構築編集画面でメンバーを1体追加した状態(`TeamEditMemberCard`)の AX5 検査も未実施。
+
+### 6. 実装結果(implementer、2026-09-25)
+
+§4の推奨1・2どおりに実装した。
+
+1. `ResultRowView.percentRangeTextView`・`koText`(`CalcScreenResults.swift`)と
+   `ReverseCandidateCardView` の `percentRangeText` の `Text`(`ReverseScreenResults.swift`)から
+   `.fixedSize()` を外し、このファイルの他の `Text`(`subtitleText` 等)と同じ
+   `.lineLimit(1).minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)` に置き換えた。
+   これで `ViewThatFits` の「横並び」案(`ResultRowView`)・`HStack`(`ReverseCandidateCardView`)が
+   AX5 でも縮小した文字幅で収まるようになり、`CalcScreenView`/`ReverseScreenView` の `VStack` 全体が
+   広がる連鎖(§3)が起きなくなった。既定サイズでは自然な幅がスケール閾値を超えないため、
+   見た目(%表示の大きさ・改行なし)は変えていない。
+2. `ResultRowView`・`ReverseCandidateCardView` のコンテナに `.accessibilityElement(children: .contain)`
+   を追加(`CalcConditionsSection.calcConditionsPanel` と同じパターン)。§2の申し送りどおり
+   `calcResultPercent-*`/`calcResultKO-*`/`reverseCandidateRange-*`/`reverseCandidateMatch-*` が
+   親の `calcResultRow-*`/`reverseCandidateRow-*` に飲まれず個別要素のまま残ることを確認した。
+   `accessibilityIdentifier` はどちらも変えていない。
+3. `LargeTextLayoutUITests` に AX5 のケースを2件追加した(いずれも実装前に「失敗するはず」だった
+   §5のフォローアップを埋める):
+   - `testReverseScreenWithCandidateNoHorizontalOverflowAtAX5`:
+     `reverseObservationField-0` に "12" を入力して `reverseCandidateRow-neutral@-` を実際に描画した
+     状態で検査(`ReverseScreenUITests.testEnteringObservationShowsCandidatesAndPremise` と同じ操作)。
+   - `testTeamEditScreenWithMemberNoHorizontalOverflowAtAX5`: 構築編集画面でメンバーを1体追加した
+     状態(`TeamEditMemberCard`)を検査。member id が UUID で identifier に入るため、新設の
+     `matchingElementsBeginningWith`/`assertNoHorizontalOverflowForPrefixes`(前方一致版)で
+     `memberCard-`・`memberSP-`・`memberMoveSlot-` 等を検査した。
+   `testCalcScreenNoHorizontalOverflowAtAX5`(既存の失敗していたテスト本体)を含め、
+   `LargeTextLayoutUITests` は8件全て成功した。
+4. `grep fixedSize ios/PokeCalc` で他の使用箇所も確認した。`CalcScreenResults.ChipButton`
+   (横スクロールの `ScrollView(.horizontal)` の中なので、内容が広がっても外側の `VStack` 幅には
+   伝播しない)、`CalcScreenCards.SpeciesHeaderMenuLabel` の名前(`fixedSize(horizontal: false,
+   vertical: true)` で縦方向だけ)、`CalcScreenCards.TypeBadgeView`、`CalcConditionsSection.
+   sectionRowLabel`(既定サイズの1行レイアウト限定。アクセシビリティサイズでは2行レイアウトに
+   切り替わり `fixedSize()` を使わない分岐に入る)、`TeamEditMemberCard.spStepper` のラベルは、
+   いずれも本タスクで追加した AX5 の XCUITest(計算画面・逆算画面〈候補あり〉・構築編集画面
+   〈メンバーあり〉)で実際にはみ出しを起こさず、8件とも成功したため、追加の修正はしていない。
+5. 検証: `swift test`(`ios/PokeCalcKit`)436件0失敗。
+   `xcodebuild test -only-testing:PokeCalcUITests/LargeTextLayoutUITests` 8件0失敗
+   (新設の2件を含む)。`make ios-test`: `ios-test-unit`・`ios-test-ui`(30件0失敗。既存22件+新設8件)・
+   `ios-check-infoplist` すべて成功(終了コード0)。
+6. 気づいた点(修正はしていない・要フォローアップ): `testReverseScreenWithCandidateNoHorizontalOverflowAtAX5`
+   の `xcresult` に、`reverseObservationField-0` をタップした直後(候補描画前・入力前)に
+   1件だけ SwiftUI のランタイム警告「Invalid frame dimension (negative or non-finite).」が記録された。
+   アサーション失敗にはなっておらず(`isAssociatedWithFailure: false`)、テストは成功している。
+   候補カードの描画やテキストフィールドへの入力より前(フォーカス直後)に出ているため、
+   本タスクの `.fixedSize()` の直しとは無関係に見える(AX5 でのキーボード表示アニメーション周りの
+   既知の SwiftUI の挙動の可能性)。原因は特定していない。
+
+## P6-15 の受け入れ条件(P6-14 の残り3点。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+- 日付: 2026-09-25 / 担当レーン: iOS / 関連: 本 ADR「P6-14」、docs/plan.md P6-15、
+  `CalcScreenView.swift`・`ReverseScreenView.swift`・`CalcConditionsSection.swift`・
+  `CalcScreenResults.swift`
+
+### 0. 対象
+
+docs/plan.md P6-15 の3点。P6-14 で直していない「残り(軽微)」。
+
+1. AX5 で攻撃側プリセットのピル「A振り(無補正)」が「A振り…」と省略される
+   (`CalcScreenView.presetSegmentedRow`・`ReverseScreenView.presetSegmentedRow`/`PresetPillButton`。
+   `.attacker` 側の `KnownDefenderPreset` のピルも同じ部品を使っている)。
+2. `LargeTextLayoutUITests` で計算画面の「詳細」(issue #274)を開いた状態も AX5 で検査する。
+3. 既定サイズで%・確定数の文字が縮んでいないことを確かめる検査(critic の任意の指摘)。
+
+### 1. 受け入れ条件(検証可能な形)
+
+1. AX5(`.accessibility5`)で計算画面の攻撃側プリセット3ピル(`attackerPreset-none`/`aFull`/`aMax`)、
+   および逆算画面の同等のピル(既定の `.defender` 側: `reverseAttackerPreset-*`、`.attacker` 側:
+   `reverseKnownDefenderPreset-*`)は、既定サイズの「画面幅いっぱいの3等分・横1行」をやめ、
+   縦に積む等の形で各ピルがより広い幅を持つ(design.md の縦積みパターン。`cardsRow` が
+   `dynamicTypeSize >= .accessibility1` で横並び→縦積みに切り替えているのと同じ考え方)。
+   XCUITest は `Text` が省略記号で切れているかどうかを直接読めないため、次の2点を代理指標として使う
+   (`assertPresetPillsStackVertically`。P6-15 タスク指示「robust, meaningful assertion」):
+   - 3つのピルの `minY` が(縦積みが効いていれば)互いに 10pt 以上離れている
+   - 各ピルの `frame.width` がウィンドウ幅の半分より広い(3等分〈約1/3〉のままではない)
+2. 既定の文字サイズでは、上記3ピルは今までどおり横1行・3等分のままである(回帰させない。
+   `assertPresetPillsSingleRow`: `minY` の差が2pt未満・各ピルの幅がウィンドウ幅の半分未満)。
+3. `accessibilityIdentifier` は変えない(`attackerPreset-*`・`reverseAttackerPreset-*`・
+   `reverseKnownDefenderPreset-*`。既存 XCUITest・本 ADR の識別子表と衝突させない)。
+4. AX5 で計算画面の「詳細」(`calcConditionsToggle` → `calcConditionsPanel`)を開いた状態でも、
+   issue #274 6章の identifier のうち horizontal スクロールの中に無いもの
+   (`calcConditionsPanel`・`calcCondition-critical`/`burn`・`calcAttackerRankValue`・
+   `calcAttackerRankDecrement`/`Increment`・`calcAttackerAbilityPicker`)がウィンドウの外に
+   はみ出さない(`calcScreenIdentifiers` の主要要素と合わせて検査)。天候・フィールド・防御側の壁
+   (`calcWeather-*`/`calcTerrain-*`/`calcDefenderScreen-*`)は `ScrollView(.horizontal)` の中に
+   ある意図的な設計(`CalcConditionsSection.weatherSection` 等のコメント)なので、はみ出し検査の
+   対象にしない(存在確認だけ行う。2章「テスト実装上の注意」参照)。
+5. 既定の文字サイズで、%表示(`calcResultPercent-*`)が `minimumScaleFactor`(`CalcScreenMetrics.
+   compactMinimumScaleFactor` = 0.7)によって不要に縮んでいない。フォントの実測 pt 値を
+   ハードコードせず、「横幅に制約が無い横向き(landscape)」での同じ要素の高さを基準値として比較する
+   (2章「テスト実装上の注意」参照。iPhone は landscape をサポートしているため成立する)。
+6. 直した後も既存の `LargeTextLayoutUITests`(P6-14 分)・`CalcScreenUITests`・
+   `ReverseScreenUITests`・`CalcConditionsUITests`・`AttackerPresetTests`・`KnownDefenderPresetTests`
+   等の既存 XCTest/XCUITest がすべて成功する(数値・文言の期待値は変えない)。
+
+### 2. 追加したテスト
+
+`ios/PokeCalcUITests/LargeTextLayoutUITests.swift`(既存ファイルへの追加。新規ファイルは作らない)。
+
+- `testCalcScreenAttackerPresetPillsStackVerticallyAtAX5` / `testCalcScreenAttackerPresetPillsSingleRowAtDefaultSize`
+- `testReverseScreenAttackerPresetPillsStackVerticallyAtAX5` / `testReverseScreenAttackerPresetPillsSingleRowAtDefaultSize`
+- `testReverseScreenKnownDefenderPresetPillsStackVerticallyAtAX5`(`.attacker` 側に切り替えてから検査)
+- `testCalcScreenConditionsPanelNoHorizontalOverflowAtAX5`
+- `testCalcScreenResultPercentNotShrunkAtDefaultSize`
+
+テスト実装上の注意(申し送り):
+
+- **ピルの縦積み判定**: 直接「省略されたか」を読む API が無いため、`assertPresetPillsStackVertically`/
+  `assertPresetPillsSingleRow` という2つの共通ヘルパーを新設し、上記1章1・2の代理指標(`minY` の差・
+  幅の比率)で判定する。実装が「縦積み」以外の直し方(例: `ViewThatFits` で改行、フォントをさらに
+  縮小する等)を選んだ場合、この代理指標に合わない可能性がある。もし implementer が縦積み以外の
+  設計にするなら、この2つのヘルパーと該当テストを合わせて見直してよい(ただし「省略されない」という
+  1章の受け入れ条件そのものは変えない)。
+- **「詳細」パネルの検査で踏んだ落とし穴**: 初回実装時、天候・フィールド・防御側の壁の全チップを
+  `assertNoHorizontalOverflowForPrefixes` に含めたところ、`ScrollView(.horizontal)` で2番目以降の
+  チップの `frame.maxX` がウィンドウ幅を大きく超えて誤って失敗した(例: `calcTerrain-*[4/5]` が
+  `frame=(1177, 1006, 339, 67)` で `window=(0,0,402,874)` を大きく超える)。これは
+  `ChipButton`/`CalcConditionsSection` のコメントが明言する意図的な設計(横スクロールで見せる)であり
+  不具合ではない。`itemComparisonToggles` の `defenderItemToggle-*` が P6-14 の
+  `calcScreenIdentifiers` に元から含まれていないのと同じ理由で、このプリフィックスは
+  「はみ出し検査」の対象から外し、「存在するか」だけを確かめる形にした
+  (`calcConditionsPanelScrollableChipPrefixes` のコメント参照)。実装者はこの区別(横スクロールの
+  中の要素とそうでない要素)を保ったまま直してよい。
+- **%表示が縮んでいないことの検査**: `.label` は元の文字列のままで見た目の縮小を反映しないため、
+  「横幅に制約の無い横向き(landscape)」での同じ要素(`calcResultPercent-none@-`)の高さを基準値にし、
+  縦向き(既定)の高さと比較する方式にした(`XCUIDevice.shared.orientation` を使い、
+  `addTeardownBlock` で `.portrait` に戻す。他のテストに向きが持ち越されないようにするため)。
+  フォントの pt 値や行高をハードコードしていないので、`TextStyleToken.resultPercent` のサイズや
+  `CalcScreenMetrics.compactMinimumScaleFactor` の値が変わってもテスト自体は書き直さずに機能する。
+
+2026-09-25 時点の実行結果(`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test
+-project ios/PokeCalc.xcodeproj -scheme PokeCalc -destination 'platform=iOS Simulator,name=iPhone 18 Pro'
+-only-testing:PokeCalcUITests/LargeTextLayoutUITests`): 15件中12件成功・3件失敗。
+
+失敗3件はいずれも1章(1)の本体(想定どおり。`presetSegmentedRow` が `dynamicTypeSize` を見ていないので
+現状は縦積みにならない):
+
+```
+testCalcScreenAttackerPresetPillsStackVerticallyAtAX5
+  XCTAssertGreaterThan failed: ("0.0") is not greater than ("10.0")
+  minYs=[762.83, 762.83, 770.17] identifiers=["attackerPreset-none", "attackerPreset-aFull", "attackerPreset-aMax"]
+
+testReverseScreenAttackerPresetPillsStackVerticallyAtAX5
+  XCTAssertGreaterThan failed: ("0.0") is not greater than ("10.0")
+  minYs=[811.17, 811.17, 818.83] identifiers=["reverseAttackerPreset-none", "reverseAttackerPreset-aFull", "reverseAttackerPreset-aMax"]
+
+testReverseScreenKnownDefenderPresetPillsStackVerticallyAtAX5
+  XCTAssertGreaterThan failed: ("4.0") is not greater than ("10.0")
+  minYs=[811.17, 815.17, 815.17] identifiers=["reverseKnownDefenderPreset-none", "reverseKnownDefenderPreset-max", "reverseKnownDefenderPreset-full"]
+```
+
+3件とも「3つのピルがほぼ同じ `minY`(=横1行のまま)」という、いま直っていない実際の状態どおりの
+理由で失敗している(`testCalcScreenAttackerPresetPillsStackVerticallyAtAX5` の2つは `minY` が完全一致、
+`KnownDefenderPreset` 側は僅差の4ptで、フォントの自然な行高差にすぎず縦積みとは呼べない)。
+
+残り12件はすべて成功。うち次の3件は本タスクで新設し、実装前の時点で green だったもの
+(実装済みの前提を壊していないことの確認・回帰の番として残す):
+
+- `testCalcScreenAttackerPresetPillsSingleRowAtDefaultSize`(既定サイズは今までどおり1行)
+- `testReverseScreenAttackerPresetPillsSingleRowAtDefaultSize`(同上)
+- `testCalcScreenConditionsPanelNoHorizontalOverflowAtAX5`(1章(4)。「詳細」パネル自体は
+  横スクロールの中身を除けば AX5 でもすでにはみ出していなかった)
+- `testCalcScreenResultPercentNotShrunkAtDefaultSize`(1章(5)。P6-14 の実装〈`.fixedSize()` を
+  `minimumScaleFactor` に置き換えた〉のおかげで、既定サイズでは landscape と同じ高さのまま
+  すでに縮んでいない。回帰の番として残す)
+
+既存の8件(P6-14 分)もすべて成功しており、回帰は無い。
+
+### 3. 推奨する直し方(実装はしていない。implementer への申し送り)
+
+1. **本命**: `CalcScreenView.presetSegmentedRow` と `ReverseScreenView.presetSegmentedRow`(3ケースとも)
+   を、`cardsRow`/`sideSwitch` と同じ `if dynamicTypeSize >= .accessibility1 { VStack … } else { HStack … }`
+   の分岐にする。`PresetPillButton`(`ReverseScreenView.swift` 私有型)自体は見た目(`Text` + Capsule)を
+   変えず、呼び出し側の並べ方だけを変える形で十分なはず。
+2. `.lineLimit(1).minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)` はそのまま残してよい
+   (縦積みで幅が増えれば、0.7倍までの縮小で「A振り(無補正)」のような長いラベルも省略されずに収まる
+   可能性が大きく上がる。直接の省略検出はできないため、1章の代理指標〈幅・`minY`〉で確認する)。
+3. `KnownDefenderPreset` 側(ラベルが短い)も同じ分岐に揃えることで、`AttackerPreset`/
+   `KnownDefenderPreset` のどちらの側を表示していても一貫した見た目になる(`presetSegmentedRow` の
+   `@ViewBuilder` の2つの `case` 両方に同じ分岐を入れる)。
+4. 「詳細」パネル(`CalcConditionsSection`)は本タスクの検査で AX5 でも(横スクロールの中身を除けば)
+   はみ出しが無かったため、修正は不要と見られる。ただし念のため実装者は3ピルの直し方を反映した後、
+   `testCalcScreenConditionsPanelNoHorizontalOverflowAtAX5` を再実行して green のままであることを
+   確認すること。
+5. 既定サイズの%表示が縮んでいないことも、直した後に
+   `testCalcScreenResultPercentNotShrunkAtDefaultSize` を再実行して確認すること(今回のピルの直しは
+   `ResultRowView` に触れないので影響しないはずだが、`CalcScreenView.body` の `VStack` 幅の連鎖
+   〈P6-14 §3〉に似た問題を新たに作らないための保険)。
+
+### 4. `swift test` / `xcodebuild test` の実行結果(実装前・spec-writer 時点)
+
+- `swift test`(`ios/PokeCalcKit`): 本タスクは `ios/PokeCalcKit` のソースを変更していないため未実行
+  (対象外。`PokeCalcCore`/`PokeCalcDesign` のテストに影響する変更は無い)。
+- `xcodebuild build-for-testing -scheme PokeCalc`: 成功(`** TEST BUILD SUCCEEDED **`)。
+- `xcodebuild test -only-testing:PokeCalcUITests/LargeTextLayoutUITests`: 2章のとおり15件中12件成功・
+  3件失敗(失敗3件は1章(1)本体。想定どおりの理由)。
+
+### 5. 実装者への注意(まとめ)
+
+- 本体の直しは `CalcScreenView.presetSegmentedRow`・`ReverseScreenView.presetSegmentedRow` の2箇所
+  (3章1)。`accessibilityIdentifier` は変えないこと。
+- 「詳細」パネル・%表示については本タスクの検査で既に green だったので、実装者が新たに壊さないための
+  回帰テストとして扱う(3章4・5)。
+- `LargeTextLayoutUITests` 以外の既存 XCTest/XCUITest(`AttackerPresetTests`・`KnownDefenderPresetTests`・
+  `CalcScreenUITests.testAttackerPresetPillsFollowCatalogOrderAndDefault` 等)も、ピルの並び順・
+  既定選択・`isHittable` を検査している。縦積みにしても `minXs` の昇順チェックのような既定サイズ限定の
+  アサーションには影響しないはずだが、実装後に必ず全体を実行して確認すること。
+- 完了条件: `xcodebuild test -only-testing:PokeCalcUITests/LargeTextLayoutUITests` の15件が全て成功。
+  `make ios-test` も成功させ、結果をこの章の後ろに追記する。plan.md の P6-15 にチェックを付ける。
+
+### 6. 実装結果(2026-09-25)
+
+- 計算画面の `presetSegmentedRow` と逆算画面の `presetPillContainer`(攻撃側プリセット・既知の防御側プリセットの両方)を、
+  `dynamicTypeSize >= .accessibility1` で縦積み、それ未満で従来の横1行にした(`cardsRow`/`sideSwitch` と同じ閾値)。identifier は不変。
+- `LargeTextLayoutUITests` 15/15 成功。`make ios-test`: unit 449/449、XCUITest 37/37、スキップ 0。
+- critic PASS。critic の懸念「`testCalcScreenResultPercentNotShrunkAtDefaultSize` が縮小を見逃して素通りするかもしれない」は、
+  メインセッションで変異テストをして確かめた。% 表示に `.padding(.leading, 300)` を足して縦向きだけ縮ませると、縦 23.3pt / 横 33.7pt で
+  テストが red になった(元に戻して確認済み)。高さの比較は縮小を検出できる。
+
+## issue #250 の受け入れ条件(`AppConfiguration` の受理条件と ATS の実行時挙動が食い違う。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+- 日付: 2026-09-25 / 担当レーン: iOS / 関連: 本 ADR §5(`AppConfiguration`)、ADR-0500 §5、docs/plan.md P6-16、
+  `AppConfiguration.swift`・`AppConfigurationTests.swift`(既存。変更しない)・`ios/PokeCalc-Info.plist`・
+  `ios/scripts/check-infoplist.sh`
+
+### 0. 何がずれているか(issue #250 の指摘)
+
+`AppConfiguration`(`ios/PokeCalcKit/Sources/PokeCalcCore/AppConfiguration.swift`)は `acceptedSchemes = ["http",
+"https"]` で、スキームが `http`/`https` でホストがあれば URL を無条件に受理する。一方 `ios/PokeCalc-Info.plist`・
+`PokeCalc.xcodeproj` には `NSAppTransportSecurity` が無い。既定の ATS(App Transport Security)は非 TLS
+(`http`)通信を拒否するため、`AppConfiguration` が受理した `http://localhost:8080` のような接続先が実行時に
+通信できない(`AppConfigurationTests.testBackendSelection` の「http」ケースがまさにこの状態を正常系にしている)。
+issue は案A(http を拒否してテストを直す)と案B(`NSAllowsLocalNetworking` 等で ATS 側を開ける)を挙げ、
+既定案はAとしつつ「ローカル API を http で叩く開発が要るなら案B」としていた。
+
+### 0.5 2026-09-25 の見直し(critic 指摘。IP アドレスを対象から外した)
+
+最初の版の §1〜3 は「`NSAllowsLocalNetworking` は IP アドレスも通す」としていたが、critic
+(メインセッション)のレビューで以下の指摘を受け、**IP アドレスを http の受理範囲から外す**方向に修正した:
+
+- Apple のドキュメントの「iOS 17+, iPadOS 17+, macOS 14+」の節は「ATS no longer allows connections to IP
+  addresses by default. Add individual IP addresses and CIDR ranges in the `NSExceptionDomains` dictionary」
+  であり、これは「`NSAllowsLocalNetworking` があれば IP アドレスも通る」という主張の裏付けにならない。
+  旧版が書いていた「`NSAllowsLocalNetworking`(または `NSExceptionDomains`)無しには通らない」という読みは、
+  「`NSAllowsLocalNetworking` があれば通る」への言い換えとしては文書に無い拡大解釈だった(この読みは撤回)。
+  `NSExceptionDomains` は `NSAllowsLocalNetworking` とは別のキーで、個々の IP アドレス/CIDR
+  範囲を明示的に列挙する仕組みであり、今回のタスクの範囲外(実装しない)。
+- メインセッションが iOS 27 シミュレータ + ローカル Python サーバーで実験した: `NSAllowsLocalNetworking =
+  true` のとき、`http://localhost` / `http://127.0.0.1` / Mac の LAN の IPv4 アドレス(値は記録しない)/
+  `http://<Mac のホスト名>.local` はいずれもサーバーに到達した。しかし **`NSAppTransportSecurity` キー自体を
+  一切書かない対照実験でも** `localhost`/`127.0.0.1`/LAN の IPv4 アドレスへの到達に成功しており、この
+  シミュレータ環境では ATS そのものが(少なくともこれらのホストに対して)効いていない可能性が高い。
+  したがって、この実験は「`NSAllowsLocalNetworking` が IP アドレスを通す」ことの確認にはならない
+  (対照群と処置群が区別できていないため。実機での確認は「人間の確認が必要なこと」として plan.md に残す)。
+- 上記2点により、IP アドレスを http で受理する根拠が無くなったため、**保守的に読んで IP アドレスは
+  http では拒否する**方向に変更した(範囲を Apple の文書の記述〈非修飾ドメイン・`.local` ドメインの2つ〉に
+  絞る。ループバック/プライベート帯だから安全、という判断もしない)。
+
+以下の §1〜3 はこの見直し後の内容。
+
+### 1. 判断(A/B の間。ADR として採用する理由。2026-09-25 見直し後)
+
+**採用**: `https` は任意のホストで受理する。`http` は ATS が `NSAllowsLocalNetworking`
+(`ios/PokeCalc-Info.plist` の `NSAppTransportSecurity` に追加)で実際に通す範囲(**非修飾ホスト名と
+`.local` ドメインのみ。IP アドレスは含めない**。§0.5・§2)だけを `AppConfiguration` も受理する。
+それ以外の `http`(IP アドレス・通常の公開ドメイン)は `AppConfigurationError` にする。
+
+理由:
+
+1. **受理条件 == 実行時の挙動**(issue の「達成する結果」そのもの)。案Aだけだと `make dev`
+   (`http://localhost:8080`)を使ったシミュレータでの開発ループが `AppConfiguration` の時点で塞がれる
+   (`docs/runbooks/ios.md` のモック起動だけになり、`docs/plan.md` P6-16 のようなローカル API 接続の確認が
+   iOS レーンで出来なくなる)。案Bを「`NSAllowsArbitraryLoads`」で丸ごと開けると、`AppConfiguration` が
+   `http://pokecalc-attacker.example` のような通常の公開ドメインへの `http` も受理してしまい、受理条件が
+   ATS の実際の挙動より緩くなる(ATS はそれを拒否しないので矛盾は起きないが、平文通信を野放図に許す設定を
+   コードに残すことになり、望ましくない)。
+2. **`NSAllowsLocalNetworking` の対象範囲は Apple のドキュメントに明記されている**(下記2章)ので、
+   `AppConfiguration` 側の判定をその範囲と1対1に鏡写しにできる。ドキュメントに明記が無い IP アドレスは
+   保守的に対象外とする(§0.5)。「案Bだが無制限には広げない」という issue の既定案の裏にある懸念
+   (平文を野放図に許さない)も満たす。
+3. 既存の `AppConfigurationTests.testBackendSelection` の「http」ケース(`http://localhost:8080` → API)は
+   `localhost` が非修飾ホスト名(後述)なので、この判断でも受理され続ける。**既存テストは変更しない**
+   (タスク指示の禁止事項どおり)。`AppConfigurationTests.swift` に http の IP アドレスを使うケースは無い
+   (implementer が確認済み)ので、この見直しで既存テストが壊れることも無い。
+
+### 2. Apple ドキュメントによる `NSAllowsLocalNetworking` の範囲(判断の根拠。実装が鏡写しにする対象)
+
+`developer.apple.com/documentation/bundleresources/information-property-list/nsapptransportsecurity/
+nsallowslocalnetworking` の Discussion(2026-09-25 に確認)より:
+
+> The `NSAllowsLocalNetworking` key controls whether App Transport Security (ATS) allows your app to connect to:
+> - Unqualified domains
+> - `.local` domains
+> - IP addresses using IPv4 or IPv6
+
+かつ「iOS 17+, iPadOS 17+, macOS 14+」の節(原文どおり引用):
+
+> In iOS 17, iPadOS 17, and macOS 14, ATS no longer allows connections to IP addresses
+> by default. Add individual IP addresses and CIDR ranges in the `NSExceptionDomains` dictionary.
+
+**§0.5 の見直し**: 上の Discussion の箇条書きだけを読むと IP アドレスも `NSAllowsLocalNetworking` の対象に
+見えるが、「iOS 17+」の節はそれと矛盾するように読める内容(IP アドレスへの接続は既定で許可されず、許可するには
+`NSExceptionDomains` に個別に追加する必要がある)を書いている。本アプリの対象は iOS 27(Package.swift の
+`platforms: [.iOS(.v27), .macOS(.v27)]`)であり iOS 17+ の節の対象なので、**IP アドレスは
+`NSAllowsLocalNetworking` だけでは通らない前提で扱う**(`NSExceptionDomains` は今回実装しない。
+個々の IP を列挙する仕組みで、本アプリの「開発時にローカル API を叩く」用途に対して具体的な IP を
+ハードコードすることになり、ドメイン規約(IP・ホストをハードコードしない)にも合わない)。
+
+範囲は次の2つ(**IP アドレスは含めない**。旧版はループバック/プライベート帯に限らず IP アドレス全般を
+含めていたが、§0.5 の理由で撤回した):
+
+1. **非修飾ホスト名**(unqualified domain): ホスト名にドットが無い(例 `localhost`・`pokecalc-router`)。
+   FQDN のルート記法(末尾ドット。例 `localhost.`)はドットを含むため非修飾ホスト名として扱わない
+   (「ドットが無い」という記述をそのまま読んだ結果。ルートドットを特別扱いする根拠が文書に無いため)。
+2. **`.local` ドメイン**(Bonjour。例 `foo.local`。大文字小文字は区別しない)。
+
+上記以外(IP アドレス〈IPv4/IPv6〉、およびドットを含み `.local` でも無いホスト名 = 通常の公開ドメイン。
+例 `127.0.0.1`・`::1`・`example.com`・`pokecalc.example.invalid`)は `NSAllowsLocalNetworking` の対象外。
+これは `http` では実行時に拒否される(はずな)ので、`AppConfiguration` でも受理してはいけない。
+
+### 3. 受け入れ条件(検証可能な形。2026-09-25 見直し後)
+
+1. `https://` の URL はホストを問わず(IP・非修飾・`.local`・通常の公開ドメインいずれも)これまでどおり
+   `.api` として受理する(既存 `AppConfigurationTests` を壊さない)。
+2. `http://` の URL は、ホストが次のいずれかのときだけ `.api` として受理する:
+   - ドットを含まない(非修飾ホスト名。例 `localhost`・`pokecalc-router`。末尾ドットが付くと対象外)
+   - `.local` で終わる(大文字小文字を区別しない。例 `foo.local`・`FOO.LOCAL`)
+3. 上記2に当てはまらない `http://` の URL(**IP アドレス〈IPv4/IPv6。例 `127.0.0.1`・`::1`〉を含む**。
+   ドットを含み `.local` でも無いホスト。例 `http://example.com`)は `AppConfigurationError` を投げる。
+   `reason` は `http` であることと ATS(`NSAllowsLocalNetworking`)が理由であることが分かる文言にする
+   (下記テストが `"http"` と `"ATS"`/`"NSAllowsLocalNetworking"` の文字列を含むことを検査する)。
+   IP アドレスかどうかの判定は文字列の形(ドット・コロンの数)ではなく `inet_pton` 相当
+   (`IPv4Address`/`IPv6Address`〈Network フレームワーク〉)で行う。`URL.host` は
+   `http://[::1]:8080` のようなブラケット付き IPv6 リテラルからブラケットを外した `::1` を返す
+   〈`swift -e` で確認済み〉ので、追加のブラケット除去は不要。
+4. `ios/PokeCalc-Info.plist` に `NSAppTransportSecurity` → `NSAllowsLocalNetworking = true` を追加する。
+   `NSAllowsArbitraryLoads` は追加しない(1章2の理由)。`NSExceptionDomains` も追加しない(2章の理由)。
+5. `ios/scripts/check-infoplist.sh`(`make ios-check-infoplist` → `make ios-test` から実行)が、ビルド成果物の
+   `PokeCalc.app/Info.plist` に `NSAppTransportSecurity.NSAllowsLocalNetworking = true` があり、
+   `NSAppTransportSecurity.NSAllowsArbitraryLoads` が無いことを確かめる(本タスクで検査を追加済み。
+   4 の実装が入るまでは赤くなるのが期待どおり)。
+6. 既存の `AppConfigurationTests`(`testKeyNamesMatchADR`・`testBackendSelection`・`testInvalidBaseURLIsAnError`)
+   はすべて成功し続ける(変更しない。`testBackendSelection` の「http」「モック強制は不正な URL より優先」
+   ケースは `localhost`/`not a url` を使っており、この判断でも従来どおりの結果になる)。
+7. **実機での確認は本タスクの範囲外・人間の確認が必要なこと**として扱う(§0.5 のシミュレータ実験は
+   ATS 自体が効いているか確認できず結論が出せなかったため。CLAUDE.md「人間の確認が必要なこと」に相当する
+   実機検証は自動で進めない)。
+
+### 4. 追加したテスト(spec-writer 時点。§0.5・§7 で IP アドレスの扱いを見直した後の版は §7 参照)
+
+`ios/PokeCalcKit/Tests/PokeCalcCoreTests/AppConfigurationATSTests.swift`(新規ファイル。既存の
+`AppConfigurationTests.swift` は変更していない)。
+
+- `testHTTPLocalhostIsAccepted` / `testHTTPLoopbackIPv4IsAccepted` / `testHTTPLoopbackIPv6IsAccepted`
+- `testHTTPDotLocalHostIsAccepted` / `testHTTPDotLocalHostIsAcceptedCaseInsensitive`
+- `testHTTPUnqualifiedHostnameIsAccepted`
+- `testHTTPArbitraryIPAddressIsAccepted`(2章の「ループバック/プライベート帯に限らない」ことの直接確認)
+- `testHTTPPublicHostIsRejected`(`reason` に `"http"` と `"ATS"`/`"NSAllowsLocalNetworking"` を含むことも検査)
+- `testHTTPPublicHostWithPathIsRejected` / `testHTTPSubdomainOfDotLocalLikeButNotLocalIsRejected`
+  (`local.example.com` は `.local` **では終わらない**ので拒否対象。「`.local` を含む」ではなく
+  「`.local` で終わる」判定にすることの回帰止め)
+- `testHTTPSAnyHostIsAccepted`(https は `example.com`・`127.0.0.1`・`localhost` 等どれでも受理する回帰確認)
+
+2026-09-25 時点の実行結果(`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`、
+`ios/PokeCalcKit` ルート): `PokeCalcCoreTests` 447件中3件失敗(想定どおり。すべて3章3の「拒否すべき」テスト)。
+
+```
+testHTTPPublicHostIsRejected
+  XCTAssertThrowsError failed: did not throw an error
+testHTTPPublicHostWithPathIsRejected
+  XCTAssertThrowsError failed: did not throw an error
+testHTTPSubdomainOfDotLocalLikeButNotLocalIsRejected
+  XCTAssertThrowsError failed: did not throw an error
+```
+
+残り444件(既存の `AppConfigurationTests` を含む)はすべて成功しており、既存テストへの影響は無い。
+
+`ios/scripts/check-infoplist.sh` は本タスクで ATS キーの検査を追加した(シェル構文は `bash -n` で確認済み。
+`plutil -extract` の挙動は一時ファイルで検証済み: キーが無いと空文字列を返し、スクリプトは
+`<キー無し>` としてエラーメッセージに出す)。実際の `xcodebuild` を伴う実行(`make ios-check-infoplist`)は
+`ios/PokeCalc-Info.plist` に `NSAllowsLocalNetworking` が無い現状では失敗する想定のため、
+本タスク(spec-writer)では実行していない(実装後に implementer が実行して確認する)。
+
+### 5. 実装者への注意
+
+- 変更してよいのは `AppConfiguration.swift`(判定ロジック)と `ios/PokeCalc-Info.plist`(ATS キーの追加)。
+  `AppConfigurationTests.swift`・`AppConfigurationATSTests.swift` は変更しないこと(後者はこのタスクの
+  受け入れ条件そのもの)。
+- ホストが IP アドレスかどうかの判定は、IPv4 は `inet_pton(AF_INET, ...)` 相当、IPv6 は
+  `inet_pton(AF_INET6, ...)` 相当(Swift では `IPv4Address`/`IPv6Address`〈Network フレームワーク〉、
+  または `inet_pton` を `Darwin`/`Glibc` 経由で直接呼ぶ、のどちらでもよい。`engine/` ではなく
+  `ios/PokeCalcKit` 側のコードなので絶対ルール2〈engine を純粋に保つ〉の対象外)。文字列を `.` や `:` の
+  個数で判定するような簡易正規表現は誤判定(例 `1.2.3` のような不完全な IP や `2001:db8::1` のような
+  短縮 IPv6 を取りこぼす)の余地があるため避けること。
+- 「非修飾ホスト名」の判定は「ホスト文字列にドット(`.`)が1つも無い」で足りる(`localhost`・
+  `pokecalc-router` はドット無し、`foo.local`・`example.com` はドット有り)。IPv6 アドレスは `:` を含み
+  `.` を含まない場合があるため(例 `::1`)、判定の順序は「IP アドレスか」を先に見てから「非修飾ホスト名か」
+  を見るなど、IPv6 アドレスが誤って「非修飾ホスト名」に分類されても実害は無い実装にする
+  (どちらに転んでも1章の範囲内〈受理〉になるため。逆に IPv4 のドットを含むアドレスが誤って
+  「非修飾ホスト名でない」と判定されて拒否されないよう、IP アドレス判定を独立して行うこと)。
+- `.local` 判定は大文字小文字を無視する(`url.host?.lowercased().hasSuffix(".local")`)。
+- エラーメッセージ(`AppConfigurationError.reason`)は既存の `testInvalidBaseURLIsAnError` の文言パターン
+  (`"\(Self.apiBaseURLInfoKey) が不正な URL: \(trimmed)"` 等)に合わせつつ、3章3のテストが検査する
+  `"http"` と `"ATS"`(または `"NSAllowsLocalNetworking"`)を含める。例:
+  `"\(Self.apiBaseURLInfoKey) は http でホストが ATS(NSAllowsLocalNetworking)の対象外: \(trimmed)"`。
+- `ios/PokeCalc-Info.plist` への追加は plist の `<dict>` に `NSAppTransportSecurity` キーとその値の
+  `<dict>` に `NSAllowsLocalNetworking` → `<true/>` を足すだけ(既存の `PokeCalcAPIBaseURL` キーはそのまま)。
+  `NSAllowsArbitraryLoads` は追加しないこと(3章4・critic が指摘するはず)。
+- 完了条件: `swift test`(`ios/PokeCalcKit`)で `AppConfigurationATSTests` を含む全件成功、
+  `make ios-check-infoplist`(または `make ios-test`)成功、`make ios-test` 全体成功。
+  結果をこの章の後ろに「### 6. 実装結果」として追記し、`docs/plan.md` の P6-16 にチェックを付ける。
+
+### 6. 実装結果(implementer, 2026-09-25)
+
+変更したのは §5 で指定された2ファイルのみ(`AppConfigurationTests.swift`・`AppConfigurationATSTests.swift` は
+変更していない)。
+
+- `ios/PokeCalcKit/Sources/PokeCalcCore/AppConfiguration.swift`
+  - `http` スキームのとき、`isAllowedByNSAllowsLocalNetworking(host:)` で受理範囲を判定する処理を
+    `init` に追加した。判定順は §5 の指示どおり「IP アドレスか」を先に見て、次に `.local`
+    (`host.lowercased().hasSuffix(".local")`)、最後に「ドットを含まない(非修飾ホスト名)」。
+  - IP アドレス判定は `Network` フレームワークの `IPv4Address(_:)`/`IPv6Address(_:)`(`inet_pton` 相当)を
+    使い、文字列のドット・コロンの数による簡易判定は行っていない。
+  - 拒否時の `AppConfigurationError.reason` は
+    `"\(apiBaseURLInfoKey) は http でホストが ATS(NSAllowsLocalNetworking)の対象外: \(trimmed)"`
+    (§5 の例文どおり。`"http"` と `"ATS"`/`"NSAllowsLocalNetworking"` の両方を含む)。
+  - 冒頭のドキュメントコメントの表を、https は常に受理・http は ATS 範囲のみ受理・それ以外の http は
+    エラー、の3行に分けて更新した。
+- `ios/PokeCalc-Info.plist`
+  - `NSAppTransportSecurity` → `NSAllowsLocalNetworking` = `true` を追加。`NSAllowsArbitraryLoads` は
+    追加していない。
+
+検証結果:
+
+- `cd ios/PokeCalcKit && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`:
+  `PokeCalcCoreTests` 447件中 447件成功(0失敗)。`AppConfigurationATSTests` の12件(§4)を含め全件成功。
+  §4 に記録された spec-writer 時点の3件の失敗(`testHTTPPublicHostIsRejected`・
+  `testHTTPPublicHostWithPathIsRejected`・`testHTTPSubdomainOfDotLocalLikeButNotLocalIsRejected`)は解消した。
+- リポジトリルートで `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make ios-test`: 成功
+  (`TEST SUCCEEDED`、終了コード0)。`ios-lint`・`ios-gen-check`・`ios-check-request-limits`・
+  `ios-test-unit`・`ios-test-ui`(全37件成功・失敗0)・`ios-check-infoplist` の全ステップが通った。
+  `ios-check-infoplist` の出力:
+  ```
+  ios-check-infoplist: Info.plist に PokeCalcAPIBaseURL = https://pokecalc-check.example.invalid が入っている
+  ios-check-infoplist: NSAppTransportSecurity.NSAllowsLocalNetworking = true・NSAllowsArbitraryLoads 無し
+  ```
+  (3章5・4章末の「4 の実装が入るまでは赤くなる」が解消し、期待どおり緑になったことを確認)。
+
+### 7. 実装結果の訂正(critic 指摘対応。IP アドレスを http の受理範囲から外した。2026-09-25)
+
+§6 まではメインセッション(critic)のレビュー前の実装で、IP アドレスの http を受理していた。
+critic のレビュー(§0.5 に詳細)を受けて、**IP アドレスは http で拒否する**方向に修正した。
+
+- `ios/PokeCalcKit/Sources/PokeCalcCore/AppConfiguration.swift`
+  - `isAllowedByNSAllowsLocalNetworking(host:)` の IP アドレス判定を「受理」から「拒否」に反転
+    (`isIPAddress(host)` が真なら `return false`)。IPv6 アドレス(`::1` 等)がドット無しの
+    「非修飾ホスト名」に誤って分類されないよう、IP アドレス判定は引き続き最初に行う。
+  - 非修飾ホスト名の判定について、末尾ドット(`localhost.` のような FQDN のルート記法)はドットを含むため
+    非修飾扱いにしないことをコメントに明記(§2 の判断を反映。ロジック自体は元から `host.contains(".")`
+    で対応済みだったため、コード変更は無くコメントのみ追加)。
+  - 冒頭のドキュメントコメントの表と `init` 内のコメントを、IP アドレスが受理範囲から外れたことが分かるように
+    更新した。
+- `ios/PokeCalcKit/Tests/PokeCalcCoreTests/AppConfigurationATSTests.swift`(このタスクの受け入れ条件そのもの
+  なので変更可。`AppConfigurationTests.swift` は変更していない。事前に grep で確認: 同ファイルに http と
+  IP アドレスの組み合わせのケースは無く、この訂正で既存テストが壊れる心配は無かった)。
+  - `testHTTPLoopbackIPv4IsAccepted` → `testHTTPLoopbackIPv4IsRejected`、
+    `testHTTPLoopbackIPv6IsAccepted` → `testHTTPLoopbackIPv6IsRejected`、
+    `testHTTPArbitraryIPAddressIsAccepted` → `testHTTPArbitraryIPAddressIsRejected` に変更し、
+    いずれも `reason` に `"http"` と `"ATS"`/`"NSAllowsLocalNetworking"` を含むことを検査する
+    共通アサーション `assertRejectedForATS(_:)` を使うようにした。
+  - `testHTTPTrailingDotHostIsRejected` を新規追加(`http://localhost.:8080` は拒否。§2 の末尾ドットの
+    判断の回帰止め)。`URL(string: "http://localhost.:8080")!.host` が `"localhost."` を返すことは
+    `swift -e` で事前確認済み。
+  - ヘッダーのドキュメントコメントを §0.5・§1・§2 の内容に合わせて書き直した。
+  - `ios/PokeCalc-Info.plist`・`ios/scripts/check-infoplist.sh` は変更していない(IP アドレスの扱いの変更は
+    `AppConfiguration.swift` 側の判定だけの問題で、ATS キー自体〈`NSAllowsLocalNetworking`〉は
+    IP アドレス以外〈非修飾ホスト名・`.local`〉のために引き続き必要)。
+
+検証結果(2026-09-25、訂正後):
+
+- `cd ios/PokeCalcKit && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`:
+  `PokeCalcCoreTests` 448件中 448件成功(0失敗)。`AppConfigurationATSTests` は12件(§4 の11件 +
+  `testHTTPTrailingDotHostIsRejected` の1件)全件成功、既存の `AppConfigurationTests`(3件)も成功。
+- リポジトリルートで `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make ios-test`: 成功
+  (`TEST SUCCEEDED`、終了コード0)。`ios-test-unit`・`ios-test-ui`(全37件成功・失敗0)・
+  `ios-check-infoplist`(`NSAllowsLocalNetworking = true`・`NSAllowsArbitraryLoads` 無しを確認)を含む
+  全ステップが通った。
+
+実機での確認(§3 の7)は本タスクでは行っていない。人間が実機で `http://<Mac の .local 名>:8080` や
+`http://<開発機のホスト名>:8080`(非修飾ホスト名・`.local` のケース)が実際に通ることを確認し、
+IP アドレス(`http://192.168.x.x:8080` 等)は実機でも拒否されるべき(コード側は拒否する。ATS 側も
+拒否するはずだが未確認)ことを合わせて確認するとよい。
+

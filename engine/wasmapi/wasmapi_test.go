@@ -144,7 +144,7 @@ func TestSuccessEnvelopeShape(t *testing.T) {
 	}{
 		{"calc", mustJSON(t, baseCalc()), []string{
 			"rolls", "minDamage", "maxDamage", "minPercent", "maxPercent",
-			"defenderHP", "effectiveness", "stab", "category", "ko",
+			"defenderHP", "effectiveness", "stab", "category", "ko", "unsupported",
 		}},
 		{"calcBulk", mustJSON(t, baseBulk()), []string{"defenderSpeciesKey", "rows"}},
 		{"calcReverse", mustJSON(t, baseReverse()), []string{"side", "stat", "assumedHpSp", "candidates", "exactCount"}},

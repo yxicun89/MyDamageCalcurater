@@ -8,7 +8,7 @@
 // threats はパーティ1体以上・仮想敵1体以上そろったときだけ呼ぶ(ADR-0303 §7)。
 // 4つの呼び出しは互いに独立(1つの遅延・エラーが他の表示を消さない。ADR-0303 §9)。
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { components } from "../api/balance.gen";
 import type { BalanceClient, BalanceResult } from "../api/balanceClient";
@@ -629,25 +629,36 @@ function MemberFields({
   const moves = species === null ? [] : learnsetMoves(species, movesFor(master.moves, member.speciesKey));
   // P4-17b(ADR-0304 A-14.4): 枠ごとの技セレクトの有効・無効(A-13.2 をこの画面に当てはめる)。
   const movesAvailable = movesListAvailable || moves.length > 0;
+  // 見えるラベル(issue 304)の id。枠(MemberFields)は複数出るので固定文字列にしない。
+  const speciesSelectId = useId();
+  const abilitySelectId = useId();
   return (
     <fieldset className="balance-member">
       <legend>{groupLabel}</legend>
       {speciesListAvailable ? (
-        <select
-          aria-label={balanceScreenText.speciesLabel}
-          value={member.speciesKey}
-          disabled={disabled}
-          onChange={(event) => {
-            onSelectSpecies(event.target.value);
-          }}
-        >
-          <option value="" hidden />
-          {master.species.map((candidate) => (
-            <option key={candidate.key} value={candidate.key}>
-              {candidate.nameJa}
+        <>
+          <label className="balance-member__label" htmlFor={speciesSelectId}>
+            {balanceScreenText.speciesLabel}
+          </label>
+          <select
+            id={speciesSelectId}
+            aria-label={balanceScreenText.speciesLabel}
+            value={member.speciesKey}
+            disabled={disabled}
+            onChange={(event) => {
+              onSelectSpecies(event.target.value);
+            }}
+          >
+            <option value="" hidden>
+              {balanceScreenText.speciesPlaceholderOption}
             </option>
-          ))}
-        </select>
+            {master.species.map((candidate) => (
+              <option key={candidate.key} value={candidate.key}>
+                {candidate.nameJa}
+              </option>
+            ))}
+          </select>
+        </>
       ) : (
         <SpeciesSearchField
           label={balanceScreenText.speciesLabel}
@@ -655,7 +666,11 @@ function MemberFields({
           onResolved={onSpeciesResolved}
         />
       )}
+      <label className="balance-member__label" htmlFor={abilitySelectId}>
+        {balanceScreenText.abilityLabel}
+      </label>
       <select
+        id={abilitySelectId}
         aria-label={balanceScreenText.abilityLabel}
         value={member.abilityId}
         disabled={disabled}
@@ -663,6 +678,11 @@ function MemberFields({
           onSelectAbility(event.target.value);
         }}
       >
+        {/* ポケモンを選ぶまで特性の候補が1件も無い(空の枠)。未選択の option は hidden にして
+            一覧(role=option)には出さない(issue 304)。 */}
+        <option value="" hidden>
+          {balanceScreenText.abilityPlaceholderOption}
+        </option>
         {species?.abilities.map((abilityId) => (
           <option key={abilityId} value={abilityId}>
             {findAbilityName(abilitiesFor, master, member.speciesKey, abilityId)}
@@ -670,22 +690,16 @@ function MemberFields({
         ))}
       </select>
       {Array.from({ length: MOVE_SLOTS }, (_, slot) => slot).map((slot) => (
-        <select
+        <MoveFieldSelect
           key={slot}
-          aria-label={balanceScreenText.moveLabel(slot + 1)}
+          label={balanceScreenText.moveLabel(slot + 1)}
           value={member.moveIds[slot] ?? ""}
           disabled={disabled || !movesAvailable}
-          onChange={(event) => {
-            onSelectMove(slot, event.target.value);
+          moves={moves}
+          onChange={(moveId) => {
+            onSelectMove(slot, moveId);
           }}
-        >
-          <option value="">{balanceScreenText.noMoveOption}</option>
-          {moves.map((move) => (
-            <option key={move.id} value={move.id}>
-              {move.nameJa}
-            </option>
-          ))}
-        </select>
+        />
       ))}
       {removable && (
         <button type="button" onClick={onRemove} disabled={disabled} className="balance-member__remove">
@@ -693,6 +707,43 @@ function MemberFields({
         </button>
       )}
     </fieldset>
+  );
+}
+
+interface MoveFieldSelectProps {
+  /** 見えるラベルと accessible name の両方に使う語(「技1」〜「技4」)。 */
+  readonly label: string;
+  readonly value: string;
+  readonly disabled: boolean;
+  readonly moves: readonly { readonly id: string; readonly nameJa: string }[];
+  readonly onChange: (moveId: string) => void;
+}
+
+/** 技1〜4の1枠(issue 304: 見えるラベルを持つ)。 */
+function MoveFieldSelect({ label, value, disabled, moves, onChange }: MoveFieldSelectProps) {
+  const selectId = useId();
+  return (
+    <>
+      <label className="balance-member__label" htmlFor={selectId}>
+        {label}
+      </label>
+      <select
+        id={selectId}
+        aria-label={label}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
+      >
+        <option value="">{balanceScreenText.noMoveOption}</option>
+        {moves.map((move) => (
+          <option key={move.id} value={move.id}>
+            {move.nameJa}
+          </option>
+        ))}
+      </select>
+    </>
   );
 }
 

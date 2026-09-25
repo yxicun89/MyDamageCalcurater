@@ -68,11 +68,11 @@
     },
     {
       "scope": "abilities/items",
-      "reason": "Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2)"
+      "reason": "Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2). Every non-legacy effects.json entry with a type-dependent effect has an apply/control pair (effects/<id>/...; issue #270 / ADR-0120). Champions items/abilities that change damage but are not representable by the effect schema are listed with reasons in tools/golden/unsupported-effects.json and never appear in vectors"
     },
     {
       "scope": "terrain",
-      "reason": "Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Psychic Terrain priority block, Terrain Pulse etc.) are outside the move list"
+      "reason": "Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; the Psychic Terrain priority block is covered by psychic-priority/* (ADR-0123); terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Terrain Pulse etc.) are outside the move list and carry an unsupported mark in the engine (ADR-0123)"
     },
     {
       "scope": "battle",
@@ -129,8 +129,8 @@
   ],
   "files": {
     "fixed.json": {
-      "count": 207,
-      "sha256": "b2918310fafc126b356d8c6f468d4baa2383b5d218181417ef0f111b89228683"
+      "count": 308,
+      "sha256": "c44e0fcf749aa96884108ad88ea436be795a0071cc2faed39de90d8b7e696d44"
     },
     "random.jsonl.gz": {
       "count": 10000,

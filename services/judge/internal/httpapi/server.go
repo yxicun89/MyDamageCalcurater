@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"example.com/pokecalc/services/judge/internal/api"
 	"example.com/pokecalc/services/judge/internal/client"
@@ -29,6 +30,12 @@ type Dependencies struct {
 	// ChoiceScarfItemID overrides judge.DefaultChoiceScarfItemID (ADR-0701 §3). Empty uses
 	// the default.
 	ChoiceScarfItemID string
+
+	// RequestTimeout bounds one whole outspeed-and-ko request's upstream calls (ADR-0707 §2).
+	// Zero (the default) applies no deadline: this keeps every existing internal/httpapi test
+	// that builds Dependencies without this field unaffected. cmd/api/main.go always passes a
+	// positive value (JUDGE_REQUEST_TIMEOUT, default 12s) in production.
+	RequestTimeout time.Duration
 }
 
 // New returns the judge HTTP handler.

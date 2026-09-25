@@ -86,7 +86,7 @@ func Apply(ctx context.Context, db *sql.DB, out Output, versions []SourceVersion
 		q.DeleteRegulations,
 		q.DeleteLearnsets,
 		q.DeleteSpeciesAbilities,
-		q.DeleteItemEffects, q.DeleteAbilityEffects, q.DeleteMoveEffects,
+		q.DeleteItemEffects, q.DeleteAbilityEffects, q.DeleteMoveEffects, q.DeleteMoveMechanisms,
 		q.DeleteMegaSpecies, q.DeleteRemainingSpecies,
 		q.DeleteMoves, q.DeleteItems, q.DeleteAbilities,
 		q.DeleteTypeChart, q.DeleteTypes,
@@ -172,6 +172,11 @@ func Apply(ctx context.Context, db *sql.DB, out Output, versions []SourceVersion
 	}
 	for _, e := range out.MoveEffects {
 		if err := q.InsertMoveEffect(ctx, store.InsertMoveEffectParams{MoveID: e.ID, Effect: json.RawMessage(e.Effect)}); err != nil {
+			return err
+		}
+	}
+	for _, m := range out.MoveMechanisms {
+		if err := q.InsertMoveMechanism(ctx, store.InsertMoveMechanismParams{MoveID: m.MoveID, Mechanism: m.Mechanism}); err != nil {
 			return err
 		}
 	}

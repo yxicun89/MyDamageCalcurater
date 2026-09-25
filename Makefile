@@ -77,6 +77,7 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@cd services && $(GO) vet ./...
 	@cd services && $(GO) vet -tags mysql ./pokedex/...
 	@cd services && $(GO) vet -tags tidb ./record/... ./team/...
+	@cd services && $(GO) vet -tags nats ./calc/...
 	@cd tools && $(GO) vet ./...
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 	@for script in tools/importer/*.sh; do sh -n "$$script" || exit; done
@@ -121,6 +122,14 @@ migrate-down: ## pokedex の DB を全て戻す(破壊的。CONFIRM_DESTROY=<DB�
 		exit 1; \
 	fi
 	@cd services && $(GO) run ./pokedex/cmd/migrate down -confirm "$(CONFIRM_DESTROY)"
+
+.PHONY: migrate-force
+migrate-force: ## pokedex の dirty を解いて版を FORCE_VERSION にする(FORCE_VERSION=<版> CONFIRM_FORCE=<DB名> が必須。人間の確認。docs/runbooks/data.md)
+	@if [ -z "$(FORCE_VERSION)" ] || [ -z "$(CONFIRM_FORCE)" ]; then \
+		echo "migrate-force: FORCE_VERSION=<版> CONFIRM_FORCE=<DB名> を指定すること(migration の状態を書き換える操作)。手順は docs/runbooks/data.md。人間が確認すること" >&2; \
+		exit 1; \
+	fi
+	@cd services && $(GO) run ./pokedex/cmd/migrate force -version "$(FORCE_VERSION)" -confirm "$(CONFIRM_FORCE)"
 
 ## --- record/team DB(migrate。ADR-0211 §4・§5) ------------------------
 .PHONY: migrate-up-record
@@ -172,6 +181,14 @@ test-db: ## pokedex(MySQL)・record/team(TiDB)のDBを使うテスト(POKEDEX_TE
 	@cd services && $(GO) test -tags mysql -p 1 ./pokedex/...
 	@cd services && $(GO) test -tags tidb -p 1 ./record/... ./team/...
 
+.PHONY: test-nats
+test-nats: ## calc-svcのイベント発行を実NATSで検査する(CALC_TEST_NATS_URL が必須。make test には含めない。ADR-0212)
+	@if [ -z "$(CALC_TEST_NATS_URL)" ]; then \
+		echo "test-nats: CALC_TEST_NATS_URL が設定されていない(スキップせず失敗する)" >&2; \
+		exit 1; \
+	fi
+	@cd services && $(GO) test -tags nats -p 1 ./calc/internal/events/...
+
 .PHONY: db-local-up
 db-local-up: ## make dev 用に docker で mysql:9.7.2 を 127.0.0.1:3306 に起動する(パスワードは .env)
 	@./scripts/db-local-up.sh
@@ -179,6 +196,10 @@ db-local-up: ## make dev 用に docker で mysql:9.7.2 を 127.0.0.1:3306 に起
 .PHONY: tidb-local-up
 tidb-local-up: ## make dev 用に tiup playground で TiDB v8.5.8 を 127.0.0.1:4000 に起動し record・team の DB を作る(ADR-0211 §2)
 	@./scripts/tidb-local-up.sh
+
+.PHONY: nats-local-up
+nats-local-up: ## make dev 用に docker で NATS v2.15.0(JetStream 有効)を 127.0.0.1:4222 に起動する(ADR-0212 §2)
+	@./scripts/nats-local-up.sh
 
 ## --- クラスタ / ローカル ---------------------------------------------
 .PHONY: up
@@ -241,6 +262,10 @@ import-k8s: ## k3d 上の CronJob pokedex-import を手動で1回流す(週1回�
 		exit 1; \
 	fi; \
 	kubectl -n pokecalc create job --from=cronjob/pokedex-import "pokedex-import-manual-$$(date +%Y%m%d%H%M%S)"
+
+.PHONY: pokedex-registry-push
+pokedex-registry-push: ## pokedex(server イメージ)をクラスタ内共有レジストリ balance-registry へ digest 固定で push する(タイプバランスレーン issue #237 の依頼。ADR-0018・ADR-0605 と同じ方式)
+	@./scripts/pokedex-registry-push.sh
 
 .PHONY: k8s-render
 k8s-render: ## kustomize で local / cloud / tidb overlay が描画できることを確かめる(apply はしない)

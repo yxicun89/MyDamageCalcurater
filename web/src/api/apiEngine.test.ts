@@ -142,6 +142,7 @@ const apiCalcResult: Schemas["CalcResult"] = {
   stab: true,
   category: "physical",
   ko: { hits: 3, guaranteed: false, chancePercent: 12.34, displayChancePercent: 12.3 },
+  unsupported: [],
 };
 
 /** key を持たない(undefined を入れるのでなく、プロパティごと無い)コピー。省略時の写し方の確認用。 */
@@ -269,7 +270,12 @@ describe("calc: 実体 → ID の写像(ADR-0301 §2)", () => {
   test("成功の応答は CalcResult の形のまま返す", async () => {
     const fetchMock = fakeFetch(() => Promise.resolve(jsonResponse(apiCalcResult)));
     const result = await engineWith(fetchMock).calc(calcRequest);
-    const expected: CalcResult = { ...apiCalcResult, ko: { ...apiCalcResult.ko, chancePercent: 12.34 } };
+    // unsupported は API のみの項目で、Web の CalcResult(engine/types)にはまだ無い(Web はまだ表示しない。
+    // ADR-0123 §6・DECISIONS.md 2026-09-25)。issue 67 の前方互換どおり DTO には混ざらない。
+    const expected: CalcResult = omit(
+      { ...apiCalcResult, ko: { ...apiCalcResult.ko, chancePercent: 12.34 } },
+      "unsupported",
+    );
     expect(result).toEqual({ ok: true, value: expected });
   });
 
@@ -452,7 +458,8 @@ describe("calcBulk", () => {
               nature: { plus: "", minus: "" },
               stats: { hp: 165, atk: 95, def: 100, spa: 115, spd: 105, spe: 90 },
             },
-            result: apiCalcResult,
+            // unsupported は Web の CalcResult にまだ無い(DTO には混ざらない。上と同じ理由)。
+            result: omit(apiCalcResult, "unsupported"),
           },
           {
             preset: "hb_boost",
@@ -463,7 +470,7 @@ describe("calcBulk", () => {
               nature: { plus: "def", minus: "atk" },
               stats: { hp: 197, atk: 85, def: 110, spa: 115, spd: 105, spe: 90 },
             },
-            result: apiCalcResult,
+            result: omit(apiCalcResult, "unsupported"),
           },
         ],
       },
@@ -507,6 +514,7 @@ const apiReverseResult: Schemas["ReverseResult"] = {
       support: 4,
       minPercent: 40.2,
       maxPercent: 47.8,
+      unsupported: [],
     },
     {
       natureClass: "plus",
@@ -520,6 +528,7 @@ const apiReverseResult: Schemas["ReverseResult"] = {
       support: 1,
       minPercent: 44.1,
       maxPercent: 52.0,
+      unsupported: [],
     },
   ],
 };
@@ -960,7 +969,10 @@ describe("契約どおりの 2xx は従来どおり成功(検証で落とさな�
       ),
     );
     const result = await engineWith(fetchMock).calc(calcRequest);
-    const expected: CalcResult = { ...apiCalcResult, ko: { ...apiCalcResult.ko, chancePercent: 12.34 } };
+    const expected: CalcResult = omit(
+      { ...apiCalcResult, ko: { ...apiCalcResult.ko, chancePercent: 12.34 } },
+      "unsupported",
+    );
     expect(result).toEqual({ ok: true, value: expected });
   });
 

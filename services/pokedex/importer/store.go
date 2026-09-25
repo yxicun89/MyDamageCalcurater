@@ -61,9 +61,15 @@ func wrapSchemaNotReady(err error) error {
 // AppliedVersions が失敗したら Apply を呼ばずにそのエラーを返す(force でも呼ばない。
 // 版が読めない = migrate 未実施かもしれない DB にテーブルを作ってしまわないため)。
 // NeedsImport が ErrInvalidInput を返す(incoming の形式が不正)ときも Apply を呼ばない。
+// 比べる版・記録する版には、取得元の版に変換結果の版(OutputVersion)を足したものを使う
+// (取得元が同じでも変換結果が変われば投入する。issue #379・ADR-0122)。
 // 取り込んだら true を返す。
 func RunStore(ctx context.Context, s Store, out Output, versions []SourceVersion, now time.Time, force bool) (bool, error) {
 	applied, err := s.AppliedVersions(ctx)
+	if err != nil {
+		return false, err
+	}
+	versions, err = WithOutputVersion(versions, out)
 	if err != nil {
 		return false, err
 	}

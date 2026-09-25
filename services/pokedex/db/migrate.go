@@ -23,6 +23,14 @@ var Migrations embed.FS
 // errors.Is で参照するため dbmigrate 側の値をそのまま再エクスポートする。
 var ErrDownNotConfirmed = dbmigrate.ErrDownNotConfirmed
 
+// ErrForceNotConfirmed・ErrForceUnknownVersion・ErrForceNotDirty は Force の拒否理由(issue #221)。
+// dbmigrate 側の値をそのまま再エクスポートする。
+var (
+	ErrForceNotConfirmed   = dbmigrate.ErrForceNotConfirmed
+	ErrForceUnknownVersion = dbmigrate.ErrForceUnknownVersion
+	ErrForceNotDirty       = dbmigrate.ErrForceNotDirty
+)
+
 // Up は最新版まで migrate する。差分が無ければ何もしない。
 func Up(dsn string) error {
 	return dbmigrate.Up(dsn, Migrations)
@@ -33,6 +41,13 @@ func Up(dsn string) error {
 // スキーマが未適用の DB に対しては何もせず nil を返す。
 func DownAll(dsn, confirmDatabase string) error {
 	return dbmigrate.DownAll(dsn, confirmDatabase, Migrations)
+}
+
+// Force は途中で失敗して dirty になった DB の dirty を解き、版を version にする(スキーマは変えない)。
+// version は migrations にある版か 0(未適用に戻す)。confirmDatabase が DSN の DB 名と
+// 一致しないときは接続前に ErrForceNotConfirmed を返す。手順は docs/runbooks/data.md。
+func Force(dsn, confirmDatabase string, version int) error {
+	return dbmigrate.Force(dsn, confirmDatabase, version, Migrations)
 }
 
 // Version は現在の migrate バージョンと dirty フラグを返す。migrate が一度も

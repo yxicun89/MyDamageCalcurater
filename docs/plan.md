@@ -226,6 +226,52 @@
   運用レーンが到達経路(Tailscale Operator の ingressClass か subnet router + tailscale serve か)を選び、
   実際の名前が決まってから。今はコード変更不要。着手のタイミングは運用レーンの選定後
 - [x] P4-22 issue #72(ルートの `make e2e` が未実装スタブのまま「テスト0件で成功」する)。**完了(2026-09-25。Web レーン。API+Web 共同担当)**: ADR-0306 に従い `scripts/e2e.sh` を実装(常時3件 `web-e2e`/`web-e2e-online`/`web-e2e-balance` を必ず実行し、kubectl のコンテキストが `k3d-$CLUSTER` のときだけ `api-smoke`/`web-k3d-smoke`/`web-k3d-e2e` を追加実行。`E2E_REQUIRE_K3D=1` あり)。ルート Makefile の `e2e` を `CLUSTER=$(CLUSTER) ./scripts/e2e.sh` に配線、`docs/test-strategy.md`・`README.md` を実装内容に合わせて更新。`bash scripts/e2e_test.sh` は80/80 passed
+- [x] `make e2e` の `web-e2e-online` 修復・PR1(2026-09-25。Web レーン。issue 無し。ブランチ
+  `fix/web-online-e2e-master-export`)。**完了・critic PASS。ただし `make e2e`(`web-e2e-online`)は
+  まだ緑にならない(PR2 で対応。下記)**。
+  P4-22 で常時実行になった3件のうち `web-e2e-online` が main で壊れていた(calc-svc が起動できない)。原因は
+  ADR-0204(相性表は MasterExport 本体に含める・`CALC_TYPECHART_PATH` は廃止)に Web 側の書き出しが
+  追従していなかったこと: (1) `web/playwright.online.config.ts` が廃止済みの `CALC_TYPECHART_PATH` を渡す
+  → calc-svc が起動を拒否する (2) `web/src/master/exportSnapshot.ts` の `toCalcSnapshot()` の出力が
+  ADR-0204 以前の暫定スキーマのままで、`MasterExport`(`dataVersion`/`types`/`typeChart`、`MasterSpecies` の
+  `showdownId`・`type1`/`type2`・`abilities[{slot, abilityId}]`、`MasterMove.effect`、効果のキーの
+  PascalCase)を満たさない (3) 例データの技・持ち物・特性の ID がハイフンを含み、共通マスタの
+  `codeIDPattern`(`^[a-z0-9]+$`)で弾かれる。calc-svc の契約を正として Web 側を写像する形で修正
+  (契約は緩めていない。`services/`・`api/openapi.yaml`・`testdata/golden/typechart.json` は無変更)。
+  `node scripts/export-example-master.mjs` の出力を実際に `go run ./calc/cmd/calc` に読ませ、
+  `/healthz` 200・`/api/calc` が契約レベルのバリデーションまで到達することを確認済み(=マスタのロード自体は成功)。
+  critic PASS(mutation testing 4件、うち2件〈defAbsorbTypesの入れ子変換・相性表の欠けた組の既定値〉は
+  未到達分岐だったため専用のテストを追加してから確認)。
+  **PR2 に持ち越し(最優先。#308 以降はPR2が緑になるまで着手しない。オーケストレーター決定 2026-09-25)**:
+  `npm run e2e:online` はまだ2件ともタイムアウトする。原因は今回の修正とは別の、P4-16 以降の既存の設計不整合
+  (オンラインモードの `main.tsx` は pokedex-svc の公開API に依存するが、`web-e2e-online` は calc-svc しか
+  起動しない。calc-svc は pokedex ルートを意図的に404で返す設計。`registerPokedexNotFoundRoutes`、
+  critic指摘R1で確定済み)。方針は e2e専用の軽量 pokedex フィクスチャサーバーを Web 側に新設し、
+  `API_PROXY_TARGET` を pokedex パスと calc パスで振り分ける(calc-svc/pokedex-svc 本体には触れない。
+  詳細は ADR-0301 §5 追記)。
+  **申し送り(J1。critic指摘、ブロッカーではない)**: `web/src/master/exportSnapshot.ts` の
+  `CalcSnapshot`/`CalcSnapshotSpecies`等は生成済みの契約型(`web/src/api/openapi.gen.ts` の
+  `components["schemas"]["MasterExport"]`)の手書きの写し。`exportSnapshot.contract.test.ts` が
+  毎回 `api/openapi.yaml` を読んで突き合わせるのでズレは検知できるが、`type CalcSnapshot =
+  Schemas["MasterExport"]` に寄せるか型レベルの一致アサーションを足すと、より一枚岩になる
+  (次に触るときの検討事項)。
+- [x] `make e2e` の `web-e2e-online` 修復・PR2(**完了・critic PASS(2回目。1回目FAIL→修正)、2026-09-25**。
+  Web レーン。issue 無し。ブランチ `fix/web-online-e2e-pokedex-fixture`。ADR-0307)。E2E 専用の軽量 pokedex
+  フィクスチャ(`web/e2e/support/pokedexFixture.ts`。応答生成はHTTPを知らない純粋関数+`pokedexFixtureServer.mjs`
+  でHTTP待ち受け)を新設し、`POKEDEX_PROXY_TARGET` で `/api/pokedex` を `/api`(calc)より前に振り分ける
+  (`vite.config.ts`、既存の`/api/balance`と同じパターン)。`online.spec.ts` を種族の検索欄
+  (ADR-0304 A-4・A-10。`selectMatchupBySearch`)に追従させ、「持ち物の候補も比較」がオンラインでは常時
+  disabled(ADR-0304 A-1)であることを確認する形に更新。calc-svc / pokedex-svc 本体・`api/openapi.yaml`は無変更。
+  **`cd web && npm run e2e:online` を実際に実行し3件とも緑、`npm run e2e`(オフライン)も35件とも緑(無回帰)を
+  実機確認済み**。`cd .. && make e2e` も web-e2e/web-e2e-online/web-e2e-balance すべて緑(k3d起動済み環境では
+  api-smoke/web-k3d-smoke/web-k3d-e2eも緑、参考情報)。
+  **critic 1回目FAIL→修正**: (1) `web/playwright.container.config.ts` に `testMatch` が無く、本PRで新設した
+  `e2e/support/*.test.ts` を拾って `make web-e2e-container` が壊れていたのを、`playwright.config.ts`と同じ
+  `testMatch: ["**/*.spec.ts"]` を追加して修正(`--list` がexit 0・46件を確認)。(2) `POKEDEX_PROXY_TARGET`の
+  振り分けが単体テストで守られておらず(`vite.config.ts`のルールを削除してもvitestが全緑のままだった)、
+  `web/src/deploy/viteProxy.test.ts`に3ケース追加して固定(mutationで実際に検知することを確認)。
+  軽微(learnsetがID昇順でない簡略化)はADR-0307 §3に注記、`pokedexFixtureServer.mjs`のtry/finally化は直接修正。
+  `cd web && npx vitest run` 1598/1598 green、tsc・lintともにエラー無し。
 - [x] issue #71 の Web 側(攻撃側プリセットの単一化。ADR-0114)。**完了(2026-09-25。Web レーン)**: データレーン
   が `engine/presets/attacker.json`(embed)を唯一の正にした(PR #346)のを受け、
   `web/src/domain/attackerPresets.contract.test.ts` を新規追加。ハードコードした期待値と比較する既存の
@@ -245,6 +291,186 @@
   (2)タブ列を左端・右端までスクロールし、先頭・末尾のタブが表示領域に収まることを確認(centered flexbox
   overflow clippingの回帰ガード)。CSSを戻すと両方とも実際に検知することを確認(確認後に復元)。
   `web/e2e/a11y.spec.ts`(タブのキーボード操作)・vitest 1262件・lintは無回帰(22/22 green)。
+- [x] issue #306(計算画面のタイプ名のコントラストとダメージバーの読み上げ名。Web レーン)。**完了・critic PASS
+  (2026-09-25)**: ブランチ `fix/web-issue-306-type-badge-contrast`。
+  タイプ名は文字色にタイプ色を使うのをやめてバッジ化し(背景 = タイプ色、文字 = `--type-<id>-ink`)、
+  ダメージバーは %幅 を同じ行に併記済みなので装飾(`aria-hidden`、`role="meter"` を外す)にする方針を
+  `docs/design.md`(「タイプバッジ」の新設・「画面: ダメージ計算」への追記)に記録。
+  失敗するテストを先に追加(`web/src/styles/typeBadgeContrast.test.ts` 新規、`tokens.test.ts`・
+  `CalcScreen.test.tsx`・`web/e2e/calc.spec.ts` を更新)。
+  実装: `web/src/styles/tokens.css` に18タイプ分の `--type-<id>-ink`(design.md 転記、ダークで上書きしない)を追加、
+  `web/src/screens/CalcScreen.tsx` のタイプ名 `<li>` を背景 `var(--type-<id>, var(--border-hairline))`・
+  文字色 `var(--type-<id>-ink, var(--text-primary))` のバッジに変更(未知タイプIDは既定値にフォールバック)、
+  `CalcScreen.css` に `.calc-card__type` のピル装飾を追加、ダメージバーの `div` から
+  `role="meter"`/`aria-value*` を外し `aria-hidden="true"` + `data-testid="damage-bar"`(fill 側は
+  `data-testid="damage-bar-fill"`)に変更。critic指摘の軽微1件(ダメージバーの技タイプ色`var(--type-${moveType})`
+  にフォールバックが無かった。今回の差分ではなく既存コードだが、ついでに`var(--type-${moveType},
+  var(--text-secondary))`へ修正)は直接修正。`cd web && npx vitest run` 1341 passed(0 failed)、
+  `npx tsc --noEmit` エラー無し、`npm run lint` エラー無し。テストファイル・design.md は変更していない。
+  **iOSレーンへの申し送り(critic指摘)**: design.mdの「タイプバッジ」節はiOSも同名トークン(`typeInk(_:)`)
+  を持つ前提で書かれているが、2026-09-25時点でiOS側にタイプ色自体がまだ実装されていない
+  (`ios/`にタイプ色の16進値0件)。iOS側でタイプ名を表示する画面ができたときに、design.mdの18タイプ分の
+  文字色の表を移植する必要がある
+- [x] issue #275(重大度 high。逆算の「受けたダメージ」で自分の耐久が無振り固定・画面にも出ない)。
+  **完了・critic PASS(2026-09-25。Web レーン。ブランチ `fix/web-issue-275-reverse-defender-preset`)**:
+  自分側カードに防御側プリセット(ADR-0009 §1 のカタログ8件)を出し、既定は `none`(無振り)のまま = 既定時の
+  リクエストは今までと同じ(回帰無し)。選択肢は技の分類で絞り(物理 = B 系、特殊 = D 系、変化技 = none/hp)、
+  分類が変わったら対のプリセットへ読み替える(`defenderPresetForCategory`。state は元のキーを保持したまま
+  表示だけ読み替えるので、物理→変化→物理と戻すと元のプリセットが復活する)。新しいテスト:
+  `web/src/domain/defenderPresets.test.ts`(挙動の固定)・`defenderPresets.contract.test.ts`
+  (`engine/bulk.go` の `DefenderPresetCatalog()` と `api/openapi.yaml` の enum を読む契約テスト)・
+  `ReverseScreen.test.tsx`(UI とリクエストの回帰)。engine への一本化
+  (`engine/presets/defender.json`)は DECISIONS.md 2026-09-25 でデータレーンへ申し送り済み、
+  `defenderPresetForCategory`(engine に無いWeb限定の読み替え規則)は ADR-0009 §1 に追記して根拠を残した。
+  critic PASS(mutation testing 2/3 kill。`flushObservationDebounce()` を守るテストが無いのは
+  `selectAttackerPreset` 側にも元々あった既存の穴で、今回の退行ではない。次に触るときに攻撃側・防御側
+  両方へテストを足すとよい)。`cd web && npx vitest run` 1419/1419 green、tsc・lintエラー無し。
+- [x] issue #304(重大度 medium。計算・逆算・タイプバランスの入力に見えるラベルが無く、初見でどれが
+  攻撃側・防御側・技・観測値か分からない。WCAG 2.2 SC 3.3.2 / SC 2.5.3)。**完了・critic PASS
+  (2026-09-25。Web レーン。ブランチ `fix/web-issue-304-visible-labels`)**: 受け入れ条件と失敗する
+  テストを先に用意(`web/src/screens/visibleLabels.test.tsx`・`web/src/i18n/visibleLabels.test.ts`・
+  `web/src/styles/inputTokens.test.ts`、共通の道具 `web/src/test/accessibleName.ts`)。
+  設計は docs/design.md「入力のラベル」に記録済み(領域の見える見出し・h2/h3 の階層・`label for` の
+  見えるラベル・accessible name は「<見出しの語>の<ラベルの語>」を文言資源で組み立てる・未選択 option の
+  文言・観測欄の説明文・入力/ピルの角丸トークン)。実装完了(1534/1534 green)。
+  **critic 1回目FAIL→修正**: (1) `web/e2e/mobile.spec.ts` の見出しレベル検査(h2→h3。calc.spec.ts と
+  同じ形)が未追従だったので修正。あわせて同ファイルの `focusedCalcZone` ヘルパーが `[aria-label="攻撃側"]`
+  という属性セレクタで区画を判定していたが、計算画面のカードは `aria-labelledby`(見える h2 を参照)に
+  変わったため引けなくなっていたのを修正(`aria-labelledby` の参照先の文字も見るように)。
+  (2) 逆算の観測欄で、見えるラベルと説明文(hint)がどちらも grid の全幅行を要求するため、`grid` の
+  自動配置で入力欄と単位ラジオ・削除ボタンが別々の行に分かれてしまっていた(jsdom では検出できない
+  レイアウト崩れ。実ブラウザで確認)。hint の DOM 位置を単位ラジオの後ろへ移し(`aria-describedby` は
+  DOM順に依存しないので支援技術への影響なし)、`.reverse-observation__label` に `grid-column: 1 / -1`
+  を追加して解消。`e2e/reverse.spec.ts` の検証メッセージの accessible description の期待値も、
+  hint が `aria-describedby` に加わった分を反映して更新(検証メッセージ自体の確認は維持。弱めていない)。
+  (3) オンラインの種族検索欄(`SpeciesSearchField.tsx`)がplaceholderだけで見えるラベルが無く、
+  issue #304 の症状が本番のオンラインモードに残っていたのを、短い見えるラベル(「ポケモン」)を追加して解消。
+  `npx playwright test`(オフライン、35/35)・vitest(1534/1534)は無回帰。
+  **申し送り(critic指摘の重要事項)**: `web/src/styles/inputTokens.test.ts` は「design.mdの値から
+  `:root` で最初にその値を持つ変数名を逆引きする」設計で、`--radius-input`(12px)と
+  `--font-size-caption`・`--space-3`(いずれも12px)が値を共有するため、`:root` の宣言順に依存する
+  脆さを持つ(今回は宣言順の入れ替え〈値は不変〉で対応。critic が宣言順を戻すと実際に失敗することを
+  確認済み)。次にトークンを足すときに同じ値の衝突が再発しうるので、触るときは
+  `inputTokens.test.ts` の逆引きを変数名ベースに直すことを検討する。
+- [x] issue #308(重大度 medium。オンラインでマスタの読み込みに失敗すると、タブ一覧ごと消えて
+  `<p role="alert">` 1行だけになり、再試行も切り替えの案内も無い。計算モードは localStorage に残るので
+  リロードしても同じ失敗画面から抜けられない)。**完了(2026-09-25。Web レーン。ブランチ
+  `fix/web-master-load-retry-308`)**: 受け入れ条件と失敗するテストを先に用意
+  (`web/src/App.masterSources.test.tsx` に8件〈既存の失敗時テスト1件を拡張 + 新規7件〉、
+  文言は `web/src/i18n/ja.ts` の `appText` に `masterLoadErrorDetailLabel`・`masterLoadRetryLabel`・
+  `masterLoadSwitchToOfflineLabel` を追加)。方針は自動フォールバックを入れず(ADR-0301 §4)、
+  失敗の案内に原因(受け取った `Error` の message)と「再試行」「オフラインに切り替える」を出し、
+  タブ一覧は失敗中も残して、マスタを使わない「素早さ」画面(ADR-0604 §5)を選べるようにする。
+  実装(ADR-0304 追記6): `web/src/App.tsx` に `retryToken` state(「再試行」で同じ取得口を読み直す
+  トリガー)と `MasterLoadFailureNotice`(原因・再試行・オンラインのときだけ「オフラインに切り替える」)を追加。
+  `app/routes.ts` の `SCREEN_ROUTES` に `usesMaster: boolean` を足し(`screenUsesMaster`・
+  `isMasterlessScreen` を追加)、マスタを使わない画面(素早さ)だけ `app/screens.tsx` の
+  `MASTERLESS_SCREEN_COMPONENTS`(`ScreenProps` から `master` を除いた `MasterlessScreenProps`)経由で
+  失敗中も描画する(`ScreenProps.master` 自体・計算/逆算/タイプバランス/判定の4画面の Props は無変更)。
+  `npx vitest run`(1605/1605)・`npm run typecheck`・`npm run lint`(eslint + prettier)は無回帰。
+  **critic PASS(mutation testing 7件で全て検知)**。指摘のうち次の3件はそのままマージ前に直接反映した:
+  `MasterlessScreenProps` から `engine` も除く(`Omit<ScreenProps, "master" | "engine">`。マスタ失敗中に
+  offline のプレースホルダ engine を静かに渡すと、オンライン選択中なのに実は WASM で計算する形になり
+  ADR-0301 §4 の自動フォールバック禁止に抵触しかねないため)/ JSX 内 IIFE を `MasterlessActiveScreen` の
+  事前算出に書き換え / `error.message` が空文字のときは原因の行ごと出さない。
+  **申し送り(次回以降の改善候補。今回は見送り)**: (1) 「再試行」を押しても応答が届くまで画面が変わらず
+  連打で多重リクエストになりうる(pending state を追加して「読み込み中…」に戻す設計が要る)。
+  (2) 「素早さ」タブを選んでいる間は失敗の通知・再試行ボタンがどこにも出ない(他のタブに移れば出るので
+  受け入れ条件は満たすが、タブパネルの外に出す方が issue の意図に近い)。
+- [x] issue #305(重大度 medium。逆算で観測を厳密に説明できる候補(`exact`)が1件も無くても、その旨の案内が
+  無く、候補ごとの「近い候補」ラベルと SP 範囲だけが並ぶ。%欄が「その候補で撃ったときの予測ダメージ%」で
+  あることの説明も無い)。**完了(2026-09-25。Web レーン。ブランチ `fix/web-reverse-no-exact-candidates-305`)**:
+  受け入れ条件と失敗するテストを先に用意(`web/src/screens/ReverseScreen.test.tsx` の
+  `describe("結果の表示")` に6件追加〈新規の案内・「参考」の印・「予測」のラベルの3件が red、
+  候補一覧を消さないこと・正常系・候補0件の3件は現状の挙動の回帰ガードとして green〉。文言は
+  `web/src/i18n/ja.ts` の `reverseResultText` に `noExactCandidateNotice`・`referenceRangeLabel`・
+  `predictedPercentLabel` を追加)。方針は engine の一致判定に触れず(ADR-0300 §8「Web は返ってきた値を
+  加工せずに表示する」)、`ReverseResult.exactCount` をそのまま見て表示だけを変える。候補一覧は消さずに
+  残す(要件「候補の提示を優先」)。実装: `ReverseScreen.tsx` の `ReverseResultsList` に
+  `exactCount === 0 && candidates.length > 0` のときだけ role=status の案内・SP 範囲への「参考」の印を出し、
+  %欄には常に「予測」のラベルを値と別要素で添える(`"40.2〜47.8%"` の完全一致は維持)。
+  `ReverseScreen.css` に見た目を追加(tokens.css の変数のみ使用。常時アニメーションなし)。
+  `web/src/i18n/ja.ts` と `ReverseScreen.tsx` のコメント中の `issue #305` は
+  `web/src/styles/noColorLiterals.test.ts` の16進色リテラル検出(`#` + 3桁hex)に誤検出されるため
+  `issue 305`(# なし)表記に修正(他の issue コメントと同じ慣習)。
+  `npx vitest run ReverseScreen` 94件・`npm test` 1611件・`npm run typecheck`・`npm run lint`
+  (eslint + prettier)いずれも green。
+- [x] issue #248(重大度 low。計算画面のオンライン計算(`/api/calc/bulk`)に `AbortSignal` を渡しておらず、
+  入力を連続して変えても古い要求が中断されずサーバーに無駄な計算をさせる。gateway の取り消し伝播は
+  issue #113 で実装済みだが、計算画面〈`CalcScreen.tsx`〉は当時 `cancelled` フラグで結果を無視するだけで、
+  逆算画面〈`ReverseScreen.tsx`〉と違って `AbortController` を渡していなかった)。
+  **完了(2026-09-25。Web レーン。メインセッションで直接実装、軽微な作業のため spec-writer/implementer は
+  介さず。CLAUDE.md「軽微な作業はメインのみでよい」)**: `ReverseScreen.tsx` と全く同じ形
+  (effectごとに `AbortController` を作り、`engine.calcBulk(request, controller.signal)` へ渡し、
+  cleanupで `controller.abort()`)を `CalcScreen.tsx` に追加。`web/src/test/fakeEngine.ts` の
+  `PendingBulk`(`createDeferredEngine` が返す)に `signal` フィールドを追加(`PendingReverse` と同じ形。
+  `calcBulk` に渡された signal を記録)。回帰テストは `CalcScreen.test.tsx` の
+  `describe("結果の表示(engine の値を加工せずに出す)")` に1件追加(「入力を変えると、前の calcBulk 要求を
+  abort する」。実装前は red であることを一時的に `CalcScreen.tsx` の変更だけ `git stash` で戻して確認済み)。
+  `npx vitest run CalcScreen.test` 33件・`npm test` 1612件・`npm run typecheck`・`npm run lint`
+  (eslint + prettier)いずれも green。**critic PASS**(sonnetで実施。opusのセッション利用枠が一時的に
+  上限に達したため、CLAUDE.mdのモデル割り当て方針〈engine・逆算・DB・API契約に関わるときだけOpus〉に従い
+  sonnetへ切り替え。mutation testing 2件で全て検知、WASM側の無回帰も`wasmEngine.test`29件で確認済み)。
+- [x] issue #218(重大度 medium。`web/src/App.tsx` がタブごとに `SCREEN_COMPONENTS[tab]` で別のコンポーネント型を
+  描くため、タブを切り替えるたびに前の画面が unmount され、選んだ種族・技・持ち物・プリセット・観測が消える。
+  ブラウザの戻る/進むでも同じ。requirements.md §2「入力の手間を最小にする」に反する)。
+  **完了(2026-09-25。Web レーン。ブランチ `fix/web-tab-state-persistence-218`)**:
+  受け入れ条件と失敗するテストを先に用意した(spec-writer)。設計判断は **ADR-0308**(新規)にまとめた:
+  (1) 5画面を全部 mount する issue の既定案は採らず、**一度でも選ばれたタブの画面だけを mount して以後
+  unmount しない**(`SpeedScreen` はマウント時に speed API を2本呼ぶ〈ADR-0604 §2〉ので、未訪問の画面の
+  通信を起こさない)。(2) 非選択の画面は**ネイティブの `hidden` 属性**で隠し、`role="tabpanel"` は1つのまま
+  (既存の `queryByRole(...).toBeNull()`・`aria-controls` のアサーションを書き換えずに済む。絶対ルール6)。
+  (3) 計算モードの切り替えでマスタが入れ替わったら、マスタを使う画面は**作り直す**(古いマスタで計算した
+  結果が残るのを避ける。ADR-0304 §追記 A-6・issue #308 の既存テストの線を動かさない)。issue の異常系の
+  「他の入力は保持する」は採らず、「マスタに無い種族が選ばれたまま残らない」として満たす。
+  (4) 保持はセッション内だけ(リロードで初期状態。入力をストレージに書かない)。
+  テスト: `web/src/App.tabPersistence.test.tsx`(新規11件。往復・戻る/進む・hidden の隠し方・
+  未訪問の画面の通信なし・マスタ入れ替えでの初期化・リロードでの初期化)、`web/src/App.test.tsx` に往復1件、
+  `web/e2e/routing.spec.ts` に2件(非選択の画面が DOM に残ること・実ブラウザの戻る/進む)。
+  **実装(implementer)**: `web/src/App.tsx` のレンダー部だけを変更(各画面・`app/screens.tsx`・
+  `app/routes.ts` は無変更)。App が新たに持つ state は `visitedTabs`(選ばれたタブの集合)1つだけ
+  (ADR-0308 §影響のとおり)。タブの選択(クリック・キーボード・popstate)はすべて共通の `selectTab` を
+  通し、`setTab` と同時に `visitedTabs` へ足す。`role="tabpanel"` の中で `visitedTabs` に含まれる
+  各タブを1つずつ `<div hidden={...}>` に包んで並べ、選択中でないものだけ `hidden` を付ける(決定2)。
+  決定3(マスタが入れ替わったら作り直す)は、`visitedTabs` 自体をリセットするのではなく、マスタを使う
+  各画面の React `key` に `masterEpoch`(モードごとに別マスタを持つときだけ `mode` の値、単一マスタなら
+  常に `"single"`)を含めて、マスタが実際に入れ替わったときだけ React に作り直させる形にした。
+  `npx vitest run App` 113件・`npm test` 1624件・`npm run typecheck`・`npm run lint`(eslint + prettier)
+  いずれも green(実装前の7 red が0件になり、既存の1617件は無回帰)。`make web-e2e`
+  (`web/e2e/routing.spec.ts` の新規2件を含む)は37件すべて green(a11y.spec.ts も無回帰)。
+  本体コードのコメントに issue 番号を書くときは `#` を付けない(`web/src/styles/noColorLiterals.test.ts` の
+  16進色リテラル検出が `#218` を拾うため。issue #305 と同じ)。
+  **critic FAIL(2点)**: (a) `masterEpoch` はデッドコードだった。固定値にしても全1624件 green(検知
+  できない)。理由: モード切替で取得口(`activeMasterSource`)が変わると `currentMasterLoad` が一旦
+  `null` になり(ADR-0304 §追記 A-6)、`{currentMasterLoad !== null && (...)}` で `.app-tabs`
+  サブツリーごと unmount される(ADR-0304 §追記 A-6 の既存挙動)ため、epoch を key に混ぜなくても
+  取得口が変わる経路では必ずサブツリーが作り直される。(b) `visitedTabs` は App 直下の state のままで、
+  サブツリーの unmount/mount を生き延びるため、マスタ再読み込みのたびに「訪問済みの非選択タブ」が
+  hidden のまま一斉に再マウントされ、SpeedScreen のマウント時 speed API 呼び出しが再度走っていた
+  (critic 実測: 2件→4件)。
+  **critic FAIL への対応(2026-09-25。Web レーン。同ブランチで直接修正)**: `masterEpoch` を削除し、
+  マスタを使う画面・マスタ不要画面(`isMasterlessScreen`)とも `key={id}` に統一(軽微指摘1: 失敗中→
+  成功への「再試行」で SpeedScreen が不要に作り直されるのも解消)。`visitedTabs` の置き場を App 直下から
+  `AppTabPanel`(`.app-tabs` サブツリーの中、`{currentMasterLoad !== null && <AppTabPanel .../>}` の
+  内側に置いた新規の子コンポーネント)へ移した。これにより、取得口が変わって `currentMasterLoad` が
+  `null` を経由するたびに `AppTabPanel` ごと作り直され、`visitedTabs` も選択中のタブだけへ自動的に
+  リセットされる(取得口が変わらない「再試行」では `null` を経由しないので保たれる)。`tab` prop の
+  変化を `visitedTabs` へ反映する処理は、`useEffect` 内の `setState` だと
+  `react-hooks/set-state-in-effect` に触れるため、React の「レンダー中の state 更新」パターン
+  (前回の `tab` を `useState` で覚え、レンダー中に差分を見て `setVisitedTabs` する)で実装した。
+  ADR-0308 決定3に実現手段の説明を追記、状態を「提案」→「採用」に更新。
+  回帰テスト: `web/src/App.tabPersistence.test.tsx` の「計算モードを切り替えてマスタが入れ替わると…」
+  テストに、切替前に攻撃側・防御側の両方を選んで実際に計算結果を出すステップを追加(従来は結果を
+  一度も出さないまま `queryByRole("list", { name: "計算結果" })` が `null` であることを確かめる
+  空振りのアサーションだった)。「素早さタブを訪問後にマスタが入れ替わっても、speed API を呼び直さない」
+  を新規追加(criticのプローブと同型: 素早さタブを訪問→計算タブへ戻る→モード切替で `speedCallCount`
+  が増えないことを確認)。`web/src/App.tabPersistence.test.tsx` は11件→12件。
+  mutation testing 3種(`masterEpoch` 相当の判定〈`AppTabPanel` の再作成条件〉を固定する・`hidden`
+  条件を `false` 固定にする・`visitedTabs` によるフィルタを撤去する)を当て、追加した回帰テストが
+  それぞれ落ちることを確認してから元に戻した。
+  `origin/main` をマージ後、`npx vitest run` 1625件(1624 + 新規1件)・`npm run typecheck`・
+  `npm run lint`(eslint + prettier)いずれも green。
+  **Next(critic)**: レビュー待ち。
 
 ## M2: 保存・構築
 
@@ -269,18 +495,42 @@
   TidbCluster・TidbInitializer が実際に Ready/Completed になることを確認する)。TidbInitializer の
   `tnir/mysqlclient` イメージは amd64 専用(上流がそれしか提供していない)で、Apple Silicon の k3d
   ノードでの起動可否(QEMU エミュレーション経由)も未確認
-- [ ] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)。
+- [x] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)。
   ストリームの `max_age` は7日、イベントに発生時刻(`occurred_at`)を載せる(ADR-0209 §7・#6)。
   record-svc と team-svc(P5-4)は**別々の durable consumer**を持つ(同じ consumer を共有すると配送が分かれ
   record-svc が計算イベントを取りこぼす。ADR-0209 §4)。
   バージョン固定・ローカル/k3d 導入・ストリーム設定(Retention は Limits。ADR-0209 §3 #6 の
   文言からの意図的な逸脱で理由は ADR-0212 §4)・イベントのワイヤフォーマット(`services/internal/calcevents`。
   `calc` は個体・技・状況・ダメージ幅まで、`calcBulk`/`calcReverse` は envelope のみ)は ADR-0212 で確定
-  (critic 3ラウンド)。実装はこれから
-- [ ] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰)。
+  (critic 3ラウンド)。実装は critic 2ラウンド(第1回 FAIL→修正、第2回 PASS)で実 NATS を使い
+  発行・drain・起動非ブロックまで確認済み。
+  P5-3/P5-4 は `services/internal/calcevents.Event`・ストリーム名 `CALC_EVENTS`・
+  subject `calc.events.<device_id>` をそのまま前提にする(at-least-once 配送。消費側は冪等に実装すること)。
+  **残作業**: P5-1 と同じく、共有 k3d クラスタへの実適用(`deploy/k8s/overlays/local` の NATS
+  StatefulSet が実際に Ready になること・他レーンの Pod に影響しないこと。ADR-0212「人間の確認が
+  必要なこと」・AC-N4)は未実施(このセッションではローカルの `docker run`〈`scripts/nats-local-up.sh`〉
+  でのみ確認した)。次に `make up` を実行するときに確認する
+- [x] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰。critic 2ラウンド。1回目 FAIL〈重大1・重要3〉→修正→2回目 PASS〈軽微4件〉、軽微も反映済み)。
   ADR-0209 §5.3 の契約を `api/openapi.yaml` に入れて `make gen`(`store_unavailable` の追加を含む)→
-  分離(§6)・全削除(§5)・失効ジョブ(§4)・ログ(§3)を実装。時間減衰の半減期は保持期間90日より短くする。
-  gateway に `/api/record/*` のルーティングと CORS の `DELETE` 許可を追加(ADR-0209 §10・ADR-0202 への追記)
+  分離(§6)・全削除(§5)・ログ(§3)を実装。時間減衰の半減期は保持期間90日より短くする。
+  gateway に `/api/record/*` のルーティングと CORS の `DELETE` 許可を追加(ADR-0209 §10・ADR-0202 への追記)。
+  `services/record/internal/store` の TiDB 実装は `services/record/internal/store/tidb_test.go`
+  (`//go:build tidb`。`make test-db`)で実 SQL(一意制約・削除順序・冪等性・時間減衰)を検証済み。
+  **残作業(critic レビューで指摘。R-3・R-4)**:
+  - 失効ジョブ(§4。日次で保持期間超過行を消す CronJob)は未実装。`cmd/record/config.go` の
+    `CalcEventsRetention`/`FavoritesRetention`/`DeviceRowExpiry`/`PurgeJournalRetention` は
+    起動時検証(ADR-0211 §7・AC-R8)のためだけに今は存在し、ジョブ本体からはまだ参照されない
+    (意図的な先取り。コード側にも同じ注記あり)。**P5-3b** として別タスクに切り出す
+  - `deploy/k8s/base/record` に Deployment・Service が無く、`GATEWAY_RECORD_URL` を渡す manifest も
+    無いため、k3d クラスタでは `/api/record/*` が恒久的に 503 になる(migrate Job のみ存在)。
+    **P5-3b** で Deployment・Service・gateway への配線・`scripts/up.sh` のイメージ追加までを行う
+- [ ] P5-3b record-svc の残作業(P5-3 の critic レビューで切り出し。2026-09-25)。
+  (1) `deploy/k8s/base/record` に Deployment・Service を追加し、`GATEWAY_RECORD_URL` を実際に配線して
+  k3d クラスタで `/api/record/*` が届くようにする(`scripts/up.sh` のイメージビルド対象に `record` の
+  `server` ターゲットを追加)。
+  (2) ADR-0209 §4 の失効ジョブ(record 用の日次 CronJob。生イベント90日・お気に入り540日・
+  devices 行30日・purge journal 90日を `cmd/record/config.go` の値で判定して消す。冪等・1回の上限あり)を
+  実装する。team-svc 側の同等ジョブ(ADR-0211 §7 の `TEAM_*` 環境変数)も合わせて検討する
 - [ ] P5-4 team-svc(構築 CRUD、Showdown 形式入出力)。
   ADR-0209 §5.3 の `deleteTeamDeviceData` と §6 の分離規則(他端末のリソース ID は 404 `not_found`)を含む。
   **P5-2 のイベントを購読し、自分の DB の `devices.last_seen_at` だけを更新する**(計算 API だけを使い続ける端末の
@@ -367,6 +617,85 @@
   `swift test`(PokeCalcKit)400件0失敗、`make ios-test`
   (`ios-test-unit` 413件・`ios-test-ui` 18件(新規 `testSelectingSpecialMoveShowsCLetterPresetLabel` を含む)、
   すべて成功。終了コード0)ともに green
+- [x] P6-12 issue #71 の iOS 側(ADR-0114「Web・iOS への依頼」): `AttackerPreset` を `engine/presets/attacker.json` に揃える。
+  並び順を 無振り → 特化 → 振り に、既定を無振り(JSON の `default`)にし、JSON のキーとの対応を `catalogKey` の1か所に書く。
+  JSON を直接読む契約テスト(`AttackerPresetCatalogContractTests`。シミュレータでも読めることを実測済み)を追加。
+  受け入れ条件・判断・変えた既存テストの期待値・実装結果は ADR-0501「P6-12」。
+  `swift test` 406件0失敗、`make ios-test`(`ios-test-unit` 419件・`ios-test-ui` 20件)すべて成功
+- [x] P6-13 issue #274(iOS 側): 計算画面に「詳細」(既定は閉じる)を足し、急所・攻撃側のやけど・天候・フィールド・防御側の壁・
+  攻撃側のランク(技の分類の関連ステータス)・攻撃側の特性を選べるようにした。既定は今の要求と同じ。防御側のランク・特性・状態異常は
+  bulk の契約に無いので対象外(API レーンへ提案。DECISIONS.md 2026-09-25「計算条件の入力 UI」)。受け入れ条件・判断・文言・実装結果は
+  ADR-0501「issue #274」(9章)。テスト先行(`CalcViewModelConditionsTests`・`CalcConditionsDomainTests`・`APIPokeCalcServiceConditionsTests`・
+  `MockPokeCalcServiceConditionsTests`・XCUITest `CalcConditionsUITests`)で実装し、critic PASS。実装中に accessibilityIdentifier が
+  コンテナに飲まれる不具合と、XCUITest の前方スクロールがランクの +/− ボタンに届かない不具合を見つけて直した(ADR 9章に詳細)。
+  ランクの +/− ボタンに VoiceOver ラベル、「詳細」の各行に Dynamic Type(アクセシビリティ文字サイズで2行に切り替え)を追加。
+  `swift test` 436件0失敗、`make ios-test`(`ios-test-unit` 449件・`ios-test-ui` 22件)すべて成功(並行セッションが同じ
+  シミュレータを使っていた回はブートストラップ失敗になったが、P6-12 と同じ既知の環境要因と確認済み)
+- [x] P6-14 最大の文字サイズ(accessibility-extra-extra-extra-large)で計算画面の全体が横にはみ出し、左端が切れる(既存の不具合。
+  P6-13 の確認中に発見。2026-09-23 のスクリーンショットでも同じ)。原因の特定と修正、XCUITest か撮影での確認
+  - spec-writer(2026-09-25): 受け入れ条件・失敗するテストのみ追加、実装はまだ(ADR-0501「P6-14」)。
+    XCUITest `ios/PokeCalcUITests/LargeTextLayoutUITests.swift` を新規追加。AX5 で
+    `testCalcScreenNoHorizontalOverflowAtAX5` が失敗することを確認済み(既定サイズ・逆算画面・構築画面は成功)。
+    原因は `ResultRowView`(`CalcScreenResults.swift`)の `percentRangeTextView`/`koText` の `.fixedSize()` が
+    AX5 で画面幅を超える自然な幅を要求し、`ViewThatFits` が縦積み案でも縮められず、`CalcScreenView` の
+    `VStack` 全体・`.frame(maxWidth: .infinity)` の兄弟(カード・プリセット・構築元・技セレクタ・「詳細」)
+    まで広がり、非スクロール軸を中央寄せする `ScrollView` の挙動で左端が負の座標に押し出される、という連鎖
+    (実測 frame・推奨修正は ADR 本文)。`ReverseCandidateCardView` にも同じパターンがあるが、モックの既定状態
+    (観測0件)では未再現(要フォローアップ)。implementer は ADR-0501「P6-14」§4 の推奨(`.fixedSize()` を外す/
+    `minimumScaleFactor` に揃える)から着手
+  - implementer(2026-09-25): ADR-0501「P6-14」§4の推奨1・2のとおり、`ResultRowView.percentRangeTextView`/
+    `koText`(`CalcScreenResults.swift`)と `ReverseCandidateCardView` の `percentRangeText`
+    (`ReverseScreenResults.swift`)の `.fixedSize()` を `.lineLimit(1).minimumScaleFactor(
+    CalcScreenMetrics.compactMinimumScaleFactor)` に置き換え、両ファイルのコンテナに
+    `.accessibilityElement(children: .contain)` を追加(識別子は変更なし)。`LargeTextLayoutUITests` に
+    AX5 の2件(`testReverseScreenWithCandidateNoHorizontalOverflowAtAX5`= 観測入力後の候補カード、
+    `testTeamEditScreenWithMemberNoHorizontalOverflowAtAX5` = メンバー追加後の構築編集画面)を追加し、
+    8件全て成功。`grep fixedSize ios/PokeCalc` で他の使用箇所(`ChipButton`・`SpeciesHeaderMenuLabel`・
+    `TypeBadgeView`・`CalcConditionsSection.sectionRowLabel`・`TeamEditMemberCard.spStepper`)も確認したが、
+    追加した AX5 テストでははみ出さなかったため未修正(詳細は ADR-0501「P6-14」6章)。
+    `swift test`(PokeCalcKit)436件0失敗、`xcodebuild -only-testing:PokeCalcUITests/LargeTextLayoutUITests`
+    8件0失敗、`make ios-test`(`ios-test-unit`・`ios-test-ui` 30件〈既存22+新設8〉・`ios-check-infoplist`)
+    すべて成功。気づいた点(未修正・要フォローアップ): 候補カードテストの1回で `reverseObservationField-0`
+    タップ直後に SwiftUI ランタイム警告「Invalid frame dimension (negative or non-finite).」が1件出たが
+    アサーション失敗ではなく、候補描画・入力より前(フォーカス直後)に出ているため今回の修正とは無関係に見える
+    (原因未特定。ADR-0501「P6-14」6章)。
+- [x] P6-15 P6-14 の残り(軽微): (1) 最大の文字サイズで攻撃側プリセットのピル「A振り(無補正)」が「A振り…」と省略される
+  (はみ出しは解消済み。アクセシビリティ域では縦に並べる等で全文を出す)、(2) LargeTextLayoutUITests で「詳細」を開いた状態も検査する、
+  (3) 既定サイズで %・確定数の文字が縮んでいないことを確かめる検査(critic の任意の指摘)
+  完了: アクセシビリティ域でプリセットのピルを縦積みに。「詳細」を開いた AX5 検査と、既定サイズの % が縮まない検査を追加
+  (縮小の変異で red になることを確認)。make ios-test unit 449/449・XCUITest 37/37。critic PASS
+- [x] P6-16 issue #250: `AppConfiguration` が http/https の URL を受理するが、`ios/PokeCalc-Info.plist` に
+  `NSAppTransportSecurity` が無く ATS が非 TLS 通信を実行時に拒否するため、受理条件と実行時の挙動が食い違っていた。
+  判断(issue の案A・案Bの間。2026-09-25 → 同日 critic 指摘で訂正): `https` は任意のホストで受理。`http` は
+  `NSAllowsLocalNetworking`(`ios/PokeCalc-Info.plist` に追加。`NSAllowsArbitraryLoads` は使わない)が
+  実際に通す範囲(Apple ドキュメント: 非修飾ホスト名・`.local` ドメインの2つ。**IP アドレスは含めない**
+  〈訂正理由は下記〉)だけ受理し、それ以外の http(IP アドレス・通常の公開ドメイン)は
+  `AppConfigurationError` にする。受け入れ条件・追加したテスト・実装者への注意は ADR-0501「issue #250」。
+  spec-writer(2026-09-25): 受け入れ条件・失敗するテストのみ追加、実装はまだ
+  (`AppConfigurationATSTests.swift` 新設。`swift test`: 447件中3件失敗〈拒否すべき3件。想定どおり〉。
+  `ios/scripts/check-infoplist.sh` に ATS キーの検査を追加〈plist にキーが無い現状では失敗する想定〉)。
+  implementer(2026-09-25): `AppConfiguration.swift` に ATS 判定(`isAllowedByNSAllowsLocalNetworking`・
+  `isIPAddress`、`Network` の `IPv4Address`/`IPv6Address` を使用)を追加し、`ios/PokeCalc-Info.plist` に
+  `NSAppTransportSecurity.NSAllowsLocalNetworking = true` を追加(`NSAllowsArbitraryLoads` は追加せず)。
+  `swift test`: `PokeCalcCoreTests` 447/447 成功(`AppConfigurationATSTests` 含む)。
+  `make ios-test`: 成功(exit 0。`ios-test-unit`・`ios-test-ui` 全 37/37・`ios-check-infoplist` とも成功。
+  `NSAllowsLocalNetworking = true`・`NSAllowsArbitraryLoads` 無しを確認)。ADR-0501「issue #250」に
+  「### 6. 実装結果」を追記。
+  **critic(メインセッション、2026-09-25)FAIL → 訂正**: Apple のドキュメントの「iOS 17+ は既定で IP
+  アドレスへの接続を許可しない(`NSExceptionDomains` が必要)」という記述と、実装の「IP アドレスは
+  `NSAllowsLocalNetworking` で受理する」が矛盾していた。critic がシミュレータで実験したが、
+  `NSAppTransportSecurity` キー無しの対照群でも `localhost`/`127.0.0.1`/LAN の IPv4 に到達できてしまい、
+  シミュレータでは ATS の効き自体を確認できず「IP アドレスは通る」ことの裏付けにはならなかった。
+  よって保守的な方針に訂正: **IP アドレス(IPv4/IPv6。ループバック含む)は http では拒否する**
+  (`AppConfigurationError`。非修飾ホスト名・`.local` は従来どおり受理)。
+  `AppConfiguration.swift` の `isAllowedByNSAllowsLocalNetworking` の IP アドレス分岐を受理→拒否に反転し、
+  `AppConfigurationATSTests.swift`(このタスクの受け入れ条件。変更可)の IP 系3テストを
+  `…IsAccepted` → `…IsRejected` に改名(`reason` の文言検査つき)、末尾ドットホスト
+  (`localhost.`)を拒否する回帰テストを追加。`AppConfigurationTests.swift`(既存・変更禁止)には
+  http の IP アドレスケースが無いことを確認済みで、この訂正でも壊れない。
+  検証(訂正後): `swift test` 448/448 成功。`make ios-test` 成功(exit 0。unit/UI/infoplist 全て green)。
+  ADR-0501「issue #250」に §0.5(訂正の経緯・実験内容)と §7(訂正後の実装結果)を追記、
+  §1〜3 を訂正後の内容に更新。実機での ATS 挙動の確認は人間向けタスクとして残す(§3 の7)。
 - [x] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼された
   内容どおり `ColorToken.danger` のライト値を `0xE5,0x48,0x4D` → `0xCD,0x1D,0x23` に更新し、
   `DesignTokenTests.swift` の旧値も書き換えた。`ios/PokeCalcKit/Tests/PokeCalcDesignTests/ColorContrast.swift`
@@ -446,6 +775,152 @@
   - 失敗するテストを先に置いた(spec-writer): `web/src/judge/judgeClient.test.ts`・`web/src/judge/JudgeScreen.test.tsx`・
     `web/src/app/routes.test.ts`(judge タブの登録)。`judge.gen.ts` は生成済み
   - iOS は Web を出してから改めて判断する(DECISIONS.md 2026-09-24)
+- [x] issue #234 moveId/natureId の形式検証が無く、制御文字などが上流 URL にそのまま埋め込まれ、503
+  `upstream_unavailable` + 誤警告ログになる(全体レビュー指摘。2026-09-24)
+  - 設計の正は ADR-0706: `moveId` / `natureId` を `^[a-z0-9]+(-[a-z0-9]+)*$`・1〜64 文字で検査し
+    (`services/balance` の `MoveId` / `AbilityId` と同じ綴り。ADR-0016 §2・ADR-0017 §2)、
+    **上流を呼ぶ前に** 400 `invalid_request` を返す(`writeUpstreamError` に到達させない)/
+    message は `attacker` / `defenders[<index>]` を示す(ADR-0703 §3)/ `internal/client` は
+    key を `url.PathEscape` で埋める(二重の守り)/ pokedex-svc 側の key 検証と `abilityId` / `itemId` は範囲外
+  - 契約は先に更新した(spec-writer): `services/judge/api/openapi.yaml` に `MoveId` / `NatureId` を新設し、
+    `moveId` / `natureId` の 4 か所をその `$ref` に。**`make judge-gen` は implementer が実行する**
+  - 失敗するテストを先に置いた(spec-writer): `internal/httpapi` に `TestOutspeedAndKoRejectsInvalidIDFormat`・
+    `TestOutspeedAndKoIDLengthLimit`・`TestOutspeedAndKoIDFormatCheckOrder`・`TestOutspeedAndKoAcceptsValidIDFormat`、
+    `TestOutspeedAndKoRejectsInvalidRequest` に形式の行を 4 件追加、`internal/client` に
+    `TestPokedexEscapesKeyInPath`・`TestPokedexDoesNotEscapeValidKey`。
+    現行コードでは 5 つの Test が失敗し、それ以外の既存テストは全件通ることを確認済み
+  - 実装(implementer、1 回目): `internal/httpapi/outspeed.go` の attacker 本体・defenders 候補それぞれで
+    `moveId`・`natureId` の計 3 箇所に ID 形式検査を追加(`writeUpstreamError` より前・attacker → defenders を
+    index 昇順)、`internal/client/pokedex.go` の `Species` / `Move` は key を `url.PathEscape` で path 要素に
+    埋めるよう変更(二重の守り)。`make judge-test` 全件通過
+  - critic 1 回目 NG: Go 側のロジック・テストは適合だが、`web/src/judge/judge.gen.ts` が契約変更
+    (`MoveId` / `NatureId` の追加)後に再生成されておらず stale(絶対ルール1「API 変更は openapi.yaml から。
+    変更後は make gen」違反)。2 回目(implementer)で `web/` にて手動再生成
+    (`npx openapi-typescript ../services/judge/api/openapi.yaml -o src/judge/judge.gen.ts &&
+    npx prettier --write src/judge/judge.gen.ts`。ADR-0604 §2 の素早さレーンの前例に倣う)、
+    差分が契約変更相当の型・doc コメントのみであることを確認、`npm run lint`・`npm test`(1262 件)が通ることを確認。
+    ADR-0706 の受け入れ条件7に `judge.gen.ts` の手動再生成を明記して再発防止
+- [x] issue #213(重大度 high)上流(pokedex-svc/calc-svc)が遅いと judge は1リクエスト全体の期限を持たず、
+  逐次呼び出し(最大27回・1回3秒)を律儀に最後まで続け、クライアントは HTTP 000(空応答)を受け取る
+  (JSON の 503 が返らない。全体レビュー指摘。2026-09-24)
+  - 設計の正は ADR-0707: `JUDGE_REQUEST_TIMEOUT`(既定 12 秒)を新設し、`writeTimeout`(15 秒)未満であることを
+    起動時に検証する。ハンドラ(`outspeedAndKo`)の先頭で `ctx` を 1 回だけ `context.WithTimeout` でラップし、
+    以降のすべての上流呼び出しに使い回す(呼び出し順序・逐次であることは変えない。ADR-0703 §3 の維持)。
+    `internal/client` は変更不要(既に `http.NewRequestWithContext` を使っており、`net/http` の context 統合が
+    「進行中の呼び出しを打ち切る」「未着手の呼び出しは即座に失敗する」の両方を自動で満たす)
+  - 失敗するテストを先に置いた(spec-writer): `services/judge/internal/httpapi/outspeed_deadline_test.go`
+    (`TestOutspeedAndKoOverallDeadline`・`TestOutspeedAndKoWithinDeadlineUnaffected`)、
+    `outspeed_test.go` に `upstreams.delay`・`sleepOrCancel` を追加、`cmd/api/config_test.go` に
+    `TestRequestTimeoutFromEnv`。実装前は `go vet` が `deps.RequestTimeout undefined` /
+    `undefined: requestTimeoutFromEnv` の 2 件で失敗する状態だった
+  - 実装(implementer): `cmd/api/config.go` に `requestTimeoutEnv`・`defaultRequestTimeout`(12秒)・
+    `requestTimeoutFromEnv(lookup, writeTimeout)`(`upstreamTimeoutFromEnv` と同じ形 + `writeTimeout` 以上は
+    起動失敗)を追加。`cmd/api/main.go` で呼び出し、`httpapi.Dependencies.RequestTimeout` に渡す(パース失敗は
+    他の設定エラーと同じく `os.Exit(1)`)。`internal/httpapi/server.go` の `Dependencies` に
+    `RequestTimeout time.Duration` を追加(既定 0 は「期限なし」で既存テストに影響しない)。
+    `internal/httpapi/outspeed.go` の `outspeedAndKo` で `ctx := c.Request().Context()` の直後に
+    `deps.RequestTimeout > 0` のときだけ `context.WithTimeout` でラップ。`README.md` に
+    `JUDGE_REQUEST_TIMEOUT` の行を追加。`go vet`・`go test ./...`(新規テスト含め全件)・`gofmt -l`・
+    `make judge-lint`・`make judge-build`・`bash scripts/check-publishable.sh` すべて成功を確認
+    (`TestOutspeedAndKoOverallDeadline` は `-count=5` でも安定して ~0.22s で 503 を返すことを確認済み)
+- [x] issue #329(重大度 low)SP 合計超過(67)の拒否を確かめる回帰テストが無く、`validateSP` の
+      `> engine.MaxSPTotal` を `> engine.MaxSPTotal+1` に変える退行を検出できない(既存の唯一のケースが
+      合計96で境界〈67〉から遠い。全体レビュー第3回指摘。2026-09-25)。テストのみの変更(実装は無変更):
+      `internal/judge/speed_test.go` に合計ちょうど66(受け付ける)・ちょうど67(拒否する。各欄は
+      MaxSPPerStat=32以下のまま)を追加、`internal/httpapi/outspeed_test.go` にも合計67の境界値ケースを
+      追加。mutation test で検証: `validateSP` を `> engine.MaxSPTotal+1` に一時的に変えて新規テスト
+      (`TestSpeedRejectsOutOfRangeInput`・`TestOutspeedAndKoRejectsInvalidRequest` の追加分)が実際に
+      失敗することを確認、復元して `go test ./...`・`gofmt -l`・`make judge-lint`・`make judge-build`・
+      `bash scripts/check-publishable.sh` すべて成功を確認(軽微な作業のため /phase の quick-scanner〜critic
+      は使わずメインで対応。CLAUDE.md「軽微な作業はメインのみでよい」)
+- [x] issue #257(重大度 low)`services/judge/scripts/smoke.sh` が healthz しか叩かず、k3d 上で
+      pokedex-svc・calc-svc への疎通(業務エンドポイント)を検証していない(balance・speed の smoke と
+      深さが揃っていない。全体レビュー指摘。2026-09-24)。`services/gateway/scripts/smoke.sh` の ID
+      取得部分(`API_URL`=gateway 経由で性格・種族・物理技の実IDを引く。pokedex 未投入なら例の架空ID
+      にフォールバックし「未投入」として区別)を流用し、`JUDGE_URL`(judge 自身の Ingress)へ
+      `POST /api/judge/v1/outspeed-and-ko` を実際に送って 200(`matchups[0].attackerKo.hits` を含む)・
+      ヘッダなし 400 `invalid_request`・未知 speciesKey 422 `unknown_species`(pokedex 到達時のみ)・
+      7候補(上限6超過)400 `invalid_request` を確認するよう拡張。`Makefile` に `API_URL` を追加し
+      `judge-smoke` に配線。README の古い「JD0完了」表記も直した(coding-rules §8)。
+      実クラスタ(k3d-pokecalc。実データ)で `make judge-smoke` を実行して確認済み
+      (`judge smoke: master=pokedex species=0003-000 move=highhorsepower nature=bashful` /
+      `health=200 outspeed=200(hits=4) missing_headers=400 unknown_species=422 too_many_defenders=400`)。
+      `JUDGE_URL` を到達不能にすると exit 1 になることも確認(回帰検出力)。`pokedex-svc` が未投入時の
+      example フォールバック分岐は、共有クラスタの pokedex-svc を落とさずに済ませるため、
+      `services/gateway/scripts/smoke.sh` の同じロジックを流用したことによる構成の裏取りで代える
+      (実際に落として確認はしていない)。軽微な作業のため /phase の quick-scanner〜critic は
+      使わずメインで対応
+- [~] issue #260(担当: タイプバランス・判定。重大度 low)`docs/judge-design.md`・`docs/type-balance-design.md` が
+      実装の後追いになっていない(全体レビュー指摘。2026-09-24)。**判定レーンの分だけ対応**:
+      `judge-design.md` の状態を「起草」→「完了(JD0〜JD5・main統合済み)」に、JD5節を「着手する」から
+      実際の完了内容(ADR-0705・PR #182・担当決定)へ更新、JD1の麻痺の記述(JD2で扱う、が誤り。JD2でも
+      見送りを継続したのが正しい)を訂正、新設の §5「未対応(既知の制限)」に状態異常・素早さ関連特性・
+      ダブルの全体技/壁減衰(issue #288)を明記。`docs/README.md` の目次は既に judge-design.md を指しており
+      変更不要。`type-balance-design.md` はタイプバランスレーンの持ち物のため対象外(DECISIONS.mdへ)。
+      `bash scripts/check-publishable.sh`(0件)成功を確認。軽微な作業のためメインで対応
+- [x] 判定の応答に calc-svc の「未対応」の印を中継する(issue #271 / #270 の判定レーン分。ADR-0123 §6 の
+      「印を見せる画面・利用者は各レーンの作業」)。judge は `attackerKo` / `defenderKo` を calc-svc から
+      転記するだけなので、多段技・固定ダメージ技・表せない持ち物/特性を選んだときに **誤った確定数が
+      正しい顔で画面に出る**
+  - 設計の正は ADR-0708: `Matchup` に `attackerKoUnsupported` / `defenderKoUnsupported`(必須・印なしは `[]`)を
+    足す(§1)/ **順方向と逆方向の印は絶対にまとめない**(どちらの確定数が疑わしいか画面が区別できるように。§4)/
+    印は `target` / `reason` / `id` をそのまま・同じ並びで中継し、judge は解釈・丸め・`reason` の検査をしない(§4)/
+    `target` の attacker/defender は**その計算から見た**役割(逆方向では入れ替わる。§5)/ judge の契約に
+    `UnsupportedMark` を**複製**する(ルートを `$ref` しない。ADR-0706 §2 の前例。§6)/ calc-svc の応答に
+    `unsupported` が無ければ `ErrUpstreamInvalidResponse` → 503(ADR-0704 §9 の priority と同じ立場。§7)/
+    `internal/judge` は変えない(§8)
+  - 契約は先に更新した(spec-writer): `services/judge/api/openapi.yaml` に `UnsupportedMark`(ルートと同じ
+    target / reason / id・同じ enum)を新設し、`Matchup` の `properties` と `required` に 2 欄を追加。
+    **`make judge-gen` は implementer が実行する**(ADR-0706 と同じ分担)。`web/src/judge/judge.gen.ts` の
+    手動再生成も implementer(ADR-0706 受け入れ条件7・critic 1 回目の NG を再発させない)
+  - 失敗するテストを先に置いた(spec-writer): `internal/httpapi` に
+    `TestOutspeedAndKoTranscribesUnsupportedMarks`(方向ごとに件数も中身も違う印・印なしは `null` でなく `[]`・
+    知らない `reason` も中継)・`TestOutspeedAndKoUnsupportedMarksPerCandidate`(候補 index 1 だけに印)、
+    `TestOutspeedAndKoUpstreamFailures` に `unsupported` 欠落・要素の `reason` 欠落の 2 行、
+    `internal/client` に `TestDamageDecodesUnsupportedMarks`・`TestDamageAcceptsUnknownUnsupportedReason`・
+    `TestDamageRejectsInvalidBody` の 4 行。共有スタブ(`calcBody`・`calcKO` の本文・`validCalcBody`)に
+    `"unsupported":[]` を足した(既存テストの期待値は変えていない)。現行コードでは `internal/httpapi` の
+    3 つの Test が失敗し、`internal/client` は `undefined: UnsupportedMark` でビルドできない状態
+    (それ以外の既存テストは全件通ることを確認済み)
+  - implementer への申し送り: `make judge-gen` 後に `api.Matchup` が配列欄を持つので `==` で比較できなくなる。
+    `outspeed_test.go` の 4 か所の `api.Matchup` リテラル(`TestOutspeedAndKo`・
+    `TestOutspeedAndKoSpeedFieldOmittedMatchesJD1`・`TestOutspeedAndKoMultipleDefenders`・
+    `TestOutspeedAndKoSpeedFieldAppliesToEveryCandidate`)の want に**空配列 2 欄を書き足す**
+    (nil スライスと `[]api.UnsupportedMark{}` は `reflect.DeepEqual` では別物。該当箇所にコメントを残した)
+  - 実装(implementer): `make judge-gen` を実行(`services/judge/internal/api/openapi.gen.go` のみ変更。
+    `Id`(`ID` ではない)・`UnsupportedMarkTarget`/`UnsupportedMarkReason` の文字列型を確認)。
+    `internal/client/calc.go` に `UnsupportedMark{Target, Reason, ID string}`・`CalcResult.Unsupported`
+    を追加し、`calcResultWire.Unsupported *[]unsupportedMarkWire`(nil = 欄が無い → `ErrUpstreamInvalidResponse`。
+    要素の `target`/`reason`/`id` のいずれかが nil でも同じ)を `toUnsupportedMarks` で変換、印なしは
+    `make([]UnsupportedMark, 0, ...)` で空スライス(nil にしない)にした。`internal/httpapi/outspeed.go` に
+    `toAPIUnsupportedMarks(marks []client.UnsupportedMark) []api.UnsupportedMark` を追加し、`Matchup` 組み立てで
+    `forward.Unsupported` → `AttackerKoUnsupported`・`reverse.Unsupported` → `DefenderKoUnsupported`
+    に方向ごとに独立してマップ(共有スライスの使い回しはしない)。spec-writer が申し送った 4 か所の
+    `api.Matchup`/`[]api.Matchup` リテラルに空配列 2 欄(`[]api.UnsupportedMark{}`)を追加。`internal/judge`
+    は変更していない。確認: `GOWORK=off go test ./... -count=1`(全パッケージ成功。新規テスト
+    `TestOutspeedAndKoTranscribesUnsupportedMarks` 全5件・`TestOutspeedAndKoUnsupportedMarksPerCandidate`・
+    `TestOutspeedAndKoUpstreamFailures` の新規2件・`TestDamageDecodesUnsupportedMarks`・
+    `TestDamageAcceptsUnknownUnsupportedReason`・`TestDamageRejectsInvalidBody` の新規4件を含め全件成功)、
+    `gofmt -l services/judge`(空)、`go vet ./...`、`make judge-lint`・`make judge-build`、
+    `bash scripts/check-publishable.sh`(0件)、いずれも成功。`git status --short` で
+    `services/judge/internal/api/openapi.gen.go` 以外の生成物の変化が無いことを確認。
+    `web/` で `npx openapi-typescript ../services/judge/api/openapi.yaml -o src/judge/judge.gen.ts &&
+    npx prettier --write src/judge/judge.gen.ts` を実行し、手書きのヘッダ(1〜6行目)を復元した上で
+    `npm run lint`・`npm test`(65ファイル1612件)成功、`git diff web/src/judge/judge.gen.ts` が
+    `UnsupportedMark` 型と `Matchup` の新 2 欄の追加のみであることを確認。critic レビュー待ち
+  - critic 1回目 NG(ブロッカー1件): `Matchup` に必須欄2つ足したため `web/src/judge/JudgeScreen.test.tsx`・
+    `judgeClient.test.ts` の既存の架空応答リテラルが型として不完全になり、`npm run typecheck`
+    (= ルートの `make lint` が含む)が失敗していた(`npm run lint`〈eslint+prettier〉・`npm test`
+    〈vitest。型検査しない〉では検出できず見落とした)。方向の不変条件(順方向/逆方向を混ぜない)・
+    never-null契約・byte-for-byte中継・上流の壊れた応答→503・スコープ・契約/生成物の整合はすべて
+    critic 自身が変異テスト6種で実際に検証し問題なし(CLAUDE.md絶対ルール違反・テスト弱体化なし)。
+    修正: 両ファイルの `Matchup` リテラルに `attackerKoUnsupported: []`・`defenderKoUnsupported: []` を
+    追加(既存アサーションは変更なし)。ADR-0708 受け入れ条件7にこの手順を明記して再発防止。
+    `cd web && npm run typecheck`・`npm run lint`・`npm test`(65ファイル1612件)、ルート `make lint`
+    (typecheck・eslint・prettier・k8s-render・check-publishable・自己テストすべて含む)成功を確認。
+    critic が「この件はもう一巡回す必要はない」と明示したため round 2 の critic 再レビューは省略し、
+    ADR-0708 の状態を「提案」→「採用」に更新(critic の明示的な判断: ADR-0706/0707 は実装と同時に
+    「採用」でコミットされているのがこのレーンの慣行)
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
 各レーンが自分の範囲の README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)と、動かして確かめられるレーンは手順書(`docs/runbooks/<レーン>.md`。AGENTS.md「手順書の書き方」に従う)を書く。全体図は `docs/architecture.md`。
@@ -543,6 +1018,23 @@
 
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)
+- [x] issue #271/#270(データレーンからの依頼。ADR-0121 §4・ADR-0123 §7。DECISIONS.md 2026-09-25)の API レーン
+  担当分: `api/openapi.yaml` に `MasterMove.mechanisms: string[]`(必須・昇順・通常の技は空配列)と
+  `CalcResult`(`BulkCalcRow.result` も同じ型)・`ReverseCandidate` への `unsupported: UnsupportedMark[]`
+  (必須・印なしは `[]`)を追加(`make gen`)。pokedex-svc の内部マスタ export に `ListMoveMechanisms` を
+  配線(SQL の並びに頼らずこの層で昇順ソート)、calc-svc は `sharedmaster.MoveRow.Mechanisms` にそのまま渡す
+  だけ(検証は既存の `MoveMechanismsOf` が担当)。calc-svc の応答変換(`calcResultFrom`・`reverseResultFrom`)
+  に `unsupportedFrom`(`engine/wasmapi` と同じ変換)を配線し、HTTP/WASM パリティテストの
+  `dropEmptyUnsupported`(印を比較対象から除外する暫定処置)を削除して印も比べるようにした。
+  Web の例データ(`exportSnapshot.ts`)に `mechanisms: []` を追加(Web は `unsupported` をまだ受け取らない
+  設計のまま。`mapCalcResult` 等の明示的フィールド写像により自動的に弾かれる。issue #67 の前方互換どおり)。
+  データレーン・Web レーン・iOS レーンへ連絡済み(iOS は生成物の再生成が必要)
+- [ ] issue #274/#272(iOS レーンからの提案。DECISIONS.md 2026-09-25)の API レーン担当分: `BulkCalcRequest` に
+  `defenderOverride: { abilityId?, ranks?: RankBlock, status?: StatusCondition }`(全行に一律で上書き)を追加する。
+  iOS(PR #377)は攻撃側のランク・特性・天候・フィールド・防御側の壁までは実装済みだが、防御側のランク・特性・
+  状態異常は契約に上書き手段が無く未実装のまま(範囲外として明記)。engine 側の変更(`BulkInput` へのオーバーライド
+  追加。プリセット解決後・計算前に当てる)を伴うため ADR-0003 の test-first + 独立 critic の対象。
+  **急ぎではない(iOS レーン明記)。M2(P5-3・P5-4)の後に着手する**。入ったら iOS・Web へ連絡(追従は各レーン)
 - [x] issue #110(セキュリティ。Codex レビュー)の API レーン担当分: `POST /api/calc/bulk`・`/api/calc/reverse` の候補・観測配列に件数上限が無く、1MiB未満の小さな本文で計算量を増幅できた(2,000×2,000 で約9.4秒)。契約(`maxItems`/`uniqueItems`/`maximum`。ADR-0208)を追加し、calc-svc の生成ラッパは検証しないため(実測確認済み)自前検証をID解決・engine呼び出しより前に実装。critic PASS、実HTTPで境界値と再現手順の解消(0.9ms・engine未到達)を確認。engine/wasmapi(データレーン)・Web・iOSへの追従は DECISIONS.md に既定案付きで依頼(issue はレーンの完了までクローズしない)
 - [x] issue #110 のデータレーン担当分: `engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ件数・範囲の上限(presets 8・itemVariants 64・itemCandidates 64・observations 16・maxCandidates 0..128)を追加(ADR-0108)。HTTP を経由しない直接呼び出し・WASM でも計算量を増幅できないようにした。wasmapi は DTO 変換より前に同じ検査を重ねて置き、複数の違反が重なっても HTTP と同じ `invalid_input` が先に出るようにした(parity)。`MaxCandidates` の負の値は、従来「無制限」扱いだったのを ADR-0208 の契約(`minimum: 0`)に合わせて拒否するよう変更(既存テストの期待値を更新。理由は ADR-0108 決定4)。critic PASS(1往復)。Web・iOS の追従(観測16件でUI無効化・持ち物候補64件超の扱い)は ADR-0208 §4 のまま未着手
 - [x] issue #148(クラウド公開前のアクセス境界・認証方針。ユーザー決定「私設サービスを維持する」)の API レーン担当分: `deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定(ADR-0210)。TLS 終端は gateway/クラスタの Ingress では行わず Tailscale(`tailscale serve`)に任せる方針を決定。端末IDが認証として機能しないこと・CORSが到達制御でないことの回帰テストを追加(`TestDeviceIDIsNotAuthentication`・`TestCORSIsNotAccessControl`・`TestContractHasNoAuthentication`)。`base`のgateway Ingress本体は local(k3d)専用として残し、先頭コメントで明記。ADR-0209 §1(クラウド公開へ進む判断)は「公開しない」で確定した旨を追記。critic PASS。運用(tailnet ACL・失効手順のrunbook)・Web/iOS(接続先をtailnet名に)への依頼はDECISIONS.mdに既定案付きで記録(issue はレーンの完了までクローズしない)
