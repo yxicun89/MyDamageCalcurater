@@ -1773,6 +1773,32 @@ Impact: **データレーンへ**: #271・#270 は API レーン担当分も完�
 未実施)。再生成すると `MasterMove.mechanisms`・`CalcResult.unsupported`・`ReverseCandidate.unsupported` が
 必須フィールドとして生成物に増えるため、既存のデコード/モック実装が影響を受ける可能性がある。
 
+## 2026-09-25: 全体レビューissueの担当拡大の範囲をユーザーが確定(タイプバランスレーン)
+Decision: 別セッション(damage calculation bug resolution)から「運用担当」としてP7-4(MySQL/TiDBバックアップ復元テスト)と
+issue #107・#108・#75もタイプバランスレーンで担当するよう依頼があったが、ユーザーに確認したところ次の方針になった。
+- P7-4はタイプバランスレーンが引き受ける(ただしADR-0209 §9のとおりTiDBはAPIレーンのP5-1完了後に着手)。
+- issue #107・#108・#75はデータレーンが既に主担当として登録されており、データレーンはM2(TiDB)作業中のため、
+  重複作業を避けてそのままデータレーンに委ねる(タイプバランスレーンは着手しない)。
+Reason: ユーザー回答(AskUserQuestion、2026-09-25)。#107・#108・#75は現在もOPENで未着手のままだが、
+主担当レーンが明確に決まっている状態での横取りは重複・競合のリスクがあるため。
+Impact: データレーンへは特に追加連絡不要(担当は変わらない)。P7-4はデータレーンのP5-1完了まで着手待ち。
+
+## 2026-09-25: issue #237(GitOps overlayのread model欠如)を既定案で決定
+Decision: 既定案(a)のinitContainer方式(起動時にpokedex exportを実行)で進める。これに伴い、pokedex-svcのserver
+イメージをbalance-registryへdigest固定でpushする新しい依頼をデータレーンへ送った(急ぎではない)。
+Reason: ユーザー回答(AskUserQuestion、2026-09-25)。素早さレーンが指摘した新しい依存関係(pokedex-svcイメージの
+push作業がデータレーンに発生すること)を判断材料に含めた上での決定。
+Impact: タイプバランスレーンが主担当として#263と合わせて実装する。素早さレーン側のoverlay・scriptsは素早さレーンが対応。
+
+## 2026-09-25: issue #236(端末ID・セッションIDの検証・エラーコード不一致)の実装方針
+Decision: APIレーンの助言により、`services/internal/httpmetrics`と同じ前例(cross-module importではなく各サービスへの
+複製)に揃える。balance/speed/judgeそれぞれに`internal/requestctx`(仮称)を作り、gatewayの`checkAPIHeaders`・
+`isCanonicalUUID`(`services/gateway/internal/httpapi/headers.go`)相当を複製する。エラーコードはcalc-svcの
+`missing_header`/`invalid_header`(ADR-0200)に揃える。gateway側(Traefik直結でgatewayの検証を経由しない問題)は
+APIレーンが引き取る(M2作業が一段落してから着手)。
+Reason: APIレーンとの相談(cross-session)。
+Impact: タイプバランス・素早さレーンはそれぞれ独立して着手してよい(balance/speedの実装は並行可能)。
+
 ## 2026-09-25: ユーザー決定 4 件(GitOps の範囲・API の入口・AI の権限・公開)
 Decision(ユーザーが選択。いずれも推奨案):
 1. #292(+#241): **balance だけを GitOps(Argo CD)にし、常に Synced に保つ**。damage calc 系は `make deploy-latest` のまま。CLAUDE.md の「Argo CD が main を見ているので PR 必須」の理由は「main を常に緑に保つため(CI・レビューの記録)」に書き直す(CLAUDE.md の文言はユーザーに1回確認してから)。
