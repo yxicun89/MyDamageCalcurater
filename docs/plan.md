@@ -434,16 +434,42 @@
   各タブを1つずつ `<div hidden={...}>` に包んで並べ、選択中でないものだけ `hidden` を付ける(決定2)。
   決定3(マスタが入れ替わったら作り直す)は、`visitedTabs` 自体をリセットするのではなく、マスタを使う
   各画面の React `key` に `masterEpoch`(モードごとに別マスタを持つときだけ `mode` の値、単一マスタなら
-  常に `"single"`)を含めて、マスタが実際に入れ替わったときだけ React に作り直させる形にした
-  (`modeMasterSources` が無い既存の P4-5 テスト〈engines だけ渡してモード切り替え〉は master が
-  入れ替わらないので、往復した入力は保持されたまま。マスタを使わない素早さ画面は epoch を key に
-  含めず、モード切り替えで作り直さない)。マスタの読み込みに失敗している間、選択中でないマスタ使用画面は
-  描画しない(マスタが無いので出しようがなく、隠れているので実害も無い)。
+  常に `"single"`)を含めて、マスタが実際に入れ替わったときだけ React に作り直させる形にした。
   `npx vitest run App` 113件・`npm test` 1624件・`npm run typecheck`・`npm run lint`(eslint + prettier)
   いずれも green(実装前の7 red が0件になり、既存の1617件は無回帰)。`make web-e2e`
   (`web/e2e/routing.spec.ts` の新規2件を含む)は37件すべて green(a11y.spec.ts も無回帰)。
   本体コードのコメントに issue 番号を書くときは `#` を付けない(`web/src/styles/noColorLiterals.test.ts` の
   16進色リテラル検出が `#218` を拾うため。issue #305 と同じ)。
+  **critic FAIL(2点)**: (a) `masterEpoch` はデッドコードだった。固定値にしても全1624件 green(検知
+  できない)。理由: モード切替で取得口(`activeMasterSource`)が変わると `currentMasterLoad` が一旦
+  `null` になり(ADR-0304 §追記 A-6)、`{currentMasterLoad !== null && (...)}` で `.app-tabs`
+  サブツリーごと unmount される(ADR-0304 §追記 A-6 の既存挙動)ため、epoch を key に混ぜなくても
+  取得口が変わる経路では必ずサブツリーが作り直される。(b) `visitedTabs` は App 直下の state のままで、
+  サブツリーの unmount/mount を生き延びるため、マスタ再読み込みのたびに「訪問済みの非選択タブ」が
+  hidden のまま一斉に再マウントされ、SpeedScreen のマウント時 speed API 呼び出しが再度走っていた
+  (critic 実測: 2件→4件)。
+  **critic FAIL への対応(2026-09-25。Web レーン。同ブランチで直接修正)**: `masterEpoch` を削除し、
+  マスタを使う画面・マスタ不要画面(`isMasterlessScreen`)とも `key={id}` に統一(軽微指摘1: 失敗中→
+  成功への「再試行」で SpeedScreen が不要に作り直されるのも解消)。`visitedTabs` の置き場を App 直下から
+  `AppTabPanel`(`.app-tabs` サブツリーの中、`{currentMasterLoad !== null && <AppTabPanel .../>}` の
+  内側に置いた新規の子コンポーネント)へ移した。これにより、取得口が変わって `currentMasterLoad` が
+  `null` を経由するたびに `AppTabPanel` ごと作り直され、`visitedTabs` も選択中のタブだけへ自動的に
+  リセットされる(取得口が変わらない「再試行」では `null` を経由しないので保たれる)。`tab` prop の
+  変化を `visitedTabs` へ反映する処理は、`useEffect` 内の `setState` だと
+  `react-hooks/set-state-in-effect` に触れるため、React の「レンダー中の state 更新」パターン
+  (前回の `tab` を `useState` で覚え、レンダー中に差分を見て `setVisitedTabs` する)で実装した。
+  ADR-0308 決定3に実現手段の説明を追記、状態を「提案」→「採用」に更新。
+  回帰テスト: `web/src/App.tabPersistence.test.tsx` の「計算モードを切り替えてマスタが入れ替わると…」
+  テストに、切替前に攻撃側・防御側の両方を選んで実際に計算結果を出すステップを追加(従来は結果を
+  一度も出さないまま `queryByRole("list", { name: "計算結果" })` が `null` であることを確かめる
+  空振りのアサーションだった)。「素早さタブを訪問後にマスタが入れ替わっても、speed API を呼び直さない」
+  を新規追加(criticのプローブと同型: 素早さタブを訪問→計算タブへ戻る→モード切替で `speedCallCount`
+  が増えないことを確認)。`web/src/App.tabPersistence.test.tsx` は11件→12件。
+  mutation testing 3種(`masterEpoch` 相当の判定〈`AppTabPanel` の再作成条件〉を固定する・`hidden`
+  条件を `false` 固定にする・`visitedTabs` によるフィルタを撤去する)を当て、追加した回帰テストが
+  それぞれ落ちることを確認してから元に戻した。
+  `origin/main` をマージ後、`npx vitest run` 1625件(1624 + 新規1件)・`npm run typecheck`・
+  `npm run lint`(eslint + prettier)いずれも green。
   **Next(critic)**: レビュー待ち。
 
 ## M2: 保存・構築

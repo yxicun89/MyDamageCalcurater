@@ -9,7 +9,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import "./App.css";
 import { createApiEngine } from "./api/apiEngine";
-import { createBalanceClient } from "./api/balanceClient";
+import { createBalanceClient, type BalanceClient } from "./api/balanceClient";
 import { apiBaseUrl } from "./api/config";
 import { createClientIds, type ClientIds } from "./api/clientIds";
 import { loadCalcMode, saveCalcMode, type CalcMode } from "./app/calcMode";
@@ -27,11 +27,11 @@ import { browserWasmLoader } from "./engine/browserWasmLoader";
 import type { CalcEngine } from "./engine/types";
 import { createWasmEngine } from "./engine/wasmEngine";
 import { appText } from "./i18n/ja";
-import { createJudgeClient } from "./judge/judgeClient";
+import { createJudgeClient, type JudgeClient } from "./judge/judgeClient";
 import { isSearchableMasterSource } from "./master/capabilities";
 import { exampleMasterSource } from "./master/exampleSource";
-import { createSpeedClient } from "./speed/speedClient";
-import type { MasterData, MasterSource, MasterSources } from "./master/types";
+import { createSpeedClient, type SpeedClient } from "./speed/speedClient";
+import type { MasterData, MasterSource, MasterSources, MasterSpeciesSearch } from "./master/types";
 import { MASTERLESS_SCREEN_COMPONENTS, SCREEN_COMPONENTS } from "./app/screens";
 
 /** タブの定義順(ロービング tabIndex・矢印キーの移動順。WAI-ARIA Authoring Practices の Tabs パターン)。 */
@@ -214,15 +214,9 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
     () => screenFromPath(window.location.pathname, base) ?? DEFAULT_SCREEN,
   );
 
-  // issue 218(ADR-0308 決定1・決定4): 一度でも選ばれたタブだけを mount し、以後 unmount しない
-  // (訪れていない画面は mount しない。SpeedScreen はマウント時に speed API を2本呼ぶため。
-  // ADR-0604 §2)。App が新たに持つ state はこれ1つだけ(ADR-0308 §影響)。初期値は最初のタブ。
-  const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<ScreenId>>(() => new Set([tab]));
-
-  /** タブを選ぶ(クリック・キーボード・popstate 共通の入口)。訪れたタブの集合にも足す。 */
+  /** タブを選ぶ(クリック・キーボード・popstate 共通の入口)。 */
   function selectTab(nextTab: ScreenId): void {
     setTab(nextTab);
-    setVisitedTabs((prev) => (prev.has(nextTab) ? prev : new Set(prev).add(nextTab)));
   }
 
   // タブ・タブパネルの id(WAI-ARIA Authoring Practices の Tabs パターン: tab の aria-controls が
@@ -309,12 +303,6 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
     document.title = documentTitle(tab);
   }, [tab]);
 
-  // issue 218(ADR-0308 決定3): 計算モードの切り替えでマスタが入れ替わったら、マスタを使う画面は
-  // 作り直す(選んだ種族・技・持ち物・結果を初期状態に戻す)。modeMasterSources が無ければ両モードとも
-  // 同じ masterSource を使う(マスタは入れ替わらない)ので、モードが変わっても作り直さない
-  // (P4-5 の既存テスト: engines だけ渡してモードを切り替えても、計算タブの入力は保たれる)。
-  const masterEpoch = modeMasterSources === null ? "single" : mode;
-
   return (
     <>
       {/* main の外に置く: main の内側だと header は banner ランドマークにならない(HTML-AAM)。 */}
@@ -357,66 +345,137 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
               })}
             </div>
             <div role="tabpanel" id={panelId} aria-labelledby={tabElementId(tab)} className="app-tabs__panel">
-              {/* issue 218(ADR-0308 決定1・決定2): 訪れたタブの画面だけを mount したまま並べ、
-                  選択中でないものは内側の包み要素に hidden を付けて隠す(role=tabpanel 自体は1つのまま)。 */}
-              {TAB_ORDER.filter((id) => visitedTabs.has(id)).map((id) => {
-                const hidden = id !== tab;
-                if (currentMasterLoad.ok) {
-                  // ok の間は、マスタを使わない画面(素早さ)も含めてこの対応表から引く(既存の
-                  // ActiveScreen の描き方のまま。issue 308 のマスタ不要フォールバックは失敗中だけ使う)。
-                  const ScreenComponent = SCREEN_COMPONENTS[id];
-                  return (
-                    <div key={`${masterEpoch}-${id}`} hidden={hidden}>
-                      <ScreenComponent
-                        engine={resolvedEngine}
-                        master={currentMasterLoad.master}
-                        client={balanceClient}
-                        speedClient={speedClient}
-                        judgeClient={judgeClient}
-                        masterSearch={activeMasterSearch}
-                      />
-                    </div>
-                  );
-                }
-                if (isMasterlessScreen(id)) {
-                  // issue 308: マスタを使わない画面(素早さ)は、失敗中でも master・engine を渡さずに
-                  // 描画する(MASTERLESS_SCREEN_COMPONENTS は両方を持たない Props しか要求しない。
-                  // ADR-0304 追記6)。マスタには依存しないので epoch を key に含めない(モードの切り替えで
-                  // 作り直さない。ADR-0308 決定3は「マスタを使う画面」だけが対象)。
-                  const MasterlessScreenComponent = MASTERLESS_SCREEN_COMPONENTS[id];
-                  return (
-                    <div key={`masterless-${id}`} hidden={hidden}>
-                      <MasterlessScreenComponent
-                        client={balanceClient}
-                        speedClient={speedClient}
-                        judgeClient={judgeClient}
-                        masterSearch={activeMasterSearch}
-                      />
-                    </div>
-                  );
-                }
-                if (id !== tab) {
-                  // マスタを使う画面のうち選択中でないものは、マスタが読めていない間は出せない
-                  // (hidden でも実データが無い)。マスタが読めたら次の render で改めて mount する。
-                  return null;
-                }
-                return (
-                  <div key={`failure-${id}`}>
-                    <MasterLoadFailureNotice
-                      error={currentMasterLoad.error}
-                      showSwitchToOffline={mode === "online"}
-                      onRetry={retryMasterLoad}
-                      onSwitchToOffline={() => {
-                        selectMode("offline");
-                      }}
-                    />
-                  </div>
-                );
-              })}
+              {/* issue 218(ADR-0308 決定1・2・3): 訪れたタブの画面だけを mount したまま並べ、
+                  選択中でないものは内側の包み要素に hidden を付けて隠す(role=tabpanel 自体は1つのまま)。
+                  訪れたタブの集合(visitedTabs)は AppTabPanel 自身の state に持たせてある。この
+                  {currentMasterLoad !== null && ...} の分岐が false→true になるたびに AppTabPanel は
+                  作り直される(取得口が変わって一旦 currentMasterLoad が null になったとき。
+                  ADR-0304 §追記 A-6)ので、マスタが入れ替わったときは自動的に訪問履歴もリセットされる
+                  (決定3)。「再試行」(取得口は変わらない)では null を経由しないので保たれる。 */}
+              <AppTabPanel
+                tab={tab}
+                currentMasterLoad={currentMasterLoad}
+                resolvedEngine={resolvedEngine}
+                activeMasterSearch={activeMasterSearch}
+                balanceClient={balanceClient}
+                speedClient={speedClient}
+                judgeClient={judgeClient}
+                mode={mode}
+                retryMasterLoad={retryMasterLoad}
+                selectMode={selectMode}
+              />
             </div>
           </div>
         )}
       </main>
+    </>
+  );
+}
+
+interface AppTabPanelProps {
+  readonly tab: ScreenId;
+  /** currentMasterLoad !== null が確かめられてから渡される(App 側の分岐)。 */
+  readonly currentMasterLoad: MasterLoadResult;
+  readonly resolvedEngine: CalcEngine;
+  readonly activeMasterSearch: MasterSpeciesSearch | undefined;
+  readonly balanceClient: BalanceClient;
+  readonly speedClient: SpeedClient;
+  readonly judgeClient: JudgeClient;
+  readonly mode: CalcMode;
+  readonly retryMasterLoad: () => void;
+  readonly selectMode: (mode: CalcMode) => void;
+}
+
+/**
+ * issue 218(ADR-0308 決定1・2・3): tabpanel の中身(訪れたタブの画面を並べて hidden で隠す)。
+ * 「一度でも選ばれたタブ」の集合(visitedTabs)は、App ではなくこのコンポーネント自身の state に持つ。
+ * これにより、呼び出し側(App)の `{currentMasterLoad !== null && <AppTabPanel .../>}` が
+ * false→true になるたび(= マスタの取得口が変わって一旦 currentMasterLoad が null になり、
+ * 新しいマスタが読み終わったとき。ADR-0304 §追記 A-6)、このコンポーネントごと作り直され、
+ * visitedTabs も自動的に選択中のタブだけへリセットされる(決定3)。「再試行」(取得口は変わらない)では
+ * currentMasterLoad が null を経由しないので、このコンポーネントは作り直されず visitedTabs も保たれる。
+ */
+function AppTabPanel({
+  tab,
+  currentMasterLoad,
+  resolvedEngine,
+  activeMasterSearch,
+  balanceClient,
+  speedClient,
+  judgeClient,
+  mode,
+  retryMasterLoad,
+  selectMode,
+}: AppTabPanelProps) {
+  const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<ScreenId>>(() => new Set([tab]));
+  // tab が変わるたび(クリック・キーボード・popstate)、訪れたタブの集合に足す。effect ではなく
+  // レンダー中に前回の tab との差分を見て setState する(React の「レンダー中の state 更新」パターン。
+  // react-hooks/set-state-in-effect を避けるため。https://react.dev/learn/you-might-not-need-an-effect)。
+  const [prevTab, setPrevTab] = useState(tab);
+  if (tab !== prevTab) {
+    setPrevTab(tab);
+    if (!visitedTabs.has(tab)) {
+      setVisitedTabs(new Set(visitedTabs).add(tab));
+    }
+  }
+
+  return (
+    <>
+      {TAB_ORDER.filter((id) => visitedTabs.has(id)).map((id) => {
+        const hidden = id !== tab;
+        if (currentMasterLoad.ok) {
+          // ok の間は、マスタを使わない画面(素早さ)も含めてこの対応表から引く(既存の
+          // ActiveScreen の描き方のまま。issue 308 のマスタ不要フォールバックは失敗中だけ使う)。
+          // isMasterlessScreen(id) の画面(素早さ)は失敗中の分岐と同じ key(id そのもの)にする
+          // (「再試行」が成功して ok に切り替わっても、同じ SpeedScreen を作り直さないため)。
+          const ScreenComponent = SCREEN_COMPONENTS[id];
+          return (
+            <div key={id} hidden={hidden}>
+              <ScreenComponent
+                engine={resolvedEngine}
+                master={currentMasterLoad.master}
+                client={balanceClient}
+                speedClient={speedClient}
+                judgeClient={judgeClient}
+                masterSearch={activeMasterSearch}
+              />
+            </div>
+          );
+        }
+        if (isMasterlessScreen(id)) {
+          // issue 308: マスタを使わない画面(素早さ)は、失敗中でも master・engine を渡さずに
+          // 描画する(MASTERLESS_SCREEN_COMPONENTS は両方を持たない Props しか要求しない。
+          // ADR-0304 追記6)。key は ok 側の分岐と同じ id にする(上のコメントのとおり)。
+          const MasterlessScreenComponent = MASTERLESS_SCREEN_COMPONENTS[id];
+          return (
+            <div key={id} hidden={hidden}>
+              <MasterlessScreenComponent
+                client={balanceClient}
+                speedClient={speedClient}
+                judgeClient={judgeClient}
+                masterSearch={activeMasterSearch}
+              />
+            </div>
+          );
+        }
+        if (id !== tab) {
+          // マスタを使う画面のうち選択中でないものは、マスタが読めていない間は出せない
+          // (hidden でも実データが無い)。マスタが読めたら次の render で改めて mount する。
+          return null;
+        }
+        return (
+          <div key={`failure-${id}`}>
+            <MasterLoadFailureNotice
+              error={currentMasterLoad.error}
+              showSwitchToOffline={mode === "online"}
+              onRetry={retryMasterLoad}
+              onSwitchToOffline={() => {
+                selectMode("offline");
+              }}
+            />
+          </div>
+        );
+      })}
     </>
   );
 }

@@ -79,6 +79,13 @@ function selectValue(name: string): string {
   return element.value;
 }
 
+/** fetch の呼び出しのうち speed API(api/speed/…)のものの件数(App.test.tsx の urlOf と同じ形)。 */
+function speedCallCount(calls: readonly (readonly [string | URL | Request, ...unknown[]])[]): number {
+  const urlOf = (input: string | URL | Request): string =>
+    input instanceof Request ? input.url : input instanceof URL ? input.href : input;
+  return calls.filter(([input]) => urlOf(input).includes("api/speed/")).length;
+}
+
 describe("issue #218 タブを往復しても入力が残る(同じマスタで開いている間)", () => {
   test("計算タブの種族・持ち物・技は、逆算タブへ行って戻っても残る", async () => {
     const { attackerKey, defenderKey, itemId } = await examplePicks();
@@ -208,13 +215,6 @@ describe("issue #218 隠し方(ADR-0308 決定2: hidden 属性・tabpanel は1�
 });
 
 describe("issue #218 未訪問の画面は mount しない(ADR-0308 決定1)", () => {
-  /** fetch の呼び出しのうち speed API(api/speed/…)のものの件数(App.test.tsx の urlOf と同じ形)。 */
-  function speedCallCount(calls: readonly (readonly [string | URL | Request, ...unknown[]])[]): number {
-    const urlOf = (input: string | URL | Request): string =>
-      input instanceof Request ? input.url : input instanceof URL ? input.href : input;
-    return calls.filter(([input]) => urlOf(input).includes("api/speed/")).length;
-  }
-
   test("素早さのタブを開くまで speed API を呼ばない(全画面を先に mount しない)", async () => {
     const { attackerKey } = await examplePicks();
     const fetchMock = vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
@@ -276,9 +276,9 @@ describe("issue #218 異常系: マスタが入れ替わったら作り直す(AD
     const offlineSource: MasterSource = { load: () => Promise.resolve(offline) };
     const onlineSource: MasterSource = { load: () => Promise.resolve(online) };
     const [item] = offline.items;
-    const [attacker] = offline.species;
-    if (item === undefined || attacker === undefined) {
-      throw new Error("例データに種族と持ち物が要る");
+    const [attacker, defender] = offline.species;
+    if (item === undefined || attacker === undefined || defender === undefined) {
+      throw new Error("例データに種族2体と持ち物が要る");
     }
     const user = userEvent.setup();
     render(
@@ -290,7 +290,11 @@ describe("issue #218 異常系: マスタが入れ替わったら作り直す(AD
 
     await user.selectOptions(await screen.findByRole("combobox", { name: "攻撃側のポケモン" }), attacker.key);
     await user.selectOptions(calcCombobox("攻撃側の持ち物"), item.id);
+    // 攻撃側・防御側の両方を選び、切り替え前に実際に計算結果を出しておく(critic指摘: 結果を一度も
+    // 出さずに queryByRole(...).toBeNull() を確かめても空振りのアサーションにしかならない)。
+    await user.selectOptions(calcCombobox("防御側のポケモン"), defender.key);
     expect(calcCombobox("攻撃側のポケモン")).toHaveValue(attacker.key);
+    await screen.findByRole("list", { name: "計算結果" });
 
     await user.click(modeRadio("オンライン(API)"));
 
@@ -306,7 +310,7 @@ describe("issue #218 異常系: マスタが入れ替わったら作り直す(AD
     expect(calcCombobox("攻撃側のポケモン")).toHaveValue("");
     expect(calcCombobox("攻撃側の持ち物")).toHaveValue("");
     expect(selectValue("技")).toBe("");
-    // 古いマスタで計算した結果も残らない。
+    // 古いマスタで計算した結果(切り替え直前に実際に出していたもの)も残らない。
     expect(screen.queryByRole("list", { name: "計算結果" })).toBeNull();
   });
 
@@ -345,6 +349,46 @@ describe("issue #218 異常系: マスタが入れ替わったら作り直す(AD
       ).toBeInTheDocument();
     });
     expect(calcCombobox("攻撃側のポケモン")).toHaveValue("");
+  });
+
+  test("素早さタブを訪問後にマスタが入れ替わっても、speed API を呼び直さない(hidden のまま再マウントしない)", async () => {
+    // critic の実測(#218 FAIL 指摘): 素早さタブを一度開く→計算タブへ戻る→計算モードを切り替える、で
+    // 呼び出し件数が2件→4件に増えていた。visitedTabs が App の state のままだと、マスタ再読み込みで
+    // .app-tabs サブツリーが作り直されるとき、訪問済みの素早さも含めて全部 hidden のまま再マウントされ、
+    // SpeedScreen のマウント時 speed API 呼び出しが再度走っていた。
+    const { offline, online } = await swappedMasters();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    const user = userEvent.setup();
+    render(
+      <App
+        engine={createFakeEngine()}
+        masterSources={() => ({
+          offline: { load: () => Promise.resolve(offline) },
+          online: { load: () => Promise.resolve(online) },
+        })}
+      />,
+    );
+    await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
+
+    // 素早さタブを一度開く(speed API が呼ばれる)。
+    await user.click(tabButton("素早さ"));
+    await screen.findByRole("region", { name: "自分のポケモン" });
+    await waitFor(() => {
+      expect(speedCallCount(fetchMock.mock.calls)).toBeGreaterThan(0);
+    });
+    const callsAfterSpeedVisit = speedCallCount(fetchMock.mock.calls);
+
+    // 計算タブへ戻ってから、計算モードを切り替えてマスタを入れ替える。
+    await user.click(tabButton("計算"));
+    await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
+    await user.click(modeRadio("オンライン(API)"));
+    await waitFor(() => {
+      expect(calcCombobox("攻撃側のポケモン")).toHaveValue("");
+    });
+
+    // 素早さは非選択(hidden)のまま。訪問済みタブは選択中のタブだけへリセットされ、素早さは
+    // 再訪問するまで mount されないので、呼び出し件数は増えない。
+    expect(speedCallCount(fetchMock.mock.calls)).toBe(callsAfterSpeedVisit);
   });
 });
 
