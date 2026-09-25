@@ -1772,3 +1772,12 @@ Impact: **データレーンへ**: #271・#270 は API レーン担当分も完�
 **iOS レーンへ**: swift-openapi-generator の生成物の再生成(`make ios-gen` 相当)が必要(このタスクでは
 未実施)。再生成すると `MasterMove.mechanisms`・`CalcResult.unsupported`・`ReverseCandidate.unsupported` が
 必須フィールドとして生成物に増えるため、既存のデコード/モック実装が影響を受ける可能性がある。
+
+## 2026-09-25: ユーザー決定 4 件(GitOps の範囲・API の入口・AI の権限・公開)
+Decision(ユーザーが選択。いずれも推奨案):
+1. #292(+#241): **balance だけを GitOps(Argo CD)にし、常に Synced に保つ**。damage calc 系は `make deploy-latest` のまま。CLAUDE.md の「Argo CD が main を見ているので PR 必須」の理由は「main を常に緑に保つため(CI・レビューの記録)」に書き直す(CLAUDE.md の文言はユーザーに1回確認してから)。
+2. #284: **balance・speed・judge も gateway の後ろにまとめる**(CLAUDE.md の「gateway が唯一の入口」を保つ。端末 ID の検証を1か所に)。API → タイプバランス・素早さ・判定 → Web・iOS の順。
+3. #273(+#239): **allow を読み取り系と非破壊の make に絞り、破壊・秘密・main への反映に関わる操作は ask にする。PreToolUse フックでコマンド本文も検査する**(`.claude/settings.json`・`.codex/`)。
+4. #328: **非公開・私的利用のまま**。LICENSE は置かない。README に明記し、アプリ内に第三者データの出典と非公式の表示を入れる。R-2-9(公開用クリーンコピー)は行わない。
+Reason: 全件解決の仕分け(2026-09-25)で「人間の判断が必要」とした項目のうち、進め方に効く 4 件を質問した。
+Impact: 各 issue の needs-decision を ready-for-implementation に付け替え、決定をコメントした。クラウド選定(#149)・認証(#148)は「+α」として保留のまま。
