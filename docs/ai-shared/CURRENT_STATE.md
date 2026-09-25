@@ -143,15 +143,15 @@ JSONを一時的に書き換えるmutationで実際に検知することを確�
 `justify-content: safe center`に修正、design.mdに記録。safeキーワードのSafari対応はP4-5のSafari確認
 (ブロッカー節)に追記。回帰テスト2件(1行であることの直接確認・スクロールで先頭末尾に到達できることの確認)。
 **2026-09-25、オーケストレーター(damage calculation bug resolution)から13件のissue消化を依頼された**
-(open 113件中、優先度順): (1) bug: #333(完了・PR #356オープン中)・#306(タイプ名コントラスト・
-ダメージバー読み上げ名。spec-writer実行中)・#275(逆算「受けたダメージ」で自分の耐久が無振り固定。
-spec-writer実行中、high severity)。(2) ready-for-implementation: #304・#308・#305・#248・#218・#219
-(APIレーン連携)・#211(APIレーン連携)・#332(devDependencies更新)・#226(README等の実装状況)は未着手。
-(3) needs-decisionだが「要望済み機能は実装しきる」方針で既定案付きで実装: #272(特性選択)・#274(急所・
-やけど・天候・フィールド・ランク・壁・特性の指定。iOSへも連絡済み)・#210(オフライン実データ)は未着手。
-P5-5はAPIレーンの契約が出たら最優先。
-Next: (1) #306・#275のspec-writer完了待ち→implementer→critic。(2) 順次(2)(3)の残りへ。(3) P4-20:
-issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
+(open 113件中、優先度順): (1) bug: #333(完了・main統合済み。PR #356)・#306(タイプ名コントラスト・
+ダメージバー読み上げ名。完了・main統合済み。PR #362)・#275(逆算「受けたダメージ」で自分の耐久が無振り固定。
+high severity。完了・critic PASS・**PR #366オープン中**、オーケストレーターのマージ待ち)。
+(2) ready-for-implementation: #304・#308・#305・#248・#218・#219(APIレーン連携)・#211(APIレーン連携)・
+#332(devDependencies更新)・#226(README等の実装状況)は未着手。(3) needs-decisionだが「要望済み機能は
+実装しきる」方針で既定案付きで実装: #272(特性選択)・#274(急所・やけど・天候・フィールド・ランク・壁・
+特性の指定。iOSへも連絡済み)・#210(オフライン実データ)は未着手。P5-5はAPIレーンの契約が出たら最優先。
+Next: (1) PR #366のマージ待ち→#71のWeb側(完了・main統合済み。PR #352)。(2) 続けて(2)(3)の残りへ着手。
+(3) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
 (apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより
 連絡が来る想定。(4) P5-5(構築ビルダー等)は record/team の API 待ち(M2。2026-09-24 時点で record/team-svc
 の DB マイグレーション・TiDB 導入方針〈ADR-0211〉はデータレーンで進行中)。(5) 人間へのお願い:
@@ -247,7 +247,26 @@ JD4(返り討ち判定。PR #169)・JD5(Web の画面。PR #182。ADR-0705)ま�
 (`/judge` タブ)から呼べる。技はID自由入力(ADR-0304 §3の技一覧APIの欠落を踏襲)、相手側の追い風は全候補共通の
 1チェックボックス(ADR-0703 §5)、送信ボタンでのみ呼ぶ(1回で上流最大27回)。
 Next: 新規要望待ち。軽微な積み残しは解消済み(2026-09-25。`attacker`単数の`Individual`にも`defenders`候補と
-同じ大文字小文字厳密なキー検査〈`individualWireKeys`〉を適用。PR で main へ)。iOS版JD5は要望が出たら判断(ADR-0705 却下案)
+同じ大文字小文字厳密なキー検査〈`individualWireKeys`〉を適用。PR #342 main 統合済み)。
+issue #234(moveId/natureId の形式検証。ADR-0706)も解消(2026-09-25。critic 2ラウンド。PR #365 main 統合済み):
+名前付きスキーマ `MoveId`/`NatureId`(pattern `^[a-z0-9]+(-[a-z0-9]+)*$`・maxLength 64)を契約に追加し、
+`outspeed.go` の3箇所(attacker moveId・natureId共有・候補moveId)で上流呼び出し前に検査、
+`pokedex.go` は `url.PathEscape` で二重の守り。`web/src/judge/judge.gen.ts` も手動再生成(ADR-0705 §2)。
+issue #213(重大度 high。リクエスト全体の期限。ADR-0707)も解消(2026-09-25。critic PASS〈1回目〉。PR #370 main 統合済み):
+`JUDGE_REQUEST_TIMEOUT`(既定12秒。`writeTimeout`=15秒未満を起動時検証)を新設し、`outspeedAndKo` の
+先頭で ctx を1回だけ `context.WithTimeout` でラップして以降の上流呼び出しに使い回す(呼び出し順序・
+逐次打ち切り規約〈ADR-0703 §3〉は無変更)。`internal/client` は無変更(`http.NewRequestWithContext` の
+既存の context 統合だけで「進行中呼び出しの中断」「未着手呼び出しの即時失敗」の両方が成立)。
+上流が遅くても期限内に503 JSONを返すようになり、クライアントが空応答(HTTP 000)を受け取ることが無くなった。
+issue #329(重大度 low。SP合計67の境界値テスト欠落)も解消(2026-09-25。テストのみ・実装無変更。PR #371 main 統合済み):
+`validateSP` の合計超過検査の既存テストが境界〈67〉から遠い(96)ため、
+`> engine.MaxSPTotal` を `+1` する退行を検出できなかった。境界値(合計66は受け付け・67は拒否)の
+テストを `internal/judge`・`internal/httpapi` 両方に追加し、mutation test で実際に検出できることを確認。
+issue #257(重大度 low。smoke.sh が healthz のみ)も解消(2026-09-25。テスト用スクリプトのみ。PR で main へ):
+gateway smoke の ID取得部分を流用し `POST /api/judge/v1/outspeed-and-ko` の 200(hits含む)・
+ヘッダなし400・未知speciesKey 422・7候補400 を実クラスタ(k3d-pokecalc、実データ)で確認済み。
+`Makefile` に `API_URL` を追加、README の古い「JD0完了」表記も修正。
+iOS版JD5は要望が出たら判断(ADR-0705 却下案)
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

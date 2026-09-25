@@ -34,8 +34,10 @@ test("攻撃側・防御側を選ぶと技が自動で選ばれ、既定の5行�
     expect(text).toMatch(PERCENT_RANGE_PATTERN);
     expect(text).toMatch(KO_PATTERN);
   }
-  // 各行にダメージバー(meter)がある。
-  await expect(rows.getByRole("meter")).toHaveCount(DEFAULT_ROW_COUNT);
+  // 各行にダメージバーがある。issue #306 でバーは装飾(aria-hidden)にしたので、
+  // role ではなく testid で数え、支援技術に名前の無い meter が残っていないことも確かめる。
+  await expect(rows.getByTestId("damage-bar")).toHaveCount(DEFAULT_ROW_COUNT);
+  await expect(page.getByRole("meter")).toHaveCount(0);
 });
 
 test("攻撃側の調整を A特化 に変えると、先頭行の最大%が増える", async ({ page }) => {
@@ -63,11 +65,16 @@ test("攻守入れ替えで攻撃側・防御側の名前が入れ替わり、�
 
   await expect(combobox(page, "攻撃側のポケモン")).toHaveValue(SPECIES.water.key);
   await expect(combobox(page, "防御側のポケモン")).toHaveValue(SPECIES.fire.key);
+  // issue #304: カードの見出し(h2)は「攻撃側」「防御側」のまま動かず、
+  // 入れ替わるのはその中のポケモンの名前(h3。design.md「入力のラベル」の見出しの階層)。
   await expect(
     page.getByRole("region", { name: "攻撃側", exact: true }).getByRole("heading", { level: 2 }),
+  ).toHaveText("攻撃側");
+  await expect(
+    page.getByRole("region", { name: "攻撃側", exact: true }).getByRole("heading", { level: 3 }),
   ).toHaveText(SPECIES.water.nameJa);
   await expect(
-    page.getByRole("region", { name: "防御側", exact: true }).getByRole("heading", { level: 2 }),
+    page.getByRole("region", { name: "防御側", exact: true }).getByRole("heading", { level: 3 }),
   ).toHaveText(SPECIES.fire.nameJa);
 
   // 技は新しい攻撃側(テストみず)の learnset から選び直され、結果は入れ替え前と異なる。

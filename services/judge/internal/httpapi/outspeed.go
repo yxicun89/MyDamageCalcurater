@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,6 +33,22 @@ var errInvalidOutspeedBody = errors.New("request body does not match the outspee
 // speciesKeyPattern is api/openapi.yaml's SpeciesKey pattern (judge holds it once, matching
 // services/speed's pokemonIDPattern precedent: the generated code doesn't validate it).
 var speciesKeyPattern = regexp.MustCompile(`^[0-9]{4}-[0-9]{3}$`)
+
+// moveIDPattern / natureIDPattern are api/openapi.yaml's MoveId / NatureId pattern (Showdown
+// ID: lowercase alphanumeric, hyphen-separated). Both fields share the same regex (ADR-0706
+// §1), matching services/balance's MoveId/AbilityId precedent (ADR-0016 §2・ADR-0017 §2). The
+// length limit is checked separately via maxIDLength, not embedded in the regex, so the
+// contract's maxLength and this pattern don't need to agree on the same number in two places
+// (ADR-0706 §1).
+var (
+	moveIDPattern   = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+	natureIDPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+)
+
+// maxIDLength is the upper bound on moveId/natureId length (ADR-0706 §1: judge doesn't hold the
+// master, so this exists only to keep an unbounded value from becoming a path element sent
+// upstream, matching api/openapi.yaml's MoveId/NatureId maxLength).
+const maxIDLength = 64
 
 // minDefenders/maxDefenders: ADR-0703 §1 の defenders の件数の上下限。oapi-codegen の生成コードは
 // minItems/maxItems を検証しないので、httpapi 側が自前で検査する。
@@ -137,6 +154,17 @@ func parseCandidateWire(raw json.RawMessage) (defenderCandidateWire, error) {
 		return defenderCandidateWire{}, errInvalidOutspeedBody
 	}
 	return wire, nil
+}
+
+// validMoveID / validNatureID check ADR-0706 §1's format (Showdown ID) and length
+// (maxIDLength) for moveId / natureId. Both use the same regex, but are kept as separate
+// functions matching speciesKeyPattern's call-site convention (one pattern per field kind).
+func validMoveID(id string) bool {
+	return len(id) <= maxIDLength && moveIDPattern.MatchString(id)
+}
+
+func validNatureID(id string) bool {
+	return len(id) <= maxIDLength && natureIDPattern.MatchString(id)
 }
 
 // decodeRequiredString decodes raw as a required non-empty JSON string. A missing key (raw ==
@@ -247,6 +275,13 @@ func outspeedAndKo(c *echo.Context, deps Dependencies, params api.OutspeedAndKoP
 	}
 
 	ctx := c.Request().Context()
+	if deps.RequestTimeout > 0 {
+		// ADR-0707 §2: リクエスト全体の期限を 1 回だけ張り、以降の上流呼び出しすべてに使う
+		// (呼び出し順序・逐次であること自体は変えない。ADR-0703 §3 の維持)。
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, deps.RequestTimeout)
+		defer cancel()
+	}
 	rc := client.RequestContext{DeviceID: params.XDeviceId, SessionID: params.XSessionId}
 
 	natures, err := deps.Pokedex.Natures(ctx, rc)
@@ -423,7 +458,10 @@ func toOutspeedRequest(wire outspeedRequestWire) (outspeedRequest, error) {
 		return outspeedRequest{}, errInvalidOutspeedBody
 	}
 	if wire.MoveID == nil || *wire.MoveID == "" {
-		return outspeedRequest{}, errInvalidOutspeedBody
+		return outspeedRequest{}, fmt.Errorf("%w: attacker", errInvalidOutspeedBody)
+	}
+	if !validMoveID(*wire.MoveID) {
+		return outspeedRequest{}, fmt.Errorf("%w: attacker", errInvalidOutspeedBody)
 	}
 
 	attackerWire, err := parseIndividualWire(wire.Attacker)
@@ -514,6 +552,9 @@ func toIndividualInput(wire individualWire) (individualInput, error) {
 	if wire.NatureID == nil || *wire.NatureID == "" {
 		return individualInput{}, errInvalidOutspeedBody
 	}
+	if !validNatureID(*wire.NatureID) {
+		return individualInput{}, errInvalidOutspeedBody
+	}
 
 	sp, err := toStats(wire.SP)
 	if err != nil {
@@ -549,6 +590,9 @@ func toDefenderInput(wire defenderCandidateWire) (defenderInput, error) {
 	}
 	moveID, ok := decodeRequiredString(wire.MoveID)
 	if !ok {
+		return defenderInput{}, errInvalidOutspeedBody
+	}
+	if !validMoveID(moveID) {
 		return defenderInput{}, errInvalidOutspeedBody
 	}
 	return defenderInput{individualInput: individual, moveID: moveID}, nil

@@ -83,6 +83,10 @@ const (
 	KindEffectNoHook FindingKind = "effect-no-hook"
 	// KindFormLearnetDiff は畳んだフォームの習得技(取り込む技に絞る)が代表と違うとき。ID は畳んだフォーム。
 	KindFormLearnsetDiff FindingKind = "form-learnset-diff"
+	// KindTypeChartReferenceMismatch は取り込む相性表(calc スナップショット由来)が参照の相性表
+	// (testdata/golden/typechart.json。ゴールデンテスト・balance・Web が使う)と食い違うとき
+	// (issue #280・ADR-0118)。ID は "version" / "types" / "<攻撃>><防御>"。
+	KindTypeChartReferenceMismatch FindingKind = "type-chart-reference-mismatch"
 )
 
 // Finding は1件の指摘。ID は技・持ち物・特性 ID、種族は showdown_id(calc だけのものは

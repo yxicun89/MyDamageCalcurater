@@ -665,10 +665,15 @@ function SpeciesCard({
   const className = ["calc-card", isSwapping ? "is-swapping" : "", holo.isHolo ? "is-holo" : ""]
     .filter((part) => part !== "")
     .join(" ");
+  // 領域(カード)の見える見出し(h2)。accessible name はこの見出しの文字から作る(SC 2.5.3)。
+  // 2枚のカードを並べて出すので、id は useId() で発行し固定文字列にしない。
+  const regionHeadingId = useId();
+  const speciesSelectId = useId();
+  const itemSelectId = useId();
   return (
     <section
       className={className}
-      aria-label={regionLabel}
+      aria-labelledby={regionHeadingId}
       style={holo.style}
       onAnimationEnd={(event) => {
         // バブリングで子要素のアニメーション(バッジの弾み等)と混ざらないよう currentTarget と比べる。
@@ -679,21 +684,32 @@ function SpeciesCard({
       onPointerMove={holo.onPointerMove}
       onPointerLeave={holo.onPointerLeave}
     >
+      <h2 id={regionHeadingId} className="calc-card__region">
+        {regionLabel}
+      </h2>
       {speciesListAvailable ? (
-        <select
-          aria-label={speciesSelectLabel}
-          value={selectedSpeciesKey}
-          onChange={(event) => {
-            onSpeciesChange(event.target.value);
-          }}
-        >
-          <option value="" hidden />
-          {speciesList.map((candidate) => (
-            <option key={candidate.key} value={candidate.key}>
-              {candidate.nameJa}
+        <>
+          <label className="calc-card__label" htmlFor={speciesSelectId}>
+            {calcScreenText.pokemonFieldLabel}
+          </label>
+          <select
+            id={speciesSelectId}
+            aria-label={speciesSelectLabel}
+            value={selectedSpeciesKey}
+            onChange={(event) => {
+              onSpeciesChange(event.target.value);
+            }}
+          >
+            <option value="" hidden>
+              {calcScreenText.speciesPlaceholderOption}
             </option>
-          ))}
-        </select>
+            {speciesList.map((candidate) => (
+              <option key={candidate.key} value={candidate.key}>
+                {candidate.nameJa}
+              </option>
+            ))}
+          </select>
+        </>
       ) : (
         <SpeciesSearchField
           label={speciesSelectLabel}
@@ -704,20 +720,26 @@ function SpeciesCard({
       {/* P4-16b(ADR-0304 A-10): 検索中(まだ種族が解決していない)は持ち物欄も出さない
           (attackerCard 内の role="option" は種族の検索候補だけにする。「入力前は候補を出さない」)。 */}
       {(speciesListAvailable || species !== null) && (
-        <select
-          aria-label={itemSelectLabel}
-          value={selectedItemId}
-          onChange={(event) => {
-            onItemChange(event.target.value);
-          }}
-        >
-          <option value="">{calcScreenText.noItemOption}</option>
-          {items.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.nameJa}
-            </option>
-          ))}
-        </select>
+        <>
+          <label className="calc-card__label" htmlFor={itemSelectId}>
+            {calcScreenText.itemFieldLabel}
+          </label>
+          <select
+            id={itemSelectId}
+            aria-label={itemSelectLabel}
+            value={selectedItemId}
+            onChange={(event) => {
+              onItemChange(event.target.value);
+            }}
+          >
+            <option value="">{calcScreenText.noItemOption}</option>
+            {items.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.nameJa}
+              </option>
+            ))}
+          </select>
+        </>
       )}
       {species !== null && primaryType !== undefined && (
         <div className="calc-card__info">
@@ -726,10 +748,17 @@ function SpeciesCard({
             data-testid="type-emblem"
             style={{ backgroundColor: `var(--type-${primaryType})` }}
           />
-          <h2 className="calc-card__name">{species.nameJa}</h2>
+          <h3 className="calc-card__name">{species.nameJa}</h3>
           <ul className="calc-card__types">
             {species.types.map((type) => (
-              <li key={type} className="calc-card__type" style={{ color: `var(--type-${type})` }}>
+              <li
+                key={type}
+                className="calc-card__type"
+                style={{
+                  backgroundColor: `var(--type-${type}, var(--border-hairline))`,
+                  color: `var(--type-${type}-ink, var(--text-primary))`,
+                }}
+              >
                 {/* マスタ由来の type は相性表の18種に限らないので、型ガードで確かめ、
                     未知の ID はそのまま出す(未知データで画面を壊さない)。 */}
                 {isTypeId(type) ? typeNameJa[type] : type}
@@ -796,26 +825,34 @@ interface MoveSelectProps {
 
 /** 技セレクタ。learnset の順のまま、分類と威力(変化技は威力を出さない)を併記する。 */
 function MoveSelect({ moves, value, onChange, disabled = false }: MoveSelectProps) {
+  const moveSelectId = useId();
   return (
-    <select
-      aria-label={calcScreenText.moveLabel}
-      value={value}
-      disabled={disabled}
-      onChange={(event) => {
-        onChange(event.target.value);
-      }}
-    >
-      {moves.map((move) => (
-        <option key={move.id} value={move.id}>
-          {move.nameJa}
-          {calcScreenText.moveOptionSeparator}
-          {formatMoveCategory(move.category)}
-          {move.category === "status"
-            ? ""
-            : `${calcScreenText.moveOptionSeparator}${calcScreenText.movePowerLabel}${String(move.power)}`}
-        </option>
-      ))}
-    </select>
+    <>
+      <label className="calc-screen__label" htmlFor={moveSelectId}>
+        {calcScreenText.moveLabel}
+      </label>
+      <select
+        id={moveSelectId}
+        className="calc-screen__move"
+        aria-label={calcScreenText.moveLabel}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
+      >
+        {moves.map((move) => (
+          <option key={move.id} value={move.id}>
+            {move.nameJa}
+            {calcScreenText.moveOptionSeparator}
+            {formatMoveCategory(move.category)}
+            {move.category === "status"
+              ? ""
+              : `${calcScreenText.moveOptionSeparator}${calcScreenText.movePowerLabel}${String(move.power)}`}
+          </option>
+        ))}
+      </select>
+    </>
   );
 }
 
@@ -895,7 +932,9 @@ const DAMAGE_BAR_MAX_PERCENT = 100;
 function ResultsList({ result, items, moveType, pulsingKeys, onKoAnimationEnd }: ResultsListProps) {
   const firstRow = result.rows[0];
   const barColor =
-    moveType === undefined || moveType === "" ? "var(--text-secondary)" : `var(--type-${moveType})`;
+    moveType === undefined || moveType === ""
+      ? "var(--text-secondary)"
+      : `var(--type-${moveType}, var(--text-secondary))`;
   return (
     <div className="calc-results">
       {firstRow !== undefined && (
@@ -921,14 +960,9 @@ function ResultsList({ result, items, moveType, pulsingKeys, onKoAnimationEnd }:
               <span className={koClassName} onAnimationEnd={onKoAnimationEnd(koKey)}>
                 {formatKO(row.result.ko)}
               </span>
-              <div
-                role="meter"
-                aria-valuemin={0}
-                aria-valuemax={DAMAGE_BAR_MAX_PERCENT}
-                aria-valuenow={barValue}
-                className="calc-results__bar"
-              >
+              <div aria-hidden="true" data-testid="damage-bar" className="calc-results__bar">
                 <div
+                  data-testid="damage-bar-fill"
                   className="calc-results__bar-fill"
                   style={{ width: `${String(barValue)}%`, backgroundColor: barColor }}
                 />

@@ -63,6 +63,8 @@ func reconcileInput(t *testing.T) importer.Input {
 	sdItem(t, &in, "testorb").Hooks = []string{"onModifyDamage"}
 	sdItem(t, &in, "testberry").Hooks = []string{"onEat", "onSourceModifyDamage"}
 	sdAbility(t, &in, "testguard").Hooks = []string{"onSourceModifyDamage"}
+	// 参照の相性表(issue #280)。fixture の calc と一致する架空の表。
+	in.ReferenceTypeChart = loadFictionalReference(t)
 	return in
 }
 
