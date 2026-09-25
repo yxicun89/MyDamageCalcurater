@@ -96,8 +96,10 @@ export interface paths {
      *     検査順(ADR-0701 §5 を ADR-0703 §4・ADR-0704 §5 が拡張した形。上流は逐次で呼ぶ):
      *     ヘッダー (400) → body が 1 つの JSON か・上限 8 KiB (400 / 413)
      *     → defenders の件数が 1〜6 か (400)
-     *     → attacker と各 defender の sp・ranks・format・必須文字列(候補の moveId を含む)の範囲
-     *        (400。最初に範囲外だった候補の index で止める。ここまで上流を 1 回も呼ばない)
+     *     → attacker と各 defender の sp・ranks・format・必須文字列(候補の moveId を含む)の範囲と、
+     *        ID の形式(moveId / natureId が MoveId / NatureId の pattern・maxLength に合うか。ADR-0706 §1)
+     *        (400。attacker を先に見て、次に defenders を index 昇順。最初に範囲外だった候補の index で止める。
+     *         ここまで上流を 1 回も呼ばない。形式が合わない ID は 503 upstream_unavailable にならない。ADR-0706 §3)
      *     → 性格の一覧 (1 リクエストにつき 1 回だけ。503)
      *     → natureId が一覧に無い (422 unknown_nature。attacker → defenders を index 昇順に見て最初の 1 件)
      *     → attacker の種族 (422 unknown_species / 503)
@@ -135,6 +137,22 @@ export interface components {
      * @example 0445-000
      */
     SpeciesKey: string;
+    /**
+     * @description 技 ID(Showdown ID: 小文字英数をハイフンで区切る)。意味の正はルートの api/openapi.yaml の Move.id。
+     *     judge はこの ID を GET /api/pokedex/moves/{key} の path 要素に埋めるので、形式に合わない値は
+     *     上流を呼ぶ前に 400 invalid_request で断る(ADR-0706 §1・§3)。形式は合うがマスタに無いときは
+     *     422 unknown_move(ADR-0704 §6)。
+     * @example flamethrower
+     */
+    MoveId: string;
+    /**
+     * @description 性格 ID(Showdown ID: 小文字英数をハイフンで区切る)。GET /api/pokedex/natures の一覧で
+     *     補正する能力に解決する(ADR-0701 §4)。URL には埋めないが、同じ由来の ID を欄ごとに違う
+     *     厳しさで通さないため MoveId と同じ形式で検査する(ADR-0706 §5)。形式に合わない値は
+     *     上流を呼ぶ前に 400 invalid_request、一覧に無いときは 422 unknown_nature。
+     * @example jolly
+     */
+    NatureId: string;
     /**
      * @description 対戦形式。calc-svc にそのまま渡す。
      * @default single
@@ -175,8 +193,7 @@ export interface components {
      */
     Individual: {
       speciesKey: components["schemas"]["SpeciesKey"];
-      /** @description 性格 ID。GET /api/pokedex/natures の一覧で補正する能力に解決する(ADR-0701 §4)。 */
-      natureId: string;
+      natureId: components["schemas"]["NatureId"];
       sp: components["schemas"]["StatBlock"];
       ranks?: components["schemas"]["RankBlock"];
       /** @description 特性 ID。judge は解釈せず calc-svc にそのまま渡す。 */
@@ -200,8 +217,7 @@ export interface components {
      */
     DefenderCandidate: {
       speciesKey: components["schemas"]["SpeciesKey"];
-      /** @description 性格 ID。GET /api/pokedex/natures の一覧で補正する能力に解決する(ADR-0701 §4)。 */
-      natureId: string;
+      natureId: components["schemas"]["NatureId"];
       sp: components["schemas"]["StatBlock"];
       ranks?: components["schemas"]["RankBlock"];
       /** @description 特性 ID。judge は解釈せず calc-svc にそのまま渡す。 */
@@ -215,8 +231,10 @@ export interface components {
        * @description この候補が使う技(1 つ)。優先度は GET /api/pokedex/moves/{key} で引き、
        *     この技によるダメージは calc-svc を逆方向(この候補が攻撃側・自分が防御側)で
        *     呼んで求める(ADR-0704 §4)。マスタに無ければ 422 unknown_move。
+       *     形式が MoveId に合わない値は上流を呼ぶ前に 400 invalid_request で、
+       *     message は defenders[<index>] を示す(ADR-0706 §3・§4)。
        */
-      moveId: string;
+      moveId: components["schemas"]["MoveId"];
     };
     /**
      * @default none
@@ -296,8 +314,10 @@ export interface components {
        * @description 自分(attacker)が使う技(1 つ)。すべての候補に対して同じ技で判定する。
        *     JD4 からは優先度を引くために GET /api/pokedex/moves/{key} でも解決するので、
        *     マスタに無ければ calc-svc に届く前に 422 unknown_move になる(ADR-0704 §7)。
+       *     形式が MoveId に合わない値は上流を呼ぶ前に 400 invalid_request で、
+       *     message は attacker を示す(候補の index を騙らない。ADR-0706 §4)。
        */
-      moveId: string;
+      moveId: components["schemas"]["MoveId"];
       field?: components["schemas"]["FieldState"];
       speedField?: components["schemas"]["SpeedField"];
     };

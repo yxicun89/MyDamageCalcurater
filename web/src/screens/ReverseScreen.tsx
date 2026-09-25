@@ -17,6 +17,14 @@ import {
   resolveAttackerPreset,
   type AttackerPresetKey,
 } from "../domain/attackerPresets";
+import {
+  DEFAULT_DEFENDER_PRESET,
+  defenderPresetForCategory,
+  defenderPresetKeysFor,
+  defenderPresetLabel,
+  resolveDefenderPreset,
+  type DefenderPresetKey,
+} from "../domain/defenderPresets";
 import { formatMoveCategory, formatPercentRange } from "../domain/format";
 import { firstDamagingMove, learnsetMoves } from "../domain/moves";
 import {
@@ -27,13 +35,7 @@ import {
   type ObservationUnit,
 } from "../domain/observations";
 import { MAX_ITEM_CANDIDATES, MAX_OBSERVATIONS } from "../domain/requestLimits";
-import {
-  NEUTRAL_NATURE,
-  ZERO_SP,
-  buildIndividual,
-  buildReverseRequest,
-  defaultAbility,
-} from "../domain/requests";
+import { buildIndividual, buildReverseRequest, defaultAbility } from "../domain/requests";
 import { reverseItemCandidates } from "../domain/reverseItems";
 import {
   formatSPRanges,
@@ -140,6 +142,7 @@ interface CompletedReverse {
   readonly move: Move;
   readonly myItem: Item | null;
   readonly attackerPresetKey: AttackerPresetKey;
+  readonly defenderPresetKey: DefenderPresetKey;
   readonly observations: readonly Observation[];
   readonly result: EngineResult<ReverseResult>;
 }
@@ -168,6 +171,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   const [myItemId, setMyItemId] = useState("");
   const [moveId, setMoveId] = useState("");
   const [attackerPresetKey, setAttackerPresetKey] = useState<AttackerPresetKey>(DEFAULT_ATTACKER_PRESET);
+  const [defenderPresetKey, setDefenderPresetKey] = useState<DefenderPresetKey>(DEFAULT_DEFENDER_PRESET);
   // 観測行の連番(newObservationRow)。0 は初期行が使う。
   const lastRowId = useRef(0);
   const nextRowId = (): number => {
@@ -221,6 +225,11 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     () => moveOptions.find((candidate) => candidate.id === moveId) ?? null,
     [moveOptions, moveId],
   );
+  // issue 275: 技を選んでいないときの自分の調整の表示用の仮の分類は DEFAULT_MOVE_CATEGORY(物理)。
+  const presetCategory = move?.category ?? DEFAULT_MOVE_CATEGORY;
+  // 技の分類が変わったとき、自分の耐久(防御側プリセット)を対になるプリセットへ自動で読み替える
+  // (issue 275。選択肢が入れ替わってもラジオグループに必ず1つ checked が残るようにするため)。
+  const effectiveDefenderPresetKey = defenderPresetForCategory(defenderPresetKey, presetCategory);
   // P4-19(issue 110、ADR-0208): 持ち物候補(itemCandidates)を組み立て、上限で絞り込んだかを画面に出す。
   // useEffect の依存に truncated を含む新しい配列を毎回作らないよう、ここで useMemo にする
   // (react-hooks/set-state-in-effect の無限ループを避ける)。
@@ -367,6 +376,12 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     setAttackerPresetKey(key);
   }
 
+  /** 自分の耐久(防御側プリセット)を選ぶ(確定操作。issue 113、issue 275)。 */
+  function selectDefenderPreset(key: DefenderPresetKey): void {
+    flushObservationDebounce();
+    setDefenderPresetKey(key);
+  }
+
   function addObservation(): void {
     if (!canAddObservation(observations.length)) {
       return;
@@ -418,7 +433,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     const { sp, nature } =
       side === "defender"
         ? resolveAttackerPreset(attackerPresetKey, move.category)
-        : { sp: ZERO_SP, nature: NEUTRAL_NATURE };
+        : resolveDefenderPreset(effectiveDefenderPresetKey);
     const known = buildIndividual(mySpecies, {
       sp,
       nature,
@@ -443,6 +458,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
           move,
           myItem,
           attackerPresetKey,
+          defenderPresetKey: effectiveDefenderPresetKey,
           observations: requestValidObservations,
           result,
         });
@@ -462,6 +478,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     move,
     myItem,
     attackerPresetKey,
+    effectiveDefenderPresetKey,
     requestHasInvalidObservation,
     requestValidObservations,
     abilitiesFor,
@@ -533,6 +550,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     completed.move !== move ||
     completed.myItem !== myItem ||
     completed.attackerPresetKey !== attackerPresetKey ||
+    completed.defenderPresetKey !== effectiveDefenderPresetKey ||
     completed.observations !== requestValidObservations
   ) {
     outcome = { status: "loading" };
@@ -590,9 +608,16 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
           )}
           {side === "defender" && mySpecies !== null && (
             <MyPresetSelector
-              category={move?.category ?? DEFAULT_MOVE_CATEGORY}
+              category={presetCategory}
               value={attackerPresetKey}
               onChange={selectAttackerPreset}
+            />
+          )}
+          {side === "attacker" && mySpecies !== null && (
+            <MyDefenderPresetSelector
+              category={presetCategory}
+              value={effectiveDefenderPresetKey}
+              onChange={selectDefenderPreset}
             />
           )}
         </section>
@@ -742,6 +767,44 @@ function MyPresetSelector({ category, value, onChange }: MyPresetSelectorProps) 
               }}
             />
             {attackerPresetLabel(key, category)}
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+interface MyDefenderPresetSelectorProps {
+  readonly category: MoveCategory;
+  readonly value: DefenderPresetKey;
+  readonly onChange: (key: DefenderPresetKey) => void;
+}
+
+/**
+ * 自分の耐久(防御側プリセット。domain/defenderPresets.ts、issue 275)。「受けたダメージ」で
+ * 自分が防御側のときに出す。MyPresetSelector と同じ形で、選択肢は技の分類で絞る。
+ */
+function MyDefenderPresetSelector({ category, value, onChange }: MyDefenderPresetSelectorProps) {
+  const groupName = useId();
+  return (
+    <div role="radiogroup" aria-label={reverseScreenText.myPresetGroupLabel} className="reverse-preset">
+      {defenderPresetKeysFor(category).map((key) => {
+        const selected = key === value;
+        return (
+          <label
+            key={key}
+            className={`reverse-preset__option${selected ? " reverse-preset__option--selected" : ""}`}
+          >
+            <input
+              type="radio"
+              name={groupName}
+              className="reverse-preset__input"
+              checked={selected}
+              onChange={() => {
+                onChange(key);
+              }}
+            />
+            {defenderPresetLabel(key)}
           </label>
         );
       })}

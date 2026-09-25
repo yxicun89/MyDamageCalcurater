@@ -987,8 +987,14 @@ func TestOutspeedAndKoRejectsInvalidRequest(t *testing.T) {
 			body["format"] = "triple"
 			return body
 		}(), nil},
+		{"moveId が形式に合わない", func() any {
+			body := validBody()
+			body["moveId"] = "test move"
+			return body
+		}(), nil},
 		{"speciesKey が形式に合わない", withAttacker(func(a map[string]any) { a["speciesKey"] = "pikachu" }), nil},
 		{"natureId が空", withAttacker(func(a map[string]any) { a["natureId"] = "" }), nil},
+		{"natureId が形式に合わない", withAttacker(func(a map[string]any) { a["natureId"] = "test/nature" }), nil},
 		{"sp が無い", withAttacker(func(a map[string]any) { delete(a, "sp") }), nil},
 		{"sp の欄が足りない", withAttacker(func(a map[string]any) { a["sp"] = map[string]any{"spe": 32} }), nil},
 		{"sp が負", withAttacker(func(a map[string]any) { a["sp"] = sp(-1) }), nil},
@@ -1002,6 +1008,16 @@ func TestOutspeedAndKoRejectsInvalidRequest(t *testing.T) {
 		{"候補の speciesKey が形式に合わない", func() any {
 			body := validBody()
 			defenderAt(body, 0)["speciesKey"] = "pikachu"
+			return body
+		}(), nil},
+		{"候補の moveId が形式に合わない", func() any {
+			body := validBody()
+			defenderAt(body, 0)["moveId"] = "test?move=1"
+			return body
+		}(), nil},
+		{"候補の natureId が形式に合わない", func() any {
+			body := validBody()
+			defenderAt(body, 0)["natureId"] = "test nature"
 			return body
 		}(), nil},
 		{"候補の sp が無い", func() any {
@@ -2913,5 +2929,241 @@ func TestOutspeedAndKoMoveCheckOrder(t *testing.T) {
 		if routes := stub.calcRoutes(); len(routes) != 0 {
 			t.Errorf("calc を %v 回呼んでいる。全候補の種族・技が揃ってから計算する(ADR-0704 §5)", routes)
 		}
+	})
+}
+
+// --- ADR-0706: ID(moveId / natureId)の形式検証 ------------------------------------------
+// issue #234: 形式の検査が無いと、制御文字を含む moveId は上流 URL の組み立てで落ちて
+// 503 upstream_unavailable + 「上流が落ちている」という誤った警告ログになり、
+// "x?y=1" のような moveId は /moves/x への問い合わせに静かにすり替わる。
+// クライアントの入力ミスは上流を呼ぶ前に 400 invalid_request で返す(ADR-0706 §1・§3)。
+
+// invalidIDSamples は ID に現れてはいけない値(ADR-0706 §1・受け入れ条件1)。
+// 前半は URL の構文を壊す・書き換える文字、後半は Showdown ID の綴りから外れる形。
+var invalidIDSamples = []struct {
+	name string
+	id   string
+}{
+	{"制御文字(タブ)", "test\tmove"},
+	{"制御文字(0x7f)", "test\u007fmove"},
+	{"空白", "test move"},
+	{"スラッシュ", "test/move"},
+	{"クエリの開始", "test?move=1"},
+	{"フラグメントの開始", "test#move"},
+	{"パーセント", "test%2fmove"},
+	{"大文字", "Test-Move"},
+	{"先頭のハイフン", "-test-move"},
+	{"末尾のハイフン", "test-move-"},
+	{"ハイフンの連続", "test--move"},
+}
+
+// idFields は moveId / natureId が現れる 4 か所(ADR-0706 テストの期待値)。
+// どれか 1 か所だけ直った実装を通さないために、4 つすべてを同じ表で回す。
+// wantIndex が -1 なら attacker 側(message は候補の index を騙らない。ADR-0703 §3)。
+var idFields = []struct {
+	name      string
+	mutate    func(body map[string]any, id string)
+	wantIndex int
+}{
+	{"attacker の moveId(request 直下)", func(body map[string]any, id string) { body["moveId"] = id }, -1},
+	{"attacker の natureId", func(body map[string]any, id string) { attackerOf(body)["natureId"] = id }, -1},
+	{"候補の moveId", func(body map[string]any, id string) { defenderAt(body, 1)["moveId"] = id }, 1},
+	{"候補の natureId", func(body map[string]any, id string) { defenderAt(body, 1)["natureId"] = id }, 1},
+}
+
+// twoCandidateBody は候補 2 件の 200 になる request。ID の異常系は **index 1** を不正にして
+// 確かめる(index 0 だと、帰属ラベルを defenders[0] に固定した実装が緑のまま通る)。
+func twoCandidateBody() map[string]any {
+	return bodyWithDefenders(
+		candidate(defenderSpeciesKey, natureNeutralID, 0, candidateMoveID(0)),
+		candidate(defender2SpeciesKey, natureNeutralID, 0, candidateMoveID(1)),
+	)
+}
+
+// assertBlamesSide は attacker 側(index < 0)と候補側で帰属の検査を振り分ける。
+func assertBlamesSide(t *testing.T, recorder *httptest.ResponseRecorder, wantIndex int) {
+	t.Helper()
+	if wantIndex < 0 {
+		assertBlamesAttacker(t, recorder)
+		return
+	}
+	assertBlamesCandidate(t, recorder, wantIndex)
+}
+
+// TestOutspeedAndKoRejectsInvalidIDFormat: moveId / natureId が Showdown ID の形式
+// (^[a-z0-9]+(-[a-z0-9]+)*$)に合わなければ、**上流を 1 回も呼ばずに** 400 invalid_request
+// (ADR-0706 §1・§3・受け入れ条件1・2)。message はどちら側の ID かを示す(ADR-0706 §4)。
+func TestOutspeedAndKoRejectsInvalidIDFormat(t *testing.T) {
+	t.Parallel()
+
+	for _, field := range idFields {
+		t.Run(field.name, func(t *testing.T) {
+			t.Parallel()
+
+			for _, sample := range invalidIDSamples {
+				t.Run(sample.name, func(t *testing.T) {
+					t.Parallel()
+
+					body := twoCandidateBody()
+					field.mutate(body, sample.id)
+
+					stub := &upstreams{}
+					recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+					assertStatusAndCode(t, recorder, http.StatusBadRequest, api.InvalidRequest)
+					assertBlamesSide(t, recorder, field.wantIndex)
+					assertNoUpstreamCalls(t, stub)
+					assertNoUpstreamDetail(t, recorder.Body.String(), stub.pokedexURL, stub.calcURL)
+				})
+			}
+		})
+	}
+}
+
+// TestOutspeedAndKoIDLengthLimit: 長さの上限は 64 文字ちょうどまで通り、65 文字は上流を
+// 1 回も呼ばずに 400(ADR-0706 §1・受け入れ条件4)。上限は「際限なく長い path 要素を
+// 上流へ出さない」ためのもので、正しい形式の ID を落とすためのものではない。
+func TestOutspeedAndKoIDLengthLimit(t *testing.T) {
+	t.Parallel()
+
+	atLimit := strings.Repeat("a", maxIDLength)
+	overLimit := strings.Repeat("a", maxIDLength+1)
+
+	// 上限ちょうどの natureId が「一覧に無い」(422 unknown_nature)で落ちないよう、
+	// その ID を載せた架空の性格一覧を返させる(形式の検査とは別の話)。
+	naturesWithLongID := `[
+	  {"id":"` + naturePlusSpeID + `","nameJa":"テストようき","plus":"spe","minus":"spa"},
+	  {"id":"` + natureNeutralID + `","nameJa":"テストまじめ","plus":null,"minus":null},
+	  {"id":"` + atLimit + `","nameJa":"テストながいせいかく","plus":null,"minus":null}
+	]`
+
+	t.Run("64 文字ちょうどの moveId / natureId は通る", func(t *testing.T) {
+		t.Parallel()
+
+		body := validBody()
+		body["moveId"] = atLimit
+		attackerOf(body)["natureId"] = atLimit
+		defenderAt(body, 0)["moveId"] = atLimit
+		defenderAt(body, 0)["natureId"] = atLimit
+
+		stub := &upstreams{naturesBody: naturesWithLongID}
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200(上限ちょうどは通る); body=%s", recorder.Code, recorder.Body.String())
+		}
+		if moves := stub.moveCalls(); len(moves) != 2 || moves[0] != atLimit || moves[1] != atLimit {
+			t.Errorf("技の呼び出し = %v, want [%s %s](上限ちょうどの ID がそのまま上流に届く)", moves, atLimit, atLimit)
+		}
+	})
+
+	t.Run("65 文字は 400", func(t *testing.T) {
+		t.Parallel()
+
+		for _, field := range idFields {
+			t.Run(field.name, func(t *testing.T) {
+				t.Parallel()
+
+				body := twoCandidateBody()
+				field.mutate(body, overLimit)
+
+				stub := &upstreams{}
+				recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+				assertStatusAndCode(t, recorder, http.StatusBadRequest, api.InvalidRequest)
+				assertBlamesSide(t, recorder, field.wantIndex)
+				assertNoUpstreamCalls(t, stub)
+			})
+		}
+	})
+}
+
+// TestOutspeedAndKoIDFormatCheckOrder: 形式の検査は ADR-0703 §4 の順(attacker → 候補を
+// index 昇順)に従い、最初の 1 件だけを返す(ADR-0706 §4)。body の上限(8 KiB)は
+// 長さの上限より**先**に見るので、巨大な moveId は 400 ではなく 413 のまま(受け入れ条件4)。
+func TestOutspeedAndKoIDFormatCheckOrder(t *testing.T) {
+	t.Parallel()
+
+	t.Run("attacker と候補の両方が不正なら attacker", func(t *testing.T) {
+		t.Parallel()
+
+		body := twoCandidateBody()
+		body["moveId"] = "test move"
+		defenderAt(body, 1)["natureId"] = "test/nature"
+
+		stub := &upstreams{}
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+		assertStatusAndCode(t, recorder, http.StatusBadRequest, api.InvalidRequest)
+		assertBlamesAttacker(t, recorder)
+		assertNoUpstreamCalls(t, stub)
+	})
+
+	t.Run("候補が複数不正なら index の小さい方", func(t *testing.T) {
+		t.Parallel()
+
+		body := twoCandidateBody()
+		defenderAt(body, 0)["moveId"] = "test move"
+		defenderAt(body, 1)["natureId"] = "test/nature"
+
+		stub := &upstreams{}
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+		assertStatusAndCode(t, recorder, http.StatusBadRequest, api.InvalidRequest)
+		assertBlamesCandidate(t, recorder, 0)
+		assertNoUpstreamCalls(t, stub)
+	})
+
+	t.Run("8 KiB を超える moveId は長さの上限より先に 413", func(t *testing.T) {
+		t.Parallel()
+
+		body := validBody()
+		body["moveId"] = strings.Repeat("a", 9*1024)
+
+		stub := &upstreams{}
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+		assertStatusAndCode(t, recorder, http.StatusRequestEntityTooLarge, api.RequestTooLarge)
+		assertNoUpstreamCalls(t, stub)
+	})
+}
+
+// TestOutspeedAndKoAcceptsValidIDFormat: 正常系は変わらない(ADR-0706 受け入れ条件5)。
+// ハイフン区切りの小文字英数はそのまま通り、上流へ渡される ID も変わらない。
+// 形式は合うがマスタに無い技は、今まで通り 400 ではなく 422 unknown_move(ADR-0704 §6)。
+func TestOutspeedAndKoAcceptsValidIDFormat(t *testing.T) {
+	t.Parallel()
+
+	t.Run("数字だけ・ハイフン区切りの ID も通る", func(t *testing.T) {
+		t.Parallel()
+
+		body := validBody()
+		body["moveId"] = "m1"
+		defenderAt(body, 0)["moveId"] = "test-move-2-x9"
+
+		stub := &upstreams{}
+		recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+		}
+		want := []string{"m1", "test-move-2-x9"}
+		if moves := stub.moveCalls(); !reflect.DeepEqual(moves, want) {
+			t.Errorf("技の呼び出し = %v, want %v(ID は加工せずそのまま上流へ渡す)", moves, want)
+		}
+	})
+
+	t.Run("形式は合うがマスタに無い技は 422 unknown_move のまま", func(t *testing.T) {
+		t.Parallel()
+
+		stub := &upstreams{
+			moveFail: map[string]stubResponse{
+				testMoveID: {http.StatusNotFound, `{"code":"not_found","message":"no such move"}`},
+			},
+		}
+		recorder := postOutspeed(newUpstreams(t, stub), validBody(), nil)
+
+		assertStatusAndCode(t, recorder, http.StatusUnprocessableEntity, api.UnknownMove)
+		assertBlamesAttacker(t, recorder)
 	})
 }
