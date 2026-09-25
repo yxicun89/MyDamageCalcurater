@@ -303,7 +303,7 @@ func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 	if req.DefenderOverride != nil {
 		defenderAbilityOverride = req.DefenderOverride.AbilityId
 	}
-	defenderAbilities, err := s.resolveAbilityCandidates("defenderOverride", species, defenderAbilityOverride)
+	defenderAbilities, err := s.resolveAbilityCandidates("defenderOverride.abilityId", species, defenderAbilityOverride)
 	if err != nil {
 		return err
 	}

@@ -170,17 +170,19 @@ func (s *Server) resolveMove(id string) (engine.Move, error) {
 	return mv, nil
 }
 
-// resolveAbilityCandidates は特性の候補を解決する(issue #272。ADR-0126・ADR-0214)。
+// resolveAbilityCandidates は特性の候補を解決する(issue 272。ADR-0126・ADR-0214)。
 // overrideID が指定されていればその1件だけを返す(種族が持つかどうかは engine.CalcBulk/CalcReverse の
 // abilityCandidates が検証し、ErrInvalidAbilityCandidates を invalid_input に写す。errors.go 参照)。
 // 省略時は species.Abilities(スロット順)から先頭 engine.MaxAbilityCandidates 件を候補にする
 // (4件目がある種族は Showdown の特殊枠 "S" を落とす。ADR-0105 §5 と同じ判断)。
 // species.Abilities の各 ID がマスタに無いことは起きない(buildSpecies が起動時に検証済み)。
+// label は overrideID 解決失敗時のエラーメッセージにそのまま使うフィールド名(呼び出し側が
+// "defenderOverride.abilityId"/"unknownAbilityId" 等、末尾に ".abilityId" を含む完全な形で渡すこと)。
 func (s *Server) resolveAbilityCandidates(label string, species engine.Species, overrideID *string) ([]engine.Ability, error) {
 	if overrideID != nil {
 		a, ok := s.store.Ability(*overrideID)
 		if !ok {
-			return nil, newError(api.UnknownAbility, "%s.abilityId が見つからない: %q", label, *overrideID)
+			return nil, newError(api.UnknownAbility, "%s が見つからない: %q", label, *overrideID)
 		}
 		return []engine.Ability{a}, nil
 	}
