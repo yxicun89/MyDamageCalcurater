@@ -53,7 +53,8 @@ type Event struct {
 // CalcDetail は POST /api/calc(1件の攻撃側 vs 防御側)の内容(requirements.md §6 の
 // calc_events 列)。フィールドは api.CalcRequest・api.CalcResult からそのまま埋める
 // (ADR-0212 §7。api/openapi.yaml の破壊的変更がこの構造を黙って変えうることを許容する
-// 判断で、その代わり calcevents_contract_test.go で検知する)。
+// 判断で、その代わり contract_test.go(コンパイル時チェック)と golden_test.go(埋め込み型の
+// 内部フィールドまで検知する JSON リテラル比較)で検知する)。
 type CalcDetail struct {
 	Format   string         `json:"format"`
 	Attacker api.Individual `json:"attacker"`

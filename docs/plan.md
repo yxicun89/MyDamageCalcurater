@@ -276,10 +276,14 @@
   バージョン固定・ローカル/k3d 導入・ストリーム設定(Retention は Limits。ADR-0209 §3 #6 の
   文言からの意図的な逸脱で理由は ADR-0212 §4)・イベントのワイヤフォーマット(`services/internal/calcevents`。
   `calc` は個体・技・状況・ダメージ幅まで、`calcBulk`/`calcReverse` は envelope のみ)は ADR-0212 で確定
-  (critic 3ラウンド)。実装は critic 第1回の指摘をすべて反映済み(実 NATS で発行・drain・起動非ブロックまで確認済み)、
-  critic 第2回レビューへ提出予定。
+  (critic 3ラウンド)。実装は critic 2ラウンド(第1回 FAIL→修正、第2回 PASS)で実 NATS を使い
+  発行・drain・起動非ブロックまで確認済み。
   P5-3/P5-4 は `services/internal/calcevents.Event`・ストリーム名 `CALC_EVENTS`・
-  subject `calc.events.<device_id>` をそのまま前提にする(at-least-once 配送。消費側は冪等に実装すること)
+  subject `calc.events.<device_id>` をそのまま前提にする(at-least-once 配送。消費側は冪等に実装すること)。
+  **残作業**: P5-1 と同じく、共有 k3d クラスタへの実適用(`deploy/k8s/overlays/local` の NATS
+  StatefulSet が実際に Ready になること・他レーンの Pod に影響しないこと。ADR-0212「人間の確認が
+  必要なこと」・AC-N4)は未実施(このセッションではローカルの `docker run`〈`scripts/nats-local-up.sh`〉
+  でのみ確認した)。次に `make up` を実行するときに確認する
 - [ ] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰)。
   ADR-0209 §5.3 の契約を `api/openapi.yaml` に入れて `make gen`(`store_unavailable` の追加を含む)→
   分離(§6)・全削除(§5)・失効ジョブ(§4)・ログ(§3)を実装。時間減衰の半減期は保持期間90日より短くする。

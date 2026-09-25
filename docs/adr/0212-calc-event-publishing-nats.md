@@ -135,15 +135,17 @@ NATS 自体が完全に無効(`CALC_NATS_URL` 未設定)の場合はこの gorou
 - `CALC_NATS_URL` 環境変数(任意)。未設定なら発行を最初から無効にする(NATS 無しでも calc-svc は
   今までどおり動く。ローカルの単体テストで NATS を用意しなくてよいようにするため)。
 - 設定されていれば起動時に1回だけ接続を試みる(`nats.Connect` に `nats.RetryOnFailedConnect(true)`・
-  `nats.MaxReconnects(-1)`(無限に再接続を試みる)を渡し、**起動時に NATS が落ちていても calc-svc の
-  起動をブロック・失敗させない**)。
+  `nats.MaxReconnects(-1)`(無限に再接続を試みる)・`nats.Timeout(500 * time.Millisecond)`
+  (`connectTimeout`。nats.go の既定2秒のままだと接続先が無応答〈TCP は繋がるが INFO を返さない等〉の
+  ときに calc-svc の起動〈`newHandler` → `srv.ListenAndServe`〉をその秒数だけ遅らせる。実測して判明。
+  この値は初回接続だけでなく `MaxReconnects(-1)` による再接続1回ごとの上限にもなる)を渡し、
+  **起動時に NATS が落ちていても calc-svc の起動をブロック・失敗させない**)。
 - 発行は `jetstream.Publisher.PublishAsync(subject, payload)`(応答を待たない)を別 goroutine で行う。
-  ハンドラは `ctx.JSON(...)` を呼ぶ**前**に発行 goroutine を起動する
-  (JSON への marshal 自体は `ctx.JSON` の中で同期的に行われ、応答をブロックしない発行本体
-  〈`PublishAsync` の呼び出しと `select` での確認〉は別 goroutine 側にあるため、
-  「レスポンスを書き終えるまで発行が応答を遅らせない」という目的は保たれる。むしろこの順序の方が、
-  goroutine 起動を `ctx.JSON` の**後**にすると echo v5 がリクエストごとに使い回す `*echo.Context` の
-  プール返却タイミングと競合しうる分だけ安全。実装は `services/calc/internal/httpapi/server.go` 参照)。
+  この関数(`Publish`)自体は `json.Marshal(event)` を同期的に行うだけで、`PublishAsync` の呼び出しと
+  `select` での確認は別 goroutine 側にあるため、ハンドラが `ctx.JSON(...)` を呼ぶ前後どちらで
+  `Publish` を呼んでも「レスポンスを書き終えるまで発行が応答を遅らせない」という目的は保たれる
+  (実装は `services/calc/internal/httpapi/server.go` 参照。`ctx.JSON` の前に呼んでいるが、
+  これは書きやすさの都合であって安全性の理由ではない)。
   **goroutine へ渡す値は、起動前にすべてコピーする**(`params.XDeviceId`・`params.XSessionId` の文字列と、
   イベントに詰める構造体はコピー渡しでよいが、`*echo.Context` そのものは goroutine に持ち出さない。
   echo v5 は `Context` をリクエストごとにプールして使い回すため、ハンドラの return 後に goroutine から

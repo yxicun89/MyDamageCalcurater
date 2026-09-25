@@ -22,9 +22,8 @@ func TestEventJSONGoldenWithDetail(t *testing.T) {
 	moveIDOnIndividual := "test-individual-move" // Individual.MoveId(使わない方。CalcDetail.MoveID は別経路)
 	teraType := api.PokeType("fire")
 	status := api.StatusCondition("burn")
-	atk := 1
 	critical := true
-
+	rankAtk, rankDef, rankSpa, rankSpd, rankSpe := 1, -1, 2, -2, 0
 	attacker := api.Individual{
 		SpeciesKey: "0001-000",
 		NatureId:   "adamant",
@@ -33,7 +32,7 @@ func TestEventJSONGoldenWithDetail(t *testing.T) {
 		ItemId:     &itemID,
 		MoveId:     &moveIDOnIndividual,
 		Sp:         api.StatBlock{Hp: 1, Atk: 2, Def: 3, Spa: 4, Spd: 5, Spe: 6},
-		Ranks:      &api.RankBlock{Atk: &atk},
+		Ranks:      &api.RankBlock{Atk: &rankAtk, Def: &rankDef, Spa: &rankSpa, Spd: &rankSpd, Spe: &rankSpe},
 		Status:     &status,
 		TeraType:   &teraType,
 	}
@@ -43,7 +42,19 @@ func TestEventJSONGoldenWithDetail(t *testing.T) {
 		Sp:         api.StatBlock{Hp: 10, Atk: 20, Def: 30, Spa: 40, Spd: 50, Spe: 60},
 	}
 	weather := api.Weather("rain")
-	field := &api.FieldState{Weather: &weather}
+	terrain := api.Terrain("electric")
+	attackerAurora, attackerLight, attackerReflect := true, false, true
+	defenderAurora, defenderLight, defenderReflect := false, true, false
+	field := &api.FieldState{
+		Weather: &weather,
+		Terrain: &terrain,
+		AttackerScreens: &api.Screens{
+			AuroraVeil: &attackerAurora, LightScreen: &attackerLight, Reflect: &attackerReflect,
+		},
+		DefenderScreens: &api.Screens{
+			AuroraVeil: &defenderAurora, LightScreen: &defenderLight, Reflect: &defenderReflect,
+		},
+	}
 	options := &api.CalcOptions{Critical: &critical}
 
 	occurredAt := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
@@ -74,9 +85,14 @@ func TestEventJSONGoldenWithDetail(t *testing.T) {
 	const want = `{"schemaVersion":1,"deviceId":"device-1","sessionId":"session-1","operation":"calc","occurredAt":"2026-09-25T12:00:00Z",` +
 		`"detail":{"format":"single",` +
 		`"attacker":{"abilityId":"test-ability","itemId":"test-item","level":50,"moveId":"test-individual-move","natureId":"adamant",` +
-		`"ranks":{"atk":1},"sp":{"atk":2,"def":3,"hp":1,"spa":4,"spd":5,"spe":6},"speciesKey":"0001-000","status":"burn","teraType":"fire"},` +
+		`"ranks":{"atk":1,"def":-1,"spa":2,"spd":-2,"spe":0},"sp":{"atk":2,"def":3,"hp":1,"spa":4,"spd":5,"spe":6},` +
+		`"speciesKey":"0001-000","status":"burn","teraType":"fire"},` +
 		`"defender":{"natureId":"bold","sp":{"atk":20,"def":30,"hp":10,"spa":40,"spd":50,"spe":60},"speciesKey":"0002-000"},` +
-		`"moveId":"test-beam","field":{"weather":"rain"},"options":{"critical":true},` +
+		`"moveId":"test-beam",` +
+		`"field":{"attackerScreens":{"auroraVeil":true,"lightScreen":false,"reflect":true},` +
+		`"defenderScreens":{"auroraVeil":false,"lightScreen":true,"reflect":false},` +
+		`"terrain":"electric","weather":"rain"},` +
+		`"options":{"critical":true},` +
 		`"minPercent":16.8,"maxPercent":20.3,"viaRecommendation":false}}`
 
 	if string(got) != want {

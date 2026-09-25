@@ -141,8 +141,10 @@ func streamRetryDelay(attempt int) time.Duration {
 }
 
 // Publish はイベントを非同期に発行する(応答をブロックしない。ADR-0212 §6)。
-// ハンドラがレスポンスを書き終えた後に呼ぶこと。p が nil(発行無効)・ストリーム未作成なら
-// 何もしない。detail は Operation が calcevents.OperationCalc のときだけ渡す。
+// ハンドラの応答処理(ctx.JSON 呼び出し)の前後どちらから呼んでもよい
+// (この関数自体は同期的に json.Marshal するだけで、発行本体は別 goroutine に切り離す)。
+// p が nil(発行無効)・ストリーム未作成なら何もしない。detail は Operation が
+// calcevents.OperationCalc のときだけ渡す。
 func (p *Publisher) Publish(deviceID, sessionID, operation string, occurredAt time.Time, detail *calcevents.CalcDetail) {
 	if p == nil || !p.ready.Load() {
 		return
