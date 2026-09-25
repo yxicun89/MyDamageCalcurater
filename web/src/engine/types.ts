@@ -212,6 +212,47 @@ export interface ReverseRequest {
   readonly typeChart: TypeChart;
 }
 
+/**
+ * 「未対応」の印の対象(engine.UnsupportedTarget の写し。ADR-0123 §2)。
+ * attacker / defender は**その計算から見た**役割(攻撃側・防御側)。
+ */
+export type UnsupportedTarget =
+  "move" | "attacker_item" | "attacker_ability" | "defender_item" | "defender_ability";
+
+/**
+ * 「未対応」の印の理由(engine.UnsupportedReason の写し。ADR-0123 §2)。技は機構の値(13 種)か
+ * zero_power(威力 0 の攻撃技)、持ち物・特性は unsupported_effect(効果スキーマで表せない)。
+ */
+export type UnsupportedReason =
+  | "alt_defense_stat"
+  | "alt_offense_stat"
+  | "always_crit"
+  | "effectiveness_change"
+  | "field_specific"
+  | "fixed_damage"
+  | "ignore_defense_ranks"
+  | "move_specific"
+  | "multi_hit"
+  | "ohko"
+  | "priority_change"
+  | "type_change"
+  | "variable_power"
+  | "zero_power"
+  | "unsupported_effect";
+
+/**
+ * 「この結果は正しく計算できていない可能性がある」印 1 件(engine.UnsupportedMark の写し。ADR-0123)。
+ * 数値は通常の式のまま返るので、印が付いても行・候補は消さない(issue 271 / issue 270)。
+ * 並びは engine が決める(技 → 攻撃側の持ち物 → 攻撃側の特性 → 防御側の持ち物 → 防御側の特性。
+ * 技は理由の昇順で zero_power が最後)。Web は並べ替え・重複除去をしない(ADR-0300 §8)。
+ */
+export interface UnsupportedMark {
+  readonly target: UnsupportedTarget;
+  readonly reason: UnsupportedReason;
+  /** 印が付いた技・持ち物・特性の ID。 */
+  readonly id: string;
+}
+
 /** 確定数(engine.KOChance の写し)。表示は displayChancePercent を使う(ADR-0011 §3)。 */
 export interface KOChance {
   readonly hits: number;
@@ -232,6 +273,8 @@ export interface CalcResult {
   readonly stab: boolean;
   readonly category: MoveCategory;
   readonly ko: KOChance;
+  /** 「未対応」の印(印なしは空配列。ADR-0123 §6)。engine が返した順のまま持つ。 */
+  readonly unsupported: readonly UnsupportedMark[];
 }
 
 /** 一括計算の1行の防御側(SP・性格・実数値だけ。ADR-0011 §3)。 */
@@ -280,6 +323,8 @@ export interface ReverseCandidate {
   readonly support: number;
   readonly minPercent: number;
   readonly maxPercent: number;
+  /** 「未対応」の印(印なしは空配列。SP によらず候補ごとに同じ内容になる。ADR-0123 §2)。 */
+  readonly unsupported: readonly UnsupportedMark[];
 }
 
 /** 逆算の結果。 */

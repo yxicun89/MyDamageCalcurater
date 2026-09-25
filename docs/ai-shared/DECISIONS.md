@@ -1862,3 +1862,34 @@ Impact: **Web・iOSへ**: `BulkCalcRow`・`ReverseCandidate`の応答にabilityI
 特性を選べる画面はADR-0126の依頼どおり各レーンの担当(急ぎではない)。**データレーンへ**: API レーン担当分は
 critic レビュー待ち。issue 272 のclose判断はデータレーンに委ねる。**残作業**: `defenderOverride.ranks`/
 `status`は別タスク(plan.md参照。優先度低)。次は issue #284(balance/speed/judgeのgateway集約)に着手する。
+
+## 2026-09-25: issue #271/#270 の Web レーン実装を、iOS レーンのクロスプラットフォーム決定に合わせた(Web レーン)
+Decision: 上の「未対応の印の表示(文言・置き場所)を決めた」の Impact「Web レーンへ」を受けて、
+`feat/web-unsupported-marks-271-270`(critic PASS 後の再修正)を次のとおり iOS レーンの決定に揃えた。
+1. **置き場所**: `hasUnsupported = rows.some(...)` + 行ごとに常に印一覧、という実装(technicalな target で
+   決め打ちせず、行ごとに繰り返す設計)から、`web/src/domain/unsupportedLabels.ts` に新設した
+   `splitUnsupportedMarks`(印の内容〈target・reason・id〉が全行〈全候補〉にあるかどうかで判定)に置き換えた。
+   全行共通の印は結果・候補一覧の先頭に1回、残りはその行・候補だけに出す。CalcScreen.tsx・ReverseScreen.tsx
+   の両方で共有する。
+2. **色**: `--danger` を `--text-secondary`・`--font-size-caption`(既存の補足文と同じトークン)に変更
+   (`CalcScreen.css`・`ReverseScreen.css`)。
+3. **文言**: `web/src/i18n/ja.ts` の `unsupportedText` を全面的に書き直した。`notice`/`rowLabel` は
+   markLabel 済みの文言の配列を受け取り、iOS と同じ書式(結果の上「この結果は正確でない可能性があります
+   (未対応: <印>、<印>)」、行・候補「未対応: <印>、<印>」)を組み立てる関数にした。`markLabel` は
+   `<対象>「<名前>」(<理由>)`(reason が `unsupported_effect` のときは括弧を省く)。reason 15 種の文言を
+   iOS の表記(DisplayLabels.swift)に合わせ、alt_offense_stat・alt_defense_stat・effectiveness_change に
+   「特殊」を使わない(iOS critic 指摘を Web にも適用)。旧 `badgeLabel`/`listLabel` は廃止し、
+   `unsupportedText.reason`/`target` のキー・件数は変えていない(契約の enum と1対1)。
+critic からの軽微な指摘2件も合わせて対応: (1) 装飾アイコン(⚠)が `aria-hidden="true"` であることを直接
+検証する回帰テストを追加(`data-testid="unsupported-icon"` を新設)。(2) ReverseScreen で issue #305 の
+`noExactCandidateNotice`(role=status)と本タスクの `unsupportedText.notice`(role=status)が同時に出て、
+互いに独立した別要素として共存することを固定するテストを追加。
+`docs/design.md`「画面: ダメージ計算」「画面: 逆算」の該当箇所も置き場所・色の記述を更新した。
+`npx vitest run` 1674件 green・`npm run typecheck` green・`npm run lint`(eslint + prettier)green・
+`make wasm` 後 `npm run e2e` 37件 green。
+Reason: iOS レーンの決定(上のエントリの Impact)。技の印は全行に付くことが多く、行ごとに繰り返すと
+同じ文言が何度も並ぶ(iOS の指摘どおり Web でも同じ問題が起きる設計だった)。数値は通常の式の目安であり
+エラーではないため警告色にしない、という判断もクロスプラットフォームで揃える方が利用者の理解を助ける。
+Impact: 判定レーン(JD5 `JudgeScreen` の追従。docs/plan.md 未着手タスク)は、この Web の書式・
+`splitUnsupportedMarks` の考え方(全行共通 vs 個別)を踏襲してよい。iOS レーンへは特に追加の申し送りなし
+(Web 側が iOS の決定に合わせただけで、契約・iOS 側の変更は無い)。
