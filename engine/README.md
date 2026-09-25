@@ -18,7 +18,7 @@ flowchart LR
 | パス | 役割 |
 |---|---|
 | `engine/`(ルート直下) | ダメージ・確定数・一括計算・逆算・実数値・タイプ相性表の純粋ロジック(`damage.go`・`bulk.go`・`reverse.go`・`stats.go`・`ko.go`・`typechart.go` ほか) |
-| `engine/presets` | 攻撃側プリセットの正(`attacker.json`。ビルド時に embed。Web・iOS は契約テストで同じファイルを読む。ADR-0114) |
+| `engine/presets` | 攻撃側プリセットの正(`attacker.json`。ADR-0114)と防御側プリセットの正(`defender.json`。ADR-0009 2026-09-25 追記)。ビルド時に embed。Web・iOS は契約テストで同じファイルを読む |
 | `engine/wasmapi` | JS 境界の DTO・検証・エラー整形。ネイティブ Go でテストできる |
 | `engine/cmd/wasm` | ブラウザ向けエントリ。`globalThis.pokecalc` に関数を登録するだけの薄いラッパー |
 | `engine/cmd/wasmexpect` | Go/WASM 一致テスト(`make test-wasm`)用の期待値を生成するネイティブ Go ツール |
