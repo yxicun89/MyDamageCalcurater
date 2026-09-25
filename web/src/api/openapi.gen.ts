@@ -295,14 +295,14 @@ export interface paths {
      *     (ADR-0209 §6-1・§6-3)。他端末の構築は混ざらない。1件も無ければ空配列(404 にしない)。
      *
      *     メンバーまで含めた完全な `Team` を返す。ページングは持たない(1端末が持てる構築は
-     *     `maxTeamsPerDevice` 件で頭打ちなので、一覧は常に有限で小さい。ADR-0213 §2)。
+     *     **100件**で頭打ちなので、一覧は常に有限で小さい。ADR-0213 §2)。
      */
     get: operations["listTeams"];
     put?: never;
     /**
      * 構築を1つ作る
      * @description `id` と `createdAt` / `updatedAt` はサーバーが決める(要求には含めない。含めたら 400 `unknown_field`)。
-     *     すでに `maxTeamsPerDevice` 件持っている端末の作成は 400 `invalid_input`(ADR-0213 §2)。
+     *     1端末が持てる構築は **100件**まで。上限に達している端末からの作成は 400 `invalid_input`(ADR-0213 §2)。
      */
     post: operations["createTeam"];
     delete?: never;
@@ -737,6 +737,17 @@ export interface components {
      * @enum {string}
      */
     DefenderPreset: "none" | "hp" | "hb_boost" | "hb" | "hb_full" | "hd_boost" | "hd" | "hd_full";
+    /** @description 防御側の上書き(issue 272。ADR-0126・ADR-0214)。省略した項目は上書きしない。 */
+    DefenderOverride: {
+      /**
+       * @description 防御側の特性を1つに固定する。省略時は防御側の種族が持つ特性(最大3件。4件目がある種族は
+       *     Showdown の特殊枠 `"S"` を落とす。ADR-0105 §5 と同じ判断)をすべて候補として計算し、
+       *     結果が完全に同じになる特性は1行にまとめ、違うときだけ行を分ける(ADR-0126)。
+       *     指定した特性をその種族が持たない場合は 400 `invalid_input`、マスタに無い ID は
+       *     400 `unknown_ability`。
+       */
+      abilityId?: string;
+    };
     BulkCalcRequest: {
       format: components["schemas"]["Format"];
       attacker: components["schemas"]["Individual"];
@@ -744,6 +755,7 @@ export interface components {
       moveId: string;
       field?: components["schemas"]["FieldState"];
       options?: components["schemas"]["CalcOptions"];
+      defenderOverride?: components["schemas"]["DefenderOverride"];
       /**
        * @description 使う防御側プリセットと行の順序。省略と空配列(`[]`)は同じで、技の分類に応じた既定セットになる。
        *     物理技は 5 件(none, hp, hb_boost, hb, hb_full)、
@@ -758,7 +770,9 @@ export interface components {
       /**
        * @description 差し替えて比較する持ち物 ID(省略時は素の1通り)。null 要素は「持ち物なし」。
        *     65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
-       *     行数は `len(presets) × len(itemVariants)` なので、上限は 8 × 64 = 512 行。
+       *     行の基本数は `len(presets) × len(itemVariants)`(上限 8 × 64 = 512)。特性ごとに結果が違う
+       *     ときだけ、その基本数のうち最大3倍(特性の候補数。ADR-0126・ADR-0214)まで行が分かれる。
+       *     結果が同じ特性は1行にまとまるため、特性が効かない技では行数は変わらない。
        */
       itemVariants?: (string | null)[];
     };
@@ -770,6 +784,13 @@ export interface components {
       itemId?: string | null;
       defender: components["schemas"]["BulkDefender"];
       result: components["schemas"]["CalcResult"];
+      /**
+       * @description この行の計算に使った防御側の特性(ADR-0126・ADR-0214)。種族は必ず1件以上の特性を持つため
+       *     常に入る。
+       */
+      abilityId: string;
+      /** @description この行と結果が完全に同じになる特性の ID(abilityId が先頭。渡した/解決した順)。 */
+      abilityIds: string[];
     };
     /**
      * @description 性格補正の構造値。plus が +10%、minus が -10% を受ける能力。無補正は両方 null。
@@ -826,6 +847,13 @@ export interface components {
       known: components["schemas"]["Individual"];
       /** @description 逆算する相手の種族。SP・性格・持ち物は探索対象なので渡さない */
       unknownSpeciesKey: components["schemas"]["SpeciesKey"];
+      /**
+       * @description 相手の特性を1つに固定する(issue 272。ADR-0126・ADR-0214)。省略時は相手の種族が持つ特性
+       *     (最大3件。BulkCalcRequest.defenderOverride.abilityId と同じ既定)をすべて候補にする。
+       *     指定した特性をその種族が持たない場合は 400 `invalid_input`、マスタに無い ID は
+       *     400 `unknown_ability`。
+       */
+      unknownAbilityId?: string;
       /** @description 観測したときの技(side=defender なら自分の技、attacker なら相手の技) */
       moveId: string;
       field?: components["schemas"]["FieldState"];
@@ -842,8 +870,11 @@ export interface components {
        */
       observations: components["schemas"]["Observation"][];
       /**
-       * @description 返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(上限は
-       *     2 性格クラス × 64 itemCandidates = 128 件)。負の値と 129 以上は 400 `invalid_input`。
+       * @description 返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(特性の候補分岐〈ADR-0126・
+       *     ADR-0214〉により最大 2 性格クラス × 3 特性グループ × 64 itemCandidates = 384 件まで増えうる。
+       *     特性が効かない技では従来どおり最大 128 件)。指定できる値自体は 1..128(この上限は変えていない。
+       *     返る件数をこの値で切り詰めるだけで、384 件から絞り込みたいときに使う)。負の値と 129 以上は
+       *     400 `invalid_input`。
        * @default 0
        */
       maxCandidates: number;
@@ -894,6 +925,13 @@ export interface components {
        *     印なしは空配列。
        */
       unsupported: components["schemas"]["UnsupportedMark"][];
+      /**
+       * @description この候補の計算に使った相手の特性(ADR-0126・ADR-0214)。種族は必ず1件以上の特性を持つため
+       *     常に入る。
+       */
+      abilityId: string;
+      /** @description この候補と結果が完全に同じになる特性の ID(abilityId が先頭。渡した/解決した順)。 */
+      abilityIds: string[];
     };
     ReverseResult: {
       side: components["schemas"]["ReverseSide"];

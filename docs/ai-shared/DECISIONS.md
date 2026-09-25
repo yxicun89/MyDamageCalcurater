@@ -1835,3 +1835,30 @@ Impact: 各 issue の needs-decision を ready-for-implementation に付け替�
 Decision: `engine.BulkInput.DefenderAbilities` / `engine.ReverseInput.UnknownAbilities`(解決済みの特性 0〜3 件)を追加。各特性で計算し、全行(逆算は全性格クラス × 持ち物 × SP)の結果が完全に同じ特性は1つにまとめ(代表 = 先に渡したもの)、違えば行・候補を分ける。行・候補に `Ability` と `AbilityIDs` を出す。空は従来どおり特性なし。WASM は `calcBulk.defenderAbilities`・`calcReverse.unknownAbilities` を受け、応答の `abilityId`/`abilityIds` は特性を送ったときだけ出す(送らなければバイト単位で従来と同じ)。攻撃側の特性は `Individual.Ability` で既に渡せる(engine の変更なし)。
 Reason: 「1番目の特性」や「1つ指定」を既定にすると、隠れ特性などで無効になる種族を利用者が選び忘れたときに黙って誤る。全特性で行を分けると多くの技で行が2〜3倍になる。結果の一致でまとめれば、特性が効く技のときだけ行が分かれる。
 Impact(他レーンへの依頼。既定案): API — 既に採用済みの `BulkCalcRequest.defenderOverride.abilityId` を `DefenderAbilities` の1件に写し、**省略時は calc-svc が種族の全特性を解決して渡す**。`ReverseRequest.unknownAbilityId`(任意・1つ、省略時は同じく全特性)。`BulkCalcRow`・`ReverseCandidate` に `abilityId: string`・`abilityIds: string[]`。Web — WASM に種族の特性をマスタから解決して `defenderAbilities`/`unknownAbilities` で渡し、行・候補に `abilityIds` を表示。攻撃側は種族の1番目を既定にして画面に表示し、選べるようにする。iOS — API の追従後に同じ表示。
+
+## 2026-09-25: issue 272 の API レーン担当分(defenderOverride.abilityId・unknownAbilityId)を実装(API レーン → データ・Web・iOS レーンへ)
+Decision: データレーンの依頼(ADR-0126・PR #402)を反映した(ADR-0214)。
+`api/openapi.yaml`: 新規スキーマ `DefenderOverride { abilityId?: string }` を `BulkCalcRequest.defenderOverride`
+に追加(既存の採用済み概念〈2026-09-25「issue #274/#272 の防御側の詳細」〉のabilityId部分のみを実装。
+ranks/statusは別タスクとして残す)。`ReverseRequest.unknownAbilityId?: string` を新設。`BulkCalcRow`
+(`BulkCalcRow.result`経由ではなく行自体)・`ReverseCandidate` に `abilityId`(必須)・`abilityIds`(必須。
+`minItems: 1`)を追加。
+`services/calc/internal/httpapi/convert.go`: `resolveAbilityCandidates` を新設。指定があれば`store.Ability`
+で解決した1件、無ければ `species.Abilities`(スロット順)の先頭 `engine.MaxAbilityCandidates`(3)件を解決する。
+**4件目(Showdown の特殊枠 `"S"`。ADR-0100 §3)は落とす**(ADR-0105 §5と同じ判断。理由: engineの上限3を
+超えると`ErrInvalidAbilityCandidates`で常に失敗し、4件持つ種族の一括計算・逆算が既定のまま使えなくなる
+regressionを防ぐため)。マスタに無いIDは`unknown_ability`、種族が持たない特性は`invalid_input`(engineの
+`abilityCandidates`の検証結果をそのまま写す)。
+HTTP/WASMパリティテスト(`parity_test.go`)は、HTTPが既定で特性を渡すようになったため、WASM側のテスト入力
+にも同じ既定の特性を渡すよう更新(`wasmAbilitiesForSpecies`)。新規テスト
+`services/calc/internal/httpapi/ability_candidates_test.go`(4特性中1つだけ効果を持つ架空種族で、既定の
+切り詰め・override・エラー2種を一括計算・逆算の両方で固定。mutation testingで確認済み)。
+一括計算・逆算の行数/候補数の上限(ADR-0208)が特性分岐で最大3倍(一括512→1536行・逆算128→384件)まで
+増えうることをopenapi.yaml・ADR-0208に追記(クライアントが直接増幅できる経路ではないことを確認済み)。
+Reason: 1対1の計算では正しく効く防御側の特性(無効・吸収・軽減)が一括計算・逆算では常にゼロ値だった
+バグ(issue 272)を、契約側から解消する。
+Impact: **Web・iOSへ**: `BulkCalcRow`・`ReverseCandidate`の応答にabilityId/abilityIdsが必須で増える
+(生成物の再生成が必要)。特性が効く技では一括計算・逆算の行数/候補数が増える(意図した挙動)。防御側/相手側の
+特性を選べる画面はADR-0126の依頼どおり各レーンの担当(急ぎではない)。**データレーンへ**: API レーン担当分は
+critic レビュー待ち。issue 272 のclose判断はデータレーンに委ねる。**残作業**: `defenderOverride.ranks`/
+`status`は別タスク(plan.md参照。優先度低)。次は issue #284(balance/speed/judgeのgateway集約)に着手する。

@@ -64,14 +64,30 @@ func calcWasmBody(t *testing.T, f *fakeStore, c calcCase) map[string]any {
 	return body
 }
 
+// wasmAbilitiesForSpecies は calc-svc の resolveAbilityCandidates の既定(上書きが無いときに種族の全特性を
+// 解決する)経路と同じ形の wasmapi 入力を作る(issue #272。ADR-0126・ADR-0214。パリティを保つため)。
+func wasmAbilitiesForSpecies(f *fakeStore, species engine.Species) []any {
+	ids := species.Abilities
+	if len(ids) > engine.MaxAbilityCandidates {
+		ids = ids[:engine.MaxAbilityCandidates]
+	}
+	out := make([]any, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, wasmAbility(f.abilities[id]))
+	}
+	return out
+}
+
 func bulkWasmBody(t *testing.T, f *fakeStore, moveID string, presetKeys any, itemIDs []string) map[string]any {
 	t.Helper()
+	defender := f.species[speciesDefender]
 	body := map[string]any{
-		"format":          "single",
-		"attacker":        bulkAttacker().wasm(t, f),
-		"defenderSpecies": wasmSpecies(f.species[speciesDefender]),
-		"move":            wasmMove(f.moves[moveID]),
-		"typeChart":       wasmTypeChart(t),
+		"format":            "single",
+		"attacker":          bulkAttacker().wasm(t, f),
+		"defenderSpecies":   wasmSpecies(defender),
+		"move":              wasmMove(f.moves[moveID]),
+		"typeChart":         wasmTypeChart(t),
+		"defenderAbilities": wasmAbilitiesForSpecies(f, defender),
 	}
 	if presetKeys != nil {
 		body["presetKeys"] = presetKeys
@@ -107,15 +123,17 @@ func reverseWasmBody(t *testing.T, f *fakeStore, c reverseCase) map[string]any {
 		}
 		obs = append(obs, m)
 	}
+	unknown := f.species[c.unknownSpecies]
 	body := map[string]any{
-		"format":         "single",
-		"side":           string(c.side),
-		"known":          c.known.wasm(t, f),
-		"unknownSpecies": wasmSpecies(f.species[c.unknownSpecies]),
-		"move":           wasmMove(f.moves[c.moveID]),
-		"observations":   obs,
-		"maxCandidates":  c.maxCandidates,
-		"typeChart":      wasmTypeChart(t),
+		"format":           "single",
+		"side":             string(c.side),
+		"known":            c.known.wasm(t, f),
+		"unknownSpecies":   wasmSpecies(unknown),
+		"move":             wasmMove(f.moves[c.moveID]),
+		"observations":     obs,
+		"maxCandidates":    c.maxCandidates,
+		"typeChart":        wasmTypeChart(t),
+		"unknownAbilities": wasmAbilitiesForSpecies(f, unknown),
 	}
 	if c.itemIDs != nil {
 		items := make([]any, 0, len(c.itemIDs))
