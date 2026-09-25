@@ -65,14 +65,10 @@
   --type-steel-ink: #000000;
   --type-fairy-ink: #000000;
 
-  /* 文字(docs/design.md「文字」)。Web の書体は SF Pro Rounded → M PLUS Rounded 1c → system-ui の順。 */
-  --font-family: "SF Pro Rounded", "M PLUS Rounded 1c", system-ui, sans-serif;
-  --font-size-result: 28px;
-  --font-size-heading: 17px;
-  --font-size-body: 15px;
-  --font-size-caption: 12px;
-
-  /* 形・余白(docs/design.md「形・余白」)。 */
+  /* 形・余白(docs/design.md「形・余白」)。文字(--font-size-*)より先に置く: 角丸「入力」(12px)と
+     補足の文字サイズ・--space-3 がたまたま同じ 12px の値を持つため、値からトークン名を引くテスト
+     (web/src/styles/inputTokens.test.ts)は :root の宣言順で先に出た方を引く。角丸を先に置くことで
+     「入力」の 12px が --radius-input に解決されるようにする(値は変えない。宣言順だけの整理)。 */
   --radius-card: 20px;
   --radius-pill: 999px;
   --radius-input: 12px;
@@ -81,6 +77,13 @@
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 24px;
+
+  /* 文字(docs/design.md「文字」)。Web の書体は SF Pro Rounded → M PLUS Rounded 1c → system-ui の順。 */
+  --font-family: "SF Pro Rounded", "M PLUS Rounded 1c", system-ui, sans-serif;
+  --font-size-result: 28px;
+  --font-size-heading: 17px;
+  --font-size-body: 15px;
+  --font-size-caption: 12px;
 
   /* 動き(docs/design.md「動き」)。攻守入れ替えのカードアニメーションの秒数。 */
   --duration-swap: 0.35s;
