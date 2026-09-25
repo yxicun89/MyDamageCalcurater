@@ -488,8 +488,37 @@
   ランクの +/− ボタンに VoiceOver ラベル、「詳細」の各行に Dynamic Type(アクセシビリティ文字サイズで2行に切り替え)を追加。
   `swift test` 436件0失敗、`make ios-test`(`ios-test-unit` 449件・`ios-test-ui` 22件)すべて成功(並行セッションが同じ
   シミュレータを使っていた回はブートストラップ失敗になったが、P6-12 と同じ既知の環境要因と確認済み)
-- [ ] P6-14 最大の文字サイズ(accessibility-extra-extra-extra-large)で計算画面の全体が横にはみ出し、左端が切れる(既存の不具合。
+- [x] P6-14 最大の文字サイズ(accessibility-extra-extra-extra-large)で計算画面の全体が横にはみ出し、左端が切れる(既存の不具合。
   P6-13 の確認中に発見。2026-09-23 のスクリーンショットでも同じ)。原因の特定と修正、XCUITest か撮影での確認
+  - spec-writer(2026-09-25): 受け入れ条件・失敗するテストのみ追加、実装はまだ(ADR-0501「P6-14」)。
+    XCUITest `ios/PokeCalcUITests/LargeTextLayoutUITests.swift` を新規追加。AX5 で
+    `testCalcScreenNoHorizontalOverflowAtAX5` が失敗することを確認済み(既定サイズ・逆算画面・構築画面は成功)。
+    原因は `ResultRowView`(`CalcScreenResults.swift`)の `percentRangeTextView`/`koText` の `.fixedSize()` が
+    AX5 で画面幅を超える自然な幅を要求し、`ViewThatFits` が縦積み案でも縮められず、`CalcScreenView` の
+    `VStack` 全体・`.frame(maxWidth: .infinity)` の兄弟(カード・プリセット・構築元・技セレクタ・「詳細」)
+    まで広がり、非スクロール軸を中央寄せする `ScrollView` の挙動で左端が負の座標に押し出される、という連鎖
+    (実測 frame・推奨修正は ADR 本文)。`ReverseCandidateCardView` にも同じパターンがあるが、モックの既定状態
+    (観測0件)では未再現(要フォローアップ)。implementer は ADR-0501「P6-14」§4 の推奨(`.fixedSize()` を外す/
+    `minimumScaleFactor` に揃える)から着手
+  - implementer(2026-09-25): ADR-0501「P6-14」§4の推奨1・2のとおり、`ResultRowView.percentRangeTextView`/
+    `koText`(`CalcScreenResults.swift`)と `ReverseCandidateCardView` の `percentRangeText`
+    (`ReverseScreenResults.swift`)の `.fixedSize()` を `.lineLimit(1).minimumScaleFactor(
+    CalcScreenMetrics.compactMinimumScaleFactor)` に置き換え、両ファイルのコンテナに
+    `.accessibilityElement(children: .contain)` を追加(識別子は変更なし)。`LargeTextLayoutUITests` に
+    AX5 の2件(`testReverseScreenWithCandidateNoHorizontalOverflowAtAX5`= 観測入力後の候補カード、
+    `testTeamEditScreenWithMemberNoHorizontalOverflowAtAX5` = メンバー追加後の構築編集画面)を追加し、
+    8件全て成功。`grep fixedSize ios/PokeCalc` で他の使用箇所(`ChipButton`・`SpeciesHeaderMenuLabel`・
+    `TypeBadgeView`・`CalcConditionsSection.sectionRowLabel`・`TeamEditMemberCard.spStepper`)も確認したが、
+    追加した AX5 テストでははみ出さなかったため未修正(詳細は ADR-0501「P6-14」6章)。
+    `swift test`(PokeCalcKit)436件0失敗、`xcodebuild -only-testing:PokeCalcUITests/LargeTextLayoutUITests`
+    8件0失敗、`make ios-test`(`ios-test-unit`・`ios-test-ui` 30件〈既存22+新設8〉・`ios-check-infoplist`)
+    すべて成功。気づいた点(未修正・要フォローアップ): 候補カードテストの1回で `reverseObservationField-0`
+    タップ直後に SwiftUI ランタイム警告「Invalid frame dimension (negative or non-finite).」が1件出たが
+    アサーション失敗ではなく、候補描画・入力より前(フォーカス直後)に出ているため今回の修正とは無関係に見える
+    (原因未特定。ADR-0501「P6-14」6章)。
+- [ ] P6-15 P6-14 の残り(軽微): (1) 最大の文字サイズで攻撃側プリセットのピル「A振り(無補正)」が「A振り…」と省略される
+  (はみ出しは解消済み。アクセシビリティ域では縦に並べる等で全文を出す)、(2) LargeTextLayoutUITests で「詳細」を開いた状態も検査する、
+  (3) 既定サイズで %・確定数の文字が縮んでいないことを確かめる検査(critic の任意の指摘)
 - [x] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼された
   内容どおり `ColorToken.danger` のライト値を `0xE5,0x48,0x4D` → `0xCD,0x1D,0x23` に更新し、
   `DesignTokenTests.swift` の旧値も書き換えた。`ios/PokeCalcKit/Tests/PokeCalcDesignTests/ColorContrast.swift`

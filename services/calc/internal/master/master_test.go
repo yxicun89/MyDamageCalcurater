@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"reflect"
 	"testing"
 
 	"example.com/pokecalc/engine"
@@ -159,7 +160,7 @@ func TestFromExportAndLookup(t *testing.T) {
 
 	mv, ok := store.Move("testwave")
 	want := engine.Move{ID: "testwave", NameJa: "テストウェーブ", Type: engine.TypeGrass, Category: engine.CategorySpecial, Power: 90}
-	if !ok || mv != want {
+	if !ok || !reflect.DeepEqual(mv, want) {
 		t.Errorf("Move = %+v, %v, want %+v, true", mv, ok, want)
 	}
 

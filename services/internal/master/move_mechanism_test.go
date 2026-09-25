@@ -72,7 +72,7 @@ func TestMoveMechanismsOf(t *testing.T) {
 	}
 }
 
-// master.Move は機構を検証する(不正な行を calc に渡さない)。engine の型にはまだ載せない(D16)。
+// master.Move は機構を検証する(不正な行を calc に渡さない)。正しい機構は engine.Move に載せる(ADR-0123)。
 func TestMoveRejectsInvalidMechanisms(t *testing.T) {
 	c := testChart(t)
 	row := master.MoveRow{ID: "testhit", NameJa: "テストヒット", Type: "normal", Category: "physical", Power: 25, Mechanisms: []string{"unknown"}}

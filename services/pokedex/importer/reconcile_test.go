@@ -497,6 +497,28 @@ func TestReconcileEffectCoverage(t *testing.T) {
 	}
 }
 
+// 「未対応」の印だけの効果定義(ADR-0123)は、補正を計算していないので網羅性では「定義なし」と数える
+// (印を足しても effect-missing は減らず、ダメージのハンドラが無くても effect-no-hook にしない)。
+func TestReconcileEffectCoverageIgnoresUnsupportedMarks(t *testing.T) {
+	in := reconcileInput(t)
+	sdItem(t, &in, "testmonite").Hooks = []string{"onBasePower"}
+	sdAbility(t, &in, "testblaze").Hooks = []string{"onModifyAtk"}
+	in.Effects.Items["testmonite"] = json.RawMessage(`{"UnsupportedAttacker":true}`)
+	in.Effects.Abilities["testblaze"] = json.RawMessage(`{"UnsupportedAttacker":true}`)
+	in.Effects.Abilities["teststance"] = json.RawMessage(`{"UnsupportedDefender":true}`) // ダメージのハンドラなし
+
+	_, rec := reconcileOK(t, in)
+	if got := rec.EffectCoverage.Items; got.Defined != 2 || !sameStrings(got.MissingIDs, []string{"testmonite"}) {
+		t.Errorf("Items = %+v, want Defined 2・Missing [testmonite]", got)
+	}
+	if got := rec.EffectCoverage.Abilities; got.Defined != 1 || !sameStrings(got.MissingIDs, []string{"testblaze"}) {
+		t.Errorf("Abilities = %+v, want Defined 1・Missing [testblaze]", got)
+	}
+	if hasFinding(rec.Report.Warnings, importer.KindEffectNoHook, "teststance") {
+		t.Error("未対応の印だけの定義を effect-no-hook にした")
+	}
+}
+
 // --- 日本語名(PokeAPI との照合。ADR-0103 §8) ------------------------------------------
 
 func TestReconcileNameStats(t *testing.T) {
