@@ -45,32 +45,7 @@ func wasmResult(t *testing.T, out string) any {
 	if env.Error != nil {
 		t.Fatalf("wasmapi が失敗した: %s", out)
 	}
-	return dropEmptyUnsupported(t, env.Result)
-}
-
-// dropEmptyUnsupported は WASM の結果から「未対応」の印(unsupported。ADR-0123)を取り除く。
-// HTTP の契約(api/openapi.yaml)にはまだ印の項目が無い(API レーンに追加を依頼中)ため、比べられない。
-// ここのパリティの入力は印が付かないものだけなので、空でない印が出たら黙って捨てずに失敗させる。
-// HTTP の契約に印が入ったら、この関数を消して印も比べる。
-func dropEmptyUnsupported(t *testing.T, v any) any {
-	t.Helper()
-	switch x := v.(type) {
-	case map[string]any:
-		if u, ok := x["unsupported"]; ok {
-			if arr, isArr := u.([]any); !isArr || len(arr) != 0 {
-				t.Fatalf("WASM の結果に空でない印がある(HTTP の契約に印が無いので比べられない): %v", u)
-			}
-			delete(x, "unsupported")
-		}
-		for k, child := range x {
-			x[k] = dropEmptyUnsupported(t, child)
-		}
-	case []any:
-		for i, child := range x {
-			x[i] = dropEmptyUnsupported(t, child)
-		}
-	}
-	return v
+	return env.Result
 }
 
 func calcWasmBody(t *testing.T, f *fakeStore, c calcCase) map[string]any {

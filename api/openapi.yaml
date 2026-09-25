@@ -799,9 +799,30 @@ components:
             - それ以外: chancePercent を 0.1% 単位に四捨五入し、[0.1, 99.9] に収める
               (確定・不可能と取り違えないため、0.0 と 100.0 はこの2つに予約する)
 
+    UnsupportedMark:
+      type: object
+      description: |
+        「この結果は正しくない可能性がある」印1つ(ADR-0123)。engine が正しく計算できない技の機構・
+        持ち物・特性に、数値は通常の式のまま付ける(400 で拒否しない)。
+      required: [target, reason, id]
+      properties:
+        target:
+          type: string
+          description: 印の対象
+          enum: [move, attacker_item, attacker_ability, defender_item, defender_ability]
+        reason:
+          type: string
+          description: |
+            印の理由。技は機構の値(MasterMove.mechanisms と同じ13種)か zero_power(威力0の攻撃技。
+            威力が技の処理で決まるため)、持ち物・特性は unsupported_effect(効果スキーマで表せない)。
+          enum: [alt_defense_stat, alt_offense_stat, always_crit, effectiveness_change, field_specific,
+                 fixed_damage, ignore_defense_ranks, move_specific, multi_hit, ohko, priority_change,
+                 type_change, variable_power, zero_power, unsupported_effect]
+        id: { type: string, description: 技・持ち物・特性の ID }
+
     CalcResult:
       type: object
-      required: [rolls, minDamage, maxDamage, minPercent, maxPercent, defenderHP, effectiveness, stab, category, ko]
+      required: [rolls, minDamage, maxDamage, minPercent, maxPercent, defenderHP, effectiveness, stab, category, ko, unsupported]
       properties:
         rolls:
           type: array
@@ -837,6 +858,11 @@ components:
           allOf: [ { $ref: '#/components/schemas/MoveCategory' } ]
           description: 使った技の分類(WASM 境界の CalcResult と同じ。Web が型を共有するため)
         ko: { $ref: '#/components/schemas/KOChance' }
+        unsupported:
+          type: array
+          description: |
+            この結果に付いた「未対応」の印(ADR-0123)。印なしは空配列(WASM 境界の CalcResult と同じ形)。
+          items: { $ref: '#/components/schemas/UnsupportedMark' }
 
     DefenderPreset:
       type: string
@@ -1027,7 +1053,7 @@ components:
     ReverseCandidate:
       type: object
       description: 候補1件(性格クラス × 持ち物。ADR-0010 §R3)
-      required: [natureClass, nature, natureId, itemId, ranges, spCount, exact, mismatch, support, minPercent, maxPercent]
+      required: [natureClass, nature, natureId, itemId, ranges, spCount, exact, mismatch, support, minPercent, maxPercent, unsupported]
       properties:
         natureClass: { $ref: '#/components/schemas/NatureClass' }
         nature: { $ref: '#/components/schemas/NatureModifier' }
@@ -1055,6 +1081,12 @@ components:
           type: number
           format: double
           description: ranges 全体での想定ダメージ幅の上限(表示%。小数第1位・四捨五入。CalcResult.maxPercent と同じ意味)
+        unsupported:
+          type: array
+          description: |
+            この候補の計算に付いた「未対応」の印(ADR-0123)。SP によらず同じ(技・場・既知側は候補間で共通)。
+            印なしは空配列。
+          items: { $ref: '#/components/schemas/UnsupportedMark' }
 
     ReverseResult:
       type: object
@@ -1176,7 +1208,7 @@ components:
     MasterMove:
       type: object
       description: moves テーブルの行(計算に使う列だけ)+ move_effects の effect(ADR-0107)
-      required: [id, nameJa, type, category, power, priority, effect]
+      required: [id, nameJa, type, category, power, priority, effect, mechanisms]
       properties:
         id: { type: string }
         nameJa: { type: string }
@@ -1190,6 +1222,13 @@ components:
             技の追加効果(命中時のランク変化。ADR-0107)。null は追加効果なし。
             ダメージ計算はこの値を読まない(ADR-0107 決定2)。発動するかどうかの判定も engine は行わず、
             「発動した場合の変化量」と「その確率」を持つだけ(ADR-0107 決定1)。
+        mechanisms:
+          type: array
+          description: |
+            技の機構(move_mechanisms。ADR-0121)。「威力・分類・タイプから通常の式で計算すると誤る」理由の
+            分類で、1つの技が複数を持つことがある。昇順・重複なし。通常の技(変化技を含む)は空配列。
+            calc-svc は engine.Move.Mechanisms にそのまま渡す(「未対応」の印の判定に使う。ADR-0123)。
+          items: { type: string }
 
     MasterEffect:
       type: object

@@ -120,3 +120,13 @@ down は DROP TABLE だけ(行が入った状態でも通る)。
   `tools/importer` で Showdown の取得をやり直す(同じ commit。キャッシュ済みのソースを使うのでネットワーク不要。他の値は変わらない)。
   取り直した取得物は、この変更を含まない古いブランチの importer では未知のフィールドとして拒否される。
 - `move_specific` の過検出 5 件は、ハンドラのソースを読まないと区別できない。必要になったら ADR を追記して規則を細かくする。
+
+**実装時の追記(2026-09-25。API レーン)**: §4 の依頼どおり `api/openapi.yaml` の `MasterMove` に
+`mechanisms: string[]`(必須・昇順・通常の技は空配列)を追加した。`services/pokedex/internal/httpapi/master.go`
+が `ListMoveMechanisms` を move_id ごとにまとめ、SQL の `ORDER BY` に頼らずここで明示的にソートしてから返す
+(契約の「昇順」保証をこの層で持つ)。`services/calc/internal/master/export.go` の `buildMoves` はこれを
+`sharedmaster.MoveRow.Mechanisms` にそのまま渡すだけで、検証・`engine.Move.Mechanisms` への変換は既存の
+`services/internal/master.MoveMechanismsOf`(データレーンが本 ADR で実装済み)がそのまま行う。
+Web(`web/src/master/exportSnapshot.ts` の `CalcSnapshotMove`)の例データにも `mechanisms: []` を追加した
+(例データは機構を持つ技を含まない)。iOS 側の生成物(swift-openapi-generator)は iOS レーンでの
+`make ios-gen` 相当の再生成が必要(このタスクでは未実施。DECISIONS.md 参照)。

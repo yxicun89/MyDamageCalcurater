@@ -131,3 +131,15 @@ issue #271 は「未対応と分かる印」か「400 で拒否」を、#270 は
 - 既存の正常な入力の数値は変わらない(ゴールデン全件一致。追加は `psychic-priority/*` の 6 件だけ)。
 - 注意: `move_specific` の過検出(ADR-0121 の 5 件)にも印が付く。印の条件を細かくするときは本 ADR に追記する。
 - 印を見せる画面(Web・iOS)は各レーンの作業。
+
+**実装時の追記(2026-09-25。API レーン)**: §7 の依頼どおり `UnsupportedMark`(target・reason・id。§7 記載の
+YAML そのまま)を新設し、`CalcResult`(`BulkCalcRow.result` は `CalcResult` を再利用するため両方に効く)・
+`ReverseCandidate` に `unsupported: UnsupportedMark[]`(必須・印なしは `[]`)を追加した。
+`services/calc/internal/httpapi/convert.go` に `unsupportedFrom`(`engine/wasmapi` の `unsupportedFrom` と
+同じ変換)を追加し、`calcResultFrom`・`reverseResultFrom`(→ `bulkResultFrom` 経由でも使われる)に配線した。
+`services/calc/internal/httpapi/parity_test.go` の `dropEmptyUnsupported` は削除し、HTTP と WASM で
+`unsupported` を含めてそのまま比較するようにした(§6 の依頼どおり)。
+Web(`web/src/engine/types.ts` の `CalcResult` 等)はこの印をまだ受け取らない設計のまま
+(`web/src/api/apiEngine.ts` の `mapCalcResult` 等が明示的なフィールド写像のため、契約に増えた
+`unsupported` は自動的に弾かれる。issue #67 の前方互換どおり)。表示するかどうかは Web レーンの判断。
+iOS 側の生成物は iOS レーンでの再生成が必要(このタスクでは未実施。DECISIONS.md 参照)。

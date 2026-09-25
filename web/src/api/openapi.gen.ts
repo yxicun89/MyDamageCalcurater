@@ -567,6 +567,40 @@ export interface components {
        */
       displayChancePercent: number;
     };
+    /**
+     * @description 「この結果は正しくない可能性がある」印1つ(ADR-0123)。engine が正しく計算できない技の機構・
+     *     持ち物・特性に、数値は通常の式のまま付ける(400 で拒否しない)。
+     */
+    UnsupportedMark: {
+      /**
+       * @description 印の対象
+       * @enum {string}
+       */
+      target: "move" | "attacker_item" | "attacker_ability" | "defender_item" | "defender_ability";
+      /**
+       * @description 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種)か zero_power(威力0の攻撃技。
+       *     威力が技の処理で決まるため)、持ち物・特性は unsupported_effect(効果スキーマで表せない)。
+       * @enum {string}
+       */
+      reason:
+        | "alt_defense_stat"
+        | "alt_offense_stat"
+        | "always_crit"
+        | "effectiveness_change"
+        | "field_specific"
+        | "fixed_damage"
+        | "ignore_defense_ranks"
+        | "move_specific"
+        | "multi_hit"
+        | "ohko"
+        | "priority_change"
+        | "type_change"
+        | "variable_power"
+        | "zero_power"
+        | "unsupported_effect";
+      /** @description 技・持ち物・特性の ID */
+      id: string;
+    };
     CalcResult: {
       /** @description 16 段階の乱数ダメージ(非減少) */
       rolls: number[];
@@ -599,6 +633,8 @@ export interface components {
       /** @description 使った技の分類(WASM 境界の CalcResult と同じ。Web が型を共有するため) */
       category: components["schemas"]["MoveCategory"];
       ko: components["schemas"]["KOChance"];
+      /** @description この結果に付いた「未対応」の印(ADR-0123)。印なしは空配列(WASM 境界の CalcResult と同じ形)。 */
+      unsupported: components["schemas"]["UnsupportedMark"][];
     };
     /**
      * @description 防御側の代表調整(耐久が上がる順)。SP は能力ポイント(Lv50・個体値31固定)。
@@ -767,6 +803,11 @@ export interface components {
        * @description ranges 全体での想定ダメージ幅の上限(表示%。小数第1位・四捨五入。CalcResult.maxPercent と同じ意味)
        */
       maxPercent: number;
+      /**
+       * @description この候補の計算に付いた「未対応」の印(ADR-0123)。SP によらず同じ(技・場・既知側は候補間で共通)。
+       *     印なしは空配列。
+       */
+      unsupported: components["schemas"]["UnsupportedMark"][];
     };
     ReverseResult: {
       side: components["schemas"]["ReverseSide"];
@@ -860,6 +901,12 @@ export interface components {
        *     「発動した場合の変化量」と「その確率」を持つだけ(ADR-0107 決定1)。
        */
       effect: components["schemas"]["MasterEffect"];
+      /**
+       * @description 技の機構(move_mechanisms。ADR-0121)。「威力・分類・タイプから通常の式で計算すると誤る」理由の
+       *     分類で、1つの技が複数を持つことがある。昇順・重複なし。通常の技(変化技を含む)は空配列。
+       *     calc-svc は engine.Move.Mechanisms にそのまま渡す(「未対応」の印の判定に使う。ADR-0123)。
+       */
+      mechanisms: string[];
     };
     /**
      * @description 効果定義(item_effects / ability_effects の JSON をそのまま。ADR-0005)。null は補正なし。

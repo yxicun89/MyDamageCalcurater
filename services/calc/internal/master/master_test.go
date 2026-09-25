@@ -94,8 +94,8 @@ func baseExport(t *testing.T) api.MasterExport {
 				Abilities: []api.MasterSpeciesAbility{{Slot: 1, AbilityId: "testthick"}}},
 		},
 		Moves: []api.MasterMove{
-			{Id: "testbeam", NameJa: "テストビーム", Type: api.PokeTypeNormal, Category: api.Physical, Power: 80},
-			{Id: "testwave", NameJa: "テストウェーブ", Type: api.PokeTypeGrass, Category: api.Special, Power: 90},
+			{Id: "testbeam", NameJa: "テストビーム", Type: api.PokeTypeNormal, Category: api.Physical, Power: 80, Mechanisms: []string{}},
+			{Id: "testwave", NameJa: "テストウェーブ", Type: api.PokeTypeGrass, Category: api.Special, Power: 90, Mechanisms: []string{}},
 		},
 		Items: []api.MasterItem{
 			{Id: "testplainitem", NameJa: "テストのいし"},
