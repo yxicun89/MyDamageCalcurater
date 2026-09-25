@@ -88,14 +88,34 @@ func (h *harness) run(t *testing.T, args ...string) int {
 	return code
 }
 
-// pinnedVersions は data ディレクトリの固定版(LoadInput の結果)を返す。
-func pinnedVersions(t *testing.T, data string) []importer.SourceVersion {
+// recordedVersions は data ディレクトリを投入したあと DB に記録される版(LoadInput の固定版 +
+// 変換結果の版。ADR-0122)を返す。
+func recordedVersions(t *testing.T, data string) []importer.SourceVersion {
 	t.Helper()
-	_, vs, err := importer.LoadInput(data)
+	out, vs := convertData(t, data)
+	recorded, err := importer.WithOutputVersion(vs, out)
+	if err != nil {
+		t.Fatalf("WithOutputVersion: %v", err)
+	}
+	return recorded
+}
+
+// convertData は data ディレクトリを CLI と同じ手順(参照の相性表つき)で照合・変換する。
+func convertData(t *testing.T, data string) (importer.Output, []importer.SourceVersion) {
+	t.Helper()
+	in, vs, err := importer.LoadInput(data)
 	if err != nil {
 		t.Fatalf("LoadInput: %v", err)
 	}
-	return vs
+	in.ReferenceTypeChart, err = importer.LoadReferenceTypeChart(importer.ReferenceTypeChartDefaultPath(data))
+	if err != nil {
+		t.Fatalf("LoadReferenceTypeChart: %v", err)
+	}
+	out, _, err := importer.Reconcile(in)
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	return out, vs
 }
 
 func versionOf(vs []importer.SourceVersion, source string) string {
@@ -131,7 +151,7 @@ func upstreamBody(checkedAt, showdown string) string {
 func TestRunSkipsWhenDBHasPinnedVersions(t *testing.T) {
 	data := copyFixtureData(t, 2)
 	h := newHarness()
-	h.store.applied = pinnedVersions(t, data)
+	h.store.applied = recordedVersions(t, data)
 	if code := h.run(t, "-data", data); code != 0 {
 		t.Fatalf("exit = %d, want 0", code)
 	}
@@ -155,8 +175,52 @@ func TestRunAppliesPinnedVersionsWhenDBDiffers(t *testing.T) {
 	if len(h.store.applyCalls) != 1 {
 		t.Fatalf("DB が空なのに Apply が %d 回(want 1)", len(h.store.applyCalls))
 	}
-	if needs, _ := importer.NeedsImport(h.store.applyCalls[0], pinnedVersions(t, data)); needs {
+	if needs, _ := importer.NeedsImport(h.store.applyCalls[0], recordedVersions(t, data)); needs {
 		t.Errorf("Apply に渡った版が固定版と違う: %+v", h.store.applyCalls[0])
+	}
+}
+
+// 取得元の版が同じでも、前回の変換結果と今回の変換結果が違えば投入する(issue #379・ADR-0122)。
+// importer の変換ロジックや DB スキーマだけが変わったときの取り込み(CronJob・make import-k8s)。
+func TestRunReimportsWhenOutputChangesWithSameSources(t *testing.T) {
+	data := copyFixtureData(t, 2)
+	out, pinned := convertData(t, data)
+	stale := out
+	stale.MoveMechanisms = nil // 前回の importer は技の機構を作っていなかった
+	if len(out.MoveMechanisms) == 0 {
+		t.Fatal("架空データに技の機構が無く、変換結果の違いを作れない")
+	}
+	previous, err := importer.WithOutputVersion(pinned, stale)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newHarness()
+	h.store.applied = previous
+	if code := h.run(t, "-data", data); code != 0 {
+		t.Fatalf("exit = %d, want 0", code)
+	}
+	if len(h.store.applyCalls) != 1 {
+		t.Fatalf("変換結果が変わったのに Apply が %d 回(want 1)", len(h.store.applyCalls))
+	}
+	if needs, _ := importer.NeedsImport(h.store.applyCalls[0], recordedVersions(t, data)); needs {
+		t.Errorf("Apply に渡った版が今回の変換結果の版と違う: %+v", h.store.applyCalls[0])
+	}
+}
+
+// 変換結果の版を stdout に出す(dry-run でも。kubectl logs と実データの dry-run で比べるため)。
+func TestRunPrintsOutputVersion(t *testing.T) {
+	data := copyFixtureData(t, 2)
+	out, _ := convertData(t, data)
+	ov, err := importer.OutputVersion(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newHarness()
+	if code := h.run(t, "-data", data, "-dry-run"); code != 0 {
+		t.Fatalf("exit = %d, want 0", code)
+	}
+	if want := importer.OutputSource + "=" + ov.Version; !strings.Contains(h.stdout.String(), want) {
+		t.Errorf("stdout に変換結果の版 %q が無い", want)
 	}
 }
 
@@ -229,7 +293,7 @@ func TestRunUpstreamShownEvenWhenSkipping(t *testing.T) {
 	data := copyFixtureData(t, 2)
 	up := writeUpstream(t, data, upstreamBody("2026-09-26T03:00:00Z", newerShowdown))
 	h := newHarness()
-	h.store.applied = pinnedVersions(t, data)
+	h.store.applied = recordedVersions(t, data)
 	if code := h.run(t, "-data", data, "-upstream", up); code != 0 {
 		t.Fatalf("exit = %d, want 0", code)
 	}
@@ -406,7 +470,7 @@ func TestRunReferenceTypeChartMismatchBlocks(t *testing.T) {
 func TestRunForceAppliesEvenWhenSame(t *testing.T) {
 	data := copyFixtureData(t, 2)
 	h := newHarness()
-	h.store.applied = pinnedVersions(t, data)
+	h.store.applied = recordedVersions(t, data)
 	if code := h.run(t, "-data", data, "-force"); code != 0 {
 		t.Fatalf("exit = %d", code)
 	}
