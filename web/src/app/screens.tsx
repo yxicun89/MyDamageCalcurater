@@ -48,10 +48,13 @@ export const SCREEN_COMPONENTS: Record<ScreenId, ComponentType<ScreenProps>> = {
 
 /**
  * issue 308(ADR-0304 追記6): マスタを使わない画面(app/routes.ts の usesMaster: false)に渡す props。
- * ScreenProps から master を取り除いただけ(SpeedScreenProps は master を要らないので、この型は
- * 元から master を渡さない SpeedScreen にそのまま代入できる)。
+ * ScreenProps から master と engine を取り除いただけ(SpeedScreenProps はどちらも要らないので、この型は
+ * 元から両方を渡さない SpeedScreen にそのまま代入できる)。engine も除くのは、マスタの読み込みに
+ * 失敗している間(critic指摘)は `resolvedEngines.online` が使えず offline へ静かに落ちるため
+ * (ADR-0301 §4 が禁じる自動フォールバックに見えかねない)。マスタ不要の画面は engine も要らない
+ * はずなので、そもそも渡さない。
  */
-export type MasterlessScreenProps = Omit<ScreenProps, "master">;
+export type MasterlessScreenProps = Omit<ScreenProps, "master" | "engine">;
 
 /**
  * マスタを使わない画面のコンポーネント(app/routes.ts の `MasterlessScreenId` = usesMaster: false の

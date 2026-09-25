@@ -193,8 +193,11 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   }, [currentMasterLoad, clientIds]);
 
   // モードごとに使う engine を決める(ADR-0301 §4)。engines > engine(両モードに使う) > 既定の順。
-  // 既定のオンラインは、マスタ読み込み前は使われない(currentMasterLoad が ok になるまで下の画面を描画しない)
-  // ので null のままでもよく、その間は offline のプレースホルダで埋める。
+  // 既定のオンラインは、マスタが読めるまで(currentMasterLoad が ok になるまで)使えないので null のままでもよく、
+  // その間は offline のプレースホルダで埋める。issue 308: マスタの読み込みに失敗した状態でも
+  // マスタ不要の画面(素早さ)は描画するが、その画面には engine 自体を渡さない(MasterlessScreenProps。
+  // ここで offline へ静かに落ちたプレースホルダを渡すと、オンラインを選んでいるのに実は WASM で
+  // 計算しているという、ADR-0301 §4 が禁じる自動フォールバックに見えかねないため)。
   const resolvedEngines: CalcEngines =
     engines ??
     (engine !== undefined
@@ -297,6 +300,9 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
 
   // 選ばれている画面のコンポーネント(app/screens.tsx の対応表から引く)。
   const ActiveScreen = SCREEN_COMPONENTS[tab];
+  // issue 308: 選ばれているタブがマスタ不要画面(素早さ)なら、そのコンポーネントも先に引いておく
+  // (マスタの読み込みに失敗していてもこちらは描画できる)。
+  const MasterlessActiveScreen = isMasterlessScreen(tab) ? MASTERLESS_SCREEN_COMPONENTS[tab] : null;
 
   return (
     <>
@@ -349,21 +355,15 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
                   judgeClient={judgeClient}
                   masterSearch={activeMasterSearch}
                 />
-              ) : isMasterlessScreen(tab) ? (
-                // issue 308: マスタを使わない画面(素早さ)は、失敗中でも master を渡さずに描画する
-                // (MASTERLESS_SCREEN_COMPONENTS は master を持たない Props しか要求しない。ADR-0304 追記6)。
-                (() => {
-                  const MasterlessActiveScreen = MASTERLESS_SCREEN_COMPONENTS[tab];
-                  return (
-                    <MasterlessActiveScreen
-                      engine={resolvedEngine}
-                      client={balanceClient}
-                      speedClient={speedClient}
-                      judgeClient={judgeClient}
-                      masterSearch={activeMasterSearch}
-                    />
-                  );
-                })()
+              ) : MasterlessActiveScreen !== null ? (
+                // issue 308: マスタを使わない画面(素早さ)は、失敗中でも master・engine を渡さずに描画する
+                // (MASTERLESS_SCREEN_COMPONENTS は両方を持たない Props しか要求しない。ADR-0304 追記6)。
+                <MasterlessActiveScreen
+                  client={balanceClient}
+                  speedClient={speedClient}
+                  judgeClient={judgeClient}
+                  masterSearch={activeMasterSearch}
+                />
               ) : (
                 <MasterLoadFailureNotice
                   error={currentMasterLoad.error}
@@ -403,9 +403,11 @@ function MasterLoadFailureNotice({
   return (
     <div role="alert" className="app-master-error">
       <p>{appText.masterLoadError}</p>
-      <p>
-        {appText.masterLoadErrorDetailLabel}: {error.message}
-      </p>
+      {error.message !== "" && (
+        <p>
+          {appText.masterLoadErrorDetailLabel}: {error.message}
+        </p>
+      )}
       <div className="app-master-error__actions">
         <button type="button" className="app-master-error__button" onClick={onRetry}>
           {appText.masterLoadRetryLabel}
