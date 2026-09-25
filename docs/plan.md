@@ -471,6 +471,31 @@
   - 失敗するテストを先に置いた(spec-writer): `web/src/judge/judgeClient.test.ts`・`web/src/judge/JudgeScreen.test.tsx`・
     `web/src/app/routes.test.ts`(judge タブの登録)。`judge.gen.ts` は生成済み
   - iOS は Web を出してから改めて判断する(DECISIONS.md 2026-09-24)
+- [x] issue #234 moveId/natureId の形式検証が無く、制御文字などが上流 URL にそのまま埋め込まれ、503
+  `upstream_unavailable` + 誤警告ログになる(全体レビュー指摘。2026-09-24)
+  - 設計の正は ADR-0706: `moveId` / `natureId` を `^[a-z0-9]+(-[a-z0-9]+)*$`・1〜64 文字で検査し
+    (`services/balance` の `MoveId` / `AbilityId` と同じ綴り。ADR-0016 §2・ADR-0017 §2)、
+    **上流を呼ぶ前に** 400 `invalid_request` を返す(`writeUpstreamError` に到達させない)/
+    message は `attacker` / `defenders[<index>]` を示す(ADR-0703 §3)/ `internal/client` は
+    key を `url.PathEscape` で埋める(二重の守り)/ pokedex-svc 側の key 検証と `abilityId` / `itemId` は範囲外
+  - 契約は先に更新した(spec-writer): `services/judge/api/openapi.yaml` に `MoveId` / `NatureId` を新設し、
+    `moveId` / `natureId` の 4 か所をその `$ref` に。**`make judge-gen` は implementer が実行する**
+  - 失敗するテストを先に置いた(spec-writer): `internal/httpapi` に `TestOutspeedAndKoRejectsInvalidIDFormat`・
+    `TestOutspeedAndKoIDLengthLimit`・`TestOutspeedAndKoIDFormatCheckOrder`・`TestOutspeedAndKoAcceptsValidIDFormat`、
+    `TestOutspeedAndKoRejectsInvalidRequest` に形式の行を 4 件追加、`internal/client` に
+    `TestPokedexEscapesKeyInPath`・`TestPokedexDoesNotEscapeValidKey`。
+    現行コードでは 5 つの Test が失敗し、それ以外の既存テストは全件通ることを確認済み
+  - 実装(implementer、1 回目): `internal/httpapi/outspeed.go` の attacker 本体・defenders 候補それぞれで
+    `moveId`・`natureId` の計 3 箇所に ID 形式検査を追加(`writeUpstreamError` より前・attacker → defenders を
+    index 昇順)、`internal/client/pokedex.go` の `Species` / `Move` は key を `url.PathEscape` で path 要素に
+    埋めるよう変更(二重の守り)。`make judge-test` 全件通過
+  - critic 1 回目 NG: Go 側のロジック・テストは適合だが、`web/src/judge/judge.gen.ts` が契約変更
+    (`MoveId` / `NatureId` の追加)後に再生成されておらず stale(絶対ルール1「API 変更は openapi.yaml から。
+    変更後は make gen」違反)。2 回目(implementer)で `web/` にて手動再生成
+    (`npx openapi-typescript ../services/judge/api/openapi.yaml -o src/judge/judge.gen.ts &&
+    npx prettier --write src/judge/judge.gen.ts`。ADR-0604 §2 の素早さレーンの前例に倣う)、
+    差分が契約変更相当の型・doc コメントのみであることを確認、`npm run lint`・`npm test`(1262 件)が通ることを確認。
+    ADR-0706 の受け入れ条件7に `judge.gen.ts` の手動再生成を明記して再発防止
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
 各レーンが自分の範囲の README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)と、動かして確かめられるレーンは手順書(`docs/runbooks/<レーン>.md`。AGENTS.md「手順書の書き方」に従う)を書く。全体図は `docs/architecture.md`。
