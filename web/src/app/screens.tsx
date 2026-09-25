@@ -13,7 +13,7 @@ import { CalcScreen } from "../screens/CalcScreen";
 import { ReverseScreen } from "../screens/ReverseScreen";
 import { SpeedScreen } from "../speed/SpeedScreen";
 import type { SpeedClient } from "../speed/speedClient";
-import type { ScreenId } from "./routes";
+import type { MasterlessScreenId, ScreenId } from "./routes";
 
 /**
  * どの画面にも App が渡すもの(計算の差し替え口・マスタ・balance API のクライアント。
@@ -44,4 +44,23 @@ export const SCREEN_COMPONENTS: Record<ScreenId, ComponentType<ScreenProps>> = {
   speed: SpeedScreen,
   // JD5(ADR-0705 §1): 判定。画面の中身は web/src/judge/ にある(レーンの境界)。
   judge: JudgeScreen,
+};
+
+/**
+ * issue 308(ADR-0304 追記6): マスタを使わない画面(app/routes.ts の usesMaster: false)に渡す props。
+ * ScreenProps から master を取り除いただけ(SpeedScreenProps は master を要らないので、この型は
+ * 元から master を渡さない SpeedScreen にそのまま代入できる)。
+ */
+export type MasterlessScreenProps = Omit<ScreenProps, "master">;
+
+/**
+ * マスタを使わない画面のコンポーネント(app/routes.ts の `MasterlessScreenId` = usesMaster: false の
+ * 画面 ID だけを key に持つ。今は素早さだけ)。マスタの読み込みに失敗していても、この対応表にある画面は
+ * master を渡さずに描画できる(App.tsx が `isMasterlessScreen` で選ぶ)。
+ */
+export const MASTERLESS_SCREEN_COMPONENTS: Record<
+  MasterlessScreenId,
+  ComponentType<MasterlessScreenProps>
+> = {
+  speed: SpeedScreen,
 };

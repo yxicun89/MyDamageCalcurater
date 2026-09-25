@@ -17,6 +17,7 @@ import {
   DEFAULT_SCREEN,
   SCREEN_ROUTES,
   documentTitle,
+  isMasterlessScreen,
   pathForScreen,
   screenFromPath,
   screenLabel,
@@ -31,7 +32,7 @@ import { isSearchableMasterSource } from "./master/capabilities";
 import { exampleMasterSource } from "./master/exampleSource";
 import { createSpeedClient } from "./speed/speedClient";
 import type { MasterData, MasterSource, MasterSources } from "./master/types";
-import { SCREEN_COMPONENTS } from "./app/screens";
+import { MASTERLESS_SCREEN_COMPONENTS, SCREEN_COMPONENTS } from "./app/screens";
 
 /** タブの定義順(ロービング tabIndex・矢印キーの移動順。WAI-ARIA Authoring Practices の Tabs パターン)。 */
 const TAB_ORDER: readonly ScreenId[] = SCREEN_ROUTES.map((route) => route.id);
@@ -143,6 +144,11 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   const currentMasterLoad: MasterLoadResult | null =
     masterLoad !== null && masterLoad.source === activeMasterSource ? masterLoad.result : null;
 
+  // issue 308: 「再試行」で同じ取得口(activeMasterSource)を読み直すためのトリガー。値そのものに意味は無く、
+  // 増やすたびに下の effect を再実行させる(activeMasterSource 自体は参照が変わらないので依存配列に足すだけでは
+  // 読み直せない)。
+  const [retryToken, setRetryToken] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
     activeMasterSource.load().then(
@@ -163,7 +169,14 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
     return () => {
       cancelled = true;
     };
-  }, [activeMasterSource]);
+    // retryToken は値を使わない(再実行のためだけの依存。activeMasterSource が変わらない「再試行」でも
+    // このトリガーで effect を再実行する)。
+  }, [activeMasterSource, retryToken]);
+
+  /** issue 308: マスタの読み込みに失敗した画面の「再試行」。今の取得口をもう一度読む。 */
+  function retryMasterLoad(): void {
+    setRetryToken((token) => token + 1);
+  }
 
   // 既定のオンライン(API)エンジンは、natures(性格の一覧)が要るのでマスタの読み込みが終わってから作る
   // (ADR-0301 §2・§4)。createApiEngine 自体は fetch しない(初回の計算まで遅延。ADR-0300 §2 と同じ考え方)。
@@ -294,8 +307,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
       </header>
       <main className="app-main">
         {currentMasterLoad === null && <p>{appText.loading}</p>}
-        {currentMasterLoad !== null && !currentMasterLoad.ok && <p role="alert">{appText.masterLoadError}</p>}
-        {currentMasterLoad !== null && currentMasterLoad.ok && (
+        {currentMasterLoad !== null && (
           <div className="app-tabs">
             <div role="tablist" aria-label={appText.tabsLabel} className="app-tabs__list">
               {TAB_ORDER.map((id, index) => {
@@ -328,19 +340,83 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
               })}
             </div>
             <div role="tabpanel" id={panelId} aria-labelledby={tabElementId(tab)} className="app-tabs__panel">
-              <ActiveScreen
-                engine={resolvedEngine}
-                master={currentMasterLoad.master}
-                client={balanceClient}
-                speedClient={speedClient}
-                judgeClient={judgeClient}
-                masterSearch={activeMasterSearch}
-              />
+              {currentMasterLoad.ok ? (
+                <ActiveScreen
+                  engine={resolvedEngine}
+                  master={currentMasterLoad.master}
+                  client={balanceClient}
+                  speedClient={speedClient}
+                  judgeClient={judgeClient}
+                  masterSearch={activeMasterSearch}
+                />
+              ) : isMasterlessScreen(tab) ? (
+                // issue 308: マスタを使わない画面(素早さ)は、失敗中でも master を渡さずに描画する
+                // (MASTERLESS_SCREEN_COMPONENTS は master を持たない Props しか要求しない。ADR-0304 追記6)。
+                (() => {
+                  const MasterlessActiveScreen = MASTERLESS_SCREEN_COMPONENTS[tab];
+                  return (
+                    <MasterlessActiveScreen
+                      engine={resolvedEngine}
+                      client={balanceClient}
+                      speedClient={speedClient}
+                      judgeClient={judgeClient}
+                      masterSearch={activeMasterSearch}
+                    />
+                  );
+                })()
+              ) : (
+                <MasterLoadFailureNotice
+                  error={currentMasterLoad.error}
+                  showSwitchToOffline={mode === "online"}
+                  onRetry={retryMasterLoad}
+                  onSwitchToOffline={() => {
+                    selectMode("offline");
+                  }}
+                />
+              )}
             </div>
           </div>
         )}
       </main>
     </>
+  );
+}
+
+interface MasterLoadFailureNoticeProps {
+  readonly error: Error;
+  /** オンラインのときだけ「オフラインに切り替える」を出す(自動では切り替えない。ADR-0301 §4)。 */
+  readonly showSwitchToOffline: boolean;
+  readonly onRetry: () => void;
+  readonly onSwitchToOffline: () => void;
+}
+
+/**
+ * issue 308: マスタの読み込みに失敗したときの立て直し。原因(Error の message)を握りつぶさず、
+ * 「再試行」(同じ取得口を読み直す)と、オンラインのときだけ「オフラインに切り替える」を出す。
+ */
+function MasterLoadFailureNotice({
+  error,
+  showSwitchToOffline,
+  onRetry,
+  onSwitchToOffline,
+}: MasterLoadFailureNoticeProps) {
+  return (
+    <div role="alert" className="app-master-error">
+      <p>{appText.masterLoadError}</p>
+      <p>
+        {appText.masterLoadErrorDetailLabel}: {error.message}
+      </p>
+      <div className="app-master-error__actions">
+        <button type="button" className="app-master-error__button" onClick={onRetry}>
+          {appText.masterLoadRetryLabel}
+        </button>
+        {showSwitchToOffline && (
+          <button type="button" className="app-master-error__button" onClick={onSwitchToOffline}>
+            {appText.masterLoadSwitchToOfflineLabel}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
