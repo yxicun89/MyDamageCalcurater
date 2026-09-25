@@ -4,6 +4,18 @@
 - 読み方: 「前提」= Makefile の前提条件。「副作用」の**太字**はクラスタ・DB・レジストリ・破壊的操作。コマンド単位の実行順は [runbook-commands.md](runbook-commands.md)、リソースは [k8s-local.md](k8s-local.md)。
 - ルート `Makefile` は末尾で 6 本を `include`(`Makefile:239-244`)。ターゲット名は接頭辞でレーン分離(`api-`=gateway/calc、`web-`、`balance-`、`speed-`、`judge-`、`ios-`)。
 
+## CI(GitHub Actions。ADR-0114)
+
+`.github/workflows/ci.yml` が PR と main への push で1ジョブ(ubuntu-latest、Secret 不要)を実行する。
+下表の `test`/`lint`/`build` が Web・balance・speed・judge を合成済みなので、CI も go/web でジョブを
+分けず `make test` → `make lint` → `make build` → `make test-golden` → `make test-wasm` を順に呼ぶ
+(分けると Web 分が二重実行になる)。`kubectl`(`azure/setup-kubectl`、stable.txt 準拠のバージョンに固定)を
+追加で入れ、`make lint` の `k8s-render` に加えて `api-kustomize`・`web-kustomize`・`balance-kustomize`・
+`speed-kustomize`・`judge-kustomize`(各レーン専用 overlay)も描画確認する。最後に `make check-publishable`
+を単独ステップとしても走らせる(`make lint` に含まれるが、ログで単独の合否として見せるため)。
+Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-version` を読み、版をワークフローに
+二重に書かない。対象外(iOS・Playwright e2e・k3d への実 apply)は ci.yml 冒頭のコメントと ADR-0114 を参照。
+
 ## 共通の仕様
 
 | 項目 | 内容 | 根拠 |
@@ -19,7 +31,7 @@
 
 | ターゲット | 前提条件(全 Makefile の合算) | 追加のレシピ |
 |---|---|---|
-| `test` | test-engine test-services test-tools test-scripts balance-test speed-test judge-test web-test | なし |
+| `test` | test-engine test-golden test-services test-tools test-scripts balance-test speed-test judge-test web-test | なし |
 | `lint` | speed-lint judge-lint web-lint balance-lint | あり(gofmt・vet・構文検査・k8s-render・check-publishable・selftest。`Makefile:67-80`) |
 | `build` | speed-build judge-build web-build balance-build | あり(engine・services・tools の go build) |
 | `gen` | gen-go gen-sql gen-ts | なし |
@@ -44,14 +56,14 @@
 | `gen-go` | 30 | — | `cd services && $(GO) tool oapi-codegen -config internal/api/cfg.yaml ../api/openapi.yaml ⏎ echo "gen-go: services/internal/api/openapi.gen.go を生成"` | 生成物を書換 |
 | `gen-sql` | 35 | — | `cd tools && $(GO) tool sqlc generate -f ../services/pokedex/db/sqlc.yaml ⏎ echo "gen-sql: services/pokedex/internal/store を生成"` | 生成物を書換 |
 | `gen-ts` | 40 | — | `test -x web/node_modules/.bin/openapi-typescript \|\| { echo "gen-ts: web の依存が無い(先に make web-install)" >&2; exit 1; } ⏎ cd web && npx --no-install openapi-typescript ../…` | 生成物を書換 |
-| `test` | 48 | test-engine test-services test-tools test-scripts | (レシピなし) | なし(前提条件のみ) |
+| `test` | 48 | test-engine test-golden test-services test-tools test-scripts | (レシピなし) | なし(前提条件のみ) |
 | `test-engine` | 51 | — | `cd engine && $(GO) test ./...` | なし(読み取り/検査) |
 | `test-services` | 55 | — | `cd services && $(GO) test ./...` | なし(読み取り/検査) |
 | `test-tools` | 59 | — | `cd tools && $(GO) test ./...` | なし(読み取り/検査) |
 | `test-scripts` | 63 | — | `./scripts/argocd-bootstrap_test.sh` | なし(PATH 上の偽 curl/kubectl で検査。クラスタ・ネットワーク非接触) |
-| `lint` | 67 | — | `test -z "$$(gofmt -l engine services tools)" \|\| { gofmt -l engine services tools; exit 1; } ⏎ cd engine && $(GO) vet ./... ⏎ cd services && $(GO) vet ./... ⏎ cd tools …` | ファイル非変更。$(MAKE) で k8s-render・check-publishable(-selftest)も再帰実行 |
+| `lint` | 67 | — | `test -z "$$(gofmt -l engine services tools)" \|\| { gofmt -l engine services tools; exit 1; } ⏎ cd engine && $(GO) vet ./... ⏎ cd engine && $(GO) vet -tags golden ./... ⏎ cd engine && $(GO) vet -tags allspecies ./... ⏎ cd services && $(GO) vet ./... ⏎ cd tools …` | ファイル非変更。$(MAKE) で k8s-render・check-publishable(-selftest)も再帰実行 |
 | `build` | 82 | — | `cd engine && $(GO) build ./... ⏎ cd services && $(GO) build ./... ⏎ cd tools && $(GO) build ./...` | なし(読み取り/検査) |
-| `golden-generate` | 88 | — | `cd tools/golden && npm run generate` | testdata/golden/ を再生成(@smogon/calc 0.12.0。要 npm ci 済み) |
+| `golden-generate` | 88 | — | `cd tools/golden && npm ci && npm run generate` | testdata/golden/ を再生成(@smogon/calc 0.12.0。lockfile どおりに npm ci してから。ネットワークが要る) |
 | `test-golden` | 92 | — | `cd engine && $(GO) test -tags golden ./... -run Golden` | なし(読み取り/検査) |
 | `test-all-species` | 96 | — | `cd engine && $(GO) test -tags allspecies ./... -run AllSpecies` | なし(読み取り/検査) |
 | `migrate-up` | 101 | — | `cd services && $(GO) run ./pokedex/cmd/migrate up` | **DB 書込(migrate)** |

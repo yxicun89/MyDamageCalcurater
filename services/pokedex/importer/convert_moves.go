@@ -24,6 +24,28 @@ func resolveCalcCategory(category string) string {
 	return strings.ToLower(category)
 }
 
+// 技の PP・命中の許容範囲。migration の moves の CHECK(chk_moves_pp・chk_moves_accuracy。
+// ADR-0100 §3)が正で、TestMoveRangesMatchMigrationCheck で一致を確かめる(#310)。
+// 命中 0 は必中(NULL で保存)なので範囲とは別に許す。
+const (
+	MovePPMin       = 1
+	MovePPMax       = 64
+	MoveAccuracyMin = 1
+	MoveAccuracyMax = 100
+)
+
+// validateMoveRange は取得元の PP・命中が DB に入る範囲かを確かめる。範囲外を投入に回すと、
+// 型変換の桁あふれで値が黙って変わる(pp=300 → 44)か、CHECK 違反で投入が失敗する(#310)。
+func validateMoveRange(m ShowdownMove) error {
+	if m.PP < MovePPMin || m.PP > MovePPMax {
+		return fmt.Errorf("%w: 技 %q の pp %d が範囲 %d..%d の外", ErrInvalidData, m.ID, m.PP, MovePPMin, MovePPMax)
+	}
+	if m.Accuracy != 0 && (m.Accuracy < MoveAccuracyMin || m.Accuracy > MoveAccuracyMax) {
+		return fmt.Errorf("%w: 技 %q の accuracy %d が 0(必中)または %d..%d の外", ErrInvalidData, m.ID, m.Accuracy, MoveAccuracyMin, MoveAccuracyMax)
+	}
+	return nil
+}
+
 type moveConversion struct {
 	Rows     []MoveRow
 	Included map[string]bool
@@ -69,6 +91,9 @@ func convertMoves(in Input, typeNameToID map[string]string) (moveConversion, []F
 			if !ok {
 				return moveConversion{}, nil, nil, fmt.Errorf("%w: 技 %q が除外したタイプを使っている: %q", ErrInvalidData, id, sm.Type)
 			}
+			if err := validateMoveRange(sm); err != nil {
+				return moveConversion{}, nil, nil, err
+			}
 			finalCategory := resolveCalcCategory(cm.Category)
 			if cm.Type != sm.Type {
 				f := Finding{Kind: KindMoveTypeMismatch, ID: id}
@@ -98,6 +123,9 @@ func convertMoves(in Input, typeNameToID map[string]string) (moveConversion, []F
 			typeID, ok := typeNameToID[sm.Type]
 			if !ok {
 				return moveConversion{}, nil, nil, fmt.Errorf("%w: 技 %q が除外したタイプを使っている: %q", ErrInvalidData, id, sm.Type)
+			}
+			if err := validateMoveRange(sm); err != nil {
+				return moveConversion{}, nil, nil, err
 			}
 			warnings = append(warnings, Finding{Kind: KindMoveShowdownOnly, ID: id})
 			included[id] = true

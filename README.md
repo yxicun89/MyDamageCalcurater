@@ -53,8 +53,7 @@ make build
 ```
 
 ゴールデンテストは `tools/golden` の外部計算実装から生成したベクタと照合します。
-期待値の再生成時は同ディレクトリで `npm ci` により lockfile に従って依存を導入し、
-ルートから `make golden-generate` を実行します。通常の Go 側の照合はコミット済みベクタを使います。
+期待値の再生成はルートから `make golden-generate` を実行します(lockfile に従う `npm ci` も行います)。通常の Go 側の照合はコミット済みベクタを使います。
 [テスト戦略](docs/test-strategy.md) も参照してください。
 
 `make lint` は Go の整形・vet と shell/Node の構文、`make build` は実装済み Go モジュールを確認します。
@@ -69,7 +68,12 @@ make build
 変更した Go ファイルは `gofmt` します。`make fmt` は広い範囲を変更するため、既存差分がある場合は
 変更ファイルに絞ってください。API 変更は `api/openapi.yaml` が先で、その後 `make gen` です。
 
-`make dev` / `make e2e` / `make wasm` / `make ios-test` / `make import` / `make assets` や
+`make e2e` は常時3件(`web-e2e`・`web-e2e-online`・`web-e2e-balance`。k3d クラスタ不要)の Playwright を必ず実行し、
+kubectl の現在のコンテキストが `k3d-$CLUSTER` のときだけ既存クラスタが要る3件(`api-smoke`・`web-k3d-smoke`・`web-k3d-e2e`)
+を追加で実行します。クラスタが無ければスキップして成功しますが、`E2E_REQUIRE_K3D=1` を付けるとスキップせず失敗で
+終わります(リリース前などクラスタ分まで確かめたいとき用)。詳細は [ADR-0306](docs/adr/0306-root-e2e-wiring.md)。
+
+`make dev` / `make wasm` / `make ios-test` / `make import` / `make assets` や
 TypeScript・sqlc の生成は未実装部分があります。Makefile・スクリプトの内容を確認してください。
 正常終了でも未実装メッセージやテスト 0 件を合格として記録しません。
 Web の package.json とアプリが整備されたら、そこに定義された test/lint/typecheck/build を確認します。

@@ -392,12 +392,14 @@ type abilityEffectDTO struct {
 	DefAbsorbTypes       map[string]absorbEffectDTO `json:"defAbsorbTypes"`
 	ReduceSuperEffective int                        `json:"reduceSuperEffective"`
 	IgnoresBurn          bool                       `json:"ignoresBurn"`
+	Airborne             bool                       `json:"airborne"` // 浮いている(フィールドの補正の対象外。ADR-0116)
 }
 
 func (e abilityEffectDTO) toEngine(path string) (*engine.AbilityEffect, error) {
 	out := &engine.AbilityEffect{
 		StabMod: e.StabMod, OffBoostTypeMod: e.OffBoostTypeMod,
 		ReduceSuperEffective: e.ReduceSuperEffective, IgnoresBurn: e.IgnoresBurn,
+		Airborne: e.Airborne,
 	}
 	var err error
 	if out.OffBoostType, err = parseType(path+".offBoostType", e.OffBoostType, true); err != nil {

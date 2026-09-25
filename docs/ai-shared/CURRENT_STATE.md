@@ -117,12 +117,33 @@ BalanceScreen がオンラインで永久に使えなかった。可否の判定
   作業中に発見した無関係の既存退行(JD5の判定タブ追加で `a11y.spec.ts` が壊れていた)を別途修正・main統合済み
   (PR #191)。
   最終テスト数: 既存1166件は無変更のまま vitest 1184件・Playwright 31件、すべて green。
+**issue #268(gateway経由:8080の白画面)の検証テスト修正・main統合済み(PR #338。実装は別セッション)**:
+`services/gateway/scripts/smoke.sh` に追加された「index.htmlが読むJSを実際に取得して200」の検査により、
+`TestSmokeScriptAcceptsWebDeployed` のfixtureがscript srcの無いHTMLを返していて落ちていた(タイプバランス
+レーンが検証・指摘)。fixtureにscript srcとその配信先を持たせ、JSが404のケースで検知できることの回帰テスト
+(`TestSmokeScriptFailsWhenEntryJSMissing`)も追加。
+**issue #334(相性表記の倍率併記。iOSとの語の統一)完了・main統合済み(PR #341)**: iOSのDisplayLabels.swiftの語
+(「ばつぐん(×2)」「いまひとつ(×0.5)」)にWeb側を揃えた(「効果は」接頭辞は削除)。format.test.tsの0.25/0.5・
+2/4のケースが倍率を書き分けるようになり検証強化。新規0件(既存アサーション4件の強化)。
+**issue #72(ルートmake e2eが未実装スタブ)完了・main統合済み(PR #350。ADR-0306)**: k3dクラスタ不要な3件
+(`web-e2e`→`web-e2e-online`→`web-e2e-balance`)を必ずこの順で実行し、kubectlの現在のコンテキストが
+`k3d-$CLUSTER`のときだけ`api-smoke`→`web-k3d-smoke`→`web-k3d-e2e`を追加実行するよう`scripts/e2e.sh`を実装。
+クラスタが無ければ黙らずスキップを明示、`E2E_REQUIRE_K3D=1`でスキップさせない逃げ道も用意。critic PASS
+(mutation testing 4件で全て検知)。`scripts/e2e_test.sh`(新規80件)を`make test-scripts`に追加。
+**issue #71のWeb側(攻撃側プリセット単一化。ADR-0114)完了・main統合済み(PR #352)**:
+`web/src/domain/attackerPresets.contract.test.ts`を新規追加。毎回`engine/presets/attacker.json`を読み、
+カタログ(順序・既定値・relevantStat・boostMinus・relevantSp・nature)から導いた期待値と
+`resolveAttackerPreset`の実際の出力を突き合わせる契約テスト(現状の値は一致済み、実装変更なし)。
+JSONを一時的に書き換えるmutationで実際に検知することを確認済み。新規17件追加。iOSの追従が済めば
+データレーンが#71をcloseする想定(2026-09-25時点、Web側は完了を連絡済み)。
 Next: (1) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
 (apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより
 連絡が来る想定。(2) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち。
 2026-09-24 時点で record/team-svc の DB マイグレーション・TiDB 導入方針〈ADR-0211〉はデータレーンで進行中)。
-(3) 人間へのお願い: docs/verify-m1.md §4 を
-Safari で確認(P4-5)。(4) 他レーンからの依頼待ち
+(3) issue #274(計算画面で急所・やけど・天候・フィールド・ランク・壁・特性を指定できない)は未着手。iOSが
+既定案(「詳細」折りたたみ)で先行する予定で、決めた語をDECISIONS.mdに書く想定(2026-09-25、iOSレーンへ返信済み)。
+(4) 人間へのお願い: docs/verify-m1.md §4 を
+Safari で確認(P4-5)。(5) 他レーンからの依頼待ち
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
@@ -207,8 +228,8 @@ JD4(返り討ち判定。PR #169)・JD5(Web の画面。PR #182。ADR-0705)ま�
 は自分1体対相手1〜6体の素早さ判定・場の効果(トリックルーム・追い風)・返り討ち判定まで対応し、`web/src/judge/`
 (`/judge` タブ)から呼べる。技はID自由入力(ADR-0304 §3の技一覧APIの欠落を踏襲)、相手側の追い風は全候補共通の
 1チェックボックス(ADR-0703 §5)、送信ボタンでのみ呼ぶ(1回で上流最大27回)。
-Next: 新規要望待ち。軽微な積み残し: `attacker`単数の`Individual`にも`defenders`候補と同じ大文字小文字厳密な
-キー検査を広げると契約全体で一貫する(plan.md 参照)。iOS版JD5は要望が出たら判断(ADR-0705 却下案)
+Next: 新規要望待ち。軽微な積み残しは解消済み(2026-09-25。`attacker`単数の`Individual`にも`defenders`候補と
+同じ大文字小文字厳密なキー検査〈`individualWireKeys`〉を適用。PR で main へ)。iOS版JD5は要望が出たら判断(ADR-0705 却下案)
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

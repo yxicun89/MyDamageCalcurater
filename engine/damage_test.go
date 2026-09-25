@@ -167,3 +167,29 @@ func TestCritIgnoresUnfavorableStages(t *testing.T) {
 		t.Errorf("crit should ignore defender +Def: crit=%d normal=%d", critR.Rolls[15], normal.Rolls[15])
 	}
 }
+
+// TestCritIgnoresOneStageBoundary は急所のランク無視の境界(攻撃側 -1・防御側 +1)を固定する(issue #303)。
+// 急所の基準値は ctrlInput で 135(TestCalcDamageCritical)。-1/+1 を無視しないと 135 より小さくなる。
+func TestCritIgnoresOneStageBoundary(t *testing.T) {
+	tests := []struct {
+		name  string
+		ranks func(in *DamageInput)
+	}{
+		{"attacker Atk -1 is ignored", func(in *DamageInput) { in.Attacker.Ranks = Ranks{Atk: -1} }},
+		{"defender Def +1 is ignored", func(in *DamageInput) { in.Defender.Ranks = Ranks{Def: 1} }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeNormal)
+			in.Critical = true
+			tt.ranks(&in)
+			r, err := calcDamage(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if r.Rolls[15] != 135 {
+				t.Fatalf("crit rolls[15]=%d want 135 (rank should be ignored)", r.Rolls[15])
+			}
+		})
+	}
+}

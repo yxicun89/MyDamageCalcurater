@@ -334,6 +334,7 @@ func wasmAbility(a engine.Ability) map[string]any {
 		out["effect"] = map[string]any{
 			"stabMod": e.StabMod, "offBoostType": string(e.OffBoostType), "offBoostTypeMod": e.OffBoostTypeMod,
 			"defResistType": resist, "reduceSuperEffective": e.ReduceSuperEffective, "ignoresBurn": e.IgnoresBurn,
+			"airborne": e.Airborne,
 		}
 	}
 	return out

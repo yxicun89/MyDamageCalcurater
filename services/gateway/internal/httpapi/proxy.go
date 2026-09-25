@@ -8,6 +8,7 @@ package httpapi
 // X-Forwarded-For / X-Forwarded-Host / X-Forwarded-Proto をクライアントの値で信用せず
 // gateway が実際のクライアント IP・元の Host・スキームで付け直す(ProxyRequest.SetXForwarded は
 // 呼び出し前に Rewrite がこれらのヘッダを削除済みの outbound リクエストに対して働く)。
+// クライアントが送った X-Real-Ip / Forwarded も素通ししない(issue #326。ADR-0202 §4 追記)。
 
 import (
 	"context"
@@ -27,23 +28,50 @@ import (
 // dial・アドレス・context のエラー文などの Go の内部情報は出さない(ADR-0202 §5)。
 const msgUpstreamUnavailable = "上流を利用できない"
 
+// newReverseProxy の restoreVerifiedIDs に渡す値(呼び出し側で意図が読めるように名前を付ける)。
+const (
+	restoreIDs  = true  // /api/* の上流: 検証済みの X-Device-Id / X-Session-Id を付け直す
+	keepIDsAsIs = false // 検証しない上流(assets・Web): 付け直さない
+)
+
 // newReverseProxy は target への ReverseProxy を作る。
 //
 //   - target: 転送先の基底 URL。
 //   - timeout: 上流の応答ヘッダを待つ上限(dial にも同じ値を使う)。override が nil のときの
 //     既定 Transport にだけ効く。
 //   - override: 上流への RoundTripper の差し替え(テストだけが使う。nil なら既定の Transport)。
+//   - restoreVerifiedIDs: true なら、gateway が検証した X-Device-Id / X-Session-Id を上流へ付け直す
+//     (/api/* の上流だけ。クライアントが Connection に列挙すると ReverseProxy が hop-by-hop として
+//     消してしまうため。issue #326)。
 //   - originAllowed: CORS の許可オリジン判定。ModifyResponse(上流の応答が届いたとき)と
 //     ErrorHandler(上流に接続できない・タイムアウトしたとき)の両方で、Access-Control-* を
 //     いったん取り除いてから、許可オリジンのときだけ gateway 自身の ACAO を付け直すために使う
 //     (必須1・必須2)。
 //
 // 接続できない・タイムアウトしたときは ErrorHandler が 503 upstream_unavailable を返す。
-func newReverseProxy(target *url.URL, timeout time.Duration, override http.RoundTripper, originAllowed func(string) bool) *httputil.ReverseProxy {
+func newReverseProxy(target *url.URL, timeout time.Duration, override http.RoundTripper, restoreVerifiedIDs bool, originAllowed func(string) bool) *httputil.ReverseProxy {
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)  // Host も target のホストに書き換わる(推奨3)。
 			pr.SetXForwarded() // X-Forwarded-* はクライアントの値を信用せず付け直す(推奨3)。
+			// gateway→上流では 100-continue を使わない(issue #209。ADR-0202 §5 追記)。上流が 100 Continue を
+			// 返すと ReverseProxy がそれを WriteHeader(100) で転送し、Echo の Response が 100 で commit されて
+			// 続く上流のステータス(4xx/5xx)を捨て、既定の 200 が出てしまう。クライアント側の Expect には
+			// gateway の http.Server が本文を読むときに自動で 100 Continue を返すので、クライアントの挙動は変わらない。
+			pr.Out.Header.Del("Expect")
+			// クライアント IP を名乗るヘッダはクライアントの値を信用しない(issue #326)。X-Forwarded-For は
+			// SetXForwarded が付け直す。Forwarded は ReverseProxy が Rewrite の前に消すが、意図を明示する。
+			pr.Out.Header.Del("X-Real-Ip")
+			pr.Out.Header.Del("Forwarded")
+			if restoreVerifiedIDs {
+				// ReverseProxy は Rewrite の前に Connection に列挙されたヘッダを消す。serve が検証した
+				// 受信側の値(ちょうど1つ)を付け直し、検証済みの ID が必ず上流に届くようにする。
+				for _, name := range verifiedIDHeaders {
+					if v := pr.In.Header.Get(name); v != "" {
+						pr.Out.Header.Set(name, v)
+					}
+				}
+			}
 		},
 	}
 	if override != nil {

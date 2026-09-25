@@ -44,6 +44,26 @@ final class AttackerPresetTests: XCTestCase {
         XCTAssertEqual(AttackerPreset.allCases.map(\.label), ["A特化", "A振り", "無振り"])
     }
 
+    /// issue #334: `label(for:)` は技の分類で A/C を切り替える(`KnownDefenderPreset.label(for:)` と同じ形)。
+    /// Web(`attackerPresetText`)と同じ語: 「A振り」は「A振り(無補正)」にする(ADR-0501「P6-11」)。
+    /// 物理・変化は A、特殊は C。「無振り」は分類によらず共通。
+    func testLabelForCategoryMatchesWebWording() {
+        let cases: [(AttackerPreset, MoveCategory, String)] = [
+            (.aFull, .physical, "A特化"),
+            (.aFull, .status, "A特化"),
+            (.aFull, .special, "C特化"),
+            (.aMax, .physical, "A振り(無補正)"),
+            (.aMax, .status, "A振り(無補正)"),
+            (.aMax, .special, "C振り(無補正)"),
+            (.none, .physical, "無振り"),
+            (.none, .special, "無振り"),
+            (.none, .status, "無振り"),
+        ]
+        for (preset, category, expected) in cases {
+            XCTAssertEqual(preset.label(for: category), expected, "\(preset) / \(category)")
+        }
+    }
+
     func testRelevantStatByMoveCategory() {
         let cases: [(MoveCategory, StatKey)] = [
             (.physical, .atk),

@@ -25,6 +25,7 @@ func FormatSummary(r Reconciliation) string {
 			row.name, row.set.Calc, row.set.Showdown, row.set.ShowdownStandard, row.set.Both,
 			row.set.CalcOnly, row.set.ShowdownOnly, row.set.Imported)
 	}
+	fmt.Fprintf(&b, "typeChart: types=%d rows=%d\n", r.Summary.TypeChart.Types, r.Summary.TypeChart.Rows)
 	writeFindingCounts(&b, "warnings", r.Summary.WarningCounts)
 	writeFindingCounts(&b, "blockers", r.Summary.BlockerCounts)
 	for _, check := range r.VerdictChecks {

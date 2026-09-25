@@ -129,3 +129,36 @@ func TestRepoConfigEffectHooksCoverImmunity(t *testing.T) {
 		}
 	}
 }
+
+// issue #231 / ADR-0116: 浮いている特性(ふゆう)は Airborne を持ち、フィールドの補正の接地判定に使われる。
+// 地面技の無効(DefImmuneTypes)とは別の項目(どしょく等「地面を受けても接地している」特性があるため)。
+// 地面を吸収する特性(どしょく)は浮いていない。
+func TestRepoEffectsAirborneAbilities(t *testing.T) {
+	raw, err := os.ReadFile(repoDataPath("effects.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var file struct {
+		Abilities map[string]json.RawMessage `json:"abilities"`
+	}
+	if err := json.Unmarshal(raw, &file); err != nil {
+		t.Fatalf("data/importer/effects.json: %v", err)
+	}
+	chart := fullTypeChart(t)
+	want := map[string]bool{"levitate": true, "eartheater": false}
+	for id, airborne := range want {
+		def, ok := file.Abilities[id]
+		if !ok {
+			t.Errorf("data/importer/effects.json に %q が無い", id)
+			continue
+		}
+		eff, err := master.DecodeAbilityEffect(def, chart)
+		if err != nil {
+			t.Errorf("%s の定義を読めない: %v", id, err)
+			continue
+		}
+		if eff.Airborne != airborne {
+			t.Errorf("%s の Airborne = %v, want %v(ADR-0116)", id, eff.Airborne, airborne)
+		}
+	}
+}

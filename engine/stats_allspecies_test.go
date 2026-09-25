@@ -2,7 +2,10 @@
 
 package engine
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 // allTypes は網羅テスト用の全18タイプ。
 var allTypes = []Type{
@@ -139,6 +142,78 @@ func TestAllSpeciesRealStatFormula(t *testing.T) {
 				}).Atk
 				if want := standardOther(base, sp, nc.mult10); got != want {
 					t.Fatalf("Atk base=%d sp=%d mult10=%d got=%d want=%d", base, sp, nc.mult10, got, want)
+				}
+			}
+		}
+	}
+}
+
+// TestAllSpeciesTerrainGroundedProperty は issue #231 / ADR-0116 の性質を全タイプ組合せで確認する:
+// フィールドの威力補正は「攻撃側が接地(ひこうでない・Airborne の特性でない)」のときだけ、
+// ミストのドラゴン半減は「防御側が接地」のときだけ掛かり、掛からないときは地形なしと同じ結果になる。
+// 掛かるときは「地形なしで威力を補正後の値にした結果」と一致する(補正は威力段階。ADR-0004)。
+func TestAllSpeciesTerrainGroundedProperty(t *testing.T) {
+	terrains := []Terrain{TerrainElectric, TerrainGrassy, TerrainPsychic, TerrainMisty}
+	const power = 80
+	boostedPower := pokeRound(power, 5325)
+	halvedPower := pokeRound(power, ModifierHalf)
+	newIn := func(atkTypes, defTypes []Type, atkAir, defAir bool, moveType Type, terr Terrain, pw int) DamageInput {
+		in := DamageInput{
+			Format: FormatSingle,
+			Attacker: Individual{
+				Species: Species{Types: atkTypes, BaseStats: Stats{HP: 100, Atk: 100, SpA: 100}},
+				Nature:  NatureNeutral,
+			},
+			Defender: Individual{
+				Species: Species{Types: defTypes, BaseStats: Stats{HP: 100, Def: 100, SpD: 100}},
+				Nature:  NatureNeutral,
+			},
+			Move:  Move{Type: moveType, Category: CategorySpecial, Power: pw},
+			Field: Field{Terrain: terr},
+		}
+		if atkAir {
+			in.Attacker.Ability = Ability{Effect: &AbilityEffect{Airborne: true}}
+		}
+		if defAir {
+			in.Defender.Ability = Ability{Effect: &AbilityEffect{Airborne: true}}
+		}
+		return in
+	}
+	// 各タイプの単タイプと、ひこう複合(浮いている側の代表)。
+	typeSets := make([][]Type, 0, len(allTypes)*2)
+	for _, ty := range allTypes {
+		typeSets = append(typeSets, []Type{ty})
+		if ty != TypeFlying {
+			typeSets = append(typeSets, []Type{ty, TypeFlying})
+		}
+	}
+	for _, terr := range terrains {
+		for _, moveType := range allTypes {
+			for _, atkTypes := range typeSets {
+				for _, defTypes := range typeSets {
+					for _, air := range [][2]bool{{false, false}, {true, false}, {false, true}} {
+						in := newIn(atkTypes, defTypes, air[0], air[1], moveType, terr, power)
+						got, err := calcDamage(in)
+						if err != nil {
+							t.Fatalf("%v: %v", in, err)
+						}
+						atkGrounded := !air[0] && !slices.Contains(atkTypes, TypeFlying)
+						defGrounded := !air[1] && !slices.Contains(defTypes, TypeFlying)
+						wantPower := power
+						switch {
+						case terr == TerrainElectric && moveType == TypeElectric && atkGrounded,
+							terr == TerrainGrassy && moveType == TypeGrass && atkGrounded,
+							terr == TerrainPsychic && moveType == TypePsychic && atkGrounded:
+							wantPower = boostedPower
+						case terr == TerrainMisty && moveType == TypeDragon && defGrounded:
+							wantPower = halvedPower
+						}
+						want, _ := calcDamage(newIn(atkTypes, defTypes, air[0], air[1], moveType, TerrainNone, wantPower))
+						if got.Rolls != want.Rolls {
+							t.Fatalf("terrain=%s move=%s atk=%v(air=%v) def=%v(air=%v): rolls=%v want(威力%d・地形なし)=%v",
+								terr, moveType, atkTypes, air[0], defTypes, air[1], got.Rolls, wantPower, want.Rolls)
+						}
+					}
 				}
 			}
 		}

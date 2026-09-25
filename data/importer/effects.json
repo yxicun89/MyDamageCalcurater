@@ -20,7 +20,7 @@
     "solidrock": {"ReduceSuperEffective": 3072},
     "steelworker": {"OffBoostType": "steel", "OffBoostTypeMod": 6144},
     "waterbubble": {"OffBoostType": "water", "OffBoostTypeMod": 8192, "DefResistType": {"fire": 2048}},
-    "levitate": {"DefImmuneTypes": ["ground"]},
+    "levitate": {"DefImmuneTypes": ["ground"], "Airborne": true},
     "waterabsorb": {"DefAbsorbTypes": {"water": {"HealNumerator": 1, "HealDenominator": 4}}},
     "voltabsorb": {"DefAbsorbTypes": {"electric": {"HealNumerator": 1, "HealDenominator": 4}}},
     "eartheater": {"DefAbsorbTypes": {"ground": {"HealNumerator": 1, "HealDenominator": 4}}},

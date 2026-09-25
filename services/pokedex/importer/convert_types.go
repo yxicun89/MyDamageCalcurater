@@ -62,19 +62,9 @@ func convertTypes(in Input, usedOverride map[string]bool) (typeConversion, []Fin
 		})
 	}
 
-	var chartRows []master.TypeChartRow
-	for atkName, row := range in.Calc.TypeChart {
-		atkID, ok := nameToID[atkName]
-		if !ok {
-			continue
-		}
-		for defName, code := range row {
-			defID, ok := nameToID[defName]
-			if !ok {
-				continue
-			}
-			chartRows = append(chartRows, master.TypeChartRow{AttackType: atkID, DefenseType: defID, Code: code})
-		}
+	chartRows, err := convertTypeChart(in.Calc.TypeChart, order, nameToID, excluded)
+	if err != nil {
+		return typeConversion{}, nil, err
 	}
 	sort.Slice(chartRows, func(i, j int) bool {
 		if chartRows[i].AttackType != chartRows[j].AttackType {
@@ -95,4 +85,43 @@ func convertTypes(in Input, usedOverride map[string]bool) (typeConversion, []Fin
 		MasterRows: masterRows,
 		ChartRows:  chartRows,
 	}, warnings, nil
+}
+
+// convertTypeChart は calc の相性表(等倍の組は省略)を行にする(#269)。除外タイプの名前だけは
+// 攻撃側・防御側のどちらでも捨ててよい。それ以外の未知の名前(表記・大文字小文字の変化)や、
+// 取り込むタイプの攻撃側の行の欠落(等倍だけのタイプも空オブジェクトで明示される)は、
+// 相性表が黙って欠けて calc が等倍で計算する状態に落ちるので ErrInvalidData で止める。
+// 行の有無ではなくキーの有無で判定するのは、等倍しかないタイプを許すため。
+func convertTypeChart(table map[string]map[string]int, order []string, nameToID map[string]string, excluded map[string]bool) ([]master.TypeChartRow, error) {
+	for _, name := range order {
+		if _, ok := table[name]; !ok {
+			return nil, fmt.Errorf("%w: calc の相性表に取り込むタイプ %q の攻撃側の行が無い(キーの表記の変化を疑う)", ErrInvalidData, name)
+		}
+	}
+	var rows []master.TypeChartRow
+	for _, atkName := range sortedKeysRaw(table) {
+		if excluded[atkName] {
+			continue
+		}
+		atkID, ok := nameToID[atkName]
+		if !ok {
+			return nil, fmt.Errorf("%w: calc の相性表の攻撃側に types に無いタイプ名がある: %q", ErrInvalidData, atkName)
+		}
+		for _, defName := range sortedKeysRaw(table[atkName]) {
+			if excluded[defName] {
+				continue
+			}
+			defID, ok := nameToID[defName]
+			if !ok {
+				return nil, fmt.Errorf("%w: calc の相性表の防御側に types に無いタイプ名がある: %q(攻撃側 %q)", ErrInvalidData, defName, atkName)
+			}
+			rows = append(rows, master.TypeChartRow{AttackType: atkID, DefenseType: defID, Code: table[atkName][defName]})
+		}
+	}
+	// キーはそろっていても中身がすべて空(取得側で effectiveness が取れず空オブジェクトに落ちた形)
+	// なら、全組み合わせ等倍になる。等倍でない組が1つも無いタイプ相性は無いので止める。
+	if len(order) > 0 && len(rows) == 0 {
+		return nil, fmt.Errorf("%w: calc の相性表に等倍でない組が1件も無い(取り込むタイプ %d 件。取得元の形の変化を疑う)", ErrInvalidData, len(order))
+	}
+	return rows, nil
 }

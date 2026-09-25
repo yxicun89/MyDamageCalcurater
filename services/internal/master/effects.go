@@ -43,7 +43,7 @@ var (
 	abilityEffectFields = map[string]bool{
 		"StabMod": true, "OffBoostType": true, "OffBoostTypeMod": true,
 		"DefResistType": true, "DefImmuneTypes": true, "DefAbsorbTypes": true,
-		"ReduceSuperEffective": true, "IgnoresBurn": true,
+		"ReduceSuperEffective": true, "IgnoresBurn": true, "Airborne": true,
 	}
 	// absorbEffectFields は DefAbsorbTypes の値(1タイプぶんの副次効果)の既知のフィールド名。
 	absorbEffectFields = map[string]bool{
@@ -453,6 +453,13 @@ func DecodeAbilityEffect(raw []byte, chart engine.TypeChart) (*engine.AbilityEff
 		}
 		e.IgnoresBurn = b
 	}
+	if v, ok := fields["Airborne"]; ok {
+		b, err := decodeTrueLiteral(v)
+		if err != nil {
+			return nil, err
+		}
+		e.Airborne = b
+	}
 	return &e, nil
 }
 
@@ -648,6 +655,9 @@ func EncodeAbilityEffect(e engine.AbilityEffect) ([]byte, error) {
 	}
 	if e.IgnoresBurn {
 		w.field("IgnoresBurn", []byte("true"))
+	}
+	if e.Airborne {
+		w.field("Airborne", []byte("true"))
 	}
 	return w.bytes()
 }

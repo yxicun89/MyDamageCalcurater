@@ -225,6 +225,15 @@
   残るのは実際の tailnet MagicDNS 名を `VITE_API_BASE_URL` にデプロイ時設定するという**運用/設定の話**で、
   運用レーンが到達経路(Tailscale Operator の ingressClass か subnet router + tailscale serve か)を選び、
   実際の名前が決まってから。今はコード変更不要。着手のタイミングは運用レーンの選定後
+- [x] P4-22 issue #72(ルートの `make e2e` が未実装スタブのまま「テスト0件で成功」する)。**完了(2026-09-25。Web レーン。API+Web 共同担当)**: ADR-0306 に従い `scripts/e2e.sh` を実装(常時3件 `web-e2e`/`web-e2e-online`/`web-e2e-balance` を必ず実行し、kubectl のコンテキストが `k3d-$CLUSTER` のときだけ `api-smoke`/`web-k3d-smoke`/`web-k3d-e2e` を追加実行。`E2E_REQUIRE_K3D=1` あり)。ルート Makefile の `e2e` を `CLUSTER=$(CLUSTER) ./scripts/e2e.sh` に配線、`docs/test-strategy.md`・`README.md` を実装内容に合わせて更新。`bash scripts/e2e_test.sh` は80/80 passed
+- [x] issue #71 の Web 側(攻撃側プリセットの単一化。ADR-0114)。**完了(2026-09-25。Web レーン)**: データレーン
+  が `engine/presets/attacker.json`(embed)を唯一の正にした(PR #346)のを受け、
+  `web/src/domain/attackerPresets.contract.test.ts` を新規追加。ハードコードした期待値と比較する既存の
+  `attackerPresets.test.ts`(Web の今の挙動を固定)とは別に、こちらは毎回 `engine/presets/attacker.json` を
+  読み、カタログの順序・既定値・`relevantStat`/`boostMinus`/`relevantSp`/`nature` から導いた期待値と
+  `resolveAttackerPreset` の実際の出力を突き合わせる契約テスト(現状の値は一致済み)。JSON の値を書き換える
+  mutation で実際に検知することを確認(3件 fail)、確認後に復元。新規17件追加(1262件)。`web/src/domain/
+  attackerPresets.ts` 自体は変更していない(engine への実装移管は別タスク)。
 
 ## M2: 保存・構築
 
@@ -252,7 +261,11 @@
 - [ ] P5-2 NATS JetStream と calc-svc からのイベント発行(失敗しても計算は成功)。
   ストリームの `max_age` は7日、イベントに発生時刻(`occurred_at`)を載せる(ADR-0209 §7・#6)。
   record-svc と team-svc(P5-4)は**別々の durable consumer**を持つ(同じ consumer を共有すると配送が分かれ
-  record-svc が計算イベントを取りこぼす。ADR-0209 §4)
+  record-svc が計算イベントを取りこぼす。ADR-0209 §4)。
+  バージョン固定・ローカル/k3d 導入・ストリーム設定(Retention は Limits。ADR-0209 §3 #6 の
+  文言からの意図的な逸脱で理由は ADR-0212 §4)・イベントのワイヤフォーマット(`services/internal/calcevents`。
+  `calc` は個体・技・状況・ダメージ幅まで、`calcBulk`/`calcReverse` は envelope のみ)は ADR-0212 で確定
+  (critic 3ラウンド)。実装はこれから
 - [ ] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰)。
   ADR-0209 §5.3 の契約を `api/openapi.yaml` に入れて `make gen`(`store_unavailable` の追加を含む)→
   分離(§6)・全削除(§5)・失効ジョブ(§4)・ログ(§3)を実装。時間減衰の半減期は保持期間90日より短くする。
@@ -334,6 +347,15 @@
   ヘッダーコメントを修正(ADR 8章)。`swift test`(399件・0失敗)・`make ios-test`
   (`ios-test-unit` 412件・`ios-test-ui` 17件・Info.plist 検査、すべて成功。終了コード0)ともに green
 - [ ] P6-7 ADR-0209 §8 の文言と「この端末のデータを削除」の UI(issue #103。record-svc / team-svc の全削除 API 実装後)
+- [x] P6-11 issue #334: 攻撃側プリセットの表示名(`AttackerPreset.label`)が技の分類(物理/特殊)に追従せず、
+  特殊技でも「A特化」のままになる不具合を直した。表記は Web(`attackerPresetText`)の出荷済み文言に揃えた
+  (「A振り(無補正)」等)。受け入れ条件・判断・実装結果は ADR-0501「P6-11」。
+  `AttackerPreset.label(for:)`(`relevantStat(for:)` の atk/spa から文字 A/C を引く。文字・接尾辞は1箇所にまとめた)を実装し、
+  `CalcScreenView.presetSegmentedRow`・`ReverseScreenView.presetSegmentedRow`(`case .defender:`)を
+  `label(for: category)` に切り替えた。既存の分類なし `label` は削除していない(旧テスト維持)。
+  `swift test`(PokeCalcKit)400件0失敗、`make ios-test`
+  (`ios-test-unit` 413件・`ios-test-ui` 18件(新規 `testSelectingSpecialMoveShowsCLetterPresetLabel` を含む)、
+  すべて成功。終了コード0)ともに green
 - [x] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼された
   内容どおり `ColorToken.danger` のライト値を `0xE5,0x48,0x4D` → `0xCD,0x1D,0x23` に更新し、
   `DesignTokenTests.swift` の旧値も書き換えた。`ios/PokeCalcKit/Tests/PokeCalcDesignTests/ColorContrast.swift`
@@ -397,10 +419,10 @@
   クライアント未着手のため安全)/ 先制判定は優先度優先(トリックルームは優先度に影響しない)で `internal/judge` に
   `CompareTurnOrder` を新設 / 逆方向の calc では `field` の screens を入れ替える / 検査順に attacker と候補の技の解決を挿入し
   `unknown_move`(422)を追加(攻撃側の未知の技も JD4 からは 422)。critic PASS(1回目)
-  - 軽微な積み残し(critic 指摘。ブロッカーではない): `attacker`(単数の `Individual`)の欄名は
-    `encoding/json` の大文字小文字を無視したフォールバックマッチングの対象のままで、`defenders` の候補
-    (JD2/JD4 で allow-list 化済み)と厳しさが左右で食い違う。実害は小さい(値は正しい欄に入る)が、
-    `attacker` 側にも同じ allow-list を広げると契約全体で一貫する(JD5 完了時点でも未着手)
+  - [x] 軽微な積み残し(critic 指摘)を解消(2026-09-25): `attacker`(単数の `Individual`)の欄名にも
+    `defenders` の候補と同じ `individualWireKeys` allow-list による厳密な大文字小文字検査を適用
+    (`parseIndividualWire` を新設。`candidateWireKeys` は `individualWireKeys` + `moveId` から導出する形に統一)。
+    `TestOutspeedAndKoRejectsUnknownAttackerField` を追加、fix 前に戻して失敗することを確認済み(mutation test)
 - [x] JD5 Web の画面(judge-svc を呼ぶ。ADR-0705。critic PASS〈2回目。1回目 NG は古い応答〈A8〉テストが
   実際にはレースを検証していなかった点を、送信ボタンの disabled が反映される前に2回叩いて実際に2本
   同時に送る形へ修正〉)
@@ -523,14 +545,14 @@
 
 - P2-2d の critic の軽微(2026-09-22): `cronjob_layout_test.go` の「消さない」検査を secret・statefulset・configmap にも広げる / `make lint` が kubectl に依存する(kubectl の無い環境では失敗する)/ upstream の `checkedAt` が未来でも fresh 扱い / **コンテナの中で取得スクリプト(Showdown の build 等)を実際に流した記録が無い。初回の `make import-k8s` で確かめる**
 
-- `services/pokedex/db/mysql_test.go` に「species_abilities.slot = 4 が入る」ことを確かめるケースを足す(P2-2c の critic の軽微。000005 は使い捨てコンテナで手動確認済み)
+- [x] issue #76(データレーン)`services/pokedex/db/mysql_test.go` に「species_abilities.slot = 4 が入る」ことを確かめるケースを足す(P2-2c の critic の軽微。000005 は使い捨てコンテナで手動確認済みだったが自動テストが無かった): `TestConstraintsRejectInvalidRows` のスロット5拒否・特性重複拒否は負方向だけだったため、`TestSpeciesAbilitiesSlot4RoundTrip` を追加し slot 4 への挿入成功と読み戻し(`SELECT ... ORDER BY slot`)を固定。確認・ロールバックはトランザクション内(コミットして残すと、他テストの `freshDB` が呼ぶ `DownAll` が migration 000005 の down〈CHECK を 1..3 へ戻す〉で失敗するため)。migration 000005 の CHECK を一時的に `(1,2,3)` に戻して新テストが失敗することを確認した上で revert(退行検知の実効性を確認)。`-tags mysql`(使い捨て MySQL コンテナ、pin 済み `mysql:9.7.2`)・`make test`・`make lint` 成功
 
 - [x] `scripts/check-publishable.sh --self-test` の既存の失敗2件を MT-2 で修正し、`make lint` に自己テストを追加(2026-09-22)
 
 P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更。次の engine タスクに合わせて対応を検討):
 - `engine/golden_test.go`: `speciesCount` の下限アサート追加(現在は 0 だけ検査。少数種で再生成しても通ってしまう)
 - `engine/golden_test.go`: `DamageInput` の json タグ明示または `DisallowUnknownFields`(フィールド改名でフィクスチャ値が黙ってゼロ値になる)
-- `Makefile`: `go vet -tags golden` を lint に追加 / `golden-generate` は説明どおり `npm ci` を実行するか未導入で明示的に失敗させる
+- [x] `Makefile`: `go vet -tags golden` を lint に追加 / `golden-generate` は説明どおり `npm ci` を実行するか未導入で明示的に失敗させる(#77。vet は allspecies も。`golden-generate` は `npm ci` してから生成)
 - `tools/golden/package.json`: `^0.10.0` を `0.10.0` に完全固定
-- `engine/damage.go` `chainMods`: @smogon/calc はクランプ(41/410〜131072/2097152)を持つ。現在の補正集合では到達しないが、補正追加時に再確認
-- ゴールデン未カバー: リフレクターとオーロラベールの同時成立、`Effectiveness` / `STAB` の直接照合(L1 では確認済み)
+- [x] `engine/damage.go` `chainMods`: @smogon/calc はクランプ(41/410〜131072/2097152)を持つ。現在の補正集合では到達しないが、補正追加時に再確認(#77。同じクランプを実装し境界テストを追加)
+- ゴールデン未カバー: リフレクターとオーロラベールの同時成立、`Effectiveness` / `STAB` の直接照合(L1 では確認済み。壁の同時成立は #77 で L1 の回帰テストを追加)
