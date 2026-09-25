@@ -367,6 +367,11 @@
   `swift test`(PokeCalcKit)400件0失敗、`make ios-test`
   (`ios-test-unit` 413件・`ios-test-ui` 18件(新規 `testSelectingSpecialMoveShowsCLetterPresetLabel` を含む)、
   すべて成功。終了コード0)ともに green
+- [x] P6-12 issue #71 の iOS 側(ADR-0114「Web・iOS への依頼」): `AttackerPreset` を `engine/presets/attacker.json` に揃える。
+  並び順を 無振り → 特化 → 振り に、既定を無振り(JSON の `default`)にし、JSON のキーとの対応を `catalogKey` の1か所に書く。
+  JSON を直接読む契約テスト(`AttackerPresetCatalogContractTests`。シミュレータでも読めることを実測済み)を追加。
+  受け入れ条件・判断・変えた既存テストの期待値・実装結果は ADR-0501「P6-12」。
+  `swift test` 406件0失敗、`make ios-test`(`ios-test-unit` 419件・`ios-test-ui` 20件)すべて成功
 - [x] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼された
   内容どおり `ColorToken.danger` のライト値を `0xE5,0x48,0x4D` → `0xCD,0x1D,0x23` に更新し、
   `DesignTokenTests.swift` の旧値も書き換えた。`ios/PokeCalcKit/Tests/PokeCalcDesignTests/ColorContrast.swift`
