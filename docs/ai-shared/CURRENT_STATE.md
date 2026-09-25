@@ -136,14 +136,26 @@ BalanceScreen がオンラインで永久に使えなかった。可否の判定
 `resolveAttackerPreset`の実際の出力を突き合わせる契約テスト(現状の値は一致済み、実装変更なし)。
 JSONを一時的に書き換えるmutationで実際に検知することを確認済み。新規17件追加。iOSの追従が済めば
 データレーンが#71をcloseする想定(2026-09-25時点、Web側は完了を連絡済み)。
-Next: (1) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
+**issue #333(375px幅でタブの名前が1文字ずつ縦に折り返す)PR #356オープン中(2026-09-25、マージは
+オーケストレーターが検証後に実施)**: `App.css`の`.app-tabs__list`にoverflow-x: auto・safe center、
+`.app-tabs__tab`にwhite-space: nowrap・flex-shrink: 0。**critic 1回目FAIL**: 素のcenterのままだと
+はみ出した先頭タブがscrollLeft=0でも戻れない(centered flexbox overflow clipping。320pxで実測再現)→
+`justify-content: safe center`に修正、design.mdに記録。safeキーワードのSafari対応はP4-5のSafari確認
+(ブロッカー節)に追記。回帰テスト2件(1行であることの直接確認・スクロールで先頭末尾に到達できることの確認)。
+**2026-09-25、オーケストレーター(damage calculation bug resolution)から13件のissue消化を依頼された**
+(open 113件中、優先度順): (1) bug: #333(完了・PR #356オープン中)・#306(タイプ名コントラスト・
+ダメージバー読み上げ名。spec-writer実行中)・#275(逆算「受けたダメージ」で自分の耐久が無振り固定。
+spec-writer実行中、high severity)。(2) ready-for-implementation: #304・#308・#305・#248・#218・#219
+(APIレーン連携)・#211(APIレーン連携)・#332(devDependencies更新)・#226(README等の実装状況)は未着手。
+(3) needs-decisionだが「要望済み機能は実装しきる」方針で既定案付きで実装: #272(特性選択)・#274(急所・
+やけど・天候・フィールド・ランク・壁・特性の指定。iOSへも連絡済み)・#210(オフライン実データ)は未着手。
+P5-5はAPIレーンの契約が出たら最優先。
+Next: (1) #306・#275のspec-writer完了待ち→implementer→critic。(2) 順次(2)(3)の残りへ。(3) P4-20:
+issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
 (apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより
-連絡が来る想定。(2) 続いて P5-5(構築ビルダー等)は record/team の API 待ち(M2。人間の /phase キックオフ待ち。
-2026-09-24 時点で record/team-svc の DB マイグレーション・TiDB 導入方針〈ADR-0211〉はデータレーンで進行中)。
-(3) issue #274(計算画面で急所・やけど・天候・フィールド・ランク・壁・特性を指定できない)は未着手。iOSが
-既定案(「詳細」折りたたみ)で先行する予定で、決めた語をDECISIONS.mdに書く想定(2026-09-25、iOSレーンへ返信済み)。
-(4) 人間へのお願い: docs/verify-m1.md §4 を
-Safari で確認(P4-5)。(5) 他レーンからの依頼待ち
+連絡が来る想定。(4) P5-5(構築ビルダー等)は record/team の API 待ち(M2。2026-09-24 時点で record/team-svc
+の DB マイグレーション・TiDB 導入方針〈ADR-0211〉はデータレーンで進行中)。(5) 人間へのお願い:
+docs/verify-m1.md §4 を Safari で確認(P4-5。issue #333のsafeキーワード確認も合わせて)
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
