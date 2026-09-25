@@ -37,6 +37,12 @@ type Config struct {
 	RecordURL *url.URL
 	// TeamURL は team-svc の基底 URL(ADR-0213)。nil なら /api/team/* は 503 upstream_unavailable。
 	TeamURL *url.URL
+	// BalanceURL は balance-svc の基底 URL(issue #284)。nil なら /api/balance/* は 503 upstream_unavailable。
+	BalanceURL *url.URL
+	// SpeedURL は speed-svc の基底 URL(issue #284)。nil なら /api/speed/* は 503 upstream_unavailable。
+	SpeedURL *url.URL
+	// JudgeURL は judge-svc の基底 URL(issue #284)。nil なら /api/judge/* は 503 upstream_unavailable。
+	JudgeURL *url.URL
 	// AssetsURL は画像配信(MinIO)の基底 URL。nil なら /assets/* は 404 not_found。
 	AssetsURL *url.URL
 	// WebURL は Web の静的配信(nginx)の基底 URL(ADR-0205)。設定されていれば /api・/assets/*・/healthz・
@@ -60,6 +66,9 @@ type gateway struct {
 	pokedexProxy *httputil.ReverseProxy // nil なら /api/pokedex/* は 503(PokedexURL 未設定)
 	recordProxy  *httputil.ReverseProxy // nil なら /api/record/* は 503(RecordURL 未設定)
 	teamProxy    *httputil.ReverseProxy // nil なら /api/team/* は 503(TeamURL 未設定)
+	balanceProxy *httputil.ReverseProxy // nil なら /api/balance/* は 503(BalanceURL 未設定)
+	speedProxy   *httputil.ReverseProxy // nil なら /api/speed/* は 503(SpeedURL 未設定)
+	judgeProxy   *httputil.ReverseProxy // nil なら /api/judge/* は 503(JudgeURL 未設定)
 	assetsProxy  *httputil.ReverseProxy // nil なら /assets/* は 404(AssetsURL 未設定)
 	webProxy     *httputil.ReverseProxy // nil なら予約パス以外の GET / HEAD は 404(WebURL 未設定。ADR-0205)
 }
@@ -80,6 +89,15 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	}
 	if cfg.TeamURL != nil {
 		g.teamProxy = newReverseProxy(cfg.TeamURL, cfg.UpstreamTimeout, cfg.transport, restoreIDs, g.originAllowed)
+	}
+	if cfg.BalanceURL != nil {
+		g.balanceProxy = newReverseProxy(cfg.BalanceURL, cfg.UpstreamTimeout, cfg.transport, restoreIDs, g.originAllowed)
+	}
+	if cfg.SpeedURL != nil {
+		g.speedProxy = newReverseProxy(cfg.SpeedURL, cfg.UpstreamTimeout, cfg.transport, restoreIDs, g.originAllowed)
+	}
+	if cfg.JudgeURL != nil {
+		g.judgeProxy = newReverseProxy(cfg.JudgeURL, cfg.UpstreamTimeout, cfg.transport, restoreIDs, g.originAllowed)
 	}
 	if cfg.AssetsURL != nil {
 		g.assetsProxy = newReverseProxy(cfg.AssetsURL, cfg.UpstreamTimeout, cfg.transport, keepIDsAsIs, g.originAllowed)
@@ -191,6 +209,21 @@ func (g *gateway) serve(c *echo.Context) error {
 			return g.ownError(c, origin, allowed, newError(api.UpstreamUnavailable, "%s", msgUpstreamUnavailable))
 		}
 		g.teamProxy.ServeHTTP(c.Response(), r)
+	case routeBalance:
+		if g.balanceProxy == nil {
+			return g.ownError(c, origin, allowed, newError(api.UpstreamUnavailable, "%s", msgUpstreamUnavailable))
+		}
+		g.balanceProxy.ServeHTTP(c.Response(), r)
+	case routeSpeed:
+		if g.speedProxy == nil {
+			return g.ownError(c, origin, allowed, newError(api.UpstreamUnavailable, "%s", msgUpstreamUnavailable))
+		}
+		g.speedProxy.ServeHTTP(c.Response(), r)
+	case routeJudge:
+		if g.judgeProxy == nil {
+			return g.ownError(c, origin, allowed, newError(api.UpstreamUnavailable, "%s", msgUpstreamUnavailable))
+		}
+		g.judgeProxy.ServeHTTP(c.Response(), r)
 	case routeAssets:
 		if g.assetsProxy == nil {
 			return g.ownError(c, origin, allowed, newError(api.NotFound, "%s", msgNotFound))

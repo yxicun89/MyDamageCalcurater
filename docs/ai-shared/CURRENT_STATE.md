@@ -80,12 +80,19 @@ ADR-0105 §5と同じ判断で落とす)を解決して渡すため、1つしか
 FAIL: 省略時に解決した特性のEffectが実際にengineへ届くことが無テストだった→対照種族ペアのテストを追加して
 修正→2回目PASS)。一括計算・逆算の行数/候補数上限(ADR-0208)が特性分岐で最大3倍まで増えうることを追記。
 **main未統合(PR #411。ユーザーのテスト確認・マージ待ち)**。
-Next: PR #411マージ後、キュー順に対応:
-(1) issue #284(balance/speed/judgeをgatewayの後ろにまとめる。ユーザー決定・PR #399のDECISIONS.md参照)、
-(2) UnsupportedMark.reason/targetのenum前方互換性の見直し(iOSレーン提案。新しいreason値を足すと古いクライアント
+Status(追記): issue #284(balance/speed/judgeをgatewayの後ろにまとめる。ユーザー決定・DECISIONS.md
+2026-09-25「ユーザー決定 4 件」#2)を実装。`routing.go`に`routeBalance`/`routeSpeed`/`routeJudge`と対応する
+prefix(record・teamと同じ前方一致・末尾スラッシュ必須の規則)、`requiresHeaderCheck`にも3つを追加して
+端末ID・セッションIDの検証(issue #236で判明していたTraefik直結の穴)をgatewayでも課すようにした。
+`server.go`に`Config.BalanceURL`/`SpeedURL`/`JudgeURL`と対応するReverseProxy、`main.go`に
+`GATEWAY_BALANCE_URL`/`GATEWAY_SPEED_URL`/`GATEWAY_JUDGE_URL`を追加。CORS許可メソッドは変更なし。
+deployment.yamlへの実URL配線はrecord・team(P5-3b/P5-4b)と同じく別タスクとして残す(コードのみ今回の
+スコープ)。critic レビュー待ち。**main未統合**。
+Next: PR #411・issue #284マージ後、キュー順に対応:
+(1) UnsupportedMark.reason/targetのenum前方互換性の見直し(iOSレーン提案。新しいreason値を足すと古いクライアント
 の計算・逆算応答全体がデコード失敗する問題。type:stringに緩める方向で検討中)、
-(3) defenderOverride.ranks/status(issue 272残り。優先度低)、(4) P5-3b・P5-4b(失効ジョブ・Deployment配線。
-優先度低)。
+(2) defenderOverride.ranks/status(issue 272残り。優先度低)、(3) P5-3b・P5-4b(失効ジョブ・Deployment配線。
+issue #284のdeployment.yaml配線も含む。優先度低)。
 issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。
 60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
 

@@ -2,8 +2,10 @@
 
 - 状態: 採用(2026-09-22。P3-2 の設計。受け入れ条件とテストは spec-writer が先に書き、実装は implementer)
 - 日付: 2026-09-22
-- 関連: ADR-0001(技術スタック)、ADR-0012(サービス境界。balance は兄弟で `/api/balance` は独自の Ingress)、
+- 関連: ADR-0001(技術スタック)、ADR-0012(サービス境界。balance・speed・judge は兄弟サービス。**2026-09-25
+  追記〈issue #284〉: 当初 `/api/balance` は独自の Ingress だったが、gateway の後ろに統合した**)、
   ADR-0200(calc-svc の契約・ErrorCode の語彙と HTTP ステータス・healthz の扱い)、ADR-0201(Echo v5)、
+  ADR-0606(speed-svc が独自に複製した端末ID/セッションID検証。issue #236。issue #284 統合後も残る二重化)、
   docs/requirements.md §3(認証なし・端末ID)・§4(アーキテクチャ)・§8(画像は gateway の `/assets/` から配信)、plan.md P3-2
 
 ## 背景
@@ -43,9 +45,12 @@
 | `/api/pokedex/*` | pokedex-svc | `/api/pokedex` そのものは 404 |
 | `/api/record/*` | record-svc | `/api/record` そのものは 404(2026-09-25 追記。P5-3・ADR-0209 §10-1)。上流(`GATEWAY_RECORD_URL`)未設定なら 503 `upstream_unavailable` |
 | `/api/team/*` | team-svc | `/api/team` そのもの・`/api/teamx` は 404(2026-09-25 追記。P5-4・ADR-0213 §7)。上流(`GATEWAY_TEAM_URL`)未設定なら 503 `upstream_unavailable` |
+| `/api/balance/*` | balance-svc | `/api/balance` そのもの・`/api/balancex` は 404(2026-09-25 追記。issue #284)。上流(`GATEWAY_BALANCE_URL`)未設定なら 503 `upstream_unavailable`。**旧: 独自の Ingress(ADR-0012)で gateway を経由しなかったが、issue #284 でここに統合した** |
+| `/api/speed/*` | speed-svc | `/api/speed` そのもの・`/api/speedx` は 404(2026-09-25 追記。issue #284)。上流(`GATEWAY_SPEED_URL`)未設定なら 503 `upstream_unavailable` |
+| `/api/judge/*` | judge-svc | `/api/judge` そのもの・`/api/judgex` は 404(2026-09-25 追記。issue #284)。上流(`GATEWAY_JUDGE_URL`)未設定なら 503 `upstream_unavailable` |
 | `/assets/*`(GET / HEAD のみ) | assets の上流(MinIO) | それ以外のメソッドは 404 `not_found` |
 | `GET /healthz` | gateway 自身 | 200 `{"status":"ok"}`。openapi に載せない(ADR-0200 と同じ)。上流の `/healthz` は外に出さない |
-| それ以外(`/api/balance` を含む) | なし | 404 `not_found`(Error 形式)。`/api/balance` は独自の Ingress(ADR-0012) |
+| それ以外 | なし | 404 `not_found`(Error 形式) |
 
 - パスとクエリはそのまま転送する(上流の基底 URL にパスがあれば前に連結する。`ReverseProxy` の標準の連結)。
   gateway は `/api/calc` の中の操作を知らない(メソッド違い・未知の下位パスの判定は上流に任せる)。

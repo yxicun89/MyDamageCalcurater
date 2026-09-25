@@ -124,7 +124,7 @@ func TestWebDoesNotShadowReservedRoutes(t *testing.T) {
 		{"/api/unknown はヘッダ無しでも 404", nil, http.MethodGet, "/api/unknown", http.Header{}, nil, "", http.StatusNotFound, "not_found"},
 		{"/api そのものは 404", nil, http.MethodGet, "/api", http.Header{}, nil, "", http.StatusNotFound, "not_found"},
 		{"/api/ は 404", nil, http.MethodGet, "/api/", http.Header{}, nil, "", http.StatusNotFound, "not_found"},
-		{"/api/balance は 404(独自の Ingress。ADR-0012)", nil, http.MethodGet, "/api/balance", validHeaders(), nil, "", http.StatusNotFound, "not_found"},
+		{"/api/balance(末尾なし)は 404(issue #284。pokedex と同じ規則)", nil, http.MethodGet, "/api/balance", validHeaders(), nil, "", http.StatusNotFound, "not_found"},
 		{"/api/pokedex(末尾なし)は 404", nil, http.MethodGet, "/api/pokedex", validHeaders(), nil, "", http.StatusNotFound, "not_found"},
 		{"/api/calcx は 404", nil, http.MethodGet, "/api/calcx", validHeaders(), nil, "", http.StatusNotFound, "not_found"},
 

@@ -17,6 +17,9 @@ const (
 	routePokedex
 	routeRecord
 	routeTeam
+	routeBalance
+	routeSpeed
+	routeJudge
 	routeAssets
 	routeWeb
 )
@@ -28,6 +31,9 @@ const (
 	prefixPokedex = "/api/pokedex/"
 	prefixRecord  = "/api/record/"
 	prefixTeam    = "/api/team/"
+	prefixBalance = "/api/balance/"
+	prefixSpeed   = "/api/speed/"
+	prefixJudge   = "/api/judge/"
 	prefixAssets  = "/assets/"
 )
 
@@ -78,6 +84,16 @@ func matchRoute(method, path string) (routeKind, bool) {
 		// /api/team そのもの(末尾スラッシュ無し)・/api/teamx はここに一致しない → 404
 		// (ADR-0213・ADR-0209 §10 と同じ規則)。
 		return routeTeam, true
+	case strings.HasPrefix(path, prefixBalance):
+		// /api/balance そのもの(末尾スラッシュ無し)・/api/balancex はここに一致しない → 404
+		// (issue #284・ADR-0202 §3 追記。record・team と同じ規則)。
+		return routeBalance, true
+	case strings.HasPrefix(path, prefixSpeed):
+		// /api/speed そのもの・/api/speedx は一致しない → 404(同上)。
+		return routeSpeed, true
+	case strings.HasPrefix(path, prefixJudge):
+		// /api/judge そのもの・/api/judgex は一致しない → 404(同上)。
+		return routeJudge, true
 	case strings.HasPrefix(path, prefixAssets):
 		if method != http.MethodGet && method != http.MethodHead {
 			return routeNone, false
@@ -114,8 +130,16 @@ func hasEmptySegment(path string) bool {
 	return false
 }
 
-// requiresHeaderCheck は /api/* のルート(calc・pokedex・record・team)にだけ X-Device-Id / X-Session-Id の
-// 検証を課す(ADR-0202 §4。/assets・/healthz・CORS プリフライトは課さない)。
+// requiresHeaderCheck は /api/* のルート(calc・pokedex・record・team・balance・speed・judge)にだけ
+// X-Device-Id / X-Session-Id の検証を課す(ADR-0202 §4。/assets・/healthz・CORS プリフライトは課さない)。
+// balance・speed・judge は自分自身でも同じ検証を複製して持つ(issue #236。各サービスの
+// internal/httpapi/requestctx 相当)が、gateway 経由になったことでここでも先に検証がかかる
+// (二重になるが害はない。複製側の削除は各レーンの判断。issue #284)。
 func requiresHeaderCheck(kind routeKind) bool {
-	return kind == routeCalc || kind == routePokedex || kind == routeRecord || kind == routeTeam
+	switch kind {
+	case routeCalc, routePokedex, routeRecord, routeTeam, routeBalance, routeSpeed, routeJudge:
+		return true
+	default:
+		return false
+	}
 }
