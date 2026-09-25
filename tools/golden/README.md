@@ -19,6 +19,13 @@ make golden-generate        # npm ci(package-lock.json どおり)→ 期待値�
 make test-golden            # 生成済みベクタで engine を照合
 ```
 
+## 効果定義の照合(ADR-0120)
+
+`testdata/golden/effects.json` の持ち物・特性は1種ずつ照合する。タイプ・相性で効く効果は、定義から
+「効く」と「効かない対照」の組(`fixed.json` の `effects/<id>/…`)を作る。Champions 世代の全持ち物・全特性の
+うちダメージが変わるもので定義の無いものは、`unsupported-effects.json` に理由付きで載っているものだけを許す
+(生成時に一致しなければ止まる)。
+
 ## 関連 ADR
 
-[0002](../../docs/adr/0002-master-data-source.md)(追記 P2-1b。oracle を Champions 世代へ切り替え)。
+[0002](../../docs/adr/0002-master-data-source.md)(追記 P2-1b。oracle を Champions 世代へ切り替え)、[0120](../../docs/adr/0120-effects-data-coverage.md)(効果定義の網羅と未対応一覧)。

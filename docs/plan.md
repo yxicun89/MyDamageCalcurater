@@ -537,6 +537,64 @@
     npx prettier --write src/judge/judge.gen.ts`。ADR-0604 §2 の素早さレーンの前例に倣う)、
     差分が契約変更相当の型・doc コメントのみであることを確認、`npm run lint`・`npm test`(1262 件)が通ることを確認。
     ADR-0706 の受け入れ条件7に `judge.gen.ts` の手動再生成を明記して再発防止
+- [x] issue #213(重大度 high)上流(pokedex-svc/calc-svc)が遅いと judge は1リクエスト全体の期限を持たず、
+  逐次呼び出し(最大27回・1回3秒)を律儀に最後まで続け、クライアントは HTTP 000(空応答)を受け取る
+  (JSON の 503 が返らない。全体レビュー指摘。2026-09-24)
+  - 設計の正は ADR-0707: `JUDGE_REQUEST_TIMEOUT`(既定 12 秒)を新設し、`writeTimeout`(15 秒)未満であることを
+    起動時に検証する。ハンドラ(`outspeedAndKo`)の先頭で `ctx` を 1 回だけ `context.WithTimeout` でラップし、
+    以降のすべての上流呼び出しに使い回す(呼び出し順序・逐次であることは変えない。ADR-0703 §3 の維持)。
+    `internal/client` は変更不要(既に `http.NewRequestWithContext` を使っており、`net/http` の context 統合が
+    「進行中の呼び出しを打ち切る」「未着手の呼び出しは即座に失敗する」の両方を自動で満たす)
+  - 失敗するテストを先に置いた(spec-writer): `services/judge/internal/httpapi/outspeed_deadline_test.go`
+    (`TestOutspeedAndKoOverallDeadline`・`TestOutspeedAndKoWithinDeadlineUnaffected`)、
+    `outspeed_test.go` に `upstreams.delay`・`sleepOrCancel` を追加、`cmd/api/config_test.go` に
+    `TestRequestTimeoutFromEnv`。実装前は `go vet` が `deps.RequestTimeout undefined` /
+    `undefined: requestTimeoutFromEnv` の 2 件で失敗する状態だった
+  - 実装(implementer): `cmd/api/config.go` に `requestTimeoutEnv`・`defaultRequestTimeout`(12秒)・
+    `requestTimeoutFromEnv(lookup, writeTimeout)`(`upstreamTimeoutFromEnv` と同じ形 + `writeTimeout` 以上は
+    起動失敗)を追加。`cmd/api/main.go` で呼び出し、`httpapi.Dependencies.RequestTimeout` に渡す(パース失敗は
+    他の設定エラーと同じく `os.Exit(1)`)。`internal/httpapi/server.go` の `Dependencies` に
+    `RequestTimeout time.Duration` を追加(既定 0 は「期限なし」で既存テストに影響しない)。
+    `internal/httpapi/outspeed.go` の `outspeedAndKo` で `ctx := c.Request().Context()` の直後に
+    `deps.RequestTimeout > 0` のときだけ `context.WithTimeout` でラップ。`README.md` に
+    `JUDGE_REQUEST_TIMEOUT` の行を追加。`go vet`・`go test ./...`(新規テスト含め全件)・`gofmt -l`・
+    `make judge-lint`・`make judge-build`・`bash scripts/check-publishable.sh` すべて成功を確認
+    (`TestOutspeedAndKoOverallDeadline` は `-count=5` でも安定して ~0.22s で 503 を返すことを確認済み)
+- [x] issue #329(重大度 low)SP 合計超過(67)の拒否を確かめる回帰テストが無く、`validateSP` の
+      `> engine.MaxSPTotal` を `> engine.MaxSPTotal+1` に変える退行を検出できない(既存の唯一のケースが
+      合計96で境界〈67〉から遠い。全体レビュー第3回指摘。2026-09-25)。テストのみの変更(実装は無変更):
+      `internal/judge/speed_test.go` に合計ちょうど66(受け付ける)・ちょうど67(拒否する。各欄は
+      MaxSPPerStat=32以下のまま)を追加、`internal/httpapi/outspeed_test.go` にも合計67の境界値ケースを
+      追加。mutation test で検証: `validateSP` を `> engine.MaxSPTotal+1` に一時的に変えて新規テスト
+      (`TestSpeedRejectsOutOfRangeInput`・`TestOutspeedAndKoRejectsInvalidRequest` の追加分)が実際に
+      失敗することを確認、復元して `go test ./...`・`gofmt -l`・`make judge-lint`・`make judge-build`・
+      `bash scripts/check-publishable.sh` すべて成功を確認(軽微な作業のため /phase の quick-scanner〜critic
+      は使わずメインで対応。CLAUDE.md「軽微な作業はメインのみでよい」)
+- [x] issue #257(重大度 low)`services/judge/scripts/smoke.sh` が healthz しか叩かず、k3d 上で
+      pokedex-svc・calc-svc への疎通(業務エンドポイント)を検証していない(balance・speed の smoke と
+      深さが揃っていない。全体レビュー指摘。2026-09-24)。`services/gateway/scripts/smoke.sh` の ID
+      取得部分(`API_URL`=gateway 経由で性格・種族・物理技の実IDを引く。pokedex 未投入なら例の架空ID
+      にフォールバックし「未投入」として区別)を流用し、`JUDGE_URL`(judge 自身の Ingress)へ
+      `POST /api/judge/v1/outspeed-and-ko` を実際に送って 200(`matchups[0].attackerKo.hits` を含む)・
+      ヘッダなし 400 `invalid_request`・未知 speciesKey 422 `unknown_species`(pokedex 到達時のみ)・
+      7候補(上限6超過)400 `invalid_request` を確認するよう拡張。`Makefile` に `API_URL` を追加し
+      `judge-smoke` に配線。README の古い「JD0完了」表記も直した(coding-rules §8)。
+      実クラスタ(k3d-pokecalc。実データ)で `make judge-smoke` を実行して確認済み
+      (`judge smoke: master=pokedex species=0003-000 move=highhorsepower nature=bashful` /
+      `health=200 outspeed=200(hits=4) missing_headers=400 unknown_species=422 too_many_defenders=400`)。
+      `JUDGE_URL` を到達不能にすると exit 1 になることも確認(回帰検出力)。`pokedex-svc` が未投入時の
+      example フォールバック分岐は、共有クラスタの pokedex-svc を落とさずに済ませるため、
+      `services/gateway/scripts/smoke.sh` の同じロジックを流用したことによる構成の裏取りで代える
+      (実際に落として確認はしていない)。軽微な作業のため /phase の quick-scanner〜critic は
+      使わずメインで対応
+- [~] issue #260(担当: タイプバランス・判定。重大度 low)`docs/judge-design.md`・`docs/type-balance-design.md` が
+      実装の後追いになっていない(全体レビュー指摘。2026-09-24)。**判定レーンの分だけ対応**:
+      `judge-design.md` の状態を「起草」→「完了(JD0〜JD5・main統合済み)」に、JD5節を「着手する」から
+      実際の完了内容(ADR-0705・PR #182・担当決定)へ更新、JD1の麻痺の記述(JD2で扱う、が誤り。JD2でも
+      見送りを継続したのが正しい)を訂正、新設の §5「未対応(既知の制限)」に状態異常・素早さ関連特性・
+      ダブルの全体技/壁減衰(issue #288)を明記。`docs/README.md` の目次は既に judge-design.md を指しており
+      変更不要。`type-balance-design.md` はタイプバランスレーンの持ち物のため対象外(DECISIONS.mdへ)。
+      `bash scripts/check-publishable.sh`(0件)成功を確認。軽微な作業のためメインで対応
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
 各レーンが自分の範囲の README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)と、動かして確かめられるレーンは手順書(`docs/runbooks/<レーン>.md`。AGENTS.md「手順書の書き方」に従う)を書く。全体図は `docs/architecture.md`。

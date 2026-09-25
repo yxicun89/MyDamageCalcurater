@@ -153,7 +153,7 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 | `IgnoresBurn` | 攻撃側。やけどの半減を無効 | `dmg:132-134` | #13 |
 | `Airborne` | 両側。浮いている(ふゆう)。接地判定 `isGrounded`(`mod:86`)でフィールドの補正の対象外にする。地面技の無効は `DefImmuneTypes` で別に持つ(ADR-0116) | `mod:86-95` | #7 |
 
-- 効果値の出どころ: calc-svc は DB の効果 JSON を `services/internal/master/effects.go:299` `DecodeItemEffect`・`:380` `DecodeAbilityEffect` で厳格デコード(本番の定義は `data/importer/effects.json`。ADR-0101)。WASM はリクエストの `item.effect` / `ability.effect` を `engine/wasmapi/dto.go:273`・`:398` で変換。
+- 効果値の出どころ: calc-svc は DB の効果 JSON を `services/internal/master/effects.go:305` `DecodeItemEffect`・`:386` `DecodeAbilityEffect` で厳格デコード(本番の定義は `data/importer/effects.json`。ADR-0101。補正値は engine と同じ上限 `MaxEffectModifier` まで)。Champions 世代でダメージに効くのにこの表で表せない持ち物・特性は、理由付きで `tools/golden/unsupported-effects.json` に載せる(ゴールデンの生成器が「効くもの − 定義済み」との一致を確かめる。ADR-0120)。WASM はリクエストの `item.effect` / `ability.effect` を `engine/wasmapi/dto.go:273`・`:398` で変換。
 - 天候・フィールド・壁は「ゲーム機構」なので engine のルールとしてコードに持つ(`mod:1-14` のコメント、ADR-0005)。
 - 技の追加効果 `Move.Effect`(`engine/move_effect.go:22` `MoveEffect`)は `CalcDamage` が読まない。判定側が使うメタデータ(ADR-0107 決定2。`engine/move_effect_test.go:83` `TestCalcDamageIgnoresMoveEffect`)。
 
@@ -189,7 +189,7 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 |---|---|---|
 | 件数上限 | `Presets`・`PresetKeys` は各 8 以下、`ItemVariants` は 64 以下(選別より前に見る) | `engine/bulk.go:217-225` |
 | プリセットの選択 | `PresetKeys` あり → `Presets`(空ならカタログ)からキーで選ぶ(指定順が行順)/ `Presets` のみ → そのまま / どちらも空 → 技の分類の既定セット | `engine/bulk.go:170` `selectPresets` |
-| 既定カタログ | 8 件(無振り・H・H+B補正・HB・HB特化・H+D補正・HD・HD特化)。物理は B 系、特殊は D 系、変化技は無振りと H だけ | `engine/bulk.go:112` `DefenderPresetCatalog`、`:127` `DefaultDefenderPresets` |
+| 既定カタログ | 8 件(無振り・H・H+B補正・HB・HB特化・H+D補正・HD・HD特化)。物理は B 系、特殊は D 系、変化技は無振りと H だけ | `engine/presets/defender.json`(正。`engine/defender_preset.go` が embed)、`engine/bulk.go` `DefenderPresetCatalog`・`DefaultDefenderPresets` |
 | 検証 | キー空・SP 範囲/合計・性格が HP を指す → `ErrInvalidPreset`。重複 `ErrDuplicatePreset`、未知 `ErrUnknownPreset` | `engine/bulk.go:151` |
 | 防御側の組み立て | Lv50・`Status` なし・ランク 0・**特性なし(ゼロ値)**・テラスなし | `engine/bulk.go:139` `Defender` |
 | 行 | プリセット優先でプリセット × 持ち物(持ち物なしは `nil` の 1 通り)。各行 = 同じ入力の `CalcDamage` | `engine/bulk.go:243-275` |

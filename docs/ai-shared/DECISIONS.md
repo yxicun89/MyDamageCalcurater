@@ -1674,3 +1674,28 @@ Impact: speed API を直接叩く外部ツール・スクリプトは正準形 U
 Decision: 効果定義の正は `data/importer/effects.json`、`testdata/golden/effects.json` は写しとし、toID で正規化した一致をテストで確かめる(生成物にはしない。生成器の変更がゴールデンの出力を動かしうるため)。相性表の正は importer が取り込む calc スナップショットで、`pokedex-import` の照合が `testdata/golden/typechart.json`(`-typechart`、既定 `<data>/../testdata/golden/typechart.json`)と比べ、食い違いは Blocker `type-chart-reference-mismatch`。calc の版は `data/importer/config.json` の `sources.calc` を正とし、fetch-calc.mjs・tools/importer と tools/golden の依存・ゴールデンの version の一致をテストで確かめる。
 Reason: 片方だけを直しても `make test`・`make test-golden` が通り、ゴールデンが検証した定義・表と本番の DB の定義・表がずれたまま出荷されうる(issue #280)。
 Impact: importer のイメージに `testdata/golden/typechart.json` を焼く。calc の版を上げるときはゴールデンの再生成まで import が止まる(意図どおり)。タイプバランス レーンへ: balance の埋め込みは既存の `TestEmbeddedTypeChartMatchesSharedData` で golden と一致し、本決定で golden ⇔ DB がつながるので、#259 の export 追加は必須ではなくなった(判断は同レーン)。Web(`@typechart`)は変更不要。
+
+## 2026-09-25: 防御側プリセットの正を engine/presets/defender.json にした(データレーン。Web レーンの申し送りへの対応)
+Decision: ADR-0009 §1 のカタログ8件の正を `engine/presets/defender.json` にし、`DefenderPresetCatalog()` は embed した JSON から作る(ADR-0009 2026-09-25 追記)。値・順序・キーは不変。攻撃側 JSON と違い `label` も持つ(API の `presetLabel` の出力を変えないため)。
+**Web レーンの持ち物に触れた理由**: `web/src/domain/defenderPresets.contract.test.ts` は `engine/bulk.go` の Go リテラルを読んでいたため、engine だけ変えるとこのテストと CI が落ちる。main を赤くしないよう、同じ PR で読み先を JSON に変えた(比べる項目と期待値は同じ、`defenderPresets.ts` は不変)。
+**連絡(Web レーン)**: 契約テストの読み先を `engine/presets/defender.json` に変えた。`defenderPresets.ts` を JSON の読み込みに置き換えるか(`defenderPresetForCategory` は Web 限定で残る)は Web レーンが決める。
+**連絡(iOS レーン)**: 逆算の自分側に防御側プリセットを出すときは、同じ JSON を契約テストで読める。
+Reason: Web が Go ソースを正規表現でパースする契約テストは Go の書き方に依存して壊れやすく、iOS からは読めない。ADR-0114 と同じ理由。
+Impact: engine・calc-svc・WASM の出力は不変(`make test-golden` 全件一致)。OpenAPI・WASM 境界の変更なし。
+
+## 2026-09-25: issue #260 の判定レーン分をクローズ(判定レーン)
+Decision: `docs/judge-design.md` を実装の現状(JD0〜JD5完了・main統合済み)に合わせて更新した: 状態欄を「起草」→「完了」、
+JD5節を「着手する」から実際の完了内容(ADR-0705・PR #182・担当は判定レーン自身)へ、JD1の「麻痺はJD2で扱う」という
+誤った先送り記述を「JD2でも見送りを継続した」に訂正、新設の §5「未対応(既知の制限)」に状態異常・素早さに影響する
+特性(request の abilityId は calc-svc のダメージ計算へ転送されるだけで `internal/judge/speed.go` の実数値計算には
+一切反映しない)・ダブルの全体技/壁減衰(issue #288。engine/modifiers.go の範囲でジャッジレーン単独では解決しない)を明記した。
+Reason: issue #260 は「タイプバランス・判定」の両担当。`docs/type-balance-design.md` はタイプバランスレーンの持ち物のため、
+判定レーンはこの文書自身の範囲(`docs/judge-design.md`)だけを直した(CLAUDE.md「他レーンのファイルを触らない」)。
+Impact: タイプバランスレーンへ: `type-balance-design.md` の未対応分(役割分担・レビュー依頼節の履歴化、`/api/damage` 等の
+古い記述、`pokecalc-kit-v2` の別名、実装済みのKustomize/Argo CD分割の未決事項化)はそちらの担当で進めてください。
+両方揃って issue #260 をクローズできます。コード・ADR は無変更(ドキュメントのみ)。
+
+## 2026-09-25: 効果スキーマで表せる持ち物・特性をすべて定義し、表せないものを一覧で固定(データレーン。issue #270・ADR-0120)
+Decision: issue の既定案 A を採り、タイプ強化の持ち物・ノーマルジュエル・半減きのみ・Fire Mane・Heatproof・Purifying Salt・Eelevate を `data/importer/effects.json` と `testdata/golden/effects.json` に足した(値は oracle の実装から)。ゴールデンの生成器が効果ごとに「効く/効かない対照」の組を作り、Champions 世代でダメージが変わるのに定義の無いものは `tools/golden/unsupported-effects.json`(理由付き)と一致しなければ止まる。取込時の補正値に engine と同じ上限 `MaxEffectModifier` を入れた。
+Reason: 定義の無い持ち物・特性が黙って等倍で計算されていた(importer の effect-missing 92 件)。多くは engine を変えずにデータだけで直せる。
+Impact: 実データの dry-run で effect-missing 92→56、effect-no-hook 1→3(ノーマルジュエル・Eelevate。Levitate と同じ理由)。既定案 B(応答の「補正未対応」の印)は #271 の技の印と同じ仕組みでまとめて決める(未決)。タイプバランス レーンへ: readmodel の特性(Heatproof・Purifying Salt・Eelevate)が防御相性に入るようになる。

@@ -181,6 +181,9 @@ const immunityCases = [
   {slug:'sap-sipper', ability:'Sap Sipper', attacker:'Metagross', defender:'Garchomp',
     blockedMove:'Energy Ball', controlMove:'Body Slam',
     comboOptions:{a:{ranks:{atk:6,spa:6}}, d:{ability:'Sap Sipper'}}},
+  // issue #270 / ADR-0120: Eelevate は oracle で Levitate と同じ扱い(地面無効・isGrounded で浮く)。
+  {slug:'eelevate', ability:'Eelevate', attacker:'Garchomp', defender:'Snorlax',
+    blockedMove:'Drill Run', controlMove:'Flamethrower', comboOptions:{critical:true, terrain:'misty', d:{ability:'Eelevate'}}},
 ];
 for (const c of immunityCases) {
   championsFixed.push(vector(genC,`${c.slug}/immune`,c.attacker,c.defender,c.blockedMove,{d:{ability:c.ability}}));
@@ -205,13 +208,144 @@ const groundingCases = [
   ['grassy-levitate-defender','Garchomp','Snorlax','Energy Ball',{terrain:'grassy',d:{ability:'Levitate'}}],
   ['misty-flying-attacker','Dragonite','Snorlax','Dragon Claw',{terrain:'misty'}],
   ['misty-levitate-attacker','Garchomp','Snorlax','Dragon Claw',{terrain:'misty',a:{ability:'Levitate'}}],
+  // issue #270 / ADR-0120: Eelevate も oracle の isGrounded で浮く。
+  ['electric-eelevate-attacker','Pikachu','Snorlax','Thunderbolt',{terrain:'electric',a:{ability:'Eelevate'}}],
 ];
 for (const [slug,a,d,m,options] of groundingCases) {
   const v=vector(genC,`terrain-grounding/${slug}`,a,d,m,options);
   // 意図した側が浮いている/接地していることを oracle 側でも確かめる(種族の差し替えで黙って崩れないように)。
-  const airborne = side => {const p=individual(genC, side==='a'?a:d, options[side]).p; return p.hasType('Flying')||p.hasAbility('Levitate');};
+  const airborne = side => {const p=individual(genC, side==='a'?a:d, options[side]).p; return p.hasType('Flying')||p.hasAbility('Levitate','Eelevate');};
   assert.equal(airborne('a')||airborne('d'), true, `terrain-grounding/${slug} に浮いている側が無い`);
   championsFixed.push(v);
+}
+
+// --- 効果定義の1種ずつの照合(issue #270 / ADR-0120) --------------------------------
+// タイプ・相性で効く効果(タイプ強化・半減きのみ・特定タイプの攻撃実数値補正・抜群軽減)は、
+// effects.json の定義から「効く」ケースと「効かない対照」を1組ずつ作る。どちらも、同じ条件で
+// 効果を外したときの oracle のダメージと比べ、効く方は変わり・対照は変わらないことを確かめる
+// (定義の型を取り違えて、効かないケースだけを照合してしまうのを防ぐ)。
+// Champions の random のプールには足さない(乱数列が動き、既存の期待値がすべて変わるため)。
+const typeNameById = Object.fromEntries([...genC.types].map(t => [t.id, t.name]));
+const effectiveness = (moveType, s) => s.types.reduce((e, t) => e * genC.types.get(id(moveType)).effectiveness[t], 1);
+const physicalMoveOfType = t => {
+  const m = physical.find(m => m.type === typeNameById[t]);
+  assert(m, `代表技に ${t} タイプの物理技が無い(moveNames を確認)`);
+  return m.name;
+};
+const defenderFor = (t, pred, label) => {
+  const s = species.find(s => pred(effectiveness(typeNameById[t], s)));
+  assert(s, `${label}: ${t} 技の相手が種族集合に無い`);
+  return s.name;
+};
+const neutral = e => e === 1;
+const superEffective = e => e > 1;
+// 対照に使う別タイプ(ノーマル自身が対象の効果だけ、かくとうにする)。
+const otherType = t => t === 'normal' ? 'fighting' : 'normal';
+const effectAttacker = 'Snorlax';
+function withoutEffect(options) {
+  const strip = side => side && Object.fromEntries(Object.entries(side).filter(([k]) => k !== 'item' && k !== 'ability'));
+  return {...options, a:strip(options.a), d:strip(options.d)};
+}
+function effectCase(label, t, pred, options, expectChange) {
+  const move = physicalMoveOfType(t);
+  const d = defenderFor(t, pred, label);
+  const v = vector(genC, label, effectAttacker, d, move, options);
+  const base = vector(genC, `${label}/base`, effectAttacker, d, move, withoutEffect(options));
+  assert(v.expected.rolls.some(r => r > 0), `${label}: ダメージが0(相性で無効な組を選んだ)`);
+  const changed = JSON.stringify(v.expected.rolls) !== JSON.stringify(base.expected.rolls);
+  assert.equal(changed, expectChange, `${label}: 効果の有無で oracle のダメージが${expectChange ? '変わらない' : '変わる'}`);
+  championsFixed.push(v);
+}
+const typedEffectCases = (kind, name, def) => {
+  const slug = `effects/${id(name)}`;
+  if (kind === 'items' && def.BoostType) {
+    const t = def.BoostType;
+    effectCase(`${slug}/boost/${t}/apply`, t, neutral, {a:{item:name}}, true);
+    effectCase(`${slug}/boost/${otherType(t)}/control`, otherType(t), neutral, {a:{item:name}}, false);
+  }
+  if (kind === 'items' && def.ResistBerryType) {
+    const t = def.ResistBerryType;
+    effectCase(`${slug}/berry/${t}/apply`, t, t === 'normal' ? neutral : superEffective, {d:{item:name}}, true);
+    // 半減きのみは抜群のときだけ効く(ノーマルは例外で常に効くので、別タイプを対照にする)。
+    if (t === 'normal') effectCase(`${slug}/berry/${otherType(t)}/control`, otherType(t), neutral, {d:{item:name}}, false);
+    else effectCase(`${slug}/berry/${t}/control`, t, neutral, {d:{item:name}}, false);
+  }
+  if (kind === 'abilities' && def.OffBoostType) {
+    const t = def.OffBoostType;
+    effectCase(`${slug}/offboost/${t}/apply`, t, neutral, {a:{ability:name}}, true);
+    effectCase(`${slug}/offboost/${otherType(t)}/control`, otherType(t), neutral, {a:{ability:name}}, false);
+  }
+  if (kind === 'abilities' && def.DefResistType) {
+    const types = Object.keys(def.DefResistType).sort();
+    for (const t of types) effectCase(`${slug}/defresist/${t}/apply`, t, neutral, {d:{ability:name}}, true);
+    const c = types.includes('normal') ? 'fighting' : 'normal';
+    assert(!types.includes(c), `${slug}: 対照のタイプ ${c} も軽減の対象になっている`);
+    effectCase(`${slug}/defresist/${c}/control`, c, neutral, {d:{ability:name}}, false);
+  }
+  if (kind === 'abilities' && def.ReduceSuperEffective) {
+    effectCase(`${slug}/reduce/fighting/apply`, 'fighting', superEffective, {d:{ability:name}}, true);
+    effectCase(`${slug}/reduce/fighting/control`, 'fighting', neutral, {d:{ability:name}}, false);
+  }
+};
+for (const kind of ['items','abilities']) {
+  for (const name of Object.keys(effects[kind]).sort()) {
+    if (kind === 'items' ? legacyItems.has(name) : legacyAbilities.has(name)) continue;
+    typedEffectCases(kind, name, effects[kind][name]);
+  }
+}
+
+// --- ダメージに効く持ち物・特性と効果定義の差(issue #270 / ADR-0120) --------------------
+// Champions 世代の全持ち物・全特性を1つずつ攻撃側/防御側に持たせ、持たせないときとダメージが
+// 変わるものを数える(手で列挙しない)。そのうち effects.json に定義が無いものは、
+// unsupported-effects.json に理由付きで登録したものだけを許す(差分は両方向とも失敗にする)。
+// 条件付きの効果も拾えるよう、天候・急所・状態異常・HP・フィールドを変えた3条件で調べる。
+const probeAttackers = ['Pikachu','Garchomp'];
+const probeDefenders = ['Snorlax','Tyranitar','Corviknight','Toxapex','Garchomp','Charizard','Gengar','Clefable','Venusaur'];
+for (const m of moves) {
+  assert(probeDefenders.some(d => effectiveness(m.type, genC.species.get(id(d))) > 1) || m.type === 'Normal',
+    `調査用の防御側に ${m.type} 技が抜群になる種族が無い(半減きのみを取りこぼす)`);
+}
+const probeConditions = [
+  {field:{}, a:{}, d:{}},
+  {field:{weather:'Sand'}, crit:true, a:{status:'brn', hpFraction:3}, d:{}},
+  {field:{weather:'Sun', terrain:'Grassy'}, a:{status:'par'}, d:{status:'par'}},
+];
+function probePokemon(name, side, ability, item) {
+  const p = new Pokemon(genC, name, {level:50, ivs:stats(31), evs:stats(), nature:'Serious', ability, item,
+    status:side.status || '', overrides:{abilities:{0:''}}});
+  if (side.hpFraction) p.originalCurHP = Math.floor(p.maxHP() / side.hpFraction);
+  return p;
+}
+function probeSignature(holder, ability, item) {
+  const out = [];
+  for (const cond of probeConditions) for (const a of probeAttackers) for (const d of probeDefenders) for (const m of moves) {
+    const A = probePokemon(a, cond.a, holder === 'a' ? ability : '', holder === 'a' ? item : '');
+    const D = probePokemon(d, cond.d, holder === 'd' ? ability : '', holder === 'd' ? item : '');
+    const r = calculate(genC, A, D, new Move(genC, m.name, {isCrit:!!cond.crit}), new Field({gameType:'Singles', ...cond.field}));
+    out.push(JSON.stringify(r.damage));
+  }
+  return out.join('|');
+}
+const probeBaseline = probeSignature('a', '', '');
+const damageChanging = {items:[], abilities:[]};
+for (const it of genC.items) {
+  if (probeSignature('a', '', it.name) !== probeBaseline || probeSignature('d', '', it.name) !== probeBaseline) damageChanging.items.push(it.id);
+}
+for (const ab of genC.abilities) {
+  if (probeSignature('a', ab.name, '') !== probeBaseline || probeSignature('d', ab.name, '') !== probeBaseline) damageChanging.abilities.push(ab.id);
+}
+const unsupportedEffects = JSON.parse(readFileSync(new URL('unsupported-effects.json', import.meta.url)));
+const effectCoverage = {};
+for (const kind of ['items','abilities']) {
+  const legacy = kind === 'items' ? legacyItems : legacyAbilities;
+  const defined = new Set(Object.keys(effects[kind]).filter(n => !legacy.has(n)).map(id));
+  const changing = new Set(damageChanging[kind]);
+  const undefinedChanging = [...changing].filter(x => !defined.has(x)).sort();
+  assert.deepEqual(undefinedChanging, Object.keys(unsupportedEffects[kind]).sort(),
+    `${kind}: ダメージに効くのに効果定義が無いものが unsupported-effects.json と一致しない(定義を足すか、理由付きで登録する)`);
+  const deadDefinitions = [...defined].filter(x => !changing.has(x)).sort();
+  assert.deepEqual(deadDefinitions, [], `${kind}: 効果定義があるのに oracle のダメージが変わらない(定義の誤りか調査条件の不足)`);
+  effectCoverage[kind] = {damageChanging:changing.size, defined:defined.size, unsupported:undefinedChanging.length};
 }
 
 // --- legacy-effects の固定部分(gen9。元の種族のまま) --------------------------
@@ -422,7 +556,7 @@ const metadata={
     {scope:'species',names:excludedSpeciesNames,reason:'Internal calc-only pseudo-form; not a selectable in-game form (P2-1b)'},
     {scope:'species',names:[...genC.species].filter(s=>s.baseStats.hp===1).map(s=>s.name),reason:'HP=1 special mechanic is outside Champions SP formula; not present in the current Champions set'},
     {scope:'moves',reason:'Only the listed fixed-power single-hit moves; excludes variable/fixed damage, multi-hit, forced criticals, alternate attack/defense stats, screen removal, terrain-specific move mechanics, tera/Z/Max moves'},
-    {scope:'abilities/items',reason:'Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2)'},
+    {scope:'abilities/items',reason:'Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2). Every non-legacy effects.json entry with a type-dependent effect has an apply/control pair (effects/<id>/...; issue #270 / ADR-0120). Champions items/abilities that change damage but are not representable by the effect schema are listed with reasons in tools/golden/unsupported-effects.json and never appear in vectors'},
     {scope:'terrain',reason:'Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Psychic Terrain priority block, Terrain Pulse etc.) are outside the move list'},
     {scope:'battle',reason:'No double/tera/Dynamax/form transformations or unsupported status effects'},
     {scope:'KO',reason:'Smogon residual/consumable multi-turn model differs from ADR-0006; direct smogonKO cross-check only residual/consumable-free fixed cases with 1-4 hits'},
@@ -442,4 +576,4 @@ const metadata={
   files,
 };
 writeFileSync(`${out}/metadata.json`,JSON.stringify(metadata,null,2)+'\n');
-console.log(JSON.stringify({species:species.length,championsKoCrossChecks,legacyKoCrossChecks,legacyRandomCount:legacyRandomCases.length,files},null,2));
+console.log(JSON.stringify({species:species.length,effectCoverage,championsKoCrossChecks,legacyKoCrossChecks,legacyRandomCount:legacyRandomCases.length,files},null,2));
