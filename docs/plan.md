@@ -226,6 +226,35 @@
   運用レーンが到達経路(Tailscale Operator の ingressClass か subnet router + tailscale serve か)を選び、
   実際の名前が決まってから。今はコード変更不要。着手のタイミングは運用レーンの選定後
 - [x] P4-22 issue #72(ルートの `make e2e` が未実装スタブのまま「テスト0件で成功」する)。**完了(2026-09-25。Web レーン。API+Web 共同担当)**: ADR-0306 に従い `scripts/e2e.sh` を実装(常時3件 `web-e2e`/`web-e2e-online`/`web-e2e-balance` を必ず実行し、kubectl のコンテキストが `k3d-$CLUSTER` のときだけ `api-smoke`/`web-k3d-smoke`/`web-k3d-e2e` を追加実行。`E2E_REQUIRE_K3D=1` あり)。ルート Makefile の `e2e` を `CLUSTER=$(CLUSTER) ./scripts/e2e.sh` に配線、`docs/test-strategy.md`・`README.md` を実装内容に合わせて更新。`bash scripts/e2e_test.sh` は80/80 passed
+- [x] `make e2e` の `web-e2e-online` 修復・PR1(2026-09-25。Web レーン。issue 無し。ブランチ
+  `fix/web-online-e2e-master-export`)。**完了・critic PASS。ただし `make e2e`(`web-e2e-online`)は
+  まだ緑にならない(PR2 で対応。下記)**。
+  P4-22 で常時実行になった3件のうち `web-e2e-online` が main で壊れていた(calc-svc が起動できない)。原因は
+  ADR-0204(相性表は MasterExport 本体に含める・`CALC_TYPECHART_PATH` は廃止)に Web 側の書き出しが
+  追従していなかったこと: (1) `web/playwright.online.config.ts` が廃止済みの `CALC_TYPECHART_PATH` を渡す
+  → calc-svc が起動を拒否する (2) `web/src/master/exportSnapshot.ts` の `toCalcSnapshot()` の出力が
+  ADR-0204 以前の暫定スキーマのままで、`MasterExport`(`dataVersion`/`types`/`typeChart`、`MasterSpecies` の
+  `showdownId`・`type1`/`type2`・`abilities[{slot, abilityId}]`、`MasterMove.effect`、効果のキーの
+  PascalCase)を満たさない (3) 例データの技・持ち物・特性の ID がハイフンを含み、共通マスタの
+  `codeIDPattern`(`^[a-z0-9]+$`)で弾かれる。calc-svc の契約を正として Web 側を写像する形で修正
+  (契約は緩めていない。`services/`・`api/openapi.yaml`・`testdata/golden/typechart.json` は無変更)。
+  `node scripts/export-example-master.mjs` の出力を実際に `go run ./calc/cmd/calc` に読ませ、
+  `/healthz` 200・`/api/calc` が契約レベルのバリデーションまで到達することを確認済み(=マスタのロード自体は成功)。
+  critic PASS(mutation testing 4件、うち2件〈defAbsorbTypesの入れ子変換・相性表の欠けた組の既定値〉は
+  未到達分岐だったため専用のテストを追加してから確認)。
+  **PR2 に持ち越し(最優先。#308 以降はPR2が緑になるまで着手しない。オーケストレーター決定 2026-09-25)**:
+  `npm run e2e:online` はまだ2件ともタイムアウトする。原因は今回の修正とは別の、P4-16 以降の既存の設計不整合
+  (オンラインモードの `main.tsx` は pokedex-svc の公開API に依存するが、`web-e2e-online` は calc-svc しか
+  起動しない。calc-svc は pokedex ルートを意図的に404で返す設計。`registerPokedexNotFoundRoutes`、
+  critic指摘R1で確定済み)。方針は e2e専用の軽量 pokedex フィクスチャサーバーを Web 側に新設し、
+  `API_PROXY_TARGET` を pokedex パスと calc パスで振り分ける(calc-svc/pokedex-svc 本体には触れない。
+  詳細は ADR-0301 §5 追記)。
+  **申し送り(J1。critic指摘、ブロッカーではない)**: `web/src/master/exportSnapshot.ts` の
+  `CalcSnapshot`/`CalcSnapshotSpecies`等は生成済みの契約型(`web/src/api/openapi.gen.ts` の
+  `components["schemas"]["MasterExport"]`)の手書きの写し。`exportSnapshot.contract.test.ts` が
+  毎回 `api/openapi.yaml` を読んで突き合わせるのでズレは検知できるが、`type CalcSnapshot =
+  Schemas["MasterExport"]` に寄せるか型レベルの一致アサーションを足すと、より一枚岩になる
+  (次に触るときの検討事項)。
 - [x] issue #71 の Web 側(攻撃側プリセットの単一化。ADR-0114)。**完了(2026-09-25。Web レーン)**: データレーン
   が `engine/presets/attacker.json`(embed)を唯一の正にした(PR #346)のを受け、
   `web/src/domain/attackerPresets.contract.test.ts` を新規追加。ハードコードした期待値と比較する既存の

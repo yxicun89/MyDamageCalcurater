@@ -543,7 +543,7 @@ describe("結果の表示", () => {
       reverseCandidate({
         natureClass: "plus",
         nature: { plus: "def", minus: "atk" },
-        itemId: "example-item-def",
+        itemId: "exampleitemdef",
         ranges: [
           { min: 4, max: 7 },
           { min: 9, max: 12 },
@@ -616,7 +616,7 @@ describe("結果の表示", () => {
         reverseCandidate({
           natureClass: "plus",
           nature: { plus: "spa", minus: "atk" },
-          itemId: "example-item-power",
+          itemId: "exampleitempower",
           ranges: [{ min: 28, max: 32 }],
           spCount: 5,
         }),
