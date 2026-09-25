@@ -139,6 +139,15 @@ export const appText = {
   title: "ポケモン ダメージ計算",
   loading: "読み込み中…",
   masterLoadError: "マスタデータの読み込みに失敗しました",
+  /**
+   * issue 308: マスタが読めないときの次の一手。自動でオフラインへ切り替えることはしない
+   * (ADR-0301 §4 の既定方針)ので、画面から操作できるようにする。
+   * 原因は握りつぶさず、受け取った Error の message をこの見出しに続けてそのまま出す
+   * (fetch の失敗・HTTP エラーなど。凝った分類はしない)。
+   */
+  masterLoadErrorDetailLabel: "原因",
+  masterLoadRetryLabel: "再試行",
+  masterLoadSwitchToOfflineLabel: "オフラインに切り替える",
   /** 計算・逆算の切り替えタブ(P4-4、ADR-0300 §7)。 */
   tabsLabel: "画面の切り替え",
   /** サイト名(index.html の <title> と同じ。文書タイトルの接尾辞)。 */
