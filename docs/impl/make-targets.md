@@ -4,7 +4,7 @@
 - 読み方: 「前提」= Makefile の前提条件。「副作用」の**太字**はクラスタ・DB・レジストリ・破壊的操作。コマンド単位の実行順は [runbook-commands.md](runbook-commands.md)、リソースは [k8s-local.md](k8s-local.md)。
 - ルート `Makefile` は末尾で 6 本を `include`(`Makefile:239-244`)。ターゲット名は接頭辞でレーン分離(`api-`=gateway/calc、`web-`、`balance-`、`speed-`、`judge-`、`ios-`)。
 
-## CI(GitHub Actions。ADR-0114)
+## CI(GitHub Actions。ADR-0118)
 
 `.github/workflows/ci.yml` が PR と main への push で1ジョブ(ubuntu-latest、Secret 不要)を実行する。
 下表の `test`/`lint`/`build` が Web・balance・speed・judge を合成済みなので、CI も go/web でジョブを
@@ -14,7 +14,7 @@
 `speed-kustomize`・`judge-kustomize`(各レーン専用 overlay)も描画確認する。最後に `make check-publishable`
 を単独ステップとしても走らせる(`make lint` に含まれるが、ログで単独の合否として見せるため)。
 Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-version` を読み、版をワークフローに
-二重に書かない。対象外(iOS・Playwright e2e・k3d への実 apply)は ci.yml 冒頭のコメントと ADR-0114 を参照。
+二重に書かない。対象外(iOS・Playwright e2e・k3d への実 apply)は ci.yml 冒頭のコメントと ADR-0118 を参照。
 
 ## 共通の仕様
 

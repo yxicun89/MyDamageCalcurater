@@ -1,4 +1,4 @@
-# ADR-0114: GitHub Actions で PR・main を機械的に検証する(issue #215)
+# ADR-0118: GitHub Actions で PR・main を機械的に検証する(issue #215)
 
 - 状態: 採用
 - 日付: 2026-09-25
