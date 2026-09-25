@@ -29,8 +29,8 @@ attempt=0
 while :; do
   pokemon_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
     "$base_url/api/speed/v1/pokemon" \
-    -H 'X-Device-Id: smoke-device' \
-    -H 'X-Session-Id: smoke-session' || printf '000')
+    -H 'X-Device-Id: 11111111-1111-1111-1111-111111111111' \
+    -H 'X-Session-Id: 22222222-2222-2222-2222-222222222222' || printf '000')
   case "$pokemon_status" in
     000|502|503) ;;
     *) break ;;
@@ -61,8 +61,8 @@ if [ "$count" != "8" ]; then
 fi
 
 missing_headers_status=$(curl -sS -o "$body_file" -w '%{http_code}' "$base_url/api/speed/v1/pokemon")
-if [ "$missing_headers_status" != "400" ] || ! grep -qF '"code":"invalid_request"' "$body_file"; then
-  echo "speed pokemon list without headers: HTTP $missing_headers_status, want 400 invalid_request" >&2
+if [ "$missing_headers_status" != "400" ] || ! grep -qF '"code":"missing_header"' "$body_file"; then
+  echo "speed pokemon list without headers: HTTP $missing_headers_status, want 400 missing_header" >&2
   cat "$body_file" >&2
   exit 1
 fi
@@ -71,8 +71,8 @@ fi
 # speed 81, so their max-scarf rows (146 x 1.5 = 219) form one tie tier, in pokemonId order.
 table_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   "$base_url/api/speed/v1/table?presets=max-scarf" \
-  -H 'X-Device-Id: smoke-device' \
-  -H 'X-Session-Id: smoke-session' || printf '000')
+  -H 'X-Device-Id: 11111111-1111-1111-1111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-2222-2222-222222222222' || printf '000')
 if [ "$table_status" != "200" ]; then
   echo "speed table failed: HTTP $table_status" >&2
   cat "$body_file" >&2
@@ -101,8 +101,8 @@ fi
 
 invalid_presets_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   "$base_url/api/speed/v1/table?presets=unknown" \
-  -H 'X-Device-Id: smoke-device' \
-  -H 'X-Session-Id: smoke-session')
+  -H 'X-Device-Id: 11111111-1111-1111-1111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-2222-2222-222222222222')
 if [ "$invalid_presets_status" != "400" ] || ! grep -qF '"code":"invalid_request"' "$body_file"; then
   echo "speed table with unknown presets: HTTP $invalid_presets_status, want 400 invalid_request" >&2
   cat "$body_file" >&2
@@ -114,8 +114,8 @@ fi
 # the 48 rows (8 pokemon x 6 presets).
 position_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   "$base_url/api/speed/v1/position" \
-  -H 'X-Device-Id: smoke-device' \
-  -H 'X-Session-Id: smoke-session' \
+  -H 'X-Device-Id: 11111111-1111-1111-1111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-2222-2222-222222222222' \
   -H 'Content-Type: application/json' \
   -d '{"mode":"preset","pokemonId":"9002-000","preset":"max","scarf":false}' || printf '000')
 if [ "$position_status" != "200" ]; then
@@ -133,8 +133,8 @@ done
 
 invalid_position_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   "$base_url/api/speed/v1/position" \
-  -H 'X-Device-Id: smoke-device' \
-  -H 'X-Session-Id: smoke-session' \
+  -H 'X-Device-Id: 11111111-1111-1111-1111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-2222-2222-222222222222' \
   -H 'Content-Type: application/json' \
   -d '{"mode":"preset","pokemonId":"9002-000","preset":"max","scarf":false,"sp":32}')
 if [ "$invalid_position_status" != "400" ] || ! grep -qF '"code":"invalid_request"' "$body_file"; then
@@ -145,8 +145,8 @@ fi
 
 unknown_position_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   "$base_url/api/speed/v1/position" \
-  -H 'X-Device-Id: smoke-device' \
-  -H 'X-Session-Id: smoke-session' \
+  -H 'X-Device-Id: 11111111-1111-1111-1111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-2222-2222-222222222222' \
   -H 'Content-Type: application/json' \
   -d '{"mode":"preset","pokemonId":"9999-000","preset":"max","scarf":false}')
 if [ "$unknown_position_status" != "422" ] || ! grep -qF '"code":"unknown_pokemon"' "$body_file"; then

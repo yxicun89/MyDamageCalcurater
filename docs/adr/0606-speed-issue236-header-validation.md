@@ -36,6 +36,12 @@ gateway の検証はこの3サービスには効いていない。
 speed の API は Web だけが呼んでおり(judge のように他サービスへ転送しない)、同一リポジトリ内なので影響範囲は把握できる。
 Web レーンへの追従依頼は本 ADR の「他レーンへの依頼」に書く。
 
+**注**: 旧実装は `strings.TrimSpace` で空白だけの値も「空」扱いにしていたが、gateway の `headerStatus` は
+`""` だけを missing とし、空白だけの値(例: `"  "`)は「空でなく UUID でもない」ので `invalid_header` になる。
+「一字一句 gateway と同じ」を優先し、speed でも `TrimSpace` はしない(空白だけの値は `invalid_header` に変わる)。
+ただし実際の HTTP 通信では net/http がヘッダー値の前後の空白を受信時に取り除くため、この差は httptest 等で
+`http.Header` を直接組み立てたときだけ見える。実運用で空白だけの値を送っても `""` になり `missing_header` を返す。
+
 ### 3. `requireRequestContext` ミドルウェアを置き換える
 `services/speed/internal/httpapi/server.go` の `requireRequestContext` を、`strings.TrimSpace` による非空検査から
 `checkAPIHeaders(c.Request().Header)` の呼び出しに置き換える。エラーは `missingHeader`/`invalidHeader` の bool から
