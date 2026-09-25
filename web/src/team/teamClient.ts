@@ -70,16 +70,93 @@ export function teamUnavailableError(): TeamError {
   return { code: TEAM_UNAVAILABLE_CODE, message: teamClientText.unavailable };
 }
 
+/** サーバーのエラー本文({code, message})の形をしているかの型ガード(speedClient.ts と同じ形)。 */
+function isErrorBody(value: unknown): value is Schemas["Error"] {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return typeof record.code === "string" && typeof record.message === "string";
+}
+
+/** team_unavailable の失敗(speedClient.ts の unavailableResult と同じ形)。 */
+function unavailableResult<T>(): TeamResult<T> {
+  return { ok: false, error: teamUnavailableError() };
+}
+
 /**
  * 構築 API のクライアント実装(ADR-0309 §3)。
- *
- * **未実装**: spec-writer 工程では骨格だけを置く(team/teamClient.test.ts が正)。
- * 空のクライアントを返すと「呼んだのに何も起きない」状態がテストによっては緑に見えうるので、
- * 実装前は呼ぶと必ず失敗するようにしておく。
+ * 応答をそのまま運び、Web で並べ替え・整形をしない。通信・応答の失敗は team_unavailable にする。
  */
 export function createTeamClient(input: CreateTeamClientInput): TeamClient {
-  // 骨格のみ(implementer が baseUrl・fetch・ids を使って実装する)。
-  throw new Error(
-    `createTeamClient は未実装(P5-5 PR-A1 の implementer 工程で実装する。baseUrl: ${input.baseUrl})`,
-  );
+  const { baseUrl, fetch: fetchImpl, ids } = input;
+
+  function headers(withBody: boolean): Record<string, string> {
+    const base: Record<string, string> = {
+      "X-Device-Id": ids.deviceId,
+      "X-Session-Id": ids.sessionId,
+    };
+    if (withBody) {
+      base["Content-Type"] = "application/json";
+    }
+    return base;
+  }
+
+  /**
+   * fetch を呼び、応答(成功の値、または境界のエラー封筒)を返す。例外を投げない。
+   * `noBody` のとき(remove の 204)は本文を読まず、`{ok: true, value: undefined}` を返す
+   * (204 の本文を読もうとして team_unavailable に落ちないため。ADR-0309 §3)。
+   */
+  async function request<T>(
+    path: string,
+    method: string,
+    body: unknown,
+    noBody: boolean,
+  ): Promise<TeamResult<T>> {
+    let response: Response;
+    try {
+      response = await fetchImpl(`${baseUrl}${path}`, {
+        method,
+        headers: headers(body !== undefined),
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    } catch {
+      return unavailableResult();
+    }
+    if (noBody && response.status === 204) {
+      return { ok: true, value: undefined as T };
+    }
+    let parsed: unknown;
+    try {
+      parsed = await response.json();
+    } catch {
+      return unavailableResult();
+    }
+    if (!response.ok) {
+      return isErrorBody(parsed)
+        ? { ok: false, error: { code: parsed.code, message: parsed.message } }
+        : unavailableResult();
+    }
+    return { ok: true, value: parsed as T };
+  }
+
+  return {
+    list() {
+      return request<Schemas["Team"][]>(TEAM_PATHS.teams, "GET", undefined, false);
+    },
+    create(teamInput) {
+      return request<Schemas["Team"]>(TEAM_PATHS.teams, "POST", teamInput, false);
+    },
+    get(teamId) {
+      return request<Schemas["Team"]>(TEAM_PATHS.team(teamId), "GET", undefined, false);
+    },
+    update(teamId, teamInput) {
+      return request<Schemas["Team"]>(TEAM_PATHS.team(teamId), "PUT", teamInput, false);
+    },
+    remove(teamId) {
+      // T は remove() の宣言(Promise<TeamResult<void>>)から推論させる(void を明示の型引数にすると
+      // @typescript-eslint/no-invalid-void-type に引っかかるため)。
+      return request(TEAM_PATHS.team(teamId), "DELETE", undefined, true);
+    },
+  };
 }

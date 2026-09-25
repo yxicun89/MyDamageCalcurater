@@ -307,7 +307,7 @@ describe("issue #308 マスタの読み込みに失敗したときの立て直�
     });
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(retryButton()).toBeInTheDocument();
-    expect(tabLabels()).toHaveLength(5);
+    expect(tabLabels()).toHaveLength(6);
   });
 
   test("「オフラインに切り替える」でオフラインのマスタに戻り、選択も保存される", async () => {
@@ -335,7 +335,7 @@ describe("issue #308 マスタの読み込みに失敗したときの立て直�
     );
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
-    expect(tabLabels()).toHaveLength(5);
+    expect(tabLabels()).toHaveLength(6);
 
     await user.click(retryButton());
 
@@ -357,7 +357,7 @@ describe("issue #308 マスタの読み込みに失敗したときの立て直�
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(retryButton()).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "オフラインに切り替える" })).toBeNull();
-    expect(tabLabels()).toHaveLength(5);
+    expect(tabLabels()).toHaveLength(6);
   });
 });
 
