@@ -1048,6 +1048,11 @@
 
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)
+- [ ] お気に入り(手動ピン留め)のCRUD API(requirements.md §2「あれば便利(マストではない)」)。
+  `favorites`テーブル・保持期間(540日)・全削除時の件数カウントはADR-0209で設計・実装済みだが、
+  作成・削除・一覧のAPI自体は未着手(ADR-0209にも「recordにお気に入りのCRUDを足すときに検証する」と
+  将来課題として記述されている)。Webレーンからの問い合わせ(2026-09-25。P5-5着手時)で未実装であることを
+  確認・回答済み。着手するかどうかはユーザー判断待ち(急ぎではない)
 - [x] issue #271/#270(データレーンからの依頼。ADR-0121 §4・ADR-0123 §7。DECISIONS.md 2026-09-25)の API レーン
   担当分: `api/openapi.yaml` に `MasterMove.mechanisms: string[]`(必須・昇順・通常の技は空配列)と
   `CalcResult`(`BulkCalcRow.result` も同じ型)・`ReverseCandidate` への `unsupported: UnsupportedMark[]`
