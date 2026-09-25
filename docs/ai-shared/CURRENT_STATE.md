@@ -149,8 +149,10 @@ issue #68 の残り(一度も検索結果に出ていない選択中の技IDを�
 issue #110 は API・データ・Web・iOS すべて完了したためクローズ済み(2026-09-24)。
 P6-10(構築編集の load の技解決を `getMovesByIds` のまとめ取り1回へ。ADR-0501「getMovesByIds による構築編集の技の一括解決」。
 critic 1周目 FAIL〈分割境界のテスト不足〉→テスト追加→2周目 PASS)完了。
-Next: (1) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。#71(攻撃側プリセット
-単一化)は engine 側の `AttackerPreset` カタログ新設(データレーン)が前提のため iOS からは未着手。将来の候補:
+P6-11(issue #334。攻撃側プリセットの表示名を技の分類に追従。PR #348、issue クローズ済み)・P6-12(issue #71 の iOS 追従。
+`engine/presets/attacker.json` との契約テスト、並び 無振り→特化→振り、既定を無振りに変更。ADR-0501「P6-12」)完了。
+Next: (1) issue #274(計算画面の条件入力。Web レーンと合意済みで iOS が先行、語は DECISIONS.md に書いて Web が合わせる)。
+(2) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。将来の候補:
 engine の Champions マスタが pokedex-svc 経由になったら iOS のモック/実マスタの差し替え動作を再確認、Web の
 record/team-svc(M2)が進んだら iOS の構築を端末内保存から API 保存へ移行するかを検討。
 

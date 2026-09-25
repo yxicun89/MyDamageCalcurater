@@ -78,7 +78,8 @@ final class ReverseViewModelTests: XCTestCase {
         // 技 = 攻撃側(与えたダメージでは自分)の learnset の順・マスタにある・ダメージ技だけ(変化技は逆算できないので出さない)
         XCTAssertEqual(viewModel.moveOptions.map(\.id), [StubMaster.alphaOnlyMove.id, StubMaster.specialMove.id])
         XCTAssertEqual(viewModel.moveId, StubMaster.alphaOnlyMove.id)
-        XCTAssertEqual(viewModel.attackerPreset, .aFull)
+        // 既定は engine/presets/attacker.json の default(無振り。P6-12 で A特化から変更。ADR-0501「P6-12」5章)
+        XCTAssertEqual(viewModel.attackerPreset, AttackerPreset.defaultPreset)
         // P6-2d で `knownDefenderPreset` が `KnownDefenderPreset?`(計算プロパティ)になったため、
         // 素の `.none` は `Optional<KnownDefenderPreset>.none`(nil)に解決されてしまう
         // (Swift の既知の挙動。ビルド時に警告も出る)。列挙子を明示して曖昧さを消す
@@ -118,6 +119,9 @@ final class ReverseViewModelTests: XCTestCase {
     func testValidPercentObservationCallsReverseOnceWithDefenderSideRequest() async throws {
         let stub = await makeStub()
         let viewModel = await loadedViewModel(stub)
+        // 既定は無振り(P6-12)。A特化の組み立てを見るため、観測を入れる前(逆算しない状態)に選ぶ
+        // (ADR-0501「P6-12」5章)。
+        await viewModel.selectAttackerPreset(.aFull)
 
         await viewModel.editObservation(id: try firstObservationID(viewModel), text: "12")
 
@@ -425,7 +429,8 @@ final class ReverseViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.opponentItemCandidateIds, [])
         XCTAssertEqual(viewModel.mySpeciesKey, StubMaster.alpha.key)
         XCTAssertEqual(viewModel.opponentSpeciesKey, StubMaster.beta.key)
-        XCTAssertEqual(viewModel.attackerPreset, .aFull)
+        // 側を変えても自分のプリセットは起動時の既定のまま(P6-12 で既定が無振りに変わったため既定を参照する)
+        XCTAssertEqual(viewModel.attackerPreset, AttackerPreset.defaultPreset)
         // 技は攻撃側 = 相手(beta)の learnset から、ダメージ技だけ
         XCTAssertEqual(viewModel.moveOptions.map(\.id), [StubMaster.specialMove.id, StubMaster.physicalMove.id])
         XCTAssertEqual(viewModel.moveId, StubMaster.specialMove.id)
