@@ -1650,3 +1650,8 @@ Impact: speed API を直接叩く外部ツール・スクリプトは正準形 U
 Decision: 効果定義の正は `data/importer/effects.json`、`testdata/golden/effects.json` は写しとし、toID で正規化した一致をテストで確かめる(生成物にはしない。生成器の変更がゴールデンの出力を動かしうるため)。相性表の正は importer が取り込む calc スナップショットで、`pokedex-import` の照合が `testdata/golden/typechart.json`(`-typechart`、既定 `<data>/../testdata/golden/typechart.json`)と比べ、食い違いは Blocker `type-chart-reference-mismatch`。calc の版は `data/importer/config.json` の `sources.calc` を正とし、fetch-calc.mjs・tools/importer と tools/golden の依存・ゴールデンの version の一致をテストで確かめる。
 Reason: 片方だけを直しても `make test`・`make test-golden` が通り、ゴールデンが検証した定義・表と本番の DB の定義・表がずれたまま出荷されうる(issue #280)。
 Impact: importer のイメージに `testdata/golden/typechart.json` を焼く。calc の版を上げるときはゴールデンの再生成まで import が止まる(意図どおり)。タイプバランス レーンへ: balance の埋め込みは既存の `TestEmbeddedTypeChartMatchesSharedData` で golden と一致し、本決定で golden ⇔ DB がつながるので、#259 の export 追加は必須ではなくなった(判断は同レーン)。Web(`@typechart`)は変更不要。
+
+## 2026-09-25: 効果スキーマで表せる持ち物・特性をすべて定義し、表せないものを一覧で固定(データレーン。issue #270・ADR-0120)
+Decision: issue の既定案 A を採り、タイプ強化の持ち物・ノーマルジュエル・半減きのみ・Fire Mane・Heatproof・Purifying Salt・Eelevate を `data/importer/effects.json` と `testdata/golden/effects.json` に足した(値は oracle の実装から)。ゴールデンの生成器が効果ごとに「効く/効かない対照」の組を作り、Champions 世代でダメージが変わるのに定義の無いものは `tools/golden/unsupported-effects.json`(理由付き)と一致しなければ止まる。取込時の補正値に engine と同じ上限 `MaxEffectModifier` を入れた。
+Reason: 定義の無い持ち物・特性が黙って等倍で計算されていた(importer の effect-missing 92 件)。多くは engine を変えずにデータだけで直せる。
+Impact: 実データの dry-run で effect-missing 92→56、effect-no-hook 1→3(ノーマルジュエル・Eelevate。Levitate と同じ理由)。既定案 B(応答の「補正未対応」の印)は #271 の技の印と同じ仕組みでまとめて決める(未決)。タイプバランス レーンへ: readmodel の特性(Heatproof・Purifying Salt・Eelevate)が防御相性に入るようになる。

@@ -77,7 +77,10 @@ func rejectUnknownFields(fields map[string]json.RawMessage, known map[string]boo
 	return nil
 }
 
-// decodePositiveInt は 4096 基準の正の整数(1以上)だけを認める。
+// decodePositiveInt は 4096 基準の正の整数(1..engine.MaxEffectModifier)だけを認める。
+// 上限は engine の Individual.Validate と同じ(それを超える定義を取り込むと、その持ち物・特性を
+// 選んだ計算が毎回入力エラーになるため、取込の時点で止める)。回復の分母・ランク段階など
+// より狭い範囲を持つ項目は、呼び出し側で別に絞る。
 func decodePositiveInt(raw json.RawMessage) (int, error) {
 	s := string(raw)
 	if !integerLiteral.MatchString(s) {
@@ -89,6 +92,9 @@ func decodePositiveInt(raw json.RawMessage) (int, error) {
 	}
 	if n <= 0 {
 		return 0, fmt.Errorf("%w: 正の整数でない: %d", ErrInvalidEffect, n)
+	}
+	if n > engine.MaxEffectModifier {
+		return 0, fmt.Errorf("%w: 補正値が上限 %d を超える: %d", ErrInvalidEffect, engine.MaxEffectModifier, n)
 	}
 	return n, nil
 }

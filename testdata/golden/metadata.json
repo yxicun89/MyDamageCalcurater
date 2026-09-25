@@ -68,7 +68,7 @@
     },
     {
       "scope": "abilities/items",
-      "reason": "Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2)"
+      "reason": "Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2). Every non-legacy effects.json entry with a type-dependent effect has an apply/control pair (effects/<id>/...; issue #270 / ADR-0120). Champions items/abilities that change damage but are not representable by the effect schema are listed with reasons in tools/golden/unsupported-effects.json and never appear in vectors"
     },
     {
       "scope": "terrain",
@@ -129,8 +129,8 @@
   ],
   "files": {
     "fixed.json": {
-      "count": 207,
-      "sha256": "b2918310fafc126b356d8c6f468d4baa2383b5d218181417ef0f111b89228683"
+      "count": 302,
+      "sha256": "09476bad67380a789e26ec6bf2fbeeb5a1bea9f4d162aab7ba3c7c0148eb7e7c"
     },
     "random.jsonl.gz": {
       "count": 10000,
