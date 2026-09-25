@@ -175,6 +175,9 @@ function mapCalcResult(result: Schemas["CalcResult"]): CalcResult {
       chancePercent: result.ko.chancePercent ?? 0,
       displayChancePercent: result.ko.displayChancePercent,
     },
+    // 「未対応」の印(ADR-0123)。engine が決めた並びのまま素通しする(並べ替え・重複除去をしない。
+    // ADR-0300 §8)。target・reason の値は契約と DTO で同じ文字列なので、写しは代入だけでよい。
+    unsupported: result.unsupported,
   };
 }
 
@@ -216,6 +219,7 @@ function mapReverseCandidate(candidate: Schemas["ReverseCandidate"]): ReverseCan
     support: candidate.support,
     minPercent: candidate.minPercent,
     maxPercent: candidate.maxPercent,
+    unsupported: candidate.unsupported,
   };
 }
 

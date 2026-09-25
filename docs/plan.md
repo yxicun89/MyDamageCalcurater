@@ -471,6 +471,65 @@
   `origin/main` をマージ後、`npx vitest run` 1625件(1624 + 新規1件)・`npm run typecheck`・
   `npm run lint`(eslint + prettier)いずれも green。
   **Next(critic)**: レビュー待ち。
+- [ ] issue #271 / issue #270(重大度 high。多段技・威力可変技・固定ダメージ技〈#271〉や、効果スキーマで
+  表せない持ち物・特性〈#270〉を選ぶと、engine は黙って通常の式で計算し、あたかも正しい結果のように
+  見える。データ / API レーンが ADR-0123 で「印を付ける」方式を採り、計算・逆算・bulk の結果に
+  `unsupported: UnsupportedMark[]`〈印なしは空配列〉を返すようになった)の **Web レーン分**:
+  計算・逆算・一括の結果に「未対応」の印を表示する。ブランチ `feat/web-unsupported-marks-271-270`。
+  **仕様とテストまで完了(2026-09-25。spec-writer)**:
+  受け入れ条件と失敗するテストを先に用意した。設計判断は docs/design.md の「画面: ダメージ計算」・
+  「画面: 逆算」に追記: (1) 印は**行・候補ごと**に出す(防御側の持ち物バリアント・候補ごとに印が変わりうるし、
+  engine が行・候補ごとに返すものを Web でまとめるのは加工になる。ADR-0300 §8)。(2) 印が1件でもあれば
+  一覧の先頭に `role="status"` の案内を1つ(issue 305 の作法と同じ)。(3) **色だけに頼らない**:
+  バッジの「未対応」と「<target>「<対象名>」: <理由>」を必ず文字で出し、アイコンは `aria-hidden`、
+  色は既存トークン `danger` の範囲。
+  配線(実装作業ではない部分)は先に済ませた: `web/src/engine/types.ts` に `UnsupportedTarget`・
+  `UnsupportedReason`・`UnsupportedMark` を新設し `CalcResult`・`ReverseCandidate` に `unsupported` を追加 /
+  `web/src/api/apiEngine.ts` の `mapCalcResult`・`mapReverseCandidate` で写す /
+  `web/src/test/fakeEngine.ts` の fixture に既定値(空配列)/ `web/src/i18n/ja.ts` に `unsupportedText`
+  (target 5 種・reason 15 種の日本語ラベル・案内・`markLabel`)。
+  **WASM(オフライン)は `wasmEngine.ts` の変更なしで印が届くことを実測で確認**(`make wasm` 後、
+  `web/src/engine/wasmEngine.wasm.test.ts` の新規3件が green。`parseEnvelope` が unchecked cast のため)。
+  テスト: `web/src/i18n/unsupported.test.ts`(新規11件・green。ラベルの過不足・文言の検査)/
+  `web/src/api/apiEngine.test.ts`(+3件・green。契約と DTO の型の一致、bulk の行ごと・reverse の候補ごとの
+  素通し。従来「Web は受け取らない」前提で `omit(apiCalcResult, "unsupported")` としていた既存の期待値3か所は、
+  受け取る形に**更新**した〈弱めていない: 省略ではなく等値で検査する〉)/
+  `web/src/screens/CalcScreen.test.tsx`(+7件。うち6件が red)/ `web/src/screens/ReverseScreen.test.tsx`
+  (+5件。うち4件が red)/ `web/src/engine/reverse.wasm.test.ts`(候補が常に `unsupported` を持つ検査を追加)。
+  **実装完了(2026-09-25。implementer)**: `CalcScreen.tsx`・`ReverseScreen.tsx` に表示を実装し、
+  red 10件を含め green にした。ID → 表示名の解決は共通ヘルパー `web/src/domain/unsupportedLabels.ts`
+  (`unsupportedMarkLabel`)を新設し、`master.moves` / `master.items` / `master.abilities` から引く
+  (見つからなければ空文字を `unsupportedText.markLabel` に渡し、ID をそのまま出す設計どおり)。
+  計算画面は行(`BulkRow`)の中に `unsupported` の内容を、逆算画面は候補カード(`ReverseCandidate`)の中に
+  同じ形で出す(engine の順のまま、並べ替え・重複除去なし。ADR-0300 §8)。印が1件でもある行・候補が
+  1つでもあれば一覧先頭に `role="status"` の案内を1つ(issue 305 の作法どおり)。バッジの文字は
+  「未対応」、アイコン(⚠)は `aria-hidden="true"` の装飾のみで意味を持たせず、色は `--danger` の範囲。
+  CSS は `CalcScreen.css`・`ReverseScreen.css` に追加(常時アニメーションなし)。
+  `npx vitest run` 1652件 green(spec-writer時点の1642 passed/10 failedから全green化)・
+  `npm run typecheck` green・`npm run lint`(eslint + prettier)green・`make wasm` 後
+  `npm run e2e` 37件 green。critic PASS 済み。
+  **クロスプラットフォーム決定への追従(2026-09-25。implementer)**: critic PASS 後、iOS レーンのレビューで
+  文言・置き場所・色のクロスプラットフォーム決定(docs/ai-shared/DECISIONS.md 2026-09-25「未対応の印の表示」、
+  ADR-0501「P6-17」)が追加されたため、それに合わせて再修正した。(1) 置き場所:
+  `web/src/domain/unsupportedLabels.ts` に `splitUnsupportedMarks` を新設し、印の内容(target・reason・id)
+  が**全行(全候補)にあるかどうか**で振り分ける形に変更(technicalな target で決め打ちせず、行ごとに
+  常に一覧を出していた旧実装を置き換え)。全行共通の印は結果・候補一覧の先頭に1回、残りはその行・候補だけに
+  出す。(2) 色: `--danger` → 既存の補足文と同じ `--text-secondary`・`--font-size-caption`。(3) 文言:
+  `unsupportedText`(`web/src/i18n/ja.ts`)を全面的に書き直し、`notice`/`rowLabel` を配列を受け取る関数にし、
+  `markLabel` を iOS と同じ `<対象>「<名前>」(<理由>)` 書式(`unsupported_effect` は括弧省略)にした。
+  reason 15 種の文言も iOS の表記に揃え、alt_offense_stat/alt_defense_stat/effectiveness_change に
+  「特殊」を使わない(iOS critic 指摘の適用)。critic の軽微な指摘2件(装飾アイコンの aria-hidden の直接
+  回帰テスト、ReverseScreen で issue #305 の `noExactCandidateNotice` と本件の `notice` が同時に出て
+  独立に共存することの固定テスト)も対応。テストは削除・弱化ではなく新仕様に合わせて書き換え・強化
+  (`splitUnsupportedMarks` 用に `web/src/domain/unsupportedLabels.test.ts` を新設)。
+  `npx vitest run` 1674件 green・`npm run typecheck` green・`npm run lint`(eslint + prettier)green・
+  `make wasm` 後 `npm run e2e` 37件 green。docs/design.md「画面: ダメージ計算」「画面: 逆算」・
+  docs/ai-shared/DECISIONS.md も更新済み。
+  **Next(critic)**: 再レビュー待ち。
+- [ ] 判定画面(JD5 `JudgeScreen`)の「未対応」の印への追従(issue #271 / #270 の判定レーン分。**上の
+  Web レーンの PR の対象外**)。judge の契約は計算・逆算と別の形(`attackerKoUnsupported` /
+  `defenderKoUnsupported`。ADR-0708 §1・`web/src/judge/judge.gen.ts`)なので、別タスクとして進める。
+  文言(`unsupportedText`)と表示の作法(色だけに頼らない・`role="status"` の案内)は上のものを再利用する。
 
 ## M2: 保存・構築
 
@@ -1073,12 +1132,20 @@
   Web の例データ(`exportSnapshot.ts`)に `mechanisms: []` を追加(Web は `unsupported` をまだ受け取らない
   設計のまま。`mapCalcResult` 等の明示的フィールド写像により自動的に弾かれる。issue #67 の前方互換どおり)。
   データレーン・Web レーン・iOS レーンへ連絡済み(iOS は生成物の再生成が必要)
-- [ ] issue #274/#272(iOS レーンからの提案。DECISIONS.md 2026-09-25)の API レーン担当分: `BulkCalcRequest` に
-  `defenderOverride: { abilityId?, ranks?: RankBlock, status?: StatusCondition }`(全行に一律で上書き)を追加する。
-  iOS(PR #377)は攻撃側のランク・特性・天候・フィールド・防御側の壁までは実装済みだが、防御側のランク・特性・
-  状態異常は契約に上書き手段が無く未実装のまま(範囲外として明記)。engine 側の変更(`BulkInput` へのオーバーライド
-  追加。プリセット解決後・計算前に当てる)を伴うため ADR-0003 の test-first + 独立 critic の対象。
-  **急ぎではない(iOS レーン明記)。M2(P5-3・P5-4)の後に着手する**。入ったら iOS・Web へ連絡(追従は各レーン)
+- [x] issue #274/#272(iOS レーンからの提案。DECISIONS.md 2026-09-25)の API レーン担当分のうち **abilityId**:
+  `BulkCalcRequest.defenderOverride.abilityId`(ADR-0126・ADR-0214)。データレーンが engine 側
+  (`BulkInput.DefenderAbilities`・`ReverseInput.UnknownAbilities`。PR #402)を実装済みで、API レーンは
+  `defenderOverride.abilityId`(既に採用済みの概念)をその1件として渡す配線と、`ReverseRequest.unknownAbilityId`
+  (新規)・`BulkCalcRow`/`ReverseCandidate` への `abilityId`/`abilityIds`(必須)を実装。省略時は種族の全特性
+  (最大3件。4件目は Showdown の特殊枠 `"S"` として落とす。ADR-0105 §5 と同じ判断)を解決して渡すため、
+  1つしか特性を持たない種族は必ずその特性が効くようになる(issue の境界値の受け入れ条件を満たす)。
+  一括計算・逆算の行数/候補数の上限(ADR-0208)が特性分岐で最大3倍まで増えうることを openapi.yaml と
+  ADR-0208 に追記。critic レビュー予定。**残り(ranks・status の上書き)は別タスクとして残す**(このタスクの
+  スコープ外。abilityId とは独立に追加できる)。入ったら iOS・Web へ連絡(生成物の再生成・追従は各レーン)
+- [ ] issue #274/#272 の API レーン担当分の残り: `defenderOverride.ranks: RankBlock` / `defenderOverride.status:
+  StatusCondition`(全行に一律で上書き)。abilityId(上記)とは独立に追加できる。engine 側の変更
+  (`BulkInput`/`ReverseInput` へのオーバーライド追加。プリセット解決後・計算前に当てる)を伴うため
+  ADR-0003 の test-first + 独立 critic の対象。優先度は低い(iOS レーンから「急ぎではない」と明記済み)
 - [x] issue #110(セキュリティ。Codex レビュー)の API レーン担当分: `POST /api/calc/bulk`・`/api/calc/reverse` の候補・観測配列に件数上限が無く、1MiB未満の小さな本文で計算量を増幅できた(2,000×2,000 で約9.4秒)。契約(`maxItems`/`uniqueItems`/`maximum`。ADR-0208)を追加し、calc-svc の生成ラッパは検証しないため(実測確認済み)自前検証をID解決・engine呼び出しより前に実装。critic PASS、実HTTPで境界値と再現手順の解消(0.9ms・engine未到達)を確認。engine/wasmapi(データレーン)・Web・iOSへの追従は DECISIONS.md に既定案付きで依頼(issue はレーンの完了までクローズしない)
 - [x] issue #110 のデータレーン担当分: `engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ件数・範囲の上限(presets 8・itemVariants 64・itemCandidates 64・observations 16・maxCandidates 0..128)を追加(ADR-0108)。HTTP を経由しない直接呼び出し・WASM でも計算量を増幅できないようにした。wasmapi は DTO 変換より前に同じ検査を重ねて置き、複数の違反が重なっても HTTP と同じ `invalid_input` が先に出るようにした(parity)。`MaxCandidates` の負の値は、従来「無制限」扱いだったのを ADR-0208 の契約(`minimum: 0`)に合わせて拒否するよう変更(既存テストの期待値を更新。理由は ADR-0108 決定4)。critic PASS(1往復)。Web・iOS の追従(観測16件でUI無効化・持ち物候補64件超の扱い)は ADR-0208 §4 のまま未着手
 - [x] issue #148(クラウド公開前のアクセス境界・認証方針。ユーザー決定「私設サービスを維持する」)の API レーン担当分: `deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定(ADR-0210)。TLS 終端は gateway/クラスタの Ingress では行わず Tailscale(`tailscale serve`)に任せる方針を決定。端末IDが認証として機能しないこと・CORSが到達制御でないことの回帰テストを追加(`TestDeviceIDIsNotAuthentication`・`TestCORSIsNotAccessControl`・`TestContractHasNoAuthentication`)。`base`のgateway Ingress本体は local(k3d)専用として残し、先頭コメントで明記。ADR-0209 §1(クラウド公開へ進む判断)は「公開しない」で確定した旨を追記。critic PASS。運用(tailnet ACL・失効手順のrunbook)・Web/iOS(接続先をtailnet名に)への依頼はDECISIONS.mdに既定案付きで記録(issue はレーンの完了までクローズしない)

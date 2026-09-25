@@ -1848,3 +1848,61 @@ Web レーンはこの文言に従う(依頼元との合意どおり)。詳細�
 Reason: iOS レーンへの依頼(このタスクの指示)どおり、iOS が先に既定案を決めて共有する運用(既存のレーン間の「既定案で進む」原則と同じ)。
 Impact: iOS は `PokeCalcCore.AboutText`(`unofficialNotice`/`dataSources`)にこの文言を1か所持つ(実装は implementer が TODO(implementer) を埋める形で行う。spec 時点ではプレースホルダで `swift test` は新規テストのみ失敗)。
 Web レーンはこの文言・出典の範囲(4件)をそのまま使ってよい。出典を追加・削除する場合は、docs/adr/0002-master-data-source.md の責務分離表・ADR-0501「P6-18」3章・このエントリ・両レーンの実装コードを同時に直すこと(勝手に増減しない)。
+
+## 2026-09-25: issue 272 の API レーン担当分(defenderOverride.abilityId・unknownAbilityId)を実装(API レーン → データ・Web・iOS レーンへ)
+Decision: データレーンの依頼(ADR-0126・PR #402)を反映した(ADR-0214)。
+`api/openapi.yaml`: 新規スキーマ `DefenderOverride { abilityId?: string }` を `BulkCalcRequest.defenderOverride`
+に追加(既存の採用済み概念〈2026-09-25「issue #274/#272 の防御側の詳細」〉のabilityId部分のみを実装。
+ranks/statusは別タスクとして残す)。`ReverseRequest.unknownAbilityId?: string` を新設。`BulkCalcRow`
+(`BulkCalcRow.result`経由ではなく行自体)・`ReverseCandidate` に `abilityId`(必須)・`abilityIds`(必須。
+`minItems: 1`)を追加。
+`services/calc/internal/httpapi/convert.go`: `resolveAbilityCandidates` を新設。指定があれば`store.Ability`
+で解決した1件、無ければ `species.Abilities`(スロット順)の先頭 `engine.MaxAbilityCandidates`(3)件を解決する。
+**4件目(Showdown の特殊枠 `"S"`。ADR-0100 §3)は落とす**(ADR-0105 §5と同じ判断。理由: engineの上限3を
+超えると`ErrInvalidAbilityCandidates`で常に失敗し、4件持つ種族の一括計算・逆算が既定のまま使えなくなる
+regressionを防ぐため)。マスタに無いIDは`unknown_ability`、種族が持たない特性は`invalid_input`(engineの
+`abilityCandidates`の検証結果をそのまま写す)。
+HTTP/WASMパリティテスト(`parity_test.go`)は、HTTPが既定で特性を渡すようになったため、WASM側のテスト入力
+にも同じ既定の特性を渡すよう更新(`wasmAbilitiesForSpecies`)。新規テスト
+`services/calc/internal/httpapi/ability_candidates_test.go`(4特性中1つだけ効果を持つ架空種族で、既定の
+切り詰め・override・エラー2種を一括計算・逆算の両方で固定。mutation testingで確認済み)。
+一括計算・逆算の行数/候補数の上限(ADR-0208)が特性分岐で最大3倍(一括512→1536行・逆算128→384件)まで
+増えうることをopenapi.yaml・ADR-0208に追記(クライアントが直接増幅できる経路ではないことを確認済み)。
+Reason: 1対1の計算では正しく効く防御側の特性(無効・吸収・軽減)が一括計算・逆算では常にゼロ値だった
+バグ(issue 272)を、契約側から解消する。
+Impact: **Web・iOSへ**: `BulkCalcRow`・`ReverseCandidate`の応答にabilityId/abilityIdsが必須で増える
+(生成物の再生成が必要)。特性が効く技では一括計算・逆算の行数/候補数が増える(意図した挙動)。防御側/相手側の
+特性を選べる画面はADR-0126の依頼どおり各レーンの担当(急ぎではない)。**データレーンへ**: API レーン担当分は
+critic レビュー待ち。issue 272 のclose判断はデータレーンに委ねる。**残作業**: `defenderOverride.ranks`/
+`status`は別タスク(plan.md参照。優先度低)。次は issue #284(balance/speed/judgeのgateway集約)に着手する。
+
+## 2026-09-25: issue #271/#270 の Web レーン実装を、iOS レーンのクロスプラットフォーム決定に合わせた(Web レーン)
+Decision: 上の「未対応の印の表示(文言・置き場所)を決めた」の Impact「Web レーンへ」を受けて、
+`feat/web-unsupported-marks-271-270`(critic PASS 後の再修正)を次のとおり iOS レーンの決定に揃えた。
+1. **置き場所**: `hasUnsupported = rows.some(...)` + 行ごとに常に印一覧、という実装(technicalな target で
+   決め打ちせず、行ごとに繰り返す設計)から、`web/src/domain/unsupportedLabels.ts` に新設した
+   `splitUnsupportedMarks`(印の内容〈target・reason・id〉が全行〈全候補〉にあるかどうかで判定)に置き換えた。
+   全行共通の印は結果・候補一覧の先頭に1回、残りはその行・候補だけに出す。CalcScreen.tsx・ReverseScreen.tsx
+   の両方で共有する。
+2. **色**: `--danger` を `--text-secondary`・`--font-size-caption`(既存の補足文と同じトークン)に変更
+   (`CalcScreen.css`・`ReverseScreen.css`)。
+3. **文言**: `web/src/i18n/ja.ts` の `unsupportedText` を全面的に書き直した。`notice`/`rowLabel` は
+   markLabel 済みの文言の配列を受け取り、iOS と同じ書式(結果の上「この結果は正確でない可能性があります
+   (未対応: <印>、<印>)」、行・候補「未対応: <印>、<印>」)を組み立てる関数にした。`markLabel` は
+   `<対象>「<名前>」(<理由>)`(reason が `unsupported_effect` のときは括弧を省く)。reason 15 種の文言を
+   iOS の表記(DisplayLabels.swift)に合わせ、alt_offense_stat・alt_defense_stat・effectiveness_change に
+   「特殊」を使わない(iOS critic 指摘を Web にも適用)。旧 `badgeLabel`/`listLabel` は廃止し、
+   `unsupportedText.reason`/`target` のキー・件数は変えていない(契約の enum と1対1)。
+critic からの軽微な指摘2件も合わせて対応: (1) 装飾アイコン(⚠)が `aria-hidden="true"` であることを直接
+検証する回帰テストを追加(`data-testid="unsupported-icon"` を新設)。(2) ReverseScreen で issue #305 の
+`noExactCandidateNotice`(role=status)と本タスクの `unsupportedText.notice`(role=status)が同時に出て、
+互いに独立した別要素として共存することを固定するテストを追加。
+`docs/design.md`「画面: ダメージ計算」「画面: 逆算」の該当箇所も置き場所・色の記述を更新した。
+`npx vitest run` 1674件 green・`npm run typecheck` green・`npm run lint`(eslint + prettier)green・
+`make wasm` 後 `npm run e2e` 37件 green。
+Reason: iOS レーンの決定(上のエントリの Impact)。技の印は全行に付くことが多く、行ごとに繰り返すと
+同じ文言が何度も並ぶ(iOS の指摘どおり Web でも同じ問題が起きる設計だった)。数値は通常の式の目安であり
+エラーではないため警告色にしない、という判断もクロスプラットフォームで揃える方が利用者の理解を助ける。
+Impact: 判定レーン(JD5 `JudgeScreen` の追従。docs/plan.md 未着手タスク)は、この Web の書式・
+`splitUnsupportedMarks` の考え方(全行共通 vs 個別)を踏襲してよい。iOS レーンへは特に追加の申し送りなし
+(Web 側が iOS の決定に合わせただけで、契約・iOS 側の変更は無い)。

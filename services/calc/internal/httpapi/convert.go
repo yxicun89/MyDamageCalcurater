@@ -170,6 +170,37 @@ func (s *Server) resolveMove(id string) (engine.Move, error) {
 	return mv, nil
 }
 
+// resolveAbilityCandidates は特性の候補を解決する(issue 272。ADR-0126・ADR-0214)。
+// overrideID が指定されていればその1件だけを返す(種族が持つかどうかは engine.CalcBulk/CalcReverse の
+// abilityCandidates が検証し、ErrInvalidAbilityCandidates を invalid_input に写す。errors.go 参照)。
+// 省略時は species.Abilities(スロット順)から先頭 engine.MaxAbilityCandidates 件を候補にする
+// (4件目がある種族は Showdown の特殊枠 "S" を落とす。ADR-0105 §5 と同じ判断)。
+// species.Abilities の各 ID がマスタに無いことは起きない(buildSpecies が起動時に検証済み)。
+// label は overrideID 解決失敗時のエラーメッセージにそのまま使うフィールド名(呼び出し側が
+// "defenderOverride.abilityId"/"unknownAbilityId" 等、末尾に ".abilityId" を含む完全な形で渡すこと)。
+func (s *Server) resolveAbilityCandidates(label string, species engine.Species, overrideID *string) ([]engine.Ability, error) {
+	if overrideID != nil {
+		a, ok := s.store.Ability(*overrideID)
+		if !ok {
+			return nil, newError(api.UnknownAbility, "%s が見つからない: %q", label, *overrideID)
+		}
+		return []engine.Ability{a}, nil
+	}
+	ids := species.Abilities
+	if len(ids) > engine.MaxAbilityCandidates {
+		ids = ids[:engine.MaxAbilityCandidates]
+	}
+	out := make([]engine.Ability, 0, len(ids))
+	for _, id := range ids {
+		a, ok := s.store.Ability(id)
+		if !ok {
+			return nil, newError(api.Internal, "%s: マスタの不整合(種族の特性 %q が特性一覧に無い)", label, id)
+		}
+		out = append(out, a)
+	}
+	return out, nil
+}
+
 // resolveItems は持ち物 ID の配列(null は持ち物なし)を解決する。省略(nil)は nil のまま返す
 // (engine 側が「持ち物なしの1通り」に既定するため。ADR-0200)。
 func (s *Server) resolveItems(label string, ids *[]*string) ([]*engine.Item, error) {
@@ -309,7 +340,7 @@ func (s *Server) bulkResultFrom(res engine.BulkResult) api.BulkCalcResult {
 				Sp: statBlockFrom(row.Defender.SP), Nature: natureModifierFrom(row.Defender.Nature),
 				NatureId: natureID, Stats: statBlockFrom(engine.RealStats(row.Defender)),
 			},
-			Result: calcResultFrom(row.Result),
+			Result: calcResultFrom(row.Result), AbilityId: row.Ability.ID, AbilityIds: row.AbilityIDs,
 		})
 	}
 	return api.BulkCalcResult{DefenderSpeciesKey: res.DefenderSpeciesKey, Rows: rows}
@@ -336,7 +367,7 @@ func (s *Server) reverseResultFrom(res engine.ReverseResult) api.ReverseResult {
 			NatureClass: api.NatureClass(c.NatureClass), Nature: natureModifierFrom(c.Nature), NatureId: natureID,
 			ItemId: itemID, Ranges: ranges, SpCount: c.SPCount, Exact: c.Exact, Mismatch: c.Mismatch, Support: c.Support,
 			MinPercent: percentFromTenths(c.MinPercentTenths), MaxPercent: percentFromTenths(c.MaxPercentTenths),
-			Unsupported: unsupportedFrom(c.Unsupported),
+			Unsupported: unsupportedFrom(c.Unsupported), AbilityId: c.Ability.ID, AbilityIds: c.AbilityIDs,
 		})
 	}
 	return api.ReverseResult{

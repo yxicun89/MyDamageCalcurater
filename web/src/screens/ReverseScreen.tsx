@@ -53,7 +53,9 @@ import {
   reverseGuideNames,
   reverseItemLabel,
 } from "../domain/reverseLabels";
+import { splitUnsupportedMarks, unsupportedMarkLabels } from "../domain/unsupportedLabels";
 import type {
+  Ability,
   CalcEngine,
   EngineError,
   EngineResult,
@@ -70,6 +72,7 @@ import {
   requestLimitText,
   reverseResultText,
   reverseScreenText,
+  unsupportedText,
 } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type {
@@ -674,6 +677,8 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
       <ResultsSection
         outcome={outcome}
         items={master.items}
+        moves={master.moves}
+        abilities={master.abilities}
         narrowing={narrowing}
         onNarrowingAnimationEnd={handleNarrowingAnimationEnd}
       />
@@ -1045,6 +1050,9 @@ function ObservationRowView({
 interface ResultsSectionProps {
   readonly outcome: Outcome;
   readonly items: readonly Item[];
+  /** 「未対応」の印(ADR-0123)の ID を表示名に解決するためのマスタ。 */
+  readonly moves: readonly Move[];
+  readonly abilities: readonly Ability[];
   /** 観測を2件以上入れて届いた結果の「絞り込み」演出(design.md「画面: 逆算」)。 */
   readonly narrowing: boolean;
   readonly onNarrowingAnimationEnd: (event: AnimationEvent<HTMLUListElement>) => void;
@@ -1054,6 +1062,8 @@ interface ResultsSectionProps {
 function ResultsSection({
   outcome,
   items,
+  moves,
+  abilities,
   narrowing,
   onNarrowingAnimationEnd,
 }: ResultsSectionProps): ReactElement | null {
@@ -1080,6 +1090,8 @@ function ResultsSection({
         <ReverseResultsList
           result={outcome.result}
           items={items}
+          moves={moves}
+          abilities={abilities}
           narrowing={narrowing}
           onNarrowingAnimationEnd={onNarrowingAnimationEnd}
         />
@@ -1095,19 +1107,46 @@ function ResultsSection({
 interface ReverseResultsListProps {
   readonly result: ReverseResult;
   readonly items: readonly Item[];
+  readonly moves: readonly Move[];
+  readonly abilities: readonly Ability[];
   readonly narrowing: boolean;
   readonly onNarrowingAnimationEnd: (event: AnimationEvent<HTMLUListElement>) => void;
 }
 
 /** 候補一覧(ADR-0300 §8: engine の順のまま、加工せずに表示)。防御側は H32 前提の注記を添える。 */
-function ReverseResultsList({ result, items, narrowing, onNarrowingAnimationEnd }: ReverseResultsListProps) {
+function ReverseResultsList({
+  result,
+  items,
+  moves,
+  abilities,
+  narrowing,
+  onNarrowingAnimationEnd,
+}: ReverseResultsListProps) {
   const assumptionNote = reverseAssumptionNote(result);
   const listClassName = `reverse-results__list${narrowing ? " is-narrowing" : ""}`;
   // issue 305: 観測を厳密に説明できる候補(exact)が1件も無いとき(exactCount 0 かつ候補が1件以上)。
   // 判定は engine が返した exactCount をそのまま使う(ADR-0300 §8: TS 側で再判定しない)。
   const hasNoExactCandidate = result.exactCount === 0 && result.candidates.length > 0;
+  // issue 271 / issue 270(ADR-0123。iOS レーンの決定 DECISIONS.md 2026-09-25「未対応の印の表示」に揃える):
+  // 全候補に共通する印は候補一覧の先頭に1回、残りはその候補だけに出す(CalcScreen.tsx の ResultsList と同じ形)。
+  const { common: commonMarks, perRow: perCandidateMarks } = splitUnsupportedMarks(
+    result.candidates.map((candidate) => candidate.unsupported),
+  );
+  const commonMarkLabels = unsupportedMarkLabels(commonMarks, moves, items, abilities);
   return (
     <div className="reverse-results">
+      {commonMarkLabels.length > 0 && (
+        <p role="status" className="reverse-results__unsupported-notice">
+          <span
+            aria-hidden="true"
+            data-testid="unsupported-icon"
+            className="reverse-results__unsupported-icon"
+          >
+            ⚠
+          </span>
+          <span>{unsupportedText.notice(commonMarkLabels)}</span>
+        </p>
+      )}
       {hasNoExactCandidate && (
         <p role="status" className="reverse-results__no-exact-notice">
           {reverseResultText.noExactCandidateNotice}
@@ -1125,6 +1164,13 @@ function ReverseResultsList({ result, items, narrowing, onNarrowingAnimationEnd 
             result.stat,
             candidate.natureClass,
             candidate.ranges,
+          );
+          // 全候補に共通する印は先頭の案内が担うので、この候補では残り(一部の候補だけにある印)だけ出す。
+          const candidateMarkLabels = unsupportedMarkLabels(
+            perCandidateMarks[index] ?? [],
+            moves,
+            items,
+            abilities,
           );
           return (
             <li
@@ -1155,6 +1201,18 @@ function ReverseResultsList({ result, items, narrowing, onNarrowingAnimationEnd 
                 </span>
                 <span className="reverse-results__percent-value">{formatPercentRange(candidate)}</span>
               </span>
+              {candidateMarkLabels.length > 0 && (
+                <p className="reverse-results__unsupported">
+                  <span
+                    aria-hidden="true"
+                    data-testid="unsupported-icon"
+                    className="reverse-results__unsupported-icon"
+                  >
+                    ⚠
+                  </span>
+                  <span>{unsupportedText.rowLabel(candidateMarkLabels)}</span>
+                </p>
+              )}
             </li>
           );
         })}

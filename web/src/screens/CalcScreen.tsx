@@ -35,7 +35,9 @@ import {
   defenderItemVariants,
   defensiveItemCandidates,
 } from "../domain/requests";
+import { splitUnsupportedMarks, unsupportedMarkLabels } from "../domain/unsupportedLabels";
 import type {
+  Ability,
   BulkResult,
   BulkRow,
   CalcEngine,
@@ -45,7 +47,14 @@ import type {
   Move,
   MoveCategory,
 } from "../engine/types";
-import { calcScreenText, isTypeId, masterOnlineText, requestLimitText, typeNameJa } from "../i18n/ja";
+import {
+  calcScreenText,
+  isTypeId,
+  masterOnlineText,
+  requestLimitText,
+  typeNameJa,
+  unsupportedText,
+} from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type {
   MasterData,
@@ -610,6 +619,8 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
       <ResultsSection
         outcome={outcome}
         items={master.items}
+        moves={master.moves}
+        abilities={master.abilities}
         moveType={move?.type}
         pulsingKeys={pulsingKeys}
         onKoAnimationEnd={handleKoAnimationEnd}
@@ -864,6 +875,9 @@ function MoveSelect({ moves, value, onChange, disabled = false }: MoveSelectProp
 interface ResultsSectionProps {
   readonly outcome: Outcome;
   readonly items: readonly Item[];
+  /** 「未対応」の印(ADR-0123)の ID を表示名に解決するためのマスタ。 */
+  readonly moves: readonly Move[];
+  readonly abilities: readonly Ability[];
   /** ダメージバーの色に使う、選ばれている技のタイプ(design.md: バーは技のタイプ色)。 */
   readonly moveType: string | undefined;
   /** 確定数が変わって弾ませる行のキー(koRowKey)の集合(design.md「動き」)。 */
@@ -878,6 +892,8 @@ interface ResultsSectionProps {
 function ResultsSection({
   outcome,
   items,
+  moves,
+  abilities,
   moveType,
   pulsingKeys,
   onKoAnimationEnd,
@@ -904,6 +920,8 @@ function ResultsSection({
         <ResultsList
           result={outcome.result}
           items={items}
+          moves={moves}
+          abilities={abilities}
           moveType={moveType}
           pulsingKeys={pulsingKeys}
           onKoAnimationEnd={onKoAnimationEnd}
@@ -921,6 +939,8 @@ function ResultsSection({
 interface ResultsListProps {
   readonly result: BulkResult;
   readonly items: readonly Item[];
+  readonly moves: readonly Move[];
+  readonly abilities: readonly Ability[];
   readonly moveType: string | undefined;
   readonly pulsingKeys: ReadonlySet<string>;
   readonly onKoAnimationEnd: (key: string) => (event: AnimationEvent<HTMLSpanElement>) => void;
@@ -934,14 +954,38 @@ const DAMAGE_BAR_MAX_PERCENT = 100;
  * 持ち物のバリアントが変わっても同じ値になる(防御側の種族・技のタイプだけで決まる)ため、行ごとに
  * 繰り返さず、結果全体の先頭行の値を1回だけ表示する。
  */
-function ResultsList({ result, items, moveType, pulsingKeys, onKoAnimationEnd }: ResultsListProps) {
+function ResultsList({
+  result,
+  items,
+  moves,
+  abilities,
+  moveType,
+  pulsingKeys,
+  onKoAnimationEnd,
+}: ResultsListProps) {
   const firstRow = result.rows[0];
   const barColor =
     moveType === undefined || moveType === ""
       ? "var(--text-secondary)"
       : `var(--type-${moveType}, var(--text-secondary))`;
+  // issue 271 / issue 270(ADR-0123。iOS レーンの決定 DECISIONS.md 2026-09-25「未対応の印の表示」に揃える):
+  // 全行に共通する印は結果の先頭に1回、残りはその行だけに出す(technicalな target で決め打ちせず、
+  // 印の内容〈target・reason・id〉が全行にあるかで判定する。ADR-0300 §8: TS 側で数値・判定を加工しない、
+  // ここは「どこに出すか」の割り振りだけを行う)。
+  const { common: commonMarks, perRow: perRowMarks } = splitUnsupportedMarks(
+    result.rows.map((row) => row.result.unsupported),
+  );
+  const commonMarkLabels = unsupportedMarkLabels(commonMarks, moves, items, abilities);
   return (
     <div className="calc-results">
+      {commonMarkLabels.length > 0 && (
+        <p role="status" className="calc-results__unsupported-notice">
+          <span aria-hidden="true" data-testid="unsupported-icon" className="calc-results__unsupported-icon">
+            ⚠
+          </span>
+          <span>{unsupportedText.notice(commonMarkLabels)}</span>
+        </p>
+      )}
       {firstRow !== undefined && (
         <p className="calc-results__effectiveness">
           <strong>{formatEffectiveness(firstRow.result.effectiveness)}</strong>
@@ -956,6 +1000,8 @@ function ResultsList({ result, items, moveType, pulsingKeys, onKoAnimationEnd }:
           const barValue = Math.min(row.result.maxPercent, DAMAGE_BAR_MAX_PERCENT);
           const koKey = koRowKey(row);
           const koClassName = `calc-results__ko${pulsingKeys.has(koKey) ? " is-pulsing" : ""}`;
+          // 全行に共通する印は先頭の案内が担うので、この行では残り(一部の行だけにある印)だけ出す。
+          const rowMarkLabels = unsupportedMarkLabels(perRowMarks[index] ?? [], moves, items, abilities);
           return (
             // preset・itemId の組は行内で一意ではない場合がある(同じ preset で持ち物違い)ため index も足す。
             <li key={`${row.preset}-${row.itemId}-${String(index)}`} className="calc-results__row">
@@ -972,6 +1018,18 @@ function ResultsList({ result, items, moveType, pulsingKeys, onKoAnimationEnd }:
                   style={{ width: `${String(barValue)}%`, backgroundColor: barColor }}
                 />
               </div>
+              {rowMarkLabels.length > 0 && (
+                <p className="calc-results__unsupported">
+                  <span
+                    aria-hidden="true"
+                    data-testid="unsupported-icon"
+                    className="calc-results__unsupported-icon"
+                  >
+                    ⚠
+                  </span>
+                  <span>{unsupportedText.rowLabel(rowMarkLabels)}</span>
+                </p>
+              )}
             </li>
           );
         })}

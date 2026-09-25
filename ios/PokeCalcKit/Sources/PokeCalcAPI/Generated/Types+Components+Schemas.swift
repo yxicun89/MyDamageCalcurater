@@ -1059,6 +1059,31 @@ extension Components {
             case hd = "hd"
             case hdFull = "hd_full"
         }
+        /// 防御側の上書き(issue 272。ADR-0126・ADR-0214)。省略した項目は上書きしない。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/DefenderOverride`.
+        public struct DefenderOverride: Codable, Hashable, Sendable {
+            /// 防御側の特性を1つに固定する。省略時は防御側の種族が持つ特性(最大3件。4件目がある種族は
+            /// Showdown の特殊枠 `"S"` を落とす。ADR-0105 §5 と同じ判断)をすべて候補として計算し、
+            /// 結果が完全に同じになる特性は1行にまとめ、違うときだけ行を分ける(ADR-0126)。
+            /// 指定した特性をその種族が持たない場合は 400 `invalid_input`、マスタに無い ID は
+            /// 400 `unknown_ability`。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/DefenderOverride/abilityId`.
+            public var abilityId: Swift.String?
+            /// Creates a new `DefenderOverride`.
+            ///
+            /// - Parameters:
+            ///   - abilityId: 防御側の特性を1つに固定する。省略時は防御側の種族が持つ特性(最大3件。4件目がある種族は
+            public init(abilityId: Swift.String? = nil) {
+                self.abilityId = abilityId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case abilityId
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/BulkCalcRequest`.
         public struct BulkCalcRequest: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/BulkCalcRequest/format`.
@@ -1073,6 +1098,8 @@ extension Components {
             public var field: Components.Schemas.FieldState?
             /// - Remark: Generated from `#/components/schemas/BulkCalcRequest/options`.
             public var options: Components.Schemas.CalcOptions?
+            /// - Remark: Generated from `#/components/schemas/BulkCalcRequest/defenderOverride`.
+            public var defenderOverride: Components.Schemas.DefenderOverride?
             /// 使う防御側プリセットと行の順序。省略と空配列(`[]`)は同じで、技の分類に応じた既定セットになる。
             /// 物理技は 5 件(none, hp, hb_boost, hb, hb_full)、
             /// 特殊技は 5 件(none, hp, hd_boost, hd, hd_full)、
@@ -1087,7 +1114,9 @@ extension Components {
             public var presets: [Components.Schemas.DefenderPreset]?
             /// 差し替えて比較する持ち物 ID(省略時は素の1通り)。null 要素は「持ち物なし」。
             /// 65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
-            /// 行数は `len(presets) × len(itemVariants)` なので、上限は 8 × 64 = 512 行。
+            /// 行の基本数は `len(presets) × len(itemVariants)`(上限 8 × 64 = 512)。特性ごとに結果が違う
+            /// ときだけ、その基本数のうち最大3倍(特性の候補数。ADR-0126・ADR-0214)まで行が分かれる。
+            /// 結果が同じ特性は1行にまとまるため、特性が効かない技では行数は変わらない。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/BulkCalcRequest/itemVariants`.
@@ -1101,6 +1130,7 @@ extension Components {
             ///   - moveId:
             ///   - field:
             ///   - options:
+            ///   - defenderOverride:
             ///   - presets: 使う防御側プリセットと行の順序。省略と空配列(`[]`)は同じで、技の分類に応じた既定セットになる。
             ///   - itemVariants: 差し替えて比較する持ち物 ID(省略時は素の1通り)。null 要素は「持ち物なし」。
             public init(
@@ -1110,6 +1140,7 @@ extension Components {
                 moveId: Swift.String,
                 field: Components.Schemas.FieldState? = nil,
                 options: Components.Schemas.CalcOptions? = nil,
+                defenderOverride: Components.Schemas.DefenderOverride? = nil,
                 presets: [Components.Schemas.DefenderPreset]? = nil,
                 itemVariants: [Swift.String?]? = nil
             ) {
@@ -1119,6 +1150,7 @@ extension Components {
                 self.moveId = moveId
                 self.field = field
                 self.options = options
+                self.defenderOverride = defenderOverride
                 self.presets = presets
                 self.itemVariants = itemVariants
             }
@@ -1129,6 +1161,7 @@ extension Components {
                 case moveId
                 case field
                 case options
+                case defenderOverride
                 case presets
                 case itemVariants
             }
@@ -1149,6 +1182,16 @@ extension Components {
             public var defender: Components.Schemas.BulkDefender
             /// - Remark: Generated from `#/components/schemas/BulkCalcRow/result`.
             public var result: Components.Schemas.CalcResult
+            /// この行の計算に使った防御側の特性(ADR-0126・ADR-0214)。種族は必ず1件以上の特性を持つため
+            /// 常に入る。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/BulkCalcRow/abilityId`.
+            public var abilityId: Swift.String
+            /// この行と結果が完全に同じになる特性の ID(abilityId が先頭。渡した/解決した順)。
+            ///
+            /// - Remark: Generated from `#/components/schemas/BulkCalcRow/abilityIds`.
+            public var abilityIds: [Swift.String]
             /// Creates a new `BulkCalcRow`.
             ///
             /// - Parameters:
@@ -1157,18 +1200,24 @@ extension Components {
             ///   - itemId: この行の防御側の持ち物(持ち物なしは null)
             ///   - defender:
             ///   - result:
+            ///   - abilityId: この行の計算に使った防御側の特性(ADR-0126・ADR-0214)。種族は必ず1件以上の特性を持つため
+            ///   - abilityIds: この行と結果が完全に同じになる特性の ID(abilityId が先頭。渡した/解決した順)。
             public init(
                 preset: Components.Schemas.DefenderPreset,
                 presetLabel: Swift.String,
                 itemId: Swift.String? = nil,
                 defender: Components.Schemas.BulkDefender,
-                result: Components.Schemas.CalcResult
+                result: Components.Schemas.CalcResult,
+                abilityId: Swift.String,
+                abilityIds: [Swift.String]
             ) {
                 self.preset = preset
                 self.presetLabel = presetLabel
                 self.itemId = itemId
                 self.defender = defender
                 self.result = result
+                self.abilityId = abilityId
+                self.abilityIds = abilityIds
             }
             public enum CodingKeys: String, CodingKey {
                 case preset
@@ -1176,6 +1225,8 @@ extension Components {
                 case itemId
                 case defender
                 case result
+                case abilityId
+                case abilityIds
             }
         }
         /// 性格補正の構造値。plus が +10%、minus が -10% を受ける能力。無補正は両方 null。
@@ -1462,6 +1513,14 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/unknownSpeciesKey`.
             public var unknownSpeciesKey: Components.Schemas.ReverseRequest.UnknownSpeciesKeyPayload
+            /// 相手の特性を1つに固定する(issue 272。ADR-0126・ADR-0214)。省略時は相手の種族が持つ特性
+            /// (最大3件。BulkCalcRequest.defenderOverride.abilityId と同じ既定)をすべて候補にする。
+            /// 指定した特性をその種族が持たない場合は 400 `invalid_input`、マスタに無い ID は
+            /// 400 `unknown_ability`。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseRequest/unknownAbilityId`.
+            public var unknownAbilityId: Swift.String?
             /// 観測したときの技(side=defender なら自分の技、attacker なら相手の技)
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/moveId`.
@@ -1483,8 +1542,11 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/observations`.
             public var observations: [Components.Schemas.Observation]
-            /// 返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(上限は
-            /// 2 性格クラス × 64 itemCandidates = 128 件)。負の値と 129 以上は 400 `invalid_input`。
+            /// 返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(特性の候補分岐〈ADR-0126・
+            /// ADR-0214〉により最大 2 性格クラス × 3 特性グループ × 64 itemCandidates = 384 件まで増えうる。
+            /// 特性が効かない技では従来どおり最大 128 件)。指定できる値自体は 1..128(この上限は変えていない。
+            /// 返る件数をこの値で切り詰めるだけで、384 件から絞り込みたいときに使う)。負の値と 129 以上は
+            /// 400 `invalid_input`。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/maxCandidates`.
@@ -1496,17 +1558,19 @@ extension Components {
             ///   - side:
             ///   - known: 既知の側(自分)の個体。side=defender なら自分=攻撃側、side=attacker なら自分=防御側。
             ///   - unknownSpeciesKey: 逆算する相手の種族。SP・性格・持ち物は探索対象なので渡さない
+            ///   - unknownAbilityId: 相手の特性を1つに固定する(issue 272。ADR-0126・ADR-0214)。省略時は相手の種族が持つ特性
             ///   - moveId: 観測したときの技(side=defender なら自分の技、attacker なら相手の技)
             ///   - field:
             ///   - options:
             ///   - itemCandidates: 相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ。
             ///   - observations: 同じ技・同じ場・同じ既知側に対する別々の1発。0 件は 400 `no_observation`、
-            ///   - maxCandidates: 返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(上限は
+            ///   - maxCandidates: 返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(特性の候補分岐〈ADR-0126・
             public init(
                 format: Components.Schemas.Format,
                 side: Components.Schemas.ReverseSide,
                 known: Components.Schemas.ReverseRequest.KnownPayload,
                 unknownSpeciesKey: Components.Schemas.ReverseRequest.UnknownSpeciesKeyPayload,
+                unknownAbilityId: Swift.String? = nil,
                 moveId: Swift.String,
                 field: Components.Schemas.FieldState? = nil,
                 options: Components.Schemas.CalcOptions? = nil,
@@ -1518,6 +1582,7 @@ extension Components {
                 self.side = side
                 self.known = known
                 self.unknownSpeciesKey = unknownSpeciesKey
+                self.unknownAbilityId = unknownAbilityId
                 self.moveId = moveId
                 self.field = field
                 self.options = options
@@ -1530,6 +1595,7 @@ extension Components {
                 case side
                 case known
                 case unknownSpeciesKey
+                case unknownAbilityId
                 case moveId
                 case field
                 case options
@@ -1622,6 +1688,16 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseCandidate/unsupported`.
             public var unsupported: [Components.Schemas.UnsupportedMark]
+            /// この候補の計算に使った相手の特性(ADR-0126・ADR-0214)。種族は必ず1件以上の特性を持つため
+            /// 常に入る。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/abilityId`.
+            public var abilityId: Swift.String
+            /// この候補と結果が完全に同じになる特性の ID(abilityId が先頭。渡した/解決した順)。
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/abilityIds`.
+            public var abilityIds: [Swift.String]
             /// Creates a new `ReverseCandidate`.
             ///
             /// - Parameters:
@@ -1637,6 +1713,8 @@ extension Components {
             ///   - minPercent: ranges 全体での想定ダメージ幅の下限(表示%。小数第1位・切り捨て。CalcResult.minPercent と同じ意味)
             ///   - maxPercent: ranges 全体での想定ダメージ幅の上限(表示%。小数第1位・四捨五入。CalcResult.maxPercent と同じ意味)
             ///   - unsupported: この候補の計算に付いた「未対応」の印(ADR-0123)。SP によらず同じ(技・場・既知側は候補間で共通)。
+            ///   - abilityId: この候補の計算に使った相手の特性(ADR-0126・ADR-0214)。種族は必ず1件以上の特性を持つため
+            ///   - abilityIds: この候補と結果が完全に同じになる特性の ID(abilityId が先頭。渡した/解決した順)。
             public init(
                 natureClass: Components.Schemas.NatureClass,
                 nature: Components.Schemas.NatureModifier,
@@ -1649,7 +1727,9 @@ extension Components {
                 support: Swift.Int,
                 minPercent: Swift.Double,
                 maxPercent: Swift.Double,
-                unsupported: [Components.Schemas.UnsupportedMark]
+                unsupported: [Components.Schemas.UnsupportedMark],
+                abilityId: Swift.String,
+                abilityIds: [Swift.String]
             ) {
                 self.natureClass = natureClass
                 self.nature = nature
@@ -1663,6 +1743,8 @@ extension Components {
                 self.minPercent = minPercent
                 self.maxPercent = maxPercent
                 self.unsupported = unsupported
+                self.abilityId = abilityId
+                self.abilityIds = abilityIds
             }
             public enum CodingKeys: String, CodingKey {
                 case natureClass
@@ -1677,6 +1759,8 @@ extension Components {
                 case minPercent
                 case maxPercent
                 case unsupported
+                case abilityId
+                case abilityIds
             }
         }
         /// - Remark: Generated from `#/components/schemas/ReverseResult`.

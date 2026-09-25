@@ -1093,6 +1093,20 @@ components:
         - `hd_full`: HD特化(HP 32・特防 32・特防上昇 +D/-A)。特殊
       enum: [none, hp, hb_boost, hb, hb_full, hd_boost, hd, hd_full]
 
+    DefenderOverride:
+      type: object
+      description: |
+        防御側の上書き(issue 272。ADR-0126・ADR-0214)。省略した項目は上書きしない。
+      properties:
+        abilityId:
+          type: string
+          description: |
+            防御側の特性を1つに固定する。省略時は防御側の種族が持つ特性(最大3件。4件目がある種族は
+            Showdown の特殊枠 `"S"` を落とす。ADR-0105 §5 と同じ判断)をすべて候補として計算し、
+            結果が完全に同じになる特性は1行にまとめ、違うときだけ行を分ける(ADR-0126)。
+            指定した特性をその種族が持たない場合は 400 `invalid_input`、マスタに無い ID は
+            400 `unknown_ability`。
+
     BulkCalcRequest:
       type: object
       required: [format, attacker, defenderSpeciesKey, moveId]
@@ -1103,6 +1117,7 @@ components:
         moveId: { type: string }
         field: { $ref: '#/components/schemas/FieldState' }
         options: { $ref: '#/components/schemas/CalcOptions' }
+        defenderOverride: { $ref: '#/components/schemas/DefenderOverride' }
         presets:
           type: array
           description: |
@@ -1122,20 +1137,32 @@ components:
           description: |
             差し替えて比較する持ち物 ID(省略時は素の1通り)。null 要素は「持ち物なし」。
             65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
-            行数は `len(presets) × len(itemVariants)` なので、上限は 8 × 64 = 512 行。
+            行の基本数は `len(presets) × len(itemVariants)`(上限 8 × 64 = 512)。特性ごとに結果が違う
+            ときだけ、その基本数のうち最大3倍(特性の候補数。ADR-0126・ADR-0214)まで行が分かれる。
+            結果が同じ特性は1行にまとまるため、特性が効かない技では行数は変わらない。
           maxItems: 64
           uniqueItems: true
           items: { type: string, nullable: true }
 
     BulkCalcRow:
       type: object
-      required: [preset, presetLabel, defender, result]
+      required: [preset, presetLabel, defender, result, abilityId, abilityIds]
       properties:
         preset: { $ref: '#/components/schemas/DefenderPreset' }
         presetLabel: { type: string, description: 表示名(例 HB振り / HB特化 / H振り+B補正) }
         itemId: { type: string, nullable: true, description: この行の防御側の持ち物(持ち物なしは null) }
         defender: { $ref: '#/components/schemas/BulkDefender' }
         result: { $ref: '#/components/schemas/CalcResult' }
+        abilityId:
+          type: string
+          description: |
+            この行の計算に使った防御側の特性(ADR-0126・ADR-0214)。種族は必ず1件以上の特性を持つため
+            常に入る。
+        abilityIds:
+          type: array
+          minItems: 1
+          description: この行と結果が完全に同じになる特性の ID(abilityId が先頭。渡した/解決した順)。
+          items: { type: string }
 
     NatureModifier:
       type: object
@@ -1221,6 +1248,13 @@ components:
         unknownSpeciesKey:
           allOf: [ { $ref: '#/components/schemas/SpeciesKey' } ]
           description: 逆算する相手の種族。SP・性格・持ち物は探索対象なので渡さない
+        unknownAbilityId:
+          type: string
+          description: |
+            相手の特性を1つに固定する(issue 272。ADR-0126・ADR-0214)。省略時は相手の種族が持つ特性
+            (最大3件。BulkCalcRequest.defenderOverride.abilityId と同じ既定)をすべて候補にする。
+            指定した特性をその種族が持たない場合は 400 `invalid_input`、マスタに無い ID は
+            400 `unknown_ability`。
         moveId: { type: string, description: 観測したときの技(side=defender なら自分の技、attacker なら相手の技) }
         field: { $ref: '#/components/schemas/FieldState' }
         options: { $ref: '#/components/schemas/CalcOptions' }
@@ -1247,8 +1281,11 @@ components:
           maximum: 128
           default: 0
           description: |
-            返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(上限は
-            2 性格クラス × 64 itemCandidates = 128 件)。負の値と 129 以上は 400 `invalid_input`。
+            返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(特性の候補分岐〈ADR-0126・
+            ADR-0214〉により最大 2 性格クラス × 3 特性グループ × 64 itemCandidates = 384 件まで増えうる。
+            特性が効かない技では従来どおり最大 128 件)。指定できる値自体は 1..128(この上限は変えていない。
+            返る件数をこの値で切り詰めるだけで、384 件から絞り込みたいときに使う)。負の値と 129 以上は
+            400 `invalid_input`。
 
     NatureClass:
       type: string
@@ -1266,7 +1303,7 @@ components:
     ReverseCandidate:
       type: object
       description: 候補1件(性格クラス × 持ち物。ADR-0010 §R3)
-      required: [natureClass, nature, natureId, itemId, ranges, spCount, exact, mismatch, support, minPercent, maxPercent, unsupported]
+      required: [natureClass, nature, natureId, itemId, ranges, spCount, exact, mismatch, support, minPercent, maxPercent, unsupported, abilityId, abilityIds]
       properties:
         natureClass: { $ref: '#/components/schemas/NatureClass' }
         nature: { $ref: '#/components/schemas/NatureModifier' }
@@ -1300,6 +1337,16 @@ components:
             この候補の計算に付いた「未対応」の印(ADR-0123)。SP によらず同じ(技・場・既知側は候補間で共通)。
             印なしは空配列。
           items: { $ref: '#/components/schemas/UnsupportedMark' }
+        abilityId:
+          type: string
+          description: |
+            この候補の計算に使った相手の特性(ADR-0126・ADR-0214)。種族は必ず1件以上の特性を持つため
+            常に入る。
+        abilityIds:
+          type: array
+          minItems: 1
+          description: この候補と結果が完全に同じになる特性の ID(abilityId が先頭。渡した/解決した順)。
+          items: { type: string }
 
     ReverseResult:
       type: object

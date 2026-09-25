@@ -81,12 +81,12 @@ final class UnsupportedMarkDomainTests: XCTestCase {
     private static func bulkJSON(firstUnsupported: String, secondUnsupported: String) -> String {
         """
         {"defenderSpeciesKey":"9002-000","rows":[
-          {"preset":"none","presetLabel":"テスト表示名1","itemId":null,
+          {"preset":"none","presetLabel":"テスト表示名1","abilityId":"test-ability","abilityIds":["test-ability"],"itemId":null,
            "defender":{"sp":{"hp":0,"atk":0,"def":0,"spa":0,"spd":0,"spe":0},
                        "nature":{"plus":null,"minus":null},"natureId":null,
                        "stats":{"hp":119,"atk":90,"def":80,"spa":70,"spd":85,"spe":90}},
            "result":\(calcResultJSON(unsupported: firstUnsupported))},
-          {"preset":"none","presetLabel":"テスト表示名1","itemId":"test-item-a",
+          {"preset":"none","presetLabel":"テスト表示名1","abilityId":"test-ability","abilityIds":["test-ability"],"itemId":"test-item-a",
            "defender":{"sp":{"hp":0,"atk":0,"def":0,"spa":0,"spd":0,"spe":0},
                        "nature":{"plus":null,"minus":null},"natureId":null,
                        "stats":{"hp":119,"atk":90,"def":80,"spa":70,"spd":85,"spe":90}},
@@ -98,11 +98,11 @@ final class UnsupportedMarkDomainTests: XCTestCase {
     private static func reverseJSON(firstUnsupported: String, secondUnsupported: String) -> String {
         """
         {"side":"defender","stat":"def","assumedHpSp":32,"exactCount":2,"candidates":[
-          {"natureClass":"neutral","nature":{"plus":null,"minus":null},"natureId":null,
+          {"natureClass":"neutral","abilityId":"test-ability","abilityIds":["test-ability"],"nature":{"plus":null,"minus":null},"natureId":null,
            "itemId":null,"ranges":[{"min":0,"max":3}],"spCount":4,
            "exact":true,"mismatch":0,"support":4,"minPercent":38.2,"maxPercent":47.9,
            "unsupported":\(firstUnsupported)},
-          {"natureClass":"neutral","nature":{"plus":null,"minus":null},"natureId":null,
+          {"natureClass":"neutral","abilityId":"test-ability","abilityIds":["test-ability"],"nature":{"plus":null,"minus":null},"natureId":null,
            "itemId":"test-item-a","ranges":[{"min":0,"max":3}],"spCount":4,
            "exact":true,"mismatch":0,"support":4,"minPercent":38.2,"maxPercent":47.9,
            "unsupported":\(secondUnsupported)}
