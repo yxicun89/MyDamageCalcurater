@@ -43,6 +43,9 @@ assert.deepEqual([...legacyAbilityNames].sort(), ['Steelworker'],
   'legacyEffects(abilities)の導出結果が想定と違う(ADR-0002 §4 / P2-1b)');
 const legacyItems = new Set(legacyItemNames);
 const legacyAbilities = new Set(legacyAbilityNames);
+// 未対応の印(補正を計算できない持ち物・特性。issue #270 案 B / ADR-0123)。印だけの定義はベクタで使わない。
+const unsupportedEffectKeys = ['UnsupportedAttacker','UnsupportedDefender'];
+const isUnsupportedEffect = def => unsupportedEffectKeys.some(k => k in def);
 
 // Fixed-power, single-hit reference moves. These probe arithmetic, not learnset legality.
 const moveNames = [
@@ -74,8 +77,8 @@ function individual(gen, name, options = {}) {
   assert(Object.values(sp).reduce((a,b) => a+b,0) <= 66);
   const ability = options.ability || '';
   const item = options.item || '';
-  if (ability) assert(effects.abilities[ability]);
-  if (item) assert(effects.items[item]);
+  if (ability) assert(effects.abilities[ability] && !isUnsupportedEffect(effects.abilities[ability]));
+  if (item) assert(effects.items[item] && !isUnsupportedEffect(effects.items[item]));
   if (gen.num === 0) {
     assert(!item || !legacyItems.has(item), `Champions ベクタが legacy 持ち物 ${item} を使おうとした`);
     assert(!ability || !legacyAbilities.has(ability), `Champions ベクタが legacy 特性 ${ability} を使おうとした`);
@@ -219,6 +222,25 @@ for (const [slug,a,d,m,options] of groundingCases) {
   championsFixed.push(v);
 }
 
+// --- サイコフィールドの先制技(ADR-0121 §5 / ADR-0123) ----------------------------------
+// 優先度が正の攻撃技は、サイコフィールドで接地した防御側に当たらない(oracle: move.priority > 0 &&
+// field.hasTerrain('Psychic') && isGrounded(defender))。浮いている防御側・他のフィールドは対照。
+// 当たらないケースは oracle のダメージが 0、対照は 0 でないことをここでも確かめる。
+const psychicPriorityCases = [
+  ['grounded-defender','Garchomp','Snorlax','Quick Attack',{terrain:'psychic'},true],
+  ['grounded-defender-special','Gengar','Snorlax','Vacuum Wave',{terrain:'psychic'},true],
+  ['grounded-defender-priority2','Garchomp','Snorlax','Extreme Speed',{terrain:'psychic',critical:true},true],
+  ['flying-defender','Garchomp','Corviknight','Quick Attack',{terrain:'psychic'},false],
+  ['levitate-defender','Garchomp','Snorlax','Quick Attack',{terrain:'psychic',d:{ability:'Levitate'}},false],
+  ['electric-terrain','Garchomp','Snorlax','Quick Attack',{terrain:'electric'},false],
+];
+for (const [slug,a,d,m,options,blocked] of psychicPriorityCases) {
+  assert(genC.moves.get(id(m)).priority > 0, `psychic-priority/${slug}: ${m} の優先度が正でない`);
+  const v=vector(genC,`psychic-priority/${slug}`,a,d,m,options);
+  assert.equal(v.expected.rolls.every(r => r === 0), blocked, `psychic-priority/${slug}: oracle の当たる/当たらないが想定と違う`);
+  championsFixed.push(v);
+}
+
 // --- 効果定義の1種ずつの照合(issue #270 / ADR-0120) --------------------------------
 // タイプ・相性で効く効果(タイプ強化・半減きのみ・特定タイプの攻撃実数値補正・抜群軽減)は、
 // effects.json の定義から「効く」ケースと「効かない対照」を1組ずつ作る。どちらも、同じ条件で
@@ -290,6 +312,7 @@ const typedEffectCases = (kind, name, def) => {
 for (const kind of ['items','abilities']) {
   for (const name of Object.keys(effects[kind]).sort()) {
     if (kind === 'items' ? legacyItems.has(name) : legacyAbilities.has(name)) continue;
+    if (isUnsupportedEffect(effects[kind][name])) continue;
     typedEffectCases(kind, name, effects[kind][name]);
   }
 }
@@ -328,21 +351,41 @@ function probeSignature(holder, ability, item) {
 }
 const probeBaseline = probeSignature('a', '', '');
 const damageChanging = {items:[], abilities:[]};
-for (const it of genC.items) {
-  if (probeSignature('a', '', it.name) !== probeBaseline || probeSignature('d', '', it.name) !== probeBaseline) damageChanging.items.push(it.id);
-}
-for (const ab of genC.abilities) {
-  if (probeSignature('a', ab.name, '') !== probeBaseline || probeSignature('d', ab.name, '') !== probeBaseline) damageChanging.abilities.push(ab.id);
-}
+// changingSides は、持たせるとダメージが変わった側(a: 攻撃側 / d: 防御側。issue #270 案 B / ADR-0123)。
+const changingSides = {items:{}, abilities:{}};
+const probeSides = (kind, list, probe) => {
+  for (const x of list) {
+    const sides = {a: probe('a', x.name) !== probeBaseline, d: probe('d', x.name) !== probeBaseline};
+    if (sides.a || sides.d) {
+      damageChanging[kind].push(x.id);
+      changingSides[kind][x.id] = sides;
+    }
+  }
+};
+probeSides('items', genC.items, (side, name) => probeSignature(side, '', name));
+probeSides('abilities', genC.abilities, (side, name) => probeSignature(side, name, ''));
 const unsupportedEffects = JSON.parse(readFileSync(new URL('unsupported-effects.json', import.meta.url)));
 const effectCoverage = {};
 for (const kind of ['items','abilities']) {
   const legacy = kind === 'items' ? legacyItems : legacyAbilities;
-  const defined = new Set(Object.keys(effects[kind]).filter(n => !legacy.has(n)).map(id));
+  const names = Object.keys(effects[kind]).filter(n => !legacy.has(n));
+  // 「未対応」の印だけの定義(UnsupportedAttacker / UnsupportedDefender。ADR-0123)は補正の定義に数えない。
+  const marked = names.filter(n => isUnsupportedEffect(effects[kind][n]));
+  const defined = new Set(names.filter(n => !isUnsupportedEffect(effects[kind][n])).map(id));
   const changing = new Set(damageChanging[kind]);
   const undefinedChanging = [...changing].filter(x => !defined.has(x)).sort();
   assert.deepEqual(undefinedChanging, Object.keys(unsupportedEffects[kind]).sort(),
     `${kind}: ダメージに効くのに効果定義が無いものが unsupported-effects.json と一致しない(定義を足すか、理由付きで登録する)`);
+  // 未対応の一覧(理由)と、効果定義の「未対応」の印は同じ集合で、印の側は oracle でダメージが変わった側と一致する。
+  assert.deepEqual(marked.map(id).sort(), undefinedChanging,
+    `${kind}: effects.json の未対応の印(UnsupportedAttacker / UnsupportedDefender)が unsupported-effects.json と一致しない`);
+  for (const n of marked) {
+    const def = effects[kind][n], sides = changingSides[kind][id(n)];
+    assert.deepEqual(Object.keys(def).sort().filter(k => !unsupportedEffectKeys.includes(k)), [],
+      `${kind} ${n}: 未対応の印と補正の定義を同じ項目に混ぜない`);
+    assert.deepEqual({a:def.UnsupportedAttacker === true, d:def.UnsupportedDefender === true}, sides,
+      `${kind} ${n}: 未対応の印の側が oracle でダメージが変わる側と一致しない(a=攻撃側 / d=防御側)`);
+  }
   const deadDefinitions = [...defined].filter(x => !changing.has(x)).sort();
   assert.deepEqual(deadDefinitions, [], `${kind}: 効果定義があるのに oracle のダメージが変わらない(定義の誤りか調査条件の不足)`);
   effectCoverage[kind] = {damageChanging:changing.size, defined:defined.size, unsupported:undefinedChanging.length};
@@ -557,7 +600,7 @@ const metadata={
     {scope:'species',names:[...genC.species].filter(s=>s.baseStats.hp===1).map(s=>s.name),reason:'HP=1 special mechanic is outside Champions SP formula; not present in the current Champions set'},
     {scope:'moves',reason:'Only the listed fixed-power single-hit moves; excludes variable/fixed damage, multi-hit, forced criticals, alternate attack/defense stats, screen removal, terrain-specific move mechanics, tera/Z/Max moves'},
     {scope:'abilities/items',reason:'Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2). Every non-legacy effects.json entry with a type-dependent effect has an apply/control pair (effects/<id>/...; issue #270 / ADR-0120). Champions items/abilities that change damage but are not representable by the effect schema are listed with reasons in tools/golden/unsupported-effects.json and never appear in vectors'},
-    {scope:'terrain',reason:'Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Psychic Terrain priority block, Terrain Pulse etc.) are outside the move list'},
+    {scope:'terrain',reason:'Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; the Psychic Terrain priority block is covered by psychic-priority/* (ADR-0123); terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Terrain Pulse etc.) are outside the move list and carry an unsupported mark in the engine (ADR-0123)'},
     {scope:'battle',reason:'No double/tera/Dynamax/form transformations or unsupported status effects'},
     {scope:'KO',reason:'Smogon residual/consumable multi-turn model differs from ADR-0006; direct smogonKO cross-check only residual/consumable-free fixed cases with 1-4 hits'},
   ],

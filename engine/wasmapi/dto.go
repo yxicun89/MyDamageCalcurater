@@ -7,6 +7,7 @@ package wasmapi
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 
@@ -245,6 +246,8 @@ type moveDTO struct {
 	Category string `json:"category"`
 	Power    int    `json:"power"`
 	Priority int    `json:"priority"`
+	// Mechanisms は技の機構(ADR-0121。省略・空は通常の技)。未対応の印に使う(ADR-0123)。
+	Mechanisms []string `json:"mechanisms"`
 }
 
 func (m moveDTO) toEngine(path string) (engine.Move, error) {
@@ -256,7 +259,32 @@ func (m moveDTO) toEngine(path string) (engine.Move, error) {
 	if err != nil {
 		return engine.Move{}, err
 	}
-	return engine.Move{ID: m.ID, NameJa: m.NameJa, Type: typ, Category: cat, Power: m.Power, Priority: m.Priority}, nil
+	mechanisms, err := parseMechanisms(path+".mechanisms", m.Mechanisms)
+	if err != nil {
+		return engine.Move{}, err
+	}
+	return engine.Move{ID: m.ID, NameJa: m.NameJa, Type: typ, Category: cat, Power: m.Power, Priority: m.Priority,
+		Mechanisms: mechanisms}, nil
+}
+
+// parseMechanisms は技の機構を検証する(未知の値は invalid_enum、重複は invalid_input)。
+// 並びは engine が印を付けるときに整えるので、ここでは変えない。
+func parseMechanisms(path string, vs []string) ([]engine.MoveMechanism, error) {
+	if len(vs) == 0 {
+		return nil, nil
+	}
+	out := make([]engine.MoveMechanism, 0, len(vs))
+	for i, v := range vs {
+		m := engine.MoveMechanism(v)
+		if !m.Known() {
+			return nil, enumError(fmt.Sprintf("%s[%d]", path, i), v)
+		}
+		if slices.Contains(out, m) {
+			return nil, fail(CodeInvalidInput, "%s に機構 %q が重複している", path, v)
+		}
+		out = append(out, m)
+	}
+	return out, nil
 }
 
 type itemEffectDTO struct {
@@ -268,12 +296,16 @@ type itemEffectDTO struct {
 	BoostType          string         `json:"boostType"`
 	BoostTypeMod       int            `json:"boostTypeMod"`
 	ResistBerryType    string         `json:"resistBerryType"`
+	// UnsupportedAttacker / UnsupportedDefender は「未対応」の印(ADR-0123)。
+	UnsupportedAttacker bool `json:"unsupportedAttacker"`
+	UnsupportedDefender bool `json:"unsupportedDefender"`
 }
 
 func (e itemEffectDTO) toEngine(path string) (*engine.ItemEffect, error) {
 	out := &engine.ItemEffect{
 		DamageMod: e.DamageMod, PowerMod: e.PowerMod, OnlySuperEffective: e.OnlySuperEffective,
-		BoostTypeMod: e.BoostTypeMod,
+		BoostTypeMod:        e.BoostTypeMod,
+		UnsupportedAttacker: e.UnsupportedAttacker, UnsupportedDefender: e.UnsupportedDefender,
 	}
 	if e.StatMods != nil {
 		out.StatMods = make(map[engine.StatKey]int, len(e.StatMods))
@@ -392,14 +424,17 @@ type abilityEffectDTO struct {
 	DefAbsorbTypes       map[string]absorbEffectDTO `json:"defAbsorbTypes"`
 	ReduceSuperEffective int                        `json:"reduceSuperEffective"`
 	IgnoresBurn          bool                       `json:"ignoresBurn"`
-	Airborne             bool                       `json:"airborne"` // 浮いている(フィールドの補正の対象外。ADR-0116)
+	Airborne             bool                       `json:"airborne"`            // 浮いている(フィールドの補正の対象外。ADR-0116)
+	UnsupportedAttacker  bool                       `json:"unsupportedAttacker"` // 「未対応」の印(ADR-0123)
+	UnsupportedDefender  bool                       `json:"unsupportedDefender"`
 }
 
 func (e abilityEffectDTO) toEngine(path string) (*engine.AbilityEffect, error) {
 	out := &engine.AbilityEffect{
 		StabMod: e.StabMod, OffBoostTypeMod: e.OffBoostTypeMod,
 		ReduceSuperEffective: e.ReduceSuperEffective, IgnoresBurn: e.IgnoresBurn,
-		Airborne: e.Airborne,
+		Airborne:            e.Airborne,
+		UnsupportedAttacker: e.UnsupportedAttacker, UnsupportedDefender: e.UnsupportedDefender,
 	}
 	var err error
 	if out.OffBoostType, err = parseType(path+".offBoostType", e.OffBoostType, true); err != nil {
@@ -606,6 +641,24 @@ type calcResultDTO struct {
 	STAB          bool         `json:"stab"`
 	Category      string       `json:"category"`
 	KO            koDTO        `json:"ko"`
+	// Unsupported は「未対応」の印(ADR-0123)。印なしは空配列(null にしない)。
+	Unsupported []unsupportedMarkDTO `json:"unsupported"`
+}
+
+// unsupportedMarkDTO は印1つ(engine.UnsupportedMark の写し)。
+type unsupportedMarkDTO struct {
+	Target string `json:"target"`
+	Reason string `json:"reason"`
+	ID     string `json:"id"`
+}
+
+// unsupportedFrom は印を写す。nil も空配列にする。
+func unsupportedFrom(ms []engine.UnsupportedMark) []unsupportedMarkDTO {
+	out := make([]unsupportedMarkDTO, 0, len(ms))
+	for _, m := range ms {
+		out = append(out, unsupportedMarkDTO{Target: string(m.Target), Reason: string(m.Reason), ID: m.ID})
+	}
+	return out
 }
 
 // calcResultFrom は engine の結果を写す。パーセントは表示%(0.1% 単位。
@@ -626,5 +679,6 @@ func calcResultFrom(r engine.DamageResult) calcResultDTO {
 			Hits: r.KO.Hits, Guaranteed: r.KO.Guaranteed, ChancePercent: r.KO.ChancePercent,
 			DisplayChancePercent: tenthPercent(r.KO.DisplayChancePercentTenths()),
 		},
+		Unsupported: unsupportedFrom(r.Unsupported),
 	}
 }

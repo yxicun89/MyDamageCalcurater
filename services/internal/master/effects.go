@@ -39,11 +39,13 @@ var (
 	itemEffectFields = map[string]bool{
 		"StatMods": true, "DamageMod": true, "PowerMod": true, "PowerCategory": true,
 		"OnlySuperEffective": true, "BoostType": true, "BoostTypeMod": true, "ResistBerryType": true,
+		"UnsupportedAttacker": true, "UnsupportedDefender": true,
 	}
 	abilityEffectFields = map[string]bool{
 		"StabMod": true, "OffBoostType": true, "OffBoostTypeMod": true,
 		"DefResistType": true, "DefImmuneTypes": true, "DefAbsorbTypes": true,
 		"ReduceSuperEffective": true, "IgnoresBurn": true, "Airborne": true,
+		"UnsupportedAttacker": true, "UnsupportedDefender": true,
 	}
 	// absorbEffectFields は DefAbsorbTypes の値(1タイプぶんの副次効果)の既知のフィールド名。
 	absorbEffectFields = map[string]bool{
@@ -105,6 +107,32 @@ func decodeTrueLiteral(raw json.RawMessage) (bool, error) {
 		return false, fmt.Errorf("%w: true 以外の真偽値: %s", ErrInvalidEffect, raw)
 	}
 	return true, nil
+}
+
+// decodeUnsupportedMarks は「未対応」の印(UnsupportedAttacker / UnsupportedDefender。ADR-0123)を読む。
+// どちらも true だけを認める。
+func decodeUnsupportedMarks(fields map[string]json.RawMessage) (attacker, defender bool, err error) {
+	if v, ok := fields["UnsupportedAttacker"]; ok {
+		if attacker, err = decodeTrueLiteral(v); err != nil {
+			return false, false, err
+		}
+	}
+	if v, ok := fields["UnsupportedDefender"]; ok {
+		if defender, err = decodeTrueLiteral(v); err != nil {
+			return false, false, err
+		}
+	}
+	return attacker, defender, nil
+}
+
+// unsupportedMarks は印を struct 定義順(UnsupportedAttacker → UnsupportedDefender)で書く。
+func (w *effectWriter) unsupportedMarks(attacker, defender bool) {
+	if attacker {
+		w.field("UnsupportedAttacker", []byte("true"))
+	}
+	if defender {
+		w.field("UnsupportedDefender", []byte("true"))
+	}
 }
 
 // decodeStrictString は raw が JSON 文字列であることを要求する(数値・オブジェクト等を拒否)。
@@ -379,6 +407,9 @@ func DecodeItemEffect(raw []byte, chart engine.TypeChart) (*engine.ItemEffect, e
 		}
 		e.ResistBerryType = t
 	}
+	if e.UnsupportedAttacker, e.UnsupportedDefender, err = decodeUnsupportedMarks(fields); err != nil {
+		return nil, err
+	}
 	return &e, nil
 }
 
@@ -465,6 +496,9 @@ func DecodeAbilityEffect(raw []byte, chart engine.TypeChart) (*engine.AbilityEff
 			return nil, err
 		}
 		e.Airborne = b
+	}
+	if e.UnsupportedAttacker, e.UnsupportedDefender, err = decodeUnsupportedMarks(fields); err != nil {
+		return nil, err
 	}
 	return &e, nil
 }
@@ -632,6 +666,7 @@ func EncodeItemEffect(e engine.ItemEffect) ([]byte, error) {
 	if e.ResistBerryType != "" {
 		w.field("ResistBerryType", quoteJSON(string(e.ResistBerryType)))
 	}
+	w.unsupportedMarks(e.UnsupportedAttacker, e.UnsupportedDefender)
 	return w.bytes()
 }
 
@@ -665,5 +700,6 @@ func EncodeAbilityEffect(e engine.AbilityEffect) ([]byte, error) {
 	if e.Airborne {
 		w.field("Airborne", []byte("true"))
 	}
+	w.unsupportedMarks(e.UnsupportedAttacker, e.UnsupportedDefender)
 	return w.bytes()
 }

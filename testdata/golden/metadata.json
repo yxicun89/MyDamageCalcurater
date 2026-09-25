@@ -72,7 +72,7 @@
     },
     {
       "scope": "terrain",
-      "reason": "Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Psychic Terrain priority block, Terrain Pulse etc.) are outside the move list"
+      "reason": "Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; the Psychic Terrain priority block is covered by psychic-priority/* (ADR-0123); terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Terrain Pulse etc.) are outside the move list and carry an unsupported mark in the engine (ADR-0123)"
     },
     {
       "scope": "battle",
@@ -129,8 +129,8 @@
   ],
   "files": {
     "fixed.json": {
-      "count": 302,
-      "sha256": "09476bad67380a789e26ec6bf2fbeeb5a1bea9f4d162aab7ba3c7c0148eb7e7c"
+      "count": 308,
+      "sha256": "c44e0fcf749aa96884108ad88ea436be795a0071cc2faed39de90d8b7e696d44"
     },
     "random.jsonl.gz": {
       "count": 10000,
