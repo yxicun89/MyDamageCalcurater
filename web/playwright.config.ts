@@ -12,6 +12,10 @@ const baseURL = `http://127.0.0.1:${OFFLINE_PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  // Playwright が走らせるのは *.spec.ts だけ。e2e/support/ には vitest が走らせる *.test.ts
+  // (pokedex フィクスチャの契約テスト。ADR-0307)があり、Playwright の既定の testMatch では
+  // それも拾ってしまうため明示する。
+  testMatch: ["**/*.spec.ts"],
   // オンライン専用の spec は calc-svc が要るので、こちらでは走らせない。
   // container.spec.ts は nginx(web/nginx.conf)の配信設定を確かめるもので、preview では成り立たない
   // (playwright.container.config.ts だけが走らせる)。

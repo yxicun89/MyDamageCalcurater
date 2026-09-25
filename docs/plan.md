@@ -255,6 +255,12 @@
   毎回 `api/openapi.yaml` を読んで突き合わせるのでズレは検知できるが、`type CalcSnapshot =
   Schemas["MasterExport"]` に寄せるか型レベルの一致アサーションを足すと、より一枚岩になる
   (次に触るときの検討事項)。
+- [ ] `make e2e` の `web-e2e-online` 修復・PR2(**着手 2026-09-25**。Web レーン。issue 無し。ブランチ
+  `fix/web-online-e2e-pokedex-fixture`。ADR-0307)。E2E 専用の軽量 pokedex フィクスチャを
+  `web/e2e/support/` に新設し、`POKEDEX_PROXY_TARGET` で `/api/pokedex` を `/api`(calc)より前に振り分ける。
+  `online.spec.ts` は種族の検索欄(ADR-0304 A-4・A-10)に追従させる。calc-svc / pokedex-svc 本体・
+  `api/openapi.yaml` は無変更。受け入れ条件と失敗するテストを先に置いた段階(spec-writer)。
+  完了条件は `make e2e` の `web-e2e-online` が実際に全件緑になること。
 - [x] issue #71 の Web 側(攻撃側プリセットの単一化。ADR-0114)。**完了(2026-09-25。Web レーン)**: データレーン
   が `engine/presets/attacker.json`(embed)を唯一の正にした(PR #346)のを受け、
   `web/src/domain/attackerPresets.contract.test.ts` を新規追加。ハードコードした期待値と比較する既存の
