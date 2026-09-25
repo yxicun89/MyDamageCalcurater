@@ -25,7 +25,10 @@ fi
 
 # pokedex の DB を最新の migration まで上げる(新しい表・列を前提にするコードより先に)。
 # migrate の Job は共有の overlay 全体の apply でしか作り直せないので、ここでは mysql へ一時的に
-# port-forward し、migrator 用の DSN(Secret mysql-auth。値は表示しない)で `make migrate-up` を実行する。
+# port-forward し、Job と同じ4つの DSN(Secret mysql-auth。値は表示しない)で `make migrate-up` を実行する。
+# POKEDEX_PROVISION_DSN(root)を渡すので「用途別ユーザーのプロビジョニング → Up → importer の表ごとの
+# 権限の付け直し」まで1回で行う(ADR-0125。migrator には GRANT の権限が無く、付け直さないと
+# 表を足す migration の後に importer がその表に書けない)。
 echo "== pokedex の DB(migrate-up)"
 command -v nc >/dev/null 2>&1 || { echo "deploy-latest: nc が無い(port-forward の疎通確認に使う)" >&2; exit 1; }
 if nc -z 127.0.0.1 "$MIGRATE_LOCAL_PORT" 2>/dev/null; then
@@ -45,16 +48,26 @@ if [ "$ready" != 1 ]; then
   echo "deploy-latest: mysql への port-forward が張れなかった(kubectl -n pokecalc get pods で mysql-0 が Running か確認する)" >&2
   exit 1
 fi
-migrator_dsn=$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.pokedex-migrator-dsn}' | base64 -d \
-  | sed -E "s/@tcp\(mysql:[0-9]+\)/@tcp(127.0.0.1:$MIGRATE_LOCAL_PORT)/")
-case "$migrator_dsn" in
-  *"@tcp(127.0.0.1:$MIGRATE_LOCAL_PORT)"*) ;;
-  "") echo "deploy-latest: Secret mysql-auth に pokedex-migrator-dsn が無い(make up で作り直す。docs/runbooks/data.md)" >&2; exit 1 ;;
-  *) echo "deploy-latest: pokedex-migrator-dsn の接続先が想定(mysql:<port>)と違うので付け替えられない" >&2; exit 1 ;;
-esac
-POKEDEX_DATABASE_DSN="$migrator_dsn" make --no-print-directory migrate-up
+# local_dsn <Secret のキー>: DSN の接続先を port-forward 先に付け替えて出力する。キーが無い・付け替えられない
+# ときは理由を stderr に出して非ゼロで返す(値は表示しない)。
+local_dsn() {
+  local key=$1 dsn
+  dsn=$(kubectl -n pokecalc get secret mysql-auth -o jsonpath="{.data.$key}" | base64 -d \
+    | sed -E "s/@tcp\(mysql:[0-9]+\)/@tcp(127.0.0.1:$MIGRATE_LOCAL_PORT)/")
+  case "$dsn" in
+    *"@tcp(127.0.0.1:$MIGRATE_LOCAL_PORT)"*) printf '%s' "$dsn" ;;
+    "") echo "deploy-latest: Secret mysql-auth に $key が無い(make up で作り直す。docs/runbooks/data.md)" >&2; return 1 ;;
+    *) echo "deploy-latest: $key の接続先が想定(mysql:<port>)と違うので付け替えられない" >&2; return 1 ;;
+  esac
+}
+migrator_dsn=$(local_dsn pokedex-migrator-dsn)
+provision_dsn=$(local_dsn pokedex-dsn)
+reader_dsn=$(local_dsn pokedex-reader-dsn)
+importer_dsn=$(local_dsn pokedex-importer-dsn)
+POKEDEX_PROVISION_DSN="$provision_dsn" POKEDEX_READER_DSN="$reader_dsn" POKEDEX_IMPORTER_DSN="$importer_dsn" \
+  POKEDEX_DATABASE_DSN="$migrator_dsn" make --no-print-directory migrate-up
 POKEDEX_DATABASE_DSN="$migrator_dsn" make --no-print-directory migrate-version
-unset migrator_dsn
+unset migrator_dsn provision_dsn reader_dsn importer_dsn
 kill "$pf_pid" 2>/dev/null || true
 wait "$pf_pid" 2>/dev/null || true
 trap - EXIT

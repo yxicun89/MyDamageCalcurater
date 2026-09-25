@@ -35,12 +35,14 @@ MySQL には「DB 全体から特定の表を除く」GRANT が無いので、�
 
 ## 影響
 
-- 付け直しは `POKEDEX_PROVISION_DSN` がある up(k8s の `pokedex-migrate` Job、`make up` が流す)だけで起きる。
-  `make deploy-latest` の migrate-up は migrator の DSN だけで流すため、**権限は付け直さない**。
-  - 既存の k3d の DB では、この変更を入れた後に一度付け直すまで importer は DB 全体への権限のまま。
-  - `make deploy-latest` で表を足す migration を入れたときは、付け直すまで importer がその表に書けない。
-  - どちらも `docs/runbooks/data.md`「importer の権限を付け直す」の手順で直す。deploy-latest に付け直しを
-    組み込むかは運用レーンに任せる(root の DSN を扱う経路が増えるため、ここでは足さない)。
+- 付け直しは `POKEDEX_PROVISION_DSN` がある up で起きる: k8s の `pokedex-migrate` Job(`make up`)と、
+  `make deploy-latest`(`scripts/k3d-deploy-latest.sh`。Secret `mysql-auth` の4つの DSN を port-forward 先に
+  付け替えて渡す。独立レビューの指摘で追加)。migrator には GRANT の権限が無いので、migrator の DSN だけの
+  `make migrate-up` では付け直されない。
+  - 既存の k3d の DB は、この変更を入れた後に `make deploy-latest` を1回流すと importer の権限が表ごとに絞られる。
+  - 表を足す migration も `make deploy-latest` だけで importer が新しい表に書けるようになる。
+- 付け直しは REVOKE ALL → GRANT なので、その間に importer の CronJob が走ると一時的に権限不足で失敗しうる
+  (CronJob の再試行か `make import-k8s` で流し直す。`docs/runbooks/data.md` に注記)。
 - `make dev`・`make test-db` はプロビジョニングしない(ADR-0110 決定7)ので影響なし。
 - 回帰テスト(`-tags mysql`): `grants_mysql_test.go` の `TestImporterCannotWriteMigrationsTable`
   (importer は schema_migrations を読めるが INSERT/UPDATE/DELETE は拒否、マスタの全表に DML ができる)、

@@ -204,26 +204,17 @@ unset POKEDEX_DATABASE_DSN pf_pid
 
 ## importer の権限を付け直す(issue #312・ADR-0125)
 
-importer の書き込み権限は表ごと(`schema_migrations` を除く)に付く。`make deploy-latest` の migrate-up は権限を
-付け直さないので、次のときにこの手順を流す: この変更を入れた後の既存の k3d の DB に初めて入れるとき、
-`make deploy-latest` で表を足す migration を入れたとき。
+importer の書き込み権限は表ごと(`schema_migrations` を除く)に付く。`make deploy-latest` の migrate-up が
+プロビジョニング → up → importer の付け直しまで行うので、表を足す migration も `make deploy-latest` だけで追随する。
+この変更より前から動いている k3d の DB は、`make deploy-latest` を1回流すと importer の権限が表ごとに絞られる。
+付け直しは importer の権限をいったん全部外してから付けるので、その数秒の間に CronJob `pokedex-import` が走ると
+権限不足で失敗することがある(CronJob は再試行する。失敗したら `make import-k8s` で流し直す)。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-kubectl -n pokecalc port-forward svc/mysql 13306:3306 >/dev/null 2>&1 &
-pf_pid=$!
-sleep 2
-dsn() { kubectl -n pokecalc get secret mysql-auth -o jsonpath="{.data.$1}" | base64 -d | sed -E 's/@tcp\(mysql:[0-9]+\)/@tcp(127.0.0.1:13306)/'; }
-POKEDEX_PROVISION_DSN="$(dsn pokedex-dsn)" \
-POKEDEX_DATABASE_DSN="$(dsn pokedex-migrator-dsn)" \
-POKEDEX_READER_DSN="$(dsn pokedex-reader-dsn)" \
-POKEDEX_IMPORTER_DSN="$(dsn pokedex-importer-dsn)" \
-make migrate-up
-kill "$pf_pid"
-unset -f dsn
-unset pf_pid
+make deploy-latest
 ```
-確認: 最後の行が `up: 完了`(DSN・パスワードは表示されない)。
+確認: `== pokedex の DB(migrate-up)` の後に `up: 完了` と `version=<最新の版> dirty=false` が出る(DSN・パスワードは表示されない)。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
