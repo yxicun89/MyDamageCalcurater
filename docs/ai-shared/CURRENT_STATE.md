@@ -44,7 +44,22 @@ namespace・完了待ちの順序)・Makefileのmigrate-up/down/version-record/t
 のk3dノードでの起動可否も未確認)。`grants_tidb_test.go`・`migrate_tidb_test.go`(`-tags tidb`)も
 このサンドボックスでは実TiDBに対して未実行(tiup playgroundのpdがdarwin/arm64でクラッシュ)。
 `make test-db`により検証してからP5-1完了とする
-Next: M2 P5-1の実機確認(次のmake up時にTidbCluster/TidbInitializerのReady/Completedを確認)→P5-2(NATS JetStream)へ進む。他レーンからの依頼待ち。issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
+Status(追記): P5-2(NATS JetStream。calc-svcからのイベント発行)完了・**main統合済み**(ADR-0212。critic 2ラウンド)。
+ストリーム`CALC_EVENTS`・Retentionは意図的にLimits(Interest ではない。理由はADR-0212 §4)・
+`services/internal/calcevents`のワイヤフォーマットを確定。
+Status(追記): P5-3(record-svc)着手・critic 1ラウンドFAIL(重大1・重要3・軽微7件)→修正中。
+`api/openapi.yaml`にrecordの契約(`deleteRecordDeviceData`・`listFrequentOpponents`・`store_unavailable`)を追加、
+record-svcの保存(TiDB実装。SaveCalcEvent/PurgeDevice/TouchDevice/FrequentOpponents)・NATS購読
+(`services/record/internal/events`)・gatewayルーティング/CORSのDELETE許可まで実装。
+critic指摘で判明した重要事項: (1) `services/record/internal/store`にfakeしかテストが無かった欠落を
+`tidb_test.go`(`-tags tidb`。`make test-db`)で解消し実TiDB(ローカルの`tidb-server --store=unistore`)で
+全緑を確認、(2) `frequent_opponents.last_calculated_at`が再配送の順序次第で巻き戻る不具合を`GREATEST`で修正、
+(3) golang-migrateのmysqlドライバがTiDBでSERIALIZABLE分離レベルを要求し失敗する既知の非互換を発見・
+`tidb_skip_isolation_level_check=1`をTidbInitializer/tidb-local-up.shに追加(ADR-0211追記)。
+失効ジョブ(ADR-0209 §4)とrecord-svcのDeployment/Service配線は**P5-3bへ切り出し**(plan.md参照。
+現状k3dでは`/api/record/*`はupstream_unavailableのまま)。
+Next: P5-3のcritic再レビュー→PASSしたらmain統合。その後P5-3b(失効ジョブ・Deployment配線)→
+P5-4(team-svc)へ進む。他レーンからの依頼待ち。issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)

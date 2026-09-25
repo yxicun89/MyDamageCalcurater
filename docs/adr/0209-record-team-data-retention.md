@@ -202,6 +202,19 @@ gateway に `DELETE /api/me/data` のような1本を置いて fan-out させる
 
 #### 5.3 契約(P5-3 / P5-4 で openapi.yaml に移すときの本文。**移した時点でこの節は「移動済み」に書き換える**)
 
+> **移動済み(record の分だけ。2026-09-25。P5-3)**: `DELETE /api/record/device-data`・`DeletionStatus`・
+> `RecordDeletionResult`・`ErrorCode` の `store_unavailable`・top-level の `record` タグは
+> **`api/openapi.yaml` に移した。正はそちら**(coding-rules §2「単一の正」)。以下の record 側の YAML は
+> 移す前の記録として残すだけで、差異が出たら openapi.yaml が正。
+> あわせて、ADR には具体名の無かった「よく使う相手」の読み取り系を
+> **`GET /api/record/frequent-opponents`(operationId `listFrequentOpponents`)**として追加した
+> (名前の根拠: requirements.md §2「よく使うポケモン」/ 本 ADR §3 #2「よく使う相手」の語に合わせ、
+> 一覧を返す既存操作の命名 `listNatures` と `/api/pokedex/natures` の形に揃えた。返すのは `speciesKey`・
+> スコア・件数・最終計算時刻だけで、名前・タイプは pokedex-svc から引く = 絶対ルール4)。
+>
+> **team の分(`DELETE /api/team/device-data`・`TeamDeletionResult`・`team` タグ)は未移動**で、
+> 正は引き続きこの節。P5-4 で移すこと。
+
 ```yaml
   /api/record/device-data:
     delete:
@@ -436,6 +449,10 @@ openapi.yaml に移した時点で §5.3 を「移動済み(正は `api/openapi.
 - **AC-D1** 端末 A が作ったデータは、端末 B の一覧・検索に出ない(同じデータを A で作り、B で一覧して 0 件)。
 - **AC-D2** 端末 B が、端末 A のリソース ID を指して GET / PUT / DELETE すると **404 `not_found`**。
   403 を返さない。応答本文に A の情報(名前・存在の有無・件数)を含まない。
+  (2026-09-25 追記: P5-3 時点の record の契約にはリソース ID をパスで受ける操作が無い〈集計と全削除だけ〉ため、
+  record 側にこの AC を直接試せる操作が無い。代わりに「record の操作にパスパラメータが無い」ことを契約から
+  固定し〈`TestRecordOperationsHaveNoPathParameters`〉、増えたときに落ちるようにしてある。
+  実操作での検証は team-svc〈P5-4〉と、record にお気に入りの CRUD を足すときに行う。)
 - **AC-D3** ボディ・クエリに `deviceId` を入れた要求は 400 `unknown_field`。ヘッダの端末 ID を上書きできない。
 - **AC-D4** ヘッダの欠落・不正は gateway で 400 `missing_header` / `invalid_header`(ADR-0202 §4 の再確認)。
 - **AC-D5** 「よく使う相手」の集計に他端末のイベントが混ざらない(A で 10 件、B で 1 件作り、B の集計が 1 件分だけを反映)。
@@ -457,6 +474,9 @@ openapi.yaml に移した時点で §5.3 を「移動済み(正は `api/openapi.
 - **AC-P8** gateway: `OPTIONS /api/record/device-data`(と `/api/team/device-data`)に
   `Access-Control-Request-Method: DELETE` を付けたプリフライトが、許可オリジンに対して DELETE を許可して返る
   (§10 の gateway 変更の確認)。
+- **AC-P9**(2026-09-25追記。P5-3) gateway: `/api/record/*` が record-svc へルーティングされ、ヘッダ検証が
+  かかる。上流未設定なら 503 `upstream_unavailable`(404 にしない)。`/api/record`(末尾スラッシュ無し)・
+  `/api/recordx` は 404 `not_found`(ADR-0202 §3 の pokedex と同じ規則)。
 
 保持期間(§3・§4):
 
@@ -476,6 +496,13 @@ openapi.yaml に移した時点で §5.3 を「移動済み(正は `api/openapi.
 - **AC-R4** 失効ジョブ・record-svc・TiDB・NATS が落ちていても、計算 API(`/api/calc/*`)は成功を返す(絶対ルール5)。
 - **AC-R5** `last_seen_at` は直近の更新から24時間以内の2回目の要求では更新されない(書き込み増幅の抑止)。
 - **AC-R6** 集計(#2)は生イベント(#1)から再計算でき、生イベントを消したあとに集計だけが残らない。
+- **AC-R7**(2026-09-25追記。P5-3) at-least-once 配送(ADR-0212 §6)の冪等性: 同じイベント(同じ
+  ストリームシーケンス)を2回受け取っても、`calc_events` が2行にならず、集計も `devices.last_seen_at` も
+  二重に進まない。2回目も ack する(再配送のループにしない)。重複排除キーは受信時刻・ランダム値を混ぜず、
+  再配送で同じ値になること。
+- **AC-R8**(2026-09-25追記。P5-3) 起動時検証: ADR-0211 §7 の環境変数は未設定・0以下なら起動しない。
+  `RECORD_DEVICE_ROW_EXPIRY_DAYS` > JetStream の `max_age`(7日)、時間減衰の半減期 < 生イベントの保持期間
+  (§4)を起動時に検査する。
 
 バックアップ / 復元(§9。P7-4 の完了条件):
 
@@ -550,6 +577,19 @@ openapi.yaml に移した時点で §5.3 を「移動済み(正は `api/openapi.
   **解消(2026-09-23。issue #148 のユーザー決定)**: 「公開しない」で確定した(ADR-0210)。以後この項目の確認は不要で、
   公開へ進み直すときだけ §1 の追記のとおり別 ADR が必要になる。
 - 失効ジョブを本番データに初めて向けるとき(CLAUDE.md「人間の確認が必要なこと: DB のデータ削除」)。
+
+**追記(2026-09-25。P5-3 の critic レビューで判明)**: P5-3 は §4 の失効ジョブと record-svc の
+Deployment/Service(k3d への実配線)を完了条件に含めていたが、実装は保存(SaveCalcEvent)・集計
+(FrequentOpponents)・分離(§6)・全削除 API(§5)・ログ(§3)・gateway ルーティングと CORS までに留めた。
+失効ジョブ本体(#1〜#5 の保持期間超過行を消す日次 CronJob)と record-svc の Deployment/Service は
+**P5-3b** に切り出す(docs/plan.md 参照)。それまでの間:
+
+- `calc_events`(90日)・`favorites`(540日)・`devices` 行(30日)・`purge_journal`(90日)は、
+  実装済みの端末単位の全削除 API(§5)でしか消えない。未使用端末のデータは失効ジョブが動くまで
+  自然には消えない(AC-R1・AC-R3 は P5-3b の完了条件として持ち越す)。
+- record-svc の HTTP/イベント消費は実装済みだが、k3d クラスタには配線されていない
+  (`deploy/k8s/base/record` は migrate Job のみ)ため、実際に `/api/record/*` を叩けるようになるのは
+  P5-3b 完了後。
 
 **追記(2026-09-24。ADR-0211 P5-1 実装時に判明した既知のギャップ)**: §5b・§9-2 が求める「purge journal を
 DB のバックアップ世代とは独立の場所(P7-4 が決める)にも同時に追記する」は、その独立保存先が P7-4 で

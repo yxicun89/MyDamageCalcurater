@@ -230,6 +230,58 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/record/frequent-opponents": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * この端末でよく計算した相手(防御側の種族)を頻度×時間減衰の順に返す
+     * @description `X-Device-Id` の端末の計算イベント(`calc_events`)だけから作った集計を、スコアの降順で返す
+     *     (requirements.md §2「よく使うポケモン」・ADR-0209 §3 #2・§6-3)。他端末のイベントは混ぜない。
+     *
+     *     - スコアは「頻度 × 時間減衰(半減期は record-svc の設定。生イベントの保持期間 90日より短い。ADR-0209 §4)」で、
+     *       絶対値に意味は無い(並び順と相対比較のためだけの値)。
+     *     - 返すのは `speciesKey` だけで、名前・タイプ・画像は返さない(マスタは pokedex-svc の担当。
+     *       CLAUDE.md 絶対ルール4)。クライアントは必要なら `/api/pokedex/species/{key}` を引く。
+     *     - 記録が1件も無い端末は空配列(404 にしない)。
+     */
+    get: operations["listFrequentOpponents"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/record/device-data": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * この端末の記録(計算イベント・集計・お気に入り)をすべて削除する
+     * @description X-Device-Id の端末に紐づく record DB の行をすべて消す(ADR-0209 §5)。冪等で、
+     *     何も無い端末でも 200 `completed` を返す(404 にしない)。1回で消しきれない場合は
+     *     `partial` を返すので、同じ要求を `completed` になるまで繰り返す。
+     *     削除の時点を墓石として記録し、それ以前に発生した計算イベントが JetStream から
+     *     後から届いても保存しない(ADR-0209 §7)。team DB は消さないので、
+     *     クライアントは `DELETE /api/team/device-data` も呼ぶ(P5-4 で追加する)。
+     */
+    delete: operations["deleteRecordDeviceData"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/internal/pokedex/master": {
     parameters: {
       query?: never;
@@ -300,7 +352,8 @@ export interface components {
      *     | unknown_ability | abilityId がマスタに無い | 400 |
      *     | unknown_nature | natureId がマスタに無い | 400 |
      *     | not_found | ルートが無い / このサービスの担当外の操作 | 404 |
-     *     | master_unavailable | マスタを参照できない | 503 |
+     *     | master_unavailable | マスタ(pokedex の MySQL)を参照できない | 503 |
+     *     | store_unavailable | 保存データの DB(record / team の TiDB)を参照できない。`master_unavailable` と分けるのは原因も復旧手順も別で、「計算はできるが保存はできない」状態(CLAUDE.md 絶対ルール5)をクライアントが区別できる必要があるため(ADR-0209 §5.3) | 503 |
      *     | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202) | 503 |
      * @enum {string}
      */
@@ -328,6 +381,7 @@ export interface components {
       | "unknown_nature"
       | "not_found"
       | "master_unavailable"
+      | "store_unavailable"
       | "upstream_unavailable";
     /**
      * @default single
@@ -833,6 +887,46 @@ export interface components {
       nameJa: string;
       plus: components["schemas"]["StatKey"] | null;
       minus: components["schemas"]["StatKey"] | null;
+    };
+    /**
+     * @description 「よく使う相手」1件(ADR-0209 §3 #2)。端末内の計算イベントの集計で、他端末のイベントは混ざらない。
+     *     個体の中身(技・持ち物・特性・性格・SP)・ダメージの数値は返さない(集計に使うのは防御側の種族だけ)。
+     */
+    FrequentOpponent: {
+      /** @description 防御側(相手)の種族。名前・タイプは pokedex-svc から引く */
+      speciesKey: components["schemas"]["SpeciesKey"];
+      /**
+       * Format: double
+       * @description 頻度 × 時間減衰。並び順のための相対値で、絶対値に意味は無い(ADR-0209 §4)
+       */
+      score: number;
+      /** @description 減衰をかける前の、集計対象として残っている計算イベントの件数 */
+      count: number;
+      /**
+       * Format: date-time
+       * @description この相手を最後に計算した時刻(イベントの `occurred_at`)
+       */
+      lastCalculatedAt: string;
+    };
+    /**
+     * @description `completed` = この端末のデータは残っていない。`partial` = 1回の上限に達したので残りがある
+     *     (同じ要求を繰り返す。ADR-0209 §5.2)。
+     * @enum {string}
+     */
+    DeletionStatus: "completed" | "partial";
+    RecordDeletionResult: {
+      status: components["schemas"]["DeletionStatus"];
+      /**
+       * Format: date-time
+       * @description 墓石の時刻。これ以前に発生した計算イベントは以後保存しない(ADR-0209 §7)
+       */
+      purgedAt: string;
+      /** @description この呼び出しで消した行数(冪等なので2回目は 0 になる) */
+      deleted: {
+        calcEvents: number;
+        aggregates: number;
+        favorites: number;
+      };
     };
   };
   responses: {
@@ -1416,6 +1510,111 @@ export interface operations {
        * @description 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
        *     gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
        */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  listFrequentOpponents: {
+    parameters: {
+      query?: {
+        /** @description 返す上限。範囲外・整数でない値は 400 `invalid_input` */
+        limit?: number;
+      };
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description スコアの降順(同点は speciesKey の昇順)。記録が無ければ空配列 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FrequentOpponent"][];
+        };
+      };
+      400: components["responses"]["Error"];
+      /**
+       * @description record-svc が TiDB に届かない(`store_unavailable`)、または gateway から record-svc に届かない
+       *     (`upstream_unavailable`。ADR-0202・ADR-0209 §5.3)
+       */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  deleteRecordDeviceData: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 削除の結果(`partial` なら残りがある) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RecordDeletionResult"];
+        };
+      };
+      400: components["responses"]["Error"];
+      500: components["responses"]["Error"];
+      /** @description record-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`) */
       503: {
         headers: {
           [name: string]: unknown;

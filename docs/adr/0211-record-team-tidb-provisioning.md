@@ -248,6 +248,29 @@ CLI 部分(`cmd/migrate/main.go` の `cliEnv`・`run`・`runUp`/`runVersion`/`ru
 - record の `migrate up` 実行後、record DB に `devices`・`purge_journal` **だけ**が存在し、
   pokedex のテーブル(`types`・`species` 等)が存在しないこと(旧設計の誤り〈後述「変更履歴」〉の再発防止)。
 
+**実装時の追記(2026-09-25。P5-3 の critic レビュー対応で判明)**: `golang-migrate/migrate/v4/database/mysql`
+の `Lock()`(migration 実行前後の排他制御)は `sql.TxOptions{Isolation: sql.LevelSerializable}` を指定して
+トランザクションを開始する。TiDB は `SERIALIZABLE` 分離レベルをサポートしないため、これを設定しないまま
+`record-migrate`/`team-migrate` を TiDB に対して実行すると
+`Error 8048 (HY000): The isolation level 'SERIALIZABLE' is not supported` で必ず失敗する
+(ローカルの `tidb-server --store=unistore` で確認済み。TiKV 構成の TiDB でも同じ制限)。
+**`Lock()` だけの問題ではない**: 同ドライバの `SetVersion()`(`mysql.go:357`。migration 適用後にバージョンを
+記録する処理)も無条件に同じ `sql.LevelSerializable` を使うため、`x-no-lock=true`(同ドライバが対応する
+DSN オプション。`Lock()` の排他制御を無効化できる)を付けても `SetVersion()` 側で同じエラーになり回避でき
+ない。つまりクラスタ側の設定を変える以外に現実的な回避策が無い。
+対策として TiDB のグローバル変数 `tidb_skip_isolation_level_check=1` を一度設定する(TiDB は
+global 変数を永続化するため、クラスタ生成後に1回でよい)。
+`deploy/k8s/overlays/local/tidb/tidbinitializer.yaml` の `initSql` と `scripts/tidb-local-up.sh` に追加した。
+`dbmigrate` package 自体を変更する(例: 内部で `SET GLOBAL` を自動実行する)選択肢もあったが、
+DB 接続ユーザーに `SUPER`/`SYSTEM_VARIABLES_ADMIN` 相当の権限が要ることになり、ADR-0211 §4 の
+最小権限方針(migrator ロールは DDL のみ)に反するため採らなかった。クラスタ側の一度きりの設定に留める。
+**既存クラスタへの注意**: `TidbInitializer` は一度 Completed になると `initSql` を再実行しない。すでに
+`make up` で TiDB を立てたことがあるローカルクラスタでは、この `initSql` の変更が反映されないまま
+`record-migrate`/`team-migrate` が同じ 8048 エラーで失敗し続ける。その場合は (a) TiDB に直接
+`SET GLOBAL tidb_skip_isolation_level_check=1` を一度流すか、(b) `TidbInitializer`(と必要なら
+`TidbCluster` の該当部分)を作り直すこと。P5-1 の実機確認(共有 k3d クラスタへの初回適用)がまだ未実施の
+ため、この対応が実際に必要になるのは P5-3b(deploy/k8s の record-svc 配線)の実機確認時点の見込み。
+
 ### 6. スキーマ(ADR-0209 §3 の #5・#5b。record DB・team DB がそれぞれ自分の分を持つ)
 
 `services/record/db/migrations/`・`services/team/db/migrations/` に同一内容の2本の migration を置く

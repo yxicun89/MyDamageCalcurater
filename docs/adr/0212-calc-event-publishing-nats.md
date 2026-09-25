@@ -104,6 +104,23 @@ record-svc/team-svc の実装より先に作ることもできる。しかし co
 「片方でも取り違えると発行イベントが静かに保存されなくなる」構造を作るのは、責務の分離として
 悪い。Limits retention なら consumer の存在・設定に発行の成否が依存しないため、この問題自体が起きない。
 
+**実装時の追記(2026-09-25。P5-3 の critic レビュー R-9)**: record-svc の重複排除キー
+(`services/record/internal/events.EventID`。`calc_events.event_id` の一意制約に使う。ADR-0212 §6・
+ADR-0209 AC-R7)は `CALC_EVENTS` ストリームのシーケンス番号だけから組み立てる
+(`"calc-events-" + streamSeq`)。これは「同じメッセージの再配送では常に同じ値になる」という
+at-least-once の重複排除には十分だが、**ストリームを作り直す(delete → 再作成)とシーケンスが1から
+再開する**ため、過去に処理済みの `event_id`(例: `calc-events-42`)と、作り直した後に届く新しい
+イベントの `event_id` が衝突しうる。衝突すると新しいイベントは `calc_events` への `INSERT` が
+一意制約違反になり、record-svc は「重複」と誤認して(`store.Duplicate`)保存せずに ack してしまう
+(サイレントなデータ欠損)。ストリームを作り直す運用(バージョンアップでの `Subjects`/`Retention` の
+再作成、障害復旧での re-provision 等)を行うときは、**同じ操作で record DB の `calc_events`
+テーブルも合わせて空にする**(または record-svc を再作成前に一時停止し、再作成後に空の状態から
+再開する)こと。ストリームの通常の再起動(NATS Pod の再起動・`CreateOrUpdateStream` によるべき等な
+再適用)ではシーケンスは維持されるため、この対応が要るのは「ストリームを明示的に delete して
+作り直す」場合に限る。恒久対策(シーケンス以外の情報を event_id に混ぜる、ストリームの作成時刻を
+含める等)は、実際にストリームの再作成が運用上必要になったとき(P7-4 のバックアップ/復元設計や
+NATS のバージョンアップ手順を書くとき)に判断する。
+
 ### 5. Go クライアントは新 `jetstream` パッケージを使う(legacy の `JetStreamContext` ではない)
 
 nats.go v1.54.0 自身が `JetStreamContext`(`nats.Conn.JetStream()` で得られる旧 API)を

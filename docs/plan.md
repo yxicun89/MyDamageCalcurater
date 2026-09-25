@@ -345,10 +345,27 @@
   StatefulSet が実際に Ready になること・他レーンの Pod に影響しないこと。ADR-0212「人間の確認が
   必要なこと」・AC-N4)は未実施(このセッションではローカルの `docker run`〈`scripts/nats-local-up.sh`〉
   でのみ確認した)。次に `make up` を実行するときに確認する
-- [ ] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰)。
+- [x] P5-3 record-svc(保存・よく使う集計: 頻度×時間減衰。critic 2ラウンド。1回目 FAIL〈重大1・重要3〉→修正→2回目 PASS〈軽微4件〉、軽微も反映済み)。
   ADR-0209 §5.3 の契約を `api/openapi.yaml` に入れて `make gen`(`store_unavailable` の追加を含む)→
-  分離(§6)・全削除(§5)・失効ジョブ(§4)・ログ(§3)を実装。時間減衰の半減期は保持期間90日より短くする。
-  gateway に `/api/record/*` のルーティングと CORS の `DELETE` 許可を追加(ADR-0209 §10・ADR-0202 への追記)
+  分離(§6)・全削除(§5)・ログ(§3)を実装。時間減衰の半減期は保持期間90日より短くする。
+  gateway に `/api/record/*` のルーティングと CORS の `DELETE` 許可を追加(ADR-0209 §10・ADR-0202 への追記)。
+  `services/record/internal/store` の TiDB 実装は `services/record/internal/store/tidb_test.go`
+  (`//go:build tidb`。`make test-db`)で実 SQL(一意制約・削除順序・冪等性・時間減衰)を検証済み。
+  **残作業(critic レビューで指摘。R-3・R-4)**:
+  - 失効ジョブ(§4。日次で保持期間超過行を消す CronJob)は未実装。`cmd/record/config.go` の
+    `CalcEventsRetention`/`FavoritesRetention`/`DeviceRowExpiry`/`PurgeJournalRetention` は
+    起動時検証(ADR-0211 §7・AC-R8)のためだけに今は存在し、ジョブ本体からはまだ参照されない
+    (意図的な先取り。コード側にも同じ注記あり)。**P5-3b** として別タスクに切り出す
+  - `deploy/k8s/base/record` に Deployment・Service が無く、`GATEWAY_RECORD_URL` を渡す manifest も
+    無いため、k3d クラスタでは `/api/record/*` が恒久的に 503 になる(migrate Job のみ存在)。
+    **P5-3b** で Deployment・Service・gateway への配線・`scripts/up.sh` のイメージ追加までを行う
+- [ ] P5-3b record-svc の残作業(P5-3 の critic レビューで切り出し。2026-09-25)。
+  (1) `deploy/k8s/base/record` に Deployment・Service を追加し、`GATEWAY_RECORD_URL` を実際に配線して
+  k3d クラスタで `/api/record/*` が届くようにする(`scripts/up.sh` のイメージビルド対象に `record` の
+  `server` ターゲットを追加)。
+  (2) ADR-0209 §4 の失効ジョブ(record 用の日次 CronJob。生イベント90日・お気に入り540日・
+  devices 行30日・purge journal 90日を `cmd/record/config.go` の値で判定して消す。冪等・1回の上限あり)を
+  実装する。team-svc 側の同等ジョブ(ADR-0211 §7 の `TEAM_*` 環境変数)も合わせて検討する
 - [ ] P5-4 team-svc(構築 CRUD、Showdown 形式入出力)。
   ADR-0209 §5.3 の `deleteTeamDeviceData` と §6 の分離規則(他端末のリソース ID は 404 `not_found`)を含む。
   **P5-2 のイベントを購読し、自分の DB の `devices.last_seen_at` だけを更新する**(計算 API だけを使い続ける端末の
