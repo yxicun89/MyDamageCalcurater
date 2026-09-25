@@ -101,6 +101,22 @@ export const attackerPresetText = {
   xSuffix: "振り(無補正)",
 } as const;
 
+/**
+ * issue 275: 防御側プリセット(domain/defenderPresets.ts、ADR-0009 §1 のカタログ)の表示名。
+ * engine の Label(engine/bulk.go の DefenderPresetCatalog())と一字一句同じにする
+ * (defenderPresets.contract.test.ts が一致を検査する)。
+ */
+export const defenderPresetText = {
+  none: "無振り",
+  hp: "H振り",
+  hb_boost: "H振り+B補正",
+  hb: "HB振り",
+  hb_full: "HB特化",
+  hd_boost: "H振り+D補正",
+  hd: "HD振り",
+  hd_full: "HD特化",
+} as const;
+
 /** アプリ全体(App.tsx)の文言。 */
 export const appText = {
   title: "ポケモン ダメージ計算",
