@@ -19,6 +19,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, describe, expect, test } from "vitest";
+import type { Ability } from "../engine/types";
 import { typeNameJa, isTypeId } from "../i18n/ja";
 import { localPath } from "../test/localPath";
 import { exampleMasterSource } from "./exampleSource";
@@ -125,6 +126,35 @@ describe("toCalcSnapshot(api/openapi.yaml の MasterExport。ADR-0204)", () => {
       }
     });
 
+    // critic指摘: 例データ(testdata/golden/typechart.json)は324組すべてを明示しているため、
+    // 「組が欠けていたら等倍(2)を既定にする」という分岐が例データだけでは検証できない。
+    // 一部の組をわざと欠かせた入力で、その分岐を直接確かめる。
+    test("effectiveness に無い組は等倍(2)を既定にする", () => {
+      const [attackType, defenseType] = master.typeChart.types;
+      if (attackType === undefined || defenseType === undefined) {
+        throw new Error("相性表にタイプが無い(例データが壊れている)");
+      }
+      const sourceRow = master.typeChart.effectiveness[attackType];
+      if (sourceRow === undefined) {
+        throw new Error(`${attackType} の行が無い`);
+      }
+      const row = Object.fromEntries(
+        Object.entries(sourceRow).filter(([defendType]) => defendType !== defenseType),
+      );
+      const effectiveness = { ...master.typeChart.effectiveness, [attackType]: row };
+      const missingPair: MasterData = {
+        ...master,
+        typeChart: { types: master.typeChart.types, effectiveness },
+      };
+
+      const snapshot = toCalcSnapshot(missingPair);
+      const entry = snapshot.typeChart.find(
+        (candidate) => candidate.attackType === attackType && candidate.defenseType === defenseType,
+      );
+      expect(entry, `${attackType}→${defenseType} の行が書き出されていない`).toBeDefined();
+      expect(entry?.code).toBe(2);
+    });
+
     test("attackType・defenseType は types に載っているタイプだけ", () => {
       const snapshot = toCalcSnapshot(master);
       const known = new Set(snapshot.types.map((type) => type.id));
@@ -222,11 +252,33 @@ describe("toCalcSnapshot(api/openapi.yaml の MasterExport。ADR-0204)", () => {
         expect(entry.id).toBe(source?.id);
         expect(entry.nameJa).toBe(source?.nameJa);
         // 例データの効果は入れ子を持たない(statMods のキーは engine と同じ小文字のまま)。
-        // defAbsorbTypes のような入れ子の効果も同じ規則で変換する必要があるが、例データには無い。
         expect(entry.effect).toEqual(pascalCaseKeys(source?.effect ?? null));
       });
     },
   );
+
+  // critic指摘: 例データの特性はdefAbsorbTypesを持たないため、入れ子の効果を変換する分岐が
+  // 例データだけでは検証できない。共有の例データ(web/src/master/example/)は変えず、
+  // このテストだけの使い捨ての特性を1件差し込んで確かめる。
+  test("特性の defAbsorbTypes(入れ子の効果)も、外側のタイプIDは変換せず中身だけ PascalCase にする", () => {
+    const absorbingAbility: Ability = {
+      id: "exampleabilityabsorbfortest",
+      nameJa: "テスト吸収(テスト専用)",
+      effect: { defAbsorbTypes: { water: { healNumerator: 1, healDenominator: 4 } } },
+    };
+    const withAbsorb: MasterData = {
+      ...master,
+      abilities: [...master.abilities, absorbingAbility],
+    };
+
+    const snapshot = toCalcSnapshot(withAbsorb);
+    const entry = snapshot.abilities.find((candidate) => candidate.id === absorbingAbility.id);
+    expect(entry, "差し込んだ特性が書き出されていない").toBeDefined();
+    expect(entry?.effect).toEqual({
+      // 外側のキー(water。タイプID)は変換しない。値(AbsorbEffect)の中だけ PascalCase にする。
+      DefAbsorbTypes: { water: { HealNumerator: 1, HealDenominator: 4 } },
+    });
+  });
 
   test("性格は id・nameJa・plus・minus(無補正は plus・minus とも null)", () => {
     const snapshot = toCalcSnapshot(master);

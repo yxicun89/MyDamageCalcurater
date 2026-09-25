@@ -42,7 +42,9 @@ const effectsSource = readRepoFile("services/internal/master/effects.go");
  * 末尾のスキーマ(次の見出しが無い)も読めるよう、番兵の見出しを足した文字列から探す。
  */
 function schemaBlock(name: string): string {
-  const matched = new RegExp(`^ {4}${name}:$([\\s\\S]*?)^ {4}\\w`, "m").exec(`${openApiSource}\n    ZZEndOfSchemas:`);
+  const matched = new RegExp(`^ {4}${name}:$([\\s\\S]*?)^ {4}\\w`, "m").exec(
+    `${openApiSource}\n    ZZEndOfSchemas:`,
+  );
   expect(matched, `api/openapi.yaml の ${name} スキーマを読めない`).not.toBeNull();
   return matched?.[1] ?? "";
 }
@@ -207,7 +209,11 @@ describe("services/internal/master の検証との一致(FromExport が通る形
     ["abilities", "abilityEffectFields"],
   ] as const)("%s の効果のキーは %s(PascalCase)にあるものだけ", (field, goVar) => {
     const known = new Set(
-      goQuotedNames(effectsSource, new RegExp(`${goVar}\\s*=\\s*map\\[string\\]bool\\{([\\s\\S]*?)\\}`), goVar),
+      goQuotedNames(
+        effectsSource,
+        new RegExp(`${goVar}\\s*=\\s*map\\[string\\]bool\\{([\\s\\S]*?)\\}`),
+        goVar,
+      ),
     );
     expect(known.size).toBeGreaterThan(0);
     const rows = toCalcSnapshot(master)[field];

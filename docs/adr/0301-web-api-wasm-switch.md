@@ -88,6 +88,58 @@ API レーンの P3-1(ADR-0200)で `api/openapi.yaml` が P1-12 以降の engine
   スクリプト `web/scripts/export-example-master.mjs` を置く(出力は `data/generated/` 相当の .gitignore 済みの場所。生成物はコミットしない)。
   calc-svc をその出力で起動すれば、Web の例データの ID がそのまま通る(P4-6 の E2E でも使う)。
 
+#### 5 追記(2026-09-25。`make e2e` の `web-e2e-online` 修復。ブランチ `fix/web-online-e2e-master-export`)
+
+calc-svc の契約が、この節を書いた時点(2026-09-22)の暫定スキーマ(`services/calc/README.md` の
+schemaVersion 1、相性表は `CALC_TYPECHART_PATH` で別出し)から、ADR-0204 の `MasterExport`
+(`api/openapi.yaml`。相性表を本体に含める・`showdownId`/`type1`/`type2`/`abilities[{slot,abilityId}]`・
+`MasterMove.effect`・効果のキーは PascalCase)に変わった。`web/playwright.online.config.ts` が
+廃止済みの `CALC_TYPECHART_PATH` を渡し続け、`toCalcSnapshot()` の出力も旧スキーマのままだったため、
+calc-svc が起動できず `make e2e` の `web-e2e-online` が壊れていた(issue 無し。plan.md 2026-09-25 着手分)。
+
+- `web/src/master/exportSnapshot.ts`(`toCalcSnapshot`)を `MasterExport` の形に合わせて書き直した:
+  `dataVersion`(`"example"` を含む固定文字列。呼ぶたびに変わらない)・`types`(`typeChart.types` から
+  `{id, sortOrder, nameJa}`。`nameJa` は `i18n/ja.ts` の `typeNameJa` から引く)・`typeChart`(18×18=324件、
+  等倍の既定は `code: 2`)を本体に足し、`species` は `type1`/`type2`(`types[0]`/`types[1] ?? null`)・
+  `showdownId`(後述)・`isMega: false`・`baseSpeciesKey: null`・`requiredItemId: null`・
+  `abilities: [{slot, abilityId}]` の形にし、`moves` に `effect: null`(例データに追加効果は無い)を足した。
+- `items`/`abilities` の効果(`ItemEffect`/`AbilityEffect`)は Web の DTO の camelCase のキーのまま
+  持っていたが、共通マスタ(`services/internal/master/effects.go` の `itemEffectFields`/`abilityEffectFields`/
+  `absorbEffectFields`)は PascalCase を大文字小文字区別で照合するため、書き出し時に変換する
+  (`toPascalCaseEffect`)。タイプ/ステータス ID をキーに持つ辞書(`statMods`・`defResistType`・
+  `defAbsorbTypes` の外側のキー)は値であって変換対象のフィールド名ではないので変換しない。
+  `defAbsorbTypes` の値(`AbsorbEffect`)のように、値自身がさらにフィールド名を持つオブジェクトの辞書は
+  同じ規則を再帰的に適用する(例データには無いが、将来の入れ子の効果に備える)。
+- 技・持ち物・特性の ID(`web/src/master/example/{moves,items,abilities}.ts`)からハイフンを除いた
+  (`example-move-tackle` → `examplemovetackle`)。共通マスタの ID の形式(`services/internal/master/typechart.go`
+  の `codeIDPattern = ^[a-z0-9]+$`)がハイフンを許さないため。**種族の `key` はこの節の元の決定どおり
+  `SpeciesKey`(`9001-000`。ハイフン必須)のままで変更しない**。`showdownId`(ADR-0204 で新設された必須
+  フィールド)は `key` からハイフンを除いた値(`"9001-000"` → `"9001000"`)にする。**性格の ID は
+  `example-` のままで変更しない**(`buildNatures` は ID の形式を検査しない。calc-svc 側の契約どおり)。
+- `web/playwright.online.config.ts` から `CALC_TYPECHART_PATH` と `testdata/golden/typechart.json` への
+  参照を削除し、calc-svc には `CALC_MASTER_PATH` だけを渡す(ADR-0204 §「相性表は本体」に合わせる)。
+
+**未解決(このタスクの範囲外として持ち越し)**: 上記の修正で calc-svc 自体は正しい `MasterExport` で
+起動できることを確認した(`GET /healthz` が 200)が、`web/e2e/online.spec.ts` はまだ緑にならない。
+`main.tsx` の「オンライン」モードは P4-16(ADR-0304)以降、`MasterSource` を `createOnlineMasterSource`
+(pokedex-svc の公開 API `/api/pokedex/*` を読む)に固定で切り替える。`web-e2e-online` は calc-svc だけを
+`go run`(pokedex-svc は起動しない)で立てる設計(2026-09-22 の DECISIONS.md の決定、この ADR の §5 の
+前段)だが、calc-svc は担当外の pokedex の7操作を意図的に 404 で返す(`services/calc/internal/httpapi/server.go`
+の `registerPokedexNotFoundRoutes`。critic 指摘 R1、P3-1 から変更なし)。このため `onlineSource.load()`
+が `GET /api/pokedex/items` 等で reject し(`curl` で 404 を確認済み)、画面は「マスタデータの読み込みに
+失敗しました」のまま止まり、`e2e/online.spec.ts` の2件がどちらもタイムアウトする。加えて、たとえ
+items/natures が読めても `ONLINE_MASTER_CAPABILITIES.speciesList` が常に `false` のため `CalcScreen` は
+種族の選択をプルダウンから `SpeciesSearchField`(検索入力)に切り替える設計であり、`e2e/support/calcPage.ts`
+の `selectMatchup`(`<select>` への `selectOption`)とも噛み合わない。P4-16 が「オンライン」の意味を
+(このADRの§5が前提にしていた「Webの例データ + calc-svcのみ」から)「pokedex-svcの公開APIから読む」へ
+グローバルに変えたことで、`make e2e` が長らくスタブだった(issue #72・P4-22 で2026-09-25に初めて実行される
+ようになった)間に生じていた既存の不整合と判断する。calc-svc に pokedex 相当のルートを持たせるのは
+R1 の決定に反するため不可、pokedex-svc(MySQL 必須)を e2e に足すのは「k3d 不要」の設計(ADR-0306)に反する。
+Web 側だけで完結する対処(例: e2e 専用の軽量な pokedex フィクスチャサーバーを別に置く、または
+`web-e2e-online` の検証範囲を「オンラインは常に例データ + calc-svc」に戻す設計変更)が要るが、
+どちらも新しい設計判断(と、それに伴う `e2e/online.spec.ts` 自体の書き換え)を要するため、このタスクの
+「`toCalcSnapshot` を契約に合わせる」という範囲には含めず、別タスクとして残す。
+
 ### 6. テスト
 
 - 単体: 写像(実体 → ID、応答 → DTO、`natureId` の選び方、エラーの写し)、UUID と端末 ID の保存、モードの保存。`fetch` は fake。

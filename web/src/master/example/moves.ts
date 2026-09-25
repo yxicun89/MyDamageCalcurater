@@ -4,7 +4,7 @@ import type { Move } from "../../engine/types";
 
 export const exampleMoves: Move[] = [
   {
-    id: "example-move-tackle",
+    id: "examplemovetackle",
     nameJa: "テストたいあたり",
     type: "normal",
     category: "physical",
@@ -12,7 +12,7 @@ export const exampleMoves: Move[] = [
     priority: 0,
   },
   {
-    id: "example-move-firepunch",
+    id: "examplemovefirepunch",
     nameJa: "テストかえんパンチ",
     type: "fire",
     category: "physical",
@@ -20,7 +20,7 @@ export const exampleMoves: Move[] = [
     priority: 0,
   },
   {
-    id: "example-move-waterblast",
+    id: "examplemovewaterblast",
     nameJa: "テストみずでっぽう",
     type: "water",
     category: "special",
@@ -28,7 +28,7 @@ export const exampleMoves: Move[] = [
     priority: 0,
   },
   {
-    id: "example-move-thunder",
+    id: "examplemovethunder",
     nameJa: "テストかみなり",
     type: "electric",
     category: "special",
@@ -36,7 +36,7 @@ export const exampleMoves: Move[] = [
     priority: 0,
   },
   {
-    id: "example-move-leafcutter",
+    id: "examplemoveleafcutter",
     nameJa: "テストはっぱカッター",
     type: "grass",
     category: "physical",
@@ -44,7 +44,7 @@ export const exampleMoves: Move[] = [
     priority: 0,
   },
   {
-    id: "example-move-dragonpulse",
+    id: "examplemovedragonpulse",
     nameJa: "テストりゅうのはどう",
     type: "dragon",
     category: "special",
@@ -52,7 +52,7 @@ export const exampleMoves: Move[] = [
     priority: 0,
   },
   {
-    id: "example-move-rockslide",
+    id: "examplemoverockslide",
     nameJa: "テストいわおとし",
     type: "rock",
     category: "physical",
@@ -60,7 +60,7 @@ export const exampleMoves: Move[] = [
     priority: 0,
   },
   {
-    id: "example-move-steelwing",
+    id: "examplemovesteelwing",
     nameJa: "テストてつのつばさ",
     type: "steel",
     category: "physical",
@@ -68,7 +68,7 @@ export const exampleMoves: Move[] = [
     priority: 0,
   },
   {
-    id: "example-move-wingattack",
+    id: "examplemovewingattack",
     nameJa: "テストつばさでうつ",
     type: "flying",
     category: "physical",
@@ -76,7 +76,7 @@ export const exampleMoves: Move[] = [
     priority: 0,
   },
   {
-    id: "example-move-growl",
+    id: "examplemovegrowl",
     nameJa: "テストなきごえ",
     type: "normal",
     category: "status",
