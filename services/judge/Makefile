@@ -3,6 +3,7 @@ CLUSTER ?= pokecalc
 JUDGE_DIR ?= services/judge
 JUDGE_IMAGE ?= pokecalc/judge:local
 JUDGE_URL ?= http://localhost:8080
+API_URL ?= http://localhost:8080
 
 .PHONY: judge-gen judge-test judge-lint judge-build judge-kustomize judge-docker-build judge-k3d-deploy judge-smoke
 
@@ -39,4 +40,4 @@ judge-k3d-deploy: judge-docker-build ## k3d へ judge を直接デプロイ(loca
 	@kubectl -n pokecalc rollout status deployment/judge --timeout=120s
 
 judge-smoke:
-	@JUDGE_URL=$(JUDGE_URL) $(JUDGE_DIR)/scripts/smoke.sh
+	@JUDGE_URL=$(JUDGE_URL) API_URL=$(API_URL) $(JUDGE_DIR)/scripts/smoke.sh

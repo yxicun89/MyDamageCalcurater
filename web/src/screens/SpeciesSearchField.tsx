@@ -5,7 +5,7 @@
 // 候補は role="listbox" の中の role="option")に合わせる。CalcScreen.tsx・ReverseScreen.tsx で共有する。
 
 import { useEffect, useId, useRef, useState } from "react";
-import { masterOnlineText } from "../i18n/ja";
+import { calcScreenText, masterOnlineText } from "../i18n/ja";
 import {
   SPECIES_SEARCH_DEBOUNCE_MS,
   SPECIES_SEARCH_LIMIT,
@@ -51,6 +51,7 @@ export function SpeciesSearchField({ label, masterSearch, onResolved }: SpeciesS
   const abortControllerRef = useRef<AbortController | null>(null);
   const hintId = useId();
   const listboxId = useId();
+  const inputId = useId();
 
   function clearDebounceTimer(): void {
     if (debounceTimerRef.current !== null) {
@@ -184,7 +185,14 @@ export function SpeciesSearchField({ label, masterSearch, onResolved }: SpeciesS
 
   return (
     <div className="species-search">
+      {/* critic指摘(issue 304): オンラインの種族検索欄はplaceholderだけで見えるラベルが無く、
+          文字を入力すると消えてしまい SC 3.3.2 を満たさなかった。短い語(「ポケモン」)を見える
+          ラベルにし、aria-label(既存のスロットの語。「攻撃側のポケモン」等)はそのまま残す。 */}
+      <label className="species-search__label" htmlFor={inputId}>
+        {calcScreenText.pokemonFieldLabel}
+      </label>
       <input
+        id={inputId}
         type="text"
         role="combobox"
         aria-label={label}

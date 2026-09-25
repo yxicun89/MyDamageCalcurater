@@ -127,6 +127,22 @@ type ReverseZone = "mine" | "theirs" | "other";
 /** いまフォーカスがある要素が、計算画面のどの区画にあるか。 */
 async function focusedCalcZone(page: Page): Promise<CalcZone> {
   return page.evaluate<CalcZone>(() => {
+    // issue #304: 攻撃側・防御側カードの section は aria-label ではなく aria-labelledby(見える h2 を
+    // 参照)になった。属性セレクタでは引けないので、aria-labelledby の参照先の文字も見る。
+    function regionName(element: Element): string | null {
+      const region = element.closest("section");
+      if (region === null) {
+        return null;
+      }
+      const labelledBy = region.getAttribute("aria-labelledby");
+      if (labelledBy !== null && labelledBy !== "") {
+        const label = document.getElementById(labelledBy);
+        if (label !== null) {
+          return label.textContent.trim();
+        }
+      }
+      return region.getAttribute("aria-label");
+    }
     const element = document.activeElement;
     if (element === null) {
       return "other";
@@ -134,10 +150,11 @@ async function focusedCalcZone(page: Page): Promise<CalcZone> {
     if (element instanceof HTMLButtonElement && element.textContent.trim() === "攻守入れ替え") {
       return "swap";
     }
-    if (element.closest('[aria-label="攻撃側"]') !== null) {
+    const name = regionName(element);
+    if (name === "攻撃側") {
       return "attacker";
     }
-    if (element.closest('[aria-label="防御側"]') !== null) {
+    if (name === "防御側") {
       return "defender";
     }
     return "other";
@@ -293,8 +310,9 @@ for (const width of NARROW_WIDTHS) {
       await chooseRadio(page, "攻撃側の調整", "A特化");
 
       await page.getByRole("button", { name: "攻守入れ替え", exact: true }).click();
+      // issue #304: カードの見出し階層が h2(領域名「攻撃側」固定)→ h3(種族名)になった(calc.spec.ts と同じ形)。
       await expect(
-        page.getByRole("region", { name: "攻撃側", exact: true }).getByRole("heading", { level: 2 }),
+        page.getByRole("region", { name: "攻撃側", exact: true }).getByRole("heading", { level: 3 }),
       ).toHaveText(SPECIES.water.nameJa);
       await expectNoHorizontalOverflow(page);
     });

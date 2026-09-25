@@ -153,7 +153,7 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 | `IgnoresBurn` | 攻撃側。やけどの半減を無効 | `dmg:132-134` | #13 |
 | `Airborne` | 両側。浮いている(ふゆう)。接地判定 `isGrounded`(`mod:86`)でフィールドの補正の対象外にする。地面技の無効は `DefImmuneTypes` で別に持つ(ADR-0116) | `mod:86-95` | #7 |
 
-- 効果値の出どころ: calc-svc は DB の効果 JSON を `services/internal/master/effects.go:299` `DecodeItemEffect`・`:380` `DecodeAbilityEffect` で厳格デコード(本番の定義は `data/importer/effects.json`。ADR-0101)。WASM はリクエストの `item.effect` / `ability.effect` を `engine/wasmapi/dto.go:273`・`:398` で変換。
+- 効果値の出どころ: calc-svc は DB の効果 JSON を `services/internal/master/effects.go:305` `DecodeItemEffect`・`:386` `DecodeAbilityEffect` で厳格デコード(本番の定義は `data/importer/effects.json`。ADR-0101。補正値は engine と同じ上限 `MaxEffectModifier` まで)。Champions 世代でダメージに効くのにこの表で表せない持ち物・特性は、理由付きで `tools/golden/unsupported-effects.json` に載せる(ゴールデンの生成器が「効くもの − 定義済み」との一致を確かめる。ADR-0120)。WASM はリクエストの `item.effect` / `ability.effect` を `engine/wasmapi/dto.go:273`・`:398` で変換。
 - 天候・フィールド・壁は「ゲーム機構」なので engine のルールとしてコードに持つ(`mod:1-14` のコメント、ADR-0005)。
 - 技の追加効果 `Move.Effect`(`engine/move_effect.go:22` `MoveEffect`)は `CalcDamage` が読まない。判定側が使うメタデータ(ADR-0107 決定2。`engine/move_effect_test.go:83` `TestCalcDamageIgnoresMoveEffect`)。
 
@@ -189,7 +189,7 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 |---|---|---|
 | 件数上限 | `Presets`・`PresetKeys` は各 8 以下、`ItemVariants` は 64 以下(選別より前に見る) | `engine/bulk.go:217-225` |
 | プリセットの選択 | `PresetKeys` あり → `Presets`(空ならカタログ)からキーで選ぶ(指定順が行順)/ `Presets` のみ → そのまま / どちらも空 → 技の分類の既定セット | `engine/bulk.go:170` `selectPresets` |
-| 既定カタログ | 8 件(無振り・H・H+B補正・HB・HB特化・H+D補正・HD・HD特化)。物理は B 系、特殊は D 系、変化技は無振りと H だけ | `engine/bulk.go:112` `DefenderPresetCatalog`、`:127` `DefaultDefenderPresets` |
+| 既定カタログ | 8 件(無振り・H・H+B補正・HB・HB特化・H+D補正・HD・HD特化)。物理は B 系、特殊は D 系、変化技は無振りと H だけ | `engine/presets/defender.json`(正。`engine/defender_preset.go` が embed)、`engine/bulk.go` `DefenderPresetCatalog`・`DefaultDefenderPresets` |
 | 検証 | キー空・SP 範囲/合計・性格が HP を指す → `ErrInvalidPreset`。重複 `ErrDuplicatePreset`、未知 `ErrUnknownPreset` | `engine/bulk.go:151` |
 | 防御側の組み立て | Lv50・`Status` なし・ランク 0・**特性なし(ゼロ値)**・テラスなし | `engine/bulk.go:139` `Defender` |
 | 行 | プリセット優先でプリセット × 持ち物(持ち物なしは `nil` の 1 通り)。各行 = 同じ入力の `CalcDamage` | `engine/bulk.go:243-275` |
@@ -212,14 +212,17 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 | SP 各 0..32・合計 ≤ 66 | error | `engine/model.go:141-148` |
 | ランク -6..6 | error | `engine/model.go:149-154` |
 | 性格が HP を指さない | error | `engine/model.go:155` |
-| 種族のタイプが 1〜2 個 | error | `engine/model.go:158` |
+| 種族のタイプが 1〜2 個・重複なし | error | `engine/model.go` `Individual.Validate` |
+| 種族値 `MinBaseStat..MaxBaseStat`(1..255。HP を含む) | error | `engine/model.go` `Individual.Validate`(#255。ADR-0117) |
+| 持ち物・特性の効果の補正値 `MinEffectModifier..MaxEffectModifier`(1..×512。「0 は補正なし」の項目は 0 も可) | error | `engine/model.go` `ItemEffect.validate` / `AbilityEffect.validate`(#255。ADR-0117) |
 | 相性表あり・入力のタイプ ID が表にある | `ErrTypeChartMissing` / `ErrUnknownType` | `dmg:173` |
 | bulk の件数(8 / 8 / 64) | `ErrTooManyPresets` / `ErrTooManyItemVariants` | `engine/bulk.go:36-43,217-225` |
 | reverse の件数(持ち物 64・観測 16・`MaxCandidates` 0..128) | `ErrTooManyItemCandidates` / `ErrTooManyObservations` / `ErrInvalidMaxCandidates` | `engine/reverse.go:49-56,307-315` |
+| reverse の技がダメージを与えられる(変化技・威力 0・全候補で 0 を拒否) | `ErrMoveDealsNoDamage`(境界では `invalid_input`) | `engine/reverse.go` `CalcReverse`(#317。ADR-0117 §3) |
 
 - 件数上限の値は calc-svc の契約(ADR-0208 §1)と同じ値を engine にも置く。HTTP を通らない直接呼び出し・WASM でも計算量を増幅させないため(ADR-0108 決定1〜3)。上限ちょうどの実測は bulk 約 3.0ms・reverse 約 25ms(ADR-0108 §6 が引く ADR-0208 の計測)。
 - wasmapi は同じ件数検査を DTO 変換より前に重ねて置く(`engine/wasmapi/requests.go:129-136,279-286`)。HTTP と WASM で同じ `code`(`invalid_input`)にするため(ADR-0108 決定3・5)。エラーの code 対応は `engine/wasmapi/wasmapi.go:151` `errorResponse`。
-- 検査**していない**もの(#255): 種族値の上限、タイプの重複(`["fire","fire"]` が 2 回掛かる)、効果値の範囲(負・巨大な倍率)、`Move.Effect` の妥当性(`engine/move_effect_test.go:120` `TestCalcDamageAcceptsInvalidMoveEffect`。`MoveEffect.Validate` `engine/move_effect.go:29` は呼び出し側が使う)。HP が巨大だと `koProbability` の配列確保(`engine/ko.go:40`)が比例して増える。
+- 検査**していない**もの: `Move.Effect` の妥当性(`engine/move_effect_test.go:120` `TestCalcDamageAcceptsInvalidMoveEffect`。`MoveEffect.Validate` `engine/move_effect.go:29` は呼び出し側が使う)。種族値の上限・タイプの重複・効果値の範囲は #255 で `Individual.Validate` が見るようにした(HP の上限で `koProbability` の配列確保 `engine/ko.go:40` も頭打ちになる。ADR-0117)。
 
 ## 12. engine の純粋性の保ち方
 

@@ -166,6 +166,10 @@ func TestRunPrintsSummary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	in.ReferenceTypeChart, err = importer.LoadReferenceTypeChart(importer.ReferenceTypeChartDefaultPath(data))
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, rec, err := importer.Reconcile(in)
 	if err != nil {
 		t.Fatal(err)
@@ -344,6 +348,58 @@ func TestRunInvalidInputExitsNeedsHuman(t *testing.T) {
 	}
 	if h.openCalls != 0 {
 		t.Error("入力が不正なのに DB を開いた")
+	}
+}
+
+// --- 参照の相性表との照合(issue #280・ADR-0118) -------------------------------------------
+
+func TestRunReferenceTypeChartMissingExitsNeedsHuman(t *testing.T) {
+	data := copyFixtureData(t, 2)
+	if err := os.Remove(importer.ReferenceTypeChartDefaultPath(data)); err != nil {
+		t.Fatal(err)
+	}
+	h := newHarness()
+	if code := h.run(t, "-data", data, "-dry-run"); code != 3 {
+		t.Fatalf("exit = %d, want 3(参照の相性表が無いまま照合を飛ばさない)", code)
+	}
+}
+
+func TestRunReferenceTypeChartFlagOverridesDefault(t *testing.T) {
+	data := copyFixtureData(t, 2)
+	moved := filepath.Join(t.TempDir(), "typechart.json")
+	if err := os.Rename(importer.ReferenceTypeChartDefaultPath(data), moved); err != nil {
+		t.Fatal(err)
+	}
+	h := newHarness()
+	if code := h.run(t, "-data", data, "-typechart", moved, "-dry-run"); code != 0 {
+		t.Fatalf("exit = %d, want 0", code)
+	}
+}
+
+func TestRunReferenceTypeChartMismatchBlocks(t *testing.T) {
+	data := copyFixtureData(t, 2)
+	path := importer.ReferenceTypeChartDefaultPath(data)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 参照の版を取り込む calc の版と変える(食い違い = Blocker)。
+	changed := strings.Replace(string(raw), `"version": "`+fixtureCalcVersion+`"`, `"version": "test-calc-2"`, 1)
+	if changed == string(raw) {
+		t.Fatal("参照の相性表の version を書き換えられない(fixture の形を確認)")
+	}
+	if err := os.WriteFile(path, []byte(changed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h := newHarness()
+	if code := h.run(t, "-data", data); code != 3 {
+		t.Fatalf("exit = %d, want 3(相性表の食い違いは人の裁定が要る)", code)
+	}
+	if h.openCalls != 0 {
+		t.Errorf("照合で止まったのに DB を開いた(%d 回)", h.openCalls)
+	}
+	if !strings.Contains(h.stderr.String(), "人間の裁定が必要な食い違い") {
+		t.Errorf("stderr に Blocker の案内が無い")
 	}
 }
 

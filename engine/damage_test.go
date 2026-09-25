@@ -3,13 +3,23 @@ package engine
 import "testing"
 
 // mkIndiv は種族値・タイプ・SP・性格を指定して個体を作る(HP種族値は 100 固定)。
+// 指定しなかった(0 の)種族値は計算に使わないステータスなので、Validate の範囲
+// (MinBaseStat..MaxBaseStat。issue #255)に入る fillerBaseStat で埋める。
 func mkIndiv(types []Type, base Stats) Individual {
 	base.HP = 100
+	for _, k := range AllStatKeys() {
+		if base.Get(k) == 0 {
+			base = base.WithStat(k, fillerBaseStat)
+		}
+	}
 	return Individual{
 		Species: Species{Types: types, BaseStats: base},
 		Nature:  NatureNeutral,
 	}
 }
+
+// fillerBaseStat は mkIndiv が未指定の種族値に入れる値(計算に使わないステータス用)。
+const fillerBaseStat = 100
 
 // 統制ケース: real Atk=200(base180), real Def=100(base80), 威力100 → base=90。
 func ctrlInput(atkTypes, defTypes []Type, cat MoveCategory, moveType Type) DamageInput {

@@ -38,7 +38,7 @@ sequenceDiagram
 | 9 | `calc/server.go:177` `CalcDamage` → `errors.go:95` `decodeStrict`(`limitedBody`: 1MiB) | 未知フィールド拒否・末尾ゴミ拒否 | 400 `invalid_json` / `unknown_field` |
 | 10 | `calc/convert.go:16,23,33` | format・status・teraType の列挙検証(ID 解決より先) | 400 `invalid_enum` |
 | 11 | `calc/convert.go:117` `resolveIndividual`、`:165` `resolveMove`、`:89` `parseField` | ID → `engine` 型。`Store` は `calc/internal/master/master.go:20` | 400 `unknown_species`/`unknown_nature`/`unknown_ability`/`unknown_item`/`unknown_move` |
-| 12 | `calc/errors.go:85` `validateIndividual` → `engine.Individual.Validate` | SP 範囲(各 0..32・合計 ≤ 66)・ランク等 | 400 `invalid_input` |
+| 12 | `calc/errors.go:85` `validateIndividual` → `engine.Individual.Validate` | SP 範囲(各 0..32・合計 ≤ 66)・ランク・種族値 1..255・タイプの重複・効果の補正値の範囲等 | 400 `invalid_input` |
 | 13 | `engine/damage.go:192` `CalcDamage` | 相性(`TypeChart.Effectiveness` `typechart.go:206`)→ 無効判定 → 基礎ダメージ(整数 floor)→ 16 乱数 × `pokeRound`(4096 基準)→ `ComputeKO`(`ko.go:17`) | `errFromEngine`(`errors.go:74`)で sentinel → code |
 | 14 | `calc/convert.go:261` `calcResultFrom` | `rolls`・確定数・表示 %(tenths ÷ 10) | — |
 

@@ -245,6 +245,67 @@
   (2)タブ列を左端・右端までスクロールし、先頭・末尾のタブが表示領域に収まることを確認(centered flexbox
   overflow clippingの回帰ガード)。CSSを戻すと両方とも実際に検知することを確認(確認後に復元)。
   `web/e2e/a11y.spec.ts`(タブのキーボード操作)・vitest 1262件・lintは無回帰(22/22 green)。
+- [x] issue #306(計算画面のタイプ名のコントラストとダメージバーの読み上げ名。Web レーン)。**完了・critic PASS
+  (2026-09-25)**: ブランチ `fix/web-issue-306-type-badge-contrast`。
+  タイプ名は文字色にタイプ色を使うのをやめてバッジ化し(背景 = タイプ色、文字 = `--type-<id>-ink`)、
+  ダメージバーは %幅 を同じ行に併記済みなので装飾(`aria-hidden`、`role="meter"` を外す)にする方針を
+  `docs/design.md`(「タイプバッジ」の新設・「画面: ダメージ計算」への追記)に記録。
+  失敗するテストを先に追加(`web/src/styles/typeBadgeContrast.test.ts` 新規、`tokens.test.ts`・
+  `CalcScreen.test.tsx`・`web/e2e/calc.spec.ts` を更新)。
+  実装: `web/src/styles/tokens.css` に18タイプ分の `--type-<id>-ink`(design.md 転記、ダークで上書きしない)を追加、
+  `web/src/screens/CalcScreen.tsx` のタイプ名 `<li>` を背景 `var(--type-<id>, var(--border-hairline))`・
+  文字色 `var(--type-<id>-ink, var(--text-primary))` のバッジに変更(未知タイプIDは既定値にフォールバック)、
+  `CalcScreen.css` に `.calc-card__type` のピル装飾を追加、ダメージバーの `div` から
+  `role="meter"`/`aria-value*` を外し `aria-hidden="true"` + `data-testid="damage-bar"`(fill 側は
+  `data-testid="damage-bar-fill"`)に変更。critic指摘の軽微1件(ダメージバーの技タイプ色`var(--type-${moveType})`
+  にフォールバックが無かった。今回の差分ではなく既存コードだが、ついでに`var(--type-${moveType},
+  var(--text-secondary))`へ修正)は直接修正。`cd web && npx vitest run` 1341 passed(0 failed)、
+  `npx tsc --noEmit` エラー無し、`npm run lint` エラー無し。テストファイル・design.md は変更していない。
+  **iOSレーンへの申し送り(critic指摘)**: design.mdの「タイプバッジ」節はiOSも同名トークン(`typeInk(_:)`)
+  を持つ前提で書かれているが、2026-09-25時点でiOS側にタイプ色自体がまだ実装されていない
+  (`ios/`にタイプ色の16進値0件)。iOS側でタイプ名を表示する画面ができたときに、design.mdの18タイプ分の
+  文字色の表を移植する必要がある
+- [x] issue #275(重大度 high。逆算の「受けたダメージ」で自分の耐久が無振り固定・画面にも出ない)。
+  **完了・critic PASS(2026-09-25。Web レーン。ブランチ `fix/web-issue-275-reverse-defender-preset`)**:
+  自分側カードに防御側プリセット(ADR-0009 §1 のカタログ8件)を出し、既定は `none`(無振り)のまま = 既定時の
+  リクエストは今までと同じ(回帰無し)。選択肢は技の分類で絞り(物理 = B 系、特殊 = D 系、変化技 = none/hp)、
+  分類が変わったら対のプリセットへ読み替える(`defenderPresetForCategory`。state は元のキーを保持したまま
+  表示だけ読み替えるので、物理→変化→物理と戻すと元のプリセットが復活する)。新しいテスト:
+  `web/src/domain/defenderPresets.test.ts`(挙動の固定)・`defenderPresets.contract.test.ts`
+  (`engine/bulk.go` の `DefenderPresetCatalog()` と `api/openapi.yaml` の enum を読む契約テスト)・
+  `ReverseScreen.test.tsx`(UI とリクエストの回帰)。engine への一本化
+  (`engine/presets/defender.json`)は DECISIONS.md 2026-09-25 でデータレーンへ申し送り済み、
+  `defenderPresetForCategory`(engine に無いWeb限定の読み替え規則)は ADR-0009 §1 に追記して根拠を残した。
+  critic PASS(mutation testing 2/3 kill。`flushObservationDebounce()` を守るテストが無いのは
+  `selectAttackerPreset` 側にも元々あった既存の穴で、今回の退行ではない。次に触るときに攻撃側・防御側
+  両方へテストを足すとよい)。`cd web && npx vitest run` 1419/1419 green、tsc・lintエラー無し。
+- [x] issue #304(重大度 medium。計算・逆算・タイプバランスの入力に見えるラベルが無く、初見でどれが
+  攻撃側・防御側・技・観測値か分からない。WCAG 2.2 SC 3.3.2 / SC 2.5.3)。**完了・critic PASS
+  (2026-09-25。Web レーン。ブランチ `fix/web-issue-304-visible-labels`)**: 受け入れ条件と失敗する
+  テストを先に用意(`web/src/screens/visibleLabels.test.tsx`・`web/src/i18n/visibleLabels.test.ts`・
+  `web/src/styles/inputTokens.test.ts`、共通の道具 `web/src/test/accessibleName.ts`)。
+  設計は docs/design.md「入力のラベル」に記録済み(領域の見える見出し・h2/h3 の階層・`label for` の
+  見えるラベル・accessible name は「<見出しの語>の<ラベルの語>」を文言資源で組み立てる・未選択 option の
+  文言・観測欄の説明文・入力/ピルの角丸トークン)。実装完了(1534/1534 green)。
+  **critic 1回目FAIL→修正**: (1) `web/e2e/mobile.spec.ts` の見出しレベル検査(h2→h3。calc.spec.ts と
+  同じ形)が未追従だったので修正。あわせて同ファイルの `focusedCalcZone` ヘルパーが `[aria-label="攻撃側"]`
+  という属性セレクタで区画を判定していたが、計算画面のカードは `aria-labelledby`(見える h2 を参照)に
+  変わったため引けなくなっていたのを修正(`aria-labelledby` の参照先の文字も見るように)。
+  (2) 逆算の観測欄で、見えるラベルと説明文(hint)がどちらも grid の全幅行を要求するため、`grid` の
+  自動配置で入力欄と単位ラジオ・削除ボタンが別々の行に分かれてしまっていた(jsdom では検出できない
+  レイアウト崩れ。実ブラウザで確認)。hint の DOM 位置を単位ラジオの後ろへ移し(`aria-describedby` は
+  DOM順に依存しないので支援技術への影響なし)、`.reverse-observation__label` に `grid-column: 1 / -1`
+  を追加して解消。`e2e/reverse.spec.ts` の検証メッセージの accessible description の期待値も、
+  hint が `aria-describedby` に加わった分を反映して更新(検証メッセージ自体の確認は維持。弱めていない)。
+  (3) オンラインの種族検索欄(`SpeciesSearchField.tsx`)がplaceholderだけで見えるラベルが無く、
+  issue #304 の症状が本番のオンラインモードに残っていたのを、短い見えるラベル(「ポケモン」)を追加して解消。
+  `npx playwright test`(オフライン、35/35)・vitest(1534/1534)は無回帰。
+  **申し送り(critic指摘の重要事項)**: `web/src/styles/inputTokens.test.ts` は「design.mdの値から
+  `:root` で最初にその値を持つ変数名を逆引きする」設計で、`--radius-input`(12px)と
+  `--font-size-caption`・`--space-3`(いずれも12px)が値を共有するため、`:root` の宣言順に依存する
+  脆さを持つ(今回は宣言順の入れ替え〈値は不変〉で対応。critic が宣言順を戻すと実際に失敗することを
+  確認済み)。次にトークンを足すときに同じ値の衝突が再発しうるので、触るときは
+  `inputTokens.test.ts` の逆引きを変数名ベースに直すことを検討する。
 
 ## M2: 保存・構築
 
@@ -462,6 +523,89 @@
   - 失敗するテストを先に置いた(spec-writer): `web/src/judge/judgeClient.test.ts`・`web/src/judge/JudgeScreen.test.tsx`・
     `web/src/app/routes.test.ts`(judge タブの登録)。`judge.gen.ts` は生成済み
   - iOS は Web を出してから改めて判断する(DECISIONS.md 2026-09-24)
+- [x] issue #234 moveId/natureId の形式検証が無く、制御文字などが上流 URL にそのまま埋め込まれ、503
+  `upstream_unavailable` + 誤警告ログになる(全体レビュー指摘。2026-09-24)
+  - 設計の正は ADR-0706: `moveId` / `natureId` を `^[a-z0-9]+(-[a-z0-9]+)*$`・1〜64 文字で検査し
+    (`services/balance` の `MoveId` / `AbilityId` と同じ綴り。ADR-0016 §2・ADR-0017 §2)、
+    **上流を呼ぶ前に** 400 `invalid_request` を返す(`writeUpstreamError` に到達させない)/
+    message は `attacker` / `defenders[<index>]` を示す(ADR-0703 §3)/ `internal/client` は
+    key を `url.PathEscape` で埋める(二重の守り)/ pokedex-svc 側の key 検証と `abilityId` / `itemId` は範囲外
+  - 契約は先に更新した(spec-writer): `services/judge/api/openapi.yaml` に `MoveId` / `NatureId` を新設し、
+    `moveId` / `natureId` の 4 か所をその `$ref` に。**`make judge-gen` は implementer が実行する**
+  - 失敗するテストを先に置いた(spec-writer): `internal/httpapi` に `TestOutspeedAndKoRejectsInvalidIDFormat`・
+    `TestOutspeedAndKoIDLengthLimit`・`TestOutspeedAndKoIDFormatCheckOrder`・`TestOutspeedAndKoAcceptsValidIDFormat`、
+    `TestOutspeedAndKoRejectsInvalidRequest` に形式の行を 4 件追加、`internal/client` に
+    `TestPokedexEscapesKeyInPath`・`TestPokedexDoesNotEscapeValidKey`。
+    現行コードでは 5 つの Test が失敗し、それ以外の既存テストは全件通ることを確認済み
+  - 実装(implementer、1 回目): `internal/httpapi/outspeed.go` の attacker 本体・defenders 候補それぞれで
+    `moveId`・`natureId` の計 3 箇所に ID 形式検査を追加(`writeUpstreamError` より前・attacker → defenders を
+    index 昇順)、`internal/client/pokedex.go` の `Species` / `Move` は key を `url.PathEscape` で path 要素に
+    埋めるよう変更(二重の守り)。`make judge-test` 全件通過
+  - critic 1 回目 NG: Go 側のロジック・テストは適合だが、`web/src/judge/judge.gen.ts` が契約変更
+    (`MoveId` / `NatureId` の追加)後に再生成されておらず stale(絶対ルール1「API 変更は openapi.yaml から。
+    変更後は make gen」違反)。2 回目(implementer)で `web/` にて手動再生成
+    (`npx openapi-typescript ../services/judge/api/openapi.yaml -o src/judge/judge.gen.ts &&
+    npx prettier --write src/judge/judge.gen.ts`。ADR-0604 §2 の素早さレーンの前例に倣う)、
+    差分が契約変更相当の型・doc コメントのみであることを確認、`npm run lint`・`npm test`(1262 件)が通ることを確認。
+    ADR-0706 の受け入れ条件7に `judge.gen.ts` の手動再生成を明記して再発防止
+- [x] issue #213(重大度 high)上流(pokedex-svc/calc-svc)が遅いと judge は1リクエスト全体の期限を持たず、
+  逐次呼び出し(最大27回・1回3秒)を律儀に最後まで続け、クライアントは HTTP 000(空応答)を受け取る
+  (JSON の 503 が返らない。全体レビュー指摘。2026-09-24)
+  - 設計の正は ADR-0707: `JUDGE_REQUEST_TIMEOUT`(既定 12 秒)を新設し、`writeTimeout`(15 秒)未満であることを
+    起動時に検証する。ハンドラ(`outspeedAndKo`)の先頭で `ctx` を 1 回だけ `context.WithTimeout` でラップし、
+    以降のすべての上流呼び出しに使い回す(呼び出し順序・逐次であることは変えない。ADR-0703 §3 の維持)。
+    `internal/client` は変更不要(既に `http.NewRequestWithContext` を使っており、`net/http` の context 統合が
+    「進行中の呼び出しを打ち切る」「未着手の呼び出しは即座に失敗する」の両方を自動で満たす)
+  - 失敗するテストを先に置いた(spec-writer): `services/judge/internal/httpapi/outspeed_deadline_test.go`
+    (`TestOutspeedAndKoOverallDeadline`・`TestOutspeedAndKoWithinDeadlineUnaffected`)、
+    `outspeed_test.go` に `upstreams.delay`・`sleepOrCancel` を追加、`cmd/api/config_test.go` に
+    `TestRequestTimeoutFromEnv`。実装前は `go vet` が `deps.RequestTimeout undefined` /
+    `undefined: requestTimeoutFromEnv` の 2 件で失敗する状態だった
+  - 実装(implementer): `cmd/api/config.go` に `requestTimeoutEnv`・`defaultRequestTimeout`(12秒)・
+    `requestTimeoutFromEnv(lookup, writeTimeout)`(`upstreamTimeoutFromEnv` と同じ形 + `writeTimeout` 以上は
+    起動失敗)を追加。`cmd/api/main.go` で呼び出し、`httpapi.Dependencies.RequestTimeout` に渡す(パース失敗は
+    他の設定エラーと同じく `os.Exit(1)`)。`internal/httpapi/server.go` の `Dependencies` に
+    `RequestTimeout time.Duration` を追加(既定 0 は「期限なし」で既存テストに影響しない)。
+    `internal/httpapi/outspeed.go` の `outspeedAndKo` で `ctx := c.Request().Context()` の直後に
+    `deps.RequestTimeout > 0` のときだけ `context.WithTimeout` でラップ。`README.md` に
+    `JUDGE_REQUEST_TIMEOUT` の行を追加。`go vet`・`go test ./...`(新規テスト含め全件)・`gofmt -l`・
+    `make judge-lint`・`make judge-build`・`bash scripts/check-publishable.sh` すべて成功を確認
+    (`TestOutspeedAndKoOverallDeadline` は `-count=5` でも安定して ~0.22s で 503 を返すことを確認済み)
+- [x] issue #329(重大度 low)SP 合計超過(67)の拒否を確かめる回帰テストが無く、`validateSP` の
+      `> engine.MaxSPTotal` を `> engine.MaxSPTotal+1` に変える退行を検出できない(既存の唯一のケースが
+      合計96で境界〈67〉から遠い。全体レビュー第3回指摘。2026-09-25)。テストのみの変更(実装は無変更):
+      `internal/judge/speed_test.go` に合計ちょうど66(受け付ける)・ちょうど67(拒否する。各欄は
+      MaxSPPerStat=32以下のまま)を追加、`internal/httpapi/outspeed_test.go` にも合計67の境界値ケースを
+      追加。mutation test で検証: `validateSP` を `> engine.MaxSPTotal+1` に一時的に変えて新規テスト
+      (`TestSpeedRejectsOutOfRangeInput`・`TestOutspeedAndKoRejectsInvalidRequest` の追加分)が実際に
+      失敗することを確認、復元して `go test ./...`・`gofmt -l`・`make judge-lint`・`make judge-build`・
+      `bash scripts/check-publishable.sh` すべて成功を確認(軽微な作業のため /phase の quick-scanner〜critic
+      は使わずメインで対応。CLAUDE.md「軽微な作業はメインのみでよい」)
+- [x] issue #257(重大度 low)`services/judge/scripts/smoke.sh` が healthz しか叩かず、k3d 上で
+      pokedex-svc・calc-svc への疎通(業務エンドポイント)を検証していない(balance・speed の smoke と
+      深さが揃っていない。全体レビュー指摘。2026-09-24)。`services/gateway/scripts/smoke.sh` の ID
+      取得部分(`API_URL`=gateway 経由で性格・種族・物理技の実IDを引く。pokedex 未投入なら例の架空ID
+      にフォールバックし「未投入」として区別)を流用し、`JUDGE_URL`(judge 自身の Ingress)へ
+      `POST /api/judge/v1/outspeed-and-ko` を実際に送って 200(`matchups[0].attackerKo.hits` を含む)・
+      ヘッダなし 400 `invalid_request`・未知 speciesKey 422 `unknown_species`(pokedex 到達時のみ)・
+      7候補(上限6超過)400 `invalid_request` を確認するよう拡張。`Makefile` に `API_URL` を追加し
+      `judge-smoke` に配線。README の古い「JD0完了」表記も直した(coding-rules §8)。
+      実クラスタ(k3d-pokecalc。実データ)で `make judge-smoke` を実行して確認済み
+      (`judge smoke: master=pokedex species=0003-000 move=highhorsepower nature=bashful` /
+      `health=200 outspeed=200(hits=4) missing_headers=400 unknown_species=422 too_many_defenders=400`)。
+      `JUDGE_URL` を到達不能にすると exit 1 になることも確認(回帰検出力)。`pokedex-svc` が未投入時の
+      example フォールバック分岐は、共有クラスタの pokedex-svc を落とさずに済ませるため、
+      `services/gateway/scripts/smoke.sh` の同じロジックを流用したことによる構成の裏取りで代える
+      (実際に落として確認はしていない)。軽微な作業のため /phase の quick-scanner〜critic は
+      使わずメインで対応
+- [~] issue #260(担当: タイプバランス・判定。重大度 low)`docs/judge-design.md`・`docs/type-balance-design.md` が
+      実装の後追いになっていない(全体レビュー指摘。2026-09-24)。**判定レーンの分だけ対応**:
+      `judge-design.md` の状態を「起草」→「完了(JD0〜JD5・main統合済み)」に、JD5節を「着手する」から
+      実際の完了内容(ADR-0705・PR #182・担当決定)へ更新、JD1の麻痺の記述(JD2で扱う、が誤り。JD2でも
+      見送りを継続したのが正しい)を訂正、新設の §5「未対応(既知の制限)」に状態異常・素早さ関連特性・
+      ダブルの全体技/壁減衰(issue #288)を明記。`docs/README.md` の目次は既に judge-design.md を指しており
+      変更不要。`type-balance-design.md` はタイプバランスレーンの持ち物のため対象外(DECISIONS.mdへ)。
+      `bash scripts/check-publishable.sh`(0件)成功を確認。軽微な作業のためメインで対応
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
 各レーンが自分の範囲の README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)と、動かして確かめられるレーンは手順書(`docs/runbooks/<レーン>.md`。AGENTS.md「手順書の書き方」に従う)を書く。全体図は `docs/architecture.md`。

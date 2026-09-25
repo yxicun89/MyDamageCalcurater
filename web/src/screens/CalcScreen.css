@@ -101,6 +101,23 @@
   padding: var(--space-2) var(--space-3);
 }
 
+/* 領域(カード)の見える見出し(issue 304、design.md「入力のラベル」)。
+   accessible name はこの見出しの文字から作る(section の aria-labelledby)。
+   critic指摘: 下の .calc-card__name(種族名。h3)と同じ大きさだと見出し階層(h2→h3)が視覚的に
+   区別できない。領域名(h2)は区画のラベルなので小さく、種族名(h3)を主役の大きさのままにする。 */
+.calc-card__region {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+/* 入力欄の見えるラベル(issue 304)。視覚的に隠さない(clip・width:1px 等を使わない)。 */
+.calc-card__label,
+.calc-screen__label {
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
 .calc-card__info {
   display: flex;
   flex-direction: column;
@@ -123,11 +140,22 @@
 
 .calc-card__types {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   list-style: none;
   margin: 0;
   padding: 0;
   font-size: var(--font-size-caption);
+}
+
+/* タイプ名はバッジ(ピル)で出す(docs/design.md「タイプバッジ」、issue #306)。
+   背景色・文字色は CalcScreen.tsx でタイプごとの CSS 変数を style に設定する。 */
+.calc-card__type {
+  display: inline-block;
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-2);
+  font-weight: 600;
+  line-height: 1.2;
 }
 
 .calc-preset {
@@ -169,6 +197,19 @@
   width: 1px;
   height: 1px;
   pointer-events: none;
+}
+
+/* 技の select(design.md「入力のラベル」: ブラウザ既定の見た目のまま置かない)。 */
+.calc-screen__move {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  padding: var(--space-2) var(--space-3);
 }
 
 .calc-screen__compare {

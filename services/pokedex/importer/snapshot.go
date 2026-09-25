@@ -244,4 +244,9 @@ type Input struct {
 	Effects     EffectsFile
 	Regulations RegulationsFile
 	Config      Config
+
+	// ReferenceTypeChart は照合(Reconcile)が比べる参照の相性表(issue #280・ADR-0118)。
+	// LoadInput は読まない(data の外にある)。呼び出し側が LoadReferenceTypeChart で読んで入れる。
+	// Reconcile では必須、Convert では使わない。
+	ReferenceTypeChart *ReferenceTypeChart
 }
