@@ -521,6 +521,38 @@
   (3) 既定サイズで %・確定数の文字が縮んでいないことを確かめる検査(critic の任意の指摘)
   完了: アクセシビリティ域でプリセットのピルを縦積みに。「詳細」を開いた AX5 検査と、既定サイズの % が縮まない検査を追加
   (縮小の変異で red になることを確認)。make ios-test unit 449/449・XCUITest 37/37。critic PASS
+- [x] P6-16 issue #250: `AppConfiguration` が http/https の URL を受理するが、`ios/PokeCalc-Info.plist` に
+  `NSAppTransportSecurity` が無く ATS が非 TLS 通信を実行時に拒否するため、受理条件と実行時の挙動が食い違っていた。
+  判断(issue の案A・案Bの間。2026-09-25 → 同日 critic 指摘で訂正): `https` は任意のホストで受理。`http` は
+  `NSAllowsLocalNetworking`(`ios/PokeCalc-Info.plist` に追加。`NSAllowsArbitraryLoads` は使わない)が
+  実際に通す範囲(Apple ドキュメント: 非修飾ホスト名・`.local` ドメインの2つ。**IP アドレスは含めない**
+  〈訂正理由は下記〉)だけ受理し、それ以外の http(IP アドレス・通常の公開ドメイン)は
+  `AppConfigurationError` にする。受け入れ条件・追加したテスト・実装者への注意は ADR-0501「issue #250」。
+  spec-writer(2026-09-25): 受け入れ条件・失敗するテストのみ追加、実装はまだ
+  (`AppConfigurationATSTests.swift` 新設。`swift test`: 447件中3件失敗〈拒否すべき3件。想定どおり〉。
+  `ios/scripts/check-infoplist.sh` に ATS キーの検査を追加〈plist にキーが無い現状では失敗する想定〉)。
+  implementer(2026-09-25): `AppConfiguration.swift` に ATS 判定(`isAllowedByNSAllowsLocalNetworking`・
+  `isIPAddress`、`Network` の `IPv4Address`/`IPv6Address` を使用)を追加し、`ios/PokeCalc-Info.plist` に
+  `NSAppTransportSecurity.NSAllowsLocalNetworking = true` を追加(`NSAllowsArbitraryLoads` は追加せず)。
+  `swift test`: `PokeCalcCoreTests` 447/447 成功(`AppConfigurationATSTests` 含む)。
+  `make ios-test`: 成功(exit 0。`ios-test-unit`・`ios-test-ui` 全 37/37・`ios-check-infoplist` とも成功。
+  `NSAllowsLocalNetworking = true`・`NSAllowsArbitraryLoads` 無しを確認)。ADR-0501「issue #250」に
+  「### 6. 実装結果」を追記。
+  **critic(メインセッション、2026-09-25)FAIL → 訂正**: Apple のドキュメントの「iOS 17+ は既定で IP
+  アドレスへの接続を許可しない(`NSExceptionDomains` が必要)」という記述と、実装の「IP アドレスは
+  `NSAllowsLocalNetworking` で受理する」が矛盾していた。critic がシミュレータで実験したが、
+  `NSAppTransportSecurity` キー無しの対照群でも `localhost`/`127.0.0.1`/LAN の IPv4 に到達できてしまい、
+  シミュレータでは ATS の効き自体を確認できず「IP アドレスは通る」ことの裏付けにはならなかった。
+  よって保守的な方針に訂正: **IP アドレス(IPv4/IPv6。ループバック含む)は http では拒否する**
+  (`AppConfigurationError`。非修飾ホスト名・`.local` は従来どおり受理)。
+  `AppConfiguration.swift` の `isAllowedByNSAllowsLocalNetworking` の IP アドレス分岐を受理→拒否に反転し、
+  `AppConfigurationATSTests.swift`(このタスクの受け入れ条件。変更可)の IP 系3テストを
+  `…IsAccepted` → `…IsRejected` に改名(`reason` の文言検査つき)、末尾ドットホスト
+  (`localhost.`)を拒否する回帰テストを追加。`AppConfigurationTests.swift`(既存・変更禁止)には
+  http の IP アドレスケースが無いことを確認済みで、この訂正でも壊れない。
+  検証(訂正後): `swift test` 448/448 成功。`make ios-test` 成功(exit 0。unit/UI/infoplist 全て green)。
+  ADR-0501「issue #250」に §0.5(訂正の経緯・実験内容)と §7(訂正後の実装結果)を追記、
+  §1〜3 を訂正後の内容に更新。実機での ATS 挙動の確認は人間向けタスクとして残す(§3 の7)。
 - [x] P6-8 issue #99(ライトテーマの danger コントラスト不足)の iOS 側。Web レーンから 2026-09-24 に依頼された
   内容どおり `ColorToken.danger` のライト値を `0xE5,0x48,0x4D` → `0xCD,0x1D,0x23` に更新し、
   `DesignTokenTests.swift` の旧値も書き換えた。`ios/PokeCalcKit/Tests/PokeCalcDesignTests/ColorContrast.swift`

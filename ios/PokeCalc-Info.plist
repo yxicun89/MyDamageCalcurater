@@ -4,5 +4,10 @@
 <dict>
 	<key>PokeCalcAPIBaseURL</key>
 	<string>$(POKECALC_API_BASE_URL)</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
