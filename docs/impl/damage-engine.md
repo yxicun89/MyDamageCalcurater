@@ -212,14 +212,16 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 | SP 各 0..32・合計 ≤ 66 | error | `engine/model.go:141-148` |
 | ランク -6..6 | error | `engine/model.go:149-154` |
 | 性格が HP を指さない | error | `engine/model.go:155` |
-| 種族のタイプが 1〜2 個 | error | `engine/model.go:158` |
+| 種族のタイプが 1〜2 個・重複なし | error | `engine/model.go` `Individual.Validate` |
+| 種族値 `MinBaseStat..MaxBaseStat`(1..255。HP を含む) | error | `engine/model.go` `Individual.Validate`(#255。ADR-0117) |
+| 持ち物・特性の効果の補正値 `MinEffectModifier..MaxEffectModifier`(1..×512。「0 は補正なし」の項目は 0 も可) | error | `engine/model.go` `ItemEffect.validate` / `AbilityEffect.validate`(#255。ADR-0117) |
 | 相性表あり・入力のタイプ ID が表にある | `ErrTypeChartMissing` / `ErrUnknownType` | `dmg:173` |
 | bulk の件数(8 / 8 / 64) | `ErrTooManyPresets` / `ErrTooManyItemVariants` | `engine/bulk.go:36-43,217-225` |
 | reverse の件数(持ち物 64・観測 16・`MaxCandidates` 0..128) | `ErrTooManyItemCandidates` / `ErrTooManyObservations` / `ErrInvalidMaxCandidates` | `engine/reverse.go:49-56,307-315` |
 
 - 件数上限の値は calc-svc の契約(ADR-0208 §1)と同じ値を engine にも置く。HTTP を通らない直接呼び出し・WASM でも計算量を増幅させないため(ADR-0108 決定1〜3)。上限ちょうどの実測は bulk 約 3.0ms・reverse 約 25ms(ADR-0108 §6 が引く ADR-0208 の計測)。
 - wasmapi は同じ件数検査を DTO 変換より前に重ねて置く(`engine/wasmapi/requests.go:129-136,279-286`)。HTTP と WASM で同じ `code`(`invalid_input`)にするため(ADR-0108 決定3・5)。エラーの code 対応は `engine/wasmapi/wasmapi.go:151` `errorResponse`。
-- 検査**していない**もの(#255): 種族値の上限、タイプの重複(`["fire","fire"]` が 2 回掛かる)、効果値の範囲(負・巨大な倍率)、`Move.Effect` の妥当性(`engine/move_effect_test.go:120` `TestCalcDamageAcceptsInvalidMoveEffect`。`MoveEffect.Validate` `engine/move_effect.go:29` は呼び出し側が使う)。HP が巨大だと `koProbability` の配列確保(`engine/ko.go:40`)が比例して増える。
+- 検査**していない**もの: `Move.Effect` の妥当性(`engine/move_effect_test.go:120` `TestCalcDamageAcceptsInvalidMoveEffect`。`MoveEffect.Validate` `engine/move_effect.go:29` は呼び出し側が使う)。種族値の上限・タイプの重複・効果値の範囲は #255 で `Individual.Validate` が見るようにした(HP の上限で `koProbability` の配列確保 `engine/ko.go:40` も頭打ちになる。ADR-0117)。
 
 ## 12. engine の純粋性の保ち方
 

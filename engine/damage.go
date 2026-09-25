@@ -27,6 +27,14 @@ const (
 	ModifierStab = 6144
 	// ModifierAdaptability はタイプ一致補正を上げる特性(てきおうりょく)の一致補正 ×2.0。
 	ModifierAdaptability = 8192
+	// MinEffectModifier / MaxEffectModifier は持ち物・特性の効果(ItemEffect・AbilityEffect)に
+	// 書ける 4096 基準の補正値の範囲 ×1/4096〜×512(issue #255。ADR-0117)。負・0 の倍率は
+	// ロールを非単調にしたり全ロールを 1 に潰したりするため、Individual.Validate が拒否する。
+	// 上限は engine が掛けるいちばん広いクランプ(powerModBounds の上限 ×512)と同じ。それより
+	// 大きい値はどの段階でもクランプされて意味を持たず、連鎖の途中の桁あふれだけを招く。
+	// 「0 は補正なし」と定義された項目の 0 はこの範囲とは別に許す。
+	MinEffectModifier = 1
+	MaxEffectModifier = 512 * Modifier4096
 
 	// modifierWeatherBoost は天候による強化 ×1.5(はれ/あめの技ダメージ、
 	// すなあらし/ゆきの防御実数値)。
