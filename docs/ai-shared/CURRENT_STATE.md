@@ -86,8 +86,11 @@ prefix(record・teamと同じ前方一致・末尾スラッシュ必須の規則
 端末ID・セッションIDの検証(issue #236で判明していたTraefik直結の穴)をgatewayでも課すようにした。
 `server.go`に`Config.BalanceURL`/`SpeedURL`/`JudgeURL`と対応するReverseProxy、`main.go`に
 `GATEWAY_BALANCE_URL`/`GATEWAY_SPEED_URL`/`GATEWAY_JUDGE_URL`を追加。CORS許可メソッドは変更なし。
-deployment.yamlへの実URL配線はrecord・team(P5-3b/P5-4b)と同じく別タスクとして残す(コードのみ今回の
-スコープ)。critic レビュー待ち。**main未統合**。
+`/api/{balance,speed,judge}/healthz`(完全一致のみ)はヘッダ検証を課さない(3サービスの契約の
+`publicHealth`・ADR-0600/ADR-0700がIngress越しの疎通確認用としてヘッダ不要と明記しているため。
+critic 1回目FAILで発覚し修正済み)。deployment.yamlへの実URL配線はrecord・team(P5-3b/P5-4b)と
+同じく別タスクとして残す(コードのみ今回のスコープ)。critic 2ラウンド(1回目FAIL〈重要2件:
+healthz例外の欠如・README.mdのルーティング表が古いまま〉→修正→2回目PASS)。**main未統合**。
 Next: PR #411・issue #284マージ後、キュー順に対応:
 (1) UnsupportedMark.reason/targetのenum前方互換性の見直し(iOSレーン提案。新しいreason値を足すと古いクライアント
 の計算・逆算応答全体がデコード失敗する問題。type:stringに緩める方向で検討中)、
