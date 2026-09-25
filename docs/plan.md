@@ -352,6 +352,16 @@
   脆さを持つ(今回は宣言順の入れ替え〈値は不変〉で対応。critic が宣言順を戻すと実際に失敗することを
   確認済み)。次にトークンを足すときに同じ値の衝突が再発しうるので、触るときは
   `inputTokens.test.ts` の逆引きを変数名ベースに直すことを検討する。
+- [ ] issue #308(重大度 medium。オンラインでマスタの読み込みに失敗すると、タブ一覧ごと消えて
+  `<p role="alert">` 1行だけになり、再試行も切り替えの案内も無い。計算モードは localStorage に残るので
+  リロードしても同じ失敗画面から抜けられない)。**着手(2026-09-25。Web レーン。ブランチ
+  `fix/web-master-load-retry-308`)**: 受け入れ条件と失敗するテストを先に用意
+  (`web/src/App.masterSources.test.tsx` に8件〈既存の失敗時テスト1件を拡張 + 新規7件〉、
+  文言は `web/src/i18n/ja.ts` の `appText` に `masterLoadErrorDetailLabel`・`masterLoadRetryLabel`・
+  `masterLoadSwitchToOfflineLabel` を追加)。方針は自動フォールバックを入れず(ADR-0301 §4)、
+  失敗の案内に原因(受け取った `Error` の message)と「再試行」「オフラインに切り替える」を出し、
+  タブ一覧は失敗中も残して、マスタを使わない「素早さ」画面(ADR-0604 §5)を選べるようにする。
+  実装は `web/src/App.tsx`(再読み込みの起点と、マスタ不要の画面の描画分岐)。
 
 ## M2: 保存・構築
 
