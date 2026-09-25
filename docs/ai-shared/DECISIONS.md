@@ -1807,3 +1807,8 @@ Decision(ユーザーが選択。いずれも推奨案):
 4. #328: **非公開・私的利用のまま**。LICENSE は置かない。README に明記し、アプリ内に第三者データの出典と非公式の表示を入れる。R-2-9(公開用クリーンコピー)は行わない。
 Reason: 全件解決の仕分け(2026-09-25)で「人間の判断が必要」とした項目のうち、進め方に効く 4 件を質問した。
 Impact: 各 issue の needs-decision を ready-for-implementation に付け替え、決定をコメントした。クラウド選定(#149)・認証(#148)は「+α」として保留のまま。
+
+## 2026-09-25: issue #272 の engine 側 — 一括計算・逆算に特性の候補を渡し、結果が同じ特性はまとめる(データレーン。ADR-0126)
+Decision: `engine.BulkInput.DefenderAbilities` / `engine.ReverseInput.UnknownAbilities`(解決済みの特性 0〜3 件)を追加。各特性で計算し、全行(逆算は全性格クラス × 持ち物 × SP)の結果が完全に同じ特性は1つにまとめ(代表 = 先に渡したもの)、違えば行・候補を分ける。行・候補に `Ability` と `AbilityIDs` を出す。空は従来どおり特性なし。WASM は `calcBulk.defenderAbilities`・`calcReverse.unknownAbilities` を受け、応答の `abilityId`/`abilityIds` は特性を送ったときだけ出す(送らなければバイト単位で従来と同じ)。攻撃側の特性は `Individual.Ability` で既に渡せる(engine の変更なし)。
+Reason: 「1番目の特性」や「1つ指定」を既定にすると、隠れ特性などで無効になる種族を利用者が選び忘れたときに黙って誤る。全特性で行を分けると多くの技で行が2〜3倍になる。結果の一致でまとめれば、特性が効く技のときだけ行が分かれる。
+Impact(他レーンへの依頼。既定案): API — 既に採用済みの `BulkCalcRequest.defenderOverride.abilityId` を `DefenderAbilities` の1件に写し、**省略時は calc-svc が種族の全特性を解決して渡す**。`ReverseRequest.unknownAbilityId`(任意・1つ、省略時は同じく全特性)。`BulkCalcRow`・`ReverseCandidate` に `abilityId: string`・`abilityIds: string[]`。Web — WASM に種族の特性をマスタから解決して `defenderAbilities`/`unknownAbilities` で渡し、行・候補に `abilityIds` を表示。攻撃側は種族の1番目を既定にして画面に表示し、選べるようにする。iOS — API の追従後に同じ表示。
