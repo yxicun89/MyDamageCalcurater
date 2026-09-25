@@ -467,6 +467,36 @@ describe("結果の表示(engine の値を加工せずに出す)", () => {
     expect(screen.queryByText("古い結果")).toBeNull();
   });
 
+  test("入力を変えると、前の calcBulk 要求を abort する(issue 248。gateway の取り消し伝播はissue 113で実装済み)", async () => {
+    const { engine, pending } = createDeferredEngine();
+    const { user } = renderScreen(engine);
+    const attacker = master.species.find(
+      (species) =>
+        learnsetMoves(species, master.moves).filter((move) => move.category !== "status").length >= 2,
+    );
+    const defender = master.species.find((species) => species.key !== attacker?.key);
+    if (attacker === undefined || defender === undefined) {
+      throw new Error("例データが足りない");
+    }
+    const secondMove = learnsetMoves(attacker, master.moves).filter((move) => move.category !== "status")[1];
+    if (secondMove === undefined) {
+      throw new Error("2つ目のダメージ技が無い");
+    }
+    await choosePair(user, attacker, defender);
+    await waitFor(() => {
+      expect(pending).toHaveLength(1);
+    });
+    expect(pending[0]?.signal?.aborted).toBe(false);
+
+    await user.selectOptions(moveSelect(), secondMove.id);
+    await waitFor(() => {
+      expect(pending).toHaveLength(2);
+    });
+
+    expect(pending[0]?.signal?.aborted).toBe(true);
+    expect(pending[1]?.signal?.aborted).toBe(false);
+  });
+
   test("入力を変えると、応答が届くまで古い行を消して「計算中」を出す(ADR-0300 §8)", async () => {
     const { engine, pending } = createDeferredEngine();
     const { user } = renderScreen(engine);

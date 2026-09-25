@@ -451,11 +451,15 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
   // setState は応答が届いたとき(.then のコールバック)だけで行い、effect の本体では呼ばない
   // (react-hooks/set-state-in-effect)。入力が変わるたびに実行し直し、古い応答が新しい表示を
   // 上書きしないよう cancelled で無視する。idle・status-move は下の outcome で入力から直接導出する。
+  // issue 248(issue 113 で ReverseScreen に入れたのと同じ形): AbortController は effect ごとに作り、
+  // cleanup(依存が変わった・アンマウント)で abort する(古い計算に「もう要らない」を伝え、gateway 側の
+  // 取り消し伝播〈issue 113〉を活かす。オンラインでないときは calcBulk 側が signal を無視するだけ)。
   useEffect(() => {
     if (attackerSpecies === null || defenderSpecies === null || move === null || move.category === "status") {
       return;
     }
     let cancelled = false;
+    const controller = new AbortController();
     const { sp, nature } = resolveAttackerPreset(attackerPresetKey, move.category);
     const attackerIndividual = buildIndividual(attackerSpecies, {
       sp,
@@ -473,7 +477,7 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     });
     // calcBulk は EngineResult(ok/not ok)で成否を運び、reject しない契約(ADR-0011 §5)。
     // それでも floating promise を残さないよう void で明示する。
-    void engine.calcBulk(request).then((result) => {
+    void engine.calcBulk(request, controller.signal).then((result) => {
       if (!cancelled) {
         setCompleted({
           attackerSpecies,
@@ -489,6 +493,7 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [
     engine,
