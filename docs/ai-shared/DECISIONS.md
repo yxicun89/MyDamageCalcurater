@@ -1714,3 +1714,8 @@ Impact: タイプバランスレーンへ: `type-balance-design.md` の未対応
 Decision: issue の既定案 A を採り、タイプ強化の持ち物・ノーマルジュエル・半減きのみ・Fire Mane・Heatproof・Purifying Salt・Eelevate を `data/importer/effects.json` と `testdata/golden/effects.json` に足した(値は oracle の実装から)。ゴールデンの生成器が効果ごとに「効く/効かない対照」の組を作り、Champions 世代でダメージが変わるのに定義の無いものは `tools/golden/unsupported-effects.json`(理由付き)と一致しなければ止まる。取込時の補正値に engine と同じ上限 `MaxEffectModifier` を入れた。
 Reason: 定義の無い持ち物・特性が黙って等倍で計算されていた(importer の effect-missing 92 件)。多くは engine を変えずにデータだけで直せる。
 Impact: 実データの dry-run で effect-missing 92→56、effect-no-hook 1→3(ノーマルジュエル・Eelevate。Levitate と同じ理由)。既定案 B(応答の「補正未対応」の印)は #271 の技の印と同じ仕組みでまとめて決める(未決)。タイプバランス レーンへ: readmodel の特性(Heatproof・Purifying Salt・Eelevate)が防御相性に入るようになる。
+
+## 2026-09-25: 技の機構(多段・固定ダメージ・威力変動 等)を move_mechanisms 表としてマスタに持つ(データレーン。issue #271-a・ADR-0121)
+Decision: Showdown の技データ(multihit・damage・ohko・willCrit・override*・ignoreDefensive・ハンドラ名)と、天候・フィールドのハンドラが技を名指ししている箇所から、importer が攻撃技の機構を 13 種に機械的に分類し、`move_mechanisms(move_id, mechanism)` に入れる。技名は持たない。分類表に無いハンドラは安全側(move_specific / field_specific)+警告。取得物の `mechanism` は必須(古い取得物は拒否)。
+Reason: 多段・威力変動・固定ダメージ等の技が黙って誤ったダメージになる(#271・#233)。engine の「未対応の印」(D16)の前提になるデータが無かった。
+Impact: 実データで攻撃技 335 のうち 93 が機構を持つ。マージ後に Showdown の取得をやり直す必要がある(同じ commit・キャッシュ使用)。API レーンへ: `MasterMove.mechanisms: string[]` の追加を依頼(`api/openapi.yaml`)。engine・calc-svc への受け渡しは D16。

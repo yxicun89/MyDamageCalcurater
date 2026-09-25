@@ -26,6 +26,15 @@ func FormatSummary(r Reconciliation) string {
 			row.set.CalcOnly, row.set.ShowdownOnly, row.set.Imported)
 	}
 	fmt.Fprintf(&b, "typeChart: types=%d rows=%d\n", r.Summary.TypeChart.Types, r.Summary.TypeChart.Rows)
+	fmt.Fprintf(&b, "moveMechanisms: attack=%d withMechanism=%d\n", r.Summary.MoveMechanisms.Attack, r.Summary.MoveMechanisms.WithMechanism)
+	mechanisms := make([]string, 0, len(r.Summary.MoveMechanisms.ByMechanism))
+	for m := range r.Summary.MoveMechanisms.ByMechanism {
+		mechanisms = append(mechanisms, m)
+	}
+	sort.Strings(mechanisms)
+	for _, m := range mechanisms {
+		fmt.Fprintf(&b, "moveMechanism %s: %d\n", m, r.Summary.MoveMechanisms.ByMechanism[m])
+	}
 	writeFindingCounts(&b, "warnings", r.Summary.WarningCounts)
 	writeFindingCounts(&b, "blockers", r.Summary.BlockerCounts)
 	for _, check := range r.VerdictChecks {

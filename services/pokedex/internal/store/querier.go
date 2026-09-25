@@ -17,6 +17,7 @@ type Querier interface {
 	DeleteLearnsets(ctx context.Context) error
 	DeleteMegaSpecies(ctx context.Context) error
 	DeleteMoveEffects(ctx context.Context) error
+	DeleteMoveMechanisms(ctx context.Context) error
 	DeleteMoves(ctx context.Context) error
 	DeleteNatures(ctx context.Context) error
 	DeleteRegulationAbilities(ctx context.Context) error
@@ -45,6 +46,7 @@ type Querier interface {
 	InsertLearnset(ctx context.Context, arg InsertLearnsetParams) error
 	InsertMove(ctx context.Context, arg InsertMoveParams) error
 	InsertMoveEffect(ctx context.Context, arg InsertMoveEffectParams) error
+	InsertMoveMechanism(ctx context.Context, arg InsertMoveMechanismParams) error
 	InsertNature(ctx context.Context, arg InsertNatureParams) error
 	InsertRegulation(ctx context.Context, arg InsertRegulationParams) error
 	InsertRegulationAbility(ctx context.Context, arg InsertRegulationAbilityParams) error
@@ -62,6 +64,7 @@ type Querier interface {
 	ListItemEffects(ctx context.Context) ([]ItemEffect, error)
 	ListItems(ctx context.Context) ([]Item, error)
 	ListMoveEffects(ctx context.Context) ([]MoveEffect, error)
+	ListMoveMechanisms(ctx context.Context) ([]MoveMechanism, error)
 	ListMoves(ctx context.Context) ([]Move, error)
 	// ---------------------------------------------------------------------------------------------
 	// 性格(000006。ADR-0105 §4)

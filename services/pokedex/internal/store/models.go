@@ -64,6 +64,11 @@ type MoveEffect struct {
 	Effect json.RawMessage
 }
 
+type MoveMechanism struct {
+	MoveID    string
+	Mechanism string
+}
+
 type Nature struct {
 	ID           string
 	NameJa       string

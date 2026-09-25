@@ -140,6 +140,42 @@ func TestMigrateUpDownUp(t *testing.T) {
 	seed(t, conn) // up → down → up の後もスキーマが元どおり
 }
 
+// TestMoveMechanismsDownWithRows は機構の行が入った DB でも down が通り、技を消すと機構も消えること
+// (ADR-0121。行が入った状態の down が失敗した前例 #278 があるため、空の DB だけで確かめない)。
+func TestMoveMechanismsDownWithRows(t *testing.T) {
+	conn := freshDB(t)
+	seed(t, conn)
+	var n int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM move_mechanisms WHERE move_id = 'testsplash'`).Scan(&n); err != nil || n != 2 {
+		t.Fatalf("seed の機構の行数 = %d, err=%v, want 2", n, err)
+	}
+
+	tx, err := conn.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(`DELETE FROM regulation_moves WHERE move_id = 'testsplash'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(`DELETE FROM moves WHERE id = 'testsplash'`); err != nil {
+		t.Fatalf("機構を持つ技を消せない: %v", err)
+	}
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM move_mechanisms WHERE move_id = 'testsplash'`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("技を消した後の機構の行数 = %d, err=%v, want 0(ON DELETE CASCADE)", n, err)
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+
+	dsn, cfg := testDSN(t)
+	if err := DownAll(dsn, cfg.DBName); err != nil {
+		t.Fatalf("機構の行がある DB の DownAll: %v", err)
+	}
+	if left := userTables(t, conn); len(left) != 0 {
+		t.Fatalf("down の後に残ったテーブル: %v", left)
+	}
+}
+
 func TestExampleSeedLoads(t *testing.T) {
 	conn := freshDB(t)
 	seed(t, conn)
@@ -201,6 +237,11 @@ func TestConstraintsRejectInvalidRows(t *testing.T) {
 		{"効果が壊れた JSON", `INSERT INTO item_effects (item_id, effect) VALUES ('testplain', '{"DamageMod":')`, []uint16{errInvalidJSON}},
 		{"効果がオブジェクトでない", `INSERT INTO item_effects (item_id, effect) VALUES ('testplain', '[1]')`, []uint16{errCheckViolated}},
 		{"効果の持ち物が未知", `INSERT INTO item_effects (item_id, effect) VALUES ('testnoitem', '{"DamageMod":5324}')`, []uint16{errNoReferencedRow}},
+		// move_mechanisms(ADR-0121)
+		{"機構の値が未知", `INSERT INTO move_mechanisms (move_id, mechanism) VALUES ('testflame', 'teleport')`, []uint16{errCheckViolated}},
+		{"機構の値が大文字", `INSERT INTO move_mechanisms (move_id, mechanism) VALUES ('testflame', 'MULTI_HIT')`, []uint16{errCheckViolated}},
+		{"機構の技が未知", `INSERT INTO move_mechanisms (move_id, mechanism) VALUES ('testnomove', 'multi_hit')`, []uint16{errNoReferencedRow}},
+		{"同じ技に同じ機構が2行", `INSERT INTO move_mechanisms (move_id, mechanism) VALUES ('testsplash', 'multi_hit')`, []uint16{errDupEntry}},
 		// regulations
 		{"既定のレギュレーションが2件", `INSERT INTO regulations (id, name_ja, is_default) VALUES ('test-c', 'テストレギュレーションC', 1)`, []uint16{errDupEntry}},
 		{"レギュレーション ID が大文字", `INSERT INTO regulations (id, name_ja, is_default) VALUES ('Test-D', 'テストレギュレーションD', 0)`, []uint16{errCheckViolated}},

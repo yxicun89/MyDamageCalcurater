@@ -28,7 +28,7 @@ flowchart LR
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-make import-fetch            # 取得(npm ci を含む。ネットワークが要る)
+make import-fetch            # 取得(npm ci を含む。ネットワークが要る)。ADR-0121 より前のスナップショットは技の mechanism が無く import が exit 3 で止まるので、取り直す
 make import-check-upstream   # 上流の最新版の検出だけ(取り込みはしない)
 ```
 

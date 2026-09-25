@@ -41,6 +41,22 @@ func computeSummary(in Input, out Output, partial bool) Summary {
 	}
 }
 
+func computeMoveMechanismSummary(out Output) MoveMechanismSummary {
+	s := MoveMechanismSummary{ByMechanism: map[string]int{}}
+	for _, m := range out.Moves {
+		if m.Category != "status" {
+			s.Attack++
+		}
+	}
+	withMechanism := map[string]bool{}
+	for _, r := range out.MoveMechanisms {
+		withMechanism[r.MoveID] = true
+		s.ByMechanism[r.Mechanism]++
+	}
+	s.WithMechanism = len(withMechanism)
+	return s
+}
+
 func addFindingCounts(summary *Summary, warnings, blockers []Finding) {
 	summary.WarningCounts = countFindingsByKind(warnings)
 	summary.BlockerCounts = countFindingsByKind(blockers)
