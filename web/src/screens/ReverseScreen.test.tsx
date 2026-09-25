@@ -8,6 +8,8 @@
 //   - 「観測を追加」「観測nを削除」、観測はすべての有効な行を順に送る(空行は送らない)
 //   - 持ち物候補は reverseItemCandidates(効果データから)、maxCandidates は送らない
 //   - 結果は engine の順のまま候補カードにし、性格クラス・持ち物・SP 範囲(全部)・目安・近い候補・%幅を出す
+//   - 全候補が観測と一致しない(exactCount 0)ときは role=status の案内を出し、候補一覧は残したまま
+//     SP 範囲に「参考」の印を添える。%欄には「予測」のラベルを添える(issue #305)
 //   - 防御側は H32 の仮定を出す。計算中・エラー(role=alert)・古い応答の無視・変化技
 
 import { act, render, screen, waitFor, within } from "@testing-library/react";
@@ -19,6 +21,7 @@ import { OBSERVATION_INPUT_DEBOUNCE_MS } from "../domain/observations";
 import { NEUTRAL_NATURE, ZERO_SP, defaultAbility, toEngineSpecies } from "../domain/requests";
 import { reverseItemCandidates } from "../domain/reverseItems";
 import type { Item, Move, ReverseRequest, ReverseResult } from "../engine/types";
+import { reverseResultText } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
 import {
@@ -634,6 +637,83 @@ describe("結果の表示", () => {
     expect(within(first).getByText(/C特化/)).toBeInTheDocument();
     expect(within(second).getByText("C 0")).toBeInTheDocument();
     expect(within(second).getByText(/無振り/)).toBeInTheDocument();
+  });
+
+  // issue #305: 観測を厳密に説明できる候補(exact)が1件も無いとき、その旨が分かるようにする。
+  // 一致の判定そのものは engine が返した exact / exactCount をそのまま使う(TS で再計算・再判定しない。
+  // ADR-0300 §8「Web は返ってきた値を加工せずに表示する」)。
+  const noExactResult: ReverseResult = {
+    ...defenderResult,
+    exactCount: 0,
+    candidates: defenderResult.candidates.map((candidate) => ({
+      ...candidate,
+      exact: false,
+      mismatch: 3,
+    })),
+  };
+
+  test("全候補が観測と一致しないときは role=status で理由の案内を出す(issue #305)", async () => {
+    await renderWithResult(noExactResult);
+    expect(await screen.findByRole("status")).toHaveTextContent(reverseResultText.noExactCandidateNotice);
+  });
+
+  test("全候補が不一致でも候補一覧は消さず、件数分そのまま出す(issue #305)", async () => {
+    await renderWithResult(noExactResult);
+    const cards = await candidateCards();
+    expect(cards).toHaveLength(noExactResult.candidates.length);
+    const [first, second, third] = cards;
+    if (first === undefined || second === undefined || third === undefined) {
+      throw new Error("候補カードが3件でない");
+    }
+    // 性格クラス・持ち物・SP 範囲・目安は今までどおり出る(SP 範囲には「参考」の印が添わるので部分一致で見る)
+    expect(within(first).getByText("補正なし")).toBeInTheDocument();
+    expect(within(first).getByText("持ち物なし")).toBeInTheDocument();
+    expect(within(first).getByText(/B 0〜3/)).toBeInTheDocument();
+    expect(within(first).getByText(/H振り/)).toBeInTheDocument();
+    expect(within(second).getByText("B上昇")).toBeInTheDocument();
+    expect(within(second).getByText("テストぼうぎょだま")).toBeInTheDocument();
+    expect(within(second).getByText(/B 4〜7, 9〜12/)).toBeInTheDocument();
+    expect(within(third).getByText(/B 32/)).toBeInTheDocument();
+    expect(within(third).getByText(/HB特化/)).toBeInTheDocument();
+    // 個別の「近い候補」ラベルは今までどおり全件に付く(弱めない)
+    expect(screen.getAllByText(reverseResultText.closeCandidateLabel)).toHaveLength(cards.length);
+  });
+
+  test("全候補が不一致のとき、SP 範囲は「参考」と分かる印を添える(issue #305)", async () => {
+    await renderWithResult(noExactResult);
+    const cards = await candidateCards();
+    for (const card of cards) {
+      expect(
+        within(card).getByText(reverseResultText.referenceRangeLabel, { exact: false }),
+      ).toBeInTheDocument();
+    }
+  });
+
+  test("一致する候補が1件以上あるときは案内も「参考」の印も出さない(issue #305 の正常系)", async () => {
+    await renderWithResult(defenderResult);
+    expect(await candidateCards()).toHaveLength(3);
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByText(reverseResultText.noExactCandidateNotice)).toBeNull();
+    expect(screen.queryByText(reverseResultText.referenceRangeLabel, { exact: false })).toBeNull();
+  });
+
+  test("候補が0件のときは全件不一致の案内を出さない(issue #305)", async () => {
+    await renderWithResult({ ...defenderResult, exactCount: 0, candidates: [] });
+    expect(await screen.findByRole("list", { name: "推定結果" })).toBeInTheDocument();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  test("%欄には「予測」のラベルを添える(issue #305)", async () => {
+    await renderWithResult(defenderResult);
+    const [first] = await candidateCards();
+    if (first === undefined) {
+      throw new Error("候補カードが無い");
+    }
+    expect(
+      within(first).getByText(reverseResultText.predictedPercentLabel, { exact: false }),
+    ).toBeInTheDocument();
+    // 値そのものの表記は変えない(ラベルは別の要素に分ける。既存の完全一致の期待値を壊さないため)
+    expect(within(first).getByText("40.2〜47.8%")).toBeInTheDocument();
   });
 
   test("応答を待つ間は「計算中」を出す", async () => {
