@@ -121,6 +121,14 @@ migrate-down: ## pokedex の DB を全て戻す(破壊的。CONFIRM_DESTROY=<DB�
 	fi
 	@cd services && $(GO) run ./pokedex/cmd/migrate down -confirm "$(CONFIRM_DESTROY)"
 
+.PHONY: migrate-force
+migrate-force: ## pokedex の dirty を解いて版を FORCE_VERSION にする(FORCE_VERSION=<版> CONFIRM_FORCE=<DB名> が必須。人間の確認。docs/runbooks/data.md)
+	@if [ -z "$(FORCE_VERSION)" ] || [ -z "$(CONFIRM_FORCE)" ]; then \
+		echo "migrate-force: FORCE_VERSION=<版> CONFIRM_FORCE=<DB名> を指定すること(migration の状態を書き換える操作)。手順は docs/runbooks/data.md。人間が確認すること" >&2; \
+		exit 1; \
+	fi
+	@cd services && $(GO) run ./pokedex/cmd/migrate force -version "$(FORCE_VERSION)" -confirm "$(CONFIRM_FORCE)"
+
 ## --- record/team DB(migrate。ADR-0211 §4・§5) ------------------------
 .PHONY: migrate-up-record
 migrate-up-record: ## record の DB を最新版まで migrate する(RECORD_DATABASE_DSN が必須)

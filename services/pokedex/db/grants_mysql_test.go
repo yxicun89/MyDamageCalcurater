@@ -67,7 +67,7 @@ func newTestRoles(t *testing.T, rootCfg *mysql.Config) testRoleSet {
 		s.pass[u] = randomPassword(t)
 	}
 	s.reader = RoleGrant{DSN: roleDSN(rootCfg, testReaderUser, s.pass[testReaderUser]), Privileges: ReaderPrivileges}
-	s.importer = RoleGrant{DSN: roleDSN(rootCfg, testImporterUser, s.pass[testImporterUser]), Privileges: ImporterPrivileges}
+	s.importer = RoleGrant{DSN: roleDSN(rootCfg, testImporterUser, s.pass[testImporterUser]), Privileges: ImporterPrivileges, Scope: ScopeDataTables}
 	s.migrator = RoleGrant{DSN: roleDSN(rootCfg, testMigratorUser, s.pass[testMigratorUser]), Privileges: MigratorPrivileges}
 	return s
 }
@@ -157,16 +157,29 @@ func expectOK(t *testing.T, what string, err error) {
 
 var grantOnDB = regexp.MustCompile("^GRANT (.+) ON `([^`]+)`\\.\\* TO `([^`]+)`@`%`$")
 
-// grantedPrivileges は SHOW GRANTS からそのユーザーの権限を読む。
-// USAGE ON *.* 以外のグローバル権限・他 DB への権限・WITH GRANT OPTION があれば失敗にする。
+var grantOnTable = regexp.MustCompile("^GRANT (.+) ON `([^`]+)`\\.`([^`]+)` TO `([^`]+)`@`%`$")
+
+// grantedPrivileges は SHOW GRANTS からそのユーザーの DB 全体(`db`.*)への権限を読む。
+// USAGE ON *.* 以外のグローバル権限・他 DB への権限・表単位の権限・WITH GRANT OPTION があれば失敗にする。
 func grantedPrivileges(t *testing.T, conn *sql.DB, user, dbName string) []string {
 	t.Helper()
+	privs, tables := grantsOf(t, conn, user, dbName)
+	if len(tables) > 0 {
+		t.Errorf("%s に表単位の権限がある: %v", user, tables)
+	}
+	return privs
+}
+
+// grantsOf は SHOW GRANTS からそのユーザーの DB 全体への権限と、表ごとの権限(表名 → 権限)を読む。
+// USAGE ON *.* 以外のグローバル権限・他 DB への権限・WITH GRANT OPTION があれば失敗にする。
+func grantsOf(t *testing.T, conn *sql.DB, user, dbName string) (dbPrivs []string, tablePrivs map[string][]string) {
+	t.Helper()
+	tablePrivs = map[string][]string{}
 	rows, err := conn.Query("SHOW GRANTS FOR '" + user + "'@'%'")
 	if err != nil {
 		t.Fatalf("SHOW GRANTS FOR %s: %v", user, err)
 	}
 	defer rows.Close()
-	var privs []string
 	for rows.Next() {
 		var line string
 		if err := rows.Scan(&line); err != nil {
@@ -178,20 +191,29 @@ func grantedPrivileges(t *testing.T, conn *sql.DB, user, dbName string) []string
 		if strings.Contains(line, "WITH GRANT OPTION") {
 			t.Errorf("%s に GRANT OPTION が付いている: %q", user, line)
 		}
+		if m := grantOnTable.FindStringSubmatch(line); m != nil && m[2] == dbName && m[4] == user {
+			var ps []string
+			for _, p := range strings.Split(m[1], ",") {
+				ps = append(ps, strings.TrimSpace(p))
+			}
+			sort.Strings(ps)
+			tablePrivs[m[3]] = ps
+			continue
+		}
 		m := grantOnDB.FindStringSubmatch(line)
 		if m == nil || m[2] != dbName || m[3] != user {
-			t.Errorf("%s に %s.* 以外の権限がある: %q", user, dbName, line)
+			t.Errorf("%s に %s 以外の権限がある: %q", user, dbName, line)
 			continue
 		}
 		for _, p := range strings.Split(m[1], ",") {
-			privs = append(privs, strings.TrimSpace(p))
+			dbPrivs = append(dbPrivs, strings.TrimSpace(p))
 		}
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	sort.Strings(privs)
-	return privs
+	sort.Strings(dbPrivs)
+	return dbPrivs, tablePrivs
 }
 
 func sortedPrivileges(s string) []string {
@@ -220,7 +242,6 @@ func TestProvisionIsIdempotent(t *testing.T) {
 		grant RoleGrant
 	}{
 		{testReaderUser, roles.reader},
-		{testImporterUser, roles.importer},
 		{testMigratorUser, roles.migrator},
 	} {
 		got := grantedPrivileges(t, root, c.user, cfg.DBName)
@@ -229,6 +250,30 @@ func TestProvisionIsIdempotent(t *testing.T) {
 			t.Errorf("%s の権限 = %v, want %v", c.user, got, want)
 		}
 		mustOpenAs(t, c.grant)
+	}
+	assertImporterGrants(t, root, cfg.DBName)
+	mustOpenAs(t, roles.importer)
+}
+
+// assertImporterGrants は importer の権限が ADR-0125 のとおりであること: DB 全体には SELECT だけ、
+// migration の管理表を除くいまある表のそれぞれに INSERT・UPDATE・DELETE、管理表には書き込みの権限なし。
+func assertImporterGrants(t *testing.T, root *sql.DB, dbName string) {
+	t.Helper()
+	dbPrivs, tables := grantsOf(t, root, testImporterUser, dbName)
+	if strings.Join(dbPrivs, ",") != "SELECT" {
+		t.Errorf("importer の DB 全体への権限 = %v, want [SELECT]", dbPrivs)
+	}
+	if _, ok := tables["schema_migrations"]; ok {
+		t.Errorf("importer に schema_migrations への権限がある: %v", tables["schema_migrations"])
+	}
+	existing := userTables(t, root)
+	for _, tbl := range existing {
+		if got := strings.Join(tables[tbl], ","); got != "DELETE,INSERT,UPDATE" {
+			t.Errorf("importer の %s への権限 = %q, want DELETE,INSERT,UPDATE", tbl, got)
+		}
+	}
+	if len(tables) != len(existing) {
+		t.Errorf("importer の表単位の権限の数 = %d, want いまある表(schema_migrations 以外)の数 %d", len(tables), len(existing))
 	}
 }
 
@@ -408,4 +453,66 @@ func TestProvisionFreshUsersFromScratch(t *testing.T) {
 	if err := Provision(dsn, roles.all()); err != nil {
 		t.Fatalf("新規ユーザーへの Provision: %v", err)
 	}
+}
+
+// issue #312・ADR-0125: importer は schema_migrations を読めるが書き換えられない(migrate の状態を壊せない)。
+// マスタのすべての表には DML ができる(表の一覧は DB から引いた、いまある表)。
+func TestImporterCannotWriteMigrationsTable(t *testing.T) {
+	admin := freshDB(t)
+	dropTestUsers(t, admin)
+	dsn, cfg := testDSN(t)
+	roles := newTestRoles(t, cfg)
+	if err := Provision(dsn, roles.all()); err != nil {
+		t.Fatalf("Provision: %v", err)
+	}
+	assertImporterGrants(t, admin, cfg.DBName)
+	im := mustOpenAs(t, roles.importer)
+
+	var v int
+	expectOK(t, "importer の schema_migrations の SELECT", im.QueryRow(`SELECT version FROM schema_migrations`).Scan(&v))
+	_, err := im.Exec(`UPDATE schema_migrations SET dirty = 1`)
+	expectDenied(t, "importer の schema_migrations の UPDATE", err)
+	_, err = im.Exec(`DELETE FROM schema_migrations`)
+	expectDenied(t, "importer の schema_migrations の DELETE", err)
+	_, err = im.Exec(`INSERT INTO schema_migrations (version, dirty) VALUES (999, 0)`)
+	expectDenied(t, "importer の schema_migrations の INSERT", err)
+	if got, dirty := mustVersion(t, dsn); int(got) != v || dirty {
+		t.Errorf("版 = %d dirty=%v, want %d / false(importer が書き換えられた)", got, dirty, v)
+	}
+
+	// マスタの表にはこれまでどおり DML ができる(1件入れて戻す)。
+	for _, tbl := range userTables(t, admin) {
+		_, err := im.Exec("DELETE FROM `" + tbl + "` WHERE 1 = 0")
+		expectOK(t, "importer の "+tbl+" の DELETE", err)
+	}
+	_, err = im.Exec(insertNature("tzzimport2", "テスト投入2", "", ""))
+	expectOK(t, "importer の INSERT", err)
+	_, err = im.Exec(`DELETE FROM natures WHERE id = 'tzzimport2'`)
+	expectOK(t, "importer の DELETE", err)
+}
+
+// ADR-0125: migration で増えた表には、もう一度 Provision するまで importer は書き込めない
+// (cmd/migrate が up の後に importer を付け直す理由。表の一覧をコードに持たない代わり)。
+func TestImporterGrantsFollowNewTablesAfterReprovision(t *testing.T) {
+	admin := freshDB(t)
+	dropTestUsers(t, admin)
+	dsn, cfg := testDSN(t)
+	roles := newTestRoles(t, cfg)
+	if err := Provision(dsn, roles.all()); err != nil {
+		t.Fatalf("Provision: %v", err)
+	}
+	if _, err := admin.Exec(`CREATE TABLE t_new_after_provision (id INT PRIMARY KEY)`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = admin.Exec(`DROP TABLE IF EXISTS t_new_after_provision`) })
+	im := mustOpenAs(t, roles.importer)
+	_, err := im.Exec(`INSERT INTO t_new_after_provision (id) VALUES (1)`)
+	expectDenied(t, "付け直す前の新しい表への INSERT", err)
+
+	if err := Provision(dsn, []RoleGrant{roles.importer}); err != nil {
+		t.Fatalf("Provision(importer の付け直し): %v", err)
+	}
+	_, err = im.Exec(`INSERT INTO t_new_after_provision (id) VALUES (1)`)
+	expectOK(t, "付け直した後の新しい表への INSERT", err)
+	assertImporterGrants(t, admin, cfg.DBName)
 }

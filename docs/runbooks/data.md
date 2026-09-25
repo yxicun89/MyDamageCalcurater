@@ -100,3 +100,126 @@ cd "$(git rev-parse --show-toplevel)"
 k3d cluster stop pokecalc
 ```
 確認: 出力に `Stopped cluster 'pokecalc'` が含まれる(削除ではない。クラスタ削除の `make down` は人間の確認が要る)。
+
+## migration が途中で失敗して dirty になったとき(issue #221)
+
+`make up` の `pokedex-migrate` Job や `make deploy-latest` の migrate-up が失敗し、以後の up が
+`Dirty database version N. Fix and force version.` で止まるときの戻し方。データを全部消す `make migrate-down` は使わない。
+
+### a. 版を確かめる
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc port-forward svc/mysql 13306:3306 >/dev/null 2>&1 &
+pf_pid=$!
+sleep 2
+export POKEDEX_DATABASE_DSN="$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.pokedex-migrator-dsn}' | base64 -d | sed -E 's/@tcp\(mysql:[0-9]+\)/@tcp(127.0.0.1:13306)/')"
+make migrate-version
+```
+確認: `version=N dirty=true` が表示される。この N が途中で失敗した migration の版(以下の `<N>`)。
+
+### b. 途中まで作られたテーブルを確かめる
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+ls services/pokedex/db/migrations/ | grep "^$(printf '%06d' <N>)_"
+pw="$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.mysql-root-password}' | base64 -d)"
+kubectl -n pokecalc exec mysql-0 -- env MYSQL_PWD="$pw" mysql -u root -N -e "SHOW TABLES FROM pokedex;"
+unset pw
+```
+確認: 版 `<N>` の `.down.sql` が `DROP TABLE IF EXISTS` だけか(ALTER だけの migration は1文なので途中までの状態が無い。c を飛ばして d へ)。
+`.down.sql` にあるテーブルのうち、どれが既に作られているか。
+
+### c. 版 N のテーブルを down で片付ける
+
+`.down.sql` にある名前のテーブルは中身ごと消える(衝突の原因になった同名の既存テーブルも消える。中身が要るなら先に退避する)。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+pw="$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.mysql-root-password}' | base64 -d)"
+kubectl -n pokecalc exec -i mysql-0 -- env MYSQL_PWD="$pw" mysql -u root pokedex < services/pokedex/db/migrations/$(printf '%06d' <N>)_*.down.sql
+kubectl -n pokecalc exec mysql-0 -- env MYSQL_PWD="$pw" mysql -u root -N -e "SHOW TABLES FROM pokedex;"
+unset pw
+```
+確認: `.down.sql` にあるテーブルが一覧から消えている。
+
+### d. dirty を解いて1つ前の版にする
+
+`<N-1>` は `<N>` から1を引いた数(版 1 で止まったときは 0 = 未適用)。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make migrate-force FORCE_VERSION=<N-1> CONFIRM_FORCE=pokedex
+make migrate-version
+```
+確認: `force: 完了` の後に `version=<N-1> dirty=false`(0 のときは `version: 未適用`)。
+
+### e. もう一度 up する
+
+失敗の原因(権限・接続・衝突したテーブル)を取り除いてから流す。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make migrate-up
+make migrate-version
+kill "$pf_pid"
+unset POKEDEX_DATABASE_DSN pf_pid
+```
+確認: `up: 完了` の後に `version=<最新の版> dirty=false`(最新の版は `ls services/pokedex/db/migrations/` の最後の番号)。
+
+### f. c でデータの入ったテーブルを消したときだけ、投入し直す
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+created=$(make import-k8s)
+job_name=$(echo "$created" | grep -o 'pokedex-import-manual-[0-9]*' | tail -1)
+kubectl -n pokecalc wait --for=condition=complete "job/$job_name" --timeout=600s
+```
+確認: 最後の行が `job.batch/<job名> condition met`。
+
+## `make migrate-down` の途中で止まったとき(issue #278)
+
+down が失敗すると `version=<V> dirty=true` になる。このとき失敗したのは版 `<V+1>` の down(旧 000005 の down では V = 4)。
+down を流し直すので、全テーブルが消えてよいこと(`make migrate-down` を流したときと同じ判断)を人が確かめてから行う。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc port-forward svc/mysql 13306:3306 >/dev/null 2>&1 &
+pf_pid=$!
+sleep 2
+export POKEDEX_DATABASE_DSN="$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.pokedex-migrator-dsn}' | base64 -d | sed -E 's/@tcp\(mysql:[0-9]+\)/@tcp(127.0.0.1:13306)/')"
+make migrate-version
+```
+確認: `version=<V> dirty=true` が表示される。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make migrate-force FORCE_VERSION=<V+1> CONFIRM_FORCE=pokedex
+make migrate-down CONFIRM_DESTROY=pokedex
+make migrate-version
+kill "$pf_pid"
+unset POKEDEX_DATABASE_DSN pf_pid
+```
+確認: `down: 完了` の後に `version: 未適用`。
+
+## importer の権限を付け直す(issue #312・ADR-0125)
+
+importer の書き込み権限は表ごと(`schema_migrations` を除く)に付く。`make deploy-latest` の migrate-up が
+プロビジョニング → up → importer の付け直しまで行うので、表を足す migration も `make deploy-latest` だけで追随する。
+この変更より前から動いている k3d の DB は、`make deploy-latest` を1回流すと importer の権限が表ごとに絞られる。
+付け直しは importer の権限をいったん全部外してから付けるので、その数秒の間に CronJob `pokedex-import` が走ると
+権限不足で失敗することがある(CronJob は再試行する。失敗したら `make import-k8s` で流し直す)。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make deploy-latest
+```
+確認: `== pokedex の DB(migrate-up)` の後に `up: 完了` と `version=<最新の版> dirty=false` が出る(DSN・パスワードは表示されない)。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+pw="$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.mysql-root-password}' | base64 -d)"
+kubectl -n pokecalc exec mysql-0 -- env MYSQL_PWD="$pw" mysql -u root -N -e "SHOW GRANTS FOR 'pokedex_importer'@'%';"
+unset pw
+```
+確認: `` ON `pokedex`.* `` の行は `GRANT SELECT` だけで、`INSERT, UPDATE, DELETE` は表ごとの行にあり、`schema_migrations` の行が無い。

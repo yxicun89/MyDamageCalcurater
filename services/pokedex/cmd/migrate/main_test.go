@@ -12,10 +12,11 @@ package main
 //		Up             func(dsn string) error
 //		Version        func(dsn string) (version uint, dirty bool, ok bool, err error)
 //		DownAll        func(dsn, confirmDatabase string) error
+//		Force          func(dsn, confirmDatabase string, version int) error
 //	}
 //	func run(args []string, env cliEnv) int
 //
-// main は os.Getenv と db.Provision・db.Up・db.Version・db.DownAll を渡す。
+// main は os.Getenv と db.Provision・db.Up・db.Version・db.DownAll・db.Force を渡す。
 
 import (
 	"bytes"
@@ -42,12 +43,18 @@ type harness struct {
 	stdout bytes.Buffer
 	stderr bytes.Buffer
 
-	calls          []string // "provision" / "up" / "version" / "down" の呼ばれた順
+	calls          []string // "provision" / "up" / "version" / "down" / "force" の呼ばれた順
 	provisionRoot  string
 	provisionRoles []db.RoleGrant
-	upDSN          string
-	provisionErr   error
-	upErr          error
+	// provisionRolesByCall は Provision の呼び出しごとのロール(Up の前後で2回呼ばれる)。
+	provisionRolesByCall [][]db.RoleGrant
+	upDSN                string
+	provisionErr         error
+	upErr                error
+	forceDSN             string
+	forceConfirm         string
+	forceVersion         int
+	forceErr             error
 }
 
 func newHarness(env map[string]string) *harness { return &harness{env: env} }
@@ -61,6 +68,7 @@ func (h *harness) cliEnv() cliEnv {
 			h.calls = append(h.calls, "provision")
 			h.provisionRoot = rootDSN
 			h.provisionRoles = append([]db.RoleGrant(nil), roles...)
+			h.provisionRolesByCall = append(h.provisionRolesByCall, h.provisionRoles)
 			return h.provisionErr
 		},
 		Up: func(dsn string) error {
@@ -75,6 +83,11 @@ func (h *harness) cliEnv() cliEnv {
 		DownAll: func(string, string) error {
 			h.calls = append(h.calls, "down")
 			return nil
+		},
+		Force: func(dsn, confirm string, version int) error {
+			h.calls = append(h.calls, "force")
+			h.forceDSN, h.forceConfirm, h.forceVersion = dsn, confirm, version
+			return h.forceErr
 		},
 	}
 }
@@ -115,22 +128,32 @@ func TestUpWithoutProvisionDSNSkipsProvisioning(t *testing.T) {
 }
 
 // AC-5: POKEDEX_PROVISION_DSN があれば、root で3ロールをプロビジョニングしてから migrator で Up する。
+// issue #312・ADR-0125: importer は表単位(schema_migrations を除く)の権限なので、Up で増えた表に
+// 追随させるため、Up の後に importer だけもう一度プロビジョニングする。
 func TestUpWithProvisionDSNProvisionsThenMigrates(t *testing.T) {
 	h := newHarness(fullProvisionEnv())
 	if code := run([]string{"up"}, h.cliEnv()); code != 0 {
 		t.Fatalf("exit = %d, want 0(stderr=%q)", code, h.stderr.String())
 	}
-	if !reflect.DeepEqual(h.calls, []string{"provision", "up"}) {
-		t.Fatalf("呼び出し = %v, want [provision up](プロビジョニングが先)", h.calls)
+	if !reflect.DeepEqual(h.calls, []string{"provision", "up", "provision"}) {
+		t.Fatalf("呼び出し = %v, want [provision up provision](プロビジョニングが先、Up の後に表単位のロールを付け直す)", h.calls)
 	}
 	if h.provisionRoot != fakeProvisionDSN {
 		t.Error("Provision の root DSN が POKEDEX_PROVISION_DSN でない")
 	}
+	if len(h.provisionRolesByCall) != 2 {
+		t.Fatalf("Provision の呼び出し回数 = %d, want 2", len(h.provisionRolesByCall))
+	}
+	importer := db.RoleGrant{DSN: fakeImporterDSN, Privileges: db.ImporterPrivileges, Scope: db.ScopeDataTables}
+	if !reflect.DeepEqual(h.provisionRolesByCall[1], []db.RoleGrant{importer}) {
+		t.Error("Up の後の Provision は importer(表単位)だけを渡すこと")
+	}
 	want := []db.RoleGrant{
 		{DSN: fakeReaderDSN, Privileges: db.ReaderPrivileges},
-		{DSN: fakeImporterDSN, Privileges: db.ImporterPrivileges},
+		importer,
 		{DSN: fakeMigratorDSN, Privileges: db.MigratorPrivileges},
 	}
+	h.provisionRoles = h.provisionRolesByCall[0]
 	if !reflect.DeepEqual(h.provisionRoles, want) {
 		// DSN を表示しない(パスワードを含むため)。権限だけを並べる。
 		var got []string
@@ -214,6 +237,106 @@ func TestVersionNeverProvisions(t *testing.T) {
 	}
 	if !reflect.DeepEqual(h.calls, []string{"version"}) {
 		t.Errorf("呼び出し = %v, want [version]", h.calls)
+	}
+	h.assertNoSecrets(t)
+}
+
+// issue #221: force はフラグ(-version・-confirm)を検査してから Force に渡す。欠け・負数は
+// Force を呼ばずに終了コード 2。Force の拒否(DB 名の不一致・存在しない版・dirty でない)は終了コード 1。
+func TestForceFlags(t *testing.T) {
+	cases := []struct {
+		name      string
+		args      []string
+		forceErr  error
+		wantCode  int
+		wantCall  bool
+		wantInErr string
+	}{
+		{"正常", []string{"force", "-version", "2", "-confirm", "pokedex_fake"}, nil, 0, true, ""},
+		{"0 は未適用に戻す", []string{"force", "-version", "0", "-confirm", "pokedex_fake"}, nil, 0, true, ""},
+		{"-version が無い", []string{"force", "-confirm", "pokedex_fake"}, nil, 2, false, "-version"},
+		{"-version が負", []string{"force", "-version", "-1", "-confirm", "pokedex_fake"}, nil, 2, false, "-version"},
+		{"-version が数でない", []string{"force", "-version", "x", "-confirm", "pokedex_fake"}, nil, 2, false, ""},
+		{"-confirm が無い", []string{"force", "-version", "2"}, nil, 2, false, "-confirm"},
+		{"余分な引数", []string{"force", "-version", "2", "-confirm", "pokedex_fake", "extra"}, nil, 2, false, ""},
+		{"DB 名の不一致", []string{"force", "-version", "2", "-confirm", "other"}, db.ErrForceNotConfirmed, 1, true, ""},
+		{"存在しない版", []string{"force", "-version", "99", "-confirm", "pokedex_fake"}, db.ErrForceUnknownVersion, 1, true, ""},
+		{"dirty でない", []string{"force", "-version", "2", "-confirm", "pokedex_fake"}, db.ErrForceNotDirty, 1, true, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(map[string]string{"POKEDEX_DATABASE_DSN": fakeMigratorDSN, "POKEDEX_PROVISION_DSN": fakeProvisionDSN})
+			h.forceErr = tc.forceErr
+			code := run(tc.args, h.cliEnv())
+			if code != tc.wantCode {
+				t.Errorf("exit = %d, want %d(stderr=%q)", code, tc.wantCode, h.stderr.String())
+			}
+			called := reflect.DeepEqual(h.calls, []string{"force"})
+			if called != tc.wantCall {
+				t.Errorf("呼び出し = %v, want Force を呼ぶ=%v(プロビジョニングもしない)", h.calls, tc.wantCall)
+			}
+			if tc.wantCall && tc.forceErr == nil {
+				if h.forceDSN != fakeMigratorDSN {
+					t.Error("Force に POKEDEX_DATABASE_DSN を渡していない")
+				}
+				if h.forceConfirm != "pokedex_fake" {
+					t.Errorf("Force の確認用 DB 名 = %q", h.forceConfirm)
+				}
+			}
+			if tc.wantInErr != "" && !strings.Contains(h.stderr.String(), tc.wantInErr) {
+				t.Errorf("stderr に %q が無い: %q", tc.wantInErr, h.stderr.String())
+			}
+			if tc.forceErr != nil && h.stderr.Len() == 0 {
+				t.Error("拒否の理由を stderr に出していない")
+			}
+			h.assertNoSecrets(t)
+		})
+	}
+}
+
+// issue #221: force の版は -version の値をそのまま渡す。
+func TestForcePassesVersion(t *testing.T) {
+	h := newHarness(map[string]string{"POKEDEX_DATABASE_DSN": fakeMigratorDSN})
+	if code := run([]string{"force", "-version", "5", "-confirm", "pokedex_fake"}, h.cliEnv()); code != 0 {
+		t.Fatalf("exit = %d(stderr=%q)", code, h.stderr.String())
+	}
+	if h.forceVersion != 5 {
+		t.Errorf("Force の版 = %d, want 5", h.forceVersion)
+	}
+}
+
+// POKEDEX_DATABASE_DSN が無ければ force も何もせず失敗する。
+func TestForceRequiresDatabaseDSN(t *testing.T) {
+	h := newHarness(map[string]string{})
+	if code := run([]string{"force", "-version", "2", "-confirm", "pokedex_fake"}, h.cliEnv()); code == 0 {
+		t.Error("POKEDEX_DATABASE_DSN が無いのに成功した")
+	}
+	if len(h.calls) != 0 {
+		t.Errorf("呼び出し = %v, want なし", h.calls)
+	}
+}
+
+// issue #312: Up の後の importer の付け直しが失敗したら終了コード 1(新しい表に書けない importer を黙って残さない)。
+func TestUpFailsWhenRegrantAfterUpFails(t *testing.T) {
+	h := newHarness(fullProvisionEnv())
+	env := h.cliEnv()
+	calls := 0
+	env.Provision = func(rootDSN string, roles []db.RoleGrant) error {
+		h.calls = append(h.calls, "provision")
+		calls++
+		if calls == 2 {
+			return errors.New("provision: 接続できない")
+		}
+		return nil
+	}
+	if code := run([]string{"up"}, env); code != 1 {
+		t.Errorf("exit = %d, want 1", code)
+	}
+	if !reflect.DeepEqual(h.calls, []string{"provision", "up", "provision"}) {
+		t.Errorf("呼び出し = %v", h.calls)
+	}
+	if h.stderr.Len() == 0 {
+		t.Error("失敗の理由を stderr に出していない")
 	}
 	h.assertNoSecrets(t)
 }
