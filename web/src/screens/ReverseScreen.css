@@ -254,6 +254,13 @@
   color: var(--text-secondary);
 }
 
+/* issue #305: 観測を厳密に説明できる候補が1件も無いときの案内。結果の先頭に出す。 */
+.reverse-results__no-exact-notice {
+  margin: 0;
+  font-size: var(--font-size-body);
+  color: var(--danger);
+}
+
 .reverse-results__list {
   display: flex;
   flex-direction: column;
@@ -309,6 +316,13 @@
   color: var(--text-primary);
 }
 
+/* issue #305: 全候補が不一致のとき、SP 範囲は厳密一致ではなく「参考」であることを添える。 */
+.reverse-results__reference-label {
+  margin-inline-start: var(--space-1);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
 .reverse-results__guide {
   font-size: var(--font-size-caption);
   color: var(--text-secondary);
@@ -323,4 +337,11 @@
   grid-column: 1 / -1;
   font-size: var(--font-size-result);
   color: var(--text-primary);
+}
+
+/* issue #305: %欄が「その候補で撃ったときの予測ダメージ%」であることを示すラベル。 */
+.reverse-results__percent-label {
+  margin-inline-end: var(--space-1);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
 }

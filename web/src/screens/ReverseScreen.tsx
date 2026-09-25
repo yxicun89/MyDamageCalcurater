@@ -1103,8 +1103,16 @@ interface ReverseResultsListProps {
 function ReverseResultsList({ result, items, narrowing, onNarrowingAnimationEnd }: ReverseResultsListProps) {
   const assumptionNote = reverseAssumptionNote(result);
   const listClassName = `reverse-results__list${narrowing ? " is-narrowing" : ""}`;
+  // issue 305: 観測を厳密に説明できる候補(exact)が1件も無いとき(exactCount 0 かつ候補が1件以上)。
+  // 判定は engine が返した exactCount をそのまま使う(ADR-0300 §8: TS 側で再判定しない)。
+  const hasNoExactCandidate = result.exactCount === 0 && result.candidates.length > 0;
   return (
     <div className="reverse-results">
+      {hasNoExactCandidate && (
+        <p role="status" className="reverse-results__no-exact-notice">
+          {reverseResultText.noExactCandidateNotice}
+        </p>
+      )}
       {assumptionNote !== null && <p className="reverse-results__assumption">{assumptionNote}</p>}
       <ul
         aria-label={reverseScreenText.resultsListLabel}
@@ -1127,14 +1135,26 @@ function ReverseResultsList({ result, items, narrowing, onNarrowingAnimationEnd 
                 {natureClassLabel(candidate.natureClass, result.stat)}
               </span>
               <span className="reverse-results__item">{reverseItemLabel(candidate.itemId, items)}</span>
-              <span className="reverse-results__ranges">{formatSPRanges(result.stat, candidate.ranges)}</span>
+              <span className="reverse-results__ranges">
+                {formatSPRanges(result.stat, candidate.ranges)}
+                {hasNoExactCandidate && (
+                  <span className="reverse-results__reference-label">
+                    {reverseResultText.referenceRangeLabel}
+                  </span>
+                )}
+              </span>
               {guideNames.length > 0 && (
                 <span className="reverse-results__guide">{guideNames.join("・")}</span>
               )}
               {!candidate.exact && (
                 <span className="reverse-results__mismatch">{reverseResultText.closeCandidateLabel}</span>
               )}
-              <span className="reverse-results__percent">{formatPercentRange(candidate)}</span>
+              <span className="reverse-results__percent">
+                <span className="reverse-results__percent-label">
+                  {reverseResultText.predictedPercentLabel}
+                </span>
+                <span className="reverse-results__percent-value">{formatPercentRange(candidate)}</span>
+              </span>
             </li>
           );
         })}

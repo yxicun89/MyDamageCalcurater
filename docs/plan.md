@@ -377,6 +377,24 @@
   連打で多重リクエストになりうる(pending state を追加して「読み込み中…」に戻す設計が要る)。
   (2) 「素早さ」タブを選んでいる間は失敗の通知・再試行ボタンがどこにも出ない(他のタブに移れば出るので
   受け入れ条件は満たすが、タブパネルの外に出す方が issue の意図に近い)。
+- [x] issue #305(重大度 medium。逆算で観測を厳密に説明できる候補(`exact`)が1件も無くても、その旨の案内が
+  無く、候補ごとの「近い候補」ラベルと SP 範囲だけが並ぶ。%欄が「その候補で撃ったときの予測ダメージ%」で
+  あることの説明も無い)。**完了(2026-09-25。Web レーン。ブランチ `fix/web-reverse-no-exact-candidates-305`)**:
+  受け入れ条件と失敗するテストを先に用意(`web/src/screens/ReverseScreen.test.tsx` の
+  `describe("結果の表示")` に6件追加〈新規の案内・「参考」の印・「予測」のラベルの3件が red、
+  候補一覧を消さないこと・正常系・候補0件の3件は現状の挙動の回帰ガードとして green〉。文言は
+  `web/src/i18n/ja.ts` の `reverseResultText` に `noExactCandidateNotice`・`referenceRangeLabel`・
+  `predictedPercentLabel` を追加)。方針は engine の一致判定に触れず(ADR-0300 §8「Web は返ってきた値を
+  加工せずに表示する」)、`ReverseResult.exactCount` をそのまま見て表示だけを変える。候補一覧は消さずに
+  残す(要件「候補の提示を優先」)。実装: `ReverseScreen.tsx` の `ReverseResultsList` に
+  `exactCount === 0 && candidates.length > 0` のときだけ role=status の案内・SP 範囲への「参考」の印を出し、
+  %欄には常に「予測」のラベルを値と別要素で添える(`"40.2〜47.8%"` の完全一致は維持)。
+  `ReverseScreen.css` に見た目を追加(tokens.css の変数のみ使用。常時アニメーションなし)。
+  `web/src/i18n/ja.ts` と `ReverseScreen.tsx` のコメント中の `issue #305` は
+  `web/src/styles/noColorLiterals.test.ts` の16進色リテラル検出(`#` + 3桁hex)に誤検出されるため
+  `issue 305`(# なし)表記に修正(他の issue コメントと同じ慣習)。
+  `npx vitest run ReverseScreen` 94件・`npm test` 1611件・`npm run typecheck`・`npm run lint`
+  (eslint + prettier)いずれも green。
 
 ## M2: 保存・構築
 
