@@ -125,7 +125,7 @@ sequenceDiagram
 
 | exit | 意味 | CronJob の扱い(`podFailurePolicy`) |
 |---|---|---|
-| 0 | 投入した / 版が同じでスキップ / dry-run | 成功 |
+| 0 | 投入した / 取得元の版と変換結果が同じでスキップ / dry-run | 成功 |
 | 1 | 再試行で直りうる(DB 接続・I/O) | `backoffLimit: 2` で再試行 |
 | 2 | 使い方・設定の誤り(DSN 無し等) | `FailJob`(再試行しない) |
 | 3 | 人間の対応が要る(`ErrBlocked` `ErrKeyChanged` `ErrInvalidInput` `ErrInvalidData` `ErrInvalidEffect` `ErrSchemaNotReady`)。DB は変えない | `FailJob` |
@@ -135,7 +135,7 @@ sequenceDiagram
 | 段 | 場所 | 内容 |
 |---|---|---|
 | Reconcile | `importer/reconcile*.go` | 3 ソース(calc・Showdown・PokeAPI)を照合し、報告を `data/generated/reports/` へ書く。食い違いがあれば `ErrBlocked`(exit 3) |
-| RunStore | `importer/store.go:65-83` | `AppliedVersions`(`data_versions`)→ `NeedsImport` → 版が同じなら**スキップ**(`-force` で強制)。版が読めない(=migrate 未実施かも)ときは `Apply` を呼ばない |
+| RunStore | `importer/store.go` | `AppliedVersions`(`data_versions`)→ 取得元の版に変換結果の版(`importer-output`。`Output` の内容ハッシュ。`importer/output_version.go`。ADR-0122)を足す → `NeedsImport` → すべて同じなら**スキップ**(`-force` で強制)。版が読めない(=migrate 未実施かも)ときは `Apply` を呼ばない |
 | Apply | `importer/apply.go:54-` | **1 トランザクションで全置換**: 全テーブルを FK 順に DELETE → INSERT → `data_versions` 更新 → Commit。自己参照 FK(`species.base_species_key`)のためメガは削除が先・挿入が後 |
 | key の保護 | `apply.go:71-81` | 既存の `showdown_id` の `key` が変わる/別の `showdown_id` が同じ `key` を奪う投入は `ErrKeyChanged` で拒否(team-svc 等が保存した key の指す種族が入れ替わるのを防ぐ) |
 
@@ -160,7 +160,7 @@ ID 列は `ascii_bin`、日本語名は `utf8mb4_ja_0900_as_cs`(ADR-0100 §2)。
 | 13 | `regulation_moves` | `(regulation_id, move_id)` | FK CASCADE | 000003 |
 | 14 | `regulation_items` | `(regulation_id, item_id)` | FK CASCADE | 000003 |
 | 15 | `regulation_abilities` | `(regulation_id, ability_id)` | FK CASCADE | 000003 |
-| 16 | `data_versions` | `source` | `version` `checksum`(64 桁 hex)`imported_at` DATETIME(6)。取り込み版のスキップ判定に使う | 000004 |
+| 16 | `data_versions` | `source` | `version` `checksum`(64 桁 hex)`imported_at` DATETIME(6)。取り込み版のスキップ判定に使う。取得元ごとの行と、変換結果の版の行(`source = importer-output`。ADR-0122) | 000004 |
 | 17 | `natures` | `id` | `plus` `minus`(atk/def/spa/spd/spe。両方 NULL = 無補正)。`(plus, minus)` UNIQUE | 000006 |
 | 18 | `move_effects` | `move_id` | `effect` JSON(FK → moves) | 000007 |
 | 19 | `move_mechanisms` | `(move_id, mechanism)` | 技の機構(多段・固定ダメージ・威力変動 等。CHECK で値を固定。行が無い = 通常の技。FK → moves CASCADE。ADR-0121) | 000008 |

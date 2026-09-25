@@ -1,7 +1,9 @@
-// P4-6: Playwright の E2E(オンライン = API)。ADR-0301 §5・§6: Web の例データを calc-svc のスナップショットに
-// 書き出し(scripts/export-example-master.mjs)、その出力で calc-svc を起動する。vite preview は /api を
-// calc-svc へ転送する(API_PROXY_TARGET。vite.config.ts)。要 Go(services/ を go run する)。
-// 書き出し先は data/generated/(.gitignore 済み。ADR-0002)。
+// P4-6: Playwright の E2E(オンライン = API)。ADR-0301 §5・§6・ADR-0204: Web の例データを calc-svc の
+// マスタ一式(MasterExport。相性表も含む)に書き出し(scripts/export-example-master.mjs)、その出力で
+// calc-svc を起動する。vite preview は /api を calc-svc へ転送する(API_PROXY_TARGET。vite.config.ts)。
+// 要 Go(services/ を go run する)。書き出し先は data/generated/(.gitignore 済み。ADR-0002)。
+// 相性表を別出しする廃止済みの環境変数(services/calc/cmd/calc/main.go 参照)は渡さない
+// (設定されていると calc-svc が起動しない)。
 
 import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
@@ -19,7 +21,6 @@ assertWasmArtifacts();
 const baseURL = `http://127.0.0.1:${ONLINE_PORT}`;
 const calcSvcURL = `http://127.0.0.1:${CALC_SVC_PORT}`;
 const masterPath = join(repoRoot, "data", "generated", "e2e-web-example-master.json");
-const typeChartPath = join(repoRoot, "testdata", "golden", "typechart.json");
 
 export default defineConfig({
   testDir: "./e2e",
@@ -44,7 +45,6 @@ export default defineConfig({
       env: {
         CALC_ADDR: `127.0.0.1:${CALC_SVC_PORT}`,
         CALC_MASTER_PATH: masterPath,
-        CALC_TYPECHART_PATH: typeChartPath,
       },
     },
     {
