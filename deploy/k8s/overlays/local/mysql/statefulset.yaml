@@ -42,16 +42,22 @@ spec:
             - name: config
               mountPath: /etc/mysql/conf.d/charset.cnf
               subPath: charset.cnf
+          # timeoutSeconds の既定は 1 秒。import(全置換の投入)中は CPU 上限(500m)に張り付き、ping が 1 秒を
+          # 超えて liveness が失敗 → 取り込みの最中に再起動されていた(2026-09-25 に k3d で再現)。
+          # 応答が遅いだけのときに殺さないよう、タイムアウトと失敗回数に余裕を持たせる(約 2 分応答が無ければ再起動)。
           readinessProbe:
             exec:
               command: ["mysqladmin", "ping", "-h", "127.0.0.1"]
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 5
           livenessProbe:
             exec:
               command: ["mysqladmin", "ping", "-h", "127.0.0.1"]
             initialDelaySeconds: 15
             periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
           resources:
             requests:
               cpu: 100m
