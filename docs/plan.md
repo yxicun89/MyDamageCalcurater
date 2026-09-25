@@ -395,6 +395,22 @@
   `issue 305`(# なし)表記に修正(他の issue コメントと同じ慣習)。
   `npx vitest run ReverseScreen` 94件・`npm test` 1611件・`npm run typecheck`・`npm run lint`
   (eslint + prettier)いずれも green。
+- [x] issue #248(重大度 low。計算画面のオンライン計算(`/api/calc/bulk`)に `AbortSignal` を渡しておらず、
+  入力を連続して変えても古い要求が中断されずサーバーに無駄な計算をさせる。gateway の取り消し伝播は
+  issue #113 で実装済みだが、計算画面〈`CalcScreen.tsx`〉は当時 `cancelled` フラグで結果を無視するだけで、
+  逆算画面〈`ReverseScreen.tsx`〉と違って `AbortController` を渡していなかった)。
+  **完了(2026-09-25。Web レーン。メインセッションで直接実装、軽微な作業のため spec-writer/implementer は
+  介さず。CLAUDE.md「軽微な作業はメインのみでよい」)**: `ReverseScreen.tsx` と全く同じ形
+  (effectごとに `AbortController` を作り、`engine.calcBulk(request, controller.signal)` へ渡し、
+  cleanupで `controller.abort()`)を `CalcScreen.tsx` に追加。`web/src/test/fakeEngine.ts` の
+  `PendingBulk`(`createDeferredEngine` が返す)に `signal` フィールドを追加(`PendingReverse` と同じ形。
+  `calcBulk` に渡された signal を記録)。回帰テストは `CalcScreen.test.tsx` の
+  `describe("結果の表示(engine の値を加工せずに出す)")` に1件追加(「入力を変えると、前の calcBulk 要求を
+  abort する」。実装前は red であることを一時的に `CalcScreen.tsx` の変更だけ `git stash` で戻して確認済み)。
+  `npx vitest run CalcScreen.test` 33件・`npm test` 1612件・`npm run typecheck`・`npm run lint`
+  (eslint + prettier)いずれも green。**critic PASS**(sonnetで実施。opusのセッション利用枠が一時的に
+  上限に達したため、CLAUDE.mdのモデル割り当て方針〈engine・逆算・DB・API契約に関わるときだけOpus〉に従い
+  sonnetへ切り替え。mutation testing 2件で全て検知、WASM側の無回帰も`wasmEngine.test`29件で確認済み)。
 
 ## M2: 保存・構築
 
