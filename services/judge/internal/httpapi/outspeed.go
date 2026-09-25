@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -274,6 +275,13 @@ func outspeedAndKo(c *echo.Context, deps Dependencies, params api.OutspeedAndKoP
 	}
 
 	ctx := c.Request().Context()
+	if deps.RequestTimeout > 0 {
+		// ADR-0707 §2: リクエスト全体の期限を 1 回だけ張り、以降の上流呼び出しすべてに使う
+		// (呼び出し順序・逐次であること自体は変えない。ADR-0703 §3 の維持)。
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, deps.RequestTimeout)
+		defer cancel()
+	}
 	rc := client.RequestContext{DeviceID: params.XDeviceId, SessionID: params.XSessionId}
 
 	natures, err := deps.Pokedex.Natures(ctx, rc)
