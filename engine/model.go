@@ -20,15 +20,18 @@ type Species struct {
 
 // Move は技データ(マスタから解決済み)。
 // Effect は追加効果(命中時のランク変化)の定義(マスタから解決)。nil は追加効果なし。
-// CalcDamage はこの値を読まない(ADR-0107 決定2)。
+// CalcDamage は Effect を読まない(ADR-0107 決定2)。
+// Mechanisms は技の機構(ADR-0121)。空は通常の技。CalcDamage は数値の計算には使わず、
+// 通常の式で誤る機構に「未対応」の印を付けるためだけに読む(ADR-0123)。
 type Move struct {
-	ID       string
-	NameJa   string
-	Type     Type
-	Category MoveCategory
-	Power    int // 威力。0 は変化技/固定ダメージ
-	Priority int
-	Effect   *MoveEffect
+	ID         string
+	NameJa     string
+	Type       Type
+	Category   MoveCategory
+	Power      int // 威力。0 は変化技/固定ダメージ
+	Priority   int
+	Effect     *MoveEffect
+	Mechanisms []MoveMechanism
 }
 
 // Item は持ち物データ。Effect はダメージ補正の定義(マスタから解決)。nil は補正なし。

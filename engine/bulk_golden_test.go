@@ -131,7 +131,7 @@ func TestGoldenBulkDefenderPresets(t *testing.T) {
 				t.Fatalf("%s: 未知の golden プリセット名 %q", c.ID, name)
 			}
 			if !reflect.DeepEqual(c.Input.Attacker, first.Input.Attacker) ||
-				c.Input.Move != first.Input.Move || c.Input.Field != first.Input.Field ||
+				!reflect.DeepEqual(c.Input.Move, first.Input.Move) || c.Input.Field != first.Input.Field ||
 				c.Input.Critical != first.Input.Critical || c.Input.Format != first.Input.Format {
 				t.Fatalf("%s: 同一グループで攻撃側/技/場が異なる(ベクタの並び順の前提が崩れた)", c.ID)
 			}

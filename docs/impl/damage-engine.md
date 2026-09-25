@@ -82,8 +82,8 @@ flowchart TD
 | 1 | 入力検証 | `dmg:193-201` | — | §11。失敗は error(部分結果なし) |
 | 2 | 相性 | `dmg:209` `in.TypeChart.Effectiveness(技タイプ, 防御側 Species.Types)` | 整数比 `Num/Den`(約分しない。`Den = 2^タイプ数`)`tc:58-63` | §5。**テラスタイプは使わない**(§13) |
 | 3 | 一致判定 | `dmg:214` → `dmg:117` `stabModifier` | — | 攻撃側 `Species.Types` に技タイプがあれば 6144、特性 `StabMod` があればその値(例 8192)。技タイプなし(`""`)は不一致 |
-| 4 | 特性による無効・吸収 | `dmg:218-220` → `dmg:96` `abilityNullification` | — | タイプ由来の無効が先。`DefImmuneTypes` が `DefAbsorbTypes` に勝つ(ADR-0106 §決定1)。結果は `DamageResult.Nullified` |
-| 5 | 0 ダメージの早期終了 | `dmg:223-225` | — | 変化技・`Power <= 0`・相性 0・特性で無効/吸収。Rolls は全 0、`KO.Hits = 0` |
+| 4 | 特性による無効・吸収 → サイコフィールドの先制技 | `abilityNullification` → `blockedByPsychicTerrain`(`engine/damage.go`) | — | タイプ由来の無効が先。`DefImmuneTypes` が `DefAbsorbTypes` に勝つ(ADR-0106 §決定1)。その後、優先度 > 0 の攻撃技 × サイコフィールド × 防御側が接地(`isGrounded`)なら無効(ADR-0123。oracle と同じ順)。結果は `DamageResult.Nullified`(`immune` / `absorb` / `psychic_terrain`) |
+| 5 | 0 ダメージの早期終了 | `dmg:223-225` | — | 変化技・`Power <= 0`・相性 0・特性で無効/吸収・サイコフィールド。Rolls は全 0、`KO.Hits = 0` |
 | 6 | 攻撃・防御の実効値 | `dmg:228` → `dmg:144` `attackDefenseStats` | 下表 | 物理 = A/B、特殊 = C/D(`dmg:146-150`) |
 | 7 | 威力 | `dmg:231` `max(1, pokeRound(威力, powerModifier(in)))` | `pokeRound` 1 回(補正は `chainMods` 済み) | `mod:178` `powerModifier`: フィールド(`mod:99`。接地している側だけ)→ タイプ強化持ち物 → 分類限定の威力持ち物(ADR-0008 訂正2) |
 | 8 | 基礎ダメージ | `dmg:232` `(((2*L/5+2)*威力*A)/D)/50 + 2` | 各段 floor | L は `EffectiveLevel`(常に 50) |
@@ -244,17 +244,27 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 | `TeraType` | 表にある ID かの検証だけ。一致判定・相性は素の `Species.Types` | `dmg:184-187`、`dmg:117`、`mod:51` `hasType`、ADR-0005 | #232・#315 |
 | `Format = double` | 計算に使わない(壁 ×0.5 固定・全体技の軽減なし) | §10 | #232・#288 |
 | `Field.AttackerScreens` | どこからも読まれない(`DefenderScreens` だけを見る) | `mod:124` | — |
-| `Move.Priority`・`Move.Effect` | ダメージ計算では読まない | `engine/model.go:21`、ADR-0107 決定2 | — |
+| `Move.Effect` | ダメージ計算では読まない(`Move.Priority` はサイコフィールドの判定だけに使う。ADR-0123) | `engine/model.go:21`、ADR-0107 決定2 | — |
 | `Species.Abilities` | 参考。計算は `Individual.Ability` を使う | `engine/model.go:16` | #272(Web で特性を選べない) |
 | `AbsorbEffect` の回復・能力上昇 | 読まない(ダメージ 0 だけ) | `mod:28-30`、ADR-0106 §決定4 | — |
 | `Status` の burn 以外 | ダメージに関係しない | `dmg:130` | — |
 | `DamageResult.Nullified` | engine は返すが、wasmapi の結果 DTO と calc-svc の応答に出ない(`calcResultDTO` `engine/wasmapi/dto.go:598` に項目なし。`services/calc` に参照なし) | grep | #78 |
-| 効果定義の無い持ち物・特性 | `Effect == nil` = 補正なしで計算 | §6 | #270・#282 |
+| 効果定義の無い持ち物・特性 | `Effect == nil` = 補正なしで計算。ダメージに効くのに表せないもの(`tools/golden/unsupported-effects.json`)は効果定義に「未対応」の印(`UnsupportedAttacker` / `UnsupportedDefender`)を持ち、効く側で持つと結果に印が付く(下の「未対応の印」) | §6、ADR-0120・ADR-0123 | #270・#282 |
+
+未対応の印(ADR-0123。`engine/unsupported.go`):
+
+engine が通常の式で正しく計算できない入力は、数値を通常の式のまま返し、`DamageResult.Unsupported`(一括計算は各行の `Result`、逆算は各候補の `Unsupported`)に印 `{Target, Reason, ID}` を付ける。WASM の結果には `unsupported`(常に配列)として出る。calc-svc の応答にはまだ出ない(API レーンに契約の追加を依頼中)。
+
+| 対象(`Target`) | 理由(`Reason`) | 付く条件 |
+|---|---|---|
+| `move` | 技の機構(`Move.Mechanisms`。ADR-0121 の 13 種) | `always_crit` は急所なしの入力、`ignore_defense_ranks` は防御側の使う側のランクが 0 でないとき、`priority_change` はサイコフィールド、`field_specific` は天候かフィールドがあるとき。ほかは常に。未知の値も常に |
+| `move` | `zero_power` | 威力 0 の攻撃技(変化技は付けない) |
+| `attacker_item` / `attacker_ability` / `defender_item` / `defender_ability` | `unsupported_effect` | 効果定義の `UnsupportedAttacker`(攻撃側で持つとき)/ `UnsupportedDefender`(防御側で持つとき) |
 
 対応していない機構(ADR-0005「M1 での対象外」・コードで確認できるもの):
 
-- 接地判定の一部: じゅうりょく・くろいてっきゅう(必ず接地)・ふうせん(浮く)は未モデル化(ADR-0116 §対象外)。グラスフィールドの地震・じならし半減、サイコフィールドの先制技無効などフィールド固有の技の処理は #271
-- 固定ダメージ・多段・威力変動・参照ステータスの差し替え: 威力の数値どおり単発で計算(`Power <= 0` は 0 ダメージ。`dmg:223`)。#233・#271
+- 接地判定の一部: じゅうりょく・くろいてっきゅう(必ず接地)・ふうせん(浮く)は未モデル化(ADR-0116 §対象外)。グラスフィールドの地震・じならし半減などフィールド固有の技の処理は未実装で、印(`field_specific`)が付く(#271。サイコフィールドの先制技無効は実装済み。ADR-0123)
+- 固定ダメージ・多段・威力変動・参照ステータスの差し替え: 威力の数値どおり単発で計算し、印を付ける(`Power <= 0` は 0 ダメージ + `zero_power`)。#233・#271
 - 条件付き特性(ADR-0005 の列挙: いかく等)、天候を変える特性、重さ依存技、急所ランク、テラスタルの補正、ダブル固有補正(全体技 ×0.75 など)
 - 多ターンの KO(定数ダメージ・回復・反動)、急所率・命中率(ADR-0006)
 - 32bit 折り返し(ADR-0004 保留)

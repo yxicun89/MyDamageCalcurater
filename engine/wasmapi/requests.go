@@ -263,6 +263,8 @@ type reverseCandidateDTO struct {
 	Support     int          `json:"support"`
 	MinPercent  tenthPercent `json:"minPercent"`
 	MaxPercent  tenthPercent `json:"maxPercent"`
+	// Unsupported は候補の計算に付いた「未対応」の印(ADR-0123)。印なしは空配列。
+	Unsupported []unsupportedMarkDTO `json:"unsupported"`
 }
 
 type reverseResultDTO struct {
@@ -356,6 +358,7 @@ func (r *reverseRequest) run() (reverseResultDTO, error) {
 			Support:     c.Support,
 			MinPercent:  tenthPercent(c.MinPercentTenths),
 			MaxPercent:  tenthPercent(c.MaxPercentTenths),
+			Unsupported: unsupportedFrom(c.Unsupported),
 		})
 	}
 	return reverseResultDTO{
