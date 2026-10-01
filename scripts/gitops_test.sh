@@ -135,6 +135,7 @@ new_sandbox() {
   local dir="$WORK/sandbox/$1" svc
   mkdir -p "$dir/scripts" "$dir/deploy"
   "$REAL_GIT" -C "$dir" init -q
+  cp "$ROOT/scripts/require-k3d-context.sh" "$dir/scripts/require-k3d-context.sh"
   [ -d "$ROOT/scripts/gitops" ] && cp -R "$ROOT/scripts/gitops" "$dir/scripts/gitops"
   [ -d "$ROOT/deploy/argocd" ] && cp -R "$ROOT/deploy/argocd" "$dir/deploy/argocd"
   for svc in $SERVICES; do
@@ -167,6 +168,9 @@ for a in "\$@"; do
     kustomize|apply|version|get|create|delete|rollout|annotate|port-forward|patch|replace) sub=\$a; break ;;
   esac
 done
+case "\$*" in
+  "config current-context") printf 'k3d-pokecalc\n'; exit 0 ;;
+esac
 case "\$sub" in
   kustomize) exec "$REAL_KUBECTL" "\$@" ;;
   version) exit 0 ;;

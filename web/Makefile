@@ -76,7 +76,7 @@ web-e2e-container: web-docker-build web-deps ## 作ったイメージを docker 
 # 自分の Deployment だけを apply する。
 .PHONY: web-k3d-deploy
 web-k3d-deploy: web-docker-build ## k3d(既存クラスタ。make up 済み)へ Web だけをデプロイする
-	@test "$$(kubectl config current-context)" = "k3d-$(CLUSTER)" || { echo "web-k3d-deploy: kubectl のコンテキストが k3d-$(CLUSTER) ではない" >&2; exit 1; }
+	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh web-k3d-deploy
 	@k3d image import pokecalc/web:local --cluster $(CLUSTER)
 	@kubectl apply -k deploy/k8s/overlays/local-web
 	@kubectl -n pokecalc rollout restart deployment/web
