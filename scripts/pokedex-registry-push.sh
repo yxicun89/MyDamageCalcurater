@@ -20,12 +20,9 @@ cd "$(git rev-parse --show-toplevel)"
 pokedex_dir=${POKEDEX_DIR:-services/pokedex}
 cluster=${CLUSTER:-pokecalc}
 local_port=${POKEDEX_REGISTRY_PORT:-5003}
-tag=$(git rev-parse --short=12 HEAD)
 # イメージには engine も入る(ビルドコンテキストはリポジトリのルート。Dockerfile 冒頭のコメント参照)ので、
-# 未コミットの変更は pokedex と engine の両方を見て印を付ける(speed の local-registry-push.sh と同じ考え方)。
-if [ -n "$(git status --porcelain -- "$pokedex_dir" engine)" ]; then
-  tag="${tag}-dirty"   # 未コミットの変更があると tag と中身がずれるので印を付ける
-fi
+# 未コミットの変更は pokedex と engine の両方を見て -dirty の印を付ける(scripts/image-tag.sh)。
+tag=$(./scripts/image-tag.sh "$pokedex_dir" engine)
 image="pokecalc/pokedex:${tag}"
 work_dir=$(mktemp -d)
 forward_pid=""
@@ -48,11 +45,8 @@ if [ -n "${POKEDEX_REGISTRY_HOST:-}" ]; then
   push_host="$POKEDEX_REGISTRY_HOST"
   ref_host="$POKEDEX_REGISTRY_HOST"
 else
-  context="$(kubectl config current-context)"
-  if [ "$context" != "k3d-${cluster}" ]; then
-    echo "pokedex-registry-push: kubectl の context が '$context'(期待 k3d-${cluster})。別クラスタへ push しないよう中断" >&2
-    exit 1
-  fi
+  CLUSTER="$cluster" ./scripts/require-k3d-context.sh pokedex-registry-push
+  context="k3d-${cluster}"
   echo "pokedex-registry-push: 宛先 = 共有クラスタ(context ${context})の balance-registry、イメージ ${image}" >&2
   if [ "${POKEDEX_REGISTRY_PUSH_CONFIRM:-}" != 1 ]; then
     echo "pokedex-registry-push: 共有クラスタへ push するときは POKEDEX_REGISTRY_PUSH_CONFIRM=1 を付けて実行する(検証なら POKEDEX_REGISTRY_HOST=<使い捨てレジストリ>)" >&2

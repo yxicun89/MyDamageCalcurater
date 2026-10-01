@@ -656,8 +656,12 @@ func TestMakefileImportTargets(t *testing.T) {
 	if !strings.Contains(k, "pokecalc") {
 		t.Errorf("import-k8s は namespace pokecalc に作る: %q", k)
 	}
-	if !strings.Contains(k, "current-context") || !strings.Contains(k, "k3d-$(CLUSTER)") {
-		t.Errorf("import-k8s は kubectl の context が k3d-$(CLUSTER) であることを確かめる(別クラスタで流さない): %q", k)
+	// context の検査は共通のガード scripts/require-k3d-context.sh に寄せた(issue #295。ガード自体の動作は
+	// scripts/require-k3d-context_test.sh が偽 kubectl で確かめる)。create job より前に、CLUSTER を渡して呼ぶこと。
+	guard := regexp.MustCompile(`CLUSTER=\$\(CLUSTER\)\s+\./scripts/require-k3d-context\.sh`).FindStringIndex(k)
+	create := regexp.MustCompile(`create\s+job`).FindStringIndex(k)
+	if guard == nil || create == nil || guard[0] > create[0] {
+		t.Errorf("import-k8s は create job の前に CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh で context を確かめる(別クラスタで流さない): %q", k)
 	}
 	if !strings.Contains(targets["import-check-upstream"], "check-upstream.mjs") {
 		t.Errorf("import-check-upstream は tools/importer/check-upstream.mjs を実行する: %q", targets["import-check-upstream"])

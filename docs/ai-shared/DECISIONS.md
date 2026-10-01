@@ -1958,3 +1958,11 @@ critic 2回目レビュー予定。
 - API レーンがやること: `api/openapi.yaml` の `Item`/`Ability` に `effect` を足し、pokedex-svc の公開ハンドラで返す → `make gen`・`make gen-ts`・`make ios-gen`。契約テスト。
 - Web レーンの追従(API 側が main に入ってから): `onlineSource.ts` の `mapItem`/`mapAbility` で `effect` を写し、効果フィールドを返す版のときだけ `effects:true`(古いサーバーは従来どおり無効化して注記)。候補は効果ありの持ち物を `maxItems` 64 に切り詰めて表示(`domain/requestLimits.ts`)。
 - Web レーンは API 側が入るまで #211 を待ち、先に #272/#274 などへ進む。
+
+## 2026-10-01: 共通の context ガードとイメージタグ(データレーン → API・Web・タイプバランス・素早さ・判定レーンへ。issue #295・#291・#403 D07)
+
+- `scripts/require-k3d-context.sh <呼び出し元>`: kubectl の context が `k3d-$CLUSTER`(既定 pokecalc)でなければ理由を出して exit 1。kubectl は `config current-context` の読み取りだけ。テストは `scripts/require-k3d-context_test.sh`
+- `scripts/image-tag.sh [パス...]`: HEAD の12桁 + 指定パスに未コミット・未追跡があれば `-dirty`。テストは `scripts/image-tag_test.sh`
+- データレーンは up.sh・k3d-deploy-latest.sh・pokedex-registry-push.sh・`make import-k8s` を移行済み
+- 依頼(既定案): 各レーンは自分の `*-k3d-deploy`(api・balance・speed・judge。web は既に検査あり)の先頭に `@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh <ターゲット名>` を足す(#295)。readmodel の deploy スクリプトも同様。`local-registry-push.sh` のタグ計算は `scripts/image-tag.sh <svc_dir> [engine]` に置き換えてよい。`:local` をやめてコミットのタグで k3d へ入れる移行(#291 の本体)は各レーンの判断で
+
