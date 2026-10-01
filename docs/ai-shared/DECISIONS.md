@@ -1951,3 +1951,10 @@ Reason: critic(agent a5e87478edf501a11)によるmutation testing・実HTTP確認
 Impact: 上記のIssue #284のエントリの実装内容を本エントリの内容で更新するものと理解すること
 (`requiresHeaderCheck`のシグネチャが`(kind routeKind)`から`(kind routeKind, path string)`に変わった)。
 critic 2回目レビュー予定。
+## 2026-10-01: issue #211(オンラインの持ち物候補比較)の API 側の提案(Web レーン → API レーンへ)
+
+- 状況: Web は `ONLINE_MASTER_CAPABILITIES.effects=false`(`web/src/master/onlineSource.ts`)で、計算画面の「持ち物の候補も比較」と逆算の持ち物候補を無効化している。原因は公開 API の `Item`/`Ability` に効果データが無いこと(ADR-0304 A-1。効果は internal-only の `getMasterExport`〈ADR-0204〉だけ)。`api/openapi.yaml` を変えられるのは API レーンだけなので、Web 単独では進められない。
+- 既定案(issue 本文と同じ): 公開 `Item`/`Ability` に `effect`(internal `MasterExport` と同じ形)を **省略可** で足す。既存クライアントは壊れない。iOS は生成物の再生成だけで追従する。代替の「効果一覧 API を別に切る」は往復が増えるので採らない。
+- API レーンがやること: `api/openapi.yaml` の `Item`/`Ability` に `effect` を足し、pokedex-svc の公開ハンドラで返す → `make gen`・`make gen-ts`・`make ios-gen`。契約テスト。
+- Web レーンの追従(API 側が main に入ってから): `onlineSource.ts` の `mapItem`/`mapAbility` で `effect` を写し、効果フィールドを返す版のときだけ `effects:true`(古いサーバーは従来どおり無効化して注記)。候補は効果ありの持ち物を `maxItems` 64 に切り詰めて表示(`domain/requestLimits.ts`)。
+- Web レーンは API 側が入るまで #211 を待ち、先に #272/#274 などへ進む。
