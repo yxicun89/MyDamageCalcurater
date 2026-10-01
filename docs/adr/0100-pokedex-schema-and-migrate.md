@@ -1,6 +1,6 @@
 # ADR-0100: pokedex のスキーマ(MySQL)・migrate・DB 行から engine 型への写像
 
-- 状態: 提案(P2-2a の仕様。spec-writer 起草、implementer が実装、critic がレビュー)
+- 状態: 採用(P2-2a の仕様。実装済み・main 統合済み: PR #17。以降の改訂は本文の更新・追記欄)
 - 日付: 2026-09-21
 - 関連: plan.md P2-2a、ADR-0002(マスタの取得元・確定した方針)、ADR-0005(データ駆動の効果定義)、
   ADR-0012(サービス境界と共通マスタ)、ADR-0013(タイプ相性表はデータ)、ADR-0014(balance TB1 の read model)、
