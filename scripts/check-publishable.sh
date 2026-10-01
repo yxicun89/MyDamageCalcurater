@@ -57,6 +57,32 @@ readonly -a BE_EXCLUDES=(":(exclude)scripts/gitops_test.sh")
 # 継ぎ足して検出を逃れる細工は、この形では通らない(self-test で確認)。
 readonly B_KEYVALUE_ALLOW='=[[:space:]]*"(mysql-auth|pokedex-dsn|pokedex-reader-dsn|pokedex-importer-dsn|pokedex-migrator-dsn|mysql-root-password)$|:[[:space:]]*(tidb-root-auth|grafana-admin-credentials|admin-password)$|[:=][[:space:]]*"?\$\{[A-Za-z_][A-Za-z0-9_]*\}$'
 
+# B の「キー名=値」パターン。キー名(password・secret・token・dsn 等)の後ろに、短い値(3文字以上)が続く形。
+# 値の先頭が `$`(シェル・テンプレートの変数参照)のものは値とみなさない。
+readonly B_KV_PATTERN='(password|passwd|secret|api[_-]?key|private[_-]?key|access[_-]?token)[A-Za-z0-9_-]{0,128}['"'"'"]?[[:space:]]*[:=][[:space:]]*['"'"'"]?[^[:space:]'"'"'"$][^[:space:]'"'"'"]{2,}'
+# B のキー名=値の許可(B_KEYVALUE_ALLOW に足す。理由は1つずつ)。awk の動的正規表現に使うので、
+# mawk(Debian の既定 awk)が `{n,m}` と選択肢の組み合わせを扱えないため、区間は使わず展開して書く:
+#   secret-type=...   : Argo CD の Secret のラベル(`argocd.argoproj.io/secret-type=repository`)。種類名で値ではない
+#   型注釈・リテラル  : `password: string` 等の TypeScript の型・真偽値・null
+#   (型注釈の直後に付く `)`・バッククォート等の1文字は許す)
+#   os.Getenv( ...    : 環境変数の参照(Go)。値そのものではない
+#   process.env ...   : 環境変数の参照(Node)
+#   cfg./config./opts.: 設定オブジェクトのフィールド参照(Go)
+#   英字だけの3〜7文字: 変数名・単語(`c.Passwd = pass` はテストの変数代入)。8文字以上の英字だけの値は許さない
+#   値が日本語など非 ASCII で始まる: 説明文(`secrets_test: すべて成功` は echo のメッセージ)
+readonly B_KEYVALUE_ALLOW_EXTRA='^secret-type[:=]|[:=][[:space:]]*["'"'"']?(string|number|boolean|bool|int|undefined|null|nil|true|false)[^A-Za-z0-9]?[^A-Za-z0-9]?[^A-Za-z0-9]?$|[:=][[:space:]]*["'"'"']?(os\.Getenv\(|process\.env|cfg\.|config\.|opts\.)|[:=][[:space:]]*[A-Za-z_][A-Za-z_][A-Za-z_][A-Za-z_]?[A-Za-z_]?[A-Za-z_]?[A-Za-z_]?$|[:=][[:space:]]*["'"'"']?[^ -~]'
+
+# token は語として短い・コードの変数名と紛れるので、値が16文字以上で、数字を1つ以上含むものだけを見る
+# (実際のトークンは乱数なので数字を含む。`let token = beginInput()` や `token = latestTeamListToken` は外れる)。
+readonly B_TOKEN_PATTERN='token[A-Za-z0-9_-]{0,64}['"'"'"]?[[:space:]]*[:=][[:space:]]*['"'"'"]?[A-Za-z0-9._~+/=-]{16,}'
+# 数字を含まない値は許す(識別子・単語)。
+readonly B_TOKEN_ALLOW='[:=][[:space:]]*["'"'"']?[A-Za-z._~+/=-]+$'
+
+# DSN の許可: テスト用の偽 DSN。接続先が `127.0.0.1:1`(閉じたポートで、何にも接続できない)のものだけ。
+readonly B_DSN_ALLOW='@tcp\(127\.0\.0\.1:1\)$'
+# Bearer の許可: ゼロ埋めのダミー UUID(`00000000-…`。gateway の境界テストの架空の値)。
+readonly B_BEARER_ALLOW='Bearer[[:space:]]+00000000-'
+
 # 許可するメールアドレス(ERE。一致した文字列全体に対して評価)。
 #   noreply@anthropic.com : コミットの共同著者表記(公開情報)
 #   @example.com/.org     : RFC 2606 の予約ドメイン(架空データ用)
@@ -191,13 +217,57 @@ check_a() {
 # ---------------------------------------------------------------------------
 # B. 秘密らしき文字列
 # ---------------------------------------------------------------------------
+# scan_b_multiline — キーと値が2行に分かれる形(YAML の `password:` の次の行・JSON の `"password":` の次の行)。
+# 検出位置はキーの行。キーは行末が秘密らしい名前(password 等)で、次の行が空白・`:` を含まない単独の値のときだけ。
+# (`secretKeyRef:` の次の `name: x`、`imagePullSecrets:` の次の `- name: x` は、値の形でないので外れる)
+# 行単位の git grep では拾えないので awk で見る。区間 {n} は mawk(Debian の既定 awk)で使えないため length() で書く。
+scan_b_multiline() {
+  local -a files=()
+  local file location
+  while IFS= read -r -d '' file; do
+    files+=("$file")
+  done < <(
+    git grep -I -l -z -i -E -e '((password|passwd|secret|api[_-]?key|private[_-]?key|access[_-]?token)[A-Za-z0-9_-]{0,128}|token|-dsn)['"'"'"]?[[:space:]]*:[[:space:]]*$' \
+      -- . "${CONTENT_EXCLUDES[@]}" ${SCAN_EXTRA_EXCLUDES[@]+"${SCAN_EXTRA_EXCLUDES[@]}"} 2>/dev/null || true
+  )
+  if [ "${#files[@]}" -eq 0 ]; then return 0; fi
+  while IFS= read -r location; do
+    report B "$location" "秘密らしき文字列(キーと値が2行に分かれる形)"
+  done < <(
+    awk '
+      function trim(t) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", t); return t }
+      FNR == 1 { key_line = 0 }
+      {
+        if (key_line > 0) {
+          v = trim($0); sub(/,$/, "", v); gsub(/^["\047]|["\047]$/, "", v)
+          if (length(v) >= 8 && v !~ /[[:space:]:]/ && v !~ /^[$\[{-]/) print FILENAME ":" key_line
+          key_line = 0
+        }
+        l = tolower($0)
+        if (l ~ /((password|passwd|secret|api[_-]?key|private[_-]?key|access[_-]?token)[a-z0-9_-]*|token|-dsn)["\047]?[[:space:]]*:[[:space:]]*$/) key_line = FNR
+      }
+    ' "${files[@]}" | sort -u || true
+  )
+}
+
 check_b() {
   SCAN_EXTRA_EXCLUDES=("${BE_EXCLUDES[@]}")
   # キー名の後ろの `[A-Za-z0-9_-]*` も上限を付ける(上と同じ理由。ADR-0119 で判明した
   # メールアドレス正規表現の O(n^2) 走査と同じ形なので、念のためこちらも塞ぐ)。
-  scan_content B "秘密らしき文字列(キー名=値)" \
-    '(password|passwd|secret|api[_-]?key|private[_-]?key|access[_-]?token)[A-Za-z0-9_-]{0,128}['"'"'"]?[[:space:]]*[:=][[:space:]]*['"'"'"]?[^[:space:]'"'"'"]{8,}' \
-    "$B_KEYVALUE_ALLOW" i
+  scan_content B "秘密らしき文字列(キー名=値)" "$B_KV_PATTERN" "$B_KEYVALUE_ALLOW|$B_KEYVALUE_ALLOW_EXTRA" i
+  scan_content B "秘密らしき文字列(token の値)" "$B_TOKEN_PATTERN" "$B_TOKEN_ALLOW" i
+  scan_b_multiline
+  # 値の形(キー名に頼らない)。参照(`$`・`${}`)は値に使えない文字として外す。
+  # Secret の data(base64)。キー名が `-dsn` で終わり、値が base64 の16文字以上のとき(`pokedex-dsn: <base64>`)。
+  scan_content B "秘密らしき文字列(Secret の DSN の base64)" "-dsn[A-Za-z0-9_-]{0,32}['\"]?[[:space:]]*:[[:space:]]*['\"]?[A-Za-z0-9+/]{16,}={0,2}['\"]?\$"
+  scan_content B "秘密らしき文字列(DSN の資格情報)" "[A-Za-z0-9_.-]{1,64}:[^[:space:]:@/'\"\$<>]{8,}@tcp\\([^)]*\\)" "$B_DSN_ALLOW"
+  scan_content B "秘密らしき文字列(URL の資格情報)" "[A-Za-z][A-Za-z0-9+.-]{0,16}://[^[:space:]:@/'\"\$]{1,64}:[^[:space:]:@/'\"\$]{3,}@"
+  scan_content B "秘密らしき文字列(MYSQL_PWD)" "MYSQL_PWD[[:space:]]*=[[:space:]]*['\"]?[^[:space:]'\"\$]{3,}"
+  scan_content B "秘密らしき文字列(Bearer トークン)" "Bearer[[:space:]]+[A-Za-z0-9._~+/=-]{16,}" "$B_BEARER_ALLOW"
+  scan_content B "秘密らしき文字列(Anthropic API キー形式)" 'sk-ant-[A-Za-z0-9_-]{20,}'
+  scan_content B "秘密らしき文字列(GitHub fine-grained トークン形式)" 'github_pat_[A-Za-z0-9_]{20,}'
+  scan_content B "秘密らしき文字列(Slack トークン形式)" 'xox[abeprs]-[A-Za-z0-9-]{10,}'
+  scan_content B "秘密らしき文字列(Google API キー形式)" 'AIza[0-9A-Za-z_-]{35}'
   scan_content B "秘密らしき文字列(秘密鍵ブロック)" '-----BEGIN [A-Z ]*PRIVATE KEY-----'
   scan_content B "秘密らしき文字列(AWS アクセスキー形式)" 'AKIA[0-9A-Z]{16}'
   scan_content B "秘密らしき文字列(GitHub トークン形式)" 'gh[pousr]_[A-Za-z0-9]{36}'
@@ -225,6 +295,12 @@ forbidden_kind() {
     *.pem | *.key | *.p12 | *.pfx | *.jks) echo "追跡禁止(鍵・証明書)"; return 0 ;;
     *.wasm) echo "追跡禁止(WASM 生成物。make wasm で作る)"; return 0 ;;
     kubeconfig*) echo "追跡禁止(kubeconfig)"; return 0 ;;
+    .envrc) echo "追跡禁止(direnv の環境変数ファイル .envrc)"; return 0 ;;
+    id_rsa | id_ed25519 | id_ecdsa | id_dsa) echo "追跡禁止(SSH の秘密鍵)"; return 0 ;;
+    credentials.json) echo "追跡禁止(認証情報 credentials.json)"; return 0 ;;
+    *.p8) echo "追跡禁止(Apple の秘密鍵 .p8)"; return 0 ;;
+    *.sql.gz | *dump*.sql | *backup*.sql) echo "追跡禁止(DB のダンプ・バックアップ。マイグレーションの *.sql は対象外)"; return 0 ;;
+    secret*.yaml) echo "追跡禁止(Secret の manifest。値を Git に置かない)"; return 0 ;;
     .DS_Store) echo "追跡禁止(.DS_Store)"; return 0 ;;
   esac
   return 1
