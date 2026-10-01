@@ -378,3 +378,29 @@ test('reports/ の import- で始まらないファイル・ディレクトリ�
   for (const rel of ['reports/notes.json', 'reports/import-old.d/x.json', 'reports/import-20200101T000000Z.json.bak']) assert.ok(exists(root, rel), rel);
   done(root);
 });
+
+test('reports/ 自体が symlink なら辿らず、リンク先の report を消さない', async () => {
+  const root = seed();
+  success(root, ['1', '2', '3']);
+  const outside = mkdtempSync(join(tmpdir(), 'importer-prune-outside-'));
+  for (let i = 0; i < 60; i++) put(outside, `import-20200101T0000${String(i).padStart(2, '0')}Z.json`);
+  rmSync(join(root, 'reports'), { recursive: true, force: true });
+  symlinkSync(outside, join(root, 'reports'));
+  const plan = planPrune({ generatedDir: root, config: config() });
+  assert.ok(!plan.remove.some((p) => p.startsWith('reports')));
+  await pruneGenerated({ generatedDir: root, config: config() });
+  assert.equal(readdirSync(outside).length, 60);
+  done(root);
+  done(outside);
+});
+
+test('CLI: config.json を解釈できなくても stderr に入力の断片を出さない', () => {
+  const root = seed();
+  const bad = join(root, 'bad-config.json');
+  writeFileSync(bad, '{"sources": FRAGMENT-SHOULD-NOT-LEAK');
+  const r = cli(['prune'], { IMPORT_GENERATED_DIR: root, IMPORT_CONFIG_FILE: bad });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /JSON を解釈できない/);
+  assert.ok(!r.stderr.includes('FRAGMENT'), r.stderr);
+  done(root);
+});

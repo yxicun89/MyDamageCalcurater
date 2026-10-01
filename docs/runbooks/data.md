@@ -114,6 +114,7 @@ kubectl -n pokecalc logs "$JOB" | grep 'importer-'
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 kubectl -n pokecalc get pods | grep pokedex-import
+JOB=$(kubectl -n pokecalc get jobs -o name --sort-by=.metadata.creationTimestamp | grep pokedex-import | tail -1)
 kubectl -n pokecalc logs "$JOB" | grep 'importer-capacity: 空き'
 ```
 確認: 直近の Pod が `Error` で、ログに `importer-capacity: 空き ... byte が予約容量 ... byte を下回る` が出ていれば超過(終了コード 3)。
@@ -137,13 +138,16 @@ kubectl -n pokecalc get pvc pokedex-import-cache
 確認: `CAPACITY` が 4Gi になる。
 
 `false`(k3d の local-path)なら拡張できない。作り直すしかなく、取得キャッシュ・スナップショット・報告が消える(取得元から再取得される。
-報告は戻らない)。**データ削除なので人間の確認が要る操作**。確認を得てから、base の `storage` を上げた状態で次を流す。
+報告は戻らない)。CronJob を消すと、過去の Job とそのログも消える。**データ削除なので人間の確認が要る操作**。
+確認を得てから、base の `storage` を上げた状態で次を流す。作り直すのは PVC `pokedex-import-cache` と CronJob `pokedex-import` の2つだけ
+(overlay 全体は apply しない。他のサービスや migrate の Job まで作り直してしまうため。base を単独で apply すると namespace が付かないので、
+overlay の描画からラベル `app.kubernetes.io/name=pokedex-import` の2つだけを取り出す)。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 kubectl -n pokecalc delete cronjob pokedex-import
 kubectl -n pokecalc delete pvc pokedex-import-cache
-kubectl apply -k deploy/k8s/overlays/local
+kubectl kustomize deploy/k8s/overlays/local | kubectl apply -l app.kubernetes.io/name=pokedex-import -f -
 ```
 確認: `kubectl -n pokecalc get pvc pokedex-import-cache` の `CAPACITY` が新しい値で、`STATUS` が `Bound`(または最初の Job 実行まで `Pending`)。
 

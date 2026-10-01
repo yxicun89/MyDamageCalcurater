@@ -78,6 +78,7 @@ export const planPrune = ({ generatedDir, config, keepGenerations = 2, keepRepor
     }
   }
   try {
+    if (lstatSync(join(generatedDir, 'reports')).isSymbolicLink()) return { remove: remove.sort() }; // symlink は辿らない
     const reports = readdirSync(join(generatedDir, 'reports'), { withFileTypes: true })
       .filter((e) => e.isFile() && REPORT_RE.test(e.name))
       .map((e) => e.name)
@@ -185,7 +186,14 @@ const main = async (cmd) => {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main(process.argv[2]).catch((e) => {
     // fs のエラーは message に絶対パスを含むので、errno コードだけ出す。
-    console.error(e?.code && e?.syscall ? `importer-prune: ファイル操作に失敗した(${e.code} ${e.syscall})` : e.message);
+    // JSON の解釈の失敗は message に入力の断片を含むので、種類だけ出す。
+    const message =
+      e?.code && e?.syscall
+        ? `importer-prune: ファイル操作に失敗した(${e.code} ${e.syscall})`
+        : e instanceof SyntaxError
+          ? 'importer-prune: JSON を解釈できない(config.json か台帳)'
+          : e.message;
+    console.error(message);
     process.exit(e instanceof InsufficientSpaceError ? EXIT_CAPACITY : e instanceof UsageError ? EXIT_USAGE : 1);
   });
 }
