@@ -10,18 +10,18 @@ import (
 
 	"example.com/pokecalc/services/internal/api"
 	"example.com/pokecalc/services/internal/httpmetrics"
-	"example.com/pokecalc/services/pokedex/internal/store"
+	"example.com/pokecalc/services/pokedex/internal/readtx"
 )
 
-// Server は api.ServerInterface を実装する。DB へは store.Querier 経由でだけ触る。
+// Server は api.ServerInterface を実装する。DB へは readtx.DB(store.Querier と読み取り専用 Tx の開始)経由でだけ触る。
 type Server struct {
-	q store.Querier
+	q readtx.DB
 }
 
 var _ api.ServerInterface = (*Server)(nil)
 
 // NewServer は q を使う Server を作る。
-func NewServer(q store.Querier) *Server {
+func NewServer(q readtx.DB) *Server {
 	return &Server{q: q}
 }
 
@@ -30,7 +30,7 @@ func NewServer(q store.Querier) *Server {
 // GET /healthz(DB に触れない運用エンドポイント)、panic の回復(500 internal)、echo の既定エラー
 // (ルート無し・メソッド違い)を Error 形式に揃えるエラーハンドラを含む。
 // serve は起動時に DB へ接続しない(sql.Open だけ)。DB が無くても起動し、DB を使う操作が 503 を返す。
-func NewHandler(q store.Querier) http.Handler {
+func NewHandler(q readtx.DB) http.Handler {
 	e := echo.New()
 	e.HTTPErrorHandler = httpErrorHandler
 	m := httpmetrics.New()

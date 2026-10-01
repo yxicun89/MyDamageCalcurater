@@ -852,6 +852,7 @@
 - [x] TB6 技範囲チェッカー(2026-09-22 ユーザー要望。ADR-0404): 技 ID(最大4つ)から18タイプの一貫判定を出し、その技構成を半減以下で受けられる実在ポケモンを図鑑から具体名で列挙する。特性で半減以下になるポケモンは別枠
 - [x] Codexレビュー issue #105 対応(2026-09-23。ADR-0405): Argo CD 導入物(install.yaml・同梱3イメージ)をコミットSHA・SHA-256・digestで固定する `scripts/argocd-bootstrap.sh` を新設し、balance/speed 両runbookの重複した生URL直apply手順を1本化。自動テスト `scripts/argocd-bootstrap_test.sh`(`make test-scripts`)。
 - [x] 全体レビュー issue #263・#292 対応(2026-09-25。ADR-0408): AppProject `pokecalc` を新設し balance/speed 両 Application を `project: default` から限定、GitOps スクリプト5本を `scripts/gitops/{argocd-local-app,check-gitops,publish-image,local-registry-push,k3d-deploy-readmodel}.sh`(`SERVICE=` 必須)に共通化、クラスタ内レジストリを `emptyDir` から PVC(`local-path`・2Gi)へ変更して push 済み image の消失を解消。自動テスト `scripts/gitops_test.sh`(`make test-scripts`)。
+- [x] issue #298(タイプバランス/運用。全体レビュー第3回。ADR-0409): balance の recommendations が同時 30 で 64Mi を超えて OOMKill される。(a) `matchingPokemon`・`abilityOptionsFor` の結果スライスをカタログ件数分あらかじめ確保しない(削減前 約 3.1 MB/op → 1 MiB/op 以下)、`GOMEMLIMIT` を balance・judge・speed の Deployment に追加、(b) 同時実行セマフォ(`BALANCE_MAX_CONCURRENT_RECOMMENDATIONS`、既定 4)と超過時の即時 503 `overloaded`(`Retry-After: 1`。ErrorCode 追加は openapi 先行で生成済み)。spec-writer 済み: 失敗するテスト(`recommendations_limit_test.go`・`recommendations_alloc_test.go`・`cmd/api/concurrency_config_test.go`・`services/gateway/deploytest/go_memlimit_test.go`)とベンチ(`recommendations_bench_test.go`)。実装済み(1,500件で約 0.53 MB/op、docker 同時 30 で OOMKilled=false を確認)
 
 ### ブロッカー(タイプバランスレーン)
 (なし。Argo CD の実同期は 2026-09-22 に解消)
@@ -991,6 +992,12 @@
       ダブルの全体技/壁減衰(issue #288)を明記。`docs/README.md` の目次は既に judge-design.md を指しており
       変更不要。`type-balance-design.md` はタイプバランスレーンの持ち物のため対象外(DECISIONS.mdへ)。
       `bash scripts/check-publishable.sh`(0件)成功を確認。軽微な作業のためメインで対応
+- [x] issue #260 のタイプバランス分(担当: タイプバランス。ドキュメントのみ): `docs/type-balance-design.md` を
+      2026-09-21 のレビュー依頼文書から「現在の設計」(目的・位置づけ・構成・計算・API・段階・データ・運用・GitOps・UI・未対応。
+      speed-design.md の構成に揃えた。根拠は services/balance の実コード・openapi.yaml・ADR-0400〜0409)に書き換え、
+      役割分担・レビュー依頼・AI 間の共有ルール・旧未決事項の決着は ADR-0410(履歴・旧節番号の対応表)へ移した。
+      `/api/damage`・`pokecalc-kit-v2` の誤記を除去。`docs/impl/gitops-argocd.md` の行番号参照を節参照に更新。
+      判定レーン分と合わせて issue #260 は完了
 - [x] 判定の応答に calc-svc の「未対応」の印を中継する(issue #271 / #270 の判定レーン分。ADR-0123 §6 の
       「印を見せる画面・利用者は各レーンの作業」)。judge は `attackerKo` / `defenderKo` を calc-svc から
       転記するだけなので、多段技・固定ダメージ技・表せない持ち物/特性を選んだときに **誤った確定数が

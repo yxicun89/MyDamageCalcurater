@@ -8,6 +8,10 @@
 //
 // Querier に埋め込んだ store.Querier は nil で、上書きしていないメソッドを呼ぶと panic する
 // (テストが想定していないクエリ・書き込みを呼んだことに気づくため)。
+//
+// Querier は readtx.DB も満たす。BeginTx が返す Tx は同じ架空データを読み、呼び出しを Call.InTx: true で
+// 記録する。読み出しが1つの読み取り専用トランザクションの中で行われたかは SnapshotViolations /
+// RollbackViolations で確かめる(ADR-0127・issue #220)。
 package storetest
 
 import (
@@ -15,9 +19,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
+	"example.com/pokecalc/services/pokedex/internal/readtx"
 	"example.com/pokecalc/services/pokedex/internal/store"
 )
 
@@ -58,22 +65,212 @@ type Querier struct {
 
 	mu    sync.Mutex
 	Calls []Call // 呼ばれたメソッドと引数(検索のパターン・件数の確認用)
+
+	// root・tx はトランザクションの中の Querier(BeginTx が返す Tx の中身)だけが持つ。
+	// root は記録・失敗の注入の持ち主(BeginTx を呼んだ Querier)、tx はそのトランザクションの状態。
+	root *Querier
+	tx   *txState
+	txs  []*txState // BeginTx が開いた(成功した)トランザクション。root の側だけが持つ
 }
 
-// Call は呼び出しの記録。
+// Call は呼び出しの記録。InTx は BeginTx が返した Tx 経由の呼び出し(Commit / Rollback を含む)なら真。
+// BeginTx 自身は Tx の外の呼び出しとして記録し、Arg に渡された *sql.TxOptions を持つ。
 type Call struct {
 	Method string
 	Arg    any
+	InTx   bool
+}
+
+// トランザクションの操作の記録名(Call.Method。ErrByMethod のキーにも使える)。
+const (
+	MethodBeginTx  = "BeginTx"
+	MethodCommit   = "Commit"
+	MethodRollback = "Rollback"
+)
+
+type txState struct {
+	done bool
+}
+
+func (q *Querier) owner() *Querier {
+	if q.root != nil {
+		return q.root
+	}
+	return q
 }
 
 func (q *Querier) record(method string, arg any) error {
-	q.mu.Lock()
-	q.Calls = append(q.Calls, Call{Method: method, Arg: arg})
-	q.mu.Unlock()
-	if err := q.ErrByMethod[method]; err != nil {
+	o := q.owner()
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if q.tx != nil && q.tx.done {
+		// *sql.Tx と同じく、終わったトランザクションでは読めない(記録もしない)。
+		return sql.ErrTxDone
+	}
+	o.Calls = append(o.Calls, Call{Method: method, Arg: arg, InTx: q.tx != nil})
+	if err := o.ErrByMethod[method]; err != nil {
 		return err
 	}
-	return q.Err
+	return o.Err
+}
+
+// BeginTx は偽のトランザクションを開く(readtx.Beginner)。opts を Call.Arg に記録する。
+// ErrByMethod["BeginTx"](または Err)が非 nil なら開かずにその値を返す。
+// 返す Tx は同じ架空データを読み、呼び出しを InTx: true で記録する。
+func (q *Querier) BeginTx(_ context.Context, opts *sql.TxOptions) (readtx.Tx, error) {
+	if err := q.record(MethodBeginTx, opts); err != nil {
+		return nil, err
+	}
+	view := q.txView()
+	q.mu.Lock()
+	q.txs = append(q.txs, view.tx)
+	q.mu.Unlock()
+	return &Tx{Querier: view}, nil
+}
+
+// txView は q と同じ架空データ(公開フィールド。Calls を除く)を持ち、記録を q に送る Querier を作る。
+// フィールドを足しても写し漏れないよう reflect で写す。
+func (q *Querier) txView() *Querier {
+	view := &Querier{root: q, tx: &txState{}}
+	src := reflect.ValueOf(q).Elem()
+	dst := reflect.ValueOf(view).Elem()
+	for i := 0; i < src.NumField(); i++ {
+		f := src.Type().Field(i)
+		if !f.IsExported() || f.Name == "Calls" {
+			continue
+		}
+		dst.Field(i).Set(src.Field(i))
+	}
+	return view
+}
+
+// Tx は偽の readtx.Tx。Commit / Rollback は1回だけ記録し、2回目以降(Commit 後の defer Rollback 等)は
+// *sql.Tx と同じく sql.ErrTxDone を返して記録しない。
+type Tx struct {
+	*Querier
+}
+
+var _ readtx.Tx = (*Tx)(nil)
+
+// Commit はトランザクションを終える。ErrByMethod["Commit"] が非 nil ならその値を返す(終わったことにはなる)。
+func (t *Tx) Commit() error { return t.finish(MethodCommit) }
+
+// Rollback はトランザクションを終える。
+func (t *Tx) Rollback() error { return t.finish(MethodRollback) }
+
+func (t *Tx) finish(method string) error {
+	o := t.owner()
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if t.tx.done {
+		return sql.ErrTxDone
+	}
+	t.tx.done = true
+	o.Calls = append(o.Calls, Call{Method: method, InTx: true})
+	return o.ErrByMethod[method]
+}
+
+// OpenTxCount は BeginTx で開いて Commit も Rollback もしていないトランザクションの数。
+func (q *Querier) OpenTxCount() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	open := 0
+	for _, tx := range q.txs {
+		if !tx.done {
+			open++
+		}
+	}
+	return open
+}
+
+// SnapshotViolations は「BeginTx(ReadOnly)をちょうど1回開き、reads の全メソッドを含む全ての読み出しを
+// その Tx の中で行い、最後に Commit し(Rollback しない)、開いたままのトランザクションが無い」ことを確かめ、
+// 満たさない点を文で返す(空なら満たす)。BeginTx が失敗した呼び出しも1回と数える。
+func (q *Querier) SnapshotViolations(reads []string) []string {
+	q.mu.Lock()
+	calls := append([]Call(nil), q.Calls...)
+	q.mu.Unlock()
+
+	var problems []string
+	begins, commits, rollbacks := 0, 0, 0
+	called := map[string]bool{}
+	for i, c := range calls {
+		switch c.Method {
+		case MethodBeginTx:
+			begins++
+			opts, _ := c.Arg.(*sql.TxOptions)
+			if opts == nil || !opts.ReadOnly {
+				problems = append(problems, fmt.Sprintf("BeginTx の TxOptions が ReadOnly でない: %+v", opts))
+			} else if opts.Isolation == sql.LevelReadUncommitted || opts.Isolation == sql.LevelReadCommitted {
+				problems = append(problems, fmt.Sprintf("BeginTx の分離レベルが文ごとのスナップショットになる: %v", opts.Isolation))
+			}
+		case MethodCommit:
+			commits++
+			if i != len(calls)-1 {
+				problems = append(problems, fmt.Sprintf("Commit の後に呼び出しがある: %+v", calls[i+1:]))
+			}
+		case MethodRollback:
+			rollbacks++
+		default:
+			called[c.Method] = true
+			if !c.InTx {
+				problems = append(problems, fmt.Sprintf("%s をトランザクションの外(autocommit)で呼んだ", c.Method))
+			}
+		}
+	}
+	if begins != 1 {
+		problems = append(problems, fmt.Sprintf("BeginTx の回数 = %d, want 1", begins))
+	}
+	if commits != 1 {
+		problems = append(problems, fmt.Sprintf("Commit の回数 = %d, want 1", commits))
+	}
+	if rollbacks != 0 {
+		problems = append(problems, fmt.Sprintf("成功したのに Rollback した(%d 回)", rollbacks))
+	}
+	if len(calls) > 0 && calls[0].Method != MethodBeginTx {
+		problems = append(problems, fmt.Sprintf("最初の呼び出しが BeginTx でない: %s", calls[0].Method))
+	}
+	for _, m := range reads {
+		if !called[m] {
+			problems = append(problems, fmt.Sprintf("%s を読んでいない", m))
+		}
+	}
+	return problems
+}
+
+// RollbackViolations は「失敗した読み出しのトランザクションを Rollback で閉じ、Commit していない」ことを確かめ、
+// 満たさない点を文で返す(空なら満たす)。BeginTx 自体が失敗した(Tx が無い)ときは、Tx の中の呼び出しが
+// 1つも無いことだけを確かめる。
+func (q *Querier) RollbackViolations() []string {
+	q.mu.Lock()
+	calls := append([]Call(nil), q.Calls...)
+	opened := len(q.txs)
+	q.mu.Unlock()
+
+	var problems []string
+	begins, rollbacks := 0, 0
+	for _, c := range calls {
+		switch {
+		case c.Method == MethodBeginTx:
+			begins++
+		case c.Method == MethodCommit:
+			problems = append(problems, "失敗したのに Commit した")
+		case c.Method == MethodRollback:
+			rollbacks++
+		case !c.InTx:
+			problems = append(problems, fmt.Sprintf("%s をトランザクションの外(autocommit)で呼んだ", c.Method))
+		}
+	}
+	if begins > 1 {
+		problems = append(problems, fmt.Sprintf("BeginTx の回数 = %d, want 1 以下", begins))
+	}
+	if opened != rollbacks {
+		problems = append(problems, fmt.Sprintf("開いたトランザクション %d 個に対し Rollback %d 回", opened, rollbacks))
+	}
+	if open := q.OpenTxCount(); open > 0 {
+		problems = append(problems, fmt.Sprintf("開いたままのトランザクションが %d 個ある", open))
+	}
+	return problems
 }
 
 // CallsOf は method の呼び出しの引数を順に返す。
