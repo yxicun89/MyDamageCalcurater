@@ -58,6 +58,7 @@ import type {
 } from "../engine/types";
 import {
   calcScreenText,
+  frequentOpponentsText,
   isTypeId,
   masterOnlineText,
   requestLimitText,
@@ -72,6 +73,8 @@ import type {
   MasterSpeciesSearch,
 } from "../master/types";
 import { prefersReducedMotion } from "../ui/motion";
+import type { RecordClient } from "../record/recordClient";
+import { useFrequentOpponents } from "../record/useFrequentOpponents";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
@@ -225,6 +228,11 @@ export interface CalcScreenProps {
    * (capabilities を省いたマスタ = 今までどおりドロップダウン)。
    */
   readonly masterSearch?: MasterSpeciesSearch;
+  /**
+   * P5-5c(ADR-0317 §2): 「よく計算する相手」を引く口。App は計算モードがオンラインのときだけ渡す。
+   * 省略は「出さない」(失敗・0件・オフラインと同じく黙って非表示。計算には影響しない)。
+   */
+  readonly recordClient?: RecordClient;
 }
 
 /** 計算の状態(判別 union)。idle は入力が揃っていない、status-move は変化技を選んでいる。 */
@@ -270,11 +278,12 @@ function resolveMoveId(species: MasterSpecies | null, moves: readonly Move[], cu
 }
 
 /** 計算画面(design.md「画面: ダメージ計算」、ADR-0300 §2・§6)。攻撃側・防御側・技が揃うと自動で計算する。 */
-export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
+export function CalcScreen({ engine, master, masterSearch, recordClient }: CalcScreenProps) {
   // P4-16b(ADR-0304 A-2・A-9・A-10): 使える機能。capabilities を省いたマスタ(オフライン相当)は全部使える。
   const capabilities = masterCapabilities(master);
   // 検索で解決した種族・特性の覚え書き(capabilities.speciesList が true のときは常に空のまま。ADR-0304 A-10)。
   const { speciesFor, abilitiesFor, movesFor, register: registerSpeciesResolution } = useSpeciesResolutions();
+  const frequentOpponents = useFrequentOpponents(recordClient, master, masterSearch);
   const [attackerKey, setAttackerKey] = useState("");
   const [defenderKey, setDefenderKey] = useState("");
   const [attackerItemId, setAttackerItemId] = useState("");
@@ -721,6 +730,27 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
         pulsingKeys={pulsingKeys}
         onKoAnimationEnd={handleKoAnimationEnd}
       />
+
+      {frequentOpponents.length > 0 && (
+        <div role="group" aria-label={frequentOpponentsText.groupLabel} className="calc-screen__frequent">
+          {frequentOpponents.map((chip) => (
+            <button
+              key={chip.key}
+              type="button"
+              className="calc-screen__frequent-chip"
+              onClick={() => {
+                if (chip.resolution === undefined) {
+                  selectDefender(chip.key);
+                } else {
+                  handleDefenderResolved(chip.resolution);
+                }
+              }}
+            >
+              {chip.nameJa}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -830,6 +860,7 @@ function SpeciesCard({
           label={speciesSelectLabel}
           masterSearch={masterSearch}
           onResolved={onSpeciesResolved}
+          selectedName={species?.nameJa}
         />
       )}
       {/* P4-16b(ADR-0304 A-10): 検索中(まだ種族が解決していない)は持ち物欄も出さない

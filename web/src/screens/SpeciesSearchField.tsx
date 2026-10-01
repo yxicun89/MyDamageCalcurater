@@ -21,6 +21,11 @@ export interface SpeciesSearchFieldProps {
   readonly masterSearch: MasterSpeciesSearch | undefined;
   /** 候補を選んで resolveSpecies が解決したときに呼ぶ。 */
   readonly onResolved: (resolution: MasterSpeciesResolution) => void;
+  /**
+   * 外から与える表示名(P5-5c: チップ押下で名前を入れる口)。変わったら入力欄の文字が追従し、候補は閉じる。
+   * 省略(undefined)のときは何もしない。
+   */
+  readonly selectedName?: string;
 }
 
 /**
@@ -44,9 +49,25 @@ type SearchStatus =
   | { readonly kind: "closed" };
 
 /** 種族の検索欄(ADR-0304 A-4・A-10)。 */
-export function SpeciesSearchField({ label, masterSearch, onResolved }: SpeciesSearchFieldProps) {
-  const [inputText, setInputText] = useState("");
-  const [status, setStatus] = useState<SearchStatus>({ kind: "empty" });
+export function SpeciesSearchField({
+  label,
+  masterSearch,
+  onResolved,
+  selectedName,
+}: SpeciesSearchFieldProps) {
+  const [inputText, setInputText] = useState(selectedName ?? "");
+  const [status, setStatus] = useState<SearchStatus>(
+    selectedName === undefined ? { kind: "empty" } : { kind: "resolved" },
+  );
+  // 親が選択済みの名前を変えたら入力欄に反映する(描画中の state 調整。effect で setState しない)。
+  const [shownName, setShownName] = useState(selectedName);
+  if (selectedName !== shownName) {
+    setShownName(selectedName);
+    if (selectedName !== undefined) {
+      setInputText(selectedName);
+      setStatus({ kind: "resolved" });
+    }
+  }
   const debounceTimerRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const hintId = useId();
@@ -73,6 +94,14 @@ export function SpeciesSearchField({ label, masterSearch, onResolved }: SpeciesS
       abortPendingSearch();
     };
   }, []);
+
+  // 外から名前が与えられたら、進行中の検索・デバウンスを止める(古い候補が後から開かないように)。
+  useEffect(() => {
+    if (selectedName !== undefined) {
+      clearDebounceTimer();
+      abortPendingSearch();
+    }
+  }, [selectedName]);
 
   function runSearch(search: MasterSpeciesSearch, query: string): void {
     abortPendingSearch();

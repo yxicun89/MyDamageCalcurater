@@ -28,6 +28,14 @@ test("アプリが描画される", () => {
 
 // P4-2: App はヘッダーと計算画面を出す。マスタは MasterSource(既定は架空の例データ。ADR-0300 §3)から、
 // 計算は CalcEngine(既定は browserWasmLoader の WASM 実装。ADR-0300 §2)から受け取り、テストでは差し替える。
+/** fetch の第1引数(RequestInfo | URL)を URL 文字列にする。 */
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === "string") {
+    return input;
+  }
+  return input instanceof URL ? input.href : input.url;
+}
+
 describe("P4-2 計算画面の組み込み", () => {
   function deferredMasterSource(): {
     source: MasterSource;
@@ -455,7 +463,12 @@ describe("P4-5 計算モード(オフライン / オンライン)の切り替え
     render(<App />);
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toBeInTheDocument();
 
-    expect(fetchSpy).not.toHaveBeenCalled();
+    // ADR-0317 §3: オンラインでは「よく計算する相手」のために /api/record を1回だけ読む(表示専用。
+    // 計算・マスタ・engine.wasm とは無関係)。それ以外(calc・pokedex・engine.wasm)は読まない。
+    const nonRecordCalls = fetchSpy.mock.calls.filter(
+      ([input]) => !requestUrl(input).includes("/api/record/"),
+    );
+    expect(nonRecordCalls).toEqual([]);
     expect(headAppendSpy).not.toHaveBeenCalled();
     expect(headAppendChildSpy).not.toHaveBeenCalled();
   });

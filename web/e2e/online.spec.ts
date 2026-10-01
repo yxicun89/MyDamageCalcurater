@@ -19,10 +19,12 @@ import {
   SPECIES,
   calcRows,
   chooseRadio,
+  combobox,
   openApp,
   rowTexts,
   selectMatchup,
   selectMatchupBySearch,
+  selectSpeciesBySearch,
 } from "./support/calcPage.ts";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -124,4 +126,57 @@ test("同じ画面操作で、オンライン(API)とオフライン(WASM)の結
   // オフラインは効果データがあるので、こちらでは候補比較を選べる(オンラインとの違いの確認)。
   await expect(compare).toBeEnabled();
   await expect.poll(async () => rowTexts(calcRows(page), DEFAULT_ROW_COUNT)).toEqual(online);
+});
+
+// P5-5c(ADR-0317): よく計算する相手のチップ。record-svc はこの構成に無いので、
+// gateway の /api/record/frequent-opponents を page.route で fake する(pokedex は本物のフィクスチャ)。
+test("オンラインでは、よく計算する相手のチップを押すと防御側に反映される", async ({ page }) => {
+  let recordCalls = 0;
+  await page.route("**/api/record/frequent-opponents*", async (route) => {
+    recordCalls += 1;
+    const headers = route.request().headers();
+    expect(headers["x-device-id"]).toMatch(UUID_PATTERN);
+    expect(headers["x-session-id"]).toMatch(UUID_PATTERN);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        { speciesKey: SPECIES.water.key, score: 2.5, count: 3, lastCalculatedAt: "2026-10-01T00:00:00Z" },
+      ]),
+    });
+  });
+  await openApp(page);
+  await selectMode(page, "オンライン(API)");
+
+  const group = page.getByRole("group", { name: "よく計算する相手", exact: true });
+  const chip = group.getByRole("button", { name: SPECIES.water.nameJa, exact: true });
+  await expect(chip).toBeVisible();
+  await selectSpeciesBySearch(page, "攻撃側のポケモン", SPECIES.fire.nameJa);
+  await chip.click();
+
+  await expect(combobox(page, "防御側のポケモン")).toHaveValue(SPECIES.water.nameJa);
+  for (const text of await rowTexts(calcRows(page), DEFAULT_ROW_COUNT)) {
+    expect(text).toMatch(PERCENT_RANGE_PATTERN);
+  }
+  expect(recordCalls, "取得は画面表示時の1回だけ").toBe(1);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("オンラインで record が 503 でも、チップは出ず、計算は成功する", async ({ page }) => {
+  await page.route("**/api/record/frequent-opponents*", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ code: "upstream_unavailable", message: "届きません" }),
+    }),
+  );
+  await openApp(page);
+  await selectMode(page, "オンライン(API)");
+  await selectMatchupBySearch(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
+
+  for (const text of await rowTexts(calcRows(page), DEFAULT_ROW_COUNT)) {
+    expect(text).toMatch(PERCENT_RANGE_PATTERN);
+  }
+  await expect(page.getByRole("group", { name: "よく計算する相手", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("alert")).toHaveCount(0);
 });

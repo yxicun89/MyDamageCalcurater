@@ -548,6 +548,19 @@ export const teamClientText = {
 } as const;
 
 /**
+ * P5-5c: 記録 API(record-svc)のクライアント(record/recordClient.ts、ADR-0317)の文言。
+ * 失敗は画面に出さない(黙って非表示)ので、使うのはクライアントが返す Error.message だけ。
+ */
+export const recordClientText = {
+  unavailable: "記録の API に接続できません",
+} as const;
+
+/** P5-5c: 計算画面の「よく計算する相手」チップ(ADR-0317)。 */
+export const frequentOpponentsText = {
+  groupLabel: "よく計算する相手",
+} as const;
+
+/**
  * P5-5 PR-A1: 構築ビルダーの画面(team/TeamScreen.tsx、ADR-0309)の文言。
  * この段階(PR-A1)で扱うのは一覧・新規作成(名前だけ)・名前変更・削除まで。
  * メンバー(種族・技・持ち物・特性・性格・SP・テラスタイプ)の編集は PR-A2 で足す。
