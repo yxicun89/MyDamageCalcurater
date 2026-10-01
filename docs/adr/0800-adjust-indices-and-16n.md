@@ -103,6 +103,54 @@ plan.md の要望(「攻撃実数値 × 威力ベース」)どおり威力を含
   出力は最小 SP の組と指数最大の組。合計 66・各 32 を守る。探索空間は各 0〜32 の総当たりで、2能力なら 33² 通り、3能力でも 33³ ≈ 3.6 万通りで
   WASM の同期実行に収まる。
 
+### 7. AJ2: 倒せる/耐える最小 SP の探索(追記 2026-10-02。§6 の AJ2 を具体化)
+
+`engine/adjust_search.go` に純粋関数で置く(時刻・乱数・I/O なし)。ダメージは `CalcDamage` の合成だけで求め、
+n 発の確率は既存の確定数の算出(`ko.go` の16ロールの畳み込み)と同じ定義を使う。独自のダメージ式は書かない。
+
+| 関数 | 探索する側 | 探索する SP | 目標 |
+|---|---|---|---|
+| `MinSPToKO(in AdjustSearchInput) (KOSearchResult, error)` | `Attacker`(自分) | 物理 → A、特殊 → C(1能力) | `Hits` 発で `Defender` を倒す確率 ≥ しきい値 |
+| `MinSPToSurvive(in AdjustSearchInput) (SurviveSearchResult, error)` | `Defender`(自分) | H と、物理 → B / 特殊 → D の組 | `Attacker` の技を `Hits` 発受けて耐える確率 ≥ しきい値 |
+
+**入力**(`AdjustSearchInput`): `CalcDamage` と同じ `Format`・`Attacker`・`Defender`・`Move`・`Field`・`Critical`・`TypeChart`、
+目標の発数 `Hits`(1..`MaxAdjustHits` = 10)、しきい値 `ThresholdPercent`(%)。
+
+- **しきい値**: 0 は既定の `DefaultAdjustThresholdPercent` = 100(確定)。それ以外は (0, 100]。比較は `確率 >= しきい値`
+  (ちょうど等しければ満たす)。確率の単位は `KOChance.ChancePercent` と同じ %(表示用の確率は float でよい。ADR-0006)。
+  100 の判定は乱数の最悪側で満たすこと(倒す側: 最小ロール × n ≥ HP、耐える側: 最大ロール × n < HP)と同値になる。
+- **n 発の確率**: 倒す確率 = 16ロールを独立・等確率に n 回引いた合計が HP 以上になる確率。耐える確率 = 100 − 倒す確率。
+  `ComputeKO` の `Hits`(倒すのに必要な最小の発数)とは別に、**指定の `Hits` で**求める(例: 確定2発の火力で Hits=3 なら 100%)。
+- **固定する SP**: 探索する能力以外の SP・性格・持ち物・特性・ランクは呼び出し側が渡した値で固定する。探索する能力の入力値は
+  無視する(上書きする)。固定側の SP の合計が 66 を超える・1能力が 0..32 の外なら `ErrInvalidAdjustInput`。
+- **探索の上限**: 攻撃側は `min(32, 66 − 固定の合計)`。耐久側は H・B(D) とも各 0..32 で、`H + B(D) ≤ 66 − 固定の合計`。
+  固定の合計がちょうど 66 なら上限 0(0 だけを試す。エラーにしない)。
+- **入力検査**(すべて `ErrInvalidAdjustInput` で包む): `Hits` の範囲外、しきい値が負・100 超・NaN・Inf、変化技・威力 0 以下
+  (分類から探索する能力が決まらない/ダメージが出ない)、両側の個体の `Validate` 失敗(探索する能力の SP を除いて検査する)。
+  相性表の不足は `CalcDamage` のエラー(`ErrTypeChartMissing` など)を包んで返す。
+
+**出力**:
+
+- `KOSearchResult`: `Stat`(A / C)、`SearchLimit`、`Feasible`、`SP`、`ChancePercent`。
+  `Feasible` のとき `SP` はしきい値を満たす**最小の** SP、`ChancePercent` はそのときの倒す確率。
+  満たせないとき(上限まで振っても不可・タイプ相性で無効)は `Feasible=false`、`SP = SearchLimit`、`ChancePercent` はその SP での確率
+  (到達できる最大の確率)。エラーにしない。
+- `SurviveSearchResult`: `Stat`(B / D)、`SearchLimit`、`Feasible`、`HPSP`、`StatSP`、`TotalSP`、`BulkIndex`、`ChancePercent`。
+  `Feasible` のとき、しきい値を満たす組のうち **§6 の順**(合計 SP が小さい → 耐久指数が大きい → 能力の固定順 H, A, B, C, D, S で
+  辞書順に小さい = HPSP が小さい)で最初の組。耐久指数は §3 の被ダメージ補正を等倍(4096)にした `H 実数値 × B(D) 実数値`
+  (補正は全候補で共通なので順序に影響しない)。満たせないときは `Feasible=false` で、耐える確率が最大の組を同じ順で選ぶ。
+  タイプ相性で無効なら (0, 0) で 100%。
+- **未対応の印**: 両方の結果に `Unsupported []UnsupportedMark`(ADR-0123)を持たせ、探索中の `CalcDamage` の印を入れる。
+  印は SP によらず同じ(技・場・両側の個体で決まる)で、逆算の `ReverseCandidate.Unsupported` と同じ扱い。数値は印の有無で変えない。
+- **常時最大振りにしない**: 結果は常に条件を満たす最小(上の順で最初)の組で、上限まで振るのは上限でしか満たせないときだけ。
+
+**計算量**: 攻撃側は `CalcDamage` 33 回、耐久側は最大 33² = 1089 回。n 発の確率は1回あたり O(Hits × HP × 16)。
+`MaxAdjustHits` = 10 は確定数の表示で実用になる範囲を覆い、この積を WASM の同期実行に収めるための上限。
+
+**テスト**(`engine/adjust_search_test.go`): 境界(SP0 で既に満たす/上限でも不可/ちょうど閾値/しきい値の上下/
+固定 SP と合計 66/無効相性/不正入力)と、威力・発数・しきい値・性格・分類・固定 SP の表で、
+16^n 通りの数え上げによる独立の総当たりと全件一致することを確かめる性質テスト。
+
 ## 結果
 
 - 指数の式は engine の1か所(`adjust.go`)にだけ置き、Web・iOS・calc-svc は engine(WASM / API)の結果を表示する。
