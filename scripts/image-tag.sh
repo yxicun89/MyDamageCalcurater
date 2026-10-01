@@ -7,6 +7,7 @@
 # コミットが分かり、kubectl rollout undo で前のタグへ戻せる。
 # 各レーンの local-registry-push.sh・pokedex-registry-push.sh が個別に持っていた計算を共通化したもの。
 #
+# パスはリポジトリのルートからの相対パスで渡す(スクリプトはルートへ cd してから git status する)。
 # 使い方: tag="$(./scripts/image-tag.sh services/pokedex engine)"
 # 自動テスト: scripts/image-tag_test.sh(make test-scripts)。
 set -euo pipefail

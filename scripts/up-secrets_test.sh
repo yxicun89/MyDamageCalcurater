@@ -2,7 +2,7 @@
 # scripts/up.sh が Secret を作る経路の静的な検査(issue #327)。make test-scripts から流す。
 # `kubectl apply` は入力(stringData の平文)を last-applied-configuration 注釈に写すため、値を持つ Secret は
 # `kubectl create`(--save-config なし)で作り、既存の Secret には patch で無いキーだけを足す。
-# up.sh はクラスタ・Docker を使うので実行せず、文面を確かめる。
+# up.sh は k3d・Docker・クラスタを使うため、偽 kubectl で流す代わりに文面を確かめる(issue #327 の回帰テスト案の代替)。
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -22,7 +22,7 @@ for manifest in tidb_root_auth_manifest mysql_auth_manifest; do
   else
     ng "${manifest} を kubectl create -f で作っていない"
   fi
-  if grep -qE "kubectl[[:space:]]+apply[^#]*${manifest}" "$UP"; then
+  if grep -qE "kubectl[^#]*[[:space:]]apply[^#]*${manifest}" "$UP"; then
     ng "${manifest} を kubectl apply している(平文が last-applied-configuration 注釈に残る)"
   else
     ok "${manifest} を kubectl apply しない"
@@ -35,7 +35,7 @@ else
   ok "up.sh は --save-config を使わない"
 fi
 
-if grep -qE 'create[[:space:]]+secret[^\n]*--from-literal' "$UP"; then
+if grep -qE 'create[[:space:]]+secret.*--from-literal' "$UP"; then
   ng "up.sh が --from-literal で値をコマンドラインに出している"
 else
   ok "Secret の値をコマンドライン引数に出さない"
