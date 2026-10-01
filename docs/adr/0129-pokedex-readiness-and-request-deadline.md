@@ -1,6 +1,6 @@
 # ADR-0129: pokedex-svc の readiness を DB に連動させ、DB の呼び出しに締め切りを持たせる(issue #107・#323・#324・#299)
 
-- 状態: 採用(spec-writer 起草。実装前)
+- 状態: 採用(実装済み。critic PASS)
 - 日付: 2026-10-01
 - レーン: データ(ADR 帯 `0100〜`)
 - 関連: issue #107、#323、#324(pokedex 分)、#299(pokedex 分)、#437(MySQL の OOMKill 中に calc がマスタを取れなかった)、
@@ -80,6 +80,10 @@
 
 - 初回 import 前のクラスタでは pokedex の Deployment が Available にならない。`rollout status deployment/pokedex` を
   待つスクリプト(`scripts/k3d-deploy-latest.sh`)は、import 済みのクラスタを前提にする(新規クラスタでは `make import-k8s` の後)。
+  Argo CD で同期するクラスタでも、import までは Application が Progressing、progressDeadlineSeconds(既定 600s)を過ぎると
+  Degraded と表示される(import 後に Healthy へ戻る)。
+- preStop の sleep アクションは Kubernetes 1.30 以上が前提(1.34 で GA)。確認したのは k3d(v1.35)だけで、cloud overlay の
+  対象クラスタでは版を確かめてから使う。
   replicas 1 のローリング更新では、新しい Pod が Ready になるまで古い Pod が残る(maxUnavailable 0)。
 - calc-svc の readiness(マスタ取得済み)と合わせ、DB 障害時は pokedex → calc の順に Service から外れ、DB が戻れば自動で戻る。
 - 同時実行の上限と過負荷時の 503 + `Retry-After`(#299 の残り)は、pokedex では扱わない(検索は DB の接続プールの上限

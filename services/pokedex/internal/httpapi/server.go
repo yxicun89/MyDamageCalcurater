@@ -51,7 +51,8 @@ func NewServer(q readtx.DB) *Server {
 
 // NewHandler は pokedex-svc の HTTP ハンドラ全体を組み立てる。
 // pokedex の8操作(検索7 + 内部 API 1。生成ラッパ経由)、calc の3操作(直接 404。calc-svc の R1 と対称)、
-// GET /healthz(DB に触れない運用エンドポイント)、panic の回復(500 internal)、echo の既定エラー
+// GET /healthz(liveness。DB に触れない)、GET /readyz(readiness。DB の最小条件を確かめる。ADR-0129)、
+// DB を使うルートへの締め切りのミドルウェア(ADR-0129 §2)、panic の回復(500 internal)、echo の既定エラー
 // (ルート無し・メソッド違い)を Error 形式に揃えるエラーハンドラを含む。
 // serve は起動時に DB へ接続しない(sql.Open だけ)。DB が無くても起動し、DB を使う操作が 503 を返す。
 func NewHandler(q readtx.DB, opts ...Option) http.Handler {
@@ -69,6 +70,8 @@ func NewHandler(q readtx.DB, opts ...Option) http.Handler {
 	e.GET("/healthz", healthzHandler)
 	e.GET("/readyz", readyzHandler(q, cfg.readinessTimeout))
 
+	// echo v5 の Group にミドルウェアを渡すと "" と "/*" に RouteNotFound が登録される。未登録パスは従来どおり
+	// 404(エラーハンドラで Error 形式)になり、metrics の route ラベルは "/*" にまとまる(件数は有限)。
 	g := e.Group("", deadlineMiddleware(cfg.requestTimeout))
 	registerPokedexRoutes(g, NewServer(q))
 	registerCalcNotFoundRoutes(g)
@@ -104,7 +107,7 @@ func registerCalcNotFoundRoutes(e *echo.Group) {
 	e.POST("/api/calc/reverse", h)
 }
 
-// healthzHandler は GET /healthz。DB に触れず常に 200(liveness/readiness 共通。ADR-0105 §1)。
+// healthzHandler は GET /healthz。DB に触れず常に 200(liveness 専用。readiness は /readyz。ADR-0129)。
 func healthzHandler(c *echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -146,9 +149,9 @@ func deadlineMiddleware(d time.Duration) echo.MiddlewareFunc {
 	}
 }
 
-// readyzHandler は GET /readyz(ADR-0129 §1)。最小条件の4クエリを autocommit で読み、
-// 失敗・空・既定レギュレーション無しなら 503 master_unavailable。キャッシュしない。
-// 読み取り専用 Tx の中で読み、必ず閉じる(開いたままの Tx を残さない)。
+// readyzHandler は GET /readyz(ADR-0129 §1)。最小条件の4クエリを読み取り専用 Tx の中で読み、
+// Tx を開けない・失敗・空・既定レギュレーション無しなら 503 master_unavailable。キャッシュしない。
+// Tx は必ず閉じる(開いたままの Tx を残さない)。
 func readyzHandler(q readtx.DB, timeout time.Duration) echo.HandlerFunc {
 	return func(c *echo.Context) error {
 		ctx, cancel := context.WithTimeout(c.Request().Context(), timeout)
