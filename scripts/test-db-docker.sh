@@ -2,8 +2,8 @@
 # make test-db-docker(issue #223)。Docker で使い捨ての MySQL と TiDB を起動し、`make test-db`(-tags mysql の
 # pokedex・-tags tidb の record/team)を流して、終わったら(失敗・中断でも)コンテナとネットワークを消す。
 #
-# - MySQL は scripts/db-local-up.sh と同じ digest、TiDB は v8.5.8(deploy/k8s/overlays/local/tidb と同じ版)を
-#   digest 固定で使う。ポートはホストの 127.0.0.1 の空きポートを Docker に選ばせる(開発用の 3306・4000 と衝突しない)
+# - MySQL は scripts/db-local-up.sh と同じ digest、TiDB は v8.5.8(deploy/k8s/overlays/local/tidb と同じ版。
+#   digest は Docker Hub の pingcap/tidb:v8.5.8 の index)で固定する。ポートはホストの 127.0.0.1 の空きポートを Docker に選ばせる(開発用の 3306・4000 と衝突しない)
 # - DB 名は各テストの安全装置どおり _test で終わる名前(pokedex_test・record_test・team_test)
 # - TiDB には golang-migrate 用に tidb_skip_isolation_level_check=1 を設定する(scripts/tidb-local-up.sh と同じ理由。ADR-0211)
 # - Docker が無い・起動しないときは「スキップして成功」にせず失敗する(CLAUDE.md 絶対ルール 6)
@@ -28,7 +28,10 @@ cleanup() {
   docker rm -f "$MYSQL_NAME" "$TIDB_NAME" >/dev/null 2>&1 || true
   docker network rm "$NETWORK" >/dev/null 2>&1 || true
 }
-trap cleanup EXIT INT TERM
+# INT・TERM では exit して EXIT の trap(後片付け)に任せる。trap cleanup INT だけだと後片付けの後も続きを実行してしまう。
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # 値はコマンドライン引数に出さない(環境変数で渡す)。使い捨てのコンテナ限りのパスワード。
 MYSQL_ROOT_PASSWORD="$(openssl rand -hex 16)"
@@ -41,7 +44,7 @@ docker run -d --name "$MYSQL_NAME" --network "$NETWORK" -p 127.0.0.1::3306 \
   "$MYSQL_IMAGE" --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci >/dev/null
 docker run -d --name "$TIDB_NAME" --network "$NETWORK" -p 127.0.0.1::4000 "$TIDB_IMAGE" >/dev/null
 
-# mysql_sql ホスト ポート SQL [パスワード] — MySQL コンテナの中のクライアントから SQL を流す。
+# mysql_sql ホスト ポート SQL — MySQL コンテナの中のクライアントから SQL を流す。
 mysql_sql() {
   local host="$1" port="$2" sql="$3"
   if [ "$host" = "127.0.0.1" ]; then

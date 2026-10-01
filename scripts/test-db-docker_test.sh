@@ -22,6 +22,10 @@ echo "$*" >> "${FAKE_LOG:?}"
 case "$1" in
   info) exit "${FAKE_DOCKER_INFO_RC:-0}" ;;
   port) echo "127.0.0.1:65000" ;;
+  exec)
+    [ -n "${FAKE_EXEC_SLEEP:-}" ] && sleep "$FAKE_EXEC_SLEEP"
+    exit "${FAKE_EXEC_RC:-0}"
+    ;;
 esac
 exit 0
 FAKE
@@ -31,7 +35,12 @@ cat > "$work/bin/make" <<'FAKE'
 echo "make $* POKEDEX=${POKEDEX_TEST_DSN##*/} RECORD=${RECORD_TEST_DSN##*/} TEAM=${TEAM_TEST_DSN##*/}" >> "${FAKE_LOG:?}"
 exit "${FAKE_MAKE_RC:-0}"
 FAKE
-chmod +x "$work/bin/docker" "$work/bin/make"
+# 偽の openssl: 固定のパスワードを返す(記録全体にこの値が出ないことを確かめるため)。
+cat > "$work/bin/openssl" <<'FAKE'
+#!/usr/bin/env bash
+echo FAKESECRET0123456789
+FAKE
+chmod +x "$work/bin/docker" "$work/bin/make" "$work/bin/openssl"
 for tool in bash env git date openssl sed head mktemp cat; do ln -s "$(command -v "$tool")" "$work/nodocker/$tool"; done
 
 # run_case 環境変数... — スクリプトを流し、終了コードを rc に、記録を log に残す。
@@ -63,10 +72,10 @@ if echo "$log" | grep -E "^run " | grep -vq "@sha256:"; then
 else
   ok "起動するイメージはすべて digest 固定"
 fi
-if echo "$log" | grep -E "^(run|exec) " | grep -q "MYSQL_ROOT_PASSWORD=\|MYSQL_PWD=[0-9a-f]"; then
-  ng "パスワードの値をコマンドライン引数に出している"
+if echo "$log" | grep -v "^make " | grep -q "FAKESECRET"; then
+  ng "パスワードの値を docker のコマンドライン引数に出している"
 else
-  ok "パスワードの値をコマンドライン引数に出さない"
+  ok "パスワードの値を docker のコマンドライン引数に出さない"
 fi
 
 run_case FAKE_MAKE_RC=3
@@ -74,6 +83,28 @@ if [ "$rc" -ne 0 ] && echo "$log" | grep -q "^rm -f pokecalc-testdb-mysql-"; the
   ok "テストが失敗したら非0で終わり、それでも後片付けする"
 else
   ng "テスト失敗時(終了コード ${rc}): ${log}"
+fi
+
+run_case TEST_DB_WAIT_SECONDS=2 FAKE_EXEC_RC=1
+if [ "$rc" -ne 0 ] && echo "$out" | grep -q "起動しない" && ! echo "$log" | grep -q "^make " && echo "$log" | grep -q "^rm -f pokecalc-testdb-mysql-"; then
+  ok "DB が起動しなければ、テストを流さずに失敗し、後片付けする"
+else
+  ng "起動待ちのタイムアウト(終了コード ${rc}): ${out}"
+fi
+
+# TERM で止めたら、待ちを続けずにすぐ終わり、後片付けする。
+: > "$work/log"
+(cd "$ROOT" && exec env FAKE_LOG="$work/log" MAKE="$work/bin/make" PATH="$work/bin:$PATH" FAKE_EXEC_SLEEP=1 FAKE_EXEC_RC=1 "$SCRIPT" >/dev/null 2>&1) &
+pid=$!
+sleep 1
+kill -TERM "$pid"
+start=$SECONDS
+wait "$pid"
+rc=$?
+if [ "$rc" -ne 0 ] && [ $((SECONDS - start)) -le 5 ] && grep -q "^rm -f pokecalc-testdb-mysql-" "$work/log"; then
+  ok "TERM で止めると、すぐ非0で終わり後片付けする"
+else
+  ng "TERM のとき(終了コード ${rc}、$((SECONDS - start)) 秒): $(cat "$work/log")"
 fi
 
 run_case FAKE_DOCKER_INFO_RC=1

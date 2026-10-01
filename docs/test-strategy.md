@@ -124,7 +124,7 @@ P1-6〜P2-1a の間は gen9 の全種族(CAP 等を含む1392種)を参考集合
 ## DB テスト(`make test-db-docker`)
 
 `-tags mysql`・`-tags tidb` のテストは実 DB でしか動かない(`make test` の偽 Querier では SQL 文そのものを実行しない)。
-`make test-db-docker` は Docker で使い捨ての MySQL(`scripts/db-local-up.sh` と同じ digest)と TiDB v8.5.8 を起動し、
+`make test-db-docker` は Docker で使い捨ての MySQL(`scripts/db-local-up.sh` と同じ digest)と TiDB v8.5.8(k3d の TidbCluster と同じ版。digest 固定)を起動し、
 `_test` で終わる DB を作って `make test-db` を流し、終了時(失敗・中断でも)にコンテナを消す。Docker が無ければ失敗する
 (スキップして成功にしない)。DB・importer・sqlc のクエリ・migration に触れた変更では PR の前に流す。
 既存の DB に向けて流すときは `make test-db`(`POKEDEX_TEST_DSN`・`RECORD_TEST_DSN`・`TEAM_TEST_DSN` が必須)。
