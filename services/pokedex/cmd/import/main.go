@@ -163,7 +163,7 @@ func run(args []string, env cliEnv) int {
 		fmt.Fprintln(env.Stderr, "import: 投入に失敗:", err)
 		var removedErr *importer.RemovedIDsError
 		if errors.As(err, &removedErr) {
-			fmt.Fprintf(env.Stderr, "import: 消える ID: %s\nimport: 内容を確かめ、消えてよければ -allow-removed %s を付けて1回だけ流す\n",
+			fmt.Fprintf(env.Stderr, "import: 消える ID: %s\nimport: 内容を確かめ、消えてよければ -allow-removed %s を付けて1回だけ流す(k8s では環境変数 IMPORT_ALLOW_REMOVED。docs/runbooks/data.md「ID が消えて CronJob が終了コード 3 で止まったとき」)\n",
 				joinRemovedIDs(removedErr.IDs), joinRemovedIDs(removedErr.IDs))
 		}
 		return classifyErr(err)

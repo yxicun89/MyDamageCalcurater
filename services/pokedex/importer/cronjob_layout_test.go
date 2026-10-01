@@ -734,3 +734,17 @@ func TestCheckUpstreamScriptExists(t *testing.T) {
 		t.Error("check-upstream.mjs は config.json を書き換えない(版を上げるのは人の PR)")
 	}
 }
+
+// TestCronJobManifestHasNoAllowRemoved は、消える ID の承認(IMPORT_ALLOW_REMOVED)を定期実行の CronJob に
+// 置かないこと(issue #277・ADR-0131)。承認は人が内容を確かめて手動 Job で1回だけ渡す。
+func TestCronJobManifestHasNoAllowRemoved(t *testing.T) {
+	for _, f := range []string{"deploy/k8s/base/pokedex/cronjob-import.yaml", "deploy/k8s/overlays/cloud/cronjob-import-suspend-patch.yaml"} {
+		if strings.Contains(readRepo(t, f), "IMPORT_ALLOW_REMOVED") {
+			t.Errorf("%s: IMPORT_ALLOW_REMOVED を定期実行に置かない(承認は手動 Job で1回だけ)", f)
+		}
+	}
+	if s := readRepo(t, cronJobScript); !regexp.MustCompile(`if \[ -n "\$\{IMPORT_ALLOW_REMOVED:-\}" \]`).MatchString(s) {
+		t.Errorf("%s: IMPORT_ALLOW_REMOVED が設定されたときだけ -allow-removed を付ける", cronJobScript)
+	}
+}
+

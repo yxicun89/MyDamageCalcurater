@@ -183,7 +183,7 @@ kubectl -n pokecalc delete job pokedex-import-retry
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-kubectl -n pokecalc logs "$(kubectl -n pokecalc get pods -l job-name -o name | tail -1)" | grep "import:"
+kubectl -n pokecalc logs "$(kubectl -n pokecalc get pods -l app.kubernetes.io/name=pokedex-import --sort-by=.metadata.creationTimestamp -o name | tail -1)" | grep "import:"
 ```
 確認: `import: 消える ID: species:9002-002,move:teststrike` のように `<種類>:<ID>` が並ぶ。
 保存済みの構築が使っている ID なら、消してよいかを人が判断する(使っていなければそのまま承認してよい)。
@@ -201,6 +201,7 @@ kubectl -n pokecalc delete job "$job"
 ```
 `$v` には a で見た ID のうち承認するものだけを写す。実際には消えない ID を書くと終了コード 3(打ち間違い)で止まる。
 確認: Job が `complete` になる。承認で消えた種族 key は台帳に残るので、後で別の種族に付く投入は引き続き止まる。
+`wait` が timeout したら Job が止まっているので、a のコマンドでその Job のログを見て原因を確かめる。
 
 ## 7. 後片付け(クラスタは残したまま止める)
 
