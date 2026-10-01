@@ -260,6 +260,7 @@ public enum Operations {
     ///
     /// 使用可能集合の外の種族も返す(絞り込みは検索の仕事)。`abilities` は slot 順、
     /// `learnset` は習得技 ∩ 既定のレギュレーションの使用可能な技(ID 昇順)。
+    /// `abilities` の各特性は効果を持てば `effect` を伴う(ADR-0218)。
     ///
     ///
     /// - Remark: HTTP `GET /api/pokedex/species/{key}`.
@@ -1302,6 +1303,9 @@ public enum Operations {
     /// 持ち物を日本語名で前方一致検索
     ///
     /// 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
+    /// 各持ち物は効果を持てば `effect` を伴う(ADR-0218)。効果を持つ持ち物だけに絞る検索条件は無い
+    /// (クライアントが `effect` の有無で絞る)。
+    ///
     ///
     /// - Remark: HTTP `GET /api/pokedex/items`.
     /// - Remark: Generated from `#/paths//api/pokedex/items/get(searchItems)`.

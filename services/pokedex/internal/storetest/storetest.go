@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -444,10 +445,16 @@ func (q *Querier) SearchItems(_ context.Context, arg store.SearchItemsParams) ([
 		return nil, err
 	}
 	in := set(q.RegulationItems[arg.RegulationID])
+	prefix := likePrefix(arg.Pattern)
+	effects := map[string]*json.RawMessage{} // 行が無ければ nil(LEFT JOIN の NULL)
+	for _, e := range q.ItemEffects {
+		effect := e.Effect
+		effects[e.ItemID] = &effect
+	}
 	var out []store.SearchItemsRow
 	for _, it := range q.Items {
-		if in[it.ID] && len(out) < int(arg.Limit) {
-			out = append(out, store.SearchItemsRow{ID: it.ID, NameJa: it.NameJa})
+		if in[it.ID] && strings.HasPrefix(it.NameJa, prefix) && len(out) < int(arg.Limit) {
+			out = append(out, store.SearchItemsRow{ID: it.ID, NameJa: it.NameJa, Effect: effects[it.ID]})
 		}
 	}
 	return out, nil
@@ -499,10 +506,15 @@ func (q *Querier) ListSpeciesAbilityNames(_ context.Context, speciesKey string) 
 	for _, a := range q.Abilities {
 		names[a.ID] = a.NameJa
 	}
+	effects := map[string]*json.RawMessage{} // 行が無ければ nil(LEFT JOIN の NULL)
+	for _, e := range q.AbilityEffects {
+		effect := e.Effect
+		effects[e.AbilityID] = &effect
+	}
 	var out []store.ListSpeciesAbilityNamesRow
 	for _, sa := range q.SpeciesAbilities {
 		if sa.SpeciesKey == speciesKey {
-			out = append(out, store.ListSpeciesAbilityNamesRow{Slot: sa.Slot, ID: sa.AbilityID, NameJa: names[sa.AbilityID]})
+			out = append(out, store.ListSpeciesAbilityNamesRow{Slot: sa.Slot, ID: sa.AbilityID, NameJa: names[sa.AbilityID], Effect: effects[sa.AbilityID]})
 		}
 	}
 	return out, nil
@@ -649,4 +661,20 @@ func New() *Querier {
 			"test-b":            {"testunused"},
 		},
 	}
+}
+
+// 注意: 実 MySQL(照合順序 ja_0900_as_cs。かな種別・全角半角を区別しない)の LIKE より厳しい(バイト列の前方一致)。
+// 実 MySQL との一致は services/pokedex/importer の mysql タグのテストが確かめる。
+// likePrefix は前方一致の LIKE パターン("..." + "%"。\ \% \_ はエスケープ)から接頭辞を取り出す。
+func likePrefix(pattern string) string {
+	pattern = strings.TrimSuffix(pattern, "%")
+	var b strings.Builder
+	rs := []rune(pattern)
+	for i := 0; i < len(rs); i++ {
+		if rs[i] == '\\' && i+1 < len(rs) {
+			i++
+		}
+		b.WriteRune(rs[i])
+	}
+	return b.String()
 }

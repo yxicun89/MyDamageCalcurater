@@ -106,6 +106,7 @@ critic 1回目FAILで発覚し修正済み)。deployment.yamlへの実URL配線�
 同じく別タスクとして残す(コードのみ今回のスコープ)。critic 2ラウンド(1回目FAIL〈重要2件:
 healthz例外の欠如・README.mdのルーティング表が古いまま〉→修正→2回目PASS)。**main未統合**。
 Status(追記): 2026-10-01 PR #416(issue #284: balance・speed・judgeをgatewayの後ろに統一)を main 統合。続けて UnsupportedMark の target・reason を string に緩めた(ADR-0215。Web・iOS の追従込み)。
+Status(追記): 2026-10-02 issue #211 の API 分(ADR-0218)実装済み・critic PASS・コミット前。公開の `Item` / `Ability` に省略可の `effect` を足し、pokedex-svc が共通マスタで検証して返す(不正は 503)。Web・iOS への連絡は DECISIONS.md。
 Next: キュー順に対応:
 (2) defenderOverride.ranks/status は実装済み(ADR-0216。critic・コミット・PR 待ち)、(3) P5-3b・P5-4b(失効ジョブ・Deployment配線。
 issue #284のdeployment.yaml配線も含む。優先度低)。
