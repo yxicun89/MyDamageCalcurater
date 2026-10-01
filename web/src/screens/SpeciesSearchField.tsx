@@ -21,6 +21,11 @@ export interface SpeciesSearchFieldProps {
   readonly masterSearch: MasterSpeciesSearch | undefined;
   /** 候補を選んで resolveSpecies が解決したときに呼ぶ。 */
   readonly onResolved: (resolution: MasterSpeciesResolution) => void;
+  /**
+   * 選択済みの種族の名前(省略可。P5-5b: 構築の保存済みメンバーなど、最初から種族が決まっている欄で
+   * 入力欄に出す)。変わったときも入力欄に反映する。省略(undefined)なら従来どおり空の欄から始まる。
+   */
+  readonly selectedName?: string;
 }
 
 /**
@@ -44,9 +49,25 @@ type SearchStatus =
   | { readonly kind: "closed" };
 
 /** 種族の検索欄(ADR-0304 A-4・A-10)。 */
-export function SpeciesSearchField({ label, masterSearch, onResolved }: SpeciesSearchFieldProps) {
-  const [inputText, setInputText] = useState("");
-  const [status, setStatus] = useState<SearchStatus>({ kind: "empty" });
+export function SpeciesSearchField({
+  label,
+  masterSearch,
+  onResolved,
+  selectedName,
+}: SpeciesSearchFieldProps) {
+  const [inputText, setInputText] = useState(selectedName ?? "");
+  const [status, setStatus] = useState<SearchStatus>(
+    selectedName === undefined ? { kind: "empty" } : { kind: "resolved" },
+  );
+  // 親が選択済みの名前を変えたら入力欄に反映する(描画中の state 調整。effect で setState しない)。
+  const [shownName, setShownName] = useState(selectedName);
+  if (selectedName !== shownName) {
+    setShownName(selectedName);
+    if (selectedName !== undefined) {
+      setInputText(selectedName);
+      setStatus({ kind: "resolved" });
+    }
+  }
   const debounceTimerRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const hintId = useId();
