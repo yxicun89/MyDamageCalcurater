@@ -91,11 +91,23 @@ public struct BulkResultDisplay: Equatable, Sendable {
     /// 全行に共通する印の注記(無ければ nil)。
     public let unsupportedNotice: String?
 
-    public init(result: BulkCalcResult, items: [Item], names: UnsupportedMarkNames) {
+    /// `abilityNames` は防御側の特性 ID → 日本語名(特性で分かれた行の副題に使う。無い ID は ID のまま)。
+    public init(result: BulkCalcResult, items: [Item], names: UnsupportedMarkNames, abilityNames: [String: String] = [:]) {
         let placement = UnsupportedPlacement(result.rows.map(\.result.unsupported))
         unsupportedNotice = UnsupportedNoticeText.summary(placement.common, names: names)
-        rows = zip(result.rows, placement.perEntry).map { row, marks in
-            BulkRowDisplay(row: row, items: items, unsupportedNote: UnsupportedNoticeText.rowNote(marks, names: names))
+        let baseIDs = result.rows.map { BulkRowDisplay.baseID(for: $0) }
+        let ids = ResultEntryIdentity.uniqueIDs(baseIDs: baseIDs, abilityIds: result.rows.map(\.abilityId))
+        let splitBases = ResultEntryIdentity.splitBaseIDs(baseIDs)
+        rows = (0..<result.rows.count).map { index in
+            let row = result.rows[index]
+            let marks = placement.perEntry[index]
+            let abilityText = splitBases.contains(baseIDs[index])
+                ? AbilityGroupLabel.text(abilityIds: row.abilityIds, names: abilityNames)
+                : nil
+            return BulkRowDisplay(
+                row: row, items: items, unsupportedNote: UnsupportedNoticeText.rowNote(marks, names: names),
+                id: ids[index], abilityText: abilityText
+            )
         }
     }
 }

@@ -14,6 +14,10 @@ struct MockFixtures {
         struct AbilityEntry: Decodable {
             let id: String
             let nameJa: String
+            /// この特性を防御側(逆算は相手 = 防御側のとき)が持つと、このタイプの技のダメージが 0 になる
+            /// (フィクスチャだけの任意項目。モックは計算しないので、特性で行・候補が分かれる状況を決め打ちで
+            /// 再現するためだけに使う。ADR-0501「P6-19」5章)。無ければ効果なし。
+            let nullifiesMoveType: String?
         }
         let key: String
         let dexNo: Int

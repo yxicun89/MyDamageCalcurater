@@ -382,7 +382,8 @@ public struct APIPokeCalcService: PokeCalcService {
     private static func domainBulkCalcRow(_ row: Components.Schemas.BulkCalcRow) -> BulkCalcRow {
         BulkCalcRow(
             preset: domainDefenderPreset(row.preset), presetLabel: row.presetLabel,
-            itemId: row.itemId, defender: domainBulkDefender(row.defender), result: domainCalcResult(row.result)
+            itemId: row.itemId, defender: domainBulkDefender(row.defender), result: domainCalcResult(row.result),
+            abilityId: row.abilityId, abilityIds: row.abilityIds
         )
     }
 
@@ -427,7 +428,8 @@ public struct APIPokeCalcService: PokeCalcService {
             support: candidate.support,
             minPercent: candidate.minPercent,
             maxPercent: candidate.maxPercent,
-            unsupported: candidate.unsupported.map(domainUnsupportedMark)
+            unsupported: candidate.unsupported.map(domainUnsupportedMark),
+            abilityId: candidate.abilityId, abilityIds: candidate.abilityIds
         )
     }
 
@@ -525,6 +527,9 @@ public struct APIPokeCalcService: PokeCalcService {
             // (ADR-0501「issue #274」4章「判断」)。
             field: request.field == FieldState() ? nil : generatedFieldState(request.field),
             options: .init(critical: request.critical),
+            // 指定なし(nil)は `defenderOverride` 自体を送らない(これまでの要求本文と同じ。
+            // ADR-0501「P6-19」1章)。
+            defenderOverride: request.defenderAbilityId.map { .init(abilityId: $0) },
             // 省略(空配列を含む)は同じ意味(openapi の description)なので、空のときは
             // フィールド自体を送らない(nil のプロパティは JSON エンコード時に省かれる)。
             presets: request.presets.isEmpty ? nil : request.presets.map(generatedDefenderPreset),
@@ -533,13 +538,14 @@ public struct APIPokeCalcService: PokeCalcService {
     }
 
     /// openapi `ReverseRequest`(ADR-0010 §R): itemCandidates の省略と maxCandidates == 0 は既定値と
-    /// 同じ意味なので、送るときは省く。
+    /// 同じ意味なので、送るときは省く。`unknownAbilityId` は nil なら送らない(ADR-0501「P6-19」1章)。
     private static func generatedReverseRequest(_ request: ReverseRequest) -> Components.Schemas.ReverseRequest {
         .init(
             format: generatedFormat(request.format),
             side: generatedReverseSide(request.side),
             known: .init(value1: generatedIndividual(request.known)),
             unknownSpeciesKey: .init(value1: request.unknownSpeciesKey),
+            unknownAbilityId: request.unknownAbilityId,
             moveId: request.moveId,
             options: .init(critical: request.critical),
             itemCandidates: request.itemCandidates.isEmpty ? nil : request.itemCandidates,
