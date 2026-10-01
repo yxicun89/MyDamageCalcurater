@@ -46,6 +46,7 @@
 | balance | `BALANCE_POKEMON_TYPES_PATH` | `cmd/api/config.go:9` | 任意 | ポケモンのタイプ read model。未設定 → analyze 等が 503。設定済みで読めない → 非ゼロ終了 |
 | balance | `BALANCE_MOVES_PATH` | `config.go:30` | 任意 | 技 read model(coverage 等) |
 | balance | `BALANCE_ABILITIES_PATH` | `config.go:50` | 任意 | 特性 read model |
+| balance | `BALANCE_MAX_CONCURRENT_RECOMMENDATIONS` | `cmd/api/config.go` | 任意 | recommendations の同時計算数の上限(既定 4)。超過は即 503 `overloaded`(`Retry-After: 1`)。0・負・数値以外 → 非ゼロ終了(ADR-0409) |
 | speed | `PORT` | `cmd/api/config.go:13` | 任意 | 待ち受けポート |
 | speed | `SPEED_POKEMON_PATH` | `config.go:9` | 任意 | ポケモン read model。未設定 → 503 |
 | judge | `PORT` | `cmd/api/config.go:13` | 任意 | 待ち受けポート |
@@ -81,13 +82,13 @@
 | pokedex-migrate(Job) | `POKEDEX_DATABASE_DSN`(同上 `job-migrate.yaml:60`)。initContainer `wait-for-mysql`: `MYSQL_PWD`(Secret `mysql-root-password` `:42`) | `deploy/k8s/base/pokedex/job-migrate.yaml` | |
 | pokedex-import(CronJob) | `HOME=/tmp`・`npm_config_cache=/tmp/npm-cache`・`POKEDEX_DATABASE_DSN`(Secret `:66`) | `deploy/k8s/base/pokedex/cronjob-import.yaml` | 読み取り専用ルートのため /tmp を使う |
 | mysql | `MYSQL_ROOT_PASSWORD`(Secret `mysql-root-password` `:32`)・`MYSQL_DATABASE=pokedex`(初回起動時のみ有効) | `deploy/k8s/overlays/local/mysql/statefulset.yaml` | |
-| balance | `PORT=8080` | `services/balance/deploy/k8s/base/deployment.yaml` | |
+| balance | `PORT=8080`・`GOMEMLIMIT=56MiB` | `services/balance/deploy/k8s/base/deployment.yaml` | |
 | balance(local) | `BALANCE_POKEMON_TYPES_PATH=/etc/balance/pokemon-types.json`・`BALANCE_MOVES_PATH=/etc/balance/moves.json`・`BALANCE_ABILITIES_PATH=/etc/balance/abilities.json` | `services/balance/deploy/k8s/overlays/local/deployment-*-patch.yaml`(3) | 架空データ |
 | balance(local-readmodel) | 同 3 変数 = `/etc/balance/readmodel/{pokemon-types,moves,abilities}.json` | `…/overlays/local-readmodel/deployment-readmodel-patch.yaml` | pokedex export の実 read model |
-| speed | `PORT=8080` | `services/speed/deploy/k8s/base/deployment.yaml` | |
+| speed | `PORT=8080`・`GOMEMLIMIT=56MiB` | `services/speed/deploy/k8s/base/deployment.yaml` | |
 | speed(local) | `SPEED_POKEMON_PATH=/etc/speed/pokemon.json` | `services/speed/deploy/k8s/overlays/local/deployment-pokemon-patch.yaml` | 架空データ |
 | speed(local-readmodel) | `SPEED_POKEMON_PATH=/etc/speed/readmodel/speed-pokemon.json` | `…/overlays/local-readmodel/deployment-readmodel-patch.yaml` | |
-| judge | `JUDGE_POKEDEX_BASE_URL=http://pokedex`・`JUDGE_CALC_BASE_URL=http://calc` | `services/judge/deploy/k8s/base/deployment.yaml` | |
+| judge | `JUDGE_POKEDEX_BASE_URL=http://pokedex`・`JUDGE_CALC_BASE_URL=http://calc`・`GOMEMLIMIT=56MiB` | `services/judge/deploy/k8s/base/deployment.yaml` | |
 | web | なし | `deploy/k8s/base/web/deployment.yaml` | `/tmp` は emptyDir |
 
 ## 3. ConfigMap(全件)
@@ -96,9 +97,9 @@
 |---|---|---|---|---|
 | `mysql-config` | `deploy/k8s/overlays/local/mysql/configmap.yaml` | `charset.cnf`(utf8mb4・`utf8mb4_0900_ai_ci`) | mysql StatefulSet `/etc/mysql/conf.d/charset.cnf`(subPath) | ○ |
 | `balance-pokemon-types`・`balance-moves`・`balance-abilities` | `services/balance/deploy/k8s/overlays/local/kustomization.yaml:22-`(`configMapGenerator`。元 = 同ディレクトリの `*.example.json`) | 架空の read model | balance `/etc/balance/{pokemon-types,moves,abilities}.json`(subPath) | ○(架空) |
-| `balance-readmodel` | `services/balance/scripts/k3d-deploy-readmodel.sh:28`(`kubectl create configmap`。`make balance-k3d-deploy-readmodel`) | `data/generated/readmodel/` の 3 ファイル(1MB 未満) | balance `/etc/balance/readmodel`(ディレクトリ) | ×(生成物) |
+| `balance-readmodel` | `scripts/gitops/k3d-deploy-readmodel.sh`(`kubectl create configmap`。`make balance-k3d-deploy-readmodel` → `SERVICE=balance`) | `data/generated/readmodel/` の 3 ファイル(1MB 未満) | balance `/etc/balance/readmodel`(ディレクトリ) | ×(生成物) |
 | `speed-pokemon` | `services/speed/deploy/k8s/overlays/local/kustomization.yaml:13`(`configMapGenerator`) | 架空のポケモン read model | speed `/etc/speed/pokemon.json`(subPath) | ○(架空) |
-| `speed-readmodel` | `services/speed/scripts/k3d-deploy-readmodel.sh:30` | `speed-pokemon.json`(1 ファイル。1MB 未満) | speed `/etc/speed/readmodel` | ×(生成物) |
+| `speed-readmodel` | `scripts/gitops/k3d-deploy-readmodel.sh`(`make speed-k3d-deploy-readmodel` → `SERVICE=speed`) | `speed-pokemon.json`(1 ファイル。1MB 未満) | speed `/etc/speed/readmodel` | ×(生成物) |
 | `pokedex-name-overrides` | `scripts/up.sh:86-88`(`data/local/name_ja_overrides.json` があるときだけ作成/更新。無くても既存は消さない) | 日本語名の上書き(任意・Git 管理外の実データ) | pokedex-import CronJob `/app/data/local`(`optional: true`、read-only) | ×(実データ) |
 
 - read model の Deployment は `pokecalc.example/readmodel-hash` annotation で ConfigMap の内容が変わると Pod を作り直す(スクリプトが hash を差し込む)。
@@ -141,8 +142,9 @@
 | `scripts/db-local-up.sh:8,16,18` | `ENV_FILE=.env`・`POKEDEX_MYSQL_CONTAINER=pokecalc-mysql-local`・`MYSQL_ROOT_PASSWORD`(空なら失敗) |
 | `services/gateway/scripts/smoke.sh:22-25` | `API_URL=http://localhost:8080`・`API_SMOKE_RETRIES=30`・`API_SMOKE_BALANCE=auto`(`on`/`off`)・`API_SMOKE_NAMESPACE=pokecalc` |
 | `web/scripts/k3d-smoke.sh:15,17` | `WEB_URL=http://localhost:8080`・`WEB_SMOKE_RETRIES=30` |
-| `services/balance/scripts/*.sh` | `BALANCE_DIR=services/balance`・`BALANCE_URL=http://localhost:8080`・`BALANCE_READMODEL_DIR=data/generated/readmodel`・`BALANCE_IMAGE=pokecalc/balance:local`・`CLUSTER=pokecalc`・`BALANCE_REGISTRY_PORT=5001`・`BALANCE_RELEASE_IMAGE`(空)・`BALANCE_PLATFORMS=linux/amd64,linux/arm64`・`BALANCE_GITOPS_REPO_URL`(既定 = ファイル内の値 / `git remote get-url origin`) |
-| `services/speed/scripts/*.sh` | `SPEED_DIR=services/speed`・`SPEED_URL=http://localhost:8080`・`SPEED_READMODEL_DIR=data/generated/readmodel`・`SPEED_IMAGE=pokecalc/speed:local`・`CLUSTER=pokecalc`・`SPEED_REGISTRY_PORT=5002`・`SPEED_RELEASE_IMAGE`(空)・`SPEED_PLATFORMS=linux/amd64,linux/arm64`・`SPEED_GITOPS_REPO_URL`(同上) |
+| `services/balance/scripts/smoke*.sh` | `BALANCE_DIR=services/balance`・`BALANCE_URL=http://localhost:8080`・`BALANCE_READMODEL_DIR=data/generated/readmodel` |
+| `services/speed/scripts/smoke*.sh` | `SPEED_DIR=services/speed`・`SPEED_URL=http://localhost:8080`・`SPEED_READMODEL_DIR=data/generated/readmodel` |
+| `scripts/gitops/*.sh`(ADR-0408 §2。`SERVICE=balance` または `SERVICE=speed` が必須。それ以外の値は外部コマンドを呼ぶ前に非0で終了する) | `SERVICE` の値から `services/$SERVICE` を導く(`*_DIR` の指定は廃止)。既定値は balance/speed で共通: `CLUSTER=pokecalc`・`${SVC}_READMODEL_DIR=data/generated/readmodel`・`${SVC}_IMAGE=pokecalc/$SERVICE:local`・`${SVC}_RELEASE_IMAGE`(空)・`${SVC}_PLATFORMS=linux/amd64,linux/arm64`・`${SVC}_GITOPS_REPO_URL`(既定 = ファイル内の値 / `git remote get-url origin`)。`${SVC}_REGISTRY_PORT` の既定だけ balance=5001・speed=5002(`SVC` は `BALANCE`/`SPEED`) |
 | `services/judge/scripts/smoke.sh:5` | `JUDGE_URL=http://localhost:8080` |
 | `tools/importer/cronjob.sh:12,17,18` | `HOME=/tmp`・`IMPORT_APP_DIR=/app`・`IMPORT_LOCK_FILE=$IMPORT_APP_DIR/data/generated/.import.lock`(テスト契約。名前を変えない。ADR-0109) |
 | `ios/scripts/xcode-env.sh:8` | `DEVELOPER_DIR`(CommandLineTools を指していたら Xcode に切り替え) |

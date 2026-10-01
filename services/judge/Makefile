@@ -4,8 +4,11 @@ JUDGE_DIR ?= services/judge
 JUDGE_IMAGE ?= pokecalc/judge:local
 JUDGE_URL ?= http://localhost:8080
 API_URL ?= http://localhost:8080
+# クラスタ内レジストリは balance-registry namespace のものを共有する(ADR-0709 §1)。
+# Mac 側の port-forward は balance の 5001・speed の 5002 と衝突しないよう 5003(ノード側は localhost:5000 のまま)。
+JUDGE_REGISTRY_PORT ?= 5003
 
-.PHONY: judge-gen judge-test judge-lint judge-build judge-kustomize judge-docker-build judge-k3d-deploy judge-smoke
+.PHONY: judge-gen judge-test judge-lint judge-build judge-kustomize judge-docker-build judge-k3d-deploy judge-smoke judge-gitops-template-check judge-gitops-check judge-registry-push judge-argocd-app judge-docker-push
 
 # ルートの make test / lint / build に judge を含める(ADR-0700 §1。speed と同じ)。
 # レシピを持たない前提条件の追加なので、ルートの既存ターゲットのレシピは変わらない。
@@ -28,6 +31,25 @@ judge-build:
 
 judge-kustomize:
 	@kubectl kustomize $(JUDGE_DIR)/deploy/k8s/overlays/local >/dev/null
+	@kubectl kustomize $(JUDGE_DIR)/deploy/k8s/overlays/gitops >/dev/null
+	@kubectl kustomize $(JUDGE_DIR)/deploy/argocd >/dev/null
+
+# クラスタを変えない検査(placeholder のままでよい)。GitOps を適用する前は ready のほうで確かめる。
+judge-gitops-template-check: judge-kustomize
+	@JUDGE_DIR=$(JUDGE_DIR) $(JUDGE_DIR)/scripts/check-gitops.sh template
+
+judge-gitops-check: judge-kustomize
+	@JUDGE_DIR=$(JUDGE_DIR) $(JUDGE_DIR)/scripts/check-gitops.sh ready
+
+judge-docker-push:
+	@JUDGE_DIR=$(JUDGE_DIR) $(JUDGE_DIR)/scripts/publish-image.sh
+
+# balance レーンのクラスタ内レジストリを共有する(ADR-0709 §1)。専用の registry-apply は持たない。
+judge-registry-push:
+	@JUDGE_DIR=$(JUDGE_DIR) JUDGE_REGISTRY_PORT=$(JUDGE_REGISTRY_PORT) $(JUDGE_DIR)/scripts/local-registry-push.sh
+
+judge-argocd-app:
+	@JUDGE_DIR=$(JUDGE_DIR) $(JUDGE_DIR)/scripts/argocd-local-app.sh
 
 # engine を含むため、ビルドコンテキストはリポジトリのルート(ADR-0700 §1。speed と同じ形)。
 judge-docker-build:

@@ -267,6 +267,7 @@
   color: var(--text-primary);
 }
 
+.calc-results__ability,
 .calc-results__item {
   grid-column: 1 / -1;
   font-size: var(--font-size-caption);

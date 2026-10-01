@@ -25,7 +25,7 @@ import (
 	"example.com/pokecalc/services/pokedex/db"
 	"example.com/pokecalc/services/pokedex/internal/httpapi"
 	"example.com/pokecalc/services/pokedex/internal/readmodel"
-	"example.com/pokecalc/services/pokedex/internal/store"
+	"example.com/pokecalc/services/pokedex/internal/readtx"
 )
 
 // 環境変数の名前と既定値(k8s のマニフェスト・Makefile と共有する。ADR-0105 §1・AC-K0)。
@@ -266,7 +266,7 @@ func runServe(ctx context.Context, lookup func(string) (string, bool)) error {
 	}
 	defer conn.Close()
 
-	handler := httpapi.NewHandler(store.New(conn))
+	handler := httpapi.NewHandler(readtx.NewDB(conn))
 	return serve(ctx, cfg.Addr, handler)
 }
 
@@ -292,7 +292,7 @@ func runExport(args []string) int {
 	}
 	defer conn.Close()
 
-	files, report, err := readmodel.Export(context.Background(), store.New(conn))
+	files, report, err := readmodel.Export(context.Background(), readtx.NewDB(conn))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "pokedex export:", err)
 		return 1

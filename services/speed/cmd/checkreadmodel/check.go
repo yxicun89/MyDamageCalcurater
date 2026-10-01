@@ -13,7 +13,7 @@ const pokemonReadModelFile = "speed-pokemon.json"
 
 // check は dir の read model を service と同じ loader(master.LoadPokemonFile)で読み、
 // "read model ok: <n> pokemon" の形の 1 行の summary を返す。
-// ConfigMap の大きさは見ない(scripts/k3d-deploy-readmodel.sh の役割。balance と同じ分担)。
+// ConfigMap の大きさは見ない(scripts/gitops/k3d-deploy-readmodel.sh の役割。balance と同じ分担)。
 func check(dir string) (string, error) {
 	readModel, err := master.LoadPokemonFile(filepath.Join(dir, pokemonReadModelFile))
 	if err != nil {

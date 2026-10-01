@@ -18,7 +18,7 @@ import (
 
 	"example.com/pokecalc/services/internal/api"
 	"example.com/pokecalc/services/pokedex/internal/httpapi"
-	"example.com/pokecalc/services/pokedex/internal/store"
+	"example.com/pokecalc/services/pokedex/internal/readtx"
 )
 
 // 端末ID・セッションID(公開 API の必須ヘッダ。形式の検証は gateway の仕事で、pokedex-svc は有無だけを見る。ADR-0202)。
@@ -40,7 +40,7 @@ func do(t *testing.T, h http.Handler, method, target string, withHeaders bool) *
 	return rec
 }
 
-func newHandler(t *testing.T, q store.Querier) http.Handler {
+func newHandler(t *testing.T, q readtx.DB) http.Handler {
 	t.Helper()
 	h := httpapi.NewHandler(q)
 	if h == nil {

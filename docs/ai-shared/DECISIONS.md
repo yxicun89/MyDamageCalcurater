@@ -1927,3 +1927,62 @@ Reason: issue #272 の API レーン分(PR #411)で `BulkCalcRow`・`ReverseCand
 読む(既存テストの `species(key:)` の回数を変えない・余計な通信をしない)。
 Impact: **Web レーンへ**: 上の 1〜5 に揃えてよい(Web は WASM 経由なので、指定なしのときは種族の特性をマスタから解決して
 `defenderAbilities`/`unknownAbilities` に渡す。ADR-0126 §他レーンへの依頼)。**API・データレーンへ**: 追加の依頼なし(契約の変更なし)。
+
+## 2026-09-26: issue #284 の API レーン担当分(balance・speed・judge を gateway の後ろにまとめる)を実装(API レーン → タイプバランス・素早さ・判定レーンへ)
+Decision: ユーザー決定(2026-09-25「ユーザー決定 4 件」#2)を実装。`services/gateway/internal/httpapi/routing.go`
+に `routeBalance`/`routeSpeed`/`routeJudge` と `prefixBalance`/`prefixSpeed`/`prefixJudge`(`/api/balance/`・
+`/api/speed/`・`/api/judge/`。record・team と同じ前方一致・末尾スラッシュ必須・不一致は404)を追加し、
+`requiresHeaderCheck` にも3つとも加えた(`/api/{balance,speed,judge}/*` にも端末ID・セッションIDの検証
+〈ADR-0202 §4〉がgatewayでもかかるようになった)。`server.go` に `Config.BalanceURL`/`SpeedURL`/`JudgeURL`
+(nilなら503 `upstream_unavailable`)と対応する `ReverseProxy` を追加、`main.go` に `GATEWAY_BALANCE_URL`/
+`GATEWAY_SPEED_URL`/`GATEWAY_JUDGE_URL` を追加。CORSの許可メソッドは変更なし(3サービスの契約は
+GET/POSTのみとソースで確認済み)。`deploy/k8s` にbalance/speed/judge自体のDeployment/Serviceがまだ無い
+ため、gatewayのdeployment.yamlへの実URL配線はrecord・team(P5-3b/P5-4b)と同じく別タスクとして残す
+(コードのみ今回のスコープ)。
+Reason: issue #236で判明していた「balance/speed/judgeがTraefik直結でgatewayを経由しないため、端末ID・
+セッションIDの検証がgatewayと各サービスで別々に実装され食い違いうる」問題を、CLAUDE.mdの「gatewayが
+唯一の入口」原則どおりgatewayに統合することで解消する。
+Impact: **タイプバランス・素早さ・判定レーンへ**: gatewayに `/api/balance/*`・`/api/speed/*`・
+`/api/judge/*` の転送が実装された(現時点ではcritic未レビュー・deployment.yamlの実URL未配線のため
+まだ有効化されていない)。各レーンが持つ直結Traefik Ingressの撤去は、gateway側のdeployment.yaml配線が
+完了し実クラスタで動作確認できてから行うこと(先に撤去すると経路が無くなる)。各サービス自身が持つ
+端末ID・セッションIDの検証(issue #236)は二重になるが害はなく、削除するかどうかは各レーンの判断のまま
+残す。critic レビュー後、deployment.yaml配線と実クラスタ確認を別途行い、完了したら改めて連絡する。
+
+## 2026-09-26: issue #284 critic 1回目 FAIL(重要2件)を修正
+Decision: critic指摘を反映(2回目相当のセルフレビューまで実施)。
+(1) **重要-1**: `/api/{balance,speed,judge}/healthz`(完全一致のみ)がgatewayでヘッダ検証必須になっていたのを
+外した。3サービスの契約(`services/{balance,speed,judge}/api/openapi.yaml`の`publicHealth`)・ADR-0600・
+ADR-0700がIngress越しの疎通確認用としてヘッダ不要と明記しており、gateway経由になっても同じ契約を守る
+必要があるため(このまま出すと、直結Ingress撤去後に各サービス自身のsmoke.sh・ヘルスチェックが400で
+落ちる時限爆弾だった)。`requiresHeaderCheck`にpathを渡すよう変更し、完全一致だけを緩めた
+(`healthzz`・`healthz/x`のような似た別パスは従来どおり検証。前方一致に緩めないことをテストで固定)。
+`balance_speed_judge_routing_test.go`に4テーブルケース×3サービスを追加、ADR-0202 §3・§4に追記。
+(2) **重要-2**: `services/gateway/README.md`のルーティング表が古いまま(record/team/balance/speed/judgeの
+行が無く、catch-allの行に「`/api/balance`を含む」という誤った記述が残っていた)だったのを、5サービス分の
+行と環境変数表を追加して実態に合わせた。
+あわせて軽微指摘2件も反映: `deploy/k8s/base/gateway/ingress.yaml`・`manifest_test.go`の「balanceは
+独自Ingress」コメントに、gateway側のルーティングは実装済みで直結Ingress撤去は別タスクである旨を追記。
+`cmd/gateway/main_test.go`の`TestEnvNames`/`TestLoadConfig`/`TestLoadConfigRejects`にrecord/team/
+balance/speed/judgeの5URLを追加(取り違えmutationがすり抜けていた穴を閉じた。record/teamも含めて
+まとめて追加)。
+Reason: critic(agent a5e87478edf501a11)によるmutation testing・実HTTP確認・契約/ADRの横断チェックで
+発見。健全性チェック済みの既存パターン(record/team)をそのままコピーしたことで、balance/speed/judge
+固有の契約差分(公開healthzの存在)を見落としていた。
+Impact: 上記のIssue #284のエントリの実装内容を本エントリの内容で更新するものと理解すること
+(`requiresHeaderCheck`のシグネチャが`(kind routeKind)`から`(kind routeKind, path string)`に変わった)。
+critic 2回目レビュー予定。
+## 2026-10-01: issue #211(オンラインの持ち物候補比較)の API 側の提案(Web レーン → API レーンへ)
+
+- 状況: Web は `ONLINE_MASTER_CAPABILITIES.effects=false`(`web/src/master/onlineSource.ts`)で、計算画面の「持ち物の候補も比較」と逆算の持ち物候補を無効化している。原因は公開 API の `Item`/`Ability` に効果データが無いこと(ADR-0304 A-1。効果は internal-only の `getMasterExport`〈ADR-0204〉だけ)。`api/openapi.yaml` を変えられるのは API レーンだけなので、Web 単独では進められない。
+- 既定案(issue 本文と同じ): 公開 `Item`/`Ability` に `effect`(internal `MasterExport` と同じ形)を **省略可** で足す。既存クライアントは壊れない。iOS は生成物の再生成だけで追従する。代替の「効果一覧 API を別に切る」は往復が増えるので採らない。
+- API レーンがやること: `api/openapi.yaml` の `Item`/`Ability` に `effect` を足し、pokedex-svc の公開ハンドラで返す → `make gen`・`make gen-ts`・`make ios-gen`。契約テスト。
+- Web レーンの追従(API 側が main に入ってから): `onlineSource.ts` の `mapItem`/`mapAbility` で `effect` を写し、効果フィールドを返す版のときだけ `effects:true`(古いサーバーは従来どおり無効化して注記)。候補は効果ありの持ち物を `maxItems` 64 に切り詰めて表示(`domain/requestLimits.ts`)。
+- Web レーンは API 側が入るまで #211 を待ち、先に #272/#274 などへ進む。
+
+## 2026-10-01: issue #260 のタイプバランス分をクローズ(タイプバランスレーン)
+Decision: `docs/type-balance-design.md` を実装済みの現在の設計(TB0〜TB6・メトリクス・GitOps〈手動 sync〉・recommendations の同時実行上限・未対応)
+に書き換え、役割分担・レビュー依頼・AI 間の共有ルール・旧未決事項の決着は ADR-0410 に履歴として移した。
+Reason: 旧版は 2026-09-21 のレビュー依頼文書のままで、`/api/damage` 等の誤記・実装済みの Kustomize/Argo CD 分割の未決扱いが残っていた。
+Impact: 判定レーン分(2026-09-25)と合わせて issue #260 をクローズできる。旧版の節番号を参照する ADR は変更せず、ADR-0410 の対応表で読み替える
+(§6 段階・§10 倍率の表示は新版でも同じ節番号)。コード・API・他の ADR は無変更(ドキュメントのみ)。

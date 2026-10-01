@@ -632,6 +632,12 @@
   - [ ] **P5-5c 履歴・よく計算する相手・端末データの削除(PR-A3 以降)**: record-svc の API と ADR-0209 §8 の文言
 - [x] P5-6 技の追加効果(使用者自身のランク変化。例: ニトロチャージで自分の素早さ+1)を engine の Move・マスタ・importer・export に足す(判定レーンからの提案。DECISIONS.md 2026-09-22。ADR-0005 に沿い、追加効果の対象=self/target・確率・ランク変化量をデータとして持つ。ADR-0107。critic PASS。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。公開APIへの露出は判定レーンの要件確定後)
 
+- [x] issue #219(Web 配信にセキュリティヘッダが無い)。**完了(2026-10-01。Web レーン。ブランチ `fix/web-security-headers-219`)**:
+  `web/security-headers.conf`(新規)を各 location から include し、CSP(`'wasm-unsafe-eval'` のみ許可)・
+  `frame-ancestors 'none'`/`X-Frame-Options`・`Referrer-Policy`・`Permissions-Policy` を付与。ADR-0310。
+  `web/e2e/container.spec.ts` にヘッダと CSP 下の画面・WASM 計算の検査を追加(`make web-e2e-container` 54件 green)。
+  gateway は上流ヘッダを素通し(CORS 以外を触らない)なので変更なし。
+
 ## M3: iOS
 - [x] P6-1 Xcode プロジェクト、swift-openapi-generator、デザイントークン(ADR-0500。`make ios-test` = 生成物の一致・XCTest・XCUITest・Info.plist の接続先。critic PASS)
 - [x] P6-2 計算画面・逆算・構築(構築は端末内に保存、Showdown 形式は後回し。2026-09-21 ユーザー回答)。P6-2a 計算画面・契約追従・P6-2b 逆算画面・P6-2c 構築(一覧・編集画面・ニックネーム・XCUITest)・P6-2d(構築から呼び出す配線)は完了(critic PASS)
@@ -857,6 +863,8 @@
 - [x] TB 実データの配線(2026-09-22。データレーンの依頼): pokedex export の read model を ConfigMap で k3d の balance に読ませる(ADR-0403)、abilityIds の上限を 4 に
 - [x] TB6 技範囲チェッカー(2026-09-22 ユーザー要望。ADR-0404): 技 ID(最大4つ)から18タイプの一貫判定を出し、その技構成を半減以下で受けられる実在ポケモンを図鑑から具体名で列挙する。特性で半減以下になるポケモンは別枠
 - [x] Codexレビュー issue #105 対応(2026-09-23。ADR-0405): Argo CD 導入物(install.yaml・同梱3イメージ)をコミットSHA・SHA-256・digestで固定する `scripts/argocd-bootstrap.sh` を新設し、balance/speed 両runbookの重複した生URL直apply手順を1本化。自動テスト `scripts/argocd-bootstrap_test.sh`(`make test-scripts`)。
+- [x] 全体レビュー issue #263・#292 対応(2026-09-25。ADR-0408): AppProject `pokecalc` を新設し balance/speed 両 Application を `project: default` から限定、GitOps スクリプト5本を `scripts/gitops/{argocd-local-app,check-gitops,publish-image,local-registry-push,k3d-deploy-readmodel}.sh`(`SERVICE=` 必須)に共通化、クラスタ内レジストリを `emptyDir` から PVC(`local-path`・2Gi)へ変更して push 済み image の消失を解消。自動テスト `scripts/gitops_test.sh`(`make test-scripts`)。
+- [x] issue #298(タイプバランス/運用。全体レビュー第3回。ADR-0409): balance の recommendations が同時 30 で 64Mi を超えて OOMKill される。(a) `matchingPokemon`・`abilityOptionsFor` の結果スライスをカタログ件数分あらかじめ確保しない(削減前 約 3.1 MB/op → 1 MiB/op 以下)、`GOMEMLIMIT` を balance・judge・speed の Deployment に追加、(b) 同時実行セマフォ(`BALANCE_MAX_CONCURRENT_RECOMMENDATIONS`、既定 4)と超過時の即時 503 `overloaded`(`Retry-After: 1`。ErrorCode 追加は openapi 先行で生成済み)。spec-writer 済み: 失敗するテスト(`recommendations_limit_test.go`・`recommendations_alloc_test.go`・`cmd/api/concurrency_config_test.go`・`services/gateway/deploytest/go_memlimit_test.go`)とベンチ(`recommendations_bench_test.go`)。実装済み(1,500件で約 0.53 MB/op、docker 同時 30 で OOMKilled=false を確認)
 
 ### ブロッカー(タイプバランスレーン)
 (なし。Argo CD の実同期は 2026-09-22 に解消)
@@ -996,6 +1004,12 @@
       ダブルの全体技/壁減衰(issue #288)を明記。`docs/README.md` の目次は既に judge-design.md を指しており
       変更不要。`type-balance-design.md` はタイプバランスレーンの持ち物のため対象外(DECISIONS.mdへ)。
       `bash scripts/check-publishable.sh`(0件)成功を確認。軽微な作業のためメインで対応
+- [x] issue #260 のタイプバランス分(担当: タイプバランス。ドキュメントのみ): `docs/type-balance-design.md` を
+      2026-09-21 のレビュー依頼文書から「現在の設計」(目的・位置づけ・構成・計算・API・段階・データ・運用・GitOps・UI・未対応。
+      speed-design.md の構成に揃えた。根拠は services/balance の実コード・openapi.yaml・ADR-0400〜0409)に書き換え、
+      役割分担・レビュー依頼・AI 間の共有ルール・旧未決事項の決着は ADR-0410(履歴・旧節番号の対応表)へ移した。
+      `/api/damage`・`pokecalc-kit-v2` の誤記を除去。`docs/impl/gitops-argocd.md` の行番号参照を節参照に更新。
+      判定レーン分と合わせて issue #260 は完了
 - [x] 判定の応答に calc-svc の「未対応」の印を中継する(issue #271 / #270 の判定レーン分。ADR-0123 §6 の
       「印を見せる画面・利用者は各レーンの作業」)。judge は `attackerKo` / `defenderKo` を calc-svc から
       転記するだけなので、多段技・固定ダメージ技・表せない持ち物/特性を選んだときに **誤った確定数が
@@ -1156,6 +1170,11 @@
 
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)
+- [ ] お気に入り(手動ピン留め)のCRUD API(requirements.md §2「あれば便利(マストではない)」)。
+  `favorites`テーブル・保持期間(540日)・全削除時の件数カウントはADR-0209で設計・実装済みだが、
+  作成・削除・一覧のAPI自体は未着手(ADR-0209にも「recordにお気に入りのCRUDを足すときに検証する」と
+  将来課題として記述されている)。Webレーンからの問い合わせ(2026-09-25。P5-5着手時)で未実装であることを
+  確認・回答済み。着手するかどうかはユーザー判断待ち(急ぎではない)
 - [x] issue #271/#270(データレーンからの依頼。ADR-0121 §4・ADR-0123 §7。DECISIONS.md 2026-09-25)の API レーン
   担当分: `api/openapi.yaml` に `MasterMove.mechanisms: string[]`(必須・昇順・通常の技は空配列)と
   `CalcResult`(`BulkCalcRow.result` も同じ型)・`ReverseCandidate` への `unsupported: UnsupportedMark[]`
@@ -1177,10 +1196,40 @@
   一括計算・逆算の行数/候補数の上限(ADR-0208)が特性分岐で最大3倍まで増えうることを openapi.yaml と
   ADR-0208 に追記。critic レビュー予定。**残り(ranks・status の上書き)は別タスクとして残す**(このタスクの
   スコープ外。abilityId とは独立に追加できる)。入ったら iOS・Web へ連絡(生成物の再生成・追従は各レーン)
+- [x] issue #272 の Web 分(ADR-0311): 計算・逆算画面に特性セレクトを追加。攻撃側(自分)は種族の特性から選び(既定は先頭)、
+  防御側(相手)は「おまかせ(種族の全特性)」+各特性から選ぶ(おまかせは先頭3件を `defenderAbilities` /
+  `unknownAbilities` に渡す)。WASM は候補をそのまま、API 実装は候補がちょうど1件のときだけ
+  `defenderOverride.abilityId` / `unknownAbilityId` で送る。行・候補の `abilityId` / `abilityIds` を DTO に写し、
+  特性で分かれた行は特性名つきの別行、まとめられた行は名前を並べて表示。`MAX_ABILITY_CANDIDATES` は
+  `domain/requestLimits.ts`、選択肢・候補の組み立ては `domain/requests.ts`。iOS は別レーン
 - [ ] issue #274/#272 の API レーン担当分の残り: `defenderOverride.ranks: RankBlock` / `defenderOverride.status:
   StatusCondition`(全行に一律で上書き)。abilityId(上記)とは独立に追加できる。engine 側の変更
   (`BulkInput`/`ReverseInput` へのオーバーライド追加。プリセット解決後・計算前に当てる)を伴うため
   ADR-0003 の test-first + 独立 critic の対象。優先度は低い(iOS レーンから「急ぎではない」と明記済み)
+- [x] issue #284(ユーザー決定。DECISIONS.md 2026-09-25「ユーザー決定 4 件」#2)balance・speed・judge も
+  gateway の後ろにまとめる: `services/gateway/internal/httpapi/routing.go` に `routeBalance`/`routeSpeed`/
+  `routeJudge` と `prefixBalance`/`prefixSpeed`/`prefixJudge`(record・team と同じ前方一致・末尾スラッシュ
+  必須・不一致は404の規則)を追加し、`requiresHeaderCheck` に3つとも加えて `/api/{balance,speed,judge}/*`
+  にも端末ID・セッションIDの検証(ADR-0202 §4)を課すようにした(issue #236 で判明していた「Traefik 直結だと
+  gateway の検証を経由しない」穴をこれで塞ぐ。balance/speed/judge 自身が持つ複製の検証〈issue #236〉は
+  二重になるが害はなく、削除するかどうかは各レーンの判断のまま残す)。`server.go` に `Config.BalanceURL`/
+  `SpeedURL`/`JudgeURL`(nilなら503 `upstream_unavailable`)と対応する `ReverseProxy` を追加、`main.go` に
+  `GATEWAY_BALANCE_URL`/`GATEWAY_SPEED_URL`/`GATEWAY_JUDGE_URL` を追加。CORS の許可メソッドは変更なし
+  (balance・speed・judge の契約〈`services/{balance,speed,judge}/api/openapi.yaml`〉はいずれも GET/POST の
+  みで確認済み)。`deploy/k8s` にはbalance/speed/judge自体のDeployment/Serviceがまだ無く、gatewayの
+  deployment.yamlへの実際のURL配線も record・team(P5-3b/P5-4b)と同じく別タスクとして残す(コードのみ
+  今回のスコープ)。新規 `balance_speed_judge_routing_test.go` で3サービス共通のルーティング・404境界・
+  ヘッダ検証・実転送を固定、既存の `TestUnroutedPathsAreNotFound` から `/api/balance/defense`(今は503に
+  変わるため404の例として不適切)を削除、ADR-0202 §3 の表と関連ADR行を更新(ADR-0012の「balanceは独自の
+  Ingress」の記述を更新し、ADR-0606〈issue #236 のspeed側〉への参照を追加)。
+  **critic 1回目FAIL(重要2件)→修正**: (1) `/api/{balance,speed,judge}/healthz`(完全一致)がgatewayで
+  ヘッダ検証必須になっており、3サービスの契約(`publicHealth`)・ADR-0600・ADR-0700の「ヘッダ不要」と食い違う
+  時限爆弾だった→ `requiresHeaderCheck` にpathを渡し完全一致だけ例外にする修正+テーブル駆動テスト4本を追加。
+  (2) `services/gateway/README.md` のルーティング表がrecord/team/balance/speed/judge抜けの古いままだった
+  →5サービス分の行・環境変数を追加。軽微2件(ingress.yaml・manifest_test.goの「独自Ingress」コメントに
+  補足、`main_test.go` の `TestEnvNames`/`TestLoadConfig`/`TestLoadConfigRejects` にrecord/team/balance/
+  speed/judgeの5URLを追加してURL取り違えmutationのすり抜けを閉じた)も反映。critic 2回目レビュー予定。
+  タイプバランス・素早さ・判定レーンへ、直結Ingressを撤去できる旨を連絡予定
 - [x] issue #110(セキュリティ。Codex レビュー)の API レーン担当分: `POST /api/calc/bulk`・`/api/calc/reverse` の候補・観測配列に件数上限が無く、1MiB未満の小さな本文で計算量を増幅できた(2,000×2,000 で約9.4秒)。契約(`maxItems`/`uniqueItems`/`maximum`。ADR-0208)を追加し、calc-svc の生成ラッパは検証しないため(実測確認済み)自前検証をID解決・engine呼び出しより前に実装。critic PASS、実HTTPで境界値と再現手順の解消(0.9ms・engine未到達)を確認。engine/wasmapi(データレーン)・Web・iOSへの追従は DECISIONS.md に既定案付きで依頼(issue はレーンの完了までクローズしない)
 - [x] issue #110 のデータレーン担当分: `engine.CalcBulk`/`CalcReverse` と `engine/wasmapi` に ADR-0208 §1 と同じ件数・範囲の上限(presets 8・itemVariants 64・itemCandidates 64・observations 16・maxCandidates 0..128)を追加(ADR-0108)。HTTP を経由しない直接呼び出し・WASM でも計算量を増幅できないようにした。wasmapi は DTO 変換より前に同じ検査を重ねて置き、複数の違反が重なっても HTTP と同じ `invalid_input` が先に出るようにした(parity)。`MaxCandidates` の負の値は、従来「無制限」扱いだったのを ADR-0208 の契約(`minimum: 0`)に合わせて拒否するよう変更(既存テストの期待値を更新。理由は ADR-0108 決定4)。critic PASS(1往復)。Web・iOS の追従(観測16件でUI無効化・持ち物候補64件超の扱い)は ADR-0208 §4 のまま未着手
 - [x] issue #148(クラウド公開前のアクセス境界・認証方針。ユーザー決定「私設サービスを維持する」)の API レーン担当分: `deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定(ADR-0210)。TLS 終端は gateway/クラスタの Ingress では行わず Tailscale(`tailscale serve`)に任せる方針を決定。端末IDが認証として機能しないこと・CORSが到達制御でないことの回帰テストを追加(`TestDeviceIDIsNotAuthentication`・`TestCORSIsNotAccessControl`・`TestContractHasNoAuthentication`)。`base`のgateway Ingress本体は local(k3d)専用として残し、先頭コメントで明記。ADR-0209 §1(クラウド公開へ進む判断)は「公開しない」で確定した旨を追記。critic PASS。運用(tailnet ACL・失効手順のrunbook)・Web/iOS(接続先をtailnet名に)への依頼はDECISIONS.mdに既定案付きで記録(issue はレーンの完了までクローズしない)

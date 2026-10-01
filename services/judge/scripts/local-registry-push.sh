@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
-# ローカル k3d のクラスタ内レジストリへ balance イメージを push し、digest 参照を表示する(TB0。ADR-0018)。
+# ローカル k3d のクラスタ内レジストリへ judge イメージを push し、digest 参照を表示する(ADR-0709)。
+# レジストリは balance レーンが持つ `balance-registry` namespace のものを共有する(hostPort は 1 ノード 1 つ。ADR-0709 §1)。
 # Docker Desktop のデーモンからは Mac の localhost に届かないため、docker save した tar を crane で push する。
 set -euo pipefail
 
-balance_dir=${BALANCE_DIR:-services/balance}
-local_port=${BALANCE_REGISTRY_PORT:-5001}
+judge_dir=${JUDGE_DIR:-services/judge}
+local_port=${JUDGE_REGISTRY_PORT:-5003}
 tag=$(git rev-parse --short=12 HEAD)
-if [ -n "$(git status --porcelain -- "$balance_dir")" ]; then
+# イメージには engine も入る(ビルドコンテキストはリポジトリのルート。ADR-0700 §1)ので、
+# 未コミットの変更は judge と engine の両方を見て印を付ける。
+if [ -n "$(git status --porcelain -- "$judge_dir" engine)" ]; then
   tag="${tag}-dirty"   # 未コミットの変更があると tag と中身がずれるので印を付ける
 fi
-image="pokecalc/balance:${tag}"
+image="pokecalc/judge:${tag}"
 work_dir=$(mktemp -d)
 cleanup() {
   if [ -n "${forward_pid:-}" ]; then
@@ -22,7 +25,7 @@ trap cleanup EXIT
 
 command -v crane >/dev/null || { echo "crane is required (brew install crane)" >&2; exit 1; }
 
-docker build -q -t "$image" "$balance_dir" >/dev/null
+docker build -q -f "$judge_dir/Dockerfile" -t "$image" . >/dev/null
 docker save "$image" -o "$work_dir/image.tar"
 
 kubectl -n balance-registry port-forward svc/registry "${local_port}:5000" >/dev/null 2>&1 &
@@ -41,6 +44,6 @@ for _ in $(seq 1 30); do
 done
 [ "$ready" = true ] || { echo "registry did not answer on localhost:${local_port}" >&2; exit 1; }
 
-crane push --insecure "$work_dir/image.tar" "localhost:${local_port}/pokecalc/balance:${tag}" >/dev/null
-digest=$(crane digest --insecure "localhost:${local_port}/pokecalc/balance:${tag}")
-echo "localhost:5000/pokecalc/balance@${digest}"
+crane push --insecure "$work_dir/image.tar" "localhost:${local_port}/pokecalc/judge:${tag}" >/dev/null
+digest=$(crane digest --insecure "localhost:${local_port}/pokecalc/judge:${tag}")
+echo "localhost:5000/pokecalc/judge@${digest}"

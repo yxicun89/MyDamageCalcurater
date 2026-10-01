@@ -157,7 +157,7 @@
 | iOS UI | `make ios-test-ui`(`ios/PokeCalcUITests`。モック強制) | SwiftUI アプリ | `func test` 16 件(4 ファイル) |
 | iOS その他 | `make ios-lint` / `ios-gen-check` / `ios-check-infoplist` | 生成クライアントと `openapi.yaml` の一致、Info.plist への `POKECALC_API_BASE_URL` 反映(ADR-0500 §5) | `make ios-test` が全て束ねる |
 | `make e2e` | `scripts/e2e.sh` | (未実装) | `e2e: (P4-6 で スモーク + Playwright を実装)` と表示して exit 0。**成功と数えない**(CLAUDE.md) |
-| Argo CD / GitOps 検査 | [gitops-argocd.md](gitops-argocd.md) | balance / speed の `*-gitops-check`、`scripts/check-gitops.sh` 等 | 詳細は C に置く |
+| Argo CD / GitOps 検査 | [gitops-argocd.md](gitops-argocd.md) | balance / speed の `*-gitops-check`、`scripts/gitops/check-gitops.sh` 等 | 詳細は C に置く |
 
 ## カバレッジ
 
