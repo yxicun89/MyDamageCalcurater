@@ -55,6 +55,12 @@ case "$HANDOFF_TTL" in
     exit 2
     ;;
 esac
+case "$LOCK_WAIT" in
+  '' | *[!0-9]*)
+    echo "cronjob: IMPORT_LOCK_WAIT_SECONDS が数値でない: $LOCK_WAIT" >&2
+    exit 2
+    ;;
+esac
 
 # 引き渡しファイルの owner を返す(期限は見ない)。
 handoff_raw_owner() {
@@ -63,12 +69,18 @@ handoff_raw_owner() {
 
 exec 9>"$LOCK_FILE"
 if [ "$PHASE" = import ]; then
-  flock -w "$LOCK_WAIT" 9 || {
-    echo "cronjob: ロック $LOCK_FILE を ${LOCK_WAIT} 秒待っても取得できない" >&2
-    # 自分の引き渡しを残すと、期限まで全 Job が止まる。自分のものだけ消して諦める。
-    if [ "$(handoff_raw_owner)" = "$SELF" ]; then rm -f "$HANDOFF_FILE"; fi
-    exit 1
-  }
+  # BusyBox の flock(本番の alpine イメージ)は -w を持たないので、-n を1秒間隔で試して待つ。
+  _waited=0
+  until flock -n 9; do
+    if [ "$_waited" -ge "$LOCK_WAIT" ]; then
+      echo "cronjob: ロック $LOCK_FILE を ${LOCK_WAIT} 秒待っても取得できない" >&2
+      # 自分の引き渡しを残すと、期限まで全 Job が止まる。自分のものだけ消して諦める。
+      if [ "$(handoff_raw_owner)" = "$SELF" ]; then rm -f "$HANDOFF_FILE"; fi
+      exit 1
+    fi
+    _waited=$((_waited + 1))
+    sleep 1
+  done
 else
   flock -n 9 || {
     echo "cronjob: 別の import が実行中(ロック $LOCK_FILE を取得できない)。今回は諦める" >&2

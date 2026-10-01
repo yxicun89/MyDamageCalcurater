@@ -362,9 +362,9 @@ sha256 は `meta.json` に記録するだけで期待値と照合せず、PokeAP
    (手動 Job と定期 Job は `concurrencyPolicy` の対象外)が fetch を始めると、取得キャッシュの書き込みと投入が競合する。そこで:
    - `fetch` はロック(`flock -n`)の中で、有効な他 Pod の引き渡しがあれば何もせず終了コード 1。無ければ、成功の最後に引き渡しファイル
      `data/generated/.import.handoff`(`owner=<HOSTNAME = Pod 名>` と `expires=<epoch 秒>` の2行)を書いてからロックを解放する。
-   - `import` はロックを取り(引き渡しを持っているので `flock -w`。`IMPORT_LOCK_WAIT_SECONDS` 既定 60。他の Pod の fetch が引き渡しの確認で
+   - `import` はロックを取り(引き渡しを持っているので `flock -n` を1秒間隔で最大 `IMPORT_LOCK_WAIT_SECONDS` 回試す。本番の alpine の BusyBox の flock は `-w` を持たない。`IMPORT_LOCK_WAIT_SECONDS` 既定 60。他の Pod の fetch が引き渡しの確認で
      一瞬ロックを持つ競合に耐える)、引き渡しファイルの owner が自分であることを確かめてから投入する。違えば終了コード 1(pokedex-import を呼ばない)。
-     待っても取れなければ、owner が自分の引き渡しだけを消して終了コード 1(消さないと期限まで全 Job が止まる)。
+     待っても取れなければ、owner が自分の引き渡しだけを消して終了コード 1(消さないと期限まで全 Job が止まる)。owner を読んでから rm するまでの間に他 Pod の引き渡しが書かれると消しうるが、相手の import は終了コード 1 になるだけの安全側の失敗。
      終了時(成功・失敗とも)に、ロックを持ったまま引き渡しファイルを消す。`IMPORT_HANDOFF_TTL_SECONDS` が数値でなければ終了コード 2。
    - 有効期限(`IMPORT_HANDOFF_TTL_SECONDS`。既定 3600 = `activeDeadlineSeconds`。fetch の成功後に Job が生き続けられる最長なので、これより長く
      残す理由が無く、これより短いと import の途中で他の Pod が割り込める。SIGKILL・OOM では EXIT trap が走らないので、残る時間の上限もこの値)が切れた引き渡しは、SIGKILL・ノード停止で残った

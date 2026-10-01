@@ -7,6 +7,7 @@ package importer_test
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -256,5 +257,37 @@ func TestCronJobScriptPhases(t *testing.T) {
 		if !strings.Contains(s, want) {
 			t.Errorf("%s: %q が無い(フェーズ fetch|import と引き渡しファイル。ADR-0101 追記)", cronJobScript, want)
 		}
+	}
+}
+
+// 本番の importer イメージ(node:alpine)の flock は BusyBox で、-w・-E・-o・-c・--timeout などを持たない
+// (使えるのは -s -x -u -n)。util-linux の flock でだけ通るオプションを cronjob.sh に書かない。
+func TestCronJobScriptUsesOnlyBusyBoxFlockOptions(t *testing.T) {
+	re := regexp.MustCompile(`(?m)^[^#\n]*\bflock\b([^\n]*)$`)
+	opt := regexp.MustCompile(`(^|\s)(-[A-Za-z]+|--[a-z-]+)`)
+	allowed := map[string]bool{"-s": true, "-x": true, "-u": true, "-n": true}
+	found := 0
+	for _, m := range re.FindAllStringSubmatch(readRepo(t, cronJobScript), -1) {
+		found++
+		for _, o := range opt.FindAllStringSubmatch(m[1], -1) {
+			if !allowed[o[2]] {
+				t.Errorf("cronjob.sh の flock に BusyBox で使えないオプション %q: %s", o[2], strings.TrimSpace(m[0]))
+			}
+		}
+	}
+	if found == 0 {
+		t.Fatal("cronjob.sh に flock の呼び出しが無い")
+	}
+}
+
+// 引き渡しの有効期間の既定は、fetch の成功後に Job が生き続けられる最長(activeDeadlineSeconds)と一致させる。
+func TestHandoffTTLDefaultMatchesActiveDeadline(t *testing.T) {
+	m := regexp.MustCompile(`IMPORT_HANDOFF_TTL_SECONDS:-([0-9]+)`).FindStringSubmatch(readRepo(t, cronJobScript))
+	if m == nil {
+		t.Fatal("cronjob.sh に IMPORT_HANDOFF_TTL_SECONDS の既定が無い")
+	}
+	ad := loadCronJob(t).Spec.JobTemplate.Spec.ActiveDeadlineSeconds
+	if ad == nil || strconv.Itoa(*ad) != m[1] {
+		t.Errorf("TTL の既定 %s と activeDeadlineSeconds %v が一致しない", m[1], ad)
 	}
 }

@@ -224,9 +224,11 @@ cd "$(git rev-parse --show-toplevel)"
 kubectl -n pokecalc run handoff-peek --rm -i --restart=Never --image=busybox:1.37.0 \
   --overrides='{"spec":{"containers":[{"name":"handoff-peek","image":"busybox:1.37.0","command":["sh","-c","cat /g/.import.handoff; date +%s"],"volumeMounts":[{"name":"g","mountPath":"/g"}]}],"volumes":[{"name":"g","persistentVolumeClaim":{"claimName":"pokedex-import-cache"}}]}}'
 ```
-確認: `owner=<Pod 名>` と `expires=<epoch 秒>` の2行と、現在の epoch 秒が出る。`expires` が現在より未来なら、その差の秒数だけ待てば自然に無視される。
+確認: `owner=<Pod 名>` と `expires=<epoch 秒>` の2行と、現在の epoch 秒が出る(ファイルが無ければ残っていない。`cat` が失敗するので、ここで終わり)。`expires` が現在より未来なら、その差の秒数だけ待てば自然に無視される。
 
-### c. 待てないときだけ、手で消す(a で実行中の Job が無いことを確かめた後だけ)
+### c. 待てないときだけ、手で消す
+
+先に a をもう一度流し、実行中の Job が無いことを確かめ直す。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
