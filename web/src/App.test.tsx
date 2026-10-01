@@ -267,7 +267,9 @@ describe("P4-5 計算モード(オフライン / オンライン)の切り替え
   }
 
   function modeRadios() {
-    const group = within(screen.getByRole("banner")).getByRole("radiogroup", { name: "計算モード" });
+    const group = within(screen.getByRole("banner")).getByRole("radiogroup", {
+      name: "ダメージ計算の実行場所",
+    });
     return {
       group,
       offline: within(group).getByRole("radio", { name: "オフライン(WASM)" }),
@@ -275,7 +277,7 @@ describe("P4-5 計算モード(オフライン / オンライン)の切り替え
     };
   }
 
-  test("ヘッダーに「計算モード」の radiogroup があり、既定はオフライン(WASM)", () => {
+  test("ヘッダーに「ダメージ計算の実行場所」の radiogroup があり、既定はオフライン(WASM)", () => {
     render(<App engines={{ offline: createFakeEngine(), online: createFakeEngine() }} />);
     const { offline, online } = modeRadios();
     expect(offline).toBeChecked();

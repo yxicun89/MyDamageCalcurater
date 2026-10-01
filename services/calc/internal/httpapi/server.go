@@ -300,8 +300,14 @@ func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 		return err
 	}
 	var defenderAbilityOverride *string
-	if req.DefenderOverride != nil {
-		defenderAbilityOverride = req.DefenderOverride.AbilityId
+	var defenderOverride engine.DefenderOverride
+	if ov := req.DefenderOverride; ov != nil {
+		defenderAbilityOverride = ov.AbilityId
+		status, err := parseStatusCondition("defenderOverride", ov.Status)
+		if err != nil {
+			return err
+		}
+		defenderOverride = engine.DefenderOverride{Ranks: ranksFromBlock(ov.Ranks), Status: status}
 	}
 	defenderAbilities, err := s.resolveAbilityCandidates("defenderOverride.abilityId", species, defenderAbilityOverride)
 	if err != nil {
@@ -311,7 +317,7 @@ func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 	res, err := engine.CalcBulk(engine.BulkInput{
 		Format: format, Attacker: attacker, DefenderSpecies: species, Move: move, Field: field,
 		Critical: criticalFrom(req.Options), PresetKeys: presetKeysFrom(req.Presets), ItemVariants: variants,
-		DefenderAbilities: defenderAbilities, TypeChart: s.store.TypeChart(),
+		DefenderAbilities: defenderAbilities, DefenderOverride: defenderOverride, TypeChart: s.store.TypeChart(),
 	})
 	if err != nil {
 		return errFromEngine(err)

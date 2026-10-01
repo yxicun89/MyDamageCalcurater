@@ -66,6 +66,7 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/observability-bootstrap_test.sh
 	@./scripts/observability-slo_test.sh
 	@./scripts/e2e_test.sh
+	@./scripts/ai-guard/bash-guard_test.sh
 	@./scripts/gitops_test.sh
 	@./scripts/make-targets_test.sh
 	@./scripts/require-k3d-context_test.sh

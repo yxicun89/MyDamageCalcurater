@@ -1,6 +1,6 @@
 # 要件定義: ポケモン ダメージ計算 & 構築ビルダー
 
-最終更新: 2026-09-20 / ステータス: v3(未決事項なし)
+最終更新: 2026-10-02(§2・§4・§7 に索引を追加) / ステータス: v3(未決事項なし)
 
 ## 1. 目的と優先順位
 
@@ -49,6 +49,12 @@
 - **構築ビルダー**: 6体のパーティ、個体(技・持ち物・特性・性格・努力値・テラスタイプ)、Showdown形式のインポート/エクスポート
 - **2つのクライアント**: iOSネイティブアプリ / ブラウザ版(React)
 
+### 追加機能(索引。要件の本文は各設計書に置き、ここでは重複させない)
+- **タイプバランス**: 手持ちの防御相性・攻撃範囲からタイプの穴を診断し、ふさぐ候補を提案する → [type-balance-design.md](type-balance-design.md)(テストは [type-balance-test-strategy.md](type-balance-test-strategy.md))
+- **素早さ比較**: 使用可能な全ポケモンの素早さ表と、自分のポケモンの位置を見せる → [speed-design.md](speed-design.md)
+- **判定**: 道具・調整・技構成で、想定した相手を抜いて倒せるかを1回で確認する → [judge-design.md](judge-design.md)
+- 3機能のユーザー要望の原文は [plan.md](plan.md) の TB・SP・JD 節。実装状況の正も plan.md
+
 ### あれば便利(マストではない)
 - 計算候補の推薦(機械学習)。まず統計ベース、MLは比較して勝てたら採用
 - お気に入り(手動ピン留め)
@@ -76,8 +82,11 @@ Web (React)  ────────┼─▶ gateway (Echo) ─┬▶ pokedex-
 importer (CronJob) ─▶ MySQL
 ```
 
+- 上の図は v3 時点。現行の構成図は [architecture.md](architecture.md) が正(balance-svc・speed-svc・judge-svc を含む)
 - 計算エンジンは**純粋なGoパッケージ**(I/Oなし)。calc-svc と WASM の両方から利用
-- API契約は **OpenAPI 1本**。Go(Echo)/ TypeScript / Swift のコードを生成
+- API契約は OpenAPI(仕様先行)。実態は**4本**: ダメージ計算・gateway・pokedex 等は `api/openapi.yaml`、balance・speed・judge は
+  サービスごとの `services/{balance,speed,judge}/api/openapi.yaml`(サービスローカル契約。DECISIONS.md 2026-09-21、ADR-0012)。
+  Go(Echo)/ TypeScript / Swift のコードを生成
 - 計算イベントはNATS経由で非同期保存(TiDB障害時も計算は止めない)
 
 ## 5. 技術スタック
@@ -126,6 +135,7 @@ team-svc:
 | 6 | iOSアプリ |
 | 7 | 構築ビルダー |
 | 8 | 監視・GitOps・SLO |
+| TB / SP / JD | タイプバランス・素早さ比較・判定(各レーン。計画は [plan.md](plan.md) の TB・SP・JD 節) |
 | +α | クラウドデプロイ、推薦ML、Android(Kotlin + Jetpack Compose) |
 
 ## 8. 決定事項(旧未決事項)

@@ -69,6 +69,8 @@ var engineSentinels = []struct {
 	// ダメージを与えられない技の逆算(issue #317)。契約に専用の code が無いので invalid_input
 	// (400)に写す。専用の code の追加は API レーンへ依頼(ADR-0117 §3)。
 	{engine.ErrMoveDealsNoDamage, api.InvalidInput},
+	// 防御側の上書きのランク範囲外・未知の status(ADR-0216。HTTP の status は先に parseStatusCondition で弾くので届かない)。
+	{engine.ErrInvalidDefenderOverride, api.InvalidInput},
 	// 特性の候補が不正(件数超過・ID重複・種族が持たない特性)。engine/wasmapi と同じく invalid_input に
 	// 写す(新しい code は足さない。ADR-0126 §5・ADR-0214)。マスタに無いIDはこれより前(resolveAbilityCandidates
 	// でのstore参照)でunknown_abilityにする。

@@ -1,6 +1,6 @@
 # ADR-0101: importer の取得・変換・投入(P2-2b)
 
-- 状態: 提案(P2-2b の仕様。spec-writer 起草、implementer が実装、critic がレビュー)
+- 状態: 採用(P2-2b の仕様。実装済み・main 統合済み: PR #19。P2-2c は PR #34)
 - 日付: 2026-09-21
 - 関連: plan.md P2-2b(P2-2c 照合と差分報告・P2-2d CronJob との境界は §10)、ADR-0002(確定した方針・追記 P2-1b・追記 P2-1c)、
   ADR-0005(データ駆動の効果定義)、ADR-0013(相性表はデータ)、ADR-0100(スキーマ・写像)、ADR-0012 / ADR-0100 §8(balance の read model は P2-3)、

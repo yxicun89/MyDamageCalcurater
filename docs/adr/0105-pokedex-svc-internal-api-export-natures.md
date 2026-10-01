@@ -1,6 +1,6 @@
 # ADR-0105: pokedex-svc(検索 API・内部 API・natures・pokedex export・k8s)
 
-- 状態: 提案(P2-3 の仕様。spec-writer 起草、implementer が実装、critic がレビュー)
+- 状態: 採用(P2-3 の仕様。実装済み・main 統合済み: PR #57)
 - 日付: 2026-09-22
 - 関連: plan.md P2-3、ADR-0100(スキーマ・§8 balance の read model・「性格はマスタにしない」)、ADR-0101(importer)、
   ADR-0104(CronJob・checksum)、ADR-0012(§6 実行時のサービス間依存を足さない)、ADR-0017(特性の正規化された効果)、

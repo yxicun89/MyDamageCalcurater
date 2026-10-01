@@ -28,8 +28,9 @@ Status(追記): issue #403 D24(#300・#74 のスクリプト部分。ADR-0130)�
 Status: D12(issue #277・ADR-0131 採用)実装済み。migration 000009 の種族 key の台帳(追記だけ)と、ID の消滅(ErrKeyRemoved・終了コード3・`-allow-removed <種類>:<ID>`)・消滅後の再利用(ErrKeyChanged)の検出を Apply に追加。実データの dry-run は blockers: none。
 Status(追記): 2026-10-01、D25(issue #240・ADR-0132)。pokecalc に ingress の default-deny と許可リスト10本(`deploy/k8s/base/networkpolicy/`)を実装。受け入れテスト AC-N1〜N5 は green。k3d での実地確認(apply・smoke・拒否の確認)はメイン。
 Status: D27(#252・#319・#290・#221 の runbook 部分)実装済み。`docs/runbooks/{data,api}.md`・`docs/impl/{k8s-local,db-mysql,make-targets}.md`・`docs/verify-m1.md` §3 を今の main に合わせて直した(確認方法・Secret 5キー・NetworkPolicy・終了コード3と PVC 消失の復旧手順・行番号の除去)。新しいクラスタでの verify-m1 §3 の通し実行は人間の確認待ち。
+Status: D29(#226・#296・#314・#224・#254 の索引・#256 の C・#227 のデータ分)実装済み(文書のみ)。README を現状(動くもの・未実装は assets のみ・起動手順)に、overview の状態列を plan.md への委譲に、requirements に3機能と契約4本の索引、test-strategy にサービス別の索引、ゴールデン関連(known_diffs・gen9 表記・1,392 種族)を実態に直し、ADR-0002・0011・0012・0100・0101・0104・0105・0108 の状態欄を実装後の事実(PR 番号)に更新。CLAUDE.md・docs/impl の known_diffs 記述は他担当(D31)。0207 欠番は API レーンの判断。
 Status: D19(issue #222 案A〈ユーザー確認待ち。DECISIONS.md〉・#301。ADR-0101 追記)実装済み。取得物の内容ハッシュ(Showdown 展開後ツリー・PokeAPI の各 CSV)を config.json の integrity と照合し、不一致は終了コード3。`npm ci --ignore-scripts`。CronJob を initContainer `fetch`(DSN なし)と `import` に分離し、cronjob.sh は fetch|import|引数なしと引き渡しファイルでロックの隙間を埋める。実データの再取得でハッシュ一致・dry-run は blockers: none。
-Next: issue #403 の「残りのパッケージ」を依存の順に(D26 → D28〈T05 待ち〉→ D29〈作業中〉→ D30 → D31〈CLAUDE.md・AGENTS.md はユーザー確認〉→ D32。D21 は T04・S04・A06 待ち、D20 の #211-data は API レーンの契約待ち)。後続: 逆算の特性候補の計算量の最適化(ADR-0126 追記)、#349。1 パッケージ = 1 PR、importer に触れたら実データの dry-run、マージ後は make deploy-latest。
+Next: データレーンの open issue を解消中(2026-10-02。triage → 実装済みのクローズ → 残りの実装)。#403 の残り: D26・D28〈T05 待ち〉・D30・D31〈CLAUDE.md・AGENTS.md はユーザー確認〉・D32・D21〈T04・S04・A06 待ち〉・#211-data〈API レーン待ち〉。後続: ADR-0126 の計算量の最適化。
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
@@ -106,7 +107,7 @@ critic 1回目FAILで発覚し修正済み)。deployment.yamlへの実URL配線�
 healthz例外の欠如・README.mdのルーティング表が古いまま〉→修正→2回目PASS)。**main未統合**。
 Status(追記): 2026-10-01 PR #416(issue #284: balance・speed・judgeをgatewayの後ろに統一)を main 統合。続けて UnsupportedMark の target・reason を string に緩めた(ADR-0215。Web・iOS の追従込み)。
 Next: キュー順に対応:
-(2) defenderOverride.ranks/status(issue 272残り。優先度低)、(3) P5-3b・P5-4b(失効ジョブ・Deployment配線。
+(2) defenderOverride.ranks/status は実装済み(ADR-0216。critic・コミット・PR 待ち)、(3) P5-3b・P5-4b(失効ジョブ・Deployment配線。
 issue #284のdeployment.yaml配線も含む。優先度低)。
 issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。
 60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
@@ -432,6 +433,41 @@ gateway smoke の ID取得部分を流用し `POST /api/judge/v1/outspeed-and-ko
 ヘッダなし400・未知speciesKey 422・7候補400 を実クラスタ(k3d-pokecalc、実データ)で確認済み。
 `Makefile` に `API_URL` を追加、README の古い「JD0完了」表記も修正。
 iOS版JD5は要望が出たら判断(ADR-0705 却下案)
+
+## Ops
+Lane: 運用(deploy・scripts・AIエージェントの権限設定。専任セッションなし。空席時は手が空いたレーンが調整役の
+割り当てで代行できる。COORDINATION.md)
+Active: 素早さレーン(調整役「damage calculation bug resolution」からの割り当て。**ユーザーの直接指示ではない**。
+運用の担当欄は変わらず「運用」のまま、今回だけ空席を代行。DECISIONS.md 参照)
+Branch: 次は main から fix/ops-issue273-239 を切る
+Status: 2026-09-25、issue #273・#239(AIエージェントの権限設定が、CLAUDE.mdの「人間の確認が必要」な操作(クラスタ削除・
+DBのデータ削除・main反映・秘密の読み取り)を止められない)に着手。既定案(ADR-0800):
+(1) `.claude/settings.json` の `permissions.allow` から `Bash(make *)`・`Bash(kubectl *)`・`Bash(k3d *)`・`Bash(docker *)`・
+`Bash(git push *)`・`Bash(gh pr merge *)` 等の広い許可を外し、読み取り・非破壊のサブコマンド単位に絞る。
+(2) 主防御として `hooks.PreToolUse`(Bash)から `scripts/ai-guard/bash-guard.sh` を呼び、コマンド文字列を検査して
+該当すれば exit code 2 で無条件 block(`permissions.allow` があっても上書きされない。公式ドキュメントで確認済み)。
+対象: `make down`・`make import`・`make import-k8s`・`make migrate-down*`・`kubectl` での ns/namespace/pvc/pv/
+statefulset/secret の delete・`kubectl get secret`・`.env`/SSH鍵ディレクトリを含むコマンド・`k3d cluster delete/rm`・
+`git push` の main 反映(`main`・`:main`・`HEAD:refs/heads/main` 等、書き方によらず)・force push 系・`gh pr merge`。
+(3) `.codex/config.toml` にも同じスクリプトを `[[hooks.PreToolUse]]` から呼ぶ設定を追加し、`approval_policy`・
+`sandbox_mode` を明示する(Codexのpermissionは`deny`のみ対応、`ask`は無い)。
+**影響**: 上記に該当する操作は、どのレーンのセッションでも(Claude Code・Codex とも)AIエージェントからは実行できなく
+なり、人間が自分の端末で実行する必要がある。`make test`・`make lint`・`make build`・`go test`・`kubectl get/describe/logs`・
+featureブランチへの `git push`・`gh pr create` は従来どおり確認なしで通る。各レーンの runbook に `gh pr merge` を
+AIが実行する手順があれば、そこだけ「人間が実行」に変わる(気づき次第、該当レーンへ個別連絡)。
+**このPRは実装後もこのセッションはマージしない**(設定ファイルの変更で全レーンに影響するため、ユーザーの確認・
+承認を経てからのマージとする。ADR-0800 §5)。
+Status(追記): 2026-09-25、critic(Opus)1回目 FAIL。テスト268件は green だったが、テストに無い普通の書き方
+(`git push origin main 2>&1`・`bash -c "make test && make down"`・`kubectl delete statefulsets mysql`(複数形)・
+`$HOME/.ssh` 等)でガードを迂回できる穴が複数見つかった。加えて **Codex 側の実効性は未検証**と判明: codex-cli の
+バイナリ文字列調査で、プロジェクトローカルの hooks はディレクトリの信頼+フックごとの人間確認(TUI)を経るまで
+読み込まれない可能性があり、`$(git rev-parse ...)` のシェル展開や `tool_name` が `"Bash"` になるかも実機未確認
+(ADR-0800 §3 に追記)。`services/pokedex/db/layout_test.go` の `TestNoAutomaticDown` が `scripts/ai-guard/` 配下の
+検知用文字列 `migrate-down` に誤反応する既知の1件は、調整役(damage calculation bug resolution)経由でデータレーン
+(4f)へ最小除外を依頼済み(ai-guardの実装自体の欠陥ではない)。critic指摘の修正をimplementerへ差し戻し中(2回目)。
+Next: critic 2回目レビュー → PASSしたらPRを作成してユーザーに提示する(マージは求めない。データレーンの
+TestNoAutomaticDown修正がmainに入るまでこのPRはマージ不可であることをPR本文に明記する。Codex側は「未検証」と
+明記し、実地確認〈Codexを起動してフックを信頼・確認する手順〉を宿題として残す)。
 
 ## Shared Interfaces
 - Pokemon ID: pokedex-svc の `{図鑑番号4桁}-{フォルム3桁}` 形式に準拠

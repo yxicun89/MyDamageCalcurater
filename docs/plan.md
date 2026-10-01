@@ -1208,10 +1208,12 @@
   触った分だけ `critical` / `attacker.status` / `field` / `attacker.ranks` を要求に載せる(既定は従来とバイト同一)。
   要求の形は `domain/calcConditions.ts`、文言は `calcConditionsText`、部品は `screens/CalcConditionsPanel.tsx`。
   条件は攻守入れ替え・種族・技の変更で消さず、変えた直後は古い結果を出さない。iOS は別レーン
-- [ ] issue #274/#272 の API レーン担当分の残り: `defenderOverride.ranks: RankBlock` / `defenderOverride.status:
-  StatusCondition`(全行に一律で上書き)。abilityId(上記)とは独立に追加できる。engine 側の変更
-  (`BulkInput`/`ReverseInput` へのオーバーライド追加。プリセット解決後・計算前に当てる)を伴うため
-  ADR-0003 の test-first + 独立 critic の対象。優先度は低い(iOS レーンから「急ぎではない」と明記済み)
+- [x] issue #274/#272 の API レーン担当分の残り(ADR-0216): `BulkCalcRequest.defenderOverride` に `ranks: RankBlock` /
+  `status: StatusCondition` を追加(全行の防御側に一律で上書き)。engine は `BulkInput.DefenderOverride`
+  (`ErrInvalidDefenderOverride`。件数上限の後・計算の前に検証し、results・rows の両ループで特性の直後に当てる)、
+  wasmapi は `defenderOverride{ranks,status}`、calc-svc は `parseStatusCondition`+`ranksFromBlock`。範囲外のランクは
+  400 `invalid_input`、未知の status は `invalid_enum`。防御側の状態異常は今のダメージ式に効かない(結果不変)。
+  逆算には足していない(ADR-0216 §4)。Web・iOS 生成物は再生成済み
 - [x] issue #284(ユーザー決定。DECISIONS.md 2026-09-25「ユーザー決定 4 件」#2)balance・speed・judge も
   gateway の後ろにまとめる: `services/gateway/internal/httpapi/routing.go` に `routeBalance`/`routeSpeed`/
   `routeJudge` と `prefixBalance`/`prefixSpeed`/`prefixJudge`(record・team と同じ前方一致・末尾スラッシュ
@@ -1265,3 +1267,7 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
 - `tools/golden/package.json`: `^0.10.0` を `0.10.0` に完全固定
 - [x] `engine/damage.go` `chainMods`: @smogon/calc はクランプ(41/410〜131072/2097152)を持つ。現在の補正集合では到達しないが、補正追加時に再確認(#77。同じクランプを実装し境界テストを追加)
 - ゴールデン未カバー: リフレクターとオーロラベールの同時成立、`Effectiveness` / `STAB` の直接照合(L1 では確認済み。壁の同時成立は #77 で L1 の回帰テストを追加)
+- [x] issue #276(担当: タイプバランス・Web。ADR-0411): API 専用の画面(タイプバランス・判定)は計算モードに関係なくオンラインのマスタを使う
+      (`web/src/app/withOnlineMaster.tsx`。読めなければ日本語の案内と再試行)。balance のエラーはコードを日本語の文言に写像し、
+      英語の message を出さない(`balanceErrorText`)。ヘッダーの切替の名前を「ダメージ計算の実行場所」に変更。契約・生成物の変更なし。
+      判定のエラー補助行(サーバー message)は未対応(別 issue 候補)

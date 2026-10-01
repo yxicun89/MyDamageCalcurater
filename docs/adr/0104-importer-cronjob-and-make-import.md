@@ -1,6 +1,6 @@
 # ADR-0104: importer の CronJob(週1回)と make import の運用(P2-2d)
 
-- 状態: 提案(P2-2d の仕様。spec-writer 起草、implementer が実装、critic がレビュー)
+- 状態: 採用(P2-2d の仕様。実装済み・main 統合済み: PR #45)
 - 日付: 2026-09-22
 - 関連: plan.md P2-2d、ADR-0101(§1 構成・63行 CronJob のイメージは Node と Go の両方・§9 版と冪等な投入・§10 P2-2d の範囲・§11 CLI)、
   ADR-0100(111行 checksum が一致すれば取り込まない・§9 k3d の MySQL・Secret・Job の流儀)、ADR-0102(イメージはタグ+digest で固定)、

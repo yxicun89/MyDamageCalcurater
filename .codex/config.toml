@@ -1,5 +1,20 @@
 # Role instructions: AGENTS.md and docs/development-workflow.md.
 # Model selection inherits the user's session; do not pin a project model.
+
+# 破壊的操作(main への push・クラスタ削除・秘密情報の読み取り等)は毎回人間の確認を求める(ADR-0800)。
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+# Bash 実行前に scripts/ai-guard/bash-guard.sh で判定する(危険なら exit 2 で止める。ADR-0800)。
+[[hooks.PreToolUse]]
+matcher = "^Bash$"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+# CODEX_PROJECT_DIR のようなプロジェクトルート変数は未確認のため使わない(参照先が
+# 存在しない場合にフックが無音で無効化される事故を避ける。$(git rev-parse) は確実に動く)。
+command = '$(git rev-parse --show-toplevel)/scripts/ai-guard/bash-guard.sh'
+
 [agents]
 max_concurrent_threads_per_session = 2
 default_subagent_reasoning_effort = "medium"

@@ -7,7 +7,7 @@ import type { BalanceClient } from "../api/balanceClient";
 import type { CalcEngine } from "../engine/types";
 import { JudgeScreen } from "../judge/JudgeScreen";
 import type { JudgeClient } from "../judge/judgeClient";
-import type { MasterData, MasterSpeciesSearch } from "../master/types";
+import type { MasterData, MasterSource, MasterSpeciesSearch } from "../master/types";
 import { BalanceScreen } from "../screens/BalanceScreen";
 import { CalcScreen } from "../screens/CalcScreen";
 import { ReverseScreen } from "../screens/ReverseScreen";
@@ -15,6 +15,7 @@ import { SpeedScreen } from "../speed/SpeedScreen";
 import type { SpeedClient } from "../speed/speedClient";
 import { TeamScreen } from "../team/TeamScreen";
 import type { TeamClient } from "../team/teamClient";
+import { withOnlineMaster } from "./withOnlineMaster";
 import type { MasterlessScreenId, ScreenId } from "./routes";
 
 /**
@@ -37,17 +38,23 @@ export interface ScreenProps {
    * ポケモンのドロップダウンの代わりにこの口で検索する。素早さの画面は master 自体を使わない。
    */
   readonly masterSearch?: MasterSpeciesSearch;
+  /**
+   * issue 276(ADR-0411): オンラインのマスタの取得口。API 専用の画面(タイプバランス・判定)は、
+   * 計算モードに関係なく(サーバーが知っている ID だけを送るため)これから読んだマスタを使う。
+   */
+  readonly onlineMasterSource: MasterSource;
 }
 
 /** 画面 ID ごとのコンポーネント。 */
 export const SCREEN_COMPONENTS: Record<ScreenId, ComponentType<ScreenProps>> = {
   calc: CalcScreen,
   reverse: ReverseScreen,
-  balance: BalanceScreen,
+  // issue 276(ADR-0411): balance・judge は API 専用。計算モードに関係なくオンラインのマスタを使う。
+  balance: withOnlineMaster(BalanceScreen),
   // SP3(ADR-0604 §2): 素早さ比較。画面の中身は web/src/speed/ にある(レーンの境界)。
   speed: SpeedScreen,
   // JD5(ADR-0705 §1): 判定。画面の中身は web/src/judge/ にある(レーンの境界)。
-  judge: JudgeScreen,
+  judge: withOnlineMaster(JudgeScreen),
   // P5-5 PR-A1(ADR-0309 §2): 構築ビルダー。画面の中身は web/src/team/ にある(レーンの境界)。
   team: TeamScreen,
 };

@@ -3,15 +3,32 @@
   "permissions": {
     "defaultMode": "auto",
     "allow": [
-      "Bash(make *)",
+      "Bash(make test*)",
+      "Bash(make lint*)",
+      "Bash(make build*)",
+      "Bash(make dev*)",
+      "Bash(make doctor*)",
+      "Bash(make gen*)",
+      "Bash(make wasm*)",
+      "Bash(make up)",
+      "Bash(make deploy*)",
+      "Bash(make import-dry-run)",
+      "Bash(make import-fetch)",
+      "Bash(make import-check-upstream)",
       "Bash(go *)",
       "Bash(gofmt *)",
       "Bash(npm *)",
       "Bash(npx *)",
       "Bash(node *)",
-      "Bash(docker *)",
-      "Bash(k3d *)",
-      "Bash(kubectl *)",
+      "Bash(docker ps*)",
+      "Bash(docker images*)",
+      "Bash(docker build *)",
+      "Bash(k3d cluster list*)",
+      "Bash(kubectl get *)",
+      "Bash(kubectl describe *)",
+      "Bash(kubectl logs *)",
+      "Bash(kubectl apply *)",
+      "Bash(kubectl rollout *)",
       "Bash(helm *)",
       "Bash(tiup *)",
       "Bash(xcodebuild *)",
@@ -23,9 +40,8 @@
       "Bash(git log*)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)",
-      "Bash(gh pr create *)",
-      "Bash(gh pr merge *)"
+      "Bash(git push -u origin *)",
+      "Bash(gh pr create *)"
     ],
     "ask": [
       "Bash(k3d cluster delete *)",
@@ -56,6 +72,17 @@
     ]
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR}/scripts/ai-guard/bash-guard.sh\""
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
