@@ -2012,3 +2012,14 @@ Decision: (1) Web は未実装のため iOS が既定を決める。文言は AD
 Reason: ADR-0209 §8 の依頼(Web は P5-5、iOS は P6-5 → plan では P6-7)。
 Impact: Web レーンは文言・再送の上限・再試行の扱いを揃えるか、違う判断をするなら DECISIONS.md に書く。iOS の生成クライアントは
 `record`・`team` タグが未生成のため、implementer が `ios/tools/openapi-gen/openapi-generator-config.yaml` に足して再生成する(契約の変更なし)。
+
+## 2026-10-01: #222(Showdown 取得のサプライチェーン)を深夜のため既定案 A で進めた(データレーン。ユーザー確認待ち。issue #403 D19・#301)
+Decision: #222 は needs-decision(セキュリティ方針)だが、深夜のため人間に聞かず、issue 本文の既定案 A(推奨)で進めた。
+`npm ci --ignore-scripts` + 展開後のファイル木の内容ハッシュ(ソート済みパス+内容)を `data/importer/config.json` の `integrity` に pin し、
+不一致なら取得を止めて終了コード 3。PokeAPI の CSV も同じ(#301)。あわせて、取得・build 段(第三者のコードを実行)を CronJob の
+initContainer `fetch`(DSN・Secret なし)に分け、DSN は `import` だけが持つ。2コンテナの間のロックは flock + 有効期限付きの引き渡しファイル
+(ADR-0101 追記 2026-10-01)。
+Reason: 既定案 A は変更が小さく、版を上げる PR でハッシュも更新する運用に乗る。クラウド移行(#149)の前に塞ぎたい。
+Impact: 版を上げる PR は config.json の `integrity` も更新する(不一致のときは stderr の実際のハッシュを、内容を確かめたうえで反映)。
+却下案 B(dist の vendoring)・C(現状維持)に変えるなら ADR-0101 追記と config.json の integrity を戻す。
+ユーザーの確認待ち: A でよいか(特に、期限切れの引き渡しを無視する TTL 7200 秒の扱い)。
