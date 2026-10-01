@@ -158,6 +158,7 @@ func TestErrKeyRemovedIsDistinct(t *testing.T) {
 		t.Fatal("ErrKeyRemoved が nil")
 	}
 	for _, other := range []error{importer.ErrKeyChanged, importer.ErrInvalidInput, importer.ErrInvalidData, importer.ErrBlocked, importer.ErrSchemaNotReady} {
+		//lint:ignore SA1032 sentinel が other を包んでいないこと(逆向き)も確かめるため、片方は引数順をあえて逆にしている
 		if errors.Is(importer.ErrKeyRemoved, other) || errors.Is(other, importer.ErrKeyRemoved) {
 			t.Errorf("ErrKeyRemoved が %v と区別できない", other)
 		}
