@@ -72,6 +72,9 @@ strip_redirects() {
 flatten_metachars() {
   local s="$1"
   local ch
+  # 行継続(バックスラッシュ+改行)は区切りではなく単なる空白。改行を区切りにする前に空白へ変える
+  # (critic 5回目指摘: 先に区切りにすると `git push origin \<改行>main` が宛先なしに見えて通ってしまう)
+  s="${s//\\$'\n'/ }"
   for ch in '&' '|' ';' $'\n'; do
     s="${s//$ch/ __SEP__ }"
   done
@@ -508,7 +511,7 @@ check_git() {
       __SEP__) break ;;
       # 値を取るフラグは次のトークン(値)ごと読み飛ばす。読み飛ばさないと値が remote 扱いになり、
       # 本物の remote が宛先に数えられて現在のブランチを確認しなくなる(critic 4回目指摘)
-      -o | --push-option | --receive-pack | --exec | --repo)
+      -o | --push-option | --receive-pack | --exec | --repo | --recurse-submodules)
         j=$((j + 1))
         continue
         ;;
@@ -521,7 +524,7 @@ check_git() {
     any_dest=1
     dst="${tok##*:}"
     case "$dst" in
-      main | refs/heads/main)
+      main | heads/main | refs/heads/main)
         BLOCK_REASON="git push の宛先が main です(${tok})"
         return 0
         ;;

@@ -351,6 +351,26 @@ test_pass_critic4_separator_no_false_positive() {
   expect_pass_in "$OTHER_REPO_FEATURE" "git push -o ci.skip origin"
 }
 
+test_block_critic5_edge_cases() {
+  begin "block: critic 5回目指摘(行継続・heads/main・--recurse-submodules・--exec/--repo)"
+  expect_block_in "$MAIN_REPO" $'git push origin \\\nmain'
+  expect_block_in "$MAIN_REPO" $'git push \\\n origin main'
+  expect_block $'git \\\npush origin main'
+  expect_block $'gh pr \\\nmerge 1'
+  expect_block "git push origin HEAD:heads/main"
+  expect_block "git push origin feature:heads/main"
+  expect_block_in "$MAIN_REPO" "git push --recurse-submodules check origin"
+  expect_block_in "$MAIN_REPO" "git push --exec x origin"
+  expect_block_in "$MAIN_REPO" "git push --repo x origin"
+}
+
+test_pass_critic5_no_false_positive() {
+  begin "pass: critic 5回目の修正が誤検知しない"
+  expect_pass_in "$OTHER_REPO_FEATURE" $'git push origin \\\nfeature'
+  expect_pass_in "$OTHER_REPO_FEATURE" "git push --recurse-submodules check origin"
+  expect_pass_in "$OTHER_REPO_FEATURE" "git push origin HEAD:heads/feature"
+}
+
 test_block_kubectl_delete_indirect_and_dynamic() {
   begin "block: kubectl delete -f/-R(ファイル指定・再帰)・all・パイプ/xargs越し・コマンド置換(critic 3回目指摘)"
   expect_block "kubectl delete -f deploy/k8s/base"
@@ -578,6 +598,8 @@ test_pass_git_push_remote_only_non_main
 test_block_kubectl_separator_boundary_edge_cases
 test_block_critic4_edge_cases
 test_pass_critic4_separator_no_false_positive
+test_block_critic5_edge_cases
+test_pass_critic5_no_false_positive
 test_pass_daily_commands
 test_pass_import_readonly
 test_pass_kubectl_readonly_and_pod_delete
