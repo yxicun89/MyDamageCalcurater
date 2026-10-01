@@ -252,6 +252,39 @@ function koText(ko: Schemas["KOChance"]): string {
     : judgeScreenText.koRandom(ko.hits, ko.displayChancePercent);
 }
 
+/** 素早さに反映した補正・反映していない入力の行(空の欄は出さない。ADR-0710)。 */
+function speedNotes(matchup: Schemas["Matchup"]): string[] {
+  const t = judgeScreenText;
+  const sides = [
+    { side: t.speedSideSelf, applied: matchup.attackerSpeedApplied, ignored: matchup.attackerSpeedIgnored },
+    {
+      side: t.speedSideOpponent,
+      applied: matchup.defenderSpeedApplied,
+      ignored: matchup.defenderSpeedIgnored,
+    },
+  ];
+  const notes: string[] = [];
+  for (const { side, applied, ignored } of sides) {
+    if (applied.length > 0) {
+      notes.push(
+        t.speedAppliedNote(
+          side,
+          applied.map((name) => t.speedFactorLabel[name]),
+        ),
+      );
+    }
+    if (ignored.length > 0) {
+      notes.push(
+        t.speedIgnoredNote(
+          side,
+          ignored.map((name) => t.speedIgnoredLabel[name]),
+        ),
+      );
+    }
+  }
+  return notes;
+}
+
 /** 素早さの比較(同速は outspeeds の false と区別する。ADR-0700 §6-1)。 */
 function speedComparisonLabel(matchup: Schemas["Matchup"]): string {
   if (matchup.speedTie) {
@@ -659,6 +692,11 @@ function ResultList({ defenders, matchups }: ResultListProps) {
           >
             <p className="judge-screen__matchup-species">{defender.speciesName || defender.speciesKey}</p>
             <p>{judgeScreenText.speedLabel(matchup.attackerSpeed, matchup.defenderSpeed)}</p>
+            {speedNotes(matchup).map((note) => (
+              <p key={note} className="judge-screen__speed-note">
+                {note}
+              </p>
+            ))}
             <p>{speedComparisonLabel(matchup)}</p>
             <p>{judgeScreenText.priorityLabel(matchup.attackerMovePriority, matchup.defenderMovePriority)}</p>
             <p>{turnOrderLabel(matchup)}</p>

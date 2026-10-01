@@ -502,6 +502,18 @@ export const judgeScreenText = {
   requiredMessage: "ポケモン・性格・技の ID をすべて入力してください",
   // ---- 結果(ADR-0705 §8)。judge の値をそのまま出す ----
   speedLabel: (attacker: number, defender: number): string => `素早さ ${attacker} 対 ${defender}`,
+  /**
+   * 素早さに反映した補正・反映していない入力(ADR-0710。issue 235)。judge が返した欄をそのまま文にする。
+   * 反映していない入力は「指定されたが素早さには掛けていない」の意味で、効果が無い特性・持ち物でも出る。
+   */
+  speedAppliedNote: (side: string, names: readonly string[]): string =>
+    `${side}の素早さに反映: ${names.join("・")}`,
+  speedIgnoredNote: (side: string, names: readonly string[]): string =>
+    `${side}の素早さに${names.join("・")}は反映していません`,
+  speedSideSelf: "自分",
+  speedSideOpponent: "相手",
+  speedFactorLabel: { rank: "ランク補正", tailwind: "追い風", choiceScarf: "こだわりスカーフ" } as const,
+  speedIgnoredLabel: { abilityId: "特性", itemId: "持ち物", fieldWeather: "天候" } as const,
   priorityLabel: (attacker: number, defender: number): string => `優先度 ${attacker} 対 ${defender}`,
   outspeedsTrueLabel: "素早さで上回る",
   outspeedsFalseLabel: "素早さで下回る",

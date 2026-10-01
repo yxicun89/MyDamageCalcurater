@@ -2022,3 +2022,12 @@ Impact: Web レーンは文言・再送の上限・再試行の扱いを揃え�
   M2 で record・team の本体を足すときも許可が要る。PR #416(#284)で gateway → balance/speed/judge は既に許可済み
 - 詰まったときの戻し方: `kubectl -n pokecalc delete networkpolicy default-deny-ingress`(許可だけが残る。データは消えない)
 
+
+## 2026-10-02: 素早さに効く特性・持ち物のデータ(判定レーン → データレーン。issue #235・ADR-0710 第2段の依頼)
+
+- 判定レーンは第1段(素早さに反映した補正 `*SpeedApplied`・指定されたが反映していない入力 `*SpeedIgnored` を応答に返す)を実装した。
+  ユーザー決定: 反映する範囲は**全て**(天候特性・状態異常・持ち物。不要なら指摘される)
+- データレーンへ: 素早さ補正を持つ特性(天候・場・状態依存)と持ち物(こだわりスカーフ以外のすばやさ補正)を、balance の `abilities` read model の
+  `effects` と同じ流儀の正規化データとしてマスタ側に置き、内部 API(pokedex-svc)から引けるようにしてほしい。judge は ID の switch を持たず、
+  そのデータで反映する。状態異常(麻痺)は judge 側の入力 `status` の追加も要る(判定レーンが契約を足す)
+- 受け取り次第、判定レーンが第2段を実装し、反映できた要素を `*SpeedApplied` に足して `*SpeedIgnored` から外す
