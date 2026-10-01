@@ -315,13 +315,14 @@ pokedex のマスタは上のとおり再生成できるのでバックアップ
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-kubectl -n pokecalc exec mysql-0 -- sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -u root --single-transaction --routines pokedex' > pokedex-backup.sql
+kubectl -n pokecalc exec mysql-0 -- sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -u root --single-transaction --routines --set-gtid-purged=OFF pokedex' > pokedex-backup.sql
 kubectl -n pokecalc exec mysql-0 -- sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root -e "CREATE DATABASE pokedex_restore"'
 kubectl -n pokecalc exec -i mysql-0 -- sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root pokedex_restore' < pokedex-backup.sql
 for db in pokedex pokedex_restore; do
   kubectl -n pokecalc exec mysql-0 -- sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" mysql -u root -N -e 'SELECT COUNT(*) FROM $db.species;'"
 done
 ```
+(`--set-gtid-purged=OFF` が無いと、同じサーバーへの復元が `ERROR 3546 ... GTID_PURGED` で止まる。2026-10-02 に k3d で確認)
 確認: 2つの件数が一致する。`pokedex-backup.sql` はマスタ(取得物由来)を含むので Git に入れない(`*backup*.sql` は `.gitignore` 済み)。
 片付け(`pokedex_restore` の削除は**人間の確認が要る操作**): `... mysql -u root -e "DROP DATABASE pokedex_restore"`。
 
