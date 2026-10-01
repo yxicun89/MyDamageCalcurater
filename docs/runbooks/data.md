@@ -205,6 +205,7 @@ kubectl -n pokecalc logs "$(kubectl -n pokecalc get pods -l app.kubernetes.io/na
 | `既存の種族の key が変わる投入` | `ErrKeyChanged`(上流の formeOrder の並びが変わった) | c |
 | `DB のスキーマが未整備` | migrate が済んでいない DB(`ErrSchemaNotReady`) | `make deploy-latest`(migrate-up まで流す)。dirty なら下の「migration が途中で失敗して dirty になったとき」 |
 | そのほかの `import:` の行(`ErrInvalidInput`・`ErrInvalidData`) | 入力の誤り(config・取得データの矛盾) | 行のとおりに入力を直す PR を出す |
+| `import: 投入に失敗:` に MySQL のエラー番号(1062・1264・1406・1452・3819)、または効果データの検証エラー(`ErrInvalidEffect`) | 取得データか migration の制約との不整合。DB は1トランザクションなので巻き戻っている | 行の内容を issue に書き、取得データ・効果データ・migration のどれを直すかを決めて PR を出す |
 
 ### b. 照合の Blocker のとき
 
