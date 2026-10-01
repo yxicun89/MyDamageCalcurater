@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"example.com/pokecalc/services/internal/api"
+	"example.com/pokecalc/services/pokedex/internal/readtx"
 	"example.com/pokecalc/services/pokedex/internal/store"
 	"example.com/pokecalc/services/pokedex/internal/storetest"
 )
@@ -315,16 +316,34 @@ func TestCalcRoutesAndUnknownPathsAreNotFound(t *testing.T) {
 }
 
 // AC-I8: panic は 500 internal(Error 形式・内部情報を出さない)。
+// panic したリクエストのトランザクションも閉じる(接続を返さないまま残さない。issue #220)。
 func TestPanicIsInternalError(t *testing.T) {
-	h := newHandler(t, &panickingQuerier{Querier: storetest.New()})
+	q := storetest.New()
+	h := newHandler(t, &panickingQuerier{Querier: q})
 	rec := do(t, h, http.MethodGet, masterPath, false)
 	assertError(t, rec, http.StatusInternalServerError, api.Internal)
 	if strings.Contains(rec.Body.String(), "goroutine") || strings.Contains(rec.Body.String(), "boom") {
 		t.Errorf("内部情報を出している: %s", rec.Body.String())
 	}
+	if open := q.OpenTxCount(); open != 0 {
+		t.Errorf("panic の後に開いたままのトランザクションが %d 個ある", open)
+	}
 }
 
-// panickingQuerier は ListTypes で panic する。
+// panickingQuerier は ListTypes で panic する。マスタの読み出しは BeginTx が返す Tx 経由なので(issue #220)、
+// Tx の ListTypes も panic させる(autocommit の ListTypes だけでは panic が起きず、検査が空振りする)。
 type panickingQuerier struct{ *storetest.Querier }
 
 func (panickingQuerier) ListTypes(context.Context) ([]store.Type, error) { panic("boom") }
+
+func (p panickingQuerier) BeginTx(ctx context.Context, opts *sql.TxOptions) (readtx.Tx, error) {
+	tx, err := p.Querier.BeginTx(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return panickingTx{tx}, nil
+}
+
+type panickingTx struct{ readtx.Tx }
+
+func (panickingTx) ListTypes(context.Context) ([]store.Type, error) { panic("boom") }
