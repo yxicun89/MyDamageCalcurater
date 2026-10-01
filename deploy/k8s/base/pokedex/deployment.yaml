@@ -1,6 +1,8 @@
 # pokedex-svc(検索 API・内部 API GET /internal/pokedex/master。ADR-0105)。
 # DB(POKEDEX_DATABASE_DSN)は Secret mysql-auth から渡す。起動時に DB へ接続しない
 # (sql.Open だけ。DB が無くても起動し、DB を使う操作は 503 を返す)。
+# readiness は /readyz(DB に届き、マスタの最小条件が揃っているときだけ Ready。ADR-0129)。
+# 新規クラスタでは初回 import(make import-k8s)の後に Ready になる。liveness は DB に触れない /healthz。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,7 +22,7 @@ spec:
         app.kubernetes.io/part-of: pokecalc
     spec:
       automountServiceAccountToken: false
-      # shutdownTimeout(main.go。10秒)より長い。ADR-0111 決定3。
+      # preStop(5秒)+ shutdownTimeout(main.go。10秒)より長い。ADR-0111 決定3・ADR-0129 §4。
       terminationGracePeriodSeconds: 30
       containers:
         - name: pokedex
@@ -46,12 +48,18 @@ spec:
               value: "5m"
             - name: POKEDEX_DB_CONN_MAX_LIFETIME
               value: "30m"
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /readyz
               port: http
             initialDelaySeconds: 1
             periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
           livenessProbe:
             httpGet:
               path: /healthz

@@ -12,6 +12,7 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"example.com/pokecalc/services/internal/api"
+	"example.com/pokecalc/services/pokedex/internal/dataversion"
 	"example.com/pokecalc/services/pokedex/internal/store"
 )
 
@@ -198,7 +199,7 @@ func buildMasterExportFrom(ctx context.Context, q store.Querier) (api.MasterExpo
 
 	return api.MasterExport{
 		SchemaVersion: api.MasterExportSchemaVersionN1,
-		DataVersion:   dataVersionString(versions),
+		DataVersion:   dataversion.String(versions),
 		Types:         masterTypes,
 		TypeChart:     masterTypeChart,
 		Species:       masterSpecies,
@@ -207,20 +208,6 @@ func buildMasterExportFrom(ctx context.Context, q store.Querier) (api.MasterExpo
 		Abilities:     masterAbilities,
 		Natures:       masterNatures,
 	}, nil
-}
-
-// dataVersionString は data_versions の source=version を source 昇順に「,」で連結する(ADR-0105 §2)。
-func dataVersionString(versions []store.DataVersion) string {
-	sorted := append([]store.DataVersion(nil), versions...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Source < sorted[j].Source })
-	s := ""
-	for i, v := range sorted {
-		if i > 0 {
-			s += ","
-		}
-		s += v.Source + "=" + v.Version
-	}
-	return s
 }
 
 // masterEffectFor は item_effects / ability_effects の JSON をそのまま api.MasterEffect にする

@@ -16,6 +16,7 @@ flowchart LR
 
 | ファイル | 役割 |
 |---|---|
+| `prune.mjs` | `check`: 取得前に PVC の空きを確認(不足は終了コード3)。`prune`: 成功を台帳へ記録し、旧版・古い report を削除(ADR-0104 追記 issue #111) |
 | `fetch.mjs` | `fetch-calc` → `fetch-showdown` → `fetch-pokeapi` を順に呼ぶ入口 |
 | `fetch-calc.mjs` | 固定版の `@smogon/calc`(Champions 世代)から抽出 |
 | `fetch-showdown.mjs` | Showdown の Champions mod を取得(版は `config.json`) |

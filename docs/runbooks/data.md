@@ -93,6 +93,87 @@ kubectl -n pokecalc delete job pokedex-import-manual-race1 pokedex-import-manual
 ```
 確認: 両方とも `job.batch "pokedex-import-manual-raceN" deleted` と表示される。
 
+## importer の PVC の容量(issue #111・ADR-0104 追記)
+
+CronJob は取得の前に PVC の空きを確かめ(予約容量 既定 400 MiB)、足りなければ終了コード 3 で止まる(取得・DB 更新・prune のどれにも進まない)。
+取り込みが成功した後にだけ、現在版+直前の成功版と report 直近 52 件を残して旧版を自動で消す。
+
+### a. 使用量を確かめる(副作用なし)
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc get jobs --sort-by=.metadata.creationTimestamp | grep pokedex-import
+JOB=$(kubectl -n pokecalc get jobs -o name --sort-by=.metadata.creationTimestamp | grep pokedex-import | tail -1)
+kubectl -n pokecalc logs "$JOB" | grep 'importer-'
+```
+確認: 直近の Job のログに `importer-capacity: total=... used=... free=... reserve=...` と、版ごとの `usage` 行が出る。
+(Job を新しく作ると取得から DB 投入までの取り込みが全部走る。確認だけなら作らない。)
+
+### b. 閾値を超えたかを判定する
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc get pods | grep pokedex-import
+JOB=$(kubectl -n pokecalc get jobs -o name --sort-by=.metadata.creationTimestamp | grep pokedex-import | tail -1)
+kubectl -n pokecalc logs "$JOB" | grep 'importer-capacity: 空き'
+```
+確認: 直近の Pod が `Error` で、ログに `importer-capacity: 空き ... byte が予約容量 ... byte を下回る` が出ていれば超過(終了コード 3)。
+出ていなければ容量は足りているので、ここで終わり。
+
+### c. PVC の拡張可否を確かめて広げる
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+SC=$(kubectl -n pokecalc get pvc pokedex-import-cache -o jsonpath='{.spec.storageClassName}')
+kubectl get storageclass "$SC" -o jsonpath='{.allowVolumeExpansion}{"\n"}'
+```
+確認: `true` なら拡張できる。まず `deploy/k8s/base/pokedex/pvc-import-cache.yaml` の `storage` を上げて通常の PR で入れる
+(Argo CD が main を見ているため、base の yaml と実機の値がずれると差分として戻される)。急ぐときだけ先に実機へ patch し、同じ値を base に揃える。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc patch pvc pokedex-import-cache -p '{"spec":{"resources":{"requests":{"storage":"4Gi"}}}}'
+kubectl -n pokecalc get pvc pokedex-import-cache
+```
+確認: `CAPACITY` が 4Gi になる。
+
+`false`(k3d の local-path)なら拡張できない。作り直すしかなく、取得キャッシュ・スナップショット・報告が消える(取得元から再取得される。
+報告は戻らない)。CronJob を消すと、過去の Job とそのログも消える。**データ削除なので人間の確認が要る操作**。
+確認を得てから、base の `storage` を上げた状態で次を流す。作り直すのは PVC `pokedex-import-cache` と CronJob `pokedex-import` の2つだけ
+(overlay 全体は apply しない。他のサービスや migrate の Job まで作り直してしまうため。base を単独で apply すると namespace が付かないので、
+overlay の描画からラベル `app.kubernetes.io/name=pokedex-import` の2つだけを取り出す)。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc delete cronjob pokedex-import
+kubectl -n pokecalc delete pvc pokedex-import-cache
+kubectl kustomize deploy/k8s/overlays/local | kubectl apply -l app.kubernetes.io/name=pokedex-import -f -
+```
+確認: `kubectl -n pokecalc get pvc pokedex-import-cache` の `CAPACITY` が新しい値で、`STATUS` が `Bound`(または最初の Job 実行まで `Pending`)。
+
+### d. 取り込みを成功させて旧版を prune する
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc create job --from=cronjob/pokedex-import pokedex-import-prune
+kubectl -n pokecalc wait --for=condition=complete job/pokedex-import-prune --timeout=900s
+kubectl -n pokecalc logs job/pokedex-import-prune | grep importer-prune
+```
+確認: `importer-prune: 削除 <相対パス> <byte> byte` の行と、最後の `削除 N 件・回収 M byte・残量 K byte` が出る。
+消えるのは現在版・直前の成功版以外の `.cache/<source>/<版>`・`<source>/<版>` と、52 件より古い `reports/import-*.json` だけ。
+`upstream/`・`reports/latest*`・ロック・台帳は消えない。
+
+### e. 失敗後に再実行する
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc delete job pokedex-import-prune --ignore-not-found
+kubectl -n pokecalc create job --from=cronjob/pokedex-import pokedex-import-retry
+kubectl -n pokecalc wait --for=condition=complete job/pokedex-import-retry --timeout=900s
+kubectl -n pokecalc delete job pokedex-import-retry
+```
+確認: Job が `complete` になる。途中で止まった取得は次回に自己回復し(#102)、prune の中断は再実行で残りを消す(何度流しても同じ結果)。
+
 ## 7. 後片付け(クラスタは残したまま止める)
 
 ```sh

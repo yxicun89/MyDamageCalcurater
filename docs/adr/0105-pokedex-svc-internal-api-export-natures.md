@@ -34,7 +34,7 @@ API レーン(calc-svc が起動時に取るマスタ一式 `GET /internal/poked
 - `serve` は起動時に DB へ接続しない(`sql.Open` だけ)。DB が無くても起動し、DB を使う操作が 503 を返す(calc-svc の URL 方式と同じ考え)。
   DSN は go-sql-driver/mysql の形式で、`parseTime=true` を必ず付ける(`regulations` の DATE を `sql.NullTime` で読むため)。
   DSN が壊れていれば起動エラー。エラー文に DSN(パスワード)を含めない。
-- 運用エンドポイント: `GET /healthz` → 200 `{"status":"ok"}`(DB に触れない。readiness も同じ。データの有無は各操作の 503 で表す)。
+- 運用エンドポイント: `GET /healthz` → 200 `{"status":"ok"}`(DB に触れない。liveness 用)。readiness は ADR-0129 で `GET /readyz`(DB の最小条件に連動)に置き換えた。
 - calc の3操作は pokedex-svc の担当外なので、生成ラッパを経由させず 404 `not_found`(calc-svc の R1 と対称)。
   ルート無し・メソッド違いも 404 `not_found`、panic は 500 `internal`(Error 形式・内部情報を出さない)。
 

@@ -11,3 +11,15 @@ data:
     [mysqld]
     character-set-server=utf8mb4
     collation-server=utf8mb4_0900_ai_ci
+  # メモリ上限(statefulset の limits 768Mi)の中に収める(issue #437)。MySQL 9 の既定のままだと待機中でも約 500Mi を使い、
+  # importer の全置換の最中に 512Mi の上限で OOMKill されていた(2026-10-01 に k3d で観測)。
+  # - performance_schema: ローカルでは使わない計測用の領域(既定 ON で数百 MiB を確保する)
+  # - innodb_buffer_pool_size: 既定と同じ 128M を明示(上限との関係をここで読めるように)
+  # - innodb_log_buffer_size: 既定 64M → 16M(全置換の1トランザクションでも足りる。書き込みが溢れたら redo へ書くだけ)
+  # - max_connections: 既定 151 → 50(pokedex・importer・migrate の合計は 1 桁。接続ごとのバッファの上限を下げる)
+  memory.cnf: |
+    [mysqld]
+    performance_schema=OFF
+    innodb_buffer_pool_size=128M
+    innodb_log_buffer_size=16M
+    max_connections=50
