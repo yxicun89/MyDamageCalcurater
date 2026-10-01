@@ -1177,6 +1177,12 @@
   一括計算・逆算の行数/候補数の上限(ADR-0208)が特性分岐で最大3倍まで増えうることを openapi.yaml と
   ADR-0208 に追記。critic レビュー予定。**残り(ranks・status の上書き)は別タスクとして残す**(このタスクの
   スコープ外。abilityId とは独立に追加できる)。入ったら iOS・Web へ連絡(生成物の再生成・追従は各レーン)
+- [x] issue #272 の Web 分(ADR-0311): 計算・逆算画面に特性セレクトを追加。攻撃側(自分)は種族の特性から選び(既定は先頭)、
+  防御側(相手)は「おまかせ(種族の全特性)」+各特性から選ぶ(おまかせは先頭3件を `defenderAbilities` /
+  `unknownAbilities` に渡す)。WASM は候補をそのまま、API 実装は候補がちょうど1件のときだけ
+  `defenderOverride.abilityId` / `unknownAbilityId` で送る。行・候補の `abilityId` / `abilityIds` を DTO に写し、
+  特性で分かれた行は特性名つきの別行、まとめられた行は名前を並べて表示。`MAX_ABILITY_CANDIDATES` は
+  `domain/requestLimits.ts`、選択肢・候補の組み立ては `domain/requests.ts`。iOS は別レーン
 - [ ] issue #274/#272 の API レーン担当分の残り: `defenderOverride.ranks: RankBlock` / `defenderOverride.status:
   StatusCondition`(全行に一律で上書き)。abilityId(上記)とは独立に追加できる。engine 側の変更
   (`BulkInput`/`ReverseInput` へのオーバーライド追加。プリセット解決後・計算前に当てる)を伴うため

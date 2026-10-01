@@ -17,6 +17,12 @@ export const MAX_ITEM_CANDIDATES = 64;
 /** 逆算に渡せる観測の件数(`ReverseRequest.observations` の maxItems)。 */
 export const MAX_OBSERVATIONS = 16;
 
+/**
+ * 防御側・相手側の特性の候補の数(engine の `MaxAbilityCandidates`。通常特性2つ + 隠れ特性1つ。ADR-0126 §1)。
+ * 超える候補を渡すと engine は常に失敗するので、おまかせは先頭からこの件数までにする(ADR-0214)。
+ */
+export const MAX_ABILITY_CANDIDATES = 3;
+
 /** 上限で絞り込んだ結果。truncated は「落とした要素があるか」(ちょうど上限のときは false)。 */
 export interface LimitedValues<T> {
   readonly values: readonly T[];
