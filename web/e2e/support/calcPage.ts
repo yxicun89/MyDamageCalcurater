@@ -1,5 +1,6 @@
 // P4-6: E2E の画面操作の部品。要素はアクセシブルな名前(src/i18n/ja.ts の語)で引き、CSS クラスには頼らない。
-// 種族・技の名前は架空の例データ(src/master/example/)のもの。
+// 種族・技の名前は架空の例データ(src/master/example/)のもの。ADR-0313: 例データは利用者の画面には出ず、
+// E2E では pokedex フィクスチャ(e2e/support/pokedexFixture.ts)が公開 API の形で返す。
 
 import { expect, type Locator, type Page } from "@playwright/test";
 
@@ -39,16 +40,6 @@ export function reverseRows(page: Page): Locator {
 }
 
 /**
- * 計算画面で攻撃側・防御側を選ぶ(技は攻撃側の最初のダメージ技が自動で選ばれる)。
- * **種族の一覧がそろうマスタ(オフライン。capabilities.speciesList が true)専用**で、`<select>` を前提にする。
- * オンラインは selectMatchupBySearch を使う(ADR-0304 §4・ADR-0307)。
- */
-export async function selectMatchup(page: Page, attackerName: string, defenderName: string): Promise<void> {
-  await combobox(page, "攻撃側のポケモン").selectOption({ label: attackerName });
-  await combobox(page, "防御側のポケモン").selectOption({ label: defenderName });
-}
-
-/**
  * PR2(ADR-0307): 種族の検索欄(SpeciesSearchField)で1体選ぶ。capabilities.speciesList が false のマスタ
  * (オンライン)では、種族のスロットが `<select>` ではなく検索入力になる(ADR-0304 A-4・A-10)。
  *
@@ -68,12 +59,12 @@ export async function selectSpeciesBySearch(page: Page, label: string, name: str
   await expect(input).toHaveValue(name);
 }
 
-/** PR2(ADR-0307): 検索欄で攻撃側・防御側を選ぶ(オンライン用の selectMatchup)。 */
-export async function selectMatchupBySearch(
-  page: Page,
-  attackerName: string,
-  defenderName: string,
-): Promise<void> {
+/**
+ * 計算画面で攻撃側・防御側を選ぶ(技は攻撃側の最初のダメージ技が自動で選ばれる)。
+ * ADR-0313: オンライン・オフラインとも種族は検索欄で選ぶ(どちらも capabilities.speciesList が false)。
+ * 以前の `<select>` 版の selectMatchup(オフラインの架空の例データ前提)は無くなった。
+ */
+export async function selectMatchup(page: Page, attackerName: string, defenderName: string): Promise<void> {
   await selectSpeciesBySearch(page, "攻撃側のポケモン", attackerName);
   await selectSpeciesBySearch(page, "防御側のポケモン", defenderName);
 }
@@ -101,4 +92,76 @@ export async function chooseRadio(page: Page, groupName: string, optionName: str
   const group = page.getByRole("radiogroup", { name: groupName, exact: true });
   await group.getByText(optionName, { exact: true }).click();
   await expect(group.getByRole("radio", { name: optionName, exact: true })).toBeChecked();
+}
+
+/** 既存の呼び出し(online.spec.ts)の名前。selectMatchup と同じ(ADR-0313 で両方とも検索欄になった)。 */
+export const selectMatchupBySearch = selectMatchup;
+
+/** 逆算画面で「自分」「相手」のポケモンを検索欄で選ぶ(ADR-0313。以前は `<select>`)。 */
+export async function selectReverseMatchup(page: Page, ownName: string, opponentName: string): Promise<void> {
+  await selectSpeciesBySearch(page, "自分のポケモン", ownName);
+  await selectSpeciesBySearch(page, "相手のポケモン", opponentName);
+}
+
+/** マスタのキャッシュ(IndexedDB)のデータベース名。src/master/cache/browserStore.ts の MASTER_CACHE_DB_NAME と同じ値。 */
+export const MASTER_CACHE_DB_NAME = "pokecalc-master-cache";
+
+/**
+ * ADR-0313: オンライン(既定)で一度開いて、持ち物・性格と、使う種族(fire・water)を解決し、
+ * それが IndexedDB に保存されるまで待つ。オフラインで使うマスタを温める操作(利用者の「一度オンラインで開く」)。
+ */
+export async function warmOfflineCache(page: Page): Promise<void> {
+  await page.goto("/calc");
+  await expect(page.getByRole("tablist", { name: "画面の切り替え" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "オンライン(API)", exact: true })).toBeChecked();
+  await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
+  // データベースができただけでは足りない(開くのは保存より先)。種族(fire・water)まで書き込まれるのを待つ。
+  await expect
+    .poll(async () =>
+      page.evaluate(async (name) => {
+        // 無いデータベースを open すると空のものを作ってしまうので、あるときだけ開く。
+        if (!(await indexedDB.databases()).some((db) => db.name === name)) {
+          return false;
+        }
+        return new Promise<boolean>((resolve) => {
+          const open = indexedDB.open(name);
+          open.onerror = () => {
+            resolve(false);
+          };
+          open.onsuccess = () => {
+            const db = open.result;
+            const storeName = db.objectStoreNames[0];
+            if (storeName === undefined) {
+              db.close();
+              resolve(false);
+              return;
+            }
+            const request = db.transaction(storeName, "readonly").objectStore(storeName).getAll();
+            request.onerror = () => {
+              db.close();
+              resolve(false);
+            };
+            request.onsuccess = () => {
+              db.close();
+              const [record] = request.result as { species?: Record<string, unknown> }[];
+              resolve(Object.keys(record?.species ?? {}).length >= 2);
+            };
+          };
+        });
+      }, MASTER_CACHE_DB_NAME),
+    )
+    .toBe(true);
+}
+
+/**
+ * ADR-0313: キャッシュを温めてからオフライン(WASM)に切り替え、`path` を開き直して、マスタの読み込みが
+ * 終わって画面の切り替えタブが出るまで待つ。以降の画面はキャッシュのマスタ(fire・water)で動く。
+ */
+export async function openAppOffline(page: Page, path = "/calc"): Promise<void> {
+  await warmOfflineCache(page);
+  await chooseRadio(page, "計算モード", "オフライン(WASM)");
+  await page.goto(path);
+  await expect(page.getByRole("tablist", { name: "画面の切り替え" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "オフライン(WASM)", exact: true })).toBeChecked();
+  await expect(page.getByRole("alert")).toHaveCount(0);
 }

@@ -10,14 +10,15 @@ import {
   calcRows,
   chooseRadio,
   combobox,
-  openApp,
+  openAppOffline,
   parsePercentRange,
   rowTexts,
   selectMatchup,
 } from "./support/calcPage.ts";
 
 test.beforeEach(async ({ page }) => {
-  await openApp(page);
+  // ADR-0313: キャッシュを温めてからオフライン(WASM)で確かめる(既定はオンライン)。
+  await openAppOffline(page);
 });
 
 test("攻撃側・防御側を選ぶと技が自動で選ばれ、既定の5行の一括結果が出る", async ({ page }) => {
@@ -63,8 +64,8 @@ test("攻守入れ替えで攻撃側・防御側の名前が入れ替わり、�
 
   await page.getByRole("button", { name: "攻守入れ替え", exact: true }).click();
 
-  await expect(combobox(page, "攻撃側のポケモン")).toHaveValue(SPECIES.water.key);
-  await expect(combobox(page, "防御側のポケモン")).toHaveValue(SPECIES.fire.key);
+  await expect(combobox(page, "攻撃側のポケモン")).toHaveValue(SPECIES.water.nameJa);
+  await expect(combobox(page, "防御側のポケモン")).toHaveValue(SPECIES.fire.nameJa);
   // issue #304: カードの見出し(h2)は「攻撃側」「防御側」のまま動かず、
   // 入れ替わるのはその中のポケモンの名前(h3。design.md「入力のラベル」の見出しの階層)。
   await expect(
@@ -85,19 +86,15 @@ test("攻守入れ替えで攻撃側・防御側の名前が入れ替わり、�
   }
 });
 
-test("持ち物の候補も比較 をオンにすると行が増える", async ({ page }) => {
+test("持ち物の候補も比較 は、オフライン(キャッシュ)では選べない(ADR-0313 §3)", async ({ page }) => {
+  // 以前は架空の例データの持ち物効果で行が増えることを確かめていた。実データ相当のマスタは公開 API が持ち物の
+  // 効果データを持たない(ADR-0304 A-1)ので、オフラインのキャッシュでも比較は出せない。増える挙動は
+  // 効果データを持つマスタの単体テスト(CalcScreen.test.tsx・requests.test.ts)で確かめる。
   await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
-  const rows = calcRows(page);
-  await expect(rows).toHaveCount(DEFAULT_ROW_COUNT);
+  await expect(calcRows(page)).toHaveCount(DEFAULT_ROW_COUNT);
 
-  await page.getByRole("checkbox", { name: "持ち物の候補も比較", exact: true }).check();
-
-  await expect.poll(async () => rows.count()).toBeGreaterThan(DEFAULT_ROW_COUNT);
-  // 増えた行も同じ書式で、持ち物の名前(例データの「テスト…」)か「持ち物なし」を持つ。
-  for (const text of await rows.allInnerTexts()) {
-    expect(text).toMatch(PERCENT_RANGE_PATTERN);
-    expect(text).toMatch(/持ち物なし|テスト/);
-  }
+  await expect(page.getByRole("checkbox", { name: "持ち物の候補も比較", exact: true })).toBeDisabled();
+  await expect(calcRows(page)).toHaveCount(DEFAULT_ROW_COUNT);
 });
 
 test("「詳細」を開いて 急所 とはれを入れると、先頭行の最大%が増える(issue #274)", async ({ page }) => {

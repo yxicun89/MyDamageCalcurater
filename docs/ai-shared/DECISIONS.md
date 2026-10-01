@@ -1979,3 +1979,8 @@ Impact: 判定レーン分(2026-09-25)と合わせて issue #260 をクローズ
 - `scripts/image-tag.sh [パス...]`: HEAD の12桁 + 指定パスに未コミット・未追跡があれば `-dirty`。テストは `scripts/image-tag_test.sh`
 - データレーンは up.sh・k3d-deploy-latest.sh・pokedex-registry-push.sh・`make import-k8s` を移行済み
 - 依頼(既定案): 各レーンは自分の `*-k3d-deploy`(api・balance・speed・judge。web は既に検査あり)の先頭に `@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh <ターゲット名>` を足す(#295)。readmodel の deploy スクリプトも同様。`local-registry-push.sh` のタグ計算は `scripts/image-tag.sh <svc_dir> [engine]` に置き換えてよい。`:local` をやめてコミットのタグで k3d へ入れる移行(#291 の本体)は各レーンの判断で
+
+## 2026-10-01: 既定の計算モードをオンラインに変更(ユーザー決定。Web レーン。issue #210 / ADR-0313)
+Decision: Web の既定の計算モードを「オンライン」にする(ADR-0301 §4 の「既定はオフライン」を変更)。オンラインで取得したマスタ(持ち物・性格・解決した種族/特性/技)を IndexedDB に保存し、オフライン(WASM)はそのキャッシュだけから読む。保存済みのモード(localStorage)は従来どおり尊重する。
+Reason: 既定のオフラインは架空の例データしか持たず、実データで計算するには毎回オンラインへ切り替えが要った。実データのビルド同梱は ADR-0002 に反する。
+Impact: Web のみ(`web/src/master/cache/`・`main.tsx`・`calcMode.ts`・E2E 設定)。API・engine・iOS は無変更。オフラインで引ける種族は一度オンラインで選んだものに限り、持ち物の候補比較はオフラインでも選べない(公開 API に効果データが無い)。
