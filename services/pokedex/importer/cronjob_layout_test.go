@@ -632,10 +632,10 @@ func TestCronJobScriptCapacityCheckAndPrune(t *testing.T) {
 		return loc[0]
 	}
 	lock := idx(`flock\s+-n`)
-	check := idx(`node\s+\S*prune\.mjs\s+check\b`)
+	check := idx(`node\s+\S*prune\.mjs"?\s+check\b`)
 	fetch := idx(`node\s+\S*fetch\.mjs`)
 	imp := idx(`pokedex-import\b[^\n]*-data`)
-	prune := idx(`node\s+\S*prune\.mjs\s+prune\b`)
+	prune := idx(`node\s+\S*prune\.mjs"?\s+prune\b`)
 	if check < 0 || prune < 0 {
 		t.Fatalf("%s: prune.mjs check(%d)・prune.mjs prune(%d)の呼び出しが無い", cronJobScript, check, prune)
 	}
@@ -648,7 +648,7 @@ func TestCronJobScriptCapacityCheckAndPrune(t *testing.T) {
 	if regexp.MustCompile(`(?m)^\s*exec\s+\S*pokedex-import`).MatchString(s) {
 		t.Errorf("%s: pokedex-import を exec にしない(後ろで prune を実行するため)", cronJobScript)
 	}
-	if regexp.MustCompile(`prune\.mjs\s+prune\b[^\n]*\|\|\s*(true|:)`).MatchString(s) {
+	if regexp.MustCompile(`prune\.mjs"?\s+prune\b[^\n]*\|\|\s*(true|:)`).MatchString(s) {
 		t.Errorf("%s: prune の失敗を握りつぶさない(容量回復の失敗に気付けなくなる)", cronJobScript)
 	}
 }

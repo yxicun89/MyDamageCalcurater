@@ -18,6 +18,8 @@ const SOURCES = ['calc', 'showdown', 'pokeapi'];
 const REPORT_RE = /^import-.*\.json$/;
 
 export class InsufficientSpaceError extends Error {}
+export const EXIT_USAGE = 2; // 使い方・環境変数の誤り
+export class UsageError extends Error {}
 
 const VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const assertVersion = (source, v) => {
@@ -29,7 +31,7 @@ const assertVersion = (source, v) => {
 const readLedger = (generatedDir) => {
   try {
     const l = JSON.parse(readFileSync(join(generatedDir, LEDGER), 'utf8'));
-    return l && typeof l.sources === 'object' && l.sources ? l.sources : {};
+    return l && typeof l.sources === 'object' && l.sources && !Array.isArray(l.sources) ? l.sources : {};
   } catch {
     return {};
   }
@@ -52,6 +54,7 @@ export const recordSuccess = ({ generatedDir, versions, now = new Date() }) => {
 
 const dirNames = (dir) => {
   try {
+    if (lstatSync(dir).isSymbolicLink()) return []; // base 自体が symlink なら何も触らない
     return readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
   } catch {
     return [];
@@ -161,7 +164,11 @@ const main = async (cmd) => {
   const generatedDir = process.env.IMPORT_GENERATED_DIR || join(root, 'data/generated');
   const log = (m) => console.log(m);
   if (cmd === 'check') {
-    const reserveBytes = Number(process.env.IMPORT_RESERVE_BYTES ?? DEFAULT_RESERVE_BYTES);
+    const raw = process.env.IMPORT_RESERVE_BYTES ?? String(DEFAULT_RESERVE_BYTES);
+    const reserveBytes = /^\d+$/.test(raw) ? Number(raw) : NaN;
+    if (!Number.isSafeInteger(reserveBytes)) {
+      throw new UsageError('IMPORT_RESERVE_BYTES は 0 以上の整数(byte)で指定する');
+    }
     checkReserve({ generatedDir, reserveBytes, log });
   } else if (cmd === 'prune') {
     const configFile = process.env.IMPORT_CONFIG_FILE || join(root, 'data/importer/config.json');
@@ -171,13 +178,14 @@ const main = async (cmd) => {
     recordSuccess({ generatedDir, versions: config.sources, now: new Date() });
     await pruneGenerated({ generatedDir, config, log });
   } else {
-    throw new Error('使い方: node prune.mjs check|prune');
+    throw new UsageError('使い方: node prune.mjs check|prune');
   }
 };
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main(process.argv[2]).catch((e) => {
-    console.error(e.message);
-    process.exit(e instanceof InsufficientSpaceError ? EXIT_CAPACITY : 1);
+    // fs のエラーは message に絶対パスを含むので、errno コードだけ出す。
+    console.error(e?.code && e?.syscall ? `importer-prune: ファイル操作に失敗した(${e.code} ${e.syscall})` : e.message);
+    process.exit(e instanceof InsufficientSpaceError ? EXIT_CAPACITY : e instanceof UsageError ? EXIT_USAGE : 1);
   });
 }

@@ -315,7 +315,8 @@ PVC(2Gi)が版更新と週次実行で満杯にならないよう、容量の事
   prune は fetch・照合・DB apply がすべて成功した後に、同じロックを持ったまま行う。現在版の snapshot が無ければ台帳にも記録せず何も消さない。
   prune の失敗は握りつぶさない。
 - 容量の事前確認: 空きが予約容量(既定 400 MiB。`IMPORT_RESERVE_BYTES` で上書き)を下回ると、stderr に `importer-capacity` を出して終了コード 3
-  で止まる。根拠は Showdown の新版 1 つ分(tarball+展開済み tree+依存+build 結果)の実測約 190 MiB と、展開中の一時ディレクトリとの併存を見込んだ約 2 倍。
+  で止まる。根拠は Showdown の新版 1 つ分(tarball+展開済み tree+依存+build 結果)の実測約 190 MiB(2026-10-01、`du -sh data/generated/.cache/showdown/<固定コミット f10d679…>`)に、約2倍の余裕を見たこと。
+  PokeAPI・calc の版は数 MiB で無視できる。
   終了コード 3 は再試行しても直らない容量不足(1 は再試行で直りうる失敗)で、`docs/runbooks/data.md` の手順で人が回復する。
 - ログは相対パス・byte 数・残量だけ。絶対パス・取得物の中身は出さない。
 - 限界: 台帳は PVC 内にあり、消えると直前版の保持根拠が無くなる(次の成功 run まで現在版だけが残り、旧版は再生成できる)。

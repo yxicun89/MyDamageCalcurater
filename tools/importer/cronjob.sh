@@ -30,7 +30,7 @@ flock -n 9 || {
 }
 
 echo "cronjob: 容量の事前確認(不足なら終了コード3)"
-node $APP_DIR/tools/importer/prune.mjs check
+node "$APP_DIR/tools/importer/prune.mjs" check
 
 echo "cronjob: 固定版の取得"
 node "$APP_DIR/tools/importer/fetch.mjs"
@@ -42,4 +42,4 @@ echo "cronjob: 照合・投入"
 "$APP_DIR/pokedex-import" -data "$APP_DIR/data" -upstream "$APP_DIR/data/generated/upstream/latest.json"
 
 echo "cronjob: 旧版の整理(現在版+直前の成功版と直近52件の report を残す)"
-node $APP_DIR/tools/importer/prune.mjs prune
+node "$APP_DIR/tools/importer/prune.mjs" prune

@@ -11,7 +11,7 @@
 //  - `upstream/`・`.import.lock`・成功台帳・`.partial-` を含む名前・ディレクトリでないもの・知らない top-level は触らない。
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, symlinkSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -319,5 +319,62 @@ test('CLI prune: 現在版の snapshot が無ければ非 0 で何も消さな�
   assert.notEqual(r.status, 0);
   assert.ok(exists(root, 'calc/c1/snapshot.json'));
   rmSync(cfg, { force: true });
+  done(root);
+});
+
+test('CLI check: IMPORT_RESERVE_BYTES が整数でなければ終了コード 2', () => {
+  const root = seed();
+  for (const v of ['abc', '', '-1', '1.5']) {
+    const r = cli(['check'], { IMPORT_GENERATED_DIR: root, IMPORT_RESERVE_BYTES: v });
+    assert.equal(r.status, 2, `${JSON.stringify(v)}: ${r.stderr}`);
+    assert.match(r.stderr, /IMPORT_RESERVE_BYTES/);
+  }
+  done(root);
+});
+
+test('CLI: fs エラー(存在しない IMPORT_GENERATED_DIR)でも stderr に絶対パスを出さない', () => {
+  const missing = join(tmpdir(), `importer-prune-missing-${process.pid}`, 'nested');
+  const r = cli(['check'], { IMPORT_GENERATED_DIR: missing, IMPORT_RESERVE_BYTES: '1' });
+  assert.notEqual(r.status, 0);
+  assert.ok(!r.stderr.includes(missing) && !r.stderr.includes(tmpdir()), r.stderr);
+  assert.match(r.stderr, /ENOENT/);
+});
+
+test('壊れた JSON・配列の台帳は無いものとして扱い、現在版だけ残す', () => {
+  for (const body of ['{not json', '{"sources":["s1","s2"]}', '[]']) {
+    const root = seed();
+    writeFileSync(join(root, '.import-success.json'), body);
+    const plan = planPrune({ generatedDir: root, config: config() });
+    assert.ok(!plan.remove.some((p) => p.endsWith('/c3') || p.endsWith('/s3') || p.endsWith('/p3')));
+    assert.ok(plan.remove.includes('showdown/s2'), '台帳が読めなければ直前版の根拠が無い');
+    done(root);
+  }
+});
+
+test('symlink の版ディレクトリ・symlink の base は消さず、辿らない', async () => {
+  const root = seed();
+  success(root, ['1', '2', '3']);
+  const outside = mkdtempSync(join(tmpdir(), 'importer-prune-outside-'));
+  put(outside, 'keep.txt');
+  symlinkSync(outside, join(root, 'showdown/s8'));
+  rmSync(join(root, '.cache/pokeapi'), { recursive: true });
+  symlinkSync(outside, join(root, '.cache/pokeapi'));
+  const plan = planPrune({ generatedDir: root, config: config() });
+  assert.ok(!plan.remove.includes('showdown/s8'));
+  assert.ok(!plan.remove.some((p) => p.startsWith('.cache/pokeapi')));
+  await pruneGenerated({ generatedDir: root, config: config() });
+  assert.ok(exists(outside, 'keep.txt'));
+  done(root);
+  done(outside);
+});
+
+test('reports/ の import- で始まらないファイル・ディレクトリは古くても残す', async () => {
+  const root = seed({ reports: 60 });
+  success(root, ['1', '2', '3']);
+  put(root, 'reports/notes.json');
+  put(root, 'reports/import-old.d/x.json');
+  put(root, 'reports/import-20200101T000000Z.json.bak');
+  await pruneGenerated({ generatedDir: root, config: config() });
+  for (const rel of ['reports/notes.json', 'reports/import-old.d/x.json', 'reports/import-20200101T000000Z.json.bak']) assert.ok(exists(root, rel), rel);
   done(root);
 });
