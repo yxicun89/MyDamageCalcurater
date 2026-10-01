@@ -95,6 +95,7 @@ func refCalcBulk(in BulkInput) (BulkResult, error) {
 				def := p.Defender(in.DefenderSpecies, item)
 				def.Ability = ability
 				in.DefenderOverride.apply(&def)
+				// 参照実装も公開の CalcDamage を呼ぶ(KO の値は自己参照の比較)。CalcDamage そのものの不変はゴールデンが担保する。
 				res, err := CalcDamage(DamageInput{
 					Format: in.Format, Attacker: in.Attacker, Defender: def, Move: in.Move,
 					Field: in.Field, Critical: in.Critical, TypeChart: in.TypeChart,
@@ -552,6 +553,7 @@ const (
 
 // allocatedBytesPerCall は f を runs 回呼んだときの1回あたりの確保バイト数(runtime.MemStats.TotalAlloc の差)。
 // 壁時計と違い、同じ Go の版・同じ入力なら負荷によらず決まる。並列テストは無いので他のテストの確保は混ざらない。
+// 上限テストが落ちたら、まず Go の版の差(map・スライスの伸び方)を疑う(一括計算の予算は実測の約 1.6 倍で一番きつい)。
 func allocatedBytesPerCall(runs int, f func()) uint64 {
 	f() // 初回だけの確保(sync.Once 等)を除く
 	runtime.GC()
