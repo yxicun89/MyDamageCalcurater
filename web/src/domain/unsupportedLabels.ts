@@ -21,11 +21,10 @@ function unsupportedMarkName(
     case "attacker_ability":
     case "defender_ability":
       return abilities.find((ability) => ability.id === mark.id)?.nameJa ?? "";
-    default: {
-      // 判別 union の網羅性チェック(コーディング規約 §4 TypeScript「判別 union は網羅性を検査する」)。
-      const exhaustive: never = mark.target;
-      throw new Error(`未知の UnsupportedTarget: ${JSON.stringify(exhaustive)}`);
-    }
+    default:
+      // 契約は target を enum にしない(ADR-0215)。未知の対象は名前を引けないので空文字を返し、
+      // markLabel 側が ID をそのまま出す。
+      return "";
   }
 }
 

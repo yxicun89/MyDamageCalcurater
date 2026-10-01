@@ -848,48 +848,23 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/schemas/UnsupportedMark`.
         public struct UnsupportedMark: Codable, Hashable, Sendable {
-            /// 印の対象
+            /// 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability。
+            /// 値を足しても古いクライアントが応答全体をデコードできなくなるのを避けるため、enum にしない
+            /// (クライアントは未知の値を「対象不明の印」として扱い、id をそのまま表示する。ADR-0215)。
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/UnsupportedMark/target`.
-            @frozen public enum TargetPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                case move = "move"
-                case attackerItem = "attacker_item"
-                case attackerAbility = "attacker_ability"
-                case defenderItem = "defender_item"
-                case defenderAbility = "defender_ability"
-            }
-            /// 印の対象
-            ///
-            /// - Remark: Generated from `#/components/schemas/UnsupportedMark/target`.
-            public var target: Components.Schemas.UnsupportedMark.TargetPayload
-            /// 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種)か zero_power(威力0の攻撃技。
-            /// 威力が技の処理で決まるため)、持ち物・特性は unsupported_effect(効果スキーマで表せない)。
+            public var target: Swift.String
+            /// 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種: alt_defense_stat・alt_offense_stat・
+            /// always_crit・effectiveness_change・field_specific・fixed_damage・ignore_defense_ranks・
+            /// move_specific・multi_hit・ohko・priority_change・type_change・variable_power)か
+            /// zero_power(威力0の攻撃技。威力が技の処理で決まるため)、持ち物・特性は
+            /// unsupported_effect(効果スキーマで表せない)。target と同じ理由で enum にしない
+            /// (クライアントは未知の値を汎用の文言で扱う。ADR-0215)。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/UnsupportedMark/reason`.
-            @frozen public enum ReasonPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                case altDefenseStat = "alt_defense_stat"
-                case altOffenseStat = "alt_offense_stat"
-                case alwaysCrit = "always_crit"
-                case effectivenessChange = "effectiveness_change"
-                case fieldSpecific = "field_specific"
-                case fixedDamage = "fixed_damage"
-                case ignoreDefenseRanks = "ignore_defense_ranks"
-                case moveSpecific = "move_specific"
-                case multiHit = "multi_hit"
-                case ohko = "ohko"
-                case priorityChange = "priority_change"
-                case typeChange = "type_change"
-                case variablePower = "variable_power"
-                case zeroPower = "zero_power"
-                case unsupportedEffect = "unsupported_effect"
-            }
-            /// 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種)か zero_power(威力0の攻撃技。
-            /// 威力が技の処理で決まるため)、持ち物・特性は unsupported_effect(効果スキーマで表せない)。
-            ///
-            ///
-            /// - Remark: Generated from `#/components/schemas/UnsupportedMark/reason`.
-            public var reason: Components.Schemas.UnsupportedMark.ReasonPayload
+            public var reason: Swift.String
             /// 技・持ち物・特性の ID
             ///
             /// - Remark: Generated from `#/components/schemas/UnsupportedMark/id`.
@@ -897,12 +872,12 @@ extension Components {
             /// Creates a new `UnsupportedMark`.
             ///
             /// - Parameters:
-            ///   - target: 印の対象
-            ///   - reason: 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種)か zero_power(威力0の攻撃技。
+            ///   - target: 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability。
+            ///   - reason: 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種: alt_defense_stat・alt_offense_stat・
             ///   - id: 技・持ち物・特性の ID
             public init(
-                target: Components.Schemas.UnsupportedMark.TargetPayload,
-                reason: Components.Schemas.UnsupportedMark.ReasonPayload,
+                target: Swift.String,
+                reason: Swift.String,
                 id: Swift.String
             ) {
                 self.target = target

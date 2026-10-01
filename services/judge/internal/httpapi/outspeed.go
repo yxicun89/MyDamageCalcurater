@@ -676,8 +676,8 @@ func toAPIUnsupportedMarks(marks []client.UnsupportedMark) []api.UnsupportedMark
 	out := make([]api.UnsupportedMark, 0, len(marks))
 	for _, m := range marks {
 		out = append(out, api.UnsupportedMark{
-			Target: api.UnsupportedMarkTarget(m.Target),
-			Reason: api.UnsupportedMarkReason(m.Reason),
+			Target: string(m.Target),
+			Reason: string(m.Reason),
 			Id:     m.ID,
 		})
 	}

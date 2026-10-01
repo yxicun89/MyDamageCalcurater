@@ -1951,6 +1951,13 @@ Reason: critic(agent a5e87478edf501a11)によるmutation testing・実HTTP確認
 Impact: 上記のIssue #284のエントリの実装内容を本エントリの内容で更新するものと理解すること
 (`requiresHeaderCheck`のシグネチャが`(kind routeKind)`から`(kind routeKind, path string)`に変わった)。
 critic 2回目レビュー予定。
+
+## 2026-10-01: UnsupportedMark の target・reason を string にした(API レーン → Web・iOS レーンへ)
+
+Decision: ADR-0215。openapi の `UnsupportedMark.target`・`reason` から enum を外した(既知の値は description)。サーバーの応答値は不変。
+Reason: 新しい reason を足すと古い iOS アプリが応答全体をデコードできなくなるため(iOS レーン提案の対応)。
+Impact: Web は `UnsupportedMark.target/reason: string`、未知の値は「項目」「詳細は不明」で表示。iOS は `UnsupportedTarget/Reason` に `unknown` を足し、契約同期テストは既知の値の集合をテストに持つ。両レーンの追従は同じ PR で済み(Web 1747・iOS 全件テスト緑)。
+
 ## 2026-10-01: issue #211(オンラインの持ち物候補比較)の API 側の提案(Web レーン → API レーンへ)
 
 - 状況: Web は `ONLINE_MASTER_CAPABILITIES.effects=false`(`web/src/master/onlineSource.ts`)で、計算画面の「持ち物の候補も比較」と逆算の持ち物候補を無効化している。原因は公開 API の `Item`/`Ability` に効果データが無いこと(ADR-0304 A-1。効果は internal-only の `getMasterExport`〈ADR-0204〉だけ)。`api/openapi.yaml` を変えられるのは API レーンだけなので、Web 単独では進められない。
