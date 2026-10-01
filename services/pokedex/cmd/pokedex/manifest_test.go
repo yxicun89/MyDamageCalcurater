@@ -98,7 +98,7 @@ func readRepo(t *testing.T, rel string) string {
 	return string(raw)
 }
 
-// AC-K1: base/pokedex に Deployment pokedex がある(serve・DSN は Secret・probe は /healthz・非 root・読み取り専用)。
+// AC-K1: base/pokedex に Deployment pokedex がある(serve・DSN は Secret・readiness は /readyz・liveness は /healthz・非 root・読み取り専用)。
 func TestManifestPokedexDeployment(t *testing.T) {
 	objs := deploytest.BaseObjects(t, pokedexService)
 	var d pokedexDeployment
@@ -153,9 +153,17 @@ func TestManifestPokedexDeployment(t *testing.T) {
 	if _, port, _ := strings.Cut(addr, ":"); port != itoa(c.Ports[0].ContainerPort) {
 		t.Errorf("待ち受けアドレス %q のポートが containerPort %d と違う", addr, c.Ports[0].ContainerPort)
 	}
-	for name, p := range map[string]*deploytest.Probe{"readinessProbe": c.ReadinessProbe, "livenessProbe": c.LivenessProbe} {
-		if p == nil || p.HTTPGet == nil || p.HTTPGet.Path != deploytest.HealthzPath {
-			t.Errorf("%s が httpGet %s でない", name, deploytest.HealthzPath)
+	// readiness は DB に連動する /readyz、liveness は DB に触れない /healthz(issue #107・ADR-0129 §3)。
+	for _, p := range []struct {
+		name  string
+		probe *deploytest.Probe
+		path  string
+	}{
+		{"readinessProbe", c.ReadinessProbe, readyzPath},
+		{"livenessProbe", c.LivenessProbe, deploytest.HealthzPath},
+	} {
+		if p.probe == nil || p.probe.HTTPGet == nil || p.probe.HTTPGet.Path != p.path {
+			t.Errorf("%s が httpGet %s でない", p.name, p.path)
 		}
 	}
 	for _, kind := range []string{"cpu", "memory"} {
