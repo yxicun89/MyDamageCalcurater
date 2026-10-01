@@ -141,17 +141,17 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `balance-lint` | 23 | — | `test -z "$$(gofmt -l $(BALANCE_DIR))" \|\| { gofmt -l $(BALANCE_DIR); exit 1; } ⏎ cd $(BALANCE_DIR) && GOWORK=off $(GO) vet ./...` | なし |
 | `balance-build` | 27 | — | `cd $(BALANCE_DIR) && GOWORK=off $(GO) build ./...` | なし(読み取り/検査) |
 | `balance-kustomize` | 30 | — | `kubectl kustomize $(BALANCE_DIR)/deploy/k8s/overlays/local >/dev/null ⏎ kubectl kustomize $(BALANCE_DIR)/deploy/k8s/overlays/local-readmodel >/dev/null ⏎ kubectl kusto…` | なし(kustomize 描画のみ) |
-| `balance-gitops-template-check` | 36 | balance-kustomize | `BALANCE_DIR=$(BALANCE_DIR) $(BALANCE_DIR)/scripts/check-gitops.sh template` | なし(kustomize 描画+検査。digest はプレースホルダ可) |
-| `balance-gitops-check` | 39 | balance-kustomize | `BALANCE_DIR=$(BALANCE_DIR) $(BALANCE_DIR)/scripts/check-gitops.sh ready` | なし(kustomize 描画+検査。digest 確定を要求) |
+| `balance-gitops-template-check` | 36 | balance-kustomize | `SERVICE=balance scripts/gitops/check-gitops.sh template` | なし(kustomize 描画+検査。digest はプレースホルダ可) |
+| `balance-gitops-check` | 39 | balance-kustomize | `SERVICE=balance scripts/gitops/check-gitops.sh ready` | なし(kustomize 描画+検査。digest 確定を要求) |
 | `balance-docker-build` | 42 | — | `docker build -t $(BALANCE_IMAGE) $(BALANCE_DIR)` | docker イメージ作成 |
-| `balance-docker-push` | 45 | — | `BALANCE_DIR=$(BALANCE_DIR) $(BALANCE_DIR)/scripts/publish-image.sh` | **レジストリへ push**(docker buildx --push。BALANCE_RELEASE_IMAGE 必須) |
+| `balance-docker-push` | 45 | — | `SERVICE=balance scripts/gitops/publish-image.sh` | **レジストリへ push**(docker buildx --push。BALANCE_RELEASE_IMAGE 必須) |
 | `balance-k3d-deploy` | 48 | balance-docker-build | `k3d image import $(BALANCE_IMAGE) --cluster $(CLUSTER) ⏎ kubectl apply -k $(BALANCE_DIR)/deploy/k8s/overlays/local ⏎ kubectl -n pokecalc rollout restart deployment/bal…` | k3d ノードへ image import, **クラスタへ apply**, Pod 再起動 |
 | `balance-smoke` | 54 | — | `BALANCE_URL=$(BALANCE_URL) $(BALANCE_DIR)/scripts/smoke.sh` | なし(HTTP のみ) |
 | `balance-sync-typechart` | 57 | — | `cp testdata/golden/typechart.json $(BALANCE_DIR)/internal/master/data/typechart.json` | balance/internal/master/data/typechart.json を上書き |
-| `balance-registry-apply` | 60 | — | `kubectl apply -k $(BALANCE_DIR)/deploy/local-registry ⏎ kubectl -n balance-registry rollout status deployment/registry --timeout=120s` | **クラスタへ apply** |
-| `balance-registry-push` | 64 | — | `BALANCE_DIR=$(BALANCE_DIR) BALANCE_REGISTRY_PORT=$(BALANCE_REGISTRY_PORT) $(BALANCE_DIR)/scripts/local-registry-push.sh` | docker build/save, レジストリへ port-forward(5001)して crane push |
-| `balance-argocd-app` | 67 | — | `BALANCE_DIR=$(BALANCE_DIR) $(BALANCE_DIR)/scripts/argocd-local-app.sh` | **Argo CD Application を apply** |
-| `balance-k3d-deploy-readmodel` | 70 | — | `BALANCE_DIR=$(BALANCE_DIR) BALANCE_IMAGE=$(BALANCE_IMAGE) CLUSTER=$(CLUSTER) $(BALANCE_DIR)/scripts/k3d-deploy-readmodel.sh` | docker build, k3d image import, ConfigMap balance-readmodel 作成/更新, **apply**, Pod 再起動 |
+| `balance-registry-apply` | 60 | — | `kubectl apply -k $(BALANCE_DIR)/deploy/local-registry ⏎ kubectl -n balance-registry rollout status deployment/registry --timeout=120s` | **クラスタへ apply**(PVC `registry-data` を含む。ADR-0408 §3) |
+| `balance-registry-push` | 64 | — | `SERVICE=balance BALANCE_REGISTRY_PORT=$(BALANCE_REGISTRY_PORT) scripts/gitops/local-registry-push.sh` | docker build/save, レジストリへ port-forward(5001)して crane push |
+| `balance-argocd-app` | 67 | — | `SERVICE=balance scripts/gitops/argocd-local-app.sh` | **AppProject `pokecalc` と Argo CD Application を apply**(AppProject が先。ADR-0408 §1・§2) |
+| `balance-k3d-deploy-readmodel` | 70 | — | `SERVICE=balance BALANCE_IMAGE=$(BALANCE_IMAGE) CLUSTER=$(CLUSTER) scripts/gitops/k3d-deploy-readmodel.sh` | docker build, k3d image import, ConfigMap balance-readmodel 作成/更新, **apply**, Pod 再起動 |
 | `balance-smoke-readmodel` | 73 | — | `BALANCE_URL=$(BALANCE_URL) $(BALANCE_DIR)/scripts/smoke-readmodel.sh` | なし(HTTP のみ) |
 
 ### `services/speed/Makefile`(18 定義)
@@ -166,15 +166,15 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `speed-lint` | 26 | — | `test -z "$$(gofmt -l $(SPEED_DIR))" \|\| { gofmt -l $(SPEED_DIR); exit 1; } ⏎ cd $(SPEED_DIR) && GOWORK=off $(GO) vet ./...` | なし |
 | `speed-build` | 30 | — | `cd $(SPEED_DIR) && GOWORK=off $(GO) build ./...` | なし(読み取り/検査) |
 | `speed-kustomize` | 33 | — | `kubectl kustomize $(SPEED_DIR)/deploy/k8s/overlays/local >/dev/null ⏎ kubectl kustomize $(SPEED_DIR)/deploy/k8s/overlays/local-readmodel >/dev/null ⏎ kubectl kustomize…` | なし(kustomize 描画のみ) |
-| `speed-gitops-template-check` | 40 | speed-kustomize | `SPEED_DIR=$(SPEED_DIR) $(SPEED_DIR)/scripts/check-gitops.sh template` | なし(kustomize 描画+検査。digest はプレースホルダ可) |
-| `speed-gitops-check` | 43 | speed-kustomize | `SPEED_DIR=$(SPEED_DIR) $(SPEED_DIR)/scripts/check-gitops.sh ready` | なし(kustomize 描画+検査。digest 確定を要求) |
+| `speed-gitops-template-check` | 40 | speed-kustomize | `SERVICE=speed scripts/gitops/check-gitops.sh template` | なし(kustomize 描画+検査。digest はプレースホルダ可) |
+| `speed-gitops-check` | 43 | speed-kustomize | `SERVICE=speed scripts/gitops/check-gitops.sh ready` | なし(kustomize 描画+検査。digest 確定を要求) |
 | `speed-docker-build` | 47 | — | `docker build -f $(SPEED_DIR)/Dockerfile -t $(SPEED_IMAGE) .` | docker イメージ作成 |
-| `speed-docker-push` | 50 | — | `SPEED_DIR=$(SPEED_DIR) $(SPEED_DIR)/scripts/publish-image.sh` | **レジストリへ push**(docker buildx --push。SPEED_RELEASE_IMAGE 必須) |
-| `speed-registry-push` | 54 | — | `SPEED_DIR=$(SPEED_DIR) SPEED_REGISTRY_PORT=$(SPEED_REGISTRY_PORT) $(SPEED_DIR)/scripts/local-registry-push.sh` | docker build/save, レジストリへ port-forward(5002)して crane push |
-| `speed-argocd-app` | 57 | — | `SPEED_DIR=$(SPEED_DIR) $(SPEED_DIR)/scripts/argocd-local-app.sh` | **Argo CD Application を apply** |
+| `speed-docker-push` | 50 | — | `SERVICE=speed scripts/gitops/publish-image.sh` | **レジストリへ push**(docker buildx --push。SPEED_RELEASE_IMAGE 必須) |
+| `speed-registry-push` | 54 | — | `SERVICE=speed SPEED_REGISTRY_PORT=$(SPEED_REGISTRY_PORT) scripts/gitops/local-registry-push.sh` | docker build/save, レジストリへ port-forward(5002)して crane push |
+| `speed-argocd-app` | 57 | — | `SERVICE=speed scripts/gitops/argocd-local-app.sh` | **AppProject `pokecalc` と Argo CD Application を apply**(AppProject が先。ADR-0408 §1・§2) |
 | `speed-k3d-deploy` | 60 | speed-docker-build | `k3d image import $(SPEED_IMAGE) --cluster $(CLUSTER) ⏎ kubectl apply -k $(SPEED_DIR)/deploy/k8s/overlays/local ⏎ kubectl -n pokecalc rollout restart deployment/speed ⏎…` | k3d ノードへ image import, **クラスタへ apply**, Pod 再起動 |
 | `speed-smoke` | 66 | — | `SPEED_URL=$(SPEED_URL) $(SPEED_DIR)/scripts/smoke.sh` | なし(HTTP のみ) |
-| `speed-k3d-deploy-readmodel` | 70 | — | `SPEED_DIR=$(SPEED_DIR) SPEED_IMAGE=$(SPEED_IMAGE) SPEED_READMODEL_DIR=$(SPEED_READMODEL_DIR) CLUSTER=$(CLUSTER) $(SPEED_DIR)/scripts/k3d-deploy-readmodel.sh` | docker build, k3d image import, ConfigMap speed-readmodel 作成/更新, **apply**, Pod 再起動 |
+| `speed-k3d-deploy-readmodel` | 70 | — | `SERVICE=speed SPEED_IMAGE=$(SPEED_IMAGE) SPEED_READMODEL_DIR=$(SPEED_READMODEL_DIR) CLUSTER=$(CLUSTER) scripts/gitops/k3d-deploy-readmodel.sh` | docker build, k3d image import, ConfigMap speed-readmodel 作成/更新, **apply**, Pod 再起動 |
 | `speed-smoke-readmodel` | 73 | — | `SPEED_URL=$(SPEED_URL) SPEED_READMODEL_DIR=$(SPEED_READMODEL_DIR) $(SPEED_DIR)/scripts/smoke-readmodel.sh` | なし(HTTP のみ) |
 
 ### `services/judge/Makefile`(11 定義)
