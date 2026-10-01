@@ -2570,4 +2570,2152 @@ public enum Operations {
             }
         }
     }
+    /// この端末でよく計算した相手(防御側の種族)を頻度×時間減衰の順に返す
+    ///
+    /// `X-Device-Id` の端末の計算イベント(`calc_events`)だけから作った集計を、スコアの降順で返す
+    /// (requirements.md §2「よく使うポケモン」・ADR-0209 §3 #2・§6-3)。他端末のイベントは混ぜない。
+    ///
+    /// - スコアは「頻度 × 時間減衰(半減期は record-svc の設定。生イベントの保持期間 90日より短い。ADR-0209 §4)」で、
+    ///   絶対値に意味は無い(並び順と相対比較のためだけの値)。
+    /// - 返すのは `speciesKey` だけで、名前・タイプ・画像は返さない(マスタは pokedex-svc の担当。
+    ///   CLAUDE.md 絶対ルール4)。クライアントは必要なら `/api/pokedex/species/{key}` を引く。
+    /// - 記録が1件も無い端末は空配列(404 にしない)。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/record/frequent-opponents`.
+    /// - Remark: Generated from `#/paths//api/record/frequent-opponents/get(listFrequentOpponents)`.
+    public enum ListFrequentOpponents {
+        public static let id: Swift.String = "listFrequentOpponents"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/record/frequent-opponents/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// 返す上限。範囲外・整数でない値は 400 `invalid_input`
+                ///
+                /// - Remark: Generated from `#/paths/api/record/frequent-opponents/GET/query/limit`.
+                public var limit: Swift.Int?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - limit: 返す上限。範囲外・整数でない値は 400 `invalid_input`
+                public init(limit: Swift.Int? = nil) {
+                    self.limit = limit
+                }
+            }
+            public var query: Operations.ListFrequentOpponents.Input.Query
+            /// - Remark: Generated from `#/paths/api/record/frequent-opponents/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/record/frequent-opponents/GET/header/X-Device-Id`.
+                public var xDeviceId: Components.Parameters.DeviceId
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/record/frequent-opponents/GET/header/X-Session-Id`.
+                public var xSessionId: Components.Parameters.SessionId
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListFrequentOpponents.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///   - accept:
+                public init(
+                    xDeviceId: Components.Parameters.DeviceId,
+                    xSessionId: Components.Parameters.SessionId,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListFrequentOpponents.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.xDeviceId = xDeviceId
+                    self.xSessionId = xSessionId
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ListFrequentOpponents.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.ListFrequentOpponents.Input.Query = .init(),
+                headers: Operations.ListFrequentOpponents.Input.Headers
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/record/frequent-opponents/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/record/frequent-opponents/GET/responses/200/content/application\/json`.
+                    case json([Components.Schemas.FrequentOpponent])
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: [Components.Schemas.FrequentOpponent] {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListFrequentOpponents.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListFrequentOpponents.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// スコアの降順(同点は speciesKey の昇順)。記録が無ければ空配列
+            ///
+            /// - Remark: Generated from `#/paths//api/record/frequent-opponents/get(listFrequentOpponents)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ListFrequentOpponents.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ListFrequentOpponents.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/record/frequent-opponents/get(listFrequentOpponents)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/record/frequent-opponents/GET/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/record/frequent-opponents/GET/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListFrequentOpponents.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListFrequentOpponents.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// record-svc が TiDB に届かない(`store_unavailable`)、または gateway から record-svc に届かない
+            /// (`upstream_unavailable`。ADR-0202・ADR-0209 §5.3)
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//api/record/frequent-opponents/get(listFrequentOpponents)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.ListFrequentOpponents.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.ListFrequentOpponents.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/record/frequent-opponents/get(listFrequentOpponents)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// この端末の記録(計算イベント・集計・お気に入り)をすべて削除する
+    ///
+    /// X-Device-Id の端末に紐づく record DB の行をすべて消す(ADR-0209 §5)。冪等で、
+    /// 何も無い端末でも 200 `completed` を返す(404 にしない)。1回で消しきれない場合は
+    /// `partial` を返すので、同じ要求を `completed` になるまで繰り返す。
+    /// 削除の時点を墓石として記録し、それ以前に発生した計算イベントが JetStream から
+    /// 後から届いても保存しない(ADR-0209 §7)。team DB は消さないので、
+    /// クライアントは `DELETE /api/team/device-data` も呼ぶ。
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /api/record/device-data`.
+    /// - Remark: Generated from `#/paths//api/record/device-data/delete(deleteRecordDeviceData)`.
+    public enum DeleteRecordDeviceData {
+        public static let id: Swift.String = "deleteRecordDeviceData"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/record/device-data/DELETE/header`.
+            public struct Headers: Sendable, Hashable {
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/record/device-data/DELETE/header/X-Device-Id`.
+                public var xDeviceId: Components.Parameters.DeviceId
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/record/device-data/DELETE/header/X-Session-Id`.
+                public var xSessionId: Components.Parameters.SessionId
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.DeleteRecordDeviceData.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///   - accept:
+                public init(
+                    xDeviceId: Components.Parameters.DeviceId,
+                    xSessionId: Components.Parameters.SessionId,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.DeleteRecordDeviceData.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.xDeviceId = xDeviceId
+                    self.xSessionId = xSessionId
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.DeleteRecordDeviceData.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.DeleteRecordDeviceData.Input.Headers) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/record/device-data/DELETE/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/record/device-data/DELETE/responses/200/content/application\/json`.
+                    case json(Components.Schemas.RecordDeletionResult)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.RecordDeletionResult {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.DeleteRecordDeviceData.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.DeleteRecordDeviceData.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 削除の結果(`partial` なら残りがある)
+            ///
+            /// - Remark: Generated from `#/paths//api/record/device-data/delete(deleteRecordDeviceData)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.DeleteRecordDeviceData.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.DeleteRecordDeviceData.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/record/device-data/delete(deleteRecordDeviceData)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/record/device-data/delete(deleteRecordDeviceData)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/record/device-data/DELETE/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/record/device-data/DELETE/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.DeleteRecordDeviceData.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.DeleteRecordDeviceData.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// record-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`)
+            ///
+            /// - Remark: Generated from `#/paths//api/record/device-data/delete(deleteRecordDeviceData)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.DeleteRecordDeviceData.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.DeleteRecordDeviceData.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/record/device-data/delete(deleteRecordDeviceData)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// この端末の構築を一覧する
+    ///
+    /// `X-Device-Id` の端末の構築だけを、更新の新しい順(同時刻は `id` の昇順)で返す
+    /// (ADR-0209 §6-1・§6-3)。他端末の構築は混ざらない。1件も無ければ空配列(404 にしない)。
+    ///
+    /// メンバーまで含めた完全な `Team` を返す。ページングは持たない(1端末が持てる構築は
+    /// **100件**で頭打ちなので、一覧は常に有限で小さい。ADR-0213 §2)。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/team/teams`.
+    /// - Remark: Generated from `#/paths//api/team/teams/get(listTeams)`.
+    public enum ListTeams {
+        public static let id: Swift.String = "listTeams"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/team/teams/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/team/teams/GET/header/X-Device-Id`.
+                public var xDeviceId: Components.Parameters.DeviceId
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/team/teams/GET/header/X-Session-Id`.
+                public var xSessionId: Components.Parameters.SessionId
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListTeams.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///   - accept:
+                public init(
+                    xDeviceId: Components.Parameters.DeviceId,
+                    xSessionId: Components.Parameters.SessionId,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListTeams.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.xDeviceId = xDeviceId
+                    self.xSessionId = xSessionId
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ListTeams.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.ListTeams.Input.Headers) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/team/teams/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/team/teams/GET/responses/200/content/application\/json`.
+                    case json([Components.Schemas.Team])
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: [Components.Schemas.Team] {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListTeams.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListTeams.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// この端末の構築(更新の新しい順)。無ければ空配列
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/get(listTeams)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ListTeams.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ListTeams.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/get(listTeams)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/team/teams/GET/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/team/teams/GET/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListTeams.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListTeams.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// team-svc が TiDB に届かない(`store_unavailable`)、または gateway から team-svc に届かない
+            /// (`upstream_unavailable`。ADR-0202・ADR-0209 §5.3)
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/get(listTeams)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.ListTeams.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.ListTeams.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/get(listTeams)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// 構築を1つ作る
+    ///
+    /// `id` と `createdAt` / `updatedAt` はサーバーが決める(要求には含めない。含めたら 400 `unknown_field`)。
+    /// 1端末が持てる構築は **100件**まで。上限に達している端末からの作成は 400 `invalid_input`(ADR-0213 §2)。
+    ///
+    ///
+    /// - Remark: HTTP `POST /api/team/teams`.
+    /// - Remark: Generated from `#/paths//api/team/teams/post(createTeam)`.
+    public enum CreateTeam {
+        public static let id: Swift.String = "createTeam"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/team/teams/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/team/teams/POST/header/X-Device-Id`.
+                public var xDeviceId: Components.Parameters.DeviceId
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/team/teams/POST/header/X-Session-Id`.
+                public var xSessionId: Components.Parameters.SessionId
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CreateTeam.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///   - accept:
+                public init(
+                    xDeviceId: Components.Parameters.DeviceId,
+                    xSessionId: Components.Parameters.SessionId,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CreateTeam.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.xDeviceId = xDeviceId
+                    self.xSessionId = xSessionId
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.CreateTeam.Input.Headers
+            /// - Remark: Generated from `#/paths/api/team/teams/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/team/teams/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.TeamInput)
+            }
+            public var body: Operations.CreateTeam.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.CreateTeam.Input.Headers,
+                body: Operations.CreateTeam.Input.Body
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Created: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/team/teams/POST/responses/201/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/team/teams/POST/responses/201/content/application\/json`.
+                    case json(Components.Schemas.Team)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.Team {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.CreateTeam.Output.Created.Body
+                /// Creates a new `Created`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.CreateTeam.Output.Created.Body) {
+                    self.body = body
+                }
+            }
+            /// 作った構築(サーバーが決めた `id` と時刻を含む)
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/post(createTeam)/responses/201`.
+            ///
+            /// HTTP response code: `201 created`.
+            case created(Operations.CreateTeam.Output.Created)
+            /// The associated value of the enum case if `self` is `.created`.
+            ///
+            /// - Throws: An error if `self` is not `.created`.
+            /// - SeeAlso: `.created`.
+            public var created: Operations.CreateTeam.Output.Created {
+                get throws {
+                    switch self {
+                    case let .created(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "created",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/post(createTeam)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/post(createTeam)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/team/teams/POST/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/team/teams/POST/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.CreateTeam.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.CreateTeam.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// team-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`)
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/post(createTeam)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.CreateTeam.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.CreateTeam.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/post(createTeam)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// 構築を1つ取得する
+    ///
+    /// 先に端末 ID で絞ってから `teamId` を照合する(ADR-0209 §6-2)。この端末が持っていない
+    /// `teamId`(他端末のもの・実在しないもの・形式が違うものを区別しない)は 404 `not_found`。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/team/teams/{teamId}`.
+    /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/get(getTeam)`.
+    public enum GetTeam {
+        public static let id: Swift.String = "getTeam"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// 構築の ID(作成時にサーバーが発行する UUID。ADR-0213 §2)。
+                /// 端末 ID は**パスに含めない**(ヘッダだけが正。ADR-0209 §2・§6-4)。
+                /// この端末が持っていない ID は、他端末のものか実在しないかを区別せず 404 `not_found`(§6-2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/GET/path/teamId`.
+                public var teamId: Components.Parameters.TeamId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - teamId: 構築の ID(作成時にサーバーが発行する UUID。ADR-0213 §2)。
+                public init(teamId: Components.Parameters.TeamId) {
+                    self.teamId = teamId
+                }
+            }
+            public var path: Operations.GetTeam.Input.Path
+            /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/GET/header/X-Device-Id`.
+                public var xDeviceId: Components.Parameters.DeviceId
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/GET/header/X-Session-Id`.
+                public var xSessionId: Components.Parameters.SessionId
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetTeam.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///   - accept:
+                public init(
+                    xDeviceId: Components.Parameters.DeviceId,
+                    xSessionId: Components.Parameters.SessionId,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetTeam.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.xDeviceId = xDeviceId
+                    self.xSessionId = xSessionId
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetTeam.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.GetTeam.Input.Path,
+                headers: Operations.GetTeam.Input.Headers
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.Team)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.Team {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetTeam.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetTeam.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 構築
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/get(getTeam)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetTeam.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetTeam.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/get(getTeam)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/get(getTeam)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/GET/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/GET/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetTeam.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetTeam.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// team-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`)
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/get(getTeam)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.GetTeam.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.GetTeam.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/get(getTeam)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// 構築を丸ごと置き換える
+    ///
+    /// 名前とメンバー全体を要求の内容で置き換える(部分更新・メンバー個別の更新は持たない。ADR-0213 §2)。
+    /// `members` を省略した場合は「メンバーなし」に置き換わる(消し忘れではなく明示の置換として扱う)。
+    /// この端末が持っていない `teamId` は 404 `not_found`(ADR-0209 §6-2)。
+    ///
+    ///
+    /// - Remark: HTTP `PUT /api/team/teams/{teamId}`.
+    /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/put(updateTeam)`.
+    public enum UpdateTeam {
+        public static let id: Swift.String = "updateTeam"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/PUT/path`.
+            public struct Path: Sendable, Hashable {
+                /// 構築の ID(作成時にサーバーが発行する UUID。ADR-0213 §2)。
+                /// 端末 ID は**パスに含めない**(ヘッダだけが正。ADR-0209 §2・§6-4)。
+                /// この端末が持っていない ID は、他端末のものか実在しないかを区別せず 404 `not_found`(§6-2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/PUT/path/teamId`.
+                public var teamId: Components.Parameters.TeamId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - teamId: 構築の ID(作成時にサーバーが発行する UUID。ADR-0213 §2)。
+                public init(teamId: Components.Parameters.TeamId) {
+                    self.teamId = teamId
+                }
+            }
+            public var path: Operations.UpdateTeam.Input.Path
+            /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/PUT/header`.
+            public struct Headers: Sendable, Hashable {
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/PUT/header/X-Device-Id`.
+                public var xDeviceId: Components.Parameters.DeviceId
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/PUT/header/X-Session-Id`.
+                public var xSessionId: Components.Parameters.SessionId
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.UpdateTeam.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///   - accept:
+                public init(
+                    xDeviceId: Components.Parameters.DeviceId,
+                    xSessionId: Components.Parameters.SessionId,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.UpdateTeam.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.xDeviceId = xDeviceId
+                    self.xSessionId = xSessionId
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.UpdateTeam.Input.Headers
+            /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/PUT/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/PUT/requestBody/content/application\/json`.
+                case json(Components.Schemas.TeamInput)
+            }
+            public var body: Operations.UpdateTeam.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            public init(
+                path: Operations.UpdateTeam.Input.Path,
+                headers: Operations.UpdateTeam.Input.Headers,
+                body: Operations.UpdateTeam.Input.Body
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/PUT/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/PUT/responses/200/content/application\/json`.
+                    case json(Components.Schemas.Team)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.Team {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.UpdateTeam.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.UpdateTeam.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 置き換えた後の構築(`updatedAt` は更新される)
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/put(updateTeam)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.UpdateTeam.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.UpdateTeam.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/put(updateTeam)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/put(updateTeam)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/put(updateTeam)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/PUT/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/PUT/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.UpdateTeam.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.UpdateTeam.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// team-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`)
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/put(updateTeam)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.UpdateTeam.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.UpdateTeam.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/put(updateTeam)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// 構築を1つ削除する
+    ///
+    /// 成功は 204(本文なし)。この端末が持っていない `teamId` は 404 `not_found` で、
+    /// 同じ構築をもう一度削除しても 404 になる(端末単位の全削除 `deleteTeamDeviceData` とは違い、
+    /// 1件の削除は「消した」と「もともと無い」を区別する。ADR-0213 §2)。
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /api/team/teams/{teamId}`.
+    /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/delete(deleteTeam)`.
+    public enum DeleteTeam {
+        public static let id: Swift.String = "deleteTeam"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/DELETE/path`.
+            public struct Path: Sendable, Hashable {
+                /// 構築の ID(作成時にサーバーが発行する UUID。ADR-0213 §2)。
+                /// 端末 ID は**パスに含めない**(ヘッダだけが正。ADR-0209 §2・§6-4)。
+                /// この端末が持っていない ID は、他端末のものか実在しないかを区別せず 404 `not_found`(§6-2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/DELETE/path/teamId`.
+                public var teamId: Components.Parameters.TeamId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - teamId: 構築の ID(作成時にサーバーが発行する UUID。ADR-0213 §2)。
+                public init(teamId: Components.Parameters.TeamId) {
+                    self.teamId = teamId
+                }
+            }
+            public var path: Operations.DeleteTeam.Input.Path
+            /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/DELETE/header`.
+            public struct Headers: Sendable, Hashable {
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/DELETE/header/X-Device-Id`.
+                public var xDeviceId: Components.Parameters.DeviceId
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/DELETE/header/X-Session-Id`.
+                public var xSessionId: Components.Parameters.SessionId
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.DeleteTeam.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///   - accept:
+                public init(
+                    xDeviceId: Components.Parameters.DeviceId,
+                    xSessionId: Components.Parameters.SessionId,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.DeleteTeam.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.xDeviceId = xDeviceId
+                    self.xSessionId = xSessionId
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.DeleteTeam.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.DeleteTeam.Input.Path,
+                headers: Operations.DeleteTeam.Input.Headers
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct NoContent: Sendable, Hashable {
+                /// Creates a new `NoContent`.
+                public init() {}
+            }
+            /// 削除した(本文なし)
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/delete(deleteTeam)/responses/204`.
+            ///
+            /// HTTP response code: `204 noContent`.
+            case noContent(Operations.DeleteTeam.Output.NoContent)
+            /// 削除した(本文なし)
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/delete(deleteTeam)/responses/204`.
+            ///
+            /// HTTP response code: `204 noContent`.
+            public static var noContent: Self {
+                .noContent(.init())
+            }
+            /// The associated value of the enum case if `self` is `.noContent`.
+            ///
+            /// - Throws: An error if `self` is not `.noContent`.
+            /// - SeeAlso: `.noContent`.
+            public var noContent: Operations.DeleteTeam.Output.NoContent {
+                get throws {
+                    switch self {
+                    case let .noContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "noContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/delete(deleteTeam)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/delete(deleteTeam)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/DELETE/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/team/teams/{teamId}/DELETE/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.DeleteTeam.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.DeleteTeam.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// team-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`)
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/delete(deleteTeam)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.DeleteTeam.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.DeleteTeam.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/teams/{teamId}/delete(deleteTeam)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// この端末の構築をすべて削除する
+    ///
+    /// X-Device-Id の端末に紐づく team DB の行(構築とその個体)をすべて消す。
+    /// 冪等性・`partial` の扱いは deleteRecordDeviceData と同じ(ADR-0209 §5)。
+    /// 削除の時点を墓石として記録し、それ以前に発生した計算イベントが JetStream から
+    /// 後から届いても `devices.last_seen_at` を進めない(ADR-0209 §7・ADR-0213 §5)。
+    /// record DB は消さないので、クライアントは `DELETE /api/record/device-data` も呼ぶ。
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /api/team/device-data`.
+    /// - Remark: Generated from `#/paths//api/team/device-data/delete(deleteTeamDeviceData)`.
+    public enum DeleteTeamDeviceData {
+        public static let id: Swift.String = "deleteTeamDeviceData"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/team/device-data/DELETE/header`.
+            public struct Headers: Sendable, Hashable {
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/team/device-data/DELETE/header/X-Device-Id`.
+                public var xDeviceId: Components.Parameters.DeviceId
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/team/device-data/DELETE/header/X-Session-Id`.
+                public var xSessionId: Components.Parameters.SessionId
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.DeleteTeamDeviceData.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///   - accept:
+                public init(
+                    xDeviceId: Components.Parameters.DeviceId,
+                    xSessionId: Components.Parameters.SessionId,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.DeleteTeamDeviceData.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.xDeviceId = xDeviceId
+                    self.xSessionId = xSessionId
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.DeleteTeamDeviceData.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.DeleteTeamDeviceData.Input.Headers) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/team/device-data/DELETE/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/team/device-data/DELETE/responses/200/content/application\/json`.
+                    case json(Components.Schemas.TeamDeletionResult)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.TeamDeletionResult {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.DeleteTeamDeviceData.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.DeleteTeamDeviceData.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 削除の結果(`partial` なら残りがある)
+            ///
+            /// - Remark: Generated from `#/paths//api/team/device-data/delete(deleteTeamDeviceData)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.DeleteTeamDeviceData.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.DeleteTeamDeviceData.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/device-data/delete(deleteTeamDeviceData)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/device-data/delete(deleteTeamDeviceData)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/team/device-data/DELETE/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/team/device-data/DELETE/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.DeleteTeamDeviceData.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.DeleteTeamDeviceData.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// team-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`)
+            ///
+            /// - Remark: Generated from `#/paths//api/team/device-data/delete(deleteTeamDeviceData)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.DeleteTeamDeviceData.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.DeleteTeamDeviceData.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/team/device-data/delete(deleteTeamDeviceData)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
 }

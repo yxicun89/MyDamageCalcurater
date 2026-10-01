@@ -25,8 +25,9 @@ Status(追記): 2026-10-01、D18(issue #111・ADR-0104 追記)。importer の PV
 Status(追記): 2026-10-01、issue #437(取り込み中に MySQL が OOMKill)を修正。memory.cnf(performance_schema=OFF 等)と limit 768Mi。k3d に反映済み(待機 499Mi → 165Mi、全置換3回で restart 0)。
 Status(追記): 2026-10-01、D11(issue #107・#323・#324・#299 の pokedex 分。ADR-0129)。`/readyz`(DB の最小条件に連動)・DB 呼び出しの締め切り5秒・preStop sleep 5秒。新規クラスタは初回 import 前に pokedex が Ready にならない(deploy-latest は失敗時に make import-k8s を案内)。
 Status(追記): issue #403 D24(#300・#74 のスクリプト部分。ADR-0130)実装済み。check-publishable の B に DSN・URL 資格情報・MYSQL_PWD・Secret の base64・Bearer・各種トークン接頭辞・短い値・2行に分かれる値を、C と .gitignore に .envrc・id_rsa 系・credentials.json・*.p8・*.sql.gz・ダンプ・secret*.yaml を追加(gitleaks は足さない)。
+Status: D12(issue #277・ADR-0131 採用)実装済み。migration 000009 の種族 key の台帳(追記だけ)と、ID の消滅(ErrKeyRemoved・終了コード3・`-allow-removed <種類>:<ID>`)・消滅後の再利用(ErrKeyChanged)の検出を Apply に追加。実データの dry-run は blockers: none。
 Status(追記): 2026-10-01、D25(issue #240・ADR-0132)。pokecalc に ingress の default-deny と許可リスト10本(`deploy/k8s/base/networkpolicy/`)を実装。受け入れテスト AC-N1〜N5 は green。k3d での実地確認(apply・smoke・拒否の確認)はメイン。
-Next: issue #403 の「残りのパッケージ」を依存の順に(D12〈作業中〉→ D19 → D25 → D26 → D27〜D32。D21 は T04・S04・A06 待ち、D20 の #211-data は API レーンの契約待ち)。後続: 逆算の特性候補の計算量の最適化(ADR-0126 追記)、#349。1 パッケージ = 1 PR、importer に触れたら実データの dry-run、マージ後は make deploy-latest。
+Next: issue #403 の「残りのパッケージ」を依存の順に(D19〈作業中〉→ D26 → D27〜D32。D21 は T04・S04・A06 待ち、D20 の #211-data は API レーンの契約待ち)。後続: 逆算の特性候補の計算量の最適化(ADR-0126 追記)、#349。1 パッケージ = 1 PR、importer に触れたら実データの dry-run、マージ後は make deploy-latest。
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
@@ -310,7 +311,7 @@ docs/verify-m1.md §4 を Safari で確認(P4-5。issue #333のsafeキーワー�
 
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
-Active: なし(P6-6 完了・main 統合済み。残る P6-7 は record/team の API 待ち)
+Active: なし(P6-19〈PR #432〉・P6-7 完了。残る Next は他レーン待ちのみ)
 Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
 Status: **M3(iPhone で使える)は完了**。P6-1(ADR-0500)・P6-2a 計算画面・契約追従・P6-2b 逆算画面・P6-2c 構築ビルダー
 (一覧・編集・ニックネーム)・P6-2d(構築から個体を呼び出す配線)・P6-3・P6-4(手順書 `docs/runbooks/ios-device-install.md`)・
@@ -345,7 +346,7 @@ Next: (1) 第三者データの出典・非公式の表示(#328 のユーザー�
 (3) API レーンが UnsupportedMark の reason/target を string に緩めたら、未知の値の扱いを追加(P5-4 の後に検討と連絡あり)。
 (4) API レーンが `BulkCalcRequest.defenderOverride`(防御側のランク・特性・状態異常。
 DECISIONS.md 2026-09-25 で採用、M2 の後に実装予定)を入れたら、iOS の「詳細」に防御側の入力を追加。
-(5) P6-7(issue #103・ADR-0209 §8の削除UI。record-svc/team-svc実装待ち、急ぎではない)。将来の候補:
+(5) P6-7(issue #103・ADR-0209 §8の削除UI)は完了(2026-10-01)。(1)〜(3) も完了済み(P6-18・P6-19・ADR-0215)。将来の候補:
 engine の Champions マスタが pokedex-svc 経由になったら iOS のモック/実マスタの差し替え動作を再確認、Web の
 record/team-svc(M2)が進んだら iOS の構築を端末内保存から API 保存へ移行するかを検討。
 

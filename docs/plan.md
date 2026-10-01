@@ -706,7 +706,8 @@
   ごと cancel するテストを追加、`species(key:)` が途中で失敗したときの挙動差分を ADR に明記、古くなったテストの
   ヘッダーコメントを修正(ADR 8章)。`swift test`(399件・0失敗)・`make ios-test`
   (`ios-test-unit` 412件・`ios-test-ui` 17件・Info.plist 検査、すべて成功。終了コード0)ともに green
-- [ ] P6-7 ADR-0209 §8 の文言と「この端末のデータを削除」の UI(issue #103。record-svc / team-svc の全削除 API 実装後)
+- [x] P6-7 ADR-0209 §8 の文言と「この端末のデータを削除」の UI(issue #103。record-svc / team-svc の全削除 API 実装後)
+  - 完了(2026-10-01): `AboutView` に「データの扱い」セクション(ADR-0209 §8 の文言・確認カード・record/team の全削除を独立に呼び partial は1対象20回まで再送)。生成設定の `filter.tags` に record・team を追加して再生成。`swift test` 576件・`make ios-test` 全件成功(XCUITest 53件)。critic PASS(1回)。受け入れ条件・判断は ADR-0501「P6-7」
 - [x] P6-11 issue #334: 攻撃側プリセットの表示名(`AttackerPreset.label`)が技の分類(物理/特殊)に追従せず、
   特殊技でも「A特化」のままになる不具合を直した。表記は Web(`attackerPresetText`)の出荷済み文言に揃えた
   (「A振り(無補正)」等)。受け入れ条件・判断・実装結果は ADR-0501「P6-11」。

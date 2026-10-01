@@ -6,6 +6,7 @@ package store
 
 import (
 	"context"
+	"time"
 )
 
 type Querier interface {
@@ -55,15 +56,19 @@ type Querier interface {
 	InsertRegulationSpecies(ctx context.Context, arg InsertRegulationSpeciesParams) error
 	InsertSpecies(ctx context.Context, arg InsertSpeciesParams) error
 	InsertSpeciesAbility(ctx context.Context, arg InsertSpeciesAbilityParams) error
+	InsertSpeciesKeyLedgerEntry(ctx context.Context, arg InsertSpeciesKeyLedgerEntryParams) error
 	InsertType(ctx context.Context, arg InsertTypeParams) error
 	InsertTypeChart(ctx context.Context, arg InsertTypeChartParams) error
 	ListAbilities(ctx context.Context) ([]Ability, error)
 	ListAbilityEffects(ctx context.Context) ([]AbilityEffect, error)
+	ListAbilityIDs(ctx context.Context) ([]string, error)
 	ListAllSpeciesAbilities(ctx context.Context) ([]SpeciesAbility, error)
 	ListDataVersions(ctx context.Context) ([]DataVersion, error)
 	ListItemEffects(ctx context.Context) ([]ItemEffect, error)
+	ListItemIDs(ctx context.Context) ([]string, error)
 	ListItems(ctx context.Context) ([]Item, error)
 	ListMoveEffects(ctx context.Context) ([]MoveEffect, error)
+	ListMoveIDs(ctx context.Context) ([]string, error)
 	ListMoveMechanisms(ctx context.Context) ([]MoveMechanism, error)
 	ListMoves(ctx context.Context) ([]Move, error)
 	// ---------------------------------------------------------------------------------------------
@@ -79,6 +84,10 @@ type Querier interface {
 	ListSpecies(ctx context.Context) ([]Species, error)
 	ListSpeciesAbilities(ctx context.Context, speciesKey string) ([]SpeciesAbility, error)
 	ListSpeciesAbilityNames(ctx context.Context, speciesKey string) ([]ListSpeciesAbilityNamesRow, error)
+	// 種族 key の台帳(ADR-0131)。追記だけ。削除・更新・REPLACE のクエリは置かない(layout テストで固定)。
+	ListSpeciesKeyLedger(ctx context.Context) ([]ListSpeciesKeyLedgerRow, error)
+	// 消滅の検出用(投入前の ID の一覧)。
+	ListSpeciesKeyValues(ctx context.Context) ([]string, error)
 	// 冪等な投入(importer.Apply。ADR-0101 §9)。全置き換えを1トランザクションで行う。
 	// 自己参照の外部キー(species.base_species_key)があるので、削除はメガを先・挿入はメガを後にする。
 	ListSpeciesKeys(ctx context.Context) ([]ListSpeciesKeysRow, error)
@@ -94,6 +103,8 @@ type Querier interface {
 	// \ でエスケープし、末尾に % を付けた前方一致のパターン。name_ja の照合順序は utf8mb4_ja_0900_as_cs
 	// (ADR-0100 §2。ひらがなとカタカナを区別しない)。
 	SearchSpecies(ctx context.Context, arg SearchSpeciesParams) ([]SearchSpeciesRow, error)
+	// 今の species のうち台帳に無い組を足す(台帳ができる前に投入した DB の移行)。
+	SeedSpeciesKeyLedgerFromSpecies(ctx context.Context, firstSeenAt time.Time) error
 }
 
 var _ Querier = (*Queries)(nil)

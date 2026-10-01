@@ -1807,5 +1807,397 @@ extension Components {
                 case candidates
             }
         }
+        /// 「よく使う相手」1件(ADR-0209 §3 #2)。端末内の計算イベントの集計で、他端末のイベントは混ざらない。
+        /// 個体の中身(技・持ち物・特性・性格・SP)・ダメージの数値は返さない(集計に使うのは防御側の種族だけ)。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/FrequentOpponent`.
+        public struct FrequentOpponent: Codable, Hashable, Sendable {
+            /// 防御側(相手)の種族。名前・タイプは pokedex-svc から引く
+            ///
+            /// - Remark: Generated from `#/components/schemas/FrequentOpponent/speciesKey`.
+            public struct SpeciesKeyPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/FrequentOpponent/speciesKey/value1`.
+                public var value1: Components.Schemas.SpeciesKey
+                /// Creates a new `SpeciesKeyPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.SpeciesKey) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeToSingleValueContainer(self.value1)
+                }
+            }
+            /// 防御側(相手)の種族。名前・タイプは pokedex-svc から引く
+            ///
+            /// - Remark: Generated from `#/components/schemas/FrequentOpponent/speciesKey`.
+            public var speciesKey: Components.Schemas.FrequentOpponent.SpeciesKeyPayload
+            /// 頻度 × 時間減衰。並び順のための相対値で、絶対値に意味は無い(ADR-0209 §4)
+            ///
+            /// - Remark: Generated from `#/components/schemas/FrequentOpponent/score`.
+            public var score: Swift.Double
+            /// 減衰をかける前の、集計対象として残っている計算イベントの件数
+            ///
+            /// - Remark: Generated from `#/components/schemas/FrequentOpponent/count`.
+            public var count: Swift.Int
+            /// この相手を最後に計算した時刻(イベントの `occurred_at`)
+            ///
+            /// - Remark: Generated from `#/components/schemas/FrequentOpponent/lastCalculatedAt`.
+            public var lastCalculatedAt: Foundation.Date
+            /// Creates a new `FrequentOpponent`.
+            ///
+            /// - Parameters:
+            ///   - speciesKey: 防御側(相手)の種族。名前・タイプは pokedex-svc から引く
+            ///   - score: 頻度 × 時間減衰。並び順のための相対値で、絶対値に意味は無い(ADR-0209 §4)
+            ///   - count: 減衰をかける前の、集計対象として残っている計算イベントの件数
+            ///   - lastCalculatedAt: この相手を最後に計算した時刻(イベントの `occurred_at`)
+            public init(
+                speciesKey: Components.Schemas.FrequentOpponent.SpeciesKeyPayload,
+                score: Swift.Double,
+                count: Swift.Int,
+                lastCalculatedAt: Foundation.Date
+            ) {
+                self.speciesKey = speciesKey
+                self.score = score
+                self.count = count
+                self.lastCalculatedAt = lastCalculatedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case speciesKey
+                case score
+                case count
+                case lastCalculatedAt
+            }
+        }
+        /// `completed` = この端末のデータは残っていない。`partial` = 1回の上限に達したので残りがある
+        /// (同じ要求を繰り返す。ADR-0209 §5.2)。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/DeletionStatus`.
+        @frozen public enum DeletionStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case completed = "completed"
+            case partial = "partial"
+        }
+        /// - Remark: Generated from `#/components/schemas/RecordDeletionResult`.
+        public struct RecordDeletionResult: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/RecordDeletionResult/status`.
+            public var status: Components.Schemas.DeletionStatus
+            /// 墓石の時刻。これ以前に発生した計算イベントは以後保存しない(ADR-0209 §7)
+            ///
+            /// - Remark: Generated from `#/components/schemas/RecordDeletionResult/purgedAt`.
+            public var purgedAt: Foundation.Date
+            /// この呼び出しで消した行数(冪等なので2回目は 0 になる)
+            ///
+            /// - Remark: Generated from `#/components/schemas/RecordDeletionResult/deleted`.
+            public struct DeletedPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/RecordDeletionResult/deleted/calcEvents`.
+                public var calcEvents: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/RecordDeletionResult/deleted/aggregates`.
+                public var aggregates: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/RecordDeletionResult/deleted/favorites`.
+                public var favorites: Swift.Int
+                /// Creates a new `DeletedPayload`.
+                ///
+                /// - Parameters:
+                ///   - calcEvents:
+                ///   - aggregates:
+                ///   - favorites:
+                public init(
+                    calcEvents: Swift.Int,
+                    aggregates: Swift.Int,
+                    favorites: Swift.Int
+                ) {
+                    self.calcEvents = calcEvents
+                    self.aggregates = aggregates
+                    self.favorites = favorites
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case calcEvents
+                    case aggregates
+                    case favorites
+                }
+            }
+            /// この呼び出しで消した行数(冪等なので2回目は 0 になる)
+            ///
+            /// - Remark: Generated from `#/components/schemas/RecordDeletionResult/deleted`.
+            public var deleted: Components.Schemas.RecordDeletionResult.DeletedPayload
+            /// Creates a new `RecordDeletionResult`.
+            ///
+            /// - Parameters:
+            ///   - status:
+            ///   - purgedAt: 墓石の時刻。これ以前に発生した計算イベントは以後保存しない(ADR-0209 §7)
+            ///   - deleted: この呼び出しで消した行数(冪等なので2回目は 0 になる)
+            public init(
+                status: Components.Schemas.DeletionStatus,
+                purgedAt: Foundation.Date,
+                deleted: Components.Schemas.RecordDeletionResult.DeletedPayload
+            ) {
+                self.status = status
+                self.purgedAt = purgedAt
+                self.deleted = deleted
+            }
+            public enum CodingKeys: String, CodingKey {
+                case status
+                case purgedAt
+                case deleted
+            }
+        }
+        /// 構築の ID(サーバーが発行する UUID。正準形 8-4-4-4-12 の16進)
+        ///
+        /// - Remark: Generated from `#/components/schemas/TeamId`.
+        public typealias TeamId = Swift.String
+        /// 構築の1体(ADR-0213 §3)。種族・技・持ち物・特性・性格・SP・テラスタイプは **ID のまま**運び、
+        /// team-svc はマスタに実在するかを検証しない(CLAUDE.md 絶対ルール4)。
+        /// 並び順(パーティの何番目か)は `Team.members` の配列の順序そのもので、`slot` は持たない。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TeamMember`.
+        public struct TeamMember: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TeamMember/speciesKey`.
+            public var speciesKey: Components.Schemas.SpeciesKey
+            /// 任意のニックネーム(文字数は Unicode コードポイントで数える)。空文字は null と同じ「未設定」として扱う。
+            /// 利用者の自由入力で個人を特定しうるため、**ログには出さない**(ADR-0209 §3)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamMember/nickname`.
+            public var nickname: Swift.String?
+            /// 覚えさせる技(最大4つ・同一メンバー内で重複不可。並び順は表示順)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamMember/moveIds`.
+            public var moveIds: [Swift.String]?
+            /// 持ち物(持たせないときは null)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamMember/itemId`.
+            public var itemId: Swift.String?
+            /// 特性(未選択のときは null)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamMember/abilityId`.
+            public var abilityId: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TeamMember/natureId`.
+            public var natureId: Swift.String
+            /// 能力ポイント。各 0..32、合計 <= 66(Individual.sp と同じ規則。範囲外は 400 `invalid_input`)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamMember/sp`.
+            public struct SpPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TeamMember/sp/value1`.
+                public var value1: Components.Schemas.StatBlock
+                /// Creates a new `SpPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.StatBlock) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 能力ポイント。各 0..32、合計 <= 66(Individual.sp と同じ規則。範囲外は 400 `invalid_input`)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamMember/sp`.
+            public var sp: Components.Schemas.TeamMember.SpPayload
+            /// - Remark: Generated from `#/components/schemas/TeamMember/teraType`.
+            public struct TeraTypePayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TeamMember/teraType/value1`.
+                public var value1: Components.Schemas.PokeType
+                /// Creates a new `TeraTypePayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.PokeType) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeToSingleValueContainer(self.value1)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TeamMember/teraType`.
+            public var teraType: Components.Schemas.TeamMember.TeraTypePayload?
+            /// Creates a new `TeamMember`.
+            ///
+            /// - Parameters:
+            ///   - speciesKey:
+            ///   - nickname: 任意のニックネーム(文字数は Unicode コードポイントで数える)。空文字は null と同じ「未設定」として扱う。
+            ///   - moveIds: 覚えさせる技(最大4つ・同一メンバー内で重複不可。並び順は表示順)
+            ///   - itemId: 持ち物(持たせないときは null)
+            ///   - abilityId: 特性(未選択のときは null)
+            ///   - natureId:
+            ///   - sp: 能力ポイント。各 0..32、合計 <= 66(Individual.sp と同じ規則。範囲外は 400 `invalid_input`)
+            ///   - teraType:
+            public init(
+                speciesKey: Components.Schemas.SpeciesKey,
+                nickname: Swift.String? = nil,
+                moveIds: [Swift.String]? = nil,
+                itemId: Swift.String? = nil,
+                abilityId: Swift.String? = nil,
+                natureId: Swift.String,
+                sp: Components.Schemas.TeamMember.SpPayload,
+                teraType: Components.Schemas.TeamMember.TeraTypePayload? = nil
+            ) {
+                self.speciesKey = speciesKey
+                self.nickname = nickname
+                self.moveIds = moveIds
+                self.itemId = itemId
+                self.abilityId = abilityId
+                self.natureId = natureId
+                self.sp = sp
+                self.teraType = teraType
+            }
+            public enum CodingKeys: String, CodingKey {
+                case speciesKey
+                case nickname
+                case moveIds
+                case itemId
+                case abilityId
+                case natureId
+                case sp
+                case teraType
+            }
+        }
+        /// 構築の作成(`createTeam`)・置換(`updateTeam`)で送る内容。`id` / `createdAt` / `updatedAt` は
+        /// サーバーが決めるので送らない(送ったら 400 `unknown_field`)。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TeamInput`.
+        public struct TeamInput: Codable, Hashable, Sendable {
+            /// 構築名(前後の空白を除いて1文字以上。文字数は Unicode コードポイントで数える)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamInput/name`.
+            public var name: Swift.String
+            /// パーティ(最大6体。省略・空配列は「メンバーなし」)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamInput/members`.
+            public var members: [Components.Schemas.TeamMember]?
+            /// Creates a new `TeamInput`.
+            ///
+            /// - Parameters:
+            ///   - name: 構築名(前後の空白を除いて1文字以上。文字数は Unicode コードポイントで数える)
+            ///   - members: パーティ(最大6体。省略・空配列は「メンバーなし」)
+            public init(
+                name: Swift.String,
+                members: [Components.Schemas.TeamMember]? = nil
+            ) {
+                self.name = name
+                self.members = members
+            }
+            public enum CodingKeys: String, CodingKey {
+                case name
+                case members
+            }
+        }
+        /// 保存済みの構築(ADR-0213 §2)
+        ///
+        /// - Remark: Generated from `#/components/schemas/Team`.
+        public struct Team: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/Team/id`.
+            public var id: Components.Schemas.TeamId
+            /// - Remark: Generated from `#/components/schemas/Team/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/Team/members`.
+            public var members: [Components.Schemas.TeamMember]
+            /// - Remark: Generated from `#/components/schemas/Team/createdAt`.
+            public var createdAt: Foundation.Date
+            /// 最終更新。失効の判定に使う(`max(devices.last_seen_at, updatedAt)` から540日。ADR-0209 §4)
+            ///
+            /// - Remark: Generated from `#/components/schemas/Team/updatedAt`.
+            public var updatedAt: Foundation.Date
+            /// Creates a new `Team`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - name:
+            ///   - members:
+            ///   - createdAt:
+            ///   - updatedAt: 最終更新。失効の判定に使う(`max(devices.last_seen_at, updatedAt)` から540日。ADR-0209 §4)
+            public init(
+                id: Components.Schemas.TeamId,
+                name: Swift.String,
+                members: [Components.Schemas.TeamMember],
+                createdAt: Foundation.Date,
+                updatedAt: Foundation.Date
+            ) {
+                self.id = id
+                self.name = name
+                self.members = members
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case name
+                case members
+                case createdAt
+                case updatedAt
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/TeamDeletionResult`.
+        public struct TeamDeletionResult: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TeamDeletionResult/status`.
+            public var status: Components.Schemas.DeletionStatus
+            /// 墓石の時刻。これ以前に発生した計算イベントは以後 last_seen_at を進めない(ADR-0209 §7)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamDeletionResult/purgedAt`.
+            public var purgedAt: Foundation.Date
+            /// この呼び出しで消した行数(冪等なので2回目は 0 になる)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamDeletionResult/deleted`.
+            public struct DeletedPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TeamDeletionResult/deleted/teams`.
+                public var teams: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/TeamDeletionResult/deleted/teamMembers`.
+                public var teamMembers: Swift.Int
+                /// Creates a new `DeletedPayload`.
+                ///
+                /// - Parameters:
+                ///   - teams:
+                ///   - teamMembers:
+                public init(
+                    teams: Swift.Int,
+                    teamMembers: Swift.Int
+                ) {
+                    self.teams = teams
+                    self.teamMembers = teamMembers
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case teams
+                    case teamMembers
+                }
+            }
+            /// この呼び出しで消した行数(冪等なので2回目は 0 になる)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamDeletionResult/deleted`.
+            public var deleted: Components.Schemas.TeamDeletionResult.DeletedPayload
+            /// Creates a new `TeamDeletionResult`.
+            ///
+            /// - Parameters:
+            ///   - status:
+            ///   - purgedAt: 墓石の時刻。これ以前に発生した計算イベントは以後 last_seen_at を進めない(ADR-0209 §7)
+            ///   - deleted: この呼び出しで消した行数(冪等なので2回目は 0 になる)
+            public init(
+                status: Components.Schemas.DeletionStatus,
+                purgedAt: Foundation.Date,
+                deleted: Components.Schemas.TeamDeletionResult.DeletedPayload
+            ) {
+                self.status = status
+                self.purgedAt = purgedAt
+                self.deleted = deleted
+            }
+            public enum CodingKeys: String, CodingKey {
+                case status
+                case purgedAt
+                case deleted
+            }
+        }
     }
 }

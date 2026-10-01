@@ -3620,3 +3620,139 @@ XCUITest(`AboutScreenUITests` 2件・`LargeTextLayoutUITests.testAboutScreenNoHo
 - XCUITest `AbilityPickerUITests` の `chooseSpecies` に `previousQuery` を足した(検索欄の入力は画面ごとに保持されるため、
   同じ画面で2回目に種族を選ぶときは前の入力を消してから打つ。製品の挙動は変えない)。
 - 結果: `swift test` 546件・`make ios-test` 全件成功(unit 546件・XCUITest 47件)。
+
+## P6-7 の受け入れ条件(issue #103 の iOS 側: 「この端末のデータを削除」と ADR-0209 §8 の文言。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+- 日付: 2026-10-01 / 担当レーン: iOS / 関連: ADR-0209 §5(全削除 API)・§6・§7・§8(文言案)、api/openapi.yaml
+  (`deleteRecordDeviceData`・`deleteTeamDeviceData`・`DeletionStatus`)、CLAUDE.md 絶対ルール5、本 ADR「P6-18」(画面の置き場所)、
+  DECISIONS.md 本タスクの新規エントリ「P6-7」、docs/plan.md P6-7
+- 背景: record-svc・team-svc の全削除 API は実装済みで冪等。1回の上限で `status: partial` を返し、クライアントは同じ要求を
+  `completed` まで繰り返す。record と team は別 DB なので **2本とも** 呼び、**両方 `completed` になってから**完了を出す。
+  Web は未実装(`web/src` に該当 UI なし。`openapi.gen.ts` の型だけ)なので、iOS が既定を決め DECISIONS.md に書く(Web が合わせる)。
+
+### 1. 事前に分かった事実(implementer が最初に直すこと)
+
+- **生成クライアントに該当 operation が無い**。`ios/tools/openapi-gen/openapi-generator-config.yaml` の `filter.tags` が
+  `pokedex`・`calc` だけで、`record`・`team` を生成していない(`api/openapi.yaml` は変更不要・契約の変更ではない)。
+  implementer が `tags` に `record`・`team` を足し `make ios-gen` で再生成する(同設定ファイルのコメントの手順どおり)。
+  spec-writer は Generated に触らない指示のため行っていない。
+- 端末ID・セッションIDは `APIPokeCalcService` が全操作に `identity` から付ける(`headers: .init(xDeviceId:xSessionId:)`)。
+  新しい2本も同じ流儀で付ける。**削除しても端末 ID は作り直さない**(`ClientIdentity` は触らない)。
+- 削除するのはサーバー側(record・team)だけ。端末内の構築(`LocalTeamStore`、UserDefaults)は消さない
+  (§8 の確認文が「サーバーから削除します」であるため。DECISIONS.md に記録する)。
+
+### 2. 画面の置き場所と文言(確定)
+
+- 置き場所: **「このアプリについて」画面(`AboutView`)に「データの扱い」セクションを足す**(新しい画面・導線は作らない。
+  設定画面が無く、説明文の置き場所として About が自然なため)。セクションは出典一覧の上に置く。
+  identifier: セクション `deviceDataSection`、説明 `deviceDataExplanation-<0..2>`、ボタン `deleteDeviceDataButton`、
+  状態表示 `deleteDeviceDataStatus`(`Text`。`label` が文言そのもの。操作前は出さない)、再試行ボタン `retryDeleteDeviceDataButton`
+  (失敗・未完了のときだけ)、確認の了承 `confirmDeleteDeviceDataButton`・取り消し `cancelDeleteDeviceDataButton`。
+- 確認は `confirmationDialog` か `alert`(どちらでもよい。message に確認文、2つのボタンに上の identifier)。**確認なしに削除しない**。
+- 文言は `PokeCalcCore.DeviceDataText` の1か所だけ(View はそれを描くだけ。ハードコードしない)。
+
+| 定数 | 文言 |
+|---|---|
+| `explanation[0]` | アカウントはありません。履歴・お気に入り・構築は、この端末に割り当てた ID でサーバーに保存しています。 |
+| `explanation[1]` | ID が変わると(アプリを削除して入れ直したとき)、前のデータは開けなくなります。元に戻す方法はありません。 |
+| `explanation[2]` | 開けなくなったデータは自動的に消えます。計算の履歴は記録から90日、お気に入りと構築は最後に使った日から18か月です。 |
+| `deleteButton` | この端末のデータを削除 |
+| `confirmMessage` | 履歴・お気に入り・構築をサーバーから削除します。元に戻せません。 |
+| `deleting` | 削除しています… |
+| `partialNotice` | まだ残っています。続けて削除します。 |
+| `failure` | サーバーに届きませんでした。通信を確認してもう一度お試しください。 |
+| `completed` | 削除しました。 |
+| `confirmAction` / `cancelAction` / `retryButton` | 空でない文言(spec で値を固定しない。例 削除する / キャンセル / もう一度削除する) |
+| `recordLabel` / `teamLabel` | 履歴・お気に入り / 構築 |
+| `partlyDeleted(label:)` | `"\(label)は削除済みです。"` |
+
+§8 の「Web: サイトデータ消去」側の括弧は iOS では「アプリを削除して入れ直したとき」にする。
+
+### 3. 状態の仕様(`DeviceDataDeletionViewModel`。`@MainActor @Observable`、PokeCalcCore)
+
+- 依存は `DeviceDataService`(新プロトコル。`deleteRecordDeviceData()`/`deleteTeamDeviceData()` が1回の要求ごとに
+  `DeletionProgress`〈`.completed`/`.partial`〉を返す。失敗は `PokeCalcError`)。`PokeCalcService` には混ぜない(計算と切り離す)。
+- `phase`: `idle` → `requestDeletion()` で `confirming`(通信しない)→ `confirmDeletion()` で `deleting` → `finished`。
+  `cancelConfirmation()` で `idle`。`confirmDeletion()` は `confirming` のときだけ動く(削除中の二重起動も無視)。
+- 対象ごとに `DeviceDataTargetOutcome`(`pending`/`completed`/`incomplete`/`failed(code:)`)を持つ。record と team は**独立**に呼ぶ
+  (片方が失敗・未完了でももう片方は進める)。
+- `partial` は同じ要求を繰り返す。対象ごとの要求は `maxRequestsPerTarget`(既定 20)回まで。超えたら `incomplete`
+  (失敗ではない。無限ループしない)。通信エラーは自動で再送せず `failed(code: PokeCalcError.code)`。
+- `statusMessage`: `idle`/`confirming` は nil。`deleting` 中は `deleting`、ただし直前の応答が `partial` なら `partialNotice`。
+  `finished`: 両方 `completed` なら `completed` **のみ**。`incomplete` を含み失敗なしなら `partialNotice`。失敗を含めば `failure`
+  (片方だけ `completed` なら `partlyDeleted(label:)` を添える。`completed` の文言は出さない)。両方失敗なら `failure` だけ。
+- `retry()`: `finished` かつ `canRetry`(`completed` でない対象がある)のときだけ、`completed` でない対象だけを再度削除する
+  (再確認は不要。要求の上限は新しく数える)。それ以外は何もしない。
+- キャンセル(Task の cancel)は尊重する: 以後の要求を送らず、失敗にもせず(`pending` のまま)`phase` を `idle` に戻す。
+  すでに `completed` の対象はそのまま残る。
+
+### 4. モック(XCUITest 用)
+
+- `MockDeviceDataService`(actor)。挙動は起動時の環境変数 `POKECALC_MOCK_DEVICE_DATA`(`POKECALC_USE_MOCK` と同じ流儀)で切り替える:
+  なし/未知 = `immediate`(最初の要求で `completed`)、`partial` = 各対象が1回目 `partial`・2回目 `completed`、
+  `fail-once` = record の1回目だけ transport エラー・以後成功(team は常に成功)。`completed` 後は冪等に `completed`。
+- `AppEnvironment` の `.ready` が `DeviceDataService` も運ぶ(形は implementer の判断。`.ready` に値を足すとき既存の使用箇所を直す)。
+  `APIPokeCalcService` も `DeviceDataService` に準拠させる。
+
+### 5. 受け入れ条件(検証可能な形)
+
+1. `DeviceDataText` が2章の表の文言と完全一致する(`DeviceDataTextTests`)。説明に Web 固有の語(ブラウザ・サイトデータ)を含まない。
+2. 確認の前・取り消し後・`requestDeletion()` なしの `confirmDeletion()` では一切通信しない(`DeviceDataDeletionViewModelTests`)。
+3. record と team の両方が `completed` になってから `statusMessage == completed`。`partial` は `completed` まで繰り返す。
+   `deleting` 中の表示は `deleting`、`partial` を受けた後は `partialNotice`。削除中の二重 confirm で要求が増えない。
+4. `partial` が続き続けても対象ごとに上限回数で止まり(`incomplete`)、もう片方は実行される。
+5. record の失敗でも team を呼び、team の失敗でも record を呼ぶ。失敗は自動再送せず `failed(code:)` を運び、
+   `completed` を出さない。結果は対象ごとに分けて伝える(`partlyDeleted`)。
+6. `retry()` は `completed` でない対象だけを呼び、上限を数え直し、完了で `completed` を出す。再試行できないときは通信しない。
+7. キャンセルで以後の要求を送らず、失敗扱い・状態表示にしない。
+8. モックが3つのシナリオで 3章・4章どおりに動く(`MockDeviceDataServiceTests`)。
+9. XCUITest(`DeviceDataDeletionUITests`・モック): About に説明3文とボタンが見える(確認前は状態表示なし)/ 確認で取り消せる /
+   `partial` シナリオで確認の了承後に「削除しました。」になる / `fail-once` で失敗文言と再試行ボタンが出て、
+   再試行後に「削除しました。」になる / 失敗した後でも計算画面が開き結果の行が出る(絶対ルール5)。
+10. AX5 でセクション(説明・ボタン)が横にはみ出さない(`LargeTextLayoutUITests.testAboutScreenDeviceDataSectionNoHorizontalOverflowAtAX5`)。
+11. 既存の XCTest・XCUITest は1つも編集しない(`LargeTextLayoutUITests` へのメソッド追加のみ)。
+
+### 6. 追加したテスト(spec 時点)
+
+- 足場(既定値付き。`TODO(implementer` を検索): `PokeCalcCore/DeviceDataDeletion.swift`(`DeviceDataService`・`DeletionProgress`・
+  `DeviceDataTarget`・`DeviceDataText`〈文言は空文字列〉・`DeviceDataTargetOutcome`・`DeviceDataDeletionViewModel`〈何もしない〉)、
+  `PokeCalcCore/MockDeviceDataService.swift`(常に `completed`)
+- `Tests/PokeCalcCoreTests/DeviceDataTextTests.swift`(4件)・`DeviceDataDeletionViewModelTests.swift`(16件)・
+  `MockDeviceDataServiceTests.swift`(5件)・`Support/StubDeviceDataService.swift`(台本・呼び出し記録・フック付きのスタブ)
+- `PokeCalcUITests/DeviceDataDeletionUITests.swift`(5件)と `LargeTextLayoutUITests.testAboutScreenDeviceDataSectionNoHorizontalOverflowAtAX5`
+  (既存テストは編集していない)
+
+`swift test`(`ios/PokeCalcKit`): 572件中、新規25件のテストで 61 個のアサーションが失敗(すべて新規3ファイル内。既存547件は成功)。
+`xcodebuild build-for-testing`(XCUITest 6件を含む)は `** TEST BUILD SUCCEEDED **`。XCUITest の実行は未実施(identifier 未実装のため失敗する)。
+
+### 7. 実装者への注意
+
+- 最初に生成設定の `tags` へ `record`・`team` を足し `make ios-gen`(1章)。その後 `APIPokeCalcService` に2本の DELETE を実装して
+  `DeviceDataService` に準拠させる。**spec 時点ではこの API 写像のテストを書けていない**(生成物が無くコンパイルできないため)。
+  `APIPokeCalcServiceTests` の流儀(`RecordingTransport`)で追加すること: DELETE・パス `/api/record/device-data`・`/api/team/device-data`、
+  `X-Device-Id`/`X-Session-Id` ヘッダ、200 の `completed`/`partial` の写像、503(`store_unavailable`・`upstream_unavailable`)→`PokeCalcError`、
+  通信不能→`transport`。
+- `DeviceDataText`・`DeviceDataDeletionViewModel`・`MockDeviceDataService` の `TODO(implementer` を埋める。
+  `partial` の繰り返しは `Task.isCancelled` / `CancellationError` を確認する(`URLError(.cancelled)` は API 層で既に処理されているか確認)。
+- View(`AboutView` の新セクション)は `DeviceDataDeletionViewModel` を `@State` で持ち、`confirmDeletion()`/`retry()` は `Task` で呼び、
+  画面が消えたら cancel する。`CalcViewModel` など計算側は `DeviceDataService` に依存させない。
+- `ios/README.md` の操作説明と `docs/plan.md`(P6-7 のチェック)・DECISIONS.md(Web が合わせるための確定文言)を更新する。
+
+### 実装結果(P6-7。implementer)
+
+- 生成: `filter.tags` に `record`・`team` を足して `make ios-gen`(Generated が約 4000 行増えた。`api/openapi.yaml` は不変)。
+  operation だけに絞る方法は無い(openapi-generator の filter は tags / paths 単位)ため、タグ単位で足した。
+  既存コードは壊れず、`make ios-gen-check` は一致。
+- `APIPokeCalcService` に `DeviceDataService` 準拠を同ファイルの extension で足した(`send`/`client` が private のため)。
+  単体テスト `APIDeviceDataServiceTests`(新規ファイル 4 件: DELETE・パス・ヘッダ・completed/partial・503 の code・transport)。
+- 確認 UI: システムの `alert` / `confirmationDialog` は、XCUITest(iOS 26 系)で同じ identifier のボタンが入れ子に2つ見え、
+  `Failed to tap ... Multiple matching elements` になった(identifier を Button・label の Text のどちらに付けても同じ)。
+  そのためセクション内に確認文と2ボタンのカード(`confirmationCard`)を描く形にした(確認なしに削除しない点は同じ)。
+- `AppEnvironment.ready` に `deviceData` を足した(モックは `MockDeviceDataService(environment:)`、API は同じ `APIPokeCalcService`)。
+  `AboutView(deviceDataService:)`(nil ならセクションを出さない)。
+- **spec の文言の矛盾を解消(2026-10-01)**: `partlyDeleted(label:)` が「構築は削除しました。」だと `completed`「削除しました。」を
+  部分文字列として含み、「片方だけ completed のとき completed の文言を含まない」検査(ViewModel 2件・XCUITest 1件)が成立しなかった。
+  テストを弱めず、文言を「構築は削除済みです。」に変えた(2章の表・`DeviceDataTextTests`・DECISIONS.md も同じ)。
+- テスト結果: `swift test` 576 件中 2 件失敗(上記の矛盾の2件のみ。新規 API 4 件を含む他は成功)/ `make ios-lint ios-gen-check
+  ios-check-request-limits` 成功 / `make ios-test-ui` 53 件中 1 件失敗(`testFailureThenRetryCompletes`。上記の矛盾のみ。
+  AX5 の新規テストを含む他は全件成功)。
