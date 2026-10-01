@@ -8,6 +8,8 @@
 //
 //   node scripts/wasm-conformance.mjs
 //   node scripts/wasm-conformance.mjs --expected /tmp/expected.json --max-reverse-ms 1000
+//   node scripts/wasm-conformance.mjs --vectors engine/wasmapi/testdata/vectors-perf.json --timings each
+//     (計算量の計測。--timings each でベクタごとの最悪値(2周の遅いほう)を出す。ADR-0126 追記)
 //
 // 前提(engine.wasm / wasm_exec.js / node / go)が揃わないときは、スキップせず必ず失敗する。
 // 「未実装ターゲットやスキップの正常終了を成功と数えない」(CLAUDE.md / docs/development-workflow.md)。
@@ -48,11 +50,14 @@ function mustExist(p, what) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const vectorsPath = mustExist(args.vectors ?? path.join(REPO, 'engine/wasmapi/testdata/vectors.json'), '入力ベクタ');
+// 期待値の生成は engine/ を cwd にして走るので、相対パスはここで絶対パスにしておく。
+const vectorsPath = mustExist(path.resolve(args.vectors ?? path.join(REPO, 'engine/wasmapi/testdata/vectors.json')), '入力ベクタ');
 const wasmPath = mustExist(args.wasm ?? path.join(REPO, 'web/public/engine.wasm'), 'engine.wasm');
 const wasmExecPath = mustExist(args['wasm-exec'] ?? path.join(REPO, 'web/public/wasm_exec.js'), 'wasm_exec.js');
 const maxReverseMs = Number(args['max-reverse-ms'] ?? 1000);
 if (!Number.isFinite(maxReverseMs) || maxReverseMs <= 0) die('--max-reverse-ms が数値でない');
+const timingsMode = args.timings ?? 'worst';
+if (timingsMode !== 'worst' && timingsMode !== 'each') die('--timings は worst か each');
 
 // --- 入力ベクタ -------------------------------------------------------------
 
@@ -229,6 +234,11 @@ console.log(`wasm-conformance: ${vectors.length} ベクタ × 2周`);
 console.log(`  engine.wasm  : ${(wasmBytes / 1024 / 1024).toFixed(2)} MB`);
 console.log(`  instantiate  : ${instantiateMs.toFixed(1)} ms`);
 if (reverseWorst) console.log(`  逆算の最悪値 : ${reverseWorst.ms.toFixed(1)} ms (${reverseWorst.name})`);
+if (timingsMode === 'each') {
+  const worstByName = new Map();
+  for (const t of timings) worstByName.set(t.name, Math.max(worstByName.get(t.name) ?? 0, t.ms));
+  for (const [name, ms] of worstByName) console.log(`  ${ms.toFixed(1).padStart(8)} ms  ${name}`);
+}
 
 if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
 
