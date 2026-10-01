@@ -510,17 +510,11 @@ components:
       properties:
         target:
           description: |
-            印の対象。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
+            印の対象(move・attacker_item・attacker_ability・defender_item・defender_ability。ADR-0215 で enum にしない)。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
             一致しないことがある(ADR-0708 §5)。attackerKoUnsupported(順方向)では
             attacker_* = 自分・defender_* = その候補、defenderKoUnsupported(逆方向)では
             attacker_* = その候補・defender_* = 自分を指す。
           type: string
-          enum:
-            - move
-            - attacker_item
-            - attacker_ability
-            - defender_item
-            - defender_ability
         reason:
           description: |
             印の理由。技は機構の値(13 種)か zero_power(威力 0 の攻撃技)、持ち物・特性は
@@ -528,22 +522,6 @@ components:
             この列挙に無い値もそのまま中継する(engine が理由を足したときに judge の版で落とさない。
             ADR-0708 §4・§6。契約は説明で、judge は印の意味を持たない)。
           type: string
-          enum:
-            - alt_defense_stat
-            - alt_offense_stat
-            - always_crit
-            - effectiveness_change
-            - field_specific
-            - fixed_damage
-            - ignore_defense_ranks
-            - move_specific
-            - multi_hit
-            - ohko
-            - priority_change
-            - type_change
-            - variable_power
-            - zero_power
-            - unsupported_effect
         id:
           description: 印が付いた技・持ち物・特性の ID(calc-svc が返したまま)。
           type: string

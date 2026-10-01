@@ -16,17 +16,35 @@ final class UnsupportedMarkDomainTests: XCTestCase {
 
     /// `UnsupportedTarget` の rawValue の集合 = openapi `UnsupportedMark.target` の enum。
     func testUnsupportedTargetMatchesOpenAPIEnum() {
-        XCTAssertEqual(Set(UnsupportedTarget.allCases.map(\.rawValue)),
-                       Set(Components.Schemas.UnsupportedMark.TargetPayload.allCases.map(\.rawValue)))
+        XCTAssertEqual(Set(UnsupportedTarget.allCases.map(\.rawValue)), Self.contractTargets)
         XCTAssertEqual(UnsupportedTarget.allCases.count, 5)
     }
 
     /// `UnsupportedReason` の rawValue の集合 = openapi `UnsupportedMark.reason` の enum
     /// (ADR-0121 の機構13種 + `zero_power` + `unsupported_effect`)。
     func testUnsupportedReasonMatchesOpenAPIEnum() {
-        XCTAssertEqual(Set(UnsupportedReason.allCases.map(\.rawValue)),
-                       Set(Components.Schemas.UnsupportedMark.ReasonPayload.allCases.map(\.rawValue)))
+        XCTAssertEqual(Set(UnsupportedReason.allCases.map(\.rawValue)), Self.contractReasons)
         XCTAssertEqual(UnsupportedReason.allCases.count, 15)
+    }
+
+    /// 契約(api/openapi.yaml の UnsupportedMark)が説明している既知の値。契約は enum にしない(ADR-0215)ので
+    /// 生成型からは取れず、ここに写す(値が増えたらここと各ラベル表を足す)。
+    private static let contractTargets: Set<String> =
+        ["move", "attacker_item", "attacker_ability", "defender_item", "defender_ability"]
+    private static let contractReasons: Set<String> = [
+        "alt_defense_stat", "alt_offense_stat", "always_crit", "effectiveness_change", "field_specific",
+        "fixed_damage", "ignore_defense_ranks", "move_specific", "multi_hit", "ohko", "priority_change",
+        "type_change", "variable_power", "zero_power", "unsupported_effect",
+    ]
+
+    /// 知らない target・reason は `.unknown` に写り、デコードは失敗しない(ADR-0215)。
+    func testUnknownContractValuesMapToUnknown() async throws {
+        let json = Self.calcResultJSON(unsupported: Self.marksJSON([("future_target", "future_reason", "x-id")]))
+        let result = try await makeService(json: json).calcDamage(calcRequest)
+        XCTAssertEqual(result.unsupported.map(\.target), [.unknown])
+        XCTAssertEqual(result.unsupported.map(\.reason), [.unknown])
+        XCTAssertEqual(result.unsupported.map(\.id), ["x-id"])
+        XCTAssertEqual(UnsupportedMarkLabel.text(for: result.unsupported[0], name: "x-id"), "項目「x-id」(詳細は不明)")
     }
 
     // MARK: - 既定値(既存の呼び出し側を壊さない)
@@ -139,8 +157,8 @@ final class UnsupportedMarkDomainTests: XCTestCase {
 
     /// 契約の target 5種・reason 15種のどの値も、同じ rawValue のドメインの値に写る(取り違えが無い)。
     func testEveryContractTargetAndReasonMapsToSameRawValue() async throws {
-        let targets = Components.Schemas.UnsupportedMark.TargetPayload.allCases.map(\.rawValue)
-        let reasons = Components.Schemas.UnsupportedMark.ReasonPayload.allCases.map(\.rawValue)
+        let targets = Self.contractTargets.sorted()
+        let reasons = Self.contractReasons.sorted()
         var marks: [(target: String, reason: String, id: String)] = []
         for target in targets {
             marks.append((target, "unsupported_effect", "test-id-\(target)"))
@@ -190,27 +208,19 @@ final class UnsupportedMarkDomainTests: XCTestCase {
 
     // MARK: - 契約に無い値(将来の追加)
 
-    /// 契約に無い reason が来ると、生成型(`@frozen` の String enum。未知の値の受け皿が無い)のデコードで失敗し、
-    /// 応答全体がデコード失敗(`decode`)になる。クラッシュはしない(画面はエラー表示)。
-    /// 判断(ADR-0501「P6-17」1章): 生成物は変えない(`Generated/` はレーン外)。値の追加は契約の変更なので、
-    /// API レーンが enum を足したら iOS は再生成 + ドメインの enum 追加を同じ変更で行う(`testUnsupportedReasonMatchesOpenAPIEnum`
-    /// と写像の網羅 switch が気付かせる)。
-    func testUnknownReasonIsDecodeErrorNotCrash() async throws {
+    /// 契約に無い reason(古いアプリが知らない値)は応答全体のデコード失敗にせず、`.unknown` に写す(ADR-0215)。
+    func testUnknownReasonMapsToUnknownNotDecodeError() async throws {
         let json = Self.calcResultJSON(unsupported: Self.marksJSON([("move", "test_future_reason", "test-move-a")]))
-        let service = try makeService(json: json)
-        let error = await assertThrowsPokeCalcError("未知の reason") {
-            try await service.calcDamage(self.calcRequest)
-        }
-        XCTAssertEqual(error?.code, PokeCalcError.Code.decode)
+        let result = try await makeService(json: json).calcDamage(calcRequest)
+        XCTAssertEqual(result.unsupported.map(\.reason), [.unknown])
+        XCTAssertEqual(result.unsupported.map(\.target), [.move])
     }
 
-    /// 契約に無い target も同じ(応答全体がデコード失敗)。
-    func testUnknownTargetIsDecodeErrorNotCrash() async throws {
+    /// 契約に無い target も同じ(`.unknown`。名前は引けないので ID を出す)。
+    func testUnknownTargetMapsToUnknownNotDecodeError() async throws {
         let json = Self.calcResultJSON(unsupported: Self.marksJSON([("test_future_target", "multi_hit", "test-move-a")]))
-        let service = try makeService(json: json)
-        let error = await assertThrowsPokeCalcError("未知の target") {
-            try await service.calcDamage(self.calcRequest)
-        }
-        XCTAssertEqual(error?.code, PokeCalcError.Code.decode)
+        let result = try await makeService(json: json).calcDamage(calcRequest)
+        XCTAssertEqual(result.unsupported.map(\.target), [.unknown])
+        XCTAssertEqual(result.unsupported.map(\.id), ["test-move-a"])
     }
 }

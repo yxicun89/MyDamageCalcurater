@@ -104,90 +104,6 @@ func (e Terrain) Valid() bool {
 	}
 }
 
-// Defines values for UnsupportedMarkReason.
-const (
-	AltDefenseStat      UnsupportedMarkReason = "alt_defense_stat"
-	AltOffenseStat      UnsupportedMarkReason = "alt_offense_stat"
-	AlwaysCrit          UnsupportedMarkReason = "always_crit"
-	EffectivenessChange UnsupportedMarkReason = "effectiveness_change"
-	FieldSpecific       UnsupportedMarkReason = "field_specific"
-	FixedDamage         UnsupportedMarkReason = "fixed_damage"
-	IgnoreDefenseRanks  UnsupportedMarkReason = "ignore_defense_ranks"
-	MoveSpecific        UnsupportedMarkReason = "move_specific"
-	MultiHit            UnsupportedMarkReason = "multi_hit"
-	Ohko                UnsupportedMarkReason = "ohko"
-	PriorityChange      UnsupportedMarkReason = "priority_change"
-	TypeChange          UnsupportedMarkReason = "type_change"
-	UnsupportedEffect   UnsupportedMarkReason = "unsupported_effect"
-	VariablePower       UnsupportedMarkReason = "variable_power"
-	ZeroPower           UnsupportedMarkReason = "zero_power"
-)
-
-// Valid indicates whether the value is a known member of the UnsupportedMarkReason enum.
-func (e UnsupportedMarkReason) Valid() bool {
-	switch e {
-	case AltDefenseStat:
-		return true
-	case AltOffenseStat:
-		return true
-	case AlwaysCrit:
-		return true
-	case EffectivenessChange:
-		return true
-	case FieldSpecific:
-		return true
-	case FixedDamage:
-		return true
-	case IgnoreDefenseRanks:
-		return true
-	case MoveSpecific:
-		return true
-	case MultiHit:
-		return true
-	case Ohko:
-		return true
-	case PriorityChange:
-		return true
-	case TypeChange:
-		return true
-	case UnsupportedEffect:
-		return true
-	case VariablePower:
-		return true
-	case ZeroPower:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for UnsupportedMarkTarget.
-const (
-	AttackerAbility UnsupportedMarkTarget = "attacker_ability"
-	AttackerItem    UnsupportedMarkTarget = "attacker_item"
-	DefenderAbility UnsupportedMarkTarget = "defender_ability"
-	DefenderItem    UnsupportedMarkTarget = "defender_item"
-	Move            UnsupportedMarkTarget = "move"
-)
-
-// Valid indicates whether the value is a known member of the UnsupportedMarkTarget enum.
-func (e UnsupportedMarkTarget) Valid() bool {
-	switch e {
-	case AttackerAbility:
-		return true
-	case AttackerItem:
-		return true
-	case DefenderAbility:
-		return true
-	case DefenderItem:
-		return true
-	case Move:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for Weather.
 const (
 	WeatherNone Weather = "none"
@@ -570,26 +486,14 @@ type UnsupportedMark struct {
 	// unsupported_effect(効果スキーマで表せない)。judge はこの値を検査せず、
 	// この列挙に無い値もそのまま中継する(engine が理由を足したときに judge の版で落とさない。
 	// ADR-0708 §4・§6。契約は説明で、judge は印の意味を持たない)。
-	Reason UnsupportedMarkReason `json:"reason"`
+	Reason string `json:"reason"`
 
-	// Target 印の対象。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
+	// Target 印の対象(move・attacker_item・attacker_ability・defender_item・defender_ability。ADR-0215 で enum にしない)。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
 	// 一致しないことがある(ADR-0708 §5)。attackerKoUnsupported(順方向)では
 	// attacker_* = 自分・defender_* = その候補、defenderKoUnsupported(逆方向)では
 	// attacker_* = その候補・defender_* = 自分を指す。
-	Target UnsupportedMarkTarget `json:"target"`
+	Target string `json:"target"`
 }
-
-// UnsupportedMarkReason 印の理由。技は機構の値(13 種)か zero_power(威力 0 の攻撃技)、持ち物・特性は
-// unsupported_effect(効果スキーマで表せない)。judge はこの値を検査せず、
-// この列挙に無い値もそのまま中継する(engine が理由を足したときに judge の版で落とさない。
-// ADR-0708 §4・§6。契約は説明で、judge は印の意味を持たない)。
-type UnsupportedMarkReason string
-
-// UnsupportedMarkTarget 印の対象。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
-// 一致しないことがある(ADR-0708 §5)。attackerKoUnsupported(順方向)では
-// attacker_* = 自分・defender_* = その候補、defenderKoUnsupported(逆方向)では
-// attacker_* = その候補・defender_* = 自分を指す。
-type UnsupportedMarkTarget string
 
 // Weather defines model for Weather.
 type Weather string

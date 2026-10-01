@@ -193,6 +193,7 @@ public enum UnsupportedMarkLabel {
         case .attackerAbility: return "攻撃側の特性"
         case .defenderItem: return "防御側の持ち物"
         case .defenderAbility: return "防御側の特性"
+        case .unknown: return "項目"
         }
     }
 
@@ -214,6 +215,7 @@ public enum UnsupportedMarkLabel {
         case .moveSpecific: return "技固有の効果"
         case .zeroPower: return "威力が技の処理で決まる"
         case .unsupportedEffect: return "効果を計算に反映していない"
+        case .unknown: return "詳細は不明"
         }
     }
 
