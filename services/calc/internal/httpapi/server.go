@@ -208,7 +208,7 @@ func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) erro
 		return err
 	}
 	var req api.CalcRequest
-	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
+	if err := decodeStrict(limitedBody(ctx), &req, "attacker", "defender"); err != nil {
 		return err
 	}
 	format, err := parseFormat(req.Format)
@@ -247,7 +247,6 @@ func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) erro
 	}
 	result := calcResultFrom(res)
 	// イベント発行は非同期・応答をブロックしない(CLAUDE.md 絶対ルール5・ADR-0212 §6)。
-	// req.Attacker.MoveId ではなく req.MoveId(トップレベル)を使う(calc-svc は前者を読まない)。
 	// Publish 自体は ctx.JSON より前に呼ぶ(前後どちらでも安全。ADR-0212 §6 参照)。
 	s.publisher.Publish(params.XDeviceId, params.XSessionId, calcevents.OperationCalc, time.Now().UTC(), &calcevents.CalcDetail{
 		Format: string(req.Format), Attacker: req.Attacker, Defender: req.Defender,
@@ -263,7 +262,7 @@ func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 		return err
 	}
 	var req api.BulkCalcRequest
-	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
+	if err := decodeStrict(limitedBody(ctx), &req, "attacker"); err != nil {
 		return err
 	}
 	if err := checkBulkLimits(req); err != nil {
@@ -334,7 +333,7 @@ func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) er
 		return err
 	}
 	var req api.ReverseRequest
-	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
+	if err := decodeStrict(limitedBody(ctx), &req, "known"); err != nil {
 		return err
 	}
 	if err := checkReverseLimits(req); err != nil {

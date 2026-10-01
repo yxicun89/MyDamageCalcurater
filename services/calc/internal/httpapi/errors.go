@@ -101,7 +101,10 @@ func validateIndividual(label string, in engine.Individual) error {
 // --- 厳格デコード(engine/wasmapi の decodeStrict と同じ振る舞い) --------------
 
 // decodeStrict は未知フィールドを拒否して JSON オブジェクトを dst へ読む。
-func decodeStrict(r io.Reader, dst any) error {
+// individualKeys は本文の直下にある Individual のキー名(attacker / defender / known)で、
+// それぞれの sp(StatBlock の6キー)が契約どおりそろっていることも確かめる(issue #316。
+// 生成型は値型でゼロ値が入るため、キーの有無は生の JSON で見る。ADR-0200 §4)。
+func decodeStrict(r io.Reader, dst any, individualKeys ...string) error {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return newError(api.InvalidJson, "リクエスト本文を読めない: %v", err)
@@ -119,7 +122,57 @@ func decodeStrict(r io.Reader, dst any) error {
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return newError(api.InvalidJson, "JSON の後ろに余計なデータがある")
 	}
+	return requireIndividualSP(data, individualKeys)
+}
+
+// statBlockKeys は契約の StatBlock の必須6キー。
+var statBlockKeys = []string{"hp", "atk", "def", "spa", "spd", "spe"}
+
+// requireIndividualSP は、本文直下の各 Individual の sp が存在し、6キーすべてを(null でなく)持つことを
+// 確かめる(欠落は invalid_input。judge-svc の toStats と同じ扱い)。Individual 自体の欠落は
+// ここでは見ない(speciesKey 空として既存どおり unknown_species になる)。encoding/json は
+// キー名の大文字小文字を区別せず束縛するので("Attacker" は attacker に入る)、ここでも EqualFold で探す。
+func requireIndividualSP(data []byte, individualKeys []string) error {
+	if len(individualKeys) == 0 {
+		return nil
+	}
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(data, &top); err != nil {
+		return nil // decodeStrict が構文は検証済み
+	}
+	for _, key := range individualKeys {
+		rawInd, ok := lookupFold(top, key)
+		if !ok {
+			continue
+		}
+		var ind map[string]json.RawMessage
+		if json.Unmarshal(rawInd, &ind) != nil || ind == nil {
+			continue
+		}
+		var sp map[string]json.RawMessage
+		if raw, ok := lookupFold(ind, "sp"); !ok || json.Unmarshal(raw, &sp) != nil || sp == nil {
+			return newError(api.InvalidInput, "%s.sp が必須(能力ポイントの6キーをすべて指定する)", key)
+		}
+		for _, k := range statBlockKeys {
+			if raw, ok := lookupFold(sp, k); !ok || string(bytes.TrimSpace(raw)) == "null" {
+				return newError(api.InvalidInput, "%s.sp.%s が必須(能力ポイントの6キーをすべて指定する)", key, k)
+			}
+		}
+	}
 	return nil
+}
+
+// lookupFold は大文字小文字を区別せずキーを探す(encoding/json の束縛と同じ)。
+func lookupFold(m map[string]json.RawMessage, key string) (json.RawMessage, bool) {
+	if v, ok := m[key]; ok {
+		return v, true
+	}
+	for k, v := range m {
+		if strings.EqualFold(k, key) {
+			return v, true
+		}
+	}
+	return nil, false
 }
 
 // unknownFieldPrefix は encoding/json が DisallowUnknownFields で返すエラーの接頭辞。

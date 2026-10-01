@@ -36,6 +36,8 @@ public struct APIPokeCalcService: PokeCalcService {
         switch output {
         case .ok(let ok):
             return try ok.body.json.map(Self.domainSpeciesSummary)
+        case .badRequest(let response):
+            throw try Self.domainErrorFromSchema(response.body.json)
         case .serviceUnavailable(let response):
             throw try Self.domainErrorFromSchema(response.body.json)
         case .default(_, let error):
@@ -53,6 +55,8 @@ public struct APIPokeCalcService: PokeCalcService {
         switch output {
         case .ok(let ok):
             return try Self.domainSpeciesDetail(ok.body.json)
+        case .badRequest(let response):
+            throw try Self.domainErrorFromSchema(response.body.json)
         case .notFound(let response):
             // 404 は他の操作の `Components.Responses._Error` と違い、getSpecies だけの inline body
             // (`#/paths/.../404` を `#/responses/Error` の参照ではなく直接定義しているため。ADR-0105 の
@@ -75,6 +79,8 @@ public struct APIPokeCalcService: PokeCalcService {
         switch output {
         case .ok(let ok):
             return try ok.body.json.map(Self.domainMove)
+        case .badRequest(let response):
+            throw try Self.domainErrorFromSchema(response.body.json)
         case .serviceUnavailable(let response):
             throw try Self.domainErrorFromSchema(response.body.json)
         case .default(_, let error):
@@ -144,6 +150,8 @@ public struct APIPokeCalcService: PokeCalcService {
         switch output {
         case .ok(let ok):
             return try ok.body.json.map { Item(id: $0.id, nameJa: $0.nameJa) }
+        case .badRequest(let response):
+            throw try Self.domainErrorFromSchema(response.body.json)
         case .serviceUnavailable(let response):
             throw try Self.domainErrorFromSchema(response.body.json)
         case .default(_, let error):
@@ -428,7 +436,6 @@ public struct APIPokeCalcService: PokeCalcService {
             natureId: individual.natureId,
             abilityId: individual.abilityId,
             itemId: individual.itemId,
-            moveId: individual.moveId,
             sp: .init(value1: generatedStatBlock(individual.sp)),
             ranks: generatedRankBlock(individual.ranks),
             teraType: individual.teraType.map { .init(value1: generatedPokeType($0)) },

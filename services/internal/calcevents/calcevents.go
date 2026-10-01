@@ -59,8 +59,7 @@ type CalcDetail struct {
 	Format   string         `json:"format"`
 	Attacker api.Individual `json:"attacker"`
 	Defender api.Individual `json:"defender"`
-	// MoveID は req.MoveId(CalcRequest のトップレベル)から取る。api.Individual.MoveId ではない
-	// (calc-svc の resolveIndividual は Individual.MoveId を読まない)。
+	// MoveID は req.MoveId(CalcRequest のトップレベル)から取る。Individual に moveId は無い(ADR-0200 §4)。
 	MoveID  string           `json:"moveId"`
 	Field   *api.FieldState  `json:"field,omitempty"`
 	Options *api.CalcOptions `json:"options,omitempty"`
