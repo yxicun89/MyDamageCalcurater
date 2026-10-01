@@ -82,7 +82,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `import-dry-run` | 162 | — | `cd services && $(GO) run ./pokedex/cmd/import -data ../data -dry-run` | なし(DB 非接触・ネットワークなし) |
 | `import-fetch` | 166 | — | `cd tools/importer && npm ci && node fetch.mjs` | node_modules 更新(ネットワーク), 外部ネットワーク取得 |
 | `import-check-upstream` | 170 | — | `cd tools/importer && npm ci && node check-upstream.mjs` | node_modules 更新(ネットワーク), 外部ネットワーク取得 |
-| `pokedex-export` | 174 | — | `cd services && $(GO) run ./pokedex/cmd/pokedex export -out ../data/generated/readmodel` | DB を読み、data/generated/readmodel に4ファイルを書込 |
+| `pokedex-export` | 174 | — | `cd services && $(GO) run ./pokedex/cmd/pokedex export -out ../data/generated/readmodel` | DB を読み、data/generated/readmodel に6ファイル(4ファイル+type-chart.json・metadata.json。ADR-0128)を書込 |
 | `import-k8s` | 178 | — | `current_context="$$(kubectl config current-context)"; \ ⏎ if [ "$$current_context" != "k3d-$(CLUSTER)" ]; then \ ⏎ echo "import-k8s: 現在の kubectl context '$$current_con…` | **クラスタに Job 作成**(CronJob pokedex-import から。context 検査あり) |
 | `pokedex-registry-push` | 266 | — | `./scripts/pokedex-registry-push.sh` | docker build(--target server)/save, balance-registry へ port-forward(5003)して crane push(context 検査あり。**クラスタ内レジストリへ push**) |
 | `k8s-render` | 187 | — | `kubectl kustomize deploy/k8s/overlays/local >/dev/null ⏎ kubectl kustomize deploy/k8s/overlays/cloud >/dev/null ⏎ echo "k8s-render: local / cloud overlay の描画を確認"` | なし(kustomize 描画のみ) |
