@@ -124,38 +124,6 @@ func assertMetricsFormat(t *testing.T, body string) {
 	metricsParse(t, body)
 }
 
-// assertCountedOnce は req を1回送ると http_requests_total{method,path=wantPath,status=実際の応答}
-// と http_request_duration_seconds_count{method,path=wantPath} がちょうど1増えることを確かめる。
-// 実際に来たパス(req.target)が wantPath と違う場合は、生のパスがどのラベルにも入らないことも確かめる。
-func assertCountedOnce(t *testing.T, h http.Handler, req metricsRequest, wantPath string) *httptest.ResponseRecorder {
-	t.Helper()
-	before := metricsParse(t, metricsScrape(t, h))
-	rec := metricsDo(h, req.method, req.target, req.header, req.body)
-	after := metricsParse(t, metricsScrape(t, h))
-
-	counter := map[string]string{"method": req.method, "path": wantPath, "status": strconv.Itoa(rec.Code)}
-	if d := metricsSum(after, metricsRequestsTotal, counter) - metricsSum(before, metricsRequestsTotal, counter); d != 1 {
-		t.Errorf("%s %s(応答 %d)の後 %s%v の増分 = %v, want 1", req.method, req.target, rec.Code, metricsRequestsTotal, counter, d)
-	}
-	histogram := map[string]string{"method": req.method, "path": wantPath}
-	name := metricsDurationSeconds + "_count"
-	if d := metricsSum(after, name, histogram) - metricsSum(before, name, histogram); d != 1 {
-		t.Errorf("%s %s の後 %s%v の増分 = %v, want 1", req.method, req.target, name, histogram, d)
-	}
-	if rawPath := strings.SplitN(req.target, "?", 2)[0]; rawPath != wantPath {
-		// 生のパスの最後のセグメント(未知の ID 等)がどのラベル値にも入っていないこと。
-		rawSegment := rawPath[strings.LastIndex(rawPath, "/")+1:]
-		for _, s := range after {
-			for k, v := range s.labels {
-				if rawSegment != "" && strings.Contains(v, rawSegment) {
-					t.Errorf("%s{%s=%q}: 実際に来たパスの一部 %q がラベルに入っている(ルーティングパターン %q を使うこと)", s.name, k, v, rawSegment, wantPath)
-				}
-			}
-		}
-	}
-	return rec
-}
-
 // assertMetricsNotSelfCounted は /metrics を何度呼んでも指標の合計が変わらず、path="/metrics" のサンプルが無いことを確かめる。
 func assertMetricsNotSelfCounted(t *testing.T, h http.Handler) {
 	t.Helper()

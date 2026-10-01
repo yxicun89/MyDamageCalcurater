@@ -133,6 +133,7 @@ func TestSchemaNotReadyIsDistinct(t *testing.T) {
 		t.Fatal("ErrSchemaNotReady が nil")
 	}
 	for _, other := range []error{importer.ErrInvalidInput, importer.ErrInvalidData, importer.ErrBlocked, importer.ErrKeyChanged} {
+		//lint:ignore SA1032 sentinel が other を包んでいないこと(逆向き)も確かめるため、引数順をあえて逆にしている
 		if errors.Is(importer.ErrSchemaNotReady, other) {
 			t.Errorf("ErrSchemaNotReady が %v と区別できない", other)
 		}
