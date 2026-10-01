@@ -837,6 +837,18 @@
     `aboutUnofficialNotice`/`aboutDataSource-<index>` を表示(design.md のトークンのみ・`lineLimit` なし)。
     `swift test` 500件全件成功、`make ios-test` 全件成功(unit 513件・XCUITest 44件。`AboutScreenUITests` 2件・
     `LargeTextLayoutUITests.testAboutScreenNoHorizontalOverflowAtAX5` を含む)。既存テストは編集していない。
+- [x] P6-19 issue #272 の iOS 側: 防御側・相手の特性の選択と、特性で分かれた行・候補の表示。計算画面の「詳細」に
+  「防御側の特性」(`defenderOverride.abilityId`)、逆算画面に「相手の特性」(`unknownAbilityId`)を足す(既定は「指定なし」=
+  サーバーが種族の特性をすべて試す。防御側・相手の種族の変更・入れ替え・側の切り替えで指定なしに戻る)。応答の
+  `abilityId`/`abilityIds` を写し、**特性で分かれた行・候補の ID の衝突**(`<preset>@<item>` が重なる)を、分かれた時だけ
+  `@<特性 ID>` を足す規則で解消し、分かれた行・候補に「特性: A / B」を出す。受け入れ条件・判断・identifier は ADR-0501「P6-19」。
+  Web はラベル・置き場所を DECISIONS.md 2026-09-26「P6-19」に揃える。
+  - spec-writer(2026-09-26): 受け入れ条件・失敗するテストのみ追加、実装はまだ(`swift test`: 546 件中 32 件失敗
+    〈すべて新しいテスト〉。XCUITest `AbilityPickerUITests` 3件は `build-for-testing` のみ確認)。モックに特性を2つ持つ架空の種族
+    9004-000 と、フィクスチャの任意項目 `nullifiesMoveType` を追加
+  - 実装(2026-10-01): 防御側・相手の特性の選択と、特性で分かれた行・候補の ID・副題を実装。`swift test` 546件全件成功、
+    `make ios-test` 全件成功(unit 546件・XCUITest 47件。`AbilityPickerUITests` 3件を含む)。既存テストは編集していない
+  - 後続候補(対象外として記録): 逆算画面の自分(既知側)の特性の選択(プリセット経路。構築の個体なら既に `known.abilityId` に載る)
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)。Argo CD の実同期もローカル k3d で確認済み(ADR-0018: Git 変更 32fbb9e → manual sync → Pod の image digest 一致)

@@ -32,6 +32,8 @@ public enum KOTier: Equatable, Sendable {
 /// 一括計算の1行(`BulkCalcRow`)を画面向けに整形した値。
 public struct BulkRowDisplay: Identifiable, Equatable, Sendable {
     /// XCUITest の `calcResultRow-<id>` に使う安定な ID(`<preset の rawValue>@<itemId。nil は "-">`)。
+    /// 同じ preset・持ち物の行が特性で分かれたときだけ `@<代表の特性 ID>` が付く
+    /// (`ResultEntryIdentity`。ADR-0501「P6-19」1章。組み立ては `BulkResultDisplay`)。
     public let id: String
     public let preset: DefenderPreset
     /// 調整名。サーバーの `presetLabel` をそのまま使う(クライアントで名前を作らない)。
@@ -52,9 +54,20 @@ public struct BulkRowDisplay: Identifiable, Equatable, Sendable {
     /// この行だけに付いた未対応の印の注記(`UnsupportedNoticeText.rowNote`。無ければ nil)。
     /// 全行に共通する印は行ではなく `BulkResultDisplay.unsupportedNotice` に出す(ADR-0501「P6-17」3章)。
     public let unsupportedNote: String?
+    /// この行と結果が同じになる防御側の特性(`BulkCalcRow.abilityIds` のまま)。
+    public let abilityIds: [String]
+    /// 特性で分かれた行の副題(「特性: A / B」。`AbilityGroupLabel`)。分かれていなければ nil
+    /// (ADR-0501「P6-19」2章。組み立ては `BulkResultDisplay`)。
+    public let abilityText: String?
 
-    public init(row: BulkCalcRow, items: [Item], unsupportedNote: String? = nil) {
+    /// `id` を省略すると `baseID`(特性を含まない既存の形)。`abilityText` は既定 nil。
+    public init(
+        row: BulkCalcRow, items: [Item], unsupportedNote: String? = nil,
+        id: String? = nil, abilityText: String? = nil
+    ) {
         self.unsupportedNote = unsupportedNote
+        abilityIds = row.abilityIds
+        self.abilityText = abilityText
         preset = row.preset
         presetLabel = row.presetLabel
         itemId = row.itemId
@@ -65,7 +78,12 @@ public struct BulkRowDisplay: Identifiable, Equatable, Sendable {
         koText = Self.koText(row.result.ko)
         effectiveness = row.result.effectiveness
         koTier = KOTier(row.result.ko)
-        id = "\(row.preset.rawValue)@\(row.itemId ?? Self.noItemIDPlaceholder)"
+        self.id = id ?? Self.baseID(for: row)
+    }
+
+    /// 特性を含まない行の ID(`<preset の rawValue>@<itemId。nil は "-">`)。
+    public static func baseID(for row: BulkCalcRow) -> String {
+        "\(row.preset.rawValue)@\(row.itemId ?? noItemIDPlaceholder)"
     }
 
     /// `id` で「持ち物なし」を表す記号。

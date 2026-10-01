@@ -100,6 +100,34 @@ public enum CalcConditionLabels {
     public static let rankIncrement = "ランクを上げる"
 }
 
+/// 防御側・相手側の特性の選択(issue #272。ADR-0501「P6-19」3章)。Web レーンも同じ語を使う
+/// (docs/ai-shared/DECISIONS.md 2026-09-26「P6-19」)。「指定なし」は `CalcConditionLabels.abilityUnspecified`
+/// と同じ語(意味は「種族の特性をすべて試す」。攻撃側の「指定なし」と語を分けない)。
+public enum AbilityPickerLabels {
+    /// 計算画面の「詳細」の小見出し(`CalcConditionLabels.abilityTitle`「攻撃側の特性」の対)。
+    public static let defenderTitle = "防御側の特性"
+    /// 逆算画面の小見出し(相手 = 逆算する側)。
+    public static let opponentTitle = "相手の特性"
+    /// 特性を指定しない選択肢(= 送らない)。
+    public static let unspecified = CalcConditionLabels.abilityUnspecified
+}
+
+/// 特性で分かれた行・候補の副題(issue #272。ADR-0501「P6-19」2章)。例「特性: テストとくせいA / テストとくせいB」。
+public enum AbilityGroupLabel {
+    /// 副題の頭。
+    public static let prefix = "特性: "
+    /// 同じ結果になる特性の区切り。
+    public static let separator = " / "
+
+    /// `abilityIds` を `names`(特性 ID → 日本語名)で引いて並べる(順序は `abilityIds` のまま)。
+    /// 名前が無い ID は ID のまま出す(黙って消さない)。`abilityIds` が空なら nil。
+    public static func text(abilityIds: [String], names: [String: String]) -> String? {
+        guard !abilityIds.isEmpty else { return nil }
+        let joined = abilityIds.map { names[$0] ?? $0 }.joined(separator: separator)
+        return "\(prefix)\(joined)"
+    }
+}
+
 /// 天候の日本語名(openapi `Weather` の5値)。
 public enum WeatherLabel {
     public static func japaneseName(for weather: Weather) -> String {

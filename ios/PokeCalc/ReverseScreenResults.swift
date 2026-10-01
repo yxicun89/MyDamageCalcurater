@@ -83,6 +83,12 @@ private struct ReverseCandidateCardView: View {
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
                 .accessibilityIdentifier("reverseCandidateMatch-\(candidate.id)")
+            if let abilityText = candidate.abilityText {
+                Text(abilityText)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .accessibilityIdentifier("reverseCandidateAbility-\(candidate.id)")
+            }
             if let unsupportedNote = candidate.unsupportedNote {
                 Text(unsupportedNote)
                     .font(TextStyleToken.caption.font)

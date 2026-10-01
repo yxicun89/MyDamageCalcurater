@@ -156,6 +156,12 @@ struct ResultRowView: View {
                     .scaleEffect(badgeScale)
                     .accessibilityIdentifier("calcResultKO-\(display.id)")
             }
+            if let abilityText = display.abilityText {
+                Text(abilityText)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .accessibilityIdentifier("calcResultAbility-\(display.id)")
+            }
             if let unsupportedNote = display.unsupportedNote {
                 Text(unsupportedNote)
                     .font(TextStyleToken.caption.font)

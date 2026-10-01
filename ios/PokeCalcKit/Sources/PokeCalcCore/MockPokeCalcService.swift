@@ -112,7 +112,7 @@ public struct MockPokeCalcService: PokeCalcService {
         guard fixtures.species.contains(where: { $0.key == request.attacker.speciesKey }) else {
             throw Self.notFoundError("種族", request.attacker.speciesKey)
         }
-        guard fixtures.species.contains(where: { $0.key == request.defenderSpeciesKey }) else {
+        guard let defenderEntry = fixtures.species.first(where: { $0.key == request.defenderSpeciesKey }) else {
             throw Self.notFoundError("種族", request.defenderSpeciesKey)
         }
         let category = try Self.domainMoveCategory(move.category)
@@ -124,20 +124,73 @@ public struct MockPokeCalcService: PokeCalcService {
         let commonMarks = try Self.moveMarks(move, category: category)
             + [itemMark(itemId: request.attacker.itemId, target: .attackerItem)].compactMap { $0 }
 
-        // 行の順序は「プリセット優先」(presets × itemVariants。plan.md P3-1)。
+        // 防御側の特性の候補(ADR-0501「P6-19」5章): calcBulk は常に防御側が技を受ける側なので
+        // `nullifiesMoveType` は常に効く。行はプリセット → 特性の組 → 持ち物 の順(plan.md P3-1 の
+        // 「プリセット優先」の続き)。
+        let abilityGroups = try Self.defenderAbilityGroups(
+            species: defenderEntry, moveType: move.type, applyNullify: true,
+            requestedAbilityId: request.defenderAbilityId
+        )
         var rows: [BulkCalcRow] = []
         for preset in presets {
             let cannedRow = try cannedResult(forKey: preset.rawValue, category: category)
             let stats = try cannedDefenderStats(forKey: preset.rawValue)
             let defender = Self.defenderForRow(preset: preset, natures: domainNatures, stats: stats)
             let label = Self.presetLabel(preset)
-            for itemId in itemVariants {
-                var result = cannedRow
-                result.unsupported = commonMarks + [itemMark(itemId: itemId, target: .defenderItem)].compactMap { $0 }
-                rows.append(BulkCalcRow(preset: preset, presetLabel: label, itemId: itemId, defender: defender, result: result))
+            for group in abilityGroups {
+                for itemId in itemVariants {
+                    var result = group.nullifies ? Self.zeroDamageResult(from: cannedRow) : cannedRow
+                    result.unsupported = commonMarks + [itemMark(itemId: itemId, target: .defenderItem)].compactMap { $0 }
+                    rows.append(BulkCalcRow(
+                        preset: preset, presetLabel: label, itemId: itemId, defender: defender, result: result,
+                        abilityId: group.ids.first, abilityIds: group.ids
+                    ))
+                }
             }
         }
         return BulkCalcResult(defenderSpeciesKey: request.defenderSpeciesKey, rows: rows)
+    }
+
+    /// 防御側の特性の候補をまとめる(ADR-0501「P6-19」5章)。`requestedAbilityId` があればその1件
+    /// (種族が持たなければ `invalid_input`)。無ければ種族の特性の先頭3件を、`applyNullify` かつ
+    /// `nullifiesMoveType == moveType` かどうかでグループ化する(同じ真偽値のものを1組にまとめ、
+    /// 種族の並び順で最初に現れた組を先に返す。代表 `ids.first` は組の中で最初に現れた特性)。
+    private static func defenderAbilityGroups(
+        species: MockFixtures.SpeciesEntry, moveType: String, applyNullify: Bool, requestedAbilityId: String?
+    ) throws -> [(ids: [String], nullifies: Bool)] {
+        if let requestedAbilityId {
+            guard species.abilities.contains(where: { $0.id == requestedAbilityId }) else {
+                throw PokeCalcError(
+                    code: PokeCalcError.Code.invalidInput,
+                    message: "防御側の種族が持たない特性: \(requestedAbilityId)"
+                )
+            }
+            let nullifies = applyNullify
+                && species.abilities.first(where: { $0.id == requestedAbilityId })?.nullifiesMoveType == moveType
+            return [(ids: [requestedAbilityId], nullifies: nullifies)]
+        }
+        var groups: [(ids: [String], nullifies: Bool)] = []
+        for ability in species.abilities.prefix(3) {
+            let nullifies = applyNullify && ability.nullifiesMoveType == moveType
+            if let index = groups.firstIndex(where: { $0.nullifies == nullifies }) {
+                groups[index].ids.append(ability.id)
+            } else {
+                groups.append((ids: [ability.id], nullifies: nullifies))
+            }
+        }
+        return groups
+    }
+
+    /// 無効の特性が効いたときの結果(ダメージ 0。ADR-0501「P6-19」5章: 防御側の実数値・相性・分類はそのまま)。
+    private static func zeroDamageResult(from result: CalcResult) -> CalcResult {
+        var zero = result
+        zero.rolls = Array(repeating: 0, count: result.rolls.count)
+        zero.minDamage = 0
+        zero.maxDamage = 0
+        zero.minPercent = 0
+        zero.maxPercent = 0
+        zero.ko = KOChance(hits: 0, guaranteed: false, chancePercent: 0, displayChancePercent: 0)
+        return zero
     }
 
     /// openapi `BulkCalcRequest.presets` の description / ADR-0009: 省略(空を含む)時の既定セット。
@@ -213,7 +266,7 @@ public struct MockPokeCalcService: PokeCalcService {
         guard !request.observations.isEmpty else {
             throw PokeCalcError(code: PokeCalcError.Code.invalidInput, message: "observations が空")
         }
-        guard fixtures.species.contains(where: { $0.key == request.unknownSpeciesKey }) else {
+        guard let unknownEntry = fixtures.species.first(where: { $0.key == request.unknownSpeciesKey }) else {
             throw Self.notFoundError("種族", request.unknownSpeciesKey)
         }
         guard let move = fixtures.moves.first(where: { $0.id == request.moveId }) else {
@@ -231,28 +284,43 @@ public struct MockPokeCalcService: PokeCalcService {
         let candidateTarget: UnsupportedTarget = request.side == .defender ? .defenderItem : .attackerItem
         let knownItemMark = itemMark(itemId: request.known.itemId, target: knownTarget)
 
-        // §R1: 候補 = (性格クラス, 持ち物)。空の持ち物候補は「持ち物なし」の1通り。
+        // 相手の特性の候補(ADR-0501「P6-19」5章): `nullifiesMoveType` が効くのは相手が防御側
+        // (side=defender)のときだけ(side=attacker では相手が攻撃側なので、自分の技を無効にする
+        // 効果は働かない)。候補は 性格クラス → 特性の組 → 持ち物 の順に作ってから mismatch の
+        // 昇順に安定ソートする(§R1: 候補 = (性格クラス, 持ち物)。空の持ち物候補は「持ち物なし」の1通り)。
+        let abilityGroups = try Self.defenderAbilityGroups(
+            species: unknownEntry, moveType: move.type, applyNullify: request.side == .defender,
+            requestedAbilityId: request.unknownAbilityId
+        )
         let items = request.itemCandidates.isEmpty ? [String?.none] : request.itemCandidates
         var candidates: [ReverseCandidate] = []
         for natureClass in NatureClass.allCases {
             let nature = Self.representativeNature(for: natureClass, stat: stat)
             let natureId = Self.natureID(for: nature, in: domainNatures)
-            for itemId in items {
-                let candidateItemMark = itemMark(itemId: itemId, target: candidateTarget)
-                var attackerItemMark: UnsupportedMark?
-                var defenderItemMark: UnsupportedMark?
-                if knownTarget == .attackerItem { attackerItemMark = knownItemMark } else { defenderItemMark = knownItemMark }
-                if candidateTarget == .attackerItem { attackerItemMark = candidateItemMark } else { defenderItemMark = candidateItemMark }
-                candidates.append(ReverseCandidate(
-                    natureClass: natureClass, nature: nature, natureId: natureId, itemId: itemId,
-                    ranges: [SPRange(min: Self.minSP, max: Self.maxSP)],
-                    spCount: Self.maxSP - Self.minSP + 1,
-                    exact: true, mismatch: 0, support: Self.mockSupport,
-                    minPercent: result.minPercent, maxPercent: result.maxPercent,
-                    unsupported: moveMarksList + [attackerItemMark, defenderItemMark].compactMap { $0 }
-                ))
+            for group in abilityGroups {
+                for itemId in items {
+                    let candidateItemMark = itemMark(itemId: itemId, target: candidateTarget)
+                    var attackerItemMark: UnsupportedMark?
+                    var defenderItemMark: UnsupportedMark?
+                    if knownTarget == .attackerItem { attackerItemMark = knownItemMark } else { defenderItemMark = knownItemMark }
+                    if candidateTarget == .attackerItem { attackerItemMark = candidateItemMark } else { defenderItemMark = candidateItemMark }
+                    // 無効の特性が効く候補は、どの観測も説明できない(exact=false・mismatch=観測の件数・%0。5章)。
+                    let mismatch = group.nullifies ? request.observations.count : 0
+                    candidates.append(ReverseCandidate(
+                        natureClass: natureClass, nature: nature, natureId: natureId, itemId: itemId,
+                        ranges: [SPRange(min: Self.minSP, max: Self.maxSP)],
+                        spCount: Self.maxSP - Self.minSP + 1,
+                        exact: mismatch == 0, mismatch: mismatch, support: group.nullifies ? 0 : Self.mockSupport,
+                        minPercent: group.nullifies ? 0 : result.minPercent,
+                        maxPercent: group.nullifies ? 0 : result.maxPercent,
+                        unsupported: moveMarksList + [attackerItemMark, defenderItemMark].compactMap { $0 },
+                        abilityId: group.ids.first, abilityIds: group.ids
+                    ))
+                }
             }
         }
+        // 定義順(性格クラス → 特性の組 → 持ち物)を mismatch の昇順で安定に並べ替える(一致する候補を先に)。
+        candidates.sort { $0.mismatch < $1.mismatch }
         return ReverseResult(
             side: request.side, stat: stat, assumedHPSP: assumedHPSP,
             candidates: candidates, exactCount: candidates.filter(\.exact).count
