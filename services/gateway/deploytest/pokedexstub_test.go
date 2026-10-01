@@ -125,7 +125,7 @@ func newPokedexStub(t *testing.T, mode pokedexMode) http.Handler {
 		if mode == pokedexNoNeutralNature && n.Plus == nil && n.Minus == nil {
 			continue
 		}
-		natures = append(natures, api.Nature{Id: n.Id, NameJa: n.NameJa, Plus: n.Plus, Minus: n.Minus})
+		natures = append(natures, api.Nature(n))
 	}
 	species := make([]api.SpeciesSummary, 0, len(export.Species))
 	if mode != pokedexNoSpecies {

@@ -85,6 +85,7 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@cd services && $(GO) vet -tags tidb ./record/... ./team/...
 	@cd services && $(GO) vet -tags nats ./calc/...
 	@cd tools && $(GO) vet ./...
+	@$(MAKE) --no-print-directory staticcheck
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 	@for script in tools/importer/*.sh; do sh -n "$$script" || exit; done
 	@node --check tools/golden/generate.mjs
@@ -93,6 +94,17 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@$(MAKE) --no-print-directory k8s-render
 	@$(MAKE) --no-print-directory check-publishable
 	@$(MAKE) --no-print-directory check-publishable-selftest
+
+# staticcheck(tools/go.mod の tool ディレクティブで版固定。issue #331)。警告が1件でもあれば失敗する。
+# ビルドタグ付きのファイルも解析する(vet と同じタグ)。balance・speed・judge は別モジュールのため GOWORK=off。
+# engine はタグ無しだと golden 専用の定数を未使用と誤検知するため、タグ付きだけ解析する。
+# 生成コードは staticcheck.conf の checks で外す(各モジュールのルートに置く)。
+.PHONY: staticcheck
+staticcheck: ## staticcheck(固定版)を全モジュール・全ビルドタグで実行
+	@sc="$$(cd tools && $(GO) tool -n staticcheck)" && \
+	cd engine && "$$sc" -tags golden ./... && "$$sc" -tags allspecies ./... && cd ../services && \
+	"$$sc" ./... && "$$sc" -tags mysql ./pokedex/... && "$$sc" -tags tidb ./record/... ./team/... && "$$sc" -tags nats ./calc/... && cd ../tools && \
+	"$$sc" ./... && cd ../services/balance && GOWORK=off "$$sc" ./... && cd ../speed && GOWORK=off "$$sc" ./... && cd ../judge && GOWORK=off "$$sc" ./...
 
 .PHONY: build
 build: ## 実装済みGoモジュールをビルド(Web/WASMは後続タスク)
