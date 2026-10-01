@@ -837,3 +837,37 @@ export const aboutText = {
   ],
   backLabel: "計算に戻る",
 } as const;
+
+/**
+ * P5-5c/P5-5d: 記録 API のクライアントが返す失敗の文言(ADR-0317 §1、ADR-0318 §1)。
+ * 失敗は画面に出さない場合もあるので、使うのはクライアントが返す Error.message だけ。
+ */
+export const recordClientText = {
+  unavailable: "記録の API に接続できません",
+} as const;
+
+/**
+ * P5-5d: 「この端末のデータを削除」(ADR-0209 §8、ADR-0318 §5)。iOS(PokeCalcCore.DeviceDataText)と同じ文言(4文目だけ Web 追加)。
+ * 説明の2文目の括弧だけ Web 向け。4文目は Web 側の補足(計算は削除の成否に影響されない。絶対ルール5)。
+ */
+export const deviceDataText = {
+  sectionHeading: "データの扱い",
+  explanation: [
+    "アカウントはありません。履歴・お気に入り・構築は、この端末に割り当てた ID でサーバーに保存しています。",
+    "ID が変わると(ブラウザのサイトデータを消したとき)、前のデータは開けなくなります。元に戻す方法はありません。",
+    "開けなくなったデータは自動的に消えます。計算の履歴は記録から90日、お気に入りと構築は最後に使った日から18か月です。",
+    "削除するのはサーバーに保存したデータだけです。計算・逆算は、削除の成否にかかわらず使えます。",
+  ],
+  deleteButton: "この端末のデータを削除",
+  confirmMessage: "履歴・お気に入り・構築をサーバーから削除します。元に戻せません。",
+  confirmAction: "削除する",
+  cancelAction: "キャンセル",
+  deleting: "削除しています…",
+  partialNotice: "まだ残っています。続けて削除します。",
+  failure: "サーバーに届きませんでした。通信を確認してもう一度お試しください。",
+  completed: "削除しました。",
+  retryButton: "もう一度削除する",
+  recordLabel: "履歴・お気に入り",
+  teamLabel: "構築",
+  partlyDeleted: (label: string): string => `${label}は削除済みです。`,
+} as const;

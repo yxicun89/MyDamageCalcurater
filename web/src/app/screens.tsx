@@ -32,6 +32,8 @@ export interface ScreenProps {
   readonly judgeClient: JudgeClient;
   /** P5-5 PR-A1(ADR-0309 §2): 構築ビルダーの画面も同じく専用のフィールドで受け取る。 */
   readonly teamClient: TeamClient;
+  /** P5-5d(ADR-0318 §6): 構築一覧の取り直しの合図(端末データの削除後に App が進める)。 */
+  readonly reloadToken?: number;
   /**
    * P4-16b(ADR-0304 A-10): 種族を都度引く口。App は今選ばれているマスタの取得口が検索付きのとき
    * (`isSearchableMasterSource`)だけ渡す。`master.capabilities.speciesList` が false の画面は、

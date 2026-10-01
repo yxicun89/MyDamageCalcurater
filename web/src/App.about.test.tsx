@@ -170,7 +170,7 @@ describe("/about の表示", () => {
     }
   });
 
-  test("見出し構造: h1(アプリ名)→ h2(このアプリについて)→ h3(非公式表示・データの出典)。h2 は1つだけ", async () => {
+  test("見出し構造: h1(アプリ名)→ h2(このアプリについて)→ h3(非公式表示・データの出典・データの扱い)。h2 は1つだけ", async () => {
     setPath("/about");
     render(<App engine={createFakeEngine()} />);
     await screen.findByText(NOTICE);
@@ -180,6 +180,7 @@ describe("/about の表示", () => {
       ["H2", "このアプリについて"],
       ["H3", "非公式表示"],
       ["H3", "データの出典"],
+      ["H3", "データの扱い"], // P5-5d(ADR-0318 §3)で足した節
     ]);
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     // 注記は「非公式表示」の節、出典の一覧は「データの出典」の節の中にある。
