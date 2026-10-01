@@ -276,10 +276,11 @@ pokedex-registry-push: ## pokedex(server イメージ)をクラスタ内共有�
 .PHONY: k8s-render
 # 各レーンの overlay も描画する(issue #261・#321)。どれか1つでも描画できなければ lint を失敗させる。
 # local/api・local/web・local/mysql・local/nats は Component なので、local・local-api・local-web の描画で確かめる。
-k8s-render: k8s-render-kubectl api-kustomize web-kustomize balance-kustomize speed-kustomize judge-kustomize ## kustomize で全レーンの overlay(local・cloud・tidb・local-api・local-web・balance・speed・judge・Argo CD の AppProject)が描画できることを確かめる(apply はしない)
+k8s-render: k8s-render-kubectl api-kustomize web-kustomize balance-kustomize speed-kustomize judge-kustomize ## kustomize で全レーンの overlay(local・cloud・tidb・local-api・local-web・balance・speed・judge・observability・Argo CD の AppProject)が描画できることを確かめる(apply はしない)
 	@kubectl kustomize deploy/k8s/overlays/cloud >/dev/null
 	@kubectl kustomize deploy/k8s/overlays/local/tidb >/dev/null
 	@kubectl kustomize deploy/argocd >/dev/null
+	@kubectl kustomize deploy/k8s/base/observability >/dev/null
 	@if kubectl cluster-info --request-timeout=3s >/dev/null 2>&1; then \
 		kubectl apply --dry-run=client --request-timeout=10s -f deploy/k8s/base/record/job-migrate.yaml -o yaml >/dev/null; \
 		kubectl apply --dry-run=client --request-timeout=10s -f deploy/k8s/base/team/job-migrate.yaml -o yaml >/dev/null; \

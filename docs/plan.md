@@ -231,6 +231,7 @@
 
 ## M4: 運用
 - [x] P7-1 kube-prometheus-stack / Loki、各サービスのメトリクス
+  - [x] issue #293 の残り(2026-10-02): 一次切り分けの runbook(observability.md §7)と `make k8s-render` に base/observability
 - [x] P7-2 SLO(計算API p99 < 100ms、可用性)とダッシュボード
 - [~] P7-3 ArgoCD(GitOps): balance は Argo CD 管理。speed・judge の実クラスタ適用は人間確認待ち(CURRENT_STATE.md)。残りは issue #292・#263・#237
 - [ ] P7-4 MySQL/TiDB バックアップと復元テスト(ADR-0209 §9 を要件に含める: バックアップに `devices`〈墓石〉を含める /
