@@ -352,7 +352,8 @@ sha256 は `meta.json` に記録するだけで期待値と照合せず、PokeAP
 3. **不一致・期待値が無い・形式不正は fail closed**。取得を止め、実際のハッシュを stderr に出し、終了コード 3(人間対応。ADR-0104 §3)で終わる。
    人は内容を確かめたうえで config を更新する PR を出す。tarball のハッシュの `meta.json` への記録は自己整合(キャッシュ破損の検出。ADR-0113)として残す。
 4. **`npm ci --ignore-scripts`** を取得段・Dockerfile の importer-deps の両方で使う。Showdown の build に install スクリプトが必要なパッケージが
-   あれば、その名前と理由をこの ADR に追記し、必要最小限だけを明示的に許可する(実装時に確認して追記する)。
+   あれば、その名前と理由をこの ADR に追記し、必要最小限だけを明示的に許可する。実装時に確認した結果、固定コミット(f10d679)の `node build` は
+   `--ignore-scripts` のままで通った(許可するパッケージは無い)。
 5. **取得段と投入段を同じ Pod の別コンテナに分ける**。CronJob の `fetch`(initContainer。`tools/importer/cronjob.sh fetch`)は DSN・Secret・
    `envFrom`・名前の上書き ConfigMap のどれも持たず、PVC(`/app/data/generated`)と `/tmp` だけをマウントする。`import`(main。`cronjob.sh import`)だけが
    DSN を持つ。イメージは同じ(版・up.sh の既定を1つに保つ)。成果物は PVC で渡す。`podFailurePolicy` は両コンテナの終了コード 2・3 を FailJob にする。

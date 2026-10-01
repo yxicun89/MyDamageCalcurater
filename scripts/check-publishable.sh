@@ -42,7 +42,9 @@ readonly -a A_EXCLUDES=(":(exclude)docs/audit-r1.md")
 #   - `argocd-initial-admin-secret` を検査するテストの説明文(`begin "..."`)が、たまたま
 #     「-secret: <日本語の説明が続く>」という形になり、B の「秘密らしき文字列(キー名=値)」に誤検知する
 #     (値ではなく検査の説明文)。
-readonly -a BE_EXCLUDES=(":(exclude)scripts/gitops_test.sh")
+#   - cronjob_isolation_test.go(D19)は「CronJob の volumes に Secret を足さない」を検査する正規表現
+#     (`(?m)^\s+secret:`)を書いており、B に誤検知する(値ではなく検査のパターン)。
+readonly -a BE_EXCLUDES=(":(exclude)scripts/gitops_test.sh" ":(exclude)services/pokedex/importer/cronjob_isolation_test.go")
 
 # 定数だけを対象にする(秘密の値ではない)。`tidb-root-auth` は ADR-0211 §3.2 の
 # TidbInitializer が参照する Secret 名(`passwordSecret: tidb-root-auth`。値ではなく名前)。

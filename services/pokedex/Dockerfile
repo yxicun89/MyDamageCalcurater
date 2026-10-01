@@ -37,7 +37,7 @@ CMD ["serve"]
 FROM node:26.9.0-alpine@sha256:dbaa92e5758cbbcf85d65d5403fdb530fe3442cbe8c6dbfb7ef23365450d5070 AS importer-deps
 WORKDIR /app/tools/importer
 COPY tools/importer/package.json tools/importer/package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 
 # importer: pokedex-import(CronJob)が使うイメージ。取得(Node)・上流の検出(Node)・
 # 照合と投入(Go)を1つのイメージにする(ADR-0104 §2・§6)。data/importer(config・effects・
