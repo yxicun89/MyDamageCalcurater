@@ -526,6 +526,7 @@
   `make wasm` 後 `npm run e2e` 37件 green。docs/design.md「画面: ダメージ計算」「画面: 逆算」・
   docs/ai-shared/DECISIONS.md も更新済み。
   **Next(critic)**: 再レビュー待ち。
+- [x] issue 309 判定画面の技を select(種族の learnset)に、調整をプリセット(無振り・最速・攻撃特化・HB/HD特化)に、SP6欄・ランク5欄を「詳細」に畳み、検証エラーを欄ごとに aria-invalid+文言で出す(ADR-0711。ADR-0705 §5 を置き換え)。vitest 全件・tsc・lint green。critic・PR 待ち
 - [ ] 判定画面(JD5 `JudgeScreen`)の「未対応」の印への追従(issue #271 / #270 の判定レーン分。**上の
   Web レーンの PR の対象外**)。judge の契約は計算・逆算と別の形(`attackerKoUnsupported` /
   `defenderKoUnsupported`。ADR-0708 §1・`web/src/judge/judge.gen.ts`)なので、別タスクとして進める。
