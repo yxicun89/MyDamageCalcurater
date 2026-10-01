@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// 倒せる/耐える最小 SP の探索(plan.md AJ2・ADR-0800 §7)の受け入れ条件。
+// 倒せる/耐える最小 SP の探索(plan.md AJ2・ADR-0150 §7)の受け入れ条件。
 //
 // 正解は engine の探索からではなく、このファイルの総当たり(oracleMinSPToKO / oracleMinSPToSurvive)から
 // 独立に導く。n 発の確率は koProbability を使わず、16^n 通りのロールの組を数え上げて求める
@@ -184,7 +184,7 @@ type oracleSurviveCandidate struct {
 	chance              float64
 }
 
-// oracleBetterSurvive は ADR-0800 §6 の順(合計 SP 小 → 耐久指数大 → HPSP 小)で a が b より前かを返す。
+// oracleBetterSurvive は ADR-0150 §6 の順(合計 SP 小 → 耐久指数大 → HPSP 小)で a が b より前かを返す。
 func oracleBetterSurvive(a, b oracleSurviveCandidate) bool {
 	if ta, tb := a.hpSP+a.statSP, b.hpSP+b.statSP; ta != tb {
 		return ta < tb
@@ -216,7 +216,7 @@ func oracleSurviveCandidates(t *testing.T, in AdjustSearchInput) (stat StatKey, 
 	return stat, limit, cands
 }
 
-// oracleMinSPToSurvive はしきい値を満たす組のうち ADR-0800 §6 の順で最初のものを返す。
+// oracleMinSPToSurvive はしきい値を満たす組のうち ADR-0150 §6 の順で最初のものを返す。
 // 満たす組が無ければ、耐える確率が最大の組のうち同じ順で最初のもの。
 func oracleMinSPToSurvive(t *testing.T, in AdjustSearchInput) SurviveSearchResult {
 	t.Helper()
@@ -981,7 +981,7 @@ func TestAdjustMinSPToKOHitsMatchComputeKO(t *testing.T) {
 }
 
 // TestAdjustSearchCarriesUnsupportedMarks は探索中の CalcDamage の「未対応」の印が両方の結果に付き、
-// 数値は印のない技の場合と同じことを確かめる(ADR-0800 §7・ADR-0123)。
+// 数値は印のない技の場合と同じことを確かめる(ADR-0150 §7・ADR-0123)。
 func TestAdjustSearchCarriesUnsupportedMarks(t *testing.T) {
 	mark := func(in AdjustSearchInput) AdjustSearchInput {
 		in.Move.Mechanisms = []MoveMechanism{MechanismMultiHit}

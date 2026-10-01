@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// 調整の指数・HP ラインのテスト(ADR-0800 §2〜§4)。
+// 調整の指数・HP ラインのテスト(ADR-0150 §2〜§4)。
 // 種族値は stats_test.go と同じ攻撃寄りの架空の配分(HP108/Atk130/Def95/SpA80/SpD85/Spe102)。
 // 実数値は RealStats の式: HP = 種族値 + 75 + SP、その他 = floor((種族値 + 20 + SP) × 性格補正)。
 var adjustBase = Stats{HP: 108, Atk: 130, Def: 95, SpA: 80, SpD: 85, Spe: 102}

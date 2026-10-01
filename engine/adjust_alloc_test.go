@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// SP 配分の提案(plan.md AJ3・ADR-0800 §8)の受け入れ条件。
+// SP 配分の提案(plan.md AJ3・ADR-0150 §8)の受け入れ条件。
 //
 // 正解は engine の実装からではなく、このファイルの総当たり(allocOracle)から独立に導く。
 // 候補(回す能力が各 [下限, 上限]・回さない能力は下限・合計 ≤ 66)を全部列挙し、§8 の順を整数のキーの
@@ -81,7 +81,7 @@ func withGoal(in SPAllocInput, goal *AllocGoal) SPAllocInput {
 // 独立の総当たり(oracle)
 // ---------------------------------------------------------------------------
 
-// allocOracleKeys は残り SP を回す能力(ADR-0800 §8 の表)。
+// allocOracleKeys は残り SP を回す能力(ADR-0150 §8 の表)。
 func allocOracleKeys(in SPAllocInput) []StatKey {
 	if in.Mode == AllocModeBulk {
 		return []StatKey{StatHP, StatDef, StatSpD}
@@ -219,7 +219,7 @@ func allocOraclePick(t *testing.T, cands []allocOracleCand, filter func(allocOra
 
 func allocAll(allocOracleCand) bool { return true }
 
-// allocOracleMaxIndexKey は指数最大の順(ADR-0800 §8 の表 → 合計 SP 小 → 辞書順)。
+// allocOracleMaxIndexKey は指数最大の順(ADR-0150 §8 の表 → 合計 SP 小 → 辞書順)。
 // 攻撃側は speedFeasible(素早さ目標を満たす候補があるか)で並べ方を変える。
 func allocOracleMaxIndexKey(in SPAllocInput, speedFeasible bool) func(allocOracleCand) []int {
 	return func(c allocOracleCand) []int {
@@ -251,7 +251,7 @@ func allocOracleMinSPKey(in SPAllocInput) func(allocOracleCand) []int {
 	}
 }
 
-// allocOracleFallbackKey は最小 SP の組が無いときの順(ADR-0800 §8)。
+// allocOracleFallbackKey は最小 SP の組が無いときの順(ADR-0150 §8)。
 // 耐久側: 耐える確率 大 → 最小 SP の順。攻撃側: min(S, MinSpeed) 大 → 倒す確率 大 → 最小 SP の順。
 func allocOracleFallbackKey(in SPAllocInput) func(allocOracleCand) []int {
 	minSP := allocOracleMinSPKey(in)
@@ -518,7 +518,7 @@ func TestAdjustAllocMaxIndexBoundaries(t *testing.T) {
 	}
 }
 
-// TestAdjustAllocTotalExactly66 は「余りを使い切れるなら合計ちょうど 66」を明示する(ADR-0800 §8)。
+// TestAdjustAllocTotalExactly66 は「余りを使い切れるなら合計ちょうど 66」を明示する(ADR-0150 §8)。
 func TestAdjustAllocTotalExactly66(t *testing.T) {
 	ins := []SPAllocInput{
 		bulkAllocInput(BulkFocusPhysical, NatureNeutral, Stats{Spe: 32}, allocFullCeiling),
@@ -1017,7 +1017,7 @@ func TestAdjustAllocRequiresTypeChart(t *testing.T) {
 }
 
 // TestAdjustAllocCarriesUnsupportedMarks は目標の CalcDamage の「未対応」の印が結果に付き、
-// 数値は印のない技の場合と同じことを確かめる(ADR-0800 §8・ADR-0123)。
+// 数値は印のない技の場合と同じことを確かめる(ADR-0150 §8・ADR-0123)。
 func TestAdjustAllocCarriesUnsupportedMarks(t *testing.T) {
 	cases := []struct {
 		name string

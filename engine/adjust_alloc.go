@@ -5,12 +5,12 @@ import (
 	"math"
 )
 
-// SP 配分の提案(plan.md AJ3・機能 3)。定義は ADR-0800 §8。
+// SP 配分の提案(plan.md AJ3・機能 3)。定義は ADR-0150 §8。
 //
 // 使用者が「ここまで振りたい」能力を下限(Self.SP)として固定し、残りの SP(MaxSPTotal − 下限の合計)を
 // 耐久側(H・B・D)か攻撃側(A または C と S)に回す。各能力の上限(Ceiling)も使用者が決める。
 // 結果は「指数最大の組」と、目標(Goal)を渡したときの「目標を満たす最小 SP の組」の2つ。
-// どちらも各能力 0..MaxSPPerStat・合計 MaxSPTotal 以内を守る。探索は engine 内の総当たり(ADR-0800 §1)。
+// どちらも各能力 0..MaxSPPerStat・合計 MaxSPTotal 以内を守る。探索は engine 内の総当たり(ADR-0150 §1)。
 
 // AllocMode は残り SP を回す側。
 type AllocMode string
@@ -22,7 +22,7 @@ const (
 	AllocModeOffense AllocMode = "offense"
 )
 
-// BulkFocus は耐久側の指数最大で、どの耐久指数を大きくするか(ADR-0800 §8)。
+// BulkFocus は耐久側の指数最大で、どの耐久指数を大きくするか(ADR-0150 §8)。
 type BulkFocus string
 
 const (
@@ -34,7 +34,7 @@ const (
 	BulkFocusBoth BulkFocus = "both"
 )
 
-// SPAllocInput は SP 配分の提案の入力(ADR-0800 §8)。
+// SPAllocInput は SP 配分の提案の入力(ADR-0150 §8)。
 type SPAllocInput struct {
 	// Self は自分の個体。Self.SP は各能力の下限(「ここまで振りたい」)。結果の SP は各能力でこれ以上になる。
 	Self Individual
@@ -54,7 +54,7 @@ type SPAllocInput struct {
 	Goal *AllocGoal
 }
 
-// AllocGoal は最小 SP の組の目標(ADR-0800 §8)。判定は AJ2(§7)と同じ定義。
+// AllocGoal は最小 SP の組の目標(ADR-0150 §8)。判定は AJ2(§7)と同じ定義。
 // 耐久側: Opponent の Move を Hits 発受けて耐える確率 ≥ しきい値。
 // 攻撃側: Move で Opponent を Hits 発で倒す確率 ≥ しきい値(Move の分類は OffenseCategory と一致させる)。
 type AllocGoal struct {
@@ -79,7 +79,7 @@ type AllocPlan struct {
 	TotalSP int
 	// Real は SP と性格から求めた実数値(RealStats。ランク補正は含めない)。
 	Real Stats
-	// PhysicalBulk・SpecialBulk は等倍の耐久指数(H 実数値 × B 実数値、H 実数値 × D 実数値。ADR-0800 §3)。
+	// PhysicalBulk・SpecialBulk は等倍の耐久指数(H 実数値 × B 実数値、H 実数値 × D 実数値。ADR-0150 §3)。
 	PhysicalBulk int
 	SpecialBulk  int
 	// SpeedMet は素早さの目標を満たすか(攻撃側で MinSpeed > 0 のときだけ偽になりうる。それ以外は真)。
@@ -90,7 +90,7 @@ type AllocPlan struct {
 	ChancePercent float64
 }
 
-// SPAllocResult は SP 配分の提案の結果(ADR-0800 §8)。
+// SPAllocResult は SP 配分の提案の結果(ADR-0150 §8)。
 type SPAllocResult struct {
 	// Remaining は残り SP = MaxSPTotal − 下限の合計。
 	Remaining int
@@ -103,7 +103,7 @@ type SPAllocResult struct {
 }
 
 // SuggestSPAllocation は下限(Self.SP)を固定したまま残り SP を Mode の側に回し、
-// 指数最大の組と(Goal があれば)目標を満たす最小 SP の組を返す(ADR-0800 §8)。
+// 指数最大の組と(Goal があれば)目標を満たす最小 SP の組を返す(ADR-0150 §8)。
 // 入力が不正なら ErrInvalidAdjustInput を包んで返す。相性表の誤りは CalcDamage のエラーを包んで返す。
 func SuggestSPAllocation(in SPAllocInput) (SPAllocResult, error) {
 	keys, err := validateAlloc(in)
@@ -142,7 +142,7 @@ func SuggestSPAllocation(in SPAllocInput) (SPAllocResult, error) {
 	return out, nil
 }
 
-// allocKeys は Mode で残り SP を回す能力(ADR-0800 §8 の表)。
+// allocKeys は Mode で残り SP を回す能力(ADR-0150 §8 の表)。
 func allocKeys(in SPAllocInput) []StatKey {
 	if in.Mode == AllocModeBulk {
 		return []StatKey{StatHP, StatDef, StatSpD}
@@ -237,7 +237,7 @@ type allocSearch struct {
 	threshold float64
 	// damage は Goal の CalcDamage の結果のキャッシュ。耐久側は (H 実数値, 技の分類の B/D 実数値) で決まる。
 	// 攻撃側のダメージは攻撃実数値だけで決まり S によらないが、キーには (攻撃実数値, S 実数値) を使う
-	// (保守的な選択。S 違いの重複計算が増えるだけで結果は変わらない。ADR-0800 §8 の計算量)。
+	// (保守的な選択。S 違いの重複計算が増えるだけで結果は変わらない。ADR-0150 §8 の計算量)。
 	damage      map[[2]int]DamageResult
 	calculated  bool
 	unsupported []UnsupportedMark
@@ -379,7 +379,7 @@ func (s *allocSearch) minSPKey(c *allocCand) []int64 {
 	return []int64{-int64(c.total), int64(index)}
 }
 
-// fallbackKey は目標を満たす組が無いときの順の先頭のキー(ADR-0800 §8)。
+// fallbackKey は目標を満たす組が無いときの順の先頭のキー(ADR-0150 §8)。
 // 耐久側: 耐える確率 大 → 最小 SP の順。攻撃側: min(S, MinSpeed) 大 → 倒す確率 大 → 最小 SP の順。
 func (s *allocSearch) fallbackKey(c *allocCand) []int64 {
 	head := []int64{c.goalCount}

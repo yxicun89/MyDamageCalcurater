@@ -6,14 +6,14 @@ import (
 	"math"
 )
 
-// 調整(自分の SP を決める機能)の土台になる量。定義と根拠は ADR-0800。
+// 調整(自分の SP を決める機能)の土台になる量。定義と根拠は ADR-0150。
 //
 
 // ErrInvalidAdjustInput は調整の入力(個体・技の分類・威力・補正・SP)が不正なときのエラー。
 var ErrInvalidAdjustInput = errors.New("調整の入力が不正")
 
 // HPLineDivisor は HP ラインの単位。天候・どく・たべのこし等の HP の 1/16 を単位とする効果に由来する
-// プロトコル定数(ADR-0800 §4)。
+// プロトコル定数(ADR-0150 §4)。
 const HPLineDivisor = 16
 
 // maxIndexPower は火力指数に渡せる威力の上限。
@@ -40,7 +40,7 @@ type HPLinePoint struct {
 	SPDelta int // 現在の SP からの差(次のラインは正、前のラインは負)
 }
 
-// HPLineReport は HP の SP 1つに対する 16n / 16n-1 ラインの報告(ADR-0800 §4)。
+// HPLineReport は HP の SP 1つに対する 16n / 16n-1 ラインの報告(ADR-0150 §4)。
 // Next* は SP が現在より大きい中で最小のライン、Prev* は SP が現在より小さい中で最大のライン。
 // HP の SP の範囲 0..MaxSPPerStat に無ければ nil。
 type HPLineReport struct {
@@ -53,7 +53,7 @@ type HPLineReport struct {
 	Prev16nMinus1 *HPLinePoint
 }
 
-// FirepowerIndex は火力指数 floor(攻撃実数値 × 威力 × modifier / 4096) を返す(ADR-0800 §2)。
+// FirepowerIndex は火力指数 floor(攻撃実数値 × 威力 × modifier / 4096) を返す(ADR-0150 §2)。
 // 攻撃実数値は category が physical なら A、special なら C の RealStats(ランク補正は含めない)。
 // modifier はタイプ一致・持ち物などを呼び出し側が掛け合わせた 4096 基準の補正。
 // 個体・分類・威力・補正が不正なら ErrInvalidAdjustInput を包んで返す。
@@ -80,7 +80,7 @@ func FirepowerIndex(attacker Individual, category MoveCategory, power, modifier 
 	return stat * power * modifier / Modifier4096, nil
 }
 
-// BulkIndex は耐久指数 floor(H × B(D) × 4096 / damageModifier) を返す(ADR-0800 §3)。
+// BulkIndex は耐久指数 floor(H × B(D) × 4096 / damageModifier) を返す(ADR-0150 §3)。
 // category が physical なら B、special なら D の RealStats を使う(ランク補正は含めない)。
 // damageModifier は受けるダメージの倍率を呼び出し側が掛け合わせた 4096 基準の補正(半減 2048 で指数が2倍)。
 // 個体・分類・補正が不正なら ErrInvalidAdjustInput を包んで返す。
@@ -104,7 +104,7 @@ func BulkIndex(defender Individual, category MoveCategory, damageModifier int) (
 	return real.HP * stat * Modifier4096 / damageModifier, nil
 }
 
-// HPLines は HP 種族値と HP の SP から、16n / 16n-1 ラインの報告を返す(ADR-0800 §4)。
+// HPLines は HP 種族値と HP の SP から、16n / 16n-1 ラインの報告を返す(ADR-0150 §4)。
 // HP = baseHP + HPStatOffset + hpSP。合計 66 の制約は見ない。
 // baseHP が MinBaseStat..MaxBaseStat、hpSP が 0..MaxSPPerStat の外なら ErrInvalidAdjustInput を包んで返す。
 func HPLines(baseHP, hpSP int) (HPLineReport, error) {

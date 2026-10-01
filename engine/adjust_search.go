@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-// 倒せる/耐える最小 SP の探索(plan.md AJ2・機能 4)。定義は ADR-0800 §7。
+// 倒せる/耐える最小 SP の探索(plan.md AJ2・機能 4)。定義は ADR-0150 §7。
 //
 //   - MinSPToKO: 自分(Attacker)の A(物理)/ C(特殊)の SP を 0 から探し、相手(Defender)を
 //     Hits 発で倒す確率が ThresholdPercent 以上になる最小の SP を返す。
@@ -15,20 +15,20 @@ import (
 // 探索する能力以外の SP・性格・持ち物・ランクは呼び出し側が固定で渡す。
 // 到達できないときはエラーにせず Feasible=false を返す。
 
-// MaxAdjustHits は探索の目標発数 Hits の上限(ADR-0800 §7)。
+// MaxAdjustHits は探索の目標発数 Hits の上限(ADR-0150 §7)。
 // 確定数の表示で実用になる範囲を覆い、n 発の確率計算(O(Hits × HP × 16))と
 // 耐久側の総当たり(最大 33² 通り)の積を WASM の同期実行に収めるための上限。
 const MaxAdjustHits = 10
 
 // DefaultAdjustThresholdPercent は ThresholdPercent が 0(未指定)のときに使うしきい値(%)。
-// 100 = 確定(乱数の最悪側でも満たす)。ADR-0800 §7。
+// 100 = 確定(乱数の最悪側でも満たす)。ADR-0150 §7。
 const DefaultAdjustThresholdPercent = 100.0
 
 // certainPercent は「確定」を表す確率(%)。この値のしきい値は浮動小数の確率ではなく、
-// 乱数の最悪側の整数比較で判定する(ADR-0800 §7)。
+// 乱数の最悪側の整数比較で判定する(ADR-0150 §7)。
 const certainPercent = 100.0
 
-// AdjustSearchInput は最小 SP の探索の入力(ADR-0800 §7)。場・技・相性表は CalcDamage と同じ。
+// AdjustSearchInput は最小 SP の探索の入力(ADR-0150 §7)。場・技・相性表は CalcDamage と同じ。
 type AdjustSearchInput struct {
 	Format Format
 	// Attacker は攻撃側。MinSPToKO では自分(探索する側)、MinSPToSurvive では相手(固定)。
@@ -79,7 +79,7 @@ type SurviveSearchResult struct {
 	StatSP int
 	// TotalSP は HPSP + StatSP。
 	TotalSP int
-	// BulkIndex は選んだ組の耐久指数(ADR-0800 §3。被ダメージ補正は等倍 = H 実数値 × B(D) 実数値)。
+	// BulkIndex は選んだ組の耐久指数(ADR-0150 §3。被ダメージ補正は等倍 = H 実数値 × B(D) 実数値)。
 	BulkIndex int
 	// ChancePercent は選んだ組で Hits 発を受けて耐える確率(%)。
 	ChancePercent float64
@@ -89,7 +89,7 @@ type SurviveSearchResult struct {
 }
 
 // MinSPToKO は Attacker の A/C の SP を探索し、Defender を Hits 発で倒す確率が
-// ThresholdPercent 以上になる最小の SP を返す(ADR-0800 §7)。
+// ThresholdPercent 以上になる最小の SP を返す(ADR-0150 §7)。
 // Attacker.SP の探索する能力の値は無視する(上書きする)。
 // 入力が不正なら ErrInvalidAdjustInput を包んで返す。相性表の誤りは CalcDamage のエラーを包んで返す。
 func MinSPToKO(in AdjustSearchInput) (KOSearchResult, error) {
@@ -128,7 +128,7 @@ func MinSPToKO(in AdjustSearchInput) (KOSearchResult, error) {
 }
 
 // MinSPToSurvive は Defender の H と B/D の SP の組を探索し、Attacker の技を Hits 発受けて耐える確率が
-// ThresholdPercent 以上になる、合計 SP 最小の組を返す(ADR-0800 §7)。
+// ThresholdPercent 以上になる、合計 SP 最小の組を返す(ADR-0150 §7)。
 // Defender.SP の H と B/D の値は無視する(上書きする)。
 // 入力が不正なら ErrInvalidAdjustInput を包んで返す。相性表の誤りは CalcDamage のエラーを包んで返す。
 func MinSPToSurvive(in AdjustSearchInput) (SurviveSearchResult, error) {
@@ -157,7 +157,7 @@ func MinSPToSurvive(in AdjustSearchInput) (SurviveSearchResult, error) {
 			if hpSP == 0 && statSP == 0 {
 				unsupported = res.Unsupported
 			}
-			// 被ダメージ補正は全候補で共通なので等倍(Modifier4096)で並べる(ADR-0800 §7)。
+			// 被ダメージ補正は全候補で共通なので等倍(Modifier4096)で並べる(ADR-0150 §7)。
 			index, err := BulkIndex(defender, in.Move.Category, Modifier4096)
 			if err != nil {
 				return SurviveSearchResult{}, err
@@ -194,7 +194,7 @@ type surviveCandidate struct {
 	chance              float64
 }
 
-// before は ADR-0800 §6 の順(合計 SP が小さい → 耐久指数が大きい → HPSP が小さい)で c が o より前かを返す。
+// before は ADR-0150 §6 の順(合計 SP が小さい → 耐久指数が大きい → HPSP が小さい)で c が o より前かを返す。
 func (c surviveCandidate) before(o surviveCandidate) bool {
 	if tc, to := c.hpSP+c.statSP, o.hpSP+o.statSP; tc != to {
 		return tc < to
