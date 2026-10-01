@@ -1,17 +1,15 @@
-# Prometheus(observability)から ServiceMonitor 対象 5 サービスの /metrics(Pod ポート 8080)へ。
-# gateway だけはメトリクス専用ポート(9090)なので allow-prometheus-gateway-metrics.yaml で許可する(issue #216)。
+# Prometheus(observability)から gateway のメトリクス専用ポート(9090)へ(issue #216)。
+# 公開ポート(8080)の許可は Traefik だけ(allow-traefik-ingress.yaml)なので、Prometheus は /metrics 以外に届かない。
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-prometheus-metrics
+  name: allow-prometheus-gateway-metrics
   labels:
     app.kubernetes.io/part-of: pokecalc
 spec:
   podSelector:
-    matchExpressions:
-      - key: app.kubernetes.io/name
-        operator: In
-        values: [calc, pokedex, balance, speed, judge]
+    matchLabels:
+      app.kubernetes.io/name: gateway
   policyTypes:
     - Ingress
   ingress:
@@ -24,4 +22,4 @@ spec:
               app.kubernetes.io/name: prometheus
       ports:
         - protocol: TCP
-          port: 8080
+          port: 9090

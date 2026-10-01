@@ -203,7 +203,8 @@ Component は `kustomize.config.k8s.io/v1alpha1`(`overlays/local/api`・`overlay
 | mysql(:3306) | pokedex・pokedex-migrate・pokedex-import(`allow-mysql-ingress`) |
 | nats(:4222) | calc(`allow-nats-ingress`) |
 | TiDB(:4000 と TiDB 内部) | record-migrate・team-migrate と、同じ TiDB の Pod(`allow-tidb-client-ingress`・`allow-tidb-internal`。TiDB を上げてラベルを確かめる前提) |
-| gateway・calc・pokedex・balance・speed・judge(:8080) | observability の Prometheus(`allow-prometheus-metrics`) |
+| calc・pokedex・balance・speed・judge(:8080) | observability の Prometheus(`allow-prometheus-metrics`) |
+| gateway のメトリクス専用ポート(:9090) | observability の Prometheus(`allow-prometheus-gateway-metrics`。公開ポート :8080 は Traefik だけ。issue #216) |
 
 - 新しい Pod 間の通信を足すときは、許可を足さないと届かない(全体が止まる)。止まったときの戻し方は ADR-0132 の「実クラスタでの確認手順」(`kubectl -n pokecalc delete networkpolicy default-deny-ingress` で許可だけが残る)。
 - ホストからの `kubectl port-forward`・`kubectl exec` は NetworkPolicy の対象外。runbook の port-forward 手順はそのまま使える。

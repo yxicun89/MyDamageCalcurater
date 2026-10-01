@@ -34,6 +34,7 @@ flowchart LR
 | 名前 | 必須 | 意味 |
 |---|---|---|
 | `GATEWAY_ADDR` | いいえ(既定 `:8080`) | 待ち受けアドレス |
+| `GATEWAY_METRICS_ADDR` | いいえ(既定 `:9090`) | メトリクス専用の待ち受けアドレス。`/metrics` はここだけ(公開側は 404 `not_found`。Service の `metrics` ポート。issue #216)。`GATEWAY_ADDR` と同じ値は起動エラー |
 | `GATEWAY_CALC_URL` | はい | calc-svc の基底 URL |
 | `GATEWAY_POKEDEX_URL` | いいえ(base の既定は `http://pokedex`) | pokedex-svc の基底 URL。DB が空のクラスタでは初回の `make import-k8s` を実行するまで 503 |
 | `GATEWAY_RECORD_URL` | いいえ | record-svc の基底 URL(ADR-0209 §10・P5-3)。未設定なら `/api/record/*` は 503。**deployment.yaml への配線は未実施(P5-3b)** |

@@ -31,6 +31,8 @@ import (
 	"example.com/pokecalc/services/calc/internal/events"
 	"example.com/pokecalc/services/calc/internal/httpapi"
 	"example.com/pokecalc/services/calc/internal/master"
+	"example.com/pokecalc/services/internal/reqlog"
+	"example.com/pokecalc/services/internal/version"
 )
 
 // 環境変数の名前。
@@ -213,6 +215,8 @@ func run(ctx context.Context, lookup func(string) (string, bool)) error {
 	if err != nil {
 		return err
 	}
+	// どのビルドが動いているかを起動ログの先頭で分かるようにする(issue #217)。
+	slog.Info("calc-svc を起動する", "version", version.Version, "addr", cfg.Addr)
 	handler, publisher, err := newHandler(ctx, cfg)
 	if err != nil {
 		// newHandler はエラー時も publisher を返しうる(NATS への接続自体は先に試みるため)。
@@ -256,6 +260,8 @@ func run(ctx context.Context, lookup func(string) (string, bool)) error {
 }
 
 func main() {
+	// ログは JSON 1 形式(Echo 内部のログも同じ handler。issue #246)。
+	reqlog.Install(os.Stderr)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := run(ctx, os.LookupEnv); err != nil {

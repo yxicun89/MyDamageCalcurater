@@ -24,6 +24,20 @@ const (
 	routeWeb
 )
 
+// 名前は httpmetrics の path ラベルに使う(固定集合。routeNone は未知のパス)。
+var routeKindNames = map[routeKind]string{
+	routeNone: "none", routeHealthz: "healthz", routeCalc: "calc", routePokedex: "pokedex", routeRecord: "record",
+	routeTeam: "team", routeBalance: "balance", routeSpeed: "speed", routeJudge: "judge", routeAssets: "assets", routeWeb: "web",
+}
+
+// String は routeKind のラベル名("calc" 等)。
+func (k routeKind) String() string {
+	if n, ok := routeKindNames[k]; ok {
+		return n
+	}
+	return "none"
+}
+
 // パスの前方一致に使う定数。
 const (
 	pathHealthz   = "/healthz"
@@ -39,7 +53,10 @@ const (
 
 // reservedFirstSegments は先頭セグメントがこれと完全一致するパスを Web に流さない予約語(ADR-0205)。
 // /apix・/internals のように予約語で始まるだけの別名は含まない(セグメント単位の判定)。
-var reservedFirstSegments = map[string]bool{"api": true, "assets": true, "healthz": true, "internal": true}
+//
+// metrics は公開入口に出さない運用エンドポイント(メトリクス専用ポートだけが持つ。issue #216)。Web の SPA
+// フォールバックに /metrics が流れて 200 text/html を返さないよう、予約して 404 にする。
+var reservedFirstSegments = map[string]bool{"api": true, "assets": true, "healthz": true, "internal": true, "metrics": true}
 
 // firstPathSegment はパスの先頭セグメントを返す("/api/calc" なら "api"。"/" や "" なら "")。
 // "//internal/..." のように空セグメントが先頭に来るパスは hasEmptySegment が先に 404 にするので、
