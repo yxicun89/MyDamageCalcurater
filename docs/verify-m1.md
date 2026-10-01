@@ -38,7 +38,7 @@ make test-db-docker
 cd "$(git rev-parse --show-toplevel)"
 make up
 ```
-→ 最後に `完了。` が出る。`kubectl -n pokecalc get pods` で `mysql-0`・`pokedex` が `Running`。
+→ 最後に `完了。` が出る。`kubectl -n pokecalc get pods` で `mysql-0` が `Running`。`pokedex` は `Running` だが、初回 import(次の手順)が済むまで `0/1`(Ready にならない。異常ではない)。
 
 マスタ(実データ)を入れる。バックエンドはマスタが無いと計算できないので、次の §4 より先に行う。
 
@@ -48,7 +48,7 @@ make import-fetch
 make import-dry-run
 make import-k8s
 ```
-→ `import-dry-run` の最後の行が `blockers: none`。`import-k8s` の Job が `condition met` で終わる。
+→ `import-dry-run` の最後の行が `blockers: none`。`import-k8s` の Job が `condition met` で終わる。数秒〜10秒ほどで `pokedex` が `1/1` になる(`kubectl -n pokecalc get pods`)。
 
 タイプバランス・素早さが読む read model を書き出す(`mysql` へ一時的に port-forward する)。
 
