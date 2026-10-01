@@ -617,6 +617,42 @@ func TestCronJobScriptLocksBeforeFetch(t *testing.T) {
 	}
 }
 
+// --- issue #111(D18): 容量の事前確認と prune の位置 ---------------------------------------
+
+// TestCronJobScriptCapacityCheckAndPrune は、容量の事前確認が flock の後・fetch の前(download・DB 更新より前)、
+// prune が pokedex-import(DB apply)の成功後・ロックを持ったままの位置にあることを固定する。
+// pokedex-import を exec で置き換えると prune に戻れないので、exec にしない(set -eu で apply の失敗は prune に進まない)。
+func TestCronJobScriptCapacityCheckAndPrune(t *testing.T) {
+	s := readRepo(t, cronJobScript)
+	idx := func(re string) int {
+		loc := regexp.MustCompile(re).FindStringIndex(s)
+		if loc == nil {
+			return -1
+		}
+		return loc[0]
+	}
+	lock := idx(`flock\s+-n`)
+	check := idx(`node\s+\S*prune\.mjs"?\s+check\b`)
+	fetch := idx(`node\s+\S*fetch\.mjs`)
+	imp := idx(`pokedex-import\b[^\n]*-data`)
+	prune := idx(`node\s+\S*prune\.mjs"?\s+prune\b`)
+	if check < 0 || prune < 0 {
+		t.Fatalf("%s: prune.mjs check(%d)・prune.mjs prune(%d)の呼び出しが無い", cronJobScript, check, prune)
+	}
+	if !(lock < check && check < fetch) {
+		t.Errorf("%s: 容量の事前確認は flock の後・fetch.mjs の前(download・DB 更新より前)", cronJobScript)
+	}
+	if !(imp < prune) {
+		t.Errorf("%s: prune は pokedex-import(DB apply)が成功した後", cronJobScript)
+	}
+	if regexp.MustCompile(`(?m)^\s*exec\s+\S*pokedex-import`).MatchString(s) {
+		t.Errorf("%s: pokedex-import を exec にしない(後ろで prune を実行するため)", cronJobScript)
+	}
+	if regexp.MustCompile(`prune\.mjs"?\s+prune\b[^\n]*\|\|\s*(true|:)`).MatchString(s) {
+		t.Errorf("%s: prune の失敗を握りつぶさない(容量回復の失敗に気付けなくなる)", cronJobScript)
+	}
+}
+
 // --- AC8: Makefile -------------------------------------------------------------------
 
 // layoutMakeTargets は Makefile の「ターゲット: 依存」行とレシピを集める(include は見ない)。
@@ -696,5 +732,18 @@ func TestCheckUpstreamScriptExists(t *testing.T) {
 	}
 	if regexp.MustCompile(`writeFileSync\([^)]*config\.json`).MatchString(s) {
 		t.Error("check-upstream.mjs は config.json を書き換えない(版を上げるのは人の PR)")
+	}
+}
+
+// TestCronJobManifestHasNoAllowRemoved は、消える ID の承認(IMPORT_ALLOW_REMOVED)を定期実行の CronJob に
+// 置かないこと(issue #277・ADR-0131)。承認は人が内容を確かめて手動 Job で1回だけ渡す。
+func TestCronJobManifestHasNoAllowRemoved(t *testing.T) {
+	for _, f := range []string{"deploy/k8s/base/pokedex/cronjob-import.yaml", "deploy/k8s/overlays/cloud/cronjob-import-suspend-patch.yaml"} {
+		if strings.Contains(readRepo(t, f), "IMPORT_ALLOW_REMOVED") {
+			t.Errorf("%s: IMPORT_ALLOW_REMOVED を定期実行に置かない(承認は手動 Job で1回だけ)", f)
+		}
+	}
+	if s := readRepo(t, cronJobScript); !regexp.MustCompile(`if \[ -n "\$\{IMPORT_ALLOW_REMOVED:-\}" \]`).MatchString(s) {
+		t.Errorf("%s: IMPORT_ALLOW_REMOVED が設定されたときだけ -allow-removed を付ける", cronJobScript)
 	}
 }

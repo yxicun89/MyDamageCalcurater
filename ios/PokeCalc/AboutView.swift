@@ -10,10 +10,20 @@ import SwiftUI
 
 /// 「このアプリについて」画面。非公式の注記とデータの出典一覧を表示する。
 struct AboutView: View {
+    /// 「データの扱い」セクションの削除先。nil(設定エラーで API が無い)ならセクションを出さない。
+    private let deviceDataService: (any DeviceDataService)?
+
+    init(deviceDataService: (any DeviceDataService)? = nil) {
+        self.deviceDataService = deviceDataService
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingToken.x4) {
                 noticeCard
+                if let deviceDataService {
+                    DeviceDataSection(service: deviceDataService)
+                }
                 dataSourcesSection
             }
             .padding(SpacingToken.x4)
@@ -53,6 +63,87 @@ struct AboutView: View {
                     .accessibilityIdentifier("aboutDataSource-\(index)")
             }
         }
+    }
+}
+
+/// 「データの扱い」セクション(P6-7・ADR-0501「P6-7」2章)。文言は `DeviceDataText`、状態は
+/// `DeviceDataDeletionViewModel` に任せ、ここは描くだけ。削除は確認(alert)を必ず挟む。
+private struct DeviceDataSection: View {
+    @State private var viewModel: DeviceDataDeletionViewModel
+    @State private var task: Task<Void, Never>?
+
+    init(service: any DeviceDataService) {
+        _viewModel = State(initialValue: DeviceDataDeletionViewModel(service: service))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x3) {
+            Text(DeviceDataText.sectionTitle)
+                .font(TextStyleToken.heading.font)
+                .foregroundStyle(ColorToken.textPrimary.color)
+
+            ForEach(Array(DeviceDataText.explanation.enumerated()), id: \.offset) { index, sentence in
+                Text(sentence)
+                    .font(TextStyleToken.body.font)
+                    .foregroundStyle(ColorToken.textPrimary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("deviceDataExplanation-\(index)")
+            }
+
+            if viewModel.phase == .confirming {
+                confirmationCard
+            } else {
+                Button(DeviceDataText.deleteButton) { viewModel.requestDeletion() }
+                    .buttonStyle(PillButtonStyle())
+                    .disabled(viewModel.phase == .deleting)
+                    .accessibilityIdentifier("deleteDeviceDataButton")
+            }
+
+            if let message = viewModel.statusMessage {
+                Text(message)
+                    .font(TextStyleToken.body.font)
+                    .foregroundStyle(ColorToken.textPrimary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("deleteDeviceDataStatus")
+            }
+
+            if viewModel.canRetry {
+                Button(DeviceDataText.retryButton) {
+                    task = Task { await viewModel.retry() }
+                }
+                .buttonStyle(PillButtonStyle())
+                .accessibilityIdentifier("retryDeleteDeviceDataButton")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // 子要素の identifier を上書きしないよう、コンテナとして識別する(`aboutDataSource-*` と同じ理由)。
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("deviceDataSection")
+        .onDisappear { task?.cancel() }
+    }
+
+    /// 削除の確認。システムの alert / confirmationDialog は XCUITest で同じ identifier のボタンが入れ子に
+    /// 2つ見えて操作できないため、セクション内の確認として描く(確認なしに削除しない点は同じ。ADR-0501「P6-7」実装結果)。
+    private var confirmationCard: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x3) {
+            Text(DeviceDataText.confirmMessage)
+                .font(TextStyleToken.body.font)
+                .foregroundStyle(ColorToken.textPrimary.color)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button(DeviceDataText.confirmAction) {
+                task = Task { await viewModel.confirmDeletion() }
+            }
+            .buttonStyle(PillButtonStyle())
+            .accessibilityIdentifier("confirmDeleteDeviceDataButton")
+            Button(DeviceDataText.cancelAction) { viewModel.cancelConfirmation() }
+                .buttonStyle(PillButtonStyle())
+                .accessibilityIdentifier("cancelDeleteDeviceDataButton")
+        }
+        .padding(SpacingToken.x3)
+        .glassCard()
     }
 }
 

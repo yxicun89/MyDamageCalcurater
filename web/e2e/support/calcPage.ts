@@ -159,7 +159,7 @@ export async function warmOfflineCache(page: Page): Promise<void> {
  */
 export async function openAppOffline(page: Page, path = "/calc"): Promise<void> {
   await warmOfflineCache(page);
-  await chooseRadio(page, "計算モード", "オフライン(WASM)");
+  await chooseRadio(page, "ダメージ計算の実行場所", "オフライン(WASM)");
   await page.goto(path);
   await expect(page.getByRole("tablist", { name: "画面の切り替え" })).toBeVisible();
   await expect(page.getByRole("radio", { name: "オフライン(WASM)", exact: true })).toBeChecked();

@@ -52,6 +52,7 @@ struct CalcConditionsSection: View {
             criticalAndBurnRow
             rankSection
             abilitySection
+            defenderAbilitySection
             weatherSection
             terrainSection
             defenderScreensSection
@@ -175,6 +176,31 @@ struct CalcConditionsSection: View {
             }
             .accessibilityIdentifier("calcAttackerAbilityPicker")
         }
+    }
+
+    /// 防御側の特性: 「指定なし」+ 防御側の特性名(`defenderAbilityOptions`。ADR-0501「P6-19」3章)。
+    /// 「詳細」を開いている間だけ選択肢を読む(`.task`。開いていなければ読まない)。
+    private var defenderAbilitySection: some View {
+        let selectedName = viewModel.defenderAbilityOptions
+            .first(where: { $0.id == viewModel.defenderAbilityId })?.nameJa
+            ?? AbilityPickerLabels.unspecified
+        return sectionRow(AbilityPickerLabels.defenderTitle) {
+            Menu {
+                Button(AbilityPickerLabels.unspecified) {
+                    viewModel.scheduleLatest { await $0.selectDefenderAbility(id: nil) }
+                }
+                ForEach(viewModel.defenderAbilityOptions, id: \.id) { ability in
+                    Button(ability.nameJa) {
+                        viewModel.scheduleLatest { await $0.selectDefenderAbility(id: ability.id) }
+                    }
+                }
+            } label: {
+                MenuLabelChip(text: selectedName)
+            }
+            .accessibilityValue(selectedName)
+            .accessibilityIdentifier("calcDefenderAbilityPicker")
+        }
+        .task(id: viewModel.defenderSpeciesKey) { await viewModel.loadDefenderAbilityOptions() }
     }
 
     /// 天候(1つ選ぶピル。既定 なし)。

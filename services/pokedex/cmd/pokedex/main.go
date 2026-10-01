@@ -1,7 +1,7 @@
 // Command pokedex は pokedex-svc の唯一のバイナリ(ADR-0105 §1)。
 //
 //	pokedex serve            # HTTP(/api/pokedex/*・/internal/pokedex/master・/healthz)
-//	pokedex export -out <dir> # balance・speed 向けの read model を4ファイル書く(ADR-0105 §5)
+//	pokedex export -out <dir> # balance・speed 向けの read model を6ファイル書く(ADR-0105 §5・ADR-0128)
 //
 // 設定は環境変数 POKEDEX_DATABASE_DSN(必須)・POKEDEX_ADDR(既定 :8080)。
 // serve は起動時に DB へ接続しない(sql.Open だけ。DB が無くても起動し、DB を使う操作が 503 を返す)。

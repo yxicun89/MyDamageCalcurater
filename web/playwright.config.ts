@@ -1,5 +1,4 @@
-// P4-6: Playwright の E2E(オフライン = WASM)。ADR-0313 で既定の計算モードはオンラインになったので、
-// マスタは pokedex フィクスチャ(ADR-0307)から読み、オンラインで一度開いてキャッシュを温めてからオフラインで確かめる。docs/test-strategy.md「E2E(Playwright)」。
+// P4-6: Playwright の E2E(オフライン = WASM、既定の計算モード)。docs/test-strategy.md「E2E(Playwright)」。
 // 本番ビルド(vite build → vite preview)を相手にし、バックエンドは起動しない(WASM だけで計算できることを確かめる)。
 // オンライン(API)は playwright.online.config.ts(calc-svc も起動する)。
 // 自動化するブラウザは chromium だけ。Safari・実機の確認は人間の作業(plan.md のブロッカー)。
@@ -8,7 +7,7 @@ import { defineConfig, devices } from "@playwright/test";
 import { join } from "node:path";
 import {
   OFFLINE_PORT,
-  OFFLINE_POKEDEX_FIXTURE_PORT,
+  POKEDEX_FIXTURE_PORT,
   assertWasmArtifacts,
   previewCommand,
   webRoot,
@@ -17,7 +16,7 @@ import {
 assertWasmArtifacts();
 
 const baseURL = `http://127.0.0.1:${OFFLINE_PORT}`;
-const pokedexFixtureURL = `http://127.0.0.1:${OFFLINE_POKEDEX_FIXTURE_PORT}`;
+const pokedexFixtureURL = `http://127.0.0.1:${String(POKEDEX_FIXTURE_PORT)}`;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -40,8 +39,9 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
-      // pokedex フィクスチャ(ADR-0307)。マスタの供給元(実データ相当。calc-svc は起動しない)。
-      command: `node ${join(webRoot, "e2e", "support", "pokedexFixtureServer.mjs")} ${String(OFFLINE_POKEDEX_FIXTURE_PORT)}`,
+      // ADR-0411: タイプバランス・判定はオフラインでもオンラインのマスタ(/api/pokedex/*)を読む。計算用の
+      // バックエンドは起動しないが、マスタの読み取りだけは軽量な pokedex フィクスチャ(ADR-0307)で受ける。
+      command: `node ${join(webRoot, "e2e", "support", "pokedexFixtureServer.mjs")} ${String(POKEDEX_FIXTURE_PORT)}`,
       cwd: webRoot,
       url: `${pokedexFixtureURL}/healthz`,
       reuseExistingServer: false,
@@ -54,8 +54,7 @@ export default defineConfig({
       // 別の設定(オンライン)で動いているサーバーを取り違えないよう、既存のサーバーは使わない。
       reuseExistingServer: false,
       timeout: 120_000,
-      // /api/pokedex だけをフィクスチャへ転送し、計算の /api は転送しない(WASM だけで計算できることの前提。
-      // 開発者の環境変数を持ち込まない)。
+      // 計算 API への転送を持たない preview にする(オフラインの前提。開発者の環境変数を持ち込まない)。
       env: { API_PROXY_TARGET: "", POKEDEX_PROXY_TARGET: pokedexFixtureURL },
     },
   ],

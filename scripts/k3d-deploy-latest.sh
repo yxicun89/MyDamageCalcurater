@@ -76,7 +76,11 @@ echo "== pokedex"
 docker build -q -f services/pokedex/Dockerfile --target server -t "$POKEDEX_SERVER_IMAGE" . >/dev/null
 k3d image import "$POKEDEX_SERVER_IMAGE" --cluster "$CLUSTER" >/dev/null
 kubectl -n pokecalc rollout restart deployment/pokedex
-kubectl -n pokecalc rollout status deployment/pokedex --timeout=180s
+if ! kubectl -n pokecalc rollout status deployment/pokedex --timeout=180s; then
+  echo "deploy-latest: pokedex が Ready にならない。readiness は DB のマスタに連動する(ADR-0129)。" >&2
+  echo "  新規クラスタ(初回 import 前)なら、先に make import-k8s を流してから、もう一度このコマンドを実行する" >&2
+  exit 1
+fi
 
 echo "== calc・gateway"
 make --no-print-directory api-k3d-deploy

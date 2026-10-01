@@ -3457,3 +3457,302 @@ XCUITest(`AboutScreenUITests` 2件・`LargeTextLayoutUITests.testAboutScreenNoHo
   (`AboutScreenUITests` 2件・`LargeTextLayoutUITests.testAboutScreenNoHorizontalOverflowAtAX5` を含む。
   `ios-lint`/`ios-gen-check`/`ios-check-request-limits`/`ios-check-infoplist` も成功)。既存テストは1つも
   編集していない。
+
+## P6-19 の受け入れ条件(issue #272 の iOS 側: 防御側・相手の特性の選択と、特性で分かれた行・候補の表示。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+- 日付: 2026-09-26 / 担当レーン: iOS / 関連: issue #272、ADR-0126(engine: 特性の候補とまとめ方)、ADR-0214(契約:
+  `BulkCalcRequest.defenderOverride.abilityId`・`ReverseRequest.unknownAbilityId`・`BulkCalcRow`/`ReverseCandidate` の必須
+  `abilityId`・`abilityIds`)、本 ADR「issue #274」(攻撃側の特性の選択は「詳細」に実装済み)・「P6-17」(行・候補の ID と
+  未対応の印の置き場所)、DECISIONS.md 2026-09-25「issue #274/#272 の防御側の詳細」・「issue 272 の API レーン担当分」、
+  同ファイル本タスクの新規エントリ「P6-19」、docs/plan.md P6-19
+- 背景: サーバーは防御側(逆算は相手)の特性を省略すると種族の特性(最大3件)をすべて試し、**結果が完全に同じ特性は
+  1行(1候補)にまとめ、違うときだけ行(候補)を分ける**(ADR-0126 (D))。生成物は PR #414 で再生成済みだが、iOS は
+  `abilityId`/`abilityIds` を写像で捨てており、行の ID(`<preset>@<item>`)・候補の ID(`<natureClass>@<item>`)に特性が
+  入らないため、**分かれた行が同じ ID になり** SwiftUI の `ForEach` の ID と `UnsupportedPlacement` の行ごとの注記
+  (`calcResultUnsupported-<row id>`)が衝突する(急ぎの正しさの問題)。契約の変更は無い(`api/openapi.yaml`・`Generated/` は触らない)。
+
+### 1. ドメインと ID(`ResultEntryIdentity.swift`)
+
+1. ドメインに足す(どれも既定値つきの init 引数。既存の呼び出し側・テストは変えない):
+   `BulkCalcRequest.defenderAbilityId: String?`・`ReverseRequest.unknownAbilityId: String?`・
+   `BulkCalcRow.abilityId: String?`/`abilityIds: [String]`・`ReverseCandidate.abilityId: String?`/`abilityIds: [String]`。
+   契約では `abilityId` は必須・`abilityIds` は1件以上だが、ドメインの既定(nil・空)は「特性の情報なし」
+   (P6-19 より前に書かれたテストの行)を表す。
+2. `APIPokeCalcService`: `defenderAbilityId` があれば `defenderOverride: {abilityId}`、nil なら **`defenderOverride` 自体を送らない**
+   (これまでの要求本文と同じ)。`unknownAbilityId` も nil なら送らない。応答の `abilityId`・`abilityIds` は並べ替えずに写す。
+3. **ID の規則(判断: 既存の identifier を最も変えない形)**: base ID(`<preset>@<item>`・`<natureClass>@<item>`)が
+   **その結果の中で1回だけ**なら base ID のまま。**2回以上**(= 特性で分かれた)なら `<base>@<代表の特性 ID>`
+   (`abilityId`。nil は `-`)。それでも重なる(契約違反: 同じ base・同じ特性が2回)ときは2つ目以降に `#2`・`#3`…。
+   - 採った理由: 特性が効かない大半の技・特性を指定したとき・既存のモック(特性1つの種族)では ID が今までと同じなので、
+     既存の XCUITest(`calcResultRow-none@-` 等)と P6-17 の identifier を1つも変えずに済む。「常に `@<特性>` を足す」案は
+     既存の XCUITest の期待値をすべて変えることになり、「サーバーが分けた組が2つ以上ある base だけ」は上と同じ意味
+     (engine のまとめは全行一括なので、分かれるときは全 base が分かれる。ADR-0126 §2)だが、base ごとに数える方が
+     行の並び・欠けに依存せず純粋関数で書ける。
+   - ID を作るのは `BulkResultDisplay`・`ReverseResultDisplay`(結果全体を見る所)。`BulkRowDisplay`/`ReverseCandidateDisplay`
+     の単体の init は `id` を渡さなければ base ID(既存の呼び出し側は変わらない)。
+   - `UnsupportedPlacement` は行の並び(添字)で動くので規則は変えない。分かれた行は ID が別になるので、行だけの注記の
+     identifier(`calcResultUnsupported-<row id>`)も衝突しない。
+
+### 2. 表示(特性で分かれた行・候補の副題)
+
+- `ResultEntryIdentity.splitBaseIDs` に入る(= 分かれた)行・候補にだけ副題 `AbilityGroupLabel.text` を付ける:
+  `特性: <名前> / <名前>`(`abilityIds` の順。名前は防御側〈逆算は相手〉の `species(key:)` の `abilities` から引き、
+  無い ID は ID のまま出す)。分かれていない行・候補には何も足さない(ノイズにしない)。
+- 名前の出どころ: ViewModel が持つ防御側(相手)の特性の選択肢(3・4章)。**結果が分かれていて名前をまだ持っていないとき
+  だけ**、ViewModel が `species(key:)` を読んでから行・候補を作り直す(計算し直さない。token が最新のときだけ)。
+- 見た目: 既存の補足文と同じ `TextStyleToken.caption` + `ColorToken.textSecondary`。折り返す(`lineLimit` なし)。
+  identifier は `calcResultAbility-<row id>`(`calcResultRow-<row id>` の中)・`reverseCandidateAbility-<candidate id>`
+  (`reverseCandidateRow-<candidate id>` の中)。読み上げは表示文言そのまま。
+
+### 3. 計算画面の「防御側の特性」(`CalcViewModel`)
+
+- 「詳細」の中、「攻撃側の特性」の**すぐ下**に小見出し「防御側の特性」(`AbilityPickerLabels.defenderTitle`)の `Menu` を置く。
+  項目は「指定なし」+ 防御側の特性名(`defenderAbilityOptions` の順)。identifier `calcDefenderAbilityPicker`、
+  `.accessibilityValue(<選択中の名前 or 「指定なし」>)`(XCUITest が `value` で読む)。
+- 状態: `defenderAbilityOptions: [Ability]`・`defenderAbilityId: String?`(nil = 指定なし。既定)。
+- **選択肢の読み込み(判断)**: 起動・防御側の変更では `species(key:)` を**読まない**(既存テストが数える `species(key:)` の
+  回数・添字〈manual モードの待ち合わせ〉を変えないため)。`loadDefenderAbilityOptions()` を View が「詳細」を開いている間
+  `.task(id: defenderSpeciesKey)` で呼ぶ。読み済みの防御側なら何もしない。計算しない・`isLoading`/`error`/`rows` を変えない・
+  失敗(キャンセル含む)は黙って空のまま・応答が届いた時点で防御側が変わっていたら反映しない。
+- `selectDefenderAbility(id:)`: nil か `defenderAbilityOptions` にある ID だけを受け付け、値が変わったときだけ
+  `beginInput()` → 更新 → `recalculate`(計算1回。`scheduleLatest` で先行の計算を cancel し、先の条件は次の要求に残る)。
+- **リセット**: 防御側の種族の変更(`selectDefender`)・攻守入れ替え(`swapSides`)で `defenderAbilityId = nil`・
+  `defenderAbilityOptions = []`(その操作の計算回数は変えない。その計算から指定なし)。攻撃側・技・プリセット・攻撃側の持ち物・
+  持ち物の比較・計算条件・構築の呼び出しでは消さない。
+- `buildRequest` は `defenderAbilityId` を `BulkCalcRequest.defenderAbilityId` に載せる(攻撃側の `abilityId` には混ぜない)。
+
+### 4. 逆算画面の「相手の特性」(`ReverseViewModel`)
+
+- 逆算画面には「詳細」が無いので、「相手の持ち物候補」の**すぐ上**に小見出し「相手の特性」(`AbilityPickerLabels.opponentTitle`)の
+  `Menu` を常に出す。identifier `reverseOpponentAbilityPicker`、`.accessibilityValue` は3章と同じ。
+  View は `.task(id: opponentSpeciesKey)` で `loadOpponentAbilityOptions()` を呼ぶ。
+- 状態: `opponentAbilityOptions`・`opponentAbilityId`(nil = 指定なし)。読み込みの規則は3章と同じ。
+- `selectOpponentAbility(id:)`: 3章と同じ受け付け。値が変わったら `beginInput()` → `recalculateIfPossible`
+  (有効な観測が無ければ reverse は呼ばず、覚えるだけ)。
+- **リセット**: 相手の種族の変更で nil・選択肢も空。**側の切り替え**(`selectSide`)でも nil(相手の役割が防御側 ↔ 攻撃側で
+  変わり、無効・軽減の意味が変わるため。種族は同じなので選択肢は残してよい)。自分・技・プリセット・持ち物では消さない。
+- `buildRequest` は `unknownAbilityId` に載せる(`known.abilityId` には混ぜない)。
+- **対象外(判断)**: 自分(既知側)の特性の選択は足さない(issue #272 が求めるのは相手側の特性を届けること。自分の特性は
+  構築の個体を呼べば `known.abilityId` に載る)。プリセット経路で自分の特性を選べるようにするかは plan.md の後続候補に記録する。
+  計算画面の攻撃側の特性の既定(「指定なし」。issue #272 の文面の「既定は種族の先頭を表示」とは違う)は issue #274 の判断のまま変えない。
+
+### 5. モック(`MockPokeCalcService`)
+
+- 既存の種族(9001〜9003。特性は各1つ)は、行・候補の数・順・ID を変えない。各行・候補に `abilityId` = その特性、
+  `abilityIds` = [その特性] を入れる(契約どおり常に入れる)。
+- 新しい架空の種族 `9004-000`「テストモンよん」(ノーマル。特性 `test-ability-delta`「テストとくせいデルタ」、
+  `test-ability-fighting-immune`「テストとくせいかくとうむこう」)を species.json の**末尾**に足した。フィクスチャの任意項目
+  `nullifiesMoveType`(特性)を足し、2つ目の特性に `"fighting"` を持たせた。
+- 規則: 候補の特性 = 指定があればその1件(種族に無ければ `invalid_input`)、無ければ種族の特性の先頭3件。
+  「防御側の特性の `nullifiesMoveType` が技のタイプと同じ」ものはダメージ 0(`rolls` 全 0・min/max 0・%0・`ko` = 0/false/0/0。
+  防御側の実数値・相性・分類はそのまま)、それ以外は既存の決め打ちの結果。結果が同じ特性を1組にまとめ(代表は先頭)、
+  一括計算は プリセット → 特性の組 → 持ち物 の順に並べる。逆算は相手が防御側(side=defender)のときだけ無効が効き、
+  無効の候補は `exact=false`・`mismatch` = 観測の件数・%0。候補は 性格クラス → 特性の組 → 持ち物 の順で作ってから
+  `mismatch` の昇順に安定ソートする。`exactCount` は `exact` の数。
+- 既存の XCUITest が使う種族・技・持ち物は変えない(新しい種族は検索シートで名前を打ったときだけ選ばれる)。
+
+### 6. accessibilityIdentifier(XCUITest が参照する)
+
+| 要素 | identifier | 備考 |
+|---|---|---|
+| 計算画面の防御側の特性 | `calcDefenderAbilityPicker` | 「詳細」の中。`Menu`。`value` = 選択中の名前 / 「指定なし」 |
+| 逆算画面の相手の特性 | `reverseOpponentAbilityPicker` | 常に表示。`Menu`。`value` は同上 |
+| 行の特性の副題 | `calcResultAbility-<row id>` | 特性で分かれた行だけ |
+| 候補の特性の副題 | `reverseCandidateAbility-<candidate id>` | 特性で分かれた候補だけ |
+
+行・候補の identifier(`calcResultRow-<id>` 等)の `<id>` は1章3の規則に従う(分かれた時だけ `@<特性 ID>` が付く)。
+
+### 7. 受け入れ条件(検証可能な形)
+
+1. **写像**: `defenderAbilityId`/`unknownAbilityId` が指定時だけ `defenderOverride.abilityId`/`unknownAbilityId` に載り、
+   nil のときは送らない。応答の `abilityId`/`abilityIds` がそのままの順でドメインに写る(`APIPokeCalcServiceAbilityTests`)。
+2. **ID の一意性**: 1章3の規則どおり。分かれない結果は既存の ID のまま、同じ preset/item が特性で分かれた行は
+   `@<特性>` 付きで一意、契約違反の重複でも一意。未対応の印の行ごとの注記は分かれた行ごとに正しく付く
+   (`AbilitySplitDisplayTests`)。
+3. **副題**: 分かれた行・候補にだけ `特性: A / B`(名前が無い ID は ID のまま)。分かれていなければ nil
+   (`AbilitySplitDisplayTests`)。文言「防御側の特性」「相手の特性」「指定なし」(`testPickerLabels`)。
+4. **計算画面**: 既定は指定なしで、起動時の `species(key:)` は攻撃側の1回のまま。選択肢は `loadDefenderAbilityOptions()` で
+   読み(計算しない・1回だけ・失敗は黙る・古い応答は捨てる)、選択は値が変わるたびに計算1回・選択肢外は無視。防御側の変更・
+   入れ替えで指定なしに戻り計算回数は変わらない。他の入力では消えない。先行の計算を cancel して積み上がる。分かれた行の名前は
+   防御側の `species(key:)` から引き、計算し直さない。分かれなければ `species(key:)` を読まない(`CalcViewModelDefenderAbilityTests`)。
+5. **逆算画面**: 4と同じ規則(観測が無いときは選択を覚えるだけ。側の切り替えでも指定なし)(`ReverseViewModelOpponentAbilityTests`)。
+6. **モック**: 5章の規則(`MockPokeCalcServiceAbilityTests`)。
+7. **XCUITest**(`AbilityPickerUITests` 3件): 計算画面で防御側を 9004-000 にすると行が `…@test-ability-delta`/
+   `…@test-ability-fighting-immune` に分かれて副題が出る → 「防御側の特性」で1つに決めると `none@-` に戻り副題が消える →
+   防御側を変えると「指定なし」。入れ替えでも「指定なし」。逆算画面で相手を 9004-000 にして観測を入れると候補が分かれ、
+   「相手の特性」で1つに決めると `neutral@-` に戻り、側を切り替えると「指定なし」。
+8. 既存の XCTest・XCUITest は1行も変えずに通る。`swift test` と `make ios-test` がすべて成功する。
+
+### 8. spec 時点のテスト結果(2026-09-26)
+
+`swift test`(`ios/PokeCalcKit`): 546 件実行(既存 500 件 + 新規 46 件)、32 件が失敗(すべて本タスクの新しいテスト。既存テストの失敗は 0 件)。
+仮実装のままで通る新しいテスト(14件: 分かれない結果の ID・特性の情報が無い行・既定が指定なし・起動で防御側を読まない・
+読み込み失敗が黙る・選択肢を読む前の選択の無視・リセット系〈選択が仮実装で入らないため今は自明に通るが、実装後は
+リセットの番になる〉・分かれないとき読まない・フィクスチャ)は回帰の番として残す。
+`AbilityPickerUITests` は `xcodebuild build-for-testing` が通ることだけ確認し、実行はしていない(View が未実装なので失敗する)。
+
+### 9. 実装者への注意(`TODO(implementer` を検索すると該当箇所が見つかる)
+
+- 型・引数・プロパティ・フィクスチャ(species.json の 9004-000 と `MockFixtures.AbilityEntry.nullifiesMoveType`)は spec で
+  追加済み。実装するのは: `ResultEntryIdentity.uniqueIDs`/`splitBaseIDs`、`AbilityGroupLabel.text`、`AbilityPickerLabels` の
+  2つの文言、`BulkResultDisplay`/`ReverseResultDisplay` の ID と副題、`APIPokeCalcService` の写像4か所、
+  `CalcViewModel`(`loadDefenderAbilityOptions`・`selectDefenderAbility`・`selectDefender`/`swapSides` のリセット・`buildRequest`・
+  `performCalc` の名前)、`ReverseViewModel`(同じ4点 + `selectSide`)、`MockPokeCalcService` の一括計算・逆算、
+  View(`CalcConditionsSection.swift` に防御側の特性、`ReverseScreenView.swift` に相手の特性、`CalcScreenResults.swift`・
+  `ReverseScreenResults.swift` に副題)と6章の identifier。
+- 名前を引くための `species(key:)` は `performCalc`/`recalculateIfPossible` の中で、行を反映した**後**に読み、token が最新のまま
+  なら行を作り直す(`isLoading` を立て直さない。失敗は黙って ID のまま)。**既存テストの `species(key:)` の回数を変えないため、
+  分かれていない結果では読まない**(`testUnsplitRowsDoNotFetchDefenderSpecies`)。
+- 未対応の印の名前(`UnsupportedMarkNames.abilityNames`)にも防御側・相手の特性名を足すとよい(`defender_ability` の印が
+  名前で出る)。必須ではない(テストは無い)。
+- 行の `.accessibilityElement(children: .contain)` の中に副題の `Text` を置けば `calcResultAbility-*` が個別の要素になる
+  (P6-17 と同じ)。`Menu` のラベルは `MenuLabelChip`(攻撃側の特性と同じ見た目)。
+- `LargeTextLayoutUITests` の AX5 はみ出し検査への追加は任意(足すなら既存の配列を変えずに別のテストで)。
+- 既存テスト・新しいテストの期待値は変えない。`api/openapi.yaml`・`Generated/`・`engine/`・`web/`・`services/` は触らない。
+- 完了条件は7章。`swift test` と `make ios-test` を実行し、結果をこの章の後ろに追記する。plan.md の P6-19 にチェックを付ける。
+
+### 10. 実装結果(2026-10-01)
+
+- View: `CalcConditionsSection`(防御側の特性)・`ReverseScreenView`(相手の特性)・`CalcScreenResults`/`ReverseScreenResults`(副題)。
+- **5章の訂正**: 新しい種族 9004-000 は species.json の**末尾ではなく 9002 と 9003 の間**に置く。既存の `MockPokeCalcServiceTests` が
+  `species.last` を防御側に使っており、末尾だと既定の技(かくとう)で行が特性により倍に分かれて8件が失敗するため
+  (既存テストを変えない方針を優先)。
+- XCUITest `AbilityPickerUITests` の `chooseSpecies` に `previousQuery` を足した(検索欄の入力は画面ごとに保持されるため、
+  同じ画面で2回目に種族を選ぶときは前の入力を消してから打つ。製品の挙動は変えない)。
+- 結果: `swift test` 546件・`make ios-test` 全件成功(unit 546件・XCUITest 47件)。
+
+## P6-7 の受け入れ条件(issue #103 の iOS 側: 「この端末のデータを削除」と ADR-0209 §8 の文言。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+- 日付: 2026-10-01 / 担当レーン: iOS / 関連: ADR-0209 §5(全削除 API)・§6・§7・§8(文言案)、api/openapi.yaml
+  (`deleteRecordDeviceData`・`deleteTeamDeviceData`・`DeletionStatus`)、CLAUDE.md 絶対ルール5、本 ADR「P6-18」(画面の置き場所)、
+  DECISIONS.md 本タスクの新規エントリ「P6-7」、docs/plan.md P6-7
+- 背景: record-svc・team-svc の全削除 API は実装済みで冪等。1回の上限で `status: partial` を返し、クライアントは同じ要求を
+  `completed` まで繰り返す。record と team は別 DB なので **2本とも** 呼び、**両方 `completed` になってから**完了を出す。
+  Web は未実装(`web/src` に該当 UI なし。`openapi.gen.ts` の型だけ)なので、iOS が既定を決め DECISIONS.md に書く(Web が合わせる)。
+
+### 1. 事前に分かった事実(implementer が最初に直すこと)
+
+- **生成クライアントに該当 operation が無い**。`ios/tools/openapi-gen/openapi-generator-config.yaml` の `filter.tags` が
+  `pokedex`・`calc` だけで、`record`・`team` を生成していない(`api/openapi.yaml` は変更不要・契約の変更ではない)。
+  implementer が `tags` に `record`・`team` を足し `make ios-gen` で再生成する(同設定ファイルのコメントの手順どおり)。
+  spec-writer は Generated に触らない指示のため行っていない。
+- 端末ID・セッションIDは `APIPokeCalcService` が全操作に `identity` から付ける(`headers: .init(xDeviceId:xSessionId:)`)。
+  新しい2本も同じ流儀で付ける。**削除しても端末 ID は作り直さない**(`ClientIdentity` は触らない)。
+- 削除するのはサーバー側(record・team)だけ。端末内の構築(`LocalTeamStore`、UserDefaults)は消さない
+  (§8 の確認文が「サーバーから削除します」であるため。DECISIONS.md に記録する)。
+
+### 2. 画面の置き場所と文言(確定)
+
+- 置き場所: **「このアプリについて」画面(`AboutView`)に「データの扱い」セクションを足す**(新しい画面・導線は作らない。
+  設定画面が無く、説明文の置き場所として About が自然なため)。セクションは出典一覧の上に置く。
+  identifier: セクション `deviceDataSection`、説明 `deviceDataExplanation-<0..2>`、ボタン `deleteDeviceDataButton`、
+  状態表示 `deleteDeviceDataStatus`(`Text`。`label` が文言そのもの。操作前は出さない)、再試行ボタン `retryDeleteDeviceDataButton`
+  (失敗・未完了のときだけ)、確認の了承 `confirmDeleteDeviceDataButton`・取り消し `cancelDeleteDeviceDataButton`。
+- 確認は `confirmationDialog` か `alert`(どちらでもよい。message に確認文、2つのボタンに上の identifier)。**確認なしに削除しない**。
+- 文言は `PokeCalcCore.DeviceDataText` の1か所だけ(View はそれを描くだけ。ハードコードしない)。
+
+| 定数 | 文言 |
+|---|---|
+| `explanation[0]` | アカウントはありません。履歴・お気に入り・構築は、この端末に割り当てた ID でサーバーに保存しています。 |
+| `explanation[1]` | ID が変わると(アプリを削除して入れ直したとき)、前のデータは開けなくなります。元に戻す方法はありません。 |
+| `explanation[2]` | 開けなくなったデータは自動的に消えます。計算の履歴は記録から90日、お気に入りと構築は最後に使った日から18か月です。 |
+| `deleteButton` | この端末のデータを削除 |
+| `confirmMessage` | 履歴・お気に入り・構築をサーバーから削除します。元に戻せません。 |
+| `deleting` | 削除しています… |
+| `partialNotice` | まだ残っています。続けて削除します。 |
+| `failure` | サーバーに届きませんでした。通信を確認してもう一度お試しください。 |
+| `completed` | 削除しました。 |
+| `confirmAction` / `cancelAction` / `retryButton` | 空でない文言(spec で値を固定しない。例 削除する / キャンセル / もう一度削除する) |
+| `recordLabel` / `teamLabel` | 履歴・お気に入り / 構築 |
+| `partlyDeleted(label:)` | `"\(label)は削除済みです。"` |
+
+§8 の「Web: サイトデータ消去」側の括弧は iOS では「アプリを削除して入れ直したとき」にする。
+
+### 3. 状態の仕様(`DeviceDataDeletionViewModel`。`@MainActor @Observable`、PokeCalcCore)
+
+- 依存は `DeviceDataService`(新プロトコル。`deleteRecordDeviceData()`/`deleteTeamDeviceData()` が1回の要求ごとに
+  `DeletionProgress`〈`.completed`/`.partial`〉を返す。失敗は `PokeCalcError`)。`PokeCalcService` には混ぜない(計算と切り離す)。
+- `phase`: `idle` → `requestDeletion()` で `confirming`(通信しない)→ `confirmDeletion()` で `deleting` → `finished`。
+  `cancelConfirmation()` で `idle`。`confirmDeletion()` は `confirming` のときだけ動く(削除中の二重起動も無視)。
+- 対象ごとに `DeviceDataTargetOutcome`(`pending`/`completed`/`incomplete`/`failed(code:)`)を持つ。record と team は**独立**に呼ぶ
+  (片方が失敗・未完了でももう片方は進める)。
+- `partial` は同じ要求を繰り返す。対象ごとの要求は `maxRequestsPerTarget`(既定 20)回まで。超えたら `incomplete`
+  (失敗ではない。無限ループしない)。通信エラーは自動で再送せず `failed(code: PokeCalcError.code)`。
+- `statusMessage`: `idle`/`confirming` は nil。`deleting` 中は `deleting`、ただし直前の応答が `partial` なら `partialNotice`。
+  `finished`: 両方 `completed` なら `completed` **のみ**。`incomplete` を含み失敗なしなら `partialNotice`。失敗を含めば `failure`
+  (片方だけ `completed` なら `partlyDeleted(label:)` を添える。`completed` の文言は出さない)。両方失敗なら `failure` だけ。
+- `retry()`: `finished` かつ `canRetry`(`completed` でない対象がある)のときだけ、`completed` でない対象だけを再度削除する
+  (再確認は不要。要求の上限は新しく数える)。それ以外は何もしない。
+- キャンセル(Task の cancel)は尊重する: 以後の要求を送らず、失敗にもせず(`pending` のまま)`phase` を `idle` に戻す。
+  すでに `completed` の対象はそのまま残る。
+
+### 4. モック(XCUITest 用)
+
+- `MockDeviceDataService`(actor)。挙動は起動時の環境変数 `POKECALC_MOCK_DEVICE_DATA`(`POKECALC_USE_MOCK` と同じ流儀)で切り替える:
+  なし/未知 = `immediate`(最初の要求で `completed`)、`partial` = 各対象が1回目 `partial`・2回目 `completed`、
+  `fail-once` = record の1回目だけ transport エラー・以後成功(team は常に成功)。`completed` 後は冪等に `completed`。
+- `AppEnvironment` の `.ready` が `DeviceDataService` も運ぶ(形は implementer の判断。`.ready` に値を足すとき既存の使用箇所を直す)。
+  `APIPokeCalcService` も `DeviceDataService` に準拠させる。
+
+### 5. 受け入れ条件(検証可能な形)
+
+1. `DeviceDataText` が2章の表の文言と完全一致する(`DeviceDataTextTests`)。説明に Web 固有の語(ブラウザ・サイトデータ)を含まない。
+2. 確認の前・取り消し後・`requestDeletion()` なしの `confirmDeletion()` では一切通信しない(`DeviceDataDeletionViewModelTests`)。
+3. record と team の両方が `completed` になってから `statusMessage == completed`。`partial` は `completed` まで繰り返す。
+   `deleting` 中の表示は `deleting`、`partial` を受けた後は `partialNotice`。削除中の二重 confirm で要求が増えない。
+4. `partial` が続き続けても対象ごとに上限回数で止まり(`incomplete`)、もう片方は実行される。
+5. record の失敗でも team を呼び、team の失敗でも record を呼ぶ。失敗は自動再送せず `failed(code:)` を運び、
+   `completed` を出さない。結果は対象ごとに分けて伝える(`partlyDeleted`)。
+6. `retry()` は `completed` でない対象だけを呼び、上限を数え直し、完了で `completed` を出す。再試行できないときは通信しない。
+7. キャンセルで以後の要求を送らず、失敗扱い・状態表示にしない。
+8. モックが3つのシナリオで 3章・4章どおりに動く(`MockDeviceDataServiceTests`)。
+9. XCUITest(`DeviceDataDeletionUITests`・モック): About に説明3文とボタンが見える(確認前は状態表示なし)/ 確認で取り消せる /
+   `partial` シナリオで確認の了承後に「削除しました。」になる / `fail-once` で失敗文言と再試行ボタンが出て、
+   再試行後に「削除しました。」になる / 失敗した後でも計算画面が開き結果の行が出る(絶対ルール5)。
+10. AX5 でセクション(説明・ボタン)が横にはみ出さない(`LargeTextLayoutUITests.testAboutScreenDeviceDataSectionNoHorizontalOverflowAtAX5`)。
+11. 既存の XCTest・XCUITest は1つも編集しない(`LargeTextLayoutUITests` へのメソッド追加のみ)。
+
+### 6. 追加したテスト(spec 時点)
+
+- 足場(既定値付き。`TODO(implementer` を検索): `PokeCalcCore/DeviceDataDeletion.swift`(`DeviceDataService`・`DeletionProgress`・
+  `DeviceDataTarget`・`DeviceDataText`〈文言は空文字列〉・`DeviceDataTargetOutcome`・`DeviceDataDeletionViewModel`〈何もしない〉)、
+  `PokeCalcCore/MockDeviceDataService.swift`(常に `completed`)
+- `Tests/PokeCalcCoreTests/DeviceDataTextTests.swift`(4件)・`DeviceDataDeletionViewModelTests.swift`(16件)・
+  `MockDeviceDataServiceTests.swift`(5件)・`Support/StubDeviceDataService.swift`(台本・呼び出し記録・フック付きのスタブ)
+- `PokeCalcUITests/DeviceDataDeletionUITests.swift`(5件)と `LargeTextLayoutUITests.testAboutScreenDeviceDataSectionNoHorizontalOverflowAtAX5`
+  (既存テストは編集していない)
+
+`swift test`(`ios/PokeCalcKit`): 572件中、新規25件のテストで 61 個のアサーションが失敗(すべて新規3ファイル内。既存547件は成功)。
+`xcodebuild build-for-testing`(XCUITest 6件を含む)は `** TEST BUILD SUCCEEDED **`。XCUITest の実行は未実施(identifier 未実装のため失敗する)。
+
+### 7. 実装者への注意
+
+- 最初に生成設定の `tags` へ `record`・`team` を足し `make ios-gen`(1章)。その後 `APIPokeCalcService` に2本の DELETE を実装して
+  `DeviceDataService` に準拠させる。**spec 時点ではこの API 写像のテストを書けていない**(生成物が無くコンパイルできないため)。
+  `APIPokeCalcServiceTests` の流儀(`RecordingTransport`)で追加すること: DELETE・パス `/api/record/device-data`・`/api/team/device-data`、
+  `X-Device-Id`/`X-Session-Id` ヘッダ、200 の `completed`/`partial` の写像、503(`store_unavailable`・`upstream_unavailable`)→`PokeCalcError`、
+  通信不能→`transport`。
+- `DeviceDataText`・`DeviceDataDeletionViewModel`・`MockDeviceDataService` の `TODO(implementer` を埋める。
+  `partial` の繰り返しは `Task.isCancelled` / `CancellationError` を確認する(`URLError(.cancelled)` は API 層で既に処理されているか確認)。
+- View(`AboutView` の新セクション)は `DeviceDataDeletionViewModel` を `@State` で持ち、`confirmDeletion()`/`retry()` は `Task` で呼び、
+  画面が消えたら cancel する。`CalcViewModel` など計算側は `DeviceDataService` に依存させない。
+- `ios/README.md` の操作説明と `docs/plan.md`(P6-7 のチェック)・DECISIONS.md(Web が合わせるための確定文言)を更新する。
+
+### 実装結果(P6-7。implementer)
+
+- 生成: `filter.tags` に `record`・`team` を足して `make ios-gen`(Generated が約 4000 行増えた。`api/openapi.yaml` は不変)。
+  operation だけに絞る方法は無い(openapi-generator の filter は tags / paths 単位)ため、タグ単位で足した。
+  既存コードは壊れず、`make ios-gen-check` は一致。
+- `APIPokeCalcService` に `DeviceDataService` 準拠を同ファイルの extension で足した(`send`/`client` が private のため)。
+  単体テスト `APIDeviceDataServiceTests`(新規ファイル 4 件: DELETE・パス・ヘッダ・completed/partial・503 の code・transport)。
+- 確認 UI: システムの `alert` / `confirmationDialog` は、XCUITest(iOS 26 系)で同じ identifier のボタンが入れ子に2つ見え、
+  `Failed to tap ... Multiple matching elements` になった(identifier を Button・label の Text のどちらに付けても同じ)。
+  そのためセクション内に確認文と2ボタンのカード(`confirmationCard`)を描く形にした(確認なしに削除しない点は同じ)。
+- `AppEnvironment.ready` に `deviceData` を足した(モックは `MockDeviceDataService(environment:)`、API は同じ `APIPokeCalcService`)。
+  `AboutView(deviceDataService:)`(nil ならセクションを出さない)。
+- **spec の文言の矛盾を解消(2026-10-01)**: `partlyDeleted(label:)` が「構築は削除しました。」だと `completed`「削除しました。」を
+  部分文字列として含み、「片方だけ completed のとき completed の文言を含まない」検査(ViewModel 2件・XCUITest 1件)が成立しなかった。
+  テストを弱めず、文言を「構築は削除済みです。」に変えた(2章の表・`DeviceDataTextTests`・DECISIONS.md も同じ)。
+- テスト結果: `swift test` 576 件中 2 件失敗(上記の矛盾の2件のみ。新規 API 4 件を含む他は成功)/ `make ios-lint ios-gen-check
+  ios-check-request-limits` 成功 / `make ios-test-ui` 53 件中 1 件失敗(`testFailureThenRetryCompletes`。上記の矛盾のみ。
+  AX5 の新規テストを含む他は全件成功)。

@@ -52,6 +52,9 @@ cd ios/PokeCalcKit && swift test     # ロジックだけを macOS で手早く
 Xcode 27 が要る(`xcode-select` が CommandLineTools のままでも、スクリプトが `DEVELOPER_DIR` を Xcode に向ける)。
 失敗・スキップ・テスト 0 件は失敗として扱う。署名チームの設定と実機インストールは人間の作業(P6-4)。
 
+「このアプリについて」(ホーム右上の i)の「データの扱い」から「この端末のデータを削除」(サーバーの履歴・お気に入り・構築。
+端末内の構築は消さない)。モックの挙動は `POKECALC_MOCK_DEVICE_DATA=partial|fail-once` で切り替える(ADR-0501「P6-7」)。
+
 ## 関連 ADR
 
 [0500](../docs/adr/0500-ios-app-architecture.md)(構成・生成・モック・設定・テスト)・

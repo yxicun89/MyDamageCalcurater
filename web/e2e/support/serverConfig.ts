@@ -32,7 +32,6 @@ export const POKEDEX_FIXTURE_PORT = 18319;
  * 既定の計算モードがオンラインになり、マスタは /api/pokedex から読む(一度読んだものを IndexedDB に
  * 保存してオフラインで使う)ため、オフライン設定でも pokedex フィクスチャが要る(calc-svc は不要)。
  */
-export const OFFLINE_POKEDEX_FIXTURE_PORT = 18320;
 
 /**
  * ADR-0313: コンテナ(playwright.container.config.ts)の E2E 用 pokedex フィクスチャのポート。コンテナの nginx は

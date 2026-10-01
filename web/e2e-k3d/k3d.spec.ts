@@ -70,7 +70,7 @@ test("オフライン(WASM): オンラインで引いた実マスタの種族で
   await pickFirstCandidate(page, "防御側のポケモン", prefix);
   await expect(calcRows(page)).toHaveCount(DEFAULT_ROW_COUNT);
 
-  await chooseRadio(page, "計算モード", "オフライン(WASM)");
+  await chooseRadio(page, "ダメージ計算の実行場所", "オフライン(WASM)");
   await page.goto("/calc");
   await expect(page.getByRole("tablist", { name: "画面の切り替え" })).toBeVisible();
   await pickFirstCachedCandidate(page, "攻撃側のポケモン", prefix);
@@ -86,7 +86,7 @@ test("オンライン(API): 実マスタのポケモンを選ぶと計算結果�
 
   const failures = trackFailures(page);
   await openApp(page);
-  await chooseRadio(page, "計算モード", "オンライン(API)");
+  await chooseRadio(page, "ダメージ計算の実行場所", "オンライン(API)");
   await pickFirstCandidate(page, "攻撃側のポケモン", prefix);
   await pickFirstCandidate(page, "防御側のポケモン", prefix);
   await expect(calcRows(page)).toHaveCount(DEFAULT_ROW_COUNT);

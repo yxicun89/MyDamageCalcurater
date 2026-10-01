@@ -52,7 +52,7 @@ test("既定はオンライン。一度開いて種族を引いたあと /api �
   expect(wasmRequests, "オンラインの間は engine.wasm を取得しない").toEqual([]);
 
   // 2. オフラインに切り替え、バックエンドが落ちている状態を再現して開き直す(届いた要求は全て通信エラー)。
-  await chooseRadio(page, "計算モード", "オフライン(WASM)");
+  await chooseRadio(page, "ダメージ計算の実行場所", "オフライン(WASM)");
   await page.route("**/api/**", (route) => route.abort("connectionrefused"));
   apiRequests.length = 0;
   await page.goto("/calc");
@@ -85,7 +85,7 @@ test("既定はオンライン。一度開いて種族を引いたあと /api �
 
 test("オフラインではキャッシュに無い種族は引けない(架空データは出ない)", async ({ page }) => {
   await warmOfflineCache(page);
-  await chooseRadio(page, "計算モード", "オフライン(WASM)");
+  await chooseRadio(page, "ダメージ計算の実行場所", "オフライン(WASM)");
   await page.route("**/api/**", (route) => route.abort("connectionrefused"));
   await page.goto("/calc");
   await expect(page.getByRole("tablist", { name: "画面の切り替え" })).toBeVisible();
@@ -163,7 +163,7 @@ test("キャッシュが壊れていれば破棄して案内を出し、オン�
       };
     });
   }, MASTER_CACHE_DB_NAME);
-  await chooseRadio(page, "計算モード", "オフライン(WASM)");
+  await chooseRadio(page, "ダメージ計算の実行場所", "オフライン(WASM)");
   await page.route("**/api/**", (route) => route.abort("connectionrefused"));
 
   await page.goto("/calc");
@@ -175,7 +175,7 @@ test("キャッシュが壊れていれば破棄して案内を出し、オン�
     localStorage.setItem("pokecalc.calcMode", "online");
   });
   await warmOfflineCache(page);
-  await chooseRadio(page, "計算モード", "オフライン(WASM)");
+  await chooseRadio(page, "ダメージ計算の実行場所", "オフライン(WASM)");
   await page.goto("/calc");
   await expect(page.getByRole("tablist", { name: "画面の切り替え" })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
@@ -222,7 +222,7 @@ test("スキーマ版が違うキャッシュは破棄して案内を出す", as
       };
     });
   }, MASTER_CACHE_DB_NAME);
-  await chooseRadio(page, "計算モード", "オフライン(WASM)");
+  await chooseRadio(page, "ダメージ計算の実行場所", "オフライン(WASM)");
   await page.route("**/api/**", (route) => route.abort("connectionrefused"));
 
   await page.goto("/calc");

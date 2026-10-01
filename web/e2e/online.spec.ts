@@ -31,7 +31,7 @@ function isEngineWasm(request: Request): boolean {
 }
 
 async function selectMode(page: Page, name: "オンライン(API)" | "オフライン(WASM)"): Promise<void> {
-  await chooseRadio(page, "計算モード", name);
+  await chooseRadio(page, "ダメージ計算の実行場所", name);
 }
 
 test("オンラインのマスタは /api/pokedex/* から読む(フィクスチャへの振り分けが効いている)", async ({

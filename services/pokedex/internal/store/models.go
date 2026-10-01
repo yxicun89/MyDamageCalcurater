@@ -134,6 +134,12 @@ type SpeciesAbility struct {
 	AbilityID  string
 }
 
+type SpeciesKeyLedger struct {
+	SpeciesKey  string
+	ShowdownID  string
+	FirstSeenAt time.Time
+}
+
 type Type struct {
 	ID           string
 	SortOrder    uint16

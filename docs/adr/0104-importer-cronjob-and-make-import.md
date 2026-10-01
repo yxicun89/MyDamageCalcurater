@@ -1,6 +1,6 @@
 # ADR-0104: importer の CronJob(週1回)と make import の運用(P2-2d)
 
-- 状態: 提案(P2-2d の仕様。spec-writer 起草、implementer が実装、critic がレビュー)
+- 状態: 採用(P2-2d の仕様。実装済み・main 統合済み: PR #45)
 - 日付: 2026-09-22
 - 関連: plan.md P2-2d、ADR-0101(§1 構成・63行 CronJob のイメージは Node と Go の両方・§9 版と冪等な投入・§10 P2-2d の範囲・§11 CLI)、
   ADR-0100(111行 checksum が一致すれば取り込まない・§9 k3d の MySQL・Secret・Job の流儀)、ADR-0102(イメージはタグ+digest で固定)、
@@ -125,7 +125,7 @@ tools/importer/cronjob.sh(POSIX sh。set -eu)
 | `/tmp` | npm のキャッシュ・HOME | emptyDir | ルートを読み取り専用にするため(`HOME=/tmp`、`npm_config_cache=/tmp/npm-cache`) |
 
 - `data/importer/*.json`(config・effects・regulations)はイメージに焼く(§6)。ConfigMap にしない。
-- PVC の削除は自動化しない(データの削除。CLAUDE.md の人間の確認事項)。キャッシュを捨てたいときは人が消す。
+- PVC そのものの削除は自動化しない(データの削除。CLAUDE.md の人間の確認事項)。個別の旧版 artifact の削除だけは例外で、末尾の「追記(issue #111)」に従い `prune.mjs` が行う。
 
 ### 6. イメージ(`services/pokedex/Dockerfile` の `importer` ターゲット)
 
@@ -273,7 +273,7 @@ func run(args []string, env cliEnv) int // main は os.Exit(run(os.Args[1:], 本
 ## 限界
 
 - 上流の検出は「違う」までで、新しい版に何が入ったか(裁定が要るか)は人が `make import-dry-run` で見る。
-- 報告(`reports/import-<時刻>.json`)は毎週 PVC に1つ増える(1年で約50個)。掃除は v1 では行わない(容量が問題になったら保持数を足す)。
+- 報告(`reports/import-<時刻>.json`)は毎週 PVC に1つ増える(1年で約50個)。→ issue #111 で直近 52 件だけ残すようにした(末尾の追記)。
 - PVC を失うと次の実行で固定版を取り直す(取得元へ1回ずつ)。k3d の local-path の PVC はノードのディスク上にあり、クラスタ削除で消える。
 - ローカルの k3d はノート PC が止まっていれば動かない。`startingDeadlineSeconds` の範囲で1回だけ追いつく。
 - cloud での実運用(マネージド DB・レジストリ・suspend の解除)は後続。
@@ -298,3 +298,26 @@ func run(args []string, env cliEnv) int // main は os.Exit(run(os.Args[1:], 本
 だった。Kubernetes の `concurrencyPolicy` は**同じ CronJob が作る Job 同士**にしか働かず、`make import-k8s`
 (`kubectl create job --from=cronjob/...`)が作る独立した Job とは排他しない。実際の排他(`cronjob.sh` での
 `flock`)は ADR-0109 を参照。`Forbid` 自体は「同じ CronJob の Job 同士の重複防止」という限定された役割のまま維持する。
+
+## 追記(issue #111 / D18。2026-10-01)
+
+PVC(2Gi)が版更新と週次実行で満杯にならないよう、容量の事前確認と保持 prune を `tools/importer/prune.mjs` に入れた。
+根拠は DECISIONS.md 2026-09-23 のユーザー決定(「古いキャッシュを自動削除。直近 N 世代のみ保持。容量拡張だけで対症療法にしない」)。
+世代数は提案どおり 2(現在版+直前の成功版)、report は 52 件とした。
+
+- §5 の「PVC の削除は自動化しない」は **PVC そのもの**に限る。再生成可能な artifact(`.cache/<source>/<旧版>`・`<source>/<旧版>`・古い report)は、
+  下記の保持方針に従って `prune.mjs` が自動で消してよい。
+- 保持: source(calc・showdown・pokeapi)ごとに `config.json` が固定する現在版+直前の成功版。直前の成功版は成功台帳
+  `data/generated/.import-success.json` で決め、失敗 run が作っただけの版はその枠を奪わない。台帳が無くても現在版は消さない。
+  `reports/` は `import-<UTC時刻>.json` を新しい順に 52 件。`latest*`・`upstream/`・`.import.lock`・台帳・`.partial-` を含む名前・
+  ディレクトリでないもの・知らない top-level は触らない。config の版名にパス区切り・`..` があれば拒否する。
+- 順序: `cronjob.sh` は flock → `prune.mjs check` → fetch → 検出 → `pokedex-import`(exec にしない)→ `prune.mjs prune`。
+  prune は fetch・照合・DB apply がすべて成功した後に、同じロックを持ったまま行う。現在版の snapshot が無ければ台帳にも記録せず何も消さない。
+  prune の失敗は握りつぶさない。
+- 容量の事前確認: 空きが予約容量(既定 400 MiB。`IMPORT_RESERVE_BYTES` で上書き)を下回ると、stderr に `importer-capacity` を出して終了コード 3
+  で止まる。根拠は Showdown の新版 1 つ分(tarball+展開済み tree+依存+build 結果)の実測約 190 MiB(2026-10-01、`du -sh data/generated/.cache/showdown/<固定コミット f10d679…>`)に、約2倍の余裕を見たこと。
+  PokeAPI・calc の版は数 MiB で無視できる。
+  終了コード 3 は再試行しても直らない容量不足(1 は再試行で直りうる失敗)で、`docs/runbooks/data.md` の手順で人が回復する。
+- ログは相対パス・byte 数・残量だけ。絶対パス・取得物の中身は出さない。
+- 限界: 台帳は PVC 内にあり、消えると直前版の保持根拠が無くなる(次の成功 run まで現在版だけが残り、旧版は再生成できる)。
+  版が 3 つ同時に進む週は保持分で一時的に約 2 世代分の容量が要るので、2Gi で足りなければ runbook の PVC 拡張を使う。

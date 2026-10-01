@@ -76,7 +76,8 @@ func TestMasterExportMatchesContract(t *testing.T) {
 }
 
 // AC-I2: 中身は DB の行のとおり。使用可能集合で絞らない(既定のレギュレーションの外の種族・技・持ち物・特性も入る)。
-// species に showdownId、メガの3列、slot 順の特性。dataVersion は data_versions の source=version を source 昇順に「,」で連結。
+// species に showdownId、メガの3列、slot 順の特性。dataVersion は data_versions の source=version@checksum先頭8桁 を
+// source 昇順に「,」で連結(issue #281・ADR-0128。checksum を含めて、version が "local" 固定の取得元の中身の違いも区別する)。
 func TestMasterExportContent(t *testing.T) {
 	q := storetest.New()
 	h := newHandler(t, q)
@@ -89,7 +90,7 @@ func TestMasterExportContent(t *testing.T) {
 	if ex.SchemaVersion != api.MasterExportSchemaVersionN1 {
 		t.Errorf("schemaVersion = %d, want 1", ex.SchemaVersion)
 	}
-	wantVersion := "calc=test-calc-1,pokeapi=cafef00dcafef00dcafef00dcafef00dcafef00d,showdown=abad1deaabad1deaabad1deaabad1deaabad1dea"
+	wantVersion := "calc=test-calc-1@22222222,pokeapi=cafef00dcafef00dcafef00dcafef00dcafef00d@33333333,showdown=abad1deaabad1deaabad1deaabad1deaabad1dea@11111111"
 	if ex.DataVersion != wantVersion {
 		t.Errorf("dataVersion = %q, want %q", ex.DataVersion, wantVersion)
 	}

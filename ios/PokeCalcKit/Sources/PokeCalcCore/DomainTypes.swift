@@ -519,11 +519,16 @@ public struct BulkCalcRequest: Sendable {
     public var presets: [DefenderPreset]
     /// 差し替えて比較する持ち物 ID(省略時は素の1通り)。`nil` は「持ち物なし」。
     public var itemVariants: [String?]
+    /// 防御側の特性を1つに固定する(openapi `BulkCalcRequest.defenderOverride.abilityId`。issue #272・ADR-0214)。
+    /// nil は「指定なし」= `defenderOverride` を送らず、サーバーが種族の特性(最大3件)をすべて試して、
+    /// 結果が違うときだけ行を分ける(ADR-0126)。ADR-0501「P6-19」。
+    public var defenderAbilityId: String?
 
     public init(
         format: Format, attacker: Individual, defenderSpeciesKey: String, moveId: String,
         field: FieldState = FieldState(),
-        critical: Bool = false, presets: [DefenderPreset] = [], itemVariants: [String?] = []
+        critical: Bool = false, presets: [DefenderPreset] = [], itemVariants: [String?] = [],
+        defenderAbilityId: String? = nil
     ) {
         self.format = format
         self.attacker = attacker
@@ -533,6 +538,7 @@ public struct BulkCalcRequest: Sendable {
         self.critical = critical
         self.presets = presets
         self.itemVariants = itemVariants
+        self.defenderAbilityId = defenderAbilityId
     }
 }
 
@@ -563,16 +569,25 @@ public struct BulkCalcRow: Equatable, Sendable {
     /// この行で使った防御側の調整(openapi `BulkCalcRow.defender`。必須)。
     public var defender: BulkDefender
     public var result: CalcResult
+    /// この行の計算に使った防御側の特性(openapi `BulkCalcRow.abilityId`。契約では必須。ADR-0126・ADR-0214)。
+    /// ドメインでは既定 nil(P6-19 より前に書かれた呼び出し側・テストの行は「特性の情報なし」として扱う)。
+    public var abilityId: String?
+    /// この行と結果が完全に同じになる特性の ID(openapi `BulkCalcRow.abilityIds`。`abilityId` が先頭)。
+    /// 既定は空(= 特性の情報なし)。
+    public var abilityIds: [String]
 
     public init(
         preset: DefenderPreset, presetLabel: String, itemId: String? = nil,
-        defender: BulkDefender, result: CalcResult
+        defender: BulkDefender, result: CalcResult,
+        abilityId: String? = nil, abilityIds: [String] = []
     ) {
         self.preset = preset
         self.presetLabel = presetLabel
         self.itemId = itemId
         self.defender = defender
         self.result = result
+        self.abilityId = abilityId
+        self.abilityIds = abilityIds
     }
 }
 
@@ -635,14 +650,21 @@ public struct ReverseCandidate: Equatable, Sendable {
     /// 「正確でない可能性がある」印(openapi `ReverseCandidate.unsupported`。必須・印なしは空。
     /// SP によらず候補ごとに決まる。ADR-0123 §2)。
     public var unsupported: [UnsupportedMark]
+    /// この候補の計算に使った相手の特性(openapi `ReverseCandidate.abilityId`。`BulkCalcRow.abilityId` と同じ規則)。
+    public var abilityId: String?
+    /// この候補と結果が完全に同じになる特性の ID(openapi `ReverseCandidate.abilityIds`。既定は空)。
+    public var abilityIds: [String]
 
-    /// `unsupported` は既定で空(`CalcResult` と同じ理由)。
+    /// `unsupported`・`abilityId`・`abilityIds` は既定で空(`CalcResult` と同じ理由)。
     public init(
         natureClass: NatureClass, nature: NatureModifier, natureId: String?, itemId: String?,
         ranges: [SPRange], spCount: Int,
         exact: Bool, mismatch: Int, support: Int, minPercent: Double, maxPercent: Double,
-        unsupported: [UnsupportedMark] = []
+        unsupported: [UnsupportedMark] = [],
+        abilityId: String? = nil, abilityIds: [String] = []
     ) {
+        self.abilityId = abilityId
+        self.abilityIds = abilityIds
         self.natureClass = natureClass
         self.nature = nature
         self.natureId = natureId
@@ -695,12 +717,16 @@ public struct ReverseRequest: Sendable {
     public var critical: Bool
     /// 返す候補数の上限。0 は無制限(openapi の既定値)。
     public var maxCandidates: Int
+    /// 相手の特性を1つに固定する(openapi `ReverseRequest.unknownAbilityId`。issue #272・ADR-0214)。
+    /// nil は「指定なし」= 送らず、サーバーが相手の種族の特性をすべて候補にする(ADR-0126)。
+    public var unknownAbilityId: String?
 
     public init(
         format: Format, side: ReverseSide, known: Individual, unknownSpeciesKey: String, moveId: String,
         itemCandidates: [String?] = [], observations: [DamageObservation],
-        critical: Bool = false, maxCandidates: Int = 0
+        critical: Bool = false, maxCandidates: Int = 0, unknownAbilityId: String? = nil
     ) {
+        self.unknownAbilityId = unknownAbilityId
         self.format = format
         self.side = side
         self.known = known

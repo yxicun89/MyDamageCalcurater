@@ -770,6 +770,22 @@ func (q *Queries) InsertSpeciesAbility(ctx context.Context, arg InsertSpeciesAbi
 	return err
 }
 
+const insertSpeciesKeyLedgerEntry = `-- name: InsertSpeciesKeyLedgerEntry :exec
+INSERT IGNORE INTO species_key_ledger (species_key, showdown_id, first_seen_at)
+VALUES (?, ?, ?)
+`
+
+type InsertSpeciesKeyLedgerEntryParams struct {
+	SpeciesKey  string
+	ShowdownID  string
+	FirstSeenAt time.Time
+}
+
+func (q *Queries) InsertSpeciesKeyLedgerEntry(ctx context.Context, arg InsertSpeciesKeyLedgerEntryParams) error {
+	_, err := q.db.ExecContext(ctx, insertSpeciesKeyLedgerEntry, arg.SpeciesKey, arg.ShowdownID, arg.FirstSeenAt)
+	return err
+}
+
 const insertType = `-- name: InsertType :exec
 INSERT INTO types (id, sort_order, name_ja, name_ja_source)
 VALUES (?, ?, ?, ?)
@@ -861,6 +877,33 @@ func (q *Queries) ListAbilityEffects(ctx context.Context) ([]AbilityEffect, erro
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAbilityIDs = `-- name: ListAbilityIDs :many
+SELECT id FROM abilities ORDER BY id
+`
+
+func (q *Queries) ListAbilityIDs(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listAbilityIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -963,6 +1006,33 @@ func (q *Queries) ListItemEffects(ctx context.Context) ([]ItemEffect, error) {
 	return items, nil
 }
 
+const listItemIDs = `-- name: ListItemIDs :many
+SELECT id FROM items ORDER BY id
+`
+
+func (q *Queries) ListItemIDs(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listItemIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listItems = `-- name: ListItems :many
 SELECT id, name_ja, name_ja_source, name_en
 FROM items
@@ -1016,6 +1086,33 @@ func (q *Queries) ListMoveEffects(ctx context.Context) ([]MoveEffect, error) {
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMoveIDs = `-- name: ListMoveIDs :many
+SELECT id FROM moves ORDER BY id
+`
+
+func (q *Queries) ListMoveIDs(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listMoveIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -1388,6 +1485,69 @@ func (q *Queries) ListSpeciesAbilityNames(ctx context.Context, speciesKey string
 	return items, nil
 }
 
+const listSpeciesKeyLedger = `-- name: ListSpeciesKeyLedger :many
+SELECT species_key, showdown_id
+FROM species_key_ledger
+ORDER BY species_key
+`
+
+type ListSpeciesKeyLedgerRow struct {
+	SpeciesKey string
+	ShowdownID string
+}
+
+// 種族 key の台帳(ADR-0131)。追記だけ。削除・更新・REPLACE のクエリは置かない(layout テストで固定)。
+func (q *Queries) ListSpeciesKeyLedger(ctx context.Context) ([]ListSpeciesKeyLedgerRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSpeciesKeyLedger)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSpeciesKeyLedgerRow
+	for rows.Next() {
+		var i ListSpeciesKeyLedgerRow
+		if err := rows.Scan(&i.SpeciesKey, &i.ShowdownID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSpeciesKeyValues = `-- name: ListSpeciesKeyValues :many
+SELECT ` + "`" + `key` + "`" + ` FROM species ORDER BY ` + "`" + `key` + "`" + `
+`
+
+// 消滅の検出用(投入前の ID の一覧)。
+func (q *Queries) ListSpeciesKeyValues(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listSpeciesKeyValues)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		items = append(items, key)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSpeciesKeys = `-- name: ListSpeciesKeys :many
 
 SELECT ` + "`" + `key` + "`" + `, showdown_id
@@ -1679,4 +1839,15 @@ func (q *Queries) SearchSpecies(ctx context.Context, arg SearchSpeciesParams) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const seedSpeciesKeyLedgerFromSpecies = `-- name: SeedSpeciesKeyLedgerFromSpecies :exec
+INSERT IGNORE INTO species_key_ledger (species_key, showdown_id, first_seen_at)
+SELECT ` + "`" + `key` + "`" + `, showdown_id, ? FROM species
+`
+
+// 今の species のうち台帳に無い組を足す(台帳ができる前に投入した DB の移行)。
+func (q *Queries) SeedSpeciesKeyLedgerFromSpecies(ctx context.Context, firstSeenAt time.Time) error {
+	_, err := q.db.ExecContext(ctx, seedSpeciesKeyLedgerFromSpecies, firstSeenAt)
+	return err
 }

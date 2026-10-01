@@ -45,6 +45,13 @@ make pokedex-export      # read model を data/generated/readmodel/ に書く(PO
 make test-db             # DB を使うテスト(POKEDEX_TEST_DSN が必須。make test には含めない)
 ```
 
+## 運用エンドポイント
+
+- `GET /healthz`: DB に触れない。liveness 用。
+- `GET /readyz`: DB に届き、マスタの最小条件(data_versions・types・natures・既定のレギュレーション)が揃っているときだけ 200。
+  readiness 用。新規クラスタでは初回 import(`make import-k8s`)の後に Ready になる(ADR-0129)。
+- DB を使う操作は5秒の締め切りで 503 `master_unavailable` を返す(ADR-0129)。
+
 ## 関連 ADR
 
 [0002](../../docs/adr/0002-master-data-source.md)(取得元と責務分離)・

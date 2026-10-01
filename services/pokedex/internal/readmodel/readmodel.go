@@ -1,4 +1,4 @@
-// Package readmodel は `pokedex export`(balance・speed 向けの read model。ADR-0100 §8・ADR-0105 §5)。
+// Package readmodel は `pokedex export`(balance・speed 向けの read model 6ファイル。ADR-0100 §8・ADR-0105 §5・ADR-0128)。
 // HTTP に依存しない。DB は store.Querier(sqlc の生成インターフェース)経由でだけ読む。
 package readmodel
 
@@ -14,6 +14,7 @@ import (
 
 	"example.com/pokecalc/engine"
 	"example.com/pokecalc/services/internal/master"
+	"example.com/pokecalc/services/pokedex/internal/dataversion"
 	"example.com/pokecalc/services/pokedex/internal/readtx"
 	"example.com/pokecalc/services/pokedex/internal/store"
 )
@@ -24,7 +25,20 @@ const (
 	FileMoves        = "moves.json"
 	FileAbilities    = "abilities.json"
 	FileSpeedPokemon = "speed-pokemon.json"
+	FileTypeChart    = "type-chart.json" // balance の BALANCE_TYPE_CHART_PATH が指す名前(ADR-0128)
+	FileMetadata     = "metadata.json"   // dataVersion。WriteDir は最後に書く(ADR-0128)
 )
+
+// typeChartSource・typeChartGeneration・typeChartNote は type-chart.json の出典欄
+// (balance の type-chart.schema.json。ADR-0013・ADR-0128)。generation 0 は golden と同じ Champions の番号。
+const (
+	typeChartSource     = "pokedex"
+	typeChartGeneration = 0
+	typeChartNote       = "Effectiveness x2 as an integer: 0=immune, 1=not very effective, 2=neutral, 4=super effective. A pair missing from the DB is neutral (2). Exported from the pokedex type_chart table (ADR-0013, ADR-0128)."
+)
+
+// neutralCode は DB に行が無い攻撃×防御の組の相性コード(importer は等倍の組を保存しない)。
+const neutralCode = 2
 
 // exportSchemaVersion は各ファイルの schemaVersion(いまは 1 だけ)。
 const exportSchemaVersion = 1
@@ -41,12 +55,14 @@ var ErrNoDefaultRegulation = errors.New("readmodel: 既定のレギュレーシ�
 // 係数が 1〜16 の比にならない)。
 var ErrInvalidExport = errors.New("readmodel: read model として出力できない")
 
-// Files は export の出力(4ファイル)。
+// Files は export の出力(6ファイル)。
 type Files struct {
 	PokemonTypes []byte
 	Moves        []byte
 	Abilities    []byte
 	SpeedPokemon []byte
+	TypeChart    []byte // type-chart.json(balance の type-chart.schema.json の形)
+	Metadata     []byte // metadata.json({"schemaVersion":1,"dataVersion":...})
 }
 
 // TruncatedAbility は balance の上限を超えて落とした特性(pokemonId・abilityId)。
@@ -105,6 +121,22 @@ type effectEntry struct {
 	Denominator int    `json:"denominator,omitempty"`
 }
 
+type typeChartFile struct {
+	SchemaVersion int                       `json:"schemaVersion"`
+	Source        string                    `json:"source"`
+	Version       string                    `json:"version"`
+	Generation    int                       `json:"generation"`
+	Note          string                    `json:"note"`
+	ExcludedTypes []string                  `json:"excludedTypes"`
+	Types         []string                  `json:"types"`
+	Effectiveness map[string]map[string]int `json:"effectiveness"`
+}
+
+type metadataFile struct {
+	SchemaVersion int    `json:"schemaVersion"`
+	DataVersion   string `json:"dataVersion"`
+}
+
 type speedFile struct {
 	SchemaVersion int          `json:"schemaVersion"`
 	RegulationID  string       `json:"regulationId"`
@@ -118,7 +150,7 @@ type speedEntry struct {
 	BaseSpeed int      `json:"baseSpeed"`
 }
 
-// Export は DB を読み、balance・speed 向けの4ファイルを組み立てる(ADR-0105 §5)。
+// Export は DB を読み、balance・speed 向けの6ファイルを組み立てる(ADR-0105 §5)。
 // 対象は既定のレギュレーションの使用可能集合。失敗時は Files のゼロ値を返す(部分的な出力をしない)。
 func Export(ctx context.Context, b readtx.Beginner) (Files, Report, error) {
 	tx, err := b.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
@@ -144,6 +176,15 @@ func exportFrom(ctx context.Context, q store.Querier) (Files, Report, error) {
 		}
 		return Files{}, Report{}, err
 	}
+
+	versions, err := q.ListDataVersions(ctx)
+	if err != nil {
+		return Files{}, Report{}, err
+	}
+	if len(versions) == 0 {
+		return Files{}, Report{}, fmt.Errorf("%w: data_versions が空(版の無い read model を出さない)", ErrInvalidExport)
+	}
+	dataVersion := dataversion.String(versions)
 
 	speciesKeys, err := q.ListRegulationSpeciesKeys(ctx, reg.ID)
 	if err != nil {
@@ -282,8 +323,50 @@ func exportFrom(ctx context.Context, q store.Querier) (Files, Report, error) {
 	if err != nil {
 		return Files{}, Report{}, err
 	}
+	typeChartJSON, err := marshalLine(typeChartExport(allTypes, allTypeChart, dataVersion))
+	if err != nil {
+		return Files{}, Report{}, err
+	}
+	metadataJSON, err := marshalLine(metadataFile{SchemaVersion: exportSchemaVersion, DataVersion: dataVersion})
+	if err != nil {
+		return Files{}, Report{}, err
+	}
 
-	return Files{PokemonTypes: pokemonJSON, Moves: movesJSON, Abilities: abilitiesJSON, SpeedPokemon: speedJSON}, report, nil
+	return Files{
+		PokemonTypes: pokemonJSON, Moves: movesJSON, Abilities: abilitiesJSON, SpeedPokemon: speedJSON,
+		TypeChart: typeChartJSON, Metadata: metadataJSON,
+	}, report, nil
+}
+
+// typeChartExport は DB の types・type_chart から type-chart.json の中身を作る。types は ID 昇順、
+// effectiveness は types × types の全組(行が無い組は等倍)。使用可能集合では絞らない。タイプ数は検査しない(ADR-0128 §2)。
+func typeChartExport(types []store.Type, chart []store.TypeChart, dataVersion string) typeChartFile {
+	ids := make([]string, 0, len(types))
+	for _, t := range types {
+		ids = append(ids, t.ID)
+	}
+	sort.Strings(ids)
+	codes := make(map[[2]string]int, len(chart))
+	for _, c := range chart {
+		codes[[2]string{c.AttackType, c.DefenseType}] = int(c.Code)
+	}
+	eff := make(map[string]map[string]int, len(ids))
+	for _, a := range ids {
+		row := make(map[string]int, len(ids))
+		for _, d := range ids {
+			code, ok := codes[[2]string{a, d}]
+			if !ok {
+				code = neutralCode
+			}
+			row[d] = code
+		}
+		eff[a] = row
+	}
+	return typeChartFile{
+		SchemaVersion: exportSchemaVersion, Source: typeChartSource, Version: dataVersion,
+		Generation: typeChartGeneration, Note: typeChartNote,
+		ExcludedTypes: []string{}, Types: ids, Effectiveness: eff,
+	}
 }
 
 // speciesTypes は [type1] か [type1, type2] を返す。
@@ -404,7 +487,7 @@ func marshalLine(v any) ([]byte, error) {
 	return append(b, '\n'), nil
 }
 
-// WriteDir は4ファイルを dir に書く。無ければ作る。各ファイルは同じディレクトリの一時ファイルに
+// WriteDir は6ファイルを dir に書く(metadata.json を最後に。読めた時点で他の5ファイルは同じ export の中身)。無ければ作る。各ファイルは同じディレクトリの一時ファイルに
 // 書いてから rename する(読む側が書きかけを読まない。ADR-0105 §5)。dir がファイルならエラー。
 func (f Files) WriteDir(dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -418,6 +501,8 @@ func (f Files) WriteDir(dir string) error {
 		{FileMoves, f.Moves},
 		{FileAbilities, f.Abilities},
 		{FileSpeedPokemon, f.SpeedPokemon},
+		{FileTypeChart, f.TypeChart},
+		{FileMetadata, f.Metadata},
 	}
 	for _, file := range files {
 		if err := writeFileAtomic(dir, file.name, file.data); err != nil {

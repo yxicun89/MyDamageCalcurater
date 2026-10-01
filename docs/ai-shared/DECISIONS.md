@@ -1907,6 +1907,27 @@ Impact: 判定レーン(JD5 `JudgeScreen` の追従。docs/plan.md 未着手タ�
 `splitUnsupportedMarks` の考え方(全行共通 vs 個別)を踏襲してよい。iOS レーンへは特に追加の申し送りなし
 (Web 側が iOS の決定に合わせただけで、契約・iOS 側の変更は無い)。
 
+## 2026-09-26: P6-19(issue #272 の iOS 側)防御側・相手の特性の選択と、特性で分かれた行・候補の表示(iOS レーンから Web レーンへ)
+Decision: iOS は次の形にする(spec 段階。詳細・受け入れ条件は ADR-0501「P6-19」)。Web はラベル・置き場所・既定・リセット・
+行の副題をこれに揃えてよい。
+1. **ラベル**: 計算画面の「詳細」の中、「攻撃側の特性」のすぐ下に「防御側の特性」。逆算画面は「相手の持ち物候補」のすぐ上に
+   「相手の特性」(常に表示)。選択肢は「指定なし」+ その種族の特性名(マスタの順)。「指定なし」は攻撃側と同じ語。
+2. **既定・写像**: 既定は「指定なし」= `defenderOverride` / `unknownAbilityId` を送らない(サーバーが種族の特性を最大3件すべて
+   試し、結果が違うときだけ行・候補を分ける。ADR-0126・ADR-0214)。選ぶとその1件を送る。
+3. **リセット**: 防御側(相手)の種族の変更・攻守入れ替え・逆算の側の切り替えで「指定なし」に戻す。他の入力では残す。
+4. **行・候補の副題**: 同じ(プリセット, 持ち物)・(性格クラス, 持ち物)が特性で分かれた行・候補にだけ
+   `特性: <名前> / <名前>`(`abilityIds` の順。名前が無い ID は ID のまま)。分かれていなければ出さない。
+5. **行・候補の ID**: base ID が結果の中で2回以上あるときだけ `<base>@<代表の特性 ID>`(重複が残れば `#2`…)。
+   分かれない結果の ID は今までどおり(iOS の既存の XCUITest の identifier を変えない)。
+6. 逆算画面の自分(既知側)の特性の選択は足さない(issue #272 の範囲外。plan.md P6-19 に後続候補として記録)。
+Reason: issue #272 の API レーン分(PR #411)で `BulkCalcRow`・`ReverseCandidate` に必須の `abilityId`/`abilityIds` が入り、特性の効く技では
+同じ(プリセット, 持ち物)の行が複数返るようになった。iOS の行 ID は特性を含まないため `ForEach` と行ごとの注記の identifier が
+衝突する(急ぎの正しさの問題)。「常に特性を ID に足す」案は既存の XCUITest の identifier をすべて変えるので採らなかった。
+防御側の特性の選択肢は起動・防御側の変更では読まず、「詳細」を開いたとき(逆算は画面表示時)と行が分かれて名前が要るときだけ
+読む(既存テストの `species(key:)` の回数を変えない・余計な通信をしない)。
+Impact: **Web レーンへ**: 上の 1〜5 に揃えてよい(Web は WASM 経由なので、指定なしのときは種族の特性をマスタから解決して
+`defenderAbilities`/`unknownAbilities` に渡す。ADR-0126 §他レーンへの依頼)。**API・データレーンへ**: 追加の依頼なし(契約の変更なし)。
+
 ## 2026-09-26: issue #284 の API レーン担当分(balance・speed・judge を gateway の後ろにまとめる)を実装(API レーン → タイプバランス・素早さ・判定レーンへ)
 Decision: ユーザー決定(2026-09-25「ユーザー決定 4 件」#2)を実装。`services/gateway/internal/httpapi/routing.go`
 に `routeBalance`/`routeSpeed`/`routeJudge` と `prefixBalance`/`prefixSpeed`/`prefixJudge`(`/api/balance/`・
@@ -1980,6 +2001,26 @@ Impact: 判定レーン分(2026-09-25)と合わせて issue #260 をクローズ
 - データレーンは up.sh・k3d-deploy-latest.sh・pokedex-registry-push.sh・`make import-k8s` を移行済み
 - 依頼(既定案): 各レーンは自分の `*-k3d-deploy`(api・balance・speed・judge。web は既に検査あり)の先頭に `@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh <ターゲット名>` を足す(#295)。readmodel の deploy スクリプトも同様。`local-registry-push.sh` のタグ計算は `scripts/image-tag.sh <svc_dir> [engine]` に置き換えてよい。`:local` をやめてコミットのタグで k3d へ入れる移行(#291 の本体)は各レーンの判断で
 
+## 2026-10-01: P6-7「この端末のデータを削除」の iOS 側の決定(iOS レーン → Web レーンへ。issue #103)
+Decision: (1) Web は未実装のため iOS が既定を決める。文言は ADR-0209 §8 をそのまま使い、設定の説明2文目の括弧だけ iOS 向け
+(「アプリを削除して入れ直したとき」。Web は「ブラウザのサイトデータを消したとき」)。確定文は ADR-0501「P6-7」2章の表。
+(2) 置き場所は「このアプリについて」画面の「データの扱い」セクション(新しい画面・導線は作らない)。Web も About 相当に揃えてよい。
+(3) 動き: 確認必須 → record と team を独立に呼ぶ(片方が失敗でももう片方は進める)→ `partial` は上限付き(1対象20回)で自動再送 →
+両方 `completed` になってから「削除しました。」。失敗は自動再送せず「サーバーに届きませんでした…」と再試行ボタン(片方だけ消えたときは
+「構築は削除済みです。」等を添える)。(4) 削除するのはサーバー側だけ。端末内に持つデータ(iOS の `LocalTeamStore`)と端末 ID は消さない。
+(5) 計算・逆算は削除の成否に依存しない(絶対ルール5)。
+Reason: ADR-0209 §8 の依頼(Web は P5-5、iOS は P6-5 → plan では P6-7)。
+Impact: Web レーンは文言・再送の上限・再試行の扱いを揃えるか、違う判断をするなら DECISIONS.md に書く。iOS の生成クライアントは
+`record`・`team` タグが未生成のため、implementer が `ios/tools/openapi-gen/openapi-generator-config.yaml` に足して再生成する(契約の変更なし)。
+
+## 2026-10-01: pokecalc namespace に NetworkPolicy(ingress の既定拒否)を入れた(データレーン → 全レーンへ。issue #240・ADR-0132)
+
+- k3d-pokecalc には適用済み(全 smoke・import・Prometheus の scrape が通ることを確認)。許可していない Pod からの ingress は届かない
+- 新しい通信(新サービス・新しい呼び出し先)を足すレーンは、`deploy/k8s/base/networkpolicy/` に許可を足し、
+  `services/gateway/deploytest/networkpolicy_test.go` の許可表にも足す。許可は宛先 Pod の 8080(Service の 80 ではない)
+- API レーンへ: TiDB(record/team)を k3d に上げる前に ADR-0132「確認の結果」の手順を行う(tidb-operator からの許可を足す)。
+  M2 で record・team の本体を足すときも許可が要る。PR #416(#284)で gateway → balance/speed/judge は既に許可済み
+- 詰まったときの戻し方: `kubectl -n pokecalc delete networkpolicy default-deny-ingress`(許可だけが残る。データは消えない)
 ## 2026-10-01: 既定の計算モードをオンラインに変更(ユーザー決定。Web レーン。issue #210 / ADR-0313)
 Decision: Web の既定の計算モードを「オンライン」にする(ADR-0301 §4 の「既定はオフライン」を変更)。オンラインで取得したマスタ(持ち物・性格・解決した種族/特性/技)を IndexedDB に保存し、オフライン(WASM)はそのキャッシュだけから読む。保存済みのモード(localStorage)は従来どおり尊重する。
 Reason: 既定のオフラインは架空の例データしか持たず、実データで計算するには毎回オンラインへ切り替えが要った。実データのビルド同梱は ADR-0002 に反する。

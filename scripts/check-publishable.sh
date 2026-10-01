@@ -33,7 +33,8 @@ readonly -a CONTENT_EXCLUDES=(
 
 # A(絶対パス・個人情報)だけから外すファイル。
 #   docs/audit-r1.md : 検査対象のパターン(/Users/ など)を説明する文書で、実際の値ではない
-readonly -a A_EXCLUDES=(":(exclude)docs/audit-r1.md")
+#   scripts/ai-guard/bash-guard*.sh : 秘密ファイル(SSH鍵の置き場所等)を検知するパターンと、その検知テスト用の文字列で、実際の値ではない
+readonly -a A_EXCLUDES=(":(exclude)docs/audit-r1.md" ":(exclude)scripts/ai-guard/bash-guard.sh" ":(exclude)scripts/ai-guard/bash-guard_test.sh")
 
 # B・E だけから外すファイル(ADR-0408。scripts/gitops_test.sh)。
 #   - FAKE_ORIGIN(`https://github.com/example-owner/pokecalc.git`)は argocd-local-app.sh に
@@ -56,6 +57,34 @@ readonly -a BE_EXCLUDES=(":(exclude)scripts/gitops_test.sh")
 # 始まり、他の文字を挟まない)。`password: "realsecret${x}"` のように本物の値へ無害な変数参照を
 # 継ぎ足して検出を逃れる細工は、この形では通らない(self-test で確認)。
 readonly B_KEYVALUE_ALLOW='=[[:space:]]*"(mysql-auth|pokedex-dsn|pokedex-reader-dsn|pokedex-importer-dsn|pokedex-migrator-dsn|mysql-root-password)$|:[[:space:]]*(tidb-root-auth|grafana-admin-credentials|admin-password)$|[:=][[:space:]]*"?\$\{[A-Za-z_][A-Za-z0-9_]*\}$'
+
+# B の「キー名=値」パターン。キー名(password・secret・token・dsn 等)の後ろに、短い値(3文字以上)が続く形。
+# 値の先頭が `$`(シェル・テンプレートの変数参照)のものは値とみなさない。
+readonly B_KV_PATTERN='(password|passwd|secret|api[_-]?key|private[_-]?key|access[_-]?token)[A-Za-z0-9_-]{0,128}['"'"'"]?[[:space:]]*[:=][[:space:]]*['"'"'"]?[^[:space:]'"'"'"$][^[:space:]'"'"'"]{2,}'
+# B のキー名=値の許可(B_KEYVALUE_ALLOW に足す。理由は1つずつ)。awk の動的正規表現に使うので、
+# mawk(Debian の既定 awk)が `{n,m}` と選択肢の組み合わせを扱えないため、区間は使わず展開して書く:
+#   secret-type=...   : Argo CD の Secret のラベル(`argocd.argoproj.io/secret-type=repository`)。種類名で値ではない
+#   型注釈・リテラル  : `password: string` 等の TypeScript の型・真偽値・null
+#   (型注釈の直後に付く `)`・バッククォート等の1文字は許す)
+#   os.Getenv( ...    : 環境変数の参照(Go)。値そのものではない
+#   process.env ...   : 環境変数の参照(Node)
+#   cfg./config./opts.: 設定オブジェクトのフィールド参照(Go)
+#   英字だけの3〜7文字: 変数名・単語(`c.Passwd = pass` はテストの変数代入)。8文字以上の英字だけの値は許さない
+#   値が日本語など非 ASCII で始まる: 説明文(`secrets_test: すべて成功` は echo のメッセージ)
+# どの許可も「キー名の直後の最初の `:`/`=`」の直後(値の先頭)だけで判定する(`^[^:=]*`)。値の途中の `=é`・`:true` で
+# 許可されて本物の値を見逃さないため(D24 critic)。
+readonly B_KEYVALUE_ALLOW_EXTRA='^secret-type[:=]|^[^:=]*[:=][[:space:]]*["'"'"']?(string|number|boolean|bool|int|undefined|null|nil|true|false)[^A-Za-z0-9]?[^A-Za-z0-9]?[^A-Za-z0-9]?$|^[^:=]*[:=][[:space:]]*["'"'"']?(os\.Getenv\(|process\.env|cfg\.|config\.|opts\.)|^[^:=]*[:=][[:space:]]*[A-Za-z_][A-Za-z_][A-Za-z_][A-Za-z_]?[A-Za-z_]?[A-Za-z_]?[A-Za-z_]?$|^[^:=]*[:=][[:space:]]*["'"'"']?[^ -~]'
+
+# token は語として短い・コードの変数名と紛れるので、値が16文字以上で、数字を1つ以上含むものだけを見る
+# (実際のトークンは乱数なので数字を含む。`let token = beginInput()` や `token = latestTeamListToken` は外れる)。
+readonly B_TOKEN_PATTERN='token[A-Za-z0-9_-]{0,64}['"'"'"]?[[:space:]]*[:=][[:space:]]*['"'"'"]?[A-Za-z0-9._~+/=-]{16,}'
+# 数字を含まない値は許す(識別子・単語)。
+readonly B_TOKEN_ALLOW='^[^:=]*[:=][[:space:]]*["'"'"']?[A-Za-z._~+/=-]+$'
+
+# DSN の許可: テスト用の偽 DSN。接続先が `127.0.0.1:1`(閉じたポートで、何にも接続できない)のものだけ。
+readonly B_DSN_ALLOW='@tcp\(127\.0\.0\.1:1\)$'
+# Bearer の許可: ゼロ埋めのダミー UUID(`00000000-…`。gateway の境界テストの架空の値)。
+readonly B_BEARER_ALLOW='Bearer[[:space:]]+00000000-'
 
 # 許可するメールアドレス(ERE。一致した文字列全体に対して評価)。
 #   noreply@anthropic.com : コミットの共同著者表記(公開情報)
@@ -191,13 +220,57 @@ check_a() {
 # ---------------------------------------------------------------------------
 # B. 秘密らしき文字列
 # ---------------------------------------------------------------------------
+# scan_b_multiline — キーと値が2行に分かれる形(YAML の `password:` の次の行・JSON の `"password":` の次の行)。
+# 検出位置はキーの行。キーは行末が秘密らしい名前(password 等)で、次の行が空白・`:` を含まない単独の値のときだけ。
+# (`secretKeyRef:` の次の `name: x`、`imagePullSecrets:` の次の `- name: x` は、値の形でないので外れる)
+# 行単位の git grep では拾えないので awk で見る。区間 {n} は mawk(Debian の既定 awk)で使えないため length() で書く。
+scan_b_multiline() {
+  local -a files=()
+  local file location
+  while IFS= read -r -d '' file; do
+    files+=("$file")
+  done < <(
+    git grep -I -l -z -i -E -e '((password|passwd|secret|api[_-]?key|private[_-]?key|access[_-]?token)[A-Za-z0-9_-]{0,128}|token|-dsn)['"'"'"]?[[:space:]]*:[[:space:]]*$' \
+      -- . "${CONTENT_EXCLUDES[@]}" ${SCAN_EXTRA_EXCLUDES[@]+"${SCAN_EXTRA_EXCLUDES[@]}"} 2>/dev/null || true
+  )
+  if [ "${#files[@]}" -eq 0 ]; then return 0; fi
+  while IFS= read -r location; do
+    report B "$location" "秘密らしき文字列(キーと値が2行に分かれる形)"
+  done < <(
+    awk '
+      function trim(t) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", t); return t }
+      FNR == 1 { key_line = 0 }
+      {
+        if (key_line > 0) {
+          v = trim($0); sub(/,$/, "", v); gsub(/^["\047]|["\047]$/, "", v)
+          if (length(v) >= 8 && v !~ /[[:space:]:]/ && v !~ /^[$\[{-]/) print FILENAME ":" key_line
+          key_line = 0
+        }
+        l = tolower($0)
+        if (l ~ /((password|passwd|secret|api[_-]?key|private[_-]?key|access[_-]?token)[a-z0-9_-]*|token|-dsn)["\047]?[[:space:]]*:[[:space:]]*$/) key_line = FNR
+      }
+    ' "${files[@]}" | sort -u || true
+  )
+}
+
 check_b() {
   SCAN_EXTRA_EXCLUDES=("${BE_EXCLUDES[@]}")
   # キー名の後ろの `[A-Za-z0-9_-]*` も上限を付ける(上と同じ理由。ADR-0119 で判明した
   # メールアドレス正規表現の O(n^2) 走査と同じ形なので、念のためこちらも塞ぐ)。
-  scan_content B "秘密らしき文字列(キー名=値)" \
-    '(password|passwd|secret|api[_-]?key|private[_-]?key|access[_-]?token)[A-Za-z0-9_-]{0,128}['"'"'"]?[[:space:]]*[:=][[:space:]]*['"'"'"]?[^[:space:]'"'"'"]{8,}' \
-    "$B_KEYVALUE_ALLOW" i
+  scan_content B "秘密らしき文字列(キー名=値)" "$B_KV_PATTERN" "$B_KEYVALUE_ALLOW|$B_KEYVALUE_ALLOW_EXTRA" i
+  scan_content B "秘密らしき文字列(token の値)" "$B_TOKEN_PATTERN" "$B_TOKEN_ALLOW" i
+  scan_b_multiline
+  # 値の形(キー名に頼らない)。参照(`$`・`${}`)は値に使えない文字として外す。
+  # Secret の data(base64)。キー名が `-dsn` で終わり、値が base64 の16文字以上のとき(`pokedex-dsn: <base64>`)。
+  scan_content B "秘密らしき文字列(Secret の DSN の base64)" "-dsn[A-Za-z0-9_-]{0,32}['\"]?[[:space:]]*:[[:space:]]*['\"]?[A-Za-z0-9+/]{16,}={0,2}['\"]?\$"
+  scan_content B "秘密らしき文字列(DSN の資格情報)" "[A-Za-z0-9_.-]{1,64}:[^[:space:]:@/'\"\$<>]{8,}@tcp\\([^)]*\\)" "$B_DSN_ALLOW"
+  scan_content B "秘密らしき文字列(URL の資格情報)" "[A-Za-z][A-Za-z0-9+.-]{0,16}://[^[:space:]:@/'\"\$]{1,64}:[^[:space:]:@/'\"\$]{3,}@"
+  scan_content B "秘密らしき文字列(MYSQL_PWD)" "MYSQL_PWD[[:space:]]*=[[:space:]]*['\"]?[^[:space:]'\"\$]{3,}"
+  scan_content B "秘密らしき文字列(Bearer トークン)" "Bearer[[:space:]]+[A-Za-z0-9._~+/=-]{16,}" "$B_BEARER_ALLOW"
+  scan_content B "秘密らしき文字列(Anthropic API キー形式)" 'sk-ant-[A-Za-z0-9_-]{20,}'
+  scan_content B "秘密らしき文字列(GitHub fine-grained トークン形式)" 'github_pat_[A-Za-z0-9_]{20,}'
+  scan_content B "秘密らしき文字列(Slack トークン形式)" 'xox[abeprs]-[A-Za-z0-9-]{10,}'
+  scan_content B "秘密らしき文字列(Google API キー形式)" 'AIza[0-9A-Za-z_-]{35}'
   scan_content B "秘密らしき文字列(秘密鍵ブロック)" '-----BEGIN [A-Z ]*PRIVATE KEY-----'
   scan_content B "秘密らしき文字列(AWS アクセスキー形式)" 'AKIA[0-9A-Z]{16}'
   scan_content B "秘密らしき文字列(GitHub トークン形式)" 'gh[pousr]_[A-Za-z0-9]{36}'
@@ -225,6 +298,12 @@ forbidden_kind() {
     *.pem | *.key | *.p12 | *.pfx | *.jks) echo "追跡禁止(鍵・証明書)"; return 0 ;;
     *.wasm) echo "追跡禁止(WASM 生成物。make wasm で作る)"; return 0 ;;
     kubeconfig*) echo "追跡禁止(kubeconfig)"; return 0 ;;
+    .envrc) echo "追跡禁止(direnv の環境変数ファイル .envrc)"; return 0 ;;
+    id_rsa | id_ed25519 | id_ecdsa | id_dsa) echo "追跡禁止(SSH の秘密鍵)"; return 0 ;;
+    credentials.json) echo "追跡禁止(認証情報 credentials.json)"; return 0 ;;
+    *.p8) echo "追跡禁止(Apple の秘密鍵 .p8)"; return 0 ;;
+    *.sql.gz | *dump*.sql | *backup*.sql) echo "追跡禁止(DB のダンプ・バックアップ。マイグレーションの *.sql は対象外)"; return 0 ;;
+    secret*.yaml) echo "追跡禁止(Secret の manifest。値を Git に置かない)"; return 0 ;;
     .DS_Store) echo "追跡禁止(.DS_Store)"; return 0 ;;
   esac
   return 1
@@ -441,6 +520,19 @@ selftest_new_repo() {
     printf '{"hp":100}\n{"hp":101}\n' | gzip -c >testdata/golden/vectors.jsonl.gz
     printf 'module example.com/pokecalc/engine\n' >engine/go.mod
     printf 'package engine\n\nvar x = Species{NameJa: "テスト種"}\nvar y = Item{NameJa: "?"}\n' >engine/sample_test.go
+    # B の許可リスト(B_KEYVALUE_ALLOW)が許す Secret 名・キー名を全部含める(#74)。許可リストを壊すと基準が赤くなる。
+    mkdir -p deploy
+    cat >deploy/allowed-names.yaml <<'YAML'
+secretName="mysql-auth"
+secretName="pokedex-dsn"
+secretName="pokedex-reader-dsn"
+secretName="pokedex-importer-dsn"
+secretName="pokedex-migrator-dsn"
+secretName="mysql-root-password"
+passwordSecret: tidb-root-auth
+existingSecret: grafana-admin-credentials
+passwordKey: admin-password
+YAML
     git add -f -A
     GIT_AUTHOR_NAME=Allowed GIT_AUTHOR_EMAIL=allowed@example.com \
       GIT_COMMITTER_NAME=Allowed GIT_COMMITTER_EMAIL=allowed@example.com \
@@ -565,6 +657,65 @@ selftest() {
   selftest_expect_no_hit "B" b8.txt
   selftest_expect_no_leak "B" "$pw" "$aws" "$gh" "$sk" "$jwt" "RSA PRIVATE" "$sneaky"
 
+  # --- B 追加(#300): このリポジトリで実際に出る形の秘密(値はすべて架空。接頭辞は連結して push protection を避ける) ---
+  echo "自己テスト: B 追加(DSN・URL 資格情報・トークン接頭辞・短い値・複数行)"
+  dir="$(selftest_new_repo b2)"
+  local v14 v24 v40 b64
+  v14="dummy$(repeat 7 9)" v24="$(repeat d 12)$(repeat 3 12)" v40="$(repeat e 20)$(repeat 5 20)"
+  b64="$(repeat Q 12)$(repeat Z 12)=="
+  selftest_add "dsn: app_user:${v14}@tcp(db.internal:3306)/pokedex" "$dir" b2_01.txt
+  selftest_add "url: mysql://app_user:${v14}@db.internal:3306/pokedex" "$dir" b2_02.txt
+  selftest_add "MYSQL_PWD=${v14}" "$dir" b2_03.sh
+  selftest_add "data:
+  pokedex-dsn: ${b64}" "$dir" b2_04.yaml
+  selftest_add "//registry.example.test/:_auth""Token=${v24}" "$dir" b2_05.npmrc
+  selftest_add "Authorization: Bearer ${v24}" "$dir" b2_06.txt
+  selftest_add "token: ${v24}" "$dir" b2_07.txt
+  selftest_add "key: sk""-ant-api03-${v40}" "$dir" b2_08.txt
+  selftest_add "key: github""_pat_$(repeat A 22)_$(repeat B 59)" "$dir" b2_09.txt
+  selftest_add "key: xox""b-123456789012-1234567890123-$(repeat C 24)" "$dir" b2_10.txt
+  selftest_add "key: AI""za$(repeat D 35)" "$dir" b2_11.txt
+  # 境界値: 値が8文字未満
+  selftest_add "password: abc123" "$dir" b2_12.txt
+  # 境界値: キーと値が2行に分かれる(JSON / YAML)。検出位置はキーの行
+  selftest_add '{
+  "password":
+    "'"${v14}"'"
+}' "$dir" b2_13.json
+  selftest_add "password:
+  ${v14}" "$dir" b2_14.yaml
+  # 許可の判定は値の先頭だけ: 値の途中に「=非ASCII」「:true」「=数字なしの語」があっても許可しない
+  selftest_add "password=${v14}=é" "$dir" b2_15.txt
+  selftest_add "password=${v14}:true" "$dir" b2_16.txt
+  selftest_add "token=${v24}=abcdef" "$dir" b2_17.txt
+  selftest_run "B2" "$dir"
+  selftest_expect_hits "B2" b2_01.txt:1 b2_02.txt:1 b2_03.sh:1 b2_04.yaml:2 b2_05.npmrc:1 b2_06.txt:1 b2_07.txt:1 \
+    b2_08.txt:1 b2_09.txt:1 b2_10.txt:1 b2_11.txt:1 b2_12.txt:1 b2_13.json:2 b2_14.yaml:1 \
+    b2_15.txt:1 b2_16.txt:1 b2_17.txt:1
+  selftest_expect_no_leak "B2" "$v14" "$v24" "$v40" "$b64" abc123 "ant-api03" "github_pat" "xoxb-" "AIza"
+
+  echo "自己テスト: B 追加(値ではない参照・Secret 名・型注釈は誤検知しない)"
+  dir="$(selftest_new_repo b3)"
+  selftest_add 'password = os.Getenv("DB_PASSWORD")' "$dir" ok_01.go
+  selftest_add 'password := cfg.Password' "$dir" ok_02.go
+  selftest_add 'const password = process.env.DB_PASSWORD' "$dir" ok_03.ts
+  selftest_add 'password: string' "$dir" ok_04.ts
+  selftest_add 'token: string' "$dir" ok_05.ts
+  selftest_add 'password: ""' "$dir" ok_06.yaml
+  selftest_add 'password: ${DB_PASSWORD}' "$dir" ok_07.yaml
+  selftest_add 'secret-type=repository' "$dir" ok_08.txt
+  selftest_add 'imagePullSecrets:
+  - name: registry-credentials' "$dir" ok_09.yaml
+  selftest_add 'secretKeyRef:
+  name: pokedex-dsn
+  key: dsn' "$dir" ok_10.yaml
+  selftest_add 'passwordSecret: tidb-root-auth' "$dir" ok_11.yaml
+  selftest_add 'Authorization: Bearer ${TOKEN}' "$dir" ok_12.sh
+  selftest_add 'Authorization: Bearer $TOKEN' "$dir" ok_13.sh
+  selftest_add 'dsn: user:${DB_PASSWORD}@tcp(db:3306)/pokedex' "$dir" ok_14.yaml
+  selftest_add 'mysql://user:${DB_PASSWORD}@db:3306/pokedex' "$dir" ok_15.yaml
+  selftest_expect_clean "B3(誤検知なし)" "$dir"
+
   echo "自己テスト: C 追跡してはいけないファイル・サイズ・テキスト以外"
   dir="$(selftest_new_repo c)"
   selftest_add "X=1" "$dir" .env
@@ -584,6 +735,52 @@ selftest() {
   selftest_expect_hits "C" .env certs/dummy.pem certs/dummy.key web/public/engine.wasm kubeconfig-local.yaml \
     docs/local/note.md data/generated/master.json .reviews/r1.md node_modules/pkg/index.js .DS_Store \
     "big.txt  サイズ超過" "blob.bin  テキスト以外"
+
+  echo "自己テスト: C 追加(#300: 鍵・秘密の置き場になりやすいファイル名)"
+  dir="$(selftest_new_repo c2)"
+  selftest_add "dummy" "$dir" .envrc
+  selftest_add "dummy" "$dir" sub/.envrc
+  selftest_add "dummy" "$dir" id_rsa
+  selftest_add "dummy" "$dir" .ssh/id_ed25519
+  selftest_add "dummy" "$dir" credentials.json
+  selftest_add "dummy" "$dir" ios/keys/AuthKey_DUMMY0000.p8
+  selftest_add "dummy" "$dir" backup/dump.sql.gz
+  selftest_add "dummy" "$dir" backup/pokedex_dump.sql
+  selftest_add "dummy" "$dir" kubeconfig
+  selftest_add "dummy" "$dir" secret.yaml
+  selftest_run "C2" "$dir"
+  selftest_expect_hits "C2" .envrc sub/.envrc id_rsa .ssh/id_ed25519 credentials.json AuthKey_DUMMY0000.p8 \
+    backup/dump.sql.gz backup/pokedex_dump.sql kubeconfig secret.yaml
+
+  echo "自己テスト: C 追加(マイグレーション・クエリ・例・xcconfig・テストの Secret 検査は誤検知しない)"
+  dir="$(selftest_new_repo c3)"
+  selftest_add "CREATE TABLE t (id INT);" "$dir" services/pokedex/db/migrations/000001_create_t.up.sql
+  selftest_add "SELECT 1;" "$dir" services/pokedex/db/query/pokedex.sql
+  selftest_add "INSERT INTO t VALUES (1);" "$dir" services/pokedex/db/testdata/example_seed.sql
+  selftest_add "PRODUCT_NAME = PokeCalc" "$dir" ios/PokeCalc/Config/PokeCalc.xcconfig
+  selftest_add "#!/usr/bin/env bash" "$dir" scripts/up-secrets_test.sh
+  selftest_add "dummy" "$dir" .env.example
+  selftest_expect_clean "C3(誤検知なし)" "$dir"
+
+  echo "自己テスト: .gitignore が鍵・秘密の置き場になりやすい名前を無視する(#300)"
+  dir="$SELFTEST_TMP/gi"
+  mkdir -p "$dir"
+  cp "$(dirname "$SELFTEST_SCRIPT")/../.gitignore" "$dir/.gitignore"
+  (cd "$dir" && git init -q)
+  local ignored
+  for ignored in .envrc sub/.envrc id_rsa .ssh/id_ed25519 credentials.json ios/keys/AuthKey_DUMMY0000.p8 \
+    backup/dump.sql.gz kubeconfig secret.yaml; do
+    if ! (cd "$dir" && git check-ignore -q "$ignored"); then
+      selftest_fail ".gitignore が無視しない: $ignored"
+    fi
+  done
+  # 追跡している正当なファイルは無視しない(git add -f 無しで追加できる)
+  for ignored in .env.example services/pokedex/db/migrations/000001_create_t.up.sql \
+    services/pokedex/db/query/pokedex.sql ios/PokeCalc/Config/PokeCalc.xcconfig; do
+    if (cd "$dir" && git check-ignore -q "$ignored"); then
+      selftest_fail ".gitignore が正当なファイルまで無視する: $ignored"
+    fi
+  done
 
   echo "自己テスト: D 第三者データ"
   dir="$(selftest_new_repo d)"
