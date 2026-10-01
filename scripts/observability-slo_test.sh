@@ -135,7 +135,7 @@ expect_calc_paths() {
   fi
   bad=$(printf '%s\n' "$sets" | grep -vxF "$want" || true)
   if [ -z "$bad" ]; then ok; else
-    ng "$label の path=~ が計算3エンドポイント($want)と一致しない: $(printf '%s' "$bad" | tr '\n' ';')"
+    ng "$label の path=~ が対象エンドポイント($want)と一致しない: $(printf '%s' "$bad" | tr '\n' ';')"
   fi
 }
 
@@ -184,7 +184,7 @@ test_rule_p99_expr() {
 }
 
 test_rule_availability_expr() {
-  begin "PrometheusRule: $RULE_AVAIL の式が計算3エンドポイントの 5xx 以外 / 全体 の比を5分窓で求める($ADR §1)"
+  begin "PrometheusRule: $RULE_AVAIL の式が対象エンドポイントの 5xx 以外 / 全体 の比を5分窓で求める($ADR §1)"
   [ -f "$ROOT/$RULE_REL" ] || { ng "$RULE_REL が無い"; return; }
   local e n
   e=$(rule_expr "$RULE_AVAIL")
@@ -263,7 +263,7 @@ test_dashboard_panels() {
   local p99ts
   p99ts=$(dash_jq "$JQ_PANELS | map(select(.type == \"timeseries\" and ([.targets[]?.expr // \"\"] | any(contains(\"$RULE_P99\"))))) | length")
   if [ "$p99ts" -ge 1 ]; then ok; else ng "p99($RULE_P99)を参照する timeseries パネルが無い"; return; fi
-  # 単位は秒(s。Grafana が ms 表示にする)か、式で1000倍して ms。しきい値 100ms のラインを引く。
+  # 単位は秒(s。Grafana が ms 表示にする)か、式で1000倍して ms。しきい値($THRESH_MS ms) のラインを引く。
   local okline
   okline=$(dash_jq "$JQ_PANELS | map(select(.type == \"timeseries\" and ([.targets[]?.expr // \"\"] | any(contains(\"$RULE_P99\")))))
     | any(
@@ -272,7 +272,7 @@ test_dashboard_panels() {
           | ((\$u == \"s\" and (\$vals | index($THRESH_S))) or (\$u == \"ms\" and (\$vals | index($THRESH_MS)))))
         and ((.fieldConfig.defaults.custom.thresholdsStyle.mode // \"off\") != \"off\"))")
   if [ "$okline" = true ]; then ok; else
-    ng "p99 の timeseries に 100ms のしきい値ライン(unit s なら $THRESH_S・ms なら $THRESH_MS の threshold step と、custom.thresholdsStyle.mode が off 以外)が無い"
+    ng "p99 の timeseries に ${THRESH_MS}ms のしきい値ライン(unit s なら $THRESH_S・ms なら $THRESH_MS の threshold step と、custom.thresholdsStyle.mode が off 以外)が無い"
   fi
 
   # 2. 可用性の時系列: timeseries で可用性の記録ルールを参照し、パーセント表示。

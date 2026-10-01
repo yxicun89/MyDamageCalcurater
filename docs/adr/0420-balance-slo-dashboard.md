@@ -23,7 +23,7 @@ ADR-0407 と同じ方式で SLO を目視できるようにする。
 - 可用性: 同じ絞り込みで `status!~"5.."` の rate / 全体の rate(ADR-0407 §1 と同じ形。4xx は不可用に数えない)。
 
 ### 2. 目標値: p99 < 500ms。recommendations は別系列にしない
-- 実測(`BenchmarkRecommendations`、1,500件・6メンバー・limit 20、Apple M5 Pro、2026-10-02): 約 **3.5 ms/op**・約 0.53 MB/op
+- 実測(`BenchmarkRecommendations`、1,500件・6メンバー・limit 20、開発機、2026-10-02): 約 **3.5 ms/op**・約 0.53 MB/op
   (ADR-0409)。最も重い recommendations でも計算本体は数 ms で、他のエンドポイントと桁が違わない。
   よって別系列・別しきい値にする根拠が無く、1系列にまとめる。
 - 500ms の理由: 計算本体は数 ms なので、p99 を押し上げるのは CPU limit 100m でのスロットリング・同時実行・GC。
