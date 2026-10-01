@@ -632,6 +632,12 @@
   - [ ] **P5-5c 履歴・よく計算する相手・端末データの削除(PR-A3 以降)**: record-svc の API と ADR-0209 §8 の文言
 - [x] P5-6 技の追加効果(使用者自身のランク変化。例: ニトロチャージで自分の素早さ+1)を engine の Move・マスタ・importer・export に足す(判定レーンからの提案。DECISIONS.md 2026-09-22。ADR-0005 に沿い、追加効果の対象=self/target・確率・ランク変化量をデータとして持つ。ADR-0107。critic PASS。engine は乱数を持たず「発動した場合の値」だけを返す。ゴールデン不変。公開APIへの露出は判定レーンの要件確定後)
 
+- [x] issue #219(Web 配信にセキュリティヘッダが無い)。**完了(2026-10-01。Web レーン。ブランチ `fix/web-security-headers-219`)**:
+  `web/security-headers.conf`(新規)を各 location から include し、CSP(`'wasm-unsafe-eval'` のみ許可)・
+  `frame-ancestors 'none'`/`X-Frame-Options`・`Referrer-Policy`・`Permissions-Policy` を付与。ADR-0310。
+  `web/e2e/container.spec.ts` にヘッダと CSP 下の画面・WASM 計算の検査を追加(`make web-e2e-container` 54件 green)。
+  gateway は上流ヘッダを素通し(CORS 以外を触らない)なので変更なし。
+
 ## M3: iOS
 - [x] P6-1 Xcode プロジェクト、swift-openapi-generator、デザイントークン(ADR-0500。`make ios-test` = 生成物の一致・XCTest・XCUITest・Info.plist の接続先。critic PASS)
 - [x] P6-2 計算画面・逆算・構築(構築は端末内に保存、Showdown 形式は後回し。2026-09-21 ユーザー回答)。P6-2a 計算画面・契約追従・P6-2b 逆算画面・P6-2c 構築(一覧・編集画面・ニックネーム・XCUITest)・P6-2d(構築から呼び出す配線)は完了(critic PASS)
