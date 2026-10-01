@@ -252,6 +252,8 @@ pokedex の DB の中身は、Git に固定した版の取得物から importer 
 `pokedex-import-cache`(取得キャッシュ・報告)も、取得元から取り直せる(過去の報告は戻らない)。
 失うものは、DB の投入履歴(`data_versions`)と、importer の過去の報告だけ。record・team の DB(TiDB)はこの手順の対象外。
 
+> `deploy/k3d.yaml`(k3s の版・待ち受けの 127.0.0.1 限定。ADR-0133)の変更は**既存クラスタには反映されない**。反映にはクラスタの作り直し(`make down` → `make up`。人間の確認が要る)が必要で、手順は下の「a. クラスタごと失ったとき」に従う。
+
 ### a. クラスタごと失ったとき(`make down`・`k3d cluster delete`)
 
 `make down` はクラスタ・PVC・Secret を消す。**データ削除なので人間の確認が要る操作**。消えた後は新しいクラスタを作る。

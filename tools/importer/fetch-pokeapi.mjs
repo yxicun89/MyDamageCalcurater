@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { exitCodeFor, expectedPokeapiCsvSha256, verifyFileSha256 } from './integrity.mjs';
-import { parseCSV } from './pokeapi-csv.mjs';
+import { collectNames, parseCSV } from './pokeapi-csv.mjs';
 
 // IMPORTER_ROOT: テスト用にリポジトリのルートを差し替える。
 const root = process.env.IMPORTER_ROOT ? `${process.env.IMPORTER_ROOT.replace(/\/$/, '')}/` : fileURLToPath(new URL('../../', import.meta.url));
@@ -64,21 +64,8 @@ async function fetchCSV(name) {
 const languages = await fetchCSV('languages.csv');
 const langIDToIdentifier = new Map(languages.map((l) => [l.id, l.identifier ?? l.iso639]));
 
-// namesByOwner: ownerIdColumn の値ごとに、対象言語だけの {identifier: name} を集める。
-function collectNames(rows, ownerCol, nameCol = 'name') {
-  const byOwner = new Map();
-  for (const r of rows) {
-    const lang = langIDToIdentifier.get(r.local_language_id);
-    if (!LANGUAGES.includes(lang)) continue;
-    const owner = r[ownerCol];
-    if (!byOwner.has(owner)) byOwner.set(owner, {});
-    byOwner.get(owner)[lang] = r[nameCol];
-  }
-  return byOwner;
-}
-
 async function namedEntries(slugRows, nameRows, idCol, slugCol, ownerCol, nameCol = 'name') {
-  const names = collectNames(nameRows, ownerCol, nameCol);
+  const names = collectNames(nameRows, ownerCol, nameCol, langIDToIdentifier, LANGUAGES);
   return slugRows
     .map((r) => ({ slug: r[slugCol], names: names.get(r[idCol]) ?? {} }))
     .filter((e) => Object.keys(e.names).length > 0);
