@@ -66,7 +66,7 @@ cd "$(git rev-parse --show-toplevel)"
 kubectl -n pokecalc port-forward svc/mysql 3306:3306 >/dev/null 2>&1 &
 PF_PID=$!
 sleep 2
-export POKEDEX_DATABASE_DSN=$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.pokedex-dsn}' | base64 -d | sed 's/@tcp(mysql:/@tcp(127.0.0.1:/')
+export POKEDEX_DATABASE_DSN=$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.pokedex-reader-dsn}' | base64 -d | sed 's/@tcp(mysql:/@tcp(127.0.0.1:/')
 make pokedex-export
 kill $PF_PID
 unset POKEDEX_DATABASE_DSN PF_PID

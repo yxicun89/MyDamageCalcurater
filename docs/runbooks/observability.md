@@ -70,3 +70,75 @@ kubectl -n observability port-forward svc/kube-prometheus-stack-prometheus 9090:
 `KUBE_PROMETHEUS_STACK_SHA256` / `LOKI_VERSION` / `LOKI_SHA256` / `ALLOY_VERSION` / `ALLOY_SHA256`)を明示的に
 更新し、`docs/adr/0406-observability-metrics-and-stack.md` §4 の記載も合わせて更新する(自動追従はしない。
 `scripts/observability-bootstrap_test.sh` が ADR の記載とスクリプトの定数の一致を検査する)。
+
+## 7. 障害時の一次切り分け(issue #293)
+
+前提: 手順 5 の port-forward(Grafana 3000・Prometheus 9090)が張ってある。PromQL は `http://localhost:9090/graph` に貼る
+(Grafana の Explore で データソース `Prometheus` を選んでもよい)。ログは Explore の `Loki`。
+クエリはすべて読み取り専用。**まず全体を1行で見る**: `count(up{namespace="pokecalc"} == 1)` が `6`(balance・speed・judge・gateway・pokedex・calc)
+でなければ、下の症状 A から。`6` なら、サービスは動いていて、遅い・エラーなら症状 B。
+
+### 症状 A: Pod が Ready にならない
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc get pods
+kubectl -n pokecalc describe pod <Ready でない Pod>
+kubectl -n pokecalc logs <Pod> --previous
+```
+```promql
+# Ready でない Pod(完了済みの Job の Pod は除く)
+(kube_pod_status_ready{namespace="pokecalc",condition="false"} == 1) unless on(namespace,pod) (kube_pod_status_phase{namespace="pokecalc",phase="Succeeded"} == 1)
+# 待ち状態の理由(ImagePullBackOff・CrashLoopBackOff・CreateContainerConfigError など)
+kube_pod_container_status_waiting_reason{namespace="pokecalc"} == 1
+# 直近1時間に再起動した container
+increase(kube_pod_container_status_restarts_total{namespace="pokecalc"}[1h]) > 0
+# 落ちているサービス(スクレイプできない)
+up{namespace="pokecalc"} == 0
+```
+次に確かめる: `describe` 末尾の Events(イメージを引けない・Secret/ConfigMap が無い・probe 失敗)。起動時に落ちるなら `logs --previous`。
+DB を使う Pod(pokedex)は `mysql-0` が Ready か、依存する Secret `mysql-auth` があるかを先に見る。
+
+### 症状 B: gateway が 502・503 を返す
+
+```promql
+# サービスごとの 5xx 率(結果が空なら 5xx は出ていない)
+sum by (job)(rate(http_requests_total{status=~"5.."}[5m]))
+# サービスごとのリクエスト率と p99 レイテンシ(どのサービスが遅いか)
+sum by (job)(rate(http_requests_total[5m]))
+histogram_quantile(0.99, sum by (le, job)(rate(http_request_duration_seconds_bucket[5m])))
+```
+```logql
+{namespace="pokecalc", container="gateway"} |~ "(?i)error|502|503"
+```
+次に確かめる: gateway だけ 5xx なら上流(calc・pokedex・balance・speed・judge)のどれが `up == 0` か(症状 A)。上流の Service に Pod が
+付いているか `kubectl -n pokecalc get endpoints` の ENDPOINTS 列が空でないかを見る。計算 API が遅いときは Grafana のダッシュボード `calc-slo`(p99 と可用性)。
+
+### 症状 C: import Job が失敗する
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc get cronjob,jobs
+kubectl -n pokecalc logs job/<失敗した Job 名>
+kubectl -n pokecalc describe job <失敗した Job 名>
+```
+```promql
+kube_job_status_failed{namespace="pokecalc"} == 1
+```
+次に確かめる: `logs` の最後のエラー行(取り込み元・DB 接続・マイグレーション未適用)。DB 側は症状 A の `mysql-0`。
+過去の失敗 Job(`BackoffLimitExceeded`)が `== 1` に残り続けることがある。TTL で消えない手動 Job は
+`kubectl -n pokecalc delete job <名>` で片づけるまで残るので、新しい Job が `Complete` かどうかを見て判断する。
+手順の本体は [`data.md`](data.md) を見る。
+
+### 症状 D: Argo CD の Application が OutOfSync
+
+Argo CD は Prometheus に載せていないため、Application の状態は kubectl で見る(読み取りだけ)。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n argocd get applications
+kubectl -n argocd describe application pokecalc-balance
+kubectl -n argocd get application pokecalc-balance -o jsonpath='{.status.conditions}{"\n"}{.status.sync.revision}{"\n"}'
+```
+次に確かめる: `describe` の `Conditions`(ComparisonError ならリポジトリ・パスを引けていない)と、`sync.revision` が main の先頭と一致するか。
+差分があるだけなら意図した状態か(自動 sync は入れない。ADR-0408 §4)を確かめ、同期は [`balance.md`](balance.md) §7・[`speed.md`](speed.md) §9 の手順で行う。

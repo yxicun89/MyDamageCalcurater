@@ -1097,6 +1097,7 @@
 
 ## M4: 運用
 - [x] P7-1 kube-prometheus-stack / Loki、各サービスのメトリクス
+  - issue #293 の残り(2026-10-02): 障害の一次切り分け runbook(`docs/runbooks/observability.md` §7。Pod が Ready にならない・502/503・import Job 失敗・Argo OutOfSync の4症状。PromQL は実クラスタの Prometheus で実行確認済み)と、`make k8s-render` に `deploy/k8s/base/observability` の描画を追加。アラートは ADR-0407 §2 のとおり先回りしない。issue #320: runbook の `sed -i ''`・`set-context`・root DSN を両 OS 対応・一時 kubeconfig・`pokedex-reader-dsn` に直し、`scripts/argocd-bootstrap_test.sh` に回帰検査を追加
   - [x] メトリクス計測(ADR-0406 §1〜3。2026-09-24): gateway・pokedex・calc(`services/internal/httpmetrics`)、
     balance・speed・judge(各自 `internal/httpmetrics` に複製)すべてに `GET /metrics`(Prometheus text format、
     `http_requests_total{method,path,status}` / `http_request_duration_seconds{method,path}`、path はルーティング
