@@ -7,6 +7,12 @@
 # 競合しうる(issue #106)。fetch.mjs を呼ぶ前に flock で非ブロッキングに排他し、取れなければ何もせず
 # 終了コード1(ADR-0104 §3「再試行で直りうる失敗」)で諦める。ロックは advisory lock なので、プロセスの
 # 終了理由(正常・異常・SIGKILL)によらずカーネルが自動解放し、stale lock を残さない(ADR-0109)。
+#
+# 容量(issue #111・ADR-0104 追記): ロックの直後、取得より前に prune.mjs check で PVC の空きを確かめる。
+# 予約容量を下回ると stderr に importer-capacity を出して終了コード3で止まる(download・DB 更新に進まない)。
+# 終了コード3は「再試行しても直らない容量不足」で、docs/runbooks/data.md の手順で人が回復する(1=再試行で直りうる失敗)。
+# 取り込み(pokedex-import)が成功した後に、同じロックを持ったまま prune.mjs prune で旧版を消す。
+# prune の失敗は握りつぶさない(容量回復の失敗に気付けなくなるため)。pokedex-import は exec にしない。
 set -eu
 
 export HOME="${HOME:-/tmp}"
@@ -23,6 +29,9 @@ flock -n 9 || {
   exit 1
 }
 
+echo "cronjob: 容量の事前確認(不足なら終了コード3)"
+node "$APP_DIR/tools/importer/prune.mjs" check
+
 echo "cronjob: 固定版の取得"
 node "$APP_DIR/tools/importer/fetch.mjs"
 
@@ -30,4 +39,7 @@ echo "cronjob: 上流の最新版の検出(失敗しても取り込みは続け�
 node "$APP_DIR/tools/importer/check-upstream.mjs" || echo "cronjob: 上流の検出に失敗した(ログを参照。取り込みは続ける)" >&2
 
 echo "cronjob: 照合・投入"
-exec "$APP_DIR/pokedex-import" -data "$APP_DIR/data" -upstream "$APP_DIR/data/generated/upstream/latest.json"
+"$APP_DIR/pokedex-import" -data "$APP_DIR/data" -upstream "$APP_DIR/data/generated/upstream/latest.json"
+
+echo "cronjob: 旧版の整理(現在版+直前の成功版と直近52件の report を残す)"
+node "$APP_DIR/tools/importer/prune.mjs" prune

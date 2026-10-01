@@ -58,7 +58,7 @@ test-services: ## services のユニットテスト
 .PHONY: test-tools
 test-tools:
 	@cd tools && $(GO) test ./...
-	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs
+	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs tools/importer/prune.test.mjs
 
 .PHONY: test-scripts
 test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406・計算API SLO ADR-0407・ルートの e2e ADR-0306・GitOps の AppProject/共通スクリプト/レジストリ ADR-0408・Makefile の help と未実装ターゲット。クラスタ・ネットワークに触らない)
