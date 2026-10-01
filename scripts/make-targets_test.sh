@@ -59,6 +59,21 @@ for overlay in deploy/k8s/overlays/local deploy/k8s/overlays/cloud deploy/k8s/ov
   fi
 done
 
+# kubectl が無い環境では、各 *-kustomize の分かりにくいエラーより先に理由を出して止まる(issue #75)。
+# PATH を make・coreutils だけにした一時ディレクトリへ向け、kubectl を見えなくする。
+nokube=$(mktemp -d)
+trap 'rm -rf "$nokube"' EXIT
+for tool in bash env make grep sed awk; do
+  src=$(command -v "$tool") && ln -s "$src" "$nokube/$tool"
+done
+rc=0
+out=$(PATH="$nokube" "$MAKE_BIN" -C "$ROOT" --no-print-directory k8s-render 2>&1) || rc=$?
+if [ "$rc" -ne 0 ] && echo "$out" | grep -q "kubectl が無い"; then
+  ok "kubectl が無いと k8s-render は理由を出して失敗する"
+else
+  ng "kubectl が無いときの k8s-render(終了コード ${rc}): ${out}"
+fi
+
 if [ "$failures" -ne 0 ]; then
   echo "make-targets_test: ${failures} 件失敗" >&2
   exit 1
