@@ -1,0 +1,24 @@
+# calc(CALC_MASTER_URL。内部 API)と judge(JUDGE_POKEDEX_BASE_URL)から pokedex へ。
+# L4 なのでパスは区別できない(ADR-0132 の限界)。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-pokedex-ingress
+  labels:
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: pokedex
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [calc, judge]
+      ports:
+        - protocol: TCP
+          port: 8080
