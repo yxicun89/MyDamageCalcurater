@@ -28,7 +28,7 @@ flowchart LR
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 make test-engine        # ユニットテスト(ルートの make test にも含まれる)
-make test-golden        # @smogon/calc 照合(全件一致が必須。CLAUDE.md 絶対ルール3。ルートの make test にも含まれる)
+make test-golden        # @smogon/calc 0.12.0 照合(Champions 世代が主。全件一致が必須。差分を許容する仕組みは無い。CLAUDE.md 絶対ルール3。ルートの make test にも含まれる)
 make test-all-species   # 全ポケモン網羅・性質テスト
 make wasm test-wasm     # WASM ビルド → Go/WASM の結果一致テスト
 ```

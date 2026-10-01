@@ -1,12 +1,29 @@
 # pokecalc
 
-ポケモンチャンピオンズ向けのダメージ計算・構築ビルダー。
-純粋 Go の計算 engine を API とブラウザ WASM から使う構成を開発中です。
+ポケモンチャンピオンズ向けのダメージ計算・構築ビルダー。純粋 Go の計算 engine を、API(Go のマイクロサービス)と
+ブラウザ WASM の両方から使います。
 
-現状は engine(ダメージ計算・一括計算・逆算)、WASM 境界(Node で確認済み)、OpenAPI・環境の土台まで実装されています。
-ブラウザ画面、計算 API のサービス実装、マスタデータの取込は未完了です。
-`make up` だけで計算画面が使える状態には達していません。
-進捗と次の作業は [docs/plan.md](docs/plan.md) を確認してください。
+## 何が動くか
+
+- ブラウザ(Web): ダメージ計算・逆算・タイプバランス・素早さ比較・判定・構築ビルダー。オフライン(WASM。架空の例データ)とオンライン(API。実データ)の両方
+- サービス: gateway・calc・pokedex(マスタ取込を含む)・balance・speed・judge・record・team(k3d。各レーンの overlay は docs/runbooks/)。`make dev` が起動するのは calc と gateway だけ
+- iOS アプリ(SwiftUI。`make ios-test`)
+- 未実装: `make assets`(画像の変換・配信。終了コード 2)と、k3d の有無で変わる E2E の一部(クラスタ分は `make up` が前提)
+- 進捗と残りの作業は [docs/plan.md](docs/plan.md)(状態の正)。要件・テスト・設計の入口は [docs/README.md](docs/README.md)
+
+## 起動する
+
+最短(バックエンド不要。WASM で計算):
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make doctor
+make web-install
+make web-dev
+```
+
+表示された URL をブラウザで開きます。k3d(`make up` → `http://localhost:8080`)・iOS・DB を使う手順は
+[docs/verify-m1.md](docs/verify-m1.md) と [docs/runbooks/](docs/runbooks/) を上から実行してください。
 
 ## データの扱い(第三者の著作物)
 
@@ -61,7 +78,7 @@ make build
 
 ```sh
 (cd engine && go vet ./... && go build ./...)
-(cd services && go vet ./... && go build ./...)
+(cd services && go vet ./... && go build ./...)   # balance・speed・judge は別モジュール。make lint / make build が検査する
 (cd tools && go vet ./... && go build ./...)
 ```
 
@@ -73,24 +90,17 @@ kubectl の現在のコンテキストが `k3d-$CLUSTER` のときだけ既存�
 を追加で実行します。クラスタが無ければスキップして成功しますが、`E2E_REQUIRE_K3D=1` を付けるとスキップせず失敗で
 終わります(リリース前などクラスタ分まで確かめたいとき用)。詳細は [ADR-0306](docs/adr/0306-root-e2e-wiring.md)。
 
-`make dev` / `make wasm` / `make ios-test` / `make import` / `make assets` や
-TypeScript・sqlc の生成は未実装部分があります。Makefile・スクリプトの内容を確認してください。
-正常終了でも未実装メッセージやテスト 0 件を合格として記録しません。
-Web の package.json とアプリが整備されたら、そこに定義された test/lint/typecheck/build を確認します。
+正常終了でも未実装メッセージやテスト 0 件を合格として記録しません(未実装は `make assets` のみ)。
 
 ## 構成
 
 | パス | 役割 |
 |---|---|
-| `api/openapi.yaml` | API 契約の唯一の正 |
+| `api/openapi.yaml` | ダメージ計算・gateway・pokedex 等の API 契約(balance・speed・judge は `services/<名前>/api/openapi.yaml`。DECISIONS 2026-09-21) |
 | `engine/` | 純粋 Go の計算ロジックとテスト |
 | `services/` | Go サービス用モジュール、OpenAPI 生成コード |
 | `tools/golden/` / `testdata/golden/` | 外部実装によるテストベクタ生成・照合データ |
-| `web/` / `ios/` | クライアントの予定配置先 |
+| `web/` / `ios/` | クライアント(Vite + React + TypeScript / SwiftUI) |
 | `deploy/` / `scripts/` | k3d/Kustomize と開発補助 |
 | `.claude/` / `.codex/` | 各ツールのエージェント・ワークフロー設定 |
 | `docs/` | 要件、設計、テスト戦略、進捗、ADR、引き継ぎ |
-
-Claude からの任意の外部 Codex レビューには `scripts/codex-review.sh` を使います。
-ログイン等でスキップしたレビューを実施済みとは扱いません。Codex 主導時は別の reviewer が確認し、
-このスクリプトによる再帰起動は行いません。
