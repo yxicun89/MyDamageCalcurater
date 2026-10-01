@@ -24,6 +24,7 @@ api-docker-build: ## calc・gateway のイメージを local タグでビルド�
 # `deploy/k8s/overlays/local-api`(base/calc・base/gateway と Component local/api だけ)で
 # apply する。他レーンのリソースには一切触らない(ADR-0203 追記「apply の分離」)。
 api-k3d-deploy: api-docker-build ## k3d(既存クラスタ。make up 済み)へ calc・gateway だけをデプロイする
+	@CLUSTER=$(API_CLUSTER) ./scripts/require-k3d-context.sh api-k3d-deploy
 	@k3d image import pokecalc/calc:local pokecalc/gateway:local --cluster $(API_CLUSTER)
 	@kubectl apply -k deploy/k8s/overlays/local-api
 	@kubectl -n pokecalc rollout restart deployment/calc deployment/gateway

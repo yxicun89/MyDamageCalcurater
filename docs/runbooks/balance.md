@@ -79,7 +79,7 @@ make balance-argocd-app
 cd "$(git rev-parse --show-toplevel)"
 digest=$(make -s balance-registry-push 2>/dev/null | tail -1 | sed 's/.*@//')
 # digest 行は images に2つある(pokecalc/balance と pokecalc/pokedex)。name ごとの範囲で本体の行だけを書き換える。
-sed -i '' "/name: pokecalc\/balance$/,/digest:/ s/digest: .*/digest: ${digest}/" services/balance/deploy/k8s/overlays/gitops/kustomization.yaml
+perl -pi -e "s/digest: .*/digest: ${digest}/ if /name: pokecalc\\/balance\$/ .. /digest:/" services/balance/deploy/k8s/overlays/gitops/kustomization.yaml
 git diff services/balance/deploy/k8s/overlays/gitops/kustomization.yaml
 ```
 確認: diff の `digest:` が `sha256:` で始まる値に変わる(変わらなければ同じイメージなので、7 と 8 は不要)。
@@ -101,9 +101,11 @@ git diff services/balance/deploy/k8s/overlays/gitops/kustomization.yaml
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 kubectl -n argocd annotate application pokecalc-balance argocd.argoproj.io/refresh=normal --overwrite
-kubectl config set-context --current --namespace=argocd
-argocd --core app sync pokecalc-balance --timeout 180
-kubectl config set-context --current --namespace=default
+# argocd --core は kubeconfig の context の namespace を読む。自分の設定は書き換えず、一時コピーだけ argocd にする(失敗しても元のまま)。
+(kc=$(mktemp) && trap 'rm -f "$kc"' EXIT \
+  && kubectl config view --minify --flatten >"$kc" \
+  && KUBECONFIG="$kc" kubectl config set-context --current --namespace=argocd >/dev/null \
+  && KUBECONFIG="$kc" argocd --core app sync pokecalc-balance --timeout 180)
 ```
 確認: 出力に `Sync Status: Synced to main (<main の commit>)` と `Phase: Succeeded`。
 
@@ -138,8 +140,10 @@ make balance-smoke
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 kubectl -n argocd annotate application pokecalc-balance argocd.argoproj.io/refresh=normal --overwrite
-kubectl config set-context --current --namespace=argocd
-argocd --core app sync pokecalc-balance --timeout 180
-kubectl config set-context --current --namespace=default
+# argocd --core は kubeconfig の context の namespace を読む。自分の設定は書き換えず、一時コピーだけ argocd にする(失敗しても元のまま)。
+(kc=$(mktemp) && trap 'rm -f "$kc"' EXIT \
+  && kubectl config view --minify --flatten >"$kc" \
+  && KUBECONFIG="$kc" kubectl config set-context --current --namespace=argocd >/dev/null \
+  && KUBECONFIG="$kc" argocd --core app sync pokecalc-balance --timeout 180)
 ```
 確認: 出力に `Sync Status: Synced to main (<main の commit>)` と `Phase: Succeeded`。
