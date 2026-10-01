@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	"example.com/pokecalc/services/speed/internal/api"
+	"example.com/pokecalc/services/speed/internal/httpguard"
 	"example.com/pokecalc/services/speed/internal/httpmetrics"
 	"example.com/pokecalc/services/speed/internal/speed"
 	"github.com/labstack/echo/v5"
@@ -32,6 +33,11 @@ var pokemonIDPattern = regexp.MustCompile(`^\d{4}-\d{3}$`)
 // Pokemon が nil でも起動はし、/healthz は 200、ポケモンを使う API は 503 master_unavailable(ADR-0600 §4)。
 type Dependencies struct {
 	Pokemon speed.PokemonProvider
+
+	// Guard bounds concurrent requests and puts a deadline on the whole handler (issue #299,
+	// ADR-0801). The zero value disables both, which keeps tests that build Dependencies
+	// without it unaffected; cmd/api/main.go always passes DefaultGuard.
+	Guard httpguard.Config
 }
 
 // New は HTTP ハンドラを返す。
@@ -41,11 +47,12 @@ func New(deps Dependencies) *echo.Echo {
 	m := httpmetrics.New()
 	e.Use(m.Middleware())
 	e.GET(httpmetrics.Path, m.Handler())
+	guard := httpguard.Middleware(deps.Guard)
 	api.RegisterHandlersWithOptions(e, handler{deps: deps}, api.RegisterHandlersOptions{
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
-			"listPokemon":      {requireRequestContext},
-			"getSpeedTable":    {requireRequestContext},
-			"getSpeedPosition": {requireRequestContext},
+			"listPokemon":      {guard, requireRequestContext},
+			"getSpeedTable":    {guard, requireRequestContext},
+			"getSpeedPosition": {guard, requireRequestContext},
 		},
 	})
 	return e
@@ -106,6 +113,9 @@ func getSpeedTable(c *echo.Context, deps Dependencies, params api.GetSpeedTableP
 		return internalError(c, err)
 	}
 
+	if httpguard.Expired(c.Request().Context()) {
+		return overloaded(c)
+	}
 	table, err := speed.BuildTable(roster, presets)
 	if err != nil {
 		return internalError(c, err)
@@ -198,6 +208,16 @@ func listPokemon(c *echo.Context, deps Dependencies) error {
 	return c.JSON(http.StatusOK, api.PokemonListResponse{
 		RegulationId: roster.RegulationID,
 		Pokemon:      pokemon,
+	})
+}
+
+// overloaded answers 503 overloaded for a request that is past its deadline, so no new
+// computation starts for a response that can no longer be written in time (issue #299).
+func overloaded(c *echo.Context) error {
+	c.Response().Header().Set("Retry-After", "1")
+	return c.JSON(http.StatusServiceUnavailable, api.Error{
+		Code:    api.Overloaded,
+		Message: "the request deadline has passed; retry shortly",
 	})
 }
 

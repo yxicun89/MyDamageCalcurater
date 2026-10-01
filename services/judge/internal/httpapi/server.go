@@ -11,6 +11,7 @@ import (
 
 	"example.com/pokecalc/services/judge/internal/api"
 	"example.com/pokecalc/services/judge/internal/client"
+	"example.com/pokecalc/services/judge/internal/httpguard"
 	"example.com/pokecalc/services/judge/internal/httpmetrics"
 	"github.com/labstack/echo/v5"
 )
@@ -36,6 +37,11 @@ type Dependencies struct {
 	// that builds Dependencies without this field unaffected. cmd/api/main.go always passes a
 	// positive value (JUDGE_REQUEST_TIMEOUT, default 12s) in production.
 	RequestTimeout time.Duration
+
+	// Guard bounds the outspeed-and-ko requests handled at once (issue #299, ADR-0801). Only
+	// MaxInflight and Code are used here: the whole-request deadline is RequestTimeout above
+	// (ADR-0707), so Guard.Timeout stays zero. The zero value disables the limit.
+	Guard httpguard.Config
 }
 
 // New returns the judge HTTP handler.
@@ -45,9 +51,10 @@ func New(deps Dependencies) *echo.Echo {
 	m := httpmetrics.New()
 	e.Use(m.Middleware())
 	e.GET(httpmetrics.Path, m.Handler())
+	guard := httpguard.Middleware(deps.Guard)
 	api.RegisterHandlersWithOptions(e, handler{deps: deps}, api.RegisterHandlersOptions{
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
-			"outspeedAndKo": {requireRequestContext},
+			"outspeedAndKo": {guard, requireRequestContext},
 		},
 	})
 	return e

@@ -13,6 +13,7 @@ import (
 
 	"example.com/pokecalc/services/balance/internal/api"
 	"example.com/pokecalc/services/balance/internal/balance"
+	"example.com/pokecalc/services/balance/internal/httpguard"
 	"example.com/pokecalc/services/balance/internal/httpmetrics"
 	"github.com/labstack/echo/v5"
 )
@@ -61,6 +62,10 @@ type Dependencies struct {
 	// MaxConcurrentRecommendations caps the recommendations computed at once; a request over the
 	// cap is answered 503 overloaded without waiting. Zero or negative means the default.
 	MaxConcurrentRecommendations int
+	// Guard bounds the requests handled at once across all operations and puts a deadline on the
+	// whole handler (issue #299, ADR-0801). The zero value disables both, which keeps tests that
+	// build Dependencies without it unaffected; cmd/api/main.go always passes its guard.
+	Guard httpguard.Config
 }
 
 // normalizeDependencies clears any provider whose interface value wraps a nil pointer (or
@@ -113,17 +118,18 @@ func New(deps Dependencies) *echo.Echo {
 	m := httpmetrics.New()
 	e.Use(m.Middleware())
 	e.GET(httpmetrics.Path, m.Handler())
+	guard := httpguard.Middleware(deps.Guard)
 	maxConcurrent := deps.MaxConcurrentRecommendations
 	if maxConcurrent <= 0 {
 		maxConcurrent = DefaultMaxConcurrentRecommendations
 	}
 	api.RegisterHandlersWithOptions(e, handler{deps: deps, slots: make(chan struct{}, maxConcurrent)}, api.RegisterHandlersOptions{
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
-			"analyzeTeamBalance":  {requireRequestContext},
-			"analyzeTeamCoverage": {requireRequestContext},
-			"analyzeTeamThreats":  {requireRequestContext},
-			"recommendTeamTypes":  {requireRequestContext},
-			"analyzeMoveRange":    {requireRequestContext},
+			"analyzeTeamBalance":  {guard, requireRequestContext},
+			"analyzeTeamCoverage": {guard, requireRequestContext},
+			"analyzeTeamThreats":  {guard, requireRequestContext},
+			"recommendTeamTypes":  {guard, requireRequestContext},
+			"analyzeMoveRange":    {guard, requireRequestContext},
 		},
 	})
 	return e
@@ -228,12 +234,25 @@ func analyze(c *echo.Context, deps Dependencies) error {
 		members[i].Ability = &ability
 	}
 
+	if httpguard.Expired(c.Request().Context()) {
+		return overloaded(c)
+	}
 	analysis, err := balance.AnalyzeDefense(deps.TypeChart, members)
 	if err != nil {
 		return internalError(c, err)
 	}
 
 	return c.JSON(http.StatusOK, toAnalyzeResponse(analysis))
+}
+
+// overloaded answers 503 overloaded for a request that is past its deadline, so no new
+// computation starts for a response that can no longer be written in time (issue #299).
+func overloaded(c *echo.Context) error {
+	c.Response().Header().Set("Retry-After", "1")
+	return c.JSON(http.StatusServiceUnavailable, api.Error{
+		Code:    api.Overloaded,
+		Message: "the request deadline has passed; retry shortly",
+	})
 }
 
 // internalError answers 500 internal_error with a fixed message: ADR-0014 §5.5
@@ -420,6 +439,9 @@ func coverage(c *echo.Context, deps Dependencies) error {
 		members[i] = balance.CoverageMember{PokemonID: member.PokemonId, Moves: moves}
 	}
 
+	if httpguard.Expired(c.Request().Context()) {
+		return overloaded(c)
+	}
 	analysis, err := balance.AnalyzeCoverage(deps.TypeChart, members)
 	if err != nil {
 		return internalError(c, err)
