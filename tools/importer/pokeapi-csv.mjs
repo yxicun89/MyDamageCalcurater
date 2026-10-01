@@ -32,3 +32,20 @@ export function parseCSV(text, name) {
   }
   return rows.map((r) => Object.fromEntries(header.map((h, i) => [h, r[i]])));
 }
+
+// collectNames は ownerCol の値ごとに、対象言語だけの {言語: 名前} を集める。
+// PokeAPI の languages.csv の identifier は小文字(ja-hrkt)なので、大文字小文字を区別せず比べ、
+// 出力のキーは languages の表記(ADR-0101 の `ja-Hrkt`、config の nameJaLanguages と同じ)にそろえる。
+// langIDToIdentifier: languages.csv の id → identifier。languages: 出力する言語の表記の一覧。
+export function collectNames(rows, ownerCol, nameCol, langIDToIdentifier, languages) {
+  const canonical = new Map(languages.map((l) => [l.toLowerCase(), l]));
+  const byOwner = new Map();
+  for (const r of rows) {
+    const lang = canonical.get((langIDToIdentifier.get(r.local_language_id) ?? '').toLowerCase());
+    if (!lang) continue;
+    const owner = r[ownerCol];
+    if (!byOwner.has(owner)) byOwner.set(owner, {});
+    byOwner.get(owner)[lang] = r[nameCol];
+  }
+  return byOwner;
+}
