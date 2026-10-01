@@ -627,4 +627,15 @@ final class LargeTextLayoutUITests: XCTestCase {
         openAboutScreen(app)
         assertNoHorizontalOverflow(app, identifiers: Self.aboutScreenIdentifiers)
     }
+
+    /// P6-7: AX5 でも「データの扱い」セクション(説明3文・ボタン)が横にはみ出さない。
+    func testAboutScreenDeviceDataSectionNoHorizontalOverflowAtAX5() {
+        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        openAboutScreen(app)
+        assertNoHorizontalOverflow(
+            app,
+            identifiers: ["deviceDataSection", "deleteDeviceDataButton"]
+                + (0..<3).map { "deviceDataExplanation-\($0)" }
+        )
+    }
 }

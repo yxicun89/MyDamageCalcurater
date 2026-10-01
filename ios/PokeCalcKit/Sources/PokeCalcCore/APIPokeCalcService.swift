@@ -653,3 +653,56 @@ public struct APIPokeCalcService: PokeCalcService {
         }
     }
 }
+
+// MARK: - 端末単位の全削除(P6-7・ADR-0209 §5・ADR-0501「P6-7」)
+
+/// `DELETE /api/record/device-data`・`DELETE /api/team/device-data`。1回の呼び出しが1回の HTTP 要求
+/// (`partial` の繰り返しは `DeviceDataDeletionViewModel` が行う)。`PokeCalcService` とは別のプロトコル。
+extension APIPokeCalcService: DeviceDataService {
+    public func deleteRecordDeviceData() async throws -> DeletionProgress {
+        let output = try await send {
+            try await client.deleteRecordDeviceData(.init(
+                headers: .init(xDeviceId: identity.deviceID, xSessionId: identity.sessionID)
+            ))
+        }
+        switch output {
+        case .ok(let ok):
+            return Self.domainDeletionProgress(try ok.body.json.status)
+        case .badRequest(let error):
+            throw try Self.domainError(error)
+        case .internalServerError(let error):
+            throw try Self.domainError(error)
+        case .serviceUnavailable(let response):
+            throw try Self.domainErrorFromSchema(response.body.json)
+        case .default(_, let error):
+            throw try Self.domainError(error)
+        }
+    }
+
+    public func deleteTeamDeviceData() async throws -> DeletionProgress {
+        let output = try await send {
+            try await client.deleteTeamDeviceData(.init(
+                headers: .init(xDeviceId: identity.deviceID, xSessionId: identity.sessionID)
+            ))
+        }
+        switch output {
+        case .ok(let ok):
+            return Self.domainDeletionProgress(try ok.body.json.status)
+        case .badRequest(let error):
+            throw try Self.domainError(error)
+        case .internalServerError(let error):
+            throw try Self.domainError(error)
+        case .serviceUnavailable(let response):
+            throw try Self.domainErrorFromSchema(response.body.json)
+        case .default(_, let error):
+            throw try Self.domainError(error)
+        }
+    }
+
+    private static func domainDeletionProgress(_ status: Components.Schemas.DeletionStatus) -> DeletionProgress {
+        switch status {
+        case .completed: return .completed
+        case .partial: return .partial
+        }
+    }
+}
