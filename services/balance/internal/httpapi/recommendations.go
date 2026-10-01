@@ -11,7 +11,7 @@ import (
 
 // RecommendTeamTypes is the TB5 recommendation endpoint (ADR-0401).
 func (h handler) RecommendTeamTypes(c *echo.Context, _ api.RecommendTeamTypesParams) error {
-	return recommendations(c, h.deps)
+	return recommendations(c, h.deps, h.slots)
 }
 
 // recommendations implements the TB5 recommendation endpoint (ADR-0401 §2〜6), reusing the
@@ -25,7 +25,7 @@ func (h handler) RecommendTeamTypes(c *echo.Context, _ api.RecommendTeamTypesPar
 // abilityId is named (503) → unknown pokemonId → unknown moveId → unknown abilityId
 // (422; request order, the first one) → 200. Every other failure (provider failure, nil
 // chart, invalid move/ability data) answers 500 with a fixed message.
-func recommendations(c *echo.Context, deps Dependencies) error {
+func recommendations(c *echo.Context, deps Dependencies, slots chan struct{}) error {
 	c.Request().Body = http.MaxBytesReader(c.Response(), c.Request().Body, maxAnalyzeBodyBytes)
 	request, err := decodeJSONBody[api.RecommendationsRequest](c.Request())
 	if err != nil {
@@ -48,11 +48,7 @@ func recommendations(c *echo.Context, deps Dependencies) error {
 	entries := make([]api.ThreatsRequestPokemon, len(request.Members))
 	var hasMoveID, hasAbilityID bool
 	for i, member := range request.Members {
-		entry := api.ThreatsRequestPokemon{
-			PokemonId: member.PokemonId,
-			MoveIds:   member.MoveIds,
-			AbilityId: member.AbilityId,
-		}
+		entry := api.ThreatsRequestPokemon(member)
 		entryHasMoveID, entryHasAbilityID, err := validateThreatsEntry(entry)
 		if err != nil {
 			return badRequest(c, err.Error())
@@ -103,6 +99,18 @@ func recommendations(c *echo.Context, deps Dependencies) error {
 	}
 	if err := resolveThreatsAbilities(deps, entries, members); err != nil {
 		return resolveError(c, err)
+	}
+
+	// ADR-0409: take a concurrency slot just before the catalog scan, without waiting.
+	select {
+	case slots <- struct{}{}:
+		defer func() { <-slots }()
+	default:
+		c.Response().Header().Set("Retry-After", "1")
+		return c.JSON(http.StatusServiceUnavailable, api.Error{
+			Code:    api.Overloaded,
+			Message: "too many recommendations are being computed; retry shortly",
+		})
 	}
 
 	catalog, err := deps.PokemonCatalog.AllPokemon()

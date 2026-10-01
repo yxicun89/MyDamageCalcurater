@@ -68,7 +68,7 @@ func newStubImportEnv(t *testing.T) stubImportEnv {
 		}
 	}
 
-	// 偽の node: 引数のスクリプト名(fetch.mjs / check-upstream.mjs)ごとにマーカーを書くだけ。
+	// 偽の node: 引数のスクリプト名(fetch.mjs / check-upstream.mjs / prune.mjs)ごとにマーカーを書くだけ。
 	// 実際の Node.js が要らないので、このテストの関心(排他)以外の依存を持ち込まない。
 	writeExecutable(t, filepath.Join(binDir, "node"), `#!/bin/sh
 set -eu
@@ -76,6 +76,7 @@ role="${IMPORT_TEST_ROLE:-unknown}"
 case "$1" in
   *fetch.mjs) : > "$MARKER_DIR/fetch-called-$role" ;;
   *check-upstream.mjs) : > "$MARKER_DIR/check-upstream-called-$role" ;;
+  *prune.mjs) : > "$MARKER_DIR/prune-$2-called-$role" ;;
   *) echo "stub node: unexpected script $1" >&2; exit 1 ;;
 esac
 `)

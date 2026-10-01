@@ -34,18 +34,19 @@ balance-kustomize:
 	@kubectl kustomize $(BALANCE_DIR)/deploy/argocd >/dev/null
 
 balance-gitops-template-check: balance-kustomize
-	@BALANCE_DIR=$(BALANCE_DIR) $(BALANCE_DIR)/scripts/check-gitops.sh template
+	@SERVICE=balance scripts/gitops/check-gitops.sh template
 
 balance-gitops-check: balance-kustomize
-	@BALANCE_DIR=$(BALANCE_DIR) $(BALANCE_DIR)/scripts/check-gitops.sh ready
+	@SERVICE=balance scripts/gitops/check-gitops.sh ready
 
 balance-docker-build:
 	@docker build -t $(BALANCE_IMAGE) $(BALANCE_DIR)
 
 balance-docker-push:
-	@BALANCE_DIR=$(BALANCE_DIR) $(BALANCE_DIR)/scripts/publish-image.sh
+	@SERVICE=balance scripts/gitops/publish-image.sh
 
 balance-k3d-deploy: balance-docker-build ## k3d へ balance を直接デプロイ
+	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh balance-k3d-deploy
 	@k3d image import $(BALANCE_IMAGE) --cluster $(CLUSTER)
 	@kubectl apply -k $(BALANCE_DIR)/deploy/k8s/overlays/local
 	@kubectl -n pokecalc rollout restart deployment/balance
@@ -62,13 +63,14 @@ balance-registry-apply:
 	@kubectl -n balance-registry rollout status deployment/registry --timeout=120s
 
 balance-registry-push:
-	@BALANCE_DIR=$(BALANCE_DIR) BALANCE_REGISTRY_PORT=$(BALANCE_REGISTRY_PORT) $(BALANCE_DIR)/scripts/local-registry-push.sh
+	@SERVICE=balance BALANCE_REGISTRY_PORT=$(BALANCE_REGISTRY_PORT) scripts/gitops/local-registry-push.sh
 
 balance-argocd-app:
-	@BALANCE_DIR=$(BALANCE_DIR) $(BALANCE_DIR)/scripts/argocd-local-app.sh
+	@SERVICE=balance scripts/gitops/argocd-local-app.sh
 
 balance-k3d-deploy-readmodel:
-	@BALANCE_DIR=$(BALANCE_DIR) BALANCE_IMAGE=$(BALANCE_IMAGE) CLUSTER=$(CLUSTER) $(BALANCE_DIR)/scripts/k3d-deploy-readmodel.sh
+	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh balance-k3d-deploy-readmodel
+	@SERVICE=balance BALANCE_IMAGE=$(BALANCE_IMAGE) CLUSTER=$(CLUSTER) scripts/gitops/k3d-deploy-readmodel.sh
 
 balance-smoke-readmodel:
 	@BALANCE_URL=$(BALANCE_URL) $(BALANCE_DIR)/scripts/smoke-readmodel.sh

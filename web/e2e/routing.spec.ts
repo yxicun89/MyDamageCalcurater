@@ -68,6 +68,52 @@ test("未知のパスを開くと /calc に置き換わる", async ({ page }) =>
   await expect(tab(page, "計算")).toHaveAttribute("aria-selected", "true");
 });
 
+// issue #218(ADR-0308): タブを往復しても各画面の入力が消えない。
+// 実ブラウザでだけ確かめられること:
+//   - 非選択の画面が本当に DOM に残っていること(`page.locator` の toHaveCount は見た目に関係なく
+//     DOM を数える。一方 getByRole は hidden の要素を除くので、支援技術から見えないことも同時に分かる)
+//   - 実際の戻る/進む(page.goBack / goForward。jsdom での popstate の模倣ではない)
+// 実装後に見るのは「逆算タブにいる間も攻撃側の select が DOM に1つあり、role では取れない」ことと、
+// 「計算タブに戻ると選んだ値がそのまま残っている」こと。
+test("タブを往復しても計算画面の入力が残り、非選択の間も DOM から消えない", async ({ page }) => {
+  await page.goto("/calc");
+  await waitForTabs(page);
+  const attacker = page.getByRole("combobox", { name: "攻撃側のポケモン", exact: true });
+  // 先頭の option はプレースホルダ(hidden)なので、その次(最初の種族)を選ぶ。
+  await attacker.selectOption({ index: 1 });
+  const selected = await attacker.inputValue();
+  expect(selected).not.toBe("");
+
+  await tab(page, "逆算").click();
+  await expect(page.getByRole("combobox", { name: "自分のポケモン", exact: true })).toBeVisible();
+  // 隠れているだけで DOM には残る(= unmount されていない)。支援技術からは見えない。
+  await expect(page.locator('select[aria-label="攻撃側のポケモン"]')).toHaveCount(1);
+  await expect(attacker).toBeHidden();
+
+  await tab(page, "計算").click();
+  await expect(attacker).toHaveValue(selected);
+});
+
+test("戻る・進むでタブが切り替わっても、それぞれの画面の入力が残る", async ({ page }) => {
+  await page.goto("/calc");
+  await waitForTabs(page);
+  const attacker = page.getByRole("combobox", { name: "攻撃側のポケモン", exact: true });
+  await attacker.selectOption({ index: 1 });
+  const selected = await attacker.inputValue();
+
+  await tab(page, "逆算").click();
+  const observation = page.getByRole("textbox", { name: "観測1", exact: true });
+  await observation.fill("45");
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/calc$/);
+  await expect(attacker).toHaveValue(selected);
+
+  await page.goForward();
+  await expect(page).toHaveURL(/\/reverse$/);
+  await expect(observation).toHaveValue("45");
+});
+
 // SP3(ADR-0604 §2): 素早さ比較のタブ。/speed を直接開ける(SPA のフォールバック)。
 // speed-svc はこの構成では動いていないので、API は失敗するが画面(右の自分の入力)は出る(ADR-0604 §4)。
 test("/speed を直接開くと素早さタブが選択され、自分のポケモンの入力が出る", async ({ page }) => {

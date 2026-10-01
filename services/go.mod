@@ -7,6 +7,7 @@ require (
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/golang-migrate/migrate/v4 v4.20.1
+	github.com/google/uuid v1.6.0
 	github.com/labstack/echo/v5 v5.3.1
 	github.com/nats-io/nats.go v1.54.0
 	github.com/oapi-codegen/runtime v1.7.0
@@ -22,7 +23,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
 	github.com/go-openapi/jsonpointer v1.0.1 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.20.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nats-io/nkeys v0.4.16 // indirect

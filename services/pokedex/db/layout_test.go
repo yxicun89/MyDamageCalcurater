@@ -100,6 +100,7 @@ var requiredTables = []string{
 	"item_effects", "ability_effects", "move_effects", "learnsets",
 	"regulations", "regulation_species", "regulation_moves", "regulation_items", "regulation_abilities",
 	"data_versions",
+	"species_key_ledger", // 配った種族 key の台帳(ADR-0131)
 }
 
 func TestMigrationsCreateAndDropRequiredTables(t *testing.T) {
@@ -505,6 +506,44 @@ func TestLocalMySQLManifests(t *testing.T) {
 	}
 	if !strings.Contains(readRepoFile(t, "scripts/up.sh"), "mysql-auth") {
 		t.Error("scripts/up.sh が Secret mysql-auth を作っていない(Secret はコミットせず up.sh が作る)")
+	}
+}
+
+// TestLocalMySQLMemory は MySQL の常駐を下げる設定がマウントされ、メモリ上限に余裕があること(issue #437)。
+// 既定のまま・512Mi では importer の全置換の最中に OOMKill され、pokedex・calc がマスタを取れなかった。
+func TestLocalMySQLMemory(t *testing.T) {
+	cm := readRepoFile(t, "deploy/k8s/overlays/local/mysql/configmap.yaml")
+	for _, want := range []string{"memory.cnf:", "performance_schema=OFF", "innodb_buffer_pool_size=", "max_connections="} {
+		if !strings.Contains(cm, want) {
+			t.Errorf("mysql-config に %q が無い", want)
+		}
+	}
+	sts := readRepoFile(t, "deploy/k8s/overlays/local/mysql/statefulset.yaml")
+	if !regexp.MustCompile(`mountPath:\s*/etc/mysql/conf\.d/memory\.cnf\s+subPath:\s*memory\.cnf`).MatchString(sts) {
+		t.Error("memory.cnf を /etc/mysql/conf.d/ にマウントしていない(ConfigMap に書いても効かない)")
+	}
+	m := regexp.MustCompile(`limits:\s*\n\s*cpu:[^\n]*\n(?:\s*#[^\n]*\n)*\s*memory:\s*(\d+)Mi`).FindStringSubmatch(sts)
+	if m == nil {
+		t.Fatal("MySQL の limits.memory(Mi)が読めない")
+	}
+	if n, _ := strconv.Atoi(m[1]); n < 768 {
+		t.Errorf("MySQL の limits.memory が %sMi。768Mi 未満では全置換の最中に OOMKill されうる(issue #437)", m[1])
+	}
+}
+
+// TestLocalMySQLSecurityContext は MySQL が非 root・最小権限で動くこと(issue #262)。
+// 既存 PVC のファイルは uid/gid 999 所有なので、999 で起動すれば読める。
+func TestLocalMySQLSecurityContext(t *testing.T) {
+	sts := readRepoFile(t, "deploy/k8s/overlays/local/mysql/statefulset.yaml")
+	for _, want := range []string{
+		`runAsUser:\s*999\b`, `runAsGroup:\s*999\b`, `fsGroup:\s*999\b`,
+		`runAsNonRoot:\s*true`, `fsGroupChangePolicy:\s*OnRootMismatch`,
+		`allowPrivilegeEscalation:\s*false`, `drop:\s*\["ALL"\]`,
+		`seccompProfile:\s*\n\s*type:\s*RuntimeDefault`,
+	} {
+		if !regexp.MustCompile(want).MatchString(sts) {
+			t.Errorf("MySQL の StatefulSet に securityContext の %q が無い(issue #262)", want)
+		}
 	}
 }
 

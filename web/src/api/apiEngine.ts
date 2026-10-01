@@ -8,6 +8,7 @@
 import { apiEngineText, engineAbortText } from "../i18n/ja";
 import {
   REQUEST_ABORTED_CODE,
+  type Ability,
   type BulkRequest,
   type BulkResult,
   type BulkRow,
@@ -175,12 +176,35 @@ function mapCalcResult(result: Schemas["CalcResult"]): CalcResult {
       chancePercent: result.ko.chancePercent ?? 0,
       displayChancePercent: result.ko.displayChancePercent,
     },
+    // 「未対応」の印(ADR-0123)。engine が決めた並びのまま素通しする(並べ替え・重複除去をしない。
+    // ADR-0300 §8)。target・reason の値は契約と DTO で同じ文字列なので、写しは代入だけでよい。
+    unsupported: result.unsupported,
   };
 }
 
 /** API の NatureModifier(null は無補正)を DTO の Nature("" は無補正)に写す。 */
 function mapNatureModifier(nature: Schemas["NatureModifier"]): Nature {
   return { plus: nature.plus ?? "", minus: nature.minus ?? "" };
+}
+
+/** 応答の abilityId / abilityIds を写す。特性を送らなかった(古いサーバーを含む)応答にはフィールドを出さない。 */
+function mapAbilityIds(source: Partial<Pick<Schemas["BulkCalcRow"], "abilityId" | "abilityIds">>): {
+  abilityId?: string;
+  abilityIds?: readonly string[];
+} {
+  return {
+    ...(source.abilityId === undefined ? {} : { abilityId: source.abilityId }),
+    ...(source.abilityIds === undefined ? {} : { abilityIds: source.abilityIds }),
+  };
+}
+
+/**
+ * 防御側・相手側の特性の候補から、API に送る個別指定の ID を決める(ADR-0214・ADR-0311)。
+ * ちょうど1件(個別選択)のときだけ ID を返す。2件以上(おまかせ)・空・未指定は undefined で、
+ * 省略するとサーバーが種族の全特性を候補にする。
+ */
+function singleAbilityId(candidates: readonly Ability[] | undefined): string | undefined {
+  return candidates?.length === 1 ? candidates[0]?.id : undefined;
 }
 
 /** API の BulkCalcRow を DTO の BulkRow に写す(natureId は画面が使わないので捨てる。ADR-0301 §2)。 */
@@ -195,6 +219,7 @@ function mapBulkRow(row: Schemas["BulkCalcRow"]): BulkRow {
       stats: row.defender.stats,
     },
     result: mapCalcResult(row.result),
+    ...mapAbilityIds(row),
   };
 }
 
@@ -216,6 +241,8 @@ function mapReverseCandidate(candidate: Schemas["ReverseCandidate"]): ReverseCan
     support: candidate.support,
     minPercent: candidate.minPercent,
     maxPercent: candidate.maxPercent,
+    unsupported: candidate.unsupported,
+    ...mapAbilityIds(candidate),
   };
 }
 
@@ -498,6 +525,10 @@ export function createApiEngine(input: CreateApiEngineInput): CalcEngine {
       if (request.itemVariants !== undefined) {
         body.itemVariants = request.itemVariants.map((item) => item?.id ?? null);
       }
+      const defenderAbilityId = singleAbilityId(request.defenderAbilities);
+      if (defenderAbilityId !== undefined) {
+        body.defenderOverride = { abilityId: defenderAbilityId };
+      }
       const response = await postJson(CALC_PATHS.bulk, body, isBulkCalcResult, signal);
       if (!response.ok) {
         return response;
@@ -530,6 +561,10 @@ export function createApiEngine(input: CreateApiEngineInput): CalcEngine {
       }
       if (request.itemCandidates !== undefined) {
         body.itemCandidates = request.itemCandidates.map((item) => item?.id ?? null);
+      }
+      const unknownAbilityId = singleAbilityId(request.unknownAbilities);
+      if (unknownAbilityId !== undefined) {
+        body.unknownAbilityId = unknownAbilityId;
       }
       const response = await postJson(CALC_PATHS.reverse, body, isReverseResult, signal);
       if (!response.ok) {

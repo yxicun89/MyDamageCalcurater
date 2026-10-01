@@ -13,7 +13,7 @@ RUN cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /out/wasm_exec.js
 
 # --- 2) Web 本体のビルド(vite build) ---
 # Node の版は web/package.json の engines と揃える。
-FROM node:26.9.0-alpine@sha256:dbaa92e5758cbbcf85d65d5403fdb530fe3442cbe8c6dbfb7ef23365450d5070 AS build
+FROM node:26.10.0-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80 AS build
 
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
@@ -34,6 +34,7 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:1.31.6-alpine@sha256:e75f89810bf5bfbcf58a1cfb32a1a11de55b7623d732e67735d513b720d7436a
 
 COPY web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY web/security-headers.conf /etc/nginx/security-headers.conf
 COPY --from=build /src/web/dist /usr/share/nginx/html
 
 USER 101

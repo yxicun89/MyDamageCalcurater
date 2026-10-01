@@ -8,6 +8,7 @@
 #   API_SMOKE_RETRIES   ロールアウト直後、Traefik が終了中の Pod に振り分けて返す 000(接続不可)・502
 #                       (Bad Gateway)だけを再試行する回数(既定 30。1秒間隔)。404・503 は意味のある
 #                       最終状態(pokedex 未投入・Web 未デプロイ等)でもありうるので再試行しない
+#   API_SMOKE_STRICT    1 のとき web と balance が 200 でなければ失敗にする(既定は web=503・balance=skipped も成功。issue #321)。
 #   API_SMOKE_BALANCE   /api/balance/healthz が balance の Ingress に届くかの確認。
 #                       auto(既定: kubectl で balance の Ingress があるときだけ見る)/ on / off
 #   API_SMOKE_NAMESPACE auto のときに balance の Ingress を探す namespace(既定 pokecalc)
@@ -325,3 +326,10 @@ else
   echo "api smoke: master=example"
 fi
 echo "api smoke: calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=$pokedex_status internal=404 balance=$balance_result web=$web_result"
+
+if [ "${API_SMOKE_STRICT:-}" = 1 ]; then
+  if [ "$web_result" != 200 ] || [ "$balance_result" != 200 ]; then
+    echo "api smoke: API_SMOKE_STRICT=1 では web=200 balance=200 が必要(実際 web=$web_result balance=$balance_result)" >&2
+    exit 1
+  fi
+fi

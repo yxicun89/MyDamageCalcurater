@@ -25,6 +25,7 @@ type fakeStore struct {
 	appliedErr error
 	applyErr   error
 	applyCalls [][]importer.SourceVersion
+	applyOpts  []importer.ApplyOptions
 }
 
 func (f *fakeStore) AppliedVersions(context.Context) ([]importer.SourceVersion, error) {
@@ -34,8 +35,9 @@ func (f *fakeStore) AppliedVersions(context.Context) ([]importer.SourceVersion, 
 	return append([]importer.SourceVersion(nil), f.applied...), nil
 }
 
-func (f *fakeStore) Apply(_ context.Context, _ importer.Output, versions []importer.SourceVersion, _ time.Time) error {
+func (f *fakeStore) Apply(_ context.Context, _ importer.Output, versions []importer.SourceVersion, _ time.Time, opts importer.ApplyOptions) error {
 	f.applyCalls = append(f.applyCalls, append([]importer.SourceVersion(nil), versions...))
+	f.applyOpts = append(f.applyOpts, opts)
 	return f.applyErr
 }
 

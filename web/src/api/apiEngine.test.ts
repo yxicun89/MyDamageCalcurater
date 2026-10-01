@@ -16,6 +16,7 @@ import {
   type ReverseRequest,
   type Species,
   type TypeChart,
+  type UnsupportedMark,
 } from "../engine/types";
 import type { MasterNature } from "../master/types";
 import { createApiEngine } from "./apiEngine";
@@ -267,16 +268,27 @@ describe("calc: 実体 → ID の写像(ADR-0301 §2)", () => {
     expect(sentRequest(fetchMock).body).not.toHaveProperty("options");
   });
 
-  test("成功の応答は CalcResult の形のまま返す", async () => {
+  // issue 271 / issue 270(Web レーン): unsupported は Web の CalcResult にも写す(ADR-0123 §6・§7)。
+  // 以前は「Web はまだ受け取らない設計」で omit していたが、画面で印を出すために受け取るように変えた。
+  test("成功の応答は CalcResult の形のまま返す(unsupported を含む)", async () => {
     const fetchMock = fakeFetch(() => Promise.resolve(jsonResponse(apiCalcResult)));
     const result = await engineWith(fetchMock).calc(calcRequest);
-    // unsupported は API のみの項目で、Web の CalcResult(engine/types)にはまだ無い(Web はまだ表示しない。
-    // ADR-0123 §6・DECISIONS.md 2026-09-25)。issue 67 の前方互換どおり DTO には混ざらない。
-    const expected: CalcResult = omit(
-      { ...apiCalcResult, ko: { ...apiCalcResult.ko, chancePercent: 12.34 } },
-      "unsupported",
-    );
+    const expected: CalcResult = { ...apiCalcResult, ko: { ...apiCalcResult.ko, chancePercent: 12.34 } };
     expect(result).toEqual({ ok: true, value: expected });
+  });
+
+  test("unsupported の印は engine の順のまま素通しする(並べ替え・重複除去をしない。ADR-0123 §2)", async () => {
+    const marks: Schemas["UnsupportedMark"][] = [
+      { target: "move", reason: "multi_hit", id: "example-move-firepunch" },
+      { target: "move", reason: "zero_power", id: "example-move-firepunch" },
+      { target: "attacker_item", reason: "unsupported_effect", id: "example-item-power" },
+      { target: "defender_ability", reason: "unsupported_effect", id: "example-ability-none" },
+    ];
+    const fetchMock = fakeFetch(() =>
+      Promise.resolve(jsonResponse({ ...apiCalcResult, unsupported: marks })),
+    );
+    const result = await engineWith(fetchMock).calc(calcRequest);
+    expect(result).toMatchObject({ ok: true, value: { unsupported: marks } });
   });
 
   test("ko.chancePercent が省かれた応答は 0 で埋める(API では任意、DTO では必須。確定・倒せないときの値)", async () => {
@@ -381,6 +393,8 @@ const apiBulkResult: Schemas["BulkCalcResult"] = {
         stats: { hp: 165, atk: 95, def: 100, spa: 115, spd: 105, spe: 90 },
       },
       result: apiCalcResult,
+      abilityId: "example-ability-adapt",
+      abilityIds: ["example-ability-adapt"],
     },
     {
       preset: "hb_boost",
@@ -393,6 +407,8 @@ const apiBulkResult: Schemas["BulkCalcResult"] = {
         stats: { hp: 197, atk: 85, def: 110, spa: 115, spd: 105, spe: 90 },
       },
       result: apiCalcResult,
+      abilityId: "example-ability-adapt",
+      abilityIds: ["example-ability-adapt"],
     },
   ],
 };
@@ -458,8 +474,10 @@ describe("calcBulk", () => {
               nature: { plus: "", minus: "" },
               stats: { hp: 165, atk: 95, def: 100, spa: 115, spd: 105, spe: 90 },
             },
-            // unsupported は Web の CalcResult にまだ無い(DTO には混ざらない。上と同じ理由)。
-            result: omit(apiCalcResult, "unsupported"),
+            result: apiCalcResult,
+            // issue 272(ADR-0311): 応答の abilityId / abilityIds は行に写す。
+            abilityId: "example-ability-adapt",
+            abilityIds: ["example-ability-adapt"],
           },
           {
             preset: "hb_boost",
@@ -470,7 +488,10 @@ describe("calcBulk", () => {
               nature: { plus: "def", minus: "atk" },
               stats: { hp: 197, atk: 85, def: 110, spa: 115, spd: 105, spe: 90 },
             },
-            result: omit(apiCalcResult, "unsupported"),
+            result: apiCalcResult,
+            // issue 272(ADR-0311): 応答の abilityId / abilityIds は行に写す。
+            abilityId: "example-ability-adapt",
+            abilityIds: ["example-ability-adapt"],
           },
         ],
       },
@@ -515,6 +536,8 @@ const apiReverseResult: Schemas["ReverseResult"] = {
       minPercent: 40.2,
       maxPercent: 47.8,
       unsupported: [],
+      abilityId: "example-ability-adapt",
+      abilityIds: ["example-ability-adapt"],
     },
     {
       natureClass: "plus",
@@ -529,6 +552,8 @@ const apiReverseResult: Schemas["ReverseResult"] = {
       minPercent: 44.1,
       maxPercent: 52.0,
       unsupported: [],
+      abilityId: "example-ability-adapt",
+      abilityIds: ["example-ability-adapt"],
     },
   ],
 };
@@ -589,6 +614,10 @@ describe("calcReverse", () => {
             support: 4,
             minPercent: 40.2,
             maxPercent: 47.8,
+            // issue 271 / issue 270: 印なしは空配列のまま候補に残す(ADR-0123 §6)。
+            unsupported: [],
+            abilityId: "example-ability-adapt",
+            abilityIds: ["example-ability-adapt"],
           },
           {
             natureClass: "plus",
@@ -601,6 +630,9 @@ describe("calcReverse", () => {
             support: 1,
             minPercent: 44.1,
             maxPercent: 52.0,
+            unsupported: [],
+            abilityId: "example-ability-adapt",
+            abilityIds: ["example-ability-adapt"],
           },
         ],
       },
@@ -969,10 +1001,7 @@ describe("契約どおりの 2xx は従来どおり成功(検証で落とさな�
       ),
     );
     const result = await engineWith(fetchMock).calc(calcRequest);
-    const expected: CalcResult = omit(
-      { ...apiCalcResult, ko: { ...apiCalcResult.ko, chancePercent: 12.34 } },
-      "unsupported",
-    );
+    const expected: CalcResult = { ...apiCalcResult, ko: { ...apiCalcResult.ko, chancePercent: 12.34 } };
     expect(result).toEqual({ ok: true, value: expected });
   });
 
@@ -1022,5 +1051,118 @@ describe("契約どおりの 2xx は従来どおり成功(検証で落とさな�
     );
     const result = await engineWith(fetchMock).calcReverse(reverseRequest);
     expect(result).toMatchObject({ ok: true, value: { candidates: [{ itemId: "" }] } });
+  });
+});
+
+// issue 271 / issue 270(Web レーン。ADR-0123 §6・§7): オンライン(API)でも「未対応」の印を受け取り、
+// 画面まで届けられること。engine の並びのまま素通しし、Web で解釈・並べ替え・重複除去をしない(ADR-0300 §8)。
+describe("未対応の印(unsupported)の写し", () => {
+  test("契約の UnsupportedMark と DTO の UnsupportedMark は相互に代入できる(型の写し)", () => {
+    const fromContract: Schemas["UnsupportedMark"] = {
+      target: "attacker_ability",
+      reason: "unsupported_effect",
+      id: "example-ability-adapt",
+    };
+    const toDto: UnsupportedMark = fromContract;
+    const backToContract: Schemas["UnsupportedMark"] = toDto;
+    expect(backToContract).toEqual(fromContract);
+  });
+
+  test("bulk: 行ごとに、その行の result.unsupported をそのまま写す", async () => {
+    const moveMark: Schemas["UnsupportedMark"] = {
+      target: "move",
+      reason: "variable_power",
+      id: "example-move-firepunch",
+    };
+    const defenderItemMark: Schemas["UnsupportedMark"] = {
+      target: "defender_item",
+      reason: "unsupported_effect",
+      id: "example-item-def",
+    };
+    const body: Schemas["BulkCalcResult"] = {
+      ...apiBulkResult,
+      rows: apiBulkResult.rows.map((row, index) => ({
+        ...row,
+        result: { ...row.result, unsupported: index === 0 ? [moveMark] : [moveMark, defenderItemMark] },
+      })),
+    };
+    const fetchMock = fakeFetch(() => Promise.resolve(jsonResponse(body)));
+    const result = await engineWith(fetchMock).calcBulk(bulkRequest);
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        rows: [
+          { result: { unsupported: [moveMark] } },
+          { result: { unsupported: [moveMark, defenderItemMark] } },
+        ],
+      },
+    });
+  });
+
+  test("reverse: 候補ごとに unsupported をそのまま写す", async () => {
+    const abilityMark: Schemas["UnsupportedMark"] = {
+      target: "defender_ability",
+      reason: "unsupported_effect",
+      id: "example-ability-none",
+    };
+    const body: Schemas["ReverseResult"] = {
+      ...apiReverseResult,
+      candidates: apiReverseResult.candidates.map((candidate, index) => ({
+        ...candidate,
+        unsupported: index === 0 ? [] : [abilityMark],
+      })),
+    };
+    const fetchMock = fakeFetch(() => Promise.resolve(jsonResponse(body)));
+    const result = await engineWith(fetchMock).calcReverse(reverseRequest);
+    expect(result).toMatchObject({
+      ok: true,
+      value: { candidates: [{ unsupported: [] }, { unsupported: [abilityMark] }] },
+    });
+  });
+});
+
+// issue #274(ADR-0312): 計算画面の「詳細」の条件が、オンライン(API)でもオフライン(WASM)と同じ要求形になること。
+// BulkCalcRequest.field / options.critical、attacker の status / ranks。既定(条件なし)は従来と同じ本文。
+describe("calcBulk: 計算条件(issue #274)", () => {
+  const conditionAttacker: Individual = {
+    ...attacker,
+    status: "burn",
+    ranks: { atk: 1, def: 0, spa: -2, spd: 0, spe: 0 },
+  };
+
+  test("急所・場(天候・フィールド・防御側の壁)・攻撃側のやけど/ランクが API の本文に写る", async () => {
+    const fetchMock = fakeFetch(() => Promise.resolve(jsonResponse(apiBulkResult)));
+    await engineWith(fetchMock).calcBulk({
+      ...bulkRequest,
+      attacker: conditionAttacker,
+      critical: true,
+      field: {
+        weather: "rain",
+        terrain: "psychic",
+        defenderScreens: { reflect: true, lightScreen: false, auroraVeil: true },
+      },
+    });
+    const { body } = sentRequest(fetchMock);
+    expect(body).toMatchObject({
+      attacker: { ...apiAttacker, status: "burn", ranks: { atk: 1, def: 0, spa: -2, spd: 0, spe: 0 } },
+      field: {
+        weather: "rain",
+        terrain: "psychic",
+        defenderScreens: { reflect: true, lightScreen: false, auroraVeil: true },
+      },
+      options: { critical: true },
+    });
+    expect((body as { field: object }).field).not.toHaveProperty("attackerScreens");
+  });
+
+  test("条件なし(critical・field・status・ranks が無い)なら本文に field・options・status・ranks を足さない", async () => {
+    const fetchMock = fakeFetch(() => Promise.resolve(jsonResponse(apiBulkResult)));
+    const plainAttacker = omit(omit(attacker, "status"), "ranks");
+    await engineWith(fetchMock).calcBulk({ ...bulkRequest, attacker: plainAttacker });
+    const { body } = sentRequest(fetchMock);
+    expect(body).not.toHaveProperty("field");
+    expect(body).not.toHaveProperty("options");
+    expect((body as { attacker: object }).attacker).not.toHaveProperty("status");
+    expect((body as { attacker: object }).attacker).not.toHaveProperty("ranks");
   });
 });

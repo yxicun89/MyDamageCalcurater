@@ -1,6 +1,6 @@
 package httpapi
 
-// record-svc の担当外の操作(calc-svc・pokedex-svc の担当)。生成物 api.ServerInterface(単一
+// record-svc の担当外の操作(calc-svc・pokedex-svc・team-svc の担当)。生成物 api.ServerInterface(単一
 // インターフェース。oapi-codegen の skip-prune。ADR-0209 §10-1)を満たすためだけに実装し、
 // ルートには登録しない(NewHandler・registerRecordRoutes 参照)。呼ばれたら 404 not_found になるが、
 // これらのメソッド自体は登録されないルートなので実際には呼ばれない(echo の既定 404 を
@@ -53,5 +53,31 @@ func (s *Server) GetSpecies(ctx *echo.Context, key api.SpeciesKey, params api.Ge
 }
 
 func (s *Server) GetMasterExport(ctx *echo.Context) error {
+	return notFoundForOtherServices()
+}
+
+// --- team-svc の担当(P5-4 で契約に入った。ADR-0213)---------------------------
+
+func (s *Server) DeleteTeamDeviceData(ctx *echo.Context, params api.DeleteTeamDeviceDataParams) error {
+	return notFoundForOtherServices()
+}
+
+func (s *Server) ListTeams(ctx *echo.Context, params api.ListTeamsParams) error {
+	return notFoundForOtherServices()
+}
+
+func (s *Server) CreateTeam(ctx *echo.Context, params api.CreateTeamParams) error {
+	return notFoundForOtherServices()
+}
+
+func (s *Server) GetTeam(ctx *echo.Context, teamId api.TeamId, params api.GetTeamParams) error {
+	return notFoundForOtherServices()
+}
+
+func (s *Server) UpdateTeam(ctx *echo.Context, teamId api.TeamId, params api.UpdateTeamParams) error {
+	return notFoundForOtherServices()
+}
+
+func (s *Server) DeleteTeam(ctx *echo.Context, teamId api.TeamId, params api.DeleteTeamParams) error {
 	return notFoundForOtherServices()
 }

@@ -158,6 +158,9 @@ function expectWellFormed(result: ReverseResult, side: ReverseSide, itemCandidat
     }
     expect(candidate.spCount).toBe(count);
     expect(candidate.minPercent).toBeLessThanOrEqual(candidate.maxPercent);
+    // issue 271 / issue 270(ADR-0123 §6): 候補は常に unsupported を持つ(印なしは空配列)。
+    // 例データの技には機構が無いので、ここでは空配列であること = 境界を通って DTO に届くことを見る。
+    expect(candidate.unsupported).toEqual([]);
   }
 }
 

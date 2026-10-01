@@ -81,6 +81,9 @@ Ingress は `/api/speed`(balance の `/api/balance` と同じ形)。
   (`docs/runbooks/speed.md` 節3)。
 - 実マスタ・公式画像はコミットしない(ADR-0002)。画像が無くてもタイプ色のエンブレムで成立させる(Web 側)。
 
+- gitops overlay は balance と同じく initContainer(pokedex export)→ emptyDir で read model を得る(issue #237・ADR-0412)。
+  speed 本体の image digest は全0の placeholder のままで**未配備**(Application も未適用)。配備は人間の確認のもとで(`docs/runbooks/speed.md`)。
+
 ## 8. 段階(2026-09-24 時点で SP0〜SP5 すべて完了)
 
 | 段階 | 内容 | ADR |

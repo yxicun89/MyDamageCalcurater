@@ -18,7 +18,7 @@ import (
 
 	"example.com/pokecalc/services/internal/api"
 	"example.com/pokecalc/services/pokedex/internal/httpapi"
-	"example.com/pokecalc/services/pokedex/internal/store"
+	"example.com/pokecalc/services/pokedex/internal/readtx"
 )
 
 // 端末ID・セッションID(公開 API の必須ヘッダ。形式の検証は gateway の仕事で、pokedex-svc は有無だけを見る。ADR-0202)。
@@ -40,7 +40,7 @@ func do(t *testing.T, h http.Handler, method, target string, withHeaders bool) *
 	return rec
 }
 
-func newHandler(t *testing.T, q store.Querier) http.Handler {
+func newHandler(t *testing.T, q readtx.DB) http.Handler {
 	t.Helper()
 	h := httpapi.NewHandler(q)
 	if h == nil {
@@ -74,7 +74,7 @@ func validateResponseAgainstContract(t *testing.T, method, target string, withHe
 // contractRoute は method・target に当たる契約の操作を引き、検証の入力を作る(リクエストはまだ照らさない)。
 func contractRoute(t *testing.T, method, target string, withHeaders bool) *openapi3filter.RequestValidationInput {
 	t.Helper()
-	doc, err := api.GetSwagger()
+	doc, err := api.GetSpec()
 	if err != nil {
 		t.Fatalf("契約を読めない: %v", err)
 	}
@@ -119,7 +119,7 @@ func responseContractError(in *openapi3filter.RequestValidationInput, rec *httpt
 // 保つ(絶対ルール1。契約の maxItems を変えたらこのテストの期待値も自動で追従する)。
 func contractQueryParamMaxItems(t *testing.T, path, method, name string) int {
 	t.Helper()
-	doc, err := api.GetSwagger()
+	doc, err := api.GetSpec()
 	if err != nil {
 		t.Fatalf("契約を読めない: %v", err)
 	}

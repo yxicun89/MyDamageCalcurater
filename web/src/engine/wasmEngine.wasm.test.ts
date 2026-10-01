@@ -213,6 +213,70 @@ describe("calc(1対1)", () => {
   });
 });
 
+// issue 271 / issue 270(Web レーン。ADR-0123 §6): オフライン(WASM)でも「未対応」の印が DTO に届くこと。
+// engine/wasmapi は calc・bulk の各行・reverse の各候補に unsupported を**常に**(印なしは空配列で)返す。
+// ここは「境界を通って DTO の形で届く」ことだけを見る(どの技にどの印が付くかは engine のテストの役割)。
+describe("未対応の印(unsupported。ADR-0123)", () => {
+  test("印の無い普通の技では、calc の結果に空配列の unsupported が付く", async () => {
+    const { attacker, defender, move } = matchup("physical");
+    const result = await engine.calc(
+      buildCalcRequest({
+        attacker: attackerOf(attacker),
+        defender: attackerOf(defender),
+        move,
+        typeChart: master.typeChart,
+      }),
+    );
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(result.value.unsupported).toEqual([]);
+    }
+  });
+
+  test("威力 0 の攻撃技は zero_power の印が付き、ダメージ 0 を正しい結果のように返さない", async () => {
+    const { attacker, defender, move } = matchup("physical");
+    const zeroPowerMove: Move = { ...move, power: 0 };
+    const result = await engine.calc(
+      buildCalcRequest({
+        attacker: attackerOf(attacker),
+        defender: attackerOf(defender),
+        move: zeroPowerMove,
+        typeChart: master.typeChart,
+      }),
+    );
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(result.value.unsupported).toEqual([
+        { target: "move", reason: "zero_power", id: zeroPowerMove.id },
+      ]);
+      // 数値は今までどおり(印は数値を変えない。ADR-0123 §1)
+      expect(result.value.maxDamage).toBe(0);
+    }
+  });
+
+  test("bulk は各行の result に unsupported を持つ(威力 0 なら全行に印)", async () => {
+    const { attacker, defender, move } = matchup("physical");
+    const zeroPowerMove: Move = { ...move, power: 0 };
+    const result = await engine.calcBulk(
+      buildBulkRequest({
+        attacker: attackerOf(attacker),
+        defenderSpecies: defender,
+        move: zeroPowerMove,
+        typeChart: master.typeChart,
+      }),
+    );
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(result.value.rows.length).toBeGreaterThan(0);
+      for (const row of result.value.rows) {
+        expect(row.result.unsupported).toEqual([
+          { target: "move", reason: "zero_power", id: zeroPowerMove.id },
+        ]);
+      }
+    }
+  });
+});
+
 // P4-3: 攻撃側プリセット(ADR-0300 §5)で組み立てた攻撃側が engine に受理され、強さの順
 // (無振り ≤ A(C)振り(無補正) ≤ A(C)特化)に並ぶこと。数値の正しさはゴールデンの役割なので、
 // Web が「強くなる順の入力」を組み立てたことだけを単調性で確かめる。

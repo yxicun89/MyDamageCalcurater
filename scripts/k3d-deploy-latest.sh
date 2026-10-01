@@ -17,11 +17,7 @@ POKEDEX_SERVER_IMAGE=${POKEDEX_SERVER_IMAGE:-pokecalc/pokedex:0.1.0}
 POKEDEX_IMPORTER_IMAGE=${POKEDEX_IMPORTER_IMAGE:-pokecalc/pokedex-importer:0.1.0}
 MIGRATE_LOCAL_PORT=${MIGRATE_LOCAL_PORT:-13306}
 
-context="$(kubectl config current-context)"
-if [ "$context" != "k3d-$CLUSTER" ]; then
-  echo "deploy-latest: kubectl の context が '$context'(期待 k3d-$CLUSTER)。別クラスタへ適用しないよう中断" >&2
-  exit 1
-fi
+CLUSTER="$CLUSTER" ./scripts/require-k3d-context.sh deploy-latest
 
 # pokedex の DB を最新の migration まで上げる(新しい表・列を前提にするコードより先に)。
 # migrate の Job は共有の overlay 全体の apply でしか作り直せないので、ここでは mysql へ一時的に
@@ -80,7 +76,11 @@ echo "== pokedex"
 docker build -q -f services/pokedex/Dockerfile --target server -t "$POKEDEX_SERVER_IMAGE" . >/dev/null
 k3d image import "$POKEDEX_SERVER_IMAGE" --cluster "$CLUSTER" >/dev/null
 kubectl -n pokecalc rollout restart deployment/pokedex
-kubectl -n pokecalc rollout status deployment/pokedex --timeout=180s
+if ! kubectl -n pokecalc rollout status deployment/pokedex --timeout=180s; then
+  echo "deploy-latest: pokedex が Ready にならない。readiness は DB のマスタに連動する(ADR-0129)。" >&2
+  echo "  新規クラスタ(初回 import 前)なら、先に make import-k8s を流してから、もう一度このコマンドを実行する" >&2
+  exit 1
+fi
 
 echo "== calc・gateway"
 make --no-print-directory api-k3d-deploy
@@ -91,10 +91,17 @@ make --no-print-directory judge-k3d-deploy
 
 missing=0
 if [ -f "$READMODEL_DIR/speed-pokemon.json" ] && [ -f "$READMODEL_DIR/pokemon-types.json" ]; then
-  echo "== balance(read model: $READMODEL_DIR)"
-  make --no-print-directory balance-k3d-deploy-readmodel BALANCE_READMODEL_DIR="$READMODEL_DIR"
-  echo "== speed(read model: $READMODEL_DIR)"
-  make --no-print-directory speed-k3d-deploy-readmodel SPEED_READMODEL_DIR="$READMODEL_DIR"
+  # Argo CD が管理しているサービス(Application pokecalc-<svc> がある)は手動の overlay で上書きしない
+  # (k3d-deploy-readmodel.sh が拒否する。ADR-0412 §5)。その場合は飛ばして、Argo CD の sync を案内する。
+  for svc in balance speed; do
+    if kubectl -n argocd get applications.argoproj.io "pokecalc-$svc" -o name >/dev/null 2>&1; then
+      echo "== $svc: Argo CD(Application pokecalc-$svc)が管理しているので飛ばす。最新にするには docs/runbooks/$svc.md の Argo CD の sync" >&2
+      continue
+    fi
+    svc_upper=$(printf '%s' "$svc" | tr '[:lower:]' '[:upper:]')
+    echo "== $svc(read model: $READMODEL_DIR)"
+    make --no-print-directory "$svc-k3d-deploy-readmodel" "${svc_upper}_READMODEL_DIR=$READMODEL_DIR"
+  done
 else
   missing=1
   echo "deploy-latest: $READMODEL_DIR に read model が無いので balance・speed は入れ替えていない。" >&2

@@ -14,6 +14,7 @@ import type {
   ReverseRequest,
   ReverseResult,
   StatKey,
+  UnsupportedMark,
 } from "../engine/types";
 
 /** engine の既定プリセット(ADR-0009 §1。物理技の5行)。fake の行の Key と表示名に使う。 */
@@ -33,6 +34,10 @@ export interface RowSpec {
   readonly maxPercent?: number;
   readonly effectiveness?: number;
   readonly ko?: CalcResult["ko"];
+  /** 「未対応」の印(ADR-0123)。既定は印なし(空配列)で、既存のテストの見た目は変わらない。 */
+  readonly unsupported?: readonly UnsupportedMark[];
+  /** 行の特性(issue 272、ADR-0126)。先頭が abilityId。省くと特性を送らなかった応答(abilityId/abilityIds なし)。 */
+  readonly abilityIds?: readonly string[];
 }
 
 const zeroStats = { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 };
@@ -50,6 +55,7 @@ export function calcResult(spec: RowSpec = {}): CalcResult {
     stab: false,
     category: "physical",
     ko: spec.ko ?? { hits: 2, guaranteed: true, chancePercent: 0, displayChancePercent: 100 },
+    unsupported: spec.unsupported ?? [],
   };
 }
 
@@ -65,6 +71,9 @@ export function bulkRow(spec: RowSpec = {}): BulkRow {
       stats: { hp: 175, atk: 100, def: 100, spa: 100, spd: 100, spe: 100 },
     },
     result: calcResult(spec),
+    ...(spec.abilityIds === undefined || spec.abilityIds[0] === undefined
+      ? {}
+      : { abilityId: spec.abilityIds[0], abilityIds: spec.abilityIds }),
   };
 }
 
@@ -103,6 +112,7 @@ export function reverseCandidate(spec: Partial<ReverseCandidate> = {}): ReverseC
     support: 4,
     minPercent: 40.2,
     maxPercent: 47.8,
+    unsupported: [],
     ...spec,
   };
 }

@@ -1,6 +1,6 @@
 # ADR-0100: pokedex のスキーマ(MySQL)・migrate・DB 行から engine 型への写像
 
-- 状態: 提案(P2-2a の仕様。spec-writer 起草、implementer が実装、critic がレビュー)
+- 状態: 採用(P2-2a の仕様。実装済み・main 統合済み: PR #17。以降の改訂は本文の更新・追記欄)
 - 日付: 2026-09-21
 - 関連: plan.md P2-2a、ADR-0002(マスタの取得元・確定した方針)、ADR-0005(データ駆動の効果定義)、
   ADR-0012(サービス境界と共通マスタ)、ADR-0013(タイプ相性表はデータ)、ADR-0014(balance TB1 の read model)、
@@ -235,3 +235,15 @@ implementer は `scripts/check-publishable.sh` の `NAMEJA_PATHSPECS` に `servi
 - sqlc と golang-migrate は services / tools の go.mod に依存を足す(DEPENDENCIES の記録は implementer)。
 - balance 向け read model の出力と相性表の形は P2-3 で詰める。
 - CHECK 制約の文法は MySQL 8.4 で確認する(TiDB には移さない。TiDB は record/team 用)。
+
+## 追記(2026-10-01、issue #437): ローカルの MySQL のメモリ
+
+- 観測: MySQL 9 の既定(performance_schema ON・innodb_log_buffer_size 64M・max_connections 151)のままだと、待機中でも約 499Mi を使い、
+  limit 512Mi に張り付いていた。importer の全置換の最中に OOMKill(Exit 137)され、数十秒 pokedex が `master_unavailable`、その間に
+  起動した calc-svc がマスタを取れず `make api-smoke` が失敗した
+- 決定: `deploy/k8s/overlays/local/mysql` の ConfigMap に `memory.cnf`(performance_schema=OFF・innodb_buffer_pool_size=128M〈既定と同じ値を明示〉・
+  innodb_log_buffer_size=16M・max_connections=50)を足して `/etc/mysql/conf.d/` にマウントし、limit を 768Mi に上げる。
+  max_connections は pokedex・importer・migrate の合計(実測の Max_used_connections は 2)に対して十分
+- 確認(k3d-pokecalc): 待機中 165Mi。`pokedex-import -force`(全置換)を3回続けて流して restart 0、`make api-smoke` 成功
+- 回帰テスト: `services/pokedex/db/layout_test.go` の TestLocalMySQLMemory
+- 限界: クラウドの DB は対象外(cloud overlay は MySQL を持たない)。既存クラスタへの反映は MySQL の再起動を伴う

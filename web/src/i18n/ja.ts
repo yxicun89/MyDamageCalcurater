@@ -5,7 +5,13 @@
 // (コーディング規約 §2 の「独立した検証」)。
 
 import type { ObservationUnit } from "../domain/observations";
-import type { ReverseSide, StatKey } from "../engine/types";
+import type {
+  ReverseSide,
+  StatKey,
+  UnsupportedMark,
+  UnsupportedReason,
+  UnsupportedTarget,
+} from "../engine/types";
 
 /** 相性表が持つ18タイプの ID(`testdata/golden/typechart.json` の `types` と同じ)。 */
 export type TypeId =
@@ -69,6 +75,7 @@ const defenderRegionLabel = "防御側";
 /** 入力欄の見えるラベルの語(短くする。どちら側かは領域の見出しが担う)。 */
 const pokemonFieldLabel = "ポケモン";
 const itemFieldLabel = "持ち物";
+const abilityFieldLabel = "特性";
 
 /**
  * 計算画面(P4-2)の文言。コーディング規約 §2「UI の文言は文言資源に置く」に従い、
@@ -80,10 +87,18 @@ export const calcScreenText = {
   /** 入力欄の見えるラベルの語(select の label に使う。計算・逆算・タイプバランスで共通)。 */
   pokemonFieldLabel,
   itemFieldLabel,
+  /** 特性欄の見えるラベルの語(issue 272、ADR-0311)。 */
+  abilityFieldLabel,
   attackerPokemonLabel: `${attackerRegionLabel}の${pokemonFieldLabel}`,
   defenderPokemonLabel: `${defenderRegionLabel}の${pokemonFieldLabel}`,
   attackerItemLabel: `${attackerRegionLabel}の${itemFieldLabel}`,
   defenderItemLabel: `${defenderRegionLabel}の${itemFieldLabel}`,
+  attackerAbilityLabel: `${attackerRegionLabel}の${abilityFieldLabel}`,
+  defenderAbilityLabel: `${defenderRegionLabel}の${abilityFieldLabel}`,
+  /** 防御側・相手の特性を決め打ちしない選択肢(種族の特性を先頭から最大3件まで全部計算する。ADR-0126・ADR-0311)。 */
+  anyAbilityOption: "おまかせ(種族の全特性)",
+  /** 結果の行・候補に、まとめた特性の名前を並べるときの区切り。 */
+  abilityNameSeparator: "・",
   moveLabel: "技",
   /** 種族 select が未選択のとき、hidden の先頭 option に出す文言(空文字にしない。issue 304)。 */
   speciesPlaceholderOption: "ポケモンを選ぶ",
@@ -101,6 +116,31 @@ export const calcScreenText = {
   loadingNotice: "計算中",
   /** 攻撃側プリセットのラジオグループの名前(P4-3、ADR-0300 §5)。 */
   attackerPresetGroupLabel: "攻撃側の調整",
+} as const;
+
+/** 計算画面の「詳細」(急所・やけど・天候・フィールド・防御側の壁・攻撃側のランク。issue 274、ADR-0312)の文言。iOS と同じ。 */
+export const calcConditionsText = {
+  toggleLabel: "詳細",
+  criticalLabel: "急所",
+  burnLabel: "やけど",
+  weatherLabel: "天候",
+  terrainLabel: "フィールド",
+  screensLabel: "防御側の壁",
+  ranksLabel: "攻撃側のランク",
+  weather: { none: "なし", sun: "はれ", rain: "あめ", sand: "すなあらし", snow: "ゆき" },
+  terrain: {
+    none: "なし",
+    electric: "エレキフィールド",
+    grassy: "グラスフィールド",
+    psychic: "サイコフィールド",
+    misty: "ミストフィールド",
+  },
+  screens: { reflect: "リフレクター", lightScreen: "ひかりのかべ", auroraVeil: "オーロラベール" },
+  rankUpLabel: "攻撃側のランクを上げる",
+  rankDownLabel: "攻撃側のランクを下げる",
+  /** ランクの増減ボタンの見た目の記号。 */
+  rankUpSymbol: "+",
+  rankDownSymbol: "-",
 } as const;
 
 /**
@@ -139,6 +179,8 @@ export const appText = {
   title: "ポケモン ダメージ計算",
   loading: "読み込み中…",
   masterLoadError: "マスタデータの読み込みに失敗しました",
+  /** issue 276: API 専用の画面(タイプバランス・判定)がオンラインのマスタを読めなかったときの案内。 */
+  onlineMasterLoadError: "オンラインのマスタを読み込めませんでした。接続を確かめて、もう一度お試しください",
   /**
    * issue 308: マスタが読めないときの次の一手。自動でオフラインへ切り替えることはしない
    * (ADR-0301 §4 の既定方針)ので、画面から操作できるようにする。
@@ -160,8 +202,10 @@ export const appText = {
   speedTabLabel: "素早さ",
   /** JD5: 判定(抜けて倒せるか・返り討ちに遭うか)のタブ(ADR-0705 §1)。 */
   judgeTabLabel: "判定",
+  /** P5-5 PR-A1: 構築ビルダーのタブ(ADR-0309 §1)。 */
+  teamTabLabel: "構築",
   /** 計算モード(オフライン = WASM / オンライン = API)の切り替え(P4-5、ADR-0301 §4)。 */
-  calcModeGroupLabel: "計算モード",
+  calcModeGroupLabel: "ダメージ計算の実行場所",
   calcModeOfflineLabel: "オフライン(WASM)",
   calcModeOnlineLabel: "オンライン(API)",
 } as const;
@@ -209,6 +253,24 @@ export const masterOnlineText = {
  */
 export const balanceClientText = {
   unavailable: "タイプバランスの API に接続できません",
+} as const;
+
+/**
+ * issue 276(ADR-0411): balance API のエラーコード(ErrorCode)→日本語の文言。画面は応答の message(英語の
+ * 内部メッセージ)を出さず、コードからここを引く。Web 側の balance_unavailable も同じ表で引く。
+ */
+export const balanceErrorText = {
+  missing_request_context: "端末の情報を送れませんでした。ページを開き直してください",
+  invalid_request: "リクエストが正しくありません。入力を見直してください",
+  request_too_large: "入力が大きすぎます。メンバーや技を減らしてください",
+  unknown_pokemon: "選んだポケモンがサーバーのマスタにありません。選び直してください",
+  unknown_move: "選んだ技がサーバーのマスタにありません。選び直してください",
+  unknown_ability: "選んだ特性がサーバーのマスタにありません。選び直してください",
+  master_unavailable: "サーバーのマスタを読み込めません。しばらくしてからもう一度お試しください",
+  overloaded: "サーバーが混み合っています。しばらくしてからもう一度お試しください",
+  internal_error: "サーバーでエラーが起きました。しばらくしてからもう一度お試しください",
+  balance_unavailable: "タイプバランスの API に接続できません",
+  fallback: "タイプバランスを計算できませんでした。しばらくしてからもう一度お試しください",
 } as const;
 
 /**
@@ -361,6 +423,26 @@ export const speedScreenText = {
   natureLabel: { minus: "下降", neutral: "補正なし", plus: "上昇" } as const,
   rankLabel: "ランク",
   rawValueLabel: "実数値",
+  // ---- 入力の範囲外(送信前に画面で止める。issue 307。判定画面 judgeScreenText と同じ言い回し) ----
+  spRangeMessage: (max: number): string => `能力ポイントは0〜${String(max)}の整数で入力してください`,
+  rankRangeMessage: (min: number, max: number): string =>
+    `ランクは${String(min)}〜+${String(max)}の整数で入力してください`,
+  /** 実数値の下限(契約の minimum: 1)。上限は speed サービスだけが式から導くので、画面では判定せず API の 400 を日本語にする。 */
+  rawRangeMessage: "実数値は1以上の整数で入力してください",
+  // ---- API エラー(サーバーの英語 message は出さず、code から日本語にする。issue 307) ----
+  /** services/speed/api/openapi.yaml の ErrorCode と、Web 側の speed_unavailable に対応する。 */
+  errorByCode: {
+    invalid_request: "入力の形が正しくありません。値の範囲を確認してください",
+    missing_header: "端末の識別情報が送られていません",
+    invalid_header: "端末の識別情報の形が正しくありません",
+    unknown_pokemon: "このポケモンはマスタにありません",
+    request_too_large: "入力が大きすぎます",
+    master_unavailable: "ポケモンのマスタを読み込めません",
+    internal_error: "素早さの計算に失敗しました",
+    speed_unavailable: "素早さの API に接続できません",
+  } satisfies Readonly<Record<string, string>>,
+  /** errorByCode に無い code のとき。 */
+  errorFallback: "素早さの計算に失敗しました",
   // ---- 右(自分のポケモン)の結果(ADR-0604 §4) ----
   positionLoadingNotice: "位置を計算中",
   selfSpeedLabel: (speed: number): string => `実数値 ${String(speed)}`,
@@ -457,6 +539,57 @@ export const judgeScreenText = {
 } as const;
 
 /**
+ * P5-5 PR-A1: 構築 API のクライアント(team/teamClient.ts)が、通信できない・応答が読めない・
+ * エラー本文の形が不正なときに作る文言(ADR-0309 §3。speedClientText・judgeClientText と同じ形)。
+ * サーバーが返す `Error.message` はそのまま運ぶので、ここには含まない。
+ */
+export const teamClientText = {
+  unavailable: "構築の API に接続できません",
+} as const;
+
+/**
+ * P5-5 PR-A1: 構築ビルダーの画面(team/TeamScreen.tsx、ADR-0309)の文言。
+ * この段階(PR-A1)で扱うのは一覧・新規作成(名前だけ)・名前変更・削除まで。
+ * メンバー(種族・技・持ち物・特性・性格・SP・テラスタイプ)の編集は PR-A2 で足す。
+ */
+export const teamScreenText = {
+  /** 画面全体の領域(role="region" の名前)。 */
+  regionLabel: "構築",
+  /** 一覧(`<ul>`)の名前と、その上の見出し。 */
+  listLabel: "保存した構築",
+  listHeading: "保存した構築",
+  /** 一覧を読み込んでいる間(新規作成のフォームは先に使える。ADR-0309 §4)。 */
+  loadingNotice: "読み込み中",
+  /** 1件も無いとき(エラーと取り違えない案内。ADR-0309 §4)。 */
+  emptyNotice: "保存した構築はまだありません。名前を付けて作成してください",
+  /** 構築1件の要約(メンバー数・最終更新。PR-A1 ではメンバーは常に0体)。 */
+  memberCountLabel: (count: number, max: number): string => `${count}/${max}体`,
+  updatedAtLabel: (date: string): string => `最終更新 ${date}`,
+  // ---- 新規作成 ----
+  createHeading: "新しい構築",
+  nameLabel: "構築名",
+  createLabel: "作成",
+  /** 送信前の検査(契約の TeamInput.name と同じ範囲。前後の空白を除いて1〜50文字)。 */
+  nameRequiredNotice: "構築名を入力してください",
+  nameTooLongNotice: (max: number): string => `構築名は${max}文字までです`,
+  // ---- 名前変更 ----
+  renameLabel: (name: string): string => `「${name}」の名前を変更`,
+  renameFieldLabel: (name: string): string => `「${name}」の新しい構築名`,
+  renameSaveLabel: "名前を保存",
+  renameCancelLabel: "名前の変更をやめる",
+  // ---- 削除(2段階。window.confirm は使わない。ADR-0309 §5)----
+  deleteLabel: (name: string): string => `「${name}」を削除`,
+  deleteConfirmLabel: (name: string): string => `「${name}」の削除を確定`,
+  deleteCancelLabel: (name: string): string => `「${name}」の削除をやめる`,
+  deleteConfirmNotice: (name: string): string => `「${name}」を削除します。取り消せません`,
+  // ---- 失敗(role="alert"。サーバーの message はこの見出しに続けてそのまま出す)----
+  loadErrorHeading: "構築の一覧を読み込めませんでした",
+  createErrorHeading: "構築を作成できませんでした",
+  renameErrorHeading: "構築の名前を変えられませんでした",
+  deleteErrorHeading: "構築を削除できませんでした",
+} as const;
+
+/**
  * API 実装(createApiEngine、P4-5)がクライアント側(fetch する前・応答を読めないとき)で作るエラーの文言
  * (ADR-0301 §2・§4)。サーバーが返す Error.message はそのまま運ぶので、ここには含まない。
  */
@@ -528,6 +661,8 @@ export const reverseScreenText = {
   mySpeciesLabel: `${myRegionLabel}の${calcScreenText.pokemonFieldLabel}`,
   theirSpeciesLabel: `${theirRegionLabel}の${calcScreenText.pokemonFieldLabel}`,
   myItemLabel: `${myRegionLabel}の${calcScreenText.itemFieldLabel}`,
+  myAbilityLabel: `${myRegionLabel}の${calcScreenText.abilityFieldLabel}`,
+  theirAbilityLabel: `${theirRegionLabel}の${calcScreenText.abilityFieldLabel}`,
   myPresetGroupLabel: "自分の調整",
   observationLabel: (n: number): string => `観測${String(n)}`,
   observationUnitGroupLabel: (n: number): string => `観測${String(n)}の単位`,
@@ -575,6 +710,94 @@ export const reverseResultText = {
     attackerFullNeutralSuffix: "振り",
     attackerFullPlusSuffix: "特化",
   },
+} as const;
+
+/**
+ * 「未対応」の印(ADR-0123、issue 271 / issue 270)の文言。engine が正しく計算できない技の機構・
+ * 持ち物・特性に付く印で、数値は通常の式のまま返る(拒否しない)。画面は数値を消さず、
+ * 「この結果は正しく計算できていない可能性がある」ことと、その原因(技・持ち物・特性のどれか)を示す。
+ *
+ * 文言・置き場所は iOS レーンの決定(docs/ai-shared/DECISIONS.md 2026-09-25「未対応の印の表示」、
+ * ADR-0501「P6-17」)に揃える: 全行(全候補)に共通する印は結果の上に1回、残りはその行(候補)だけに出す。
+ * 色だけに頼らない(design.md「画面: ダメージ計算」): 印は必ず文字(notice と markLabel)で出し、
+ * アイコン・色は補助にする(アイコンは aria-hidden)。色は補足文と同じ text-secondary を使い、
+ * danger・タイプ色は使わない(数値は通常の式の目安として出ておりエラーではないため)。
+ */
+const unsupportedTargetLabel: Record<UnsupportedTarget, string> = {
+  move: "技",
+  attacker_item: "攻撃側の持ち物",
+  attacker_ability: "攻撃側の特性",
+  defender_item: "防御側の持ち物",
+  defender_ability: "防御側の特性",
+};
+
+/**
+ * 印の理由(15 種)の説明。target のラベルに続けて読む短い語にし、技術用語(機構・スキーマ・engine)は出さない。
+ * 正は ADR-0123 §2 の表と api/openapi.yaml の UnsupportedMark.reason。文言は iOS レーンの表記(DisplayLabels.swift、
+ * DECISIONS.md 2026-09-25)に揃える。「特殊」はダメージ計算の特殊技分類と紛れるため、alt_offense_stat・
+ * alt_defense_stat・effectiveness_change の文言には使わない(iOS critic 指摘 2026-09-25)。
+ */
+const unsupportedReasonLabel: Record<UnsupportedReason, string> = {
+  multi_hit: "多段技",
+  fixed_damage: "固定ダメージ",
+  ohko: "一撃必殺",
+  variable_power: "威力が変化",
+  alt_offense_stat: "攻撃に使う能力値が通常と違う",
+  alt_defense_stat: "防御に使う能力値が通常と違う",
+  always_crit: "必ず急所",
+  ignore_defense_ranks: "防御側のランク変化を無視",
+  type_change: "タイプが変化",
+  effectiveness_change: "相性の求め方が通常と違う",
+  priority_change: "優先度が変化",
+  field_specific: "天候・フィールドで変化",
+  move_specific: "技固有の効果",
+  zero_power: "威力が技の処理で決まる",
+  unsupported_effect: "効果を計算に反映していない",
+};
+
+/** 契約に無い(古いクライアントが知らない)target・reason の汎用の語(ADR-0215)。 */
+const unknownTargetLabel = "項目";
+const unknownReasonLabel = "詳細は不明";
+
+function isKnownKey<T extends string>(table: Record<T, string>, key: string): key is T {
+  return Object.hasOwn(table, key);
+}
+
+export const unsupportedText = {
+  unknownTarget: unknownTargetLabel,
+  unknownReason: unknownReasonLabel,
+  target: unsupportedTargetLabel,
+  reason: unsupportedReasonLabel,
+  /**
+   * 印 1 件の文言(iOS レーンの書式に揃える)。`<対象>「<名前>」(<理由>)`。
+   * name は ID を解決した表示名(マスタに無ければ空文字を渡す。そのとき ID をそのまま出す)。
+   * reason が unsupported_effect のときは、理由の括弧を省く(「効果を計算に反映していない」は
+   * 対象名だけで意味が通るため。iOS レーンの書式と同じ)。
+   * 例: 技「テストれんぞくパンチ」(多段技) / 攻撃側の持ち物「テストどうぐ」
+   */
+  markLabel: (mark: UnsupportedMark, name: string): string => {
+    // 契約は target・reason を enum にしない(ADR-0215)。未知の値は汎用の語で出し、ID は必ず出す。
+    const targetLabel = isKnownKey(unsupportedTargetLabel, mark.target)
+      ? unsupportedTargetLabel[mark.target]
+      : unknownTargetLabel;
+    const target = `${targetLabel}「${name === "" ? mark.id : name}」`;
+    if (mark.reason === "unsupported_effect") return target;
+    const reasonLabel = isKnownKey(unsupportedReasonLabel, mark.reason)
+      ? unsupportedReasonLabel[mark.reason]
+      : unknownReasonLabel;
+    return `${target}(${reasonLabel})`;
+  },
+  /**
+   * 全行(全候補)に共通する印がある結果の先頭に1回だけ置く案内(iOS レーンの書式)。
+   * markLabels は markLabel で組み立て済みの印の文言(読点区切りで並べる)。
+   */
+  notice: (markLabels: readonly string[]): string =>
+    `この結果は正確でない可能性があります(未対応: ${markLabels.join("、")})`,
+  /**
+   * 一部の行(候補)だけにある印を、その行・候補カードに出す文言(iOS レーンの書式)。
+   * markLabels は markLabel で組み立て済みの印の文言(読点区切りで並べる)。
+   */
+  rowLabel: (markLabels: readonly string[]): string => `未対応: ${markLabels.join("、")}`,
 } as const;
 
 /** 計算結果の書式(domain/format.ts)で使う語。 */

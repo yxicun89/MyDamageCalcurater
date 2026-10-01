@@ -432,90 +432,6 @@ func (e Terrain) Valid() bool {
 	}
 }
 
-// Defines values for UnsupportedMarkReason.
-const (
-	AltDefenseStat      UnsupportedMarkReason = "alt_defense_stat"
-	AltOffenseStat      UnsupportedMarkReason = "alt_offense_stat"
-	AlwaysCrit          UnsupportedMarkReason = "always_crit"
-	EffectivenessChange UnsupportedMarkReason = "effectiveness_change"
-	FieldSpecific       UnsupportedMarkReason = "field_specific"
-	FixedDamage         UnsupportedMarkReason = "fixed_damage"
-	IgnoreDefenseRanks  UnsupportedMarkReason = "ignore_defense_ranks"
-	MoveSpecific        UnsupportedMarkReason = "move_specific"
-	MultiHit            UnsupportedMarkReason = "multi_hit"
-	Ohko                UnsupportedMarkReason = "ohko"
-	PriorityChange      UnsupportedMarkReason = "priority_change"
-	TypeChange          UnsupportedMarkReason = "type_change"
-	UnsupportedEffect   UnsupportedMarkReason = "unsupported_effect"
-	VariablePower       UnsupportedMarkReason = "variable_power"
-	ZeroPower           UnsupportedMarkReason = "zero_power"
-)
-
-// Valid indicates whether the value is a known member of the UnsupportedMarkReason enum.
-func (e UnsupportedMarkReason) Valid() bool {
-	switch e {
-	case AltDefenseStat:
-		return true
-	case AltOffenseStat:
-		return true
-	case AlwaysCrit:
-		return true
-	case EffectivenessChange:
-		return true
-	case FieldSpecific:
-		return true
-	case FixedDamage:
-		return true
-	case IgnoreDefenseRanks:
-		return true
-	case MoveSpecific:
-		return true
-	case MultiHit:
-		return true
-	case Ohko:
-		return true
-	case PriorityChange:
-		return true
-	case TypeChange:
-		return true
-	case UnsupportedEffect:
-		return true
-	case VariablePower:
-		return true
-	case ZeroPower:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for UnsupportedMarkTarget.
-const (
-	UnsupportedMarkTargetAttackerAbility UnsupportedMarkTarget = "attacker_ability"
-	UnsupportedMarkTargetAttackerItem    UnsupportedMarkTarget = "attacker_item"
-	UnsupportedMarkTargetDefenderAbility UnsupportedMarkTarget = "defender_ability"
-	UnsupportedMarkTargetDefenderItem    UnsupportedMarkTarget = "defender_item"
-	UnsupportedMarkTargetMove            UnsupportedMarkTarget = "move"
-)
-
-// Valid indicates whether the value is a known member of the UnsupportedMarkTarget enum.
-func (e UnsupportedMarkTarget) Valid() bool {
-	switch e {
-	case UnsupportedMarkTargetAttackerAbility:
-		return true
-	case UnsupportedMarkTargetAttackerItem:
-		return true
-	case UnsupportedMarkTargetDefenderAbility:
-		return true
-	case UnsupportedMarkTargetDefenderItem:
-		return true
-	case UnsupportedMarkTargetMove:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for Weather.
 const (
 	WeatherNone Weather = "none"
@@ -554,6 +470,22 @@ type BulkCalcRequest struct {
 	// Attacker 計算に使う個体。SP と性格 ID から実数値を導出する
 	Attacker Individual `json:"attacker"`
 
+	// DefenderOverride 防御側の上書き(issue 272・274。ADR-0126・ADR-0214・ADR-0216)。省略した項目は上書きしない。
+	// 指定した値は生成するすべての行(全プリセット × 全 itemVariants × 全特性)の防御側に一律で当てる。
+	// プリセットが決める SP・性格・持ち物には触れない。省略・空オブジェクト・ゼロ値(ranks がすべて 0、
+	// status が none)の応答は、defenderOverride を送らないときとバイト単位で同じ。
+	// 逆算(ReverseRequest)には無い(既知の側は known.ranks / known.status で渡す。ADR-0216 §4)。
+	//
+	// - `ranks`: 防御側のランク補正。省略した能力は 0。プリセットの防御側はランク 0 なので、指定した値が
+	//   そのまま全行に当たる。ダメージに効くのは技の分類が使う側だけ(物理は def、特殊は spd)で、
+	//   急所のときは正のランクを無視する(1対1の計算と同じ規則)。各値が -6..+6 の外なら
+	//   400 `invalid_input`(使わない側の能力でも拒否する)。応答の行(BulkDefender)にはランクを出さない
+	//   (`stats` はランク補正前の実数値のまま)。
+	// - `status`: 防御側の状態異常。未知の値は 400 `invalid_enum`(Individual.status と同じ)。
+	//   **今のダメージ式は防御側の状態異常を見ない**(やけどの物理半減は攻撃側の状態だけ。ADR-0216 §3)ため、
+	//   現時点では結果を変えない。防御側の状態で威力・防御が変わる技・特性に対応したときに効くようになる。
+	DefenderOverride *DefenderOverride `json:"defenderOverride,omitempty"`
+
 	// DefenderSpeciesKey {図鑑番号4桁}-{フォルム3桁}
 	//
 	// Example: 0445-000
@@ -563,7 +495,9 @@ type BulkCalcRequest struct {
 
 	// ItemVariants 差し替えて比較する持ち物 ID(省略時は素の1通り)。null 要素は「持ち物なし」。
 	// 65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
-	// 行数は `len(presets) × len(itemVariants)` なので、上限は 8 × 64 = 512 行。
+	// 行の基本数は `len(presets) × len(itemVariants)`(上限 8 × 64 = 512)。特性ごとに結果が違う
+	// ときだけ、その基本数のうち最大3倍(特性の候補数。ADR-0126・ADR-0214)まで行が分かれる。
+	// 結果が同じ特性は1行にまとまるため、特性が効かない技では行数は変わらない。
 	ItemVariants *[]*string   `json:"itemVariants,omitempty"`
 	MoveId       string       `json:"moveId"`
 	Options      *CalcOptions `json:"options,omitempty"`
@@ -590,6 +524,13 @@ type BulkCalcResult struct {
 
 // BulkCalcRow defines model for BulkCalcRow.
 type BulkCalcRow struct {
+	// AbilityId この行の計算に使った防御側の特性(ADR-0126・ADR-0214)。種族は必ず1件以上の特性を持つため
+	// 常に入る。
+	AbilityId string `json:"abilityId"`
+
+	// AbilityIds この行と結果が完全に同じになる特性の ID(abilityId が先頭。渡した/解決した順)。
+	AbilityIds []string `json:"abilityIds"`
+
 	// Defender 一括計算の1行で使った防御側の調整(SP・性格補正・実数値)
 	Defender BulkDefender `json:"defender"`
 
@@ -688,6 +629,33 @@ type CalcResult struct {
 	Unsupported []UnsupportedMark `json:"unsupported"`
 }
 
+// DefenderOverride 防御側の上書き(issue 272・274。ADR-0126・ADR-0214・ADR-0216)。省略した項目は上書きしない。
+// 指定した値は生成するすべての行(全プリセット × 全 itemVariants × 全特性)の防御側に一律で当てる。
+// プリセットが決める SP・性格・持ち物には触れない。省略・空オブジェクト・ゼロ値(ranks がすべて 0、
+// status が none)の応答は、defenderOverride を送らないときとバイト単位で同じ。
+// 逆算(ReverseRequest)には無い(既知の側は known.ranks / known.status で渡す。ADR-0216 §4)。
+//
+//   - `ranks`: 防御側のランク補正。省略した能力は 0。プリセットの防御側はランク 0 なので、指定した値が
+//     そのまま全行に当たる。ダメージに効くのは技の分類が使う側だけ(物理は def、特殊は spd)で、
+//     急所のときは正のランクを無視する(1対1の計算と同じ規則)。各値が -6..+6 の外なら
+//     400 `invalid_input`(使わない側の能力でも拒否する)。応答の行(BulkDefender)にはランクを出さない
+//     (`stats` はランク補正前の実数値のまま)。
+//   - `status`: 防御側の状態異常。未知の値は 400 `invalid_enum`(Individual.status と同じ)。
+//     **今のダメージ式は防御側の状態異常を見ない**(やけどの物理半減は攻撃側の状態だけ。ADR-0216 §3)ため、
+//     現時点では結果を変えない。防御側の状態で威力・防御が変わる技・特性に対応したときに効くようになる。
+type DefenderOverride struct {
+	// AbilityId 防御側の特性を1つに固定する。省略時は防御側の種族が持つ特性(最大3件。4件目がある種族は
+	// Showdown の特殊枠 `"S"` を落とす。ADR-0105 §5 と同じ判断)をすべて候補として計算し、
+	// 結果が完全に同じになる特性は1行にまとめ、違うときだけ行を分ける(ADR-0126)。
+	// 指定した特性をその種族が持たない場合は 400 `invalid_input`、マスタに無い ID は
+	// 400 `unknown_ability`。
+	AbilityId *string `json:"abilityId,omitempty"`
+
+	// Ranks ランク補正(-6..+6)。HP は持たない
+	Ranks  *RankBlock       `json:"ranks,omitempty"`
+	Status *StatusCondition `json:"status,omitempty"`
+}
+
 // DefenderPreset 防御側の代表調整(耐久が上がる順)。SP は能力ポイント(Lv50・個体値31固定)。
 // 性格の「無補正」は上昇・下降なし、「+B/-A」は防御上昇・攻撃下降のこと。
 // engine の PresetKey と同一文字列(docs/adr/0009-bulk-calc-presets.md §1)。
@@ -717,7 +685,7 @@ type Error struct {
 	// | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
 	// | unknown_field | 契約にないフィールド | 400 |
 	// | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-	// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む | 400 |
+	// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
 	// | unknown_preset | 未知の防御側プリセット | 400 |
 	// | duplicate_preset | 防御側プリセットの重複 | 400 |
 	// | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -739,7 +707,7 @@ type Error struct {
 	// | unknown_item | itemId がマスタに無い | 400 |
 	// | unknown_ability | abilityId がマスタに無い | 400 |
 	// | unknown_nature | natureId がマスタに無い | 400 |
-	// | not_found | ルートが無い / このサービスの担当外の操作 | 404 |
+	// | not_found | ルートが無い / このサービスの担当外の操作 / この端末が持っていないリソース ID(他端末のものか実在しないかを区別しない。403 にしない。ADR-0209 §6-2) | 404 |
 	// | master_unavailable | マスタ(pokedex の MySQL)を参照できない | 503 |
 	// | store_unavailable | 保存データの DB(record / team の TiDB)を参照できない。`master_unavailable` と分けるのは原因も復旧手順も別で、「計算はできるが保存はできない」状態(CLAUDE.md 絶対ルール5)をクライアントが区別できる必要があるため(ADR-0209 §5.3) | 503 |
 	// | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202) | 503 |
@@ -756,7 +724,7 @@ type Error struct {
 // | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
 // | unknown_field | 契約にないフィールド | 400 |
 // | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む | 400 |
+// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
 // | unknown_preset | 未知の防御側プリセット | 400 |
 // | duplicate_preset | 防御側プリセットの重複 | 400 |
 // | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -778,7 +746,7 @@ type Error struct {
 // | unknown_item | itemId がマスタに無い | 400 |
 // | unknown_ability | abilityId がマスタに無い | 400 |
 // | unknown_nature | natureId がマスタに無い | 400 |
-// | not_found | ルートが無い / このサービスの担当外の操作 | 404 |
+// | not_found | ルートが無い / このサービスの担当外の操作 / この端末が持っていないリソース ID(他端末のものか実在しないかを区別しない。403 にしない。ADR-0209 §6-2) | 404 |
 // | master_unavailable | マスタ(pokedex の MySQL)を参照できない | 503 |
 // | store_unavailable | 保存データの DB(record / team の TiDB)を参照できない。`master_unavailable` と分けるのは原因も復旧手順も別で、「計算はできるが保存はできない」状態(CLAUDE.md 絶対ルール5)をクライアントが区別できる必要があるため(ADR-0209 §5.3) | 503 |
 // | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202) | 503 |
@@ -1091,6 +1059,13 @@ type RecordDeletionResult struct {
 
 // ReverseCandidate 候補1件(性格クラス × 持ち物。ADR-0010 §R3)
 type ReverseCandidate struct {
+	// AbilityId この候補の計算に使った相手の特性(ADR-0126・ADR-0214)。種族は必ず1件以上の特性を持つため
+	// 常に入る。
+	AbilityId string `json:"abilityId"`
+
+	// AbilityIds この候補と結果が完全に同じになる特性の ID(abilityId が先頭。渡した/解決した順)。
+	AbilityIds []string `json:"abilityIds"`
+
 	// Exact mismatch == 0(全観測を説明できる)
 	Exact bool `json:"exact"`
 
@@ -1144,8 +1119,11 @@ type ReverseRequest struct {
 	// known.moveId は使わない(技は moveId で指定する)。
 	Known Individual `json:"known"`
 
-	// MaxCandidates 返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(上限は
-	// 2 性格クラス × 64 itemCandidates = 128 件)。負の値と 129 以上は 400 `invalid_input`。
+	// MaxCandidates 返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(特性の候補分岐〈ADR-0126・
+	// ADR-0214〉により最大 2 性格クラス × 3 特性グループ × 64 itemCandidates = 384 件まで増えうる。
+	// 特性が効かない技では従来どおり最大 128 件)。指定できる値自体は 1..128(この上限は変えていない。
+	// 返る件数をこの値で切り詰めるだけで、384 件から絞り込みたいときに使う)。負の値と 129 以上は
+	// 400 `invalid_input`。
 	MaxCandidates *int `json:"maxCandidates,omitempty"`
 
 	// MoveId 観測したときの技(side=defender なら自分の技、attacker なら相手の技)
@@ -1159,6 +1137,12 @@ type ReverseRequest struct {
 
 	// Side どちら側の調整を逆算するか(defender=与ダメ観測 / attacker=被ダメ観測)
 	Side ReverseSide `json:"side"`
+
+	// UnknownAbilityId 相手の特性を1つに固定する(issue 272。ADR-0126・ADR-0214)。省略時は相手の種族が持つ特性
+	// (最大3件。BulkCalcRequest.defenderOverride.abilityId と同じ既定)をすべて候補にする。
+	// 指定した特性をその種族が持たない場合は 400 `invalid_input`、マスタに無い ID は
+	// 400 `unknown_ability`。
+	UnknownAbilityId *string `json:"unknownAbilityId,omitempty"`
 
 	// UnknownSpeciesKey 逆算する相手の種族。SP・性格・持ち物は探索対象なので渡さない
 	UnknownSpeciesKey SpeciesKey `json:"unknownSpeciesKey"`
@@ -1256,6 +1240,80 @@ type StatKey string
 // StatusCondition defines model for StatusCondition.
 type StatusCondition string
 
+// Team 保存済みの構築(ADR-0213 §2)
+type Team struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Id 構築の ID(サーバーが発行する UUID。正準形 8-4-4-4-12 の16進)
+	//
+	// Example: 11111111-2222-4333-8444-555555555555
+	Id      TeamId       `json:"id"`
+	Members []TeamMember `json:"members"`
+	Name    string       `json:"name"`
+
+	// UpdatedAt 最終更新。失効の判定に使う(`max(devices.last_seen_at, updatedAt)` から540日。ADR-0209 §4)
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// TeamDeletionResult defines model for TeamDeletionResult.
+type TeamDeletionResult struct {
+	// Deleted この呼び出しで消した行数(冪等なので2回目は 0 になる)
+	Deleted struct {
+		TeamMembers int `json:"teamMembers"`
+		Teams       int `json:"teams"`
+	} `json:"deleted"`
+
+	// PurgedAt 墓石の時刻。これ以前に発生した計算イベントは以後 last_seen_at を進めない(ADR-0209 §7)
+	PurgedAt time.Time `json:"purgedAt"`
+
+	// Status `completed` = この端末のデータは残っていない。`partial` = 1回の上限に達したので残りがある
+	// (同じ要求を繰り返す。ADR-0209 §5.2)。
+	Status DeletionStatus `json:"status"`
+}
+
+// TeamId 構築の ID(サーバーが発行する UUID。正準形 8-4-4-4-12 の16進)
+//
+// Example: 11111111-2222-4333-8444-555555555555
+type TeamId = string
+
+// TeamInput 構築の作成(`createTeam`)・置換(`updateTeam`)で送る内容。`id` / `createdAt` / `updatedAt` は
+// サーバーが決めるので送らない(送ったら 400 `unknown_field`)。
+type TeamInput struct {
+	// Members パーティ(最大6体。省略・空配列は「メンバーなし」)
+	Members *[]TeamMember `json:"members,omitempty"`
+
+	// Name 構築名(前後の空白を除いて1文字以上。文字数は Unicode コードポイントで数える)
+	Name string `json:"name"`
+}
+
+// TeamMember 構築の1体(ADR-0213 §3)。種族・技・持ち物・特性・性格・SP・テラスタイプは **ID のまま**運び、
+// team-svc はマスタに実在するかを検証しない(CLAUDE.md 絶対ルール4)。
+// 並び順(パーティの何番目か)は `Team.members` の配列の順序そのもので、`slot` は持たない。
+type TeamMember struct {
+	// AbilityId 特性(未選択のときは null)
+	AbilityId *string `json:"abilityId,omitempty"`
+
+	// ItemId 持ち物(持たせないときは null)
+	ItemId *string `json:"itemId,omitempty"`
+
+	// MoveIds 覚えさせる技(最大4つ・同一メンバー内で重複不可。並び順は表示順)
+	MoveIds  *[]string `json:"moveIds,omitempty"`
+	NatureId string    `json:"natureId"`
+
+	// Nickname 任意のニックネーム(文字数は Unicode コードポイントで数える)。空文字は null と同じ「未設定」として扱う。
+	// 利用者の自由入力で個人を特定しうるため、**ログには出さない**(ADR-0209 §3)。
+	Nickname *string `json:"nickname,omitempty"`
+
+	// Sp 能力ポイント。各 0..32、合計 <= 66(Individual.sp と同じ規則。範囲外は 400 `invalid_input`)
+	Sp StatBlock `json:"sp"`
+
+	// SpeciesKey {図鑑番号4桁}-{フォルム3桁}
+	//
+	// Example: 0445-000
+	SpeciesKey SpeciesKey `json:"speciesKey"`
+	TeraType   *PokeType  `json:"teraType,omitempty"`
+}
+
 // Terrain defines model for Terrain.
 type Terrain string
 
@@ -1265,20 +1323,19 @@ type UnsupportedMark struct {
 	// Id 技・持ち物・特性の ID
 	Id string `json:"id"`
 
-	// Reason 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種)か zero_power(威力0の攻撃技。
-	// 威力が技の処理で決まるため)、持ち物・特性は unsupported_effect(効果スキーマで表せない)。
-	Reason UnsupportedMarkReason `json:"reason"`
+	// Reason 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種: alt_defense_stat・alt_offense_stat・
+	// always_crit・effectiveness_change・field_specific・fixed_damage・ignore_defense_ranks・
+	// move_specific・multi_hit・ohko・priority_change・type_change・variable_power)か
+	// zero_power(威力0の攻撃技。威力が技の処理で決まるため)、持ち物・特性は
+	// unsupported_effect(効果スキーマで表せない)。target と同じ理由で enum にしない
+	// (クライアントは未知の値を汎用の文言で扱う。ADR-0215)。
+	Reason string `json:"reason"`
 
-	// Target 印の対象
-	Target UnsupportedMarkTarget `json:"target"`
+	// Target 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability。
+	// 値を足しても古いクライアントが応答全体をデコードできなくなるのを避けるため、enum にしない
+	// (クライアントは未知の値を「対象不明の印」として扱い、id をそのまま表示する。ADR-0215)。
+	Target string `json:"target"`
 }
-
-// UnsupportedMarkReason 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種)か zero_power(威力0の攻撃技。
-// 威力が技の処理で決まるため)、持ち物・特性は unsupported_effect(効果スキーマで表せない)。
-type UnsupportedMarkReason string
-
-// UnsupportedMarkTarget 印の対象
-type UnsupportedMarkTarget string
 
 // Weather defines model for Weather.
 type Weather string
@@ -1534,6 +1591,114 @@ type ListFrequentOpponentsParams struct {
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
+// DeleteTeamDeviceDataParams defines parameters for DeleteTeamDeviceData.
+type DeleteTeamDeviceDataParams struct {
+	// XDeviceId クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+	// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+	// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+	//
+	// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+	// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+	// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+	XDeviceId DeviceId `json:"X-Device-Id"`
+
+	// XSessionId セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+	//
+	// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+	// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+	XSessionId SessionId `json:"X-Session-Id"`
+}
+
+// ListTeamsParams defines parameters for ListTeams.
+type ListTeamsParams struct {
+	// XDeviceId クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+	// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+	// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+	//
+	// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+	// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+	// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+	XDeviceId DeviceId `json:"X-Device-Id"`
+
+	// XSessionId セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+	//
+	// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+	// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+	XSessionId SessionId `json:"X-Session-Id"`
+}
+
+// CreateTeamParams defines parameters for CreateTeam.
+type CreateTeamParams struct {
+	// XDeviceId クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+	// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+	// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+	//
+	// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+	// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+	// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+	XDeviceId DeviceId `json:"X-Device-Id"`
+
+	// XSessionId セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+	//
+	// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+	// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+	XSessionId SessionId `json:"X-Session-Id"`
+}
+
+// DeleteTeamParams defines parameters for DeleteTeam.
+type DeleteTeamParams struct {
+	// XDeviceId クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+	// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+	// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+	//
+	// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+	// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+	// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+	XDeviceId DeviceId `json:"X-Device-Id"`
+
+	// XSessionId セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+	//
+	// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+	// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+	XSessionId SessionId `json:"X-Session-Id"`
+}
+
+// GetTeamParams defines parameters for GetTeam.
+type GetTeamParams struct {
+	// XDeviceId クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+	// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+	// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+	//
+	// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+	// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+	// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+	XDeviceId DeviceId `json:"X-Device-Id"`
+
+	// XSessionId セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+	//
+	// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+	// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+	XSessionId SessionId `json:"X-Session-Id"`
+}
+
+// UpdateTeamParams defines parameters for UpdateTeam.
+type UpdateTeamParams struct {
+	// XDeviceId クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+	// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+	// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+	//
+	// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+	// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+	// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+	XDeviceId DeviceId `json:"X-Device-Id"`
+
+	// XSessionId セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+	//
+	// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+	// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+	XSessionId SessionId `json:"X-Session-Id"`
+}
+
 // CalcDamageJSONRequestBody defines body for CalcDamage for application/json ContentType.
 type CalcDamageJSONRequestBody = CalcRequest
 
@@ -1542,6 +1707,12 @@ type CalcBulkJSONRequestBody = BulkCalcRequest
 
 // CalcReverseJSONRequestBody defines body for CalcReverse for application/json ContentType.
 type CalcReverseJSONRequestBody = ReverseRequest
+
+// CreateTeamJSONRequestBody defines body for CreateTeam for application/json ContentType.
+type CreateTeamJSONRequestBody = TeamInput
+
+// UpdateTeamJSONRequestBody defines body for UpdateTeam for application/json ContentType.
+type UpdateTeamJSONRequestBody = TeamInput
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -1581,6 +1752,24 @@ type ServerInterface interface {
 	// ListFrequentOpponents この端末でよく計算した相手(防御側の種族)を頻度×時間減衰の順に返す
 	// (GET /api/record/frequent-opponents)
 	ListFrequentOpponents(ctx *echo.Context, params ListFrequentOpponentsParams) error
+	// DeleteTeamDeviceData この端末の構築をすべて削除する
+	// (DELETE /api/team/device-data)
+	DeleteTeamDeviceData(ctx *echo.Context, params DeleteTeamDeviceDataParams) error
+	// ListTeams この端末の構築を一覧する
+	// (GET /api/team/teams)
+	ListTeams(ctx *echo.Context, params ListTeamsParams) error
+	// CreateTeam 構築を1つ作る
+	// (POST /api/team/teams)
+	CreateTeam(ctx *echo.Context, params CreateTeamParams) error
+	// DeleteTeam 構築を1つ削除する
+	// (DELETE /api/team/teams/{teamId})
+	DeleteTeam(ctx *echo.Context, teamId TeamId, params DeleteTeamParams) error
+	// GetTeam 構築を1つ取得する
+	// (GET /api/team/teams/{teamId})
+	GetTeam(ctx *echo.Context, teamId TeamId, params GetTeamParams) error
+	// UpdateTeam 構築を丸ごと置き換える
+	// (PUT /api/team/teams/{teamId})
+	UpdateTeam(ctx *echo.Context, teamId TeamId, params UpdateTeamParams) error
 	// GetMasterExport 計算用のマスタ一式(pokedex-svc → calc-svc)
 	// (GET /internal/pokedex/master)
 	GetMasterExport(ctx *echo.Context) error
@@ -2239,6 +2428,315 @@ func (w *ServerInterfaceWrapper) ListFrequentOpponents(ctx *echo.Context) error 
 	return err
 }
 
+// DeleteTeamDeviceData converts echo context to params.
+func (w *ServerInterfaceWrapper) DeleteTeamDeviceData(ctx *echo.Context) error {
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteTeamDeviceDataParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Device-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Device-Id")]; found {
+		var XDeviceId DeviceId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
+		}
+
+		params.XDeviceId = XDeviceId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Device-Id is required, but not found"))
+	}
+	// ------------- Required header parameter "X-Session-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Session-Id")]; found {
+		var XSessionId SessionId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
+		}
+
+		params.XSessionId = XSessionId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Session-Id is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.DeleteTeamDeviceData(ctx, params)
+	return err
+}
+
+// ListTeams converts echo context to params.
+func (w *ServerInterfaceWrapper) ListTeams(ctx *echo.Context) error {
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTeamsParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Device-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Device-Id")]; found {
+		var XDeviceId DeviceId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
+		}
+
+		params.XDeviceId = XDeviceId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Device-Id is required, but not found"))
+	}
+	// ------------- Required header parameter "X-Session-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Session-Id")]; found {
+		var XSessionId SessionId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
+		}
+
+		params.XSessionId = XSessionId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Session-Id is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.ListTeams(ctx, params)
+	return err
+}
+
+// CreateTeam converts echo context to params.
+func (w *ServerInterfaceWrapper) CreateTeam(ctx *echo.Context) error {
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateTeamParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Device-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Device-Id")]; found {
+		var XDeviceId DeviceId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
+		}
+
+		params.XDeviceId = XDeviceId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Device-Id is required, but not found"))
+	}
+	// ------------- Required header parameter "X-Session-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Session-Id")]; found {
+		var XSessionId SessionId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
+		}
+
+		params.XSessionId = XSessionId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Session-Id is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.CreateTeam(ctx, params)
+	return err
+}
+
+// DeleteTeam converts echo context to params.
+func (w *ServerInterfaceWrapper) DeleteTeam(ctx *echo.Context) error {
+	var err error
+	// ------------- Path parameter "teamId" -------------
+	var teamId TeamId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "teamId", ctx.Param("teamId"), &teamId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: ctx.Request().URL.RawPath == ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter teamId: %s", err))
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteTeamParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Device-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Device-Id")]; found {
+		var XDeviceId DeviceId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
+		}
+
+		params.XDeviceId = XDeviceId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Device-Id is required, but not found"))
+	}
+	// ------------- Required header parameter "X-Session-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Session-Id")]; found {
+		var XSessionId SessionId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
+		}
+
+		params.XSessionId = XSessionId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Session-Id is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.DeleteTeam(ctx, teamId, params)
+	return err
+}
+
+// GetTeam converts echo context to params.
+func (w *ServerInterfaceWrapper) GetTeam(ctx *echo.Context) error {
+	var err error
+	// ------------- Path parameter "teamId" -------------
+	var teamId TeamId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "teamId", ctx.Param("teamId"), &teamId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: ctx.Request().URL.RawPath == ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter teamId: %s", err))
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetTeamParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Device-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Device-Id")]; found {
+		var XDeviceId DeviceId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
+		}
+
+		params.XDeviceId = XDeviceId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Device-Id is required, but not found"))
+	}
+	// ------------- Required header parameter "X-Session-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Session-Id")]; found {
+		var XSessionId SessionId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
+		}
+
+		params.XSessionId = XSessionId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Session-Id is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.GetTeam(ctx, teamId, params)
+	return err
+}
+
+// UpdateTeam converts echo context to params.
+func (w *ServerInterfaceWrapper) UpdateTeam(ctx *echo.Context) error {
+	var err error
+	// ------------- Path parameter "teamId" -------------
+	var teamId TeamId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "teamId", ctx.Param("teamId"), &teamId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: ctx.Request().URL.RawPath == ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter teamId: %s", err))
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateTeamParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Device-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Device-Id")]; found {
+		var XDeviceId DeviceId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Device-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Device-Id", valueList[0], &XDeviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Device-Id: %s", err))
+		}
+
+		params.XDeviceId = XDeviceId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Device-Id is required, but not found"))
+	}
+	// ------------- Required header parameter "X-Session-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Session-Id")]; found {
+		var XSessionId SessionId
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Session-Id, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Session-Id", valueList[0], &XSessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Session-Id: %s", err))
+		}
+
+		params.XSessionId = XSessionId
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Session-Id is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.UpdateTeam(ctx, teamId, params)
+	return err
+}
+
 // GetMasterExport converts echo context to params.
 func (w *ServerInterfaceWrapper) GetMasterExport(ctx *echo.Context) error {
 	var err error
@@ -2307,6 +2805,12 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 	router.POST(options.BaseURL+"/api/calc/reverse", wrapper.CalcReverse, options.OperationMiddlewares["calcReverse"]...)
 	router.GET(options.BaseURL+"/api/record/frequent-opponents", wrapper.ListFrequentOpponents, options.OperationMiddlewares["listFrequentOpponents"]...)
 	router.DELETE(options.BaseURL+"/api/record/device-data", wrapper.DeleteRecordDeviceData, options.OperationMiddlewares["deleteRecordDeviceData"]...)
+	router.GET(options.BaseURL+"/api/team/teams", wrapper.ListTeams, options.OperationMiddlewares["listTeams"]...)
+	router.POST(options.BaseURL+"/api/team/teams", wrapper.CreateTeam, options.OperationMiddlewares["createTeam"]...)
+	router.DELETE(options.BaseURL+"/api/team/teams/:teamId", wrapper.DeleteTeam, options.OperationMiddlewares["deleteTeam"]...)
+	router.GET(options.BaseURL+"/api/team/teams/:teamId", wrapper.GetTeam, options.OperationMiddlewares["getTeam"]...)
+	router.PUT(options.BaseURL+"/api/team/teams/:teamId", wrapper.UpdateTeam, options.OperationMiddlewares["updateTeam"]...)
+	router.DELETE(options.BaseURL+"/api/team/device-data", wrapper.DeleteTeamDeviceData, options.OperationMiddlewares["deleteTeamDeviceData"]...)
 	router.GET(options.BaseURL+"/internal/pokedex/master", wrapper.GetMasterExport, options.OperationMiddlewares["getMasterExport"]...)
 
 }
@@ -3108,6 +3612,491 @@ func (response ListFrequentOpponentsdefaultJSONResponse) VisitListFrequentOppone
 	return err
 }
 
+type DeleteTeamDeviceDataRequestObject struct {
+	Params DeleteTeamDeviceDataParams
+}
+
+type DeleteTeamDeviceDataResponseObject interface {
+	VisitDeleteTeamDeviceDataResponse(w http.ResponseWriter) error
+}
+
+type DeleteTeamDeviceData200JSONResponse TeamDeletionResult
+
+func (response DeleteTeamDeviceData200JSONResponse) VisitDeleteTeamDeviceDataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTeamDeviceData400JSONResponse struct{ ErrorJSONResponse }
+
+func (response DeleteTeamDeviceData400JSONResponse) VisitDeleteTeamDeviceDataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTeamDeviceData500JSONResponse Error
+
+func (response DeleteTeamDeviceData500JSONResponse) VisitDeleteTeamDeviceDataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTeamDeviceData503JSONResponse Error
+
+func (response DeleteTeamDeviceData503JSONResponse) VisitDeleteTeamDeviceDataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTeamDeviceDatadefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response DeleteTeamDeviceDatadefaultJSONResponse) VisitDeleteTeamDeviceDataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTeamsRequestObject struct {
+	Params ListTeamsParams
+}
+
+type ListTeamsResponseObject interface {
+	VisitListTeamsResponse(w http.ResponseWriter) error
+}
+
+type ListTeams200JSONResponse []Team
+
+func (response ListTeams200JSONResponse) VisitListTeamsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTeams400JSONResponse struct{ ErrorJSONResponse }
+
+func (response ListTeams400JSONResponse) VisitListTeamsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTeams503JSONResponse Error
+
+func (response ListTeams503JSONResponse) VisitListTeamsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTeamsdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListTeamsdefaultJSONResponse) VisitListTeamsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTeamRequestObject struct {
+	Params CreateTeamParams
+	Body   *CreateTeamJSONRequestBody
+}
+
+type CreateTeamResponseObject interface {
+	VisitCreateTeamResponse(w http.ResponseWriter) error
+}
+
+type CreateTeam201JSONResponse Team
+
+func (response CreateTeam201JSONResponse) VisitCreateTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTeam400JSONResponse struct{ ErrorJSONResponse }
+
+func (response CreateTeam400JSONResponse) VisitCreateTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTeam500JSONResponse Error
+
+func (response CreateTeam500JSONResponse) VisitCreateTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTeam503JSONResponse Error
+
+func (response CreateTeam503JSONResponse) VisitCreateTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTeamdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response CreateTeamdefaultJSONResponse) VisitCreateTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTeamRequestObject struct {
+	TeamId TeamId `json:"teamId"`
+	Params DeleteTeamParams
+}
+
+type DeleteTeamResponseObject interface {
+	VisitDeleteTeamResponse(w http.ResponseWriter) error
+}
+
+type DeleteTeam204Response struct {
+}
+
+func (response DeleteTeam204Response) VisitDeleteTeamResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteTeam400JSONResponse struct{ ErrorJSONResponse }
+
+func (response DeleteTeam400JSONResponse) VisitDeleteTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTeam404JSONResponse Error
+
+func (response DeleteTeam404JSONResponse) VisitDeleteTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTeam503JSONResponse Error
+
+func (response DeleteTeam503JSONResponse) VisitDeleteTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTeamdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response DeleteTeamdefaultJSONResponse) VisitDeleteTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTeamRequestObject struct {
+	TeamId TeamId `json:"teamId"`
+	Params GetTeamParams
+}
+
+type GetTeamResponseObject interface {
+	VisitGetTeamResponse(w http.ResponseWriter) error
+}
+
+type GetTeam200JSONResponse Team
+
+func (response GetTeam200JSONResponse) VisitGetTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTeam400JSONResponse struct{ ErrorJSONResponse }
+
+func (response GetTeam400JSONResponse) VisitGetTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTeam404JSONResponse Error
+
+func (response GetTeam404JSONResponse) VisitGetTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTeam503JSONResponse Error
+
+func (response GetTeam503JSONResponse) VisitGetTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTeamdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetTeamdefaultJSONResponse) VisitGetTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTeamRequestObject struct {
+	TeamId TeamId `json:"teamId"`
+	Params UpdateTeamParams
+	Body   *UpdateTeamJSONRequestBody
+}
+
+type UpdateTeamResponseObject interface {
+	VisitUpdateTeamResponse(w http.ResponseWriter) error
+}
+
+type UpdateTeam200JSONResponse Team
+
+func (response UpdateTeam200JSONResponse) VisitUpdateTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTeam400JSONResponse struct{ ErrorJSONResponse }
+
+func (response UpdateTeam400JSONResponse) VisitUpdateTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTeam404JSONResponse Error
+
+func (response UpdateTeam404JSONResponse) VisitUpdateTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTeam500JSONResponse Error
+
+func (response UpdateTeam500JSONResponse) VisitUpdateTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTeam503JSONResponse Error
+
+func (response UpdateTeam503JSONResponse) VisitUpdateTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTeamdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response UpdateTeamdefaultJSONResponse) VisitUpdateTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMasterExportRequestObject struct {
 }
 
@@ -3181,6 +4170,24 @@ type StrictServerInterface interface {
 	// ListFrequentOpponents この端末でよく計算した相手(防御側の種族)を頻度×時間減衰の順に返す
 	// (GET /api/record/frequent-opponents)
 	ListFrequentOpponents(ctx context.Context, request ListFrequentOpponentsRequestObject) (ListFrequentOpponentsResponseObject, error)
+	// DeleteTeamDeviceData この端末の構築をすべて削除する
+	// (DELETE /api/team/device-data)
+	DeleteTeamDeviceData(ctx context.Context, request DeleteTeamDeviceDataRequestObject) (DeleteTeamDeviceDataResponseObject, error)
+	// ListTeams この端末の構築を一覧する
+	// (GET /api/team/teams)
+	ListTeams(ctx context.Context, request ListTeamsRequestObject) (ListTeamsResponseObject, error)
+	// CreateTeam 構築を1つ作る
+	// (POST /api/team/teams)
+	CreateTeam(ctx context.Context, request CreateTeamRequestObject) (CreateTeamResponseObject, error)
+	// DeleteTeam 構築を1つ削除する
+	// (DELETE /api/team/teams/{teamId})
+	DeleteTeam(ctx context.Context, request DeleteTeamRequestObject) (DeleteTeamResponseObject, error)
+	// GetTeam 構築を1つ取得する
+	// (GET /api/team/teams/{teamId})
+	GetTeam(ctx context.Context, request GetTeamRequestObject) (GetTeamResponseObject, error)
+	// UpdateTeam 構築を丸ごと置き換える
+	// (PUT /api/team/teams/{teamId})
+	UpdateTeam(ctx context.Context, request UpdateTeamRequestObject) (UpdateTeamResponseObject, error)
 	// GetMasterExport 計算用のマスタ一式(pokedex-svc → calc-svc)
 	// (GET /internal/pokedex/master)
 	GetMasterExport(ctx context.Context, request GetMasterExportRequestObject) (GetMasterExportResponseObject, error)
@@ -3548,6 +4555,191 @@ func (sh *strictHandler) ListFrequentOpponents(ctx *echo.Context, params ListFre
 	return nil
 }
 
+// DeleteTeamDeviceData operation middleware
+func (sh *strictHandler) DeleteTeamDeviceData(ctx *echo.Context, params DeleteTeamDeviceDataParams) error {
+	var request DeleteTeamDeviceDataRequestObject
+
+	request.Params = params
+
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteTeamDeviceData(ctx.Request().Context(), request.(DeleteTeamDeviceDataRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteTeamDeviceData")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(DeleteTeamDeviceDataResponseObject); ok {
+		return validResponse.VisitDeleteTeamDeviceDataResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
+// ListTeams operation middleware
+func (sh *strictHandler) ListTeams(ctx *echo.Context, params ListTeamsParams) error {
+	var request ListTeamsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTeams(ctx.Request().Context(), request.(ListTeamsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTeams")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(ListTeamsResponseObject); ok {
+		return validResponse.VisitListTeamsResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
+// CreateTeam operation middleware
+func (sh *strictHandler) CreateTeam(ctx *echo.Context, params CreateTeamParams) error {
+	var request CreateTeamRequestObject
+
+	request.Params = params
+
+	var body CreateTeamJSONRequestBody
+	var err error
+	if _, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
+		// Bind only the request body, so that path and query parameters
+		// are not also bound into the body struct.
+		err = echo.BindBody(ctx, &body)
+	} else {
+		// A custom binder is installed on the Echo instance; defer to it
+		// entirely, since echo.Binder does not expose body-only binding.
+		err = ctx.Bind(&body)
+	}
+	if err != nil {
+		return err
+	}
+	request.Body = &body
+
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateTeam(ctx.Request().Context(), request.(CreateTeamRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateTeam")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(CreateTeamResponseObject); ok {
+		return validResponse.VisitCreateTeamResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
+// DeleteTeam operation middleware
+func (sh *strictHandler) DeleteTeam(ctx *echo.Context, teamId TeamId, params DeleteTeamParams) error {
+	var request DeleteTeamRequestObject
+
+	request.TeamId = teamId
+	request.Params = params
+
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteTeam(ctx.Request().Context(), request.(DeleteTeamRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteTeam")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(DeleteTeamResponseObject); ok {
+		return validResponse.VisitDeleteTeamResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
+// GetTeam operation middleware
+func (sh *strictHandler) GetTeam(ctx *echo.Context, teamId TeamId, params GetTeamParams) error {
+	var request GetTeamRequestObject
+
+	request.TeamId = teamId
+	request.Params = params
+
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTeam(ctx.Request().Context(), request.(GetTeamRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTeam")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(GetTeamResponseObject); ok {
+		return validResponse.VisitGetTeamResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
+// UpdateTeam operation middleware
+func (sh *strictHandler) UpdateTeam(ctx *echo.Context, teamId TeamId, params UpdateTeamParams) error {
+	var request UpdateTeamRequestObject
+
+	request.TeamId = teamId
+	request.Params = params
+
+	var body UpdateTeamJSONRequestBody
+	var err error
+	if _, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
+		// Bind only the request body, so that path and query parameters
+		// are not also bound into the body struct.
+		err = echo.BindBody(ctx, &body)
+	} else {
+		// A custom binder is installed on the Echo instance; defer to it
+		// entirely, since echo.Binder does not expose body-only binding.
+		err = ctx.Bind(&body)
+	}
+	if err != nil {
+		return err
+	}
+	request.Body = &body
+
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateTeam(ctx.Request().Context(), request.(UpdateTeamRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateTeam")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(UpdateTeamResponseObject); ok {
+		return validResponse.VisitUpdateTeamResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
 // GetMasterExport operation middleware
 func (sh *strictHandler) GetMasterExport(ctx *echo.Context) error {
 	var request GetMasterExportRequestObject
@@ -3576,256 +4768,312 @@ func (sh *strictHandler) GetMasterExport(ctx *echo.Context) error {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"+3f28Nn/PwA=",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

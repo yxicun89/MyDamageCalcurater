@@ -31,5 +31,12 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/parameters/SessionId`.
         public typealias SessionId = Swift.String
+        /// 構築の ID(作成時にサーバーが発行する UUID。ADR-0213 §2)。
+        /// 端末 ID は**パスに含めない**(ヘッダだけが正。ADR-0209 §2・§6-4)。
+        /// この端末が持っていない ID は、他端末のものか実在しないかを区別せず 404 `not_found`(§6-2)。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/parameters/TeamId`.
+        public typealias TeamId = Components.Schemas.TeamId
     }
 }

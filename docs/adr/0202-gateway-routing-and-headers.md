@@ -2,8 +2,10 @@
 
 - 状態: 採用(2026-09-22。P3-2 の設計。受け入れ条件とテストは spec-writer が先に書き、実装は implementer)
 - 日付: 2026-09-22
-- 関連: ADR-0001(技術スタック)、ADR-0012(サービス境界。balance は兄弟で `/api/balance` は独自の Ingress)、
+- 関連: ADR-0001(技術スタック)、ADR-0012(サービス境界。balance・speed・judge は兄弟サービス。**2026-09-25
+  追記〈issue #284〉: 当初 `/api/balance` は独自の Ingress だったが、gateway の後ろに統合した**)、
   ADR-0200(calc-svc の契約・ErrorCode の語彙と HTTP ステータス・healthz の扱い)、ADR-0201(Echo v5)、
+  ADR-0606(speed-svc が独自に複製した端末ID/セッションID検証。issue #236。issue #284 統合後も残る二重化)、
   docs/requirements.md §3(認証なし・端末ID)・§4(アーキテクチャ)・§8(画像は gateway の `/assets/` から配信)、plan.md P3-2
 
 ## 背景
@@ -42,9 +44,13 @@
 | `/api/calc`、`/api/calc/*` | calc-svc | `/api/calcx` のような前方一致は拾わない |
 | `/api/pokedex/*` | pokedex-svc | `/api/pokedex` そのものは 404 |
 | `/api/record/*` | record-svc | `/api/record` そのものは 404(2026-09-25 追記。P5-3・ADR-0209 §10-1)。上流(`GATEWAY_RECORD_URL`)未設定なら 503 `upstream_unavailable` |
+| `/api/team/*` | team-svc | `/api/team` そのもの・`/api/teamx` は 404(2026-09-25 追記。P5-4・ADR-0213 §7)。上流(`GATEWAY_TEAM_URL`)未設定なら 503 `upstream_unavailable` |
+| `/api/balance/*` | balance-svc | `/api/balance` そのもの・`/api/balancex` は 404(2026-09-25 追記。issue #284)。上流(`GATEWAY_BALANCE_URL`)未設定なら 503 `upstream_unavailable`。**旧: 独自の Ingress(ADR-0012)で gateway を経由しなかったが、issue #284 でここに統合した**。**`/api/balance/healthz`(完全一致のみ)はヘッダ検証を課さない(§4 追記)** |
+| `/api/speed/*` | speed-svc | `/api/speed` そのもの・`/api/speedx` は 404(2026-09-25 追記。issue #284)。上流(`GATEWAY_SPEED_URL`)未設定なら 503 `upstream_unavailable`。`/api/speed/healthz`(完全一致のみ)はヘッダ検証を課さない(§4 追記) |
+| `/api/judge/*` | judge-svc | `/api/judge` そのもの・`/api/judgex` は 404(2026-09-25 追記。issue #284)。上流(`GATEWAY_JUDGE_URL`)未設定なら 503 `upstream_unavailable`。`/api/judge/healthz`(完全一致のみ)はヘッダ検証を課さない(§4 追記) |
 | `/assets/*`(GET / HEAD のみ) | assets の上流(MinIO) | それ以外のメソッドは 404 `not_found` |
 | `GET /healthz` | gateway 自身 | 200 `{"status":"ok"}`。openapi に載せない(ADR-0200 と同じ)。上流の `/healthz` は外に出さない |
-| それ以外(`/api/balance` を含む) | なし | 404 `not_found`(Error 形式)。`/api/balance` は独自の Ingress(ADR-0012) |
+| それ以外 | なし | 404 `not_found`(Error 形式) |
 
 - パスとクエリはそのまま転送する(上流の基底 URL にパスがあれば前に連結する。`ReverseProxy` の標準の連結)。
   gateway は `/api/calc` の中の操作を知らない(メソッド違い・未知の下位パスの判定は上流に任せる)。
@@ -61,6 +67,11 @@
 - 欠落と不正が同時にあれば `missing_header` を優先する。
 - `/assets/*`・`/healthz`・CORS プリフライト(OPTIONS + `Access-Control-Request-Method`)には課さない(`<img>` はヘッダを送れない。
   プリフライトにはブラウザが独自ヘッダを付けない)。
+- **追記(2026-09-26。issue #284 critic 指摘)**: `/api/balance/healthz`・`/api/speed/healthz`・`/api/judge/healthz`
+  (完全一致のみ。前方一致にしない)にも課さない。3サービスの契約(`services/{balance,speed,judge}/api/openapi.yaml`
+  の `publicHealth`)・ADR-0600 §5・ADR-0700 §該当箇所が、Ingress 越しの疎通確認用としてヘッダ不要と明記しており、
+  gateway 経由になっても同じ契約を守る必要があるため。`healthzz`・`healthz/x` のような似た別パスは通常どおり
+  検証する(完全一致であることを `TestBalanceSpeedJudgeHealthzLookalikesStillRequireHeaders` で固定)。
 - 検証を通ったリクエストのヘッダは書き換えずに上流へ転送する(大文字の UUID も大文字のまま)。
 - **追記(2026-09-25。issue #326「転送ヘッダ」)**:
   - 検証済みの `X-Device-Id` / `X-Session-Id` は `/api/*` の上流(calc・pokedex)へ**必ず**届ける。クライアントが
@@ -119,9 +130,10 @@
 - 上流を経由する応答は、上流が独自に付けた `Access-Control-*`(誤った `*` や別オリジンの反射を含む)を`ReverseProxy.ModifyResponse`
   で全部取り除いてから、許可オリジンのときだけ gateway 自身の ACAO を1つだけ付け直す(上流の判断をそのまま外へ出さない)。
 - プリフライト(OPTIONS + `Access-Control-Request-Method`)は 204(本文なし)で、上流に送らない。許可オリジンなら
-  `Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS`(**2026-09-25 追記。P5-3**: `DELETE` は端末単位の全削除 API
+  `Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS`(**2026-09-25 追記。P5-3**: `DELETE` は端末単位の全削除 API
   〈ADR-0209 §5・§10-2〉のために足した。これが無いと別オリジンのブラウザからプリフライトが通らず Web から呼べない。
-  team の CRUD が要る `PUT` / `PATCH` は P5-4 で足す)、`Access-Control-Allow-Headers: Content-Type, X-Device-Id, X-Session-Id`、
+  **2026-09-25 追記。P5-4**: `PUT` は構築の置換〈`updateTeam`。ADR-0213 §2・§7〉のために足した。
+  `PATCH` は足さない — ADR-0213 §2 で部分更新を持たないと決めたため)、`Access-Control-Allow-Headers: Content-Type, X-Device-Id, X-Session-Id`、
   `Access-Control-Max-Age: 600`。許可外のオリジン・CORS 未設定なら CORS ヘッダ無しの 204(ブラウザが拒否する)。
 - 認証なしなので `Access-Control-Allow-Credentials` は付けない。`*` は使わない(設定でも拒否)。
 

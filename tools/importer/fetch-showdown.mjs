@@ -10,6 +10,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { exitCodeFor, expectedShowdownTreeSha256 } from './integrity.mjs';
 import { ensureShowdownSource } from './showdown-cache.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -32,22 +33,30 @@ const cacheDir = `${root}data/generated/.cache/showdown/${commit}/`;
 const url = `https://codeload.github.com/smogon/pokemon-showdown/tar.gz/${commit}`;
 
 // 取得・展開・build は一時名で行い検証後に公開する(中断しても次回自己回復。issue #102)。
-const extractDir = await ensureShowdownSource({
-  cacheDir,
-  commit,
-  url,
-  deps: {
-    download: async () => {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Showdown tarball を取得できない: ${res.status} ${url}`);
-      return Buffer.from(await res.arrayBuffer());
+let extractDir;
+try {
+  extractDir = await ensureShowdownSource({
+    cacheDir,
+    commit,
+    url,
+    expectedTreeSha256: expectedShowdownTreeSha256(config),
+    deps: {
+      download: async () => {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Showdown tarball を取得できない: ${res.status} ${url}`);
+        return Buffer.from(await res.arrayBuffer());
+      },
+      extract: (tarball, dir) => execFileSync('tar', ['-xzf', tarball, '--strip-components=1', '-C', dir]),
+      install: (dir) => execFileSync('npm', ['ci', '--omit=dev', '--ignore-scripts'], { cwd: dir, stdio: 'inherit' }),
+      build: (dir) => execFileSync('node', ['build'], { cwd: dir, stdio: 'inherit' }),
+      log: console.log,
     },
-    extract: (tarball, dir) => execFileSync('tar', ['-xzf', tarball, '--strip-components=1', '-C', dir]),
-    install: (dir) => execFileSync('npm', ['ci', '--omit=dev'], { cwd: dir, stdio: 'inherit' }),
-    build: (dir) => execFileSync('node', ['build'], { cwd: dir, stdio: 'inherit' }),
-    log: console.log,
-  },
-});
+  });
+} catch (err) {
+  // 内容ハッシュの不一致は終了コード 3(人間対応。ADR-0101 追記・ADR-0104 §3)。
+  console.error(`fetch-showdown: ${err.message}`);
+  process.exit(exitCodeFor(err));
+}
 
 // 固定した Showdown は CommonJS として build される。ESM からの dynamic import では
 // named export が直接見える版と default に包まれる版があるため、両方を受ける。

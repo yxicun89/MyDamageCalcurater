@@ -75,3 +75,6 @@ Argo CD の refresh・sync → Pod の image digest が一致することを確�
 - speed 専用のクラスタ内レジストリを新設する: hostPort の競合で balance のものと同時に動かせない。
 - Argo CD を speed 用に別途インストールする: TB0 で導入済みの1つの Argo CD をクラスタ全体で共有する(複数レーンで複数の Argo CD を
   動かす理由が無い)。
+
+## 追記(2026-09-25): read model と digest の扱い(ADR-0412)
+gitops overlay は balance と同じ initContainer(pokedex export)→ emptyDir で read model を得る。speed 本体の digest は placeholder のままで「未配備」と明示する(実 image は配備時に人間の確認のもとで)。

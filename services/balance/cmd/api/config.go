@@ -1,7 +1,11 @@
 package main
 
 import (
+	"fmt"
+	"strconv"
+
 	"example.com/pokecalc/services/balance/internal/balance"
+	"example.com/pokecalc/services/balance/internal/httpapi"
 	"example.com/pokecalc/services/balance/internal/master"
 )
 
@@ -65,4 +69,21 @@ func abilityProviderFromEnv(lookup func(string) (string, bool)) (balance.Ability
 		return nil, err
 	}
 	return model, nil
+}
+
+// maxConcurrentRecommendationsEnv caps the recommendations computed at once (issue #298, ADR-0409).
+const maxConcurrentRecommendationsEnv = "BALANCE_MAX_CONCURRENT_RECOMMENDATIONS"
+
+// maxConcurrentRecommendationsFromEnv reads the cap. Unset or empty: httpapi.DefaultMaxConcurrentRecommendations.
+// Not a positive integer: an error, and main must exit non-zero.
+func maxConcurrentRecommendationsFromEnv(lookup func(string) (string, bool)) (int, error) {
+	value, ok := lookup(maxConcurrentRecommendationsEnv)
+	if !ok || value == "" {
+		return httpapi.DefaultMaxConcurrentRecommendations, nil
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer, got %q", maxConcurrentRecommendationsEnv, value)
+	}
+	return n, nil
 }

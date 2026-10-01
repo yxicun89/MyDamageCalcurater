@@ -37,6 +37,10 @@ var abilityIDPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 const maxAbilityIDLength = 40
 
+// DefaultMaxConcurrentRecommendations is how many recommendations may be computed at once when
+// Dependencies.MaxConcurrentRecommendations is not positive (issue #298, ADR-0409).
+const DefaultMaxConcurrentRecommendations = 4
+
 var errRequestTooLarge = errors.New("request body exceeds 16 KiB")
 
 // Dependencies are the replaceable master-data boundaries of the HTTP adapter.
@@ -54,6 +58,9 @@ type Dependencies struct {
 	Moves          balance.MoveProvider
 	Abilities      balance.AbilityProvider
 	PokemonCatalog balance.PokemonCatalog
+	// MaxConcurrentRecommendations caps the recommendations computed at once; a request over the
+	// cap is answered 503 overloaded without waiting. Zero or negative means the default.
+	MaxConcurrentRecommendations int
 }
 
 // normalizeDependencies clears any provider whose interface value wraps a nil pointer (or
@@ -106,7 +113,11 @@ func New(deps Dependencies) *echo.Echo {
 	m := httpmetrics.New()
 	e.Use(m.Middleware())
 	e.GET(httpmetrics.Path, m.Handler())
-	api.RegisterHandlersWithOptions(e, handler{deps: deps}, api.RegisterHandlersOptions{
+	maxConcurrent := deps.MaxConcurrentRecommendations
+	if maxConcurrent <= 0 {
+		maxConcurrent = DefaultMaxConcurrentRecommendations
+	}
+	api.RegisterHandlersWithOptions(e, handler{deps: deps, slots: make(chan struct{}, maxConcurrent)}, api.RegisterHandlersOptions{
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
 			"analyzeTeamBalance":  {requireRequestContext},
 			"analyzeTeamCoverage": {requireRequestContext},
@@ -120,6 +131,8 @@ func New(deps Dependencies) *echo.Echo {
 
 type handler struct {
 	deps Dependencies
+	// slots holds one token per recommendation being computed (ADR-0409).
+	slots chan struct{}
 }
 
 var _ api.ServerInterface = handler{}

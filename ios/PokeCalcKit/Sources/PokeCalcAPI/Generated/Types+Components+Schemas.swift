@@ -48,7 +48,7 @@ extension Components {
         /// | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
         /// | unknown_field | 契約にないフィールド | 400 |
         /// | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-        /// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む | 400 |
+        /// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
         /// | unknown_preset | 未知の防御側プリセット | 400 |
         /// | duplicate_preset | 防御側プリセットの重複 | 400 |
         /// | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -70,7 +70,7 @@ extension Components {
         /// | unknown_item | itemId がマスタに無い | 400 |
         /// | unknown_ability | abilityId がマスタに無い | 400 |
         /// | unknown_nature | natureId がマスタに無い | 400 |
-        /// | not_found | ルートが無い / このサービスの担当外の操作 | 404 |
+        /// | not_found | ルートが無い / このサービスの担当外の操作 / この端末が持っていないリソース ID(他端末のものか実在しないかを区別しない。403 にしない。ADR-0209 §6-2) | 404 |
         /// | master_unavailable | マスタ(pokedex の MySQL)を参照できない | 503 |
         /// | store_unavailable | 保存データの DB(record / team の TiDB)を参照できない。`master_unavailable` と分けるのは原因も復旧手順も別で、「計算はできるが保存はできない」状態(CLAUDE.md 絶対ルール5)をクライアントが区別できる必要があるため(ADR-0209 §5.3) | 503 |
         /// | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202) | 503 |
@@ -848,48 +848,23 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/schemas/UnsupportedMark`.
         public struct UnsupportedMark: Codable, Hashable, Sendable {
-            /// 印の対象
+            /// 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability。
+            /// 値を足しても古いクライアントが応答全体をデコードできなくなるのを避けるため、enum にしない
+            /// (クライアントは未知の値を「対象不明の印」として扱い、id をそのまま表示する。ADR-0215)。
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/UnsupportedMark/target`.
-            @frozen public enum TargetPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                case move = "move"
-                case attackerItem = "attacker_item"
-                case attackerAbility = "attacker_ability"
-                case defenderItem = "defender_item"
-                case defenderAbility = "defender_ability"
-            }
-            /// 印の対象
-            ///
-            /// - Remark: Generated from `#/components/schemas/UnsupportedMark/target`.
-            public var target: Components.Schemas.UnsupportedMark.TargetPayload
-            /// 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種)か zero_power(威力0の攻撃技。
-            /// 威力が技の処理で決まるため)、持ち物・特性は unsupported_effect(効果スキーマで表せない)。
+            public var target: Swift.String
+            /// 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種: alt_defense_stat・alt_offense_stat・
+            /// always_crit・effectiveness_change・field_specific・fixed_damage・ignore_defense_ranks・
+            /// move_specific・multi_hit・ohko・priority_change・type_change・variable_power)か
+            /// zero_power(威力0の攻撃技。威力が技の処理で決まるため)、持ち物・特性は
+            /// unsupported_effect(効果スキーマで表せない)。target と同じ理由で enum にしない
+            /// (クライアントは未知の値を汎用の文言で扱う。ADR-0215)。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/UnsupportedMark/reason`.
-            @frozen public enum ReasonPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                case altDefenseStat = "alt_defense_stat"
-                case altOffenseStat = "alt_offense_stat"
-                case alwaysCrit = "always_crit"
-                case effectivenessChange = "effectiveness_change"
-                case fieldSpecific = "field_specific"
-                case fixedDamage = "fixed_damage"
-                case ignoreDefenseRanks = "ignore_defense_ranks"
-                case moveSpecific = "move_specific"
-                case multiHit = "multi_hit"
-                case ohko = "ohko"
-                case priorityChange = "priority_change"
-                case typeChange = "type_change"
-                case variablePower = "variable_power"
-                case zeroPower = "zero_power"
-                case unsupportedEffect = "unsupported_effect"
-            }
-            /// 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種)か zero_power(威力0の攻撃技。
-            /// 威力が技の処理で決まるため)、持ち物・特性は unsupported_effect(効果スキーマで表せない)。
-            ///
-            ///
-            /// - Remark: Generated from `#/components/schemas/UnsupportedMark/reason`.
-            public var reason: Components.Schemas.UnsupportedMark.ReasonPayload
+            public var reason: Swift.String
             /// 技・持ち物・特性の ID
             ///
             /// - Remark: Generated from `#/components/schemas/UnsupportedMark/id`.
@@ -897,12 +872,12 @@ extension Components {
             /// Creates a new `UnsupportedMark`.
             ///
             /// - Parameters:
-            ///   - target: 印の対象
-            ///   - reason: 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種)か zero_power(威力0の攻撃技。
+            ///   - target: 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability。
+            ///   - reason: 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種: alt_defense_stat・alt_offense_stat・
             ///   - id: 技・持ち物・特性の ID
             public init(
-                target: Components.Schemas.UnsupportedMark.TargetPayload,
-                reason: Components.Schemas.UnsupportedMark.ReasonPayload,
+                target: Swift.String,
+                reason: Swift.String,
                 id: Swift.String
             ) {
                 self.target = target
@@ -1059,6 +1034,58 @@ extension Components {
             case hd = "hd"
             case hdFull = "hd_full"
         }
+        /// 防御側の上書き(issue 272・274。ADR-0126・ADR-0214・ADR-0216)。省略した項目は上書きしない。
+        /// 指定した値は生成するすべての行(全プリセット × 全 itemVariants × 全特性)の防御側に一律で当てる。
+        /// プリセットが決める SP・性格・持ち物には触れない。省略・空オブジェクト・ゼロ値(ranks がすべて 0、
+        /// status が none)の応答は、defenderOverride を送らないときとバイト単位で同じ。
+        /// 逆算(ReverseRequest)には無い(既知の側は known.ranks / known.status で渡す。ADR-0216 §4)。
+        ///
+        /// - `ranks`: 防御側のランク補正。省略した能力は 0。プリセットの防御側はランク 0 なので、指定した値が
+        ///   そのまま全行に当たる。ダメージに効くのは技の分類が使う側だけ(物理は def、特殊は spd)で、
+        ///   急所のときは正のランクを無視する(1対1の計算と同じ規則)。各値が -6..+6 の外なら
+        ///   400 `invalid_input`(使わない側の能力でも拒否する)。応答の行(BulkDefender)にはランクを出さない
+        ///   (`stats` はランク補正前の実数値のまま)。
+        /// - `status`: 防御側の状態異常。未知の値は 400 `invalid_enum`(Individual.status と同じ)。
+        ///   **今のダメージ式は防御側の状態異常を見ない**(やけどの物理半減は攻撃側の状態だけ。ADR-0216 §3)ため、
+        ///   現時点では結果を変えない。防御側の状態で威力・防御が変わる技・特性に対応したときに効くようになる。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/DefenderOverride`.
+        public struct DefenderOverride: Codable, Hashable, Sendable {
+            /// 防御側の特性を1つに固定する。省略時は防御側の種族が持つ特性(最大3件。4件目がある種族は
+            /// Showdown の特殊枠 `"S"` を落とす。ADR-0105 §5 と同じ判断)をすべて候補として計算し、
+            /// 結果が完全に同じになる特性は1行にまとめ、違うときだけ行を分ける(ADR-0126)。
+            /// 指定した特性をその種族が持たない場合は 400 `invalid_input`、マスタに無い ID は
+            /// 400 `unknown_ability`。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/DefenderOverride/abilityId`.
+            public var abilityId: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DefenderOverride/ranks`.
+            public var ranks: Components.Schemas.RankBlock?
+            /// - Remark: Generated from `#/components/schemas/DefenderOverride/status`.
+            public var status: Components.Schemas.StatusCondition?
+            /// Creates a new `DefenderOverride`.
+            ///
+            /// - Parameters:
+            ///   - abilityId: 防御側の特性を1つに固定する。省略時は防御側の種族が持つ特性(最大3件。4件目がある種族は
+            ///   - ranks:
+            ///   - status:
+            public init(
+                abilityId: Swift.String? = nil,
+                ranks: Components.Schemas.RankBlock? = nil,
+                status: Components.Schemas.StatusCondition? = nil
+            ) {
+                self.abilityId = abilityId
+                self.ranks = ranks
+                self.status = status
+            }
+            public enum CodingKeys: String, CodingKey {
+                case abilityId
+                case ranks
+                case status
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/BulkCalcRequest`.
         public struct BulkCalcRequest: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/BulkCalcRequest/format`.
@@ -1073,6 +1100,8 @@ extension Components {
             public var field: Components.Schemas.FieldState?
             /// - Remark: Generated from `#/components/schemas/BulkCalcRequest/options`.
             public var options: Components.Schemas.CalcOptions?
+            /// - Remark: Generated from `#/components/schemas/BulkCalcRequest/defenderOverride`.
+            public var defenderOverride: Components.Schemas.DefenderOverride?
             /// 使う防御側プリセットと行の順序。省略と空配列(`[]`)は同じで、技の分類に応じた既定セットになる。
             /// 物理技は 5 件(none, hp, hb_boost, hb, hb_full)、
             /// 特殊技は 5 件(none, hp, hd_boost, hd, hd_full)、
@@ -1087,7 +1116,9 @@ extension Components {
             public var presets: [Components.Schemas.DefenderPreset]?
             /// 差し替えて比較する持ち物 ID(省略時は素の1通り)。null 要素は「持ち物なし」。
             /// 65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
-            /// 行数は `len(presets) × len(itemVariants)` なので、上限は 8 × 64 = 512 行。
+            /// 行の基本数は `len(presets) × len(itemVariants)`(上限 8 × 64 = 512)。特性ごとに結果が違う
+            /// ときだけ、その基本数のうち最大3倍(特性の候補数。ADR-0126・ADR-0214)まで行が分かれる。
+            /// 結果が同じ特性は1行にまとまるため、特性が効かない技では行数は変わらない。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/BulkCalcRequest/itemVariants`.
@@ -1101,6 +1132,7 @@ extension Components {
             ///   - moveId:
             ///   - field:
             ///   - options:
+            ///   - defenderOverride:
             ///   - presets: 使う防御側プリセットと行の順序。省略と空配列(`[]`)は同じで、技の分類に応じた既定セットになる。
             ///   - itemVariants: 差し替えて比較する持ち物 ID(省略時は素の1通り)。null 要素は「持ち物なし」。
             public init(
@@ -1110,6 +1142,7 @@ extension Components {
                 moveId: Swift.String,
                 field: Components.Schemas.FieldState? = nil,
                 options: Components.Schemas.CalcOptions? = nil,
+                defenderOverride: Components.Schemas.DefenderOverride? = nil,
                 presets: [Components.Schemas.DefenderPreset]? = nil,
                 itemVariants: [Swift.String?]? = nil
             ) {
@@ -1119,6 +1152,7 @@ extension Components {
                 self.moveId = moveId
                 self.field = field
                 self.options = options
+                self.defenderOverride = defenderOverride
                 self.presets = presets
                 self.itemVariants = itemVariants
             }
@@ -1129,6 +1163,7 @@ extension Components {
                 case moveId
                 case field
                 case options
+                case defenderOverride
                 case presets
                 case itemVariants
             }
@@ -1149,6 +1184,16 @@ extension Components {
             public var defender: Components.Schemas.BulkDefender
             /// - Remark: Generated from `#/components/schemas/BulkCalcRow/result`.
             public var result: Components.Schemas.CalcResult
+            /// この行の計算に使った防御側の特性(ADR-0126・ADR-0214)。種族は必ず1件以上の特性を持つため
+            /// 常に入る。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/BulkCalcRow/abilityId`.
+            public var abilityId: Swift.String
+            /// この行と結果が完全に同じになる特性の ID(abilityId が先頭。渡した/解決した順)。
+            ///
+            /// - Remark: Generated from `#/components/schemas/BulkCalcRow/abilityIds`.
+            public var abilityIds: [Swift.String]
             /// Creates a new `BulkCalcRow`.
             ///
             /// - Parameters:
@@ -1157,18 +1202,24 @@ extension Components {
             ///   - itemId: この行の防御側の持ち物(持ち物なしは null)
             ///   - defender:
             ///   - result:
+            ///   - abilityId: この行の計算に使った防御側の特性(ADR-0126・ADR-0214)。種族は必ず1件以上の特性を持つため
+            ///   - abilityIds: この行と結果が完全に同じになる特性の ID(abilityId が先頭。渡した/解決した順)。
             public init(
                 preset: Components.Schemas.DefenderPreset,
                 presetLabel: Swift.String,
                 itemId: Swift.String? = nil,
                 defender: Components.Schemas.BulkDefender,
-                result: Components.Schemas.CalcResult
+                result: Components.Schemas.CalcResult,
+                abilityId: Swift.String,
+                abilityIds: [Swift.String]
             ) {
                 self.preset = preset
                 self.presetLabel = presetLabel
                 self.itemId = itemId
                 self.defender = defender
                 self.result = result
+                self.abilityId = abilityId
+                self.abilityIds = abilityIds
             }
             public enum CodingKeys: String, CodingKey {
                 case preset
@@ -1176,6 +1227,8 @@ extension Components {
                 case itemId
                 case defender
                 case result
+                case abilityId
+                case abilityIds
             }
         }
         /// 性格補正の構造値。plus が +10%、minus が -10% を受ける能力。無補正は両方 null。
@@ -1462,6 +1515,14 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/unknownSpeciesKey`.
             public var unknownSpeciesKey: Components.Schemas.ReverseRequest.UnknownSpeciesKeyPayload
+            /// 相手の特性を1つに固定する(issue 272。ADR-0126・ADR-0214)。省略時は相手の種族が持つ特性
+            /// (最大3件。BulkCalcRequest.defenderOverride.abilityId と同じ既定)をすべて候補にする。
+            /// 指定した特性をその種族が持たない場合は 400 `invalid_input`、マスタに無い ID は
+            /// 400 `unknown_ability`。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseRequest/unknownAbilityId`.
+            public var unknownAbilityId: Swift.String?
             /// 観測したときの技(side=defender なら自分の技、attacker なら相手の技)
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/moveId`.
@@ -1483,8 +1544,11 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/observations`.
             public var observations: [Components.Schemas.Observation]
-            /// 返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(上限は
-            /// 2 性格クラス × 64 itemCandidates = 128 件)。負の値と 129 以上は 400 `invalid_input`。
+            /// 返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(特性の候補分岐〈ADR-0126・
+            /// ADR-0214〉により最大 2 性格クラス × 3 特性グループ × 64 itemCandidates = 384 件まで増えうる。
+            /// 特性が効かない技では従来どおり最大 128 件)。指定できる値自体は 1..128(この上限は変えていない。
+            /// 返る件数をこの値で切り詰めるだけで、384 件から絞り込みたいときに使う)。負の値と 129 以上は
+            /// 400 `invalid_input`。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/maxCandidates`.
@@ -1496,17 +1560,19 @@ extension Components {
             ///   - side:
             ///   - known: 既知の側(自分)の個体。side=defender なら自分=攻撃側、side=attacker なら自分=防御側。
             ///   - unknownSpeciesKey: 逆算する相手の種族。SP・性格・持ち物は探索対象なので渡さない
+            ///   - unknownAbilityId: 相手の特性を1つに固定する(issue 272。ADR-0126・ADR-0214)。省略時は相手の種族が持つ特性
             ///   - moveId: 観測したときの技(side=defender なら自分の技、attacker なら相手の技)
             ///   - field:
             ///   - options:
             ///   - itemCandidates: 相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ。
             ///   - observations: 同じ技・同じ場・同じ既知側に対する別々の1発。0 件は 400 `no_observation`、
-            ///   - maxCandidates: 返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(上限は
+            ///   - maxCandidates: 返す候補数の上限。0 は「許可された入力から生まれる候補の全件」(特性の候補分岐〈ADR-0126・
             public init(
                 format: Components.Schemas.Format,
                 side: Components.Schemas.ReverseSide,
                 known: Components.Schemas.ReverseRequest.KnownPayload,
                 unknownSpeciesKey: Components.Schemas.ReverseRequest.UnknownSpeciesKeyPayload,
+                unknownAbilityId: Swift.String? = nil,
                 moveId: Swift.String,
                 field: Components.Schemas.FieldState? = nil,
                 options: Components.Schemas.CalcOptions? = nil,
@@ -1518,6 +1584,7 @@ extension Components {
                 self.side = side
                 self.known = known
                 self.unknownSpeciesKey = unknownSpeciesKey
+                self.unknownAbilityId = unknownAbilityId
                 self.moveId = moveId
                 self.field = field
                 self.options = options
@@ -1530,6 +1597,7 @@ extension Components {
                 case side
                 case known
                 case unknownSpeciesKey
+                case unknownAbilityId
                 case moveId
                 case field
                 case options
@@ -1622,6 +1690,16 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseCandidate/unsupported`.
             public var unsupported: [Components.Schemas.UnsupportedMark]
+            /// この候補の計算に使った相手の特性(ADR-0126・ADR-0214)。種族は必ず1件以上の特性を持つため
+            /// 常に入る。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/abilityId`.
+            public var abilityId: Swift.String
+            /// この候補と結果が完全に同じになる特性の ID(abilityId が先頭。渡した/解決した順)。
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReverseCandidate/abilityIds`.
+            public var abilityIds: [Swift.String]
             /// Creates a new `ReverseCandidate`.
             ///
             /// - Parameters:
@@ -1637,6 +1715,8 @@ extension Components {
             ///   - minPercent: ranges 全体での想定ダメージ幅の下限(表示%。小数第1位・切り捨て。CalcResult.minPercent と同じ意味)
             ///   - maxPercent: ranges 全体での想定ダメージ幅の上限(表示%。小数第1位・四捨五入。CalcResult.maxPercent と同じ意味)
             ///   - unsupported: この候補の計算に付いた「未対応」の印(ADR-0123)。SP によらず同じ(技・場・既知側は候補間で共通)。
+            ///   - abilityId: この候補の計算に使った相手の特性(ADR-0126・ADR-0214)。種族は必ず1件以上の特性を持つため
+            ///   - abilityIds: この候補と結果が完全に同じになる特性の ID(abilityId が先頭。渡した/解決した順)。
             public init(
                 natureClass: Components.Schemas.NatureClass,
                 nature: Components.Schemas.NatureModifier,
@@ -1649,7 +1729,9 @@ extension Components {
                 support: Swift.Int,
                 minPercent: Swift.Double,
                 maxPercent: Swift.Double,
-                unsupported: [Components.Schemas.UnsupportedMark]
+                unsupported: [Components.Schemas.UnsupportedMark],
+                abilityId: Swift.String,
+                abilityIds: [Swift.String]
             ) {
                 self.natureClass = natureClass
                 self.nature = nature
@@ -1663,6 +1745,8 @@ extension Components {
                 self.minPercent = minPercent
                 self.maxPercent = maxPercent
                 self.unsupported = unsupported
+                self.abilityId = abilityId
+                self.abilityIds = abilityIds
             }
             public enum CodingKeys: String, CodingKey {
                 case natureClass
@@ -1677,6 +1761,8 @@ extension Components {
                 case minPercent
                 case maxPercent
                 case unsupported
+                case abilityId
+                case abilityIds
             }
         }
         /// - Remark: Generated from `#/components/schemas/ReverseResult`.
@@ -1746,6 +1832,398 @@ extension Components {
                 case assumedHpSp
                 case exactCount
                 case candidates
+            }
+        }
+        /// 「よく使う相手」1件(ADR-0209 §3 #2)。端末内の計算イベントの集計で、他端末のイベントは混ざらない。
+        /// 個体の中身(技・持ち物・特性・性格・SP)・ダメージの数値は返さない(集計に使うのは防御側の種族だけ)。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/FrequentOpponent`.
+        public struct FrequentOpponent: Codable, Hashable, Sendable {
+            /// 防御側(相手)の種族。名前・タイプは pokedex-svc から引く
+            ///
+            /// - Remark: Generated from `#/components/schemas/FrequentOpponent/speciesKey`.
+            public struct SpeciesKeyPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/FrequentOpponent/speciesKey/value1`.
+                public var value1: Components.Schemas.SpeciesKey
+                /// Creates a new `SpeciesKeyPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.SpeciesKey) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeToSingleValueContainer(self.value1)
+                }
+            }
+            /// 防御側(相手)の種族。名前・タイプは pokedex-svc から引く
+            ///
+            /// - Remark: Generated from `#/components/schemas/FrequentOpponent/speciesKey`.
+            public var speciesKey: Components.Schemas.FrequentOpponent.SpeciesKeyPayload
+            /// 頻度 × 時間減衰。並び順のための相対値で、絶対値に意味は無い(ADR-0209 §4)
+            ///
+            /// - Remark: Generated from `#/components/schemas/FrequentOpponent/score`.
+            public var score: Swift.Double
+            /// 減衰をかける前の、集計対象として残っている計算イベントの件数
+            ///
+            /// - Remark: Generated from `#/components/schemas/FrequentOpponent/count`.
+            public var count: Swift.Int
+            /// この相手を最後に計算した時刻(イベントの `occurred_at`)
+            ///
+            /// - Remark: Generated from `#/components/schemas/FrequentOpponent/lastCalculatedAt`.
+            public var lastCalculatedAt: Foundation.Date
+            /// Creates a new `FrequentOpponent`.
+            ///
+            /// - Parameters:
+            ///   - speciesKey: 防御側(相手)の種族。名前・タイプは pokedex-svc から引く
+            ///   - score: 頻度 × 時間減衰。並び順のための相対値で、絶対値に意味は無い(ADR-0209 §4)
+            ///   - count: 減衰をかける前の、集計対象として残っている計算イベントの件数
+            ///   - lastCalculatedAt: この相手を最後に計算した時刻(イベントの `occurred_at`)
+            public init(
+                speciesKey: Components.Schemas.FrequentOpponent.SpeciesKeyPayload,
+                score: Swift.Double,
+                count: Swift.Int,
+                lastCalculatedAt: Foundation.Date
+            ) {
+                self.speciesKey = speciesKey
+                self.score = score
+                self.count = count
+                self.lastCalculatedAt = lastCalculatedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case speciesKey
+                case score
+                case count
+                case lastCalculatedAt
+            }
+        }
+        /// `completed` = この端末のデータは残っていない。`partial` = 1回の上限に達したので残りがある
+        /// (同じ要求を繰り返す。ADR-0209 §5.2)。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/DeletionStatus`.
+        @frozen public enum DeletionStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case completed = "completed"
+            case partial = "partial"
+        }
+        /// - Remark: Generated from `#/components/schemas/RecordDeletionResult`.
+        public struct RecordDeletionResult: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/RecordDeletionResult/status`.
+            public var status: Components.Schemas.DeletionStatus
+            /// 墓石の時刻。これ以前に発生した計算イベントは以後保存しない(ADR-0209 §7)
+            ///
+            /// - Remark: Generated from `#/components/schemas/RecordDeletionResult/purgedAt`.
+            public var purgedAt: Foundation.Date
+            /// この呼び出しで消した行数(冪等なので2回目は 0 になる)
+            ///
+            /// - Remark: Generated from `#/components/schemas/RecordDeletionResult/deleted`.
+            public struct DeletedPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/RecordDeletionResult/deleted/calcEvents`.
+                public var calcEvents: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/RecordDeletionResult/deleted/aggregates`.
+                public var aggregates: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/RecordDeletionResult/deleted/favorites`.
+                public var favorites: Swift.Int
+                /// Creates a new `DeletedPayload`.
+                ///
+                /// - Parameters:
+                ///   - calcEvents:
+                ///   - aggregates:
+                ///   - favorites:
+                public init(
+                    calcEvents: Swift.Int,
+                    aggregates: Swift.Int,
+                    favorites: Swift.Int
+                ) {
+                    self.calcEvents = calcEvents
+                    self.aggregates = aggregates
+                    self.favorites = favorites
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case calcEvents
+                    case aggregates
+                    case favorites
+                }
+            }
+            /// この呼び出しで消した行数(冪等なので2回目は 0 になる)
+            ///
+            /// - Remark: Generated from `#/components/schemas/RecordDeletionResult/deleted`.
+            public var deleted: Components.Schemas.RecordDeletionResult.DeletedPayload
+            /// Creates a new `RecordDeletionResult`.
+            ///
+            /// - Parameters:
+            ///   - status:
+            ///   - purgedAt: 墓石の時刻。これ以前に発生した計算イベントは以後保存しない(ADR-0209 §7)
+            ///   - deleted: この呼び出しで消した行数(冪等なので2回目は 0 になる)
+            public init(
+                status: Components.Schemas.DeletionStatus,
+                purgedAt: Foundation.Date,
+                deleted: Components.Schemas.RecordDeletionResult.DeletedPayload
+            ) {
+                self.status = status
+                self.purgedAt = purgedAt
+                self.deleted = deleted
+            }
+            public enum CodingKeys: String, CodingKey {
+                case status
+                case purgedAt
+                case deleted
+            }
+        }
+        /// 構築の ID(サーバーが発行する UUID。正準形 8-4-4-4-12 の16進)
+        ///
+        /// - Remark: Generated from `#/components/schemas/TeamId`.
+        public typealias TeamId = Swift.String
+        /// 構築の1体(ADR-0213 §3)。種族・技・持ち物・特性・性格・SP・テラスタイプは **ID のまま**運び、
+        /// team-svc はマスタに実在するかを検証しない(CLAUDE.md 絶対ルール4)。
+        /// 並び順(パーティの何番目か)は `Team.members` の配列の順序そのもので、`slot` は持たない。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TeamMember`.
+        public struct TeamMember: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TeamMember/speciesKey`.
+            public var speciesKey: Components.Schemas.SpeciesKey
+            /// 任意のニックネーム(文字数は Unicode コードポイントで数える)。空文字は null と同じ「未設定」として扱う。
+            /// 利用者の自由入力で個人を特定しうるため、**ログには出さない**(ADR-0209 §3)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamMember/nickname`.
+            public var nickname: Swift.String?
+            /// 覚えさせる技(最大4つ・同一メンバー内で重複不可。並び順は表示順)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamMember/moveIds`.
+            public var moveIds: [Swift.String]?
+            /// 持ち物(持たせないときは null)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamMember/itemId`.
+            public var itemId: Swift.String?
+            /// 特性(未選択のときは null)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamMember/abilityId`.
+            public var abilityId: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TeamMember/natureId`.
+            public var natureId: Swift.String
+            /// 能力ポイント。各 0..32、合計 <= 66(Individual.sp と同じ規則。範囲外は 400 `invalid_input`)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamMember/sp`.
+            public struct SpPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TeamMember/sp/value1`.
+                public var value1: Components.Schemas.StatBlock
+                /// Creates a new `SpPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.StatBlock) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 能力ポイント。各 0..32、合計 <= 66(Individual.sp と同じ規則。範囲外は 400 `invalid_input`)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamMember/sp`.
+            public var sp: Components.Schemas.TeamMember.SpPayload
+            /// - Remark: Generated from `#/components/schemas/TeamMember/teraType`.
+            public struct TeraTypePayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TeamMember/teraType/value1`.
+                public var value1: Components.Schemas.PokeType
+                /// Creates a new `TeraTypePayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.PokeType) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeToSingleValueContainer(self.value1)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TeamMember/teraType`.
+            public var teraType: Components.Schemas.TeamMember.TeraTypePayload?
+            /// Creates a new `TeamMember`.
+            ///
+            /// - Parameters:
+            ///   - speciesKey:
+            ///   - nickname: 任意のニックネーム(文字数は Unicode コードポイントで数える)。空文字は null と同じ「未設定」として扱う。
+            ///   - moveIds: 覚えさせる技(最大4つ・同一メンバー内で重複不可。並び順は表示順)
+            ///   - itemId: 持ち物(持たせないときは null)
+            ///   - abilityId: 特性(未選択のときは null)
+            ///   - natureId:
+            ///   - sp: 能力ポイント。各 0..32、合計 <= 66(Individual.sp と同じ規則。範囲外は 400 `invalid_input`)
+            ///   - teraType:
+            public init(
+                speciesKey: Components.Schemas.SpeciesKey,
+                nickname: Swift.String? = nil,
+                moveIds: [Swift.String]? = nil,
+                itemId: Swift.String? = nil,
+                abilityId: Swift.String? = nil,
+                natureId: Swift.String,
+                sp: Components.Schemas.TeamMember.SpPayload,
+                teraType: Components.Schemas.TeamMember.TeraTypePayload? = nil
+            ) {
+                self.speciesKey = speciesKey
+                self.nickname = nickname
+                self.moveIds = moveIds
+                self.itemId = itemId
+                self.abilityId = abilityId
+                self.natureId = natureId
+                self.sp = sp
+                self.teraType = teraType
+            }
+            public enum CodingKeys: String, CodingKey {
+                case speciesKey
+                case nickname
+                case moveIds
+                case itemId
+                case abilityId
+                case natureId
+                case sp
+                case teraType
+            }
+        }
+        /// 構築の作成(`createTeam`)・置換(`updateTeam`)で送る内容。`id` / `createdAt` / `updatedAt` は
+        /// サーバーが決めるので送らない(送ったら 400 `unknown_field`)。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TeamInput`.
+        public struct TeamInput: Codable, Hashable, Sendable {
+            /// 構築名(前後の空白を除いて1文字以上。文字数は Unicode コードポイントで数える)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamInput/name`.
+            public var name: Swift.String
+            /// パーティ(最大6体。省略・空配列は「メンバーなし」)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamInput/members`.
+            public var members: [Components.Schemas.TeamMember]?
+            /// Creates a new `TeamInput`.
+            ///
+            /// - Parameters:
+            ///   - name: 構築名(前後の空白を除いて1文字以上。文字数は Unicode コードポイントで数える)
+            ///   - members: パーティ(最大6体。省略・空配列は「メンバーなし」)
+            public init(
+                name: Swift.String,
+                members: [Components.Schemas.TeamMember]? = nil
+            ) {
+                self.name = name
+                self.members = members
+            }
+            public enum CodingKeys: String, CodingKey {
+                case name
+                case members
+            }
+        }
+        /// 保存済みの構築(ADR-0213 §2)
+        ///
+        /// - Remark: Generated from `#/components/schemas/Team`.
+        public struct Team: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/Team/id`.
+            public var id: Components.Schemas.TeamId
+            /// - Remark: Generated from `#/components/schemas/Team/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/Team/members`.
+            public var members: [Components.Schemas.TeamMember]
+            /// - Remark: Generated from `#/components/schemas/Team/createdAt`.
+            public var createdAt: Foundation.Date
+            /// 最終更新。失効の判定に使う(`max(devices.last_seen_at, updatedAt)` から540日。ADR-0209 §4)
+            ///
+            /// - Remark: Generated from `#/components/schemas/Team/updatedAt`.
+            public var updatedAt: Foundation.Date
+            /// Creates a new `Team`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - name:
+            ///   - members:
+            ///   - createdAt:
+            ///   - updatedAt: 最終更新。失効の判定に使う(`max(devices.last_seen_at, updatedAt)` から540日。ADR-0209 §4)
+            public init(
+                id: Components.Schemas.TeamId,
+                name: Swift.String,
+                members: [Components.Schemas.TeamMember],
+                createdAt: Foundation.Date,
+                updatedAt: Foundation.Date
+            ) {
+                self.id = id
+                self.name = name
+                self.members = members
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case name
+                case members
+                case createdAt
+                case updatedAt
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/TeamDeletionResult`.
+        public struct TeamDeletionResult: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TeamDeletionResult/status`.
+            public var status: Components.Schemas.DeletionStatus
+            /// 墓石の時刻。これ以前に発生した計算イベントは以後 last_seen_at を進めない(ADR-0209 §7)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamDeletionResult/purgedAt`.
+            public var purgedAt: Foundation.Date
+            /// この呼び出しで消した行数(冪等なので2回目は 0 になる)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamDeletionResult/deleted`.
+            public struct DeletedPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TeamDeletionResult/deleted/teams`.
+                public var teams: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/TeamDeletionResult/deleted/teamMembers`.
+                public var teamMembers: Swift.Int
+                /// Creates a new `DeletedPayload`.
+                ///
+                /// - Parameters:
+                ///   - teams:
+                ///   - teamMembers:
+                public init(
+                    teams: Swift.Int,
+                    teamMembers: Swift.Int
+                ) {
+                    self.teams = teams
+                    self.teamMembers = teamMembers
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case teams
+                    case teamMembers
+                }
+            }
+            /// この呼び出しで消した行数(冪等なので2回目は 0 になる)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TeamDeletionResult/deleted`.
+            public var deleted: Components.Schemas.TeamDeletionResult.DeletedPayload
+            /// Creates a new `TeamDeletionResult`.
+            ///
+            /// - Parameters:
+            ///   - status:
+            ///   - purgedAt: 墓石の時刻。これ以前に発生した計算イベントは以後 last_seen_at を進めない(ADR-0209 §7)
+            ///   - deleted: この呼び出しで消した行数(冪等なので2回目は 0 になる)
+            public init(
+                status: Components.Schemas.DeletionStatus,
+                purgedAt: Foundation.Date,
+                deleted: Components.Schemas.TeamDeletionResult.DeletedPayload
+            ) {
+                self.status = status
+                self.purgedAt = purgedAt
+                self.deleted = deleted
+            }
+            public enum CodingKeys: String, CodingKey {
+                case status
+                case purgedAt
+                case deleted
             }
         }
     }

@@ -38,6 +38,7 @@ struct ReverseScreenView: View {
                 presetSegmentedRow
                 teamSourceRow
                 moveSelector
+                opponentAbilityPicker
                 opponentItemCandidateToggles
                 ReverseObservationListView(viewModel: viewModel, focusedObservationID: $focusedObservationID)
                 loadingSlot
@@ -240,6 +241,33 @@ struct ReverseScreenView: View {
                 viewModel.scheduleLatest { await $0.selectMove(id: move.id) }
             }
         }
+    }
+
+    /// 相手の特性: 「指定なし」+ 相手の特性名(ADR-0501「P6-19」4章。常に表示)。
+    private var opponentAbilityPicker: some View {
+        let selectedName = viewModel.opponentAbilityOptions
+            .first(where: { $0.id == viewModel.opponentAbilityId })?.nameJa
+            ?? AbilityPickerLabels.unspecified
+        return VStack(alignment: .leading, spacing: SpacingToken.x1) {
+            Text(AbilityPickerLabels.opponentTitle)
+                .font(TextStyleToken.caption.font)
+                .foregroundStyle(ColorToken.textSecondary.color)
+            Menu {
+                Button(AbilityPickerLabels.unspecified) {
+                    viewModel.scheduleLatest { await $0.selectOpponentAbility(id: nil) }
+                }
+                ForEach(viewModel.opponentAbilityOptions, id: \.id) { ability in
+                    Button(ability.nameJa) {
+                        viewModel.scheduleLatest { await $0.selectOpponentAbility(id: ability.id) }
+                    }
+                }
+            } label: {
+                MenuLabelChip(text: selectedName)
+            }
+            .accessibilityValue(selectedName)
+            .accessibilityIdentifier("reverseOpponentAbilityPicker")
+        }
+        .task(id: viewModel.opponentSpeciesKey) { await viewModel.loadOpponentAbilityOptions() }
     }
 
     private var opponentItemCandidateToggles: some View {

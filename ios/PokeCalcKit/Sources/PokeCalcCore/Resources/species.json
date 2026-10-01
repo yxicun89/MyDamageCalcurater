@@ -7,7 +7,7 @@
     "types": ["fire"],
     "baseStats": { "hp": 80, "atk": 90, "def": 70, "spa": 60, "spd": 65, "spe": 100 },
     "abilities": [{ "id": "test-ability-alpha", "nameJa": "テストとくせいアルファ" }],
-    "learnset": ["test-move-physical-a", "test-move-special-a", "test-move-status-a"]
+    "learnset": ["test-move-physical-a", "test-move-special-a", "test-move-status-a", "test-move-multi-hit"]
   },
   {
     "key": "9002-000",
@@ -18,6 +18,19 @@
     "baseStats": { "hp": 90, "atk": 70, "def": 80, "spa": 85, "spd": 80, "spe": 60 },
     "abilities": [{ "id": "test-ability-beta", "nameJa": "テストとくせいベータ" }],
     "learnset": ["test-move-physical-a", "test-move-special-b", "test-move-status-a"]
+  },
+  {
+    "key": "9004-000",
+    "dexNo": 9004,
+    "form": 0,
+    "nameJa": "テストモンよん",
+    "types": ["normal"],
+    "baseStats": { "hp": 75, "atk": 65, "def": 75, "spa": 65, "spd": 75, "spe": 70 },
+    "abilities": [
+      { "id": "test-ability-delta", "nameJa": "テストとくせいデルタ" },
+      { "id": "test-ability-fighting-immune", "nameJa": "テストとくせいかくとうむこう", "nullifiesMoveType": "fighting" }
+    ],
+    "learnset": ["test-move-physical-a", "test-move-special-a", "test-move-status-a"]
   },
   {
     "key": "9003-000",

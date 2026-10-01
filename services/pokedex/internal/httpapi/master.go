@@ -12,6 +12,7 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"example.com/pokecalc/services/internal/api"
+	"example.com/pokecalc/services/pokedex/internal/dataversion"
 	"example.com/pokecalc/services/pokedex/internal/store"
 )
 
@@ -24,62 +25,80 @@ func (s *Server) GetMasterExport(ctx *echo.Context) error {
 	return ctx.JSON(http.StatusOK, ex)
 }
 
+// buildMasterExport は全 SELECT を1つの読み取り専用トランザクション(一貫したスナップショット)の中で行う
+// (ADR-0127)。importer の全置換が間に commit されても、新旧が混在した組を返さない。
 func (s *Server) buildMasterExport(ctx context.Context) (api.MasterExport, error) {
-	versions, err := s.q.ListDataVersions(ctx)
+	tx, err := s.q.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		return api.MasterExport{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	ex, err := buildMasterExportFrom(ctx, tx)
+	if err != nil {
+		return api.MasterExport{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return api.MasterExport{}, err
+	}
+	return ex, nil
+}
+
+func buildMasterExportFrom(ctx context.Context, q store.Querier) (api.MasterExport, error) {
+	versions, err := q.ListDataVersions(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
 	}
 	if len(versions) == 0 {
 		return api.MasterExport{}, errEmpty("data_versions")
 	}
-	types, err := s.q.ListTypes(ctx)
+	types, err := q.ListTypes(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
 	}
 	if len(types) == 0 {
 		return api.MasterExport{}, errEmpty("types")
 	}
-	typeChart, err := s.q.ListTypeChart(ctx)
+	typeChart, err := q.ListTypeChart(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
 	}
-	species, err := s.q.ListSpecies(ctx)
+	species, err := q.ListSpecies(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
 	}
-	speciesAbilities, err := s.q.ListAllSpeciesAbilities(ctx)
+	speciesAbilities, err := q.ListAllSpeciesAbilities(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
 	}
-	moves, err := s.q.ListMoves(ctx)
+	moves, err := q.ListMoves(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
 	}
-	moveEffects, err := s.q.ListMoveEffects(ctx)
+	moveEffects, err := q.ListMoveEffects(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
 	}
-	moveMechanisms, err := s.q.ListMoveMechanisms(ctx)
+	moveMechanisms, err := q.ListMoveMechanisms(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
 	}
-	items, err := s.q.ListItems(ctx)
+	items, err := q.ListItems(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
 	}
-	itemEffects, err := s.q.ListItemEffects(ctx)
+	itemEffects, err := q.ListItemEffects(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
 	}
-	abilities, err := s.q.ListAbilities(ctx)
+	abilities, err := q.ListAbilities(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
 	}
-	abilityEffects, err := s.q.ListAbilityEffects(ctx)
+	abilityEffects, err := q.ListAbilityEffects(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
 	}
-	natures, err := s.q.ListNatures(ctx)
+	natures, err := q.ListNatures(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
 	}
@@ -180,7 +199,7 @@ func (s *Server) buildMasterExport(ctx context.Context) (api.MasterExport, error
 
 	return api.MasterExport{
 		SchemaVersion: api.MasterExportSchemaVersionN1,
-		DataVersion:   dataVersionString(versions),
+		DataVersion:   dataversion.String(versions),
 		Types:         masterTypes,
 		TypeChart:     masterTypeChart,
 		Species:       masterSpecies,
@@ -189,20 +208,6 @@ func (s *Server) buildMasterExport(ctx context.Context) (api.MasterExport, error
 		Abilities:     masterAbilities,
 		Natures:       masterNatures,
 	}, nil
-}
-
-// dataVersionString は data_versions の source=version を source 昇順に「,」で連結する(ADR-0105 §2)。
-func dataVersionString(versions []store.DataVersion) string {
-	sorted := append([]store.DataVersion(nil), versions...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Source < sorted[j].Source })
-	s := ""
-	for i, v := range sorted {
-		if i > 0 {
-			s += ","
-		}
-		s += v.Source + "=" + v.Version
-	}
-	return s
 }
 
 // masterEffectFor は item_effects / ability_effects の JSON をそのまま api.MasterEffect にする

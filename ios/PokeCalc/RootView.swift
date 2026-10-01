@@ -96,20 +96,36 @@ struct RootView: View {
                         .font(TextStyleToken.heading.font)
                         .foregroundStyle(ColorToken.textPrimary.color)
                 }
+                // P6-18(issue #328): 非公式の表示とデータの出典への控えめな入口。
+                // `.principal` は上記の見出しで埋まっているため `.topBarTrailing` に置く。
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink(value: AboutScreenRoute()) {
+                        Image(systemName: "info.circle")
+                    }
+                    .accessibilityIdentifier("openAboutScreen")
+                    .accessibilityLabel("このアプリについて")
+                }
             }
             .navigationDestination(for: CalcScreenRoute.self) { _ in
-                if case .ready(let service, let backendDescription) = environment {
+                if case .ready(let service, _, let backendDescription) = environment {
                     CalcScreenView(service: service, teamStore: teamStore, backendDescription: backendDescription)
                 }
             }
             .navigationDestination(for: ReverseScreenRoute.self) { _ in
-                if case .ready(let service, let backendDescription) = environment {
+                if case .ready(let service, _, let backendDescription) = environment {
                     ReverseScreenView(service: service, teamStore: teamStore, backendDescription: backendDescription)
                 }
             }
             .navigationDestination(for: TeamListScreenRoute.self) { _ in
-                if case .ready(let service, _) = environment {
+                if case .ready(let service, _, _) = environment {
                     TeamListView(store: teamStore, service: service, path: $path)
+                }
+            }
+            .navigationDestination(for: AboutScreenRoute.self) { _ in
+                if case .ready(_, let deviceData, _) = environment {
+                    AboutView(deviceDataService: deviceData)
+                } else {
+                    AboutView()
                 }
             }
         }
@@ -129,7 +145,7 @@ struct RootView: View {
     @ViewBuilder
     private var statusBadge: some View {
         switch environment {
-        case .ready(_, let description):
+        case .ready(_, _, let description):
             Text(description)
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
@@ -173,9 +189,12 @@ private struct ReverseScreenRoute: Hashable {}
 /// `NavigationPath` に積む構築一覧画面の行き先(値だけで、状態は持たない)。
 private struct TeamListScreenRoute: Hashable {}
 
+/// `NavigationPath` に積む「このアプリについて」画面の行き先(値だけで、状態は持たない。P6-18)。
+private struct AboutScreenRoute: Hashable {}
+
 #Preview {
     if let mock = try? MockPokeCalcService() {
-        RootView(environment: .ready(service: mock, backendDescription: "モックデータで動作中"))
+        RootView(environment: .ready(service: mock, deviceData: MockDeviceDataService(), backendDescription: "モックデータで動作中"))
     } else {
         Text("プレビュー用モックの読み込みに失敗")
     }

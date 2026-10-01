@@ -69,6 +69,8 @@ const response: Schemas["OutspeedAndKoResponse"] = {
       turnOrderTie: false,
       attackerKo: ko(2, true, 100),
       defenderKo: ko(3, false, 42.5),
+      attackerKoUnsupported: [],
+      defenderKoUnsupported: [],
     },
   ],
 };

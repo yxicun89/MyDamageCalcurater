@@ -1773,6 +1773,29 @@ Impact: **データレーンへ**: #271・#270 は API レーン担当分も完�
 未実施)。再生成すると `MasterMove.mechanisms`・`CalcResult.unsupported`・`ReverseCandidate.unsupported` が
 必須フィールドとして生成物に増えるため、既存のデコード/モック実装が影響を受ける可能性がある。
 
+## 2026-09-25: 未対応の印の表示(文言・置き場所)を決めた(iOS レーン → Web レーンへ。issue #271/#270・ADR-0123・ADR-0501「P6-17」)
+Decision: iOS は `unsupported` を計算画面・逆算画面に表示する(P6-17 の implementer で実装済み。critic 指摘を
+受けて2026-09-25 に理由ラベル4件を修正済み)。
+文言: 結果の上 `この結果は正確でない可能性があります(未対応: <印>、<印>)`、行・候補カード `未対応: <印>、<印>`。
+印1つは `<対象>「<名前>」(<理由>)`、理由が `unsupported_effect` のときは `(…)` を省く。
+対象: move=技 / attacker_item=攻撃側の持ち物 / attacker_ability=攻撃側の特性 / defender_item=防御側の持ち物 /
+defender_ability=防御側の特性。理由: multi_hit=多段技 / fixed_damage=固定ダメージ / ohko=一撃必殺 /
+variable_power=威力が変化 / alt_offense_stat=攻撃に使う能力値が通常と違う / alt_defense_stat=防御に使う能力値が通常と違う /
+always_crit=必ず急所 / ignore_defense_ranks=防御側のランク変化を無視 / type_change=タイプが変化 /
+effectiveness_change=相性の求め方が通常と違う /
+priority_change=優先度が変化 / field_specific=天候・フィールドで変化 / move_specific=技固有の効果 /
+zero_power=威力が技の処理で決まる / unsupported_effect=効果を計算に反映していない。
+(「特殊」はポケモンの文脈でダメージ計算の特殊技分類を指すため、alt_offense_stat/alt_defense_stat/
+effectiveness_change の文言には使わない。critic 指摘 2026-09-25)。
+名前はマスタ(技・持ち物・特性)から引き、無ければ ID のまま。置き場所: 全行(全候補)が持つ印は結果の上に1回、
+残りはその行(候補)だけ(target で決め打ちせず「全行にあるか」で決める)。見た目は補足文と同じ caption・text.secondary
+(danger・タイプ色は使わない)、常時アニメーションなし。
+Reason: 多段技・固定ダメージ等の結果が黙って正しい値に見えていた(ADR-0123)。技の印は全行に付くので行ごとに出すと
+同じ文言が5〜10回並ぶ。数値は通常の式の目安として出ておりエラーではないので警告色にしない。
+Impact: **Web レーンへ**: 表示するときは上の語・書式・置き場所に揃えてほしい(違える場合はこのファイルに理由を書く)。
+iOS は生成型の enum に未知の値の受け皿が無いため、契約に target/reason が増えると応答全体がデコード失敗になる
+(`client_decode`。クラッシュはしない)。**API レーンへ**: enum に値を足すときは iOS レーンへ再生成を依頼してほしい。
+
 ## 2026-09-25: 全体レビューissueの担当拡大の範囲をユーザーが確定(タイプバランスレーン)
 Decision: 別セッション(damage calculation bug resolution)から「運用担当」としてP7-4(MySQL/TiDBバックアップ復元テスト)と
 issue #107・#108・#75もタイプバランスレーンで担当するよう依頼があったが、ユーザーに確認したところ次の方針になった。
@@ -1812,3 +1835,208 @@ Impact: 各 issue の needs-decision を ready-for-implementation に付け替�
 Decision: `engine.BulkInput.DefenderAbilities` / `engine.ReverseInput.UnknownAbilities`(解決済みの特性 0〜3 件)を追加。各特性で計算し、全行(逆算は全性格クラス × 持ち物 × SP)の結果が完全に同じ特性は1つにまとめ(代表 = 先に渡したもの)、違えば行・候補を分ける。行・候補に `Ability` と `AbilityIDs` を出す。空は従来どおり特性なし。WASM は `calcBulk.defenderAbilities`・`calcReverse.unknownAbilities` を受け、応答の `abilityId`/`abilityIds` は特性を送ったときだけ出す(送らなければバイト単位で従来と同じ)。攻撃側の特性は `Individual.Ability` で既に渡せる(engine の変更なし)。
 Reason: 「1番目の特性」や「1つ指定」を既定にすると、隠れ特性などで無効になる種族を利用者が選び忘れたときに黙って誤る。全特性で行を分けると多くの技で行が2〜3倍になる。結果の一致でまとめれば、特性が効く技のときだけ行が分かれる。
 Impact(他レーンへの依頼。既定案): API — 既に採用済みの `BulkCalcRequest.defenderOverride.abilityId` を `DefenderAbilities` の1件に写し、**省略時は calc-svc が種族の全特性を解決して渡す**。`ReverseRequest.unknownAbilityId`(任意・1つ、省略時は同じく全特性)。`BulkCalcRow`・`ReverseCandidate` に `abilityId: string`・`abilityIds: string[]`。Web — WASM に種族の特性をマスタから解決して `defenderAbilities`/`unknownAbilities` で渡し、行・候補に `abilityIds` を表示。攻撃側は種族の1番目を既定にして画面に表示し、選べるようにする。iOS — API の追従後に同じ表示。
+
+## 2026-09-26: P6-18(issue #328)の非公式表示・データ出典の既定文言(iOS レーンから Web レーンへ)
+Decision: issue #328 のユーザー決定(2026-09-25「アプリ内に第三者データの出典と非公式の表示を入れる」)に対する既定の文言を iOS レーンが決め、
+Web レーンはこの文言に従う(依頼元との合意どおり)。詳細・受け入れ条件は ADR-0501「P6-18」(spec のみ。実装は未着手)。
+- 非公式の注記(完全一致): 「このアプリは個人が私的に使うための非公式ツールです。任天堂・クリーチャーズ・ゲームフリーク・株式会社ポケモンとは関係ありません。ポケモン・Pokémon および関連する名称は各社の商標です。」
+- データの出典一覧(docs/adr/0002-master-data-source.md「確定した方針 / 責務の分離」表と同じ順・同じ範囲。ADR に書かれていないライセンスは書かない):
+  1. ダメージ計算の検証: `@smogon/calc`(MIT License)
+  2. ポケモン・技・習得技の照合: Pokémon Showdown(MIT License)
+  3. 日本語名・図鑑番号: PokeAPI(ライセンス表記なし。ADR-0002 の調査でデータ自体の利用条件が README に明記されていないため)
+  4. 使用可能なポケモン等の基準: Pokémon HOME・Pokémon Champions の公式情報(ライセンス表記なし)
+Reason: iOS レーンへの依頼(このタスクの指示)どおり、iOS が先に既定案を決めて共有する運用(既存のレーン間の「既定案で進む」原則と同じ)。
+Impact: iOS は `PokeCalcCore.AboutText`(`unofficialNotice`/`dataSources`)にこの文言を1か所持つ(実装は implementer が TODO(implementer) を埋める形で行う。spec 時点ではプレースホルダで `swift test` は新規テストのみ失敗)。
+Web レーンはこの文言・出典の範囲(4件)をそのまま使ってよい。出典を追加・削除する場合は、docs/adr/0002-master-data-source.md の責務分離表・ADR-0501「P6-18」3章・このエントリ・両レーンの実装コードを同時に直すこと(勝手に増減しない)。
+
+## 2026-09-25: issue 272 の API レーン担当分(defenderOverride.abilityId・unknownAbilityId)を実装(API レーン → データ・Web・iOS レーンへ)
+Decision: データレーンの依頼(ADR-0126・PR #402)を反映した(ADR-0214)。
+`api/openapi.yaml`: 新規スキーマ `DefenderOverride { abilityId?: string }` を `BulkCalcRequest.defenderOverride`
+に追加(既存の採用済み概念〈2026-09-25「issue #274/#272 の防御側の詳細」〉のabilityId部分のみを実装。
+ranks/statusは別タスクとして残す)。`ReverseRequest.unknownAbilityId?: string` を新設。`BulkCalcRow`
+(`BulkCalcRow.result`経由ではなく行自体)・`ReverseCandidate` に `abilityId`(必須)・`abilityIds`(必須。
+`minItems: 1`)を追加。
+`services/calc/internal/httpapi/convert.go`: `resolveAbilityCandidates` を新設。指定があれば`store.Ability`
+で解決した1件、無ければ `species.Abilities`(スロット順)の先頭 `engine.MaxAbilityCandidates`(3)件を解決する。
+**4件目(Showdown の特殊枠 `"S"`。ADR-0100 §3)は落とす**(ADR-0105 §5と同じ判断。理由: engineの上限3を
+超えると`ErrInvalidAbilityCandidates`で常に失敗し、4件持つ種族の一括計算・逆算が既定のまま使えなくなる
+regressionを防ぐため)。マスタに無いIDは`unknown_ability`、種族が持たない特性は`invalid_input`(engineの
+`abilityCandidates`の検証結果をそのまま写す)。
+HTTP/WASMパリティテスト(`parity_test.go`)は、HTTPが既定で特性を渡すようになったため、WASM側のテスト入力
+にも同じ既定の特性を渡すよう更新(`wasmAbilitiesForSpecies`)。新規テスト
+`services/calc/internal/httpapi/ability_candidates_test.go`(4特性中1つだけ効果を持つ架空種族で、既定の
+切り詰め・override・エラー2種を一括計算・逆算の両方で固定。mutation testingで確認済み)。
+一括計算・逆算の行数/候補数の上限(ADR-0208)が特性分岐で最大3倍(一括512→1536行・逆算128→384件)まで
+増えうることをopenapi.yaml・ADR-0208に追記(クライアントが直接増幅できる経路ではないことを確認済み)。
+Reason: 1対1の計算では正しく効く防御側の特性(無効・吸収・軽減)が一括計算・逆算では常にゼロ値だった
+バグ(issue 272)を、契約側から解消する。
+Impact: **Web・iOSへ**: `BulkCalcRow`・`ReverseCandidate`の応答にabilityId/abilityIdsが必須で増える
+(生成物の再生成が必要)。特性が効く技では一括計算・逆算の行数/候補数が増える(意図した挙動)。防御側/相手側の
+特性を選べる画面はADR-0126の依頼どおり各レーンの担当(急ぎではない)。**データレーンへ**: API レーン担当分は
+critic レビュー待ち。issue 272 のclose判断はデータレーンに委ねる。**残作業**: `defenderOverride.ranks`/
+`status`は別タスク(plan.md参照。優先度低)。次は issue #284(balance/speed/judgeのgateway集約)に着手する。
+
+## 2026-09-25: issue #271/#270 の Web レーン実装を、iOS レーンのクロスプラットフォーム決定に合わせた(Web レーン)
+Decision: 上の「未対応の印の表示(文言・置き場所)を決めた」の Impact「Web レーンへ」を受けて、
+`feat/web-unsupported-marks-271-270`(critic PASS 後の再修正)を次のとおり iOS レーンの決定に揃えた。
+1. **置き場所**: `hasUnsupported = rows.some(...)` + 行ごとに常に印一覧、という実装(technicalな target で
+   決め打ちせず、行ごとに繰り返す設計)から、`web/src/domain/unsupportedLabels.ts` に新設した
+   `splitUnsupportedMarks`(印の内容〈target・reason・id〉が全行〈全候補〉にあるかどうかで判定)に置き換えた。
+   全行共通の印は結果・候補一覧の先頭に1回、残りはその行・候補だけに出す。CalcScreen.tsx・ReverseScreen.tsx
+   の両方で共有する。
+2. **色**: `--danger` を `--text-secondary`・`--font-size-caption`(既存の補足文と同じトークン)に変更
+   (`CalcScreen.css`・`ReverseScreen.css`)。
+3. **文言**: `web/src/i18n/ja.ts` の `unsupportedText` を全面的に書き直した。`notice`/`rowLabel` は
+   markLabel 済みの文言の配列を受け取り、iOS と同じ書式(結果の上「この結果は正確でない可能性があります
+   (未対応: <印>、<印>)」、行・候補「未対応: <印>、<印>」)を組み立てる関数にした。`markLabel` は
+   `<対象>「<名前>」(<理由>)`(reason が `unsupported_effect` のときは括弧を省く)。reason 15 種の文言を
+   iOS の表記(DisplayLabels.swift)に合わせ、alt_offense_stat・alt_defense_stat・effectiveness_change に
+   「特殊」を使わない(iOS critic 指摘を Web にも適用)。旧 `badgeLabel`/`listLabel` は廃止し、
+   `unsupportedText.reason`/`target` のキー・件数は変えていない(契約の enum と1対1)。
+critic からの軽微な指摘2件も合わせて対応: (1) 装飾アイコン(⚠)が `aria-hidden="true"` であることを直接
+検証する回帰テストを追加(`data-testid="unsupported-icon"` を新設)。(2) ReverseScreen で issue #305 の
+`noExactCandidateNotice`(role=status)と本タスクの `unsupportedText.notice`(role=status)が同時に出て、
+互いに独立した別要素として共存することを固定するテストを追加。
+`docs/design.md`「画面: ダメージ計算」「画面: 逆算」の該当箇所も置き場所・色の記述を更新した。
+`npx vitest run` 1674件 green・`npm run typecheck` green・`npm run lint`(eslint + prettier)green・
+`make wasm` 後 `npm run e2e` 37件 green。
+Reason: iOS レーンの決定(上のエントリの Impact)。技の印は全行に付くことが多く、行ごとに繰り返すと
+同じ文言が何度も並ぶ(iOS の指摘どおり Web でも同じ問題が起きる設計だった)。数値は通常の式の目安であり
+エラーではないため警告色にしない、という判断もクロスプラットフォームで揃える方が利用者の理解を助ける。
+Impact: 判定レーン(JD5 `JudgeScreen` の追従。docs/plan.md 未着手タスク)は、この Web の書式・
+`splitUnsupportedMarks` の考え方(全行共通 vs 個別)を踏襲してよい。iOS レーンへは特に追加の申し送りなし
+(Web 側が iOS の決定に合わせただけで、契約・iOS 側の変更は無い)。
+
+## 2026-09-26: P6-19(issue #272 の iOS 側)防御側・相手の特性の選択と、特性で分かれた行・候補の表示(iOS レーンから Web レーンへ)
+Decision: iOS は次の形にする(spec 段階。詳細・受け入れ条件は ADR-0501「P6-19」)。Web はラベル・置き場所・既定・リセット・
+行の副題をこれに揃えてよい。
+1. **ラベル**: 計算画面の「詳細」の中、「攻撃側の特性」のすぐ下に「防御側の特性」。逆算画面は「相手の持ち物候補」のすぐ上に
+   「相手の特性」(常に表示)。選択肢は「指定なし」+ その種族の特性名(マスタの順)。「指定なし」は攻撃側と同じ語。
+2. **既定・写像**: 既定は「指定なし」= `defenderOverride` / `unknownAbilityId` を送らない(サーバーが種族の特性を最大3件すべて
+   試し、結果が違うときだけ行・候補を分ける。ADR-0126・ADR-0214)。選ぶとその1件を送る。
+3. **リセット**: 防御側(相手)の種族の変更・攻守入れ替え・逆算の側の切り替えで「指定なし」に戻す。他の入力では残す。
+4. **行・候補の副題**: 同じ(プリセット, 持ち物)・(性格クラス, 持ち物)が特性で分かれた行・候補にだけ
+   `特性: <名前> / <名前>`(`abilityIds` の順。名前が無い ID は ID のまま)。分かれていなければ出さない。
+5. **行・候補の ID**: base ID が結果の中で2回以上あるときだけ `<base>@<代表の特性 ID>`(重複が残れば `#2`…)。
+   分かれない結果の ID は今までどおり(iOS の既存の XCUITest の identifier を変えない)。
+6. 逆算画面の自分(既知側)の特性の選択は足さない(issue #272 の範囲外。plan.md P6-19 に後続候補として記録)。
+Reason: issue #272 の API レーン分(PR #411)で `BulkCalcRow`・`ReverseCandidate` に必須の `abilityId`/`abilityIds` が入り、特性の効く技では
+同じ(プリセット, 持ち物)の行が複数返るようになった。iOS の行 ID は特性を含まないため `ForEach` と行ごとの注記の identifier が
+衝突する(急ぎの正しさの問題)。「常に特性を ID に足す」案は既存の XCUITest の identifier をすべて変えるので採らなかった。
+防御側の特性の選択肢は起動・防御側の変更では読まず、「詳細」を開いたとき(逆算は画面表示時)と行が分かれて名前が要るときだけ
+読む(既存テストの `species(key:)` の回数を変えない・余計な通信をしない)。
+Impact: **Web レーンへ**: 上の 1〜5 に揃えてよい(Web は WASM 経由なので、指定なしのときは種族の特性をマスタから解決して
+`defenderAbilities`/`unknownAbilities` に渡す。ADR-0126 §他レーンへの依頼)。**API・データレーンへ**: 追加の依頼なし(契約の変更なし)。
+
+## 2026-09-26: issue #284 の API レーン担当分(balance・speed・judge を gateway の後ろにまとめる)を実装(API レーン → タイプバランス・素早さ・判定レーンへ)
+Decision: ユーザー決定(2026-09-25「ユーザー決定 4 件」#2)を実装。`services/gateway/internal/httpapi/routing.go`
+に `routeBalance`/`routeSpeed`/`routeJudge` と `prefixBalance`/`prefixSpeed`/`prefixJudge`(`/api/balance/`・
+`/api/speed/`・`/api/judge/`。record・team と同じ前方一致・末尾スラッシュ必須・不一致は404)を追加し、
+`requiresHeaderCheck` にも3つとも加えた(`/api/{balance,speed,judge}/*` にも端末ID・セッションIDの検証
+〈ADR-0202 §4〉がgatewayでもかかるようになった)。`server.go` に `Config.BalanceURL`/`SpeedURL`/`JudgeURL`
+(nilなら503 `upstream_unavailable`)と対応する `ReverseProxy` を追加、`main.go` に `GATEWAY_BALANCE_URL`/
+`GATEWAY_SPEED_URL`/`GATEWAY_JUDGE_URL` を追加。CORSの許可メソッドは変更なし(3サービスの契約は
+GET/POSTのみとソースで確認済み)。`deploy/k8s` にbalance/speed/judge自体のDeployment/Serviceがまだ無い
+ため、gatewayのdeployment.yamlへの実URL配線はrecord・team(P5-3b/P5-4b)と同じく別タスクとして残す
+(コードのみ今回のスコープ)。
+Reason: issue #236で判明していた「balance/speed/judgeがTraefik直結でgatewayを経由しないため、端末ID・
+セッションIDの検証がgatewayと各サービスで別々に実装され食い違いうる」問題を、CLAUDE.mdの「gatewayが
+唯一の入口」原則どおりgatewayに統合することで解消する。
+Impact: **タイプバランス・素早さ・判定レーンへ**: gatewayに `/api/balance/*`・`/api/speed/*`・
+`/api/judge/*` の転送が実装された(現時点ではcritic未レビュー・deployment.yamlの実URL未配線のため
+まだ有効化されていない)。各レーンが持つ直結Traefik Ingressの撤去は、gateway側のdeployment.yaml配線が
+完了し実クラスタで動作確認できてから行うこと(先に撤去すると経路が無くなる)。各サービス自身が持つ
+端末ID・セッションIDの検証(issue #236)は二重になるが害はなく、削除するかどうかは各レーンの判断のまま
+残す。critic レビュー後、deployment.yaml配線と実クラスタ確認を別途行い、完了したら改めて連絡する。
+
+## 2026-09-26: issue #284 critic 1回目 FAIL(重要2件)を修正
+Decision: critic指摘を反映(2回目相当のセルフレビューまで実施)。
+(1) **重要-1**: `/api/{balance,speed,judge}/healthz`(完全一致のみ)がgatewayでヘッダ検証必須になっていたのを
+外した。3サービスの契約(`services/{balance,speed,judge}/api/openapi.yaml`の`publicHealth`)・ADR-0600・
+ADR-0700がIngress越しの疎通確認用としてヘッダ不要と明記しており、gateway経由になっても同じ契約を守る
+必要があるため(このまま出すと、直結Ingress撤去後に各サービス自身のsmoke.sh・ヘルスチェックが400で
+落ちる時限爆弾だった)。`requiresHeaderCheck`にpathを渡すよう変更し、完全一致だけを緩めた
+(`healthzz`・`healthz/x`のような似た別パスは従来どおり検証。前方一致に緩めないことをテストで固定)。
+`balance_speed_judge_routing_test.go`に4テーブルケース×3サービスを追加、ADR-0202 §3・§4に追記。
+(2) **重要-2**: `services/gateway/README.md`のルーティング表が古いまま(record/team/balance/speed/judgeの
+行が無く、catch-allの行に「`/api/balance`を含む」という誤った記述が残っていた)だったのを、5サービス分の
+行と環境変数表を追加して実態に合わせた。
+あわせて軽微指摘2件も反映: `deploy/k8s/base/gateway/ingress.yaml`・`manifest_test.go`の「balanceは
+独自Ingress」コメントに、gateway側のルーティングは実装済みで直結Ingress撤去は別タスクである旨を追記。
+`cmd/gateway/main_test.go`の`TestEnvNames`/`TestLoadConfig`/`TestLoadConfigRejects`にrecord/team/
+balance/speed/judgeの5URLを追加(取り違えmutationがすり抜けていた穴を閉じた。record/teamも含めて
+まとめて追加)。
+Reason: critic(agent a5e87478edf501a11)によるmutation testing・実HTTP確認・契約/ADRの横断チェックで
+発見。健全性チェック済みの既存パターン(record/team)をそのままコピーしたことで、balance/speed/judge
+固有の契約差分(公開healthzの存在)を見落としていた。
+Impact: 上記のIssue #284のエントリの実装内容を本エントリの内容で更新するものと理解すること
+(`requiresHeaderCheck`のシグネチャが`(kind routeKind)`から`(kind routeKind, path string)`に変わった)。
+critic 2回目レビュー予定。
+
+## 2026-10-01: UnsupportedMark の target・reason を string にした(API レーン → Web・iOS レーンへ)
+
+Decision: ADR-0215。openapi の `UnsupportedMark.target`・`reason` から enum を外した(既知の値は description)。サーバーの応答値は不変。
+Reason: 新しい reason を足すと古い iOS アプリが応答全体をデコードできなくなるため(iOS レーン提案の対応)。
+Impact: Web は `UnsupportedMark.target/reason: string`、未知の値は「項目」「詳細は不明」で表示。iOS は `UnsupportedTarget/Reason` に `unknown` を足し、契約同期テストは既知の値の集合をテストに持つ。両レーンの追従は同じ PR で済み(Web 1747・iOS 全件テスト緑)。
+
+## 2026-10-01: issue #211(オンラインの持ち物候補比較)の API 側の提案(Web レーン → API レーンへ)
+
+- 状況: Web は `ONLINE_MASTER_CAPABILITIES.effects=false`(`web/src/master/onlineSource.ts`)で、計算画面の「持ち物の候補も比較」と逆算の持ち物候補を無効化している。原因は公開 API の `Item`/`Ability` に効果データが無いこと(ADR-0304 A-1。効果は internal-only の `getMasterExport`〈ADR-0204〉だけ)。`api/openapi.yaml` を変えられるのは API レーンだけなので、Web 単独では進められない。
+- 既定案(issue 本文と同じ): 公開 `Item`/`Ability` に `effect`(internal `MasterExport` と同じ形)を **省略可** で足す。既存クライアントは壊れない。iOS は生成物の再生成だけで追従する。代替の「効果一覧 API を別に切る」は往復が増えるので採らない。
+- API レーンがやること: `api/openapi.yaml` の `Item`/`Ability` に `effect` を足し、pokedex-svc の公開ハンドラで返す → `make gen`・`make gen-ts`・`make ios-gen`。契約テスト。
+- Web レーンの追従(API 側が main に入ってから): `onlineSource.ts` の `mapItem`/`mapAbility` で `effect` を写し、効果フィールドを返す版のときだけ `effects:true`(古いサーバーは従来どおり無効化して注記)。候補は効果ありの持ち物を `maxItems` 64 に切り詰めて表示(`domain/requestLimits.ts`)。
+- Web レーンは API 側が入るまで #211 を待ち、先に #272/#274 などへ進む。
+
+## 2026-10-01: issue #260 のタイプバランス分をクローズ(タイプバランスレーン)
+Decision: `docs/type-balance-design.md` を実装済みの現在の設計(TB0〜TB6・メトリクス・GitOps〈手動 sync〉・recommendations の同時実行上限・未対応)
+に書き換え、役割分担・レビュー依頼・AI 間の共有ルール・旧未決事項の決着は ADR-0410 に履歴として移した。
+Reason: 旧版は 2026-09-21 のレビュー依頼文書のままで、`/api/damage` 等の誤記・実装済みの Kustomize/Argo CD 分割の未決扱いが残っていた。
+Impact: 判定レーン分(2026-09-25)と合わせて issue #260 をクローズできる。旧版の節番号を参照する ADR は変更せず、ADR-0410 の対応表で読み替える
+(§6 段階・§10 倍率の表示は新版でも同じ節番号)。コード・API・他の ADR は無変更(ドキュメントのみ)。
+
+## 2026-10-01: 共通の context ガードとイメージタグ(データレーン → API・Web・タイプバランス・素早さ・判定レーンへ。issue #295・#291・#403 D07)
+
+- `scripts/require-k3d-context.sh <呼び出し元>`: kubectl の context が `k3d-$CLUSTER`(既定 pokecalc)でなければ理由を出して exit 1。kubectl は `config current-context` の読み取りだけ。テストは `scripts/require-k3d-context_test.sh`
+- `scripts/image-tag.sh [パス...]`: HEAD の12桁 + 指定パスに未コミット・未追跡があれば `-dirty`。テストは `scripts/image-tag_test.sh`
+- データレーンは up.sh・k3d-deploy-latest.sh・pokedex-registry-push.sh・`make import-k8s` を移行済み
+- 依頼(既定案): 各レーンは自分の `*-k3d-deploy`(api・balance・speed・judge。web は既に検査あり)の先頭に `@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh <ターゲット名>` を足す(#295)。readmodel の deploy スクリプトも同様。`local-registry-push.sh` のタグ計算は `scripts/image-tag.sh <svc_dir> [engine]` に置き換えてよい。`:local` をやめてコミットのタグで k3d へ入れる移行(#291 の本体)は各レーンの判断で
+
+## 2026-10-01: P6-7「この端末のデータを削除」の iOS 側の決定(iOS レーン → Web レーンへ。issue #103)
+Decision: (1) Web は未実装のため iOS が既定を決める。文言は ADR-0209 §8 をそのまま使い、設定の説明2文目の括弧だけ iOS 向け
+(「アプリを削除して入れ直したとき」。Web は「ブラウザのサイトデータを消したとき」)。確定文は ADR-0501「P6-7」2章の表。
+(2) 置き場所は「このアプリについて」画面の「データの扱い」セクション(新しい画面・導線は作らない)。Web も About 相当に揃えてよい。
+(3) 動き: 確認必須 → record と team を独立に呼ぶ(片方が失敗でももう片方は進める)→ `partial` は上限付き(1対象20回)で自動再送 →
+両方 `completed` になってから「削除しました。」。失敗は自動再送せず「サーバーに届きませんでした…」と再試行ボタン(片方だけ消えたときは
+「構築は削除済みです。」等を添える)。(4) 削除するのはサーバー側だけ。端末内に持つデータ(iOS の `LocalTeamStore`)と端末 ID は消さない。
+(5) 計算・逆算は削除の成否に依存しない(絶対ルール5)。
+Reason: ADR-0209 §8 の依頼(Web は P5-5、iOS は P6-5 → plan では P6-7)。
+Impact: Web レーンは文言・再送の上限・再試行の扱いを揃えるか、違う判断をするなら DECISIONS.md に書く。iOS の生成クライアントは
+`record`・`team` タグが未生成のため、implementer が `ios/tools/openapi-gen/openapi-generator-config.yaml` に足して再生成する(契約の変更なし)。
+
+## 2026-10-01: pokecalc namespace に NetworkPolicy(ingress の既定拒否)を入れた(データレーン → 全レーンへ。issue #240・ADR-0132)
+
+- k3d-pokecalc には適用済み(全 smoke・import・Prometheus の scrape が通ることを確認)。許可していない Pod からの ingress は届かない
+- 新しい通信(新サービス・新しい呼び出し先)を足すレーンは、`deploy/k8s/base/networkpolicy/` に許可を足し、
+  `services/gateway/deploytest/networkpolicy_test.go` の許可表にも足す。許可は宛先 Pod の 8080(Service の 80 ではない)
+- API レーンへ: TiDB(record/team)を k3d に上げる前に ADR-0132「確認の結果」の手順を行う(tidb-operator からの許可を足す)。
+  M2 で record・team の本体を足すときも許可が要る。PR #416(#284)で gateway → balance/speed/judge は既に許可済み
+- 詰まったときの戻し方: `kubectl -n pokecalc delete networkpolicy default-deny-ingress`(許可だけが残る。データは消えない)
+
+
+## 2026-10-02: 一括計算の defenderOverride に ranks・status を足した(API レーン → Web・iOS レーンへ。issue #274/#272・ADR-0216)
+
+- `BulkCalcRequest.defenderOverride` は `{ abilityId?, ranks?: RankBlock, status?: StatusCondition }`。全行(全プリセット × 持ち物 × 特性)に一律で当たる。ランクは各 -6..+6(外は 400 `invalid_input`)、未知の status は 400 `invalid_enum`
+- 防御側の status は現状のダメージ式に効かない(結果は変わらない。ADR-0216 §3)。UI で選ばせるなら、その旨を注記するか、式が対応するまで出さない判断をレーン側で行う
+- iOS の生成物(`Types+Components+Schemas.swift`)は API レーンで再生成済み(`make ios-gen-check` 緑)。Web の `openapi.gen.ts` も再生成済み
+- 逆算(`ReverseRequest`)には足していない(既知の側は `known.ranks` / `known.status`。`defenderOverride` を送ると 400 `unknown_field` のまま)
+
+## 2026-10-01: #222(Showdown 取得のサプライチェーン)を深夜のため既定案 A で進めた(データレーン。ユーザー確認待ち。issue #403 D19・#301)
+Decision: #222 は needs-decision(セキュリティ方針)だが、深夜のため人間に聞かず、issue 本文の既定案 A(推奨)で進めた。
+`npm ci --ignore-scripts` + 展開後のファイル木の内容ハッシュ(ソート済みパス+内容)を `data/importer/config.json` の `integrity` に pin し、
+不一致なら取得を止めて終了コード 3。PokeAPI の CSV も同じ(#301)。あわせて、取得・build 段(第三者のコードを実行)を CronJob の
+initContainer `fetch`(DSN・Secret なし)に分け、DSN は `import` だけが持つ。2コンテナの間のロックは flock + 有効期限付きの引き渡しファイル
+(ADR-0101 追記 2026-10-01)。
+Reason: 既定案 A は変更が小さく、版を上げる PR でハッシュも更新する運用に乗る。クラウド移行(#149)の前に塞ぎたい。
+Impact: 版を上げる PR は config.json の `integrity` も更新する(不一致のときは stderr の実際のハッシュを、内容を確かめたうえで反映)。
+却下案 B(dist の vendoring)・C(現状維持)に変えるなら ADR-0101 追記と config.json の integrity を戻す。
+ユーザーの確認待ち: A でよいか(特に、期限切れの引き渡しを無視する TTL 7200 秒の扱い)。

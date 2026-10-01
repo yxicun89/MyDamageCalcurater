@@ -22,6 +22,16 @@ tools/golden/dist/
 .env.*
 !.env.example
 # 鍵・証明書の秘密鍵類(誤コミット防止)
+.envrc
+id_rsa*
+id_ed25519*
+credentials.json
+*.p8
+*.sql.gz
+*dump*.sql
+*backup*.sql
+kubeconfig
+secret*.yaml
 *.pem
 *.key
 *.p12

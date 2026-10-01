@@ -8,10 +8,12 @@ import type {
   BulkRequest,
   CalcRequest,
   Individual,
+  Field,
   Item,
   Move,
   Nature,
   Observation,
+  Ranks,
   ReverseRequest,
   ReverseSide,
   Species,
@@ -20,7 +22,7 @@ import type {
   TypeChart,
 } from "../engine/types";
 import type { MasterSpecies } from "../master/types";
-import { MAX_ITEM_VARIANTS, limitToMax } from "./requestLimits";
+import { MAX_ABILITY_CANDIDATES, MAX_ITEM_VARIANTS, limitToMax } from "./requestLimits";
 
 /** バトルのレベル。Lv50 固定(CLAUDE.md ドメイン規約)。 */
 export const BATTLE_LEVEL = 50;
@@ -63,11 +65,40 @@ export function defaultAbility(species: MasterSpecies, abilities: readonly Abili
   return NO_ABILITY;
 }
 
+/**
+ * 種族の特性の選択肢(スロット順。マスタで解決できないものは捨てる。issue 272、ADR-0311)。
+ * 攻撃側の特性セレクトと、防御側の「個別選択」の選択肢に使う。件数は絞らない(4件目も選べる)。
+ * 同じ ID が複数スロットにあっても初出だけ残す(engine は候補の重複を拒否し、option の key も重複するため)。
+ */
+export function selectableAbilities(species: MasterSpecies, abilities: readonly Ability[]): Ability[] {
+  const uniqueIds = [...new Set(species.abilities)];
+  return uniqueIds.flatMap((id) => abilities.filter((ability) => ability.id === id).slice(0, 1));
+}
+
+/**
+ * 防御側・相手側の特性の候補(issue 272、ADR-0311)。selectedId が null は「おまかせ」で、選択肢の先頭
+ * MAX_ABILITY_CANDIDATES 件。個別選択はその1件だけ(種族が持たない ID は空)。
+ */
+export function defenderAbilityCandidates(
+  species: MasterSpecies,
+  abilities: readonly Ability[],
+  selectedId: string | null,
+): Ability[] {
+  const selectable = selectableAbilities(species, abilities);
+  if (selectedId === null) {
+    return selectable.slice(0, MAX_ABILITY_CANDIDATES);
+  }
+  return selectable.filter((ability) => ability.id === selectedId);
+}
+
 export interface BuildIndividualInput {
   readonly sp: Stats;
   readonly nature: Nature;
   readonly item: Item | null;
   readonly ability: Ability;
+  /** 攻撃側の状態異常・ランク(計算条件。省略はキーを作らない。issue 274)。 */
+  readonly status?: string;
+  readonly ranks?: Ranks;
 }
 
 /** レベル 50・指定の SP・性格・持ち物・特性の個体を作る(P4-2 ではランクを入力しない)。 */
@@ -79,6 +110,8 @@ export function buildIndividual(species: MasterSpecies, input: BuildIndividualIn
     ability: input.ability,
     item: input.item,
     sp: input.sp,
+    ...(input.status === undefined ? {} : { status: input.status }),
+    ...(input.ranks === undefined ? {} : { ranks: input.ranks }),
   };
 }
 
@@ -89,11 +122,17 @@ export interface BuildBulkRequestInput {
   readonly typeChart: TypeChart;
   /** 防御側の持ち物の差し替え候補(ADR-0300 §6)。省くと engine は持ち物なしの5行を返す。 */
   readonly itemVariants?: ReadonlyArray<Item | null>;
+  /** 防御側の特性の候補(defenderAbilityCandidates)。省略・空は送らない。 */
+  readonly defenderAbilities?: readonly Ability[];
+  /** 急所(計算条件。false・省略は送らない)と場(省略は送らない。issue 274)。 */
+  readonly critical?: boolean;
+  readonly field?: Field;
 }
 
 /** 一括計算リクエスト。presetKeys・presets を省いて engine の既定の5行にする(ADR-0009)。 */
 export function buildBulkRequest(input: BuildBulkRequestInput): BulkRequest {
-  const { attacker, defenderSpecies, move, typeChart, itemVariants } = input;
+  const { attacker, defenderSpecies, move, typeChart, itemVariants, defenderAbilities, critical, field } =
+    input;
   return {
     format: "single",
     attacker,
@@ -101,6 +140,9 @@ export function buildBulkRequest(input: BuildBulkRequestInput): BulkRequest {
     move,
     typeChart,
     ...(itemVariants === undefined ? {} : { itemVariants }),
+    ...(defenderAbilities === undefined || defenderAbilities.length === 0 ? {} : { defenderAbilities }),
+    ...(critical === true ? { critical } : {}),
+    ...(field === undefined ? {} : { field }),
   };
 }
 
@@ -205,6 +247,8 @@ export interface BuildReverseRequestInput {
   /** 探索する持ち物候補(domain/reverseItems.ts の reverseItemCandidates)。先頭は必ず null。 */
   readonly itemCandidates: ReadonlyArray<Item | null>;
   readonly observations: readonly Observation[];
+  /** 相手の特性の候補(defenderAbilityCandidates)。省略・空は送らない。 */
+  readonly unknownAbilities?: readonly Ability[];
 }
 
 /**
@@ -212,7 +256,8 @@ export interface BuildReverseRequestInput {
  * (engine は 2 × 持ち物候補数の全候補を返し、候補は高々十数件なので切り取る必要が無い)。
  */
 export function buildReverseRequest(input: BuildReverseRequestInput): ReverseRequest {
-  const { side, known, unknownSpecies, move, typeChart, itemCandidates, observations } = input;
+  const { side, known, unknownSpecies, move, typeChart, itemCandidates, observations, unknownAbilities } =
+    input;
   return {
     format: "single",
     side,
@@ -222,5 +267,6 @@ export function buildReverseRequest(input: BuildReverseRequestInput): ReverseReq
     typeChart,
     itemCandidates,
     observations,
+    ...(unknownAbilities === undefined || unknownAbilities.length === 0 ? {} : { unknownAbilities }),
   };
 }

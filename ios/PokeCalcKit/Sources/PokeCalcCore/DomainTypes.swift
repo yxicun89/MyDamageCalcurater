@@ -321,10 +321,15 @@ public struct CalcResult: Equatable, Sendable {
     /// 使った技の分類(openapi `CalcResult.category`。必須)。
     public var category: MoveCategory
     public var ko: KOChance
+    /// 「正確でない可能性がある」印(openapi `CalcResult.unsupported`。必須・印なしは空。ADR-0123)。
+    /// 数値は印があっても通常の式のまま(サーバーが拒否しない)。表示は `UnsupportedNotice.swift`。
+    public var unsupported: [UnsupportedMark]
 
+    /// `unsupported` は既定で空(P6-17 より前に書かれた呼び出し側・テストをそのまま通すため)。
     public init(
         rolls: [Int], minDamage: Int, maxDamage: Int, minPercent: Double, maxPercent: Double,
-        defenderHP: Int, effectiveness: Double, stab: Bool, category: MoveCategory, ko: KOChance
+        defenderHP: Int, effectiveness: Double, stab: Bool, category: MoveCategory, ko: KOChance,
+        unsupported: [UnsupportedMark] = []
     ) {
         self.rolls = rolls
         self.minDamage = minDamage
@@ -336,6 +341,77 @@ public struct CalcResult: Equatable, Sendable {
         self.stab = stab
         self.category = category
         self.ko = ko
+        self.unsupported = unsupported
+    }
+}
+
+// MARK: - 未対応の印(ADR-0123・ADR-0501「P6-17」)
+
+/// 印の対象(openapi `UnsupportedMark.target`)。契約は enum にしない(ADR-0215)ので、知らない値は
+/// `.unknown` に写す。`allCases` は既知の値だけ(`.unknown` を含めない)。
+public enum UnsupportedTarget: String, CaseIterable, Sendable, Hashable {
+    case move
+    case attackerItem = "attacker_item"
+    case attackerAbility = "attacker_ability"
+    case defenderItem = "defender_item"
+    case defenderAbility = "defender_ability"
+    /// 契約に新しい値が増えても古いアプリが応答全体をデコードできなくならないための受け皿。
+    case unknown
+
+    public static var allCases: [UnsupportedTarget] {
+        [.move, .attackerItem, .attackerAbility, .defenderItem, .defenderAbility]
+    }
+
+    /// 契約の文字列から作る。知らない値は `.unknown`。
+    public init(contractValue: String) {
+        self = UnsupportedTarget(rawValue: contractValue) ?? .unknown
+    }
+}
+
+/// 印の理由(openapi `UnsupportedMark.reason`)。技は機構(ADR-0121 の13種)か `zero_power`、
+/// 持ち物・特性は `unsupported_effect`。値の集合は `UnsupportedMarkDomainTests` が契約と照合する。
+/// 契約は enum にしない(ADR-0215)ので、知らない値は `.unknown` に写す。`allCases` は既知の値だけ。
+public enum UnsupportedReason: String, CaseIterable, Sendable, Hashable {
+    case altDefenseStat = "alt_defense_stat"
+    case altOffenseStat = "alt_offense_stat"
+    case alwaysCrit = "always_crit"
+    case effectivenessChange = "effectiveness_change"
+    case fieldSpecific = "field_specific"
+    case fixedDamage = "fixed_damage"
+    case ignoreDefenseRanks = "ignore_defense_ranks"
+    case moveSpecific = "move_specific"
+    case multiHit = "multi_hit"
+    case ohko
+    case priorityChange = "priority_change"
+    case typeChange = "type_change"
+    case variablePower = "variable_power"
+    case zeroPower = "zero_power"
+    case unsupportedEffect = "unsupported_effect"
+    case unknown
+
+    public static var allCases: [UnsupportedReason] {
+        [.altDefenseStat, .altOffenseStat, .alwaysCrit, .effectivenessChange, .fieldSpecific, .fixedDamage,
+         .ignoreDefenseRanks, .moveSpecific, .multiHit, .ohko, .priorityChange, .typeChange, .variablePower,
+         .zeroPower, .unsupportedEffect]
+    }
+
+    /// 契約の文字列から作る。知らない値は `.unknown`。
+    public init(contractValue: String) {
+        self = UnsupportedReason(rawValue: contractValue) ?? .unknown
+    }
+}
+
+/// 「この結果は正確でない可能性がある」印1つ(openapi `UnsupportedMark`。ADR-0123 §2)。
+/// `id` は技・持ち物・特性の ID(`target` で決まる)。
+public struct UnsupportedMark: Equatable, Hashable, Sendable {
+    public var target: UnsupportedTarget
+    public var reason: UnsupportedReason
+    public var id: String
+
+    public init(target: UnsupportedTarget, reason: UnsupportedReason, id: String) {
+        self.target = target
+        self.reason = reason
+        self.id = id
     }
 }
 
@@ -443,11 +519,16 @@ public struct BulkCalcRequest: Sendable {
     public var presets: [DefenderPreset]
     /// 差し替えて比較する持ち物 ID(省略時は素の1通り)。`nil` は「持ち物なし」。
     public var itemVariants: [String?]
+    /// 防御側の特性を1つに固定する(openapi `BulkCalcRequest.defenderOverride.abilityId`。issue #272・ADR-0214)。
+    /// nil は「指定なし」= `defenderOverride` を送らず、サーバーが種族の特性(最大3件)をすべて試して、
+    /// 結果が違うときだけ行を分ける(ADR-0126)。ADR-0501「P6-19」。
+    public var defenderAbilityId: String?
 
     public init(
         format: Format, attacker: Individual, defenderSpeciesKey: String, moveId: String,
         field: FieldState = FieldState(),
-        critical: Bool = false, presets: [DefenderPreset] = [], itemVariants: [String?] = []
+        critical: Bool = false, presets: [DefenderPreset] = [], itemVariants: [String?] = [],
+        defenderAbilityId: String? = nil
     ) {
         self.format = format
         self.attacker = attacker
@@ -457,6 +538,7 @@ public struct BulkCalcRequest: Sendable {
         self.critical = critical
         self.presets = presets
         self.itemVariants = itemVariants
+        self.defenderAbilityId = defenderAbilityId
     }
 }
 
@@ -487,16 +569,25 @@ public struct BulkCalcRow: Equatable, Sendable {
     /// この行で使った防御側の調整(openapi `BulkCalcRow.defender`。必須)。
     public var defender: BulkDefender
     public var result: CalcResult
+    /// この行の計算に使った防御側の特性(openapi `BulkCalcRow.abilityId`。契約では必須。ADR-0126・ADR-0214)。
+    /// ドメインでは既定 nil(P6-19 より前に書かれた呼び出し側・テストの行は「特性の情報なし」として扱う)。
+    public var abilityId: String?
+    /// この行と結果が完全に同じになる特性の ID(openapi `BulkCalcRow.abilityIds`。`abilityId` が先頭)。
+    /// 既定は空(= 特性の情報なし)。
+    public var abilityIds: [String]
 
     public init(
         preset: DefenderPreset, presetLabel: String, itemId: String? = nil,
-        defender: BulkDefender, result: CalcResult
+        defender: BulkDefender, result: CalcResult,
+        abilityId: String? = nil, abilityIds: [String] = []
     ) {
         self.preset = preset
         self.presetLabel = presetLabel
         self.itemId = itemId
         self.defender = defender
         self.result = result
+        self.abilityId = abilityId
+        self.abilityIds = abilityIds
     }
 }
 
@@ -556,12 +647,24 @@ public struct ReverseCandidate: Equatable, Sendable {
     /// `ranges` 全体での想定ダメージ幅(表示%)。
     public var minPercent: Double
     public var maxPercent: Double
+    /// 「正確でない可能性がある」印(openapi `ReverseCandidate.unsupported`。必須・印なしは空。
+    /// SP によらず候補ごとに決まる。ADR-0123 §2)。
+    public var unsupported: [UnsupportedMark]
+    /// この候補の計算に使った相手の特性(openapi `ReverseCandidate.abilityId`。`BulkCalcRow.abilityId` と同じ規則)。
+    public var abilityId: String?
+    /// この候補と結果が完全に同じになる特性の ID(openapi `ReverseCandidate.abilityIds`。既定は空)。
+    public var abilityIds: [String]
 
+    /// `unsupported`・`abilityId`・`abilityIds` は既定で空(`CalcResult` と同じ理由)。
     public init(
         natureClass: NatureClass, nature: NatureModifier, natureId: String?, itemId: String?,
         ranges: [SPRange], spCount: Int,
-        exact: Bool, mismatch: Int, support: Int, minPercent: Double, maxPercent: Double
+        exact: Bool, mismatch: Int, support: Int, minPercent: Double, maxPercent: Double,
+        unsupported: [UnsupportedMark] = [],
+        abilityId: String? = nil, abilityIds: [String] = []
     ) {
+        self.abilityId = abilityId
+        self.abilityIds = abilityIds
         self.natureClass = natureClass
         self.nature = nature
         self.natureId = natureId
@@ -573,6 +676,7 @@ public struct ReverseCandidate: Equatable, Sendable {
         self.support = support
         self.minPercent = minPercent
         self.maxPercent = maxPercent
+        self.unsupported = unsupported
     }
 }
 
@@ -613,12 +717,16 @@ public struct ReverseRequest: Sendable {
     public var critical: Bool
     /// 返す候補数の上限。0 は無制限(openapi の既定値)。
     public var maxCandidates: Int
+    /// 相手の特性を1つに固定する(openapi `ReverseRequest.unknownAbilityId`。issue #272・ADR-0214)。
+    /// nil は「指定なし」= 送らず、サーバーが相手の種族の特性をすべて候補にする(ADR-0126)。
+    public var unknownAbilityId: String?
 
     public init(
         format: Format, side: ReverseSide, known: Individual, unknownSpeciesKey: String, moveId: String,
         itemCandidates: [String?] = [], observations: [DamageObservation],
-        critical: Bool = false, maxCandidates: Int = 0
+        critical: Bool = false, maxCandidates: Int = 0, unknownAbilityId: String? = nil
     ) {
+        self.unknownAbilityId = unknownAbilityId
         self.format = format
         self.side = side
         self.known = known

@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"example.com/pokecalc/services/internal/api"
+	"example.com/pokecalc/services/pokedex/internal/readtx"
 	"example.com/pokecalc/services/pokedex/internal/store"
 	"example.com/pokecalc/services/pokedex/internal/storetest"
 )
@@ -75,7 +76,8 @@ func TestMasterExportMatchesContract(t *testing.T) {
 }
 
 // AC-I2: 中身は DB の行のとおり。使用可能集合で絞らない(既定のレギュレーションの外の種族・技・持ち物・特性も入る)。
-// species に showdownId、メガの3列、slot 順の特性。dataVersion は data_versions の source=version を source 昇順に「,」で連結。
+// species に showdownId、メガの3列、slot 順の特性。dataVersion は data_versions の source=version@checksum先頭8桁 を
+// source 昇順に「,」で連結(issue #281・ADR-0128。checksum を含めて、version が "local" 固定の取得元の中身の違いも区別する)。
 func TestMasterExportContent(t *testing.T) {
 	q := storetest.New()
 	h := newHandler(t, q)
@@ -88,7 +90,7 @@ func TestMasterExportContent(t *testing.T) {
 	if ex.SchemaVersion != api.MasterExportSchemaVersionN1 {
 		t.Errorf("schemaVersion = %d, want 1", ex.SchemaVersion)
 	}
-	wantVersion := "calc=test-calc-1,pokeapi=cafef00dcafef00dcafef00dcafef00dcafef00d,showdown=abad1deaabad1deaabad1deaabad1deaabad1dea"
+	wantVersion := "calc=test-calc-1@22222222,pokeapi=cafef00dcafef00dcafef00dcafef00dcafef00d@33333333,showdown=abad1deaabad1deaabad1deaabad1deaabad1dea@11111111"
 	if ex.DataVersion != wantVersion {
 		t.Errorf("dataVersion = %q, want %q", ex.DataVersion, wantVersion)
 	}
@@ -315,16 +317,34 @@ func TestCalcRoutesAndUnknownPathsAreNotFound(t *testing.T) {
 }
 
 // AC-I8: panic は 500 internal(Error 形式・内部情報を出さない)。
+// panic したリクエストのトランザクションも閉じる(接続を返さないまま残さない。issue #220)。
 func TestPanicIsInternalError(t *testing.T) {
-	h := newHandler(t, &panickingQuerier{Querier: storetest.New()})
+	q := storetest.New()
+	h := newHandler(t, &panickingQuerier{Querier: q})
 	rec := do(t, h, http.MethodGet, masterPath, false)
 	assertError(t, rec, http.StatusInternalServerError, api.Internal)
 	if strings.Contains(rec.Body.String(), "goroutine") || strings.Contains(rec.Body.String(), "boom") {
 		t.Errorf("内部情報を出している: %s", rec.Body.String())
 	}
+	if open := q.OpenTxCount(); open != 0 {
+		t.Errorf("panic の後に開いたままのトランザクションが %d 個ある", open)
+	}
 }
 
-// panickingQuerier は ListTypes で panic する。
+// panickingQuerier は ListTypes で panic する。マスタの読み出しは BeginTx が返す Tx 経由なので(issue #220)、
+// Tx の ListTypes も panic させる(autocommit の ListTypes だけでは panic が起きず、検査が空振りする)。
 type panickingQuerier struct{ *storetest.Querier }
 
 func (panickingQuerier) ListTypes(context.Context) ([]store.Type, error) { panic("boom") }
+
+func (p panickingQuerier) BeginTx(ctx context.Context, opts *sql.TxOptions) (readtx.Tx, error) {
+	tx, err := p.Querier.BeginTx(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return panickingTx{tx}, nil
+}
+
+type panickingTx struct{ readtx.Tx }
+
+func (panickingTx) ListTypes(context.Context) ([]store.Type, error) { panic("boom") }

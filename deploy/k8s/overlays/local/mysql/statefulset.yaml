@@ -20,9 +20,24 @@ spec:
         app.kubernetes.io/part-of: pokecalc
     spec:
       automountServiceAccountToken: false
+      # mysql:9.7.2 の mysql ユーザーは uid/gid 999。非 root で起動したときエントリポイントは chown/gosu を飛ばす。
+      # 既存 PVC のファイルは 999:999(ディレクトリは 999:0 の 0777)なので、そのまま読める(issue #262)。
+      # fsGroup の再帰 chown は、所有グループが合っていれば飛ばす(OnRootMismatch)。
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        runAsNonRoot: true
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: mysql
           image: mysql:9.7.2@sha256:29abb0a179982e4a8928138bfc7f918af9eda64e7eeb1b1d084c1720a20159e6
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           ports:
             - name: mysql
               containerPort: 3306
@@ -42,6 +57,9 @@ spec:
             - name: config
               mountPath: /etc/mysql/conf.d/charset.cnf
               subPath: charset.cnf
+            - name: config
+              mountPath: /etc/mysql/conf.d/memory.cnf
+              subPath: memory.cnf
           # timeoutSeconds の既定は 1 秒。import(全置換の投入)中は CPU 上限(500m)に張り付き、ping が 1 秒を
           # 超えて liveness が失敗 → 取り込みの最中に再起動されていた(2026-09-25 に k3d で再現)。
           # 応答が遅いだけのときに殺さないよう、タイムアウトと失敗回数に余裕を持たせる(約 2 分応答が無ければ再起動)。
@@ -64,7 +82,8 @@ spec:
               memory: 256Mi
             limits:
               cpu: 500m
-              memory: 512Mi
+              # 512Mi では importer の全置換の最中に OOMKill された(issue #437)。memory.cnf で常駐を下げたうえで余裕を持たせる。
+              memory: 768Mi
       volumes:
         - name: config
           configMap:

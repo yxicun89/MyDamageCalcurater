@@ -186,6 +186,51 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         await recalculate(token: token)
     }
 
+    // MARK: - 防御側の特性(issue #272。ADR-0501「P6-19」3章)
+
+    /// 防御側の特性の選択肢(いまの防御側の `species(key:)` の `abilities` の順)。`loadDefenderAbilityOptions()`
+    /// が読むまでは空(起動・防御側の変更では読まない。既存の `species(key:)` の呼び出し回数を変えないため)。
+    public private(set) var defenderAbilityOptions: [Ability] = []
+    /// 要求の `defenderOverride.abilityId` に載せる防御側の特性。nil は「指定なし」(送らない = サーバーが
+    /// 種族の特性をすべて試し、結果が違うときだけ行を分ける。ADR-0126)。
+    public private(set) var defenderAbilityId: String?
+    /// `defenderAbilityOptions` の元になった防御側の `species(key:)`(読み済みかどうかの判定に使う。
+    /// nil は未読み込み。防御側の種族が変わったら nil に戻す)。
+    private var defenderAbilityOptionsSpeciesKey: String?
+
+    /// いまの防御側の `species(key:)` を読み、`defenderAbilityOptions` を入れる(ADR-0501「P6-19」3章)。
+    /// - 読み済み(いまの防御側の分をすでに持っている)なら何もしない。
+    /// - 計算しない・`isLoading`/`error`/`rows` を変えない。失敗(キャンセルを含む)は黙って空のまま。
+    /// - 応答が届いた時点で防御側が変わっていたら反映しない。
+    /// View は「詳細」を開いている間 `.task(id: defenderSpeciesKey)` で呼ぶ。VM 自身も、計算結果の行が特性で
+    /// 分かれていて名前が要るときに呼ぶ(2章)。
+    public func loadDefenderAbilityOptions() async {
+        guard defenderAbilityOptionsSpeciesKey != defenderSpeciesKey else { return }
+        let key = defenderSpeciesKey
+        do {
+            let detail = try await service.species(key: key)
+            guard defenderSpeciesKey == key else { return }
+            speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+            defenderAbilityOptions = detail.abilities
+            defenderAbilityOptionsSpeciesKey = key
+            if let abilityId = defenderAbilityId, !detail.abilities.contains(where: { $0.id == abilityId }) {
+                defenderAbilityId = nil
+            }
+        } catch {
+            // 失敗(キャンセルを含む)は黙って「選択肢なし」のまま(3章「判断」: 計算は指定なしで成り立つ)。
+        }
+    }
+
+    /// nil(指定なし)か `defenderAbilityOptions` にある ID だけを受け付ける。値が変わったときだけ計算1回
+    /// (`selectAttackerAbility` と同じ形: `beginInput()` → 更新 → `recalculate`)。
+    public func selectDefenderAbility(id: String?) async {
+        guard id != defenderAbilityId else { return }
+        if let id, !defenderAbilityOptions.contains(where: { $0.id == id }) { return }
+        let token = beginInput()
+        defenderAbilityId = id
+        await recalculate(token: token)
+    }
+
     // MARK: - 構築から個体を呼び出す(P6-2d)
 
     /// 構築の一覧から作った選択肢(メンバーが0体の構築は含まない)。`teamStore` が nil、
@@ -201,6 +246,9 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     // MARK: - 計算結果
 
     public private(set) var rows: [BulkRowDisplay] = []
+    /// 全行に共通する未対応の印の注記(結果の上に1回だけ出す。無ければ nil。ADR-0501「P6-17」)。
+    /// `rows` と同じ時に書き換える(失敗で `rows` を空にするときは nil に戻す)。
+    public private(set) var unsupportedNotice: String?
     public private(set) var isLoading = false
     public private(set) var error: CalcScreenError?
 
@@ -342,7 +390,16 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         guard speciesDictionary[speciesKey] != nil else { return }
         let token = beginInput()
         defenderSpeciesKey = speciesKey
+        resetDefenderAbility()
         await recalculate(token: token)
+    }
+
+    /// 防御側の特性の選択・選択肢を「指定なし」に戻す(旧種族の特性を残さない。ADR-0501「P6-19」3章)。
+    /// `selectDefender`・`swapSides` の両方で使う(計算回数は変えない)。
+    private func resetDefenderAbility() {
+        defenderAbilityId = nil
+        defenderAbilityOptions = []
+        defenderAbilityOptionsSpeciesKey = nil
     }
 
     /// `moveOptions` に無い技は無視する(計算しない。規則4)。
@@ -391,6 +448,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         let token = beginInput()
         swapTick += 1
         swap(&attackerSpeciesKey, &defenderSpeciesKey)
+        resetDefenderAbility()
         await applyAttackerChangeAndRecalculate(token: token)
     }
 
@@ -500,6 +558,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         }
         self.error = CalcScreenError(error)
         rows = []
+        unsupportedNotice = nil
         isLoading = false
     }
 
@@ -682,7 +741,8 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         let field = FieldState(weather: weather, terrain: terrain, defenderScreens: defenderScreens)
         return BulkCalcRequest(
             format: .single, attacker: attacker, defenderSpeciesKey: defenderSpeciesKey, moveId: moveId,
-            field: field, critical: isCritical, presets: [], itemVariants: itemVariants
+            field: field, critical: isCritical, presets: [], itemVariants: itemVariants,
+            defenderAbilityId: defenderAbilityId
         )
     }
 
@@ -692,12 +752,41 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         do {
             let result = try await service.calcBulk(request)
             guard token == latestRequestToken else { return }
-            rows = result.rows.map { BulkRowDisplay(row: $0, items: itemOptions) }
+            applyBulkResult(result)
             error = nil
             isLoading = false
+            // 行が特性で分かれていて、いまの防御側の特性名をまだ持っていなければ、計算し直さずに
+            // species(key:) だけ読んで行を作り直す(ADR-0501「P6-19」2章・9章)。分かれていなければ
+            // 読まない(既存テストの species(key:) の回数を変えないため)。
+            if defenderAbilityOptionsSpeciesKey != defenderSpeciesKey, hasSplitRows(result) {
+                await loadDefenderAbilityOptions()
+                guard token == latestRequestToken else { return }
+                applyBulkResult(result)
+            }
         } catch {
             guard token == latestRequestToken else { return }
             handleInputFailure(error)
         }
+    }
+
+    /// `result` の行を画面向けに整形して `rows`/`unsupportedNotice` に反映する。`isLoading`/`error` は変えない
+    /// (呼び出し側が管理する)。特性名の副題は `defenderAbilityOptions` から引く(2章)。
+    private func applyBulkResult(_ result: BulkCalcResult) {
+        let names = UnsupportedMarkNames(
+            moves: Array(moveDictionary.values), items: itemOptions,
+            abilities: attackerAbilityOptions + defenderAbilityOptions
+        )
+        let abilityNames = Dictionary(
+            defenderAbilityOptions.map { ($0.id, $0.nameJa) }, uniquingKeysWith: { _, latest in latest }
+        )
+        let display = BulkResultDisplay(result: result, items: itemOptions, names: names, abilityNames: abilityNames)
+        rows = display.rows
+        unsupportedNotice = display.unsupportedNotice
+    }
+
+    /// `result` の行が防御側の特性で分かれているか(`ResultEntryIdentity.splitBaseIDs` が空でないか)。
+    private func hasSplitRows(_ result: BulkCalcResult) -> Bool {
+        let baseIDs = result.rows.map { BulkRowDisplay.baseID(for: $0) }
+        return !ResultEntryIdentity.splitBaseIDs(baseIDs).isEmpty
     }
 }

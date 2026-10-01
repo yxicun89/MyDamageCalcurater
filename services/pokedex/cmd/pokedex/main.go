@@ -1,7 +1,7 @@
 // Command pokedex は pokedex-svc の唯一のバイナリ(ADR-0105 §1)。
 //
 //	pokedex serve            # HTTP(/api/pokedex/*・/internal/pokedex/master・/healthz)
-//	pokedex export -out <dir> # balance・speed 向けの read model を4ファイル書く(ADR-0105 §5)
+//	pokedex export -out <dir> # balance・speed 向けの read model を6ファイル書く(ADR-0105 §5・ADR-0128)
 //
 // 設定は環境変数 POKEDEX_DATABASE_DSN(必須)・POKEDEX_ADDR(既定 :8080)。
 // serve は起動時に DB へ接続しない(sql.Open だけ。DB が無くても起動し、DB を使う操作が 503 を返す)。
@@ -25,7 +25,7 @@ import (
 	"example.com/pokecalc/services/pokedex/db"
 	"example.com/pokecalc/services/pokedex/internal/httpapi"
 	"example.com/pokecalc/services/pokedex/internal/readmodel"
-	"example.com/pokecalc/services/pokedex/internal/store"
+	"example.com/pokecalc/services/pokedex/internal/readtx"
 )
 
 // 環境変数の名前と既定値(k8s のマニフェスト・Makefile と共有する。ADR-0105 §1・AC-K0)。
@@ -266,7 +266,7 @@ func runServe(ctx context.Context, lookup func(string) (string, bool)) error {
 	}
 	defer conn.Close()
 
-	handler := httpapi.NewHandler(store.New(conn))
+	handler := httpapi.NewHandler(readtx.NewDB(conn))
 	return serve(ctx, cfg.Addr, handler)
 }
 
@@ -292,7 +292,7 @@ func runExport(args []string) int {
 	}
 	defer conn.Close()
 
-	files, report, err := readmodel.Export(context.Background(), store.New(conn))
+	files, report, err := readmodel.Export(context.Background(), readtx.NewDB(conn))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "pokedex export:", err)
 		return 1

@@ -4,33 +4,62 @@
 package httpapi
 
 import (
+	"context"
+	"database/sql"
+	"errors"
 	"net/http"
+	"time"
 
 	"github.com/labstack/echo/v5"
 
 	"example.com/pokecalc/services/internal/api"
 	"example.com/pokecalc/services/internal/httpmetrics"
-	"example.com/pokecalc/services/pokedex/internal/store"
+	"example.com/pokecalc/services/pokedex/internal/readtx"
 )
 
-// Server は api.ServerInterface を実装する。DB へは store.Querier 経由でだけ触る。
+// Server は api.ServerInterface を実装する。DB へは readtx.DB(store.Querier と読み取り専用 Tx の開始)経由でだけ触る。
 type Server struct {
-	q store.Querier
+	q readtx.DB
 }
 
 var _ api.ServerInterface = (*Server)(nil)
 
+// 締め切りの既定値(ADR-0129 §2・§3)。DefaultReadinessTimeout ≤ DefaultRequestTimeout < writeTimeout(15秒)。
+const (
+	DefaultRequestTimeout   = 5 * time.Second
+	DefaultReadinessTimeout = 2 * time.Second
+)
+
+type config struct {
+	requestTimeout   time.Duration
+	readinessTimeout time.Duration
+}
+
+// Option は NewHandler の設定(主にテストで短い締め切りを渡す)。本番は渡さない。
+type Option func(*config)
+
+// WithRequestTimeout は DB を使う操作の締め切りを変える。
+func WithRequestTimeout(d time.Duration) Option { return func(c *config) { c.requestTimeout = d } }
+
+// WithReadinessTimeout は /readyz の締め切りを変える。
+func WithReadinessTimeout(d time.Duration) Option { return func(c *config) { c.readinessTimeout = d } }
+
 // NewServer は q を使う Server を作る。
-func NewServer(q store.Querier) *Server {
+func NewServer(q readtx.DB) *Server {
 	return &Server{q: q}
 }
 
 // NewHandler は pokedex-svc の HTTP ハンドラ全体を組み立てる。
 // pokedex の8操作(検索7 + 内部 API 1。生成ラッパ経由)、calc の3操作(直接 404。calc-svc の R1 と対称)、
-// GET /healthz(DB に触れない運用エンドポイント)、panic の回復(500 internal)、echo の既定エラー
+// GET /healthz(liveness。DB に触れない)、GET /readyz(readiness。DB の最小条件を確かめる。ADR-0129)、
+// DB を使うルートへの締め切りのミドルウェア(ADR-0129 §2)、panic の回復(500 internal)、echo の既定エラー
 // (ルート無し・メソッド違い)を Error 形式に揃えるエラーハンドラを含む。
 // serve は起動時に DB へ接続しない(sql.Open だけ)。DB が無くても起動し、DB を使う操作が 503 を返す。
-func NewHandler(q store.Querier) http.Handler {
+func NewHandler(q readtx.DB, opts ...Option) http.Handler {
+	cfg := config{requestTimeout: DefaultRequestTimeout, readinessTimeout: DefaultReadinessTimeout}
+	for _, o := range opts {
+		o(&cfg)
+	}
 	e := echo.New()
 	e.HTTPErrorHandler = httpErrorHandler
 	m := httpmetrics.New()
@@ -38,9 +67,14 @@ func NewHandler(q store.Querier) http.Handler {
 	e.Use(recoverMiddleware)
 	e.GET(httpmetrics.Path, m.Handler())
 
-	registerPokedexRoutes(e, NewServer(q))
-	registerCalcNotFoundRoutes(e)
 	e.GET("/healthz", healthzHandler)
+	e.GET("/readyz", readyzHandler(q, cfg.readinessTimeout))
+
+	// echo v5 の Group にミドルウェアを渡すと "" と "/*" に RouteNotFound が登録される。未登録パスは従来どおり
+	// 404(エラーハンドラで Error 形式)になり、metrics の route ラベルは "/*" にまとまる(件数は有限)。
+	g := e.Group("", deadlineMiddleware(cfg.requestTimeout))
+	registerPokedexRoutes(g, NewServer(q))
+	registerCalcNotFoundRoutes(g)
 	return e
 }
 
@@ -51,7 +85,7 @@ func NewHandler(q store.Querier) http.Handler {
 // `/api/pokedex/moves/:key`(`key="batch"`)に食われない。`TestGetMovesByIds` が固定しているのは
 // 「食われないこと」自体(現在の登録順で)。登録順を入れ替えても同じ結果になることは調査時に
 // 使い捨てテストで確認しただけで、恒久テストには含まれない。
-func registerPokedexRoutes(e *echo.Echo, srv *Server) {
+func registerPokedexRoutes(e *echo.Group, srv *Server) {
 	wrapper := api.ServerInterfaceWrapper{Handler: srv}
 	e.GET("/api/pokedex/species", wrapper.SearchSpecies)
 	e.GET("/api/pokedex/species/:key", wrapper.GetSpecies)
@@ -66,14 +100,14 @@ func registerPokedexRoutes(e *echo.Echo, srv *Server) {
 // registerCalcNotFoundRoutes は pokedex-svc の担当外(calc)の3操作を、生成ラッパを経由させずに
 // 直接 404 not_found で応答する(calc-svc の registerPokedexNotFoundRoutes と対称。ADR-0105 §1)。
 // 生成ラッパを経由させるとヘッダの必須検証が先に走り、「担当外の操作は常に not_found」に反するため。
-func registerCalcNotFoundRoutes(e *echo.Echo) {
+func registerCalcNotFoundRoutes(e *echo.Group) {
 	h := func(c *echo.Context) error { return notFoundForCalc() }
 	e.POST("/api/calc", h)
 	e.POST("/api/calc/bulk", h)
 	e.POST("/api/calc/reverse", h)
 }
 
-// healthzHandler は GET /healthz。DB に触れず常に 200(liveness/readiness 共通。ADR-0105 §1)。
+// healthzHandler は GET /healthz。DB に触れず常に 200(liveness 専用。readiness は /readyz。ADR-0129)。
 func healthzHandler(c *echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -101,4 +135,53 @@ func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 }
 func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) error {
 	return notFoundForCalc()
+}
+
+// deadlineMiddleware は DB を使う操作の context に締め切りを掛ける(ADR-0129 §2)。
+func deadlineMiddleware(d time.Duration) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c *echo.Context) error {
+			ctx, cancel := context.WithTimeout(c.Request().Context(), d)
+			defer cancel()
+			c.SetRequest(c.Request().WithContext(ctx))
+			return next(c)
+		}
+	}
+}
+
+// readyzHandler は GET /readyz(ADR-0129 §1)。最小条件の4クエリを読み取り専用 Tx の中で読み、
+// Tx を開けない・失敗・空・既定レギュレーション無しなら 503 master_unavailable。キャッシュしない。
+// Tx は必ず閉じる(開いたままの Tx を残さない)。
+func readyzHandler(q readtx.DB, timeout time.Duration) echo.HandlerFunc {
+	return func(c *echo.Context) error {
+		ctx, cancel := context.WithTimeout(c.Request().Context(), timeout)
+		defer cancel()
+		tx, err := q.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+		if err != nil {
+			return unavailable("readyz: BeginTx", err)
+		}
+		defer func() { _ = tx.Rollback() }()
+		if dv, err := tx.ListDataVersions(ctx); err != nil {
+			return unavailable("readyz: data_versions", err)
+		} else if len(dv) == 0 {
+			return unavailable("readyz: data_versions が空", nil)
+		}
+		if ts, err := tx.ListTypes(ctx); err != nil {
+			return unavailable("readyz: types", err)
+		} else if len(ts) == 0 {
+			return unavailable("readyz: types が空", nil)
+		}
+		if ns, err := tx.ListNatures(ctx); err != nil {
+			return unavailable("readyz: natures", err)
+		} else if len(ns) == 0 {
+			return unavailable("readyz: natures が空", nil)
+		}
+		if _, err := tx.GetDefaultRegulation(ctx); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return unavailable("readyz: 既定のレギュレーションが無い", err)
+			}
+			return unavailable("readyz: regulation", err)
+		}
+		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	}
 }

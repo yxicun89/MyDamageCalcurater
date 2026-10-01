@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "@smogon/calc(gen9)でゴールデンテストベクタを生成する",
+  "description": "@smogon/calc 0.12.0(Champions 世代が主。効果の計算式の一部だけ gen9 世代)でゴールデンテストベクタを生成する",
   "scripts": {
     "generate": "node generate.mjs"
   },

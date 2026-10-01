@@ -100,6 +100,34 @@ public enum CalcConditionLabels {
     public static let rankIncrement = "ランクを上げる"
 }
 
+/// 防御側・相手側の特性の選択(issue #272。ADR-0501「P6-19」3章)。Web レーンも同じ語を使う
+/// (docs/ai-shared/DECISIONS.md 2026-09-26「P6-19」)。「指定なし」は `CalcConditionLabels.abilityUnspecified`
+/// と同じ語(意味は「種族の特性をすべて試す」。攻撃側の「指定なし」と語を分けない)。
+public enum AbilityPickerLabels {
+    /// 計算画面の「詳細」の小見出し(`CalcConditionLabels.abilityTitle`「攻撃側の特性」の対)。
+    public static let defenderTitle = "防御側の特性"
+    /// 逆算画面の小見出し(相手 = 逆算する側)。
+    public static let opponentTitle = "相手の特性"
+    /// 特性を指定しない選択肢(= 送らない)。
+    public static let unspecified = CalcConditionLabels.abilityUnspecified
+}
+
+/// 特性で分かれた行・候補の副題(issue #272。ADR-0501「P6-19」2章)。例「特性: テストとくせいA / テストとくせいB」。
+public enum AbilityGroupLabel {
+    /// 副題の頭。
+    public static let prefix = "特性: "
+    /// 同じ結果になる特性の区切り。
+    public static let separator = " / "
+
+    /// `abilityIds` を `names`(特性 ID → 日本語名)で引いて並べる(順序は `abilityIds` のまま)。
+    /// 名前が無い ID は ID のまま出す(黙って消さない)。`abilityIds` が空なら nil。
+    public static func text(abilityIds: [String], names: [String: String]) -> String? {
+        guard !abilityIds.isEmpty else { return nil }
+        let joined = abilityIds.map { names[$0] ?? $0 }.joined(separator: separator)
+        return "\(prefix)\(joined)"
+    }
+}
+
 /// 天候の日本語名(openapi `Weather` の5値)。
 public enum WeatherLabel {
     public static func japaneseName(for weather: Weather) -> String {
@@ -148,5 +176,57 @@ public enum RankLabel {
         default: signedValue = "+\(value)"
         }
         return "\(letter) \(signedValue)"
+    }
+}
+
+// MARK: - 未対応の印(P6-17。ADR-0123・ADR-0501「P6-17」)
+
+/// 未対応の印(`UnsupportedMark`)の日本語ラベル。対象5種・理由15種の文言はここ1か所に置く
+/// (マスタに無い表示専用の文言なので `MoveCategoryLabel` と同じ理由でコードに持つ)。
+/// Web レーンも同じ語を使う(docs/ai-shared/DECISIONS.md 2026-09-25「未対応の印の表示(文言・置き場所)を決めた」)。
+public enum UnsupportedMarkLabel {
+    /// 対象の名前(「技」「防御側の持ち物」等)。ADR-0501「P6-17」2章の表。
+    public static func targetName(for target: UnsupportedTarget) -> String {
+        switch target {
+        case .move: return "技"
+        case .attackerItem: return "攻撃側の持ち物"
+        case .attackerAbility: return "攻撃側の特性"
+        case .defenderItem: return "防御側の持ち物"
+        case .defenderAbility: return "防御側の特性"
+        case .unknown: return "項目"
+        }
+    }
+
+    /// 理由の名前(「多段技」「固定ダメージ」等)。ADR-0501「P6-17」2章の表。
+    public static func reasonName(for reason: UnsupportedReason) -> String {
+        switch reason {
+        case .multiHit: return "多段技"
+        case .fixedDamage: return "固定ダメージ"
+        case .ohko: return "一撃必殺"
+        case .variablePower: return "威力が変化"
+        case .altOffenseStat: return "攻撃に使う能力値が通常と違う"
+        case .altDefenseStat: return "防御に使う能力値が通常と違う"
+        case .alwaysCrit: return "必ず急所"
+        case .ignoreDefenseRanks: return "防御側のランク変化を無視"
+        case .typeChange: return "タイプが変化"
+        case .effectivenessChange: return "相性の求め方が通常と違う"
+        case .priorityChange: return "優先度が変化"
+        case .fieldSpecific: return "天候・フィールドで変化"
+        case .moveSpecific: return "技固有の効果"
+        case .zeroPower: return "威力が技の処理で決まる"
+        case .unsupportedEffect: return "効果を計算に反映していない"
+        case .unknown: return "詳細は不明"
+        }
+    }
+
+    /// 印1つの文言。`<対象>「<名前>」(<理由>)`。理由が `unsupported_effect`(持ち物・特性)のときは
+    /// 対象の名前で意味が通るので「(…)」を付けない(例: `防御側の持ち物「たべのこし」`)。
+    /// `name` は `UnsupportedMarkNames.name(for:)` が解決した名前(無ければ ID)。
+    public static func text(for mark: UnsupportedMark, name: String) -> String {
+        let target = "\(targetName(for: mark.target))「\(name)」"
+        if mark.reason == .unsupportedEffect {
+            return target
+        }
+        return "\(target)(\(reasonName(for: mark.reason)))"
     }
 }

@@ -1,0 +1,29 @@
+# pokecalc の balance/speed レーンだけが使う Argo CD AppProject(ADR-0408 §1、issue #263)。
+# project: default(制限なし)のままだと任意の repo・namespace・cluster スコープ資源への同期を許してしまうので、
+# このリポジトリ・pokecalc namespace・balance/speed が実際に使う種別だけに絞る。
+# balance/speed どちらの所有物でもない共有インフラなので、リポジトリルートに置く(scripts/argocd-bootstrap.sh と同じ考え方)。
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: pokecalc
+  namespace: argocd
+spec:
+  description: balance/speed の GitOps Application だけを許可する AppProject
+  # repoURL にはアカウント名が入るので Git に書かず、application.yaml と同じ placeholder にする
+  # (適用時に scripts/gitops/argocd-local-app.sh が `git remote get-url origin` へ置き換える。ADR-0018 §4)。
+  sourceRepos:
+    - https://git.example.invalid/pokecalc.git
+  destinations:
+    - namespace: pokecalc
+      server: https://kubernetes.default.svc
+  # cluster スコープの資源への同期は許さない。
+  clusterResourceWhitelist: []
+  # balance/speed の gitops overlay(services/{balance,speed}/deploy/k8s/overlays/gitops)が実際に描画する
+  # 種別だけに絞る(ワイルドカードは使わない)。増減したらここも合わせて変える。
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: Service
+    - group: apps
+      kind: Deployment
+    - group: networking.k8s.io
+      kind: Ingress

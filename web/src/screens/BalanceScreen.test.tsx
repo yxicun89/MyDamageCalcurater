@@ -18,7 +18,7 @@ import type { components } from "../api/balance.gen";
 import type { BalanceClient, BalanceResult } from "../api/balanceClient";
 import { learnsetMoves } from "../domain/moves";
 import type { Move } from "../engine/types";
-import { typeNameJa } from "../i18n/ja";
+import { balanceErrorText, typeNameJa } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
 import { BalanceScreen } from "./BalanceScreen";
@@ -716,8 +716,9 @@ describe("coverage(攻撃範囲)", () => {
       await Promise.resolve();
     });
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent("unknown moveId: x");
+      expect(screen.getByRole("alert")).toHaveTextContent(balanceErrorText.unknown_move);
     });
+    expect(screen.getByRole("alert")).not.toHaveTextContent("unknown moveId");
     expect(screen.getByRole("table", { name: "防御相性" })).toBeInTheDocument();
     expect(screen.queryByRole("table", { name: "攻撃範囲" })).not.toBeInTheDocument();
   });
@@ -1023,9 +1024,10 @@ describe("threats(仮想敵の診断)", () => {
 
     await waitFor(() => {
       expect(screen.getAllByRole("alert").map((alert) => alert.textContent)).toContain(
-        "unknown pokemonId: 9999-000",
+        balanceErrorText.unknown_pokemon,
       );
     });
+    expect(screen.queryByText(/unknown pokemonId/)).not.toBeInTheDocument();
     expect(screen.getByRole("table", { name: "防御相性" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: /^仮想敵1/ })).not.toBeInTheDocument();
     expect(screen.queryByText("仮想敵を計算中")).not.toBeInTheDocument();
@@ -1184,5 +1186,46 @@ describe("recommendations(おすすめタイプ)", () => {
     expect(threatRegion(1, enemy.nameJa)).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "おすすめタイプ" })).not.toBeInTheDocument();
     expect(screen.queryByText("おすすめタイプを計算中")).not.toBeInTheDocument();
+  });
+});
+
+// issue 276(ADR-0411): API のエラーコードを日本語の文言に写像し、応答の英語の message は画面に出さない。
+describe("エラーコードの日本語文言(issue 276)", () => {
+  const codes = [
+    "missing_request_context",
+    "invalid_request",
+    "request_too_large",
+    "unknown_pokemon",
+    "unknown_move",
+    "unknown_ability",
+    "master_unavailable",
+    "overloaded",
+    "internal_error",
+  ] as const;
+
+  test.each(codes)("analyze の %s は日本語の文言を出し、英語の message を出さない", async (code) => {
+    const { user, client } = renderScreen();
+    await selectSpecies(user, 1, speciesAt(0));
+    const call = lastOf(client.analyzeCalls, "analyze");
+    await act(async () => {
+      call.resolve({ ok: false, error: { code, message: "unknown abilityId: example-ability-none" } });
+      await Promise.resolve();
+    });
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(balanceErrorText[code]);
+    expect(alert.textContent).not.toMatch(/[A-Za-z]{4,}/);
+    expect(screen.queryByText(/example-ability-none/)).not.toBeInTheDocument();
+  });
+
+  test("未知のコードは汎用の日本語の文言にし、英語の message を出さない", async () => {
+    const { user, client } = renderScreen();
+    await selectSpecies(user, 1, speciesAt(0));
+    const call = lastOf(client.analyzeCalls, "analyze");
+    await act(async () => {
+      call.resolve({ ok: false, error: { code: "something_new", message: "boom happened" } });
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(balanceErrorText.fallback);
+    expect(screen.queryByText(/boom happened/)).not.toBeInTheDocument();
   });
 });

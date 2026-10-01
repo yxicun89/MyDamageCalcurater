@@ -26,7 +26,7 @@ spec:
       containers:
         - name: registry
           # 2026-09-22 時点の最新の安定版(版は digest で固定。DECISIONS.md「最新の安定版」)
-          image: registry:3.1.1@sha256:325b4b29b041e82803abeb703e201655e4e23ab83264ec1a7c9ddb0a5b14a6e0
+          image: registry:3.1.2@sha256:ddf754342cfc8acc51a56d5d0ab6af06826461864460636d8bd5c546dab2a7b8
           ports:
             - name: registry
               containerPort: 5000
@@ -51,9 +51,25 @@ spec:
               drop:
                 - ALL
       volumes:
-        # 検証用。Pod が作り直されるとイメージは消える(push し直す)。
+        # PVC(local-path)に永続化する。emptyDir だと Pod が作り直されるたびに push 済みイメージが消え、
+        # 次の Argo CD sync で ImagePullBackOff になっていた(issue #292。ADR-0408 §3)。
         - name: data
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: registry-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-data
+  labels:
+    app.kubernetes.io/name: balance-registry
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi
 ---
 apiVersion: v1
 kind: Service

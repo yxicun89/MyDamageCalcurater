@@ -25,17 +25,28 @@ import {
   resolveAttackerPreset,
   type AttackerPresetKey,
 } from "../domain/attackerPresets";
+import {
+  DEFAULT_CALC_CONDITIONS,
+  conditionRequestParts,
+  rankStatFor,
+  type CalcConditions,
+} from "../domain/calcConditions";
+import { abilityNamesLabel } from "../domain/abilityLabels";
 import { formatEffectiveness, formatKO, formatMoveCategory, formatPercentRange } from "../domain/format";
 import { firstDamagingMove, learnsetMoves } from "../domain/moves";
 import { MAX_ITEM_VARIANTS } from "../domain/requestLimits";
 import {
   buildBulkRequest,
   buildIndividual,
-  defaultAbility,
+  NO_ABILITY,
+  defenderAbilityCandidates,
   defenderItemVariants,
   defensiveItemCandidates,
+  selectableAbilities,
 } from "../domain/requests";
+import { splitUnsupportedMarks, unsupportedMarkLabels } from "../domain/unsupportedLabels";
 import type {
+  Ability,
   BulkResult,
   BulkRow,
   CalcEngine,
@@ -45,7 +56,14 @@ import type {
   Move,
   MoveCategory,
 } from "../engine/types";
-import { calcScreenText, isTypeId, masterOnlineText, requestLimitText, typeNameJa } from "../i18n/ja";
+import {
+  calcScreenText,
+  isTypeId,
+  masterOnlineText,
+  requestLimitText,
+  typeNameJa,
+  unsupportedText,
+} from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type {
   MasterData,
@@ -56,6 +74,8 @@ import type {
 import { prefersReducedMotion } from "../ui/motion";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
+import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
+import { CalcConditionsPanel } from "./CalcConditionsPanel";
 import "./CalcScreen.css";
 
 /**
@@ -91,7 +111,7 @@ function clampPercent(value: number): number {
 
 /** 確定数バッジの弾みを、行ごとに追跡するためのキー(preset・itemId の組。CalcScreen.tsx の行の識別と同じ考え方)。 */
 function koRowKey(row: BulkRow): string {
-  return `${row.preset}-${row.itemId}`;
+  return `${row.preset}-${row.itemId}-${row.abilityId ?? ""}`;
 }
 
 /**
@@ -229,6 +249,9 @@ interface CompletedCalc {
   readonly defenderItem: Item | null;
   readonly compareItems: boolean;
   readonly attackerPresetKey: AttackerPresetKey;
+  readonly attackerAbility: Ability;
+  readonly defenderAbilities: readonly Ability[];
+  readonly conditions: CalcConditions;
   readonly result: EngineResult<BulkResult>;
 }
 
@@ -258,6 +281,12 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
   const [defenderItemId, setDefenderItemId] = useState("");
   const [moveId, setMoveId] = useState("");
   const [compareItems, setCompareItems] = useState(false);
+  // 特性の選択(issue 272、ADR-0311)。"" は攻撃側では「種族の先頭」、防御側では「おまかせ(種族の全特性)」。
+  // 種族を変えたら "" に戻す(古い選択を引き継がない)。
+  const [attackerAbilityId, setAttackerAbilityId] = useState("");
+  const [defenderAbilityId, setDefenderAbilityId] = useState("");
+  // 「詳細」の条件(issue 274、ADR-0312)。攻守入れ替え・種族・技の変更では消さない。
+  const [conditions, setConditions] = useState<CalcConditions>(DEFAULT_CALC_CONDITIONS);
   // 攻撃側プリセットの Key だけを持ち、攻撃側・技・攻守入れ替えでは変えない(ADR-0300 §5、
   // CalcScreen.test.tsx「攻撃側のプリセット(P4-3)」)。表示名・SP・性格は今の技の分類から毎レンダー導出する。
   const [attackerPresetKey, setAttackerPresetKey] = useState<AttackerPresetKey>(DEFAULT_ATTACKER_PRESET);
@@ -320,8 +349,43 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     return defenderItemVariants({ selectedItem: defenderItem, compare: compareItems, candidates });
   }, [master.items, move, defenderItem, compareItems]);
 
+  // 特性の選択肢と、calcBulk に渡す特性(issue 272、ADR-0311)。
+  const attackerAbilityOptions = useMemo(
+    () =>
+      attackerSpecies === null
+        ? []
+        : selectableAbilities(attackerSpecies, abilitiesFor(master.abilities, attackerKey)),
+    [attackerSpecies, master.abilities, attackerKey, abilitiesFor],
+  );
+  const attackerAbility = useMemo(
+    () =>
+      attackerAbilityOptions.find((ability) => ability.id === attackerAbilityId) ??
+      attackerAbilityOptions[0] ??
+      NO_ABILITY,
+    [attackerAbilityOptions, attackerAbilityId],
+  );
+  const defenderAbilityOptions = useMemo(
+    () =>
+      defenderSpecies === null
+        ? []
+        : selectableAbilities(defenderSpecies, abilitiesFor(master.abilities, defenderKey)),
+    [defenderSpecies, master.abilities, defenderKey, abilitiesFor],
+  );
+  const defenderAbilities = useMemo(
+    () =>
+      defenderSpecies === null
+        ? []
+        : defenderAbilityCandidates(
+            defenderSpecies,
+            defenderAbilityOptions,
+            defenderAbilityId === "" ? null : defenderAbilityId,
+          ),
+    [defenderSpecies, defenderAbilityOptions, defenderAbilityId],
+  );
+
   function selectAttacker(key: string): void {
     setAttackerKey(key);
+    setAttackerAbilityId("");
     const species = speciesFor(master.species, key);
     setMoveId((prev) => resolveMoveId(species, movesFor(master.moves, key), prev));
   }
@@ -334,6 +398,7 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
   function handleAttackerResolved(resolution: MasterSpeciesResolution): void {
     registerSpeciesResolution(resolution);
     setAttackerKey(resolution.species.key);
+    setAttackerAbilityId("");
     // movesFor(master.moves, key) は使わない(register の setState 直後はまだ古い覚え書きのまま)。
     // movesFor が最終的に返す形(master.moves + 解決で覚えた分)をここで直接組み立てる。
     setMoveId((prev) => resolveMoveId(resolution.species, [...master.moves, ...resolution.moves], prev));
@@ -342,7 +407,12 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
   /** P4-16b(ADR-0304 A-10): 検索で防御側の種族が解決したとき(防御側は技を持たないので moveId は変えない)。 */
   function handleDefenderResolved(resolution: MasterSpeciesResolution): void {
     registerSpeciesResolution(resolution);
-    setDefenderKey(resolution.species.key);
+    selectDefender(resolution.species.key);
+  }
+
+  function selectDefender(key: string): void {
+    setDefenderKey(key);
+    setDefenderAbilityId("");
   }
 
   /** タイマーが残っていれば止める(2回目の入れ替えで前のタイマーが後から発火しないように)。 */
@@ -364,6 +434,8 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     const newAttackerMoves = movesFor(master.moves, defenderKey);
     setAttackerKey(defenderKey);
     setDefenderKey(attackerKey);
+    setAttackerAbilityId("");
+    setDefenderAbilityId("");
     setAttackerItemId(defenderItemId);
     setDefenderItemId(attackerItemId);
     setMoveId((prev) => resolveMoveId(newAttackerSpecies, newAttackerMoves, prev));
@@ -461,11 +533,14 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     let cancelled = false;
     const controller = new AbortController();
     const { sp, nature } = resolveAttackerPreset(attackerPresetKey, move.category);
+    const parts = conditionRequestParts(conditions);
     const attackerIndividual = buildIndividual(attackerSpecies, {
       sp,
       nature,
       item: attackerItem,
-      ability: defaultAbility(attackerSpecies, abilitiesFor(master.abilities, attackerKey)),
+      ability: attackerAbility,
+      ...(parts.status === undefined ? {} : { status: parts.status }),
+      ...(parts.ranks === undefined ? {} : { ranks: parts.ranks }),
     });
     const { variants: itemVariants } = itemVariantsResult;
     const request = buildBulkRequest({
@@ -474,6 +549,9 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
       move,
       typeChart: master.typeChart,
       itemVariants,
+      defenderAbilities,
+      ...(parts.critical === undefined ? {} : { critical: parts.critical }),
+      ...(parts.field === undefined ? {} : { field: parts.field }),
     });
     // calcBulk は EngineResult(ok/not ok)で成否を運び、reject しない契約(ADR-0011 §5)。
     // それでも floating promise を残さないよう void で明示する。
@@ -487,6 +565,9 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
           defenderItem,
           compareItems,
           attackerPresetKey,
+          attackerAbility,
+          defenderAbilities,
+          conditions,
           result,
         });
       }
@@ -498,7 +579,6 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
   }, [
     engine,
     master,
-    attackerKey,
     attackerSpecies,
     defenderSpecies,
     move,
@@ -506,7 +586,9 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     defenderItem,
     compareItems,
     attackerPresetKey,
-    abilitiesFor,
+    attackerAbility,
+    defenderAbilities,
+    conditions,
     itemVariantsResult,
   ]);
 
@@ -525,7 +607,10 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     completed.attackerItem !== attackerItem ||
     completed.defenderItem !== defenderItem ||
     completed.compareItems !== compareItems ||
-    completed.attackerPresetKey !== attackerPresetKey
+    completed.attackerPresetKey !== attackerPresetKey ||
+    completed.attackerAbility !== attackerAbility ||
+    completed.defenderAbilities !== defenderAbilities ||
+    completed.conditions !== conditions
   ) {
     outcome = { status: "loading" };
   } else {
@@ -551,6 +636,12 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
           onSpeciesChange={selectAttacker}
           onSpeciesResolved={handleAttackerResolved}
           onItemChange={setAttackerItemId}
+          abilitySelect={{
+            ariaLabel: calcScreenText.attackerAbilityLabel,
+            options: attackerAbilityOptions,
+            value: attackerAbility.id,
+            onChange: setAttackerAbilityId,
+          }}
           isSwapping={swapping}
           onSwapAnimationEnd={endSwapAnimation}
           activeHoloClearRef={activeHoloClearRef}
@@ -577,9 +668,16 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
           items={master.items}
           selectedSpeciesKey={defenderKey}
           selectedItemId={defenderItemId}
-          onSpeciesChange={setDefenderKey}
+          onSpeciesChange={selectDefender}
           onSpeciesResolved={handleDefenderResolved}
           onItemChange={setDefenderItemId}
+          abilitySelect={{
+            ariaLabel: calcScreenText.defenderAbilityLabel,
+            options: defenderAbilityOptions,
+            value: defenderAbilityId,
+            onChange: setDefenderAbilityId,
+            autoOptionLabel: calcScreenText.anyAbilityOption,
+          }}
           isSwapping={swapping}
           onSwapAnimationEnd={endSwapAnimation}
           activeHoloClearRef={activeHoloClearRef}
@@ -607,10 +705,19 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
         <p className="calc-screen__notice">{requestLimitText.itemCandidatesTruncated(MAX_ITEM_VARIANTS)}</p>
       )}
 
+      <CalcConditionsPanel
+        conditions={conditions}
+        onChange={setConditions}
+        rankStat={rankStatFor(move?.category ?? null)}
+      />
+
       <ResultsSection
         outcome={outcome}
         items={master.items}
+        moves={master.moves}
+        abilities={master.abilities}
         moveType={move?.type}
+        defenderHasAbilityChoice={defenderAbilityOptions.length > 1}
         pulsingKeys={pulsingKeys}
         onKoAnimationEnd={handleKoAnimationEnd}
       />
@@ -636,6 +743,8 @@ interface SpeciesCardProps {
   /** 検索で種族が解決したとき(speciesListAvailable が false のときに使う)。 */
   readonly onSpeciesResolved: (resolution: MasterSpeciesResolution) => void;
   readonly onItemChange: (id: string) => void;
+  /** 特性セレクト(issue 272、ADR-0311)。選択肢が空なら出さない。 */
+  readonly abilitySelect: AbilitySelectConfig;
   /** カードの中に足す追加要素(攻撃側プリセットの選択。防御側カードは渡さない)。 */
   readonly children?: ReactNode;
   /** 攻守入れ替えの演出中か(design.md「動き」)。 */
@@ -660,6 +769,7 @@ function SpeciesCard({
   onSpeciesChange,
   onSpeciesResolved,
   onItemChange,
+  abilitySelect,
   children,
   isSwapping,
   onSwapAnimationEnd,
@@ -744,6 +854,7 @@ function SpeciesCard({
               </option>
             ))}
           </select>
+          <AbilitySelect labelClassName="calc-card__label" {...abilitySelect} />
         </>
       )}
       {species !== null && primaryType !== undefined && (
@@ -864,8 +975,13 @@ function MoveSelect({ moves, value, onChange, disabled = false }: MoveSelectProp
 interface ResultsSectionProps {
   readonly outcome: Outcome;
   readonly items: readonly Item[];
+  /** 「未対応」の印(ADR-0123)の ID を表示名に解決するためのマスタ。 */
+  readonly moves: readonly Move[];
+  readonly abilities: readonly Ability[];
   /** ダメージバーの色に使う、選ばれている技のタイプ(design.md: バーは技のタイプ色)。 */
   readonly moveType: string | undefined;
+  /** 防御側の種族の特性が2つ以上か(行に特性名を出すかの判定。issue 272)。 */
+  readonly defenderHasAbilityChoice: boolean;
   /** 確定数が変わって弾ませる行のキー(koRowKey)の集合(design.md「動き」)。 */
   readonly pulsingKeys: ReadonlySet<string>;
   readonly onKoAnimationEnd: (key: string) => (event: AnimationEvent<HTMLSpanElement>) => void;
@@ -878,7 +994,10 @@ interface ResultsSectionProps {
 function ResultsSection({
   outcome,
   items,
+  moves,
+  abilities,
   moveType,
+  defenderHasAbilityChoice,
   pulsingKeys,
   onKoAnimationEnd,
 }: ResultsSectionProps): ReactElement | null {
@@ -904,7 +1023,10 @@ function ResultsSection({
         <ResultsList
           result={outcome.result}
           items={items}
+          moves={moves}
+          abilities={abilities}
           moveType={moveType}
+          defenderHasAbilityChoice={defenderHasAbilityChoice}
           pulsingKeys={pulsingKeys}
           onKoAnimationEnd={onKoAnimationEnd}
         />
@@ -921,7 +1043,10 @@ function ResultsSection({
 interface ResultsListProps {
   readonly result: BulkResult;
   readonly items: readonly Item[];
+  readonly moves: readonly Move[];
+  readonly abilities: readonly Ability[];
   readonly moveType: string | undefined;
+  readonly defenderHasAbilityChoice: boolean;
   readonly pulsingKeys: ReadonlySet<string>;
   readonly onKoAnimationEnd: (key: string) => (event: AnimationEvent<HTMLSpanElement>) => void;
 }
@@ -934,14 +1059,39 @@ const DAMAGE_BAR_MAX_PERCENT = 100;
  * 持ち物のバリアントが変わっても同じ値になる(防御側の種族・技のタイプだけで決まる)ため、行ごとに
  * 繰り返さず、結果全体の先頭行の値を1回だけ表示する。
  */
-function ResultsList({ result, items, moveType, pulsingKeys, onKoAnimationEnd }: ResultsListProps) {
+function ResultsList({
+  result,
+  items,
+  moves,
+  abilities,
+  moveType,
+  defenderHasAbilityChoice,
+  pulsingKeys,
+  onKoAnimationEnd,
+}: ResultsListProps) {
   const firstRow = result.rows[0];
   const barColor =
     moveType === undefined || moveType === ""
       ? "var(--text-secondary)"
       : `var(--type-${moveType}, var(--text-secondary))`;
+  // issue 271 / issue 270(ADR-0123。iOS レーンの決定 DECISIONS.md 2026-09-25「未対応の印の表示」に揃える):
+  // 全行に共通する印は結果の先頭に1回、残りはその行だけに出す(technicalな target で決め打ちせず、
+  // 印の内容〈target・reason・id〉が全行にあるかで判定する。ADR-0300 §8: TS 側で数値・判定を加工しない、
+  // ここは「どこに出すか」の割り振りだけを行う)。
+  const { common: commonMarks, perRow: perRowMarks } = splitUnsupportedMarks(
+    result.rows.map((row) => row.result.unsupported),
+  );
+  const commonMarkLabels = unsupportedMarkLabels(commonMarks, moves, items, abilities);
   return (
     <div className="calc-results">
+      {commonMarkLabels.length > 0 && (
+        <p role="status" className="calc-results__unsupported-notice">
+          <span aria-hidden="true" data-testid="unsupported-icon" className="calc-results__unsupported-icon">
+            ⚠
+          </span>
+          <span>{unsupportedText.notice(commonMarkLabels)}</span>
+        </p>
+      )}
       {firstRow !== undefined && (
         <p className="calc-results__effectiveness">
           <strong>{formatEffectiveness(firstRow.result.effectiveness)}</strong>
@@ -953,14 +1103,21 @@ function ResultsList({ result, items, moveType, pulsingKeys, onKoAnimationEnd }:
             row.itemId === ""
               ? calcScreenText.noItemRowLabel
               : (items.find((item) => item.id === row.itemId)?.nameJa ?? row.itemId);
+          const abilityLabel = abilityNamesLabel(row.abilityIds, abilities, defenderHasAbilityChoice);
           const barValue = Math.min(row.result.maxPercent, DAMAGE_BAR_MAX_PERCENT);
           const koKey = koRowKey(row);
           const koClassName = `calc-results__ko${pulsingKeys.has(koKey) ? " is-pulsing" : ""}`;
+          // 全行に共通する印は先頭の案内が担うので、この行では残り(一部の行だけにある印)だけ出す。
+          const rowMarkLabels = unsupportedMarkLabels(perRowMarks[index] ?? [], moves, items, abilities);
           return (
-            // preset・itemId の組は行内で一意ではない場合がある(同じ preset で持ち物違い)ため index も足す。
-            <li key={`${row.preset}-${row.itemId}-${String(index)}`} className="calc-results__row">
+            // preset・itemId・abilityId の組は行内で一意ではない場合がある(同じ preset で持ち物違い)ため index も足す。
+            <li
+              key={`${row.preset}-${row.itemId}-${row.abilityId ?? ""}-${String(index)}`}
+              className="calc-results__row"
+            >
               <span className="calc-results__preset">{row.presetLabel}</span>
               <span className="calc-results__item">{itemLabel}</span>
+              {abilityLabel !== null && <span className="calc-results__ability">{abilityLabel}</span>}
               <span className="calc-results__percent">{formatPercentRange(row.result)}</span>
               <span className={koClassName} onAnimationEnd={onKoAnimationEnd(koKey)}>
                 {formatKO(row.result.ko)}
@@ -972,6 +1129,18 @@ function ResultsList({ result, items, moveType, pulsingKeys, onKoAnimationEnd }:
                   style={{ width: `${String(barValue)}%`, backgroundColor: barColor }}
                 />
               </div>
+              {rowMarkLabels.length > 0 && (
+                <p className="calc-results__unsupported">
+                  <span
+                    aria-hidden="true"
+                    data-testid="unsupported-icon"
+                    className="calc-results__unsupported-icon"
+                  >
+                    ⚠
+                  </span>
+                  <span>{unsupportedText.rowLabel(rowMarkLabels)}</span>
+                </p>
+              )}
             </li>
           );
         })}

@@ -64,14 +64,30 @@ func calcWasmBody(t *testing.T, f *fakeStore, c calcCase) map[string]any {
 	return body
 }
 
+// wasmAbilitiesForSpecies は calc-svc の resolveAbilityCandidates の既定(上書きが無いときに種族の全特性を
+// 解決する)経路と同じ形の wasmapi 入力を作る(issue #272。ADR-0126・ADR-0214。パリティを保つため)。
+func wasmAbilitiesForSpecies(f *fakeStore, species engine.Species) []any {
+	ids := species.Abilities
+	if len(ids) > engine.MaxAbilityCandidates {
+		ids = ids[:engine.MaxAbilityCandidates]
+	}
+	out := make([]any, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, wasmAbility(f.abilities[id]))
+	}
+	return out
+}
+
 func bulkWasmBody(t *testing.T, f *fakeStore, moveID string, presetKeys any, itemIDs []string) map[string]any {
 	t.Helper()
+	defender := f.species[speciesDefender]
 	body := map[string]any{
-		"format":          "single",
-		"attacker":        bulkAttacker().wasm(t, f),
-		"defenderSpecies": wasmSpecies(f.species[speciesDefender]),
-		"move":            wasmMove(f.moves[moveID]),
-		"typeChart":       wasmTypeChart(t),
+		"format":            "single",
+		"attacker":          bulkAttacker().wasm(t, f),
+		"defenderSpecies":   wasmSpecies(defender),
+		"move":              wasmMove(f.moves[moveID]),
+		"typeChart":         wasmTypeChart(t),
+		"defenderAbilities": wasmAbilitiesForSpecies(f, defender),
 	}
 	if presetKeys != nil {
 		body["presetKeys"] = presetKeys
@@ -107,15 +123,17 @@ func reverseWasmBody(t *testing.T, f *fakeStore, c reverseCase) map[string]any {
 		}
 		obs = append(obs, m)
 	}
+	unknown := f.species[c.unknownSpecies]
 	body := map[string]any{
-		"format":         "single",
-		"side":           string(c.side),
-		"known":          c.known.wasm(t, f),
-		"unknownSpecies": wasmSpecies(f.species[c.unknownSpecies]),
-		"move":           wasmMove(f.moves[c.moveID]),
-		"observations":   obs,
-		"maxCandidates":  c.maxCandidates,
-		"typeChart":      wasmTypeChart(t),
+		"format":           "single",
+		"side":             string(c.side),
+		"known":            c.known.wasm(t, f),
+		"unknownSpecies":   wasmSpecies(unknown),
+		"move":             wasmMove(f.moves[c.moveID]),
+		"observations":     obs,
+		"maxCandidates":    c.maxCandidates,
+		"typeChart":        wasmTypeChart(t),
+		"unknownAbilities": wasmAbilitiesForSpecies(f, unknown),
 	}
 	if c.itemIDs != nil {
 		items := make([]any, 0, len(c.itemIDs))
@@ -401,6 +419,76 @@ func TestReverseResultParityWithWasm(t *testing.T) {
 				g := normalizeReverseCandidate(gotCands[i].(map[string]any))
 				if !reflect.DeepEqual(g, wantCands[i]) {
 					t.Errorf("candidates[%d] が WASM と違う\nHTTP: %s\nWASM: %s", i, mustJSON(t, g), mustJSON(t, wantCands[i]))
+				}
+			}
+		})
+	}
+}
+
+// ADR-0216: defenderOverride(ranks・status)の失敗は HTTP と WASM で同じ code。
+// WASM は解決済みの特性を defenderAbilities で受けるため、上書きは ranks・status だけを同じ形で渡す。
+func TestDefenderOverrideErrorCodeParityWithWasm(t *testing.T) {
+	store := newFakeStore(t)
+	h := NewHandler(store, nil)
+	tests := []struct {
+		name     string
+		override map[string]any
+		wantCode string
+	}{
+		{"防御ランク 7", map[string]any{"ranks": map[string]any{"def": 7}}, wasmapi.CodeInvalidInput},
+		{"素早さランク -7", map[string]any{"ranks": map[string]any{"spe": -7}}, wasmapi.CodeInvalidInput},
+		{"未知の状態異常", map[string]any{"status": "confused"}, wasmapi.CodeInvalidEnum},
+		{"ranks.hp", map[string]any{"ranks": map[string]any{"hp": 1}}, wasmapi.CodeUnknownField},
+		{"ランクが小数", map[string]any{"ranks": map[string]any{"def": 0.5}}, wasmapi.CodeInvalidJSON},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wasmBody := bulkWasmBody(t, store, movePhysical, nil, nil)
+			wasmBody["defenderOverride"] = tt.override
+			if got := wasmError(t, wasmapi.CalcBulk(string(mustJSON(t, wasmBody)))); got != tt.wantCode {
+				t.Fatalf("前提: wasmapi の code = %q, want %q", got, tt.wantCode)
+			}
+			httpBody := bulkBody(movePhysical, nil, nil)
+			httpBody["defenderOverride"] = tt.override
+			rec := post(t, h, "/api/calc/bulk", mustJSON(t, httpBody), false)
+			assertError(t, rec, http.StatusBadRequest, tt.wantCode)
+		})
+	}
+}
+
+// ADR-0216: 同じ上書きなら bulk の各行は WASM と同じ(上書きは行の形を変えない)。
+func TestDefenderOverrideBulkResultParityWithWasm(t *testing.T) {
+	store := newFakeStore(t)
+	h := NewHandler(store, nil)
+	tests := []struct {
+		name     string
+		moveID   string
+		override map[string]any
+	}{
+		{"物理・防御+2・まひ", movePhysical, map[string]any{"ranks": map[string]any{"def": 2}, "status": "paralysis"}},
+		{"物理・防御-6", movePhysical, map[string]any{"ranks": map[string]any{"def": -6}}},
+		{"特殊・特防+6・やけど", moveSpecial, map[string]any{"ranks": map[string]any{"spd": 6}, "status": "burn"}},
+		{"特殊・使わない側だけ", moveSpecial, map[string]any{"ranks": map[string]any{"def": 6, "atk": -6}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wasmBody := bulkWasmBody(t, store, tt.moveID, nil, []string{"", itemShell})
+			wasmBody["defenderOverride"] = tt.override
+			wasmOut := wasmResult(t, wasmapi.CalcBulk(string(mustJSON(t, wasmBody)))).(map[string]any)
+			httpBody := bulkBody(tt.moveID, nil, []any{nil, itemShell})
+			httpBody["defenderOverride"] = tt.override
+			rec := post(t, h, "/api/calc/bulk", mustJSON(t, httpBody), true)
+			var got map[string]any
+			decodeInto(t, rec, &got)
+			gotRows, _ := got["rows"].([]any)
+			wantRows, _ := wasmOut["rows"].([]any)
+			if len(gotRows) != len(wantRows) || len(gotRows) == 0 {
+				t.Fatalf("行数 = %d, want %d", len(gotRows), len(wantRows))
+			}
+			for i := range wantRows {
+				g := normalizeBulkRow(gotRows[i].(map[string]any))
+				if !reflect.DeepEqual(g, wantRows[i]) {
+					t.Errorf("rows[%d] が WASM と違う\nHTTP: %s\nWASM: %s", i, mustJSON(t, g), mustJSON(t, wantRows[i]))
 				}
 			}
 		})

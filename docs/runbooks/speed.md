@@ -33,7 +33,7 @@ cd "$(git rev-parse --show-toplevel)"
 kubectl -n pokecalc port-forward svc/mysql 3306:3306 >/tmp/mysql-pf.log 2>&1 &
 PF_PID=$!
 sleep 2
-export POKEDEX_DATABASE_DSN=$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.pokedex-dsn}' | base64 -d | sed 's/@tcp(mysql:/@tcp(127.0.0.1:/')
+export POKEDEX_DATABASE_DSN=$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.pokedex-reader-dsn}' | base64 -d | sed 's/@tcp(mysql:/@tcp(127.0.0.1:/')
 make pokedex-export
 kill $PF_PID
 ```
@@ -105,20 +105,35 @@ make speed-argocd-app
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 digest=$(make -s speed-registry-push 2>/dev/null | tail -1 | sed 's/.*@//')
-sed -i '' "s/digest: .*/digest: ${digest}/" services/speed/deploy/k8s/overlays/gitops/kustomization.yaml
+# digest 行は images に2つある(pokecalc/speed と pokecalc/pokedex)。name ごとの範囲で本体の行だけを書き換える。
+perl -pi -e "s/digest: .*/digest: ${digest}/ if /name: pokecalc\\/speed\$/ .. /digest:/" services/speed/deploy/k8s/overlays/gitops/kustomization.yaml
 git diff services/speed/deploy/k8s/overlays/gitops/kustomization.yaml
 ```
 確認: diff の `digest:` が `sha256:` で始まる値に変わる(変わらなければ同じイメージなので、9 と 10 は不要)。
 この変更をブランチに commit し、PR で main に入れる。
+
+### read model(initContainer)と pokedex image の digest(issue #237・ADR-0412)
+
+- gitops overlay の Deployment は、initContainer `readmodel-export`(pokedex image の `export -out`)で read model を `emptyDir` に作り、
+  本体は読み取り専用でマウントして読む。ConfigMap は使わない。DSN は Secret `mysql-auth` の `pokedex-reader-dsn`(SELECT のみ)で、initContainer だけに渡す。
+- **Argo CD 有効時は手動 apply しない**。`make speed-k3d-deploy-readmodel` は Application が在ると既定で拒否する
+  (意図して上書きするときだけ `ALLOW_MANUAL_OVERLAY=1`。戻すときは `argocd app sync pokecalc-speed`)。
+- pokedex image の digest は `make pokedex-registry-push`(共有クラスタへは `POKEDEX_REGISTRY_PUSH_CONFIRM=1` が要る。人間の確認のもとで)の
+  出力を使い、`kustomization.yaml` の `name: pokecalc/pokedex` の `digest:` に書く。全0のままだと `speed-gitops-check`(ready)が失敗する。
+- **前提: NetworkPolicy(`allow-mysql-ingress.yaml`)の承認・適用と pokedex の実 digest の確定が済むまで、speed(と balance) を sync しない。**
+- initContainer が MySQL に届くには NetworkPolicy の許可が要る(`deploy/k8s/base/networkpolicy/allow-mysql-ingress.yaml`)。共有 base なので別 PR・人間確認(ADR-0412 §4)。
+- **speed の本体 image は未配備**(digest が全0の placeholder)。overlay の構造だけ先に入れてあり、template 検査は通るが ready 検査は意図どおり失敗する。実 image への置き換えは節 8 で、人間の確認のもとで。
 
 ## 9. 同期する(main に入った後)
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 kubectl -n argocd annotate application pokecalc-speed argocd.argoproj.io/refresh=normal --overwrite
-kubectl config set-context --current --namespace=argocd
-argocd --core app sync pokecalc-speed --timeout 180
-kubectl config set-context --current --namespace=default
+# argocd --core は kubeconfig の context の namespace を読む。自分の設定は書き換えず、一時コピーだけ argocd にする(失敗しても元のまま)。
+(kc=$(mktemp) && trap 'rm -f "$kc"' EXIT \
+  && kubectl config view --minify --flatten >"$kc" \
+  && KUBECONFIG="$kc" kubectl config set-context --current --namespace=argocd >/dev/null \
+  && KUBECONFIG="$kc" argocd --core app sync pokecalc-speed --timeout 180)
 ```
 確認: 出力に `Sync Status: Synced to main (<main の commit>)` と `Phase: Succeeded`。
 
@@ -136,3 +151,22 @@ for i in $(seq 1 15); do code=$(curl -s -o /dev/null -w '%{http_code}' http://lo
 (ADR-0605 §2a。実データを GitOps でどう配るかは未決)。
 
 local の read model で動かす状態に戻すときは 2 をもう一度実行する(Argo CD の Application は OutOfSync になる)。
+
+## 11. GitOps の状態に戻す(通常経路)
+
+10 で local overlay に上書きすると OutOfSync のままになる。main へマージされた後の通常経路は 8〜9 と同じ
+(`make speed-registry-push` → 出力された digest を `services/speed/deploy/k8s/overlays/gitops/kustomization.yaml`
+に書いて PR で main に入れる → `argocd --core app sync pokecalc-speed`)。
+
+自動 sync(`syncPolicy.automated`)は導入しないので(ADR-0408 §4)、この手順を踏んで明示的に Synced へ戻す。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n argocd annotate application pokecalc-speed argocd.argoproj.io/refresh=normal --overwrite
+# argocd --core は kubeconfig の context の namespace を読む。自分の設定は書き換えず、一時コピーだけ argocd にする(失敗しても元のまま)。
+(kc=$(mktemp) && trap 'rm -f "$kc"' EXIT \
+  && kubectl config view --minify --flatten >"$kc" \
+  && KUBECONFIG="$kc" kubectl config set-context --current --namespace=argocd >/dev/null \
+  && KUBECONFIG="$kc" argocd --core app sync pokecalc-speed --timeout 180)
+```
+確認: 出力に `Sync Status: Synced to main (<main の commit>)` と `Phase: Succeeded`。

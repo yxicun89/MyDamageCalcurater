@@ -1,6 +1,6 @@
 # pokecalc Makefile
 # 各ターゲットは docs/plan.md の Phase 進行に合わせて実装を埋めていく。
-# 未実装のターゲットは理由を表示して正常終了する(ビルドを壊さない)。
+# 未実装のターゲットは理由を表示して非0(終了コード 2)で終わる。成功と数えないため(issue #261・#294)。
 
 SHELL := /usr/bin/env bash
 .DEFAULT_GOAL := help
@@ -58,14 +58,21 @@ test-services: ## services のユニットテスト
 .PHONY: test-tools
 test-tools:
 	@cd tools && $(GO) test ./...
-	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs
+	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs tools/importer/prune.test.mjs tools/importer/integrity.test.mjs tools/importer/fetch-integrity.test.mjs
 
 .PHONY: test-scripts
-test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406・計算API SLO ADR-0407・ルートの e2e ADR-0306。クラスタ・ネットワークに触らない)
+test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406・計算API SLO ADR-0407・ルートの e2e ADR-0306・GitOps の AppProject/共通スクリプト/レジストリ ADR-0408・Makefile の help と未実装ターゲット。クラスタ・ネットワークに触らない)
 	@./scripts/argocd-bootstrap_test.sh
 	@./scripts/observability-bootstrap_test.sh
 	@./scripts/observability-slo_test.sh
 	@./scripts/e2e_test.sh
+	@./scripts/ai-guard/bash-guard_test.sh
+	@./scripts/gitops_test.sh
+	@./scripts/make-targets_test.sh
+	@./scripts/require-k3d-context_test.sh
+	@./scripts/image-tag_test.sh
+	@./scripts/up-secrets_test.sh
+	@./scripts/test-db-docker_test.sh
 
 .PHONY: lint
 lint: ## gofmt / go vet / shell・Node構文チェック
@@ -78,6 +85,7 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@cd services && $(GO) vet -tags tidb ./record/... ./team/...
 	@cd services && $(GO) vet -tags nats ./calc/...
 	@cd tools && $(GO) vet ./...
+	@$(MAKE) --no-print-directory staticcheck
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 	@for script in tools/importer/*.sh; do sh -n "$$script" || exit; done
 	@node --check tools/golden/generate.mjs
@@ -86,6 +94,17 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@$(MAKE) --no-print-directory k8s-render
 	@$(MAKE) --no-print-directory check-publishable
 	@$(MAKE) --no-print-directory check-publishable-selftest
+
+# staticcheck(tools/go.mod の tool ディレクティブで版固定。issue #331)。警告が1件でもあれば失敗する。
+# ビルドタグ付きのファイルも解析する(vet と同じタグ)。balance・speed・judge は別モジュールのため GOWORK=off。
+# engine はタグ無しだと golden 専用の定数を未使用と誤検知するため、タグ付きだけ解析する。
+# 生成コードは staticcheck.conf の checks で外す(各モジュールのルートに置く)。
+.PHONY: staticcheck
+staticcheck: ## staticcheck(固定版)を全モジュール・全ビルドタグで実行
+	@sc="$$(cd tools && $(GO) tool -n staticcheck)" && \
+	cd engine && "$$sc" -tags golden ./... && "$$sc" -tags allspecies ./... && cd ../services && \
+	"$$sc" ./... && "$$sc" -tags mysql ./pokedex/... && "$$sc" -tags tidb ./record/... ./team/... && "$$sc" -tags nats ./calc/... && cd ../tools && \
+	"$$sc" ./... && cd ../services/balance && GOWORK=off "$$sc" ./... && cd ../speed && GOWORK=off "$$sc" ./... && cd ../judge && GOWORK=off "$$sc" ./...
 
 .PHONY: build
 build: ## 実装済みGoモジュールをビルド(Web/WASMは後続タスク)
@@ -180,6 +199,10 @@ test-db: ## pokedex(MySQL)・record/team(TiDB)のDBを使うテスト(POKEDEX_TE
 	@cd services && $(GO) test -tags mysql -p 1 ./pokedex/...
 	@cd services && $(GO) test -tags tidb -p 1 ./record/... ./team/...
 
+.PHONY: test-db-docker
+test-db-docker: ## test-db を Docker の使い捨て MySQL・TiDB で流す(終了時に消す。Docker が無ければ失敗。make test には含めない。issue #223)
+	@./scripts/test-db-docker.sh
+
 .PHONY: test-nats
 test-nats: ## calc-svcのイベント発行を実NATSで検査する(CALC_TEST_NATS_URL が必須。make test には含めない。ADR-0212)
 	@if [ -z "$(CALC_TEST_NATS_URL)" ]; then \
@@ -250,38 +273,42 @@ import-check-upstream: ## 上流(calc/Showdown/PokeAPI)の最新版を検出し�
 	@cd tools/importer && npm ci && node check-upstream.mjs
 
 .PHONY: pokedex-export
-pokedex-export: ## balance/speed 向けの read model を4ファイル書く(POKEDEX_DATABASE_DSN が必須。出力先 data/generated/readmodel/)
+pokedex-export: ## balance/speed 向けの read model を6ファイル(4ファイル+type-chart.json・metadata.json)書く(POKEDEX_DATABASE_DSN が必須。出力先 data/generated/readmodel/)
 	@cd services && $(GO) run ./pokedex/cmd/pokedex export -out ../data/generated/readmodel
 
 .PHONY: import-k8s
 import-k8s: ## k3d 上の CronJob pokedex-import を手動で1回流す(週1回の定期実行とは別に)
-	@current_context="$$(kubectl config current-context)"; \
-	if [ "$$current_context" != "k3d-$(CLUSTER)" ]; then \
-		echo "import-k8s: 現在の kubectl context '$$current_context' が 'k3d-$(CLUSTER)' ではない(別クラスタへ流してしまうため中断)" >&2; \
-		exit 1; \
-	fi; \
-	kubectl -n pokecalc create job --from=cronjob/pokedex-import "pokedex-import-manual-$$(date +%Y%m%d%H%M%S)"
+	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh import-k8s
+	@kubectl -n pokecalc create job --from=cronjob/pokedex-import "pokedex-import-manual-$$(date +%Y%m%d%H%M%S)"
 
 .PHONY: pokedex-registry-push
 pokedex-registry-push: ## pokedex(server イメージ)をクラスタ内共有レジストリ balance-registry へ digest 固定で push する(タイプバランスレーン issue #237 の依頼。ADR-0018・ADR-0605 と同じ方式)
 	@./scripts/pokedex-registry-push.sh
 
 .PHONY: k8s-render
-k8s-render: ## kustomize で local / cloud / tidb overlay が描画できることを確かめる(apply はしない)
-	@kubectl kustomize deploy/k8s/overlays/local >/dev/null
+# 各レーンの overlay も描画する(issue #261・#321)。どれか1つでも描画できなければ lint を失敗させる。
+# local/api・local/web・local/mysql・local/nats は Component なので、local・local-api・local-web の描画で確かめる。
+k8s-render: k8s-render-kubectl api-kustomize web-kustomize balance-kustomize speed-kustomize judge-kustomize ## kustomize で全レーンの overlay(local・cloud・tidb・local-api・local-web・balance・speed・judge・observability・Argo CD の AppProject)が描画できることを確かめる(apply はしない)
 	@kubectl kustomize deploy/k8s/overlays/cloud >/dev/null
 	@kubectl kustomize deploy/k8s/overlays/local/tidb >/dev/null
+	@kubectl kustomize deploy/argocd >/dev/null
+	@kubectl kustomize deploy/k8s/base/observability >/dev/null
 	@if kubectl cluster-info --request-timeout=3s >/dev/null 2>&1; then \
 		kubectl apply --dry-run=client --request-timeout=10s -f deploy/k8s/base/record/job-migrate.yaml -o yaml >/dev/null; \
 		kubectl apply --dry-run=client --request-timeout=10s -f deploy/k8s/base/team/job-migrate.yaml -o yaml >/dev/null; \
-		echo "k8s-render: local / cloud / tidb overlay・record/team migrate Job の描画を確認"; \
+		echo "k8s-render: 全レーンの overlay・record/team migrate Job の描画を確認"; \
 	else \
-		echo "k8s-render: local / cloud / tidb overlay の描画を確認(クラスタ未起動のため record/team migrate Job の dry-run はスキップ)"; \
+		echo "k8s-render: 全レーンの overlay の描画を確認(クラスタ未起動のため record/team migrate Job の dry-run はスキップ)"; \
 	fi
 
+# kubectl が無いと各 *-kustomize が分かりにくいエラーで止まるため、先に理由を出して止める(issue #75)。
+.PHONY: k8s-render-kubectl
+k8s-render-kubectl:
+	@command -v kubectl >/dev/null 2>&1 || { echo "k8s-render: kubectl が無いため overlay を描画できません(brew install kubectl。make doctor で確認)" >&2; exit 1; }
+
 .PHONY: assets
-assets: ## 画像を WebP 2サイズに変換して MinIO へ
-	@echo "assets: (M画像対応 で実装)"
+assets: ## 画像を WebP 2サイズに変換して MinIO へ(未実装。終了コード 2)
+	@echo "assets: 未実装です(画像の配信は計画外。issue #286)。成功と数えないため終了コード 2 で終わります" >&2; exit 2
 
 ## --- 公開前の検査 -----------------------------------------------------
 .PHONY: check-publishable
@@ -306,6 +333,9 @@ tidy: ## go mod tidy(全モジュール)
 	@cd engine && $(GO) mod tidy
 	@cd services && $(GO) mod tidy
 	@cd tools && $(GO) mod tidy
+	@cd services/balance && GOWORK=off $(GO) mod tidy
+	@cd services/speed && GOWORK=off $(GO) mod tidy
+	@cd services/judge && GOWORK=off $(GO) mod tidy
 
 .PHONY: deps-outdated
 deps-outdated: ## 古くなった依存の一覧を表示する(ネットワーク使用。失敗しても一覧を出す。make test には含めない)
@@ -319,6 +349,10 @@ deps-outdated: ## 古くなった依存の一覧を表示する(ネットワー�
 	@cd tools && GOWORK=off $(GO) list -m -u all 2>&1 || true
 	@echo "== Go: services/balance (go list -m -u all) =="
 	@cd services/balance && GOWORK=off $(GO) list -m -u all 2>&1 || true
+	@echo "== Go: services/speed (go list -m -u all) =="
+	@cd services/speed && GOWORK=off $(GO) list -m -u all 2>&1 || true
+	@echo "== Go: services/judge (go list -m -u all) =="
+	@cd services/judge && GOWORK=off $(GO) list -m -u all 2>&1 || true
 	@echo "== Node: tools/golden (npm outdated) =="
 	@if [ -f tools/golden/package.json ]; then cd tools/golden && (npm outdated || true); else echo "(tools/golden/package.json が無い)"; fi
 	@echo "== Node: tools/importer (npm outdated) =="

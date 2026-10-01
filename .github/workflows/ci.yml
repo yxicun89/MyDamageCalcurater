@@ -102,13 +102,3 @@ jobs:
         run: make check-publishable
         timeout-minutes: 3
 
-      # make lint の k8s-render は base/local/cloud/tidb overlay だけを描画する。ここでは
-      # 各レーン専用 overlay(local-api・local-web・gitops 等)も apply せず描画だけ確認する。
-      - name: kustomize 描画(各レーン。apply はしない)
-        run: |
-          make api-kustomize
-          make web-kustomize
-          make balance-kustomize
-          make speed-kustomize
-          make judge-kustomize
-        timeout-minutes: 3

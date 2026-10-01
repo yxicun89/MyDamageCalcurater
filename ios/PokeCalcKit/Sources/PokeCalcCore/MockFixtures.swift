@@ -14,6 +14,10 @@ struct MockFixtures {
         struct AbilityEntry: Decodable {
             let id: String
             let nameJa: String
+            /// この特性を防御側(逆算は相手 = 防御側のとき)が持つと、このタイプの技のダメージが 0 になる
+            /// (フィクスチャだけの任意項目。モックは計算しないので、特性で行・候補が分かれる状況を決め打ちで
+            /// 再現するためだけに使う。ADR-0501「P6-19」5章)。無ければ効果なし。
+            let nullifiesMoveType: String?
         }
         let key: String
         let dexNo: Int
@@ -32,11 +36,17 @@ struct MockFixtures {
         let category: String
         let power: Int
         let priority: Int
+        /// 技の機構(openapi `MasterMove.mechanisms` と同じ値。ADR-0121)。無ければ通常の技。
+        /// モックはこれを未対応の印(`target: move`)にする(ADR-0501「P6-17」4章)。
+        let mechanisms: [String]?
     }
 
     struct ItemEntry: Decodable {
         let id: String
         let nameJa: String
+        /// true なら効果を表せない持ち物(ADR-0123 §4 の `UnsupportedAttacker`/`UnsupportedDefender` に相当)。
+        /// モックは持つ側に応じて `attacker_item` / `defender_item` の印を付ける(ADR-0501「P6-17」4章)。
+        let unsupportedEffect: Bool?
     }
 
     struct NatureEntry: Decodable {

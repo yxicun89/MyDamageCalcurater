@@ -28,26 +28,36 @@ make web-e2e
 make web-e2e-container
 make web-e2e-online
 make web-e2e-balance
+make test-db-docker
 ```
 → すべて最後まで成功する(失敗したらそこで止めて plan.md に記録)。
 
-## 3. k3d を用意する(初回だけ)
+## 3. k3d を用意する(初回だけ。人間の確認つきで通しで実行する)
+
+新しいクラスタで上から実行する。マスタ(実データ)の投入を、calc・gateway などを入れる §4 より先に済ませる
+(§4 の `make deploy-latest` は、`pokedex` が Ready になるのを待ってから calc などを入れる。マスタが無いと `pokedex` は Ready にならない)。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 make up
 ```
-→ 最後に `完了。` が出る。`kubectl -n pokecalc get pods` で `mysql-0`・`pokedex` が `Running`。
-
-マスタ(実データ)を入れる。バックエンドはマスタが無いと計算できないので、次の §4 より先に行う。
+→ 出力に `job.batch/pokedex-migrate condition met` が含まれ、最後に `完了。http://localhost:8080 ...` の案内が出る。
+`kubectl -n pokecalc get pods` で `mysql-0` が `Running`。`pokedex` は `Running` だが、初回 import(次の手順)が済むまで `0/1`(Ready にならない。異常ではない)。
+calc・gateway・web は §4 でイメージを入れるまで起動しない(イメージが無いので `ImagePullBackOff` などになる。異常ではない)。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 make import-fetch
 make import-dry-run
-make import-k8s
+created=$(make import-k8s)
+echo "$created"
+job_name=$(echo "$created" | grep -o 'pokedex-import-manual-[0-9]*' | tail -1)
+kubectl -n pokecalc wait --for=condition=complete "job/$job_name" --timeout=600s
+kubectl -n pokecalc get pods -l app.kubernetes.io/name=pokedex
 ```
-→ `import-dry-run` の最後の行が `blockers: none`。`import-k8s` の Job が `condition met` で終わる。
+→ `import-dry-run` の出力に `blockers: none` が含まれ、最後の行が `import: -dry-run のため DB には投入しない`。
+`wait` が `job.batch/<job名> condition met` で終わる(`make import-k8s` は Job を作るだけで待たないので、`wait` までを流す)。
+数秒〜10秒ほどで `pokedex` が `1/1` になる。`make import-fetch` がネットワーク無しで失敗したら、そこで止める(ネットワークを戻して再実行する。DB は変わっていない)。
 
 タイプバランス・素早さが読む read model を書き出す(`mysql` へ一時的に port-forward する)。
 
@@ -56,11 +66,13 @@ cd "$(git rev-parse --show-toplevel)"
 kubectl -n pokecalc port-forward svc/mysql 3306:3306 >/dev/null 2>&1 &
 PF_PID=$!
 sleep 2
-export POKEDEX_DATABASE_DSN=$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.pokedex-dsn}' | base64 -d | sed 's/@tcp(mysql:/@tcp(127.0.0.1:/')
+export POKEDEX_DATABASE_DSN=$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.pokedex-reader-dsn}' | base64 -d | sed 's/@tcp(mysql:/@tcp(127.0.0.1:/')
 make pokedex-export
 kill $PF_PID
+unset POKEDEX_DATABASE_DSN PF_PID
 ```
-→ `export: ../data/generated/readmodel に書いた`。
+→ `export: ../data/generated/readmodel に書いた`。`data/generated/readmodel` に `metadata.json`・`type-chart.json` を含む6ファイルがある。
+ホストの 3306 を `make db-local-up` の MySQL が使っているときは、port-forward 先を `13306:3306` にし、`sed` の `127.0.0.1:` の後も `13306` にする。
 
 ## 4. 最新のコードを k3d に入れる(動作確認の前に毎回)
 
@@ -77,11 +89,11 @@ make deploy-latest
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 make web-k3d-smoke
-make api-smoke
+API_SMOKE_STRICT=1 make api-smoke
 make web-k3d-e2e
 ```
-→ `web smoke: すべて成功(http://localhost:8080)`。`api-smoke` の最終行に `calc=200 bulk=200 reverse=200 pokedex=200 web=200 balance=200`
-(`missing_header=400`・`invalid_header=400`・`internal=404` は異常系を意図して確かめた結果で、この値が正常)。
+→ `web smoke: すべて成功(http://localhost:8080)`。`api-smoke` の最終行に `calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=200 internal=404 balance=200 web=200`
+(`API_SMOKE_STRICT=1` は web・balance が 200 でなければ非0で終わる。`missing_header=400`・`invalid_header=400`・`internal=404` は異常系を意図して確かめた結果で、この値が正常)。
 `web-k3d-e2e` は `2 passed`(実ブラウザで 8080 を開き、オフラインとオンライン〈実マスタ〉の両方で計算結果が出ることを確かめる)。
 
 ## 6. ブラウザで確認する(Chrome と Safari)

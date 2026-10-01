@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: pokecalc
+resources:
+  - ../../base
+images:
+  - name: pokecalc/judge
+    newName: localhost:5000/pokecalc/judge
+    digest: sha256:f5bb6001b8d5b78265a05ba6b7941b4d75b20d0015b2028f526ff03ec9b43f92

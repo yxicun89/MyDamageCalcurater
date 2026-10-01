@@ -21,7 +21,7 @@ import {
   superEffectiveLabel,
 } from "../domain/balanceLabels";
 import { learnsetMoves } from "../domain/moves";
-import { balanceScreenText, masterOnlineText, typeNameJa } from "../i18n/ja";
+import { balanceErrorText, balanceScreenText, masterOnlineText, typeNameJa } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type { MasterData, MasterSpeciesResolution, MasterSpeciesSearch } from "../master/types";
 import { SpeciesSearchField } from "./SpeciesSearchField";
@@ -71,6 +71,13 @@ type RequestState<T> =
   | { readonly status: "loading" }
   | { readonly status: "success"; readonly value: T }
   | { readonly status: "error"; readonly error: { readonly code: string; readonly message: string } };
+
+/** エラーコードを日本語の文言にする(応答の message は英語の内部メッセージなので出さない。ADR-0411)。 */
+function balanceErrorMessage(code: string): string {
+  return Object.hasOwn(balanceErrorText, code)
+    ? balanceErrorText[code as keyof typeof balanceErrorText]
+    : balanceErrorText.fallback;
+}
 
 /** 直近に届いた応答と、それを生んだ入力の key(CalcScreen.tsx の CompletedCalc と同じ考え方)。 */
 interface Completed<T> {
@@ -518,12 +525,12 @@ export function BalanceScreen({ master, client, masterSearch }: BalanceScreenPro
       {loading && <p className="balance-screen__notice">{balanceScreenText.loadingNotice}</p>}
       {analyzeState.status === "error" && (
         <p role="alert" className="balance-screen__error">
-          {analyzeState.error.message}
+          {balanceErrorMessage(analyzeState.error.code)}
         </p>
       )}
       {coverageState.status === "error" && (
         <p role="alert" className="balance-screen__error">
-          {coverageState.error.message}
+          {balanceErrorMessage(coverageState.error.code)}
         </p>
       )}
 
@@ -540,7 +547,7 @@ export function BalanceScreen({ master, client, masterSearch }: BalanceScreenPro
       )}
       {threatsState.status === "error" && (
         <p role="alert" className="balance-screen__error">
-          {threatsState.error.message}
+          {balanceErrorMessage(threatsState.error.code)}
         </p>
       )}
       {threatsState.status === "success" &&
@@ -559,7 +566,7 @@ export function BalanceScreen({ master, client, masterSearch }: BalanceScreenPro
       )}
       {recommendationsState.status === "error" && (
         <p role="alert" className="balance-screen__error">
-          {recommendationsState.error.message}
+          {balanceErrorMessage(recommendationsState.error.code)}
         </p>
       )}
       {recommendationsState.status === "success" && (

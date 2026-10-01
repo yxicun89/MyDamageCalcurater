@@ -3,7 +3,14 @@ kind: Kustomization
 namespace: pokecalc
 resources:
   - ../../base
+patches:
+  - path: deployment-readmodel-patch.yaml
 images:
   - name: pokecalc/balance
     newName: localhost:5000/pokecalc/balance
     digest: sha256:ad41022e5fba325be3911d51c3d82289783c4563cb56e67f83530e081d385b08
+  # read model を作る initContainer 用の pokedex image(ADR-0412)。digest は make pokedex-registry-push の出力で置き換える。
+  # 全0は未 push の placeholder(speed と同じ)。実 digest 確定と NetworkPolicy(allow-mysql-ingress.yaml)の承認・適用が済むまで sync しない。
+  - name: pokecalc/pokedex
+    newName: localhost:5000/pokecalc/pokedex
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
