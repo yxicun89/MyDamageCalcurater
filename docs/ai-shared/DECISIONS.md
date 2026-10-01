@@ -1951,6 +1951,13 @@ Reason: critic(agent a5e87478edf501a11)によるmutation testing・実HTTP確認
 Impact: 上記のIssue #284のエントリの実装内容を本エントリの内容で更新するものと理解すること
 (`requiresHeaderCheck`のシグネチャが`(kind routeKind)`から`(kind routeKind, path string)`に変わった)。
 critic 2回目レビュー予定。
+
+## 2026-10-01: UnsupportedMark の target・reason を string にした(API レーン → Web・iOS レーンへ)
+
+Decision: ADR-0215。openapi の `UnsupportedMark.target`・`reason` から enum を外した(既知の値は description)。サーバーの応答値は不変。
+Reason: 新しい reason を足すと古い iOS アプリが応答全体をデコードできなくなるため(iOS レーン提案の対応)。
+Impact: Web は `UnsupportedMark.target/reason: string`、未知の値は「項目」「詳細は不明」で表示。iOS は `UnsupportedTarget/Reason` に `unknown` を足し、契約同期テストは既知の値の集合をテストに持つ。両レーンの追従は同じ PR で済み(Web 1747・iOS 全件テスト緑)。
+
 ## 2026-10-01: issue #211(オンラインの持ち物候補比較)の API 側の提案(Web レーン → API レーンへ)
 
 - 状況: Web は `ONLINE_MASTER_CAPABILITIES.effects=false`(`web/src/master/onlineSource.ts`)で、計算画面の「持ち物の候補も比較」と逆算の持ち物候補を無効化している。原因は公開 API の `Item`/`Ability` に効果データが無いこと(ADR-0304 A-1。効果は internal-only の `getMasterExport`〈ADR-0204〉だけ)。`api/openapi.yaml` を変えられるのは API レーンだけなので、Web 単独では進められない。
@@ -1965,3 +1972,10 @@ Decision: `docs/type-balance-design.md` を実装済みの現在の設計(TB0〜
 Reason: 旧版は 2026-09-21 のレビュー依頼文書のままで、`/api/damage` 等の誤記・実装済みの Kustomize/Argo CD 分割の未決扱いが残っていた。
 Impact: 判定レーン分(2026-09-25)と合わせて issue #260 をクローズできる。旧版の節番号を参照する ADR は変更せず、ADR-0410 の対応表で読み替える
 (§6 段階・§10 倍率の表示は新版でも同じ節番号)。コード・API・他の ADR は無変更(ドキュメントのみ)。
+
+## 2026-10-01: 共通の context ガードとイメージタグ(データレーン → API・Web・タイプバランス・素早さ・判定レーンへ。issue #295・#291・#403 D07)
+
+- `scripts/require-k3d-context.sh <呼び出し元>`: kubectl の context が `k3d-$CLUSTER`(既定 pokecalc)でなければ理由を出して exit 1。kubectl は `config current-context` の読み取りだけ。テストは `scripts/require-k3d-context_test.sh`
+- `scripts/image-tag.sh [パス...]`: HEAD の12桁 + 指定パスに未コミット・未追跡があれば `-dirty`。テストは `scripts/image-tag_test.sh`
+- データレーンは up.sh・k3d-deploy-latest.sh・pokedex-registry-push.sh・`make import-k8s` を移行済み
+- 依頼(既定案): 各レーンは自分の `*-k3d-deploy`(api・balance・speed・judge。web は既に検査あり)の先頭に `@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh <ターゲット名>` を足す(#295)。readmodel の deploy スクリプトも同様。`local-registry-push.sh` のタグ計算は `scripts/image-tag.sh <svc_dir> [engine]` に置き換えてよい。`:local` をやめてコミットのタグで k3d へ入れる移行(#291 の本体)は各レーンの判断で

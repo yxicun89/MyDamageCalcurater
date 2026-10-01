@@ -183,6 +183,11 @@ export interface BulkRequest {
   readonly presets?: readonly DefenderPreset[];
   readonly presetKeys?: readonly string[];
   readonly itemVariants?: ReadonlyArray<Item | null>;
+  /**
+   * 防御側の特性の候補(0〜3件。issue 272、ADR-0126)。結果が同じ特性は1行にまとまり、違えば行が分かれる。
+   * 省略・空は従来どおり(特性を渡さない)。
+   */
+  readonly defenderAbilities?: readonly Ability[];
   readonly typeChart: TypeChart;
 }
 
@@ -209,6 +214,8 @@ export interface ReverseRequest {
   readonly itemCandidates?: ReadonlyArray<Item | null>;
   readonly observations: readonly Observation[];
   readonly maxCandidates?: number;
+  /** 相手(逆算する側)の特性の候補(0〜3件。issue 272、ADR-0126)。省略・空は従来どおり。 */
+  readonly unknownAbilities?: readonly Ability[];
   readonly typeChart: TypeChart;
 }
 
@@ -247,8 +254,13 @@ export type UnsupportedReason =
  * 技は理由の昇順で zero_power が最後)。Web は並べ替え・重複除去をしない(ADR-0300 §8)。
  */
 export interface UnsupportedMark {
-  readonly target: UnsupportedTarget;
-  readonly reason: UnsupportedReason;
+  /**
+   * 契約(api/openapi.yaml)が enum にしない値。既知の値は {@link UnsupportedTarget}。
+   * 古いクライアントが新しい値で応答全体をデコードできなくならないよう、未知の値も受け取る(ADR-0215)。
+   */
+  readonly target: string;
+  /** 既知の値は {@link UnsupportedReason}。target と同じく未知の値も受け取る(ADR-0215)。 */
+  readonly reason: string;
   /** 印が付いた技・持ち物・特性の ID。 */
   readonly id: string;
 }
@@ -291,6 +303,10 @@ export interface BulkRow {
   readonly itemId: string;
   readonly defender: BulkDefender;
   readonly result: CalcResult;
+  /** 行の特性(先頭。特性を送らなかった応答には無い。issue 272)。 */
+  readonly abilityId?: string;
+  /** この行と結果が同じ特性の ID(abilityId が先頭。issue 272)。 */
+  readonly abilityIds?: readonly string[];
 }
 
 /** 一括計算の結果。 */
@@ -325,6 +341,10 @@ export interface ReverseCandidate {
   readonly maxPercent: number;
   /** 「未対応」の印(印なしは空配列。SP によらず候補ごとに同じ内容になる。ADR-0123 §2)。 */
   readonly unsupported: readonly UnsupportedMark[];
+  /** 候補の特性(先頭。特性を送らなかった応答には無い。issue 272)。 */
+  readonly abilityId?: string;
+  /** この候補と結果が同じ特性の ID(abilityId が先頭。issue 272)。 */
+  readonly abilityIds?: readonly string[];
 }
 
 /** 逆算の結果。 */

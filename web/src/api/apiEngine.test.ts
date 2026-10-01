@@ -475,6 +475,9 @@ describe("calcBulk", () => {
               stats: { hp: 165, atk: 95, def: 100, spa: 115, spd: 105, spe: 90 },
             },
             result: apiCalcResult,
+            // issue 272(ADR-0311): 応答の abilityId / abilityIds は行に写す。
+            abilityId: "example-ability-adapt",
+            abilityIds: ["example-ability-adapt"],
           },
           {
             preset: "hb_boost",
@@ -486,6 +489,9 @@ describe("calcBulk", () => {
               stats: { hp: 197, atk: 85, def: 110, spa: 115, spd: 105, spe: 90 },
             },
             result: apiCalcResult,
+            // issue 272(ADR-0311): 応答の abilityId / abilityIds は行に写す。
+            abilityId: "example-ability-adapt",
+            abilityIds: ["example-ability-adapt"],
           },
         ],
       },
@@ -610,6 +616,8 @@ describe("calcReverse", () => {
             maxPercent: 47.8,
             // issue 271 / issue 270: 印なしは空配列のまま候補に残す(ADR-0123 §6)。
             unsupported: [],
+            abilityId: "example-ability-adapt",
+            abilityIds: ["example-ability-adapt"],
           },
           {
             natureClass: "plus",
@@ -623,6 +631,8 @@ describe("calcReverse", () => {
             minPercent: 44.1,
             maxPercent: 52.0,
             unsupported: [],
+            abilityId: "example-ability-adapt",
+            abilityIds: ["example-ability-adapt"],
           },
         ],
       },

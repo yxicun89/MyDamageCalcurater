@@ -340,39 +340,11 @@ public struct APIPokeCalcService: PokeCalcService {
         )
     }
 
-    /// 未対応の印(ADR-0123・ADR-0501「P6-17」1章)。target/reason は網羅 `switch`(`default` なし)で写す。
+    /// 未対応の印(ADR-0123・ADR-0501「P6-17」1章)。契約は target/reason を enum にしない(ADR-0215)ので、
+    /// 知らない値は `.unknown` に写す(応答全体をデコード失敗にしない)。
     private static func domainUnsupportedMark(_ mark: Components.Schemas.UnsupportedMark) -> UnsupportedMark {
-        UnsupportedMark(target: domainUnsupportedTarget(mark.target), reason: domainUnsupportedReason(mark.reason), id: mark.id)
-    }
-
-    private static func domainUnsupportedTarget(_ target: Components.Schemas.UnsupportedMark.TargetPayload) -> UnsupportedTarget {
-        switch target {
-        case .move: return .move
-        case .attackerItem: return .attackerItem
-        case .attackerAbility: return .attackerAbility
-        case .defenderItem: return .defenderItem
-        case .defenderAbility: return .defenderAbility
-        }
-    }
-
-    private static func domainUnsupportedReason(_ reason: Components.Schemas.UnsupportedMark.ReasonPayload) -> UnsupportedReason {
-        switch reason {
-        case .altDefenseStat: return .altDefenseStat
-        case .altOffenseStat: return .altOffenseStat
-        case .alwaysCrit: return .alwaysCrit
-        case .effectivenessChange: return .effectivenessChange
-        case .fieldSpecific: return .fieldSpecific
-        case .fixedDamage: return .fixedDamage
-        case .ignoreDefenseRanks: return .ignoreDefenseRanks
-        case .moveSpecific: return .moveSpecific
-        case .multiHit: return .multiHit
-        case .ohko: return .ohko
-        case .priorityChange: return .priorityChange
-        case .typeChange: return .typeChange
-        case .variablePower: return .variablePower
-        case .zeroPower: return .zeroPower
-        case .unsupportedEffect: return .unsupportedEffect
-        }
+        UnsupportedMark(target: UnsupportedTarget(contractValue: mark.target),
+                        reason: UnsupportedReason(contractValue: mark.reason), id: mark.id)
     }
 
     private static func domainBulkCalcResult(_ result: Components.Schemas.BulkCalcResult) -> BulkCalcResult {

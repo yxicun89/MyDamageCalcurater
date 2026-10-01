@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from "vitest";
 import type { UnsupportedMark } from "../engine/types";
-import { splitUnsupportedMarks } from "./unsupportedLabels";
+import { splitUnsupportedMarks, unsupportedMarkLabel } from "./unsupportedLabels";
 
 const multiHit = (moveId: string): UnsupportedMark => ({ target: "move", reason: "multi_hit", id: moveId });
 const itemMark = (itemId: string): UnsupportedMark => ({
@@ -82,5 +82,17 @@ describe("splitUnsupportedMarks", () => {
     expect(result.common).toEqual([common, zeroPower]);
     // perRow: common に振り分けられた分を除いた残り。順序は元の並びのまま
     expect(result.perRow).toEqual([[onlyRow0], []]);
+  });
+});
+
+describe("unsupportedMarkLabel(未知の target。ADR-0215)", () => {
+  test("未知の target でも例外にならず、ID をそのまま出す", () => {
+    const label = unsupportedMarkLabel(
+      { target: "future_target", reason: "unsupported_effect", id: "x-id" },
+      [],
+      [],
+      [],
+    );
+    expect(label).toContain("x-id");
   });
 });

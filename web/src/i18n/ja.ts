@@ -75,6 +75,7 @@ const defenderRegionLabel = "防御側";
 /** 入力欄の見えるラベルの語(短くする。どちら側かは領域の見出しが担う)。 */
 const pokemonFieldLabel = "ポケモン";
 const itemFieldLabel = "持ち物";
+const abilityFieldLabel = "特性";
 
 /**
  * 計算画面(P4-2)の文言。コーディング規約 §2「UI の文言は文言資源に置く」に従い、
@@ -86,10 +87,18 @@ export const calcScreenText = {
   /** 入力欄の見えるラベルの語(select の label に使う。計算・逆算・タイプバランスで共通)。 */
   pokemonFieldLabel,
   itemFieldLabel,
+  /** 特性欄の見えるラベルの語(issue 272、ADR-0311)。 */
+  abilityFieldLabel,
   attackerPokemonLabel: `${attackerRegionLabel}の${pokemonFieldLabel}`,
   defenderPokemonLabel: `${defenderRegionLabel}の${pokemonFieldLabel}`,
   attackerItemLabel: `${attackerRegionLabel}の${itemFieldLabel}`,
   defenderItemLabel: `${defenderRegionLabel}の${itemFieldLabel}`,
+  attackerAbilityLabel: `${attackerRegionLabel}の${abilityFieldLabel}`,
+  defenderAbilityLabel: `${defenderRegionLabel}の${abilityFieldLabel}`,
+  /** 防御側・相手の特性を決め打ちしない選択肢(種族の特性を先頭から最大3件まで全部計算する。ADR-0126・ADR-0311)。 */
+  anyAbilityOption: "おまかせ(種族の全特性)",
+  /** 結果の行・候補に、まとめた特性の名前を並べるときの区切り。 */
+  abilityNameSeparator: "・",
   moveLabel: "技",
   /** 種族 select が未選択のとき、hidden の先頭 option に出す文言(空文字にしない。issue 304)。 */
   speciesPlaceholderOption: "ポケモンを選ぶ",
@@ -587,6 +596,8 @@ export const reverseScreenText = {
   mySpeciesLabel: `${myRegionLabel}の${calcScreenText.pokemonFieldLabel}`,
   theirSpeciesLabel: `${theirRegionLabel}の${calcScreenText.pokemonFieldLabel}`,
   myItemLabel: `${myRegionLabel}の${calcScreenText.itemFieldLabel}`,
+  myAbilityLabel: `${myRegionLabel}の${calcScreenText.abilityFieldLabel}`,
+  theirAbilityLabel: `${theirRegionLabel}の${calcScreenText.abilityFieldLabel}`,
   myPresetGroupLabel: "自分の調整",
   observationLabel: (n: number): string => `観測${String(n)}`,
   observationUnitGroupLabel: (n: number): string => `観測${String(n)}の単位`,
@@ -679,7 +690,17 @@ const unsupportedReasonLabel: Record<UnsupportedReason, string> = {
   unsupported_effect: "効果を計算に反映していない",
 };
 
+/** 契約に無い(古いクライアントが知らない)target・reason の汎用の語(ADR-0215)。 */
+const unknownTargetLabel = "項目";
+const unknownReasonLabel = "詳細は不明";
+
+function isKnownKey<T extends string>(table: Record<T, string>, key: string): key is T {
+  return Object.hasOwn(table, key);
+}
+
 export const unsupportedText = {
+  unknownTarget: unknownTargetLabel,
+  unknownReason: unknownReasonLabel,
   target: unsupportedTargetLabel,
   reason: unsupportedReasonLabel,
   /**
@@ -690,10 +711,16 @@ export const unsupportedText = {
    * 例: 技「テストれんぞくパンチ」(多段技) / 攻撃側の持ち物「テストどうぐ」
    */
   markLabel: (mark: UnsupportedMark, name: string): string => {
-    const target = `${unsupportedTargetLabel[mark.target]}「${name === "" ? mark.id : name}」`;
-    return mark.reason === "unsupported_effect"
-      ? target
-      : `${target}(${unsupportedReasonLabel[mark.reason]})`;
+    // 契約は target・reason を enum にしない(ADR-0215)。未知の値は汎用の語で出し、ID は必ず出す。
+    const targetLabel = isKnownKey(unsupportedTargetLabel, mark.target)
+      ? unsupportedTargetLabel[mark.target]
+      : unknownTargetLabel;
+    const target = `${targetLabel}「${name === "" ? mark.id : name}」`;
+    if (mark.reason === "unsupported_effect") return target;
+    const reasonLabel = isKnownKey(unsupportedReasonLabel, mark.reason)
+      ? unsupportedReasonLabel[mark.reason]
+      : unknownReasonLabel;
+    return `${target}(${reasonLabel})`;
   },
   /**
    * 全行(全候補)に共通する印がある結果の先頭に1回だけ置く案内(iOS レーンの書式)。

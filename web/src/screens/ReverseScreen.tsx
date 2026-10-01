@@ -43,8 +43,15 @@ import {
   parseObservation,
   type ObservationUnit,
 } from "../domain/observations";
+import { abilityNamesLabel } from "../domain/abilityLabels";
 import { MAX_ITEM_CANDIDATES, MAX_OBSERVATIONS } from "../domain/requestLimits";
-import { buildIndividual, buildReverseRequest, defaultAbility } from "../domain/requests";
+import {
+  NO_ABILITY,
+  buildIndividual,
+  buildReverseRequest,
+  defenderAbilityCandidates,
+  selectableAbilities,
+} from "../domain/requests";
 import { reverseItemCandidates } from "../domain/reverseItems";
 import {
   formatSPRanges,
@@ -84,6 +91,7 @@ import type {
 import { prefersReducedMotion } from "../ui/motion";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
+import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
 import "./ReverseScreen.css";
 
 /**
@@ -155,6 +163,8 @@ interface CompletedReverse {
   readonly myItem: Item | null;
   readonly attackerPresetKey: AttackerPresetKey;
   readonly defenderPresetKey: DefenderPresetKey;
+  readonly myAbility: Ability;
+  readonly unknownAbilities: readonly Ability[];
   readonly observations: readonly Observation[];
   readonly result: EngineResult<ReverseResult>;
 }
@@ -182,6 +192,10 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   const [theirsSpeciesKey, setTheirsSpeciesKey] = useState("");
   const [myItemId, setMyItemId] = useState("");
   const [moveId, setMoveId] = useState("");
+  // 特性の選択(issue 272、ADR-0311)。"" は自分では「種族の先頭」、相手では「おまかせ(種族の全特性)」。
+  // 種族を変えたら "" に戻す(古い選択を引き継がない)。
+  const [myAbilityId, setMyAbilityId] = useState("");
+  const [theirsAbilityId, setTheirsAbilityId] = useState("");
   const [attackerPresetKey, setAttackerPresetKey] = useState<AttackerPresetKey>(DEFAULT_ATTACKER_PRESET);
   const [defenderPresetKey, setDefenderPresetKey] = useState<DefenderPresetKey>(DEFAULT_DEFENDER_PRESET);
   // 観測行の連番(newObservationRow)。0 は初期行が使う。
@@ -219,6 +233,34 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   const myItem = useMemo(
     () => master.items.find((item) => item.id === myItemId) ?? null,
     [master.items, myItemId],
+  );
+  // 特性の選択肢と、calcReverse に渡す特性(issue 272、ADR-0311)。
+  const myAbilityOptions = useMemo(
+    () =>
+      mySpecies === null ? [] : selectableAbilities(mySpecies, abilitiesFor(master.abilities, mySpeciesKey)),
+    [mySpecies, master.abilities, mySpeciesKey, abilitiesFor],
+  );
+  const myAbility = useMemo(
+    () => myAbilityOptions.find((ability) => ability.id === myAbilityId) ?? myAbilityOptions[0] ?? NO_ABILITY,
+    [myAbilityOptions, myAbilityId],
+  );
+  const theirsAbilityOptions = useMemo(
+    () =>
+      theirsSpecies === null
+        ? []
+        : selectableAbilities(theirsSpecies, abilitiesFor(master.abilities, theirsSpeciesKey)),
+    [theirsSpecies, master.abilities, theirsSpeciesKey, abilitiesFor],
+  );
+  const unknownAbilities = useMemo(
+    () =>
+      theirsSpecies === null
+        ? []
+        : defenderAbilityCandidates(
+            theirsSpecies,
+            theirsAbilityOptions,
+            theirsAbilityId === "" ? null : theirsAbilityId,
+          ),
+    [theirsSpecies, theirsAbilityOptions, theirsAbilityId],
   );
   // 技は常に攻撃側(自分を攻撃側にする defender、相手を攻撃側にする attacker)の learnset から選ぶ。
   const moveSourceSpecies = side === "defender" ? mySpecies : theirsSpecies;
@@ -329,6 +371,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   function selectMySpecies(key: string): void {
     flushObservationDebounce();
     setMySpeciesKey(key);
+    setMyAbilityId("");
     if (side === "defender") {
       const species = speciesFor(master.species, key);
       setMoveId((prev) => resolveMoveId(species, movesFor(master.moves, key), prev));
@@ -338,6 +381,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   function selectTheirsSpecies(key: string): void {
     flushObservationDebounce();
     setTheirsSpeciesKey(key);
+    setTheirsAbilityId("");
     if (side === "attacker") {
       const species = speciesFor(master.species, key);
       setMoveId((prev) => resolveMoveId(species, movesFor(master.moves, key), prev));
@@ -353,6 +397,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     flushObservationDebounce();
     registerSpeciesResolution(resolution);
     setMySpeciesKey(resolution.species.key);
+    setMyAbilityId("");
     if (side === "defender") {
       // movesFor(master.moves, key) は使わない(register の setState 直後はまだ古い覚え書きのまま)。
       // movesFor が最終的に返す形(master.moves + 解決で覚えた分)をここで直接組み立てる。
@@ -365,6 +410,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     flushObservationDebounce();
     registerSpeciesResolution(resolution);
     setTheirsSpeciesKey(resolution.species.key);
+    setTheirsAbilityId("");
     if (side === "attacker") {
       setMoveId((prev) => resolveMoveId(resolution.species, [...master.moves, ...resolution.moves], prev));
     }
@@ -374,6 +420,18 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   function selectMyItem(itemId: string): void {
     flushObservationDebounce();
     setMyItemId(itemId);
+  }
+
+  /** 自分の特性を選ぶ(確定操作。issue 113、272)。 */
+  function selectMyAbility(abilityId: string): void {
+    flushObservationDebounce();
+    setMyAbilityId(abilityId);
+  }
+
+  /** 相手の特性を選ぶ(確定操作。issue 113、272)。 */
+  function selectTheirsAbility(abilityId: string): void {
+    flushObservationDebounce();
+    setTheirsAbilityId(abilityId);
   }
 
   /** 技を選ぶ(確定操作。issue 113)。 */
@@ -450,7 +508,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
       sp,
       nature,
       item: myItem,
-      ability: defaultAbility(mySpecies, abilitiesFor(master.abilities, mySpeciesKey)),
+      ability: myAbility,
     });
     const request = buildReverseRequest({
       side,
@@ -460,6 +518,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
       typeChart: master.typeChart,
       itemCandidates: itemCandidatesResult.candidates,
       observations: requestValidObservations,
+      unknownAbilities,
     });
     void engine.calcReverse(request, controller.signal).then((result) => {
       if (!cancelled) {
@@ -471,6 +530,8 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
           myItem,
           attackerPresetKey,
           defenderPresetKey: effectiveDefenderPresetKey,
+          myAbility,
+          unknownAbilities,
           observations: requestValidObservations,
           result,
         });
@@ -483,7 +544,6 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   }, [
     engine,
     master,
-    mySpeciesKey,
     side,
     mySpecies,
     theirsSpecies,
@@ -493,7 +553,8 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     effectiveDefenderPresetKey,
     requestHasInvalidObservation,
     requestValidObservations,
-    abilitiesFor,
+    myAbility,
+    unknownAbilities,
     itemCandidatesResult,
   ]);
 
@@ -563,6 +624,8 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     completed.myItem !== myItem ||
     completed.attackerPresetKey !== attackerPresetKey ||
     completed.defenderPresetKey !== effectiveDefenderPresetKey ||
+    completed.myAbility !== myAbility ||
+    completed.unknownAbilities !== unknownAbilities ||
     completed.observations !== requestValidObservations
   ) {
     outcome = { status: "loading" };
@@ -592,6 +655,12 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
           onSpeciesChange={selectMySpecies}
           onSpeciesResolved={handleMineResolved}
           onItemChange={selectMyItem}
+          abilitySelect={{
+            ariaLabel: reverseScreenText.myAbilityLabel,
+            options: myAbilityOptions,
+            value: myAbility.id,
+            onChange: selectMyAbility,
+          }}
         >
           {side === "defender" && mySpecies !== null && (
             <MyPresetSelector
@@ -624,6 +693,13 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
           onSpeciesChange={selectTheirsSpecies}
           onSpeciesResolved={handleTheirsResolved}
           onItemChange={undefined}
+          abilitySelect={{
+            ariaLabel: reverseScreenText.theirAbilityLabel,
+            options: theirsAbilityOptions,
+            value: theirsAbilityId,
+            onChange: selectTheirsAbility,
+            autoOptionLabel: calcScreenText.anyAbilityOption,
+          }}
         />
       </div>
 
@@ -679,6 +755,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
         items={master.items}
         moves={master.moves}
         abilities={master.abilities}
+        theirsHasAbilityChoice={theirsAbilityOptions.length > 1}
         narrowing={narrowing}
         onNarrowingAnimationEnd={handleNarrowingAnimationEnd}
       />
@@ -704,6 +781,8 @@ interface ReverseCardProps {
   readonly onSpeciesChange: (key: string) => void;
   readonly onSpeciesResolved: (resolution: MasterSpeciesResolution) => void;
   readonly onItemChange: ((id: string) => void) | undefined;
+  /** 特性セレクト(issue 272、ADR-0311)。選択肢が空なら出さない。 */
+  readonly abilitySelect: AbilitySelectConfig;
   readonly children?: ReactNode;
 }
 
@@ -727,6 +806,7 @@ function ReverseCard({
   onSpeciesChange,
   onSpeciesResolved,
   onItemChange,
+  abilitySelect,
   children,
 }: ReverseCardProps) {
   const speciesSelectId = useId();
@@ -792,6 +872,9 @@ function ReverseCard({
             </select>
           </>
         )}
+      {(speciesListAvailable || species !== null) && (
+        <AbilitySelect labelClassName="reverse-card__label" {...abilitySelect} />
+      )}
       {children}
     </section>
   );
@@ -1053,6 +1136,8 @@ interface ResultsSectionProps {
   /** 「未対応」の印(ADR-0123)の ID を表示名に解決するためのマスタ。 */
   readonly moves: readonly Move[];
   readonly abilities: readonly Ability[];
+  /** 相手の種族の特性が2つ以上か(候補に特性名を出すかの判定。issue 272)。 */
+  readonly theirsHasAbilityChoice: boolean;
   /** 観測を2件以上入れて届いた結果の「絞り込み」演出(design.md「画面: 逆算」)。 */
   readonly narrowing: boolean;
   readonly onNarrowingAnimationEnd: (event: AnimationEvent<HTMLUListElement>) => void;
@@ -1064,6 +1149,7 @@ function ResultsSection({
   items,
   moves,
   abilities,
+  theirsHasAbilityChoice,
   narrowing,
   onNarrowingAnimationEnd,
 }: ResultsSectionProps): ReactElement | null {
@@ -1092,6 +1178,7 @@ function ResultsSection({
           items={items}
           moves={moves}
           abilities={abilities}
+          theirsHasAbilityChoice={theirsHasAbilityChoice}
           narrowing={narrowing}
           onNarrowingAnimationEnd={onNarrowingAnimationEnd}
         />
@@ -1109,6 +1196,7 @@ interface ReverseResultsListProps {
   readonly items: readonly Item[];
   readonly moves: readonly Move[];
   readonly abilities: readonly Ability[];
+  readonly theirsHasAbilityChoice: boolean;
   readonly narrowing: boolean;
   readonly onNarrowingAnimationEnd: (event: AnimationEvent<HTMLUListElement>) => void;
 }
@@ -1119,6 +1207,7 @@ function ReverseResultsList({
   items,
   moves,
   abilities,
+  theirsHasAbilityChoice,
   narrowing,
   onNarrowingAnimationEnd,
 }: ReverseResultsListProps) {
@@ -1172,15 +1261,17 @@ function ReverseResultsList({
             items,
             abilities,
           );
+          const abilityLabel = abilityNamesLabel(candidate.abilityIds, abilities, theirsHasAbilityChoice);
           return (
             <li
-              key={`${candidate.natureClass}-${candidate.itemId}-${String(index)}`}
+              key={`${candidate.natureClass}-${candidate.itemId}-${candidate.abilityId ?? ""}-${String(index)}`}
               className="reverse-results__row"
             >
               <span className="reverse-results__nature">
                 {natureClassLabel(candidate.natureClass, result.stat)}
               </span>
               <span className="reverse-results__item">{reverseItemLabel(candidate.itemId, items)}</span>
+              {abilityLabel !== null && <span className="reverse-results__ability">{abilityLabel}</span>}
               <span className="reverse-results__ranges">
                 {formatSPRanges(result.stat, candidate.ranges)}
                 {hasNoExactCandidate && (

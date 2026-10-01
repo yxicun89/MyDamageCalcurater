@@ -304,6 +304,7 @@
   color: var(--text-primary);
 }
 
+.reverse-results__ability,
 .reverse-results__item {
   grid-column: 1 / -1;
   font-size: var(--font-size-caption);

@@ -145,6 +145,14 @@ describe("markLabel(印 1 件の文言)", () => {
     expect(label).toContain("テストもちもの");
   });
 
+  test("契約に無い target・reason(古いクライアントが知らない値)でも例外にならず、ID を出す(ADR-0215)", () => {
+    const label = unsupportedText.markLabel(
+      { target: "future_target", reason: "future_reason", id: "x-id" },
+      "",
+    );
+    expect(label).toBe(`${unsupportedText.unknownTarget}「x-id」(${unsupportedText.unknownReason})`);
+  });
+
   test("target・reason の全組み合わせで空でない文言になる", () => {
     for (const target of allTargets) {
       for (const reason of allReasons) {

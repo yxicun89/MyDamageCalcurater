@@ -21,11 +21,7 @@ fi
 
 # k3d cluster create はコンテキストを 'k3d-<CLUSTER>' に切り替えるため、確認は
 # 作成・既存チェックの後に行う(意図しない別クラスタへの適用を防ぐ)。
-current_context="$(kubectl config current-context)"
-if [ "$current_context" != "k3d-$CLUSTER" ]; then
-  echo "up.sh: 現在の kubectl context '$current_context' が 'k3d-$CLUSTER' ではない(別クラスタへ適用してしまうため中断)" >&2
-  exit 1
-fi
+CLUSTER="$CLUSTER" ./scripts/require-k3d-context.sh up.sh
 
 echo "namespace を作成します..."
 kubectl apply -f deploy/k8s/base/namespace.yaml
@@ -65,7 +61,9 @@ type: Opaque
 stringData:
   root: "${tidb_root_pw_value}"
 SECRET_MANIFEST
-    kubectl apply -f "$tidb_root_auth_manifest"
+    # apply ではなく create(--save-config なし)。apply は入力の stringData(平文)を
+    # last-applied-configuration 注釈に写すため(issue #327)。
+    kubectl create -f "$tidb_root_auth_manifest"
     rm -f "$tidb_root_auth_manifest"
     trap - EXIT
   fi
@@ -150,7 +148,9 @@ stringData:
   ${importer_dsn_key}: "pokedex_importer:${importer_pw_value}@tcp(mysql:3306)/pokedex?parseTime=true"
   ${migrator_dsn_key}: "pokedex_migrator:${migrator_pw_value}@tcp(mysql:3306)/pokedex?parseTime=true"
 SECRET_MANIFEST
-  kubectl apply -f "$mysql_auth_manifest"
+  # apply ではなく create(--save-config なし)。apply は入力の stringData(平文)を
+  # last-applied-configuration 注釈に写すため(issue #327)。既存クラスタのキー追記は上の patch のまま。
+  kubectl create -f "$mysql_auth_manifest"
   rm -f "$mysql_auth_manifest"
   trap - EXIT
 fi

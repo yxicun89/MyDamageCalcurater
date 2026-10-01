@@ -35,6 +35,7 @@ public struct UnsupportedMarkNames: Equatable, Sendable {
         case .move: dictionary = moveNames
         case .attackerItem, .defenderItem: dictionary = itemNames
         case .attackerAbility, .defenderAbility: dictionary = abilityNames
+        case .unknown: return mark.id
         }
         return dictionary[mark.id] ?? mark.id
     }

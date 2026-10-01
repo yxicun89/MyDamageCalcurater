@@ -17,11 +17,7 @@ POKEDEX_SERVER_IMAGE=${POKEDEX_SERVER_IMAGE:-pokecalc/pokedex:0.1.0}
 POKEDEX_IMPORTER_IMAGE=${POKEDEX_IMPORTER_IMAGE:-pokecalc/pokedex-importer:0.1.0}
 MIGRATE_LOCAL_PORT=${MIGRATE_LOCAL_PORT:-13306}
 
-context="$(kubectl config current-context)"
-if [ "$context" != "k3d-$CLUSTER" ]; then
-  echo "deploy-latest: kubectl の context が '$context'(期待 k3d-$CLUSTER)。別クラスタへ適用しないよう中断" >&2
-  exit 1
-fi
+CLUSTER="$CLUSTER" ./scripts/require-k3d-context.sh deploy-latest
 
 # pokedex の DB を最新の migration まで上げる(新しい表・列を前提にするコードより先に)。
 # migrate の Job は共有の overlay 全体の apply でしか作り直せないので、ここでは mysql へ一時的に

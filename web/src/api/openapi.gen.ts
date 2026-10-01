@@ -659,31 +659,20 @@ export interface components {
      */
     UnsupportedMark: {
       /**
-       * @description 印の対象
-       * @enum {string}
+       * @description 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability。
+       *     値を足しても古いクライアントが応答全体をデコードできなくなるのを避けるため、enum にしない
+       *     (クライアントは未知の値を「対象不明の印」として扱い、id をそのまま表示する。ADR-0215)。
        */
-      target: "move" | "attacker_item" | "attacker_ability" | "defender_item" | "defender_ability";
+      target: string;
       /**
-       * @description 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種)か zero_power(威力0の攻撃技。
-       *     威力が技の処理で決まるため)、持ち物・特性は unsupported_effect(効果スキーマで表せない)。
-       * @enum {string}
+       * @description 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種: alt_defense_stat・alt_offense_stat・
+       *     always_crit・effectiveness_change・field_specific・fixed_damage・ignore_defense_ranks・
+       *     move_specific・multi_hit・ohko・priority_change・type_change・variable_power)か
+       *     zero_power(威力0の攻撃技。威力が技の処理で決まるため)、持ち物・特性は
+       *     unsupported_effect(効果スキーマで表せない)。target と同じ理由で enum にしない
+       *     (クライアントは未知の値を汎用の文言で扱う。ADR-0215)。
        */
-      reason:
-        | "alt_defense_stat"
-        | "alt_offense_stat"
-        | "always_crit"
-        | "effectiveness_change"
-        | "field_specific"
-        | "fixed_damage"
-        | "ignore_defense_ranks"
-        | "move_specific"
-        | "multi_hit"
-        | "ohko"
-        | "priority_change"
-        | "type_change"
-        | "variable_power"
-        | "zero_power"
-        | "unsupported_effect";
+      reason: string;
       /** @description 技・持ち物・特性の ID */
       id: string;
     };
