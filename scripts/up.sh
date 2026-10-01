@@ -344,5 +344,7 @@ fi
 
 echo
 echo "完了。http://localhost:8080 で計算画面にアクセスできます。"
+echo "pokedex は初回 import が済むまで Ready にならない(readiness が DB のマスタに連動。ADR-0129)。" \
+  "'kubectl get pods' で pokedex が 0/1 でも異常ではない。"
 echo "pokedex-import の初回投入は 'make import-k8s' で手動で1回流してください" \
   "(CronJob は週1回・土曜 12:00 JST に自動実行されます。初回はネットワークが要るため自動では流しません)。"
