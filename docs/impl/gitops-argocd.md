@@ -23,7 +23,7 @@
 | 項目 | 内容 | 根拠 |
 |---|---|---|
 | 動く場所 | クラスタ `k3d-pokecalc`(`deploy/k3d.yaml`)の namespace `argocd`。全レーン共有の 1 インスタンス | ADR-0018 §1、ADR-0605 §3 |
-| 目的 | Git 上の Kustomize(`services/<svc>/deploy/k8s/overlays/gitops`)をクラスタへ同期(現状は balance・speed のみ) | ADR-0018、`docs/type-balance-design.md:143` |
+| 目的 | Git 上の Kustomize(`services/<svc>/deploy/k8s/overlays/gitops`)をクラスタへ同期(現状は balance・speed のみ) | ADR-0018、`docs/type-balance-design.md` §9 |
 | 導入 | `./scripts/argocd-bootstrap.sh`(`docs/runbooks/balance.md` §3 / `speed.md` §5 から呼ぶ。`make` ターゲットは無い) | `scripts/argocd-bootstrap.sh` |
 | 取得元の固定 | upstream リポジトリのコミット SHA(`ARGOCD_INSTALL_COMMIT`、タグ v3.5.3 の指す commit)+ install.yaml の SHA-256(`EXPECTED_INSTALL_YAML_SHA256`) | `scripts/argocd-bootstrap.sh:12-13` |
 | イメージ固定 | argocd・dex・redis の 3 イメージを `<repo>@sha256:` へ `sed` で書換え、全 `image:` 行が digest 形式であることを検査 | 同 `:15-19`、`:62-77` |
@@ -141,7 +141,7 @@ flowchart TD
 |---|---|---|
 | `docs/adr/0206-wire-to-pokedex-svc.md:52,165` | Argo CD が main の `deploy/k8s/overlays/local` を見ている | そのパスを見る Application は Git・クラスタのどちらにも無い(§2・§7) |
 | `CLAUDE.md:119`、`docs/adr/0104-importer-cronjob-and-make-import.md:9`、`docs/ai-shared/CURRENT_STATE.md:120` | 「Argo CD が main を見る」ため main へは PR のみ | 見ているのは balance(と将来の speed)の gitops overlay のみ。main への PR 運用の理由としては、全体を見ているわけではない |
-| `docs/type-balance-design.md:165` | 「マージすれば Argo CD が差分を検知して反映できる状態」 | 検知は poll までで、反映は手動 sync(自動 sync は TB0・SP5 とも禁止。`check-gitops.sh:44`) |
+| 旧 `docs/type-balance-design.md:165`(2026-10-01 に書き換え済み。ADR-0410) | 「マージすれば Argo CD が差分を検知して反映できる状態」 | 検知は poll までで、反映は手動 sync(自動 sync は TB0・SP5 とも禁止。`check-gitops.sh:44`) |
 | `docs/requirements.md:97` | デプロイは Kustomize + ArgoCD、overlays は local / cloud | Application は balance・speed 用のみ。`overlays/cloud` を対象とする Application なし |
 
 ## 9. 未完了・未実装(明記)
@@ -152,8 +152,8 @@ flowchart TD
 | damage 系(calc・gateway・web・pokedex・mysql)の Application | なし | §5 |
 | judge-svc の gitops overlay・Application・runbook | なし | §5 |
 | `pokecalc-speed` の実クラスタ適用・レジストリ push・sync | 未実施(人間確認待ち) | ADR-0605 §4、`docs/plan.md:264-266` |
-| 自動 sync・prune・selfHeal | 意図的に無効(TB0・SP5 の方針)。有効化は未決 | `docs/type-balance-design.md:687`、`check-gitops.sh:44` |
-| ApplicationSet / AppProject / App-of-Apps | なし。Application 分割の方針は未決 | `docs/type-balance-design.md:494,686` |
+| 自動 sync・prune・selfHeal | 意図的に無効(TB0・SP5 の方針)。有効化は未決 | `docs/type-balance-design.md` §9・§11、`check-gitops.sh:44` |
+| ApplicationSet / AppProject / App-of-Apps | なし。Application 分割の方針は未決 | `docs/type-balance-design.md` §9・§11 |
 | Webhook・通知(notifications-controller は稼働のみ) | Git に設定なし | 該当ファイルなし(`git grep` で確認) |
 | クラウドのレジストリ・overlay の `newName` 差替え・実データの GitOps 配布 | 未決(クラウドのデプロイ先が決まってから) | ADR-0018 §影響、ADR-0605 §2a |
 | registry namespace の共有名への改名(`pokecalc-registry`) | 提案のみ | ADR-0605 §1 |

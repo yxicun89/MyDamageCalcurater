@@ -343,6 +343,6 @@ else
 fi
 
 echo
-echo "完了。gateway 実装後は http://localhost:8080 で計算画面にアクセスできます。"
+echo "完了。http://localhost:8080 で計算画面にアクセスできます。"
 echo "pokedex-import の初回投入は 'make import-k8s' で手動で1回流してください" \
   "(CronJob は週1回・土曜 12:00 JST に自動実行されます。初回はネットワークが要るため自動では流しません)。"

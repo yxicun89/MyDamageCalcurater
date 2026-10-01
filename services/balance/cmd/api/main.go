@@ -47,6 +47,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	maxConcurrentRecommendations, err := maxConcurrentRecommendationsFromEnv(os.LookupEnv)
+	if err != nil {
+		slog.Error("balance API has an invalid concurrency limit", "error", err)
+		os.Exit(1)
+	}
+
 	typeChart, err := master.EmbeddedTypeChart()
 	if err != nil {
 		slog.Error("balance API failed to load the type chart", "error", err)
@@ -67,6 +73,8 @@ func main() {
 			Moves:          moves,
 			Abilities:      abilities,
 			PokemonCatalog: pokemonCatalog,
+
+			MaxConcurrentRecommendations: maxConcurrentRecommendations,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,

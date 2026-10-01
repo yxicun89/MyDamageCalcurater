@@ -143,9 +143,13 @@ func RecommendTypes(chart TypeChartProvider, members []Combatant, catalog []Cata
 
 	var abilityOptions []AbilityOption
 	if abilities != nil {
+		// Sorted once for every hole (ADR-0409): abilityOptionsFor needs pokemonId order.
+		sorted := make([]CatalogPokemon, len(catalog))
+		copy(sorted, catalog)
+		sort.Slice(sorted, func(i, j int) bool { return sorted[i].PokemonID < sorted[j].PokemonID })
 		abilityOptions = make([]AbilityOption, len(defenseHoles))
 		for i, attack := range defenseHoles {
-			pokemon, err := abilityOptionsFor(chart, attack, catalog, abilities)
+			pokemon, err := abilityOptionsFor(chart, attack, sorted, abilities)
 			if err != nil {
 				return Recommendation{}, err
 			}
@@ -321,7 +325,7 @@ func recommendCandidates(chart TypeChartProvider, defenseHoles, offenseHoles, al
 func matchingPokemon(chart TypeChartProvider, catalog []CatalogPokemon, candidate TypeCandidate) ([]RecommendedPokemon, error) {
 	want := typeSet(candidate.Types)
 	one := Effectiveness{Num: 1, Den: 1}
-	result := make([]RecommendedPokemon, 0, len(catalog))
+	var result []RecommendedPokemon
 	for _, pokemon := range catalog {
 		have := typeSet(pokemon.Types)
 		exact := typeSetEqual(have, want)
@@ -380,16 +384,12 @@ func typeSetEqual(a, b map[TypeID]struct{}) bool {
 	return true
 }
 
-// abilityOptionsFor lists, for one defense hole (attack), the catalog pokemon that one of
+// abilityOptionsFor lists, for one defense hole (attack), the catalog pokemon (sorted by pokemonId ascending by the caller) that one of
 // their abilities takes below x1 while their types alone do not (ADR-0401 §4), pokemonId
 // ascending then abilityId ascending (§7.3). An abilityId the provider does not know is
 // skipped (§7.2: an export inconsistency does not fail the whole endpoint); any other
 // provider failure is propagated.
-func abilityOptionsFor(chart TypeChartProvider, attack TypeID, catalog []CatalogPokemon, abilities AbilityProvider) ([]AbilityPokemon, error) {
-	sorted := make([]CatalogPokemon, len(catalog))
-	copy(sorted, catalog)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].PokemonID < sorted[j].PokemonID })
-
+func abilityOptionsFor(chart TypeChartProvider, attack TypeID, sorted []CatalogPokemon, abilities AbilityProvider) ([]AbilityPokemon, error) {
 	var result []AbilityPokemon
 	one := Effectiveness{Num: 1, Den: 1}
 	for _, pokemon := range sorted {

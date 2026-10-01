@@ -1,6 +1,6 @@
 # pokecalc Makefile
 # 各ターゲットは docs/plan.md の Phase 進行に合わせて実装を埋めていく。
-# 未実装のターゲットは理由を表示して正常終了する(ビルドを壊さない)。
+# 未実装のターゲットは理由を表示して非0(終了コード 2)で終わる。成功と数えないため(issue #261・#294)。
 
 SHELL := /usr/bin/env bash
 .DEFAULT_GOAL := help
@@ -61,12 +61,13 @@ test-tools:
 	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs
 
 .PHONY: test-scripts
-test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406・計算API SLO ADR-0407・ルートの e2e ADR-0306・GitOps の AppProject/共通スクリプト/レジストリ ADR-0408。クラスタ・ネットワークに触らない)
+test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406・計算API SLO ADR-0407・ルートの e2e ADR-0306・GitOps の AppProject/共通スクリプト/レジストリ ADR-0408・Makefile の help と未実装ターゲット。クラスタ・ネットワークに触らない)
 	@./scripts/argocd-bootstrap_test.sh
 	@./scripts/observability-bootstrap_test.sh
 	@./scripts/observability-slo_test.sh
 	@./scripts/e2e_test.sh
 	@./scripts/gitops_test.sh
+	@./scripts/make-targets_test.sh
 
 .PHONY: lint
 lint: ## gofmt / go vet / shell・Node構文チェック
@@ -268,21 +269,28 @@ pokedex-registry-push: ## pokedex(server イメージ)をクラスタ内共有�
 	@./scripts/pokedex-registry-push.sh
 
 .PHONY: k8s-render
-k8s-render: ## kustomize で local / cloud / tidb overlay が描画できることを確かめる(apply はしない)
-	@kubectl kustomize deploy/k8s/overlays/local >/dev/null
+# 各レーンの overlay も描画する(issue #261・#321)。どれか1つでも描画できなければ lint を失敗させる。
+# local/api・local/web・local/mysql・local/nats は Component なので、local・local-api・local-web の描画で確かめる。
+k8s-render: k8s-render-kubectl api-kustomize web-kustomize balance-kustomize speed-kustomize judge-kustomize ## kustomize で全レーンの overlay(local・cloud・tidb・local-api・local-web・balance・speed・judge・Argo CD の AppProject)が描画できることを確かめる(apply はしない)
 	@kubectl kustomize deploy/k8s/overlays/cloud >/dev/null
 	@kubectl kustomize deploy/k8s/overlays/local/tidb >/dev/null
+	@kubectl kustomize deploy/argocd >/dev/null
 	@if kubectl cluster-info --request-timeout=3s >/dev/null 2>&1; then \
 		kubectl apply --dry-run=client --request-timeout=10s -f deploy/k8s/base/record/job-migrate.yaml -o yaml >/dev/null; \
 		kubectl apply --dry-run=client --request-timeout=10s -f deploy/k8s/base/team/job-migrate.yaml -o yaml >/dev/null; \
-		echo "k8s-render: local / cloud / tidb overlay・record/team migrate Job の描画を確認"; \
+		echo "k8s-render: 全レーンの overlay・record/team migrate Job の描画を確認"; \
 	else \
-		echo "k8s-render: local / cloud / tidb overlay の描画を確認(クラスタ未起動のため record/team migrate Job の dry-run はスキップ)"; \
+		echo "k8s-render: 全レーンの overlay の描画を確認(クラスタ未起動のため record/team migrate Job の dry-run はスキップ)"; \
 	fi
 
+# kubectl が無いと各 *-kustomize が分かりにくいエラーで止まるため、先に理由を出して止める(issue #75)。
+.PHONY: k8s-render-kubectl
+k8s-render-kubectl:
+	@command -v kubectl >/dev/null 2>&1 || { echo "k8s-render: kubectl が無いため overlay を描画できません(brew install kubectl。make doctor で確認)" >&2; exit 1; }
+
 .PHONY: assets
-assets: ## 画像を WebP 2サイズに変換して MinIO へ
-	@echo "assets: (M画像対応 で実装)"
+assets: ## 画像を WebP 2サイズに変換して MinIO へ(未実装。終了コード 2)
+	@echo "assets: 未実装です(画像の配信は計画外。issue #286)。成功と数えないため終了コード 2 で終わります" >&2; exit 2
 
 ## --- 公開前の検査 -----------------------------------------------------
 .PHONY: check-publishable
@@ -307,6 +315,9 @@ tidy: ## go mod tidy(全モジュール)
 	@cd engine && $(GO) mod tidy
 	@cd services && $(GO) mod tidy
 	@cd tools && $(GO) mod tidy
+	@cd services/balance && GOWORK=off $(GO) mod tidy
+	@cd services/speed && GOWORK=off $(GO) mod tidy
+	@cd services/judge && GOWORK=off $(GO) mod tidy
 
 .PHONY: deps-outdated
 deps-outdated: ## 古くなった依存の一覧を表示する(ネットワーク使用。失敗しても一覧を出す。make test には含めない)
@@ -320,6 +331,10 @@ deps-outdated: ## 古くなった依存の一覧を表示する(ネットワー�
 	@cd tools && GOWORK=off $(GO) list -m -u all 2>&1 || true
 	@echo "== Go: services/balance (go list -m -u all) =="
 	@cd services/balance && GOWORK=off $(GO) list -m -u all 2>&1 || true
+	@echo "== Go: services/speed (go list -m -u all) =="
+	@cd services/speed && GOWORK=off $(GO) list -m -u all 2>&1 || true
+	@echo "== Go: services/judge (go list -m -u all) =="
+	@cd services/judge && GOWORK=off $(GO) list -m -u all 2>&1 || true
 	@echo "== Node: tools/golden (npm outdated) =="
 	@if [ -f tools/golden/package.json ]; then cd tools/golden && (npm outdated || true); else echo "(tools/golden/package.json が無い)"; fi
 	@echo "== Node: tools/importer (npm outdated) =="

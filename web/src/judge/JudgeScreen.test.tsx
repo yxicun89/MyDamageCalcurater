@@ -394,14 +394,16 @@ describe("A3 request の組み立て", () => {
     expect(lastCall(client).args.defenders[0]?.moveId).toBe("test-defender-move-0");
   });
 
-  test("対戦形式を切り替えると format が変わる(judge は calc-svc へそのまま渡す)", async () => {
+  test("ダブルは未対応なので対戦形式の選択肢に出さず、format は single で送る(issue #288)", async () => {
     const { user, client } = renderScreen();
     await fillMinimalForm(user);
-    await user.selectOptions(screen.getByLabelText(judgeScreenText.formatLabel), "double");
+    const select = screen.getByLabelText(judgeScreenText.formatLabel);
+
+    expect(within(select).queryByRole("option", { name: judgeScreenText.formatOption.double })).toBeNull();
 
     await user.click(submitButton());
 
-    expect(lastCall(client).args.format).toBe("double");
+    expect(lastCall(client).args.format).toBe("single");
   });
 
   test("候補を増やすと defenders が入力した順に並ぶ", async () => {

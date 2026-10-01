@@ -14,6 +14,7 @@ import (
 
 	"example.com/pokecalc/engine"
 	"example.com/pokecalc/services/internal/master"
+	"example.com/pokecalc/services/pokedex/internal/readtx"
 	"example.com/pokecalc/services/pokedex/internal/store"
 )
 
@@ -119,7 +120,23 @@ type speedEntry struct {
 
 // Export は DB を読み、balance・speed 向けの4ファイルを組み立てる(ADR-0105 §5)。
 // 対象は既定のレギュレーションの使用可能集合。失敗時は Files のゼロ値を返す(部分的な出力をしない)。
-func Export(ctx context.Context, q store.Querier) (Files, Report, error) {
+func Export(ctx context.Context, b readtx.Beginner) (Files, Report, error) {
+	tx, err := b.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		return Files{}, Report{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	files, rep, err := exportFrom(ctx, tx)
+	if err != nil {
+		return Files{}, Report{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Files{}, Report{}, err
+	}
+	return files, rep, nil
+}
+
+func exportFrom(ctx context.Context, q store.Querier) (Files, Report, error) {
 	reg, err := q.GetDefaultRegulation(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
