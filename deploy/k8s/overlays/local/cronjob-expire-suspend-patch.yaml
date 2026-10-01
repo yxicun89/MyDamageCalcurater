@@ -1,0 +1,17 @@
+# 失効ジョブ(record-expire・team-expire)を、k3d の実データへ初めて向ける承認(ADR-0209 の「人間の確認」。
+# ADR-0220 未決事項 0)が済むまで suspend する。定期実行だけを止める(手動実行はできる):
+#   kubectl -n pokecalc create job --from=cronjob/record-expire record-expire-manual-$(date +%s)
+# 承認後はこのファイルと overlays/local/kustomization.yaml の patches を外す(docs/runbooks/api.md)。
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: record-expire
+spec:
+  suspend: true
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: team-expire
+spec:
+  suspend: true

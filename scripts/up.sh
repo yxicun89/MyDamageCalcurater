@@ -10,6 +10,8 @@ POKEDEX_IMPORTER_IMAGE="${POKEDEX_IMPORTER_IMAGE:-pokecalc/pokedex-importer:0.1.
 POKEDEX_SERVER_IMAGE="${POKEDEX_SERVER_IMAGE:-pokecalc/pokedex:0.1.0}"
 RECORD_MIGRATE_IMAGE="${RECORD_MIGRATE_IMAGE:-pokecalc/record-migrate:0.1.0}"
 TEAM_MIGRATE_IMAGE="${TEAM_MIGRATE_IMAGE:-pokecalc/team-migrate:0.1.0}"
+RECORD_SERVER_IMAGE="${RECORD_SERVER_IMAGE:-pokecalc/record:0.1.0}"
+TEAM_SERVER_IMAGE="${TEAM_SERVER_IMAGE:-pokecalc/team:0.1.0}"
 TIDB_CLUSTER_NAME="pokecalc-tidb"
 
 if k3d cluster list 2>/dev/null | awk '{print $1}' | grep -qx "$CLUSTER"; then
@@ -166,6 +168,16 @@ k3d image import "$POKEDEX_MIGRATE_IMAGE" -c "$CLUSTER"
 echo "pokedex(server)イメージを build して k3d に import します..."
 docker build -f services/pokedex/Dockerfile --target server -t "$POKEDEX_SERVER_IMAGE" .
 k3d image import "$POKEDEX_SERVER_IMAGE" -c "$CLUSTER"
+
+# record・team(ADR-0220)の Deployment・失効 CronJob が使う server イメージも、overlay を apply する前に
+# import する。TiDB の導入に失敗しても(非致命)Pod が Ready にならないだけなので、build は常に行う。
+# record/team の Ready は待たない(TiDB が無いと Ready にならない。calc・gateway・pokedex には影響しない)。
+echo "record(server)イメージを build して k3d に import します..."
+docker build -f services/record/Dockerfile --target server -t "$RECORD_SERVER_IMAGE" .
+k3d image import "$RECORD_SERVER_IMAGE" -c "$CLUSTER"
+echo "team(server)イメージを build して k3d に import します..."
+docker build -f services/team/Dockerfile --target server -t "$TEAM_SERVER_IMAGE" .
+k3d image import "$TEAM_SERVER_IMAGE" -c "$CLUSTER"
 
 # Job は一度作成すると Pod テンプレートを更新できない(kubectl apply が失敗する)ため、
 # overlay を apply する前に(実行中の可能性がある正しい Job を消してしまわないよう、

@@ -20,6 +20,9 @@ var goMemLimitDeployments = map[string]string{
 	"balance": "services/balance/deploy/k8s/base/deployment.yaml",
 	"judge":   "services/judge/deploy/k8s/base/deployment.yaml",
 	"speed":   "services/speed/deploy/k8s/base/deployment.yaml",
+	// ADR-0220 §1
+	"record": "deploy/k8s/base/record/deployment.yaml",
+	"team":   "deploy/k8s/base/team/deployment.yaml",
 }
 
 type memLimitDeployment struct {

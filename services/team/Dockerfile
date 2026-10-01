@@ -19,11 +19,8 @@ USER 65532:65532
 ENTRYPOINT ["/team-migrate"]
 CMD ["up"]
 
-# server: team-svc 本体(HTTP + NATS JetStream の購読)のイメージ。
-# 対応する Deployment・Service・gateway への配線(GATEWAY_TEAM_URL)・scripts/up.sh のビルド対象への
-# 追加は、まだ deploy/k8s/base/team に存在しない(record-svc の P5-3b と対になる P5-4b。docs/plan.md
-# 参照)。このイメージ自体はビルドできるが、k3d クラスタにはまだ配線されていないため、現状は
-# `/api/team/*` へのアクセスは gateway 側で upstream_unavailable(503)のままになる。
+# server: team-svc 本体(`team serve`: HTTP + NATS JetStream の購読)と失効ジョブ(`team expire`)の
+# 共通イメージ。Deployment・CronJob・Service は deploy/k8s/base/team(ADR-0220)。
 FROM scratch AS server
 COPY --from=build /out/team /team
 USER 65532:65532

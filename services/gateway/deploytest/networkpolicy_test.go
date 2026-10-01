@@ -468,7 +468,8 @@ func app(name string) func(npWorld) npPod { return func(w npWorld) npPod { retur
 func ext(p npPod) func(npWorld) npPod     { return func(npWorld) npPod { return p } }
 
 // 8080 で受ける pokecalc のサービス(balance・speed・judge は各レーンの Pod だが同じ namespace に入る)。
-var httpServices = []string{"gateway", "calc", "pokedex", "balance", "speed", "judge"}
+// record・team は ADR-0220 §2 で追加(/metrics と ServiceMonitor を持つ)。
+var httpServices = []string{"gateway", "calc", "pokedex", "balance", "speed", "judge", "record", "team"}
 
 func allowedFlows() []npFlow {
 	var f []npFlow
@@ -480,8 +481,12 @@ func allowedFlows() []npFlow {
 		add("Traefik → "+n+"(Ingress)", ext(traefikPod), app(n), podPort)
 	}
 	// gateway の上流。balance・speed・judge は issue #284 の配線(GATEWAY_*_URL)が入ると必要になる。
-	for _, n := range []string{"calc", "pokedex", "web", "balance", "speed", "judge"} {
+	for _, n := range []string{"calc", "pokedex", "web", "balance", "speed", "judge", "record", "team"} {
 		add("gateway → "+n, app("gateway"), app(n), podPort)
+	}
+	// record・team は計算イベントを購読する(ADR-0212・ADR-0213 §5。ADR-0220 §2)。
+	for _, n := range []string{"record", "team"} {
+		add(n+" → nats(購読)", app(n), app("nats"), natsPort)
 	}
 	add("calc → pokedex(内部 API /internal/pokedex/master)", app("calc"), app("pokedex"), podPort)
 	add("calc → nats", app("calc"), app("nats"), natsPort)
@@ -491,7 +496,8 @@ func allowedFlows() []npFlow {
 	for _, n := range []string{"pokedex", "pokedex-migrate", "pokedex-import"} {
 		add(n+" → mysql", app(n), app("mysql"), mysqlPort)
 	}
-	for _, n := range []string{"record-migrate", "team-migrate"} {
+	// record・team 本体と失効ジョブ(CronJob)は app ロールで TiDB へ(ADR-0220 §2)。
+	for _, n := range []string{"record-migrate", "team-migrate", "record", "team", "record-expire", "team-expire"} {
 		add(n+" → tidb", app(n), ext(tidbServerPod), tidbPort)
 	}
 	add("tidb 内部(tidb → pd)", ext(tidbServerPod), ext(tidbPDPod), 2379)
@@ -525,6 +531,20 @@ func deniedFlows() []npFlow {
 	add("gateway → nats", app("gateway"), app("nats"), natsPort)
 	add("record-migrate → mysql", app("record-migrate"), app("mysql"), mysqlPort)
 	add("pokedex → tidb", app("pokedex"), ext(tidbServerPod), tidbPort)
+	// ADR-0220 §2: record・team は gateway の上流だけ。サービスは自分の DB にだけ触る(絶対ルール4)。
+	add("web → record", app("web"), app("record"), podPort)
+	add("calc → record(計算は保存に依存しない。絶対ルール5)", app("calc"), app("record"), podPort)
+	add("calc → team", app("calc"), app("team"), podPort)
+	add("record → team", app("record"), app("team"), podPort)
+	add("team → record", app("team"), app("record"), podPort)
+	add("record → mysql", app("record"), app("mysql"), mysqlPort)
+	add("team-expire → mysql", app("team-expire"), app("mysql"), mysqlPort)
+	add("record-expire → nats(失効ジョブは NATS に触れない)", app("record-expire"), app("nats"), natsPort)
+	add("record-expire → record", app("record-expire"), app("record"), podPort)
+	add("gateway → tidb", app("gateway"), ext(tidbServerPod), tidbPort)
+	add("calc → tidb", app("calc"), ext(tidbServerPod), tidbPort)
+	add("Traefik → record(Ingress の向き先ではない)", ext(traefikPod), app("record"), podPort)
+	add("default namespace の一時 Pod → team", ext(strayPod), app("team"), podPort)
 	// 他 namespace・外部
 	add("default namespace の一時 Pod → pokedex(/internal)", ext(strayPod), app("pokedex"), podPort)
 	add("default namespace の一時 Pod → calc(/metrics)", ext(strayPod), app("calc"), podPort)
