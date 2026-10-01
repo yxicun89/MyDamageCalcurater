@@ -26,8 +26,7 @@
   埋め込む」方式。ADR-0018 §4)。
 - `destinations`: namespace `pokecalc`、server `https://kubernetes.default.svc` の組のみ。
 - `clusterResourceWhitelist`: 空(cluster スコープ資源への同期を許さない)。
-- `namespaceResourceWhitelist`: Deployment・Service・ConfigMap・Secret など、balance/speed の Kustomize base が
-  実際に使う種別だけに絞る(ワイルドカード `*` は使わない)。
+- `namespaceResourceWhitelist`: Service・Deployment・Ingress の3種(gitops overlay が実際に描画する種別)だけに絞る(ワイルドカード `*` は使わない)。
 
 `services/balance/deploy/argocd/application.yaml`・`services/speed/deploy/argocd/application.yaml` の
 `spec.project` を `default` から `pokecalc` に変更する。`check-gitops.sh`(共通化後は `scripts/gitops/check-gitops.sh`。
