@@ -300,6 +300,31 @@ make deploy-latest
 何もしなくてよい。次の Job(`make import-k8s` か CronJob)が固定版を取り直す。
 PVC を作り直す手順は、上の「importer の PVC の容量」の c にある。
 
+### d. 再生成できないものと、MySQL の論理バックアップ(issue #262)
+
+pokedex のマスタは上のとおり再生成できるのでバックアップ不要。**再生成できないもの**は次のとおり。
+
+| もの | 失うと | 扱い |
+|---|---|---|
+| Secret `mysql-auth`(root・用途別ユーザーのパスワード・DSN) | 既存 PVC の MySQL に入れなくなる(`make up` は Secret が無いと乱数で作り直すため、PVC と食い違う) | Secret か PVC のどちらかだけを消さない。両方消すなら空の DB から作り直す(上の a) |
+| Secret `tidb-root-auth` | 既存の TiDB に入れなくなる | 同上 |
+| record・team の保存データ(TiDB) | 計算イベント・お気に入り・構築が戻らない | ローカルはバックアップ手順なし(`make down` で消える)。残したい間は `make down` しない。クラウドのバックアップは P7-4 |
+| レジストリ(`balance-registry`)の image | balance が ImagePullBackOff | 作り直したら push し直す(`docs/runbooks/cluster-rebuild.md`) |
+
+手元の確認用に、DB の論理バックアップを取って**別名 DB** に戻せる。`pokedex` 本体は上書きしない。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc exec mysql-0 -- sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -u root --single-transaction --routines pokedex' > pokedex-backup.sql
+kubectl -n pokecalc exec mysql-0 -- sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root -e "CREATE DATABASE pokedex_restore"'
+kubectl -n pokecalc exec -i mysql-0 -- sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root pokedex_restore' < pokedex-backup.sql
+for db in pokedex pokedex_restore; do
+  kubectl -n pokecalc exec mysql-0 -- sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" mysql -u root -N -e 'SELECT COUNT(*) FROM $db.species;'"
+done
+```
+確認: 2つの件数が一致する。`pokedex-backup.sql` はマスタ(取得物由来)を含むので Git に入れない(`*backup*.sql` は `.gitignore` 済み)。
+片付け(`pokedex_restore` の削除は**人間の確認が要る操作**): `... mysql -u root -e "DROP DATABASE pokedex_restore"`。
+
 ## ID が消えて CronJob が終了コード 3 で止まったとき(issue #277・ADR-0131)
 
 上流の更新で、DB にある種族 key・技/持ち物/特性の ID が新しい出力から消えると、投入は DB を変えずに終了コード 3 で止まる

@@ -531,6 +531,22 @@ func TestLocalMySQLMemory(t *testing.T) {
 	}
 }
 
+// TestLocalMySQLSecurityContext は MySQL が非 root・最小権限で動くこと(issue #262)。
+// 既存 PVC のファイルは uid/gid 999 所有なので、999 で起動すれば読める。
+func TestLocalMySQLSecurityContext(t *testing.T) {
+	sts := readRepoFile(t, "deploy/k8s/overlays/local/mysql/statefulset.yaml")
+	for _, want := range []string{
+		`runAsUser:\s*999\b`, `runAsGroup:\s*999\b`, `fsGroup:\s*999\b`,
+		`runAsNonRoot:\s*true`, `fsGroupChangePolicy:\s*OnRootMismatch`,
+		`allowPrivilegeEscalation:\s*false`, `drop:\s*\["ALL"\]`,
+		`seccompProfile:\s*\n\s*type:\s*RuntimeDefault`,
+	} {
+		if !regexp.MustCompile(want).MatchString(sts) {
+			t.Errorf("MySQL の StatefulSet に securityContext の %q が無い(issue #262)", want)
+		}
+	}
+}
+
 // TestNoCommittedSecrets は deploy/ に値入りの Secret を置かないこと(ADR-0100 §9)。
 func TestNoCommittedSecrets(t *testing.T) {
 	err := filepath.WalkDir(filepath.Join(repoRoot, "deploy"), func(p string, d fs.DirEntry, err error) error {
