@@ -210,6 +210,7 @@ export interface components {
       | "unknown_move"
       | "unknown_ability"
       | "master_unavailable"
+      | "overloaded"
       | "internal_error";
     AnalyzeResponse: {
       /** @description One entry per request member, in request order. Duplicated pokemonId values are kept. */
@@ -891,9 +892,14 @@ export interface operations {
        * @description The pokemon read model is not configured, or any member names a moveId while the move read model
        *     is not configured, or any member names an abilityId while the ability read model is not configured
        *     (master_unavailable). A missing ability read model alone only empties abilityOptions.
+       *     Also answered when the number of recommendations being computed at once is already at the
+       *     configured limit (overloaded, BALANCE_MAX_CONCURRENT_RECOMMENDATIONS, default 4; issue 298,
+       *     ADR-0409): the request is not queued, so retry after the Retry-After seconds.
        */
       503: {
         headers: {
+          /** @description Seconds to wait before retrying; only sent with overloaded. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
