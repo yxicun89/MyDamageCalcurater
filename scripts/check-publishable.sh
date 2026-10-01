@@ -33,7 +33,8 @@ readonly -a CONTENT_EXCLUDES=(
 
 # A(絶対パス・個人情報)だけから外すファイル。
 #   docs/audit-r1.md : 検査対象のパターン(/Users/ など)を説明する文書で、実際の値ではない
-readonly -a A_EXCLUDES=(":(exclude)docs/audit-r1.md")
+#   scripts/ai-guard/bash-guard*.sh : 秘密ファイル(SSH鍵の置き場所等)を検知するパターンと、その検知テスト用の文字列で、実際の値ではない
+readonly -a A_EXCLUDES=(":(exclude)docs/audit-r1.md" ":(exclude)scripts/ai-guard/bash-guard.sh" ":(exclude)scripts/ai-guard/bash-guard_test.sh")
 
 # B・E だけから外すファイル(ADR-0408。scripts/gitops_test.sh)。
 #   - FAKE_ORIGIN(`https://github.com/example-owner/pokecalc.git`)は argocd-local-app.sh に

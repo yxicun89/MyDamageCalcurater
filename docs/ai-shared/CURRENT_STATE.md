@@ -435,7 +435,7 @@ DBのデータ削除・main反映・秘密の読み取り)を止められない)
 (2) 主防御として `hooks.PreToolUse`(Bash)から `scripts/ai-guard/bash-guard.sh` を呼び、コマンド文字列を検査して
 該当すれば exit code 2 で無条件 block(`permissions.allow` があっても上書きされない。公式ドキュメントで確認済み)。
 対象: `make down`・`make import`・`make import-k8s`・`make migrate-down*`・`kubectl` での ns/namespace/pvc/pv/
-statefulset/secret の delete・`kubectl get secret`・`.env`/`~/.ssh` を含むコマンド・`k3d cluster delete/rm`・
+statefulset/secret の delete・`kubectl get secret`・`.env`/SSH鍵ディレクトリを含むコマンド・`k3d cluster delete/rm`・
 `git push` の main 反映(`main`・`:main`・`HEAD:refs/heads/main` 等、書き方によらず)・force push 系・`gh pr merge`。
 (3) `.codex/config.toml` にも同じスクリプトを `[[hooks.PreToolUse]]` から呼ぶ設定を追加し、`approval_policy`・
 `sandbox_mode` を明示する(Codexのpermissionは`deny`のみ対応、`ask`は無い)。
