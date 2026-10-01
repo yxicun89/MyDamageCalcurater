@@ -20,6 +20,8 @@ spec:
         app.kubernetes.io/part-of: pokecalc
     spec:
       automountServiceAccountToken: false
+      # preStop(5秒)+ shutdownTimeout(calc/cmd/calc/main.go。5秒)より長い。ADR-0129 §4・issue #324。
+      terminationGracePeriodSeconds: 30
       containers:
         - name: calc
           image: pokecalc/calc:0.1.0
@@ -41,6 +43,10 @@ spec:
             # limits.memory の 64Mi に対して少し余裕を持たせた値(GC が OOMKill の前に働くように)。
             - name: GOMEMLIMIT
               value: 56MiB
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
           readinessProbe:
             httpGet:
               path: /readyz
