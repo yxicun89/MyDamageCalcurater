@@ -617,6 +617,42 @@ func TestCronJobScriptLocksBeforeFetch(t *testing.T) {
 	}
 }
 
+// --- issue #111(D18): 容量の事前確認と prune の位置 ---------------------------------------
+
+// TestCronJobScriptCapacityCheckAndPrune は、容量の事前確認が flock の後・fetch の前(download・DB 更新より前)、
+// prune が pokedex-import(DB apply)の成功後・ロックを持ったままの位置にあることを固定する。
+// pokedex-import を exec で置き換えると prune に戻れないので、exec にしない(set -eu で apply の失敗は prune に進まない)。
+func TestCronJobScriptCapacityCheckAndPrune(t *testing.T) {
+	s := readRepo(t, cronJobScript)
+	idx := func(re string) int {
+		loc := regexp.MustCompile(re).FindStringIndex(s)
+		if loc == nil {
+			return -1
+		}
+		return loc[0]
+	}
+	lock := idx(`flock\s+-n`)
+	check := idx(`node\s+\S*prune\.mjs\s+check\b`)
+	fetch := idx(`node\s+\S*fetch\.mjs`)
+	imp := idx(`pokedex-import\b[^\n]*-data`)
+	prune := idx(`node\s+\S*prune\.mjs\s+prune\b`)
+	if check < 0 || prune < 0 {
+		t.Fatalf("%s: prune.mjs check(%d)・prune.mjs prune(%d)の呼び出しが無い", cronJobScript, check, prune)
+	}
+	if !(lock < check && check < fetch) {
+		t.Errorf("%s: 容量の事前確認は flock の後・fetch.mjs の前(download・DB 更新より前)", cronJobScript)
+	}
+	if !(imp < prune) {
+		t.Errorf("%s: prune は pokedex-import(DB apply)が成功した後", cronJobScript)
+	}
+	if regexp.MustCompile(`(?m)^\s*exec\s+\S*pokedex-import`).MatchString(s) {
+		t.Errorf("%s: pokedex-import を exec にしない(後ろで prune を実行するため)", cronJobScript)
+	}
+	if regexp.MustCompile(`prune\.mjs\s+prune\b[^\n]*\|\|\s*(true|:)`).MatchString(s) {
+		t.Errorf("%s: prune の失敗を握りつぶさない(容量回復の失敗に気付けなくなる)", cronJobScript)
+	}
+}
+
 // --- AC8: Makefile -------------------------------------------------------------------
 
 // layoutMakeTargets は Makefile の「ターゲット: 依存」行とレシピを集める(include は見ない)。
