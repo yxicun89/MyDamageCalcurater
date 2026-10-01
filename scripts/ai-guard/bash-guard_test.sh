@@ -101,6 +101,13 @@ expect_pass() {
   if [ ! -s "$WORK/out" ]; then ok; else ng "通過時は stdout に何も出さない: $1"; fi
 }
 
+# expect_pass_in ディレクトリ コマンド文字列 — run_guard_in 版の expect_pass。
+expect_pass_in() {
+  run_guard_in "$1" "$2"
+  if [ "$GUARD_RC" = 0 ]; then ok; else ng "通過すべき(exit 0)が exit $GUARD_RC: $2"; return; fi
+  if [ ! -s "$WORK/out" ]; then ok; else ng "通過時は stdout に何も出さない: $2"; fi
+}
+
 test_prerequisites() {
   begin "前提: jq がある・$GUARD_REL が存在する"
   if command -v jq >/dev/null 2>&1; then ok; else ng "jq が無い(make doctor で確認)"; fi
@@ -284,6 +291,64 @@ test_block_secret_path_edge_cases() {
 test_block_k3d_edge_cases() {
   begin "block: k3d 判定の抜け(critic指摘。cluster の前にグローバルフラグが挟まる形)"
   expect_block "k3d --verbose cluster delete pokecalc"
+}
+
+# critic 3回目レビュー(最終回)で新たに見つかった、これまでの修正では塞がっていなかった穴。
+# 主因は同じ: flatten_metachars がコマンドの区切り(&&・;・|等)を単なる空白に潰していたため、
+# (1) git push の宛先候補ループが remote 自体("origin")も「宛先あり」と数えてしまい、
+#     宛先省略(refspec無し)の場合に現在のブランチを確認しないまま通ってしまう、
+# (2) kubectl の対象候補収集・delete の -k/-f 判定が、区切りの先にある別コマンドのトークンまで
+#     拾ってしまい、逆に「対象不明なら安全側でblock」という安全網を素通りしてしまう、という2点。
+# 区切りを番兵トークン "__SEP__" に変え、各引数収集ループがそこで止まるようにして解消した。
+test_block_git_push_remote_only_edge_cases() {
+  begin "block: git push が remote 名だけ(宛先省略)のとき、区切りの前後に関わらず現在のブランチを見る(critic 3回目・最終指摘)"
+  expect_block_in "$MAIN_REPO" "git push origin"
+  expect_block_in "$MAIN_REPO" "git push -u origin"
+  expect_block_in "$MAIN_REPO" "git push && echo done"
+  expect_block_in "$MAIN_REPO" "git push 2>&1 | tail -3"
+  expect_block_in "$MAIN_REPO" "git push -u origin && gh pr create --title x --body y"
+  expect_block "git -C $OTHER_REPO_MAIN push origin"
+  expect_block "cd $OTHER_REPO_MAIN && git push origin"
+}
+
+test_pass_git_push_remote_only_non_main() {
+  begin "pass: git push が remote 名だけでも、現在のブランチが main でなければ通す(誤検知しないこと)"
+  expect_pass_in "$OTHER_REPO_FEATURE" "git push origin"
+  expect_pass_in "$OTHER_REPO_FEATURE" "git push -u origin"
+  expect_pass_in "$OTHER_REPO_FEATURE" "git push && echo done"
+}
+
+test_block_kubectl_separator_boundary_edge_cases() {
+  begin "block: kubectl の対象収集・-k/-f 判定が区切りの先の別コマンドまで読まない(critic 3回目・最終指摘)"
+  expect_block "kubectl get ns -o name | xargs kubectl delete | tail -3"
+  expect_block "kubectl get pvc -o name | xargs kubectl delete && echo ok"
+  expect_block "kubectl delete --kustomize=deploy/k8s/overlays/local && echo ok"
+  expect_block "kubectl delete -k=deploy/k8s/overlays/local; echo ok"
+  expect_block "kubectl delete -f=deploy.yaml; echo ok"
+}
+
+test_block_critic4_edge_cases() {
+  begin "block: critic 4回目指摘(値を取るpushフラグ・短フラグまとめ・クォート分割・動的な宛先)"
+  expect_block_in "$MAIN_REPO" "git push -o ci.skip origin"
+  expect_block_in "$MAIN_REPO" "git push --push-option x origin"
+  expect_block_in "$MAIN_REPO" "git push --receive-pack x origin"
+  expect_block "kubectl delete -Rf deploy/k8s/base"
+  expect_block "kubectl delete -fR deploy/k8s/base"
+  expect_block "kubectl delete -fdeploy.yaml pod x"
+  expect_block "kubectl delete -kdir"
+  expect_block 'gi""t push origin main'
+  expect_block 'git push origin mai""n'
+  expect_block 'git push origin ma\in'
+  expect_block 'B=main; git push origin $B'
+}
+
+test_pass_critic4_separator_no_false_positive() {
+  begin "pass: 区切りの前後で誤検知しない(critic 4回目指摘7)"
+  expect_pass "kubectl delete pod x; echo ok"
+  expect_pass "kubectl delete pod x && echo ok"
+  expect_pass_in "$OTHER_REPO_FEATURE" "git push origin feature && echo ok"
+  expect_pass_in "$OTHER_REPO_FEATURE" "git push -o ci.skip origin feature"
+  expect_pass_in "$OTHER_REPO_FEATURE" "git push -o ci.skip origin"
 }
 
 test_block_kubectl_delete_indirect_and_dynamic() {
@@ -508,6 +573,11 @@ test_block_secret_read_before_redirect_strip
 test_block_git_push_other_checkout
 test_block_command_name_case_and_escape
 test_block_gh_api_merge_variants
+test_block_git_push_remote_only_edge_cases
+test_pass_git_push_remote_only_non_main
+test_block_kubectl_separator_boundary_edge_cases
+test_block_critic4_edge_cases
+test_pass_critic4_separator_no_false_positive
 test_pass_daily_commands
 test_pass_import_readonly
 test_pass_kubectl_readonly_and_pod_delete

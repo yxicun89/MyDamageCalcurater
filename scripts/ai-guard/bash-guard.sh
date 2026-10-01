@@ -6,9 +6,11 @@
 #   - 危険と判定: stderr に理由を書いて exit 2(呼び出し元が人間に確認を求める)
 #   - 危険でない: 何も出力せず exit 0
 #   - command が無い・空、tool_name が Bash 以外、jq が無い環境: 判定できないので exit 0(fail-open)
-# 方式: 引用符とシェルのメタ文字を空白に置き換えて1本のトークン列に平坦化し、
-# git・make・kubectl・k3d・gh のいずれかのトークンが現れるたびに、その位置から対応する
-# check_* 関数を呼ぶ(bash -c・eval・サブシェル・前置きコマンド等の形に関わらず本体コマンドを拾うため)。
+# 方式: 引用符とグルーピング記号を空白に、コマンドの区切り(&&・||・;・|・&・改行)を番兵トークン
+# "__SEP__" に置き換えて1本のトークン列に平坦化し、git・make・kubectl・k3d・gh のいずれかのトークンが
+# 現れるたびに、その位置から対応する check_* 関数を呼ぶ(bash -c・eval・サブシェル・前置きコマンド等の
+# 形に関わらず本体コマンドを拾うため)。各 check_* 内の「このコマンド自身の引数」を集めるループは
+# "__SEP__" に達したら止める(止めないと後続コマンドのトークンを自分の引数と誤認する)。
 # ADR-0800 §2 の方針により、見逃すより誤検知(過剰な確認要求)を許容する。
 # 自動テスト: scripts/ai-guard/bash-guard_test.sh(`make test-scripts` から実行)。
 set -uo pipefail
@@ -57,14 +59,30 @@ strip_redirects() {
   printf '%s' "$s"
 }
 
-# flatten_metachars 文字列 — クォート文字とシェルのメタ文字(&&・||・;・|・&・(・)・{・}・`・改行・タブ)
-# を空白に置き換える。bash -c・eval・サブシェル・前置きコマンド等の形に関わらず、
-# 本体のコマンド名(git・make・kubectl・k3d・gh)をトークン列から拾えるようにするため。
+# flatten_metachars 文字列 — クォート文字とシェルのメタ文字を空白に置き換え、1本のトークン列にする。
+# bash -c・eval・サブシェル・前置きコマンド等の形に関わらず、本体のコマンド名
+# (git・make・kubectl・k3d・gh)をトークン列から拾えるようにするため。
+# コマンドの区切り(&&・||・;・|・&・改行)は、単なる空白ではなく番兵トークン "__SEP__" に変える
+# (critic 3回目指摘: 空白に潰すと「このコマンド自身の引数はどこまでか」が分からなくなり、
+# `kubectl delete ...; echo ok` の "echo ok" を delete の対象候補と誤認したり、逆に
+# `git push origin && gh pr create ...` で "origin" の後に続く別コマンドのトークンが無いことを
+# 「宛先省略」と区別できなくなったりする。呼び出し側の引数収集ループは "__SEP__" で止める)。
+# 括弧・波括弧・バッククォート・リダイレクト記号・クォートは、コマンド自身の引数の区切りではない
+# (グルーピング/クォートの記号でしかない)ので、従来通り単なる空白にする。
 flatten_metachars() {
   local s="$1"
   local ch
-  for ch in '&' '|' ';' '(' ')' '{' '}' '<' '>' '"' "'" '`' $'\n' $'\t'; do
+  for ch in '&' '|' ';' $'\n'; do
+    s="${s//$ch/ __SEP__ }"
+  done
+  for ch in '(' ')' '{' '}' '<' '>' '`' $'\t'; do
     s="${s//$ch/ }"
+  done
+  # クォートとバックスラッシュは空白ではなく削除する(critic 4回目指摘: 空白にすると
+  # `gi""t push origin mai""n` や `ma\in` が単語ごと割れて判定をすり抜ける。削除すればシェルが
+  # 解釈する後の単語と一致する)。
+  for ch in '"' "'" '\\'; do
+    s="${s//$ch/}"
   done
   printf '%s' "$s"
 }
@@ -150,6 +168,9 @@ find_kubectl_verb() {
 # (例: "--timeout 60s" の "60s")、以降のトークンも引き続き候補として集め続けるため、本来のリソース種別
 # ("pvc" 等)を見逃さない。呼び出し側は候補が0件(パイプ/xargs等で対象が渡ってくる形)・"$"始まり
 # (コマンド置換・変数展開で動的に決まる形)を安全側でブロックする材料として使う(critic 3回目指摘)。
+# "__SEP__" 番兵に達したら止める(このコマンド自身の引数は、区切り記号の前までしかない。
+# 止めないと、"kubectl delete ...; echo ok" の "echo ok" のような後続コマンドのトークンを
+# 削除対象と誤認してしまう。critic 3回目指摘)。
 CANDIDATES=()
 kubectl_collect_candidates() {
   local start="$1"
@@ -160,6 +181,7 @@ kubectl_collect_candidates() {
   while [ "$j" -lt "$n" ]; do
     t="${W[$j]}"
     case "$t" in
+      __SEP__) break ;;
       -*)
         case "$t" in
           *=*) j=$((j + 1)) ;;
@@ -239,7 +261,10 @@ check_kubectl() {
   if [ "$verb" = "delete" ]; then
     for ((j = rstart; j < n; j++)); do
       case "${W[$j]}" in
-        -k | --kustomize | -f | --filename | --filename=* | -R | --recursive)
+        __SEP__) break ;;
+        --kustomize* | --filename* | --recursive* | -[kfR]* | -[!-]*[kfR]*)
+          # 短いフラグのまとめ書き(-Rf・-fR)・連結形(-fdeploy.yaml)も含む(critic 4回目指摘)。
+          # -lapp=foo のような f を含む別フラグは誤検知になるが、ADR-0800 §2 により許容する
           BLOCK_REASON="kubectl delete -k/--kustomize/-f/--filename/-R/--recursive はまとめて・間接的に削除するため常に確認が必要です"
           return 0
           ;;
@@ -424,6 +449,7 @@ check_git() {
   while [ "$i" -lt "$n" ]; do
     t="${W[$i]}"
     case "$t" in
+      __SEP__) return 1 ;;
       -C)
         c_dir="${W[$((i + 1))]:-}"
         i=$((i + 2))
@@ -457,6 +483,7 @@ check_git() {
   local j
   for ((j = start2; j < n; j++)); do
     case "${W[$j]}" in
+      __SEP__) break ;;
       --force | --force-with-lease* | -f | --mirror | --all)
         BLOCK_REASON="git push の強制オプション(${W[$j]})は履歴を壊す可能性があるため常に確認が必要です"
         return 0
@@ -468,18 +495,38 @@ check_git() {
     esac
   done
 
+  # remote_seen が立つまでの最初の非フラグトークンは remote 名(例: "origin")であって
+  # 宛先(refspec)ではない。critic 3回目指摘: これを宛先候補に含めていたため、
+  # "git push origin"(refspec 省略)が「宛先あり("origin")」と誤認され、現在のブランチを
+  # 確認しないまま通ってしまうバグがあった。remote の次以降のトークンだけを宛先候補にする。
+  local remote_seen=0
   local any_dest=0
   local tok dst cur
   for ((j = start2; j < n; j++)); do
     tok="${W[$j]}"
     case "$tok" in
+      __SEP__) break ;;
+      # 値を取るフラグは次のトークン(値)ごと読み飛ばす。読み飛ばさないと値が remote 扱いになり、
+      # 本物の remote が宛先に数えられて現在のブランチを確認しなくなる(critic 4回目指摘)
+      -o | --push-option | --receive-pack | --exec | --repo)
+        j=$((j + 1))
+        continue
+        ;;
       -*) continue ;;
     esac
+    if [ "$remote_seen" = 0 ]; then
+      remote_seen=1
+      continue
+    fi
     any_dest=1
     dst="${tok##*:}"
     case "$dst" in
       main | refs/heads/main)
         BLOCK_REASON="git push の宛先が main です(${tok})"
+        return 0
+        ;;
+      \$*)
+        BLOCK_REASON="git push の宛先が変数・コマンド置換で動的に決まるため main か判定できません(${tok})"
         return 0
         ;;
       "" | HEAD | @)
@@ -495,7 +542,7 @@ check_git() {
   if [ "$any_dest" = 0 ]; then
     cur="$(resolve_current_branch "$resolve_dir")"
     if [ -z "$cur" ] || [ "$cur" = "main" ]; then
-      BLOCK_REASON="git push に宛先の指定が無く、現在のブランチが main か判定できません(現在のブランチ: ${cur:-不明})"
+      BLOCK_REASON="git push に宛先の指定が無く(remote だけ、または省略)、現在のブランチが main か判定できません(現在のブランチ: ${cur:-不明})"
       return 0
     fi
   fi
