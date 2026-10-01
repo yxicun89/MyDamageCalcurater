@@ -100,8 +100,15 @@ type bulkRequest struct {
 	ItemVariants    []*itemDTO    `json:"itemVariants"`
 	// DefenderAbilities は防御側の特性の候補(issue #272・ADR-0126)。省略・空は特性なし(従来どおり)。
 	DefenderAbilities []abilityDTO `json:"defenderAbilities"`
+	// DefenderOverride は全行の防御側に当てるランク・状態異常(ADR-0216)。省略は上書きなし。
+	DefenderOverride defenderOverrideDTO `json:"defenderOverride"`
 	// TypeChart は必須。省略は type_chart_missing(ADR-0011 §13)。
 	TypeChart typeChartDTO `json:"typeChart"`
+}
+
+type defenderOverrideDTO struct {
+	Ranks  ranksDTO `json:"ranks"`
+	Status string   `json:"status"`
 }
 
 type bulkDefenderDTO struct {
@@ -143,6 +150,11 @@ func (r *bulkRequest) run() (bulkResultDTO, error) {
 	}
 	if len(r.DefenderAbilities) > engine.MaxAbilityCandidates {
 		return bulkResultDTO{}, fail(CodeInvalidInput, "defenderAbilities は %d 件以下でなければならない: %d 件", engine.MaxAbilityCandidates, len(r.DefenderAbilities))
+	}
+
+	overrideStatus := engine.Status(r.DefenderOverride.Status)
+	if r.DefenderOverride.Status != "" && !validStatuses[overrideStatus] {
+		return bulkResultDTO{}, enumError("defenderOverride.status", r.DefenderOverride.Status)
 	}
 
 	format, err := parseFormat(r.Format)
@@ -213,6 +225,7 @@ func (r *bulkRequest) run() (bulkResultDTO, error) {
 		Format: format, Attacker: attacker, DefenderSpecies: species, Move: move, Field: field,
 		Critical: r.Critical, Presets: presets, PresetKeys: keys, ItemVariants: variants, TypeChart: chart,
 		DefenderAbilities: defAbilities,
+		DefenderOverride:  engine.DefenderOverride{Ranks: r.DefenderOverride.Ranks.toEngine(), Status: overrideStatus},
 	})
 	if err != nil {
 		return bulkResultDTO{}, err

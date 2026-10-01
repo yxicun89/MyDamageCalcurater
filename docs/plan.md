@@ -1208,10 +1208,12 @@
   触った分だけ `critical` / `attacker.status` / `field` / `attacker.ranks` を要求に載せる(既定は従来とバイト同一)。
   要求の形は `domain/calcConditions.ts`、文言は `calcConditionsText`、部品は `screens/CalcConditionsPanel.tsx`。
   条件は攻守入れ替え・種族・技の変更で消さず、変えた直後は古い結果を出さない。iOS は別レーン
-- [ ] issue #274/#272 の API レーン担当分の残り: `defenderOverride.ranks: RankBlock` / `defenderOverride.status:
-  StatusCondition`(全行に一律で上書き)。abilityId(上記)とは独立に追加できる。engine 側の変更
-  (`BulkInput`/`ReverseInput` へのオーバーライド追加。プリセット解決後・計算前に当てる)を伴うため
-  ADR-0003 の test-first + 独立 critic の対象。優先度は低い(iOS レーンから「急ぎではない」と明記済み)
+- [x] issue #274/#272 の API レーン担当分の残り(ADR-0216): `BulkCalcRequest.defenderOverride` に `ranks: RankBlock` /
+  `status: StatusCondition` を追加(全行の防御側に一律で上書き)。engine は `BulkInput.DefenderOverride`
+  (`ErrInvalidDefenderOverride`。件数上限の後・計算の前に検証し、results・rows の両ループで特性の直後に当てる)、
+  wasmapi は `defenderOverride{ranks,status}`、calc-svc は `parseStatusCondition`+`ranksFromBlock`。範囲外のランクは
+  400 `invalid_input`、未知の status は `invalid_enum`。防御側の状態異常は今のダメージ式に効かない(結果不変)。
+  逆算には足していない(ADR-0216 §4)。Web・iOS 生成物は再生成済み
 - [x] issue #284(ユーザー決定。DECISIONS.md 2026-09-25「ユーザー決定 4 件」#2)balance・speed・judge も
   gateway の後ろにまとめる: `services/gateway/internal/httpapi/routing.go` に `routeBalance`/`routeSpeed`/
   `routeJudge` と `prefixBalance`/`prefixSpeed`/`prefixJudge`(record・team と同じ前方一致・末尾スラッシュ
