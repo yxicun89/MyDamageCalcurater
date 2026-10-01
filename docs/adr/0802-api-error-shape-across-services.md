@@ -25,8 +25,8 @@ calc-svc と同じ扱い(ADR-0200: メソッド違いに新しい code を足さ
 
 | 失敗 | calc / gateway | pokedex | balance | judge | speed |
 |---|---|---|---|---|---|
-| ヘッダー欠落・空 | `missing_header` | (ヘッダー不要) | `missing_request_context` | `invalid_request` | `missing_header` |
-| ヘッダー不正・重複 | `invalid_header` | - | `invalid_request` | `invalid_request` | `invalid_header` |
+| ヘッダー欠落・空 | `missing_header` | `missing_header`(内部 API はヘッダー不要) | `missing_request_context` | `invalid_request` | `missing_header` |
+| ヘッダー不正・重複 | `invalid_header` | `invalid_header` | `invalid_request` | `invalid_request` | `invalid_header` |
 | 想定外の内部エラー | `internal` | `internal`(ルートの契約) | `internal_error` | `internal_error` | `internal_error` |
 | 未知ルート・メソッド違い | `not_found`(404) | `not_found`(404) | `not_found`(404) | `not_found`(404) | `not_found`(404) |
 

@@ -355,6 +355,10 @@ func recoverMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("panic recovered", "path", c.Path(), "panic", r)
+				// 応答を書き始めた後の panic では、JSON を追記せず(本文が壊れる)ログだけ残す。
+				if response, _ := echo.UnwrapResponse(c.Response()); response != nil && response.Committed {
+					return
+				}
 				err = c.JSON(http.StatusInternalServerError, api.Error{
 					Code:    api.InternalError,
 					Message: "internal error",
