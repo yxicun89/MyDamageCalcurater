@@ -70,13 +70,15 @@ readonly B_KV_PATTERN='(password|passwd|secret|api[_-]?key|private[_-]?key|acces
 #   cfg./config./opts.: 設定オブジェクトのフィールド参照(Go)
 #   英字だけの3〜7文字: 変数名・単語(`c.Passwd = pass` はテストの変数代入)。8文字以上の英字だけの値は許さない
 #   値が日本語など非 ASCII で始まる: 説明文(`secrets_test: すべて成功` は echo のメッセージ)
-readonly B_KEYVALUE_ALLOW_EXTRA='^secret-type[:=]|[:=][[:space:]]*["'"'"']?(string|number|boolean|bool|int|undefined|null|nil|true|false)[^A-Za-z0-9]?[^A-Za-z0-9]?[^A-Za-z0-9]?$|[:=][[:space:]]*["'"'"']?(os\.Getenv\(|process\.env|cfg\.|config\.|opts\.)|[:=][[:space:]]*[A-Za-z_][A-Za-z_][A-Za-z_][A-Za-z_]?[A-Za-z_]?[A-Za-z_]?[A-Za-z_]?$|[:=][[:space:]]*["'"'"']?[^ -~]'
+# どの許可も「キー名の直後の最初の `:`/`=`」の直後(値の先頭)だけで判定する(`^[^:=]*`)。値の途中の `=é`・`:true` で
+# 許可されて本物の値を見逃さないため(D24 critic)。
+readonly B_KEYVALUE_ALLOW_EXTRA='^secret-type[:=]|^[^:=]*[:=][[:space:]]*["'"'"']?(string|number|boolean|bool|int|undefined|null|nil|true|false)[^A-Za-z0-9]?[^A-Za-z0-9]?[^A-Za-z0-9]?$|^[^:=]*[:=][[:space:]]*["'"'"']?(os\.Getenv\(|process\.env|cfg\.|config\.|opts\.)|^[^:=]*[:=][[:space:]]*[A-Za-z_][A-Za-z_][A-Za-z_][A-Za-z_]?[A-Za-z_]?[A-Za-z_]?[A-Za-z_]?$|^[^:=]*[:=][[:space:]]*["'"'"']?[^ -~]'
 
 # token は語として短い・コードの変数名と紛れるので、値が16文字以上で、数字を1つ以上含むものだけを見る
 # (実際のトークンは乱数なので数字を含む。`let token = beginInput()` や `token = latestTeamListToken` は外れる)。
 readonly B_TOKEN_PATTERN='token[A-Za-z0-9_-]{0,64}['"'"'"]?[[:space:]]*[:=][[:space:]]*['"'"'"]?[A-Za-z0-9._~+/=-]{16,}'
 # 数字を含まない値は許す(識別子・単語)。
-readonly B_TOKEN_ALLOW='[:=][[:space:]]*["'"'"']?[A-Za-z._~+/=-]+$'
+readonly B_TOKEN_ALLOW='^[^:=]*[:=][[:space:]]*["'"'"']?[A-Za-z._~+/=-]+$'
 
 # DSN の許可: テスト用の偽 DSN。接続先が `127.0.0.1:1`(閉じたポートで、何にも接続できない)のものだけ。
 readonly B_DSN_ALLOW='@tcp\(127\.0\.0\.1:1\)$'
@@ -681,9 +683,14 @@ selftest() {
 }' "$dir" b2_13.json
   selftest_add "password:
   ${v14}" "$dir" b2_14.yaml
+  # 許可の判定は値の先頭だけ: 値の途中に「=非ASCII」「:true」「=数字なしの語」があっても許可しない
+  selftest_add "password=${v14}=é" "$dir" b2_15.txt
+  selftest_add "password=${v14}:true" "$dir" b2_16.txt
+  selftest_add "token=${v24}=abcdef" "$dir" b2_17.txt
   selftest_run "B2" "$dir"
   selftest_expect_hits "B2" b2_01.txt:1 b2_02.txt:1 b2_03.sh:1 b2_04.yaml:2 b2_05.npmrc:1 b2_06.txt:1 b2_07.txt:1 \
-    b2_08.txt:1 b2_09.txt:1 b2_10.txt:1 b2_11.txt:1 b2_12.txt:1 b2_13.json:2 b2_14.yaml:1
+    b2_08.txt:1 b2_09.txt:1 b2_10.txt:1 b2_11.txt:1 b2_12.txt:1 b2_13.json:2 b2_14.yaml:1 \
+    b2_15.txt:1 b2_16.txt:1 b2_17.txt:1
   selftest_expect_no_leak "B2" "$v14" "$v24" "$v40" "$b64" abc123 "ant-api03" "github_pat" "xoxb-" "AIza"
 
   echo "自己テスト: B 追加(値ではない参照・Secret 名・型注釈は誤検知しない)"
