@@ -92,7 +92,7 @@
 | 4b | `:269` | 同 `/api/calc`、`X-Session-Id: not-a-uuid` | **400 `invalid_header`** | 同上(正準形 UUID のみ許可) | ADR-0202 §4 |
 | 5 | `:274` | `GET /internal/pokedex/master`(ヘッダ無し) | **404 `not_found`** | gateway が `/internal/*` を公開しない(`gw/routing.go:59` `matchRoute` に無いパス = 404)。内部 API は calc → pokedex のサービス間専用 | ADR-0204・0210 |
 | 6 | `:281` | `GET /`(ヘッダ無し) | 200(web 到達)/ 503 `upstream_unavailable`(web 未デプロイ)。それ以外は失敗 | gateway が `/api` 以外を web に転送(`GATEWAY_WEB_URL`) | ADR-0205 |
-| 7 | `:308` | `GET /api/balance/healthz`(balance の Service があるときだけ。`API_SMOKE_BALANCE`) | 200 | gateway が `/api/balance` を balance へ転送する | ADR-0202・0413 |
+| 7 | `:308` | `GET /api/balance/healthz`(balance の Service があるときだけ。`API_SMOKE_BALANCE`) | 200 | gateway が `/api/balance` を balance へ転送する | ADR-0202・0414 |
 
 最終行 `api smoke: calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=200 internal=404 balance=200 web=200` の読み方:
 
