@@ -20,6 +20,7 @@ Status(追記): 2026-10-01、D22(Makefile の help・未実装ターゲット・
 Status(追記): 2026-10-01、D10(issue #220・ADR-0127)完了。内部 API(/internal/pokedex/master)と pokedex export の全 SELECT を1つの読み取り専用トランザクション(readtx)に入れ、importer の全置換と重なっても新旧が混在しないようにした。検索系は autocommit のまま。
 Status(追記): 2026-10-01、D07(共通の scripts/require-k3d-context.sh・scripts/image-tag.sh とテスト、up.sh・deploy-latest・pokedex-registry-push・import-k8s の context 検査を共通化、Secret を kubectl create で作る。#327・#295-shared・#291-shared)。各レーンの *-k3d-deploy への組み込みは各レーン(DECISIONS.md 2026-10-01)。
 Status(追記): 2026-10-01、D23(`make test-db-docker`: Docker の使い捨て MySQL・TiDB で `make test-db` を流して消す。verify-m1 §2・test-strategy L8。#223)。
+Status(追記): 2026-10-01、D18(issue #111・ADR-0104 追記)。importer の PVC に容量の事前確認(`prune.mjs check`、不足は終了コード3)と、現在版+直前の成功版・report 52 件の保持 prune(`prune.mjs prune`、DB apply 成功後)を追加。手順は docs/runbooks/data.md。
 Next: issue #403 の「残りのパッケージ」を依存の順に(D20 → D11 → D12 → D24〈TB の check-publishable 待ち〉→ D18〜D32)。後続: 逆算の特性候補の計算量の最適化(ADR-0126 追記)、#349。1 パッケージ = 1 PR、importer に触れたら実データの dry-run、マージ後は make deploy-latest。
 
 ## API

@@ -93,6 +93,73 @@ kubectl -n pokecalc delete job pokedex-import-manual-race1 pokedex-import-manual
 ```
 確認: 両方とも `job.batch "pokedex-import-manual-raceN" deleted` と表示される。
 
+## importer の PVC の容量(issue #111・ADR-0104 追記)
+
+CronJob は取得の前に PVC の空きを確かめ(予約容量 既定 400 MiB)、足りなければ終了コード 3 で止まる。
+取り込みが成功した後に、現在版+直前の成功版と report 直近 52 件を残して旧版を自動で消す。
+
+### a. 使用量を確かめる
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc create job --from=cronjob/pokedex-import pokedex-import-capacity
+kubectl -n pokecalc logs job/pokedex-import-capacity | grep importer-
+```
+確認: `importer-capacity: total=... used=... free=... reserve=...` と、版ごとの `usage` 行が出る。`free` が `reserve` 以上なら問題ない
+(下回ると `importer-capacity` を stderr に出して Job が終了コード 3 で失敗し、取得・DB 更新には進まない)。
+
+### b. 閾値を超えたとき(Job が終了コード 3)
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc get pods -l job-name=pokedex-import-capacity
+kubectl -n pokecalc get pvc pokedex-import-cache
+```
+確認: Pod が `Error` で、ログに `importer-capacity: 空き ... byte が予約容量 ... byte を下回る` が出ている。次の c か d で空きを作る。
+
+### c. 安全に prune する(旧版だけを消す)
+
+prune は取り込みが成功した run の最後に自動で走る。容量不足で取り込めないときは、現在版の取り込みを済ませる前に消すものがないので、
+まず d で PVC を広げて取り込みを成功させる。成功すれば prune が旧版を消す。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc delete job pokedex-import-capacity
+kubectl -n pokecalc create job --from=cronjob/pokedex-import pokedex-import-prune
+kubectl -n pokecalc logs -f job/pokedex-import-prune | grep importer-prune
+```
+確認: `importer-prune: 削除 <相対パス> <byte> byte` の行と、最後の `削除 N 件・回収 M byte・残量 K byte` が出る。
+消えるのは現在版・直前の成功版以外の `.cache/<source>/<版>`・`<source>/<版>` と、52 件より古い `reports/import-*.json` だけ。
+`upstream/`・`reports/latest*`・ロック・台帳は消えない。PVC を丸ごと消さない。
+
+### d. PVC を広げる
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl get storageclass
+kubectl -n pokecalc get pvc pokedex-import-cache -o jsonpath='{.spec.storageClassName}{"\n"}'
+```
+確認: StorageClass の `ALLOWVOLUMEEXPANSION` が `true` なら次を流す。`false`(k3d の local-path)なら拡張できないので、
+`deploy/k8s/base/pokedex/pvc-import-cache.yaml` の `storage` を上げて PVC を作り直す(取得キャッシュは取得元から再取得される。報告は消える)。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc patch pvc pokedex-import-cache -p '{"spec":{"resources":{"requests":{"storage":"4Gi"}}}}'
+kubectl -n pokecalc get pvc pokedex-import-cache
+```
+確認: `CAPACITY` が 4Gi になる。
+
+### e. 失敗後に再実行する
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc delete job pokedex-import-prune --ignore-not-found
+kubectl -n pokecalc create job --from=cronjob/pokedex-import pokedex-import-retry
+kubectl -n pokecalc wait --for=condition=complete job/pokedex-import-retry --timeout=900s
+```
+確認: Job が `complete` になる。途中で止まった取得は次回に自己回復し(ADR-0104・#102)、prune の中断は再実行で残りを消す(何度流しても同じ結果)。
+終わったら `kubectl -n pokecalc delete job pokedex-import-retry` で片付ける。
+
 ## 7. 後片付け(クラスタは残したまま止める)
 
 ```sh
