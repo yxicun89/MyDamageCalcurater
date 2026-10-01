@@ -397,6 +397,8 @@ JD4(返り討ち判定。PR #169)・JD5(Web の画面。PR #182。ADR-0705)ま�
 は自分1体対相手1〜6体の素早さ判定・場の効果(トリックルーム・追い風)・返り討ち判定まで対応し、`web/src/judge/`
 (`/judge` タブ)から呼べる。技はID自由入力(ADR-0304 §3の技一覧APIの欠落を踏襲)、相手側の追い風は全候補共通の
 1チェックボックス(ADR-0703 §5)、送信ボタンでのみ呼ぶ(1回で上流最大27回)。
+Status(追記): 2026-10-01 issue #258 judge の GitOps(gitops overlay・Argo CD Application・image 公開スクリプト。ADR-0709)を実装。
+実クラスタへの適用(`judge-argocd-app`・registry push・sync)は人間確認待ちで未実施。
 Next: 新規要望待ち。軽微な積み残しは解消済み(2026-09-25。`attacker`単数の`Individual`にも`defenders`候補と
 同じ大文字小文字厳密なキー検査〈`individualWireKeys`〉を適用。PR #342 main 統合済み)。
 issue #234(moveId/natureId の形式検証。ADR-0706)も解消(2026-09-25。critic 2ラウンド。PR #365 main 統合済み):
