@@ -387,7 +387,7 @@ func CalcReverse(in ReverseInput) (ReverseResult, error) {
 					} else {
 						dmg.Attacker, dmg.Defender = unknown, in.Known
 					}
-					res, err := CalcDamage(dmg)
+					res, _, err := calcDamageNoKO(dmg)
 					if err != nil {
 						return ReverseResult{}, fmt.Errorf("逆算の候補(性格クラス=%s, 特性=%q, 持ち物=%q, SP=%d)の計算: %w",
 							class, ability.ID, itemID(item), x, err)
