@@ -10,7 +10,7 @@
 cd "$(git rev-parse --show-toplevel)"
 make up
 ```
-確認: 最後の行が `job.batch/pokedex-migrate condition met`(すでに起動済みならスキップしてよい。`http://localhost:8080/healthz` が `{"status":"ok"}` を返せば起動済み)。
+確認: 出力に `job.batch/pokedex-migrate condition met` が含まれる(最後の行ではない。すでに起動済みならスキップしてよい。`http://localhost:8080/healthz` が `{"status":"ok"}` を返せば起動済み)。
 
 ## 2. Tailscale で gateway を HTTPS 公開する(人間の作業)
 

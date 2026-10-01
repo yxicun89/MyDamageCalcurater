@@ -9,7 +9,7 @@ calc-svc・gateway を k3d で動かして疎通を確かめる。設計は
 cd "$(git rev-parse --show-toplevel)"
 make test lint build check-publishable
 ```
-確認: 最後の行が `check-publishable: 0 件` で、エラーで止まらない。
+確認: 最後の行が `check-publishable: 0 件(既定(A〜E))` で、エラーで止まらない。
 
 ## 2. k3d クラスタを起動する
 
@@ -17,7 +17,10 @@ make test lint build check-publishable
 cd "$(git rev-parse --show-toplevel)"
 make up
 ```
-確認: 最後の行が `job.batch/pokedex-migrate condition met`。
+確認: 出力に `job.batch/pokedex-migrate condition met` が含まれ、最後に `完了。http://localhost:8080 ...` の案内が出る
+(migrate の後に importer のイメージの build が続くので、`condition met` は最後の行ではない)。
+`kubectl -n pokecalc get pods` で `mysql-0` が `Running`、`pokedex` は手順3の投入が済むまで `0/1`(異常ではない)。
+calc・gateway・web はこの時点では起動しない(手順4で入れる)。
 
 ## 3. マスタを投入する(初回だけ。投入済みならスキップしてよい)
 
@@ -29,7 +32,8 @@ created=$(make import-k8s)
 job_name=$(echo "$created" | grep -o 'pokedex-import-manual-[0-9]*' | tail -1)
 kubectl -n pokecalc wait --for=condition=complete "job/$job_name" --timeout=600s
 ```
-確認: 最後の行が `job.batch/<job名> condition met`。
+確認: 最後の行が `job.batch/<job名> condition met`(`make import-k8s` は Job を作るだけで完了を待たないので `wait` まで流す)。
+数秒〜10秒ほどで `kubectl -n pokecalc get pods` の `pokedex` が `1/1` になる。
 
 ## 4. calc・gateway を k3d にデプロイする
 

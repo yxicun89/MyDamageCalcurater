@@ -27,6 +27,7 @@ Status(追記): 2026-10-01、D11(issue #107・#323・#324・#299 の pokedex 分
 Status(追記): issue #403 D24(#300・#74 のスクリプト部分。ADR-0130)実装済み。check-publishable の B に DSN・URL 資格情報・MYSQL_PWD・Secret の base64・Bearer・各種トークン接頭辞・短い値・2行に分かれる値を、C と .gitignore に .envrc・id_rsa 系・credentials.json・*.p8・*.sql.gz・ダンプ・secret*.yaml を追加(gitleaks は足さない)。
 Status: D12(issue #277・ADR-0131 採用)実装済み。migration 000009 の種族 key の台帳(追記だけ)と、ID の消滅(ErrKeyRemoved・終了コード3・`-allow-removed <種類>:<ID>`)・消滅後の再利用(ErrKeyChanged)の検出を Apply に追加。実データの dry-run は blockers: none。
 Status(追記): 2026-10-01、D25(issue #240・ADR-0132)。pokecalc に ingress の default-deny と許可リスト10本(`deploy/k8s/base/networkpolicy/`)を実装。受け入れテスト AC-N1〜N5 は green。k3d での実地確認(apply・smoke・拒否の確認)はメイン。
+Status: D27(#252・#319・#290・#221 の runbook 部分)実装済み。`docs/runbooks/{data,api}.md`・`docs/impl/{k8s-local,db-mysql,make-targets}.md`・`docs/verify-m1.md` §3 を今の main に合わせて直した(確認方法・Secret 5キー・NetworkPolicy・終了コード3と PVC 消失の復旧手順・行番号の除去)。新しいクラスタでの verify-m1 §3 の通し実行は人間の確認待ち。
 Next: issue #403 の「残りのパッケージ」を依存の順に(D19〈作業中〉→ D26 → D27〜D32。D21 は T04・S04・A06 待ち、D20 の #211-data は API レーンの契約待ち)。後続: 逆算の特性候補の計算量の最適化(ADR-0126 追記)、#349。1 パッケージ = 1 PR、importer に触れたら実データの dry-run、マージ後は make deploy-latest。
 
 ## API

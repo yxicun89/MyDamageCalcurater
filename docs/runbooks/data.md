@@ -18,7 +18,10 @@ Pod ごとに持つ。`pokedex` の `replicas` を増やす前に、
 cd "$(git rev-parse --show-toplevel)"
 make up
 ```
-確認: 最後の行が `job.batch/pokedex-migrate condition met`(`make up` が migrate Job の完了まで待つ)。
+確認: 出力に `job.batch/pokedex-migrate condition met`(`make up` が migrate Job の完了まで待つ)が含まれ、
+最後に `完了。http://localhost:8080 ...` の案内が出る。この後に importer のイメージの build と案内文が続くので、
+`condition met` は最後の行ではない。`kubectl -n pokecalc get pods` で `mysql-0` が `Running`、`pokedex` は初回の投入(§4)が済むまで `0/1`(異常ではない)。
+`make up` は kubectl の context が `k3d-pokecalc` でなければ、何も apply せずに止まる。
 
 ## 2. 取得する
 
@@ -45,17 +48,16 @@ echo "$created"
 job_name=$(echo "$created" | grep -o 'pokedex-import-manual-[0-9]*' | tail -1)
 kubectl -n pokecalc wait --for=condition=complete "job/$job_name" --timeout=600s
 ```
-確認: 最後の行が `job.batch/<job名> condition met`。
+確認: 最後の行が `job.batch/<job名> condition met`。数秒〜10秒ほどで `kubectl -n pokecalc get pods` の `pokedex` が `1/1` になる。
+`make import-k8s` は Job を作るだけで完了を待たないので、`wait` までを1回で流す。
 
 ## 5. DB に行が入ったことを確認する
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-pw="$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.mysql-root-password}' | base64 -d)"
-kubectl -n pokecalc exec mysql-0 -- env MYSQL_PWD="$pw" mysql -u root -N -e "SELECT COUNT(*) FROM pokedex.species;"
-unset pw
+kubectl -n pokecalc exec mysql-0 -- sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root -N -e "SELECT COUNT(*) FROM pokedex.species;"'
 ```
-確認: 画面にパスワードは出ず、0 より大きい数値が1行表示される。
+確認: 画面にパスワードは出ず、0 より大きい数値が1行表示される(パスワードは `mysql-0` の環境変数から読むので、コマンド引数や API サーバの記録に出ない)。
 
 ## 6. 手動実行と CronJob の重複を確かめる(issue #106 / ADR-0109)
 
@@ -70,11 +72,15 @@ cd "$(git rev-parse --show-toplevel)"
 kubectl -n pokecalc create job --from=cronjob/pokedex-import pokedex-import-manual-race1
 kubectl -n pokecalc create job --from=cronjob/pokedex-import pokedex-import-manual-race2
 kubectl -n pokecalc wait --for=condition=complete job/pokedex-import-manual-race1 job/pokedex-import-manual-race2 --timeout=600s || true
-kubectl -n pokecalc get jobs pokedex-import-manual-race1 pokedex-import-manual-race2
+kubectl -n pokecalc get jobs pokedex-import-manual-race1 pokedex-import-manual-race2 \
+  -o custom-columns=NAME:.metadata.name,SUCCEEDED:.status.succeeded,FAILED:.status.failed
+kubectl -n pokecalc get pods -l 'job-name in (pokedex-import-manual-race1,pokedex-import-manual-race2)'
 ```
-確認: 2つの Job がどちらも最終的に `COMPLETIONS` 1/1 になる(ロックに負けた側は終了コード1で
-1〜2回自動再試行してから成功する。`kubectl -n pokecalc get pods -l job-name=pokedex-import-manual-race1`・
-`...race2` の `RESTARTS` 列のどちらかが 0 より大きければ、実際に排他が働いた証拠)。
+確認: 片方の Job の `FAILED` が 1 以上になっている(または Pod が2つ以上ある)。これがロックに負けた Pod で、排他が働いた証拠。
+Job の Pod は `restartPolicy: Never` なので `RESTARTS` は常に 0 で、失敗すると別の Pod が作られる(`backoffLimit: 2`)。
+負けた側は終了コード1で失敗してから作り直され、勝った側の完了後に成功する(`SUCCEEDED` 1)。
+勝った側の処理が長引くと、負けた側は3回失敗して `Failed` で終わることもある。これも排他が働いた結果で異常ではない。
+どちらの `FAILED` も空(0)なら、2つが重ならずに順に走っただけなので、もう一度 6a の最初から流す。
 
 ### 6b. Pod のログでロック競合を確認する(秘密が出ていないことも見る)
 
@@ -97,6 +103,9 @@ kubectl -n pokecalc delete job pokedex-import-manual-race1 pokedex-import-manual
 
 CronJob は取得の前に PVC の空きを確かめ(予約容量 既定 400 MiB)、足りなければ終了コード 3 で止まる(取得・DB 更新・prune のどれにも進まない)。
 取り込みが成功した後にだけ、現在版+直前の成功版と report 直近 52 件を残して旧版を自動で消す。
+
+k3d の `local-path` では空きの値がホストのディスクのものになり、PVC の 2Gi では制限されないため、容量の確認はローカルでは実質効かない
+(PVC に容量の制限があるクラウドの StorageClass では効く)。以下はクラウド相当の環境での手順。
 
 ### a. 使用量を確かめる(副作用なし)
 
@@ -174,6 +183,119 @@ kubectl -n pokecalc delete job pokedex-import-retry
 ```
 確認: Job が `complete` になる。途中で止まった取得は次回に自己回復し(#102)、prune の中断は再実行で残りを消す(何度流しても同じ結果)。
 
+## importer が終了コード 3 で止まったとき(ADR-0104 §3・§9)
+
+終了コード 3 は「再試行しても同じ結果になり、人の対応が要る」。DB は変わらず、Job は再試行されずに `Failed` で終わる
+(`podFailurePolicy` が 2・3 を `FailJob` にしている)。ロックに負けた(終了コード 1)のとは別。
+
+### a. 止まった理由を読む
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc get pods -l app.kubernetes.io/name=pokedex-import --sort-by=.metadata.creationTimestamp
+kubectl -n pokecalc logs "$(kubectl -n pokecalc get pods -l app.kubernetes.io/name=pokedex-import --sort-by=.metadata.creationTimestamp -o name | tail -1)" | tail -20
+```
+確認: 直近の Pod が `Error` で、ログの最後の `import:` か `importer-capacity:` の行に理由が出ている。次の表で対応する。
+
+| ログの行 | 意味 | 次にすること |
+|---|---|---|
+| `importer-capacity: 空き ... を下回る` | PVC の空き不足 | 上の「importer の PVC の容量」の c・d |
+| `import: 消える ID: ...` | DB にある ID が新しい出力から消える | 下の「ID が消えて CronJob が終了コード 3 で止まったとき」 |
+| `import: 人間の裁定が必要な食い違いが N 件ある` | 照合の Blocker(上流の更新で、裁定済みの件数・集合や種族・技の値が変わった) | b |
+| `既存の種族の key が変わる投入` | `ErrKeyChanged`(上流の formeOrder の並びが変わった) | c |
+| `DB のスキーマが未整備` | migrate が済んでいない DB(`ErrSchemaNotReady`) | `make deploy-latest`(migrate-up まで流す)。dirty なら下の「migration が途中で失敗して dirty になったとき」 |
+| そのほかの `import:` の行(`ErrInvalidInput`・`ErrInvalidData`) | 入力の誤り(config・取得データの矛盾) | 行のとおりに入力を直す PR を出す |
+
+### b. 照合の Blocker のとき
+
+CronJob のイメージは Git の `data/importer/config.json` の版で作られている。同じ版をホストで再現して報告を読む(DB には触れない)。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make import-fetch
+make import-dry-run
+cat data/generated/reports/latest-summary.txt
+```
+確認: 出力に `blockers <種類>: <件数>` の行がある。`data/generated/reports/latest.json` の `blockers` に ID と詳細がある。
+Git の config がクラスタのイメージと同じ版であること(`git log -1 -- data/importer/config.json` の後にイメージを作り直していること)を確かめる。
+どう直すかは人が決める。いずれも通常の PR で行い、クラスタ上の Pod や DB を直接直さない。
+
+- 上流の版を上げたことが原因なら、`data/importer/config.json` の `sources` を前の版に戻す PR を出す。
+- 食い違いが正しく、使えるデータとして受け入れるなら、ADR-0002 に裁定を追記してから `reconcile.verdicts` を更新する PR を出す(ADR-0103 §5)。
+
+PR が main に入ったら、イメージを入れ替えて流し直す。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+git switch main && git pull --ff-only
+make deploy-latest
+created=$(make import-k8s)
+job_name=$(echo "$created" | grep -o 'pokedex-import-manual-[0-9]*' | tail -1)
+kubectl -n pokecalc wait --for=condition=complete "job/$job_name" --timeout=600s
+```
+確認: 最後の行が `job.batch/<job名> condition met`。
+
+### c. 種族の key が変わるとき(ErrKeyChanged)
+
+ログの行は `showdown_id "<ID>" の key が "<旧>" → "<新>"`(または `key "<key>" の showdown_id が ...`)。
+team-svc・record-svc・端末に保存された key が別の種族を指さないよう、投入は DB(台帳 `species_key_ledger` を含む)を変えずに止まる。
+承認用のフラグは無い(`-allow-removed` でも通らない。ADR-0131)。人が次のどちらかを決める。
+
+- 上流の並びが変わっただけなら、`data/importer/config.json` の `sources` を前の版に戻す PR を出す(b と同じ流し方)。
+- 保存済みの key を壊してでも新しい key にする判断は、ADR を書いてから行う。DB と台帳の書き換えを伴い、この手順書の範囲外(人間の確認が要る)。
+
+## PVC や DB を失ったとき(pokedex のマスタは再生成できる)
+
+pokedex の DB の中身は、Git に固定した版の取得物から importer が作り直せるので、バックアップは取らない。
+`pokedex-import-cache`(取得キャッシュ・報告)も、取得元から取り直せる(過去の報告は戻らない)。
+失うものは、DB の投入履歴(`data_versions`)と、importer の過去の報告だけ。record・team の DB(TiDB)はこの手順の対象外。
+
+### a. クラスタごと失ったとき(`make down`・`k3d cluster delete`)
+
+`make down` はクラスタ・PVC・Secret を消す。**データ削除なので人間の確認が要る操作**。消えた後は新しいクラスタを作る。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make up
+created=$(make import-k8s)
+job_name=$(echo "$created" | grep -o 'pokedex-import-manual-[0-9]*' | tail -1)
+kubectl -n pokecalc wait --for=condition=complete "job/$job_name" --timeout=600s
+```
+確認: 最後の行が `job.batch/<job名> condition met`。`make up` が Secret を新しく作り、migrate が DB と用途別ユーザーを作る。
+取得はこの Job の中で行う(ネットワークが要る)。ここまでで `pokedex` が `1/1` になる。
+calc・gateway・web・balance・speed・judge は `docs/verify-m1.md` の §3・§4(`make pokedex-export` → `make deploy-latest`)で入れ直す。
+
+### b. MySQL の PVC(`data-mysql-0`)だけ失ったとき
+
+Secret `mysql-auth` は残っているので、空の MySQL が同じ root パスワードで起動し、DB `pokedex` だけが作られる。
+用途別ユーザーとテーブルは無いので、`make deploy-latest` の migrate-up(プロビジョニング込み)で作り直してから投入する。
+PVC を消す操作は**人間の確認が要る**。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc get pod mysql-0
+make deploy-latest
+```
+確認: `mysql-0` が `Running`。`deploy-latest` の `== pokedex の DB(migrate-up)` の後に `up: 完了` と `version=<最新の版> dirty=false`。
+DB が空の間 `pokedex` は Ready にならないので、`deploy-latest` は 180 秒待って「pokedex が Ready にならない」で止まる(想定どおり。
+`up: 完了` はその前に出ている)。止まったら上の `import-k8s` と `wait` を流し、終わってからもう一度 `make deploy-latest` を実行する
+(migrate-up は何度流しても同じ結果)。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+created=$(make import-k8s)
+job_name=$(echo "$created" | grep -o 'pokedex-import-manual-[0-9]*' | tail -1)
+kubectl -n pokecalc wait --for=condition=complete "job/$job_name" --timeout=600s
+make deploy-latest
+```
+確認: `wait` が `condition met` で終わり、2回目の `deploy-latest` が `全サービスを <コミット> の内容で入れ替えた` で終わる
+(balance・speed の read model が無ければ、先に `make pokedex-export`。`docs/verify-m1.md` §3)。
+
+### c. `pokedex-import-cache` だけ失ったとき
+
+何もしなくてよい。次の Job(`make import-k8s` か CronJob)が固定版を取り直す。
+PVC を作り直す手順は、上の「importer の PVC の容量」の c にある。
+
 ## ID が消えて CronJob が終了コード 3 で止まったとき(issue #277・ADR-0131)
 
 上流の更新で、DB にある種族 key・技/持ち物/特性の ID が新しい出力から消えると、投入は DB を変えずに終了コード 3 で止まる
@@ -233,29 +355,27 @@ make migrate-version
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 ls services/pokedex/db/migrations/ | grep "^$(printf '%06d' <N>)_"
-pw="$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.mysql-root-password}' | base64 -d)"
-kubectl -n pokecalc exec mysql-0 -- env MYSQL_PWD="$pw" mysql -u root -N -e "SHOW TABLES FROM pokedex;"
-unset pw
+kubectl -n pokecalc exec mysql-0 -- sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root -N -e "SHOW TABLES FROM pokedex;"'
 ```
 確認: 版 `<N>` の `.down.sql` が `DROP TABLE IF EXISTS` だけか(ALTER だけの migration は1文なので途中までの状態が無い。c を飛ばして d へ)。
 `.down.sql` にあるテーブルのうち、どれが既に作られているか。
 
-### c. 版 N のテーブルを down で片付ける
+### c. 版 N のテーブルを down で片付ける(データ削除。人間の確認が要る操作)
 
 `.down.sql` にある名前のテーブルは中身ごと消える(衝突の原因になった同名の既存テーブルも消える。中身が要るなら先に退避する)。
+消してよいことを人が確かめてから流す。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-pw="$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.mysql-root-password}' | base64 -d)"
-kubectl -n pokecalc exec -i mysql-0 -- env MYSQL_PWD="$pw" mysql -u root pokedex < services/pokedex/db/migrations/$(printf '%06d' <N>)_*.down.sql
-kubectl -n pokecalc exec mysql-0 -- env MYSQL_PWD="$pw" mysql -u root -N -e "SHOW TABLES FROM pokedex;"
-unset pw
+kubectl -n pokecalc exec -i mysql-0 -- sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root pokedex' < services/pokedex/db/migrations/$(printf '%06d' <N>)_*.down.sql
+kubectl -n pokecalc exec mysql-0 -- sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root -N -e "SHOW TABLES FROM pokedex;"'
 ```
 確認: `.down.sql` にあるテーブルが一覧から消えている。
 
-### d. dirty を解いて1つ前の版にする
+### d. dirty を解いて1つ前の版にする(人間の確認が要る操作)
 
-`<N-1>` は `<N>` から1を引いた数(版 1 で止まったときは 0 = 未適用)。
+migration の記録(`schema_migrations`)を書き換える。スキーマは変えない。`CONFIRM_FORCE` に DB 名を書くことが確認の代わりで、
+DB 名が接続先と違えば接続前に止まる。`<N-1>` は `<N>` から1を引いた数(版 1 で止まったときは 0 = 未適用)。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
@@ -328,9 +448,7 @@ make deploy-latest
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-pw="$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.mysql-root-password}' | base64 -d)"
-kubectl -n pokecalc exec mysql-0 -- env MYSQL_PWD="$pw" mysql -u root -N -e "SHOW GRANTS FOR 'pokedex_importer'@'%';"
-unset pw
+kubectl -n pokecalc exec mysql-0 -- sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" mysql -u root -N -e \"SHOW GRANTS FOR 'pokedex_importer'@'%';\""
 ```
 確認: `` ON `pokedex`.* `` の行は `GRANT SELECT` だけで、`INSERT, UPDATE, DELETE` は表ごとの行にあり、`schema_migrations` の行が無い。
 
