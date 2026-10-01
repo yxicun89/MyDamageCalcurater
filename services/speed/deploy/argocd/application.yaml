@@ -4,7 +4,7 @@ metadata:
   name: pokecalc-speed
   namespace: argocd
 spec:
-  project: default
+  project: pokecalc
   source:
     repoURL: https://git.example.invalid/pokecalc.git
     targetRevision: main

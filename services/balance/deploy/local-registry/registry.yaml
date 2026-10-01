@@ -51,9 +51,25 @@ spec:
               drop:
                 - ALL
       volumes:
-        # 検証用。Pod が作り直されるとイメージは消える(push し直す)。
+        # PVC(local-path)に永続化する。emptyDir だと Pod が作り直されるたびに push 済みイメージが消え、
+        # 次の Argo CD sync で ImagePullBackOff になっていた(issue #292。ADR-0408 §3)。
         - name: data
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: registry-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-data
+  labels:
+    app.kubernetes.io/name: balance-registry
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi
 ---
 apiVersion: v1
 kind: Service

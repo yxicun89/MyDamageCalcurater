@@ -61,11 +61,12 @@ test-tools:
 	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs
 
 .PHONY: test-scripts
-test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406・計算API SLO ADR-0407・ルートの e2e ADR-0306・Makefile の help と未実装ターゲット。クラスタ・ネットワークに触らない)
+test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406・計算API SLO ADR-0407・ルートの e2e ADR-0306・GitOps の AppProject/共通スクリプト/レジストリ ADR-0408・Makefile の help と未実装ターゲット。クラスタ・ネットワークに触らない)
 	@./scripts/argocd-bootstrap_test.sh
 	@./scripts/observability-bootstrap_test.sh
 	@./scripts/observability-slo_test.sh
 	@./scripts/e2e_test.sh
+	@./scripts/gitops_test.sh
 	@./scripts/make-targets_test.sh
 
 .PHONY: lint
@@ -270,9 +271,10 @@ pokedex-registry-push: ## pokedex(server イメージ)をクラスタ内共有�
 .PHONY: k8s-render
 # 各レーンの overlay も描画する(issue #261・#321)。どれか1つでも描画できなければ lint を失敗させる。
 # local/api・local/web・local/mysql・local/nats は Component なので、local・local-api・local-web の描画で確かめる。
-k8s-render: k8s-render-kubectl api-kustomize web-kustomize balance-kustomize speed-kustomize judge-kustomize ## kustomize で全レーンの overlay(local・cloud・tidb・local-api・local-web・balance・speed・judge)が描画できることを確かめる(apply はしない)
+k8s-render: k8s-render-kubectl api-kustomize web-kustomize balance-kustomize speed-kustomize judge-kustomize ## kustomize で全レーンの overlay(local・cloud・tidb・local-api・local-web・balance・speed・judge・Argo CD の AppProject)が描画できることを確かめる(apply はしない)
 	@kubectl kustomize deploy/k8s/overlays/cloud >/dev/null
 	@kubectl kustomize deploy/k8s/overlays/local/tidb >/dev/null
+	@kubectl kustomize deploy/argocd >/dev/null
 	@if kubectl cluster-info --request-timeout=3s >/dev/null 2>&1; then \
 		kubectl apply --dry-run=client --request-timeout=10s -f deploy/k8s/base/record/job-migrate.yaml -o yaml >/dev/null; \
 		kubectl apply --dry-run=client --request-timeout=10s -f deploy/k8s/base/team/job-migrate.yaml -o yaml >/dev/null; \

@@ -44,6 +44,12 @@ cd "$(git rev-parse --show-toplevel)"
 ```
 確認: `deployment "argocd-server" successfully rolled out`。
 
+初回ログイン後、初期パスワードの Secret を削除する(ADR-0408 §5。トークンと同じ認証情報の操作なので人が行う)。
+
+```sh
+kubectl -n argocd delete secret argocd-initial-admin-secret
+```
+
 ## 4. リポジトリの認証を登録する(初回だけ。人が自分のターミナルで)
 
 GitHub で、このリポジトリだけ・Contents: Read-only の fine-grained token を作ってから実行する。トークンは画面に出さずに貼り付けて Enter。
@@ -108,3 +114,20 @@ make balance-k3d-deploy
 make balance-smoke
 ```
 確認: 最後の行が `balance smoke: health=200 ... recommendations=200`(Argo CD の Application は OutOfSync になる)。
+
+## 10. GitOps の状態に戻す(通常経路)
+
+9 で local overlay に上書きすると OutOfSync のままになる。main へマージされた後の通常経路は 6〜7 と同じ
+(`make balance-registry-push` → 出力された digest を `services/balance/deploy/k8s/overlays/gitops/kustomization.yaml`
+に書いて PR で main に入れる → `argocd --core app sync pokecalc-balance`)。
+
+自動 sync(`syncPolicy.automated`)は導入しないので(ADR-0408 §4)、この手順を踏んで明示的に Synced へ戻す。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n argocd annotate application pokecalc-balance argocd.argoproj.io/refresh=normal --overwrite
+kubectl config set-context --current --namespace=argocd
+argocd --core app sync pokecalc-balance --timeout 180
+kubectl config set-context --current --namespace=default
+```
+確認: 出力に `Sync Status: Synced to main (<main の commit>)` と `Phase: Succeeded`。

@@ -51,7 +51,7 @@ render_plan=$("$MAKE_BIN" -C "$ROOT" --no-print-directory -n k8s-render 2>/dev/n
 for overlay in deploy/k8s/overlays/local deploy/k8s/overlays/cloud deploy/k8s/overlays/local/tidb \
   deploy/k8s/overlays/local-api deploy/k8s/overlays/local-web \
   services/balance/deploy/k8s/overlays/gitops services/speed/deploy/k8s/overlays/gitops \
-  services/judge/deploy/k8s/overlays/local; do
+  services/judge/deploy/k8s/overlays/local deploy/argocd; do
   if echo "$render_plan" | grep -qE "kubectl kustomize [^ ]*${overlay} "; then
     ok "k8s-render が ${overlay} を描画する"
   else
