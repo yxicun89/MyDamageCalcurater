@@ -56,6 +56,7 @@ judge-docker-build:
 	@docker build -f $(JUDGE_DIR)/Dockerfile -t $(JUDGE_IMAGE) .
 
 judge-k3d-deploy: judge-docker-build ## k3d へ judge を直接デプロイ(local overlay)
+	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh judge-k3d-deploy
 	@k3d image import $(JUDGE_IMAGE) --cluster $(CLUSTER)
 	@kubectl apply -k $(JUDGE_DIR)/deploy/k8s/overlays/local
 	@kubectl -n pokecalc rollout restart deployment/judge

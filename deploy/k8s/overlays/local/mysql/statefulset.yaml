@@ -20,9 +20,24 @@ spec:
         app.kubernetes.io/part-of: pokecalc
     spec:
       automountServiceAccountToken: false
+      # mysql:9.7.2 の mysql ユーザーは uid/gid 999。非 root で起動したときエントリポイントは chown/gosu を飛ばす。
+      # 既存 PVC のファイルは 999:999(ディレクトリは 999:0 の 0777)なので、そのまま読める(issue #262)。
+      # fsGroup の再帰 chown は、所有グループが合っていれば飛ばす(OnRootMismatch)。
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        runAsNonRoot: true
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: mysql
           image: mysql:9.7.2@sha256:29abb0a179982e4a8928138bfc7f918af9eda64e7eeb1b1d084c1720a20159e6
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           ports:
             - name: mysql
               containerPort: 3306

@@ -58,6 +58,7 @@ speed-argocd-app:
 	@SERVICE=speed scripts/gitops/argocd-local-app.sh
 
 speed-k3d-deploy: speed-docker-build ## k3d へ speed を直接デプロイ(local overlay。架空データの read model)
+	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh speed-k3d-deploy
 	@k3d image import $(SPEED_IMAGE) --cluster $(CLUSTER)
 	@kubectl apply -k $(SPEED_DIR)/deploy/k8s/overlays/local
 	@kubectl -n pokecalc rollout restart deployment/speed
@@ -68,6 +69,7 @@ speed-smoke:
 
 # pokedex export の実データの read model を ConfigMap にして k3d の speed に読ませる(ADR-0603)
 speed-k3d-deploy-readmodel:
+	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh speed-k3d-deploy-readmodel
 	@SERVICE=speed SPEED_IMAGE=$(SPEED_IMAGE) SPEED_READMODEL_DIR=$(SPEED_READMODEL_DIR) CLUSTER=$(CLUSTER) scripts/gitops/k3d-deploy-readmodel.sh
 
 speed-smoke-readmodel:

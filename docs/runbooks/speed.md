@@ -33,7 +33,7 @@ cd "$(git rev-parse --show-toplevel)"
 kubectl -n pokecalc port-forward svc/mysql 3306:3306 >/tmp/mysql-pf.log 2>&1 &
 PF_PID=$!
 sleep 2
-export POKEDEX_DATABASE_DSN=$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.pokedex-dsn}' | base64 -d | sed 's/@tcp(mysql:/@tcp(127.0.0.1:/')
+export POKEDEX_DATABASE_DSN=$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.pokedex-reader-dsn}' | base64 -d | sed 's/@tcp(mysql:/@tcp(127.0.0.1:/')
 make pokedex-export
 kill $PF_PID
 ```
@@ -106,7 +106,7 @@ make speed-argocd-app
 cd "$(git rev-parse --show-toplevel)"
 digest=$(make -s speed-registry-push 2>/dev/null | tail -1 | sed 's/.*@//')
 # digest 行は images に2つある(pokecalc/speed と pokecalc/pokedex)。name ごとの範囲で本体の行だけを書き換える。
-sed -i '' "/name: pokecalc\/speed$/,/digest:/ s/digest: .*/digest: ${digest}/" services/speed/deploy/k8s/overlays/gitops/kustomization.yaml
+perl -pi -e "s/digest: .*/digest: ${digest}/ if /name: pokecalc\\/speed\$/ .. /digest:/" services/speed/deploy/k8s/overlays/gitops/kustomization.yaml
 git diff services/speed/deploy/k8s/overlays/gitops/kustomization.yaml
 ```
 確認: diff の `digest:` が `sha256:` で始まる値に変わる(変わらなければ同じイメージなので、9 と 10 は不要)。
@@ -129,9 +129,11 @@ git diff services/speed/deploy/k8s/overlays/gitops/kustomization.yaml
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 kubectl -n argocd annotate application pokecalc-speed argocd.argoproj.io/refresh=normal --overwrite
-kubectl config set-context --current --namespace=argocd
-argocd --core app sync pokecalc-speed --timeout 180
-kubectl config set-context --current --namespace=default
+# argocd --core は kubeconfig の context の namespace を読む。自分の設定は書き換えず、一時コピーだけ argocd にする(失敗しても元のまま)。
+(kc=$(mktemp) && trap 'rm -f "$kc"' EXIT \
+  && kubectl config view --minify --flatten >"$kc" \
+  && KUBECONFIG="$kc" kubectl config set-context --current --namespace=argocd >/dev/null \
+  && KUBECONFIG="$kc" argocd --core app sync pokecalc-speed --timeout 180)
 ```
 確認: 出力に `Sync Status: Synced to main (<main の commit>)` と `Phase: Succeeded`。
 
@@ -161,8 +163,10 @@ local の read model で動かす状態に戻すときは 2 をもう一度実�
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 kubectl -n argocd annotate application pokecalc-speed argocd.argoproj.io/refresh=normal --overwrite
-kubectl config set-context --current --namespace=argocd
-argocd --core app sync pokecalc-speed --timeout 180
-kubectl config set-context --current --namespace=default
+# argocd --core は kubeconfig の context の namespace を読む。自分の設定は書き換えず、一時コピーだけ argocd にする(失敗しても元のまま)。
+(kc=$(mktemp) && trap 'rm -f "$kc"' EXIT \
+  && kubectl config view --minify --flatten >"$kc" \
+  && KUBECONFIG="$kc" kubectl config set-context --current --namespace=argocd >/dev/null \
+  && KUBECONFIG="$kc" argocd --core app sync pokecalc-speed --timeout 180)
 ```
 確認: 出力に `Sync Status: Synced to main (<main の commit>)` と `Phase: Succeeded`。

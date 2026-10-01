@@ -12,6 +12,8 @@ case "${SERVICE:-}" in
     ;;
 esac
 
+CLUSTER="${CLUSTER:-pokecalc}" ./scripts/require-k3d-context.sh "$SERVICE-k3d-deploy-readmodel"
+
 svc_dir="services/$SERVICE"
 # Argo CD の Application が在るクラスタでは手動 apply を拒否する(desired state と乖離して OutOfSync になる。ADR-0412 §5)。
 if [ "${ALLOW_MANUAL_OVERLAY:-}" != "1" ]; then
