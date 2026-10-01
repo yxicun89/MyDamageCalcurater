@@ -1,7 +1,7 @@
 package main
 
 // issue #284: balance は gateway(/api/balance/*)経由だけで届く。Traefik から直接届く Ingress は持たない
-// (ADR-0801)。k8s マニフェストの静的検査(kubectl を使わず、ファイルを読む)。
+// (ADR-0414)。k8s マニフェストの静的検査(kubectl を使わず、ファイルを読む)。
 
 import (
 	"io/fs"

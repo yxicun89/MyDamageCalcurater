@@ -34,7 +34,7 @@ spec:
               value: http://calc
             - name: GATEWAY_POKEDEX_URL
               value: http://pokedex
-            # balance は Traefik 直結をやめ gateway 経由にした(issue #284・ADR-0801)。Service 名はクラウドでも同じ。
+            # balance は Traefik 直結をやめ gateway 経由にした(issue #284・ADR-0414)。Service 名はクラウドでも同じ。
             # balance 未デプロイの間、/api/balance/* は上流到達不可のエラーになる。speed・judge は各レーンで後続。
             - name: GATEWAY_BALANCE_URL
               value: http://balance
