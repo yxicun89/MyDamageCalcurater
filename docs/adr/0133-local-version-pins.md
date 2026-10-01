@@ -7,7 +7,7 @@
 ## 決定
 
 1. `deploy/k3d.yaml` に `image: rancher/k3s:<版>@sha256:<digest>` を置く。
-2. `deploy/k3d.yaml` の Ingress を `127.0.0.1:8080:80`、k8s API を `kubeAPI.host/hostIP: 127.0.0.1` に限定する(同じ LAN から届かせない。#302)。
+2. `deploy/k3d.yaml` の k8s API を `kubeAPI.host/hostIP: 127.0.0.1` に限定する(同じ LAN から届かせない。#302 の一部)。Ingress(8080)は全インターフェースのまま: iOS 実機が Mac の LAN IP で 8080 に届く必要がある(verify-m1 §7)。Ingress を限定するかは #302 の人間の判断(LAN と Tailscale のどちらで実機をつなぐか)で決める。
 3. `scripts/doctor.sh` は go・k3d・kubectl・helm が固定版より古ければ NG、Node は `web/.node-version` と違えば警告にする。
 4. Dockerfile の Go は全サービスで `golang:1.27.1-alpine`(patch まで)+ digest。pokedex の Node は web と同じ 26.10.0。balance の registry は 3.1.2。
 
