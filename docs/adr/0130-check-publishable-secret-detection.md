@@ -1,4 +1,4 @@
-# ADR-0129: check-publishable の秘密検査を「値の形」と「追跡禁止ファイル名」で強化する(gitleaks は足さない)
+# ADR-0130: check-publishable の秘密検査を「値の形」と「追跡禁止ファイル名」で強化する(gitleaks は足さない)
 
 - 状態: 提案(spec-writer。実装者が確定する)
 - 日付: 2026-10-01
