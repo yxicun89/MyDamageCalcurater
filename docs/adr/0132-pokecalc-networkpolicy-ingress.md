@@ -1,6 +1,6 @@
 # ADR-0132: pokecalc namespace に ingress の default-deny と許可リストを置く(egress は絞らない)
 
-- 状態: 採用(実装済み。実クラスタでの確認: 未実施〈メインが行う。結果をここに追記〉)
+- 状態: 採用(実装済み。2026-10-01 に k3d-pokecalc で確認済み。下記「確認の結果」)
 - 日付: 2026-10-01
 - レーン: データ(ADR 帯 `0100〜`。運用の D25)
 - 関連: issue #240、issue #403(パッケージ D25)、#148、ADR-0204(`/internal` は gateway が 404)、ADR-0211(TiDB)、ADR-0406(ServiceMonitor)
@@ -76,3 +76,15 @@ kubectl -n default run np-probe --rm -it --restart=Never --image=busybox:1.37 --
 
 止まった場合は `kubectl -n pokecalc delete networkpolicy default-deny-ingress` で直ちに戻せる(許可だけが残るので安全)。
 DB・namespace は消さない。
+
+## 確認の結果(2026-10-01、k3d-pokecalc。NetworkPolicy 10 本だけを適用)
+
+- 許可される通信: `make api-smoke`・`make web-k3d-smoke`・`make judge-smoke`・`make balance-smoke-readmodel`・`make speed-smoke-readmodel`
+  がすべて成功。`make import-k8s`(importer → mysql)成功。Prometheus の pokecalc の6ターゲット(balance・calc・gateway・judge・pokedex・speed)が
+  適用後も up
+- 拒否される通信: default namespace の一時 Pod、pokecalc 内の許可ラベルを持たない一時 Pod から、pokedex:80・calc:80・mysql:3306・nats:4222・
+  gateway:80 がすべて届かない
+- 対照: pokecalc 内で `app.kubernetes.io/name=gateway` を付けた一時 Pod からは pokedex・calc に届き、mysql:3306 には届かない
+  (「届かない」が probe の不具合でないことの確認)
+- 未確認: TiDB(record/team)の経路。k3d に TiDB の Pod が無いため。TiDB を起動したらラベルと record-migrate・team-migrate の到達を確かめる
+
