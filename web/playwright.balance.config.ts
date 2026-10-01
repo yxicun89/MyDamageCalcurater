@@ -9,6 +9,7 @@ import { defineConfig, devices } from "@playwright/test";
 import {
   BALANCE_PORT,
   BALANCE_SVC_PORT,
+  POKEDEX_FIXTURE_PORT,
   assertWasmArtifacts,
   previewCommand,
   repoRoot,
@@ -20,6 +21,7 @@ assertWasmArtifacts();
 
 const baseURL = `http://127.0.0.1:${String(BALANCE_PORT)}`;
 const balanceSvcURL = `http://127.0.0.1:${String(BALANCE_SVC_PORT)}`;
+const pokedexFixtureURL = `http://127.0.0.1:${String(POKEDEX_FIXTURE_PORT)}`;
 const outDir = join(repoRoot, "data", "generated", "e2e-balance");
 const masterPath = join(outDir, "web-example-master.json");
 
@@ -51,12 +53,21 @@ export default defineConfig({
       },
     },
     {
+      // ADR-0411: タイプバランスは計算モードに関係なくオンラインのマスタ(/api/pokedex/*)を読むので、
+      // online と同じ pokedex フィクスチャ(ADR-0307)を起動して vite preview から転送する。
+      command: `node ${join(webRoot, "e2e", "support", "pokedexFixtureServer.mjs")} ${String(POKEDEX_FIXTURE_PORT)}`,
+      cwd: webRoot,
+      url: `${pokedexFixtureURL}/healthz`,
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+    {
       command: previewCommand(BALANCE_PORT),
       cwd: webRoot,
       url: baseURL,
       reuseExistingServer: false,
       timeout: 120_000,
-      env: { BALANCE_PROXY_TARGET: balanceSvcURL },
+      env: { BALANCE_PROXY_TARGET: balanceSvcURL, POKEDEX_PROXY_TARGET: pokedexFixtureURL },
     },
   ],
 });

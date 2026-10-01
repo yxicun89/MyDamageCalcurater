@@ -314,7 +314,7 @@ describe("issue #218 異常系: マスタが入れ替わったら作り直す(AD
   }
 
   function modeRadio(name: string): HTMLElement {
-    const group = screen.getByRole("radiogroup", { name: "計算モード" });
+    const group = screen.getByRole("radiogroup", { name: "ダメージ計算の実行場所" });
     return within(group).getByRole("radio", { name });
   }
 

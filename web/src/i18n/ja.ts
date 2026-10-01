@@ -145,6 +145,8 @@ export const appText = {
   title: "ポケモン ダメージ計算",
   loading: "読み込み中…",
   masterLoadError: "マスタデータの読み込みに失敗しました",
+  /** issue 276: API 専用の画面(タイプバランス・判定)がオンラインのマスタを読めなかったときの案内。 */
+  onlineMasterLoadError: "オンラインのマスタを読み込めませんでした。接続を確かめて、もう一度お試しください",
   /**
    * issue 308: マスタが読めないときの次の一手。自動でオフラインへ切り替えることはしない
    * (ADR-0301 §4 の既定方針)ので、画面から操作できるようにする。
@@ -169,7 +171,7 @@ export const appText = {
   /** P5-5 PR-A1: 構築ビルダーのタブ(ADR-0309 §1)。 */
   teamTabLabel: "構築",
   /** 計算モード(オフライン = WASM / オンライン = API)の切り替え(P4-5、ADR-0301 §4)。 */
-  calcModeGroupLabel: "計算モード",
+  calcModeGroupLabel: "ダメージ計算の実行場所",
   calcModeOfflineLabel: "オフライン(WASM)",
   calcModeOnlineLabel: "オンライン(API)",
 } as const;
@@ -217,6 +219,24 @@ export const masterOnlineText = {
  */
 export const balanceClientText = {
   unavailable: "タイプバランスの API に接続できません",
+} as const;
+
+/**
+ * issue 276(ADR-0411): balance API のエラーコード(ErrorCode)→日本語の文言。画面は応答の message(英語の
+ * 内部メッセージ)を出さず、コードからここを引く。Web 側の balance_unavailable も同じ表で引く。
+ */
+export const balanceErrorText = {
+  missing_request_context: "端末の情報を送れませんでした。ページを開き直してください",
+  invalid_request: "リクエストが正しくありません。入力を見直してください",
+  request_too_large: "入力が大きすぎます。メンバーや技を減らしてください",
+  unknown_pokemon: "選んだポケモンがサーバーのマスタにありません。選び直してください",
+  unknown_move: "選んだ技がサーバーのマスタにありません。選び直してください",
+  unknown_ability: "選んだ特性がサーバーのマスタにありません。選び直してください",
+  master_unavailable: "サーバーのマスタを読み込めません。しばらくしてからもう一度お試しください",
+  overloaded: "サーバーが混み合っています。しばらくしてからもう一度お試しください",
+  internal_error: "サーバーでエラーが起きました。しばらくしてからもう一度お試しください",
+  balance_unavailable: "タイプバランスの API に接続できません",
+  fallback: "タイプバランスを計算できませんでした。しばらくしてからもう一度お試しください",
 } as const;
 
 /**

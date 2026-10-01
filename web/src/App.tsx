@@ -138,6 +138,11 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   const activeMasterSource: MasterSource =
     modeMasterSources === null ? masterSource : modeMasterSources[mode];
 
+  // issue 276(ADR-0411): API 専用の画面(タイプバランス・判定)が使うオンラインのマスタの取得口。
+  // masterSources が無ければ masterSource(両モード共通)。
+  const onlineMasterSource: MasterSource =
+    modeMasterSources === null ? masterSource : modeMasterSources.online;
+
   // P4-16b(ADR-0304 A-10): 今の取得口が検索付きのときだけ、その search を画面へ渡す(省略は「検索できない」)。
   const activeMasterSearch = isSearchableMasterSource(activeMasterSource)
     ? activeMasterSource.search
@@ -363,6 +368,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
                 currentMasterLoad={currentMasterLoad}
                 resolvedEngine={resolvedEngine}
                 activeMasterSearch={activeMasterSearch}
+                onlineMasterSource={onlineMasterSource}
                 balanceClient={balanceClient}
                 speedClient={speedClient}
                 judgeClient={judgeClient}
@@ -385,6 +391,7 @@ interface AppTabPanelProps {
   readonly currentMasterLoad: MasterLoadResult;
   readonly resolvedEngine: CalcEngine;
   readonly activeMasterSearch: MasterSpeciesSearch | undefined;
+  readonly onlineMasterSource: MasterSource;
   readonly balanceClient: BalanceClient;
   readonly speedClient: SpeedClient;
   readonly judgeClient: JudgeClient;
@@ -408,6 +415,7 @@ function AppTabPanel({
   currentMasterLoad,
   resolvedEngine,
   activeMasterSearch,
+  onlineMasterSource,
   balanceClient,
   speedClient,
   judgeClient,
@@ -448,6 +456,7 @@ function AppTabPanel({
                 judgeClient={judgeClient}
                 teamClient={teamClient}
                 masterSearch={activeMasterSearch}
+                onlineMasterSource={onlineMasterSource}
               />
             </div>
           );
@@ -465,6 +474,7 @@ function AppTabPanel({
                 judgeClient={judgeClient}
                 teamClient={teamClient}
                 masterSearch={activeMasterSearch}
+                onlineMasterSource={onlineMasterSource}
               />
             </div>
           );
