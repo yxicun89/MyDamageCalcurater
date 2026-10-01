@@ -20,6 +20,19 @@
 | L7 Go/WASM 一致 | ネイティブ Go と WASM の出力 | Node + wasm_exec.js | `make test-wasm` |
 | L8 DB | 実 MySQL(pokedex: 制約・sqlc のクエリ・権限・接続プール・import の全置換・読み取りスナップショット)と実 TiDB(record/team: migration・権限・store) | go test `-tags mysql` / `-tags tidb` | `make test-db-docker`(Docker の使い捨て MySQL・TiDB。`make test` には含めない) |
 
+## サービス別のテスト戦略(索引)
+
+本書はダメージ計算(engine・calc)が中心。他のサービスは各レーンの文書を正とし、ここには入口だけを置く(重複させない)。
+
+| 対象 | 正の文書 | 実行 |
+|---|---|---|
+| ダメージ計算・逆算(engine・calc・WASM) | 本書 | `make test` / `make test-golden` / `make test-wasm` |
+| タイプバランス(balance) | [type-balance-test-strategy.md](type-balance-test-strategy.md) | `make test`(services/balance)・`make web-e2e-balance` |
+| 素早さ比較(speed) | [speed-design.md](speed-design.md)・[runbooks/speed.md](runbooks/speed.md)・ADR-0600〜0606 | `make test`(services/speed)。専用のテスト節は未整備(issue #254。素早さレーンが speed-design.md に足す) |
+| 判定(judge) | [judge-design.md](judge-design.md)・ADR-0700〜0709 | `make test`(services/judge)。専用のテスト節は未整備(issue #254。判定レーンが judge-design.md に足す) |
+| record / team | 本書「保存データ」・ADR-0209 | `make test`・`make test-db-docker` |
+| Web・iOS | [ADR-0300](adr/0300-web-architecture.md)・[ADR-0501](adr/0501-ios-screen-acceptance.md) | `make web-test`・`make web-e2e*`・`make ios-test` |
+
 ## L2 ゴールデンテスト
 
 `tools/golden`(Node)が @smogon/calc で期待値を生成し、`testdata/golden/` にコミットする。
@@ -51,9 +64,9 @@ P2-1b 再生成時点で Champions 世代 37 件、legacy-effects(gen9)は対象
 **種族集合(P2-1b 以降)**: 「使用可能な全ポケモン」は @smogon/calc 0.12.0 の Champions 世代の全種族・フォルム
 (メガを含む。選択できない内部フォームは除外し、除外名と理由を `metadata.json` の `exclusions` に記録)。
 Champions に居ない種族を使っていた固定シナリオ・アンカーは、同じ役割の種族に差し替える(ADR-0002 追記「P2-1b」の表)。
-P1-6〜P2-1a の間は gen9 の全種族(CAP 等を含む1392種)を参考集合として代用していた。
+P1-6〜P2-1a の間は gen9 の全種族(CAP 等を含む1392種)を参考集合として代用していたが、現在は上のとおり Champions 世代の種族数(`metadata.json` の `speciesCount`)になっている。
 
-既知の差分(チャンピオンズで仕様が変わった技など)は `testdata/golden/known_diffs.yaml` に ADR 番号付きで登録したものだけ許容する。
+差分を許容する仕組みは無い(`testdata/golden/known_diffs.yaml` は存在しない)。両世代とも全件一致が必須で、仕様差が出たら期待値でなく engine かデータ側を直す。必要になったら ADR で導入する(ADR-0002 追記 P2-1b)。
 
 ## L3 全ポケモン網羅テスト
 
