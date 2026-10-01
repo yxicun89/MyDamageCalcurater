@@ -42,6 +42,12 @@ func TestRoutesReachTheirUpstream(t *testing.T) {
 			"record", "/api/record/device-data", ""},
 		{"team 構築の更新(ADR-0213)", http.MethodPut, "/api/team/teams/11111111-2222-4333-8444-555555555555", validHeaders(), calcBody,
 			"team", "/api/team/teams/11111111-2222-4333-8444-555555555555", ""},
+		{"balance 分析(issue #284)", http.MethodPost, "/api/balance/v1/team-balance/analyze", validHeaders(), calcBody,
+			"balance", "/api/balance/v1/team-balance/analyze", ""},
+		{"speed 一覧(issue #284)", http.MethodGet, "/api/speed/v1/table?format=single", validHeaders(), nil,
+			"speed", "/api/speed/v1/table", "format=single"},
+		{"judge 判定(issue #284)", http.MethodPost, "/api/judge/v1/outspeed-and-ko", validHeaders(), calcBody,
+			"judge", "/api/judge/v1/outspeed-and-ko", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -53,9 +59,17 @@ func TestRoutesReachTheirUpstream(t *testing.T) {
 			case "team":
 				// TeamURL は newTestEnv の既定では未設定(team_routing_test.go の前提を壊さないため)。
 				env = newTeamTestEnv(t)
+			case "balance":
+				// BalanceURL は newTestEnv の既定では未設定(balance_speed_judge_routing_test.go の前提を壊さないため)。
+				env = newBalanceTestEnv(t)
+			case "speed":
+				env = newSpeedTestEnv(t)
+			case "judge":
+				env = newJudgeTestEnv(t)
 			}
 			target := map[string]*fakeUpstream{
 				"calc": env.calc, "pokedex": env.pokedex, "assets": env.assets, "record": env.record, "team": env.team,
+				"balance": env.balance, "speed": env.speed, "judge": env.judge,
 			}[tt.upstream]
 			target.respond(upstreamResponse{
 				status: http.StatusOK, contentType: "application/json; charset=utf-8",
@@ -141,8 +155,9 @@ func TestUpstreamResponsesPassThroughUnchanged(t *testing.T) {
 }
 
 // AC-G3: gateway が扱わないパス・メソッドは 404 not_found(Error 形式)で、どの上流にも届かない。
-// /api/balance は独自の Ingress(ADR-0012)なので gateway では扱わない。ドットセグメントで
-// 別のルート(上流の /healthz など)へ抜けることもできない。
+// `/api/balance`(末尾スラッシュ無し)は pokedex・record・team と同じ「前方一致は `/api/balance/` から」
+// の規則で一致しない(issue #284。balance_speed_judge_routing_test.go に prefix-exact のケースがある)。
+// ドットセグメントで別のルート(上流の /healthz など)へ抜けることもできない。
 func TestUnroutedPathsAreNotFound(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -150,8 +165,8 @@ func TestUnroutedPathsAreNotFound(t *testing.T) {
 		path   string
 		header http.Header
 	}{
-		{"/api/balance", http.MethodGet, "/api/balance", validHeaders()},
-		{"/api/balance/defense", http.MethodPost, "/api/balance/defense", validHeaders()},
+		{"/api/balance(末尾なし。issue #284 で /api/balance/* をルーティングした後も末尾スラッシュ無しは404)",
+			http.MethodGet, "/api/balance", validHeaders()},
 		{"/api/calcx(前方一致で拾わない)", http.MethodPost, "/api/calcx", validHeaders()},
 		{"/api/pokedex(末尾なし)", http.MethodGet, "/api/pokedex", validHeaders()},
 		{"/api/unknown", http.MethodGet, "/api/unknown", validHeaders()},
