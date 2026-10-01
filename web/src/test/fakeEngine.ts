@@ -36,6 +36,8 @@ export interface RowSpec {
   readonly ko?: CalcResult["ko"];
   /** 「未対応」の印(ADR-0123)。既定は印なし(空配列)で、既存のテストの見た目は変わらない。 */
   readonly unsupported?: readonly UnsupportedMark[];
+  /** 行の特性(issue 272、ADR-0126)。先頭が abilityId。省くと特性を送らなかった応答(abilityId/abilityIds なし)。 */
+  readonly abilityIds?: readonly string[];
 }
 
 const zeroStats = { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 };
@@ -69,6 +71,9 @@ export function bulkRow(spec: RowSpec = {}): BulkRow {
       stats: { hp: 175, atk: 100, def: 100, spa: 100, spd: 100, spe: 100 },
     },
     result: calcResult(spec),
+    ...(spec.abilityIds === undefined || spec.abilityIds[0] === undefined
+      ? {}
+      : { abilityId: spec.abilityIds[0], abilityIds: spec.abilityIds }),
   };
 }
 

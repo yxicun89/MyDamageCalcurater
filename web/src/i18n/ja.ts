@@ -75,6 +75,7 @@ const defenderRegionLabel = "防御側";
 /** 入力欄の見えるラベルの語(短くする。どちら側かは領域の見出しが担う)。 */
 const pokemonFieldLabel = "ポケモン";
 const itemFieldLabel = "持ち物";
+const abilityFieldLabel = "特性";
 
 /**
  * 計算画面(P4-2)の文言。コーディング規約 §2「UI の文言は文言資源に置く」に従い、
@@ -86,10 +87,18 @@ export const calcScreenText = {
   /** 入力欄の見えるラベルの語(select の label に使う。計算・逆算・タイプバランスで共通)。 */
   pokemonFieldLabel,
   itemFieldLabel,
+  /** 特性欄の見えるラベルの語(issue 272、ADR-0311)。 */
+  abilityFieldLabel,
   attackerPokemonLabel: `${attackerRegionLabel}の${pokemonFieldLabel}`,
   defenderPokemonLabel: `${defenderRegionLabel}の${pokemonFieldLabel}`,
   attackerItemLabel: `${attackerRegionLabel}の${itemFieldLabel}`,
   defenderItemLabel: `${defenderRegionLabel}の${itemFieldLabel}`,
+  attackerAbilityLabel: `${attackerRegionLabel}の${abilityFieldLabel}`,
+  defenderAbilityLabel: `${defenderRegionLabel}の${abilityFieldLabel}`,
+  /** 防御側・相手の特性を決め打ちしない選択肢(種族の特性を先頭から最大3件まで全部計算する。ADR-0126・ADR-0311)。 */
+  anyAbilityOption: "おまかせ(種族の全特性)",
+  /** 結果の行・候補に、まとめた特性の名前を並べるときの区切り。 */
+  abilityNameSeparator: "・",
   moveLabel: "技",
   /** 種族 select が未選択のとき、hidden の先頭 option に出す文言(空文字にしない。issue 304)。 */
   speciesPlaceholderOption: "ポケモンを選ぶ",
@@ -587,6 +596,8 @@ export const reverseScreenText = {
   mySpeciesLabel: `${myRegionLabel}の${calcScreenText.pokemonFieldLabel}`,
   theirSpeciesLabel: `${theirRegionLabel}の${calcScreenText.pokemonFieldLabel}`,
   myItemLabel: `${myRegionLabel}の${calcScreenText.itemFieldLabel}`,
+  myAbilityLabel: `${myRegionLabel}の${calcScreenText.abilityFieldLabel}`,
+  theirAbilityLabel: `${theirRegionLabel}の${calcScreenText.abilityFieldLabel}`,
   myPresetGroupLabel: "自分の調整",
   observationLabel: (n: number): string => `観測${String(n)}`,
   observationUnitGroupLabel: (n: number): string => `観測${String(n)}の単位`,
