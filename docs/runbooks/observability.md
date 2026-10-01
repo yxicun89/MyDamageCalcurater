@@ -102,8 +102,8 @@ DB を使う Pod(pokedex)は `mysql-0` が Ready か、依存する Secret `mysq
 ### 症状 B: gateway が 502・503 を返す
 
 ```promql
-# サービスごとの 5xx 率(結果が空なら 5xx は出ていない)
-sum by (job)(rate(http_requests_total{status=~"5.."}[5m]))
+# サービスごとの 5xx 率(先に `count(up{namespace="pokecalc"}==1)` が 6 であることを確かめる。収集できていれば、結果が空なら 5xx は出ていない)
+sum by (job)(rate(http_requests_total{namespace="pokecalc",status=~"5.."}[5m]))
 # サービスごとのリクエスト率と p99 レイテンシ(どのサービスが遅いか)
 sum by (job)(rate(http_requests_total[5m]))
 histogram_quantile(0.99, sum by (le, job)(rate(http_request_duration_seconds_bucket[5m])))
