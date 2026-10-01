@@ -1958,3 +1958,10 @@ critic 2回目レビュー予定。
 - API レーンがやること: `api/openapi.yaml` の `Item`/`Ability` に `effect` を足し、pokedex-svc の公開ハンドラで返す → `make gen`・`make gen-ts`・`make ios-gen`。契約テスト。
 - Web レーンの追従(API 側が main に入ってから): `onlineSource.ts` の `mapItem`/`mapAbility` で `effect` を写し、効果フィールドを返す版のときだけ `effects:true`(古いサーバーは従来どおり無効化して注記)。候補は効果ありの持ち物を `maxItems` 64 に切り詰めて表示(`domain/requestLimits.ts`)。
 - Web レーンは API 側が入るまで #211 を待ち、先に #272/#274 などへ進む。
+
+## 2026-10-01: issue #260 のタイプバランス分をクローズ(タイプバランスレーン)
+Decision: `docs/type-balance-design.md` を実装済みの現在の設計(TB0〜TB6・メトリクス・GitOps〈手動 sync〉・recommendations の同時実行上限・未対応)
+に書き換え、役割分担・レビュー依頼・AI 間の共有ルール・旧未決事項の決着は ADR-0410 に履歴として移した。
+Reason: 旧版は 2026-09-21 のレビュー依頼文書のままで、`/api/damage` 等の誤記・実装済みの Kustomize/Argo CD 分割の未決扱いが残っていた。
+Impact: 判定レーン分(2026-09-25)と合わせて issue #260 をクローズできる。旧版の節番号を参照する ADR は変更せず、ADR-0410 の対応表で読み替える
+(§6 段階・§10 倍率の表示は新版でも同じ節番号)。コード・API・他の ADR は無変更(ドキュメントのみ)。
