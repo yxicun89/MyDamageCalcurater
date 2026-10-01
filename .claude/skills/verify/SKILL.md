@@ -8,7 +8,8 @@ description: 全テストとローカル環境の起動確認を行い、結果�
 
 1. `make doctor`
 2. 自動テスト(verify-m1 §2。クラスタ不要): `make test` / `make lint` / `make build` / `make test-golden` / `make test-all-species` /
-   `make test-wasm` / `make web-test-wasm` / `make e2e`(Playwright 3件。k3d-pokecalc があれば k3d のスモーク・Playwright も)
+   `make test-wasm` / `make web-test-wasm` / `make e2e`(Playwright 3件。k3d-pokecalc があれば k3d のスモーク・Playwright も) /
+   `make test-db-docker`(Docker の使い捨て MySQL・TiDB で DB のテスト)
 3. k3d(verify-m1 §5): `kubectl config current-context` が `k3d-pokecalc` のときだけ `make web-k3d-smoke` / `make api-smoke` / `make web-k3d-e2e`。
    クラスタが無いときは `make up` を勝手に実行せず、この3件を「未実施(クラスタ無し)」として表に書く
 4. iOS がある場合は `make ios-test`

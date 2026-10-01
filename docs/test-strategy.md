@@ -18,6 +18,7 @@
 | L5 E2E | 常時3件(オフライン/オンライン/タイプバランスの Playwright。k3d不要)+ k3d-$CLUSTER 検出時に3件追加(スモーク curl・Web の k3d E2E) | `make e2e` |
 | L6 iOS | 画面ロジック | XCTest(シミュレータ) | `make ios-test` |
 | L7 Go/WASM 一致 | ネイティブ Go と WASM の出力 | Node + wasm_exec.js | `make test-wasm` |
+| L8 DB | 実 MySQL(pokedex: 制約・sqlc のクエリ・権限・接続プール・import の全置換・読み取りスナップショット)と実 TiDB(record/team: migration・権限・store) | go test `-tags mysql` / `-tags tidb` | `make test-db-docker`(Docker の使い捨て MySQL・TiDB。`make test` には含めない) |
 
 ## L2 ゴールデンテスト
 
@@ -119,6 +120,14 @@ P1-6〜P2-1a の間は gen9 の全種族(CAP 等を含む1392種)を参考集合
 実装は P5-3 / P5-4 / P7-4 で、そのときに L1(ジョブ・クエリ)・L4(契約)・L5(E2E)へ割り振る。
 契約側の「端末 ID は分割キーであって認証ではない」という前提だけは、実装より先に
 `services/internal/api/client_id_semantics_test.go`(L4)が `make test` で見ている。
+
+## DB テスト(`make test-db-docker`)
+
+`-tags mysql`・`-tags tidb` のテストは実 DB でしか動かない(`make test` の偽 Querier では SQL 文そのものを実行しない)。
+`make test-db-docker` は Docker で使い捨ての MySQL(`scripts/db-local-up.sh` と同じ digest)と TiDB v8.5.8 を起動し、
+`_test` で終わる DB を作って `make test-db` を流し、終了時(失敗・中断でも)にコンテナを消す。Docker が無ければ失敗する
+(スキップして成功にしない)。DB・importer・sqlc のクエリ・migration に触れた変更では PR の前に流す。
+既存の DB に向けて流すときは `make test-db`(`POKEDEX_TEST_DSN`・`RECORD_TEST_DSN`・`TEAM_TEST_DSN` が必須)。
 
 ## 失敗時のルール
 
