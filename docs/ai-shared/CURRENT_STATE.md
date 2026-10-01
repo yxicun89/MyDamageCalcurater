@@ -293,15 +293,21 @@ create/update/removeのレースコンディションで作成直後の構築が
 判定レーンがShowdown形式インポート/エクスポートをブランチ`feat/web-team-showdown-format`(`web/src/team/`
 配下)で並行して進めている(分担合意済み。member editorとファイルが重ならないよう次のPR着手前に確認)。
 Next: P5-5b(構築ビルダーのメンバー編集。種族検索・技/持ち物/特性選択・SP直接入力グリッド0〜32・
-テラスタイプ)に着手する。判定レーンのShowdown形式ブランチとの統合順を確認してから進める。その後
+テラスタイプ。特性セレクト〈ADR-0311〉と `selectableAbilities` を再利用できる)に着手する。判定レーンのShowdown形式ブランチとの統合順を確認してから進める。その後
 P5-5c(よく計算する相手の表示。`GET /api/record/frequent-opponents`、design.mdに既にチップのモックアップ
 枠あり)・P5-5d(ADR-0209 §8の文言で「この端末のデータを削除」UI、record/team両方のdevice-data削除を呼ぶ)。
 P5-5完了時はdocs/verify-m1.md(またはM2用手順書)にM2動作確認手順を追加し、make deploy-latestの対象に
 record・team・TiDB・NATSが要るかAPIレーンと確認すること(オーケストレーターの依頼)。
-P5-5の後、#219・#211(APIレーン連携)、#272・#274(PR #411/ADR-0214でAPI分実装済み・PR #402/
-ADR-0126でWASM側実装済み。攻撃側・防御側の特性選択UIを一緒に設計、防御側は省略時に種族の全特性〈最大3件〉
-が自動候補化され行数が増える点を表示に反映)、#210、#332(devDependencies更新)、#226(README等の実装状況の
-精度確認)。**新規キュー項目**: issue #328(非公開・私的利用・LICENSEなしで決定。design.mdに追記のうえ
+**2026-10-01〜02 に消化済み(1 issue = 1 PR)**: #218(PR #407 で解決済み・クローズ)・#219(PR #420・ADR-0310。nginx にセキュリティヘッダ)・
+#272 Web 分(PR #430・ADR-0311。特性セレクト)・#274 Web 分(PR #433・ADR-0312。計算画面の「詳細」)・#210(PR #451・ADR-0313。
+**既定の計算モードをオンラインに変更**〈ユーザー決定 2026-10-01〉+ IndexedDB キャッシュのオフライン)・#332 Web 分(PR #454。
+devDependencies 7 件と Web の Node 26.10.0)・#226(D29 でクローズ済み。Web 分に古い記述なし)・#271/#270 の Web 分は PR #412 で
+完了済み(issue にコメント)。**待ち**: #211(公開 API の Item/Ability に effect が必要。DECISIONS.md 2026-10-01 に API レーンへの提案を
+記録。入ったら Web が `effects:true` へ追従。オフラインのキャッシュは effect を持たないので「持ち物の候補も比較」は#211まで無効)・
+#332 の残り(`services/pokedex/Dockerfile` の Node〈データ〉・golang タグ統一・定期検出〈運用〉)・#274 の防御側ランク/状態異常
+(API の `defenderOverride.ranks/status` が未実装)・#271/#270 の判定画面表示(判定レーン)。
+**PR のマージは ADR-0800 §2 のガードで人間の端末実行が必須**(Claude は PR 作成と CI 確認まで。マージはユーザーが自分の端末で行う)。
+**新規キュー項目**: issue #328(非公開・私的利用・LICENSEなしで決定。design.mdに追記のうえ
 既存画面の邪魔にならない位置に出典・非公式である旨を表示。iOSは既にPR #415でmain統合済み〈AboutView.swift。
 非公式注記+データ出典4件〉。Webは同じ文言〈DECISIONS.md参照〉でフッターリンク→情報ページの形にする)。
 issue #284(balance/speed/judgeがgatewayの後ろに統一される。APIレーンの転送実装が出たら`/api/balance`・
