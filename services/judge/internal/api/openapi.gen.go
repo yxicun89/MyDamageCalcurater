@@ -15,6 +15,7 @@ import (
 const (
 	InternalError       ErrorCode = "internal_error"
 	InvalidRequest      ErrorCode = "invalid_request"
+	NotFound            ErrorCode = "not_found"
 	RequestTooLarge     ErrorCode = "request_too_large"
 	UnknownMove         ErrorCode = "unknown_move"
 	UnknownNature       ErrorCode = "unknown_nature"
@@ -28,6 +29,8 @@ func (e ErrorCode) Valid() bool {
 	case InternalError:
 		return true
 	case InvalidRequest:
+		return true
+	case NotFound:
 		return true
 	case RequestTooLarge:
 		return true
@@ -185,6 +188,7 @@ type Error struct {
 	// unknown_species: speciesKey が pokedex-svc のマスタに無い。
 	// unknown_move: moveId が pokedex-svc の技のマスタに無い(攻撃側・候補側のどちらも。ADR-0704 §6)。
 	// unknown_nature: natureId が性格の一覧に無い。
+	// not_found: 契約に無いルート・メソッド(404。メソッド違いも 405 にせず not_found。calc・gateway と同じ。ADR-0217)。
 	// request_too_large: request body が上限(8 KiB)を超えている。
 	// upstream_unavailable: pokedex-svc / calc-svc が未設定・接続できない・タイムアウト・5xx・契約に合わない応答。
 	// internal_error: 想定外の内部エラー(message は固定文言で、内部の詳細を返さない)。
@@ -198,6 +202,7 @@ type Error struct {
 // unknown_species: speciesKey が pokedex-svc のマスタに無い。
 // unknown_move: moveId が pokedex-svc の技のマスタに無い(攻撃側・候補側のどちらも。ADR-0704 §6)。
 // unknown_nature: natureId が性格の一覧に無い。
+// not_found: 契約に無いルート・メソッド(404。メソッド違いも 405 にせず not_found。calc・gateway と同じ。ADR-0217)。
 // request_too_large: request body が上限(8 KiB)を超えている。
 // upstream_unavailable: pokedex-svc / calc-svc が未設定・接続できない・タイムアウト・5xx・契約に合わない応答。
 // internal_error: 想定外の内部エラー(message は固定文言で、内部の詳細を返さない)。

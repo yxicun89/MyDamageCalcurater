@@ -40,6 +40,7 @@ func New(deps Dependencies) *echo.Echo {
 	e.HTTPErrorHandler = writeHTTPError
 	m := httpmetrics.New()
 	e.Use(m.Middleware())
+	e.Use(recoverMiddleware)
 	e.GET(httpmetrics.Path, m.Handler())
 	api.RegisterHandlersWithOptions(e, handler{deps: deps}, api.RegisterHandlersOptions{
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
@@ -229,6 +230,13 @@ func writeHTTPError(c *echo.Context, err error) {
 	if response, _ := echo.UnwrapResponse(c.Response()); response != nil && response.Committed {
 		return
 	}
+	if errors.Is(err, errPanicRecovered) {
+		_ = c.JSON(http.StatusInternalServerError, api.Error{
+			Code:    api.InternalError,
+			Message: "internal error",
+		})
+		return
+	}
 	var httpError *echo.HTTPError
 	if errors.As(err, &httpError) && httpError.Code == http.StatusBadRequest {
 		_ = c.JSON(http.StatusBadRequest, api.Error{
@@ -237,5 +245,43 @@ func writeHTTPError(c *echo.Context, err error) {
 		})
 		return
 	}
+	// The echo default 404/405 errors are unexported types: read the status through
+	// HTTPStatusCoder. A wrong method is answered as 404 not_found too, the same as calc and
+	// gateway (ADR-0200, ADR-0217), so no new code is added to the contract.
+	var statusCoder echo.HTTPStatusCoder
+	if errors.As(err, &statusCoder) {
+		switch statusCoder.StatusCode() {
+		case http.StatusNotFound, http.StatusMethodNotAllowed:
+			_ = c.JSON(http.StatusNotFound, api.Error{
+				Code:    api.NotFound,
+				Message: "route not found",
+			})
+			return
+		}
+	}
 	echo.DefaultHTTPErrorHandler(false)(c, err)
+}
+
+// errPanicRecovered marks a recovered panic on its way to writeHTTPError, which answers it as
+// 500 internal_error unless a response was already written (same flow as calc and pokedex:
+// the error handler checks Committed, so a panic after a partial write never appends a body).
+var errPanicRecovered = errors.New("speed: panic recovered")
+
+// recoverMiddleware recovers a panic into errPanicRecovered (same policy as calc, pokedex and
+// gateway). It sits inside the metrics middleware so the recovered 500 is counted. Only a fixed
+// message reaches the client; the panic value is logged for operators. http.ErrAbortHandler is
+// the deliberate "abort this response" signal of net/http, so it is re-panicked untouched.
+func recoverMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c *echo.Context) (err error) {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				if recovered == http.ErrAbortHandler {
+					panic(recovered)
+				}
+				slog.Error("speed panic recovered", "path", c.Path(), "panic", recovered)
+				err = errPanicRecovered
+			}
+		}()
+		return next(c)
+	}
 }

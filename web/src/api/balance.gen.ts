@@ -209,6 +209,7 @@ export interface components {
       | "unknown_pokemon"
       | "unknown_move"
       | "unknown_ability"
+      | "not_found"
       | "master_unavailable"
       | "overloaded"
       | "internal_error";

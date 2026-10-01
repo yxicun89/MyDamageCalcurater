@@ -2040,3 +2040,8 @@ Reason: 既定案 A は変更が小さく、版を上げる PR でハッシュ�
 Impact: 版を上げる PR は config.json の `integrity` も更新する(不一致のときは stderr の実際のハッシュを、内容を確かめたうえで反映)。
 却下案 B(dist の vendoring)・C(現状維持)に変えるなら ADR-0101 追記と config.json の integrity を戻す。
 ユーザーの確認待ち: A でよいか(特に、期限切れの引き渡しを無視する TTL 7200 秒の扱い)。
+
+## 2026-10-02: エラーの形と code 語彙(issue #325。API レーン。ADR-0217)
+Decision: judge・balance・speed の未知ルート/メソッド違いは calc・gateway と同じく 404 `not_found`(405 は足さない)。panic は 500 `internal_error` の JSON。gateway は /api/* 上流の非 JSON 5xx を 503 `upstream_unavailable` に正規化(上流の JSON エラーは素通し)。ヘッダ欠落・内部エラーの code 名はコードを変えず ADR-0217 に対応表と将来の統一手順(別名の併用期間)を記録した。
+Reason: 契約どおりに揃えるだけの変更は後方互換の問題が無い。語彙の改名は既存クライアントに影響する。
+Impact: 各サービスの openapi の ErrorCode に `not_found` が増えた(judge・balance・speed。Web の balance.gen.ts・speed.gen.ts・judge.gen.ts は再生成済み)。Web・iOS は code で分岐せず、未知 code は fallback の文言にする。Web・判定・素早さ・タイプバランスのレーンは、ヘッダ欠落/内部エラーの code を新規に分岐へ使わないこと(統一時に変わる)。

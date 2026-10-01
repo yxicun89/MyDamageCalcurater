@@ -292,6 +292,7 @@ export interface components {
       | "missing_header"
       | "invalid_header"
       | "unknown_pokemon"
+      | "not_found"
       | "request_too_large"
       | "master_unavailable"
       | "internal_error";

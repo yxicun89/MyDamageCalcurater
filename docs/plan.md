@@ -274,3 +274,4 @@ requirements.md の項目のうち、計画に無かったものをここに置�
 - [x] issue #113(Web/iOS/APIレーン)入力変更時の古い計算要求を抑止・キャンセルする、のAPIレーン連携分(「クライアントのcancel伝播」)
 - [x] P4-17(Web/APIレーン)技のID解決の欠落を解消(ADR-0304 §3)
 - [x] issue #276
+- [x] issue #325(API レーン。ADR-0217): judge・balance・speed の 404/405 を 404 not_found の Error 形に、panic を 500 internal_error の JSON に、gateway が /api/* 上流の非 JSON 5xx を 503 upstream_unavailable に正規化。ヘッダ欠落・内部エラー code の統一はコードを変えず ADR に対応表と方針を記録(Traefik 直結の 502/504 は範囲外)
