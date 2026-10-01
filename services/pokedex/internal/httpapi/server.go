@@ -13,7 +13,7 @@ import (
 	"example.com/pokecalc/services/pokedex/internal/readtx"
 )
 
-// Server は api.ServerInterface を実装する。DB へは store.Querier 経由でだけ触る。
+// Server は api.ServerInterface を実装する。DB へは readtx.DB(store.Querier と読み取り専用 Tx の開始)経由でだけ触る。
 type Server struct {
 	q readtx.DB
 }

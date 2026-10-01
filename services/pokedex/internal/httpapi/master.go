@@ -27,7 +27,7 @@ func (s *Server) GetMasterExport(ctx *echo.Context) error {
 // buildMasterExport は全 SELECT を1つの読み取り専用トランザクション(一貫したスナップショット)の中で行う
 // (ADR-0127)。importer の全置換が間に commit されても、新旧が混在した組を返さない。
 func (s *Server) buildMasterExport(ctx context.Context) (api.MasterExport, error) {
-	tx, err := s.q.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := s.q.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return api.MasterExport{}, err
 	}

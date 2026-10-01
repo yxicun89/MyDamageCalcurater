@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"example.com/pokecalc/services/pokedex/internal/readtx"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 
 	"example.com/pokecalc/engine"
 	"example.com/pokecalc/services/internal/master"
+	"example.com/pokecalc/services/pokedex/internal/readtx"
 	"example.com/pokecalc/services/pokedex/internal/store"
 )
 
@@ -121,7 +121,7 @@ type speedEntry struct {
 // Export は DB を読み、balance・speed 向けの4ファイルを組み立てる(ADR-0105 §5)。
 // 対象は既定のレギュレーションの使用可能集合。失敗時は Files のゼロ値を返す(部分的な出力をしない)。
 func Export(ctx context.Context, b readtx.Beginner) (Files, Report, error) {
-	tx, err := b.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := b.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return Files{}, Report{}, err
 	}
