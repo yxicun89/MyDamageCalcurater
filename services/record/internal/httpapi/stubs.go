@@ -24,6 +24,24 @@ func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) er
 	return notFoundForOtherServices()
 }
 
+// 調整の4操作(calc-svc の担当。ADR-0250)。
+
+func (s *Server) AdjustIndices(ctx *echo.Context, params api.AdjustIndicesParams) error {
+	return notFoundForOtherServices()
+}
+
+func (s *Server) AdjustMinSpToKo(ctx *echo.Context, params api.AdjustMinSpToKoParams) error {
+	return notFoundForOtherServices()
+}
+
+func (s *Server) AdjustMinSpToSurvive(ctx *echo.Context, params api.AdjustMinSpToSurviveParams) error {
+	return notFoundForOtherServices()
+}
+
+func (s *Server) AdjustAllocation(ctx *echo.Context, params api.AdjustAllocationParams) error {
+	return notFoundForOtherServices()
+}
+
 func (s *Server) SearchItems(ctx *echo.Context, params api.SearchItemsParams) error {
 	return notFoundForOtherServices()
 }

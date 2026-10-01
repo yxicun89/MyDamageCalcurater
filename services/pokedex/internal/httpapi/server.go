@@ -137,6 +137,24 @@ func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) er
 	return notFoundForCalc()
 }
 
+// 調整の4操作(calc-svc の担当。ADR-0250)。api.ServerInterface を満たすためだけに置く。
+
+func (s *Server) AdjustIndices(ctx *echo.Context, params api.AdjustIndicesParams) error {
+	return notFoundForCalc()
+}
+
+func (s *Server) AdjustMinSpToKo(ctx *echo.Context, params api.AdjustMinSpToKoParams) error {
+	return notFoundForCalc()
+}
+
+func (s *Server) AdjustMinSpToSurvive(ctx *echo.Context, params api.AdjustMinSpToSurviveParams) error {
+	return notFoundForCalc()
+}
+
+func (s *Server) AdjustAllocation(ctx *echo.Context, params api.AdjustAllocationParams) error {
+	return notFoundForCalc()
+}
+
 // deadlineMiddleware は DB を使う操作の context に締め切りを掛ける(ADR-0129 §2)。
 func deadlineMiddleware(d time.Duration) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {

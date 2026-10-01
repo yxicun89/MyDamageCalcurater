@@ -18,7 +18,7 @@ tags:
   - name: pokedex
     description: マスタ参照(種族・技・持ち物・特性・性格)
   - name: calc
-    description: ダメージ計算・一括計算・逆算
+    description: ダメージ計算・一括計算・逆算・調整(指数・最小 SP・SP 配分。ADR-0250)
   - name: record
     description: |
       計算の記録(自動保存された計算イベントから作る「よく使う相手」の集計・お気に入り)と、
@@ -410,6 +410,171 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
+  /api/calc/adjust/indices:
+    post:
+      tags: [calc]
+      operationId: adjustIndices
+      summary: 調整の指数(火力指数・耐久指数)と HP の 16n / 16n-1 ライン
+      description: |
+        自分の個体1体の育成で決まる量を返す(ADR-0150 §2〜§4・ADR-0250)。ステートレスで、計算イベントは発行しない。
+        - 火力指数 = floor(攻撃実数値 × 威力 × modifier / 4096)。`moveId` を省略したら `firepowerIndex` は null。
+          技の分類が physical なら A、special なら C。変化技・威力 0 の技は 400 `invalid_input`。
+        - 耐久指数 = floor(H × B(D) × 4096 / damageModifier)。物理・特殊の両方を返す(技は見ない)。
+        - 実数値はランク補正を含めない(`individual.ranks`・`status`・`itemId`・`abilityId` は指数に使わない。
+          持ち物・特性・タイプ一致の倍率はクライアントが `modifier` / `damageModifier` に掛け合わせて渡す)。
+        - HP ラインは `individual.sp.hp` と種族の HP 種族値から求める(合計 66 は見ない。ADR-0150 §4)。
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdjustIndicesRequest' }
+      responses:
+        '200':
+          description: 指数と HP ライン
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdjustIndicesResult' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          description: |
+            下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+            gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        default:
+          $ref: '#/components/responses/Error'
+
+  /api/calc/adjust/min-sp-to-ko:
+    post:
+      tags: [calc]
+      operationId: adjustMinSpToKo
+      summary: 相手を n 発で倒せる最小の A / C の SP
+      description: |
+        自分 = `attacker`、相手 = `defender`。自分の A(物理)/ C(特殊)の SP を 0 から探し、`hits` 発で倒す確率が
+        `thresholdPercent` 以上になる最小の SP を返す(ADR-0150 §7・ADR-0250)。
+        - `attacker.sp` の探索する能力(物理なら atk、特殊なら spa)の値は無視する(上書きする)。それ以外の SP の合計が
+          66 を超えると 400 `invalid_input`。
+        - 満たせない(上限まで振っても届かない・タイプ相性で無効)ときもエラーにせず `feasible: false` を返す。
+        - 変化技・威力 0 の技は 400 `invalid_input`。探索量は `hits`(1〜10)と SP 0〜32 で上限が決まる(ADR-0250 §5)。
+        - ステートレスで、計算イベントは発行しない。
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdjustSearchRequest' }
+      responses:
+        '200':
+          description: 最小の SP(または届かないときの上限での結果)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdjustKOResult' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          description: |
+            下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+            gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        default:
+          $ref: '#/components/responses/Error'
+
+  /api/calc/adjust/min-sp-to-survive:
+    post:
+      tags: [calc]
+      operationId: adjustMinSpToSurvive
+      summary: 相手の技を n 発耐える最小の H と B / D の SP の組
+      description: |
+        自分 = `defender`、相手 = `attacker`。自分の H と B(物理)/ D(特殊)の SP の組を探し、`hits` 発受けて耐える
+        確率が `thresholdPercent` 以上になる組のうち、合計 SP 最小(同点は耐久指数が大きい → H が小さい)を返す
+        (ADR-0150 §7・ADR-0250)。
+        - `defender.sp` の hp と探索する能力(物理なら def、特殊なら spd)の値は無視する(上書きする)。
+        - 満たせないときもエラーにせず `feasible: false` で、耐える確率が最大の組を返す。
+        - 変化技・威力 0 の技は 400 `invalid_input`。探索は最大 33² 組(ADR-0250 §5)。
+        - ステートレスで、計算イベントは発行しない。
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdjustSearchRequest' }
+      responses:
+        '200':
+          description: 最小の SP の組(または届かないときの最も耐える組)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdjustSurviveResult' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          description: |
+            下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+            gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        default:
+          $ref: '#/components/responses/Error'
+
+  /api/calc/adjust/allocation:
+    post:
+      tags: [calc]
+      operationId: adjustAllocation
+      summary: SP 配分の提案(指数最大の組と、目標を満たす最小 SP の組)
+      description: |
+        `self.sp` を各能力の下限(「ここまで振りたい」)として固定し、残りの SP(66 − 下限の合計)を `mode` の側に回す
+        (ADR-0150 §8・ADR-0250)。
+        - `mode: bulk` は H・B・D に回す(素早さは見ない)。`focus` が必須。`minSpeed` は 0 以外なら 400 `invalid_input`。
+        - `mode: offense` は A(`offenseCategory: physical`)または C(`special`)と S に回す。`offenseCategory` が必須。
+        - `ceiling` は回す能力の上限。**省略した能力は 32**(engine のゼロ値「振らない」をそのまま渡さない。ADR-0150 §8)。
+          明示した 0 は「下限より上には振らない」。下限 ≤ 上限 ≤ 32 でなければ 400 `invalid_input`。
+        - `goal` を渡したときだけ `minSp` を返す(省略時は null)。判定は min-sp-to-ko / min-sp-to-survive と同じ。
+        - 探索は耐久側で最大 33³ ≈ 3.6 万候補、攻撃側で 33² 候補(ADR-0250 §5)。ステートレスで、計算イベントは発行しない。
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdjustAllocationRequest' }
+      responses:
+        '200':
+          description: 提案する SP の組
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdjustAllocationResult' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          description: |
+            下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+            gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        default:
+          $ref: '#/components/responses/Error'
+
   /api/record/frequent-opponents:
     get:
       tags: [record]
@@ -772,7 +937,7 @@ components:
         | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
         | unknown_field | 契約にないフィールド | 400 |
         | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-        | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
+        | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む。調整(`/api/calc/adjust/*`)の発数・しきい値・補正・上限(ceiling)の範囲外、変化技での探索、下限が上限を超える配分(ADR-0250)も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
         | unknown_preset | 未知の防御側プリセット | 400 |
         | duplicate_preset | 防御側プリセットの重複 | 400 |
         | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -1382,6 +1547,259 @@ components:
           type: array
           description: Mismatch 昇順 → Support 降順 → SPCount 降順 → 定義順(ADR-0010 §R4)
           items: { $ref: '#/components/schemas/ReverseCandidate' }
+
+    AdjustModifier:
+      type: integer
+      minimum: 1
+      maximum: 2097152
+      default: 4096
+      description: |
+        4096 基準の補正(×1.0 = 4096。engine の MinEffectModifier..MaxEffectModifier)。省略は 4096。
+        明示した 0 と範囲外は 400 `invalid_input`。
+
+    AdjustThresholdPercent:
+      type: number
+      format: double
+      minimum: 0
+      exclusiveMinimum: true
+      maximum: 100
+      default: 100
+      description: |
+        満たすべき確率(%)。省略は 100(確定 = 乱数の最悪側でも満たす)。比較は「確率 >= しきい値」。
+        明示した 0・負・100 超は 400 `invalid_input`(engine のゼロ値「既定」をそのまま渡さない。ADR-0250 §3)。
+
+    AdjustHits:
+      type: integer
+      minimum: 1
+      maximum: 10
+      description: 目標の発数 n(engine の MaxAdjustHits = 10)。範囲外は 400 `invalid_input`(ID の解決より前に検査する)
+
+    AdjustIndicesRequest:
+      type: object
+      required: [individual]
+      properties:
+        individual:
+          allOf: [ { $ref: '#/components/schemas/Individual' } ]
+          description: 指数を求める自分の個体(SP 各 0..32・合計 66 以下)
+        moveId:
+          type: string
+          description: 火力指数に使う技(分類と威力をマスタから引く)。省略すると firepowerIndex は null
+        modifier:
+          allOf: [ { $ref: '#/components/schemas/AdjustModifier' } ]
+          description: |
+            火力指数の補正(タイプ一致・持ち物・特性などをクライアントが掛け合わせたもの)。
+            moveId を省略しても値域を検査する(明示した 0 と範囲外は 400 `invalid_input`)
+        damageModifier:
+          allOf: [ { $ref: '#/components/schemas/AdjustModifier' } ]
+          description: 耐久指数の被ダメージ補正(受けるダメージの倍率。半減 2048 で指数が2倍)
+
+    HPLineKind:
+      type: string
+      description: HP 実数値が属するライン(16n = HP mod 16 が 0、16n-1 = 15、none = どちらでもない)
+      enum: [none, 16n, 16n-1]
+
+    HPLinePoint:
+      type: object
+      required: [hp, sp, spDelta]
+      properties:
+        hp: { type: integer, description: そのラインの HP 実数値 }
+        sp: { type: integer, minimum: 0, maximum: 32, description: その HP にする HP の SP }
+        spDelta: { type: integer, description: 現在の SP からの差(次のラインは正、前のラインは負) }
+
+    HPLineReport:
+      type: object
+      description: |
+        HP の 16n / 16n-1 ライン(ADR-0150 §4)。next* は SP が現在より大きい中で最小、prev* は小さい中で最大のライン。
+        HP の SP 0..32 の範囲に無ければ null。
+      required: [hp, sp, current, next16n, prev16n, next16nMinus1, prev16nMinus1]
+      properties:
+        hp: { type: integer }
+        sp: { type: integer, minimum: 0, maximum: 32 }
+        current: { $ref: '#/components/schemas/HPLineKind' }
+        next16n:
+          nullable: true
+          allOf: [ { $ref: '#/components/schemas/HPLinePoint' } ]
+        prev16n:
+          nullable: true
+          allOf: [ { $ref: '#/components/schemas/HPLinePoint' } ]
+        next16nMinus1:
+          nullable: true
+          allOf: [ { $ref: '#/components/schemas/HPLinePoint' } ]
+        prev16nMinus1:
+          nullable: true
+          allOf: [ { $ref: '#/components/schemas/HPLinePoint' } ]
+
+    AdjustIndicesResult:
+      type: object
+      required: [stats, firepowerIndex, physicalBulkIndex, specialBulkIndex, hpLines]
+      properties:
+        stats:
+          allOf: [ { $ref: '#/components/schemas/StatBlock' } ]
+          description: 実数値(ランク補正なし)
+        firepowerIndex:
+          type: integer
+          format: int64
+          nullable: true
+          description: 火力指数。moveId を省略したら null
+        physicalBulkIndex: { type: integer, format: int64, description: 物理耐久指数 floor(H × B × 4096 / damageModifier) }
+        specialBulkIndex: { type: integer, format: int64, description: 特殊耐久指数 floor(H × D × 4096 / damageModifier) }
+        hpLines: { $ref: '#/components/schemas/HPLineReport' }
+
+    AdjustSearchRequest:
+      type: object
+      description: |
+        最小 SP の探索の入力(ADR-0150 §7)。個体・技・場の指定は CalcRequest と同じ。どちらが自分かは操作で決まる
+        (min-sp-to-ko は attacker、min-sp-to-survive は defender)。
+      required: [format, attacker, defender, moveId, hits]
+      properties:
+        format: { $ref: '#/components/schemas/Format' }
+        attacker: { $ref: '#/components/schemas/Individual' }
+        defender: { $ref: '#/components/schemas/Individual' }
+        moveId: { type: string, description: attacker が使う技(attacker.moveId は読まない) }
+        field: { $ref: '#/components/schemas/FieldState' }
+        options: { $ref: '#/components/schemas/CalcOptions' }
+        hits: { $ref: '#/components/schemas/AdjustHits' }
+        thresholdPercent: { $ref: '#/components/schemas/AdjustThresholdPercent' }
+
+    AdjustKOResult:
+      type: object
+      required: [stat, searchLimit, feasible, sp, chancePercent, unsupported]
+      properties:
+        stat:
+          allOf: [ { $ref: '#/components/schemas/StatKey' } ]
+          description: 探索した能力(物理 → atk、特殊 → spa)
+        searchLimit: { type: integer, description: '探索した SP の上限 = min(32, 66 − 固定 SP の合計)' }
+        feasible: { type: boolean, description: searchLimit 以内でしきい値を満たす SP があるか }
+        sp: { type: integer, description: feasible なら満たす最小の SP、そうでなければ searchLimit }
+        chancePercent:
+          type: number
+          format: double
+          description: sp のときに hits 発で倒す確率(%。engine の生値。丸めない)
+        unsupported:
+          type: array
+          description: 探索中の計算に付いた「未対応」の印(ADR-0123・ADR-0215)。SP によらず同じ。印なしは空配列
+          items: { $ref: '#/components/schemas/UnsupportedMark' }
+
+    AdjustSurviveResult:
+      type: object
+      required: [stat, searchLimit, feasible, hpSp, statSp, totalSp, bulkIndex, chancePercent, unsupported]
+      properties:
+        stat:
+          allOf: [ { $ref: '#/components/schemas/StatKey' } ]
+          description: H と組にして探索した能力(物理 → def、特殊 → spd)
+        searchLimit: { type: integer, description: hpSp + statSp の上限 = 66 − 固定 SP の合計(各能力は別に 32 まで) }
+        feasible: { type: boolean }
+        hpSp: { type: integer }
+        statSp: { type: integer }
+        totalSp: { type: integer }
+        bulkIndex: { type: integer, format: int64, description: 選んだ組の耐久指数(等倍。H 実数値 × B(D) 実数値) }
+        chancePercent:
+          type: number
+          format: double
+          description: 選んだ組で hits 発受けて耐える確率(%。engine の生値)
+        unsupported:
+          type: array
+          description: 探索中の計算に付いた「未対応」の印(ADR-0123・ADR-0215)。印なしは空配列
+          items: { $ref: '#/components/schemas/UnsupportedMark' }
+
+    AllocMode:
+      type: string
+      description: 残り SP を回す側(bulk = H・B・D、offense = A または C と S)
+      enum: [bulk, offense]
+      # 汎用の名前(Bulk・Offense)が将来の列挙と衝突して既存の定数名を変えないよう、型名を前に付ける
+      x-enum-varnames: [AllocModeBulk, AllocModeOffense]
+
+    BulkFocus:
+      type: string
+      description: 耐久側の指数最大の基準(physical = H×B、special = H×D、both = min(H×B, H×D) → max)
+      enum: [physical, special, both]
+      # MoveCategory と同じ値を持つため、生成する Go の定数名を明示して MoveCategory 側の定数名(Physical など)を変えない
+      x-enum-varnames: [BulkFocusPhysical, BulkFocusSpecial, BulkFocusBoth]
+
+    AdjustCeiling:
+      type: object
+      description: |
+        回す能力の SP の上限(0..32)。**省略した能力は 32**(ADR-0150 §8 の「既定は境界の責務」)。
+        明示した 0 は「下限より上には振らない」。回さない能力の値は検査の範囲(0..32)以外では使わない。
+      properties:
+        hp: { type: integer, minimum: 0, maximum: 32 }
+        atk: { type: integer, minimum: 0, maximum: 32 }
+        def: { type: integer, minimum: 0, maximum: 32 }
+        spa: { type: integer, minimum: 0, maximum: 32 }
+        spd: { type: integer, minimum: 0, maximum: 32 }
+        spe: { type: integer, minimum: 0, maximum: 32 }
+
+    AdjustAllocGoal:
+      type: object
+      description: |
+        最小 SP の組の目標(ADR-0150 §8)。bulk は「opponent の技を hits 発受けて耐える」、offense は
+        「自分の技で opponent を hits 発で倒す」(技の分類は offenseCategory と一致させる。違えば 400 `invalid_input`)。
+      required: [format, opponent, moveId, hits]
+      properties:
+        format: { $ref: '#/components/schemas/Format' }
+        opponent: { $ref: '#/components/schemas/Individual' }
+        moveId: { type: string }
+        field: { $ref: '#/components/schemas/FieldState' }
+        options: { $ref: '#/components/schemas/CalcOptions' }
+        hits: { $ref: '#/components/schemas/AdjustHits' }
+        thresholdPercent: { $ref: '#/components/schemas/AdjustThresholdPercent' }
+
+    AdjustAllocationRequest:
+      type: object
+      required: [self, mode]
+      properties:
+        self:
+          allOf: [ { $ref: '#/components/schemas/Individual' } ]
+          description: 自分の個体。sp は各能力の下限(結果の SP は各能力でこれ以上)
+        ceiling: { $ref: '#/components/schemas/AdjustCeiling' }
+        mode: { $ref: '#/components/schemas/AllocMode' }
+        focus:
+          allOf: [ { $ref: '#/components/schemas/BulkFocus' } ]
+          description: mode=bulk で必須(欠けたら 400 `invalid_input`)。offense では読まない
+        offenseCategory:
+          allOf: [ { $ref: '#/components/schemas/MoveCategory' } ]
+          description: mode=offense で必須(physical → A、special → C。欠落・status は 400 `invalid_input`)。bulk では読まない
+        minSpeed:
+          type: integer
+          minimum: 0
+          default: 0
+          description: offense の素早さの目標(S 実数値の下限。相手の S + 1 を渡せば「超え」)。0 は目標なし。bulk で 0 以外は 400 `invalid_input`
+        goal: { $ref: '#/components/schemas/AdjustAllocGoal' }
+
+    AdjustAllocPlan:
+      type: object
+      required: [sp, totalSp, stats, physicalBulk, specialBulk, speedMet, goalMet, chancePercent]
+      properties:
+        sp:
+          allOf: [ { $ref: '#/components/schemas/StatBlock' } ]
+          description: 全6能力の SP(回さない能力は下限のまま)
+        totalSp: { type: integer }
+        stats:
+          allOf: [ { $ref: '#/components/schemas/StatBlock' } ]
+          description: 実数値(ランク補正なし)
+        physicalBulk: { type: integer, format: int64, description: 等倍の物理耐久指数(H × B) }
+        specialBulk: { type: integer, format: int64, description: 等倍の特殊耐久指数(H × D) }
+        speedMet: { type: boolean, description: 素早さの目標を満たすか(bulk・minSpeed=0 では常に true) }
+        goalMet: { type: boolean, description: goal を満たすか(goal を省略したら false) }
+        chancePercent:
+          type: number
+          format: double
+          description: goal の確率(bulk は耐える、offense は倒す確率。%)。goal を省略したら 0
+
+    AdjustAllocationResult:
+      type: object
+      required: [remaining, maxIndex, minSp, unsupported]
+      properties:
+        remaining: { type: integer, description: 残り SP = 66 − 下限の合計 }
+        maxIndex: { $ref: '#/components/schemas/AdjustAllocPlan' }
+        minSp:
+          nullable: true
+          allOf: [ { $ref: '#/components/schemas/AdjustAllocPlan' } ]
+          description: goal を満たす最小 SP の組(満たせなければ最も近い組。GoalMet / SpeedMet で判別)。goal を省略したら null
+        unsupported:
+          type: array
+          description: goal の計算に付いた「未対応」の印(ADR-0123)。goal を省略したら空配列
+          items: { $ref: '#/components/schemas/UnsupportedMark' }
 
     MasterExport:
       type: object
