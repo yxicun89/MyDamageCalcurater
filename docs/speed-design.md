@@ -94,3 +94,22 @@ Ingress は `/api/speed`(balance の `/api/balance` と同じ形)。
 
 実際にクラスタへ Argo CD の Application を適用する操作(`docs/runbooks/speed.md` 節5〜10)は、共有クラスタへの変更のため
 人間の確認のもとで必要になったときに行う(まだ実施していない)。
+
+## 9. テスト
+
+素早さは engine のゴールデンテスト(`testdata/golden/`)の対象外(@smogon/calc に「素早さ比較」の出力が無い)。式そのものは engine の
+`RealStats`・`EffectiveStat` が既にゴールデンで守られているので、ここでは「それを組み合わせた結果」と「API・画面」を守る。
+方針の全体は [test-strategy.md](test-strategy.md)(テスト戦略の索引から本節へ来る)。
+
+| 層 | 対象 | 置き場所 | 実行 |
+|---|---|---|---|
+| ユニット | 素早さの計算(スカーフ・ランク・性格の組合せ)・表の行・位置の判定。境界値は SP 0/32・ランク ±6・無効な入力の拒否 | `services/speed/internal/speed/` | `make speed-test` |
+| API(httpapi) | 表・位置・ポケモン一覧・ヘッダ検証・エラー本文・メトリクス。契約は `services/speed/api/openapi.yaml` が正 | `services/speed/internal/httpapi/` | `make speed-test` |
+| read model | マスタの読込・検証(`internal/master`)と、起動前確認(`cmd/checkreadmodel`)・設定(`cmd/api`) | `services/speed/internal/master/`・`cmd/` | `make speed-test` |
+| Web | 画面の振る舞い(preset/カスタム/実数値の入力・範囲外の検証・エラーの日本語表示・絞り込み)と API クライアント | `web/src/speed/*.test.ts(x)` | `make web-test`(`cd web && npm test -- speed`) |
+| スモーク | 起動したサービスへの疎通(ヘッダ欠落 400・表・位置・不正入力 400・未知ポケモン 422) | `services/speed/scripts/smoke.sh`・`smoke-readmodel.sh`(実データ) | `make speed-smoke`・`make speed-smoke-readmodel`(クラスタ・サービスの起動が必要) |
+
+合格基準: `make speed-test speed-lint` が通り、Web を触ったら `make web-lint web-test` も通る(型検査・ESLint・Prettier を含む)。
+GitOps の overlay を触ったら `make speed-gitops-template-check` も通す。
+外部サービス(pokedex・DB)が落ちても素早さの計算テストは成功する(read model はファイルから読み、テストは架空データ
+`services/speed/testdata/pokemon.example.json` を使う。実データはコミットしない。ADR-0002)。
