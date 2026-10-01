@@ -1,4 +1,4 @@
-# ADR-0413: balance の直結 Ingress を撤去し、gateway 経由に一本化する(issue #284 のタイプバランス分)
+# ADR-0414: balance の直結 Ingress を撤去し、gateway 経由に一本化する(issue #284 のタイプバランス分)
 
 - 状態: 採用(2026-10-02。実装済み・共有クラスタ未適用)
 - 関連: issue #284、ADR-0012(当初は独自 Ingress)、ADR-0202(gateway の転送と §4 ヘッダ検証。PR #416 の追記)、ADR-0408(GitOps)、

@@ -186,7 +186,7 @@ Component は `kustomize.config.k8s.io/v1alpha1`(`overlays/local/api`・`overlay
 | 4 | balance・speed は `local-readmodel` 方式(env は `*_PATH` のみ、annotation `readmodel-hash`) | `local` overlay(例データ)ではなく readmodel でデプロイ済み。`speed-pokemon-*`(例データ)は残骸 |
 | 5 | Job `pokedex-import-manual-20260922185252` が `Failed`(`DeadlineExceeded`)、他 3 件 `Complete` | 手動 Job は TTL 14 日で消える。失敗 1 件は残存(2026-10-01 には消えている) |
 | 6 | Application `pokecalc-balance` が `OutOfSync` / `Healthy`。`pokecalc-speed` は無い | Git に定義はあるが speed の Application は未適用(C で詳述) |
-| 7 | Ingress は 4 件(gateway/balance/speed/judge) | 観測時点(balance の Ingress 撤去前。ADR-0413 後の再デプロイで 3 件になる) |
+| 7 | Ingress は 4 件(gateway/balance/speed/judge) | 観測時点(balance の Ingress 撤去前。ADR-0414 後の再デプロイで 3 件になる) |
 
 ## 10. NetworkPolicy(ADR-0132)
 

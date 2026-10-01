@@ -83,7 +83,7 @@ gateway(G3・G4)経由で到達。ID ヘッダは `/internal` 以外の 9 操作
 - pokedex は起動時に DB へ接続しない(`sql.Open` のみ)。DB 不通・未投入は各操作が 503(`errors.go:53` `unavailable`)。
 - サブコマンド(HTTP ではない): `pokedex serve`・`pokedex export -out <dir>`(`cmd/pokedex/main.go:67`)。
 
-## 6. balance-svc(`services/balance`。gateway の `/api/balance/*` が転送。独自の Ingress は無い。ADR-0413)
+## 6. balance-svc(`services/balance`。gateway の `/api/balance/*` が転送。独自の Ingress は無い。ADR-0414)
 
 `internal/httpapi/server.go:101` `New` が `api.RegisterHandlersWithOptions` で登録(業務 5 操作に `requireRequestContext`)。ID ヘッダは**非空のみ**検証、不足は 400 `missing_request_context`。本文上限 16KiB(`maxAnalyzeBodyBytes`)。
 

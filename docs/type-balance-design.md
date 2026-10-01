@@ -49,7 +49,7 @@ services/balance/
 
 - 計算コアは HTTP・k8s から分離している。ハンドラにタイプ計算を書かない。単体テストは k8s を起動せずコアを直接検証する。
 - balance は Ingress を持たない。クライアントは gateway(`/api/balance/*`)経由で届き、gateway が Service `balance` へ転送する
-  (`GATEWAY_BALANCE_URL=http://balance`。issue #284・ADR-0413)。端末ID・セッションIDの検証は gateway でも掛かる。
+  (`GATEWAY_BALANCE_URL=http://balance`。issue #284・ADR-0414)。端末ID・セッションIDの検証は gateway でも掛かる。
 - リソースは requests 10m/16Mi・limits 100m/64Mi、`GOMEMLIMIT=56MiB`(§8)。HPA は付けていない(軽量 API のため。必要になってから)。
 
 ## 4. 計算の考え方(`internal/balance`)
@@ -141,7 +141,7 @@ services/balance/
 | 項目 | 状態 |
 |---|---|
 | iOS のタイプバランス画面 | 未対応(Web のみ) |
-| gateway 経由への一本化 | balance は完了(直結 Ingress を撤去し `GATEWAY_BALANCE_URL` を配線。ADR-0413)。speed・judge の直結 Ingress は各レーンで残り |
+| gateway 経由への一本化 | balance は完了(直結 Ingress を撤去し `GATEWAY_BALANCE_URL` を配線。ADR-0414)。speed・judge の直結 Ingress は各レーンで残り |
 | 自動 sync・prune・selfHeal | 意図的に無効。有効化は未決 |
 | ApplicationSet・App-of-Apps・judge/calc 系の Application | なし |
 | クラウドへのデプロイ(EKS / GKE の選択・クラウドのレジストリ・実データの GitOps 配布) | 未決(クラウド公開はしない方針。ADR-0210) |

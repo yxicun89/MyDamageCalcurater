@@ -172,7 +172,7 @@
 | レイヤー | 構成要素 | 依存してよい先 |
 |---|---|---|
 | クライアント | `web/`(React)・`ios/`(SwiftUI)・engine.wasm(ブラウザ内) | 入口(Traefik → gateway / 各 Ingress)。WASM は engine のみ |
-| 入口 | k3d loadbalancer → Traefik(`Ingress`)→ `services/gateway` | calc・pokedex・web(gateway 経由)。balance も gateway 経由(issue #284・ADR-0413)。speed・judge は Traefik が直接振り分け(残り) |
+| 入口 | k3d loadbalancer → Traefik(`Ingress`)→ `services/gateway` | calc・pokedex・web(gateway 経由)。balance も gateway 経由(issue #284・ADR-0414)。speed・judge は Traefik が直接振り分け(残り) |
 | ドメインサービス | `services/calc`・`pokedex`・`balance`・`speed`・`judge` | 自分のデータ(MySQL / read model ファイル)。他サービスは HTTP のみ |
 | 計算コア | `engine/`(純粋 Go) | 標準ライブラリのみ(DB・HTTP・時刻・乱数なし。CLAUDE.md 絶対ルール2) |
 

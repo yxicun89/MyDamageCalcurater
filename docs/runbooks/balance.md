@@ -20,7 +20,7 @@ make balance-smoke
 確認: 最後の行が `balance smoke: health=200 analyze=200 unknown=422 coverage=200 unknown_move=422 ability=200 unknown_ability=422 threats=200 threats_unknown_move=422 recommendations=200`
 (1回目がロールアウト直後で失敗したら `make balance-smoke` をもう一度)。
 
-入口は gateway(`/api/balance/*`を `GATEWAY_BALANCE_URL=http://balance` へ転送。balance の Ingress は無い。ADR-0413)。
+入口は gateway(`/api/balance/*`を `GATEWAY_BALANCE_URL=http://balance` へ転送。balance の Ingress は無い。ADR-0414)。
 先に `make api-k3d-deploy` 等で gateway を更新しておく。以前のデプロイで残った `Ingress/balance` があれば消す(クラスタ操作。共有クラスタは人間確認):
 `kubectl -n pokecalc delete ingress balance --ignore-not-found`。
 
