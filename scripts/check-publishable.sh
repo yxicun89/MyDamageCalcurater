@@ -441,6 +441,19 @@ selftest_new_repo() {
     printf '{"hp":100}\n{"hp":101}\n' | gzip -c >testdata/golden/vectors.jsonl.gz
     printf 'module example.com/pokecalc/engine\n' >engine/go.mod
     printf 'package engine\n\nvar x = Species{NameJa: "テスト種"}\nvar y = Item{NameJa: "?"}\n' >engine/sample_test.go
+    # B の許可リスト(B_KEYVALUE_ALLOW)が許す Secret 名・キー名を全部含める(#74)。許可リストを壊すと基準が赤くなる。
+    mkdir -p deploy
+    cat >deploy/allowed-names.yaml <<'YAML'
+secretName="mysql-auth"
+secretName="pokedex-dsn"
+secretName="pokedex-reader-dsn"
+secretName="pokedex-importer-dsn"
+secretName="pokedex-migrator-dsn"
+secretName="mysql-root-password"
+passwordSecret: tidb-root-auth
+existingSecret: grafana-admin-credentials
+passwordKey: admin-password
+YAML
     git add -f -A
     GIT_AUTHOR_NAME=Allowed GIT_AUTHOR_EMAIL=allowed@example.com \
       GIT_COMMITTER_NAME=Allowed GIT_COMMITTER_EMAIL=allowed@example.com \
@@ -565,6 +578,60 @@ selftest() {
   selftest_expect_no_hit "B" b8.txt
   selftest_expect_no_leak "B" "$pw" "$aws" "$gh" "$sk" "$jwt" "RSA PRIVATE" "$sneaky"
 
+  # --- B 追加(#300): このリポジトリで実際に出る形の秘密(値はすべて架空。接頭辞は連結して push protection を避ける) ---
+  echo "自己テスト: B 追加(DSN・URL 資格情報・トークン接頭辞・短い値・複数行)"
+  dir="$(selftest_new_repo b2)"
+  local v14 v24 v40 b64
+  v14="dummy$(repeat 7 9)" v24="$(repeat d 12)$(repeat 3 12)" v40="$(repeat e 20)$(repeat 5 20)"
+  b64="$(repeat Q 12)$(repeat Z 12)=="
+  selftest_add "dsn: app_user:${v14}@tcp(db.internal:3306)/pokedex" "$dir" b2_01.txt
+  selftest_add "url: mysql://app_user:${v14}@db.internal:3306/pokedex" "$dir" b2_02.txt
+  selftest_add "MYSQL_PWD=${v14}" "$dir" b2_03.sh
+  selftest_add "data:
+  pokedex-dsn: ${b64}" "$dir" b2_04.yaml
+  selftest_add "//registry.example.test/:_auth""Token=${v24}" "$dir" b2_05.npmrc
+  selftest_add "Authorization: Bearer ${v24}" "$dir" b2_06.txt
+  selftest_add "token: ${v24}" "$dir" b2_07.txt
+  selftest_add "key: sk""-ant-api03-${v40}" "$dir" b2_08.txt
+  selftest_add "key: github""_pat_$(repeat A 22)_$(repeat B 59)" "$dir" b2_09.txt
+  selftest_add "key: xox""b-123456789012-1234567890123-$(repeat C 24)" "$dir" b2_10.txt
+  selftest_add "key: AI""za$(repeat D 35)" "$dir" b2_11.txt
+  # 境界値: 値が8文字未満
+  selftest_add "password: abc123" "$dir" b2_12.txt
+  # 境界値: キーと値が2行に分かれる(JSON / YAML)。検出位置はキーの行
+  selftest_add '{
+  "password":
+    "'"${v14}"'"
+}' "$dir" b2_13.json
+  selftest_add "password:
+  ${v14}" "$dir" b2_14.yaml
+  selftest_run "B2" "$dir"
+  selftest_expect_hits "B2" b2_01.txt:1 b2_02.txt:1 b2_03.sh:1 b2_04.yaml:2 b2_05.npmrc:1 b2_06.txt:1 b2_07.txt:1 \
+    b2_08.txt:1 b2_09.txt:1 b2_10.txt:1 b2_11.txt:1 b2_12.txt:1 b2_13.json:2 b2_14.yaml:1
+  selftest_expect_no_leak "B2" "$v14" "$v24" "$v40" "$b64" abc123 "ant-api03" "github_pat" "xoxb-" "AIza"
+
+  echo "自己テスト: B 追加(値ではない参照・Secret 名・型注釈は誤検知しない)"
+  dir="$(selftest_new_repo b3)"
+  selftest_add 'password = os.Getenv("DB_PASSWORD")' "$dir" ok_01.go
+  selftest_add 'password := cfg.Password' "$dir" ok_02.go
+  selftest_add 'const password = process.env.DB_PASSWORD' "$dir" ok_03.ts
+  selftest_add 'password: string' "$dir" ok_04.ts
+  selftest_add 'token: string' "$dir" ok_05.ts
+  selftest_add 'password: ""' "$dir" ok_06.yaml
+  selftest_add 'password: ${DB_PASSWORD}' "$dir" ok_07.yaml
+  selftest_add 'secret-type=repository' "$dir" ok_08.txt
+  selftest_add 'imagePullSecrets:
+  - name: registry-credentials' "$dir" ok_09.yaml
+  selftest_add 'secretKeyRef:
+  name: pokedex-dsn
+  key: dsn' "$dir" ok_10.yaml
+  selftest_add 'passwordSecret: tidb-root-auth' "$dir" ok_11.yaml
+  selftest_add 'Authorization: Bearer ${TOKEN}' "$dir" ok_12.sh
+  selftest_add 'Authorization: Bearer $TOKEN' "$dir" ok_13.sh
+  selftest_add 'dsn: user:${DB_PASSWORD}@tcp(db:3306)/pokedex' "$dir" ok_14.yaml
+  selftest_add 'mysql://user:${DB_PASSWORD}@db:3306/pokedex' "$dir" ok_15.yaml
+  selftest_expect_clean "B3(誤検知なし)" "$dir"
+
   echo "自己テスト: C 追跡してはいけないファイル・サイズ・テキスト以外"
   dir="$(selftest_new_repo c)"
   selftest_add "X=1" "$dir" .env
@@ -584,6 +651,52 @@ selftest() {
   selftest_expect_hits "C" .env certs/dummy.pem certs/dummy.key web/public/engine.wasm kubeconfig-local.yaml \
     docs/local/note.md data/generated/master.json .reviews/r1.md node_modules/pkg/index.js .DS_Store \
     "big.txt  サイズ超過" "blob.bin  テキスト以外"
+
+  echo "自己テスト: C 追加(#300: 鍵・秘密の置き場になりやすいファイル名)"
+  dir="$(selftest_new_repo c2)"
+  selftest_add "dummy" "$dir" .envrc
+  selftest_add "dummy" "$dir" sub/.envrc
+  selftest_add "dummy" "$dir" id_rsa
+  selftest_add "dummy" "$dir" .ssh/id_ed25519
+  selftest_add "dummy" "$dir" credentials.json
+  selftest_add "dummy" "$dir" ios/keys/AuthKey_DUMMY0000.p8
+  selftest_add "dummy" "$dir" backup/dump.sql.gz
+  selftest_add "dummy" "$dir" backup/pokedex_dump.sql
+  selftest_add "dummy" "$dir" kubeconfig
+  selftest_add "dummy" "$dir" secret.yaml
+  selftest_run "C2" "$dir"
+  selftest_expect_hits "C2" .envrc sub/.envrc id_rsa .ssh/id_ed25519 credentials.json AuthKey_DUMMY0000.p8 \
+    backup/dump.sql.gz backup/pokedex_dump.sql kubeconfig secret.yaml
+
+  echo "自己テスト: C 追加(マイグレーション・クエリ・例・xcconfig・テストの Secret 検査は誤検知しない)"
+  dir="$(selftest_new_repo c3)"
+  selftest_add "CREATE TABLE t (id INT);" "$dir" services/pokedex/db/migrations/000001_create_t.up.sql
+  selftest_add "SELECT 1;" "$dir" services/pokedex/db/query/pokedex.sql
+  selftest_add "INSERT INTO t VALUES (1);" "$dir" services/pokedex/db/testdata/example_seed.sql
+  selftest_add "PRODUCT_NAME = PokeCalc" "$dir" ios/PokeCalc/Config/PokeCalc.xcconfig
+  selftest_add "#!/usr/bin/env bash" "$dir" scripts/up-secrets_test.sh
+  selftest_add "dummy" "$dir" .env.example
+  selftest_expect_clean "C3(誤検知なし)" "$dir"
+
+  echo "自己テスト: .gitignore が鍵・秘密の置き場になりやすい名前を無視する(#300)"
+  dir="$SELFTEST_TMP/gi"
+  mkdir -p "$dir"
+  cp "$(dirname "$SELFTEST_SCRIPT")/../.gitignore" "$dir/.gitignore"
+  (cd "$dir" && git init -q)
+  local ignored
+  for ignored in .envrc sub/.envrc id_rsa .ssh/id_ed25519 credentials.json ios/keys/AuthKey_DUMMY0000.p8 \
+    backup/dump.sql.gz kubeconfig secret.yaml; do
+    if ! (cd "$dir" && git check-ignore -q "$ignored"); then
+      selftest_fail ".gitignore が無視しない: $ignored"
+    fi
+  done
+  # 追跡している正当なファイルは無視しない(git add -f 無しで追加できる)
+  for ignored in .env.example services/pokedex/db/migrations/000001_create_t.up.sql \
+    services/pokedex/db/query/pokedex.sql ios/PokeCalc/Config/PokeCalc.xcconfig; do
+    if (cd "$dir" && git check-ignore -q "$ignored"); then
+      selftest_fail ".gitignore が正当なファイルまで無視する: $ignored"
+    fi
+  done
 
   echo "自己テスト: D 第三者データ"
   dir="$(selftest_new_repo d)"
