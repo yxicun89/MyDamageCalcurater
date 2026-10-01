@@ -362,9 +362,12 @@ sha256 は `meta.json` に記録するだけで期待値と照合せず、PokeAP
    (手動 Job と定期 Job は `concurrencyPolicy` の対象外)が fetch を始めると、取得キャッシュの書き込みと投入が競合する。そこで:
    - `fetch` はロック(`flock -n`)の中で、有効な他 Pod の引き渡しがあれば何もせず終了コード 1。無ければ、成功の最後に引き渡しファイル
      `data/generated/.import.handoff`(`owner=<HOSTNAME = Pod 名>` と `expires=<epoch 秒>` の2行)を書いてからロックを解放する。
-   - `import` はロックを取り、引き渡しファイルの owner が自分であることを確かめてから投入する。違えば終了コード 1(pokedex-import を呼ばない)。
-     終了時(成功・失敗とも)に、ロックを持ったまま引き渡しファイルを消す。
-   - 有効期限(`IMPORT_HANDOFF_TTL_SECONDS`。既定 7200 = `activeDeadlineSeconds` の2倍)が切れた引き渡しは、SIGKILL・ノード停止で残った
+   - `import` はロックを取り(引き渡しを持っているので `flock -w`。`IMPORT_LOCK_WAIT_SECONDS` 既定 60。他の Pod の fetch が引き渡しの確認で
+     一瞬ロックを持つ競合に耐える)、引き渡しファイルの owner が自分であることを確かめてから投入する。違えば終了コード 1(pokedex-import を呼ばない)。
+     待っても取れなければ、owner が自分の引き渡しだけを消して終了コード 1(消さないと期限まで全 Job が止まる)。
+     終了時(成功・失敗とも)に、ロックを持ったまま引き渡しファイルを消す。`IMPORT_HANDOFF_TTL_SECONDS` が数値でなければ終了コード 2。
+   - 有効期限(`IMPORT_HANDOFF_TTL_SECONDS`。既定 3600 = `activeDeadlineSeconds`。fetch の成功後に Job が生き続けられる最長なので、これより長く
+     残す理由が無く、これより短いと import の途中で他の Pod が割り込める。SIGKILL・OOM では EXIT trap が走らないので、残る時間の上限もこの値)が切れた引き渡しは、SIGKILL・ノード停止で残った
      stale として無視する。ADR-0109 §3 の「恒久的な stale lock を残さない」を、有効期限付きで保つ(最長 TTL の間だけ、新しい Job は終了コード 1 で待たされる)。
    - 順序と意味は変えない: ロック → 容量確認(prune.mjs check。download の前)→ 取得 → 上流の検出(以上 `fetch`)/ 投入(pokedex-import。D12 の
      `IMPORT_ALLOW_REMOVED` は `import` だけが使う。runbook の `containers[0].env` への追加は `import` のまま有効)→ prune(同じロックの中。D18)(以上 `import`)。
@@ -376,4 +379,10 @@ sha256 は `meta.json` に記録するだけで期待値と照合せず、PokeAP
 ### 限界
 
 - 期待ハッシュは「取得時点の上流が、人が確認した内容と同じ」ことしか保証しない。Showdown の依存(npm)の中身は `package-lock.json` の integrity に任せる。
+- 検証済みの Showdown キャッシュ(`src/`)は毎回は再ハッシュしない。`src.tree-sha256` と期待値の一致だけを見る(PokeAPI の CSV は毎回照合するので非対称)。
+  PVC への書き込み権を持つ者は信頼の境界の内側にいるとみなす。
+- `import`(DSN あり)は `fetch` が PVC に書いた JSON を読む。`fetch` が侵害されると DB の内容は汚染されうる。分離が防ぐのは資格情報の窃取で、
+  データの完全性は Go 側の厳格な検証(strictDecode・整合の確認)に頼る。
+- 未検証の tarball の展開は照合より前に行う(ハッシュはツリーに対して取るため)。リスクは tar の実装・`readOnlyRootFilesystem`・PVC の範囲に限られる。
+- `config.json` の `integrity` は第三者ファイルの sha256 だけでデータではない(ADR-0002 の「版の metadata」にあたり、コミットしてよい)。
 - egress の制限(NetworkPolicy)は別 issue(運用レーン)。取得段が DB に届かないことは資格情報を持たないことで担保し、ネットワーク到達性の遮断は含まない。

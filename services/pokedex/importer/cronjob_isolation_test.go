@@ -73,9 +73,39 @@ func TestFetchInitContainerHasNoCredentials(t *testing.T) {
 	}
 
 	// Pod の volumes に Secret を足さない(足すと initContainer にもマウントできてしまう)。
-	if regexp.MustCompile(`(?m)^\s+secret:`).MatchString(readRepo(t, cronJobPath)) {
-		t.Error("CronJob の volumes に Secret を足さない(資格情報は import の env だけ)")
+	for _, v := range rawPodVolumes(t) {
+		if _, ok := v["secret"]; ok {
+			t.Errorf("CronJob の volumes に Secret を足さない(資格情報は import の env だけ): %v", v["name"])
+		}
+		if _, ok := v["projected"]; ok {
+			t.Errorf("CronJob の volumes に projected(Secret を含みうる)を足さない: %v", v["name"])
+		}
 	}
+}
+
+// rawPodVolumes は Pod の volumes を未知のキーも含めて汎用の形で読む(YAML の構造で Secret の有無を見る)。
+func rawPodVolumes(t *testing.T) []map[string]any {
+	t.Helper()
+	var doc struct {
+		Spec struct {
+			JobTemplate struct {
+				Spec struct {
+					Template struct {
+						Spec struct {
+							Volumes []map[string]any `yaml:"volumes"`
+						} `yaml:"spec"`
+					} `yaml:"template"`
+				} `yaml:"spec"`
+			} `yaml:"jobTemplate"`
+		} `yaml:"spec"`
+	}
+	if err := yaml.Unmarshal([]byte(readRepo(t, cronJobPath)), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Spec.JobTemplate.Spec.Template.Spec.Volumes) == 0 {
+		t.Fatal("volumes を読めない")
+	}
+	return doc.Spec.JobTemplate.Spec.Template.Spec.Volumes
 }
 
 // 取得段は PVC と tmp だけをマウントする。名前の上書き ConfigMap(/app/data/local。実データ)は投入段だけが読む。

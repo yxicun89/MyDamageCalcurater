@@ -330,7 +330,9 @@ func TestPhaseConcurrentFetchDuringImportIsRejected(t *testing.T) {
 }
 
 func TestPhaseUnknownIsUsageError(t *testing.T) {
-	requireShAndFlock(t)
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh が無いので cronjob.sh を流せない")
+	}
 	p := newPhaseEnv(t)
 	if code, out := p.run(t, "pod-a", "bogus"); code != 2 {
 		t.Errorf("不明なフェーズは終了コード2(使い方の誤り): code=%d out=%s", code, out)
@@ -354,5 +356,98 @@ func TestPhaseDefaultRunsEverythingWithoutHandoff(t *testing.T) {
 	}
 	if p.handoffExists() {
 		t.Error("引数なしでは引き渡しファイルを残さない")
+	}
+}
+
+// IMPORT_HANDOFF_TTL_SECONDS が数値でなければ、何も始めずに終了コード2(設定の誤り)。
+func TestPhaseInvalidTTLIsUsageError(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh が無いので cronjob.sh を流せない")
+	}
+	p := newPhaseEnv(t)
+	for _, phase := range []string{"fetch", "import", ""} {
+		if code, out := p.run(t, "pod-a", phase, "IMPORT_HANDOFF_TTL_SECONDS=abc"); code != 2 {
+			t.Errorf("フェーズ %q: TTL が数値でなければ終了コード2: code=%d out=%s", phase, code, out)
+		}
+	}
+	if len(p.lines()) != 0 {
+		t.Errorf("何も呼ばない: %q", p.lines())
+	}
+}
+
+// holdLock は別プロセスで duration の間 ロックファイルの flock を持つ(他の Pod の fetch が引き渡しの確認で
+// 一瞬ロックを持つ状況の再現)。
+func (p phaseEnv) holdLock(t *testing.T, seconds string) *exec.Cmd {
+	t.Helper()
+	lock := ""
+	for _, e := range p.env {
+		if v, ok := strings.CutPrefix(e, "IMPORT_LOCK_FILE="); ok {
+			lock = v
+		}
+	}
+	cmd := exec.Command("flock", lock, "sleep", seconds)
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond) // flock を取るまで待つ
+	return cmd
+}
+
+// import は引き渡しを持っているので、短い間だけ他がロックを持っていても待って投入する。
+func TestPhaseImportWaitsForBriefLock(t *testing.T) {
+	requireShAndFlock(t)
+	p := newPhaseEnv(t)
+	if code, out := p.run(t, "pod-a", "fetch"); code != 0 {
+		t.Fatalf("前提: %d %s", code, out)
+	}
+	holder := p.holdLock(t, "1")
+	code, out := p.run(t, "pod-a", "import", "IMPORT_LOCK_WAIT_SECONDS=10")
+	_ = holder.Wait()
+	if code != 0 {
+		t.Fatalf("短い間のロック保持は待って投入する: code=%d out=%s", code, out)
+	}
+	if p.handoffExists() {
+		t.Error("投入後は引き渡しファイルを消す")
+	}
+}
+
+// ロックを待っても取れないとき、自分の引き渡しを残さない(残すと期限まで全 Job が止まる)。
+func TestPhaseImportLockTimeoutDropsOwnHandoff(t *testing.T) {
+	requireShAndFlock(t)
+	p := newPhaseEnv(t)
+	if code, out := p.run(t, "pod-a", "fetch"); code != 0 {
+		t.Fatalf("前提: %d %s", code, out)
+	}
+	holder := p.holdLock(t, "3")
+	code, out := p.run(t, "pod-a", "import", "IMPORT_LOCK_WAIT_SECONDS=1")
+	_ = holder.Wait()
+	if code != 1 {
+		t.Errorf("ロックを取れなければ終了コード1: code=%d out=%s", code, out)
+	}
+	if p.handoffExists() {
+		t.Error("自分(owner=自分)の引き渡しを消して諦める")
+	}
+	for _, l := range p.lines() {
+		if strings.HasPrefix(l, "pokedex-import") {
+			t.Errorf("pokedex-import を呼んではいけない: %q", p.lines())
+		}
+	}
+}
+
+// ロックを取れなかった import が、他の Pod の引き渡しを消してはいけない。
+func TestPhaseImportLockTimeoutKeepsOthersHandoff(t *testing.T) {
+	requireShAndFlock(t)
+	p := newPhaseEnv(t)
+	if code, out := p.run(t, "pod-a", "fetch"); code != 0 {
+		t.Fatalf("前提: %d %s", code, out)
+	}
+	holder := p.holdLock(t, "3")
+	code, _ := p.run(t, "pod-b", "import", "IMPORT_LOCK_WAIT_SECONDS=1")
+	_ = holder.Wait()
+	if code != 1 {
+		t.Errorf("code=%d, want 1", code)
+	}
+	if !p.handoffExists() || p.handoffOwner(t) != "pod-a" {
+		t.Error("他の Pod の引き渡しは消さない")
 	}
 }

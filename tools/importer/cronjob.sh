@@ -42,14 +42,39 @@ case "$PHASE" in
 esac
 
 HANDOFF_FILE="${IMPORT_HANDOFF_FILE:-${APP_DIR}/data/generated/.import.handoff}"
-HANDOFF_TTL="${IMPORT_HANDOFF_TTL_SECONDS:-7200}"
+# 引き渡しの有効期間。fetch の成功後に Job が生き続けられる最長は activeDeadlineSeconds(3600)なので、
+# 既定はそれと同じ 3600 秒(SIGKILL・OOM で EXIT trap が走らず残った引き渡しが、次の Job を止める最長時間でもある)。
+HANDOFF_TTL="${IMPORT_HANDOFF_TTL_SECONDS:-3600}"
+# import は引き渡しを持っているので、fetch の確認などで一瞬ロックを持つ他の Pod を待つ。
+LOCK_WAIT="${IMPORT_LOCK_WAIT_SECONDS:-60}"
 SELF="${HOSTNAME:-$(hostname)}"
 
-exec 9>"$LOCK_FILE"
-flock -n 9 || {
-  echo "cronjob: 別の import が実行中(ロック $LOCK_FILE を取得できない)。今回は諦める" >&2
-  exit 1
+case "$HANDOFF_TTL" in
+  '' | *[!0-9]*)
+    echo "cronjob: IMPORT_HANDOFF_TTL_SECONDS が数値でない: $HANDOFF_TTL" >&2
+    exit 2
+    ;;
+esac
+
+# 引き渡しファイルの owner を返す(期限は見ない)。
+handoff_raw_owner() {
+  if [ -f "$HANDOFF_FILE" ]; then sed -n 's/^owner=//p' "$HANDOFF_FILE" | head -n 1; fi
 }
+
+exec 9>"$LOCK_FILE"
+if [ "$PHASE" = import ]; then
+  flock -w "$LOCK_WAIT" 9 || {
+    echo "cronjob: ロック $LOCK_FILE を ${LOCK_WAIT} 秒待っても取得できない" >&2
+    # 自分の引き渡しを残すと、期限まで全 Job が止まる。自分のものだけ消して諦める。
+    if [ "$(handoff_raw_owner)" = "$SELF" ]; then rm -f "$HANDOFF_FILE"; fi
+    exit 1
+  }
+else
+  flock -n 9 || {
+    echo "cronjob: 別の import が実行中(ロック $LOCK_FILE を取得できない)。今回は諦める" >&2
+    exit 1
+  }
+fi
 
 # 引き渡しファイルの内容。無い・読めない・期限切れなら owner は空(stale として無視)。
 HANDOFF_OWNER=""
