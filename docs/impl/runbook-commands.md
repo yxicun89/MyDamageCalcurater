@@ -115,5 +115,5 @@
 - 読んだ範囲: 上記 8 文書の全コードブロック(README 6、verify-m1 全、api・data・balance・speed・ios・ios-device の全ブロックを機械抽出。抽出結果の行 = 表の行に全件対応)、`scripts/{up,dev,db-local-up,wasm,doctor,e2e}.sh`、`web/scripts/k3d-smoke.sh` 全行、`services/gateway/scripts/smoke.sh` 全行、`web/playwright*.ts`・`web/e2e/support/serverConfig.ts` の起動コマンド、`services/{balance,speed}/scripts/*.sh` と `ios/scripts/*.sh` の冒頭・外部コマンド行。
 - 読めていない箇所: `scripts/check-publishable.sh` の全検査項目、`services/{balance,speed}/scripts/smoke*.sh` の判定の細部、`check-gitops.sh` の判定、`ios/scripts/*.sh` の内部、`tools/importer/fetch*.mjs`・`check-upstream.mjs`、`argocd-bootstrap.sh` の後半(冒頭・固定値のみ確認)。
 - 実行して確認したもの: `web-k3d-smoke`(既定 8080。2026-09-25、ADR-0305 の後)。それ以外は静的に読んだ内容で、実行はしていない。
-- 未実装・スタブ: `make e2e`(`scripts/e2e.sh` は echo のみ。P4-6)、`make assets`(echo のみ)。judge は `healthz` のみ(JD0)。
+- 未実装: `make assets`(「未実装」を出して終了コード 2。issue #286)。`make e2e` は実装済み(ADR-0306)。judge は `healthz` のみ(JD0)。
 - 手順書に記載が無いが存在するコマンド: `judge-k3d-deploy`/`judge-smoke`(§5 に記載)、`make down`(クラスタ削除。人間の確認)、`migrate-*`(db-mysql.md)。

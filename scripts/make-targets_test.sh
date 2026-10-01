@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# ルート Makefile の help と未実装ターゲットの自動テスト(issue #261・#294・#318・#321)。
+# `make test-scripts`(make test に含む)から流す。クラスタ・ネットワークには触らない。
+#
+# 固定すること:
+#   - make help の左列がターゲット名で(Makefile のファイル名ではない)、数字入りのターゲットも出る
+#   - 未実装の make assets が成功(終了コード 0)で終わらない
+#   - make lint の k8s-render が全レーンの overlay を描画する(各レーンの *-kustomize を呼ぶ)
+set -uo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+readonly ROOT
+MAKE_BIN="${MAKE:-make}"
+
+failures=0
+ok() { echo "ok: $1"; }
+ng() { echo "NG: $1" >&2; failures=$((failures + 1)); }
+
+help_out=$("$MAKE_BIN" -C "$ROOT" --no-print-directory help | sed 's/\x1b\[[0-9;]*m//g')
+
+if echo "$help_out" | awk '{print $1}' | grep -qE '(^|/)Makefile$'; then
+  ng "make help の左列に Makefile のファイル名が出ている"
+else
+  ok "make help の左列はターゲット名"
+fi
+
+for target in k8s-render api-k3d-deploy web-k3d-open import-k8s e2e; do
+  if echo "$help_out" | grep -qE "^[[:space:]]+${target}[[:space:]]"; then
+    ok "make help に ${target} が出る"
+  else
+    ng "make help に ${target} が出ない(数字入り・include 先のターゲットも出すこと)"
+  fi
+done
+
+dups=$(echo "$help_out" | awk '{print $1}' | sort | uniq -d)
+if [ -z "$dups" ]; then
+  ok "make help に重複が無い"
+else
+  ng "make help に重複がある: ${dups}"
+fi
+
+rc=0
+"$MAKE_BIN" -C "$ROOT" --no-print-directory assets >/dev/null 2>&1 || rc=$?
+if [ "$rc" -ne 0 ]; then
+  ok "未実装の make assets は非0(${rc})で終わる"
+else
+  ng "未実装の make assets が終了コード 0 で終わった(成功と数えられてしまう)"
+fi
+
+render_plan=$("$MAKE_BIN" -C "$ROOT" --no-print-directory -n k8s-render 2>/dev/null)
+for overlay in deploy/k8s/overlays/local deploy/k8s/overlays/cloud deploy/k8s/overlays/local/tidb \
+  deploy/k8s/overlays/local-api deploy/k8s/overlays/local-web \
+  services/balance/deploy/k8s/overlays/gitops services/speed/deploy/k8s/overlays/gitops \
+  services/judge/deploy/k8s/overlays/local; do
+  if echo "$render_plan" | grep -qE "kubectl kustomize [^ ]*${overlay} "; then
+    ok "k8s-render が ${overlay} を描画する"
+  else
+    ng "k8s-render が ${overlay} を描画しない"
+  fi
+done
+
+if [ "$failures" -ne 0 ]; then
+  echo "make-targets_test: ${failures} 件失敗" >&2
+  exit 1
+fi
+echo "make-targets_test: すべて成功"
