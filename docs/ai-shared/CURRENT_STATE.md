@@ -29,7 +29,8 @@ Status: D12(issue #277・ADR-0131 採用)実装済み。migration 000009 の種�
 Status(追記): 2026-10-01、D25(issue #240・ADR-0132)。pokecalc に ingress の default-deny と許可リスト10本(`deploy/k8s/base/networkpolicy/`)を実装。受け入れテスト AC-N1〜N5 は green。k3d での実地確認(apply・smoke・拒否の確認)はメイン。
 Status: D27(#252・#319・#290・#221 の runbook 部分)実装済み。`docs/runbooks/{data,api}.md`・`docs/impl/{k8s-local,db-mysql,make-targets}.md`・`docs/verify-m1.md` §3 を今の main に合わせて直した(確認方法・Secret 5キー・NetworkPolicy・終了コード3と PVC 消失の復旧手順・行番号の除去)。新しいクラスタでの verify-m1 §3 の通し実行は人間の確認待ち。
 Status: D29(#226・#296・#314・#224・#254 の索引・#256 の C・#227 のデータ分)実装済み(文書のみ)。README を現状(動くもの・未実装は assets のみ・起動手順)に、overview の状態列を plan.md への委譲に、requirements に3機能と契約4本の索引、test-strategy にサービス別の索引、ゴールデン関連(known_diffs・gen9 表記・1,392 種族)を実態に直し、ADR-0002・0011・0012・0100・0101・0104・0105・0108 の状態欄を実装後の事実(PR 番号)に更新。CLAUDE.md・docs/impl の known_diffs 記述は他担当(D31)。0207 欠番は API レーンの判断。
-Next: issue #403 の「残りのパッケージ」を依存の順に(D19〈作業中〉→ D26 → D27〜D32。D21 は T04・S04・A06 待ち、D20 の #211-data は API レーンの契約待ち)。後続: 逆算の特性候補の計算量の最適化(ADR-0126 追記)、#349。1 パッケージ = 1 PR、importer に触れたら実データの dry-run、マージ後は make deploy-latest。
+Status: D19(issue #222 案A〈ユーザー確認待ち。DECISIONS.md〉・#301。ADR-0101 追記)実装済み。取得物の内容ハッシュ(Showdown 展開後ツリー・PokeAPI の各 CSV)を config.json の integrity と照合し、不一致は終了コード3。`npm ci --ignore-scripts`。CronJob を initContainer `fetch`(DSN なし)と `import` に分離し、cronjob.sh は fetch|import|引数なしと引き渡しファイルでロックの隙間を埋める。実データの再取得でハッシュ一致・dry-run は blockers: none。
+Next: データレーンの open issue を解消中(2026-10-02。triage → 実装済みのクローズ → 残りの実装)。#403 の残り: D26・D28〈T05 待ち〉・D30・D31〈CLAUDE.md・AGENTS.md はユーザー確認〉・D32・D21〈T04・S04・A06 待ち〉・#211-data〈API レーン待ち〉。後続: ADR-0126 の計算量の最適化。
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)

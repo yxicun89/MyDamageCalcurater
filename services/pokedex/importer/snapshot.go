@@ -231,6 +231,8 @@ type Config struct {
 	// Reconcile は照合の設定(ADR-0103 §5・§6・§9)。任意(無ければ Convert 単体は従来どおり動く。
 	// Reconcile 関数は必須にする)。有れば厳格に検証する。
 	Reconcile *ReconcileConfig `json:"reconcile"`
+	// Integrity は取得物の期待ハッシュ(照合は Node の tools/importer/integrity.mjs が行う。ADR-0101 追記 2026-10-01)。
+	Integrity *IntegrityConfig `json:"integrity"`
 }
 
 // ReconcileConfig は Config.Reconcile(ADR-0103 §11)。
@@ -272,4 +274,20 @@ type Input struct {
 	// LoadInput は読まない(data の外にある)。呼び出し側が LoadReferenceTypeChart で読んで入れる。
 	// Reconcile では必須、Convert では使わない。
 	ReferenceTypeChart *ReferenceTypeChart
+}
+
+// IntegrityConfig は取得物の内容ハッシュ(sha256。64桁の16進小文字)。Go は形の検証だけを行う。
+type IntegrityConfig struct {
+	Showdown IntegrityShowdown `json:"showdown"`
+	PokeAPI  IntegrityPokeAPI  `json:"pokeapi"`
+}
+
+// IntegrityShowdown は Showdown の固定コミットを展開した後のファイル木のハッシュ。
+type IntegrityShowdown struct {
+	TreeSha256 string `json:"treeSha256"`
+}
+
+// IntegrityPokeAPI は取得する CSV ファイル名ごとの内容ハッシュ。
+type IntegrityPokeAPI struct {
+	CSVSha256 map[string]string `json:"csvSha256"`
 }

@@ -6,14 +6,34 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { exitCodeFor, expectedPokeapiCsvSha256, verifyFileSha256 } from './integrity.mjs';
 import { parseCSV } from './pokeapi-csv.mjs';
 
-const root = fileURLToPath(new URL('../../', import.meta.url));
+// IMPORTER_ROOT: テスト用にリポジトリのルートを差し替える。
+const root = process.env.IMPORTER_ROOT ? `${process.env.IMPORTER_ROOT.replace(/\/$/, '')}/` : fileURLToPath(new URL('../../', import.meta.url));
 const config = JSON.parse(readFileSync(`${root}data/importer/config.json`, 'utf8'));
 const commit = config.sources?.pokeapi;
 if (!commit || !/^[0-9a-f]{40}$/.test(commit)) {
   throw new Error(`config.json の sources.pokeapi が40桁の commit でない: ${commit}`);
 }
+
+// 各 CSV は取得(またはキャッシュ読み込み)の直後・解析の前に、期待ハッシュと照合する(D19)。
+// 不一致・期待値なしは終了コード 3(fail closed)。
+let expectedCsv;
+try {
+  expectedCsv = expectedPokeapiCsvSha256(config);
+} catch (err) {
+  console.error(`fetch-pokeapi: ${err.message}`);
+  process.exit(exitCodeFor(err));
+}
+const verifyCSV = (name, content) => {
+  try {
+    verifyFileSha256({ name, content, expected: expectedCsv });
+  } catch (err) {
+    console.error(`fetch-pokeapi: ${err.message}`);
+    process.exit(exitCodeFor(err));
+  }
+};
 
 const LANGUAGES = ['ja-Hrkt', 'ja']; // ADR-0101 §3: この2言語だけ出す(取り込む言語の絞り込みは config 側)
 const cacheDir = `${root}data/generated/.cache/pokeapi/${commit}/`;
@@ -26,13 +46,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function fetchCSV(name) {
   const cachePath = `${cacheDir}${name}`;
   if (existsSync(cachePath)) {
-    return parseCSV(readFileSync(cachePath, 'utf8'), cachePath);
+    const cached = readFileSync(cachePath);
+    verifyCSV(name, cached);
+    return parseCSV(cached.toString('utf8'), cachePath);
   }
   const url = `https://raw.githubusercontent.com/PokeAPI/pokeapi/${commit}/data/v2/csv/${name}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`PokeAPI CSV を取得できない: ${res.status} ${url}`);
-  const text = await res.text();
-  writeFileSync(cachePath, text);
+  const body = Buffer.from(await res.arrayBuffer());
+  verifyCSV(name, body); // 検証に通ったものだけキャッシュに書く
+  const text = body.toString('utf8');
+  writeFileSync(cachePath, body);
   await sleep(300);
   return parseCSV(text, url);
 }
