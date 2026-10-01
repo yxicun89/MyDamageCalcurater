@@ -18,7 +18,7 @@ cp "$ROOT/scripts/image-tag.sh" "$repo/scripts/"
 echo a > "$repo/svc/a.txt"
 echo b > "$repo/other/b.txt"
 git -C "$repo" add -A
-git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm init
+git -C "$repo" -c user.name=test -c user.email=image-tag-test commit -qm init
 head=$(git -C "$repo" rev-parse --short=12 HEAD)
 
 tag() { (cd "$repo" && ./scripts/image-tag.sh "$@"); }
