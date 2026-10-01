@@ -94,6 +94,46 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
     public private(set) var opponentItemCandidateIds: [String] = []
     private var toggledOpponentItemIds: Set<String> = []
 
+    // MARK: - 相手の特性(issue #272。ADR-0501「P6-19」4章)
+
+    /// 相手の特性の選択肢(いまの相手の `species(key:)` の `abilities` の順)。`loadOpponentAbilityOptions()`
+    /// が読むまでは空(`CalcViewModel.defenderAbilityOptions` と同じ理由)。
+    public private(set) var opponentAbilityOptions: [Ability] = []
+    /// 要求の `unknownAbilityId` に載せる相手の特性。nil は「指定なし」(送らない = 相手の種族の特性をすべて候補にする)。
+    public private(set) var opponentAbilityId: String?
+    /// `opponentAbilityOptions` の元になった相手の `species(key:)`(`CalcViewModel.defenderAbilityOptionsSpeciesKey`
+    /// と同じ理由。相手の種族が変わったら nil に戻す)。
+    private var opponentAbilityOptionsSpeciesKey: String?
+
+    /// いまの相手の `species(key:)` を読み、`opponentAbilityOptions` を入れる(`CalcViewModel.loadDefenderAbilityOptions`
+    /// と同じ規則: 読み済みなら何もしない・計算しない・失敗は黙って空・相手が変わっていたら反映しない)。
+    public func loadOpponentAbilityOptions() async {
+        guard opponentAbilityOptionsSpeciesKey != opponentSpeciesKey else { return }
+        let key = opponentSpeciesKey
+        do {
+            let detail = try await service.species(key: key)
+            guard opponentSpeciesKey == key else { return }
+            speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+            opponentAbilityOptions = detail.abilities
+            opponentAbilityOptionsSpeciesKey = key
+            if let abilityId = opponentAbilityId, !detail.abilities.contains(where: { $0.id == abilityId }) {
+                opponentAbilityId = nil
+            }
+        } catch {
+            // 失敗(キャンセルを含む)は黙って「選択肢なし」のまま(`CalcViewModel` と同じ判断)。
+        }
+    }
+
+    /// nil(指定なし)か `opponentAbilityOptions` にある ID だけを受け付ける。値が変わったときだけ
+    /// `recalculateIfPossible` を1回(観測が無ければ reverse は呼ばない)。
+    public func selectOpponentAbility(id: String?) async {
+        guard id != opponentAbilityId else { return }
+        if let id, !opponentAbilityOptions.contains(where: { $0.id == id }) { return }
+        let token = beginInput()
+        opponentAbilityId = id
+        await recalculateIfPossible(token: token)
+    }
+
     // MARK: - 構築から個体を呼び出す(P6-2d)
 
     /// 構築の一覧から作った選択肢(`CalcViewModel.teamOptions` と同じ規則)。
@@ -372,6 +412,9 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
     public func selectSide(_ newSide: ReverseSide) async {
         guard newSide != side else { return }
         side = newSide
+        // 相手の役割(防御側 ↔ 攻撃側)が変わり、無効・軽減の意味が変わるので「指定なし」に戻す
+        // (相手の種族は変わらないので `opponentAbilityOptions`/読み込み済みの印は残してよい)。
+        opponentAbilityId = nil
         let token = beginInput()
         observations = [freshObservationRow()]
         result = nil
@@ -398,6 +441,9 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
 
     public func selectOpponentSpecies(key: String) async {
         guard speciesDictionary[key] != nil else { return }
+        opponentAbilityId = nil
+        opponentAbilityOptions = []
+        opponentAbilityOptionsSpeciesKey = nil
         opponentSpeciesKey = key
         let token = beginInput()
         if side == .attacker {
@@ -689,15 +735,37 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
         do {
             let response = try await service.reverse(request)
             guard token == latestRequestToken else { return }
-            // 逆算画面は特性の一覧を持たないので、特性の印は ID のまま出る(ADR-0501「P6-17」3章)。
-            let names = UnsupportedMarkNames(moves: Array(moveDictionary.values), items: itemOptions, abilities: [])
-            result = ReverseResultDisplay(result: response, items: itemOptions, names: names)
+            applyReverseResult(response)
             error = nil
             isLoading = false
+            // 候補が特性で分かれていて、いまの相手の特性名をまだ持っていなければ、逆算し直さずに
+            // species(key:) だけ読んで候補を作り直す(ADR-0501「P6-19」2章・9章と同じ判断)。
+            if opponentAbilityOptionsSpeciesKey != opponentSpeciesKey, hasSplitCandidates(response) {
+                await loadOpponentAbilityOptions()
+                guard token == latestRequestToken else { return }
+                applyReverseResult(response)
+            }
         } catch {
             guard token == latestRequestToken else { return }
             handleInputFailure(error)
         }
+    }
+
+    /// `response` を画面向けに整形して `result` に反映する(`isLoading`/`error` は呼び出し側が管理する)。
+    /// 特性の印は一覧を持たないので ID のまま出る(ADR-0501「P6-17」3章)。特性名の副題は
+    /// `opponentAbilityOptions` から引く(2章)。
+    private func applyReverseResult(_ response: ReverseResult) {
+        let names = UnsupportedMarkNames(moves: Array(moveDictionary.values), items: itemOptions, abilities: [])
+        let abilityNames = Dictionary(
+            opponentAbilityOptions.map { ($0.id, $0.nameJa) }, uniquingKeysWith: { _, latest in latest }
+        )
+        result = ReverseResultDisplay(result: response, items: itemOptions, names: names, abilityNames: abilityNames)
+    }
+
+    /// `response` の候補が相手の特性で分かれているか(`ResultEntryIdentity.splitBaseIDs` が空でないか)。
+    private func hasSplitCandidates(_ response: ReverseResult) -> Bool {
+        let baseIDs = response.candidates.map { ReverseCandidateDisplay.baseID(for: $0) }
+        return !ResultEntryIdentity.splitBaseIDs(baseIDs).isEmpty
     }
 
     /// いまの入力から `ReverseRequest` を組み立てる(規則6)。既知側(`known`)は常に自分。
@@ -732,7 +800,8 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
             : [String?.none] + opponentItemCandidateIds.map { $0 as String? }
         return ReverseRequest(
             format: .single, side: side, known: known, unknownSpeciesKey: opponentSpeciesKey, moveId: moveId,
-            itemCandidates: itemCandidates, observations: observations, critical: false, maxCandidates: 0
+            itemCandidates: itemCandidates, observations: observations, critical: false, maxCandidates: 0,
+            unknownAbilityId: opponentAbilityId
         )
     }
 }

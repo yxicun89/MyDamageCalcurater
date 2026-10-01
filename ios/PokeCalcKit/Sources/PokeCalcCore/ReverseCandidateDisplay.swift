@@ -7,6 +7,8 @@
 /// 逆算候補1件(`ReverseCandidate`)を画面向けに整形した値。
 public struct ReverseCandidateDisplay: Identifiable, Equatable, Sendable {
     /// XCUITest の `reverseCandidateRow-<id>` に使う安定な ID(`<natureClass の rawValue>@<itemId。nil は "-">`)。
+    /// 同じ性格クラス・持ち物の候補が特性で分かれたときだけ `@<代表の特性 ID>` が付く
+    /// (`ResultEntryIdentity`。ADR-0501「P6-19」1章。組み立ては `ReverseResultDisplay`)。
     public let id: String
     public let natureClass: NatureClass
     /// 「補正なし」「B上昇」のような性格クラスの表示名。
@@ -25,9 +27,19 @@ public struct ReverseCandidateDisplay: Identifiable, Equatable, Sendable {
     /// この候補だけに付いた未対応の印の注記(無ければ nil。全候補に共通する印は
     /// `ReverseResultDisplay.unsupportedNotice`。ADR-0501「P6-17」3章)。
     public let unsupportedNote: String?
+    /// この候補と結果が同じになる相手の特性(`ReverseCandidate.abilityIds` のまま)。
+    public let abilityIds: [String]
+    /// 特性で分かれた候補の副題(「特性: A / B」)。分かれていなければ nil(ADR-0501「P6-19」2章)。
+    public let abilityText: String?
 
-    public init(candidate: ReverseCandidate, stat: StatKey, items: [Item], unsupportedNote: String? = nil) {
+    /// `id` を省略すると `baseID`(特性を含まない既存の形)。`abilityText` は既定 nil。
+    public init(
+        candidate: ReverseCandidate, stat: StatKey, items: [Item], unsupportedNote: String? = nil,
+        id: String? = nil, abilityText: String? = nil
+    ) {
         self.unsupportedNote = unsupportedNote
+        abilityIds = candidate.abilityIds
+        self.abilityText = abilityText
         natureClass = candidate.natureClass
         natureClassLabel = Self.natureClassLabel(candidate.natureClass, stat: stat)
         itemId = candidate.itemId
@@ -37,7 +49,12 @@ public struct ReverseCandidateDisplay: Identifiable, Equatable, Sendable {
         exact = candidate.exact
         matchLabel = Self.matchLabel(exact: candidate.exact)
         percentRangeText = BulkRowDisplay.percentRangeText(minPercent: candidate.minPercent, maxPercent: candidate.maxPercent)
-        id = "\(candidate.natureClass.rawValue)@\(candidate.itemId ?? Self.noItemIDPlaceholder)"
+        self.id = id ?? Self.baseID(for: candidate)
+    }
+
+    /// 特性を含まない候補の ID(`<natureClass の rawValue>@<itemId。nil は "-">`)。
+    public static func baseID(for candidate: ReverseCandidate) -> String {
+        "\(candidate.natureClass.rawValue)@\(candidate.itemId ?? noItemIDPlaceholder)"
     }
 
     /// `id` で「持ち物なし」を表す記号(`BulkRowDisplay` と同じ規則)。
@@ -138,16 +155,29 @@ public struct ReverseResultDisplay: Sendable {
     public let unsupportedNotice: String?
 
     /// `names` は印の ID → 日本語名(`ReverseViewModel` がマスタから作って渡す)。
-    public init(result: ReverseResult, items: [Item], names: UnsupportedMarkNames = UnsupportedMarkNames()) {
+    /// `abilityNames` は相手の特性 ID → 日本語名(特性で分かれた候補の副題に使う。無い ID は ID のまま)。
+    public init(
+        result: ReverseResult, items: [Item], names: UnsupportedMarkNames = UnsupportedMarkNames(),
+        abilityNames: [String: String] = [:]
+    ) {
         let placement = UnsupportedPlacement(result.candidates.map(\.unsupported))
         unsupportedNotice = UnsupportedNoticeText.summary(placement.common, names: names)
         side = result.side
         stat = result.stat
         assumedHPSP = result.assumedHPSP
-        candidates = zip(result.candidates, placement.perEntry).map { candidate, marks in
-            ReverseCandidateDisplay(
+        let baseIDs = result.candidates.map { ReverseCandidateDisplay.baseID(for: $0) }
+        let ids = ResultEntryIdentity.uniqueIDs(baseIDs: baseIDs, abilityIds: result.candidates.map(\.abilityId))
+        let splitBases = ResultEntryIdentity.splitBaseIDs(baseIDs)
+        candidates = (0..<result.candidates.count).map { index in
+            let candidate = result.candidates[index]
+            let marks = placement.perEntry[index]
+            let abilityText = splitBases.contains(baseIDs[index])
+                ? AbilityGroupLabel.text(abilityIds: candidate.abilityIds, names: abilityNames)
+                : nil
+            return ReverseCandidateDisplay(
                 candidate: candidate, stat: result.stat, items: items,
-                unsupportedNote: UnsupportedNoticeText.rowNote(marks, names: names)
+                unsupportedNote: UnsupportedNoticeText.rowNote(marks, names: names),
+                id: ids[index], abilityText: abilityText
             )
         }
         exactCount = result.exactCount
