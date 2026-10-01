@@ -895,6 +895,7 @@
 - [x] SP5 GitOps(ADR-0605。critic PASS。digest 固定の overlay・Argo CD Application・balance-registry と Argo CD を共有。
   `speed-gitops-template-check` まで実行して確認済み。クラスタへの実際の適用〈speed-argocd-app・registry-push・sync〉は
   人間の確認のもとで別途。手順は docs/runbooks/speed.md の節5〜10)
+- [x] issue #237 gitops overlay の read model(ADR-0412。ユーザー決定 2026-09-25: 方式 a。**実装済み・実クラスタ未適用**。pokedex digest は全0 placeholder、speed 本体は未配備、NetworkPolicy は別 PR・人間確認): initContainer(pokedex export)→ emptyDir を balance・speed の gitops overlay に足し、check-gitops・手動 overlay のガード・runbook・speed の「未配備」明示を入れる。テストは `scripts/gitops_test.sh`(`make test-scripts`)。共有クラスタへの pokedex push・NetworkPolicy 変更・適用は人間の確認
 
 ## JD: 判定(判定レーン。設計は docs/judge-design.md。2026-09-22 ユーザー要望)
 「ニトチャ+メイン技で素早さ抜ける+そのポケモンを倒せるか」を1回の入力で確認する。engine を直接呼び、pokedex-svc と calc-svc の公開 API だけに依存する(speed-svc には依存しない)。
