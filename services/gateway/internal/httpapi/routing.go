@@ -16,6 +16,7 @@ const (
 	routeCalc
 	routePokedex
 	routeRecord
+	routeTeam
 	routeAssets
 	routeWeb
 )
@@ -26,6 +27,7 @@ const (
 	prefixCalc    = "/api/calc"
 	prefixPokedex = "/api/pokedex/"
 	prefixRecord  = "/api/record/"
+	prefixTeam    = "/api/team/"
 	prefixAssets  = "/assets/"
 )
 
@@ -72,6 +74,10 @@ func matchRoute(method, path string) (routeKind, bool) {
 		// /api/record そのもの(末尾スラッシュ無し)・/api/recordx はここに一致しない → 404
 		// (ADR-0209 §10・AC-G13。pokedex と同じ規則)。
 		return routeRecord, true
+	case strings.HasPrefix(path, prefixTeam):
+		// /api/team そのもの(末尾スラッシュ無し)・/api/teamx はここに一致しない → 404
+		// (ADR-0213・ADR-0209 §10 と同じ規則)。
+		return routeTeam, true
 	case strings.HasPrefix(path, prefixAssets):
 		if method != http.MethodGet && method != http.MethodHead {
 			return routeNone, false
@@ -108,8 +114,8 @@ func hasEmptySegment(path string) bool {
 	return false
 }
 
-// requiresHeaderCheck は /api/* のルート(calc・pokedex・record)にだけ X-Device-Id / X-Session-Id の
+// requiresHeaderCheck は /api/* のルート(calc・pokedex・record・team)にだけ X-Device-Id / X-Session-Id の
 // 検証を課す(ADR-0202 §4。/assets・/healthz・CORS プリフライトは課さない)。
 func requiresHeaderCheck(kind routeKind) bool {
-	return kind == routeCalc || kind == routePokedex || kind == routeRecord
+	return kind == routeCalc || kind == routePokedex || kind == routeRecord || kind == routeTeam
 }

@@ -22,6 +22,12 @@ struct ResultsSectionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            if let unsupportedNotice = viewModel.unsupportedNotice {
+                Text(unsupportedNotice)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .accessibilityIdentifier("calcUnsupportedNotice")
+            }
             ForEach(viewModel.rows) { row in
                 ResultRowView(display: row, barColor: barColor, tierChanged: changedRowIDs.contains(row.id))
             }
@@ -149,6 +155,12 @@ struct ResultRowView: View {
                     .background(ColorToken.bgGlass.color, in: Capsule())
                     .scaleEffect(badgeScale)
                     .accessibilityIdentifier("calcResultKO-\(display.id)")
+            }
+            if let unsupportedNote = display.unsupportedNote {
+                Text(unsupportedNote)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .accessibilityIdentifier("calcResultUnsupported-\(display.id)")
             }
         }
         .padding(SpacingToken.x3)

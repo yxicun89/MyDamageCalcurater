@@ -35,6 +35,9 @@ export const SCREEN_ROUTES = [
   { id: "speed", segment: "speed", label: appText.speedTabLabel, usesMaster: false },
   // JD5(ADR-0705 §1): 判定(抜けて倒せるか・返り討ちに遭うか)。
   { id: "judge", segment: "judge", label: appText.judgeTabLabel, usesMaster: true },
+  // P5-5 PR-A1(ADR-0309 §1): 構築ビルダー(一覧・新規作成・名前変更・削除)。PR-A1 自体はマスタ不要だが、
+  // PR-A2 のメンバー編集で種族・技・持ち物・特性の名前解決にマスタが要るため、最初から usesMaster: true。
+  { id: "team", segment: "team", label: appText.teamTabLabel, usesMaster: true },
 ] as const satisfies readonly ScreenRoute[];
 
 /** 画面 ID(SCREEN_ROUTES から導出する。手で union を書かない)。 */

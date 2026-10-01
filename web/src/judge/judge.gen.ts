@@ -337,6 +337,49 @@ export interface components {
        */
       displayChancePercent: number;
     };
+    /**
+     * @description 「この確定数は正しくない可能性がある」印 1 つ(ADR-0123・ADR-0708)。engine が正しく計算できない
+     *     技の機構・持ち物・特性に、数値は通常の式のまま付く(400 で拒否されない)。
+     *     意味・条件・並びの正はルートの api/openapi.yaml の UnsupportedMark と ADR-0123 で、
+     *     judge は calc-svc が返した値を**そのまま・同じ順で**中継するだけである(解釈・並べ替え・
+     *     重複除去・真偽値への丸めをしない。ADR-0708 §4)。judge が自分の契約に同じ定義を持つのは、
+     *     ルートの契約を $ref せず契約を独立に版管理するため(ADR-0012・ADR-0706 §2 の前例)。
+     */
+    UnsupportedMark: {
+      /**
+       * @description 印の対象。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
+       *     一致しないことがある(ADR-0708 §5)。attackerKoUnsupported(順方向)では
+       *     attacker_* = 自分・defender_* = その候補、defenderKoUnsupported(逆方向)では
+       *     attacker_* = その候補・defender_* = 自分を指す。
+       * @enum {string}
+       */
+      target: "move" | "attacker_item" | "attacker_ability" | "defender_item" | "defender_ability";
+      /**
+       * @description 印の理由。技は機構の値(13 種)か zero_power(威力 0 の攻撃技)、持ち物・特性は
+       *     unsupported_effect(効果スキーマで表せない)。judge はこの値を検査せず、
+       *     この列挙に無い値もそのまま中継する(engine が理由を足したときに judge の版で落とさない。
+       *     ADR-0708 §4・§6。契約は説明で、judge は印の意味を持たない)。
+       * @enum {string}
+       */
+      reason:
+        | "alt_defense_stat"
+        | "alt_offense_stat"
+        | "always_crit"
+        | "effectiveness_change"
+        | "field_specific"
+        | "fixed_damage"
+        | "ignore_defense_ranks"
+        | "move_specific"
+        | "multi_hit"
+        | "ohko"
+        | "priority_change"
+        | "type_change"
+        | "variable_power"
+        | "zero_power"
+        | "unsupported_effect";
+      /** @description 印が付いた技・持ち物・特性の ID(calc-svc が返したまま)。 */
+      id: string;
+    };
     OutspeedAndKoResponse: {
       /**
        * @description 相手候補ごとの判定結果(ADR-0703 §2)。request の defenders と**同じ順序・同じ件数**で、
@@ -412,6 +455,26 @@ export interface components {
        *     行動順に関わらず必ず計算する(自分が先に動いて倒しきれなかったときの被害も知りたいため)。
        */
       defenderKo: components["schemas"]["KOChance"];
+      /**
+       * @description attackerKo(順方向の計算。自分の技 → この候補)に付いた「正しく計算できていない可能性がある」印
+       *     (ADR-0708 §1)。calc-svc の CalcResult.unsupported をそのまま・同じ順で中継する。
+       *     **印が無いときは空配列**(null にも欄の欠落にもしない。ADR-0708 §3)。
+       *     画面はこれが空でないとき、attackerKo を「確定した数」として見せない
+       *     (「この確定数は当てにならないかもしれない」旨を添える。文言は画面の持ち物)。
+       *     自分の技が多段技・威力変動・固定ダメージのとき、またはこの計算で効く持ち物・特性が
+       *     engine の効果スキーマで表せないときに入る。
+       *     target の attacker_* は自分・defender_* はこの候補を指す(ADR-0708 §5)。
+       */
+      attackerKoUnsupported: components["schemas"]["UnsupportedMark"][];
+      /**
+       * @description defenderKo(逆方向の計算。この候補の技 → 自分)に付いた印(ADR-0708 §1)。
+       *     attackerKoUnsupported と同じ形で、**印が無いときは空配列**。
+       *     順方向の印と**まとめない**(どちらの確定数が疑わしいかを画面が区別できるように、
+       *     方向ごとに分けたまま返す。ADR-0708 §4)。
+       *     逆方向では役割が入れ替わるので、target の attacker_* は**この候補**・
+       *     defender_* は**自分**を指す(ADR-0708 §5。自分が持つ防御側で効く持ち物の印はこちらに入る)。
+       */
+      defenderKoUnsupported: components["schemas"]["UnsupportedMark"][];
     };
     Error: {
       code: components["schemas"]["ErrorCode"];

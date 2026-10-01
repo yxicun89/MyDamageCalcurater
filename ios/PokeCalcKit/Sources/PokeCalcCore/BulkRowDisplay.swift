@@ -49,8 +49,12 @@ public struct BulkRowDisplay: Identifiable, Equatable, Sendable {
     public let koTier: KOTier
     /// タイプ相性(0, 0.25, 0.5, 1, 2, 4)。`CalcViewModel.moveEffectiveness` が全行の一致を見るのに使う。
     public let effectiveness: Double
+    /// この行だけに付いた未対応の印の注記(`UnsupportedNoticeText.rowNote`。無ければ nil)。
+    /// 全行に共通する印は行ではなく `BulkResultDisplay.unsupportedNotice` に出す(ADR-0501「P6-17」3章)。
+    public let unsupportedNote: String?
 
-    public init(row: BulkCalcRow, items: [Item]) {
+    public init(row: BulkCalcRow, items: [Item], unsupportedNote: String? = nil) {
+        self.unsupportedNote = unsupportedNote
         preset = row.preset
         presetLabel = row.presetLabel
         itemId = row.itemId

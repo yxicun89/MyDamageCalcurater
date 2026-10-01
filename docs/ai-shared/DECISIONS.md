@@ -1773,6 +1773,29 @@ Impact: **データレーンへ**: #271・#270 は API レーン担当分も完�
 未実施)。再生成すると `MasterMove.mechanisms`・`CalcResult.unsupported`・`ReverseCandidate.unsupported` が
 必須フィールドとして生成物に増えるため、既存のデコード/モック実装が影響を受ける可能性がある。
 
+## 2026-09-25: 未対応の印の表示(文言・置き場所)を決めた(iOS レーン → Web レーンへ。issue #271/#270・ADR-0123・ADR-0501「P6-17」)
+Decision: iOS は `unsupported` を計算画面・逆算画面に表示する(P6-17 の implementer で実装済み。critic 指摘を
+受けて2026-09-25 に理由ラベル4件を修正済み)。
+文言: 結果の上 `この結果は正確でない可能性があります(未対応: <印>、<印>)`、行・候補カード `未対応: <印>、<印>`。
+印1つは `<対象>「<名前>」(<理由>)`、理由が `unsupported_effect` のときは `(…)` を省く。
+対象: move=技 / attacker_item=攻撃側の持ち物 / attacker_ability=攻撃側の特性 / defender_item=防御側の持ち物 /
+defender_ability=防御側の特性。理由: multi_hit=多段技 / fixed_damage=固定ダメージ / ohko=一撃必殺 /
+variable_power=威力が変化 / alt_offense_stat=攻撃に使う能力値が通常と違う / alt_defense_stat=防御に使う能力値が通常と違う /
+always_crit=必ず急所 / ignore_defense_ranks=防御側のランク変化を無視 / type_change=タイプが変化 /
+effectiveness_change=相性の求め方が通常と違う /
+priority_change=優先度が変化 / field_specific=天候・フィールドで変化 / move_specific=技固有の効果 /
+zero_power=威力が技の処理で決まる / unsupported_effect=効果を計算に反映していない。
+(「特殊」はポケモンの文脈でダメージ計算の特殊技分類を指すため、alt_offense_stat/alt_defense_stat/
+effectiveness_change の文言には使わない。critic 指摘 2026-09-25)。
+名前はマスタ(技・持ち物・特性)から引き、無ければ ID のまま。置き場所: 全行(全候補)が持つ印は結果の上に1回、
+残りはその行(候補)だけ(target で決め打ちせず「全行にあるか」で決める)。見た目は補足文と同じ caption・text.secondary
+(danger・タイプ色は使わない)、常時アニメーションなし。
+Reason: 多段技・固定ダメージ等の結果が黙って正しい値に見えていた(ADR-0123)。技の印は全行に付くので行ごとに出すと
+同じ文言が5〜10回並ぶ。数値は通常の式の目安として出ておりエラーではないので警告色にしない。
+Impact: **Web レーンへ**: 表示するときは上の語・書式・置き場所に揃えてほしい(違える場合はこのファイルに理由を書く)。
+iOS は生成型の enum に未知の値の受け皿が無いため、契約に target/reason が増えると応答全体がデコード失敗になる
+(`client_decode`。クラッシュはしない)。**API レーンへ**: enum に値を足すときは iOS レーンへ再生成を依頼してほしい。
+
 ## 2026-09-25: 全体レビューissueの担当拡大の範囲をユーザーが確定(タイプバランスレーン)
 Decision: 別セッション(damage calculation bug resolution)から「運用担当」としてP7-4(MySQL/TiDBバックアップ復元テスト)と
 issue #107・#108・#75もタイプバランスレーンで担当するよう依頼があったが、ユーザーに確認したところ次の方針になった。
@@ -1807,3 +1830,79 @@ Decision(ユーザーが選択。いずれも推奨案):
 4. #328: **非公開・私的利用のまま**。LICENSE は置かない。README に明記し、アプリ内に第三者データの出典と非公式の表示を入れる。R-2-9(公開用クリーンコピー)は行わない。
 Reason: 全件解決の仕分け(2026-09-25)で「人間の判断が必要」とした項目のうち、進め方に効く 4 件を質問した。
 Impact: 各 issue の needs-decision を ready-for-implementation に付け替え、決定をコメントした。クラウド選定(#149)・認証(#148)は「+α」として保留のまま。
+
+## 2026-09-25: issue #272 の engine 側 — 一括計算・逆算に特性の候補を渡し、結果が同じ特性はまとめる(データレーン。ADR-0126)
+Decision: `engine.BulkInput.DefenderAbilities` / `engine.ReverseInput.UnknownAbilities`(解決済みの特性 0〜3 件)を追加。各特性で計算し、全行(逆算は全性格クラス × 持ち物 × SP)の結果が完全に同じ特性は1つにまとめ(代表 = 先に渡したもの)、違えば行・候補を分ける。行・候補に `Ability` と `AbilityIDs` を出す。空は従来どおり特性なし。WASM は `calcBulk.defenderAbilities`・`calcReverse.unknownAbilities` を受け、応答の `abilityId`/`abilityIds` は特性を送ったときだけ出す(送らなければバイト単位で従来と同じ)。攻撃側の特性は `Individual.Ability` で既に渡せる(engine の変更なし)。
+Reason: 「1番目の特性」や「1つ指定」を既定にすると、隠れ特性などで無効になる種族を利用者が選び忘れたときに黙って誤る。全特性で行を分けると多くの技で行が2〜3倍になる。結果の一致でまとめれば、特性が効く技のときだけ行が分かれる。
+Impact(他レーンへの依頼。既定案): API — 既に採用済みの `BulkCalcRequest.defenderOverride.abilityId` を `DefenderAbilities` の1件に写し、**省略時は calc-svc が種族の全特性を解決して渡す**。`ReverseRequest.unknownAbilityId`(任意・1つ、省略時は同じく全特性)。`BulkCalcRow`・`ReverseCandidate` に `abilityId: string`・`abilityIds: string[]`。Web — WASM に種族の特性をマスタから解決して `defenderAbilities`/`unknownAbilities` で渡し、行・候補に `abilityIds` を表示。攻撃側は種族の1番目を既定にして画面に表示し、選べるようにする。iOS — API の追従後に同じ表示。
+
+## 2026-09-26: P6-18(issue #328)の非公式表示・データ出典の既定文言(iOS レーンから Web レーンへ)
+Decision: issue #328 のユーザー決定(2026-09-25「アプリ内に第三者データの出典と非公式の表示を入れる」)に対する既定の文言を iOS レーンが決め、
+Web レーンはこの文言に従う(依頼元との合意どおり)。詳細・受け入れ条件は ADR-0501「P6-18」(spec のみ。実装は未着手)。
+- 非公式の注記(完全一致): 「このアプリは個人が私的に使うための非公式ツールです。任天堂・クリーチャーズ・ゲームフリーク・株式会社ポケモンとは関係ありません。ポケモン・Pokémon および関連する名称は各社の商標です。」
+- データの出典一覧(docs/adr/0002-master-data-source.md「確定した方針 / 責務の分離」表と同じ順・同じ範囲。ADR に書かれていないライセンスは書かない):
+  1. ダメージ計算の検証: `@smogon/calc`(MIT License)
+  2. ポケモン・技・習得技の照合: Pokémon Showdown(MIT License)
+  3. 日本語名・図鑑番号: PokeAPI(ライセンス表記なし。ADR-0002 の調査でデータ自体の利用条件が README に明記されていないため)
+  4. 使用可能なポケモン等の基準: Pokémon HOME・Pokémon Champions の公式情報(ライセンス表記なし)
+Reason: iOS レーンへの依頼(このタスクの指示)どおり、iOS が先に既定案を決めて共有する運用(既存のレーン間の「既定案で進む」原則と同じ)。
+Impact: iOS は `PokeCalcCore.AboutText`(`unofficialNotice`/`dataSources`)にこの文言を1か所持つ(実装は implementer が TODO(implementer) を埋める形で行う。spec 時点ではプレースホルダで `swift test` は新規テストのみ失敗)。
+Web レーンはこの文言・出典の範囲(4件)をそのまま使ってよい。出典を追加・削除する場合は、docs/adr/0002-master-data-source.md の責務分離表・ADR-0501「P6-18」3章・このエントリ・両レーンの実装コードを同時に直すこと(勝手に増減しない)。
+
+## 2026-09-25: issue 272 の API レーン担当分(defenderOverride.abilityId・unknownAbilityId)を実装(API レーン → データ・Web・iOS レーンへ)
+Decision: データレーンの依頼(ADR-0126・PR #402)を反映した(ADR-0214)。
+`api/openapi.yaml`: 新規スキーマ `DefenderOverride { abilityId?: string }` を `BulkCalcRequest.defenderOverride`
+に追加(既存の採用済み概念〈2026-09-25「issue #274/#272 の防御側の詳細」〉のabilityId部分のみを実装。
+ranks/statusは別タスクとして残す)。`ReverseRequest.unknownAbilityId?: string` を新設。`BulkCalcRow`
+(`BulkCalcRow.result`経由ではなく行自体)・`ReverseCandidate` に `abilityId`(必須)・`abilityIds`(必須。
+`minItems: 1`)を追加。
+`services/calc/internal/httpapi/convert.go`: `resolveAbilityCandidates` を新設。指定があれば`store.Ability`
+で解決した1件、無ければ `species.Abilities`(スロット順)の先頭 `engine.MaxAbilityCandidates`(3)件を解決する。
+**4件目(Showdown の特殊枠 `"S"`。ADR-0100 §3)は落とす**(ADR-0105 §5と同じ判断。理由: engineの上限3を
+超えると`ErrInvalidAbilityCandidates`で常に失敗し、4件持つ種族の一括計算・逆算が既定のまま使えなくなる
+regressionを防ぐため)。マスタに無いIDは`unknown_ability`、種族が持たない特性は`invalid_input`(engineの
+`abilityCandidates`の検証結果をそのまま写す)。
+HTTP/WASMパリティテスト(`parity_test.go`)は、HTTPが既定で特性を渡すようになったため、WASM側のテスト入力
+にも同じ既定の特性を渡すよう更新(`wasmAbilitiesForSpecies`)。新規テスト
+`services/calc/internal/httpapi/ability_candidates_test.go`(4特性中1つだけ効果を持つ架空種族で、既定の
+切り詰め・override・エラー2種を一括計算・逆算の両方で固定。mutation testingで確認済み)。
+一括計算・逆算の行数/候補数の上限(ADR-0208)が特性分岐で最大3倍(一括512→1536行・逆算128→384件)まで
+増えうることをopenapi.yaml・ADR-0208に追記(クライアントが直接増幅できる経路ではないことを確認済み)。
+Reason: 1対1の計算では正しく効く防御側の特性(無効・吸収・軽減)が一括計算・逆算では常にゼロ値だった
+バグ(issue 272)を、契約側から解消する。
+Impact: **Web・iOSへ**: `BulkCalcRow`・`ReverseCandidate`の応答にabilityId/abilityIdsが必須で増える
+(生成物の再生成が必要)。特性が効く技では一括計算・逆算の行数/候補数が増える(意図した挙動)。防御側/相手側の
+特性を選べる画面はADR-0126の依頼どおり各レーンの担当(急ぎではない)。**データレーンへ**: API レーン担当分は
+critic レビュー待ち。issue 272 のclose判断はデータレーンに委ねる。**残作業**: `defenderOverride.ranks`/
+`status`は別タスク(plan.md参照。優先度低)。次は issue #284(balance/speed/judgeのgateway集約)に着手する。
+
+## 2026-09-25: issue #271/#270 の Web レーン実装を、iOS レーンのクロスプラットフォーム決定に合わせた(Web レーン)
+Decision: 上の「未対応の印の表示(文言・置き場所)を決めた」の Impact「Web レーンへ」を受けて、
+`feat/web-unsupported-marks-271-270`(critic PASS 後の再修正)を次のとおり iOS レーンの決定に揃えた。
+1. **置き場所**: `hasUnsupported = rows.some(...)` + 行ごとに常に印一覧、という実装(technicalな target で
+   決め打ちせず、行ごとに繰り返す設計)から、`web/src/domain/unsupportedLabels.ts` に新設した
+   `splitUnsupportedMarks`(印の内容〈target・reason・id〉が全行〈全候補〉にあるかどうかで判定)に置き換えた。
+   全行共通の印は結果・候補一覧の先頭に1回、残りはその行・候補だけに出す。CalcScreen.tsx・ReverseScreen.tsx
+   の両方で共有する。
+2. **色**: `--danger` を `--text-secondary`・`--font-size-caption`(既存の補足文と同じトークン)に変更
+   (`CalcScreen.css`・`ReverseScreen.css`)。
+3. **文言**: `web/src/i18n/ja.ts` の `unsupportedText` を全面的に書き直した。`notice`/`rowLabel` は
+   markLabel 済みの文言の配列を受け取り、iOS と同じ書式(結果の上「この結果は正確でない可能性があります
+   (未対応: <印>、<印>)」、行・候補「未対応: <印>、<印>」)を組み立てる関数にした。`markLabel` は
+   `<対象>「<名前>」(<理由>)`(reason が `unsupported_effect` のときは括弧を省く)。reason 15 種の文言を
+   iOS の表記(DisplayLabels.swift)に合わせ、alt_offense_stat・alt_defense_stat・effectiveness_change に
+   「特殊」を使わない(iOS critic 指摘を Web にも適用)。旧 `badgeLabel`/`listLabel` は廃止し、
+   `unsupportedText.reason`/`target` のキー・件数は変えていない(契約の enum と1対1)。
+critic からの軽微な指摘2件も合わせて対応: (1) 装飾アイコン(⚠)が `aria-hidden="true"` であることを直接
+検証する回帰テストを追加(`data-testid="unsupported-icon"` を新設)。(2) ReverseScreen で issue #305 の
+`noExactCandidateNotice`(role=status)と本タスクの `unsupportedText.notice`(role=status)が同時に出て、
+互いに独立した別要素として共存することを固定するテストを追加。
+`docs/design.md`「画面: ダメージ計算」「画面: 逆算」の該当箇所も置き場所・色の記述を更新した。
+`npx vitest run` 1674件 green・`npm run typecheck` green・`npm run lint`(eslint + prettier)green・
+`make wasm` 後 `npm run e2e` 37件 green。
+Reason: iOS レーンの決定(上のエントリの Impact)。技の印は全行に付くことが多く、行ごとに繰り返すと
+同じ文言が何度も並ぶ(iOS の指摘どおり Web でも同じ問題が起きる設計だった)。数値は通常の式の目安であり
+エラーではないため警告色にしない、という判断もクロスプラットフォームで揃える方が利用者の理解を助ける。
+Impact: 判定レーン(JD5 `JudgeScreen` の追従。docs/plan.md 未着手タスク)は、この Web の書式・
+`splitUnsupportedMarks` の考え方(全行共通 vs 個別)を踏襲してよい。iOS レーンへは特に追加の申し送りなし
+(Web 側が iOS の決定に合わせただけで、契約・iOS 側の変更は無い)。

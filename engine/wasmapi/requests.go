@@ -98,6 +98,8 @@ type bulkRequest struct {
 	Presets         []presetDTO   `json:"presets"`
 	PresetKeys      []string      `json:"presetKeys"`
 	ItemVariants    []*itemDTO    `json:"itemVariants"`
+	// DefenderAbilities は防御側の特性の候補(issue #272・ADR-0126)。省略・空は特性なし(従来どおり)。
+	DefenderAbilities []abilityDTO `json:"defenderAbilities"`
 	// TypeChart は必須。省略は type_chart_missing(ADR-0011 §13)。
 	TypeChart typeChartDTO `json:"typeChart"`
 }
@@ -109,11 +111,15 @@ type bulkDefenderDTO struct {
 }
 
 type bulkRowDTO struct {
-	Preset      string          `json:"preset"`
-	PresetLabel string          `json:"presetLabel"`
-	ItemID      string          `json:"itemId"`
-	Defender    bulkDefenderDTO `json:"defender"`
-	Result      calcResultDTO   `json:"result"`
+	Preset      string `json:"preset"`
+	PresetLabel string `json:"presetLabel"`
+	ItemID      string `json:"itemId"`
+	// AbilityID / AbilityIDs は計算に使った特性と、結果が同じ特性(ADR-0126)。
+	// defenderAbilities を送らなかったときは出さない(従来の応答とバイト単位で同じにする)。
+	AbilityID  string          `json:"abilityId,omitempty"`
+	AbilityIDs []string        `json:"abilityIds,omitempty"`
+	Defender   bulkDefenderDTO `json:"defender"`
+	Result     calcResultDTO   `json:"result"`
 }
 
 type bulkResultDTO struct {
@@ -134,6 +140,9 @@ func (r *bulkRequest) run() (bulkResultDTO, error) {
 	}
 	if len(r.ItemVariants) > engine.MaxBulkItemVariants {
 		return bulkResultDTO{}, fail(CodeInvalidInput, "itemVariants は %d 件以下でなければならない: %d 件", engine.MaxBulkItemVariants, len(r.ItemVariants))
+	}
+	if len(r.DefenderAbilities) > engine.MaxAbilityCandidates {
+		return bulkResultDTO{}, fail(CodeInvalidInput, "defenderAbilities は %d 件以下でなければならない: %d 件", engine.MaxAbilityCandidates, len(r.DefenderAbilities))
 	}
 
 	format, err := parseFormat(r.Format)
@@ -189,6 +198,10 @@ func (r *bulkRequest) run() (bulkResultDTO, error) {
 	if err != nil {
 		return bulkResultDTO{}, err
 	}
+	defAbilities, err := abilitiesToEngine("defenderAbilities", r.DefenderAbilities)
+	if err != nil {
+		return bulkResultDTO{}, err
+	}
 	if err := validateIndividual("攻撃側", attacker); err != nil {
 		return bulkResultDTO{}, err
 	}
@@ -199,6 +212,7 @@ func (r *bulkRequest) run() (bulkResultDTO, error) {
 	res, err := engine.CalcBulk(engine.BulkInput{
 		Format: format, Attacker: attacker, DefenderSpecies: species, Move: move, Field: field,
 		Critical: r.Critical, Presets: presets, PresetKeys: keys, ItemVariants: variants, TypeChart: chart,
+		DefenderAbilities: defAbilities,
 	})
 	if err != nil {
 		return bulkResultDTO{}, err
@@ -210,6 +224,8 @@ func (r *bulkRequest) run() (bulkResultDTO, error) {
 			Preset:      string(row.Preset),
 			PresetLabel: row.PresetLabel,
 			ItemID:      row.ItemID,
+			AbilityID:   row.Ability.ID,
+			AbilityIDs:  row.AbilityIDs,
 			Defender: bulkDefenderDTO{
 				SP:     statsFrom(row.Defender.SP),
 				Nature: natureFrom(row.Defender.Nature),
@@ -241,6 +257,8 @@ type reverseRequest struct {
 	ItemCandidates []*itemDTO       `json:"itemCandidates"`
 	Observations   []observationDTO `json:"observations"`
 	MaxCandidates  int              `json:"maxCandidates"`
+	// UnknownAbilities は相手の特性の候補(issue #272・ADR-0126)。省略・空は特性なし(従来どおり)。
+	UnknownAbilities []abilityDTO `json:"unknownAbilities"`
 	// TypeChart は必須。省略は type_chart_missing(ADR-0011 §13)。
 	TypeChart typeChartDTO `json:"typeChart"`
 }
@@ -253,16 +271,19 @@ type spRangeDTO struct {
 
 // reverseCandidateDTO は候補1件(P1-12。ADR-0010 §R3・§R8)。
 type reverseCandidateDTO struct {
-	NatureClass string       `json:"natureClass"`
-	Nature      natureDTO    `json:"nature"`
-	ItemID      string       `json:"itemId"`
-	Ranges      []spRangeDTO `json:"ranges"`
-	SPCount     int          `json:"spCount"`
-	Exact       bool         `json:"exact"`
-	Mismatch    int          `json:"mismatch"`
-	Support     int          `json:"support"`
-	MinPercent  tenthPercent `json:"minPercent"`
-	MaxPercent  tenthPercent `json:"maxPercent"`
+	NatureClass string    `json:"natureClass"`
+	Nature      natureDTO `json:"nature"`
+	ItemID      string    `json:"itemId"`
+	// AbilityID / AbilityIDs は bulk の行と同じ(ADR-0126)。unknownAbilities を送らなかったときは出さない。
+	AbilityID  string       `json:"abilityId,omitempty"`
+	AbilityIDs []string     `json:"abilityIds,omitempty"`
+	Ranges     []spRangeDTO `json:"ranges"`
+	SPCount    int          `json:"spCount"`
+	Exact      bool         `json:"exact"`
+	Mismatch   int          `json:"mismatch"`
+	Support    int          `json:"support"`
+	MinPercent tenthPercent `json:"minPercent"`
+	MaxPercent tenthPercent `json:"maxPercent"`
 	// Unsupported は候補の計算に付いた「未対応」の印(ADR-0123)。印なしは空配列。
 	Unsupported []unsupportedMarkDTO `json:"unsupported"`
 }
@@ -286,6 +307,9 @@ func (r *reverseRequest) run() (reverseResultDTO, error) {
 	}
 	if r.MaxCandidates < 0 || r.MaxCandidates > engine.MaxReverseMaxCandidates {
 		return reverseResultDTO{}, fail(CodeInvalidInput, "maxCandidates は 0..%d でなければならない: %d", engine.MaxReverseMaxCandidates, r.MaxCandidates)
+	}
+	if len(r.UnknownAbilities) > engine.MaxAbilityCandidates {
+		return reverseResultDTO{}, fail(CodeInvalidInput, "unknownAbilities は %d 件以下でなければならない: %d 件", engine.MaxAbilityCandidates, len(r.UnknownAbilities))
 	}
 
 	format, err := parseFormat(r.Format)
@@ -316,6 +340,10 @@ func (r *reverseRequest) run() (reverseResultDTO, error) {
 	if err != nil {
 		return reverseResultDTO{}, err
 	}
+	unknownAbilities, err := abilitiesToEngine("unknownAbilities", r.UnknownAbilities)
+	if err != nil {
+		return reverseResultDTO{}, err
+	}
 	var obs []engine.Observation
 	if r.Observations != nil {
 		obs = make([]engine.Observation, 0, len(r.Observations))
@@ -335,7 +363,7 @@ func (r *reverseRequest) run() (reverseResultDTO, error) {
 	res, err := engine.CalcReverse(engine.ReverseInput{
 		Format: format, Side: engine.ReverseSide(r.Side), Known: known, UnknownSpecies: species,
 		Move: move, Field: field, Critical: r.Critical, ItemCandidates: items,
-		Observations: obs, MaxCandidates: r.MaxCandidates, TypeChart: chart,
+		Observations: obs, MaxCandidates: r.MaxCandidates, TypeChart: chart, UnknownAbilities: unknownAbilities,
 	})
 	if err != nil {
 		return reverseResultDTO{}, err
@@ -351,6 +379,8 @@ func (r *reverseRequest) run() (reverseResultDTO, error) {
 			NatureClass: string(c.NatureClass),
 			Nature:      natureFrom(c.Nature),
 			ItemID:      c.ItemID,
+			AbilityID:   c.Ability.ID,
+			AbilityIDs:  c.AbilityIDs,
 			Ranges:      ranges,
 			SPCount:     c.SPCount,
 			Exact:       c.Exact,
@@ -365,4 +395,20 @@ func (r *reverseRequest) run() (reverseResultDTO, error) {
 		Side: string(res.Side), Stat: string(res.Stat), AssumedHPSP: res.AssumedHPSP,
 		ExactCount: res.ExactCount, Candidates: cands,
 	}, nil
+}
+
+// abilitiesToEngine は特性の候補を変換する。省略(nil)は nil のまま(engine で特性なしの1通り)。
+func abilitiesToEngine(path string, in []abilityDTO) ([]engine.Ability, error) {
+	if len(in) == 0 {
+		return nil, nil
+	}
+	out := make([]engine.Ability, 0, len(in))
+	for i, a := range in {
+		ability, err := a.toEngine(fmt.Sprintf("%s[%d]", path, i))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ability)
+	}
+	return out, nil
 }

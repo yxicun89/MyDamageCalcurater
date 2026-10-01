@@ -120,27 +120,28 @@ func mustParseURL(t *testing.T, raw string) *url.URL {
 	return u
 }
 
-// testEnv は5つの上流の偽物と、それらに向けた gateway のハンドラ。web・record の偽物は常に起動するが、
-// Config の WebURL / RecordURL に入るのは newWebTestEnv / newRecordTestEnv のときだけ
-// (newTestEnv では未設定 = 従来どおり。ADR-0209 §10 の record_routing_test.go が前提にする)。
+// testEnv は6つの上流の偽物と、それらに向けた gateway のハンドラ。web・record・team の偽物は常に
+// 起動するが、Config の WebURL / RecordURL / TeamURL に入るのは newWebTestEnv / newRecordTestEnv /
+// newTeamTestEnv のときだけ(newTestEnv では未設定 = 従来どおり。ADR-0209 §10 の
+// record_routing_test.go・ADR-0213 の team_routing_test.go が前提にする)。
 type testEnv struct {
-	calc, pokedex, assets, web, record *fakeUpstream
-	handler                            http.Handler
+	calc, pokedex, assets, web, record, team *fakeUpstream
+	handler                                  http.Handler
 }
 
 // newTestEnv は既定の Config(calc・pokedex・assets の上流・許可オリジン2つ・タイムアウト 2s。WebURL・
-// RecordURL は未設定)で gateway を作る。mutate で Config を書き換えられる(未設定の上流・短いタイムアウト・
-// CORS 無しなど)。
+// RecordURL・TeamURL は未設定)で gateway を作る。mutate で Config を書き換えられる(未設定の上流・
+// 短いタイムアウト・CORS 無しなど)。
 func newTestEnv(t *testing.T, mutate ...func(*Config)) *testEnv {
 	t.Helper()
-	return buildTestEnv(t, false, false, mutate...)
+	return buildTestEnv(t, false, false, false, mutate...)
 }
 
 // newWebTestEnv は newTestEnv に加えて WebURL を web の偽物に向けた gateway を作る(ADR-0205)。
 // mutate は WebURL を設定した後に適用する(WebURL を閉じたサーバや遅いサーバに差し替えられる)。
 func newWebTestEnv(t *testing.T, mutate ...func(*Config)) *testEnv {
 	t.Helper()
-	return buildTestEnv(t, true, false, mutate...)
+	return buildTestEnv(t, true, false, false, mutate...)
 }
 
 // newRecordTestEnv は newTestEnv に加えて RecordURL を record の偽物に向けた gateway を作る
@@ -148,10 +149,18 @@ func newWebTestEnv(t *testing.T, mutate ...func(*Config)) *testEnv {
 // 別のコンストラクタにしてある。
 func newRecordTestEnv(t *testing.T, mutate ...func(*Config)) *testEnv {
 	t.Helper()
-	return buildTestEnv(t, false, true, mutate...)
+	return buildTestEnv(t, false, true, false, mutate...)
 }
 
-func buildTestEnv(t *testing.T, withWeb, withRecord bool, mutate ...func(*Config)) *testEnv {
+// newTeamTestEnv は newTestEnv に加えて TeamURL を team の偽物に向けた gateway を作る(ADR-0213)。
+// team_routing_test.go の既定(TeamURL 未設定)を壊さないよう、newTestEnv とは別のコンストラクタに
+// してある。
+func newTeamTestEnv(t *testing.T, mutate ...func(*Config)) *testEnv {
+	t.Helper()
+	return buildTestEnv(t, false, false, true, mutate...)
+}
+
+func buildTestEnv(t *testing.T, withWeb, withRecord, withTeam bool, mutate ...func(*Config)) *testEnv {
 	t.Helper()
 	env := &testEnv{
 		calc:    newFakeUpstream(t, "calc"),
@@ -159,6 +168,7 @@ func buildTestEnv(t *testing.T, withWeb, withRecord bool, mutate ...func(*Config
 		assets:  newFakeUpstream(t, "assets"),
 		web:     newFakeUpstream(t, "web"),
 		record:  newFakeUpstream(t, "record"),
+		team:    newFakeUpstream(t, "team"),
 	}
 	cfg := Config{
 		CalcURL:            env.calc.url(t),
@@ -173,6 +183,9 @@ func buildTestEnv(t *testing.T, withWeb, withRecord bool, mutate ...func(*Config
 	if withRecord {
 		cfg.RecordURL = env.record.url(t)
 	}
+	if withTeam {
+		cfg.TeamURL = env.team.url(t)
+	}
 	for _, m := range mutate {
 		m(&cfg)
 	}
@@ -184,9 +197,9 @@ func buildTestEnv(t *testing.T, withWeb, withRecord bool, mutate ...func(*Config
 	return env
 }
 
-// upstreams は5つの上流を名前つきで返す(「どこにも届かない」の検査用。web・record は未設定でも含める)。
+// upstreams は6つの上流を名前つきで返す(「どこにも届かない」の検査用。web・record・team は未設定でも含める)。
 func (e *testEnv) upstreams() []*fakeUpstream {
-	return []*fakeUpstream{e.calc, e.pokedex, e.assets, e.web, e.record}
+	return []*fakeUpstream{e.calc, e.pokedex, e.assets, e.web, e.record, e.team}
 }
 
 // assertNoUpstreamReached はどの上流にもリクエストが届いていないことを確かめる。

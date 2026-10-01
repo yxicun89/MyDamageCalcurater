@@ -35,6 +35,8 @@ type Config struct {
 	PokedexURL *url.URL
 	// RecordURL は record-svc の基底 URL(ADR-0209 §10)。nil なら /api/record/* は 503 upstream_unavailable。
 	RecordURL *url.URL
+	// TeamURL は team-svc の基底 URL(ADR-0213)。nil なら /api/team/* は 503 upstream_unavailable。
+	TeamURL *url.URL
 	// AssetsURL は画像配信(MinIO)の基底 URL。nil なら /assets/* は 404 not_found。
 	AssetsURL *url.URL
 	// WebURL は Web の静的配信(nginx)の基底 URL(ADR-0205)。設定されていれば /api・/assets/*・/healthz・
@@ -57,6 +59,7 @@ type gateway struct {
 	calcProxy    *httputil.ReverseProxy
 	pokedexProxy *httputil.ReverseProxy // nil なら /api/pokedex/* は 503(PokedexURL 未設定)
 	recordProxy  *httputil.ReverseProxy // nil なら /api/record/* は 503(RecordURL 未設定)
+	teamProxy    *httputil.ReverseProxy // nil なら /api/team/* は 503(TeamURL 未設定)
 	assetsProxy  *httputil.ReverseProxy // nil なら /assets/* は 404(AssetsURL 未設定)
 	webProxy     *httputil.ReverseProxy // nil なら予約パス以外の GET / HEAD は 404(WebURL 未設定。ADR-0205)
 }
@@ -74,6 +77,9 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	}
 	if cfg.RecordURL != nil {
 		g.recordProxy = newReverseProxy(cfg.RecordURL, cfg.UpstreamTimeout, cfg.transport, restoreIDs, g.originAllowed)
+	}
+	if cfg.TeamURL != nil {
+		g.teamProxy = newReverseProxy(cfg.TeamURL, cfg.UpstreamTimeout, cfg.transport, restoreIDs, g.originAllowed)
 	}
 	if cfg.AssetsURL != nil {
 		g.assetsProxy = newReverseProxy(cfg.AssetsURL, cfg.UpstreamTimeout, cfg.transport, keepIDsAsIs, g.originAllowed)
@@ -180,6 +186,11 @@ func (g *gateway) serve(c *echo.Context) error {
 			return g.ownError(c, origin, allowed, newError(api.UpstreamUnavailable, "%s", msgUpstreamUnavailable))
 		}
 		g.recordProxy.ServeHTTP(c.Response(), r)
+	case routeTeam:
+		if g.teamProxy == nil {
+			return g.ownError(c, origin, allowed, newError(api.UpstreamUnavailable, "%s", msgUpstreamUnavailable))
+		}
+		g.teamProxy.ServeHTTP(c.Response(), r)
 	case routeAssets:
 		if g.assetsProxy == nil {
 			return g.ownError(c, origin, allowed, newError(api.NotFound, "%s", msgNotFound))

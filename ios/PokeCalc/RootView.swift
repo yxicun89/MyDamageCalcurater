@@ -96,6 +96,15 @@ struct RootView: View {
                         .font(TextStyleToken.heading.font)
                         .foregroundStyle(ColorToken.textPrimary.color)
                 }
+                // P6-18(issue #328): 非公式の表示とデータの出典への控えめな入口。
+                // `.principal` は上記の見出しで埋まっているため `.topBarTrailing` に置く。
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink(value: AboutScreenRoute()) {
+                        Image(systemName: "info.circle")
+                    }
+                    .accessibilityIdentifier("openAboutScreen")
+                    .accessibilityLabel("このアプリについて")
+                }
             }
             .navigationDestination(for: CalcScreenRoute.self) { _ in
                 if case .ready(let service, let backendDescription) = environment {
@@ -111,6 +120,9 @@ struct RootView: View {
                 if case .ready(let service, _) = environment {
                     TeamListView(store: teamStore, service: service, path: $path)
                 }
+            }
+            .navigationDestination(for: AboutScreenRoute.self) { _ in
+                AboutView()
             }
         }
         .task {
@@ -172,6 +184,9 @@ private struct ReverseScreenRoute: Hashable {}
 
 /// `NavigationPath` に積む構築一覧画面の行き先(値だけで、状態は持たない)。
 private struct TeamListScreenRoute: Hashable {}
+
+/// `NavigationPath` に積む「このアプリについて」画面の行き先(値だけで、状態は持たない。P6-18)。
+private struct AboutScreenRoute: Hashable {}
 
 #Preview {
     if let mock = try? MockPokeCalcService() {

@@ -406,6 +406,8 @@ func outspeedAndKo(c *echo.Context, deps Dependencies, params api.OutspeedAndKoP
 				Guaranteed:           reverse.KO.Guaranteed,
 				DisplayChancePercent: reverse.KO.DisplayChancePercent,
 			},
+			AttackerKoUnsupported: toAPIUnsupportedMarks(forward.Unsupported),
+			DefenderKoUnsupported: toAPIUnsupportedMarks(reverse.Unsupported),
 		}
 	}
 
@@ -664,6 +666,22 @@ func toClientIndividual(input individualInput) client.Individual {
 			SpA: input.ranks.SpA, SpD: input.ranks.SpD, Spe: input.ranks.Spe,
 		},
 	}
+}
+
+// toAPIUnsupportedMarks converts calc-svc の unsupported(client.UnsupportedMark)を、
+// judge の契約の型(api.UnsupportedMark)にそのまま・同じ順で写す(ADR-0708 §4)。judge は
+// 解釈・並べ替え・間引きをしない。印が無いときも**空スライス**を返す(nil にしない。ADR-0708 §3:
+// 契約は attackerKoUnsupported/defenderKoUnsupported を必須の配列とし、null を許さない)。
+func toAPIUnsupportedMarks(marks []client.UnsupportedMark) []api.UnsupportedMark {
+	out := make([]api.UnsupportedMark, 0, len(marks))
+	for _, m := range marks {
+		out = append(out, api.UnsupportedMark{
+			Target: api.UnsupportedMarkTarget(m.Target),
+			Reason: api.UnsupportedMarkReason(m.Reason),
+			Id:     m.ID,
+		})
+	}
+	return out
 }
 
 // toClientField forwards field as-is to calc-svc; judge never interprets weather/terrain/

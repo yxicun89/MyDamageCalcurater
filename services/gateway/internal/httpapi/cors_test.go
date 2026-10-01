@@ -13,8 +13,8 @@ import (
 // プリフライトの応答ヘッダの期待値(ADR-0202 §6)。
 const (
 	// DELETE は P5-3(record-svc の全削除 API)で足した(ADR-0209 §10-2・AC-P8)。
-	// team の PUT / PATCH は P5-4 で足す。
-	wantAllowMethods = "GET, POST, DELETE, OPTIONS"
+	// PUT は P5-4(team-svc の updateTeam)で足した(ADR-0213・AC-T9)。
+	wantAllowMethods = "GET, POST, PUT, DELETE, OPTIONS"
 	wantAllowHeaders = "Content-Type, X-Device-Id, X-Session-Id"
 	wantMaxAge       = "600"
 )

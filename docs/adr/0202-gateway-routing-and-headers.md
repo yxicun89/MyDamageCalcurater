@@ -42,6 +42,7 @@
 | `/api/calc`、`/api/calc/*` | calc-svc | `/api/calcx` のような前方一致は拾わない |
 | `/api/pokedex/*` | pokedex-svc | `/api/pokedex` そのものは 404 |
 | `/api/record/*` | record-svc | `/api/record` そのものは 404(2026-09-25 追記。P5-3・ADR-0209 §10-1)。上流(`GATEWAY_RECORD_URL`)未設定なら 503 `upstream_unavailable` |
+| `/api/team/*` | team-svc | `/api/team` そのもの・`/api/teamx` は 404(2026-09-25 追記。P5-4・ADR-0213 §7)。上流(`GATEWAY_TEAM_URL`)未設定なら 503 `upstream_unavailable` |
 | `/assets/*`(GET / HEAD のみ) | assets の上流(MinIO) | それ以外のメソッドは 404 `not_found` |
 | `GET /healthz` | gateway 自身 | 200 `{"status":"ok"}`。openapi に載せない(ADR-0200 と同じ)。上流の `/healthz` は外に出さない |
 | それ以外(`/api/balance` を含む) | なし | 404 `not_found`(Error 形式)。`/api/balance` は独自の Ingress(ADR-0012) |
@@ -119,9 +120,10 @@
 - 上流を経由する応答は、上流が独自に付けた `Access-Control-*`(誤った `*` や別オリジンの反射を含む)を`ReverseProxy.ModifyResponse`
   で全部取り除いてから、許可オリジンのときだけ gateway 自身の ACAO を1つだけ付け直す(上流の判断をそのまま外へ出さない)。
 - プリフライト(OPTIONS + `Access-Control-Request-Method`)は 204(本文なし)で、上流に送らない。許可オリジンなら
-  `Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS`(**2026-09-25 追記。P5-3**: `DELETE` は端末単位の全削除 API
+  `Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS`(**2026-09-25 追記。P5-3**: `DELETE` は端末単位の全削除 API
   〈ADR-0209 §5・§10-2〉のために足した。これが無いと別オリジンのブラウザからプリフライトが通らず Web から呼べない。
-  team の CRUD が要る `PUT` / `PATCH` は P5-4 で足す)、`Access-Control-Allow-Headers: Content-Type, X-Device-Id, X-Session-Id`、
+  **2026-09-25 追記。P5-4**: `PUT` は構築の置換〈`updateTeam`。ADR-0213 §2・§7〉のために足した。
+  `PATCH` は足さない — ADR-0213 §2 で部分更新を持たないと決めたため)、`Access-Control-Allow-Headers: Content-Type, X-Device-Id, X-Session-Id`、
   `Access-Control-Max-Age: 600`。許可外のオリジン・CORS 未設定なら CORS ヘッダ無しの 204(ブラウザが拒否する)。
 - 認証なしなので `Access-Control-Allow-Credentials` は付けない。`*` は使わない(設定でも拒否)。
 

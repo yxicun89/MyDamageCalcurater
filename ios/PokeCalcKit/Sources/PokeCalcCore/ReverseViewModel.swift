@@ -689,7 +689,9 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
         do {
             let response = try await service.reverse(request)
             guard token == latestRequestToken else { return }
-            result = ReverseResultDisplay(result: response, items: itemOptions)
+            // 逆算画面は特性の一覧を持たないので、特性の印は ID のまま出る(ADR-0501「P6-17」3章)。
+            let names = UnsupportedMarkNames(moves: Array(moveDictionary.values), items: itemOptions, abilities: [])
+            result = ReverseResultDisplay(result: response, items: itemOptions, names: names)
             error = nil
             isLoading = false
         } catch {

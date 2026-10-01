@@ -599,4 +599,32 @@ final class LargeTextLayoutUITests: XCTestCase {
         assertNoHorizontalOverflow(app, identifiers: Self.teamEditIdentifiers)
         assertNoHorizontalOverflowForPrefixes(app, prefixes: Self.teamEditMemberCardPrefixes)
     }
+
+    // MARK: - このアプリについて画面(P6-18。issue #328。ADR-0501「P6-18」4章の5)
+
+    /// 非公式の注記(長文)と4件のデータ出典。`aboutDataSource-<index>` は member id のような
+    /// 可変IDを含まないため前方一致ではなく完全一致の配列でよい(`calcScreenIdentifiers` と同じ形)。
+    private static let aboutScreenIdentifiers = [
+        "aboutScreen",
+        "aboutUnofficialNotice",
+        "aboutDataSource-0",
+        "aboutDataSource-1",
+        "aboutDataSource-2",
+        "aboutDataSource-3",
+    ]
+
+    private func openAboutScreen(_ app: XCUIApplication) {
+        let openButton = app.buttons["openAboutScreen"]
+        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout))
+        openButton.tap()
+        XCTAssertTrue(element(app, "aboutScreen").waitForExistence(timeout: Self.existenceTimeout))
+    }
+
+    /// P6-18 本体: AX5(最大の文字サイズ)でも、非公式の注記(長文)とデータの出典一覧が横にはみ出さない。
+    /// 現時点(未実装)では identifier が見つからず失敗してよい。
+    func testAboutScreenNoHorizontalOverflowAtAX5() {
+        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        openAboutScreen(app)
+        assertNoHorizontalOverflow(app, identifiers: Self.aboutScreenIdentifiers)
+    }
 }

@@ -16,6 +16,9 @@ beforeEach(() => {
 
 afterEach(() => {
   window.history.replaceState(null, "", "/");
+  // P5-5 PR-A1: 末尾のタブ(構築)は開くと構築 API を呼ぶので、テストによっては fetch を差し替える。
+  // 差し替えを次のテストへ持ち越さない。
+  vi.restoreAllMocks();
 });
 
 test("アプリが描画される", () => {
@@ -201,17 +204,26 @@ describe("P4-4 タブの ARIA 配線とキーボード操作", () => {
   });
 
   test("Home/End で最初/最後のタブへ選択とフォーカスが移動する", async () => {
+    // P5-5 PR-A1: End で開く末尾のタブ(構築)はマウント時に構築 API を呼ぶ。通信は失敗させる
+    // (画面はそれでも壊れない。ADR-0309 §4)。
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
     const user = userEvent.setup();
     render(<App engine={createFakeEngine()} />);
     const calcTab = await screen.findByRole("tab", { name: "計算" });
     const reverseTab = screen.getByRole("tab", { name: "逆算" });
 
-    // JD5: 最後のタブは判定(ADR-0705 §1)。素早さ・タイプバランスは End からそれぞれ1・2つ手前。
+    // P5-5 PR-A1(ADR-0309 §1): 最後のタブは構築。判定・素早さ・タイプバランスは End からそれぞれ
+    // 1・2・3つ手前(JD5 の時点では判定が末尾だった)。
     const balanceTab = screen.getByRole("tab", { name: "タイプバランス" });
     const speedTab = screen.getByRole("tab", { name: "素早さ" });
     const judgeTab = screen.getByRole("tab", { name: "判定" });
+    const teamTab = screen.getByRole("tab", { name: "構築" });
     calcTab.focus();
     await user.keyboard("{End}");
+    expect(teamTab).toHaveAttribute("aria-selected", "true");
+    expect(teamTab).toHaveFocus();
+
+    await user.keyboard("{ArrowLeft}");
     expect(judgeTab).toHaveAttribute("aria-selected", "true");
     expect(judgeTab).toHaveFocus();
 
@@ -444,5 +456,33 @@ describe("P4-5 計算モード(オフライン / オンライン)の切り替え
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(headAppendSpy).not.toHaveBeenCalled();
     expect(headAppendChildSpy).not.toHaveBeenCalled();
+  });
+});
+
+// issue #218(ADR-0308): タブを切り替えても入力が消えないこと。ここには最小の往復1件だけ置き
+// (上の「別タブの入力欄は取れない」を守る describe と同じファイルで回帰を見るため)、
+// 戻る/進む・遅延マウント・マスタ入れ替え・リロードの扱いは App.tabPersistence.test.tsx で確かめる。
+describe("issue #218 タブの往復で入力が消えない", () => {
+  test("計算タブで選んだ攻撃側・防御側は、逆算タブへ行って戻っても残る", async () => {
+    const master = await exampleMasterSource.load();
+    const [attacker, defender] = master.species;
+    if (attacker === undefined || defender === undefined) {
+      throw new Error("例データに種族が2つ以上要る");
+    }
+    const user = userEvent.setup();
+    render(<App engine={createFakeEngine()} />);
+
+    await user.selectOptions(await screen.findByRole("combobox", { name: "攻撃側のポケモン" }), attacker.key);
+    await user.selectOptions(screen.getByRole("combobox", { name: "防御側のポケモン" }), defender.key);
+
+    await user.click(screen.getByRole("tab", { name: "逆算" }));
+    // 逆算タブを出している間、計算画面の入力欄はアクセシビリティツリーから取れない(既存の保証)。
+    expect(screen.queryByRole("combobox", { name: "攻撃側のポケモン" })).toBeNull();
+    await screen.findByRole("combobox", { name: "自分のポケモン" });
+
+    await user.click(screen.getByRole("tab", { name: "計算" }));
+
+    expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toHaveValue(attacker.key);
+    expect(screen.getByRole("combobox", { name: "防御側のポケモン" })).toHaveValue(defender.key);
   });
 });

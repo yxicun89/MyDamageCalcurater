@@ -29,6 +29,12 @@ struct ReverseResultsSectionView: View {
                     .foregroundStyle(ColorToken.textPrimary.color)
                     .accessibilityIdentifier("reverseExactCount")
             }
+            if let unsupportedNotice = result?.unsupportedNotice {
+                Text(unsupportedNotice)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .accessibilityIdentifier("reverseUnsupportedNotice")
+            }
             VStack(alignment: .leading, spacing: SpacingToken.x2) {
                 ForEach(result?.candidates ?? []) { candidate in
                     ReverseCandidateCardView(candidate: candidate)
@@ -77,6 +83,12 @@ private struct ReverseCandidateCardView: View {
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
                 .accessibilityIdentifier("reverseCandidateMatch-\(candidate.id)")
+            if let unsupportedNote = candidate.unsupportedNote {
+                Text(unsupportedNote)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .accessibilityIdentifier("reverseCandidateUnsupported-\(candidate.id)")
+            }
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
