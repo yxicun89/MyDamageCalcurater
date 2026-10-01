@@ -260,25 +260,33 @@ DECISIONS.mdへクロスプラットフォームの文言・配置・色の決�
 JudgeScreen(JD5)は別contract(`attackerKoUnsupported`/`defenderKoUnsupported`)のため対象外、別タスクとして
 plan.mdに記載。`npx vitest run`1674/1674・`make web-e2e`37/37・typecheck/lint無回帰。opusのセッション
 利用枠上限で両criticともsonnetで代替実施(CLAUDE.mdのモデル割り当て方針どおり)。
-Next: オーケストレーターの見立て(2026-09-25、damage calculation bug resolution)に従い、
-**P5-5(履歴・よく計算する相手・構築ビルダー・ADR-0209 §8「この端末のデータを削除」UI)** に着手する
-(record-svc PR #372・team-svc PR #409がmain統合済み)。判定レーンとShowdown形式インポート/エクスポートの
-分担で合意済み(判定レーンが`web/src/team/showdownFormat.ts`等、Webは構築CRUD本体・履歴・よく使う相手・
-端末データ削除UIを担当。judge worktreeで既にブランチ`feat/web-team-showdown-format`が動いている模様、
-着手時に重複が無いか要確認)。完了時はdocs/verify-m1.md(またはM2用手順書)にM2動作確認手順を追加し、
-make deploy-latestの対象にrecord・team・TiDB・NATSが要るかAPIレーンと確認すること(オーケストレーターの
-依頼)。P5-5の後、#219・#211(APIレーン連携)、#272・#274(PR #411/ADR-0214でAPI分実装済み・PR #402/
+**P5-5a(構築ビルダーの骨格。一覧・新規作成・名前変更・削除)完了・main統合済み(2026-09-25。PR #417)**:
+新規タブ「構築」(`/team`、末尾、`usesMaster: true`)。`web/src/team/teamClient.ts`(専用`.gen.ts`は作らず
+ルート共有の`openapi.gen.ts`を使う。team/recordはルート契約に同居しgateway経由のため)。削除確認は
+`window.confirm`を使わず行内の2段階ボタン。書き込み後は`list()`を呼び直さず応答の`Team`で手元を書き換える。
+**メンバー編集(種族・技・持ち物・特性・性格・SP・テラスタイプ)は次のPR(P5-5b)で別途**(ADR-0309「却下した案」)。
+spec-writer→implementer→**critic 1回目PASS**(重要指摘2件: 名前変更の送信前検査漏れ・list()応答と
+create/update/removeのレースコンディションで作成直後の構築が消えて見える不具合)→implementer(修正)→
+**critic 2回目PASS**。`npx vitest run`1745/1745・`make web-e2e`37/37・typecheck/lint無回帰。
+判定レーンがShowdown形式インポート/エクスポートをブランチ`feat/web-team-showdown-format`(`web/src/team/`
+配下)で並行して進めている(分担合意済み。member editorとファイルが重ならないよう次のPR着手前に確認)。
+Next: P5-5b(構築ビルダーのメンバー編集。種族検索・技/持ち物/特性選択・SP直接入力グリッド0〜32・
+テラスタイプ)に着手する。判定レーンのShowdown形式ブランチとの統合順を確認してから進める。その後
+P5-5c(よく計算する相手の表示。`GET /api/record/frequent-opponents`、design.mdに既にチップのモックアップ
+枠あり)・P5-5d(ADR-0209 §8の文言で「この端末のデータを削除」UI、record/team両方のdevice-data削除を呼ぶ)。
+P5-5完了時はdocs/verify-m1.md(またはM2用手順書)にM2動作確認手順を追加し、make deploy-latestの対象に
+record・team・TiDB・NATSが要るかAPIレーンと確認すること(オーケストレーターの依頼)。
+P5-5の後、#219・#211(APIレーン連携)、#272・#274(PR #411/ADR-0214でAPI分実装済み・PR #402/
 ADR-0126でWASM側実装済み。攻撃側・防御側の特性選択UIを一緒に設計、防御側は省略時に種族の全特性〈最大3件〉
 が自動候補化され行数が増える点を表示に反映)、#210、#332(devDependencies更新)、#226(README等の実装状況の
 精度確認)。**新規キュー項目**: issue #328(非公開・私的利用・LICENSEなしで決定。design.mdに追記のうえ
-既存画面の邪魔にならない位置に出典・非公式である旨を表示。文言はiOSレーンがfeat/ios-p6-18-aboutブランチの
-DECISIONS.mdに記載済み〈非公式注記+データ出典4件。フッターリンク→情報ページの置き場所案あり〉)。
+既存画面の邪魔にならない位置に出典・非公式である旨を表示。iOSは既にPR #415でmain統合済み〈AboutView.swift。
+非公式注記+データ出典4件〉。Webは同じ文言〈DECISIONS.md参照〉でフッターリンク→情報ページの形にする)。
 issue #284(balance/speed/judgeがgatewayの後ろに統一される。APIレーンの転送実装が出たら`/api/balance`・
 `/api/speed`・`/api/judge`の接続先を切り替える)。両方ともキューの末尾。
 (3) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
 (apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより
-連絡が来る想定。(4) P5-5(構築ビルダー等)は record/team の API 待ち(M2。2026-09-24 時点で record/team-svc
-の DB マイグレーション・TiDB 導入方針〈ADR-0211〉はデータレーンで進行中)。(5) 人間へのお願い:
+連絡が来る想定。(5) 人間へのお願い:
 docs/verify-m1.md §4 を Safari で確認(P4-5。issue #333のsafeキーワード確認も合わせて)
 
 ## iOS

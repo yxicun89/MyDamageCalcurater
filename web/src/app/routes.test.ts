@@ -12,17 +12,27 @@ describe("ルート表", () => {
   // SP3(ADR-0604 §2): 素早さ比較(/speed)をタイプバランスの後ろに足す。
   // JD5(ADR-0705 §1): 判定(/judge)を素早さの後ろに足す。判定レーンの持ち物は web/src/judge/ の中だけで、
   // 共有ファイルへの追記はこの1件・screens.tsx の1件・ja.ts の文言・App.tsx の client の受け渡しに限る。
-  test("計算 → calc、逆算 → reverse、タイプバランス → balance、素早さ → speed、判定 → judge の順に並び、表示名は appText の語", () => {
+  // P5-5 PR-A1(ADR-0309 §1): 構築(/team)を判定の後ろ(末尾)に足す。持ち物は web/src/team/ の中だけ。
+  test("計算 → calc、逆算 → reverse、タイプバランス → balance、素早さ → speed、判定 → judge、構築 → team の順に並び、表示名は appText の語", () => {
     expect(SCREEN_ROUTES.map((route) => [route.id, route.segment, route.label])).toEqual([
       ["calc", "calc", appText.calcTabLabel],
       ["reverse", "reverse", appText.reverseTabLabel],
       ["balance", "balance", appText.balanceTabLabel],
       ["speed", "speed", appText.speedTabLabel],
       ["judge", "judge", appText.judgeTabLabel],
+      ["team", "team", appText.teamTabLabel],
     ]);
     expect(appText.balanceTabLabel).toBe("タイプバランス");
     expect(appText.speedTabLabel).toBe("素早さ");
     expect(appText.judgeTabLabel).toBe("判定");
+    expect(appText.teamTabLabel).toBe("構築");
+  });
+
+  // P5-5 PR-A1(ADR-0309 §1): 構築は PR-A2 でメンバー編集(種族・技・持ち物・特性の名前解決)にマスタを使うので、
+  // 最初から usesMaster: true にする(あとで false → true に変えると、マスタが読めないときに使えていたタブが
+  // 使えなくなる退行に見えるため)。マスタを使わない画面は今のところ素早さだけ。
+  test("マスタを使わない画面は素早さだけ(構築は usesMaster: true)", () => {
+    expect(SCREEN_ROUTES.filter((route) => !route.usesMaster).map((route) => route.id)).toEqual(["speed"]);
   });
 
   test("既定の画面は計算", () => {
