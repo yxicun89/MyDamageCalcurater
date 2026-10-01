@@ -106,7 +106,10 @@ func getSpeedTable(c *echo.Context, deps Dependencies, params api.GetSpeedTableP
 		return internalError(c, err)
 	}
 
-	table, err := speed.BuildTable(roster, presets)
+	table, err := speed.BuildTable(roster, presets, speed.TableField{
+		Tailwind:  params.Tailwind != nil && *params.Tailwind,
+		TrickRoom: params.TrickRoom != nil && *params.TrickRoom,
+	})
 	if err != nil {
 		return internalError(c, err)
 	}
