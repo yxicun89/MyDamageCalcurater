@@ -25,6 +25,12 @@ import {
   resolveAttackerPreset,
   type AttackerPresetKey,
 } from "../domain/attackerPresets";
+import {
+  DEFAULT_CALC_CONDITIONS,
+  conditionRequestParts,
+  rankStatFor,
+  type CalcConditions,
+} from "../domain/calcConditions";
 import { abilityNamesLabel } from "../domain/abilityLabels";
 import { formatEffectiveness, formatKO, formatMoveCategory, formatPercentRange } from "../domain/format";
 import { firstDamagingMove, learnsetMoves } from "../domain/moves";
@@ -69,6 +75,7 @@ import { prefersReducedMotion } from "../ui/motion";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
+import { CalcConditionsPanel } from "./CalcConditionsPanel";
 import "./CalcScreen.css";
 
 /**
@@ -244,6 +251,7 @@ interface CompletedCalc {
   readonly attackerPresetKey: AttackerPresetKey;
   readonly attackerAbility: Ability;
   readonly defenderAbilities: readonly Ability[];
+  readonly conditions: CalcConditions;
   readonly result: EngineResult<BulkResult>;
 }
 
@@ -277,6 +285,8 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
   // 種族を変えたら "" に戻す(古い選択を引き継がない)。
   const [attackerAbilityId, setAttackerAbilityId] = useState("");
   const [defenderAbilityId, setDefenderAbilityId] = useState("");
+  // 「詳細」の条件(issue 274、ADR-0312)。攻守入れ替え・種族・技の変更では消さない。
+  const [conditions, setConditions] = useState<CalcConditions>(DEFAULT_CALC_CONDITIONS);
   // 攻撃側プリセットの Key だけを持ち、攻撃側・技・攻守入れ替えでは変えない(ADR-0300 §5、
   // CalcScreen.test.tsx「攻撃側のプリセット(P4-3)」)。表示名・SP・性格は今の技の分類から毎レンダー導出する。
   const [attackerPresetKey, setAttackerPresetKey] = useState<AttackerPresetKey>(DEFAULT_ATTACKER_PRESET);
@@ -523,11 +533,14 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     let cancelled = false;
     const controller = new AbortController();
     const { sp, nature } = resolveAttackerPreset(attackerPresetKey, move.category);
+    const parts = conditionRequestParts(conditions);
     const attackerIndividual = buildIndividual(attackerSpecies, {
       sp,
       nature,
       item: attackerItem,
       ability: attackerAbility,
+      ...(parts.status === undefined ? {} : { status: parts.status }),
+      ...(parts.ranks === undefined ? {} : { ranks: parts.ranks }),
     });
     const { variants: itemVariants } = itemVariantsResult;
     const request = buildBulkRequest({
@@ -537,6 +550,8 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
       typeChart: master.typeChart,
       itemVariants,
       defenderAbilities,
+      ...(parts.critical === undefined ? {} : { critical: parts.critical }),
+      ...(parts.field === undefined ? {} : { field: parts.field }),
     });
     // calcBulk は EngineResult(ok/not ok)で成否を運び、reject しない契約(ADR-0011 §5)。
     // それでも floating promise を残さないよう void で明示する。
@@ -552,6 +567,7 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
           attackerPresetKey,
           attackerAbility,
           defenderAbilities,
+          conditions,
           result,
         });
       }
@@ -572,6 +588,7 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     attackerPresetKey,
     attackerAbility,
     defenderAbilities,
+    conditions,
     itemVariantsResult,
   ]);
 
@@ -592,7 +609,8 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     completed.compareItems !== compareItems ||
     completed.attackerPresetKey !== attackerPresetKey ||
     completed.attackerAbility !== attackerAbility ||
-    completed.defenderAbilities !== defenderAbilities
+    completed.defenderAbilities !== defenderAbilities ||
+    completed.conditions !== conditions
   ) {
     outcome = { status: "loading" };
   } else {
@@ -686,6 +704,12 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
       {itemVariantsResult.truncated && (
         <p className="calc-screen__notice">{requestLimitText.itemCandidatesTruncated(MAX_ITEM_VARIANTS)}</p>
       )}
+
+      <CalcConditionsPanel
+        conditions={conditions}
+        onChange={setConditions}
+        rankStat={rankStatFor(move?.category ?? null)}
+      />
 
       <ResultsSection
         outcome={outcome}

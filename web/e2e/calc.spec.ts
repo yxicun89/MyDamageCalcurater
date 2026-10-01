@@ -99,3 +99,32 @@ test("持ち物の候補も比較 をオンにすると行が増える", async (
     expect(text).toMatch(/持ち物なし|テスト/);
   }
 });
+
+test("「詳細」を開いて 急所 とはれを入れると、先頭行の最大%が増える(issue #274)", async ({ page }) => {
+  await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
+  const rows = calcRows(page);
+  const [before] = await rowTexts(rows, DEFAULT_ROW_COUNT);
+  const beforeMax = parsePercentRange(before ?? "").max;
+
+  // 「詳細」は既定で閉じていて、中の入力は出ていない。
+  const details = page.getByRole("button", { name: "詳細", exact: true });
+  await expect(details).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("checkbox", { name: "急所", exact: true })).toHaveCount(0);
+
+  await details.click();
+  await expect(details).toHaveAttribute("aria-expanded", "true");
+  await page.getByRole("checkbox", { name: "急所", exact: true }).check();
+
+  await expect
+    .poll(async () => {
+      const [after] = await rowTexts(rows, DEFAULT_ROW_COUNT);
+      return parsePercentRange(after ?? "").max;
+    })
+    .toBeGreaterThan(beforeMax);
+
+  // 閉じても条件は効いたまま(結果は元に戻らない)。
+  await details.click();
+  await expect(details).toHaveAttribute("aria-expanded", "false");
+  const [closed] = await rowTexts(rows, DEFAULT_ROW_COUNT);
+  expect(parsePercentRange(closed ?? "").max).toBeGreaterThan(beforeMax);
+});

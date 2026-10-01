@@ -8,10 +8,12 @@ import type {
   BulkRequest,
   CalcRequest,
   Individual,
+  Field,
   Item,
   Move,
   Nature,
   Observation,
+  Ranks,
   ReverseRequest,
   ReverseSide,
   Species,
@@ -94,6 +96,9 @@ export interface BuildIndividualInput {
   readonly nature: Nature;
   readonly item: Item | null;
   readonly ability: Ability;
+  /** 攻撃側の状態異常・ランク(計算条件。省略はキーを作らない。issue 274)。 */
+  readonly status?: string;
+  readonly ranks?: Ranks;
 }
 
 /** レベル 50・指定の SP・性格・持ち物・特性の個体を作る(P4-2 ではランクを入力しない)。 */
@@ -105,6 +110,8 @@ export function buildIndividual(species: MasterSpecies, input: BuildIndividualIn
     ability: input.ability,
     item: input.item,
     sp: input.sp,
+    ...(input.status === undefined ? {} : { status: input.status }),
+    ...(input.ranks === undefined ? {} : { ranks: input.ranks }),
   };
 }
 
@@ -117,11 +124,15 @@ export interface BuildBulkRequestInput {
   readonly itemVariants?: ReadonlyArray<Item | null>;
   /** 防御側の特性の候補(defenderAbilityCandidates)。省略・空は送らない。 */
   readonly defenderAbilities?: readonly Ability[];
+  /** 急所(計算条件。false・省略は送らない)と場(省略は送らない。issue 274)。 */
+  readonly critical?: boolean;
+  readonly field?: Field;
 }
 
 /** 一括計算リクエスト。presetKeys・presets を省いて engine の既定の5行にする(ADR-0009)。 */
 export function buildBulkRequest(input: BuildBulkRequestInput): BulkRequest {
-  const { attacker, defenderSpecies, move, typeChart, itemVariants, defenderAbilities } = input;
+  const { attacker, defenderSpecies, move, typeChart, itemVariants, defenderAbilities, critical, field } =
+    input;
   return {
     format: "single",
     attacker,
@@ -130,6 +141,8 @@ export function buildBulkRequest(input: BuildBulkRequestInput): BulkRequest {
     typeChart,
     ...(itemVariants === undefined ? {} : { itemVariants }),
     ...(defenderAbilities === undefined || defenderAbilities.length === 0 ? {} : { defenderAbilities }),
+    ...(critical === true ? { critical } : {}),
+    ...(field === undefined ? {} : { field }),
   };
 }
 
