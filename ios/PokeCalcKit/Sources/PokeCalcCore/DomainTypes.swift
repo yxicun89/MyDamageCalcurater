@@ -347,17 +347,30 @@ public struct CalcResult: Equatable, Sendable {
 
 // MARK: - 未対応の印(ADR-0123・ADR-0501「P6-17」)
 
-/// 印の対象(openapi `UnsupportedMark.target`)。値の集合は `UnsupportedMarkDomainTests` が契約と照合する。
+/// 印の対象(openapi `UnsupportedMark.target`)。契約は enum にしない(ADR-0215)ので、知らない値は
+/// `.unknown` に写す。`allCases` は既知の値だけ(`.unknown` を含めない)。
 public enum UnsupportedTarget: String, CaseIterable, Sendable, Hashable {
     case move
     case attackerItem = "attacker_item"
     case attackerAbility = "attacker_ability"
     case defenderItem = "defender_item"
     case defenderAbility = "defender_ability"
+    /// 契約に新しい値が増えても古いアプリが応答全体をデコードできなくならないための受け皿。
+    case unknown
+
+    public static var allCases: [UnsupportedTarget] {
+        [.move, .attackerItem, .attackerAbility, .defenderItem, .defenderAbility]
+    }
+
+    /// 契約の文字列から作る。知らない値は `.unknown`。
+    public init(contractValue: String) {
+        self = UnsupportedTarget(rawValue: contractValue) ?? .unknown
+    }
 }
 
 /// 印の理由(openapi `UnsupportedMark.reason`)。技は機構(ADR-0121 の13種)か `zero_power`、
 /// 持ち物・特性は `unsupported_effect`。値の集合は `UnsupportedMarkDomainTests` が契約と照合する。
+/// 契約は enum にしない(ADR-0215)ので、知らない値は `.unknown` に写す。`allCases` は既知の値だけ。
 public enum UnsupportedReason: String, CaseIterable, Sendable, Hashable {
     case altDefenseStat = "alt_defense_stat"
     case altOffenseStat = "alt_offense_stat"
@@ -374,6 +387,18 @@ public enum UnsupportedReason: String, CaseIterable, Sendable, Hashable {
     case variablePower = "variable_power"
     case zeroPower = "zero_power"
     case unsupportedEffect = "unsupported_effect"
+    case unknown
+
+    public static var allCases: [UnsupportedReason] {
+        [.altDefenseStat, .altOffenseStat, .alwaysCrit, .effectivenessChange, .fieldSpecific, .fixedDamage,
+         .ignoreDefenseRanks, .moveSpecific, .multiHit, .ohko, .priorityChange, .typeChange, .variablePower,
+         .zeroPower, .unsupportedEffect]
+    }
+
+    /// 契約の文字列から作る。知らない値は `.unknown`。
+    public init(contractValue: String) {
+        self = UnsupportedReason(rawValue: contractValue) ?? .unknown
+    }
 }
 
 /// 「この結果は正確でない可能性がある」印1つ(openapi `UnsupportedMark`。ADR-0123 §2)。

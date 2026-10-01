@@ -679,7 +679,17 @@ const unsupportedReasonLabel: Record<UnsupportedReason, string> = {
   unsupported_effect: "効果を計算に反映していない",
 };
 
+/** 契約に無い(古いクライアントが知らない)target・reason の汎用の語(ADR-0215)。 */
+const unknownTargetLabel = "項目";
+const unknownReasonLabel = "詳細は不明";
+
+function isKnownKey<T extends string>(table: Record<T, string>, key: string): key is T {
+  return Object.hasOwn(table, key);
+}
+
 export const unsupportedText = {
+  unknownTarget: unknownTargetLabel,
+  unknownReason: unknownReasonLabel,
   target: unsupportedTargetLabel,
   reason: unsupportedReasonLabel,
   /**
@@ -690,10 +700,16 @@ export const unsupportedText = {
    * 例: 技「テストれんぞくパンチ」(多段技) / 攻撃側の持ち物「テストどうぐ」
    */
   markLabel: (mark: UnsupportedMark, name: string): string => {
-    const target = `${unsupportedTargetLabel[mark.target]}「${name === "" ? mark.id : name}」`;
-    return mark.reason === "unsupported_effect"
-      ? target
-      : `${target}(${unsupportedReasonLabel[mark.reason]})`;
+    // 契約は target・reason を enum にしない(ADR-0215)。未知の値は汎用の語で出し、ID は必ず出す。
+    const targetLabel = isKnownKey(unsupportedTargetLabel, mark.target)
+      ? unsupportedTargetLabel[mark.target]
+      : unknownTargetLabel;
+    const target = `${targetLabel}「${name === "" ? mark.id : name}」`;
+    if (mark.reason === "unsupported_effect") return target;
+    const reasonLabel = isKnownKey(unsupportedReasonLabel, mark.reason)
+      ? unsupportedReasonLabel[mark.reason]
+      : unknownReasonLabel;
+    return `${target}(${reasonLabel})`;
   },
   /**
    * 全行(全候補)に共通する印がある結果の先頭に1回だけ置く案内(iOS レーンの書式)。

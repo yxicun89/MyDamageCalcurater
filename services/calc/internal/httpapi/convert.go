@@ -293,8 +293,8 @@ func unsupportedFrom(ms []engine.UnsupportedMark) []api.UnsupportedMark {
 	out := make([]api.UnsupportedMark, 0, len(ms))
 	for _, m := range ms {
 		out = append(out, api.UnsupportedMark{
-			Target: api.UnsupportedMarkTarget(m.Target),
-			Reason: api.UnsupportedMarkReason(m.Reason),
+			Target: string(m.Target),
+			Reason: string(m.Reason),
 			Id:     m.ID,
 		})
 	}

@@ -20,8 +20,8 @@ Next: issue #403 の「残りのパッケージ」を依存の順に(D07 共通�
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
-Active: Claude Code(M2完遂の依頼〈2026-09-25〉でP5-2〜P5-4完了。次のキュー〈#272・#284等〉へ)
-Branch: feat/api-p5-2-calc-events(作業ディレクトリ ~/MyDamageCalcurater-api。P5-4を含む。PR #409。
+Active: Claude Code(2026-10-01 再開。#284 は PR #416 で main 統合済み。キューを順に消化中)
+Branch: feat/api-unsupported-mark-string(作業ディレクトリ ~/MyDamageCalcurater-api。P5-4はPR #409、#284はPR #416で統合済み。
 P5-2・P5-3・issue #271/#270はmain統合済み〈PR #372〉)
 Status: Phase 3・issue #110(ADR-0208。PR #130)・issue #103の設計(M2保存データの保持・削除・端末ID境界。ADR-0209。critic PASS。PR #150)は main に統合済み
 Status(追記): issue #148のAPIレーン担当分(ADR-0210。私設サービスの境界)完了・critic PASS・**main 統合済み(PR #157)**。`deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定。端末ID/CORSを認証・到達制御として扱わない回帰テストも追加。
@@ -91,9 +91,8 @@ prefix(record・teamと同じ前方一致・末尾スラッシュ必須の規則
 critic 1回目FAILで発覚し修正済み)。deployment.yamlへの実URL配線はrecord・team(P5-3b/P5-4b)と
 同じく別タスクとして残す(コードのみ今回のスコープ)。critic 2ラウンド(1回目FAIL〈重要2件:
 healthz例外の欠如・README.mdのルーティング表が古いまま〉→修正→2回目PASS)。**main未統合**。
-Next: PR #411・issue #284マージ後、キュー順に対応:
-(1) UnsupportedMark.reason/targetのenum前方互換性の見直し(iOSレーン提案。新しいreason値を足すと古いクライアント
-の計算・逆算応答全体がデコード失敗する問題。type:stringに緩める方向で検討中)、
+Status(追記): 2026-10-01 PR #416(issue #284: balance・speed・judgeをgatewayの後ろに統一)を main 統合。続けて UnsupportedMark の target・reason を string に緩めた(ADR-0215。Web・iOS の追従込み)。
+Next: キュー順に対応:
 (2) defenderOverride.ranks/status(issue 272残り。優先度低)、(3) P5-3b・P5-4b(失効ジョブ・Deployment配線。
 issue #284のdeployment.yaml配線も含む。優先度低)。
 issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。

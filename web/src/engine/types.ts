@@ -247,8 +247,13 @@ export type UnsupportedReason =
  * 技は理由の昇順で zero_power が最後)。Web は並べ替え・重複除去をしない(ADR-0300 §8)。
  */
 export interface UnsupportedMark {
-  readonly target: UnsupportedTarget;
-  readonly reason: UnsupportedReason;
+  /**
+   * 契約(api/openapi.yaml)が enum にしない値。既知の値は {@link UnsupportedTarget}。
+   * 古いクライアントが新しい値で応答全体をデコードできなくならないよう、未知の値も受け取る(ADR-0215)。
+   */
+  readonly target: string;
+  /** 既知の値は {@link UnsupportedReason}。target と同じく未知の値も受け取る(ADR-0215)。 */
+  readonly reason: string;
   /** 印が付いた技・持ち物・特性の ID。 */
   readonly id: string;
 }
