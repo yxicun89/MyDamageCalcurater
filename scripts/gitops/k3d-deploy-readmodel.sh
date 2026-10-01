@@ -13,6 +13,15 @@ case "${SERVICE:-}" in
 esac
 
 svc_dir="services/$SERVICE"
+# Argo CD の Application が在るクラスタでは手動 apply を拒否する(desired state と乖離して OutOfSync になる。ADR-0412 §5)。
+if [ "${ALLOW_MANUAL_OVERLAY:-}" != "1" ]; then
+  app=$(kubectl --context "k3d-${CLUSTER:-pokecalc}" -n argocd get applications.argoproj.io "pokecalc-$SERVICE" -o name 2>/dev/null || true)
+  if [ -n "$app" ]; then
+    echo "Argo CD の Application pokecalc-$SERVICE が有効です。手動 overlay は Argo CD と取り合うため中止します。" >&2
+    echo "gitops overlay は initContainer で read model を作ります(argocd app sync)。意図して上書きするなら ALLOW_MANUAL_OVERLAY=1 を付けてください。" >&2
+    exit 1
+  fi
+fi
 svc_upper=$(printf '%s' "$SERVICE" | tr '[:lower:]' '[:upper:]')
 
 readmodel_dir_var="${svc_upper}_READMODEL_DIR"
