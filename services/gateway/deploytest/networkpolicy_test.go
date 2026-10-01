@@ -1,3 +1,6 @@
+// NetworkPolicy の描画結果の検査(issue #240・ADR-0132)。AC-N1〜N4 は kubectl kustomize の描画を使うので、kubectl が無い
+// 環境では skip になり、kustomization への組み込み(AC-N5)だけが走る。CI(.github/workflows/ci.yml は kubectl を入れる)と
+// 開発機の make test-services で走ることを前提にする。
 package deploytest
 
 // pokecalc namespace の NetworkPolicy(ingress の default-deny + 許可リスト。ADR-0132・issue #240)の静的検査。

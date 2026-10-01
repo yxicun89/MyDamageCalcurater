@@ -86,5 +86,11 @@ DB・namespace は消さない。
   gateway:80 がすべて届かない
 - 対照: pokecalc 内で `app.kubernetes.io/name=gateway` を付けた一時 Pod からは pokedex・calc に届き、mysql:3306 には届かない
   (「届かない」が probe の不具合でないことの確認)
-- 未確認: TiDB(record/team)の経路。k3d に TiDB の Pod が無いため。TiDB を起動したらラベルと record-migrate・team-migrate の到達を確かめる
+- 未確認: TiDB(record/team)の経路。k3d に TiDB の Pod が無いため。**TiDB を k3d に上げる前に**、次のどちらかを行う:
+  (1) tidb-operator(namespace `tidb-admin` の controller-manager)から PD 2379・TiDB status 10080・TiKV status 20180 への
+  ingress の許可を足し(namespaceSelector と podSelector を同じ peer に)、TiDB 側のラベル(`instance`・`component`・`managed-by`)を
+  `kubectl -n pokecalc get pod --show-labels` で確かめてから networkpolicy_test の許可表にも足す。または
+  (2) 一時的に `kubectl -n pokecalc delete networkpolicy default-deny-ingress` で既定の拒否を外して TiDB を上げ、許可を整えてから戻す
+- M2 で record・team の本体の Deployment が増えたら、gateway → record/team の 8080、record/team → TiDB 4000、NATS への許可を足す
+  (今は本体が無いので許可していない)
 
