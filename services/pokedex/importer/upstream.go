@@ -85,14 +85,16 @@ type UpstreamStatus struct {
 // CompareUpstream は pinned(config.json の sources)の source ごとに(昇順)、latest との
 // 比較結果を返す。latest にだけある source は無視する。
 //
-//   - checkedAt が解釈できない、または now - checkedAt > maxAge なら全 source が unknown(stale)。
+//   - checkedAt が解釈できない、未来の時刻(時計のずれ・書き間違い)、または now - checkedAt > maxAge なら
+//     全 source が unknown(stale)。未来の時刻を「新しい」と扱うと、古い結果を最新と誤るため(issue #75)。
 //   - errors にある source は unknown(理由は Errors の値)。
 //   - 検出結果(sources・errors のどちらにも)無い source は unknown(not-checked)。
 //   - それ以外は版が同じなら same、違えば differs。
 func CompareUpstream(pinned map[string]string, latest UpstreamLatest, now time.Time, maxAge time.Duration) []UpstreamStatus {
 	stale := true
 	if checkedAt, err := time.Parse(time.RFC3339, latest.CheckedAt); err == nil {
-		stale = now.Sub(checkedAt) > maxAge
+		age := now.Sub(checkedAt)
+		stale = age < 0 || age > maxAge
 	}
 	sources := sortedKeysRaw(pinned)
 	out := make([]UpstreamStatus, 0, len(sources))

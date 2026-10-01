@@ -2,12 +2,12 @@
 set -eu
 
 mode=${1:-ready}
-balance_dir=${BALANCE_DIR:-services/balance}
-application_file=$balance_dir/deploy/argocd/application.yaml
-overlay_file=$balance_dir/deploy/k8s/overlays/gitops/kustomization.yaml
+judge_dir=${JUDGE_DIR:-services/judge}
+application_file=$judge_dir/deploy/argocd/application.yaml
+overlay_file=$judge_dir/deploy/k8s/overlays/gitops/kustomization.yaml
 
 fail() {
-  echo "balance GitOps check failed: $1" >&2
+  echo "judge GitOps check failed: $1" >&2
   exit 1
 }
 
@@ -19,13 +19,13 @@ esac
 [ -f "$application_file" ] || fail "Application manifest is missing"
 [ -f "$overlay_file" ] || fail "GitOps overlay is missing"
 
-# repoURL はアカウント名を含むので Git に書かない(ADR-0018)。ファイルは placeholder のままであることを必須にし、
-# 適用時の値は ready モードでだけ BALANCE_GITOPS_REPO_URL から受け取る(scripts/argocd-local-app.sh)。
+# repoURL はアカウント名を含むので Git に書かない(ADR-0709 §2・ADR-0018)。ファイルは placeholder のままであることを必須にし、
+# 適用時の値は ready モードでだけ JUDGE_GITOPS_REPO_URL から受け取る(scripts/argocd-local-app.sh)。
 file_repo_url=$(awk '$1 == "repoURL:" { print $2; exit }' "$application_file")
 [ "$file_repo_url" = "https://git.example.invalid/pokecalc.git" ] || fail "application.yaml repoURL must stay the placeholder (the real URL must not be committed)"
 repo_url=$file_repo_url
 if [ "$mode" = "ready" ]; then
-  repo_url=${BALANCE_GITOPS_REPO_URL:-$file_repo_url}
+  repo_url=${JUDGE_GITOPS_REPO_URL:-$file_repo_url}
 fi
 target_revision=$(awk '$1 == "targetRevision:" { print $2; exit }' "$application_file")
 source_path=$(awk '$1 == "path:" { print $2; exit }' "$application_file")
@@ -34,7 +34,7 @@ image_digest=$(awk '$1 == "digest:" { print $2; exit }' "$overlay_file")
 
 [ -n "$repo_url" ] || fail "repoURL is missing"
 [ -n "$target_revision" ] || fail "targetRevision is missing"
-[ "$source_path" = "services/balance/deploy/k8s/overlays/gitops" ] || fail "Application source path must use the GitOps overlay"
+[ "$source_path" = "services/judge/deploy/k8s/overlays/gitops" ] || fail "Application source path must use the GitOps overlay"
 [ -n "$image_name" ] || fail "image newName is missing"
 printf '%s\n' "$image_digest" | grep -Eq '^sha256:[0-9a-f]{64}$' || fail "image digest must be sha256"
 if grep -Eq '^[[:space:]]*newTag:' "$overlay_file"; then
@@ -42,11 +42,11 @@ if grep -Eq '^[[:space:]]*newTag:' "$overlay_file"; then
 fi
 
 if grep -Eq '(^|[[:space:]])automated:' "$application_file"; then
-  fail "automated sync must remain disabled for TB0"
+  fail "automated sync must remain disabled for judge"
 fi
 
 if [ "$mode" = "template" ]; then
-  echo "balance GitOps template: valid"
+  echo "judge GitOps template: valid"
   exit 0
 fi
 
@@ -68,4 +68,4 @@ if [ "$image_digest" = "sha256:0000000000000000000000000000000000000000000000000
   fail "image digest placeholder has not been replaced"
 fi
 
-echo "balance GitOps configuration: ready"
+echo "judge GitOps configuration: ready"

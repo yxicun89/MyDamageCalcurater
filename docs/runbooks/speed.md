@@ -136,3 +136,20 @@ for i in $(seq 1 15); do code=$(curl -s -o /dev/null -w '%{http_code}' http://lo
 (ADR-0605 §2a。実データを GitOps でどう配るかは未決)。
 
 local の read model で動かす状態に戻すときは 2 をもう一度実行する(Argo CD の Application は OutOfSync になる)。
+
+## 11. GitOps の状態に戻す(通常経路)
+
+10 で local overlay に上書きすると OutOfSync のままになる。main へマージされた後の通常経路は 8〜9 と同じ
+(`make speed-registry-push` → 出力された digest を `services/speed/deploy/k8s/overlays/gitops/kustomization.yaml`
+に書いて PR で main に入れる → `argocd --core app sync pokecalc-speed`)。
+
+自動 sync(`syncPolicy.automated`)は導入しないので(ADR-0408 §4)、この手順を踏んで明示的に Synced へ戻す。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n argocd annotate application pokecalc-speed argocd.argoproj.io/refresh=normal --overwrite
+kubectl config set-context --current --namespace=argocd
+argocd --core app sync pokecalc-speed --timeout 180
+kubectl config set-context --current --namespace=default
+```
+確認: 出力に `Sync Status: Synced to main (<main の commit>)` と `Phase: Succeeded`。

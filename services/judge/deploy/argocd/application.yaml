@@ -1,14 +1,14 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: pokecalc-speed
+  name: pokecalc-judge
   namespace: argocd
 spec:
-  project: pokecalc
+  project: default
   source:
     repoURL: https://git.example.invalid/pokecalc.git
     targetRevision: main
-    path: services/speed/deploy/k8s/overlays/gitops
+    path: services/judge/deploy/k8s/overlays/gitops
   destination:
     server: https://kubernetes.default.svc
     namespace: pokecalc

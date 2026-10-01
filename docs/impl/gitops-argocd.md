@@ -2,6 +2,10 @@
 
 - 基準: `origin/main` を取り込んだ `docs/impl-guide`(実クラスタ `k3d-pokecalc` の読み取り確認は 2026-09-24)。実 URL・認証情報・Secret 値は書かない。
 - 関連: 構成は [k8s-local.md](k8s-local.md)、コマンドは [runbook-commands.md](runbook-commands.md)・[make-targets.md](make-targets.md)、環境変数は [config-env.md](config-env.md)。
+- 2026-09-25 の ADR-0408(issue #263・#292)で以下が変わった: AppProject `pokecalc` を新設し両 Application の `spec.project` をそれに限定、
+  `services/{balance,speed}/scripts/{argocd-local-app,check-gitops,publish-image,local-registry-push,k3d-deploy-readmodel}.sh` を
+  `scripts/gitops/*.sh`(`SERVICE=` 引数)に共通化、クラスタ内レジストリを `emptyDir` から PVC(local-path・2Gi)へ変更。
+  以下の本文・行番号は ADR-0408 適用前の監査時点のものを引き継いでいる箇所があり、パス・`project` の値は上の変更を正とする。
 
 ## 0. 結論(先に読む)
 
@@ -9,7 +13,7 @@
 |---|---|
 | Git の Application は **2 件だけ**(`pokecalc-balance`・`pokecalc-speed`)。ApplicationSet・AppProject の定義は Git に **0 件** | §2 |
 | calc・gateway・web・pokedex・mysql・judge は **Argo CD の管理外**。`make up` / `make api-k3d-deploy` / `make web-k3d-deploy` / `make judge-*` が `kubectl apply` する | §5 |
-| 2 件とも **manual sync**(`syncPolicy` なし。`check-gitops.sh` が `automated:` を検出すると失敗) | `services/balance/scripts/check-gitops.sh:44` |
+| 2 件とも **manual sync**(`syncPolicy` なし。`check-gitops.sh` が `automated:` を検出すると失敗) | `scripts/gitops/check-gitops.sh` |
 | 実クラスタの Application は `pokecalc-balance` の **1 件のみ**(OutOfSync / Healthy)。`pokecalc-speed` は未適用 | §7 |
 | ADR-0206 と CLAUDE.md は「Argo CD が main の `deploy/k8s/overlays/local` を見ている」と読める記述だが、**それを見る Application は Git にもクラスタにも無い** | §8 |
 | 未完了: P7-3 ArgoCD(`docs/plan.md:331`)、クラウド側(overlay `cloud` に対応する Application・レジストリ・実データの配布) | §9 |
@@ -35,13 +39,13 @@
 
 | # | kind / name | 定義ファイル | repo | path | targetRevision | destination | syncPolicy | project |
 |---|---|---|---|---|---|---|---|---|
-| 1 | Application `pokecalc-balance` | `services/balance/deploy/argocd/application.yaml:1-14`(Kustomization: `.../argocd/kustomization.yaml`) | `repoURL` は placeholder(`git.example.invalid`)。適用時に注入 | `services/balance/deploy/k8s/overlays/gitops` | `main` | `https://kubernetes.default.svc` / ns `pokecalc` | なし(manual。prune・selfHeal も未設定) | `default` |
-| 2 | Application `pokecalc-speed` | `services/speed/deploy/argocd/application.yaml:1-14`(同上) | 同上 | `services/speed/deploy/k8s/overlays/gitops` | `main` | 同上 | なし(manual) | `default` |
+| 1 | Application `pokecalc-balance` | `services/balance/deploy/argocd/application.yaml`(Kustomization: `.../argocd/kustomization.yaml`) | `repoURL` は placeholder(`git.example.invalid`)。適用時に注入 | `services/balance/deploy/k8s/overlays/gitops` | `main` | `https://kubernetes.default.svc` / ns `pokecalc` | なし(manual。prune・selfHeal も未設定) | `pokecalc` |
+| 2 | Application `pokecalc-speed` | `services/speed/deploy/argocd/application.yaml`(同上) | 同上 | `services/speed/deploy/k8s/overlays/gitops` | `main` | 同上 | なし(manual) | `pokecalc` |
 | - | ApplicationSet | 0 件(`git grep ApplicationSet` 該当なし) | - | - | - | - | - | - |
-| - | AppProject | 0 件(`default` を使用) | - | - | - | - | - | - |
+| - | AppProject | **1 件**(`pokecalc`。`sourceRepos` は placeholder 1件・`destinations` は ns `pokecalc` 1組・`clusterResourceWhitelist` 空・`namespaceResourceWhitelist` は Service/Deployment/Ingress の3種別のみ) | `deploy/argocd/appproject.yaml` | - | - | - | - | - |
 
-- repo の注入: `make balance-argocd-app` / `make speed-argocd-app` → `services/<svc>/scripts/argocd-local-app.sh`。`git remote get-url origin`(または `BALANCE_GITOPS_REPO_URL` / `SPEED_GITOPS_REPO_URL`)を `https://` の許可文字だけに制限して検査 → `check-gitops.sh ready` → `kubectl kustomize deploy/argocd | sed`(置換がちょうど 1 か所か検査)→ `kubectl apply -f`(`argocd-local-app.sh:8-28`)。理由: アカウント名を Git に入れない方針(ADR-0018 §4、R-2-8)。
-- 二つのスクリプトは対象ディレクトリ・変数名・メッセージ以外同一(`diff` で確認)。
+- repo の注入: `make balance-argocd-app` / `make speed-argocd-app` → `SERVICE=<svc> scripts/gitops/argocd-local-app.sh`。`git remote get-url origin`(または `${SVC}_GITOPS_REPO_URL`)を `https://` の許可文字だけに制限して検査 → `check-gitops.sh ready` → AppProject(`deploy/argocd/appproject.yaml`)と Application(`services/<svc>/deploy/argocd`)の両方の `repoURL`/`sourceRepos` を同じ URL に置換 → **AppProject を Application より先に** `kubectl apply -f`(逆順だと Application の repo が AppProject にまだ許可されず弾かれる)。理由: アカウント名を Git に入れない方針(ADR-0018 §4、R-2-8)。AppProject を先に適用する理由は ADR-0408 §1・§2。
+- balance/speed の呼び出しは `SERVICE=balance` / `SERVICE=speed` の違いだけで、スクリプト本体は `scripts/gitops/` に1本だけ(ADR-0408 §2)。
 
 ### gitops overlay(Application が見る中身)
 
@@ -57,8 +61,8 @@
 
 | 検査 | 実体 | 見るもの |
 |---|---|---|
-| `make balance-gitops-template-check` / `make speed-gitops-template-check` | `services/<svc>/Makefile` → `balance-kustomize` → `scripts/check-gitops.sh template` | local・local-readmodel・gitops overlay・`deploy/argocd` が `kubectl kustomize` で描画可。Application の `repoURL` が **placeholder のまま**。`path` が gitops overlay。`newName` あり・`digest` が `sha256:<64 桁 hex>`・`newTag` なし。`automated:` なし |
-| `make balance-gitops-check` / `make speed-gitops-check` | 同 `check-gitops.sh ready` | 上に加え、`*_GITOPS_REPO_URL`(適用時の値)が https / ssh の clone URL・資格情報や query を含まない・placeholder でない。image `newName` に `example.invalid`・`@` を含まない。digest が全 0 でない(**speed は現状これで失敗する**) |
+| `make balance-gitops-template-check` / `make speed-gitops-template-check` | `services/<svc>/Makefile` → `balance-kustomize` → `SERVICE=<svc> scripts/gitops/check-gitops.sh template` | local・local-readmodel・gitops overlay・`deploy/argocd` が `kubectl kustomize` で描画可。Application の `repoURL` が **placeholder のまま**、`spec.project` が `pokecalc`。`path` が gitops overlay。`newName` あり・`digest` が `sha256:<64 桁 hex>`・`newTag` なし。`automated:` なし |
+| `make balance-gitops-check` / `make speed-gitops-check` | 同 `check-gitops.sh ready` | 上に加え、`${SVC}_GITOPS_REPO_URL`(適用時の値)が https / ssh の clone URL・資格情報や query を含まない・placeholder でない。image `newName` に `example.invalid`・`@` を含まない。digest が全 0 でない(**speed は現状これで失敗する**) |
 | `make test-scripts` | `scripts/argocd-bootstrap_test.sh` | §1 のスクリプトのハッシュ不一致・digest 形式・定数空・冪等性・runbook の記述(`test_runbooks`) |
 | `make check-publishable` | `scripts/check-publishable.sh` | 実 URL・認証情報がコミットに無いこと(Argo 専用ではない) |
 
@@ -68,11 +72,11 @@
 
 | 要素 | 内容 | 根拠 |
 |---|---|---|
-| クラスタ内レジストリ | namespace `balance-registry` に Deployment/Service `registry`(registry 3.1.1 を digest 固定、containerPort=hostPort 5000、`emptyDir` で永続しない、Recreate) | `services/balance/deploy/local-registry/registry.yaml`、`kustomization.yaml` |
+| クラスタ内レジストリ | namespace `balance-registry` に Deployment/Service `registry`(registry 3.1.1 を digest 固定、containerPort=hostPort 5000、Recreate)。`/var/lib/registry` は PVC `registry-data`(`local-path`・2Gi)で永続化(ADR-0408 §3。issue #292。旧 `emptyDir` は Pod 再作成で push 済み image が消えていた) | `services/balance/deploy/local-registry/registry.yaml`、`kustomization.yaml` |
 | 適用 | `make balance-registry-apply`(`kubectl apply -k` + rollout 待ち)。speed は専用 apply を持たず共有 | `services/balance/Makefile`、ADR-0605 §1 |
 | pull 側 | ノードの containerd が `localhost:5000` を HTTP で pull(localhost は平文許可)。overlay の `newName: localhost:5000/...` はこのため | ADR-0018 §2 |
-| push 側 | `make balance-registry-push` / `speed-registry-push` → `local-registry-push.sh`: `docker build` → `docker save` → `kubectl -n balance-registry port-forward svc/registry <5001|5002>:5000` → `crane push --insecure` → `crane digest`。標準出力の最終行が `localhost:5000/pokecalc/<svc>@sha256:…` | `services/balance/scripts/local-registry-push.sh:25-46` |
-| 実 push(リリース用) | `make balance-docker-push` → `publish-image.sh`(`docker buildx --push`、`latest`・`local` タグと placeholder を拒否)。`*_RELEASE_IMAGE` が必須 | `services/balance/scripts/publish-image.sh` |
+| push 側 | `make balance-registry-push` / `speed-registry-push` → `SERVICE=<svc> scripts/gitops/local-registry-push.sh`: `docker build` → `docker save` → `kubectl -n balance-registry port-forward svc/registry <5001|5002>:5000` → `crane push --insecure` → `crane digest`。標準出力の最終行が `localhost:5000/pokecalc/<svc>@sha256:…` | `scripts/gitops/local-registry-push.sh` |
+| 実 push(リリース用) | `make balance-docker-push` → `SERVICE=balance scripts/gitops/publish-image.sh`(`docker buildx --push`、`latest`・`local` タグと placeholder を拒否)。`${SVC}_RELEASE_IMAGE` が必須 | `scripts/gitops/publish-image.sh` |
 
 ## 5. GitOps の対象範囲
 
@@ -91,7 +95,7 @@
 ```mermaid
 flowchart TD
   subgraph host[開発機]
-    A[コード変更 + make balance-registry-push] -->|crane push via port-forward| R[(balance-registry:5000\nemptyDir)]
+    A[コード変更 + make balance-registry-push] -->|crane push via port-forward| R[(balance-registry:5000\nPVC local-path 2Gi)]
     A -->|標準出力の digest| B[overlays/gitops/kustomization.yaml の digest を手で書換え]
     B --> C[commit → PR → main へ merge]
   end
@@ -117,7 +121,7 @@ flowchart TD
 噛み合う点 / 噛み合わない点:
 - 噛み合う: digest 固定の overlay を Git が正本とし、Pod の image と一致することを確認できる(ADR-0018、`docs/type-balance-test-strategy.md:63-64`)。
 - 噛み合わない: `make *-k3d-deploy`(local overlay。`pokecalc/<svc>:local` を `k3d image import`)で上書きすると、同じ Deployment を別内容にするため Application が OutOfSync になり、manual sync なので戻らない(ADR-0018、ADR-0605 §2a)。
-- 噛み合わない: レジストリが `emptyDir` のため、registry Pod の再作成で image が消え、push し直しが要る。
+- 解消済み(ADR-0408 §3): レジストリはかつて `emptyDir` で、registry Pod の再作成のたびに push 済み image が消えていた(issue #292)。PVC(`local-path`・2Gi)化により Pod を作り直しても image は残る(k3d クラスタごと削除した場合は push し直す)。
 - 噛み合わない: gitops overlay は read model を持たないため、同期後の実データ API は 503。
 
 ## 7. 実クラスタの状態(2026-09-24 読み取り)と Git の差異
@@ -159,7 +163,7 @@ flowchart TD
 
 | 区分 | 件数 | ファイル |
 |---|---|---|
-| 定義・スクリプト・Makefile | 14 | `scripts/argocd-bootstrap.sh`・`scripts/argocd-bootstrap_test.sh`・`Makefile`、`services/balance/`(`Makefile`・`README.md`・`deploy/argocd/application.yaml`・`deploy/local-registry/kustomization.yaml`・`scripts/argocd-local-app.sh`・`scripts/check-gitops.sh`)、`services/speed/`(`Makefile`・`README.md`・`deploy/argocd/application.yaml`・`scripts/argocd-local-app.sh`・`scripts/check-gitops.sh`) |
+| 定義・スクリプト・Makefile | 14 | `scripts/argocd-bootstrap.sh`・`scripts/argocd-bootstrap_test.sh`・`Makefile`、`deploy/argocd/appproject.yaml`、`scripts/gitops/{argocd-local-app,check-gitops,publish-image,local-registry-push,k3d-deploy-readmodel}.sh`(ADR-0408 §2 で共通化。以前は `services/{balance,speed}/scripts/` に複製)、`services/balance/`(`Makefile`・`README.md`・`deploy/argocd/application.yaml`・`deploy/local-registry/kustomization.yaml`)、`services/speed/`(`Makefile`・`README.md`・`deploy/argocd/application.yaml`) |
 | ADR | 7 | 0018(balance の GitOps。方式の正)・0104・0206・0405(bootstrap の固定)・0600・0603・0605(speed の GitOps) |
 | runbook | 2 | `docs/runbooks/balance.md`(節 3〜9)・`docs/runbooks/speed.md`(節 4〜10) |
 | 設計・計画 | 6 | `docs/type-balance-design.md`・`docs/type-balance-test-strategy.md`・`docs/speed-design.md`・`docs/judge-design.md`・`docs/plan.md`・`docs/requirements.md` |

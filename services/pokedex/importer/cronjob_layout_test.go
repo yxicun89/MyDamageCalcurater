@@ -518,9 +518,11 @@ func TestUpScriptBuildsImporterAndOverrides(t *testing.T) {
 	if regexp.MustCompile(`create\s+job\s+[^\n]*--from=cronjob`).MatchString(s) {
 		t.Error("up.sh は CronJob を即時に流さない(初回の取得はネットワークが要る。人が make import-k8s で流す)")
 	}
+	// PVC だけでなく、DB の資格情報・DB 本体・設定も消さない(issue #75)。消してよいのは作り直す Job だけ。
+	destructive := regexp.MustCompile(`delete\s+(pvc|persistentvolumeclaims?|secrets?|statefulsets?|sts|configmaps?|cm|namespaces?|ns)\b`)
 	for _, f := range []string{"scripts/up.sh", "Makefile"} {
-		if regexp.MustCompile(`delete\s+(pvc|persistentvolumeclaim)`).MatchString(readRepo(t, f)) {
-			t.Errorf("%s: PVC を消さない(データの削除は人間の確認)", f)
+		if m := destructive.FindString(readRepo(t, f)); m != "" {
+			t.Errorf("%s: %q — PVC・Secret・StatefulSet・ConfigMap・namespace を消さない(データの削除は人間の確認)", f, m)
 		}
 	}
 }

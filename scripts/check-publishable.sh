@@ -35,6 +35,15 @@ readonly -a CONTENT_EXCLUDES=(
 #   docs/audit-r1.md : 検査対象のパターン(/Users/ など)を説明する文書で、実際の値ではない
 readonly -a A_EXCLUDES=(":(exclude)docs/audit-r1.md")
 
+# B・E だけから外すファイル(ADR-0408。scripts/gitops_test.sh)。
+#   - FAKE_ORIGIN(`https://github.com/example-owner/pokecalc.git`)は argocd-local-app.sh に
+#     `git remote get-url origin` の代わりに与える架空のテストフィクスチャで、実在のアカウントではない
+#     (E の「module path に GitHub のアカウント名」に誤検知する)。
+#   - `argocd-initial-admin-secret` を検査するテストの説明文(`begin "..."`)が、たまたま
+#     「-secret: <日本語の説明が続く>」という形になり、B の「秘密らしき文字列(キー名=値)」に誤検知する
+#     (値ではなく検査の説明文)。
+readonly -a BE_EXCLUDES=(":(exclude)scripts/gitops_test.sh")
+
 # 定数だけを対象にする(秘密の値ではない)。`tidb-root-auth` は ADR-0211 §3.2 の
 # TidbInitializer が参照する Secret 名(`passwordSecret: tidb-root-auth`。値ではなく名前)。
 # `grafana-admin-credentials`・`admin-password` は kube-prometheus-stack chart の values
@@ -183,6 +192,7 @@ check_a() {
 # B. 秘密らしき文字列
 # ---------------------------------------------------------------------------
 check_b() {
+  SCAN_EXTRA_EXCLUDES=("${BE_EXCLUDES[@]}")
   # キー名の後ろの `[A-Za-z0-9_-]*` も上限を付ける(上と同じ理由。ADR-0119 で判明した
   # メールアドレス正規表現の O(n^2) 走査と同じ形なので、念のためこちらも塞ぐ)。
   scan_content B "秘密らしき文字列(キー名=値)" \
@@ -193,6 +203,7 @@ check_b() {
   scan_content B "秘密らしき文字列(GitHub トークン形式)" 'gh[pousr]_[A-Za-z0-9]{36}'
   scan_content B "秘密らしき文字列(sk- 形式の API キー)" 'sk-[A-Za-z0-9]{20,}'
   scan_content B "秘密らしき文字列(JWT)" 'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+'
+  SCAN_EXTRA_EXCLUDES=()
 }
 
 # ---------------------------------------------------------------------------
@@ -343,8 +354,10 @@ check_e() {
   done < <(git ls-files -z -- 'package.json' '*/package.json')
 
   # Go の module path にアカウント名を入れない(coding-rules §1。公開用は example.com/pokecalc)
+  SCAN_EXTRA_EXCLUDES=("${BE_EXCLUDES[@]}")
   scan_content E "module path に GitHub のアカウント名(github.com/<誰か>/pokecalc)" \
     'github\.com/[A-Za-z0-9_.-]+/pokecalc'
+  SCAN_EXTRA_EXCLUDES=()
 }
 
 # ---------------------------------------------------------------------------

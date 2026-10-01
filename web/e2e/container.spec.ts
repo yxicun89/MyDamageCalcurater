@@ -4,6 +4,7 @@
 // /api は gateway の持ち物で、Web のコンテナは転送も index.html での代用もしない(DECISIONS.md 2026-09-22)。
 
 import { expect, test, type APIResponse } from "@playwright/test";
+import { SPECIES, openApp, selectMatchup } from "./support/calcPage.ts";
 
 /** WebAssembly のバイナリの先頭4バイト(\0asm)。 */
 const WASM_MAGIC = [0x00, 0x61, 0x73, 0x6d];
@@ -106,4 +107,60 @@ test("/api/* は Web のコンテナでは配らない(gateway の持ち物。in
   const get = await request.get("/api/calc");
   expect(get.status()).toBe(404);
   expect(await get.text()).not.toContain(APP_ROOT);
+});
+
+// issue #219: 外部公開(Tailscale・クラウド)でも埋め込み・スクリプト注入・参照元漏えいを既定で防ぐ。
+// nginx は location に add_header が1つでもあると server の分を継承しないので、配る応答の種類ごとに確かめる。
+test.describe("セキュリティヘッダ", () => {
+  const PATHS = ["/", "/calc", "/engine.wasm", "/wasm_exec.js"];
+
+  for (const path of PATHS) {
+    test(`${path} に CSP・frame-ancestors・Referrer-Policy・Permissions-Policy が付く`, async ({
+      request,
+    }) => {
+      const response = await request.get(path);
+      expect(response.status()).toBe(200);
+      const csp = header(response, "content-security-policy");
+      // WASM の実体化に必要なのは 'wasm-unsafe-eval' だけ。'unsafe-eval'・'unsafe-inline' は許さない。
+      expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval'");
+      expect(csp).not.toContain("'unsafe-eval'");
+      expect(csp).not.toContain("'unsafe-inline'");
+      expect(csp).toContain("default-src 'self'");
+      expect(csp).toContain("connect-src 'self'");
+      expect(csp).toContain("frame-ancestors 'none'");
+      expect(csp).toContain("base-uri 'self'");
+      expect(csp).toContain("object-src 'none'");
+      expect(header(response, "x-frame-options")).toBe("DENY");
+      expect(header(response, "referrer-policy")).toBe("no-referrer");
+      expect(header(response, "permissions-policy")).toContain("camera=()");
+      expect(header(response, "x-content-type-options")).toBe("nosniff");
+    });
+  }
+
+  test("ハッシュ付きの /static/*.js にも付く(キャッシュ指定と共存する)", async ({ request }) => {
+    const html = await (await request.get("/")).text();
+    const match = /(?:src|href)="(\/static\/[^"]+\.js)"/.exec(html);
+    const response = await request.get(match?.[1] ?? "");
+    expect(header(response, "content-security-policy")).toContain("frame-ancestors 'none'");
+    expect(header(response, "cache-control")).toContain("immutable");
+  });
+
+  test("CSP の下でも画面と WASM 計算が動き、違反・コンソールエラーが出ない", async ({ page }) => {
+    const problems: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") {
+        problems.push(`console: ${message.text()}`);
+      }
+    });
+    page.on("pageerror", (error) => problems.push(`pageerror: ${error.message}`));
+    await page.addInitScript(() => {
+      document.addEventListener("securitypolicyviolation", (event) => {
+        console.error(`CSP違反: ${event.violatedDirective} ${event.blockedURI}`);
+      });
+    });
+    await openApp(page);
+    await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    expect(problems).toEqual([]);
+  });
 });

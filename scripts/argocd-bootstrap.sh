@@ -81,3 +81,7 @@ kubectl get namespace argocd >/dev/null 2>&1 || kubectl create namespace argocd
 
 kubectl apply -n argocd --server-side -f - <"$pinned"
 kubectl -n argocd rollout status deployment/argocd-server --timeout=300s
+
+# 初回ログイン後、初期パスワードの Secret を消す(削除自体は人が行う。ADR-0408 §5)。
+echo "argocd-bootstrap: 初回ログイン後、初期パスワードの Secret を削除してください:" >&2
+echo "  kubectl -n argocd delete secret argocd-initial-admin-secret" >&2
