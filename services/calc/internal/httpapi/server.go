@@ -434,3 +434,8 @@ func (s *Server) GetMove(ctx *echo.Context, key string, params api.GetMoveParams
 func (s *Server) GetMovesByIds(ctx *echo.Context, params api.GetMovesByIdsParams) error {
 	return notFoundForPokedex()
 }
+
+// ListMoveLearners は pokedex の操作(ADR-0251)。calc-svc の担当外なので 404 not_found。
+func (s *Server) ListMoveLearners(ctx *echo.Context, key string, params api.ListMoveLearnersParams) error {
+	return notFoundForPokedex()
+}

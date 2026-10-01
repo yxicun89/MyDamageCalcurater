@@ -113,6 +113,35 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/pokedex/moves/{key}/learners": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * 技を覚えるポケモンの一覧(learnset の逆引き)
+     * @description 技 `key` を覚える種族の要約を返す(調整タブの機能 1。ADR-0251)。既定のレギュレーション
+     *     (コードに書かず DB から引く。ADR-0105)で絞る:
+     *     種族が使用可能集合にあり、かつ技が使用可能集合にあるときだけ返す。`getSpecies` の `learnset`
+     *     (習得技 ∩ 使用可能な技)と同じ規則で、使用可能な種族 S について「S がこの一覧に出る」と
+     *     「`getSpecies(S).learnset` にこの技がある」は一致する。技がマスタにあっても使用可能集合の外なら
+     *     200 `[]`(404 ではない)。
+     *     並びは `searchSpecies` と同じ図鑑番号・フォルム番号の昇順(決定的)。ページングは `limit` と
+     *     `offset`。返った件数が `limit` 未満なら最後のページ(総数は返さない)。
+     *     既定のレギュレーションが無い(マスタ未投入)は 503 `master_unavailable`(一覧系の流儀。
+     *     `getMove` の 404 とは異なる)。既定のレギュレーションはあるが技がマスタに無いときは 404 `not_found`。
+     */
+    get: operations["listMoveLearners"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/pokedex/items": {
     parameters: {
       query?: never;
@@ -1815,6 +1844,71 @@ export interface operations {
         };
       };
       /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  listMoveLearners: {
+    parameters: {
+      query?: {
+        /** @description 1ページの件数。範囲外・整数でない値は 400 `invalid_input` */
+        limit?: number;
+        /** @description 先頭から飛ばす件数。範囲外・整数でない値は 400 `invalid_input`。末尾を超えれば 200 `[]` */
+        offset?: number;
+      };
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path: {
+        /** @description 技の ID(例 highhorsepower)。マスタに無ければ 404 `not_found` */
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 技を覚える種族の要約(図鑑番号・フォルム番号の昇順。一致なしは `[]`) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SpeciesSummary"][];
+        };
+      };
+      /** @description 技がマスタに無い(`not_found`) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;

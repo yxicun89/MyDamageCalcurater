@@ -229,6 +229,59 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
+  /api/pokedex/moves/{key}/learners:
+    get:
+      tags: [pokedex]
+      operationId: listMoveLearners
+      summary: 技を覚えるポケモンの一覧(learnset の逆引き)
+      description: |
+        技 `key` を覚える種族の要約を返す(調整タブの機能 1。ADR-0251)。既定のレギュレーション
+        (コードに書かず DB から引く。ADR-0105)で絞る:
+        種族が使用可能集合にあり、かつ技が使用可能集合にあるときだけ返す。`getSpecies` の `learnset`
+        (習得技 ∩ 使用可能な技)と同じ規則で、使用可能な種族 S について「S がこの一覧に出る」と
+        「`getSpecies(S).learnset` にこの技がある」は一致する。技がマスタにあっても使用可能集合の外なら
+        200 `[]`(404 ではない)。
+        並びは `searchSpecies` と同じ図鑑番号・フォルム番号の昇順(決定的)。ページングは `limit` と
+        `offset`。返った件数が `limit` 未満なら最後のページ(総数は返さない)。
+        既定のレギュレーションが無い(マスタ未投入)は 503 `master_unavailable`(一覧系の流儀。
+        `getMove` の 404 とは異なる)。既定のレギュレーションはあるが技がマスタに無いときは 404 `not_found`。
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+        - name: key
+          in: path
+          required: true
+          description: 技の ID(例 highhorsepower)。マスタに無ければ 404 `not_found`
+          schema: { type: string }
+        - name: limit
+          in: query
+          description: 1ページの件数。範囲外・整数でない値は 400 `invalid_input`
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          description: 先頭から飛ばす件数。範囲外・整数でない値は 400 `invalid_input`。末尾を超えれば 200 `[]`
+          schema: { type: integer, minimum: 0, maximum: 10000, default: 0 }
+      responses:
+        '200':
+          description: 技を覚える種族の要約(図鑑番号・フォルム番号の昇順。一致なしは `[]`)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SpeciesSummary' }
+        '404':
+          description: 技がマスタに無い(`not_found`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        default:
+          $ref: '#/components/responses/Error'
+
   /api/pokedex/items:
     get:
       tags: [pokedex]

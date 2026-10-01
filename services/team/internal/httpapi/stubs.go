@@ -54,6 +54,10 @@ func (s *Server) GetMovesByIds(ctx *echo.Context, params api.GetMovesByIdsParams
 	return notFoundForOtherServices()
 }
 
+func (s *Server) ListMoveLearners(ctx *echo.Context, key string, params api.ListMoveLearnersParams) error {
+	return notFoundForOtherServices()
+}
+
 func (s *Server) GetMove(ctx *echo.Context, key string, params api.GetMoveParams) error {
 	return notFoundForOtherServices()
 }

@@ -50,7 +50,7 @@ func NewServer(q readtx.DB) *Server {
 }
 
 // NewHandler は pokedex-svc の HTTP ハンドラ全体を組み立てる。
-// pokedex の8操作(検索7 + 内部 API 1。生成ラッパ経由)、calc の3操作(直接 404。calc-svc の R1 と対称)、
+// pokedex の9操作(検索8 + 内部 API 1。生成ラッパ経由)、calc の調整4操作を含む操作(直接 404。calc-svc の R1 と対称)、
 // GET /healthz(liveness。DB に触れない)、GET /readyz(readiness。DB の最小条件を確かめる。ADR-0129)、
 // DB を使うルートへの締め切りのミドルウェア(ADR-0129 §2)、panic の回復(500 internal)、echo の既定エラー
 // (ルート無し・メソッド違い)を Error 形式に揃えるエラーハンドラを含む。
@@ -78,7 +78,7 @@ func NewHandler(q readtx.DB, opts ...Option) http.Handler {
 	return e
 }
 
-// registerPokedexRoutes は pokedex-svc の担当(検索7操作 + 内部 API)だけを、生成ラッパ
+// registerPokedexRoutes は pokedex-svc の担当(検索8操作 + 内部 API)だけを、生成ラッパ
 // (api.ServerInterfaceWrapper。公開操作は必須ヘッダ X-Device-Id / X-Session-Id の有無を検証してから
 // Server を呼ぶ。内部 API はヘッダを要求しない)経由で登録する。
 // echo v5.3.1 のルーターは静的セグメントをパラメータより優先するため、`/api/pokedex/moves/batch` は
@@ -92,6 +92,7 @@ func registerPokedexRoutes(e *echo.Group, srv *Server) {
 	e.GET("/api/pokedex/moves", wrapper.SearchMoves)
 	e.GET("/api/pokedex/moves/batch", wrapper.GetMovesByIds)
 	e.GET("/api/pokedex/moves/:key", wrapper.GetMove)
+	e.GET("/api/pokedex/moves/:key/learners", wrapper.ListMoveLearners)
 	e.GET("/api/pokedex/items", wrapper.SearchItems)
 	e.GET("/api/pokedex/natures", wrapper.ListNatures)
 	e.GET("/internal/pokedex/master", wrapper.GetMasterExport)
