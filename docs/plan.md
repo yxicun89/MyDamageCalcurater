@@ -1190,6 +1190,11 @@
   `defenderOverride.abilityId` / `unknownAbilityId` で送る。行・候補の `abilityId` / `abilityIds` を DTO に写し、
   特性で分かれた行は特性名つきの別行、まとめられた行は名前を並べて表示。`MAX_ABILITY_CANDIDATES` は
   `domain/requestLimits.ts`、選択肢・候補の組み立ては `domain/requests.ts`。iOS は別レーン
+- [x] issue #274 の Web 分(ADR-0312): 計算画面に「詳細」(既定は閉じる disclosure)を追加。急所・やけど(攻撃側 burn のみ)・
+  天候・フィールド・防御側の壁(3つ独立)・攻撃側のランク(選択中の技の分類で A か C を ±1、-6..+6)を入力でき、
+  触った分だけ `critical` / `attacker.status` / `field` / `attacker.ranks` を要求に載せる(既定は従来とバイト同一)。
+  要求の形は `domain/calcConditions.ts`、文言は `calcConditionsText`、部品は `screens/CalcConditionsPanel.tsx`。
+  条件は攻守入れ替え・種族・技の変更で消さず、変えた直後は古い結果を出さない。iOS は別レーン
 - [ ] issue #274/#272 の API レーン担当分の残り: `defenderOverride.ranks: RankBlock` / `defenderOverride.status:
   StatusCondition`(全行に一律で上書き)。abilityId(上記)とは独立に追加できる。engine 側の変更
   (`BulkInput`/`ReverseInput` へのオーバーライド追加。プリセット解決後・計算前に当てる)を伴うため

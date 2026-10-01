@@ -1120,3 +1120,49 @@ describe("未対応の印(unsupported)の写し", () => {
     });
   });
 });
+
+// issue #274(ADR-0312): 計算画面の「詳細」の条件が、オンライン(API)でもオフライン(WASM)と同じ要求形になること。
+// BulkCalcRequest.field / options.critical、attacker の status / ranks。既定(条件なし)は従来と同じ本文。
+describe("calcBulk: 計算条件(issue #274)", () => {
+  const conditionAttacker: Individual = {
+    ...attacker,
+    status: "burn",
+    ranks: { atk: 1, def: 0, spa: -2, spd: 0, spe: 0 },
+  };
+
+  test("急所・場(天候・フィールド・防御側の壁)・攻撃側のやけど/ランクが API の本文に写る", async () => {
+    const fetchMock = fakeFetch(() => Promise.resolve(jsonResponse(apiBulkResult)));
+    await engineWith(fetchMock).calcBulk({
+      ...bulkRequest,
+      attacker: conditionAttacker,
+      critical: true,
+      field: {
+        weather: "rain",
+        terrain: "psychic",
+        defenderScreens: { reflect: true, lightScreen: false, auroraVeil: true },
+      },
+    });
+    const { body } = sentRequest(fetchMock);
+    expect(body).toMatchObject({
+      attacker: { ...apiAttacker, status: "burn", ranks: { atk: 1, def: 0, spa: -2, spd: 0, spe: 0 } },
+      field: {
+        weather: "rain",
+        terrain: "psychic",
+        defenderScreens: { reflect: true, lightScreen: false, auroraVeil: true },
+      },
+      options: { critical: true },
+    });
+    expect((body as { field: object }).field).not.toHaveProperty("attackerScreens");
+  });
+
+  test("条件なし(critical・field・status・ranks が無い)なら本文に field・options・status・ranks を足さない", async () => {
+    const fetchMock = fakeFetch(() => Promise.resolve(jsonResponse(apiBulkResult)));
+    const plainAttacker = omit(omit(attacker, "status"), "ranks");
+    await engineWith(fetchMock).calcBulk({ ...bulkRequest, attacker: plainAttacker });
+    const { body } = sentRequest(fetchMock);
+    expect(body).not.toHaveProperty("field");
+    expect(body).not.toHaveProperty("options");
+    expect((body as { attacker: object }).attacker).not.toHaveProperty("status");
+    expect((body as { attacker: object }).attacker).not.toHaveProperty("ranks");
+  });
+});
