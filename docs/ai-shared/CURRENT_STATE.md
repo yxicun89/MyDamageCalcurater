@@ -22,8 +22,9 @@ Status(追記): 2026-10-01、D07(共通の scripts/require-k3d-context.sh・scri
 Status(追記): 2026-10-01、D23(`make test-db-docker`: Docker の使い捨て MySQL・TiDB で `make test-db` を流して消す。verify-m1 §2・test-strategy L8。#223)。
 Status(追記): issue #403 D20 のデータ部分(#281-data・#108-a・#259-a。ADR-0128)実装済み。dataVersion を source=version@checksum先頭8桁にし(内部 API と export が internal/dataversion を共有)、export に metadata.json・type-chart.json を追加(6ファイル)。#211-data は API レーンの契約待ちで残る。
 Status(追記): 2026-10-01、D18(issue #111・ADR-0104 追記)。importer の PVC に容量の事前確認(`prune.mjs check`、不足は終了コード3)と、現在版+直前の成功版・report 52 件の保持 prune(`prune.mjs prune`、DB apply 成功後)を追加。手順は docs/runbooks/data.md。
+Status(追記): 2026-10-01、issue #437(取り込み中に MySQL が OOMKill)を修正。memory.cnf(performance_schema=OFF 等)と limit 768Mi。k3d に反映済み(待機 499Mi → 165Mi、全置換3回で restart 0)。
 Status(追記): 2026-10-01、D11(issue #107・#323・#324・#299 の pokedex 分。ADR-0129)。`/readyz`(DB の最小条件に連動)・DB 呼び出しの締め切り5秒・preStop sleep 5秒。新規クラスタは初回 import 前に pokedex が Ready にならない(deploy-latest は失敗時に make import-k8s を案内)。
-Next: issue #403 の「残りのパッケージ」を依存の順に(D11 → D12 → D19 → D24〈TB の check-publishable 待ち〉→ D25 → D26 → D27〜D32。D21 は T04・S04・A06 待ち、D20 の #211-data は API レーンの契約待ち)。後続: 逆算の特性候補の計算量の最適化(ADR-0126 追記)、#349。1 パッケージ = 1 PR、importer に触れたら実データの dry-run、マージ後は make deploy-latest。
+Next: issue #403 の「残りのパッケージ」を依存の順に(D12 → D19 → D24〈作業中〉→ D25 → D26 → D27〜D32。D21 は T04・S04・A06 待ち、D20 の #211-data は API レーンの契約待ち)。後続: 逆算の特性候補の計算量の最適化(ADR-0126 追記)、#349。1 パッケージ = 1 PR、importer に触れたら実データの dry-run、マージ後は make deploy-latest。
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)

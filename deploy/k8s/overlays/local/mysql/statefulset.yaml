@@ -42,6 +42,9 @@ spec:
             - name: config
               mountPath: /etc/mysql/conf.d/charset.cnf
               subPath: charset.cnf
+            - name: config
+              mountPath: /etc/mysql/conf.d/memory.cnf
+              subPath: memory.cnf
           # timeoutSeconds の既定は 1 秒。import(全置換の投入)中は CPU 上限(500m)に張り付き、ping が 1 秒を
           # 超えて liveness が失敗 → 取り込みの最中に再起動されていた(2026-09-25 に k3d で再現)。
           # 応答が遅いだけのときに殺さないよう、タイムアウトと失敗回数に余裕を持たせる(約 2 分応答が無ければ再起動)。
@@ -64,7 +67,8 @@ spec:
               memory: 256Mi
             limits:
               cpu: 500m
-              memory: 512Mi
+              # 512Mi では importer の全置換の最中に OOMKill された(issue #437)。memory.cnf で常駐を下げたうえで余裕を持たせる。
+              memory: 768Mi
       volumes:
         - name: config
           configMap:
