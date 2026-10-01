@@ -113,7 +113,7 @@ func TestRunStoreReimportsWhenOutputChanges(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &fakeStore{applied: appliedOld}
-			got, err := importer.RunStore(context.Background(), s, tt.out, pinned, storeNow, tt.force)
+			got, err := importer.RunStore(context.Background(), s, tt.out, pinned, storeNow, tt.force, importer.ApplyOptions{})
 			if err != nil {
 				t.Fatalf("RunStore: %v", err)
 			}
@@ -136,7 +136,7 @@ func TestRunStoreReimportsWhenOutputChanges(t *testing.T) {
 func TestRunStoreRejectsSourceNamedLikeOutput(t *testing.T) {
 	s := &fakeStore{}
 	bad := []importer.SourceVersion{sv(importer.OutputSource, "v1", "a")}
-	if _, err := importer.RunStore(context.Background(), s, importer.Output{}, bad, storeNow, true); err == nil {
+	if _, err := importer.RunStore(context.Background(), s, importer.Output{}, bad, storeNow, true, importer.ApplyOptions{}); err == nil {
 		t.Fatal("取得元 importer-output と出力の版が重複しても通った")
 	}
 	if len(s.applyCalls) != 0 {

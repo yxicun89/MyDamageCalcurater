@@ -24,12 +24,13 @@ import (
 	"example.com/pokecalc/services/pokedex/importer"
 )
 
-// masterTables は投入で置き換えるテーブル(ADR-0100 §3。schema_migrations を除く全テーブル)。
+// masterTables は投入で書くテーブル(ADR-0100 §3。schema_migrations を除く全テーブル)。
+// species_key_ledger は置き換えずに追記だけする台帳(ADR-0131)。止めた投入で変わらないことも比べる。
 var masterTables = []string{
 	"types", "type_chart", "abilities", "items", "moves", "species", "species_abilities",
 	"item_effects", "ability_effects", "move_mechanisms", "learnsets", "natures",
 	"regulations", "regulation_species", "regulation_moves", "regulation_items", "regulation_abilities",
-	"data_versions",
+	"data_versions", "species_key_ledger",
 }
 
 func freshImportDB(t *testing.T) *sql.DB {
@@ -143,7 +144,7 @@ func TestApplyWritesOutput(t *testing.T) {
 		"regulations":        len(out.Regulations),
 		"regulation_species": len(out.RegulationSpecies), "regulation_moves": len(out.RegulationMoves),
 		"regulation_items": len(out.RegulationItems), "regulation_abilities": len(out.RegulationAbilities),
-		"data_versions": len(versions),
+		"data_versions": len(versions), "species_key_ledger": len(out.Species),
 	}
 	for table, want := range counts {
 		if got := len(dump[table]); got != want {
