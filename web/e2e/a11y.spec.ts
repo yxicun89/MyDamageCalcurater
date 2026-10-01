@@ -14,6 +14,8 @@ test("タブは矢印キー・Home・End で選択とフォーカスが移り、
   // (6件、構築が末尾。JD5〈ADR-0705 §1〉の時点では判定が末尾だった)。
   const judgeTab = page.getByRole("tab", { name: "判定", exact: true });
   const teamTab = page.getByRole("tab", { name: "構築", exact: true });
+  // AJ6(ADR-0319 §1): 調整を構築の後ろ(末尾)に足した(7件)。
+  const adjustTab = page.getByRole("tab", { name: "調整", exact: true });
 
   await calcTab.focus();
   await expect(calcTab).toHaveAttribute("aria-selected", "true");
@@ -49,19 +51,25 @@ test("タブは矢印キー・Home・End で選択とフォーカスが移り、
   await expect(judgeTab).toHaveAttribute("aria-selected", "false");
   await expect(page.getByRole("textbox", { name: "構築名", exact: true })).toBeVisible();
 
+  // AJ6: 調整(末尾)。タブを選ぶだけでは調整 API を呼ばない(「調整する」を押したときだけ。ADR-0319 §4)。
+  await page.keyboard.press("ArrowRight");
+  await expect(adjustTab).toBeFocused();
+  await expect(adjustTab).toHaveAttribute("aria-selected", "true");
+  await expect(teamTab).toHaveAttribute("aria-selected", "false");
+
   // 末尾から ArrowRight で先頭へ回り込む。
   await page.keyboard.press("ArrowRight");
   await expect(calcTab).toBeFocused();
   await expect(combobox(page, "攻撃側のポケモン")).toBeVisible();
 
   await page.keyboard.press("End");
-  await expect(teamTab).toBeFocused();
+  await expect(adjustTab).toBeFocused();
   await page.keyboard.press("Home");
   await expect(calcTab).toBeFocused();
   // 先頭から ArrowLeft で末尾へ回り込む。
   await page.keyboard.press("ArrowLeft");
-  await expect(teamTab).toBeFocused();
-  await expect(teamTab).toHaveAttribute("aria-selected", "true");
+  await expect(adjustTab).toBeFocused();
+  await expect(adjustTab).toHaveAttribute("aria-selected", "true");
 });
 
 test("Tab キーは選択中のタブにだけ止まる(ロービング tabIndex)", async ({ page }) => {

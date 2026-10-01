@@ -27,6 +27,9 @@ import { MAX_ABILITY_CANDIDATES, MAX_ITEM_VARIANTS, limitToMax } from "./request
 /** バトルのレベル。Lv50 固定(CLAUDE.md ドメイン規約)。 */
 export const BATTLE_LEVEL = 50;
 
+/** 6能力の表示順(能力ポイント・実数値の欄と1行表示で共通)。 */
+export const STAT_ORDER: readonly StatKey[] = ["hp", "atk", "def", "spa", "spd", "spe"];
+
 /** SP の1ステータスあたりの上限(CLAUDE.md ドメイン規約: 1ステータス最大32)。 */
 export const MAX_SP_PER_STAT = 32;
 
