@@ -28,6 +28,7 @@ make web-e2e
 make web-e2e-container
 make web-e2e-online
 make web-e2e-balance
+make test-db-docker
 ```
 → すべて最後まで成功する(失敗したらそこで止めて plan.md に記録)。
 

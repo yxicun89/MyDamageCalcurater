@@ -19,7 +19,8 @@ Status(追記): 2026-09-25「open issue 全件解決」(3 回の全体レビュ�
 Status(追記): 2026-10-01、D22(Makefile の help・未実装ターゲット・k8s-render の全レーン描画・tidy/deps-outdated の全モジュール・/verify・importer の未来 checkedAt と破壊操作の検査。#261・#294・#321-lint・#75 の一部・#286-assets)。
 Status(追記): 2026-10-01、D10(issue #220・ADR-0127)完了。内部 API(/internal/pokedex/master)と pokedex export の全 SELECT を1つの読み取り専用トランザクション(readtx)に入れ、importer の全置換と重なっても新旧が混在しないようにした。検索系は autocommit のまま。
 Status(追記): 2026-10-01、D07(共通の scripts/require-k3d-context.sh・scripts/image-tag.sh とテスト、up.sh・deploy-latest・pokedex-registry-push・import-k8s の context 検査を共通化、Secret を kubectl create で作る。#327・#295-shared・#291-shared)。各レーンの *-k3d-deploy への組み込みは各レーン(DECISIONS.md 2026-10-01)。
-Next: issue #403 の「残りのパッケージ」を依存の順に(D20 → D11 → D12 → D24〈TB の check-publishable 待ち〉→ D23 → D18〜D32)。後続: 逆算の特性候補の計算量の最適化(ADR-0126 追記)、#349。1 パッケージ = 1 PR、importer に触れたら実データの dry-run、マージ後は make deploy-latest。
+Status(追記): 2026-10-01、D23(`make test-db-docker`: Docker の使い捨て MySQL・TiDB で `make test-db` を流して消す。verify-m1 §2・test-strategy L8。#223)。
+Next: issue #403 の「残りのパッケージ」を依存の順に(D20 → D11 → D12 → D24〈TB の check-publishable 待ち〉→ D18〜D32)。後続: 逆算の特性候補の計算量の最適化(ADR-0126 追記)、#349。1 パッケージ = 1 PR、importer に触れたら実データの dry-run、マージ後は make deploy-latest。
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
