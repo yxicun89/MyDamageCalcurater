@@ -1972,3 +1972,10 @@ Decision: `docs/type-balance-design.md` を実装済みの現在の設計(TB0〜
 Reason: 旧版は 2026-09-21 のレビュー依頼文書のままで、`/api/damage` 等の誤記・実装済みの Kustomize/Argo CD 分割の未決扱いが残っていた。
 Impact: 判定レーン分(2026-09-25)と合わせて issue #260 をクローズできる。旧版の節番号を参照する ADR は変更せず、ADR-0410 の対応表で読み替える
 (§6 段階・§10 倍率の表示は新版でも同じ節番号)。コード・API・他の ADR は無変更(ドキュメントのみ)。
+
+## 2026-10-01: 共通の context ガードとイメージタグ(データレーン → API・Web・タイプバランス・素早さ・判定レーンへ。issue #295・#291・#403 D07)
+
+- `scripts/require-k3d-context.sh <呼び出し元>`: kubectl の context が `k3d-$CLUSTER`(既定 pokecalc)でなければ理由を出して exit 1。kubectl は `config current-context` の読み取りだけ。テストは `scripts/require-k3d-context_test.sh`
+- `scripts/image-tag.sh [パス...]`: HEAD の12桁 + 指定パスに未コミット・未追跡があれば `-dirty`。テストは `scripts/image-tag_test.sh`
+- データレーンは up.sh・k3d-deploy-latest.sh・pokedex-registry-push.sh・`make import-k8s` を移行済み
+- 依頼(既定案): 各レーンは自分の `*-k3d-deploy`(api・balance・speed・judge。web は既に検査あり)の先頭に `@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh <ターゲット名>` を足す(#295)。readmodel の deploy スクリプトも同様。`local-registry-push.sh` のタグ計算は `scripts/image-tag.sh <svc_dir> [engine]` に置き換えてよい。`:local` をやめてコミットのタグで k3d へ入れる移行(#291 の本体)は各レーンの判断で

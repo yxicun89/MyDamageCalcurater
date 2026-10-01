@@ -68,6 +68,9 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/e2e_test.sh
 	@./scripts/gitops_test.sh
 	@./scripts/make-targets_test.sh
+	@./scripts/require-k3d-context_test.sh
+	@./scripts/image-tag_test.sh
+	@./scripts/up-secrets_test.sh
 
 .PHONY: lint
 lint: ## gofmt / go vet / shell・Node構文チェック
@@ -257,12 +260,8 @@ pokedex-export: ## balance/speed 向けの read model を4ファイル書く(POK
 
 .PHONY: import-k8s
 import-k8s: ## k3d 上の CronJob pokedex-import を手動で1回流す(週1回の定期実行とは別に)
-	@current_context="$$(kubectl config current-context)"; \
-	if [ "$$current_context" != "k3d-$(CLUSTER)" ]; then \
-		echo "import-k8s: 現在の kubectl context '$$current_context' が 'k3d-$(CLUSTER)' ではない(別クラスタへ流してしまうため中断)" >&2; \
-		exit 1; \
-	fi; \
-	kubectl -n pokecalc create job --from=cronjob/pokedex-import "pokedex-import-manual-$$(date +%Y%m%d%H%M%S)"
+	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh import-k8s
+	@kubectl -n pokecalc create job --from=cronjob/pokedex-import "pokedex-import-manual-$$(date +%Y%m%d%H%M%S)"
 
 .PHONY: pokedex-registry-push
 pokedex-registry-push: ## pokedex(server イメージ)をクラスタ内共有レジストリ balance-registry へ digest 固定で push する(タイプバランスレーン issue #237 の依頼。ADR-0018・ADR-0605 と同じ方式)
