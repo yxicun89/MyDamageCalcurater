@@ -1,0 +1,21 @@
+# judge から calc(JUDGE_CALC_BASE_URL)へ。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-calc-ingress
+  labels:
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: calc
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: judge
+      ports:
+        - protocol: TCP
+          port: 8080

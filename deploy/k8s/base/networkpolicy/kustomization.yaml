@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - allow-calc-ingress.yaml
+  - allow-gateway-upstream.yaml
+  - allow-mysql-ingress.yaml
+  - allow-nats-ingress.yaml
+  - allow-pokedex-ingress.yaml
+  - allow-prometheus-metrics.yaml
+  - allow-tidb-client-ingress.yaml
+  - allow-tidb-internal.yaml
+  - allow-traefik-ingress.yaml
+  - default-deny-ingress.yaml

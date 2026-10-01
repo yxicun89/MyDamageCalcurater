@@ -1,6 +1,6 @@
 # ADR-0132: pokecalc namespace に ingress の default-deny と許可リストを置く(egress は絞らない)
 
-- 状態: 採用(spec-writer の提案。実装はこの ADR の受け入れ条件=テストが正)
+- 状態: 採用(実装済み。実クラスタでの確認: 未実施〈メインが行う。結果をここに追記〉)
 - 日付: 2026-10-01
 - レーン: データ(ADR 帯 `0100〜`。運用の D25)
 - 関連: issue #240、issue #403(パッケージ D25)、#148、ADR-0204(`/internal` は gateway が 404)、ADR-0211(TiDB)、ADR-0406(ServiceMonitor)

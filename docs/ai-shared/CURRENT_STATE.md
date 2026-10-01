@@ -25,6 +25,7 @@ Status(追記): 2026-10-01、D18(issue #111・ADR-0104 追記)。importer の PV
 Status(追記): 2026-10-01、issue #437(取り込み中に MySQL が OOMKill)を修正。memory.cnf(performance_schema=OFF 等)と limit 768Mi。k3d に反映済み(待機 499Mi → 165Mi、全置換3回で restart 0)。
 Status(追記): 2026-10-01、D11(issue #107・#323・#324・#299 の pokedex 分。ADR-0129)。`/readyz`(DB の最小条件に連動)・DB 呼び出しの締め切り5秒・preStop sleep 5秒。新規クラスタは初回 import 前に pokedex が Ready にならない(deploy-latest は失敗時に make import-k8s を案内)。
 Status(追記): issue #403 D24(#300・#74 のスクリプト部分。ADR-0130)実装済み。check-publishable の B に DSN・URL 資格情報・MYSQL_PWD・Secret の base64・Bearer・各種トークン接頭辞・短い値・2行に分かれる値を、C と .gitignore に .envrc・id_rsa 系・credentials.json・*.p8・*.sql.gz・ダンプ・secret*.yaml を追加(gitleaks は足さない)。
+Status(追記): 2026-10-01、D25(issue #240・ADR-0132)。pokecalc に ingress の default-deny と許可リスト10本(`deploy/k8s/base/networkpolicy/`)を実装。受け入れテスト AC-N1〜N5 は green。k3d での実地確認(apply・smoke・拒否の確認)はメイン。
 Next: issue #403 の「残りのパッケージ」を依存の順に(D12〈作業中〉→ D19 → D25 → D26 → D27〜D32。D21 は T04・S04・A06 待ち、D20 の #211-data は API レーンの契約待ち)。後続: 逆算の特性候補の計算量の最適化(ADR-0126 追記)、#349。1 パッケージ = 1 PR、importer に触れたら実データの dry-run、マージ後は make deploy-latest。
 
 ## API
