@@ -747,4 +747,3 @@ func TestCronJobManifestHasNoAllowRemoved(t *testing.T) {
 		t.Errorf("%s: IMPORT_ALLOW_REMOVED が設定されたときだけ -allow-removed を付ける", cronJobScript)
 	}
 }
-
