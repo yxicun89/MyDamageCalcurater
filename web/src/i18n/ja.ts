@@ -794,3 +794,26 @@ export const resultText = {
   effectivenessSuper: (multiplier: number): string => `ばつぐん(×${multiplier})`,
   moveCategory: { physical: "物理", special: "特殊", status: "変化" },
 } as const;
+
+/**
+ * 「このアプリについて」(issue 328 / P6-18、ADR-0314)の文言。非公式の注記・データの出典4件は iOS の
+ * PokeCalcCore.AboutText と一字一句同じ(正は docs/ai-shared/DECISIONS.md 2026-09-26「P6-18」と ADR-0002「責務の分離」表)。
+ * 出典を増減するときは ADR-0002・ADR-0501「P6-18」・iOS と同時に直す。
+ */
+export const aboutText = {
+  footerLinkLabel: "このアプリについて",
+  pageHeading: "このアプリについて",
+  unofficialHeading: "非公式表示",
+  unofficialNotice:
+    "このアプリは個人が私的に使うための非公式ツールです。" +
+    "任天堂・クリーチャーズ・ゲームフリーク・株式会社ポケモンとは関係ありません。" +
+    "ポケモン・Pokémon および関連する名称は各社の商標です。",
+  dataSourcesHeading: "データの出典",
+  dataSources: [
+    { title: "ダメージ計算の検証", detail: "@smogon/calc(MIT License)" },
+    { title: "ポケモン・技・習得技の照合", detail: "Pokémon Showdown(MIT License)" },
+    { title: "日本語名・図鑑番号", detail: "PokeAPI" },
+    { title: "使用可能なポケモン等の基準", detail: "Pokémon HOME・Pokémon Champions の公式情報" },
+  ],
+  backLabel: "計算に戻る",
+} as const;

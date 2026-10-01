@@ -1208,6 +1208,10 @@
   触った分だけ `critical` / `attacker.status` / `field` / `attacker.ranks` を要求に載せる(既定は従来とバイト同一)。
   要求の形は `domain/calcConditions.ts`、文言は `calcConditionsText`、部品は `screens/CalcConditionsPanel.tsx`。
   条件は攻守入れ替え・種族・技の変更で消さず、変えた直後は古い結果を出さない。iOS は別レーン
+- [x] issue #328 の Web 分(ADR-0314): アプリ下部のフッター(`<footer>`、main の外)に「このアプリについて」リンクを置き、
+  `/about`(ADR-0300 §1 のパス連動。タブには入れない)で非公式の注記とデータの出典4件を出す。文言は `aboutText`
+  (iOS の `AboutText` と一字一句同じ)、画面は `AboutScreen.tsx`。タブ列は出さず他タブは hidden で DOM に残す(入力を保つ)。
+  axe(`@axe-core/playwright` 4.13.0)の検査を `e2e/a11y-about.spec.ts` に追加。マスタ・engine は使わない
 - [x] issue #274/#272 の API レーン担当分の残り(ADR-0216): `BulkCalcRequest.defenderOverride` に `ranks: RankBlock` /
   `status: StatusCondition` を追加(全行の防御側に一律で上書き)。engine は `BulkInput.DefenderOverride`
   (`ErrInvalidDefenderOverride`。件数上限の後・計算の前に検証し、results・rows の両ループで特性の直後に当てる)、
