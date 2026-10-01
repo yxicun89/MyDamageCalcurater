@@ -66,7 +66,7 @@ cd "$(git rev-parse --show-toplevel)"
 kubectl -n pokecalc port-forward svc/mysql 3306:3306 >/dev/null 2>&1 &
 PF_PID=$!
 sleep 2
-export POKEDEX_DATABASE_DSN=$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.pokedex-dsn}' | base64 -d | sed 's/@tcp(mysql:/@tcp(127.0.0.1:/')
+export POKEDEX_DATABASE_DSN=$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.pokedex-reader-dsn}' | base64 -d | sed 's/@tcp(mysql:/@tcp(127.0.0.1:/')
 make pokedex-export
 kill $PF_PID
 unset POKEDEX_DATABASE_DSN PF_PID
@@ -89,11 +89,11 @@ make deploy-latest
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 make web-k3d-smoke
-make api-smoke
+API_SMOKE_STRICT=1 make api-smoke
 make web-k3d-e2e
 ```
 → `web smoke: すべて成功(http://localhost:8080)`。`api-smoke` の最終行に `calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=200 internal=404 balance=200 web=200`
-(`missing_header=400`・`invalid_header=400`・`internal=404` は異常系を意図して確かめた結果で、この値が正常)。
+(`API_SMOKE_STRICT=1` は web・balance が 200 でなければ非0で終わる。`missing_header=400`・`invalid_header=400`・`internal=404` は異常系を意図して確かめた結果で、この値が正常)。
 `web-k3d-e2e` は `2 passed`(実ブラウザで 8080 を開き、オフラインとオンライン〈実マスタ〉の両方で計算結果が出ることを確かめる)。
 
 ## 6. ブラウザで確認する(Chrome と Safari)

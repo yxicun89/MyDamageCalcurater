@@ -46,6 +46,7 @@ balance-docker-push:
 	@SERVICE=balance scripts/gitops/publish-image.sh
 
 balance-k3d-deploy: balance-docker-build ## k3d へ balance を直接デプロイ
+	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh balance-k3d-deploy
 	@k3d image import $(BALANCE_IMAGE) --cluster $(CLUSTER)
 	@kubectl apply -k $(BALANCE_DIR)/deploy/k8s/overlays/local
 	@kubectl -n pokecalc rollout restart deployment/balance
@@ -68,6 +69,7 @@ balance-argocd-app:
 	@SERVICE=balance scripts/gitops/argocd-local-app.sh
 
 balance-k3d-deploy-readmodel:
+	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh balance-k3d-deploy-readmodel
 	@SERVICE=balance BALANCE_IMAGE=$(BALANCE_IMAGE) CLUSTER=$(CLUSTER) scripts/gitops/k3d-deploy-readmodel.sh
 
 balance-smoke-readmodel:

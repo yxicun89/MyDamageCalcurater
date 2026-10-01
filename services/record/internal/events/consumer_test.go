@@ -157,7 +157,8 @@ func TestRedeliveryIsIdempotent(t *testing.T) {
 
 // EventID はストリームシーケンスだけから決まる(受信時刻・ランダム値を混ぜない)。
 func TestEventIDIsStableAcrossRedeliveries(t *testing.T) {
-	if EventID(42) != EventID(42) {
+	first, second := EventID(42), EventID(42)
+	if first != second {
 		t.Error("同じシーケンスで EventID が変わる(重複排除が効かない)")
 	}
 	if EventID(42) == EventID(43) {
