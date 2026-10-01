@@ -144,7 +144,8 @@ function validateSelf(self: SelfState): FieldErrors {
 
 /** サーバーの英語 message は出さず、code から日本語にする(未知の code は汎用の文言)。 */
 function errorMessage(error: { readonly code: string }): string {
-  return speedScreenText.errorByCode[error.code] ?? speedScreenText.errorFallback;
+  const byCode: Readonly<Record<string, string | undefined>> = speedScreenText.errorByCode;
+  return byCode[error.code] ?? speedScreenText.errorFallback;
 }
 
 /**

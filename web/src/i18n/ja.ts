@@ -420,7 +420,7 @@ export const speedScreenText = {
     master_unavailable: "ポケモンのマスタを読み込めません",
     internal_error: "素早さの計算に失敗しました",
     speed_unavailable: "素早さの API に接続できません",
-  } as Readonly<Record<string, string>>,
+  } satisfies Readonly<Record<string, string>>,
   /** errorByCode に無い code のとき。 */
   errorFallback: "素早さの計算に失敗しました",
   // ---- 右(自分のポケモン)の結果(ADR-0604 §4) ----
