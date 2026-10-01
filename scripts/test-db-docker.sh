@@ -34,8 +34,8 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 # 値はコマンドライン引数に出さない(環境変数で渡す)。使い捨てのコンテナ限りのパスワード。
-MYSQL_ROOT_PASSWORD="$(openssl rand -hex 16)"
-export MYSQL_ROOT_PASSWORD
+pw="$(openssl rand -hex 16)"
+export MYSQL_ROOT_PASSWORD="${pw}"
 
 docker network create "$NETWORK" >/dev/null
 echo "test-db-docker: MySQL と TiDB を起動します(使い捨て。終了時に消します)..." >&2
