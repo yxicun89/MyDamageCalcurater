@@ -1216,6 +1216,9 @@
   触った分だけ `critical` / `attacker.status` / `field` / `attacker.ranks` を要求に載せる(既定は従来とバイト同一)。
   要求の形は `domain/calcConditions.ts`、文言は `calcConditionsText`、部品は `screens/CalcConditionsPanel.tsx`。
   条件は攻守入れ替え・種族・技の変更で消さず、変えた直後は古い結果を出さない。iOS は別レーン
+- [x] issue #274 の Web 分の残り(ADR-0315): 「詳細」に防御側のランク(選択中の技の分類で B か D を ±1、-6..+6、def / spd は別保持)を追加。
+  触った分だけ `defenderOverride.ranks`(5項目)を要求に載せ(既定は従来とバイト同一)、API は特性(#272)と同じ `defenderOverride` に合成、
+  WASM は素通し(特性は従来どおり `defenderAbilities`)。条件の置き場は `domain/calcConditions.ts`。防御側の状態異常は式に効かないので出さない。iOS は別レーン
 - [x] issue #274/#272 の API レーン担当分の残り(ADR-0216): `BulkCalcRequest.defenderOverride` に `ranks: RankBlock` /
   `status: StatusCondition` を追加(全行の防御側に一律で上書き)。engine は `BulkInput.DefenderOverride`
   (`ErrInvalidDefenderOverride`。件数上限の後・計算の前に検証し、results・rows の両ループで特性の直後に当てる)、

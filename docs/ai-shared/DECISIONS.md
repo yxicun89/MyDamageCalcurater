@@ -2040,3 +2040,10 @@ Reason: 既定案 A は変更が小さく、版を上げる PR でハッシュ�
 Impact: 版を上げる PR は config.json の `integrity` も更新する(不一致のときは stderr の実際のハッシュを、内容を確かめたうえで反映)。
 却下案 B(dist の vendoring)・C(現状維持)に変えるなら ADR-0101 追記と config.json の integrity を戻す。
 ユーザーの確認待ち: A でよいか(特に、期限切れの引き渡しを無視する TTL 7200 秒の扱い)。
+
+## 2026-10-02: 防御側のランクの文言を iOS も同じに揃える提案(Web レーン → iOS レーン。issue #274、ADR-0315)
+Decision: Web の「詳細」に防御側のランクを追加した。iOS も攻撃側のランクと同じ作りで揃えてほしい。
+文言は fieldset「防御側のランク」、ボタン「防御側のランクを上げる」「防御側のランクを下げる」、表示は「B +1」「D -2」「B ±0」。
+編集対象は選択中の技の分類で 物理・変化・技なし = def〈B〉、特殊 = spd〈D〉。def / spd は別々に保持する。
+Reason: 契約(`defenderOverride.ranks`、ADR-0216)は入っており、攻守で画面の作りを揃えるため。
+Impact: 既定(0・0)なら `defenderOverride` を送らない。どちらかが非 0 なら 5 項目の ranks を送り、特性(#272)と同じ `defenderOverride` に併存させる。防御側の状態異常は式に効かないので出さない。
