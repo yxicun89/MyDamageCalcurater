@@ -50,7 +50,9 @@ final class AbilityPickerUITests: XCTestCase {
     }
 
     /// 種族の検索シートで `name` を打ち、`speciesSearchResult-<key>` を選ぶ(`CalcScreenUITests` と同じ流れ)。
-    private func chooseSpecies(_ app: XCUIApplication, picker: String, container: String, name: String, key: String) {
+    /// 検索欄の入力は画面ごとに保持される(8章)ので、同じ画面で2回目に選ぶときは `previousQuery` を渡して消してから打つ。
+    private func chooseSpecies(_ app: XCUIApplication, picker: String, container: String, name: String, key: String,
+                               previousQuery: String = "") {
         let pickerElement = element(app, picker)
         scrollUntilHittable(app, container: container, pickerElement)
         pickerElement.tap()
@@ -58,6 +60,9 @@ final class AbilityPickerUITests: XCTestCase {
         let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: Self.existenceTimeout))
         field.tap()
+        if !previousQuery.isEmpty {
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: previousQuery.count))
+        }
         field.typeText(name)
         let result = element(app, "speciesSearchResult-\(key)")
         XCTAssertTrue(result.waitForExistence(timeout: Self.existenceTimeout))
@@ -133,7 +138,7 @@ final class AbilityPickerUITests: XCTestCase {
         XCTAssertFalse(element(app, "calcResultAbility-none@-").exists, "分かれていなければ副題を出さない")
 
         chooseSpecies(app, picker: "defenderSpeciesPicker", container: "calcScreen",
-                      name: Self.plainSpeciesName, key: Self.plainSpeciesKey)
+                      name: Self.plainSpeciesName, key: Self.plainSpeciesKey, previousQuery: Self.splitSpeciesName)
         waitForValue(picker, Self.unspecifiedLabel)
     }
 

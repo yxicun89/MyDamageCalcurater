@@ -3610,3 +3610,13 @@ XCUITest(`AboutScreenUITests` 2件・`LargeTextLayoutUITests.testAboutScreenNoHo
 - `LargeTextLayoutUITests` の AX5 はみ出し検査への追加は任意(足すなら既存の配列を変えずに別のテストで)。
 - 既存テスト・新しいテストの期待値は変えない。`api/openapi.yaml`・`Generated/`・`engine/`・`web/`・`services/` は触らない。
 - 完了条件は7章。`swift test` と `make ios-test` を実行し、結果をこの章の後ろに追記する。plan.md の P6-19 にチェックを付ける。
+
+### 10. 実装結果(2026-10-01)
+
+- View: `CalcConditionsSection`(防御側の特性)・`ReverseScreenView`(相手の特性)・`CalcScreenResults`/`ReverseScreenResults`(副題)。
+- **5章の訂正**: 新しい種族 9004-000 は species.json の**末尾ではなく 9002 と 9003 の間**に置く。既存の `MockPokeCalcServiceTests` が
+  `species.last` を防御側に使っており、末尾だと既定の技(かくとう)で行が特性により倍に分かれて8件が失敗するため
+  (既存テストを変えない方針を優先)。
+- XCUITest `AbilityPickerUITests` の `chooseSpecies` に `previousQuery` を足した(検索欄の入力は画面ごとに保持されるため、
+  同じ画面で2回目に種族を選ぶときは前の入力を消してから打つ。製品の挙動は変えない)。
+- 結果: `swift test` 546件・`make ios-test` 全件成功(unit 546件・XCUITest 47件)。
