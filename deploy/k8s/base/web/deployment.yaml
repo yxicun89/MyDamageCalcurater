@@ -19,6 +19,8 @@ spec:
         app.kubernetes.io/part-of: pokecalc
     spec:
       automountServiceAccountToken: false
+      # preStop(5秒)+ nginx の graceful 終了(SIGQUIT。処理中の接続を待つ)より長い。issue #324。
+      terminationGracePeriodSeconds: 30
       containers:
         - name: web
           image: pokecalc/web:0.1.0
@@ -26,6 +28,10 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
           readinessProbe:
             httpGet:
               path: /healthz
