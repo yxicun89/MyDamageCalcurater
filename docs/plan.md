@@ -852,6 +852,7 @@
 - [x] TB6 技範囲チェッカー(2026-09-22 ユーザー要望。ADR-0404): 技 ID(最大4つ)から18タイプの一貫判定を出し、その技構成を半減以下で受けられる実在ポケモンを図鑑から具体名で列挙する。特性で半減以下になるポケモンは別枠
 - [x] Codexレビュー issue #105 対応(2026-09-23。ADR-0405): Argo CD 導入物(install.yaml・同梱3イメージ)をコミットSHA・SHA-256・digestで固定する `scripts/argocd-bootstrap.sh` を新設し、balance/speed 両runbookの重複した生URL直apply手順を1本化。自動テスト `scripts/argocd-bootstrap_test.sh`(`make test-scripts`)。
 - [x] 全体レビュー issue #263・#292 対応(2026-09-25。ADR-0408): AppProject `pokecalc` を新設し balance/speed 両 Application を `project: default` から限定、GitOps スクリプト5本を `scripts/gitops/{argocd-local-app,check-gitops,publish-image,local-registry-push,k3d-deploy-readmodel}.sh`(`SERVICE=` 必須)に共通化、クラスタ内レジストリを `emptyDir` から PVC(`local-path`・2Gi)へ変更して push 済み image の消失を解消。自動テスト `scripts/gitops_test.sh`(`make test-scripts`)。
+- [x] issue #298(タイプバランス/運用。全体レビュー第3回。ADR-0409): balance の recommendations が同時 30 で 64Mi を超えて OOMKill される。(a) `matchingPokemon`・`abilityOptionsFor` の結果スライスをカタログ件数分あらかじめ確保しない(削減前 約 3.1 MB/op → 1 MiB/op 以下)、`GOMEMLIMIT` を balance・judge・speed の Deployment に追加、(b) 同時実行セマフォ(`BALANCE_MAX_CONCURRENT_RECOMMENDATIONS`、既定 4)と超過時の即時 503 `overloaded`(`Retry-After: 1`。ErrorCode 追加は openapi 先行で生成済み)。spec-writer 済み: 失敗するテスト(`recommendations_limit_test.go`・`recommendations_alloc_test.go`・`cmd/api/concurrency_config_test.go`・`services/gateway/deploytest/go_memlimit_test.go`)とベンチ(`recommendations_bench_test.go`)。実装済み(1,500件で約 0.53 MB/op、docker 同時 30 で OOMKilled=false を確認)
 
 ### ブロッカー(タイプバランスレーン)
 (なし。Argo CD の実同期は 2026-09-22 に解消)

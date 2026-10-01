@@ -32,6 +32,9 @@ spec:
               value: http://pokedex
             - name: JUDGE_CALC_BASE_URL
               value: http://calc
+            # limits.memory の 64Mi に対して少し余裕を持たせた値(GC が OOMKill の前に働くように)。
+            - name: GOMEMLIMIT
+              value: 56MiB
           readinessProbe:
             httpGet:
               path: /healthz

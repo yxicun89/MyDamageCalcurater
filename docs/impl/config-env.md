@@ -46,6 +46,7 @@
 | balance | `BALANCE_POKEMON_TYPES_PATH` | `cmd/api/config.go:9` | 任意 | ポケモンのタイプ read model。未設定 → analyze 等が 503。設定済みで読めない → 非ゼロ終了 |
 | balance | `BALANCE_MOVES_PATH` | `config.go:30` | 任意 | 技 read model(coverage 等) |
 | balance | `BALANCE_ABILITIES_PATH` | `config.go:50` | 任意 | 特性 read model |
+| balance | `BALANCE_MAX_CONCURRENT_RECOMMENDATIONS` | `cmd/api/config.go` | 任意 | recommendations の同時計算数の上限(既定 4)。超過は即 503 `overloaded`(`Retry-After: 1`)。0・負・数値以外 → 非ゼロ終了(ADR-0409) |
 | speed | `PORT` | `cmd/api/config.go:13` | 任意 | 待ち受けポート |
 | speed | `SPEED_POKEMON_PATH` | `config.go:9` | 任意 | ポケモン read model。未設定 → 503 |
 | judge | `PORT` | `cmd/api/config.go:13` | 任意 | 待ち受けポート |
@@ -81,13 +82,13 @@
 | pokedex-migrate(Job) | `POKEDEX_DATABASE_DSN`(同上 `job-migrate.yaml:60`)。initContainer `wait-for-mysql`: `MYSQL_PWD`(Secret `mysql-root-password` `:42`) | `deploy/k8s/base/pokedex/job-migrate.yaml` | |
 | pokedex-import(CronJob) | `HOME=/tmp`・`npm_config_cache=/tmp/npm-cache`・`POKEDEX_DATABASE_DSN`(Secret `:66`) | `deploy/k8s/base/pokedex/cronjob-import.yaml` | 読み取り専用ルートのため /tmp を使う |
 | mysql | `MYSQL_ROOT_PASSWORD`(Secret `mysql-root-password` `:32`)・`MYSQL_DATABASE=pokedex`(初回起動時のみ有効) | `deploy/k8s/overlays/local/mysql/statefulset.yaml` | |
-| balance | `PORT=8080` | `services/balance/deploy/k8s/base/deployment.yaml` | |
+| balance | `PORT=8080`・`GOMEMLIMIT=56MiB` | `services/balance/deploy/k8s/base/deployment.yaml` | |
 | balance(local) | `BALANCE_POKEMON_TYPES_PATH=/etc/balance/pokemon-types.json`・`BALANCE_MOVES_PATH=/etc/balance/moves.json`・`BALANCE_ABILITIES_PATH=/etc/balance/abilities.json` | `services/balance/deploy/k8s/overlays/local/deployment-*-patch.yaml`(3) | 架空データ |
 | balance(local-readmodel) | 同 3 変数 = `/etc/balance/readmodel/{pokemon-types,moves,abilities}.json` | `…/overlays/local-readmodel/deployment-readmodel-patch.yaml` | pokedex export の実 read model |
-| speed | `PORT=8080` | `services/speed/deploy/k8s/base/deployment.yaml` | |
+| speed | `PORT=8080`・`GOMEMLIMIT=56MiB` | `services/speed/deploy/k8s/base/deployment.yaml` | |
 | speed(local) | `SPEED_POKEMON_PATH=/etc/speed/pokemon.json` | `services/speed/deploy/k8s/overlays/local/deployment-pokemon-patch.yaml` | 架空データ |
 | speed(local-readmodel) | `SPEED_POKEMON_PATH=/etc/speed/readmodel/speed-pokemon.json` | `…/overlays/local-readmodel/deployment-readmodel-patch.yaml` | |
-| judge | `JUDGE_POKEDEX_BASE_URL=http://pokedex`・`JUDGE_CALC_BASE_URL=http://calc` | `services/judge/deploy/k8s/base/deployment.yaml` | |
+| judge | `JUDGE_POKEDEX_BASE_URL=http://pokedex`・`JUDGE_CALC_BASE_URL=http://calc`・`GOMEMLIMIT=56MiB` | `services/judge/deploy/k8s/base/deployment.yaml` | |
 | web | なし | `deploy/k8s/base/web/deployment.yaml` | `/tmp` は emptyDir |
 
 ## 3. ConfigMap(全件)
