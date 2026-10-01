@@ -2000,3 +2000,15 @@ Impact: 判定レーン分(2026-09-25)と合わせて issue #260 をクローズ
 - `scripts/image-tag.sh [パス...]`: HEAD の12桁 + 指定パスに未コミット・未追跡があれば `-dirty`。テストは `scripts/image-tag_test.sh`
 - データレーンは up.sh・k3d-deploy-latest.sh・pokedex-registry-push.sh・`make import-k8s` を移行済み
 - 依頼(既定案): 各レーンは自分の `*-k3d-deploy`(api・balance・speed・judge。web は既に検査あり)の先頭に `@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh <ターゲット名>` を足す(#295)。readmodel の deploy スクリプトも同様。`local-registry-push.sh` のタグ計算は `scripts/image-tag.sh <svc_dir> [engine]` に置き換えてよい。`:local` をやめてコミットのタグで k3d へ入れる移行(#291 の本体)は各レーンの判断で
+
+## 2026-10-01: P6-7「この端末のデータを削除」の iOS 側の決定(iOS レーン → Web レーンへ。issue #103)
+Decision: (1) Web は未実装のため iOS が既定を決める。文言は ADR-0209 §8 をそのまま使い、設定の説明2文目の括弧だけ iOS 向け
+(「アプリを削除して入れ直したとき」。Web は「ブラウザのサイトデータを消したとき」)。確定文は ADR-0501「P6-7」2章の表。
+(2) 置き場所は「このアプリについて」画面の「データの扱い」セクション(新しい画面・導線は作らない)。Web も About 相当に揃えてよい。
+(3) 動き: 確認必須 → record と team を独立に呼ぶ(片方が失敗でももう片方は進める)→ `partial` は上限付き(1対象20回)で自動再送 →
+両方 `completed` になってから「削除しました。」。失敗は自動再送せず「サーバーに届きませんでした…」と再試行ボタン(片方だけ消えたときは
+「構築は削除済みです。」等を添える)。(4) 削除するのはサーバー側だけ。端末内に持つデータ(iOS の `LocalTeamStore`)と端末 ID は消さない。
+(5) 計算・逆算は削除の成否に依存しない(絶対ルール5)。
+Reason: ADR-0209 §8 の依頼(Web は P5-5、iOS は P6-5 → plan では P6-7)。
+Impact: Web レーンは文言・再送の上限・再試行の扱いを揃えるか、違う判断をするなら DECISIONS.md に書く。iOS の生成クライアントは
+`record`・`team` タグが未生成のため、implementer が `ios/tools/openapi-gen/openapi-generator-config.yaml` に足して再生成する(契約の変更なし)。
