@@ -90,7 +90,7 @@ final class APIBalanceServiceTests: XCTestCase {
     ]}
     """
 
-    private static let errorJSON: (String, String) -> String = { code, message in
+    private static let errorJSON: @Sendable (String, String) -> String = { code, message in
         #"{"code":"\#(code)","message":"\#(message)"}"#
     }
 

@@ -81,6 +81,12 @@ struct RootView: View {
                         }
                         .buttonStyle(PillButtonStyle())
                         .accessibilityIdentifier("openTeamListScreen")
+
+                        NavigationLink(value: BalanceScreenRoute()) {
+                            Text("タイプバランス")
+                        }
+                        .buttonStyle(PillButtonStyle())
+                        .accessibilityIdentifier("openBalanceScreen")
                     }
                 }
                 Spacer()
@@ -107,22 +113,27 @@ struct RootView: View {
                 }
             }
             .navigationDestination(for: CalcScreenRoute.self) { _ in
-                if case .ready(let service, _, let backendDescription) = environment {
+                if case .ready(let service, _, let backendDescription, _) = environment {
                     CalcScreenView(service: service, teamStore: teamStore, backendDescription: backendDescription)
                 }
             }
             .navigationDestination(for: ReverseScreenRoute.self) { _ in
-                if case .ready(let service, _, let backendDescription) = environment {
+                if case .ready(let service, _, let backendDescription, _) = environment {
                     ReverseScreenView(service: service, teamStore: teamStore, backendDescription: backendDescription)
                 }
             }
             .navigationDestination(for: TeamListScreenRoute.self) { _ in
-                if case .ready(let service, _, _) = environment {
+                if case .ready(let service, _, _, _) = environment {
                     TeamListView(store: teamStore, service: service, path: $path)
                 }
             }
+            .navigationDestination(for: BalanceScreenRoute.self) { _ in
+                if case .ready(let service, _, _, let balance) = environment {
+                    BalanceScreenView(balance: balance, service: service, teamStore: teamStore)
+                }
+            }
             .navigationDestination(for: AboutScreenRoute.self) { _ in
-                if case .ready(_, let deviceData, _) = environment {
+                if case .ready(_, let deviceData, _, _) = environment {
                     AboutView(deviceDataService: deviceData)
                 } else {
                     AboutView()
@@ -145,7 +156,7 @@ struct RootView: View {
     @ViewBuilder
     private var statusBadge: some View {
         switch environment {
-        case .ready(_, _, let description):
+        case .ready(_, _, let description, _):
             Text(description)
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
@@ -189,12 +200,18 @@ private struct ReverseScreenRoute: Hashable {}
 /// `NavigationPath` に積む構築一覧画面の行き先(値だけで、状態は持たない)。
 private struct TeamListScreenRoute: Hashable {}
 
+/// `NavigationPath` に積むタイプバランス画面の行き先(値だけで、状態は持たない。P6-21)。
+private struct BalanceScreenRoute: Hashable {}
+
 /// `NavigationPath` に積む「このアプリについて」画面の行き先(値だけで、状態は持たない。P6-18)。
 private struct AboutScreenRoute: Hashable {}
 
 #Preview {
     if let mock = try? MockPokeCalcService() {
-        RootView(environment: .ready(service: mock, deviceData: MockDeviceDataService(), backendDescription: "モックデータで動作中"))
+        RootView(
+            environment: .ready(
+                service: mock, deviceData: MockDeviceDataService(), backendDescription: "モックデータで動作中",
+                balance: UnavailableBalanceService()))
     } else {
         Text("プレビュー用モックの読み込みに失敗")
     }
