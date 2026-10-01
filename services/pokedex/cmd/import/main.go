@@ -2,10 +2,13 @@
 // 冪等に投入する CLI(ADR-0101 §11・ADR-0104 §3・§10)。ネットワークには触らない
 // (取得は tools/importer、上流の最新版の検出結果はファイルで受け取るだけ)。
 //
-//	import -data <dir> [-dry-run] [-force] [-typechart <path>] [-upstream <path>] [-upstream-max-age <duration>]
+//	import -data <dir> [-dry-run] [-force] [-typechart <path>] [-upstream <path>] [-upstream-max-age <duration>] [-allow-removed <種類>:<ID>,...]
 //
 // 照合では、取り込む相性表を参照の相性表(既定は <data>/../testdata/golden/typechart.json)と比べ、
 // 食い違いは Blocker にする(issue #280・ADR-0118)。
+//
+// -allow-removed は、DB にある種族 key・技/持ち物/特性の ID が新しい出力から消える投入を人が承認する
+// (種類は species/move/item/ability。既定は何も許さない。ADR-0131)。形式の誤りはフラグの解析直後に終了コード 2。
 //
 // DSN(go-sql-driver/mysql 形式)は環境変数 POKEDEX_DATABASE_DSN から読む(-dry-run のときは不要)。
 //
@@ -13,8 +16,8 @@
 //
 //	0 成功(投入した・取得元の版と変換結果が同じでスキップ・dry-run)
 //	1 再試行で直りうる失敗(DB に接続できない・報告を書けない・その他の I/O)
-//	2 使い方・設定の誤り(フラグの誤り・POKEDEX_DATABASE_DSN が無い)
-//	3 人間の対応が要る(ErrBlocked・ErrKeyChanged・ErrInvalidInput・ErrInvalidData・
+//	2 使い方・設定の誤り(フラグの誤り・-allow-removed の形式の誤り・POKEDEX_DATABASE_DSN が無い)
+//	3 人間の対応が要る(ErrBlocked・ErrKeyChanged・ErrKeyRemoved・ErrInvalidInput・ErrInvalidData・
 //	  master.ErrInvalidEffect・ErrSchemaNotReady・DB の制約違反)。DB は変えない
 package main
 
@@ -76,7 +79,13 @@ func run(args []string, env cliEnv) int {
 	typeChartPath := fs.String("typechart", "", "照合する参照の相性表(空なら <data>/../testdata/golden/typechart.json)")
 	upstreamPath := fs.String("upstream", "", "上流の最新版の検出結果ファイル(空なら表示しない)")
 	upstreamMaxAge := fs.Duration("upstream-max-age", 24*time.Hour, "checkedAt がこれより古い検出結果は unknown 扱いにする")
+	allowRemovedFlag := fs.String("allow-removed", "", "消える ID を承認する(<種類>:<ID> のカンマ区切り。種類は species/move/item/ability)")
 	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	allowRemoved, err := importer.ParseAllowRemoved(*allowRemovedFlag)
+	if err != nil {
+		fmt.Fprintln(env.Stderr, "import:", err)
 		return 2
 	}
 
@@ -149,9 +158,14 @@ func run(args []string, env cliEnv) int {
 	}
 	defer closer.Close() //nolint:errcheck // 投入の成否とは無関係
 
-	applied, err := importer.RunStore(context.Background(), store, out, versions, env.Now(), *force)
+	applied, err := importer.RunStore(context.Background(), store, out, versions, env.Now(), *force, importer.ApplyOptions{AllowRemoved: allowRemoved})
 	if err != nil {
 		fmt.Fprintln(env.Stderr, "import: 投入に失敗:", err)
+		var removedErr *importer.RemovedIDsError
+		if errors.As(err, &removedErr) {
+			fmt.Fprintf(env.Stderr, "import: 消える ID: %s\nimport: 内容を確かめ、消えてよければ -allow-removed %s を付けて1回だけ流す(k8s では環境変数 IMPORT_ALLOW_REMOVED。docs/runbooks/data.md「ID が消えて CronJob が終了コード 3 で止まったとき」)\n",
+				joinRemovedIDs(removedErr.IDs), joinRemovedIDs(removedErr.IDs))
+		}
 		return classifyErr(err)
 	}
 	if applied {
@@ -205,6 +219,7 @@ func classifyErr(err error) int {
 		importer.ErrInvalidData,
 		master.ErrInvalidEffect,
 		importer.ErrKeyChanged,
+		importer.ErrKeyRemoved,
 		importer.ErrSchemaNotReady,
 	} {
 		if errors.Is(err, sentinel) {
@@ -216,4 +231,12 @@ func classifyErr(err error) int {
 		return 3
 	}
 	return 1
+}
+
+func joinRemovedIDs(ids []importer.RemovedID) string {
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = id.String()
+	}
+	return strings.Join(parts, ",")
 }

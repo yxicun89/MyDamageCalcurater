@@ -6,6 +6,7 @@ package importer_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ type fakeStore struct {
 	appliedErr error
 	applyErr   error
 	applyCalls [][]importer.SourceVersion
+	applyOpts  []importer.ApplyOptions
 }
 
 func (f *fakeStore) AppliedVersions(context.Context) ([]importer.SourceVersion, error) {
@@ -27,8 +29,9 @@ func (f *fakeStore) AppliedVersions(context.Context) ([]importer.SourceVersion, 
 	return append([]importer.SourceVersion(nil), f.applied...), nil
 }
 
-func (f *fakeStore) Apply(_ context.Context, _ importer.Output, versions []importer.SourceVersion, _ time.Time) error {
+func (f *fakeStore) Apply(_ context.Context, _ importer.Output, versions []importer.SourceVersion, _ time.Time, opts importer.ApplyOptions) error {
 	f.applyCalls = append(f.applyCalls, append([]importer.SourceVersion(nil), versions...))
+	f.applyOpts = append(f.applyOpts, opts)
 	return f.applyErr
 }
 
@@ -58,7 +61,7 @@ func TestRunStoreDecision(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &fakeStore{applied: tt.applied}
-			got, err := importer.RunStore(context.Background(), s, importer.Output{}, pinned, storeNow, tt.force)
+			got, err := importer.RunStore(context.Background(), s, importer.Output{}, pinned, storeNow, tt.force, importer.ApplyOptions{})
 			if err != nil {
 				t.Fatalf("RunStore: %v", err)
 			}
@@ -89,7 +92,7 @@ func TestRunStoreDoesNotApplyWhenVersionsUnreadable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &fakeStore{appliedErr: tt.err}
-			got, err := importer.RunStore(context.Background(), s, importer.Output{}, pinned, storeNow, true)
+			got, err := importer.RunStore(context.Background(), s, importer.Output{}, pinned, storeNow, true, importer.ApplyOptions{})
 			if !errors.Is(err, tt.err) {
 				t.Fatalf("err = %v, want %v を包む", err, tt.err)
 			}
@@ -106,7 +109,7 @@ func TestRunStoreDoesNotApplyWhenVersionsUnreadable(t *testing.T) {
 func TestRunStoreRejectsInvalidIncomingVersions(t *testing.T) {
 	s := &fakeStore{}
 	bad := []importer.SourceVersion{{Source: "calc", Version: "", Checksum: "x"}}
-	if _, err := importer.RunStore(context.Background(), s, importer.Output{}, bad, storeNow, false); !errors.Is(err, importer.ErrInvalidInput) {
+	if _, err := importer.RunStore(context.Background(), s, importer.Output{}, bad, storeNow, false, importer.ApplyOptions{}); !errors.Is(err, importer.ErrInvalidInput) {
 		t.Fatalf("err = %v, want ErrInvalidInput", err)
 	}
 	if len(s.applyCalls) != 0 {
@@ -116,7 +119,7 @@ func TestRunStoreRejectsInvalidIncomingVersions(t *testing.T) {
 
 func TestRunStorePropagatesApplyError(t *testing.T) {
 	s := &fakeStore{applyErr: importer.ErrKeyChanged}
-	got, err := importer.RunStore(context.Background(), s, importer.Output{}, []importer.SourceVersion{sv("calc", "v1", "a")}, storeNow, false)
+	got, err := importer.RunStore(context.Background(), s, importer.Output{}, []importer.SourceVersion{sv("calc", "v1", "a")}, storeNow, false, importer.ApplyOptions{})
 	if !errors.Is(err, importer.ErrKeyChanged) {
 		t.Fatalf("err = %v, want ErrKeyChanged", err)
 	}
@@ -133,5 +136,18 @@ func TestSchemaNotReadyIsDistinct(t *testing.T) {
 		if errors.Is(importer.ErrSchemaNotReady, other) {
 			t.Errorf("ErrSchemaNotReady が %v と区別できない", other)
 		}
+	}
+}
+
+// RunStore は消滅の承認(-allow-removed)をそのまま Apply に渡す(ADR-0131)。
+// 既定(ゼロ値)は何も許さない。
+func TestRunStorePassesApplyOptions(t *testing.T) {
+	opts := importer.ApplyOptions{AllowRemoved: []importer.RemovedID{{Kind: importer.IDKindSpecies, ID: "9002-002"}}}
+	s := &fakeStore{}
+	if _, err := importer.RunStore(context.Background(), s, importer.Output{}, []importer.SourceVersion{sv("calc", "v1", "a")}, storeNow, false, opts); err != nil {
+		t.Fatalf("RunStore: %v", err)
+	}
+	if len(s.applyOpts) != 1 || !reflect.DeepEqual(s.applyOpts[0], opts) {
+		t.Fatalf("Apply に渡った opts = %+v, want [%+v]", s.applyOpts, opts)
 	}
 }

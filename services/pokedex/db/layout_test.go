@@ -100,6 +100,7 @@ var requiredTables = []string{
 	"item_effects", "ability_effects", "move_effects", "learnsets",
 	"regulations", "regulation_species", "regulation_moves", "regulation_items", "regulation_abilities",
 	"data_versions",
+	"species_key_ledger", // 配った種族 key の台帳(ADR-0131)
 }
 
 func TestMigrationsCreateAndDropRequiredTables(t *testing.T) {

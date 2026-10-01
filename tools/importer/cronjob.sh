@@ -12,6 +12,9 @@
 # 予約容量を下回ると stderr に importer-capacity を出して終了コード3で止まる(download・DB 更新に進まない)。
 # 終了コード3は「再試行しても直らない容量不足」で、docs/runbooks/data.md の手順で人が回復する(1=再試行で直りうる失敗)。
 # 取り込み(pokedex-import)が成功した後に、同じロックを持ったまま prune.mjs prune で旧版を消す。
+# 終了コード3 には、ID が消える投入(ErrKeyRemoved。ADR-0131)もある。DB は変えない。stderr の
+# `<種類>:<ID>` を確かめ、消えてよければ手動 Job に IMPORT_ALLOW_REMOVED を付けて1回流す
+# (docs/runbooks/data.md「ID が消えて止まったとき」)。CronJob の定期実行には付けない(消滅を自動で通さない)。
 # prune の失敗は握りつぶさない(容量回復の失敗に気付けなくなるため)。pokedex-import は exec にしない。
 set -eu
 
@@ -39,7 +42,11 @@ echo "cronjob: 上流の最新版の検出(失敗しても取り込みは続け�
 node "$APP_DIR/tools/importer/check-upstream.mjs" || echo "cronjob: 上流の検出に失敗した(ログを参照。取り込みは続ける)" >&2
 
 echo "cronjob: 照合・投入"
-"$APP_DIR/pokedex-import" -data "$APP_DIR/data" -upstream "$APP_DIR/data/generated/upstream/latest.json"
+if [ -n "${IMPORT_ALLOW_REMOVED:-}" ]; then
+  "$APP_DIR/pokedex-import" -data "$APP_DIR/data" -upstream "$APP_DIR/data/generated/upstream/latest.json" -allow-removed "$IMPORT_ALLOW_REMOVED"
+else
+  "$APP_DIR/pokedex-import" -data "$APP_DIR/data" -upstream "$APP_DIR/data/generated/upstream/latest.json"
+fi
 
 echo "cronjob: 旧版の整理(現在版+直前の成功版と直近52件の report を残す)"
 node "$APP_DIR/tools/importer/prune.mjs" prune

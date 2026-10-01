@@ -22,7 +22,7 @@ const mysqlErrNoSuchTable = 1146
 // Store は AppliedVersions/Apply を抽象化する(RunStore が使う)。
 type Store interface {
 	AppliedVersions(ctx context.Context) ([]SourceVersion, error)
-	Apply(ctx context.Context, out Output, versions []SourceVersion, now time.Time) error
+	Apply(ctx context.Context, out Output, versions []SourceVersion, now time.Time, opts ApplyOptions) error
 }
 
 // sqlStore は既存の AppliedVersions / Apply(*sql.DB を直接使う関数)を Store として包む。
@@ -40,8 +40,8 @@ func (s sqlStore) AppliedVersions(ctx context.Context) ([]SourceVersion, error) 
 	return vs, nil
 }
 
-func (s sqlStore) Apply(ctx context.Context, out Output, versions []SourceVersion, now time.Time) error {
-	if err := Apply(ctx, s.db, out, versions, now); err != nil {
+func (s sqlStore) Apply(ctx context.Context, out Output, versions []SourceVersion, now time.Time, opts ApplyOptions) error {
+	if err := ApplyWithOptions(ctx, s.db, out, versions, now, opts); err != nil {
 		return wrapSchemaNotReady(err)
 	}
 	return nil
@@ -63,8 +63,8 @@ func wrapSchemaNotReady(err error) error {
 // NeedsImport が ErrInvalidInput を返す(incoming の形式が不正)ときも Apply を呼ばない。
 // 比べる版・記録する版には、取得元の版に変換結果の版(OutputVersion)を足したものを使う
 // (取得元が同じでも変換結果が変われば投入する。issue #379・ADR-0122)。
-// 取り込んだら true を返す。
-func RunStore(ctx context.Context, s Store, out Output, versions []SourceVersion, now time.Time, force bool) (bool, error) {
+// opts は消滅の承認(ADR-0131)。取り込んだら true を返す。
+func RunStore(ctx context.Context, s Store, out Output, versions []SourceVersion, now time.Time, force bool, opts ApplyOptions) (bool, error) {
 	applied, err := s.AppliedVersions(ctx)
 	if err != nil {
 		return false, err
@@ -80,7 +80,7 @@ func RunStore(ctx context.Context, s Store, out Output, versions []SourceVersion
 	if !needs && !force {
 		return false, nil
 	}
-	if err := s.Apply(ctx, out, versions, now); err != nil {
+	if err := s.Apply(ctx, out, versions, now, opts); err != nil {
 		return false, err
 	}
 	return true, nil

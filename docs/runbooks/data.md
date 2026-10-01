@@ -174,6 +174,35 @@ kubectl -n pokecalc delete job pokedex-import-retry
 ```
 確認: Job が `complete` になる。途中で止まった取得は次回に自己回復し(#102)、prune の中断は再実行で残りを消す(何度流しても同じ結果)。
 
+## ID が消えて CronJob が終了コード 3 で止まったとき(issue #277・ADR-0131)
+
+上流の更新で、DB にある種族 key・技/持ち物/特性の ID が新しい出力から消えると、投入は DB を変えずに終了コード 3 で止まる
+(消えた key の別の種族での再利用は、承認しても止まる)。
+
+### a. 消える ID を確かめる
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc logs "$(kubectl -n pokecalc get pods -l app.kubernetes.io/name=pokedex-import --sort-by=.metadata.creationTimestamp -o name | tail -1)" | grep "import:"
+```
+確認: `import: 消える ID: species:9002-002,move:teststrike` のように `<種類>:<ID>` が並ぶ。
+保存済みの構築が使っている ID なら、消してよいかを人が判断する(使っていなければそのまま承認してよい)。
+
+### b. 消えてよいときだけ、承認して手動 Job を1回流す
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+job=pokedex-import-allow-removed
+kubectl -n pokecalc create job --from=cronjob/pokedex-import "$job" --dry-run=client -o json \
+  | jq --arg v "species:9002-002,move:teststrike" '.spec.template.spec.containers[0].env += [{name:"IMPORT_ALLOW_REMOVED",value:$v}]' \
+  | kubectl -n pokecalc create -f -
+kubectl -n pokecalc wait --for=condition=complete "job/$job" --timeout=900s
+kubectl -n pokecalc delete job "$job"
+```
+`$v` には a で見た ID のうち承認するものだけを写す。実際には消えない ID を書くと終了コード 3(打ち間違い)で止まる。
+確認: Job が `complete` になる。承認で消えた種族 key は台帳に残るので、後で別の種族に付く投入は引き続き止まる。
+`wait` が timeout したら Job が止まっているので、a のコマンドでその Job のログを見て原因を確かめる。
+
 ## 7. 後片付け(クラスタは残したまま止める)
 
 ```sh

@@ -52,6 +52,14 @@ func dateToNull(s string) (sql.NullTime, error) {
 // 既存の showdown_id に対する species の key が変わる投入は ErrKeyChanged で止め、DB を変えない。
 // 自己参照の外部キー(species.base_species_key)があるので、削除はメガを先に、挿入はメガを後にする。
 func Apply(ctx context.Context, db *sql.DB, out Output, versions []SourceVersion, now time.Time) error {
+	return ApplyWithOptions(ctx, db, out, versions, now, ApplyOptions{})
+}
+
+// ApplyWithOptions は Apply に人による承認(消滅を許す ID)を渡す(ADR-0131)。
+// 全置換の前に、1) 今の species から台帳を埋め(既存 DB の移行)、2) key の対応を既存 species と台帳に
+// 照らして検査し(ErrKeyChanged)、3) 消える ID を承認と突き合わせる(ErrKeyRemoved)。
+// 全置換のあと、新しい種族を台帳に追記する。止めたときは DB(台帳を含む)を変えない。
+func ApplyWithOptions(ctx context.Context, db *sql.DB, out Output, versions []SourceVersion, now time.Time, opts ApplyOptions) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -60,6 +68,9 @@ func Apply(ctx context.Context, db *sql.DB, out Output, versions []SourceVersion
 
 	q := store.New(tx)
 
+	if err := q.SeedSpeciesKeyLedgerFromSpecies(ctx, now); err != nil {
+		return err
+	}
 	existing, err := q.ListSpeciesKeys(ctx)
 	if err != nil {
 		return err
@@ -79,6 +90,25 @@ func Apply(ctx context.Context, db *sql.DB, out Output, versions []SourceVersion
 		if oldShowdownID, ok := existingShowdownIDByKey[sp.Key]; ok && oldShowdownID != sp.ShowdownID {
 			return fmt.Errorf("%w: key %q の showdown_id が %q → %q", ErrKeyChanged, sp.Key, oldShowdownID, sp.ShowdownID)
 		}
+	}
+
+	ledgerRows, err := q.ListSpeciesKeyLedger(ctx)
+	if err != nil {
+		return err
+	}
+	ledger := make([]LedgerEntry, len(ledgerRows))
+	for i, r := range ledgerRows {
+		ledger[i] = LedgerEntry{Key: r.SpeciesKey, ShowdownID: r.ShowdownID}
+	}
+	if err := CheckLedger(ledger, out); err != nil {
+		return err
+	}
+	existingIDs, err := listExistingIDs(ctx, q)
+	if err != nil {
+		return err
+	}
+	if err := CheckRemovals(RemovedIDs(existingIDs, out), opts.AllowRemoved); err != nil {
+		return err
 	}
 
 	deletes := []func(context.Context) error{
@@ -226,6 +256,11 @@ func Apply(ctx context.Context, db *sql.DB, out Output, versions []SourceVersion
 			return err
 		}
 	}
+	for _, sp := range out.Species {
+		if err := q.InsertSpeciesKeyLedgerEntry(ctx, store.InsertSpeciesKeyLedgerEntryParams{SpeciesKey: sp.Key, ShowdownID: sp.ShowdownID, FirstSeenAt: now}); err != nil {
+			return err
+		}
+	}
 	for _, v := range versions {
 		if err := q.InsertDataVersion(ctx, store.InsertDataVersionParams{Source: v.Source, Version: v.Version, Checksum: v.Checksum, ImportedAt: now}); err != nil {
 			return err
@@ -235,8 +270,24 @@ func Apply(ctx context.Context, db *sql.DB, out Output, versions []SourceVersion
 	return tx.Commit()
 }
 
+func listExistingIDs(ctx context.Context, q *store.Queries) (ExistingIDs, error) {
+	var ids ExistingIDs
+	var err error
+	if ids.SpeciesKeys, err = q.ListSpeciesKeyValues(ctx); err != nil {
+		return ids, err
+	}
+	if ids.MoveIDs, err = q.ListMoveIDs(ctx); err != nil {
+		return ids, err
+	}
+	if ids.ItemIDs, err = q.ListItemIDs(ctx); err != nil {
+		return ids, err
+	}
+	ids.AbilityIDs, err = q.ListAbilityIDs(ctx)
+	return ids, err
+}
+
 // Run は RunStore(ctx, NewSQLStore(db), ...) と同じ挙動(AppliedVersions → NeedsImport
 // (force なら常に投入)→ Apply の順)。取り込んだら true を返す(ADR-0104 §10)。
 func Run(ctx context.Context, db *sql.DB, out Output, versions []SourceVersion, now time.Time, force bool) (bool, error) {
-	return RunStore(ctx, NewSQLStore(db), out, versions, now, force)
+	return RunStore(ctx, NewSQLStore(db), out, versions, now, force, ApplyOptions{})
 }
