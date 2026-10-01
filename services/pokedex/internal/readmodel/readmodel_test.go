@@ -415,7 +415,7 @@ func TestExportFailures(t *testing.T) {
 	}
 }
 
-// AC-E9: WriteDir は4つのファイル名で書く。無いディレクトリは作り、既存のファイルは置き換え、一時ファイルを残さない。
+// AC-E9: WriteDir は6つのファイル名(既存の4つ + type-chart.json・metadata.json。ADR-0128)で書く。無いディレクトリは作り、既存のファイルは置き換え、一時ファイルを残さない。
 func TestWriteDir(t *testing.T) {
 	files, _ := export(t, storetest.New())
 	dir := filepath.Join(t.TempDir(), "readmodel")
@@ -434,6 +434,8 @@ func TestWriteDir(t *testing.T) {
 		readmodel.FileMoves:        files.Moves,
 		readmodel.FileAbilities:    files.Abilities,
 		readmodel.FileSpeedPokemon: files.SpeedPokemon,
+		readmodel.FileTypeChart:    files.TypeChart,
+		readmodel.FileMetadata:     files.Metadata,
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -472,9 +474,12 @@ func TestWriteDir(t *testing.T) {
 }
 
 // AC-E10: ファイル名は balance・speed の設定(BALANCE_*_PATH・SPEED_POKEMON_PATH)で指す名前として固定する。
+// type-chart.json は balance の BALANCE_TYPE_CHART_PATH(issue #259 の既定案)、metadata.json は版の照合(issue #108)が指す。
 func TestFileNames(t *testing.T) {
-	got := []string{readmodel.FilePokemonTypes, readmodel.FileMoves, readmodel.FileAbilities, readmodel.FileSpeedPokemon}
-	want := []string{"pokemon-types.json", "moves.json", "abilities.json", "speed-pokemon.json"}
+	got := []string{readmodel.FilePokemonTypes, readmodel.FileMoves, readmodel.FileAbilities, readmodel.FileSpeedPokemon,
+		readmodel.FileTypeChart, readmodel.FileMetadata}
+	want := []string{"pokemon-types.json", "moves.json", "abilities.json", "speed-pokemon.json",
+		"type-chart.json", "metadata.json"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ファイル名 = %v, want %v", got, want)
 	}

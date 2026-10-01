@@ -15,9 +15,10 @@ import (
 	"example.com/pokecalc/services/pokedex/internal/storetest"
 )
 
-// exportReads は Export が読むクエリ(全 SELECT)。
+// exportReads は Export が読むクエリ(全 SELECT)。ListDataVersions は metadata.json・type-chart.json の
+// dataVersion(ADR-0128)を、他のファイルと同じスナップショットから取るために読む。
 var exportReads = []string{
-	"GetDefaultRegulation", "ListRegulationSpeciesKeys", "ListRegulationMoveIDs", "ListRegulationAbilityIDs",
+	"ListDataVersions", "GetDefaultRegulation", "ListRegulationSpeciesKeys", "ListRegulationMoveIDs", "ListRegulationAbilityIDs",
 	"ListTypes", "ListTypeChart", "ListSpecies", "ListAllSpeciesAbilities", "ListMoves", "ListAbilityEffects",
 }
 
