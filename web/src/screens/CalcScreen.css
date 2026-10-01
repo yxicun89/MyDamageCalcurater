@@ -318,6 +318,37 @@
   transition: width var(--duration-swap) var(--ease-spring);
 }
 
+/* issue 271 / issue 270(ADR-0123): 全行に共通する印がある結果の先頭に出す案内(iOS レーンの決定。
+   DECISIONS.md 2026-09-25「未対応の印の表示」)。数値は通常の式の目安として出ておりエラーではないので、
+   補足文(calc-screen__notice 等)と同じ caption・text-secondary にし、danger・タイプ色は使わない。 */
+.calc-results__unsupported-notice {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+/* 行の中の「未対応」の印(design.md「画面: ダメージ計算」)。一部の行だけにある印をここに出す。
+   バーと同じく行いっぱいに広げる。 */
+.calc-results__unsupported {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin: 0;
+  border-top: 1px solid var(--border-hairline);
+  padding-top: var(--space-1);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+/* アイコンは装飾(design.md: 色・アイコンだけに頼らない)。読み上げには渡さない。 */
+.calc-results__unsupported-icon {
+  line-height: 1;
+}
+
 /* ネイティブのラジオは隠しているので、キーボード操作のフォーカス位置をラベル側に出す(WCAG 2.4.7)。 */
 .calc-preset__option:has(.calc-preset__input:focus-visible) {
   outline: 2px solid var(--text-primary);

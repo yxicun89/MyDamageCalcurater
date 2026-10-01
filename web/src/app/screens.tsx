@@ -13,6 +13,8 @@ import { CalcScreen } from "../screens/CalcScreen";
 import { ReverseScreen } from "../screens/ReverseScreen";
 import { SpeedScreen } from "../speed/SpeedScreen";
 import type { SpeedClient } from "../speed/speedClient";
+import { TeamScreen } from "../team/TeamScreen";
+import type { TeamClient } from "../team/teamClient";
 import type { MasterlessScreenId, ScreenId } from "./routes";
 
 /**
@@ -27,6 +29,8 @@ export interface ScreenProps {
   readonly client: BalanceClient;
   readonly speedClient: SpeedClient;
   readonly judgeClient: JudgeClient;
+  /** P5-5 PR-A1(ADR-0309 §2): 構築ビルダーの画面も同じく専用のフィールドで受け取る。 */
+  readonly teamClient: TeamClient;
   /**
    * P4-16b(ADR-0304 A-10): 種族を都度引く口。App は今選ばれているマスタの取得口が検索付きのとき
    * (`isSearchableMasterSource`)だけ渡す。`master.capabilities.speciesList` が false の画面は、
@@ -44,6 +48,8 @@ export const SCREEN_COMPONENTS: Record<ScreenId, ComponentType<ScreenProps>> = {
   speed: SpeedScreen,
   // JD5(ADR-0705 §1): 判定。画面の中身は web/src/judge/ にある(レーンの境界)。
   judge: JudgeScreen,
+  // P5-5 PR-A1(ADR-0309 §2): 構築ビルダー。画面の中身は web/src/team/ にある(レーンの境界)。
+  team: TeamScreen,
 };
 
 /**

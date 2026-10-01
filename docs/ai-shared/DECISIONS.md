@@ -1836,6 +1836,19 @@ Decision: `engine.BulkInput.DefenderAbilities` / `engine.ReverseInput.UnknownAbi
 Reason: 「1番目の特性」や「1つ指定」を既定にすると、隠れ特性などで無効になる種族を利用者が選び忘れたときに黙って誤る。全特性で行を分けると多くの技で行が2〜3倍になる。結果の一致でまとめれば、特性が効く技のときだけ行が分かれる。
 Impact(他レーンへの依頼。既定案): API — 既に採用済みの `BulkCalcRequest.defenderOverride.abilityId` を `DefenderAbilities` の1件に写し、**省略時は calc-svc が種族の全特性を解決して渡す**。`ReverseRequest.unknownAbilityId`(任意・1つ、省略時は同じく全特性)。`BulkCalcRow`・`ReverseCandidate` に `abilityId: string`・`abilityIds: string[]`。Web — WASM に種族の特性をマスタから解決して `defenderAbilities`/`unknownAbilities` で渡し、行・候補に `abilityIds` を表示。攻撃側は種族の1番目を既定にして画面に表示し、選べるようにする。iOS — API の追従後に同じ表示。
 
+## 2026-09-26: P6-18(issue #328)の非公式表示・データ出典の既定文言(iOS レーンから Web レーンへ)
+Decision: issue #328 のユーザー決定(2026-09-25「アプリ内に第三者データの出典と非公式の表示を入れる」)に対する既定の文言を iOS レーンが決め、
+Web レーンはこの文言に従う(依頼元との合意どおり)。詳細・受け入れ条件は ADR-0501「P6-18」(spec のみ。実装は未着手)。
+- 非公式の注記(完全一致): 「このアプリは個人が私的に使うための非公式ツールです。任天堂・クリーチャーズ・ゲームフリーク・株式会社ポケモンとは関係ありません。ポケモン・Pokémon および関連する名称は各社の商標です。」
+- データの出典一覧(docs/adr/0002-master-data-source.md「確定した方針 / 責務の分離」表と同じ順・同じ範囲。ADR に書かれていないライセンスは書かない):
+  1. ダメージ計算の検証: `@smogon/calc`(MIT License)
+  2. ポケモン・技・習得技の照合: Pokémon Showdown(MIT License)
+  3. 日本語名・図鑑番号: PokeAPI(ライセンス表記なし。ADR-0002 の調査でデータ自体の利用条件が README に明記されていないため)
+  4. 使用可能なポケモン等の基準: Pokémon HOME・Pokémon Champions の公式情報(ライセンス表記なし)
+Reason: iOS レーンへの依頼(このタスクの指示)どおり、iOS が先に既定案を決めて共有する運用(既存のレーン間の「既定案で進む」原則と同じ)。
+Impact: iOS は `PokeCalcCore.AboutText`(`unofficialNotice`/`dataSources`)にこの文言を1か所持つ(実装は implementer が TODO(implementer) を埋める形で行う。spec 時点ではプレースホルダで `swift test` は新規テストのみ失敗)。
+Web レーンはこの文言・出典の範囲(4件)をそのまま使ってよい。出典を追加・削除する場合は、docs/adr/0002-master-data-source.md の責務分離表・ADR-0501「P6-18」3章・このエントリ・両レーンの実装コードを同時に直すこと(勝手に増減しない)。
+
 ## 2026-09-25: issue 272 の API レーン担当分(defenderOverride.abilityId・unknownAbilityId)を実装(API レーン → データ・Web・iOS レーンへ)
 Decision: データレーンの依頼(ADR-0126・PR #402)を反映した(ADR-0214)。
 `api/openapi.yaml`: 新規スキーマ `DefenderOverride { abilityId?: string }` を `BulkCalcRequest.defenderOverride`
@@ -1862,6 +1875,37 @@ Impact: **Web・iOSへ**: `BulkCalcRow`・`ReverseCandidate`の応答にabilityI
 特性を選べる画面はADR-0126の依頼どおり各レーンの担当(急ぎではない)。**データレーンへ**: API レーン担当分は
 critic レビュー待ち。issue 272 のclose判断はデータレーンに委ねる。**残作業**: `defenderOverride.ranks`/
 `status`は別タスク(plan.md参照。優先度低)。次は issue #284(balance/speed/judgeのgateway集約)に着手する。
+
+## 2026-09-25: issue #271/#270 の Web レーン実装を、iOS レーンのクロスプラットフォーム決定に合わせた(Web レーン)
+Decision: 上の「未対応の印の表示(文言・置き場所)を決めた」の Impact「Web レーンへ」を受けて、
+`feat/web-unsupported-marks-271-270`(critic PASS 後の再修正)を次のとおり iOS レーンの決定に揃えた。
+1. **置き場所**: `hasUnsupported = rows.some(...)` + 行ごとに常に印一覧、という実装(technicalな target で
+   決め打ちせず、行ごとに繰り返す設計)から、`web/src/domain/unsupportedLabels.ts` に新設した
+   `splitUnsupportedMarks`(印の内容〈target・reason・id〉が全行〈全候補〉にあるかどうかで判定)に置き換えた。
+   全行共通の印は結果・候補一覧の先頭に1回、残りはその行・候補だけに出す。CalcScreen.tsx・ReverseScreen.tsx
+   の両方で共有する。
+2. **色**: `--danger` を `--text-secondary`・`--font-size-caption`(既存の補足文と同じトークン)に変更
+   (`CalcScreen.css`・`ReverseScreen.css`)。
+3. **文言**: `web/src/i18n/ja.ts` の `unsupportedText` を全面的に書き直した。`notice`/`rowLabel` は
+   markLabel 済みの文言の配列を受け取り、iOS と同じ書式(結果の上「この結果は正確でない可能性があります
+   (未対応: <印>、<印>)」、行・候補「未対応: <印>、<印>」)を組み立てる関数にした。`markLabel` は
+   `<対象>「<名前>」(<理由>)`(reason が `unsupported_effect` のときは括弧を省く)。reason 15 種の文言を
+   iOS の表記(DisplayLabels.swift)に合わせ、alt_offense_stat・alt_defense_stat・effectiveness_change に
+   「特殊」を使わない(iOS critic 指摘を Web にも適用)。旧 `badgeLabel`/`listLabel` は廃止し、
+   `unsupportedText.reason`/`target` のキー・件数は変えていない(契約の enum と1対1)。
+critic からの軽微な指摘2件も合わせて対応: (1) 装飾アイコン(⚠)が `aria-hidden="true"` であることを直接
+検証する回帰テストを追加(`data-testid="unsupported-icon"` を新設)。(2) ReverseScreen で issue #305 の
+`noExactCandidateNotice`(role=status)と本タスクの `unsupportedText.notice`(role=status)が同時に出て、
+互いに独立した別要素として共存することを固定するテストを追加。
+`docs/design.md`「画面: ダメージ計算」「画面: 逆算」の該当箇所も置き場所・色の記述を更新した。
+`npx vitest run` 1674件 green・`npm run typecheck` green・`npm run lint`(eslint + prettier)green・
+`make wasm` 後 `npm run e2e` 37件 green。
+Reason: iOS レーンの決定(上のエントリの Impact)。技の印は全行に付くことが多く、行ごとに繰り返すと
+同じ文言が何度も並ぶ(iOS の指摘どおり Web でも同じ問題が起きる設計だった)。数値は通常の式の目安であり
+エラーではないため警告色にしない、という判断もクロスプラットフォームで揃える方が利用者の理解を助ける。
+Impact: 判定レーン(JD5 `JudgeScreen` の追従。docs/plan.md 未着手タスク)は、この Web の書式・
+`splitUnsupportedMarks` の考え方(全行共通 vs 個別)を踏襲してよい。iOS レーンへは特に追加の申し送りなし
+(Web 側が iOS の決定に合わせただけで、契約・iOS 側の変更は無い)。
 
 ## 2026-09-26: issue #284 の API レーン担当分(balance・speed・judge を gateway の後ろにまとめる)を実装(API レーン → タイプバランス・素早さ・判定レーンへ)
 Decision: ユーザー決定(2026-09-25「ユーザー決定 4 件」#2)を実装。`services/gateway/internal/httpapi/routing.go`

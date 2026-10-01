@@ -12,8 +12,8 @@ import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { beforeAll, describe, expect, test } from "vitest";
 import { defaultAbility, defensiveItemCandidates, toEngineSpecies } from "../domain/requests";
 import { firstDamagingMove, learnsetMoves } from "../domain/moves";
-import type { BulkRequest, Item, Move } from "../engine/types";
-import { typeNameJa, type TypeId } from "../i18n/ja";
+import type { BulkRequest, Item, Move, UnsupportedMark } from "../engine/types";
+import { typeNameJa, unsupportedText, type TypeId } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
 import {
@@ -873,5 +873,211 @@ describe("持ち物候補の件数の上限(issue #110)", () => {
     expect(sent?.[1]?.id).toBe("example-many-def-0");
     expect(sent?.at(-1)?.id).toBe("example-many-def-62");
     expect(screen.getByText(itemsTruncatedNotice)).toBeInTheDocument();
+  });
+});
+
+// issue 271 / issue 270(Web レーン。ADR-0123): engine が正しく計算できない技・持ち物・特性を選んだとき、
+// 数値は今までどおり出しつつ「この結果は正しく計算できていない可能性がある」印を出す。
+// 置き場所・文言は iOS レーンの決定(docs/ai-shared/DECISIONS.md 2026-09-25「未対応の印の表示」、
+// ADR-0501「P6-17」)に揃える:
+//   - **全行に共通する印**(target・reason・id が同じ)は、結果の**先頭に1回**(role=status)だけ出す。
+//     技由来の印は全行に付くことが多く、行ごとに出すと同じ文言が何度も並ぶため(iOS レーンの指摘)。
+//     target で決め打ちせず、印の内容が全行にあるかどうかで判定する(splitUnsupportedMarks)。
+//   - **一部の行だけにある印**(防御側の持ち物バリアントなどで行ごとに変わる印)は、その**行だけ**に出す。
+//   - 色・アイコンだけに頼らない: 印は必ず文字(「未対応: <印>、<印>」、印は「<対象>「<名前>」(<理由>)」)で出す。
+//     アイコン(⚠)は装飾として aria-hidden にする。
+describe("未対応の印(issue 271 / issue 270)", () => {
+  const multiHit = (moveId: string): UnsupportedMark => ({
+    target: "move",
+    reason: "multi_hit",
+    id: moveId,
+  });
+  const attackerItemMark = (itemId: string): UnsupportedMark => ({
+    target: "attacker_item",
+    reason: "unsupported_effect",
+    id: itemId,
+  });
+  const defenderAbilityMark = (abilityId: string): UnsupportedMark => ({
+    target: "defender_ability",
+    reason: "unsupported_effect",
+    id: abilityId,
+  });
+
+  function firstItem(): Item {
+    const item = master.items[0];
+    if (item === undefined) {
+      throw new Error("例データに持ち物が無い");
+    }
+    return item;
+  }
+
+  function firstAbility(): { id: string; nameJa: string } {
+    const ability = master.abilities[0];
+    if (ability === undefined) {
+      throw new Error("例データに特性が無い");
+    }
+    return ability;
+  }
+
+  /** 行ごとの印を決めて画面を描き、結果の行を返す。 */
+  async function renderWithMarks(marksByRow: ReadonlyArray<readonly UnsupportedMark[]>) {
+    const rows = marksByRow.map((unsupported, index) =>
+      bulkRow({
+        preset: index === 0 ? "none" : "hp",
+        presetLabel: index === 0 ? "無振り" : "H振り",
+        unsupported,
+      }),
+    );
+    const engine = createFakeEngine((request) =>
+      ok({ defenderSpeciesKey: request.defenderSpecies.key, rows }),
+    );
+    const { user } = renderScreen(engine);
+    await choosePair(user, speciesAt(0), speciesAt(1));
+    return resultItems();
+  }
+
+  test("印が無ければ何も出ない(正常系。今までの見た目を変えない)", async () => {
+    const items = await renderWithMarks([[], []]);
+    expect(items).toHaveLength(2);
+    expect(screen.queryByTestId("unsupported-icon")).toBeNull();
+    for (const item of items) {
+      expect(within(item).queryByTestId("unsupported-icon")).toBeNull();
+    }
+  });
+
+  test("一部の行だけにある印は、その行に「未対応: <対象>「<名前>」(<理由>)」の形で出る", async () => {
+    const move = firstMoveOf(speciesAt(0));
+    const [first, second] = await renderWithMarks([[multiHit(move.id)], []]);
+    if (first === undefined || second === undefined) {
+      throw new Error("結果が2行でない");
+    }
+    const expectedRowLabel = unsupportedText.rowLabel([
+      unsupportedText.markLabel(multiHit(move.id), move.nameJa),
+    ]);
+    expect(within(first).getByText(expectedRowLabel)).toBeInTheDocument();
+    // 印の無いもう一方の行には出ない(結果の先頭にも出ない。全行共通ではないため)
+    expect(within(second).queryByTestId("unsupported-icon")).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  test("持ち物・特性の印も、どちら側の何が原因かが分かる文言で1行にまとまる", async () => {
+    const item = firstItem();
+    const ability = firstAbility();
+    const itemMark = attackerItemMark(item.id);
+    const abilityMark = defenderAbilityMark(ability.id);
+    const [first] = await renderWithMarks([[itemMark, abilityMark], []]);
+    if (first === undefined) {
+      throw new Error("1行目が無い");
+    }
+    const expectedRowLabel = unsupportedText.rowLabel([
+      unsupportedText.markLabel(itemMark, item.nameJa),
+      unsupportedText.markLabel(abilityMark, ability.nameJa),
+    ]);
+    expect(within(first).getByText(expectedRowLabel)).toBeInTheDocument();
+  });
+
+  test("印はその行だけに出る(印の無い行には出さない)", async () => {
+    const move = firstMoveOf(speciesAt(0));
+    const [first, second] = await renderWithMarks([[], [multiHit(move.id)]]);
+    if (first === undefined || second === undefined) {
+      throw new Error("結果が2行でない");
+    }
+    expect(within(first).queryByTestId("unsupported-icon")).toBeNull();
+    expect(within(second).getByTestId("unsupported-icon")).toBeInTheDocument();
+    // %幅・確定数は今までどおり全行に出る(印が付いても数値を消さない)
+    for (const row of [first, second]) {
+      expect(within(row).getByText("72.1〜85.3%")).toBeInTheDocument();
+    }
+  });
+
+  // iOS レーンの決定(DECISIONS.md 2026-09-25): 「全行(全候補)が持つ印は結果の上に1回、残りはその行だけ」。
+  // target で決め打ちせず「全行にあるか」で決めるため、両方の行に同じ内容(target・reason・id)の印があれば、
+  // その印は結果の先頭にまとめ、行には出さない(技の印が行ごとに5〜10回並ぶのを避けるため)。
+  test("全行に共通する印は結果の先頭に1回だけ出て、どの行にも出ない", async () => {
+    const move = firstMoveOf(speciesAt(0));
+    const [first, second] = await renderWithMarks([[multiHit(move.id)], [multiHit(move.id)]]);
+    if (first === undefined || second === undefined) {
+      throw new Error("結果が2行でない");
+    }
+    const expectedNotice = unsupportedText.notice([
+      unsupportedText.markLabel(multiHit(move.id), move.nameJa),
+    ]);
+    const notice = await screen.findByText(expectedNotice);
+    expect(notice.closest('[role="status"]')).not.toBeNull();
+    expect(screen.getAllByText(expectedNotice)).toHaveLength(1);
+    // 共通の印は行には残らない(行に「未対応」のアイコンが出ない)
+    expect(within(first).queryByTestId("unsupported-icon")).toBeNull();
+    expect(within(second).queryByTestId("unsupported-icon")).toBeNull();
+    // 先頭の案内のアイコンの分だけ、画面全体では1つだけアイコンが出る
+    expect(screen.getAllByTestId("unsupported-icon")).toHaveLength(1);
+  });
+
+  // 技由来の印(全行共通になりやすい)+ 持ち物バリアントで変わる印(一部の行だけ)が混在するケース。
+  test("全行共通の印と行固有の印が混在するとき、共通は先頭に、残りはその行だけに出る", async () => {
+    const move = firstMoveOf(speciesAt(0));
+    const item = firstItem();
+    const commonMark = multiHit(move.id);
+    const rowOnlyMark = attackerItemMark(item.id);
+    const [first, second] = await renderWithMarks([[commonMark, rowOnlyMark], [multiHit(move.id)]]);
+    if (first === undefined || second === undefined) {
+      throw new Error("結果が2行でない");
+    }
+    const expectedNotice = unsupportedText.notice([unsupportedText.markLabel(commonMark, move.nameJa)]);
+    expect(await screen.findByText(expectedNotice)).toBeInTheDocument();
+    // 行固有の印(itemMark)だけが1行目に残る。共通の印(multiHit)は1行目からは消える
+    const expectedRowLabel = unsupportedText.rowLabel([unsupportedText.markLabel(rowOnlyMark, item.nameJa)]);
+    expect(within(first).getByText(expectedRowLabel)).toBeInTheDocument();
+    expect(within(first).queryByText(unsupportedText.markLabel(commonMark, move.nameJa))).toBeNull();
+    // 2行目は行固有の印が無いので、行には何も出ない
+    expect(within(second).queryByTestId("unsupported-icon")).toBeNull();
+  });
+
+  test("装飾アイコンは aria-hidden=true で支援技術から隠す", async () => {
+    const move = firstMoveOf(speciesAt(0));
+    const [first] = await renderWithMarks([[multiHit(move.id)], []]);
+    if (first === undefined) {
+      throw new Error("1行目が無い");
+    }
+    const icon = within(first).getByTestId("unsupported-icon");
+    expect(icon).toHaveAttribute("aria-hidden", "true");
+  });
+
+  test("色・アイコンだけに頼らない: 印は支援技術にも読める文字で出す", async () => {
+    const move = firstMoveOf(speciesAt(0));
+    const [first] = await renderWithMarks([[multiHit(move.id)], []]);
+    if (first === undefined) {
+      throw new Error("1行目が無い");
+    }
+    const expectedRowLabel = unsupportedText.rowLabel([
+      unsupportedText.markLabel(multiHit(move.id), move.nameJa),
+    ]);
+    const mark = within(first).getByText(expectedRowLabel);
+    // 印の文字が aria-hidden の中(= 読み上げられない飾り)に入っていないこと
+    expect(mark.closest('[aria-hidden="true"]')).toBeNull();
+  });
+
+  test("engine が返した印の順を変えない(並べ替え・重複除去をしない。ADR-0300 §8)", async () => {
+    const move = firstMoveOf(speciesAt(0));
+    const item = firstItem();
+    const zeroPower: UnsupportedMark = { target: "move", reason: "zero_power", id: move.id };
+    const itemMark = attackerItemMark(item.id);
+    const [first] = await renderWithMarks([[multiHit(move.id), zeroPower, itemMark], []]);
+    if (first === undefined) {
+      throw new Error("1行目が無い");
+    }
+    const expected = [
+      unsupportedText.markLabel(multiHit(move.id), move.nameJa),
+      unsupportedText.markLabel(zeroPower, move.nameJa),
+      unsupportedText.markLabel(itemMark, item.nameJa),
+    ];
+    expect(within(first).getByText(unsupportedText.rowLabel(expected))).toBeInTheDocument();
+    // 行の読み上げ順(= DOM の順)が engine の並びと同じであること
+    const rowText = first.textContent;
+    let cursor = 0;
+    for (const text of expected) {
+      const index = rowText.indexOf(text, cursor);
+      expect(index).toBeGreaterThanOrEqual(0);
+      cursor = index + text.length;
+    }
   });
 });

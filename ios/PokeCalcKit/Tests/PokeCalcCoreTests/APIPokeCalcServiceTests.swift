@@ -78,12 +78,12 @@ final class APIPokeCalcServiceTests: XCTestCase {
     private static var bulkJSON: String {
         """
         {"defenderSpeciesKey":"9002-000","rows":[
-          {"preset":"hb_full","presetLabel":"テスト表示名1","itemId":null,
+          {"preset":"hb_full","presetLabel":"テスト表示名1","abilityId":"test-ability","abilityIds":["test-ability"],"itemId":null,
            "defender":{"sp":{"hp":32,"atk":0,"def":32,"spa":0,"spd":0,"spe":0},
                        "nature":{"plus":"def","minus":"atk"},"natureId":null,
                        "stats":{"hp":151,"atk":81,"def":122,"spa":70,"spd":85,"spe":90}},
            "result":\(calcResultJSON)},
-          {"preset":"none","presetLabel":"テスト表示名2","itemId":"test-item-a",
+          {"preset":"none","presetLabel":"テスト表示名2","abilityId":"test-ability","abilityIds":["test-ability"],"itemId":"test-item-a",
            "defender":{"sp":{"hp":0,"atk":0,"def":0,"spa":0,"spd":0,"spe":0},
                        "nature":{"plus":null,"minus":null},"natureId":"test-nature-neutral",
                        "stats":{"hp":119,"atk":90,"def":80,"spa":70,"spd":85,"spe":90}},
@@ -96,10 +96,10 @@ final class APIPokeCalcServiceTests: XCTestCase {
     /// 候補2: plus(+spa/-atk)・持ち物あり・exact でない・natureId null。
     private static let reverseJSON = """
     {"side":"attacker","stat":"spa","assumedHpSp":0,"exactCount":1,"candidates":[
-      {"natureClass":"neutral","nature":{"plus":null,"minus":null},"natureId":"test-nature-neutral",
+      {"natureClass":"neutral","abilityId":"test-ability","abilityIds":["test-ability"],"nature":{"plus":null,"minus":null},"natureId":"test-nature-neutral",
        "itemId":null,"ranges":[{"min":0,"max":3},{"min":6,"max":32}],"spCount":31,
        "exact":true,"mismatch":0,"support":44,"minPercent":38.2,"maxPercent":47.9,"unsupported":[]},
-      {"natureClass":"plus","nature":{"plus":"spa","minus":"atk"},"natureId":null,
+      {"natureClass":"plus","abilityId":"test-ability","abilityIds":["test-ability"],"nature":{"plus":"spa","minus":"atk"},"natureId":null,
        "itemId":"test-item-a","ranges":[{"min":0,"max":0}],"spCount":1,
        "exact":false,"mismatch":7,"support":0,"minPercent":51.5,"maxPercent":61.1,"unsupported":[]}
     ]}
@@ -352,7 +352,7 @@ final class APIPokeCalcServiceTests: XCTestCase {
     func testCalcBulkRowWithoutDefenderIsDecodeError() async throws {
         let json = """
         {"defenderSpeciesKey":"9002-000","rows":[
-          {"preset":"none","presetLabel":"テスト表示名","itemId":null,"result":\(Self.calcResultJSON)}
+          {"preset":"none","presetLabel":"テスト表示名","abilityId":"test-ability","abilityIds":["test-ability"],"itemId":null,"result":\(Self.calcResultJSON)}
         ]}
         """
         let service = try makeService(transport: RecordingTransport(json: json))

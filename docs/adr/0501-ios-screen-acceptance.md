@@ -3341,3 +3341,119 @@ IP アドレス(`http://192.168.x.x:8080` 等)は実機でも拒否されるべ�
   `ios-test-unit: 全 506 件 / 成功 506 / 失敗 0`・`ios-test-ui: 全 41 件 / 成功 41 / 失敗 0`
   (`UnsupportedMarksUITests` 4件を含む)・`ios-check-infoplist` すべて成功(exit code 0)。既存テストは
   1つも編集していない。
+
+## P6-18 の受け入れ条件(issue #328「このアプリについて」画面。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+- 日付: 2026-09-26 / 担当レーン: iOS / 関連: docs/adr/0002-master-data-source.md「確定した方針 / 責務の分離」・§2(候補比較とライセンス)、
+  docs/ai-shared/DECISIONS.md 2026-09-25「ユーザー決定 4 件(GitOps の範囲・API の入口・AI の権限・公開)」#328、
+  同ファイル本タスクの新規エントリ「P6-18」、docs/plan.md P6-18
+- 背景: issue #328(ユーザー決定、2026-09-25)は「非公開・私的利用のまま。LICENSE は置かない。README に明記し、
+  **アプリ内に第三者データの出典と非公式の表示を入れる**」というもの。Web レーンとの合意により、**iOS が既定の
+  文言を決めて DECISIONS.md に書き、Web はそれに従う**(このタスクの依頼)。データ計算そのものではなく、
+  画面に固定文言を1つ表示するだけの機能なので `api/openapi.yaml` の変更は無い。
+
+### 1. 画面の置き場所
+
+- ルート画面(`RootView.swift`)から到達できる、控えめな入口にする(design.md に「このアプリについて」画面の
+  指定は無いため implementer の判断)。既存の `.principal` ツールバー位置は「PokeCalc」の見出しで埋まっているため、
+  推奨: `.toolbar` の `.topBarTrailing`(または `.bottomBar`)に「i」アイコン等の `ToolbarItem` を1つ追加し、
+  `NavigationLink(value: AboutScreenRoute())` で押す(既存の `CalcScreenRoute`/`ReverseScreenRoute`/
+  `TeamListScreenRoute` と同じ、値ベースの `navigationDestination(for:)` パターン。`RootView` は
+  `NavigationStack` を1つしか持たないため `path` を増やす必要はない)。
+- ボタン本体は `openAboutScreen` の accessibilityIdentifier を持つ(アイコンだけのボタンでも読み上げの名前を
+  持たせる。design.md「入力のラベル」と同じ考え方。`SF Symbol` の `info.circle` などを想定するが指定はしない)。
+- 画面自体のコンテナに `aboutScreen` の accessibilityIdentifier を付ける(他画面の `calcScreen`/`reverseScreen`/
+  `teamListScreen` と同じ命名規則)。プッシュ(`navigationDestination`)・シートのどちらでもよい(implementer 判断)。
+- 見た目: design.md の `ColorToken`/`TextStyleToken`/`SpacingToken` をそのまま使う。**常時アニメーションは
+  付けない**(CLAUDE.md ドメイン規約)。ダークモードはトークンを使えば自動で対応する。
+
+### 2. 非公式の注記(既定文言。DECISIONS.md に確定として記録する)
+
+> このアプリは個人が私的に使うための非公式ツールです。任天堂・クリーチャーズ・ゲームフリーク・株式会社ポケモンとは
+> 関係ありません。ポケモン・Pokémon および関連する名称は各社の商標です。
+
+- `PokeCalcCore.AboutText.unofficialNotice` に1か所だけ持つ(`DisplayLabels.swift` と同じ理由でコードに置く。
+  マスタ(pokedex)には無い、表示専用の固定文言)。
+- 表示は折り返し(`lineLimit` を付けない。長文でも AX5 で横にはみ出さない。P6-14/P6-17 と同じ方針)。
+  identifier: `aboutUnofficialNotice`。
+
+### 3. データの出典一覧(ADR-0002 の責務分離表に基づく。実際にシステムが使っているものだけ)
+
+ADR-0002「確定した方針 / 責務の分離」表と一致させる。名称・ライセンスは同 ADR に書かれている範囲を超えて
+断定しない(PokeAPI は README にデータ自体の利用条件の明記がないため、ライセンス名を書かない。
+Pokémon HOME・Pokémon Champions の公式情報も同様にオープンソースライセンスの対象ではないので書かない)。
+
+| # | 用途(title) | 出典・ライセンス(detail) | ADR-0002 の対応箇所 |
+|---|---|---|---|
+| 1 | ダメージ計算の検証 | `@smogon/calc`(MIT License) | 「責務の分離」表・ダメージ計算の oracle、§2 候補A |
+| 2 | ポケモン・技・習得技の照合 | Pokémon Showdown(MIT License) | 「責務の分離」表・データ照合、§2 候補B |
+| 3 | 日本語名・図鑑番号 | PokeAPI | 「責務の分離」表・日本語名、§2 候補C(ライセンス表記なし) |
+| 4 | 使用可能なポケモン等の基準 | Pokémon HOME・Pokémon Champions の公式情報 | 「責務の分離」表・使用可能集合(レギュレーション) |
+
+- `PokeCalcCore.AboutText.dataSources: [AboutText.DataSource]`(`title`/`detail` の2フィールド。上表の順)に持つ。
+- 出典を1件追加・削除するときは、この ADR の表・`AboutText.dataSources`・DECISIONS.md の3箇所を同時に直す
+  (`AboutTextTests` が件数・文言を固定するので、直し忘れは `swift test` で気付ける)。
+- 表示は一覧(`List`/`VStack` どちらでもよい)。各行に `aboutDataSource-<index>`(0始まり、上表の順)の
+  identifier を持たせる。
+
+### 4. 受け入れ条件(検証可能な形)
+
+1. `AboutText.unofficialNotice` が非空で「非公式」を含み、2章の確定文言と完全一致する(`AboutTextTests`)。
+2. `AboutText.dataSources` がちょうど4件で、3章の表の `title`/`detail` と順序どおり一致する。PokeAPI・
+   Pokémon HOME を含む項目には「License」という語を書かない(断定しない。`AboutTextTests`)。
+3. ルート画面に `openAboutScreen` の入口があり、押すと `aboutScreen` が開く(`AboutScreenUITests`)。
+4. `aboutScreen` の中に `aboutUnofficialNotice` と、4件の `aboutDataSource-<index>`(0〜3)がすべて見える
+   (`AboutScreenUITests`)。
+5. AX5(最大の文字サイズ)でも `aboutUnofficialNotice`・`aboutDataSource-*` が横にはみ出さない
+   (`LargeTextLayoutUITests.testAboutScreenNoHorizontalOverflowAtAX5`。P6-14/P6-17 と同じ検査粒度で、
+   文言の数値は検査しない)。
+6. 既存の XCTest・XCUITest の期待値は変えない(既存テストの編集なし)。
+
+### 5. 追加したテスト(spec 時点)
+
+- `ios/PokeCalcKit/Sources/PokeCalcCore/AboutText.swift`(型と `TODO(implementer` プレースホルダ。空文字列・
+  空配列を返すので、コンパイルは通るが2〜4章の受け入れ条件は満たさない)
+- `ios/PokeCalcKit/Tests/PokeCalcCoreTests/AboutTextTests.swift`(文言・出典一覧の非空・件数・完全一致・
+  キーワード・ライセンスを断定しないことの検査。7件)
+- `ios/PokeCalcUITests/AboutScreenUITests.swift`(ルートから開く・注記と出典が見える。2件)
+- `ios/PokeCalcUITests/LargeTextLayoutUITests.swift` に `testAboutScreenNoHorizontalOverflowAtAX5` を追加
+  (既存テストは1つも編集していない。新規メソッドの追加のみ)
+
+`swift test`(spec 時点、`cd ios/PokeCalcKit && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`):
+500 件中 9 件が失敗(すべて新規 `AboutTextTests` の中。7件のテストメソッドのうち `testDataSourcesDoNotInventLicensesForUnlicensedSources`
+だけは `dataSources` が空でも成立する〈vacuously true〉ため成功する。既存 493 件は1つも編集しておらず全件成功)。
+XCUITest(`AboutScreenUITests` 2件・`LargeTextLayoutUITests.testAboutScreenNoHorizontalOverflowAtAX5`)は
+`openAboutScreen`/`aboutScreen` 等の identifier が未実装のため実行すれば失敗するが、ビルド自体は通ることを
+`xcodebuild build-for-testing -project ios/PokeCalc.xcodeproj -scheme PokeCalc -destination "platform=iOS Simulator,name=iPhone 18 Pro"`
+の `** TEST BUILD SUCCEEDED **` で確認済み(シミュレータでの実行は implementer 側で `make ios-test` により行う)。
+
+### 6. 実装者への注意(`TODO(implementer` を検索すると該当箇所が見つかる)
+
+- `ios/PokeCalcKit/Sources/PokeCalcCore/AboutText.swift` の `unofficialNotice`(2章の文言をそのまま)と
+  `dataSources`(3章の表を4件そのまま)を埋める。型・フィールドは spec で追加済み。
+- `ios/PokeCalc/RootView.swift` に `.toolbar` の `ToolbarItem`(`openAboutScreen`)と `AboutScreenRoute` の
+  `navigationDestination(for:)` を追加する(1章)。
+- 新規 View(例 `ios/PokeCalc/AboutView.swift`)を作り、`aboutScreen`・`aboutUnofficialNotice`・
+  `aboutDataSource-<index>` の identifier を3章の順に付ける。折り返し・ダークモードは design.md のトークンを
+  使えば自動で満たされる。
+- `swift test`(`ios/PokeCalcKit`)と `make ios-test`(リポジトリルート。XCUITest を含む)の両方が全件成功する
+  ことを確認する。
+
+### 7. 実装結果(implementer: 2026-09-26)
+
+- `AboutText.unofficialNotice`/`dataSources` を2〜3章のとおりそのまま埋めた(TODO は解消)。
+- `RootView.swift`: `.toolbar` の `.topBarTrailing` に `NavigationLink(value: AboutScreenRoute())`(SF Symbol
+  `info.circle`、identifier `openAboutScreen`、`accessibilityLabel("このアプリについて")`)を追加。
+  `AboutScreenRoute`(値のみの `Hashable`)を既存の `CalcScreenRoute` 等と同じパターンで定義し、
+  `.navigationDestination(for: AboutScreenRoute.self)` で `AboutView()` に遷移する。
+- 新規 `ios/PokeCalc/AboutView.swift`: `ScrollView` + `VStack` で非公式の注記(`aboutUnofficialNotice`)と
+  データの出典一覧(`aboutDataSource-0`〜`3`)を表示。両方とも `glassCard()` の角丸カードに乗せ、`Text` は
+  `lineLimit` を付けず `.fixedSize(horizontal: false, vertical: true)` で折り返す。色・フォント・余白は
+  `ColorToken`/`TextStyleToken`/`SpacingToken` のみ使用しアニメーションは付けていない。各出典行は
+  `CalcScreenResults.swift` の `calcResultRow-*` と同じ理由で `.accessibilityElement(children: .contain)` を
+  付け、identifier 検査時に同一 identifier の要素が複数見つからないようにした。
+- 検証: `cd ios/PokeCalcKit && swift test` は500件全件成功(新規 `AboutTextTests` 7件含む)。
+  `make ios-test`(リポジトリルート)は unit 513件・XCUITest 44件すべて成功
+  (`AboutScreenUITests` 2件・`LargeTextLayoutUITests.testAboutScreenNoHorizontalOverflowAtAX5` を含む。
+  `ios-lint`/`ios-gen-check`/`ios-check-request-limits`/`ios-check-infoplist` も成功)。既存テストは1つも
+  編集していない。
