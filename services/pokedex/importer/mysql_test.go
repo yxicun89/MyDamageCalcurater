@@ -28,7 +28,7 @@ import (
 // species_key_ledger は置き換えずに追記だけする台帳(ADR-0131)。止めた投入で変わらないことも比べる。
 var masterTables = []string{
 	"types", "type_chart", "abilities", "items", "moves", "species", "species_abilities",
-	"item_effects", "ability_effects", "move_mechanisms", "learnsets", "natures",
+	"item_effects", "ability_effects", "move_effects", "move_mechanisms", "learnsets", "natures",
 	"regulations", "regulation_species", "regulation_moves", "regulation_items", "regulation_abilities",
 	"data_versions", "species_key_ledger",
 }

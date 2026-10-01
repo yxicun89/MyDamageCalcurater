@@ -90,6 +90,34 @@ ORDER BY source;
 SELECT `key`, showdown_id
 FROM species;
 
+-- 種族 key の台帳(ADR-0131)。追記だけ。削除・更新・REPLACE のクエリは置かない(layout テストで固定)。
+-- name: ListSpeciesKeyLedger :many
+SELECT species_key, showdown_id
+FROM species_key_ledger
+ORDER BY species_key;
+
+-- name: InsertSpeciesKeyLedgerEntry :exec
+INSERT IGNORE INTO species_key_ledger (species_key, showdown_id, first_seen_at)
+VALUES (?, ?, ?);
+
+-- 今の species のうち台帳に無い組を足す(台帳ができる前に投入した DB の移行)。
+-- name: SeedSpeciesKeyLedgerFromSpecies :exec
+INSERT IGNORE INTO species_key_ledger (species_key, showdown_id, first_seen_at)
+SELECT `key`, showdown_id, sqlc.arg(first_seen_at) FROM species;
+
+-- 消滅の検出用(投入前の ID の一覧)。
+-- name: ListSpeciesKeyValues :many
+SELECT `key` FROM species ORDER BY `key`;
+
+-- name: ListMoveIDs :many
+SELECT id FROM moves ORDER BY id;
+
+-- name: ListItemIDs :many
+SELECT id FROM items ORDER BY id;
+
+-- name: ListAbilityIDs :many
+SELECT id FROM abilities ORDER BY id;
+
 -- name: DeleteRegulationSpecies :exec
 DELETE FROM regulation_species;
 

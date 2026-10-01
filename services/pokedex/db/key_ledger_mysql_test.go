@@ -39,8 +39,9 @@ func TestKeyLedgerConstraints(t *testing.T) {
 	if _, err := conn.Exec(insertLedger + `('9009-000', 'testgone', '2026-10-01 00:00:00')`); err != nil {
 		t.Fatalf("species に無い key を入れられない(外部キーがある?): %v", err)
 	}
-	// species を全部消しても(importer の全置換と同じ)台帳の行は残る。
-	if _, err := conn.Exec(`SET FOREIGN_KEY_CHECKS = 0; DELETE FROM species; SET FOREIGN_KEY_CHECKS = 1`); err != nil {
+	// species を全部消しても(importer の全置換と同じ)台帳の行は残る。子の表の行を先に消すのは、
+	// 孤児の行が残ると、次のテストの DownAll(migration 000005 の down が外部キーを張り直す)が失敗するため。
+	if _, err := conn.Exec(`DELETE FROM species_abilities; DELETE FROM learnsets; DELETE FROM regulation_species; SET FOREIGN_KEY_CHECKS = 0; DELETE FROM species; SET FOREIGN_KEY_CHECKS = 1`); err != nil {
 		t.Fatal(err)
 	}
 	var n int
