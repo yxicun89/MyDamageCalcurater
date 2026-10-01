@@ -17,6 +17,20 @@ function member(page: Page, index: number): Locator {
   return page.getByRole("group", { name: `メンバー${String(index)}`, exact: true });
 }
 
+/**
+ * ADR-0411: タイプバランスはオンラインのマスタ(/api/pokedex/*)を読むので、種族は `<select>` ではなく検索欄
+ * (SpeciesSearchField)で選ぶ。候補は入力欄と同じ名前のリストボックスから選ぶ。
+ */
+async function pickSpecies(page: Page, index: number, nameJa: string): Promise<void> {
+  const input = member(page, index).getByRole("combobox", { name: "ポケモン", exact: true });
+  await input.fill(nameJa);
+  await member(page, index)
+    .getByRole("listbox", { name: "ポケモン", exact: true })
+    .getByRole("option", { name: nameJa, exact: true })
+    .click();
+  await expect(input).toHaveValue(nameJa);
+}
+
 async function openBalance(page: Page): Promise<void> {
   await page.goto("/balance");
   await expect(page.getByRole("tab", { name: "タイプバランス", exact: true })).toHaveAttribute(
@@ -41,9 +55,9 @@ test("2体を選ぶと analyze(200)で防御相性の表(18タイプ・文字の
       new URL(response.url()).pathname === "/api/balance/v1/team-balance/analyze" &&
       response.request().method() === "POST",
   );
-  await member(page, 1).getByRole("combobox", { name: "ポケモン", exact: true }).selectOption(FIRE.key);
+  await pickSpecies(page, 1, FIRE.nameJa);
   await page.getByRole("button", { name: "メンバーを追加", exact: true }).click();
-  await member(page, 2).getByRole("combobox", { name: "ポケモン", exact: true }).selectOption(WATER.key);
+  await pickSpecies(page, 2, WATER.nameJa);
   const response = await analyzeResponse;
   expect(response.status()).toBe(200);
   // 端末 ID・セッション ID を付ける(ADR-0303 §5)。
@@ -75,7 +89,7 @@ test("2体を選ぶと analyze(200)で防御相性の表(18タイプ・文字の
 
 test("攻撃技を選ぶと coverage(200)で攻撃範囲の表を出す", async ({ page }) => {
   await openBalance(page);
-  await member(page, 1).getByRole("combobox", { name: "ポケモン", exact: true }).selectOption(FIRE.key);
+  await pickSpecies(page, 1, FIRE.nameJa);
 
   const coverageResponse = page.waitForResponse(
     (response) =>
