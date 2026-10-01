@@ -5,6 +5,7 @@
 - 関連: ADR-0001(技術スタック)、ADR-0012(サービス境界。balance・speed・judge は兄弟サービス。**2026-09-25
   追記〈issue #284〉: 当初 `/api/balance` は独自の Ingress だったが、gateway の後ろに統合した**)、
   ADR-0200(calc-svc の契約・ErrorCode の語彙と HTTP ステータス・healthz の扱い)、ADR-0201(Echo v5)、
+  ADR-0413(balance の直結 Ingress の撤去と `GATEWAY_BALANCE_URL` の配線。2026-10-02),
   ADR-0606(speed-svc が独自に複製した端末ID/セッションID検証。issue #236。issue #284 統合後も残る二重化)、
   docs/requirements.md §3(認証なし・端末ID)・§4(アーキテクチャ)・§8(画像は gateway の `/assets/` から配信)、plan.md P3-2
 

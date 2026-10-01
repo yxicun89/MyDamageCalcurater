@@ -51,7 +51,7 @@
 | 5 | 「逆算」タブ → `/reverse` | `App.tsx:207` `history.pushState`、`web/src/app/routes.ts`。e2e: `routing.spec.ts:31` | URL |
 | 6 | 観測 1 を入れる → 「H32 を仮定」と候補 | `ReverseScreen`(`web/src/screens/ReverseScreen.tsx:157`)→ `POST /api/calc/reverse`(engine の総当たり探索。ADR-0010)。e2e: `reverse.spec.ts:40` | `reverse` が 200 か |
 | 7 | 「観測を追加」 → 候補が増えない | `web/src/domain/observations.ts`(上限・検証)。e2e: `reverse.spec.ts:65` | — |
-| 8 | 「タイプバランス」タブ → 2 体選ぶ | `BalanceScreen`(`web/src/screens/BalanceScreen.tsx:187`)→ `balanceClient.ts` → Traefik `/api/balance/v1/team-balance/analyze`(gateway を通らない。[api-endpoints.md](api-endpoints.md) §6)。e2e: `balance.spec.ts:36` | `analyze` が 200 か。404 は balance の Ingress、422 は入力 |
+| 8 | 「タイプバランス」タブ → 2 体選ぶ | `BalanceScreen`(`web/src/screens/BalanceScreen.tsx:187`)→ `balanceClient.ts` → Traefik → gateway `/api/balance/v1/team-balance/analyze` → balance([api-endpoints.md](api-endpoints.md) §6)。e2e: `balance.spec.ts:36` | `analyze` が 200 か。404 は gateway の `GATEWAY_BALANCE_URL`・balance の Service、422 は入力 |
 | 9 | 技を選ぶ → 攻撃範囲 | 同 `…/coverage`。e2e: `balance.spec.ts:76` | `coverage` |
 | 10 | 「仮想敵を追加」 | 同 `…/threats`(最大 6 体。ADR-0303 §7)。e2e は無し(vitest `BalanceScreen.test.tsx`) | `threats` |
 | 11 | ブラウザの戻る | `App.tsx:254-266` `popstate`。e2e: `routing.spec.ts:31` | — |
@@ -92,7 +92,7 @@
 | 4b | `:269` | 同 `/api/calc`、`X-Session-Id: not-a-uuid` | **400 `invalid_header`** | 同上(正準形 UUID のみ許可) | ADR-0202 §4 |
 | 5 | `:274` | `GET /internal/pokedex/master`(ヘッダ無し) | **404 `not_found`** | gateway が `/internal/*` を公開しない(`gw/routing.go:59` `matchRoute` に無いパス = 404)。内部 API は calc → pokedex のサービス間専用 | ADR-0204・0210 |
 | 6 | `:281` | `GET /`(ヘッダ無し) | 200(web 到達)/ 503 `upstream_unavailable`(web 未デプロイ)。それ以外は失敗 | gateway が `/api` 以外を web に転送(`GATEWAY_WEB_URL`) | ADR-0205 |
-| 7 | `:308` | `GET /api/balance/healthz`(balance の Ingress があるときだけ。`API_SMOKE_BALANCE`) | 200 | Traefik が `/api/balance` を balance に振る(gateway の `/` が奪わない) | ADR-0012・0203 |
+| 7 | `:308` | `GET /api/balance/healthz`(balance の Service があるときだけ。`API_SMOKE_BALANCE`) | 200 | gateway が `/api/balance` を balance へ転送する | ADR-0202・0413 |
 
 最終行 `api smoke: calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=200 internal=404 balance=200 web=200` の読み方:
 
@@ -102,7 +102,7 @@
 | `missing_header` / `invalid_header` | **400** | 異常系を意図して叩き、gateway が正しく弾いた | 200 など → gateway の検証が抜けた |
 | `internal` | **404** | 内部 API が外に出ていない | 200 → **内部 API の露出(重大)** |
 | `pokedex` | 200(投入済み)/ 503 | 503 は `master=example`(例データ)で継続 | `master_unavailable` → `make import-k8s` |
-| `balance` | 200 / `skipped` | balance の Ingress が無いと `skipped` | 404 → balance の Ingress |
+| `balance` | 200 / `skipped` | balance の Service が無いと `skipped` | 404 → gateway の balance 転送(`GATEWAY_BALANCE_URL`) |
 | `web` | 200 / 503 | 503 は web 未デプロイ | 404 → gateway の web 転送設定 |
 
 ## 4. エラー早見表
@@ -118,7 +118,7 @@
 | `503` + JSON `master_unavailable` | calc / pokedex | pokedex の DB が未投入・不完全、または calc がまだマスタを取得できていない(`calc/readiness.go:21`) | `make import-k8s` → `wait`。`kubectl -n pokecalc logs deployment/calc`(起動時の取得。[request-flows.md](request-flows.md) §4)、`get pods`(pokedex Running か) |
 | `503`(JSON でない / Traefik の本文) | Traefik | Service に Ready な Endpoint が無い | `kubectl -n pokecalc get endpoints`、`describe ingress <名前>` |
 | `404` + JSON `not_found` | gateway | ルートが無い。**`/internal/*` は意図どおり**。ほか: メソッド違い(`GET /api/calc` は 404)、`.` / `..`・連続スラッシュ(`gw/routing.go:81,95`) | `matchRoute`(`gw/routing.go:59`)と [api-endpoints.md](api-endpoints.md) §2 |
-| `404`(JSON でない) | Traefik / nginx | `/api/balance|speed|judge` の Ingress 不在、または web の `/api` / `/assets/*` の 404(想定) | `kubectl -n pokecalc get ingress`([k8s-local.md](k8s-local.md) §6)、`web/nginx.conf:32-46` |
+| `404`(JSON でない) | Traefik / nginx | `/api/speed|judge` の Ingress 不在、または web の `/api` / `/assets/*` の 404(想定) | `kubectl -n pokecalc get ingress`([k8s-local.md](k8s-local.md) §6)、`web/nginx.conf:32-46` |
 | `400` + `missing_header` / `invalid_header` | gateway(`gw/headers.go:19`) | `X-Device-Id` / `X-Session-Id` が無い・非 UUID。**smoke の異常系は正常** | ブラウザ: `web/src/api/apiEngine.ts:240-241` が付与(ID は `clientIds.ts`)。curl は 2 ヘッダを足す |
 | `400` + `invalid_json` / `unknown_field` / `invalid_enum` | calc(`calc/errors.go:95`、`convert.go:16`) | 本文の不正 | `logs deployment/calc`、[api-endpoints.md](api-endpoints.md) §4・§9 |
 | `400` + `unknown_species` 等(`unknown_*`) | calc(`convert.go:117,165`) | マスタに無い ID(例データの ID を実マスタに送った等) | pokedex の `GET /api/pokedex/species` で ID を確認 |
@@ -142,7 +142,7 @@
 
 | 検証 | 実行 | 対象コンポーネント | 内容 |
 |---|---|---|---|
-| balance smoke | `make balance-smoke`(`services/balance/scripts/smoke.sh`) | balance-svc(Traefik `/api/balance`。`BALANCE_URL` 既定 8080) | healthz 200 → analyze 200 / unknown pokemon 422 → coverage 200 / unknown_move 422 → ability 200 / unknown_ability 422 → threats 200 / unknown_move 422 → recommendations 200 → move-range 200 / unknown_move 422 / 状態技のみ 400。最終行に全ステータス |
+| balance smoke | `make balance-smoke`(`services/balance/scripts/smoke.sh`) | balance-svc(gateway 経由。`BALANCE_URL` 既定 8080。端末ID・セッションIDは固定の架空 UUID) | healthz 200 → analyze 200 / unknown pokemon 422 → coverage 200 / unknown_move 422 → ability 200 / unknown_ability 422 → threats 200 / unknown_move 422 → recommendations 200 → move-range 200 / unknown_move 422 / 状態技のみ 400。最終行に全ステータス |
 | balance read model smoke | `make balance-smoke-readmodel`(`smoke-readmodel.sh`) | balance が pokedex export の read model で動く(ADR-0403) | 先頭のポケモンで analyze と recommendations が 200 |
 | speed smoke | `make speed-smoke`(`services/speed/scripts/smoke.sh`。`SPEED_URL`) | speed-svc(`/api/speed`) | healthz 200 → pokemon 200(8 体)→ ヘッダ無し 400 `invalid_request` → table 200(7 tier・同速 219)→ 不明 presets 400 → position 200 → 不要フィールド 400 → 不明 pokemonId 422 |
 | speed read model smoke | `make speed-smoke-readmodel`(`smoke-readmodel.sh`) | speed の read model(ADR-0603 §4) | 先頭のポケモンで pokemon / table が 200 |

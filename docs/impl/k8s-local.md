@@ -19,7 +19,7 @@ flowchart LR
       TR["Traefik (svclb) :80"]
     end
     subgraph PC["ns pokecalc"]
-      IG["Ingress ×4<br/>gateway '/' · balance '/api/balance'<br/>speed '/api/speed' · judge '/api/judge'"]
+      IG["Ingress ×3<br/>gateway '/'<br/>speed '/api/speed' · judge '/api/judge'"]
       GW["Deployment gateway :8080"]
       WEB["Deployment web (nginx) :8080"]
       CALC["Deployment calc :8080"]
@@ -59,7 +59,7 @@ flowchart LR
   BR -.->|":5173"| PF -.->|"svc/web:80"| WEB
 ```
 
-- 8080 は k3d の loadbalancer(docker コンテナ)が持つ公開ポート。Traefik へ入り、Ingress の path 最長一致で振り分ける(gateway は `/` の Prefix。`/api/balance` などはより長いので各サービスへ直接届き、gateway を通らない。`deploy/k8s/base/gateway/ingress.yaml` の冒頭コメント)。
+- 8080 は k3d の loadbalancer(docker コンテナ)が持つ公開ポート。Traefik へ入り、Ingress の path 最長一致で振り分ける(gateway は `/` の Prefix。`/api/speed`・`/api/judge` はより長いので各サービスへ直接届き、gateway を通らない。`/api/balance` は Ingress を撤去したので gateway が balance へ転送する。`deploy/k8s/base/gateway/ingress.yaml` の冒頭コメント)。
 - 5173 は**クラスタの公開ポートではない**。`make web-k3d-open` が張る port-forward(`web/Makefile`)で、止めると消える。web は gateway を通らず Service に直結する。
 - web の Ingress は無い。`web` へは gateway が `GATEWAY_WEB_URL=http://web` へ転送して届く(ADR-0205。`deploy/k8s/overlays/local/api/gateway-patch.yaml`)。
 - どの経路も、Pod 間は NetworkPolicy(§10)で許可した通信だけが通る。ホストからの port-forward・`kubectl exec` は対象外。
@@ -69,7 +69,7 @@ flowchart LR
 
 | ホスト側 | 経路 | 宛先 | 定義 |
 |---|---|---|---|
-| `localhost:8080` | docker `k3d-pokecalc-serverlb` → Traefik:80 → Ingress | gateway Service:80 → Pod:8080(`/`)/ balance・speed・judge(各 path) | `deploy/k3d.yaml` |
+| `localhost:8080` | docker `k3d-pokecalc-serverlb` → Traefik:80 → Ingress | gateway Service:80 → Pod:8080(`/`。balance へは gateway が転送)/ speed・judge(各 path) | `deploy/k3d.yaml` |
 | `localhost:52779`(動的) | serverlb → k3s API :6443 | kube-apiserver | k3d が割当(`docker ps` の実測値。固定ではない) |
 | `localhost:5173` | `kubectl port-forward svc/web 5173:80`(手動) | web Service:80 → Pod:8080 | `web/Makefile`(`web-k3d-open`) |
 | `localhost:5000`(**ノード側**) | registry の `hostPort: 5000` | registry Pod:5000(クラスタ内レジストリ) | `services/balance/deploy/local-registry/registry.yaml` |
@@ -122,12 +122,11 @@ image は base のタグ → local overlay(および `make *-k3d-deploy`)が `:l
 
 `mysql` が headless のため、`mysql:3306` は Pod `mysql-0` の IP に直接解決される(DSN は `@tcp(mysql:3306)`。`scripts/up.sh` が作る)。
 
-## 6. Ingress(全 4 件。すべて `ingressClassName: traefik`、host なし・TLS なし)
+## 6. Ingress(全 3 件。すべて `ingressClassName: traefik`、host なし・TLS なし)
 
 | 名前 | path(Prefix) | backend | 定義 |
 |---|---|---|---|
 | `gateway` | `/` | Service `gateway`:http | `deploy/k8s/base/gateway/ingress.yaml`(**cloud overlay では `$patch: delete`**。ADR-0210 §2) |
-| `balance` | `/api/balance` | Service `balance`:http | `services/balance/deploy/k8s/base/ingress.yaml` |
 | `speed` | `/api/speed` | Service `speed`:http | `services/speed/deploy/k8s/base/ingress.yaml` |
 | `judge` | `/api/judge` | Service `judge`:http | `services/judge/deploy/k8s/base/ingress.yaml` |
 
@@ -167,7 +166,7 @@ services/{balance,speed}/deploy/k8s/overlays/{local,local-readmodel,gitops}   se
 | `overlays/local-api`(5) | Deployment/Service ×(calc, gateway), Ingress(gateway) | `make api-k3d-deploy`。Job・mysql に触れない(他レーンと共有クラスタのため) |
 | `overlays/local-web`(2) | Deployment/Service web | `make web-k3d-deploy` |
 | `overlays/cloud`(22) | base − Ingress、CronJob は `suspend: true` | `make k8s-render` の描画確認のみ(**cloud に MySQL・Secret・image 配布経路が無い**。`cronjob-import-suspend-patch.yaml` のコメント) |
-| `services/balance/.../local`(6) | Deployment, Service, Ingress + ConfigMap×3(例データ) | `make balance-k3d-deploy` |
+| `services/balance/.../local`(6) | Deployment, Service + ConfigMap×3(例データ。Ingress は無い) | `make balance-k3d-deploy` |
 | `services/balance/.../local-readmodel`(3) | 上記から ConfigMap を除き `/etc/balance/readmodel/*` を参照(ConfigMap は script が別途作る) | `make balance-k3d-deploy-readmodel` |
 | `services/balance/.../gitops`(3) | `localhost:5000/pokecalc/balance@sha256:…`(digest 固定) | Argo CD(C で扱う) |
 | `services/speed/...` | balance と同型(`local` 4 = +ConfigMap×1、`local-readmodel` 3、`gitops` 3。gitops の digest は現状 `sha256:000…`(未確定プレースホルダ)) | `make speed-k3d-deploy` / `-readmodel` / Argo CD |
@@ -187,7 +186,7 @@ Component は `kustomize.config.k8s.io/v1alpha1`(`overlays/local/api`・`overlay
 | 4 | balance・speed は `local-readmodel` 方式(env は `*_PATH` のみ、annotation `readmodel-hash`) | `local` overlay(例データ)ではなく readmodel でデプロイ済み。`speed-pokemon-*`(例データ)は残骸 |
 | 5 | Job `pokedex-import-manual-20260922185252` が `Failed`(`DeadlineExceeded`)、他 3 件 `Complete` | 手動 Job は TTL 14 日で消える。失敗 1 件は残存(2026-10-01 には消えている) |
 | 6 | Application `pokecalc-balance` が `OutOfSync` / `Healthy`。`pokecalc-speed` は無い | Git に定義はあるが speed の Application は未適用(C で詳述) |
-| 7 | Ingress は 4 件(gateway/balance/speed/judge) | 一致 |
+| 7 | Ingress は 4 件(gateway/balance/speed/judge) | 観測時点(balance の Ingress 撤去前。ADR-0413 後の再デプロイで 3 件になる) |
 
 ## 10. NetworkPolicy(ADR-0132)
 

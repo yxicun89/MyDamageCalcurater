@@ -12,7 +12,6 @@ Traefik は最長一致で選ぶ。ホスト 8080 が入口(`deploy/k3d.yaml`)�
 | Ingress | path(Prefix) | 転送先 Service:port | 定義 |
 |---|---|---|---|
 | `gateway` | `/` | `gateway`:http(80) | `deploy/k8s/base/gateway/ingress.yaml`(cloud overlay では削除) |
-| `balance` | `/api/balance` | `balance`:http | `services/balance/deploy/k8s/base/ingress.yaml` |
 | `speed` | `/api/speed` | `speed`:http | `services/speed/deploy/k8s/base/ingress.yaml` |
 | `judge` | `/api/judge` | `judge`:http | `services/judge/deploy/k8s/base/ingress.yaml` |
 
@@ -84,7 +83,7 @@ gateway(G3・G4)経由で到達。ID ヘッダは `/internal` 以外の 9 操作
 - pokedex は起動時に DB へ接続しない(`sql.Open` のみ)。DB 不通・未投入は各操作が 503(`errors.go:53` `unavailable`)。
 - サブコマンド(HTTP ではない): `pokedex serve`・`pokedex export -out <dir>`(`cmd/pokedex/main.go:67`)。
 
-## 6. balance-svc(`services/balance`。Traefik `/api/balance`)
+## 6. balance-svc(`services/balance`。gateway の `/api/balance/*` が転送。独自の Ingress は無い。ADR-0413)
 
 `internal/httpapi/server.go:101` `New` が `api.RegisterHandlersWithOptions` で登録(業務 5 操作に `requireRequestContext`)。ID ヘッダは**非空のみ**検証、不足は 400 `missing_request_context`。本文上限 16KiB(`maxAnalyzeBodyBytes`)。
 
