@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 計算API SLO(p99・可用性)の記録ルールとダッシュボード(ADR-0407)の自動テスト。
+# 計算API SLO(p99・可用性)の記録ルールとダッシュボード(ADR-0407)と、balance の同じ構成(ADR-0420)の自動テスト。
 # `make test-scripts`(make test に含む)から流す。
 #
 # 対象:
@@ -7,6 +7,7 @@
 #   - deploy/k8s/base/observability/dashboards/calc-slo.json(Grafana ダッシュボード。ADR-0407 §4)
 #   - deploy/k8s/base/observability/dashboards/kustomization.yaml(configMapGenerator。ADR-0407 §4)
 #   - deploy/k8s/base/observability/kustomization.yaml(親。上の2つを resources に含む)
+#   - balance 分: prometheusrules/balance-slo.yaml・dashboards/balance-slo.json(ADR-0420。calc と同じ検査を target 切替で流す)
 #
 # 方式は scripts/observability-bootstrap_test.sh(ADR-0406)と同じ: 手書きの ok/ng ヘルパー付きの bash。
 # YAML は本物の helm でローカルの最小 chart を描画して構造として読み(chart repo へは行かない)、JSON は jq で読む。
@@ -17,19 +18,39 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 readonly ROOT
 readonly OBS_REL="deploy/k8s/base/observability"
-readonly RULE_REL="$OBS_REL/prometheusrules/calc-slo.yaml"
 readonly DASH_DIR_REL="$OBS_REL/dashboards"
-readonly DASH_REL="$DASH_DIR_REL/calc-slo.json"
 readonly DASH_KUST_REL="$DASH_DIR_REL/kustomization.yaml"
 readonly PARENT_KUST_REL="$OBS_REL/kustomization.yaml"
 readonly KPS_VALUES_REL="$OBS_REL/values/kube-prometheus-stack.yaml"
 readonly NAMESPACE="observability"
+readonly TARGETS="calc balance"
 
-# ADR-0407 §3 の記録ルール名。
-readonly RULE_P99="calc_job:calc_request_duration_seconds:p99_5m"
-readonly RULE_AVAIL="calc_job:calc_availability_ratio:5m"
-# ADR-0407 §1 の対象エンドポイント(calc-svc の計算3つ。/healthz・/readyz・/api/pokedex/* は含めない)。
-readonly CALC_PATHS="/api/calc /api/calc/bulk /api/calc/reverse"
+# use_target calc|balance — 以降の検査が見る対象(ルール・ダッシュボード・job・パス・しきい値)を切り替える。
+# calc: ADR-0407 §1(計算3エンドポイント・100ms)。balance: ADR-0420 §1(計算5エンドポイント・500ms)。
+# いずれも /healthz・/readyz・/metrics などは含めない。
+use_target() {
+  TARGET=$1
+  RULE_REL="$OBS_REL/prometheusrules/$TARGET-slo.yaml"
+  DASH_REL="$DASH_DIR_REL/$TARGET-slo.json"
+  JOB=$TARGET
+  RULE_P99="${TARGET}_job:${TARGET}_request_duration_seconds:p99_5m"
+  RULE_AVAIL="${TARGET}_job:${TARGET}_availability_ratio:5m"
+  ADR="ADR-0407"
+  case "$TARGET" in
+    calc)
+      CALC_PATHS="/api/calc /api/calc/bulk /api/calc/reverse"
+      THRESH_S=0.1
+      THRESH_MS=100
+      ;;
+    balance)
+      CALC_PATHS="/api/balance/v1/team-balance/analyze /api/balance/v1/team-balance/coverage /api/balance/v1/team-balance/threats /api/balance/v1/team-balance/recommendations /api/balance/v1/move-range/analyze"
+      THRESH_S=0.5
+      THRESH_MS=500
+      ADR="ADR-0420"
+      ;;
+  esac
+}
+use_target calc
 
 REAL_HELM=$(command -v helm || true)
 readonly REAL_HELM
@@ -149,28 +170,28 @@ test_rule_records() {
 }
 
 test_rule_p99_expr() {
-  begin "PrometheusRule: $RULE_P99 の式が job=\"calc\"・計算3エンドポイントのヒストグラムから histogram_quantile(0.99, ...) を5分窓で求める(ADR-0407 §1)"
+  begin "PrometheusRule: $RULE_P99 の式が job=\"$JOB\"・計算エンドポイントのヒストグラムから histogram_quantile(0.99, ...) を5分窓で求める($ADR §1)"
   [ -f "$ROOT/$RULE_REL" ] || { ng "$RULE_REL が無い"; return; }
   local e
   e=$(rule_expr "$RULE_P99")
   [ -n "$e" ] || { ng "$RULE_P99 の expr が無い"; return; }
   if printf '%s' "$e" | grep -Eq 'histogram_quantile\([[:space:]]*0\.99[[:space:]]*,'; then ok; else ng "histogram_quantile(0.99, ...) を使っていない: $e"; fi
   if printf '%s' "$e" | grep -q 'http_request_duration_seconds_bucket'; then ok; else ng "http_request_duration_seconds_bucket を使っていない: $e"; fi
-  if printf '%s' "$e" | grep -q 'job="calc"'; then ok; else ng "job=\"calc\" で絞っていない: $e"; fi
+  if printf '%s' "$e" | grep -q "job=\"$JOB\""; then ok; else ng "job=\"$JOB\" で絞っていない: $e"; fi
   expect_calc_paths "$RULE_P99 の式" "$e"
   if printf '%s' "$e" | grep -q '\[5m\]'; then ok; else ng "5分窓([5m])でない: $e"; fi
   if printf '%s' "$e" | grep -Eq 'by[[:space:]]*\([[:space:]]*le[[:space:]]*\)'; then ok; else ng "le で集約(by (le))していない: $e"; fi
 }
 
 test_rule_availability_expr() {
-  begin "PrometheusRule: $RULE_AVAIL の式が計算3エンドポイントの 5xx 以外 / 全体 の比を5分窓で求める(ADR-0407 §1)"
+  begin "PrometheusRule: $RULE_AVAIL の式が計算3エンドポイントの 5xx 以外 / 全体 の比を5分窓で求める($ADR §1)"
   [ -f "$ROOT/$RULE_REL" ] || { ng "$RULE_REL が無い"; return; }
   local e n
   e=$(rule_expr "$RULE_AVAIL")
   [ -n "$e" ] || { ng "$RULE_AVAIL の expr が無い"; return; }
   n=$(printf '%s' "$e" | grep -o 'http_requests_total' | wc -l | tr -d ' ')
   if [ "$n" -ge 2 ]; then ok; else ng "http_requests_total を分子・分母の2か所で使っていない($n か所): $e"; fi
-  if printf '%s' "$e" | grep -q 'job="calc"'; then ok; else ng "job=\"calc\" で絞っていない: $e"; fi
+  if printf '%s' "$e" | grep -q "job=\"$JOB\""; then ok; else ng "job=\"$JOB\" で絞っていない: $e"; fi
   expect_calc_paths "$RULE_AVAIL の式" "$e"
   # 5xx 除外は分子だけ(分母にもあると常に 1 になる)。
   n=$(printf '%s' "$e" | grep -oE 'status!~"5\.\."' | wc -l | tr -d ' ')
@@ -231,7 +252,7 @@ test_dashboard_json() {
 }
 
 test_dashboard_panels() {
-  begin "ダッシュボード: p99 の時系列(100ms しきい値)・可用性の時系列(%)・直近値の数値パネル(p99・可用性)がある(ADR-0407 §4)"
+  begin "ダッシュボード: p99 の時系列(${THRESH_MS}ms しきい値)・可用性の時系列(%)・直近値の数値パネル(p99・可用性)がある($ADR §4)"
   [ -f "$ROOT/$DASH_REL" ] || { ng "$DASH_REL が無い"; return; }
   jq -e . "$ROOT/$DASH_REL" >/dev/null 2>&1 || { ng "$DASH_REL が JSON として読めない"; return; }
   local n
@@ -248,10 +269,10 @@ test_dashboard_panels() {
     | any(
         (.fieldConfig.defaults.unit as \$u
           | [.fieldConfig.defaults.thresholds.steps[]?.value] as \$vals
-          | ((\$u == \"s\" and (\$vals | index(0.1))) or (\$u == \"ms\" and (\$vals | index(100)))))
+          | ((\$u == \"s\" and (\$vals | index($THRESH_S))) or (\$u == \"ms\" and (\$vals | index($THRESH_MS)))))
         and ((.fieldConfig.defaults.custom.thresholdsStyle.mode // \"off\") != \"off\"))")
   if [ "$okline" = true ]; then ok; else
-    ng "p99 の timeseries に 100ms のしきい値ライン(unit s なら 0.1・ms なら 100 の threshold step と、custom.thresholdsStyle.mode が off 以外)が無い"
+    ng "p99 の timeseries に 100ms のしきい値ライン(unit s なら $THRESH_S・ms なら $THRESH_MS の threshold step と、custom.thresholdsStyle.mode が off 以外)が無い"
   fi
 
   # 2. 可用性の時系列: timeseries で可用性の記録ルールを参照し、パーセント表示。
@@ -269,7 +290,7 @@ test_dashboard_panels() {
 }
 
 test_dashboard_uses_recording_rules() {
-  begin "ダッシュボード: すべてのクエリが記録ルールを参照し、生の histogram_quantile・rate を評価しない(ADR-0407 §3)"
+  begin "ダッシュボード: すべてのクエリが記録ルールを参照し、生の histogram_quantile・rate を評価しない($ADR §3)"
   [ -f "$ROOT/$DASH_REL" ] || { ng "$DASH_REL が無い"; return; }
   jq -e . "$ROOT/$DASH_REL" >/dev/null 2>&1 || { ng "$DASH_REL が JSON として読めない"; return; }
   local exprs e bad=""
@@ -283,7 +304,7 @@ test_dashboard_uses_recording_rules() {
 }
 
 test_dashboard_no_alert() {
-  begin "ダッシュボード: Grafana のアラート定義(alert)を含まない(ADR-0407 §2)"
+  begin "ダッシュボード: Grafana のアラート定義(alert)を含まない($ADR §2)"
   [ -f "$ROOT/$DASH_REL" ] || { ng "$DASH_REL が無い"; return; }
   jq -e . "$ROOT/$DASH_REL" >/dev/null 2>&1 || { ng "$DASH_REL が JSON として読めない"; return; }
   if [ "$(dash_jq '[.. | objects | has("alert")] | any')" = false ]; then ok; else ng "alert キーがある(アラートは作らない)"; fi
@@ -294,44 +315,51 @@ test_dashboard_no_alert() {
 # ---------------------------------------------------------------------------
 
 test_dashboard_kustomization() {
-  begin "kustomize: $DASH_DIR_REL が calc-slo.json を持つ ConfigMap を grafana_dashboard: \"1\" ラベル付きで生成する(ADR-0407 §4)"
+  begin "kustomize: $DASH_DIR_REL が $TARGET-slo.json を持つ ConfigMap $TARGET-slo-dashboard を grafana_dashboard: \"1\" ラベル付きで生成する($ADR §4)"
   command -v kubectl >/dev/null 2>&1 || { ng "kubectl が PATH に無い"; return; }
   [ -f "$ROOT/$DASH_KUST_REL" ] || { ng "$DASH_KUST_REL が無い"; return; }
   local gen out f n
-  gen=$(yaml_query "$ROOT/$DASH_KUST_REL" '{{ range (dig "configMapGenerator" list $v) }}# R gen
-{{ end }}')
-  if [ -n "$gen" ]; then ok; else ng "$DASH_KUST_REL に configMapGenerator が無い"; fi
+  gen=$(yaml_query "$ROOT/$DASH_KUST_REL" '{{ range (dig "configMapGenerator" list $v) }}{{ if eq (toString (dig "name" "" .)) "'"$TARGET-slo-dashboard"'" }}# R gen
+{{ end }}{{ end }}')
+  if [ -n "$gen" ]; then ok; else ng "$DASH_KUST_REL に configMapGenerator $TARGET-slo-dashboard が無い"; fi
   if out=$(kubectl kustomize "$ROOT/$DASH_DIR_REL" 2>&1); then ok; else ng "kubectl kustomize $DASH_DIR_REL が失敗: $out"; return; fi
-  n=$(printf '%s\n' "$out" | grep -cE '^kind: ConfigMap$' || true)
-  if [ "$n" = 1 ]; then ok; else ng "描画結果の ConfigMap が1つでない: $n"; return; fi
-  f="$WORK/dash-cm.yaml"
-  printf '%s\n' "$out" >"$f"
+  # 文書ごとに分けて、このターゲットの ConfigMap だけを取り出す。
+  f="$WORK/dash-cm-$TARGET.yaml"
+  printf '%s\n' "$out" | awk -v want="  name: $TARGET-slo-dashboard" '
+    function flush() { if (hit) printf "%s", doc; doc = ""; hit = 0 }
+    /^---$/ { flush(); next }
+    { doc = doc $0 "\n"; if ($0 == want) hit = 1 }
+    END { flush() }
+  ' >"$f"
+  n=$(grep -cE '^kind: ConfigMap$' "$f" || true)
+  if [ "$n" = 1 ]; then ok; else ng "描画結果の ConfigMap $TARGET-slo-dashboard が1つでない: $n"; return; fi
   # sidecar は文字列の "1" と照合する(数値 1 ではない)。
   expect_json "ConfigMap の metadata.labels.grafana_dashboard" "$(yaml_get "$f" metadata labels grafana_dashboard)" '"1"'
   if yaml_query "$f" '{{ range $k, $x := (dig "data" dict $v) }}# R {{ $k }}
-{{ end }}' | grep -qxF "calc-slo.json"; then ok; else ng "ConfigMap の data に calc-slo.json が無い"; fi
+{{ end }}' | grep -qxF "$TARGET-slo.json"; then ok; else ng "ConfigMap の data に $TARGET-slo.json が無い"; fi
 }
 
 test_parent_kustomization() {
-  begin "kustomize: 親 $PARENT_KUST_REL の resources に prometheusrules/ と dashboards/ がある"
+  begin "kustomize: 親 $PARENT_KUST_REL の resources に prometheusrules/$TARGET-slo.yaml と dashboards/ がある"
   local f="$ROOT/$PARENT_KUST_REL" res
   [ -f "$f" ] || { ng "$PARENT_KUST_REL が無い"; return; }
   res=$(yaml_query "$f" '{{ range (dig "resources" list $v) }}# R {{ . }}
 {{ end }}') || { ng "$PARENT_KUST_REL が YAML として読めない"; return; }
-  if printf '%s\n' "$res" | grep -Eq '^prometheusrules/calc-slo\.yaml$|^prometheusrules/?$'; then ok; else
-    ng "resources に prometheusrules/calc-slo.yaml(または prometheusrules/)が無い"
+  if printf '%s\n' "$res" | grep -Eq "^prometheusrules/$TARGET-slo\.yaml\$|^prometheusrules/?\$"; then ok; else
+    ng "resources に prometheusrules/$TARGET-slo.yaml(または prometheusrules/)が無い"
   fi
   if printf '%s\n' "$res" | grep -Eq '^dashboards/?$'; then ok; else ng "resources に dashboards/ が無い"; fi
 }
 
 test_render() {
-  begin "kustomize: $OBS_REL の描画結果に PrometheusRule 1つと grafana_dashboard ラベルの ConfigMap 1つが namespace $NAMESPACE で含まれる"
+  begin "kustomize: $OBS_REL の描画結果に PrometheusRule・grafana_dashboard ラベルの ConfigMap が対象(calc・balance)の数ずつ namespace $NAMESPACE で含まれる"
   command -v kubectl >/dev/null 2>&1 || { ng "kubectl が PATH に無い"; return; }
-  local out n
+  local out n want
+  want=$(printf '%s\n' $TARGETS | wc -l | tr -d ' ')
   if out=$(kubectl kustomize "$ROOT/$OBS_REL" 2>&1); then ok; else ng "kubectl kustomize $OBS_REL が失敗: $out"; return; fi
   printf '%s\n' "$out" >"$WORK/rendered.yaml"
   n=$(grep -cE '^kind: PrometheusRule$' "$WORK/rendered.yaml" || true)
-  if [ "$n" = 1 ]; then ok; else ng "描画結果の PrometheusRule が1つでない: $n"; fi
+  if [ "$n" = "$want" ]; then ok; else ng "描画結果の PrometheusRule が $want 個でない: $n"; fi
   # 文書ごとに kind・namespace・grafana_dashboard ラベルを拾う(kubectl kustomize の出力は metadata 直下が2字下げ)。
   local docs
   docs=$(awk '
@@ -343,11 +371,13 @@ test_render() {
     END { flush() }
   ' "$WORK/rendered.yaml")
   n=$(printf '%s\n' "$docs" | grep -cE '^ConfigMap\|[^|]*\|"1"$' || true)
-  if [ "$n" = 1 ]; then ok; else ng "grafana_dashboard: \"1\" の ConfigMap が1つでない: $n"; fi
-  if printf '%s\n' "$docs" | grep -E '^PrometheusRule\|' | grep -qxF "PrometheusRule|$NAMESPACE|"; then ok; else
+  if [ "$n" = "$want" ]; then ok; else ng "grafana_dashboard: \"1\" の ConfigMap が $want 個でない: $n"; fi
+  n=$(printf '%s\n' "$docs" | grep -E '^PrometheusRule\|' | grep -cvxF "PrometheusRule|$NAMESPACE|" || true)
+  if [ "$n" = 0 ]; then ok; else
     ng "PrometheusRule の namespace が $NAMESPACE でない"
   fi
-  if printf '%s\n' "$docs" | grep -E '^ConfigMap\|[^|]*\|"1"$' | grep -qE "^ConfigMap\|$NAMESPACE\|"; then ok; else
+  n=$(printf '%s\n' "$docs" | grep -E '^ConfigMap\|[^|]*\|"1"$' | grep -cvE "^ConfigMap\|$NAMESPACE\|" || true)
+  if [ "$n" = 0 ]; then ok; else
     ng "ダッシュボードの ConfigMap の namespace が $NAMESPACE でない(Grafana sidecar は既定で自 namespace だけを探す)"
   fi
 }
@@ -363,17 +393,20 @@ test_cloud_overlay_untouched() {
 
 # ---------------------------------------------------------------------------
 
-test_rule_shape
-test_rule_records
-test_rule_p99_expr
-test_rule_availability_expr
-test_rule_discovery
-test_dashboard_json
-test_dashboard_panels
-test_dashboard_uses_recording_rules
-test_dashboard_no_alert
-test_dashboard_kustomization
-test_parent_kustomization
+for t in $TARGETS; do
+  use_target "$t"
+  test_rule_shape
+  test_rule_records
+  test_rule_p99_expr
+  test_rule_availability_expr
+  test_rule_discovery
+  test_dashboard_json
+  test_dashboard_panels
+  test_dashboard_uses_recording_rules
+  test_dashboard_no_alert
+  test_dashboard_kustomization
+  test_parent_kustomization
+done
 test_render
 test_cloud_overlay_untouched
 
