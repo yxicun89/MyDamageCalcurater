@@ -638,6 +638,13 @@
   `web/e2e/container.spec.ts` にヘッダと CSP 下の画面・WASM 計算の検査を追加(`make web-e2e-container` 54件 green)。
   gateway は上流ヘッダを素通し(CORS 以外を触らない)なので変更なし。
 
+- [x] issue #332 の Web 分(**2026-10-02。Web レーン。ブランチ `chore/web-deps-latest-332`**): devDependencies 7 件
+  (@types/node 26.6.3・globals 17.13.0・jsdom 30.1.1・prettier 3.9.9・typescript-eslint 8.71.0・vite 8.3.2・vitest 5.0.3)と、
+  Web の Node(`web/.node-version`・`engines`・`package-lock.json`・`web/Dockerfile` のイメージ+ダイジェスト)を 26.10.0 に更新。
+  `npm outdated` 空・vitest・typecheck・lint・build・`make web-e2e` green。**残り(他レーン)**: `services/pokedex/Dockerfile` の
+  Node 26.9.0(データレーン)、balance・speed・judge の golang タグ表記の統一、版のずれを検出する定期ジョブ(運用)。
+  issue #332 はこれらが残るためクローズしない。
+
 ## M3: iOS
 - [x] P6-1 Xcode プロジェクト、swift-openapi-generator、デザイントークン(ADR-0500。`make ios-test` = 生成物の一致・XCTest・XCUITest・Info.plist の接続先。critic PASS)
 - [x] P6-2 計算画面・逆算・構築(構築は端末内に保存、Showdown 形式は後回し。2026-09-21 ユーザー回答)。P6-2a 計算画面・契約追従・P6-2b 逆算画面・P6-2c 構築(一覧・編集画面・ニックネーム・XCUITest)・P6-2d(構築から呼び出す配線)は完了(critic PASS)
