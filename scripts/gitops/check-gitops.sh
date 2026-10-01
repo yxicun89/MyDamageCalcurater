@@ -49,8 +49,18 @@ fi
 
 target_revision=$(awk '$1 == "targetRevision:" { print $2; exit }' "$application_file")
 source_path=$(awk '$1 == "path:" { print $2; exit }' "$application_file")
-image_name=$(awk '$1 == "newName:" { print $2; exit }' "$overlay_file")
-image_digest=$(awk '$1 == "digest:" { print $2; exit }' "$overlay_file")
+# images は name ごとに値を取る(先頭一致だと pokedex など別 image の値と取り違える。ADR-0412 §3)。
+image_field() {
+  awk -v want="pokecalc/$1" -v field="$2" '
+    $1 == "-" && $2 == "name:" { cur = $3; next }
+    $1 == "name:" { cur = $2; next }
+    cur == want && $1 == field ":" { print $2; exit }
+  ' "$overlay_file"
+}
+image_name=$(image_field "$SERVICE" newName)
+image_digest=$(image_field "$SERVICE" digest)
+pokedex_name=$(image_field pokedex newName)
+pokedex_digest=$(image_field pokedex digest)
 
 [ -n "$repo_url" ] || fail "repoURL is missing"
 [ -n "$target_revision" ] || fail "targetRevision is missing"
@@ -65,9 +75,29 @@ if grep -Eq '(^|[[:space:]])automated:' "$application_file"; then
   fail "automated sync must remain disabled (ADR-0408 §4)"
 fi
 
+# read model の供給経路(ADR-0412): pokedex image は digest 固定、描画に initContainer があり ConfigMap が無いこと。
+[ -n "$pokedex_name" ] || fail "images に pokecalc/pokedex の newName が無い(read model の initContainer 用。ADR-0412)"
+printf '%s\n' "$pokedex_digest" | grep -Eq '^sha256:[0-9a-f]{64}$' || fail "pokedex image digest must be sha256 (ADR-0412)"
+rendered=$(kubectl kustomize "$svc_dir/deploy/k8s/overlays/gitops") || fail "kubectl kustomize of the GitOps overlay failed"
+printf '%s\n' "$rendered" | grep -q 'name: readmodel-export' || fail "rendered Deployment has no readmodel-export initContainer (read model の供給経路が無い。ADR-0412)"
+if printf '%s\n' "$rendered" | grep -Eq '^kind: (ConfigMap|Secret)$'; then
+  fail "GitOps overlay must not render a ConfigMap or Secret (read model は initContainer で作る。ADR-0002・ADR-0412)"
+fi
+
 if [ "$mode" = "template" ]; then
   echo "$SERVICE GitOps template: valid"
   exit 0
+fi
+
+# 手動 overlay(local-readmodel)が生きている Deployment に残っていたら Argo CD と取り合う(ADR-0412 §5)。
+# クラスタに届かないときは検査しない。
+live_annotations=$(kubectl --context "k3d-${CLUSTER:-pokecalc}" -n pokecalc get deployment "$SERVICE" -o jsonpath='{.spec.template.metadata.annotations}' 2>/dev/null || true)
+case "$live_annotations" in
+  *readmodel-hash*) fail "live Deployment has the local-readmodel annotation pokecalc.example/readmodel-hash (手動 overlay の上書きが残っている。argocd app sync pokecalc-$SERVICE で gitops overlay に戻す)" ;;
+esac
+
+if [ "$pokedex_digest" = "sha256:0000000000000000000000000000000000000000000000000000000000000000" ]; then
+  fail "pokedex image digest placeholder has not been replaced (make pokedex-registry-push の digest を書く。ADR-0412)"
 fi
 
 case "$repo_url" in

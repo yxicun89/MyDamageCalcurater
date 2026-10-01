@@ -78,11 +78,23 @@ make balance-argocd-app
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 digest=$(make -s balance-registry-push 2>/dev/null | tail -1 | sed 's/.*@//')
-sed -i '' "s/digest: .*/digest: ${digest}/" services/balance/deploy/k8s/overlays/gitops/kustomization.yaml
+# digest 行は images に2つある(pokecalc/balance と pokecalc/pokedex)。name ごとの範囲で本体の行だけを書き換える。
+sed -i '' "/name: pokecalc\/balance$/,/digest:/ s/digest: .*/digest: ${digest}/" services/balance/deploy/k8s/overlays/gitops/kustomization.yaml
 git diff services/balance/deploy/k8s/overlays/gitops/kustomization.yaml
 ```
 確認: diff の `digest:` が `sha256:` で始まる値に変わる(変わらなければ同じイメージなので、7 と 8 は不要)。
 この変更をブランチに commit し、PR で main に入れる。
+
+### read model(initContainer)と pokedex image の digest(issue #237・ADR-0412)
+
+- gitops overlay の Deployment は、initContainer `readmodel-export`(pokedex image の `export -out`)で read model を `emptyDir` に作り、
+  本体は読み取り専用でマウントして読む。ConfigMap は使わない。DSN は Secret `mysql-auth` の `pokedex-reader-dsn`(SELECT のみ)で、initContainer だけに渡す。
+- **Argo CD 有効時は手動 apply しない**。`make balance-k3d-deploy-readmodel` は Application が在ると既定で拒否する
+  (意図して上書きするときだけ `ALLOW_MANUAL_OVERLAY=1`。戻すときは `argocd app sync pokecalc-balance`)。
+- pokedex image の digest は `make pokedex-registry-push`(共有クラスタへは `POKEDEX_REGISTRY_PUSH_CONFIRM=1` が要る。人間の確認のもとで)の
+  出力を使い、`kustomization.yaml` の `name: pokecalc/pokedex` の `digest:` に書く。全0のままだと `balance-gitops-check`(ready)が失敗する。
+- **前提: NetworkPolicy(`allow-mysql-ingress.yaml`)の承認・適用と pokedex の実 digest の確定が済むまで、balance を sync しない。**
+- initContainer が MySQL に届くには NetworkPolicy の許可が要る(`deploy/k8s/base/networkpolicy/allow-mysql-ingress.yaml`)。共有 base なので別 PR・人間確認(ADR-0412 §4)。
 
 ## 7. 同期する(main に入った後)
 

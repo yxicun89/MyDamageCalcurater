@@ -3,7 +3,13 @@ kind: Kustomization
 namespace: pokecalc
 resources:
   - ../../base
+patches:
+  - path: deployment-readmodel-patch.yaml
 images:
   - name: pokecalc/speed
     newName: localhost:5000/pokecalc/speed
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  # read model を作る initContainer 用の pokedex image(ADR-0412)。digest は make pokedex-registry-push の出力で置き換える。
+  - name: pokecalc/pokedex
+    newName: localhost:5000/pokecalc/pokedex
     digest: sha256:0000000000000000000000000000000000000000000000000000000000000000

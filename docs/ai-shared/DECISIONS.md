@@ -2025,3 +2025,11 @@ Impact: Web レーンは文言・再送の上限・再試行の扱いを揃え�
 Decision: Web の既定の計算モードを「オンライン」にする(ADR-0301 §4 の「既定はオフライン」を変更)。オンラインで取得したマスタ(持ち物・性格・解決した種族/特性/技)を IndexedDB に保存し、オフライン(WASM)はそのキャッシュだけから読む。保存済みのモード(localStorage)は従来どおり尊重する。
 Reason: 既定のオフラインは架空の例データしか持たず、実データで計算するには毎回オンラインへ切り替えが要った。実データのビルド同梱は ADR-0002 に反する。
 Impact: Web のみ(`web/src/master/cache/`・`main.tsx`・`calcMode.ts`・E2E 設定)。API・engine・iOS は無変更。オフラインで引ける種族は一度オンラインで選んだものに限り、持ち物の候補比較はオフラインでも選べない(公開 API に効果データが無い)。
+
+
+## 2026-10-02: 一括計算の defenderOverride に ranks・status を足した(API レーン → Web・iOS レーンへ。issue #274/#272・ADR-0216)
+
+- `BulkCalcRequest.defenderOverride` は `{ abilityId?, ranks?: RankBlock, status?: StatusCondition }`。全行(全プリセット × 持ち物 × 特性)に一律で当たる。ランクは各 -6..+6(外は 400 `invalid_input`)、未知の status は 400 `invalid_enum`
+- 防御側の status は現状のダメージ式に効かない(結果は変わらない。ADR-0216 §3)。UI で選ばせるなら、その旨を注記するか、式が対応するまで出さない判断をレーン側で行う
+- iOS の生成物(`Types+Components+Schemas.swift`)は API レーンで再生成済み(`make ios-gen-check` 緑)。Web の `openapi.gen.ts` も再生成済み
+- 逆算(`ReverseRequest`)には足していない(既知の側は `known.ranks` / `known.status`。`defenderOverride` を送ると 400 `unknown_field` のまま)

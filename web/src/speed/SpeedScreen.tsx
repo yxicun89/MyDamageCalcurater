@@ -14,6 +14,8 @@
 //     契約上 400 invalid_request になるため)。
 
 import { useEffect, useId, useState, type ReactNode } from "react";
+import { MIN_RANK, MAX_RANK } from "../domain/calcConditions";
+import { MAX_SP_PER_STAT } from "../domain/requests";
 import { speedPresetText, speedScreenText } from "../i18n/ja";
 import "./SpeedScreen.css";
 import type { components } from "./speed.gen";
@@ -101,11 +103,60 @@ function initialSelfState(): SelfState {
   };
 }
 
+/** 入力欄ごとの範囲外メッセージ(無ければ範囲内)。送信前に画面で止めるための検査(issue 307)。 */
+interface FieldErrors {
+  readonly sp?: string;
+  readonly rank?: string;
+  readonly raw?: string;
+}
+
+/**
+ * 今の mode で使う入力欄だけを検査する(判定画面 JudgeScreen の validationMessage と同じ規則: SP 0〜32、
+ * ランク -6〜+6、整数)。空欄の扱い:
+ *   - custom の SP・ランクは onChange(parseIntOr)が 0 とみなす(従来どおり。欄は 0 に戻り、エラーにしない)。
+ *   - raw の実数値は「未入力」で、呼ばずエラーも出さない。
+ * raw の実数値は契約の minimum(1)・整数だけをここで見る。上限は speed サービスが式から導く値で
+ * 画面に複製しない(契約の説明)ので、超過は API の 400 を日本語にして出す。
+ */
+function validateSelf(self: SelfState): FieldErrors {
+  if (self.mode === "custom") {
+    return {
+      sp:
+        self.sp < 0 || self.sp > MAX_SP_PER_STAT
+          ? speedScreenText.spRangeMessage(MAX_SP_PER_STAT)
+          : undefined,
+      rank:
+        self.rank < MIN_RANK || self.rank > MAX_RANK
+          ? speedScreenText.rankRangeMessage(MIN_RANK, MAX_RANK)
+          : undefined,
+    };
+  }
+  if (self.mode === "raw") {
+    const trimmed = self.rawValue.trim();
+    if (trimmed === "") {
+      return {};
+    }
+    const value = Number(trimmed);
+    return Number.isInteger(value) && value >= 1 ? {} : { raw: speedScreenText.rawRangeMessage };
+  }
+  return {};
+}
+
+/** サーバーの英語 message は出さず、code から日本語にする(未知の code は汎用の文言)。 */
+function errorMessage(error: { readonly code: string }): string {
+  const byCode: Readonly<Record<string, string | undefined>> = speedScreenText.errorByCode;
+  return byCode[error.code] ?? speedScreenText.errorFallback;
+}
+
 /**
  * self の入力から PositionRequest を作る。mode に要らない項目は含めない(契約上 400 invalid_request の
  * ため)。まだ送れない入力(preset/custom はポケモン未選択、raw は未入力・数でない)は null。
  */
 function buildPositionRequest(self: SelfState): Schemas["PositionRequest"] | null {
+  const errors = validateSelf(self);
+  if (errors.sp !== undefined || errors.rank !== undefined || errors.raw !== undefined) {
+    return null;
+  }
   if (self.mode === "preset") {
     if (self.pokemonId === "") {
       return null;
@@ -244,6 +295,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
     setSelf((current) => ({ ...current, ...patch }));
   }
 
+  const fieldErrors = validateSelf(self);
   const request = buildPositionRequest(self);
   const requestKey = request === null ? "" : JSON.stringify(request);
 
@@ -278,6 +330,9 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
   const presetGroupName = useId();
   const natureGroupName = useId();
   const filterMinimumNoticeId = useId();
+  const spErrorId = useId();
+  const rankErrorId = useId();
+  const rawErrorId = useId();
 
   return (
     <div className="speed-screen">
@@ -320,7 +375,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
         )}
         {tableState.status === "error" && (
           <p role="alert" className="speed-screen__error">
-            {tableState.error.message}
+            {errorMessage(tableState.error)}
           </p>
         )}
         {tableState.status === "success" && (
@@ -331,7 +386,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
       <section className="speed-self" aria-label={speedScreenText.selfRegionLabel}>
         {pokemonState.status === "error" && (
           <p role="alert" className="speed-screen__error">
-            {pokemonState.error.message}
+            {errorMessage(pokemonState.error)}
           </p>
         )}
 
@@ -421,12 +476,19 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
                 type="number"
                 aria-label={speedScreenText.spLabel}
                 min={0}
-                max={32}
+                max={MAX_SP_PER_STAT}
+                aria-invalid={fieldErrors.sp !== undefined}
+                aria-describedby={fieldErrors.sp === undefined ? undefined : spErrorId}
                 value={self.sp}
                 onChange={(event) => {
                   updateSelf({ sp: parseIntOr(event.target.value, 0) });
                 }}
               />
+              {fieldErrors.sp !== undefined && (
+                <p id={spErrorId} role="alert" className="speed-screen__error">
+                  {fieldErrors.sp}
+                </p>
+              )}
             </div>
             <div
               role="radiogroup"
@@ -455,13 +517,20 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
               <input
                 type="number"
                 aria-label={speedScreenText.rankLabel}
-                min={-6}
-                max={6}
+                min={MIN_RANK}
+                max={MAX_RANK}
+                aria-invalid={fieldErrors.rank !== undefined}
+                aria-describedby={fieldErrors.rank === undefined ? undefined : rankErrorId}
                 value={self.rank}
                 onChange={(event) => {
                   updateSelf({ rank: parseIntOr(event.target.value, 0) });
                 }}
               />
+              {fieldErrors.rank !== undefined && (
+                <p id={rankErrorId} role="alert" className="speed-screen__error">
+                  {fieldErrors.rank}
+                </p>
+              )}
             </div>
             <label className="speed-self__field">
               <input
@@ -482,11 +551,19 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
             <input
               type="number"
               aria-label={speedScreenText.rawValueLabel}
+              min={1}
+              aria-invalid={fieldErrors.raw !== undefined}
+              aria-describedby={fieldErrors.raw === undefined ? undefined : rawErrorId}
               value={self.rawValue}
               onChange={(event) => {
                 updateSelf({ rawValue: event.target.value });
               }}
             />
+            {fieldErrors.raw !== undefined && (
+              <p id={rawErrorId} role="alert" className="speed-screen__error">
+                {fieldErrors.raw}
+              </p>
+            )}
           </div>
         )}
 
@@ -495,7 +572,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
         )}
         {positionState.status === "error" && (
           <p role="alert" className="speed-screen__error">
-            {positionState.error.message}
+            {errorMessage(positionState.error)}
           </p>
         )}
         {positionState.status === "success" && <PositionResult value={positionState.value} />}
