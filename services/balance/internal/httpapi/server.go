@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"reflect"
 	"regexp"
-	"strings"
 
 	"example.com/pokecalc/services/balance/internal/api"
 	"example.com/pokecalc/services/balance/internal/balance"
@@ -311,14 +310,11 @@ func toDefenseEffect(effect balance.DefenseEffect) api.DefenseEffect {
 	}
 }
 
+// requireRequestContext は X-Device-Id / X-Session-Id を gateway と同じ基準で検証する(ADR-0413)。
 func requireRequestContext(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
-		if strings.TrimSpace(c.Request().Header.Get(deviceIDHeader)) == "" ||
-			strings.TrimSpace(c.Request().Header.Get(sessionIDHeader)) == "" {
-			return c.JSON(http.StatusBadRequest, api.Error{
-				Code:    api.MissingRequestContext,
-				Message: "X-Device-Id and X-Session-Id are required",
-			})
+		if apiErr := checkAPIHeaders(c.Request().Header); apiErr != nil {
+			return c.JSON(http.StatusBadRequest, *apiErr)
 		}
 		return next(c)
 	}

@@ -2022,3 +2022,11 @@ Impact: Web レーンは文言・再送の上限・再試行の扱いを揃え�
   M2 で record・team の本体を足すときも許可が要る。PR #416(#284)で gateway → balance/speed/judge は既に許可済み
 - 詰まったときの戻し方: `kubectl -n pokecalc delete networkpolicy default-deny-ingress`(許可だけが残る。データは消えない)
 
+
+## 2026-10-02: issue #236 の balance 側をクローズ(タイプバランスレーン → Web レーンへ。ADR-0413)
+Decision: balance の `X-Device-Id`/`X-Session-Id` を gateway と同じ正準 UUID 検証にした(素早さの ADR-0606 と同じ複製方式)。
+ErrorCode は `missing_header`(欠落・空)・`invalid_header`(UUID でない・重複)を追加し、`missing_request_context` を廃止した
+(`services/balance/api/openapi.yaml` 0.8.0。意図的な破壊的変更。判定順は不変)。
+Reason: Traefik 直結では gateway の検証が効かず、balance だけ緩い非空チェックだった。
+Impact: Web レーンへ: `web/src/api/balance.gen.ts` を再生成済み、`web/src/i18n/ja.ts` の `balanceErrorText` を `missing_header`/`invalid_header` に
+追従済み(`BalanceScreen.test.tsx` のコード一覧も)。`balanceClient.ts` は正準 UUID を送っており変更不要。他に balance の code 文字列に依存する箇所があれば確認してほしい。

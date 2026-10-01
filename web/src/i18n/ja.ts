@@ -260,7 +260,8 @@ export const balanceClientText = {
  * 内部メッセージ)を出さず、コードからここを引く。Web 側の balance_unavailable も同じ表で引く。
  */
 export const balanceErrorText = {
-  missing_request_context: "端末の情報を送れませんでした。ページを開き直してください",
+  missing_header: "端末の情報を送れませんでした。ページを開き直してください",
+  invalid_header: "端末の情報が正しくありません。ページを開き直してください",
   invalid_request: "リクエストが正しくありません。入力を見直してください",
   request_too_large: "入力が大きすぎます。メンバーや技を減らしてください",
   unknown_pokemon: "選んだポケモンがサーバーのマスタにありません。選び直してください",

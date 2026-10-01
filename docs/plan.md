@@ -1269,3 +1269,6 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
       (`web/src/app/withOnlineMaster.tsx`。読めなければ日本語の案内と再試行)。balance のエラーはコードを日本語の文言に写像し、
       英語の message を出さない(`balanceErrorText`)。ヘッダーの切替の名前を「ダメージ計算の実行場所」に変更。契約・生成物の変更なし。
       判定のエラー補助行(サーバー message)は未対応(別 issue 候補)
+- [x] issue #236 の balance 分(担当: タイプバランス。ADR-0413): `X-Device-Id`/`X-Session-Id` を gateway と同じ正準 UUID 検証に揃えた
+      (`services/balance/internal/httpapi/requestctx.go`。素早さの ADR-0606 を踏襲)。ErrorCode に `missing_header`/`invalid_header` を追加し
+      `missing_request_context` を廃止(openapi 0.8.0・破壊的変更)。`balance.gen.ts` 再生成、`balanceErrorText` 追従。judge 分は判定レーン
