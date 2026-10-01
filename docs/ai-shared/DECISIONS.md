@@ -2040,3 +2040,12 @@ Reason: 既定案 A は変更が小さく、版を上げる PR でハッシュ�
 Impact: 版を上げる PR は config.json の `integrity` も更新する(不一致のときは stderr の実際のハッシュを、内容を確かめたうえで反映)。
 却下案 B(dist の vendoring)・C(現状維持)に変えるなら ADR-0101 追記と config.json の integrity を戻す。
 ユーザーの確認待ち: A でよいか(特に、期限切れの引き渡しを無視する TTL 7200 秒の扱い)。
+
+## 2026-10-02: issue #236 の judge 分を API レーンが実施(ADR-0219)
+Decision: #236 の judge 分を API レーンが実施した(判定レーンの範囲。判定レーンは #457/#480 と衝突する場合は取り込みで解消)。
+judge の `X-Device-Id`/`X-Session-Id` 検証を gateway・speed と同じ判定(欠落・空 → 400 `missing_header`、非正準 UUID・重複 →
+400 `invalid_header`)にし、複製方式(`requestctx.go`)で実装した。judge の openapi は 0.2.0 で `Error.code` に両 code を追加。
+judge は非 UUID を calc-svc・pokedex-svc へ転送しなくなった。balance 分は PR #458(ADR-0413)に委ねた。
+Reason: Traefik 直結のため gateway の検証が効かず、judge は非空チェックだけで ID をそのまま上流へ転送していた。
+Impact(Web レーンへ連絡): `web/src/judge/judge.gen.ts` を再生成し、`judgeErrorText`(`web/src/i18n/ja.ts`)に
+`missing_header`・`invalid_header` の文言を追加した(additive。既存キーは不変)。Web の通常操作は正準 UUID を送るため挙動は不変。

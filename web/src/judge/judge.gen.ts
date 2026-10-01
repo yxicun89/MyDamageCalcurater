@@ -460,7 +460,9 @@ export interface components {
     /**
      * @description エラーの区分。judge は上流の事情(HTTP のステータス・接続エラーの文面・URL)をそのまま返さず、
      *     ADR-0700 §3・ADR-0701 §6 の対応表でこの列挙に畳む。
-     *     invalid_request: ヘッダー・request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
+     *     missing_header: X-Device-Id / X-Session-Id が無い・空(ADR-0219。gateway と同じ判定)。
+     *     invalid_header: X-Device-Id / X-Session-Id が正準形 UUID でない、または同名ヘッダが重複している(ADR-0219)。
+     *     invalid_request: request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
      *     unknown_species: speciesKey が pokedex-svc のマスタに無い。
      *     unknown_move: moveId が pokedex-svc の技のマスタに無い(攻撃側・候補側のどちらも。ADR-0704 §6)。
      *     unknown_nature: natureId が性格の一覧に無い。
@@ -470,6 +472,8 @@ export interface components {
      * @enum {string}
      */
     ErrorCode:
+      | "missing_header"
+      | "invalid_header"
       | "invalid_request"
       | "unknown_species"
       | "unknown_move"
@@ -480,7 +484,17 @@ export interface components {
   };
   responses: never;
   parameters: {
+    /**
+     * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+     *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+     *     the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+     */
     DeviceId: string;
+    /**
+     * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+     *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+     *     the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+     */
     SessionId: string;
   };
   requestBodies: never;
@@ -533,7 +547,17 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+         */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -555,7 +579,8 @@ export interface operations {
         };
       };
       /**
-       * @description X-Device-Id / X-Session-Id が無い・空、body が 1 つの JSON オブジェクトでない・未知の欄がある、
+       * @description X-Device-Id / X-Session-Id が無い・空(missing_header)、正準形 UUID でない・重複(invalid_header。ADR-0219)、
+       *     body が 1 つの JSON オブジェクトでない・未知の欄がある、
        *     必須の欄が無い(候補の moveId を含む)、defenders が 1 件未満・6 件超、sp / ranks / format が範囲外、
        *     または calc-svc が計算要求を受け付けなかった(invalid_request。ADR-0701 §6・ADR-0703 §4)
        */

@@ -465,6 +465,8 @@ export const judgeClientText = {
  * この見出しとは別に、補助の行として画面が出す。未知のコードは message だけを出す。
  */
 export const judgeErrorText = {
+  missing_header: "端末の情報を送れませんでした。ページを開き直してください",
+  invalid_header: "端末の情報が正しくありません。ページを開き直してください",
   invalid_request: "入力の形が正しくありません",
   unknown_species: "このポケモンはマスタにありません",
   unknown_move: "この技の ID はマスタにありません",
