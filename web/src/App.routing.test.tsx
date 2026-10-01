@@ -9,6 +9,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "./App";
+import { teamScreenText } from "./i18n/ja";
 import type { MasterData, MasterSource } from "./master/types";
 import { createFakeEngine } from "./test/fakeEngine";
 
@@ -300,5 +301,41 @@ describe("JD5 判定のタブ", () => {
     expect(window.location.pathname).toBe("/judge");
     expect(pushSpy).toHaveBeenCalledTimes(1);
     expect(await screen.findByRole("region", { name: "自分のポケモン" })).toBeInTheDocument();
+  });
+});
+
+// P5-5 PR-A1(ADR-0309 §1): 構築ビルダー。ルート表に1件足し、タブ「構築」と /team で開く。
+// 画面はマウント時に構築の一覧(GET /api/team/teams)を1回だけ呼ぶ(ADR-0309 §4)。
+describe("P5-5 構築のタブ", () => {
+  test("タブ「構築」があり、/team を直接開くと選択され、構築の領域と一覧の呼び出しが出る", async () => {
+    // team-svc は居ないので通信は失敗させる(画面はそれでも壊れない。ADR-0309 §4)。
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    setPath("/team");
+    render(<App engine={createFakeEngine()} />);
+
+    expect(await screen.findByRole("tab", { name: "構築" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "計算" })).toHaveAttribute("aria-selected", "false");
+    expect(await screen.findByRole("region", { name: teamScreenText.regionLabel })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/team");
+    expect(document.title).toBe("構築 | pokecalc");
+
+    await waitFor(() => {
+      // クライアントは文字列の URL で呼ぶ(team/teamClient.ts)。端末 ID はパスに入れない。
+      const requested = fetchSpy.mock.calls.flatMap(([url]) => (typeof url === "string" ? [url] : []));
+      expect(requested).toContain("/api/team/teams");
+    });
+  });
+
+  test("構築のタブのクリックで /team を pushState し、画面を切り替える", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    const user = userEvent.setup();
+    render(<App engine={createFakeEngine()} />);
+    await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
+    const pushSpy = vi.spyOn(window.history, "pushState");
+
+    await user.click(screen.getByRole("tab", { name: "構築" }));
+    expect(window.location.pathname).toBe("/team");
+    expect(pushSpy).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole("region", { name: teamScreenText.regionLabel })).toBeInTheDocument();
   });
 });

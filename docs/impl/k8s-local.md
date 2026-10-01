@@ -2,6 +2,9 @@
 
 - 基準: `origin/main` 3379b03 取り込み後。実クラスタの状態は 2026-09-24 に `kubectl get` で読み取り(変更なし)。
 - 関連: コマンドの実行順は [runbook-commands.md](runbook-commands.md)、DB は [db-mysql.md](db-mysql.md)、Argo CD は `gitops-argocd.md`(C で作成予定)、ワークロードの型・依存は [architecture.md](architecture.md)。
+- 2026-09-25 の ADR-0408(issue #292)でクラスタ内レジストリに PVC `registry-data`(2Gi・`local-path`)が増えた。
+  §9「実クラスタとの差異」・「件数の突き合わせ」は 2026-09-24 時点(この変更の前)の読み取りなので、実クラスタに再適用するまでは
+  マニフェスト(描画)側の PVC 件数だけが先に増えている。
 
 ## 1. 全体像
 
@@ -134,10 +137,11 @@ image は base のタグ → local overlay(および `make *-k3d-deploy`)が `:l
 | ConfigMap | `pokedex-name-overrides`(任意) | 日本語名の上書き JSON | `up.sh:85-89`(`data/local/name_ja_overrides.json` があるときだけ) | CronJob(`optional: true`、`/app/data/local` に mount) |
 | ConfigMap | `balance-pokemon-types-<hash>` `balance-moves-<hash>` `balance-abilities-<hash>` | 架空の例 JSON(local overlay の `configMapGenerator`) | `balance/deploy/k8s/overlays/local` | balance(`BALANCE_*_PATH`) |
 | ConfigMap | `speed-pokemon-<hash>` | 架空の例 JSON | `speed/deploy/k8s/overlays/local` | speed(`SPEED_POKEMON_PATH`) |
-| ConfigMap | `balance-readmodel` | pokedex export の 3 ファイル(実データ由来。Git 管理外) | `balance/scripts/k3d-deploy-readmodel.sh:28` | balance(local-readmodel overlay) |
-| ConfigMap | `speed-readmodel` | pokedex export の speed 用 1 ファイル | `speed/scripts/k3d-deploy-readmodel.sh:30` | speed(local-readmodel overlay) |
+| ConfigMap | `balance-readmodel` | pokedex export の 3 ファイル(実データ由来。Git 管理外) | `scripts/gitops/k3d-deploy-readmodel.sh`(`SERVICE=balance`) | balance(local-readmodel overlay) |
+| ConfigMap | `speed-readmodel` | pokedex export の speed 用 1 ファイル | `scripts/gitops/k3d-deploy-readmodel.sh`(`SERVICE=speed`) | speed(local-readmodel overlay) |
 | PVC | `data-mysql-0` | 1Gi RWO(`volumeClaimTemplates`) | mysql StatefulSet | mysql(`/var/lib/mysql`) |
 | PVC | `pokedex-import-cache` | 2Gi RWO(取得キャッシュ・スナップショット・報告) | `deploy/k8s/base/pokedex/pvc-import-cache.yaml` | CronJob/手動 Job(`/app/data/generated`) |
+| PVC | `registry-data`(namespace `balance-registry`) | 2Gi RWO・`local-path`。push 済み image を永続化(ADR-0408 §3。issue #292) | `services/balance/deploy/local-registry/registry.yaml` | クラスタ内レジストリ(`/var/lib/registry`) |
 
 環境変数の全一覧は [config-env.md](config-env.md)。
 
@@ -164,7 +168,7 @@ services/{balance,speed}/deploy/k8s/overlays/{local,local-readmodel,gitops}   se
 | `services/balance/.../gitops`(3) | `localhost:5000/pokecalc/balance@sha256:…`(digest 固定) | Argo CD(C で扱う) |
 | `services/speed/...` | balance と同型(`local` 4 = +ConfigMap×1、`local-readmodel` 3、`gitops` 3。gitops の digest は現状 `sha256:000…`(未確定プレースホルダ)) | `make speed-k3d-deploy` / `-readmodel` / Argo CD |
 | `services/judge/.../local`(3) | Deployment, Service, Ingress | `make judge-k3d-deploy` |
-| `services/balance/deploy/local-registry`(3) | Namespace, Deployment, Service(registry) | `make balance-registry-apply` |
+| `services/balance/deploy/local-registry`(4) | Namespace, Deployment, Service(registry), PVC `registry-data`(ADR-0408 §3。以前は `emptyDir` で PVC は無かった) | `make balance-registry-apply` |
 | `services/{balance,speed}/deploy/argocd`(各 1) | Application `pokecalc-balance` / `pokecalc-speed` | `make *-argocd-app`(C で扱う) |
 
 Component は `kustomize.config.k8s.io/v1alpha1`(`overlays/local/api`・`overlays/local/web`)。local と local-api/local-web が**同じ patch を共有**するための分割(ADR-0203 追記「apply の分離」)。

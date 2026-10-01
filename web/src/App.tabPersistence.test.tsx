@@ -18,6 +18,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "./App";
+import { teamScreenText } from "./i18n/ja";
 import { exampleMasterSource } from "./master/exampleSource";
 import type { MasterData, MasterSource } from "./master/types";
 import { createFakeEngine } from "./test/fakeEngine";
@@ -84,6 +85,13 @@ function speedCallCount(calls: readonly (readonly [string | URL | Request, ...un
   const urlOf = (input: string | URL | Request): string =>
     input instanceof Request ? input.url : input instanceof URL ? input.href : input;
   return calls.filter(([input]) => urlOf(input).includes("api/speed/")).length;
+}
+
+/** fetch の呼び出しのうち構築 API(api/team/…)のものの件数(P5-5 PR-A1。ADR-0309 §4)。 */
+function teamCallCount(calls: readonly (readonly [string | URL | Request, ...unknown[]])[]): number {
+  const urlOf = (input: string | URL | Request): string =>
+    input instanceof Request ? input.url : input instanceof URL ? input.href : input;
+  return calls.filter(([input]) => urlOf(input).includes("api/team/")).length;
 }
 
 describe("issue #218 タブを往復しても入力が残る(同じマスタで開いている間)", () => {
@@ -175,6 +183,45 @@ describe("issue #218 タブを往復しても入力が残る(同じマスタで�
     simulatePopState("/reverse");
     expect(tabButton("逆算")).toHaveAttribute("aria-selected", "true");
     expect(await screen.findByRole("textbox", { name: "観測1" })).toHaveValue("45");
+  });
+});
+
+// P5-5 PR-A1(ADR-0309 §4): 新しい「構築」のタブも、ADR-0308 の決まりに乗る
+// (訪れるまで mount しない = 構築 API を呼ばない / 往復しても入力が消えない)。
+describe("issue #218 構築のタブも同じ決まりに乗る(P5-5 PR-A1)", () => {
+  test("構築のタブを開くまで構築 API を呼ばない", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    const user = userEvent.setup();
+    render(<App engine={createFakeEngine()} />);
+    await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
+
+    await user.click(tabButton("逆算"));
+    await screen.findByRole("combobox", { name: "自分のポケモン" });
+
+    expect(teamCallCount(fetchMock.mock.calls)).toBe(0);
+  });
+
+  test("構築名の入力は、計算タブへ行って戻っても残り、構築 API を呼び直さない", async () => {
+    // team-svc は居ないので一覧は失敗するが、新規作成の入力は先に使える(ADR-0309 §4)。
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    const user = userEvent.setup();
+    render(<App engine={createFakeEngine()} />);
+    await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
+
+    await user.click(tabButton("構築"));
+    const nameField = await screen.findByRole("textbox", { name: teamScreenText.nameLabel });
+    await user.type(nameField, "テスト構築C");
+    await waitFor(() => {
+      expect(teamCallCount(fetchMock.mock.calls)).toBeGreaterThan(0);
+    });
+    const callsAfterFirstVisit = teamCallCount(fetchMock.mock.calls);
+
+    await user.click(tabButton("計算"));
+    await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
+    await user.click(tabButton("構築"));
+
+    expect(await screen.findByRole("textbox", { name: teamScreenText.nameLabel })).toHaveValue("テスト構築C");
+    expect(teamCallCount(fetchMock.mock.calls)).toBe(callsAfterFirstVisit);
   });
 });
 

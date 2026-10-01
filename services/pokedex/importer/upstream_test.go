@@ -118,6 +118,24 @@ func TestCompareUpstreamStaleResultIsUnknown(t *testing.T) {
 	}
 }
 
+func TestCompareUpstreamFutureCheckedAtIsUnknown(t *testing.T) {
+	latest, err := importer.DecodeUpstreamLatest([]byte(validUpstream)) // checkedAt 2026-09-26T03:00:00Z
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinned := map[string]string{"calc": "test-calc-1", "showdown": pinnedShowdown}
+	// 未来の checkedAt(1年前に戻った時計で比べる)は経過時間が負になる。fresh と扱わず unknown(stale)にする(issue #75)。
+	got := importer.CompareUpstream(pinned, latest, time.Date(2025, 9, 26, 3, 0, 0, 0, time.UTC), 24*time.Hour)
+	if len(got) != 2 {
+		t.Fatalf("件数 %d: %+v", len(got), got)
+	}
+	for _, g := range got {
+		if g.State != importer.UpstreamUnknown || !strings.Contains(g.Detail, "stale") {
+			t.Errorf("未来の検出結果が unknown(stale)になっていない: %+v", g)
+		}
+	}
+}
+
 func TestFormatUpstream(t *testing.T) {
 	statuses := []importer.UpstreamStatus{
 		{Source: "calc", Pinned: "test-calc-1", Latest: "test-calc-1", State: importer.UpstreamSame},

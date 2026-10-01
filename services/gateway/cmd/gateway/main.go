@@ -6,6 +6,10 @@
 //	GATEWAY_CALC_URL              calc-svc の基底 URL。必須
 //	GATEWAY_POKEDEX_URL           pokedex-svc の基底 URL。任意(未設定なら /api/pokedex/* は 503)
 //	GATEWAY_RECORD_URL            record-svc の基底 URL。任意(未設定なら /api/record/* は 503。ADR-0209 §10)
+//	GATEWAY_TEAM_URL              team-svc の基底 URL。任意(未設定なら /api/team/* は 503。ADR-0213)
+//	GATEWAY_BALANCE_URL           balance-svc の基底 URL。任意(未設定なら /api/balance/* は 503。issue #284)
+//	GATEWAY_SPEED_URL             speed-svc の基底 URL。任意(未設定なら /api/speed/* は 503。issue #284)
+//	GATEWAY_JUDGE_URL             judge-svc の基底 URL。任意(未設定なら /api/judge/* は 503。issue #284)
 //	GATEWAY_ASSETS_URL            画像配信の基底 URL。任意(未設定なら /assets/* は 404)
 //	GATEWAY_WEB_URL               Web の静的配信の基底 URL。任意(設定時は予約パス以外の GET / HEAD を転送。ADR-0205)
 //	GATEWAY_CORS_ALLOWED_ORIGINS  カンマ区切りの許可オリジン(完全一致)。任意。"*" は起動エラー
@@ -34,6 +38,10 @@ const (
 	envCalcURL            = "GATEWAY_CALC_URL"
 	envPokedexURL         = "GATEWAY_POKEDEX_URL"
 	envRecordURL          = "GATEWAY_RECORD_URL"
+	envTeamURL            = "GATEWAY_TEAM_URL"
+	envBalanceURL         = "GATEWAY_BALANCE_URL"
+	envSpeedURL           = "GATEWAY_SPEED_URL"
+	envJudgeURL           = "GATEWAY_JUDGE_URL"
 	envAssetsURL          = "GATEWAY_ASSETS_URL"
 	envCORSAllowedOrigins = "GATEWAY_CORS_ALLOWED_ORIGINS"
 	envUpstreamTimeout    = "GATEWAY_UPSTREAM_TIMEOUT"
@@ -96,6 +104,38 @@ func loadConfig(lookup func(string) (string, bool)) (config, error) {
 		}
 	}
 
+	var team *url.URL
+	if raw, ok := lookup(envTeamURL); ok && raw != "" {
+		team, err = parseUpstreamURL(raw)
+		if err != nil {
+			return config{}, fmt.Errorf("%w: %s が不正: %v", errInvalidConfig, envTeamURL, err)
+		}
+	}
+
+	var balance *url.URL
+	if raw, ok := lookup(envBalanceURL); ok && raw != "" {
+		balance, err = parseUpstreamURL(raw)
+		if err != nil {
+			return config{}, fmt.Errorf("%w: %s が不正: %v", errInvalidConfig, envBalanceURL, err)
+		}
+	}
+
+	var speed *url.URL
+	if raw, ok := lookup(envSpeedURL); ok && raw != "" {
+		speed, err = parseUpstreamURL(raw)
+		if err != nil {
+			return config{}, fmt.Errorf("%w: %s が不正: %v", errInvalidConfig, envSpeedURL, err)
+		}
+	}
+
+	var judge *url.URL
+	if raw, ok := lookup(envJudgeURL); ok && raw != "" {
+		judge, err = parseUpstreamURL(raw)
+		if err != nil {
+			return config{}, fmt.Errorf("%w: %s が不正: %v", errInvalidConfig, envJudgeURL, err)
+		}
+	}
+
 	var assets *url.URL
 	if raw, ok := lookup(envAssetsURL); ok && raw != "" {
 		assets, err = parseUpstreamURL(raw)
@@ -141,6 +181,10 @@ func loadConfig(lookup func(string) (string, bool)) (config, error) {
 			CalcURL:            calc,
 			PokedexURL:         pokedex,
 			RecordURL:          record,
+			TeamURL:            team,
+			BalanceURL:         balance,
+			SpeedURL:           speed,
+			JudgeURL:           judge,
 			AssetsURL:          assets,
 			WebURL:             web,
 			CORSAllowedOrigins: origins,

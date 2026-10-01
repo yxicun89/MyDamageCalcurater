@@ -1,0 +1,20 @@
+CREATE TABLE team_members (
+  team_id     VARCHAR(36) NOT NULL,
+  slot        INT NOT NULL,
+  device_id   VARCHAR(36) NOT NULL,
+  species_key VARCHAR(16) NOT NULL,
+  nickname    VARCHAR(24) NULL,
+  move_ids    JSON NOT NULL,
+  item_id     VARCHAR(64) NULL,
+  ability_id  VARCHAR(64) NULL,
+  nature_id   VARCHAR(64) NOT NULL,
+  sp_hp       INT NOT NULL,
+  sp_atk      INT NOT NULL,
+  sp_def      INT NOT NULL,
+  sp_spa      INT NOT NULL,
+  sp_spd      INT NOT NULL,
+  sp_spe      INT NOT NULL,
+  tera_type   VARCHAR(16) NULL,
+  PRIMARY KEY (team_id, slot),
+  KEY idx_team_members_device_id (device_id)
+);

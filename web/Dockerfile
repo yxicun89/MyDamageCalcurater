@@ -34,6 +34,7 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:1.31.6-alpine@sha256:e75f89810bf5bfbcf58a1cfb32a1a11de55b7623d732e67735d513b720d7436a
 
 COPY web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY web/security-headers.conf /etc/nginx/security-headers.conf
 COPY --from=build /src/web/dist /usr/share/nginx/html
 
 USER 101

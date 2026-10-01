@@ -212,8 +212,14 @@ gateway に `DELETE /api/me/data` のような1本を置いて fan-out させる
 > 一覧を返す既存操作の命名 `listNatures` と `/api/pokedex/natures` の形に揃えた。返すのは `speciesKey`・
 > スコア・件数・最終計算時刻だけで、名前・タイプは pokedex-svc から引く = 絶対ルール4)。
 >
-> **team の分(`DELETE /api/team/device-data`・`TeamDeletionResult`・`team` タグ)は未移動**で、
-> 正は引き続きこの節。P5-4 で移すこと。
+> **移動済み(team の分。2026-09-25。P5-4)**: `DELETE /api/team/device-data`・`TeamDeletionResult`・
+> top-level の `team` タグも **`api/openapi.yaml` に移した。正はそちら**。以下の team 側の YAML も
+> 移す前の記録として残すだけで、差異が出たら openapi.yaml が正。
+> あわせて、この ADR には形の無かった構築の CRUD
+> (`GET/POST /api/team/teams`・`GET/PUT/DELETE /api/team/teams/{teamId}`)と
+> `TeamId` / `TeamMember` / `TeamInput` / `Team` のスキーマを **ADR-0213** で決めて追加した
+> (リソース設計・マスタ照合をしない判断・Showdown 形式をクライアント担当にする判断はそちら)。
+> これで §5.3 の移植は record・team とも完了し、この節は履歴としてだけ残る。
 
 ```yaml
   /api/record/device-data:
@@ -452,7 +458,10 @@ openapi.yaml に移した時点で §5.3 を「移動済み(正は `api/openapi.
   (2026-09-25 追記: P5-3 時点の record の契約にはリソース ID をパスで受ける操作が無い〈集計と全削除だけ〉ため、
   record 側にこの AC を直接試せる操作が無い。代わりに「record の操作にパスパラメータが無い」ことを契約から
   固定し〈`TestRecordOperationsHaveNoPathParameters`〉、増えたときに落ちるようにしてある。
-  実操作での検証は team-svc〈P5-4〉と、record にお気に入りの CRUD を足すときに行う。)
+  実操作での検証は team-svc〈P5-4〉と、record にお気に入りの CRUD を足すときに行う。
+  **2026-09-25 追記(P5-4)**: team-svc の `/api/team/teams/{teamId}` が実操作での検証を持つ
+  〈`services/team/internal/httpapi/isolation_test.go` の `TestOtherDevicesTeamIsNotFound`〉。
+  ADR-0213 §2 のとおり、持っていない ID は他端末のものか実在しないかを区別せず 404 にする。)
 - **AC-D3** ボディ・クエリに `deviceId` を入れた要求は 400 `unknown_field`。ヘッダの端末 ID を上書きできない。
 - **AC-D4** ヘッダの欠落・不正は gateway で 400 `missing_header` / `invalid_header`(ADR-0202 §4 の再確認)。
 - **AC-D5** 「よく使う相手」の集計に他端末のイベントが混ざらない(A で 10 件、B で 1 件作り、B の集計が 1 件分だけを反映)。

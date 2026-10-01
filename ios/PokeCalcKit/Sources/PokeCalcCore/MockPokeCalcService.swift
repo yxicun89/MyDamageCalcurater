@@ -98,7 +98,11 @@ public struct MockPokeCalcService: PokeCalcService {
             throw Self.notFoundError("種族", request.defender.speciesKey)
         }
         let category = try Self.domainMoveCategory(move.category)
-        return try cannedResult(forKey: Self.singleResultKey, category: category)
+        var result = try cannedResult(forKey: Self.singleResultKey, category: category)
+        result.unsupported = try Self.moveMarks(move, category: category)
+            + [itemMark(itemId: request.attacker.itemId, target: .attackerItem)].compactMap { $0 }
+            + [itemMark(itemId: request.defender.itemId, target: .defenderItem)].compactMap { $0 }
+        return result
     }
 
     public func calcBulk(_ request: BulkCalcRequest) async throws -> BulkCalcResult {
@@ -116,15 +120,20 @@ public struct MockPokeCalcService: PokeCalcService {
         // 省略時は「素の1通り」(openapi `BulkCalcRequest.itemVariants` の description)。
         let itemVariants = request.itemVariants.isEmpty ? [String?.none] : request.itemVariants
         let domainNatures = try fixtures.natures.map(Self.domainNature)
+        // 技・攻撃側の持ち物の印は全行共通(ADR-0501「P6-17」4章)。
+        let commonMarks = try Self.moveMarks(move, category: category)
+            + [itemMark(itemId: request.attacker.itemId, target: .attackerItem)].compactMap { $0 }
 
         // 行の順序は「プリセット優先」(presets × itemVariants。plan.md P3-1)。
         var rows: [BulkCalcRow] = []
         for preset in presets {
-            let result = try cannedResult(forKey: preset.rawValue, category: category)
+            let cannedRow = try cannedResult(forKey: preset.rawValue, category: category)
             let stats = try cannedDefenderStats(forKey: preset.rawValue)
             let defender = Self.defenderForRow(preset: preset, natures: domainNatures, stats: stats)
             let label = Self.presetLabel(preset)
             for itemId in itemVariants {
+                var result = cannedRow
+                result.unsupported = commonMarks + [itemMark(itemId: itemId, target: .defenderItem)].compactMap { $0 }
                 rows.append(BulkCalcRow(preset: preset, presetLabel: label, itemId: itemId, defender: defender, result: result))
             }
         }
@@ -215,6 +224,12 @@ public struct MockPokeCalcService: PokeCalcService {
         let assumedHPSP = request.side == .defender ? Self.assumedDefenderHPSP : Self.assumedAttackerHPSP
         let result = try cannedResult(forKey: Self.singleResultKey, category: category)
         let domainNatures = try fixtures.natures.map(Self.domainNature)
+        // 技の印は全候補共通。持ち物は side で既知側・候補側それぞれの target を決める
+        // (side=defender: 既知=攻撃側・候補=防御側、side=attacker: 既知=防御側・候補=攻撃側。ADR-0501「P6-17」4章)。
+        let moveMarksList = try Self.moveMarks(move, category: category)
+        let knownTarget: UnsupportedTarget = request.side == .defender ? .attackerItem : .defenderItem
+        let candidateTarget: UnsupportedTarget = request.side == .defender ? .defenderItem : .attackerItem
+        let knownItemMark = itemMark(itemId: request.known.itemId, target: knownTarget)
 
         // §R1: 候補 = (性格クラス, 持ち物)。空の持ち物候補は「持ち物なし」の1通り。
         let items = request.itemCandidates.isEmpty ? [String?.none] : request.itemCandidates
@@ -223,12 +238,18 @@ public struct MockPokeCalcService: PokeCalcService {
             let nature = Self.representativeNature(for: natureClass, stat: stat)
             let natureId = Self.natureID(for: nature, in: domainNatures)
             for itemId in items {
+                let candidateItemMark = itemMark(itemId: itemId, target: candidateTarget)
+                var attackerItemMark: UnsupportedMark?
+                var defenderItemMark: UnsupportedMark?
+                if knownTarget == .attackerItem { attackerItemMark = knownItemMark } else { defenderItemMark = knownItemMark }
+                if candidateTarget == .attackerItem { attackerItemMark = candidateItemMark } else { defenderItemMark = candidateItemMark }
                 candidates.append(ReverseCandidate(
                     natureClass: natureClass, nature: nature, natureId: natureId, itemId: itemId,
                     ranges: [SPRange(min: Self.minSP, max: Self.maxSP)],
                     spCount: Self.maxSP - Self.minSP + 1,
                     exact: true, mismatch: 0, support: Self.mockSupport,
-                    minPercent: result.minPercent, maxPercent: result.maxPercent
+                    minPercent: result.minPercent, maxPercent: result.maxPercent,
+                    unsupported: moveMarksList + [attackerItemMark, defenderItemMark].compactMap { $0 }
                 ))
             }
         }
@@ -258,6 +279,29 @@ public struct MockPokeCalcService: PokeCalcService {
             let minus: StatKey = stat == .atk ? .spa : .atk
             return NatureModifier(plus: stat, minus: minus)
         }
+    }
+
+    // MARK: - 未対応の印(ADR-0123。ADR-0501「P6-17」4章)
+
+    /// 技の `mechanisms` から `target: move` の印を作る(昇順)。変化技には付けない。
+    /// 未知の値は `fixtureInvalid`(フィクスチャの不整合。ADR-0123 の機構13種のどれかのはず)。
+    private static func moveMarks(_ move: MockFixtures.MoveEntry, category: MoveCategory) throws -> [UnsupportedMark] {
+        guard category != .status, let mechanisms = move.mechanisms else { return [] }
+        return try mechanisms.sorted().map { mechanism in
+            guard let reason = UnsupportedReason(rawValue: mechanism) else {
+                throw PokeCalcError(code: PokeCalcError.Code.fixtureInvalid, message: "未知の mechanism: \(mechanism)")
+            }
+            return UnsupportedMark(target: .move, reason: reason, id: move.id)
+        }
+    }
+
+    /// `itemId` がフィクスチャで `unsupportedEffect: true` なら `target` の印、無ければ nil
+    /// (`itemId` が nil、またはフィクスチャに無い ID のときも nil。持ち物の実在チェックは calc の入力検証の役割ではない)。
+    private func itemMark(itemId: String?, target: UnsupportedTarget) -> UnsupportedMark? {
+        guard let itemId, let entry = fixtures.items.first(where: { $0.id == itemId }), entry.unsupportedEffect == true else {
+            return nil
+        }
+        return UnsupportedMark(target: target, reason: .unsupportedEffect, id: itemId)
     }
 
     // MARK: - 決め打ちの計算結果
