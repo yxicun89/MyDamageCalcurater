@@ -294,7 +294,8 @@ export interface components {
       | "unknown_pokemon"
       | "request_too_large"
       | "master_unavailable"
-      | "internal_error";
+      | "internal_error"
+      | "not_found";
   };
   responses: never;
   parameters: {
