@@ -2040,3 +2040,13 @@ Reason: 既定案 A は変更が小さく、版を上げる PR でハッシュ�
 Impact: 版を上げる PR は config.json の `integrity` も更新する(不一致のときは stderr の実際のハッシュを、内容を確かめたうえで反映)。
 却下案 B(dist の vendoring)・C(現状維持)に変えるなら ADR-0101 追記と config.json の integrity を戻す。
 ユーザーの確認待ち: A でよいか(特に、期限切れの引き渡しを無視する TTL 7200 秒の扱い)。
+
+## 2026-10-03: メガシンカ後の種族に別の持ち物を持たせた計算は 400 になる(API レーン → Web・iOS レーンへ。issue #315 のメガ部分・ADR-0200 §4 追記)
+Decision: calc-svc は、メガシンカ後の種族(`isMega`)に `requiredItemId` 以外の持ち物を持たせた入力を 400 `invalid_input` で拒否する。
+持ち物なし(null・省略)と `requiredItemId` は 200。対象は `/api/calc` の attacker・defender、`/api/calc/bulk` の attacker と
+(防御側がメガ種族のときの)`itemVariants`、`/api/calc/reverse` の known と(推定側がメガ種族のときの)`itemCandidates`。
+Reason: ありえない組合せの結果を黙って返さないため(ユーザー決定 2026-10-03)。
+Impact: Web・iOS は、メガ種族を選んだときの持ち物 UI を requiredItemId(またはなし)に絞るか、400 を表示できるようにする。
+bulk・reverse の候補にメガ種族の別の持ち物を入れると要求全体が 400 になる(除外はしない)。通常種族の応答は変わらない。
+Web のオフライン計算(WASM。`engine/wasmapi`)は種族 DTO が isMega・requiredItemId を持たないため同じ規則が無い(issue #505 で追跡)。
+テラスタイプ(#315 のもう一方)は別作業。

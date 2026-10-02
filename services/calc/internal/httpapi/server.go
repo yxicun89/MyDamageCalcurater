@@ -237,6 +237,12 @@ func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) erro
 	if err := validateIndividual("防御側", defender); err != nil {
 		return err
 	}
+	if err := s.checkMegaItem("攻撃側", attacker.Species, attacker.Item); err != nil {
+		return err
+	}
+	if err := s.checkMegaItem("防御側", defender.Species, defender.Item); err != nil {
+		return err
+	}
 
 	res, err := engine.CalcDamage(engine.DamageInput{
 		Format: format, Attacker: attacker, Defender: defender, Move: move, Field: field,
@@ -297,6 +303,12 @@ func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 		return err
 	}
 	if err := validateIndividual("防御側の種族", engine.Individual{Species: species}); err != nil {
+		return err
+	}
+	if err := s.checkMegaItem("攻撃側", attacker.Species, attacker.Item); err != nil {
+		return err
+	}
+	if err := s.checkMegaItems("itemVariants", species, variants); err != nil {
 		return err
 	}
 	var defenderAbilityOverride *string
@@ -372,6 +384,12 @@ func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) er
 		return err
 	}
 	if err := validateIndividual("推定側の種族", engine.Individual{Species: species}); err != nil {
+		return err
+	}
+	if err := s.checkMegaItem("既知の側", known.Species, known.Item); err != nil {
+		return err
+	}
+	if err := s.checkMegaItems("itemCandidates", species, items); err != nil {
 		return err
 	}
 	maxCandidates := derefInt(req.MaxCandidates)

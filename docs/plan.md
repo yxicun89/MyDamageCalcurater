@@ -277,3 +277,4 @@ requirements.md の項目のうち、計画に無かったものをここに置�
 - [x] issue #113(Web/iOS/APIレーン)入力変更時の古い計算要求を抑止・キャンセルする、のAPIレーン連携分(「クライアントのcancel伝播」)
 - [x] P4-17(Web/APIレーン)技のID解決の欠落を解消(ADR-0304 §3)
 - [x] issue #276
+- [x] issue #315 のメガ部分(API レーン)メガシンカ後の種族に requiredItemId 以外の持ち物を持たせた計算を 400 invalid_input で拒否(ADR-0200 §4 追記。テラスタイプは別作業、WASM 側の規則は未実装で issue #505 で追跡)
