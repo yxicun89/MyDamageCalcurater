@@ -2040,3 +2040,8 @@ Reason: 既定案 A は変更が小さく、版を上げる PR でハッシュ�
 Impact: 版を上げる PR は config.json の `integrity` も更新する(不一致のときは stderr の実際のハッシュを、内容を確かめたうえで反映)。
 却下案 B(dist の vendoring)・C(現状維持)に変えるなら ADR-0101 追記と config.json の integrity を戻す。
 ユーザーの確認待ち: A でよいか(特に、期限切れの引き渡しを無視する TTL 7200 秒の扱い)。
+
+## 2026-10-02: M2 の動作確認に record・team・TiDB・NATS の k3d デプロイが要る(Web レーン → API レーンへ)
+Decision(提案。既定案): `make deploy-latest`(`scripts/k3d-deploy-latest.sh`)の対象に record-svc・team-svc・TiDB・NATS を加えるか、M2 用の別ターゲット(例 `make deploy-latest-m2`)を作る。決めるのは API レーン(デプロイ作業 `feat/api-p5-3b-4b-deploy-expiry` と同じ扱い)。
+Reason: Web の M2 機能(構築ビルダー・よく計算する相手・この端末のデータを削除)は P5-5b〜5d で実装・main 統合(予定)済みだが、k3d にバックエンドが無いので実機の動作確認(`docs/verify-m2.md` §2)ができない。自動テストは fake のバックエンドで確認済み。
+Impact: API レーンがデプロイ対象を決めたら、Web レーンが `docs/verify-m2.md` の前提(冒頭の注記)を直し、§2 を実機で確認する。
