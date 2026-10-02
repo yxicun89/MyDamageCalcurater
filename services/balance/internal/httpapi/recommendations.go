@@ -48,11 +48,7 @@ func recommendations(c *echo.Context, deps Dependencies, slots chan struct{}) er
 	entries := make([]api.ThreatsRequestPokemon, len(request.Members))
 	var hasMoveID, hasAbilityID bool
 	for i, member := range request.Members {
-		entry := api.ThreatsRequestPokemon{
-			PokemonId: member.PokemonId,
-			MoveIds:   member.MoveIds,
-			AbilityId: member.AbilityId,
-		}
+		entry := api.ThreatsRequestPokemon(member)
 		entryHasMoveID, entryHasAbilityID, err := validateThreatsEntry(entry)
 		if err != nil {
 			return badRequest(c, err.Error())

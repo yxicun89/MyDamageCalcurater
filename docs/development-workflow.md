@@ -24,6 +24,7 @@
 リポジトリ内に独立した `.claude/commands/`、MCP 設定、他の hooks 定義は見つからなかった。
 ユーザー領域の Claude 設定・MCP・セッション履歴は今回の調査対象外で、存在しないとは判断しない。
 `docs/plan.md` と Git 履歴から作業を復元する。起動プロンプトがあることは、全手順を実行した証拠ではない。
+`docs/plan.md` には各タスクの1行の状態と未完了の受け入れ条件だけを置き、完了したタスクの経過(critic の往復・テスト件数)と解決済みのブロッカーは `docs/plan-archive.md` に移す。軽微指摘は issue に書き、plan.md には書かない(二重管理しない)。
 
 既存 phase の順序は **scanner → spec → implementer → critic → 必要時に外部 Codex**。
 FAIL は implementer へ戻し、同じ失敗で最大 3 回まで。未解決は `[!]` とブロッカーに残す。

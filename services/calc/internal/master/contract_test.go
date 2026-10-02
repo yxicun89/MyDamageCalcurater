@@ -23,7 +23,7 @@ import (
 // リクエスト(ヘッダ無し)も契約に照らす: 内部 API は端末ID/セッションID を要らない。
 func validateMasterExportResponse(t *testing.T, status int, body []byte) error {
 	t.Helper()
-	doc, err := api.GetSwagger()
+	doc, err := api.GetSpec()
 	if err != nil {
 		t.Fatalf("契約を読めない: %v", err)
 	}

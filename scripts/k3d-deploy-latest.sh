@@ -91,10 +91,17 @@ make --no-print-directory judge-k3d-deploy
 
 missing=0
 if [ -f "$READMODEL_DIR/speed-pokemon.json" ] && [ -f "$READMODEL_DIR/pokemon-types.json" ]; then
-  echo "== balance(read model: $READMODEL_DIR)"
-  make --no-print-directory balance-k3d-deploy-readmodel BALANCE_READMODEL_DIR="$READMODEL_DIR"
-  echo "== speed(read model: $READMODEL_DIR)"
-  make --no-print-directory speed-k3d-deploy-readmodel SPEED_READMODEL_DIR="$READMODEL_DIR"
+  # Argo CD が管理しているサービス(Application pokecalc-<svc> がある)は手動の overlay で上書きしない
+  # (k3d-deploy-readmodel.sh が拒否する。ADR-0412 §5)。その場合は飛ばして、Argo CD の sync を案内する。
+  for svc in balance speed; do
+    if kubectl -n argocd get applications.argoproj.io "pokecalc-$svc" -o name >/dev/null 2>&1; then
+      echo "== $svc: Argo CD(Application pokecalc-$svc)が管理しているので飛ばす。最新にするには docs/runbooks/$svc.md の Argo CD の sync" >&2
+      continue
+    fi
+    svc_upper=$(printf '%s' "$svc" | tr '[:lower:]' '[:upper:]')
+    echo "== $svc(read model: $READMODEL_DIR)"
+    make --no-print-directory "$svc-k3d-deploy-readmodel" "${svc_upper}_READMODEL_DIR=$READMODEL_DIR"
+  done
 else
   missing=1
   echo "deploy-latest: $READMODEL_DIR に read model が無いので balance・speed は入れ替えていない。" >&2
