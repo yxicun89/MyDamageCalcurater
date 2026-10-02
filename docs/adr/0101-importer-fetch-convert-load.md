@@ -328,3 +328,61 @@ func Run(ctx context.Context, db *sql.DB, out Output, versions []SourceVersion, 
 1. **効果定義ファイル `data/importer/effects.json` をコミットする** → 確定(コミットする。英語 ID と 4096 基準の整数だけ。testdata/golden/effects.json と同じ扱い)。
 2. **日本語名の言語の優先順** → 確定(`ja` → `ja-Hrkt`。ADR-0002 決定2 の暫定案どおり。§6 を参照。`config.json` の並びで変えられる)。
 3. **`data/importer/regulations.json` の日本語のレギュレーション名(例「レギュレーション M-C」相当)をコミットする** → 確定(コミットする。ゲームの固有表現ではなく利用者のラベルとして扱う)。
+
+## 追記 2026-10-01: 取得物の内容ハッシュによる照合と、取得段・投入段のコンテナ分離(issue #222 案A・#301。D19)
+
+### 背景
+
+取得段(Node)は第三者のコードを実行する(Showdown の `npm ci` の install スクリプトと `node build`)。
+sha256 は `meta.json` に記録するだけで期待値と照合せず、PokeAPI の CSV も同様だった。CronJob は取得と、DB の資格情報
+(Secret `mysql-auth` の `pokedex-importer-dsn`)を持つ投入を同じコンテナで行っていた。
+
+### 決定(#222 は needs-decision だが、深夜のため既定案 A で進めた。ユーザー確認待ち。DECISIONS.md 参照)
+
+1. **内容ハッシュで pin する**。`data/importer/config.json` の `integrity` に期待値を持つ(commit の pin と同じ運用。版を上げる PR でハッシュも更新する)。
+   - `integrity.showdown.treeSha256`: tarball のバイト列でなく**展開後のファイル木**のハッシュ。GitHub の tar.gz は同じ commit でも
+     gzip の差でバイト列が変わりうるため。計算は `tools/importer/integrity.mjs` の `hashFileTree`: 通常ファイルごとに
+     `<内容の sha256 の16進小文字>  <ルートからの相対パス(/ 区切り)>\n` の行を作り、相対パス全体の文字列(コードユニット順)で並べて連結し、
+     その sha256 を取る。ディレクトリ・実行ビット・時刻・所有者は見ない。シンボリックリンクは辿らず、リンク先の文字列に対する
+     `sha256("symlink:" + target)` を内容の列に入れる。
+   - `integrity.pokeapi.csvSha256`: 取得する CSV ファイル名 → 内容(バイト列)の sha256。
+   - Go 側の `Config.Integrity` は形(64桁の16進)の検証だけを行う。照合は Node が行う。
+2. **照合の位置は、第三者のコードを実行する前・解析する前**。Showdown は展開直後・`npm ci` の前、PokeAPI は取得(またはキャッシュ読み込み)直後・CSV 解析の前。
+   キャッシュ済みでも毎回照合する(PokeAPI)/ config の期待値が変わったら再検証する(Showdown。一致しない展開済みの `src/` は消して使わせない)。
+3. **不一致・期待値が無い・形式不正は fail closed**。取得を止め、実際のハッシュを stderr に出し、終了コード 3(人間対応。ADR-0104 §3)で終わる。
+   人は内容を確かめたうえで config を更新する PR を出す。tarball のハッシュの `meta.json` への記録は自己整合(キャッシュ破損の検出。ADR-0113)として残す。
+4. **`npm ci --ignore-scripts`** を取得段・Dockerfile の importer-deps の両方で使う。Showdown の build に install スクリプトが必要なパッケージが
+   あれば、その名前と理由をこの ADR に追記し、必要最小限だけを明示的に許可する。実装時に確認した結果、固定コミット(f10d679)の `node build` は
+   `--ignore-scripts` のままで通った(許可するパッケージは無い)。
+5. **取得段と投入段を同じ Pod の別コンテナに分ける**。CronJob の `fetch`(initContainer。`tools/importer/cronjob.sh fetch`)は DSN・Secret・
+   `envFrom`・名前の上書き ConfigMap のどれも持たず、PVC(`/app/data/generated`)と `/tmp` だけをマウントする。`import`(main。`cronjob.sh import`)だけが
+   DSN を持つ。イメージは同じ(版・up.sh の既定を1つに保つ)。成果物は PVC で渡す。`podFailurePolicy` は両コンテナの終了コード 2・3 を FailJob にする。
+   `cronjob.sh` の引数なしは従来どおり1プロセスで全工程(`make dev`・ロックのテスト用)。
+6. **ロックは flock + 引き渡しファイル**。flock(ADR-0109)は `fetch` の終了で解放され、`import` の開始まで隙間ができる。この隙間に別の Job
+   (手動 Job と定期 Job は `concurrencyPolicy` の対象外)が fetch を始めると、取得キャッシュの書き込みと投入が競合する。そこで:
+   - `fetch` はロック(`flock -n`)の中で、有効な他 Pod の引き渡しがあれば何もせず終了コード 1。無ければ、成功の最後に引き渡しファイル
+     `data/generated/.import.handoff`(`owner=<HOSTNAME = Pod 名>` と `expires=<epoch 秒>` の2行)を書いてからロックを解放する。
+   - `import` はロックを取り(引き渡しを持っているので `flock -n` を1秒間隔で最大 `IMPORT_LOCK_WAIT_SECONDS` 回試す。本番の alpine の BusyBox の flock は `-w` を持たない。`IMPORT_LOCK_WAIT_SECONDS` 既定 60。他の Pod の fetch が引き渡しの確認で
+     一瞬ロックを持つ競合に耐える)、引き渡しファイルの owner が自分であることを確かめてから投入する。違えば終了コード 1(pokedex-import を呼ばない)。
+     待っても取れなければ、owner が自分の引き渡しだけを消して終了コード 1(消さないと期限まで全 Job が止まる)。owner を読んでから rm するまでの間に他 Pod の引き渡しが書かれると消しうるが、相手の import は終了コード 1 になるだけの安全側の失敗。
+     終了時(成功・失敗とも)に、ロックを持ったまま引き渡しファイルを消す。`IMPORT_HANDOFF_TTL_SECONDS` が数値でなければ終了コード 2。
+   - 有効期限(`IMPORT_HANDOFF_TTL_SECONDS`。既定 3600 = `activeDeadlineSeconds`。fetch の成功後に Job が生き続けられる最長なので、これより長く
+     残す理由が無く、これより短いと import の途中で他の Pod が割り込める。SIGKILL・OOM では EXIT trap が走らないので、残る時間の上限もこの値)が切れた引き渡しは、SIGKILL・ノード停止で残った
+     stale として無視する。ADR-0109 §3 の「恒久的な stale lock を残さない」を、有効期限付きで保つ(最長 TTL の間だけ、新しい Job は終了コード 1 で待たされる)。
+   - 順序と意味は変えない: ロック → 容量確認(prune.mjs check。download の前)→ 取得 → 上流の検出(以上 `fetch`)/ 投入(pokedex-import。D12 の
+     `IMPORT_ALLOW_REMOVED` は `import` だけが使う。runbook の `containers[0].env` への追加は `import` のまま有効)→ prune(同じロックの中。D18)(以上 `import`)。
+   - 引数なしを含む全フェーズが、他 Pod の有効な引き渡しを尊重する。
+7. 却下: ビルド済み `dist` のコミット(案B。第三者コードのコミットで ADR-0002 に反する)。現状維持(案C。クラウド移行 #149 の前に塞ぐ)。
+   別 Job への分割(PVC が RWO で2つの Pod の同時マウントに依存せず済む initContainer を採る。1 Pod 内なら引き渡しの隙間が短い)。
+   tarball の sha256 の pin(gzip の差で壊れうる)。
+
+### 限界
+
+- 期待ハッシュは「取得時点の上流が、人が確認した内容と同じ」ことしか保証しない。Showdown の依存(npm)の中身は `package-lock.json` の integrity に任せる。
+- 検証済みの Showdown キャッシュ(`src/`)は毎回は再ハッシュしない。`src.tree-sha256` と期待値の一致だけを見る(PokeAPI の CSV は毎回照合するので非対称)。
+  PVC への書き込み権を持つ者は信頼の境界の内側にいるとみなす。
+- `import`(DSN あり)は `fetch` が PVC に書いた JSON を読む。`fetch` が侵害されると DB の内容は汚染されうる。分離が防ぐのは資格情報の窃取で、
+  データの完全性は Go 側の厳格な検証(strictDecode・整合の確認)に頼る。
+- 未検証の tarball の展開は照合より前に行う(ハッシュはツリーに対して取るため)。リスクは tar の実装・`readOnlyRootFilesystem`・PVC の範囲に限られる。
+- `config.json` の `integrity` は第三者ファイルの sha256 だけでデータではない(ADR-0002 の「版の metadata」にあたり、コミットしてよい)。
+- egress の制限(NetworkPolicy)は別 issue(運用レーン)。取得段が DB に届かないことは資格情報を持たないことで担保し、ネットワーク到達性の遮断は含まない。

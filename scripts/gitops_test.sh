@@ -135,6 +135,7 @@ new_sandbox() {
   local dir="$WORK/sandbox/$1" svc
   mkdir -p "$dir/scripts" "$dir/deploy"
   "$REAL_GIT" -C "$dir" init -q
+  cp "$ROOT/scripts/require-k3d-context.sh" "$dir/scripts/require-k3d-context.sh"
   [ -d "$ROOT/scripts/gitops" ] && cp -R "$ROOT/scripts/gitops" "$dir/scripts/gitops"
   [ -d "$ROOT/deploy/argocd" ] && cp -R "$ROOT/deploy/argocd" "$dir/deploy/argocd"
   for svc in $SERVICES; do
@@ -167,9 +168,20 @@ for a in "\$@"; do
     kustomize|apply|version|get|create|delete|rollout|annotate|port-forward|patch|replace) sub=\$a; break ;;
   esac
 done
+case "\$*" in
+  "config current-context") printf 'k3d-pokecalc\n'; exit 0 ;;
+esac
 case "\$sub" in
   kustomize) exec "$REAL_KUBECTL" "\$@" ;;
   version) exit 0 ;;
+  get)
+    # 既定は何も出さず成功。FAKE_APP_EXISTS があれば Application が在る、FAKE_LIVE_DEPLOY_ANNOTATIONS があれば
+    # 生きている Deployment の annotations(JSON)として返す(issue #237 の手動 overlay との取り合いの検査用)。
+    case "\$*" in
+      *application*) [ -n "\${FAKE_APP_EXISTS:-}" ] && printf 'application.argoproj.io/pokecalc-x\n' ;;
+      *deployment*) [ -n "\${FAKE_LIVE_DEPLOY_ANNOTATIONS:-}" ] && printf '%s\n' "\$FAKE_LIVE_DEPLOY_ANNOTATIONS" ;;
+    esac
+    exit 0 ;;
   apply)
     prev=""
     for a in "\$@"; do
@@ -498,6 +510,9 @@ test_argocd_local_app_applies_project() {
   make_fakes
   [ -f "$ROOT/scripts/gitops/argocd-local-app.sh" ] || { ng "scripts/gitops/argocd-local-app.sh が無い"; return; }
   dir=$(new_sandbox local-app)
+  # ready 検査は pokedex の digest が placeholder(全0)だと落ちる。リポジトリ本体は placeholder のまま、sandbox の中だけ実 digest 風の値にして通す。
+  sed -i.bak -E '/name: pokecalc\/pokedex/,/digest:/ s/digest: .*/digest: sha256:1111111111111111111111111111111111111111111111111111111111111111/' \
+    "$dir/services/balance/deploy/k8s/overlays/gitops/kustomization.yaml"
   reset_log
   run_isolated "$dir" env SERVICE=balance ./scripts/gitops/argocd-local-app.sh
   rc=$?
@@ -622,6 +637,171 @@ test_initial_admin_secret() {
 }
 
 # ---------------------------------------------------------------------------
+# issue #237・ADR-0412: gitops overlay が read model を起動時に自分で用意する
+# (initContainer で pokedex export → emptyDir → 本体は読むだけ。Git に実データも ConfigMap も置かない。ADR-0002)
+
+# サービスごとの read model(環境変数名=ファイル名)。pokedex export のファイル名は ADR-0105 §5 で固定。
+readmodel_env_files() {
+  case "$1" in
+    balance) printf '%s\n' BALANCE_POKEMON_TYPES_PATH=pokemon-types.json BALANCE_MOVES_PATH=moves.json BALANCE_ABILITIES_PATH=abilities.json ;;
+    speed) printf '%s\n' SPEED_POKEMON_PATH=speed-pokemon.json ;;
+  esac
+}
+
+# overlay_deploy_json サービス — gitops overlay の描画から Deployment <svc> だけを JSON 配列で取り出す。
+overlay_deploy_json() {
+  kustomize_json "$ROOT/services/$1/deploy/k8s/overlays/gitops" | jq -c --arg n "$1" '[.[] | select(.kind == "Deployment" and .metadata.name == $n)]'
+}
+
+test_gitops_overlay_readmodel() {
+  local svc deploy rendered init main pair var file mount mmount
+  for svc in $SERVICES; do
+    begin "gitops overlay($svc): initContainer(pokedex export)→emptyDir→本体が読む。ConfigMap・Secret・実データは Git に無い(#237)"
+    rendered=$(kustomize_json "$ROOT/services/$svc/deploy/k8s/overlays/gitops") || { ng "描画に失敗した"; continue; }
+    deploy=$(overlay_deploy_json "$svc")
+    if [ "$(jq 'length' <<<"$deploy")" = 1 ]; then ok; else ng "Deployment $svc が1つでない"; continue; fi
+    if [ "$(jq '[.[] | select(.kind == "ConfigMap" or .kind == "Secret")] | length' <<<"$rendered")" = 0 ]; then ok; else ng "gitops overlay が ConfigMap / Secret を描画している(read model は ConfigMap にしない。ADR-0002・1 MiB 上限)"; fi
+
+    init=$(jq -c '.[0].spec.template.spec.initContainers // [] | map(select(.name == "readmodel-export")) | .[0] // empty' <<<"$deploy")
+    if [ -n "$init" ]; then ok; else ng "initContainer readmodel-export が無い"; continue; fi
+    # image は pokedex(server イメージ)を digest 固定で。タグ・latest は不可(ADR-0405)。
+    if jq -e '.image | test("^[A-Za-z0-9._:/-]+/pokecalc/pokedex@sha256:[0-9a-f]{64}$")' <<<"$init" >/dev/null; then ok; else ng "initContainer の image が <registry>/pokecalc/pokedex@sha256:<digest> でない: $(jq -r .image <<<"$init")"; fi
+    # 出力先は emptyDir のマウント先。pokedex は ENTRYPOINT=/pokedex なので args だけで export を呼ぶ。
+    mount=$(jq -r '.volumeMounts // [] | map(select(.name == "readmodel")) | .[0].mountPath // empty' <<<"$init")
+    if [ -n "$mount" ] && jq -e --arg m "$mount" '.args == ["export", "-out", $m]' <<<"$init" >/dev/null; then ok; else ng "initContainer の args が [export, -out, <readmodel のマウント先>] でない"; fi
+    if jq -e '(.volumeMounts // []) | map(select(.name == "readmodel" and .readOnly != true)) | length == 1' <<<"$init" >/dev/null; then ok; else ng "initContainer の readmodel マウントが書き込み可でない"; fi
+    # DSN は reader ロール(SELECT のみ)を Secret から。root の pokedex-dsn は使わない(ADR-0110)。
+    if jq -e '(.env // []) | map(select(.name == "POKEDEX_DATABASE_DSN" and .valueFrom.secretKeyRef.name == "mysql-auth" and .valueFrom.secretKeyRef.key == "pokedex-reader-dsn")) | length == 1' <<<"$init" >/dev/null; then ok; else ng "POKEDEX_DATABASE_DSN が Secret mysql-auth の pokedex-reader-dsn 由来でない"; fi
+    if jq -e '[(.env // [])[] | select(.value != null and (.name | test("DSN")))] | length == 0' <<<"$init" >/dev/null; then ok; else ng "DSN を平文の value で渡している"; fi
+    # 本体と同じ水準のハードニング(readOnlyRootFilesystem でも emptyDir には書ける)。
+    if jq -e '.securityContext | .allowPrivilegeEscalation == false and .readOnlyRootFilesystem == true and .runAsNonRoot == true and (.capabilities.drop | index("ALL") != null)' <<<"$init" >/dev/null; then ok; else ng "initContainer の securityContext が不十分(allowPrivilegeEscalation=false・readOnlyRootFilesystem・runAsNonRoot・drop ALL)"; fi
+    if jq -e '.resources.limits.memory != null and .resources.limits.cpu != null' <<<"$init" >/dev/null; then ok; else ng "initContainer に resources.limits が無い"; fi
+
+    # volume は emptyDir(ConfigMap ではない)。
+    if jq -e '.[0].spec.template.spec.volumes // [] | map(select(.name == "readmodel" and .emptyDir != null and .configMap == null)) | length == 1' <<<"$deploy" >/dev/null; then ok; else ng "volume readmodel が emptyDir でない"; fi
+    # 本体: 読み取り専用でマウントし、各 *_PATH がそのマウント先のファイルを指す。DSN は渡さない(DB に届かない)。
+    main=$(jq -c --arg n "$svc" '.[0].spec.template.spec.containers | map(select(.name == $n)) | .[0]' <<<"$deploy")
+    mmount=$(jq -r '(.volumeMounts // []) | map(select(.name == "readmodel" and .readOnly == true)) | .[0].mountPath // empty' <<<"$main")
+    if [ -n "$mmount" ]; then ok; else ng "本体が readmodel を readOnly でマウントしていない"; continue; fi
+    for pair in $(readmodel_env_files "$svc"); do
+      var=${pair%%=*}
+      file=${pair#*=}
+      if jq -e --arg v "$var" --arg p "$mmount/$file" '(.env // []) | map(select(.name == $v and .value == $p)) | length == 1' <<<"$main" >/dev/null; then ok; else ng "本体の $var が $mmount/$file でない"; fi
+    done
+    if jq -e '[(.env // [])[] | select(.name | test("DSN|DATABASE"))] | length == 0' <<<"$main" >/dev/null; then ok; else ng "本体(業務 API)に DB の DSN が渡っている(read model を読むだけにする。ADR-0012 §6)"; fi
+    # 本体の image は従来どおり digest 固定。
+    if jq -e --arg s "/pokecalc/$svc@sha256:" '.image | contains($s)' <<<"$main" >/dev/null; then ok; else ng "本体の image が digest 固定の pokecalc/$svc でない"; fi
+  done
+}
+
+# gitops overlay の pokedex image は digest 固定で、check-gitops.sh が見る(issue #237・ADR-0405)。
+test_check_gitops_readmodel() {
+  local svc dir rc ov
+  make_fakes
+  for svc in $SERVICES; do
+    begin "check-gitops.sh: $svc の gitops overlay の read model 供給経路(pokedex の digest・initContainer・ConfigMap 不使用)を検査する(#237)"
+    ov="services/$svc/deploy/k8s/overlays/gitops"
+    dir=$(new_sandbox "rm-ok-$svc")
+    check_gitops_in "$dir" "$svc" template
+    rc=$?
+    if [ "$rc" -eq 0 ]; then ok; else ng "正しい overlay の template 検査が失敗: $(tail -1 "$WORK/log/out")"; fi
+
+    if grep -q 'name: pokecalc/pokedex' "$ROOT/$ov/kustomization.yaml"; then ok; else ng "$ov/kustomization.yaml の images に pokecalc/pokedex が無い"; fi
+
+    # pokedex の image が tag 指定(digest でない)なら失敗。
+    dir=$(new_sandbox "rm-pokedex-tag-$svc")
+    sed -i.bak -E '/name: pokecalc\/pokedex/,/digest:/ s/digest: .*/newTag: v1/' "$dir/$ov/kustomization.yaml"
+    check_gitops_in "$dir" "$svc" template
+    rc=$?
+    if [ "$rc" -ne 0 ]; then ok; else ng "pokedex image を tag 指定にしても $svc の template 検査が通った"; fi
+
+    # ready では pokedex の digest が全0の placeholder なら失敗(本体の digest が実値でも)。
+    dir=$(new_sandbox "rm-pokedex-zero-$svc")
+    sed -i.bak -E '/name: pokecalc\/pokedex/,/digest:/ s/digest: .*/digest: sha256:0000000000000000000000000000000000000000000000000000000000000000/' "$dir/$ov/kustomization.yaml"
+    check_gitops_in "$dir" "$svc" ready
+    rc=$?
+    if [ "$rc" -ne 0 ] && grep -qi 'pokedex' "$WORK/log/out"; then ok; else ng "pokedex の digest が placeholder でも $svc の ready 検査が通った(メッセージに pokedex の語も無い)"; fi
+
+    # 描画に initContainer が無い(read model の供給経路が消えた)なら template でも失敗。
+    dir=$(new_sandbox "rm-no-init-$svc")
+    awk '/^patches:/ {skip=1; next} skip && /^[[:space:]]+-/ {next} skip && /^[[:space:]]+[a-z]/ {next} {skip=0; print}' "$dir/$ov/kustomization.yaml" >"$dir/$ov/k.new" && mv "$dir/$ov/k.new" "$dir/$ov/kustomization.yaml"
+    check_gitops_in "$dir" "$svc" template
+    rc=$?
+    if [ "$rc" -ne 0 ] && grep -qiE 'initContainer|read model' "$WORK/log/out"; then ok; else ng "read model の供給経路(patch)を消しても $svc の template 検査が通った"; fi
+
+    # ConfigMap を描画に混ぜたら失敗(ConfigMap は使わない)。
+    dir=$(new_sandbox "rm-configmap-$svc")
+    printf 'apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: %s-readmodel\ndata:\n  x: y\n' "$svc" >"$dir/$ov/cm.yaml"
+    sed -i.bak 's#^resources:#resources:\n  - cm.yaml#' "$dir/$ov/kustomization.yaml"
+    check_gitops_in "$dir" "$svc" template
+    rc=$?
+    if [ "$rc" -ne 0 ] && grep -qi 'ConfigMap' "$WORK/log/out"; then ok; else ng "gitops overlay に ConfigMap を足しても $svc の template 検査が通った"; fi
+  done
+}
+
+# 手動 overlay(local-readmodel)と Argo CD が同じ Deployment を取り合わない(issue #237)。
+test_manual_overlay_guard() {
+  local svc dir rc f upper
+  make_fakes
+  for svc in $SERVICES; do
+    upper=$(printf '%s' "$svc" | tr '[:lower:]' '[:upper:]')
+    begin "手動デプロイと Argo CD の取り合い($svc): Application が在れば k3d-deploy-readmodel.sh は止まり、check-gitops.sh ready は local 上書きを検出する(#237)"
+    # (1) Application pokecalc-$svc が在るクラスタでは、手動 apply を既定で拒否する(ALLOW_MANUAL_OVERLAY=1 で明示したときだけ進む)。
+    dir=$(new_sandbox "guard-apply-$svc")
+    mkdir -p "$dir/data/generated/readmodel"
+    for f in pokemon-types.json moves.json abilities.json speed-pokemon.json; do printf '{}\n' >"$dir/data/generated/readmodel/$f"; done
+    reset_log
+    run_isolated "$dir" env FAKE_APP_EXISTS=1 SERVICE="$svc" ./scripts/gitops/k3d-deploy-readmodel.sh
+    rc=$?
+    if [ "$rc" -ne 0 ] && grep -qiE 'argo|ALLOW_MANUAL_OVERLAY' "$WORK/log/out"; then ok; else ng "Application が在るのに k3d-deploy-readmodel.sh が止まらない(rc=$rc)"; fi
+    if ! grep -E '^kubectl .*apply' "$WORK/log/calls" | grep -q .; then ok; else ng "拒否したのに kubectl apply を呼んだ"; fi
+    # (2) Application が無ければガードは邪魔をしない。
+    reset_log
+    run_isolated "$dir" env SERVICE="$svc" ./scripts/gitops/k3d-deploy-readmodel.sh
+    if ! grep -qE 'ALLOW_MANUAL_OVERLAY' "$WORK/log/out"; then ok; else ng "Application が無いのにガードが働いた"; fi
+
+    # (3) check-gitops.sh ready: 生きている Deployment に local-readmodel の annotation が残っていたら失敗(sync で戻す案内付き)。
+    dir=$(new_sandbox "guard-check-$svc")
+    reset_log
+    run_isolated "$dir" env FAKE_LIVE_DEPLOY_ANNOTATIONS='{"pokecalc.example/readmodel-hash":"abc"}' SERVICE="$svc" "${upper}_GITOPS_REPO_URL=$FAKE_ORIGIN" ./scripts/gitops/check-gitops.sh ready
+    rc=$?
+    if [ "$rc" -ne 0 ] && grep -q 'readmodel-hash' "$WORK/log/out" && grep -qE 'sync' "$WORK/log/out"; then ok; else ng "local-readmodel の annotation が残っていても ready 検査が通った(rc=$rc)"; fi
+  done
+}
+
+test_runbooks_no_manual_apply_with_argocd() {
+  local svc file
+  for svc in $SERVICES; do
+    begin "runbook($svc): 「Argo CD 有効時は手動 apply しない」と、gitops overlay の initContainer が read model を作る旨を明記(#237)"
+    file="$ROOT/docs/runbooks/$svc.md"
+    if grep -qE 'Argo CD 有効時は手動 apply しない' "$file"; then ok; else ng "docs/runbooks/$svc.md に「Argo CD 有効時は手動 apply しない」の明記が無い"; fi
+    if grep -q 'initContainer' "$file" && grep -q 'pokedex' "$file" && grep -q 'emptyDir' "$file"; then ok; else ng "docs/runbooks/$svc.md に gitops overlay の initContainer(pokedex export)→ emptyDir の説明が無い"; fi
+    if grep -q 'pokedex-registry-push' "$file"; then ok; else ng "docs/runbooks/$svc.md に pokedex image の digest を gitops overlay へ書く手順(make pokedex-registry-push)が無い"; fi
+  done
+}
+
+# 文書: ADR-0412(方式 a・speed の digest の扱い・取り合い対策)と、plan.md・speed の未配備表記(#237)。
+test_issue237_docs() {
+  local adr f
+  begin "ドキュメント: ADR-0412 と ADR-0018/0403/0605 の追記、plan.md の行、speed の digest の扱い(#237)"
+  adr=$(ls "$ROOT"/docs/adr/0412-*.md 2>/dev/null | head -1)
+  if [ -n "$adr" ]; then ok; else ng "docs/adr/0412-*.md が無い"; return; fi
+  for f in 0018-balance-local-gitops-verification 0403-balance-readmodel-wiring 0605-speed-sp5-gitops; do
+    if grep -q '0412' "$ROOT/docs/adr/$f.md"; then ok; else ng "docs/adr/$f.md に ADR-0412 への追記が無い"; fi
+  done
+  for f in initContainer emptyDir pokedex-reader-dsn NetworkPolicy ConfigMap '#237'; do
+    if grep -q -- "$f" "$adr"; then ok; else ng "ADR-0412 に「$f」の記述が無い"; fi
+  done
+  if grep -q '#237' "$ROOT/docs/plan.md"; then ok; else ng "docs/plan.md に issue #237 の行が無い"; fi
+  # speed の digest: 実 digest か、placeholder のままなら「未配備」と speed-design・runbook・ADR に明示。
+  if grep -q 'digest: sha256:0\{64\}' "$ROOT/services/speed/deploy/k8s/overlays/gitops/kustomization.yaml"; then
+    for f in docs/speed-design.md docs/runbooks/speed.md "docs/adr/$(basename "$adr")"; do
+      if grep -q '未配備' "$ROOT/$f"; then ok; else ng "speed の gitops digest が placeholder なのに $f に「未配備」の明示が無い"; fi
+    done
+  else ok; fi
+}
+
+# ---------------------------------------------------------------------------
 
 if [ -z "$REAL_KUBECTL" ] || [ -z "$REAL_HELM" ] || ! command -v jq >/dev/null 2>&1; then
   echo "gitops test: kubectl・helm・jq が要る(scripts/doctor.sh の前提ツール)" >&2
@@ -640,6 +820,11 @@ test_argocd_local_app_applies_project
 test_registry_pvc
 test_runbooks_return_to_gitops
 test_initial_admin_secret
+test_gitops_overlay_readmodel
+test_check_gitops_readmodel
+test_manual_overlay_guard
+test_runbooks_no_manual_apply_with_argocd
+test_issue237_docs
 
 if [ "$FAILURES" -gt 0 ]; then
   printf 'gitops test: %d failed, %d passed\n' "$FAILURES" "$PASSES" >&2

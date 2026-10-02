@@ -2,7 +2,7 @@ package httpapi
 
 // 契約テスト(test-strategy.md L4)。team-svc の応答を api/openapi.yaml に照らして検証する。
 // record-svc / calc-svc / pokedex-svc の contract_test.go と同じ形で、仕様は生成物に埋め込まれたもの
-// (api.GetSwagger)を使う。AC-C2(契約とサービスの一致)。
+// (api.GetSpec)を使う。AC-C2(契約とサービスの一致)。
 
 import (
 	"bytes"
@@ -33,7 +33,7 @@ var (
 func loadContract(t *testing.T) (*openapi3.T, routers.Router) {
 	t.Helper()
 	contractOnce.Do(func() {
-		contractDoc, contractErr = api.GetSwagger()
+		contractDoc, contractErr = api.GetSpec()
 		if contractErr != nil {
 			return
 		}

@@ -10,9 +10,11 @@
 //   A7 tie があれば左の同じ段を強調し、無ければ faster/slower の境界に印を出す(ADR-0604 §4)
 //   A8 エラー(SpeedResult.ok=false)でも表示が壊れない(role=alert を出し、他方の表示を消さない)
 
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { describe, expect, test } from "vitest";
+import { MAX_SP_PER_STAT } from "../domain/requests";
+import { MAX_RANK, MIN_RANK } from "../domain/calcConditions";
 import { speedPresetText, speedScreenText } from "../i18n/ja";
 import { SpeedScreen } from "./SpeedScreen";
 import type { components } from "./speed.gen";
@@ -706,9 +708,11 @@ describe("A8 エラーでも表示が壊れない", () => {
       });
     });
 
+    // サーバーの英語 message は出さず、code から日本語にする(issue 307)。
     expect(within(tableRegion()).getByRole("alert")).toHaveTextContent(
-      "pokemon read model is not configured",
+      speedScreenText.errorByCode.master_unavailable,
     );
+    expect(within(tableRegion()).getByRole("alert")).not.toHaveTextContent("pokemon read model");
     expect(within(tableRegion()).queryAllByTestId("speed-tier")).toHaveLength(0);
     expect(
       within(selfRegion()).getByRole("radiogroup", { name: speedScreenText.modeGroupLabel }),
@@ -749,11 +753,167 @@ describe("A8 エラーでも表示が壊れない", () => {
       });
     });
 
-    expect(within(selfRegion()).getByRole("alert")).toHaveTextContent("unknown pokemonId: 9001-000");
+    expect(within(selfRegion()).getByRole("alert")).toHaveTextContent(
+      speedScreenText.errorByCode.unknown_pokemon,
+    );
+    expect(within(selfRegion()).getByRole("alert")).not.toHaveTextContent("unknown pokemonId");
     expect(tiers()).toHaveLength(tableResponse.tiers.length);
     expect(within(tableRegion()).queryByTestId("speed-boundary")).toBeNull();
     expect(
       within(selfRegion()).getByRole("combobox", { name: speedScreenText.pokemonLabel }),
     ).toBeInTheDocument();
+  });
+});
+
+// ---- issue 307: 範囲外入力は画面で止め(API を呼ばない)、API エラーも日本語で出す ----
+// 空欄の扱い(明示): custom の SP・ランクを空にすると 0 とみなして計算する(従来どおり。欄は 0 に戻る)。
+// raw の実数値を空にすると「未入力」で、呼ばずエラーも出さない(従来どおり)。
+
+describe("issue 307 範囲外入力の検査", () => {
+  async function customScreen() {
+    const { user, client } = renderScreen();
+    await resolveInitial(client);
+    await selectMode(user, speedScreenText.modeLabel.custom);
+    await user.selectOptions(
+      within(selfRegion()).getByRole("combobox", { name: speedScreenText.pokemonLabel }),
+      BIRD.pokemonId,
+    );
+    await waitFor(() => {
+      expect(client.positionCalls.length).toBeGreaterThan(0);
+    });
+    return { user, client };
+  }
+
+  async function selectMode(user: UserEvent, label: string): Promise<void> {
+    await user.click(within(selfRegion()).getByRole("radio", { name: label }));
+  }
+
+  function setValue(label: string, text: string): HTMLElement {
+    const input = within(selfRegion()).getByRole("spinbutton", { name: label });
+    // 値を一度に入れる(1文字ずつ打つと途中の範囲内の値が送られ、"-" の途中で 0 に戻る既存の挙動も混ざる)。
+    fireEvent.change(input, { target: { value: text } });
+    return input;
+  }
+
+  test.each([
+    ["SP 0", speedScreenText.spLabel, "0", { sp: 0 }],
+    ["SP 上限", speedScreenText.spLabel, String(MAX_SP_PER_STAT), { sp: MAX_SP_PER_STAT }],
+    ["ランク 下限", speedScreenText.rankLabel, String(MIN_RANK), { rank: MIN_RANK }],
+    ["ランク 上限", speedScreenText.rankLabel, String(MAX_RANK), { rank: MAX_RANK }],
+  ])("境界値 %s は通り、エラーを出さず API を呼ぶ", async (_name, label, text, expected) => {
+    const { client } = await customScreen();
+    const input = setValue(label, text);
+    await waitFor(() => {
+      expect(lastOf(client.positionCalls, "position").args).toMatchObject(expected);
+    });
+    expect(input).not.toHaveAttribute("aria-invalid", "true");
+    expect(within(selfRegion()).queryByRole("alert")).toBeNull();
+  });
+
+  test.each([
+    ["SP 33", speedScreenText.spLabel, "33", speedScreenText.spRangeMessage(MAX_SP_PER_STAT)],
+    ["SP -1", speedScreenText.spLabel, "-1", speedScreenText.spRangeMessage(MAX_SP_PER_STAT)],
+    ["ランク 7", speedScreenText.rankLabel, "7", speedScreenText.rankRangeMessage(MIN_RANK, MAX_RANK)],
+    ["ランク -7", speedScreenText.rankLabel, "-7", speedScreenText.rankRangeMessage(MIN_RANK, MAX_RANK)],
+  ])("%s は入力欄のそばに日本語で出し、API を呼ばない", async (_name, label, text, message) => {
+    const { client } = await customScreen();
+    const before = client.positionCalls.length;
+    const input = setValue(label, text);
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(within(selfRegion()).getByRole("alert")).toHaveTextContent(message);
+    expect(input).toHaveAccessibleDescription(message);
+    // 範囲外の値は1度も送らない(途中の "3" などの範囲内の呼び出しは許す)。
+    const key = label === speedScreenText.spLabel ? "sp" : "rank";
+    for (const call of client.positionCalls.slice(before)) {
+      expect(call.args[key]).not.toBe(Number(text));
+    }
+  });
+
+  test("custom の SP を空にすると 0 とみなして計算する(エラーは出さない)", async () => {
+    const { user, client } = await customScreen();
+    setValue(speedScreenText.spLabel, "5");
+    const input = within(selfRegion()).getByRole("spinbutton", { name: speedScreenText.spLabel });
+    await user.clear(input);
+    await waitFor(() => {
+      expect(lastOf(client.positionCalls, "position").args).toMatchObject({ sp: 0 });
+    });
+    expect(within(selfRegion()).queryByRole("alert")).toBeNull();
+  });
+
+  test("範囲外から範囲内へ直すとエラーが消え、API を呼ぶ", async () => {
+    const { client } = await customScreen();
+    const input = setValue(speedScreenText.spLabel, "33");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    setValue(speedScreenText.spLabel, "32");
+    expect(input).not.toHaveAttribute("aria-invalid", "true");
+    await waitFor(() => {
+      expect(lastOf(client.positionCalls, "position").args).toMatchObject({ sp: 32 });
+    });
+  });
+
+  test.each(["0", "-5", "1.5"])("raw の実数値 %s は日本語で止め、API を呼ばない", async (text) => {
+    const { user, client } = renderScreen();
+    await resolveInitial(client);
+    await selectMode(user, speedScreenText.modeLabel.raw);
+    const input = within(selfRegion()).getByRole("spinbutton", { name: speedScreenText.rawValueLabel });
+    // 1文字ずつ打つと途中("1.5" の "1")が範囲内で送られるため、貼り付けで一度に入れる。
+    await user.click(input);
+    await user.paste(text);
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(within(selfRegion()).getByRole("alert")).toHaveTextContent(speedScreenText.rawRangeMessage);
+    expect(client.positionCalls).toHaveLength(0);
+  });
+
+  test("raw の実数値が空欄なら未入力: エラーも出さず呼ばない", async () => {
+    const { user, client } = renderScreen();
+    await resolveInitial(client);
+    await selectMode(user, speedScreenText.modeLabel.raw);
+    const input = within(selfRegion()).getByRole("spinbutton", { name: speedScreenText.rawValueLabel });
+    await user.type(input, "5");
+    await user.clear(input);
+    expect(input).not.toHaveAttribute("aria-invalid", "true");
+    expect(within(selfRegion()).queryByRole("alert")).toBeNull();
+  });
+
+  test("raw の実数値が上限超え(サーバーだけが上限を知る)で API が 400 を返したら日本語で出す", async () => {
+    const { user, client } = renderScreen();
+    await resolveInitial(client);
+    await selectMode(user, speedScreenText.modeLabel.raw);
+    await user.type(
+      within(selfRegion()).getByRole("spinbutton", { name: speedScreenText.rawValueLabel }),
+      "99999",
+    );
+    await waitFor(() => {
+      expect(client.positionCalls.length).toBeGreaterThan(0);
+    });
+    await flush(() => {
+      lastOf(client.positionCalls, "position").resolve({
+        ok: false,
+        error: { code: "invalid_request", message: "request body does not match the given mode" },
+      });
+    });
+    const alert = within(selfRegion()).getByRole("alert");
+    expect(alert).toHaveTextContent(speedScreenText.errorByCode.invalid_request);
+    expect(alert).not.toHaveTextContent("request body");
+  });
+
+  test("未知の code でも英語の message は出さず、汎用の日本語にする", async () => {
+    const { user, client } = renderScreen();
+    await resolveInitial(client);
+    await user.selectOptions(
+      within(selfRegion()).getByRole("combobox", { name: speedScreenText.pokemonLabel }),
+      BIRD.pokemonId,
+    );
+    await waitFor(() => {
+      expect(client.positionCalls.length).toBeGreaterThan(0);
+    });
+    await flush(() => {
+      lastOf(client.positionCalls, "position").resolve({
+        ok: false,
+        error: { code: "something_new", message: "boom" },
+      });
+    });
+    expect(within(selfRegion()).getByRole("alert")).toHaveTextContent(speedScreenText.errorFallback);
+    expect(within(selfRegion()).getByRole("alert")).not.toHaveTextContent("boom");
   });
 });

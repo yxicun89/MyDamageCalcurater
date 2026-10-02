@@ -25,3 +25,6 @@
 ## 却下した案
 - balance が起動時に pokedex-svc の API から取る: ADR-0012 に反する(実行時の依存)。
 - 実データを overlay のディレクトリに置く: Git 管理下になりうる(ADR-0002)。
+
+## 追記(2026-09-25): gitops overlay と手動 overlay の取り合い(ADR-0412)
+Argo CD の Application が在るクラスタでは `*-k3d-deploy-readmodel` は既定で拒否する(`ALLOW_MANUAL_OVERLAY=1`)。gitops overlay は ConfigMap でなく initContainer の export で read model を得る(ADR-0412)。

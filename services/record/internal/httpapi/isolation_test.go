@@ -89,7 +89,7 @@ func TestDeviceIDInQueryOrBodyIsRejected(t *testing.T) {
 // 気づける形**として「record の操作にパスパラメータが無い」ことを契約から固定する。
 // 追加するときはこのテストが落ちるので、そのとき AC-D2 の実テストを一緒に足すこと。
 func TestRecordOperationsHaveNoPathParameters(t *testing.T) {
-	doc, err := api.GetSwagger()
+	doc, err := api.GetSpec()
 	if err != nil {
 		t.Fatalf("契約を読めない: %v", err)
 	}

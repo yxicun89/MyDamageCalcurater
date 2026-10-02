@@ -33,6 +33,8 @@ var (
 	// ErrTooManyItemVariants は ItemVariants の件数が MaxBulkItemVariants を超えている
 	// (issue #110。ADR-0208 §4・ADR-0108)。
 	ErrTooManyItemVariants = errors.New("持ち物バリアントの件数が上限を超えている")
+	// ErrInvalidDefenderOverride は DefenderOverride の不正(ランクが -6..+6 の外、未知の Status。ADR-0216 §1)。
+	ErrInvalidDefenderOverride = errors.New("防御側の上書きが不正")
 )
 
 // 件数の上限(issue #110。ADR-0208 §1 の契約値と同じ。ADR-0108)。
@@ -73,6 +75,36 @@ type DefenderPreset struct {
 	Applies MoveCategory
 }
 
+// DefenderOverride は全行の防御側に一律で当てるランクと状態異常(ADR-0216 §1)。
+// ゼロ値は「上書きしない」(ランク 0・状態異常なし)。Status の "" は StatusNone として扱う。
+type DefenderOverride struct {
+	Ranks  Ranks
+	Status Status
+}
+
+// validate はランクが -6..+6、Status が "" か既知の値であることを確かめる。
+func (o DefenderOverride) validate() error {
+	for _, k := range rankStatKeys {
+		if rv := o.Ranks.Get(k); rv < -6 || rv > 6 {
+			return fmt.Errorf("%w: ランク補正 %s は -6..6 の範囲外: %d", ErrInvalidDefenderOverride, k, rv)
+		}
+	}
+	switch o.Status {
+	case "", StatusNone, StatusBurn, StatusParalysis, StatusPoison, StatusBadlyPoison, StatusSleep, StatusFreeze:
+		return nil
+	}
+	return fmt.Errorf("%w: 未知の状態異常 %q", ErrInvalidDefenderOverride, o.Status)
+}
+
+// apply は防御側のランクと状態異常を上書きする。
+func (o DefenderOverride) apply(def *Individual) {
+	def.Ranks = o.Ranks
+	def.Status = o.Status
+	if def.Status == "" {
+		def.Status = StatusNone
+	}
+}
+
 // BulkInput は一括計算の入力。攻撃側・技・場は1つに固定し、防御側だけを振り替える。
 type BulkInput struct {
 	Format          Format
@@ -95,6 +127,8 @@ type BulkInput struct {
 	// nil / 空は「特性なし」の1通り(従来どおり)。結果が同じになる特性は1行にまとめ、違えば行を分ける。
 	// DefenderSpecies.Abilities が空でなければ、その中の ID だけを受け付ける。
 	DefenderAbilities []Ability
+	// DefenderOverride は全行の防御側に当てるランク・状態異常(ADR-0216)。ゼロ値は上書きなし。
+	DefenderOverride DefenderOverride
 }
 
 // BulkRow は一括計算の1行(プリセット × 持ち物)。
@@ -230,6 +264,10 @@ func CalcBulk(in BulkInput) (BulkResult, error) {
 		return BulkResult{}, fmt.Errorf("%w: %d 件", ErrTooManyItemVariants, len(in.ItemVariants))
 	}
 
+	if err := in.DefenderOverride.validate(); err != nil {
+		return BulkResult{}, err
+	}
+
 	presets, err := selectPresets(in)
 	if err != nil {
 		return BulkResult{}, err
@@ -260,6 +298,7 @@ func CalcBulk(in BulkInput) (BulkResult, error) {
 			for vi, item := range variants {
 				def := p.Defender(in.DefenderSpecies, item)
 				def.Ability = ability
+				in.DefenderOverride.apply(&def)
 				res, err := CalcDamage(DamageInput{
 					Format:    in.Format,
 					Attacker:  in.Attacker,
@@ -292,6 +331,7 @@ func CalcBulk(in BulkInput) (BulkResult, error) {
 			for vi, item := range variants {
 				def := p.Defender(in.DefenderSpecies, item)
 				def.Ability = ability
+				in.DefenderOverride.apply(&def)
 				row := BulkRow{
 					Preset:      p.Key,
 					PresetLabel: label,

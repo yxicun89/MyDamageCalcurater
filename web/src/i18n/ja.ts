@@ -423,6 +423,26 @@ export const speedScreenText = {
   natureLabel: { minus: "下降", neutral: "補正なし", plus: "上昇" } as const,
   rankLabel: "ランク",
   rawValueLabel: "実数値",
+  // ---- 入力の範囲外(送信前に画面で止める。issue 307。判定画面 judgeScreenText と同じ言い回し) ----
+  spRangeMessage: (max: number): string => `能力ポイントは0〜${String(max)}の整数で入力してください`,
+  rankRangeMessage: (min: number, max: number): string =>
+    `ランクは${String(min)}〜+${String(max)}の整数で入力してください`,
+  /** 実数値の下限(契約の minimum: 1)。上限は speed サービスだけが式から導くので、画面では判定せず API の 400 を日本語にする。 */
+  rawRangeMessage: "実数値は1以上の整数で入力してください",
+  // ---- API エラー(サーバーの英語 message は出さず、code から日本語にする。issue 307) ----
+  /** services/speed/api/openapi.yaml の ErrorCode と、Web 側の speed_unavailable に対応する。 */
+  errorByCode: {
+    invalid_request: "入力の形が正しくありません。値の範囲を確認してください",
+    missing_header: "端末の識別情報が送られていません",
+    invalid_header: "端末の識別情報の形が正しくありません",
+    unknown_pokemon: "このポケモンはマスタにありません",
+    request_too_large: "入力が大きすぎます",
+    master_unavailable: "ポケモンのマスタを読み込めません",
+    internal_error: "素早さの計算に失敗しました",
+    speed_unavailable: "素早さの API に接続できません",
+  } satisfies Readonly<Record<string, string>>,
+  /** errorByCode に無い code のとき。 */
+  errorFallback: "素早さの計算に失敗しました",
   // ---- 右(自分のポケモン)の結果(ADR-0604 §4) ----
   positionLoadingNotice: "位置を計算中",
   selfSpeedLabel: (speed: number): string => `実数値 ${String(speed)}`,
