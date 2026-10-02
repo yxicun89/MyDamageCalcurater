@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Claude Code / Codex の PreToolUse フックから呼ばれる Bash コマンドの危険操作ガード(ADR-0800。issue #273・#239)。
 # stdin から `{"tool_name":"Bash","tool_input":{"command":"..."}}` 形式の JSON を受け取り、
-# 文字列だけを見て判定する(実コマンドは実行しない。git push の宛先解決だけは例外的に
-# `git rev-parse --abbrev-ref HEAD` を呼ぶ。ADR-0800 §2 参照)。
+# 文字列だけを見て判定する(判定対象のコマンドは実行しない。例外は読み取り専用の2つだけ:
+# git push の宛先解決の `git rev-parse --abbrev-ref HEAD`(ADR-0800 §2)と、
+# PR マージの CI 検証の `gh pr checks <検証済み引数>`(ADR-0803))。
 #   - 危険と判定: stderr に理由を書いて exit 2(呼び出し元が人間に確認を求める)
 #   - 危険でない: 何も出力せず exit 0
 #   - command が無い・空、tool_name が Bash 以外、jq が無い環境: 判定できないので exit 0(fail-open)
@@ -371,23 +372,142 @@ gh_flag_takes_value() {
   esac
 }
 
+# gh_merge_flag_takes_value フラグ — "gh pr merge" で次のトークンを値として消費するフラグ。
+gh_merge_flag_takes_value() {
+  case "$1" in
+    -R | --repo | -b | --body | -F | --body-file | -t | --subject | --match-head-commit)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# run_with_timeout 秒 コマンド... — timeout / gtimeout があればそれで包んで実行する。
+# macOS には timeout が標準では無いため、無ければタイムアウト無しで実行する
+# (gh 自身の HTTP 標準動作に任せる。無限に待つ可能性は残るが、ここでの失敗は fail-safe=block 側)。
+run_with_timeout() {
+  local secs="$1"
+  shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$secs" "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$secs" "$@"
+  else
+    "$@"
+  fi
+}
+
+# check_pr_merge_gate リポジトリ 引数トークン... — PR のマージを CI 全件成功のときだけ通す(ADR-0803)。
+# 成功(CI 緑)なら return 1(ブロックしない)、それ以外はすべて BLOCK_REASON を設定して return 0(ブロック)。
+# 実行する外部コマンドは、検証済み引数の読み取り専用 `gh pr checks` だけ(判定対象のマージ自体は実行しない)。
+check_pr_merge_gate() {
+  local repo="$1"
+  shift
+  local safe='^[A-Za-z0-9._/:@#-]+$'
+  local target="" npos=0 t
+  local repo_args=()
+
+  # コマンド置換・変数展開はシェルが実行時に値を決めるため、検証した PR とマージされる PR が食い違いうる。
+  if printf '%s' "$COMMAND" | grep -Eq '[$`]'; then
+    BLOCK_REASON="マージのコマンドに \$ またはバッククォートがあり、対象 PR を静的に確定できません(CI 検証不能)"
+    return 0
+  fi
+
+  # クォート内の区切り文字(`-R "o/r;x"` 等)は、平坦化後のトークン列では本物の区切りと区別できない。
+  # クォート/バックスラッシュと区切り文字(; & | 改行 < >)が同居するコマンドは静的に確定できないのでブロックする
+  # (行継続の「バックスラッシュ+改行」だけは除いて判定する)。
+  local nocont="${COMMAND//\\$'\n'/ }"
+  if [[ "$nocont" == *[\"\'\\]* ]] && { [[ "$nocont" == *[\;\&\|\<\>]* ]] || [[ "$nocont" == *$'\n'* ]]; }; then
+    BLOCK_REASON="クォート/バックスラッシュと区切り文字が同居し、対象 PR を静的に確定できません(CI 検証不能)"
+    return 0
+  fi
+
+  while [ "$#" -gt 0 ]; do
+    t="$1"
+    shift
+    case "$t" in
+      --admin | --admin=*)
+        BLOCK_REASON="--admin 付きのマージは CI 検証を回避するため許可できません(ADR-0803)"
+        return 0
+        ;;
+      -R | --repo)
+        repo="${1:-}"
+        [ "$#" -gt 0 ] && shift
+        ;;
+      --repo=*)
+        repo="${t#--repo=}"
+        ;;
+      -*=*) ;;
+      -*)
+        if gh_merge_flag_takes_value "$t"; then
+          [ "$#" -gt 0 ] && shift
+        fi
+        ;;
+      *)
+        npos=$((npos + 1))
+        target="$t"
+        ;;
+    esac
+  done
+
+  if [ "$npos" -gt 1 ]; then
+    BLOCK_REASON="マージの対象 PR を一意に決められません(位置引数が複数。CI 検証不能)"
+    return 0
+  fi
+  if [ -n "$target" ] && ! [[ "$target" =~ $safe ]]; then
+    BLOCK_REASON="マージの対象 PR の指定に許可されない文字があります(CI 検証不能): $target"
+    return 0
+  fi
+  if [ -n "$repo" ]; then
+    if ! [[ "$repo" =~ $safe ]]; then
+      BLOCK_REASON="-R/--repo の値に許可されない文字があります(CI 検証不能): $repo"
+      return 0
+    fi
+    repo_args=(-R "$repo")
+  fi
+  if ! command -v gh >/dev/null 2>&1; then
+    BLOCK_REASON="gh が見つからず、PR の CI 状態を確認できません(fail-safe でブロック)"
+    return 0
+  fi
+
+  local rc=0
+  if [ -n "$target" ]; then
+    run_with_timeout 20 gh pr checks "${repo_args[@]+"${repo_args[@]}"}" "$target" </dev/null >/dev/null 2>&1 || rc=$?
+  else
+    run_with_timeout 20 gh pr checks "${repo_args[@]+"${repo_args[@]}"}" </dev/null >/dev/null 2>&1 || rc=$?
+  fi
+  if [ "$rc" = 0 ]; then
+    return 1
+  fi
+  BLOCK_REASON="対象 PR の CI が全件成功ではありません(gh pr checks の終了コード ${rc}。1=失敗 8=未完了 その他=判定不能)。CI を直して全件成功にしてから再実行してください(ADR-0803)"
+  return 0
+}
+
 # check_gh 開始位置 — グローバル配列 W の gh トークン位置から判定する。
-#   - "-R owner/repo"・"--repo owner/repo" 等のフラグを読み飛ばした上で "pr merge" ならブロック
-#     (どんな追加引数でも常にブロック)
-#   - "gh api ..." でパスに "/merge" を含むものはブロック(API 直叩きでの PR マージ回避)
+#   - "-R owner/repo"・"--repo owner/repo" 等のフラグを読み飛ばした上で PR マージなら
+#     check_pr_merge_gate(対象 PR の CI が全件成功のときだけ通す。--admin は常にブロック。ADR-0803)
+#   - "gh api ..." でパスに "/merge" を含むものはブロック(API 直叩きでの CI 検証回避)
 check_gh() {
   local start="$1"
   local n=${#W[@]}
   local i=$((start + 1))
-  local t first="" second=""
+  local t first="" second="" repo=""
   while [ "$i" -lt "$n" ]; do
     t="${W[$i]}"
+    [ "$t" = "__SEP__" ] && break
     case "$t" in
       -*)
         case "$t" in
+          --repo=*)
+            repo="${t#--repo=}"
+            i=$((i + 1))
+            ;;
           *=*) i=$((i + 1)) ;;
           *)
             if gh_flag_takes_value "$t"; then
+              case "$t" in -R | --repo) repo="${W[$((i + 1))]:-}" ;; esac
               i=$((i + 2))
             else
               i=$((i + 1))
@@ -410,8 +530,13 @@ check_gh() {
   done
 
   if [ "$first" = "pr" ] && [ "$second" = "merge" ]; then
-    BLOCK_REASON="gh pr merge は PR を確定でマージするため常に確認が必要です"
-    return 0
+    local args=()
+    while [ "$i" -lt "$n" ] && [ "${W[$i]}" != "__SEP__" ]; do
+      args+=("${W[$i]}")
+      i=$((i + 1))
+    done
+    check_pr_merge_gate "$repo" "${args[@]+"${args[@]}"}" && return 0
+    return 1
   fi
 
   if [ "$first" = "api" ]; then
@@ -419,11 +544,11 @@ check_gh() {
     for ((j = start + 1; j < n; j++)); do
       case "${W[$j]}" in
         */merge | */merge/* | */merges | */merges/*)
-          BLOCK_REASON="gh api で /merge(s) を含むパスを叩いています(PR の確定マージに相当します)"
+          BLOCK_REASON="gh api で /merge(s) を含むパスを叩いています(PR の確定マージに相当し、CI 検証を迂回します)"
           return 0
           ;;
         *mergePullRequest*)
-          BLOCK_REASON="gh api で GraphQL の mergePullRequest を呼んでいます(PR の確定マージに相当します)"
+          BLOCK_REASON="gh api で GraphQL の mergePullRequest を呼んでいます(PR の確定マージに相当し、CI 検証を迂回します)"
           return 0
           ;;
       esac
