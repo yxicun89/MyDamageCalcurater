@@ -371,9 +371,44 @@ gh_flag_takes_value() {
   esac
 }
 
+# check_pr_merge 開始位置 — "gh pr merge" の merge の次のトークン位置から判定する(ユーザー決定 2026-10-03)。
+# 「テストと CI がすべて通っている PR だけ」マージしてよい。次のどれかならブロック(戻り値 0)、
+# 通ってよければ戻り値 1:
+#   - PR 番号(数字)が引数に無い(どの PR か判定できない)
+#   - --admin(ブランチ保護の迂回)・-R/--repo(確認した PR と別リポジトリを指せる)
+#   - `gh pr checks <番号>` が成功(終了コード 0 = 全チェック通過)しない(失敗・実行中・チェック無し・gh の失敗)
+# I/O を使う例外は git push の宛先解決と、ここの `gh pr checks`(読み取りのみ)。ADR-0800 追記。
+check_pr_merge() {
+  local i="$1"
+  local n=${#W[@]}
+  local t number=""
+  for ((; i < n; i++)); do
+    t="${W[$i]}"
+    [ "$t" = "__SEP__" ] && break
+    case "$t" in
+      --admin | -R | --repo | --repo=* | -R=*)
+        BLOCK_REASON="gh pr merge に $t が付いています(ブランチ保護の迂回・別リポジトリ指定は確認が必要です)"
+        return 0
+        ;;
+      -*) ;;
+      *[!0-9]*) ;;
+      *) [ -z "$number" ] && number="$t" ;;
+    esac
+  done
+  if [ -z "$number" ]; then
+    BLOCK_REASON="gh pr merge に PR 番号がありません(どの PR か判定できないため、CI の通過を確認できません)"
+    return 0
+  fi
+  if gh pr checks "$number" >/dev/null 2>&1; then
+    return 1
+  fi
+  BLOCK_REASON="PR #$number はテスト・CI が全て通過していません(失敗・実行中・チェック無し)。通ってからマージするか、人間が自分の端末で実行してください"
+  return 0
+}
+
 # check_gh 開始位置 — グローバル配列 W の gh トークン位置から判定する。
-#   - "-R owner/repo"・"--repo owner/repo" 等のフラグを読み飛ばした上で "pr merge" ならブロック
-#     (どんな追加引数でも常にブロック)
+#   - "-R owner/repo"・"--repo owner/repo" 等のフラグを読み飛ばした上で "pr merge" なら check_pr_merge に委ねる
+#     (CI が全て通った PR 番号つきのときだけ通す。それ以外はブロック)
 #   - "gh api ..." でパスに "/merge" を含むものはブロック(API 直叩きでの PR マージ回避)
 check_gh() {
   local start="$1"
@@ -410,8 +445,8 @@ check_gh() {
   done
 
   if [ "$first" = "pr" ] && [ "$second" = "merge" ]; then
-    BLOCK_REASON="gh pr merge は PR を確定でマージするため常に確認が必要です"
-    return 0
+    check_pr_merge "$i"
+    return $?
   fi
 
   if [ "$first" = "api" ]; then

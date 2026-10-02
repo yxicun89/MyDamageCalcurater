@@ -62,6 +62,21 @@ git -C "$OTHER_REPO_FEATURE" init -q
 git -C "$OTHER_REPO_FEATURE" symbolic-ref HEAD refs/heads/feature-x
 git -C "$OTHER_REPO_FEATURE" -c user.email=bash-guard-test@example.com -c user.name=bash-guard-test commit -q --allow-empty -m init
 
+# FAKE_BIN — 偽の gh を置く。check_pr_merge が呼ぶ `gh pr checks <番号>` の終了コードを FAKE_GH_CHECKS_RC で制御する
+# (0 = 全チェック通過。それ以外 = 失敗・実行中・チェック無し)。実際の gh・ネットワークは使わない。
+FAKE_BIN="$WORK/fake-bin"
+mkdir -p "$FAKE_BIN"
+cat >"$FAKE_BIN/gh" <<'FAKEGH'
+#!/usr/bin/env bash
+if [ "${1:-}" = "pr" ] && [ "${2:-}" = "checks" ]; then
+  exit "${FAKE_GH_CHECKS_RC:-1}"
+fi
+exit 1
+FAKEGH
+chmod +x "$FAKE_BIN/gh"
+export PATH="$FAKE_BIN:$PATH"
+export FAKE_GH_CHECKS_RC=1
+
 # run_guard コマンド文字列 — bash-guard.sh に PreToolUse 形の JSON を渡し、終了コードを GUARD_RC に、
 # stdout・stderr を $WORK/out・$WORK/err に残す。
 run_guard() {
@@ -214,11 +229,29 @@ test_block_force_push() {
 }
 
 test_block_pr_merge() {
-  begin "block: gh pr merge(どんな追加引数でも)"
+  begin "block: gh pr merge(CI が通っていない・番号なし・--admin・-R のとき)"
+  FAKE_GH_CHECKS_RC=1 # 失敗・実行中・チェック無し
   expect_block "gh pr merge"
   expect_block "gh pr merge 123"
   expect_block "gh pr merge 123 --squash --delete-branch"
   expect_block "gh pr merge --auto --merge 123"
+  FAKE_GH_CHECKS_RC=0 # 全チェック通過でも、次はブロック
+  expect_block "gh pr merge"                   # 番号が無い
+  expect_block "gh pr merge --merge"           # 番号が無い
+  expect_block "gh pr merge 123 --admin"       # ブランチ保護の迂回
+  expect_block "gh pr merge 123 -R other/repo" # 別リポジトリ指定
+  expect_block "gh pr merge 123 --repo other/repo"
+  expect_block "gh pr merge 123 && git push origin main" # 後続の別コマンドも判定される
+  FAKE_GH_CHECKS_RC=1
+}
+
+test_pass_pr_merge_when_green() {
+  begin "pass: gh pr merge <番号>(テスト・CI が全て通過しているとき)"
+  FAKE_GH_CHECKS_RC=0
+  expect_pass "gh pr merge 123 --merge"
+  expect_pass "gh pr merge 123 --squash --delete-branch"
+  expect_pass "gh pr merge --auto --merge 123"
+  FAKE_GH_CHECKS_RC=1
 }
 
 test_block_wrappers_and_compound() {
@@ -531,7 +564,7 @@ test_claude_settings() {
   fi
 
   local broad
-  for broad in 'Bash(make *)' 'Bash(kubectl *)' 'Bash(k3d *)' 'Bash(docker *)' 'Bash(git push *)' 'Bash(gh pr merge *)'; do
+  for broad in 'Bash(make *)' 'Bash(kubectl *)' 'Bash(k3d *)' 'Bash(docker *)' 'Bash(git push *)'; do
     if jq -e --arg p "$broad" '.permissions.allow // [] | index($p) == null' "$CLAUDE_SETTINGS" >/dev/null; then
       ok
     else
@@ -539,11 +572,11 @@ test_claude_settings() {
     fi
   done
 
-  # gh pr merge は allow のどんな形でも許可しない(block 対象なので allow に置く意味が無く、誤解を招く)。
-  if jq -e '[.permissions.allow // [] | .[] | select(test("^Bash\\(gh pr merge"))] | length == 0' "$CLAUDE_SETTINGS" >/dev/null; then
+  # gh pr merge は allow に置く(CI が全て通った PR 番号つきのときだけ bash-guard.sh が通す。ユーザー決定 2026-10-03)。
+  if jq -e '.permissions.allow // [] | index("Bash(gh pr merge *)") != null' "$CLAUDE_SETTINGS" >/dev/null; then
     ok
   else
-    ng "permissions.allow に gh pr merge の許可が残っている"
+    ng "permissions.allow に Bash(gh pr merge *) が無い(bash-guard.sh が CI 通過を確認して通す)"
   fi
 }
 
@@ -580,6 +613,7 @@ test_block_secret_read
 test_block_push_to_main
 test_block_force_push
 test_block_pr_merge
+test_pass_pr_merge_when_green
 test_block_wrappers_and_compound
 test_block_git_push_destination_edge_cases
 test_block_command_splitting_edge_cases

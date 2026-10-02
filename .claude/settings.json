@@ -41,7 +41,8 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(git push -u origin *)",
-      "Bash(gh pr create *)"
+      "Bash(gh pr create *)",
+      "Bash(gh pr merge *)"
     ],
     "ask": [
       "Bash(k3d cluster delete *)",
