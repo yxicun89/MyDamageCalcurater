@@ -444,6 +444,7 @@ gateway smoke の ID取得部分を流用し `POST /api/judge/v1/outspeed-and-ko
 ヘッダなし400・未知speciesKey 422・7候補400 を実クラスタ(k3d-pokecalc、実データ)で確認済み。
 `Makefile` に `API_URL` を追加、README の古い「JD0完了」表記も修正。
 iOS版JD5は要望が出たら判断(ADR-0705 却下案)
+Status(追記): 2026-10-03、P5-5 の Showdown 形式の変換部を `web/src/team/showdownFormat.ts` に実装(ADR-0310。ブランチ `feat/web-team-showdown-format`)。`parseShowdownTeam(text, master)` / `exportShowdownTeam(members, master)` の純粋関数。`EVs:` は SP をそのまま読み書き。画面への配線は Web レーンの P5-5b(`parse` の members を構築へ、issues を一覧表示)。
 
 ## Ops
 Lane: 運用(deploy・scripts・AIエージェントの権限設定。専任セッションなし。空席時は手が空いたレーンが調整役の
