@@ -543,6 +543,18 @@ test_runbooks() {
   if runbook_section "$ROOT/docs/runbooks/speed.md" | grep -q 'とばす'; then ok; else
     ng "docs/runbooks/speed.md の Argo CD 導入節から「すでに入れていればとばす」の注記が消えた(ADR-0405 §3)"
   fi
+
+  # issue #320: 両 OS で動く・利用者の kubeconfig を書き換えない・読み取りに root の資格情報を使わない。
+  local bad
+  begin "runbook: macOS 専用の sed -i '' を使わない"
+  bad=$(grep -rnF "sed -i ''" "$ROOT/docs/runbooks" "$ROOT/docs/impl/runbook-commands.md" || true)
+  if [ -z "$bad" ]; then ok; else ng "sed -i '' が残っている: $bad"; fi
+  begin "runbook: root の DSN(pokedex-dsn)を取り出さない"
+  bad=$(grep -rnE "\.data\.pokedex-dsn\}" "$ROOT/docs/runbooks" "$ROOT/docs/verify-m1.md" "$ROOT/docs/impl/runbook-commands.md" || true)
+  if [ -z "$bad" ]; then ok; else ng "pokedex-dsn(root)を使っている。pokedex-reader-dsn にする: $bad"; fi
+  begin "runbook: 実行中の context の namespace を書き換えない(一時 kubeconfig を使う)"
+  bad=$(grep -rn "set-context" "$ROOT/docs/runbooks" | grep -v 'KUBECONFIG=' || true)
+  if [ -z "$bad" ]; then ok; else ng "KUBECONFIG なしの set-context がある: $bad"; fi
 }
 
 # ---------------------------------------------------------------------------

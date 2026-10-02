@@ -3,7 +3,7 @@ package httpapi
 // 契約テスト(test-strategy.md L4。P3-3 の gateway 経由の契約テストの先取り。ADR-0202 AC-G8)。
 // gateway 自身が作るエラー応答と、上流が calc-svc の実物(calctest。架空マスタ)のときの応答を
 // api/openapi.yaml に照らして kin-openapi で検証する。仕様は生成物に埋め込まれたもの
-// (api.GetSwagger。make gen で openapi.yaml から作られる)を使う。検証ヘルパーは
+// (api.GetSpec。make gen で openapi.yaml から作られる)を使う。検証ヘルパーは
 // services/calc/internal/httpapi/contract_test.go と同じやり方(internal 規則で共有できないため写し)。
 
 import (
@@ -35,7 +35,7 @@ var (
 func loadContract(t *testing.T) (*openapi3.T, routers.Router) {
 	t.Helper()
 	contractOnce.Do(func() {
-		contractDoc, contractErr = api.GetSwagger()
+		contractDoc, contractErr = api.GetSpec()
 		if contractErr != nil {
 			return
 		}

@@ -193,7 +193,7 @@ func TestReadyzMethodsAndContract(t *testing.T) {
 	for _, m := range []string{http.MethodPost, http.MethodPut, http.MethodDelete} {
 		assertError(t, do(t, h, m, readyzPath, false), http.StatusNotFound, api.NotFound)
 	}
-	doc, err := api.GetSwagger()
+	doc, err := api.GetSpec()
 	if err != nil {
 		t.Fatalf("契約を読めない: %v", err)
 	}
