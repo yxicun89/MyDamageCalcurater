@@ -831,12 +831,19 @@ export interface components {
     /**
      * @description 1発ぶんの観測。percent / percentTenths / damage の**ちょうど1つ**を指定する(ADR-0010 §R2)。
      *     0 個・2 個以上・範囲外は 400 `invalid_observation`。整数でなければ(例 12.5)400 `invalid_json`。
-     *     表示%(CalcResult.minPercent など)とは別概念で、丸め規則に依存しない区間で照合する。
+     *     表示%(CalcResult.minPercent など)とは別概念。percent は実機の表示と同じ切り捨てとして照合し、
+     *     percentTenths は丸め規則に依存しない区間で照合する(ADR-0134)。
      */
     Observation: {
-      /** @description 整数%の観測(精度 1%) */
+      /**
+       * @description 整数%の観測(精度 1%)。実機の相手 HP 減少表示と同じ切り捨て(floor(100×ダメージ/最大HP)、100 で頭打ち)。
+       *     v は真の割合 p が v ≤ p < v+1(v=100 は p ≥ 100)のダメージと両立する(ADR-0134)
+       */
       percent?: number;
-      /** @description 小数第1位の観測を 0.1% 単位の整数にしたもの(例 45.3% → 453) */
+      /**
+       * @description 小数第1位の観測を 0.1% 単位の整数にしたもの(例 45.3% → 453)。出所の丸めが未確認なので、
+       *     v−1 < p < v+1(0.1% 単位。v=1000 は上側を開ける)のダメージと両立する(ADR-0010 §R2)
+       */
       percentTenths?: number;
       /** @description HP の実点数の観測(自分の HP の減少量など) */
       damage?: number;
