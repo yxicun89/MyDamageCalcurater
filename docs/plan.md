@@ -168,6 +168,16 @@
 - [x] P6-18 issue #328
 - [x] P6-19 issue #272 の iOS 側
 
+- [x] P6-20 構築の Showdown 形式のインポート/エクスポート(requirements.md §2 の必須。ADR-0213 §4: クライアント側の担当。
+  2026-09-21 の「後回し」は 2026-10-02 のユーザー指示「iOS レーンの未実装機能をすべて実施」で解除)。構築編集画面から
+  1体または6体を Showdown 形式のテキストで書き出し(共有・コピー)/貼り付けて取り込み。名前 ⇔ ID は pokedex の検索・`getMovesByIds` で解決。
+  解決できない行は黙って捨てず一覧で伝える。Web(`web/src/team`)の書式・文言と揃える。
+  後続: 持ち物の書き出しは ID 引き API が無く `searchItems` 先頭ページ頼み(省いた分は件数で通知。ADR-0502)。`getItemsByIds` 相当ができたら置き換える。
+  - 完了(2026-10-02): 日本語名の Showdown 風テキスト(ユーザー決定。実 Showdown 非互換。ADR-0502)。書き出し(コピー・共有)・貼り付け取り込み(取り込めなかった行を一覧し、取り込める分だけ追加)。`swift test` 633件・`make ios-test` 全件成功(XCUITest 61件)。critic PASS(指摘対応済み)
+- [ ] P6-21 タイプ色エンブレム(画像が無くても成立するフォールバック。design.md「タイプバッジ」18 タイプ。iOS に未実装なら実装)
+- [ ] P6-22 構築メンバーの並べ替え(ADR-0501「P6-2c」で範囲外にした reorder。team API の PUT で足りるか確認)
+- [ ] P6-23 よく使う相手の候補(`GET /api/record/frequent-opponents`。相手選択に出す。record-svc が計算イベントを保存する経路の確認が前提)
+
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)
 - [x] TB1 防御タイプバランス

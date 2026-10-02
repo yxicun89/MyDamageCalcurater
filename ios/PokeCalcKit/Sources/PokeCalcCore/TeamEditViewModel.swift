@@ -160,6 +160,46 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
         return true
     }
 
+    /// 取り込んだメンバーを末尾に追加する(P6-20。ADR-0501「P6-20」)。**保存はしない**(`addMember` と同じ。
+    /// 画面の「保存」で保存する)。
+    /// - 追加できるのは `TeamLimits.maxMembers` までの空き枠ぶん。超えたら先頭から入れられるだけ入れ、
+    ///   `teamError = .tooManyMembers`
+    /// - 追加したメンバーごとに `species(key:)` を引いて `moveOptionsByMember`/`abilityOptionsByMember` を用意し、
+    ///   取り込んだ技の ID(learnset に無いもの)は `resolveUnknownMoves` と同じ経路で名前を解決する
+    /// - 通信に失敗しても追加したメンバーは消さない(`error` を立てる。既存のメンバー・保存済みの構築は変えない)
+    /// - 戻り値は追加した体数
+    @discardableResult
+    public func importMembers(_ members: [TeamMember]) async -> Int {
+        guard !members.isEmpty else { return 0 }
+        let freeSlots = max(0, TeamLimits.maxMembers - team.members.count)
+        let accepted = Array(members.prefix(freeSlots))
+        teamError = members.count > freeSlots ? .tooManyMembers : nil
+        guard !accepted.isEmpty else { return 0 }
+
+        team.members.append(contentsOf: accepted)
+        let tokens = Dictionary(uniqueKeysWithValues: accepted.map { ($0.id, nextMemberSpeciesToken(for: $0.id)) })
+        var detailsByKey: [String: SpeciesDetail] = [:]
+        for member in accepted {
+            if detailsByKey[member.speciesKey] == nil {
+                do {
+                    detailsByKey[member.speciesKey] = try await service.species(key: member.speciesKey)
+                } catch {
+                    self.error = TeamScreenError(error)
+                    continue
+                }
+            }
+            guard let detail = detailsByKey[member.speciesKey], tokens[member.id] == memberSpeciesGeneration[member.id] else {
+                continue
+            }
+            speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+            learnsetIdsByMember[member.id] = detail.learnset
+            recomputeMoveOptions(forMember: member.id)
+            abilityOptionsByMember[member.id] = detail.abilities
+        }
+        await resolveUnknownMoves(accepted.flatMap(\.moveIds))
+        return accepted.count
+    }
+
     /// `team.members` から取り除き、対応する選択肢・エラー・世代も消す。
     public func removeMember(id: String) {
         team.members.removeAll(where: { $0.id == id })
