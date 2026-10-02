@@ -84,6 +84,8 @@ public enum SpeedLabels {
     }
 
     // ---- 入力の範囲外(画面で送信前に止める) ----
+    public static func spRange(max: Int) -> String { "能力ポイントは0〜\(max)の整数で入力してください" }
+    public static func rankRange(min: Int, max: Int) -> String { "ランクは\(min)〜+\(max)の整数で入力してください" }
     /// 実数値の下限(契約の minimum: 1)。上限は speed サービスだけが式から導くので画面では判定しない。
     public static let rawValueRange = "実数値は1以上の整数で入力してください"
 
