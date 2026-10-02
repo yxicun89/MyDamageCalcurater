@@ -2628,6 +2628,104 @@
       }
     },
     {
+      "name": "calc/tera-double-marks",
+      "fn": "calc",
+      "tags": [
+        "unsupported",
+        "tera",
+        "double"
+      ],
+      "source": "手書き(issue #232・ADR-0160。既存ベクタに teraType と format=double を足し、未対応の印が Go/WASM で一致することを見る。数値は single・テラスなしと同じ)",
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null,
+          "teraType": "fire"
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null,
+          "teraType": "ghost"
+        },
+        "move": {
+          "id": "bodyslam",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
       "name": "bulk/default-presets-physical",
       "fn": "calcBulk",
       "tags": [
@@ -3050,6 +3148,116 @@
       }
     },
     {
+      "name": "bulk/tera-double-marks",
+      "fn": "calcBulk",
+      "tags": [
+        "unsupported",
+        "tera",
+        "double"
+      ],
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none",
+          "teraType": "normal"
+        },
+        "defenderSpecies": {
+          "key": "blissey",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "attackerScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          },
+          "defenderScreens": {
+            "reflect": true,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false,
+        "presetKeys": [
+          "none",
+          "hp",
+          "hb_boost",
+          "hb",
+          "hb_full"
+        ],
+        "itemVariants": [
+          null,
+          {
+            "id": "eviolite",
+            "nameJa": "テストもちもの1",
+            "effect": {
+              "statMods": {
+                "def": 6144,
+                "spd": 6144
+              }
+            }
+          },
+          {
+            "id": "assaultvest",
+            "nameJa": "テストもちもの2",
+            "effect": {
+              "statMods": {
+                "spd": 6144
+              }
+            }
+          }
+        ]
+      },
+      "source": "手書き(issue #232・ADR-0160。既存ベクタに teraType と format=double を足し、未対応の印が Go/WASM で一致することを見る。数値は single・テラスなしと同じ)"
+    },
+    {
       "name": "reverse/defender-percent-single-observation",
       "fn": "calcReverse",
       "tags": [
@@ -3444,6 +3652,84 @@
         ],
         "maxCandidates": 10
       }
+    },
+    {
+      "name": "reverse/tera-double-marks",
+      "fn": "calcReverse",
+      "tags": [
+        "unsupported",
+        "tera",
+        "double"
+      ],
+      "request": {
+        "format": "double",
+        "side": "defender",
+        "known": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none",
+          "teraType": "normal"
+        },
+        "unknownSpecies": {
+          "key": "blissey",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "observations": [
+          {
+            "percent": 45
+          }
+        ],
+        "maxCandidates": 10
+      },
+      "source": "手書き(issue #232・ADR-0160。既存ベクタに teraType と format=double を足し、未対応の印が Go/WASM で一致することを見る。数値は single・テラスなしと同じ)"
     }
   ]
 }

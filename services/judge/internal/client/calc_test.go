@@ -237,6 +237,33 @@ func TestDamageAcceptsUnknownUnsupportedReason(t *testing.T) {
 	}
 }
 
+// TestDamageRelaysFormatUnsupportedMark: calc-svc が付ける format の印(ADR-0160。judge は teraType を
+// 受け取らないので届くのは format だけ)も、解釈せず calc-svc が返した並びのまま運ぶ(ADR-0708 §4)。
+func TestDamageRelaysFormatUnsupportedMark(t *testing.T) {
+	t.Parallel()
+
+	server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"minDamage":100,"maxDamage":115,"defenderHP":172,
+		  "ko":{"hits":2,"guaranteed":true,"displayChancePercent":100},
+		  "unsupported":[
+		    {"target":"defender_item","reason":"unsupported_effect","id":"test-item-vest"},
+		    {"target":"format","reason":"unsupported_effect","id":"double"}]}`))
+	})
+
+	got, err := newCalc(t, server.URL, testTimeout).Damage(t.Context(), requestContext, exampleCalcRequest())
+	if err != nil {
+		t.Fatalf("Damage: %v", err)
+	}
+	want := []UnsupportedMark{
+		{Target: "defender_item", Reason: "unsupported_effect", ID: "test-item-vest"},
+		{Target: "format", Reason: "unsupported_effect", ID: "double"},
+	}
+	if !reflect.DeepEqual(got.Unsupported, want) {
+		t.Errorf("Unsupported = %+v, want %+v", got.Unsupported, want)
+	}
+}
+
 // TestDamageRequiresRequestContext: 端末 ID・セッション ID が無いまま上流を呼ばない(pokedex と同じ)。
 func TestDamageRequiresRequestContext(t *testing.T) {
 	t.Parallel()

@@ -401,6 +401,8 @@ WASM は HTTP を通らないので API 契約ではない。ズレを記録し�
   誤りが実害になる形(呼び出し側が生成した JSON の重複)は想定せず、いまは受け入れる。
 - **ダブル・テラスタル**は engine の対応範囲どおり(`format` は渡すだけ、`teraType` は
   受け取るが engine は未使用)。境界は先に口を開けておく。
+  (追記 2026-10-02: 未使用であることは結果の `unsupported` の印(target `attacker_tera_type` /
+  `defender_tera_type` / `format`)で利用者に伝える。数値は変えない。ADR-0160・issue #232。)
 - **ベクタは 32 件**。ゴールデンの網羅(Champions 世代の全種族。`testdata/golden/metadata.json` の `speciesCount`。当時は gen9 の 1,392 種族を参考集合にしていた)を WASM 側で回してはいない。
   Go と WASM の差は補正の種類ではなく実行環境から出るので、補正を1つずつ通す固定ケースで足りる
   と判断した。全件回したくなったら `-vectors` に別ファイルを渡せる。

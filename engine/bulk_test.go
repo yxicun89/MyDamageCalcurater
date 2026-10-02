@@ -632,10 +632,10 @@ func TestCalcBulkLowHPDefender(t *testing.T) {
 }
 
 // 受け入れ条件 f: format=double でも行の構成は single と同じで、各行は Format=double の CalcDamage と一致する。
-// 実態: CalcDamage は現状 Format を一切参照しない(ダブル固有補正は ADR-0005 の未対応範囲)ため、
-// このテストが固定するのは「行構成が Format に依存しないこと」だけで、Format が CalcDamage へ
-// 素通しされていること自体は検証できない(bulk.go が Format を FormatSingle に固定しても通る = 等価変異)。
-// CalcDamage がダブル補正を持ったら、single/double で結果が変わる入力を足して素通しを検証すること。
+// 実態: CalcDamage は現状 Format を数値の計算に使わない(ダブル固有補正は ADR-0005 の未対応範囲)ため、
+// このテストが固定するのは「行構成が Format に依存しないこと」だけ。Format が各行へ素通しされること
+// (format の印が付くこと)は TestUnsupportedTeraAndFormatPropagateToBulk が検証する。
+// CalcDamage がダブル補正を持ったら、single/double で結果が変わる入力を足すこと。
 func TestCalcBulkFormatDouble(t *testing.T) {
 	single := bulkInput(CategoryPhysical, TypeWater)
 	double := bulkInput(CategoryPhysical, TypeWater)

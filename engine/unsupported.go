@@ -82,6 +82,10 @@ const (
 	UnsupportedTargetAttackerAbility UnsupportedTarget = "attacker_ability"
 	UnsupportedTargetDefenderItem    UnsupportedTarget = "defender_item"
 	UnsupportedTargetDefenderAbility UnsupportedTarget = "defender_ability"
+	// 攻撃側・防御側のテラスタイプと対戦形式(ダブル)は engine が計算に反映しない(ADR-0160)。
+	UnsupportedTargetAttackerTeraType UnsupportedTarget = "attacker_tera_type"
+	UnsupportedTargetDefenderTeraType UnsupportedTarget = "defender_tera_type"
+	UnsupportedTargetFormat           UnsupportedTarget = "format"
 )
 
 // UnsupportedReason は印の理由のコード。技の印は機構の値(MoveMechanism)か UnsupportedZeroPower、
@@ -99,12 +103,13 @@ const (
 type UnsupportedMark struct {
 	Target UnsupportedTarget
 	Reason UnsupportedReason
-	ID     string // 技・持ち物・特性の ID
+	ID     string // 技・持ち物・特性の ID、テラスタイプ・形式の値
 }
 
 // unsupportedMarks は入力に付く印を 技 → 攻撃側の持ち物 → 攻撃側の特性 → 防御側の持ち物 → 防御側の特性
-// の順に返す(技の印は理由の昇順。機構の印の後に zero_power)。印が無ければ nil。
-// 変化技は印を付けない(ダメージを持たないので 0 が正しい)。
+// → 攻撃側のテラス → 防御側のテラス → 対戦形式(シングル以外)の順に返す(技の印は理由の昇順。機構の印の後に zero_power)。印が無ければ nil。
+// 変化技は技・持ち物・特性の印を付けない(ダメージを持たないので 0 が正しい)が、
+// テラス・対戦形式の印は変化技にも付ける(入力の指定が無視されたことを示す。ADR-0160)。
 func unsupportedMarks(in DamageInput) []UnsupportedMark {
 	var marks []UnsupportedMark
 	if in.Move.Category != CategoryStatus {
@@ -121,6 +126,15 @@ func unsupportedMarks(in DamageInput) []UnsupportedMark {
 	}
 	if ae := in.Defender.Ability.Effect; ae != nil && ae.UnsupportedDefender {
 		marks = append(marks, UnsupportedMark{Target: UnsupportedTargetDefenderAbility, Reason: UnsupportedEffect, ID: in.Defender.Ability.ID})
+	}
+	if t := in.Attacker.TeraType; t != "" {
+		marks = append(marks, UnsupportedMark{Target: UnsupportedTargetAttackerTeraType, Reason: UnsupportedEffect, ID: string(t)})
+	}
+	if t := in.Defender.TeraType; t != "" {
+		marks = append(marks, UnsupportedMark{Target: UnsupportedTargetDefenderTeraType, Reason: UnsupportedEffect, ID: string(t)})
+	}
+	if in.Format != "" && in.Format != FormatSingle {
+		marks = append(marks, UnsupportedMark{Target: UnsupportedTargetFormat, Reason: UnsupportedEffect, ID: string(in.Format)})
 	}
 	return marks
 }

@@ -241,8 +241,8 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 
 | 入力 | 実際の扱い | 根拠 | issue |
 |---|---|---|---|
-| `TeraType` | 表にある ID かの検証だけ。一致判定・相性は素の `Species.Types` | `dmg:184-187`、`dmg:117`、`mod:51` `hasType`、ADR-0005 | #232・#315 |
-| `Format = double` | 計算に使わない(壁 ×0.5 固定・全体技の軽減なし) | §10 | #232・#288 |
+| `TeraType` | 表にある ID かの検証だけ。一致判定・相性は素の `Species.Types`。指定があれば結果に「未対応」の印(`attacker_tera_type`/`defender_tera_type`。変化技にも付く。ADR-0160) | `dmg:184-187`、`dmg:117`、`mod:51` `hasType`、ADR-0005 | #232・#315 |
+| `Format = double` | 計算に使わない(壁 ×0.5 固定・全体技の軽減なし)。結果に「未対応」の印(`format`。ADR-0160) | §10 | #232・#288 |
 | `Field.AttackerScreens` | どこからも読まれない(`DefenderScreens` だけを見る) | `mod:124` | — |
 | `Move.Effect` | ダメージ計算では読まない(`Move.Priority` はサイコフィールドの判定だけに使う。ADR-0123) | `engine/model.go:21`、ADR-0107 決定2 | — |
 | `Species.Abilities` | 参考。計算は `Individual.Ability` を使う | `engine/model.go:16` | #272(Web で特性を選べない) |

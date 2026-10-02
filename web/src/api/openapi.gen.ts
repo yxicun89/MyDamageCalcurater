@@ -470,6 +470,9 @@ export interface components {
       | "store_unavailable"
       | "upstream_unavailable";
     /**
+     * @description 対戦形式。計算(/api/calc・/api/calc/bulk・/api/calc/reverse)は double を受け付けるが計算には
+     *     反映しない(ダブル固有の補正は後続 Phase)。double を指定すると数値はシングルのまま、結果の
+     *     unsupported に target format・reason unsupported_effect・id double の印が付く(ADR-0160)。
      * @default single
      * @enum {string}
      */
@@ -595,6 +598,11 @@ export interface components {
       /** @description 能力ポイント。各 0..32、合計 <= 66 */
       sp: components["schemas"]["StatBlock"];
       ranks?: components["schemas"]["RankBlock"];
+      /**
+       * @description テラスタイプ。受け付けるが計算には反映しない(テラスタルの補正は未実装)。指定すると数値は
+       *     テラスなしのまま、結果の unsupported に target attacker_tera_type / defender_tera_type・
+       *     reason unsupported_effect・id テラスタイプの印が付く(ADR-0160)。
+       */
       teraType?: components["schemas"]["PokeType"] | null;
       status?: components["schemas"]["StatusCondition"];
     };
@@ -655,11 +663,13 @@ export interface components {
     };
     /**
      * @description 「この結果は正しくない可能性がある」印1つ(ADR-0123)。engine が正しく計算できない技の機構・
-     *     持ち物・特性に、数値は通常の式のまま付ける(400 で拒否しない)。
+     *     持ち物・特性と、受け付けるが計算に反映しないテラスタイプ・対戦形式(ADR-0160)に、数値は
+     *     通常の式のまま付ける(400 で拒否しない)。
      */
     UnsupportedMark: {
       /**
-       * @description 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability。
+       * @description 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability・
+       *     attacker_tera_type・defender_tera_type・format(並びもこの順)。
        *     値を足しても古いクライアントが応答全体をデコードできなくなるのを避けるため、enum にしない
        *     (クライアントは未知の値を「対象不明の印」として扱い、id をそのまま表示する。ADR-0215)。
        */
@@ -669,11 +679,15 @@ export interface components {
        *     always_crit・effectiveness_change・field_specific・fixed_damage・ignore_defense_ranks・
        *     move_specific・multi_hit・ohko・priority_change・type_change・variable_power)か
        *     zero_power(威力0の攻撃技。威力が技の処理で決まるため)、持ち物・特性は
-       *     unsupported_effect(効果スキーマで表せない)。target と同じ理由で enum にしない
+       *     unsupported_effect(効果スキーマで表せない)、テラスタイプ・対戦形式も unsupported_effect
+       *     (効果を計算に反映していない。ADR-0160)。target と同じ理由で enum にしない
        *     (クライアントは未知の値を汎用の文言で扱う。ADR-0215)。
        */
       reason: string;
-      /** @description 技・持ち物・特性の ID */
+      /**
+       * @description 技・持ち物・特性の ID。target が attacker_tera_type / defender_tera_type のときはテラスタイプ
+       *     (PokeType の値)、format のときは対戦形式(Format の値)。
+       */
       id: string;
     };
     CalcResult: {

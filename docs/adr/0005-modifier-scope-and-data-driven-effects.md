@@ -39,6 +39,8 @@ engine 内には「どの持ち物が何倍か」のリストを持たない。
 - ~~接地していない場合のフィールド無効~~(ADR-0116 で対応。じゅうりょく・くろいてっきゅう・ふうせんは引き続き対象外)、
   テラスタルの攻撃/防御補正(STAB は素タイプのみ)。
 - ダブル固有補正(全体技0.75、味方効果)。format は入力に持つが未適用。
+- (追記 2026-10-02: テラス指定・format=double の入力には、数値はそのままで結果に「未対応」の印
+  (target `attacker_tera_type` / `defender_tera_type` / `format`)を付ける。ADR-0160・issue #232。)
 
 これらは AbilityEffect/ItemEffect か Field/Move の拡張で後付けできる構造にしてある。
 
