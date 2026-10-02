@@ -147,6 +147,10 @@ func httpErrorHandler(c *echo.Context, err error) {
 		return
 	}
 	status, body := errorBodyFor(err)
+	var he *httpError
+	if errors.As(err, &he) && he.retryAfter {
+		c.Response().Header().Set("Retry-After", "1")
+	}
 	_ = c.JSON(status, body)
 }
 

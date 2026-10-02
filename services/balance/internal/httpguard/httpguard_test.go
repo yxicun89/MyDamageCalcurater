@@ -168,3 +168,27 @@ func TestCustomCode(t *testing.T) {
 		t.Errorf("body = %q (%v), want code upstream_unavailable", rec.Body.String(), err)
 	}
 }
+
+// ハンドラが panic しても同時実行の枠は返る(defer で解放する)。枠が漏れると、以後ずっと 503 になる。
+func TestReleasesSlotOnPanic(t *testing.T) {
+	t.Parallel()
+	first := true
+	e := newEcho(httpguard.Config{MaxInflight: 1, Timeout: time.Second}, func(c *echo.Context) error {
+		if first {
+			first = false
+			panic("boom")
+		}
+		return c.String(http.StatusOK, "ok")
+	})
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("panic が呼び出し元へ伝わらなかった")
+			}
+		}()
+		do(e)
+	}()
+	if rec := do(e); rec.Code != http.StatusOK {
+		t.Fatalf("panic の後の status = %d, want 200(枠が返っていない)", rec.Code)
+	}
+}

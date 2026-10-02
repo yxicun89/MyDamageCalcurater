@@ -48,7 +48,8 @@
 - calc の 16 は、0.2 CPU・逆算の最大入力(1 回約 85ms)で 16 並列でも最後の 1 件が約 1.4 秒で終わる値。
 - 契約への影響を最小にするため、**新しい ErrorCode は足さない**: balance は既存の `overloaded`(ADR-0409)、speed は
   `overloaded` を enum に追記(speed の `api/openapi.yaml` と生成物のみ)、calc・pokedex・judge は契約に宣言済みの
-  `upstream_unavailable`(ルートの `api/openapi.yaml` は変更しない。生成物・Web・iOS への波及を避ける)。
+  `upstream_unavailable`(ルートの `api/openapi.yaml` は型を変えず、calc 3 操作・pokedex の 503 と code 表の説明文に
+  「自サービスの過負荷・締め切り超過でも返す」を追記するだけ。この説明文の生成物への反映は §結果のとおり)。
   `overloaded` を全サービスの契約に足す案は、calc・gateway・Web・iOS の再生成を伴うので見送り、必要になれば API レーンに依頼する。
 - 上限を環境変数にしない(`writeTimeout` と同じく定数。負荷試験で値を動かすときはコードを変える)。
 
@@ -66,9 +67,9 @@
 
 ### 4. 連鎖の大小関係(付録 A の表の確定)
 
-内側 → 外側: pokedex の DB 締め切り 5 秒・calc の取得 10 秒・gateway の上流 10 秒・judge 全体 12 秒 <
-各サービスのハンドラ締め切り(calc 9 秒・balance/speed 14 秒)< 各サービスの writeTimeout(calc 10 秒・その他 15 秒)<
-Traefik の responseHeaderTimeout 20 秒 < gateway の writeTimeout 60 秒 < Traefik の writeTimeout 70 秒。
+内側 → 外側: pokedex の DB 締め切り 5 秒・judge 全体 12 秒 <
+calc ハンドラ締め切り 9 秒 < calc writeTimeout 10 秒 ≦ gateway の上流 10 秒、balance/speed のハンドラ締め切り 14 秒 <
+writeTimeout 15 秒 < Traefik の responseHeaderTimeout 20 秒 < gateway の writeTimeout 60 秒 < Traefik の writeTimeout 70 秒。
 各段の関係はサービスの `cmd` のテストと deploytest が固定する。
 
 ## 結果・限界
@@ -76,4 +77,6 @@ Traefik の responseHeaderTimeout 20 秒 < gateway の writeTimeout 60 秒 < Tra
 - 過負荷のとき、上限を超えた分は待たずに 503 JSON になり、受け付けた分は締め切りまでに終わる。締め切りを過ぎた要求は
   engine を新しく呼ばない。ただし**進行中の 1 回の engine 呼び出し(数 ms〜数十 ms)は止められない**(engine は純粋で context を見ない)。
 - Docker の負荷試験(同時 120 で EOF 0 件)は k3d・Docker が要るためメインでの実地確認とする(検証手順は issue #299 のとおり)。
-- 契約の変更は speed の `overloaded` の追記のみ(ルートの `api/openapi.yaml`・Web・iOS の生成物は変わらない)。
+- 契約の変更は speed の `overloaded` の追記と、ルート `api/openapi.yaml` の `upstream_unavailable` の説明文の追記のみ(型は変えない)。
+  Web の生成物(`web/src/speed/speed.gen.ts`・`judge.gen.ts`・`balance.gen.ts`・`openapi.gen.ts`)は再生成で変わる(型の enum の追加と説明文)。
+  iOS の生成物(`ios/PokeCalcKit/Sources/PokeCalcAPI/Generated`)も `ios/scripts/openapi-gen.sh` で再生成し、説明文の差分(コメントのみ)をコミットした。

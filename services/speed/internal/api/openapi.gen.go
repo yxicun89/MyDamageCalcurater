@@ -18,6 +18,7 @@ const (
 	InvalidRequest    ErrorCode = "invalid_request"
 	MasterUnavailable ErrorCode = "master_unavailable"
 	MissingHeader     ErrorCode = "missing_header"
+	NotFound          ErrorCode = "not_found"
 	Overloaded        ErrorCode = "overloaded"
 	RequestTooLarge   ErrorCode = "request_too_large"
 	UnknownPokemon    ErrorCode = "unknown_pokemon"
@@ -35,6 +36,8 @@ func (e ErrorCode) Valid() bool {
 	case MasterUnavailable:
 		return true
 	case MissingHeader:
+		return true
+	case NotFound:
 		return true
 	case Overloaded:
 		return true
@@ -214,6 +217,13 @@ type PositionRequest struct {
 	// Example: plus
 	Nature *NatureId `json:"nature,omitempty"`
 
+	// Paralysis Whether one's own pokemon is paralyzed (preset and custom only; not allowed for raw). Halves
+	// the speed (rounded down) after the other modifiers (ADR-0607 §3). Omitted means false.
+	//
+	//
+	// Example: false
+	Paralysis *bool `json:"paralysis,omitempty"`
+
 	// PokemonId The pokemon of the read model. Required for preset and custom (its base speed is the input of
 	// the formula); optional for raw, where it only resolves the name and types of the response.
 	//
@@ -246,6 +256,21 @@ type PositionRequest struct {
 	// Example: 32
 	Sp *int `json:"sp,omitempty"`
 
+	// TableTailwind Whether a tailwind is on the side of every row of the table the position is counted in (any
+	// mode). The same effect as the tailwind query of GET /api/speed/v1/table (ADR-0607 §2).
+	// Omitted means false.
+	//
+	//
+	// Example: false
+	TableTailwind *bool `json:"tableTailwind,omitempty"`
+
+	// Tailwind Whether a tailwind is on one's own side (preset and custom only; not allowed for raw). Doubles
+	// the speed, chained with the Choice Scarf before one rounding (ADR-0607 §2). Omitted means false.
+	//
+	//
+	// Example: false
+	Tailwind *bool `json:"tailwind,omitempty"`
+
 	// Value The in-battle speed itself (raw only), used as given. Accepted values are the theoretical
 	// minimum and maximum of the formula of ADR-0600 §3 over every base speed, SP, nature, rank and
 	// Choice Scarf (ADR-0602 §3); the service derives those bounds from the formula, so they are
@@ -265,13 +290,17 @@ type PositionRequestMode string
 
 // PositionResponse defines model for PositionResponse.
 type PositionResponse struct {
-	// Faster The number of table rows strictly faster than `speed`.
+	// Faster The number of table rows strictly faster than `speed`. A speed comparison that does not
+	// depend on Trick Room (under Trick Room these rows move after one's own pokemon. ADR-0607 §4).
+	//
 	//
 	// Example: 12
 	Faster  int           `json:"faster"`
 	Pokemon *SpeedPokemon `json:"pokemon,omitempty"`
 
-	// Slower The number of table rows strictly slower than `speed`.
+	// Slower The number of table rows strictly slower than `speed`. A speed comparison that does not
+	// depend on Trick Room (under Trick Room these rows move before one's own pokemon. ADR-0607 §4).
+	//
 	//
 	// Example: 30
 	Slower int `json:"slower"`
@@ -355,7 +384,8 @@ type TableResponse struct {
 	// Example: example
 	RegulationId string `json:"regulationId"`
 
-	// Tiers Tiers of the same speed, sorted by speed in descending order.
+	// Tiers Tiers of the same speed, sorted by speed in descending order, or in ascending order when
+	// trickRoom=true (move order. ADR-0607 §4).
 	Tiers []SpeedTier `json:"tiers"`
 }
 
@@ -397,6 +427,19 @@ type GetSpeedTableParams struct {
 	// The order given does not affect the result. An unknown ID, a duplicate, or an empty value
 	// (`presets=`) is 400 invalid_request.
 	Presets *[]PresetId `form:"presets,omitempty" json:"presets,omitempty"`
+
+	// Tailwind Whether a tailwind is on the side of every row of the table (ADR-0607 §2): every row's speed
+	// is doubled, chained with the Choice Scarf of the max-scarf row before one rounding. Omitted
+	// means false (the same table as before). A value that is not a boolean, an empty value, or the
+	// parameter sent more than once is 400 invalid_request.
+	Tailwind *bool `form:"tailwind,omitempty" json:"tailwind,omitempty"`
+
+	// TrickRoom Whether Trick Room is in effect (ADR-0607 §4). The speeds are not changed; only the order of
+	// the tiers is reversed so that the table is in move order (ascending speed). The order inside
+	// a tier (pokemonId ascending, then the preset order) is not reversed, and a speed tie stays one
+	// tier. Omitted means false. A value that is not a boolean, an empty value, or the parameter
+	// sent more than once is 400 invalid_request.
+	TrickRoom *bool `form:"trickRoom,omitempty" json:"trickRoom,omitempty"`
 
 	// XDeviceId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
 	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
@@ -552,6 +595,20 @@ func (w *ServerInterfaceWrapper) GetSpeedTable(ctx *echo.Context) error {
 	err = runtime.BindQueryParameterWithOptions("form", false, false, "presets", ctx.QueryParams(), &params.Presets, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter presets: %s", err))
+	}
+
+	// ------------- Optional query parameter "tailwind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "tailwind", ctx.QueryParams(), &params.Tailwind, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter tailwind: %s", err))
+	}
+
+	// ------------- Optional query parameter "trickRoom" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "trickRoom", ctx.QueryParams(), &params.TrickRoom, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter trickRoom: %s", err))
 	}
 
 	headers := ctx.Request().Header

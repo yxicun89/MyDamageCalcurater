@@ -5,6 +5,7 @@ package httpapi
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -46,7 +47,12 @@ func guardMiddleware(opts []Option) echo.MiddlewareFunc {
 // checkDeadline は engine を呼ぶ前に締め切りを確かめる。過ぎていれば計算を始めず 503 にする。
 func checkDeadline(ctx context.Context) error {
 	if httpguard.Expired(ctx) {
-		return newError(api.UpstreamUnavailable, "処理の締め切りを過ぎた。少し待ってから再試行してほしい")
+		return &httpError{
+			status:     http.StatusServiceUnavailable,
+			code:       api.UpstreamUnavailable,
+			message:    "処理の締め切りを過ぎた。少し待ってから再試行してほしい",
+			retryAfter: true,
+		}
 	}
 	return nil
 }

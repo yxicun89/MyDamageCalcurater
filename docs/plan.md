@@ -200,6 +200,7 @@
 - [x] SP3 Web の素早さ画面
 - [x] SP4 pokedex の read model
 - [x] SP5 GitOps
+- [x] SP6 追い風・まひ・トリックルーム(ADR-0607。契約 0.5.0・コア・HTTP・Web。iOS は対象外)
 - [x] issue #237 gitops overlay の read model
 
 ## JD: 判定(判定レーン。設計は docs/judge-design.md。2026-09-22 ユーザー要望)
@@ -249,6 +250,8 @@ requirements.md の項目のうち、計画に無かったものをここに置�
 
 ## ブロッカー
 解決済みの記録は [plan-archive.md](plan-archive.md)。未解決のものだけをここに置く(issue があるものは issue を正とする)。
+
+- **素早さの 999 上限(ADR-0607 §5。作業は止めない)**: @smogon/calc 0.12.0 の `getFinalSpeed` 末尾 `Math.min(gen.num <= 2 ? 999 : 10000, speed)` は Champions(`gen.num === 0`)で 999 上限になるが、ゲームの実ルールか世代判定の副作用かが不明。既定案: 現状維持(speed サービスは上限なし。既存の応答が変わるため)。ゲームの実機で 999 超の素早さがあり得るかを人間が確認できたら決める。
 
 **【人間の確認待ち】**
 - **P4-5 の Safari 実機確認**(仕様ブロッカーではない。作業は止めない。Chrome は 2026-09-22 に確認済み): `make web-dev` で開き、Safari で計算・逆算が動くこと、`.wasm` の MIME type(`application/wasm`)・`WebAssembly.instantiateStreaming`(失敗時は arrayBuffer にフォールバック)・キャッシュ・初回ロード(約4.6MB / gzip 1.3MB)・メモリを確認する。加えて issue #333: 375px 幅未満でタブ列を左端までスクロールし、先頭の「計算」タブが読める・押せること(`justify-content: safe center` の Safari 対応)。確認できるまで P4-5 は「実装・自動テスト済み、Safari 実機未確認」として扱う。

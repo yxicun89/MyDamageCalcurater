@@ -115,6 +115,9 @@ func TestExpiredDeadlineSkipsEngine(t *testing.T) {
 			h := NewHandler(store, pub, WithGuard(httpguard.Config{MaxInflight: 4, Timeout: time.Nanosecond}))
 			rec := serve(t, h, http.MethodPost, tt.path, validHeaders(), tt.body)
 			assertError(t, rec, http.StatusServiceUnavailable, "upstream_unavailable")
+			if got := rec.Header().Get("Retry-After"); got != "1" {
+				t.Errorf("Retry-After = %q, want 1(締め切り超過の 503)", got)
+			}
 			if len(pub.calls) != 0 {
 				t.Errorf("締め切り後に計算が走った: %+v", pub.calls)
 			}

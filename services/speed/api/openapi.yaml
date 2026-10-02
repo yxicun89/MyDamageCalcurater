@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: pokecalc speed API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     素早さ比較の独立サービスの契約。
     SP0 はヘルスチェックと、既定のレギュレーションで使用可能なポケモンの一覧(素早さ種族値つき)を返す。
@@ -11,6 +11,8 @@ info:
     docs/adr/0602-speed-sp2-position.md と docs/speed-design.md。
     0.4.0: X-Device-Id / X-Session-Id を gateway と同じ正準形 UUID で検証し、ヘッダー起因の 400 の code を
     missing_header / invalid_header に分けた(破壊的変更。ADR-0606)。
+    0.5.0: 追い風・まひ・トリックルームを足した(ADR-0607)。表は tailwind / trickRoom のクエリ、自分の位置は
+    tailwind / paralysis / tableTailwind の欄(すべて省略可で、省略は false = 従来と同じ応答)。後方互換。
 servers:
   - url: /
 paths:
@@ -80,7 +82,7 @@ paths:
       description: |
         Returns, for every pokemon of the service-local read model (ADR-0600 §4), one row per selected preset
         (ADR-0601 §2), grouped into tiers of the same speed (ADR-0601 §3). Tiers are sorted by speed in
-        descending order; inside a tier, entries are sorted by pokemonId ascending, then by the preset order
+        descending order (ascending when trickRoom=true. ADR-0607 §4); inside a tier, entries are sorted by pokemonId ascending, then by the preset order
         of ADR-0601 §2. A tier with two or more entries is a speed tie.
         Check order: headers (400) → query (400) → read model absent (503) → 200 (ADR-0601 §5).
       parameters:
@@ -103,6 +105,29 @@ paths:
               $ref: '#/components/schemas/PresetId'
           example:
             - max-scarf
+        - name: tailwind
+          in: query
+          required: false
+          description: |
+            Whether a tailwind is on the side of every row of the table (ADR-0607 §2): every row's speed
+            is doubled, chained with the Choice Scarf of the max-scarf row before one rounding. Omitted
+            means false (the same table as before). A value that is not a boolean, an empty value, or the
+            parameter sent more than once is 400 invalid_request.
+          schema:
+            type: boolean
+            default: false
+        - name: trickRoom
+          in: query
+          required: false
+          description: |
+            Whether Trick Room is in effect (ADR-0607 §4). The speeds are not changed; only the order of
+            the tiers is reversed so that the table is in move order (ascending speed). The order inside
+            a tier (pokemonId ascending, then the preset order) is not reversed, and a speed tie stays one
+            tier. Omitted means false. A value that is not a boolean, an empty value, or the parameter
+            sent more than once is 400 invalid_request.
+          schema:
+            type: boolean
+            default: false
       responses:
         '200':
           description: The speed table
@@ -141,12 +166,18 @@ paths:
         `faster` and `slower` count its rows above and below the given speed, and `tie` lists the rows
         with exactly that speed (empty means no speed tie).
 
+        Field effects (ADR-0607): `tailwind` and `paralysis` apply to one's own pokemon (preset and
+        custom only); `tableTailwind` applies to every row of the table the position is counted in (any
+        mode). All are optional and default to false, which gives the same response as before.
+        Trick Room is not an input here: `faster` / `slower` compare speeds and do not depend on it
+        (under Trick Room, the rows that move before one's own pokemon are the `slower` rows. ADR-0607 §4).
+
         The input has three shapes, selected by `mode` (ADR-0602 §2):
         `preset` needs pokemonId, preset and scarf (the minimal choice: the SP, nature and rank of the
         chosen row of ADR-0601 §2, with the Choice Scarf switched independently);
         `custom` needs pokemonId, sp, nature, rank and scarf;
         `raw` needs value, the in-battle speed itself, and may name pokemonId for display only (its base
-        speed is not used). A field the chosen mode does not need, a missing required field, a pokemonId
+        speed is not used); `tailwind` and `paralysis` are not allowed for raw. A field the chosen mode does not need, a missing required field, a pokemonId
         not matching the NNNN-NNN format, or a value out of range is 400 invalid_request. A JSON `null`
         for an optional field is treated the same as omitting it.
 
@@ -323,7 +354,9 @@ components:
           items:
             $ref: '#/components/schemas/PresetId'
         tiers:
-          description: Tiers of the same speed, sorted by speed in descending order.
+          description: |
+            Tiers of the same speed, sorted by speed in descending order, or in ascending order when
+            trickRoom=true (move order. ADR-0607 §4).
           type: array
           minItems: 1
           items:
@@ -438,6 +471,25 @@ components:
           description: Whether one's own pokemon holds a Choice Scarf (preset and custom only).
           type: boolean
           example: false
+        tailwind:
+          description: |
+            Whether a tailwind is on one's own side (preset and custom only; not allowed for raw). Doubles
+            the speed, chained with the Choice Scarf before one rounding (ADR-0607 §2). Omitted means false.
+          type: boolean
+          example: false
+        paralysis:
+          description: |
+            Whether one's own pokemon is paralyzed (preset and custom only; not allowed for raw). Halves
+            the speed (rounded down) after the other modifiers (ADR-0607 §3). Omitted means false.
+          type: boolean
+          example: false
+        tableTailwind:
+          description: |
+            Whether a tailwind is on the side of every row of the table the position is counted in (any
+            mode). The same effect as the tailwind query of GET /api/speed/v1/table (ADR-0607 §2).
+            Omitted means false.
+          type: boolean
+          example: false
         sp:
           description: |
             The speed SP (custom only). The upper bound is the per-stat SP cap of the domain
@@ -483,12 +535,16 @@ components:
             so a raw request without one has no pokemon field (ADR-0602 §4).
           $ref: '#/components/schemas/SpeedPokemon'
         faster:
-          description: The number of table rows strictly faster than `speed`.
+          description: |
+            The number of table rows strictly faster than `speed`. A speed comparison that does not
+            depend on Trick Room (under Trick Room these rows move after one's own pokemon. ADR-0607 §4).
           type: integer
           minimum: 0
           example: 12
         slower:
-          description: The number of table rows strictly slower than `speed`.
+          description: |
+            The number of table rows strictly slower than `speed`. A speed comparison that does not
+            depend on Trick Room (under Trick Room these rows move before one's own pokemon. ADR-0607 §4).
           type: integer
           minimum: 0
           example: 30
@@ -520,3 +576,4 @@ components:
         - master_unavailable
         - overloaded
         - internal_error
+        - not_found
