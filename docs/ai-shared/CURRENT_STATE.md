@@ -293,12 +293,11 @@ create/update/removeのレースコンディションで作成直後の構築が
 **critic 2回目PASS**。`npx vitest run`1745/1745・`make web-e2e`37/37・typecheck/lint無回帰。
 判定レーンがShowdown形式インポート/エクスポートをブランチ`feat/web-team-showdown-format`(`web/src/team/`
 配下)で並行して進めている(分担合意済み。member editorとファイルが重ならないよう次のPR着手前に確認)。
-Next: P5-5b(構築ビルダーのメンバー編集。種族検索・技/持ち物/特性選択・SP直接入力グリッド0〜32・
-テラスタイプ。特性セレクト〈ADR-0311〉と `selectableAbilities` を再利用できる)に着手する。判定レーンのShowdown形式ブランチとの統合順を確認してから進める。その後
-P5-5c(よく計算する相手の表示。`GET /api/record/frequent-opponents`、design.mdに既にチップのモックアップ
-枠あり)・P5-5d(ADR-0209 §8の文言で「この端末のデータを削除」UI、record/team両方のdevice-data削除を呼ぶ)。
-P5-5完了時はdocs/verify-m1.md(またはM2用手順書)にM2動作確認手順を追加し、make deploy-latestの対象に
-record・team・TiDB・NATSが要るかAPIレーンと確認すること(オーケストレーターの依頼)。
+Next: **PR のマージ待ち(ADR-0800 §2 により人間が実行)**: #451(#210)・#459(#328)・#462(#274 防御側ランク)・#481(P5-5b)・#486(P5-5c)・#489(P5-5d。#459 の上に積んである)・#492(docs)。
+マージ後: (1) `SpeciesSearchField.tsx` の `selectedName`(#481 と #486 が同名で追加)と、`recordClient.ts`・`i18n/ja.ts` の `recordClientText`・`App.tsx` の `createRecordClient`(#486 と #489)の統合・競合解消(ADR-0318 に方針)。
+(2) API レーンが M2 のサービス(record・team・TiDB・NATS)を k3d に入れたら、`docs/verify-m2.md` §2 を実機で確認し前提の注記を直す(DECISIONS.md 2026-10-02)。
+(3) #211(API レーンが公開 API の `Item`/`Ability` に `effect` を足したら Web が `effects:true` へ追従)。(4) iOS へ防御側ランク文言の統一提案(DECISIONS.md)。
+このレーンで残る issue は他レーン待ち(#211 API・#332 の残り データ/運用・#271/#270 の判定画面 判定レーン)。
 **2026-10-01〜02 に消化済み(1 issue = 1 PR)**: #218(PR #407 で解決済み・クローズ)・#219(PR #420・ADR-0310。nginx にセキュリティヘッダ)・
 #272 Web 分(PR #430・ADR-0311。特性セレクト)・#274 Web 分(PR #433・ADR-0312。計算画面の「詳細」)・#210(PR #451・ADR-0313。
 **既定の計算モードをオンラインに変更**〈ユーザー決定 2026-10-01〉+ IndexedDB キャッシュのオフライン)・#332 Web 分(PR #454。
