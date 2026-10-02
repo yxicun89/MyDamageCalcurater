@@ -2040,3 +2040,10 @@ Reason: 既定案 A は変更が小さく、版を上げる PR でハッシュ�
 Impact: 版を上げる PR は config.json の `integrity` も更新する(不一致のときは stderr の実際のハッシュを、内容を確かめたうえで反映)。
 却下案 B(dist の vendoring)・C(現状維持)に変えるなら ADR-0101 追記と config.json の integrity を戻す。
 ユーザーの確認待ち: A でよいか(特に、期限切れの引き渡しを無視する TTL 7200 秒の扱い)。
+
+## 2026-10-03: ダブルを計算に反映した(API レーン → Web・iOS・判定・データレーンへ。issue #232・#288・ADR-0222)
+- `format=double` で、防御側の壁が 2732/4096(シングルは 1/2)、全体技(`move.target=spread`)が基礎ダメージ ×0.75 になった。ゴールデン(doubles)は @smogon/calc 0.12.0 の Champions 世代と全件一致
+- 技の対象がマスタに無い間(#288 がデータレーンでマスタ化するまで)、calc-svc のダブルは全攻撃技に印 `{target: move, reason: move_target_unknown}` が付く。数値は単体技として計算(全体技なら過大)。クライアントは未知の reason を汎用の文言で出す(ADR-0215)。判定画面の「ダブル」を戻すのは #288 の後
+- `move.target` は WASM 境界・engine で `""`・`single`・`spread` 以外を拒否(invalid_enum)
+- PR #497 マージ後の作業(format=double の印を外す・既存テストの期待の修正)は ADR-0222 §5
+- 未決(人間の確認): teraType の扱い(ポケモンチャンピオンズにテラスタルは無い。#497 の印のまま・無視・400・印を消す)と、相手1体のときの全体技の見せ方(ADR-0222 §4)

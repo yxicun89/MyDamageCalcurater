@@ -91,6 +91,8 @@ type UnsupportedReason string
 const (
 	// UnsupportedZeroPower は威力 0 の攻撃技(威力が技の処理で決まる。ダメージ 0 は正しい結果ではない)。
 	UnsupportedZeroPower UnsupportedReason = "zero_power"
+	// UnsupportedMoveTargetUnknown はダブルの攻撃技で技の対象が不明(単体として計算した。ADR-0222)。
+	UnsupportedMoveTargetUnknown UnsupportedReason = "move_target_unknown"
 	// UnsupportedEffect は持ち物・特性のダメージへの効果を計算に入れていない(効果スキーマで表せない。ADR-0120)。
 	UnsupportedEffect UnsupportedReason = "unsupported_effect"
 )
@@ -139,6 +141,9 @@ func moveMarks(in DamageInput) []UnsupportedMark {
 	reasons = slices.Compact(reasons)
 	if in.Move.Power <= 0 {
 		reasons = append(reasons, UnsupportedZeroPower)
+	}
+	if in.Format == FormatDouble && in.Move.Target == "" {
+		reasons = append(reasons, UnsupportedMoveTargetUnknown)
 	}
 	if len(reasons) == 0 {
 		return nil

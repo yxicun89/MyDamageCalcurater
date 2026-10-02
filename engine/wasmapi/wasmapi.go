@@ -166,6 +166,8 @@ func errorResponse(err error) string {
 		{engine.ErrTypeChartMissing, CodeTypeChartMissing},
 		{engine.ErrInvalidTypeChart, CodeInvalidTypeChart},
 		{engine.ErrUnknownType, CodeUnknownType},
+		// 技の対象(ADR-0222)。境界で検証済みなので通常は届かない。新しいコードは足さない。
+		{engine.ErrUnknownMoveTarget, CodeInvalidInput},
 		// 件数・範囲の上限(issue #110。ADR-0208 §2 と同じく新しいコードは足さず invalid_input に写す。
 		// ADR-0108)。
 		{engine.ErrTooManyPresets, CodeInvalidInput},
