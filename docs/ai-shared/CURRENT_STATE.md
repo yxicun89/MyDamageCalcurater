@@ -30,7 +30,7 @@ Status(追記): 2026-10-01、D25(issue #240・ADR-0132)。pokecalc に ingress �
 Status: D27(#252・#319・#290・#221 の runbook 部分)実装済み。`docs/runbooks/{data,api}.md`・`docs/impl/{k8s-local,db-mysql,make-targets}.md`・`docs/verify-m1.md` §3 を今の main に合わせて直した(確認方法・Secret 5キー・NetworkPolicy・終了コード3と PVC 消失の復旧手順・行番号の除去)。新しいクラスタでの verify-m1 §3 の通し実行は人間の確認待ち。
 Status: D29(#226・#296・#314・#224・#254 の索引・#256 の C・#227 のデータ分)実装済み(文書のみ)。README を現状(動くもの・未実装は assets のみ・起動手順)に、overview の状態列を plan.md への委譲に、requirements に3機能と契約4本の索引、test-strategy にサービス別の索引、ゴールデン関連(known_diffs・gen9 表記・1,392 種族)を実態に直し、ADR-0002・0011・0012・0100・0101・0104・0105・0108 の状態欄を実装後の事実(PR 番号)に更新。CLAUDE.md・docs/impl の known_diffs 記述は他担当(D31)。0207 欠番は API レーンの判断。
 Status: D19(issue #222 案A〈ユーザー確認待ち。DECISIONS.md〉・#301。ADR-0101 追記)実装済み。取得物の内容ハッシュ(Showdown 展開後ツリー・PokeAPI の各 CSV)を config.json の integrity と照合し、不一致は終了コード3。`npm ci --ignore-scripts`。CronJob を initContainer `fetch`(DSN なし)と `import` に分離し、cronjob.sh は fetch|import|引数なしと引き渡しファイルでロックの隙間を埋める。実データの再取得でハッシュ一致・dry-run は blockers: none。
-Status(追記): 2026-10-02 調整機能(docs/plan.md「AJ: 調整」。ADR-0150・0250・0251・0319)の AJ0〜AJ6 を実装(engine・調整 API・技の逆引き・Web の「調整」タブ)。PR #476(AJ0〜AJ3)→ #491(AJ4〜AJ6)の順にマージ。残りは AJ7(iOS。Web で触って確認してから。iOS の生成物は再生成済み)。
+Status(追記): 2026-10-02 調整機能(docs/plan.md「AJ: 調整」。ADR-0150・0250・0251・0319)の AJ0〜AJ6 を実装(engine・調整 API・技の逆引き・Web の「調整」タブ)。PR #476(AJ0〜AJ3)→ #491(AJ4〜AJ6)の順にマージ。AJ7(iOS の調整画面。ADR-0502)も実装済み。AJ は全タスク完了(実機・ブラウザでの目視確認のみ人間の確認待ち)。
 Next: データレーンの open issue を解消中(2026-10-02。triage → 実装済みのクローズ → 残りの実装)。#403 の残り: D26・D28〈T05 待ち〉・D30・D31〈CLAUDE.md・AGENTS.md はユーザー確認〉・D32・D21〈T04・S04・A06 待ち〉・#211-data〈API レーン待ち〉。後続: ADR-0126 の計算量の最適化。
 
 ## API
