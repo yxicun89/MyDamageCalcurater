@@ -9,7 +9,7 @@ package api_test
 // このテストは「認証が無言で契約に入る」ことを防ぐ門番で、認証を入れる変更はここで必ず赤くなる。
 // 赤くなったら ADR に戻ること(テストを緩めて通さない。CLAUDE.md 絶対ルール6)。
 //
-// 仕様は生成物に埋め込まれたもの(api.GetSwagger。make gen で openapi.yaml から作られる)を読む。
+// 仕様は生成物に埋め込まれたもの(api.GetSpec。make gen で openapi.yaml から作られる)を読む。
 
 import (
 	"strings"
@@ -24,7 +24,7 @@ var authErrorCodes = []string{
 }
 
 func TestContractHasNoAuthentication(t *testing.T) {
-	doc, err := api.GetSwagger()
+	doc, err := api.GetSpec()
 	if err != nil {
 		t.Fatalf("契約(api/openapi.yaml)を読めない: %v", err)
 	}

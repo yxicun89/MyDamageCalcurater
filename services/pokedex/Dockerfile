@@ -32,18 +32,18 @@ CMD ["serve"]
 
 # importer-deps: tools/importer の依存(package-lock.json の固定版)だけを npm ci する段。
 # package.json・package-lock.json だけを COPY してキャッシュを効かせる(ADR-0104 §6)。
-# Node の版は web/package.json の engines.node(26.9.0)と同じ系列(導入時点の最新の安定版。
+# Node の版は web/package.json の engines.node(26.10.0)と同じ系列(導入時点の最新の安定版。
 # 確認した digest は本ファイルの ADR-0104 の追記を参照)。
-FROM node:26.9.0-alpine@sha256:dbaa92e5758cbbcf85d65d5403fdb530fe3442cbe8c6dbfb7ef23365450d5070 AS importer-deps
+FROM node:26.10.0-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80 AS importer-deps
 WORKDIR /app/tools/importer
 COPY tools/importer/package.json tools/importer/package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 
 # importer: pokedex-import(CronJob)が使うイメージ。取得(Node)・上流の検出(Node)・
 # 照合と投入(Go)を1つのイメージにする(ADR-0104 §2・§6)。data/importer(config・effects・
 # regulations)は Git の固定版なのでイメージに焼く。data/generated・data/local(実データ)は
 # 焼かない(PVC・ConfigMap で渡す)。
-FROM node:26.9.0-alpine@sha256:dbaa92e5758cbbcf85d65d5403fdb530fe3442cbe8c6dbfb7ef23365450d5070 AS importer
+FROM node:26.10.0-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80 AS importer
 WORKDIR /app
 COPY --from=importer-deps /app/tools/importer/node_modules ./tools/importer/node_modules
 COPY tools/importer/*.mjs ./tools/importer/

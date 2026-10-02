@@ -76,7 +76,7 @@ kubectl -n pokecalc get jobs pokedex-import-manual-race1 pokedex-import-manual-r
   -o custom-columns=NAME:.metadata.name,SUCCEEDED:.status.succeeded,FAILED:.status.failed
 kubectl -n pokecalc get pods -l 'job-name in (pokedex-import-manual-race1,pokedex-import-manual-race2)'
 ```
-確認: 片方の Job の `FAILED` が 1 以上になっている(または Pod が2つ以上ある)。これがロックに負けた Pod で、排他が働いた証拠。
+確認: 片方の Job の `FAILED` が 1 以上になっている(または Pod が2つ以上ある)。これがロックまたは引き渡し(取得段と投入段の間の予約)に負けた Pod で、排他が働いた証拠。
 Job の Pod は `restartPolicy: Never` なので `RESTARTS` は常に 0 で、失敗すると別の Pod が作られる(`backoffLimit: 2`)。
 負けた側は終了コード1で失敗してから作り直され、勝った側の完了後に成功する(`SUCCEEDED` 1)。
 勝った側の処理が長引くと、負けた側は3回失敗して `Failed` で終わることもある。これも排他が働いた結果で異常ではない。
@@ -86,10 +86,11 @@ Job の Pod は `restartPolicy: Never` なので `RESTARTS` は常に 0 で、�
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-kubectl -n pokecalc logs -l job-name=pokedex-import-manual-race1 --all-containers --prefix | grep -i 'ロック\|lock' || true
-kubectl -n pokecalc logs -l job-name=pokedex-import-manual-race2 --all-containers --prefix | grep -i 'ロック\|lock' || true
+kubectl -n pokecalc logs -l job-name=pokedex-import-manual-race1 --all-containers --prefix | grep 'ロック\|引き渡し' || true
+kubectl -n pokecalc logs -l job-name=pokedex-import-manual-race2 --all-containers --prefix | grep 'ロック\|引き渡し' || true
 ```
-確認: どちらかの Job のログに、ロックを取れず諦めた旨のメッセージが出ている(DSN・パスワード等の秘密は出ない)。
+確認: どちらかの Job のログに、`cronjob: 別の import が実行中(ロック ... を取得できない)` または
+`cronjob: 別の Pod(...)の引き渡しが有効(期限まで待つ)。今回は諦める` のどちらかが出ている(DSN・パスワード等の秘密は出ない)。
 
 ### 6c. 後片付け
 
@@ -113,7 +114,7 @@ k3d の `local-path` では空きの値がホストのディスクのものに�
 cd "$(git rev-parse --show-toplevel)"
 kubectl -n pokecalc get jobs --sort-by=.metadata.creationTimestamp | grep pokedex-import
 JOB=$(kubectl -n pokecalc get jobs -o name --sort-by=.metadata.creationTimestamp | grep pokedex-import | tail -1)
-kubectl -n pokecalc logs "$JOB" | grep 'importer-'
+kubectl -n pokecalc logs "$JOB" --all-containers | grep 'importer-'
 ```
 確認: 直近の Job のログに `importer-capacity: total=... used=... free=... reserve=...` と、版ごとの `usage` 行が出る。
 (Job を新しく作ると取得から DB 投入までの取り込みが全部走る。確認だけなら作らない。)
@@ -124,9 +125,9 @@ kubectl -n pokecalc logs "$JOB" | grep 'importer-'
 cd "$(git rev-parse --show-toplevel)"
 kubectl -n pokecalc get pods | grep pokedex-import
 JOB=$(kubectl -n pokecalc get jobs -o name --sort-by=.metadata.creationTimestamp | grep pokedex-import | tail -1)
-kubectl -n pokecalc logs "$JOB" | grep 'importer-capacity: 空き'
+kubectl -n pokecalc logs "$JOB" --all-containers | grep 'importer-capacity: 空き'
 ```
-確認: 直近の Pod が `Error` で、ログに `importer-capacity: 空き ... byte が予約容量 ... byte を下回る` が出ていれば超過(終了コード 3)。
+確認: 直近の Pod が `Init:Error`(取得段 `fetch` の失敗)で、ログに `importer-capacity: 空き ... byte が予約容量 ... byte を下回る` が出ていれば超過(終了コード 3)。
 出ていなければ容量は足りているので、ここで終わり。
 
 ### c. PVC の拡張可否を確かめて広げる
@@ -166,7 +167,7 @@ kubectl kustomize deploy/k8s/overlays/local | kubectl apply -l app.kubernetes.io
 cd "$(git rev-parse --show-toplevel)"
 kubectl -n pokecalc create job --from=cronjob/pokedex-import pokedex-import-prune
 kubectl -n pokecalc wait --for=condition=complete job/pokedex-import-prune --timeout=900s
-kubectl -n pokecalc logs job/pokedex-import-prune | grep importer-prune
+kubectl -n pokecalc logs job/pokedex-import-prune --all-containers | grep importer-prune
 ```
 確認: `importer-prune: 削除 <相対パス> <byte> byte` の行と、最後の `削除 N 件・回収 M byte・残量 K byte` が出る。
 消えるのは現在版・直前の成功版以外の `.cache/<source>/<版>`・`<source>/<版>` と、52 件より古い `reports/import-*.json` だけ。
@@ -251,6 +252,8 @@ pokedex の DB の中身は、Git に固定した版の取得物から importer 
 `pokedex-import-cache`(取得キャッシュ・報告)も、取得元から取り直せる(過去の報告は戻らない)。
 失うものは、DB の投入履歴(`data_versions`)と、importer の過去の報告だけ。record・team の DB(TiDB)はこの手順の対象外。
 
+> `deploy/k3d.yaml`(k3s の版・待ち受けの 127.0.0.1 限定。ADR-0133)の変更は**既存クラスタには反映されない**。反映にはクラスタの作り直し(`make down` → `make up`。人間の確認が要る)が必要で、手順は下の「a. クラスタごと失ったとき」に従う。
+
 ### a. クラスタごと失ったとき(`make down`・`k3d cluster delete`)
 
 `make down` はクラスタ・PVC・Secret を消す。**データ削除なので人間の確認が要る操作**。消えた後は新しいクラスタを作る。
@@ -297,6 +300,32 @@ make deploy-latest
 何もしなくてよい。次の Job(`make import-k8s` か CronJob)が固定版を取り直す。
 PVC を作り直す手順は、上の「importer の PVC の容量」の c にある。
 
+### d. 再生成できないものと、MySQL の論理バックアップ(issue #262)
+
+pokedex のマスタは上のとおり再生成できるのでバックアップ不要。**再生成できないもの**は次のとおり。
+
+| もの | 失うと | 扱い |
+|---|---|---|
+| Secret `mysql-auth`(root・用途別ユーザーのパスワード・DSN) | 既存 PVC の MySQL に入れなくなる(`make up` は Secret が無いと乱数で作り直すため、PVC と食い違う) | Secret か PVC のどちらかだけを消さない。両方消すなら空の DB から作り直す(上の a) |
+| Secret `tidb-root-auth` | 既存の TiDB に入れなくなる | 同上 |
+| record・team の保存データ(TiDB) | 計算イベント・お気に入り・構築が戻らない | ローカルはバックアップ手順なし(`make down` で消える)。残したい間は `make down` しない。クラウドのバックアップは P7-4 |
+| レジストリ(`balance-registry`)の image | balance が ImagePullBackOff | 作り直したら push し直す(`docs/runbooks/cluster-rebuild.md`) |
+
+手元の確認用に、DB の論理バックアップを取って**別名 DB** に戻せる。`pokedex` 本体は上書きしない。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc exec mysql-0 -- sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -u root --single-transaction --routines --set-gtid-purged=OFF pokedex' > pokedex-backup.sql
+kubectl -n pokecalc exec mysql-0 -- sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root -e "CREATE DATABASE pokedex_restore"'
+kubectl -n pokecalc exec -i mysql-0 -- sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root pokedex_restore' < pokedex-backup.sql
+for db in pokedex pokedex_restore; do
+  kubectl -n pokecalc exec mysql-0 -- sh -c "MYSQL_PWD=\"\$MYSQL_ROOT_PASSWORD\" mysql -u root -N -e 'SELECT COUNT(*) FROM $db.species;'"
+done
+```
+(`--set-gtid-purged=OFF` が無いと、同じサーバーへの復元が `ERROR 3546 ... GTID_PURGED` で止まる。2026-10-02 に k3d で確認)
+確認: 2つの件数が一致する。`pokedex-backup.sql` はマスタ(取得物由来)を含むので Git に入れない(`*backup*.sql` は `.gitignore` 済み)。
+片付け(`pokedex_restore` の削除は**人間の確認が要る操作**): `... mysql -u root -e "DROP DATABASE pokedex_restore"`。
+
 ## ID が消えて CronJob が終了コード 3 で止まったとき(issue #277・ADR-0131)
 
 上流の更新で、DB にある種族 key・技/持ち物/特性の ID が新しい出力から消えると、投入は DB を変えずに終了コード 3 で止まる
@@ -325,6 +354,62 @@ kubectl -n pokecalc delete job "$job"
 `$v` には a で見た ID のうち承認するものだけを写す。実際には消えない ID を書くと終了コード 3(打ち間違い)で止まる。
 確認: Job が `complete` になる。承認で消えた種族 key は台帳に残るので、後で別の種族に付く投入は引き続き止まる。
 `wait` が timeout したら Job が止まっているので、a のコマンドでその Job のログを見て原因を確かめる。
+
+## 引き渡しファイルが残って Job が終了コード 1 で待たされるとき(issue #301・ADR-0101 追記)
+
+取得段 `fetch` が成功すると PVC に `.import.handoff` を書き、投入段 `import` の終了時に消す。Pod が強制終了(OOM・ノード停止)されると
+残り、有効期限(既定 3600 秒)まで、別の Job は `cronjob: 別の Pod(...)の引き渡しが有効(期限まで待つ)。今回は諦める` で終了コード 1 になる。
+
+### a. 実行中の Job が無いことを確かめる
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc get jobs,pods | grep pokedex-import
+```
+確認: `Running`・`Init:` の Pod が1つも無い(あるなら、その Job が終わるまで待つ。ここで止める)。
+
+### b. 引き渡しファイルの中身を見る
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc run handoff-peek --rm -i --restart=Never --image=busybox:1.37.0 \
+  --overrides='{"spec":{"containers":[{"name":"handoff-peek","image":"busybox:1.37.0","command":["sh","-c","cat /g/.import.handoff; date +%s"],"volumeMounts":[{"name":"g","mountPath":"/g"}]}],"volumes":[{"name":"g","persistentVolumeClaim":{"claimName":"pokedex-import-cache"}}]}}'
+```
+確認: `owner=<Pod 名>` と `expires=<epoch 秒>` の2行と、現在の epoch 秒が出る(ファイルが無ければ残っていない。`cat` が失敗するので、ここで終わり)。`expires` が現在より未来なら、その差の秒数だけ待てば自然に無視される。
+
+### c. 待てないときだけ、手で消す
+
+先に a をもう一度流し、実行中の Job が無いことを確かめ直す。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc run handoff-rm --rm -i --restart=Never --image=busybox:1.37.0 \
+  --overrides='{"spec":{"containers":[{"name":"handoff-rm","image":"busybox:1.37.0","command":["sh","-c","rm -f /g/.import.handoff && ls -a /g"],"volumeMounts":[{"name":"g","mountPath":"/g"}]}],"volumes":[{"name":"g","persistentVolumeClaim":{"claimName":"pokedex-import-cache"}}]}}'
+```
+確認: 一覧に `.import.handoff` が無い。そのあと Job を流し直せる。
+
+## 取得段が終了コード 3 で止まったとき(取得物のハッシュ不一致。issue #222・ADR-0101 追記)
+
+Pod が `Init:Error`(取得段 `fetch` の失敗)で、再試行されずに Job が失敗する。内容が `data/importer/config.json` の `integrity` と違うと止まる(DB には触れていない)。
+
+### a. 実際のハッシュを見る
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc logs "$(kubectl -n pokecalc get pods -l app.kubernetes.io/name=pokedex-import --sort-by=.metadata.creationTimestamp -o name | tail -1)" -c fetch | grep '内容ハッシュが一致しない'
+```
+確認: `<ファイル名または showdown>: 内容ハッシュが一致しない。期待=... 実際=...` が出る。
+
+### b. 上流の内容を確かめて、config.json を更新する PR を出す
+
+上流(Showdown の固定コミット・PokeAPI の固定コミット)の該当ファイルが、コミットのとおりで改ざんされていないことを人が確かめる。
+確かめたら `data/importer/config.json` の `integrity` の該当の値を a の「実際」に書き換えて PR を出す。確かめられない間は更新しない(投入は止まったまま)。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make import-fetch
+```
+確認: config.json を直したあとで、取得が `fetch-pokeapi: ... snapshot.json を書いた` まで終了コード 0 で通る。
 
 ## 7. 後片付け(クラスタは残したまま止める)
 

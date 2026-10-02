@@ -1,6 +1,6 @@
 # ビルドコンテキストはリポジトリのルート(engine を含むため。ADR-0600 §2):
 #   docker build -f services/speed/Dockerfile .
-FROM golang:1.27-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS build
+FROM golang:1.27.1-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS build
 
 WORKDIR /src
 # 依存の取得に要るのは go.mod だけ。replace ../../engine が解決できるよう engine の go.mod を

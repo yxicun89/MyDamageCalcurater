@@ -8,6 +8,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { hashFileTree, verifyTreeSha256 } from './integrity.mjs';
 
 const sha256Of = (buf) => createHash('sha256').update(buf).digest('hex');
 
@@ -26,16 +27,28 @@ const isTarballValid = (tarballPath, metaPath) => {
   return sha256Of(readFileSync(tarballPath)) === meta.sha256;
 };
 
+const readFileSafe = (path) => {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch {
+    return null;
+  }
+};
+
 const rmrf = (path) => rmSync(path, { recursive: true, force: true });
 
 // deps: { download(): Promise<Buffer>, extract(tarballPath, dir), install(dir), build(dir), log(msg) }
 // 戻り値: 完成した展開先(`<cacheDir>/src/`)。
-export async function ensureShowdownSource({ cacheDir, commit, url, deps }) {
+// expectedTreeSha256(任意): 展開後・install の前にツリーの内容ハッシュを照合する(D19。ADR-0101 追記)。
+// 検証済みの期待値は src.tree-sha256 に残し、期待値が変わったら src/ を捨てて再検証する。
+export async function ensureShowdownSource({ cacheDir, commit, url, expectedTreeSha256, deps }) {
   const { download, extract, install, build, log = () => {} } = deps;
   const tarballPath = join(cacheDir, 'source.tar.gz');
   const metaPath = join(cacheDir, 'meta.json');
   const srcDir = join(cacheDir, 'src');
   const distEntry = join(srcDir, 'dist', 'sim', 'dex.js');
+  const verifiedPath = join(cacheDir, 'src.tree-sha256');
+  const verifying = expectedTreeSha256 !== undefined;
   mkdirSync(cacheDir, { recursive: true });
 
   // 前回中断した一時物(*.partial-*)は再利用せず消す。
@@ -61,18 +74,28 @@ export async function ensureShowdownSource({ cacheDir, commit, url, deps }) {
     log(`fetch-showdown: tarball を取得してキャッシュした(sha256=${sha256})`);
   }
 
+  if (verifying && existsSync(distEntry) && readFileSafe(verifiedPath) !== expectedTreeSha256) {
+    rmrf(srcDir); // 期待値が変わった(または検証の記録が無い)展開済みの src/ は使わせない
+  }
+
   if (!existsSync(distEntry)) {
-    rmrf(srcDir); // 空・build 途中の不完全な展開先
+    rmrf(srcDir);
+    rmrf(verifiedPath); // 空・build 途中の不完全な展開先
     const tmpDir = join(cacheDir, `src.partial-${randomBytes(4).toString('hex')}`);
     try {
       mkdirSync(tmpDir, { recursive: true });
       extract(tarballPath, tmpDir);
+      if (verifying) {
+        // 第三者のコード(install スクリプト・build)を実行する前に内容を照合する。
+        verifyTreeSha256({ label: 'showdown', actual: hashFileTree(tmpDir), expected: expectedTreeSha256 });
+      }
       install(tmpDir);
       build(tmpDir);
       if (!existsSync(join(tmpDir, 'dist', 'sim', 'dex.js'))) {
         throw new Error('Showdown の build 後に dist/sim/dex.js が無い');
       }
       renameSync(tmpDir, srcDir);
+      if (verifying) writeFileSync(verifiedPath, expectedTreeSha256);
     } catch (err) {
       rmrf(tmpDir);
       throw err;
