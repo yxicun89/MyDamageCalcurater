@@ -34,6 +34,8 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
   `docs/plan.md` を更新する。直前に `git diff` と `git diff --cached` を確認し、
   対象ファイルを明示して stage する。無関係な既存変更を一括で取り込まない。
   作業ブランチへの push は区切りごとに行う。main へは PR 経由でのみ入れる(直接 push・直接 merge をしない。COORDINATION.md)。
+  PR のマージは `scripts/pr-merge.sh <PR番号>`(テスト・lint・公開前検査・CI が通れば AI がマージしてよい。全レーン共通。
+  ユーザー決定 2026-10-03・ADR-0801)。止めるのは費用が発生すること(クラウドへのデプロイ等)と機密情報の公開だけ。
 
 ## Git ブランチ運用
 

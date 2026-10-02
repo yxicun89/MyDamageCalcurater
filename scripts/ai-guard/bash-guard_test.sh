@@ -221,6 +221,18 @@ test_block_pr_merge() {
   expect_block "gh pr merge --auto --merge 123"
 }
 
+# ADR-0801: 検証ゲート付きのマージスクリプトは通す(素のマージコマンドは上のとおり止める)。
+test_allow_pr_merge_gate_script() {
+  begin "pass: scripts/pr-merge.sh(検証ゲート付きのマージ。ADR-0801)"
+  expect_pass "scripts/pr-merge.sh 123"
+  expect_pass "scripts/pr-merge.sh 123 --check"
+  expect_pass "./scripts/pr-merge.sh 123"
+  begin "block: ゲートを迂回する書き方は止めたまま"
+  expect_block "gh pr merge 123 --admin"
+  expect_block "scripts/pr-merge.sh 123 && gh pr merge 124"
+  expect_block "bash -c 'gh pr merge 123'"
+}
+
 test_block_wrappers_and_compound() {
   begin "block: ラッパー(timeout・env・nohup・変数代入)・複合コマンド・サブシェル越し"
   expect_block "timeout 60 make down"
@@ -580,6 +592,7 @@ test_block_secret_read
 test_block_push_to_main
 test_block_force_push
 test_block_pr_merge
+test_allow_pr_merge_gate_script
 test_block_wrappers_and_compound
 test_block_git_push_destination_edge_cases
 test_block_command_splitting_edge_cases

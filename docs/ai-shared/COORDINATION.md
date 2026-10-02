@@ -117,8 +117,13 @@ git merge origin/main              # 競合はここで解決する
 make test && make lint && make check-publishable
 git push origin HEAD
 gh pr create --base main --head <ブランチ> --title "<要約>" --body "<何を・検証結果・レビュー結果>"
-gh pr merge <番号> --merge         # マージコミットで入れる。squash・rebase・force push はしない
+scripts/pr-merge.sh <番号>         # 検証ゲート(ADR-0801)を通ればマージコミットで入れる。squash・rebase・force push はしない
 ```
+- **マージは `scripts/pr-merge.sh` を使う**(ユーザー決定 2026-10-03・ADR-0801。全レーン共通)。テスト・lint・公開前検査・CI
+  (在れば)が通った PR は AI がマージしてよく、マージのたびに人間を待たない。素の `gh pr merge` は bash-guard が止める。
+  ゲートを通らないときは理由に従って直す。AI の権限・ガード・クラウド/費用に関わるファイル(`.claude/`・`.codex/`・
+  `scripts/ai-guard/`・`deploy/k8s/overlays/cloud/` 等)を変更する PR は、人間のマージ待ちとして次の作業へ進む(止まらない)。
+- 止めるのは「クラウドへのデプロイなど費用が発生すること」と「機密情報を Git で公開すること」だけ。
 - PR の本文には、テスト・lint・公開前検査の結果と、独立レビューの判定を書く。
 - **競合の解決**: `CURRENT_STATE.md` は自分のレーン欄を残し、他のレーン欄は main 側を採用。`DECISIONS.md` は両方の追記を残す。
   それ以外のファイルで別レーンの変更と競合したら、**推測で解決しない**。PR を作らず、`DECISIONS.md` に内容と既定案を書いて、自分の作業を続ける。
