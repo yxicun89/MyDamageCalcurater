@@ -45,7 +45,7 @@ flowchart LR
 cd "$(git rev-parse --show-toplevel)"
 make ios-test                        # 生成物の一致・XCTest・XCUITest(シミュレータ)・Info.plist の検査
 make ios-gen                         # api/openapi.yaml を変えたら(ルートの make gen には含めない)
-make ios-sim-run IOS_SCREEN=calc     # モックで起動してスクリーンショット(root / calc / reverse / team)
+make ios-sim-run IOS_SCREEN=calc     # モックで起動してスクリーンショット(root / calc / reverse / team / speed)
 cd ios/PokeCalcKit && swift test     # ロジックだけを macOS で手早く
 ```
 
@@ -54,6 +54,8 @@ Xcode 27 が要る(`xcode-select` が CommandLineTools のままでも、スク�
 
 「このアプリについて」(ホーム右上の i)の「データの扱い」から「この端末のデータを削除」(サーバーの履歴・お気に入り・構築。
 端末内の構築は消さない)。モックの挙動は `POKECALC_MOCK_DEVICE_DATA=partial|fail-once` で切り替える(ADR-0501「P6-7」)。
+素早さ比較画面(ホームの「素早さを比べる」。P6-24。契約は `services/speed/api/openapi.yaml`)のモックは `POKECALC_MOCK_SPEED=table-error|position-error|pokemon-error|all-error`、
+起動時に開くのは `POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH=1`(ADR-0503)。
 
 ## 関連 ADR
 

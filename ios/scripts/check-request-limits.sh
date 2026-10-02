@@ -76,6 +76,44 @@ check ReverseRequest itemCandidates maxItemCandidates
 check BulkCalcRequest itemVariants maxItemVariants
 check_query /api/pokedex/moves/batch ids maxMoveBatchIds
 
+# --- 素早さ(P6-24。ADR-0503): services/speed/api/openapi.yaml の範囲と、既存の定数(SPLimits・RankLimits)が一致するか ---
+# 素早さの画面は SP の最大・ランクの範囲を専用の定数に複製せず SPLimits / RankLimits を使う。
+# その値が素早さの契約(PositionRequest の sp・rank)と食い違ったら気づけるようにする。
+speed_openapi="$repo_root/services/speed/api/openapi.yaml"
+domain_swift="$repo_root/ios/PokeCalcKit/Sources/PokeCalcCore/DomainTypes.swift"
+
+# components.schemas.<schema>.properties.<property>.<key>(minimum / maximum)の値。見つからなければ空。
+speed_contract_value() {
+  awk -v schema="$1" -v property="$2" -v key="$3" '
+    /^    [A-Za-z]/ { in_schema = ($0 == "    " schema ":"); in_prop = 0; next }
+    in_schema && /^        [A-Za-z]/ { in_prop = ($0 ~ "^        " property ":") ; next }
+    in_schema && in_prop && $1 == key ":" { print $2; exit }
+  ' "$speed_openapi"
+}
+
+# DomainTypes.swift の `public static let <name> = <数値>`(負数可)の値。
+domain_limit() {
+  sed -n "s/^ *public static let $1 = \(-\{0,1\}[0-9][0-9]*\)$/\1/p" "$domain_swift" | head -1
+}
+
+check_speed() {
+  local property="$1" key="$2" name="$3"
+  local contract ios
+  contract="$(speed_contract_value PositionRequest "$property" "$key")"
+  ios="$(domain_limit "$name")"
+  if [ -z "$contract" ] || [ -z "$ios" ]; then
+    echo "ios-check-request-limits: speed の PositionRequest.$property.$key または $name が見つからない" >&2
+    status=1
+  elif [ "$contract" != "$ios" ]; then
+    echo "ios-check-request-limits: speed の PositionRequest.$property.$key=$contract と $name=$ios が違う" >&2
+    status=1
+  fi
+}
+
+check_speed sp maximum maxPerStat
+check_speed rank minimum min
+check_speed rank maximum max
+
 if [ "$status" -eq 0 ]; then
   echo "ios-check-request-limits: OK(RequestLimits は api/openapi.yaml と一致)"
 fi

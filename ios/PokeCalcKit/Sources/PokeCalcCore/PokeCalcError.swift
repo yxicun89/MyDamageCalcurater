@@ -21,6 +21,10 @@ public struct PokeCalcError: Error, Equatable, Sendable {
         /// 応答は受け取ったが期待した形の JSON にデコードできない。`transport`(接続できない)とは
         /// 原因が違うので分ける。
         public static let decode = "client_decode_error"
+        /// 契約に無い HTTP ステータス(ゲートウェイや中継の HTML・本文の形が違う 502 など)を受け取った。
+        /// 本文が `{code,message}` の JSON ならその `code` を使い、読めないときだけこのコードにする
+        /// (素早さの契約は `default` 応答を持たないため生成クライアントが `undocumented` で返す。P6-24)。
+        public static let unexpectedStatus = "client_unexpected_status"
 
         // MARK: - CalcViewModel が使う値(P6-2a)
 
