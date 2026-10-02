@@ -82,7 +82,7 @@ git status --short --branch        # 未コミット・未 push が無いか
 ### CI 全件成功ならマージしてよい(2026-10-03 ユーザー決定。ADR-0803)
 
 全レーンで、**対象 PR の `gh pr checks` が全件成功**のときだけ AI が `gh pr merge` してよい(bash-guard が `gh pr checks` を実行して強制する)。
-手順: PR 作成 → `gh pr checks <PR>` 全件成功 → `gh pr merge`。CI が赤・未完了なら止まって直す(`--admin` でのチェック回避・`gh api` でのマージ・
+手順: PR 作成 → `gh pr checks <N>` 全件成功 → PR 番号を明示し、`gh pr view <N> --json headRefOid -q .headRefOid` の SHA を `--match-head-commit` に付けて、他のコマンドと連結せず単独で `gh pr merge <N>`。CI が赤・未完了なら止まって直す(`--admin` でのチェック回避・`gh api` でのマージ・
 main への直接 push は不可)。クラウドへのデプロイ・課金が発生する操作と、git への機密情報の公開は引き続き人間の確認が必要。
 以下の 2026-09-23 の記述(確認なし・目を通す機会が無い)は、この条件付きの運用に読み替える。
 
@@ -125,7 +125,8 @@ make test && make lint && make check-publishable
 git push origin HEAD
 gh pr create --base main --head <ブランチ> --title "<要約>" --body "<何を・検証結果・レビュー結果>"
 gh pr checks <番号>                # 全件成功になるまで待つ(赤・未完了なら止まって直す)
-gh pr merge <番号> --merge         # マージコミットで入れる。squash・rebase・force push はしない
+gh pr view <番号> --json headRefOid -q .headRefOid   # この SHA を下の --match-head-commit に付ける
+gh pr merge <番号> --merge --match-head-commit <上の SHA>         # マージコミットで入れる。squash・rebase・force push はしない
 ```
 - PR の本文には、テスト・lint・公開前検査の結果と、独立レビューの判定を書く。
 - **競合の解決**: `CURRENT_STATE.md` は自分のレーン欄を残し、他のレーン欄は main 側を採用。`DECISIONS.md` は両方の追記を残す。

@@ -138,5 +138,5 @@ ADR-0003 の適応を維持する。Codex では ADR-0007 と共通ワークフ�
 - クラウドへのデプロイ・課金が発生する操作、git への機密情報の公開
 
 PR のマージは人間の確認を要さない(ADR-0803。ユーザー決定 2026-10-03)。ただし **対象 PR の CI が全件成功のときだけ**:
-PR 作成 → `gh pr checks` 全件成功 → `gh pr merge`。CI が赤・未完了なら止まって直す。`--admin`・`gh api` でのマージ・main への直接 push は不可
+PR 作成 → `gh pr checks N` 全件成功 → PR 番号を明示し、`gh pr view N --json headRefOid -q .headRefOid` の SHA を `--match-head-commit` に付けて単独で `gh pr merge N`。CI が赤・未完了なら止まって直す。`--admin`・`gh api` でのマージ・main への直接 push は不可
 (bash-guard が機械的に強制する)。
