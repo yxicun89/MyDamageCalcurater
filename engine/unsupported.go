@@ -105,7 +105,7 @@ type UnsupportedMark struct {
 }
 
 // unsupportedMarks は入力に付く印を 技 → 攻撃側の持ち物 → 攻撃側の特性 → 防御側の持ち物 → 防御側の特性
-// の順に返す(技の印は理由の昇順。機構の印の後に zero_power)。印が無ければ nil。
+// の順に返す(技の印は理由の昇順。機構の印の後に zero_power、その後にダブルの move_target_unknown)。印が無ければ nil。
 // 変化技は印を付けない(ダメージを持たないので 0 が正しい)。
 func unsupportedMarks(in DamageInput) []UnsupportedMark {
 	var marks []UnsupportedMark

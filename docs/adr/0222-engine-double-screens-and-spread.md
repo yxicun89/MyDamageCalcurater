@@ -1,6 +1,6 @@
 # ADR-0222: ダブルの計算(壁・全体技)を engine に入れる(issue #232 案B のダブル分・#288)
 
-- 状態: 提案(spec 段階。テストと期待値まで。実装・critic は後続)
+- 状態: 採用(critic PASS。2026-10-03)
 - 日付: 2026-10-03
 - 関連: ADR-0002(ゴールデンの oracle。追記 P2-1b で Champions 世代へ)、ADR-0004(補正の適用位置)、
   ADR-0005(補正の対象範囲。「ダブル固有補正は未対応」を本 ADR で置き換える)、ADR-0011(WASM 境界)、
@@ -13,8 +13,8 @@ engine は `Format` を読まず、ダブルでもシングルの数値を返し
 ユーザー決定(2026-10-03):
 
 - **ポケモンチャンピオンズにテラスタルは無い**。teraType は計算に使わない(issue #232 案B のテラス部分は取り下げ)
-- PR #497(ADR-0160。teraType・format=double に「未対応の印」を付け、数値は変えない)を先にマージし、
-  その上にダブルの計算を載せる
+- PR #497(ADR-0160。teraType・format=double に「未対応の印」を付け、数値は変えない)とは別に進め、
+  マージ順は後で調整する(#497 が先なら §5 の手順で取り込む)
 
 計算は 4096 基準の固定小数・五捨五超入のまま、ゴールデン(@smogon/calc 0.12.0 の Champions 世代
 `Generations.get(0)`)と全件一致させる。known_diffs は足さない。
@@ -34,7 +34,7 @@ API・WASM が teraType を受け取ったときの扱いは #497(ADR-0160)の�
 
 ## 2. oracle がダブルで反映するもの(総当たりで確認)
 
-入力の意味: 形式は `new Field({gameType: 'Singles' | 'Doubles'})`。`champions.js` が `gameType` を読むのは次の2か所だけ。
+入力の意味: 形式は `new Field({gameType: 'Singles' | 'Doubles'})`。`champions.js` が `gameType` を読むのは次の3か所だけ(壁・全体技・おやこあいの判定 L248)。
 技の対象は `Move.target`。oracle の Champions のデータで攻撃技に target があるのは全体技の 34 技だけ(他は省略 = `any`)。
 gen9 のデータとの差は Astral Barrage 1 技(Champions は省略 = 単体扱い、gen9 は allAdjacentFoes)。
 
@@ -122,6 +122,8 @@ gen9 のデータとの差は Astral Barrage 1 技(Champions は省略 = 単体�
   #497 と本 ADR の両方が書き換えるので、本 ADR の内容(double は計算に反映)に寄せて1つにまとめる。
   `UnsupportedMark.target` の説明の format は「未知の形式だけ」に直す。
 - `engine/wasmapi/testdata/vectors.json` の末尾は両方が追記するので、両方のベクタを残してマージする。
+- `docs/impl/damage-engine.md` の §10・:245 の表(Format=double の行)は #497 と衝突するので、本 ADR の内容(壁・全体技は反映済み)に寄せる。
+- `services/judge/api/openapi.yaml` の印の target・reason の説明(format を足している)は、#497 マージ後に「未知の形式だけ」に直す。
 - ADR-0005 の「ダブル固有補正は未対応」、ADR-0011 の「format は渡すだけ」、`TestCalcBulkFormatDouble` の注記を本 ADR を指すように直す。
 
 ## 6. 対象外・後続
