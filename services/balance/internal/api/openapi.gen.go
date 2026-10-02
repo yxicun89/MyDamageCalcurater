@@ -113,6 +113,7 @@ const (
 	InvalidRequest        ErrorCode = "invalid_request"
 	MasterUnavailable     ErrorCode = "master_unavailable"
 	MissingRequestContext ErrorCode = "missing_request_context"
+	NotFound              ErrorCode = "not_found"
 	Overloaded            ErrorCode = "overloaded"
 	RequestTooLarge       ErrorCode = "request_too_large"
 	UnknownAbility        ErrorCode = "unknown_ability"
@@ -130,6 +131,8 @@ func (e ErrorCode) Valid() bool {
 	case MasterUnavailable:
 		return true
 	case MissingRequestContext:
+		return true
+	case NotFound:
 		return true
 	case Overloaded:
 		return true
