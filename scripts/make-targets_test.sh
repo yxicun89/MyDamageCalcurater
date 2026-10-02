@@ -51,7 +51,7 @@ render_plan=$("$MAKE_BIN" -C "$ROOT" --no-print-directory -n k8s-render 2>/dev/n
 for overlay in deploy/k8s/overlays/local deploy/k8s/overlays/cloud deploy/k8s/overlays/local/tidb \
   deploy/k8s/overlays/local-api deploy/k8s/overlays/local-web \
   services/balance/deploy/k8s/overlays/gitops services/speed/deploy/k8s/overlays/gitops \
-  services/judge/deploy/k8s/overlays/local deploy/argocd; do
+  services/judge/deploy/k8s/overlays/local deploy/argocd deploy/k8s/base/observability; do
   if echo "$render_plan" | grep -qE "kubectl kustomize [^ ]*${overlay} "; then
     ok "k8s-render が ${overlay} を描画する"
   else
@@ -73,6 +73,21 @@ if [ "$rc" -ne 0 ] && echo "$out" | grep -q "kubectl が無い"; then
 else
   ng "kubectl が無いときの k8s-render(終了コード ${rc}): ${out}"
 fi
+
+# issue #295: 全 *-k3d-deploy は、最初の kubectl / k3d より前に共通の context ガードを呼ぶ(-n の出力で順序を見る)。
+for target in api-k3d-deploy balance-k3d-deploy speed-k3d-deploy judge-k3d-deploy web-k3d-deploy \
+  balance-k3d-deploy-readmodel speed-k3d-deploy-readmodel; do
+  plan=$("$MAKE_BIN" -C "$ROOT" --no-print-directory -n "$target" 2>/dev/null)
+  guard_line=$(echo "$plan" | grep -n "require-k3d-context.sh ${target}" | head -n 1 | cut -d: -f1)
+  first_cluster_line=$(echo "$plan" | grep -nE '(^|[ ;&])(kubectl|k3d) ' | head -n 1 | cut -d: -f1)
+  if [ -z "$guard_line" ]; then
+    ng "make -n ${target} に require-k3d-context.sh が無い"
+  elif [ -n "$first_cluster_line" ] && [ "$guard_line" -gt "$first_cluster_line" ]; then
+    ng "make -n ${target}: require-k3d-context.sh が最初の kubectl/k3d より後ろにある"
+  else
+    ok "${target} は kubectl/k3d の前に context ガードを呼ぶ"
+  fi
+done
 
 if [ "$failures" -ne 0 ]; then
   echo "make-targets_test: ${failures} 件失敗" >&2

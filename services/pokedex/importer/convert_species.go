@@ -349,9 +349,8 @@ func convertSpecies(in Input, typeNameToID map[string]string, includedItems map[
 	keyByNameEn := map[string]string{}
 	baseSpeciesName := map[string]string{}
 	type finalRow struct {
-		key   string
-		raw   rawSpecies
-		order int
+		key string
+		raw rawSpecies
 	}
 	var finals []finalRow
 	for i, r := range raw {
