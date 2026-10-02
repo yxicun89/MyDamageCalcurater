@@ -25,6 +25,15 @@ public enum RequestLimits {
     /// `components.schemas` のプロパティではなく `paths./api/pokedex/moves/batch.get` のクエリパラメータ
     /// なので、`check-request-limits.sh` の照合はスキーマの `maxItems` とは別の経路で行う。
     public static let maxMoveBatchIds = 64
+
+    // MARK: - 判定(P6-25。ADR-0504 §2): services/judge/api/openapi.yaml の写し。`check-request-limits.sh` が契約と照合する
+
+    /// `OutspeedAndKoRequest.defenders.maxItems`(相手候補の上限)。
+    public static let maxJudgeDefenders = 6
+    /// `OutspeedAndKoRequest.defenders.minItems`。
+    public static let minJudgeDefenders = 1
+    /// `MoveId.maxLength`(判定の契約の技 ID の最大長。形式に合わない値は上流を呼ぶ前に 400 になる)。
+    public static let maxJudgeMoveIdLength = 64
 }
 
 /// 件数の上限に達したことを画面に出す文言(`MasterSearchLabels` と同じ理由でコードに1か所持つ)。

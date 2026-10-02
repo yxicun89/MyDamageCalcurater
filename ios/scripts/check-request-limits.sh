@@ -82,14 +82,26 @@ check_query /api/pokedex/moves/batch ids maxMoveBatchIds
 speed_openapi="$repo_root/services/speed/api/openapi.yaml"
 domain_swift="$repo_root/ios/PokeCalcKit/Sources/PokeCalcCore/DomainTypes.swift"
 
-# components.schemas.<schema>.properties.<property>.<key>(minimum / maximum)の値。見つからなければ空。
-speed_contract_value() {
-  awk -v schema="$1" -v property="$2" -v key="$3" '
+# components.schemas.<schema>.properties.<property>.<key>(minimum / maximum / maxItems / minItems)の値。見つからなければ空。
+# $1 = 契約ファイル、$2 = schema、$3 = property、$4 = key
+schema_property_value() {
+  awk -v schema="$2" -v property="$3" -v key="$4" '
     /^    [A-Za-z]/ { in_schema = ($0 == "    " schema ":"); in_prop = 0; next }
     in_schema && /^        [A-Za-z]/ { in_prop = ($0 ~ "^        " property ":") ; next }
     in_schema && in_prop && $1 == key ":" { print $2; exit }
-  ' "$speed_openapi"
+  ' "$1"
 }
+
+# components.schemas.<schema>.<key> の値(プロパティではなく、スキーマ自身の maxLength など)。見つからなければ空。
+# $1 = 契約ファイル、$2 = schema、$3 = key
+schema_value() {
+  awk -v schema="$2" -v key="$3" '
+    /^    [A-Za-z]/ { in_schema = ($0 == "    " schema ":"); next }
+    in_schema && /^      [A-Za-z]/ && $1 == key ":" { print $2; exit }
+  ' "$1"
+}
+
+speed_contract_value() { schema_property_value "$speed_openapi" "$@"; }
 
 # DomainTypes.swift の `public static let <name> = <数値>`(負数可)の値。
 domain_limit() {
@@ -113,6 +125,36 @@ check_speed() {
 check_speed sp maximum maxPerStat
 check_speed rank minimum min
 check_speed rank maximum max
+
+# --- 判定(P6-25。ADR-0504 §2): services/judge/api/openapi.yaml の範囲と、定数(RequestLimits・SPLimits・RankLimits)が一致するか ---
+# 判定の画面も SP の最大・ランクの範囲は SPLimits / RankLimits を使い、複製しない。候補数・技 ID の長さは RequestLimits に写しを持つ。
+judge_openapi="$repo_root/services/judge/api/openapi.yaml"
+
+check_judge() {
+  local label="$1" contract="$2" ios="$3" ios_name="$4"
+  if [ -z "$contract" ] || [ -z "$ios" ]; then
+    echo "ios-check-request-limits: judge の $label または $ios_name が見つからない" >&2
+    status=1
+  elif [ "$contract" != "$ios" ]; then
+    echo "ios-check-request-limits: judge の $label=$contract と $ios_name=$ios が違う" >&2
+    status=1
+  fi
+}
+
+check_judge "OutspeedAndKoRequest.defenders.maxItems" \
+  "$(schema_property_value "$judge_openapi" OutspeedAndKoRequest defenders maxItems)" "$(swift_limit maxJudgeDefenders)" maxJudgeDefenders
+check_judge "OutspeedAndKoRequest.defenders.minItems" \
+  "$(schema_property_value "$judge_openapi" OutspeedAndKoRequest defenders minItems)" "$(swift_limit minJudgeDefenders)" minJudgeDefenders
+check_judge "MoveId.maxLength" \
+  "$(schema_value "$judge_openapi" MoveId maxLength)" "$(swift_limit maxJudgeMoveIdLength)" maxJudgeMoveIdLength
+# 能力ポイント(StatBlock の6項目)とランク(RankBlock の5項目)は、1つでも契約とずれたら気づけるよう全項目を見る。
+for stat in hp atk def spa spd spe; do
+  check_judge "StatBlock.$stat.maximum" "$(schema_property_value "$judge_openapi" StatBlock "$stat" maximum)" "$(domain_limit maxPerStat)" maxPerStat
+done
+for stat in atk def spa spd spe; do
+  check_judge "RankBlock.$stat.minimum" "$(schema_property_value "$judge_openapi" RankBlock "$stat" minimum)" "$(domain_limit min)" RankLimits.min
+  check_judge "RankBlock.$stat.maximum" "$(schema_property_value "$judge_openapi" RankBlock "$stat" maximum)" "$(domain_limit max)" RankLimits.max
+done
 
 if [ "$status" -eq 0 ]; then
   echo "ios-check-request-limits: OK(RequestLimits は api/openapi.yaml と一致)"

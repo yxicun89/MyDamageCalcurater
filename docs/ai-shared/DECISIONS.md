@@ -2057,3 +2057,23 @@ Impact:
 - ADR-0802 の `{code,message}` への統一は iOS も前提にする(契約外のステータスでも本文が JSON ならその `code` を使う)。
 - 絶対ルール 5: speed の失敗は計算・構築に影響しない(`PokeCalcService` と別のプロトコルで、画面も独立)。
 - iOS が使う入力の範囲(SP 0〜32・ランク ±6)は `SPLimits`/`RankLimits` を共有し、契約との一致を `make ios-check-request-limits` が検査する。
+
+## 2026-10-03: iOS に判定画面を作る(P6-25。iOS レーン → 判定・API レーンへ)
+
+Decision: ユーザー決定(2026-10-03)で、iOS に判定画面(「想定した相手を抜いて倒せるかを 1 回で確認」。requirements.md §2)を作る。iOS は `POST /api/judge/v1/outspeed-and-ko`(judge 自身の Ingress の `/api/judge` prefix。
+ホストは他の API と同じ)を使い始める。契約は `services/judge/api/openapi.yaml`。iOS は契約を変えず、root の `api/openapi.yaml` も変えない。生成は契約ごとに別ターゲット(`PokeCalcJudgeAPI`。ADR-0503 の形で `openapi-gen.sh` の配列に 1 行)。
+判断は ADR-0504、受け入れ条件は ADR-0501「P6-25 の受け入れ条件」。要求は Web の JD5 と同じ最小の形(format は single 固定・`field` は送らない・`speedField` は全候補共通。ADR-0705 §6)。
+Reason: Web にだけあった判定を iPhone でも使えるようにする。iOS は構築(端末内)から自分側・候補側を埋められるので、1 回の確認までの手数が Web より少ない。
+Impact:
+- **判定レーンへ(未対応の印の表示)**: iOS は `attackerKoUnsupported`/`defenderKoUnsupported`(ADR-0708)を**方向ごとに分けて**出す(混ぜない)。全候補に共通する印は結果の上に 1 回、一部の候補だけの印はその行に、
+  印のある方向の確定数には「当てにならない可能性がある」旨を添える(確定として見せない)。`target` は書き換えず「その calc から見た役割」のまま(逆方向の `attacker_*` はその候補)。`reason` の値は検査せず、
+  知らない値は「詳細は不明」として出す(ADR-0708 §4・§6 の立場と同じ。`reason` の追加で iOS が壊れることはない)。印の欄は必須(null・欠落にしない。欠けた応答は iOS では読めない応答になる。ADR-0708 §3)。
+- **契約を変えるとき(判定・API レーンへ)**: judge の契約を変える PR(`ErrorCode` の追加、`Matchup`・`KOChance`・`UnsupportedMark` の必須欄の増減、`Format`・`SpeedField` の変更、`defenders` の件数・`MoveId` の長さ・
+  `StatBlock`/`RankBlock` の範囲の変更など)は、iOS の生成物と同期テストが落ちる。変更する PR で `make ios-gen` を実行して生成物を同じ PR に含め、DECISIONS.md に 1 行残す(iOS レーンが文言・ドメインを追従する。
+  `make ios-gen-check` と `make ios-check-request-limits` が CI で検出する)。後方互換な追加(省略可の入力欄)は生成物の更新だけで済む。
+- `ErrorCode` に値を足すと、古い iOS アプリは応答をデコードできず「判定の API に接続できません」になる(素早さと同じ。`UnsupportedMark` の ADR-0215 と同じ問題)。エラー code を増やすときは、先に iOS 側の対応
+  (未知の code を許す形への変更)を相談する。
+- 判定の遅さ: 1 回の要求は上流を最大 27 回逐次で叩く(ADR-0704 §5)。iOS は専用のタイムアウトを持たず(URLSession の既定)、送信ボタンを押したときだけ呼び、判定中は「判定中」を出す。上流の期限(ADR-0707)を延ばすときは連絡する。
+- 絶対ルール 5: 判定の失敗は計算・構築に影響しない(`PokeCalcService` と別のプロトコルで、画面も独立)。
+- iOS が使う入力の範囲(SP 0〜32・合計 66・ランク ±6・候補 1〜6 件・技 ID 64 文字)は `SPLimits`/`RankLimits`/`RequestLimits` に写しを持ち、契約との一致を `make ios-check-request-limits` が検査する。
+- 実 Pokémon マスタデータは iOS のモック・テストに入れない(架空データのみ)。

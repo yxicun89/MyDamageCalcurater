@@ -7,6 +7,7 @@
 # 生成するもの(「契約・設定・出力先」の組。契約を足すときはこの表に1行足す):
 #   api/openapi.yaml                  → PokeCalcAPI(pokedex・calc・record・team)
 #   services/speed/api/openapi.yaml   → PokeCalcSpeedAPI(素早さ。ADR-0503)
+#   services/judge/api/openapi.yaml   → PokeCalcJudgeAPI(判定。ADR-0504)
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,6 +23,7 @@ readonly sources_dir="$ios_dir/PokeCalcKit/Sources"
 readonly targets=(
   "api/openapi.yaml|openapi-generator-config.yaml|PokeCalcAPI/Generated"
   "services/speed/api/openapi.yaml|openapi-generator-config.speed.yaml|PokeCalcSpeedAPI/Generated"
+  "services/judge/api/openapi.yaml|openapi-generator-config.judge.yaml|PokeCalcJudgeAPI/Generated"
 )
 
 mode="write"
