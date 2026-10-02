@@ -200,6 +200,7 @@
 - [x] SP3 Web の素早さ画面
 - [x] SP4 pokedex の read model
 - [x] SP5 GitOps
+- [x] SP6 追い風・まひ・トリックルーム(ADR-0607。契約 0.5.0・コア・HTTP・Web。iOS は対象外)
 - [x] issue #237 gitops overlay の read model
 
 ## JD: 判定(判定レーン。設計は docs/judge-design.md。2026-09-22 ユーザー要望)
@@ -248,6 +249,8 @@ requirements.md の項目のうち、計画に無かったものをここに置�
 
 ## ブロッカー
 解決済みの記録は [plan-archive.md](plan-archive.md)。未解決のものだけをここに置く(issue があるものは issue を正とする)。
+
+- **素早さの 999 上限(ADR-0607 §5。作業は止めない)**: @smogon/calc 0.12.0 の `getFinalSpeed` 末尾 `Math.min(gen.num <= 2 ? 999 : 10000, speed)` は Champions(`gen.num === 0`)で 999 上限になるが、ゲームの実ルールか世代判定の副作用かが不明。既定案: 現状維持(speed サービスは上限なし。既存の応答が変わるため)。ゲームの実機で 999 超の素早さがあり得るかを人間が確認できたら決める。
 
 **【人間の確認待ち】**
 - **失効ジョブ(record-expire・team-expire)を k3d の実データへ初めて向ける承認**(ADR-0209 の「人間の確認」・ADR-0220 未決事項 0。P5-3b・P5-4b): 既定案は「承認までは local・cloud とも CronJob を `suspend: true` のまま(自動で実データを消さない)」。承認後に `deploy/k8s/overlays/local/cronjob-expire-suspend-patch.yaml` と kustomization の `patches` を外す。承認前の確認は手動 Job(`kubectl -n pokecalc create job --from=cronjob/record-expire record-expire-manual-...`。docs/runbooks/api.md §8)。作業は止まらない。
