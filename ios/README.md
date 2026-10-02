@@ -45,7 +45,7 @@ flowchart LR
 cd "$(git rev-parse --show-toplevel)"
 make ios-test                        # 生成物の一致・XCTest・XCUITest(シミュレータ)・Info.plist の検査
 make ios-gen                         # api/openapi.yaml を変えたら(ルートの make gen には含めない)
-make ios-sim-run IOS_SCREEN=calc     # モックで起動してスクリーンショット(root / calc / reverse / team / speed / judge)
+make ios-sim-run IOS_SCREEN=calc     # モックで起動してスクリーンショット(root / calc / reverse / team / speed / judge / balance)
 cd ios/PokeCalcKit && swift test     # ロジックだけを macOS で手早く
 ```
 
@@ -58,11 +58,13 @@ Xcode 27 が要る(`xcode-select` が CommandLineTools のままでも、スク�
 起動時に開くのは `POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH=1`(ADR-0503)。
 判定画面(ホームの「抜いて倒せるか判定」。P6-25。契約は `services/judge/api/openapi.yaml`)のモックは `POKECALC_MOCK_JUDGE=error|candidate-error|marks`、
 起動時に開くのは `POKECALC_OPEN_JUDGE_SCREEN_AT_LAUNCH=1`(ADR-0504)。
+タイプバランス画面(ホームの「タイプバランス」。P6-26。契約は `services/balance/api/openapi.yaml`)のモックは `POKECALC_MOCK_BALANCE=error|coverage-error`、
+起動時に開くのは `POKECALC_OPEN_BALANCE_SCREEN_AT_LAUNCH=1`(ADR-0505)。
 
 ## 関連 ADR
 
 [0500](../docs/adr/0500-ios-app-architecture.md)(構成・生成・モック・設定・テスト)・
-[0501](../docs/adr/0501-ios-screen-acceptance.md)(画面ごとの受け入れ条件と判断)・[0503](../docs/adr/0503-ios-speed-screen-and-multi-contract-generation.md)(素早さ画面)・[0504](../docs/adr/0504-ios-judge-screen.md)(判定画面)・
+[0501](../docs/adr/0501-ios-screen-acceptance.md)(画面ごとの受け入れ条件と判断)・[0503](../docs/adr/0503-ios-speed-screen-and-multi-contract-generation.md)(素早さ画面)・[0504](../docs/adr/0504-ios-judge-screen.md)(判定画面)・[0505](../docs/adr/0505-ios-balance-screen.md)(タイプバランス画面)・
 [0009](../docs/adr/0009-bulk-calc-presets.md)(一括計算のプリセット)・[0010](../docs/adr/0010-reverse-estimation.md) §R(逆算)・
 [0200](../docs/adr/0200-calc-svc-api-contract.md)・[0202](../docs/adr/0202-gateway-routing-and-headers.md)(API 契約)。
 依存(完全固定): swift-openapi-generator 1.13.1・swift-openapi-runtime 1.12.1・swift-openapi-urlsession 1.3.1・swift-http-types 1.8.0(Apache-2.0)。

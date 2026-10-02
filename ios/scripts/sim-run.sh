@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # アプリをシミュレータにビルド・インストールし、モックで起動する(手順書 docs/runbooks/ios.md 用)。
 #
-#   ios/scripts/sim-run.sh <シミュレータ名> <画面: root | calc | reverse | team | speed | judge> <外観: light | dark> <文字サイズ>
+#   ios/scripts/sim-run.sh <シミュレータ名> <画面: root | calc | reverse | team | speed | judge | balance> <外観: light | dark> <文字サイズ>
 #
 # 文字サイズは simctl の content_size(large が標準。extra-extra-large・accessibility-large など)。
 # 画面を直接開く環境変数は ios/PokeCalc/RootView.swift の POKECALC_OPEN_*_AT_LAUNCH と同じ。
 set -euo pipefail
 
 if [ "$#" -ne 4 ]; then
-  echo "usage: $0 <simulator> <root|calc|reverse|team|speed|judge> <light|dark> <content_size>" >&2
+  echo "usage: $0 <simulator> <root|calc|reverse|team|speed|judge|balance> <light|dark> <content_size>" >&2
   exit 2
 fi
 simulator="$1"
@@ -35,7 +35,8 @@ case "$screen" in
   team) open_key="POKECALC_OPEN_TEAM_LIST_SCREEN_AT_LAUNCH" ;;
   speed) open_key="POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH" ;;
   judge) open_key="POKECALC_OPEN_JUDGE_SCREEN_AT_LAUNCH" ;;
-  *) echo "画面は root / calc / reverse / team / speed / judge のどれか: ${screen}" >&2; exit 2 ;;
+  balance) open_key="POKECALC_OPEN_BALANCE_SCREEN_AT_LAUNCH" ;;
+  *) echo "画面は root / calc / reverse / team / speed / judge / balance のどれか: ${screen}" >&2; exit 2 ;;
 esac
 
 xcrun simctl boot "$simulator" 2>/dev/null || true

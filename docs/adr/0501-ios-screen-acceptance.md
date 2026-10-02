@@ -3924,3 +3924,78 @@ XCUITest(`AboutScreenUITests` 2件・`LargeTextLayoutUITests.testAboutScreenNoHo
 - XCUITest の失敗の修正(いずれも実装側。テストは変更していない): (1) 結果の行(`judgeRow-N`)が 1 行だけのとき、行の `.contain` が外側の `judgeResult`(`.contain`)に畳まれて識別子が消えた
   (外側の子が行 1 つだけだと外側が行の枠になり、外側の識別子が勝つ)。`judgeResult` の `.contain` に見出し「判定結果」も含め(読み込み済みのときだけ。他の状態は従来どおり見出し単独)、子を 2 つ以上にして畳まれないようにした。
   (2) 能力ポイントの「−」ボタンが記号の細さのぶん押せる範囲が小さく(20pt 角。「+」は 31pt)、`tap()` が効かなかった。`JudgeStepper.stepButton` に `minWidth/minHeight 36`・`contentShape(Circle())` を足して − と + をそろえた。
+
+## P6-26 の受け入れ条件(タイプバランス画面。判断は ADR-0505。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+契約は `services/balance/api/openapi.yaml`(使うのは `POST /api/balance/v1/team-balance/analyze` と `.../coverage` の 2 本。gateway の `/api/balance/*`。ホストは他の API と同じ `baseURL`)。
+参照実装は Web の `BalanceScreen`(ADR-0303)。生成方式・範囲・境界・要求の規則・結果の見せ方・モック・識別子は ADR-0505。ユーザー決定は DECISIONS.md 2026-10-03(タイプバランス画面)。
+足場(型・プロトコル・`BalanceLabels` の固定文言・各実装の空の殻)は `TODO(implementer P6-26` 付きで追加済み。生成ターゲット(`PokeCalcBalanceAPI`)は
+足場がコンパイルするために spec の段階で作った(`make ios-gen-check` 4 本成功。`openapi-gen.sh` の配列に 1 行・設定ファイル・`Package.swift`・生成物)。
+
+1. **生成と同期**: `make ios-gen-check` が `PokeCalcAPI`・`PokeCalcSpeedAPI`・`PokeCalcJudgeAPI`(不変)・`PokeCalcBalanceAPI` の 4 本で成功する。契約の `ErrorCode`(10 値)・`TypeId`(`PokeType` と値・順序とも同じ)・
+   `DefenseCategory`・`EffectSource`・`DefenseEffect`・`CoverageMultiplier` とドメイン・文言の対応表が一致し(`BalanceContractSyncTests`)、メンバー数(`AnalyzeRequest`・`CoverageRequest` の `members` の min/maxItems)・
+   メンバーごとの技の件数・技 ID の最大長(40)は `RequestLimits` と契約が一致する(`make ios-check-request-limits`。1 つずらすと失敗することを確認済み)。
+2. **API 写像**(`APIBalanceService`): `X-Device-Id`/`X-Session-Id` 付きで `POST /api/balance/v1/team-balance/analyze`・`.../coverage`。analyze の本文は `members`(順を保つ)で、`abilityId` は nil なら欄ごと載せない(`null` を送らない)。
+   coverage の各メンバーは `moveIds` を必ず載せる(技が無いメンバーは空配列)。応答は並び(メンバーは要求の順・タイプは応答の正準順)・倍率の文字列(`"4"`・`"3/4"`。数値に変換しない)・分類・出どころ・効果・集計の数を変えずに写し、
+   coverage の `bestMultiplier` の null は `nil` のまま写す(0 や等倍に丸めない)。400/413/422/500/503 は `code`・`message` をそのまま運ぶ `PokeCalcError`、通信不能は `transport`、読めない 200・契約の `ErrorCode` に無い code は `decode`、
+   契約外のステータスは本文が `{code,message}` ならその `code`・読めなければ `client_unexpected_status`、タスクのキャンセルは `CancellationError` のまま。
+3. **構築 → 要求**(`BalanceRequestBuilder`): `pokemonId = speciesKey`・メンバーは構築の順で先頭から `RequestLimits.maxBalanceMembers` 体まで。analyze の `abilityId` は nil・空文字なら nil。coverage の `moveIds` は重複を除き先頭から
+   `RequestLimits.maxBalanceMovesPerMember` 件まで・空のメンバーも載せる。技を持つメンバーがいなければ coverage は nil・メンバー 0 体なら両方 nil。同じ種族の重複は 1 体ずつ送る。要求にタイプ・倍率・分類を含めない。
+4. **結果の整形**(`BalanceResultDisplayBuilder`): 応答の値(倍率の文字列・分類・集計の数・有効/抜群の真偽・タイプ)をそのまま運ぶ。倍率の計算・分類の判定し直し・集計の数え直し・並べ替え・弱点の偏りの判定をしない
+   (分類と倍率が食い違う応答でも応答のまま出す)。語は応答の分類から選ぶ(「×2 弱点」「×1/2 耐性」「×0 無効」。特性が変えた欄だけ添え書き)。攻撃範囲は「×2 抜群」・技が無ければ「攻撃技なし」。名前は送信時点の構築から index で引く
+   (同じ種族の重複を取り違えない。足りない index は名前を捏造せず pokemonId)。総合点・ランキング・おすすめの語を持たない。
+5. **構築から選ぶ・非同期・失敗**(`BalanceViewModel`): 構築の一覧(メンバー 0 体の構築も出す)を読み、構築を選ぶと**同期で**選択と `.loading`(技が無い構築の coverage・メンバー 0 体の構築は `.skipped`)を反映し、世代を進めて先行を cancel して
+   analyze・coverage を独立に予約する。最新の世代の応答だけ反映する(cancel を無視するサービスの古い応答・古い失敗も捨てる)。`CancellationError` は失敗にしない。画面を離れるときは進行中を cancel して `.idle` に戻す(完了済みの結果は残す)。
+   片方の失敗・遅延がもう片方の表示を消さない。失敗は `code` から日本語にする(サーバーの英語 message は出さない)。一覧にない構築 ID は何もしない。`reanalyze()` は構築の一覧を読み直し、選択中の構築の最新の内容で解析し直す
+   (消えていれば選択を外して `.idle`)。構築のストアには書かない。名前(ニックネーム → 種族名 → speciesKey。特性名)の引き当てが失敗しても解析は止まらない。構築・マスタ・balance は互いに巻き込まない(絶対ルール 5。`load()` は throw しない)。
+6. **画面**(XCUITest・モック): ルートの `openBalanceScreen` と `POKECALC_OPEN_BALANCE_SCREEN_AT_LAUNCH=1` で開く。構築が無い案内・構築の一覧(構築名・メンバー数・選択状態)・未選択の案内・防御相性(メンバーごとに違う値・タイプ名・語・名前の順)・
+   チームの集計(サーバーの数)・攻撃範囲(技ありの倍率・技なしの「攻撃技なし」・チームの有効/抜群の人数)・技が無い構築の案内(防御は出る)・構築の切り替え・メンバー 0 体の案内・失敗(日本語・再試行の入口・構築の一覧が残る・計算画面は開く・
+   片方だけの失敗で他方は出る)が動く。AX5 でも入口・防御・攻撃範囲・失敗の文言が横にはみ出さない。
+7. **文言・デザイン・不変条件**: 文言は `BalanceLabels`(Core)に集約し Web の `balanceScreenText`・`balanceLabelText`・`balanceErrorText` と同じ(違いは ADR-0505 §9 の 4 点だけ。`BalanceLabelsTests` が固定)。design.md のトークンのみ・
+   `lineLimit`・`minimumScaleFactor` なし・常時アニメーションなし・タイプ色は `TypeBadgeView`(ink)だけが持つ。**タイプ相性表・倍率・弱点の判定を iOS に持ち込まない**(`Sources/` に相性の表・倍率の計算が無い)。件数・範囲は定数から(直書きしない)。
+   既存のテスト・identifier・既存 3 つの生成物は不変。`api/openapi.yaml`・`services/` は変えない。
+
+### 追加したテスト(spec 時点)
+
+- 単体(XCTest。`ios/PokeCalcKit/Tests/PokeCalcCoreTests/`)**104 件**: `BalanceContractSyncTests` 8・`BalanceLabelsTests` 11・`APIBalanceServiceTests` 17・`MockBalanceServiceTests` 14・`BalanceRequestBuilderTests` 10・
+  `BalanceResultDisplayTests` 16・`BalanceViewModelTeamTests` 16・`BalanceViewModelAsyncTests` 12。足場: `Support/StubBalanceService.swift`(呼び出しの記録・操作ごとの hold/release・cancel の記録・cancel を無視するモード・
+  メンバーごとに違う値を返す既定の応答・架空の構築 `StubBalance`・`BalanceHarness`)。`swift test` は全 923 件中、**新規の 80 件が失敗**(足場が空の殻のため。意図どおり)、新規の 24 件(同期・固定文言・空の入力の既定値など)と既存の 819 件は成功。
+  足場が空の殻のとき添字アクセスでテストプロセスごと落ちないよう、結果の添字は `[safe:]`(既存の `Support/ArraySafe.swift`)を使っている。
+- 契約の範囲の同期: `ios/scripts/check-request-limits.sh` に balance(`AnalyzeRequest`・`CoverageRequest` の `members` の min/maxItems・`CoverageRequestMember.moveIds.maxItems`・`MoveId.maxLength`)を追加(成功。`RequestLimits` を 1 つずらして失敗することも確認済み)。
+- XCUITest(`ios/PokeCalcUITests/`)**17 件**(コンパイル確認のみ。View が未実装のため実行すると失敗する): `BalanceScreenUITests` 13 件、`LargeTextLayoutUITests` に AX5 の 4 件
+  (`testBalanceScreenNoHorizontalOverflowAtAX5`・`testBalanceDefenseResultNoHorizontalOverflowAtAX5`・`testBalanceCoverageResultNoHorizontalOverflowAtAX5`・`testBalanceErrorNoHorizontalOverflowAtAX5`)。共有の操作は `BalanceUITestSupport.swift`(構築を作る手順・起動)。
+- `make ios-gen-check`・`make ios-lint`・`make ios-check-request-limits` 成功。`xcodebuild build-for-testing`(PokeCalc スキーム・iPhone 18 Pro)成功。
+- 手順書: `docs/runbooks/ios.md` の確認行を 8 行(gen-check 4 本)に直した。
+
+### 実装者への注意
+
+- 足場の公開 API(名前・case 名・引数・ID の文字列)をテストが固定している。変えるときは理由をコミットに書く。`TODO(implementer P6-26` を grep して全部埋める
+  (`BalanceLabels.errorMessage`・`BalanceRequestBuilder.make`・`BalanceViewModel` の 5 メソッド・`BalanceResultDisplayBuilder`・`APIBalanceService`・`MockBalanceService`)。
+- `BalanceViewModel`: `selectTeam` は同期で `selectedTeamID`・両方の状態(`.loading` / `.skipped`)・世代の更新・先行の cancel まで行い、その後に 2 つの Task(analyze・coverage)を独立に走らせる(`LatestTaskRunner` は 1 つだけ保持する部品なので、
+  2 本を独立に持つなら Task を直接持って世代で守る。Task のキャンセル確認だけに頼らない。`hold(ignoringCancellation: true)` のテストがある)。名前の引き当て(`master.species(key:)`)は要求の送信を待たせない・失敗しても握りつぶして ID に落とす
+  (特性名は種族の特性候補から。見つからなければ ID)。結果の整形は**送信時点の構築のスナップショット**で行う。`settle()` は最新の予約済みの 2 本を await する。`reanalyze()` は読み直したあと `selectTeam` と同じ流れ(完了まで待っても待たなくてもよい。テストは `settle()` を使う)。
+  `cancelPendingWork()` は `.loading` を `.idle` に戻す(`.loaded`・`.failed`・`.skipped` はそのまま)。`load()` は構築の一覧だけを読む(マスタの先読みはしない)。
+- `BalanceResultDisplayBuilder`: 応答を運ぶだけ。倍率を数値化しない・`category` を倍率から導かない・`teamSummary` を数え直さない・並べ替えない。`BalanceLabels` の関数で文言を作る(`defenseText`・`abilityNote`・`summaryText`・`coverageText`・`teamCoverageText`)。
+- `APIBalanceService.swift` は `PokeCalcBalanceAPI` だけを読み込む。`APIJudgeService` の `send`・`undocumentedError` の構成をそのまま使えばよい。生成型のメモ(`EffectSource` の `type` は `._type`・`CoverageMultiplier` の case は `._0 ._12 ._1 ._2`・
+  `AbilityId`/`MoveId` は String の別名)はファイル冒頭の TODO にある。契約の `ErrorCode` の enum に無い code は `decode` になる点は speed・judge と同じ。
+- アプリ側: `AppEnvironment.ready` に `balance: any BalanceService` を足し(API は同じ `baseURL`・同じ `ClientIdentity`。モックは `MockBalanceService(environment:)`)、`RootView`・`#Preview`・既存のパターンマッチ(`.ready(` の全箇所)をすべて更新する。
+  `RootView` に `openBalanceScreen`(`BalanceLabels.openButton`)と `POKECALC_OPEN_BALANCE_SCREEN_AT_LAUNCH`(既存の else-if の並びに足す)、`ios/scripts/sim-run.sh` の `IOS_SCREEN=balance`(使い方・case・usage・`ios/Makefile` のコメント)、
+  `docs/runbooks/ios.md`(画面の確認の章を足し以降を繰り下げ)・`ios/README.md`(`POKECALC_MOCK_BALANCE=error|coverage-error`)・`docs/plan.md`(P6-26)を更新する。View は `PokeCalcCore` の `BalanceViewModel` を `@State` で持ち、
+  `.task` で `load()`、`.onDisappear` で `cancelPendingWork()`。構築は `RootView` が持つ `teamStore` を渡す。
+- View の制約: 構築の選択は行のボタン(`balanceTeam-<n>`。`Menu` は使わない。中のボタンに identifier が付かない制約)で、選択状態は `isSelected`。結果の行・欄は `.accessibilityElement(children: .contain)` か、label に値を含めた 1 要素にして子の識別子を
+  飲み込ませない(欄 `balanceDefenseCell-<i>-<type>` の label にタイプ名・倍率・語が入る)。18 タイプ × 最大 6 体の表は縦に長いので `LazyVStack` にしない・横スクロールにしない(AX5 では欄を縦に積むか折り返す)。`lineLimit`・`minimumScaleFactor` なし。
+  タイプ色は `TypeBadgeView`(ink)。未知のタイプ ID は応答に出ない(生成型が decode で落とす)。**タイプ相性・倍率の計算を View にも書かない**。
+- 範囲(6・4・40)は `RequestLimits` から。`BalanceLabels` に数値を直書きしない(`memberCount` の数は引数)。
+- 完了条件: `make ios-test`(lint・gen-check・check-request-limits・単体・UI・infoplist)がすべて成功する。UI テストはモックの固定の事実(ADR-0505 §8)に頼る箇所が複数ある
+  (メンバー 0 の normal は ×4 弱点・メンバー 1 は ×2 弱点・集計は弱点 2〈うち×4 1〉・攻撃範囲のメンバー 0 の normal は ×0 無効・electric は ×2 抜群)。モックを変えるなら ADR-0505 §8 と `MockBalanceServiceTests`・UI テストを同時に直す。
+- 構築を作る UI 操作(`BalanceUITestSupport.createTeam`)は、技スロット(`memberMoveSlot-<id>-0`)を n 番目のメンバーぶん選ぶ。AX5 の 3 テスト(防御・攻撃範囲・失敗)は AX5 のまま構築を作るので、構築ビルダーが AX5 で操作できないとき(ボタンが画面外など)は
+  この操作列(スクロールしてから tap)を直す(画面側ではなくテスト側の都合。直したら理由をコミットに書く)。
+
+### 実装結果(P6-26。implementer)
+
+- 単体 `swift test`: 全 923 件成功・失敗 0(spec 時点で失敗していた新規 80 件を含む。テストの期待値は変えていない)。
+- `make ios-lint`・`make ios-gen-check`(4 本)・`make ios-check-request-limits` 成功。`xcodebuild build-for-testing`(PokeCalc・iPhone 18 Pro)成功。
+- XCUITest `BalanceScreenUITests` 13 件を iPhone 18 Pro で実行し全件成功(失敗 0)。テスト・identifier の変更なし。AX5 の 4 件と全体の XCUITest は未実行(別途実行)。
+- 判断: `analyze`・`coverage` は Task を 2 本直接持ち世代で守る(`LatestTaskRunner` は使わない)。画面を離れるときも世代を進め、cancel を無視するサービスの遅い応答が `.idle` を上書きしない。
+  名前の引き当ては別 Task で並走し、要求の送信を待たせない。18 タイプの欄は `Grid`(遅延しない)・非アクセシビリティサイズは 2 列・AX は 1 列・各欄は `ViewThatFits` でバッジと語が収まらなければ縦に積む。
+  タイプ・相性・倍率を iOS で判定しない(応答を並べるだけ)。契約の enum → ドメインの enum は rawValue で写し、合わない値は `decode` の失敗にする(強制アンラップしない)。

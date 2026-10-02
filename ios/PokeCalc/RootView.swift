@@ -29,6 +29,9 @@ struct RootView: View {
     /// 起動時にいきなり判定画面を開かせる環境変数(同上。ADR-0504)。
     static let openJudgeScreenAtLaunchEnvironmentKey = "POKECALC_OPEN_JUDGE_SCREEN_AT_LAUNCH"
     private static let openJudgeScreenAtLaunchValue = "1"
+    /// 起動時にいきなりタイプバランス画面を開かせる環境変数(同上。ADR-0505)。
+    static let openBalanceScreenAtLaunchEnvironmentKey = "POKECALC_OPEN_BALANCE_SCREEN_AT_LAUNCH"
+    private static let openBalanceScreenAtLaunchValue = "1"
 
     /// `environment` は既定でも作れる(#Preview 用)。実行時は `PokeCalcApp` が `@State` で
     /// 1回だけ作ったものを渡す(セッション ID を起動ごとに1つに保つため)。
@@ -99,6 +102,12 @@ struct RootView: View {
                         }
                         .buttonStyle(PillButtonStyle())
                         .accessibilityIdentifier("openJudgeScreen")
+
+                        NavigationLink(value: BalanceScreenRoute()) {
+                            Text(BalanceLabels.openButton)
+                        }
+                        .buttonStyle(PillButtonStyle())
+                        .accessibilityIdentifier("openBalanceScreen")
                     }
                 }
                 Spacer()
@@ -125,32 +134,37 @@ struct RootView: View {
                 }
             }
             .navigationDestination(for: CalcScreenRoute.self) { _ in
-                if case .ready(let service, _, _, _, let backendDescription) = environment {
+                if case .ready(let service, _, _, _, _, let backendDescription) = environment {
                     CalcScreenView(service: service, teamStore: teamStore, backendDescription: backendDescription)
                 }
             }
             .navigationDestination(for: ReverseScreenRoute.self) { _ in
-                if case .ready(let service, _, _, _, let backendDescription) = environment {
+                if case .ready(let service, _, _, _, _, let backendDescription) = environment {
                     ReverseScreenView(service: service, teamStore: teamStore, backendDescription: backendDescription)
                 }
             }
             .navigationDestination(for: TeamListScreenRoute.self) { _ in
-                if case .ready(let service, _, _, _, _) = environment {
+                if case .ready(let service, _, _, _, _, _) = environment {
                     TeamListView(store: teamStore, service: service, path: $path)
                 }
             }
             .navigationDestination(for: SpeedScreenRoute.self) { _ in
-                if case .ready(_, _, let speed, _, _) = environment {
+                if case .ready(_, _, let speed, _, _, _) = environment {
                     SpeedScreenView(service: speed)
                 }
             }
             .navigationDestination(for: JudgeScreenRoute.self) { _ in
-                if case .ready(let service, _, _, let judge, _) = environment {
+                if case .ready(let service, _, _, let judge, _, _) = environment {
                     JudgeScreenView(service: judge, master: service, teamStore: teamStore)
                 }
             }
+            .navigationDestination(for: BalanceScreenRoute.self) { _ in
+                if case .ready(let service, _, _, _, let balance, _) = environment {
+                    BalanceScreenView(service: balance, master: service, teamStore: teamStore)
+                }
+            }
             .navigationDestination(for: AboutScreenRoute.self) { _ in
-                if case .ready(_, let deviceData, _, _, _) = environment {
+                if case .ready(_, let deviceData, _, _, _, _) = environment {
                     AboutView(deviceDataService: deviceData)
                 } else {
                     AboutView()
@@ -170,6 +184,8 @@ struct RootView: View {
                 path.append(SpeedScreenRoute())
             } else if env[Self.openJudgeScreenAtLaunchEnvironmentKey] == Self.openJudgeScreenAtLaunchValue {
                 path.append(JudgeScreenRoute())
+            } else if env[Self.openBalanceScreenAtLaunchEnvironmentKey] == Self.openBalanceScreenAtLaunchValue {
+                path.append(BalanceScreenRoute())
             }
         }
     }
@@ -177,7 +193,7 @@ struct RootView: View {
     @ViewBuilder
     private var statusBadge: some View {
         switch environment {
-        case .ready(_, _, _, _, let description):
+        case .ready(_, _, _, _, _, let description):
             Text(description)
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
@@ -227,6 +243,9 @@ private struct SpeedScreenRoute: Hashable {}
 /// `NavigationPath` に積む判定画面の行き先(値だけで、状態は持たない。P6-25)。
 private struct JudgeScreenRoute: Hashable {}
 
+/// `NavigationPath` に積むタイプバランス画面の行き先(値だけで、状態は持たない。P6-26)。
+private struct BalanceScreenRoute: Hashable {}
+
 /// `NavigationPath` に積む「このアプリについて」画面の行き先(値だけで、状態は持たない。P6-18)。
 private struct AboutScreenRoute: Hashable {}
 
@@ -235,7 +254,7 @@ private struct AboutScreenRoute: Hashable {}
         RootView(
             environment: .ready(
                 service: mock, deviceData: MockDeviceDataService(), speed: MockSpeedService(), judge: MockJudgeService(),
-                backendDescription: "モックデータで動作中"))
+                balance: MockBalanceService(), backendDescription: "モックデータで動作中"))
     } else {
         Text("プレビュー用モックの読み込みに失敗")
     }

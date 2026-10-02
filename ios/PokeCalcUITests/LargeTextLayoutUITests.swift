@@ -778,4 +778,67 @@ final class LargeTextLayoutUITests: XCTestCase {
         assertNoHorizontalOverflow(app, identifiers: ["judgeOptionSheet"])
         assertNoHorizontalOverflowForPrefixes(app, prefixes: ["judgeOption-"])
     }
+
+    // MARK: - タイプバランス画面(P6-26。ADR-0501「P6-26 の受け入れ条件」の AX5)
+
+    /// タイプバランス画面を AX5 で開く(構築は AX5 のまま構築ビルダーで作る。`BalanceUITestSupport`)。
+    /// 構築ビルダーが AX5 で操作できないときは、構築を作る手順(`BalanceUITestSupport.createTeam`)側を直す(画面側の問題ではない)。
+    private func launchBalanceAtAX5(scenario: String? = nil, members: [BalanceUITestSupport.Member]? = nil) -> XCUIApplication {
+        let app = BalanceUITestSupport.launch(
+            scenario: scenario, extraArguments: ["-UIPreferredContentSizeCategoryName", Self.ax5ContentSizeCategory])
+        if let members {
+            BalanceUITestSupport.createTeam(app, name: "テストこうちくP6-26", members: members)
+        }
+        BalanceUITestSupport.openBalanceScreen(app)
+        return app
+    }
+
+    private func selectFirstBalanceTeam(_ app: XCUIApplication) {
+        let team = element(app, "balanceTeam-0")
+        XCTAssertTrue(team.waitForExistence(timeout: Self.existenceTimeout), "構築の行が無い")
+        for _ in 0..<12 where !(team.exists && team.isHittable) { app.swipeUp() }
+        team.tap()
+    }
+
+    /// P6-26: AX5 でも入口(構築が無い案内)が横にはみ出さない。
+    func testBalanceScreenNoHorizontalOverflowAtAX5() {
+        let app = launchBalanceAtAX5()
+        assertNoHorizontalOverflow(app, identifiers: ["balanceScreen", "balanceTeamEmptyMessage"])
+    }
+
+    /// P6-26: AX5 で、構築の一覧・防御相性の表(メンバーの行・18 タイプの欄・特性の添え書き)・チームの集計が横にはみ出さない(長い日本語の語・倍率の文字列が折り返す)。
+    func testBalanceDefenseResultNoHorizontalOverflowAtAX5() {
+        let app = launchBalanceAtAX5(members: [BalanceUITestSupport.armedMember, BalanceUITestSupport.unarmedMember])
+        selectFirstBalanceTeam(app)
+        XCTAssertTrue(element(app, "balanceDefenseRegion").waitForExistence(timeout: Self.existenceTimeout), "防御相性が出ない")
+        assertNoHorizontalOverflow(
+            app,
+            identifiers: [
+                "balanceTeam-0", "balanceDefenseRegion", "balanceDefenseMember-0", "balanceDefenseMember-1",
+                "balanceDefenseCell-0-normal", "balanceDefenseCell-1-normal", "balanceSummary-normal",
+            ])
+        assertNoHorizontalOverflowForPrefixes(app, prefixes: ["balanceDefenseCell-", "balanceSummary-"])
+    }
+
+    /// P6-26: AX5 で、攻撃範囲(メンバーの欄・「攻撃技なし」・チームの有効/抜群の人数の行)が横にはみ出さない。
+    func testBalanceCoverageResultNoHorizontalOverflowAtAX5() {
+        let app = launchBalanceAtAX5(members: [BalanceUITestSupport.armedMember, BalanceUITestSupport.unarmedMember])
+        selectFirstBalanceTeam(app)
+        XCTAssertTrue(element(app, "balanceCoverageRegion").waitForExistence(timeout: Self.existenceTimeout), "攻撃範囲が出ない")
+        assertNoHorizontalOverflow(
+            app,
+            identifiers: [
+                "balanceCoverageRegion", "balanceCoverageMember-0", "balanceCoverageCell-0-normal", "balanceCoverageCell-1-normal",
+                "balanceCoverageTeam-normal",
+            ])
+        assertNoHorizontalOverflowForPrefixes(app, prefixes: ["balanceCoverageCell-", "balanceCoverageTeam-"])
+    }
+
+    /// P6-26: AX5 で、失敗の文言(長い日本語)と再試行の入口が横にはみ出さない。
+    func testBalanceErrorNoHorizontalOverflowAtAX5() {
+        let app = launchBalanceAtAX5(scenario: "error", members: [BalanceUITestSupport.armedMember])
+        selectFirstBalanceTeam(app)
+        XCTAssertTrue(element(app, "balanceDefenseError").waitForExistence(timeout: Self.existenceTimeout), "失敗が出ない")
+        assertNoHorizontalOverflow(app, identifiers: ["balanceDefenseError", "balanceCoverageError", "balanceRetry"])
+    }
 }

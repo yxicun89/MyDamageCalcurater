@@ -34,6 +34,17 @@ public enum RequestLimits {
     public static let minJudgeDefenders = 1
     /// `MoveId.maxLength`(判定の契約の技 ID の最大長。形式に合わない値は上流を呼ぶ前に 400 になる)。
     public static let maxJudgeMoveIdLength = 64
+
+    // MARK: - タイプバランス(P6-26。ADR-0505 §2): services/balance/api/openapi.yaml の写し。`check-request-limits.sh` が契約と照合する
+
+    /// `AnalyzeRequest.members.maxItems`・`CoverageRequest.members.maxItems`(メンバー数の上限。構築の `TeamLimits.maxMembers` と同じ 6)。
+    public static let maxBalanceMembers = 6
+    /// `AnalyzeRequest.members.minItems`・`CoverageRequest.members.minItems`(メンバーが 0 体の構築は送らない)。
+    public static let minBalanceMembers = 1
+    /// `CoverageRequestMember.moveIds.maxItems`(メンバーごとの技の上限。構築の `TeamLimits.maxMovesPerMember` と同じ 4)。
+    public static let maxBalanceMovesPerMember = 4
+    /// `MoveId.maxLength`(balance の契約の技 ID の最大長。judge の 64 とは別の契約なので別の定数)。
+    public static let maxBalanceMoveIdLength = 40
 }
 
 /// 件数の上限に達したことを画面に出す文言(`MasterSearchLabels` と同じ理由でコードに1か所持つ)。

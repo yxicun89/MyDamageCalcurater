@@ -171,6 +171,7 @@
 - [x] P6-24 素早さ比較画面(iOS。ユーザー決定 2026-10-03〈DECISIONS.md〉。Web の `SpeedScreen` が参照実装、契約は `services/speed/api/openapi.yaml`〈gateway `/api/speed/*`〉。生成設定への取り込み方を spec で決める)
   - 完了(2026-10-03): 契約ごとに別ターゲットで生成(`PokeCalcSpeedAPI`。`openapi-gen.sh` を契約のループに拡張。P6-25・26 も同形で追加できる。ADR-0503)。`SpeedService` は `PokeCalcService` と別プロトコル。Web と同じ入力(preset・custom・raw・絞り込み・相手側追い風・トリックルーム)。`swift test` 689件・`make ios-test` 全件成功(XCUITest 69件)。critic PASS
 - [x] P6-25 判定画面(iOS。ユーザー決定 2026-10-03)。P6-24 と同じ多契約生成で `PokeCalcJudgeAPI`。`JudgeService` は `PokeCalcService` と別プロトコル。手入力+構築から呼び出し。サーバー応答のみ表示(勝ち負けに丸めない)。未対応の印は方向別に表示(ADR-0708)。`swift test` 819件・`make ios-test` 全件成功(XCUITest 89件)。critic PASS。ADR-0504
+- [x] P6-26 タイプバランス画面(iOS。ユーザー決定 2026-10-03)。多契約生成で `PokeCalcBalanceAPI`。構築を選ぶと防御相性(analyze)と攻撃範囲(coverage)を独立に呼ぶ。相性表・倍率計算・弱点判定は iOS に持たずサーバー応答を表示(タイプ色バッジ)。threats / recommendations / move-range は後続(ADR-0505)。`swift test` 923件・`make ios-test` 全件成功(XCUITest 106件)。critic PASS。軽微な後続: `reanalyze()` 内の `load()` が一時失敗すると既存の結果が消える
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)

@@ -8,7 +8,7 @@ import PokeCalcCore
 enum AppEnvironment {
     case ready(
         service: any PokeCalcService, deviceData: any DeviceDataService, speed: any SpeedService, judge: any JudgeService,
-        backendDescription: String)
+        balance: any BalanceService, backendDescription: String)
     case configurationError(String)
 
     /// 設定エラー時に画面へ出す文言の接頭辞。
@@ -26,8 +26,10 @@ enum AppEnvironment {
                 let deviceData = MockDeviceDataService(environment: environment)
                 let speed = MockSpeedService(environment: environment)
                 let judge = MockJudgeService(environment: environment)
+                let balance = MockBalanceService(environment: environment)
                 return .ready(
-                    service: service, deviceData: deviceData, speed: speed, judge: judge, backendDescription: "モックデータで動作中")
+                    service: service, deviceData: deviceData, speed: speed, judge: judge, balance: balance,
+                    backendDescription: "モックデータで動作中")
             case .api(let url):
                 let identity = ClientIdentity(defaults: .standard)
                 let service = APIPokeCalcService(baseURL: url, identity: identity)
@@ -35,8 +37,10 @@ enum AppEnvironment {
                 let speed = APISpeedService(baseURL: url, identity: identity)
                 // 判定は judge 自身の Ingress(`/api/judge`)だが、ホストと端末 ID は同じ(ADR-0504 §1)。
                 let judge = APIJudgeService(baseURL: url, identity: identity)
+                // タイプバランスは gateway の `/api/balance/*`。ホストと端末 ID は同じ(ADR-0505 §1)。
+                let balance = APIBalanceService(baseURL: url, identity: identity)
                 return .ready(
-                    service: service, deviceData: service, speed: speed, judge: judge,
+                    service: service, deviceData: service, speed: speed, judge: judge, balance: balance,
                     backendDescription: "APIに接続中(\(url.host ?? url.absoluteString))")
             }
         } catch {

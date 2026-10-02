@@ -8,7 +8,7 @@
 cd "$(git rev-parse --show-toplevel)"
 make ios-test | grep '^ios-'
 ```
-確認: 出力が次の7行(`ios-gen-check: PokeCalcAPI/Generated は api/openapi.yaml と一致` / `ios-gen-check: PokeCalcSpeedAPI/Generated は services/speed/api/openapi.yaml と一致` / `ios-gen-check: PokeCalcJudgeAPI/Generated は services/judge/api/openapi.yaml と一致` / `ios-check-request-limits: OK…` / `ios-test-unit: 全 N 件 / 成功 N / 失敗 0 / スキップ 0 / 想定内の失敗 0` / `ios-test-ui: 全 N 件 / 成功 N / 失敗 0 / スキップ 0 / 想定内の失敗 0` / `ios-check-infoplist: … が入っている`)。
+確認: 出力が次の8行(`ios-gen-check: PokeCalcAPI/Generated は api/openapi.yaml と一致` / `ios-gen-check: PokeCalcSpeedAPI/Generated は services/speed/api/openapi.yaml と一致` / `ios-gen-check: PokeCalcJudgeAPI/Generated は services/judge/api/openapi.yaml と一致` / `ios-gen-check: PokeCalcBalanceAPI/Generated は services/balance/api/openapi.yaml と一致` / `ios-check-request-limits: OK…` / `ios-test-unit: 全 N 件 / 成功 N / 失敗 0 / スキップ 0 / 想定内の失敗 0` / `ios-test-ui: 全 N 件 / 成功 N / 失敗 0 / スキップ 0 / 想定内の失敗 0` / `ios-check-infoplist: … が入っている`)。
 
 ## 2. ルート画面を開く
 
@@ -61,7 +61,17 @@ make ios-sim-run IOS_SCREEN=judge
 ポケモンと技を選んで「判定する」を押すと、候補ごとに素早さ・優先度・行動順・双方の確定数の行が出る。
 モックの挙動は `POKECALC_MOCK_JUDGE=error|candidate-error|marks` で切り替える(ADR-0504 §8)。
 
-## 8. ダークモードと大きい文字で崩れないことを見る
+## 8. タイプバランス画面を開く
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make ios-sim-run IOS_SCREEN=balance
+```
+確認: 構築が無いときは「まだ構築がありません。構築ビルダーで作ると解析できます」と出る。構築を作ってから開くと「構築を選ぶ」に構築名とメンバー数の行が並び、
+「構築を選ぶと、防御相性と攻撃範囲を解析します」と出ている。構築を選ぶと、メンバーごとの防御相性(「×4 弱点」のような倍率と語)・「チームの集計」・攻撃範囲(技が無いメンバーは「攻撃技なし」)が出る。
+モックの挙動は `POKECALC_MOCK_BALANCE=error|coverage-error` で切り替える(ADR-0505 §8)。
+
+## 9. ダークモードと大きい文字で崩れないことを見る
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
@@ -70,10 +80,11 @@ make ios-sim-run IOS_SCREEN=reverse IOS_APPEARANCE=dark IOS_CONTENT_SIZE=accessi
 make ios-sim-run IOS_SCREEN=team IOS_APPEARANCE=dark IOS_CONTENT_SIZE=extra-extra-large
 make ios-sim-run IOS_SCREEN=speed IOS_APPEARANCE=dark IOS_CONTENT_SIZE=accessibility-large
 make ios-sim-run IOS_SCREEN=judge IOS_APPEARANCE=dark IOS_CONTENT_SIZE=accessibility-large
+make ios-sim-run IOS_SCREEN=balance IOS_APPEARANCE=dark IOS_CONTENT_SIZE=accessibility-large
 ```
 確認: 背景が黒に近く文字が白い。文字が1字ずつ縦に折り返したり「…」で切れたりしていない(accessibility-large ではカードが縦に並ぶ)。
 
-## 9. シミュレータを標準の表示に戻す
+## 10. シミュレータを標準の表示に戻す
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"

@@ -1,0 +1,9 @@
+# PokeCalcBalanceAPI の生成設定(ADR-0505)。生成物は ios/PokeCalcKit/Sources/PokeCalcBalanceAPI/Generated/。
+# 契約は services/balance/api/openapi.yaml(サービスローカル契約。ADR-0012)。root の PokeCalcAPI などとは
+# 別ターゲットにする(`Client`・`Components` などの生成型名が衝突するため。ADR-0503 §1)。
+generate:
+  - types
+  - client
+accessModifier: public
+namingStrategy: idiomatic
+# balance の契約には tags が無いので filter は掛けない(ヘルスチェック・使わない操作も生成されるが、画面は analyze・coverage だけを使う)。

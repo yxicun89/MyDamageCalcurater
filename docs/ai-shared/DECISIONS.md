@@ -2077,3 +2077,23 @@ Impact:
 - 絶対ルール 5: 判定の失敗は計算・構築に影響しない(`PokeCalcService` と別のプロトコルで、画面も独立)。
 - iOS が使う入力の範囲(SP 0〜32・合計 66・ランク ±6・候補 1〜6 件・技 ID 64 文字)は `SPLimits`/`RankLimits`/`RequestLimits` に写しを持ち、契約との一致を `make ios-check-request-limits` が検査する。
 - 実 Pokémon マスタデータは iOS のモック・テストに入れない(架空データのみ)。
+
+## 2026-10-03: iOS にタイプバランス画面を作る(P6-26。iOS レーン → タイプバランス・API レーンへ)
+
+Decision: ユーザー決定(2026-10-03)で、iOS にタイプバランス画面(最大 6 体のパーティの防御相性・攻撃範囲。docs/type-balance-design.md §11 の「iOS のタイプバランス画面: 未対応」)を作る。iOS は
+`POST /api/balance/v1/team-balance/analyze` と `POST /api/balance/v1/team-balance/coverage`(gateway の `/api/balance/*`。ホストは他の API と同じ)を使い始める。契約は `services/balance/api/openapi.yaml`。
+iOS は契約を変えず、root の `api/openapi.yaml` も変えない。生成は契約ごとに別ターゲット(`PokeCalcBalanceAPI`。ADR-0503 の形で `openapi-gen.sh` の配列に 1 行)。判断は ADR-0505、受け入れ条件は ADR-0501「P6-26 の受け入れ条件」。
+入力は端末内の構築(最大 6 体)から選ぶだけ(メンバー・特性・技の手入力は無い)。threats・recommendations・move-range は後続(別タスク)。
+Reason: Web にだけあったタイプバランスを iPhone でも使えるようにする。iOS は構築(端末内)があるので、構築を選ぶだけで解析できる(Web より手数が少ない)。
+Impact:
+- **タイプバランスレーンへ(契約を変えるとき)**: balance の契約を変える PR(`ErrorCode` の追加、`MemberDefense`・`DefenseEntry`・`TeamSummaryEntry`・`MemberCoverage`・`TeamCoverageEntry` の必須欄の増減、`TypeId`・`DefenseCategory`・
+  `EffectSource`・`DefenseEffect`・`CoverageMultiplier` の値の変更、`members` の件数・`moveIds` の件数・`MoveId` の長さの変更など)は、iOS の生成物と同期テストが落ちる。変更する PR で `make ios-gen` を実行して生成物を同じ PR に含め、
+  DECISIONS.md に 1 行残す(iOS レーンが文言・ドメインを追従する。`make ios-gen-check` と `make ios-check-request-limits` が CI で検出する)。後方互換な追加(省略可の入力欄・応答の追加項目)は生成物の更新だけで済む。
+- `ErrorCode` に値を足すと、古い iOS アプリは応答をデコードできず「タイプバランスの API に接続できません」になる(素早さ・判定と同じ。`UnsupportedMark` の ADR-0215 と同じ問題)。エラー code を増やすときは、先に iOS 側の対応
+  (未知の code を許す形への変更)を相談する。`TypeId` に 19 個目のタイプが増えた場合も、生成型が decode で落ちるので同じ扱い(相談してから)。
+- **タイプ相性表の正本は balance(ダメージ計算レーンの `testdata/golden/typechart.json` の複製。ADR-0013・0015)と pokedex の export 側**。iOS はタイプ相性表・倍率の計算・弱点の判定をハードコードしない
+  (ドメイン規約)。応答の倍率の文字列・分類・集計・タイプをそのまま表示するだけで、「弱点の偏り」「穴」「おすすめ」の判定も iOS に持たない(穴・おすすめは recommendations の責務。後続で結果をそのまま表示する)。
+- 範囲の写し: メンバー数 1〜6・メンバーごとの技 4・技 ID 40 文字は `RequestLimits`(`TeamLimits` と同じ値)に写しを持ち、契約との一致を `make ios-check-request-limits` が検査する。
+- gateway: iOS は `/api/balance/*` を gateway 経由で叩く。`GATEWAY_BALANCE_URL` が未設定なら gateway が 503 を返し、iOS は「接続できません」(または本文の code)を出す。直結 Ingress の撤去と URL の配線(設計書 §11)が進んでも、パスは同じ。
+- 絶対ルール 5: balance の失敗は計算・構築に影響しない(`PokeCalcService` と別のプロトコルで、画面も独立)。analyze と coverage も互いに独立(片方の失敗がもう片方の表示を消さない)。
+- 画像・実データ: タイプはタイプ色のエンブレム(画像は必須にしない)。実 Pokémon マスタデータは iOS のモック・テストに入れない(架空データのみ)。

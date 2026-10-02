@@ -156,6 +156,32 @@ for stat in atk def spa spd spe; do
   check_judge "RankBlock.$stat.maximum" "$(schema_property_value "$judge_openapi" RankBlock "$stat" maximum)" "$(domain_limit max)" RankLimits.max
 done
 
+# --- タイプバランス(P6-26。ADR-0505 §2): services/balance/api/openapi.yaml の範囲と、RequestLimits が一致するか ---
+# メンバー数の上限・下限は analyze と coverage の両方を見る(片方だけ変わってもずれに気づく)。
+balance_openapi="$repo_root/services/balance/api/openapi.yaml"
+
+check_balance() {
+  local label="$1" contract="$2" ios="$3" ios_name="$4"
+  if [ -z "$contract" ] || [ -z "$ios" ]; then
+    echo "ios-check-request-limits: balance の $label または $ios_name が見つからない" >&2
+    status=1
+  elif [ "$contract" != "$ios" ]; then
+    echo "ios-check-request-limits: balance の $label=$contract と $ios_name=$ios が違う" >&2
+    status=1
+  fi
+}
+
+for schema in AnalyzeRequest CoverageRequest; do
+  check_balance "$schema.members.maxItems" \
+    "$(schema_property_value "$balance_openapi" "$schema" members maxItems)" "$(swift_limit maxBalanceMembers)" maxBalanceMembers
+  check_balance "$schema.members.minItems" \
+    "$(schema_property_value "$balance_openapi" "$schema" members minItems)" "$(swift_limit minBalanceMembers)" minBalanceMembers
+done
+check_balance "CoverageRequestMember.moveIds.maxItems" \
+  "$(schema_property_value "$balance_openapi" CoverageRequestMember moveIds maxItems)" "$(swift_limit maxBalanceMovesPerMember)" maxBalanceMovesPerMember
+check_balance "MoveId.maxLength" \
+  "$(schema_value "$balance_openapi" MoveId maxLength)" "$(swift_limit maxBalanceMoveIdLength)" maxBalanceMoveIdLength
+
 if [ "$status" -eq 0 ]; then
   echo "ios-check-request-limits: OK(RequestLimits は api/openapi.yaml と一致)"
 fi
