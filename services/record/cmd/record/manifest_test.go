@@ -11,17 +11,17 @@ import (
 )
 
 var recordManifest = deploytest.TiDBService{
-	Service:          "record",
-	ImageRepo:        "pokecalc/record",
-	AddrEnv:          envAddr,
-	DefaultAddr:      defaultAddr,
-	DSNEnv:           envAppDSN,
-	Secret:           "record-db-auth",
-	SecretKey:        "record-app-dsn",
-	ForbiddenSecrets: []string{"team-db-auth", "tidb-root-auth", "mysql-auth"},
-	ConfigMap:        "record-retention",
-	CronJob:          "record-expire",
-	ShutdownTimeout:  shutdownTimeout,
+	Service:           "record",
+	ImageRepo:         "pokecalc/record",
+	AddrEnv:           envAddr,
+	DefaultAddr:       defaultAddr,
+	DSNEnv:            envAppDSN,
+	AuthRef:           "record-db-auth",
+	AuthKeyName:       "record-app-dsn",
+	ForbiddenAuthRefs: []string{"team-db-auth", "tidb-root-auth", "mysql-auth"},
+	ConfigMap:         "record-retention",
+	CronJob:           "record-expire",
+	ShutdownTimeout:   shutdownTimeout,
 }
 
 // AC-K1・K2・K4

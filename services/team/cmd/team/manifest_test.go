@@ -10,17 +10,17 @@ import (
 )
 
 var teamManifest = deploytest.TiDBService{
-	Service:          "team",
-	ImageRepo:        "pokecalc/team",
-	AddrEnv:          envAddr,
-	DefaultAddr:      defaultAddr,
-	DSNEnv:           envAppDSN,
-	Secret:           "team-db-auth",
-	SecretKey:        "team-app-dsn",
-	ForbiddenSecrets: []string{"record-db-auth", "tidb-root-auth", "mysql-auth"},
-	ConfigMap:        "team-retention",
-	CronJob:          "team-expire",
-	ShutdownTimeout:  shutdownTimeout,
+	Service:           "team",
+	ImageRepo:         "pokecalc/team",
+	AddrEnv:           envAddr,
+	DefaultAddr:       defaultAddr,
+	DSNEnv:            envAppDSN,
+	AuthRef:           "team-db-auth",
+	AuthKeyName:       "team-app-dsn",
+	ForbiddenAuthRefs: []string{"record-db-auth", "tidb-root-auth", "mysql-auth"},
+	ConfigMap:         "team-retention",
+	CronJob:           "team-expire",
+	ShutdownTimeout:   shutdownTimeout,
 }
 
 // AC-K1・K2・K4

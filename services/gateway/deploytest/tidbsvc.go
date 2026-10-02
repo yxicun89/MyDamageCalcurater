@@ -21,12 +21,12 @@ type TiDBService struct {
 	AddrEnv     string // 待ち受けアドレスの環境変数名(cmd の定数)
 	DefaultAddr string // 待ち受けアドレスの既定値(cmd の定数)
 	DSNEnv      string // 例 "RECORD_APP_DSN"
-	Secret      string // 例 "record-db-auth"
-	SecretKey   string // 例 "record-app-dsn"(app ロール。ADR-0211 §4)
-	// ForbiddenSecrets はこのサービスの Pod が参照してはいけない Secret(他サービスの Secret・tidb-root-auth)。
-	ForbiddenSecrets []string
-	ConfigMap        string // 保持日数の ConfigMap(例 "record-retention")
-	CronJob          string // 失効ジョブ(例 "record-expire")
+	AuthRef     string // 例 "record-db-auth"
+	AuthKeyName string // 例 "record-app-dsn"(app ロール。ADR-0211 §4)
+	// ForbiddenAuthRefs はこのサービスの Pod が参照してはいけない Secret(他サービスの Secret・tidb-root-auth)。
+	ForbiddenAuthRefs []string
+	ConfigMap         string // 保持日数の ConfigMap(例 "record-retention")
+	CronJob           string // 失効ジョブ(例 "record-expire")
 	// ShutdownTimeout は cmd/main.go の shutdownTimeout(grace > preStop + これ)。
 	ShutdownTimeout time.Duration
 }
@@ -137,13 +137,13 @@ type configMap struct {
 	Data map[string]string `yaml:"data"`
 }
 
-// SecretPlaceholder は secretKeyRef の値の代わりに env に入れる、DSN として解釈できる架空の値
+// PlaceholderDSN は secretKeyRef の値の代わりに env に入れる、DSN として解釈できる架空の値
 // (loadConfig / loadExpireConfig を manifest の env で通すため。実際の資格情報ではない)。
-const SecretPlaceholder = "placeholder:placeholder@tcp(tidb.invalid:4000)/placeholder?parseTime=true"
+const PlaceholderDSN = "app@tcp(tidb.invalid:4000)/test?parseTime=true"
 
 // TiDBServiceEnv は base の Deployment(または CronJob)のコンテナが受け取る環境変数を、
 // envFrom の ConfigMap → env の順に合成して返す(Kustomize と k8s の優先順位どおり env が後勝ち)。
-// secretKeyRef は SecretPlaceholder に置き換える。
+// secretKeyRef は PlaceholderDSN に置き換える。
 type TiDBServiceEnv struct {
 	Deployment map[string]string
 	CronJob    map[string]string
@@ -330,8 +330,8 @@ func AssertTiDBService(t *testing.T, w TiDBService) TiDBServiceEnv {
 			t.Fatal(err)
 		}
 		walkStrings(generic, func(s string) {
-			if slices.Contains(w.ForbiddenSecrets, s) {
-				t.Errorf("base/%s の %s/%s が %q を参照している(自分の Secret %s だけ)", w.Service, o.Kind, o.Name, s, w.Secret)
+			if slices.Contains(w.ForbiddenAuthRefs, s) {
+				t.Errorf("base/%s の %s/%s が %q を参照している(自分の Secret %s だけ)", w.Service, o.Kind, o.Name, s, w.AuthRef)
 			}
 		})
 	}
@@ -420,7 +420,7 @@ func parseMiBValue(s string) (int, error) {
 	return 0, fmt.Errorf("MiB 単位(Mi か MiB)でない: %q", s)
 }
 
-// mergedEnv は envFrom(ConfigMap)→ env の順に合成する。DSN は w.Secret / w.SecretKey の secretKeyRef だけを許す。
+// mergedEnv は envFrom(ConfigMap)→ env の順に合成する。DSN は w.AuthRef / w.AuthKeyName の secretKeyRef だけを許す。
 func mergedEnv(t *testing.T, where string, c tidbContainer, w TiDBService, cm configMap) map[string]string {
 	t.Helper()
 	env := map[string]string{}
@@ -448,15 +448,15 @@ func mergedEnv(t *testing.T, where string, c tidbContainer, w TiDBService, cm co
 		switch {
 		case e.ValueFrom != nil && e.ValueFrom.SecretKeyRef != nil:
 			ref := e.ValueFrom.SecretKeyRef
-			if e.Name == w.DSNEnv && ref.Name == w.Secret && ref.Key == w.SecretKey {
+			if e.Name == w.DSNEnv && ref.Name == w.AuthRef && ref.Key == w.AuthKeyName {
 				dsnFromSecret = true
 			} else {
-				t.Errorf("%s: env %s が Secret %s/%s を参照している(%s だけを %s/%s から)", where, e.Name, ref.Name, ref.Key, w.DSNEnv, w.Secret, w.SecretKey)
+				t.Errorf("%s: env %s が Secret %s/%s を参照している(%s だけを %s/%s から)", where, e.Name, ref.Name, ref.Key, w.DSNEnv, w.AuthRef, w.AuthKeyName)
 			}
-			env[e.Name] = SecretPlaceholder
+			env[e.Name] = PlaceholderDSN
 		case e.Value != nil:
 			if e.Name == w.DSNEnv {
-				t.Errorf("%s: %s が平文の value(Secret %s から渡すこと)", where, w.DSNEnv, w.Secret)
+				t.Errorf("%s: %s が平文の value(Secret %s から渡すこと)", where, w.DSNEnv, w.AuthRef)
 			}
 			env[e.Name] = *e.Value
 		default:
@@ -464,7 +464,7 @@ func mergedEnv(t *testing.T, where string, c tidbContainer, w TiDBService, cm co
 		}
 	}
 	if !dsnFromSecret {
-		t.Errorf("%s: %s が secretKeyRef %s/%s でない", where, w.DSNEnv, w.Secret, w.SecretKey)
+		t.Errorf("%s: %s が secretKeyRef %s/%s でない", where, w.DSNEnv, w.AuthRef, w.AuthKeyName)
 	}
 	for k := range cm.Data {
 		for _, e := range c.Env {
