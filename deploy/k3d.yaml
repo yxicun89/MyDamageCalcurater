@@ -1,12 +1,20 @@
 # k3d クラスタ定義。`k3d cluster create --config deploy/k3d.yaml` で作成する。
-# ホスト 8080 → クラスタ内 loadbalancer(Traefik)80 に転送し、gateway を公開する。
+# ホスト 127.0.0.1:8080 → クラスタ内 loadbalancer(Traefik)80 に転送し、gateway を公開する。
 apiVersion: k3d.io/v1alpha5
 kind: Simple
 metadata:
   name: pokecalc
 servers: 1
 agents: 0
+# k3s は最新安定版を版+digest で固定する(ADR-0133)。更新は docs/adr/0133 の手順で。
+image: rancher/k3s:v1.37.1-k3s1@sha256:ca7f37d993d82ef0dcdcfecb2e0e2618ea541dbaffc620c8cedebe01a82acd0d
+# k8s API はホストの 127.0.0.1 だけで待ち受ける(同じ LAN の他人から届かせない。#302)。
+kubeAPI:
+  host: "127.0.0.1"
+  hostIP: "127.0.0.1"
 ports:
+  # Ingress はホストの全インターフェースで待ち受ける(iOS 実機が同じ LAN の Mac の IP で 8080 に届く必要がある。
+  # verify-m1 §7)。127.0.0.1 に限定するかは #302(needs-decision)で決める。
   - port: 8080:80
     nodeFilters:
       - loadbalancer

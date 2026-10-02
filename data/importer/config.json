@@ -47,5 +47,29 @@
         }
       }
     }
+  },
+  "integrity": {
+    "showdown": {
+      "treeSha256": "62b92002af5dfefcb192d16d0c514350318e4a4ce181127909ddb2bb69c0e940"
+    },
+    "pokeapi": {
+      "csvSha256": {
+        "abilities.csv": "74c3588ad48e08e54ff01f432899a4028c3e91508bbd53201df85e1f6b9e9ef3",
+        "ability_names.csv": "8acb80c42210f86ae747dc3347b060d69cd2574a9dbfaf74774ae632ca6348da",
+        "item_names.csv": "7b1b4fe6edf7946110050a5dddabf62c3a1dc3e1616099c4ae97abcb5ebd0f97",
+        "items.csv": "f08cd6dc30b447cb91cbe9232c79052e8521f32f6105bb1489b5bfabf4ca3241",
+        "languages.csv": "fbb60019a6a461783d5671a995d5f590db61792a273e90faa0ed630d102a19b8",
+        "move_names.csv": "99e23ee38ea53d1473474d463b87651deac3cd4928750f8186feae66da45c147",
+        "moves.csv": "8aafd37bf78f19471495c05b201545180f50f0a08a2a2a844d69f9837dd39ac9",
+        "nature_names.csv": "a6bf8bedb9822d0e966a3036885e33e1306172b3a6566edc22d02ff2e7155031",
+        "natures.csv": "3536990f6adeaa1735551a6afe798649d22426e161c937da09d3ae9a5381309c",
+        "pokemon_form_names.csv": "f496066d02fab12c18d10cce0af2f748d09cb7e296ecc784cc8682f8c4da8625",
+        "pokemon_forms.csv": "99bf8f7ad4dc1f2e291357a090cef6a575623ec3cbf9030d0e33656e6e608ae2",
+        "pokemon_species.csv": "e66e2eeb25fd3836b0ebab6bf87bbf01960aa3c0555e2bac495fa8393c5e0c45",
+        "pokemon_species_names.csv": "820cde17074cdb1c2b0595c997fb8f998e773bd5da3bb525dec85703c86c5fd9",
+        "type_names.csv": "685230c51074cf2f723debcf827a4df4c36ab0ec7e929c806ad65a3e40958705",
+        "types.csv": "37f039c8d722f47d51ba1c5c5ecf9b7007235b1a9a1af2827645c777b70307c8"
+      }
+    }
   }
 }

@@ -2,7 +2,7 @@ package httpapi
 
 // 契約テスト(test-strategy.md L4)。record-svc の応答を api/openapi.yaml に照らして検証する。
 // calc-svc / pokedex-svc の contract_test.go と同じ形で、仕様は生成物に埋め込まれたもの
-// (api.GetSwagger)を使う。AC-C2(契約とサービスの一致)。
+// (api.GetSpec)を使う。AC-C2(契約とサービスの一致)。
 
 import (
 	"bytes"
@@ -33,7 +33,7 @@ var (
 func loadContract(t *testing.T) (*openapi3.T, routers.Router) {
 	t.Helper()
 	contractOnce.Do(func() {
-		contractDoc, contractErr = api.GetSwagger()
+		contractDoc, contractErr = api.GetSpec()
 		if contractErr != nil {
 			return
 		}
@@ -169,7 +169,7 @@ func TestContractHasRecordOperations(t *testing.T) {
 			if op == nil {
 				t.Fatalf("契約に %s %s が無い", o.method, o.path)
 			}
-			// api.GetSwagger() が埋め込む仕様は oapi-codegen が生成した Go のメソッド名
+			// api.GetSpec() が埋め込む仕様は oapi-codegen が生成した Go のメソッド名
 			// (PascalCase)に正規化された operationId を持つ(openapi.yaml 自体は lowerCamelCase。
 			// calc-svc の calc/internal/master/contract_test.go の TestGetMasterExportRoute と
 			// 同じ理由で EqualFold にする)。

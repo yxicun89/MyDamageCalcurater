@@ -7,7 +7,7 @@ package api_test
 // 前提が契約から落ちると、後から読む人が端末 ID を所有権の証明として扱いうるため、
 // `api/openapi.yaml` の description に書いてあることをここで固定する(文言そのものではなく、決定を表す語を見る)。
 //
-// 仕様は生成物に埋め込まれたもの(api.GetSwagger。make gen で openapi.yaml から作られる)を読む。
+// 仕様は生成物に埋め込まれたもの(api.GetSpec。make gen で openapi.yaml から作られる)を読む。
 
 import (
 	"strings"
@@ -17,7 +17,7 @@ import (
 )
 
 func TestClientIDParameterSemantics(t *testing.T) {
-	doc, err := api.GetSwagger()
+	doc, err := api.GetSpec()
 	if err != nil {
 		t.Fatalf("契約(api/openapi.yaml)を読めない: %v", err)
 	}

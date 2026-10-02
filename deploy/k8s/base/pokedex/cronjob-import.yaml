@@ -1,6 +1,8 @@
 # pokedex の master データの取り込みを週1回流す CronJob(ADR-0104)。
-# 「取得(Node)→ 上流の最新版の検出(失敗は警告だけ)→ 照合・投入(Go)」を1つのコンテナで順に行う
-# (tools/importer/cronjob.sh)。CronJob が取り込むのは Git に固定した data/importer/config.json の
+# 「取得(Node)→ 上流の最新版の検出(失敗は警告だけ)→ 照合・投入(Go)」を、同じ Pod の2つのコンテナに分けて行う
+# (tools/importer/cronjob.sh。ADR-0101 追記 2026-10-01・issue #301)。第三者のコード(Showdown の依存と build)を
+# 走らせる取得段 initContainer `fetch` は DB の資格情報・Secret・ConfigMap を持たず、PVC と /tmp だけをマウントする。
+# DB の DSN は投入段 `import` だけが持つ。CronJob が取り込むのは Git に固定した data/importer/config.json の
 # 版だけで、上流に新しい版があってもログと報告に出すだけ(ADR-0104 §1)。
 # 版を上げるのは人(config.json を更新する PR)。CronJob はスキーマの適用を行わない
 # (それは pokedex-migrate Job の担当)。
@@ -35,6 +37,12 @@ spec:
         rules:
           # 終了コード 2(使い方・設定の誤り)・3(人間の対応が要る)は再試行しても同じ結果になるので
           # 再試行しない。1(一時的な失敗)は backoffLimit の再試行に任せる。
+          # 取得段(fetch)の 3 は取得物の内容ハッシュの不一致(config.json の integrity)。
+          - action: FailJob
+            onExitCodes:
+              containerName: fetch
+              operator: In
+              values: [2, 3]
           - action: FailJob
             onExitCodes:
               containerName: import
@@ -54,10 +62,34 @@ spec:
             fsGroup: 1000
             seccompProfile:
               type: RuntimeDefault
+          initContainers:
+            - name: fetch
+              image: pokecalc/pokedex-importer:0.1.0
+              imagePullPolicy: IfNotPresent
+              args: ["fetch"]
+              env:
+                - name: HOME
+                  value: /tmp
+                - name: npm_config_cache
+                  value: /tmp/npm-cache
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                runAsUser: 1000
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: import-cache
+                  mountPath: /app/data/generated
+                - name: tmp
+                  mountPath: /tmp
           containers:
             - name: import
               image: pokecalc/pokedex-importer:0.1.0
               imagePullPolicy: IfNotPresent
+              args: ["import"]
               env:
                 - name: HOME
                   value: /tmp
