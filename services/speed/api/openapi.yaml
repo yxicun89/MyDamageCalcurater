@@ -575,3 +575,4 @@ components:
         - request_too_large
         - master_unavailable
         - internal_error
+        - not_found
