@@ -706,3 +706,31 @@ extension APIPokeCalcService: DeviceDataService {
         }
     }
 }
+
+// MARK: - よく使う相手(P6-23・ADR-0209・ADR-0501「P6-23」)
+
+/// `GET /api/record/frequent-opponents`。`PokeCalcService` とは別のプロトコル。
+extension APIPokeCalcService: FrequentOpponentsService {
+    public func frequentOpponents(limit: Int) async throws -> [FrequentOpponent] {
+        let output = try await send {
+            try await client.listFrequentOpponents(.init(
+                query: .init(limit: limit),
+                headers: .init(xDeviceId: identity.deviceID, xSessionId: identity.sessionID)
+            ))
+        }
+        switch output {
+        case .ok(let ok):
+            return try ok.body.json.map {
+                FrequentOpponent(
+                    speciesKey: $0.speciesKey.value1, score: $0.score, count: $0.count,
+                    lastCalculatedAt: $0.lastCalculatedAt)
+            }
+        case .badRequest(let error):
+            throw try Self.domainError(error)
+        case .serviceUnavailable(let response):
+            throw try Self.domainErrorFromSchema(response.body.json)
+        case .default(_, let error):
+            throw try Self.domainError(error)
+        }
+    }
+}

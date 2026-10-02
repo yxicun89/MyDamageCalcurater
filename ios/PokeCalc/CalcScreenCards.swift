@@ -70,6 +70,8 @@ struct AttackerCardView: View {
 /// 持ち物・プリセットは持たない。
 struct DefenderCardView: View {
     let viewModel: CalcViewModel
+    /// 種族シートの「よく使う相手」(P6-23。防御側だけに渡す)。
+    var frequentOpponents: FrequentOpponentsViewModel?
     @State private var isSpeciesSearchPresented = false
 
     private var species: SpeciesSummary? { viewModel.defenderSpecies }
@@ -85,7 +87,7 @@ struct DefenderCardView: View {
             .accessibilityLabel(species?.nameJa ?? SpeciesHeaderMenuLabel.placeholderName)
             .accessibilityHint("ポケモンを変える")
             .sheet(isPresented: $isSpeciesSearchPresented) {
-                SpeciesSearchSheet(viewModel: viewModel) { option in
+                SpeciesSearchSheet(viewModel: viewModel, frequentOpponents: frequentOpponents) { option in
                     viewModel.scheduleLatest { await $0.selectDefender(speciesKey: option.key) }
                 }
             }

@@ -13,6 +13,7 @@ struct CalcScreenView: View {
     @State private var isMoveSearchPresented = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var frequentOpponents: FrequentOpponentsViewModel
     private let backendDescription: String
 
     /// design.md「攻守入れ替え: カードが入れ替わる(0.35秒)」。
@@ -21,8 +22,13 @@ struct CalcScreenView: View {
     /// 表示の有無に関わらず高さを固定で確保する(批評「任意」対応)。
     private static let loadingIndicatorHeight: CGFloat = 24
 
-    init(service: any PokeCalcService, teamStore: any TeamStore, backendDescription: String) {
+    init(
+        service: any PokeCalcService, teamStore: any TeamStore, backendDescription: String,
+        frequentOpponentsService: (any FrequentOpponentsService)? = nil
+    ) {
         _viewModel = State(initialValue: CalcViewModel(service: service, teamStore: teamStore))
+        _frequentOpponents = State(
+            initialValue: FrequentOpponentsViewModel(service: frequentOpponentsService, resolver: service))
         self.backendDescription = backendDescription
     }
 
@@ -93,7 +99,7 @@ struct CalcScreenView: View {
                         .id(viewModel.attackerSpeciesKey)
                         .transition(swapTransition)
                     swapButton
-                    DefenderCardView(viewModel: viewModel)
+                    DefenderCardView(viewModel: viewModel, frequentOpponents: frequentOpponents)
                         .id(viewModel.defenderSpeciesKey)
                         .transition(swapTransition)
                 }
@@ -103,7 +109,7 @@ struct CalcScreenView: View {
                         .id(viewModel.attackerSpeciesKey)
                         .transition(swapTransition)
                     swapButton
-                    DefenderCardView(viewModel: viewModel)
+                    DefenderCardView(viewModel: viewModel, frequentOpponents: frequentOpponents)
                         .id(viewModel.defenderSpeciesKey)
                         .transition(swapTransition)
                 }
