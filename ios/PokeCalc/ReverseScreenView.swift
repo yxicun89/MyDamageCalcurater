@@ -45,7 +45,7 @@ struct ReverseScreenView: View {
                 teamSourceRow
                 moveSelector
                 opponentAbilityPicker
-                opponentItemCandidateToggles
+                opponentItemCandidateSection
                 ReverseObservationListView(viewModel: viewModel, focusedObservationID: $focusedObservationID)
                 loadingSlot
                 ReverseResultsSectionView(result: viewModel.result, observationCount: viewModel.observations.count)
@@ -276,6 +276,23 @@ struct ReverseScreenView: View {
         .task(id: viewModel.opponentSpeciesKey) { await viewModel.loadOpponentAbilityOptions() }
     }
 
+    /// 相手がメガ種族のときは持ち物がストーンに固定されるので、候補の代わりに理由を出す(ADR-0509 §8)。
+    @ViewBuilder
+    private var opponentItemCandidateSection: some View {
+        switch viewModel.opponentItemLock {
+        case .none:
+            opponentItemCandidateToggles
+        case .locked, .missing:
+            if let reason = lockReason(for: viewModel.opponentItemLock) {
+                Text(reason)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("reverseOpponentItemLockReason")
+            }
+        }
+    }
+
     private var opponentItemCandidateToggles: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x1) {
             Text("相手の持ち物候補")
@@ -283,7 +300,7 @@ struct ReverseScreenView: View {
                 .foregroundStyle(ColorToken.textSecondary.color)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: SpacingToken.x2) {
-                    ForEach(viewModel.itemOptions, id: \.id) { item in
+                    ForEach(viewModel.opponentItemCandidateOptions, id: \.id) { item in
                         let isSelected = viewModel.opponentItemCandidateIds.contains(item.id)
                         ChipButton(
                             title: item.nameJa,

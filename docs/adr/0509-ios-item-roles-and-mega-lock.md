@@ -1,6 +1,6 @@
 # ADR-0509: iOS の持ち物を役割で絞り、メガ種族の持ち物をメガストーンに固定して日本語で見せる
 
-- 状態: 提案(spec。実装は implementer)
+- 状態: 採用(実装済み。ブランチ feat/ios-item-roles)
 - 日付: 2026-10-03
 - レーン: iOS
 - 関連: ADR-0175 §4(クライアントの使い方。正)、ADR-0320(Web のメガ持ち物固定。文言・挙動をそろえる相手)、
@@ -149,3 +149,15 @@ iOS はこれらをまだ写しておらず、**メガの固定も未実装**(`g
 - `CalcViewModelItemRolesTests.swift`・`ReverseViewModelItemRolesTests.swift`・`TeamEditViewModelItemRolesTests.swift`・
   `JudgeViewModelItemRolesTests.swift`・`AdjustViewModelItemRolesTests.swift`
 - XCUITest `PokeCalcUITests/MegaItemLockUITests.swift`(モック強制。計算画面の固定・解除・選択肢・AX5)
+
+## 実装メモ(implementer)
+
+- 表示名: `ItemDisplayName.displayItems(_:megaStoneNames:)` で、メガストーンの `nameJa` を「{基本種名}のメガストーン」に置いた
+  一覧(置いたものは `isMegaStone = false`)を作り、結果の行・逆算の候補・未対応の印の注記にはこれを渡す。
+  `BulkRowDisplay.itemLabel` / `ReverseCandidateDisplay` は `ItemDisplayName.text` に任せる(循環しない: 後者は前者を呼ばない)。
+- 各 VM は `megaInfo: [種族キー: MegaSpeciesInfo]` を持ち、`species(key:)` を読んだ場所(攻撃側の learnset 読み込み・
+  `loadDefenderAbilityOptions` / `loadOpponentAbilityOptions` / `loadMySpeciesDetail`)で更新する。固定は `megaInfo` から都度導く。
+- 逆算の相手がメガのときの理由の文は、攻撃側にも防御側にもなり得るので `MegaItemText.lockedReason` を使う
+  (計算の防御側の比較欄だけ `compareDisabledReason`)。
+- 判定の View は `selectableItemOptions(for:)`(そのスロットのいまの持ち物を残す)を使う。`selectableItemOptions` は全体の選択肢(テスト用)。
+- 構築の `addMember` でメガ種族を足したときも、持ち物はストーンに固定する(通知は出さない)。

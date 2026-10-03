@@ -1,7 +1,4 @@
 // ItemRoles: 持ち物を役割で絞る・メガ種族の持ち物をメガストーンに固定する・持ち物の表示名(ADR-0509)。
-//
-// spec-writer のスタブ。シグネチャだけを決めてあり、中身は implementer が ADR-0509 のとおりに書く
-// (いまは「従来の挙動」を返すので、ItemRoleFilterTests・MegaItemLockTests が期待どおりの理由で失敗する)。
 
 /// 持ち物の欄が求める役割(ADR-0509 §2・§3)。
 public enum ItemRoleRequirement: Equatable, Sendable {
@@ -20,8 +17,16 @@ public enum ItemRoleFilter {
     /// - `isMegaStone == true` の持ち物は常に出さない。
     /// - `keeping`(いまの選択)は、規則で外れても `items` にあればその1件だけ残す(§5)。
     public static func options(_ items: [Item], for requirement: ItemRoleRequirement, keeping selectedId: String? = nil) -> [Item] {
-        // TODO(implementer): ADR-0509 §2 の表どおりに絞る。
-        items
+        items.filter { item in
+            if item.isMegaStone == true { return false }
+            if item.id == selectedId { return true }
+            guard let roles = item.roles else { return true }
+            switch requirement {
+            case .attacker: return roles.contains(.attacker)
+            case .defender: return roles.contains(.defender)
+            case .any: return !roles.isEmpty
+            }
+        }
     }
 }
 
@@ -54,38 +59,45 @@ public enum MegaItemLock: Equatable, Sendable {
     /// `detail` が nil・非メガなら `.none`。メガで `requiredItemId` が `allItems`(絞り込む前の全件)にあれば `.locked`、
     /// 無ければ `.missing`。
     public static func make(for detail: SpeciesDetail?, allItems: [Item]) -> MegaItemLock {
-        // TODO(implementer)
-        .none
+        make(for: detail.map(MegaSpeciesInfo.init(detail:)), allItems: allItems)
     }
 
     /// `MegaSpeciesInfo` 版(VM が覚えている情報から作る)。
     public static func make(for info: MegaSpeciesInfo?, allItems: [Item]) -> MegaItemLock {
-        // TODO(implementer)
-        .none
+        guard let info, info.isMega else { return .none }
+        guard let stoneId = info.requiredItemId, allItems.contains(where: { $0.id == stoneId }) else { return .missing }
+        return .locked(itemId: stoneId, displayName: MegaItemText.stoneName(baseSpeciesNameJa: info.baseSpeciesNameJa))
     }
 
     /// 固定中なら要求に載せる持ち物 ID(`.locked` はストーン、`.missing` は nil)。`.none` は nil。
     public var lockedItemId: String? {
-        // TODO(implementer)
-        nil
+        if case .locked(let itemId, _) = self { return itemId }
+        return nil
     }
 
     /// 持ち物欄を操作できないか(`.locked` と `.missing`)。
     public var disablesItemField: Bool {
-        // TODO(implementer)
-        false
+        self != .none
     }
 
     /// 種族を変えたときの持ち物 ID(ADR-0509 §4)。
     public static func itemIdAfterSpeciesChange(previous: MegaItemLock, next: MegaItemLock, currentItemId: String?) -> String? {
-        // TODO(implementer)
-        currentItemId
+        switch (previous, next) {
+        case (_, .locked(let itemId, _)): return itemId
+        case (_, .missing): return nil
+        case (.none, .none): return currentItemId
+        case (_, .none): return nil
+        }
     }
 
     /// 構築の保存データの補正(ADR-0509 §4。Web ADR-0320 PR-B と同じ方針)。
     public static func correction(currentItemId: String?, lock: MegaItemLock) -> MegaItemCorrection {
-        // TODO(implementer)
-        .unchanged
+        switch lock {
+        case .none: return .unchanged
+        case .locked(let itemId, let displayName):
+            return currentItemId == itemId ? .unchanged : .fixed(itemId: itemId, displayName: displayName)
+        case .missing: return currentItemId == nil ? .unchanged : .cleared
+        }
     }
 }
 
@@ -103,8 +115,25 @@ public enum ItemDisplayName {
     /// nil →「持ち物なし」/ `megaStoneNames` にある → その名前 / `isMegaStone == true` →「メガストーン」/
     /// それ以外 → `nameJa`(マスタに無い ID は ID のまま)。
     public static func text(itemId: String?, items: [Item], megaStoneNames: [String: String] = [:]) -> String {
-        // TODO(implementer)
-        BulkRowDisplay.itemLabel(itemId: itemId, items: items)
+        guard let itemId else { return noItemLabel }
+        if let name = megaStoneNames[itemId] { return name }
+        guard let item = items.first(where: { $0.id == itemId }) else { return itemId }
+        return item.isMegaStone == true ? MegaItemText.stoneName(baseSpeciesNameJa: nil) : item.nameJa
+    }
+
+    /// 「持ち物なし」の表示(`id` に持ち物が無いとき)。
+    public static let noItemLabel = "持ち物なし"
+
+    /// 名前を引く側(結果の行・未対応の印の注記など)に渡す、メガストーンの `nameJa` を日本語の表示名に置いた一覧
+    /// (置いたものは `isMegaStone` を false にして、`nameJa` をそのまま表示名として使わせる)。
+    public static func displayItems(_ items: [Item], megaStoneNames: [String: String] = [:]) -> [Item] {
+        items.map { item in
+            guard item.isMegaStone == true || megaStoneNames[item.id] != nil else { return item }
+            var copy = item
+            copy.nameJa = text(itemId: item.id, items: items, megaStoneNames: megaStoneNames)
+            copy.isMegaStone = false
+            return copy
+        }
     }
 }
 
@@ -112,15 +141,16 @@ public enum ItemDisplayName {
 public enum MegaItemText {
     /// 「{基本種名}のメガストーン」。基本種名が nil なら「メガストーン」だけ(名前を推測しない)。
     public static func stoneName(baseSpeciesNameJa: String?) -> String {
-        // TODO(implementer)
-        ""
+        guard let baseSpeciesNameJa else { return "メガストーン" }
+        return "\(baseSpeciesNameJa)のメガストーン"
     }
 
-    // TODO(implementer): 以下は Web と同じ語にする(ADR-0509 §7 の表)。
-    public static let lockedReason = ""
-    public static let missingReason = ""
-    public static let compareDisabledReason = ""
-    public static func fixedItemName(_ name: String) -> String { "" }
-    public static func correctedNotice(_ itemName: String) -> String { "" }
-    public static let clearedNotice = ""
+    public static let lockedReason = "メガシンカ: メガストーンを持ちます"
+    public static let missingReason = "メガシンカ: メガストーンがマスタに見つかりません"
+    public static let compareDisabledReason = "メガシンカ: 防御側の持ち物はメガストーンに固定されるため、候補は比較しません"
+    public static func fixedItemName(_ name: String) -> String { "持ち物: \(name)" }
+    public static func correctedNotice(_ itemName: String) -> String {
+        "メガシンカのため持ち物を\(itemName)に直しました。保存すると反映されます"
+    }
+    public static let clearedNotice = "メガシンカのメガストーンがマスタに無いため、持ち物を空にしました。保存すると反映されます"
 }

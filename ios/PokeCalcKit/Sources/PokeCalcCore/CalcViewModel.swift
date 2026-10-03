@@ -34,6 +34,8 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     /// 一度でも見た種族(検索結果・`species(key:)` の応答のどちらからも合流する。5章)。
     /// 検索語を変えても、選択中の種族の名前をここから引ける。
     private var speciesDictionary: [String: SpeciesSummary] = [:]
+    /// 一度でも読んだ種族のメガ情報(`species(key:)` の応答ごとに覚える。ADR-0509 §4)。
+    private var megaInfo: [String: MegaSpeciesInfo] = [:]
     /// 一度でも見た技(検索結果から合流する。5章)。`selectedMove` はここから引く。
     private var moveDictionary: [String: Move] = [:]
     /// 直近の技検索の結果(`moveOptions` は「これと攻撃側の learnset の ID 集合との交差」。6章)。
@@ -204,20 +206,33 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     /// - 応答が届いた時点で防御側が変わっていたら反映しない。
     /// View は「詳細」を開いている間 `.task(id: defenderSpeciesKey)` で呼ぶ。VM 自身も、計算結果の行が特性で
     /// 分かれていて名前が要るときに呼ぶ(2章)。
+    ///
+    /// 読んだ結果で防御側のメガ固定が変わったときだけ、計算し直す(ADR-0509 §4 L2。固定が変わらなければ計算しない)。
     public func loadDefenderAbilityOptions() async {
-        guard defenderAbilityOptionsSpeciesKey != defenderSpeciesKey else { return }
+        guard await loadDefenderDetail(), selectedMove != nil else { return }
+        let token = beginInput()
+        await recalculate(token: token)
+    }
+
+    /// `loadDefenderAbilityOptions` の本体。防御側のメガ固定が変わったら true を返す。
+    private func loadDefenderDetail() async -> Bool {
+        guard defenderAbilityOptionsSpeciesKey != defenderSpeciesKey else { return false }
         let key = defenderSpeciesKey
+        let lockBefore = defenderItemLock
         do {
             let detail = try await service.species(key: key)
-            guard defenderSpeciesKey == key else { return }
+            guard defenderSpeciesKey == key else { return false }
             speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+            megaInfo[detail.key] = MegaSpeciesInfo(detail: detail)
             defenderAbilityOptions = detail.abilities
             defenderAbilityOptionsSpeciesKey = key
             if let abilityId = defenderAbilityId, !detail.abilities.contains(where: { $0.id == abilityId }) {
                 defenderAbilityId = nil
             }
+            return defenderItemLock != lockBefore
         } catch {
             // 失敗(キャンセルを含む)は黙って「選択肢なし」のまま(3章「判断」: 計算は指定なしで成り立つ)。
+            return false
         }
     }
 
@@ -313,6 +328,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
 
             try await reloadAttackerMoveOptions(token: token)
             guard token == latestRequestToken else { return }
+            applyAttackerItemLock(previous: .none)
             try await reselectMove(preferringCurrent: nil, token: token)
             guard token == latestRequestToken else { return }
         } catch {
@@ -359,6 +375,8 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         do {
             try await reloadAttackerMoveOptions(token: token)
             guard token == latestRequestToken else { return }
+            // 呼び出した個体の持ち物は「固定されていない状態から来た」ものとして扱う(メガなら固定する)。
+            applyAttackerItemLock(previous: .none)
             // 個体の技を優先する(無ければ・いまの learnset に無ければ規則3・4の既定に落ちる)。
             try await reselectMove(preferringCurrent: selection.individual.moveId, token: token)
             guard token == latestRequestToken else { return }
@@ -382,8 +400,9 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     public func selectAttacker(speciesKey: String) async {
         guard speciesDictionary[speciesKey] != nil else { return }
         let token = beginInput()
+        let previousLock = attackerItemLock
         attackerSpeciesKey = speciesKey
-        await applyAttackerChangeAndRecalculate(token: token)
+        await applyAttackerChangeAndRecalculate(token: token, previousLock: previousLock)
     }
 
     public func selectDefender(speciesKey: String) async {
@@ -391,6 +410,12 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         let token = beginInput()
         defenderSpeciesKey = speciesKey
         resetDefenderAbility()
+        // 防御側に持ち物の比較があるときだけ、送れない入力を出さないよう要求の前に詳細を読む(ADR-0509 §4 L1)。
+        // 無いときは読まない(ADR-0501「P6-19」の約束)。View が `loadDefenderAbilityOptions()` で固定を反映する。
+        if !toggledDefenderItemIds.isEmpty, megaInfo[speciesKey] == nil {
+            _ = await loadDefenderDetail()
+            guard token == latestRequestToken else { return }
+        }
         await recalculate(token: token)
     }
 
@@ -423,6 +448,8 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     }
 
     public func selectAttackerItem(id: String?) async {
+        guard !attackerItemLock.disablesItemField else { return }
+        if let id, !attackerItemOptions.contains(where: { $0.id == id }) { return }
         let token = beginInput()
         attackerItemId = id
         await recalculate(token: token)
@@ -431,6 +458,8 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     /// 比較する持ち物のトグル。`comparedDefenderItemIds` はトグルした順ではなく持ち物マスタの順(規則5)。
     /// 上限到達中の ON 操作は拒否する(OFF は常に通す。issue #110 A8)。
     public func toggleDefenderItemComparison(itemId: String) async {
+        guard !defenderItemLock.disablesItemField else { return }
+        guard toggledDefenderItemIds.contains(itemId) || defenderCompareItemOptions.contains(where: { $0.id == itemId }) else { return }
         if toggledDefenderItemIds.contains(itemId) {
             toggledDefenderItemIds.remove(itemId)
         } else {
@@ -447,9 +476,10 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     public func swapSides() async {
         let token = beginInput()
         swapTick += 1
+        let previousLock = attackerItemLock
         swap(&attackerSpeciesKey, &defenderSpeciesKey)
         resetDefenderAbility()
-        await applyAttackerChangeAndRecalculate(token: token)
+        await applyAttackerChangeAndRecalculate(token: token, previousLock: previousLock)
     }
 
     /// 攻守入れ替えが起きた回数(値そのものに意味は無い)。View はこれの変化だけを見て
@@ -573,7 +603,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     }
 
     /// 攻撃側の種族が変わった(選択・入れ替え)ときの共通処理: learnset を読み直し、技を選び直し、計算する。
-    private func applyAttackerChangeAndRecalculate(token: Int) async {
+    private func applyAttackerChangeAndRecalculate(token: Int, previousLock: MegaItemLock) async {
         // `species(key:)` の応答待ちの間も読み込み中にする(`performCalc` が `calcBulk` の間だけ
         // 立てていたが、その手前の learnset 読み直しも同じ1回の操作の一部なので合わせる)。
         isLoading = true
@@ -581,6 +611,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
             let previousMoveId = moveId
             try await reloadAttackerMoveOptions(token: token)
             guard token == latestRequestToken else { return }
+            applyAttackerItemLock(previous: previousLock)
             try await reselectMove(preferringCurrent: previousMoveId, token: token)
             guard token == latestRequestToken else { return }
         } catch {
@@ -599,6 +630,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         let detail = try await service.species(key: attackerSpeciesKey)
         guard token == latestRequestToken, detail.key == attackerSpeciesKey else { return }
         speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+        megaInfo[detail.key] = MegaSpeciesInfo(detail: detail)
         attackerLearnsetIds = detail.learnset
         // 特性の選択肢を新しい攻撃側の abilities にする。選択中の特性が新種族に無ければ nil に戻す
         // (旧種族の特性を送らない。issue #274。ADR-0501「issue #274」2章・8章。構築の呼び出しは
@@ -735,9 +767,16 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         attacker.ranks = attackerRanks
         attacker.status = isAttackerBurned ? .burn : .none
         // 比較する持ち物が1つ以上あれば「持ち物なし」を先頭に含める。無ければ素の1通り(省略。規則5)。
-        let itemVariants: [String?] = comparedDefenderItemIds.isEmpty
-            ? []
-            : [String?.none] + comparedDefenderItemIds.map { $0 as String? }
+        // 防御側がメガなら持ち物はストーン1件(null も混ぜない。ADR-0509 §4)。比較のトグルは固定中は使わない。
+        let itemVariants: [String?]
+        switch defenderItemLock {
+        case .locked(let stoneId, _): itemVariants = [stoneId]
+        case .missing: itemVariants = []
+        case .none:
+            itemVariants = comparedDefenderItemIds.isEmpty
+                ? []
+                : [String?.none] + comparedDefenderItemIds.map { $0 as String? }
+        }
         let field = FieldState(weather: weather, terrain: terrain, defenderScreens: defenderScreens)
         return BulkCalcRequest(
             format: .single, attacker: attacker, defenderSpeciesKey: defenderSpeciesKey, moveId: moveId,
@@ -759,8 +798,13 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
             // species(key:) だけ読んで行を作り直す(ADR-0501「P6-19」2章・9章)。分かれていなければ
             // 読まない(既存テストの species(key:) の回数を変えないため)。
             if defenderAbilityOptionsSpeciesKey != defenderSpeciesKey, hasSplitRows(result) {
-                await loadDefenderAbilityOptions()
+                let lockChanged = await loadDefenderDetail()
                 guard token == latestRequestToken else { return }
+                if lockChanged {
+                    // 防御側がメガと分かった: 持ち物を固定した要求で1回だけ計算し直す(次は読まないので繰り返さない)。
+                    await recalculate(token: token)
+                    return
+                }
                 applyBulkResult(result)
             }
         } catch {
@@ -772,14 +816,15 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     /// `result` の行を画面向けに整形して `rows`/`unsupportedNotice` に反映する。`isLoading`/`error` は変えない
     /// (呼び出し側が管理する)。特性名の副題は `defenderAbilityOptions` から引く(2章)。
     private func applyBulkResult(_ result: BulkCalcResult) {
+        let displayItems = ItemDisplayName.displayItems(itemOptions, megaStoneNames: megaStoneNames)
         let names = UnsupportedMarkNames(
-            moves: Array(moveDictionary.values), items: itemOptions,
+            moves: Array(moveDictionary.values), items: displayItems,
             abilities: attackerAbilityOptions + defenderAbilityOptions
         )
         let abilityNames = Dictionary(
             defenderAbilityOptions.map { ($0.id, $0.nameJa) }, uniquingKeysWith: { _, latest in latest }
         )
-        let display = BulkResultDisplay(result: result, items: itemOptions, names: names, abilityNames: abilityNames)
+        let display = BulkResultDisplay(result: result, items: displayItems, names: names, abilityNames: abilityNames)
         rows = display.rows
         unsupportedNotice = display.unsupportedNotice
     }
@@ -791,19 +836,49 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     }
 }
 
-// MARK: - 持ち物の役割・メガ固定(ADR-0509。spec-writer のスタブ。implementer が本体に組み込む)
+// MARK: - 持ち物の役割・メガ固定(ADR-0509)
 
 extension CalcViewModel {
-    /// 攻撃側の持ち物の選択肢(`.attacker`。いまの選択は `keeping` で残す。固定中は View が出さない)。
-    public var attackerItemOptions: [Item] { itemOptions }
-    /// 「持ち物の候補も比較」の選択肢(`.defender`)。
-    public var defenderCompareItemOptions: [Item] { itemOptions }
+    /// 攻撃側の持ち物の選択肢(`.attacker`。いまの選択は役割から外れても残す。固定中は View が出さない)。
+    public var attackerItemOptions: [Item] {
+        ItemRoleFilter.options(itemOptions, for: .attacker, keeping: attackerItemId)
+    }
+
+    /// 「持ち物の候補も比較」の選択肢(`.defender`。ON にしてある候補は役割から外れても残す)。
+    public var defenderCompareItemOptions: [Item] {
+        let base = Set(ItemRoleFilter.options(itemOptions, for: .defender).map(\.id))
+        return itemOptions.filter { base.contains($0.id) || (toggledDefenderItemIds.contains($0.id) && $0.isMegaStone != true) }
+    }
+
     /// 攻撃側の固定(攻撃側の `species(key:)` から作る)。
-    public var attackerItemLock: MegaItemLock { .none }
+    public var attackerItemLock: MegaItemLock {
+        MegaItemLock.make(for: megaInfo[attackerSpeciesKey], allItems: itemOptions)
+    }
+
     /// 防御側の固定(防御側の詳細を読んだ後だけ分かる。ADR-0509 §4 L1・L2)。
-    public var defenderItemLock: MegaItemLock { .none }
+    public var defenderItemLock: MegaItemLock {
+        MegaItemLock.make(for: megaInfo[defenderSpeciesKey], allItems: itemOptions)
+    }
+
     /// 画面に出す持ち物名(`ItemDisplayName`。この VM が知るメガ種族のストーンは「{基本種名}のメガストーン」)。
     public func itemLabel(for itemId: String?) -> String {
-        BulkRowDisplay.itemLabel(itemId: itemId, items: itemOptions)
+        ItemDisplayName.text(itemId: itemId, items: itemOptions, megaStoneNames: megaStoneNames)
+    }
+
+    /// 読んだメガ種族のストーン ID → 表示名。
+    private var megaStoneNames: [String: String] {
+        var names: [String: String] = [:]
+        for info in megaInfo.values {
+            if case .locked(let itemId, let displayName) = MegaItemLock.make(for: info, allItems: itemOptions) {
+                names[itemId] = displayName
+            }
+        }
+        return names
+    }
+
+    /// 攻撃側の種族が変わった後の持ち物(固定・解除。ADR-0509 §4)。
+    fileprivate func applyAttackerItemLock(previous: MegaItemLock) {
+        attackerItemId = MegaItemLock.itemIdAfterSpeciesChange(
+            previous: previous, next: attackerItemLock, currentItemId: attackerItemId)
     }
 }

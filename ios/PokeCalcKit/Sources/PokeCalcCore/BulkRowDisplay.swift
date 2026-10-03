@@ -88,7 +88,6 @@ public struct BulkRowDisplay: Identifiable, Equatable, Sendable {
 
     /// `id` で「持ち物なし」を表す記号。
     private static let noItemIDPlaceholder = "-"
-    private static let noItemLabel = "持ち物なし"
     private static let cannotKOLabel = "倒せない"
     /// %幅・確率の区切り・小数点の書式はロケールに依存させない(端末の言語設定でカンマ小数点になる等を避ける)。
     private static let numberLocale = Locale(identifier: "en_US_POSIX")
@@ -98,8 +97,7 @@ public struct BulkRowDisplay: Identifiable, Equatable, Sendable {
     /// `itemId` が `nil` なら「持ち物なし」、マスタに無い ID はその ID をそのまま返す
     /// (黙って「持ち物なし」に丸めない)。
     public static func itemLabel(itemId: String?, items: [Item]) -> String {
-        guard let itemId else { return noItemLabel }
-        return items.first(where: { $0.id == itemId })?.nameJa ?? itemId
+        ItemDisplayName.text(itemId: itemId, items: items)
     }
 
     /// 「72.1〜85.3%」のような文字列。小数第1位固定・100% 超もそのまま出す。

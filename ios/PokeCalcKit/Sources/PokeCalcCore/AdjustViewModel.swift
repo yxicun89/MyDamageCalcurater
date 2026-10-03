@@ -105,6 +105,8 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
     private var opponentSpeciesGeneration = 0
     /// 一度でも見た種族(検索結果・`species(key:)` の応答から合流する。`ownSpecies` / `opponentSpecies` を引く)。
     private var speciesDictionary: [String: SpeciesSummary] = [:]
+    /// 一度でも読んだ種族のメガ情報(`species(key:)` の応答ごとに覚える。ADR-0509 §4)。
+    private var megaInfo: [String: MegaSpeciesInfo] = [:]
     private var didLoad = false
 
     public init(service: any PokeCalcService, adjust: any AdjustService, searchDebounce: Duration = MasterSearch.debounceInterval) {
@@ -188,7 +190,10 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
         let token = ownSpeciesGeneration
         guard let loaded = await loadSpecies(key: key) else { return }
         guard token == ownSpeciesGeneration else { return }
+        let previousLock = ownItemLock
         ownSpeciesKey = key
+        // メガ種族ならストーンに固定、メガ以外に変えたら未選択に戻す(ADR-0509 §4)。
+        ownItemId = MegaItemLock.itemIdAfterSpeciesChange(previous: previousLock, next: ownItemLock, currentItemId: ownItemId)
         ownAbilityOptions = loaded.detail.abilities
         ownMoveOptions = loaded.moves
         if let id = ownAbilityId, !ownAbilityOptions.contains(where: { $0.id == id }) { ownAbilityId = nil }
@@ -206,7 +211,8 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
     }
 
     public func selectOwnItem(id: String?) {
-        guard id == nil || itemOptions.contains(where: { $0.id == id }) else { return }
+        guard !ownItemLock.disablesItemField else { return }
+        guard id == nil || ownItemOptions.contains(where: { $0.id == id }) else { return }
         ownItemId = id
     }
 
@@ -340,6 +346,7 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
             let moves = try await service.moves(ids: detail.learnset)
             let order = Dictionary(detail.learnset.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
             mergeSpecies([SpeciesSummary(detail: detail)])
+            megaInfo[detail.key] = MegaSpeciesInfo(detail: detail)
             let damageMoves = moves
                 .filter { $0.category != .status }
                 .sorted { (order[$0.id] ?? 0) < (order[$1.id] ?? 0) }
@@ -617,7 +624,7 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
         case .allocation(let allocation, _, _, _): marks = allocation.unsupported
         case nil: marks = []
         }
-        let names = UnsupportedMarkNames(moves: ownMoveOptions + opponentMoveOptions, items: itemOptions, abilities: ownAbilityOptions)
+        let names = UnsupportedMarkNames(moves: ownMoveOptions + opponentMoveOptions, items: ItemDisplayName.displayItems(itemOptions, megaStoneNames: megaStoneNames), abilities: ownAbilityOptions)
         return UnsupportedNoticeText.summary(marks, names: names)
     }
 
@@ -697,13 +704,29 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
 /// 種族の検索欄(`MasterSearchField` の別名。`MasterSearchField<SpeciesSummary>` を1か所の名前で呼ぶ)。
 private typealias MasterSpeciesSearchField = MasterSearchField<SpeciesSummary>
 
-// MARK: - 持ち物の役割・メガ固定(ADR-0509。spec-writer のスタブ。implementer が本体に組み込む)
+// MARK: - 持ち物の役割・メガ固定(ADR-0509)
 
 extension AdjustViewModel {
-    /// 自分の持ち物の選択肢(`.any`。モードを後から変えられるため)。
-    public var ownItemOptions: [Item] { itemOptions }
-    public var ownItemLock: MegaItemLock { .none }
+    /// 自分の持ち物の選択肢(`.any`。モードを後から変えられるため。いまの選択は残す)。
+    public var ownItemOptions: [Item] {
+        ItemRoleFilter.options(itemOptions, for: .any, keeping: ownItemId)
+    }
+
+    public var ownItemLock: MegaItemLock {
+        MegaItemLock.make(for: ownSpeciesKey.flatMap { megaInfo[$0] }, allItems: itemOptions)
+    }
+
     public func itemLabel(for itemId: String?) -> String {
-        BulkRowDisplay.itemLabel(itemId: itemId, items: itemOptions)
+        ItemDisplayName.text(itemId: itemId, items: itemOptions, megaStoneNames: megaStoneNames)
+    }
+
+    private var megaStoneNames: [String: String] {
+        var names: [String: String] = [:]
+        for info in megaInfo.values {
+            if case .locked(let itemId, let displayName) = MegaItemLock.make(for: info, allItems: itemOptions) {
+                names[itemId] = displayName
+            }
+        }
+        return names
     }
 }

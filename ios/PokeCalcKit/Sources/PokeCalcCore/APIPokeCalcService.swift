@@ -149,7 +149,7 @@ public struct APIPokeCalcService: PokeCalcService {
         }
         switch output {
         case .ok(let ok):
-            return try ok.body.json.map { Item(id: $0.id, nameJa: $0.nameJa) }
+            return try ok.body.json.map { Self.domainItem($0) }
         case .badRequest(let response):
             throw try Self.domainErrorFromSchema(response.body.json)
         case .serviceUnavailable(let response):
@@ -308,8 +308,17 @@ public struct APIPokeCalcService: PokeCalcService {
             nameJa: detail.value1.nameJa, types: detail.value1.types.map(domainPokeType),
             baseStats: domainStatBlock(detail.value2.baseStats),
             abilities: detail.value2.abilities.map { Ability(id: $0.id, nameJa: $0.nameJa) },
-            learnset: detail.value2.learnset ?? []
+            learnset: detail.value2.learnset ?? [],
+            isMega: detail.value2.isMega ?? false, requiredItemId: detail.value2.requiredItemId,
+            baseSpeciesKey: detail.value2.baseSpeciesKey, baseSpeciesNameJa: detail.value2.baseSpeciesNameJa
         )
+    }
+
+    private static func domainItem(_ item: Components.Schemas.Item) -> Item {
+        Item(
+            id: item.id, nameJa: item.nameJa,
+            roles: item.roles.map { $0.map { ItemRole(rawValue: $0.rawValue) ?? .attacker } },
+            isMegaStone: item.isMegaStone)
     }
 
     private static func domainMove(_ move: Components.Schemas.Move) -> Move {
