@@ -225,10 +225,10 @@ if [ -z "$hits" ]; then
   fail "POST /api/judge/v1/outspeed-and-ko: attackerKo.hits が読み取れない"
 fi
 
-# 3. ヘッダなしは 400 invalid_request(judge は gateway と違い missing_header を分けない。
-#    services/judge/internal/httpapi/server.go の requireRequestContext)。
+# 3. ヘッダなしは 400 missing_header(gateway と同じ語彙。ADR-0219。
+#    services/judge/internal/httpapi/requestctx.go の checkAPIHeaders)。
 request_with_retry POST /api/judge/v1/outspeed-and-ko "$base_url" "$body" none
-expect_error 400 invalid_request "POST /api/judge/v1/outspeed-and-ko without device/session headers"
+expect_error 400 missing_header "POST /api/judge/v1/outspeed-and-ko without device/session headers"
 
 # 4. 未知の speciesKey は 422 unknown_species(pokedex-svc に到達できているときだけ検証できる。
 #    未投入なら pokedex-svc 自体に到達できず 503 になり区別できないため、pokedex 未投入時はスキップする)。

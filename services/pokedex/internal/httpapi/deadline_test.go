@@ -149,7 +149,7 @@ func (d *deadlineCapturingDB) captured() []time.Time {
 	return append([]time.Time(nil), d.deadlines...)
 }
 
-// dbRoutes は DB を使う全ての操作(公開の検索7 + 内部 API 1)。withHeaders は公開操作の必須ヘッダ。
+// dbRoutes は DB を使う全ての操作(公開の検索8 + 内部 API 1)。withHeaders は公開操作の必須ヘッダ。
 var dbRoutes = []struct {
 	name        string
 	target      string
@@ -160,6 +160,7 @@ var dbRoutes = []struct {
 	{"技の検索", "/api/pokedex/moves?q=a", true},
 	{"技のまとめ取り", "/api/pokedex/moves/batch?ids=teststrike", true},
 	{"技の詳細", "/api/pokedex/moves/teststrike", true},
+	{"技の逆引き(ADR-0251)", "/api/pokedex/moves/testflame/learners", true},
 	{"持ち物の検索", "/api/pokedex/items?q=a", true},
 	{"性格の一覧", "/api/pokedex/natures", true},
 	{"内部 API(マスタ全体)", masterPath, false},
