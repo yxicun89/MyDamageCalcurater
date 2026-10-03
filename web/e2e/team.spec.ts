@@ -86,6 +86,11 @@ async function selectMemberSpecies(member: Locator, name: string): Promise<void>
     .getByRole("option", { name, exact: true })
     .click();
   await expect(input).toHaveValue(name);
+  // 入力欄の値は選んだ直後に変わるが、メンバーへの反映は種族の解決(非同期)の後。解決前は「ポケモンを選んでください」が
+  // alert に出るので、これが消えるのを待ってから次の操作に進む(待たないと後続の alert 検証が解決の遅れと競合する)。
+  await expect(member.getByRole("alert").getByText("ポケモンを選んでください", { exact: true })).toHaveCount(
+    0,
+  );
 }
 
 test("メンバーを追加して種族・技・SP を入れて保存すると、PUT に全置換で送られ一覧のメンバー数が変わる", async ({
