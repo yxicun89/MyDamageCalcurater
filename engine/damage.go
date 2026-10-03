@@ -1,5 +1,7 @@
 package engine
 
+import "fmt"
+
 // ダメージ計算コア。第9世代の式を 4096基準の固定小数・五捨五超入(pokeRound)で実装する。
 // float 近似はしない(CLAUDE.md ドメイン規約)。
 //
@@ -23,6 +25,10 @@ const (
 	// ModifierHalf は ×0.5(4096 に対する比 1/2)。やけど・壁・ミストフィールド・
 	// 天候による弱化・半減きのみなど、半減する補正すべてで共通。
 	ModifierHalf = 2048
+	// ModifierDoubleScreen はダブルの壁 ×2732/4096(ADR-0222)。
+	ModifierDoubleScreen = 2732
+	// ModifierSpread はダブルの全体技 ×3072/4096(×0.75。ADR-0222)。
+	ModifierSpread = 3072
 	// ModifierStab はタイプ一致補正 ×1.5。
 	ModifierStab = 6144
 	// ModifierAdaptability はタイプ一致補正を上げる特性(てきおうりょく)の一致補正 ×2.0。
@@ -251,6 +257,11 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 	if err := validateAgainstTypeChart(in); err != nil {
 		return DamageResult{}, false, err
 	}
+	switch in.Move.Target {
+	case "", MoveTargetSingle, MoveTargetSpread:
+	default:
+		return DamageResult{}, false, fmt.Errorf("%w: %q", ErrUnknownMoveTarget, in.Move.Target)
+	}
 
 	res = DamageResult{
 		Category:    in.Move.Category,
@@ -288,6 +299,10 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 	power := max(1, pokeRound(in.Move.Power, powerModifier(in)))
 	base := (((2*level/5+2)*power*atk)/def)/50 + 2
 
+	// ダブルの全体技(ADR-0222)。天候・急所より前。
+	if in.Format == FormatDouble && in.Move.Target == MoveTargetSpread {
+		base = pokeRound(base, ModifierSpread)
+	}
 	// 基礎段階の補正(天候のダメージ倍率は個別に pokeRound)→ 急所
 	if wm := weatherDamageMod(in.Field.Weather, moveType); wm != Modifier4096 {
 		base = pokeRound(base, wm)

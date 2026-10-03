@@ -91,6 +91,8 @@ type UnsupportedReason string
 const (
 	// UnsupportedZeroPower は威力 0 の攻撃技(威力が技の処理で決まる。ダメージ 0 は正しい結果ではない)。
 	UnsupportedZeroPower UnsupportedReason = "zero_power"
+	// UnsupportedMoveTargetUnknown はダブルの攻撃技で技の対象が不明(単体として計算した。ADR-0222)。
+	UnsupportedMoveTargetUnknown UnsupportedReason = "move_target_unknown"
 	// UnsupportedEffect は持ち物・特性のダメージへの効果を計算に入れていない(効果スキーマで表せない。ADR-0120)。
 	UnsupportedEffect UnsupportedReason = "unsupported_effect"
 )
@@ -103,7 +105,7 @@ type UnsupportedMark struct {
 }
 
 // unsupportedMarks は入力に付く印を 技 → 攻撃側の持ち物 → 攻撃側の特性 → 防御側の持ち物 → 防御側の特性
-// の順に返す(技の印は理由の昇順。機構の印の後に zero_power)。印が無ければ nil。
+// の順に返す(技の印は理由の昇順。機構の印の後に zero_power、その後にダブルの move_target_unknown)。印が無ければ nil。
 // 変化技は印を付けない(ダメージを持たないので 0 が正しい)。
 func unsupportedMarks(in DamageInput) []UnsupportedMark {
 	var marks []UnsupportedMark
@@ -139,6 +141,9 @@ func moveMarks(in DamageInput) []UnsupportedMark {
 	reasons = slices.Compact(reasons)
 	if in.Move.Power <= 0 {
 		reasons = append(reasons, UnsupportedZeroPower)
+	}
+	if in.Format == FormatDouble && in.Move.Target == "" {
+		reasons = append(reasons, UnsupportedMoveTargetUnknown)
 	}
 	if len(reasons) == 0 {
 		return nil

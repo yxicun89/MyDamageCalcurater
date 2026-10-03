@@ -607,6 +607,12 @@ export interface components {
       | "store_unavailable"
       | "upstream_unavailable";
     /**
+     * @description 対戦形式。計算(/api/calc・/api/calc/bulk・/api/calc/reverse)では double のとき次を掛ける(issue 232 案B のダブル分・ADR-0222)。
+     *     - 防御側の壁(リフレクター・ひかりのかべ・オーロラベール): ×2732/4096(single は ×1/2)。急所は壁を無視する
+     *     - 全体技(技の対象が相手全体・自分以外全体): 基礎ダメージに ×3072/4096(天候・急所より前)。
+     *       1対1の計算なので、全体技は常に2体以上に当たる前提で掛ける。味方の効果(てだすけ等)は扱わない
+     *     技の対象をマスタが持たない間(issue 288)は、double の攻撃技に UnsupportedMark
+     *     (target=move・reason=move_target_unknown)を付け、全体技の補正は掛けない(壁は掛ける)。
      * @default single
      * @enum {string}
      */
@@ -823,7 +829,8 @@ export interface components {
        * @description 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種: alt_defense_stat・alt_offense_stat・
        *     always_crit・effectiveness_change・field_specific・fixed_damage・ignore_defense_ranks・
        *     move_specific・multi_hit・ohko・priority_change・type_change・variable_power)か
-       *     zero_power(威力0の攻撃技。威力が技の処理で決まるため)、持ち物・特性は
+       *     zero_power(威力0の攻撃技。威力が技の処理で決まるため)・move_target_unknown(double で技の対象が
+       *     不明なため全体技の補正を判断できない。ADR-0222)、持ち物・特性は
        *     unsupported_effect(効果スキーマで表せない)。target と同じ理由で enum にしない
        *     (クライアントは未知の値を汎用の文言で扱う。ADR-0215)。
        */

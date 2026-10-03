@@ -324,6 +324,8 @@ func wasmMove(m engine.Move) map[string]any {
 	return map[string]any{
 		"id": m.ID, "nameJa": m.NameJa, "type": string(m.Type), "category": string(m.Category),
 		"power": m.Power, "priority": m.Priority,
+		// 技の対象(ADR-0222)。"" は不明(マスタに未収録)。
+		"target": string(m.Target),
 	}
 }
 

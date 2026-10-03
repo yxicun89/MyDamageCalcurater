@@ -3446,6 +3446,1051 @@
       }
     },
     {
+      "name": "calc/double-screen-reflect",
+      "fn": "calc",
+      "tags": [
+        "double",
+        "screens"
+      ],
+      "source": "testdata/golden/doubles.json#doubles/screen/reflect",
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "garchomp",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "baseStats": {
+              "hp": 108,
+              "atk": 130,
+              "def": 95,
+              "spa": 80,
+              "spd": 85,
+              "spe": 102
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "dragonclaw",
+          "type": "dragon",
+          "category": "physical",
+          "power": 80,
+          "priority": 0,
+          "target": "single"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": true,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/double-screen-light-screen-critical",
+      "fn": "calc",
+      "tags": [
+        "double",
+        "screens",
+        "critical"
+      ],
+      "source": "testdata/golden/doubles.json#doubles/screen/light-screen/critical",
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "charizard",
+            "types": [
+              "fire",
+              "flying"
+            ],
+            "baseStats": {
+              "hp": 78,
+              "atk": 84,
+              "def": 78,
+              "spa": 109,
+              "spd": 85,
+              "spe": 100
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "flamethrower",
+          "type": "fire",
+          "category": "special",
+          "power": 90,
+          "priority": 0,
+          "target": "single"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": true,
+            "auroraVeil": false
+          }
+        },
+        "critical": true
+      }
+    },
+    {
+      "name": "calc/double-spread-earthquake",
+      "fn": "calc",
+      "tags": [
+        "double",
+        "spread"
+      ],
+      "source": "testdata/golden/doubles.json#doubles/spread/all-adjacent/earthquake",
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "garchomp",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "baseStats": {
+              "hp": 108,
+              "atk": 130,
+              "def": 95,
+              "spa": 80,
+              "spd": 85,
+              "spe": 102
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "earthquake",
+          "type": "ground",
+          "category": "physical",
+          "power": 100,
+          "priority": 0,
+          "target": "spread"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/double-spread-rock-slide",
+      "fn": "calc",
+      "tags": [
+        "double",
+        "spread"
+      ],
+      "source": "testdata/golden/doubles.json#doubles/spread/all-adjacent-foes/rock-slide",
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "tyranitar",
+            "types": [
+              "rock",
+              "dark"
+            ],
+            "baseStats": {
+              "hp": 100,
+              "atk": 134,
+              "def": 110,
+              "spa": 95,
+              "spd": 100,
+              "spe": 61
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "charizard",
+            "types": [
+              "fire",
+              "flying"
+            ],
+            "baseStats": {
+              "hp": 78,
+              "atk": 84,
+              "def": 78,
+              "spa": 109,
+              "spd": 85,
+              "spe": 100
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "rockslide",
+          "type": "rock",
+          "category": "physical",
+          "power": 75,
+          "priority": 0,
+          "target": "spread"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/double-spread-rain",
+      "fn": "calc",
+      "tags": [
+        "double",
+        "spread",
+        "weather"
+      ],
+      "source": "testdata/golden/doubles.json#doubles/spread/rain",
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "blastoise",
+            "types": [
+              "water"
+            ],
+            "baseStats": {
+              "hp": 79,
+              "atk": 83,
+              "def": 100,
+              "spa": 85,
+              "spd": 105,
+              "spe": 78
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "surf",
+          "type": "water",
+          "category": "special",
+          "power": 90,
+          "priority": 0,
+          "target": "spread"
+        },
+        "field": {
+          "weather": "rain",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/double-spread-critical",
+      "fn": "calc",
+      "tags": [
+        "double",
+        "spread",
+        "critical"
+      ],
+      "source": "testdata/golden/doubles.json#doubles/spread/critical",
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "garchomp",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "baseStats": {
+              "hp": 108,
+              "atk": 130,
+              "def": 95,
+              "spa": 80,
+              "spd": 85,
+              "spe": 102
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "earthquake",
+          "type": "ground",
+          "category": "physical",
+          "power": 100,
+          "priority": 0,
+          "target": "spread"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": true
+      }
+    },
+    {
+      "name": "calc/double-spread-reflect",
+      "fn": "calc",
+      "tags": [
+        "double",
+        "spread",
+        "screens"
+      ],
+      "source": "testdata/golden/doubles.json#doubles/spread/reflect",
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "garchomp",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "baseStats": {
+              "hp": 108,
+              "atk": 130,
+              "def": 95,
+              "spa": 80,
+              "spd": 85,
+              "spe": 102
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "earthquake",
+          "type": "ground",
+          "category": "physical",
+          "power": 100,
+          "priority": 0,
+          "target": "spread"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": true,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/single-spread-earthquake",
+      "fn": "calc",
+      "tags": [
+        "spread"
+      ],
+      "source": "testdata/golden/doubles.json#doubles/single-control/spread/all-adjacent/earthquake",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "garchomp",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "baseStats": {
+              "hp": 108,
+              "atk": 130,
+              "def": 95,
+              "spa": 80,
+              "spd": 85,
+              "spe": 102
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "earthquake",
+          "type": "ground",
+          "category": "physical",
+          "power": 100,
+          "priority": 0,
+          "target": "spread"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/double-move-target-unknown",
+      "fn": "calc",
+      "tags": [
+        "double",
+        "unsupported"
+      ],
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "garchomp",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "baseStats": {
+              "hp": 108,
+              "atk": 130,
+              "def": 95,
+              "spa": 80,
+              "spd": 85,
+              "spe": 102
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "earthquake",
+          "type": "ground",
+          "category": "physical",
+          "power": 100,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "bulk/double-spread-reflect",
+      "fn": "calcBulk",
+      "tags": [
+        "bulk",
+        "double",
+        "spread"
+      ],
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "defenderSpecies": {
+          "key": "blissey",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0,
+          "target": "spread"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": true,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "reverse/defender-double-reflect",
+      "fn": "calcReverse",
+      "tags": [
+        "reverse",
+        "damage",
+        "defender",
+        "double"
+      ],
+      "request": {
+        "format": "double",
+        "side": "defender",
+        "known": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "unknownSpecies": {
+          "key": "blissey",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0,
+          "target": "single"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": true,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false,
+        "itemCandidates": [
+          null,
+          {
+            "id": "eviolite",
+            "nameJa": "テストもちもの1",
+            "effect": {
+              "statMods": {
+                "def": 6144,
+                "spd": 6144
+              }
+            }
+          }
+        ],
+        "observations": [
+          {
+            "damage": 100
+          }
+        ],
+        "maxCandidates": 8
+      }
+    },
+    {
       "name": "adjust/indices-physical-with-modifiers",
       "fn": "adjustIndices",
       "tags": [
