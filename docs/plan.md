@@ -141,6 +141,7 @@
     マスタ(種族・技・持ち物・特性の名前解決)を使うのはここから。実装: `web/src/team/` の `TeamMemberEditor`・`TeamMemberFields`・
     `teamMember`(純粋関数)・`teamMemberOptions`。update 全置換・応答待ち・失敗時は下書き保持・SP は明示エラー。ADR-0316。
     Web: vitest 全件・typecheck・lint と e2e(`web/e2e/team.spec.ts`)
+  - [x] Showdown 形式の変換部(判定レーン。`web/src/team/showdownFormat.ts`。ADR-0310。画面への配線は P5-5b 側)
   - [ ] **P5-5c 履歴・よく計算する相手・端末データの削除(PR-A3 以降)**: record-svc の API と ADR-0209 §8 の文言
 - [x] P5-6 技の追加効果
 
