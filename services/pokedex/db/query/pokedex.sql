@@ -344,17 +344,19 @@ ORDER BY m.name_ja, m.id
 LIMIT ?;
 
 -- name: SearchItems :many
-SELECT i.id, i.name_ja
+SELECT i.id, i.name_ja, ie.effect
 FROM items i
 JOIN regulation_items ri ON ri.item_id = i.id
+LEFT JOIN item_effects ie ON ie.item_id = i.id
 WHERE ri.regulation_id = sqlc.arg(regulation_id) AND i.name_ja LIKE sqlc.arg(pattern)
 ORDER BY i.name_ja, i.id
 LIMIT ?;
 
 -- name: ListSpeciesAbilityNames :many
-SELECT sa.slot, a.id, a.name_ja
+SELECT sa.slot, a.id, a.name_ja, ae.effect
 FROM species_abilities sa
 JOIN abilities a ON a.id = sa.ability_id
+LEFT JOIN ability_effects ae ON ae.ability_id = a.id
 WHERE sa.species_key = ?
 ORDER BY sa.slot;
 
