@@ -2022,6 +2022,10 @@ Impact: Web レーンは文言・再送の上限・再試行の扱いを揃え�
 - API レーンへ: TiDB(record/team)を k3d に上げる前に ADR-0132「確認の結果」の手順を行う(tidb-operator からの許可を足す)。
   M2 で record・team の本体を足すときも許可が要る。PR #416(#284)で gateway → balance/speed/judge は既に許可済み
 - 詰まったときの戻し方: `kubectl -n pokecalc delete networkpolicy default-deny-ingress`(許可だけが残る。データは消えない)
+## 2026-10-01: 既定の計算モードをオンラインに変更(ユーザー決定。Web レーン。issue #210 / ADR-0313)
+Decision: Web の既定の計算モードを「オンライン」にする(ADR-0301 §4 の「既定はオフライン」を変更)。オンラインで取得したマスタ(持ち物・性格・解決した種族/特性/技)を IndexedDB に保存し、オフライン(WASM)はそのキャッシュだけから読む。保存済みのモード(localStorage)は従来どおり尊重する。
+Reason: 既定のオフラインは架空の例データしか持たず、実データで計算するには毎回オンラインへ切り替えが要った。実データのビルド同梱は ADR-0002 に反する。
+Impact: Web のみ(`web/src/master/cache/`・`main.tsx`・`calcMode.ts`・E2E 設定)。API・engine・iOS は無変更。オフラインで引ける種族は一度オンラインで選んだものに限り、持ち物の候補比較はオフラインでも選べない(公開 API に効果データが無い)。
 
 
 ## 2026-10-02: 公開 API の Item / Ability に省略可の effect を足した(API レーン → Web・iOS レーンへ。issue #211・ADR-0218)
