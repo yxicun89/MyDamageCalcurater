@@ -6,7 +6,7 @@ base_url=${BALANCE_URL:-http://localhost:8080}
 readmodel_dir=${BALANCE_READMODEL_DIR:-data/generated/readmodel}
 pokemon_id=$(jq -r '.pokemon[0].pokemonId' "$readmodel_dir/pokemon-types.json")
 body="{\"members\":[{\"pokemonId\":\"${pokemon_id}\",\"moveIds\":[]}]}"
-headers=(-H 'Content-Type: application/json' -H 'X-Device-Id: smoke-device' -H 'X-Session-Id: smoke-session')
+headers=(-H 'Content-Type: application/json' -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222')
 
 code=000
 for _ in $(seq 1 30); do

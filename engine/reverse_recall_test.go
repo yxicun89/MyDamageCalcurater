@@ -6,7 +6,9 @@ package engine
 //
 //	1. 既知の調整(SP配分・性格・持ち物)でダメージを生成
 //	2. 乱数の1段階を選び、ゲーム内表示と同じ丸め(HP%)をかけて観測値にする
-//	   → 実機の丸めは未確認なので、切り捨て・四捨五入・切り上げの3通りすべてで作り、それぞれ判定する
+//	   → 実機の相手 HP 減少の整数%表示は切り捨て(2026-10-03 ユーザー確認。ADR-0134)なので、切り捨てで作る。
+//	     (旧版は丸めが未確認だったため 切り捨て・四捨五入・切り上げ の3通りで作っていた。四捨五入・切り上げの
+//	     整数%は実機に現れない観測で、ADR-0134 で engine が受け入れなくなったので測らない)
 //	3. 逆算にかけ、正解が候補に入る割合(Recall)を測る
 //	- 合格基準: 1回観測で Recall >= 80%、2回観測で >= 95%(数値は旧 Recall@5 から変えない)
 //	- 全ポケモンからランダムに 1,000 ケース(固定シード)
@@ -65,7 +67,7 @@ func TestAllSpeciesReverseRecall(t *testing.T) {
 		{SideAttacker, 2, 95},
 	}
 	for _, tt := range tests {
-		for _, rule := range allObsRoundings {
+		for _, rule := range percentObsRoundings {
 			t.Run(fmt.Sprintf("%s/観測%d件/%s", tt.side, tt.nObs, rule), func(t *testing.T) {
 				st := reverseRecall(t, tt.side, species, reverseRecallCases, tt.nObs, reverseRecallSeed, rule)
 				if st.total != reverseRecallCases {

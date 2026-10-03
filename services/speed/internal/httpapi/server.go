@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	"example.com/pokecalc/services/speed/internal/api"
+	"example.com/pokecalc/services/speed/internal/httpguard"
 	"example.com/pokecalc/services/speed/internal/httpmetrics"
 	"example.com/pokecalc/services/speed/internal/speed"
 	"github.com/labstack/echo/v5"
@@ -32,6 +33,11 @@ var pokemonIDPattern = regexp.MustCompile(`^\d{4}-\d{3}$`)
 // Pokemon が nil でも起動はし、/healthz は 200、ポケモンを使う API は 503 master_unavailable(ADR-0600 §4)。
 type Dependencies struct {
 	Pokemon speed.PokemonProvider
+
+	// Guard bounds concurrent requests and puts a deadline on the whole handler (issue #299,
+	// ADR-0801). The zero value disables both, which keeps tests that build Dependencies
+	// without it unaffected; cmd/api/main.go always passes DefaultGuard.
+	Guard httpguard.Config
 }
 
 // New は HTTP ハンドラを返す。
@@ -40,12 +46,14 @@ func New(deps Dependencies) *echo.Echo {
 	e.HTTPErrorHandler = writeHTTPError
 	m := httpmetrics.New()
 	e.Use(m.Middleware())
+	e.Use(recoverMiddleware)
 	e.GET(httpmetrics.Path, m.Handler())
+	guard := httpguard.Middleware(deps.Guard)
 	api.RegisterHandlersWithOptions(e, handler{deps: deps}, api.RegisterHandlersOptions{
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
-			"listPokemon":      {requireRequestContext},
-			"getSpeedTable":    {requireRequestContext},
-			"getSpeedPosition": {requireRequestContext},
+			"listPokemon":      {guard, requireRequestContext},
+			"getSpeedTable":    {guard, requireRequestContext},
+			"getSpeedPosition": {guard, requireRequestContext},
 		},
 	})
 	return e
@@ -106,7 +114,13 @@ func getSpeedTable(c *echo.Context, deps Dependencies, params api.GetSpeedTableP
 		return internalError(c, err)
 	}
 
-	table, err := speed.BuildTable(roster, presets)
+	if httpguard.Expired(c.Request().Context()) {
+		return overloaded(c)
+	}
+	table, err := speed.BuildTable(roster, presets, speed.TableField{
+		Tailwind:  params.Tailwind != nil && *params.Tailwind,
+		TrickRoom: params.TrickRoom != nil && *params.TrickRoom,
+	})
 	if err != nil {
 		return internalError(c, err)
 	}
@@ -201,6 +215,16 @@ func listPokemon(c *echo.Context, deps Dependencies) error {
 	})
 }
 
+// overloaded answers 503 overloaded for a request that is past its deadline, so no new
+// computation starts for a response that can no longer be written in time (issue #299).
+func overloaded(c *echo.Context) error {
+	c.Response().Header().Set("Retry-After", "1")
+	return c.JSON(http.StatusServiceUnavailable, api.Error{
+		Code:    api.Overloaded,
+		Message: "the request deadline has passed; retry shortly",
+	})
+}
+
 // internalError answers 500 internal_error with a fixed message (ADR-0600 §5): an
 // unexpected provider failure never leaks internal detail to the client. The error
 // is still logged for operators.
@@ -237,5 +261,34 @@ func writeHTTPError(c *echo.Context, err error) {
 		})
 		return
 	}
+	var statusCoder echo.HTTPStatusCoder
+	if errors.As(err, &statusCoder) {
+		switch statusCoder.StatusCode() {
+		case http.StatusNotFound, http.StatusMethodNotAllowed:
+			// ルートが無い・メソッドが違う。calc-svc と同じく not_found に畳む(ADR-0802 §1)。
+			_ = c.JSON(http.StatusNotFound, api.Error{Code: api.NotFound, Message: "route not found"})
+			return
+		}
+	}
 	echo.DefaultHTTPErrorHandler(false)(c, err)
+}
+
+// recoverMiddleware は panic を回復し、500 internal_error の JSON にする(スタック等を出さない。ADR-0802 §2)。
+func recoverMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c *echo.Context) (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("panic recovered", "path", c.Path(), "panic", r)
+				// 応答を書き始めた後の panic では、JSON を追記せず(本文が壊れる)ログだけ残す。
+				if response, _ := echo.UnwrapResponse(c.Response()); response != nil && response.Committed {
+					return
+				}
+				err = c.JSON(http.StatusInternalServerError, api.Error{
+					Code:    api.InternalError,
+					Message: "internal error",
+				})
+			}
+		}()
+		return next(c)
+	}
 }
