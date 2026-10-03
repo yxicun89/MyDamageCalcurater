@@ -176,6 +176,12 @@
 - [x] P6-18 issue #328
 - [x] P6-19 issue #272 の iOS 側
 
+- [x] P6-20 構築の Showdown 形式のインポート/エクスポート(requirements.md §2 の必須。ADR-0213 §4: クライアント側の担当。
+  2026-09-21 の「後回し」は 2026-10-02 のユーザー指示「iOS レーンの未実装機能をすべて実施」で解除)。構築編集画面から
+  1体または6体を Showdown 形式のテキストで書き出し(共有・コピー)/貼り付けて取り込み。名前 ⇔ ID は pokedex の検索・`getMovesByIds` で解決。
+  解決できない行は黙って捨てず一覧で伝える。Web(`web/src/team`)の書式・文言と揃える。
+  後続: 持ち物の書き出しは ID 引き API が無く `searchItems` 先頭ページ頼み(省いた分は件数で通知。ADR-0506)。`getItemsByIds` 相当ができたら置き換える。
+  - 完了(2026-10-02): 日本語名の Showdown 風テキスト(ユーザー決定。実 Showdown 非互換。ADR-0506)。書き出し(コピー・共有)・貼り付け取り込み(取り込めなかった行を一覧し、取り込める分だけ追加)。`swift test` 633件・`make ios-test` 全件成功(XCUITest 61件)。critic PASS(指摘対応済み)
 - [ ] P6-24 素早さ比較画面(iOS。ユーザー決定 2026-10-03〈DECISIONS.md〉。Web の `SpeedScreen` が参照実装、契約は `services/speed/api/openapi.yaml`〈gateway `/api/speed/*`〉。生成設定への取り込み方を spec で決める)
 - [ ] P6-25 判定画面(iOS。契約は `services/judge/api/openapi.yaml`。P6-24 の取り込み方に揃える。判定の応答の `unsupported` の印も表示する)
 - [ ] P6-26 タイプバランス画面(iOS。契約は `services/balance/api/openapi.yaml`。構築をそのまま渡す導線を検討)
@@ -279,7 +285,6 @@
 ## 後続: 要件との対応(issue #286。M1〜M4 の後。担当レーン付き)
 requirements.md の項目のうち、計画に無かったものをここに置く。着手の順・可否はユーザー判断(急ぎではない)。
 - [ ] P5-3c お気に入り(手動ピン留め)の作成・削除・一覧 API と画面(requirements.md §2「あれば便利」。担当: API レーン→ Web・iOS。`favorites` の表・保持期間・全削除の件数は ADR-0209 で実装済みで、API・画面が未着手。ADR-0209 の「record にお気に入りの CRUD を足すときに検証する」を併せて行う)
-- [ ] P6-20 iOS の Showdown 形式のインポート/エクスポート(requirements.md §2 は必須。P6-2 で後回しにしたまま。担当: iOS レーン。P5-4 の後。Web は P5-5・team-svc は P5-4)
 - [x] P6-21 iOS のタイプバランス画面 第1段(チーム最大6体の防御相性表・チーム集計・日本語の倍率表示)+第2段(攻撃範囲 coverage)(ADR-0415。タイプバランスレーン〈iOS 実装〉。実施: `PokeCalcCore` に `BalanceDomainTypes`・`BalanceService`(+`UnavailableBalanceService`)・`APIBalanceService`・`BalanceLabels`・`BalanceViewModel`、`ios/PokeCalc` に `BalanceScreenView`・`BalanceMemberCard`・`BalanceResultViews`、`RootView` の入口・`AppEnvironment`〈`.api`→`APIBalanceService`、`.mock`→`UnavailableBalanceService`〉。gateway `/api/balance/*` 経由。マスタは既存の PokeCalcService を再利用しフォールバックしない。`swift test`〈macOS〉617件・アプリの simulator ビルド成功。**未実施・要人間確認**: シミュレータ/実機での見た目〈Dynamic Type 最大・ダークモード・色以外で弱点が分かること〉と XCTest/XCUITest のシミュレータ実行〈`make ios-test`〉、balance 0.8.0〈ADR-0413。PR #458〉が main に入った後の `make ios-gen` 再生成〈生成物は 0.7.0 のまま。エラー文言の写像は両コード対応済み〉、gateway 配線〈ADR-0414。PR #478〉後の実機 E2E)
 - [x] P6-22 iOS のタイプバランス画面 第3段(仮想敵 threats・おすすめタイプ recommendations・技範囲チェッカー move-range)(ADR-0415 §8。タイプバランスレーン〈iOS 実装〉。実施: `BalanceService` に `threats`・`recommendations`・`moveRange` を追加〈`UnavailableBalanceService`・`APIBalanceService`・テストの `StubBalanceService` も対応〉、`BalanceStage3Types`・`BalanceLabels`〈Web と同じ文言+技範囲の文言〉・`BalanceViewModel`〈機能ごとに独立した世代カウンタ・仮想敵最大6体はメンバーと同じカードを再利用・recommendations は専用の長い debounce+「再計算」ボタン・特性名は応答のポケモンから上限付きで引く〉、`ios/PokeCalc` に `BalanceThreatsView`・`BalanceRecommendationsView`・`BalanceMoveRangeView`。Web に画面が無い技範囲チェッカーは iOS で UI と文言を決めた。`swift test`〈macOS〉672件・アプリの simulator ビルド成功。**未実施・要人間確認**: P6-21 と同じ〈シミュレータ/実機での見た目:Dynamic Type 最大・ダークモード・色以外で分かること、`make ios-test` の XCTest/XCUITest 実行、balance 0.8.0 取り込み後の `make ios-gen`、gateway 配線後の実機 E2E〉。recommendations の overloaded 時の見た目と、技範囲の候補が先頭ページ+検索のみである点も人間確認)
 - [ ] P8-1 ポケモン画像の配信(任意。M1 の後。requirements.md「ポケモン画像」: MinIO・gateway の画像パス・`manifest.json`・`make assets`・無ければタイプ色のエンブレム。担当: 運用(deploy・scripts)+ API + Web。gateway の予約パス `/assets/*` は未設定で常に 404 なので `/images/` に移す〈issue #286 所見1〉。`make assets` は実装まで終了コード 2 のスタブ)
