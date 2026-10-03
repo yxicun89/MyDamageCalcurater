@@ -15,12 +15,15 @@ import SwiftUI
 /// これを開く(画面ごとに検索の状態は1つ。8章「シートは画面ごとに1つ」)。
 struct SpeciesSearchSheet<ViewModel: MasterSpeciesSearchProviding>: View {
     let viewModel: ViewModel
+    /// 「よく使う相手」(P6-23。防御側・逆算の相手だけが渡す。nil なら出さない)。
+    var frequentOpponents: FrequentOpponentsViewModel?
     let onSelect: (SpeciesSummary) -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             List {
+                frequentOpponentsSection
                 hintRow
                 ForEach(viewModel.speciesOptions, id: \.key) { option in
                     Button {
@@ -42,6 +45,7 @@ struct SpeciesSearchSheet<ViewModel: MasterSpeciesSearchProviding>: View {
             )
             .accessibilityIdentifier("speciesSearchField")
             .task(id: viewModel.speciesQuery) { await viewModel.runSpeciesSearch() }
+            .task { await frequentOpponents?.refresh() }
             .navigationTitle("ポケモンを検索")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -58,6 +62,32 @@ struct SpeciesSearchSheet<ViewModel: MasterSpeciesSearchProviding>: View {
             }
         }
         .accessibilityIdentifier("speciesSearchSheet")
+    }
+
+    /// 空クエリのときだけ先頭に出す「よく使う相手」。選んだときは通常の検索結果と同じ `onSelect`。
+    @ViewBuilder
+    private var frequentOpponentsSection: some View {
+        let items = frequentOpponents?.visibleItems(forQuery: viewModel.speciesQuery) ?? []
+        if !items.isEmpty {
+            Section {
+                ForEach(items, id: \.key) { option in
+                    Button {
+                        onSelect(option)
+                        dismiss()
+                    } label: {
+                        MasterSearchRow.species(option)
+                    }
+                    .accessibilityIdentifier("frequentOpponentRow-\(option.key)")
+                    .accessibilityLabel(option.nameJa)
+                }
+            } header: {
+                Text(FrequentOpponentsLabels.sectionTitle)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("frequentOpponentsSection")
+            }
+        }
     }
 
     @ViewBuilder
