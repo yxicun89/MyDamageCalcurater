@@ -155,6 +155,29 @@ public enum Operations {
                     }
                 }
             }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/species/get(searchSpecies)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
             public struct ServiceUnavailable: Sendable, Hashable {
                 /// - Remark: Generated from `#/paths/api/pokedex/species/GET/responses/503/content`.
                 @frozen public enum Body: Sendable, Hashable {
@@ -260,6 +283,7 @@ public enum Operations {
     ///
     /// 使用可能集合の外の種族も返す(絞り込みは検索の仕事)。`abilities` は slot 順、
     /// `learnset` は習得技 ∩ 既定のレギュレーションの使用可能な技(ID 昇順)。
+    /// `abilities` の各特性は効果を持てば `effect` を伴う(ADR-0218)。
     ///
     ///
     /// - Remark: HTTP `GET /api/pokedex/species/{key}`.
@@ -381,6 +405,29 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/species/{key}/get(getSpecies)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
                             response: self
                         )
                     }
@@ -670,6 +717,29 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/moves/get(searchMoves)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
                             response: self
                         )
                     }
@@ -1619,6 +1689,9 @@ public enum Operations {
     /// 持ち物を日本語名で前方一致検索
     ///
     /// 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
+    /// 各持ち物は効果を持てば `effect` を伴う(ADR-0218)。効果を持つ持ち物だけに絞る検索条件は無い
+    /// (クライアントが `effect` の有無で絞る)。
+    ///
     ///
     /// - Remark: HTTP `GET /api/pokedex/items`.
     /// - Remark: Generated from `#/paths//api/pokedex/items/get(searchItems)`.
@@ -1748,6 +1821,29 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/items/get(searchItems)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
                             response: self
                         )
                     }

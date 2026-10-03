@@ -156,12 +156,12 @@ func TestCalcDamageMatchesEngine(t *testing.T) {
 	}
 }
 
-// AC-2: 本文の moveId が attacker.moveId より優先される(契約の CalcRequest.moveId)。
-func TestCalcDamageMoveIDTakesPrecedence(t *testing.T) {
+// AC-2: 技は本文の moveId(契約の CalcRequest.moveId)で指定する。Individual.moveId は契約から
+// 削除した(issue #245。実装は一度も読まなかった)ので、attacker.moveId は未知フィールドとして 400 にする。
+func TestCalcDamageMoveIDIsTopLevelOnly(t *testing.T) {
 	store := newFakeStore(t)
 	h := NewHandler(store, nil)
 	c := calcCases()[0]
-	c.attacker.moveID = moveSpecial // 本文の moveId(物理)が勝つ
 	want, err := engine.CalcDamage(c.engineInput(t, store))
 	if err != nil {
 		t.Fatalf("engine.CalcDamage = %v", err)
@@ -169,10 +169,11 @@ func TestCalcDamageMoveIDTakesPrecedence(t *testing.T) {
 	rec := post(t, h, "/api/calc", mustJSON(t, c.httpBody()), true)
 	var got api.CalcResult
 	decodeInto(t, rec, &got)
-	if got.Category != api.MoveCategory(engine.CategoryPhysical) {
-		t.Fatalf("category = %q, want physical(attacker.moveId ではなく本文の moveId を使う)", got.Category)
-	}
 	assertCalcResultMatchesEngine(t, got, want)
+
+	body := c.httpBody()
+	attackerOf(body)["moveId"] = moveSpecial
+	assertError(t, post(t, h, "/api/calc", mustJSON(t, body), false), http.StatusBadRequest, "unknown_field")
 }
 
 // AC-2: 計算はイベント保存に依存しない(絶対ルール5)。record/team/NATS が無くても 200。

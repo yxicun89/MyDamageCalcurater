@@ -33,6 +33,10 @@ type Store interface {
 	//   - それ以外は (Plus, Minus) が一致する性格のうち ID の昇順で最初のもの。
 	//   - 該当が無ければ ("", false)。
 	NatureID(n engine.Nature) (string, bool)
+	// MegaRequiredItem はメガシンカ後の種族(isMega)の requiredItemId を返す。
+	// メガでない種族・未知の種族は ("", false)。メガで requiredItemId が無いマスタは持ち物を何も
+	// 許さない(("", true)。issue #315・ADR-0200 §4 追記)。
+	MegaRequiredItem(speciesKey string) (requiredItemID string, isMega bool)
 	// TypeChart は検証済みのタイプ相性表を返す。
 	TypeChart() engine.TypeChart
 }
@@ -44,6 +48,7 @@ type MemoryStore struct {
 	items       map[string]engine.Item
 	abilities   map[string]engine.Ability
 	natures     map[string]engine.Nature
+	megaItems   map[string]string // メガ種族キー → requiredItemId(無ければ "")
 	chart       engine.TypeChart
 	dataVersion string
 }
@@ -59,6 +64,12 @@ func (s *MemoryStore) Species(key string) (engine.Species, bool) {
 	sp.Types = append([]engine.Type(nil), sp.Types...)
 	sp.Abilities = append([]string(nil), sp.Abilities...)
 	return sp, true
+}
+
+// MegaRequiredItem は Store を実装する。
+func (s *MemoryStore) MegaRequiredItem(speciesKey string) (string, bool) {
+	id, ok := s.megaItems[speciesKey]
+	return id, ok
 }
 
 // Move は Store を実装する。Effect(内部の map を含む)はコピーを返す(呼び出し側が書き換えても

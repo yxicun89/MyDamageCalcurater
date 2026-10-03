@@ -115,20 +115,31 @@ function ko(rolls,hp) {
 }
 const weatherNames = {none:undefined,sun:'Sun',rain:'Rain',sand:'Sand',snow:'Snow'};
 const terrainNames = {none:undefined,electric:'Electric',grassy:'Grassy',misty:'Misty',psychic:'Psychic'};
+// 形式(ADR-0222)。engine の Format → oracle の Field.gameType。
+const gameTypeNames = {single:'Singles', double:'Doubles'};
+// 技の対象の分類(ADR-0222)。oracle(champions.js)の isSpread = gameType !== 'Singles' && target が次のどれか。
+// それ以外(oracle のデータで target 省略 = 'any' を含む)は単体技。
+const spreadTargets = ['allAdjacent','allAdjacentFoes'];
+const moveTargetOf = m => spreadTargets.includes(m.target) ? 'spread' : 'single';
+// options.format / options.moveTarget はダブルのベクタ(ADR-0222)だけが使う。未指定のベクタは従来と同じバイト列を出す。
 function vector(gen, label, a, d, moveName, options={}) {
   const attack=individual(gen, a, options.a), defend=individual(gen, d, options.d);
   const weather=options.weather || 'none', terrain=options.terrain || 'none';
   const screen=options.screen;
+  const format=options.format || 'single';
+  assert(gameTypeNames[format], `未知の形式 ${format}`);
   const m = new Move(gen, moveName, {isCrit:!!options.critical});
   assert(m.bp>0 && m.hits===1);
-  const f = new Field({gameType:'Singles',weather:weatherNames[weather],terrain:terrainNames[terrain],
+  const f = new Field({gameType:gameTypeNames[format],weather:weatherNames[weather],terrain:terrainNames[terrain],
     defenderSide:{isReflect:screen==='Reflect',isLightScreen:screen==='LightScreen',isAuroraVeil:screen==='AuroraVeil'}});
   const result=calculate(gen,attack.p,defend.p,m,f);
   const rolls=typeof result.damage==='number' ? Array(16).fill(result.damage) : result.damage;
   assert.equal(rolls.length,16); assert(rolls.every(Number.isInteger));
   const expectedKO=ko(rolls,defend.p.rawStats.hp);
-  return {id:label, oracle:{attacker:a,defender:d,move:moveName}, input:{Format:'single',Attacker:attack.input,Defender:defend.input,
-    Move:{ID:id(moveName),Type:m.type.toLowerCase(),Category:m.category.toLowerCase(),Power:m.bp,Priority:m.priority},
+  const move={ID:id(moveName),Type:m.type.toLowerCase(),Category:m.category.toLowerCase(),Power:m.bp,Priority:m.priority};
+  if (options.moveTarget) move.Target=moveTargetOf(m);
+  return {id:label, oracle:{attacker:a,defender:d,move:moveName}, input:{Format:format,Attacker:attack.input,Defender:defend.input,
+    Move:move,
     Field:{Weather:weather,Terrain:terrain,DefenderScreens:{Reflect:screen==='Reflect',LightScreen:screen==='LightScreen',AuroraVeil:screen==='AuroraVeil'}},Critical:!!options.critical},
     expected:{rolls,attackerStats:attack.p.rawStats,defenderStats:defend.p.rawStats,ko:expectedKO}};
 }
@@ -535,6 +546,90 @@ for (const layer of legacyRandomLayers) {
 }
 const legacyEffectsCases=[...legacyFixed,...legacyRandomCases];
 
+// --- ダブル(壁・全体技。issue #232 案B のダブル分・#288。ADR-0222) ------------------------------
+// Champions 世代(genC)の oracle が反映するもの(champions.js: 壁 2732/4096・全体技 3072/4096)だけを照合する。
+// テラスタルは扱わない(ポケモンチャンピオンズに無い。ユーザー確認 2026-10-03)。
+// 既存ファイルには足さない(乱数列とバイト列を変えないため)。各ケースは「対照と比べて oracle のダメージが
+// 変わる/変わらない」をここでも確かめ、oracle の版やデータの変更で前提が黙って崩れないようにする。
+const doubleFixed=[];
+const sameRolls=(x,y)=>JSON.stringify(x.expected.rolls)===JSON.stringify(y.expected.rolls);
+function doubleCase(label, a, d, moveName, options, control, expectChange) {
+  const v=vector(genC,`doubles/${label}`,a,d,moveName,{moveTarget:true,...options});
+  if (control) {
+    const base=vector(genC,`doubles/${label}/control`,a,d,moveName,{moveTarget:true,...control});
+    assert.equal(!sameRolls(v,base), expectChange, `doubles/${label}: 対照と比べた oracle の変化が想定(${expectChange ? '変わる' : '変わらない'})と違う`);
+  }
+  doubleFixed.push(v);
+}
+const sgl={}, dbl={format:'double'};
+doubleCase('single-target/no-screen','Garchomp','Snorlax','Dragon Claw',dbl,sgl,false);
+for (const [slug,a,d,m,screen] of [
+  ['reflect','Garchomp','Snorlax','Dragon Claw','Reflect'],
+  ['light-screen','Charizard','Snorlax','Flamethrower','LightScreen'],
+  ['aurora-veil-physical','Garchomp','Snorlax','Dragon Claw','AuroraVeil'],
+  ['aurora-veil-special','Charizard','Snorlax','Flamethrower','AuroraVeil'],
+]) {
+  doubleCase(`screen/${slug}`,a,d,m,{format:'double',screen},{screen},true);
+  doubleCase(`screen/${slug}/critical`,a,d,m,{format:'double',screen,critical:true},{screen,critical:true},false); // 急所は壁を無視
+}
+doubleCase('screen/light-screen-vs-physical','Garchomp','Snorlax','Dragon Claw',{format:'double',screen:'LightScreen'},sgl,false);
+for (const [slug,a,d,m] of [
+  ['all-adjacent/earthquake','Garchomp','Snorlax','Earthquake'],
+  ['all-adjacent/surf','Blastoise','Snorlax','Surf'],
+  ['all-adjacent/discharge','Pikachu','Snorlax','Discharge'],
+  ['all-adjacent-foes/rock-slide','Tyranitar','Charizard','Rock Slide'],
+  ['all-adjacent-foes/hyper-voice','Snorlax','Snorlax','Hyper Voice'],
+  ['all-adjacent-foes/heat-wave','Charizard','Snorlax','Heat Wave'],
+  ['all-adjacent-foes/dazzling-gleam','Clefable','Garchomp','Dazzling Gleam'],
+]) {
+  assert(spreadTargets.includes(genC.moves.get(id(m)).target), `${m} が全体技でない`);
+  doubleCase(`spread/${slug}`,a,d,m,dbl,sgl,true);
+  doubleCase(`single-control/spread/${slug}`,a,d,m,{},null,false); // シングルの全体技は等倍(Target=spread でも 0.75 を掛けない)
+}
+doubleCase('spread/rain','Blastoise','Snorlax','Surf',{format:'double',weather:'rain'},{weather:'rain'},true);
+doubleCase('spread/critical','Garchomp','Snorlax','Earthquake',{format:'double',critical:true},{critical:true},true);
+// 全体技 × 壁: 0.75 × 2732/4096 はシングルの壁 0.5 とロールが一致することがある(この組がそう)。対照はダブルの壁なし。
+doubleCase('spread/reflect','Garchomp','Snorlax','Earthquake',{format:'double',screen:'Reflect'},dbl,true);
+doubleCase('spread/light-screen','Charizard','Snorlax','Heat Wave',{format:'double',screen:'LightScreen'},dbl,true);
+doubleCase('spread/aurora-veil-critical','Garchomp','Snorlax','Earthquake',{format:'double',screen:'AuroraVeil',critical:true},{screen:'AuroraVeil',critical:true},true);
+doubleCase('spread/burn-life-orb','Garchomp','Snorlax','Earthquake',{format:'double',a:{burn:true,item:'Life Orb'}},{a:{burn:true,item:'Life Orb'}},true);
+doubleCase('spread/immune','Garchomp','Corviknight','Earthquake',dbl,sgl,false); // 無効は 0 のまま
+doubleCase('spread/levitate','Garchomp','Snorlax','Earthquake',{format:'double',d:{ability:'Levitate'}},{d:{ability:'Levitate'}},false);
+doubleCase('spread/bulky-defender','Pikachu','Snorlax','Surf',{format:'double',d:{sp:{hp:32,spd:32},nature:'Calm',ranks:{spd:6}}},{d:{sp:{hp:32,spd:32},nature:'Calm',ranks:{spd:6}}},true);
+
+// ランダム(別の乱数列。メインの random と legacy-random の列は変えない)。
+const doubleRandomSeed = 0x44424c45; // "DBLE"
+let doubleState = doubleRandomSeed;
+function doubleRandom(){doubleState^=doubleState<<13;doubleState^=doubleState>>>17;doubleState^=doubleState<<5;return (doubleState>>>0)/4294967296;}
+const doublePick=xs=>xs[Math.floor(doubleRandom()*xs.length)];
+// 全体技のプール: 威力固定・単発で、技名を名指しする処理が champions.js に無いもの。
+// Earthquake / Bulldoze(グラスフィールドで半減)・Misty Explosion(ミストフィールドで強化)・Eruption / Water Spout(HP で威力変動)・
+// Explosion / Self-Destruct は入れない(固定ベクタの Earthquake は地形なしで使う)。
+const doubleSpreadMoveNames=['Rock Slide','Surf','Hyper Voice','Heat Wave','Dazzling Gleam','Discharge','Sludge Wave','Muddy Water','Blizzard','Icy Wind','Snarl','Lava Plume','Petal Blizzard','Boomburst','Breaking Swipe'];
+const doubleSpreadMoves=doubleSpreadMoveNames.map(n=>{const m=genC.moves.get(id(n));assert(m&&m.basePower>0&&!m.multihit&&spreadTargets.includes(m.target),`全体技 ${n} が前提を満たさない`);return m;});
+const doubleMoves=[...moves,...doubleSpreadMoves];
+const doubleRandomCases=[];
+for(let i=0;i<3000;i++) {
+  const terrain=doublePick(['none','electric','grassy','misty','psychic']);
+  const a=doublePick(species),d=doublePick(species),m=doublePick(doubleMoves);
+  const rank=()=>Object.fromEntries(keys.slice(1).map(k=>[k,Math.floor(doubleRandom()*13)-6]));
+  doubleRandomCases.push(vector(genC,`doubles-random/${String(i).padStart(5,'0')}`,a.name,d.name,m.name,{moveTarget:true,
+    format:doublePick(['single','double','double']),terrain,weather:doublePick(Object.keys(weatherNames)),
+    critical:doubleRandom()<0.1,screen:doublePick(['','Reflect','LightScreen','AuroraVeil']),
+    a:{sp:randomSP(doubleRandom),nature:doublePick(['Serious','Adamant','Modest','Bold','Calm']),item:doublePick(['','Life Orb','Expert Belt','Charcoal','Muscle Band','Wise Glasses']),ability:doublePick(['','Adaptability','Water Bubble']),burn:doubleRandom()<0.2,ranks:rank()},
+    d:{sp:randomSP(doubleRandom),nature:doublePick(['Serious','Adamant','Modest','Bold','Calm']),item:doublePick(['','Occa Berry','Chilan Berry']),ability:doublePick(['','Thick Fat','Filter','Solid Rock','Water Bubble']),ranks:rank()}}));
+}
+{
+  // 層の網羅(弱い生成で黙って偏らないように)。
+  const count=pred=>doubleRandomCases.filter(pred).length;
+  for (const [label,pred,min] of [
+    ['double × 全体技', v=>v.input.Format==='double'&&v.input.Move.Target==='spread',200],
+    ['double × 壁', v=>v.input.Format==='double'&&Object.values(v.input.Field.DefenderScreens).some(Boolean),200],
+    ['single × 全体技', v=>v.input.Format==='single'&&v.input.Move.Target==='spread',200],
+    ['double × 全体技 × 急所', v=>v.input.Format==='double'&&v.input.Move.Target==='spread'&&v.input.Critical,20],
+  ]) assert(count(pred)>=min, `doubles-random の層「${label}」が ${count(pred)} 件(下限 ${min})`);
+}
+
 // ADR-0009 §1/§6: engine の DefenderPresetCatalog と同じ8件。名前は engine の PresetKey と同一文字列。
 const defensePresets=[
   ['none',{}],
@@ -569,6 +664,7 @@ const files={};
 function save(name,data,compressed=false){const raw=compressed?data.map(v=>JSON.stringify(v)).join('\n')+'\n':JSON.stringify(data,null,2)+'\n';const bytes=compressed?gzipSync(raw,{level:9}):Buffer.from(raw);writeFileSync(`${out}/${name}`,bytes);files[name]={count:data.length,sha256:createHash('sha256').update(bytes).digest('hex')};}
 save('fixed.json',championsFixed);save('random.jsonl.gz',randomCases,true);save('attack-species.jsonl.gz',attacks,true);save('defense-species.jsonl.gz',defenses,true);save('stats-species.jsonl.gz',statCases,true);
 save('legacy-effects.jsonl.gz',legacyEffectsCases,true);
+save('doubles.json',doubleFixed);save('doubles-random.jsonl.gz',doubleRandomCases,true);
 
 // ADR-0013 §P1-13.5: oracle のタイプ相性表を engine に渡す入力として出力する。表の正しさは oracle の責務。
 // 倍率は oracle の値(0/0.5/1/2)を2倍した整数コード(0=無効/1=いまひとつ/2=等倍/4=抜群)。
@@ -604,7 +700,7 @@ assert.equal(Object.keys(typeChart).length*engineTypes.length,324);
 }
 
 // --- metadata.json(schemaVersion 2。ADR-0002 §決定4 / P2-1b) -----------------
-const championsFiles=['fixed.json','random.jsonl.gz','attack-species.jsonl.gz','defense-species.jsonl.gz','stats-species.jsonl.gz','typechart.json'];
+const championsFiles=['fixed.json','random.jsonl.gz','attack-species.jsonl.gz','defense-species.jsonl.gz','stats-species.jsonl.gz','typechart.json','doubles.json','doubles-random.jsonl.gz'];
 const legacyFiles=['legacy-effects.jsonl.gz'];
 const metadata={
   schemaVersion:2,
@@ -626,13 +722,14 @@ const metadata={
     {scope:'moves',reason:'Only the listed fixed-power single-hit moves; excludes variable/fixed damage, multi-hit, forced criticals, alternate attack/defense stats, screen removal, terrain-specific move mechanics, tera/Z/Max moves'},
     {scope:'abilities/items',reason:'Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2). Every non-legacy effects.json entry with a type-dependent effect has an apply/control pair (effects/<id>/...; issue #270 / ADR-0120). Champions items/abilities that change damage but are not representable by the effect schema are listed with reasons in tools/golden/unsupported-effects.json and never appear in vectors'},
     {scope:'terrain',reason:'Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; the Psychic Terrain priority block is covered by psychic-priority/* (ADR-0123); terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Terrain Pulse etc.) are outside the move list and carry an unsupported mark in the engine (ADR-0123)'},
-    {scope:'battle',reason:'No double/tera/Dynamax/form transformations or unsupported status effects'},
+    {scope:'battle',reason:'Doubles are covered only by doubles.json and doubles-random.jsonl.gz (ADR-0222): screens 2732/4096 and spread 3072/4096 for allAdjacent/allAdjacentFoes moves. No tera (absent from Pokemon Champions; ADR-0222), ally effects (Helping Hand, Friend Guard), Dynamax, form transformations or unsupported status effects'},
     {scope:'KO',reason:'Smogon residual/consumable multi-turn model differs from ADR-0006; direct smogonKO cross-check only residual/consumable-free fixed cases with 1-4 hits'},
   ],
   oracles:[
     {
       id:'champions', source:'@smogon/calc', version, generation:'champions', generationNum:0,
       spInput:'direct', files:championsFiles, koCrossChecks:championsKoCrossChecks,
+      doublesRandomSeed:doubleRandomSeed,
     },
     {
       id:'gen9-legacy-effects', source:'@smogon/calc', version, generation:'gen9', generationNum:9,

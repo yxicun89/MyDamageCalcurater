@@ -23,7 +23,8 @@ fi
 
 # TB1: the local overlay mounts testdata/pokemon-types.example.json (fictional IDs from 9001-000)
 # and sets BALANCE_POKEMON_TYPES_PATH, so a known ID must return 200 with the analysis.
-# Right after a rollout the Ingress can briefly route to a terminating Pod (502/503), so retry only those.
+# The headers are fixed fictional UUIDs: the gateway (the only entrance, issue #284) accepts only canonical UUIDs.
+# Right after a rollout the gateway or balance can briefly route to a terminating Pod (502/503), so retry only those.
 attempt=0
 while :; do
   analyze_status=$(curl -sS -o "$body_file" -w '%{http_code}' \

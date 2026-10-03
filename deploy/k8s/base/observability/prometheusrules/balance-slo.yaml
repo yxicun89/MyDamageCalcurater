@@ -1,0 +1,29 @@
+# balance 計算API SLO(p99・可用性)の記録ルール(ADR-0420。方式は ADR-0407 §1〜3)。
+# 対象は balance-svc の計算5エンドポイント(team-balance の analyze・coverage・threats・recommendations と move-range/analyze)のみ。
+# アラート(alert:)はここでは作らない(ADR-0420 §2・ADR-0407 §2。多窓バーンレートアラートは先回りしない)。
+# 検査: scripts/observability-slo_test.sh
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: balance-slo
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: balance-slo
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  groups:
+    - name: balance-slo.rules
+      rules:
+        - record: balance_job:balance_request_duration_seconds:p99_5m
+          expr: >-
+            histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket{job="balance",
+            path=~"/api/balance/v1/team-balance/analyze|/api/balance/v1/team-balance/coverage|/api/balance/v1/team-balance/threats|/api/balance/v1/team-balance/recommendations|/api/balance/v1/move-range/analyze"}[5m])) by (le))
+        - record: balance_job:balance_availability_ratio:5m
+          expr: >-
+            sum(rate(http_requests_total{job="balance",
+            path=~"/api/balance/v1/team-balance/analyze|/api/balance/v1/team-balance/coverage|/api/balance/v1/team-balance/threats|/api/balance/v1/team-balance/recommendations|/api/balance/v1/move-range/analyze",
+            status!~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{job="balance",
+            path=~"/api/balance/v1/team-balance/analyze|/api/balance/v1/team-balance/coverage|/api/balance/v1/team-balance/threats|/api/balance/v1/team-balance/recommendations|/api/balance/v1/move-range/analyze"}[5m]))

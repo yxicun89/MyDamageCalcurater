@@ -30,7 +30,7 @@ var goldenKnownLegacyEffects = struct{ items, abilities []string }{
 }
 
 // goldenChampionsFiles は Champions oracle が生成するファイル。
-var goldenChampionsFiles = []string{"fixed.json", "random.jsonl.gz", "attack-species.jsonl.gz", "defense-species.jsonl.gz", "stats-species.jsonl.gz", typeChartFixture}
+var goldenChampionsFiles = []string{"fixed.json", "random.jsonl.gz", "attack-species.jsonl.gz", "defense-species.jsonl.gz", "stats-species.jsonl.gz", typeChartFixture, goldenDoublesFile, goldenDoublesRandomFile}
 
 // goldenChampionsDamageFiles は Champions oracle のダメージのベクタ(持ち物・特性を含みうる)。
 var goldenChampionsDamageFiles = []string{"fixed.json", "random.jsonl.gz", "attack-species.jsonl.gz", "defense-species.jsonl.gz"}

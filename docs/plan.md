@@ -141,7 +141,13 @@
     マスタ(種族・技・持ち物・特性の名前解決)を使うのはここから。実装: `web/src/team/` の `TeamMemberEditor`・`TeamMemberFields`・
     `teamMember`(純粋関数)・`teamMemberOptions`。update 全置換・応答待ち・失敗時は下書き保持・SP は明示エラー。ADR-0316。
     Web: vitest 全件・typecheck・lint と e2e(`web/e2e/team.spec.ts`)
+  - [x] Showdown 形式の変換部(判定レーン。`web/src/team/showdownFormat.ts`。ADR-0310。画面への配線は P5-5b 側)
   - [ ] **P5-5c 履歴・よく計算する相手・端末データの削除(PR-A3 以降)**: record-svc の API と ADR-0209 §8 の文言
+  - [x] **P5-5d 端末データの削除(Web。issue #103 の Web 分。ADR-0318)**: 情報ページの「データの扱い」節に説明(ADR-0209 §8)と
+    「この端末のデータを削除」(アプリ内 alertdialog・初期フォーカス=キャンセル)。`recordClient`/`teamClient` の `deleteDeviceData`、
+    手順は純粋関数 `deviceData/deleteDeviceData.ts`(record/team 独立・partial は対象ごと最大20回・通信エラーは自動再送せず再試行)。
+    ローカルの端末 ID・設定は消さない(iOS と同じ)。team が消えたら構築一覧を取り直す(`reloadToken`)。
+    `web` の vitest 1998件・typecheck・lint・`make web-e2e`(49件)・`make check-publishable` green
 - [x] P5-6 技の追加効果
 
 - [x] issue #219(Web 配信にセキュリティヘッダが無い)
@@ -172,7 +178,14 @@
 
 - [x] P6-23 よく使う相手の候補(requirements.md §2「計算履歴から頻度×時間減衰で上位を表示」。`GET /api/record/frequent-opponents` を種族ピッカーの空クエリ時に「よく使う」として出す。頻度は calc-svc → NATS → record-svc が自動で貯める。取得失敗・空・未解決は黙って省き検索と計算を塞がない。受け入れ条件・判断は ADR-0501「P6-23」)
   - 完了(2026-10-02): 計算の防御側・逆算の相手の種族ピッカーの空クエリ時に「よく使う相手」を先頭に表示(limit 10・名前は `species(key:)` で同時4件まで解決・失敗/空/未解決は黙って省く)。`PokeCalcService` とは別プロトコル。`swift test` 610件・`make ios-test` 全件成功(XCUITest 60件。検索欄のクリアは削除キーで操作)。critic PASS
-- [-] P6-22 構築メンバーの並べ替え(**不要と判断**。requirements.md・design.md・Web に要件が無い。team API は配列順を保存するので、要求が出たら ViewModel の `move` と `onMove` で足りる〈S〉)
+- [-] P6-27 構築メンバーの並べ替え(**不要と判断**。番号は他レーンの P6-22 と重ならないよう付け替え。requirements.md・design.md・Web に要件が無い。team API は配列順を保存するので、要求が出たら ViewModel の `move` と `onMove` で足りる〈S〉)
+
+- [ ] P6-24 素早さ比較画面(iOS。ユーザー決定 2026-10-03〈DECISIONS.md〉。Web の `SpeedScreen` が参照実装、契約は `services/speed/api/openapi.yaml`〈gateway `/api/speed/*`〉。生成設定への取り込み方を spec で決める)
+- [ ] P6-25 判定画面(iOS。契約は `services/judge/api/openapi.yaml`。P6-24 の取り込み方に揃える。判定の応答の `unsupported` の印も表示する)
+- [-] P6-26 タイプバランス画面(iOS)は**取り下げ**(2026-10-03 ユーザー決定)。タイプバランスレーンが P6-21(ADR-0415)として第1〜2段を main に実装済みで、重複する PR #512 を閉じた。第3段は P6-22(タイプバランスレーン)
+- [ ] お気に入り・計算履歴の iOS 表示(API レーンの契約追加待ち。DECISIONS.md 2026-10-03 で依頼済み)
+
+- [x] P6-21 タイプバッジ・エンブレムの文字色を design.md「タイプバッジ」の `typeInk` 規則(黒/白のコントラスト比が高い方。白は どく/ゴースト/ドラゴン/あく のみ)に準拠(エンブレム本体・バッジは実装済みで、残っていたのは文字色の白固定)。`TypeColorToken.ink(forTypeID:)` を追加。`swift test` 全件・`make ios-test` 全件成功(XCUITest 53件)。critic PASS。ADR-0501「P6-21」
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)
@@ -226,6 +239,7 @@
 - [x] issue #260 のタイプバランス分
 - [x] 判定の応答に calc-svc の「未対応」の印を中継する
 - [x] issue 309 判定画面の技を select(種族の learnset)に、調整をプリセット(無振り・最速・攻撃特化・HB/HD特化)に、SP6欄・ランク5欄を「詳細」に畳み、検証エラーを欄ごとに aria-invalid+文言で出す(ADR-0711。ADR-0705 §5 を置き換え)。critic PASS・PR #480
+- [x] issue #235 追加分 判定に status(状態異常)を足し、まひを素早さに反映(ADR-0712。契約・judge コア・Web の select・`*SpeedApplied` の paralysis)。特性・持ち物のデータ駆動(第2段)はデータレーン待ち
 
 ## AJ: 調整(ダメージ計算レーン。設計は ADR-0150。2026-10-01 ユーザー要望)
 
@@ -248,6 +262,7 @@
 - [x] DOC-data
 - [x] DOC-api: `services/calc/README.md`・`services/gateway/README.md` を §8 の形に、手順書
 - [x] DOC-web: `web/README.md`、手順書
+- [x] issue #284 のタイプバランス分(ADR-0414): balance の直結 Ingress を撤去し gateway の `GATEWAY_BALANCE_URL=http://balance` を base に配線。**残り**: speed・judge の直結 Ingress の撤去と URL 配線(各レーン)、共有クラスタの旧 `Ingress/balance` の手動削除と `allow-traefik-ingress` の balance 除外(人間確認)
 - [x] DOC-tb: `services/balance/README.md` を §8 の形に、手順書 `docs/runbooks/balance.md`
 - [x] DOC-speed
 - [x] DOC-ios: `ios/README.md`
@@ -258,6 +273,7 @@
   - [x] issue #293 の残り(2026-10-02): 一次切り分けの runbook(observability.md §7)と `make k8s-render` に base/observability
 - [x] issue #299(タイムアウトの連鎖。ADR-0801): calc・balance・speed にハンドラ全体の締め切り(writeTimeout − 1 秒)と同時実行の上限(超過は待たせず 503 + Retry-After)、judge・pokedex に上限、k3d の Traefik に有限のタイムアウト(`scripts/up.sh` が適用)。Docker 負荷試験(同時 120 で EOF 0 件)はメインでの実地確認。issue #330(httpmetrics の複製のずれ検出)は先行コミット a8db4fa で解消済み
 - [x] P7-2 SLO(計算API p99 < 100ms、可用性)とダッシュボード
+  - [x] balance 分(2026-10-02、ADR-0420。p99 < 500ms・可用性。記録ルール・ダッシュボード・静的検査。実クラスタ確認は未実施)
 - [~] P7-3 ArgoCD(GitOps): balance は Argo CD 管理。speed・judge の実クラスタ適用は人間確認待ち(CURRENT_STATE.md)。残りは issue #292・#263・#237(NetworkPolicy の balance・speed → mysql は base に反映済み=ADR-0412 追記。残りは共有クラスタへの apply の人間確認と pokedex の実 digest 確定)
 - [ ] P7-4 MySQL/TiDB バックアップと復元テスト(ADR-0209 §9 を要件に含める: バックアップに `devices`〈墓石〉を含める /
   purge journal(#5b。世代取得後の削除要求。保持90日)をバックアップ世代と別に保持し復元時に再適用 /
@@ -268,6 +284,8 @@
 requirements.md の項目のうち、計画に無かったものをここに置く。着手の順・可否はユーザー判断(急ぎではない)。
 - [ ] P5-3c お気に入り(手動ピン留め)の作成・削除・一覧 API と画面(requirements.md §2「あれば便利」。担当: API レーン→ Web・iOS。`favorites` の表・保持期間・全削除の件数は ADR-0209 で実装済みで、API・画面が未着手。ADR-0209 の「record にお気に入りの CRUD を足すときに検証する」を併せて行う)
 - [ ] P6-20 iOS の Showdown 形式のインポート/エクスポート(requirements.md §2 は必須。P6-2 で後回しにしたまま。担当: iOS レーン。P5-4 の後。Web は P5-5・team-svc は P5-4)
+- [x] P6-21 iOS のタイプバランス画面 第1段(チーム最大6体の防御相性表・チーム集計・日本語の倍率表示)+第2段(攻撃範囲 coverage)(ADR-0415。タイプバランスレーン〈iOS 実装〉。実施: `PokeCalcCore` に `BalanceDomainTypes`・`BalanceService`(+`UnavailableBalanceService`)・`APIBalanceService`・`BalanceLabels`・`BalanceViewModel`、`ios/PokeCalc` に `BalanceScreenView`・`BalanceMemberCard`・`BalanceResultViews`、`RootView` の入口・`AppEnvironment`〈`.api`→`APIBalanceService`、`.mock`→`UnavailableBalanceService`〉。gateway `/api/balance/*` 経由。マスタは既存の PokeCalcService を再利用しフォールバックしない。`swift test`〈macOS〉617件・アプリの simulator ビルド成功。**未実施・要人間確認**: シミュレータ/実機での見た目〈Dynamic Type 最大・ダークモード・色以外で弱点が分かること〉と XCTest/XCUITest のシミュレータ実行〈`make ios-test`〉、balance 0.8.0〈ADR-0413。PR #458〉が main に入った後の `make ios-gen` 再生成〈生成物は 0.7.0 のまま。エラー文言の写像は両コード対応済み〉、gateway 配線〈ADR-0414。PR #478〉後の実機 E2E)
+- [x] P6-22 iOS のタイプバランス画面 第3段(仮想敵 threats・おすすめタイプ recommendations・技範囲チェッカー move-range)(ADR-0415 §8。タイプバランスレーン〈iOS 実装〉。実施: `BalanceService` に `threats`・`recommendations`・`moveRange` を追加〈`UnavailableBalanceService`・`APIBalanceService`・テストの `StubBalanceService` も対応〉、`BalanceStage3Types`・`BalanceLabels`〈Web と同じ文言+技範囲の文言〉・`BalanceViewModel`〈機能ごとに独立した世代カウンタ・仮想敵最大6体はメンバーと同じカードを再利用・recommendations は専用の長い debounce+「再計算」ボタン・特性名は応答のポケモンから上限付きで引く〉、`ios/PokeCalc` に `BalanceThreatsView`・`BalanceRecommendationsView`・`BalanceMoveRangeView`。Web に画面が無い技範囲チェッカーは iOS で UI と文言を決めた。`swift test`〈macOS〉672件・アプリの simulator ビルド成功。**未実施・要人間確認**: P6-21 と同じ〈シミュレータ/実機での見た目:Dynamic Type 最大・ダークモード・色以外で分かること、`make ios-test` の XCTest/XCUITest 実行、balance 0.8.0 取り込み後の `make ios-gen`、gateway 配線後の実機 E2E〉。recommendations の overloaded 時の見た目と、技範囲の候補が先頭ページ+検索のみである点も人間確認)
 - [ ] P8-1 ポケモン画像の配信(任意。M1 の後。requirements.md「ポケモン画像」: MinIO・gateway の画像パス・`manifest.json`・`make assets`・無ければタイプ色のエンブレム。担当: 運用(deploy・scripts)+ API + Web。gateway の予約パス `/assets/*` は未設定で常に 404 なので `/images/` に移す〈issue #286 所見1〉。`make assets` は実装まで終了コード 2 のスタブ)
 - 公開時の名称・画像の差し替え構造(requirements.md「知財」): **後回し**。公開のタイミング(R-2-9・LICENSE・issue #328。ブロッカー節)と同時に決める。画像は P8-1 でキー(`{図鑑番号4桁}-{フォルム3桁}`)による差し替え構造になる
 
@@ -385,6 +403,12 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
       (`web/src/app/withOnlineMaster.tsx`。読めなければ日本語の案内と再試行)。balance のエラーはコードを日本語の文言に写像し、
       英語の message を出さない(`balanceErrorText`)。ヘッダーの切替の名前を「ダメージ計算の実行場所」に変更。契約・生成物の変更なし。
       判定のエラー補助行(サーバー message)は未対応(別 issue 候補)
+- [x] issue #316・#245(APIレーン。ADR-0200 §4 追記): (#316) calc-svc が契約で必須の `sp`(と StatBlock の6キー)の欠落を 400 `invalid_input` にする
+      (calc の attacker・defender、bulk の attacker、reverse の known。`decodeStrict` が生の JSON でキーの有無を確かめる。judge と同じ方式、生成型は不変)。
+      (#245) `Individual.moveId` を契約から削除(Web は参照なし、iOS は同じ PR で追従。`attacker.moveId` は `unknown_field`)、pokedex の searchSpecies・getSpecies・searchMoves・searchItems に
+      `'400'` を明記、`services/internal/api/cfg.yaml` の `strict-server: false`(StrictServerInterface は未使用。生成差分のみ)。`make gen`・`make ios-gen` 済み。
+      Web・iOS レーンへの連絡は DECISIONS.md
+
 - [x] issue #322(担当: API。ADR-0204 追記): calc-svc のマスタ本文の上限を 16MiB から 4MiB に下げた
       (`master.MaxExportBytes`。実マスタは見積り 0.5〜1MB で数倍の余裕)。上限ちょうど・+1(ErrInvalidMaster)のテストと、
       「基礎 32MiB + 4 × 上限 ≤ limits.memory の 8 割」を固定する `TestMasterBodyLimitFitsMemoryLimit` を追加。契約・生成物の変更なし。
@@ -408,6 +432,12 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
 - [x] issue #113(Web/iOS/APIレーン)入力変更時の古い計算要求を抑止・キャンセルする、のAPIレーン連携分(「クライアントのcancel伝播」)
 - [x] P4-17(Web/APIレーン)技のID解決の欠落を解消(ADR-0304 §3)
 - [x] issue #276
+- [x] issue #232 のダブル分(ADR-0222)ダブルの壁(2732/4096)と全体技(×3072/4096)を engine・wasmapi に反映。`Move.Target`(single/spread)・ダブルで技の対象が不明な攻撃技は move_target_unknown の印。テラスはゲームに無いので実装しない。ゴールデン doubles 全件一致・既存9ファイル不変。#497 マージ後の format 印の整理は ADR-0222 §5
+
+- [x] issue #315 のメガ部分(API レーン)メガシンカ後の種族に requiredItemId 以外の持ち物を持たせた計算を 400 invalid_input で拒否(ADR-0200 §4 追記。テラスタイプは別作業、WASM 側の規則は未実装で issue #505 で追跡)
+
+- [x] issue #211(API レーン分。ADR-0218): 公開 API の Item / Ability に省略可の `effect` を足した(searchItems・getSpecies.abilities。共通マスタで厳格に検証し、不正は 503 master_unavailable。内部 API は変更なし。critic PASS)
+
 - [x] issue #236 の balance 分(ADR-0413。X-Device-Id/X-Session-Id を gateway と同じ正準 UUID 検証に。openapi 0.8.0)
 - [x] issue #210 の Web 分(ADR-0313): 既定の計算モードをオンラインに変更(ユーザー決定 2026-10-01。保存済みのモードは尊重)。
   オンラインで取得した持ち物・性格と、解決した種族・特性・技を IndexedDB に保存(`master/cache/`。`MasterCacheStore`・
@@ -421,6 +451,7 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
   StatusCondition`(全行に一律で上書き)。abilityId(上記)とは独立に追加できる。engine 側の変更
   (`BulkInput`/`ReverseInput` へのオーバーライド追加。プリセット解決後・計算前に当てる)を伴うため
   ADR-0003 の test-first + 独立 critic の対象。優先度は低い(iOS レーンから「急ぎではない」と明記済み)
+- [x] issue #236 の judge 分(speed は #360/ADR-0606、balance は PR #458/ADR-0413)端末ID・セッションIDの検証を gateway と同じ正準 UUID に揃えた(ADR-0219)
 - [x] issue #328 の Web 分(ADR-0314): アプリ下部のフッター(`<footer>`、main の外)に「このアプリについて」リンクを置き、
   `/about`(ADR-0300 §1 のパス連動。タブには入れない)で非公式の注記とデータの出典4件を出す。文言は `aboutText`
   (iOS の `AboutText` と一字一句同じ)、画面は `AboutScreen.tsx`。タブ列は出さず他タブは hidden で DOM に残す(入力を保つ)。
@@ -428,3 +459,5 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
 - [x] issue #274 の Web 分の残り(ADR-0315): 「詳細」に防御側のランク(選択中の技の分類で B か D を ±1、-6..+6、def / spd は別保持)を追加。
   触った分だけ `defenderOverride.ranks`(5項目)を要求に載せ(既定は従来とバイト同一)、API は特性(#272)と同じ `defenderOverride` に合成、
   WASM は素通し(特性は従来どおり `defenderAbilities`)。条件の置き場は `domain/calcConditions.ts`。防御側の状態異常は式に効かないので出さない。iOS は別レーン
+  - [x] **P5-5c よく計算する相手(チップ。ADR-0317)**: recordClient(`web/src/record/`)・CalcScreen の結果の下のチップ(マウント時1回取得・失敗/0件は黙って非表示)・App はオンラインのときだけ接続・`SpeciesSearchField` に任意 prop `selectedName`。履歴一覧(API 無し)は対象外
+  - [ ] **P5-5d 端末データの削除 UI**: record-svc の API と ADR-0209 §8 の文言
