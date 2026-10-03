@@ -133,7 +133,7 @@ image は base のタグ → local overlay(および `make *-k3d-deploy`)が `:l
 | 種別 | 名前 | 中身 | 作る者 | 参照する者 |
 |---|---|---|---|---|
 | Secret | `mysql-auth` | 5キー: `mysql-root-password`・`pokedex-dsn`(root。プロビジョニング専用)・`pokedex-reader-dsn`・`pokedex-importer-dsn`・`pokedex-migrator-dsn`(**値は Git に置かない**。ADR-0100 §9・ADR-0110) | `scripts/up.sh`(新規は `kubectl create` で5キーを乱数で作る。既存は無いキーだけ `patch` で追記し、既存の値は変えない) | mysql(root pw)、pokedex(reader)、pokedex-migrate(4キー)、pokedex-import(importer)、migrate の initContainer(`MYSQL_PWD`)、`make deploy-latest`・runbook(ホストから port-forward 越しに使う) |
-| Secret | `tidb-root-auth`・`record-db-auth`・`team-db-auth` | TiDB の root と record・team 用 DSN(`make up` が TiDB Operator の導入に成功したときだけ作る。ADR-0211) | `scripts/up.sh` | TiDB・record/team の migrate Job(pokedex は使わない) |
+| Secret | `tidb-root-auth`・`record-db-auth`・`team-db-auth` | TiDB の root と record・team 用 DSN(TiDB Operator の導入に成功したときだけ作る。ADR-0211・ADR-0226) | `scripts/k3d-m2-deploy.sh`(`make up`・`make deploy-latest` が呼ぶ) | TiDB・record/team の migrate Job(pokedex は使わない) |
 | ConfigMap | `mysql-config` | `charset.cnf`(utf8mb4 / `utf8mb4_0900_ai_ci`)・`memory.cnf`(`performance_schema=OFF`・`innodb_buffer_pool_size=128M`・`innodb_log_buffer_size=16M`・`max_connections=50`。issue #437) | `overlays/local/mysql/configmap.yaml` | mysql StatefulSet(`/etc/mysql/conf.d/` に subPath で2ファイル) |
 | ConfigMap | `pokedex-name-overrides`(任意) | 日本語名の上書き JSON | `scripts/up.sh`(`data/local/name_ja_overrides.json` があるときだけ) | CronJob(`optional: true`、`/app/data/local` に mount) |
 | ConfigMap | `balance-pokemon-types-<hash>` `balance-moves-<hash>` `balance-abilities-<hash>` | 架空の例 JSON(local overlay の `configMapGenerator`) | `balance/deploy/k8s/overlays/local` | balance(`BALANCE_*_PATH`) |
@@ -199,7 +199,7 @@ Component は `kustomize.config.k8s.io/v1alpha1`(`overlays/local/api`・`overlay
 | pokedex | calc・judge(`allow-pokedex-ingress`。L4 なので `/internal` も届く。gateway が `/internal` を 404 にする層は残る) |
 | mysql(:3306) | pokedex・pokedex-migrate・pokedex-import(`allow-mysql-ingress`) |
 | nats(:4222) | calc(`allow-nats-ingress`) |
-| TiDB(:4000 と TiDB 内部) | record-migrate・team-migrate と、同じ TiDB の Pod(`allow-tidb-client-ingress`・`allow-tidb-internal`。TiDB を上げてラベルを確かめる前提) |
+| TiDB(:4000 と TiDB 内部) | record-migrate・team-migrate と、同じ TiDB の Pod(`allow-tidb-client-ingress`・`allow-tidb-internal`)。TiDB Operator(namespace `tidb-admin`)から PD 2379・TiDB 10080・TiKV 20180 へは `allow-tidb-operator-ingress`(ラベルは k3d で実測。ADR-0226) |
 | calc・pokedex・balance・speed・judge(:8080) | observability の Prometheus(`allow-prometheus-metrics`) |
 | gateway のメトリクス専用ポート(:9090) | observability の Prometheus(`allow-prometheus-gateway-metrics`。公開ポート :8080 は Traefik だけ。issue #216) |
 

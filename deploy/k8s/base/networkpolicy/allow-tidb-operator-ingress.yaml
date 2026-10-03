@@ -1,0 +1,33 @@
+# TiDB Operator(namespace tidb-admin の controller-manager)が、TiDB クラスタの PD・TiDB・TiKV を順に立ち上げるために
+# 見に来る経路(PD の health 2379・TiDB の status 10080・TiKV の status 20180)。これが無いと operator が
+# PD に届かず "PD(s) are not healthy" のまま TiKV・TiDB が作られない(ADR-0132「未確認」・ADR-0226)。
+# namespaceSelector と podSelector を同じ peer に置く(別 namespace の同名ラベルの Pod を通さない)。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-tidb-operator-ingress
+  labels:
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: pokecalc-tidb
+      app.kubernetes.io/managed-by: tidb-operator
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: tidb-admin
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: tidb-operator
+              app.kubernetes.io/component: controller-manager
+      ports:
+        - protocol: TCP
+          port: 2379
+        - protocol: TCP
+          port: 10080
+        - protocol: TCP
+          port: 20180

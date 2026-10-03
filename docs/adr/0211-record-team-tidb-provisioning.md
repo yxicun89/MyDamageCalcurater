@@ -503,3 +503,7 @@ TiDB クラスタ・データ自体の新規作成(クラスタ削除・DB の�
   `scripts/check-publishable.sh` の B(秘密らしき文字列)許可リストに `tidb-root-auth`(Secret 名の
   参照)を追加し、シェル変数参照の許可条件を「値の末尾が `${...}`」から「値の全体が `${...}`」に
   絞った(本物の値へ無害な変数参照を継ぎ足す細工を通さないため。self-test に確認ケースを追加)。
+- 2026-10-03 追記(ADR-0226): k3d への実適用で、helm リポジトリ `charts.pingcap.org` の廃止(Git タグのアーカイブ+sha256 検証へ変更)・
+  operator→PD の NetworkPolicy(`allow-tidb-operator-ingress` 新設)・TiKV の limit(1Gi→3Gi。常駐 約 2.2GiB)・
+  `initSql` の1行1文(複数文の行は `Commands out of sync`)を修正した。`tnir/mysqlclient` は arm64 でも(エミュレーションで)起動する。
+  up.sh の M2 の手順は `scripts/k3d-m2-deploy.sh`(`make deploy-latest` と共通)へ移した。
