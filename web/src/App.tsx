@@ -5,11 +5,11 @@
 // 単一の engine を渡すと(既存の使い方のまま)両モードでその engine を使う。
 // P4-10: タブの選択は URL(History API)と連動する(ADR-0300 §1: ルーターのライブラリは入れない)。
 // 画面 ID・パス・タブの表示名・文書タイトルの対応は app/routes.ts の SCREEN_ROUTES を正とする。
+// ADR-0173: 各画面(とそのクライアント)は登録ファイル(`*.screen.tsx`)が持つ。画面を足すときこのファイルは触らない。
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import "./App.css";
 import { createApiEngine } from "./api/apiEngine";
-import { createBalanceClient, type BalanceClient } from "./api/balanceClient";
 import { apiBaseUrl } from "./api/config";
 import { createClientIds, type ClientIds } from "./api/clientIds";
 import { loadCalcMode, saveCalcMode, type CalcMode } from "./app/calcMode";
@@ -19,7 +19,6 @@ import {
   aboutDocumentTitle,
   documentTitle,
   isAboutPath,
-  isMasterlessScreen,
   pathForAbout,
   pathForScreen,
   screenFromPath,
@@ -31,15 +30,13 @@ import type { CalcEngine } from "./engine/types";
 import { createWasmEngine } from "./engine/wasmEngine";
 import { AboutScreen } from "./AboutScreen";
 import { aboutText, appText } from "./i18n/ja";
-import { createAdjustClient, type AdjustClient } from "./adjust/adjustClient";
-import { createJudgeClient, type JudgeClient } from "./judge/judgeClient";
 import { isSearchableMasterSource } from "./master/capabilities";
 import { exampleMasterSource } from "./master/exampleSource";
 import { createRecordClient, type RecordClient } from "./record/recordClient";
-import { createSpeedClient, type SpeedClient } from "./speed/speedClient";
-import { createTeamClient, type TeamClient } from "./team/teamClient";
+import { createTeamClient } from "./team/teamClient";
 import type { MasterData, MasterSource, MasterSources, MasterSpeciesSearch } from "./master/types";
-import { MASTERLESS_SCREEN_COMPONENTS, SCREEN_COMPONENTS } from "./app/screens";
+import { SCREENS, instantiateScreens } from "./app/screens";
+import type { ScreenInstance } from "./app/screenDefinition";
 
 /** タブの定義順(ロービング tabIndex・矢印キーの移動順。WAI-ARIA Authoring Practices の Tabs パターン)。 */
 const TAB_ORDER: readonly ScreenId[] = SCREEN_ROUTES.map((route) => route.id);
@@ -102,27 +99,17 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   const [fallbackOfflineEngine] = useState<CalcEngine>(() => createWasmEngine(browserWasmLoader()));
   // 端末 ID・セッション ID はマウント時に1回だけ作る(ADR-0301 §3: セッション ID はページを開くたびに新しく)。
   const [clientIds] = useState<ClientIds>(() => createClientIds());
-  // P4-12a: balance API のクライアント(ADR-0303 §5)。計算と同じ基点 URL・端末 ID・セッション ID を使う。
-  // createBalanceClient 自体は fetch しない(メンバーを選ぶまで呼ばれない。BalanceScreen.tsx)。
-  const [balanceClient] = useState(() =>
-    createBalanceClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
+  // ADR-0173: 各画面のクライアント(balance・speed・judge・team・adjust など)は、画面の登録ファイルの createClient が
+  // 作る。マウント時に1回だけ、計算と同じ基点 URL・端末 ID・セッション ID で全画面分を作る(どれも生成時に fetch しない)。
+  const [screenInstances] = useState<readonly ScreenInstance[]>(() =>
+    instantiateScreens(SCREENS, {
+      baseUrl: apiBaseUrl(),
+      fetch: globalThis.fetch.bind(globalThis),
+      ids: clientIds,
+    }),
   );
-  // SP3: speed API のクライアント(ADR-0604 §2・§3)。balance と同じ基点 URL・端末 ID・セッション ID を使う。
-  // createSpeedClient 自体は fetch しない(素早さのタブを開くまで呼ばれない。speed/SpeedScreen.tsx)。
-  const [speedClient] = useState(() =>
-    createSpeedClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
-  );
-  // JD5: judge API のクライアント(ADR-0705 §1・§3)。同じ基点 URL・端末 ID・セッション ID を使う。
-  // createJudgeClient 自体は fetch しない(判定のタブを開くだけでは呼ばれない。judge/JudgeScreen.tsx)。
-  const [judgeClient] = useState(() =>
-    createJudgeClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
-  );
-  // AJ6: 調整 API のクライアント(ADR-0319 §1)。createAdjustClient 自体は fetch しない(調整のタブを開くだけでは呼ばれない)。
-  const [adjustClient] = useState(() =>
-    createAdjustClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
-  );
-  // P5-5 PR-A1: team API のクライアント(ADR-0309 §2・§3)。同じ基点 URL・端末 ID・セッション ID を使う。
-  // createTeamClient 自体は fetch しない(構築のタブを開くまで呼ばれない。team/TeamScreen.tsx)。
+  // P5-5d(ADR-0318): 情報ページの「この端末のデータを削除」が使う team API のクライアント(押されるまで fetch しない)。
+  // 情報ページはタブではない(登録の対象外)ので App が作る。
   const [teamClient] = useState(() =>
     createTeamClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
   );
@@ -437,16 +424,12 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
                   (決定3)。「再試行」(取得口は変わらない)では null を経由しないので保たれる。 */}
                 <AppTabPanel
                   tab={tab}
+                  screens={screenInstances}
                   currentMasterLoad={currentMasterLoad}
                   resolvedEngine={resolvedEngine}
                   activeMasterSearch={activeMasterSearch}
                   onlineMasterSource={onlineMasterSource}
-                  balanceClient={balanceClient}
-                  speedClient={speedClient}
-                  judgeClient={judgeClient}
-                  teamClient={teamClient}
                   teamReloadToken={teamReloadToken}
-                  adjustClient={adjustClient}
                   recordClient={recordClient}
                   mode={mode}
                   retryMasterLoad={retryMasterLoad}
@@ -484,17 +467,14 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
 
 interface AppTabPanelProps {
   readonly tab: ScreenId;
+  /** 登録された画面の描画の口(タブの並び順。ADR-0173)。 */
+  readonly screens: readonly ScreenInstance[];
   /** currentMasterLoad !== null が確かめられてから渡される(App 側の分岐)。 */
   readonly currentMasterLoad: MasterLoadResult;
   readonly resolvedEngine: CalcEngine;
   readonly activeMasterSearch: MasterSpeciesSearch | undefined;
   readonly onlineMasterSource: MasterSource;
-  readonly balanceClient: BalanceClient;
-  readonly speedClient: SpeedClient;
-  readonly judgeClient: JudgeClient;
-  readonly teamClient: TeamClient;
   readonly teamReloadToken: number;
-  readonly adjustClient: AdjustClient;
   readonly recordClient: RecordClient | undefined;
   readonly mode: CalcMode;
   readonly retryMasterLoad: () => void;
@@ -512,16 +492,12 @@ interface AppTabPanelProps {
  */
 function AppTabPanel({
   tab,
+  screens,
   currentMasterLoad,
   resolvedEngine,
   activeMasterSearch,
   onlineMasterSource,
-  balanceClient,
-  speedClient,
-  judgeClient,
-  teamClient,
   teamReloadToken,
-  adjustClient,
   recordClient,
   mode,
   retryMasterLoad,
@@ -541,69 +517,57 @@ function AppTabPanel({
 
   return (
     <>
-      {TAB_ORDER.filter((id) => visitedTabs.has(id)).map((id) => {
-        const hidden = id !== tab;
-        if (currentMasterLoad.ok) {
-          // ok の間は、マスタを使わない画面(素早さ)も含めてこの対応表から引く(既存の
-          // ActiveScreen の描き方のまま。issue 308 のマスタ不要フォールバックは失敗中だけ使う)。
-          // isMasterlessScreen(id) の画面(素早さ)は失敗中の分岐と同じ key(id そのもの)にする
-          // (「再試行」が成功して ok に切り替わっても、同じ SpeedScreen を作り直さないため)。
-          const ScreenComponent = SCREEN_COMPONENTS[id];
+      {screens
+        .filter((screen) => visitedTabs.has(screen.id))
+        .map((screen) => {
+          const { id } = screen;
+          const hidden = id !== tab;
+          if (currentMasterLoad.ok) {
+            // ok の間は、マスタを使わない画面(素早さ)も含めて同じ値を渡して描く(既存の
+            // ActiveScreen の描き方のまま。issue 308 のマスタ不要フォールバックは失敗中だけ使う)。
+            // マスタを使わない画面(素早さ)は失敗中の分岐と同じ key(id そのもの)にする
+            // (「再試行」が成功して ok に切り替わっても、同じ SpeedScreen を作り直さないため)。
+            return (
+              <div key={id} hidden={hidden}>
+                {screen.render({
+                  engine: resolvedEngine,
+                  master: currentMasterLoad.master,
+                  masterSearch: activeMasterSearch,
+                  recordClient,
+                  reloadToken: teamReloadToken,
+                  onlineMasterSource,
+                })}
+              </div>
+            );
+          }
+          if (!screen.usesMaster) {
+            // issue 308: マスタを使わない画面(素早さ)は、失敗中でも master・engine を渡さずに
+            // 描画する(登録ファイルの render は両方を持たない値しか受け取らない。ADR-0304 追記6・ADR-0173)。
+            // key は ok 側の分岐と同じ id にする(上のコメントのとおり)。
+            return (
+              <div key={id} hidden={hidden}>
+                {screen.render({ masterSearch: activeMasterSearch, onlineMasterSource })}
+              </div>
+            );
+          }
+          if (id !== tab) {
+            // マスタを使う画面のうち選択中でないものは、マスタが読めていない間は出せない
+            // (hidden でも実データが無い)。マスタが読めたら次の render で改めて mount する。
+            return null;
+          }
           return (
-            <div key={id} hidden={hidden}>
-              <ScreenComponent
-                engine={resolvedEngine}
-                master={currentMasterLoad.master}
-                client={balanceClient}
-                speedClient={speedClient}
-                judgeClient={judgeClient}
-                teamClient={teamClient}
-                reloadToken={teamReloadToken}
-                adjustClient={adjustClient}
-                recordClient={recordClient}
-                masterSearch={activeMasterSearch}
-                onlineMasterSource={onlineMasterSource}
+            <div key={`failure-${id}`}>
+              <MasterLoadFailureNotice
+                error={currentMasterLoad.error}
+                showSwitchToOffline={mode === "online"}
+                onRetry={retryMasterLoad}
+                onSwitchToOffline={() => {
+                  selectMode("offline");
+                }}
               />
             </div>
           );
-        }
-        if (isMasterlessScreen(id)) {
-          // issue 308: マスタを使わない画面(素早さ)は、失敗中でも master・engine を渡さずに
-          // 描画する(MASTERLESS_SCREEN_COMPONENTS は両方を持たない Props しか要求しない。
-          // ADR-0304 追記6)。key は ok 側の分岐と同じ id にする(上のコメントのとおり)。
-          const MasterlessScreenComponent = MASTERLESS_SCREEN_COMPONENTS[id];
-          return (
-            <div key={id} hidden={hidden}>
-              <MasterlessScreenComponent
-                client={balanceClient}
-                speedClient={speedClient}
-                judgeClient={judgeClient}
-                teamClient={teamClient}
-                adjustClient={adjustClient}
-                masterSearch={activeMasterSearch}
-                onlineMasterSource={onlineMasterSource}
-              />
-            </div>
-          );
-        }
-        if (id !== tab) {
-          // マスタを使う画面のうち選択中でないものは、マスタが読めていない間は出せない
-          // (hidden でも実データが無い)。マスタが読めたら次の render で改めて mount する。
-          return null;
-        }
-        return (
-          <div key={`failure-${id}`}>
-            <MasterLoadFailureNotice
-              error={currentMasterLoad.error}
-              showSwitchToOffline={mode === "online"}
-              onRetry={retryMasterLoad}
-              onSwitchToOffline={() => {
-                selectMode("offline");
-              }}
-            />
-          </div>
-        );
-      })}
+        })}
     </>
   );
 }

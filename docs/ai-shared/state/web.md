@@ -194,3 +194,7 @@ P5-5d(#489・ADR-0318。この端末のデータを削除。issue #103 の Web �
 (apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより
 連絡が来る想定。(5) 人間へのお願い:
 docs/verify-m1.md §6(ブラウザ確認)を Safari で確認(P4-5。issue #333のsafeキーワード確認も合わせて)
+
+**画面レジストリ化(2026-10-03。ADR-0173。ブランチ feat/web-screen-registry)**: 画面・タブは各レーンのディレクトリの登録ファイル
+`*.screen.tsx`(`defineScreen`)で足す。`App.tsx`・`app/screens.tsx`・`app/routes.ts`・`i18n/ja.ts` は画面の追加では触らない。
+Web の未マージ PR(feat/web-mega-item-lock-515・feat/web-mega-api-515 など)は、main を merge して変更を登録ファイル・`i18n/<レーン>.ts` に移す(ADR-0173 §5)。
