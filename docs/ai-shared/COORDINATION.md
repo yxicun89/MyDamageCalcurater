@@ -29,7 +29,7 @@
 
 | レーン | 作業ディレクトリ | ブランチ | 範囲 |
 |---|---|---|---|
-| **データ**(damage calc: engine・マスタ) | `~/MyDamageCalcurater` | `feat/calc-<phase名>`(既存の `feat/claude-p1-engine` はマージまでそのまま使う) | `engine/`、`tools/golden/`・`testdata/golden/`、Phase 2(`services/pokedex/`・`tools/importer/`・`services/internal/master/`・MySQL の k8s 定義)、および他のレーンに属さない M1〜M4 のタスク。**M4(監視・SLO・GitOps・バックアップ)と、Tailscale 等の到達経路・運用(deploy・scripts・runbook・up.sh・k8s)の持ち主はこのレーン**(ユーザー決定 2026-10-03・issue #285。「運用レーン」は作らない) |
+| **データ**(damage calc: engine・マスタ) | `~/MyDamageCalcurater-calc` | `feat/calc-<phase名>`(既存の `feat/claude-p1-engine` はマージまでそのまま使う) | `engine/`、`tools/golden/`・`testdata/golden/`、Phase 2(`services/pokedex/`・`tools/importer/`・`services/internal/master/`・MySQL の k8s 定義)、および他のレーンに属さない M1〜M4 のタスク。**M4(監視・SLO・GitOps・バックアップ)と、Tailscale 等の到達経路・運用(deploy・scripts・runbook・up.sh・k8s)の持ち主はこのレーン**(ユーザー決定 2026-10-03・issue #285。「運用レーン」は作らない) |
 | **API**(damage calc: サービス) | `~/MyDamageCalcurater-api` | `feat/api-<phase名>` | Phase 3(`services/calc/`・`services/gateway/`・契約テスト・k3d のスモーク)と **M2(`services/record/`・`services/team/`・TiDB・NATS。画面は Web レーン)**(ユーザー決定 2026-10-03)。**`api/openapi.yaml` と生成物(`services/internal/api/`)を変更できるのはこのレーンだけ** |
 | **Web**(damage calc: 画面) | `~/MyDamageCalcurater-web` | `feat/web-<phase名>` | Phase 4(`web/`・Playwright)。`make wasm` の成果物を使う |
 | **タイプバランス**(type balance) | `~/MyDamageCalcurater-tb`(同じリポジトリの git worktree) | `feat/tb-<stage名>`(既存の `feat/codex-tb0-foundation` はマージまでそのまま使う) | `services/balance/` とその Kustomize / Argo CD 定義。設計の正は `docs/type-balance-design.md` |
@@ -61,7 +61,9 @@
 ### ユーザーが確認する場所
 - ユーザーは動作確認・ドキュメント確認を **`~/MyDamageCalcurater` の `main`(マージ後)** で行う。レーンごとの worktree を VS Code で開き直さない。
 - したがって成果は必ず PR で main に入れる。「レーンのブランチでは動くが main に無い」状態にしない。
-- 既存の worktree のレーンは、`~/MyDamageCalcurater` を確認用(main 追従)にするため、データレーンも専用 worktree(`~/MyDamageCalcurater-data` 等)へ移す。移行は未実施。データレーンの次のセッションが、未コミットの変更が無いことを確認してから行う(`DECISIONS.md` 2026-09-24)。
+- **`~/MyDamageCalcurater` は動作確認専用**(ユーザー決定 2026-10-03。2026-09-24 の方針を実施): 常に `main`(全レーンのマージ後)を置き、
+  ユーザーが動作確認する場所にする。**どのレーンの AI もここで作業・コミット・ブランチの切り替えをしない**(読み取りと、ユーザーに頼まれた
+  `git pull`・`make deploy-latest` 等の確認だけ)。データ(damage calc)レーンの作業ディレクトリは `~/MyDamageCalcurater-calc`。
 
 ### PR は積極的に出す
 - 追跡のため、ローカルでの直接マージはせず、区切りごとに PR(→ 条件を満たしたら `gh pr merge`)で main に入れる。ユーザーは GitHub の PR と main の中身を見て指摘する。
@@ -206,7 +208,7 @@ Claude Code のメインセッションは **Sonnet で起動**する(`claude --
 
 
 ```
-cd ~/MyDamageCalcurater      && claude   # または codex(データレーン)
+cd ~/MyDamageCalcurater-calc && claude   # または codex(データレーン。~/MyDamageCalcurater は動作確認専用)
 cd ~/MyDamageCalcurater-api  && claude   # または codex(API レーン)
 cd ~/MyDamageCalcurater-web  && claude   # または codex(Web レーン)
 cd ~/MyDamageCalcurater-tb   && claude   # または codex(タイプバランスレーン)
