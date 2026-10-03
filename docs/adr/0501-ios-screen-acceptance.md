@@ -4369,3 +4369,75 @@ XCUITest の追加 5 件はコンパイルのみ確認(構文解析)。画像あ
   無補正の性格・SP 0・画面で選んだ特性の個体として追加する(`CalcViewModel.defenderIndividualForFavorite()`。攻撃側は計算に使う個体そのまま)。
   名前の解決は `SpeciesNameResolver`(お気に入り・履歴で共通)。外した ID は、その時点で進行中の読み込みの応答からも除く(復活防止)。
 - テストと実装の矛盾は無かった。
+
+## 防御側のランクの受け入れ条件(issue #274 の残り。2026-10-04。Web は ADR-0315、契約は ADR-0216。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+- 日付: 2026-10-04 / 担当レーン: iOS / 関連: 本 ADR「issue #274」「P6-19」、ADR-0315(Web)、ADR-0216(`defenderOverride.ranks/status`)、
+  docs/ai-shared/decisions/2026-10-02-215-ios-web-ios-issue-274-adr-0315.md・同 206・同 2026-10-04-ios-defender-ranks.md
+- 生成クライアント: `Components.Schemas.DefenderOverride.ranks`(`RankBlock`)は生成済み。`make ios-gen-check` が一致していれば再生成は不要。
+  api/openapi.yaml・services/ は触らない。
+
+### 判断(新しい ADR は起こさない)
+
+1. **リセット規則 = 消さない**。防御側の種族変更・攻守入れ替え・技の変更・構築の呼び出し・「詳細」の開閉でランクを 0 に戻さない。
+   根拠: Web の ADR-0315 §6、および攻撃側のランクの既存規則(本 ADR「issue #274」: ランクは入れ替えでも消さない)。
+   防御側の特性(P6-19)だけが「種族が変わると選択肢が変わる」ので種族変更・入れ替えで「指定なし」に戻る。ランクは種族に依存しないので別規則。
+2. **状態異常は出さない**(`defenderOverride.status` は送らない。式に効かない。ADR-0216 §3)。
+3. **逆算には足さない**(`ReverseRequest` に防御側 override は無い)。
+
+### 受け入れ条件
+
+1. **表示と編集対象**: 「詳細」の「攻撃側のランク」の次に防御側のランク(見出し「防御側のランク」)を出す。ステッパーは選択中の技の分類で
+   編集対象が決まる(物理・変化・技なし = def〈B〉、特殊 = spd〈D〉)。表示は「B +1」「D -2」「B ±0」(`RankLabel.text` を def → B、spd → D に広げる)。
+   def / spd は別々に保持し、技の分類を往復しても消えない。範囲は -6..+6(`RankLimits`)で、範囲外の指定は丸める。上限・下限でボタンを無効にする。
+2. **要求(ViewModel → `BulkCalcRequest.defenderRanks`)**: 既定(0・0)は既定の `RankBlock()`。値が変わる操作は計算1回、変わらない操作は0回。
+   def/spd は技の分類に関係なく両方そのまま載せる(攻撃側の atk/spa と同じ)。攻撃側の `attacker.ranks`・防御側の特性と混ざらない。
+3. **API 写像**(`APIPokeCalcService.generatedBulkCalcRequest`): `defenderOverride` の出し方を「abilityId も ranks も無いなら送らない」に変える。
+   (abilityId, ranks)の4通り: なし/既定 → 送らない(従来と同じ本文)、あり/既定 → `{abilityId}` のみ、なし/非 0 → `{ranks}` のみ、
+   あり/非 0 → 同じ `defenderOverride` に両方。ranks は非 0 のとき 5 項目(atk/def/spa/spd/spe。0 も含む)を送る。`status` は送らない。
+   攻撃側の `attacker.ranks` は防御側のランクの影響を受けない。
+4. **文言**(Core の `CalcConditionLabels`。既存の固定文言は変えない): `defenderRankTitle`「防御側のランク」、
+   `defenderRankIncrement`「防御側のランクを上げる」、`defenderRankDecrement`「防御側のランクを下げる」(Web と同じ語)。
+5. **identifier(追加のみ)**: `calcDefenderRankDecrement` / `calcDefenderRankValue` / `calcDefenderRankIncrement`
+   (攻撃側の `calcAttackerRank*` と同じ流儀)。ステッパーのボタンのタップ範囲は 36pt 以上、AX5 でも横にはみ出さずタップできる。
+6. **モック**: `MockPokeCalcService.calcBulk` は防御側のランク付きの要求を受け付け、ランクなしと同じ形の行を返す(数値は変えない)。
+7. **古い応答**: ランクを続けて変えたとき、古い計算は追い越され(キャンセル)、最新の要求の結果だけが残る。計算は1操作につき1回。
+
+### 追加したテスト(2026-10-04 時点。実装は未着手)
+
+| ファイル | 件数 | 内容 |
+|---|---|---|
+| `ios/PokeCalcKit/Tests/PokeCalcCoreTests/CalcViewModelDefenderRanksTests.swift` | 13 | 既定・混ざらない・±6・技の分類 def/spd・変化技・リセットしない・特性と併存・古い応答 |
+| `.../APIPokeCalcServiceDefenderRanksTests.swift` | 7 | `defenderOverride` の有無の全組み合わせ・5 項目・status 無し・攻撃側と混ざらない・他のフィールド不変 |
+| `.../DefenderRankLabelsTests.swift` | 3 | 文言 3 つ・既存文言不変・「B +1」「D -2」「B ±0」 |
+| `.../MockPokeCalcServiceDefenderRanksTests.swift` | 1 | モックが要求を受け付けて同じ形の行を返す |
+| `ios/PokeCalcUITests/CalcDefenderRanksUITests.swift`(XCUITest・モック) | 4 | 既定「B ±0」・上げ下げ・上限下限で無効・36pt 以上 |
+| `ios/PokeCalcUITests/LargeTextLayoutUITests.swift`(追加メソッド1本) | 1 | AX5 で防御側のランクがはみ出さずタップできる |
+
+単体は 24 件追加(`swift test --filter DefenderRank`)。実装前の結果: 失敗 16・成功 8(成功は足場の既定値と同じ結果になるもの。
+Labels の文言 2 件・`RankLimits`・モック 1 件・API 4 件〈従来どおり送らない/特性のみ/攻撃側不混入/他フィールド不変〉)。
+XCUITest 5 件はビルドのみ確認(実行は実装後。View が無いので失敗する)。既存テストは1つも変えていない。
+
+### 実装者への注意
+
+- 足場(`TODO(implementer` を検索): `BulkCalcRequest.defenderRanks`(既定値付き。`DomainTypes.swift`)、`CalcViewModel` の
+  `defenderRanks`/`defenderRankStat`/`defenderRank`/`defenderRankText`/`setDefenderRank`(中身は空。`attackerRank*` と同じ作りで実装)、
+  `CalcConditionLabels` の文言(値は確定済み)。
+- 実装箇所: ① `CalcViewModel.buildRequest` が `defenderRanks` を載せる。② `APIPokeCalcService.generatedBulkCalcRequest` の `defenderOverride` を
+  「abilityId も ranks も無いなら nil」に変え、ranks は `RankBlock() != request.defenderRanks` のときだけ 5 項目で載せる(`status` は nil)。
+  生成物の `RankBlock` のメンバーは Optional なので、0 も含めて全項目に値を入れる。③ `RankLabel.text`(def → B、spd → D。
+  `AttackerPreset.statLetter` は private 化せず、攻撃側の A/C の対応を壊さない)。④ `CalcConditionsSection` に `defenderRankSection`
+  (`rankStepperButton` を再利用。identifier は上記)。`CalcScreenMetrics.rankValueMinWidth` を再利用し、ボタンは 36pt 以上を保つ。
+- リセット処理は足さない(判断 1)。`resetDefenderAbility()` にランクを含めない。
+- 既存の API 写像テスト(`defenderOverride` を送らない)・既存 identifier は変えない。
+- 完了条件: `swift test`・`make ios-test`(XCUITest 5 件を含む)・`make ios-gen-check`。結果をこの章の後ろに追記し、plan.md にチェックを付ける。
+
+### 実装結果(2026-10-04。implementer)
+
+- 単体 `swift test`: 1318 件・失敗 0。XCUITest(iPhone 18 Pro・モック): `CalcDefenderRanksUITests` 4 件・`LargeTextLayoutUITests.testCalcScreenDefenderRankNoHorizontalOverflowAtAX5` 1 件・既存 `CalcConditionsUITests` 2 件、計 7 件すべて成功。
+- 逸脱 1(配置): 防御側のランクは「攻撃側のランクの次」ではなく「詳細」の末尾(防御側の壁の次)に置いた。攻撃側のランクの前後どちらに挟んでも、
+  既存の `CalcConditionsUITests.testTogglingConditionsUpdatesSelectionAndKeepsRows`(前方スクロールのみで 壁→攻撃側ランク の順に触る)が、スワイプの量子化で攻撃側ランクへ届かなくなった(実測)。既存テストは変えない。
+- 逸脱 2(テストの操作のみ): `CalcDefenderRanksUITests.scrollUntilHittable` に、前方スクロールで届かないときの `swipeDown` を追加(防御側のランクが末尾にあり、上の攻撃側ランクへ戻るため)。期待値・検証は変えていない。
+- 逸脱 3(テストの操作のみ): `CalcViewModelDefenderRanksTests.testStaleResponseDoesNotOverwriteLatestRows` は cancel 済みの古い要求に `resolveBulkWithEcho` を呼んでいた(スタブは cancel で保留を外すため失敗)。
+  その呼び出しを `waitForBulkCancellation(at:)` に置き換えた。検証(最新の結果だけが残る・エラー無し・isLoading false)は変えていない。
+- ステッパーのボタンは最小 37pt(36 ちょうどは丸め誤差で 35.99 になり不合格)。攻撃側と共有。

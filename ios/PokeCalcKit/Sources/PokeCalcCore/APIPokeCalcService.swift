@@ -516,14 +516,21 @@ public struct APIPokeCalcService: PokeCalcService {
             // (ADR-0501「issue #274」4章「判断」)。
             field: request.field == FieldState() ? nil : generatedFieldState(request.field),
             options: .init(critical: request.critical),
-            // 指定なし(nil)は `defenderOverride` 自体を送らない(これまでの要求本文と同じ。
-            // ADR-0501「P6-19」1章)。
-            defenderOverride: request.defenderAbilityId.map { .init(abilityId: $0) },
+            // 特性の指定なし(nil)かつランクが既定(すべて 0)なら `defenderOverride` 自体を送らない
+            // (これまでの要求本文と同じ。ADR-0501「P6-19」1章・「防御側のランクの受け入れ条件」3章)。
+            // ランクは非 0 のときだけ 5 項目(0 も含む)を載せる。`status` は送らない。
+            defenderOverride: generatedDefenderOverride(request),
             // 省略(空配列を含む)は同じ意味(openapi の description)なので、空のときは
             // フィールド自体を送らない(nil のプロパティは JSON エンコード時に省かれる)。
             presets: request.presets.isEmpty ? nil : request.presets.map(generatedDefenderPreset),
             itemVariants: request.itemVariants.isEmpty ? nil : request.itemVariants
         )
+    }
+
+    private static func generatedDefenderOverride(_ request: BulkCalcRequest) -> Components.Schemas.DefenderOverride? {
+        let ranks = request.defenderRanks == RankBlock() ? nil : generatedRankBlock(request.defenderRanks)
+        if request.defenderAbilityId == nil && ranks == nil { return nil }
+        return .init(abilityId: request.defenderAbilityId, ranks: ranks)
     }
 
     /// openapi `ReverseRequest`(ADR-0010 §R): itemCandidates の省略と maxCandidates == 0 は既定値と

@@ -549,12 +549,16 @@ public struct BulkCalcRequest: Sendable {
     /// nil は「指定なし」= `defenderOverride` を送らず、サーバーが種族の特性(最大3件)をすべて試して、
     /// 結果が違うときだけ行を分ける(ADR-0126)。ADR-0501「P6-19」。
     public var defenderAbilityId: String?
+    /// 防御側のランク補正(openapi `BulkCalcRequest.defenderOverride.ranks`。issue #274・ADR-0216・ADR-0501
+    /// 「防御側のランクの受け入れ条件」)。既定(すべて 0)は `defenderOverride.ranks` を送らない。
+    public var defenderRanks: RankBlock
 
     public init(
         format: Format, attacker: Individual, defenderSpeciesKey: String, moveId: String,
         field: FieldState = FieldState(),
         critical: Bool = false, presets: [DefenderPreset] = [], itemVariants: [String?] = [],
-        defenderAbilityId: String? = nil
+        defenderAbilityId: String? = nil,
+        defenderRanks: RankBlock = RankBlock()
     ) {
         self.format = format
         self.attacker = attacker
@@ -565,6 +569,7 @@ public struct BulkCalcRequest: Sendable {
         self.presets = presets
         self.itemVariants = itemVariants
         self.defenderAbilityId = defenderAbilityId
+        self.defenderRanks = defenderRanks
     }
 }
 

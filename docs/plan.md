@@ -206,6 +206,7 @@
 
 - [x] P6-21 タイプバッジ・エンブレムの文字色を design.md「タイプバッジ」の `typeInk` 規則(黒/白のコントラスト比が高い方。白は どく/ゴースト/ドラゴン/あく のみ)に準拠(エンブレム本体・バッジは実装済みで、残っていたのは文字色の白固定)。`TypeColorToken.ink(forTypeID:)` を追加。`swift test` 全件・`make ios-test` 全件成功(XCUITest 53件)。critic PASS。ADR-0501「P6-21」
 - [x] P8-1c iOS のポケモン画像表示(タイプバランスレーンの依頼。ADR-0807 の契約・ADR-0508)。gateway の `/images/manifest.json` を起動時に1回取得し、manifest にキーがあれば thumb を表示(計算・逆算・構築・調整・タイプバランスの種族ヘッダーと検索の行)、無ければ既存のタイプ色エンブレム。manifest の 404・不正・version 違いも画像なし。モックの既定は画像なし(AC-X)。detail は表示する画面が無いため後続。`swift test` 1158件・XCUITest 成功。critic PASS
+- [x] iOS の計算画面「詳細」に防御側のランク(issue #274 の残り。Web の ADR-0315・契約 `defenderOverride.ranks`)。def〈B〉/ spd〈D〉を別々に保持し、編集対象は選択中の技の分類で決まる(±6・既定 0 なら `defenderOverride` を送らない・非0 で 5 項目・防御側の特性と併存・状態異常は出さない)。防御側の種族変更・入れ替えでは消さない(Web と同じ)。配置は「詳細」の末尾(ADR-0501 末尾「実装結果」の逸脱 1)。`swift test` 1318件・XCUITest 7件成功。critic PASS
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)

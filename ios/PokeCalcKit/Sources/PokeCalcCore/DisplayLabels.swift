@@ -98,6 +98,10 @@ public enum CalcConditionLabels {
     /// ランクの −/+ ボタンの VoiceOver 読み上げ(画像だけのボタンなので明示する)。
     public static let rankDecrement = "ランクを下げる"
     public static let rankIncrement = "ランクを上げる"
+    /// 防御側のランク(issue #274・ADR-0315。Web レーンと同じ語。ADR-0501「防御側のランクの受け入れ条件」)。
+    public static let defenderRankTitle = "防御側のランク"
+    public static let defenderRankDecrement = "防御側のランクを下げる"
+    public static let defenderRankIncrement = "防御側のランクを上げる"
 }
 
 /// 防御側・相手側の特性の選択(issue #272。ADR-0501「P6-19」3章)。Web レーンも同じ語を使う
@@ -168,7 +172,12 @@ public enum ScreenKindLabel {
 /// ランク補正の表示(「A +1」「C -2」「A ±0」)。文字は `AttackerPreset` と同じ対応(atk → A、spa → C)。
 public enum RankLabel {
     public static func text(stat: StatKey, value: Int) -> String {
-        let letter = AttackerPreset.statLetter(for: stat)
+        let letter: String
+        switch stat {
+        case .def: letter = "B"
+        case .spd: letter = "D"
+        default: letter = AttackerPreset.statLetter(for: stat)
+        }
         let signedValue: String
         switch value {
         case 0: signedValue = "±0"
