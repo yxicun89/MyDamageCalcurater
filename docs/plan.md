@@ -276,3 +276,4 @@ requirements.md の項目のうち、計画に無かったものをここに置�
 - [x] issue #113(Web/iOS/APIレーン)入力変更時の古い計算要求を抑止・キャンセルする、のAPIレーン連携分(「クライアントのcancel伝播」)
 - [x] P4-17(Web/APIレーン)技のID解決の欠落を解消(ADR-0304 §3)
 - [x] issue #276
+- [x] issue #236 の balance 分(ADR-0413。X-Device-Id/X-Session-Id を gateway と同じ正準 UUID 検証に。openapi 0.8.0)
