@@ -2074,6 +2074,20 @@ Impact: 版を上げる PR は config.json の `integrity` も更新する(不�
 却下案 B(dist の vendoring)・C(現状維持)に変えるなら ADR-0101 追記と config.json の integrity を戻す。
 ユーザーの確認待ち: A でよいか(特に、期限切れの引き渡しを無視する TTL 7200 秒の扱い)。
 
+
+## 2026-10-03: PR のマージは対象 PR の CI が全件成功のときだけ AI が実行してよい(ADR-0803。ユーザー決定)
+Decision: bash-guard の PR マージを無条件ブロックから、`gh pr checks` が終了コード 0 のときだけ通す条件付きに変更。`--admin`・`gh api` 直叩き・main への直接 push は引き続き不可。
+Reason: ユーザー指示「全レーンでテストと CI が通っていれば AI が merge してよい。クラウドへの勝手なデプロイ(課金)と機密情報の公開以外は作業を止めたくない」。
+Impact: CLAUDE.md・AGENTS.md・COORDINATION.md・ADR-0800 を整合。.codex も同じ bash-guard を呼ぶため同じ規則が効く。
+## 2026-10-03: 技の対象(単体/全体)をマスタに持たせてほしい(判定レーン → データレーン。issue #288・ユーザー決定)
+
+- ダブルの壁(×2732/4096)・全体技(×3072/4096。相手2体に当たる技)の補正は engine がまだ持たない(`engine/modifiers.go` の `screenDamageMod` は format を見ない。ADR-0005)。
+  判定画面は暫定でダブルを選択肢から外している(PR #421)
+- データレーンへ: 技の対象(単体 / 相手全体 / 場全体 等。@smogon/calc の `target` に対応する値)を `MasterMove` とマスタのスキーマに足し、
+  pokedex-svc の内部 API・公開 API の技の応答に出してほしい。入ったら、判定(ダメージ計算)レーンが engine の補正とゴールデン(ダブルのベクタ。
+  `tools/golden`・`make test-golden` 全件一致)を実装し、判定画面に「ダブル」を戻す
+- それまで #288 は閉じない(暫定の非表示は維持)
+
 ## 2026-10-02: issue #230 のタイプバランス系リモートブランチ 19 本を削除(タイプバランスレーン。ユーザー承認済み)
 Decision: 対応する PR(#6〜#66)がすべて MERGED の tb 系リモートブランチ 19 本をリモートから削除した。OPEN の PR のブランチ(#451・#456・#457・#458)と main は触っていない。
 Reason: ユーザー承認(AskUserQuestion、2026-10-02)。削除前に、全 19 本の PR が MERGED であることを PR 一覧で確認した。
@@ -2116,3 +2130,4 @@ Decision: Web の「詳細」に防御側のランクを追加した。iOS も�
 編集対象は選択中の技の分類で 物理・変化・技なし = def〈B〉、特殊 = spd〈D〉。def / spd は別々に保持する。
 Reason: 契約(`defenderOverride.ranks`、ADR-0216)は入っており、攻守で画面の作りを揃えるため。
 Impact: 既定(0・0)なら `defenderOverride` を送らない。どちらかが非 0 なら 5 項目の ranks を送り、特性(#272)と同じ `defenderOverride` に併存させる。防御側の状態異常は式に効かないので出さない。
+
