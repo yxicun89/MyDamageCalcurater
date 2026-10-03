@@ -73,6 +73,7 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/check-master-version_test.sh
 	@./scripts/require-k3d-context_test.sh
 	@./scripts/image-tag_test.sh
+	@./scripts/k3d-deploy-tagged_test.sh
 	@./scripts/up-secrets_test.sh
 	@./scripts/test-db-docker_test.sh
 

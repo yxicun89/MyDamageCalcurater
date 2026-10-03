@@ -178,9 +178,11 @@ func TestAPIMakefile(t *testing.T) {
 		targets[current] += line + "\n"
 	}
 
+	// k3d import・apply・rollout status は scripts/k3d-deploy-tagged.sh へ移した(ADR-0806)。その中身は
+	// scripts/k3d-deploy-tagged_test.sh が偽の docker・k3d・kubectl で確かめる。
 	wants := map[string][]string{
-		"api-docker-build": {"services/calc/Dockerfile", "services/gateway/Dockerfile", "--build-arg VERSION=", "git rev-parse --short HEAD"},
-		"api-k3d-deploy":   {"k3d image import", "kubectl apply -k", deploytest.LocalAPIOnlyOverlayDir, "rollout status"},
+		"api-docker-build": {"services/calc/Dockerfile", "services/gateway/Dockerfile", "--build-arg VERSION=", "scripts/image-tag.sh"},
+		"api-k3d-deploy":   {"scripts/k3d-deploy-tagged.sh", deploytest.LocalAPIOnlyOverlayDir, "pokecalc/calc", "pokecalc/gateway"},
 		"api-smoke":        {"scripts/smoke.sh"},
 		"api-kustomize":    {"kubectl kustomize"},
 	}
