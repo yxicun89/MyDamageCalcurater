@@ -297,11 +297,12 @@
 - [x] P7-2 SLO(計算API p99 < 100ms、可用性)とダッシュボード
   - [x] balance 分(2026-10-02、ADR-0420。p99 < 500ms・可用性。記録ルール・ダッシュボード・静的検査。実クラスタ確認は未実施)
 - [~] P7-3 【担当: データレーン】 ArgoCD(GitOps): balance は Argo CD 管理。speed・judge の実クラスタ適用は人間確認待ち(CURRENT_STATE.md)。残りは issue #292・#263・#237(NetworkPolicy の balance・speed → mysql は base に反映済み=ADR-0412 追記。残りは共有クラスタへの apply の人間確認と pokedex の実 digest 確定)
-- [ ] P7-4 【担当: データレーン】 MySQL/TiDB バックアップと復元テスト(ADR-0209 §9 を要件に含める: バックアップに `devices`〈墓石〉を含める /
+- [x] P7-4 【担当: データレーン】 MySQL/TiDB バックアップと復元テスト(ADR-0209 §9 を要件に含める: バックアップに `devices`〈墓石〉を含める /
   purge journal(#5b。世代取得後の削除要求。保持90日)をバックアップ世代と別に保持し復元時に再適用 /
   Ready の前に墓石の再適用・purge journal の再適用・失効ジョブの強制実行 / JetStream は再生しない / 世代30日。
   受け入れ条件は AC-B1〜B3・AC-B2b)
   - [x] スクリプトとテスト(2026-10-03。ADR-0225。運用の空席をタイプバランスレーンが代行): `scripts/db-backup.sh`(full/journal)・`scripts/db-restore.sh`・`make db-backup`/`db-restore`・runbook(data.md d2)を実装。`make test-scripts` の偽物テスト2本と、Docker の使い捨て TiDB・MySQL での実往復 `make test-db-backup`(AC-B1〜B3・B2b)が通る。**未実施**: 実クラスタ(k3d)上の実バックアップ・復元(TiDB 未配備・record/team 未配備)、クラウド保存先・暗号化、PVC スナップショット、サービスが削除要求の受付時に DB 外へ同時追記する実装(同期間隔の穴が残る。ADR-0225 §7)、Argo CD/レジストリ image の復元(#297)
+  - [x] **k3d 実クラスタでの実バックアップ・復元訓練(2026-10-03。ADR-0227)**: `make db-backup-k3d`(record・team・pokedex)と `make db-restore-drill-k3d`(別名 DB `<db>_restore_drill` へ最新世代を復元→全表の行数・墓石・journal を元と照合→別名 DB を削除。稼働中の DB は上書きしない)を実 TiDB で通した(`restore-drill-ok record team`)。Secret・port-forward はスクリプト内部。mysqldump 9 の `column_masking_policy` 表示は無害。**未実施**: 実データの墓石・journal が 0 件だったため再適用の効果は Docker 往復テスト依存、API 越しの確認、クラウド保存先・暗号化、同時追記(ADR-0225 §7 の1・3・7)
 
 - [x] 確認手順書 M1〜M4(`docs/verify-all.md`。verify-m1 の read model 書き出しを `make pokedex-export-k3d` に集約、verify-m3・verify-m4 を新設。タイプバランスレーン・ドキュメントのみ)
 

@@ -340,7 +340,10 @@ pokedex のマスタは上のとおり再生成できるのでバックアップ
 `scripts/db-backup.sh` と `scripts/db-restore.sh` を使う(`make db-backup`・`make db-restore` は薄い入口)。保存先は
 `data/generated/backups/`(Git の無視対象。無視されない場所は拒否される。ディレクトリ 0700・ファイル 0600)。
 ダンプには端末 ID・計算イベント・構築名が入るので機密として扱い、ログ・PR・Issue に中身を貼らない。暗号化はしない(ローカル限定。クラウド等へ出すなら別 ADR で暗号化を必須にする)。
-**実クラスタ(k3d)上の実バックアップ・復元は未実施**(TiDB・record/team の Deployment が未配備。配備後に1回通して結果を plan.md に書く)。
+**k3d の実クラスタでは `make db-backup-k3d`(バックアップ)と `make db-restore-drill-k3d`(別名 DB への復元訓練。稼働中の DB は上書きしない)が使える**
+(Secret・port-forward はスクリプト内部。2026-10-03 に実 TiDB で通した結果は ADR-0227。下の手順は手元の DB・自分で接続する場合の手動版)。
+`mysql`・`mysqldump` がホストに無ければ docker(固定 digest の mysql イメージ)を自動で使う。mysqldump 9 の `column_masking_policy` の `SELECT command denied` 表示は無害(終了コード 0・ダンプは完全)。
+訓練は直前に `make db-backup-k3d` で世代を取ってから流す(間に record・team へ書き込みがあると行数が合わない)。別名 DB が前回の残りで既にあれば、確認してから手で削除する(自動では消さない)。
 
 接続は環境変数で渡す(パスワードは `MYSQL_PWD`。コマンドライン引数に出さない)。クラスタの DB へは `kubectl port-forward` で手元から届かせる。
 

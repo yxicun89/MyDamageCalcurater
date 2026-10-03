@@ -83,6 +83,7 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/test-db-docker_test.sh
 	@./scripts/db-backup_test.sh
 	@./scripts/db-restore_test.sh
+	@./scripts/db-backup-k3d_test.sh
 
 .PHONY: lint
 lint: ## gofmt / go vet / shell・Node構文チェック
@@ -222,6 +223,14 @@ db-backup: ## DB のバックアップ(MODE=full|journal KIND=pokedex|record|tea
 .PHONY: db-restore
 db-restore: ## DB の復元(KIND=… GEN=<世代|latest>。上書きなので CONFIRM_RESTORE=<DB名> が必須。サービスを止めてから。ADR-0225)
 	@./scripts/db-restore.sh "$(KIND)" "$(or $(GEN),latest)"
+
+.PHONY: db-backup-k3d
+db-backup-k3d: ## k3d の実 DB(record・team・pokedex)をバックアップ(KIND で絞れる。Secret はスクリプト内部で読み値を出さない。非破壊。ADR-0227)
+	@./scripts/db-backup-k3d.sh $(KIND)
+
+.PHONY: db-restore-drill-k3d
+db-restore-drill-k3d: ## k3d の実 TiDB で復元訓練(別名 DB へ最新世代を復元→行数・墓石を照合→別名 DB を削除。稼働中の DB は上書きしない。ADR-0227)
+	@./scripts/db-restore-drill-k3d.sh $(KIND)
 
 .PHONY: test-db-backup
 test-db-backup: ## バックアップ→復元の実 DB 往復テスト(Docker の使い捨て TiDB・MySQL。Docker が無ければ失敗。make test には含めない。ADR-0225)
