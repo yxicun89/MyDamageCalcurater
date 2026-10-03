@@ -28,7 +28,7 @@ struct JudgeOptionSheet: View {
         switch kind {
         case .nature: return viewModel.natureOptions.map { ($0.id, $0.nameJa) }
         case .ability: return viewModel.abilityOptions(for: target).map { ($0.id, $0.nameJa) }
-        case .item: return viewModel.itemOptions.map { ($0.id, $0.nameJa) }
+        case .item: return viewModel.selectableItemOptions(for: target).map { ($0.id, $0.nameJa) }
         }
     }
 

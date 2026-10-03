@@ -1,4 +1,8 @@
 [
-  { "id": "test-item-berry", "nameJa": "テストどうぐきのみ" },
-  { "id": "test-item-unsupported", "nameJa": "テストどうぐみたいおう", "unsupportedEffect": true }
+  { "id": "test-item-berry", "nameJa": "テストどうぐきのみ", "roles": ["attacker", "defender"], "isMegaStone": false },
+  { "id": "test-item-unsupported", "nameJa": "テストどうぐみたいおう", "unsupportedEffect": true, "roles": ["attacker", "defender"], "isMegaStone": false },
+  { "id": "test-item-attack-only", "nameJa": "テストどうぐこうげき", "roles": ["attacker"], "isMegaStone": false },
+  { "id": "test-item-defense-only", "nameJa": "テストどうぐぼうぎょ", "roles": ["defender"], "isMegaStone": false },
+  { "id": "test-item-no-role", "nameJa": "テストどうぐこうかなし", "roles": [], "isMegaStone": false },
+  { "id": "test-item-mega-stone", "nameJa": "テストどうぐメガいし", "roles": [], "isMegaStone": true }
 ]

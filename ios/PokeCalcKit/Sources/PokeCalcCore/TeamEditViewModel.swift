@@ -27,6 +27,10 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
     /// 一度でも見た技(先頭ページ・技検索の結果・`move(id:)` の応答が合流する。`move(forID:)` はここから
     /// 引く。ADR-0501「issue #68 の残り」5章)。
     private var moveDictionary: [String: Move] = [:]
+    /// 一度でも読んだ種族のメガ情報(`species(key:)` の応答ごとに覚える。ADR-0509 §4)。
+    private var megaInfo: [String: MegaSpeciesInfo] = [:]
+    /// 保存データを直したときの通知(メンバー ID → 文言。種族を変えたら消す。ADR-0509 §4)。
+    private var itemNotices: [String: String] = [:]
 
     public private(set) var speciesQuery: String = ""
     public private(set) var moveQuery: String = ""
@@ -106,10 +110,13 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
             for member in team.members {
                 let detail = try await service.species(key: member.speciesKey)
                 speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+                megaInfo[detail.key] = MegaSpeciesInfo(detail: detail)
                 learnsetIdsByMember[member.id] = detail.learnset
                 recomputeMoveOptions(forMember: member.id)
                 abilityOptionsByMember[member.id] = detail.abilities
             }
+            // 保存データのメガ種族の持ち物を直す(下書きの変更。自動では保存しない。ADR-0509 §4)。
+            for member in team.members { correctSavedItem(forMember: member.id) }
             // 全メンバーの `species(key:)` が終わった後、保存済みの技のうちまだ見ていないものを
             // 全メンバー分まとめて `moves(ids:)` で1回だけ解決する(A3: 失敗しても `error` を立てず、
             // `moveIds` も変えない。ADR-0501「getMovesByIds による構築編集の技の一括解決」A2)。
@@ -150,9 +157,15 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
             let detail = try await service.species(key: speciesKey)
             guard token == memberSpeciesGeneration[member.id] else { return true }
             speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+            megaInfo[detail.key] = MegaSpeciesInfo(detail: detail)
             learnsetIdsByMember[member.id] = detail.learnset
             recomputeMoveOptions(forMember: member.id)
             abilityOptionsByMember[member.id] = detail.abilities
+            // 追加したメンバーがメガなら、持ち物はストーンに固定する(通知は出さない。ADR-0509 §4)。
+            updateMember(id: member.id) {
+                $0.itemId = MegaItemLock.itemIdAfterSpeciesChange(
+                    previous: .none, next: MegaItemLock.make(for: megaInfo[detail.key], allItems: itemOptions), currentItemId: $0.itemId)
+            }
         } catch {
             guard token == memberSpeciesGeneration[member.id] else { return true }
             self.error = TeamScreenError(error)
@@ -192,9 +205,11 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
                 continue
             }
             speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+            megaInfo[detail.key] = MegaSpeciesInfo(detail: detail)
             learnsetIdsByMember[member.id] = detail.learnset
             recomputeMoveOptions(forMember: member.id)
             abilityOptionsByMember[member.id] = detail.abilities
+            correctSavedItem(forMember: member.id)
         }
         await resolveUnknownMoves(accepted.flatMap(\.moveIds))
         return accepted.count
@@ -207,6 +222,7 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
         abilityOptionsByMember[id] = nil
         memberErrors[id] = nil
         memberSpeciesGeneration[id] = nil
+        itemNotices[id] = nil
         learnsetIdsByMember[id] = nil
     }
 
@@ -238,7 +254,13 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
     private func applySpeciesChange(_ detail: SpeciesDetail, speciesKey: String, toMemberID id: String) {
         guard let index = team.members.firstIndex(where: { $0.id == id }) else { return }
         let learnsetIds = Set(detail.learnset)
+        let previousLock = itemLock(forMember: id)
+        megaInfo[detail.key] = MegaSpeciesInfo(detail: detail)
         team.members[index].speciesKey = speciesKey
+        // メガ種族に変えたらストーンに固定、メガ以外に変えたら未選択に戻す。直した通知は消す(ADR-0509 §4)。
+        team.members[index].itemId = MegaItemLock.itemIdAfterSpeciesChange(
+            previous: previousLock, next: itemLock(forMember: id), currentItemId: team.members[index].itemId)
+        itemNotices[id] = nil
         team.members[index].moveIds = team.members[index].moveIds.filter { moveId in
             learnsetIds.contains(moveId)
         }
@@ -311,6 +333,7 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
     // MARK: - 持ち物・特性・性格・テラスタイプ(そのまま代入。ID の存在チェックはしない)
 
     public func setMemberItem(id: String, itemId: String?) {
+        guard !itemLock(forMember: id).disablesItemField else { return }
         updateMember(id: id) { $0.itemId = itemId }
     }
 
@@ -433,6 +456,52 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
         } catch {
             self.error = TeamScreenError(error)
             return false
+        }
+    }
+}
+
+// MARK: - 持ち物の役割・メガ固定(ADR-0509)
+
+extension TeamEditViewModel {
+    /// メンバーの持ち物の選択肢(`.any`。役割で絞らずメガストーンだけ外す。そのメンバーのいまの持ち物は `keeping` で残す)。
+    public func itemOptions(forMember id: String) -> [Item] {
+        let current = team.members.first(where: { $0.id == id })?.itemId
+        return ItemRoleFilter.options(itemOptions, for: .any, keeping: current)
+    }
+
+    public func itemLock(forMember id: String) -> MegaItemLock {
+        guard let member = team.members.first(where: { $0.id == id }) else { return .none }
+        return MegaItemLock.make(for: megaInfo[member.speciesKey], allItems: itemOptions)
+    }
+
+    /// 保存データを読み込み時に直したときの通知(`MegaItemText.correctedNotice` / `clearedNotice`)。無ければ nil。
+    public func itemNotice(forMember id: String) -> String? { itemNotices[id] }
+
+    public func itemLabel(for itemId: String?) -> String {
+        ItemDisplayName.text(itemId: itemId, items: itemOptions, megaStoneNames: megaStoneNames)
+    }
+
+    private var megaStoneNames: [String: String] {
+        var names: [String: String] = [:]
+        for info in megaInfo.values {
+            if case .locked(let itemId, let displayName) = MegaItemLock.make(for: info, allItems: itemOptions) {
+                names[itemId] = displayName
+            }
+        }
+        return names
+    }
+
+    /// 保存データのメガ種族の持ち物を直し、通知を残す(ADR-0509 §4)。
+    fileprivate func correctSavedItem(forMember id: String) {
+        guard let index = team.members.firstIndex(where: { $0.id == id }) else { return }
+        switch MegaItemLock.correction(currentItemId: team.members[index].itemId, lock: itemLock(forMember: id)) {
+        case .unchanged: break
+        case .fixed(let itemId, let displayName):
+            team.members[index].itemId = itemId
+            itemNotices[id] = MegaItemText.correctedNotice(displayName)
+        case .cleared:
+            team.members[index].itemId = nil
+            itemNotices[id] = MegaItemText.clearedNotice
         }
     }
 }

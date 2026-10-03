@@ -30,19 +30,14 @@ struct ReverseMyCardView: View {
                 }
             }
 
-            Menu {
-                Button(BulkRowDisplay.itemLabel(itemId: nil, items: viewModel.itemOptions)) {
-                    viewModel.scheduleLatest { await $0.selectMyItem(id: nil) }
-                }
-                ForEach(viewModel.itemOptions, id: \.id) { item in
-                    Button(item.nameJa) {
-                        viewModel.scheduleLatest { await $0.selectMyItem(id: item.id) }
-                    }
-                }
-            } label: {
-                MenuLabelChip(text: BulkRowDisplay.itemLabel(itemId: viewModel.myItemId, items: viewModel.itemOptions))
+            myItemMenu
+            if let reason = lockReason(for: viewModel.myItemLock) {
+                Text(reason)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("reverseMyItemLockReason")
             }
-            .accessibilityIdentifier("reverseMyItemPicker")
             // 持ち物の一覧が上限に達していても黙って切り捨てない(ADR-0501「issue #68 の残り」6章)。
             if viewModel.itemOptionsReachedLimit {
                 Text(MasterSearchLabels.itemsTruncated)
@@ -56,6 +51,28 @@ struct ReverseMyCardView: View {
         .glassCard()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("reverseMyCard")
+        // 受けたダメージでは自分の変更で詳細を読まないので、View が種族の変更ごとに読む(ADR-0509 §4 L2)。
+        .task(id: viewModel.mySpeciesKey) { await viewModel.loadMySpeciesDetail() }
+    }
+
+    /// 自分の持ち物の選択(側ごとの役割の持ち物だけ。メガ種族ならメガストーンに固定して操作不可。ADR-0509 §8)。
+    private var myItemMenu: some View {
+        let lock = viewModel.myItemLock
+        return Menu {
+            Button(ItemDisplayName.noItemLabel) {
+                viewModel.scheduleLatest { await $0.selectMyItem(id: nil) }
+            }
+            ForEach(viewModel.myItemOptions, id: \.id) { item in
+                Button(item.nameJa) {
+                    viewModel.scheduleLatest { await $0.selectMyItem(id: item.id) }
+                }
+            }
+        } label: {
+            MenuLabelChip(text: viewModel.itemLabel(for: viewModel.myItemId))
+        }
+        .disabled(lock.disablesItemField)
+        .accessibilityHint(lockReason(for: lock) ?? "")
+        .accessibilityIdentifier("reverseMyItemPicker")
     }
 }
 
@@ -82,6 +99,14 @@ struct ReverseOpponentCardView: View {
                 SpeciesSearchSheet(viewModel: viewModel, frequentOpponents: frequentOpponents) { option in
                     viewModel.scheduleLatest { await $0.selectOpponentSpecies(key: option.key) }
                 }
+            }
+            // メガ種族の相手は持ち物がメガストーンに固定される(候補の欄は無いので名前だけ見せる。ADR-0509 §8)。
+            if case .locked(_, let displayName) = viewModel.opponentItemLock {
+                Text(MegaItemText.fixedItemName(displayName))
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("reverseOpponentItemLock")
             }
         }
         .padding(SpacingToken.x3)

@@ -41,5 +41,19 @@
     "baseStats": { "hp": 70, "atk": 60, "def": 60, "spa": 95, "spd": 70, "spe": 110 },
     "abilities": [{ "id": "test-ability-gamma", "nameJa": "テストとくせいガンマ" }],
     "learnset": ["test-move-physical-a", "test-move-special-a", "test-move-special-b", "test-move-status-a"]
+  },
+  {
+    "key": "9001-001",
+    "dexNo": 9001,
+    "form": 1,
+    "nameJa": "テストメガモンいち",
+    "types": ["fire"],
+    "baseStats": { "hp": 80, "atk": 120, "def": 90, "spa": 70, "spd": 75, "spe": 110 },
+    "abilities": [{ "id": "test-ability-alpha", "nameJa": "テストとくせいアルファ" }],
+    "learnset": ["test-move-physical-a", "test-move-special-a", "test-move-status-a", "test-move-multi-hit"],
+    "isMega": true,
+    "requiredItemId": "test-item-mega-stone",
+    "baseSpeciesKey": "9001-000",
+    "baseSpeciesNameJa": "テストモンいち"
   }
 ]

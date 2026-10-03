@@ -23,7 +23,9 @@ struct JudgeIndividualCard: View {
                 caption: JudgeLabels.species, value: viewModel.speciesName(for: target), id: "SpeciesButton", request: .species)
             selectButton(caption: JudgeLabels.nature, value: natureName, id: "NatureButton", request: .option(.nature))
             selectButton(caption: JudgeLabels.ability, value: abilityName, id: "AbilityButton", request: .option(.ability))
-            selectButton(caption: JudgeLabels.item, value: itemName, id: "ItemButton", request: .option(.item))
+            selectButton(
+                caption: JudgeLabels.item, value: itemName, id: "ItemButton", request: .option(.item),
+                lockReason: lockReason(for: viewModel.itemLock(for: target)))
             selectButton(caption: JudgeLabels.move, value: moveName, id: "MoveButton", request: .move)
             spSection
             rankSection
@@ -80,7 +82,7 @@ struct JudgeIndividualCard: View {
 
     private var itemName: String? {
         guard let id = draft.itemId else { return nil }
-        return viewModel.itemOptions.first { $0.id == id }?.nameJa ?? id
+        return viewModel.itemLabel(for: id)
     }
 
     private var moveName: String? {
@@ -88,7 +90,10 @@ struct JudgeIndividualCard: View {
         return viewModel.move(forID: id)?.nameJa ?? id
     }
 
-    private func selectButton(caption: String, value: String?, id: String, request: JudgePickerRequest) -> some View {
+    /// `lockReason` が非 nil なら操作できない(メガ種族の持ち物。理由の文を下に出す。ADR-0509 §8)。
+    private func selectButton(
+        caption: String, value: String?, id: String, request: JudgePickerRequest, lockReason: String? = nil
+    ) -> some View {
         VStack(alignment: .leading, spacing: SpacingToken.x1) {
             SpeedCaption(text: caption)
             Button {
@@ -114,8 +119,17 @@ struct JudgeIndividualCard: View {
                         .stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
             }
             .buttonStyle(.plain)
+            .disabled(lockReason != nil)
             .accessibilityLabel("\(caption) \(value ?? JudgeLabels.unselected)")
+            .accessibilityHint(lockReason ?? "")
             .accessibilityIdentifier("\(identifierPrefix)\(id)")
+            if let lockReason {
+                Text(lockReason)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("\(identifierPrefix)\(id)LockReason")
+            }
         }
     }
 

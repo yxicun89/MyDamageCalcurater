@@ -221,10 +221,20 @@ public struct SpeciesDetail: Equatable, Sendable {
     public var abilities: [Ability]
     /// 覚える技の ID 一覧。
     public var learnset: [String]
+    /// メガシンカ後の種族か(docs/mega-evolution-spec.md。省略は false)。
+    public var isMega: Bool
+    /// メガシンカに要るメガストーンの ID(メガでなければ nil)。
+    public var requiredItemId: String?
+    /// メガシンカ前の種族キー(ADR-0175。メガでなければ nil)。
+    public var baseSpeciesKey: String?
+    /// メガシンカ前の種族の日本語名(ADR-0175。固定中の「{基本種名}のメガストーン」に使う)。
+    public var baseSpeciesNameJa: String?
 
     public init(
         key: String, dexNo: Int, form: Int, nameJa: String, types: [PokeType],
-        baseStats: StatBlock, abilities: [Ability], learnset: [String]
+        baseStats: StatBlock, abilities: [Ability], learnset: [String],
+        isMega: Bool = false, requiredItemId: String? = nil,
+        baseSpeciesKey: String? = nil, baseSpeciesNameJa: String? = nil
     ) {
         self.key = key
         self.dexNo = dexNo
@@ -234,6 +244,10 @@ public struct SpeciesDetail: Equatable, Sendable {
         self.baseStats = baseStats
         self.abilities = abilities
         self.learnset = learnset
+        self.isMega = isMega
+        self.requiredItemId = requiredItemId
+        self.baseSpeciesKey = baseSpeciesKey
+        self.baseSpeciesNameJa = baseSpeciesNameJa
     }
 }
 
@@ -256,13 +270,25 @@ public struct Move: Equatable, Sendable {
     }
 }
 
+/// 持ち物の計算での役割(openapi `ItemRole`。ADR-0175 §1)。
+public enum ItemRole: String, CaseIterable, Equatable, Sendable {
+    case attacker
+    case defender
+}
+
 public struct Item: Equatable, Sendable {
     public var id: String
     public var nameJa: String
+    /// 計算での役割(ADR-0175)。nil は不明(古いサーバー・古いモック)で、役割で絞らない(ADR-0509 §2)。
+    public var roles: [ItemRole]?
+    /// メガストーンか(ADR-0175 §2)。nil は不明。
+    public var isMegaStone: Bool?
 
-    public init(id: String, nameJa: String) {
+    public init(id: String, nameJa: String, roles: [ItemRole]? = nil, isMegaStone: Bool? = nil) {
         self.id = id
         self.nameJa = nameJa
+        self.roles = roles
+        self.isMegaStone = isMegaStone
     }
 }
 

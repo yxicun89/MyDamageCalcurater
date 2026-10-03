@@ -35,19 +35,14 @@ struct AttackerCardView: View {
                 }
             }
 
-            Menu {
-                Button(BulkRowDisplay.itemLabel(itemId: nil, items: viewModel.itemOptions)) {
-                    viewModel.scheduleLatest { await $0.selectAttackerItem(id: nil) }
-                }
-                ForEach(viewModel.itemOptions, id: \.id) { item in
-                    Button(item.nameJa) {
-                        viewModel.scheduleLatest { await $0.selectAttackerItem(id: item.id) }
-                    }
-                }
-            } label: {
-                MenuLabelChip(text: BulkRowDisplay.itemLabel(itemId: viewModel.attackerItemId, items: viewModel.itemOptions))
+            attackerItemMenu
+            if let reason = lockReason(for: viewModel.attackerItemLock) {
+                Text(reason)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("attackerItemLockReason")
             }
-            .accessibilityIdentifier("attackerItemPicker")
             // 持ち物の一覧が上限に達していても黙って切り捨てない(ADR-0501「issue #68 の残り」6章)。
             if viewModel.itemOptionsReachedLimit {
                 Text(MasterSearchLabels.itemsTruncated)
@@ -63,6 +58,35 @@ struct AttackerCardView: View {
         // 個別の要素のまま残す(XCUITest が種族名の入れ替わりを検査できるように)。
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("attackerCard")
+    }
+
+    /// 持ち物の選択(攻撃側の役割の持ち物だけ。メガ種族ならメガストーンに固定して操作不可。ADR-0509 §8)。
+    private var attackerItemMenu: some View {
+        let lock = viewModel.attackerItemLock
+        return Menu {
+            Button(ItemDisplayName.noItemLabel) {
+                viewModel.scheduleLatest { await $0.selectAttackerItem(id: nil) }
+            }
+            ForEach(viewModel.attackerItemOptions, id: \.id) { item in
+                Button(item.nameJa) {
+                    viewModel.scheduleLatest { await $0.selectAttackerItem(id: item.id) }
+                }
+            }
+        } label: {
+            MenuLabelChip(text: viewModel.itemLabel(for: viewModel.attackerItemId))
+        }
+        .disabled(lock.disablesItemField)
+        .accessibilityHint(lockReason(for: lock) ?? "")
+        .accessibilityIdentifier("attackerItemPicker")
+    }
+}
+
+/// メガ固定の理由の文(固定していなければ nil。ADR-0509 §7)。全画面で共有する。
+func lockReason(for lock: MegaItemLock) -> String? {
+    switch lock {
+    case .none: return nil
+    case .locked: return MegaItemText.lockedReason
+    case .missing: return MegaItemText.missingReason
     }
 }
 
@@ -91,7 +115,17 @@ struct DefenderCardView: View {
                     viewModel.scheduleLatest { await $0.selectDefender(speciesKey: option.key) }
                 }
             }
+            // メガ種族の防御側は持ち物がメガストーンに固定される(持ち物欄は無いので名前だけ見せる。ADR-0509 §8)。
+            if case .locked(_, let displayName) = viewModel.defenderItemLock {
+                Text(MegaItemText.fixedItemName(displayName))
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("defenderItemLock")
+            }
         }
+        // 防御側の詳細(メガか)を種族が変わるたびに読む。固定が変わったときだけ計算し直す(ADR-0509 §4 L2)。
+        .task(id: viewModel.defenderSpeciesKey) { await viewModel.loadDefenderAbilityOptions() }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()

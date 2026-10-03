@@ -153,6 +153,8 @@ public final class JudgeViewModel: MasterSpeciesSearchProviding, MasterMoveSearc
     /// 一度でも見た種族・技(検索結果・選んだもの)。名前の引き当てに使う。
     private var speciesDictionary: [String: SpeciesSummary] = [:]
     private var moveDictionary: [String: Move] = [:]
+    /// 一度でも読んだ種族のメガ情報(`species(key:)` の応答ごとに覚える。ADR-0509 §4)。
+    private var megaInfo: [String: MegaSpeciesInfo] = [:]
     private var loadedTeams: [Team] = []
     private var latestTeamListToken = 0
 
@@ -257,6 +259,7 @@ public final class JudgeViewModel: MasterSpeciesSearchProviding, MasterMoveSearc
         guard let slot = slotID(for: target) else { return }
         speciesDictionary[species.key] = species
         let changed = draft(for: target)?.speciesKey != species.key
+        let previousLock = itemLock(for: target)
         update(target) { $0.speciesKey = species.key }
         let token = updateMeta(slot) { meta in
             meta.speciesName = species.nameJa
@@ -268,8 +271,13 @@ public final class JudgeViewModel: MasterSpeciesSearchProviding, MasterMoveSearc
         do {
             let detail = try await master.species(key: species.key)
             guard let index = currentTarget(ofSlot: slot), metaToken(slot) == token else { return }
+            megaInfo[detail.key] = MegaSpeciesInfo(detail: detail)
             updateMeta(slot) { $0.abilityOptions = detail.abilities }
+            let nextLock = MegaItemLock.make(for: megaInfo[detail.key], allItems: itemOptions)
             update(index) { draft in
+                // メガ種族ならストーンに固定、メガ以外に変えたら未選択に戻す(ADR-0509 §4)。
+                draft.itemId = MegaItemLock.itemIdAfterSpeciesChange(
+                    previous: previousLock, next: nextLock, currentItemId: draft.itemId)
                 if let ability = draft.abilityId, !detail.abilities.contains(where: { $0.id == ability }) {
                     draft.abilityId = nil
                 }
@@ -320,6 +328,7 @@ public final class JudgeViewModel: MasterSpeciesSearchProviding, MasterMoveSearc
     }
 
     public func setItem(_ itemId: String?, for target: JudgeTarget) {
+        guard !itemLock(for: target).disablesItemField else { return }
         update(target) { $0.itemId = itemId }
     }
 
@@ -445,9 +454,17 @@ public final class JudgeViewModel: MasterSpeciesSearchProviding, MasterMoveSearc
         guard let detail = try? await master.species(key: individual.speciesKey) else { return }
         guard metaToken(slot) == token else { return }
         speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+        megaInfo[detail.key] = MegaSpeciesInfo(detail: detail)
         updateMeta(slot) { meta in
             meta.speciesName = detail.nameJa
             meta.abilityOptions = detail.abilities
+        }
+        // 呼び出した個体がメガなら持ち物をストーンに固定する(ADR-0509 §4)。
+        if let index = currentTarget(ofSlot: slot) {
+            let nextLock = MegaItemLock.make(for: megaInfo[detail.key], allItems: itemOptions)
+            update(index) { draft in
+                draft.itemId = MegaItemLock.itemIdAfterSpeciesChange(previous: .none, next: nextLock, currentItemId: draft.itemId)
+            }
         }
     }
 
@@ -494,7 +511,8 @@ public final class JudgeViewModel: MasterSpeciesSearchProviding, MasterMoveSearc
         let generation = submitGeneration
         let species = speciesDictionary
         let names = UnsupportedMarkNames(
-            moves: Array(moveDictionary.values), items: itemOptions,
+            moves: Array(moveDictionary.values),
+            items: ItemDisplayName.displayItems(itemOptions, megaStoneNames: megaStoneNames),
             abilities: ([attackerMeta] + candidateMetas).flatMap(\.abilityOptions))
         submitTask = submitRunner.schedule(debounce: .zero) { [self] in
             await perform(request, generation: generation, species: species, names: names)
@@ -604,5 +622,38 @@ public final class JudgeViewModel: MasterSpeciesSearchProviding, MasterMoveSearc
         return JudgeIndividual(
             speciesKey: speciesKey, natureId: natureId, sp: draft.sp,
             ranks: draft.ranks == RankBlock() ? nil : draft.ranks, abilityId: draft.abilityId, itemId: draft.itemId)
+    }
+}
+
+// MARK: - 持ち物の役割・メガ固定(ADR-0509)
+
+extension JudgeViewModel {
+    /// 自分・候補の持ち物の選択肢(`.either`。判定は攻守の両方をするため)。
+    public var selectableItemOptions: [Item] {
+        ItemRoleFilter.options(itemOptions, for: .either)
+    }
+
+    /// `target` の選択肢(`selectableItemOptions` + そのいまの持ち物を残す)。
+    public func selectableItemOptions(for target: JudgeTarget) -> [Item] {
+        ItemRoleFilter.options(itemOptions, for: .either, keeping: draft(for: target)?.itemId)
+    }
+
+    public func itemLock(for target: JudgeTarget) -> MegaItemLock {
+        guard let key = draft(for: target)?.speciesKey else { return .none }
+        return MegaItemLock.make(for: megaInfo[key], allItems: itemOptions)
+    }
+
+    public func itemLabel(for itemId: String?) -> String {
+        ItemDisplayName.text(itemId: itemId, items: itemOptions, megaStoneNames: megaStoneNames)
+    }
+
+    private var megaStoneNames: [String: String] {
+        var names: [String: String] = [:]
+        for info in megaInfo.values {
+            if case .locked(let itemId, let displayName) = MegaItemLock.make(for: info, allItems: itemOptions) {
+                names[itemId] = displayName
+            }
+        }
+        return names
     }
 }
