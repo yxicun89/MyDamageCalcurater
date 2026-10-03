@@ -46,6 +46,7 @@ func (g *gateway) serveImage(c *echo.Context, origin string, allowed bool) error
 	if allowed {
 		setCORSAllowed(h, origin)
 	}
+	addVaryOrigin(h)
 	h.Set("Content-Type", contentType)
 	h.Set("Cache-Control", cache)
 	h.Set("X-Content-Type-Options", "nosniff")
@@ -87,6 +88,11 @@ func (g *gateway) openImage(rel string) (f *os.File, contentType, cache string, 
 		return nil, "", "", false
 	}
 	if inside, err := filepath.Rel(realRoot, real); err != nil || inside == ".." || strings.HasPrefix(inside, ".."+string(filepath.Separator)) {
+		return nil, "", "", false
+	}
+	// 実体側も再検査する(シンボリックリンク先が許可外の名前・ドットファイルなら拒否)。
+	base := filepath.Base(real)
+	if strings.HasPrefix(base, ".") || (base != imagesManifestName && !strings.HasSuffix(base, imagesWebPExt)) {
 		return nil, "", "", false
 	}
 	file, err := os.Open(real)

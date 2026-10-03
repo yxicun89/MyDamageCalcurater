@@ -21,18 +21,6 @@ make dev
 別のターミナルで、確認: `curl -s http://localhost:8080/images/manifest.json` が変換した画像のキーを含む JSON を返す。
 `dist/manifest.json` が無いときは `/images/*` は 404(画像なし)。
 
-## 3. k3d で見る(手動。make up には組み込まれていない)
+## 3. k3d
 
-local overlay の gateway には画像ディレクトリが無く、`/images/*` は 404 のまま全機能が動く。見たいときだけ、次をその場限りで行う
-(k3d の volume mount は make up を壊すので恒久配線は別タスク)。
-
-```sh
-cd "$(git rev-parse --show-toplevel)"
-kubectl -n pokecalc set env deploy/gateway GATEWAY_IMAGES_DIR=/tmp/images
-kubectl -n pokecalc rollout status deploy/gateway
-kubectl -n pokecalc cp data/generated/images/dist "$(kubectl -n pokecalc get pod -l app.kubernetes.io/name=gateway -o name | head -1 | cut -d/ -f2)":/tmp/images
-```
-確認: `curl -s http://localhost:8080/images/manifest.json` が JSON を返す。Pod が作り直されたら `kubectl cp` をやり直す(Pod の一時領域のため)。
-`set env` は GitOps の差分になるので、終わったら `kubectl -n pokecalc set env deploy/gateway GATEWAY_IMAGES_DIR-` で戻す。
-
-注意: `kubectl cp` は Pod に `tar` が要る。gateway のイメージに無い場合はこの手順は使えない(未検証。恒久配線の別タスクで volume mount を検討する)。
+k3d では現状は画像を出せない(gateway イメージは `FROM scratch` で `kubectl cp` できず、読み取り専用ファイルシステムで、Argo CD の selfHeal が `set env` を戻す)。`/images/*` は 404 のまま全機能が動く。恒久配線(volume mount)は別タスク。

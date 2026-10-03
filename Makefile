@@ -59,7 +59,7 @@ test-services: ## services のユニットテスト
 test-tools:
 	@cd tools && $(GO) test ./...
 	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs tools/importer/prune.test.mjs tools/importer/integrity.test.mjs tools/importer/fetch-integrity.test.mjs tools/importer/fetch-snapshot-shape.test.mjs
-	@cd tools/assets && npm ci --silent
+	@[ -d tools/assets/node_modules ] || (cd tools/assets && npm ci --silent)
 	@node --test tools/assets/convert.test.mjs
 
 .PHONY: test-scripts
@@ -342,7 +342,8 @@ k8s-render-kubectl:
 
 .PHONY: assets
 assets: ## 手元の画像(data/generated/images/src)を WebP 2サイズ + manifest に変換する(画像なしでも成功。ADR-0807。ASSETS_SRC・ASSETS_OUT で場所を変更)
-	@cd tools/assets && npm ci --silent && node convert.mjs
+	@[ -d tools/assets/node_modules ] || (cd tools/assets && npm ci --silent)
+	@cd tools/assets && node convert.mjs
 
 ## --- 公開前の検査 -----------------------------------------------------
 .PHONY: check-publishable

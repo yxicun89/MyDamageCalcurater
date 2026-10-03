@@ -258,6 +258,27 @@ describe('convertImages: 画像が無い・壊れている(AC-A3・A4)', () => {
     assert.deepEqual(listFiles(out).filter((f) => f !== 'manifest.json'), referenced.sort())
   })
 
+  it('同じキーの入力が複数(0445-000.png と .jpg)なら、どちらも duplicate_key でスキップし、出力に残さない', async () => {
+    const { src, out } = workdir()
+    writeFileSync(join(src, '0445-000.png'), fakePng(64, 64))
+    writeFileSync(join(src, '0445-000.jpg'), fakePng(64, 64, 1))
+    writeFileSync(join(src, '0001-000.png'), fakePng(64, 64))
+    const result = await convertImages({ srcDir: src, outDir: out, ...quiet })
+    assert.deepEqual(result.converted, ['0001-000'])
+    const reasons = Object.fromEntries(result.skipped.map((s) => [s.file, s.reason]))
+    assert.equal(reasons['0445-000.png'], 'duplicate_key')
+    assert.equal(reasons['0445-000.jpg'], 'duplicate_key')
+    assert.ok(listFiles(out).every((f) => !f.includes('0445-000')))
+  })
+
+  it('thumb/ 配下の利用者ディレクトリは消さない', async () => {
+    const { src, out } = workdir()
+    mkdirSync(join(out, 'thumb', 'mine'), { recursive: true })
+    writeFileSync(join(out, 'thumb', 'mine', 'keep.txt'), 'x')
+    await convertImages({ srcDir: src, outDir: out, ...quiet })
+    assert.ok(listFiles(out).includes('thumb/mine/keep.txt'))
+  })
+
   it('スキップの警告を log に出す(黙って落とさない)', async () => {
     const { src, out } = workdir()
     writeFileSync(join(src, 'bad.png'), fakePng(8, 8))

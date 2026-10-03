@@ -48,24 +48,25 @@ const hash8 = (buf) => createHash('sha256').update(buf).digest('hex').slice(0, 8
 async function listInputs(srcDir) {
   try {
     const entries = await readdir(srcDir, { withFileTypes: true })
-    return entries.filter((e) => e.isFile()).map((e) => e.name).sort()
+    return entries.filter((e) => e.isFile() || e.isSymbolicLink()).map((e) => ({ name: e.name, link: e.isSymbolicLink() })).sort((a, b) => (a.name < b.name ? -1 : 1))
   } catch (err) {
     if (err.code === 'ENOENT') return []
     throw err
   }
 }
 
-/** thumb/・detail/ のうち、今回の manifest が参照しないファイルを消す(入力から消した画像・古い hash)。 */
+/** thumb/・detail/ のうち、今回の manifest が参照しないファイルだけを消す(入力から消した画像・古い hash)。ディレクトリには触らない。 */
 async function removeStale(outDir, keep) {
   for (const { name } of SIZES) {
-    let files = []
+    let entries = []
     try {
-      files = await readdir(join(outDir, name))
+      entries = await readdir(join(outDir, name), { withFileTypes: true })
     } catch (err) {
       if (err.code !== 'ENOENT') throw err
     }
-    for (const f of files) {
-      if (!keep.has(`${name}/${f}`)) await rm(join(outDir, name, f), { recursive: true, force: true })
+    for (const e of entries) {
+      if (e.isDirectory() || keep.has(`${name}/${e.name}`)) continue
+      await rm(join(outDir, name, e.name), { force: true })
     }
   }
 }
@@ -85,14 +86,32 @@ export async function convertImages({ srcDir = DEFAULT_SRC_DIR, outDir = DEFAULT
     log(`警告: ${file} をスキップした (${reason})`)
   }
 
-  for (const file of await listInputs(srcDir)) {
+  // キーごとの入力ファイル。同じキーが複数あるとどれが正か決められないので、すべてスキップする。
+  const byKey = new Map()
+  for (const { name: file, link } of await listInputs(srcDir)) {
     const ext = extname(file)
-    if (!INPUT_EXTS.has(ext.toLowerCase())) continue
+    if (!INPUT_EXTS.has(ext.toLowerCase())) {
+      log(`注意: ${file} は対象外の拡張子なので無視した`)
+      continue
+    }
+    if (link) {
+      skip(file, 'symlink')
+      continue
+    }
     const key = file.slice(0, -ext.length)
     if (!KEY_PATTERN.test(key)) {
       skip(file, 'invalid_key')
       continue
     }
+    byKey.set(key, [...(byKey.get(key) ?? []), file])
+  }
+
+  for (const [key, files] of byKey) {
+    if (files.length > 1) {
+      for (const f of files) skip(f, 'duplicate_key')
+      continue
+    }
+    const file = files[0]
     try {
       const input = await readFile(join(srcDir, file))
       if (input.length === 0) throw new Error('empty')
@@ -116,16 +135,17 @@ export async function convertImages({ srcDir = DEFAULT_SRC_DIR, outDir = DEFAULT
   const sorted = Object.fromEntries(Object.keys(images).sort().map((k) => [k, images[k]]))
   const manifest = `${JSON.stringify({ version: 1, images: sorted }, null, 2)}\n`
 
+  // 順序: 新ファイルを書く → manifest を rename で差し替える → 古いファイルを消す。
+  // どの時点で止まっても、manifest(旧か新)が参照するファイルは必ず存在する(旧ファイルは差し替え後まで残す)。
   await mkdir(outDir, { recursive: true })
-  await removeStale(outDir, new Set(outputs.keys()))
   for (const [rel, buf] of outputs) {
     await mkdir(join(outDir, dirname(rel)), { recursive: true })
     await writeFile(join(outDir, rel), buf)
   }
-  // manifest は最後に原子的に置く(途中で止まっても、参照先が揃っている旧 manifest か新 manifest のどちらか)。
   const tmp = join(outDir, 'manifest.json.tmp')
   await writeFile(tmp, manifest)
   await rename(tmp, join(outDir, 'manifest.json'))
+  await removeStale(outDir, new Set(outputs.keys()))
 
   converted.sort()
   return { converted, skipped }

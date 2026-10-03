@@ -45,11 +45,11 @@ Web・iOS にはタイプ色のエンブレムがすでにあり、画像が無�
 
 ## 実装時の追記(2026-10-03。P8-1b)
 - **実装**: 変換は `tools/assets/convert.mjs`(sharp 0.35.5 固定)。容量上限は品質を 85→15 に下げながら再エンコードして守り、収まらなければ `invalid_image` でスキップする。
-  出力は manifest を最後に原子的に置き、thumb/・detail/ の古い hash や入力から消した画像のファイルは消す(それ以外のファイルには触らない)。
+  書き込みの順序は「新ファイルを書く → manifest を rename で差し替える → 古いファイルを消す」。止まっても manifest が参照するファイルは存在する。消すのは thumb/・detail/ 直下の未参照ファイルだけ(ディレクトリ・それ以外には触らない)。同じキーの入力が複数あるときはどちらも `duplicate_key` でスキップし、入力のシンボリックリンクは `symlink` でスキップする。
   gateway は `internal/httpapi/images.go`(`Config.ImagesDir`・`GATEWAY_IMAGES_DIR`)。ハッシュ付き(`.{hash8}.webp`)でない WebP は immutable にせず `no-cache` にする。
 - **`make assets` の検査の置換**: `scripts/make-targets_test.sh` の「make assets は非0」は、スタブ(終了コード 2)が成功と数えられないための検査だった。
   実装後は「画像なしの一時ディレクトリ(`ASSETS_SRC`・`ASSETS_OUT`)で終了コード 0 になり空の manifest を書く」に置き換える(AC-A6)。検査を緩めたのではなく、守る対象が「未実装を成功と数えない」から「画像なしでも壊れない」に変わった。
 - **`make dev`**: `data/generated/images/dist/manifest.json` があるときだけ `GATEWAY_IMAGES_DIR` を渡す(`DEV_IMAGES_DIR` で変更可)。無ければ画像なし。
 - **k3d は未対応**: local overlay の gateway に hostPath を足すには k3d クラスタ作成時の volume mount が要り、`make up` の既存クラスタ・手順を壊す。
-  今回は何も足さず(画像なしで全機能が動く)、k3d で画像を出す手順だけ `docs/runbooks/images.md` に書く。配線は別タスク。
+  今回は何も足さず(画像なしで全機能が動く)、k3d では現状画像を出せないことだけ `docs/runbooks/images.md` に書く(gateway イメージは `FROM scratch`・読み取り専用で `kubectl cp` 不可、Argo CD の selfHeal が `set env` を戻す)。配線は別タスク。
 - `make test-tools` は `tools/assets` で `npm ci` してからテストを走らせる(sharp が必要)。
