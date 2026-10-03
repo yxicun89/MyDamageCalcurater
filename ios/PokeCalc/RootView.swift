@@ -90,6 +90,7 @@ struct RootView: View {
                         }
                         .buttonStyle(PillButtonStyle())
                         .accessibilityIdentifier("openAdjustScreen")
+
                         NavigationLink(value: BalanceScreenRoute()) {
                             Text("タイプバランス")
                         }
@@ -217,6 +218,7 @@ private struct TeamListScreenRoute: Hashable {}
 
 /// `NavigationPath` に積む調整画面の行き先(値だけで、状態は持たない。ADR-0502)。
 private struct AdjustScreenRoute: Hashable {}
+
 /// `NavigationPath` に積むタイプバランス画面の行き先(値だけで、状態は持たない。P6-21)。
 private struct BalanceScreenRoute: Hashable {}
 
@@ -227,8 +229,8 @@ private struct AboutScreenRoute: Hashable {}
     if let mock = try? MockPokeCalcService(), let adjust = try? MockAdjustService() {
         RootView(
             environment: .ready(
-                service: mock, deviceData: MockDeviceDataService(), backendDescription: "モックデータで動作中",
-                adjust: adjust, balance: UnavailableBalanceService()))
+                service: mock, deviceData: MockDeviceDataService(), backendDescription: "モックデータで動作中", adjust: adjust,
+                balance: UnavailableBalanceService()))
     } else {
         Text("プレビュー用モックの読み込みに失敗")
     }

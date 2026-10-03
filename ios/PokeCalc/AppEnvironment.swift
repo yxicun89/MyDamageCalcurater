@@ -7,8 +7,8 @@ import PokeCalcCore
 /// 決める。設定が壊れているときは画面にエラーを出す(クラッシュしない。coding-rules §2)。
 enum AppEnvironment {
     case ready(
-        service: any PokeCalcService, deviceData: any DeviceDataService, backendDescription: String,
-        adjust: any AdjustService, balance: any BalanceService
+        service: any PokeCalcService, deviceData: any DeviceDataService, backendDescription: String, adjust: any AdjustService,
+        balance: any BalanceService
     )
     case configurationError(String)
 
@@ -28,8 +28,8 @@ enum AppEnvironment {
                 let adjust = try MockAdjustService()
                 // タイプバランスはモックを持たない(架空の相性表を作らない。ADR-0415 §4)。
                 return .ready(
-                    service: service, deviceData: deviceData, backendDescription: "モックデータで動作中",
-                    adjust: adjust, balance: UnavailableBalanceService())
+                    service: service, deviceData: deviceData, backendDescription: "モックデータで動作中", adjust: adjust,
+                    balance: UnavailableBalanceService())
             case .api(let url):
                 let identity = ClientIdentity(defaults: .standard)
                 let service = APIPokeCalcService(baseURL: url, identity: identity)
