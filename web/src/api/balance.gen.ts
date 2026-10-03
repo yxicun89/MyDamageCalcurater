@@ -183,6 +183,11 @@ export interface components {
     Health: {
       /** @enum {string} */
       status: "ok";
+      /**
+       * @description Version of the read model this process loaded (metadata.json next to the read model, ADR-0138).
+       *     Omitted when the read model has no metadata.json (unknown). Public master data version only.
+       */
+      dataVersion?: string;
     };
     AnalyzeRequest: {
       members: components["schemas"]["AnalyzeRequestMember"][];

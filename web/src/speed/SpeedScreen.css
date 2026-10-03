@@ -104,6 +104,14 @@
   border-radius: var(--radius-pill);
 }
 
+/* ポケモン画像(ADR-0325)。エンブレムと同じ寸法。 */
+.speed-entry__image {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  object-fit: contain;
+}
+
 .speed-entry__preset {
   color: var(--text-secondary);
   font-size: var(--font-size-caption);

@@ -12,11 +12,12 @@ repo_dir="$(cd "$ios_dir/.." && pwd)"
 source "$script_dir/xcode-env.sh"
 
 readonly tool_dir="$ios_dir/tools/openapi-gen"
-# 生成対象は「名前|仕様|設定|出力先」の組(ADR-0415。balance は schema 名が衝突するので別モジュール)。
+# 生成対象は「名前|仕様|設定|出力先」の組(ADR-0415。balance は schema 名が衝突するので別モジュール。素早さ・判定も同様。ADR-0503・0504)。
 readonly targets=(
   "PokeCalcAPI|$repo_dir/api/openapi.yaml|$tool_dir/openapi-generator-config.yaml|$ios_dir/PokeCalcKit/Sources/PokeCalcAPI/Generated"
   "PokeCalcBalanceAPI|$repo_dir/services/balance/api/openapi.yaml|$tool_dir/openapi-generator-balance-config.yaml|$ios_dir/PokeCalcKit/Sources/PokeCalcBalanceAPI/Generated"
   "PokeCalcSpeedAPI|$repo_dir/services/speed/api/openapi.yaml|$tool_dir/openapi-generator-config.speed.yaml|$ios_dir/PokeCalcKit/Sources/PokeCalcSpeedAPI/Generated"
+  "PokeCalcJudgeAPI|$repo_dir/services/judge/api/openapi.yaml|$tool_dir/openapi-generator-config.judge.yaml|$ios_dir/PokeCalcKit/Sources/PokeCalcJudgeAPI/Generated"
 )
 
 mode="write"

@@ -242,6 +242,19 @@ extension Components {
                 ///
                 /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2/learnset`.
                 public var learnset: [Swift.String]?
+                /// メガシンカ前の種族キー(ADR-0175)。メガでなければ null。pokedex-svc は null でもキーを常に返す
+                /// (`requiredItemId` と同じ扱い)。古いサーバーは返さないため、クライアントは省略も null も「不明」と読む。
+                ///
+                ///
+                /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2/baseSpeciesKey`.
+                public var baseSpeciesKey: Swift.String?
+                /// メガシンカ前の種族の日本語名(ADR-0175)。メガでなければ null。pokedex-svc は null でもキーを常に返す。
+                /// メガ種族の持ち物を固定したときの表示「<基本種名>のメガストーン」に使う(メガストーンの日本語名は生成しない。ADR-0324 §2)。
+                /// null・省略のときクライアントは名前を推測せず、基本種名を含まない文言にする。
+                ///
+                ///
+                /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2/baseSpeciesNameJa`.
+                public var baseSpeciesNameJa: Swift.String?
                 /// メガシンカ後の種族か(docs/mega-evolution-spec.md。issue 515)。pokedex-svc は常に返す。
                 /// 古いサーバーは返さないため、省略は「メガではない」と同じ扱い(クライアントの互換のため required にしていない)。
                 ///
@@ -261,18 +274,24 @@ extension Components {
                 ///   - baseStats:
                 ///   - abilities:
                 ///   - learnset: 覚える技の ID 一覧
+                ///   - baseSpeciesKey: メガシンカ前の種族キー(ADR-0175)。メガでなければ null。pokedex-svc は null でもキーを常に返す
+                ///   - baseSpeciesNameJa: メガシンカ前の種族の日本語名(ADR-0175)。メガでなければ null。pokedex-svc は null でもキーを常に返す。
                 ///   - isMega: メガシンカ後の種族か(docs/mega-evolution-spec.md。issue 515)。pokedex-svc は常に返す。
                 ///   - requiredItemId: メガシンカに要る持ち物(メガストーン)の ID。メガでなければ null。pokedex-svc は null でもキーを常に返す
                 public init(
                     baseStats: Components.Schemas.StatBlock,
                     abilities: [Components.Schemas.Ability],
                     learnset: [Swift.String]? = nil,
+                    baseSpeciesKey: Swift.String? = nil,
+                    baseSpeciesNameJa: Swift.String? = nil,
                     isMega: Swift.Bool? = nil,
                     requiredItemId: Swift.String? = nil
                 ) {
                     self.baseStats = baseStats
                     self.abilities = abilities
                     self.learnset = learnset
+                    self.baseSpeciesKey = baseSpeciesKey
+                    self.baseSpeciesNameJa = baseSpeciesNameJa
                     self.isMega = isMega
                     self.requiredItemId = requiredItemId
                 }
@@ -280,6 +299,8 @@ extension Components {
                     case baseStats
                     case abilities
                     case learnset
+                    case baseSpeciesKey
+                    case baseSpeciesNameJa
                     case isMega
                     case requiredItemId
                 }
@@ -576,26 +597,57 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Item/effect`.
             public var effect: Components.Schemas.Item.EffectPayload?
+            /// ダメージ計算での役割(ADR-0175 §1)。`attacker` は攻撃側で持つとダメージが変わる(または未対応の印が付く)持ち物、
+            /// `defender` は防御側で持つとダメージが変わる持ち物。両方なら両方(並びは attacker → defender)。
+            /// 効果を持たない持ち物とメガストーンは空配列。pokedex-svc は効果データから導いて常に返す(空配列可)。
+            /// クライアントはその側の役割を含む持ち物だけを選択肢にする(効果データから再導出しない)。
+            /// 古いサーバー・古いキャッシュは返さないため、省略は「役割が不明(絞らない)」と読む。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/roles`.
+            public var roles: [Components.Schemas.ItemRole]?
+            /// メガストーンか(ADR-0175 §2)。いずれかのメガ種族の `requiredItemId` に現れる持ち物が true。
+            /// 使用可能集合で絞らずに判定する。pokedex-svc は常に返す。メガストーンの `roles` は常に空配列。
+            /// 古いサーバーは返さないため、省略は「不明」と読む。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/isMegaStone`.
+            public var isMegaStone: Swift.Bool?
             /// Creates a new `Item`.
             ///
             /// - Parameters:
             ///   - id:
             ///   - nameJa:
             ///   - effect: 持ち物の効果定義(item_effects の JSON。`getMasterExport` の `MasterItem.effect` と同じ値・同じ形。
+            ///   - roles: ダメージ計算での役割(ADR-0175 §1)。`attacker` は攻撃側で持つとダメージが変わる(または未対応の印が付く)持ち物、
+            ///   - isMegaStone: メガストーンか(ADR-0175 §2)。いずれかのメガ種族の `requiredItemId` に現れる持ち物が true。
             public init(
                 id: Swift.String,
                 nameJa: Swift.String,
-                effect: Components.Schemas.Item.EffectPayload? = nil
+                effect: Components.Schemas.Item.EffectPayload? = nil,
+                roles: [Components.Schemas.ItemRole]? = nil,
+                isMegaStone: Swift.Bool? = nil
             ) {
                 self.id = id
                 self.nameJa = nameJa
                 self.effect = effect
+                self.roles = roles
+                self.isMegaStone = isMegaStone
             }
             public enum CodingKeys: String, CodingKey {
                 case id
                 case nameJa
                 case effect
+                case roles
+                case isMegaStone
             }
+        }
+        /// 持ち物のダメージ計算での役割(ADR-0175)
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemRole`.
+        @frozen public enum ItemRole: String, Codable, Hashable, Sendable, CaseIterable {
+            case attacker = "attacker"
+            case defender = "defender"
         }
         /// - Remark: Generated from `#/components/schemas/Nature`.
         public struct Nature: Codable, Hashable, Sendable {

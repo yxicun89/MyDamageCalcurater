@@ -153,8 +153,9 @@ export interface paths {
     /**
      * 持ち物を日本語名で前方一致検索
      * @description 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
-     *     各持ち物は効果を持てば `effect` を伴う(ADR-0218)。効果を持つ持ち物だけに絞る検索条件は無い
-     *     (クライアントが `effect` の有無で絞る)。
+     *     各持ち物は効果を持てば `effect` を伴う(ADR-0218)。各持ち物は計算での役割 `roles` とメガストーンかどうか
+     *     `isMegaStone` を常に伴う(ADR-0175)。役割で絞る検索条件は無い(クライアントが `roles` で絞る。
+     *     オフラインのキャッシュでも同じ式で絞れるようにするため)。
      */
     get: operations["searchItems"];
     put?: never;
@@ -677,6 +678,17 @@ export interface components {
       /** @description 覚える技の ID 一覧 */
       learnset?: string[];
       /**
+       * @description メガシンカ前の種族キー(ADR-0175)。メガでなければ null。pokedex-svc は null でもキーを常に返す
+       *     (`requiredItemId` と同じ扱い)。古いサーバーは返さないため、クライアントは省略も null も「不明」と読む。
+       */
+      baseSpeciesKey?: string | null;
+      /**
+       * @description メガシンカ前の種族の日本語名(ADR-0175)。メガでなければ null。pokedex-svc は null でもキーを常に返す。
+       *     メガ種族の持ち物を固定したときの表示「<基本種名>のメガストーン」に使う(メガストーンの日本語名は生成しない。ADR-0324 §2)。
+       *     null・省略のときクライアントは名前を推測せず、基本種名を含まない文言にする。
+       */
+      baseSpeciesNameJa?: string | null;
+      /**
        * @description メガシンカ後の種族か(docs/mega-evolution-spec.md。issue 515)。pokedex-svc は常に返す。
        *     古いサーバーは返さないため、省略は「メガではない」と同じ扱い(クライアントの互換のため required にしていない)。
        */
@@ -753,7 +765,26 @@ export interface components {
        *     検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。
        */
       effect?: components["schemas"]["MasterEffect"];
+      /**
+       * @description ダメージ計算での役割(ADR-0175 §1)。`attacker` は攻撃側で持つとダメージが変わる(または未対応の印が付く)持ち物、
+       *     `defender` は防御側で持つとダメージが変わる持ち物。両方なら両方(並びは attacker → defender)。
+       *     効果を持たない持ち物とメガストーンは空配列。pokedex-svc は効果データから導いて常に返す(空配列可)。
+       *     クライアントはその側の役割を含む持ち物だけを選択肢にする(効果データから再導出しない)。
+       *     古いサーバー・古いキャッシュは返さないため、省略は「役割が不明(絞らない)」と読む。
+       */
+      roles?: components["schemas"]["ItemRole"][];
+      /**
+       * @description メガストーンか(ADR-0175 §2)。いずれかのメガ種族の `requiredItemId` に現れる持ち物が true。
+       *     使用可能集合で絞らずに判定する。pokedex-svc は常に返す。メガストーンの `roles` は常に空配列。
+       *     古いサーバーは返さないため、省略は「不明」と読む。
+       */
+      isMegaStone?: boolean;
     };
+    /**
+     * @description 持ち物のダメージ計算での役割(ADR-0175)
+     * @enum {string}
+     */
+    ItemRole: "attacker" | "defender";
     Nature: {
       /** @example adamant */
       id: string;

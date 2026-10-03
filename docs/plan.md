@@ -121,7 +121,7 @@
 - [x] issue #218
 - [x] 画面レジストリ化(ユーザー決定 2026-10-03。ADR-0323): 画面・タブを足すとき `App.tsx`・`app/screens.tsx`・`app/routes.ts`・`i18n/ja.ts` を編集しない構造にした(登録ファイル `*.screen.tsx`・クライアントは `createClient`・文言は `i18n/<レーン>.ts`)。既存の挙動・テストの期待値は不変
 - [x] issue #271 / issue #270
-- [ ] 判定画面(JD5 `JudgeScreen`)の「未対応」の印への追従(issue #271 / #270 の判定レーン分。**上の
+- [x] 判定画面(JD5 `JudgeScreen`)の「未対応」の印への追従(issue #271 / #270 の判定レーン分。**上の
   Web レーンの PR の対象外**)。judge の契約は計算・逆算と別の形(`attackerKoUnsupported` /
   `defenderKoUnsupported`。ADR-0708 §1・`web/src/judge/judge.gen.ts`)なので、別タスクとして進める。
   文言(`unsupportedText`)と表示の作法(色だけに頼らない・`role="status"` の案内)は上のものを再利用する。
@@ -140,19 +140,24 @@
 - [x] P5-3b record-svc の残作業(実装: ADR-0220。base/record・gateway 配線・`record expire` と CronJob・NetworkPolicy・/metrics)(P5-3 の critic レビューより。2026-09-25): (1) `deploy/k8s/base/record` に Deployment・Service を追加し `GATEWAY_RECORD_URL` を配線、k3d で `/api/record/*` が届く(`scripts/up.sh` のイメージビルド対象に `record` の `server` を追加)。(2) ADR-0209 §4 の失効ジョブ(日次 CronJob。生イベント90日・お気に入り540日・devices 行30日・purge journal 90日。冪等・1回の上限あり)。team 側の同等ジョブも合わせて検討
 - [x] P5-4 team-svc
 - [x] P5-4b team-svc の残作業(実装: ADR-0220。P5-3b と同じ形)(P5-3b と対): (1) `deploy/k8s/base/team` に Deployment・Service を追加し `GATEWAY_TEAM_URL` を配線、k3d で `/api/team/*` が届く(`scripts/up.sh` に `team` を追加)。(2) ADR-0209 §4 の失効ジョブ(構築540日・devices 行30日・purge journal 90日を `TEAM_*` 環境変数で判定。冪等・1回の上限あり)。P5-3b と同じ形なので一緒に実装してよい
-- [ ] P5-5 【担当: Web レーン。M2 の必須】 Web: 履歴・よく計算する相手・構築ビルダー(Showdown 形式のインポート/エクスポートを含む。requirements.md §2・ADR-0213 §4。ADR-0209 §8 の文言と「この端末のデータを削除」の UI を含む)。PR 単位に分割(Web レーン)。Showdown 形式の変換部は判定レーンが `web/src/team/showdownFormat.ts` で担当
+- [x] P5-5 【担当: Web レーン。M2 の必須】 Web: 履歴・よく計算する相手・構築ビルダー(Showdown 形式のインポート/エクスポートを含む。requirements.md §2・ADR-0213 §4。ADR-0209 §8 の文言と「この端末のデータを削除」の UI を含む)。PR 単位に分割(Web レーン)。Showdown 形式の変換部は判定レーンが `web/src/team/showdownFormat.ts` で担当
   - [x] **P5-5a 構築ビルダーの骨格(PR-A1。2026-09-26)**: 構築の一覧・新規作成(名前だけ)・名前変更・削除。ADR-0309。詳細は plan-archive.md。
   - [x] **P5-5b メンバー編集(PR-A2)**: 6体の枠と個体(種族検索・技・持ち物・特性・性格・SP のグリッド・テラスタイプ)。
     マスタ(種族・技・持ち物・特性の名前解決)を使うのはここから。実装: `web/src/team/` の `TeamMemberEditor`・`TeamMemberFields`・
     `teamMember`(純粋関数)・`teamMemberOptions`。update 全置換・応答待ち・失敗時は下書き保持・SP は明示エラー。ADR-0316。
     Web: vitest 全件・typecheck・lint と e2e(`web/e2e/team.spec.ts`)
   - [x] Showdown 形式の変換部(判定レーン。`web/src/team/showdownFormat.ts`。ADR-0310。画面への配線は P5-5b 側)
-  - [ ] **P5-5c 履歴・よく計算する相手・端末データの削除(PR-A3 以降)**: record-svc の API と ADR-0209 §8 の文言
+  - [x] **P5-5c よく計算する相手(完了。ADR-0317)**: 計算結果の下のチップ。**履歴一覧は record-svc に取得 API が無いため対象外**(API が入ったら別タスク)。端末データの削除は P5-5d
   - [x] **P5-5d 端末データの削除(Web。issue #103 の Web 分。ADR-0318)**: 情報ページの「データの扱い」節に説明(ADR-0209 §8)と
     「この端末のデータを削除」(アプリ内 alertdialog・初期フォーカス=キャンセル)。`recordClient`/`teamClient` の `deleteDeviceData`、
     手順は純粋関数 `deviceData/deleteDeviceData.ts`(record/team 独立・partial は対象ごと最大20回・通信エラーは自動再送せず再試行)。
     ローカルの端末 ID・設定は消さない(iOS と同じ)。team が消えたら構築一覧を取り直す(`reloadToken`)。
     `web` の vitest 1998件・typecheck・lint・`make web-e2e`(49件)・`make check-publishable` green
+  - [x] **P5-5e 構築ビルダーの Showdown 形式の取り込み・書き出し UI(ADR-0321)**: 取り込みは「内容を確認 → この内容で作成」の2段階(新しい構築だけ作る。
+    取り込めるメンバーが1体以上ならその分だけ作り、問題は日本語の一覧に出す)・メガの持ち物はストーンに補正して一覧に出す。書き出しは構築の行から読み取り専用 textarea+コピー
+    (クリップボードが使えなければ全選択して手動コピーを案内)。一覧の無いマスタ(オンライン・キャッシュ)は `masterSearch` で必要な種族だけ引いて名前引き用のマスタを作る
+    (`showdownMaster.ts`・`showdownImportPlan.ts`・`TeamShowdownImport/Export.tsx`・`i18n/team.ts` の `teamShowdownText`)。日本語名のみ(英語名は別 ADR)。変換部 `showdownFormat.ts` は不変。
+    `web` vitest 2659件・typecheck・lint・`make web-e2e`(65件)・`make web-e2e-online`・`make web-e2e-container`・`make check-publishable` green
 - [x] P5-6 技の追加効果
 
 - [x] issue #219(Web 配信にセキュリティヘッダが無い)
@@ -183,6 +188,7 @@
 
 - [x] P6-24 素早さ比較画面(iOS。ユーザー決定 2026-10-03〈DECISIONS.md〉。Web の `SpeedScreen` が参照実装、契約は `services/speed/api/openapi.yaml`〈gateway `/api/speed/*`〉。生成設定への取り込み方を spec で決める)
   - 完了(2026-10-03): 契約ごとに別ターゲットで生成(`PokeCalcSpeedAPI`。`openapi-gen.sh` を契約のループに拡張。P6-25・26 も同形で追加できる。ADR-0503)。`SpeedService` は `PokeCalcService` と別プロトコル。Web と同じ入力(preset・custom・raw・絞り込み・相手側追い風・トリックルーム)。`swift test` 689件・`make ios-test` 全件成功(XCUITest 69件)。critic PASS
+- [x] P6-25 判定画面(iOS。ユーザー決定 2026-10-03)。P6-24 と同じ多契約生成で `PokeCalcJudgeAPI`。`JudgeService` は `PokeCalcService` と別プロトコル。手入力+構築から呼び出し。サーバー応答のみ表示(勝ち負けに丸めない)。未対応の印は方向別に表示(ADR-0708)。`swift test` 819件・`make ios-test` 全件成功(XCUITest 89件)。critic PASS。ADR-0504
 
 - [x] P6-23 よく使う相手の候補(requirements.md §2「計算履歴から頻度×時間減衰で上位を表示」。`GET /api/record/frequent-opponents` を種族ピッカーの空クエリ時に「よく使う」として出す。頻度は calc-svc → NATS → record-svc が自動で貯める。取得失敗・空・未解決は黙って省き検索と計算を塞がない。受け入れ条件・判断は ADR-0501「P6-23」)
   - 完了(2026-10-02): 計算の防御側・逆算の相手の種族ピッカーの空クエリ時に「よく使う相手」を先頭に表示(limit 10・名前は `species(key:)` で同時4件まで解決・失敗/空/未解決は黙って省く)。`PokeCalcService` とは別プロトコル。`swift test` 610件・`make ios-test` 全件成功(XCUITest 60件。検索欄のクリアは削除キーで操作)。critic PASS
@@ -195,8 +201,6 @@
   解決できない行は黙って捨てず一覧で伝える。Web(`web/src/team`)の書式・文言と揃える。
   後続: 持ち物の書き出しは ID 引き API が無く `searchItems` 先頭ページ頼み(省いた分は件数で通知。ADR-0506)。`getItemsByIds` 相当ができたら置き換える。
   - 完了(2026-10-02): 日本語名の Showdown 風テキスト(ユーザー決定。実 Showdown 非互換。ADR-0506)。書き出し(コピー・共有)・貼り付け取り込み(取り込めなかった行を一覧し、取り込める分だけ追加)。`swift test` 633件・`make ios-test` 全件成功(XCUITest 61件)。critic PASS(指摘対応済み)
-- [ ] P6-24 素早さ比較画面(iOS。ユーザー決定 2026-10-03〈DECISIONS.md〉。Web の `SpeedScreen` が参照実装、契約は `services/speed/api/openapi.yaml`〈gateway `/api/speed/*`〉。生成設定への取り込み方を spec で決める)
-- [ ] P6-25 判定画面(iOS。契約は `services/judge/api/openapi.yaml`。P6-24 の取り込み方に揃える。判定の応答の `unsupported` の印も表示する)
 - [-] P6-26 タイプバランス画面(iOS)は**取り下げ**(2026-10-03 ユーザー決定)。タイプバランスレーンが P6-21(ADR-0415)として第1〜2段を main に実装済みで、重複する PR #512 を閉じた。第3段は P6-22(タイプバランスレーン)
 - [ ] お気に入り・計算履歴の iOS 表示(API レーンの契約追加待ち。DECISIONS.md 2026-10-03 で依頼済み)
 
@@ -213,6 +217,7 @@
 - [x] TB 整備(2026-09-22)
 - [x] TB 実データの配線
 - [x] TB6 技範囲チェッカー
+- [x] issue #108 のタイプバランス分(ADR-0138): balance・speed が read model と同じディレクトリの `metadata.json` から dataVersion を読み、起動ログと `/healthz` の任意の `dataVersion` に出す(欠落は版不明で起動継続、不正は起動エラー)。openapi は additive、web・iOS の生成物を更新。`check-master-version.sh` の healthz 参照への切替はデータレーン側
 - [x] Codexレビュー issue #105 対応
 - [x] 全体レビュー issue #263・#292 対応
 - [x] issue #298
@@ -305,6 +310,9 @@ requirements.md の項目のうち、計画に無かったものをここに置�
 - [x] P6-21 iOS のタイプバランス画面 第1段(チーム最大6体の防御相性表・チーム集計・日本語の倍率表示)+第2段(攻撃範囲 coverage)(ADR-0415。タイプバランスレーン〈iOS 実装〉。実施: `PokeCalcCore` に `BalanceDomainTypes`・`BalanceService`(+`UnavailableBalanceService`)・`APIBalanceService`・`BalanceLabels`・`BalanceViewModel`、`ios/PokeCalc` に `BalanceScreenView`・`BalanceMemberCard`・`BalanceResultViews`、`RootView` の入口・`AppEnvironment`〈`.api`→`APIBalanceService`、`.mock`→`UnavailableBalanceService`〉。gateway `/api/balance/*` 経由。マスタは既存の PokeCalcService を再利用しフォールバックしない。`swift test`〈macOS〉617件・アプリの simulator ビルド成功。**未実施・要人間確認**: シミュレータ/実機での見た目〈Dynamic Type 最大・ダークモード・色以外で弱点が分かること〉と XCTest/XCUITest のシミュレータ実行〈`make ios-test`〉、balance 0.8.0〈ADR-0413。PR #458〉が main に入った後の `make ios-gen` 再生成〈生成物は 0.7.0 のまま。エラー文言の写像は両コード対応済み〉、gateway 配線〈ADR-0414。PR #478〉後の実機 E2E)
 - [x] P6-22 iOS のタイプバランス画面 第3段(仮想敵 threats・おすすめタイプ recommendations・技範囲チェッカー move-range)(ADR-0415 §8。タイプバランスレーン〈iOS 実装〉。実施: `BalanceService` に `threats`・`recommendations`・`moveRange` を追加〈`UnavailableBalanceService`・`APIBalanceService`・テストの `StubBalanceService` も対応〉、`BalanceStage3Types`・`BalanceLabels`〈Web と同じ文言+技範囲の文言〉・`BalanceViewModel`〈機能ごとに独立した世代カウンタ・仮想敵最大6体はメンバーと同じカードを再利用・recommendations は専用の長い debounce+「再計算」ボタン・特性名は応答のポケモンから上限付きで引く〉、`ios/PokeCalc` に `BalanceThreatsView`・`BalanceRecommendationsView`・`BalanceMoveRangeView`。Web に画面が無い技範囲チェッカーは iOS で UI と文言を決めた。`swift test`〈macOS〉672件・アプリの simulator ビルド成功。**未実施・要人間確認**: P6-21 と同じ〈シミュレータ/実機での見た目:Dynamic Type 最大・ダークモード・色以外で分かること、`make ios-test` の XCTest/XCUITest 実行、balance 0.8.0 取り込み後の `make ios-gen`、gateway 配線後の実機 E2E〉。recommendations の overloaded 時の見た目と、技範囲の候補が先頭ページ+検索のみである点も人間確認)
 - [ ] P8-1 ポケモン画像の配信(任意。M1 の後。requirements.md「ポケモン画像」: MinIO・gateway の画像パス・`manifest.json`・`make assets`・無ければタイプ色のエンブレム。担当: 運用(deploy・scripts)+ API + Web。gateway の予約パス `/assets/*` は未設定で常に 404 なので `/images/` に移す〈issue #286 所見1〉。`make assets` は実装まで終了コード 2 のスタブ)
+  - [x] P8-1a 範囲確定・AC・失敗するテスト(2026-10-03。ADR-0807。MinIO は入れず、手元画像を `make assets` で WebP 128/512+manifest に変換し、gateway が `GATEWAY_IMAGES_DIR` から `/images/*` を配信。`/assets/*` は不変。テスト: `tools/assets/convert.test.mjs`・gateway `images_test.go`・`images_env_test.go`。いずれも実装前なので失敗する)
+  - [x] P8-1b 実装(2026-10-03): `tools/assets/convert.mjs`(+package.json・README)・`make assets`・gateway `/images/*`・`make dev` の配線。k3d への配線(volume mount)は `make up` を壊すため未対応(k3d では現状画像を出せない旨を docs/runbooks/images.md に記載。ADR-0807 追記)
+  - [x] P8-1c ポケモン画像の表示(Web 分。ADR-0325。担当: Web。manifest(`/images/manifest.json`、契約は ADR-0807)を起動時に1回取り、あれば `<img loading="lazy" alt="">`、無い・未取得・失敗・読み込み失敗はタイプ色エンブレム。`web/src/images/`〈`pokemonImages.ts`・`PokemonImagesContext.tsx`・`PokemonImage.tsx`〉、App の `imageFetch`、計算画面の攻撃側・防御側カードと素早さ画面の各行に適用、`vite.config.ts` の `IMAGES_PROXY_TARGET`。画像なしの現状で既存テスト・e2e が全て通る。判定画面・iOS は対象外)
 - 公開時の名称・画像の差し替え構造(requirements.md「知財」): **後回し**。公開のタイミング(R-2-9・LICENSE・issue #328。ブロッカー節)と同時に決める。画像は P8-1 でキー(`{図鑑番号4桁}-{フォルム3桁}`)による差し替え構造になる
 
 ## ブロッカー
@@ -490,7 +498,7 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
   触った分だけ `defenderOverride.ranks`(5項目)を要求に載せ(既定は従来とバイト同一)、API は特性(#272)と同じ `defenderOverride` に合成、
   WASM は素通し(特性は従来どおり `defenderAbilities`)。条件の置き場は `domain/calcConditions.ts`。防御側の状態異常は式に効かないので出さない。iOS は別レーン
   - [x] **P5-5c よく計算する相手(チップ。ADR-0317)**: recordClient(`web/src/record/`)・CalcScreen の結果の下のチップ(マウント時1回取得・失敗/0件は黙って非表示)・App はオンラインのときだけ接続・`SpeciesSearchField` に任意 prop `selectedName`。履歴一覧(API 無し)は対象外
-  - [ ] **P5-5d 端末データの削除 UI**: record-svc の API と ADR-0209 §8 の文言
 - [x] issue #288 のデータレーン分(ADR-0136): 技の対象(`moves.target`。Showdown の15種の文字列のまま・NULL 可・CHECK。migration 000010)を取得(fetch-showdown/fetch-calc)・照合(全体技の食い違いは攻撃技 Blocker)・投入・`master.MoveTarget`(`IsSpread`)まで。engine・WASM・read model は不変。`MasterMove`/公開 API への追加は API レーンへ依頼。取得物は毎回作り直す(古い形で止まらないことをテストで固定)
 - [x] issue #288 の API レーン分(ADR-0223): 内部 API `MasterMove.target`(必須キー・nullable・値は Showdown の文字列のまま)→ calc-svc の `buildMoves` → `master.Move` が `engine.Move.Target`(single/spread/不明は空)に写す。公開 `Move.target`(省略可・single/spread。NULL はキーごと省く・未知の値は 503)を getMove・getMovesByIds・searchMoves に追加。ダブルの `move_target_unknown` の印は対象が不明な技だけに付く。シングル・ゴールデンは不変。Web の `exportSnapshot` は `target: null`
 - [x] issue 514(API レーン。gateway): `/api/*` の上流が JSON でない 5xx(502 text/html・504 text/plain 等)を返したら、503 `upstream_unavailable` の Error JSON に正規化(ADR-0802 追記)。判定は `newReverseProxy` の `apiUpstream`。JSON の 5xx・4xx・assets・Web は素通し。上流の本文・`Retry-After` は引き継がず、専用 WARN に上流のステータス・Content-Type を残す。`upstream_nonjson_test.go`(5 上流×正規化7件+素通し5件)。実装を外すと正規化7件が落ちることを確認。範囲外: Traefik 直結の 502/504。
+- [x] 持ち物の役割とメガストーン判定の API(データレーン。ADR-0175): searchItems に `roles`・`isMegaStone`、getSpecies に `baseSpeciesKey`・`baseSpeciesNameJa` を常に出す。Web・iOS の絞り込み・表示は各レーン

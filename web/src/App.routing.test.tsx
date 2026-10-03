@@ -207,6 +207,12 @@ describe("P4-10 文書のタイトル", () => {
 
 // P4-12a: タイプバランスの画面(ADR-0303 §2)。ルート表に1件足し、タブ「タイプバランス」と /balance で開く。
 // 画面はメンバーを選ぶまで balance API を呼ばない(ここでは fetch が呼ばれないことも確かめる)。
+/** ポケモン画像の manifest の取得(P8-1c)か。 */
+function isImagesRequest(input: RequestInfo | URL): boolean {
+  const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  return url.includes("/images/");
+}
+
 describe("P4-12a タイプバランスのタブ", () => {
   test("タブ「タイプバランス」があり、/balance を直接開くと選択され、メンバーの枠を出す(balance はまだ呼ばない)", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
@@ -220,7 +226,8 @@ describe("P4-12a タイプバランスのタブ", () => {
     expect(await screen.findByRole("group", { name: "メンバー1" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/balance");
     expect(document.title).toBe("タイプバランス | pokecalc");
-    expect(fetchSpy).not.toHaveBeenCalled();
+    // 画像の manifest(/images/manifest.json。P8-1c)は起動時に1回取る。それ以外の fetch が無いことを確かめる。
+    expect(fetchSpy.mock.calls.filter(([input]) => !isImagesRequest(input))).toEqual([]);
   });
 
   test("タイプバランスのタブのクリックで /balance を pushState し、画面を切り替える", async () => {
@@ -288,7 +295,8 @@ describe("JD5 判定のタブ", () => {
     expect(await screen.findByRole("region", { name: "自分のポケモン" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/judge");
     expect(document.title).toBe("判定 | pokecalc");
-    expect(fetchSpy).not.toHaveBeenCalled();
+    // 画像の manifest(/images/manifest.json。P8-1c)は起動時に1回取る。それ以外の fetch が無いことを確かめる。
+    expect(fetchSpy.mock.calls.filter(([input]) => !isImagesRequest(input))).toEqual([]);
   });
 
   test("判定のタブのクリックで /judge を pushState し、画面を切り替える", async () => {

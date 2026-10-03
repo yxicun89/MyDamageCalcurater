@@ -89,10 +89,11 @@ describe("P4-2 計算画面の組み込み", () => {
     render(<App />);
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toBeInTheDocument();
 
+    // 画像の manifest(/images/。P8-1c)は起動時に1回取るので数えない。
     // ADR-0317 §3: 既定(オンライン)では「よく計算する相手」のために /api/record を読む(表示専用)。
     // engine.wasm・計算 API・マスタは読まない。
     const nonRecordCalls = fetchSpy.mock.calls.filter(
-      ([input]) => !requestUrl(input).includes("/api/record/"),
+      ([input]) => !requestUrl(input).includes("/api/record/") && !requestUrl(input).includes("/images/"),
     );
     expect(nonRecordCalls).toEqual([]);
     expect(headAppendSpy).not.toHaveBeenCalled();
@@ -506,7 +507,7 @@ describe("P4-5 計算モード(オフライン / オンライン)の切り替え
     // ADR-0317 §3: オンラインでは「よく計算する相手」のために /api/record を1回だけ読む(表示専用。
     // 計算・マスタ・engine.wasm とは無関係)。それ以外(calc・pokedex・engine.wasm)は読まない。
     const nonRecordCalls = fetchSpy.mock.calls.filter(
-      ([input]) => !requestUrl(input).includes("/api/record/"),
+      ([input]) => !requestUrl(input).includes("/api/record/") && !requestUrl(input).includes("/images/"),
     );
     expect(nonRecordCalls).toEqual([]);
     expect(headAppendSpy).not.toHaveBeenCalled();

@@ -39,10 +39,10 @@ func envWith(mutate func(map[string]string)) map[string]string {
 // 環境変数の名前は運用(k8s の manifest・README)が依存するので固定する。
 func TestEnvNames(t *testing.T) {
 	got := []string{envAddr, envMetricsAddr, envCalcURL, envPokedexURL, envRecordURL, envTeamURL, envBalanceURL, envSpeedURL,
-		envJudgeURL, envAssetsURL, envCORSAllowedOrigins, envUpstreamTimeout, envWebURL}
+		envJudgeURL, envAssetsURL, envCORSAllowedOrigins, envUpstreamTimeout, envWebURL, envImagesDir}
 	want := []string{"GATEWAY_ADDR", "GATEWAY_METRICS_ADDR", "GATEWAY_CALC_URL", "GATEWAY_POKEDEX_URL", "GATEWAY_RECORD_URL", "GATEWAY_TEAM_URL",
 		"GATEWAY_BALANCE_URL", "GATEWAY_SPEED_URL", "GATEWAY_JUDGE_URL", "GATEWAY_ASSETS_URL",
-		"GATEWAY_CORS_ALLOWED_ORIGINS", "GATEWAY_UPSTREAM_TIMEOUT", "GATEWAY_WEB_URL"}
+		"GATEWAY_CORS_ALLOWED_ORIGINS", "GATEWAY_UPSTREAM_TIMEOUT", "GATEWAY_WEB_URL", "GATEWAY_IMAGES_DIR"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("環境変数名 = %q, want %q", got, want)
 	}

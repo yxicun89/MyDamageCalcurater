@@ -33,7 +33,11 @@ type AssertNever<T extends never> = T;
 
 const ITEM_KEYS = ["id", "nameJa"] as const satisfies readonly (keyof Schemas["Item"])[];
 // 省略可のキー(issue #211・ADR-0218: 効果を持つ持ち物だけが effect を伴う)。
-const ITEM_OPTIONAL_KEYS = ["effect"] as const satisfies readonly (keyof Schemas["Item"])[];
+const ITEM_OPTIONAL_KEYS = [
+  "effect",
+  "roles",
+  "isMegaStone",
+] as const satisfies readonly (keyof Schemas["Item"])[];
 export type ItemKeysAreComplete = AssertNever<
   Exclude<keyof Schemas["Item"], (typeof ITEM_KEYS)[number] | (typeof ITEM_OPTIONAL_KEYS)[number]>
 >;
@@ -64,6 +68,8 @@ const SPECIES_DETAIL_KEYS = [
 const SPECIES_DETAIL_OPTIONAL_KEYS = [
   "isMega",
   "requiredItemId",
+  "baseSpeciesKey",
+  "baseSpeciesNameJa",
 ] as const satisfies readonly (keyof Schemas["SpeciesDetail"])[];
 export type SpeciesDetailKeysAreComplete = AssertNever<
   Exclude<
@@ -171,7 +177,11 @@ function isItem(value: unknown): value is Schemas["Item"] {
     isRecord(value) &&
     isString(value.id) &&
     isString(value.nameJa) &&
-    isOptionalEffect(value)
+    isOptionalEffect(value) &&
+    // ADR-0175: pokedex-svc は roles・isMegaStone を常に返す。
+    Array.isArray(value.roles) &&
+    value.roles.every((role) => role === "attacker" || role === "defender") &&
+    typeof value.isMegaStone === "boolean"
   );
 }
 
@@ -226,7 +236,10 @@ function isSpeciesDetail(value: unknown): value is Schemas["SpeciesDetail"] {
     value.learnset.every(isString) &&
     // メガの項目(issue 515)は省略可。在るときは型まで確かめる(requiredItemId は null も可)。
     (value.isMega === undefined || typeof value.isMega === "boolean") &&
-    (value.requiredItemId === undefined || value.requiredItemId === null || isString(value.requiredItemId))
+    (value.requiredItemId === undefined || value.requiredItemId === null || isString(value.requiredItemId)) &&
+    // ADR-0175: 基本種の項目は pokedex-svc が null でも常に返す。
+    (value.baseSpeciesKey === null || isString(value.baseSpeciesKey)) &&
+    (value.baseSpeciesNameJa === null || isString(value.baseSpeciesNameJa))
   );
 }
 
