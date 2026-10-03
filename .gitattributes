@@ -1,0 +1,3 @@
+# iOS の API 生成物は追跡を続け、衝突は合成した仕様からの再生成で解く(ADR-0171 §5)。
+# ドライバの登録は clone ごとに scripts/setup-git.sh。未登録なら通常の 3-way マージ。
+ios/PokeCalcKit/Sources/PokeCalcAPI/Generated/*.swift merge=pokecalc-ios-gen linguist-generated=true

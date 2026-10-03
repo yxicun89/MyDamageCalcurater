@@ -69,6 +69,13 @@ jobs:
         with:
           version: v1.37.1
 
+      # API 契約・SQL の生成物は Git に置かない(ADR-0171)。各 openapi.yaml・SQL から生成できることを
+      # 単独のステップで確かめる(以降の make も前提条件で生成するが、生成の失敗をここで切り分ける)。
+      # 生成器は go.mod の tool ディレクティブ(oapi-codegen・sqlc)と web/package-lock.json で版を固定。
+      - name: make gen
+        run: make gen
+        timeout-minutes: 10
+
       # engine・services・tools・balance・speed・judge の単体テスト + Web の vitest(web-deps が
       # 未インストールなら npm ci を自動実行する)。
       - name: make test

@@ -20,18 +20,18 @@ flowchart LR
 
 ## ディレクトリ
 
-| パス                       | 役割                                                                               |
-| -------------------------- | ---------------------------------------------------------------------------------- |
-| `src/app/`                 | ルート表(`routes.ts`)・画面の対応(`screens.tsx`)・計算モードの保存                 |
-| `src/screens/`             | 計算画面・逆算画面                                                                 |
-| `src/engine/`              | 計算の差し替え口 `CalcEngine` と WASM 実装・ローダー                               |
-| `src/api/`                 | API 実装(実体 → ID の写像)・生成型 `openapi.gen.ts`(`make gen-ts`。手で編集しない) |
-| `src/domain/`              | リクエストの組み立て・プリセット・候補の抽出・表示の書式(純粋関数)                 |
-| `src/master/`              | マスタの型と架空の例データ(実マスタは置かない)                                     |
-| `src/i18n/ja.ts`           | 画面の文言                                                                         |
-| `src/styles/tokens.css`    | デザイントークン(docs/design.md)                                                   |
-| `e2e/`                     | Playwright(オフライン・オンライン・コンテナ)                                       |
-| `Dockerfile`・`nginx.conf` | 配信イメージ                                                                       |
+| パス                       | 役割                                                                                                                                            |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/app/`                 | ルート表(`routes.ts`)・画面の対応(`screens.tsx`)・計算モードの保存                                                                              |
+| `src/screens/`             | 計算画面・逆算画面                                                                                                                              |
+| `src/engine/`              | 計算の差し替え口 `CalcEngine` と WASM 実装・ローダー                                                                                            |
+| `src/api/`                 | API 実装(実体 → ID の写像)・生成型 `openapi.gen.ts`(Git に置かない。`npm run gen`/`make gen-ts`。dev・build・test 等の前に自動で生成。ADR-0171) |
+| `src/domain/`              | リクエストの組み立て・プリセット・候補の抽出・表示の書式(純粋関数)                                                                              |
+| `src/master/`              | マスタの型と架空の例データ(実マスタは置かない)                                                                                                  |
+| `src/i18n/ja.ts`           | 画面の文言                                                                                                                                      |
+| `src/styles/tokens.css`    | デザイントークン(docs/design.md)                                                                                                                |
+| `e2e/`                     | Playwright(オフライン・オンライン・コンテナ)                                                                                                    |
+| `Dockerfile`・`nginx.conf` | 配信イメージ                                                                                                                                    |
 
 画面を足すときは `src/app/routes.ts`・`src/i18n/ja.ts`・`src/app/screens.tsx` に1件ずつ足す(`App.tsx` は触らない)。
 

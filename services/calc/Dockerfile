@@ -8,6 +8,8 @@ COPY engine ./engine
 COPY services ./services
 WORKDIR /src/services
 RUN go mod download
+# API 契約・SQL の生成物は Git に置かず、ホストで make gen したものをコンテキストから受け取る(ADR-0171)。
+RUN test -f internal/api/openapi.gen.go || { echo "生成物が無い: リポジトリのルートで make gen を実行してから docker build する(ADR-0171)" >&2; exit 1; }
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/calc ./calc/cmd/calc
 
 # 最終段は scratch(シェル・パッケージマネージャを持たない)。非 root の数値 UID で動く

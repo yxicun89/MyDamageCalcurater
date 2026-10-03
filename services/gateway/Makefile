@@ -10,7 +10,7 @@ API_URL ?= http://localhost:8080
 
 .PHONY: api-docker-build api-k3d-deploy api-smoke api-kustomize
 
-api-docker-build: ## calc・gateway のイメージを local タグでビルドする
+api-docker-build: gen-go-all ## calc・gateway のイメージを local タグでビルドする
 	@docker build -f services/calc/Dockerfile -t pokecalc/calc:local .
 	@docker build -f services/gateway/Dockerfile -t pokecalc/gateway:local .
 

@@ -73,7 +73,8 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 
 `CLAUDE.md` の全規約を適用する。特に次を最優先で確認する。
 
-- API は `api/openapi.yaml` を先に変更して `make gen`。生成型を手書きしない。
+- API は `api/openapi.yaml` を先に変更して `make gen`。生成型を手書きしない。Go・TypeScript の生成物は Git に置かない
+  (コミットしない。ADR-0171)。iOS の生成物だけは `make ios-gen` の結果をコミットする。
 - engine に DB・HTTP・ファイル等の I/O や外部依存を導入しない。
 - 4096 基準の固定小数、五捨五超入、補正と丸めの順序を守る。float で近似しない。
 - SP は各 0〜32・合計 66 以下。ゴールデン照合時の EV は `max(0, 8×SP−4)`。
@@ -156,8 +157,9 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 
 - 変更に応じて test / lint / build を実行する。利用可能なターゲットは Makefile を確認する。
   最低限 `make test`、計算変更は `make test-golden`、実数値・網羅性の変更は
-  `make test-all-species`。API 変更は生成差分も確認する。
+  `make test-all-species`。API 変更は iOS の生成差分も確認する(`make ios-gen-check`)。
 - Go の変更ファイルを `gofmt` し、静的検査は `go vet`、ビルドは `go build` を各 Go モジュールで行う。
+  `go` を直接使う前に `make gen`(生成物は Git に無い。欠けているものは `scripts/ensure-gen.sh check`)。
   `make lint` / `make build` が定義されていればそれを使う。
   Web 等は package.json の scripts が実装されている範囲で型検査・lint・test・build を実行する。
 - コマンドの終了コードだけで合格としない。対象テスト 0 件、`[no tests to run]`、

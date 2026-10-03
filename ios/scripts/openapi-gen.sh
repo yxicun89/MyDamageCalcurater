@@ -3,6 +3,10 @@
 #
 #   ios/scripts/openapi-gen.sh           生成物を ios/PokeCalcKit/Sources/PokeCalcAPI/Generated に書く
 #   ios/scripts/openapi-gen.sh --check   一時ディレクトリに生成し、コミット済みの生成物と差分が無いことを確かめる
+#   ios/scripts/openapi-gen.sh --into <ディレクトリ> <仕様> <生成設定>
+#                                        指定の仕様・設定から指定のディレクトリへ生成する(マージドライバ用。ADR-0171 §5)
+#
+# iOS の生成物は Go・TypeScript と違い Git で追跡を続ける(ADR-0171 §5)。
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,15 +16,25 @@ repo_dir="$(cd "$ios_dir/.." && pwd)"
 source "$script_dir/xcode-env.sh"
 
 readonly tool_dir="$ios_dir/tools/openapi-gen"
-readonly spec="$repo_dir/api/openapi.yaml"
-readonly config="$tool_dir/openapi-generator-config.yaml"
-readonly generated_dir="$ios_dir/PokeCalcKit/Sources/PokeCalcAPI/Generated"
+spec="$repo_dir/api/openapi.yaml"
+config="$tool_dir/openapi-generator-config.yaml"
+generated_dir="$ios_dir/PokeCalcKit/Sources/PokeCalcAPI/Generated"
 
 mode="write"
 case "${1:-}" in
   "") ;;
   --check) mode="check" ;;
-  *) echo "usage: $0 [--check]" >&2; exit 2 ;;
+  --into)
+    if [ "$#" -ne 4 ]; then
+      echo "usage: $0 --into <ディレクトリ> <仕様> <生成設定>" >&2
+      exit 2
+    fi
+    mode="write"
+    generated_dir="$2"
+    spec="$3"
+    config="$4"
+    ;;
+  *) echo "usage: $0 [--check | --into <ディレクトリ> <仕様> <生成設定>]" >&2; exit 2 ;;
 esac
 
 swift build --package-path "$tool_dir" -c release --product swift-openapi-generator >/dev/null

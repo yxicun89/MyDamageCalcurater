@@ -3,6 +3,8 @@
 # サービスの Deployment はフェーズ進行に応じて base/kustomization.yaml へ追加される。
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# API 契約・SQL の生成物は Git に置かない。無ければ make gen を案内して止まる(make 経由なら先に生成済み。ADR-0171)
+./scripts/ensure-gen.sh check
 
 CLUSTER="${CLUSTER:-pokecalc}"
 POKEDEX_MIGRATE_IMAGE="${POKEDEX_MIGRATE_IMAGE:-pokecalc/pokedex-migrate:0.1.0}"

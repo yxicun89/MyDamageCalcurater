@@ -291,12 +291,16 @@ forbidden_kind() {
     data/generated/* | */data/generated/*) echo "追跡禁止(第三者由来の生成データ data/generated/)"; return 0 ;;
     .reviews/* | */.reviews/*) echo "追跡禁止(レビュー成果物 .reviews/)"; return 0 ;;
     node_modules/* | */node_modules/*) echo "追跡禁止(node_modules/)"; return 0 ;;
+    services/pokedex/internal/store/*.go)
+      [ "$base" = "gen_required.go" ] && return 1
+      echo "追跡禁止(sqlc の生成物。make gen で作る。ADR-0171)"; return 0 ;;
   esac
   case "$base" in
     .env.example) return 1 ;;
     .env | .env.*) echo "追跡禁止(環境変数ファイル。サンプルは .env.example だけ)"; return 0 ;;
     *.pem | *.key | *.p12 | *.pfx | *.jks) echo "追跡禁止(鍵・証明書)"; return 0 ;;
     *.wasm) echo "追跡禁止(WASM 生成物。make wasm で作る)"; return 0 ;;
+    *.gen.go | *.gen.ts) echo "追跡禁止(API 契約の生成物。make gen で作る。ADR-0171)"; return 0 ;;
     kubeconfig*) echo "追跡禁止(kubeconfig)"; return 0 ;;
     .envrc) echo "追跡禁止(direnv の環境変数ファイル .envrc)"; return 0 ;;
     id_rsa | id_ed25519 | id_ecdsa | id_dsa) echo "追跡禁止(SSH の秘密鍵)"; return 0 ;;
@@ -466,22 +470,14 @@ check_f() {
     done < <(git log --format='%an <%ae>%n%cn <%ce>' | sort | uniq -c | sed -E 's/^ *([0-9]+) /\1 /')
   fi
 
-  # 生成コードが仕様と一致すること: make gen の前後で作業ツリーの差分が変わらないこと。
-  # (作業中の未コミット変更があっても誤検知しないよう、実行前後を比べる)
+  # 生成コードを仕様から作れること: make gen が成功し、生成物が揃うこと。
+  # (生成物は Git に置かないので、コミットとの差分は検査しない。ADR-0171)
   if [ ! -f Makefile ]; then
     note "F(生成コード): スキップ(Makefile が無い)"
     return 0
   fi
-  local before after
-  before="$(git diff | shasum)"
   make gen >/dev/null 2>&1 || { report F "make gen" "make gen が失敗した"; return 0; }
-  after="$(git diff | shasum)"
-  if [ "$before" != "$after" ]; then
-    local changed
-    while IFS= read -r changed; do
-      report F "$changed" "make gen で差分が出た(生成コードが仕様と一致していない)"
-    done < <(git diff --name-only)
-  fi
+  ./scripts/ensure-gen.sh check >/dev/null 2>&1 || report F "make gen" "make gen の後も生成物が揃わない(scripts/ensure-gen.sh check)"
 }
 
 # ---------------------------------------------------------------------------
@@ -728,12 +724,16 @@ selftest() {
   selftest_add "dummy" "$dir" .reviews/r1.md
   selftest_add "dummy" "$dir" node_modules/pkg/index.js
   selftest_add "dummy" "$dir" .DS_Store
+  selftest_add "package api" "$dir" services/internal/api/openapi.gen.go
+  selftest_add "export {}" "$dir" web/src/api/openapi.gen.ts
+  selftest_add "package store" "$dir" services/pokedex/internal/store/querier.go
   head -c $((MAX_FILE_BYTES + 1000)) /dev/zero | tr '\0' 'x' >"$dir/big.txt"
   head -c 2048 /dev/urandom >"$dir/blob.bin"
   (cd "$dir" && git add -f big.txt blob.bin)
   selftest_run "C" "$dir"
   selftest_expect_hits "C" .env certs/dummy.pem certs/dummy.key web/public/engine.wasm kubeconfig-local.yaml \
     docs/local/note.md data/generated/master.json .reviews/r1.md node_modules/pkg/index.js .DS_Store \
+    services/internal/api/openapi.gen.go web/src/api/openapi.gen.ts services/pokedex/internal/store/querier.go \
     "big.txt  サイズ超過" "blob.bin  テキスト以外"
 
   echo "自己テスト: C 追加(#300: 鍵・秘密の置き場になりやすいファイル名)"
@@ -760,6 +760,7 @@ selftest() {
   selftest_add "PRODUCT_NAME = PokeCalc" "$dir" ios/PokeCalc/Config/PokeCalc.xcconfig
   selftest_add "#!/usr/bin/env bash" "$dir" scripts/up-secrets_test.sh
   selftest_add "dummy" "$dir" .env.example
+  selftest_add "package store" "$dir" services/pokedex/internal/store/gen_required.go
   selftest_expect_clean "C3(誤検知なし)" "$dir"
 
   echo "自己テスト: .gitignore が鍵・秘密の置き場になりやすい名前を無視する(#300)"

@@ -2119,3 +2119,7 @@ Decision: Web の「詳細」に防御側のランクを追加した。iOS も�
 Reason: 契約(`defenderOverride.ranks`、ADR-0216)は入っており、攻守で画面の作りを揃えるため。
 Impact: 既定(0・0)なら `defenderOverride` を送らない。どちらかが非 0 なら 5 項目の ranks を送り、特性(#272)と同じ `defenderOverride` に併存させる。防御側の状態異常は式に効かないので出さない。
 
+## 2026-10-03: API 契約・SQL の生成物を Git に置かない(ユーザー決定。ADR-0171)
+Decision: Go・TypeScript の生成物(`scripts/ensure-gen.sh list`)を追跡から外し、`make gen` を使う側の前段で自動に走らせる。iOS の生成物は追跡を続け、衝突は merge ドライバ `pokecalc-ios-gen`(`scripts/setup-git.sh` で clone ごとに登録)が合成した仕様からの再生成で解く。
+Reason: API を変える PR どうしが生成物で衝突し、再生成し忘れも起きた(ios-gen-check が赤)。iOS は SwiftPM プラグインだと xcodebuild がプラグインの信頼確認で止まるため。
+Impact: 全レーン。未マージのブランチは main を取り込むときに COORDINATION.md「生成物を追跡から外したあとの取り込み」の手順(`git rm --cached` → `make gen`)で解く。`go build`/`go test` を直接使う前に `make gen`。
