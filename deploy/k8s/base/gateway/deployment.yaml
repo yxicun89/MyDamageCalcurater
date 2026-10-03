@@ -1,6 +1,7 @@
 # gateway(クライアントの唯一の入口。ADR-0202)。GATEWAY_CALC_URL・GATEWAY_POKEDEX_URL・GATEWAY_BALANCE_URL・GATEWAY_SPEED_URL・GATEWAY_JUDGE_URL・GATEWAY_RECORD_URL・GATEWAY_TEAM_URL は
 # calc・pokedex・balance・speed・judge・record・team の Service 名(クラウドでも同じなので base に置く。ADR-0206 §1)。GATEWAY_ASSETS_URL は画像配信ができるまで
-# 未設定(→ 404。ADR-0203 §3)。
+# 未設定(→ 404。ADR-0203 §3)。GATEWAY_IMAGES_DIR(ローカル画像のディレクトリ。ADR-0807)も未設定のまま(→ /images/* は 404、画像なし = エンブレム)。
+# k3d で画像を出す手順は docs/runbooks/images.md。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
