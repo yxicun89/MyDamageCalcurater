@@ -6,6 +6,7 @@
 #   - balance / speed: Deployment の注釈 pokecalc.example/data-version(scripts/gitops/k3d-deploy-readmodel.sh が配備時に付ける)
 # 1つでも違う・取れないときは、どの consumer が旧版かを表示して終了コード 1。秘密は出さない(公開データの版だけ)。
 set -euo pipefail
+command -v jq >/dev/null 2>&1 || { echo "check-master-version: jq が必要です(make doctor で確認)" >&2; exit 2; }
 
 cluster="${CLUSTER:-pokecalc}"
 namespace="${NAMESPACE:-pokecalc}"
@@ -37,7 +38,7 @@ for pair in "calc:$actual_calc" "balance:$actual_balance" "speed:$actual_speed";
 done
 
 if [ "${#stale[@]}" -gt 0 ]; then
-  echo "check-master-version: 旧版または未確認の consumer: ${stale[*]}(docs/runbooks/data.md「投入後に consumer へ反映する」)" >&2
+  echo "check-master-version: 旧版または未確認の consumer: ${stale[*]}(docs/runbooks/data.md「5a. 投入後に calc・balance・speed へ反映し、動いている版を確かめる」)" >&2
   exit 1
 fi
 echo "check-master-version: calc・balance・speed の版が一致"
