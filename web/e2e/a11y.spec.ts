@@ -3,6 +3,7 @@
 
 import { expect, test } from "@playwright/test";
 import { combobox, openApp } from "./support/calcPage.ts";
+// ADR-0313: このファイルはタブ操作(キーボード)だけを見る。既定のオンラインで開いて pokedex フィクスチャのマスタを読む。
 
 test("タブは矢印キー・Home・End で選択とフォーカスが移り、パネルの中身が入れ替わる", async ({ page }) => {
   await openApp(page);
