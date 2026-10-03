@@ -1,6 +1,9 @@
 // 構築ビルダー(P5-5・ADR-0309)の文言。ADR-0323 で i18n/ja.ts から移した(ja.ts が再エクスポートする)。
 // このレーンの文言はこのファイルにだけ足す(ja.ts は触らない)。
 
+import type { ShowdownIssue, ShowdownIssueCode } from "../team/showdownFormat";
+import type { ImportNote } from "../team/showdownImportPlan";
+
 /**
  * P5-5 PR-A1: 構築 API のクライアント(team/teamClient.ts)が、通信できない・応答が読めない・
  * エラー本文の形が不正なときに作る文言(ADR-0309 §3。speedClientText・judgeClientText と同じ形)。
@@ -98,4 +101,67 @@ export const teamMemberText = {
   spTotalError: (over: number, max: number): string => `合計が${max}を${over}超えています`,
   speciesRequiredError: "ポケモンを選んでください",
   moveDuplicateError: "同じ技は1体に1つだけ選べます",
+} as const;
+
+/**
+ * P5-5e(ADR-0321): 構築の Showdown 形式の取り込み・書き出しの文言(画面は team/TeamScreen.tsx)。
+ * issueReason は ShowdownIssueCode の全件(Record。足し忘れをコンパイルで防ぐ)。コードの生の文字列は画面に出さない。
+ */
+const issueReason: Record<ShowdownIssueCode, string> = {
+  empty_input: "テキストが空です",
+  too_many_members: "6体を超える分は取り込めません",
+  malformed_line: "読み取れない行があります",
+  unresolved_name: "名前がマスタに見つかりません",
+  missing_nature: "性格の指定がありません",
+  sp_out_of_range: "SP は 0〜32 の範囲で指定してください",
+  sp_total_exceeded: "SP の合計が66を超えています",
+  ev_like_value: "努力値のような値です(SP として読み取れません)",
+  level_not_50: "レベルが50ではありません(50として扱います)",
+  iv_not_31: "個体値が31ではありません(31として扱います)",
+  too_many_moves: "技が5つ以上あります(4つまで)",
+  duplicate_move: "同じ技が重複しています",
+  nickname_too_long: "ニックネームが長すぎます",
+  missing_name: "名前がマスタに無く、書き出せませんでした",
+  ambiguous_name: "同じ名前が複数あります(先に見つかったものを使います)",
+  duplicate_line: "同じ項目の行が重複しています",
+  input_too_large: "テキストが大きすぎます",
+};
+
+export const teamShowdownText = {
+  // ---- 取り込み ----
+  importRegionLabel: "Showdown 形式から取り込む",
+  importTextLabel: "取り込むテキスト",
+  importNameLabel: "取り込む構築名",
+  importPreviewLabel: "内容を確認",
+  importCreateLabel: "この内容で作成",
+  importResolving: "名前を確認しています",
+  importErrorHeading: "構築を取り込めませんでした",
+  previewSummary: (count: number): string => `${count}体を取り込めます`,
+  previewNone: "取り込めるメンバーがいません",
+  importCreated: (name: string, count: number): string => `「${name}」を${count}体で作成しました`,
+  issuesLabel: "取り込みの問題",
+  notesLabel: "取り込み時の補正",
+  // ---- 書き出し ----
+  exportLabel: (name: string): string => `「${name}」を Showdown 形式で書き出す`,
+  exportRegionLabel: (name: string): string => `「${name}」の Showdown 形式`,
+  exportTextLabel: (name: string): string => `「${name}」の書き出しテキスト`,
+  exportCopyLabel: "コピー",
+  exportCloseLabel: "書き出しを閉じる",
+  exportCopied: "コピーしました",
+  exportCopyFailed: "コピーできませんでした。選択したテキストを手動でコピーしてください",
+  exportEmptyNotice: "メンバーがいないので書き出せません",
+  exportIssuesLabel: "書き出しの問題",
+  // ---- 問題・補正の文 ----
+  issueReason,
+  /** 重大度・何体目か(1 始まり。全体の問題には付けない)・理由・値。 */
+  issueText: (issue: ShowdownIssue): string => {
+    const severity = issue.severity === "error" ? "エラー" : "警告";
+    const member = issue.memberIndex === null ? "" : `${issue.memberIndex + 1}体目: `;
+    const value = issue.value === undefined ? "" : `(${issue.value})`;
+    return `${severity} ${member}${issueReason[issue.code]}${value}`;
+  },
+  megaNoteText: (note: ImportNote, speciesName: string): string =>
+    note.kind === "mega_item_fixed"
+      ? `${note.memberIndex + 1}体目の${speciesName}: メガシンカには専用のメガストーンが必要なため、持ち物をメガストーンに変えました`
+      : `${note.memberIndex + 1}体目の${speciesName}: メガストーンがマスタに無いため、持ち物を空にしました`,
 } as const;

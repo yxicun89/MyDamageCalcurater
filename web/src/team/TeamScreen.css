@@ -113,3 +113,48 @@
   font-size: var(--font-size-body);
   color: var(--danger);
 }
+
+/* P5-5e(ADR-0321): Showdown 形式の取り込み・書き出し。 */
+.team-showdown {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  flex-basis: 100%;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--bg-glass-blur));
+  padding: var(--space-4);
+}
+
+.team-showdown textarea,
+.team-screen__field textarea {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  padding: var(--space-2) var(--space-3);
+  resize: vertical;
+}
+
+.team-showdown__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.team-showdown__issues,
+.team-showdown__notes {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.team-showdown__issues[role="alert"] {
+  color: var(--danger);
+}
