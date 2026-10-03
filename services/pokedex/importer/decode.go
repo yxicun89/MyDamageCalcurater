@@ -71,6 +71,12 @@ func DecodeCalcSnapshot(raw []byte) (CalcSnapshot, error) {
 	if err := checkSource(s.Source, "calc"); err != nil {
 		return CalcSnapshot{}, err
 	}
+	// 技の対象は必須(ADR-0136)。無いまま照合すると全体技がすべて食い違いになり、原因が分かりにくい。
+	for _, m := range s.Moves {
+		if m.Target == nil {
+			return CalcSnapshot{}, fmt.Errorf("%w: calc の技 %q に target が無い(ADR-0136 より前の古いスナップショット。`make import-fetch` で取り直す)", ErrInvalidInput, m.Name)
+		}
+	}
 	return s, nil
 }
 
@@ -90,6 +96,9 @@ func DecodeShowdownSnapshot(raw []byte) (ShowdownSnapshot, error) {
 	for _, m := range s.Moves {
 		if m.Mechanism == nil {
 			return ShowdownSnapshot{}, fmt.Errorf("%w: 技 %q に mechanism が無い(ADR-0121 より前の古いスナップショット。`make import-fetch` で取り直す)", ErrInvalidInput, m.ID)
+		}
+		if m.Target == nil {
+			return ShowdownSnapshot{}, fmt.Errorf("%w: 技 %q に target が無い(ADR-0136 より前の古いスナップショット。`make import-fetch` で取り直す)", ErrInvalidInput, m.ID)
 		}
 	}
 	return s, nil

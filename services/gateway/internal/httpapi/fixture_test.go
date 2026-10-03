@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -128,6 +129,7 @@ func mustParseURL(t *testing.T, raw string) *url.URL {
 type testEnv struct {
 	calc, pokedex, assets, web, record, team, balance, speed, judge *fakeUpstream
 	handler                                                         http.Handler
+	metrics                                                         http.Handler // メトリクス専用ポート側(#216)
 }
 
 // enabledUpstreams は buildTestEnv がどの上流を Config に設定するかを選ぶ(newTestEnv では全て false)。
@@ -202,6 +204,7 @@ func buildTestEnv(t *testing.T, enabled enabledUpstreams, mutate ...func(*Config
 		AssetsURL:          env.assets.url(t),
 		CORSAllowedOrigins: []string{allowedOrigin, allowedOriginLocal},
 		UpstreamTimeout:    defaultTestTimeout,
+		logger:             slog.New(slog.DiscardHandler), // アクセスログでテスト出力を埋めない
 	}
 	if enabled.web {
 		cfg.WebURL = env.web.url(t)
@@ -224,11 +227,12 @@ func buildTestEnv(t *testing.T, enabled enabledUpstreams, mutate ...func(*Config
 	for _, m := range mutate {
 		m(&cfg)
 	}
-	h, err := NewHandler(cfg)
+	hs, err := NewHandlers(cfg)
 	if err != nil {
-		t.Fatalf("NewHandler = %v", err)
+		t.Fatalf("NewHandlers = %v", err)
 	}
-	env.handler = h
+	env.handler = hs.Public
+	env.metrics = hs.Metrics
 	return env
 }
 
@@ -323,4 +327,16 @@ func mustJSON(t *testing.T, v any) []byte {
 		t.Fatalf("JSON 化に失敗: %v", err)
 	}
 	return b
+}
+
+// combinedHandler は GET /metrics だけメトリクス専用側へ、他は公開側へ送る(本番では別ポート。
+// 送信と scrape に同じ http.Handler を取る既存の metrics ヘルパを使い回すためのテスト用の束ね)。
+func combinedHandler(env *testEnv) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == metricsPath {
+			env.metrics.ServeHTTP(w, r)
+			return
+		}
+		env.handler.ServeHTTP(w, r)
+	})
 }

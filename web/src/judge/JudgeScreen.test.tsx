@@ -501,6 +501,35 @@ describe("A3 request の組み立て", () => {
     ]);
   });
 
+  test("状態異常は選んだときだけ送る(なし・未選択は送らない)。自分と候補ごとに別々(issue 235)", async () => {
+    const { user, client } = renderScreen();
+    await fillMinimalForm(user);
+    await user.selectOptions(
+      within(attackerRegion()).getByLabelText(judgeScreenText.statusLabel),
+      "paralysis",
+    );
+
+    await user.click(submitButton());
+
+    const request = lastCall(client).args;
+    expect(request.attacker.status).toBe("paralysis");
+    // 候補側は未選択(なし)のまま: status を送らない。
+    expect(request.defenders[0]).not.toHaveProperty("status");
+  });
+
+  test("状態異常の選択肢は「なし」が先頭で既定。まひを含む(契約の StatusCondition)", () => {
+    renderScreen();
+    for (const region of [attackerRegion(), candidate(1)]) {
+      const select = within(region).getByLabelText<HTMLSelectElement>(judgeScreenText.statusLabel);
+      expect(select).toBeVisible();
+      expect(select.value).toBe("none");
+      const values = within(select)
+        .getAllByRole("option")
+        .map((option) => option.getAttribute("value"));
+      expect(values).toEqual(["none", "burn", "paralysis", "poison", "badly_poison", "sleep", "freeze"]);
+    }
+  });
+
   // 置き換え(issue #309): 旧「技 ID は前後の空白を落として送る」。技が select になり空白が入り得ないので、
   // 「選んだ技の ID(マスタの id そのまま)を、自分は request 直下・候補は候補の欄に送る」へ。
   test("選んだ技の ID(マスタの id)をそのまま送る(自分は直下、候補は候補の欄)", async () => {
@@ -678,6 +707,17 @@ describe("A5 結果の表示", () => {
     expect(rows[0]).toHaveTextContent(judgeScreenText.speedIgnoredNote("相手", ["特性", "天候"]));
     // 空の欄は文を出さない。
     expect(rows[1]).not.toHaveTextContent("反映");
+  });
+
+  test("まひは「素早さに反映」の行に出る(issue 235)", async () => {
+    await submitTwoCandidates([
+      matchup(0, { attackerSpeedApplied: ["tailwind", "paralysis"], defenderSpeedApplied: ["paralysis"] }),
+      matchup(1),
+    ]);
+
+    const rows = matchupRows();
+    expect(rows[0]).toHaveTextContent(judgeScreenText.speedAppliedNote("自分", ["追い風", "まひ"]));
+    expect(rows[0]).toHaveTextContent(judgeScreenText.speedAppliedNote("相手", ["まひ"]));
   });
 
   test("同速は「同速」として出す(outspeeds の false と区別する。ADR-0700 §6-1)", async () => {

@@ -112,6 +112,15 @@ engine は性格を構造値 `{Plus, Minus}` で持ち、ID を持たない。ca
 - `KOChance.chancePercent` は契約上 optional だが、calc-svc は WASM と同じく**常に返す**(engine の生値。確定・倒せないときは 0)。
 - 持ち物なしは `itemId: null`(engine の空文字を nullable に写す)、無補正は `nature: {plus: null, minus: null}`。WASM は `""` のまま
   (パリティテストはこの表現の違いだけを正規化して比べる)。
+- **メガシンカ後の種族の持ち物規則**(追記 2026-10-03。issue #315 のメガ部分・ユーザー決定): 種族が `isMega` のとき、持ち物は
+  その `requiredItemId` か持ち物なし(null・省略=メガストーン扱い)だけ受け付け、別の持ち物は 400 `invalid_input`
+  (新しい code は足さない。メッセージに種族キーと持ち物 ID を含める)。対象は明示入力のすべて: calc の `attacker`・`defender`、
+  bulk の `attacker` と `itemVariants`(防御側がメガ種族のとき)、reverse の `known` と `itemCandidates`(推定側がメガ種族のとき。
+  1件でも別の持ち物があれば要求全体を拒否し、黙って除外はしない)。検証は持ち物・種族の ID 解決と SP 検査の後(特性・状態の解決より前。`unknown_item` と
+  SP 超過が先)。サーバーが持ち物候補を展開する経路は無い(省略時は「持ち物なし」の1通り。ADR-0208 の行数・件数上限と
+  既定の応答形は変わらない)ので、不可能な組合せを作る経路も無い。通常種族の応答は変わらない。実装は `master.Store.MegaRequiredItem`
+  (マスタの `isMega`・`requiredItemId` を保持)。WASM 側(`engine/wasmapi`)の種族 DTO は `isMega`・`requiredItemId` を持たないため
+  同じ規則は未実装(オフライン計算ではメガ種族に別の持ち物を持たせても計算される)。issue #505 で追跡。
 
 ## 受け入れ条件と担当テスト
 

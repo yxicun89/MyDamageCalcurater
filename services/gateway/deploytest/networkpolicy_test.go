@@ -34,6 +34,7 @@ const (
 	appNameLabel      = "app.kubernetes.io/name"
 	namespaceNameKey  = "kubernetes.io/metadata.name"
 	podPort           = 8080 // 各サービスの containerPort。Service の port 80 の targetPort
+	gatewayMetrics    = 9090 // gateway のメトリクス専用 containerPort(issue #216)。他サービスは podPort で /metrics を出す
 	mysqlPort         = 3306
 	natsPort          = 4222
 	tidbPort          = 4000
@@ -505,7 +506,11 @@ func allowedFlows() []npFlow {
 	add("tidb 内部(pd → tidb)", ext(tidbPDPod), ext(tidbServerPod), 10080)
 	// 監視: Prometheus(observability)が ServiceMonitor 対象の /metrics を取る
 	for _, n := range httpServices {
-		add("Prometheus → "+n+" /metrics", ext(prometheusPod), app(n), podPort)
+		port := podPort
+		if n == "gateway" {
+			port = gatewayMetrics
+		}
+		add("Prometheus → "+n+" /metrics", ext(prometheusPod), app(n), port)
 	}
 	return f
 }
@@ -556,6 +561,9 @@ func deniedFlows() []npFlow {
 	add("default namespace の一時 Pod → gateway", ext(strayPod), app("gateway"), podPort)
 	add("kube-dns → pokedex", ext(corednsPod), app("pokedex"), podPort)
 	add("observability の Grafana → calc(監視対象は Prometheus だけ)", ext(grafanaPod), app("calc"), podPort)
+	add("observability の Prometheus → gateway の公開ポート(/metrics は専用ポートだけ。issue #216)", ext(prometheusPod), app("gateway"), podPort)
+	add("Traefik → gateway のメトリクス専用ポート(公開入口から /metrics に届かない。issue #216)", ext(traefikPod), app("gateway"), gatewayMetrics)
+	add("default namespace の一時 Pod → gateway のメトリクス専用ポート", ext(strayPod), app("gateway"), gatewayMetrics)
 	add("observability の Prometheus → mysql(監視対象外のポート)", ext(prometheusPod), app("mysql"), mysqlPort)
 	add("observability の Prometheus → web(ServiceMonitor が無い)", ext(prometheusPod), app("web"), podPort)
 	add("default namespace の偽 Prometheus → calc(namespace まで見る)", ext(impostorPrometheusPod), app("calc"), podPort)

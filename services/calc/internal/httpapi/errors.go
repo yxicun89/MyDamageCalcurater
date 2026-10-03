@@ -102,6 +102,35 @@ func validateIndividual(label string, in engine.Individual) error {
 	return nil
 }
 
+// checkMegaItem はメガシンカ後の種族の持ち物規則(issue #315・ADR-0200 §4 追記)を検証する。
+// メガ種族は requiredItemId の持ち物か持ち物なし(nil)だけを受け付け、別の持ち物は 400 invalid_input。
+// メガでない種族は何も検査しない。label は入力の場所(例 "攻撃側"・"itemVariants[1]")。
+func (s *Server) checkMegaItem(label string, species engine.Species, item *engine.Item) error {
+	if item == nil {
+		return nil
+	}
+	required, isMega := s.store.MegaRequiredItem(species.Key)
+	if !isMega || item.ID == required {
+		return nil
+	}
+	if required == "" {
+		return newError(api.InvalidInput, "%s: メガシンカ後の種族 %q には持ち物を持たせられない(指定: %q)",
+			label, species.Key, item.ID)
+	}
+	return newError(api.InvalidInput, "%s: メガシンカ後の種族 %q には持ち物 %q を持たせられない(持てるのはメガストーン %q だけ)",
+		label, species.Key, item.ID, required)
+}
+
+// checkMegaItems は持ち物候補の各要素に checkMegaItem を当てる(bulk の itemVariants・reverse の itemCandidates)。
+func (s *Server) checkMegaItems(label string, species engine.Species, items []*engine.Item) error {
+	for i, it := range items {
+		if err := s.checkMegaItem(fmt.Sprintf("%s[%d]", label, i), species, it); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // --- 厳格デコード(engine/wasmapi の decodeStrict と同じ振る舞い) --------------
 
 // decodeStrict は未知フィールドを拒否して JSON オブジェクトを dst へ読む。

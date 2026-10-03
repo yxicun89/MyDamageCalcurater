@@ -5,6 +5,7 @@ package httpapi
 // (ハンドラを作り直さず、取得が終わった時点で自然に切り替わる)。
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/labstack/echo/v5"
@@ -12,6 +13,7 @@ import (
 	"example.com/pokecalc/services/calc/internal/master"
 	"example.com/pokecalc/services/internal/api"
 	"example.com/pokecalc/services/internal/httpmetrics"
+	"example.com/pokecalc/services/internal/reqlog"
 )
 
 // StoreFunc は、マスタを読み込み済みならその Store を、まだなら nil を返す(並行に呼ばれても安全であること)。
@@ -24,7 +26,9 @@ type StoreFunc func() master.Store
 func NewDeferredHandler(current StoreFunc, publisher EventPublisher, opts ...Option) http.Handler {
 	e := echo.New()
 	e.HTTPErrorHandler = httpErrorHandler
+	e.Logger = slog.Default() // main が JSON ハンドラを既定にした後に呼ばれる(issue #246)
 	m := httpmetrics.New()
+	e.Use(reqlog.Middleware(slog.Default())) // 最も外側: ID の確定とアクセスログ(issue #246)
 	e.Use(m.Middleware())
 	e.Use(recoverMiddleware)
 	e.GET(httpmetrics.Path, m.Handler())

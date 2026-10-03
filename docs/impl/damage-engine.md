@@ -199,9 +199,12 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 
 ## 10. format(single / double)
 
-- `Format` は `DamageInput`・`BulkInput`・`ReverseInput` に持ち、そのまま `CalcDamage` に渡るが、**`CalcDamage` は読まない**(`dmg:192-260` に参照なし)。壁は形式に関係なく ×0.5(`mod:122` のコメント「シングルは」)。
-- double でも結果が single と同じことはテストで固定されている(`engine/bulk_test.go:639` `TestCalcBulkFormatDouble`)。
-- 意図: ダブル固有の補正を後から足せるよう入力にだけ先に持たせた(`engine/types.go:24`、ADR-0005「M1 での対象外」)。
+- `Format` は `DamageInput`・`BulkInput`・`ReverseInput` に持ち、そのまま `CalcDamage` に渡る(ADR-0222)。`""`(ゼロ値)と `single` はシングル。未知の形式はエラーにせず、ダブルの補正を掛けずシングルと同じ数値。
+- 壁: `Format == double` のとき ×2732/4096(`ModifierDoubleScreen`)。シングル・形式未指定は ×0.5。急所は壁を無視し、リフレクターとオーロラベールの重複は1回。
+- 全体技: `Format == double && Move.Target == spread` のとき、基礎ダメージの式の直後(天候・急所より前)に `pokeRound(base, 3072)`。
+- `Move.Target` は `""`(不明)・`single`・`spread`。他の値は形式に関係なく `ErrUnknownMoveTarget`。
+- ダブルで `Target == ""` の攻撃技は単体として計算し(壁は掛ける)、技の印 `move_target_unknown` を zero_power の後に付ける(シングル・形式未指定・変化技には付けない)。マスタが技の対象を持つまで(#288)、calc-svc のダブルは全攻撃技にこの印が付く。
+- 味方の効果(てだすけ・フレンドガード等)は対象外。一括計算・逆算は Format・Target をそのまま渡す(`engine/double_test.go`)。
 
 ## 11. 入力検証と上限
 
@@ -241,8 +244,8 @@ engine は持ち物・特性の一覧を持たない。`Item.Effect` / `Ability.
 
 | 入力 | 実際の扱い | 根拠 | issue |
 |---|---|---|---|
-| `TeraType` | 表にある ID かの検証だけ。一致判定・相性は素の `Species.Types` | `dmg:184-187`、`dmg:117`、`mod:51` `hasType`、ADR-0005 | #232・#315 |
-| `Format = double` | 計算に使わない(壁 ×0.5 固定・全体技の軽減なし) | §10 | #232・#288 |
+| `TeraType` | 表にある ID かの検証だけ。一致判定・相性は素の `Species.Types`。指定があれば結果に「未対応」の印(`attacker_tera_type`/`defender_tera_type`。変化技にも付く。ADR-0160) | `dmg:184-187`、`dmg:117`、`mod:51` `hasType`、ADR-0005 | #232・#315 |
+| `Format = double` | 壁・全体技は反映済み。技の対象が不明なダブルの攻撃技は印(`move_target_unknown`) | §10、ADR-0222 | #232・#288 |
 | `Field.AttackerScreens` | どこからも読まれない(`DefenderScreens` だけを見る) | `mod:124` | — |
 | `Move.Effect` | ダメージ計算では読まない(`Move.Priority` はサイコフィールドの判定だけに使う。ADR-0123) | `engine/model.go:21`、ADR-0107 決定2 | — |
 | `Species.Abilities` | 参考。計算は `Individual.Ability` を使う | `engine/model.go:16` | #272(Web で特性を選べない) |
@@ -265,7 +268,7 @@ engine が通常の式で正しく計算できない入力は、数値を通常�
 
 - 接地判定の一部: じゅうりょく・くろいてっきゅう(必ず接地)・ふうせん(浮く)は未モデル化(ADR-0116 §対象外)。グラスフィールドの地震・じならし半減などフィールド固有の技の処理は未実装で、印(`field_specific`)が付く(#271。サイコフィールドの先制技無効は実装済み。ADR-0123)
 - 固定ダメージ・多段・威力変動・参照ステータスの差し替え: 威力の数値どおり単発で計算し、印を付ける(`Power <= 0` は 0 ダメージ + `zero_power`)。#233・#271
-- 条件付き特性(ADR-0005 の列挙: いかく等)、天候を変える特性、重さ依存技、急所ランク、テラスタルの補正、ダブル固有補正(全体技 ×0.75 など)
+- 条件付き特性(ADR-0005 の列挙: いかく等)、天候を変える特性、重さ依存技、急所ランク、テラスタルの補正(ゲームに無い)、ダブルの味方効果(てだすけ・フレンドガード等)
 - 多ターンの KO(定数ダメージ・回復・反動)、急所率・命中率(ADR-0006)
 - 32bit 折り返し(ADR-0004 保留)
 - 相性表の正が 2 つ(DB と `testdata/golden/typechart.json`)で一致検査が無い: #280

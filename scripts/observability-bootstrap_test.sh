@@ -657,10 +657,13 @@ test_values_alloy() {
 # ---------------------------------------------------------------------------
 
 test_servicemonitors() {
-  local s f svc want_name want_port ns
+  local s f svc want_name want_port want_port_name ns
   ns=$(yaml_get "$ROOT/deploy/k8s/base/namespace.yaml" metadata name 2>/dev/null | tr -d '"')
   for s in $SERVICES; do
-    begin "ServiceMonitor: $s が既存 Service($(service_yaml "$s"))の app.kubernetes.io/name と http ポートの /metrics を指す"
+    # gateway だけ /metrics をメトリクス専用ポート metrics で出す(公開入口の http に出さない。issue #216)。
+    want_port_name=http
+    if [ "$s" = gateway ]; then want_port_name=metrics; fi
+    begin "ServiceMonitor: $s が既存 Service($(service_yaml "$s"))の app.kubernetes.io/name と $want_port_name ポートの /metrics を指す"
     f="$ROOT/$SM_REL/$s.yaml"
     svc="$ROOT/$(service_yaml "$s")"
     if [ ! -f "$svc" ]; then
@@ -669,9 +672,9 @@ test_servicemonitors() {
     fi
     # 期待値はテストに書き写さず、既存の Service 定義から読む。
     want_name=$(yaml_get "$svc" metadata labels app.kubernetes.io/name)
-    want_port=$(yaml_query "$svc" '{{ range (dig "spec" "ports" list $v) }}{{ if eq (toString .name) "http" }}# R http{{ end }}
+    want_port=$(yaml_query "$svc" '{{ range (dig "spec" "ports" list $v) }}{{ if eq (toString .name) "'"$want_port_name"'" }}# R '"$want_port_name"'{{ end }}
 {{ end }}')
-    if [ "$want_port" = http ]; then ok; else ng "$(service_yaml "$s") に http という名前のポートが無い"; fi
+    if [ "$want_port" = "$want_port_name" ]; then ok; else ng "$(service_yaml "$s") に $want_port_name という名前のポートが無い"; fi
     if [ ! -f "$f" ]; then
       ng "$SM_REL/$s.yaml が無い"
       continue
@@ -688,8 +691,8 @@ test_servicemonitors() {
 {{ end }}' || true)
     if [ -n "$eps" ]; then ok; else ng "$s.yaml に spec.endpoints が無い"; continue; fi
     # targetPort(番号・別ポート)ではなく、既存 Service の名前付きポート http を指す。
-    if [ "$eps" = "http|/metrics|targetPort=false" ]; then ok; else
-      ng "$s.yaml の endpoints が「port: http・path: /metrics」の1つだけでない(targetPort・別ポートを使わない。ADR-0406 §4): $(printf '%s' "$eps" | tr '\n' ';')"
+    if [ "$eps" = "$want_port_name|/metrics|targetPort=false" ]; then ok; else
+      ng "$s.yaml の endpoints が「port: $want_port_name・path: /metrics」の1つだけでない(targetPort・別ポートを使わない。ADR-0406 §4): $(printf '%s' "$eps" | tr '\n' ';')"
     fi
   done
 }

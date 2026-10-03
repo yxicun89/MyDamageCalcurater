@@ -104,6 +104,16 @@ extension Components {
             case storeUnavailable = "store_unavailable"
             case upstreamUnavailable = "upstream_unavailable"
         }
+        /// 対戦形式。計算(/api/calc・/api/calc/bulk・/api/calc/reverse)では double のとき次を掛ける(issue 232 案B のダブル分・ADR-0222)。
+        /// - 防御側の壁(リフレクター・ひかりのかべ・オーロラベール): ×2732/4096(single は ×1/2)。急所は壁を無視する
+        /// - 全体技(技の対象が相手全体・自分以外全体): 基礎ダメージに ×3072/4096(天候・急所より前)。
+        ///   1対1の計算なので、全体技は常に2体以上に当たる前提で掛ける。味方の効果(てだすけ等)は扱わない
+        /// 技の対象をマスタが持たない間(issue 288)は、double の攻撃技に UnsupportedMark
+        /// (target=move・reason=move_target_unknown)を付け、全体技の補正は掛けない(壁は掛ける)。
+        /// double は計算に反映するので形式の印は付けない。engine に未知の形式が届いたときだけ安全側で
+        /// target format・reason unsupported_effect の印が付く(ADR-0160・ADR-0222 §5)。
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/Format`.
         @frozen public enum Format: String, Codable, Hashable, Sendable, CaseIterable {
             case single = "single"
@@ -232,25 +242,46 @@ extension Components {
                 ///
                 /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2/learnset`.
                 public var learnset: [Swift.String]?
+                /// メガシンカ後の種族か(docs/mega-evolution-spec.md。issue 515)。pokedex-svc は常に返す。
+                /// 古いサーバーは返さないため、省略は「メガではない」と同じ扱い(クライアントの互換のため required にしていない)。
+                ///
+                ///
+                /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2/isMega`.
+                public var isMega: Swift.Bool?
+                /// メガシンカに要る持ち物(メガストーン)の ID。メガでなければ null。pokedex-svc は null でもキーを常に返す
+                /// (ADR-0218 の `effect` は「キーごと省く」ので逆。クライアントは省略も null も「メガではない」と読む)。
+                /// isMega が true の種族は、この ID の持ち物を持つ前提(クライアントが持ち物を固定する。ADR-0200 §4 の検証と同じ規則)。
+                ///
+                ///
+                /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2/requiredItemId`.
+                public var requiredItemId: Swift.String?
                 /// Creates a new `Value2Payload`.
                 ///
                 /// - Parameters:
                 ///   - baseStats:
                 ///   - abilities:
                 ///   - learnset: 覚える技の ID 一覧
+                ///   - isMega: メガシンカ後の種族か(docs/mega-evolution-spec.md。issue 515)。pokedex-svc は常に返す。
+                ///   - requiredItemId: メガシンカに要る持ち物(メガストーン)の ID。メガでなければ null。pokedex-svc は null でもキーを常に返す
                 public init(
                     baseStats: Components.Schemas.StatBlock,
                     abilities: [Components.Schemas.Ability],
-                    learnset: [Swift.String]? = nil
+                    learnset: [Swift.String]? = nil,
+                    isMega: Swift.Bool? = nil,
+                    requiredItemId: Swift.String? = nil
                 ) {
                     self.baseStats = baseStats
                     self.abilities = abilities
                     self.learnset = learnset
+                    self.isMega = isMega
+                    self.requiredItemId = requiredItemId
                 }
                 public enum CodingKeys: String, CodingKey {
                     case baseStats
                     case abilities
                     case learnset
+                    case isMega
+                    case requiredItemId
                 }
             }
             /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2`.
@@ -374,21 +405,61 @@ extension Components {
             public var id: Swift.String
             /// - Remark: Generated from `#/components/schemas/Ability/nameJa`.
             public var nameJa: Swift.String
+            /// 特性の効果定義(ability_effects の JSON。`getMasterExport` の `MasterAbility.effect` と同じ値・同じ形。
+            /// issue 211・ADR-0218)。効果を持たない特性は**キーごと省く**(null を返さない)。
+            /// pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeAbilityEffect`)で厳格に検証し、
+            /// 検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。古いサーバーはこのキーを
+            /// 返さないため、クライアントは「キーが無い」を「効果なし」と「効果データを返さない版」の
+            /// どちらとも区別できない。区別はクライアントの capabilities で行う(ADR-0304 A-1・ADR-0218 §4)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Ability/effect`.
+            public struct EffectPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/Ability/effect/value1`.
+                public var value1: Components.Schemas.MasterEffect
+                /// Creates a new `EffectPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.MasterEffect) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 特性の効果定義(ability_effects の JSON。`getMasterExport` の `MasterAbility.effect` と同じ値・同じ形。
+            /// issue 211・ADR-0218)。効果を持たない特性は**キーごと省く**(null を返さない)。
+            /// pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeAbilityEffect`)で厳格に検証し、
+            /// 検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。古いサーバーはこのキーを
+            /// 返さないため、クライアントは「キーが無い」を「効果なし」と「効果データを返さない版」の
+            /// どちらとも区別できない。区別はクライアントの capabilities で行う(ADR-0304 A-1・ADR-0218 §4)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Ability/effect`.
+            public var effect: Components.Schemas.Ability.EffectPayload?
             /// Creates a new `Ability`.
             ///
             /// - Parameters:
             ///   - id:
             ///   - nameJa:
+            ///   - effect: 特性の効果定義(ability_effects の JSON。`getMasterExport` の `MasterAbility.effect` と同じ値・同じ形。
             public init(
                 id: Swift.String,
-                nameJa: Swift.String
+                nameJa: Swift.String,
+                effect: Components.Schemas.Ability.EffectPayload? = nil
             ) {
                 self.id = id
                 self.nameJa = nameJa
+                self.effect = effect
             }
             public enum CodingKeys: String, CodingKey {
                 case id
                 case nameJa
+                case effect
             }
         }
         /// - Remark: Generated from `#/components/schemas/Move`.
@@ -446,21 +517,57 @@ extension Components {
             public var id: Swift.String
             /// - Remark: Generated from `#/components/schemas/Item/nameJa`.
             public var nameJa: Swift.String
+            /// 持ち物の効果定義(item_effects の JSON。`getMasterExport` の `MasterItem.effect` と同じ値・同じ形。
+            /// issue 211・ADR-0218)。効果を持たない持ち物は**キーごと省く**(null を返さない)。
+            /// pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeItemEffect`)で厳格に検証し、
+            /// 検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/effect`.
+            public struct EffectPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/Item/effect/value1`.
+                public var value1: Components.Schemas.MasterEffect
+                /// Creates a new `EffectPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.MasterEffect) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 持ち物の効果定義(item_effects の JSON。`getMasterExport` の `MasterItem.effect` と同じ値・同じ形。
+            /// issue 211・ADR-0218)。効果を持たない持ち物は**キーごと省く**(null を返さない)。
+            /// pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeItemEffect`)で厳格に検証し、
+            /// 検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/effect`.
+            public var effect: Components.Schemas.Item.EffectPayload?
             /// Creates a new `Item`.
             ///
             /// - Parameters:
             ///   - id:
             ///   - nameJa:
+            ///   - effect: 持ち物の効果定義(item_effects の JSON。`getMasterExport` の `MasterItem.effect` と同じ値・同じ形。
             public init(
                 id: Swift.String,
-                nameJa: Swift.String
+                nameJa: Swift.String,
+                effect: Components.Schemas.Item.EffectPayload? = nil
             ) {
                 self.id = id
                 self.nameJa = nameJa
+                self.effect = effect
             }
             public enum CodingKeys: String, CodingKey {
                 case id
                 case nameJa
+                case effect
             }
         }
         /// - Remark: Generated from `#/components/schemas/Nature`.
@@ -554,6 +661,10 @@ extension Components {
             public var natureId: Swift.String
             /// - Remark: Generated from `#/components/schemas/Individual/abilityId`.
             public var abilityId: Swift.String?
+            /// 持ち物。メガシンカ後の種族(isMega)は、その requiredItemId の持ち物か持ち物なし(null・省略)だけ受け付け、
+            /// 別の持ち物は 400 `invalid_input`(ADR-0200 §4)。
+            ///
+            ///
             /// - Remark: Generated from `#/components/schemas/Individual/itemId`.
             public var itemId: Swift.String?
             /// 能力ポイント。各 0..32、合計 <= 66
@@ -582,6 +693,11 @@ extension Components {
             public var sp: Components.Schemas.Individual.SpPayload
             /// - Remark: Generated from `#/components/schemas/Individual/ranks`.
             public var ranks: Components.Schemas.RankBlock?
+            /// テラスタイプ。受け付けるが計算には反映しない(テラスタルの補正は未実装)。指定すると数値は
+            /// テラスなしのまま、結果の unsupported に target attacker_tera_type / defender_tera_type・
+            /// reason unsupported_effect・id テラスタイプの印が付く(ADR-0160)。
+            ///
+            ///
             /// - Remark: Generated from `#/components/schemas/Individual/teraType`.
             public struct TeraTypePayload: Codable, Hashable, Sendable {
                 /// - Remark: Generated from `#/components/schemas/Individual/teraType/value1`.
@@ -600,6 +716,11 @@ extension Components {
                     try encoder.encodeToSingleValueContainer(self.value1)
                 }
             }
+            /// テラスタイプ。受け付けるが計算には反映しない(テラスタルの補正は未実装)。指定すると数値は
+            /// テラスなしのまま、結果の unsupported に target attacker_tera_type / defender_tera_type・
+            /// reason unsupported_effect・id テラスタイプの印が付く(ADR-0160)。
+            ///
+            ///
             /// - Remark: Generated from `#/components/schemas/Individual/teraType`.
             public var teraType: Components.Schemas.Individual.TeraTypePayload?
             /// - Remark: Generated from `#/components/schemas/Individual/status`.
@@ -611,10 +732,10 @@ extension Components {
             ///   - level:
             ///   - natureId:
             ///   - abilityId:
-            ///   - itemId:
+            ///   - itemId: 持ち物。メガシンカ後の種族(isMega)は、その requiredItemId の持ち物か持ち物なし(null・省略)だけ受け付け、
             ///   - sp: 能力ポイント。各 0..32、合計 <= 66
             ///   - ranks:
-            ///   - teraType:
+            ///   - teraType: テラスタイプ。受け付けるが計算には反映しない(テラスタルの補正は未実装)。指定すると数値は
             ///   - status:
             public init(
                 speciesKey: Components.Schemas.SpeciesKey,
@@ -835,12 +956,15 @@ extension Components {
             }
         }
         /// 「この結果は正しくない可能性がある」印1つ(ADR-0123)。engine が正しく計算できない技の機構・
-        /// 持ち物・特性に、数値は通常の式のまま付ける(400 で拒否しない)。
+        /// 持ち物・特性と、受け付けるが計算に反映しないテラスタイプ・未知の対戦形式(ADR-0160・ADR-0222 §5)に、数値は
+        /// 通常の式のまま付ける(400 で拒否しない)。
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/UnsupportedMark`.
         public struct UnsupportedMark: Codable, Hashable, Sendable {
-            /// 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability。
+            /// 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability・
+            /// attacker_tera_type・defender_tera_type・format(並びもこの順)。format は engine に未知の形式が
+            /// 届いたときだけ(double は計算に反映するので付かない。ADR-0222 §5)。
             /// 値を足しても古いクライアントが応答全体をデコードできなくなるのを避けるため、enum にしない
             /// (クライアントは未知の値を「対象不明の印」として扱い、id をそのまま表示する。ADR-0215)。
             ///
@@ -850,23 +974,27 @@ extension Components {
             /// 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種: alt_defense_stat・alt_offense_stat・
             /// always_crit・effectiveness_change・field_specific・fixed_damage・ignore_defense_ranks・
             /// move_specific・multi_hit・ohko・priority_change・type_change・variable_power)か
-            /// zero_power(威力0の攻撃技。威力が技の処理で決まるため)、持ち物・特性は
-            /// unsupported_effect(効果スキーマで表せない)。target と同じ理由で enum にしない
+            /// zero_power(威力0の攻撃技。威力が技の処理で決まるため)・move_target_unknown(double で技の対象が
+            /// 不明なため全体技の補正を判断できない。ADR-0222)、持ち物・特性は
+            /// unsupported_effect(効果スキーマで表せない)、テラスタイプ・未知の対戦形式も unsupported_effect
+            /// (効果を計算に反映していない。ADR-0160)。target と同じ理由で enum にしない
             /// (クライアントは未知の値を汎用の文言で扱う。ADR-0215)。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/UnsupportedMark/reason`.
             public var reason: Swift.String
-            /// 技・持ち物・特性の ID
+            /// 技・持ち物・特性の ID。target が attacker_tera_type / defender_tera_type のときはテラスタイプ
+            /// (PokeType の値)、format のときは対戦形式(Format の値)。
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/UnsupportedMark/id`.
             public var id: Swift.String
             /// Creates a new `UnsupportedMark`.
             ///
             /// - Parameters:
-            ///   - target: 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability。
+            ///   - target: 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability・
             ///   - reason: 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種: alt_defense_stat・alt_offense_stat・
-            ///   - id: 技・持ち物・特性の ID
+            ///   - id: 技・持ち物・特性の ID。target が attacker_tera_type / defender_tera_type のときはテラスタイプ
             public init(
                 target: Swift.String,
                 reason: Swift.String,
@@ -1107,6 +1235,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/BulkCalcRequest/presets`.
             public var presets: [Components.Schemas.DefenderPreset]?
             /// 差し替えて比較する持ち物 ID(省略時は素の1通り)。null 要素は「持ち物なし」。
+            /// defenderSpeciesKey がメガシンカ後の種族のとき、requiredItemId 以外の持ち物を含めると 400 `invalid_input`(ADR-0200 §4)。
             /// 65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
             /// 行の基本数は `len(presets) × len(itemVariants)`(上限 8 × 64 = 512)。特性ごとに結果が違う
             /// ときだけ、その基本数のうち最大3倍(特性の候補数。ADR-0126・ADR-0214)まで行が分かれる。
@@ -1529,6 +1658,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/options`.
             public var options: Components.Schemas.CalcOptions?
             /// 相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ。
+            /// unknownSpeciesKey がメガシンカ後の種族のとき、requiredItemId 以外の持ち物を含めると 400 `invalid_input`(ADR-0200 §4)。
             /// 65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
             ///
             ///
@@ -2850,6 +2980,29 @@ extension Components {
                 case maxIndex
                 case minSp
                 case unsupported
+            }
+        }
+        /// 効果定義(item_effects / ability_effects の JSON をそのまま。ADR-0005)。null は補正なし。
+        /// 形は共通マスタ(`services/internal/master` の DecodeItemEffect / DecodeAbilityEffect)が受け付けるもので、
+        /// 受け取った側がそこで厳格に検証する(未知のキー・4096 基準の整数でない値・空のオブジェクトは不正)。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/MasterEffect`.
+        public struct MasterEffect: Codable, Hashable, Sendable {
+            /// A container of undocumented properties.
+            public var additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer
+            /// Creates a new `MasterEffect`.
+            ///
+            /// - Parameters:
+            ///   - additionalProperties: A container of undocumented properties.
+            public init(additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer = .init()) {
+                self.additionalProperties = additionalProperties
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeAdditionalProperties(additionalProperties)
             }
         }
         /// 「よく使う相手」1件(ADR-0209 §3 #2)。端末内の計算イベントの集計で、他端末のイベントは混ざらない。

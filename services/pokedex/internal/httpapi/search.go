@@ -5,7 +5,9 @@ package httpapi
 // (レギュレーション ID をコードに書かない)。
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"regexp"
@@ -14,7 +16,9 @@ import (
 
 	"github.com/labstack/echo/v5"
 
+	"example.com/pokecalc/engine"
 	"example.com/pokecalc/services/internal/api"
+	"example.com/pokecalc/services/internal/master"
 	"example.com/pokecalc/services/pokedex/internal/store"
 )
 
@@ -154,19 +158,34 @@ func (s *Server) SearchItems(ctx *echo.Context, params api.SearchItemsParams) er
 		return err
 	}
 	reqCtx := ctx.Request().Context()
-	reg, err := s.q.GetDefaultRegulation(reqCtx)
+	// 一覧と相性表(効果の検証用)は1つの読み取り専用トランザクションで読む(ADR-0127・ADR-0218 §3)。
+	tx, err := s.q.BeginTx(reqCtx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		return unavailable("SearchItems/BeginTx", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	reg, err := tx.GetDefaultRegulation(reqCtx)
 	if err != nil {
 		return unavailable("SearchItems/GetDefaultRegulation", err)
 	}
-	rows, err := s.q.SearchItems(reqCtx, store.SearchItemsParams{
+	rows, err := tx.SearchItems(reqCtx, store.SearchItemsParams{
 		RegulationID: reg.ID, Pattern: likePattern(derefStr(params.Q)), Limit: limit,
 	})
 	if err != nil {
 		return unavailable("SearchItems", err)
 	}
+	var chart engine.TypeChart // 効果を持つ行があるときだけ読む
 	out := make([]api.Item, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, api.Item{Id: r.ID, NameJa: r.NameJa})
+		effect, err := publicEffect(reqCtx, tx, &chart, r.Effect, master.DecodeItemEffect)
+		if err != nil {
+			return unavailable("SearchItems/effect:"+r.ID, err)
+		}
+		out = append(out, api.Item{Id: r.ID, NameJa: r.NameJa, Effect: effect})
+	}
+	// 読み終えたらすぐ閉じて接続を返す(応答の書き込みを待たない)。エラー経路は defer の Rollback が閉じる。
+	if err := tx.Commit(); err != nil {
+		return unavailable("SearchItems/Commit", err)
 	}
 	return ctx.JSON(http.StatusOK, out)
 }
@@ -178,27 +197,37 @@ func (s *Server) GetSpecies(ctx *echo.Context, key api.SpeciesKey, params api.Ge
 		return newError(api.InvalidInput, "種族キーの形式が不正: %q", key)
 	}
 	reqCtx := ctx.Request().Context()
-	reg, err := s.q.GetDefaultRegulation(reqCtx)
+	tx, err := s.q.BeginTx(reqCtx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		return unavailable("GetSpecies/BeginTx", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	reg, err := tx.GetDefaultRegulation(reqCtx)
 	if err != nil {
 		return unavailable("GetSpecies/GetDefaultRegulation", err)
 	}
-	sp, err := s.q.GetSpeciesByKey(reqCtx, key)
+	sp, err := tx.GetSpeciesByKey(reqCtx, key)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return newError(api.NotFound, "種族が無い: %s", key)
 		}
 		return unavailable("GetSpeciesByKey", err)
 	}
-	abilityRows, err := s.q.ListSpeciesAbilityNames(reqCtx, key)
+	abilityRows, err := tx.ListSpeciesAbilityNames(reqCtx, key)
 	if err != nil {
 		return unavailable("ListSpeciesAbilityNames", err)
 	}
 	sort.Slice(abilityRows, func(i, j int) bool { return abilityRows[i].Slot < abilityRows[j].Slot })
 	abilities := make([]api.Ability, 0, len(abilityRows))
+	var chart engine.TypeChart // 効果を持つ行があるときだけ読む
 	for _, a := range abilityRows {
-		abilities = append(abilities, api.Ability{Id: a.ID, NameJa: a.NameJa})
+		effect, err := publicEffect(reqCtx, tx, &chart, a.Effect, master.DecodeAbilityEffect)
+		if err != nil {
+			return unavailable("GetSpecies/effect:"+a.ID, err)
+		}
+		abilities = append(abilities, api.Ability{Id: a.ID, NameJa: a.NameJa, Effect: effect})
 	}
-	learnset, err := s.q.ListSpeciesLearnset(reqCtx, store.ListSpeciesLearnsetParams{SpeciesKey: key, RegulationID: reg.ID})
+	learnset, err := tx.ListSpeciesLearnset(reqCtx, store.ListSpeciesLearnsetParams{SpeciesKey: key, RegulationID: reg.ID})
 	if err != nil {
 		return unavailable("ListSpeciesLearnset", err)
 	}
@@ -212,7 +241,19 @@ func (s *Server) GetSpecies(ctx *echo.Context, key api.SpeciesKey, params api.Ge
 		BaseStats: api.StatBlock{Hp: int(sp.BaseHp), Atk: int(sp.BaseAtk), Def: int(sp.BaseDef), Spa: int(sp.BaseSpa), Spd: int(sp.BaseSpd), Spe: int(sp.BaseSpe)},
 		Abilities: abilities, Learnset: &learnset,
 	}
-	return ctx.JSON(http.StatusOK, detail)
+	isMega := sp.IsMega
+	detail.IsMega = &isMega
+	if err := tx.Commit(); err != nil {
+		return unavailable("GetSpecies/Commit", err)
+	}
+	return ctx.JSON(http.StatusOK, speciesDetailBody{SpeciesDetail: detail, RequiredItemId: nullStringPtr(sp.RequiredItemID)})
+}
+
+// speciesDetailBody は SpeciesDetail の応答本文。requiredItemId は契約上 optional なので生成型は omitempty だが、
+// 公開 API はメガでなくてもキーを出す(null)。外側の同名フィールドが埋め込み側より優先され、キーが重複しない。
+type speciesDetailBody struct {
+	api.SpeciesDetail
+	RequiredItemId *string `json:"requiredItemId"`
 }
 
 // GetMove は GET /api/pokedex/moves/{key}。使用可能集合の外の技も返す(絞り込みは検索の仕事)。
@@ -281,6 +322,49 @@ func (s *Server) ListNatures(ctx *echo.Context, params api.ListNaturesParams) er
 		out = append(out, api.Nature{Id: r.ID, NameJa: r.NameJa, Plus: statKeyPtr(r.Plus), Minus: statKeyPtr(r.Minus)})
 	}
 	return ctx.JSON(http.StatusOK, out)
+}
+
+// publicEffect は公開 API の effect(ADR-0218)。行が無ければ nil(キーを省く)。あれば共通マスタで
+// 厳格に検証してから、数値の字面を保ったまま api.MasterEffect にする。検証に通らなければ error
+// (呼び出し側が 503 にする。error の文面は本文に出ない)。相性表は最初に必要になったときだけ chart に読む。
+func publicEffect[T any](ctx context.Context, q store.Querier, chart *engine.TypeChart, rawp *json.RawMessage,
+	decode func([]byte, engine.TypeChart) (*T, error)) (*api.MasterEffect, error) {
+	if rawp == nil {
+		return nil, nil // 効果の行が無い
+	}
+	raw := *rawp
+	if *chart == (engine.TypeChart{}) {
+		c, err := loadTypeChart(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		*chart = c
+	}
+	if _, err := decode(raw, *chart); err != nil {
+		return nil, err
+	}
+	return masterEffectFor(raw)
+}
+
+// loadTypeChart は types / type_chart から engine.TypeChart を作る(services/internal/master 経由)。
+func loadTypeChart(ctx context.Context, q store.Querier) (engine.TypeChart, error) {
+	types, err := q.ListTypes(ctx)
+	if err != nil {
+		return engine.TypeChart{}, err
+	}
+	chart, err := q.ListTypeChart(ctx)
+	if err != nil {
+		return engine.TypeChart{}, err
+	}
+	typeRows := make([]master.TypeRow, 0, len(types))
+	for _, t := range types {
+		typeRows = append(typeRows, master.TypeRow{ID: t.ID, SortOrder: int(t.SortOrder), NameJa: t.NameJa})
+	}
+	chartRows := make([]master.TypeChartRow, 0, len(chart))
+	for _, c := range chart {
+		chartRows = append(chartRows, master.TypeChartRow{AttackType: c.AttackType, DefenseType: c.DefenseType, Code: int(c.Code)})
+	}
+	return master.TypeChart(typeRows, chartRows)
 }
 
 // ListMoveLearners は GET /api/pokedex/moves/{key}/learners(技を覚える種族の一覧。ADR-0251)。

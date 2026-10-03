@@ -24,6 +24,8 @@ import (
 	"example.com/pokecalc/services/internal/api"
 	"example.com/pokecalc/services/internal/calcevents"
 	"example.com/pokecalc/services/internal/httpmetrics"
+	"example.com/pokecalc/services/internal/reqlog"
+	"example.com/pokecalc/services/internal/version"
 )
 
 // messageInternal は回復した panic・想定外の失敗に付ける固定文。
@@ -70,7 +72,9 @@ func NewServer(store master.Store, publisher EventPublisher) *Server {
 func NewHandler(store master.Store, publisher EventPublisher, opts ...Option) http.Handler {
 	e := echo.New()
 	e.HTTPErrorHandler = httpErrorHandler
+	e.Logger = slog.Default() // main が JSON ハンドラを既定にした後に呼ばれる(issue #246)
 	m := httpmetrics.New()
+	e.Use(reqlog.Middleware(slog.Default())) // 最も外側: ID の確定とアクセスログ(issue #246)
 	e.Use(m.Middleware())
 	e.Use(recoverMiddleware)
 	e.GET(httpmetrics.Path, m.Handler())
@@ -124,7 +128,7 @@ func registerPokedexNotFoundRoutes(e *echo.Echo) {
 }
 
 func healthzHandler(c *echo.Context) error {
-	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	return c.JSON(http.StatusOK, map[string]string{"status": "ok", "version": version.Version})
 }
 
 // limitedBody はリクエスト本文を maxRequestBodyBytes に制限した Reader にする(critic 指摘 R7)。
@@ -246,6 +250,12 @@ func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) erro
 	if err := validateIndividual("防御側", defender); err != nil {
 		return err
 	}
+	if err := s.checkMegaItem("攻撃側", attacker.Species, attacker.Item); err != nil {
+		return err
+	}
+	if err := s.checkMegaItem("防御側", defender.Species, defender.Item); err != nil {
+		return err
+	}
 
 	if err := checkDeadline(ctx.Request().Context()); err != nil {
 		return err
@@ -308,6 +318,12 @@ func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 		return err
 	}
 	if err := validateIndividual("防御側の種族", engine.Individual{Species: species}); err != nil {
+		return err
+	}
+	if err := s.checkMegaItem("攻撃側", attacker.Species, attacker.Item); err != nil {
+		return err
+	}
+	if err := s.checkMegaItems("itemVariants", species, variants); err != nil {
 		return err
 	}
 	var defenderAbilityOverride *string
@@ -386,6 +402,12 @@ func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) er
 		return err
 	}
 	if err := validateIndividual("推定側の種族", engine.Individual{Species: species}); err != nil {
+		return err
+	}
+	if err := s.checkMegaItem("既知の側", known.Species, known.Item); err != nil {
+		return err
+	}
+	if err := s.checkMegaItems("itemCandidates", species, items); err != nil {
 		return err
 	}
 	maxCandidates := derefInt(req.MaxCandidates)

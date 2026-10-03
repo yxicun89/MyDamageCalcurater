@@ -231,7 +231,14 @@ func TestGetSpecies(t *testing.T) {
 	if d.BaseStats != (api.StatBlock{Hp: 80, Atk: 90, Def: 70, Spa: 100, Spd: 75, Spe: 85}) {
 		t.Errorf("baseStats = %+v", d.BaseStats)
 	}
-	wantAbilities := []api.Ability{{Id: "testblaze", NameJa: "テストもうか"}, {Id: "testguard", NameJa: "テストまもり"}}
+	// 特性は効果を持てば effect を伴う(issue #211・ADR-0218。値の詳細は public_effect_test.go)。
+	// decodeStrict は float64 で数値を読むので、期待値も float64 で書く。
+	blazeEffect := api.MasterEffect{"OffBoostType": "fire", "OffBoostTypeMod": float64(6144)}
+	guardEffect := api.MasterEffect{"DefResistType": map[string]any{"fire": float64(2048), "water": float64(2048)}}
+	wantAbilities := []api.Ability{
+		{Id: "testblaze", NameJa: "テストもうか", Effect: &blazeEffect},
+		{Id: "testguard", NameJa: "テストまもり", Effect: &guardEffect},
+	}
 	if !reflect.DeepEqual(d.Abilities, wantAbilities) {
 		t.Errorf("abilities = %+v, want %+v", d.Abilities, wantAbilities)
 	}
@@ -433,7 +440,7 @@ func TestPublicInputValidation(t *testing.T) {
 			validateResponseAgainstContract(t, http.MethodGet, tt.target, tt.withHeaders, rec)
 			for _, c := range q.Calls {
 				switch c.Method {
-				case "SearchSpecies", "SearchMoves", "SearchItems", "GetSpeciesByKey", "GetMove", "GetMovesByIDs":
+				case storetest.MethodBeginTx, "GetDefaultRegulation", "SearchSpecies", "SearchMoves", "SearchItems", "GetSpeciesByKey", "GetMove", "GetMovesByIDs":
 					t.Errorf("入力が不正なのに %s を呼んだ", c.Method)
 				}
 			}
@@ -501,6 +508,44 @@ func TestPublicUnavailable(t *testing.T) {
 			rec := do(t, h, http.MethodGet, tt.target, true)
 			assertError(t, rec, http.StatusServiceUnavailable, api.MasterUnavailable)
 			validateAgainstContract(t, http.MethodGet, tt.target, true, rec)
+		})
+	}
+}
+
+// AC-P4c: 種族の詳細は isMega(常に)と requiredItemId(キーは常に。メガでなければ null)を返す(issue 515)。
+// requiredItemId は契約上 optional なので生成型は omitempty だが、公開 API は null でもキーを出す。
+func TestGetSpeciesMegaFields(t *testing.T) {
+	h := newHandler(t, storetest.New())
+	tests := []struct {
+		name     string
+		key      string
+		isMega   bool
+		wantItem any // nil は JSON の null
+	}{
+		{"メガ種族", "9001-001", true, "teststone"},
+		{"非メガ種族", "9001-000", false, nil},
+		{"レギュレーション外の非メガ", "9003-000", false, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := do(t, h, http.MethodGet, "/api/pokedex/species/"+tt.key, true)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d\nbody=%s", rec.Code, rec.Body.String())
+			}
+			var raw map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+				t.Fatal(err)
+			}
+			if got, ok := raw["isMega"]; !ok || got != tt.isMega {
+				t.Errorf("isMega = %v (present=%v), want %v", got, ok, tt.isMega)
+			}
+			got, ok := raw["requiredItemId"]
+			if !ok {
+				t.Fatalf("requiredItemId のキーが無い: %s", rec.Body.String())
+			}
+			if got != tt.wantItem {
+				t.Errorf("requiredItemId = %v, want %v", got, tt.wantItem)
+			}
 		})
 	}
 }

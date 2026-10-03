@@ -89,6 +89,7 @@ paths:
       description: |
         使用可能集合の外の種族も返す(絞り込みは検索の仕事)。`abilities` は slot 順、
         `learnset` は習得技 ∩ 既定のレギュレーションの使用可能な技(ID 昇順)。
+        `abilities` の各特性は効果を持てば `effect` を伴う(ADR-0218)。
       parameters:
         - $ref: '#/components/parameters/DeviceId'
         - $ref: '#/components/parameters/SessionId'
@@ -293,7 +294,10 @@ paths:
       tags: [pokedex]
       operationId: searchItems
       summary: 持ち物を日本語名で前方一致検索
-      description: 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
+      description: |
+        既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
+        各持ち物は効果を持てば `effect` を伴う(ADR-0218)。効果を持つ持ち物だけに絞る検索条件は無い
+        (クライアントが `effect` の有無で絞る)。
       parameters:
         - $ref: '#/components/parameters/DeviceId'
         - $ref: '#/components/parameters/SessionId'
@@ -1033,6 +1037,15 @@ components:
 
     Format:
       type: string
+      description: |
+        対戦形式。計算(/api/calc・/api/calc/bulk・/api/calc/reverse)では double のとき次を掛ける(issue 232 案B のダブル分・ADR-0222)。
+        - 防御側の壁(リフレクター・ひかりのかべ・オーロラベール): ×2732/4096(single は ×1/2)。急所は壁を無視する
+        - 全体技(技の対象が相手全体・自分以外全体): 基礎ダメージに ×3072/4096(天候・急所より前)。
+          1対1の計算なので、全体技は常に2体以上に当たる前提で掛ける。味方の効果(てだすけ等)は扱わない
+        技の対象をマスタが持たない間(issue 288)は、double の攻撃技に UnsupportedMark
+        (target=move・reason=move_target_unknown)を付け、全体技の補正は掛けない(壁は掛ける)。
+        double は計算に反映するので形式の印は付けない。engine に未知の形式が届いたときだけ安全側で
+        target format・reason unsupported_effect の印が付く(ADR-0160・ADR-0222 §5)。
       enum: [single, double]
       default: single
 
@@ -1098,6 +1111,18 @@ components:
               type: array
               description: 覚える技の ID 一覧
               items: { type: string }
+            isMega:
+              type: boolean
+              description: |
+                メガシンカ後の種族か(docs/mega-evolution-spec.md。issue 515)。pokedex-svc は常に返す。
+                古いサーバーは返さないため、省略は「メガではない」と同じ扱い(クライアントの互換のため required にしていない)。
+            requiredItemId:
+              type: string
+              nullable: true
+              description: |
+                メガシンカに要る持ち物(メガストーン)の ID。メガでなければ null。pokedex-svc は null でもキーを常に返す
+                (ADR-0218 の `effect` は「キーごと省く」ので逆。クライアントは省略も null も「メガではない」と読む)。
+                isMega が true の種族は、この ID の持ち物を持つ前提(クライアントが持ち物を固定する。ADR-0200 §4 の検証と同じ規則)。
 
     StatBlock:
       type: object
@@ -1127,6 +1152,15 @@ components:
       properties:
         id: { type: string }
         nameJa: { type: string }
+        effect:
+          allOf: [ { $ref: '#/components/schemas/MasterEffect' } ]
+          description: |
+            特性の効果定義(ability_effects の JSON。`getMasterExport` の `MasterAbility.effect` と同じ値・同じ形。
+            issue 211・ADR-0218)。効果を持たない特性は**キーごと省く**(null を返さない)。
+            pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeAbilityEffect`)で厳格に検証し、
+            検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。古いサーバーはこのキーを
+            返さないため、クライアントは「キーが無い」を「効果なし」と「効果データを返さない版」の
+            どちらとも区別できない。区別はクライアントの capabilities で行う(ADR-0304 A-1・ADR-0218 §4)。
 
     Move:
       type: object
@@ -1145,6 +1179,13 @@ components:
       properties:
         id: { type: string }
         nameJa: { type: string }
+        effect:
+          allOf: [ { $ref: '#/components/schemas/MasterEffect' } ]
+          description: |
+            持ち物の効果定義(item_effects の JSON。`getMasterExport` の `MasterItem.effect` と同じ値・同じ形。
+            issue 211・ADR-0218)。効果を持たない持ち物は**キーごと省く**(null を返さない)。
+            pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeItemEffect`)で厳格に検証し、
+            検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。
 
     Nature:
       type: object
@@ -1170,12 +1211,21 @@ components:
         level: { type: integer, minimum: 50, maximum: 50, default: 50 }
         natureId: { type: string }
         abilityId: { type: string, nullable: true }
-        itemId: { type: string, nullable: true }
+        itemId:
+          type: string
+          nullable: true
+          description: |
+            持ち物。メガシンカ後の種族(isMega)は、その requiredItemId の持ち物か持ち物なし(null・省略)だけ受け付け、
+            別の持ち物は 400 `invalid_input`(ADR-0200 §4)。
         sp:
           allOf: [ { $ref: '#/components/schemas/StatBlock' } ]
           description: 能力ポイント。各 0..32、合計 <= 66
         ranks: { $ref: '#/components/schemas/RankBlock' }
         teraType:
+          description: |
+            テラスタイプ。受け付けるが計算には反映しない(テラスタルの補正は未実装)。指定すると数値は
+            テラスなしのまま、結果の unsupported に target attacker_tera_type / defender_tera_type・
+            reason unsupported_effect・id テラスタイプの印が付く(ADR-0160)。
           nullable: true
           allOf: [ { $ref: '#/components/schemas/PokeType' } ]
         status: { $ref: '#/components/schemas/StatusCondition' }
@@ -1241,13 +1291,16 @@ components:
       type: object
       description: |
         「この結果は正しくない可能性がある」印1つ(ADR-0123)。engine が正しく計算できない技の機構・
-        持ち物・特性に、数値は通常の式のまま付ける(400 で拒否しない)。
+        持ち物・特性と、受け付けるが計算に反映しないテラスタイプ・未知の対戦形式(ADR-0160・ADR-0222 §5)に、数値は
+        通常の式のまま付ける(400 で拒否しない)。
       required: [target, reason, id]
       properties:
         target:
           type: string
           description: |
-            印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability。
+            印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability・
+            attacker_tera_type・defender_tera_type・format(並びもこの順)。format は engine に未知の形式が
+            届いたときだけ(double は計算に反映するので付かない。ADR-0222 §5)。
             値を足しても古いクライアントが応答全体をデコードできなくなるのを避けるため、enum にしない
             (クライアントは未知の値を「対象不明の印」として扱い、id をそのまま表示する。ADR-0215)。
         reason:
@@ -1256,10 +1309,16 @@ components:
             印の理由。技は機構の値(MasterMove.mechanisms と同じ13種: alt_defense_stat・alt_offense_stat・
             always_crit・effectiveness_change・field_specific・fixed_damage・ignore_defense_ranks・
             move_specific・multi_hit・ohko・priority_change・type_change・variable_power)か
-            zero_power(威力0の攻撃技。威力が技の処理で決まるため)、持ち物・特性は
-            unsupported_effect(効果スキーマで表せない)。target と同じ理由で enum にしない
+            zero_power(威力0の攻撃技。威力が技の処理で決まるため)・move_target_unknown(double で技の対象が
+            不明なため全体技の補正を判断できない。ADR-0222)、持ち物・特性は
+            unsupported_effect(効果スキーマで表せない)、テラスタイプ・未知の対戦形式も unsupported_effect
+            (効果を計算に反映していない。ADR-0160)。target と同じ理由で enum にしない
             (クライアントは未知の値を汎用の文言で扱う。ADR-0215)。
-        id: { type: string, description: 技・持ち物・特性の ID }
+        id:
+          type: string
+          description: |
+            技・持ち物・特性の ID。target が attacker_tera_type / defender_tera_type のときはテラスタイプ
+            (PokeType の値)、format のときは対戦形式(Format の値)。
 
     CalcResult:
       type: object
@@ -1379,6 +1438,7 @@ components:
           type: array
           description: |
             差し替えて比較する持ち物 ID(省略時は素の1通り)。null 要素は「持ち物なし」。
+            defenderSpeciesKey がメガシンカ後の種族のとき、requiredItemId 以外の持ち物を含めると 400 `invalid_input`(ADR-0200 §4)。
             65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
             行の基本数は `len(presets) × len(itemVariants)`(上限 8 × 64 = 512)。特性ごとに結果が違う
             ときだけ、その基本数のうち最大3倍(特性の候補数。ADR-0126・ADR-0214)まで行が分かれる。
@@ -1510,6 +1570,7 @@ components:
           type: array
           description: |
             相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ。
+            unknownSpeciesKey がメガシンカ後の種族のとき、requiredItemId 以外の持ち物を含めると 400 `invalid_input`(ADR-0200 §4)。
             65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
           maxItems: 64
           uniqueItems: true

@@ -126,17 +126,21 @@ func terrainDamageMod(terr Terrain, moveType Type, attackerGrounded, defenderGro
 }
 
 // screenDamageMod は壁による軽減倍率を返す。急所は壁を貫通するため呼び出し側で除外する。
-// シングルは ModifierHalf(×0.5)。
+// シングル・形式未指定は ModifierHalf(×0.5)、ダブルは ModifierDoubleScreen(2732/4096。ADR-0222)。
 func screenDamageMod(in DamageInput) int {
 	s := in.Field.DefenderScreens
+	half := ModifierHalf
+	if in.Format == FormatDouble {
+		half = ModifierDoubleScreen
+	}
 	switch in.Move.Category {
 	case CategoryPhysical:
 		if s.Reflect || s.AuroraVeil {
-			return ModifierHalf
+			return half
 		}
 	case CategorySpecial:
 		if s.LightScreen || s.AuroraVeil {
-			return ModifierHalf
+			return half
 		}
 	}
 	return Modifier4096

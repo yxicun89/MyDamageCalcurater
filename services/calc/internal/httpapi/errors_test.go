@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"example.com/pokecalc/engine"
+	"example.com/pokecalc/services/internal/version"
 )
 
 // calcBody は妥当な /api/calc の本文(書き換え用)。
@@ -260,9 +261,19 @@ func TestPanicIsRecoveredAsInternal(t *testing.T) {
 	}
 }
 
-// AC-8: GET /healthz は 200 {"status":"ok"}(openapi に載せない運用エンドポイント。ヘッダ不要)。
+// AC-8: GET /healthz は 200 {"status":"ok","version":<ビルドの版>}(openapi に載せない運用エンドポイント。ヘッダ不要。
+// version は issue #217。NewHandler・NewDeferredHandler のどちらも同じ)。
 func TestHealthz(t *testing.T) {
-	h := NewHandler(newFakeStore(t), nil)
+	prev := version.Version
+	version.Version = "abc1234"
+	t.Cleanup(func() { version.Version = prev })
+	for name, h := range calcMetricsHandlers(t) {
+		t.Run(name, func(t *testing.T) { assertHealthz(t, h) })
+	}
+}
+
+func assertHealthz(t *testing.T, h http.Handler) {
+	t.Helper()
 	rec := serve(t, h, http.MethodGet, "/healthz", http.Header{}, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
@@ -271,8 +282,8 @@ func TestHealthz(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("本文が JSON でない: %v; body=%s", err, rec.Body.String())
 	}
-	if len(body) != 1 || body["status"] != "ok" {
-		t.Errorf("本文 = %v, want {\"status\":\"ok\"}", body)
+	if len(body) != 2 || body["status"] != "ok" || body["version"] != "abc1234" {
+		t.Errorf("本文 = %v, want {\"status\":\"ok\",\"version\":\"abc1234\"}", body)
 	}
 }
 
