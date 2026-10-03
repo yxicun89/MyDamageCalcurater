@@ -10,7 +10,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { Move, Ranks } from "../engine/types";
 import { unsupportedMarkName } from "../domain/unsupportedLabels";
 import { formatMoveCategory } from "../domain/format";
-import { megaItemLock, megaStoneItemIds, selectableItems } from "../domain/mega";
+import { JUDGE_ITEM_ROLE_FILTER, itemsForRole, megaStoneLabel } from "../domain/itemRoles";
+import { megaItemLock, megaStoneItemIds } from "../domain/mega";
 import { MAX_SP_PER_STAT } from "../domain/requests";
 import { calcScreenText, judgeErrorText, judgeScreenText, unsupportedText } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
@@ -511,8 +512,9 @@ function IndividualFields({
   // issue 515・ADR-0320: メガ種族の持ち物はメガストーンに固定する(固定は選んだ種族から毎回導く)。
   // メガストーンは単独の選択肢に出さない(判別集合は、全件の一覧 + この体で選んだ種族から導く)。
   const itemLock = megaItemLock(value.species, master.items);
-  const pickableItems = selectableItems(
+  const pickableItems = itemsForRole(
     master.items,
+    JUDGE_ITEM_ROLE_FILTER,
     megaStoneItemIds(value.species === null ? master.species : [...master.species, value.species]),
   );
   const itemReasonId = `${uid}-item-reason`;
@@ -639,11 +641,15 @@ function IndividualFields({
           }}
         >
           <option value="">{judgeScreenText.unselectedOption}</option>
-          {(itemLock.kind === "locked" ? [itemLock.item] : pickableItems).map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.nameJa}
-            </option>
-          ))}
+          {itemLock.kind === "locked" && value.species !== null ? (
+            <option value={itemLock.item.id}>{megaStoneLabel(value.species)}</option>
+          ) : (
+            pickableItems.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.nameJa}
+              </option>
+            ))
+          )}
         </select>
       </label>
       <MegaItemReason id={itemReasonId} lock={itemLock} className="judge-individual__reason" />

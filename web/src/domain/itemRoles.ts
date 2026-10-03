@@ -3,10 +3,9 @@
 // 役割はサーバーが返す roles だけを読み、効果(effect)から再導出しない。roles が無い持ち物は役割では絞らない。
 // メガストーンは選択肢に出さない(isMegaStone、無ければ megaStoneItemIds の集合で判別)。固定に使うストーンは
 // 絞り込む前の全件から domain/mega.ts の megaItemLock で引く。
-//
-// TODO(ADR-0326 実装): 以下はスタブ。spec のテスト(domain/itemRoles.test.ts ほか)を通す実装に置き換える。
 
 import type { Item, ReverseSide } from "../engine/types";
+import { itemRoleText } from "../i18n/items";
 import type { ItemRole, MasterItem, MasterSpecies } from "../master/types";
 
 /**
@@ -24,21 +23,17 @@ export const ADJUST_ITEM_ROLE_FILTER: ItemRoleFilter = "either";
 /** 構築の編集の持ち物欄(ダメージに効かない持ち物も構築として記録する)。 */
 export const TEAM_ITEM_ROLE_FILTER: ItemRoleFilter = "any";
 
-function notImplemented(name: string): never {
-  throw new Error(`未実装(ADR-0326): ${name}`);
-}
-
 /**
  * 逆算で自分の持ち物欄の役割。side は逆算する相手の側(ReverseSide)なので、自分はその反対
  * (与えたダメージ = side "defender" → 自分は attacker、受けたダメージ = side "attacker" → 自分は defender)。
  */
 export function reverseMyItemRole(side: ReverseSide): ItemRole {
-  return notImplemented(`reverseMyItemRole(${side})`);
+  return side === "defender" ? "attacker" : "defender";
 }
 
 /** 持ち物がメガストーンか(isMegaStone が true、または isMegaStone が無く stoneIds に含まれる)。 */
 export function isMegaStoneItem(item: MasterItem, stoneIds: ReadonlySet<string>): boolean {
-  return notImplemented(`isMegaStoneItem(${item.id}, ${String(stoneIds.size)})`);
+  return item.isMegaStone ?? stoneIds.has(item.id);
 }
 
 /**
@@ -46,7 +41,13 @@ export function isMegaStoneItem(item: MasterItem, stoneIds: ReadonlySet<string>)
  * (役割が分からないので絞らない)。any は常に true。
  */
 export function itemMatchesRole(item: MasterItem, filter: ItemRoleFilter): boolean {
-  return notImplemented(`itemMatchesRole(${item.id}, ${filter})`);
+  if (filter === "any" || item.roles === undefined) {
+    return true;
+  }
+  if (filter === "either") {
+    return item.roles.length > 0;
+  }
+  return item.roles.includes(filter);
 }
 
 /**
@@ -58,7 +59,8 @@ export function itemsForRole(
   filter: ItemRoleFilter,
   stoneIds?: ReadonlySet<string>,
 ): readonly MasterItem[] {
-  return notImplemented(`itemsForRole(${String(items.length)}, ${filter}, ${String(stoneIds?.size ?? 0)})`);
+  const stones = stoneIds ?? new Set<string>();
+  return items.filter((item) => !isMegaStoneItem(item, stones) && itemMatchesRole(item, filter));
 }
 
 export interface ItemAfterRoleChangeInput {
@@ -83,7 +85,12 @@ export interface ItemAfterRoleChange {
  * メガの固定はここでは扱わない(固定は種族から毎回導く)。
  */
 export function itemAfterRoleChange(input: ItemAfterRoleChangeInput): ItemAfterRoleChange {
-  return notImplemented(`itemAfterRoleChange(${input.role}, ${input.currentItemId})`);
+  const { items, role, currentItemId } = input;
+  const current = items.find((item) => item.id === currentItemId);
+  if (current === undefined || current.isMegaStone === true || itemMatchesRole(current, role)) {
+    return { itemId: currentItemId, dropped: null };
+  }
+  return { itemId: "", dropped: current };
 }
 
 /**
@@ -91,10 +98,14 @@ export function itemAfterRoleChange(input: ItemAfterRoleChangeInput): ItemAfterR
  * null・省略・空白なら「メガストーン」(名前を推測しない。ストーンの nameJa は使わない)。
  */
 export function megaStoneLabel(species: MasterSpecies): string {
-  return notImplemented(`megaStoneLabel(${species.key})`);
+  const name = species.baseSpeciesNameJa?.trim();
+  return name === undefined || name === "" ? itemRoleText.megaStoneUnnamed : itemRoleText.megaStoneOf(name);
 }
 
 /** engine・calc-svc に渡す持ち物の形(id・nameJa・effect だけ。境界は未知のフィールドを拒否する)。 */
 export function toEngineItem(item: MasterItem): Item {
-  return notImplemented(`toEngineItem(${item.id})`);
+  if (item.roles === undefined && item.isMegaStone === undefined) {
+    return item;
+  }
+  return { id: item.id, nameJa: item.nameJa, effect: item.effect };
 }

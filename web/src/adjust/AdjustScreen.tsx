@@ -13,7 +13,7 @@
 //   region「調整の結果」    今の振り方の指数と 16n + モードの結果 + 未対応の印
 //   region「この技を覚えるポケモン」 「覚えるポケモン」を押したときだけ出す
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import type { components } from "../api/openapi.gen";
 import {
   ATTACKER_PRESET_KEYS,
@@ -30,6 +30,8 @@ import {
   resolveDefenderPreset,
   type DefenderPresetKey,
 } from "../domain/defenderPresets";
+import { ADJUST_ITEM_ROLE_FILTER, itemsForRole } from "../domain/itemRoles";
+import { megaStoneItemIds } from "../domain/mega";
 import { isDamagingMove, learnsetMoves } from "../domain/moves";
 import { BATTLE_LEVEL, MAX_SP_PER_STAT, MAX_SP_TOTAL, STAT_ORDER } from "../domain/requests";
 import { unsupportedMarkLabels } from "../domain/unsupportedLabels";
@@ -257,6 +259,11 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
   const needsOpponent =
     mode === "minKo" || mode === "minSurvive" || ((mode === "bulk" || mode === "offense") && useGoal);
   const opponentAttacks = mode === "minSurvive" || (mode === "bulk" && useGoal);
+  // ADR-0326: 持ち物は攻撃・防御のどちらかの役割を持つものだけ(メガストーンは出さない。調整にメガの固定は無い)。
+  const selectableItems = useMemo(
+    () => itemsForRole(master.items, ADJUST_ITEM_ROLE_FILTER, megaStoneItemIds(master.species)),
+    [master.items, master.species],
+  );
   const selfMove = findMove(self.choice, self.moveId);
   const opponentMove = findMove(opponent.choice, opponent.moveId);
   const offenseCategory: Schemas["MoveCategory"] =
@@ -699,7 +706,7 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
             }}
           >
             <option value="">{T.unselectedOption}</option>
-            {master.items.map((item) => (
+            {selectableItems.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.nameJa}
               </option>

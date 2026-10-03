@@ -200,3 +200,7 @@ docs/verify-m1.md §6(ブラウザ確認)を Safari で確認(P4-5。issue #333�
 **画面レジストリ化(2026-10-03。ADR-0323。ブランチ feat/web-screen-registry)**: 画面・タブは各レーンのディレクトリの登録ファイル
 `*.screen.tsx`(`defineScreen`)で足す。`App.tsx`・`app/screens.tsx`・`app/routes.ts`・`i18n/ja.ts` は画面の追加では触らない。
 App.tsx・app/screens.tsx・app/routes.ts・i18n/ja.ts を編集している未マージの Web の PR などは、main を merge して変更を登録ファイル・`i18n/<レーン>.ts` に移す(ADR-0323 §5)。
+
+**持ち物の役割とメガストーン表示(2026-10-03。ADR-0326。ブランチ feat/web-item-roles)**: ユーザーの実使用の不具合報告(メガストーンの英語表記・攻撃側に意味のない持ち物)の修正。
+持ち物欄は `web/src/domain/itemRoles.ts` の `itemsForRole` で絞る(`roles` が無い持ち物は絞らない・メガストーンはどの欄にも出さない)。
+固定中の表示は「{基本種名}のメガストーン」。文言は `web/src/i18n/items.ts`。マスタのキャッシュ版は 3。iOS の同じ語での追従は iOS レーンに残る。
