@@ -85,7 +85,7 @@ purge journal の DB 外保管、復元の順序を担うものが無い。一�
 | # | 未対応 | 理由 | 既定案 |
 |---|---|---|---|
 | 1 | サービスが削除要求の受付時に purge journal を DB 外へ**同時に**追記する(ADR-0209 §9-2 の厳密な形) | record / team の store 実装と、DB 外の書き込み先(オブジェクトストレージ・別 DB・NATS KV 等)が要る。保存先の選択はクラウドの判断 | §5 の同期(日次〜1時間ごと)で運用し、穴を runbook に書く。クラウドへ出す前に、同時追記を別 ADR で決める |
-| 2 | 共有クラスタ(k3d)上の実バックアップ・復元 | TiDB(TidbCluster)が未適用(P5-1 の残り)で、record / team の Deployment も未配備 | 配備後に runbook どおり1回通し、結果を plan.md に記録(人間の確認付き) |
+| 2 | ~~共有クラスタ(k3d)上の実バックアップ・復元~~ **解消(2026-10-03。ADR-0227)** | `make db-backup-k3d`・`make db-restore-drill-k3d` を実 TiDB(record・team)で流し、別名 DB への復元・行数・墓石の一致まで通った | 結果は ADR-0227 の実行記録。墓石・journal が 0 件だった点と API 越しの確認(7)は未実施 |
 | 3 | クラウドの保存先・暗号化 | 公開しない・tailnet 内の方針(ADR-0210)で、クラウドに出す判断が未確定 | ローカルの `data/generated/backups/` のみ。出すなら暗号化(例: age)を別 ADR で必須に |
 | 4 | PVC のスナップショット(`pokedex-import-cache` 等) | StorageClass(local-path)はスナップショット非対応 | 論理バックアップ(本 ADR)で足りるものに限る。import キャッシュは再取得 |
 | 5 | Argo CD の設定・リポジトリ Secret・レジストリ image の復元(#297) | needs-decision(レジストリを永続化するか、再作成時に push し直して digest を更新する PR を作るか) | #297 を別途決める。本 ADR は DB の部分だけ(#297 の「DB を戻す」側)を満たす |
