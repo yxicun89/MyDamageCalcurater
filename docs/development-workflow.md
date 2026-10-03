@@ -9,7 +9,7 @@
 
 | 配置 | 内容 |
 |---|---|
-| `CLAUDE.md` / `KICKOFF.md` | ドメイン・技術規約、M1 までの起動指示 |
+| `CLAUDE.md` / `docs/history/KICKOFF.md` | ドメイン・技術規約 / M1 までの起動指示(役目を終えた履歴) |
 | `.claude/agents/quick-scanner.md` | Haiku、関連要件・コード・ADR・テストの読み取り専用調査 |
 | `.claude/agents/spec-writer.md` | Opus、受け入れ条件・失敗するテスト、API 契約先行変更 |
 | `.claude/agents/implementer.md` | Sonnet、最小実装・test/golden 実行 |
@@ -94,7 +94,7 @@ Claude 側のエージェント定義・skills は維持する。軽微な作業
 - scanner/spec_writer/reviewer は read-only。implementer/verifier は workspace-write だが、
   verifier は検証の生成物以外を変更しないという指示を持つ。権限は実行環境の制約に従う。
 - Claude の `Bash(make *)` 等の広い allow は Codex に移植しない。
-  ログイン、Xcode 署名・実機、known_diffs、人間の承認が必要な削除は `CLAUDE.md` に従う。
+  ログイン、Xcode 署名・実機、人間の承認が必要な削除は `CLAUDE.md` に従う。
 - `.codex/` が保護領域なら承認された書き込み手順を使う。制約を迂回しない。
 - Claude の Go 編集フックは最後に `exit 0` があり失敗を隠し得る。
   Codex に複製せず変更した Go ファイルの明示的な gofmt と lint で結果を検証する。
