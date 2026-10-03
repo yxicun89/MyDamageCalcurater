@@ -72,7 +72,7 @@ iPhone(PWA / 将来 iOS アプリ)
 | `Ingress wishlist` + Traefik `Middleware wishlist-strip` | `/wishlist` を外して api / web へ |
 | `NetworkPolicy` | wishlist 名前空間で default-deny ingress、Traefik → api/web だけ許可 |
 | `Secret wishlist-api` | **Git に置かない**。`scripts/bootstrap.sh` が無いときだけ作る(`database-dsn`・`api-token`。`yahoo-appid` は環境変数 `WISHLIST_YAHOO_APPID` があるときだけ入れる任意のキー) |
-| `CronJob wishlist-refresher` | 毎日 03:00 JST。api イメージ(`wishlist/api`)の別バイナリ `/wishlist-refresher` を `command` で起動する。headless 用の Chromium 入りの専用イメージは、headless の Fetcher の実装時に別に作る(今は作らない) |
+| `CronJob wishlist-refresher` | 毎日 03:00 JST。Chromium 入りの専用イメージ(`wishlist/refresher`。`api/Dockerfile.refresher`)の `/wishlist-refresher` を起動する。api のイメージには Chromium を載せない |
 
 ### 共有基盤の変更
 

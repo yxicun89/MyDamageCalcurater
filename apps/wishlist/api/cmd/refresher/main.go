@@ -1,6 +1,6 @@
 // Command refresher は全商品の目安価格を順番に更新する(CronJob wishlist-refresher。毎日 03:00 JST。apps/wishlist/CLAUDE.md §11)。
 //
-//	wishlist-refresher   (引数なし。WISHLIST_DATABASE_DSN 必須・WISHLIST_YAHOO_APPID 任意)
+//	wishlist-refresher   (引数なし。WISHLIST_DATABASE_DSN 必須・WISHLIST_YAHOO_APPID・WISHLIST_CHROMIUM_PATH 任意)
 //
 // 1 商品の失敗で止めず、最後に件数と失敗数を 1 行で出す。終了コードは、商品があって全件失敗なら 1、設定の誤りは 1、
 // 引数を付けたら 2、それ以外は 0。受け入れ条件は docs/phase3-api-spec.md の AC-C6〜C8。
@@ -21,6 +21,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
+	"example.com/pokecalc/apps/wishlist/api/internal/chromium"
 	"example.com/pokecalc/apps/wishlist/api/internal/dbwait"
 	"example.com/pokecalc/apps/wishlist/api/internal/fetcher"
 	"example.com/pokecalc/apps/wishlist/api/internal/item"
@@ -29,12 +30,17 @@ import (
 
 const usage = "usage: wishlist-refresher (no arguments)"
 
+// chromiumNoSandbox は --no-sandbox を付けるか(実イメージでの確認結果。docs/phase3-api-spec.md)。
+const chromiumNoSandbox = true
+
 var errMissingEnv = errors.New("missing required environment variable")
 
 // config は refresher の設定。
 type config struct {
 	DSN        string // parseTime=true を付け、multiStatements を外した DSN
 	YahooAppID string // 前後の空白を除く。空なら api 型のサイトは取得しない
+	// ChromiumPath は headless-shell の実行ファイル(WISHLIST_CHROMIUM_PATH。前後の空白を除く)。空なら headless のサイト(メルカリ)は取得しない。
+	ChromiumPath string
 }
 
 func main() {
@@ -69,7 +75,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 
 	repo := item.NewMySQLRepository(db)
 	svc := refresh.New(refresh.Deps{
-		Items: repo, Prices: repo, Fetchers: fetcher.NewRegistry(fetcher.Config{YahooAppID: cfg.YahooAppID}),
+		Items: repo, Prices: repo, Fetchers: newRegistry(cfg),
 		Logger: slog.New(slog.NewJSONHandler(stderr, nil)), BaseContext: ctx,
 	})
 	report, err := svc.RefreshAll(ctx)
@@ -94,7 +100,11 @@ func loadConfig(getenv func(string) string) (config, error) {
 	}
 	parsed.ParseTime = true
 	parsed.MultiStatements = false
-	return config{DSN: parsed.FormatDSN(), YahooAppID: strings.TrimSpace(getenv("WISHLIST_YAHOO_APPID"))}, nil
+	return config{
+		DSN:          parsed.FormatDSN(),
+		YahooAppID:   strings.TrimSpace(getenv("WISHLIST_YAHOO_APPID")),
+		ChromiumPath: strings.TrimSpace(getenv("WISHLIST_CHROMIUM_PATH")),
+	}, nil
 }
 
 // exitCode は結果から終了コードを決める(商品が 1 つ以上あって全件失敗なら 1、それ以外は 0)。
@@ -108,4 +118,13 @@ func exitCode(r refresh.AllReport) int {
 // printReport は結果を 1 行で出す(例 `refresher: items=3 failed=1`)。
 func printReport(w io.Writer, r refresh.AllReport) {
 	fmt.Fprintf(w, "refresher: items=%d failed=%d\n", r.Items, r.Failed)
+}
+
+// newRegistry は取得の登録表を作る。ChromiumPath があるときだけ headless(メルカリ)用の Renderer を渡す。
+func newRegistry(cfg config) *fetcher.Registry {
+	fc := fetcher.Config{YahooAppID: cfg.YahooAppID}
+	if cfg.ChromiumPath != "" {
+		fc.Renderer = chromium.New(cfg.ChromiumPath, chromium.Options{NoSandbox: chromiumNoSandbox})
+	}
+	return fetcher.NewRegistry(fc)
 }

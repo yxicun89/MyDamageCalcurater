@@ -9,3 +9,5 @@ images:
     newTag: local
   - name: wishlist/web
     newTag: local
+  - name: wishlist/refresher
+    newTag: local

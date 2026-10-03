@@ -5,7 +5,7 @@
 //   - scrape   : カードラッシュ・あみあみ・Yahoo!フリマ・駿河屋(検索 URL のホスト名で選ぶ。ForSite)。
 //     駿河屋(www.suruga-ya.jp)は Crawl-delay 30 秒を守り、夜間の CronJob だけで取る(HostMinIntervals・NightlyOnlyHosts)。
 //     ドラゴンスターは取得不可(docs/sites.md)
-//   - headless : 未実装(メルカリ。chromedp)。TODO: fixture を保存してから作る
+//   - headless : メルカリ(jp.mercari.com。chromedp。Config.Renderer があるときだけ。夜間の CronJob だけで取る)
 //   - link_only: 取得しない
 //
 // 実サイトへのアクセスはテストからは行わない(fixture・httptest を使う。仕様 §13)。
@@ -104,7 +104,11 @@ var HostMinIntervals = map[string]time.Duration{
 // NightlyOnlyHosts は夜間の CronJob だけで取るホスト(api の裏の更新・手動の更新では取らない)。
 var NightlyOnlyHosts = map[string]bool{
 	"www.suruga-ya.jp": true,
+	mercariHost:        true,
 }
+
+// mercariHost は headless で取るメルカリのホスト。
+const mercariHost = "jp.mercari.com"
 
 // ThrottleWith は Throttle にホストごとの最小間隔 hostIntervals(nil 可)を足したもの。
 // そのホストの間隔は interval と表の値の長いほう。
@@ -193,6 +197,8 @@ type Config struct {
 	Client        *http.Client  // nil なら netguard.NewClient(netguard.Options{})
 	Clock         Clock         // nil なら SystemClock
 	Interval      time.Duration // 0 なら MinInterval
+	// Renderer は headless(メルカリ)の描画。nil なら headless は登録しない(Chromium が無い環境。refresher だけが渡す)。
+	Renderer Renderer
 }
 
 // Registry は fetch_type から Fetcher を選ぶ表。
@@ -200,9 +206,11 @@ type Registry struct {
 	m map[item.FetchType]Fetcher
 	// scrape は検索 URL テンプレートのホスト名(小文字)ごとの Fetcher。NewRegistryWith では使わない。
 	scrape map[string]Fetcher
+	// headless は同じくホストごとの Fetcher(Config.Renderer があるときだけ)。
+	headless map[string]Fetcher
 }
 
-// NewRegistry は本番の表を作る。api は Yahoo(YahooAppID があるときだけ)。scrape・headless は未実装、link_only は取得しない。
+// NewRegistry は本番の表を作る。api は Yahoo(YahooAppID があるときだけ)。scrape(ホスト別)・headless(メルカリ。Renderer があるときだけ)、link_only は取得しない。
 // 登録する Fetcher はすべて Throttle(Interval・Clock)で包む(同じサイトの間隔は Fetcher をまたいで守る)。
 func NewRegistry(cfg Config) *Registry {
 	interval := cfg.Interval
@@ -225,7 +233,13 @@ func NewRegistry(cfg Config) *Registry {
 		"paypayfleamarket.yahoo.co.jp": ThrottleWith(NewYahooFurima(cfg.Client), interval, HostMinIntervals, clock),
 		"www.suruga-ya.jp":             ThrottleWith(NewSurugaya(cfg.Client), interval, HostMinIntervals, clock),
 	}
-	return &Registry{m: m, scrape: scrape}
+	reg := &Registry{m: m, scrape: scrape}
+	if cfg.Renderer != nil {
+		reg.headless = map[string]Fetcher{
+			mercariHost: ThrottleWith(NewMercari(cfg.Renderer, clock), interval, HostMinIntervals, clock),
+		}
+	}
+	return reg
 }
 
 // NightlyOnly は site が夜間の CronJob だけで取るサイトか(NightlyOnlyHosts。検索 URL テンプレートのホストで決める)。
@@ -252,11 +266,11 @@ func (r *Registry) For(t item.FetchType) (Fetcher, bool) {
 // 大文字小文字とポートは無視)で選ぶ。それ以外は For(fetch_type)。NewRegistryWith の表はホストを見ない。
 func (r *Registry) ForSite(site Site) (Fetcher, bool) {
 	if site.FetchType == item.FetchScrape && r.scrape != nil {
-		u, err := url.Parse(site.SearchURLTemplate)
-		if err != nil {
-			return nil, false
-		}
-		f, ok := r.scrape[strings.ToLower(u.Hostname())]
+		f, ok := r.scrape[siteHost(site)]
+		return f, ok
+	}
+	if site.FetchType == item.FetchHeadless && r.headless != nil {
+		f, ok := r.headless[siteHost(site)]
 		return f, ok
 	}
 	return r.For(site.FetchType)
