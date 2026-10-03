@@ -406,6 +406,13 @@ paths:
       responses:
         '200':
           description: 画像
+          headers:
+            Cache-Control:
+              description: |
+                ファイル名は保存のたびに新しくなり内容は変わらないため、長期キャッシュ・immutable を付ける
+                (例 `public, max-age=31536000, immutable`)
+              schema:
+                type: string
           content:
             image/*:
               schema:
