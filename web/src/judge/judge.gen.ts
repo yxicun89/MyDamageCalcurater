@@ -469,6 +469,7 @@ export interface components {
      *     request_too_large: request body が上限(8 KiB)を超えている。
      *     upstream_unavailable: pokedex-svc / calc-svc が未設定・接続できない・タイムアウト・5xx・契約に合わない応答。
      *     internal_error: 想定外の内部エラー(message は固定文言で、内部の詳細を返さない)。
+     *     not_found: 契約に無い経路、またはメソッド違い(404。ADR-0802)。
      * @enum {string}
      */
     ErrorCode:
@@ -480,7 +481,8 @@ export interface components {
       | "unknown_nature"
       | "request_too_large"
       | "upstream_unavailable"
-      | "internal_error";
+      | "internal_error"
+      | "not_found";
   };
   responses: never;
   parameters: {

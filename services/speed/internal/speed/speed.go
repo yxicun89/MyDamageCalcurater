@@ -21,6 +21,17 @@ const (
 // Pokemon.getStat → ModifySpe の chainModify(1.5) に相当)。
 const scarfSpeedModifier = 6144
 
+// tailwindSpeedModifier は追い風の素早さ補正(×2)を engine.Modifier4096 基準で表した値(ADR-0607 §2)。
+const tailwindSpeedModifier = 8192
+
+// まひの素早さ補正(ADR-0607 §3)。4096 基準の補正ではなく、連結・五捨五超入の後に
+// floor(v × paralysisSpeedPercent / percentDenominator) の整数演算で掛ける(@smogon/calc 0.12.0 の
+// Champions 世代は 50/100)。float の 0.5 は使わない。
+const (
+	paralysisSpeedPercent = 50
+	percentDenominator    = 100
+)
+
 // NatureEffect は素早さに対する性格の補正(ADR-0600 §3)。
 type NatureEffect string
 
@@ -52,10 +63,13 @@ type Input struct {
 	Nature    NatureEffect
 	Rank      int
 	Scarf     bool
+	// Tailwind は追い風(その個体の側)。Paralysis はまひ(ADR-0607 §1)。
+	Tailwind  bool
+	Paralysis bool
 }
 
 // Speed は入力から戦闘中の素早さを返す。順序は 実数値(engine.RealStats)→ ランク(engine.EffectiveStat)
-// → こだわりスカーフ(×6144/4096 の五捨五超入)。入力が範囲外なら sentinel エラーを包んで返す。
+// → 追い風・こだわりスカーフ(4096 基準で連結して 1 回だけ五捨五超入)→ まひ(floor(v × 50 / 100))。入力が範囲外なら sentinel エラーを包んで返す。
 func Speed(in Input) (int, error) {
 	if in.BaseSpeed < minBaseSpeed || in.BaseSpeed > maxBaseSpeed {
 		return 0, ErrInvalidBaseSpeed
@@ -78,8 +92,19 @@ func Speed(in Input) (int, error) {
 		Ranks:   engine.Ranks{Spe: in.Rank},
 	}
 	v := engine.EffectiveStat(individual, engine.StatSpe)
+	// 配列に積む順は追い風が先、こだわりスカーフが後(ADR-0607 §2)。
+	var mods []int
+	if in.Tailwind {
+		mods = append(mods, tailwindSpeedModifier)
+	}
 	if in.Scarf {
-		v = applyScarf(v)
+		mods = append(mods, scarfSpeedModifier)
+	}
+	if len(mods) > 0 {
+		v = applySpeedModifiers(v, mods)
+	}
+	if in.Paralysis {
+		v = v * paralysisSpeedPercent / percentDenominator
 	}
 	return v, nil
 }
@@ -100,8 +125,20 @@ func toEngineNature(n NatureEffect) (engine.Nature, error) {
 	}
 }
 
-// applyScarf はランク適用後の実数値にこだわりスカーフの補正を五捨五超入で掛ける
-// (floor((v × scarfSpeedModifier + engine.Modifier4096/2 − 1) / engine.Modifier4096))。
-func applyScarf(v int) int {
-	return (v*scarfSpeedModifier + engine.Modifier4096/2 - 1) / engine.Modifier4096
+// chainSpeedModifiers は素早さ補正(各値は engine.Modifier4096 基準)を 1 つに連結する
+// (@smogon/calc 0.12.0 の chainMods。1 ステップ M = (M × mod + engine.Modifier4096/2) / engine.Modifier4096、
+// 4096 から始める。ADR-0607 §2)。mods は原典が積む順(追い風 → 持ち物)で渡す。
+func chainSpeedModifiers(mods []int) int {
+	m := engine.Modifier4096
+	for _, mod := range mods {
+		m = (m*mod + engine.Modifier4096/2) / engine.Modifier4096
+	}
+	return m
+}
+
+// applySpeedModifiers はランク適用後の実数値に、連結した補正を五捨五超入で 1 回だけ掛ける
+// (floor((v × M + engine.Modifier4096/2 − 1) / engine.Modifier4096))。
+func applySpeedModifiers(v int, mods []int) int {
+	m := chainSpeedModifiers(mods)
+	return (v*m + engine.Modifier4096/2 - 1) / engine.Modifier4096
 }
