@@ -41,6 +41,13 @@ public enum RequestLimits {
     public static let minJudgeDefenders = 1
     /// `MoveId.maxLength`(判定の契約の技 ID の最大長。形式に合わない値は上流を呼ぶ前に 400 になる)。
     public static let maxJudgeMoveIdLength = 64
+
+    // MARK: - お気に入り(ADR-0227・ADR-0509): api/openapi.yaml の写し。`check-request-limits.sh` が契約と照合する
+
+    /// `listFavorites` の 200 応答の配列の `maxItems`(1端末が持てるお気に入りの上限)。
+    public static let maxFavorites = 100
+    /// `FavoriteInput.label.maxLength`(Unicode コードポイント数)。
+    public static let maxFavoriteLabelLength = 30
 }
 
 /// 件数の上限に達したことを画面に出す文言(`MasterSearchLabels` と同じ理由でコードに1か所持つ)。

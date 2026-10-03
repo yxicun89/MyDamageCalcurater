@@ -712,6 +712,22 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         await performCalc(request, token: token)
     }
 
+    /// いまの攻撃側(計算に使う個体そのまま)。お気に入りへ追加するときに使う(ADR-0509)。
+    public func attackerIndividualForFavorite() throws -> Individual {
+        try buildRequest().attacker
+    }
+
+    /// いまの防御側。計算は防御側を種族(+特性の上書き)だけで指定するので、無補正の性格・SP 0 の個体として返す
+    /// (`DefenderPreset.none` と同じ。ADR-0509)。
+    public func defenderIndividualForFavorite() throws -> Individual {
+        guard let nature = natureOptions.first(where: { $0.plus == nil }) else {
+            throw PokeCalcError(code: PokeCalcError.Code.natureUnavailable, message: "無補正の性格が見つからない")
+        }
+        return Individual(
+            speciesKey: defenderSpeciesKey, natureId: nature.id,
+            sp: StatBlock(hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0), abilityId: defenderAbilityId)
+    }
+
     private func buildRequest() throws -> BulkCalcRequest {
         guard let move = selectedMove else {
             // `moveId` は `selectMove`/`reselectMove` を通じてしか変わらず、どちらも
