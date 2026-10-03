@@ -14,7 +14,9 @@ import (
 // Defines values for ErrorCode.
 const (
 	InternalError       ErrorCode = "internal_error"
+	InvalidHeader       ErrorCode = "invalid_header"
 	InvalidRequest      ErrorCode = "invalid_request"
+	MissingHeader       ErrorCode = "missing_header"
 	NotFound            ErrorCode = "not_found"
 	RequestTooLarge     ErrorCode = "request_too_large"
 	UnknownMove         ErrorCode = "unknown_move"
@@ -28,7 +30,11 @@ func (e ErrorCode) Valid() bool {
 	switch e {
 	case InternalError:
 		return true
+	case InvalidHeader:
+		return true
 	case InvalidRequest:
+		return true
+	case MissingHeader:
 		return true
 	case NotFound:
 		return true
@@ -226,7 +232,9 @@ type DefenderCandidate struct {
 type Error struct {
 	// Code エラーの区分。judge は上流の事情(HTTP のステータス・接続エラーの文面・URL)をそのまま返さず、
 	// ADR-0700 §3・ADR-0701 §6 の対応表でこの列挙に畳む。
-	// invalid_request: ヘッダー・request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
+	// missing_header: X-Device-Id / X-Session-Id が無い・空(ADR-0219。gateway と同じ判定)。
+	// invalid_header: X-Device-Id / X-Session-Id が正準形 UUID でない、または同名ヘッダが重複している(ADR-0219)。
+	// invalid_request: request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
 	// unknown_species: speciesKey が pokedex-svc のマスタに無い。
 	// unknown_move: moveId が pokedex-svc の技のマスタに無い(攻撃側・候補側のどちらも。ADR-0704 §6)。
 	// unknown_nature: natureId が性格の一覧に無い。
@@ -240,7 +248,9 @@ type Error struct {
 
 // ErrorCode エラーの区分。judge は上流の事情(HTTP のステータス・接続エラーの文面・URL)をそのまま返さず、
 // ADR-0700 §3・ADR-0701 §6 の対応表でこの列挙に畳む。
-// invalid_request: ヘッダー・request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
+// missing_header: X-Device-Id / X-Session-Id が無い・空(ADR-0219。gateway と同じ判定)。
+// invalid_header: X-Device-Id / X-Session-Id が正準形 UUID でない、または同名ヘッダが重複している(ADR-0219)。
+// invalid_request: request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
 // unknown_species: speciesKey が pokedex-svc のマスタに無い。
 // unknown_move: moveId が pokedex-svc の技のマスタに無い(攻撃側・候補側のどちらも。ADR-0704 §6)。
 // unknown_nature: natureId が性格の一覧に無い。
@@ -581,7 +591,14 @@ type SessionId = string
 
 // OutspeedAndKoParams defines parameters for OutspeedAndKo.
 type OutspeedAndKoParams struct {
-	XDeviceId  DeviceId  `json:"X-Device-Id"`
+	// XDeviceId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+	XDeviceId DeviceId `json:"X-Device-Id"`
+
+	// XSessionId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0219, same rule as the gateway).
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 

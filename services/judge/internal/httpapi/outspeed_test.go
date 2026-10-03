@@ -24,8 +24,9 @@ import (
 const outspeedPath = "/api/judge/v1/outspeed-and-ko"
 
 const (
-	testDeviceID  = "test-device"
-	testSessionID = "test-session"
+	// 正準形 UUID(ADR-0219: judge も gateway と同じ検証をする。calc へ非 UUID を転送しない)。
+	testDeviceID  = "11111111-1111-4111-8111-111111111111"
+	testSessionID = "22222222-2222-4222-8222-222222222222"
 )
 
 // 架空の種族・性格・技(実マスタは使わない。CLAUDE.md のドメイン規約)。
@@ -1161,7 +1162,95 @@ func TestOutspeedAndKoForwardsField(t *testing.T) {
 	})
 }
 
-// TestOutspeedAndKoRejectsInvalidRequest: ヘッダー・body の検査は上流より先(ADR-0701 §5)。
+// TestOutspeedAndKoRejectsBadHeaders: X-Device-Id / X-Session-Id は gateway と同じ判定(ADR-0219):
+// 欠落・空は 400 missing_header、正準形 UUID でない値・同名ヘッダの重複は 400 invalid_header。
+// ヘッダーは body より先に見られ(ADR-0701 §5)、**上流(calc/pokedex)を 1 回も呼ばない**
+// = 非 UUID の端末ID・セッションIDが calc へ転送されない。
+func TestOutspeedAndKoRejectsBadHeaders(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		headers map[string]string
+		extra   [][2]string // 同名ヘッダを追加で足す(重複)
+		want    api.ErrorCode
+	}{
+		{"ヘッダーが両方無い", map[string]string{}, nil, api.MissingHeader},
+		{"X-Device-Id が無い", map[string]string{"X-Session-Id": testSessionID}, nil, api.MissingHeader},
+		{"X-Session-Id が無い", map[string]string{"X-Device-Id": testDeviceID}, nil, api.MissingHeader},
+		{"X-Device-Id が空", map[string]string{"X-Device-Id": "", "X-Session-Id": testSessionID}, nil, api.MissingHeader},
+		{"欠落と不正が同時なら missing_header", map[string]string{"X-Device-Id": "not-a-uuid"}, nil, api.MissingHeader},
+		{"X-Device-Id が UUID でない", map[string]string{"X-Device-Id": "test-device", "X-Session-Id": testSessionID}, nil, api.InvalidHeader},
+		{"X-Session-Id が UUID でない", map[string]string{"X-Device-Id": testDeviceID, "X-Session-Id": "test-session"}, nil, api.InvalidHeader},
+		{"ハイフン無し32桁", map[string]string{"X-Device-Id": strings.ReplaceAll(testDeviceID, "-", ""), "X-Session-Id": testSessionID}, nil, api.InvalidHeader},
+		{"X-Device-Id の重複", map[string]string{"X-Device-Id": testDeviceID, "X-Session-Id": testSessionID}, [][2]string{{"X-Device-Id", testDeviceID}}, api.InvalidHeader},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			stub := &upstreams{}
+			request := httptest.NewRequest(http.MethodPost, outspeedPath, bytes.NewReader(mustJSON(validBody())))
+			request.Header.Set("Content-Type", "application/json")
+			for key, value := range tt.headers {
+				request.Header.Set(key, value)
+			}
+			for _, kv := range tt.extra {
+				request.Header.Add(kv[0], kv[1])
+			}
+			recorder := serve(newUpstreams(t, stub), request)
+
+			assertStatusAndCode(t, recorder, http.StatusBadRequest, tt.want)
+			assertNoUpstreamCalls(t, stub)
+		})
+	}
+}
+
+// TestOutspeedAndKoAcceptsUppercaseUUID: 大文字の正準形 UUID は通り、そのまま上流へ転送される。
+func TestOutspeedAndKoAcceptsUppercaseUUID(t *testing.T) {
+	t.Parallel()
+
+	upper := strings.ToUpper(testDeviceID)
+	stub := &upstreams{}
+	recorder := postOutspeed(newUpstreams(t, stub), validBody(), map[string]string{"X-Device-Id": upper, "X-Session-Id": testSessionID})
+	if recorder.Code == http.StatusBadRequest {
+		t.Fatalf("status = 400, body = %s; 大文字の UUID は通るはず", recorder.Body.String())
+	}
+	if len(stub.deviceIDs) == 0 {
+		t.Fatal("上流が 1 回も呼ばれていない")
+	}
+	for i, got := range stub.deviceIDs {
+		if got != upper {
+			t.Errorf("上流 %d 回目の X-Device-Id = %q, want %q(そのまま転送)", i, got, upper)
+		}
+	}
+}
+
+// TestOutspeedAndKoHeaderErrorWinsOverBadBody: body も不正でヘッダも不正なら、ヘッダの code を返す
+// (ADR-0701 §5: ヘッダ検査が先)。
+func TestOutspeedAndKoHeaderErrorWinsOverBadBody(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		headers map[string]string
+		want    api.ErrorCode
+	}{
+		{"欠落", map[string]string{}, api.MissingHeader},
+		{"非 UUID", map[string]string{"X-Device-Id": "test-device", "X-Session-Id": testSessionID}, api.InvalidHeader},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			stub := &upstreams{}
+			recorder := postOutspeed(newUpstreams(t, stub), "not json", tt.headers)
+			assertStatusAndCode(t, recorder, http.StatusBadRequest, tt.want)
+			assertNoUpstreamCalls(t, stub)
+		})
+	}
+}
+
+// TestOutspeedAndKoRejectsInvalidRequest: body の検査は上流より先(ADR-0701 §5)。
 // 400 invalid_request を返し、**上流を 1 回も呼ばない**(無駄な往復をしない。ADR-0700 §3 と同じ立場)。
 func TestOutspeedAndKoRejectsInvalidRequest(t *testing.T) {
 	t.Parallel()
@@ -1177,10 +1266,6 @@ func TestOutspeedAndKoRejectsInvalidRequest(t *testing.T) {
 		body    any
 		headers map[string]string
 	}{
-		{"ヘッダーが両方無い", validBody(), map[string]string{}},
-		{"X-Device-Id が無い", validBody(), map[string]string{"X-Session-Id": testSessionID}},
-		{"X-Session-Id が無い", validBody(), map[string]string{"X-Device-Id": testDeviceID}},
-		{"X-Device-Id が空", validBody(), map[string]string{"X-Device-Id": "", "X-Session-Id": testSessionID}},
 		{"body が JSON でない", "not json", nil},
 		{"body が JSON 値を 2 つ含む", `{"format":"single"} {"format":"single"}`, nil},
 		{"body が配列", `[]`, nil},
