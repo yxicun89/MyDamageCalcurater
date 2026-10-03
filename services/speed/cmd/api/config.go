@@ -31,6 +31,16 @@ func pokemonProviderFromEnv(lookup func(string) (string, bool)) (speed.PokemonPr
 	return model, nil
 }
 
+// dataVersionFromEnv は SPEED_POKEMON_PATH と同じディレクトリの metadata.json から read model の版を読む
+// (ADR-0138)。パス未設定・metadata.json 無しは ("", nil)(版不明)。あるのに不正ならエラー(main は非 0 で終了する)。
+func dataVersionFromEnv(lookup func(string) (string, bool)) (string, error) {
+	path, ok := lookup(pokemonPathEnv)
+	if !ok || path == "" {
+		return "", nil
+	}
+	return master.LoadDataVersionNextTo(path)
+}
+
 // portFromEnv は PORT を返す。未設定または空文字なら defaultPort。
 func portFromEnv(lookup func(string) (string, bool)) string {
 	value, ok := lookup(portEnv)

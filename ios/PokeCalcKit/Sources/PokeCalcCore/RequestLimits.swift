@@ -32,6 +32,15 @@ public enum RequestLimits {
     public static let moveLearnersPageSize = 50
     /// `AdjustHits` の `maximum`(engine の `MaxAdjustHits`)。調整画面の発数の選択肢の上限(ADR-0502 §2)。
     public static let maxAdjustHits = 10
+
+    // MARK: - 判定(P6-25。ADR-0504 §2): services/judge/api/openapi.yaml の写し。`check-request-limits.sh` が契約と照合する
+
+    /// `OutspeedAndKoRequest.defenders.maxItems`(相手候補の上限)。
+    public static let maxJudgeDefenders = 6
+    /// `OutspeedAndKoRequest.defenders.minItems`。
+    public static let minJudgeDefenders = 1
+    /// `MoveId.maxLength`(判定の契約の技 ID の最大長。形式に合わない値は上流を呼ぶ前に 400 になる)。
+    public static let maxJudgeMoveIdLength = 64
 }
 
 /// 件数の上限に達したことを画面に出す文言(`MasterSearchLabels` と同じ理由でコードに1か所持つ)。

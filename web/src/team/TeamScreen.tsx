@@ -15,14 +15,16 @@ import type { MasterData, MasterSpeciesSearch } from "../master/types";
 import "./TeamScreen.css";
 import { TeamMemberEditor } from "./TeamMemberEditor";
 import type { TeamClient, TeamError } from "./teamClient";
+import { MAX_TEAM_NAME_LENGTH, teamNameNotice } from "./teamName";
+import { TeamShowdownExport } from "./TeamShowdownExport";
+import { TeamShowdownImport } from "./TeamShowdownImport";
 
 type Schemas = components["schemas"];
 
 /** パーティの上限(api/openapi.yaml の TeamInput.members の maxItems)。 */
 export const MAX_TEAM_MEMBERS = 6;
 
-/** 構築名の長さの上限(api/openapi.yaml の TeamInput.name の maxLength)。 */
-export const MAX_TEAM_NAME_LENGTH = 50;
+export { MAX_TEAM_NAME_LENGTH };
 
 /**
  * 画面の props(App.tsx が app/screens.tsx 経由で注入する。ADR-0309 §2)。
@@ -75,11 +77,6 @@ interface DeleteState {
   readonly teamId: string;
   readonly submitting: boolean;
   readonly error: TeamError | null;
-}
-
-/** 前後の空白を除いた文字数(Unicode コードポイントで数える。契約の TeamInput.name と同じ数え方)。 */
-function codePointLength(value: string): number {
-  return Array.from(value).length;
 }
 
 /** create() が成功したら、応答の Team を一覧の先頭に足す(list を呼び直さない。ADR-0309 §4)。 */
@@ -146,19 +143,12 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
     if (createState.submitting) {
       return;
     }
+    const reason = teamNameNotice(createState.name);
+    if (reason !== null) {
+      setCreateState((current) => ({ ...current, notice: reason, error: null }));
+      return;
+    }
     const trimmed = createState.name.trim();
-    if (trimmed === "") {
-      setCreateState((current) => ({ ...current, notice: teamScreenText.nameRequiredNotice, error: null }));
-      return;
-    }
-    if (codePointLength(trimmed) > MAX_TEAM_NAME_LENGTH) {
-      setCreateState((current) => ({
-        ...current,
-        notice: teamScreenText.nameTooLongNotice(MAX_TEAM_NAME_LENGTH),
-        error: null,
-      }));
-      return;
-    }
     setCreateState((current) => ({ ...current, submitting: true, notice: null, error: null }));
     const result = await teamClient.create({ name: trimmed, members: [] });
     if (result.ok) {
@@ -185,21 +175,12 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
       return;
     }
     // 送信前の検査は新規作成と同じ範囲(契約と同じ。ADR-0309 §4)。範囲外は update() を呼ばずに理由を出す。
+    const reason = teamNameNotice(renameState.name);
+    if (reason !== null) {
+      setRenameState((current) => (current === null ? current : { ...current, notice: reason, error: null }));
+      return;
+    }
     const trimmed = renameState.name.trim();
-    if (trimmed === "") {
-      setRenameState((current) =>
-        current === null ? current : { ...current, notice: teamScreenText.nameRequiredNotice, error: null },
-      );
-      return;
-    }
-    if (codePointLength(trimmed) > MAX_TEAM_NAME_LENGTH) {
-      setRenameState((current) =>
-        current === null
-          ? current
-          : { ...current, notice: teamScreenText.nameTooLongNotice(MAX_TEAM_NAME_LENGTH), error: null },
-      );
-      return;
-    }
     setRenameState((current) =>
       current === null ? current : { ...current, submitting: true, notice: null, error: null },
     );
@@ -281,6 +262,16 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
         )}
       </div>
 
+      <TeamShowdownImport
+        teamClient={teamClient}
+        master={master}
+        masterSearch={masterSearch}
+        onCreated={(team) => {
+          hasWrittenRef.current = true;
+          setList((current) => addCreatedTeam(current, team));
+        }}
+      />
+
       <h2>{teamScreenText.listHeading}</h2>
       {list.status === "loading" && <p className="team-screen__notice">{teamScreenText.loadingNotice}</p>}
       {list.status === "error" && (
@@ -323,6 +314,7 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
               onOpenEditor={() => {
                 setEditingTeamId(team.id);
               }}
+              exporter={<TeamShowdownExport team={team} master={master} masterSearch={masterSearch} />}
               renameLocked={editorSaving}
               onOpenRename={() => {
                 openRename(team);
@@ -356,6 +348,8 @@ interface TeamRowProps {
   /** メンバー編集の領域(開いているときだけ。null は閉じている)。 */
   readonly editor: ReactNode;
   readonly onOpenEditor: () => void;
+  /** Showdown 形式の書き出し(ボタンと、開いたときの領域)。 */
+  readonly exporter: ReactNode;
   /** メンバー保存の送信中(true の間は名前変更を保存できない)。 */
   readonly renameLocked: boolean;
   readonly onOpenRename: () => void;
@@ -374,6 +368,7 @@ function TeamRow({
   deleteState,
   editor,
   onOpenEditor,
+  exporter,
   renameLocked,
   onOpenRename,
   onChangeRenameName,
@@ -432,6 +427,8 @@ function TeamRow({
           {teamMemberText.editLabel(team.name)}
         </button>
       )}
+
+      {exporter}
 
       {deleteState === null ? (
         <button type="button" onClick={onOpenDelete}>

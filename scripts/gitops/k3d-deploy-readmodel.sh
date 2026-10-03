@@ -64,6 +64,11 @@ from_file_args=()
 for name in "${readmodel_files[@]}"; do
   from_file_args+=(--from-file="$readmodel_dir/$name")
 done
+# metadata.json も同じディレクトリに置き、サービスが起動時に dataVersion を読めるようにする(ADR-0138)。
+# 無い古い export では付けない(サービス側は版不明として動く)。
+if [ -f "$readmodel_dir/metadata.json" ]; then
+  from_file_args+=(--from-file="$readmodel_dir/metadata.json")
+fi
 
 # --server-side は last-applied-configuration annotation を作らないので、256 KiB の annotation 上限
 # (client-side apply の制約)を超える大きさの read model でも ConfigMap を作れる(ADR-0403 §3・ADR-0603 §3)。

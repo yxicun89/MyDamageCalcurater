@@ -38,9 +38,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	dataVersion, err := dataVersionFromEnv(os.LookupEnv)
+	if err != nil {
+		slog.Error("speed API failed to read the read model metadata", "error", err)
+		os.Exit(1)
+	}
+	if dataVersion == "" {
+		slog.Warn("speed API: read model dataVersion is unknown (no metadata.json next to the read model)")
+	} else {
+		slog.Info("speed API: read model loaded", "dataVersion", dataVersion)
+	}
+
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           httpapi.New(httpapi.Dependencies{Pokemon: pokemon, Guard: guard}),
+		Handler:           httpapi.New(httpapi.Dependencies{Pokemon: pokemon, DataVersion: dataVersion, Guard: guard}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,
