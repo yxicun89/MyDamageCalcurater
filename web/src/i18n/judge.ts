@@ -101,7 +101,8 @@ export const judgeScreenText = {
   speedLabel: (attacker: number, defender: number): string => `素早さ ${attacker} 対 ${defender}`,
   /**
    * 素早さに反映した補正・反映していない入力(ADR-0710。issue 235)。judge が返した欄をそのまま文にする。
-   * 反映していない入力は「指定されたが素早さには掛けていない」の意味で、効果が無い特性・持ち物でも出る。
+   * 反映していない入力は「指定されたが素早さへの効き方を確定できなかった」の意味(第2段。ADR-0714)。
+   * 素早さに効果が無いと確定した特性・持ち物や、条件が成り立たないと確定したものは出ない。
    */
   speedAppliedNote: (side: string, names: readonly string[]): string =>
     `${side}の素早さに反映: ${names.join("・")}`,
@@ -112,7 +113,9 @@ export const judgeScreenText = {
   speedFactorLabel: {
     rank: "ランク補正",
     tailwind: "追い風",
+    ability: "特性",
     choiceScarf: "こだわりスカーフ",
+    item: "持ち物",
     paralysis: "まひ",
   } as const,
   speedIgnoredLabel: { abilityId: "特性", itemId: "持ち物", fieldWeather: "天候" } as const,

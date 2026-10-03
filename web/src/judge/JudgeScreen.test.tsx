@@ -731,6 +731,40 @@ describe("A5 結果の表示", () => {
     expect(rows[0]).toHaveTextContent(judgeScreenText.speedAppliedNote("相手", ["まひ"]));
   });
 
+  test("マスタの効果データから反映した特性・持ち物は「素早さに反映」の行に連鎖順で出る(issue 235 第2段)", async () => {
+    await submitTwoCandidates([
+      matchup(0, {
+        attackerSpeedApplied: ["tailwind", "ability", "item", "paralysis"],
+        defenderSpeedApplied: ["ability", "choiceScarf"],
+        defenderSpeedIgnored: ["itemId"],
+      }),
+      matchup(1),
+    ]);
+
+    const rows = matchupRows();
+    expect(rows[0]).toHaveTextContent(
+      judgeScreenText.speedAppliedNote("自分", ["追い風", "特性", "持ち物", "まひ"]),
+    );
+    expect(rows[0]).toHaveTextContent(judgeScreenText.speedAppliedNote("相手", ["特性", "こだわりスカーフ"]));
+    expect(rows[0]).toHaveTextContent(judgeScreenText.speedIgnoredNote("相手", ["持ち物"]));
+    expect(rows[1]).not.toHaveTextContent("反映");
+  });
+
+  test("素早さの補正の文言は契約の SpeedFactor の全ての値にある(issue 235 第2段)", () => {
+    const contractFactors: Schemas["SpeedFactor"][] = [
+      "rank",
+      "tailwind",
+      "ability",
+      "choiceScarf",
+      "item",
+      "paralysis",
+    ];
+    expect(Object.keys(judgeScreenText.speedFactorLabel).sort()).toEqual([...contractFactors].sort());
+    for (const factor of contractFactors) {
+      expect(judgeScreenText.speedFactorLabel[factor]).not.toBe("");
+    }
+  });
+
   test("同速は「同速」として出す(outspeeds の false と区別する。ADR-0700 §6-1)", async () => {
     await submitTwoCandidates([
       matchup(0, { outspeeds: false, speedTie: true, attackerSpeed: 150, defenderSpeed: 150 }),

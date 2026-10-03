@@ -12,6 +12,7 @@ import (
 	"example.com/pokecalc/services/judge/internal/client"
 	"example.com/pokecalc/services/judge/internal/httpguard"
 	"example.com/pokecalc/services/judge/internal/httpmetrics"
+	"example.com/pokecalc/services/judge/internal/speedeffects"
 	"github.com/labstack/echo/v5"
 )
 
@@ -41,6 +42,11 @@ type Dependencies struct {
 	// MaxInflight and Code are used here: the whole-request deadline is RequestTimeout above
 	// (ADR-0707), so Guard.Timeout stays zero. The zero value disables the limit.
 	Guard httpguard.Config
+
+	// SpeedEffects supplies the speed effects of abilities and items taken from the master
+	// (issue 235 第2段・ADR-0714). nil means no data: abilities and items are not applied to speed
+	// and the response is the same as stage 1.
+	SpeedEffects *speedeffects.Cache
 }
 
 // New returns the judge HTTP handler.

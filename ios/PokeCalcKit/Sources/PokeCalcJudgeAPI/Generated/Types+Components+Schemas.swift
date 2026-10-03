@@ -155,8 +155,8 @@ extension Components {
             }
         }
         /// 判定に使う個体。欄は docs/judge-design.md §3 JD1 の列挙そのまま。
-        /// teraType は受け取らない(ADR-0701 §2)。status(状態異常)は省略可で、麻痺だけ素早さに反映し、
-        /// すべて calc-svc へそのまま転送する(ADR-0712)。
+        /// teraType は受け取らない(ADR-0701 §2)。status(状態異常)は省略可で、麻痺の半減と、特性の素早さ効果の
+        /// 「状態異常のとき」の条件に使い、すべて calc-svc へそのまま転送する(ADR-0712・ADR-0714)。
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/Individual`.
@@ -169,19 +169,22 @@ extension Components {
             public var sp: Components.Schemas.StatBlock
             /// - Remark: Generated from `#/components/schemas/Individual/ranks`.
             public var ranks: Components.Schemas.RankBlock?
-            /// 特性 ID。judge は解釈せず calc-svc にそのまま渡す。
+            /// 特性 ID。calc-svc にそのまま渡すほか、マスタにこの特性の素早さ効果があれば素早さに反映する
+            /// (ID ごとの分岐は持たず、効果データの条件で評価する。ADR-0714)。
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/Individual/abilityId`.
             public var abilityId: Swift.String?
             /// 持ち物 ID。judge は calc-svc にそのまま渡すほか、こだわりスカーフの ID
             /// (既定 choicescarf。環境変数 JUDGE_CHOICE_SCARF_ITEM_ID で上書きできる。ADR-0701 §3)
-            /// と一致するときだけ素早さに ×1.5 を掛ける。
+            /// と一致するときは素早さに ×1.5 を掛け、それ以外はマスタにこの持ち物の素早さ効果があれば反映する(ADR-0714)。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/Individual/itemId`.
             public var itemId: Swift.String?
             /// 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
-            /// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+            /// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)を素早さに反映し(×0.5。ADR-0712)、
+            /// none 以外の値を特性の素早さ効果の「状態異常のとき」の条件に使う(ADR-0714)。
             /// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
             ///
             ///
@@ -196,7 +199,8 @@ extension Components {
                 case freeze = "freeze"
             }
             /// 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
-            /// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+            /// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)を素早さに反映し(×0.5。ADR-0712)、
+            /// none 以外の値を特性の素早さ効果の「状態異常のとき」の条件に使う(ADR-0714)。
             /// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
             ///
             ///
@@ -209,7 +213,7 @@ extension Components {
             ///   - natureId:
             ///   - sp:
             ///   - ranks:
-            ///   - abilityId: 特性 ID。judge は解釈せず calc-svc にそのまま渡す。
+            ///   - abilityId: 特性 ID。calc-svc にそのまま渡すほか、マスタにこの特性の素早さ効果があれば素早さに反映する
             ///   - itemId: 持ち物 ID。judge は calc-svc にそのまま渡すほか、こだわりスカーフの ID
             ///   - status: 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
             public init(
@@ -259,18 +263,22 @@ extension Components {
             public var sp: Components.Schemas.StatBlock
             /// - Remark: Generated from `#/components/schemas/DefenderCandidate/ranks`.
             public var ranks: Components.Schemas.RankBlock?
-            /// 特性 ID。judge は解釈せず calc-svc にそのまま渡す。
+            /// 特性 ID。calc-svc にそのまま渡すほか、マスタにこの特性の素早さ効果があれば素早さに反映する
+            /// (ID ごとの分岐は持たず、効果データの条件で評価する。ADR-0714)。
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/DefenderCandidate/abilityId`.
             public var abilityId: Swift.String?
             /// 持ち物 ID。judge は calc-svc にそのまま渡すほか、こだわりスカーフの ID
-            /// (既定 choicescarf。ADR-0701 §3)と一致するときだけ素早さに ×1.5 を掛ける。
+            /// (既定 choicescarf。ADR-0701 §3)と一致するときは素早さに ×1.5 を掛け、それ以外はマスタに
+            /// この持ち物の素早さ効果があれば反映する(ADR-0714)。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/DefenderCandidate/itemId`.
             public var itemId: Swift.String?
             /// 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
-            /// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+            /// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)を素早さに反映し(×0.5。ADR-0712)、
+            /// none 以外の値を特性の素早さ効果の「状態異常のとき」の条件に使う(ADR-0714)。
             /// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
             ///
             ///
@@ -285,7 +293,8 @@ extension Components {
                 case freeze = "freeze"
             }
             /// 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
-            /// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+            /// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)を素早さに反映し(×0.5。ADR-0712)、
+            /// none 以外の値を特性の素早さ効果の「状態異常のとき」の条件に使う(ADR-0714)。
             /// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
             ///
             ///
@@ -332,7 +341,7 @@ extension Components {
             ///   - natureId:
             ///   - sp:
             ///   - ranks:
-            ///   - abilityId: 特性 ID。judge は解釈せず calc-svc にそのまま渡す。
+            ///   - abilityId: 特性 ID。calc-svc にそのまま渡すほか、マスタにこの特性の素早さ効果があれば素早さに反映する
             ///   - itemId: 持ち物 ID。judge は calc-svc にそのまま渡すほか、こだわりスカーフの ID
             ///   - status: 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
             ///   - moveId: この候補が使う技(1 つ)。優先度は GET /api/pokedex/moves/{key} で引き、
@@ -876,9 +885,13 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Matchup/defenderKoUnsupported`.
             public var defenderKoUnsupported: [Components.Schemas.UnsupportedMark]
-            /// attackerSpeed の計算に**実際に効かせた**素早さの補正(ADR-0710)。値は rank(素早さのランクが 0 でない)・
-            /// tailwind(追い風)・choiceScarf(こだわりスカーフ)・paralysis(status が paralysis。連結のあとに ×0.5)。
-            /// 効かせた補正が無ければ空配列(null にも欄の欠落にもしない)。順序は rank → tailwind → choiceScarf → paralysis で固定。
+            /// attackerSpeed の計算に**実際に効かせた**素早さの補正(ADR-0710・ADR-0714)。値は rank(素早さのランクが 0 でない)・
+            /// tailwind(追い風)・ability(特性の素早さ効果の条件が成立して掛けた)・
+            /// choiceScarf(こだわりスカーフ)・item(スカーフ以外の持ち物の素早さ効果を掛けた)・
+            /// paralysis(status が paralysis で、連結のあとに ×0.5 を掛けた。まひの半減を受けない特性なら入らない)。
+            /// choiceScarf と item は同時に入らない(持ち物は 1 つ)。
+            /// 効かせた補正が無ければ空配列(null にも欄の欠落にもしない)。順序は計算の連鎖順
+            /// rank → tailwind → ability → choiceScarf / item → paralysis で固定。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/Matchup/attackerSpeedApplied`.
@@ -887,13 +900,15 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Matchup/defenderSpeedApplied`.
             public var defenderSpeedApplied: [Components.Schemas.SpeedFactor]
-            /// 自分の入力のうち、素早さに影響しうるのに **attackerSpeed へ反映していない**もの(ADR-0710)。
-            /// 値は abilityId(abilityId が指定されている。特性の素早さ補正は引けない)・
-            /// itemId(こだわりスカーフ以外の itemId が指定されている)・
-            /// fieldWeather(field.weather が none 以外で、かつ abilityId も指定されている。天候依存の素早さ特性があり得るため)。
-            /// **「影響する」とは限らない**: 素早さに効かない特性・持ち物でも、指定されていればここに入る
-            /// (judge は特性・持ち物の素早さ補正のデータを持たないため。第2段でデータ駆動にするまでの印)。
-            /// 状態異常は麻痺を反映済みで、この欄には現れない(麻痺と abilityId が同時でも麻痺は常に ×0.5 で、abilityId はここに残る。ADR-0712)。画面は空でないとき
+            /// 自分の入力のうち、素早さに影響しうるのに **attackerSpeed へ反映していない**もの(ADR-0710・ADR-0714)。
+            /// 値は abilityId(abilityId が指定され、その素早さへの効き方をマスタのデータで確定できなかった)・
+            /// itemId(こだわりスカーフ以外の itemId が指定され、同じく確定できなかった)・
+            /// fieldWeather(field.weather が none 以外で、かつ abilityId がこの欄に入っている。天候依存の素早さ特性があり得るため)。
+            /// 「確定できない」のは、マスタの素早さ効果のデータが取得できない・その ID がマスタに無い・効果データの形が不正・
+            /// judge が評価できない条件(持ち物を失った後など。judge はその入力を持たない)がある、のいずれか。
+            /// マスタに素早さ効果が無いと分かった特性・持ち物と、条件を評価して不成立だった特性・持ち物は
+            /// **入らない**(素早さに影響しないと確定したため。ADR-0714 で ADR-0710 の「指定されたら入る」を変更)。
+            /// 状態異常は反映済みで、この欄には現れない。画面は空でないとき
             /// 「素早さは特性・持ち物・天候を反映していない」旨を添える(文言は画面の持ち物)。
             /// 空配列が「素早さに影響する要素が無い」ことの保証になる。順序は abilityId → itemId → fieldWeather で固定。
             ///
@@ -920,9 +935,9 @@ extension Components {
             ///   - defenderKo: この候補の技(defenders[i].moveId)が自分に与えるダメージの確定数(ADR-0704 §3)。
             ///   - attackerKoUnsupported: attackerKo(順方向の計算。自分の技 → この候補)に付いた「正しく計算できていない可能性がある」印
             ///   - defenderKoUnsupported: defenderKo(逆方向の計算。この候補の技 → 自分)に付いた印(ADR-0708 §1)。
-            ///   - attackerSpeedApplied: attackerSpeed の計算に**実際に効かせた**素早さの補正(ADR-0710)。値は rank(素早さのランクが 0 でない)・
+            ///   - attackerSpeedApplied: attackerSpeed の計算に**実際に効かせた**素早さの補正(ADR-0710・ADR-0714)。値は rank(素早さのランクが 0 でない)・
             ///   - defenderSpeedApplied: defenderSpeed について、attackerSpeedApplied と同じ意味(この候補側)。
-            ///   - attackerSpeedIgnored: 自分の入力のうち、素早さに影響しうるのに **attackerSpeed へ反映していない**もの(ADR-0710)。
+            ///   - attackerSpeedIgnored: 自分の入力のうち、素早さに影響しうるのに **attackerSpeed へ反映していない**もの(ADR-0710・ADR-0714)。
             ///   - defenderSpeedIgnored: defenderSpeed について、attackerSpeedIgnored と同じ意味(この候補側。天候は共通の field.weather)。
             public init(
                 defenderIndex: Swift.Int,
@@ -981,16 +996,18 @@ extension Components {
                 case defenderSpeedIgnored
             }
         }
-        /// 素早さの計算に効かせた補正(ADR-0710・ADR-0712)。
+        /// 素早さの計算に効かせた補正(ADR-0710・ADR-0712・ADR-0714)。
         ///
         /// - Remark: Generated from `#/components/schemas/SpeedFactor`.
         @frozen public enum SpeedFactor: String, Codable, Hashable, Sendable, CaseIterable {
             case rank = "rank"
             case tailwind = "tailwind"
+            case ability = "ability"
             case choiceScarf = "choiceScarf"
+            case item = "item"
             case paralysis = "paralysis"
         }
-        /// 素早さに影響しうるが反映していない入力(ADR-0710)。
+        /// 素早さに影響しうるが反映していない入力(ADR-0710・ADR-0714)。
         ///
         /// - Remark: Generated from `#/components/schemas/SpeedIgnoredInput`.
         @frozen public enum SpeedIgnoredInput: String, Codable, Hashable, Sendable, CaseIterable {
