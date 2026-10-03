@@ -71,6 +71,7 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/gitops_test.sh
 	@./scripts/make-targets_test.sh
 	@./scripts/check-master-version_test.sh
+	@./scripts/master-release_test.sh
 	@./scripts/require-k3d-context_test.sh
 	@./scripts/image-tag_test.sh
 	@./scripts/k3d-deploy-tagged_test.sh
@@ -279,6 +280,10 @@ import-check-upstream: ## 上流(calc/Showdown/PokeAPI)の最新版を検出し�
 .PHONY: check-master-version
 check-master-version: ## calc・balance・speed が export した read model と同じ dataVersion で動いているか確かめる(読み取りだけ。要 k3d の context。ADR-0135)
 	@./scripts/check-master-version.sh
+
+.PHONY: master-release
+master-release: ## マスタ更新を calc・balance・speed へ反映する(import Job 完了待ち→export 検証→変化なしなら終了→入れ替え・rollout→版一致→smoke。要 k3d の context。ADR-0135)
+	@./scripts/master-release.sh
 
 .PHONY: pokedex-export-k3d
 pokedex-export-k3d: ## k3d の mysql から read model を data/generated/readmodel/ に書く(port-forward と DSN の取得を内部で行う。make up・import 済みが前提)
