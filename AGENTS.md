@@ -34,6 +34,8 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
   `docs/plan.md` を更新する。直前に `git diff` と `git diff --cached` を確認し、
   対象ファイルを明示して stage する。無関係な既存変更を一括で取り込まない。
   作業ブランチへの push は区切りごとに行う。main へは PR 経由でのみ入れる(直接 push・直接 merge をしない。COORDINATION.md)。
+  PR のマージは、`gh pr checks N` で CI が全件成功のときだけ、PR 番号を明示し `gh pr view N --json headRefOid -q .headRefOid` の SHA を `--match-head-commit` に付けて単独で `gh pr merge N` してよい(`--admin`・`gh api` でのマージは不可。
+  CI が赤・未完了なら止まって直す。bash-guard が強制する。ADR-0803)。クラウドへのデプロイ・課金・機密情報の公開は引き続き人間の確認が必要。
 
 ## Git ブランチ運用
 
