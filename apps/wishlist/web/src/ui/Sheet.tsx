@@ -16,7 +16,8 @@ interface Props {
 
 const yen = (n: number) => `¥${n.toLocaleString("ja-JP")}`;
 
-type Summary = { kind: "loading" } | { kind: "ok"; estimates: ItemEstimates } | { kind: "offline" } | { kind: "error" };
+type Summary =
+  { kind: "loading" } | { kind: "ok"; estimates: ItemEstimates } | { kind: "offline" } | { kind: "error" };
 
 function summaryText(s: Summary): string {
   switch (s.kind) {
@@ -36,7 +37,7 @@ function summaryText(s: Summary): string {
 
 /** 詳細シート。画像・検索ワード(その場編集)・サマリ・サイト行。 */
 export function Sheet({ item, genre, sites, client, baseUrl, onClose, onUpdated }: Props) {
-  const [summary, setSummary] = useState<Summary>({ kind: "loading" });
+  const [summary, setSummary] = useState<Summary>(() => ({ kind: navigator.onLine ? "loading" : "offline" }));
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -45,10 +46,7 @@ export function Sheet({ item, genre, sites, client, baseUrl, onClose, onUpdated 
 
   useEffect(() => {
     let cancelled = false;
-    if (!navigator.onLine) {
-      setSummary({ kind: "offline" });
-      return;
-    }
+    if (!navigator.onLine) return; // 初期値が「オフライン」
     client.getEstimates(itemId).then(
       (estimates) => {
         if (!cancelled) setSummary({ kind: "ok", estimates });

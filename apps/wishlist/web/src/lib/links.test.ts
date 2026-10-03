@@ -35,6 +35,13 @@ describe("resolveSiteLinks", () => {
       "https://jp.mercari.com/search?keyword=S.H.Figuarts%20%E3%82%B0%E3%83%AA%E3%82%B9",
     );
   });
+  it("http(s) 以外の検索 URL になるサイトは出さない", () => {
+    const bad = makeSite({ id: 9, name: "悪い", search_url_template: "javascript:alert('{q}')" });
+    const g = { ...genre, site_ids: [9, ...genre.site_ids] };
+    const links = resolveSiteLinks(makeItem({ id: 1, name: "グリス" }), g, [...sites, bad]);
+    expect(links.map((l) => l.site.id)).not.toContain(9);
+    expect(links.length).toBe(genre.site_ids.length);
+  });
   it("enabled=false のサイトは出さない", () => {
     const item = makeItem({ id: 1, name: "グリス", site_overrides: [{ site_id: 2, enabled: false }] });
     expect(resolveSiteLinks(item, genre, sites).map((l) => l.site.id)).toEqual([1]);

@@ -1,3 +1,5 @@
+import { isHttpUrl } from "./deeplink";
+
 /** localStorage のキー "wishlist.settings" に JSON `{"apiBaseUrl": string | null, "token": string}` で保存する。 */
 export interface Settings {
   /** null なら既定(defaultBaseUrl) */
@@ -20,6 +22,8 @@ export const loadSettings = (): Settings => {
     if ((apiBaseUrl !== null && typeof apiBaseUrl !== "string") || typeof token !== "string") {
       return { ...DEFAULTS };
     }
+    // http(s) 以外の API の URL は使わない(トークンを送る先なので)
+    if (apiBaseUrl !== null && !isHttpUrl(apiBaseUrl)) return { apiBaseUrl: null, token };
     return { apiBaseUrl, token };
   } catch {
     return { ...DEFAULTS };

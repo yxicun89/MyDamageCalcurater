@@ -18,7 +18,12 @@ describe("buildQuery", () => {
       }),
     ).toBe(c.want);
   });
-  it.each(buildCases)("option が空文字でも null でも同じ結果: $note", (c) => {
+  // option が空文字の事例だけが対象(option が入っている事例は null と結果が違うのが正しい)。
+  const emptyOptionCases = buildCases.filter((c) => c.option === "");
+  it("空 option の事例がベクタにある", () => {
+    expect(emptyOptionCases.length).toBeGreaterThan(0);
+  });
+  it.each(emptyOptionCases)("option が空文字でも null でも同じ結果: $note", (c) => {
     const base = {
       template: c.template,
       name: c.name,

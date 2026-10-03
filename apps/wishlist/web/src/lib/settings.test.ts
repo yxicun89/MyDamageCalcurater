@@ -14,6 +14,10 @@ describe("settings", () => {
       token: "tok",
     });
   });
+  it("http(s) 以外の API の URL は使わない", () => {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ apiBaseUrl: "javascript:alert(1)", token: "tok" }));
+    expect(loadSettings()).toEqual({ apiBaseUrl: null, token: "tok" });
+  });
   it("壊れた JSON・型違いは既定に戻す", () => {
     localStorage.setItem(SETTINGS_KEY, "{oops");
     expect(loadSettings()).toEqual({ apiBaseUrl: null, token: "" });

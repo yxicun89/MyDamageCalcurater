@@ -30,7 +30,6 @@ export function useWishlist(settings: Settings): Wishlist {
   useEffect(() => {
     if (token === "") return; // トークン未設定では API を呼ばない。
     let cancelled = false;
-    setLoadError(null);
     const run = async () => {
       const results = await Promise.allSettled([
         fetchWithCache("items", () => client.listItems()).then((r) => {
@@ -45,10 +44,9 @@ export function useWishlist(settings: Settings): Wishlist {
       ]);
       // 保存済みも無くて取得できなかった分だけがここに来る。白画面にせず、理由を出す。
       const failed = results.find((r) => r.status === "rejected");
-      if (failed && !cancelled) {
-        const reason = failed.reason as unknown;
-        setLoadError(reason instanceof Error ? reason.message : "一覧を取得できませんでした");
-      }
+      if (cancelled) return;
+      const reason = failed?.reason as unknown;
+      setLoadError(failed ? (reason instanceof Error ? reason.message : "一覧を取得できませんでした") : null);
     };
     void run();
     return () => {

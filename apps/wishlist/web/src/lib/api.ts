@@ -75,7 +75,8 @@ const ERROR_CODES: readonly string[] = [
 ];
 
 /** 末尾に / を補う。 */
-export const normalizeBaseUrl = (baseUrl: string): string => (baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
+export const normalizeBaseUrl = (baseUrl: string): string =>
+  baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
 
 /** 既定のベース URL。document.baseURI(= index.html のある場所。クラスタでは .../wishlist/)から、クエリとハッシュを除いたディレクトリ。 */
 export const defaultBaseUrl = (baseURI: string = document.baseURI): string => new URL("./", baseURI).href;
@@ -87,7 +88,11 @@ export const resolveImageUrl = (imageUrl: string, baseUrl: string): string =>
 async function toApiError(res: Response): Promise<ApiError> {
   try {
     const body = (await res.clone().json()) as Partial<ApiErrorBody>;
-    if (typeof body.code === "string" && ERROR_CODES.includes(body.code) && typeof body.message === "string") {
+    if (
+      typeof body.code === "string" &&
+      ERROR_CODES.includes(body.code) &&
+      typeof body.message === "string"
+    ) {
       return new ApiError(body.code, body.message, res.status);
     }
   } catch {
@@ -132,7 +137,8 @@ export const createApiClient = (options: ApiClientOptions): ApiClient => {
 
   const toForm = (fields: ItemFields, image: ImageFile): FormData => {
     const form = new FormData();
-    for (const [k, v] of Object.entries(fields)) if (v !== undefined) form.append(k, String(v));
+    for (const [k, v] of Object.entries<string | number | undefined>(fields))
+      if (v !== undefined) form.append(k, String(v));
     form.append("image", image);
     return form;
   };

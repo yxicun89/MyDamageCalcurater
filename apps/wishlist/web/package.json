@@ -11,7 +11,10 @@
     "typecheck": "node ./node_modules/typescript7/bin/tsc --noEmit",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "icons": "node scripts/gen-icons.mjs",
+    "pretest": "npm run icons",
+    "prebuild": "npm run icons"
   },
   "dependencies": {
     "react": "19.3.0",

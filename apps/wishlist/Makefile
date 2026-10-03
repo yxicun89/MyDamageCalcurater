@@ -1,6 +1,6 @@
 # wishlist(apps/wishlist/CLAUDE.md)のターゲット。ルートの Makefile から include する(パスはリポジトリ直下基準)。
 #   make wishlist-test / wishlist-lint / wishlist-build / wishlist-kustomize / wishlist-gen / wishlist-test-mysql
-#   make wishlist-docker-build / wishlist-k3d-deploy
+#   make wishlist-docker-build / wishlist-web-docker-build / wishlist-k3d-deploy
 # ルートの go.work には入れず GOWORK=off で単独モジュールとして扱う(docs/design.md W-01)。
 
 GO ?= go
@@ -10,8 +10,9 @@ WISHLIST_WEB_DIR ?= $(WISHLIST_DIR)/web
 
 CLUSTER ?= pokecalc
 WISHLIST_API_IMAGE ?= wishlist/api:local
+WISHLIST_WEB_IMAGE ?= wishlist/web:local
 
-.PHONY: wishlist-web-deps wishlist-web-test wishlist-web-lint wishlist-web-build wishlist-web-gen wishlist-test wishlist-lint wishlist-build wishlist-kustomize wishlist-gen wishlist-test-mysql wishlist-docker-build wishlist-k3d-deploy
+.PHONY: wishlist-web-deps wishlist-web-test wishlist-web-lint wishlist-web-build wishlist-web-gen wishlist-test wishlist-lint wishlist-build wishlist-kustomize wishlist-gen wishlist-test-mysql wishlist-docker-build wishlist-web-docker-build wishlist-k3d-deploy
 
 # ルートの make test / lint / build に wishlist を含める(CI で回すため。ユーザー決定 2026-10-03)。
 test: wishlist-test
@@ -66,10 +67,12 @@ wishlist-test-mysql:
 wishlist-docker-build: ## api のイメージを作る(wishlist/api:local)
 	@docker build -t $(WISHLIST_API_IMAGE) $(WISHLIST_API_DIR)
 
-# k3d(make up 済み)へ api を入れて overlays/local を適用する。migrate の Job は spec が不変なので消してから作り直す。
-# web のイメージ(wishlist/web:local)は Web の実装まで無く、web の Pod は ImagePullBackOff のまま(既知)。
-wishlist-k3d-deploy: wishlist-docker-build
+wishlist-web-docker-build: ## web のイメージを作る(wishlist/web:local)
+	@docker build -t $(WISHLIST_WEB_IMAGE) $(WISHLIST_WEB_DIR)
+
+# k3d(make up 済み)へ api と web を入れて overlays/local を適用する。migrate の Job は spec が不変なので消してから作り直す。
+wishlist-k3d-deploy: wishlist-docker-build wishlist-web-docker-build
 	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh wishlist-k3d-deploy
-	@k3d image import $(WISHLIST_API_IMAGE) -c $(CLUSTER)
+	@k3d image import $(WISHLIST_API_IMAGE) $(WISHLIST_WEB_IMAGE) -c $(CLUSTER)
 	@kubectl -n wishlist delete job wishlist-migrate --ignore-not-found
 	@kubectl apply -k $(WISHLIST_DIR)/deploy/k8s/overlays/local

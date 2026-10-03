@@ -6,11 +6,17 @@
   var VERSION = "v1";
   var cacheNames = { shell: "wishlist-shell-" + VERSION, images: "wishlist-images-" + VERSION };
 
+  // テストの vm には URL が無いので、origin と pathname は正規表現で取り出す(Service Worker の req.url は絶対 URL)。
+  function parse(u) {
+    var m = /^([a-z][a-z0-9+.-]*:\/\/[^/?#]*)([^?#]*)/i.exec(u);
+    return { origin: m ? m[1].toLowerCase() : "", pathname: m ? m[2] || "/" : "" };
+  }
+
   // 戻り値: ignore / network-only / cache-first / network-first-shell / stale-while-revalidate
   function classify(req, scopeUrl) {
     if (req.method !== "GET") return "ignore";
-    var url = new URL(req.url);
-    var scope = new URL(scopeUrl);
+    var url = parse(req.url);
+    var scope = parse(scopeUrl);
     if (url.origin !== scope.origin) return "ignore";
     if (url.pathname.indexOf(scope.pathname) !== 0) return "ignore";
     var rel = url.pathname.slice(scope.pathname.length);

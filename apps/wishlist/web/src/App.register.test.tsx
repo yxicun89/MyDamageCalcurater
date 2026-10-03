@@ -54,9 +54,14 @@ describe("登録", () => {
     await user.type(within(dlg).getByRole("textbox", { name: "名前" }), "直した名前");
     await user.click(within(dlg).getByRole("button", { name: "登録" }));
     await waitFor(() => {
-      expect(api.callsTo("POST", "/api/items").filter((c) => c.json !== undefined)).toHaveLength(1);
+      // callsTo は前方一致なので from-url を含む。登録の POST は完全一致で絞る。
+      expect(
+        api.callsTo("POST", "/api/items").filter((c) => c.path === "/api/items" && c.json !== undefined),
+      ).toHaveLength(1);
     });
-    const posted = api.callsTo("POST", "/api/items").find((c) => c.json !== undefined)?.json;
+    const posted = api
+      .callsTo("POST", "/api/items")
+      .find((c) => c.path === "/api/items" && c.json !== undefined)?.json;
     expect(posted).toEqual({
       genre_id: 1,
       name: "直した名前",

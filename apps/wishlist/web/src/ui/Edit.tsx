@@ -140,7 +140,12 @@ export function Edit({ item, genres, client, onClose, onUpdated }: Props) {
         <button type="button" onClick={onClose}>
           キャンセル
         </button>
-        <button type="button" className="primary" disabled={busy || name.trim() === ""} onClick={() => void save()}>
+        <button
+          type="button"
+          className="primary"
+          disabled={busy || name.trim() === ""}
+          onClick={() => void save()}
+        >
           保存
         </button>
       </div>

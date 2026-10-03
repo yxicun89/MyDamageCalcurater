@@ -1,5 +1,5 @@
 import type { Genre, Item, Site } from "../api/types";
-import { buildDeeplink } from "./deeplink";
+import { buildDeeplink, isHttpUrl } from "./deeplink";
 import { buildQuery } from "./query";
 
 export interface SiteLink {
@@ -30,7 +30,10 @@ export const resolveSiteLinks = (item: Item, genre: Genre | undefined, sites: Si
     const override = item.site_overrides.find((o) => o.site_id === id);
     if (override && !override.enabled) continue;
     const query = queryFor(item, genre, override?.query ?? null);
-    links.push({ site, query, url: buildDeeplink(site.search_url_template, query) });
+    const url = buildDeeplink(site.search_url_template, query);
+    // テンプレートは登録時に検査するが、API から来た値なので描画前にも http(s) 以外を落とす
+    if (!isHttpUrl(url)) continue;
+    links.push({ site, query, url });
   }
   return links;
 };

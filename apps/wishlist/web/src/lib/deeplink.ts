@@ -15,3 +15,13 @@ export const isValidSearchTemplate = (template: string): boolean => {
     return false;
   }
 };
+
+/** http(s) の絶対 URL なら true。href に入れる前の最後の確認(javascript: などを出さない)。 */
+export const isHttpUrl = (s: string): boolean => {
+  try {
+    const u = new URL(s);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+};

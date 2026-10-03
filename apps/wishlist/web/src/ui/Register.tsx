@@ -49,9 +49,14 @@ export function Register({ genres, initialGenreId, client, onClose, onCreated }:
   const submit = () =>
     run(async () => {
       if (genreId === null) return;
-      const fields = { genre_id: genreId, name: name.trim(), ...(sourceUrl ? { source_url: sourceUrl } : {}) };
+      const fields = {
+        genre_id: genreId,
+        name: name.trim(),
+        ...(sourceUrl ? { source_url: sourceUrl } : {}),
+      };
       if (file) onCreated(await client.createItemWithImage(fields, file));
-      else if (draftImage) onCreated(await client.createItemFromImageUrl({ ...fields, image_url: draftImage }));
+      else if (draftImage)
+        onCreated(await client.createItemFromImageUrl({ ...fields, image_url: draftImage }));
     });
 
   return (
