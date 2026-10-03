@@ -92,6 +92,7 @@ func cloneGenre(g Genre) Genre {
 	if g.SiteIDs == nil {
 		g.SiteIDs = []int64{}
 	}
+	g.Aliases = cloneAliases(g.Aliases)
 	return g
 }
 
@@ -217,7 +218,10 @@ func (m *MemoryRepository) CreateGenre(_ context.Context, in NewGenre) (Genre, e
 	if m.genreNameTaken(in.Name, 0) {
 		return Genre{}, ErrDuplicateName
 	}
-	g := cloneGenre(Genre{ID: m.id(), Name: in.Name, QueryTemplate: in.QueryTemplate, SortOrder: in.SortOrder, SiteIDs: in.SiteIDs})
+	if err := checkAliasDuplicates(in.Aliases); err != nil {
+		return Genre{}, err
+	}
+	g := cloneGenre(Genre{ID: m.id(), Name: in.Name, QueryTemplate: in.QueryTemplate, SortOrder: in.SortOrder, SiteIDs: in.SiteIDs, Aliases: in.Aliases})
 	m.genres[g.ID] = g
 	return cloneGenre(g), nil
 }
@@ -238,6 +242,12 @@ func (m *MemoryRepository) UpdateGenre(_ context.Context, id int64, p GenrePatch
 			return Genre{}, err
 		}
 		g.SiteIDs = slices.Clone(*p.SiteIDs)
+	}
+	if p.Aliases != nil {
+		if err := checkAliasDuplicates(*p.Aliases); err != nil {
+			return Genre{}, err
+		}
+		g.Aliases = cloneAliases(*p.Aliases)
 	}
 	if p.Name != nil {
 		if m.genreNameTaken(*p.Name, id) {

@@ -12,6 +12,7 @@ type Querier interface {
 	CreateGenre(ctx context.Context, arg CreateGenreParams) (int64, error)
 	CreateItem(ctx context.Context, arg CreateItemParams) (int64, error)
 	CreateSite(ctx context.Context, arg CreateSiteParams) (int64, error)
+	DeleteGenreAliases(ctx context.Context, genreID int64) error
 	DeleteGenreSites(ctx context.Context, genreID int64) error
 	DeleteItem(ctx context.Context, id int64) (int64, error)
 	DeleteItemSiteOverrides(ctx context.Context, itemID int64) error
@@ -22,10 +23,13 @@ type Querier interface {
 	GetItem(ctx context.Context, id int64) (Item, error)
 	GetItemForUpdate(ctx context.Context, id int64) (Item, error)
 	GetSite(ctx context.Context, id int64) (Site, error)
+	InsertGenreAlias(ctx context.Context, arg InsertGenreAliasParams) error
 	InsertGenreSite(ctx context.Context, arg InsertGenreSiteParams) error
 	InsertItemSiteOverride(ctx context.Context, arg InsertItemSiteOverrideParams) error
 	InsertListing(ctx context.Context, arg InsertListingParams) error
 	ListEstimatesByItem(ctx context.Context, itemID int64) ([]ListEstimatesByItemRow, error)
+	ListGenreAliases(ctx context.Context) ([]GenreAlias, error)
+	ListGenreAliasesByGenre(ctx context.Context, genreID int64) ([]GenreAlias, error)
 	ListGenreSites(ctx context.Context) ([]GenreSite, error)
 	ListGenreSitesByGenre(ctx context.Context, genreID int64) ([]GenreSite, error)
 	// wishlist の DB アクセス(sqlc)。商品×ジャンル×サイトの CRUD(フェーズ1)。

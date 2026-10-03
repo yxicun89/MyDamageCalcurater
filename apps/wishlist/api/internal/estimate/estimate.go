@@ -36,6 +36,8 @@ const (
 type Item struct {
 	Name     string
 	MinPrice *int // nil なら below_min を判定しない
+	// Aliases は商品のジャンルの表記揺れの辞書(フェーズ4-1。nil なら辞書なしで TitleMatches と同じ)。
+	Aliases [][]string
 }
 
 // Listing は判定・算出に使う出品の値。
@@ -89,11 +91,57 @@ func TitleMatches(name, title string) bool {
 	return true
 }
 
+// AliasVariants は name の 1 トークンについて、タイトルに含まれていれば一致とみなす語(正規化済み)を返す
+// (docs/phase4-spec.md AC-A4)。トークンと正規化して完全一致する語を持つグループがあればその全語、無ければトークン自身だけ。
+// 正規化して空のトークンは空を返す。
+func AliasVariants(token string, groups [][]string) []string {
+	n := query.Normalize(token)
+	if n == "" {
+		return nil
+	}
+	for _, g := range groups {
+		var words []string
+		hit := false
+		for _, w := range g {
+			nw := query.Normalize(w)
+			if nw == "" {
+				continue
+			}
+			if nw == n {
+				hit = true
+			}
+			if !slices.Contains(words, nw) {
+				words = append(words, nw)
+			}
+		}
+		if hit {
+			return words
+		}
+	}
+	return []string{n}
+}
+
+// TitleMatchesWithAliases は、表記揺れの辞書 groups を使う TitleMatches(docs/phase4-spec.md AC-A5)。
+// name の各トークンについて、AliasVariants の語のどれかが正規化タイトルに含まれればよい。groups が空なら TitleMatches と同じ。
+func TitleMatchesWithAliases(name, title string, groups [][]string) bool {
+	nt := query.Normalize(title)
+	for _, tok := range strings.FieldsFunc(name, unicode.IsSpace) {
+		vs := AliasVariants(tok, groups)
+		if len(vs) == 0 {
+			continue
+		}
+		if !slices.ContainsFunc(vs, func(v string) bool { return strings.Contains(nt, v) }) {
+			return false
+		}
+	}
+	return true
+}
+
 // Judge は 1 件の参考外の理由を返す。順は title_mismatch → too_cheap → below_min。当てはまらなければ長さ 0。
 // base が nil なら too_cheap を判定しない。item.MinPrice が nil なら below_min を判定しない。
 func Judge(item Item, base *int, l Listing) []Reason {
 	var rs []Reason
-	if !TitleMatches(item.Name, l.Title) {
+	if !TitleMatchesWithAliases(item.Name, l.Title, item.Aliases) {
 		rs = append(rs, ReasonTitleMismatch)
 	}
 	if base != nil && l.Price*100 < *base*CheapRatioPercent {
@@ -157,7 +205,7 @@ func Evaluate(item Item, sites []SiteInput) Result {
 			continue
 		}
 		for _, l := range s.Listings {
-			if !TitleMatches(item.Name, l.Title) || (item.MinPrice != nil && l.Price < *item.MinPrice) {
+			if !TitleMatchesWithAliases(item.Name, l.Title, item.Aliases) || (item.MinPrice != nil && l.Price < *item.MinPrice) {
 				continue
 			}
 			basePrices = append(basePrices, l.Price)

@@ -134,6 +134,12 @@ func (e SuspiciousReason) Valid() bool {
 	}
 }
 
+// AliasGroups 表記揺れの辞書(フェーズ4-1。docs/phase4-spec.md)。1 グループは同じものを指す語の集合(例 `["S.H.Figuarts", "SHフィギュアーツ", "フィギュアーツ"]`)。
+// 参考外の判定(title_mismatch)で、商品名のトークンがグループの語と正規化して一致すれば、同じグループのどの語がタイトルに含まれても一致とみなす。
+// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)。
+// 各語は前後の空白を除いて 1〜64 文字、1 グループは 2 語以上、正規化後の語はジャンル内で重複しない(違反は 422)
+type AliasGroups = [][]string
+
 // Error defines model for Error.
 type Error struct {
 	Code    ErrorCode `json:"code"`
@@ -159,8 +165,13 @@ type FromURLRequest struct {
 
 // Genre defines model for Genre.
 type Genre struct {
-	Id   ID     `json:"id"`
-	Name string `json:"name"`
+	// Aliases 表記揺れの辞書(フェーズ4-1。docs/phase4-spec.md)。1 グループは同じものを指す語の集合(例 `["S.H.Figuarts", "SHフィギュアーツ", "フィギュアーツ"]`)。
+	// 参考外の判定(title_mismatch)で、商品名のトークンがグループの語と正規化して一致すれば、同じグループのどの語がタイトルに含まれても一致とみなす。
+	// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)。
+	// 各語は前後の空白を除いて 1〜64 文字、1 グループは 2 語以上、正規化後の語はジャンル内で重複しない(違反は 422)
+	Aliases *AliasGroups `json:"aliases,omitempty"`
+	Id      ID           `json:"id"`
+	Name    string       `json:"name"`
 
 	// QueryTemplate `{name}` と `{option}` を埋め込む
 	QueryTemplate string `json:"query_template"`
@@ -172,16 +183,26 @@ type Genre struct {
 
 // GenreCreate defines model for GenreCreate.
 type GenreCreate struct {
-	Name          string  `json:"name"`
-	QueryTemplate *string `json:"query_template,omitempty"`
-	SiteIds       *[]ID   `json:"site_ids,omitempty"`
-	SortOrder     *int    `json:"sort_order,omitempty"`
+	// Aliases 表記揺れの辞書(フェーズ4-1。docs/phase4-spec.md)。1 グループは同じものを指す語の集合(例 `["S.H.Figuarts", "SHフィギュアーツ", "フィギュアーツ"]`)。
+	// 参考外の判定(title_mismatch)で、商品名のトークンがグループの語と正規化して一致すれば、同じグループのどの語がタイトルに含まれても一致とみなす。
+	// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)。
+	// 各語は前後の空白を除いて 1〜64 文字、1 グループは 2 語以上、正規化後の語はジャンル内で重複しない(違反は 422)
+	Aliases       *AliasGroups `json:"aliases,omitempty"`
+	Name          string       `json:"name"`
+	QueryTemplate *string      `json:"query_template,omitempty"`
+	SiteIds       *[]ID        `json:"site_ids,omitempty"`
+	SortOrder     *int         `json:"sort_order,omitempty"`
 }
 
 // GenreUpdate defines model for GenreUpdate.
 type GenreUpdate struct {
-	Name          *string `json:"name,omitempty"`
-	QueryTemplate *string `json:"query_template,omitempty"`
+	// Aliases 表記揺れの辞書(フェーズ4-1。docs/phase4-spec.md)。1 グループは同じものを指す語の集合(例 `["S.H.Figuarts", "SHフィギュアーツ", "フィギュアーツ"]`)。
+	// 参考外の判定(title_mismatch)で、商品名のトークンがグループの語と正規化して一致すれば、同じグループのどの語がタイトルに含まれても一致とみなす。
+	// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)。
+	// 各語は前後の空白を除いて 1〜64 文字、1 グループは 2 語以上、正規化後の語はジャンル内で重複しない(違反は 422)
+	Aliases       *AliasGroups `json:"aliases,omitempty"`
+	Name          *string      `json:"name,omitempty"`
+	QueryTemplate *string      `json:"query_template,omitempty"`
 
 	// SiteIds 渡すと表示するサイトと順序を全件置き換える
 	SiteIds   *[]ID `json:"site_ids,omitempty"`
