@@ -11,6 +11,10 @@
 //	  calc(requestJSON: string): string,         // wasmapi.Calc
 //	  calcBulk(requestJSON: string): string,     // wasmapi.CalcBulk
 //	  calcReverse(requestJSON: string): string,  // wasmapi.CalcReverse
+//	  adjustIndices(requestJSON: string): string,         // wasmapi.AdjustIndices(ADR-0250)
+//	  adjustMinSpToKo(requestJSON: string): string,       // wasmapi.AdjustMinSPToKO
+//	  adjustMinSpToSurvive(requestJSON: string): string,  // wasmapi.AdjustMinSPToSurvive
+//	  adjustAllocation(requestJSON: string): string,      // wasmapi.AdjustAllocation
 //	}
 //	globalThis.pokecalcReady = true              // 登録完了の目印(最後に立てる)
 //
@@ -63,6 +67,10 @@ func main() {
 	api.Set("calc", register(wasmapi.Calc))
 	api.Set("calcBulk", register(wasmapi.CalcBulk))
 	api.Set("calcReverse", register(wasmapi.CalcReverse))
+	api.Set("adjustIndices", register(wasmapi.AdjustIndices))
+	api.Set("adjustMinSpToKo", register(wasmapi.AdjustMinSPToKO))
+	api.Set("adjustMinSpToSurvive", register(wasmapi.AdjustMinSPToSurvive))
+	api.Set("adjustAllocation", register(wasmapi.AdjustAllocation))
 	js.Global().Set("pokecalc", api)
 	js.Global().Set("pokecalcReady", true)
 
