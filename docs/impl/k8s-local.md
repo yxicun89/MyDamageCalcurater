@@ -19,7 +19,7 @@ flowchart LR
       TR["Traefik (svclb) :80"]
     end
     subgraph PC["ns pokecalc"]
-      IG["Ingress ×3<br/>gateway '/'<br/>speed '/api/speed' · judge '/api/judge'"]
+      IG["Ingress ×1<br/>gateway '/'"]
       GW["Deployment gateway :8080"]
       WEB["Deployment web (nginx) :8080"]
       CALC["Deployment calc :8080"]
@@ -59,7 +59,7 @@ flowchart LR
   BR -.->|":5173"| PF -.->|"svc/web:80"| WEB
 ```
 
-- 8080 は k3d の loadbalancer(docker コンテナ)が持つ公開ポート。Traefik へ入り、Ingress の path 最長一致で振り分ける(gateway は `/` の Prefix。`/api/speed`・`/api/judge` はより長いので各サービスへ直接届き、gateway を通らない。`/api/balance` は Ingress を撤去したので gateway が balance へ転送する。`deploy/k8s/base/gateway/ingress.yaml` の冒頭コメント)。
+- 8080 は k3d の loadbalancer(docker コンテナ)が持つ公開ポート。Traefik へ入り、Ingress は gateway の `/` の 1 件だけ。`/api/balance|speed|judge` も gateway が各サービスへ転送する(直結 Ingress は ADR-0414・0416 で撤去。`deploy/k8s/base/gateway/ingress.yaml` の冒頭コメント)。
 - 5173 は**クラスタの公開ポートではない**。`make web-k3d-open` が張る port-forward(`web/Makefile`)で、止めると消える。web は gateway を通らず Service に直結する。
 - web の Ingress は無い。`web` へは gateway が `GATEWAY_WEB_URL=http://web` へ転送して届く(ADR-0205。`deploy/k8s/overlays/local/api/gateway-patch.yaml`)。
 - どの経路も、Pod 間は NetworkPolicy(§10)で許可した通信だけが通る。ホストからの port-forward・`kubectl exec` は対象外。
@@ -69,7 +69,7 @@ flowchart LR
 
 | ホスト側 | 経路 | 宛先 | 定義 |
 |---|---|---|---|
-| `localhost:8080` | docker `k3d-pokecalc-serverlb` → Traefik:80 → Ingress | gateway Service:80 → Pod:8080(`/`。balance へは gateway が転送)/ speed・judge(各 path) | `deploy/k3d.yaml` |
+| `localhost:8080` | docker `k3d-pokecalc-serverlb` → Traefik:80 → Ingress | gateway Service:80 → Pod:8080(`/`。balance・speed・judge へは gateway が転送) | `deploy/k3d.yaml` |
 | `localhost:52779`(動的) | serverlb → k3s API :6443 | kube-apiserver | k3d が割当(`docker ps` の実測値。固定ではない) |
 | `localhost:5173` | `kubectl port-forward svc/web 5173:80`(手動) | web Service:80 → Pod:8080 | `web/Makefile`(`web-k3d-open`) |
 | `localhost:5000`(**ノード側**) | registry の `hostPort: 5000` | registry Pod:5000(クラスタ内レジストリ) | `services/balance/deploy/local-registry/registry.yaml` |
@@ -122,13 +122,11 @@ image は base のタグ → local overlay(および `make *-k3d-deploy`)が `:l
 
 `mysql` が headless のため、`mysql:3306` は Pod `mysql-0` の IP に直接解決される(DSN は `@tcp(mysql:3306)`。`scripts/up.sh` が作る)。
 
-## 6. Ingress(全 3 件。すべて `ingressClassName: traefik`、host なし・TLS なし)
+## 6. Ingress(全 1 件。すべて `ingressClassName: traefik`、host なし・TLS なし)
 
 | 名前 | path(Prefix) | backend | 定義 |
 |---|---|---|---|
 | `gateway` | `/` | Service `gateway`:http | `deploy/k8s/base/gateway/ingress.yaml`(**cloud overlay では `$patch: delete`**。ADR-0210 §2) |
-| `speed` | `/api/speed` | Service `speed`:http | `services/speed/deploy/k8s/base/ingress.yaml` |
-| `judge` | `/api/judge` | Service `judge`:http | `services/judge/deploy/k8s/base/ingress.yaml` |
 
 ## 7. ConfigMap / Secret / PVC(全件)
 
@@ -186,7 +184,7 @@ Component は `kustomize.config.k8s.io/v1alpha1`(`overlays/local/api`・`overlay
 | 4 | balance・speed は `local-readmodel` 方式(env は `*_PATH` のみ、annotation `readmodel-hash`) | `local` overlay(例データ)ではなく readmodel でデプロイ済み。`speed-pokemon-*`(例データ)は残骸 |
 | 5 | Job `pokedex-import-manual-20260922185252` が `Failed`(`DeadlineExceeded`)、他 3 件 `Complete` | 手動 Job は TTL 14 日で消える。失敗 1 件は残存(2026-10-01 には消えている) |
 | 6 | Application `pokecalc-balance` が `OutOfSync` / `Healthy`。`pokecalc-speed` は無い | Git に定義はあるが speed の Application は未適用(C で詳述) |
-| 7 | Ingress は 4 件(gateway/balance/speed/judge) | 観測時点(balance の Ingress 撤去前。ADR-0414 後の再デプロイで 3 件になる) |
+| 7 | Ingress は 4 件(gateway/balance/speed/judge) | 観測時点(Ingress 撤去前。ADR-0414・0416 後の再デプロイで gateway の 1 件になる。残った旧 Ingress は手動削除) |
 
 ## 10. NetworkPolicy(ADR-0132)
 
@@ -195,7 +193,7 @@ Component は `kustomize.config.k8s.io/v1alpha1`(`overlays/local/api`・`overlay
 
 | 宛先 | 送信元 |
 |---|---|
-| gateway・balance・speed・judge | kube-system の Traefik(`allow-traefik-ingress`) |
+| gateway・balance・speed・judge | kube-system の Traefik(`allow-traefik-ingress`。balance・speed・judge は直結 Ingress 撤去後も許可が残る。共有 base のため別 PR) |
 | calc・pokedex・web・balance・speed・judge(:8080) | gateway(`allow-gateway-upstream`) |
 | calc | judge(`allow-calc-ingress`) |
 | pokedex | calc・judge(`allow-pokedex-ingress`。L4 なので `/internal` も届く。gateway が `/internal` を 404 にする層は残る) |

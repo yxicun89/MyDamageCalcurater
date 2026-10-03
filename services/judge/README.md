@@ -28,7 +28,7 @@ flowchart LR
 | `internal/httpapi` | HTTP の検証・判定順・応答の変換 |
 | `internal/api` | oapi-codegen の生成物(手で書かない) |
 | `cmd/api` | 起動・環境変数の読み込み・graceful shutdown |
-| `deploy/k8s` | Kustomize(base / overlays/local)。judge は `/api/judge` prefix の自分の Ingress を持つ(gateway は変更しない) |
+| `deploy/k8s` | Kustomize(base / overlays/local)。judge は Ingress を持たず、`/api/judge/*` は gateway が転送する(`GATEWAY_JUDGE_URL=http://judge`。ADR-0416。以前のデプロイで残った `Ingress/judge` は gateway 更新後に `kubectl -n pokecalc delete ingress speed judge --ignore-not-found` で消す。共有クラスタは人間確認) |
 | `scripts/smoke.sh` | k3d へのデプロイ後の疎通確認(healthz・`outspeed-and-ko` の 200/400/422。issue #257) |
 
 ## エンドポイント
@@ -49,7 +49,7 @@ make judge-k3d-deploy && make judge-smoke  # k3d へデプロイして healthz�
 ```
 
 `judge-smoke` は性格・種族・技の実IDを gateway(`API_URL`。既定 `http://localhost:8080`)経由で pokedex-svc から引く。
-judge 自身は `JUDGE_URL`(既定同じ)で叩く(judge は自分の Ingress を持つので gateway を経由しない)。
+judge は `JUDGE_URL`(既定同じ)で叩く(入口は gateway。端末ID・セッションIDは正準 UUID)。
 pokedex-svc が未投入なら例の架空 ID にフォールバックする(`services/gateway/scripts/smoke.sh` と同じ流儀)。
 
 ## 環境変数

@@ -47,6 +47,13 @@ func likePattern(q string) string {
 	return likeEscaper.Replace(q) + "%"
 }
 
+// SpeciesSearchPatterns は種族検索の LIKE のパターンの組を返す(ADR-0324)。
+// pattern は q の前方一致、megaPattern は「メガ + q」の前方一致(メガ種族だけに使う)。
+// 後者で、メガを除いた基本種名(ルカリオ)でもメガ種族(メガルカリオ)が当たる。
+func SpeciesSearchPatterns(q string) (pattern, megaPattern string) {
+	return likePattern(q), likeEscaper.Replace(master.MegaNamePrefix) + likePattern(q)
+}
+
 func derefStr(p *string) string {
 	if p == nil {
 		return ""
@@ -111,8 +118,9 @@ func (s *Server) SearchSpecies(ctx *echo.Context, params api.SearchSpeciesParams
 	if err != nil {
 		return unavailable("SearchSpecies/GetDefaultRegulation", err)
 	}
+	pattern, megaPattern := SpeciesSearchPatterns(derefStr(params.Q))
 	rows, err := s.q.SearchSpecies(reqCtx, store.SearchSpeciesParams{
-		RegulationID: reg.ID, Pattern: likePattern(derefStr(params.Q)), Limit: limit,
+		RegulationID: reg.ID, Pattern: pattern, MegaPattern: megaPattern, Limit: limit,
 	})
 	if err != nil {
 		return unavailable("SearchSpecies", err)
