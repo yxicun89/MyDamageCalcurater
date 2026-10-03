@@ -22,8 +22,14 @@ struct TeamEditView: View {
     /// 揺れうる)。
     @State private var nameText: String
     @State private var isSpeciesSearchPresented = false
+    /// 非 nil のとき、テキストの書き出し・取り込みシートが開いている(P6-20)。
+    @State private var textRequest: TeamTextRequest?
+    /// 取り込んだ体数の通知(追加後に画面へ出す。次にシートを開くまで残す)。
+    @State private var importedCount: Int?
+    private let service: any PokeCalcService
 
     init(store: any TeamStore, service: any PokeCalcService, team: Team) {
+        self.service = service
         _viewModel = State(initialValue: TeamEditViewModel(store: store, service: service, team: team))
         _nameText = State(initialValue: team.name)
     }
@@ -38,6 +44,7 @@ struct TeamEditView: View {
                 nameField
                 membersSection
                 addMemberSection
+                textTransferSection
                 saveButton
             }
             .padding(SpacingToken.x4)
@@ -77,7 +84,10 @@ struct TeamEditView: View {
     private var membersSection: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
             ForEach(viewModel.team.members, id: \.id) { member in
-                MemberCardView(viewModel: viewModel, member: member)
+                MemberCardView(viewModel: viewModel, member: member) {
+                    importedCount = nil
+                    textRequest = TeamTextRequest(exportMembers: [member])
+                }
             }
         }
     }
@@ -103,6 +113,35 @@ struct TeamEditView: View {
                 Text(teamError.uiMessage)
                     .font(TextStyleToken.caption.font)
                     .foregroundStyle(ColorToken.danger.color)
+            }
+        }
+    }
+
+    /// P6-20: テキストでの書き出し・取り込みの入口。`Menu` ではなく通常のボタンでシートを開く。
+    private var textTransferSection: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x1) {
+            Button {
+                importedCount = nil
+                textRequest = TeamTextRequest(exportMembers: nil)
+            } label: {
+                Label(ShowdownTextLabels.transferButton, systemImage: "doc.on.clipboard")
+                    .font(TextStyleToken.body.font)
+                    .foregroundStyle(ColorToken.textPrimary.color)
+            }
+            .accessibilityIdentifier("teamTextTransferButton")
+            .sheet(item: $textRequest) { request in
+                TeamTextSheet(
+                    service: service, members: viewModel.team.members, initialExportMembers: request.exportMembers
+                ) { imported in
+                    Task { importedCount = await viewModel.importMembers(imported) }
+                }
+            }
+
+            if let importedCount {
+                Text(ShowdownTextLabels.importedNotice(count: importedCount))
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .accessibilityIdentifier("importedNotice")
             }
         }
     }

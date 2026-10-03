@@ -34,7 +34,11 @@ issue #271 は「未対応と分かる印」か「400 で拒否」を、#270 は
 
 並びは 技(理由の昇順、`zero_power` は最後)→ 攻撃側の持ち物 → 攻撃側の特性 → 防御側の持ち物 → 防御側の特性。
 一括計算は各行の `Result`、逆算は各候補の `Unsupported`(SP によらない)に同じ印が付く(どちらも CalcDamage の合成)。
-変化技は印を付けない(ダメージを持たないので 0 が正しい。issue #271 の異常系)。
+変化技は技の印を付けない(ダメージを持たないので 0 が正しい。issue #271 の異常系)。
+持ち物・特性の印は既存コードでは変化技にも付く(技の印だけが外れる)。
+
+**追記(issue #232。ADR-0160)**: target に `attacker_tera_type` / `defender_tera_type` / `format` を足した(reason は
+`unsupported_effect`、ID はテラスタイプの ID・Format の値)。並びは防御側の特性の後に 攻撃側のテラス → 防御側のテラス → 形式。format=double の印は ADR-0222 §5 で外した(形式の印は未知の形式だけ)。
 
 追記(ADR-0222): `move` の理由に `move_target_unknown` を足した(ダブルで技の対象が不明な攻撃技。zero_power の後)。
 
