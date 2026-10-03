@@ -106,7 +106,7 @@
 - [x] P4-18
 - [x] P4-21 Codex コードレビューの次点 issue
 - [x] P4-19 issue #110
-- [ ] P4-20 【担当: データレーン(到達経路の選定・運用。ユーザー決定 2026-10-03・issue #285)】 issue #148(クラウド公開前のアクセス境界。ADR-0210。API レーン分は PR #157 で完了): Web 側のコード変更は不要(`apiBaseUrl()` の既定は同一オリジン、CORS は gateway 側)。残りは、運用側が到達経路(Tailscale Operator か subnet router + tailscale serve)を選んだあと、MagicDNS 名を `VITE_API_BASE_URL` にデプロイ時設定する運用作業(issue #285)
+- [x] P4-20 【クローズ 2026-10-04: クラウド公開をしない方針(ADR-0210)のため『クラウド公開前の到達経路の選定』は対象外。ローカルは同一オリジン(http://localhost:8080)、実機 iPhone は tailscale serve(docs/runbooks/ios-device-install.md。P6-4 で手順化済み)。クラウドに出す判断(#149)をするときに再開。以下は元の記録】【担当: データレーン(到達経路の選定・運用。ユーザー決定 2026-10-03・issue #285)】 issue #148(クラウド公開前のアクセス境界。ADR-0210。API レーン分は PR #157 で完了): Web 側のコード変更は不要(`apiBaseUrl()` の既定は同一オリジン、CORS は gateway 側)。残りは、運用側が到達経路(Tailscale Operator か subnet router + tailscale serve)を選んだあと、MagicDNS 名を `VITE_API_BASE_URL` にデプロイ時設定する運用作業(issue #285)
 - [x] P4-22 issue #72
 - [x] `make e2e` の `web-e2e-online` 修復・PR1
 - [x] `make e2e` の `web-e2e-online` 修復・PR2
