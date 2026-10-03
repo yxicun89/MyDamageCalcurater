@@ -26,6 +26,9 @@ struct RootView: View {
     /// 起動時にいきなり調整画面を開かせる環境変数(同上。ADR-0502 §1)。
     static let openAdjustScreenAtLaunchEnvironmentKey = "POKECALC_OPEN_ADJUST_SCREEN_AT_LAUNCH"
     private static let openAdjustScreenAtLaunchValue = "1"
+    /// 起動時にいきなり素早さ比較画面を開かせる環境変数(同上。ADR-0503 §7)。
+    static let openSpeedScreenAtLaunchEnvironmentKey = "POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH"
+    private static let openSpeedScreenAtLaunchValue = "1"
 
     /// `environment` は既定でも作れる(#Preview 用)。実行時は `PokeCalcApp` が `@State` で
     /// 1回だけ作ったものを渡す(セッション ID を起動ごとに1つに保つため)。
@@ -96,6 +99,12 @@ struct RootView: View {
                         }
                         .buttonStyle(PillButtonStyle())
                         .accessibilityIdentifier("openBalanceScreen")
+
+                        NavigationLink(value: SpeedScreenRoute()) {
+                            Text(SpeedLabels.openButton)
+                        }
+                        .buttonStyle(PillButtonStyle())
+                        .accessibilityIdentifier("openSpeedScreen")
                     }
                 }
                 Spacer()
@@ -122,36 +131,41 @@ struct RootView: View {
                 }
             }
             .navigationDestination(for: CalcScreenRoute.self) { _ in
-                if case .ready(let service, _, let backendDescription, _, _, let frequentOpponents) = environment {
+                if case .ready(let service, _, let backendDescription, _, _, let frequentOpponents, _) = environment {
                     CalcScreenView(
                         service: service, teamStore: teamStore, backendDescription: backendDescription,
                         frequentOpponentsService: frequentOpponents)
                 }
             }
             .navigationDestination(for: ReverseScreenRoute.self) { _ in
-                if case .ready(let service, _, let backendDescription, _, _, let frequentOpponents) = environment {
+                if case .ready(let service, _, let backendDescription, _, _, let frequentOpponents, _) = environment {
                     ReverseScreenView(
                         service: service, teamStore: teamStore, backendDescription: backendDescription,
                         frequentOpponentsService: frequentOpponents)
                 }
             }
             .navigationDestination(for: TeamListScreenRoute.self) { _ in
-                if case .ready(let service, _, _, _, _, _) = environment {
+                if case .ready(let service, _, _, _, _, _, _) = environment {
                     TeamListView(store: teamStore, service: service, path: $path)
                 }
             }
             .navigationDestination(for: AdjustScreenRoute.self) { _ in
-                if case .ready(let service, _, let backendDescription, let adjust, _, _) = environment {
+                if case .ready(let service, _, let backendDescription, let adjust, _, _, _) = environment {
                     AdjustScreenView(service: service, adjust: adjust, backendDescription: backendDescription)
                 }
             }
             .navigationDestination(for: BalanceScreenRoute.self) { _ in
-                if case .ready(let service, _, _, _, let balance, _) = environment {
+                if case .ready(let service, _, _, _, let balance, _, _) = environment {
                     BalanceScreenView(balance: balance, service: service, teamStore: teamStore)
                 }
             }
+            .navigationDestination(for: SpeedScreenRoute.self) { _ in
+                if case .ready(_, _, _, _, _, _, let speed) = environment {
+                    SpeedScreenView(service: speed)
+                }
+            }
             .navigationDestination(for: AboutScreenRoute.self) { _ in
-                if case .ready(_, let deviceData, _, _, _, _) = environment {
+                if case .ready(_, let deviceData, _, _, _, _, _) = environment {
                     AboutView(deviceDataService: deviceData)
                 } else {
                     AboutView()
@@ -169,6 +183,8 @@ struct RootView: View {
                 path.append(TeamListScreenRoute())
             } else if env[Self.openAdjustScreenAtLaunchEnvironmentKey] == Self.openAdjustScreenAtLaunchValue {
                 path.append(AdjustScreenRoute())
+            } else if env[Self.openSpeedScreenAtLaunchEnvironmentKey] == Self.openSpeedScreenAtLaunchValue {
+                path.append(SpeedScreenRoute())
             }
         }
     }
@@ -176,7 +192,7 @@ struct RootView: View {
     @ViewBuilder
     private var statusBadge: some View {
         switch environment {
-        case .ready(_, _, let description, _, _, _):
+        case .ready(_, _, let description, _, _, _, _):
             Text(description)
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
@@ -226,6 +242,9 @@ private struct AdjustScreenRoute: Hashable {}
 /// `NavigationPath` に積むタイプバランス画面の行き先(値だけで、状態は持たない。P6-21)。
 private struct BalanceScreenRoute: Hashable {}
 
+/// `NavigationPath` に積む素早さ比較画面の行き先(値だけで、状態は持たない。P6-24)。
+private struct SpeedScreenRoute: Hashable {}
+
 /// `NavigationPath` に積む「このアプリについて」画面の行き先(値だけで、状態は持たない。P6-18)。
 private struct AboutScreenRoute: Hashable {}
 
@@ -234,7 +253,8 @@ private struct AboutScreenRoute: Hashable {}
         RootView(
             environment: .ready(
                 service: mock, deviceData: MockDeviceDataService(), backendDescription: "モックデータで動作中", adjust: adjust,
-                balance: UnavailableBalanceService(), frequentOpponents: MockFrequentOpponentsService()))
+                balance: UnavailableBalanceService(), frequentOpponents: MockFrequentOpponentsService(),
+                speed: MockSpeedService()))
     } else {
         Text("プレビュー用モックの読み込みに失敗")
     }

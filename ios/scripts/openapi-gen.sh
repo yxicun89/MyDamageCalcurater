@@ -16,6 +16,7 @@ readonly tool_dir="$ios_dir/tools/openapi-gen"
 readonly targets=(
   "PokeCalcAPI|$repo_dir/api/openapi.yaml|$tool_dir/openapi-generator-config.yaml|$ios_dir/PokeCalcKit/Sources/PokeCalcAPI/Generated"
   "PokeCalcBalanceAPI|$repo_dir/services/balance/api/openapi.yaml|$tool_dir/openapi-generator-balance-config.yaml|$ios_dir/PokeCalcKit/Sources/PokeCalcBalanceAPI/Generated"
+  "PokeCalcSpeedAPI|$repo_dir/services/speed/api/openapi.yaml|$tool_dir/openapi-generator-config.speed.yaml|$ios_dir/PokeCalcKit/Sources/PokeCalcSpeedAPI/Generated"
 )
 
 mode="write"

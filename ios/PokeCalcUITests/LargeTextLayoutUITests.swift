@@ -690,4 +690,64 @@ final class LargeTextLayoutUITests: XCTestCase {
         assertNoHorizontalOverflow(
             app, identifiers: ["frequentOpponentsSection", "frequentOpponentRow-9003-000", "frequentOpponentRow-9001-000"])
     }
+    // MARK: - 素早さ比較画面(P6-24。ADR-0501「P6-24 の受け入れ条件」の AX5)
+
+    /// 素早さ画面の識別子(ADR-0503 §9)。入力・絞り込み・表・結果のうち、長い文言(「トリックルーム」
+    /// 「追い風(相手側)」「こだわりスカーフ」「自分より先に動く N行」など)を持つものを AX5 で見る。
+    private static let speedScreenIdentifiers = [
+        "speedScreen", "speedTable", "speedFilter-max-scarf", "speedFilter-max-plus1",
+        "speedTableTailwind", "speedTrickRoom", "speedMode-preset", "speedMode-custom", "speedMode-raw",
+        "speedPokemonButton",
+    ]
+    private static let speedResultIdentifiers = [
+        "speedResult", "speedResultSpeed", "speedResultFaster", "speedResultSlower", "speedResultMovesBefore",
+        "speedResultMovesAfter",
+    ]
+
+    private func openSpeedScreen(_ app: XCUIApplication) {
+        let openButton = app.buttons["openSpeedScreen"]
+        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout), "ルート画面に openSpeedScreen が無い")
+        openButton.tap()
+        XCTAssertTrue(element(app, "speedScreen").waitForExistence(timeout: Self.existenceTimeout), "speedScreen が開かない")
+    }
+
+    /// P6-24: AX5 でも素早さ画面の入力・絞り込み・場の状態が横にはみ出さない(長い日本語のピル・トグルが折り返す)。
+    func testSpeedScreenNoHorizontalOverflowAtAX5() {
+        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        openSpeedScreen(app)
+        assertNoHorizontalOverflow(app, identifiers: Self.speedScreenIdentifiers)
+    }
+
+    /// P6-24: AX5 で、実数値の結果(トリックルーム中の「先に動く/後に動く」の行を含む)・表の段・境界線が横にはみ出さない。
+    func testSpeedScreenResultAndTableNoHorizontalOverflowAtAX5() {
+        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        openSpeedScreen(app)
+
+        let trickRoom = element(app, "speedTrickRoom")
+        XCTAssertTrue(trickRoom.waitForExistence(timeout: Self.existenceTimeout))
+        trickRoom.tap()
+        let rawMode = element(app, "speedMode-raw")
+        XCTAssertTrue(rawMode.waitForExistence(timeout: Self.existenceTimeout))
+        rawMode.tap()
+        let field = element(app, "speedRawValueField")
+        XCTAssertTrue(field.waitForExistence(timeout: Self.existenceTimeout))
+        field.tap()
+        field.typeText("1")
+        XCTAssertTrue(element(app, "speedResultSpeed").waitForExistence(timeout: Self.existenceTimeout), "結果が出ない")
+
+        assertNoHorizontalOverflow(app, identifiers: Self.speedResultIdentifiers + ["speedBoundary", "speedRawValueField"])
+        assertNoHorizontalOverflowForPrefixes(app, prefixes: ["speedTier-", "speedTierTie-"])
+    }
+
+    /// P6-24: AX5 でポケモンのシート(名前の一覧・検索欄)が横にはみ出さない。
+    func testSpeedPokemonSheetNoHorizontalOverflowAtAX5() {
+        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        openSpeedScreen(app)
+        let button = element(app, "speedPokemonButton")
+        XCTAssertTrue(button.waitForExistence(timeout: Self.existenceTimeout))
+        button.tap()
+        XCTAssertTrue(element(app, "speedPokemonSheet").waitForExistence(timeout: Self.existenceTimeout), "シートが開かない")
+        assertNoHorizontalOverflow(app, identifiers: ["speedPokemonSheet", "speedPokemonSearchField"])
+        assertNoHorizontalOverflowForPrefixes(app, prefixes: ["speedPokemonRow-"])
+    }
 }

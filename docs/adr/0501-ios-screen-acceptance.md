@@ -3757,6 +3757,82 @@ XCUITest(`AboutScreenUITests` 2件・`LargeTextLayoutUITests.testAboutScreenNoHo
   ios-check-request-limits` 成功 / `make ios-test-ui` 53 件中 1 件失敗(`testFailureThenRetryCompletes`。上記の矛盾のみ。
   AX5 の新規テストを含む他は全件成功)。
 
+## P6-24 の受け入れ条件(素早さ比較画面。判断は ADR-0503。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+契約は `services/speed/api/openapi.yaml`(gateway `/api/speed/*`)。参照実装は Web の `SpeedScreen`。生成方式・境界・ピッカー・モック・識別子は ADR-0503。
+足場(型・プロトコル・`SpeedLabels` の固定文言・各実装の空の殻)は `TODO(implementer P6-24)` 付きで追加済み。生成ターゲット
+(`PokeCalcSpeedAPI`)は足場がコンパイルするために spec の段階で作った(`make ios-gen-check` 成功)。
+
+1. **生成**: `ios/scripts/openapi-gen.sh`(と `--check`)が「契約・設定・出力先」の組のループで `PokeCalcAPI`(不変)と `PokeCalcSpeedAPI` を扱い、
+   `make ios-gen-check` が成功する。契約の enum(`PresetId`・`MinimalPresetId`・`NatureId`・`ModePayload`・`ErrorCode`)とドメインの enum が値・順序とも一致し
+   (`SpeedContractSyncTests`)、SP の最大・ランクの範囲は `SPLimits`/`RankLimits` と契約が一致する(`make ios-check-request-limits`)。
+2. **API 写像**(`APISpeedService`): 全操作に `X-Device-Id`/`X-Session-Id`。`GET /api/speed/v1/pokemon`(クエリなし)、`GET /api/speed/v1/table`
+   (`presets` は 1 つのパラメータにカンマ区切り・全 6 行なら省略・`tailwind`/`trickRoom` は true のときだけ)、`POST /api/speed/v1/position`
+   (本文は mode に要る項目だけ。false の `tailwind`/`paralysis`/`tableTailwind` は載せない。`scarf` は preset・custom で常に載せる)。応答は並びを変えずにドメインへ写す。
+   400/413/422/500/503 は `code` をそのまま運ぶ `PokeCalcError`、通信不能は `transport`、読めない 200 は `decode`、契約外のステータスは本文が `{code,message}` ならその
+   `code`・読めなければ `client_unexpected_status`、タスクのキャンセルは `CancellationError` のまま。
+3. **入力 → 要求**(`SpeedViewModel`): Web と同じ既定(preset・最速・スカーフ無し・ポケモン未選択)。preset・custom はポケモン未選択では送らない。raw はポケモン任意で、
+   自分の追い風・まひ・スカーフは載せない。SP は 0…`SPLimits.maxPerStat`、ランクは `RankLimits` に収める。raw の実数値は前後の空白を落として 1 以上の整数だけ送り、
+   空欄は未入力(エラーなし)、それ以外は「実数値は1以上の整数で入力してください」を出して送らない(上限の判定はサーバー)。
+4. **表と結果の整形**: 絞り込みは全 6 行なら `presets` を省き、そうでなければ選んだ行を契約の順で渡す。最後の 1 つは外せず(取り直さない)説明を出す。トリックルームは表だけ、
+   相手側の追い風は表と位置の両方を取り直す。表の並びは応答のまま。境界線・「自分と同速」の強調は表示中の段の speed と自分の実数値の直接比較で決める
+   (同じ speed の段があれば強調して境界なし。通常は降順、トリックルーム中は昇順。位置が読めていなければ引かない)。結果は応答のまま整形し、トリックルーム中だけ
+   「先に動く(= slower)/後に動く(= faster)」の行を足す。
+5. **非同期**: 連続入力は debounce で確定値の要求 1 回にまとめ、新しい入力・画面破棄で先行の要求を cancel する。最新の世代の応答だけ反映し(cancel を無視する
+   サービスの古い応答も捨てる)、`CancellationError` は失敗として出さない。ポケモン一覧・表・位置は互いの失敗に巻き込まれず、`load()` は throw しない(絶対ルール 5)。
+   エラーはサーバーの英語 message を出さず `code` から日本語にする。
+6. **ピッカーとモック**: ピッカーは speed の一覧だけを使い、前後の空白を落としたひらがな/カタカナの部分一致で絞る(絞り込みは選択・要求に影響しない)。
+   `MockSpeedService` は ADR-0503 §8 の固定の事実(4 体・24 行・同速あり・シナリオ)を満たす。
+7. **画面(XCUITest・モック)**: ルートの `openSpeedScreen` と `POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH=1` で開く。表の段・絞り込み・最後の 1 つを外せないこと・トリックルームの並び替え・
+   実数値 1 の境界線(最下部・同じ段なし)・同速の強調・カスタムの入力部品・ピッカーの絞り込み・不正な実数値の説明が動く。表だけ・位置だけ・一覧だけ失敗しても他は使え、
+   全面的に失敗しても計算画面は開く(絶対ルール 5)。AX5 でも入力・表・結果・シートが横にはみ出さない。
+8. **文言・デザイン・不変条件**: 文言は `SpeedLabels` に集約し Web の `ja.ts` と同じ(`SpeedLabelsTests` が固定)。design.md のトークンのみ、`lineLimit`・`minimumScaleFactor` なし、
+   常時アニメーションなし。既存のテスト・identifier・`PokeCalcAPI` の生成物は不変。
+
+### 追加したテスト(spec 時点)
+
+- 単体(XCTest。`ios/PokeCalcKit/Tests/PokeCalcCoreTests/`)**113 件**: `SpeedContractSyncTests` 6・`SpeedLabelsTests` 9・`APISpeedServiceTests` 22・`MockSpeedServiceTests` 16・
+  `SpeedViewModelInputTests` 16・`SpeedViewModelTableTests` 22・`SpeedViewModelAsyncTests` 14・`SpeedViewModelPickerTests` 8。
+  足場: `Support/StubSpeedService.swift`(呼び出しの記録・hold/release・cancel の記録・cancel を無視するモード)。
+  `swift test` は全 689 件中、新規の 87 件が失敗(足場が空の殻のため。意図どおり)、新規の 26 件(同期・固定文言・初期値など)と既存の 576 件は成功。
+- 契約の範囲の同期: `ios/scripts/check-request-limits.sh` に speed(`PositionRequest.sp.maximum`・`rank.minimum/maximum` ↔ `SPLimits.maxPerStat`・`RankLimits`)を追加(成功。
+  契約を 1 つ書き換えて失敗することも確認済み)。
+- XCUITest(`ios/PokeCalcUITests/`)**16 件**(コンパイル確認のみ。View が未実装のため実行すると失敗する): `SpeedScreenUITests` 13 件、
+  `LargeTextLayoutUITests` に AX5 の 3 件(`testSpeedScreenNoHorizontalOverflowAtAX5`・`testSpeedScreenResultAndTableNoHorizontalOverflowAtAX5`・`testSpeedPokemonSheetNoHorizontalOverflowAtAX5`)。
+- `make ios-gen-check`・`make ios-lint`・`make ios-check-request-limits` 成功。`xcodebuild build-for-testing`(PokeCalc スキーム)成功。
+
+### 実装者への注意
+
+- 足場の公開 API(名前・case 名・引数・ID の文字列)をテストが固定している。変えるときは理由をコミットに書く。`TODO(implementer P6-24` を grep して全部埋める
+  (`SpeedLabels.errorMessage`・`SpeedViewModel`・`APISpeedService`・`MockSpeedService`)。
+- `SpeedViewModel`: 入力の変更は同期で状態を変え(`positionState = .loading` も同期)、要求は `LatestTaskRunner`(位置・表で別々)に予約する。応答の反映は世代で守る
+  (Task のキャンセル確認だけに頼らない。`ignoringCancellation` のテストがある)。`settle()` は最新の予約済み Task を await する。表の取り直し・`load()` は debounce しない
+  (`SpeedViewModelAsyncTests` は `debounce: .seconds(30)` でも `load()` が進む前提)。`selectedPokemon` は一覧から引く。`mode` を変えたら要求を作り直す。
+- `APISpeedService.swift` は `PokeCalcSpeedAPI` だけを読み込む(root の `PokeCalcAPI` と `Client` が衝突する)。`presets` は `explode: false` の 1 パラメータ
+  (生成クライアントに任せればカンマ区切りになる)。optional な本文項目は nil なら載らない(生成型の既定の符号化)。`undocumented` の本文は
+  `UndocumentedPayload.body` を読んで `{code,message}` を試す。`ErrorCode` の enum にない code はデコード失敗(`decode`)になる点に注意。
+- `MockSpeedService`: 表と位置は同じ内部の計算を共有する(最速 + スカーフ == 最速+1 の同値が自然に出る)。「テスト」で始まる架空の名前。`Resources/` を足すなら `MockFixtures` の流儀に従う。
+- アプリ側: `AppEnvironment.ready` に `speed` を足し、`RootView`・`#Preview`・既存のパターンマッチをすべて更新する(API は同じ `ClientIdentity` を共有)。
+  `RootView` に `openSpeedScreen` と `POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH`(既存の else-if の並びに足す)、`ios/scripts/sim-run.sh` の `IOS_SCREEN=speed`、
+  `docs/runbooks/ios.md`・`ios/README.md`・`docs/plan.md`(P6-24)を更新する。View は `PokeCalcCore` の `SpeedViewModel` を `@State` で持ち、
+  `.task` で `load()`、`.onDisappear` で `cancelPendingWork()`。
+- View の制約: 段は `VStack`(`LazyVStack` にしない)、段・結果の行は `.accessibilityElement(children: .contain)` を付けて子の識別子を飲み込ませない。
+  オン/オフの操作は選択ボタンで `isSelected` を出す。`Menu`・メニュー形式の `Picker` は使わない。`lineLimit`・`minimumScaleFactor` なし、AX5 では長いピルが折り返す。
+  色はタイプのエンブレムだけが持つ(design.md)。エンブレムの色は `PokeType` ではなく文字列のタイプ ID なので、未知の ID は無彩色のフォールバックにする。
+- 範囲(32・±6)は `SPLimits`・`RankLimits` から。`SpeedLabels` に数値を直書きしない。
+- 完了条件: `make ios-test`(lint・gen-check・check-request-limits・単体・UI・infoplist)がすべて成功する。UI テストはモック固定の事実(24 行)に頼る箇所が 1 つある
+  (`testRawValueBelowEveryRowDrawsTheBoundaryAtTheBottom`)。モックを変えるなら ADR-0503 §8 とそのテストを同時に直す。
+
+
+### 実装結果(implementer)
+
+- `swift test`(`ios/PokeCalcKit`): 全 689 件 成功 / 失敗 0(新規 113 件を含む。spec 時点の失敗 87 件はすべて解消)。
+- `make ios-lint ios-gen-check ios-check-request-limits` 成功。`xcodebuild build-for-testing`(PokeCalc スキーム・iPhone 18 Pro)成功。XCUITest(16 件)は実行していない(コンパイルのみ確認)。
+- 判断: 位置の再取得は「入力を変えた結果の要求が変わったとき」だけ予約する(preset のまま実数値欄を触る等では送らない)。
+  ポケモンのシートの検索欄は `.searchable` ではなく通常の `TextField`(`speedPokemonSearchField` を入力できる要素にするため)。
+  `SpeedPill`/`SpeedFlowLayout` は折り返すピル(既存の `ChipButton` は1行固定のため別に持つ)。`SpeedLabels` に `close`・`spIncrement`・`spDecrement` を追加。
+- テストの矛盾: なし(テスト・既存の期待値は変更していない)。
+
 ## P6-23 の受け入れ条件(iOS: 種族ピッカーの「よく使う相手」。ADR-0209・requirements.md §2。spec-writer: 受け入れ条件とテストのみ。実装はしない)
 
 - 日付: 2026-10-02 / 担当レーン: iOS / 関連: api/openapi.yaml(`listFrequentOpponents`・`FrequentOpponent`)、ADR-0209(頻度の保存・減衰・

@@ -1,0 +1,9 @@
+# PokeCalcSpeedAPI の生成設定(ADR-0503)。生成物は ios/PokeCalcKit/Sources/PokeCalcSpeedAPI/Generated/。
+# 契約は services/speed/api/openapi.yaml(サービスローカル契約。ADR-0012)。root の PokeCalcAPI とは
+# 別ターゲットにする(`Client`・`Components` などの生成型名が衝突するため)。
+generate:
+  - types
+  - client
+accessModifier: public
+namingStrategy: idiomatic
+# speed の契約には tags が無いので filter は掛けない(ヘルスチェックも生成されるが使わない)。
