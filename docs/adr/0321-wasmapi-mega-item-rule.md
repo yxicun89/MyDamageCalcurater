@@ -27,11 +27,15 @@ calc-svc は、メガ種族(`isMega`)に `requiredItemId` 以外の持ち物を�
    拒否ベクタは `expectError`(エラー code)を持ち、成功ベクタ用の一致テストの対象から外す。`TestErrorVectorsReturnExpectedCode` が code を、
    `scripts/wasm-conformance.mjs` がネイティブ Go と WASM のバイト一致を見る。
 
-## Web への影響(未対応・次の作業)
+## Web への受け渡し(同じ PR で実施。ADR-0320 の見直し)
 
-Web の `toEngineSpecies`(`web/src/domain/requests.ts`)は ADR-0320 により `isMega`・`requiredItemId` を境界へ渡さない(当時の境界が `unknown_field` で拒否するため)。
-この ADR で境界は両方を受け付けるようになったが、Web が渡すまではオフライン計算に規則は効かない(従来どおり)。Web は計算・逆算の持ち物欄をメガ種族ではストーンに
-固定しているので通常の操作では起きない入力であり、渡す変更(`toEngineSpecies` と ADR-0320 の対応テスト `requests.mega.test.ts` の更新)は Web レーンの次の作業とする。
+ADR-0320 は、当時の境界が `unknown_field` で拒否するため、`toEngineSpecies`(`web/src/domain/requests.ts`)が `isMega`・`requiredItemId` を落としていた。
+この ADR で境界が両方を受け付けるので、**メガ種族に限り `isMega: true` と `requiredItemId`(無ければ null)を渡す**ように改めた
+(メガでない種族は従来どおり渡さず、リクエストは不変)。`learnset` は引き続き落とす。Web の `Species` 型(`engine/types.ts`)に両フィールドを任意で足し、
+`MasterSpecies` はそれを継承する。値の出どころはマスタ(公開 API の `MasterSpecies.isMega`・`requiredItemId`。calc-svc が使うのと同じ項目で、
+`master/onlineSource.ts`・キャッシュ・エクスポートが既に持つ)。calc・逆算・判定の個体と相手の種族はすべて `buildIndividual`・`toEngineSpecies` を通るので、
+オフライン計算(WASM)でもオンラインと同じ検証が効く。ADR-0320 の対応テスト `requests.mega.test.ts` は「落とす」から「メガ種族だけ渡す」検証に更新した
+(弱めず、渡すこと・メガでない種族は渡さないこと・learnset は落とすことを見る)。
 
 ## 結果
 

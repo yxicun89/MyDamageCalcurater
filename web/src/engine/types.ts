@@ -65,6 +65,13 @@ export interface Species {
   readonly types: readonly string[];
   readonly baseStats: Stats;
   readonly abilities: readonly string[];
+  /**
+   * メガシンカ後の種族か(issue 505・ADR-0321)。境界(engine/wasmapi)が持ち物規則の検証に使う。
+   * メガでない種族では省略する(境界の既定は false)。
+   */
+  readonly isMega?: boolean;
+  /** メガ種族が持てる持ち物(メガストーン)の ID。isMega が true のときだけ渡す。 */
+  readonly requiredItemId?: string | null;
 }
 
 /** 技。 */

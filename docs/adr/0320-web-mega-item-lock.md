@@ -35,7 +35,7 @@ issue #515 の Web 分を2つの PR に分ける。**PR-A(この ADR の範囲)=
 4. **ストーンをマスタの持ち物から引けないメガ種族(`missing`)**: 固定せず持ち物は空にし、欄は `disabled` で理由(`missingReason`)を出す。逆算の相手は `itemCandidates = [null]`。
    黙って別の持ち物にしない。API の 400 は最後の安全網で、UI は見せない(spec §4-3)。
 5. **マスタの型**: `MasterSpecies` に `isMega?: boolean`・`requiredItemId?: string | null` を足す(**省略可**。省略は非メガと同じ。既存の fixture・例データを変えずに済み、
-   公開 API が項目を返さない間も壊れない)。engine には渡さない(`toEngineSpecies` が落とす。境界は未知のフィールドを拒否する)。
+   公開 API が項目を返さない間も壊れない)。engine には渡さない(`toEngineSpecies` が落とす。境界は未知のフィールドを拒否する)。**→ ADR-0321(issue #505)で見直し: 境界が受け付けるようになったので、メガ種族に限り渡す。**
 6. **公開 API の契約**: 公開 API の `SpeciesDetail` に `isMega` / `requiredItemId` を足した(`api/openapi.yaml`。API 分は完了済みで、Web 側は触らない)。
    契約上は省略可(古いサーバー・クライアントの互換)だが、pokedex-svc は `requiredItemId` の null キーを常に出す
    (ADR-0218 の `effect` は省略。方針の違いは意図的)。Web の写像は応答の値をそのまま写し、省略は省略のまま(`isMegaSpecies` が false と読む)。
