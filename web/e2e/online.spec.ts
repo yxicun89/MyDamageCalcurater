@@ -21,7 +21,6 @@ import {
   chooseRadio,
   openApp,
   rowTexts,
-  selectMatchup,
   selectMatchupBySearch,
 } from "./support/calcPage.ts";
 
@@ -38,11 +37,12 @@ async function selectMode(page: Page, name: "オンライン(API)" | "オフラ�
 test("オンラインのマスタは /api/pokedex/* から読む(フィクスチャへの振り分けが効いている)", async ({
   page,
 }) => {
-  await openApp(page);
+  // ADR-0313: 既定がオンラインなので、マスタは開いた時点で読まれる。応答の待ち受けは開く前に仕掛ける。
   const items = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/pokedex/items");
   const natures = page.waitForResponse(
     (response) => new URL(response.url()).pathname === "/api/pokedex/natures",
   );
+  await openApp(page);
   await selectMode(page, "オンライン(API)");
 
   for (const response of [await items, await natures]) {
@@ -117,11 +117,13 @@ test("同じ画面操作で、オンライン(API)とオフライン(WASM)の結
   await expect(compare).not.toBeChecked();
   const online = await rowTexts(calcRows(page), DEFAULT_ROW_COUNT);
 
-  // 計算モードは localStorage に覚えるので、開き直してオフラインに切り替え、同じ操作をする。
+  // 計算モードは localStorage に覚えるので、開き直してオフラインに切り替え、同じ操作をする
+  // (オンラインで取得したマスタ・種族は IndexedDB に保存済み。ADR-0313)。
   await openApp(page);
   await selectMode(page, "オフライン(WASM)");
-  await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
-  // オフラインは効果データがあるので、こちらでは候補比較を選べる(オンラインとの違いの確認)。
-  await expect(compare).toBeEnabled();
+  await selectMatchupBySearch(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
+  // ADR-0313: オフラインのマスタはオンラインで取得したキャッシュなので、効果データが無く(effects: false)、
+  // 候補比較はオフラインでも選べない(以前は架空の例データで選べた。実データ相当では同じ制約になる)。
+  await expect(compare).toBeDisabled();
   await expect.poll(async () => rowTexts(calcRows(page), DEFAULT_ROW_COUNT)).toEqual(online);
 });
