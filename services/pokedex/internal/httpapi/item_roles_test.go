@@ -48,7 +48,7 @@ func itemRolesQuerier() *storetest.Querier {
 	q.Species = append(q.Species,
 		store.Species{Key: "9004-000", DexNo: 9004, Form: 0, ShowdownID: "testouter", NameJa: "テストソト", NameJaSource: "pokeapi", NameEn: "Testouter",
 			Type1: "water", BaseHp: 70, BaseAtk: 70, BaseDef: 70, BaseSpa: 70, BaseSpd: 70, BaseSpe: 70},
-		store.Species{Key: "9004-001", DexNo: 9004, Form: 1, ShowdownID: "testoutermega", NameJa: "メガテストソト", NameJaSource: "generated", NameEn: "Testouter-Mega",
+		store.Species{Key: "9004-001", DexNo: 9004, Form: 1, ShowdownID: "testoutermega", NameJa: "テストメガソト", NameJaSource: "generated", NameEn: "Testouter-Mega",
 			Type1: "water", BaseHp: 70, BaseAtk: 90, BaseDef: 90, BaseSpa: 90, BaseSpd: 90, BaseSpe: 90,
 			IsMega: true, BaseSpeciesKey: sql.NullString{String: "9004-000", Valid: true}, RequiredItemID: sql.NullString{String: "teststone2", Valid: true}},
 	)
