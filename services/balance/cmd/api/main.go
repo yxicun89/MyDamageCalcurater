@@ -108,11 +108,8 @@ func main() {
 			os.Exit(1)
 		}
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := server.Shutdown(shutdownCtx); err != nil {
-			slog.Error("balance API shutdown failed", "error", err)
-			os.Exit(1)
+		if err := gracefulShutdown(server, shutdownTimeout); err != nil {
+			slog.Warn("balance API shutdown did not finish in time; remaining connections closed", "error", err)
 		}
 	}
 }
