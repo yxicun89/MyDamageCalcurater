@@ -1,15 +1,13 @@
 import Foundation
 import PokeCalcCore
 
-/// 起動時に1回だけ作る、画面が使う実行時の状態(ADR-0500 §5)。
+/// 起動時に1回だけ作る、画面が使う実行時の状態(ADR-0500 §5・ADR-0507 §2)。
 ///
-/// `AppConfiguration` を1か所(ここ)で読み、モック/API のどちらの `PokeCalcService` を使うかを
-/// 決める。設定が壊れているときは画面にエラーを出す(クラッシュしない。coding-rules §2)。
+/// `AppConfiguration` を1か所(ここ)で読み、モック/API のどちらを使うかを決める。画面ごとのサービスは
+/// 各 `AppFeature` が `FeatureServices` に登録する(機能を足しても `.ready` の形は変わらない)。
+/// 設定が壊れているときは画面にエラーを出す(クラッシュしない。coding-rules §2)。
 enum AppEnvironment {
-    case ready(
-        service: any PokeCalcService, deviceData: any DeviceDataService, backendDescription: String, adjust: any AdjustService,
-        balance: any BalanceService,
-        frequentOpponents: any FrequentOpponentsService, speed: any SpeedService)
+    case ready(core: CoreServices, features: FeatureServices)
     case configurationError(String)
 
     /// 設定エラー時に画面へ出す文言の接頭辞。
@@ -17,35 +15,56 @@ enum AppEnvironment {
 
     static func makeAtLaunch(
         infoDictionary: [String: Any] = Bundle.main.infoDictionary ?? [:],
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        features: [any AppFeature] = FeatureRegistry.features
     ) -> AppEnvironment {
         do {
+            try FeatureRegistry.validateUniqueIDs(features)
             let configuration = try AppConfiguration(infoDictionary: infoDictionary, environment: environment)
+            let core: CoreServices
+            let backend: FeatureBackend
             switch configuration.backend {
             case .mock:
-                let service = try MockPokeCalcService()
-                let deviceData = MockDeviceDataService(environment: environment)
-                let adjust = try MockAdjustService()
-                let frequentOpponents = MockFrequentOpponentsService(environment: environment)
-                // タイプバランスはモックを持たない(架空の相性表を作らない。ADR-0415 §4)。
-                let speed = MockSpeedService(environment: environment)
-                return .ready(
-                    service: service, deviceData: deviceData, backendDescription: "モックデータで動作中", adjust: adjust,
-                    balance: UnavailableBalanceService(), frequentOpponents: frequentOpponents, speed: speed)
+                core = CoreServices(
+                    pokeCalc: try MockPokeCalcService(),
+                    frequentOpponents: MockFrequentOpponentsService(environment: environment),
+                    backendDescription: "モックデータで動作中")
+                backend = .mock(environment: environment)
             case .api(let url):
                 let identity = ClientIdentity(defaults: .standard)
                 let service = APIPokeCalcService(baseURL: url, identity: identity)
-                // balance は gateway の `/api/balance/*`(計算・pokedex と同じ基点 URL。ADR-0415 §3)。
-                let balance = APIBalanceService(baseURL: url, identity: identity)
-                // 素早さも同じ gateway(`/api/speed/*`)・同じ端末 ID/セッション ID(ADR-0503 §3)。
-                let speed = APISpeedService(baseURL: url, identity: identity)
-                return .ready(
-                    service: service, deviceData: service,
-                    backendDescription: "APIに接続中(\(url.host ?? url.absoluteString))", adjust: service, balance: balance,
-                    frequentOpponents: service, speed: speed)
+                core = CoreServices(
+                    pokeCalc: service, frequentOpponents: service,
+                    backendDescription: "APIに接続中(\(url.host ?? url.absoluteString))")
+                backend = .api(baseURL: url, identity: identity, pokeCalc: service)
             }
+            var services = FeatureServices()
+            for feature in features {
+                try feature.registerServices(for: backend, into: &services)
+            }
+            return .ready(core: core, features: services)
         } catch {
             return .configurationError("\(configurationErrorPrefix)\(error)")
         }
     }
+}
+
+/// 複数の画面が同じインスタンスを共有するサービス(ADR-0507 §2)。1つの画面だけが使うものは
+/// `FeatureServices` に置く。
+struct CoreServices {
+    /// マスタ参照・計算・逆算(計算・逆算・構築・調整・タイプバランスが共有)。
+    let pokeCalc: any PokeCalcService
+    /// よく使う相手(計算・逆算が同じインスタンスを共有する)。
+    let frequentOpponents: any FrequentOpponentsService
+    /// 状態バッジに出す接続先の説明。
+    let backendDescription: String
+}
+
+/// 各機能がサービスを作るときの材料(ADR-0507 §2)。
+enum FeatureBackend {
+    /// 架空データ。`environment` はモックのシナリオ切り替え(XCUITest 用)に使う。
+    case mock(environment: [String: String])
+    /// API。`identity` は全機能で1つ(セッション ID を起動ごとに1つに保つ。ADR-0500 §5)。
+    /// `pokeCalc` は同じ gateway・同じ契約の機能(調整・端末データ削除など)がそのまま使う。
+    case api(baseURL: URL, identity: ClientIdentity, pokeCalc: APIPokeCalcService)
 }

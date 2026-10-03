@@ -160,6 +160,7 @@ scripts/pr-merge.sh <番号>         # 推奨: 上の3つに加えてローカ�
 | `docs/ai-shared/DECISIONS.md` | 追記のみ。既存エントリは編集しない |
 | `go.work` | 自分のレーンのモジュールの `use` 行を追記してよい(タイプバランスは `./services/balance`) |
 | ルートの `Makefile` | 自分のレーンのサービスの `include <path>/Makefile` の1行を追記してよい(タイプバランスは `include services/balance/Makefile`。ターゲット名は `balance-` 接頭辞) |
+| `ios/PokeCalc/Features/FeatureRegistry.swift` | iOS に画面を足すレーンは配列の末尾に自分の `AppFeature` の1行を足すだけ。`RootView.swift`・`AppEnvironment.swift` は編集しない(ADR-0507) |
 | `AGENTS.md` / `CLAUDE.md` / 本ファイル | 運用ルールの変更は、ユーザーの決定があったときだけ。変更したら `DECISIONS.md` に記録する |
 | `docs/adr/` | **新しい ADR の番号はレーンごとの帯から取る**(2026-09-22。並列で「main の最新の次」を取ると衝突するため): データ `0100〜` / API `0200〜` / Web `0300〜` / タイプバランス `0400〜` / iOS `0500〜` / 素早さ `0600〜` / 判定 `0700〜`。帯の中で自分のレーンの最新の次を使う。`0001〜0019` の既存の番号はそのまま(衝突しているものは、後から統合する側が自分の帯へ振り直す) |
 

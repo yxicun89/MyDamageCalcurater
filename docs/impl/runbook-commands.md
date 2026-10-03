@@ -106,7 +106,7 @@
 | コマンド | 出現 | 裏で走るもの | 場所 | つなぐもの / 副作用 |
 |---|---|---|---|---|
 | `make ios-test \| grep '^ios-'` | ios §1 | `ios-lint`(`ios/scripts/*.sh` 構文)→ `ios-gen-check`(`openapi-gen.sh --check`: 一時ディレクトリに生成し差分検査)→ `ios-test-unit`(`cd ios/PokeCalcKit && run-xcode-tests.sh … -scheme PokeCalcKit-Package`)→ `ios-test-ui`(`-project ios/PokeCalc.xcodeproj -scheme PokeCalc`。モック強制)→ `ios-check-infoplist`(`xcodebuild build` で Info.plist に `PokeCalcAPIBaseURL` が入るか) | host(Xcode・シミュレータ) | k3d・gateway 不要(モック)。`run-xcode-tests.sh` はスキップ・空実行も失敗にする |
-| `make ios-sim-run IOS_SCREEN=root\|calc\|reverse\|team [IOS_APPEARANCE=… IOS_CONTENT_SIZE=…]` | ios §2〜 | `sim-run.sh`: `xcrun simctl boot`/`bootstatus` → `xcodebuild build` → インストール・モック起動 | host(シミュレータ) | 画面を直接開く環境変数 `POKECALC_OPEN_*_AT_LAUNCH`(`RootView.swift`) |
+| `make ios-sim-run IOS_SCREEN=root\|calc\|reverse\|team [IOS_APPEARANCE=… IOS_CONTENT_SIZE=…]` | ios §2〜 | `sim-run.sh`: `xcrun simctl boot`/`bootstatus` → `xcodebuild build` → インストール・モック起動 | host(シミュレータ) | 画面を直接開く環境変数 `POKECALC_OPEN_*_AT_LAUNCH`(`ios/PokeCalc/Features/*Feature.swift`。ADR-0507) |
 | `tailscale serve https / http://localhost:8080` | ios-device §2 | Tailscale の HTTPS 入口を host:8080(k3d serverlb → gateway)へ転送 | host(tailnet) | **端末から gateway を tailnet 経由で公開**(人間の作業)。`tailscale serve off` で解除 |
 | `make ios-check-infoplist` | ios-device §3 | 上記の xcodebuild 検査 | host | `POKECALC_API_BASE_URL` は `https:/$()/<host>`(`//` がコメント扱いになるため。ADR-0500 §5) |
 
