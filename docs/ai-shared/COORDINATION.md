@@ -29,7 +29,7 @@
 
 | レーン | 作業ディレクトリ | ブランチ | 範囲 |
 |---|---|---|---|
-| **データ**(damage calc: engine・マスタ) | `~/MyDamageCalcurater-data`(同じリポジトリの git worktree。`~/MyDamageCalcurater` は確認用で使わない) | `feat/calc-<phase名>`(既存の `feat/claude-p1-engine` はマージまでそのまま使う) | `engine/`、`tools/golden/`・`testdata/golden/`、Phase 2(`services/pokedex/`・`tools/importer/`・`services/internal/master/`・MySQL の k8s 定義)、および他のレーンに属さない M1〜M4 のタスク。**M4(監視・SLO・GitOps・バックアップ)と、Tailscale 等の到達経路・運用(deploy・scripts・runbook・up.sh・k8s)の持ち主はこのレーン**(ユーザー決定 2026-10-03・issue #285。「運用レーン」は作らない) |
+| **データ**(damage calc: engine・マスタ) | `~/MyDamageCalcurater-calc`(同じリポジトリの git worktree。`~/MyDamageCalcurater` は確認用で使わない) | `feat/calc-<phase名>`(既存の `feat/claude-p1-engine` はマージまでそのまま使う) | `engine/`、`tools/golden/`・`testdata/golden/`、Phase 2(`services/pokedex/`・`tools/importer/`・`services/internal/master/`・MySQL の k8s 定義)、および他のレーンに属さない M1〜M4 のタスク。**M4(監視・SLO・GitOps・バックアップ)と、Tailscale 等の到達経路・運用(deploy・scripts・runbook・up.sh・k8s)の持ち主はこのレーン**(ユーザー決定 2026-10-03・issue #285。「運用レーン」は作らない) |
 | **API**(damage calc: サービス) | `~/MyDamageCalcurater-api` | `feat/api-<phase名>` | Phase 3(`services/calc/`・`services/gateway/`・契約テスト・k3d のスモーク)と **M2(`services/record/`・`services/team/`・TiDB・NATS。画面は Web レーン)**(ユーザー決定 2026-10-03)。**`api/openapi.yaml` と生成物(`services/internal/api/`)を変更できるのはこのレーンだけ** |
 | **Web**(damage calc: 画面) | `~/MyDamageCalcurater-web` | `feat/web-<phase名>` | Phase 4(`web/`・Playwright)。`make wasm` の成果物を使う |
 | **タイプバランス**(type balance) | `~/MyDamageCalcurater-tb`(同じリポジトリの git worktree) | `feat/tb-<stage名>`(既存の `feat/codex-tb0-foundation` はマージまでそのまま使う) | `services/balance/` とその Kustomize / Argo CD 定義。設計の正は `docs/type-balance-design.md` |
@@ -61,14 +61,14 @@
 ### ユーザーが確認する場所
 - ユーザーは動作確認・ドキュメント確認を **`~/MyDamageCalcurater` の `main`(マージ後)** で行う。レーンごとの worktree を VS Code で開き直さない。
 - したがって成果は必ず PR で main に入れる。「レーンのブランチでは動くが main に無い」状態にしない。
-- **`~/MyDamageCalcurater` は `main` 固定の確認専用**(2026-10-03 ユーザー決定。データレーンの作業とユーザーの確認が同じディレクトリで衝突していた)。
-  - どのレーンもここでブランチを切らない・コミットしない・AI のセッションを起動しない。データレーンも専用 worktree `~/MyDamageCalcurater-data` で作業する。
+- **`~/MyDamageCalcurater` は `main` だけを置く場所**(2026-10-03 ユーザー決定): 全レーンの成果を PR で `main` に統合し、ユーザーが動作確認をする場所。ダメージ計算(`feat/calc-*`。データレーン)の作業と動作確認を分けるため、ダメージ計算レーンは専用 worktree `~/MyDamageCalcurater-calc` で作業する。
+  - どのレーンもここでブランチを切らない・コミットしない・AI のセッションを起動しない。ダメージ計算レーンも専用 worktree `~/MyDamageCalcurater-calc` で作業する。
   - ユーザーが確認するときは `git -C ~/MyDamageCalcurater pull --ff-only` で最新の `main` にしてから `make up` などを行う。**古いブランチで `make up` しない**
     (migrate イメージがクラスタの DB より古くなり `pokedex-migrate` が「no migration found for version N」で失敗する。DB は消さず main を取り込む)。
-  - **データレーンの移行(未実施。次のセッションの最初にやる)**: (1) `~/MyDamageCalcurater` の未コミットの変更を、作業中のブランチにコミットして push する
+  - **ダメージ計算レーンの移行(未実施。次のセッションの最初にやる)**: (1) `~/MyDamageCalcurater` の未コミットの変更を、作業中のブランチにコミットして push する
     (不要な変更ならユーザーに確認して破棄)。(2) `git -C ~/MyDamageCalcurater checkout main && git -C ~/MyDamageCalcurater pull --ff-only`。
-    (3) `git -C ~/MyDamageCalcurater worktree add ~/MyDamageCalcurater-data <作業中のブランチ>`(同じブランチは2つの worktree で開けないので、(2) の後に行う)。
-    (4) 以後 `cd ~/MyDamageCalcurater-data && claude`。他のレーンの worktree(`~/MyDamageCalcurater-<レーン>`)は触らない。
+    (3) `git -C ~/MyDamageCalcurater worktree add ~/MyDamageCalcurater-calc <作業中のブランチ>`(同じブランチは2つの worktree で開けないので、(2) の後に行う)。
+    (4) 以後 `cd ~/MyDamageCalcurater-calc && claude`。他のレーンの worktree(`~/MyDamageCalcurater-<レーン>`)は触らない。
   - `~/MyDamageCalcurater` で他のセッションの未コミットの変更を見つけたら、勝手に消さない(持ち主のレーンかユーザーに確認する)。
 
 ### PR は積極的に出す
@@ -214,7 +214,7 @@ Claude Code のメインセッションは **Sonnet で起動**する(`claude --
 
 
 ```
-cd ~/MyDamageCalcurater-data && claude   # または codex(データレーン。~/MyDamageCalcurater は main 固定の確認用で、ここでは起動しない)
+cd ~/MyDamageCalcurater-calc && claude   # または codex(ダメージ計算・データレーン。~/MyDamageCalcurater は main だけの確認用で、ここでは起動しない)
 cd ~/MyDamageCalcurater-api  && claude   # または codex(API レーン)
 cd ~/MyDamageCalcurater-web  && claude   # または codex(Web レーン)
 cd ~/MyDamageCalcurater-tb   && claude   # または codex(タイプバランスレーン)
