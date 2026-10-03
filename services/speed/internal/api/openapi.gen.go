@@ -19,6 +19,7 @@ const (
 	MasterUnavailable ErrorCode = "master_unavailable"
 	MissingHeader     ErrorCode = "missing_header"
 	NotFound          ErrorCode = "not_found"
+	Overloaded        ErrorCode = "overloaded"
 	RequestTooLarge   ErrorCode = "request_too_large"
 	UnknownPokemon    ErrorCode = "unknown_pokemon"
 )
@@ -37,6 +38,8 @@ func (e ErrorCode) Valid() bool {
 	case MissingHeader:
 		return true
 	case NotFound:
+		return true
+	case Overloaded:
 		return true
 	case RequestTooLarge:
 		return true

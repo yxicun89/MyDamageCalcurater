@@ -1,0 +1,81 @@
+# team-svc の失効ジョブ(ADR-0209 §4・ADR-0220 §3)。同じイメージの `team expire` を日次で1回流し、
+# teams・team_members・purge_journal・devices の期限切れの行を消す。上限(`TEAM_EXPIRE_BATCH_LIMIT`)に達したら
+# 「残りあり」をログに出して成功で終わり、次回が続きを消す。DB の DSN は Deployment と同じ app ロール。
+# NATS・calc・gateway には触れない(計算は成功し続ける)。失敗は Job の状態(kube_job_status_failed)で見る。
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: team-expire
+  labels:
+    app.kubernetes.io/name: team-expire
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  # 毎日 12:00(日本時間)。ノート PC 上で動く k3d が起動している可能性の高い時間帯。
+  schedule: "0 12 * * *"
+  timeZone: Asia/Tokyo
+  concurrencyPolicy: Forbid
+  # 12時間(1日未満。次の予定と重ねない)。予定時刻にクラスタが止まっていても、この範囲で起動すれば追いつく。
+  startingDeadlineSeconds: 43200
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # 一時的な失敗(TiDB の再起動)を2回まで再試行する。
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      # 結果を次の実行より長く残す(7日)。
+      ttlSecondsAfterFinished: 604800
+      podFailurePolicy:
+        rules:
+          # 終了コード 2(使い方の誤り。サブコマンド無し・不明)は再試行しても同じ結果になるので再試行しない
+          # (`expire` 自体は 2 を返さないので保険)。設定の誤り・DB に届かない等は 1 で、backoffLimit の再試行に任せる。
+          - action: FailJob
+            onExitCodes:
+              containerName: team
+              operator: In
+              values: [2]
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: team-expire
+            app.kubernetes.io/part-of: pokecalc
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          containers:
+            - name: team
+              image: pokecalc/team:0.1.0
+              imagePullPolicy: IfNotPresent
+              args: ["expire"]
+              envFrom:
+                - configMapRef:
+                    name: team-retention
+              env:
+                - name: TEAM_APP_DSN
+                  valueFrom:
+                    secretKeyRef:
+                      name: team-db-auth
+                      key: team-app-dsn
+                # 1回の実行で消す構築数の上限(失効ジョブだけが読む)。
+                - name: TEAM_EXPIRE_BATCH_LIMIT
+                  value: "1000"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault

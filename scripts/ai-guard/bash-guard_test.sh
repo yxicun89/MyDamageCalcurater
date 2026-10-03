@@ -62,6 +62,46 @@ git -C "$OTHER_REPO_FEATURE" init -q
 git -C "$OTHER_REPO_FEATURE" symbolic-ref HEAD refs/heads/feature-x
 git -C "$OTHER_REPO_FEATURE" -c user.email=bash-guard-test@example.com -c user.name=bash-guard-test commit -q --allow-empty -m init
 
+# FAKE_BIN — PATH の先頭に置く偽の gh(ADR-0803)。本物の gh・GitHub には一切触れない。
+#   - `gh pr view ... --json headRefOid` は固定 SHA(FAKE_SHA。FAKE_GH_SHA で差し替え)を返す。FAKE_GH_SLEEP があればその秒数 sleep する(時間切れの検証)
+#   - `gh pr checks ...` は引数を $FAKE_GH_LOG に記録し、環境変数 FAKE_GH_CHECKS_RC(既定 1=失敗)で終了する
+#   - それ以外(`gh pr merge` を含む)は呼ばれたら 97 で失敗し、記録に残す(ガードがマージ等を実行しないことの検証用)
+FAKE_BIN="$WORK/fake-bin"
+FAKE_GH_LOG="$WORK/fake-gh.log"
+mkdir -p "$FAKE_BIN"
+: >"$FAKE_GH_LOG"
+cat >"$FAKE_BIN/gh" <<'FAKE'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$FAKE_GH_LOG"
+if [ -n "${FAKE_GH_SLEEP:-}" ]; then exec sleep "$FAKE_GH_SLEEP"; fi
+if [ "${1:-}" = "pr" ] && [ "${2:-}" = "view" ]; then
+  printf "%s\n" "${FAKE_GH_SHA:-$FAKE_SHA_OUT}"
+  exit "${FAKE_GH_VIEW_RC:-0}"
+fi
+if [ "${1:-}" = "pr" ] && [ "${2:-}" = "checks" ]; then
+  exit "${FAKE_GH_CHECKS_RC:-1}"
+fi
+exit 97
+FAKE
+chmod +x "$FAKE_BIN/gh"
+# FAKE_SHA — 偽 gh の `pr view --json headRefOid` が返す、固定の HEAD の SHA。
+# FAKE_GH_SHA で差し替えると「検証後に HEAD が動いた」状態を作れる。
+readonly FAKE_SHA=0123456789abcdef0123456789abcdef01234567
+export FAKE_SHA_OUT="$FAKE_SHA"
+export FAKE_GH_LOG
+export FAKE_GH_CHECKS_RC=1
+export PATH="$FAKE_BIN:$PATH"
+
+# NOGH_BIN — gh だけが無い PATH(ガードが使う道具だけをリンクする)。
+NOGH_BIN="$WORK/nogh-bin"
+mkdir -p "$NOGH_BIN"
+for tool in bash jq sed tr grep cat git env uname mktemp rm sleep; do
+  src=$(command -v "$tool" 2>/dev/null) && ln -s "$src" "$NOGH_BIN/$tool"
+done
+
+# with_checks_rc 終了コード — 以降の run_guard で偽 gh の `pr checks` をその終了コードにする。
+with_checks_rc() { export FAKE_GH_CHECKS_RC="$1"; }
+
 # run_guard コマンド文字列 — bash-guard.sh に PreToolUse 形の JSON を渡し、終了コードを GUARD_RC に、
 # stdout・stderr を $WORK/out・$WORK/err に残す。
 run_guard() {
@@ -214,11 +254,187 @@ test_block_force_push() {
 }
 
 test_block_pr_merge() {
-  begin "block: gh pr merge(どんな追加引数でも)"
-  expect_block "gh pr merge"
+  # ADR-0803: 対象 PR(番号/URL)の明示・--match-head-commit で HEAD の SHA を固定・CI が全件成功(gh pr checks が 0)の
+  # すべてを満たすときだけ通す。それ以外はすべて block(fail-safe)。
+  local rc m="--match-head-commit $FAKE_SHA"
+  for rc in 1 8 127 124; do
+    with_checks_rc "$rc"
+    begin "block: gh pr merge は CI が全件成功でない(gh pr checks の終了コード $rc)ならどんな追加引数でも block"
+    expect_block "gh pr merge 123 $m"
+    expect_block "gh pr merge 123 $m --squash --delete-branch"
+    expect_block "gh pr merge --auto --merge 123 $m"
+    expect_block "gh pr merge -R o/r 123 $m"
+    expect_block "gh pr merge"
+    expect_block "gh pr merge 123"
+  done
+
+  with_checks_rc 0
+  begin "block: CI 全件成功でも --admin(チェック回避)・動的/危険な引数・複数の対象は block"
+  expect_block "gh pr merge 123 $m --admin"
+  expect_block "gh pr merge --admin --squash 123 $m"
+  expect_block "gh pr merge --admin=true 123 $m"
+  expect_block "gh pr merge -R --admin 5 $m"
+  expect_block "gh pr merge -R -x 5 $m"
+  expect_block "gh pr merge --repo --admin 5 $m"
+  expect_block "gh pr merge --repo=-x 5 $m"
+  expect_block "gh pr merge 123 $m \$(echo x)"
+  expect_block "gh pr merge \$(echo 123) $m"
+  expect_block "gh pr merge \$PR $m"
+  expect_block 'gh pr merge `echo 123`'
+  expect_block "gh pr merge \${PR} $m"
+  expect_block "gh pr merge 123 $m -b \"\$(id)\""
+  expect_block "gh pr merge ~/x $m"
+  expect_block "gh pr merge 1* $m"
+  expect_block "gh pr merge 1 2 $m"
+  expect_block "gh pr merge -R \"o/r;x\" 123 $m"
+  expect_block "gh pr merge -R \$R 123 $m"
+  expect_block "gh pr merge --repo=o/r\$X 123 $m"
+  expect_block "gh pr merge --body 'two words' 123 $m"
+  expect_block "gh pr merge 123 $m --admin; echo ok"
+
+  begin "block: 迂回形(まとめ書きフラグ・-R の別表記・未知フラグ・ブランチ名/引数なし)"
+  expect_block "gh pr merge -sb 504 $m"
+  expect_block "gh pr merge -A 504 $m"
+  expect_block "gh pr merge -sA 504 $m"
+  expect_block "gh pr merge -R o/r"
+  expect_block "gh pr merge -Ro/r 504 $m --admin"
+  expect_block "gh pr merge --unknown-flag 504 $m"
+  expect_block "gh pr merge -x 504 $m"
+  expect_block "gh pr merge feat/ops-merge-on-green $m"
+  expect_block "gh pr merge $m"
+  expect_block "gh pr merge --squash $m"
+  expect_block "gh pr merge http://github.com/o/r/pull/1 $m"
+  expect_block "gh pr merge https://github.com/o/r/issues/1 $m"
+
+  begin "block: --match-head-commit の省略・不一致(検証後に追加された commit をマージしない。TOCTOU 対策)"
   expect_block "gh pr merge 123"
   expect_block "gh pr merge 123 --squash --delete-branch"
-  expect_block "gh pr merge --auto --merge 123"
+  expect_block "gh pr merge 123 --match-head-commit ffffffffffffffffffffffffffffffffffffffff"
+  expect_block "gh pr merge 123 --match-head-commit=ffffffffffffffffffffffffffffffffffffffff"
+  expect_block "gh pr merge 123 --match-head-commit"
+  expect_block "gh pr merge 123 --match-head-commit ${FAKE_SHA:0:7}"
+
+  begin "block: 環境変数で対象・認証・設定を差し替える形(GH_REPO 等。export 形も)"
+  expect_block "GH_REPO=o/r gh pr merge 123 $m"
+  expect_block "export GH_REPO=o/r && gh pr merge 123 $m"
+  expect_block "export GH_REPO=o/r; gh pr merge 123 $m"
+  expect_block "GH_HOST=example.com gh pr merge 123 $m"
+  expect_block "GH_TOKEN=x gh pr merge 123 $m"
+  expect_block "GH_ENTERPRISE_TOKEN=x gh pr merge 123 $m"
+  expect_block "GH_CONFIG_DIR=/tmp/x gh pr merge 123 $m"
+  expect_block "env GH_REPO=o/r gh pr merge 123 $m"
+
+  begin "block: 他コマンドとの連結・cd/pushd/xargs 越し(対象を静的に確定できない)"
+  expect_block "git push origin feat/x && gh pr merge 123 $m"
+  expect_block "git push -u origin feat/x; gh pr merge 123 $m"
+  expect_block "make test && gh pr merge 123 $m"
+  expect_block "gh pr merge 123 $m && git status"
+  expect_block "gh pr merge 123 $m | cat"
+  expect_block "gh pr merge 123 $m || true"
+  expect_block "cd /tmp && gh pr merge 123 $m"
+  expect_block "pushd /tmp && gh pr merge 123 $m"
+  expect_block "pushd /tmp; gh pr merge 123 $m"
+  expect_block "cd /tmp; gh pr merge 123 $m"
+  expect_block "xargs gh pr merge $m"
+  expect_block "echo 123 | xargs gh pr merge $m"
+  expect_block "echo 123 | xargs -I{} gh pr merge {} $m"
+  expect_block $'gh pr merge 123 '"$m"$'\nrm x'
+
+  begin "block: gh alias の登録・取り込み、組み込みでないサブコマンド越しの merge"
+  expect_block "gh alias set m 'pr merge'"
+  expect_block "gh alias import aliases.yml"
+  expect_block "gh m 123 --admin merge"
+  expect_block "gh co merge 1"
+  expect_block "gh alias exec merge 1"
+  expect_block "gh extension exec merge 1"
+
+  begin "block: 時間切れ(gh が応答しない)は判定不能として block"
+  with_checks_rc 0
+  FAKE_GH_SLEEP=5 BASH_GUARD_GH_TIMEOUT=1 expect_block "gh pr merge 123 $m"
+
+  begin "pass: CI 全件成功・PR 番号/URL を明示・--match-head-commit が現在の HEAD と一致なら gh pr merge を通す"
+  with_checks_rc 0
+  expect_pass "gh pr merge 123 $m"
+  expect_pass "gh pr merge 123 --match-head-commit=$FAKE_SHA"
+  expect_pass "gh pr merge 123 --squash --delete-branch $m"
+  expect_pass "gh pr merge --auto --merge 123 $m"
+  expect_pass "gh pr merge -sd 123 $m"
+  expect_pass "gh pr merge -R o/r 123 $m"
+  expect_pass "gh pr merge -Ro/r 123 $m"
+  expect_pass "gh pr merge -R=o/r 123 $m"
+  expect_pass "gh pr merge -sR o/r 123 $m"
+  expect_pass "gh pr merge --repo o/r 123 $m"
+  expect_pass "gh pr merge --repo=o/r 123 $m"
+  expect_pass "gh -R o/r pr merge 123 $m"
+  expect_pass "gh pr merge https://github.com/o/r/pull/123 $m"
+  expect_pass "gh pr merge 123 $m --body-file notes.md"
+  expect_pass "gh pr merge 123 $m -A me@example.com"
+  expect_pass $'gh pr \\\nmerge 123 '"$m"
+  expect_pass "GH pr merge 123 $m"
+  expect_pass "gh pr merge 123 $m "$'\n'
+  # 以降の既存テスト(CI 失敗扱いで block を期待するもの)のため、既定の失敗に戻す。
+  with_checks_rc 1
+}
+
+test_pr_merge_gate_checks_what_it_merges() {
+  begin "gh pr merge: 検証する PR とマージする PR を一致させる(-R/対象を gh pr view・gh pr checks にも渡す)"
+  with_checks_rc 0
+  local mark m="--match-head-commit $FAKE_SHA"
+  mark=$(wc -l <"$FAKE_GH_LOG")
+  run_guard "gh pr merge 123 $m"
+  if [ "$(tail -n +$((mark + 1)) "$FAKE_GH_LOG")" = "$(printf 'pr view 123 --json headRefOid -q .headRefOid\npr checks 123')" ]; then ok; else ng "pr view → pr checks の順に対象 123 で呼ばれるべき: $(tail -n +$((mark + 1)) "$FAKE_GH_LOG")"; fi
+  mark=$(wc -l <"$FAKE_GH_LOG")
+  run_guard "gh pr merge -R o/r 123 --squash $m"
+  if [ "$(tail -n +$((mark + 1)) "$FAKE_GH_LOG")" = "$(printf 'pr view -R o/r 123 --json headRefOid -q .headRefOid\npr checks -R o/r 123')" ]; then ok; else ng "-R と対象が両方に渡されるべき: $(tail -n +$((mark + 1)) "$FAKE_GH_LOG")"; fi
+  mark=$(wc -l <"$FAKE_GH_LOG")
+  run_guard "gh -R o/r pr merge 123 $m"
+  if [ "$(tail -n +$((mark + 1)) "$FAKE_GH_LOG")" = "$(printf 'pr view -R o/r 123 --json headRefOid -q .headRefOid\npr checks -R o/r 123')" ]; then ok; else ng "gh 直後の -R も渡されるべき: $(tail -n +$((mark + 1)) "$FAKE_GH_LOG")"; fi
+  mark=$(wc -l <"$FAKE_GH_LOG")
+  run_guard "gh pr merge -sR=o/r 123 $m"
+  if [ "$(tail -n +$((mark + 1)) "$FAKE_GH_LOG")" = "$(printf 'pr view -R o/r 123 --json headRefOid -q .headRefOid\npr checks -R o/r 123')" ]; then ok; else ng "まとめ書き中の -R の値も取り出されるべき: $(tail -n +$((mark + 1)) "$FAKE_GH_LOG")"; fi
+  mark=$(wc -l <"$FAKE_GH_LOG")
+  run_guard "gh pr merge 123"
+  if [ "$(wc -l <"$FAKE_GH_LOG")" = "$mark" ]; then ok; else ng "SHA 省略のとき gh は一切呼ばれないべき"; fi
+  run_guard "gh pr merge 1 --admin $m"
+  if [ "$(wc -l <"$FAKE_GH_LOG")" = "$mark" ]; then ok; else ng "--admin のとき gh は一切呼ばれないべき"; fi
+  run_guard "GH_REPO=o/r gh pr merge 1 $m"
+  if [ "$(wc -l <"$FAKE_GH_LOG")" = "$mark" ]; then ok; else ng "GH_REPO のとき gh は一切呼ばれないべき"; fi
+  # HEAD が変わった(不一致)なら、pr view だけで止まり pr checks に進まない。
+  mark=$(wc -l <"$FAKE_GH_LOG")
+  FAKE_GH_SHA=ffffffffffffffffffffffffffffffffffffffff run_guard "gh pr merge 123 $m"
+  if [ "$GUARD_RC" = 2 ]; then ok; else ng "HEAD 不一致は block されるべき"; fi
+  if [ "$(tail -n +$((mark + 1)) "$FAKE_GH_LOG")" = "pr view 123 --json headRefOid -q .headRefOid" ]; then ok; else ng "不一致のとき pr checks に進まないべき: $(tail -n +$((mark + 1)) "$FAKE_GH_LOG")"; fi
+  with_checks_rc 1
+}
+
+test_pr_merge_gate_without_gh() {
+  begin "gh pr merge: gh が無い環境は判定不能として block(fail-safe)"
+  with_checks_rc 0
+  jq -n --arg c "gh pr merge 123 --match-head-commit $FAKE_SHA" '{tool_name:"Bash", tool_input:{command:$c}}' >"$WORK/in.json"
+  PATH="$NOGH_BIN" "$NOGH_BIN/bash" "$GUARD" <"$WORK/in.json" >"$WORK/out" 2>"$WORK/err"
+  GUARD_RC=$?
+  if [ "$GUARD_RC" = 2 ]; then ok; else ng "gh が無いなら block(exit 2)されるべきが exit $GUARD_RC"; fi
+  if [ -s "$WORK/err" ]; then ok; else ng "理由が stderr に無い"; fi
+  with_checks_rc 1
+}
+
+test_pr_merge_never_executed_by_guard() {
+  begin "ガードは PR のマージ自体も他の gh サブコマンドも実行しない(実行するのは検証済み引数の gh pr view / gh pr checks だけ。全テストを通したログ全体で検証)"
+  if grep -qvE '^pr (view|checks)( |$)' "$FAKE_GH_LOG"; then ng "pr view / pr checks 以外の gh 呼び出しが記録された: $(grep -vE '^pr (view|checks)( |$)' "$FAKE_GH_LOG" | head -3)"; else ok; fi
+  if grep -qE '^pr merge|^alias|^api' "$FAKE_GH_LOG"; then ng "gh pr merge 等が実行された"; else ok; fi
+  if [ -s "$FAKE_GH_LOG" ]; then ok; else ng "ログが空(偽 gh が一度も使われていない=テストが無効)"; fi
+}
+
+# ADR-0804: 検証ゲート付きのマージスクリプトは通す(素のマージコマンドは ADR-0803 の条件を満たすときだけ通る)。
+test_allow_pr_merge_gate_script() {
+  begin "pass: scripts/pr-merge.sh(検証ゲート付きのマージ。ADR-0804)"
+  expect_pass "scripts/pr-merge.sh 123"
+  expect_pass "scripts/pr-merge.sh 123 --check"
+  expect_pass "./scripts/pr-merge.sh 123"
+  begin "block: ゲートを迂回する書き方は止めたまま"
+  expect_block "gh pr merge 123 --admin"
+  expect_block "scripts/pr-merge.sh 123 && gh pr merge 124"
+  expect_block "bash -c 'gh pr merge 123'"
 }
 
 test_block_wrappers_and_compound() {
@@ -580,6 +796,9 @@ test_block_secret_read
 test_block_push_to_main
 test_block_force_push
 test_block_pr_merge
+test_pr_merge_gate_checks_what_it_merges
+test_pr_merge_gate_without_gh
+test_allow_pr_merge_gate_script
 test_block_wrappers_and_compound
 test_block_git_push_destination_edge_cases
 test_block_command_splitting_edge_cases
@@ -611,6 +830,7 @@ test_pass_edge_cases_no_false_positive
 test_pass_edge_cases_no_false_positive_v2
 test_pass_non_command_input
 test_never_executes_the_judged_command
+test_pr_merge_never_executed_by_guard
 test_claude_settings
 test_codex_config
 

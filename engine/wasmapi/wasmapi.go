@@ -181,6 +181,8 @@ func errorResponse(err error) string {
 		// ダメージを与えられない技の逆算(issue #317。専用の code は API 契約の持ち物なので、
 		// 追加されるまでは invalid_input に写す。ADR-0117 §3)。
 		{engine.ErrMoveDealsNoDamage, CodeInvalidInput},
+		// 調整の入力の不正(ADR-0250 §4。新しいコードは足さない)。
+		{engine.ErrInvalidAdjustInput, CodeInvalidInput},
 	}
 	for _, s := range sentinels {
 		if errors.Is(err, s.err) {
