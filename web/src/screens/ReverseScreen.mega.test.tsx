@@ -121,7 +121,8 @@ describe("自分がメガ種族(持ち物欄がある側)", () => {
       expect(engine.reverseRequests.length).toBeGreaterThan(0);
     });
     expect(lastRequest(engine).known.item).toEqual(MEGA_FIRE_STONE);
-    expect(lastRequest(engine).known.species).not.toHaveProperty("isMega");
+    expect(lastRequest(engine).known.species.isMega).toBe(true);
+    expect(lastRequest(engine).known.species.requiredItemId).toBe(MEGA_FIRE_STONE.id);
   });
 
   test("メガでない種族に変えると固定が外れ、持ち物は未選択に戻る。要求の known.item は null", async () => {
@@ -171,7 +172,8 @@ describe("相手がメガ種族(持ち物候補を探索しない)", () => {
     });
     expect(lastRequest(engine).itemCandidates).toEqual([MEGA_WATER_STONE]);
     expect(lastRequest(engine).side).toBe("defender");
-    expect(lastRequest(engine).unknownSpecies).not.toHaveProperty("requiredItemId");
+    expect(lastRequest(engine).unknownSpecies.isMega).toBe(true);
+    expect(lastRequest(engine).unknownSpecies.requiredItemId).toBe(MEGA_WATER_STONE.id);
   });
 
   test("受けたダメージ: 相手(攻撃側)がメガでも itemCandidates はメガストーン1件", async () => {

@@ -5904,6 +5904,572 @@
         ],
         "maxCandidates": 8
       }
+    },
+    {
+      "name": "calc/mega-required-item",
+      "fn": "calc",
+      "tags": [
+        "mega",
+        "item"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "mega-snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            },
+            "isMega": true,
+            "requiredItemId": "snorlaxite"
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": {
+            "id": "snorlaxite",
+            "nameJa": "テストメガストーン"
+          }
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "bodyslam",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "bulk/mega-item-variants",
+      "fn": "calcBulk",
+      "tags": [
+        "mega",
+        "itemVariants"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "defenderSpecies": {
+          "key": "mega-snorlax",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          },
+          "isMega": true,
+          "requiredItemId": "snorlaxite"
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "attackerScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          },
+          "defenderScreens": {
+            "reflect": true,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false,
+        "presetKeys": [
+          "none",
+          "hp",
+          "hb_boost",
+          "hb",
+          "hb_full"
+        ],
+        "itemVariants": [
+          null,
+          {
+            "id": "snorlaxite",
+            "nameJa": "テストメガストーン"
+          }
+        ]
+      }
+    },
+    {
+      "name": "reverse/mega-item-candidates",
+      "fn": "calcReverse",
+      "tags": [
+        "mega",
+        "itemCandidates"
+      ],
+      "request": {
+        "format": "single",
+        "side": "defender",
+        "known": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "unknownSpecies": {
+          "key": "mega-snorlax",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          },
+          "isMega": true,
+          "requiredItemId": "snorlaxite"
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "itemCandidates": [
+          null,
+          {
+            "id": "snorlaxite",
+            "nameJa": "テストメガストーン"
+          }
+        ],
+        "observations": [
+          {
+            "damage": 150
+          }
+        ],
+        "maxCandidates": 8
+      }
+    },
+    {
+      "name": "calc/mega-wrong-item-rejected",
+      "fn": "calc",
+      "tags": [
+        "mega",
+        "error"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "mega-snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            },
+            "isMega": true,
+            "requiredItemId": "snorlaxite"
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": {
+            "id": "lifeorb",
+            "nameJa": "テストもちもの3",
+            "effect": {
+              "damageMod": 5324
+            }
+          }
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "bodyslam",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      },
+      "expectError": "invalid_input"
+    },
+    {
+      "name": "bulk/mega-wrong-item-variant-rejected",
+      "fn": "calcBulk",
+      "tags": [
+        "mega",
+        "error"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "defenderSpecies": {
+          "key": "mega-snorlax",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          },
+          "isMega": true,
+          "requiredItemId": "snorlaxite"
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "attackerScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          },
+          "defenderScreens": {
+            "reflect": true,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false,
+        "presetKeys": [
+          "none",
+          "hp",
+          "hb_boost",
+          "hb",
+          "hb_full"
+        ],
+        "itemVariants": [
+          null,
+          {
+            "id": "lifeorb",
+            "nameJa": "テストもちもの3",
+            "effect": {
+              "damageMod": 5324
+            }
+          }
+        ]
+      },
+      "expectError": "invalid_input"
+    },
+    {
+      "name": "reverse/mega-wrong-item-candidate-rejected",
+      "fn": "calcReverse",
+      "tags": [
+        "mega",
+        "error"
+      ],
+      "request": {
+        "format": "single",
+        "side": "defender",
+        "known": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "unknownSpecies": {
+          "key": "mega-snorlax",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          },
+          "isMega": true,
+          "requiredItemId": "snorlaxite"
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "itemCandidates": [
+          null,
+          {
+            "id": "lifeorb",
+            "nameJa": "テストもちもの3",
+            "effect": {
+              "damageMod": 5324
+            }
+          }
+        ],
+        "observations": [
+          {
+            "damage": 150
+          }
+        ],
+        "maxCandidates": 8
+      },
+      "expectError": "invalid_input"
     }
   ]
 }
