@@ -4,7 +4,7 @@
 // ここはあえてリテラル(DECISIONS.md 2026-09-26「P6-18」の確定文言)で書く。
 
 import { expect, test } from "@playwright/test";
-import { combobox, openApp } from "./support/calcPage.ts";
+import { SPECIES, combobox, openApp, selectSpeciesBySearch } from "./support/calcPage.ts";
 
 const NOTICE =
   "このアプリは個人が私的に使うための非公式ツールです。" +
@@ -42,7 +42,8 @@ test("/about を直接開ける(SPA のフォールバック)。URL は /calc �
 test("「計算に戻る」と、ブラウザの戻る・進む。計算・逆算の入力は往復しても残る", async ({ page }) => {
   await openApp(page);
   const attacker = combobox(page, "攻撃側のポケモン");
-  await attacker.selectOption({ index: 1 });
+  // ADR-0313: 既定がオンラインなので、種族は検索欄で選ぶ。
+  await selectSpeciesBySearch(page, "攻撃側のポケモン", SPECIES.fire.nameJa);
   const selected = await attacker.inputValue();
   await page.getByRole("tab", { name: "逆算", exact: true }).click();
   const observation = page.getByRole("textbox", { name: "観測1", exact: true });
@@ -51,7 +52,7 @@ test("「計算に戻る」と、ブラウザの戻る・進む。計算・逆�
   await page.getByRole("contentinfo").getByRole("link", { name: "このアプリについて", exact: true }).click();
   await expect(page.getByText(NOTICE, { exact: true })).toBeVisible();
   // 隠れているだけで DOM には残る。
-  await expect(page.locator('select[aria-label="攻撃側のポケモン"]')).toHaveCount(1);
+  await expect(page.locator('input[aria-label="攻撃側のポケモン"]')).toHaveCount(1);
 
   // ブラウザの戻る → 逆算(入力が残る)→ 進む → 情報ページ。
   await page.goBack();
