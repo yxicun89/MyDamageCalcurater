@@ -17,7 +17,7 @@ test: speed-test
 lint: speed-lint
 build: speed-build
 
-# 生成物は Git に置かない(ADR-0171)。出力が無いか入力が新しいときだけ生成する(ルート Makefile の GEN_STALE)。
+# 生成物は Git に置かない(ADR-0806)。出力が無いか入力が新しいときだけ生成する(ルート Makefile の GEN_STALE)。
 speed-gen:
 	@if $(GEN_STALE) services/speed/internal/api/openapi.gen.go -- services/speed/api/openapi.yaml services/speed/internal/api/cfg.yaml services/go.mod; then \
 		(cd services && $(GO) tool oapi-codegen -config speed/internal/api/cfg.yaml speed/api/openapi.yaml) && \
@@ -51,11 +51,15 @@ speed-gitops-check: speed-kustomize
 speed-docker-build: speed-gen
 	@docker build -f $(SPEED_DIR)/Dockerfile -t $(SPEED_IMAGE) .
 
-speed-docker-push: speed-gen
+# 公開用のイメージは手元の生成物の鮮度に頼らず、push の前に必ず作り直す(ADR-0806)
+speed-docker-push:
+	@$(MAKE) --no-print-directory speed-gen GEN_FORCE=1
 	@SERVICE=speed scripts/gitops/publish-image.sh
 
 # balance レーンのクラスタ内レジストリを共有する(ADR-0605 §1)。専用の registry-apply は持たない。
-speed-registry-push: speed-gen
+# 公開用のイメージは手元の生成物の鮮度に頼らず、push の前に必ず作り直す(ADR-0806)
+speed-registry-push:
+	@$(MAKE) --no-print-directory speed-gen GEN_FORCE=1
 	@SERVICE=speed SPEED_REGISTRY_PORT=$(SPEED_REGISTRY_PORT) scripts/gitops/local-registry-push.sh
 
 speed-argocd-app:

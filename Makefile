@@ -23,10 +23,10 @@ doctor: ## 前提ツールの確認
 	@./scripts/doctor.sh
 
 ## --- コード生成 -------------------------------------------------------
-# 生成物は Git に置かず、使う前にここで作る(ADR-0171)。出力が無いか入力(仕様・設定・生成器の版を
+# 生成物は Git に置かず、使う前にここで作る(ADR-0806)。出力が無いか入力(仕様・設定・生成器の版を
 # 固定するファイル)が新しいときだけ生成器を呼ぶので、何度呼んでも速い。強制は GEN_FORCE=1。
 # Go のパッケージをビルドするターゲット(test・lint・build・docker-build 等)は、これを前提条件に持つ。
-# iOS の生成物は追跡を続ける(ios-gen。ADR-0171 §5)。
+# iOS の生成物は ios-gen(ios/Makefile。macOS だけで動くので gen には含めない)。
 GEN_STALE := ./scripts/ensure-gen.sh stale
 export GEN_FORCE
 
@@ -54,8 +54,8 @@ gen-ts: web-deps ## TypeScript 型を各 openapi.yaml から生成(web/src の *
 	@cd web && npm run --silent gen
 
 .PHONY: gen-clean
-gen-clean: ## Git に置かない生成物を消す(次の make gen で作り直す。iOS の生成物は消さない)
-	@rm -f $$(./scripts/ensure-gen.sh list)
+gen-clean: ## Git に置かない生成物を消す(iOS も。次の make gen・make ios-gen で作り直す)
+	@rm -rf $$(./scripts/ensure-gen.sh list) ios/.gen-stamps
 	@echo "gen-clean: 生成物を削除"
 
 # Go の生成物だけ(Web の依存を入れずに Go をビルド・テストできるようにする)
@@ -309,7 +309,8 @@ import-k8s: ## k3d 上の CronJob pokedex-import を手動で1回流す(週1回�
 	@kubectl -n pokecalc create job --from=cronjob/pokedex-import "pokedex-import-manual-$$(date +%Y%m%d%H%M%S)"
 
 .PHONY: pokedex-registry-push
-pokedex-registry-push: gen-go-all ## pokedex(server イメージ)をクラスタ内共有レジストリ balance-registry へ digest 固定で push する(タイプバランスレーン issue #237 の依頼。ADR-0018・ADR-0605 と同じ方式)
+pokedex-registry-push: ## pokedex(server イメージ)をクラスタ内共有レジストリ balance-registry へ digest 固定で push する(タイプバランスレーン issue #237 の依頼。ADR-0018・ADR-0605 と同じ方式)
+	@$(MAKE) --no-print-directory gen-go-all GEN_FORCE=1
 	@./scripts/pokedex-registry-push.sh
 
 .PHONY: k8s-render

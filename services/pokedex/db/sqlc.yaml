@@ -1,5 +1,5 @@
 # sqlc 設定(ADR-0100 §1)。バージョン固定は tools/go.mod の tool ディレクティブで行う。
-# 生成は `make gen-sql`(make gen に含む)。生成物(../internal/store)は Git に置かない(ADR-0171)。
+# 生成は `make gen-sql`(make gen に含む)。生成物(../internal/store)は Git に置かない(ADR-0806)。
 version: "2"
 sql:
   - engine: "mysql"

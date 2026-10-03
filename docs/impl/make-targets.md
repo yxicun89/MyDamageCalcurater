@@ -49,11 +49,11 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 |---|---|---|---|
 | `help` | — | 全 Makefile の `## ` 付きターゲットを一覧表示 | なし |
 | `doctor` | — | `scripts/doctor.sh` | なし(読み取り/検査) |
-| `gen` | gen-go gen-sql gen-ts balance-gen speed-gen judge-gen | (レシピなし)。生成物は Git に置かない(ADR-0171)。各 gen-* は出力が無いか入力が新しいときだけ生成(`scripts/ensure-gen.sh stale`)。強制は `GEN_FORCE=1` | なし(前提条件のみ) |
+| `gen` | gen-go gen-sql gen-ts balance-gen speed-gen judge-gen | (レシピなし)。生成物は Git に置かない(ADR-0806)。各 gen-* は出力が無いか入力が新しいときだけ生成(`scripts/ensure-gen.sh stale`)。強制は `GEN_FORCE=1` | なし(前提条件のみ) |
 | `gen-go` | — | oapi-codegen で `api/openapi.yaml` から Go サーバ/型を生成 | 生成物を書換(Git 管理外) |
 | `gen-sql` | — | sqlc で pokedex の DB 行の型・クエリを生成 | 生成物を書換(Git 管理外) |
 | `gen-ts` | web-deps | `cd web && npm run gen`(openapi-typescript で web の4つの `*.gen.ts` を生成。Web の pre* フックと同じ) | 生成物を書換(Git 管理外) |
-| `gen-clean` | — | `scripts/ensure-gen.sh list` の生成物を削除(iOS の生成物は消さない) | 生成物を削除 |
+| `gen-clean` | — | `scripts/ensure-gen.sh list` の生成物(iOS を含む)と `ios/.gen-stamps` を削除 | 生成物を削除 |
 | `gen-go-all` | gen-go gen-sql balance-gen speed-gen judge-gen | (レシピなし)。Go をビルドするターゲット(`build`・`lint`・`test-services`・`staticcheck`・`test-db*`・`migrate-*`・`import*`・`up`・`dev`・`e2e` 等)の前提 | なし(前提条件のみ) |
 | `test` | test-engine test-golden test-services test-tools test-scripts | (レシピなし) | なし(前提条件のみ) |
 | `test-engine` | — | `cd engine && go test ./...` | なし |
@@ -204,9 +204,9 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 
 | ターゲット | 前提 | 実行内容(レシピ要約) | 副作用 |
 |---|---|---|---|
-| `ios-gen` | — | `./ios/scripts/openapi-gen.sh` | ios/PokeCalcKit/Sources/PokeCalcAPI/Generated を書換 |
-| `ios-gen-check` | — | `./ios/scripts/openapi-gen.sh --check` | なし(一時ディレクトリに生成して差分検査) |
-| `ios-test` | ios-lint ios-gen-check ios-test-unit ios-test-ui ios-check-infoplist | (レシピなし) | なし(前提条件のみ) |
+| `ios-gen` | — | `./ios/scripts/openapi-gen.sh`(`ios/scripts/openapi-targets.sh` の各対象。出力が無いか入力が新しいときだけ。強制は `GEN_FORCE=1`。ADR-0806) | `ios/PokeCalcKit/Sources/*/Generated` を書換(Git 管理外) |
+| `ios-gen-check` | — | `./ios/scripts/openapi-gen.sh --check` | なし(一時ディレクトリに生成して手元の生成物と差分検査) |
+| `ios-test` | ios-gen ios-lint ios-gen-check ios-check-request-limits ios-test-unit ios-test-ui ios-check-infoplist | (レシピなし)。他の `ios-*`(`ios-gen-check` を除く)も `ios-gen` を前提に持つ | なし(前提条件のみ) |
 | `ios-lint` | — | `for script in ios/scripts/*.sh; do bash -n "$$script" \|\| exit; done` | なし |
 | `ios-test-unit` | — | `cd ios/PokeCalcKit && ../scripts/run-xcode-tests.sh "ios-test-unit" \ ⏎ scheme PokeCalcKit-Package -destination "$(IOS_DESTINATION)"` | シミュレータ/xcodebuild |
 | `ios-test-ui` | — | `./ios/scripts/run-xcode-tests.sh "ios-test-ui" \ ⏎ project ios/PokeCalc.xcodeproj -scheme PokeCalc -destination "$(IOS_DESTINATION)"` | シミュレータ/xcodebuild |

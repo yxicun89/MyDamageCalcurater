@@ -269,9 +269,9 @@
 - [x] issue #299(タイムアウトの連鎖。ADR-0801): calc・balance・speed にハンドラ全体の締め切り(writeTimeout − 1 秒)と同時実行の上限(超過は待たせず 503 + Retry-After)、judge・pokedex に上限、k3d の Traefik に有限のタイムアウト(`scripts/up.sh` が適用)。Docker 負荷試験(同時 120 で EOF 0 件)はメインでの実地確認。issue #330(httpmetrics の複製のずれ検出)は先行コミット a8db4fa で解消済み
 - [x] P7-2 SLO(計算API p99 < 100ms、可用性)とダッシュボード
   - [x] balance 分(2026-10-02、ADR-0420。p99 < 500ms・可用性。記録ルール・ダッシュボード・静的検査。実クラスタ確認は未実施)
-- [x] 生成物のコミットをやめる(2026-10-03 ユーザー決定。ADR-0171): Go・TypeScript の生成物(oapi-codegen・sqlc・openapi-typescript)を
-  追跡から外し、`make gen`(冪等)を test・lint・build・Docker・CI・Web の pre* フックの前段に置いた。iOS の生成物は
-  xcodebuild が SwiftPM プラグインの信頼確認で止まるため追跡を続け、衝突は merge ドライバ(`scripts/setup-git.sh`)が再生成で解く。
+- [x] 生成物のコミットをやめる(2026-10-03 ユーザー決定。ADR-0806。PR #526): Go・TypeScript の生成物(oapi-codegen・sqlc・openapi-typescript)を
+  追跡から外し、`make gen`(冪等)を test・lint・build・Docker・CI・Web の pre* フックの前段に置いた。iOS の生成物も
+  追跡から外し、`make ios-*` の前段で `ios-gen`(Xcode で直接開く前は `make ios-gen` を1回)。merge ドライバ案は却下(ADR-0806)。
   他ブランチの移行手順は COORDINATION.md「生成物を追跡から外したあとの取り込み」
 - [~] P7-3 ArgoCD(GitOps): balance は Argo CD 管理。speed・judge の実クラスタ適用は人間確認待ち(CURRENT_STATE.md)。残りは issue #292・#263・#237(NetworkPolicy の balance・speed → mysql は base に反映済み=ADR-0412 追記。残りは共有クラスタへの apply の人間確認と pokedex の実 digest 確定)
 - [ ] P7-4 MySQL/TiDB バックアップと復元テスト(ADR-0209 §9 を要件に含める: バックアップに `devices`〈墓石〉を含める /

@@ -30,7 +30,7 @@ engine の型への写像の置き場所、ローカル環境、架空データ�
 | `services/pokedex/db/migrations/` | golang-migrate の SQL。`NNNNNN_<snake_title>.up.sql` / `.down.sql`(6桁連番、1 から隙間なし。`migrate create -seq -digits 6` の形) |
 | `services/pokedex/db/query/*.sql` | sqlc のクエリ(`-- name: Xxx :many` 形式) |
 | `services/pokedex/db/sqlc.yaml` | sqlc 設定(version "2"、engine mysql、schema `migrations`、queries `query`、gen.go の package `store`・out `../internal/store`) |
-| `services/pokedex/internal/store/` | sqlc の生成物(コミットする。`make gen` の差分検査の対象) |
+| `services/pokedex/internal/store/` | sqlc の生成物(コミットする。`make gen` の差分検査の対象)。2026-10-03 追記: **ADR-0806 で置き換え**(Git に置かず `make gen` で作る) |
 | `services/pokedex/db/migrate.go` | package `db`。`//go:embed migrations/*.sql` の `Migrations embed.FS`、`Up`、`DownAll`、`ErrDownNotConfirmed`(§5) |
 | `services/pokedex/cmd/migrate/` | migrate の CLI(`up` / `version` / `down -confirm <DB名>`)。golang-migrate の library + `iofs` source + mysql driver |
 | `services/pokedex/db/testdata/example_seed.sql` | 架空データの example(§7) |

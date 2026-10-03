@@ -62,8 +62,7 @@ xcuserdata/
 # 日本語名の override(実在の日本語名=第三者データ。ADR-0017 §6)
 data/local/
 
-# API 契約・SQL から作る生成物(コミットしない。make gen で作る。一覧の正は scripts/ensure-gen.sh list。ADR-0171)
-# iOS の生成物(ios/PokeCalcKit/Sources/PokeCalcAPI/Generated)は追跡を続ける(ADR-0171 §5)
+# API 契約・SQL から作る生成物(コミットしない。make gen・make ios-gen で作る。一覧の正は scripts/ensure-gen.sh list。ADR-0806)
 services/internal/api/openapi.gen.go
 services/balance/internal/api/openapi.gen.go
 services/speed/internal/api/openapi.gen.go
@@ -76,3 +75,6 @@ web/src/api/openapi.gen.ts
 web/src/api/balance.gen.ts
 web/src/speed/speed.gen.ts
 web/src/judge/judge.gen.ts
+# iOS の生成物は対象(ios/scripts/openapi-targets.sh)が増えても漏れないよう、まとめて無視する
+ios/PokeCalcKit/Sources/*/Generated
+ios/.gen-stamps/

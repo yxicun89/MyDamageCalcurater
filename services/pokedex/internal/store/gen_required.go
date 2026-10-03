@@ -1,4 +1,4 @@
-// 生成物の欠落を分かりやすくするための手書きファイル(ADR-0171)。
+// 生成物の欠落を分かりやすくするための手書きファイル(ADR-0806)。
 //
 // このパッケージの db.go・models.go・pokedex.sql.go・querier.go は sqlc が
 // services/pokedex/db(migrations・query)から生成し、Git に置かない。

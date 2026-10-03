@@ -23,7 +23,7 @@ WORKDIR /src
 # vite.config.ts が ../testdata/golden/typechart.json(web/ の隣)を正として読む(ADR-0300 §3)。
 COPY testdata/golden/typechart.json ./testdata/golden/typechart.json
 COPY web ./web
-# Web の API 型(*.gen.ts)は Git に置かず、npm run build の prebuild が下の仕様から生成する(ADR-0171)。
+# Web の API 型(*.gen.ts)は Git に置かず、npm run build の prebuild が下の仕様から生成する(ADR-0806)。
 COPY api/openapi.yaml ./api/openapi.yaml
 COPY services/balance/api/openapi.yaml ./services/balance/api/openapi.yaml
 COPY services/speed/api/openapi.yaml ./services/speed/api/openapi.yaml
