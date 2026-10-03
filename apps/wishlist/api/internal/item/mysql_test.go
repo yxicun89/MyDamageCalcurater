@@ -89,3 +89,9 @@ func newMySQLRepo(t *testing.T) item.Repository {
 func TestMySQLRepositoryContract(t *testing.T) {
 	itemtest.RunRepositoryContract(t, newMySQLRepo)
 }
+
+func TestMySQLPriceRepositoryContract(t *testing.T) {
+	itemtest.RunPriceRepositoryContract(t, func(t *testing.T) itemtest.FullRepository {
+		return newMySQLRepo(t).(*item.MySQLRepository)
+	})
+}

@@ -82,3 +82,35 @@ DELETE FROM item_site_overrides WHERE item_id = ?;
 
 -- name: InsertItemSiteOverride :exec
 INSERT INTO item_site_overrides (item_id, site_id, query, enabled) VALUES (?, ?, ?, ?);
+
+-- 目安価格(フェーズ3)。listings は商品×サイトごとに最新の取得分だけ残す(取得のたびに消して入れ直す)。
+
+-- name: DeleteListingsBySite :exec
+DELETE FROM listings WHERE item_id = ? AND site_id = ?;
+
+-- name: InsertListing :exec
+INSERT INTO listings (item_id, site_id, title, price, url, image_url, in_stock, suspicious_reasons, fetched_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: UpsertEstimate :exec
+INSERT INTO estimates (item_id, site_id, low, mid, `count`, suspicious_count, in_stock_count, status, fetched_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON DUPLICATE KEY UPDATE low = VALUES(low), mid = VALUES(mid), `count` = VALUES(`count`), suspicious_count = VALUES(suspicious_count),
+  in_stock_count = VALUES(in_stock_count), status = VALUES(status), fetched_at = VALUES(fetched_at);
+
+-- name: MarkEstimateFailed :exec
+INSERT INTO estimates (item_id, site_id, low, mid, `count`, suspicious_count, in_stock_count, status, fetched_at)
+VALUES (?, ?, NULL, NULL, 0, 0, 0, 'failed', ?)
+ON DUPLICATE KEY UPDATE status = 'failed';
+
+-- name: ListEstimatesByItem :many
+SELECT item_id, site_id, low, mid, `count`, suspicious_count, in_stock_count, status, fetched_at
+FROM estimates WHERE item_id = ? ORDER BY site_id;
+
+-- name: ListListingsByItem :many
+SELECT id, item_id, site_id, title, price, url, image_url, in_stock, suspicious_reasons, fetched_at
+FROM listings WHERE item_id = ? ORDER BY price, id;
+
+-- name: ListListingsByItemSite :many
+SELECT id, item_id, site_id, title, price, url, image_url, in_stock, suspicious_reasons, fetched_at
+FROM listings WHERE item_id = ? AND site_id = ? ORDER BY price, id;

@@ -5,7 +5,8 @@
 #
 # - 共有 MySQL(pokecalc 名前空間の mysql-0)に DB `wishlist` とユーザー `wishlist` を作る。
 #   root パスワードは Secret pokecalc/mysql-auth から読み、端末やコマンドラインには出さない(stdin で渡す)。
-# - wishlist 名前空間に Secret wishlist-api(database-dsn・api-token)を作る。値は Git に置かない。
+# - wishlist 名前空間に Secret wishlist-api(database-dsn・api-token。環境変数 WISHLIST_YAHOO_APPID があれば yahoo-appid も)を作る。
+#   値は Git に置かない。Yahoo!ショッピングの appid は任意(無ければ入れず、api 型のサイトは取得しない)。
 # - API トークンは最後に 1 回だけ表示する(PWA の設定画面・iOS ショートカットに入れる)。
 set -euo pipefail
 
@@ -44,9 +45,15 @@ SQL
 # API サーバー用の DSN。multiStatements は付けない(migrate だけが内部で付ける。docs/design.md W-09)。
 dsn="wishlist:${user_pw}@tcp(mysql.${mysql_ns}.svc.cluster.local:3306)/wishlist?parseTime=true&loc=UTC"
 # 値は argv に載せない(--from-literal は ps に出る)。プロセス置換のファイル経由で渡す。
-kubectl -n "$ns" create secret generic wishlist-api \
-  --from-file=database-dsn=<(printf '%s' "$dsn") \
-  --from-file=api-token=<(printf '%s' "$api_token") >/dev/null
+secret_args=(
+  --from-file=database-dsn=<(printf '%s' "$dsn")
+  --from-file=api-token=<(printf '%s' "$api_token")
+)
+yahoo_appid="$(printf '%s' "${WISHLIST_YAHOO_APPID:-}" | tr -d '[:space:]')"
+if [ -n "$yahoo_appid" ]; then
+  secret_args+=(--from-file=yahoo-appid=<(printf '%s' "$yahoo_appid"))
+fi
+kubectl -n "$ns" create secret generic wishlist-api "${secret_args[@]}" >/dev/null
 
 echo "DB 'wishlist' と Secret '$ns/wishlist-api' を作りました。"
 echo "API トークン(PWA の設定・ショートカットに入れる。再表示: kubectl -n $ns get secret wishlist-api -o jsonpath='{.data.api-token}' | base64 -d):"

@@ -105,8 +105,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description キャッシュを即返す。24時間より古ければ裏で更新を起動し `refreshing: true` を付ける。
-         *     フェーズ1では取得を実装していないため、常に空の `sites` と `refreshing: false` を返す。
+         * @description キャッシュ(保存済みの目安)を即返す。取得できる対象サイトの目安が無い・失敗している・24時間より古いときは
+         *     裏で更新を起動し `refreshing: true` を付ける(更新が実行中のときも true)。
+         *     `sites` はジャンルの表示順で、取得できる対象サイトのうち目安を保存済みのものだけ(docs/phase3-api-spec.md)。
+         *     取得できる対象サイトが 1 つも無ければ、空の `sites` と `refreshing: false`。
          */
         get: operations["getItemEstimates"];
         put?: never;
@@ -128,7 +130,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description 手動で更新を起動する。フェーズ1では 501。 */
+        /** @description 手動で更新を起動する(全対象サイトを取り直す)。すでに実行中なら新たに起動せず 202。 */
         post: operations["refreshItemEstimates"];
         delete?: never;
         options?: never;
@@ -382,24 +384,36 @@ export interface components {
         };
         /** @enum {string} */
         EstimateStatus: "ok" | "failed" | "no_result";
-        /** @description サイトごとの目安。仕様 §3 の「状態(在庫あり等)」をどの項目で表すかはフェーズ3で決める(docs/design.md §7 の未決事項)。 */
+        /**
+         * @description サイトごとの目安。仕様 §3 の「状態(在庫あり等)」は `in_stock_count` で表す(docs/phase3-api-spec.md)。
+         *     `status` が failed のとき、low・mid・count・suspicious_count・in_stock_count・fetched_at は前回の値。
+         */
         SiteEstimate: {
             site_id: components["schemas"]["ID"];
             /** @description 下位25パーセンタイル(件数3未満なら最小値) */
             low?: number | null;
             /** @description 中央値(件数3未満なら null) */
             mid?: number | null;
+            /** @description 参考外を除いた件数 */
             count: number;
+            /** @description 参考外の件数 */
             suspicious_count: number;
+            /** @description 参考外を除き、在庫ありの件数 */
+            in_stock_count: number;
             status: components["schemas"]["EstimateStatus"];
             /** Format: date-time */
             fetched_at: string;
         };
         ItemEstimates: {
             item_id: components["schemas"]["ID"];
+            /** @description `sites` の low の最小(low を持つサイトが無ければ null) */
             summary_low?: number | null;
+            /** @description summary_low を出したサイトの mid(その mid が null なら summary_low) */
             summary_mid?: number | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description low を持つサイトの fetched_at のうち最も古いもの
+             */
             summary_fetched_at?: string | null;
             sites: components["schemas"]["SiteEstimate"][];
             refreshing: boolean;
@@ -468,15 +482,6 @@ export interface components {
         };
         /** @description 外部 URL の取得に失敗した */
         BadGateway: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["Error"];
-            };
-        };
-        /** @description まだ実装していない(フェーズ3の機能) */
-        NotImplemented: {
             headers: {
                 [name: string]: unknown;
             };
@@ -751,7 +756,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 更新を起動した */
+            /** @description 更新を起動した(または実行中)。本文は現時点のキャッシュで `refreshing` は取得できる対象サイトがあれば true */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -763,7 +768,6 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["Internal"];
-            501: components["responses"]["NotImplemented"];
         };
     };
     listItemListings: {
@@ -779,7 +783,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 出品一覧(参考外も含む) */
+            /** @description 出品一覧(参考外も含む。price 昇順・同額は id 昇順) */
             200: {
                 headers: {
                     [name: string]: unknown;

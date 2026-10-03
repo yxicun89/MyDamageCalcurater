@@ -7,6 +7,7 @@ resources:
   - api-deployment.yaml
   - api-service.yaml
   - migrate-job.yaml
+  - refresher-cronjob.yaml
   - web-deployment.yaml
   - web-service.yaml
   - ingress.yaml

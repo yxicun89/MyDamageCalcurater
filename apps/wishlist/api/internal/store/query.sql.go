@@ -8,6 +8,8 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"time"
 )
 
 const createGenre = `-- name: CreateGenre :execlastid
@@ -112,6 +114,22 @@ DELETE FROM item_site_overrides WHERE item_id = ?
 
 func (q *Queries) DeleteItemSiteOverrides(ctx context.Context, itemID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteItemSiteOverrides, itemID)
+	return err
+}
+
+const deleteListingsBySite = `-- name: DeleteListingsBySite :exec
+
+DELETE FROM listings WHERE item_id = ? AND site_id = ?
+`
+
+type DeleteListingsBySiteParams struct {
+	ItemID int64
+	SiteID int64
+}
+
+// 目安価格(フェーズ3)。listings は商品×サイトごとに最新の取得分だけ残す(取得のたびに消して入れ直す)。
+func (q *Queries) DeleteListingsBySite(ctx context.Context, arg DeleteListingsBySiteParams) error {
+	_, err := q.db.ExecContext(ctx, deleteListingsBySite, arg.ItemID, arg.SiteID)
 	return err
 }
 
@@ -246,6 +264,88 @@ func (q *Queries) InsertItemSiteOverride(ctx context.Context, arg InsertItemSite
 		arg.Enabled,
 	)
 	return err
+}
+
+const insertListing = `-- name: InsertListing :exec
+INSERT INTO listings (item_id, site_id, title, price, url, image_url, in_stock, suspicious_reasons, fetched_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type InsertListingParams struct {
+	ItemID            int64
+	SiteID            int64
+	Title             string
+	Price             int32
+	Url               string
+	ImageUrl          sql.NullString
+	InStock           bool
+	SuspiciousReasons json.RawMessage
+	FetchedAt         time.Time
+}
+
+func (q *Queries) InsertListing(ctx context.Context, arg InsertListingParams) error {
+	_, err := q.db.ExecContext(ctx, insertListing,
+		arg.ItemID,
+		arg.SiteID,
+		arg.Title,
+		arg.Price,
+		arg.Url,
+		arg.ImageUrl,
+		arg.InStock,
+		arg.SuspiciousReasons,
+		arg.FetchedAt,
+	)
+	return err
+}
+
+const listEstimatesByItem = `-- name: ListEstimatesByItem :many
+SELECT item_id, site_id, low, mid, ` + "`" + `count` + "`" + `, suspicious_count, in_stock_count, status, fetched_at
+FROM estimates WHERE item_id = ? ORDER BY site_id
+`
+
+type ListEstimatesByItemRow struct {
+	ItemID          int64
+	SiteID          int64
+	Low             sql.NullInt32
+	Mid             sql.NullInt32
+	Count           int32
+	SuspiciousCount int32
+	InStockCount    int32
+	Status          EstimatesStatus
+	FetchedAt       time.Time
+}
+
+func (q *Queries) ListEstimatesByItem(ctx context.Context, itemID int64) ([]ListEstimatesByItemRow, error) {
+	rows, err := q.db.QueryContext(ctx, listEstimatesByItem, itemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEstimatesByItemRow
+	for rows.Next() {
+		var i ListEstimatesByItemRow
+		if err := rows.Scan(
+			&i.ItemID,
+			&i.SiteID,
+			&i.Low,
+			&i.Mid,
+			&i.Count,
+			&i.SuspiciousCount,
+			&i.InStockCount,
+			&i.Status,
+			&i.FetchedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listGenreSites = `-- name: ListGenreSites :many
@@ -481,6 +581,89 @@ func (q *Queries) ListItemsByGenre(ctx context.Context, genreID int64) ([]Item, 
 	return items, nil
 }
 
+const listListingsByItem = `-- name: ListListingsByItem :many
+SELECT id, item_id, site_id, title, price, url, image_url, in_stock, suspicious_reasons, fetched_at
+FROM listings WHERE item_id = ? ORDER BY price, id
+`
+
+func (q *Queries) ListListingsByItem(ctx context.Context, itemID int64) ([]Listing, error) {
+	rows, err := q.db.QueryContext(ctx, listListingsByItem, itemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Listing
+	for rows.Next() {
+		var i Listing
+		if err := rows.Scan(
+			&i.ID,
+			&i.ItemID,
+			&i.SiteID,
+			&i.Title,
+			&i.Price,
+			&i.Url,
+			&i.ImageUrl,
+			&i.InStock,
+			&i.SuspiciousReasons,
+			&i.FetchedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listListingsByItemSite = `-- name: ListListingsByItemSite :many
+SELECT id, item_id, site_id, title, price, url, image_url, in_stock, suspicious_reasons, fetched_at
+FROM listings WHERE item_id = ? AND site_id = ? ORDER BY price, id
+`
+
+type ListListingsByItemSiteParams struct {
+	ItemID int64
+	SiteID int64
+}
+
+func (q *Queries) ListListingsByItemSite(ctx context.Context, arg ListListingsByItemSiteParams) ([]Listing, error) {
+	rows, err := q.db.QueryContext(ctx, listListingsByItemSite, arg.ItemID, arg.SiteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Listing
+	for rows.Next() {
+		var i Listing
+		if err := rows.Scan(
+			&i.ID,
+			&i.ItemID,
+			&i.SiteID,
+			&i.Title,
+			&i.Price,
+			&i.Url,
+			&i.ImageUrl,
+			&i.InStock,
+			&i.SuspiciousReasons,
+			&i.FetchedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSites = `-- name: ListSites :many
 SELECT id, name, search_url_template, fetch_type, is_reference FROM sites ORDER BY id
 `
@@ -512,6 +695,23 @@ func (q *Queries) ListSites(ctx context.Context) ([]Site, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const markEstimateFailed = `-- name: MarkEstimateFailed :exec
+INSERT INTO estimates (item_id, site_id, low, mid, ` + "`" + `count` + "`" + `, suspicious_count, in_stock_count, status, fetched_at)
+VALUES (?, ?, NULL, NULL, 0, 0, 0, 'failed', ?)
+ON DUPLICATE KEY UPDATE status = 'failed'
+`
+
+type MarkEstimateFailedParams struct {
+	ItemID    int64
+	SiteID    int64
+	FetchedAt time.Time
+}
+
+func (q *Queries) MarkEstimateFailed(ctx context.Context, arg MarkEstimateFailedParams) error {
+	_, err := q.db.ExecContext(ctx, markEstimateFailed, arg.ItemID, arg.SiteID, arg.FetchedAt)
+	return err
 }
 
 const touchItem = `-- name: TouchItem :exec
@@ -604,4 +804,38 @@ func (q *Queries) UpdateSite(ctx context.Context, arg UpdateSiteParams) (int64, 
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const upsertEstimate = `-- name: UpsertEstimate :exec
+INSERT INTO estimates (item_id, site_id, low, mid, ` + "`" + `count` + "`" + `, suspicious_count, in_stock_count, status, fetched_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON DUPLICATE KEY UPDATE low = VALUES(low), mid = VALUES(mid), ` + "`" + `count` + "`" + ` = VALUES(` + "`" + `count` + "`" + `), suspicious_count = VALUES(suspicious_count),
+  in_stock_count = VALUES(in_stock_count), status = VALUES(status), fetched_at = VALUES(fetched_at)
+`
+
+type UpsertEstimateParams struct {
+	ItemID          int64
+	SiteID          int64
+	Low             sql.NullInt32
+	Mid             sql.NullInt32
+	Count           int32
+	SuspiciousCount int32
+	InStockCount    int32
+	Status          EstimatesStatus
+	FetchedAt       time.Time
+}
+
+func (q *Queries) UpsertEstimate(ctx context.Context, arg UpsertEstimateParams) error {
+	_, err := q.db.ExecContext(ctx, upsertEstimate,
+		arg.ItemID,
+		arg.SiteID,
+		arg.Low,
+		arg.Mid,
+		arg.Count,
+		arg.SuspiciousCount,
+		arg.InStockCount,
+		arg.Status,
+		arg.FetchedAt,
+	)
+	return err
 }

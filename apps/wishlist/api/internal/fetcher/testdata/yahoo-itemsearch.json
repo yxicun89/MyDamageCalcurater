@@ -1,0 +1,48 @@
+{
+  "totalResultsAvailable": 5,
+  "totalResultsReturned": 5,
+  "firstResultsPosition": 1,
+  "request": { "query": "架空の検索ワード" },
+  "hits": [
+    {
+      "index": 1,
+      "name": "架空ストア ボルシャック・ドラゴン 銀トレジャー",
+      "price": 4800,
+      "url": "https://store.example.com/item/1",
+      "inStock": true,
+      "image": { "small": "https://img.example.com/1_s.jpg", "medium": "https://img.example.com/1_m.jpg" },
+      "exImage": { "url": "https://img.example.com/1_ex.jpg", "width": 600, "height": 600 },
+      "seller": { "name": "架空ストア" }
+    },
+    {
+      "index": 2,
+      "name": "架空ストア 在庫なしの商品",
+      "price": 5000,
+      "url": "https://store.example.com/item/2",
+      "inStock": false,
+      "image": {},
+      "exImage": { "url": "https://img.example.com/2_ex.jpg", "width": 600, "height": 600 }
+    },
+    {
+      "index": 3,
+      "name": "架空ストア 画像なしの商品",
+      "price": 5200,
+      "url": "https://store.example.com/item/3",
+      "inStock": true
+    },
+    {
+      "index": 4,
+      "name": "架空ストア 価格 0 の商品(除く)",
+      "price": 0,
+      "url": "https://store.example.com/item/4",
+      "inStock": true
+    },
+    {
+      "index": 5,
+      "name": "",
+      "price": 100,
+      "url": "https://store.example.com/item/5",
+      "inStock": true
+    }
+  ]
+}

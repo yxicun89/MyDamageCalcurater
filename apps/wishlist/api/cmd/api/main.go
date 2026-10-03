@@ -1,6 +1,6 @@
 // Command api は wishlist の API サーバーと DB マイグレーション。
 //
-//	api serve        HTTP サーバー(PORT・WISHLIST_DATABASE_DSN・WISHLIST_API_TOKEN・WISHLIST_IMAGE_DIR)
+//	api serve        HTTP サーバー(PORT・WISHLIST_DATABASE_DSN・WISHLIST_API_TOKEN・WISHLIST_IMAGE_DIR・任意で WISHLIST_YAHOO_APPID)
 //	api migrate up   migrations を適用(WISHLIST_DATABASE_DSN。DSN に multiStatements=true を足す。docs/design.md W-09)
 package main
 
@@ -25,10 +25,13 @@ import (
 	migratemysql "github.com/golang-migrate/migrate/v4/database/mysql"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 
+	"example.com/pokecalc/apps/wishlist/api/internal/dbwait"
+	"example.com/pokecalc/apps/wishlist/api/internal/fetcher"
 	"example.com/pokecalc/apps/wishlist/api/internal/httpapi"
 	"example.com/pokecalc/apps/wishlist/api/internal/item"
 	"example.com/pokecalc/apps/wishlist/api/internal/netguard"
 	"example.com/pokecalc/apps/wishlist/api/internal/ogp"
+	"example.com/pokecalc/apps/wishlist/api/internal/refresh"
 	"example.com/pokecalc/apps/wishlist/api/internal/storage"
 	"example.com/pokecalc/apps/wishlist/api/migrations"
 )
@@ -49,6 +52,8 @@ type serveConfig struct {
 	DSN      string // serveDSN を通した後の DSN
 	Token    string
 	ImageDir string
+	// YahooAppID は Yahoo!ショッピング API の appid(WISHLIST_YAHOO_APPID。任意。前後の空白を除く。空なら api 型のサイトは取得しない)。
+	YahooAppID string
 }
 
 // migrateConfig は migrate の設定。
@@ -119,7 +124,7 @@ func loadServeConfig(getenv func(string) string) (serveConfig, error) {
 	if err != nil {
 		return serveConfig{}, err
 	}
-	return serveConfig{Port: port, DSN: sdsn, Token: token, ImageDir: dir}, nil
+	return serveConfig{Port: port, DSN: sdsn, Token: token, ImageDir: dir, YahooAppID: strings.TrimSpace(getenv("WISHLIST_YAHOO_APPID"))}, nil
 }
 
 // loadMigrateConfig は migrate の設定を読む。WISHLIST_DATABASE_DSN だけが必須。
@@ -182,6 +187,10 @@ func migrateUp(cfg migrateConfig) error {
 		return err
 	}
 	defer db.Close()
+	// Pod の起動直後は DB に繋がらないことがあるので再試行する(internal/dbwait)。
+	if err := dbwait.Ping(context.Background(), db); err != nil {
+		return fmt.Errorf("cannot reach the database: %w", err)
+	}
 	src, err := iofs.New(migrations.FS, ".")
 	if err != nil {
 		return err
@@ -215,15 +224,26 @@ func serve(cfg serveConfig, stderr io.Writer) error {
 	defer db.Close()
 	db.SetConnMaxLifetime(3 * time.Minute)
 	db.SetMaxOpenConns(10)
-	pingCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := db.PingContext(pingCtx); err != nil {
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	if err := dbwait.Ping(ctx, db); err != nil {
+		stop()
 		return fmt.Errorf("cannot reach the database: %w", err)
 	}
 
-	svc := item.NewService(item.NewMySQLRepository(db), images)
+	repo := item.NewMySQLRepository(db)
+	svc := item.NewService(repo, images)
 	remote := ogp.NewFetcher(netguard.NewClient(netguard.Options{}))
-	e := httpapi.NewServer(httpapi.Deps{Items: svc, Images: images, Remote: remote, Token: cfg.Token, Logger: log})
+	// 裏の更新はシグナルの ctx で動かし、終了時に止めて待つ(リクエストの ctx は使わない)。
+	est := refresh.New(refresh.Deps{
+		Items: repo, Prices: repo, Fetchers: fetcher.NewRegistry(fetcher.Config{YahooAppID: cfg.YahooAppID}),
+		Logger: log, BaseContext: ctx,
+	})
+	defer func() {
+		stop()
+		est.Wait()
+	}()
+	e := httpapi.NewServer(httpapi.Deps{Items: svc, Images: images, Remote: remote, Estimates: est, Token: cfg.Token, Logger: log})
 
 	srv := &http.Server{
 		Addr:              net.JoinHostPort("", cfg.Port),
@@ -232,8 +252,6 @@ func serve(cfg serveConfig, stderr io.Writer) error {
 		ReadTimeout:       60 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
 	log.Info("listening", "addr", srv.Addr)

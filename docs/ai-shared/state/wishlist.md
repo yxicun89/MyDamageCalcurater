@@ -2,10 +2,8 @@
 Lane: 欲しいものリスト(別アプリ。`apps/wishlist/` だけを変更する。仕様の正は `apps/wishlist/CLAUDE.md`、設計は `apps/wishlist/docs/design.md`)
 Active: Claude Code
 Branch: lane/wishlist(作業ディレクトリ ~/MyDamageCalcurater-wishlist)。PR ごとに main へ統合し、次の区切りも同じブランチで続ける
-Status: 2026-10-03 レーン開始。PR #572(設計・OpenAPI・migrations・k8s)・#581(フェーズ1 API)マージ済み。
-フェーズ1 PWA(`apps/wishlist/web/`。画像グリッド・詳細シート・登録/編集/設定・オフラインキャッシュ・manifest/SW・nginx の Dockerfile)と
-`apps/wishlist/docs/shortcut.md`(iOS ショートカット手順)を実装、critic PASS。受け入れ条件は `apps/wishlist/docs/phase1-web-spec.md`。
-クラスタへの適用(`make wishlist-k3d-deploy`)は未実施: 共有 MySQL の NetworkPolicy への許可(decisions/2026-10-03-wishlist-mysql-networkpolicy.md。データレーン)待ち。DB 作成は `apps/wishlist/scripts/bootstrap.sh`(人が 1 回)
-Next: フェーズ1の完了条件(iPhone で「S.H.Figuarts グリス」を登録し、詳細シートからメルカリと Amazon を開ける)の確認は人の作業:
-NetworkPolicy の許可 → `bootstrap.sh` → `make wishlist-k3d-deploy` → `tailscale serve` 経由で `/wishlist/` を開いて設定画面にトークン → 登録。
-その後フェーズ2(`apps/wishlist/ios/`。Xcode プロジェクト・swift-openapi-generator・Share Extension)。
+Status: PR #572・#581・#582(フェーズ1)、#587(共有 MySQL の NetworkPolicy)マージ済み。ローカル k3d にデプロイ済み(2026-10-03。DB・Secret 作成、登録→画像→削除まで確認)。
+フェーズ3 Go(目安価格の算出・参考外の判定・Yahoo!ショッピング API・5 秒間隔・更新 API・CronJob 03:00 JST・DB 接続の再試行)を実装、critic PASS。受け入れ条件 `apps/wishlist/docs/phase3-api-spec.md`。
+フェーズ2 iOS はブランチ feat/wishlist-ios(worktree ~/MyDamageCalcurater-wishlist-ios)で実装中。
+Next: PWA の目安価格表示(サマリ・サイト別・参考外)→ サイト別の取得処理(カードラッシュ・あみあみ・Yahoo!フリマ。確認結果は apps/wishlist/docs/sites.md に入れる)と確認済みサイトの seed →
+iOS(feat/wishlist-ios)の critic・PR。未着手で残すもの: メルカリ・ドラゴンスターの headless 取得と Chromium 入りイメージ(構造が未確認)、駿河屋(robots.txt の扱いが要判断)

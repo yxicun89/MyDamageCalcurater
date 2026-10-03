@@ -10,12 +10,14 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/oapi-codegen/nullable"
 
 	"example.com/pokecalc/apps/wishlist/api/internal/api"
 	"example.com/pokecalc/apps/wishlist/api/internal/item"
 	"example.com/pokecalc/apps/wishlist/api/internal/netguard"
+	"example.com/pokecalc/apps/wishlist/api/internal/refresh"
 	"example.com/pokecalc/apps/wishlist/api/internal/storage"
 )
 
@@ -24,10 +26,11 @@ const maxFieldBytes = 64 << 10
 
 // server は api.StrictServerInterface の実装。エラーは error として返し、handleError が Error スキーマにする。
 type server struct {
-	items  *item.Service
-	images storage.Storage
-	remote Remote
-	log    *slog.Logger
+	items     *item.Service
+	images    storage.Storage
+	remote    Remote
+	estimates Estimator
+	log       *slog.Logger
 }
 
 var _ api.StrictServerInterface = (*server)(nil)
@@ -279,28 +282,58 @@ func (s *server) ReplaceItemImage(ctx context.Context, req api.ReplaceItemImageR
 	return api.ReplaceItemImage200JSONResponse(toAPIItem(it)), nil
 }
 
-// ---- フェーズ3の契約(フェーズ1では空・501) ----
+// ---- 目安価格(フェーズ3) ----
 
-func (s *server) requireItem(ctx context.Context, id int64) error {
-	if err := checkID(id, "id"); err != nil {
-		return err
+func toAPIEstimates(itemID int64, v refresh.View) api.ItemEstimates {
+	out := api.ItemEstimates{
+		ItemId: itemID, Refreshing: v.Refreshing, Sites: make([]api.SiteEstimate, 0, len(v.Sites)),
+		SummaryLow: nullableOf(v.Summary.Low), SummaryMid: nullableOf(v.Summary.Mid),
 	}
-	_, err := s.items.GetItem(ctx, id)
-	return err
+	if v.Summary.FetchedAt != nil {
+		out.SummaryFetchedAt = nullable.NewNullableWithValue(v.Summary.FetchedAt.UTC())
+	} else {
+		out.SummaryFetchedAt = nullable.NewNullNullable[time.Time]()
+	}
+	for _, e := range v.Sites {
+		out.Sites = append(out.Sites, api.SiteEstimate{
+			SiteId: e.SiteID, Low: nullableOf(e.Low), Mid: nullableOf(e.Mid), Count: e.Count, SuspiciousCount: e.SuspiciousCount,
+			InStockCount: e.InStockCount, Status: api.EstimateStatus(e.Status), FetchedAt: e.FetchedAt.UTC(),
+		})
+	}
+	return out
+}
+
+func toAPIListing(l item.Listing) api.Listing {
+	reasons := make([]api.SuspiciousReason, 0, len(l.SuspiciousReasons))
+	for _, r := range l.SuspiciousReasons {
+		reasons = append(reasons, api.SuspiciousReason(r))
+	}
+	return api.Listing{
+		Id: l.ID, SiteId: l.SiteID, Title: l.Title, Price: l.Price, Url: l.URL, ImageUrl: nullableOf(l.ImageURL),
+		InStock: l.InStock, SuspiciousReasons: reasons, FetchedAt: l.FetchedAt.UTC(),
+	}
 }
 
 func (s *server) GetItemEstimates(ctx context.Context, req api.GetItemEstimatesRequestObject) (api.GetItemEstimatesResponseObject, error) {
-	if err := s.requireItem(ctx, req.Id); err != nil {
+	if err := checkID(req.Id, "id"); err != nil {
 		return nil, err
 	}
-	return api.GetItemEstimates200JSONResponse(api.ItemEstimates{ItemId: req.Id, Sites: []api.SiteEstimate{}, Refreshing: false}), nil
+	v, err := s.estimates.Estimates(ctx, req.Id)
+	if err != nil {
+		return nil, err
+	}
+	return api.GetItemEstimates200JSONResponse(toAPIEstimates(req.Id, v)), nil
 }
 
 func (s *server) RefreshItemEstimates(ctx context.Context, req api.RefreshItemEstimatesRequestObject) (api.RefreshItemEstimatesResponseObject, error) {
-	if err := s.requireItem(ctx, req.Id); err != nil {
+	if err := checkID(req.Id, "id"); err != nil {
 		return nil, err
 	}
-	return nil, &apiError{status: http.StatusNotImplemented, code: api.ErrorCodeNotImplemented, msg: "price estimates are not implemented yet"}
+	v, err := s.estimates.Refresh(ctx, req.Id)
+	if err != nil {
+		return nil, err
+	}
+	return api.RefreshItemEstimates202JSONResponse(toAPIEstimates(req.Id, v)), nil
 }
 
 func (s *server) ListItemListings(ctx context.Context, req api.ListItemListingsRequestObject) (api.ListItemListingsResponseObject, error) {
@@ -309,10 +342,18 @@ func (s *server) ListItemListings(ctx context.Context, req api.ListItemListingsR
 			return nil, err
 		}
 	}
-	if err := s.requireItem(ctx, req.Id); err != nil {
+	if err := checkID(req.Id, "id"); err != nil {
 		return nil, err
 	}
-	return api.ListItemListings200JSONResponse{Listings: []api.Listing{}}, nil
+	ls, err := s.estimates.Listings(ctx, req.Id, req.Params.SiteId)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]api.Listing, 0, len(ls))
+	for _, l := range ls {
+		out = append(out, toAPIListing(l))
+	}
+	return api.ListItemListings200JSONResponse{Listings: out}, nil
 }
 
 // ---- ジャンル・サイト ----
