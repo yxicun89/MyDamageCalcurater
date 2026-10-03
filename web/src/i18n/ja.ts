@@ -189,6 +189,8 @@ export const appText = {
    */
   masterLoadErrorDetailLabel: "原因",
   masterLoadRetryLabel: "再試行",
+  /** ADR-0313: オフラインでキャッシュが空(初回・未取得・破棄後)のときの案内。 */
+  masterCacheEmptyError: "オフラインで使うには、一度オンラインで開いてマスタを取得してください",
   masterLoadSwitchToOfflineLabel: "オフラインに切り替える",
   /** 計算・逆算の切り替えタブ(P4-4、ADR-0300 §7)。 */
   tabsLabel: "画面の切り替え",
@@ -260,7 +262,8 @@ export const balanceClientText = {
  * 内部メッセージ)を出さず、コードからここを引く。Web 側の balance_unavailable も同じ表で引く。
  */
 export const balanceErrorText = {
-  missing_request_context: "端末の情報を送れませんでした。ページを開き直してください",
+  missing_header: "端末の情報を送れませんでした。ページを開き直してください",
+  invalid_header: "端末の情報が正しくありません。ページを開き直してください",
   invalid_request: "リクエストが正しくありません。入力を見直してください",
   request_too_large: "入力が大きすぎます。メンバーや技を減らしてください",
   unknown_pokemon: "選んだポケモンがサーバーのマスタにありません。選び直してください",
