@@ -46,11 +46,7 @@ balance-docker-push:
 	@SERVICE=balance scripts/gitops/publish-image.sh
 
 balance-k3d-deploy: balance-docker-build ## k3d へ balance を直接デプロイ
-	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh balance-k3d-deploy
-	@k3d image import $(BALANCE_IMAGE) --cluster $(CLUSTER)
-	@kubectl apply -k $(BALANCE_DIR)/deploy/k8s/overlays/local
-	@kubectl -n pokecalc rollout restart deployment/balance
-	@kubectl -n pokecalc rollout status deployment/balance --timeout=120s
+	@CLUSTER=$(CLUSTER) TAG_PATHS="$(BALANCE_DIR)" ./scripts/k3d-deploy-tagged.sh balance-k3d-deploy $(BALANCE_DIR)/deploy/k8s/overlays/local pokecalc/balance
 
 balance-smoke:
 	@BALANCE_URL=$(BALANCE_URL) $(BALANCE_DIR)/scripts/smoke.sh
