@@ -59,6 +59,25 @@ kubectl -n pokecalc exec mysql-0 -- sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysq
 ```
 確認: 画面にパスワードは出ず、0 より大きい数値が1行表示される(パスワードは `mysql-0` の環境変数から読むので、コマンド引数や API サーバの記録に出ない)。
 
+## 5a. 投入後に calc・balance・speed へ反映し、動いている版を確かめる(issue #281・#108・ADR-0135)
+
+投入(§4)は DB を書き換えるだけで、calc・balance・speed は起動時に読んだマスタのまま動く(自動の再取得はしない。ADR-0204 §3)。
+投入のたびに、次の順で反映し、版が揃ったことを確かめる。`dataVersion` は `source=version@checksum先頭8桁` の連結で、中身が変わると変わる(ADR-0128)。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make pokedex-export
+make deploy-latest
+make check-master-version
+```
+確認: `deploy-latest` が `全サービスを <コミット> の内容で入れ替えた` で終わる(calc は再起動で DB の最新を取り直し、balance・speed は
+export した read model で入れ替わる)。`check-master-version` が calc・balance・speed の3行とも `ok` で、最後の行が
+`calc・balance・speed の版が一致`。`STALE <名前>` が出たら、その consumer がまだ旧版(終了コード 1)。
+`make pokedex-export` は `POKEDEX_DATABASE_DSN` が要る(手順は `docs/runbooks/speed.md`)。
+
+calc だけを入れ直すなら、`kubectl -n pokecalc rollout restart deployment/calc` のあと `kubectl -n pokecalc rollout status deployment/calc`。
+calc の起動ログ(`kubectl -n pokecalc logs deployment/calc | grep dataVersion`)と `GET /readyz` の本文にも、読み込んだ `dataVersion` が出る。
+
 ## 6. 手動実行と CronJob の重複を確かめる(issue #106 / ADR-0109)
 
 `make import-k8s` の手動 Job と CronJob `pokedex-import` の定期 Job が同時に走っても、片方だけが最後まで処理を

@@ -19,12 +19,8 @@ USER 65532:65532
 ENTRYPOINT ["/record-migrate"]
 CMD ["up"]
 
-# server: record-svc 本体(HTTP + NATS JetStream の購読)のイメージ。
-# 対応する Deployment・Service・gateway への配線(GATEWAY_RECORD_URL)・scripts/up.sh のビルド対象への
-# 追加は、まだ deploy/k8s/base/record に存在しない(critic レビュー R-4 で判明。P5-3b で行う。
-# docs/plan.md・ADR-0209「影響」参照)。このイメージ自体はビルドできるが、k3d クラスタには
-# まだ配線されていないため、現状は `/api/record/*` へのアクセスは gateway 側で
-# upstream_unavailable(503)のままになる。
+# server: record-svc 本体(`record serve`: HTTP + NATS JetStream の購読)と失効ジョブ(`record expire`)の
+# 共通イメージ。Deployment・CronJob・Service は deploy/k8s/base/record(ADR-0220)。
 FROM scratch AS server
 COPY --from=build /out/record /record
 USER 65532:65532

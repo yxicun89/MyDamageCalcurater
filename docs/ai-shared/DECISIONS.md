@@ -240,6 +240,7 @@ Decision: (1) P1-12 の Recall の新定義(返した SP 範囲が総当たり�
 Reason: ユーザーが確認の質問に回答した。
 Impact: 逆算の観測は整数%(`Percent`)が主の入力。丸め方が未確認なので、照合は切り捨て・四捨五入・切り上げのどれでも真値を落とさない区間のまま(ADR-0010 §R)。
 丸め方が確認できたら区間を狭める(1か所の差し替え)。plan.md のブロッカー「観測ダメージの入力と丸め」は「丸め方のみ未確認」に縮小。
+→ 2026-10-03 に確認済み(減少量そのものの切り捨て)。整数%の区間は [v, v+1) に狭めた(ADR-0134)。
 
 ## 2026-09-21: マスタのフォームの持ち方・更新運用・技の使用可否の裁定の進め方(ユーザー回答)
 Decision: (1) 見た目だけ違うフォーム(種族値・タイプ・特性が同じ)はマスタで1件にまとめる。性能が違うフォーム(メガ・リージョンフォーム等)は別ポケモンとして登録する(メガは既決のとおり `is_mega` / `base_species_key` / `required_item_id`)。
@@ -1746,6 +1747,18 @@ Impact: 既存の正常な入力の数値は不変(ゴールデン全件一致)�
 **API レーンへの依頼**(契約は変えていない。既定案は ADR-0123 §7): (1) `MasterMove.mechanisms: string[]`(昇順・通常の技は空配列。ADR-0121 の依頼の再掲)。(2) `CalcResponse`・`BulkRow.result`・`ReverseCandidate` に `unsupported: UnsupportedMark[]`(必須・印なしは `[]`)、`UnsupportedMark = {target: move|attacker_item|attacker_ability|defender_item|defender_ability, reason: <機構 13 種>|zero_power|unsupported_effect, id: string}`。入ったら `services/calc/internal/httpapi/parity_test.go` の `dropEmptyUnsupported` を消して印も比べる。
 **Web / iOS レーンへ**: 印の表示(「未対応」の注記)は各レーンの作業。WASM の形は ADR-0123 §6。
 
+## 2026-10-02: record-svc・team-svc を k3d に配線し、失効ジョブを CronJob にした(API レーン。他レーンへの連絡。ADR-0220)
+Decision: `deploy/k8s/base/{record,team}` を追加し、base の kustomization と gateway(`GATEWAY_RECORD_URL=http://record`・`GATEWAY_TEAM_URL=http://team`)に配線した。
+失効(ADR-0209 §4)は同じバイナリのサブコマンド `record expire` / `team expire` を日次 CronJob(`record-expire`・`team-expire`。日本時間 12:00)で起動する。
+Reason: 設定の解釈を serve と共有でき、イメージを増やさない(ADR-0220 §3)。
+Impact(他レーンへ):
+- Web・iOS: `make up` 後、k3d で `/api/record/*`・`/api/team/*` が gateway 経由で届く(TiDB の導入に成功し record/team の Pod が Ready のとき。無ければ従来どおり 503 `upstream_unavailable`)。
+- 運用: 失効ジョブの CronJob が増えた(失敗は kube_job_status_failed で見る。削除件数はログの `expire done` 1行)。cloud overlay では TiDB・Secret が無いので suspend 済み。
+  NetworkPolicy は record/team の gateway 上流・TiDB・NATS(購読)・Prometheus を許可し、record ↔ team・calc → record/team・record/team → mysql を拒否する。ServiceMonitor は8サービスになった。
+  `make deploy-latest` に record/team を加えるかは運用レーンの判断(今回は触っていない)。up.sh は record/team の Ready を待たない。
+- 失効ジョブは local・cloud とも `suspend: true`(実データへ初めて向ける承認 ADR-0209・ADR-0220 未決事項 0 が済むまで。既定案。plan.md ブロッカー)。手動実行は `kubectl -n pokecalc create job --from=cronjob/record-expire record-expire-manual-...`。承認後に local の suspend patch を外す。
+- 保持日数は ConfigMap `record-retention`・`team-retention` の1か所(ADR-0211 §7 の既定値。変えるときは ADR も更新)。
+
 ## 2026-09-25: issue #271/#270 の API レーン担当分(mechanisms 公開・unsupported 印)を実装(API レーン → データ・Web・iOS レーンへ)
 Decision: データレーンからの依頼(ADR-0121 §4・ADR-0123 §7)を反映した。
 `api/openapi.yaml`: `MasterMove.mechanisms: string[]`(必須・昇順・通常の技は空配列)を追加。
@@ -2021,7 +2034,27 @@ Impact: Web レーンは文言・再送の上限・再試行の扱いを揃え�
 - API レーンへ: TiDB(record/team)を k3d に上げる前に ADR-0132「確認の結果」の手順を行う(tidb-operator からの許可を足す)。
   M2 で record・team の本体を足すときも許可が要る。PR #416(#284)で gateway → balance/speed/judge は既に許可済み
 - 詰まったときの戻し方: `kubectl -n pokecalc delete networkpolicy default-deny-ingress`(許可だけが残る。データは消えない)
+## 2026-10-01: 既定の計算モードをオンラインに変更(ユーザー決定。Web レーン。issue #210 / ADR-0313)
+Decision: Web の既定の計算モードを「オンライン」にする(ADR-0301 §4 の「既定はオフライン」を変更)。オンラインで取得したマスタ(持ち物・性格・解決した種族/特性/技)を IndexedDB に保存し、オフライン(WASM)はそのキャッシュだけから読む。保存済みのモード(localStorage)は従来どおり尊重する。
+Reason: 既定のオフラインは架空の例データしか持たず、実データで計算するには毎回オンラインへ切り替えが要った。実データのビルド同梱は ADR-0002 に反する。
+Impact: Web のみ(`web/src/master/cache/`・`main.tsx`・`calcMode.ts`・E2E 設定)。API・engine・iOS は無変更。オフラインで引ける種族は一度オンラインで選んだものに限り、持ち物の候補比較はオフラインでも選べない(公開 API に効果データが無い)。
 
+
+## 2026-10-02: issue #236 の balance 側をクローズ(タイプバランスレーン → Web レーンへ。ADR-0413)
+Decision: balance の `X-Device-Id`/`X-Session-Id` を gateway と同じ正準 UUID 検証にした(素早さの ADR-0606 と同じ複製方式)。
+ErrorCode は `missing_header`(欠落・空)・`invalid_header`(UUID でない・重複)を追加し、`missing_request_context` を廃止した
+(`services/balance/api/openapi.yaml` 0.8.0。意図的な破壊的変更。判定順は不変)。
+Reason: Traefik 直結では gateway の検証が効かず、balance だけ緩い非空チェックだった。
+Impact: Web レーンへ: `web/src/api/balance.gen.ts` を再生成済み、`web/src/i18n/ja.ts` の `balanceErrorText` を `missing_header`/`invalid_header` に
+追従済み(`BalanceScreen.test.tsx` のコード一覧も)。`balanceClient.ts` は正準 UUID を送っており変更不要。他に balance の code 文字列に依存する箇所があれば確認してほしい。
+## 2026-10-02: 素早さに効く特性・持ち物のデータ(判定レーン → データレーン。issue #235・ADR-0710 第2段の依頼)
+
+- 判定レーンは第1段(素早さに反映した補正 `*SpeedApplied`・指定されたが反映していない入力 `*SpeedIgnored` を応答に返す)を実装した。
+  ユーザー決定: 反映する範囲は**全て**(天候特性・状態異常・持ち物。不要なら指摘される)
+- データレーンへ: 素早さ補正を持つ特性(天候・場・状態依存)と持ち物(こだわりスカーフ以外のすばやさ補正)を、balance の `abilities` read model の
+  `effects` と同じ流儀の正規化データとしてマスタ側に置き、内部 API(pokedex-svc)から引けるようにしてほしい。judge は ID の switch を持たず、
+  そのデータで反映する。状態異常(麻痺)は judge 側の入力 `status` の追加も要る(判定レーンが契約を足す)
+- 受け取り次第、判定レーンが第2段を実装し、反映できた要素を `*SpeedApplied` に足して `*SpeedIgnored` から外す
 
 ## 2026-10-02: 一括計算の defenderOverride に ranks・status を足した(API レーン → Web・iOS レーンへ。issue #274/#272・ADR-0216)
 
@@ -2040,3 +2073,61 @@ Reason: 既定案 A は変更が小さく、版を上げる PR でハッシュ�
 Impact: 版を上げる PR は config.json の `integrity` も更新する(不一致のときは stderr の実際のハッシュを、内容を確かめたうえで反映)。
 却下案 B(dist の vendoring)・C(現状維持)に変えるなら ADR-0101 追記と config.json の integrity を戻す。
 ユーザーの確認待ち: A でよいか(特に、期限切れの引き渡しを無視する TTL 7200 秒の扱い)。
+
+
+## 2026-10-03: PR のマージは対象 PR の CI が全件成功のときだけ AI が実行してよい(ADR-0803。ユーザー決定)
+Decision: bash-guard の PR マージを無条件ブロックから、`gh pr checks` が終了コード 0 のときだけ通す条件付きに変更。`--admin`・`gh api` 直叩き・main への直接 push は引き続き不可。
+Reason: ユーザー指示「全レーンでテストと CI が通っていれば AI が merge してよい。クラウドへの勝手なデプロイ(課金)と機密情報の公開以外は作業を止めたくない」。
+Impact: CLAUDE.md・AGENTS.md・COORDINATION.md・ADR-0800 を整合。.codex も同じ bash-guard を呼ぶため同じ規則が効く。
+## 2026-10-03: 技の対象(単体/全体)をマスタに持たせてほしい(判定レーン → データレーン。issue #288・ユーザー決定)
+
+- ダブルの壁(×2732/4096)・全体技(×3072/4096。相手2体に当たる技)の補正は engine がまだ持たない(`engine/modifiers.go` の `screenDamageMod` は format を見ない。ADR-0005)。
+  判定画面は暫定でダブルを選択肢から外している(PR #421)
+- データレーンへ: 技の対象(単体 / 相手全体 / 場全体 等。@smogon/calc の `target` に対応する値)を `MasterMove` とマスタのスキーマに足し、
+  pokedex-svc の内部 API・公開 API の技の応答に出してほしい。入ったら、判定(ダメージ計算)レーンが engine の補正とゴールデン(ダブルのベクタ。
+  `tools/golden`・`make test-golden` 全件一致)を実装し、判定画面に「ダブル」を戻す
+- それまで #288 は閉じない(暫定の非表示は維持)
+
+## 2026-10-02: issue #230 のタイプバランス系リモートブランチ 19 本を削除(タイプバランスレーン。ユーザー承認済み)
+Decision: 対応する PR(#6〜#66)がすべて MERGED の tb 系リモートブランチ 19 本をリモートから削除した。OPEN の PR のブランチ(#451・#456・#457・#458)と main は触っていない。
+Reason: ユーザー承認(AskUserQuestion、2026-10-02)。削除前に、全 19 本の PR が MERGED であることを PR 一覧で確認した。
+Impact: 復旧が必要なときは、下記の tip SHA から `git branch <名前> <SHA>` で作れる(GitHub 側で参照されなくなってから一定期間を過ぎると到達できなくなる)。#230 の残りの対象(Web・運用レーンのブランチ)は各レーンが判断する。
+- `feat/tb-readmodel-wiring`(tip 13f353e)
+- `feat/tb-tb0-argocd`(tip a4841f3)
+- `feat/tb-tb1-defense`(tip 94c44ce)
+- `feat/tb-tb1b-typechart`(tip 5e75b81)
+- `feat/tb-tb2-offense`(tip ed7888a)
+- `feat/tb-tb3-ability`(tip 352b5cf)
+- `feat/tb-tb4-threats`(tip a97a7fc)
+- `feat/tb-tb5-recommend`(tip c7fc41f)
+- `feat/tb-tb6-moverange`(tip c73193b)
+- `feat/tb-tb6-planning`(tip 12c8c45)
+- `fix/tb-deps-latest`(tip 64fedb0)
+- `fix/tb-doc`(tip f731d30)
+- `fix/tb-maint-cleanup`(tip dc8e4b6)
+- `fix/tb-pause-checkpoint`(tip 1e0cb8e)
+- `fix/tb-post-merge-state`(tip e03548f)
+- `fix/tb-push-permission`(tip 727bad3)
+- `fix/tb-runbook-retry`(tip 3569d95)
+- `fix/tb-runbooks`(tip 8faf353)
+- `fix/tb-tb0-done`(tip fcd83db)
+
+## 2026-10-03: PR のマージは対象 PR の CI が全件成功のときだけ AI が実行してよい(ADR-0803。ユーザー決定)
+Decision: bash-guard の PR マージを無条件ブロックから、`gh pr checks` が終了コード 0 のときだけ通す条件付きに変更。`--admin`・`gh api` 直叩き・main への直接 push は引き続き不可。
+Reason: ユーザー指示「全レーンでテストと CI が通っていれば AI が merge してよい。クラウドへの勝手なデプロイ(課金)と機密情報の公開以外は作業を止めたくない」。
+Impact: CLAUDE.md・AGENTS.md・COORDINATION.md・ADR-0800 を整合。.codex も同じ bash-guard を呼ぶため同じ規則が効く。
+## 2026-10-02: issue #236 の judge 分を API レーンが実施(ADR-0219)
+Decision: #236 の judge 分を API レーンが実施した(判定レーンの範囲。判定レーンは #457/#480 と衝突する場合は取り込みで解消)。
+judge の `X-Device-Id`/`X-Session-Id` 検証を gateway・speed と同じ判定(欠落・空 → 400 `missing_header`、非正準 UUID・重複 →
+400 `invalid_header`)にし、複製方式(`requestctx.go`)で実装した。judge の openapi は 0.2.0 で `Error.code` に両 code を追加。
+judge は非 UUID を calc-svc・pokedex-svc へ転送しなくなった。balance 分は PR #458(ADR-0413)に委ねた。
+Reason: Traefik 直結のため gateway の検証が効かず、judge は非空チェックだけで ID をそのまま上流へ転送していた。
+Impact(Web レーンへ連絡): `web/src/judge/judge.gen.ts` を再生成し、`judgeErrorText`(`web/src/i18n/ja.ts`)に
+`missing_header`・`invalid_header` の文言を追加した(additive。既存キーは不変)。Web の通常操作は正準 UUID を送るため挙動は不変。
+## 2026-10-02: 防御側のランクの文言を iOS も同じに揃える提案(Web レーン → iOS レーン。issue #274、ADR-0315)
+Decision: Web の「詳細」に防御側のランクを追加した。iOS も攻撃側のランクと同じ作りで揃えてほしい。
+文言は fieldset「防御側のランク」、ボタン「防御側のランクを上げる」「防御側のランクを下げる」、表示は「B +1」「D -2」「B ±0」。
+編集対象は選択中の技の分類で 物理・変化・技なし = def〈B〉、特殊 = spd〈D〉。def / spd は別々に保持する。
+Reason: 契約(`defenderOverride.ranks`、ADR-0216)は入っており、攻守で画面の作りを揃えるため。
+Impact: 既定(0・0)なら `defenderOverride` を送らない。どちらかが非 0 なら 5 項目の ranks を送り、特性(#272)と同じ `defenderOverride` に併存させる。防御側の状態異常は式に効かないので出さない。
+

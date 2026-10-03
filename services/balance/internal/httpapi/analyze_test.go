@@ -49,8 +49,8 @@ func postAnalyze(t *testing.T, server http.Handler, body string) *httptest.Respo
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, analyzePath, strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("X-Device-Id", "test-device")
-	request.Header.Set("X-Session-Id", "test-session")
+	request.Header.Set("X-Device-Id", "11111111-1111-4111-8111-111111111111")
+	request.Header.Set("X-Session-Id", "22222222-2222-4222-a222-222222222222")
 	server.ServeHTTP(recorder, request)
 	return recorder
 }
@@ -387,8 +387,8 @@ func TestAnalyzeWithoutPokemonTypesStillRequiresRequestContext(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, analyzePath, strings.NewReader(`{"members":[{"pokemonId":"9001-000"}]}`))
 	request.Header.Set("Content-Type", "application/json")
 	server.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), `"code":"missing_request_context"`) {
-		t.Fatalf("status = %d body=%s, want 400 missing_request_context", recorder.Code, recorder.Body.String())
+	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), `"code":"missing_header"`) {
+		t.Fatalf("status = %d body=%s, want 400 missing_header", recorder.Code, recorder.Body.String())
 	}
 }
 

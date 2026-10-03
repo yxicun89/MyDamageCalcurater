@@ -1,4 +1,4 @@
-# gateway から上流(calc・pokedex・web・balance・speed・judge)の Pod ポート 8080 へ。
+# gateway から上流(calc・pokedex・web・balance・speed・judge・record・team)の Pod ポート 8080 へ。
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -10,7 +10,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: In
-        values: [calc, pokedex, web, balance, speed, judge]
+        values: [calc, pokedex, web, balance, speed, judge, record, team]
   policyTypes:
     - Ingress
   ingress:

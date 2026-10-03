@@ -77,8 +77,9 @@ export interface paths {
      *
      *     素早さは 実数値(engine.RealStats)→ ランク補正 → 素早さ補正(追い風 ×2・こだわりスカーフ ×1.5)の
      *     順で求める(ADR-0701 §2・ADR-0702 §2)。補正は 4096 基準で 1 つに連結してから 1 回だけ
-     *     五捨五超入する(各補正ごとに丸めない)。状態異常(麻痺など)による素早さの変化は扱わないため、
-     *     Individual に status は無い。ko は calc-svc の計算結果をそのまま転記する(judge は確定数を再計算しない)。
+     *     五捨五超入する(各補正ごとに丸めない)。状態異常(麻痺など)・特性・持ち物(スカーフ以外)・天候による
+     *     素早さの変化は反映しない(Individual に status は無い)。反映した補正は *SpeedApplied、
+     *     指定されたのに反映していない入力は *SpeedIgnored で各行に返す(ADR-0710)。ko は calc-svc の計算結果をそのまま転記する(judge は確定数を再計算しない)。
      *
      *     場の効果は 2 つの欄に分かれる(ADR-0702 §1)。ダメージに効く weather / terrain / screens は
      *     field に入れ、judge は解釈せず calc-svc へそのまま転送する。素早さにしか効かない
@@ -452,7 +453,39 @@ export interface components {
        *     defender_* は**自分**を指す(ADR-0708 §5。自分が持つ防御側で効く持ち物の印はこちらに入る)。
        */
       defenderKoUnsupported: components["schemas"]["UnsupportedMark"][];
+      /**
+       * @description attackerSpeed の計算に**実際に効かせた**素早さの補正(ADR-0710)。値は rank(素早さのランクが 0 でない)・
+       *     tailwind(追い風)・choiceScarf(こだわりスカーフ)。効かせた補正が無ければ空配列
+       *     (null にも欄の欠落にもしない)。順序は rank → tailwind → choiceScarf で固定。
+       */
+      attackerSpeedApplied: components["schemas"]["SpeedFactor"][];
+      /** @description defenderSpeed について、attackerSpeedApplied と同じ意味(この候補側)。 */
+      defenderSpeedApplied: components["schemas"]["SpeedFactor"][];
+      /**
+       * @description 自分の入力のうち、素早さに影響しうるのに **attackerSpeed へ反映していない**もの(ADR-0710)。
+       *     値は abilityId(abilityId が指定されている。特性の素早さ補正は引けない)・
+       *     itemId(こだわりスカーフ以外の itemId が指定されている)・
+       *     fieldWeather(field.weather が none 以外で、かつ abilityId も指定されている。天候依存の素早さ特性があり得るため)。
+       *     **「影響する」とは限らない**: 素早さに効かない特性・持ち物でも、指定されていればここに入る
+       *     (judge は特性・持ち物の素早さ補正のデータを持たないため。第2段でデータ駆動にするまでの印)。
+       *     状態異常(麻痺など)は入力に無いので、この欄にも現れない。画面は空でないとき
+       *     「素早さは特性・持ち物・天候を反映していない」旨を添える(文言は画面の持ち物)。
+       *     空配列が「素早さに影響する要素が無い」ことの保証になる。順序は abilityId → itemId → fieldWeather で固定。
+       */
+      attackerSpeedIgnored: components["schemas"]["SpeedIgnoredInput"][];
+      /** @description defenderSpeed について、attackerSpeedIgnored と同じ意味(この候補側。天候は共通の field.weather)。 */
+      defenderSpeedIgnored: components["schemas"]["SpeedIgnoredInput"][];
     };
+    /**
+     * @description 素早さの計算に効かせた補正(ADR-0710)。
+     * @enum {string}
+     */
+    SpeedFactor: "rank" | "tailwind" | "choiceScarf";
+    /**
+     * @description 素早さに影響しうるが反映していない入力(ADR-0710)。
+     * @enum {string}
+     */
+    SpeedIgnoredInput: "abilityId" | "itemId" | "fieldWeather";
     Error: {
       code: components["schemas"]["ErrorCode"];
       message: string;
@@ -460,27 +493,43 @@ export interface components {
     /**
      * @description エラーの区分。judge は上流の事情(HTTP のステータス・接続エラーの文面・URL)をそのまま返さず、
      *     ADR-0700 §3・ADR-0701 §6 の対応表でこの列挙に畳む。
-     *     invalid_request: ヘッダー・request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
+     *     missing_header: X-Device-Id / X-Session-Id が無い・空(ADR-0219。gateway と同じ判定)。
+     *     invalid_header: X-Device-Id / X-Session-Id が正準形 UUID でない、または同名ヘッダが重複している(ADR-0219)。
+     *     invalid_request: request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
      *     unknown_species: speciesKey が pokedex-svc のマスタに無い。
      *     unknown_move: moveId が pokedex-svc の技のマスタに無い(攻撃側・候補側のどちらも。ADR-0704 §6)。
      *     unknown_nature: natureId が性格の一覧に無い。
      *     request_too_large: request body が上限(8 KiB)を超えている。
      *     upstream_unavailable: pokedex-svc / calc-svc が未設定・接続できない・タイムアウト・5xx・契約に合わない応答。
      *     internal_error: 想定外の内部エラー(message は固定文言で、内部の詳細を返さない)。
+     *     not_found: 契約に無い経路、またはメソッド違い(404。ADR-0802)。
      * @enum {string}
      */
     ErrorCode:
+      | "missing_header"
+      | "invalid_header"
       | "invalid_request"
       | "unknown_species"
       | "unknown_move"
       | "unknown_nature"
       | "request_too_large"
       | "upstream_unavailable"
-      | "internal_error";
+      | "internal_error"
+      | "not_found";
   };
   responses: never;
   parameters: {
+    /**
+     * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+     *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+     *     the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+     */
     DeviceId: string;
+    /**
+     * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+     *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+     *     the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+     */
     SessionId: string;
   };
   requestBodies: never;
@@ -533,7 +582,17 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+         */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -555,7 +614,8 @@ export interface operations {
         };
       };
       /**
-       * @description X-Device-Id / X-Session-Id が無い・空、body が 1 つの JSON オブジェクトでない・未知の欄がある、
+       * @description X-Device-Id / X-Session-Id が無い・空(missing_header)、正準形 UUID でない・重複(invalid_header。ADR-0219)、
+       *     body が 1 つの JSON オブジェクトでない・未知の欄がある、
        *     必須の欄が無い(候補の moveId を含む)、defenders が 1 件未満・6 件超、sp / ranks / format が範囲外、
        *     または calc-svc が計算要求を受け付けなかった(invalid_request。ADR-0701 §6・ADR-0703 §4)
        */

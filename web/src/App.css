@@ -12,7 +12,8 @@
 }
 
 .app-main {
-  min-height: 100vh;
+  /* フッターが常に画面外へ押し出されないよう、100vh の最小高さは持たない(ADR-0314)。 */
+  min-height: 0;
 }
 
 /* 計算・逆算の切り替えタブ(P4-4)。色は tokens.css の CSS 変数だけを参照する。 */
@@ -122,4 +123,54 @@
   font-size: var(--font-size-body);
   padding: var(--space-2) var(--space-4);
   cursor: pointer;
+}
+
+/* 「このアプリについて」(ADR-0314)。フッターのリンクは目立たせない(ただしコントラストは AA)。 */
+.app-footer {
+  padding: var(--space-4);
+  text-align: center;
+}
+
+.app-footer__link {
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+  text-decoration: underline;
+}
+
+.about {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: var(--space-4);
+  color: var(--text-primary);
+}
+
+.about__heading {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-heading);
+}
+
+.about__section h3 {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--font-size-body);
+}
+
+.about__section p,
+.about__sources {
+  margin: 0;
+  font-size: var(--font-size-body);
+  color: var(--text-secondary);
+}
+
+.about__sources {
+  padding-left: var(--space-5);
+}
+
+.about__source-title {
+  color: var(--text-primary);
+}
+
+.about__back {
+  display: inline-block;
+  margin-top: var(--space-5);
+  color: var(--text-primary);
 }

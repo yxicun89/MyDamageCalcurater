@@ -6,11 +6,11 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"example.com/pokecalc/services/judge/internal/api"
 	"example.com/pokecalc/services/judge/internal/client"
+	"example.com/pokecalc/services/judge/internal/httpguard"
 	"example.com/pokecalc/services/judge/internal/httpmetrics"
 	"github.com/labstack/echo/v5"
 )
@@ -36,6 +36,11 @@ type Dependencies struct {
 	// that builds Dependencies without this field unaffected. cmd/api/main.go always passes a
 	// positive value (JUDGE_REQUEST_TIMEOUT, default 12s) in production.
 	RequestTimeout time.Duration
+
+	// Guard bounds the outspeed-and-ko requests handled at once (issue #299, ADR-0801). Only
+	// MaxInflight and Code are used here: the whole-request deadline is RequestTimeout above
+	// (ADR-0707), so Guard.Timeout stays zero. The zero value disables the limit.
+	Guard httpguard.Config
 }
 
 // New returns the judge HTTP handler.
@@ -44,10 +49,12 @@ func New(deps Dependencies) *echo.Echo {
 	e.HTTPErrorHandler = writeHTTPError
 	m := httpmetrics.New()
 	e.Use(m.Middleware())
+	e.Use(recoverMiddleware)
 	e.GET(httpmetrics.Path, m.Handler())
+	guard := httpguard.Middleware(deps.Guard)
 	api.RegisterHandlersWithOptions(e, handler{deps: deps}, api.RegisterHandlersOptions{
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
-			"outspeedAndKo": {requireRequestContext},
+			"outspeedAndKo": {guard, requireRequestContext},
 		},
 	})
 	return e
@@ -70,8 +77,8 @@ func (handler) PublicHealth(c *echo.Context) error {
 }
 
 // OutspeedAndKo implements POST /api/judge/v1/outspeed-and-ko (ADR-0701 §1・§5). Header
-// presence/blankness is already checked by the requireRequestContext middleware registered in
-// New, ahead of the generated parameter binding.
+// validity (missing/empty, non-canonical UUID, duplicated; ADR-0219) is already checked by the
+// requireRequestContext middleware registered in New, ahead of the generated parameter binding.
 func (h handler) OutspeedAndKo(c *echo.Context, params api.OutspeedAndKoParams) error {
 	return outspeedAndKo(c, h.deps, params)
 }
@@ -82,26 +89,22 @@ func health(c *echo.Context) error {
 	return c.JSON(http.StatusOK, api.Health{Status: api.Ok})
 }
 
-// requireRequestContext rejects a missing/blank X-Device-Id or X-Session-Id before the
-// generated parameter binding runs (ADR-0701 §5: header check is first, ahead of the body).
-// It runs ahead of ServerInterfaceWrapper.OutspeedAndKo (echo runs per-route middleware before
-// the wrapped handler), so a blank header (present but "") never reaches the wrapper's own
-// presence-only check.
+// requireRequestContext rejects a missing/empty (400 missing_header) or non-canonical-UUID /
+// duplicated (400 invalid_header) X-Device-Id or X-Session-Id before the generated parameter
+// binding runs (ADR-0701 §5: header check is first, ahead of the body; ADR-0219). It runs ahead
+// of ServerInterfaceWrapper.OutspeedAndKo (echo runs per-route middleware before the wrapped
+// handler), so the wrapper's own presence-only check never sees a bad header.
 func requireRequestContext(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
-		if strings.TrimSpace(c.Request().Header.Get(deviceIDHeader)) == "" ||
-			strings.TrimSpace(c.Request().Header.Get(sessionIDHeader)) == "" {
-			return c.JSON(http.StatusBadRequest, api.Error{
-				Code:    api.InvalidRequest,
-				Message: "X-Device-Id and X-Session-Id are required",
-			})
+		if apiErr := checkAPIHeaders(c.Request().Header); apiErr != nil {
+			return c.JSON(http.StatusBadRequest, *apiErr)
 		}
 		return next(c)
 	}
 }
 
-// writeHTTPError normalizes any error the generated parameter binding raises directly (e.g. a
-// duplicate header) to the same Error{code: invalid_request} shape as the rest of the API
+// writeHTTPError normalizes any error the generated parameter binding raises directly (header
+// problems are already handled by requireRequestContext) to the same Error{code: invalid_request} shape as the rest of the API
 // (same pattern as services/speed and services/balance).
 func writeHTTPError(c *echo.Context, err error) {
 	if response, _ := echo.UnwrapResponse(c.Response()); response != nil && response.Committed {
@@ -115,7 +118,36 @@ func writeHTTPError(c *echo.Context, err error) {
 		})
 		return
 	}
+	var statusCoder echo.HTTPStatusCoder
+	if errors.As(err, &statusCoder) {
+		switch statusCoder.StatusCode() {
+		case http.StatusNotFound, http.StatusMethodNotAllowed:
+			// ルートが無い・メソッドが違う。calc-svc と同じく not_found に畳む(ADR-0802 §1)。
+			_ = c.JSON(http.StatusNotFound, api.Error{Code: api.NotFound, Message: "route not found"})
+			return
+		}
+	}
 	echo.DefaultHTTPErrorHandler(false)(c, err)
+}
+
+// recoverMiddleware は panic を回復し、500 internal_error の JSON にする(スタック等を出さない。ADR-0802 §2)。
+func recoverMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c *echo.Context) (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("panic recovered", "path", c.Path(), "panic", r)
+				// 応答を書き始めた後の panic では、JSON を追記せず(本文が壊れる)ログだけ残す。
+				if response, _ := echo.UnwrapResponse(c.Response()); response != nil && response.Committed {
+					return
+				}
+				err = c.JSON(http.StatusInternalServerError, api.Error{
+					Code:    api.InternalError,
+					Message: "internal error",
+				})
+			}
+		}()
+		return next(c)
+	}
 }
 
 // internalError answers 500 internal_error with a fixed message (ADR-0701 §6): an unexpected
