@@ -371,9 +371,96 @@ gh_flag_takes_value() {
   esac
 }
 
+# check_gh_pr_merge gh の開始位置 — "gh pr merge" を、CI が全部通っていてマージできる PR に限って許可する
+# (ユーザー決定 2026-10-03「テストと CI が通っていたら PR をマージしてよい」。ADR-0800 追記)。
+# 次のどれかに当たればブロック(安全側):
+#   - PR の指定(番号・URL・ブランチ名)が無い・複数・動的($ や ` を含む)
+#   - --admin(保護の迂回)・--auto(条件が揃う前に予約する)
+#   - gh pr checks が 0 以外(失敗・実行中〈終了コード 8〉・gh の失敗)、またはチェックが1件も無い
+#   - gh pr view で OPEN かつ MERGEABLE でない(競合・判定中〈UNKNOWN〉・クローズ済み)
+# gh は BASH_GUARD_GH(テストで偽物に差し替える)、既定は PATH の gh。
+check_gh_pr_merge() {
+  local start="$1"
+  local n=${#W[@]}
+  local gh_bin="${BASH_GUARD_GH:-gh}"
+  local -a repo_args=()
+  local pr="" count=0 seen_merge=0 j t
+  for ((j = start + 1; j < n; j++)); do
+    t="${W[$j]}"
+    [ "$t" = "__SEP__" ] && break
+    case "$t" in
+      -R | --repo)
+        repo_args=(-R "${W[$((j + 1))]:-}")
+        j=$((j + 1))
+        continue
+        ;;
+      --repo=*)
+        repo_args=(-R "${t#--repo=}")
+        continue
+        ;;
+      --admin | --auto)
+        BLOCK_REASON="gh pr merge の ${t} は CI・保護の条件を迂回するため使えません"
+        return 0
+        ;;
+      -b | --body | -t | --subject | --match-head-commit | -F | --body-file | -A | --author-email)
+        j=$((j + 1))
+        continue
+        ;;
+      -*) continue ;;
+    esac
+    if [ "$seen_merge" = 0 ]; then
+      [ "$t" = "merge" ] && seen_merge=1
+      continue
+    fi
+    pr="$t"
+    count=$((count + 1))
+  done
+  if [ "$count" -ne 1 ]; then
+    BLOCK_REASON="gh pr merge の PR の指定が無いか複数です(番号・URL・ブランチ名を1つ書いてください)"
+    return 0
+  fi
+  case "$pr" in
+    *'$'* | *'`'*)
+      BLOCK_REASON="gh pr merge の PR の指定が動的に決まります($pr)。CI を確認できません"
+      return 0
+      ;;
+  esac
+  if ! command -v "$gh_bin" >/dev/null 2>&1; then
+    BLOCK_REASON="gh が見つからないため、PR ${pr} の CI を確認できません"
+    return 0
+  fi
+  local checks rc
+  checks="$("$gh_bin" pr checks "$pr" ${repo_args[@]+"${repo_args[@]}"} 2>&1)"
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    BLOCK_REASON="PR ${pr} の CI が全部は通っていません(gh pr checks の終了コード ${rc}。8 は実行中)"
+    return 0
+  fi
+  if [ -z "$checks" ]; then
+    BLOCK_REASON="PR ${pr} に CI のチェックが1件もありません"
+    return 0
+  fi
+  # GitHub は mergeable を遅延して計算するので、最初の問い合わせは UNKNOWN になりやすい。
+  # UNKNOWN の間だけ数回(既定 5 回・2 秒おき)問い合わせ直す。
+  local state tries=0 max_tries="${BASH_GUARD_MERGEABLE_TRIES:-5}"
+  while :; do
+    state="$("$gh_bin" pr view "$pr" ${repo_args[@]+"${repo_args[@]}"} --json state,mergeable -q '.state + " " + .mergeable' 2>/dev/null)"
+    tries=$((tries + 1))
+    case "$state" in
+      *" UNKNOWN") [ "$tries" -lt "$max_tries" ] && sleep "${BASH_GUARD_MERGEABLE_WAIT:-2}" && continue ;;
+    esac
+    break
+  done
+  if [ "$state" != "OPEN MERGEABLE" ]; then
+    BLOCK_REASON="PR ${pr} はマージできる状態ではありません(${state:-取得失敗}。競合・判定中・クローズ済み)"
+    return 0
+  fi
+  return 1
+}
+
 # check_gh 開始位置 — グローバル配列 W の gh トークン位置から判定する。
-#   - "-R owner/repo"・"--repo owner/repo" 等のフラグを読み飛ばした上で "pr merge" ならブロック
-#     (どんな追加引数でも常にブロック)
+#   - "-R owner/repo"・"--repo owner/repo" 等のフラグを読み飛ばした上で "pr merge" なら check_gh_pr_merge で判定
+#     (CI が全部通っていてマージできる PR だけ許可。2026-10-03 のユーザー決定)
 #   - "gh api ..." でパスに "/merge" を含むものはブロック(API 直叩きでの PR マージ回避)
 check_gh() {
   local start="$1"
@@ -410,8 +497,8 @@ check_gh() {
   done
 
   if [ "$first" = "pr" ] && [ "$second" = "merge" ]; then
-    BLOCK_REASON="gh pr merge は PR を確定でマージするため常に確認が必要です"
-    return 0
+    check_gh_pr_merge "$start"
+    return $?
   fi
 
   if [ "$first" = "api" ]; then

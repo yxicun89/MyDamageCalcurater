@@ -117,6 +117,9 @@ ADR-0003 の適応を維持する。Codex では ADR-0007 と共通ワークフ�
 - レビューのスキップや未実装ターゲットの正常終了を成功と数えない。詳細は共通ワークフローを参照
 - ブランチ・統合: レーン制(ダメージ計算 `feat/calc-<phase名>` / タイプバランス `feat/tb-<stage名>`)。main へは PR で入れる
   (直接 push・直接 merge をしない。Argo CD の GitOps が main を見ているため)。詳細は AGENTS.md「Git ブランチ運用」と COORDINATION.md
+- **PR のマージ**: 手元のテスト・lint・公開前検査が通り、PR の CI が全部通っていて競合が無ければ、どのレーンの AI もマージしてよい
+  (2026-10-03 ユーザー決定)。`gh pr merge <番号> --merge` は bash-guard が `gh pr checks` と mergeable を確かめてから通す
+  (`--admin`・`--auto` は使わない)。人間の確認で止めるのは、お金が発生する操作(クラウドへのデプロイ等)と機密情報の公開だけ
 - タイプバランスレーンを Claude Code で進めるときは、`/phase` の代わりに `docs/type-balance-design.md` のステージ順で、
   同じ流れ(quick-scanner → spec-writer → implementer → critic)を使う
 

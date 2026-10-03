@@ -66,7 +66,9 @@ git -C "$OTHER_REPO_FEATURE" -c user.email=bash-guard-test@example.com -c user.n
 # stdout・stderr を $WORK/out・$WORK/err に残す。
 run_guard() {
   jq -n --arg c "$1" '{tool_name:"Bash", tool_input:{command:$c}}' >"$WORK/in.json"
-  bash "$GUARD" <"$WORK/in.json" >"$WORK/out" 2>"$WORK/err"
+  # gh pr merge は実際に gh で CI を問い合わせるため、既定では存在しない gh を渡して必ずブロック側に倒す
+  # (ネットワーク・認証に依存しない決定的なテストにする。CI 判定そのものは test_pr_merge_requires_green_ci が偽の gh で確かめる)。
+  BASH_GUARD_GH=/nonexistent/gh bash "$GUARD" <"$WORK/in.json" >"$WORK/out" 2>"$WORK/err"
   GUARD_RC=$?
 }
 
@@ -213,12 +215,77 @@ test_block_force_push() {
   expect_block "git push --all origin"
 }
 
-test_block_pr_merge() {
-  begin "block: gh pr merge(どんな追加引数でも)"
-  expect_block "gh pr merge"
-  expect_block "gh pr merge 123"
-  expect_block "gh pr merge 123 --squash --delete-branch"
-  expect_block "gh pr merge --auto --merge 123"
+# FAKE_GH — 偽の gh。FAKE_GH_CHECKS_RC(gh pr checks の終了コード)・FAKE_GH_CHECKS_OUT(その出力)・
+# FAKE_GH_STATE(gh pr view の "state mergeable")で振る舞いを変える。呼び出しは $WORK/gh.log に記録する。
+FAKE_GH="$WORK/fake-gh"
+cat >"$FAKE_GH" <<'FAKE'
+#!/usr/bin/env bash
+echo "$*" >>"${FAKE_GH_LOG:?}"
+case "$1 $2" in
+  "pr checks")
+    printf '%s' "${FAKE_GH_CHECKS_OUT-test	pass	1m	https://example.invalid/run}"
+    exit "${FAKE_GH_CHECKS_RC:-0}"
+    ;;
+  "pr view")
+    echo "${FAKE_GH_STATE:-OPEN MERGEABLE}"
+    exit 0
+    ;;
+esac
+exit 1
+FAKE
+chmod +x "$FAKE_GH"
+
+# with_fake_gh [環境変数...] -- 期待(block|allow) コマンド — 偽の gh で判定を確かめる。
+with_fake_gh() {
+  local -a envs=()
+  while [ "$1" != "--" ]; do
+    envs+=("$1")
+    shift
+  done
+  shift
+  local want="$1" cmd="$2"
+  : >"$WORK/gh.log"
+  jq -n --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}' >"$WORK/in.json"
+  env BASH_GUARD_MERGEABLE_WAIT=0 BASH_GUARD_GH="$FAKE_GH" FAKE_GH_LOG="$WORK/gh.log" ${envs[@]+"${envs[@]}"} bash "$GUARD" <"$WORK/in.json" >"$WORK/out" 2>"$WORK/err"
+  GUARD_RC=$?
+  if [ "$want" = block ] && [ "$GUARD_RC" -eq 2 ] && [ -s "$WORK/err" ]; then
+    ok
+  elif [ "$want" = allow ] && [ "$GUARD_RC" -eq 0 ]; then
+    ok
+  else
+    ng "${want} のはずが終了コード ${GUARD_RC}: ${cmd} (${envs[*]:-既定}) $(cat "$WORK/err")"
+  fi
+}
+
+# 2026-10-03 のユーザー決定「テストと CI が通っていたら PR をマージしてよい」(ADR-0800 追記)により、
+# 以前の「gh pr merge はどんな形でも常にブロック」を、CI が全部通っていてマージできる PR だけ許可に変えた。
+test_pr_merge_requires_green_ci() {
+  begin "gh pr merge: CI が全部通っていてマージできる PR だけ許可"
+  with_fake_gh -- allow "gh pr merge 123 --merge"
+  with_fake_gh -- allow "gh pr merge 123 --squash --delete-branch"
+  with_fake_gh -- allow "gh -R owner/repo pr merge 1 --merge"
+  with_fake_gh -- allow "gh pr merge feat/some-branch --merge"
+  with_fake_gh FAKE_GH_CHECKS_RC=1 -- block "gh pr merge 123 --merge"
+  with_fake_gh FAKE_GH_CHECKS_RC=8 -- block "gh pr merge 123 --merge"
+  with_fake_gh FAKE_GH_CHECKS_OUT= -- block "gh pr merge 123 --merge"
+  with_fake_gh FAKE_GH_STATE="OPEN CONFLICTING" -- block "gh pr merge 123 --merge"
+  with_fake_gh FAKE_GH_STATE="OPEN UNKNOWN" -- block "gh pr merge 123 --merge"
+  with_fake_gh FAKE_GH_STATE="MERGED UNKNOWN" -- block "gh pr merge 123 --merge"
+  begin "gh pr merge: 指定が無い・複数・動的・条件の迂回・gh が無いときはブロック"
+  with_fake_gh -- block "gh pr merge"
+  with_fake_gh -- block "gh pr merge --merge"
+  with_fake_gh -- block "gh pr merge 1 2"
+  with_fake_gh -- block 'gh pr merge $PR --merge'
+  with_fake_gh -- block "gh pr merge --auto --merge 123"
+  with_fake_gh -- block "gh pr merge 123 --admin --merge"
+  with_fake_gh BASH_GUARD_GH=/nonexistent/gh -- block "gh pr merge 123 --merge"
+  begin "gh pr merge: 実際に gh pr checks・gh pr view で問い合わせている"
+  with_fake_gh -- allow "gh pr merge 77 --merge"
+  if grep -q "^pr checks 77" "$WORK/gh.log" && grep -q "^pr view 77" "$WORK/gh.log"; then
+    ok
+  else
+    ng "gh pr checks / view を呼んでいない: $(cat "$WORK/gh.log")"
+  fi
 }
 
 test_block_wrappers_and_compound() {
@@ -579,7 +646,7 @@ test_block_import
 test_block_secret_read
 test_block_push_to_main
 test_block_force_push
-test_block_pr_merge
+test_pr_merge_requires_green_ci
 test_block_wrappers_and_compound
 test_block_git_push_destination_edge_cases
 test_block_command_splitting_edge_cases
