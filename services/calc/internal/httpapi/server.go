@@ -67,7 +67,7 @@ func NewServer(store master.Store, publisher EventPublisher) *Server {
 // calc の3操作(生成ラッパ経由)、pokedex の7操作(直接 404。R1)、GET /healthz
 // (openapi に載せない運用エンドポイント)、panic の回復(500 internal)、echo の既定エラー
 // (ルート無し・メソッド違い)を Error 形式({"code","message"})に揃えるエラーハンドラを含む。
-func NewHandler(store master.Store, publisher EventPublisher) http.Handler {
+func NewHandler(store master.Store, publisher EventPublisher, opts ...Option) http.Handler {
 	e := echo.New()
 	e.HTTPErrorHandler = httpErrorHandler
 	m := httpmetrics.New()
@@ -75,7 +75,7 @@ func NewHandler(store master.Store, publisher EventPublisher) http.Handler {
 	e.Use(recoverMiddleware)
 	e.GET(httpmetrics.Path, m.Handler())
 
-	registerCalcRoutes(e, NewServer(store, publisher))
+	registerCalcRoutes(e, NewServer(store, publisher), guardMiddleware(opts))
 	registerPokedexNotFoundRoutes(e)
 	e.GET("/healthz", healthzHandler)
 	e.GET("/readyz", readyzHandler)
@@ -90,11 +90,11 @@ func readyzHandler(c *echo.Context) error {
 // registerCalcRoutes は calc の3操作だけを、生成ラッパ(api.ServerInterfaceWrapper。
 // 必須ヘッダ X-Device-Id / X-Session-Id の有無を検証してから Server を呼ぶ)経由で登録する。
 // pokedex はここに含めない(registerPokedexNotFoundRoutes 参照。critic 指摘 R1)。
-func registerCalcRoutes(e *echo.Echo, srv *Server) {
+func registerCalcRoutes(e *echo.Echo, srv *Server, guard echo.MiddlewareFunc) {
 	wrapper := api.ServerInterfaceWrapper{Handler: srv}
-	e.POST("/api/calc", wrapper.CalcDamage)
-	e.POST("/api/calc/bulk", wrapper.CalcBulk)
-	e.POST("/api/calc/reverse", wrapper.CalcReverse)
+	e.POST("/api/calc", wrapper.CalcDamage, guard)
+	e.POST("/api/calc/bulk", wrapper.CalcBulk, guard)
+	e.POST("/api/calc/reverse", wrapper.CalcReverse, guard)
 }
 
 // registerPokedexNotFoundRoutes は calc-svc の担当外(pokedex)の7操作を、生成ラッパを
@@ -147,6 +147,10 @@ func httpErrorHandler(c *echo.Context, err error) {
 		return
 	}
 	status, body := errorBodyFor(err)
+	var he *httpError
+	if errors.As(err, &he) && he.retryAfter {
+		c.Response().Header().Set("Retry-After", "1")
+	}
 	_ = c.JSON(status, body)
 }
 
@@ -244,6 +248,9 @@ func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) erro
 		return err
 	}
 
+	if err := checkDeadline(ctx.Request().Context()); err != nil {
+		return err
+	}
 	res, err := engine.CalcDamage(engine.DamageInput{
 		Format: format, Attacker: attacker, Defender: defender, Move: move, Field: field,
 		Critical: criticalFrom(req.Options), TypeChart: s.store.TypeChart(),
@@ -326,6 +333,9 @@ func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 		return err
 	}
 
+	if err := checkDeadline(ctx.Request().Context()); err != nil {
+		return err
+	}
 	res, err := engine.CalcBulk(engine.BulkInput{
 		Format: format, Attacker: attacker, DefenderSpecies: species, Move: move, Field: field,
 		Critical: criticalFrom(req.Options), PresetKeys: presetKeysFrom(req.Presets), ItemVariants: variants,
@@ -398,6 +408,9 @@ func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) er
 		return err
 	}
 
+	if err := checkDeadline(ctx.Request().Context()); err != nil {
+		return err
+	}
 	res, err := engine.CalcReverse(engine.ReverseInput{
 		Format: format, Side: engine.ReverseSide(req.Side), Known: known, UnknownSpecies: species,
 		Move: move, Field: field, Critical: criticalFrom(req.Options), ItemCandidates: items,

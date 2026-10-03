@@ -523,8 +523,8 @@ func TestAnalyzeAbilityRequiresRequestContextFirst(t *testing.T) {
 		"no abilities": New(Dependencies{TypeChart: testTypeChart(), PokemonTypes: fictionalPokemonTypes}),
 	} {
 		recorder := postAnalyzeWithoutContext(t, server, `{"members":[{"pokemonId":"9001-000","abilityId":"ability-9999"}]}`)
-		if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), `"code":"missing_request_context"`) {
-			t.Errorf("%s: status = %d body=%s, want 400 missing_request_context", name, recorder.Code, recorder.Body.String())
+		if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), `"code":"missing_header"`) {
+			t.Errorf("%s: status = %d body=%s, want 400 missing_header", name, recorder.Code, recorder.Body.String())
 		}
 	}
 }

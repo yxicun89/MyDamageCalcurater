@@ -4,7 +4,16 @@
 // /api は gateway の持ち物で、Web のコンテナは転送も index.html での代用もしない(DECISIONS.md 2026-09-22)。
 
 import { expect, test, type APIResponse } from "@playwright/test";
-import { SPECIES, openApp, selectMatchup } from "./support/calcPage.ts";
+import {
+  DEFAULT_ROW_COUNT,
+  PERCENT_RANGE_PATTERN,
+  SPECIES,
+  calcRows,
+  openAppOffline,
+  rowTexts,
+  selectMatchup,
+} from "./support/calcPage.ts";
+import { CONTAINER_POKEDEX_FIXTURE_PORT } from "./support/serverConfig.ts";
 
 /** WebAssembly のバイナリの先頭4バイト(\0asm)。 */
 const WASM_MAGIC = [0x00, 0x61, 0x73, 0x6d];
@@ -158,8 +167,26 @@ test.describe("セキュリティヘッダ", () => {
         console.error(`CSP違反: ${event.violatedDirective} ${event.blockedURI}`);
       });
     });
-    await openApp(page);
+    // ADR-0313: 既定はオンラインで、コンテナは /api を配らない(404)。マスタは /api/pokedex だけを
+    // pokedex フィクスチャへ転送して取得し(ブラウザからは同一オリジンの要求に見えるので connect-src 'self' の下で動く)、
+    // 一度オンラインで種族を引いてからオフライン(WASM)に切り替える。以降は /api を一切使わず、
+    // 最初の計算で engine.wasm を実体化する(= 'wasm-unsafe-eval' の下で WASM 計算まで通す)。
+    const fixtureOrigin = `http://127.0.0.1:${String(CONTAINER_POKEDEX_FIXTURE_PORT)}`;
+    await page.route("**/api/pokedex/**", async (route) => {
+      const url = new URL(route.request().url());
+      const response = await route.fetch({ url: `${fixtureOrigin}${url.pathname}${url.search}` });
+      await route.fulfill({ response });
+    });
+    // 種族を2つ選ぶとオンラインの計算(/api/calc)が走るが、コンテナには calc-svc が無い。404 はブラウザが
+    // コンソールエラーにするので、無害な応答(内容は使わない。この後オフラインで開き直す)で受ける。
+    await page.route("**/api/calc/**", (route) => route.fulfill({ status: 200, json: {} }));
+    await openAppOffline(page);
+    await page.unroute("**/api/pokedex/**");
+    await page.route("**/api/**", (route) => route.abort("connectionrefused"));
     await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
+    for (const text of await rowTexts(calcRows(page), DEFAULT_ROW_COUNT)) {
+      expect(text).toMatch(PERCENT_RANGE_PATTERN);
+    }
     await expect(page.getByRole("alert")).toHaveCount(0);
     expect(problems).toEqual([]);
   });

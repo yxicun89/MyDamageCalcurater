@@ -1,4 +1,5 @@
-# pokedex・migrate Job・importer CronJob から mysql の 3306 へ。
+# pokedex・migrate Job・importer CronJob、および balance・speed(initContainer readmodel-export の pokedex export)から mysql の 3306 へ。
+# Pod 単位の許可なので balance・speed の本体コンテナも同じ Pod として届く(ADR-0412 §4 追記)。DSN は initContainer にだけ渡す。
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -17,7 +18,7 @@ spec:
             matchExpressions:
               - key: app.kubernetes.io/name
                 operator: In
-                values: [pokedex, pokedex-migrate, pokedex-import]
+                values: [pokedex, pokedex-migrate, pokedex-import, balance, speed]
       ports:
         - protocol: TCP
           port: 3306

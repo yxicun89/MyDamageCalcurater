@@ -73,7 +73,7 @@ extension Components {
         /// | not_found | ルートが無い / このサービスの担当外の操作 / この端末が持っていないリソース ID(他端末のものか実在しないかを区別しない。403 にしない。ADR-0209 §6-2) | 404 |
         /// | master_unavailable | マスタ(pokedex の MySQL)を参照できない | 503 |
         /// | store_unavailable | 保存データの DB(record / team の TiDB)を参照できない。`master_unavailable` と分けるのは原因も復旧手順も別で、「計算はできるが保存はできない」状態(CLAUDE.md 絶対ルール5)をクライアントが区別できる必要があるため(ADR-0209 §5.3) | 503 |
-        /// | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202) | 503 |
+        /// | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202)。calc・pokedex は自サービスの過負荷・締め切り超過でも返す(ADR-0801) | 503 |
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/ErrorCode`.
@@ -1416,16 +1416,21 @@ extension Components {
         }
         /// 1発ぶんの観測。percent / percentTenths / damage の**ちょうど1つ**を指定する(ADR-0010 §R2)。
         /// 0 個・2 個以上・範囲外は 400 `invalid_observation`。整数でなければ(例 12.5)400 `invalid_json`。
-        /// 表示%(CalcResult.minPercent など)とは別概念で、丸め規則に依存しない区間で照合する。
+        /// 表示%(CalcResult.minPercent など)とは別概念。percent は実機の表示と同じ切り捨てとして照合し、
+        /// percentTenths は丸め規則に依存しない区間で照合する(ADR-0134)。
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/Observation`.
         public struct Observation: Codable, Hashable, Sendable {
-            /// 整数%の観測(精度 1%)
+            /// 整数%の観測(精度 1%)。実機の相手 HP 減少表示と同じ切り捨て(floor(100×ダメージ/最大HP)、100 で頭打ち)。
+            /// v は真の割合 p が v ≤ p < v+1(v=100 は p ≥ 100)のダメージと両立する(ADR-0134)
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/Observation/percent`.
             public var percent: Swift.Int?
-            /// 小数第1位の観測を 0.1% 単位の整数にしたもの(例 45.3% → 453)
+            /// 小数第1位の観測を 0.1% 単位の整数にしたもの(例 45.3% → 453)。出所の丸めが未確認なので、
+            /// v−1 < p < v+1(0.1% 単位。v=1000 は上側を開ける)のダメージと両立する(ADR-0010 §R2)
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/Observation/percentTenths`.
             public var percentTenths: Swift.Int?
@@ -1440,8 +1445,8 @@ extension Components {
             /// Creates a new `Observation`.
             ///
             /// - Parameters:
-            ///   - percent: 整数%の観測(精度 1%)
-            ///   - percentTenths: 小数第1位の観測を 0.1% 単位の整数にしたもの(例 45.3% → 453)
+            ///   - percent: 整数%の観測(精度 1%)。実機の相手 HP 減少表示と同じ切り捨て(floor(100×ダメージ/最大HP)、100 で頭打ち)。
+            ///   - percentTenths: 小数第1位の観測を 0.1% 単位の整数にしたもの(例 45.3% → 453)。出所の丸めが未確認なので、
             ///   - damage: HP の実点数の観測(自分の HP の減少量など)
             ///   - note: 画面用のメモ。計算には使わない
             public init(
