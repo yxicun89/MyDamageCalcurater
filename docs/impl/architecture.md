@@ -143,7 +143,7 @@
 | `services/team` | 1 | 未実装(.gitkeep のみ。構築保存予定) |
 | `testdata/golden` | 10 | @smogon/calc 由来のゴールデンベクタ(gz)・相性表・effects・metadata |
 | `tools` | 4 | Go module example.com/pokecalc/tools(doc.go のみ)・DEPENDENCIES.md |
-| `tools/assets` | 1 | 未実装(.gitkeep のみ。画像変換予定) |
+| `tools/assets` | 4 | 画像変換(Node。sharp 固定。`convert.mjs`・テスト・README。ADR-0807) |
 | `tools/golden` | 5 | ゴールデン生成(Node。@smogon/calc 0.12.0 固定) |
 | `tools/importer` | 9 | マスタ取得(Node: fetch-*.mjs・check-upstream.mjs)と CronJob エントリ cronjob.sh |
 | `web` | 21 | Web(Vite + React + TS)。Dockerfile・nginx.conf・Makefile・playwright 設定 |
@@ -217,7 +217,7 @@ flowchart LR
 - Traefik は `/` を gateway へ振る。`/api/balance|speed|judge` は各サービスの Ingress を撤去したので gateway に届き、gateway が `GATEWAY_BALANCE_URL`・`GATEWAY_SPEED_URL`・`GATEWAY_JUDGE_URL`(`http://balance|speed|judge`)へ転送する(`services/gateway/internal/httpapi/routing.go` `routeBalance`・`routeSpeed`・`routeJudge`)。
 - judge は gateway を経由せず Service 名 `http://pokedex`・`http://calc` を直接呼ぶ(`services/judge/deploy/k8s/base/deployment.yaml` の env)。
 - balance・speed は他サービスを HTTP で呼ばない。マスタは環境変数 `BALANCE_*_PATH`・`SPEED_POKEMON_PATH` が指す JSON ファイル(未設定なら 503 `master_unavailable` で起動は継続)。
-- record・team・assets・NATS・TiDB・MinIO は未実装(§9)。gateway の `GATEWAY_ASSETS_URL` は未設定で、`/assets/*` は 404。
+- record・team・assets・NATS・TiDB・MinIO は未実装(§9)。gateway の `GATEWAY_ASSETS_URL` は未設定で、`/assets/*` は 404。画像は MinIO を使わず、`make assets` の出力を gateway が `GATEWAY_IMAGES_DIR` から `/images/*` で配信する(ADR-0807。k3d では未配線)。
 
 ## 4. ワークロード一覧(image・エントリポイント・ポート)
 
@@ -309,8 +309,8 @@ flowchart LR
 | 対象 | 状態 | 根拠 |
 |---|---|---|
 | `services/record`・`services/team` | `.gitkeep` のみ | `git ls-files services/record services/team` |
-| `tools/assets` | `.gitkeep` のみ | 同上 |
-| gateway `/assets/*` | `GATEWAY_ASSETS_URL` 未設定 → 404。配信元(MinIO)は未デプロイ | `services/gateway/cmd/gateway/main.go:8`、`deploy/k8s/base/gateway/deployment.yaml` の env |
+| `tools/assets` | 実装済み(`convert.mjs`。ADR-0807)。k3d への配線は未対応 | `tools/assets/README.md` |
+| gateway `/assets/*`・`/images/*` | `GATEWAY_ASSETS_URL` 未設定 → 404。配信元(MinIO)は未デプロイ。`/images/*` は `GATEWAY_IMAGES_DIR` 未設定 → 404(ADR-0807) | `services/gateway/cmd/gateway/main.go:8`、`deploy/k8s/base/gateway/deployment.yaml` の env |
 | cloud overlay | MySQL・Secret・image 配布経路が無く import CronJob を suspend、gateway Ingress を削除 | `deploy/k8s/overlays/cloud/*` |
 | `web/.gitkeep`・`api/.gitkeep`・`ios/.gitkeep` | 空のプレースホルダ | 追跡ファイル |
 

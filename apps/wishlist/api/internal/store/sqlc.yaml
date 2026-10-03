@@ -1,0 +1,13 @@
+# sqlc 設定(docs/design.md W-02)。生成はリポジトリ直下で `make wishlist-gen`
+# (tools モジュールの go tool sqlc を変更せずに使う)。生成物はこのディレクトリにコミットする。
+version: "2"
+sql:
+  - engine: "mysql"
+    schema: "../../migrations"
+    queries: "query.sql"
+    gen:
+      go:
+        package: "store"
+        out: "."
+        emit_json_tags: false
+        emit_interface: true
