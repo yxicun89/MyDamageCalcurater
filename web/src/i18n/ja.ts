@@ -485,6 +485,8 @@ export const judgeClientText = {
  * この見出しとは別に、補助の行として画面が出す。未知のコードは message だけを出す。
  */
 export const judgeErrorText = {
+  missing_header: "端末の情報を送れませんでした。ページを開き直してください",
+  invalid_header: "端末の情報が正しくありません。ページを開き直してください",
   invalid_request: "入力の形が正しくありません",
   unknown_species: "このポケモンはマスタにありません",
   unknown_move: "この技の ID はマスタにありません",
@@ -587,6 +589,19 @@ export const judgeScreenText = {
  */
 export const teamClientText = {
   unavailable: "構築の API に接続できません",
+} as const;
+
+/**
+ * P5-5c: 記録 API(record-svc)のクライアント(record/recordClient.ts、ADR-0317)の文言。
+ * 失敗は画面に出さない(黙って非表示)ので、使うのはクライアントが返す Error.message だけ。
+ */
+export const recordClientText = {
+  unavailable: "記録の API に接続できません",
+} as const;
+
+/** P5-5c: 計算画面の「よく計算する相手」チップ(ADR-0317)。 */
+export const frequentOpponentsText = {
+  groupLabel: "よく計算する相手",
 } as const;
 
 /**
@@ -1108,14 +1123,6 @@ export const aboutText = {
     { title: "使用可能なポケモン等の基準", detail: "Pokémon HOME・Pokémon Champions の公式情報" },
   ],
   backLabel: "計算に戻る",
-} as const;
-
-/**
- * P5-5c/P5-5d: 記録 API のクライアントが返す失敗の文言(ADR-0317 §1、ADR-0318 §1)。
- * 失敗は画面に出さない場合もあるので、使うのはクライアントが返す Error.message だけ。
- */
-export const recordClientText = {
-  unavailable: "記録の API に接続できません",
 } as const;
 
 /**

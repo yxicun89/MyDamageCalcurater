@@ -25,6 +25,8 @@ export interface CreateRecordClientInput {
 }
 
 export interface RecordClient {
+  /** この端末のよく計算する相手(スコア降順。記録が無ければ空配列)。 */
+  listFrequentOpponents(signal?: AbortSignal): Promise<RecordResult<Schemas["FrequentOpponent"][]>>;
   /**
    * この端末の履歴・お気に入りをサーバーから削除する(ADR-0209 §5)。1回の呼び出しは1回の HTTP 要求。
    * partial のときの繰り返しは呼び出し側(deviceData/deleteDeviceData.ts)の仕事。
@@ -34,8 +36,12 @@ export interface RecordClient {
 
 /** 記録 API のパス(基点 URL からの相対)。 */
 export const RECORD_PATHS = {
+  frequentOpponents: "api/record/frequent-opponents",
   deviceData: "api/record/device-data",
 } as const;
+
+/** チップに出す上限として API へ渡す limit(openapi の 1〜50 の範囲内。ADR-0317 §1)。 */
+export const FREQUENT_OPPONENTS_LIMIT = 5;
 
 /** 通信できない・応答が読めない・エラー本文の形が不正なときの Web 側のコード。 */
 export const RECORD_UNAVAILABLE_CODE = "record_unavailable";
@@ -69,6 +75,35 @@ export function createRecordClient(input: CreateRecordClientInput): RecordClient
   const { baseUrl, fetch: fetchImpl, ids } = input;
 
   return {
+    async listFrequentOpponents(signal) {
+      let response: Response;
+      try {
+        response = await fetchImpl(
+          `${baseUrl}${RECORD_PATHS.frequentOpponents}?limit=${String(FREQUENT_OPPONENTS_LIMIT)}`,
+          {
+            method: "GET",
+            headers: { "X-Device-Id": ids.deviceId, "X-Session-Id": ids.sessionId },
+            signal,
+          },
+        );
+      } catch {
+        return unavailableResult();
+      }
+      let parsed: unknown;
+      try {
+        parsed = await response.json();
+      } catch {
+        return unavailableResult();
+      }
+      if (!response.ok) {
+        return isErrorBody(parsed)
+          ? { ok: false, error: { code: parsed.code, message: parsed.message } }
+          : unavailableResult();
+      }
+      return Array.isArray(parsed)
+        ? { ok: true, value: parsed as Schemas["FrequentOpponent"][] }
+        : unavailableResult();
+    },
     async deleteDeviceData() {
       let response: Response;
       try {

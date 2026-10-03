@@ -35,6 +35,7 @@ import { createAdjustClient, type AdjustClient } from "./adjust/adjustClient";
 import { createJudgeClient, type JudgeClient } from "./judge/judgeClient";
 import { isSearchableMasterSource } from "./master/capabilities";
 import { exampleMasterSource } from "./master/exampleSource";
+import { createRecordClient, type RecordClient } from "./record/recordClient";
 import { createSpeedClient, type SpeedClient } from "./speed/speedClient";
 import { createRecordClient } from "./record/recordClient";
 import { createTeamClient, type TeamClient } from "./team/teamClient";
@@ -137,6 +138,18 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   // (ADR-0301 §4)。マウント時に一度だけ読み、以後はこの state が正(他タブでの変更は追わない)。
   // マスタの取得口(下)がモードで切り替わるため、mode はそれより前に置く。
   const [mode, setMode] = useState<CalcMode>(() => loadCalcMode());
+  // P5-5c(ADR-0317 §2): 記録 API はオンラインのときだけ使う(オフラインは /api に触れない)。
+  const recordClient = useMemo(
+    () =>
+      mode === "online"
+        ? createRecordClient({
+            baseUrl: apiBaseUrl(),
+            fetch: globalThis.fetch.bind(globalThis),
+            ids: clientIds,
+          })
+        : undefined,
+    [mode, clientIds],
+  );
 
   function selectMode(nextMode: CalcMode): void {
     setMode(nextMode);
@@ -441,6 +454,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
                   teamClient={teamClient}
                   teamReloadToken={teamReloadToken}
                   adjustClient={adjustClient}
+                  recordClient={recordClient}
                   mode={mode}
                   retryMasterLoad={retryMasterLoad}
                   selectMode={selectMode}
@@ -488,6 +502,7 @@ interface AppTabPanelProps {
   readonly teamClient: TeamClient;
   readonly teamReloadToken: number;
   readonly adjustClient: AdjustClient;
+  readonly recordClient: RecordClient | undefined;
   readonly mode: CalcMode;
   readonly retryMasterLoad: () => void;
   readonly selectMode: (mode: CalcMode) => void;
@@ -514,6 +529,7 @@ function AppTabPanel({
   teamClient,
   teamReloadToken,
   adjustClient,
+  recordClient,
   mode,
   retryMasterLoad,
   selectMode,
@@ -551,6 +567,7 @@ function AppTabPanel({
                 teamClient={teamClient}
                 reloadToken={teamReloadToken}
                 adjustClient={adjustClient}
+                recordClient={recordClient}
                 masterSearch={activeMasterSearch}
                 onlineMasterSource={onlineMasterSource}
               />
