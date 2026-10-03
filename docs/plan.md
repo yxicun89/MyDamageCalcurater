@@ -81,7 +81,7 @@
 - [x] P4-2 計算画面(左右カード・持ち物・技・結果の一括表示・攻守入れ替え)
 - [x] P4-3 プリセット選択
 - [x] P4-4 逆算画面(観測ダメージ入力→候補リスト)
-- [x] P4-5 API / WASM 切り替え。実装・自動テスト済み(ADR-0301)。Chrome は確認済み、Safari は人間の確認待ち(ブロッカー節)
+- [x] P4-5 API / WASM 切り替え。実装・自動テスト済み(ADR-0301)。Chrome・Safari とも人間が確認済み〈2026-10-03〉
 - [x] P4-6 Playwright E2E
 - [x] P4-7 **M1 完了報告**
 
@@ -200,6 +200,7 @@
 - [x] SP3 Web の素早さ画面
 - [x] SP4 pokedex の read model
 - [x] SP5 GitOps
+- [x] SP6 追い風・まひ・トリックルーム(ADR-0607。契約 0.5.0・コア・HTTP・Web。iOS は対象外)
 - [x] issue #237 gitops overlay の read model
 
 ## JD: 判定(判定レーン。設計は docs/judge-design.md。2026-09-22 ユーザー要望)
@@ -218,6 +219,23 @@
 - [x] issue #260
 - [x] issue #260 のタイプバランス分
 - [x] 判定の応答に calc-svc の「未対応」の印を中継する
+- [x] issue 309 判定画面の技を select(種族の learnset)に、調整をプリセット(無振り・最速・攻撃特化・HB/HD特化)に、SP6欄・ランク5欄を「詳細」に畳み、検証エラーを欄ごとに aria-invalid+文言で出す(ADR-0711。ADR-0705 §5 を置き換え)。critic PASS・PR #480
+
+## AJ: 調整(ダメージ計算レーン。設計は ADR-0150。2026-10-01 ユーザー要望)
+
+「1つのアプリで調整まで完結」させる。既存の逆算(観測→相手の SP 推定)・判定(SP 固定での勝敗)とは向きが違い、
+**自分の SP を決める**機能。確認済みの方針(2026-10-01): 「16n」は **HP 実数値の 16n / 16n-1**、
+探索は **engine 内の総当たり**(逆算と同じ。WASM でも動く)、画面は **新タブ「調整」に機能 2・3・4 をまとめる**、
+効率の基準は **目標を満たす最小 SP と指数最大の両方**、順序は **engine → API → Web、iOS は後続**。
+
+- [x] AJ0 ADR-0150(指数の定義・16n ライン・「効率」の定義・探索の入出力)。指数式は spec-writer が既存の通説と照合して確定する
+- [x] AJ1 engine: 火力指数・耐久指数(物理 H×B / 特殊 H×D)・HP の 16n / 16n-1 ライン(現在の HP SP と、次の/前のラインまでの SP 差)。純粋関数。テーブル駆動テスト
+- [x] AJ2 engine: 倒せる/耐える最小 SP の探索(機能 4)。自分・相手・技・場を渡し、「確定 n 発で倒せる最小の A/C SP」「確定で耐える最小の H/B(D) SP」を返す。乱数込みの確率しきい値(既定 100% = 確定、指定可)。常時最大振りにしない
+- [x] AJ3 engine: SP 配分の提案(機能 3)。固定 SP(能力ごと)+残り SP を「耐久側(H/B/D の配分を使用者が決める。素早さは見ない)」「攻撃側(S と A/C の効率配分)」から選ぶ。結果は最小 SP の組と、指数最大の組。合計 66・各 32 の制約を守る
+- [ ] AJ4 `api/openapi.yaml` に調整 API を追加し `make gen`、WASM 境界(`engine/wasmapi`)に露出、calc-svc。計算はステートレス(絶対ルール 5)
+- [ ] AJ5 技の逆引き(機能 1): `GET /api/pokedex/moves/{key}/learners`(技→覚えるポケモン。既定のレギュレーションの使用可能集合で絞る)。pokedex の `learnsets` を逆に引く。ページング・上限は ADR-0105 の前例に倣う
+- [ ] AJ6 Web: 新タブ「調整」(指数・16n 表示、固定 SP、耐久側/攻撃側の選択、最小 SP の提示)。機能 1 は技選択から開けるポケモン一覧。送信ボタンでだけ呼ぶ(打鍵ごとに探索しない)
+- [ ] AJ7 iOS 版(Web で確認後。別タスクで切る)
 
 ## DOC: 文書(全レーン。docs/coding-rules.md §8。2026-09-22 ユーザー要望)
 各レーンが自分の範囲の README(何をするか・mermaid の構成図・ディレクトリ・コマンド・関連 ADR。80 行以内)と、動かして確かめられるレーンは手順書(`docs/runbooks/<レーン>.md`。AGENTS.md「手順書の書き方」に従う)を書く。全体図は `docs/architecture.md`。
@@ -232,8 +250,9 @@
 ## M4: 運用
 - [x] P7-1 kube-prometheus-stack / Loki、各サービスのメトリクス
   - [x] issue #293 の残り(2026-10-02): 一次切り分けの runbook(observability.md §7)と `make k8s-render` に base/observability
+- [x] issue #299(タイムアウトの連鎖。ADR-0801): calc・balance・speed にハンドラ全体の締め切り(writeTimeout − 1 秒)と同時実行の上限(超過は待たせず 503 + Retry-After)、judge・pokedex に上限、k3d の Traefik に有限のタイムアウト(`scripts/up.sh` が適用)。Docker 負荷試験(同時 120 で EOF 0 件)はメインでの実地確認。issue #330(httpmetrics の複製のずれ検出)は先行コミット a8db4fa で解消済み
 - [x] P7-2 SLO(計算API p99 < 100ms、可用性)とダッシュボード
-- [~] P7-3 ArgoCD(GitOps): balance は Argo CD 管理。speed・judge の実クラスタ適用は人間確認待ち(CURRENT_STATE.md)。残りは issue #292・#263・#237
+- [~] P7-3 ArgoCD(GitOps): balance は Argo CD 管理。speed・judge の実クラスタ適用は人間確認待ち(CURRENT_STATE.md)。残りは issue #292・#263・#237(NetworkPolicy の balance・speed → mysql は base に反映済み=ADR-0412 追記。残りは共有クラスタへの apply の人間確認と pokedex の実 digest 確定)
 - [ ] P7-4 MySQL/TiDB バックアップと復元テスト(ADR-0209 §9 を要件に含める: バックアップに `devices`〈墓石〉を含める /
   purge journal(#5b。世代取得後の削除要求。保持90日)をバックアップ世代と別に保持し復元時に再適用 /
   Ready の前に墓石の再適用・purge journal の再適用・失効ジョブの強制実行 / JetStream は再生しない / 世代30日。
@@ -249,9 +268,8 @@ requirements.md の項目のうち、計画に無かったものをここに置�
 ## ブロッカー
 解決済みの記録は [plan-archive.md](plan-archive.md)。未解決のものだけをここに置く(issue があるものは issue を正とする)。
 
+
 **【人間の確認待ち】**
-- **P4-5 の Safari 実機確認**(仕様ブロッカーではない。作業は止めない。Chrome は 2026-09-22 に確認済み): `make web-dev` で開き、Safari で計算・逆算が動くこと、`.wasm` の MIME type(`application/wasm`)・`WebAssembly.instantiateStreaming`(失敗時は arrayBuffer にフォールバック)・キャッシュ・初回ロード(約4.6MB / gzip 1.3MB)・メモリを確認する。加えて issue #333: 375px 幅未満でタブ列を左端までスクロールし、先頭の「計算」タブが読める・押せること(`justify-content: safe center` の Safari 対応)。確認できるまで P4-5 は「実装・自動テスト済み、Safari 実機未確認」として扱う。
-- **観測%の丸め方**(逆算の入力側。ADR-0010 §R2): 実機の相手 HP の減少は整数%で表示される。丸め方(切り捨てか四捨五入か)だけが未確認。確認できるまでは、どの丸めでも真値を落とさない区間で照合する(P1-12 で実装済み。作業は止まらない)。確認できたら `Observation.Matches` の1か所で区間を狭める。確認方法の例: HP が分かっている自分のポケモンで、実点数のダメージと画面の%を見比べる。
 - **公開のタイミング**(R-2-9・LICENSE・issue #328): 公開するときに、クリーンコピーの作成と、第三者データを含まない状態の確認、LICENSE の決定を行う。それまでは今のリポジトリで開発を続ける。
 
 ## 改善要望(/improve で追加)
@@ -274,3 +292,20 @@ requirements.md の項目のうち、計画に無かったものをここに置�
 - [x] issue #113(Web/iOS/APIレーン)入力変更時の古い計算要求を抑止・キャンセルする、のAPIレーン連携分(「クライアントのcancel伝播」)
 - [x] P4-17(Web/APIレーン)技のID解決の欠落を解消(ADR-0304 §3)
 - [x] issue #276
+- [x] issue #236 の balance 分(ADR-0413。X-Device-Id/X-Session-Id を gateway と同じ正準 UUID 検証に。openapi 0.8.0)
+- [x] issue #210 の Web 分(ADR-0313): 既定の計算モードをオンラインに変更(ユーザー決定 2026-10-01。保存済みのモードは尊重)。
+  オンラインで取得した持ち物・性格と、解決した種族・特性・技を IndexedDB に保存(`master/cache/`。`MasterCacheStore`・
+  スキーマ版つき。書き込み・読み出しの失敗は握りつぶす)し、オフラインはそのキャッシュだけから読む(オンラインを呼ばない・
+  架空データを出さない。空・壊れ・版違いは `appText.masterCacheEmptyError` の案内+再試行)。`main.tsx` は例データをやめて
+  `createCachedMasterSources` に差し替え。オフラインでは持ち物の候補比較は選べない(公開 API に効果データが無い)。
+  実装中に見つけた退行も直した: 攻守入れ替えで種族の検索欄の名前が追従しない(`SpeciesSearchField.selectedNameJa`)、
+  種族の解決待ちの間に打った逆算の観測が計算に反映されない(`ReverseScreen` の `latestObservationsRef`)。
+  E2E は pokedex フィクスチャでオンライン→オフラインを確かめる(コンテナは CSP の下の WASM 計算を `container.spec.ts` だけで確認)
+- [ ] issue #274/#272 の API レーン担当分の残り: `defenderOverride.ranks: RankBlock` / `defenderOverride.status:
+  StatusCondition`(全行に一律で上書き)。abilityId(上記)とは独立に追加できる。engine 側の変更
+  (`BulkInput`/`ReverseInput` へのオーバーライド追加。プリセット解決後・計算前に当てる)を伴うため
+  ADR-0003 の test-first + 独立 critic の対象。優先度は低い(iOS レーンから「急ぎではない」と明記済み)
+- [x] issue #328 の Web 分(ADR-0314): アプリ下部のフッター(`<footer>`、main の外)に「このアプリについて」リンクを置き、
+  `/about`(ADR-0300 §1 のパス連動。タブには入れない)で非公式の注記とデータの出典4件を出す。文言は `aboutText`
+  (iOS の `AboutText` と一字一句同じ)、画面は `AboutScreen.tsx`。タブ列は出さず他タブは hidden で DOM に残す(入力を保つ)。
+  axe(`@axe-core/playwright` 4.13.0)の検査を `e2e/a11y-about.spec.ts` に追加。マスタ・engine は使わない
