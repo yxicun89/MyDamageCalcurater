@@ -600,6 +600,45 @@ final class LargeTextLayoutUITests: XCTestCase {
         assertNoHorizontalOverflowForPrefixes(app, prefixes: Self.teamEditMemberCardPrefixes)
     }
 
+    // MARK: - 構築のテキスト書き出し・取り込みシート(P6-20。ADR-0501「P6-20」)
+
+    /// P6-20: AX5(最大の文字サイズ)で、書き出し・取り込みシートが横にはみ出さない
+    /// (書き出したテキスト・コピー・共有・貼り付け欄・取り込めなかった行の一覧・追加/やめるのボタン)。
+    func testTeamTextSheetNoHorizontalOverflowAtAX5() {
+        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        openTeamListScreen(app)
+        createTeamAndOpenEditScreen(app)
+
+        let addMemberButton = element(app, "addMemberButton")
+        XCTAssertTrue(addMemberButton.waitForExistence(timeout: Self.existenceTimeout))
+        addMemberButton.tap()
+        XCTAssertTrue(element(app, "speciesSearchSheet").waitForExistence(timeout: Self.existenceTimeout))
+        let speciesOption = app.buttons[Self.mockMemberSpeciesName]
+        XCTAssertTrue(speciesOption.waitForExistence(timeout: Self.existenceTimeout))
+        speciesOption.tap()
+        XCTAssertTrue(
+            matchingElementsBeginningWith(app, prefix: "memberCard-").first?.waitForExistence(timeout: Self.existenceTimeout) ?? false
+        )
+        assertNoHorizontalOverflowForPrefixes(app, prefixes: ["exportMemberTextButton-"])
+        assertNoHorizontalOverflow(app, identifiers: ["teamTextTransferButton"])
+
+        element(app, "teamTextTransferButton").tap()
+        XCTAssertTrue(element(app, "teamTextSheet").waitForExistence(timeout: Self.existenceTimeout))
+        element(app, "exportTeamTextButton").tap()
+        assertNoHorizontalOverflow(app, identifiers: [
+            "teamTextSheet", "closeTeamTextSheetButton", "exportTeamTextButton", "exportedText",
+            "copyExportedTextButton", "shareExportedTextLink", "importTextEditor", "analyzeImportTextButton",
+        ])
+
+        let editor = element(app, "importTextEditor")
+        editor.tap()
+        editor.typeText("テストモンさん\nEVs: 252 SpA")
+        element(app, "analyzeImportTextButton").tap()
+        assertNoHorizontalOverflow(app, identifiers: [
+            "importRejectedList", "importRejectedLine-2", "confirmImportValidButton", "cancelImportButton",
+        ])
+    }
+
     // MARK: - このアプリについて画面(P6-18。issue #328。ADR-0501「P6-18」4章の5)
 
     /// 非公式の注記(長文)と4件のデータ出典。`aboutDataSource-<index>` は member id のような

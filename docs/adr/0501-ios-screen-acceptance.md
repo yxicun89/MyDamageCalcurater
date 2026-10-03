@@ -3757,6 +3757,158 @@ XCUITest(`AboutScreenUITests` 2件・`LargeTextLayoutUITests.testAboutScreenNoHo
   ios-check-request-limits` 成功 / `make ios-test-ui` 53 件中 1 件失敗(`testFailureThenRetryCompletes`。上記の矛盾のみ。
   AX5 の新規テストを含む他は全件成功)。
 
+## P6-20 の受け入れ条件(構築の Showdown 風テキストのインポート/エクスポート。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+- 日付: 2026-10-02 / 担当レーン: iOS / 関連: requirements.md §2、ADR-0213 §4、ADR-0506(日本語名・非互換の決定)、ADR-0500 §4、
+  本 ADR「P6-2c」(構築編集)・「P6-7」(identifier と `Menu` の流儀)、CLAUDE.md 絶対ルール5、DECISIONS.md「P6-20」、docs/plan.md P6-20
+- 背景: 構築編集画面から1体または全体を書き出し(コピー・共有)、貼り付けで新しいメンバーとして取り込む。名前 → ID は既存の
+  `searchSpecies`/`searchMoves`/`searchItems`/`natures`/`species(key:)` で解決する(新しい API は無い。`api/openapi.yaml`・Generated は不変)。
+
+### 1. 型と置き場所(足場は spec-writer が置いた。`TODO(implementer` を埋める)
+
+| 型 | ファイル | 役割 |
+|---|---|---|
+| `ShowdownTextLabels`(enum) | `PokeCalcCore/ShowdownText.swift` | 書式のキーワードと画面の文言(1か所) |
+| `ShowdownNaming`(protocol)・`JapaneseShowdownNaming` | 同上 | 名前の戦略(英語名への拡張点。ADR-0506 §4) |
+| `ShowdownTextParser.parse` → `ShowdownParseResult` | 同上 | テキスト → 解釈済みメンバー + 取り込めなかった行(純粋) |
+| `ShowdownTextSerializer.serialize` | 同上 | `TeamMember` + `ShowdownNames` → テキスト(純粋) |
+| `ShowdownTransferService`(`export`/`resolve`) | `PokeCalcCore/ShowdownTransfer.swift` | 名前 ⇄ ID の解決(`PokeCalcService` のマスタ参照だけ) |
+| `TeamTextTransferViewModel`(`@MainActor @Observable`) | 同上 | シートの状態(書き出し・解釈 → 確認 → 追加) |
+| `TeamEditViewModel.importMembers` | `PokeCalcCore/TeamEditViewModel+Import.swift` | 取り込んだメンバーを追加(保存しない) |
+
+### 2. 書式(確定。ADR-0506 §2・§3)
+
+- 先頭行: `名前` / `名前 @ 持ち物` / `ニック (名前)` / `ニック (名前) @ 持ち物`。前後の空白(全角を含む)は無視。末尾が ` @` だけなら持ち物なし。
+- キーワード: `Ability:` `Nature:` `SP:` `Tera Type:` `- `(技)。`EVs:` `IVs:` は `unsupportedStatLine`。それ以外(`Level:` など)は `unrecognizedLine`。
+- 改行は LF/CRLF/CR。空行(空白だけの行)でメンバーを区切る。行番号は 1 始まりで空行も数える。
+- SP 行: `SP: 32 Atk / 20 Spe`。各項は `整数 略称`(略称は HP/Atk/Def/SpA/SpD/Spe)。0〜32 を超える項は `spOutOfRange`、合計66超は
+  `spTotalExceeded`、書き方の誤り・同じステータスの重複・負数は `spMalformed`。**いずれも SP 行全体を捨てる**(部分適用しない)。
+- 同じ項目の2回目は `duplicateField`(最初の値を残す)、5つ目の技は `tooManyMoves`(先頭4つを残す)、同名の技の2つ目は `duplicateMove`。
+- 7ブロック目以降は先頭行だけを `memberLimitExceeded` で報告(残りの行は個別に報告しない)。
+- 書き出し: 値の無い項目・名前を引けない項目の行は書かない。SP は 0 を省き全部 0 なら `SP:` 行ごと省く。技は4つまで。末尾に改行なし。
+  複数体は空行1つで区切る。確定した例は `ShowdownTextSerializerTests`。
+
+### 3. 画面の文言と取り込めなかった理由(確定。`ShowdownTextLabels`)
+
+| 定数 | 文言 |
+|---|---|
+| `transferButton` / `sheetTitle` | テキストで書き出し・取り込み / 構築のテキスト |
+| `exportMemberButton` / `exportTeamButton` | この1体を書き出す / 全員を書き出す |
+| `copyButton` / `copiedNotice` / `shareButton` | コピー / コピーしました。 / 共有 |
+| `importSectionTitle` / `importPlaceholder` / `analyzeButton` | テキストから取り込む / ここに貼り付け / 内容を確認 |
+| `rejectedTitle` / `cancelButton` / `closeButton` | 取り込めなかった行 / やめる / 閉じる |
+| `nothingImportable` / `emptyInput` | 取り込めるポケモンがありません。/ テキストを貼り付けてください。 |
+| `lookupFailure` | サーバーに届かず、名前を確認できませんでした。通信を確認してもう一度お試しください。保存済みの構築は変わりません。 |
+| `importValidOnlyButton(count:)` / `importAllButton(count:)` | 取り込める\(n)体だけ追加 / \(n)体を追加 |
+| `importedNotice(count:)` / `lineNumberLabel(_:)` | \(n)体を追加しました。保存すると反映されます。/ \(n)行目 |
+
+理由の文言(`message(for:)`。数字は `TeamLimits`・`SPLimits` から埋める): `unrecognizedLine` 解釈できない行です / `unsupportedStatLine`
+努力値(EVs)・個体値(IVs)の形式には対応していません。能力ポイントは SP: で書いてください / `duplicateField` 同じ項目が2回書かれています /
+`tooManyMoves` 技は4つまでです / `duplicateMove` 同じ技が重複しています / `spMalformed` SP の書き方が正しくありません /
+`spOutOfRange` SP は1ステータスにつき32までです / `spTotalExceeded` SP の合計は66までです / `speciesNotFound` ポケモンが見つかりません /
+`moveNotFound` 技が見つかりません / `itemNotFound` 持ち物が見つかりません / `abilityNotFound` このポケモンの特性に見つかりません /
+`natureNotFound` 性格が見つかりません / `teraTypeNotFound` テラスタイプが見つかりません / `lookupFailed` 通信できず確認できませんでした /
+`memberLimitExceeded` 構築は6体までです。
+
+### 4. 名前の解決(`ShowdownTransferService.resolve`)
+
+- 完全一致(前後空白を除く)だけを採る。検索は `ShowdownNaming.searchQuery` の語で `limit = MasterSearch.pageLimit`、結果から完全一致を選ぶ。
+  同名が複数あれば、サービスが返した順の先頭。
+- 種族が解決できなければメンバーごと捨て、**先頭行**に `speciesNotFound`(通信失敗は `lookupFailed`)。持ち物・特性・技・タイプ・性格が
+  解決できなければ、**その行だけ**を理由つきで報告し、メンバーは取り込む(技は learnset を検査しない。性格が無い・解決できないときは
+  `natures()` の先頭、`addMember` と同じ)。特性は `SpeciesDetail.abilities` の中だけから選ぶ。
+- 枠: `existingMemberCount + 取り込むメンバー数` が `TeamLimits.maxMembers` を超えるぶんは、先頭から枠を使い、超えたブロックの先頭行を
+  `memberLimitExceeded` で報告する。出力の `members` はすべて `TeamValidator` を満たす。
+- 通信量: 同じ名前は1回しか検索しない。同時呼び出しは `ShowdownTransferLimits.maxConcurrentRequests`(4)まで。通信失敗でも投げず
+  `plan.error` で返す(計算・保存済みの構築に影響しない。絶対ルール5)。
+- 書き出し: 種族は `species(key:)`(同じキーは1回)、技は `moves(ids:)` を1回、持ち物は `searchItems`(空クエリの先頭ページ)、性格は
+  `natures()` を1回。種族を引けないメンバーは飛ばして `error` を立てる(他のメンバーは書く)。
+
+### 5. 取り込めなかった行の扱い(要件の判断。**既定案**。人間レビューで変えてよい)
+
+- 取り込めなかった行は黙って捨てず、行番号・内容・理由を一覧で見せる。**全か無かにしない**。
+- 取り込めなかった行が無ければ確認なしに追加できる(ボタンは「N体を追加」)。取り込めなかった行があり取り込める体もあれば、一覧を見せたうえで
+  「取り込める N 体だけ追加」と「やめる」の2択にする。取り込める体が0なら追加ボタンは出さない。
+- 行単位で捨てたメンバー(例: 持ち物だけ見つからない)も「取り込める体」に数え、その行を一覧に残す。
+- 追加は `TeamEditViewModel.importMembers`(新しいメンバーとして末尾へ。保存しない)。確定したら貼り付けを空に戻す。貼り付けが変わったら
+  解釈の結果を捨てる。同じ文字列なら残す。
+- 通信失敗は `lookupFailed` の行と `lookupFailure` の案内で伝え、貼り付けを消さない(再実行できる)。
+
+### 6. accessibilityIdentifier(追加のみ。camelCase、メンバー単位は `-<id>` 接尾。`Menu` の中には置かない)
+
+構築編集の入口: `teamTextTransferButton`(通常の `Button`。シートを開く)・各メンバーカード `exportMemberTextButton-<memberId>`(押すとシートが
+開き、その1体を書き出した状態)・取り込み後の通知 `importedNotice`。シート: `teamTextSheet`・`exportTeamTextButton`・`exportedText`
+(`Text`。`label` がテキストそのもの)・`copyExportedTextButton`・`copiedNotice`・`shareExportedTextLink`(`ShareLink`)・`importTextEditor`
+(`TextEditor`)・`analyzeImportTextButton`・`importEmptyNotice`・`importRejectedList`(`label` に見出しを含む)・
+`importRejectedLine-<行番号>`(`label` に行番号・内容・理由を含む)・`importNothingNotice`・`importFailureNotice`・
+`confirmImportValidButton`(取り込める体だけ・全部のどちらも同じ id)・`cancelImportButton`・`closeTeamTextSheetButton`。
+`Menu` の中の identifier は UIKit に渡らない既知の制約があるので、入口・操作は `Menu` に入れない。
+
+### 7. 受け入れ条件(検証可能な形)
+
+1. 書式の定数と文言が 2章・3章の表と完全一致する(`ShowdownTextLabelsTests`)。理由の文言は全ケース非空・互いに異なる。
+2. パーサ: 先頭行の4形・空白・全角空白・CR/LF/CRLF・空行区切り・行番号が 2章どおり。`EVs:`/`IVs:`・未知の行・重複項目・5つ目の技・
+   技の重複・SP の範囲/合計/書き方の誤りが、行番号と理由つきで `rejected` に入り、採った行の値は変わらない。7ブロック目は先頭行だけ報告
+   (`ShowdownTextParserTests`)。
+3. シリアライザ: 全項目・省略・ニックネーム・SP の省略・技4つ・名前を引けない ID の省略と報告・複数体の区切りが 2章どおり。
+   書き出して取り込み直すと名前の組が元と一致する(`ShowdownTextSerializerTests`)。
+4. 名前解決: 全項目が ID になる・性格の既定・行単位の失敗とメンバーの継続・種族不明でメンバーごと捨てる・特性は種族の特性のみ・
+   パーサの失敗との行番号順のマージ・枠(既存メンバー数を含む)・`TeamValidator` を必ず満たす(`ShowdownTransferServiceTests`)。
+5. 通信量: 同じ名前は1回だけ検索し、同時呼び出しは指定した上限(1・2・既定)を超えない。通信失敗は投げず `lookupFailed` と `error` で返す。
+6. 拡張点: 名前の戦略を差し替えても書き出し・取り込みが往復する(`ShowdownTransferServiceTests.testCustomNamingIsUsedForImportAndExport`)。
+   既定の日本語名は `nameJa`・`PokeTypeLabel` と一致する(`ShowdownNamingTests`)。
+7. `TeamTextTransferViewModel`: 取り込めなかった行があっても取り込める分だけ追加でき(`needsDecision`)、0体なら確定できず、貼り付けの変更で
+   結果を捨て、空入力は通信せず、通信失敗でも貼り付けを残して再実行できる(`TeamTextTransferViewModelTests`)。
+8. `TeamEditViewModel.importMembers`: 末尾に追加し保存しない・空き枠まで(超えたら `.tooManyMembers`)・選択肢を用意・通信失敗でもメンバーを消さない
+   (`TeamEditViewModelImportTests`)。
+9. モックの架空データ(9001〜9004)で書き出し → 取り込みが往復する(`ShowdownMockEndToEndTests`)。
+10. XCUITest(`TeamTextTransferUITests`・モック): 1体の書き出し(テキスト・コピー・共有)/ 全員の書き出し / 取り込めなかった行の一覧つきで
+    取り込める分だけ追加 / 取り込めなかった行なしの追加 / 取り込める体が0のとき追加ボタンなし / やめると何も追加されない / 空入力の案内。
+11. 既存の XCTest・XCUITest は1つも編集しない。`api/openapi.yaml`・`Generated/` は触らない。
+
+### 8. 追加したテスト(spec 時点)
+
+- 足場: `ShowdownText.swift`・`ShowdownTransfer.swift`・`TeamEditViewModel+Import.swift`(値は空・何もしない。`TODO(implementer` を検索)。
+  既存ファイルの編集は無い。
+- `Tests/PokeCalcCoreTests/`: `ShowdownTextLabelsTests`(4)・`ShowdownTextParserTests`(9)・`ShowdownTextSerializerTests`(7)・
+  `ShowdownNamingTests`(1)・`ShowdownTransferServiceTests`(16)・`TeamTextTransferViewModelTests`(10)・`TeamEditViewModelImportTests`(5)・
+  `ShowdownMockEndToEndTests`(2)、`Support/ConcurrencyProbeService.swift`(同時実行数を測る包み)
+- `PokeCalcUITests/TeamTextTransferUITests.swift`(7)
+
+`swift test`(`ios/PokeCalcKit`): 630 件中、新規 54 件のうち 49 件が失敗(失敗アサーション 239 個。すべて新規ファイル内。残り5件は
+「空・nil を返す」ことを確かめる件で、足場でも通る)。既存 576 件は成功。`xcodebuild build-for-testing`(XCUITest 7件を含む)は
+`** TEST BUILD SUCCEEDED **`。XCUITest の実行は未実施(identifier 未実装のため失敗する)。
+
+### 9. 実装者への注意(`TODO(implementer` を検索すると該当箇所が見つかる)
+
+- `TeamEditViewModel.team` は `private(set)`。`importMembers` は `TeamEditViewModel.swift` 側へ移すか内部の追加口を足す(既存の挙動・テストは変えない)。
+- 名前 → ID の解決は並行数を上限つきで絞る(`TaskGroup` に同時数のセマフォ相当を入れるか、チャンクで回す)。`ConcurrencyProbeService` が上限超過を検出する。
+  `Task.isCancelled` を見て以後の呼び出しをしない。`PokeCalcService` に ID で持ち物を引く API は無いので、書き出しは `searchItems` の先頭ページから名前を引く
+  (引けなければ `unresolvedIds` に入れて行を省く)。
+- パーサは「黙って捨てない」: 採らなかった行は必ず `rejected` に入れる。先頭行が ` @` で終わるときは持ち物なし。
+  `Nickname (Species)` は末尾の `)` と ` (` で分ける(種族名に括弧がある場合は括弧の外側をニックネームにしない。マスタに括弧つきの名前が出たら再検討して ADR に追記)。
+- View(`TeamEditView` に入口 `teamTextTransferButton`、`MemberCardView` に `exportMemberTextButton-<id>`、新しいシート)。`Menu` に入れない。
+  `TextEditor` は `.scrollDismissesKeyboard` を付け、キーボードで「内容を確認」が隠れないようにする。コピーは `UIPasteboard`、共有は `ShareLink`。
+  確認文は alert/confirmationDialog にしない(P6-7 で iOS 26 系の XCUITest が同じ identifier の入れ子2つを返し `Multiple matching elements` になった。カードで描く)。
+- AX5(最大の文字サイズ)でシートが横にはみ出さないことを `LargeTextLayoutUITests` へのメソッド追加で確かめる(spec 時点では未作成。既存テストは編集しない)。
+- `ios/README.md` の操作説明・`docs/plan.md`(P6-20 のチェック)・DECISIONS.md(確定した書式)を更新する。
+
+
+### 10. 実装結果(P6-20。implementer)
+
+- `swift test`(`ios/PokeCalcKit`): 630 件すべて成功(新規 54 件を含む)。`make ios-lint ios-gen-check ios-check-request-limits` 成功。
+- `make ios-test-ui`: 全 61 件 / 成功 61 / 失敗 0 / スキップ 0(`TeamTextTransferUITests` 7 件と、AX5 の `LargeTextLayoutUITests.testTeamTextSheetNoHorizontalOverflowAtAX5` を含む)。
+- 判断: `importMembers` は `private` な状態に触るため `TeamEditViewModel+Import.swift` を廃し `TeamEditViewModel.swift` に置いた。
+  書き出しの技名は `moves(ids:)` を1回呼び、返らなかった ID だけ `searchMoves` の先頭ページで補う(`StubPokeCalcService` の既定は
+  `moves(ids:)` が空を返すため、補わないと `ShowdownTransferServiceTests` の書き出し期待値が成り立たない。実 API でも名前を引けない ID を省く動作は同じ)。
+  枠(`memberLimitExceeded`)は、名前を解決できたメンバーから先頭順に使う(種族を引けなかったメンバーは枠を使わない)。
+  取り込めなかった行の `text` は、先頭行以外は `Ability: 名前` のように正規の書式で組み直す(元の空白は保持しない)。
+- テストの矛盾: 期待値・テストの変更は無し(上の `moves(ids:)` の補いで解消)。
+- critic 指摘対応: 書き出しで省いた項目(名前を引けなかった技・持ち物の件数 `exportUnresolvedCount`、種族を引けず飛ばした体数
+  `exportSkippedMemberCount`)を書き出し結果の下に注意で表示(0 件なら出さない。identifier `exportUnresolvedNotice`/`exportSkippedNotice`)。
+  `analyze` は解析中の二重実行をしない。全角空白(U+3000)を含む入力の取り込みテストを追加し、`-` の後の全角空白を許容。
+  持ち物は ID 引き API が無い制約を ADR-0506 に明記。既存テスト・期待値の変更なし。
+
 ## P6-21 の受け入れ条件(iOS のタイプバッジ・エンブレム文字色を design.md「タイプバッジ」に合わせる。spec-writer: 受け入れ条件とテストのみ。実装はしない)
 
 - 日付: 2026-10-02 / 担当レーン: iOS / 関連: docs/design.md「タイプ色」「タイプバッジ」(issue #306)、
