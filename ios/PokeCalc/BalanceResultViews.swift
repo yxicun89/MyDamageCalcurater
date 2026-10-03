@@ -144,10 +144,12 @@ struct BalanceResultsView: View {
 // MARK: - 部品
 
 /// 見出し + 計算中の文言(色や動きに頼らず「計算中」の文字で出す。常時動くアニメーションは入れない)。
-private struct BalanceSectionHeader: View {
+struct BalanceSectionHeader: View {
     let title: String
     let isLoading: Bool
     let identifier: String
+    /// 計算中の文言(既定は第1・2段の「計算中」。第3段は機能ごとの文言を渡す)。
+    var loadingText: String = BalanceScreenText.loadingNotice
 
     var body: some View {
         HStack(spacing: SpacingToken.x2) {
@@ -156,7 +158,7 @@ private struct BalanceSectionHeader: View {
                 .foregroundStyle(ColorToken.textPrimary.color)
                 .accessibilityAddTraits(.isHeader)
             if isLoading {
-                Text(BalanceScreenText.loadingNotice)
+                Text(loadingText)
                     .font(TextStyleToken.caption.font)
                     .foregroundStyle(ColorToken.textSecondary.color)
                     .accessibilityIdentifier(identifier)
@@ -165,7 +167,7 @@ private struct BalanceSectionHeader: View {
     }
 }
 
-private struct BalanceCard<Content: View>: View {
+struct BalanceCard<Content: View>: View {
     let title: String
     let identifier: String
     @ViewBuilder let content: Content
@@ -187,7 +189,7 @@ private struct BalanceCard<Content: View>: View {
 }
 
 /// 「タイプバッジ + 内容」の1行。文字が増えても(Dynamic Type 最大)折り返せるよう、内容は残りの幅いっぱいに取る。
-private struct BalanceTypeRow<Content: View>: View {
+struct BalanceTypeRow<Content: View>: View {
     let type: PokeType
     @ViewBuilder let content: Content
 
