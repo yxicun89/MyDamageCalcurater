@@ -11,12 +11,13 @@
 - **構成**:`WishlistKit`(WishlistAPI = 生成物、WishlistCore = それ以外)。ダメ計の PokeCalcKit と同じく platforms は iOS 27・macOS 27、依存の版は完全に同じ。
 - **ドメイン型を生成型から切り離す**(`Domain.swift`)。生成型 ↔ ドメインの写像は `APIWishlistService` に閉じる。ID は `Int`、日時は `Date`、画像パスは `Item.imageURLPath`。
 - **PATCH の null(重要)**:生成型 `ItemUpdate` の nullable 項目は `String?` で、nil は JSON から**省略**される(null を送れない)。PWA の「空にしたら null」を守るため、ドメインは `FieldUpdate<T>`(`.keep` / `.set` / `.clear`)を持ち、
-  `APIWishlistService` は `.clear` を JSON の `null` で送る。実装方法は自由(PATCH だけ `ClientMiddleware` でボディを組み直す、等)。`APIWishlistServiceTests` が送信ボディを固定する。openapi.yaml は変えない。
+  `APIWishlistService` は `.clear` を JSON の `null` で送る。実装方法は自由(PATCH だけ `ClientMiddleware` でボディを組み直す、等)。`APIWishlistServiceTests` が送信ボディを固定する。openapi.yaml は変えない。**採用した方式**: `WishlistMiddleware`(ClientMiddleware)が PATCH のボディを組み直し、`.clear` のキーは TaskLocal(`PatchNulls`)で渡す。
 - **共通テストベクタはコピー**:`testdata/query-cases.json` を `Tests/WishlistCoreTests/Resources/query-cases.json` にコピーし(SwiftPM のリソースは Package 外を指せず、シンボリックリンクはシミュレータ実行で壊れうる)、`ios/scripts/sync-testdata.sh` で同期する。`make wishlist-ios-test` は `--check` を先に走らせる(元と違えば失敗)。
 - **キャッシュ**:SwiftData(`SwiftDataWishlistCache`、macOS の `swift test` のインメモリで動くことを確認済みなので JSON への切り替えは不要)。種類(items・genres・sites)ごとに全件置き換え。画像は `ImageFileCache`(ファイル)。
   `WishlistRepository` が「成功したら保存して `stale=false`・失敗したら保存済みを `stale=true`・保存済みも無ければ元の例外」を持つ(web の `fetchWithCache` と同じ)。
 - **設定**:`WishlistSettings`(API の URL と トークン)を `UserDefaults` の `wishlist.settings` に、PWA の localStorage と同じ JSON(`{"apiBaseUrl", "token"}`)の `Data` で保存(Keychain は将来)。
   Share Extension は本体とデータを共有しない(§9.5)ので、拡張は拡張自身の UserDefaults で同じ型(`WishlistSettings`・`UserDefaultsSettingsStore`・`ConnectionSettingsViewModel`)を使う。**拡張にも同じ設定画面を持たせる**。
+- **トークンの送り先**:Bearer はベース URL と scheme・host・port が同じで、パスがその配下の URL にだけ付ける(`AuthPolicy.shouldAttachToken`。API クライアントと画像取得が共通)。画像の絶対 URL(外部ホスト)には付けない。
 - **ベース URL**:iOS には「既定の URL」が無いので、URL とトークンの**両方**が入って初めて `isConfigured`(PWA はトークンだけ)。未設定なら設定画面から始め、API を呼ばない。
 - **フェーズ2は価格を取得しない**:サマリは「まだ価格情報はありません」か、通信できなければ「オフライン」(PWA と同じ。参考外は出さない)。
 - **登録のジャンル初期値**:ホームのチップで選んでいるジャンル。無ければ sortOrder 昇順の先頭(PWA は未規定。iOS は選択式 UI のため先頭を選んでおく)。

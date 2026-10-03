@@ -263,4 +263,22 @@ final class APIWishlistServiceTests: XCTestCase {
         XCTAssertEqual(error?.status, 0)
         XCTAssertEqual(error?.isNetwork, true)
     }
+
+    /// キャンセルは通信失敗(.network)にしない。
+    func testCancellationIsNotMappedToNetworkError() async {
+        let api = service(RecordingTransport { _ in throw CancellationError() })
+        do {
+            _ = try await api.listItems()
+            XCTFail("投げられるはず")
+        } catch {
+            XCTAssertNil(error as? WishlistError, "\(error)")
+        }
+        let urlCancelled = service(RecordingTransport { _ in throw URLError(.cancelled) })
+        do {
+            _ = try await urlCancelled.listItems()
+            XCTFail("投げられるはず")
+        } catch {
+            XCTAssertNotEqual((error as? WishlistError)?.code, .network)
+        }
+    }
 }

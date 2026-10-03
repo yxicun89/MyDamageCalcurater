@@ -106,14 +106,9 @@ final class AppModel {
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
             .appendingPathComponent(offline ? "wishlist-images-fake" : "wishlist-images", isDirectory: true)
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("wishlist-images", isDirectory: true)
-        let token = settings.token
-        return ImageFileCache(directory: directory) { url in
-            if offline { throw URLError(.notConnectedToInternet) }
-            var request = URLRequest(url: url)
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
-            return data
+        guard !offline, let baseURL = settings.baseURL else {
+            return ImageFileCache(directory: directory) { _ in throw URLError(.notConnectedToInternet) }
         }
+        return ImageFileCache(directory: directory, loader: ImageLoader.make(baseURL: baseURL, token: settings.token))
     }
 }

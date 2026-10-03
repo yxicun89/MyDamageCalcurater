@@ -23,7 +23,7 @@ public struct APIWishlistService: WishlistService {
         while text.hasSuffix("/") { text.removeLast() }
         client = Client(
             serverURL: URL(string: text) ?? baseURL, transport: transport,
-            middlewares: [WishlistMiddleware(token: token)])
+            middlewares: [WishlistMiddleware(token: token, baseURL: baseURL)])
     }
 
     // MARK: - 共通
@@ -33,6 +33,7 @@ public struct APIWishlistService: WishlistService {
         do {
             return try await body()
         } catch {
+            if isCancellation(error) { throw error }
             throw Self.wishlistError(error)
         }
     }
@@ -43,7 +44,7 @@ public struct APIWishlistService: WishlistService {
         if error is DecodingError {
             return WishlistError(code: .decode, message: "応答を読めませんでした")
         }
-        if error is URLError || error is CancellationError == false && (error as NSError).domain == NSURLErrorDomain {
+        if error is URLError || (!(error is CancellationError) && (error as NSError).domain == NSURLErrorDomain) {
             return WishlistError(code: .network, message: error.localizedDescription)
         }
         return WishlistError(code: .decode, message: error.localizedDescription)
@@ -241,6 +242,8 @@ enum PatchNulls {
 /// Bearer トークンの付与、PATCH の null の組み立て、エラー応答・通信失敗の `WishlistError` への変換。
 struct WishlistMiddleware: ClientMiddleware {
     let token: String
+    /// 設定したベース URL(トークンを付ける範囲の判定に使う)
+    let baseURL: URL
 
     func intercept(
         _ request: HTTPRequest, body: HTTPBody?, baseURL: URL, operationID: String,
@@ -248,7 +251,11 @@ struct WishlistMiddleware: ClientMiddleware {
     ) async throws -> (HTTPResponse, HTTPBody?) {
         var request = request
         var body = body
-        request.headerFields[.authorization] = "Bearer \(token)"
+        if let full = URL(string: baseURL.absoluteString.trimmingSuffix("/") + (request.path ?? "")),
+            AuthPolicy.shouldAttachToken(url: full, baseURL: self.baseURL)
+        {
+            request.headerFields[.authorization] = "Bearer \(token)"
+        }
 
         // JSON は charset 無しの `application/json` で送る(契約の media type と一致させる)。
         if let type = request.headerFields[.contentType], type.hasPrefix("application/json") {
@@ -271,6 +278,8 @@ struct WishlistMiddleware: ClientMiddleware {
         do {
             (response, responseBody) = try await next(request, body, baseURL)
         } catch {
+            // キャンセルは通信失敗にしない(そのまま投げる)
+            if isCancellation(error) { throw error }
             throw WishlistError(code: .network, message: error.localizedDescription)
         }
         guard response.status.code >= 400 else { return (response, responseBody) }
@@ -302,4 +311,20 @@ struct WishlistMiddleware: ClientMiddleware {
             }
         return WishlistError(code: code, status: status, message: "HTTP \(status)")
     }
+}
+
+private extension String {
+    func trimmingSuffix(_ suffix: Character) -> String {
+        var text = self
+        while text.last == suffix { text.removeLast() }
+        return text
+    }
+}
+
+/// キャンセル(Task のキャンセル・URLError.cancelled)か。生成クライアントが包んだ `ClientError` の中も見る。
+func isCancellation(_ error: any Error) -> Bool {
+    if error is CancellationError { return true }
+    if (error as? URLError)?.code == .cancelled { return true }
+    if let error = error as? ClientError { return isCancellation(error.underlyingError) }
+    return false
 }
