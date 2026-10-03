@@ -59,6 +59,8 @@ test-services: ## services のユニットテスト
 test-tools:
 	@cd tools && $(GO) test ./...
 	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs tools/importer/prune.test.mjs tools/importer/integrity.test.mjs tools/importer/fetch-integrity.test.mjs tools/importer/fetch-snapshot-shape.test.mjs
+	@[ -d tools/assets/node_modules ] || (cd tools/assets && npm ci --silent)
+	@node --test tools/assets/convert.test.mjs
 
 .PHONY: test-scripts
 test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406・計算API SLO ADR-0407・ルートの e2e ADR-0306・GitOps の AppProject/共通スクリプト/レジストリ ADR-0408・Makefile の help と未実装ターゲット。クラスタ・ネットワークに触らない)
@@ -98,6 +100,7 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@node --check tools/golden/generate.mjs
 	@node --check scripts/wasm-conformance.mjs
 	@for script in tools/importer/*.mjs; do node --check "$$script" || exit; done
+	@for script in tools/assets/*.mjs; do node --check "$$script" || exit; done
 	@$(MAKE) --no-print-directory k8s-render
 	@$(MAKE) --no-print-directory check-publishable
 	@$(MAKE) --no-print-directory check-publishable-selftest
@@ -338,8 +341,9 @@ k8s-render-kubectl:
 	@command -v kubectl >/dev/null 2>&1 || { echo "k8s-render: kubectl が無いため overlay を描画できません(brew install kubectl。make doctor で確認)" >&2; exit 1; }
 
 .PHONY: assets
-assets: ## 画像を WebP 2サイズに変換して MinIO へ(未実装。終了コード 2)
-	@echo "assets: 未実装です(画像の配信は計画外。issue #286)。成功と数えないため終了コード 2 で終わります" >&2; exit 2
+assets: ## 手元の画像(data/generated/images/src)を WebP 2サイズ + manifest に変換する(画像なしでも成功。ADR-0807。ASSETS_SRC・ASSETS_OUT で場所を変更)
+	@[ -d tools/assets/node_modules ] || (cd tools/assets && npm ci --silent)
+	@cd tools/assets && node convert.mjs
 
 ## --- 公開前の検査 -----------------------------------------------------
 .PHONY: check-publishable

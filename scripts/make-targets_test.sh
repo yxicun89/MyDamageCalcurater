@@ -4,7 +4,7 @@
 #
 # 固定すること:
 #   - make help の左列がターゲット名で(Makefile のファイル名ではない)、数字入りのターゲットも出る
-#   - 未実装の make assets が成功(終了コード 0)で終わらない
+#   - make assets は画像なしの一時ディレクトリで成功(終了コード 0)する(ADR-0807。旧スタブの終了コード 2 をやめた)
 #   - make lint の k8s-render が全レーンの overlay を描画する(各レーンの *-kustomize を呼ぶ)
 set -uo pipefail
 
@@ -39,13 +39,15 @@ else
   ng "make help に重複がある: ${dups}"
 fi
 
+assets_tmp=$(mktemp -d)
 rc=0
-"$MAKE_BIN" -C "$ROOT" --no-print-directory assets >/dev/null 2>&1 || rc=$?
-if [ "$rc" -ne 0 ]; then
-  ok "未実装の make assets は非0(${rc})で終わる"
+ASSETS_SRC="$assets_tmp/none" ASSETS_OUT="$assets_tmp/out" "$MAKE_BIN" -C "$ROOT" --no-print-directory assets >/dev/null 2>&1 || rc=$?
+if [ "$rc" -eq 0 ] && [ -f "$assets_tmp/out/manifest.json" ]; then
+  ok "make assets は画像なしで終了コード 0 になり、空の manifest を書く"
 else
-  ng "未実装の make assets が終了コード 0 で終わった(成功と数えられてしまう)"
+  ng "make assets が画像なしで成功しない(rc=${rc})"
 fi
+rm -rf "$assets_tmp"
 
 render_plan=$("$MAKE_BIN" -C "$ROOT" --no-print-directory -n k8s-render 2>/dev/null)
 for overlay in deploy/k8s/overlays/local deploy/k8s/overlays/cloud deploy/k8s/overlays/local/tidb \
