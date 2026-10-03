@@ -56,11 +56,7 @@ judge-docker-build:
 	@docker build -f $(JUDGE_DIR)/Dockerfile -t $(JUDGE_IMAGE) .
 
 judge-k3d-deploy: judge-docker-build ## k3d へ judge を直接デプロイ(local overlay)
-	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh judge-k3d-deploy
-	@k3d image import $(JUDGE_IMAGE) --cluster $(CLUSTER)
-	@kubectl apply -k $(JUDGE_DIR)/deploy/k8s/overlays/local
-	@kubectl -n pokecalc rollout restart deployment/judge
-	@kubectl -n pokecalc rollout status deployment/judge --timeout=120s
+	@CLUSTER=$(CLUSTER) TAG_PATHS="$(JUDGE_DIR) engine" ./scripts/k3d-deploy-tagged.sh judge-k3d-deploy $(JUDGE_DIR)/deploy/k8s/overlays/local pokecalc/judge
 
 judge-smoke:
 	@JUDGE_URL=$(JUDGE_URL) API_URL=$(API_URL) $(JUDGE_DIR)/scripts/smoke.sh

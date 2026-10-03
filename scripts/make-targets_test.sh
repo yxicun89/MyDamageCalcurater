@@ -75,10 +75,12 @@ else
 fi
 
 # issue #295: 全 *-k3d-deploy は、最初の kubectl / k3d より前に共通の context ガードを呼ぶ(-n の出力で順序を見る)。
+# issue #291: 5つの直接デプロイは k3d-deploy-tagged.sh 経由(先頭で require-k3d-context.sh を呼ぶ。
+# 別クラスタなら docker・apply に触らないことは k3d-deploy-tagged_test.sh が確かめる)。
 for target in api-k3d-deploy balance-k3d-deploy speed-k3d-deploy judge-k3d-deploy web-k3d-deploy \
   balance-k3d-deploy-readmodel speed-k3d-deploy-readmodel; do
   plan=$("$MAKE_BIN" -C "$ROOT" --no-print-directory -n "$target" 2>/dev/null)
-  guard_line=$(echo "$plan" | grep -n "require-k3d-context.sh ${target}" | head -n 1 | cut -d: -f1)
+  guard_line=$(echo "$plan" | grep -nE "(require-k3d-context|k3d-deploy-tagged)\.sh ${target}" | head -n 1 | cut -d: -f1)
   first_cluster_line=$(echo "$plan" | grep -nE '(^|[ ;&])(kubectl|k3d) ' | head -n 1 | cut -d: -f1)
   if [ -z "$guard_line" ]; then
     ng "make -n ${target} に require-k3d-context.sh が無い"

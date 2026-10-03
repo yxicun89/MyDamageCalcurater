@@ -341,7 +341,7 @@ describe("P5-5 構築のタブ", () => {
 });
 
 // AJ6(ADR-0319 §1): 調整の画面。ルート表に1件足し、タブ「調整」と /adjust で開く(末尾)。
-// 画面は API 専用(ADR-0411 の withOnlineMaster で包む)で、「調整する」を押すまで調整 API を呼ばない(ADR-0319 §4)。
+// 画面は API 専用(ADR-0411。登録ファイル adjust.screen.tsx が OnlineMasterGate で包む。ADR-0323)で、「調整する」を押すまで調整 API を呼ばない(ADR-0319 §4)。
 describe("AJ6 調整のタブ", () => {
   /** fetch の呼び出しのうち調整・技の逆引きの API のもの。 */
   function adjustRequests(fetchSpy: { mock: { calls: unknown[][] } }): string[] {

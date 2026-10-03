@@ -41,7 +41,10 @@ kubectl -n pokecalc wait --for=condition=complete "job/$job_name" --timeout=600s
 cd "$(git rev-parse --show-toplevel)"
 make api-k3d-deploy
 ```
-確認: 最後の2行が `deployment "calc" successfully rolled out` と `deployment "gateway" successfully rolled out`
+確認: 最後の行が `api-k3d-deploy: <コミット12桁>(未コミットの変更があれば `-dirty` 付き)をデプロイした`で、その直前の2行が
+`deployment "calc" successfully rolled out` と `deployment "gateway" successfully rolled out`。
+`kubectl -n pokecalc get deploy gateway -o jsonpath='{..image}'` の image タグが同じコミットで、`curl -s http://localhost:8080/healthz` の
+`version` も同じ値。前の版へ戻すときは [`rollback.md`](rollback.md)
 (マスタ未投入だと `calc` の rollout が `--timeout=120s` でタイムアウトする。手順3を先にやり直す)。
 
 ## 5. スモークで疎通を確かめる
