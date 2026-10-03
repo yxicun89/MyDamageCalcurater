@@ -1192,7 +1192,8 @@ describe("recommendations(おすすめタイプ)", () => {
 // issue 276(ADR-0411): API のエラーコードを日本語の文言に写像し、応答の英語の message は画面に出さない。
 describe("エラーコードの日本語文言(issue 276)", () => {
   const codes = [
-    "missing_request_context",
+    "missing_header",
+    "invalid_header",
     "invalid_request",
     "request_too_large",
     "unknown_pokemon",

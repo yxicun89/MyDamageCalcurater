@@ -24,6 +24,8 @@ type httpError struct {
 	status  int
 	code    api.ErrorCode
 	message string
+	// retryAfter は応答に Retry-After: 1 を付ける(締め切り超過の 503。guard の過負荷 503 と揃える)。
+	retryAfter bool
 }
 
 func (e *httpError) Error() string { return e.message }
@@ -75,6 +77,8 @@ var engineSentinels = []struct {
 	// 写す(新しい code は足さない。ADR-0126 §5・ADR-0214)。マスタに無いIDはこれより前(resolveAbilityCandidates
 	// でのstore参照)でunknown_abilityにする。
 	{engine.ErrInvalidAbilityCandidates, api.InvalidInput},
+	// 調整の入力の不正(ADR-0250 §4。wasmapi と同じく invalid_input。新しい code は足さない)。
+	{engine.ErrInvalidAdjustInput, api.InvalidInput},
 }
 
 // errFromEngine は engine が返したエラーを安定した code の httpError に写す。

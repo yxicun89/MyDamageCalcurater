@@ -363,12 +363,15 @@ func TestImportCronJobInBaseAndSuspendedInCloud(t *testing.T) {
 	if !strings.Contains(c, cronJobName) || !regexp.MustCompile(`suspend:\s*true`).MatchString(c) {
 		t.Error("cloud overlay に CronJob pokedex-import を suspend: true にするパッチが無い")
 	}
-	// local overlay は suspend しない。
-	var local strings.Builder
-	walkRepoFiles(t, "deploy/k8s/overlays/local", func(_, s string) { local.WriteString(s + "\n") })
-	if regexp.MustCompile(`suspend:\s*true`).MatchString(local.String()) {
-		t.Error("local overlay で CronJob を suspend しない")
-	}
+	// local overlay は pokedex-import を suspend しない(ADR-0220 で追加した record-expire・team-expire の suspend は別の CronJob で、
+	// このテストの対象外。manifest は YAML の1文書ごとに、この CronJob の名前を持つものだけを見る)。
+	walkRepoFiles(t, "deploy/k8s/overlays/local", func(rel, s string) {
+		for _, doc := range strings.Split(s, "\n---") {
+			if strings.Contains(doc, cronJobName) && regexp.MustCompile(`suspend:\s*true`).MatchString(doc) {
+				t.Errorf("%s: local overlay で CronJob %s を suspend しない", rel, cronJobName)
+			}
+		}
+	})
 }
 
 func walkRepoFiles(t *testing.T, dir string, fn func(rel, content string)) {

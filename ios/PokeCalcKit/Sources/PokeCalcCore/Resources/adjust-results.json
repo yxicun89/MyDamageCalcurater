@@ -1,0 +1,63 @@
+{
+  "indices": {
+    "stats": { "hp": 125, "atk": 90, "def": 80, "spa": 70, "spd": 75, "spe": 100 },
+    "firepowerIndex": 4200,
+    "physicalBulkIndex": 10000,
+    "specialBulkIndex": 9375,
+    "hpLines": {
+      "hp": 125,
+      "sp": 0,
+      "current": "none",
+      "next16n": { "hp": 128, "sp": 3, "spDelta": 3 },
+      "prev16n": null,
+      "next16nMinus1": { "hp": 127, "sp": 2, "spDelta": 2 },
+      "prev16nMinus1": null
+    }
+  },
+  "ko": { "searchLimit": 32, "feasible": true, "sp": 12, "chancePercent": 100 },
+  "survive": {
+    "searchLimit": 66,
+    "feasible": true,
+    "hpSp": 20,
+    "statSp": 8,
+    "totalSp": 28,
+    "bulkIndex": 9000,
+    "chancePercent": 100
+  },
+  "offenseAllocation": {
+    "remaining": 38,
+    "physicalPlan": {
+      "sp": { "hp": 0, "atk": 20, "def": 0, "spa": 0, "spd": 0, "spe": 8 },
+      "totalSp": 28,
+      "stats": { "hp": 125, "atk": 110, "def": 80, "spa": 70, "spd": 75, "spe": 108 },
+      "physicalBulk": 10000,
+      "specialBulk": 9375,
+      "speedMet": true,
+      "goalMet": true,
+      "chancePercent": 100
+    },
+    "specialPlan": {
+      "sp": { "hp": 0, "atk": 0, "def": 0, "spa": 20, "spd": 0, "spe": 8 },
+      "totalSp": 28,
+      "stats": { "hp": 125, "atk": 90, "def": 80, "spa": 90, "spd": 75, "spe": 108 },
+      "physicalBulk": 10000,
+      "specialBulk": 9375,
+      "speedMet": true,
+      "goalMet": true,
+      "chancePercent": 100
+    }
+  },
+  "allocation": {
+    "remaining": 30,
+    "plan": {
+      "sp": { "hp": 20, "atk": 0, "def": 8, "spa": 0, "spd": 8, "spe": 0 },
+      "totalSp": 36,
+      "stats": { "hp": 145, "atk": 90, "def": 88, "spa": 70, "spd": 83, "spe": 100 },
+      "physicalBulk": 12760,
+      "specialBulk": 12035,
+      "speedMet": true,
+      "goalMet": true,
+      "chancePercent": 100
+    }
+  }
+}

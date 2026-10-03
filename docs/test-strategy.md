@@ -29,7 +29,7 @@
 | ダメージ計算・逆算(engine・calc・WASM) | 本書 | `make test` / `make test-golden` / `make test-wasm` |
 | タイプバランス(balance) | [type-balance-test-strategy.md](type-balance-test-strategy.md) | `make test`(services/balance)・`make web-e2e-balance` |
 | 素早さ比較(speed) | [speed-design.md](speed-design.md)・[runbooks/speed.md](runbooks/speed.md)・ADR-0600〜0606 | `make speed-test`・`make web-test`(テスト節は [speed-design.md](speed-design.md) の「9. テスト」) |
-| 判定(judge) | [judge-design.md](judge-design.md)・ADR-0700〜0709 | `make test`(services/judge)。専用のテスト節は未整備(issue #254。判定レーンが judge-design.md に足す) |
+| 判定(judge) | [judge-design.md](judge-design.md)・ADR-0700〜0709 | `make judge-test`・`make web-test`(テスト節は [judge-design.md](judge-design.md) の「6. テスト」) |
 | record / team | 本書「保存データ」・ADR-0209 | `make test`・`make test-db-docker` |
 | Web・iOS | [ADR-0300](adr/0300-web-architecture.md)・[ADR-0501](adr/0501-ios-screen-acceptance.md) | `make web-test`・`make web-e2e*`・`make ios-test` |
 
@@ -83,7 +83,8 @@ P1-6〜P2-1a の間は gen9 の全種族(CAP 等を含む1392種)を参考集合
 
 1. 既知の調整(SP配分・性格・持ち物)でダメージを生成
 2. 乱数の1段階を選び、ゲーム内表示と同じ丸め(HP%)をかけて観測値にする
-   (実機の丸め規則は未確認なので、切り捨て・四捨五入・切り上げの3通りすべてで作り、それぞれ判定する)
+   (実機の相手 HP 減少の整数%表示は**切り捨て**(2026-10-03 ユーザー確認。ADR-0134)なので、整数%の観測は切り捨てで作る。
+   0.1% 精度の観測は丸めが未確認なので、切り捨て・四捨五入・切り上げの3通りすべてで作り、それぞれ判定する)
 3. 逆算にかけ、**正解が候補に入る割合(Recall)** を測る。P1-12 で定義を改めた(ADR-0010 §R5):
    真値の (性格クラス, 持ち物) の候補が観測を説明でき、真値の SP がその範囲に入り、
    **かつその範囲が総当たりの正解(観測を説明できる SP の集合)と完全に一致する**こと

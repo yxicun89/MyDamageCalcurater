@@ -1,0 +1,20 @@
+# record の ServiceMonitor(ADR-0220 §2・ADR-0406 §4)。Service(Kustomize base)は変更せず、
+# こちら側からラベルセレクタで参照する。
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: record
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: record
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  namespaceSelector:
+    matchNames:
+      - pokecalc
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: record
+  endpoints:
+    - port: http
+      path: /metrics

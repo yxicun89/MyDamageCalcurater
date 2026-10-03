@@ -1,0 +1,4290 @@
+{
+ "schemaVersion": 2,
+ "note": "ADR-0126 追記の計算量の計測用ベクタ(上限ちょうど: 逆算は持ち物 64・観測 16、一括計算はプリセット 8・持ち物 64。特性なし / 結果が同じ特性3つ / 結果が違う特性3つ)。node scripts/wasm-conformance.mjs --vectors engine/wasmapi/testdata/vectors-perf.json で Go とのバイト一致と逆算の最悪値を見る。種族・技・持ち物・特性はすべて架空。",
+ "generatedFrom": "手書き(engine/ability_candidates_perf_test.go の最悪ケースと同じ形)",
+ "typeChartNote": "ADR-0011 §13 / ADR-0013: タイプ相性表は入力(マスタ)。18×18 を 33 件のリクエストに書くとファイルが読めなくなるため、ここで1度だけ定義し、テストと Node ハーネスが各リクエストへ typeChart として注入する。等倍(2)は省略している。",
+ "typeChart": {
+  "types": [
+   "bug",
+   "dark",
+   "dragon",
+   "electric",
+   "fairy",
+   "fighting",
+   "fire",
+   "flying",
+   "ghost",
+   "grass",
+   "ground",
+   "ice",
+   "normal",
+   "poison",
+   "psychic",
+   "rock",
+   "steel",
+   "water"
+  ],
+  "effectiveness": {
+   "bug": {
+    "dark": 4,
+    "fairy": 1,
+    "fighting": 1,
+    "fire": 1,
+    "flying": 1,
+    "ghost": 1,
+    "grass": 4,
+    "poison": 1,
+    "psychic": 4,
+    "steel": 1
+   },
+   "dark": {
+    "dark": 1,
+    "fairy": 1,
+    "fighting": 1,
+    "ghost": 4,
+    "psychic": 4
+   },
+   "dragon": {
+    "dragon": 4,
+    "fairy": 0,
+    "steel": 1
+   },
+   "electric": {
+    "dragon": 1,
+    "electric": 1,
+    "flying": 4,
+    "grass": 1,
+    "ground": 0,
+    "water": 4
+   },
+   "fairy": {
+    "dark": 4,
+    "dragon": 4,
+    "fighting": 4,
+    "fire": 1,
+    "poison": 1,
+    "steel": 1
+   },
+   "fighting": {
+    "bug": 1,
+    "dark": 4,
+    "fairy": 1,
+    "flying": 1,
+    "ghost": 0,
+    "ice": 4,
+    "normal": 4,
+    "poison": 1,
+    "psychic": 1,
+    "rock": 4,
+    "steel": 4
+   },
+   "fire": {
+    "bug": 4,
+    "dragon": 1,
+    "fire": 1,
+    "grass": 4,
+    "ice": 4,
+    "rock": 1,
+    "steel": 4,
+    "water": 1
+   },
+   "flying": {
+    "bug": 4,
+    "electric": 1,
+    "fighting": 4,
+    "grass": 4,
+    "rock": 1,
+    "steel": 1
+   },
+   "ghost": {
+    "dark": 1,
+    "ghost": 4,
+    "normal": 0,
+    "psychic": 4
+   },
+   "grass": {
+    "bug": 1,
+    "dragon": 1,
+    "fire": 1,
+    "flying": 1,
+    "grass": 1,
+    "ground": 4,
+    "poison": 1,
+    "rock": 4,
+    "steel": 1,
+    "water": 4
+   },
+   "ground": {
+    "bug": 1,
+    "electric": 4,
+    "fire": 4,
+    "flying": 0,
+    "grass": 1,
+    "poison": 4,
+    "rock": 4,
+    "steel": 4
+   },
+   "ice": {
+    "dragon": 4,
+    "fire": 1,
+    "flying": 4,
+    "grass": 4,
+    "ground": 4,
+    "ice": 1,
+    "steel": 1,
+    "water": 1
+   },
+   "normal": {
+    "ghost": 0,
+    "rock": 1,
+    "steel": 1
+   },
+   "poison": {
+    "fairy": 4,
+    "ghost": 1,
+    "grass": 4,
+    "ground": 1,
+    "poison": 1,
+    "rock": 1,
+    "steel": 0
+   },
+   "psychic": {
+    "dark": 0,
+    "fighting": 4,
+    "poison": 4,
+    "psychic": 1,
+    "steel": 1
+   },
+   "rock": {
+    "bug": 4,
+    "fighting": 1,
+    "fire": 4,
+    "flying": 4,
+    "ground": 1,
+    "ice": 4,
+    "steel": 1
+   },
+   "steel": {
+    "electric": 1,
+    "fairy": 4,
+    "fire": 1,
+    "ice": 4,
+    "rock": 4,
+    "steel": 1,
+    "water": 1
+   },
+   "water": {
+    "dragon": 1,
+    "fire": 4,
+    "grass": 1,
+    "ground": 4,
+    "rock": 4,
+    "water": 1
+   }
+  }
+ },
+ "vectors": [
+  {
+   "name": "perf/reverse-worst-none",
+   "fn": "calcReverse",
+   "tags": [
+    "perf",
+    "reverse"
+   ],
+   "request": {
+    "format": "single",
+    "side": "defender",
+    "known": {
+     "species": {
+      "key": "0996-000",
+      "types": [
+       "water"
+      ],
+      "baseStats": {
+       "hp": 100,
+       "atk": 120,
+       "def": 70,
+       "spa": 120,
+       "spd": 70,
+       "spe": 100
+      }
+     },
+     "level": 50,
+     "nature": {
+      "plus": "atk",
+      "minus": "spa"
+     },
+     "sp": {
+      "hp": 0,
+      "atk": 32,
+      "def": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "status": "none"
+    },
+    "unknownSpecies": {
+     "key": "0997-000",
+     "types": [
+      "psychic"
+     ],
+     "baseStats": {
+      "hp": 100,
+      "atk": 50,
+      "def": 80,
+      "spa": 50,
+      "spd": 80,
+      "spe": 50
+     }
+    },
+    "move": {
+     "id": "perf-move",
+     "nameJa": "テストわざ",
+     "type": "water",
+     "category": "physical",
+     "power": 100,
+     "priority": 0
+    },
+    "field": {
+     "weather": "none",
+     "terrain": "none"
+    },
+    "critical": false,
+    "itemCandidates": [
+     null,
+     {
+      "id": "perf-item-01",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4160
+       }
+      }
+     },
+     {
+      "id": "perf-item-02",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4224
+       }
+      }
+     },
+     {
+      "id": "perf-item-03",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4288
+       }
+      }
+     },
+     {
+      "id": "perf-item-04",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4352
+       }
+      }
+     },
+     {
+      "id": "perf-item-05",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4416
+       }
+      }
+     },
+     {
+      "id": "perf-item-06",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4480
+       }
+      }
+     },
+     {
+      "id": "perf-item-07",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4544
+       }
+      }
+     },
+     {
+      "id": "perf-item-08",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4608
+       }
+      }
+     },
+     {
+      "id": "perf-item-09",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4672
+       }
+      }
+     },
+     {
+      "id": "perf-item-10",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4736
+       }
+      }
+     },
+     {
+      "id": "perf-item-11",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4800
+       }
+      }
+     },
+     {
+      "id": "perf-item-12",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4864
+       }
+      }
+     },
+     {
+      "id": "perf-item-13",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4928
+       }
+      }
+     },
+     {
+      "id": "perf-item-14",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4992
+       }
+      }
+     },
+     {
+      "id": "perf-item-15",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5056
+       }
+      }
+     },
+     {
+      "id": "perf-item-16",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5120
+       }
+      }
+     },
+     {
+      "id": "perf-item-17",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5184
+       }
+      }
+     },
+     {
+      "id": "perf-item-18",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5248
+       }
+      }
+     },
+     {
+      "id": "perf-item-19",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5312
+       }
+      }
+     },
+     {
+      "id": "perf-item-20",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5376
+       }
+      }
+     },
+     {
+      "id": "perf-item-21",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5440
+       }
+      }
+     },
+     {
+      "id": "perf-item-22",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5504
+       }
+      }
+     },
+     {
+      "id": "perf-item-23",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5568
+       }
+      }
+     },
+     {
+      "id": "perf-item-24",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5632
+       }
+      }
+     },
+     {
+      "id": "perf-item-25",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5696
+       }
+      }
+     },
+     {
+      "id": "perf-item-26",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5760
+       }
+      }
+     },
+     {
+      "id": "perf-item-27",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5824
+       }
+      }
+     },
+     {
+      "id": "perf-item-28",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5888
+       }
+      }
+     },
+     {
+      "id": "perf-item-29",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5952
+       }
+      }
+     },
+     {
+      "id": "perf-item-30",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6016
+       }
+      }
+     },
+     {
+      "id": "perf-item-31",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6080
+       }
+      }
+     },
+     {
+      "id": "perf-item-32",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6144
+       }
+      }
+     },
+     {
+      "id": "perf-item-33",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6208
+       }
+      }
+     },
+     {
+      "id": "perf-item-34",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6272
+       }
+      }
+     },
+     {
+      "id": "perf-item-35",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6336
+       }
+      }
+     },
+     {
+      "id": "perf-item-36",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6400
+       }
+      }
+     },
+     {
+      "id": "perf-item-37",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6464
+       }
+      }
+     },
+     {
+      "id": "perf-item-38",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6528
+       }
+      }
+     },
+     {
+      "id": "perf-item-39",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6592
+       }
+      }
+     },
+     {
+      "id": "perf-item-40",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6656
+       }
+      }
+     },
+     {
+      "id": "perf-item-41",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6720
+       }
+      }
+     },
+     {
+      "id": "perf-item-42",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6784
+       }
+      }
+     },
+     {
+      "id": "perf-item-43",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6848
+       }
+      }
+     },
+     {
+      "id": "perf-item-44",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6912
+       }
+      }
+     },
+     {
+      "id": "perf-item-45",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6976
+       }
+      }
+     },
+     {
+      "id": "perf-item-46",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7040
+       }
+      }
+     },
+     {
+      "id": "perf-item-47",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7104
+       }
+      }
+     },
+     {
+      "id": "perf-item-48",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7168
+       }
+      }
+     },
+     {
+      "id": "perf-item-49",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7232
+       }
+      }
+     },
+     {
+      "id": "perf-item-50",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7296
+       }
+      }
+     },
+     {
+      "id": "perf-item-51",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7360
+       }
+      }
+     },
+     {
+      "id": "perf-item-52",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7424
+       }
+      }
+     },
+     {
+      "id": "perf-item-53",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7488
+       }
+      }
+     },
+     {
+      "id": "perf-item-54",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7552
+       }
+      }
+     },
+     {
+      "id": "perf-item-55",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7616
+       }
+      }
+     },
+     {
+      "id": "perf-item-56",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7680
+       }
+      }
+     },
+     {
+      "id": "perf-item-57",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7744
+       }
+      }
+     },
+     {
+      "id": "perf-item-58",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7808
+       }
+      }
+     },
+     {
+      "id": "perf-item-59",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7872
+       }
+      }
+     },
+     {
+      "id": "perf-item-60",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7936
+       }
+      }
+     },
+     {
+      "id": "perf-item-61",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8000
+       }
+      }
+     },
+     {
+      "id": "perf-item-62",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8064
+       }
+      }
+     },
+     {
+      "id": "perf-item-63",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8128
+       }
+      }
+     }
+    ],
+    "observations": [
+     {
+      "percent": 10
+     },
+     {
+      "percent": 11
+     },
+     {
+      "percent": 12
+     },
+     {
+      "percent": 13
+     },
+     {
+      "percent": 14
+     },
+     {
+      "percent": 15
+     },
+     {
+      "percent": 16
+     },
+     {
+      "percent": 17
+     },
+     {
+      "percent": 18
+     },
+     {
+      "percent": 19
+     },
+     {
+      "percent": 20
+     },
+     {
+      "percent": 21
+     },
+     {
+      "percent": 22
+     },
+     {
+      "percent": 23
+     },
+     {
+      "percent": 24
+     },
+     {
+      "percent": 25
+     }
+    ],
+    "maxCandidates": 128
+   }
+  },
+  {
+   "name": "perf/reverse-worst-same3",
+   "fn": "calcReverse",
+   "tags": [
+    "perf",
+    "reverse"
+   ],
+   "request": {
+    "format": "single",
+    "side": "defender",
+    "known": {
+     "species": {
+      "key": "0996-000",
+      "types": [
+       "water"
+      ],
+      "baseStats": {
+       "hp": 100,
+       "atk": 120,
+       "def": 70,
+       "spa": 120,
+       "spd": 70,
+       "spe": 100
+      }
+     },
+     "level": 50,
+     "nature": {
+      "plus": "atk",
+      "minus": "spa"
+     },
+     "sp": {
+      "hp": 0,
+      "atk": 32,
+      "def": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "status": "none"
+    },
+    "unknownSpecies": {
+     "key": "0997-000",
+     "types": [
+      "psychic"
+     ],
+     "baseStats": {
+      "hp": 100,
+      "atk": 50,
+      "def": 80,
+      "spa": 50,
+      "spd": 80,
+      "spe": 50
+     }
+    },
+    "move": {
+     "id": "perf-move",
+     "nameJa": "テストわざ",
+     "type": "water",
+     "category": "physical",
+     "power": 100,
+     "priority": 0
+    },
+    "field": {
+     "weather": "none",
+     "terrain": "none"
+    },
+    "critical": false,
+    "itemCandidates": [
+     null,
+     {
+      "id": "perf-item-01",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4160
+       }
+      }
+     },
+     {
+      "id": "perf-item-02",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4224
+       }
+      }
+     },
+     {
+      "id": "perf-item-03",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4288
+       }
+      }
+     },
+     {
+      "id": "perf-item-04",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4352
+       }
+      }
+     },
+     {
+      "id": "perf-item-05",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4416
+       }
+      }
+     },
+     {
+      "id": "perf-item-06",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4480
+       }
+      }
+     },
+     {
+      "id": "perf-item-07",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4544
+       }
+      }
+     },
+     {
+      "id": "perf-item-08",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4608
+       }
+      }
+     },
+     {
+      "id": "perf-item-09",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4672
+       }
+      }
+     },
+     {
+      "id": "perf-item-10",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4736
+       }
+      }
+     },
+     {
+      "id": "perf-item-11",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4800
+       }
+      }
+     },
+     {
+      "id": "perf-item-12",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4864
+       }
+      }
+     },
+     {
+      "id": "perf-item-13",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4928
+       }
+      }
+     },
+     {
+      "id": "perf-item-14",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4992
+       }
+      }
+     },
+     {
+      "id": "perf-item-15",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5056
+       }
+      }
+     },
+     {
+      "id": "perf-item-16",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5120
+       }
+      }
+     },
+     {
+      "id": "perf-item-17",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5184
+       }
+      }
+     },
+     {
+      "id": "perf-item-18",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5248
+       }
+      }
+     },
+     {
+      "id": "perf-item-19",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5312
+       }
+      }
+     },
+     {
+      "id": "perf-item-20",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5376
+       }
+      }
+     },
+     {
+      "id": "perf-item-21",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5440
+       }
+      }
+     },
+     {
+      "id": "perf-item-22",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5504
+       }
+      }
+     },
+     {
+      "id": "perf-item-23",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5568
+       }
+      }
+     },
+     {
+      "id": "perf-item-24",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5632
+       }
+      }
+     },
+     {
+      "id": "perf-item-25",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5696
+       }
+      }
+     },
+     {
+      "id": "perf-item-26",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5760
+       }
+      }
+     },
+     {
+      "id": "perf-item-27",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5824
+       }
+      }
+     },
+     {
+      "id": "perf-item-28",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5888
+       }
+      }
+     },
+     {
+      "id": "perf-item-29",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5952
+       }
+      }
+     },
+     {
+      "id": "perf-item-30",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6016
+       }
+      }
+     },
+     {
+      "id": "perf-item-31",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6080
+       }
+      }
+     },
+     {
+      "id": "perf-item-32",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6144
+       }
+      }
+     },
+     {
+      "id": "perf-item-33",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6208
+       }
+      }
+     },
+     {
+      "id": "perf-item-34",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6272
+       }
+      }
+     },
+     {
+      "id": "perf-item-35",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6336
+       }
+      }
+     },
+     {
+      "id": "perf-item-36",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6400
+       }
+      }
+     },
+     {
+      "id": "perf-item-37",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6464
+       }
+      }
+     },
+     {
+      "id": "perf-item-38",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6528
+       }
+      }
+     },
+     {
+      "id": "perf-item-39",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6592
+       }
+      }
+     },
+     {
+      "id": "perf-item-40",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6656
+       }
+      }
+     },
+     {
+      "id": "perf-item-41",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6720
+       }
+      }
+     },
+     {
+      "id": "perf-item-42",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6784
+       }
+      }
+     },
+     {
+      "id": "perf-item-43",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6848
+       }
+      }
+     },
+     {
+      "id": "perf-item-44",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6912
+       }
+      }
+     },
+     {
+      "id": "perf-item-45",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6976
+       }
+      }
+     },
+     {
+      "id": "perf-item-46",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7040
+       }
+      }
+     },
+     {
+      "id": "perf-item-47",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7104
+       }
+      }
+     },
+     {
+      "id": "perf-item-48",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7168
+       }
+      }
+     },
+     {
+      "id": "perf-item-49",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7232
+       }
+      }
+     },
+     {
+      "id": "perf-item-50",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7296
+       }
+      }
+     },
+     {
+      "id": "perf-item-51",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7360
+       }
+      }
+     },
+     {
+      "id": "perf-item-52",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7424
+       }
+      }
+     },
+     {
+      "id": "perf-item-53",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7488
+       }
+      }
+     },
+     {
+      "id": "perf-item-54",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7552
+       }
+      }
+     },
+     {
+      "id": "perf-item-55",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7616
+       }
+      }
+     },
+     {
+      "id": "perf-item-56",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7680
+       }
+      }
+     },
+     {
+      "id": "perf-item-57",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7744
+       }
+      }
+     },
+     {
+      "id": "perf-item-58",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7808
+       }
+      }
+     },
+     {
+      "id": "perf-item-59",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7872
+       }
+      }
+     },
+     {
+      "id": "perf-item-60",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7936
+       }
+      }
+     },
+     {
+      "id": "perf-item-61",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8000
+       }
+      }
+     },
+     {
+      "id": "perf-item-62",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8064
+       }
+      }
+     },
+     {
+      "id": "perf-item-63",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8128
+       }
+      }
+     }
+    ],
+    "observations": [
+     {
+      "percent": 10
+     },
+     {
+      "percent": 11
+     },
+     {
+      "percent": 12
+     },
+     {
+      "percent": 13
+     },
+     {
+      "percent": 14
+     },
+     {
+      "percent": 15
+     },
+     {
+      "percent": 16
+     },
+     {
+      "percent": 17
+     },
+     {
+      "percent": 18
+     },
+     {
+      "percent": 19
+     },
+     {
+      "percent": 20
+     },
+     {
+      "percent": 21
+     },
+     {
+      "percent": 22
+     },
+     {
+      "percent": 23
+     },
+     {
+      "percent": 24
+     },
+     {
+      "percent": 25
+     }
+    ],
+    "maxCandidates": 128,
+    "unknownAbilities": [
+     {
+      "id": "perf-plain-1",
+      "nameJa": "テストとくせい"
+     },
+     {
+      "id": "perf-ground-immune",
+      "nameJa": "テストとくせい",
+      "effect": {
+       "defImmuneTypes": [
+        "ground"
+       ],
+       "airborne": true
+      }
+     },
+     {
+      "id": "perf-plain-2",
+      "nameJa": "テストとくせい"
+     }
+    ]
+   }
+  },
+  {
+   "name": "perf/reverse-worst-diff3",
+   "fn": "calcReverse",
+   "tags": [
+    "perf",
+    "reverse"
+   ],
+   "request": {
+    "format": "single",
+    "side": "defender",
+    "known": {
+     "species": {
+      "key": "0996-000",
+      "types": [
+       "water"
+      ],
+      "baseStats": {
+       "hp": 100,
+       "atk": 120,
+       "def": 70,
+       "spa": 120,
+       "spd": 70,
+       "spe": 100
+      }
+     },
+     "level": 50,
+     "nature": {
+      "plus": "atk",
+      "minus": "spa"
+     },
+     "sp": {
+      "hp": 0,
+      "atk": 32,
+      "def": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "status": "none"
+    },
+    "unknownSpecies": {
+     "key": "0997-000",
+     "types": [
+      "psychic"
+     ],
+     "baseStats": {
+      "hp": 100,
+      "atk": 50,
+      "def": 80,
+      "spa": 50,
+      "spd": 80,
+      "spe": 50
+     }
+    },
+    "move": {
+     "id": "perf-move",
+     "nameJa": "テストわざ",
+     "type": "water",
+     "category": "physical",
+     "power": 100,
+     "priority": 0
+    },
+    "field": {
+     "weather": "none",
+     "terrain": "none"
+    },
+    "critical": false,
+    "itemCandidates": [
+     null,
+     {
+      "id": "perf-item-01",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4160
+       }
+      }
+     },
+     {
+      "id": "perf-item-02",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4224
+       }
+      }
+     },
+     {
+      "id": "perf-item-03",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4288
+       }
+      }
+     },
+     {
+      "id": "perf-item-04",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4352
+       }
+      }
+     },
+     {
+      "id": "perf-item-05",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4416
+       }
+      }
+     },
+     {
+      "id": "perf-item-06",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4480
+       }
+      }
+     },
+     {
+      "id": "perf-item-07",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4544
+       }
+      }
+     },
+     {
+      "id": "perf-item-08",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4608
+       }
+      }
+     },
+     {
+      "id": "perf-item-09",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4672
+       }
+      }
+     },
+     {
+      "id": "perf-item-10",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4736
+       }
+      }
+     },
+     {
+      "id": "perf-item-11",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4800
+       }
+      }
+     },
+     {
+      "id": "perf-item-12",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4864
+       }
+      }
+     },
+     {
+      "id": "perf-item-13",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4928
+       }
+      }
+     },
+     {
+      "id": "perf-item-14",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4992
+       }
+      }
+     },
+     {
+      "id": "perf-item-15",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5056
+       }
+      }
+     },
+     {
+      "id": "perf-item-16",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5120
+       }
+      }
+     },
+     {
+      "id": "perf-item-17",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5184
+       }
+      }
+     },
+     {
+      "id": "perf-item-18",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5248
+       }
+      }
+     },
+     {
+      "id": "perf-item-19",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5312
+       }
+      }
+     },
+     {
+      "id": "perf-item-20",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5376
+       }
+      }
+     },
+     {
+      "id": "perf-item-21",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5440
+       }
+      }
+     },
+     {
+      "id": "perf-item-22",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5504
+       }
+      }
+     },
+     {
+      "id": "perf-item-23",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5568
+       }
+      }
+     },
+     {
+      "id": "perf-item-24",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5632
+       }
+      }
+     },
+     {
+      "id": "perf-item-25",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5696
+       }
+      }
+     },
+     {
+      "id": "perf-item-26",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5760
+       }
+      }
+     },
+     {
+      "id": "perf-item-27",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5824
+       }
+      }
+     },
+     {
+      "id": "perf-item-28",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5888
+       }
+      }
+     },
+     {
+      "id": "perf-item-29",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5952
+       }
+      }
+     },
+     {
+      "id": "perf-item-30",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6016
+       }
+      }
+     },
+     {
+      "id": "perf-item-31",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6080
+       }
+      }
+     },
+     {
+      "id": "perf-item-32",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6144
+       }
+      }
+     },
+     {
+      "id": "perf-item-33",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6208
+       }
+      }
+     },
+     {
+      "id": "perf-item-34",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6272
+       }
+      }
+     },
+     {
+      "id": "perf-item-35",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6336
+       }
+      }
+     },
+     {
+      "id": "perf-item-36",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6400
+       }
+      }
+     },
+     {
+      "id": "perf-item-37",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6464
+       }
+      }
+     },
+     {
+      "id": "perf-item-38",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6528
+       }
+      }
+     },
+     {
+      "id": "perf-item-39",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6592
+       }
+      }
+     },
+     {
+      "id": "perf-item-40",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6656
+       }
+      }
+     },
+     {
+      "id": "perf-item-41",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6720
+       }
+      }
+     },
+     {
+      "id": "perf-item-42",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6784
+       }
+      }
+     },
+     {
+      "id": "perf-item-43",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6848
+       }
+      }
+     },
+     {
+      "id": "perf-item-44",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6912
+       }
+      }
+     },
+     {
+      "id": "perf-item-45",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6976
+       }
+      }
+     },
+     {
+      "id": "perf-item-46",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7040
+       }
+      }
+     },
+     {
+      "id": "perf-item-47",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7104
+       }
+      }
+     },
+     {
+      "id": "perf-item-48",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7168
+       }
+      }
+     },
+     {
+      "id": "perf-item-49",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7232
+       }
+      }
+     },
+     {
+      "id": "perf-item-50",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7296
+       }
+      }
+     },
+     {
+      "id": "perf-item-51",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7360
+       }
+      }
+     },
+     {
+      "id": "perf-item-52",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7424
+       }
+      }
+     },
+     {
+      "id": "perf-item-53",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7488
+       }
+      }
+     },
+     {
+      "id": "perf-item-54",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7552
+       }
+      }
+     },
+     {
+      "id": "perf-item-55",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7616
+       }
+      }
+     },
+     {
+      "id": "perf-item-56",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7680
+       }
+      }
+     },
+     {
+      "id": "perf-item-57",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7744
+       }
+      }
+     },
+     {
+      "id": "perf-item-58",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7808
+       }
+      }
+     },
+     {
+      "id": "perf-item-59",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7872
+       }
+      }
+     },
+     {
+      "id": "perf-item-60",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7936
+       }
+      }
+     },
+     {
+      "id": "perf-item-61",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8000
+       }
+      }
+     },
+     {
+      "id": "perf-item-62",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8064
+       }
+      }
+     },
+     {
+      "id": "perf-item-63",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8128
+       }
+      }
+     }
+    ],
+    "observations": [
+     {
+      "percent": 10
+     },
+     {
+      "percent": 11
+     },
+     {
+      "percent": 12
+     },
+     {
+      "percent": 13
+     },
+     {
+      "percent": 14
+     },
+     {
+      "percent": 15
+     },
+     {
+      "percent": 16
+     },
+     {
+      "percent": 17
+     },
+     {
+      "percent": 18
+     },
+     {
+      "percent": 19
+     },
+     {
+      "percent": 20
+     },
+     {
+      "percent": 21
+     },
+     {
+      "percent": 22
+     },
+     {
+      "percent": 23
+     },
+     {
+      "percent": 24
+     },
+     {
+      "percent": 25
+     }
+    ],
+    "maxCandidates": 128,
+    "unknownAbilities": [
+     {
+      "id": "perf-resist-half",
+      "nameJa": "テストとくせい",
+      "effect": {
+       "defResistType": {
+        "water": 2048
+       }
+      }
+     },
+     {
+      "id": "perf-resist-3q",
+      "nameJa": "テストとくせい",
+      "effect": {
+       "defResistType": {
+        "water": 3072
+       }
+      }
+     },
+     {
+      "id": "perf-plain-1",
+      "nameJa": "テストとくせい"
+     }
+    ]
+   }
+  },
+  {
+   "name": "perf/bulk-worst-none",
+   "fn": "calcBulk",
+   "tags": [
+    "perf",
+    "bulk"
+   ],
+   "request": {
+    "format": "single",
+    "attacker": {
+     "species": {
+      "key": "0996-000",
+      "types": [
+       "water"
+      ],
+      "baseStats": {
+       "hp": 100,
+       "atk": 120,
+       "def": 70,
+       "spa": 120,
+       "spd": 70,
+       "spe": 100
+      }
+     },
+     "level": 50,
+     "nature": {
+      "plus": "atk",
+      "minus": "spa"
+     },
+     "sp": {
+      "hp": 0,
+      "atk": 32,
+      "def": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "status": "none"
+    },
+    "defenderSpecies": {
+     "key": "0997-000",
+     "types": [
+      "psychic"
+     ],
+     "baseStats": {
+      "hp": 100,
+      "atk": 50,
+      "def": 80,
+      "spa": 50,
+      "spd": 80,
+      "spe": 50
+     }
+    },
+    "move": {
+     "id": "perf-move",
+     "nameJa": "テストわざ",
+     "type": "water",
+     "category": "physical",
+     "power": 100,
+     "priority": 0
+    },
+    "field": {
+     "weather": "none",
+     "terrain": "none"
+    },
+    "critical": false,
+    "presetKeys": [
+     "none",
+     "hp",
+     "hb_boost",
+     "hb",
+     "hb_full",
+     "hd_boost",
+     "hd",
+     "hd_full"
+    ],
+    "itemVariants": [
+     null,
+     {
+      "id": "perf-item-01",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4160
+       }
+      }
+     },
+     {
+      "id": "perf-item-02",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4224
+       }
+      }
+     },
+     {
+      "id": "perf-item-03",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4288
+       }
+      }
+     },
+     {
+      "id": "perf-item-04",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4352
+       }
+      }
+     },
+     {
+      "id": "perf-item-05",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4416
+       }
+      }
+     },
+     {
+      "id": "perf-item-06",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4480
+       }
+      }
+     },
+     {
+      "id": "perf-item-07",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4544
+       }
+      }
+     },
+     {
+      "id": "perf-item-08",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4608
+       }
+      }
+     },
+     {
+      "id": "perf-item-09",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4672
+       }
+      }
+     },
+     {
+      "id": "perf-item-10",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4736
+       }
+      }
+     },
+     {
+      "id": "perf-item-11",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4800
+       }
+      }
+     },
+     {
+      "id": "perf-item-12",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4864
+       }
+      }
+     },
+     {
+      "id": "perf-item-13",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4928
+       }
+      }
+     },
+     {
+      "id": "perf-item-14",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4992
+       }
+      }
+     },
+     {
+      "id": "perf-item-15",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5056
+       }
+      }
+     },
+     {
+      "id": "perf-item-16",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5120
+       }
+      }
+     },
+     {
+      "id": "perf-item-17",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5184
+       }
+      }
+     },
+     {
+      "id": "perf-item-18",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5248
+       }
+      }
+     },
+     {
+      "id": "perf-item-19",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5312
+       }
+      }
+     },
+     {
+      "id": "perf-item-20",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5376
+       }
+      }
+     },
+     {
+      "id": "perf-item-21",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5440
+       }
+      }
+     },
+     {
+      "id": "perf-item-22",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5504
+       }
+      }
+     },
+     {
+      "id": "perf-item-23",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5568
+       }
+      }
+     },
+     {
+      "id": "perf-item-24",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5632
+       }
+      }
+     },
+     {
+      "id": "perf-item-25",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5696
+       }
+      }
+     },
+     {
+      "id": "perf-item-26",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5760
+       }
+      }
+     },
+     {
+      "id": "perf-item-27",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5824
+       }
+      }
+     },
+     {
+      "id": "perf-item-28",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5888
+       }
+      }
+     },
+     {
+      "id": "perf-item-29",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5952
+       }
+      }
+     },
+     {
+      "id": "perf-item-30",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6016
+       }
+      }
+     },
+     {
+      "id": "perf-item-31",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6080
+       }
+      }
+     },
+     {
+      "id": "perf-item-32",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6144
+       }
+      }
+     },
+     {
+      "id": "perf-item-33",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6208
+       }
+      }
+     },
+     {
+      "id": "perf-item-34",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6272
+       }
+      }
+     },
+     {
+      "id": "perf-item-35",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6336
+       }
+      }
+     },
+     {
+      "id": "perf-item-36",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6400
+       }
+      }
+     },
+     {
+      "id": "perf-item-37",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6464
+       }
+      }
+     },
+     {
+      "id": "perf-item-38",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6528
+       }
+      }
+     },
+     {
+      "id": "perf-item-39",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6592
+       }
+      }
+     },
+     {
+      "id": "perf-item-40",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6656
+       }
+      }
+     },
+     {
+      "id": "perf-item-41",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6720
+       }
+      }
+     },
+     {
+      "id": "perf-item-42",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6784
+       }
+      }
+     },
+     {
+      "id": "perf-item-43",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6848
+       }
+      }
+     },
+     {
+      "id": "perf-item-44",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6912
+       }
+      }
+     },
+     {
+      "id": "perf-item-45",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6976
+       }
+      }
+     },
+     {
+      "id": "perf-item-46",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7040
+       }
+      }
+     },
+     {
+      "id": "perf-item-47",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7104
+       }
+      }
+     },
+     {
+      "id": "perf-item-48",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7168
+       }
+      }
+     },
+     {
+      "id": "perf-item-49",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7232
+       }
+      }
+     },
+     {
+      "id": "perf-item-50",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7296
+       }
+      }
+     },
+     {
+      "id": "perf-item-51",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7360
+       }
+      }
+     },
+     {
+      "id": "perf-item-52",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7424
+       }
+      }
+     },
+     {
+      "id": "perf-item-53",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7488
+       }
+      }
+     },
+     {
+      "id": "perf-item-54",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7552
+       }
+      }
+     },
+     {
+      "id": "perf-item-55",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7616
+       }
+      }
+     },
+     {
+      "id": "perf-item-56",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7680
+       }
+      }
+     },
+     {
+      "id": "perf-item-57",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7744
+       }
+      }
+     },
+     {
+      "id": "perf-item-58",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7808
+       }
+      }
+     },
+     {
+      "id": "perf-item-59",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7872
+       }
+      }
+     },
+     {
+      "id": "perf-item-60",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7936
+       }
+      }
+     },
+     {
+      "id": "perf-item-61",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8000
+       }
+      }
+     },
+     {
+      "id": "perf-item-62",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8064
+       }
+      }
+     },
+     {
+      "id": "perf-item-63",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8128
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "perf/bulk-worst-same3",
+   "fn": "calcBulk",
+   "tags": [
+    "perf",
+    "bulk"
+   ],
+   "request": {
+    "format": "single",
+    "attacker": {
+     "species": {
+      "key": "0996-000",
+      "types": [
+       "water"
+      ],
+      "baseStats": {
+       "hp": 100,
+       "atk": 120,
+       "def": 70,
+       "spa": 120,
+       "spd": 70,
+       "spe": 100
+      }
+     },
+     "level": 50,
+     "nature": {
+      "plus": "atk",
+      "minus": "spa"
+     },
+     "sp": {
+      "hp": 0,
+      "atk": 32,
+      "def": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "status": "none"
+    },
+    "defenderSpecies": {
+     "key": "0997-000",
+     "types": [
+      "psychic"
+     ],
+     "baseStats": {
+      "hp": 100,
+      "atk": 50,
+      "def": 80,
+      "spa": 50,
+      "spd": 80,
+      "spe": 50
+     }
+    },
+    "move": {
+     "id": "perf-move",
+     "nameJa": "テストわざ",
+     "type": "water",
+     "category": "physical",
+     "power": 100,
+     "priority": 0
+    },
+    "field": {
+     "weather": "none",
+     "terrain": "none"
+    },
+    "critical": false,
+    "presetKeys": [
+     "none",
+     "hp",
+     "hb_boost",
+     "hb",
+     "hb_full",
+     "hd_boost",
+     "hd",
+     "hd_full"
+    ],
+    "itemVariants": [
+     null,
+     {
+      "id": "perf-item-01",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4160
+       }
+      }
+     },
+     {
+      "id": "perf-item-02",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4224
+       }
+      }
+     },
+     {
+      "id": "perf-item-03",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4288
+       }
+      }
+     },
+     {
+      "id": "perf-item-04",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4352
+       }
+      }
+     },
+     {
+      "id": "perf-item-05",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4416
+       }
+      }
+     },
+     {
+      "id": "perf-item-06",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4480
+       }
+      }
+     },
+     {
+      "id": "perf-item-07",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4544
+       }
+      }
+     },
+     {
+      "id": "perf-item-08",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4608
+       }
+      }
+     },
+     {
+      "id": "perf-item-09",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4672
+       }
+      }
+     },
+     {
+      "id": "perf-item-10",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4736
+       }
+      }
+     },
+     {
+      "id": "perf-item-11",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4800
+       }
+      }
+     },
+     {
+      "id": "perf-item-12",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4864
+       }
+      }
+     },
+     {
+      "id": "perf-item-13",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4928
+       }
+      }
+     },
+     {
+      "id": "perf-item-14",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4992
+       }
+      }
+     },
+     {
+      "id": "perf-item-15",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5056
+       }
+      }
+     },
+     {
+      "id": "perf-item-16",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5120
+       }
+      }
+     },
+     {
+      "id": "perf-item-17",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5184
+       }
+      }
+     },
+     {
+      "id": "perf-item-18",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5248
+       }
+      }
+     },
+     {
+      "id": "perf-item-19",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5312
+       }
+      }
+     },
+     {
+      "id": "perf-item-20",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5376
+       }
+      }
+     },
+     {
+      "id": "perf-item-21",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5440
+       }
+      }
+     },
+     {
+      "id": "perf-item-22",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5504
+       }
+      }
+     },
+     {
+      "id": "perf-item-23",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5568
+       }
+      }
+     },
+     {
+      "id": "perf-item-24",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5632
+       }
+      }
+     },
+     {
+      "id": "perf-item-25",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5696
+       }
+      }
+     },
+     {
+      "id": "perf-item-26",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5760
+       }
+      }
+     },
+     {
+      "id": "perf-item-27",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5824
+       }
+      }
+     },
+     {
+      "id": "perf-item-28",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5888
+       }
+      }
+     },
+     {
+      "id": "perf-item-29",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5952
+       }
+      }
+     },
+     {
+      "id": "perf-item-30",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6016
+       }
+      }
+     },
+     {
+      "id": "perf-item-31",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6080
+       }
+      }
+     },
+     {
+      "id": "perf-item-32",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6144
+       }
+      }
+     },
+     {
+      "id": "perf-item-33",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6208
+       }
+      }
+     },
+     {
+      "id": "perf-item-34",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6272
+       }
+      }
+     },
+     {
+      "id": "perf-item-35",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6336
+       }
+      }
+     },
+     {
+      "id": "perf-item-36",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6400
+       }
+      }
+     },
+     {
+      "id": "perf-item-37",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6464
+       }
+      }
+     },
+     {
+      "id": "perf-item-38",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6528
+       }
+      }
+     },
+     {
+      "id": "perf-item-39",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6592
+       }
+      }
+     },
+     {
+      "id": "perf-item-40",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6656
+       }
+      }
+     },
+     {
+      "id": "perf-item-41",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6720
+       }
+      }
+     },
+     {
+      "id": "perf-item-42",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6784
+       }
+      }
+     },
+     {
+      "id": "perf-item-43",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6848
+       }
+      }
+     },
+     {
+      "id": "perf-item-44",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6912
+       }
+      }
+     },
+     {
+      "id": "perf-item-45",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6976
+       }
+      }
+     },
+     {
+      "id": "perf-item-46",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7040
+       }
+      }
+     },
+     {
+      "id": "perf-item-47",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7104
+       }
+      }
+     },
+     {
+      "id": "perf-item-48",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7168
+       }
+      }
+     },
+     {
+      "id": "perf-item-49",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7232
+       }
+      }
+     },
+     {
+      "id": "perf-item-50",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7296
+       }
+      }
+     },
+     {
+      "id": "perf-item-51",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7360
+       }
+      }
+     },
+     {
+      "id": "perf-item-52",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7424
+       }
+      }
+     },
+     {
+      "id": "perf-item-53",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7488
+       }
+      }
+     },
+     {
+      "id": "perf-item-54",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7552
+       }
+      }
+     },
+     {
+      "id": "perf-item-55",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7616
+       }
+      }
+     },
+     {
+      "id": "perf-item-56",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7680
+       }
+      }
+     },
+     {
+      "id": "perf-item-57",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7744
+       }
+      }
+     },
+     {
+      "id": "perf-item-58",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7808
+       }
+      }
+     },
+     {
+      "id": "perf-item-59",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7872
+       }
+      }
+     },
+     {
+      "id": "perf-item-60",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7936
+       }
+      }
+     },
+     {
+      "id": "perf-item-61",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8000
+       }
+      }
+     },
+     {
+      "id": "perf-item-62",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8064
+       }
+      }
+     },
+     {
+      "id": "perf-item-63",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8128
+       }
+      }
+     }
+    ],
+    "defenderAbilities": [
+     {
+      "id": "perf-plain-1",
+      "nameJa": "テストとくせい"
+     },
+     {
+      "id": "perf-ground-immune",
+      "nameJa": "テストとくせい",
+      "effect": {
+       "defImmuneTypes": [
+        "ground"
+       ],
+       "airborne": true
+      }
+     },
+     {
+      "id": "perf-plain-2",
+      "nameJa": "テストとくせい"
+     }
+    ]
+   }
+  },
+  {
+   "name": "perf/bulk-worst-diff3",
+   "fn": "calcBulk",
+   "tags": [
+    "perf",
+    "bulk"
+   ],
+   "request": {
+    "format": "single",
+    "attacker": {
+     "species": {
+      "key": "0996-000",
+      "types": [
+       "water"
+      ],
+      "baseStats": {
+       "hp": 100,
+       "atk": 120,
+       "def": 70,
+       "spa": 120,
+       "spd": 70,
+       "spe": 100
+      }
+     },
+     "level": 50,
+     "nature": {
+      "plus": "atk",
+      "minus": "spa"
+     },
+     "sp": {
+      "hp": 0,
+      "atk": 32,
+      "def": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "status": "none"
+    },
+    "defenderSpecies": {
+     "key": "0997-000",
+     "types": [
+      "psychic"
+     ],
+     "baseStats": {
+      "hp": 100,
+      "atk": 50,
+      "def": 80,
+      "spa": 50,
+      "spd": 80,
+      "spe": 50
+     }
+    },
+    "move": {
+     "id": "perf-move",
+     "nameJa": "テストわざ",
+     "type": "water",
+     "category": "physical",
+     "power": 100,
+     "priority": 0
+    },
+    "field": {
+     "weather": "none",
+     "terrain": "none"
+    },
+    "critical": false,
+    "presetKeys": [
+     "none",
+     "hp",
+     "hb_boost",
+     "hb",
+     "hb_full",
+     "hd_boost",
+     "hd",
+     "hd_full"
+    ],
+    "itemVariants": [
+     null,
+     {
+      "id": "perf-item-01",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4160
+       }
+      }
+     },
+     {
+      "id": "perf-item-02",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4224
+       }
+      }
+     },
+     {
+      "id": "perf-item-03",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4288
+       }
+      }
+     },
+     {
+      "id": "perf-item-04",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4352
+       }
+      }
+     },
+     {
+      "id": "perf-item-05",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4416
+       }
+      }
+     },
+     {
+      "id": "perf-item-06",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4480
+       }
+      }
+     },
+     {
+      "id": "perf-item-07",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4544
+       }
+      }
+     },
+     {
+      "id": "perf-item-08",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4608
+       }
+      }
+     },
+     {
+      "id": "perf-item-09",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4672
+       }
+      }
+     },
+     {
+      "id": "perf-item-10",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4736
+       }
+      }
+     },
+     {
+      "id": "perf-item-11",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4800
+       }
+      }
+     },
+     {
+      "id": "perf-item-12",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4864
+       }
+      }
+     },
+     {
+      "id": "perf-item-13",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4928
+       }
+      }
+     },
+     {
+      "id": "perf-item-14",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 4992
+       }
+      }
+     },
+     {
+      "id": "perf-item-15",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5056
+       }
+      }
+     },
+     {
+      "id": "perf-item-16",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5120
+       }
+      }
+     },
+     {
+      "id": "perf-item-17",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5184
+       }
+      }
+     },
+     {
+      "id": "perf-item-18",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5248
+       }
+      }
+     },
+     {
+      "id": "perf-item-19",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5312
+       }
+      }
+     },
+     {
+      "id": "perf-item-20",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5376
+       }
+      }
+     },
+     {
+      "id": "perf-item-21",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5440
+       }
+      }
+     },
+     {
+      "id": "perf-item-22",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5504
+       }
+      }
+     },
+     {
+      "id": "perf-item-23",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5568
+       }
+      }
+     },
+     {
+      "id": "perf-item-24",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5632
+       }
+      }
+     },
+     {
+      "id": "perf-item-25",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5696
+       }
+      }
+     },
+     {
+      "id": "perf-item-26",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5760
+       }
+      }
+     },
+     {
+      "id": "perf-item-27",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5824
+       }
+      }
+     },
+     {
+      "id": "perf-item-28",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5888
+       }
+      }
+     },
+     {
+      "id": "perf-item-29",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 5952
+       }
+      }
+     },
+     {
+      "id": "perf-item-30",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6016
+       }
+      }
+     },
+     {
+      "id": "perf-item-31",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6080
+       }
+      }
+     },
+     {
+      "id": "perf-item-32",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6144
+       }
+      }
+     },
+     {
+      "id": "perf-item-33",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6208
+       }
+      }
+     },
+     {
+      "id": "perf-item-34",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6272
+       }
+      }
+     },
+     {
+      "id": "perf-item-35",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6336
+       }
+      }
+     },
+     {
+      "id": "perf-item-36",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6400
+       }
+      }
+     },
+     {
+      "id": "perf-item-37",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6464
+       }
+      }
+     },
+     {
+      "id": "perf-item-38",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6528
+       }
+      }
+     },
+     {
+      "id": "perf-item-39",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6592
+       }
+      }
+     },
+     {
+      "id": "perf-item-40",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6656
+       }
+      }
+     },
+     {
+      "id": "perf-item-41",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6720
+       }
+      }
+     },
+     {
+      "id": "perf-item-42",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6784
+       }
+      }
+     },
+     {
+      "id": "perf-item-43",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6848
+       }
+      }
+     },
+     {
+      "id": "perf-item-44",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6912
+       }
+      }
+     },
+     {
+      "id": "perf-item-45",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 6976
+       }
+      }
+     },
+     {
+      "id": "perf-item-46",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7040
+       }
+      }
+     },
+     {
+      "id": "perf-item-47",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7104
+       }
+      }
+     },
+     {
+      "id": "perf-item-48",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7168
+       }
+      }
+     },
+     {
+      "id": "perf-item-49",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7232
+       }
+      }
+     },
+     {
+      "id": "perf-item-50",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7296
+       }
+      }
+     },
+     {
+      "id": "perf-item-51",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7360
+       }
+      }
+     },
+     {
+      "id": "perf-item-52",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7424
+       }
+      }
+     },
+     {
+      "id": "perf-item-53",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7488
+       }
+      }
+     },
+     {
+      "id": "perf-item-54",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7552
+       }
+      }
+     },
+     {
+      "id": "perf-item-55",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7616
+       }
+      }
+     },
+     {
+      "id": "perf-item-56",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7680
+       }
+      }
+     },
+     {
+      "id": "perf-item-57",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7744
+       }
+      }
+     },
+     {
+      "id": "perf-item-58",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7808
+       }
+      }
+     },
+     {
+      "id": "perf-item-59",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7872
+       }
+      }
+     },
+     {
+      "id": "perf-item-60",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 7936
+       }
+      }
+     },
+     {
+      "id": "perf-item-61",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8000
+       }
+      }
+     },
+     {
+      "id": "perf-item-62",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8064
+       }
+      }
+     },
+     {
+      "id": "perf-item-63",
+      "nameJa": "テストもちもの",
+      "effect": {
+       "statMods": {
+        "def": 8128
+       }
+      }
+     }
+    ],
+    "defenderAbilities": [
+     {
+      "id": "perf-resist-half",
+      "nameJa": "テストとくせい",
+      "effect": {
+       "defResistType": {
+        "water": 2048
+       }
+      }
+     },
+     {
+      "id": "perf-resist-3q",
+      "nameJa": "テストとくせい",
+      "effect": {
+       "defResistType": {
+        "water": 3072
+       }
+      }
+     },
+     {
+      "id": "perf-plain-1",
+      "nameJa": "テストとくせい"
+     }
+    ]
+   }
+  }
+ ]
+}

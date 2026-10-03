@@ -20,7 +20,7 @@
 - ダメージ計算(damage-calc)・素早さ(speed)・判定(judge)と並ぶ独立サービス `services/balance/`(ADR-0012 のサービス境界)。
   他サービスの実行時 API に依存しない。engine も import しない(自前の純粋な Go のコア)。DB を持たない。
 - マスタ(ポケモンのタイプ・技・特性)は pokedex の export を **read model(JSON)として起動時に 1 回だけ読む**(§7)。
-- 画面は Web の「タイプバランス」タブ(`web/src/screens/BalanceScreen.tsx`、ADR-0303)。iOS の画面は未対応(§11)。
+- 画面は Web の「タイプバランス」タブ(`web/src/screens/BalanceScreen.tsx`、ADR-0303)。iOS の画面は第1〜2段を実装中・第3段は未対応(§11・ADR-0415)。
 - 認証なし。端末 ID・セッション ID のヘッダを必須とする(§5)。
 
 ## 3. 構成
@@ -39,7 +39,7 @@ services/balance/
 ├─ testdata/               # 架空データの example
 ├─ scripts/                # smoke(架空データ版・実データ版)
 └─ deploy/
-   ├─ k8s/base                     # Deployment(replicas 1)・Service・Ingress /api/balance
+   ├─ k8s/base                     # Deployment(replicas 1)・Service(Ingress は無い。gateway が転送)
    ├─ k8s/overlays/local           # 架空データの read model(ConfigMap)
    ├─ k8s/overlays/local-readmodel # pokedex export の実データ(ADR-0403)
    ├─ k8s/overlays/gitops          # digest 固定(ADR-0018)
@@ -48,8 +48,8 @@ services/balance/
 ```
 
 - 計算コアは HTTP・k8s から分離している。ハンドラにタイプ計算を書かない。単体テストは k8s を起動せずコアを直接検証する。
-- Ingress は `/api/balance`。gateway 経由のルーティング(`/api/balance/*`)は gateway 側に実装済み(issue #284)。
-  直結の Ingress の撤去と gateway への URL の配線は未対応(§11)。
+- balance は Ingress を持たない。クライアントは gateway(`/api/balance/*`)経由で届き、gateway が Service `balance` へ転送する
+  (`GATEWAY_BALANCE_URL=http://balance`。issue #284・ADR-0414)。端末ID・セッションIDの検証は gateway でも掛かる。
 - リソースは requests 10m/16Mi・limits 100m/64Mi、`GOMEMLIMIT=56MiB`(§8)。HPA は付けていない(軽量 API のため。必要になってから)。
 
 ## 4. 計算の考え方(`internal/balance`)
@@ -82,7 +82,7 @@ services/balance/
 
 - request は **`pokemonId`(と技 ID・特性 ID)だけ**を送り、タイプは balance が read model から引く(クライアントごとのタイプの食い違いを防ぐ。ADR-0014 §1)。
 - 判定順: ヘッダ(400)→ 本文(400 / 413。本文は 16 KiB まで)→ read model 未設定(503)→ 未知の ID(422)→ 200。それ以外は 500。
-- エラー形式は `{code, message}`。code は `missing_request_context`・`invalid_request`・`request_too_large`・`unknown_pokemon`・
+- エラー形式は `{code, message}`。code は `missing_header`・`invalid_header`・`invalid_request`・`request_too_large`・`unknown_pokemon`・
   `unknown_move`・`unknown_ability`・`master_unavailable`・`overloaded`・`internal_error`。
 - 配列は map ではなく**安定した順序**(メンバーは request の順、タイプは正準順 normal … fairy)で返す。
 - 上限: メンバー 1〜6、メンバーの技 4、特性は abilityId 1 つ(`abilityIds` は read model 側で最大 4)、move-range の技 1〜4、recommendations の `limit` は既定 10・最大 20。
@@ -117,7 +117,7 @@ services/balance/
   1 リクエストのメモリも削減した(1,500 件のカタログで約 3.1 MB → 約 0.53 MB)。`GOMEMLIMIT=56MiB` と合わせて、同時 30 でも OOMKill しない(ADR-0409)。
   他のエンドポイントへの上限は、問題が出てから広げる(別 issue)。
 - **メトリクス**: `GET /metrics`(Prometheus 形式。`http_requests_total`・`http_request_duration_seconds`)。
-  ServiceMonitor は `deploy/k8s/base/observability/servicemonitors/balance.yaml`(ADR-0406)。SLO・ダッシュボードの対象は calc だけで、balance は対象外(ADR-0407)。
+  ServiceMonitor は `deploy/k8s/base/observability/servicemonitors/balance.yaml`(ADR-0406)。SLO・ダッシュボードは calc(ADR-0407)と balance(ADR-0420)。
 
 ## 9. GitOps(Argo CD)
 
@@ -140,13 +140,13 @@ services/balance/
 
 | 項目 | 状態 |
 |---|---|
-| iOS のタイプバランス画面 | 未対応(Web のみ) |
-| gateway 経由への一本化 | gateway のルーティングは実装済み。balance の直結 Ingress の撤去と `GATEWAY_BALANCE_URL` 等の配線は別タスク |
+| iOS のタイプバランス画面 | 第1段(防御相性・集計)+第2段(攻撃範囲)は ADR-0415 / P6-21、第3段(threats・recommendations・move-range)は P6-22(PR #493)で実装。シミュレータでの見た目確認は未実施 |
+| gateway 経由への一本化 | balance は完了(直結 Ingress を撤去し `GATEWAY_BALANCE_URL` を配線。ADR-0414)。speed・judge の直結 Ingress は各レーンで残り |
 | 自動 sync・prune・selfHeal | 意図的に無効。有効化は未決 |
 | ApplicationSet・App-of-Apps・judge/calc 系の Application | なし |
 | クラウドへのデプロイ(EKS / GKE の選択・クラウドのレジストリ・実データの GitOps 配布) | 未決(クラウド公開はしない方針。ADR-0210) |
 | recommendations 以外の同時実行上限・HPA | なし(問題が出てから) |
-| balance の SLO・ダッシュボード | なし(calc のみ。ADR-0407) |
+| balance の SLO・アラート | SLO(p99 < 500ms・可用性)とダッシュボードは ADR-0420 で追加済み(実クラスタ確認は未実施)。アラートは作らない(ADR-0407 §2) |
 | 実データ・永続化(パーティ保存・お気に入り) | balance は DB を持たない。保存は team-svc の責務 |
 | 他のレーンに依存する部分 | レギュレーションの使用可能集合や日本語名は pokedex export の内容で決まる(データレーン) |
 

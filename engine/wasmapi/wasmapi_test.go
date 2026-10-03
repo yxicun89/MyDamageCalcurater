@@ -15,7 +15,7 @@ import (
 	"example.com/pokecalc/engine/wasmapi"
 )
 
-// invoke は fn 名で3つの境界関数を呼び分ける。
+// invoke は fn 名で境界関数を呼び分ける。
 func invoke(t *testing.T, fn, requestJSON string) string {
 	t.Helper()
 	switch fn {
@@ -25,6 +25,15 @@ func invoke(t *testing.T, fn, requestJSON string) string {
 		return wasmapi.CalcBulk(requestJSON)
 	case "calcReverse":
 		return wasmapi.CalcReverse(requestJSON)
+	// 調整(ADR-0250)。
+	case "adjustIndices":
+		return wasmapi.AdjustIndices(requestJSON)
+	case "adjustMinSpToKo":
+		return wasmapi.AdjustMinSPToKO(requestJSON)
+	case "adjustMinSpToSurvive":
+		return wasmapi.AdjustMinSPToSurvive(requestJSON)
+	case "adjustAllocation":
+		return wasmapi.AdjustAllocation(requestJSON)
 	}
 	t.Fatalf("未知の fn: %q", fn)
 	return ""

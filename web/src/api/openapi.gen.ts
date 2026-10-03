@@ -113,6 +113,35 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/pokedex/moves/{key}/learners": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * 技を覚えるポケモンの一覧(learnset の逆引き)
+     * @description 技 `key` を覚える種族の要約を返す(調整タブの機能 1。ADR-0251)。既定のレギュレーション
+     *     (コードに書かず DB から引く。ADR-0105)で絞る:
+     *     種族が使用可能集合にあり、かつ技が使用可能集合にあるときだけ返す。`getSpecies` の `learnset`
+     *     (習得技 ∩ 使用可能な技)と同じ規則で、使用可能な種族 S について「S がこの一覧に出る」と
+     *     「`getSpecies(S).learnset` にこの技がある」は一致する。技がマスタにあっても使用可能集合の外なら
+     *     200 `[]`(404 ではない)。
+     *     並びは `searchSpecies` と同じ図鑑番号・フォルム番号の昇順(決定的)。ページングは `limit` と
+     *     `offset`。返った件数が `limit` 未満なら最後のページ(総数は返さない)。
+     *     既定のレギュレーションが無い(マスタ未投入)は 503 `master_unavailable`(一覧系の流儀。
+     *     `getMove` の 404 とは異なる)。既定のレギュレーションはあるが技がマスタに無いときは 404 `not_found`。
+     */
+    get: operations["listMoveLearners"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/pokedex/items": {
     parameters: {
       query?: never;
@@ -224,6 +253,111 @@ export interface paths {
      *     正確さより候補の提示を優先する。複数観測で絞り込む。
      */
     post: operations["calcReverse"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/calc/adjust/indices": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * 調整の指数(火力指数・耐久指数)と HP の 16n / 16n-1 ライン
+     * @description 自分の個体1体の育成で決まる量を返す(ADR-0150 §2〜§4・ADR-0250)。ステートレスで、計算イベントは発行しない。
+     *     - 火力指数 = floor(攻撃実数値 × 威力 × modifier / 4096)。`moveId` を省略したら `firepowerIndex` は null。
+     *       技の分類が physical なら A、special なら C。変化技・威力 0 の技は 400 `invalid_input`。
+     *     - 耐久指数 = floor(H × B(D) × 4096 / damageModifier)。物理・特殊の両方を返す(技は見ない)。
+     *     - 実数値はランク補正を含めない(`individual.ranks`・`status`・`itemId`・`abilityId` は指数に使わない。
+     *       持ち物・特性・タイプ一致の倍率はクライアントが `modifier` / `damageModifier` に掛け合わせて渡す)。
+     *     - HP ラインは `individual.sp.hp` と種族の HP 種族値から求める(合計 66 は見ない。ADR-0150 §4)。
+     */
+    post: operations["adjustIndices"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/calc/adjust/min-sp-to-ko": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * 相手を n 発で倒せる最小の A / C の SP
+     * @description 自分 = `attacker`、相手 = `defender`。自分の A(物理)/ C(特殊)の SP を 0 から探し、`hits` 発で倒す確率が
+     *     `thresholdPercent` 以上になる最小の SP を返す(ADR-0150 §7・ADR-0250)。
+     *     - `attacker.sp` の探索する能力(物理なら atk、特殊なら spa)の値は無視する(上書きする)。それ以外の SP の合計が
+     *       66 を超えると 400 `invalid_input`。
+     *     - 満たせない(上限まで振っても届かない・タイプ相性で無効)ときもエラーにせず `feasible: false` を返す。
+     *     - 変化技・威力 0 の技は 400 `invalid_input`。探索量は `hits`(1〜10)と SP 0〜32 で上限が決まる(ADR-0250 §5)。
+     *     - ステートレスで、計算イベントは発行しない。
+     */
+    post: operations["adjustMinSpToKo"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/calc/adjust/min-sp-to-survive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * 相手の技を n 発耐える最小の H と B / D の SP の組
+     * @description 自分 = `defender`、相手 = `attacker`。自分の H と B(物理)/ D(特殊)の SP の組を探し、`hits` 発受けて耐える
+     *     確率が `thresholdPercent` 以上になる組のうち、合計 SP 最小(同点は耐久指数が大きい → H が小さい)を返す
+     *     (ADR-0150 §7・ADR-0250)。
+     *     - `defender.sp` の hp と探索する能力(物理なら def、特殊なら spd)の値は無視する(上書きする)。
+     *     - 満たせないときもエラーにせず `feasible: false` で、耐える確率が最大の組を返す。
+     *     - 変化技・威力 0 の技は 400 `invalid_input`。探索は最大 33² 組(ADR-0250 §5)。
+     *     - ステートレスで、計算イベントは発行しない。
+     */
+    post: operations["adjustMinSpToSurvive"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/calc/adjust/allocation": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * SP 配分の提案(指数最大の組と、目標を満たす最小 SP の組)
+     * @description `self.sp` を各能力の下限(「ここまで振りたい」)として固定し、残りの SP(66 − 下限の合計)を `mode` の側に回す
+     *     (ADR-0150 §8・ADR-0250)。
+     *     - `mode: bulk` は H・B・D に回す(素早さは見ない)。`focus` が必須。`minSpeed` は 0 以外なら 400 `invalid_input`。
+     *     - `mode: offense` は A(`offenseCategory: physical`)または C(`special`)と S に回す。`offenseCategory` が必須。
+     *     - `ceiling` は回す能力の上限。**省略した能力は 32**(engine のゼロ値「振らない」をそのまま渡さない。ADR-0150 §8)。
+     *       明示した 0 は「下限より上には振らない」。下限 ≤ 上限 ≤ 32 でなければ 400 `invalid_input`。
+     *     - `goal` を渡したときだけ `minSp` を返す(省略時は null)。判定は min-sp-to-ko / min-sp-to-survive と同じ。
+     *     - 探索は耐久側で最大 33³ ≈ 3.6 万候補、攻撃側で 33² 候補(ADR-0250 §5)。ステートレスで、計算イベントは発行しない。
+     */
+    post: operations["adjustAllocation"];
     delete?: never;
     options?: never;
     head?: never;
@@ -415,7 +549,7 @@ export interface components {
      *     | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
      *     | unknown_field | 契約にないフィールド | 400 |
      *     | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-     *     | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
+     *     | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む。調整(`/api/calc/adjust/*`)の発数・しきい値・補正・上限(ceiling)の範囲外、変化技での探索、下限が上限を超える配分(ADR-0250)も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
      *     | unknown_preset | 未知の防御側プリセット | 400 |
      *     | duplicate_preset | 防御側プリセットの重複 | 400 |
      *     | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -440,7 +574,7 @@ export interface components {
      *     | not_found | ルートが無い / このサービスの担当外の操作 / この端末が持っていないリソース ID(他端末のものか実在しないかを区別しない。403 にしない。ADR-0209 §6-2) | 404 |
      *     | master_unavailable | マスタ(pokedex の MySQL)を参照できない | 503 |
      *     | store_unavailable | 保存データの DB(record / team の TiDB)を参照できない。`master_unavailable` と分けるのは原因も復旧手順も別で、「計算はできるが保存はできない」状態(CLAUDE.md 絶対ルール5)をクライアントが区別できる必要があるため(ADR-0209 §5.3) | 503 |
-     *     | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202) | 503 |
+     *     | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202)。calc・pokedex は自サービスの過負荷・締め切り超過でも返す(ADR-0801) | 503 |
      * @enum {string}
      */
     ErrorCode:
@@ -831,12 +965,19 @@ export interface components {
     /**
      * @description 1発ぶんの観測。percent / percentTenths / damage の**ちょうど1つ**を指定する(ADR-0010 §R2)。
      *     0 個・2 個以上・範囲外は 400 `invalid_observation`。整数でなければ(例 12.5)400 `invalid_json`。
-     *     表示%(CalcResult.minPercent など)とは別概念で、丸め規則に依存しない区間で照合する。
+     *     表示%(CalcResult.minPercent など)とは別概念。percent は実機の表示と同じ切り捨てとして照合し、
+     *     percentTenths は丸め規則に依存しない区間で照合する(ADR-0134)。
      */
     Observation: {
-      /** @description 整数%の観測(精度 1%) */
+      /**
+       * @description 整数%の観測(精度 1%)。実機の相手 HP 減少表示と同じ切り捨て(floor(100×ダメージ/最大HP)、100 で頭打ち)。
+       *     v は真の割合 p が v ≤ p < v+1(v=100 は p ≥ 100)のダメージと両立する(ADR-0134)
+       */
       percent?: number;
-      /** @description 小数第1位の観測を 0.1% 単位の整数にしたもの(例 45.3% → 453) */
+      /**
+       * @description 小数第1位の観測を 0.1% 単位の整数にしたもの(例 45.3% → 453)。出所の丸めが未確認なので、
+       *     v−1 < p < v+1(0.1% 単位。v=1000 は上側を開ける)のダメージと両立する(ADR-0010 §R2)
+       */
       percentTenths?: number;
       /** @description HP の実点数の観測(自分の HP の減少量など) */
       damage?: number;
@@ -949,6 +1090,220 @@ export interface components {
       exactCount: number;
       /** @description Mismatch 昇順 → Support 降順 → SPCount 降順 → 定義順(ADR-0010 §R4) */
       candidates: components["schemas"]["ReverseCandidate"][];
+    };
+    /**
+     * @description 4096 基準の補正(×1.0 = 4096。engine の MinEffectModifier..MaxEffectModifier)。省略は 4096。
+     *     明示した 0 と範囲外は 400 `invalid_input`。
+     * @default 4096
+     */
+    AdjustModifier: number;
+    /**
+     * Format: double
+     * @description 満たすべき確率(%)。省略は 100(確定 = 乱数の最悪側でも満たす)。比較は「確率 >= しきい値」。
+     *     明示した 0・負・100 超は 400 `invalid_input`(engine のゼロ値「既定」をそのまま渡さない。ADR-0250 §3)。
+     * @default 100
+     */
+    AdjustThresholdPercent: number;
+    /** @description 目標の発数 n(engine の MaxAdjustHits = 10)。範囲外は 400 `invalid_input`(ID の解決より前に検査する) */
+    AdjustHits: number;
+    AdjustIndicesRequest: {
+      /** @description 指数を求める自分の個体(SP 各 0..32・合計 66 以下) */
+      individual: components["schemas"]["Individual"];
+      /** @description 火力指数に使う技(分類と威力をマスタから引く)。省略すると firepowerIndex は null */
+      moveId?: string;
+      /**
+       * @description 火力指数の補正(タイプ一致・持ち物・特性などをクライアントが掛け合わせたもの)。
+       *     moveId を省略しても値域を検査する(明示した 0 と範囲外は 400 `invalid_input`)
+       */
+      modifier?: components["schemas"]["AdjustModifier"];
+      /** @description 耐久指数の被ダメージ補正(受けるダメージの倍率。半減 2048 で指数が2倍) */
+      damageModifier?: components["schemas"]["AdjustModifier"];
+    };
+    /**
+     * @description HP 実数値が属するライン(16n = HP mod 16 が 0、16n-1 = 15、none = どちらでもない)
+     * @enum {string}
+     */
+    HPLineKind: "none" | "16n" | "16n-1";
+    HPLinePoint: {
+      /** @description そのラインの HP 実数値 */
+      hp: number;
+      /** @description その HP にする HP の SP */
+      sp: number;
+      /** @description 現在の SP からの差(次のラインは正、前のラインは負) */
+      spDelta: number;
+    };
+    /**
+     * @description HP の 16n / 16n-1 ライン(ADR-0150 §4)。next* は SP が現在より大きい中で最小、prev* は小さい中で最大のライン。
+     *     HP の SP 0..32 の範囲に無ければ null。
+     */
+    HPLineReport: {
+      hp: number;
+      sp: number;
+      current: components["schemas"]["HPLineKind"];
+      next16n: components["schemas"]["HPLinePoint"] | null;
+      prev16n: components["schemas"]["HPLinePoint"] | null;
+      next16nMinus1: components["schemas"]["HPLinePoint"] | null;
+      prev16nMinus1: components["schemas"]["HPLinePoint"] | null;
+    };
+    AdjustIndicesResult: {
+      /** @description 実数値(ランク補正なし) */
+      stats: components["schemas"]["StatBlock"];
+      /**
+       * Format: int64
+       * @description 火力指数。moveId を省略したら null
+       */
+      firepowerIndex: number | null;
+      /**
+       * Format: int64
+       * @description 物理耐久指数 floor(H × B × 4096 / damageModifier)
+       */
+      physicalBulkIndex: number;
+      /**
+       * Format: int64
+       * @description 特殊耐久指数 floor(H × D × 4096 / damageModifier)
+       */
+      specialBulkIndex: number;
+      hpLines: components["schemas"]["HPLineReport"];
+    };
+    /**
+     * @description 最小 SP の探索の入力(ADR-0150 §7)。個体・技・場の指定は CalcRequest と同じ。どちらが自分かは操作で決まる
+     *     (min-sp-to-ko は attacker、min-sp-to-survive は defender)。
+     */
+    AdjustSearchRequest: {
+      format: components["schemas"]["Format"];
+      attacker: components["schemas"]["Individual"];
+      defender: components["schemas"]["Individual"];
+      /** @description attacker が使う技(attacker.moveId は読まない) */
+      moveId: string;
+      field?: components["schemas"]["FieldState"];
+      options?: components["schemas"]["CalcOptions"];
+      hits: components["schemas"]["AdjustHits"];
+      thresholdPercent?: components["schemas"]["AdjustThresholdPercent"];
+    };
+    AdjustKOResult: {
+      /** @description 探索した能力(物理 → atk、特殊 → spa) */
+      stat: components["schemas"]["StatKey"];
+      /** @description 探索した SP の上限 = min(32, 66 − 固定 SP の合計) */
+      searchLimit: number;
+      /** @description searchLimit 以内でしきい値を満たす SP があるか */
+      feasible: boolean;
+      /** @description feasible なら満たす最小の SP、そうでなければ searchLimit */
+      sp: number;
+      /**
+       * Format: double
+       * @description sp のときに hits 発で倒す確率(%。engine の生値。丸めない)
+       */
+      chancePercent: number;
+      /** @description 探索中の計算に付いた「未対応」の印(ADR-0123・ADR-0215)。SP によらず同じ。印なしは空配列 */
+      unsupported: components["schemas"]["UnsupportedMark"][];
+    };
+    AdjustSurviveResult: {
+      /** @description H と組にして探索した能力(物理 → def、特殊 → spd) */
+      stat: components["schemas"]["StatKey"];
+      /** @description hpSp + statSp の上限 = 66 − 固定 SP の合計(各能力は別に 32 まで) */
+      searchLimit: number;
+      feasible: boolean;
+      hpSp: number;
+      statSp: number;
+      totalSp: number;
+      /**
+       * Format: int64
+       * @description 選んだ組の耐久指数(等倍。H 実数値 × B(D) 実数値)
+       */
+      bulkIndex: number;
+      /**
+       * Format: double
+       * @description 選んだ組で hits 発受けて耐える確率(%。engine の生値)
+       */
+      chancePercent: number;
+      /** @description 探索中の計算に付いた「未対応」の印(ADR-0123・ADR-0215)。印なしは空配列 */
+      unsupported: components["schemas"]["UnsupportedMark"][];
+    };
+    /**
+     * @description 残り SP を回す側(bulk = H・B・D、offense = A または C と S)
+     * @enum {string}
+     */
+    AllocMode: "bulk" | "offense";
+    /**
+     * @description 耐久側の指数最大の基準(physical = H×B、special = H×D、both = min(H×B, H×D) → max)
+     * @enum {string}
+     */
+    BulkFocus: "physical" | "special" | "both";
+    /**
+     * @description 回す能力の SP の上限(0..32)。**省略した能力は 32**(ADR-0150 §8 の「既定は境界の責務」)。
+     *     明示した 0 は「下限より上には振らない」。回さない能力の値は検査の範囲(0..32)以外では使わない。
+     */
+    AdjustCeiling: {
+      hp?: number;
+      atk?: number;
+      def?: number;
+      spa?: number;
+      spd?: number;
+      spe?: number;
+    };
+    /**
+     * @description 最小 SP の組の目標(ADR-0150 §8)。bulk は「opponent の技を hits 発受けて耐える」、offense は
+     *     「自分の技で opponent を hits 発で倒す」(技の分類は offenseCategory と一致させる。違えば 400 `invalid_input`)。
+     */
+    AdjustAllocGoal: {
+      format: components["schemas"]["Format"];
+      opponent: components["schemas"]["Individual"];
+      moveId: string;
+      field?: components["schemas"]["FieldState"];
+      options?: components["schemas"]["CalcOptions"];
+      hits: components["schemas"]["AdjustHits"];
+      thresholdPercent?: components["schemas"]["AdjustThresholdPercent"];
+    };
+    AdjustAllocationRequest: {
+      /** @description 自分の個体。sp は各能力の下限(結果の SP は各能力でこれ以上) */
+      self: components["schemas"]["Individual"];
+      ceiling?: components["schemas"]["AdjustCeiling"];
+      mode: components["schemas"]["AllocMode"];
+      /** @description mode=bulk で必須(欠けたら 400 `invalid_input`)。offense では読まない */
+      focus?: components["schemas"]["BulkFocus"];
+      /** @description mode=offense で必須(physical → A、special → C。欠落・status は 400 `invalid_input`)。bulk では読まない */
+      offenseCategory?: components["schemas"]["MoveCategory"];
+      /**
+       * @description offense の素早さの目標(S 実数値の下限。相手の S + 1 を渡せば「超え」)。0 は目標なし。bulk で 0 以外は 400 `invalid_input`
+       * @default 0
+       */
+      minSpeed: number;
+      goal?: components["schemas"]["AdjustAllocGoal"];
+    };
+    AdjustAllocPlan: {
+      /** @description 全6能力の SP(回さない能力は下限のまま) */
+      sp: components["schemas"]["StatBlock"];
+      totalSp: number;
+      /** @description 実数値(ランク補正なし) */
+      stats: components["schemas"]["StatBlock"];
+      /**
+       * Format: int64
+       * @description 等倍の物理耐久指数(H × B)
+       */
+      physicalBulk: number;
+      /**
+       * Format: int64
+       * @description 等倍の特殊耐久指数(H × D)
+       */
+      specialBulk: number;
+      /** @description 素早さの目標を満たすか(bulk・minSpeed=0 では常に true) */
+      speedMet: boolean;
+      /** @description goal を満たすか(goal を省略したら false) */
+      goalMet: boolean;
+      /**
+       * Format: double
+       * @description goal の確率(bulk は耐える、offense は倒す確率。%)。goal を省略したら 0
+       */
+      chancePercent: number;
+    };
+    AdjustAllocationResult: {
+      /** @description 残り SP = 66 − 下限の合計 */
+      remaining: number;
+      maxIndex: components["schemas"]["AdjustAllocPlan"];
+      /** @description goal を満たす最小 SP の組(満たせなければ最も近い組。GoalMet / SpeedMet で判別)。goal を省略したら null */
+      minSp: components["schemas"]["AdjustAllocPlan"] | null;
+      /** @description goal の計算に付いた「未対応」の印(ADR-0123)。goal を省略したら空配列 */
+      unsupported: components["schemas"]["UnsupportedMark"][];
     };
     /**
      * @description calc-svc が計算に使うマスタ一式(ADR-0204)。形は pokedex の DB の行(`services/internal/master` の
@@ -1265,7 +1620,7 @@ export interface operations {
           "application/json": components["schemas"]["SpeciesSummary"][];
         };
       };
-      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
+      /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -1325,7 +1680,7 @@ export interface operations {
           "application/json": components["schemas"]["Error"];
         };
       };
-      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
+      /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -1378,7 +1733,7 @@ export interface operations {
           "application/json": components["schemas"]["Move"][];
         };
       };
-      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
+      /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -1438,7 +1793,7 @@ export interface operations {
           "application/json": components["schemas"]["Error"];
         };
       };
-      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
+      /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -1495,7 +1850,72 @@ export interface operations {
           "application/json": components["schemas"]["Move"][];
         };
       };
-      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
+      /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  listMoveLearners: {
+    parameters: {
+      query?: {
+        /** @description 1ページの件数。範囲外・整数でない値は 400 `invalid_input` */
+        limit?: number;
+        /** @description 先頭から飛ばす件数。範囲外・整数でない値は 400 `invalid_input`。末尾を超えれば 200 `[]` */
+        offset?: number;
+      };
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path: {
+        /** @description 技の ID(例 highhorsepower)。マスタに無ければ 404 `not_found` */
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 技を覚える種族の要約(図鑑番号・フォルム番号の昇順。一致なしは `[]`) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SpeciesSummary"][];
+        };
+      };
+      /** @description 技がマスタに無い(`not_found`) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -1548,7 +1968,7 @@ export interface operations {
           "application/json": components["schemas"]["Item"][];
         };
       };
-      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
+      /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -1596,7 +2016,7 @@ export interface operations {
           "application/json": components["schemas"]["Nature"][];
         };
       };
-      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
+      /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -1652,7 +2072,7 @@ export interface operations {
       500: components["responses"]["Error"];
       /**
        * @description 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
-       *     gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+       *     gateway から calc-svc に届かない、または calc-svc 自身の過負荷・締め切り超過(`upstream_unavailable`。ADR-0202・ADR-0801)
        */
       503: {
         headers: {
@@ -1709,7 +2129,7 @@ export interface operations {
       500: components["responses"]["Error"];
       /**
        * @description 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
-       *     gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+       *     gateway から calc-svc に届かない、または calc-svc 自身の過負荷・締め切り超過(`upstream_unavailable`。ADR-0202・ADR-0801)
        */
       503: {
         headers: {
@@ -1760,6 +2180,234 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ReverseResult"];
+        };
+      };
+      400: components["responses"]["Error"];
+      500: components["responses"]["Error"];
+      /**
+       * @description 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+       *     gateway から calc-svc に届かない、または calc-svc 自身の過負荷・締め切り超過(`upstream_unavailable`。ADR-0202・ADR-0801)
+       */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  adjustIndices: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AdjustIndicesRequest"];
+      };
+    };
+    responses: {
+      /** @description 指数と HP ライン */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdjustIndicesResult"];
+        };
+      };
+      400: components["responses"]["Error"];
+      500: components["responses"]["Error"];
+      /**
+       * @description 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+       *     gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+       */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  adjustMinSpToKo: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AdjustSearchRequest"];
+      };
+    };
+    responses: {
+      /** @description 最小の SP(または届かないときの上限での結果) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdjustKOResult"];
+        };
+      };
+      400: components["responses"]["Error"];
+      500: components["responses"]["Error"];
+      /**
+       * @description 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+       *     gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+       */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  adjustMinSpToSurvive: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AdjustSearchRequest"];
+      };
+    };
+    responses: {
+      /** @description 最小の SP の組(または届かないときの最も耐える組) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdjustSurviveResult"];
+        };
+      };
+      400: components["responses"]["Error"];
+      500: components["responses"]["Error"];
+      /**
+       * @description 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+       *     gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+       */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  adjustAllocation: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AdjustAllocationRequest"];
+      };
+    };
+    responses: {
+      /** @description 提案する SP の組 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdjustAllocationResult"];
         };
       };
       400: components["responses"]["Error"];

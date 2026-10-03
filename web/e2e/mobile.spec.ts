@@ -13,7 +13,9 @@ import {
   calcRows,
   chooseRadio,
   combobox,
+  openAppOffline,
   selectMatchup,
+  selectReverseMatchup,
 } from "./support/calcPage.ts";
 
 /** issue #98 の再現幅(実測で横に溢れていた viewport)。 */
@@ -62,18 +64,16 @@ async function expectInsideViewport(page: Page, locator: Locator, name: string):
 
 /** 計算画面を開き、結果まで出た状態にする(入力が全部そろった、いちばん横に広がる状態)。 */
 async function openCalcScreen(page: Page): Promise<void> {
-  await page.goto("/calc");
-  await expect(page.getByRole("tablist", { name: "画面の切り替え" })).toBeVisible();
+  // ADR-0313: キャッシュを温めてからオフライン(WASM)で開く(既定はオンライン)。
+  await openAppOffline(page, "/calc");
   await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
   await expect(calcRows(page)).toHaveCount(DEFAULT_ROW_COUNT);
 }
 
 /** 逆算画面を開き、観測を2件入れた状態にする(観測の行が増えても溢れないことを見るため)。 */
 async function openReverseScreen(page: Page): Promise<void> {
-  await page.goto("/reverse");
-  await expect(page.getByRole("tablist", { name: "画面の切り替え" })).toBeVisible();
-  await combobox(page, "自分のポケモン").selectOption({ label: SPECIES.fire.nameJa });
-  await combobox(page, "相手のポケモン").selectOption({ label: SPECIES.water.nameJa });
+  await openAppOffline(page, "/reverse");
+  await selectReverseMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
   await page.getByRole("textbox", { name: "観測1", exact: true }).fill("50");
   await page.getByRole("button", { name: "観測を追加", exact: true }).click();
   await page.getByRole("textbox", { name: "観測2", exact: true }).fill("50");

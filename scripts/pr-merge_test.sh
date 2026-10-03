@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/pr-merge.sh の自動テスト(ADR-0801)。`make test-scripts` から流す。
+# scripts/pr-merge.sh の自動テスト(ADR-0804)。`make test-scripts` から流す。
 # 偽の gh・make・npm を PATH の先頭に置き、使い捨ての git リポジトリ(origin + clone)で、
 # ゲート(PR の状態・checks・保護ファイル・ローカル検証・マージ)が期待どおり働くことを確かめる。
 # 実際の GitHub・実際の make には一切触れない。

@@ -228,17 +228,31 @@ func validateAgainstTypeChart(in DamageInput) error {
 // CalcDamage は 1 vs 1 のダメージを計算する。
 // in.TypeChart が未設定なら ErrTypeChartMissing、表に無いタイプがあれば ErrUnknownType を返す。
 func CalcDamage(in DamageInput) (DamageResult, error) {
-	if err := in.Attacker.Validate(); err != nil {
+	res, hasKO, err := calcDamageNoKO(in)
+	if err != nil {
 		return DamageResult{}, err
+	}
+	if hasKO {
+		res.KO = ComputeKO(res.Rolls, res.DefenderHP)
+	}
+	return res, nil
+}
+
+// calcDamageNoKO は CalcDamage から確定数(KO)を除いた計算。KO は Rolls と DefenderHP だけで決まり、
+// 作るのが重い(ADR-0126 追記 2026-10-02)ので、KO を使わない逆算・一括計算のまとめ判定はこちらを呼ぶ。
+// hasKO は CalcDamage が KO を計算する経路(ダメージが出る)だったか。false のとき KO はゼロ値のまま。
+func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
+	if err := in.Attacker.Validate(); err != nil {
+		return DamageResult{}, false, err
 	}
 	if err := in.Defender.Validate(); err != nil {
-		return DamageResult{}, err
+		return DamageResult{}, false, err
 	}
 	if err := validateAgainstTypeChart(in); err != nil {
-		return DamageResult{}, err
+		return DamageResult{}, false, err
 	}
 
-	res := DamageResult{
+	res = DamageResult{
 		Category:    in.Move.Category,
 		DefenderHP:  RealStats(in.Defender).HP,
 		Unsupported: unsupportedMarks(in),
@@ -247,7 +261,7 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 	moveType := in.Move.Type
 	eff, err := in.TypeChart.Effectiveness(moveType, in.Defender.Species.Types)
 	if err != nil {
-		return DamageResult{}, err
+		return DamageResult{}, false, err
 	}
 	res.Effectiveness = eff.Multiplier()
 	_, res.STAB = stabModifier(in, moveType)
@@ -264,7 +278,7 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 
 	// 変化技・威力0・無効相性・特性による無効/吸収はダメージ0。
 	if in.Move.Category == CategoryStatus || in.Move.Power <= 0 || eff.IsImmune() || res.Nullified != NullifyNone {
-		return res, nil
+		return res, false, nil
 	}
 
 	level := in.Attacker.EffectiveLevel()
@@ -298,6 +312,5 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 		}
 		res.Rolls[i] = d
 	}
-	res.KO = ComputeKO(res.Rolls, res.DefenderHP)
-	return res, nil
+	return res, true, nil
 }
