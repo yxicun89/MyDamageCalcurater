@@ -3,6 +3,7 @@ package master
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"example.com/pokecalc/engine"
 )
@@ -27,6 +28,25 @@ type SpeciesRow struct {
 	// BaseSpeciesKey / RequiredItemID は "" が NULL を表す。
 	BaseSpeciesKey string
 	RequiredItemID string
+}
+
+// MegaNamePrefix はメガ種族の日本語名の先頭に付ける語(メガルカリオ)。importer が名前を生成するとき
+// (MegaNameJa)と、種族検索が「メガを除いた基本種名でも当たる」規則(ADR-0324)で使う。名前の表ではなく
+// 命名規則の1語(CLAUDE.md の「リストをハードコードしない」の対象外)。
+const MegaNamePrefix = "メガ"
+
+// megaFormePrefix は Showdown のメガのフォーム名の先頭("Mega"、"Mega-X"、"Mega-Y")。
+const megaFormePrefix = "Mega"
+
+// MegaNameJa は基本種の日本語名とメガのフォーム名から、メガ種族の日本語名を機械的に作る
+// (メガ + 基本種名 + フォーム識別子)。フォーム名が "Mega" だけなら識別子なし(メガルカリオ)、
+// "Mega-X" なら末尾に X(メガリザードンX)。基本種名が空なら "" を返す(生成しない)。
+func MegaNameJa(baseNameJa, forme string) string {
+	if strings.TrimSpace(baseNameJa) == "" {
+		return ""
+	}
+	suffix := strings.TrimPrefix(strings.TrimPrefix(forme, megaFormePrefix), "-")
+	return MegaNamePrefix + baseNameJa + suffix
 }
 
 // SpeciesAbilityRow は species_abilities テーブルの行。

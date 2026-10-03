@@ -131,6 +131,7 @@ func nameStatsForSpecies(in Input, rows []SpeciesRow) NameStats {
 		addNameStat(&stats, row.ShowdownID, row.NameJaSource, lookup, in.Config.NameJaLanguages)
 	}
 	sort.Strings(stats.FallbackIDs)
+	sort.Strings(stats.GeneratedIDs)
 	return stats
 }
 
@@ -146,6 +147,9 @@ func addNameStat(stats *NameStats, id, source string, names map[string]string, l
 				break
 			}
 		}
+	case "generated":
+		stats.Generated++
+		stats.GeneratedIDs = append(stats.GeneratedIDs, id)
 	case "fallback_en":
 		stats.FallbackEn++
 		stats.FallbackIDs = append(stats.FallbackIDs, id)
