@@ -23,7 +23,12 @@ import {
 } from "../master/onlineSource";
 import type { MasterCapabilities, MasterData, MasterSpecies, MasterSpeciesSearch } from "../master/types";
 import { createFakeEngine, type FakeEngine } from "../test/fakeEngine";
-import { createFakeSpeciesSearch, limitedMaster, type FakeSpeciesSearch } from "../test/onlineMaster";
+import {
+  createDeferredSpeciesSearch,
+  createFakeSpeciesSearch,
+  limitedMaster,
+  type FakeSpeciesSearch,
+} from "../test/onlineMaster";
 import { ReverseScreen } from "./ReverseScreen";
 
 let example: MasterData;
@@ -332,4 +337,71 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
       });
     },
   );
+});
+
+describe("種族の解決待ちの間に観測を入力したとき(ADR-0313 の回帰)", () => {
+  test("解決が届いた後に逆算が走り、「計算中」のまま止まらない", async () => {
+    const attacker = speciesAt(0);
+    const defender = speciesAt(1);
+    const search = createDeferredSpeciesSearch();
+    const rendered = renderScreen(limitedMaster(example, SEARCH_ONLY), search);
+    const resolutionOf = (species: MasterSpecies) => ({
+      species,
+      abilities: example.abilities.filter((ability) => species.abilities.includes(ability.id)),
+      moves: learnsetMoves(species, example.moves),
+    });
+    const summaryOf = ({ key, dexNo, form, nameJa, types }: MasterSpecies) => ({
+      key,
+      dexNo,
+      form,
+      nameJa,
+      types,
+    });
+
+    // 自分を選んで解決まで終える。
+    const mine = within(myCard()).getByRole("combobox", { name: "自分のポケモン" });
+    await rendered.user.type(mine, attacker.nameJa);
+    rendered.advance(SPECIES_SEARCH_DEBOUNCE_MS);
+    await waitFor(() => {
+      expect(search.searchCalls).toHaveLength(1);
+    });
+    await act(async () => {
+      search.searchCalls[0]?.resolve([summaryOf(attacker)]);
+      await Promise.resolve();
+    });
+    await rendered.user.click(await within(myCard()).findByRole("option", { name: attacker.nameJa }));
+    await act(async () => {
+      search.resolveCalls[0]?.resolve(resolutionOf(attacker));
+      await Promise.resolve();
+    });
+
+    // 相手は選んだが、解決はまだ(応答待ち)。
+    const theirs = within(theirCard()).getByRole("combobox", { name: "相手のポケモン" });
+    await rendered.user.type(theirs, defender.nameJa);
+    rendered.advance(SPECIES_SEARCH_DEBOUNCE_MS);
+    await waitFor(() => {
+      expect(search.searchCalls).toHaveLength(2);
+    });
+    await act(async () => {
+      search.searchCalls[1]?.resolve([summaryOf(defender)]);
+      await Promise.resolve();
+    });
+    await rendered.user.click(await within(theirCard()).findByRole("option", { name: defender.nameJa }));
+    expect(search.resolveCalls).toHaveLength(2);
+
+    // 解決待ちの間に観測を打ち、観測のデバウンス(200ms)が明ける前に解決が届く。
+    await rendered.user.type(observationInput(), "50");
+    await act(async () => {
+      search.resolveCalls[1]?.resolve(resolutionOf(defender));
+      await Promise.resolve();
+    });
+    rendered.advance(OBSERVATION_INPUT_DEBOUNCE_MS);
+
+    await waitFor(() => {
+      expect(rendered.engine.reverseRequests).toHaveLength(1);
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("計算中")).toBeNull();
+    });
+  });
 });

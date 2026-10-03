@@ -1,0 +1,17 @@
+# team-svc の Service。クラスタ内だけ(ClusterIP。Ingress は作らない)。
+# 公開の /api/team/* は gateway 経由(GATEWAY_TEAM_URL=http://team。ADR-0202・ADR-0220 §1)。
+apiVersion: v1
+kind: Service
+metadata:
+  name: team
+  labels:
+    app.kubernetes.io/name: team
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: team
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
