@@ -29,3 +29,4 @@ ReplicaSet の履歴は同じ image 参照しか持たないので `kubectl roll
 ## 影響
 - 古いタグのイメージが k3d ノードに溜まる(ロールバックのため意図的)。掃除はクラスタの作り直しで足りる。
 - 実クラスタでの動作確認は未実施(スクリプトは偽の docker・k3d・kubectl の自動テストのみ)。
+- 既知の制約: `scripts/image-tag.sh` は gitignore 済みのファイル(`data/generated` や Web のビルド入力など)の中身の変化を見ない。変わってもクリーン判定のままで同じタグを再 import するだけになり、image 参照が変わらないので rollout は起きず古い Pod が残る。そのときは `-dirty` 相当の再起動(`kubectl rollout restart`)を手で行う。
