@@ -74,7 +74,7 @@ func validateResponseAgainstContract(t *testing.T, method, target string, withHe
 // contractRoute は method・target に当たる契約の操作を引き、検証の入力を作る(リクエストはまだ照らさない)。
 func contractRoute(t *testing.T, method, target string, withHeaders bool) *openapi3filter.RequestValidationInput {
 	t.Helper()
-	doc, err := api.GetSwagger()
+	doc, err := api.GetSpec()
 	if err != nil {
 		t.Fatalf("契約を読めない: %v", err)
 	}
@@ -119,7 +119,7 @@ func responseContractError(in *openapi3filter.RequestValidationInput, rec *httpt
 // 保つ(絶対ルール1。契約の maxItems を変えたらこのテストの期待値も自動で追従する)。
 func contractQueryParamMaxItems(t *testing.T, path, method, name string) int {
 	t.Helper()
-	doc, err := api.GetSwagger()
+	doc, err := api.GetSpec()
 	if err != nil {
 		t.Fatalf("契約を読めない: %v", err)
 	}

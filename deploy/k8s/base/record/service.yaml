@@ -1,0 +1,17 @@
+# record-svc の Service。クラスタ内だけ(ClusterIP。Ingress は作らない)。
+# 公開の /api/record/* は gateway 経由(GATEWAY_RECORD_URL=http://record。ADR-0202・ADR-0220 §1)。
+apiVersion: v1
+kind: Service
+metadata:
+  name: record
+  labels:
+    app.kubernetes.io/name: record
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: record
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

@@ -167,6 +167,7 @@ func TestPokedexRoutesAreNotFound(t *testing.T) {
 	for _, path := range []string{
 		"/api/pokedex/species", "/api/pokedex/species?q=テ", "/api/pokedex/species/9001-000",
 		"/api/pokedex/moves", "/api/pokedex/moves/teststrike", "/api/pokedex/moves/batch?ids=teststrike",
+		"/api/pokedex/moves/teststrike/learners", "/api/pokedex/moves/teststrike/learners?limit=abc",
 		"/api/pokedex/items", "/api/pokedex/natures",
 	} {
 		t.Run(path, func(t *testing.T) {

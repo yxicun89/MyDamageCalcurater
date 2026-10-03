@@ -21,9 +21,9 @@ import (
 type StoreFunc func() master.Store
 
 // NewDeferredHandler は、マスタを後から(バックグラウンドの取得で)用意する calc-svc の HTTP ハンドラを作る(ADR-0204 §3)。
-// current が nil を返す間、calc の3操作は 503 master_unavailable、GET /readyz は 503 master_unavailable、
+// current が nil を返す間、calc の3操作と調整の4操作は 503 master_unavailable、GET /readyz は 503 master_unavailable、
 // GET /healthz は 200 を返す。current が Store を返すようになったら NewHandler と同じに振る舞う。
-func NewDeferredHandler(current StoreFunc, publisher EventPublisher) http.Handler {
+func NewDeferredHandler(current StoreFunc, publisher EventPublisher, opts ...Option) http.Handler {
 	e := echo.New()
 	e.HTTPErrorHandler = httpErrorHandler
 	e.Logger = slog.Default() // main が JSON ハンドラを既定にした後に呼ばれる(issue #246)
@@ -33,7 +33,7 @@ func NewDeferredHandler(current StoreFunc, publisher EventPublisher) http.Handle
 	e.Use(recoverMiddleware)
 	e.GET(httpmetrics.Path, m.Handler())
 
-	registerDeferredCalcRoutes(e, current, publisher)
+	registerDeferredCalcRoutes(e, current, publisher, guardMiddleware(opts))
 	registerPokedexNotFoundRoutes(e)
 	e.GET("/healthz", healthzHandler)
 	e.GET("/readyz", func(c *echo.Context) error {
@@ -45,12 +45,17 @@ func NewDeferredHandler(current StoreFunc, publisher EventPublisher) http.Handle
 	return e
 }
 
-// registerDeferredCalcRoutes は calc の3操作を、その時点の current() の結果に応じて 503 か
+// registerDeferredCalcRoutes は calc の3操作と調整の4操作を、その時点の current() の結果に応じて 503 か
 // 生成ラッパ(api.ServerInterfaceWrapper)経由の本来の処理に振り分ける。
-func registerDeferredCalcRoutes(e *echo.Echo, current StoreFunc, publisher EventPublisher) {
-	e.POST("/api/calc", deferredCalcHandler(current, publisher, func(w *api.ServerInterfaceWrapper) echo.HandlerFunc { return w.CalcDamage }))
-	e.POST("/api/calc/bulk", deferredCalcHandler(current, publisher, func(w *api.ServerInterfaceWrapper) echo.HandlerFunc { return w.CalcBulk }))
-	e.POST("/api/calc/reverse", deferredCalcHandler(current, publisher, func(w *api.ServerInterfaceWrapper) echo.HandlerFunc { return w.CalcReverse }))
+func registerDeferredCalcRoutes(e *echo.Echo, current StoreFunc, publisher EventPublisher, guard echo.MiddlewareFunc) {
+	e.POST("/api/calc", deferredCalcHandler(current, publisher, func(w *api.ServerInterfaceWrapper) echo.HandlerFunc { return w.CalcDamage }), guard)
+	e.POST("/api/calc/bulk", deferredCalcHandler(current, publisher, func(w *api.ServerInterfaceWrapper) echo.HandlerFunc { return w.CalcBulk }), guard)
+	e.POST("/api/calc/reverse", deferredCalcHandler(current, publisher, func(w *api.ServerInterfaceWrapper) echo.HandlerFunc { return w.CalcReverse }), guard)
+	// 調整の4操作(ADR-0250 §8。準備中は 503 master_unavailable)。
+	e.POST("/api/calc/adjust/indices", deferredCalcHandler(current, publisher, func(w *api.ServerInterfaceWrapper) echo.HandlerFunc { return w.AdjustIndices }), guard)
+	e.POST("/api/calc/adjust/min-sp-to-ko", deferredCalcHandler(current, publisher, func(w *api.ServerInterfaceWrapper) echo.HandlerFunc { return w.AdjustMinSpToKo }), guard)
+	e.POST("/api/calc/adjust/min-sp-to-survive", deferredCalcHandler(current, publisher, func(w *api.ServerInterfaceWrapper) echo.HandlerFunc { return w.AdjustMinSpToSurvive }), guard)
+	e.POST("/api/calc/adjust/allocation", deferredCalcHandler(current, publisher, func(w *api.ServerInterfaceWrapper) echo.HandlerFunc { return w.AdjustAllocation }), guard)
 }
 
 // deferredCalcHandler は、current() が nil の間は 503 master_unavailable、Store が用意できたら

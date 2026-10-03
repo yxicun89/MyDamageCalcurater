@@ -2,7 +2,7 @@ package httpapi
 
 // 契約テスト(test-strategy.md L4 の先取り。P3-3 で gateway 経由のものを足す)。
 // レスポンス(と成功ケースのリクエスト)を api/openapi.yaml に照らして kin-openapi で検証する。
-// 仕様は生成物に埋め込まれたもの(api.GetSwagger。make gen で openapi.yaml から作られる)を使う。
+// 仕様は生成物に埋め込まれたもの(api.GetSpec。make gen で openapi.yaml から作られる)を使う。
 
 import (
 	"bytes"
@@ -32,7 +32,7 @@ var (
 func loadContract(t *testing.T) (*openapi3.T, routers.Router) {
 	t.Helper()
 	contractOnce.Do(func() {
-		contractDoc, contractErr = api.GetSwagger()
+		contractDoc, contractErr = api.GetSpec()
 		if contractErr != nil {
 			return
 		}
