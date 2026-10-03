@@ -36,7 +36,10 @@
 | `deploy/k8s/overlays/local/web` | 1 | Component: web の image を :local |
 | `docs` | 14 | 設計・要件・計画・規約(plan/requirements/design/test-strategy/architecture/coding-rules 等) |
 | `docs/adr` | 61 | ADR(設計判断。レーンごとの番号帯) |
-| `docs/ai-shared` | 8 | Claude Code/Codex 共有状態(CURRENT_STATE・DECISIONS・COORDINATION 等) |
+| `docs/ai-shared` | 8 | Claude Code/Codex 共有状態(CURRENT_STATE〈索引〉・DECISIONS〈2026-10-03 までの凍結アーカイブ〉・COORDINATION 等) |
+| `docs/ai-shared/state` | 8 | レーン別の現在状態(Lane / Active / Branch / Status / Next。ADR-0170) |
+| `docs/decisions` | 2 | 判断の記録(1件1ファイル。README と各エントリ。`scripts/new-decision.sh`・`scripts/list-decisions.sh`。ADR-0170) |
+| `docs/plan` | 12 | plan の区画(M1〜M4・TB・SP・JD・AJ・DOC・後続・ブロッカー・改善要望。索引は docs/plan.md。ADR-0170) |
 | `docs/runbooks` | 6 | 動作確認手順(api・balance・data・ios・ios-device-install・speed) |
 | `engine` | 36 | 計算エンジン(純粋 Go: ダメージ・確定数・一括・逆算・実数値・相性表)。module example.com/pokecalc/engine |
 | `engine/cmd/wasm` | 2 | WASM エントリ(syscall/js で globalThis.pokecalc を登録)。native ビルド用スタブ付き |

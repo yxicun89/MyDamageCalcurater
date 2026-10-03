@@ -13,9 +13,9 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 同じレーンは同時に1セッションだけ。レーン・ディレクトリ・ブランチ・PR での統合・止まるときの作法は
 `docs/ai-shared/COORDINATION.md` を正とする(2026-09-21 ユーザー決定)。
 
-1. 作業開始時: `git fetch origin` し、`origin/main` の `docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md` を読む(`DECISIONS.md` は巨大なので見出しから自レーンと直近だけ。COORDINATION.md「コンテキストを膨らませない」)。
-   続きはレーン欄の `Branch` の最新コミットと `Next` から始める
-2. 作業終了時: 自分のログ(`CLAUDE_LOG.md` / `CODEX_LOG.md`)に追記し、進めたレーンの欄(`Status`・`Next`・`Active`)を更新して commit・push する
+1. 作業開始時: `git fetch origin` し、`origin/main` の `docs/ai-shared/state/<lane>.md` と未決の判断(`scripts/list-decisions.sh`。過去分は凍結アーカイブ `DECISIONS.md` の見出しから自レーンと直近だけ。COORDINATION.md「コンテキストを膨らませない」)を読む。
+   続きはレーンのファイルの `Branch` の最新コミットと `Next` から始める
+2. 作業終了時: 自分のログ(`CLAUDE_LOG.md` / `CODEX_LOG.md`)に追記し、進めたレーンのファイル `docs/ai-shared/state/<lane>.md`(`Status`・`Next`・`Active`)を更新して commit・push する
 
 ## 開始時と Git 運用
 
@@ -31,7 +31,7 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 - 依頼された範囲の最小変更に留め、無関係な整形、依存更新、大規模リファクタリングを混ぜない。
   レビューのみの依頼では変更しない。
 - コミットはメインエージェントが担当する。1タスク = 1コミットを基本とし、先に
-  `docs/plan.md` を更新する。直前に `git diff` と `git diff --cached` を確認し、
+  `docs/plan/` の区画を更新する。直前に `git diff` と `git diff --cached` を確認し、
   対象ファイルを明示して stage する。無関係な既存変更を一括で取り込まない。
   作業ブランチへの push は区切りごとに行う。main へは PR 経由でのみ入れる(直接 push・直接 merge をしない。COORDINATION.md)。
   PR のマージは、`gh pr checks N` で CI が全件成功のときだけ、PR 番号を明示し `gh pr view N --json headRefOid -q .headRefOid` の SHA を `--match-head-commit` に付けて単独で `gh pr merge N` してよい(`--admin`・`gh api` でのマージは不可。
@@ -53,11 +53,11 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 以下の規約で編集する。**main への統合は、各 AI が自分のブランチを自分で行う**(2026-09-21 改訂。
 マージコーディネーターは廃止。手順・条件・止まるときの作法は `docs/ai-shared/COORDINATION.md` を正とする)。
 
-1. `docs/ai-shared/CURRENT_STATE.md`
-   - 自分が進めているレーンの欄(`## Damage Calculator` / `## Type Balance Checker`)だけを編集する。
-     他のレーン欄は読むだけ。コンフリクトが起きても、該当欄を残すだけで解決できる。
-2. `docs/ai-shared/DECISIONS.md`
-   - 追記のみ。既存エントリは編集しない。ファイル末尾に新エントリを足す。
+1. `docs/ai-shared/state/<lane>.md`(索引は `docs/ai-shared/CURRENT_STATE.md`。ADR-0170)
+   - 自分が進めているレーンのファイルだけを編集する。
+     他のレーンのファイルは読むだけ。
+2. `docs/decisions/`(`docs/ai-shared/DECISIONS.md` は凍結アーカイブ。ADR-0170)
+   - 1件1ファイルで追加する(`scripts/new-decision.sh <lane> <slug>`)。既存エントリは編集しない。
 3. `go.work`(Go ワークスペース)
    - タイプバランスレーンは `services/balance/go.mod` を作成し、`go.work` の `use` に `./services/balance` を追記してよい(その PR に含める)。
 4. ルートの `Makefile`
@@ -66,7 +66,7 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
    - include されたレシピはルートから実行される。ターゲット名は `balance-` 接頭辞にして既存ターゲットと衝突させず、
      パスは `services/balance/` 起点で書く(または `cd services/balance &&` を付ける)。
 5. `AGENTS.md` 自体 / `CLAUDE.md` 自体
-   - 運用ルールの変更はユーザーの決定があったときだけ行い、`DECISIONS.md` に記録する。全体の書き直しはしない。
+   - 運用ルールの変更はユーザーの決定があったときだけ行い、`docs/decisions/` に記録する。全体の書き直しはしない。
    - 「タイプバランスレーンの範囲」節は、そのレーンを進める AI が設計に合わせて更新してよい。
 
 ## 変更・レビューで守ること
@@ -122,13 +122,13 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 - **範囲**: `services/balance/`(タイプバランスチェッカー)とその Deployment/Service/Kustomize
 - **範囲外・変更禁止**(ダメージ計算レーンの範囲): `engine/`, `services/pokedex/`, `services/calc/`, `services/record/`, `services/team/`, `web/`, `ios/`, `api/openapi.yaml` の damage 関連エンドポイント
   - pokedex-svc は実装やスキーマを変更しない。ADR-0012 により balance の必須ランタイム依存にもしない
-  - 変更が必要だと思ったら実装せず `docs/ai-shared/DECISIONS.md` に提案を書いて止まる
+  - 変更が必要だと思ったら実装せず `docs/decisions/` に提案を書いて止まる
 - このレーンのセッションで、ダメージ計算レーンの未完了タスクを実装しない(ダメージ計算レーンは別セッションが進める)
 
 ### 最初に読むもの(この順で)
 
-1. `docs/ai-shared/CURRENT_STATE.md`
-2. `docs/ai-shared/DECISIONS.md`
+1. `docs/ai-shared/state/tb.md`
+2. `docs/decisions/`(`scripts/list-decisions.sh`。過去分は `docs/ai-shared/DECISIONS.md`)
 3. `docs/type-balance-design.md`(設計書。実装の唯一の起点)
 4. `docs/ai-shared/claude-review.md`(Claude によるレビューと修正指摘)
 5. 必要なときだけ `docs/ai-shared/CLAUDE_LOG.md`
@@ -150,7 +150,7 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 
 - ユニットテストが通ること(`go test ./services/balance/...`)
 - k3d 上で `/api/balance/v1/team-balance/analyze` が疎通すること
-- セッション終了時に自分のログ(`CLAUDE_LOG.md` / `CODEX_LOG.md`)と `CURRENT_STATE.md` の `## Type Balance Checker` 欄を更新すること
+- セッション終了時に自分のログ(`CLAUDE_LOG.md` / `CODEX_LOG.md`)と `docs/ai-shared/state/tb.md` を更新すること
 
 ## 検証と終了時
 
@@ -163,7 +163,7 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 - コマンドの終了コードだけで合格としない。対象テスト 0 件、`[no tests to run]`、
   未実装の echo ターゲット、レビューの skip は「未実施 / 未実装」と記録する。
 - 同じ失敗で 3 回修正を繰り返しても進まない場合、原因・試行・依存を
-  `docs/plan.md` のブロッカーに残し、依存しない許可済みタスクを進める。
-- 終了時は `docs/plan.md` に実施内容・検証結果・残作業・既知の問題・次の開始点を残す。
+  `docs/plan/blockers.md` に残し、依存しない許可済みタスクを進める。
+- 終了時は `docs/plan/` の区画に実施内容・検証結果・残作業・既知の問題・次の開始点を残す。
   詳細は `docs/ai-shared/` のログ・状態に書き、別途の引き継ぎ資料は作らない。最終報告に変更点、
   ブランチ、実行した検証と未実施理由を示す。

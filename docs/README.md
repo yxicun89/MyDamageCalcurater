@@ -29,7 +29,7 @@
 | [overview.md](overview.md) | プロジェクト概要 |
 | [architecture.md](architecture.md) | アーキテクチャ全体図 |
 | [requirements.md](requirements.md) | 要件の正 |
-| [plan.md](plan.md) | 進行状況とタスク(作業の起点) |
+| [plan.md](plan.md) | 進行状況とタスクの索引(作業の起点。タスクは [plan/](plan/) の区画ごと。ADR-0170) |
 | [plan-archive.md](plan-archive.md) | 完了したタスクの経過・解決済みのブロッカー(plan.md から移した記録) |
 | [test-strategy.md](test-strategy.md) | テスト戦略(層・ゴールデン・スモーク) |
 | [design.md](design.md) | 画面・ビジュアルのデザインガイド |
@@ -59,8 +59,9 @@
 |---|---|
 | [ai-shared/README_AI_SHARED.md](ai-shared/README_AI_SHARED.md) | この共有ディレクトリの使い方 |
 | [ai-shared/COORDINATION.md](ai-shared/COORDINATION.md) | レーン制・PR での統合・止まるときの作法 |
-| [ai-shared/CURRENT_STATE.md](ai-shared/CURRENT_STATE.md) | レーンごとの現在状態(Active / Branch / Next) |
-| [ai-shared/DECISIONS.md](ai-shared/DECISIONS.md) | 判断の記録(追記のみ) |
+| [ai-shared/CURRENT_STATE.md](ai-shared/CURRENT_STATE.md) | レーンごとの現在状態の索引(本体は [ai-shared/state/](ai-shared/state/) のレーン別ファイル。Active / Branch / Next) |
+| [decisions/](decisions/) | 判断の記録(1件1ファイル。`scripts/new-decision.sh`・`scripts/list-decisions.sh`) |
+| [ai-shared/DECISIONS.md](ai-shared/DECISIONS.md) | 2026-10-03 までの判断の記録(凍結アーカイブ) |
 | [ai-shared/CLAUDE_LOG.md](ai-shared/CLAUDE_LOG.md) | Claude Code の作業ログ |
 | [ai-shared/CODEX_LOG.md](ai-shared/CODEX_LOG.md) | Codex の作業ログ |
 | [ai-shared/READ_ONLY_AUDIT_WORKFLOW.md](ai-shared/READ_ONLY_AUDIT_WORKFLOW.md) | 読み取り専用の継続監査ワークフロー |

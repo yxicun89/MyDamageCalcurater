@@ -1,5 +1,10 @@
 # Decisions
 
+> **凍結アーカイブ(2026-10-03。ADR-0170)。新規のエントリはここに追記しない。** 新しい判断・提案・依頼は
+> `scripts/new-decision.sh <lane> <slug>` で `docs/decisions/<YYYY-MM-DD>-<lane>-<slug>.md` を1件ずつ作る。
+> 未決の一覧は `scripts/list-decisions.sh`、このアーカイブの見出しの索引は `scripts/list-decisions.sh --archive`。
+> 以下の既存エントリは移さず、一字も変えずに残す(コード・ADR の「DECISIONS.md 2026-09-25「…」」の参照先として有効)。
+
 ## 2026-09-21: ダメージ計算とタイプバランスは同一クラスタ・別サービス
 Decision: 1クラスタ上で別Deployment/Service。Ingressで `/api/damage` と `/api/balance` を分離。
 Reason: 独立スケール・独立ロールバックの学習目的。

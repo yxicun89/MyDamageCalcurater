@@ -6,12 +6,12 @@
 ## 原則
 
 1. **担当は AI ではなく「レーン」に持たせる**: 作業は2本のレーンに分かれ、どの AI(Claude Code / Codex)がどのレーンを進めてもよい。
-   引き継ぎ資料は作らない。レーンのブランチと `CURRENT_STATE.md` のレーン欄の `Next` がそのまま引き継ぎになる。
-2. **1レーン = 同時に1セッション**: 同じレーンを2つのセッションで同時に進めない。着手時に `CURRENT_STATE.md` のレーン欄の `Active` を自分にして push する。
+   引き継ぎ資料は作らない。レーンのブランチとレーンのファイル `docs/ai-shared/state/<lane>.md` の `Next` がそのまま引き継ぎになる。
+2. **1レーン = 同時に1セッション**: 同じレーンを2つのセッションで同時に進めない。着手時にレーンのファイル `docs/ai-shared/state/<lane>.md` の `Active` を自分にして push する。
 3. **止まる前に安全な場所へ**: 未コミットの作業を残さない。区切りごとに commit・push し、`Next` を具体的に書く。
 4. **main は常に緑。main へは PR でしか入れない**: 直接 push・直接 merge をしない(Argo CD の GitOps が main を見ているため。ユーザー決定)。
    PR は、テスト・lint・公開前検査が通った作業だけ。WIP は PR にしない。
-5. **相談は「既定値付きの提案」**: 判断が要るときは既定案を添えて `DECISIONS.md` に書き、既定案で先へ進む。人間の確認が本当に必要なものだけ `docs/plan.md` のブロッカーに書く。
+5. **相談は「既定値付きの提案」**: 判断が要るときは既定案を添えて `docs/decisions/` に1件1ファイルで書き(`scripts/new-decision.sh`)、既定案で先へ進む。人間の確認が本当に必要なものだけ `docs/plan/blockers.md` に書く。
 
 ## レーン・ディレクトリ・ブランチ
 
@@ -22,7 +22,7 @@
 | **Web**(damage calc: 画面) | `~/MyDamageCalcurater-web` | `feat/web-<phase名>` | Phase 4(`web/`・Playwright)。`make wasm` の成果物を使う |
 | **タイプバランス**(type balance) | `~/MyDamageCalcurater-tb`(同じリポジトリの git worktree) | `feat/tb-<stage名>`(既存の `feat/codex-tb0-foundation` はマージまでそのまま使う) | `services/balance/` とその Kustomize / Argo CD 定義。設計の正は `docs/type-balance-design.md` |
 | **iOS**(damage calc: iOS アプリ) | `~/MyDamageCalcurater-ios` | `feat/ios-<phase名>` | M3 の Phase 6(`ios/`)。API クライアントは `api/openapi.yaml` から swift-openapi-generator で生成し、手で書かない。署名・実機インストールは人間(CLAUDE.md) |
-| **素早さ**(speed) | `~/MyDamageCalcurater-speed` | `feat/speed-<stage名>` | 素早さ比較サービス(`services/speed/` とその Kustomize、Web の素早さ画面 `web/src/speed/`)。設計の正は `docs/speed-design.md`(このレーンが作る)。Web のタブ登録(`web/src/App.tsx` 等のアプリの骨組み)は共有ファイルとして自分の1項目を足すだけにし、骨組みの変更が要るときは Web レーンに DECISIONS.md で提案する |
+| **素早さ**(speed) | `~/MyDamageCalcurater-speed` | `feat/speed-<stage名>` | 素早さ比較サービス(`services/speed/` とその Kustomize、Web の素早さ画面 `web/src/speed/`)。設計の正は `docs/speed-design.md`(このレーンが作る)。Web のタブ登録(`web/src/App.tsx` 等のアプリの骨組み)は共有ファイルとして自分の1項目を足すだけにし、骨組みの変更が要るときは Web レーンに `docs/decisions/` で提案する |
 | **判定**(judge。素早さ×ダメージ連動) | `~/MyDamageCalcurater-judge` | `feat/judge-<stage名>` | 素早さと確定数を1回で判定するサービス(`services/judge/` とその Kustomize)。設計の正は `docs/judge-design.md`(このレーンが作る)。calc-svc の公開 API と pokedex-svc の公開 API を呼ぶ(speed-svc には依存しない)。Web/iOS の画面は着手時に判断する |
 
 - ディレクトリはレーンの数だけ(いまは7つ)にする。レーンの作業ディレクトリは、どの AI が使ってもよい(同時に2つのセッションで開かない)。
@@ -30,16 +30,16 @@
 
 ### レーン間の依存と共有ファイル(4レーン。2026-09-21 ユーザー決定)
 
-- **他のレーンの範囲のファイルは変更しない**。必要な変更は `DECISIONS.md` に既定案付きの提案として書き、そのレーンに任せる。待たずに進めるため、暫定の境界(インターフェース・架空データ・fake)を自分のレーン内に置いてよい。
+- **他のレーンの範囲のファイルは変更しない**。必要な変更は `docs/decisions/` に既定案付きの提案として書き、そのレーンに任せる。待たずに進めるため、暫定の境界(インターフェース・架空データ・fake)を自分のレーン内に置いてよい。
   - API レーン: マスタの読み込みは `services/internal/master`(データレーン)の写像が main に入るまで、自分の中の差し替え可能なインターフェースと架空データで作る。engine は変更せず、公開 API を呼ぶだけ。
   - Web レーン: 計算は WASM(`engine/wasmapi` の JSON 契約。ADR-0011)で先に作る。API の型が要る部分(P4-5)は、API レーンが `api/openapi.yaml` を更新して main に入れてから追従する。マスタ(種族・技の一覧)は pokedex-svc ができるまで架空データで作る。
   - iOS レーン: API の契約は `api/openapi.yaml`(API レーンが持ち主)に追従するだけで変更しない。P3 のサーバーができるまでは生成クライアントに対するモック(架空データ)で画面を作る。
     Xcode が無い間は Swift Package(生成クライアント・モデル・デザイントークン)と `swift test` の範囲で進め、Xcode プロジェクトとシミュレータのテスト(`make ios-test`)は Xcode の導入後に行う。デザイントークンの値は Web と同じ(docs/design.md)
-  - データレーン: `api/openapi.yaml` を変えない。pokedex の API が要るときは DECISIONS.md で API レーンに提案する。
+  - データレーン: `api/openapi.yaml` を変えない。pokedex の API が要るときは `docs/decisions/` で API レーンに提案する。
 - **両方が触る共有ファイル**:
-  - `docs/plan.md`: 自分のレーンのタスクの行(とブロッカー節の自分の項目)だけを更新する。
+  - `docs/plan/<区画>.md`: 自分のレーンのタスクの行(と `docs/plan/blockers.md` の自分の項目)だけを更新する。`docs/plan.md` は索引とマイルストーン表だけ(ADR-0170)。
   - ルートの `Makefile`・`go.work`: 自分のレーンのターゲット・`use` 行の追加だけ。統合時の競合は両方を残して解決する。
-  - `docs/ai-shared/CURRENT_STATE.md`: 自分のレーンの欄だけ。
+  - `docs/ai-shared/state/<lane>.md`: 自分のレーンのファイルだけ(`CURRENT_STATE.md` は索引と Shared Interfaces だけ。ADR-0170)。
 - 単発の修正は `fix/<レーン>-...`(例 `fix/calc-...`)。1つのブランチに複数の Phase/ステージを積まない。
 - git の作者情報は、このリポジトリのローカル設定(`pokecalc-dev <noreply@example.com>`)を使う。個人の identity をコミットしない。
 - リモートの URL・認証情報を文書・コミットに書かない。リポジトリを公開(public)にするのは、ユーザーの明示的な指示と `make check-publishable-full` の後だけ。
@@ -54,15 +54,15 @@
 ### PR は積極的に出す
 - 追跡のため、ローカルでの直接マージはせず、区切りごとに PR(→ 条件を満たしたら `gh pr merge`)で main に入れる。ユーザーは GitHub の PR と main の中身を見て指摘する。
 - PR の本文は、何を・なぜ・検証結果・レビュー結果を書く(GitHub 上で追えるように)。1 PR = 1 目的。
-- ユーザーの指摘は、**範囲に合うレーンが対応する**(判断はどの AI でもよい。範囲が曖昧なら `DECISIONS.md` に既定案付きで書く)。
+- ユーザーの指摘は、**範囲に合うレーンが対応する**(判断はどの AI でもよい。範囲が曖昧なら `docs/decisions/` に既定案付きで書く)。
 
 ### コンテキストを膨らませない(全レーン共通)
-- 起動時に `DECISIONS.md`(約 190KB)・`plan.md`(約 70KB)を**全文読まない**。`CURRENT_STATE.md` の自レーン欄と `Next`、`DECISIONS.md` は `grep -n '^## '` で見出しを見て自レーンと直近の数件だけ読む。
+- 起動時に凍結アーカイブ `DECISIONS.md`(約 190KB)・`docs/plan/` の全区画を**全文読まない**。自レーンの `docs/ai-shared/state/<lane>.md` と `Next`、未決の判断は `scripts/list-decisions.sh`、自レーンの区画のファイルだけを読む。アーカイブは `scripts/list-decisions.sh --archive` で見出しを見て必要な数件だけ読む。
 - コードを読み直す前に、実装の場所は [docs/impl/](../impl/)(構成・フロー・API・環境変数・コマンド・k8s・DB・GitOps・動作確認の対応表。目次は [docs/README.md](../README.md))で引く。
 - 大量のファイルを読む調査・ドキュメント作成は、サブエージェント(fork)に任せ、生の出力を主セッションに残さない。
 - 1 セッション = 1 タスク(1 PR)。区切りで commit・push し、`Status`・`Next` を具体的に書いて止め、新しいセッションで続ける(長いセッションを引き延ばさない)。
 - 巨大な出力(ログ・`git diff`・テスト全出力)は要約や `tail`・`grep` で絞る。一度読んだ文書を再読しない。
-- `DECISIONS.md` は追記のみの規約を保つ。古い節の退避(archive 化)は、ユーザーの決定があってから行う(提案: `DECISIONS.md` 2026-09-24)。
+- `DECISIONS.md` は 2026-10-03 に凍結した(ユーザー決定・ADR-0170)。新規は `docs/decisions/` に1件1ファイル。アーカイブの既存エントリは編集しない。
 
 ## 始めるとき
 
@@ -71,11 +71,11 @@ cd <レーンの作業ディレクトリ>
 git fetch origin
 git status --short --branch        # 未コミット・未 push が無いか
 ```
-1. `origin/main` の `docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md` を読む(`git show origin/main:docs/ai-shared/CURRENT_STATE.md`)。
+1. `origin/main` の自レーンの `docs/ai-shared/state/<lane>.md` と未決の判断を読む(`git show origin/main:docs/ai-shared/state/<lane>.md`、`scripts/list-decisions.sh`)。
    **feature ブランチ内のコピーは古いことがある**。現在状態の正は `origin/main` と、そのレーンのブランチの最新コミット。
-2. レーン欄の `Branch` をチェックアウトし、`git pull` してから `Next` の続きをする。別の AI が途中まで進めたブランチでも、そのまま続けてよい
+2. レーンのファイルの `Branch` をチェックアウトし、`git pull` してから `Next` の続きをする。別の AI が途中まで進めたブランチでも、そのまま続けてよい
    (前任の完了記録・テスト結果はうのみにせず、自分で検証する)。
-3. レーン欄の `Active` を自分(例 `Claude Code` / `Codex`)にする。
+3. レーンのファイルの `Active` を自分(例 `Claude Code` / `Codex`)にする。
 
 ## main への統合(PR)
 
@@ -135,29 +135,60 @@ scripts/pr-merge.sh <番号>         # 推奨: 上の3つに加えてローカ�
   `scripts/ai-guard/`・`deploy/k8s/overlays/cloud/` 等)を変更する PR は、人間のマージ待ちとして次の作業へ進む(止まらない)。
 - 止めるのは「クラウドへのデプロイなど費用が発生すること」と「機密情報を Git で公開すること」だけ。
 - PR の本文には、テスト・lint・公開前検査の結果と、独立レビューの判定を書く。
-- **競合の解決**: `CURRENT_STATE.md` は自分のレーン欄を残し、他のレーン欄は main 側を採用。`DECISIONS.md` は両方の追記を残す。
-  それ以外のファイルで別レーンの変更と競合したら、**推測で解決しない**。PR を作らず、`DECISIONS.md` に内容と既定案を書いて、自分の作業を続ける。
-- マージしたら `DECISIONS.md` に「何を統合したか(PR 番号)」を1行追記し、レーン欄を更新する(次の PR に含める)。
+- **競合の解決**: 共有ログはレーン別・区画別・1件1ファイルなので、通常は競合しない(ADR-0170)。`docs/plan/blockers.md`・`improvements.md` の末尾で競合したら両方の追記を残す。
+  それ以外のファイルで別レーンの変更と競合したら、**推測で解決しない**。PR を作らず、`docs/decisions/` に内容と既定案を書いて、自分の作業を続ける。
+- マージしたら、レーンのファイル `docs/ai-shared/state/<lane>.md` の `Status` に「何を統合したか(PR 番号)」を書く(次の PR に含める)。
 - Phase/ステージが完了してマージしたブランチは削除する。途中の区切りで PR を出したブランチは、そのまま続けて使ってよい。
 
 ## 共有ファイルの編集
 
 | ファイル | 規約 |
 |---|---|
-| `docs/ai-shared/CURRENT_STATE.md` | 自分が進めているレーンの欄だけ編集する |
-| `docs/ai-shared/DECISIONS.md` | 追記のみ。既存エントリは編集しない |
+| `docs/ai-shared/state/<lane>.md` | 自分が進めているレーンのファイルだけ編集する(`CURRENT_STATE.md` は索引と Shared Interfaces) |
+| `docs/decisions/<日付>-<lane>-<slug>.md` | 1件1ファイルで追加(`scripts/new-decision.sh`)。既存エントリは編集しない(状態の行の更新だけは、そのエントリの宛先レーンか発信レーンがしてよい) |
+| `docs/ai-shared/DECISIONS.md` | 凍結アーカイブ(2026-10-03)。追記・編集しない |
+| `docs/plan/<区画>.md` | 自分のレーンのタスクの行だけ。`docs/plan.md` は索引とマイルストーン表 |
 | `go.work` | 自分のレーンのモジュールの `use` 行を追記してよい(タイプバランスは `./services/balance`) |
 | ルートの `Makefile` | 自分のレーンのサービスの `include <path>/Makefile` の1行を追記してよい(タイプバランスは `include services/balance/Makefile`。ターゲット名は `balance-` 接頭辞) |
-| `AGENTS.md` / `CLAUDE.md` / 本ファイル | 運用ルールの変更は、ユーザーの決定があったときだけ。変更したら `DECISIONS.md` に記録する |
+| `AGENTS.md` / `CLAUDE.md` / 本ファイル | 運用ルールの変更は、ユーザーの決定があったときだけ。変更したら `docs/decisions/` に記録する |
 | `docs/adr/` | **新しい ADR の番号はレーンごとの帯から取る**(2026-09-22。並列で「main の最新の次」を取ると衝突するため): データ `0100〜` / API `0200〜` / Web `0300〜` / タイプバランス `0400〜` / iOS `0500〜` / 素早さ `0600〜` / 判定 `0700〜`。帯の中で自分のレーンの最新の次を使う。`0001〜0019` の既存の番号はそのまま(衝突しているものは、後から統合する側が自分の帯へ振り直す) |
+
+## 共有ログの構造(2026-10-03 ユーザー決定。ADR-0170)
+
+全レーンが同じファイルの末尾付近を編集して PR が衝突していたため、共有ログを「1エントリ=1ファイル」に分けた。
+
+| 何を | どこに | 誰が |
+|---|---|---|
+| 判断・提案・依頼・ユーザー回答の記録 | `docs/decisions/<YYYY-MM-DD>-<lane>-<slug>.md`(`scripts/new-decision.sh <lane> <slug> [タイトル]` で作る) | 発信したレーン。状態の行(`open` → `決定` 等)だけは宛先のレーンも更新してよい |
+| 未決の一覧 | `scripts/list-decisions.sh`(`open`・`未回答`)/ `--all` / `--archive`(2026-10-03 以前のアーカイブの見出し) | 誰でも(読むだけ) |
+| レーンの現在状態(Lane / Active / Branch / Status / Next) | `docs/ai-shared/state/<lane>.md`(`data`・`api`・`web`・`ios`・`tb`・`speed`・`judge`・`ops`) | そのレーンだけ |
+| 全レーン共通の取り決め | `docs/ai-shared/CURRENT_STATE.md` の `## Shared Interfaces` | ユーザーの決定があったときだけ |
+| タスクの行 | `docs/plan/<区画>.md`(索引は `docs/plan.md`) | その区画のタスクを持つレーン |
+| 人間の確認待ち・ブロッカー | `docs/plan/blockers.md` | 全レーン(自分の項目だけ) |
+
+- **衝突しない理由**: 判断は毎回新しいファイル、状態はレーンごとのファイル、タスクは区画ごとのファイルなので、別レーンの PR が同じ行・同じ末尾を触らない。
+  残る衝突点は `docs/plan/blockers.md`・`improvements.md` の末尾への同時追記だけ(両方を残して解決する)。
+- `<lane>` はブランチの接頭辞と同じ。全レーンにかかる判断は `shared`。同じ日・同じレーンで slug が重なったら別の slug にする(既存ファイルは上書きされない)。
+- エントリの先頭には `- 日付:`・`- レーン:`・`- 状態:`・`- 状況:`・`- 既定案:` を置く。状態は `open`(既定案で進行・ユーザー未確認)/ `未回答` / `決定` / `撤回`。
+- 凍結アーカイブ `docs/ai-shared/DECISIONS.md` は `.gitattributes` で `merge=union`(ローカルの `git merge` で両方の追記を残す。GitHub の画面上の判定には効かない)。
+
+### 未マージの PR の移行(2026-10-03 より前に分岐したブランチ)
+
+`git merge origin/main` で次のように直してから PR を更新する。
+1. `docs/ai-shared/DECISIONS.md` に追記していた: union マージで両方残る。可能なら自分の追記を `scripts/new-decision.sh` で作ったファイルへ移し、アーカイブからは消す
+   (main に入った後のアーカイブのエントリは編集しない)。
+2. `docs/ai-shared/CURRENT_STATE.md` の自レーン欄を編集していた: 競合したら main 側の `CURRENT_STATE.md` を採用し(`git checkout origin/main -- docs/ai-shared/CURRENT_STATE.md`)、
+   自分の変更(`git diff $(git merge-base HEAD origin/main) HEAD -- docs/ai-shared/CURRENT_STATE.md` で確認)を `docs/ai-shared/state/<lane>.md` に書き直す。
+3. `docs/plan.md` のタスク行を編集していた: 同じく main 側の `docs/plan.md` を採用し(`git checkout origin/main -- docs/plan.md`)、自分の変更を `docs/plan/<区画>.md` の同じ行に書き直す。
+4. `scripts/list-decisions.sh --archive` と `git grep` で、書き直し漏れが無いことを確かめる。
 
 ## 止まるとき(レートリミット・上限・セッション終了の前後)
 
 止まる前(予兆があるとき、または区切りごとに):
 1. すべて commit する。未完了・未レビューなら `WIP(<タスク>): <何が未検証か>` の形にする(PR にはしない)。
 2. `git push origin <ブランチ>`。
-3. レーン欄の `Status` と `Next` に、**次にやることを具体的に**書き、`Active` を `なし` にする。この更新もブランチに commit・push する。
-   (main へはまだ入らないので、次に始める人はレーン欄の `Branch` の最新コミットを見る。)
+3. レーンのファイルの `Status` と `Next` に、**次にやることを具体的に**書き、`Active` を `なし` にする。この更新もブランチに commit・push する。
+   (main へはまだ入らないので、次に始める人はレーンのファイルの `Branch` の最新コミットを見る。)
 
 ## 人間への質問(時間帯のルール。2026-09-21 ユーザー決定)
 
@@ -167,13 +198,13 @@ scripts/pr-merge.sh <番号>         # 推奨: 上の3つに加えてローカ�
 | 時間帯(日本時間) | やること |
 |---|---|
 | **日中 8:00〜23:00** | 質問する(Claude Code は `AskUserQuestion`)。質問はタスクの区切りでまとめて出し、各問に**既定案(推奨)**を付ける。返事を待つ間も、その判断に依存しない作業を進める |
-| **深夜 23:00〜8:00** | **質問しない**。判断待ちの内容と既定案を `docs/plan.md` のブロッカー節の「【人間の確認待ち】」に書き、判断に依存しない作業を続ける。取り消しやすい判断(文書・設計の既定値など)は既定案で進めてよい。取り消しにくいもの(データ削除・公開・`known_diffs.yaml` への追加・force push など)は深夜に実行しない |
+| **深夜 23:00〜8:00** | **質問しない**。判断待ちの内容と既定案を `docs/plan/blockers.md` の「【人間の確認待ち】」に書き、判断に依存しない作業を続ける。取り消しやすい判断(文書・設計の既定値など)は既定案で進めてよい。取り消しにくいもの(データ削除・公開・`known_diffs.yaml` への追加・force push など)は深夜に実行しない |
 
 - 朝(8:00 以降)に最初に区切りが来たら、夜の間にたまった判断待ちを1回の質問にまとめて出す。
-- 質問・既定案で進めた判断は `DECISIONS.md` に記録する(既定案で進めたものは「既定案で進行・ユーザー未確認」と明記)。
+- 質問・既定案で進めた判断は `docs/decisions/` に記録する(状態 `open`。既定案で進めたものは「既定案で進行・ユーザー未確認」と明記)。
 - **深夜の PR マージ**: 検証済みの PR は、**マージしないと作業が止まる場合に限り**深夜でも main にマージしてよい。条件: マージ前に
   `make test`(balance を含む)・`make lint`・`make build` を通し、engine を変えたなら `make test-golden` も通す。独立レビューが PASS であること。
-  マージした理由を `DECISIONS.md` に記録し、朝の最初の報告に含める。止まらないなら PR を作って朝の確認に回す(2026-09-21 ユーザー決定)。
+  マージした理由を `docs/decisions/` に記録し、朝の最初の報告に含める。止まらないなら PR を作って朝の確認に回す(2026-09-21 ユーザー決定)。
 - 時間帯を変えたいときは、この表だけを直す。
 
 ## レビュー

@@ -16,7 +16,7 @@
 | 2 件とも **manual sync**(`syncPolicy` なし。`check-gitops.sh` が `automated:` を検出すると失敗) | `scripts/gitops/check-gitops.sh` |
 | 実クラスタの Application は `pokecalc-balance` の **1 件のみ**(OutOfSync / Healthy)。`pokecalc-speed` は未適用 | §7 |
 | ADR-0206 と CLAUDE.md は「Argo CD が main の `deploy/k8s/overlays/local` を見ている」と読める記述だが、**それを見る Application は Git にもクラスタにも無い** | §8 |
-| 未完了: P7-3 ArgoCD(`docs/plan.md:331`)、クラウド側(overlay `cloud` に対応する Application・レジストリ・実データの配布) | §9 |
+| 未完了: P7-3 ArgoCD(`docs/plan/m4.md`)、クラウド側(overlay `cloud` に対応する Application・レジストリ・実データの配布) | §9 |
 
 ## 1. Argo CD 本体(どこで何のために動くか)
 
@@ -129,7 +129,7 @@ flowchart TD
 | 対象 | 実クラスタ | Git | 差異 |
 |---|---|---|---|
 | Application `pokecalc-balance` | Sync=`OutOfSync` / Health=`Healthy`。`spec.source`(path・`main`)は Git と一致。`syncPolicy` なし。最後の sync は Succeeded(2026-09-22T03:13Z)。`status.summary.images` = `pokecalc/balance:local` | gitops overlay の image は `localhost:5000/pokecalc/balance@sha256:…` | Pod が local overlay の image(`pokecalc/balance:local`)で動いており、gitops の digest と不一致 = OutOfSync の原因(ADR-0018 が予告した挙動) |
-| Application `pokecalc-speed` | **存在しない** | 定義あり | 未適用(`docs/ai-shared/CURRENT_STATE.md` の SP5 記述と一致。overlay の digest も placeholder) |
+| Application `pokecalc-speed` | **存在しない** | 定義あり | 未適用(`docs/ai-shared/state/speed.md` の SP5 記述と一致。overlay の digest も placeholder) |
 | ApplicationSet | 0 件(CRD `applicationsets.argoproj.io` は導入済み) | 0 件 | なし |
 | AppProject | `default` のみ使用 | 0 件 | なし |
 | Secret(argocd ns) | `repo-pokecalc` 他 4 件(名前のみ確認。値は未読) | Git に置かない(runbook で人が作成) | 想定どおり |
@@ -140,7 +140,7 @@ flowchart TD
 | 文書 | 記述 | 実際 |
 |---|---|---|
 | `docs/adr/0206-wire-to-pokedex-svc.md:52,165` | Argo CD が main の `deploy/k8s/overlays/local` を見ている | そのパスを見る Application は Git・クラスタのどちらにも無い(§2・§7) |
-| `CLAUDE.md:119`、`docs/adr/0104-importer-cronjob-and-make-import.md:9`、`docs/ai-shared/CURRENT_STATE.md:120` | 「Argo CD が main を見る」ため main へは PR のみ | 見ているのは balance(と将来の speed)の gitops overlay のみ。main への PR 運用の理由としては、全体を見ているわけではない |
+| `CLAUDE.md:119`、`docs/adr/0104-importer-cronjob-and-make-import.md:9`、`docs/ai-shared/CURRENT_STATE.md:120`(当時。現在はレーン別の `docs/ai-shared/state/`) | 「Argo CD が main を見る」ため main へは PR のみ | 見ているのは balance(と将来の speed)の gitops overlay のみ。main への PR 運用の理由としては、全体を見ているわけではない |
 | 旧 `docs/type-balance-design.md:165`(2026-10-01 に書き換え済み。ADR-0410) | 「マージすれば Argo CD が差分を検知して反映できる状態」 | 検知は poll までで、反映は手動 sync(自動 sync は TB0・SP5 とも禁止。`check-gitops.sh:44`) |
 | `docs/requirements.md:97` | デプロイは Kustomize + ArgoCD、overlays は local / cloud | Application は balance・speed 用のみ。`overlays/cloud` を対象とする Application なし |
 
@@ -148,10 +148,10 @@ flowchart TD
 
 | 項目 | 状態 | 根拠 |
 |---|---|---|
-| P7-3 ArgoCD(GitOps) | 未着手(`[ ]`) | `docs/plan.md:331` |
+| P7-3 ArgoCD(GitOps) | 未着手(`[ ]`) | `docs/plan/m4.md` |
 | damage 系(calc・gateway・web・pokedex・mysql)の Application | なし | §5 |
 | judge-svc の gitops overlay・Application・runbook | なし | §5 |
-| `pokecalc-speed` の実クラスタ適用・レジストリ push・sync | 未実施(人間確認待ち) | ADR-0605 §4、`docs/plan.md:264-266` |
+| `pokecalc-speed` の実クラスタ適用・レジストリ push・sync | 未実施(人間確認待ち) | ADR-0605 §4、`docs/plan/speed.md` |
 | 自動 sync・prune・selfHeal | 意図的に無効(TB0・SP5 の方針)。有効化は未決 | `docs/type-balance-design.md` §9・§11、`check-gitops.sh:44` |
 | ApplicationSet / AppProject / App-of-Apps | なし。Application 分割の方針は未決 | `docs/type-balance-design.md` §9・§11 |
 | Webhook・通知(notifications-controller は稼働のみ) | Git に設定なし | 該当ファイルなし(`git grep` で確認) |

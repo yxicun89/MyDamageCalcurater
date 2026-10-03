@@ -61,7 +61,7 @@ test-tools:
 	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs tools/importer/prune.test.mjs tools/importer/integrity.test.mjs tools/importer/fetch-integrity.test.mjs
 
 .PHONY: test-scripts
-test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406・計算API SLO ADR-0407・ルートの e2e ADR-0306・GitOps の AppProject/共通スクリプト/レジストリ ADR-0408・Makefile の help と未実装ターゲット。クラスタ・ネットワークに触らない)
+test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406・計算API SLO ADR-0407・ルートの e2e ADR-0306・GitOps の AppProject/共通スクリプト/レジストリ ADR-0408・Makefile の help と未実装ターゲット・判断エントリの作成と索引 ADR-0170。クラスタ・ネットワークに触らない)
 	@./scripts/argocd-bootstrap_test.sh
 	@./scripts/observability-bootstrap_test.sh
 	@./scripts/observability-slo_test.sh
@@ -74,6 +74,7 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/image-tag_test.sh
 	@./scripts/up-secrets_test.sh
 	@./scripts/test-db-docker_test.sh
+	@./scripts/decisions_test.sh
 
 .PHONY: lint
 lint: ## gofmt / go vet / shell・Node構文チェック
