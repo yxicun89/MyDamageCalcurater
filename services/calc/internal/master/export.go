@@ -254,7 +254,7 @@ func buildMoves(list []api.MasterMove, chart engine.TypeChart) (map[string]engin
 		}
 		row := sharedmaster.MoveRow{
 			ID: m.Id, NameJa: m.NameJa, Type: string(m.Type), Category: string(m.Category),
-			Power: m.Power, Priority: m.Priority, Effect: effect, Mechanisms: m.Mechanisms,
+			Power: m.Power, Priority: m.Priority, Effect: effect, Mechanisms: m.Mechanisms, Target: derefString(m.Target),
 		}
 		mv, err := sharedmaster.Move(row, chart)
 		if err != nil {
@@ -484,4 +484,12 @@ func (h *HTTPSource) Fetch(ctx context.Context) (api.MasterExport, error) {
 		return api.MasterExport{}, fmt.Errorf("%w: %v", ErrMasterUnavailable, err)
 	}
 	return decodeExportBytes(data)
+}
+
+// derefString は nullable な文字列を値にする(null は空。技の対象の「不明」。ADR-0223)。
+func derefString(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
 }

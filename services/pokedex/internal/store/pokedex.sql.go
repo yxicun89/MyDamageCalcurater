@@ -301,7 +301,7 @@ func (q *Queries) GetItemEffect(ctx context.Context, itemID string) (ItemEffect,
 }
 
 const getMove = `-- name: GetMove :one
-SELECT id, name_ja, type, category, power, priority
+SELECT id, name_ja, type, category, power, priority, target
 FROM moves
 WHERE id = ?
 `
@@ -313,6 +313,7 @@ type GetMoveRow struct {
 	Category string
 	Power    uint16
 	Priority int8
+	Target   sql.NullString
 }
 
 func (q *Queries) GetMove(ctx context.Context, id string) (GetMoveRow, error) {
@@ -325,12 +326,13 @@ func (q *Queries) GetMove(ctx context.Context, id string) (GetMoveRow, error) {
 		&i.Category,
 		&i.Power,
 		&i.Priority,
+		&i.Target,
 	)
 	return i, err
 }
 
 const getMovesByIDs = `-- name: GetMovesByIDs :many
-SELECT id, name_ja, type, category, power, priority
+SELECT id, name_ja, type, category, power, priority, target
 FROM moves
 WHERE id IN (/*SLICE:ids*/?)
 `
@@ -342,6 +344,7 @@ type GetMovesByIDsRow struct {
 	Category string
 	Power    uint16
 	Priority int8
+	Target   sql.NullString
 }
 
 func (q *Queries) GetMovesByIDs(ctx context.Context, ids []string) ([]GetMovesByIDsRow, error) {
@@ -370,6 +373,7 @@ func (q *Queries) GetMovesByIDs(ctx context.Context, ids []string) ([]GetMovesBy
 			&i.Category,
 			&i.Power,
 			&i.Priority,
+			&i.Target,
 		); err != nil {
 			return nil, err
 		}
@@ -1807,7 +1811,7 @@ func (q *Queries) SearchItems(ctx context.Context, arg SearchItemsParams) ([]Sea
 }
 
 const searchMoves = `-- name: SearchMoves :many
-SELECT m.id, m.name_ja, m.type, m.category, m.power, m.priority
+SELECT m.id, m.name_ja, m.type, m.category, m.power, m.priority, m.target
 FROM moves m
 JOIN regulation_moves rm ON rm.move_id = m.id
 WHERE rm.regulation_id = ? AND m.name_ja LIKE ?
@@ -1828,6 +1832,7 @@ type SearchMovesRow struct {
 	Category string
 	Power    uint16
 	Priority int8
+	Target   sql.NullString
 }
 
 func (q *Queries) SearchMoves(ctx context.Context, arg SearchMovesParams) ([]SearchMovesRow, error) {
@@ -1846,6 +1851,7 @@ func (q *Queries) SearchMoves(ctx context.Context, arg SearchMovesParams) ([]Sea
 			&i.Category,
 			&i.Power,
 			&i.Priority,
+			&i.Target,
 		); err != nil {
 			return nil, err
 		}

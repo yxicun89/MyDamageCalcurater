@@ -39,12 +39,12 @@ FROM move_mechanisms
 ORDER BY move_id, mechanism;
 
 -- name: GetMove :one
-SELECT id, name_ja, type, category, power, priority
+SELECT id, name_ja, type, category, power, priority, target
 FROM moves
 WHERE id = ?;
 
 -- name: GetMovesByIDs :many
-SELECT id, name_ja, type, category, power, priority
+SELECT id, name_ja, type, category, power, priority, target
 FROM moves
 WHERE id IN (sqlc.slice(ids));
 
@@ -336,7 +336,7 @@ ORDER BY s.dex_no, s.form
 LIMIT ?;
 
 -- name: SearchMoves :many
-SELECT m.id, m.name_ja, m.type, m.category, m.power, m.priority
+SELECT m.id, m.name_ja, m.type, m.category, m.power, m.priority, m.target
 FROM moves m
 JOIN regulation_moves rm ON rm.move_id = m.id
 WHERE rm.regulation_id = sqlc.arg(regulation_id) AND m.name_ja LIKE sqlc.arg(pattern)

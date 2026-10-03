@@ -61,10 +61,12 @@ export interface CalcSnapshotSpecies {
   readonly abilities: readonly CalcSnapshotSpeciesAbility[];
 }
 
-/** スナップショットの技(MasterMove。例データに追加効果・機構は無いので effect は null・mechanisms は空配列)。 */
+/** スナップショットの技(MasterMove。例データに追加効果・機構・対象は無いので effect・target は null・mechanisms は空配列)。 */
 export interface CalcSnapshotMove extends Move {
   readonly effect: null;
   readonly mechanisms: readonly string[];
+  /** 技の対象(MasterMove.target。例データは対象を持たないので null。ADR-0223) */
+  readonly target: null;
 }
 
 /** 共通マスタ(services/internal/master/effects.go)が読む形にした効果(キーは PascalCase)。 */
@@ -202,6 +204,7 @@ export function toCalcSnapshot(master: MasterData): CalcSnapshot {
     priority: move.priority,
     effect: null,
     mechanisms: [],
+    target: null,
   }));
 
   const items: CalcSnapshotItem[] = master.items.map((item) => ({

@@ -7,8 +7,8 @@ package master_test
 // (docs/coding-rules.md §2 の「独立した検証」)。値の一覧の正は master.AllMoveTargets で、
 // migration の CHECK(chk_moves_target)との一致は services/pokedex/db の layout テストで確かめる。
 //
-// engine のダメージ計算はまだ対象を読まない(ダブル補正は判定レーン。ADR-0136 §4)。
-// ここでは「DB の行の値が正しいか」だけを検証し、engine.Move の写像は変えない。
+// engine.Move.Target への写像(全体技 → spread、その他の既知の値 → single、空 → 不明)は ADR-0223 で入れた
+// (ADR-0136 §4 の「engine.Move には載せない」を置き換える。ダブルの補正の計算は ADR-0222)。
 
 import (
 	"errors"
@@ -16,6 +16,7 @@ import (
 	"sort"
 	"testing"
 
+	"example.com/pokecalc/engine"
 	"example.com/pokecalc/services/internal/master"
 )
 
@@ -108,25 +109,47 @@ func TestMoveTargetOf(t *testing.T) {
 	}
 }
 
-// TestMoveValidatesTargetWithoutChangingEngineMove は master.Move が対象を検証する(未知の値は ErrInvalidRow)が、
-// engine.Move の中身は対象の有無で変わらないこと(ダメージ計算の挙動を変えない。ゴールデン不変。ADR-0136 §4)。
-func TestMoveValidatesTargetWithoutChangingEngineMove(t *testing.T) {
+// TestMoveMapsTargetToEngine は master.Move が技の対象を engine.Move.Target に写すこと(issue 288・ADR-0223。
+// ADR-0136 §4 の「engine.Move には載せない」を置き換える)。写像:
+//   - 全体技(IsSpread: allAdjacent・allAdjacentFoes)→ engine.MoveTargetSpread
+//   - それ以外の既知の 13 種 → engine.MoveTargetSingle(@smogon/calc は全体技の補正を spread の2種にだけかけるため、
+//     自分・味方・場の技も「単体として計算する」側に入る)
+//   - 空(不明: 取り込み前の行・target を運ばない古い pokedex)→ ""(engine はダブルで move_target_unknown の印を付ける)
+//
+// 期待値の spread の集合は TestMoveTargetIsSpread と同じく取得元(@smogon/calc の gen789.js)から独立に書く。
+// 対象の有無で engine.Move の他のフィールドが変わらないことも確かめる。
+func TestMoveMapsTargetToEngine(t *testing.T) {
 	c := testChart(t)
 	base := master.MoveRow{ID: "testflame", NameJa: "テストフレイム", Type: "fire", Category: "special", Power: 90, Priority: 0}
-	want, err := master.Move(base, c)
+	unknown, err := master.Move(base, c)
 	if err != nil {
 		t.Fatalf("Move(対象なし): %v", err)
 	}
-	for _, target := range []string{"allAdjacentFoes", "normal", "any"} {
-		row := base
-		row.Target = target
-		got, err := master.Move(row, c)
-		if err != nil {
-			t.Fatalf("Move(target=%q): %v", target, err)
-		}
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("target=%q で engine.Move が変わった: %+v, want %+v", target, got, want)
-		}
+	if unknown.Target != "" {
+		t.Fatalf("対象が空の行: Target = %q, want \"\"(不明)", unknown.Target)
+	}
+	spread := map[string]bool{"allAdjacent": true, "allAdjacentFoes": true}
+	for _, target := range showdownMoveTargets {
+		t.Run(target, func(t *testing.T) {
+			row := base
+			row.Target = target
+			got, err := master.Move(row, c)
+			if err != nil {
+				t.Fatalf("Move(target=%q): %v", target, err)
+			}
+			want := engine.MoveTargetSingle
+			if spread[target] {
+				want = engine.MoveTargetSpread
+			}
+			if got.Target != want {
+				t.Errorf("target=%q: engine.Move.Target = %q, want %q", target, got.Target, want)
+			}
+			// 対象以外は対象なしの写像と同じ(対象が他のフィールドに漏れない)。
+			got.Target = ""
+			if !reflect.DeepEqual(got, unknown) {
+				t.Errorf("target=%q で対象以外のフィールドが変わった: %+v, want %+v", target, got, unknown)
+			}
+		})
 	}
 	row := base
 	row.Target = "teleport"

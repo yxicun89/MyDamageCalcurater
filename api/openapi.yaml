@@ -1158,6 +1158,18 @@ components:
         category: { $ref: '#/components/schemas/MoveCategory' }
         power: { type: integer, description: 威力(0 は変化技/固定ダメージ) }
         priority: { type: integer, default: 0 }
+        target:
+          type: string
+          enum: [single, spread]
+          # Format の single と定数名が衝突しないよう名前を明示する(衝突すると oapi-codegen が既存の定数名を変える)。
+          x-enum-varnames: [MoveTargetSingle, MoveTargetSpread]
+          description: |
+            技の対象の分類(issue 288・ADR-0223)。ダブルの計算に使う: `spread` は相手の場の複数に当たる全体技
+            (Showdown の allAdjacent・allAdjacentFoes。ダブルで ×3072/4096)、`single` はそれ以外(単体技・自分・味方・場の技)。
+            値は engine の `MoveTarget`(WASM の技の `target`)と同じで、クライアントはそのまま渡せる。
+            pokedex-svc がマスタの対象(`MasterMove.target` の Showdown の文字列)から分類して返す。
+            対象がまだ取り込まれていない技は**キーごと省く**(null を返さない)。古いサーバーもこのキーを返さないため、
+            クライアントは「キーが無い」を不明として扱う(ダブルの計算では単体として計算し、未対応の印 move_target_unknown が付く)。
 
     Item:
       type: object
@@ -2004,7 +2016,7 @@ components:
     MasterMove:
       type: object
       description: moves テーブルの行(計算に使う列だけ)+ move_effects の effect(ADR-0107)
-      required: [id, nameJa, type, category, power, priority, effect, mechanisms]
+      required: [id, nameJa, type, category, power, priority, effect, mechanisms, target]
       properties:
         id: { type: string }
         nameJa: { type: string }
@@ -2030,6 +2042,18 @@ components:
             enum にすると oapi-codegen が別の Go 型を生成し、両サービスで `[]string` との相互変換が
             必要になるだけで、二重の検証にしかならない。
           items: { type: string }
+        target:
+          type: string
+          nullable: true
+          description: |
+            技の対象(moves.target。ADR-0136・ADR-0223。issue 288)。Showdown の技データの `target` の文字列を
+            そのまま返す(15種。正は `services/internal/master.AllMoveTargets`)。null はまだ取り込んでいない行
+            (対象が不明)。キーは省かない(null を返す)。
+            enum は付けない(mechanisms と同じ理由。値の検証は受け取った calc-svc が `master.MoveTargetOf` で行う)。
+            calc-svc は全体技(allAdjacent・allAdjacentFoes)を engine の spread、その他の既知の値を single、
+            null を不明("")として engine.Move.Target に写す(ダブルで不明の攻撃技には move_target_unknown の印。ADR-0222)。
+            古い pokedex-svc(このキーを返さない版)からの取り込みは、キーが無いことを null と同じ「不明」として受け付ける
+            (入れ替えの順序に依存させない。ADR-0223 §3)。
 
     MasterEffect:
       type: object
