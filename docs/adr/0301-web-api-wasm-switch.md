@@ -169,3 +169,5 @@ Web 側だけで完結する対処(例: e2e 専用の軽量な pokedex フィク
 
 - `web/src/api/`(生成型と API 実装)、`MasterData.natures`、例データの種族キー、ヘッダーのモード切り替え、`web/scripts/export-example-master.mjs`。
 - ルートの `Makefile` の `gen-ts`。API レーンは `make gen` の前に `make web-install` が要る(DECISIONS.md に記載)。
+
+> 追記(ADR-0313・採用): §4 の「既定はオフライン」は ADR-0313 で「既定はオンライン」に変更した。オフラインは架空の例データではなく、オンラインで取得したマスタのキャッシュ(IndexedDB)から読む。

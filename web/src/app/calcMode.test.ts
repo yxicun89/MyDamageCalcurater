@@ -1,5 +1,5 @@
 // P4-5: 計算モード(オフライン = WASM / オンライン = API)の保存(ADR-0301 §4)。
-// 既定はオフライン。選択は localStorage に覚える(端末ごとの好み)。ストレージが使えない・壊れた値でも失敗させない。
+// 既定はオンライン(ADR-0313 で変更)。選択は localStorage に覚える(端末ごとの好み)。ストレージが使えない・壊れた値でも失敗させない。
 
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { CALC_MODE_STORAGE_KEY, DEFAULT_CALC_MODE, loadCalcMode, saveCalcMode } from "./calcMode";
@@ -23,9 +23,14 @@ afterEach(() => {
 });
 
 describe("計算モードの保存", () => {
-  test("既定はオフライン、保存先のキーは pokecalc.calcMode", () => {
-    expect(DEFAULT_CALC_MODE).toBe("offline");
+  test("既定はオンライン、保存先のキーは pokecalc.calcMode", () => {
+    expect(DEFAULT_CALC_MODE).toBe("online");
     expect(CALC_MODE_STORAGE_KEY).toBe("pokecalc.calcMode");
+    expect(loadCalcMode()).toBe("online");
+  });
+
+  test("保存済みのオフラインは既定より優先する(既存利用者の選択を尊重)", () => {
+    saveCalcMode("offline");
     expect(loadCalcMode()).toBe("offline");
   });
 
@@ -39,15 +44,15 @@ describe("計算モードの保存", () => {
   );
 
   test.each(["", "ONLINE", "api", "wasm", "null", '"online"'])(
-    "未知の保存値 %j は既定(オフライン)として読む",
+    "未知の保存値 %j は既定(オンライン)として読む",
     (stored) => {
       localStorage.setItem(CALC_MODE_STORAGE_KEY, stored);
-      expect(loadCalcMode()).toBe("offline");
+      expect(loadCalcMode()).toBe("online");
     },
   );
 
   test("ストレージが例外を投げても、読むときは既定、書くときは例外にしない", () => {
-    expect(loadCalcMode(throwingStorage)).toBe("offline");
+    expect(loadCalcMode(throwingStorage)).toBe("online");
     expect(() => {
       saveCalcMode("online", throwingStorage);
     }).not.toThrow();
