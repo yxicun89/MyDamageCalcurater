@@ -367,6 +367,11 @@ func (c *countingStore) NatureID(n engine.Nature) (string, bool) {
 	return c.inner.NatureID(n)
 }
 
+func (c *countingStore) MegaRequiredItem(speciesKey string) (string, bool) {
+	c.lookups++
+	return c.inner.MegaRequiredItem(speciesKey)
+}
+
 func (c *countingStore) TypeChart() engine.TypeChart {
 	c.chartGet++
 	return c.inner.TypeChart()

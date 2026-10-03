@@ -638,6 +638,10 @@ extension Components {
             public var natureId: Swift.String
             /// - Remark: Generated from `#/components/schemas/Individual/abilityId`.
             public var abilityId: Swift.String?
+            /// 持ち物。メガシンカ後の種族(isMega)は、その requiredItemId の持ち物か持ち物なし(null・省略)だけ受け付け、
+            /// 別の持ち物は 400 `invalid_input`(ADR-0200 §4)。
+            ///
+            ///
             /// - Remark: Generated from `#/components/schemas/Individual/itemId`.
             public var itemId: Swift.String?
             /// 能力ポイント。各 0..32、合計 <= 66
@@ -695,7 +699,7 @@ extension Components {
             ///   - level:
             ///   - natureId:
             ///   - abilityId:
-            ///   - itemId:
+            ///   - itemId: 持ち物。メガシンカ後の種族(isMega)は、その requiredItemId の持ち物か持ち物なし(null・省略)だけ受け付け、
             ///   - sp: 能力ポイント。各 0..32、合計 <= 66
             ///   - ranks:
             ///   - teraType:
@@ -1192,6 +1196,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/BulkCalcRequest/presets`.
             public var presets: [Components.Schemas.DefenderPreset]?
             /// 差し替えて比較する持ち物 ID(省略時は素の1通り)。null 要素は「持ち物なし」。
+            /// defenderSpeciesKey がメガシンカ後の種族のとき、requiredItemId 以外の持ち物を含めると 400 `invalid_input`(ADR-0200 §4)。
             /// 65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
             /// 行の基本数は `len(presets) × len(itemVariants)`(上限 8 × 64 = 512)。特性ごとに結果が違う
             /// ときだけ、その基本数のうち最大3倍(特性の候補数。ADR-0126・ADR-0214)まで行が分かれる。
@@ -1614,6 +1619,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/options`.
             public var options: Components.Schemas.CalcOptions?
             /// 相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ。
+            /// unknownSpeciesKey がメガシンカ後の種族のとき、requiredItemId 以外の持ち物を含めると 400 `invalid_input`(ADR-0200 §4)。
             /// 65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
             ///
             ///
