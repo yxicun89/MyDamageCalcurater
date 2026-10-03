@@ -7,8 +7,10 @@ package engine
 //     攻撃側は A(C) の SP を 0..32 探索。性格は「補正なし」「関連ステータス上昇」の2通り。
 //   - 結果は「性格クラス × 持ち物」ごとに、観測を説明できる SP の範囲。区別できない候補は残す。
 //   - 同じ相手の観測を複数入力すると絞り込める。
-//   - 観測%の丸め規則は未確認(人間の確認待ち)なので、観測は「精度付きの値」として受け、
-//     どの丸め規則(切り捨て/四捨五入/切り上げ)で作られた観測でも真値を落とさない区間で照合する。
+//   - 観測は「精度付きの値」として受ける。整数%(Percent)は実機の HP 減少表示と同じ**切り捨て**で
+//     作られたものとして区間 [v, v+1) で照合する(2026-10-03 ユーザー確認。ADR-0134)。
+//     0.1% 精度(PercentTenths)は出所の丸めが未確認なので、どの丸め規則(切り捨て/四捨五入/切り上げ)で
+//     作られた観測でも真値を落とさない区間で照合する(ADR-0010 §R2 のまま。ADR-0134 §2)。
 //
 // テストの「正解」は engine の関数からではなく、観測を作った手順そのもの(roundObserved)から
 // 独立に導く(oracleMatches / bruteForceReverse)。engine の区間式を写さない。
@@ -134,8 +136,9 @@ func revBigHPSpecies() Species {
 // ---------------------------------------------------------------------------
 // 観測の作り方(テスト側の独立な定義)
 //
-// 実機の丸め規則は未確認(plan.md ブロッカー)。テストは3つの規則のどれで観測を作っても
-// engine が真値を落とさないことを見る。engine の区間式(ADR-0010 §R2)はここに写さない。
+// 整数%の観測は実機と同じ切り捨てで作る(ADR-0134)。0.1% 精度の観測は丸めが未確認なので、
+// 3つの規則のどれで作っても engine が真値を落とさないことを見る(ADR-0010 §R2)。
+// engine の区間式はここに写さない(観測を作る手順 roundObserved から独立に導く)。
 // ---------------------------------------------------------------------------
 
 type obsRounding int
@@ -147,6 +150,22 @@ const (
 )
 
 var allObsRoundings = []obsRounding{roundFloor, roundHalfUp, roundCeil}
+
+// percentObsRoundings は整数%(Percent)の観測を作る丸め規則。実機の相手 HP 減少の整数%表示は
+// 切り捨て(2026-10-03 ユーザー確認。ADR-0134 §1)。
+var percentObsRoundings = []obsRounding{roundFloor}
+
+// tenthsObsRoundings は 0.1% 精度(PercentTenths)の観測を作りうる丸め規則。実機の表示ではなく
+// 出所の丸めが未確認なので、3規則の和のまま(ADR-0134 §2)。
+var tenthsObsRoundings = allObsRoundings
+
+// obsRoundingsFor は精度 scale(100=整数% / 1000=0.1%)の観測を作りうる丸め規則を返す。
+func obsRoundingsFor(scale int) []obsRounding {
+	if scale == 100 {
+		return percentObsRoundings
+	}
+	return tenthsObsRoundings
+}
 
 func (r obsRounding) String() string {
 	switch r {
@@ -173,9 +192,33 @@ func roundObserved(damage, maxHP, scale int, r obsRounding) int {
 	return min(v, scale)
 }
 
-// oracleMatches は「観測 o が、ダメージ damage をいずれかの丸め規則で観測したものでありうるか」。
-// engine の Observation.Matches と同値であるべき(ADR-0010 §R2)が、定義は独立に書く。
+// oracleMatches は「観測 o が、ダメージ damage をその精度で使われうる丸め規則
+// (obsRoundingsFor。整数%は切り捨てのみ、0.1% は3規則のいずれか)で観測したものでありうるか」。
+// engine の Observation.Matches と同値であるべき(ADR-0010 §R2・ADR-0134)が、定義は独立に書く。
 func oracleMatches(o Observation, damage, maxHP int) bool {
+	scale, v := 0, 0
+	switch {
+	case o.Damage != 0:
+		return damage == o.Damage
+	case o.PercentTenths != 0:
+		scale, v = 1000, o.PercentTenths
+	default:
+		scale, v = 100, o.Percent
+	}
+	if maxHP <= 0 {
+		return false
+	}
+	for _, r := range obsRoundingsFor(scale) {
+		if roundObserved(damage, maxHP, scale, r) == v {
+			return true
+		}
+	}
+	return false
+}
+
+// anyRoundingMatches は旧仕様(ADR-0010 §R2 の 3 規則の和)の照合。ADR-0134 で整数%を狭めたあとも
+// 「新しい区間は旧区間の部分集合」(狭めるだけで広げない)を確かめる比較対象として残す。
+func anyRoundingMatches(o Observation, damage, maxHP int) bool {
 	scale, v := 0, 0
 	switch {
 	case o.Damage != 0:
@@ -448,8 +491,17 @@ func assertMatchesOracle(t *testing.T, in ReverseInput, res ReverseResult) {
 }
 
 // observeTruth は真値の個体への1発を、指定ロール・丸め規則・精度で観測にする。
+// 整数%(tenths=false)は実機と同じ切り捨てでしか作らない(ADR-0134。四捨五入・切り上げの整数%は
+// 実機に現れない観測なので、フィクスチャに使うと「真値を落とさない」の前提が崩れる)。
 func observeTruth(t *testing.T, in DamageInput, rollIdx int, r obsRounding, tenths bool) Observation {
 	t.Helper()
+	scale := 100
+	if tenths {
+		scale = 1000
+	}
+	if !slices.Contains(obsRoundingsFor(scale), r) {
+		t.Fatalf("フィクスチャ不正: 精度 1/%d の観測を%sで作ろうとした(整数%%は切り捨てのみ。ADR-0134)", scale, r)
+	}
 	res, err := calcDamage(in)
 	if err != nil {
 		t.Fatalf("真値の CalcDamage が失敗した: %v", err)
@@ -469,7 +521,8 @@ func observeTruth(t *testing.T, in DamageInput, rollIdx int, r obsRounding, tent
 }
 
 // ---------------------------------------------------------------------------
-// AC-1: 観測の区間モデル(丸め規則に依存しない照合。ADR-0010 §R2)
+// AC-1: 観測の区間モデル(整数%は切り捨て [v, v+1)。0.1% は丸め規則に依存しない照合。
+// ADR-0010 §R2・ADR-0134)
 // ---------------------------------------------------------------------------
 
 func TestObservationMatchesTable(t *testing.T) {
@@ -480,22 +533,39 @@ func TestObservationMatchesTable(t *testing.T) {
 		maxHP  int
 		want   bool
 	}{
-		// 整数% 45(HP200): 真の% p が (44, 46) に入るダメージだけ。88=44.0% と 92=46.0% は、
-		// どの丸め規則でも 45 にならないので含めない。89=44.5%(四捨五入・切り上げで45)、91=45.5%(切り捨てで45)。
+		// 整数% 45(HP200): 実機は切り捨てなので、真の% p が [45, 46) に入るダメージだけ(ADR-0134)。
+		// 下端 45.0% は含み(閉)、上端 46.0% は含まない(開)。
 		{"45%: 88 は 44.0% で外", Observation{Percent: 45}, 88, 200, false},
-		{"45%: 89 は 44.5%(切り上げ・四捨五入で45)", Observation{Percent: 45}, 89, 200, true},
-		{"45%: 90 はちょうど45.0%", Observation{Percent: 45}, 90, 200, true},
+		{"45%: 89 は 44.5%(切り捨てでは44。旧区間では両立していた)", Observation{Percent: 45}, 89, 200, false},
+		{"45%: 90 はちょうど45.0%(下端は閉)", Observation{Percent: 45}, 90, 200, true},
 		{"45%: 91 は 45.5%(切り捨てで45)", Observation{Percent: 45}, 91, 200, true},
-		{"45%: 92 は 46.0% で外", Observation{Percent: 45}, 92, 200, false},
-		// 整数% 1: (0, 2) の範囲。
-		{"1%: 1 ダメージ(0.5%)", Observation{Percent: 1}, 1, 200, true},
+		{"45%: 92 は 46.0%(上端は開)で外", Observation{Percent: 45}, 92, 200, false},
+		{"44%: 90 はちょうど45.0%(1つ下の観測の上端は開)で外", Observation{Percent: 44}, 90, 200, false},
+		{"46%: 92 はちょうど46.0%(下端は閉)", Observation{Percent: 46}, 92, 200, true},
+		// HP が 100 で割り切れないときの端。HP207: 45% の下端は 93.15 → 94 ダメージ(45.41%)から、
+		// 上端 95.22 の手前 → 95 ダメージ(45.89%)まで。93=44.93% と 96=46.38% は外。
+		{"45%: HP207 の 93(44.93%)は外", Observation{Percent: 45}, 93, 207, false},
+		{"45%: HP207 の 94(45.41%)", Observation{Percent: 45}, 94, 207, true},
+		{"45%: HP207 の 95(45.89%)", Observation{Percent: 45}, 95, 207, true},
+		{"45%: HP207 の 96(46.38%)は外", Observation{Percent: 45}, 96, 207, false},
+		// 整数% 1: [1, 2) の範囲。1% 未満(0% と表示される)は 1% の観測を説明しない。
+		{"1%: 1 ダメージ(0.5%)は 0% 表示なので外", Observation{Percent: 1}, 1, 200, false},
+		{"1%: 2 ダメージ(ちょうど1.0%)", Observation{Percent: 1}, 2, 200, true},
 		{"1%: 3 ダメージ(1.5%)", Observation{Percent: 1}, 3, 200, true},
 		{"1%: 4 ダメージ(2.0%)は外", Observation{Percent: 1}, 4, 200, false},
-		// 100% は HP バーの頭打ち。99% を超えるダメージ(瀕死・過剰打点を含む)すべてと両立する。
+		// 99%: [99, 100)。ちょうど 100% は 100% と表示されるので外。
+		{"99%: 198 はちょうど99.0%", Observation{Percent: 99}, 198, 200, true},
+		{"99%: 199 は 99.5%", Observation{Percent: 99}, 199, 200, true},
+		{"99%: 200 はちょうど100%で外", Observation{Percent: 99}, 200, 200, false},
+		// 100% は HP バーの頭打ち。切り捨てで 100 になるのは p >= 100 だけなので、
+		// 「100% 以上のダメージ(瀕死・過剰打点を含む)すべて」と両立し、100% 未満とは両立しない。
 		{"100%: 198 は 99.0% で外", Observation{Percent: 100}, 198, 200, false},
-		{"100%: 199 は 99.5%", Observation{Percent: 100}, 199, 200, true},
-		{"100%: 200 はちょうど100%", Observation{Percent: 100}, 200, 200, true},
+		{"100%: 199 は 99.5%(切り捨てでは99。旧区間では両立していた)で外", Observation{Percent: 100}, 199, 200, false},
+		{"100%: 200 はちょうど100%(下端は閉)", Observation{Percent: 100}, 200, 200, true},
+		{"100%: 201 は 100.5%(上側は開いている)", Observation{Percent: 100}, 201, 200, true},
 		{"100%: 250 は過剰打点(125%)でも両立", Observation{Percent: 100}, 250, 200, true},
+		{"100%: HP207 の 206(99.52%)は外", Observation{Percent: 100}, 206, 207, false},
+		{"100%: HP207 の 207", Observation{Percent: 100}, 207, 207, true},
 		// 0.1% 精度。HP175 の 128 ダメージ = 73.142857...% → 切り捨て・四捨五入 73.1、切り上げ 73.2。
 		{"73.1%: HP175 の 128", Observation{PercentTenths: 731}, 128, 175, true},
 		{"73.2%: HP175 の 128", Observation{PercentTenths: 732}, 128, 175, true},
@@ -520,7 +590,7 @@ func TestObservationMatchesTable(t *testing.T) {
 			if got := tt.obs.Matches(tt.damage, tt.maxHP); got != tt.want {
 				t.Errorf("%+v.Matches(%d, %d) = %v, want %v", tt.obs, tt.damage, tt.maxHP, got, tt.want)
 			}
-			// 独立な定義(いずれかの丸め規則で作れるか)とも一致すること。
+			// 独立な定義(その精度で使われうる丸め規則で作れるか)とも一致すること。
 			if got := oracleMatches(tt.obs, tt.damage, tt.maxHP); got != tt.want {
 				t.Fatalf("テスト表の誤り: oracleMatches = %v, want %v", got, tt.want)
 			}
@@ -528,10 +598,12 @@ func TestObservationMatchesTable(t *testing.T) {
 	}
 }
 
-// TestObservationMatchesAnyRounding は、区間モデルが「どの丸め規則で作った観測でも真値を落とさない」
-// こと(被覆)と、「どの丸め規則でも作れない値は受け入れない」こと(最小性)の両方を性質として見る。
-// つまり Matches は「切り捨て・四捨五入・切り上げのいずれかで作れる」と同値でなければならない。
-func TestObservationMatchesAnyRounding(t *testing.T) {
+// TestObservationMatchesRoundingRules は、区間モデルが「その精度で使われうる丸め規則で作った観測なら
+// 真値を落とさない」こと(被覆)と、「その規則で作れない値は受け入れない」こと(最小性)の両方を性質として見る。
+// 整数%は切り捨てのみ(ADR-0134)、0.1% は切り捨て・四捨五入・切り上げのいずれか(ADR-0010 §R2)。
+// 旧 TestObservationMatchesAnyRounding(3規則の和)を、整数%の規則が確定したことに合わせて置き換えたもの。
+// 確かめる範囲(HP・ダメージ・近傍の値)は旧テストから減らしていない。
+func TestObservationMatchesRoundingRules(t *testing.T) {
 	hps := []int{76, 100, 147, 175, 207, 341, 500, 704}
 	for _, hp := range hps {
 		for d := 1; d <= hp+hp/5; d++ {
@@ -542,7 +614,7 @@ func TestObservationMatchesAnyRounding(t *testing.T) {
 					}
 					return Observation{PercentTenths: v}
 				}
-				for _, r := range allObsRoundings {
+				for _, r := range obsRoundingsFor(scale) {
 					v := roundObserved(d, hp, scale, r)
 					if v <= 0 {
 						continue
@@ -557,7 +629,7 @@ func TestObservationMatchesAnyRounding(t *testing.T) {
 					o := mk(v)
 					got, want := o.Matches(d, hp), oracleMatches(o, d, hp)
 					if got != want {
-						t.Fatalf("HP%d の %d ダメージと %+v: Matches = %v, want %v(いずれかの丸め規則で作れる ⇔ 両立)",
+						t.Fatalf("HP%d の %d ダメージと %+v: Matches = %v, want %v(その精度の丸め規則で作れる ⇔ 両立)",
 							hp, d, o, got, want)
 					}
 					if (o.Distance(d, hp) == 0) != got {
@@ -570,9 +642,71 @@ func TestObservationMatchesAnyRounding(t *testing.T) {
 	}
 }
 
-// TestObservationDistance は、説明できない観測との距離(0.1% 単位の整数。ADR-0010 §R2)を手計算の表で固定する。
+// TestObservationPercentFloorIsUnique は、切り捨ての整数%観測では「1つのダメージを説明できる観測値は
+// 高々1つ」(切り捨ては関数なので、区間 [v, v+1) は v ごとに互いに素)であることを見る(ADR-0134 §1)。
+// 1% 未満のダメージ(実機は 0% と表示)は、どの 1..100 の観測とも両立しない。
+// 旧区間 (v-1, v+1) では隣り合う2つの v と両立しえた(情報を半分捨てていた)ことの回帰。
+func TestObservationPercentFloorIsUnique(t *testing.T) {
+	for _, hp := range []int{76, 100, 147, 175, 200, 207, 341, 500, 704} {
+		for d := 1; d <= hp+hp/5; d++ {
+			var hits []int
+			for v := 1; v <= 100; v++ {
+				if (Observation{Percent: v}).Matches(d, hp) {
+					hits = append(hits, v)
+				}
+			}
+			want := min(100*d/hp, 100) // 実機の表示(切り捨て・100% で頭打ち)
+			switch {
+			case want == 0 && len(hits) != 0:
+				t.Fatalf("HP%d の %d ダメージ(1%%未満 = 0%%表示)が観測 %v と両立した", hp, d, hits)
+			case want > 0 && !slices.Equal(hits, []int{want}):
+				t.Fatalf("HP%d の %d ダメージと両立する整数%%観測 = %v, want [%d](切り捨ての表示値ちょうど1つ)",
+					hp, d, hits, want)
+			}
+		}
+	}
+}
+
+// TestObservationPercentFloorNarrowsOnly は、ADR-0134 の変更が「狭めるだけ」であることを見る。
+// 新しい区間で両立するものは旧区間(3規則の和)でも必ず両立し、0.1% 精度と実点数の照合は変わらない。
+// 逆向き(旧で両立・新で外)は整数%で実際に起きる(TestObservationMatchesTable の 89/200 など)。
+func TestObservationPercentFloorNarrowsOnly(t *testing.T) {
+	narrowed := 0
+	for _, hp := range []int{76, 100, 147, 175, 207, 341, 500, 704} {
+		for d := 1; d <= hp+hp/5; d++ {
+			for v := 1; v <= 100; v++ {
+				o := Observation{Percent: v}
+				got, old := o.Matches(d, hp), anyRoundingMatches(o, d, hp)
+				if got && !old {
+					t.Fatalf("HP%d の %d ダメージと %+v: 新区間で両立するのに旧区間で外(広げてはならない)", hp, d, o)
+				}
+				if old && !got {
+					narrowed++
+				}
+			}
+			for v := 1; v <= 1000; v++ {
+				o := Observation{PercentTenths: v}
+				if got, old := o.Matches(d, hp), anyRoundingMatches(o, d, hp); got != old {
+					t.Fatalf("HP%d の %d ダメージと %+v: 0.1%% 精度の照合が変わった(Matches=%v, 旧=%v。ADR-0134 §2)",
+						hp, d, o, got, old)
+				}
+			}
+			o := Observation{Damage: d}
+			if o.Matches(d, hp) != anyRoundingMatches(o, d, hp) || o.Matches(d+1, hp) {
+				t.Fatalf("HP%d の実点数 %d の照合が変わった(完全一致のまま。ADR-0134 §2)", hp, d)
+			}
+		}
+	}
+	if narrowed == 0 {
+		t.Fatal("整数%の区間が1か所も狭まっていない(切り捨て [v, v+1) になっていない)")
+	}
+}
+
+// TestObservationDistance は、説明できない観測との距離(0.1% 単位の整数。ADR-0010 §R2・ADR-0134 §3)を
+// 手計算の表で固定する。
 //
-//	Percent       : x = 100*d  - v*HP、Distance = (|x| / HP) * 10   (両立なら 0)
+//	Percent       : x = 100*d  - v*HP。区間 [v, v+1)(v=100 は [100, ∞))の外までの距離 gap を
+//	                gap = -x(x < 0)/ x - HP(x >= HP)とし、Distance = max(1, 10*gap / HP)(両立なら 0)
 //	PercentTenths : x = 1000*d - v*HP、Distance = (|x| / HP)        (両立なら 0)
 //	Damage        : d == D なら 0、それ以外は max(1, 1000*|d-D| / HP)
 func TestObservationDistance(t *testing.T) {
@@ -584,13 +718,20 @@ func TestObservationDistance(t *testing.T) {
 		want   int
 	}{
 		{"45%: 両立は 0", Observation{Percent: 45}, 90, 200, 0},
-		{"45%: 92 は |x|=200 → 1 → 10", Observation{Percent: 45}, 92, 200, 10},
-		{"45%: 93 は |x|=300 → 1 → 10", Observation{Percent: 45}, 93, 200, 10},
-		{"45%: 94 は |x|=400 → 2 → 20", Observation{Percent: 45}, 94, 200, 20},
-		{"45%: 87 は |x|=300 → 1 → 10", Observation{Percent: 45}, 87, 200, 10},
+		{"45%: 91(45.5%)も両立で 0", Observation{Percent: 45}, 91, 200, 0},
+		{"45%: 92 は x=200 → 上端ちょうど gap=0 → 下限 1", Observation{Percent: 45}, 92, 200, 1},
+		{"45%: 93 は x=300 → gap=100 → 1000/200=5", Observation{Percent: 45}, 93, 200, 5},
+		{"45%: 94 は x=400 → gap=200 → 10", Observation{Percent: 45}, 94, 200, 10},
+		{"45%: 89 は x=-100 → gap=100 → 5(旧区間では両立していた)", Observation{Percent: 45}, 89, 200, 5},
+		{"45%: 88 は x=-200 → gap=200 → 10", Observation{Percent: 45}, 88, 200, 10},
+		{"45%: 87 は x=-300 → gap=300 → 15", Observation{Percent: 45}, 87, 200, 15},
+		{"45%: HP2000 の 899 は x=-100 → 1000/2000=0 に落ちず下限 1", Observation{Percent: 45}, 899, 2000, 1},
+		{"1%: 1 ダメージ(0.5%)は x=-100 → 5", Observation{Percent: 1}, 1, 200, 5},
 		{"100%: 過剰打点は 0", Observation{Percent: 100}, 250, 200, 0},
-		{"100%: 198 は |x|=200 → 10", Observation{Percent: 100}, 198, 200, 10},
-		{"100%: 150 は |x|=5000 → 25 → 250", Observation{Percent: 100}, 150, 200, 250},
+		{"100%: ちょうど100%は 0", Observation{Percent: 100}, 200, 200, 0},
+		{"100%: 199 は x=-100 → 5(旧区間では両立していた)", Observation{Percent: 100}, 199, 200, 5},
+		{"100%: 198 は x=-200 → 10", Observation{Percent: 100}, 198, 200, 10},
+		{"100%: 150 は x=-5000 → 250", Observation{Percent: 100}, 150, 200, 250},
 		{"73.1%: 両立は 0", Observation{PercentTenths: 731}, 128, 175, 0},
 		{"73.0%: HP175 の 128 は |x|=250 → 1", Observation{PercentTenths: 730}, 128, 175, 1},
 		{"73.3%: HP175 の 128 は |x|=275 → 1", Observation{PercentTenths: 733}, 128, 175, 1},
@@ -745,18 +886,34 @@ func TestReverseRangesMatchBruteForce(t *testing.T) {
 		name string
 		in   func(t *testing.T) ReverseInput
 	}{
-		{"防御側・整数%1件(四捨五入)", func(t *testing.T) ReverseInput {
-			o := observeTruth(t, DamageInput{Format: FormatSingle, Attacker: revKnownAttacker(), Defender: truthB19, Move: phys}, 7, roundHalfUp, false)
+		// 整数%は実機と同じ切り捨てで作る(ADR-0134)。旧版はここを四捨五入・切り上げで作っていたが、
+		// 実機に現れない観測なので 0.1% 精度の行(四捨五入・切り上げ)に移した。
+		{"防御側・整数%1件(切り捨て)", func(t *testing.T) ReverseInput {
+			o := observeTruth(t, DamageInput{Format: FormatSingle, Attacker: revKnownAttacker(), Defender: truthB19, Move: phys}, 7, roundFloor, false)
 			return defIn(phys, []*Item{nil, revEviolite()}, o)
 		}},
-		{"防御側・整数%2件(切り捨て/切り上げ)・区別できない持ち物(等倍へのきのみ)を含む", func(t *testing.T) ReverseInput {
+		{"防御側・整数%2件(切り捨て)・区別できない持ち物(等倍へのきのみ)を含む", func(t *testing.T) ReverseInput {
 			in := DamageInput{Format: FormatSingle, Attacker: revKnownAttacker(), Defender: truthD5, Move: spec}
 			return defIn(spec, []*Item{nil, revVest(), revBerry(TypeWater)},
-				observeTruth(t, in, 2, roundFloor, false), observeTruth(t, in, 13, roundCeil, false))
+				observeTruth(t, in, 2, roundFloor, false), observeTruth(t, in, 13, roundFloor, false))
 		}},
 		{"防御側・0.1%精度1件", func(t *testing.T) ReverseInput {
 			o := observeTruth(t, DamageInput{Format: FormatSingle, Attacker: revKnownAttacker(), Defender: truthB19, Move: phys}, 10, roundFloor, true)
 			return defIn(phys, []*Item{nil, revEviolite()}, o)
+		}},
+		{"防御側・0.1%精度1件(四捨五入)", func(t *testing.T) ReverseInput {
+			o := observeTruth(t, DamageInput{Format: FormatSingle, Attacker: revKnownAttacker(), Defender: truthB19, Move: phys}, 7, roundHalfUp, true)
+			return defIn(phys, []*Item{nil, revEviolite()}, o)
+		}},
+		{"防御側・0.1%精度2件(切り捨て/切り上げ)・区別できない持ち物を含む", func(t *testing.T) ReverseInput {
+			in := DamageInput{Format: FormatSingle, Attacker: revKnownAttacker(), Defender: truthD5, Move: spec}
+			return defIn(spec, []*Item{nil, revVest(), revBerry(TypeWater)},
+				observeTruth(t, in, 2, roundFloor, true), observeTruth(t, in, 13, roundCeil, true))
+		}},
+		{"攻撃側・整数%1件(切り捨て)", func(t *testing.T) ReverseInput {
+			in := DamageInput{Format: FormatSingle, Attacker: atkTruth, Defender: knownWall, Move: phys}
+			return ReverseInput{Format: FormatSingle, Side: SideAttacker, Known: knownWall,
+				UnknownSpecies: revAttackerSpecies(), Move: phys, Observations: []Observation{observeTruth(t, in, 9, roundFloor, false)}}
 		}},
 		{"防御側・100%頭打ち(確定1発)", func(t *testing.T) ReverseInput {
 			res, err := calcDamage(DamageInput{Format: FormatSingle, Attacker: revStrongAttacker(), Defender: frailTruth, Move: bigMove})
@@ -851,8 +1008,30 @@ func TestReverseNonContiguousRangesKept(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC-4: 真値は必ず範囲に入る(どの丸め規則・どの SP でも。被覆)
+// AC-4: 真値は必ず範囲に入る(整数%は切り捨て、0.1% はどの丸め規則でも。どの SP でも。被覆)
 // ---------------------------------------------------------------------------
+
+// truthObsKinds は被覆を確かめる観測の作り方(精度 × その精度で使われうる丸め規則)。
+// 整数%は切り捨てのみ(ADR-0134)、0.1% は3規則(ADR-0010 §R2)。旧版は整数% × 3規則だったので、
+// 1真値あたりの観測数(3 → 1 + 3 = 4)は減らしていない。
+func truthObsKinds() []struct {
+	tenths bool
+	rule   obsRounding
+} {
+	var out []struct {
+		tenths bool
+		rule   obsRounding
+	}
+	for _, scale := range []int{100, 1000} {
+		for _, r := range obsRoundingsFor(scale) {
+			out = append(out, struct {
+				tenths bool
+				rule   obsRounding
+			}{scale == 1000, r})
+		}
+	}
+	return out
+}
 
 func TestReverseTruthInRange(t *testing.T) {
 	sps := []int{0, 1, 7, 16, 19, 31, 32}
@@ -865,7 +1044,8 @@ func TestReverseTruthInRange(t *testing.T) {
 			}
 			for i, x := range sps {
 				for _, class := range revClasses {
-					for _, r := range allObsRoundings {
+					for _, ob := range truthObsKinds() {
+						r := ob.rule
 						item := items[i%len(items)]
 						truthSP := Stats{}.WithStat(stat, x)
 						known := revKnownAttacker()
@@ -884,7 +1064,7 @@ func TestReverseTruthInRange(t *testing.T) {
 						} else {
 							dmg.Attacker, dmg.Defender = truth, known
 						}
-						obs := observeTruth(t, dmg, (x*5+int(r))%16, r, false)
+						obs := observeTruth(t, dmg, (x*5+int(r))%16, r, ob.tenths)
 						res, err := calcReverse(ReverseInput{
 							Format: FormatSingle, Side: side, Known: known, UnknownSpecies: unknownSpecies,
 							Move: revMove(cat), ItemCandidates: items, Observations: []Observation{obs},
@@ -907,6 +1087,131 @@ func TestReverseTruthInRange(t *testing.T) {
 	}
 }
 
+// exactSPsWith は候補 (class, item) で、全観測を match で説明できる SP の昇順の列(テスト側の総当たり)。
+func exactSPsWith(t *testing.T, in ReverseInput, class NatureClass, item *Item,
+	match func(o Observation, damage, maxHP int) bool) []int {
+	t.Helper()
+	var out []int
+	for x := 0; x <= MaxSPPerStat; x++ {
+		res := revRolls(t, in, class, item, x)
+		all := true
+		for _, o := range in.Observations {
+			hit := false
+			for _, r := range res.Rolls {
+				if match(o, r, res.DefenderHP) {
+					hit = true
+					break
+				}
+			}
+			if !hit {
+				all = false
+				break
+			}
+		}
+		if all {
+			out = append(out, x)
+		}
+	}
+	return out
+}
+
+// TestReverseFloorObservationNarrowsCandidates は、整数%を切り捨て [v, v+1) で照合するようにした結果
+// (ADR-0134)を CalcReverse の出力で見る。
+//   - 候補の件数(性格2 × 持ち物)は変わらない(説明できない候補も近い候補として返す。ADR-0010 §R3)
+//   - 各候補の説明可能な SP は旧区間(3規則の和)での集合の部分集合で、真値は必ず残る
+//   - ExactCount は旧区間以下
+//   - 16 ロールのうち、説明可能な SP が実際に減る観測と、変わらない観測の両方がある(狭めた効果の実例)
+func TestReverseFloorObservationNarrowsCandidates(t *testing.T) {
+	phys := revMove(CategoryPhysical)
+	items := []*Item{nil, revEviolite()}
+	for _, side := range []ReverseSide{SideDefender, SideAttacker} {
+		t.Run(string(side), func(t *testing.T) {
+			truthX := 19
+			stat := revStatFor(side, CategoryPhysical)
+			known := revKnownAttacker()
+			unknownSpecies := revDefenderSpecies()
+			truthSP := Stats{}.WithStat(stat, truthX)
+			if side == SideDefender {
+				truthSP.HP = MaxSPPerStat
+			} else {
+				known = revDefender(Stats{HP: 32, Def: 32}, Nature{Plus: StatDef, Minus: StatAtk}, nil)
+				unknownSpecies = revAttackerSpecies()
+			}
+			truth := Individual{Species: unknownSpecies, Level: DefaultLevel, Nature: NatureNeutral,
+				SP: truthSP, Status: StatusNone}
+			dmg := DamageInput{Format: FormatSingle, Move: phys}
+			if side == SideDefender {
+				dmg.Attacker, dmg.Defender = known, truth
+			} else {
+				dmg.Attacker, dmg.Defender = truth, known
+			}
+			shrunk, same := 0, 0
+			for roll := 0; roll < 16; roll++ {
+				in := ReverseInput{Format: FormatSingle, Side: side, Known: known, UnknownSpecies: unknownSpecies,
+					Move: phys, ItemCandidates: items,
+					Observations: []Observation{observeTruth(t, dmg, roll, roundFloor, false)}}
+				res, err := calcReverse(in)
+				if err != nil {
+					t.Fatalf("CalcReverse: %v", err)
+				}
+				if len(res.Candidates) != len(revClasses)*len(items) {
+					t.Fatalf("ロール%d: 候補数 = %d, want %d(狭めても候補の件数は変わらない)",
+						roll, len(res.Candidates), len(revClasses)*len(items))
+				}
+				newTotal, oldTotal, oldExact := 0, 0, 0
+				for _, class := range revClasses {
+					for _, item := range items {
+						_, c := findCand(res.Candidates, class, revItemID(item))
+						if c == nil {
+							t.Fatalf("ロール%d: 候補 (%s,%q) が無い", roll, class, revItemID(item))
+						}
+						old := exactSPsWith(t, in, class, item, anyRoundingMatches)
+						if len(old) > 0 {
+							oldExact++
+						}
+						oldTotal += len(old)
+						if !c.Exact {
+							continue
+						}
+						got := spsOf(c.Ranges)
+						newTotal += len(got)
+						for _, x := range got {
+							if !slices.Contains(old, x) {
+								t.Errorf("ロール%d (%s,%q): SP %d は旧区間でも説明できないのに説明可能になった(広げてはならない)",
+									roll, class, revItemID(item), x)
+							}
+						}
+					}
+				}
+				if _, c := findCand(res.Candidates, NatureClassNeutral, ""); c == nil || !c.Exact ||
+					!slices.Contains(spsOf(c.Ranges), truthX) {
+					t.Errorf("ロール%d: 切り捨てで作った観測 %+v で真値 SP=%d が範囲から落ちた: %+v",
+						roll, in.Observations[0], truthX, c)
+				}
+				if res.ExactCount > oldExact {
+					t.Errorf("ロール%d: ExactCount = %d > 旧区間 %d", roll, res.ExactCount, oldExact)
+				}
+				switch {
+				case newTotal < oldTotal:
+					shrunk++
+				case newTotal == oldTotal:
+					same++
+				default:
+					t.Errorf("ロール%d: 説明可能な SP の延べ数が増えた %d -> %d", roll, oldTotal, newTotal)
+				}
+				assertMatchesOracle(t, in, res)
+			}
+			if shrunk == 0 {
+				t.Errorf("16 ロールのどれでも説明可能な SP が減らない(整数%%の区間が狭まっていない)")
+			}
+			if same == 0 {
+				t.Logf("参考: 説明可能な SP が変わらないロールは無かった(減った %d 件)", shrunk)
+			}
+			t.Logf("side=%s: 減った %d / 変わらない %d(16 ロール)", side, shrunk, same)
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // AC-5: 観測を足すと絞り込める(範囲は部分集合になり、真値は残る)
 // ---------------------------------------------------------------------------
@@ -917,9 +1222,10 @@ func TestReverseMultipleObservationsNarrow(t *testing.T) {
 	truthX := 20
 	truth := revDefender(Stats{HP: 32, Def: truthX}, Nature{Plus: StatDef, Minus: StatAtk}, nil)
 	dmg := DamageInput{Format: FormatSingle, Attacker: revKnownAttacker(), Defender: truth, Move: move}
-	o1 := observeTruth(t, dmg, 0, roundHalfUp, false)
+	// 整数%は切り捨てで作る(ADR-0134。旧版の o1 は四捨五入、o3 は切り上げだった)。
+	o1 := observeTruth(t, dmg, 0, roundFloor, false)
 	o2 := observeTruth(t, dmg, 15, roundFloor, false)
-	o3 := observeTruth(t, dmg, 8, roundCeil, false)
+	o3 := observeTruth(t, dmg, 8, roundFloor, false)
 
 	call := func(obs ...Observation) ReverseResult {
 		t.Helper()
@@ -984,7 +1290,7 @@ func TestReverseMultipleObservationsNarrow(t *testing.T) {
 func TestReverseUnreachableSecondObservationRemovesExact(t *testing.T) {
 	move := revMove(CategoryPhysical)
 	truth := revDefender(Stats{HP: 32, Def: 32}, Nature{Plus: StatDef, Minus: StatAtk}, nil)
-	o1 := observeTruth(t, DamageInput{Format: FormatSingle, Attacker: revKnownAttacker(), Defender: truth, Move: move}, 0, roundHalfUp, false)
+	o1 := observeTruth(t, DamageInput{Format: FormatSingle, Attacker: revKnownAttacker(), Defender: truth, Move: move}, 0, roundFloor, false)
 
 	call := func(obs ...Observation) ReverseResult {
 		t.Helper()
@@ -1287,7 +1593,7 @@ func TestReverseCriticalAndFieldAreApplied(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			obs := observeTruth(t, DamageInput{Format: FormatSingle, Attacker: revKnownAttacker(), Defender: truth,
-				Move: move, Field: tt.field, Critical: tt.critical}, 8, roundHalfUp, false)
+				Move: move, Field: tt.field, Critical: tt.critical}, 8, roundFloor, false)
 			call := func(critical bool, field Field) *ReverseCandidate {
 				t.Helper()
 				res, err := calcReverse(ReverseInput{
@@ -1307,7 +1613,7 @@ func TestReverseCriticalAndFieldAreApplied(t *testing.T) {
 			if c := call(tt.critical, tt.field); !c.Exact || !slices.Contains(spsOf(c.Ranges), truthX) {
 				t.Errorf("同じ Critical/Field を渡したのに真値 B%d が範囲に入らない: %+v", truthX, c.Ranges)
 			}
-			// 1.5 倍のダメージは、同じ SP の ±1% の区間に入らない。
+			// 1.5 倍のダメージは、同じ SP の [v, v+1) の区間に入らない。
 			if c := call(false, Field{}); c.Exact && slices.Contains(spsOf(c.Ranges), truthX) {
 				t.Errorf("Critical/Field を渡さないのに真値 B%d が説明可能のまま: %+v", truthX, c.Ranges)
 			}
@@ -1320,7 +1626,7 @@ func TestReverseItemCandidates(t *testing.T) {
 	vest := revVest()
 	truthX := 10
 	truth := revDefender(Stats{HP: 32, SpD: truthX}, NatureNeutral, vest)
-	obs := observeTruth(t, DamageInput{Format: FormatSingle, Attacker: revKnownAttacker(), Defender: truth, Move: move}, 7, roundHalfUp, false)
+	obs := observeTruth(t, DamageInput{Format: FormatSingle, Attacker: revKnownAttacker(), Defender: truth, Move: move}, 7, roundFloor, false)
 	in := ReverseInput{Format: FormatSingle, Side: SideDefender, Known: revKnownAttacker(),
 		UnknownSpecies: revDefenderSpecies(), Move: move,
 		ItemCandidates: []*Item{nil, vest}, Observations: []Observation{obs}}
@@ -1353,9 +1659,10 @@ func TestReverseMixedObservationKinds(t *testing.T) {
 		Format: FormatSingle, Side: SideAttacker, Known: known,
 		UnknownSpecies: revAttackerSpecies(), Move: move,
 		Observations: []Observation{
-			observeTruth(t, dmg, 3, roundHalfUp, false),
+			observeTruth(t, dmg, 3, roundFloor, false),
 			{Damage: base.Rolls[9]},
 			observeTruth(t, dmg, 12, roundFloor, true),
+			observeTruth(t, dmg, 5, roundHalfUp, true),
 		},
 	}
 	res, err := calcReverse(in)
@@ -1625,7 +1932,8 @@ func TestReverseRecallSmoke(t *testing.T) {
 	)
 	for _, side := range []ReverseSide{SideDefender, SideAttacker} {
 		for _, nObs := range []int{1, 2} {
-			for _, rule := range allObsRoundings {
+			// 整数%の観測は実機と同じ切り捨てだけで作る(ADR-0134)。
+			for _, rule := range percentObsRoundings {
 				st := reverseRecall(t, side, smokeSpecies(), cases, nObs, fixedSeed, rule)
 				t.Logf("side=%s 観測%d件 %s: %s", side, nObs, rule, st)
 				if st.hit != st.total || st.covered != st.total || st.tightViolations != 0 || st.narrowViolations != 0 {
@@ -1751,7 +2059,7 @@ func (s recallStats) String() string {
 //     持ち物は revRecallItems から一様。防御側の HP は SP 32(新仕様の前提)
 //  4. 既知側は現実的な調整(無振り / 関連ステータス32 + 上昇補正)
 //  5. ダメージ0・無効相性・観測0% は観測にならないので引き直す。100% 超は 100% に丸めて残す
-//  6. 16ロールから一様に nObs 段階を独立に選び、丸め規則 rule(整数%)で観測化する
+//  6. 16ロールから一様に nObs 段階を独立に選び、丸め規則 rule(整数%。実機は切り捨て。ADR-0134)で観測化する
 func reverseRecall(t *testing.T, side ReverseSide, species []Species, cases, nObs int, seed uint64, rule obsRounding) recallStats {
 	t.Helper()
 	if len(species) == 0 {

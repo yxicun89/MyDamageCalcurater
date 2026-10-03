@@ -1,4 +1,4 @@
-# Prometheus(observability)から ServiceMonitor 対象 6 サービスの /metrics(Pod ポート 8080)へ。
+# Prometheus(observability)から ServiceMonitor 対象 8 サービスの /metrics(Pod ポート 8080)へ。
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -10,7 +10,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: In
-        values: [gateway, calc, pokedex, balance, speed, judge]
+        values: [gateway, calc, pokedex, balance, speed, judge, record, team]
   policyTypes:
     - Ingress
   ingress:

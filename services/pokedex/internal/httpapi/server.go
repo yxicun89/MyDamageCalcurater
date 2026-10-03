@@ -13,6 +13,7 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"example.com/pokecalc/services/internal/api"
+	"example.com/pokecalc/services/internal/httpguard"
 	"example.com/pokecalc/services/internal/httpmetrics"
 	"example.com/pokecalc/services/pokedex/internal/readtx"
 )
@@ -28,11 +29,15 @@ var _ api.ServerInterface = (*Server)(nil)
 const (
 	DefaultRequestTimeout   = 5 * time.Second
 	DefaultReadinessTimeout = 2 * time.Second
+	// DefaultMaxInflight は DB を使う操作を同時に処理する数(issue #299・ADR-0801)。接続プール(ADR-0112)より
+	// 大きく、超えた要求は DB を待たずに 503 upstream_unavailable + Retry-After。
+	DefaultMaxInflight = 64
 )
 
 type config struct {
 	requestTimeout   time.Duration
 	readinessTimeout time.Duration
+	maxInflight      int
 }
 
 // Option は NewHandler の設定(主にテストで短い締め切りを渡す)。本番は渡さない。
@@ -40,6 +45,9 @@ type Option func(*config)
 
 // WithRequestTimeout は DB を使う操作の締め切りを変える。
 func WithRequestTimeout(d time.Duration) Option { return func(c *config) { c.requestTimeout = d } }
+
+// WithMaxInflight は DB を使う操作の同時実行の上限を変える。
+func WithMaxInflight(n int) Option { return func(c *config) { c.maxInflight = n } }
 
 // WithReadinessTimeout は /readyz の締め切りを変える。
 func WithReadinessTimeout(d time.Duration) Option { return func(c *config) { c.readinessTimeout = d } }
@@ -50,13 +58,13 @@ func NewServer(q readtx.DB) *Server {
 }
 
 // NewHandler は pokedex-svc の HTTP ハンドラ全体を組み立てる。
-// pokedex の8操作(検索7 + 内部 API 1。生成ラッパ経由)、calc の3操作(直接 404。calc-svc の R1 と対称)、
+// pokedex の9操作(検索8 + 内部 API 1。生成ラッパ経由)、calc の調整4操作を含む操作(直接 404。calc-svc の R1 と対称)、
 // GET /healthz(liveness。DB に触れない)、GET /readyz(readiness。DB の最小条件を確かめる。ADR-0129)、
 // DB を使うルートへの締め切りのミドルウェア(ADR-0129 §2)、panic の回復(500 internal)、echo の既定エラー
 // (ルート無し・メソッド違い)を Error 形式に揃えるエラーハンドラを含む。
 // serve は起動時に DB へ接続しない(sql.Open だけ)。DB が無くても起動し、DB を使う操作が 503 を返す。
 func NewHandler(q readtx.DB, opts ...Option) http.Handler {
-	cfg := config{requestTimeout: DefaultRequestTimeout, readinessTimeout: DefaultReadinessTimeout}
+	cfg := config{requestTimeout: DefaultRequestTimeout, readinessTimeout: DefaultReadinessTimeout, maxInflight: DefaultMaxInflight}
 	for _, o := range opts {
 		o(&cfg)
 	}
@@ -72,13 +80,14 @@ func NewHandler(q readtx.DB, opts ...Option) http.Handler {
 
 	// echo v5 の Group にミドルウェアを渡すと "" と "/*" に RouteNotFound が登録される。未登録パスは従来どおり
 	// 404(エラーハンドラで Error 形式)になり、metrics の route ラベルは "/*" にまとまる(件数は有限)。
-	g := e.Group("", deadlineMiddleware(cfg.requestTimeout))
+	g := e.Group("", deadlineMiddleware(cfg.requestTimeout),
+		httpguard.Middleware(httpguard.Config{MaxInflight: cfg.maxInflight, Code: string(api.UpstreamUnavailable)}))
 	registerPokedexRoutes(g, NewServer(q))
 	registerCalcNotFoundRoutes(g)
 	return e
 }
 
-// registerPokedexRoutes は pokedex-svc の担当(検索7操作 + 内部 API)だけを、生成ラッパ
+// registerPokedexRoutes は pokedex-svc の担当(検索8操作 + 内部 API)だけを、生成ラッパ
 // (api.ServerInterfaceWrapper。公開操作は必須ヘッダ X-Device-Id / X-Session-Id の有無を検証してから
 // Server を呼ぶ。内部 API はヘッダを要求しない)経由で登録する。
 // echo v5.3.1 のルーターは静的セグメントをパラメータより優先するため、`/api/pokedex/moves/batch` は
@@ -92,6 +101,7 @@ func registerPokedexRoutes(e *echo.Group, srv *Server) {
 	e.GET("/api/pokedex/moves", wrapper.SearchMoves)
 	e.GET("/api/pokedex/moves/batch", wrapper.GetMovesByIds)
 	e.GET("/api/pokedex/moves/:key", wrapper.GetMove)
+	e.GET("/api/pokedex/moves/:key/learners", wrapper.ListMoveLearners)
 	e.GET("/api/pokedex/items", wrapper.SearchItems)
 	e.GET("/api/pokedex/natures", wrapper.ListNatures)
 	e.GET("/internal/pokedex/master", wrapper.GetMasterExport)
@@ -134,6 +144,24 @@ func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 	return notFoundForCalc()
 }
 func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) error {
+	return notFoundForCalc()
+}
+
+// 調整の4操作(calc-svc の担当。ADR-0250)。api.ServerInterface を満たすためだけに置く。
+
+func (s *Server) AdjustIndices(ctx *echo.Context, params api.AdjustIndicesParams) error {
+	return notFoundForCalc()
+}
+
+func (s *Server) AdjustMinSpToKo(ctx *echo.Context, params api.AdjustMinSpToKoParams) error {
+	return notFoundForCalc()
+}
+
+func (s *Server) AdjustMinSpToSurvive(ctx *echo.Context, params api.AdjustMinSpToSurviveParams) error {
+	return notFoundForCalc()
+}
+
+func (s *Server) AdjustAllocation(ctx *echo.Context, params api.AdjustAllocationParams) error {
 	return notFoundForCalc()
 }
 
