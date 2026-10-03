@@ -29,7 +29,7 @@
 | ダメージ計算・逆算(engine・calc・WASM) | 本書 | `make test` / `make test-golden` / `make test-wasm` |
 | タイプバランス(balance) | [type-balance-test-strategy.md](type-balance-test-strategy.md) | `make test`(services/balance)・`make web-e2e-balance` |
 | 素早さ比較(speed) | [speed-design.md](speed-design.md)・[runbooks/speed.md](runbooks/speed.md)・ADR-0600〜0606 | `make speed-test`・`make web-test`(テスト節は [speed-design.md](speed-design.md) の「9. テスト」) |
-| 判定(judge) | [judge-design.md](judge-design.md)・ADR-0700〜0709 | `make test`(services/judge)。専用のテスト節は未整備(issue #254。判定レーンが judge-design.md に足す) |
+| 判定(judge) | [judge-design.md](judge-design.md)・ADR-0700〜0709 | `make judge-test`・`make web-test`(テスト節は [judge-design.md](judge-design.md) の「6. テスト」) |
 | record / team | 本書「保存データ」・ADR-0209 | `make test`・`make test-db-docker` |
 | Web・iOS | [ADR-0300](adr/0300-web-architecture.md)・[ADR-0501](adr/0501-ios-screen-acceptance.md) | `make web-test`・`make web-e2e*`・`make ios-test` |
 

@@ -188,6 +188,8 @@ export interface BulkRequest {
    * 省略・空は従来どおり(特性を渡さない)。
    */
   readonly defenderAbilities?: readonly Ability[];
+  /** 防御側の状態の上書き(issue 274、ADR-0216・ADR-0315)。ranks だけ。特性は defenderAbilities で渡す。 */
+  readonly defenderOverride?: { readonly ranks?: Ranks };
   readonly typeChart: TypeChart;
 }
 

@@ -9,15 +9,24 @@
 //   A6 エラー: コードごとの見出しとサーバーの message を出し、入力は消えない
 //   A7 送信前の検査: SP・ランク・必須の欄が不正なら judge を呼ばない
 //   A8 古い応答: 先に送った request の応答が後から届いても上書きしない
-//   A9 マスタ: speciesList が false なら検索欄、技は master.moves が空でも ID で入力できる(ADR-0304 §3)
+//   A9 マスタ: speciesList が false なら検索欄(技の引き方は A11)
+//   --- issue #309(技・調整・数値欄の UI。ADR-0711)で足した・置き換えたもの ---
+//   A10 技の選択: ポケモンを選ぶと覚える技(learnset)の select が出る。技の ID の自由入力は無い
+//   A11 オンライン(masterSearch): 種族を検索で選ぶと resolveSpecies が返す技から選ぶ
+//   A12 調整プリセット: 無振り・最速・A/C特化・(候補は)HB/HD特化で SP と性格が入る
+//   A13 詳細: 数値の直接入力(SP6欄・ランク5欄)は「詳細」を開いたときだけ出す
+//   A14 検証エラー: 該当欄に aria-invalid と文言(どの体かを添える)
 // 架空データだけを使う(実マスタ・実データは使わない。CLAUDE.md ドメイン規約・ADR-0002)。
 
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { attackerPresetLabel } from "../domain/attackerPresets";
+import { defenderPresetLabel } from "../domain/defenderPresets";
 import { MAX_SP_PER_STAT, MAX_SP_TOTAL } from "../domain/requests";
-import type { Ability, Item, StatKey, TypeChart } from "../engine/types";
+import type { Ability, Item, Move, StatKey, TypeChart } from "../engine/types";
 import { judgeErrorText, judgeScreenText } from "../i18n/ja";
+import { ONLINE_MASTER_CAPABILITIES, SPECIES_SEARCH_DEBOUNCE_MS } from "../master/onlineSource";
 import type { MasterData, MasterNature, MasterSpecies } from "../master/types";
 import { createFakeSpeciesSearch } from "../test/onlineMaster";
 import { JudgeScreen, MAX_DEFENDERS } from "./JudgeScreen";
@@ -71,7 +80,12 @@ async function flush(resolve: () => void): Promise<void> {
 
 const emptyTypeChart: TypeChart = { types: ["fire", "water", "grass"], effectiveness: {} };
 
-function fakeSpecies(key: string, nameJa: string, types: readonly string[]): MasterSpecies {
+function fakeSpecies(
+  key: string,
+  nameJa: string,
+  types: readonly string[],
+  learnset: readonly string[],
+): MasterSpecies {
   return {
     key,
     dexNo: Number(key.slice(0, 4)),
@@ -80,13 +94,30 @@ function fakeSpecies(key: string, nameJa: string, types: readonly string[]): Mas
     types,
     baseStats: { hp: 70, atk: 100, def: 70, spa: 60, spd: 70, spe: 110 },
     abilities: ["test-ability-a"],
-    learnset: ["test-move"],
+    learnset,
   };
 }
 
-const BIRD = fakeSpecies("9001-000", "テストカソウドリ", ["fire", "flying"]);
-const FISH = fakeSpecies("9002-000", "テストカソウギョ", ["water"]);
-const GRASS = fakeSpecies("9003-000", "テストカソウソウ", ["grass"]);
+function fakeMove(id: string, nameJa: string, category: Move["category"], power: number): Move {
+  return { id, nameJa, type: "normal", category, power, priority: 0 };
+}
+
+// 技は架空。BIRD の learnset は「変化技が先頭」(既定の技は最初のダメージ技 = 計算画面の firstDamagingMove と同じ)。
+const MOVE_STATUS = fakeMove("test-move-status", "テストへんかわざ", "status", 0);
+const MOVE_PHYS = fakeMove("test-move-phys", "テストぶつりわざ", "physical", 80);
+const MOVE_SPEC = fakeMove("test-move-spec", "テストとくしゅわざ", "special", 90);
+const FAKE_MOVES: readonly Move[] = [MOVE_STATUS, MOVE_PHYS, MOVE_SPEC];
+
+const BIRD = fakeSpecies(
+  "9001-000",
+  "テストカソウドリ",
+  ["fire", "flying"],
+  [MOVE_STATUS.id, MOVE_PHYS.id, MOVE_SPEC.id],
+);
+const FISH = fakeSpecies("9002-000", "テストカソウギョ", ["water"], [MOVE_SPEC.id]);
+const GRASS = fakeSpecies("9003-000", "テストカソウソウ", ["grass"], [MOVE_PHYS.id]);
+/** learnset が空の種族(技を1件も引けないときの扱いを確かめる)。 */
+const NOMOVE = fakeSpecies("9004-000", "テストカソウナシ", ["grass"], []);
 
 const NATURE_PLUS_SPE: MasterNature = {
   id: "test-nature-plus-spe",
@@ -101,20 +132,74 @@ const NATURE_NEUTRAL: MasterNature = {
   minus: null,
 };
 
+// プリセットが指す性格(plus・minus の組)。master.natures から引く(ハードコードしない)。
+const NATURE_JOLLY: MasterNature = {
+  id: "test-nature-jolly",
+  nameJa: "テストようき",
+  plus: "spe",
+  minus: "spa",
+};
+const NATURE_TIMID: MasterNature = {
+  id: "test-nature-timid",
+  nameJa: "テストおくびょう",
+  plus: "spe",
+  minus: "atk",
+};
+const NATURE_ADAMANT: MasterNature = {
+  id: "test-nature-adamant",
+  nameJa: "テストいじっぱり",
+  plus: "atk",
+  minus: "spa",
+};
+const NATURE_MODEST: MasterNature = {
+  id: "test-nature-modest",
+  nameJa: "テストひかえめ",
+  plus: "spa",
+  minus: "atk",
+};
+const NATURE_BOLD: MasterNature = {
+  id: "test-nature-bold",
+  nameJa: "テストずぶとい",
+  plus: "def",
+  minus: "atk",
+};
+const NATURE_CALM: MasterNature = {
+  id: "test-nature-calm",
+  nameJa: "テストおだやか",
+  plus: "spd",
+  minus: "atk",
+};
+
 const ABILITY: Ability = { id: "test-ability-a", nameJa: "テストとくせい", effect: null };
 const ITEM: Item = { id: "test-item-a", nameJa: "テストもちもの", effect: null };
 
 /**
- * 画面が使うマスタ。**技は空**(オンラインでは capabilities.moves が false で、ID から技を引く公開 API が
- * 無い。ADR-0304 §3)。判定の画面はそれでも成立する(技は ID の自由入力。ADR-0705 §5)。
+ * 画面が使うマスタ(オフライン相当。技の実体を master.moves から引ける)。
+ * issue #309: 技はポケモンの learnset から選ぶので、master.moves に技の実体を持たせる。
  */
 const master: MasterData = {
-  species: [BIRD, FISH, GRASS],
-  moves: [],
+  species: [BIRD, FISH, GRASS, NOMOVE],
+  moves: FAKE_MOVES,
   items: [ITEM],
   abilities: [ABILITY],
-  natures: [NATURE_PLUS_SPE, NATURE_NEUTRAL],
+  natures: [
+    NATURE_PLUS_SPE,
+    NATURE_NEUTRAL,
+    NATURE_JOLLY,
+    NATURE_TIMID,
+    NATURE_ADAMANT,
+    NATURE_MODEST,
+    NATURE_BOLD,
+    NATURE_CALM,
+  ],
   typeChart: emptyTypeChart,
+  capabilities: { speciesList: true, moves: true, effects: false },
+};
+
+/** 技の実体をどこからも引けないマスタ(learnset の ID を技に解決できない)。 */
+const masterNoMoves: MasterData = {
+  ...master,
+  moves: [],
   capabilities: { speciesList: true, moves: false, effects: false },
 };
 
@@ -182,12 +267,36 @@ async function fillIndividual(
   await user.selectOptions(within(region).getByLabelText(judgeScreenText.natureLabel), nature.id);
 }
 
-/** 自分 + 候補1件の、判定を通せる最小の入力。 */
+/** 技の select(自分 / 候補の領域の中)。issue #309: 技の ID の自由入力は無い。 */
+function moveSelect(region: HTMLElement): HTMLElement {
+  return within(region).getByRole("combobox", { name: judgeScreenText.moveLabel });
+}
+
+/** 技の select の選択肢の value(learnset の順)。 */
+function moveOptionValues(region: HTMLElement): string[] {
+  return within(moveSelect(region))
+    .queryAllByRole("option")
+    .map((option) => option.getAttribute("value") ?? "");
+}
+
+/** 「詳細」を開く(数値の直接入力は閉じている間は見えない。issue #309)。 */
+async function openDetails(user: UserEvent, region: HTMLElement): Promise<void> {
+  await user.click(within(region).getByText(judgeScreenText.detailsSummaryLabel));
+}
+
+/** 調整プリセットのラジオ(領域の中の radiogroup「調整」から名前で引く)。 */
+function presetRadio(region: HTMLElement, label: string): HTMLElement {
+  const group = within(region).getByRole("radiogroup", { name: judgeScreenText.presetGroupLabel });
+  return within(group).getByRole("radio", { name: label });
+}
+
+/**
+ * 自分 + 候補1件の、判定を通せる最小の入力。
+ * 技は種族を選ぶと最初のダメージ技が入る(A10)ので選ばない: 自分 BIRD → MOVE_PHYS、候補 FISH → MOVE_SPEC。
+ */
 async function fillMinimalForm(user: UserEvent): Promise<void> {
   await fillIndividual(user, attackerRegion(), BIRD, NATURE_PLUS_SPE);
-  await user.type(within(attackerRegion()).getByLabelText(judgeScreenText.moveIdLabel), "test-move");
   await fillIndividual(user, candidate(1), FISH, NATURE_NEUTRAL);
-  await user.type(within(candidate(1)).getByLabelText(judgeScreenText.moveIdLabel), "test-defender-move-0");
 }
 
 // ---- 架空の応答(候補ごとに**すべて違う値**にして、行の取り違えを検出する) ----
@@ -211,6 +320,10 @@ function matchup(index: number, overrides: Partial<Schemas["Matchup"]> = {}): Sc
     defenderKo: ko(3 + index, false, 10 + index),
     attackerKoUnsupported: [],
     defenderKoUnsupported: [],
+    attackerSpeedApplied: [],
+    defenderSpeedApplied: [],
+    attackerSpeedIgnored: [],
+    defenderSpeedIgnored: [],
     ...overrides,
   };
 }
@@ -236,14 +349,15 @@ describe("A1 初期表示", () => {
     expect(client.calls).toHaveLength(0);
   });
 
-  test("技は ID の自由入力で、一覧から選べない理由の案内が出る(ADR-0304 §3・ADR-0705 §5)", () => {
+  // 置き換え(issue #309): 旧「技は ID の自由入力で、一覧から選べない理由の案内が出る」は、技が select になるので
+  // 「技の ID を打つ欄が無い」へ(A10 の同名テスト)。
+  test("技は select で、技の ID を打つ欄も「ID で入力します」の案内も無い(issue #309)", () => {
     renderScreen();
-    expect(within(attackerRegion()).getByLabelText(judgeScreenText.moveIdLabel)).toHaveAttribute(
-      "type",
-      "text",
-    );
-    expect(within(candidate(1)).getByLabelText(judgeScreenText.moveIdLabel)).toHaveAttribute("type", "text");
-    expect(screen.getAllByText(judgeScreenText.moveIdHint).length).toBeGreaterThan(0);
+    for (const region of [attackerRegion(), candidate(1)]) {
+      expect(moveSelect(region).tagName).toBe("SELECT");
+      expect(within(region).queryByRole("textbox", { name: /技/ })).toBeNull();
+    }
+    expect(screen.queryByText(/ID から技を引く API/)).toBeNull();
   });
 });
 
@@ -275,27 +389,32 @@ describe("A2 相手候補の増減", () => {
     expect(screen.getByRole("button", { name: judgeScreenText.removeCandidateLabel(1) })).toBeDisabled();
   });
 
-  test("候補の入力は独立している(ある候補の技 ID が他の候補に混ざらない)", async () => {
+  // 置き換え(issue #309): 技 ID の自由入力が無くなったので、独立性は「性格」と「技の select」で確かめる。
+  test("候補の入力は独立している(ある候補の性格・技が他の候補に混ざらない)", async () => {
     const { user } = renderScreen();
     await user.click(addCandidateButton());
+    await fillIndividual(user, candidate(1), BIRD, NATURE_PLUS_SPE);
+    await fillIndividual(user, candidate(2), GRASS, NATURE_NEUTRAL);
+    await user.selectOptions(moveSelect(candidate(1)), MOVE_SPEC.id);
 
-    await user.type(within(candidate(1)).getByLabelText(judgeScreenText.moveIdLabel), "test-move-one");
-    await user.type(within(candidate(2)).getByLabelText(judgeScreenText.moveIdLabel), "test-move-two");
-
-    expect(within(candidate(1)).getByLabelText(judgeScreenText.moveIdLabel)).toHaveValue("test-move-one");
-    expect(within(candidate(2)).getByLabelText(judgeScreenText.moveIdLabel)).toHaveValue("test-move-two");
+    expect(within(candidate(1)).getByLabelText(judgeScreenText.natureLabel)).toHaveValue(NATURE_PLUS_SPE.id);
+    expect(within(candidate(2)).getByLabelText(judgeScreenText.natureLabel)).toHaveValue(NATURE_NEUTRAL.id);
+    expect(moveSelect(candidate(1))).toHaveValue(MOVE_SPEC.id);
+    expect(moveSelect(candidate(2))).toHaveValue(MOVE_PHYS.id);
   });
 
   test("削除しても残った候補の入力が保たれる(index のずれで値が動かない)", async () => {
     const { user } = renderScreen();
     await user.click(addCandidateButton());
-    await user.type(within(candidate(1)).getByLabelText(judgeScreenText.moveIdLabel), "test-move-one");
-    await user.type(within(candidate(2)).getByLabelText(judgeScreenText.moveIdLabel), "test-move-two");
+    await fillIndividual(user, candidate(1), BIRD, NATURE_PLUS_SPE);
+    await fillIndividual(user, candidate(2), GRASS, NATURE_NEUTRAL);
 
     await user.click(screen.getByRole("button", { name: judgeScreenText.removeCandidateLabel(1) }));
 
     expect(candidateCount()).toBe(1);
-    expect(within(candidate(1)).getByLabelText(judgeScreenText.moveIdLabel)).toHaveValue("test-move-two");
+    expect(within(candidate(1)).getByLabelText(judgeScreenText.speciesLabel)).toHaveValue(GRASS.key);
+    expect(within(candidate(1)).getByLabelText(judgeScreenText.natureLabel)).toHaveValue(NATURE_NEUTRAL.id);
+    expect(moveSelect(candidate(1))).toHaveValue(MOVE_PHYS.id);
   });
 });
 
@@ -321,16 +440,18 @@ describe("A3 request の組み立て", () => {
           speciesKey: FISH.key,
           natureId: NATURE_NEUTRAL.id,
           sp: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
-          moveId: "test-defender-move-0",
+          moveId: MOVE_SPEC.id,
         },
       ],
-      moveId: "test-move",
+      moveId: MOVE_PHYS.id,
     } satisfies Schemas["OutspeedAndKoRequest"]);
   });
 
   test("SP は6項目そのまま送る(合計の上限内)", async () => {
     const { user, client } = renderScreen();
     await fillMinimalForm(user);
+    await openDetails(user, attackerRegion());
+    await openDetails(user, candidate(1));
     await setNumber(user, within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("spe")), 32);
     await setNumber(user, within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("atk")), 30);
     await setNumber(user, within(candidate(1)).getByLabelText(judgeScreenText.spLabel("hp")), 4);
@@ -345,6 +466,8 @@ describe("A3 request の組み立て", () => {
   test("ランクを1つでも動かすと、ranks を5項目そろえて送る", async () => {
     const { user, client } = renderScreen();
     await fillMinimalForm(user);
+    await openDetails(user, attackerRegion());
+    await openDetails(user, candidate(1));
     await setNumber(user, within(attackerRegion()).getByLabelText(judgeScreenText.rankLabel("spe")), 1);
     await setNumber(user, within(candidate(1)).getByLabelText(judgeScreenText.rankLabel("def")), -2);
 
@@ -378,20 +501,19 @@ describe("A3 request の組み立て", () => {
     ]);
   });
 
-  test("技 ID は前後の空白を落として送る", async () => {
+  // 置き換え(issue #309): 旧「技 ID は前後の空白を落として送る」。技が select になり空白が入り得ないので、
+  // 「選んだ技の ID(マスタの id そのまま)を、自分は request 直下・候補は候補の欄に送る」へ。
+  test("選んだ技の ID(マスタの id)をそのまま送る(自分は直下、候補は候補の欄)", async () => {
     const { user, client } = renderScreen();
     await fillIndividual(user, attackerRegion(), BIRD, NATURE_PLUS_SPE);
-    await user.type(within(attackerRegion()).getByLabelText(judgeScreenText.moveIdLabel), "  test-move  ");
-    await fillIndividual(user, candidate(1), FISH, NATURE_NEUTRAL);
-    await user.type(
-      within(candidate(1)).getByLabelText(judgeScreenText.moveIdLabel),
-      " test-defender-move-0 ",
-    );
+    await fillIndividual(user, candidate(1), BIRD, NATURE_NEUTRAL);
+    await user.selectOptions(moveSelect(attackerRegion()), MOVE_SPEC.id);
+    await user.selectOptions(moveSelect(candidate(1)), MOVE_STATUS.id);
 
     await user.click(submitButton());
 
-    expect(lastCall(client).args.moveId).toBe("test-move");
-    expect(lastCall(client).args.defenders[0]?.moveId).toBe("test-defender-move-0");
+    expect(lastCall(client).args.moveId).toBe(MOVE_SPEC.id);
+    expect(lastCall(client).args.defenders[0]?.moveId).toBe(MOVE_STATUS.id);
   });
 
   test("ダブルは未対応なので対戦形式の選択肢に出さず、format は single で送る(issue #288)", async () => {
@@ -411,14 +533,13 @@ describe("A3 request の組み立て", () => {
     await fillMinimalForm(user);
     await user.click(addCandidateButton());
     await fillIndividual(user, candidate(2), GRASS, NATURE_NEUTRAL);
-    await user.type(within(candidate(2)).getByLabelText(judgeScreenText.moveIdLabel), "test-defender-move-1");
 
     await user.click(submitButton());
 
     expect(lastCall(client).args.defenders.map((entry) => entry.speciesKey)).toEqual([FISH.key, GRASS.key]);
     expect(lastCall(client).args.defenders.map((entry) => entry.moveId)).toEqual([
-      "test-defender-move-0",
-      "test-defender-move-1",
+      MOVE_SPEC.id,
+      MOVE_PHYS.id,
     ]);
   });
 
@@ -499,7 +620,6 @@ describe("A5 結果の表示", () => {
     await fillMinimalForm(user);
     await user.click(addCandidateButton());
     await fillIndividual(user, candidate(2), GRASS, NATURE_NEUTRAL);
-    await user.type(within(candidate(2)).getByLabelText(judgeScreenText.moveIdLabel), "test-defender-move-1");
     await user.click(submitButton());
     const call = lastCall(client);
     await flush(() => {
@@ -542,6 +662,22 @@ describe("A5 結果の表示", () => {
     expect(row).toHaveTextContent(judgeScreenText.outspeedsTrueLabel);
     expect(row).toHaveTextContent(judgeScreenText.priorityLabel(0, 1));
     expect(row).toHaveTextContent(judgeScreenText.attackerMovesFirstLabel);
+  });
+
+  test("素早さに反映した補正と、反映していない入力を側ごとに出す(issue 235)", async () => {
+    await submitTwoCandidates([
+      matchup(0, {
+        attackerSpeedApplied: ["rank", "tailwind"],
+        defenderSpeedIgnored: ["abilityId", "fieldWeather"],
+      }),
+      matchup(1),
+    ]);
+
+    const rows = matchupRows();
+    expect(rows[0]).toHaveTextContent(judgeScreenText.speedAppliedNote("自分", ["ランク補正", "追い風"]));
+    expect(rows[0]).toHaveTextContent(judgeScreenText.speedIgnoredNote("相手", ["特性", "天候"]));
+    // 空の欄は文を出さない。
+    expect(rows[1]).not.toHaveTextContent("反映");
   });
 
   test("同速は「同速」として出す(outspeeds の false と区別する。ADR-0700 §6-1)", async () => {
@@ -653,10 +789,8 @@ describe("A6 エラーの表示", () => {
       call.resolve({ ok: false, error: { code: "unknown_move", message: "attacker: unknown moveId" } });
     });
 
-    expect(within(attackerRegion()).getByLabelText(judgeScreenText.moveIdLabel)).toHaveValue("test-move");
-    expect(within(candidate(1)).getByLabelText(judgeScreenText.moveIdLabel)).toHaveValue(
-      "test-defender-move-0",
-    );
+    expect(moveSelect(attackerRegion())).toHaveValue(MOVE_PHYS.id);
+    expect(moveSelect(candidate(1))).toHaveValue(MOVE_SPEC.id);
     // 送り直せる(ボタンは戻っている)。
     expect(submitButton()).toBeEnabled();
     await user.click(submitButton());
@@ -676,11 +810,11 @@ describe("A7 送信前の検査(judge を呼ばずに理由を出す)", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(judgeScreenText.requiredMessage);
   });
 
-  test("候補の技 ID だけが空でも呼ばない(候補の moveId は契約上必須)", async () => {
+  // 置き換え(issue #309): 技は種族を選ぶと既定が入るので「技だけ空」は learnset が引けない種族で作る。
+  test("候補の技だけが空でも呼ばない(候補の moveId は契約上必須)", async () => {
     const { user, client } = renderScreen();
     await fillIndividual(user, attackerRegion(), BIRD, NATURE_PLUS_SPE);
-    await user.type(within(attackerRegion()).getByLabelText(judgeScreenText.moveIdLabel), "test-move");
-    await fillIndividual(user, candidate(1), FISH, NATURE_NEUTRAL);
+    await fillIndividual(user, candidate(1), NOMOVE, NATURE_NEUTRAL);
 
     await user.click(submitButton());
 
@@ -691,6 +825,7 @@ describe("A7 送信前の検査(judge を呼ばずに理由を出す)", () => {
   test(`SP が1項目でも ${String(MAX_SP_PER_STAT)} を超えたら呼ばない`, async () => {
     const { user, client } = renderScreen();
     await fillMinimalForm(user);
+    await openDetails(user, attackerRegion());
     await setNumber(
       user,
       within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("spe")),
@@ -706,6 +841,7 @@ describe("A7 送信前の検査(judge を呼ばずに理由を出す)", () => {
   test(`SP の合計が ${String(MAX_SP_TOTAL)} を超えたら呼ばない(CLAUDE.md ドメイン規約)`, async () => {
     const { user, client } = renderScreen();
     await fillMinimalForm(user);
+    await openDetails(user, candidate(1));
     const stats: readonly StatKey[] = ["hp", "atk", "def"];
     for (const stat of stats) {
       await setNumber(user, within(candidate(1)).getByLabelText(judgeScreenText.spLabel(stat)), 32);
@@ -721,6 +857,7 @@ describe("A7 送信前の検査(judge を呼ばずに理由を出す)", () => {
   test("ランクが -6..+6 の外なら呼ばない", async () => {
     const { user, client } = renderScreen();
     await fillMinimalForm(user);
+    await openDetails(user, attackerRegion());
     await setNumber(user, within(attackerRegion()).getByLabelText(judgeScreenText.rankLabel("spe")), 7);
 
     await user.click(submitButton());
@@ -810,15 +947,644 @@ describe("A9 マスタは入力補助にだけ使う", () => {
       }),
     ).toBeInTheDocument();
   });
+});
 
-  test("master.moves が空(オンライン)でも判定を送れる(技は ID の自由入力。ADR-0304 §3)", async () => {
+// ---- A10: 技の選択(issue #309。ADR-0711。計算画面と同じ「種族の learnset から選ぶ」) ----
+
+describe("A10 技はポケモンの覚える技(learnset)から選ぶ", () => {
+  test("種族を選ぶ前の技の select は disabled で、選択肢が無い(自分側・候補とも)", () => {
+    renderScreen();
+    for (const region of [attackerRegion(), candidate(1)]) {
+      expect(moveSelect(region)).toBeDisabled();
+      expect(moveOptionValues(region)).toEqual([]);
+    }
+  });
+
+  test("種族を選ぶと、learnset の技が learnset の順のまま(変化技も含めて)選べる", async () => {
+    const { user } = renderScreen();
+    await fillIndividual(user, attackerRegion(), BIRD, NATURE_PLUS_SPE);
+
+    expect(moveSelect(attackerRegion())).toBeEnabled();
+    expect(moveOptionValues(attackerRegion())).toEqual([MOVE_STATUS.id, MOVE_PHYS.id, MOVE_SPEC.id]);
+    // 選択肢には技の名前が出る(ID を打たせない)。
+    const options = within(moveSelect(attackerRegion())).getAllByRole("option");
+    expect(options[0]).toHaveTextContent(MOVE_STATUS.nameJa);
+    expect(options[1]).toHaveTextContent(MOVE_PHYS.nameJa);
+    // 候補側も同じ(自分と同じ部品)。他の種族の技は混ざらない。
+    await fillIndividual(user, candidate(1), FISH, NATURE_NEUTRAL);
+    expect(moveOptionValues(candidate(1))).toEqual([MOVE_SPEC.id]);
+  });
+
+  test("種族を選ぶと最初のダメージ技が既定で選ばれる(変化技が先頭でも。計算画面の firstDamagingMove と同じ)", async () => {
+    const { user } = renderScreen();
+    await fillIndividual(user, attackerRegion(), BIRD, NATURE_PLUS_SPE);
+    expect(moveSelect(attackerRegion())).toHaveValue(MOVE_PHYS.id);
+  });
+
+  test("種族を変えると、新しい種族の learnset の既定の技へ替わる(前の種族の技が残らない)", async () => {
+    const { user } = renderScreen();
+    await fillIndividual(user, candidate(1), BIRD, NATURE_NEUTRAL);
+    await user.selectOptions(moveSelect(candidate(1)), MOVE_SPEC.id);
+
+    await user.selectOptions(within(candidate(1)).getByLabelText(judgeScreenText.speciesLabel), FISH.key);
+
+    expect(moveOptionValues(candidate(1))).toEqual([MOVE_SPEC.id]);
+    expect(moveSelect(candidate(1))).toHaveValue(MOVE_SPEC.id);
+    await user.selectOptions(within(candidate(1)).getByLabelText(judgeScreenText.speciesLabel), GRASS.key);
+    expect(moveSelect(candidate(1))).toHaveValue(MOVE_PHYS.id);
+  });
+
+  test("技は自分と候補で別々に選べる", async () => {
     const { user, client } = renderScreen();
-    expect(master.moves).toHaveLength(0);
+    await fillIndividual(user, attackerRegion(), BIRD, NATURE_PLUS_SPE);
+    await fillIndividual(user, candidate(1), BIRD, NATURE_NEUTRAL);
+    await user.selectOptions(moveSelect(attackerRegion()), MOVE_SPEC.id);
 
+    expect(moveSelect(attackerRegion())).toHaveValue(MOVE_SPEC.id);
+    expect(moveSelect(candidate(1))).toHaveValue(MOVE_PHYS.id);
+
+    await user.click(submitButton());
+    expect(lastCall(client).args.moveId).toBe(MOVE_SPEC.id);
+    expect(lastCall(client).args.defenders[0]?.moveId).toBe(MOVE_PHYS.id);
+  });
+
+  test("learnset が空の種族は、技の select が disabled のままで案内が出る。判定は送らない", async () => {
+    const { user, client } = renderScreen();
+    await fillIndividual(user, attackerRegion(), BIRD, NATURE_PLUS_SPE);
+    await fillIndividual(user, candidate(1), NOMOVE, NATURE_NEUTRAL);
+
+    expect(within(candidate(1)).queryByText(judgeScreenText.moveUnavailableNotice)).toBeInTheDocument();
+    expect(moveSelect(candidate(1))).toBeDisabled();
+    expect(within(attackerRegion()).queryByText(judgeScreenText.moveUnavailableNotice)).toBeNull();
+
+    await user.click(submitButton());
+    expect(client.calls).toHaveLength(0);
+    expect(screen.getByRole("alert")).toHaveTextContent(judgeScreenText.requiredMessage);
+  });
+
+  // 置き換え(issue #309): 旧 A9「master.moves が空でも ID を打てば判定を送れる」。ID の自由入力をやめたので、
+  // 「技の実体を引けないマスタでは、技の select は disabled・案内を出し、ID を打つ逃げ道を作らない」へ。
+  test("技の実体を引けないマスタ(master.moves が空)では、select は disabled・案内を出し、ID の入力欄に逃げない", async () => {
+    const { user, client } = renderScreen(masterNoMoves);
     await fillMinimalForm(user);
+
+    expect(moveSelect(attackerRegion())).toBeDisabled();
+    expect(moveOptionValues(attackerRegion())).toEqual([]);
+    expect(within(attackerRegion()).getByText(judgeScreenText.moveUnavailableNotice)).toBeInTheDocument();
+    expect(within(attackerRegion()).queryByRole("textbox", { name: /技/ })).toBeNull();
+
+    await user.click(submitButton());
+    expect(client.calls).toHaveLength(0);
+    expect(screen.getByRole("alert")).toHaveTextContent(judgeScreenText.requiredMessage);
+  });
+});
+
+// ---- A11: オンライン(masterSearch)。種族が master.species に無いときの技の引き方(ADR-0711) ----
+
+describe("A11 種族を検索で選ぶ(speciesList が false)ときは resolveSpecies が返す技から選ぶ", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** オンライン相当のマスタ(種族・技・特性は全件を持たない)。 */
+  const onlineMaster: MasterData = {
+    ...master,
+    species: [],
+    moves: [],
+    abilities: [],
+    capabilities: ONLINE_MASTER_CAPABILITIES,
+  };
+
+  function renderOnline(
+    search = createFakeSpeciesSearch({
+      species: [BIRD, FISH, NOMOVE],
+      abilities: [ABILITY],
+      moves: FAKE_MOVES,
+    }),
+  ) {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+    const client = createFakeJudgeClient();
+    render(<JudgeScreen judgeClient={client} master={onlineMaster} masterSearch={search} />);
+    return { user, client, search };
+  }
+
+  async function chooseBySearch(user: UserEvent, region: HTMLElement, species: MasterSpecies): Promise<void> {
+    await user.type(
+      within(region).getByRole("combobox", { name: judgeScreenText.speciesLabel }),
+      species.nameJa,
+    );
+    act(() => {
+      vi.advanceTimersByTime(SPECIES_SEARCH_DEBOUNCE_MS);
+    });
+    await user.click(await within(region).findByRole("option", { name: species.nameJa }));
+  }
+
+  test("検索で種族を選ぶと、解決した learnset の技が選べて、最初のダメージ技が既定になる", async () => {
+    const { user, search } = renderOnline();
+    await chooseBySearch(user, attackerRegion(), BIRD);
+
+    await waitFor(() => {
+      expect(moveOptionValues(attackerRegion())).toEqual([MOVE_STATUS.id, MOVE_PHYS.id, MOVE_SPEC.id]);
+    });
+    expect(search.resolvedKeys).toEqual([BIRD.key]);
+    expect(moveSelect(attackerRegion())).toBeEnabled();
+    expect(moveSelect(attackerRegion())).toHaveValue(MOVE_PHYS.id);
+  });
+
+  test("自分と候補で別の種族を検索すると、それぞれの learnset が出て、request に選んだ技の ID が入る", async () => {
+    const { user, client } = renderOnline();
+    await chooseBySearch(user, attackerRegion(), BIRD);
+    await chooseBySearch(user, candidate(1), FISH);
+    await waitFor(() => {
+      expect(moveOptionValues(candidate(1))).toEqual([MOVE_SPEC.id]);
+    });
+    await user.selectOptions(
+      within(attackerRegion()).getByLabelText(judgeScreenText.natureLabel),
+      NATURE_PLUS_SPE.id,
+    );
+    await user.selectOptions(
+      within(candidate(1)).getByLabelText(judgeScreenText.natureLabel),
+      NATURE_NEUTRAL.id,
+    );
+
+    await user.click(submitButton());
+
+    expect(lastCall(client).args.attacker.speciesKey).toBe(BIRD.key);
+    expect(lastCall(client).args.moveId).toBe(MOVE_PHYS.id);
+    expect(lastCall(client).args.defenders[0]?.moveId).toBe(MOVE_SPEC.id);
+  });
+
+  test("同じ欄で種族を検索し直すと、技の候補は新しい種族の learnset に替わる", async () => {
+    const { user } = renderOnline();
+    await chooseBySearch(user, attackerRegion(), BIRD);
+    await waitFor(() => {
+      expect(moveOptionValues(attackerRegion())).toHaveLength(3);
+    });
+
+    const input = within(attackerRegion()).getByRole("combobox", { name: judgeScreenText.speciesLabel });
+    await user.clear(input);
+    await chooseBySearch(user, attackerRegion(), FISH);
+
+    await waitFor(() => {
+      expect(moveOptionValues(attackerRegion())).toEqual([MOVE_SPEC.id]);
+    });
+    expect(moveSelect(attackerRegion())).toHaveValue(MOVE_SPEC.id);
+  });
+
+  test("解決した種族が技を1件も覚えない(learnset が空)なら、select は disabled・案内を出す。ID の入力欄は出さない", async () => {
+    const { user } = renderOnline();
+    await chooseBySearch(user, candidate(1), NOMOVE);
+
+    expect(await within(candidate(1)).findByText(judgeScreenText.moveUnavailableNotice)).toBeInTheDocument();
+    expect(moveSelect(candidate(1))).toBeDisabled();
+    expect(within(candidate(1)).queryByRole("textbox", { name: /技/ })).toBeNull();
+  });
+
+  test("検索で種族を選ぶだけで、選択済みの無振りが性格・SP に入り、そのまま送信できる", async () => {
+    const { user, client } = renderOnline();
+    await chooseBySearch(user, attackerRegion(), BIRD);
+    await chooseBySearch(user, candidate(1), FISH);
+    await waitFor(() => {
+      expect(moveOptionValues(candidate(1))).toEqual([MOVE_SPEC.id]);
+    });
+
+    expect(within(attackerRegion()).getByLabelText(judgeScreenText.natureLabel)).toHaveValue(
+      NATURE_NEUTRAL.id,
+    );
     await user.click(submitButton());
 
     expect(client.calls).toHaveLength(1);
-    expect(lastCall(client).args.moveId).toBe("test-move");
+    expect(lastCall(client).args.attacker.natureId).toBe(NATURE_NEUTRAL.id);
+    expect(lastCall(client).args.defenders[0]?.natureId).toBe(NATURE_NEUTRAL.id);
+  });
+
+  test("種族の解決に失敗したら(resolveSpecies が reject)技は選べないまま。判定は送らない", async () => {
+    const base = createFakeSpeciesSearch({ species: [BIRD, FISH], abilities: [ABILITY], moves: FAKE_MOVES });
+    const failing = {
+      searchSpecies: base.searchSpecies.bind(base),
+      resolveSpecies: () => Promise.reject(new Error("テスト用の失敗")),
+    };
+    const { user, client } = renderOnline(Object.assign(base, failing));
+    await user.type(
+      within(attackerRegion()).getByRole("combobox", { name: judgeScreenText.speciesLabel }),
+      BIRD.nameJa,
+    );
+    act(() => {
+      vi.advanceTimersByTime(SPECIES_SEARCH_DEBOUNCE_MS);
+    });
+    await user.click(await within(attackerRegion()).findByRole("option", { name: BIRD.nameJa }));
+
+    expect(moveSelect(attackerRegion())).toBeDisabled();
+    expect(moveOptionValues(attackerRegion())).toEqual([]);
+    await user.click(submitButton());
+    expect(client.calls).toHaveLength(0);
+  });
+});
+
+// ---- A12: 調整プリセット(issue #309。ADR-0711。攻撃側プリセット・防御側プリセットを再利用 + 最速) ----
+
+describe("A12 調整プリセット(SP・性格がまとめて入る)", () => {
+  test("自分側・候補の両方に、無振り・最速・攻撃特化・HB特化・HD特化のラジオが出て、既定は無振り", () => {
+    renderScreen();
+    for (const region of [attackerRegion(), candidate(1)]) {
+      const labels = [
+        attackerPresetLabel("none", "physical"),
+        judgeScreenText.fastestPresetLabel,
+        attackerPresetLabel("x_full", "physical"),
+        defenderPresetLabel("hb_full"),
+        defenderPresetLabel("hd_full"),
+      ];
+      for (const label of labels) {
+        expect(presetRadio(region, label)).toBeInTheDocument();
+      }
+      expect(presetRadio(region, attackerPresetLabel("none", "physical"))).toBeChecked();
+    }
+  });
+
+  test("最速: 素早さに全振り(SP 32)+ 素早さ上昇の性格。物理技ならようき(下降は特攻)", async () => {
+    const { user, client } = renderScreen();
+    await fillMinimalForm(user);
+
+    await user.click(presetRadio(attackerRegion(), judgeScreenText.fastestPresetLabel));
+
+    expect(presetRadio(attackerRegion(), judgeScreenText.fastestPresetLabel)).toBeChecked();
+    expect(within(attackerRegion()).getByLabelText(judgeScreenText.natureLabel)).toHaveValue(NATURE_JOLLY.id);
+    await openDetails(user, attackerRegion());
+    expect(within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("spe"))).toHaveValue(32);
+    expect(within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("atk"))).toHaveValue(0);
+
+    await user.click(submitButton());
+    expect(lastCall(client).args.attacker.natureId).toBe(NATURE_JOLLY.id);
+    expect(lastCall(client).args.attacker.sp).toEqual({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 32 });
+  });
+
+  test("最速は、使う技が特殊技ならおくびょう(下降は攻撃)。技を替えると読み替える", async () => {
+    const { user } = renderScreen();
+    await fillMinimalForm(user);
+    await user.click(presetRadio(attackerRegion(), judgeScreenText.fastestPresetLabel));
+    expect(within(attackerRegion()).getByLabelText(judgeScreenText.natureLabel)).toHaveValue(NATURE_JOLLY.id);
+
+    await user.selectOptions(moveSelect(attackerRegion()), MOVE_SPEC.id);
+
+    expect(presetRadio(attackerRegion(), judgeScreenText.fastestPresetLabel)).toBeChecked();
+    expect(within(attackerRegion()).getByLabelText(judgeScreenText.natureLabel)).toHaveValue(NATURE_TIMID.id);
+  });
+
+  test("攻撃特化は、使う技の分類で A / C に替わる(計算画面の攻撃側プリセットと同じ)。技を替えても選びは保たれる", async () => {
+    const { user } = renderScreen();
+    await fillMinimalForm(user);
+
+    // 物理技(既定): A特化 = 攻撃に全振り + 攻撃上昇(いじっぱり)。
+    await user.click(presetRadio(attackerRegion(), attackerPresetLabel("x_full", "physical")));
+    expect(within(attackerRegion()).getByLabelText(judgeScreenText.natureLabel)).toHaveValue(
+      NATURE_ADAMANT.id,
+    );
+    await openDetails(user, attackerRegion());
+    expect(within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("atk"))).toHaveValue(32);
+
+    // 特殊技へ替える: ラジオの表示名は C特化 になり、選びは保たれ、SP・性格も C 側へ読み替わる。
+    await user.selectOptions(moveSelect(attackerRegion()), MOVE_SPEC.id);
+    expect(presetRadio(attackerRegion(), attackerPresetLabel("x_full", "special"))).toBeChecked();
+    expect(within(attackerRegion()).getByLabelText(judgeScreenText.natureLabel)).toHaveValue(
+      NATURE_MODEST.id,
+    );
+    expect(within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("spa"))).toHaveValue(32);
+    expect(within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("atk"))).toHaveValue(0);
+  });
+
+  test("HB特化は HP と防御に 32 + 防御上昇の性格、HD特化は HP と特防に 32 + 特防上昇の性格(防御側プリセットと同じ値)", async () => {
+    const { user } = renderScreen();
+    await fillMinimalForm(user);
+    await openDetails(user, candidate(1));
+
+    await user.click(presetRadio(candidate(1), defenderPresetLabel("hb_full")));
+    expect(within(candidate(1)).getByLabelText(judgeScreenText.natureLabel)).toHaveValue(NATURE_BOLD.id);
+    expect(within(candidate(1)).getByLabelText(judgeScreenText.spLabel("hp"))).toHaveValue(32);
+    expect(within(candidate(1)).getByLabelText(judgeScreenText.spLabel("def"))).toHaveValue(32);
+
+    await user.click(presetRadio(candidate(1), defenderPresetLabel("hd_full")));
+    expect(within(candidate(1)).getByLabelText(judgeScreenText.natureLabel)).toHaveValue(NATURE_CALM.id);
+    expect(within(candidate(1)).getByLabelText(judgeScreenText.spLabel("def"))).toHaveValue(0);
+    expect(within(candidate(1)).getByLabelText(judgeScreenText.spLabel("spd"))).toHaveValue(32);
+  });
+
+  test("無振りに戻すと SP が全部 0・性格が無補正に戻る", async () => {
+    const { user } = renderScreen();
+    await fillMinimalForm(user);
+    await user.click(presetRadio(attackerRegion(), judgeScreenText.fastestPresetLabel));
+
+    await user.click(presetRadio(attackerRegion(), attackerPresetLabel("none", "physical")));
+
+    expect(within(attackerRegion()).getByLabelText(judgeScreenText.natureLabel)).toHaveValue(
+      NATURE_NEUTRAL.id,
+    );
+    await openDetails(user, attackerRegion());
+    expect(within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("spe"))).toHaveValue(0);
+  });
+
+  test("プリセットは自分と候補で独立している(自分を最速にしても候補は変わらない)", async () => {
+    const { user } = renderScreen();
+    await fillMinimalForm(user);
+
+    await user.click(presetRadio(attackerRegion(), judgeScreenText.fastestPresetLabel));
+
+    expect(presetRadio(candidate(1), attackerPresetLabel("none", "physical"))).toBeChecked();
+    expect(within(candidate(1)).getByLabelText(judgeScreenText.natureLabel)).toHaveValue(NATURE_NEUTRAL.id);
+  });
+
+  test("SP や性格を手で変えると、どのプリセットも選ばれていない状態になる(値は手で入れたまま)", async () => {
+    const { user } = renderScreen();
+    await fillMinimalForm(user);
+    await user.click(presetRadio(attackerRegion(), judgeScreenText.fastestPresetLabel));
+    await openDetails(user, attackerRegion());
+
+    await setNumber(user, within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("hp")), 4);
+    const group = within(attackerRegion()).getByRole("radiogroup", {
+      name: judgeScreenText.presetGroupLabel,
+    });
+    for (const radio of within(group).getAllByRole("radio")) {
+      expect(radio).not.toBeChecked();
+    }
+    expect(within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("spe"))).toHaveValue(32);
+
+    // 性格を手で替えた場合も同じ。
+    await user.click(presetRadio(attackerRegion(), judgeScreenText.fastestPresetLabel));
+    await user.selectOptions(
+      within(attackerRegion()).getByLabelText(judgeScreenText.natureLabel),
+      NATURE_NEUTRAL.id,
+    );
+    for (const radio of within(group).getAllByRole("radio")) {
+      expect(radio).not.toBeChecked();
+    }
+  });
+});
+
+// ---- A13: 数値の直接入力は「詳細」に畳む(issue #309。requirements.md §2) ----
+
+describe("A13 SP6欄・ランク5欄は「詳細」を開いたときだけ出す", () => {
+  const SP_KEYS: readonly StatKey[] = ["hp", "atk", "def", "spa", "spd", "spe"];
+  const RANK_KEYS: readonly StatKey[] = ["atk", "def", "spa", "spd", "spe"];
+
+  /** 閉じている間は DOM に無いか、あっても見えない。 */
+  function expectNotVisible(region: HTMLElement, label: string): void {
+    const field = within(region).queryByLabelText(label);
+    if (field !== null) {
+      expect(field).not.toBeVisible();
+    }
+  }
+
+  test("初期表示では、自分も候補も SP・ランクの数値欄は見えず、「詳細」の開閉だけが見える", () => {
+    renderScreen();
+    for (const region of [attackerRegion(), candidate(1)]) {
+      expect(within(region).getByText(judgeScreenText.detailsSummaryLabel)).toBeVisible();
+      for (const stat of SP_KEYS) {
+        expectNotVisible(region, judgeScreenText.spLabel(stat));
+      }
+      for (const stat of RANK_KEYS) {
+        expectNotVisible(region, judgeScreenText.rankLabel(stat));
+      }
+    }
+  });
+
+  test("種族・性格・特性・持ち物・技・調整は、詳細を開かなくても見える", () => {
+    renderScreen();
+    for (const region of [attackerRegion(), candidate(1)]) {
+      for (const label of [
+        judgeScreenText.speciesLabel,
+        judgeScreenText.natureLabel,
+        judgeScreenText.abilityLabel,
+        judgeScreenText.itemLabel,
+        judgeScreenText.moveLabel,
+      ]) {
+        expect(within(region).getByLabelText(label)).toBeVisible();
+      }
+      expect(
+        within(region).getByRole("radiogroup", { name: judgeScreenText.presetGroupLabel }),
+      ).toBeVisible();
+    }
+  });
+
+  test("「詳細」を開くと SP6欄・ランク5欄が見える。開閉は自分と候補ごとに独立している", async () => {
+    const { user } = renderScreen();
+    await openDetails(user, attackerRegion());
+
+    for (const stat of SP_KEYS) {
+      expect(within(attackerRegion()).getByLabelText(judgeScreenText.spLabel(stat))).toBeVisible();
+    }
+    for (const stat of RANK_KEYS) {
+      expect(within(attackerRegion()).getByLabelText(judgeScreenText.rankLabel(stat))).toBeVisible();
+    }
+    // 候補は閉じたまま。
+    expectNotVisible(candidate(1), judgeScreenText.spLabel("spe"));
+  });
+
+  test("「詳細」を閉じても入力した値は残り、送られる(畳んだだけで捨てない)", async () => {
+    const { user, client } = renderScreen();
+    await fillMinimalForm(user);
+    await openDetails(user, attackerRegion());
+    await setNumber(user, within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("spe")), 20);
+    await openDetails(user, attackerRegion()); // 閉じる
+
+    expectNotVisible(attackerRegion(), judgeScreenText.spLabel("spe"));
+    await user.click(submitButton());
+    expect(lastCall(client).args.attacker.sp.spe).toBe(20);
+  });
+
+  test("候補を追加すると、追加した候補の詳細も閉じた状態で始まる", async () => {
+    const { user } = renderScreen();
+    await user.click(addCandidateButton());
+    expectNotVisible(candidate(2), judgeScreenText.spLabel("hp"));
+  });
+});
+
+// ---- A14: 検証エラーを該当欄に出す(issue #309。どの体かも示す) ----
+
+describe("A14 検証エラーは該当欄に aria-invalid と文言で出す(どの体かを添える)", () => {
+  /** aria-invalid が true か。 */
+  function isInvalid(element: HTMLElement): boolean {
+    return element.getAttribute("aria-invalid") === "true";
+  }
+
+  test("SP が範囲外: 該当の SP 欄だけが aria-invalid で、自分と理由を文言で示す。詳細は自動で開く", async () => {
+    const { user, client } = renderScreen();
+    await fillMinimalForm(user);
+    await openDetails(user, attackerRegion());
+    await setNumber(
+      user,
+      within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("spe")),
+      MAX_SP_PER_STAT + 1,
+    );
+    await openDetails(user, attackerRegion()); // 閉じてから送る
+
+    await user.click(submitButton());
+
+    expect(client.calls).toHaveLength(0);
+    const field = within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("spe"));
+    expect(field).toBeVisible();
+    expect(isInvalid(field)).toBe(true);
+    expect(field).toHaveAccessibleDescription(
+      expect.stringContaining(judgeScreenText.spRangeMessage(MAX_SP_PER_STAT)),
+    );
+    expect(field).toHaveAccessibleDescription(expect.stringContaining(judgeScreenText.attackerWhoLabel));
+    // 他の SP 欄・候補の欄は invalid にしない。
+    expect(isInvalid(within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("atk")))).toBe(false);
+    await openDetails(user, candidate(1));
+    expect(isInvalid(within(candidate(1)).getByLabelText(judgeScreenText.spLabel("spe")))).toBe(false);
+  });
+
+  test("SP の合計超過: その体の SP 6欄が aria-invalid で、相手候補何番かを文言で示す", async () => {
+    const { user } = renderScreen();
+    await fillMinimalForm(user);
+    await user.click(addCandidateButton());
+    await fillIndividual(user, candidate(2), GRASS, NATURE_NEUTRAL);
+    await openDetails(user, candidate(2));
+    for (const stat of ["hp", "atk", "def"] as const) {
+      await setNumber(user, within(candidate(2)).getByLabelText(judgeScreenText.spLabel(stat)), 32);
+    }
+
+    await user.click(submitButton());
+
+    for (const stat of ["hp", "atk", "def", "spa", "spd", "spe"] as const) {
+      const field = within(candidate(2)).getByLabelText(judgeScreenText.spLabel(stat));
+      expect(isInvalid(field)).toBe(true);
+      expect(field).toHaveAccessibleDescription(
+        expect.stringContaining(judgeScreenText.spTotalMessage(MAX_SP_TOTAL)),
+      );
+      expect(field).toHaveAccessibleDescription(
+        expect.stringContaining(judgeScreenText.candidateGroupLabel(2)),
+      );
+    }
+    // 候補1・自分は無関係。
+    await openDetails(user, candidate(1));
+    expect(isInvalid(within(candidate(1)).getByLabelText(judgeScreenText.spLabel("hp")))).toBe(false);
+  });
+
+  test("ランクが範囲外: 該当のランク欄だけが aria-invalid で、相手候補1と理由を示す", async () => {
+    const { user } = renderScreen();
+    await fillMinimalForm(user);
+    await openDetails(user, candidate(1));
+    await setNumber(user, within(candidate(1)).getByLabelText(judgeScreenText.rankLabel("def")), 7);
+
+    await user.click(submitButton());
+
+    const field = within(candidate(1)).getByLabelText(judgeScreenText.rankLabel("def"));
+    expect(isInvalid(field)).toBe(true);
+    expect(field).toHaveAccessibleDescription(expect.stringContaining(judgeScreenText.rankRangeMessage));
+    expect(field).toHaveAccessibleDescription(
+      expect.stringContaining(judgeScreenText.candidateGroupLabel(1)),
+    );
+    expect(isInvalid(within(candidate(1)).getByLabelText(judgeScreenText.rankLabel("atk")))).toBe(false);
+  });
+
+  test("複数の体の誤りを同時に出す(最初の1件で止めない)。それぞれに誰の誤りかが付く", async () => {
+    const { user, client } = renderScreen();
+    await fillMinimalForm(user);
+    await openDetails(user, attackerRegion());
+    await openDetails(user, candidate(1));
+    await setNumber(user, within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("hp")), 33);
+    await setNumber(user, within(candidate(1)).getByLabelText(judgeScreenText.rankLabel("spe")), -7);
+
+    await user.click(submitButton());
+
+    expect(client.calls).toHaveLength(0);
+    const attackerField = within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("hp"));
+    const candidateField = within(candidate(1)).getByLabelText(judgeScreenText.rankLabel("spe"));
+    expect(isInvalid(attackerField)).toBe(true);
+    expect(isInvalid(candidateField)).toBe(true);
+    expect(attackerField).toHaveAccessibleDescription(
+      expect.stringContaining(judgeScreenText.attackerWhoLabel),
+    );
+    expect(candidateField).toHaveAccessibleDescription(
+      expect.stringContaining(judgeScreenText.candidateGroupLabel(1)),
+    );
+  });
+
+  test("必須の欄(ポケモン・性格)が空: その欄が aria-invalid になり、体が分かる。全体の alert も従来どおり出る", async () => {
+    const { user, client } = renderScreen();
+
+    await user.click(submitButton());
+
+    expect(client.calls).toHaveLength(0);
+    expect(screen.getByRole("alert")).toHaveTextContent(judgeScreenText.requiredMessage);
+    for (const region of [attackerRegion(), candidate(1)]) {
+      for (const label of [judgeScreenText.speciesLabel, judgeScreenText.natureLabel]) {
+        expect(isInvalid(within(region).getByLabelText(label))).toBe(true);
+      }
+    }
+    expect(within(attackerRegion()).getByLabelText(judgeScreenText.natureLabel)).toHaveAccessibleDescription(
+      expect.stringContaining(judgeScreenText.attackerWhoLabel),
+    );
+    expect(within(candidate(1)).getByLabelText(judgeScreenText.natureLabel)).toHaveAccessibleDescription(
+      expect.stringContaining(judgeScreenText.candidateGroupLabel(1)),
+    );
+  });
+
+  test("learnset が引けず技が空: 技の select が aria-invalid になる", async () => {
+    const { user } = renderScreen();
+    await fillIndividual(user, attackerRegion(), BIRD, NATURE_PLUS_SPE);
+    await fillIndividual(user, candidate(1), NOMOVE, NATURE_NEUTRAL);
+
+    await user.click(submitButton());
+
+    expect(isInvalid(moveSelect(candidate(1)))).toBe(true);
+    expect(isInvalid(moveSelect(attackerRegion()))).toBe(false);
+  });
+
+  test("誤りを直して送り直すと aria-invalid と文言が消え、judge が呼ばれる", async () => {
+    const { user, client } = renderScreen();
+    await fillMinimalForm(user);
+    await openDetails(user, attackerRegion());
+    const field = within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("spe"));
+    await setNumber(user, field, MAX_SP_PER_STAT + 1);
+    await user.click(submitButton());
+    expect(isInvalid(field)).toBe(true);
+
+    await setNumber(user, field, MAX_SP_PER_STAT);
+    await user.click(submitButton());
+
+    expect(isInvalid(field)).toBe(false);
+    expect(field).not.toHaveAccessibleDescription(
+      expect.stringContaining(judgeScreenText.spRangeMessage(MAX_SP_PER_STAT)),
+    );
+    expect(client.calls).toHaveLength(1);
+  });
+});
+
+// ---- A15: 種族を選ぶだけでプリセットの SP・性格が入る(選択済みの調整と値の整合) ----
+
+describe("A15 種族を選ぶと、選択済みのプリセットが性格・SP に入る", () => {
+  test("自分・候補とも、種族を選ぶだけで性格(無振り=無補正)が入り、そのまま送信できる", async () => {
+    const { user, client } = renderScreen();
+    await user.selectOptions(within(attackerRegion()).getByLabelText(judgeScreenText.speciesLabel), BIRD.key);
+    await user.selectOptions(within(candidate(1)).getByLabelText(judgeScreenText.speciesLabel), FISH.key);
+
+    for (const region of [attackerRegion(), candidate(1)]) {
+      expect(within(region).getByLabelText(judgeScreenText.natureLabel)).toHaveValue(NATURE_NEUTRAL.id);
+      expect(presetRadio(region, attackerPresetLabel("none", "physical"))).toBeChecked();
+    }
+    await user.click(submitButton());
+
+    expect(client.calls).toHaveLength(1);
+    expect(lastCall(client).args.attacker.natureId).toBe(NATURE_NEUTRAL.id);
+    expect(lastCall(client).args.attacker.sp).toEqual({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 });
+  });
+
+  test("先にプリセット(最速)を選んでから種族を選ぶと、性格・SP が入る", async () => {
+    const { user } = renderScreen();
+    await user.click(presetRadio(attackerRegion(), judgeScreenText.fastestPresetLabel));
+    await user.selectOptions(within(attackerRegion()).getByLabelText(judgeScreenText.speciesLabel), BIRD.key);
+
+    expect(within(attackerRegion()).getByLabelText(judgeScreenText.natureLabel)).toHaveValue(NATURE_JOLLY.id);
+  });
+
+  test("性格を手で選んだ体は、種族を替えても上書きしない", async () => {
+    const { user } = renderScreen();
+    await fillIndividual(user, attackerRegion(), BIRD, NATURE_PLUS_SPE);
+    await user.selectOptions(within(attackerRegion()).getByLabelText(judgeScreenText.speciesLabel), FISH.key);
+
+    expect(within(attackerRegion()).getByLabelText(judgeScreenText.natureLabel)).toHaveValue(
+      NATURE_PLUS_SPE.id,
+    );
   });
 });

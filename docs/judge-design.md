@@ -153,6 +153,47 @@ JD0〜JD5完了時点で、判定(`outspeeds`/`speedTie`/`attackerKo`/`defenderK
 - **ダブルバトルの全体技・壁の減衰**: `format` は request で `double` も選べるが、判定の計算は常にシングル扱い
   (壁は ×0.5 固定・全体技の軽減なし。calc-svc 側の制約。issue #288、判定レーン単独では解決しない)。
 
+## 6. テスト
+
+判定は計算式を持たず、素早さの実数値(`internal/judge`)・上流 API の呼び出し(`internal/client`)・HTTP 層(`internal/httpapi`)・Web 画面からなる。
+engine のゴールデンテスト(`testdata/golden/`)の対象外(ダメージ計算式は calc-svc・engine 側で守られ、judge は複製しない。ADR-0700〜0704)。
+方針の全体は [test-strategy.md](test-strategy.md)(テスト戦略の索引から本節へ来る)。素早さの同じ節([speed-design.md](speed-design.md) の「9. テスト」)を雛形にしている。
+
+| 層 | 対象 | 置き場所 | 実行 |
+|---|---|---|---|
+| ユニット(純粋) | 素早さの実数値(性格・SP・ランク・スカーフ・追い風の丸め順)、素早さの比較(同速・トリックルーム・追い風を側ごとに)、行動順(優先度が先、同じなら素早さ)、性格表の引き。境界値は SP 0/32・ランク ±6・範囲外入力の拒否。`internal/judge` は I/O を持たない | `services/judge/internal/judge/`(`speed_test.go`・`turnorder_test.go`・`nature_test.go`) | `make judge-test` |
+| 上流クライアント | pokedex・calc の呼び出しの形(リクエスト・応答の復号・`field` の有無・未対応マークの復号)、上流ステータスの正規化、接続失敗・DNS 失敗・タイムアウト・呼び出し側の中止、不正・過大な本文の拒否、上流の詳細(URL・ホスト名)を漏らさないこと | `services/judge/internal/client/` | `make judge-test` |
+| API(httpapi) | `POST /api/judge/v1/outspeed-and-ko` の契約(200・400・422・503 とエラー本文)、検査の順序、候補ごとの結果と並び順、場の効果、返り討ち、行動順、過負荷・期限・メトリクス。契約は `services/judge/api/openapi.yaml` が正 | `services/judge/internal/httpapi/`・`internal/httpguard/`・`internal/httpmetrics/`・`cmd/api/` | `make judge-test` |
+| Web | 画面の振る舞い(相手候補の増減・request の組み立て・場の効果・結果の表示・エラーの日本語表示・送信前の検査)、API クライアント、入力の検証 | `web/src/judge/*.test.ts(x)` | `make web-test`(`cd web && npm test -- judge`) |
+| スモーク | 起動したサービスへの疎通(healthz・判定 200・ヘッダ欠落 400・未知の種族 422・候補 7 件 400) | `services/judge/scripts/smoke.sh` | `make judge-smoke`(クラスタ・サービスの起動が必要) |
+
+### 上流をフェイクにする方針
+
+judge は pokedex-svc と calc-svc を HTTP で呼ぶ。テストはすべて `httptest.Server` の架空の応答で確かめ、実マスタ・実データを使わない
+(CLAUDE.md のドメイン規約。種族 `9001-000`・`9002-000` と架空の技・性格・持ち物の ID を使う)。実サービスが落ちていてもテストは成功する。
+上流エラーの文面は `assertNoUpstreamAuthority`(`internal/client/client_test.go`)で、URL・host:port が漏れないことを確かめる。
+候補が複数のテストは、種族・技・性格を取り違えても緑のまま通らないよう、候補ごとに別の値を返す架空の上流を使う(ADR-0701・ADR-0703)。
+
+### 境界値と、壊れやすい箇所
+
+- **SP**: 各 0〜32、合計 66 まで。合計 66 は通り、67 は止まる(サーバー側 `outspeed_test.go` の「sp の合計がちょうど 67」・Web の `judgeValidation.test.ts` の「合計 66 は通り、67 は止まる」)。
+- **ランク**: -6〜+6。範囲外はサーバー・Web の両方で止まる。
+- **相手候補の数**: 1〜6 件(0 件と 7 件は 400。上流を呼ぶ前に検査する。ADR-0703 §1)。範囲外の候補・先頭で失敗したときの打ち切り・並び順(defenders と同じ)も確かめる。
+- **ID の形式**: 形式に合わない・長すぎる ID は上流を呼ぶ前に 400(ADR-0706)。検査の順序もテストで固定する。
+- **場の効果**(`speedField`): 追い風を自分・相手の側ごとに、トリックルームを全体に。素早さにだけ効き calc-svc へは転送しない(ADR-0702)。スカーフとの積は丸め前に連結する。全候補に適用し、省略時は JD1 と同じ結果になる。
+- **返り討ち**(相手の技。ADR-0704): 順方向と逆方向で calc-svc に届く `field` が違う(攻守を入れ替えると壁・天候の側も入れ替わる)ことを、上流に届いた本文で直接確かめる。応答はエラーにならないので、このテストが無いと取り違えに気づけない。優先度が先・同じなら素早さ・トリックルーム下の逆転・行動順が決まらないとき(`turnOrderTie`)も確かめる。
+- **同速**: `outspeeds` と `speedTie` を別に返す(ADR-0700 §6-1)。
+- **未対応**: 上流の `unsupportedMarks` はそのまま写す。判定に反映しない入力(状態異常・特性など)は §5 のとおり先送りで、反映しない挙動をテストで固定していない。
+
+### 合格基準
+
+`make judge-test judge-lint` が通り、Web を触ったら `make web-lint web-test` も通る(型検査・ESLint・Prettier を含む)。
+API 契約(`services/judge/api/openapi.yaml`)を触ったら `make judge-gen` で生成物を更新する。
+GitOps の overlay を触ったら `make judge-gitops-template-check` も通す。ルートの `make test`・`make lint`・`make build` は judge を前提条件に含む(ADR-0700 §1)。
+`make judge-smoke` は上流の起動が前提(クラスタ内に judge・gateway があり、`JUDGE_URL`・`API_URL` で届く。既定は `http://localhost:8080`)。
+pokedex-svc に投入済みなら gateway 経由で実 ID を引き、未投入(gateway が 503)のときは架空の例の ID に切り替えて「未投入」と表示する(失敗にしない。この場合、未知の種族 422 の確認は省略)。
+スモークは CI の対象外で、デプロイ後の人間の動作確認に使う。
+
 ## 却下した案
 - speed-svc を判定レーンが呼ぶ: SP2(自分の実数値算出)がまだ無く、判定レーンが素早さレーンの完了待ちになる。engine を直接呼べば待たずに済む。
 - calc-svc に「素早さも一緒に返す」拡張をする: calc-svc の責務(1vs1 ダメージ)を超える。判定レーンが engine を直接呼べば calc-svc の変更は不要。
