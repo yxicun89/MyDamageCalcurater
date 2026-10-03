@@ -24,7 +24,7 @@ function fakeScreen(
 const ids: ClientIds = { deviceId: "device", sessionId: "session" };
 
 describe("実際の登録", () => {
-  test("既存の7画面が order の順に登録されている(id・segment・usesMaster)", () => {
+  test("既存の8画面が order の順に登録されている(id・segment・usesMaster)", () => {
     expect(SCREENS.map((screen) => [screen.id, screen.segment, screen.usesMaster])).toEqual([
       ["calc", "calc", true],
       ["reverse", "reverse", true],
@@ -32,6 +32,7 @@ describe("実際の登録", () => {
       ["speed", "speed", false],
       ["judge", "judge", true],
       ["team", "team", true],
+      ["favorites", "favorites", false],
       ["adjust", "adjust", true],
     ]);
   });

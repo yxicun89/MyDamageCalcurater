@@ -1,0 +1,68 @@
+/*
+ * P5-3c: お気に入りの画面(docs/adr/0327-web-favorites.md)。
+ * 色は必ず tokens.css の CSS 変数で参照する(web/src/styles/noColorLiterals.test.ts)。
+ * 常時動くアニメーションは入れない(CLAUDE.md ドメイン規約)。
+ */
+
+.favorites-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+.favorites-screen h2 {
+  font-family: var(--font-family);
+  font-size: var(--font-size-heading);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.favorites-screen__count,
+.favorites-screen__notice {
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.favorites-screen__error {
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--danger);
+}
+
+.favorites-screen__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.favorites-screen__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--bg-glass-blur));
+  padding: var(--space-3);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-primary);
+}
+
+.favorites-screen__confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--danger);
+}

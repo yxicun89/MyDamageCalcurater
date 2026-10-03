@@ -1,0 +1,6 @@
+# WishlistAPI の生成設定。生成物は ios/WishlistKit/Sources/WishlistAPI/Generated/(コミットする・手で編集しない)。
+generate:
+  - types
+  - client
+accessModifier: public
+namingStrategy: idiomatic

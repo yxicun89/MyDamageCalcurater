@@ -1,0 +1,199 @@
+{
+  "$comment": "検索ワード生成(query.Build)とディープリンク(deeplink.Build)の共通テストベクタ。Go と TS の両方のテストが読む(docs/design.md W-07)。deeplink の want は JS の encodeURIComponent と同じ規則。null は「無い」。",
+  "build": [
+    {
+      "note": "仕様 §4 の表: S.H.Figuarts(option 空)",
+      "template": "S.H.Figuarts {name}",
+      "name": "グリス",
+      "option": "",
+      "query_override": null,
+      "site_query": null,
+      "want": "S.H.Figuarts グリス"
+    },
+    {
+      "note": "仕様 §4 の表: デュエマ",
+      "template": "{name} {option}",
+      "name": "ボルシャック",
+      "option": "銀トレジャー",
+      "query_override": null,
+      "site_query": null,
+      "want": "ボルシャック 銀トレジャー"
+    },
+    {
+      "note": "仕様 §4 の表: ガンプラ",
+      "template": "{name}",
+      "name": "HG ガンダムエアリアル",
+      "option": "",
+      "query_override": null,
+      "site_query": null,
+      "want": "HG ガンダムエアリアル"
+    },
+    {
+      "note": "空の {option} の後ろの空白を詰める",
+      "template": "{name} {option}",
+      "name": "ボルシャック",
+      "option": "",
+      "query_override": null,
+      "site_query": null,
+      "want": "ボルシャック"
+    },
+    {
+      "note": "option が前にあって空",
+      "template": "{option} {name} 未開封",
+      "name": "ピカチュウ",
+      "option": "",
+      "query_override": null,
+      "site_query": null,
+      "want": "ピカチュウ 未開封"
+    },
+    {
+      "note": "連続空白・前後空白・全角空白・タブを 1 つの半角空白に",
+      "template": "  {name}　　{option}\t",
+      "name": " A  B ",
+      "option": "C",
+      "query_override": null,
+      "site_query": null,
+      "want": "A B C"
+    },
+    {
+      "note": "query_override がテンプレートより優先",
+      "template": "{name} {option}",
+      "name": "ボルシャック",
+      "option": "銀トレジャー",
+      "query_override": "ボルシャック・ドラゴン 銀",
+      "site_query": null,
+      "want": "ボルシャック・ドラゴン 銀"
+    },
+    {
+      "note": "site_query が query_override より優先",
+      "template": "{name}",
+      "name": "グリス",
+      "option": "",
+      "query_override": "グリス 上書き",
+      "site_query": "グリス フィギュアーツ",
+      "want": "グリス フィギュアーツ"
+    },
+    {
+      "note": "site_query が空白のみなら無いものとして query_override を使う",
+      "template": "{name}",
+      "name": "グリス",
+      "option": "",
+      "query_override": "上書き",
+      "site_query": "  　 ",
+      "want": "上書き"
+    },
+    {
+      "note": "query_override が空文字なら無いものとしてテンプレートを使う",
+      "template": "S.H.Figuarts {name}",
+      "name": "グリス",
+      "option": "",
+      "query_override": "",
+      "site_query": null,
+      "want": "S.H.Figuarts グリス"
+    },
+    {
+      "note": "override の前後・連続空白も詰める",
+      "template": "{name}",
+      "name": "x",
+      "option": "",
+      "query_override": "  a   b  ",
+      "site_query": null,
+      "want": "a b"
+    },
+    {
+      "note": "置換は 1 回だけ(name に含まれる {option} を再置換しない)",
+      "template": "{name} {option}",
+      "name": "A{option}",
+      "option": "X",
+      "query_override": null,
+      "site_query": null,
+      "want": "A{option} X"
+    },
+    {
+      "note": "同じプレースホルダーが複数あれば全部置換",
+      "template": "{name} {name}",
+      "name": "ミュウ",
+      "option": "",
+      "query_override": null,
+      "site_query": null,
+      "want": "ミュウ ミュウ"
+    },
+    {
+      "note": "未知のプレースホルダーはそのまま",
+      "template": "{name} {foo}",
+      "name": "ミュウ",
+      "option": "",
+      "query_override": null,
+      "site_query": null,
+      "want": "ミュウ {foo}"
+    },
+    {
+      "note": "全部空なら空文字",
+      "template": "{name} {option}",
+      "name": "",
+      "option": "",
+      "query_override": null,
+      "site_query": null,
+      "want": ""
+    }
+  ],
+  "deeplink": [
+    {
+      "template": "https://jp.mercari.com/search?keyword={q}&status=on_sale&sort=price&order=asc",
+      "query": "S.H.Figuarts グリス",
+      "want": "https://jp.mercari.com/search?keyword=S.H.Figuarts%20%E3%82%B0%E3%83%AA%E3%82%B9&status=on_sale&sort=price&order=asc"
+    },
+    {
+      "template": "https://jp.mercari.com/search?keyword={q}&status=on_sale&sort=price&order=asc",
+      "query": "ボルシャック 銀トレジャー",
+      "want": "https://jp.mercari.com/search?keyword=%E3%83%9C%E3%83%AB%E3%82%B7%E3%83%A3%E3%83%83%E3%82%AF%20%E9%8A%80%E3%83%88%E3%83%AC%E3%82%B8%E3%83%A3%E3%83%BC&status=on_sale&sort=price&order=asc"
+    },
+    {
+      "template": "https://jp.mercari.com/search?keyword={q}&status=on_sale&sort=price&order=asc",
+      "query": "A&B=C+D#E/F?G",
+      "want": "https://jp.mercari.com/search?keyword=A%26B%3DC%2BD%23E%2FF%3FG&status=on_sale&sort=price&order=asc"
+    },
+    {
+      "template": "https://jp.mercari.com/search?keyword={q}&status=on_sale&sort=price&order=asc",
+      "query": "!'()*-_.~",
+      "want": "https://jp.mercari.com/search?keyword=!'()*-_.~&status=on_sale&sort=price&order=asc"
+    },
+    {
+      "template": "https://jp.mercari.com/search?keyword={q}&status=on_sale&sort=price&order=asc",
+      "query": "100% 本物",
+      "want": "https://jp.mercari.com/search?keyword=100%25%20%E6%9C%AC%E7%89%A9&status=on_sale&sort=price&order=asc"
+    },
+    {
+      "template": "https://jp.mercari.com/search?keyword={q}&status=on_sale&sort=price&order=asc",
+      "query": "ａｂｃ　全角空白",
+      "want": "https://jp.mercari.com/search?keyword=%EF%BD%81%EF%BD%82%EF%BD%83%E3%80%80%E5%85%A8%E8%A7%92%E7%A9%BA%E7%99%BD&status=on_sale&sort=price&order=asc"
+    },
+    {
+      "template": "https://jp.mercari.com/search?keyword={q}&status=on_sale&sort=price&order=asc",
+      "query": "",
+      "want": "https://jp.mercari.com/search?keyword=&status=on_sale&sort=price&order=asc"
+    },
+    {
+      "template": "https://jp.mercari.com/search?keyword={q}&status=on_sale&sort=price&order=asc",
+      "query": "😀 ポケモン",
+      "want": "https://jp.mercari.com/search?keyword=%F0%9F%98%80%20%E3%83%9D%E3%82%B1%E3%83%A2%E3%83%B3&status=on_sale&sort=price&order=asc"
+    },
+    {
+      "template": "https://www.amazon.co.jp/s?k={q}&s=price-asc-rank",
+      "query": "HG ガンダムエアリアル",
+      "want": "https://www.amazon.co.jp/s?k=HG%20%E3%82%AC%E3%83%B3%E3%83%80%E3%83%A0%E3%82%A8%E3%82%A2%E3%83%AA%E3%82%A2%E3%83%AB&s=price-asc-rank"
+    },
+    {
+      "note": "{q} が複数あれば全部置換",
+      "template": "https://example.com/s?a={q}&b={q}",
+      "query": "x y",
+      "want": "https://example.com/s?a=x%20y&b=x%20y"
+    },
+    {
+      "note": "置換後の値に {q} が含まれても再置換しない",
+      "template": "https://example.com/s?q={q}",
+      "query": "{q}",
+      "want": "https://example.com/s?q=%7Bq%7D"
+    }
+  ]
+}
