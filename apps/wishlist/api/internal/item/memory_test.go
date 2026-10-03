@@ -12,3 +12,9 @@ func TestMemoryRepositoryContract(t *testing.T) {
 		return item.NewMemoryRepository()
 	})
 }
+
+func TestMemoryPriceRepositoryContract(t *testing.T) {
+	itemtest.RunPriceRepositoryContract(t, func(t *testing.T) itemtest.FullRepository {
+		return item.NewMemoryRepository()
+	})
+}

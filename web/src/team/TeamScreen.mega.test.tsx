@@ -23,8 +23,10 @@ import { createFakeTeamClient, flush, lastCall, type FakeTeamClient } from "../t
 import {
   MEGA_FIRE,
   MEGA_FIRE_STONE,
+  MEGA_FIRE_STONE_LABEL,
   MEGA_ORPHAN,
   MEGA_WATER_STONE,
+  UNNAMED_MEGA_STONE_LABEL,
   withMegaFixture,
 } from "../test/megaMaster";
 import { createFakeSpeciesSearch, limitedMaster } from "../test/onlineMaster";
@@ -149,8 +151,8 @@ describe("AC-1・AC-2・AC-3 メガ種族の選択と固定", () => {
     const item = itemSelect(first);
     expect(item).toBeDisabled();
     expect(item).toHaveValue(MEGA_FIRE_STONE.id);
-    // (なし)ではなくストーンの名前が見える。
-    expect(item).toHaveDisplayValue(MEGA_FIRE_STONE.nameJa);
+    // (なし)ではなく「{基本種名}のメガストーン」が見える(ADR-0326。ストーンの nameJa は出さない)。
+    expect(item).toHaveDisplayValue(MEGA_FIRE_STONE_LABEL);
     expect(within(first).getByText(megaItemText.lockedReason)).toBeVisible();
     expect(item).toHaveAccessibleDescription(megaItemText.lockedReason);
   });
@@ -205,7 +207,7 @@ describe("AC-4 古い保存データの補正(別の持ち物を持つメガ種�
     expect(itemSelect(first)).toHaveValue(MEGA_FIRE_STONE.id);
     expect(itemSelect(first)).toBeDisabled();
     expect(itemSelect(first)).toHaveAccessibleDescription(megaItemText.lockedReason);
-    notice(first, megaItemText.correctedNotice(MEGA_FIRE_STONE.nameJa));
+    notice(first, megaItemText.correctedNotice(MEGA_FIRE_STONE_LABEL));
     expect(client.updateCalls).toHaveLength(0);
   });
 
@@ -214,7 +216,7 @@ describe("AC-4 古い保存データの補正(別の持ち物を持つメガ種�
     const first = group(await openEditor(user, "テストメガ構築"), 1);
 
     expect(itemSelect(first)).toHaveValue(MEGA_FIRE_STONE.id);
-    notice(first, megaItemText.correctedNotice(MEGA_FIRE_STONE.nameJa));
+    notice(first, megaItemText.correctedNotice(MEGA_FIRE_STONE_LABEL));
   });
 
   test("直した状態が下書きで、保存すると PUT にストーンが載る(他の欄は変わらない)", async () => {
@@ -237,7 +239,7 @@ describe("AC-4 古い保存データの補正(別の持ち物を持つメガ種�
       ]),
     ]);
     const editor = await openEditor(user, "テストメガ構築");
-    const text = megaItemText.correctedNotice(MEGA_FIRE_STONE.nameJa);
+    const text = megaItemText.correctedNotice(MEGA_FIRE_STONE_LABEL);
 
     expect(within(group(editor, 1)).queryByText(text)).toBeNull();
     notice(group(editor, 2), text);
@@ -251,7 +253,7 @@ describe("AC-4 古い保存データの補正(別の持ち物を持つメガ種�
 
     expect(itemSelect(first)).toHaveValue(MEGA_FIRE_STONE.id);
     expect(itemSelect(first)).toBeDisabled();
-    expect(within(first).queryByText(megaItemText.correctedNotice(MEGA_FIRE_STONE.nameJa))).toBeNull();
+    expect(within(first).queryByText(megaItemText.correctedNotice(MEGA_FIRE_STONE_LABEL))).toBeNull();
   });
 
   test("閉じて開き直すと、下書きは捨てられ保存済みの値から再び補正される", async () => {
@@ -260,19 +262,19 @@ describe("AC-4 古い保存データの補正(別の持ち物を持つメガ種�
     await user.click(within(editor).getByRole("button", { name: teamMemberText.closeLabel }));
     editor = await openEditor(user, "テストメガ構築");
 
-    notice(group(editor, 1), megaItemText.correctedNotice(MEGA_FIRE_STONE.nameJa));
+    notice(group(editor, 1), megaItemText.correctedNotice(MEGA_FIRE_STONE_LABEL));
   });
 });
 
 describe("AC-5 非メガに持たせたメガストーンは直さない", () => {
-  test("非メガの持ち物がメガストーンでも、値を保ち(名前で表示)、通知も出さず、保存でも変えない", async () => {
+  test("非メガの持ち物がメガストーンでも、値を保ち(「メガストーン」と表示。ADR-0326)、通知も出さず、保存でも変えない", async () => {
     const { client, user } = await renderScreen([team([member(NORMAL_KEY, MEGA_WATER_STONE.id)])]);
     const editor = await openEditor(user, "テストメガ構築");
     const first = group(editor, 1);
 
     expect(itemSelect(first)).toBeEnabled();
     expect(itemSelect(first)).toHaveValue(MEGA_WATER_STONE.id);
-    expect(itemSelect(first)).toHaveDisplayValue(MEGA_WATER_STONE.nameJa);
+    expect(itemSelect(first)).toHaveDisplayValue(UNNAMED_MEGA_STONE_LABEL);
     expect(within(first).queryByRole("status")).toBeNull();
 
     const members = await save(user, client, editor);
@@ -332,7 +334,7 @@ describe("AC-7 種族の一覧が無いマスタ(オンライン・キャッシ�
       expect(itemSelect(first)).toHaveValue(MEGA_FIRE_STONE.id);
     });
     expect(itemSelect(first)).toBeDisabled();
-    notice(first, megaItemText.correctedNotice(MEGA_FIRE_STONE.nameJa));
+    notice(first, megaItemText.correctedNotice(MEGA_FIRE_STONE_LABEL));
   });
 
   test("検索欄でメガ種族を選ぶと持ち物がストーンに固定される", async () => {

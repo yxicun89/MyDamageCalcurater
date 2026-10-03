@@ -217,7 +217,7 @@ flowchart LR
 - Traefik は `/` を gateway へ振る。`/api/balance|speed|judge` は各サービスの Ingress を撤去したので gateway に届き、gateway が `GATEWAY_BALANCE_URL`・`GATEWAY_SPEED_URL`・`GATEWAY_JUDGE_URL`(`http://balance|speed|judge`)へ転送する(`services/gateway/internal/httpapi/routing.go` `routeBalance`・`routeSpeed`・`routeJudge`)。
 - judge は gateway を経由せず Service 名 `http://pokedex`・`http://calc` を直接呼ぶ(`services/judge/deploy/k8s/base/deployment.yaml` の env)。
 - balance・speed は他サービスを HTTP で呼ばない。マスタは環境変数 `BALANCE_*_PATH`・`SPEED_POKEMON_PATH` が指す JSON ファイル(未設定なら 503 `master_unavailable` で起動は継続)。
-- record・team・assets・NATS・TiDB・MinIO は未実装(§9)。gateway の `GATEWAY_ASSETS_URL` は未設定で、`/assets/*` は 404。画像は MinIO を使わず、`make assets` の出力を gateway が `GATEWAY_IMAGES_DIR` から `/images/*` で配信する(ADR-0807。k3d では未配線)。
+- record・team・assets・NATS・TiDB・MinIO は未実装(§9)。gateway の `GATEWAY_ASSETS_URL` は未設定で、`/assets/*` は 404。画像は MinIO を使わず、`make assets` の出力を gateway が `GATEWAY_IMAGES_DIR` から `/images/*` で配信する(ADR-0807。k3d へは `make images-k3d`)。
 
 ## 4. ワークロード一覧(image・エントリポイント・ポート)
 

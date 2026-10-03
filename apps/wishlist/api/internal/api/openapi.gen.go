@@ -259,12 +259,18 @@ type ItemDraft struct {
 
 // ItemEstimates defines model for ItemEstimates.
 type ItemEstimates struct {
-	ItemId           ID                           `json:"item_id"`
-	Refreshing       bool                         `json:"refreshing"`
-	Sites            []SiteEstimate               `json:"sites"`
+	ItemId     ID             `json:"item_id"`
+	Refreshing bool           `json:"refreshing"`
+	Sites      []SiteEstimate `json:"sites"`
+
+	// SummaryFetchedAt low を持つサイトの fetched_at のうち最も古いもの
 	SummaryFetchedAt nullable.Nullable[time.Time] `json:"summary_fetched_at,omitempty"`
-	SummaryLow       nullable.Nullable[int]       `json:"summary_low,omitempty"`
-	SummaryMid       nullable.Nullable[int]       `json:"summary_mid,omitempty"`
+
+	// SummaryLow `sites` の low の最小(low を持つサイトが無ければ null)
+	SummaryLow nullable.Nullable[int] `json:"summary_low,omitempty"`
+
+	// SummaryMid summary_low を出したサイトの mid(その mid が null なら summary_low)
+	SummaryMid nullable.Nullable[int] `json:"summary_mid,omitempty"`
 }
 
 // ItemFields defines model for ItemFields.
@@ -326,19 +332,26 @@ type SiteCreate struct {
 	SearchUrlTemplate string `json:"search_url_template"`
 }
 
-// SiteEstimate サイトごとの目安。仕様 §3 の「状態(在庫あり等)」をどの項目で表すかはフェーズ3で決める(docs/design.md §7 の未決事項)。
+// SiteEstimate サイトごとの目安。仕様 §3 の「状態(在庫あり等)」は `in_stock_count` で表す(docs/phase3-api-spec.md)。
+// `status` が failed のとき、low・mid・count・suspicious_count・in_stock_count・fetched_at は前回の値。
 type SiteEstimate struct {
+	// Count 参考外を除いた件数
 	Count     int       `json:"count"`
 	FetchedAt time.Time `json:"fetched_at"`
+
+	// InStockCount 参考外を除き、在庫ありの件数
+	InStockCount int `json:"in_stock_count"`
 
 	// Low 下位25パーセンタイル(件数3未満なら最小値)
 	Low nullable.Nullable[int] `json:"low,omitempty"`
 
 	// Mid 中央値(件数3未満なら null)
-	Mid             nullable.Nullable[int] `json:"mid,omitempty"`
-	SiteId          ID                     `json:"site_id"`
-	Status          EstimateStatus         `json:"status"`
-	SuspiciousCount int                    `json:"suspicious_count"`
+	Mid    nullable.Nullable[int] `json:"mid,omitempty"`
+	SiteId ID                     `json:"site_id"`
+	Status EstimateStatus         `json:"status"`
+
+	// SuspiciousCount 参考外の件数
+	SuspiciousCount int `json:"suspicious_count"`
 }
 
 // SiteOverride defines model for SiteOverride.
@@ -382,9 +395,6 @@ type Internal = Error
 
 // NotFound defines model for NotFound.
 type NotFound = Error
-
-// NotImplemented defines model for NotImplemented.
-type NotImplemented = Error
 
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Error
@@ -822,8 +832,6 @@ type BadRequestJSONResponse Error
 type InternalJSONResponse Error
 
 type NotFoundJSONResponse Error
-
-type NotImplementedJSONResponse Error
 
 type UnauthorizedJSONResponse Error
 
@@ -1641,20 +1649,6 @@ func (response RefreshItemEstimates500JSONResponse) VisitRefreshItemEstimatesRes
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type RefreshItemEstimates501JSONResponse struct{ NotImplementedJSONResponse }
-
-func (response RefreshItemEstimates501JSONResponse) VisitRefreshItemEstimatesResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }

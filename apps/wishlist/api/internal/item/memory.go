@@ -11,12 +11,15 @@ import (
 // MemoryRepository はメモリ上の Repository。HTTP 層のテストと、MySQL 実装と同じ契約テスト(itemtest)に使う。
 // MySQL 実装と同じ規則(外部キー・UNIQUE・並び・不可分性)を守ること。
 type MemoryRepository struct {
-	mu      sync.Mutex
-	nextID  int64
-	genres  map[int64]Genre
-	sites   map[int64]Site
-	items   map[int64]Item
-	nowFunc func() time.Time
+	mu     sync.Mutex
+	nextID int64
+	genres map[int64]Genre
+	sites  map[int64]Site
+	items  map[int64]Item
+	// 目安価格(フェーズ3。memory_price.go)。
+	estimates map[[2]int64]Estimate // (item_id, site_id)
+	listings  []Listing
+	nowFunc   func() time.Time
 }
 
 var _ Repository = (*MemoryRepository)(nil)
@@ -24,10 +27,11 @@ var _ Repository = (*MemoryRepository)(nil)
 // NewMemoryRepository は空の MemoryRepository を返す(seed は入れない)。
 func NewMemoryRepository() *MemoryRepository {
 	return &MemoryRepository{
-		genres:  map[int64]Genre{},
-		sites:   map[int64]Site{},
-		items:   map[int64]Item{},
-		nowFunc: time.Now,
+		genres:    map[int64]Genre{},
+		sites:     map[int64]Site{},
+		items:     map[int64]Item{},
+		estimates: map[[2]int64]Estimate{},
+		nowFunc:   time.Now,
 	}
 }
 
@@ -184,6 +188,7 @@ func (m *MemoryRepository) DeleteItem(_ context.Context, id int64) (string, erro
 		return "", ErrNotFound
 	}
 	delete(m.items, id)
+	m.deletePriceData(id)
 	return it.ImagePath, nil
 }
 

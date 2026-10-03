@@ -50,6 +50,9 @@ Web・iOS にはタイプ色のエンブレムがすでにあり、画像が無�
 - **`make assets` の検査の置換**: `scripts/make-targets_test.sh` の「make assets は非0」は、スタブ(終了コード 2)が成功と数えられないための検査だった。
   実装後は「画像なしの一時ディレクトリ(`ASSETS_SRC`・`ASSETS_OUT`)で終了コード 0 になり空の manifest を書く」に置き換える(AC-A6)。検査を緩めたのではなく、守る対象が「未実装を成功と数えない」から「画像なしでも壊れない」に変わった。
 - **`make dev`**: `data/generated/images/dist/manifest.json` があるときだけ `GATEWAY_IMAGES_DIR` を渡す(`DEV_IMAGES_DIR` で変更可)。無ければ画像なし。
-- **k3d は未対応**: local overlay の gateway に hostPath を足すには k3d クラスタ作成時の volume mount が要り、`make up` の既存クラスタ・手順を壊す。
-  今回は何も足さず(画像なしで全機能が動く)、k3d では現状画像を出せないことだけ `docs/runbooks/images.md` に書く(gateway イメージは `FROM scratch`・読み取り専用で `kubectl cp` 不可、Argo CD の selfHeal が `set env` を戻す)。配線は別タスク。
+- **k3d(追記 2026-10-03。当初は未対応だったのを解消)**: クラスタ作成時の volume mount は使わず(`make up` の既存クラスタ・手順を壊すため)、
+  `make images-k3d`(`scripts/images-k3d.sh`)が dist の中身をノードコンテナ(`k3d-pokecalc-server-0`)の `/var/lib/pokecalc-images` へ `docker cp` で置く。
+  gateway には local overlay(Component `deploy/k8s/overlays/local/api`。local・local-api が使う)だけが hostPath(読み取り専用・`DirectoryOrCreate`)の volume と `GATEWAY_IMAGES_DIR=/data/images` を足す。base・cloud overlay には足さない(クラウドへ hostPath を持ち込まない)。
+  gateway の securityContext(読み取り専用ルート・非 root)は変えない。volume が空でも起動し、画像なしでも全機能が動く。
+  手順は `docs/runbooks/images.md` §3。静的検査は `scripts/images-k3d_test.sh`。置き換え時にディレクトリを作り直さない理由(bind mount が古い実体を指す)は手順書に記載。
 - `make test-tools` は `tools/assets` で `npm ci` してからテストを走らせる(sharp が必要)。

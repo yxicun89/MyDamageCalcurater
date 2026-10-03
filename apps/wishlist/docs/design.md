@@ -42,8 +42,7 @@ iPhone(PWA / 将来 iOS アプリ)
   - `POST /api/items` は `multipart/form-data`(`image` ファイル)と `application/json`(`image_url`)の両方を受ける。
     `image_url` の場合はサーバーが取得して保存する(外部の画像に依存しない)
   - `POST /api/items/from-url` は**保存しない**。OGP から `{name, image_url, source_url, genre_id}` の下書きを返す
-- フェーズ3の範囲(`/estimates`・`/listings`)は契約だけ先に置く。フェーズ1の実装は空の結果を返し、
-  `POST .../estimates/refresh` は `501`(W-06)
+- フェーズ3の範囲(`/estimates`・`/listings`)はフェーズ1で契約だけ先に置き、フェーズ3で実装した(W-06。詳細は docs/phase3-api-spec.md)
 - 外部 URL の取得(OGP・`image_url`)は SSRF 対策をする:http/https のみ、プライベート・ループバック・リンクローカル宛ては拒否、
   タイムアウト 10 秒、HTML は 2 MiB・画像は 10 MiB まで(W-05)
 
@@ -72,15 +71,16 @@ iPhone(PWA / 将来 iOS アプリ)
 | `Job wishlist-migrate` | api イメージの `migrate up`。Job の template は変えられないため、2 回目以降は `kubectl delete job` してから apply(デプロイ用ターゲットは API 実装と一緒に足す) |
 | `Ingress wishlist` + Traefik `Middleware wishlist-strip` | `/wishlist` を外して api / web へ |
 | `NetworkPolicy` | wishlist 名前空間で default-deny ingress、Traefik → api/web だけ許可 |
-| `Secret wishlist-api` | **Git に置かない**。`scripts/bootstrap.sh` が無いときだけ作る(`database-dsn`・`api-token`。Yahoo appid はフェーズ3) |
-| `CronJob wishlist-refresher` | フェーズ3で足す |
+| `Secret wishlist-api` | **Git に置かない**。`scripts/bootstrap.sh` が無いときだけ作る(`database-dsn`・`api-token`。`yahoo-appid` は環境変数 `WISHLIST_YAHOO_APPID` があるときだけ入れる任意のキー) |
+| `CronJob wishlist-refresher` | 毎日 03:00 JST。api イメージ(`wishlist/api`)の別バイナリ `/wishlist-refresher` を `command` で起動する。headless 用の Chromium 入りの専用イメージは、headless の Fetcher の実装時に別に作る(今は作らない) |
 
-### 共有基盤への依頼(このレーンでは変更しない)
+### 共有基盤の変更
 
-- **MySQL の NetworkPolicy**(`deploy/k8s/base/networkpolicy/allow-mysql-ingress.yaml`)が pokecalc 名前空間の決まった Pod からしか
-  3306 を許していない。wishlist 名前空間の `app.kubernetes.io/name: wishlist-api` / `wishlist-migrate` からの接続を許す 1 項目の追加を提案する
-  (`docs/ai-shared/decisions/` に既定案付きで記録)。入るまでは、クラスタ上の api は DB に繋がらない
-- DB `wishlist` と専用ユーザーの作成は root 権限が要る。`scripts/bootstrap.sh`(人が 1 回実行する。共有の mysql Pod に `kubectl exec`。秘密は stdin・ファイル経由で渡し argv に載せない)
+- **MySQL の NetworkPolicy**(`deploy/k8s/base/networkpolicy/allow-mysql-ingress.yaml`)に、wishlist 名前空間の
+  `app.kubernetes.io/name: wishlist-api` / `wishlist-migrate` / `wishlist-refresher` から 3306 への許可を足した
+  (ユーザー決定 2026-10-03 により wishlist レーンが PR #587 で入れた。`docs/ai-shared/decisions/2026-10-03-wishlist-phase2-3-user-decisions.md`)
+- Pod の起動直後は許可の反映が数秒遅れ、接続が拒否されることがある。api・migrate・refresher は起動時に DB への接続を再試行する(`internal/dbwait`)
+- DB `wishlist` と専用ユーザーの作成は root 権限が要る。`scripts/bootstrap.sh`(1 回だけ実行する。2026-10-03 に実行済み。共有の mysql Pod に `kubectl exec`。秘密は stdin・ファイル経由で渡し argv に載せない)
 
 ## 6. Web(PWA)
 
@@ -100,7 +100,7 @@ iPhone(PWA / 将来 iOS アプリ)
   `/wishlist` 前置 + StripPrefix なら共有基盤を一切変えずに同じ入口(`tailscale serve` → :8080)に同居できる
 - **W-04 画像は認証なし**:上記の理由。推測できないファイル名で代替する
 - **W-05 外部取得の SSRF 対策**:自分専用でも、クラスタ内(MySQL 等)へサーバーから届く経路を作らない
-- **W-06 フェーズ3の API は契約だけ先に置く**:クライアントの生成をやり直さずに済むため。未実装は 501 を明示する(成功を装わない)
+- **W-06 フェーズ3の API は契約だけ先に置く**:クライアントの生成をやり直さずに済むため。フェーズ1〜2 の間は未実装を 501 で明示した(成功を装わない)。フェーズ3で実装済み
 - **W-07 検索ワード・ディープリンクの共通テストベクタ**:Go(フェーズ3の取得で使う)と TS(フロントのリンク)の二重実装になるため、
   同じ JSON で両方を検査する
 - **W-08 PATCH の「省略」と「null」を区別する**:oapi-codegen の `output-options.nullable-type: true`(`nullable.Nullable[T]`)で生成する。
@@ -108,6 +108,7 @@ iPhone(PWA / 将来 iOS アプリ)
 - **W-09 migrate だけが multiStatements を使う**:API サーバーの DSN には付けない(1 回の Query で複数文を通さない)。
   migrate は DSN に `multiStatements=true` を足してから接続する(services/internal/dbmigrate と同じ考え方。wishlist は共有パッケージを使わず自前で持つ)
 
-### 未決事項(フェーズ3で決める)
+### 未決事項(フェーズ3で決めた)
 
-- サイト行の「状態(在庫あり等)」(仕様 §3)を `SiteEstimate` のどの項目で表すか(`listings.in_stock` の集計を足すか)
+- サイト行の「状態(在庫あり等)」(仕様 §3)は `SiteEstimate.in_stock_count`(参考外を除いた在庫ありの件数)で表す。
+  フェーズ3の決めたことは [phase3-api-spec.md](phase3-api-spec.md)

@@ -78,11 +78,13 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/image-tag_test.sh
 	@./scripts/k3d-deploy-tagged_test.sh
 	@./scripts/up-secrets_test.sh
+	@./scripts/images-k3d_test.sh
 	@./scripts/k3d-m2-deploy_test.sh
 	@./scripts/tidb-operator-bootstrap_test.sh
 	@./scripts/test-db-docker_test.sh
 	@./scripts/db-backup_test.sh
 	@./scripts/db-restore_test.sh
+	@./scripts/db-backup-k3d_test.sh
 
 .PHONY: lint
 lint: ## gofmt / go vet / shell・Node構文チェック
@@ -223,6 +225,14 @@ db-backup: ## DB のバックアップ(MODE=full|journal KIND=pokedex|record|tea
 db-restore: ## DB の復元(KIND=… GEN=<世代|latest>。上書きなので CONFIRM_RESTORE=<DB名> が必須。サービスを止めてから。ADR-0225)
 	@./scripts/db-restore.sh "$(KIND)" "$(or $(GEN),latest)"
 
+.PHONY: db-backup-k3d
+db-backup-k3d: ## k3d の実 DB(record・team・pokedex)をバックアップ(KIND で絞れる。Secret はスクリプト内部で読み値を出さない。非破壊。ADR-0227)
+	@./scripts/db-backup-k3d.sh $(KIND)
+
+.PHONY: db-restore-drill-k3d
+db-restore-drill-k3d: ## k3d の実 TiDB で復元訓練(別名 DB へ最新世代を復元→行数・墓石を照合→別名 DB を削除。稼働中の DB は上書きしない。ADR-0227)
+	@./scripts/db-restore-drill-k3d.sh $(KIND)
+
 .PHONY: test-db-backup
 test-db-backup: ## バックアップ→復元の実 DB 往復テスト(Docker の使い捨て TiDB・MySQL。Docker が無ければ失敗。make test には含めない。ADR-0225)
 	@./scripts/db-backup-restore_docker_test.sh
@@ -346,6 +356,10 @@ k8s-render-kubectl:
 assets: ## 手元の画像(data/generated/images/src)を WebP 2サイズ + manifest に変換する(画像なしでも成功。ADR-0807。ASSETS_SRC・ASSETS_OUT で場所を変更)
 	@[ -d tools/assets/node_modules ] || (cd tools/assets && npm ci --silent)
 	@cd tools/assets && node convert.mjs
+
+.PHONY: images-k3d
+images-k3d: ## make assets の出力(data/generated/images/dist)を k3d のノードへ置き、gateway の /images/* で配信する(make up 済み。画像が無ければ何もせず成功。ADR-0807)
+	@./scripts/images-k3d.sh
 
 ## --- 公開前の検査 -----------------------------------------------------
 .PHONY: check-publishable
