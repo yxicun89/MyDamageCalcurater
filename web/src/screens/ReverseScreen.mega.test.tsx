@@ -24,9 +24,11 @@ import { createFakeEngine, type FakeEngine } from "../test/fakeEngine";
 import {
   MEGA_FIRE,
   MEGA_FIRE_STONE,
+  MEGA_FIRE_STONE_LABEL,
   MEGA_ORPHAN,
   MEGA_WATER,
   MEGA_WATER_STONE,
+  MEGA_WATER_STONE_LABEL,
   withMegaFixture,
 } from "../test/megaMaster";
 import { createFakeSpeciesSearch, limitedMaster } from "../test/onlineMaster";
@@ -107,7 +109,7 @@ describe("自分がメガ種族(持ち物欄がある側)", () => {
 
     expect(myItemSelect()).toBeDisabled();
     expect(myItemSelect()).toHaveValue(MEGA_FIRE_STONE.id);
-    expect(myItemSelect()).toHaveDisplayValue(MEGA_FIRE_STONE.nameJa);
+    expect(myItemSelect()).toHaveDisplayValue(MEGA_FIRE_STONE_LABEL);
     expect(within(myCard()).getByText(megaItemText.lockedReason)).toBeVisible();
     expect(myItemSelect()).toHaveAccessibleDescription(megaItemText.lockedReason);
   });
@@ -194,7 +196,7 @@ describe("相手がメガ種族(持ち物候補を探索しない)", () => {
     await user.selectOptions(theirSpeciesSelect(), MEGA_WATER.key);
 
     expect(within(theirCard()).getByText(megaItemText.lockedReason)).toBeVisible();
-    expect(within(theirCard()).getByText(megaItemText.fixedItemName(MEGA_WATER_STONE.nameJa))).toBeVisible();
+    expect(within(theirCard()).getByText(megaItemText.fixedItemName(MEGA_WATER_STONE_LABEL))).toBeVisible();
   });
 
   test("相手をメガでない種族に戻すと、候補は今までどおり(メガストーンは混ざらない)・固定の表示は消える", async () => {
@@ -289,7 +291,7 @@ describe("種族を検索で解決するマスタ(isMega は解決後の種族�
 
     const select = await within(myCard()).findByRole("combobox", { name: "自分の持ち物" });
     expect(select).toBeDisabled();
-    expect(select).toHaveDisplayValue(MEGA_FIRE_STONE.nameJa);
+    expect(select).toHaveDisplayValue(MEGA_FIRE_STONE_LABEL);
     expect(select).toHaveAccessibleDescription(megaItemText.lockedReason);
   });
 });
