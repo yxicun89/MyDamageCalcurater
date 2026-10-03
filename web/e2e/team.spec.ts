@@ -4,7 +4,7 @@
 // 確かめること: 構築を作る → 編集領域を開く → メンバーを追加して種族・技・SP を入れる → 保存すると
 // PUT に全置換で送られ、一覧のメンバー数が変わる / SP 合計 67 は保存できない / タブを切り替えても下書きが残る(ADR-0308)。
 
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page, type Route, type Locator } from "@playwright/test";
 import { SPECIES, combobox, openApp } from "./support/calcPage.ts";
 
 interface FakeTeam {
@@ -76,6 +76,18 @@ async function createTeam(page: Page, name: string): Promise<void> {
   await expect(page.getByRole("list", { name: "保存した構築", exact: true })).toContainText(name);
 }
 
+/** メンバーの種族を検索欄で選ぶ(ADR-0313: 既定がオンラインになり、種族は select ではなく検索欄。speciesList が false)。 */
+async function selectMemberSpecies(member: Locator, name: string): Promise<void> {
+  const input = member.getByRole("combobox", { name: "ポケモン", exact: true });
+  await expect(input).toHaveAttribute("aria-expanded", /^(true|false)$/);
+  await input.fill(name);
+  await member
+    .getByRole("listbox", { name: "ポケモン", exact: true })
+    .getByRole("option", { name, exact: true })
+    .click();
+  await expect(input).toHaveValue(name);
+}
+
 test("メンバーを追加して種族・技・SP を入れて保存すると、PUT に全置換で送られ一覧のメンバー数が変わる", async ({
   page,
 }) => {
@@ -91,9 +103,7 @@ test("メンバーを追加して種族・技・SP を入れて保存すると�
 
   // 種族を選ぶまでは保存できない。
   await expect(editor.getByRole("button", { name: "メンバーを保存", exact: true })).toBeDisabled();
-  await member
-    .getByRole("combobox", { name: "ポケモン", exact: true })
-    .selectOption({ label: SPECIES.fire.nameJa });
+  await selectMemberSpecies(member, SPECIES.fire.nameJa);
   await member.getByRole("combobox", { name: "技1", exact: true }).selectOption({ index: 1 });
   await member.getByRole("textbox", { name: "SP A", exact: true }).fill("32");
   await member.getByRole("textbox", { name: "SP S", exact: true }).fill("32");
@@ -124,9 +134,7 @@ test("SP の合計が 67 になると明示エラーで保存できず、66 に�
   const editor = page.getByRole("region", { name: "「SP構築」のメンバー編集", exact: true });
   await editor.getByRole("button", { name: "メンバーを追加", exact: true }).click();
   const member = editor.getByRole("group", { name: "1体目", exact: true });
-  await member
-    .getByRole("combobox", { name: "ポケモン", exact: true })
-    .selectOption({ label: SPECIES.water.nameJa });
+  await selectMemberSpecies(member, SPECIES.water.nameJa);
 
   await member.getByRole("textbox", { name: "SP H", exact: true }).fill("3");
   await member.getByRole("textbox", { name: "SP A", exact: true }).fill("32");
@@ -147,10 +155,7 @@ test("編集中にタブを切り替えて戻っても、未保存の下書き�
   await page.getByRole("button", { name: "「保持構築」のメンバーを編集", exact: true }).click();
   const editor = page.getByRole("region", { name: "「保持構築」のメンバー編集", exact: true });
   await editor.getByRole("button", { name: "メンバーを追加", exact: true }).click();
-  await editor
-    .getByRole("group", { name: "1体目", exact: true })
-    .getByRole("combobox", { name: "ポケモン", exact: true })
-    .selectOption({ label: SPECIES.water.nameJa });
+  await selectMemberSpecies(editor.getByRole("group", { name: "1体目", exact: true }), SPECIES.water.nameJa);
 
   await page.getByRole("tab", { name: "計算", exact: true }).click();
   await expect(combobox(page, "攻撃側のポケモン")).toBeVisible();
@@ -159,7 +164,8 @@ test("編集中にタブを切り替えて戻っても、未保存の下書き�
   const restored = page
     .getByRole("region", { name: "「保持構築」のメンバー編集", exact: true })
     .getByRole("group", { name: "1体目", exact: true });
-  await expect(
-    restored.getByRole("combobox", { name: "ポケモン", exact: true }).locator("option:checked"),
-  ).toHaveText(SPECIES.water.nameJa);
+  // 種族は検索欄(ADR-0313)なので、入力欄の値で確かめる。
+  await expect(restored.getByRole("combobox", { name: "ポケモン", exact: true })).toHaveValue(
+    SPECIES.water.nameJa,
+  );
 });
