@@ -213,6 +213,10 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   // 両方を同時に更新するので、常に同じ参照になる。
   const [requestRows, setRequestRows] = useState<ObservationRow[]>(observations);
   const observationDebounceTimerRef = useRef<number | null>(null);
+  // 最新の観測。種族の解決(検索の応答。非同期)が届いた時点の flushObservationDebounce は、検索を始めたときの
+  // 古いレンダーのクロージャで動くので、state の observations ではなくこの ref から最新を読む(さもないと、
+  // 解決を待つ間に打った観測が requestRows に反映されず「計算中」のまま止まる。ADR-0313)。
+  const latestObservationsRef = useRef<ObservationRow[]>(observations);
   const [completed, setCompleted] = useState<CompletedReverse | null>(null);
   // 観測を2件以上入れて届いた結果に「絞り込み」の演出を出す(design.md「画面: 逆算」)。
   // lastCompleted は直近に判定した completed(react-hooks/set-state-in-effect を避けるため、
@@ -330,6 +334,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
    *   - "debounced"(テキスト編集): 待機中のタイマーを解除し直し、OBSERVATION_INPUT_DEBOUNCE_MS 後に追いつかせる。
    */
   function replaceObservations(next: ObservationRow[], timing: "debounced" | "immediate"): void {
+    latestObservationsRef.current = next;
     setObservations(next);
     if (observationDebounceTimerRef.current !== null) {
       window.clearTimeout(observationDebounceTimerRef.current);
@@ -356,7 +361,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     }
     window.clearTimeout(observationDebounceTimerRef.current);
     observationDebounceTimerRef.current = null;
-    setRequestRows(observations);
+    setRequestRows(latestObservationsRef.current);
   }
 
   function selectSide(nextSide: ReverseSide): void {

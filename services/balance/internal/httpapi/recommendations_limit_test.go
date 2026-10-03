@@ -178,8 +178,8 @@ func TestRecommendationsLimitDoesNotAffectOtherRequests(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/api/balance/v1/team-balance/analyze",
 		strings.NewReader(`{"members":[{"pokemonId":"9001-000","moveIds":[]}]}`))
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("X-Device-Id", "test-device")
-	request.Header.Set("X-Session-Id", "test-session")
+	request.Header.Set("X-Device-Id", "11111111-1111-4111-8111-111111111111")
+	request.Header.Set("X-Session-Id", "22222222-2222-4222-a222-222222222222")
 	server.ServeHTTP(analyze, request)
 	if analyze.Code == http.StatusServiceUnavailable && strings.Contains(analyze.Body.String(), string(api.Overloaded)) {
 		t.Errorf("analyze answered overloaded while recommendations is full: %s", analyze.Body.String())
