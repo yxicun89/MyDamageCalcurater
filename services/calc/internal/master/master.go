@@ -10,6 +10,7 @@
 package master
 
 import (
+	"slices"
 	"sort"
 
 	"example.com/pokecalc/engine"
@@ -116,6 +117,7 @@ func copyItemEffect(e *engine.ItemEffect) *engine.ItemEffect {
 			out.StatMods[k] = v
 		}
 	}
+	out.SpeedMods = slices.Clone(e.SpeedMods)
 	return &out
 }
 
@@ -156,6 +158,7 @@ func copyAbilityEffect(e *engine.AbilityEffect) *engine.AbilityEffect {
 			out.DefAbsorbTypes[k] = v
 		}
 	}
+	out.SpeedMods = slices.Clone(e.SpeedMods)
 	return &out
 }
 

@@ -39,12 +39,14 @@ var (
 	itemEffectFields = map[string]bool{
 		"StatMods": true, "DamageMod": true, "PowerMod": true, "PowerCategory": true,
 		"OnlySuperEffective": true, "BoostType": true, "BoostTypeMod": true, "ResistBerryType": true,
+		"SpeedMods":           true,
 		"UnsupportedAttacker": true, "UnsupportedDefender": true,
 	}
 	abilityEffectFields = map[string]bool{
 		"StabMod": true, "OffBoostType": true, "OffBoostTypeMod": true,
 		"DefResistType": true, "DefImmuneTypes": true, "DefAbsorbTypes": true,
 		"ReduceSuperEffective": true, "IgnoresBurn": true, "Airborne": true,
+		"SpeedMods": true, "IgnoresParalysisSpeedDrop": true,
 		"UnsupportedAttacker": true, "UnsupportedDefender": true,
 	}
 	// absorbEffectFields は DefAbsorbTypes の値(1タイプぶんの副次効果)の既知のフィールド名。
@@ -173,6 +175,77 @@ func decodePowerCategory(raw json.RawMessage) (engine.MoveCategory, error) {
 	}
 }
 
+// speedModFields は SpeedMods の要素の既知のキー(大文字小文字を区別)。
+var speedModFields = map[string]bool{"Condition": true, "Modifier": true}
+
+// decodeSpeedMods は SpeedMods(ADR-0139)を検証つきで読む。空でない配列・語彙の条件・
+// 4096(中立)を除く正の整数・条件の重複なし。item_lost は特性だけ。配列の順(評価の優先順)は保つ。
+func decodeSpeedMods(raw json.RawMessage, forItem bool) ([]engine.SpeedMod, error) {
+	var arr []json.RawMessage
+	if err := json.Unmarshal(raw, &arr); err != nil {
+		return nil, fmt.Errorf("%w: SpeedMods が配列でない: %v", ErrInvalidEffect, err)
+	}
+	if len(arr) == 0 {
+		return nil, fmt.Errorf("%w: SpeedMods が空", ErrInvalidEffect)
+	}
+	seen := make(map[engine.SpeedCondition]bool, len(arr))
+	out := make([]engine.SpeedMod, 0, len(arr))
+	for _, el := range arr {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(el, &fields); err != nil || fields == nil {
+			return nil, fmt.Errorf("%w: SpeedMods の要素がオブジェクトでない", ErrInvalidEffect)
+		}
+		if err := rejectUnknownFields(fields, speedModFields); err != nil {
+			return nil, err
+		}
+		condRaw, okC := fields["Condition"]
+		modRaw, okM := fields["Modifier"]
+		if !okC || !okM {
+			return nil, fmt.Errorf("%w: SpeedMods の要素は Condition と Modifier の両方が要る", ErrInvalidEffect)
+		}
+		s, err := decodeStrictString(condRaw)
+		if err != nil {
+			return nil, err
+		}
+		cond := engine.SpeedCondition(s)
+		if !cond.Known() {
+			return nil, fmt.Errorf("%w: SpeedMods の条件が語彙に無い: %q", ErrInvalidEffect, s)
+		}
+		if forItem && cond == engine.SpeedConditionItemLost {
+			return nil, fmt.Errorf("%w: 持ち物の SpeedMods に %q は使えない", ErrInvalidEffect, s)
+		}
+		if seen[cond] {
+			return nil, fmt.Errorf("%w: SpeedMods に条件が重複している: %q", ErrInvalidEffect, s)
+		}
+		seen[cond] = true
+		n, err := decodePositiveInt(modRaw)
+		if err != nil {
+			return nil, err
+		}
+		if n == engine.Modifier4096 {
+			return nil, fmt.Errorf("%w: SpeedMods の Modifier が中立(%d)", ErrInvalidEffect, n)
+		}
+		out = append(out, engine.SpeedMod{Condition: cond, Modifier: n})
+	}
+	return out, nil
+}
+
+// encodeSpeedMods は配列の順のまま、要素のキーを Condition → Modifier の順で書く(正準形)。
+func encodeSpeedMods(mods []engine.SpeedMod) []byte {
+	var buf bytes.Buffer
+	buf.WriteByte('[')
+	for i, m := range mods {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		buf.WriteString(`{"Condition":`)
+		buf.Write(quoteJSON(string(m.Condition)))
+		fmt.Fprintf(&buf, `,"Modifier":%d}`, m.Modifier)
+	}
+	buf.WriteByte(']')
+	return buf.Bytes()
+}
+
 // decodeStatMods は ItemEffect.StatMods を検証つきで読む(atk/def/spa/spd/spe のみ、正の整数、空不可)。
 func decodeStatMods(raw json.RawMessage) (map[engine.StatKey]int, error) {
 	var obj map[string]json.RawMessage
@@ -185,6 +258,9 @@ func decodeStatMods(raw json.RawMessage) (map[engine.StatKey]int, error) {
 	out := make(map[engine.StatKey]int, len(obj))
 	for k, v := range obj {
 		key, ok := statModKeys[k]
+		if key == engine.StatSpe {
+			return nil, fmt.Errorf("%w: StatMods に spe は使えない(素早さの補正は SpeedMods。ADR-0139)", ErrInvalidEffect)
+		}
 		if !ok {
 			return nil, fmt.Errorf("%w: StatMods のキーが不正: %q", ErrInvalidEffect, k)
 		}
@@ -407,6 +483,13 @@ func DecodeItemEffect(raw []byte, chart engine.TypeChart) (*engine.ItemEffect, e
 		}
 		e.ResistBerryType = t
 	}
+	if v, ok := fields["SpeedMods"]; ok {
+		m, err := decodeSpeedMods(v, true)
+		if err != nil {
+			return nil, err
+		}
+		e.SpeedMods = m
+	}
 	if e.UnsupportedAttacker, e.UnsupportedDefender, err = decodeUnsupportedMarks(fields); err != nil {
 		return nil, err
 	}
@@ -496,6 +579,20 @@ func DecodeAbilityEffect(raw []byte, chart engine.TypeChart) (*engine.AbilityEff
 			return nil, err
 		}
 		e.Airborne = b
+	}
+	if v, ok := fields["SpeedMods"]; ok {
+		m, err := decodeSpeedMods(v, false)
+		if err != nil {
+			return nil, err
+		}
+		e.SpeedMods = m
+	}
+	if v, ok := fields["IgnoresParalysisSpeedDrop"]; ok {
+		b, err := decodeTrueLiteral(v)
+		if err != nil {
+			return nil, err
+		}
+		e.IgnoresParalysisSpeedDrop = b
 	}
 	if e.UnsupportedAttacker, e.UnsupportedDefender, err = decodeUnsupportedMarks(fields); err != nil {
 		return nil, err
@@ -666,6 +763,9 @@ func EncodeItemEffect(e engine.ItemEffect) ([]byte, error) {
 	if e.ResistBerryType != "" {
 		w.field("ResistBerryType", quoteJSON(string(e.ResistBerryType)))
 	}
+	if len(e.SpeedMods) > 0 {
+		w.field("SpeedMods", encodeSpeedMods(e.SpeedMods))
+	}
 	w.unsupportedMarks(e.UnsupportedAttacker, e.UnsupportedDefender)
 	return w.bytes()
 }
@@ -699,6 +799,12 @@ func EncodeAbilityEffect(e engine.AbilityEffect) ([]byte, error) {
 	}
 	if e.Airborne {
 		w.field("Airborne", []byte("true"))
+	}
+	if len(e.SpeedMods) > 0 {
+		w.field("SpeedMods", encodeSpeedMods(e.SpeedMods))
+	}
+	if e.IgnoresParalysisSpeedDrop {
+		w.field("IgnoresParalysisSpeedDrop", []byte("true"))
 	}
 	w.unsupportedMarks(e.UnsupportedAttacker, e.UnsupportedDefender)
 	return w.bytes()
