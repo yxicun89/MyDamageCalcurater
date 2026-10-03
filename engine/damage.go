@@ -159,14 +159,27 @@ func (r DamageResult) MaxDamage() int { return r.Rolls[15] }
 // stabModifier はタイプ一致補正値を返す(通常 ModifierStab、てきおうりょく等 AbilityEffect.StabMod
 // (ModifierAdaptability)、不一致 Modifier4096)。
 func stabModifier(in DamageInput, moveType Type) (int, bool) {
-	if moveType == TypeNone || !hasType(in.Attacker, moveType) {
+	if moveType == TypeNone {
 		return Modifier4096, false
 	}
-	mod := ModifierStab
-	if ae := in.Attacker.Ability.Effect; ae != nil && ae.StabMod != 0 {
-		mod = ae.StabMod
+	const stabBonus = ModifierStab - Modifier4096 // 一致1種類あたりの加算分
+	mod := Modifier4096
+	if hasOriginalType(in.Attacker, moveType) {
+		mod += stabBonus
 	}
-	return mod, true
+	teraMatch := in.Attacker.TeraType != "" && in.Attacker.TeraType == moveType
+	if teraMatch {
+		mod += stabBonus
+	}
+	// てきおうりょく等: 技のタイプを持つときだけ加算。テラスが元タイプのときは半分(ADR-0224)。
+	if ae := in.Attacker.Ability.Effect; ae != nil && ae.StabMod != 0 && hasType(in.Attacker, moveType) {
+		bonus := ae.StabMod - ModifierStab
+		if teraMatch && hasOriginalType(in.Attacker, moveType) {
+			bonus /= 2
+		}
+		mod += bonus
+	}
+	return mod, mod != Modifier4096
 }
 
 // burnModifier は物理やけどによる攻撃半減(ModifierHalf)を返す。

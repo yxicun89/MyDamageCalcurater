@@ -132,9 +132,6 @@ func unsupportedMarks(in DamageInput) []UnsupportedMark {
 	if ae := in.Defender.Ability.Effect; ae != nil && ae.UnsupportedDefender {
 		marks = append(marks, UnsupportedMark{Target: UnsupportedTargetDefenderAbility, Reason: UnsupportedEffect, ID: in.Defender.Ability.ID})
 	}
-	if t := in.Attacker.TeraType; t != "" {
-		marks = append(marks, UnsupportedMark{Target: UnsupportedTargetAttackerTeraType, Reason: UnsupportedEffect, ID: string(t)})
-	}
 	if t := in.Defender.TeraType; t != "" {
 		marks = append(marks, UnsupportedMark{Target: UnsupportedTargetDefenderTeraType, Reason: UnsupportedEffect, ID: string(t)})
 	}

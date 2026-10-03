@@ -55,7 +55,17 @@ type AbilityEffect struct {
 	UnsupportedDefender bool
 }
 
+// hasType は「そのタイプを持つか」を返す。テラスタル中(TeraType 指定あり)は TeraType だけを見る
+// (@smogon/calc の Pokemon.hasType。ADR-0224)。テラス無しは元のタイプ。
 func hasType(in Individual, t Type) bool {
+	if in.TeraType != "" {
+		return in.TeraType == t
+	}
+	return hasOriginalType(in, t)
+}
+
+// hasOriginalType は種族の元のタイプを持つかを返す(テラスを見ない。oracle の hasOriginalType)。
+func hasOriginalType(in Individual, t Type) bool {
 	for _, ty := range in.Species.Types {
 		if ty == t {
 			return true
@@ -89,7 +99,7 @@ func weatherDamageMod(w Weather, moveType Type) int {
 // @smogon/calc 0.12.0 の util.isGrounded のうち engine がモデル化している条件だけを見る:
 // ひこうタイプでない、かつ特性の効果が Airborne(ふゆう等)でない。
 // じゅうりょく・くろいてっきゅう(必ず接地)と、ふうせん(浮く)は未モデル化(ADR-0116 §対象外)。
-// テラスタイプは他の補正と同じく見ない(engine は種族のタイプで相性・一致を判定している)。
+// テラスタル中はテラスタイプで判定する(hasType。ADR-0224)。
 func isGrounded(in Individual) bool {
 	if hasType(in, TypeFlying) {
 		return false
