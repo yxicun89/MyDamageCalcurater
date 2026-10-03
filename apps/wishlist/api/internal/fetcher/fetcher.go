@@ -2,8 +2,10 @@
 //
 // 取得方式(sites.fetch_type)ごとの実装:
 //   - api      : Yahoo!ショッピング(Yahoo。appid が無ければ使わない)
-//   - scrape   : 未実装(カードラッシュ・ドラゴンスター・あみあみ・駿河屋)。TODO: 実サイトの HTML を確認して fixture を保存してから作る
-//   - headless : 未実装(メルカリ・Yahoo!フリマ。chromedp)。TODO: 同上
+//   - scrape   : カードラッシュ・あみあみ・Yahoo!フリマ・駿河屋(検索 URL のホスト名で選ぶ。ForSite)。
+//     駿河屋(www.suruga-ya.jp)は Crawl-delay 30 秒を守り、夜間の CronJob だけで取る(HostMinIntervals・NightlyOnlyHosts)。
+//     ドラゴンスターは取得不可(docs/sites.md)
+//   - headless : 未実装(メルカリ。chromedp)。TODO: fixture を保存してから作る
 //   - link_only: 取得しない
 //
 // 実サイトへのアクセスはテストからは行わない(fixture・httptest を使う。仕様 §13)。
@@ -13,6 +15,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +29,9 @@ const (
 	MaxListings = 20
 	// MinInterval は同じサイトへのリクエストの最低間隔(仕様 §6)。
 	MinInterval = 5 * time.Second
+	// UserAgent は取得時に送る User-Agent。偽装せず、目的が分かるように名乗る(個人情報・リポジトリ URL は入れない)。
+	UserAgent = "wishlist-price-checker/0.1 (personal use; +https://github.com/)"
+
 	// MaxResponseBytes は取得する応答本文の上限。超えたら netguard.ErrTooLarge。
 	MaxResponseBytes = 2 << 20
 )
@@ -81,20 +88,39 @@ func (systemClock) Sleep(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// Throttle は inner を包み、同じサイト(Site.ID)へのリクエストを直列にし、前回の取得が終わってから
-// interval 以上あけてから次を始める(待ちは clock.Sleep)。初回は待たない。違うサイトは互いに待たない。
+// Throttle は inner を包み、同じホスト(検索 URL テンプレートのホスト名。読めなければ Site.ID)へのリクエストを直列にし、前回の取得が終わってから
+// interval 以上あけてから次を始める(待ちは clock.Sleep)。初回は待たない。違うホストは互いに待たない(同じホストの別サイト行も同じ待ち合わせ)。
 // 待っている間に ctx が終わったら inner を呼ばずに ctx の err を返す。inner の失敗も「取得した」として間隔を数える。
 func Throttle(inner Fetcher, interval time.Duration, clock Clock) Fetcher {
-	return &throttled{inner: inner, interval: interval, clock: clock, sites: map[int64]*siteGate{}}
+	return ThrottleWith(inner, interval, nil, clock)
+}
+
+// HostMinIntervals はホストごとの最小間隔(既定の MinInterval より長いもの)。robots.txt の Crawl-delay に合わせる。
+// 駿河屋は Crawl-delay: 30(docs/sites.md。ユーザー決定 2026-10-04)。キーは小文字・ポートなしのホスト名。
+var HostMinIntervals = map[string]time.Duration{
+	"www.suruga-ya.jp": 30 * time.Second,
+}
+
+// NightlyOnlyHosts は夜間の CronJob だけで取るホスト(api の裏の更新・手動の更新では取らない)。
+var NightlyOnlyHosts = map[string]bool{
+	"www.suruga-ya.jp": true,
+}
+
+// ThrottleWith は Throttle にホストごとの最小間隔 hostIntervals(nil 可)を足したもの。
+// そのホストの間隔は interval と表の値の長いほう。
+func ThrottleWith(inner Fetcher, interval time.Duration, hostIntervals map[string]time.Duration, clock Clock) Fetcher {
+	return &throttled{inner: inner, interval: interval, hostIntervals: hostIntervals, clock: clock, sites: map[string]*siteGate{}}
 }
 
 type throttled struct {
 	inner    Fetcher
 	interval time.Duration
 	clock    Clock
+	// hostIntervals はホストごとの最小間隔(nil 可)。
+	hostIntervals map[string]time.Duration
 
 	mu    sync.Mutex
-	sites map[int64]*siteGate
+	sites map[string]*siteGate
 }
 
 // siteGate はサイトごとの直列化(容量 1 のチャネル。待ちを ctx で取り消せる)と、前回の取得が終わった時刻。
@@ -103,7 +129,31 @@ type siteGate struct {
 	last time.Time // 前回の取得が終わった時刻(初回はゼロ値)
 }
 
-func (t *throttled) gate(id int64) *siteGate {
+// gateKey は待ち合わせのキー。検索 URL テンプレートのホスト名(小文字・ポートなし)。読めなければ Site.ID。
+func gateKey(site Site) string {
+	if h := siteHost(site); h != "" {
+		return "host:" + h
+	}
+	return "id:" + strconv.FormatInt(site.ID, 10)
+}
+
+// siteHost は検索 URL テンプレートのホスト名(小文字・ポートなし)。読めなければ空。
+func siteHost(site Site) string {
+	u, err := url.Parse(site.SearchURLTemplate)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(u.Hostname())
+}
+
+func (t *throttled) intervalFor(site Site) time.Duration {
+	if d := t.hostIntervals[siteHost(site)]; d > t.interval {
+		return d
+	}
+	return t.interval
+}
+
+func (t *throttled) gate(id string) *siteGate {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	g, ok := t.sites[id]
@@ -115,7 +165,7 @@ func (t *throttled) gate(id int64) *siteGate {
 }
 
 func (t *throttled) Fetch(ctx context.Context, site Site, query string) ([]Listing, error) {
-	g := t.gate(site.ID)
+	g := t.gate(gateKey(site))
 	select {
 	case g.sem <- struct{}{}:
 	case <-ctx.Done():
@@ -126,7 +176,7 @@ func (t *throttled) Fetch(ctx context.Context, site Site, query string) ([]Listi
 		return nil, err
 	}
 	if !g.last.IsZero() {
-		if wait := t.interval - t.clock.Now().Sub(g.last); wait > 0 {
+		if wait := t.intervalFor(site) - t.clock.Now().Sub(g.last); wait > 0 {
 			if err := t.clock.Sleep(ctx, wait); err != nil {
 				return nil, err
 			}
@@ -148,6 +198,8 @@ type Config struct {
 // Registry は fetch_type から Fetcher を選ぶ表。
 type Registry struct {
 	m map[item.FetchType]Fetcher
+	// scrape は検索 URL テンプレートのホスト名(小文字)ごとの Fetcher。NewRegistryWith では使わない。
+	scrape map[string]Fetcher
 }
 
 // NewRegistry は本番の表を作る。api は Yahoo(YahooAppID があるときだけ)。scrape・headless は未実装、link_only は取得しない。
@@ -165,10 +217,19 @@ func NewRegistry(cfg Config) *Registry {
 	if appID := strings.TrimSpace(cfg.YahooAppID); appID != "" {
 		y := NewYahoo(appID, cfg.Client)
 		y.Endpoint = cfg.YahooEndpoint
-		m[item.FetchAPI] = Throttle(y, interval, clock)
+		m[item.FetchAPI] = ThrottleWith(y, interval, HostMinIntervals, clock)
 	}
-	return &Registry{m: m}
+	scrape := map[string]Fetcher{
+		"www.cardrush-dm.jp":           ThrottleWith(NewCardrush(cfg.Client), interval, HostMinIntervals, clock),
+		"slist.amiami.jp":              ThrottleWith(NewAmiami(cfg.Client), interval, HostMinIntervals, clock),
+		"paypayfleamarket.yahoo.co.jp": ThrottleWith(NewYahooFurima(cfg.Client), interval, HostMinIntervals, clock),
+		"www.suruga-ya.jp":             ThrottleWith(NewSurugaya(cfg.Client), interval, HostMinIntervals, clock),
+	}
+	return &Registry{m: m, scrape: scrape}
 }
+
+// NightlyOnly は site が夜間の CronJob だけで取るサイトか(NightlyOnlyHosts。検索 URL テンプレートのホストで決める)。
+func (r *Registry) NightlyOnly(site Site) bool { return NightlyOnlyHosts[siteHost(site)] }
 
 // NewRegistryWith は m をそのまま使う表(テスト用。Throttle で包まない)。link_only は m にあっても使わない。
 func NewRegistryWith(m map[item.FetchType]Fetcher) *Registry {
@@ -185,4 +246,18 @@ func NewRegistryWith(m map[item.FetchType]Fetcher) *Registry {
 func (r *Registry) For(t item.FetchType) (Fetcher, bool) {
 	f, ok := r.m[t]
 	return f, ok
+}
+
+// ForSite は site を取得する Fetcher を返す。scrape は fetch_type と検索 URL テンプレートのホスト名(完全一致・
+// 大文字小文字とポートは無視)で選ぶ。それ以外は For(fetch_type)。NewRegistryWith の表はホストを見ない。
+func (r *Registry) ForSite(site Site) (Fetcher, bool) {
+	if site.FetchType == item.FetchScrape && r.scrape != nil {
+		u, err := url.Parse(site.SearchURLTemplate)
+		if err != nil {
+			return nil, false
+		}
+		f, ok := r.scrape[strings.ToLower(u.Hostname())]
+		return f, ok
+	}
+	return r.For(site.FetchType)
 }
