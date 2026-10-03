@@ -732,6 +732,16 @@ export interface components {
       power: number;
       /** @default 0 */
       priority: number;
+      /**
+       * @description 技の対象の分類(issue 288・ADR-0223)。ダブルの計算に使う: `spread` は相手の場の複数に当たる全体技
+       *     (Showdown の allAdjacent・allAdjacentFoes。ダブルで ×3072/4096)、`single` はそれ以外(単体技・自分・味方・場の技)。
+       *     値は engine の `MoveTarget`(WASM の技の `target`)と同じで、クライアントはそのまま渡せる。
+       *     pokedex-svc がマスタの対象(`MasterMove.target` の Showdown の文字列)から分類して返す。
+       *     対象がまだ取り込まれていない技は**キーごと省く**(null を返さない)。古いサーバーもこのキーを返さないため、
+       *     クライアントは「キーが無い」を不明として扱う(ダブルの計算では単体として計算し、未対応の印 move_target_unknown が付く)。
+       * @enum {string}
+       */
+      target?: "single" | "spread";
     };
     Item: {
       id: string;
@@ -1452,6 +1462,17 @@ export interface components {
        *     必要になるだけで、二重の検証にしかならない。
        */
       mechanisms: string[];
+      /**
+       * @description 技の対象(moves.target。ADR-0136・ADR-0223。issue 288)。Showdown の技データの `target` の文字列を
+       *     そのまま返す(15種。正は `services/internal/master.AllMoveTargets`)。null はまだ取り込んでいない行
+       *     (対象が不明)。キーは省かない(null を返す)。
+       *     enum は付けない(mechanisms と同じ理由。値の検証は受け取った calc-svc が `master.MoveTargetOf` で行う)。
+       *     calc-svc は全体技(allAdjacent・allAdjacentFoes)を engine の spread、その他の既知の値を single、
+       *     null を不明("")として engine.Move.Target に写す(ダブルで不明の攻撃技には move_target_unknown の印。ADR-0222)。
+       *     古い pokedex-svc(このキーを返さない版)からの取り込みは、キーが無いことを null と同じ「不明」として受け付ける
+       *     (入れ替えの順序に依存させない。ADR-0223 §3)。
+       */
+      target: string | null;
     };
     /**
      * @description 効果定義(item_effects / ability_effects の JSON をそのまま。ADR-0005)。null は補正なし。

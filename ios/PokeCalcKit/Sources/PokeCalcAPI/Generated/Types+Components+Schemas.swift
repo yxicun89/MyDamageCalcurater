@@ -478,6 +478,29 @@ extension Components {
             public var power: Swift.Int
             /// - Remark: Generated from `#/components/schemas/Move/priority`.
             public var priority: Swift.Int?
+            /// 技の対象の分類(issue 288・ADR-0223)。ダブルの計算に使う: `spread` は相手の場の複数に当たる全体技
+            /// (Showdown の allAdjacent・allAdjacentFoes。ダブルで ×3072/4096)、`single` はそれ以外(単体技・自分・味方・場の技)。
+            /// 値は engine の `MoveTarget`(WASM の技の `target`)と同じで、クライアントはそのまま渡せる。
+            /// pokedex-svc がマスタの対象(`MasterMove.target` の Showdown の文字列)から分類して返す。
+            /// 対象がまだ取り込まれていない技は**キーごと省く**(null を返さない)。古いサーバーもこのキーを返さないため、
+            /// クライアントは「キーが無い」を不明として扱う(ダブルの計算では単体として計算し、未対応の印 move_target_unknown が付く)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Move/target`.
+            @frozen public enum TargetPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case single = "single"
+                case spread = "spread"
+            }
+            /// 技の対象の分類(issue 288・ADR-0223)。ダブルの計算に使う: `spread` は相手の場の複数に当たる全体技
+            /// (Showdown の allAdjacent・allAdjacentFoes。ダブルで ×3072/4096)、`single` はそれ以外(単体技・自分・味方・場の技)。
+            /// 値は engine の `MoveTarget`(WASM の技の `target`)と同じで、クライアントはそのまま渡せる。
+            /// pokedex-svc がマスタの対象(`MasterMove.target` の Showdown の文字列)から分類して返す。
+            /// 対象がまだ取り込まれていない技は**キーごと省く**(null を返さない)。古いサーバーもこのキーを返さないため、
+            /// クライアントは「キーが無い」を不明として扱う(ダブルの計算では単体として計算し、未対応の印 move_target_unknown が付く)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Move/target`.
+            public var target: Components.Schemas.Move.TargetPayload?
             /// Creates a new `Move`.
             ///
             /// - Parameters:
@@ -487,13 +510,15 @@ extension Components {
             ///   - category:
             ///   - power: 威力(0 は変化技/固定ダメージ)
             ///   - priority:
+            ///   - target: 技の対象の分類(issue 288・ADR-0223)。ダブルの計算に使う: `spread` は相手の場の複数に当たる全体技
             public init(
                 id: Swift.String,
                 nameJa: Swift.String,
                 _type: Components.Schemas.PokeType,
                 category: Components.Schemas.MoveCategory,
                 power: Swift.Int,
-                priority: Swift.Int? = nil
+                priority: Swift.Int? = nil,
+                target: Components.Schemas.Move.TargetPayload? = nil
             ) {
                 self.id = id
                 self.nameJa = nameJa
@@ -501,6 +526,7 @@ extension Components {
                 self.category = category
                 self.power = power
                 self.priority = priority
+                self.target = target
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -509,6 +535,7 @@ extension Components {
                 case category
                 case power
                 case priority
+                case target
             }
         }
         /// - Remark: Generated from `#/components/schemas/Item`.

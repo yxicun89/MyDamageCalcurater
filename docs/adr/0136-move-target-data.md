@@ -79,6 +79,7 @@
   空は「不明」として通す)。空を通すのは、内部 API がまだ対象を運ばない calc-svc の経路と、migrate 直後の
   NULL の行のため。`engine.Move` には載せない(ダメージ計算の挙動を変えない。ゴールデン不変)。
   よって engine の example マスタ・WASM の DTO・Go/WASM 一致テストは変わらない。
+  (追記 2026-10-03: この「engine.Move には載せない」は ADR-0223 で置き換えた。ダブルの計算(ADR-0222)に必要になったため、API レーンが `engine.Move.Target` に写す。)
 - 内部 API `/internal/pokedex/master` の `MasterMove`、公開 API の技の応答(`GET /api/pokedex/moves/{key}`・
   `/moves/batch`・検索・learnset 等)への追加は `api/openapi.yaml` の変更で、API レーンの持ち物(COORDINATION.md)。
   API レーンへ次を依頼する:
