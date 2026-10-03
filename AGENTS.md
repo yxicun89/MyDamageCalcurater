@@ -9,7 +9,7 @@
 ## 共有状態(docs/ai-shared/)
 
 Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-shared/` だけ。
-**作業は AI ではなく「レーン」(データ・API・Web・iOS・タイプバランス・素早さ・判定の7本。空席の運用は手が空いたレーンが代行)に属する**。どちらの AI がどのレーンを進めてもよく、
+**作業は AI ではなく「レーン」に属する(レーン一覧は COORDINATION.md の表)**。どちらの AI がどのレーンを進めてもよく、
 同じレーンは同時に1セッションだけ。レーン・ディレクトリ・ブランチ・PR での統合・止まるときの作法は
 `docs/ai-shared/COORDINATION.md` を正とする(2026-09-21 ユーザー決定)。
 
@@ -142,7 +142,7 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
   ルート `api/openapi.yaml` は既存 damage/gateway 契約の正として Codex は変更しない
 - 認証なし。pokecalc と同じ端末ID/セッションIDの流儀に合わせる
 - manifest は Kustomize(`services/balance/deploy/k8s/base` + `overlays/local`)
-- Argo CD Application はサービスごとに分ける(balance・speed・judge の gitops overlay)。Sync は manual
+- Argo CD Application は balance 専用に分ける。Sync は最初 manual(現状: リポジトリには balance・speed・judge の Application 定義があり、いずれも manual sync。GitOps で常時 Synced にするのは balance だけ。ユーザー決定 2026-09-25)
 
 ### 完了条件
 
