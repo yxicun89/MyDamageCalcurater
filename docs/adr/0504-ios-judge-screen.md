@@ -118,3 +118,14 @@
 - root の API・Web・judge の契約は変えない。iOS が `/api/judge/v1/outspeed-and-ko` を使い始める(契約を変える側への連絡は DECISIONS.md 2026-10-03「iOS に判定画面を作る」)。
 - タイプバランス(P6-26)も同じ形(配列に 1 行 + 設定ファイル + Package.swift の target)で足せる。
 - 追加するテスト数・失敗数と実装者への注意は ADR-0501「P6-25 の受け入れ条件」。
+
+## 契約 v0.2.0 への追従(2026-10-03)
+
+判定レーンが `services/judge/api/openapi.yaml` を v0.1.0 → v0.2.0 に更新した(ADR-0710・0712・0219)。変わった点と iOS の対応は次のとおり。判定画面の振る舞いは変えない。
+
+- **ErrorCode に `missing_header`・`invalid_header` が増えた(8 → 10 値)**: `JudgeLabels.errorMessage` に日本語文言を足し、`JudgeContractSyncTests` の既知の値の期待を 10 値にした(契約への追従であり、検査を弱めたのではない)。
+- **応答の各 matchup に `attackerSpeedApplied`・`defenderSpeedApplied`・`attackerSpeedIgnored`・`defenderSpeedIgnored` が必須で加わった**: `JudgeMatchup` に同名の `[String]`(契約の enum の値のまま・並べ替えない)を足して写す。画面にはまだ出さない。テストのフィクスチャ(JSON)は必須欄を含む形にし、写像テストを 1 件足した。
+- **`Individual.status`(省略可)**: iOS は状態異常を入力しないので送らない(生成型の変更でコンパイルが通るだけ)。
+- `UnsupportedMark.target` に format が加わりうる件は、型が string のままで、未知の値は `.unknown` に写す既存の規則で足りる。
+
+**後続**: 素早さの反映/無視(`*SpeedApplied`/`*SpeedIgnored`)の画面表示と、状態異常の入力は後続(docs/plan.md に記載)。

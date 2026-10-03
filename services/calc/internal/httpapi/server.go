@@ -24,6 +24,8 @@ import (
 	"example.com/pokecalc/services/internal/api"
 	"example.com/pokecalc/services/internal/calcevents"
 	"example.com/pokecalc/services/internal/httpmetrics"
+	"example.com/pokecalc/services/internal/reqlog"
+	"example.com/pokecalc/services/internal/version"
 )
 
 // messageInternal は回復した panic・想定外の失敗に付ける固定文。
@@ -64,13 +66,15 @@ func NewServer(store master.Store, publisher EventPublisher) *Server {
 }
 
 // NewHandler は calc-svc の HTTP ハンドラ全体を組み立てる。
-// calc の3操作(生成ラッパ経由)、pokedex の7操作(直接 404。R1)、GET /healthz
+// calc の3操作と調整の4操作(生成ラッパ経由)、pokedex の7操作(直接 404。R1)、GET /healthz
 // (openapi に載せない運用エンドポイント)、panic の回復(500 internal)、echo の既定エラー
 // (ルート無し・メソッド違い)を Error 形式({"code","message"})に揃えるエラーハンドラを含む。
 func NewHandler(store master.Store, publisher EventPublisher, opts ...Option) http.Handler {
 	e := echo.New()
 	e.HTTPErrorHandler = httpErrorHandler
+	e.Logger = slog.Default() // main が JSON ハンドラを既定にした後に呼ばれる(issue #246)
 	m := httpmetrics.New()
+	e.Use(reqlog.Middleware(slog.Default())) // 最も外側: ID の確定とアクセスログ(issue #246)
 	e.Use(m.Middleware())
 	e.Use(recoverMiddleware)
 	e.GET(httpmetrics.Path, m.Handler())
@@ -87,7 +91,7 @@ func readyzHandler(c *echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// registerCalcRoutes は calc の3操作だけを、生成ラッパ(api.ServerInterfaceWrapper。
+// registerCalcRoutes は calc の3操作と調整の4操作だけを、生成ラッパ(api.ServerInterfaceWrapper。
 // 必須ヘッダ X-Device-Id / X-Session-Id の有無を検証してから Server を呼ぶ)経由で登録する。
 // pokedex はここに含めない(registerPokedexNotFoundRoutes 参照。critic 指摘 R1)。
 func registerCalcRoutes(e *echo.Echo, srv *Server, guard echo.MiddlewareFunc) {
@@ -95,6 +99,11 @@ func registerCalcRoutes(e *echo.Echo, srv *Server, guard echo.MiddlewareFunc) {
 	e.POST("/api/calc", wrapper.CalcDamage, guard)
 	e.POST("/api/calc/bulk", wrapper.CalcBulk, guard)
 	e.POST("/api/calc/reverse", wrapper.CalcReverse, guard)
+	// 調整の4操作(ADR-0250 §8)。ほかの計算と同じ guard(締め切り・同時実行の上限)を通す。
+	e.POST("/api/calc/adjust/indices", wrapper.AdjustIndices, guard)
+	e.POST("/api/calc/adjust/min-sp-to-ko", wrapper.AdjustMinSpToKo, guard)
+	e.POST("/api/calc/adjust/min-sp-to-survive", wrapper.AdjustMinSpToSurvive, guard)
+	e.POST("/api/calc/adjust/allocation", wrapper.AdjustAllocation, guard)
 }
 
 // registerPokedexNotFoundRoutes は calc-svc の担当外(pokedex)の7操作を、生成ラッパを
@@ -119,7 +128,7 @@ func registerPokedexNotFoundRoutes(e *echo.Echo) {
 }
 
 func healthzHandler(c *echo.Context) error {
-	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	return c.JSON(http.StatusOK, map[string]string{"status": "ok", "version": version.Version})
 }
 
 // limitedBody はリクエスト本文を maxRequestBodyBytes に制限した Reader にする(critic 指摘 R7)。
@@ -175,7 +184,7 @@ func errorBodyFor(err error) (int, api.Error) {
 			// ルートが無い・メソッドが違う(ADR-0200: メソッド違いに新しい code を足さず not_found にする)。
 			return http.StatusNotFound, api.Error{Code: api.NotFound, Message: "ルートが無い"}
 		case http.StatusBadRequest:
-			// calc の3操作だけが生成ラッパを経由する(pokedex は直接 not_found。R1)。
+			// calc の3操作と調整の4操作だけが生成ラッパを経由する(pokedex は直接 not_found。R1)。
 			// そのラッパが返す 400 はヘッダの検証由来。「欠落」「空」(bind 失敗も含む)は
 			// missing_header、それ以外(同名ヘッダの重複指定)は invalid_header にする
 			// (ADR-0202 §9: gateway と語彙を揃える。missing_header はヘッダ欠落・空に限定する)。
@@ -212,7 +221,7 @@ func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) erro
 		return err
 	}
 	var req api.CalcRequest
-	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
+	if err := decodeStrict(limitedBody(ctx), &req, "attacker", "defender"); err != nil {
 		return err
 	}
 	format, err := parseFormat(req.Format)
@@ -241,6 +250,12 @@ func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) erro
 	if err := validateIndividual("防御側", defender); err != nil {
 		return err
 	}
+	if err := s.checkMegaItem("攻撃側", attacker.Species, attacker.Item); err != nil {
+		return err
+	}
+	if err := s.checkMegaItem("防御側", defender.Species, defender.Item); err != nil {
+		return err
+	}
 
 	if err := checkDeadline(ctx.Request().Context()); err != nil {
 		return err
@@ -254,7 +269,6 @@ func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) erro
 	}
 	result := calcResultFrom(res)
 	// イベント発行は非同期・応答をブロックしない(CLAUDE.md 絶対ルール5・ADR-0212 §6)。
-	// req.Attacker.MoveId ではなく req.MoveId(トップレベル)を使う(calc-svc は前者を読まない)。
 	// Publish 自体は ctx.JSON より前に呼ぶ(前後どちらでも安全。ADR-0212 §6 参照)。
 	s.publisher.Publish(params.XDeviceId, params.XSessionId, calcevents.OperationCalc, time.Now().UTC(), &calcevents.CalcDetail{
 		Format: string(req.Format), Attacker: req.Attacker, Defender: req.Defender,
@@ -270,7 +284,7 @@ func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 		return err
 	}
 	var req api.BulkCalcRequest
-	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
+	if err := decodeStrict(limitedBody(ctx), &req, "attacker"); err != nil {
 		return err
 	}
 	if err := checkBulkLimits(req); err != nil {
@@ -304,6 +318,12 @@ func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 		return err
 	}
 	if err := validateIndividual("防御側の種族", engine.Individual{Species: species}); err != nil {
+		return err
+	}
+	if err := s.checkMegaItem("攻撃側", attacker.Species, attacker.Item); err != nil {
+		return err
+	}
+	if err := s.checkMegaItems("itemVariants", species, variants); err != nil {
 		return err
 	}
 	var defenderAbilityOverride *string
@@ -344,7 +364,7 @@ func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) er
 		return err
 	}
 	var req api.ReverseRequest
-	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
+	if err := decodeStrict(limitedBody(ctx), &req, "known"); err != nil {
 		return err
 	}
 	if err := checkReverseLimits(req); err != nil {
@@ -382,6 +402,12 @@ func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) er
 		return err
 	}
 	if err := validateIndividual("推定側の種族", engine.Individual{Species: species}); err != nil {
+		return err
+	}
+	if err := s.checkMegaItem("既知の側", known.Species, known.Item); err != nil {
+		return err
+	}
+	if err := s.checkMegaItems("itemCandidates", species, items); err != nil {
 		return err
 	}
 	maxCandidates := derefInt(req.MaxCandidates)
@@ -440,5 +466,10 @@ func (s *Server) GetMove(ctx *echo.Context, key string, params api.GetMoveParams
 
 // GetMovesByIds は pokedex の操作。calc-svc の担当外なので 404 not_found。
 func (s *Server) GetMovesByIds(ctx *echo.Context, params api.GetMovesByIdsParams) error {
+	return notFoundForPokedex()
+}
+
+// ListMoveLearners は pokedex の操作(ADR-0251)。calc-svc の担当外なので 404 not_found。
+func (s *Server) ListMoveLearners(ctx *echo.Context, key string, params api.ListMoveLearnersParams) error {
 	return notFoundForPokedex()
 }

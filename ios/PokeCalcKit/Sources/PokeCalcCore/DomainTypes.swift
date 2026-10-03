@@ -422,7 +422,7 @@ public struct CalcRequest: Sendable {
     public var format: Format
     public var attacker: Individual
     public var defender: Individual
-    /// 使用する技(attacker.moveId より優先)。
+    /// 使用する技。
     public var moveId: String
     /// 急所。
     public var critical: Bool

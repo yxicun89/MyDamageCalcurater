@@ -1,0 +1,117 @@
+/*
+ * P5-5b PR-A2: 構築のメンバー編集領域(docs/adr/0316-web-team-member-editor.md)。
+ * 色は必ず tokens.css の CSS 変数で参照する(web/src/styles/noColorLiterals.test.ts)。
+ * 常時動くアニメーションは入れない(CLAUDE.md ドメイン規約)。
+ */
+
+.team-member-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex-basis: 100%;
+  font-family: var(--font-family);
+  color: var(--text-primary);
+}
+
+.team-member-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.team-member-editor__notice {
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.team-member-editor__error {
+  font-size: var(--font-size-body);
+  color: var(--danger);
+}
+
+.team-member {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  padding: var(--space-3) var(--space-4);
+}
+
+.team-member legend {
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.team-member__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.team-member__ability-label {
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.team-member__field select,
+.team-member__sp-cell input {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  padding: var(--space-2) var(--space-3);
+}
+
+.team-member__sp {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  padding: var(--space-2) var(--space-3);
+}
+
+.team-member__sp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: var(--space-2);
+}
+
+.team-member__sp-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.team-member__sp-cell input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.team-member__sp-summary {
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.team-member__error {
+  font-size: var(--font-size-body);
+  color: var(--danger);
+}
+
+.team-member__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* メガ種族の持ち物固定の理由・補正の通知(issue 515、ADR-0320)。 */
+.team-member__reason,
+.team-member__notice {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+}

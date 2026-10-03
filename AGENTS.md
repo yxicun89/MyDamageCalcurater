@@ -36,6 +36,7 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
   作業ブランチへの push は区切りごとに行う。main へは PR 経由でのみ入れる(直接 push・直接 merge をしない。COORDINATION.md)。
   PR のマージは、`gh pr checks N` で CI が全件成功のときだけ、PR 番号を明示し `gh pr view N --json headRefOid -q .headRefOid` の SHA を `--match-head-commit` に付けて単独で `gh pr merge N` してよい(`--admin`・`gh api` でのマージは不可。
   CI が赤・未完了なら止まって直す。bash-guard が強制する。ADR-0803)。クラウドへのデプロイ・課金・機密情報の公開は引き続き人間の確認が必要。
+  推奨はこれをまとめて行う `scripts/pr-merge.sh <PR番号>`(使い捨て worktree でテスト・lint・公開前検査も流してから、同じ形でマージする。ADR-0804)。
 
 ## Git ブランチ運用
 
@@ -52,7 +53,7 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 以下の規約で編集する。**main への統合は、各 AI が自分のブランチを自分で行う**(2026-09-21 改訂。
 マージコーディネーターは廃止。手順・条件・止まるときの作法は `docs/ai-shared/COORDINATION.md` を正とする)。
 
-1. `docs/ai-shared/CURRENT_STATE.md`
+1. `docs/ai-shared/CURRENT_STATE.md` （2026-10-03: `CURRENT_STATE.md` はレーン別の `state/`、`DECISIONS.md` は 1 件 1 ファイルの `decisions/` に分割済み。COORDINATION.md「共有状態ファイルの分割」）
    - 自分が進めているレーンの欄(`## Damage Calculator` / `## Type Balance Checker`)だけを編集する。
      他のレーン欄は読むだけ。コンフリクトが起きても、該当欄を残すだけで解決できる。
 2. `docs/ai-shared/DECISIONS.md`

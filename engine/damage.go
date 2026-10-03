@@ -1,5 +1,7 @@
 package engine
 
+import "fmt"
+
 // ダメージ計算コア。第9世代の式を 4096基準の固定小数・五捨五超入(pokeRound)で実装する。
 // float 近似はしない(CLAUDE.md ドメイン規約)。
 //
@@ -23,6 +25,10 @@ const (
 	// ModifierHalf は ×0.5(4096 に対する比 1/2)。やけど・壁・ミストフィールド・
 	// 天候による弱化・半減きのみなど、半減する補正すべてで共通。
 	ModifierHalf = 2048
+	// ModifierDoubleScreen はダブルの壁 ×2732/4096(ADR-0222)。
+	ModifierDoubleScreen = 2732
+	// ModifierSpread はダブルの全体技 ×3072/4096(×0.75。ADR-0222)。
+	ModifierSpread = 3072
 	// ModifierStab はタイプ一致補正 ×1.5。
 	ModifierStab = 6144
 	// ModifierAdaptability はタイプ一致補正を上げる特性(てきおうりょく)の一致補正 ×2.0。
@@ -228,17 +234,36 @@ func validateAgainstTypeChart(in DamageInput) error {
 // CalcDamage は 1 vs 1 のダメージを計算する。
 // in.TypeChart が未設定なら ErrTypeChartMissing、表に無いタイプがあれば ErrUnknownType を返す。
 func CalcDamage(in DamageInput) (DamageResult, error) {
-	if err := in.Attacker.Validate(); err != nil {
+	res, hasKO, err := calcDamageNoKO(in)
+	if err != nil {
 		return DamageResult{}, err
+	}
+	if hasKO {
+		res.KO = ComputeKO(res.Rolls, res.DefenderHP)
+	}
+	return res, nil
+}
+
+// calcDamageNoKO は CalcDamage から確定数(KO)を除いた計算。KO は Rolls と DefenderHP だけで決まり、
+// 作るのが重い(ADR-0126 追記 2026-10-02)ので、KO を使わない逆算・一括計算のまとめ判定はこちらを呼ぶ。
+// hasKO は CalcDamage が KO を計算する経路(ダメージが出る)だったか。false のとき KO はゼロ値のまま。
+func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
+	if err := in.Attacker.Validate(); err != nil {
+		return DamageResult{}, false, err
 	}
 	if err := in.Defender.Validate(); err != nil {
-		return DamageResult{}, err
+		return DamageResult{}, false, err
 	}
 	if err := validateAgainstTypeChart(in); err != nil {
-		return DamageResult{}, err
+		return DamageResult{}, false, err
+	}
+	switch in.Move.Target {
+	case "", MoveTargetSingle, MoveTargetSpread:
+	default:
+		return DamageResult{}, false, fmt.Errorf("%w: %q", ErrUnknownMoveTarget, in.Move.Target)
 	}
 
-	res := DamageResult{
+	res = DamageResult{
 		Category:    in.Move.Category,
 		DefenderHP:  RealStats(in.Defender).HP,
 		Unsupported: unsupportedMarks(in),
@@ -247,7 +272,7 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 	moveType := in.Move.Type
 	eff, err := in.TypeChart.Effectiveness(moveType, in.Defender.Species.Types)
 	if err != nil {
-		return DamageResult{}, err
+		return DamageResult{}, false, err
 	}
 	res.Effectiveness = eff.Multiplier()
 	_, res.STAB = stabModifier(in, moveType)
@@ -264,7 +289,7 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 
 	// 変化技・威力0・無効相性・特性による無効/吸収はダメージ0。
 	if in.Move.Category == CategoryStatus || in.Move.Power <= 0 || eff.IsImmune() || res.Nullified != NullifyNone {
-		return res, nil
+		return res, false, nil
 	}
 
 	level := in.Attacker.EffectiveLevel()
@@ -274,6 +299,10 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 	power := max(1, pokeRound(in.Move.Power, powerModifier(in)))
 	base := (((2*level/5+2)*power*atk)/def)/50 + 2
 
+	// ダブルの全体技(ADR-0222)。天候・急所より前。
+	if in.Format == FormatDouble && in.Move.Target == MoveTargetSpread {
+		base = pokeRound(base, ModifierSpread)
+	}
 	// 基礎段階の補正(天候のダメージ倍率は個別に pokeRound)→ 急所
 	if wm := weatherDamageMod(in.Field.Weather, moveType); wm != Modifier4096 {
 		base = pokeRound(base, wm)
@@ -298,6 +327,5 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 		}
 		res.Rolls[i] = d
 	}
-	res.KO = ComputeKO(res.Rolls, res.DefenderHP)
-	return res, nil
+	return res, true, nil
 }

@@ -126,12 +126,20 @@ public struct JudgeMatchup: Equatable, Sendable {
     public var attackerKoUnsupported: [UnsupportedMark]
     /// `defenderKo` に付いた印(逆方向。印が無ければ空)。**役割が入れ替わる**: `target` の attacker_* はこの候補・defender_* は自分(ADR-0708 §5)。
     public var defenderKoUnsupported: [UnsupportedMark]
+    /// `attackerSpeed` に実際に効かせた補正(契約 `SpeedFactor` の値のまま。契約 v0.2.0・ADR-0710)。画面にはまだ出さない。
+    public var attackerSpeedApplied: [String]
+    public var defenderSpeedApplied: [String]
+    /// 素早さに影響しうるのに反映しなかった入力(契約 `SpeedIgnoredInput` の値のまま)。画面にはまだ出さない。
+    public var attackerSpeedIgnored: [String]
+    public var defenderSpeedIgnored: [String]
 
     public init(
         defenderIndex: Int, outspeeds: Bool, speedTie: Bool, attackerSpeed: Int, defenderSpeed: Int,
         attackerMovePriority: Int, defenderMovePriority: Int, attackerMovesFirst: Bool, turnOrderTie: Bool,
         attackerKo: JudgeKOChance, defenderKo: JudgeKOChance,
-        attackerKoUnsupported: [UnsupportedMark] = [], defenderKoUnsupported: [UnsupportedMark] = []
+        attackerKoUnsupported: [UnsupportedMark] = [], defenderKoUnsupported: [UnsupportedMark] = [],
+        attackerSpeedApplied: [String] = [], defenderSpeedApplied: [String] = [],
+        attackerSpeedIgnored: [String] = [], defenderSpeedIgnored: [String] = []
     ) {
         self.defenderIndex = defenderIndex
         self.outspeeds = outspeeds
@@ -146,6 +154,10 @@ public struct JudgeMatchup: Equatable, Sendable {
         self.defenderKo = defenderKo
         self.attackerKoUnsupported = attackerKoUnsupported
         self.defenderKoUnsupported = defenderKoUnsupported
+        self.attackerSpeedApplied = attackerSpeedApplied
+        self.defenderSpeedApplied = defenderSpeedApplied
+        self.attackerSpeedIgnored = attackerSpeedIgnored
+        self.defenderSpeedIgnored = defenderSpeedIgnored
     }
 }
 

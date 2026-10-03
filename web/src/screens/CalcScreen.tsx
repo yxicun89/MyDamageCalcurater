@@ -28,11 +28,20 @@ import {
 import {
   DEFAULT_CALC_CONDITIONS,
   conditionRequestParts,
+  defenderRankStatFor,
   rankStatFor,
   type CalcConditions,
 } from "../domain/calcConditions";
 import { abilityNamesLabel } from "../domain/abilityLabels";
 import { formatEffectiveness, formatKO, formatMoveCategory, formatPercentRange } from "../domain/format";
+import {
+  itemIdAfterSpeciesChange,
+  lockedOrChosenItem,
+  megaItemLock,
+  megaStoneItemIds,
+  selectableItems,
+  type MegaItemLock,
+} from "../domain/mega";
 import { firstDamagingMove, learnsetMoves } from "../domain/moves";
 import { MAX_ITEM_VARIANTS } from "../domain/requestLimits";
 import {
@@ -58,8 +67,10 @@ import type {
 } from "../engine/types";
 import {
   calcScreenText,
+  frequentOpponentsText,
   isTypeId,
   masterOnlineText,
+  megaItemText,
   requestLimitText,
   typeNameJa,
   unsupportedText,
@@ -72,6 +83,9 @@ import type {
   MasterSpeciesSearch,
 } from "../master/types";
 import { prefersReducedMotion } from "../ui/motion";
+import type { RecordClient } from "../record/recordClient";
+import { useFrequentOpponents } from "../record/useFrequentOpponents";
+import { MegaItemReason } from "./MegaItemReason";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
@@ -225,6 +239,11 @@ export interface CalcScreenProps {
    * (capabilities を省いたマスタ = 今までどおりドロップダウン)。
    */
   readonly masterSearch?: MasterSpeciesSearch;
+  /**
+   * P5-5c(ADR-0317 §2): 「よく計算する相手」を引く口。App は計算モードがオンラインのときだけ渡す。
+   * 省略は「出さない」(失敗・0件・オフラインと同じく黙って非表示。計算には影響しない)。
+   */
+  readonly recordClient?: RecordClient;
 }
 
 /** 計算の状態(判別 union)。idle は入力が揃っていない、status-move は変化技を選んでいる。 */
@@ -270,11 +289,19 @@ function resolveMoveId(species: MasterSpecies | null, moves: readonly Move[], cu
 }
 
 /** 計算画面(design.md「画面: ダメージ計算」、ADR-0300 §2・§6)。攻撃側・防御側・技が揃うと自動で計算する。 */
-export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
+export function CalcScreen({ engine, master, masterSearch, recordClient }: CalcScreenProps) {
   // P4-16b(ADR-0304 A-2・A-9・A-10): 使える機能。capabilities を省いたマスタ(オフライン相当)は全部使える。
   const capabilities = masterCapabilities(master);
   // 検索で解決した種族・特性の覚え書き(capabilities.speciesList が true のときは常に空のまま。ADR-0304 A-10)。
-  const { speciesFor, abilitiesFor, movesFor, register: registerSpeciesResolution } = useSpeciesResolutions();
+  const {
+    speciesFor,
+    abilitiesFor,
+    movesFor,
+    resolvedSpecies,
+    register: registerSpeciesResolution,
+  } = useSpeciesResolutions();
+  const compareReasonId = useId();
+  const frequentOpponents = useFrequentOpponents(recordClient, master, masterSearch);
   const [attackerKey, setAttackerKey] = useState("");
   const [defenderKey, setDefenderKey] = useState("");
   const [attackerItemId, setAttackerItemId] = useState("");
@@ -321,14 +348,32 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     () => speciesFor(master.species, defenderKey),
     [master.species, defenderKey, speciesFor],
   );
+  // issue 515(ADR-0320): メガ種族の持ち物はメガストーンに固定する。固定は毎レンダー種族から導き、表示と要求に使う。
+  // メガストーンは単独の選択肢・候補に出さない(判別集合は、全件の一覧 + 検索で解決した種族から導く)。
+  const stoneIds = useMemo(
+    () => megaStoneItemIds([...master.species, ...resolvedSpecies]),
+    [master.species, resolvedSpecies],
+  );
+  const pickableItems = useMemo(() => selectableItems(master.items, stoneIds), [master.items, stoneIds]);
+  const attackerLock = useMemo(
+    () => megaItemLock(attackerSpecies, master.items),
+    [attackerSpecies, master.items],
+  );
+  const defenderLock = useMemo(
+    () => megaItemLock(defenderSpecies, master.items),
+    [defenderSpecies, master.items],
+  );
   const attackerItem = useMemo(
-    () => master.items.find((item) => item.id === attackerItemId) ?? null,
-    [master.items, attackerItemId],
+    () => lockedOrChosenItem(attackerLock, pickableItems, attackerItemId),
+    [attackerLock, pickableItems, attackerItemId],
   );
   const defenderItem = useMemo(
-    () => master.items.find((item) => item.id === defenderItemId) ?? null,
-    [master.items, defenderItemId],
+    () => lockedOrChosenItem(defenderLock, pickableItems, defenderItemId),
+    [defenderLock, pickableItems, defenderItemId],
   );
+  // 防御側がメガ種族のときは持ち物の候補を比較しない(メガストーン1件に固定)。
+  const compareDisabledByMega = defenderLock.kind !== "none";
+  const effectiveCompareItems = compareItems && !compareDisabledByMega;
   const attackerMoves = useMemo(
     () =>
       attackerSpecies === null ? [] : learnsetMoves(attackerSpecies, movesFor(master.moves, attackerKey)),
@@ -345,9 +390,9 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
   // 画面に出す。useEffect の依存に truncated を含む新しい配列を毎回作らないよう、ここで useMemo にする
   // (react-hooks/set-state-in-effect の無限ループを避ける)。
   const itemVariantsResult = useMemo(() => {
-    const candidates = move === null ? [] : defensiveItemCandidates(master.items, move);
-    return defenderItemVariants({ selectedItem: defenderItem, compare: compareItems, candidates });
-  }, [master.items, move, defenderItem, compareItems]);
+    const candidates = move === null ? [] : defensiveItemCandidates(pickableItems, move);
+    return defenderItemVariants({ selectedItem: defenderItem, compare: effectiveCompareItems, candidates });
+  }, [pickableItems, move, defenderItem, effectiveCompareItems]);
 
   // 特性の選択肢と、calcBulk に渡す特性(issue 272、ADR-0311)。
   const attackerAbilityOptions = useMemo(
@@ -387,6 +432,7 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     setAttackerKey(key);
     setAttackerAbilityId("");
     const species = speciesFor(master.species, key);
+    changeAttackerItem(species);
     setMoveId((prev) => resolveMoveId(species, movesFor(master.moves, key), prev));
   }
 
@@ -399,6 +445,7 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     registerSpeciesResolution(resolution);
     setAttackerKey(resolution.species.key);
     setAttackerAbilityId("");
+    changeAttackerItem(resolution.species);
     // movesFor(master.moves, key) は使わない(register の setState 直後はまだ古い覚え書きのまま)。
     // movesFor が最終的に返す形(master.moves + 解決で覚えた分)をここで直接組み立てる。
     setMoveId((prev) => resolveMoveId(resolution.species, [...master.moves, ...resolution.moves], prev));
@@ -407,12 +454,41 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
   /** P4-16b(ADR-0304 A-10): 検索で防御側の種族が解決したとき(防御側は技を持たないので moveId は変えない)。 */
   function handleDefenderResolved(resolution: MasterSpeciesResolution): void {
     registerSpeciesResolution(resolution);
-    selectDefender(resolution.species.key);
+    setDefenderKey(resolution.species.key);
+    setDefenderAbilityId("");
+    setDefenderItemId(
+      itemIdAfterSpeciesChange({
+        previous: defenderSpecies,
+        next: resolution.species,
+        items: master.items,
+        currentItemId: defenderItem?.id ?? "",
+      }),
+    );
   }
 
   function selectDefender(key: string): void {
     setDefenderKey(key);
     setDefenderAbilityId("");
+    setDefenderItemId(
+      itemIdAfterSpeciesChange({
+        previous: defenderSpecies,
+        next: speciesFor(master.species, key),
+        items: master.items,
+        currentItemId: defenderItem?.id ?? "",
+      }),
+    );
+  }
+
+  /** 攻撃側の種族を変えたときの持ち物(メガは固定、メガから非メガへは未選択に戻す)。 */
+  function changeAttackerItem(next: MasterSpecies | null): void {
+    setAttackerItemId(
+      itemIdAfterSpeciesChange({
+        previous: attackerSpecies,
+        next,
+        items: master.items,
+        currentItemId: attackerItem?.id ?? "",
+      }),
+    );
   }
 
   /** タイマーが残っていれば止める(2回目の入れ替えで前のタイマーが後から発火しないように)。 */
@@ -436,8 +512,9 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     setDefenderKey(attackerKey);
     setAttackerAbilityId("");
     setDefenderAbilityId("");
-    setAttackerItemId(defenderItemId);
-    setDefenderItemId(attackerItemId);
+    // 持ち物は種族に付いて動く(固定したメガストーンも、入れ替え先で同じ種族の固定として導かれる)。
+    setAttackerItemId(defenderItem?.id ?? "");
+    setDefenderItemId(attackerItem?.id ?? "");
     setMoveId((prev) => resolveMoveId(newAttackerSpecies, newAttackerMoves, prev));
 
     if (!prefersReducedMotion()) {
@@ -552,6 +629,7 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
       defenderAbilities,
       ...(parts.critical === undefined ? {} : { critical: parts.critical }),
       ...(parts.field === undefined ? {} : { field: parts.field }),
+      ...(parts.defenderOverride === undefined ? {} : { defenderOverride: parts.defenderOverride }),
     });
     // calcBulk は EngineResult(ok/not ok)で成否を運び、reject しない契約(ADR-0011 §5)。
     // それでも floating promise を残さないよう void で明示する。
@@ -563,7 +641,7 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
           move,
           attackerItem,
           defenderItem,
-          compareItems,
+          compareItems: effectiveCompareItems,
           attackerPresetKey,
           attackerAbility,
           defenderAbilities,
@@ -584,7 +662,7 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     move,
     attackerItem,
     defenderItem,
-    compareItems,
+    effectiveCompareItems,
     attackerPresetKey,
     attackerAbility,
     defenderAbilities,
@@ -606,7 +684,7 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
     completed.move !== move ||
     completed.attackerItem !== attackerItem ||
     completed.defenderItem !== defenderItem ||
-    completed.compareItems !== compareItems ||
+    completed.compareItems !== effectiveCompareItems ||
     completed.attackerPresetKey !== attackerPresetKey ||
     completed.attackerAbility !== attackerAbility ||
     completed.defenderAbilities !== defenderAbilities ||
@@ -630,9 +708,10 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
           speciesListAvailable={capabilities.speciesList}
           speciesList={master.species}
           masterSearch={masterSearch}
-          items={master.items}
+          items={pickableItems}
+          itemLock={attackerLock}
           selectedSpeciesKey={attackerKey}
-          selectedItemId={attackerItemId}
+          selectedItemId={attackerItem?.id ?? ""}
           onSpeciesChange={selectAttacker}
           onSpeciesResolved={handleAttackerResolved}
           onItemChange={setAttackerItemId}
@@ -665,9 +744,10 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
           speciesListAvailable={capabilities.speciesList}
           speciesList={master.species}
           masterSearch={masterSearch}
-          items={master.items}
+          items={pickableItems}
+          itemLock={defenderLock}
           selectedSpeciesKey={defenderKey}
-          selectedItemId={defenderItemId}
+          selectedItemId={defenderItem?.id ?? ""}
           onSpeciesChange={selectDefender}
           onSpeciesResolved={handleDefenderResolved}
           onItemChange={setDefenderItemId}
@@ -690,14 +770,20 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
       <label className="calc-screen__compare">
         <input
           type="checkbox"
-          checked={compareItems}
-          disabled={!capabilities.effects}
+          checked={effectiveCompareItems}
+          disabled={!capabilities.effects || compareDisabledByMega}
+          aria-describedby={compareDisabledByMega ? compareReasonId : undefined}
           onChange={(event) => {
             setCompareItems(event.target.checked);
           }}
         />
         {calcScreenText.compareItemCandidatesLabel}
       </label>
+      {compareDisabledByMega && (
+        <p id={compareReasonId} className="calc-screen__notice">
+          {megaItemText.compareDisabledReason}
+        </p>
+      )}
       {!capabilities.effects && (
         <p className="calc-screen__notice">{masterOnlineText.itemCandidatesUnavailable}</p>
       )}
@@ -709,6 +795,7 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
         conditions={conditions}
         onChange={setConditions}
         rankStat={rankStatFor(move?.category ?? null)}
+        defenderRankStat={defenderRankStatFor(move?.category ?? null)}
       />
 
       <ResultsSection
@@ -721,6 +808,27 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
         pulsingKeys={pulsingKeys}
         onKoAnimationEnd={handleKoAnimationEnd}
       />
+
+      {frequentOpponents.length > 0 && (
+        <div role="group" aria-label={frequentOpponentsText.groupLabel} className="calc-screen__frequent">
+          {frequentOpponents.map((chip) => (
+            <button
+              key={chip.key}
+              type="button"
+              className="calc-screen__frequent-chip"
+              onClick={() => {
+                if (chip.resolution === undefined) {
+                  selectDefender(chip.key);
+                } else {
+                  handleDefenderResolved(chip.resolution);
+                }
+              }}
+            >
+              {chip.nameJa}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -736,7 +844,10 @@ interface SpeciesCardProps {
   readonly speciesList: readonly MasterSpecies[];
   /** 検索口(speciesListAvailable が false のときに使う。省略は「検索できない」)。 */
   readonly masterSearch: MasterSpeciesSearch | undefined;
+  /** 単独で選べる持ち物(メガストーンを除く)。 */
   readonly items: readonly Item[];
+  /** メガシンカの持ち物固定(issue 515、ADR-0320)。none 以外は持ち物欄を disabled にして理由を添える。 */
+  readonly itemLock: MegaItemLock;
   readonly selectedSpeciesKey: string;
   readonly selectedItemId: string;
   readonly onSpeciesChange: (key: string) => void;
@@ -764,6 +875,7 @@ function SpeciesCard({
   speciesList,
   masterSearch,
   items,
+  itemLock,
   selectedSpeciesKey,
   selectedItemId,
   onSpeciesChange,
@@ -785,6 +897,7 @@ function SpeciesCard({
   const regionHeadingId = useId();
   const speciesSelectId = useId();
   const itemSelectId = useId();
+  const itemReasonId = useId();
   return (
     <section
       className={className}
@@ -830,6 +943,7 @@ function SpeciesCard({
           label={speciesSelectLabel}
           masterSearch={masterSearch}
           onResolved={onSpeciesResolved}
+          selectedNameJa={species?.nameJa ?? null}
         />
       )}
       {/* P4-16b(ADR-0304 A-10): 検索中(まだ種族が解決していない)は持ち物欄も出さない
@@ -843,17 +957,20 @@ function SpeciesCard({
             id={itemSelectId}
             aria-label={itemSelectLabel}
             value={selectedItemId}
+            disabled={itemLock.kind !== "none"}
+            aria-describedby={itemLock.kind === "none" ? undefined : itemReasonId}
             onChange={(event) => {
               onItemChange(event.target.value);
             }}
           >
             <option value="">{calcScreenText.noItemOption}</option>
-            {items.map((item) => (
+            {(itemLock.kind === "locked" ? [itemLock.item] : items).map((item) => (
               <option key={item.id} value={item.id}>
                 {item.nameJa}
               </option>
             ))}
           </select>
+          <MegaItemReason id={itemReasonId} lock={itemLock} className="calc-card__reason" />
           <AbilitySelect labelClassName="calc-card__label" {...abilitySelect} />
         </>
       )}

@@ -417,7 +417,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// The pokemon read model is not configured (master_unavailable)
+            /// The pokemon read model is not configured (master_unavailable), or the service is overloaded or past its request deadline (overloaded, with Retry-After; ADR-0801)
             ///
             /// - Remark: Generated from `#/paths//api/speed/v1/pokemon/get(listPokemon)/responses/503`.
             ///
@@ -760,7 +760,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// The pokemon read model is not configured (master_unavailable)
+            /// The pokemon read model is not configured (master_unavailable), or the service is overloaded or past its request deadline (overloaded, with Retry-After; ADR-0801)
             ///
             /// - Remark: Generated from `#/paths//api/speed/v1/table/get(getSpeedTable)/responses/503`.
             ///
@@ -1186,7 +1186,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// The pokemon read model is not configured (master_unavailable)
+            /// The pokemon read model is not configured (master_unavailable), or the service is overloaded or past its request deadline (overloaded, with Retry-After; ADR-0801)
             ///
             /// - Remark: Generated from `#/paths//api/speed/v1/position/post(getSpeedPosition)/responses/503`.
             ///

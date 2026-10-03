@@ -7,12 +7,14 @@
 
 API_CLUSTER ?= $(CLUSTER)
 API_URL ?= http://localhost:8080
+# イメージに埋め込むビルドの版(起動ログと /healthz に出る。issue #217)。git が無ければ 0.0.0-dev。
+API_VERSION ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo 0.0.0-dev)
 
 .PHONY: api-docker-build api-k3d-deploy api-smoke api-kustomize
 
 api-docker-build: ## calc・gateway のイメージを local タグでビルドする
-	@docker build -f services/calc/Dockerfile -t pokecalc/calc:local .
-	@docker build -f services/gateway/Dockerfile -t pokecalc/gateway:local .
+	@docker build -f services/calc/Dockerfile --build-arg VERSION=$(API_VERSION) -t pokecalc/calc:local .
+	@docker build -f services/gateway/Dockerfile --build-arg VERSION=$(API_VERSION) -t pokecalc/gateway:local .
 
 # クラスタ全体の立ち上げ(namespace・mysql・pokedex-migrate Job を含む)は `make up`
 # (scripts/up.sh)が担う。`deploy/k8s/overlays/local`(共有)を丸ごと apply すると、

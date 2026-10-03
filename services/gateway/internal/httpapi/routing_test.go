@@ -207,7 +207,7 @@ func TestUnroutedPathsAreNotFound(t *testing.T) {
 	}
 }
 
-// AC-G3: gateway 自身の GET /healthz は 200 {"status":"ok"} で、上流の /healthz には届かない。
+// AC-G3: gateway 自身の GET /healthz は 200 {"status":"ok","version":...} で、上流の /healthz には届かない。
 func TestHealthzIsGatewayOwn(t *testing.T) {
 	env := newTestEnv(t)
 	rec := serve(t, env.handler, http.MethodGet, "/healthz", http.Header{}, nil)
@@ -217,8 +217,9 @@ func TestHealthzIsGatewayOwn(t *testing.T) {
 	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
 		t.Errorf("Content-Type = %q, want application/json", ct)
 	}
-	if got := bytes.TrimSpace(rec.Body.Bytes()); string(got) != `{"status":"ok"}` {
-		t.Errorf("body = %s, want {\"status\":\"ok\"}", got)
+	// version の中身は observability_test.go(TestHealthzIncludesVersion)。ここでは status だけ見る。
+	if got := bytes.TrimSpace(rec.Body.Bytes()); !strings.HasPrefix(string(got), `{"status":"ok"`) {
+		t.Errorf("body = %s, want status ok を含む", got)
 	}
 	env.assertNoUpstreamReached(t)
 }

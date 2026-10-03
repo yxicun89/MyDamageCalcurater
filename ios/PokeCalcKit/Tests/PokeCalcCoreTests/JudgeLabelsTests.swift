@@ -13,6 +13,8 @@ final class JudgeLabelsTests: XCTestCase {
         "unknown_nature": "この性格はマスタにありません",
         "request_too_large": "入力が大きすぎます",
         "upstream_unavailable": "判定に必要なサービスに接続できません",
+        "missing_header": "端末の識別情報がありません",
+        "invalid_header": "端末の識別情報が正しくありません",
         "internal_error": "判定に失敗しました",
         "not_found": "判定に失敗しました",
         PokeCalcError.Code.transport: "判定の API に接続できません",

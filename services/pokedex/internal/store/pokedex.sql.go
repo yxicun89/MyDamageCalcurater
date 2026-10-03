@@ -301,7 +301,7 @@ func (q *Queries) GetItemEffect(ctx context.Context, itemID string) (ItemEffect,
 }
 
 const getMove = `-- name: GetMove :one
-SELECT id, name_ja, type, category, power, priority
+SELECT id, name_ja, type, category, power, priority, target
 FROM moves
 WHERE id = ?
 `
@@ -313,6 +313,7 @@ type GetMoveRow struct {
 	Category string
 	Power    uint16
 	Priority int8
+	Target   sql.NullString
 }
 
 func (q *Queries) GetMove(ctx context.Context, id string) (GetMoveRow, error) {
@@ -325,12 +326,13 @@ func (q *Queries) GetMove(ctx context.Context, id string) (GetMoveRow, error) {
 		&i.Category,
 		&i.Power,
 		&i.Priority,
+		&i.Target,
 	)
 	return i, err
 }
 
 const getMovesByIDs = `-- name: GetMovesByIDs :many
-SELECT id, name_ja, type, category, power, priority
+SELECT id, name_ja, type, category, power, priority, target
 FROM moves
 WHERE id IN (/*SLICE:ids*/?)
 `
@@ -342,6 +344,7 @@ type GetMovesByIDsRow struct {
 	Category string
 	Power    uint16
 	Priority int8
+	Target   sql.NullString
 }
 
 func (q *Queries) GetMovesByIDs(ctx context.Context, ids []string) ([]GetMovesByIDsRow, error) {
@@ -370,6 +373,7 @@ func (q *Queries) GetMovesByIDs(ctx context.Context, ids []string) ([]GetMovesBy
 			&i.Category,
 			&i.Power,
 			&i.Priority,
+			&i.Target,
 		); err != nil {
 			return nil, err
 		}
@@ -530,8 +534,8 @@ func (q *Queries) InsertLearnset(ctx context.Context, arg InsertLearnsetParams) 
 }
 
 const insertMove = `-- name: InsertMove :exec
-INSERT INTO moves (id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO moves (id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority, target)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertMoveParams struct {
@@ -545,6 +549,7 @@ type InsertMoveParams struct {
 	Accuracy     sql.NullInt16
 	Pp           uint8
 	Priority     int8
+	Target       sql.NullString
 }
 
 func (q *Queries) InsertMove(ctx context.Context, arg InsertMoveParams) error {
@@ -559,6 +564,7 @@ func (q *Queries) InsertMove(ctx context.Context, arg InsertMoveParams) error {
 		arg.Accuracy,
 		arg.Pp,
 		arg.Priority,
+		arg.Target,
 	)
 	return err
 }
@@ -1123,6 +1129,72 @@ func (q *Queries) ListMoveIDs(ctx context.Context) ([]string, error) {
 	return items, nil
 }
 
+const listMoveLearners = `-- name: ListMoveLearners :many
+SELECT s.` + "`" + `key` + "`" + `, s.dex_no, s.form, s.name_ja, s.type1, s.type2
+FROM learnsets l
+JOIN species s ON s.` + "`" + `key` + "`" + ` = l.species_key
+JOIN regulation_species rs ON rs.species_key = l.species_key AND rs.regulation_id = ?
+JOIN regulation_moves rm ON rm.move_id = l.move_id AND rm.regulation_id = ?
+WHERE l.move_id = ?
+ORDER BY s.dex_no, s.form
+LIMIT ? OFFSET ?
+`
+
+type ListMoveLearnersParams struct {
+	RegulationID string
+	MoveID       string
+	Limit        int32
+	Offset       int32
+}
+
+type ListMoveLearnersRow struct {
+	Key    string
+	DexNo  uint16
+	Form   uint16
+	NameJa string
+	Type1  string
+	Type2  sql.NullString
+}
+
+// 技を覚える種族(learnset の逆引き。ADR-0251)。種族・技の両方が既定のレギュレーションの使用可能集合に
+// あるものだけ(ListSpeciesLearnset と同じ規則)。並びは SearchSpecies と同じ dex_no, form(UNIQUE なので決定的)。
+// learnsets の move_id には FK fk_learnsets_move の索引がある(MySQL が FK のために自動で作る。migration 不要)。
+func (q *Queries) ListMoveLearners(ctx context.Context, arg ListMoveLearnersParams) ([]ListMoveLearnersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMoveLearners,
+		arg.RegulationID,
+		arg.RegulationID,
+		arg.MoveID,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMoveLearnersRow
+	for rows.Next() {
+		var i ListMoveLearnersRow
+		if err := rows.Scan(
+			&i.Key,
+			&i.DexNo,
+			&i.Form,
+			&i.NameJa,
+			&i.Type1,
+			&i.Type2,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMoveMechanisms = `-- name: ListMoveMechanisms :many
 SELECT move_id, mechanism
 FROM move_mechanisms
@@ -1153,7 +1225,7 @@ func (q *Queries) ListMoveMechanisms(ctx context.Context) ([]MoveMechanism, erro
 }
 
 const listMoves = `-- name: ListMoves :many
-SELECT id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority
+SELECT id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority, target
 FROM moves
 ORDER BY id
 `
@@ -1178,6 +1250,7 @@ func (q *Queries) ListMoves(ctx context.Context) ([]Move, error) {
 			&i.Accuracy,
 			&i.Pp,
 			&i.Priority,
+			&i.Target,
 		); err != nil {
 			return nil, err
 		}
@@ -1449,9 +1522,10 @@ func (q *Queries) ListSpeciesAbilities(ctx context.Context, speciesKey string) (
 }
 
 const listSpeciesAbilityNames = `-- name: ListSpeciesAbilityNames :many
-SELECT sa.slot, a.id, a.name_ja
+SELECT sa.slot, a.id, a.name_ja, ae.effect
 FROM species_abilities sa
 JOIN abilities a ON a.id = sa.ability_id
+LEFT JOIN ability_effects ae ON ae.ability_id = a.id
 WHERE sa.species_key = ?
 ORDER BY sa.slot
 `
@@ -1460,6 +1534,7 @@ type ListSpeciesAbilityNamesRow struct {
 	Slot   uint8
 	ID     string
 	NameJa string
+	Effect *json.RawMessage
 }
 
 func (q *Queries) ListSpeciesAbilityNames(ctx context.Context, speciesKey string) ([]ListSpeciesAbilityNamesRow, error) {
@@ -1471,7 +1546,12 @@ func (q *Queries) ListSpeciesAbilityNames(ctx context.Context, speciesKey string
 	var items []ListSpeciesAbilityNamesRow
 	for rows.Next() {
 		var i ListSpeciesAbilityNamesRow
-		if err := rows.Scan(&i.Slot, &i.ID, &i.NameJa); err != nil {
+		if err := rows.Scan(
+			&i.Slot,
+			&i.ID,
+			&i.NameJa,
+			&i.Effect,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1686,9 +1766,10 @@ func (q *Queries) ListTypes(ctx context.Context) ([]Type, error) {
 }
 
 const searchItems = `-- name: SearchItems :many
-SELECT i.id, i.name_ja
+SELECT i.id, i.name_ja, ie.effect
 FROM items i
 JOIN regulation_items ri ON ri.item_id = i.id
+LEFT JOIN item_effects ie ON ie.item_id = i.id
 WHERE ri.regulation_id = ? AND i.name_ja LIKE ?
 ORDER BY i.name_ja, i.id
 LIMIT ?
@@ -1703,6 +1784,7 @@ type SearchItemsParams struct {
 type SearchItemsRow struct {
 	ID     string
 	NameJa string
+	Effect *json.RawMessage
 }
 
 func (q *Queries) SearchItems(ctx context.Context, arg SearchItemsParams) ([]SearchItemsRow, error) {
@@ -1714,7 +1796,7 @@ func (q *Queries) SearchItems(ctx context.Context, arg SearchItemsParams) ([]Sea
 	var items []SearchItemsRow
 	for rows.Next() {
 		var i SearchItemsRow
-		if err := rows.Scan(&i.ID, &i.NameJa); err != nil {
+		if err := rows.Scan(&i.ID, &i.NameJa, &i.Effect); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1729,7 +1811,7 @@ func (q *Queries) SearchItems(ctx context.Context, arg SearchItemsParams) ([]Sea
 }
 
 const searchMoves = `-- name: SearchMoves :many
-SELECT m.id, m.name_ja, m.type, m.category, m.power, m.priority
+SELECT m.id, m.name_ja, m.type, m.category, m.power, m.priority, m.target
 FROM moves m
 JOIN regulation_moves rm ON rm.move_id = m.id
 WHERE rm.regulation_id = ? AND m.name_ja LIKE ?
@@ -1750,6 +1832,7 @@ type SearchMovesRow struct {
 	Category string
 	Power    uint16
 	Priority int8
+	Target   sql.NullString
 }
 
 func (q *Queries) SearchMoves(ctx context.Context, arg SearchMovesParams) ([]SearchMovesRow, error) {
@@ -1768,6 +1851,7 @@ func (q *Queries) SearchMoves(ctx context.Context, arg SearchMovesParams) ([]Sea
 			&i.Category,
 			&i.Power,
 			&i.Priority,
+			&i.Target,
 		); err != nil {
 			return nil, err
 		}

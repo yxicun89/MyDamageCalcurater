@@ -71,6 +71,10 @@ const response: Schemas["OutspeedAndKoResponse"] = {
       defenderKo: ko(3, false, 42.5),
       attackerKoUnsupported: [],
       defenderKoUnsupported: [],
+      attackerSpeedApplied: [],
+      defenderSpeedApplied: [],
+      attackerSpeedIgnored: [],
+      defenderSpeedIgnored: [],
     },
   ],
 };

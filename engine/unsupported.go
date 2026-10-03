@@ -82,6 +82,11 @@ const (
 	UnsupportedTargetAttackerAbility UnsupportedTarget = "attacker_ability"
 	UnsupportedTargetDefenderItem    UnsupportedTarget = "defender_item"
 	UnsupportedTargetDefenderAbility UnsupportedTarget = "defender_ability"
+	// 攻撃側・防御側のテラスタイプは engine が計算に反映しない(ADR-0160)。対戦形式の印は未知の形式だけ
+	// (ダブルは ADR-0222 で計算に反映したので印を付けない)。
+	UnsupportedTargetAttackerTeraType UnsupportedTarget = "attacker_tera_type"
+	UnsupportedTargetDefenderTeraType UnsupportedTarget = "defender_tera_type"
+	UnsupportedTargetFormat           UnsupportedTarget = "format"
 )
 
 // UnsupportedReason は印の理由のコード。技の印は機構の値(MoveMechanism)か UnsupportedZeroPower、
@@ -91,6 +96,8 @@ type UnsupportedReason string
 const (
 	// UnsupportedZeroPower は威力 0 の攻撃技(威力が技の処理で決まる。ダメージ 0 は正しい結果ではない)。
 	UnsupportedZeroPower UnsupportedReason = "zero_power"
+	// UnsupportedMoveTargetUnknown はダブルの攻撃技で技の対象が不明(単体として計算した。ADR-0222)。
+	UnsupportedMoveTargetUnknown UnsupportedReason = "move_target_unknown"
 	// UnsupportedEffect は持ち物・特性のダメージへの効果を計算に入れていない(効果スキーマで表せない。ADR-0120)。
 	UnsupportedEffect UnsupportedReason = "unsupported_effect"
 )
@@ -99,12 +106,15 @@ const (
 type UnsupportedMark struct {
 	Target UnsupportedTarget
 	Reason UnsupportedReason
-	ID     string // 技・持ち物・特性の ID
+	ID     string // 技・持ち物・特性の ID、テラスタイプ・形式の値
 }
 
 // unsupportedMarks は入力に付く印を 技 → 攻撃側の持ち物 → 攻撃側の特性 → 防御側の持ち物 → 防御側の特性
-// の順に返す(技の印は理由の昇順。機構の印の後に zero_power)。印が無ければ nil。
-// 変化技は印を付けない(ダメージを持たないので 0 が正しい)。
+// → 攻撃側のテラス → 防御側のテラス → 未知の対戦形式の順に返す(技の印は理由の昇順。機構の印の後に zero_power、
+// その後にダブルの move_target_unknown)。印が無ければ nil。
+// 変化技は技・持ち物・特性の印を付けない(ダメージを持たないので 0 が正しい)が、
+// テラス・未知の対戦形式の印は変化技にも付ける(入力の指定が無視されたことを示す。ADR-0160)。
+// ダブルは壁・全体技を計算に反映したので形式の印を付けない(ADR-0222 §5)。
 func unsupportedMarks(in DamageInput) []UnsupportedMark {
 	var marks []UnsupportedMark
 	if in.Move.Category != CategoryStatus {
@@ -121,6 +131,15 @@ func unsupportedMarks(in DamageInput) []UnsupportedMark {
 	}
 	if ae := in.Defender.Ability.Effect; ae != nil && ae.UnsupportedDefender {
 		marks = append(marks, UnsupportedMark{Target: UnsupportedTargetDefenderAbility, Reason: UnsupportedEffect, ID: in.Defender.Ability.ID})
+	}
+	if t := in.Attacker.TeraType; t != "" {
+		marks = append(marks, UnsupportedMark{Target: UnsupportedTargetAttackerTeraType, Reason: UnsupportedEffect, ID: string(t)})
+	}
+	if t := in.Defender.TeraType; t != "" {
+		marks = append(marks, UnsupportedMark{Target: UnsupportedTargetDefenderTeraType, Reason: UnsupportedEffect, ID: string(t)})
+	}
+	if in.Format != "" && in.Format != FormatSingle && in.Format != FormatDouble {
+		marks = append(marks, UnsupportedMark{Target: UnsupportedTargetFormat, Reason: UnsupportedEffect, ID: string(in.Format)})
 	}
 	return marks
 }
@@ -139,6 +158,9 @@ func moveMarks(in DamageInput) []UnsupportedMark {
 	reasons = slices.Compact(reasons)
 	if in.Move.Power <= 0 {
 		reasons = append(reasons, UnsupportedZeroPower)
+	}
+	if in.Format == FormatDouble && in.Move.Target == "" {
+		reasons = append(reasons, UnsupportedMoveTargetUnknown)
 	}
 	if len(reasons) == 0 {
 		return nil

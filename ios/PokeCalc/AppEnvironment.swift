@@ -7,8 +7,9 @@ import PokeCalcCore
 /// 決める。設定が壊れているときは画面にエラーを出す(クラッシュしない。coding-rules §2)。
 enum AppEnvironment {
     case ready(
-        service: any PokeCalcService, deviceData: any DeviceDataService, speed: any SpeedService, judge: any JudgeService,
-        backendDescription: String)
+        service: any PokeCalcService, deviceData: any DeviceDataService, backendDescription: String, adjust: any AdjustService,
+        balance: any BalanceService,
+        frequentOpponents: any FrequentOpponentsService, speed: any SpeedService, judge: any JudgeService)
     case configurationError(String)
 
     /// 設定エラー時に画面へ出す文言の接頭辞。
@@ -24,20 +25,27 @@ enum AppEnvironment {
             case .mock:
                 let service = try MockPokeCalcService()
                 let deviceData = MockDeviceDataService(environment: environment)
+                let adjust = try MockAdjustService()
+                let frequentOpponents = MockFrequentOpponentsService(environment: environment)
+                // タイプバランスはモックを持たない(架空の相性表を作らない。ADR-0415 §4)。
                 let speed = MockSpeedService(environment: environment)
                 let judge = MockJudgeService(environment: environment)
                 return .ready(
-                    service: service, deviceData: deviceData, speed: speed, judge: judge, backendDescription: "モックデータで動作中")
+                    service: service, deviceData: deviceData, backendDescription: "モックデータで動作中", adjust: adjust,
+                    balance: UnavailableBalanceService(), frequentOpponents: frequentOpponents, speed: speed, judge: judge)
             case .api(let url):
                 let identity = ClientIdentity(defaults: .standard)
                 let service = APIPokeCalcService(baseURL: url, identity: identity)
+                // balance は gateway の `/api/balance/*`(計算・pokedex と同じ基点 URL。ADR-0415 §3)。
+                let balance = APIBalanceService(baseURL: url, identity: identity)
                 // 素早さも同じ gateway(`/api/speed/*`)・同じ端末 ID/セッション ID(ADR-0503 §3)。
                 let speed = APISpeedService(baseURL: url, identity: identity)
                 // 判定は judge 自身の Ingress(`/api/judge`)だが、ホストと端末 ID は同じ(ADR-0504 §1)。
                 let judge = APIJudgeService(baseURL: url, identity: identity)
                 return .ready(
-                    service: service, deviceData: service, speed: speed, judge: judge,
-                    backendDescription: "APIに接続中(\(url.host ?? url.absoluteString))")
+                    service: service, deviceData: service,
+                    backendDescription: "APIに接続中(\(url.host ?? url.absoluteString))", adjust: service, balance: balance,
+                    frequentOpponents: service, speed: speed, judge: judge)
             }
         } catch {
             return .configurationError("\(configurationErrorPrefix)\(error)")

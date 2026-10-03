@@ -24,6 +24,7 @@ public protocol APIProtocol: Sendable {
     ///
     /// 使用可能集合の外の種族も返す(絞り込みは検索の仕事)。`abilities` は slot 順、
     /// `learnset` は習得技 ∩ 既定のレギュレーションの使用可能な技(ID 昇順)。
+    /// `abilities` の各特性は効果を持てば `effect` を伴う(ADR-0218)。
     ///
     ///
     /// - Remark: HTTP `GET /api/pokedex/species/{key}`.
@@ -59,9 +60,29 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/pokedex/moves/batch`.
     /// - Remark: Generated from `#/paths//api/pokedex/moves/batch/get(getMovesByIds)`.
     func getMovesByIds(_ input: Operations.GetMovesByIds.Input) async throws -> Operations.GetMovesByIds.Output
+    /// 技を覚えるポケモンの一覧(learnset の逆引き)
+    ///
+    /// 技 `key` を覚える種族の要約を返す(調整タブの機能 1。ADR-0251)。既定のレギュレーション
+    /// (コードに書かず DB から引く。ADR-0105)で絞る:
+    /// 種族が使用可能集合にあり、かつ技が使用可能集合にあるときだけ返す。`getSpecies` の `learnset`
+    /// (習得技 ∩ 使用可能な技)と同じ規則で、使用可能な種族 S について「S がこの一覧に出る」と
+    /// 「`getSpecies(S).learnset` にこの技がある」は一致する。技がマスタにあっても使用可能集合の外なら
+    /// 200 `[]`(404 ではない)。
+    /// 並びは `searchSpecies` と同じ図鑑番号・フォルム番号の昇順(決定的)。ページングは `limit` と
+    /// `offset`。返った件数が `limit` 未満なら最後のページ(総数は返さない)。
+    /// 既定のレギュレーションが無い(マスタ未投入)は 503 `master_unavailable`(一覧系の流儀。
+    /// `getMove` の 404 とは異なる)。既定のレギュレーションはあるが技がマスタに無いときは 404 `not_found`。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/pokedex/moves/{key}/learners`.
+    /// - Remark: Generated from `#/paths//api/pokedex/moves/{key}/learners/get(listMoveLearners)`.
+    func listMoveLearners(_ input: Operations.ListMoveLearners.Input) async throws -> Operations.ListMoveLearners.Output
     /// 持ち物を日本語名で前方一致検索
     ///
     /// 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
+    /// 各持ち物は効果を持てば `effect` を伴う(ADR-0218)。効果を持つ持ち物だけに絞る検索条件は無い
+    /// (クライアントが `effect` の有無で絞る)。
+    ///
     ///
     /// - Remark: HTTP `GET /api/pokedex/items`.
     /// - Remark: Generated from `#/paths//api/pokedex/items/get(searchItems)`.
@@ -114,6 +135,63 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/calc/reverse`.
     /// - Remark: Generated from `#/paths//api/calc/reverse/post(calcReverse)`.
     func calcReverse(_ input: Operations.CalcReverse.Input) async throws -> Operations.CalcReverse.Output
+    /// 調整の指数(火力指数・耐久指数)と HP の 16n / 16n-1 ライン
+    ///
+    /// 自分の個体1体の育成で決まる量を返す(ADR-0150 §2〜§4・ADR-0250)。ステートレスで、計算イベントは発行しない。
+    /// - 火力指数 = floor(攻撃実数値 × 威力 × modifier / 4096)。`moveId` を省略したら `firepowerIndex` は null。
+    ///   技の分類が physical なら A、special なら C。変化技・威力 0 の技は 400 `invalid_input`。
+    /// - 耐久指数 = floor(H × B(D) × 4096 / damageModifier)。物理・特殊の両方を返す(技は見ない)。
+    /// - 実数値はランク補正を含めない(`individual.ranks`・`status`・`itemId`・`abilityId` は指数に使わない。
+    ///   持ち物・特性・タイプ一致の倍率はクライアントが `modifier` / `damageModifier` に掛け合わせて渡す)。
+    /// - HP ラインは `individual.sp.hp` と種族の HP 種族値から求める(合計 66 は見ない。ADR-0150 §4)。
+    ///
+    ///
+    /// - Remark: HTTP `POST /api/calc/adjust/indices`.
+    /// - Remark: Generated from `#/paths//api/calc/adjust/indices/post(adjustIndices)`.
+    func adjustIndices(_ input: Operations.AdjustIndices.Input) async throws -> Operations.AdjustIndices.Output
+    /// 相手を n 発で倒せる最小の A / C の SP
+    ///
+    /// 自分 = `attacker`、相手 = `defender`。自分の A(物理)/ C(特殊)の SP を 0 から探し、`hits` 発で倒す確率が
+    /// `thresholdPercent` 以上になる最小の SP を返す(ADR-0150 §7・ADR-0250)。
+    /// - `attacker.sp` の探索する能力(物理なら atk、特殊なら spa)の値は無視する(上書きする)。それ以外の SP の合計が
+    ///   66 を超えると 400 `invalid_input`。
+    /// - 満たせない(上限まで振っても届かない・タイプ相性で無効)ときもエラーにせず `feasible: false` を返す。
+    /// - 変化技・威力 0 の技は 400 `invalid_input`。探索量は `hits`(1〜10)と SP 0〜32 で上限が決まる(ADR-0250 §5)。
+    /// - ステートレスで、計算イベントは発行しない。
+    ///
+    ///
+    /// - Remark: HTTP `POST /api/calc/adjust/min-sp-to-ko`.
+    /// - Remark: Generated from `#/paths//api/calc/adjust/min-sp-to-ko/post(adjustMinSpToKo)`.
+    func adjustMinSpToKo(_ input: Operations.AdjustMinSpToKo.Input) async throws -> Operations.AdjustMinSpToKo.Output
+    /// 相手の技を n 発耐える最小の H と B / D の SP の組
+    ///
+    /// 自分 = `defender`、相手 = `attacker`。自分の H と B(物理)/ D(特殊)の SP の組を探し、`hits` 発受けて耐える
+    /// 確率が `thresholdPercent` 以上になる組のうち、合計 SP 最小(同点は耐久指数が大きい → H が小さい)を返す
+    /// (ADR-0150 §7・ADR-0250)。
+    /// - `defender.sp` の hp と探索する能力(物理なら def、特殊なら spd)の値は無視する(上書きする)。
+    /// - 満たせないときもエラーにせず `feasible: false` で、耐える確率が最大の組を返す。
+    /// - 変化技・威力 0 の技は 400 `invalid_input`。探索は最大 33² 組(ADR-0250 §5)。
+    /// - ステートレスで、計算イベントは発行しない。
+    ///
+    ///
+    /// - Remark: HTTP `POST /api/calc/adjust/min-sp-to-survive`.
+    /// - Remark: Generated from `#/paths//api/calc/adjust/min-sp-to-survive/post(adjustMinSpToSurvive)`.
+    func adjustMinSpToSurvive(_ input: Operations.AdjustMinSpToSurvive.Input) async throws -> Operations.AdjustMinSpToSurvive.Output
+    /// SP 配分の提案(指数最大の組と、目標を満たす最小 SP の組)
+    ///
+    /// `self.sp` を各能力の下限(「ここまで振りたい」)として固定し、残りの SP(66 − 下限の合計)を `mode` の側に回す
+    /// (ADR-0150 §8・ADR-0250)。
+    /// - `mode: bulk` は H・B・D に回す(素早さは見ない)。`focus` が必須。`minSpeed` は 0 以外なら 400 `invalid_input`。
+    /// - `mode: offense` は A(`offenseCategory: physical`)または C(`special`)と S に回す。`offenseCategory` が必須。
+    /// - `ceiling` は回す能力の上限。**省略した能力は 32**(engine のゼロ値「振らない」をそのまま渡さない。ADR-0150 §8)。
+    ///   明示した 0 は「下限より上には振らない」。下限 ≤ 上限 ≤ 32 でなければ 400 `invalid_input`。
+    /// - `goal` を渡したときだけ `minSp` を返す(省略時は null)。判定は min-sp-to-ko / min-sp-to-survive と同じ。
+    /// - 探索は耐久側で最大 33³ ≈ 3.6 万候補、攻撃側で 33² 候補(ADR-0250 §5)。ステートレスで、計算イベントは発行しない。
+    ///
+    ///
+    /// - Remark: HTTP `POST /api/calc/adjust/allocation`.
+    /// - Remark: Generated from `#/paths//api/calc/adjust/allocation/post(adjustAllocation)`.
+    func adjustAllocation(_ input: Operations.AdjustAllocation.Input) async throws -> Operations.AdjustAllocation.Output
     /// この端末でよく計算した相手(防御側の種族)を頻度×時間減衰の順に返す
     ///
     /// `X-Device-Id` の端末の計算イベント(`calc_events`)だけから作った集計を、スコアの降順で返す
@@ -229,6 +307,7 @@ extension APIProtocol {
     ///
     /// 使用可能集合の外の種族も返す(絞り込みは検索の仕事)。`abilities` は slot 順、
     /// `learnset` は習得技 ∩ 既定のレギュレーションの使用可能な技(ID 昇順)。
+    /// `abilities` の各特性は効果を持てば `effect` を伴う(ADR-0218)。
     ///
     ///
     /// - Remark: HTTP `GET /api/pokedex/species/{key}`.
@@ -296,9 +375,39 @@ extension APIProtocol {
             headers: headers
         ))
     }
+    /// 技を覚えるポケモンの一覧(learnset の逆引き)
+    ///
+    /// 技 `key` を覚える種族の要約を返す(調整タブの機能 1。ADR-0251)。既定のレギュレーション
+    /// (コードに書かず DB から引く。ADR-0105)で絞る:
+    /// 種族が使用可能集合にあり、かつ技が使用可能集合にあるときだけ返す。`getSpecies` の `learnset`
+    /// (習得技 ∩ 使用可能な技)と同じ規則で、使用可能な種族 S について「S がこの一覧に出る」と
+    /// 「`getSpecies(S).learnset` にこの技がある」は一致する。技がマスタにあっても使用可能集合の外なら
+    /// 200 `[]`(404 ではない)。
+    /// 並びは `searchSpecies` と同じ図鑑番号・フォルム番号の昇順(決定的)。ページングは `limit` と
+    /// `offset`。返った件数が `limit` 未満なら最後のページ(総数は返さない)。
+    /// 既定のレギュレーションが無い(マスタ未投入)は 503 `master_unavailable`(一覧系の流儀。
+    /// `getMove` の 404 とは異なる)。既定のレギュレーションはあるが技がマスタに無いときは 404 `not_found`。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/pokedex/moves/{key}/learners`.
+    /// - Remark: Generated from `#/paths//api/pokedex/moves/{key}/learners/get(listMoveLearners)`.
+    public func listMoveLearners(
+        path: Operations.ListMoveLearners.Input.Path,
+        query: Operations.ListMoveLearners.Input.Query = .init(),
+        headers: Operations.ListMoveLearners.Input.Headers
+    ) async throws -> Operations.ListMoveLearners.Output {
+        try await listMoveLearners(Operations.ListMoveLearners.Input(
+            path: path,
+            query: query,
+            headers: headers
+        ))
+    }
     /// 持ち物を日本語名で前方一致検索
     ///
     /// 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
+    /// 各持ち物は効果を持てば `effect` を伴う(ADR-0218)。効果を持つ持ち物だけに絞る検索条件は無い
+    /// (クライアントが `effect` の有無で絞る)。
+    ///
     ///
     /// - Remark: HTTP `GET /api/pokedex/items`.
     /// - Remark: Generated from `#/paths//api/pokedex/items/get(searchItems)`.
@@ -381,6 +490,95 @@ extension APIProtocol {
         body: Operations.CalcReverse.Input.Body
     ) async throws -> Operations.CalcReverse.Output {
         try await calcReverse(Operations.CalcReverse.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// 調整の指数(火力指数・耐久指数)と HP の 16n / 16n-1 ライン
+    ///
+    /// 自分の個体1体の育成で決まる量を返す(ADR-0150 §2〜§4・ADR-0250)。ステートレスで、計算イベントは発行しない。
+    /// - 火力指数 = floor(攻撃実数値 × 威力 × modifier / 4096)。`moveId` を省略したら `firepowerIndex` は null。
+    ///   技の分類が physical なら A、special なら C。変化技・威力 0 の技は 400 `invalid_input`。
+    /// - 耐久指数 = floor(H × B(D) × 4096 / damageModifier)。物理・特殊の両方を返す(技は見ない)。
+    /// - 実数値はランク補正を含めない(`individual.ranks`・`status`・`itemId`・`abilityId` は指数に使わない。
+    ///   持ち物・特性・タイプ一致の倍率はクライアントが `modifier` / `damageModifier` に掛け合わせて渡す)。
+    /// - HP ラインは `individual.sp.hp` と種族の HP 種族値から求める(合計 66 は見ない。ADR-0150 §4)。
+    ///
+    ///
+    /// - Remark: HTTP `POST /api/calc/adjust/indices`.
+    /// - Remark: Generated from `#/paths//api/calc/adjust/indices/post(adjustIndices)`.
+    public func adjustIndices(
+        headers: Operations.AdjustIndices.Input.Headers,
+        body: Operations.AdjustIndices.Input.Body
+    ) async throws -> Operations.AdjustIndices.Output {
+        try await adjustIndices(Operations.AdjustIndices.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// 相手を n 発で倒せる最小の A / C の SP
+    ///
+    /// 自分 = `attacker`、相手 = `defender`。自分の A(物理)/ C(特殊)の SP を 0 から探し、`hits` 発で倒す確率が
+    /// `thresholdPercent` 以上になる最小の SP を返す(ADR-0150 §7・ADR-0250)。
+    /// - `attacker.sp` の探索する能力(物理なら atk、特殊なら spa)の値は無視する(上書きする)。それ以外の SP の合計が
+    ///   66 を超えると 400 `invalid_input`。
+    /// - 満たせない(上限まで振っても届かない・タイプ相性で無効)ときもエラーにせず `feasible: false` を返す。
+    /// - 変化技・威力 0 の技は 400 `invalid_input`。探索量は `hits`(1〜10)と SP 0〜32 で上限が決まる(ADR-0250 §5)。
+    /// - ステートレスで、計算イベントは発行しない。
+    ///
+    ///
+    /// - Remark: HTTP `POST /api/calc/adjust/min-sp-to-ko`.
+    /// - Remark: Generated from `#/paths//api/calc/adjust/min-sp-to-ko/post(adjustMinSpToKo)`.
+    public func adjustMinSpToKo(
+        headers: Operations.AdjustMinSpToKo.Input.Headers,
+        body: Operations.AdjustMinSpToKo.Input.Body
+    ) async throws -> Operations.AdjustMinSpToKo.Output {
+        try await adjustMinSpToKo(Operations.AdjustMinSpToKo.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// 相手の技を n 発耐える最小の H と B / D の SP の組
+    ///
+    /// 自分 = `defender`、相手 = `attacker`。自分の H と B(物理)/ D(特殊)の SP の組を探し、`hits` 発受けて耐える
+    /// 確率が `thresholdPercent` 以上になる組のうち、合計 SP 最小(同点は耐久指数が大きい → H が小さい)を返す
+    /// (ADR-0150 §7・ADR-0250)。
+    /// - `defender.sp` の hp と探索する能力(物理なら def、特殊なら spd)の値は無視する(上書きする)。
+    /// - 満たせないときもエラーにせず `feasible: false` で、耐える確率が最大の組を返す。
+    /// - 変化技・威力 0 の技は 400 `invalid_input`。探索は最大 33² 組(ADR-0250 §5)。
+    /// - ステートレスで、計算イベントは発行しない。
+    ///
+    ///
+    /// - Remark: HTTP `POST /api/calc/adjust/min-sp-to-survive`.
+    /// - Remark: Generated from `#/paths//api/calc/adjust/min-sp-to-survive/post(adjustMinSpToSurvive)`.
+    public func adjustMinSpToSurvive(
+        headers: Operations.AdjustMinSpToSurvive.Input.Headers,
+        body: Operations.AdjustMinSpToSurvive.Input.Body
+    ) async throws -> Operations.AdjustMinSpToSurvive.Output {
+        try await adjustMinSpToSurvive(Operations.AdjustMinSpToSurvive.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// SP 配分の提案(指数最大の組と、目標を満たす最小 SP の組)
+    ///
+    /// `self.sp` を各能力の下限(「ここまで振りたい」)として固定し、残りの SP(66 − 下限の合計)を `mode` の側に回す
+    /// (ADR-0150 §8・ADR-0250)。
+    /// - `mode: bulk` は H・B・D に回す(素早さは見ない)。`focus` が必須。`minSpeed` は 0 以外なら 400 `invalid_input`。
+    /// - `mode: offense` は A(`offenseCategory: physical`)または C(`special`)と S に回す。`offenseCategory` が必須。
+    /// - `ceiling` は回す能力の上限。**省略した能力は 32**(engine のゼロ値「振らない」をそのまま渡さない。ADR-0150 §8)。
+    ///   明示した 0 は「下限より上には振らない」。下限 ≤ 上限 ≤ 32 でなければ 400 `invalid_input`。
+    /// - `goal` を渡したときだけ `minSp` を返す(省略時は null)。判定は min-sp-to-ko / min-sp-to-survive と同じ。
+    /// - 探索は耐久側で最大 33³ ≈ 3.6 万候補、攻撃側で 33² 候補(ADR-0250 §5)。ステートレスで、計算イベントは発行しない。
+    ///
+    ///
+    /// - Remark: HTTP `POST /api/calc/adjust/allocation`.
+    /// - Remark: Generated from `#/paths//api/calc/adjust/allocation/post(adjustAllocation)`.
+    public func adjustAllocation(
+        headers: Operations.AdjustAllocation.Input.Headers,
+        body: Operations.AdjustAllocation.Input.Body
+    ) async throws -> Operations.AdjustAllocation.Output {
+        try await adjustAllocation(Operations.AdjustAllocation.Input(
             headers: headers,
             body: body
         ))

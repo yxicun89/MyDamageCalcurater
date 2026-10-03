@@ -1747,6 +1747,18 @@ Impact: 既存の正常な入力の数値は不変(ゴールデン全件一致)�
 **API レーンへの依頼**(契約は変えていない。既定案は ADR-0123 §7): (1) `MasterMove.mechanisms: string[]`(昇順・通常の技は空配列。ADR-0121 の依頼の再掲)。(2) `CalcResponse`・`BulkRow.result`・`ReverseCandidate` に `unsupported: UnsupportedMark[]`(必須・印なしは `[]`)、`UnsupportedMark = {target: move|attacker_item|attacker_ability|defender_item|defender_ability, reason: <機構 13 種>|zero_power|unsupported_effect, id: string}`。入ったら `services/calc/internal/httpapi/parity_test.go` の `dropEmptyUnsupported` を消して印も比べる。
 **Web / iOS レーンへ**: 印の表示(「未対応」の注記)は各レーンの作業。WASM の形は ADR-0123 §6。
 
+## 2026-10-02: record-svc・team-svc を k3d に配線し、失効ジョブを CronJob にした(API レーン。他レーンへの連絡。ADR-0220)
+Decision: `deploy/k8s/base/{record,team}` を追加し、base の kustomization と gateway(`GATEWAY_RECORD_URL=http://record`・`GATEWAY_TEAM_URL=http://team`)に配線した。
+失効(ADR-0209 §4)は同じバイナリのサブコマンド `record expire` / `team expire` を日次 CronJob(`record-expire`・`team-expire`。日本時間 12:00)で起動する。
+Reason: 設定の解釈を serve と共有でき、イメージを増やさない(ADR-0220 §3)。
+Impact(他レーンへ):
+- Web・iOS: `make up` 後、k3d で `/api/record/*`・`/api/team/*` が gateway 経由で届く(TiDB の導入に成功し record/team の Pod が Ready のとき。無ければ従来どおり 503 `upstream_unavailable`)。
+- 運用: 失効ジョブの CronJob が増えた(失敗は kube_job_status_failed で見る。削除件数はログの `expire done` 1行)。cloud overlay では TiDB・Secret が無いので suspend 済み。
+  NetworkPolicy は record/team の gateway 上流・TiDB・NATS(購読)・Prometheus を許可し、record ↔ team・calc → record/team・record/team → mysql を拒否する。ServiceMonitor は8サービスになった。
+  `make deploy-latest` に record/team を加えるかは運用レーンの判断(今回は触っていない)。up.sh は record/team の Ready を待たない。
+- 失効ジョブは local・cloud とも `suspend: true`(実データへ初めて向ける承認 ADR-0209・ADR-0220 未決事項 0 が済むまで。既定案。plan.md ブロッカー)。手動実行は `kubectl -n pokecalc create job --from=cronjob/record-expire record-expire-manual-...`。承認後に local の suspend patch を外す。
+- 保持日数は ConfigMap `record-retention`・`team-retention` の1か所(ADR-0211 §7 の既定値。変えるときは ADR も更新)。
+
 ## 2026-09-25: issue #271/#270 の API レーン担当分(mechanisms 公開・unsupported 印)を実装(API レーン → データ・Web・iOS レーンへ)
 Decision: データレーンからの依頼(ADR-0121 §4・ADR-0123 §7)を反映した。
 `api/openapi.yaml`: `MasterMove.mechanisms: string[]`(必須・昇順・通常の技は空配列)を追加。
@@ -2022,6 +2034,10 @@ Impact: Web レーンは文言・再送の上限・再試行の扱いを揃え�
 - API レーンへ: TiDB(record/team)を k3d に上げる前に ADR-0132「確認の結果」の手順を行う(tidb-operator からの許可を足す)。
   M2 で record・team の本体を足すときも許可が要る。PR #416(#284)で gateway → balance/speed/judge は既に許可済み
 - 詰まったときの戻し方: `kubectl -n pokecalc delete networkpolicy default-deny-ingress`(許可だけが残る。データは消えない)
+## 2026-10-01: 既定の計算モードをオンラインに変更(ユーザー決定。Web レーン。issue #210 / ADR-0313)
+Decision: Web の既定の計算モードを「オンライン」にする(ADR-0301 §4 の「既定はオフライン」を変更)。オンラインで取得したマスタ(持ち物・性格・解決した種族/特性/技)を IndexedDB に保存し、オフライン(WASM)はそのキャッシュだけから読む。保存済みのモード(localStorage)は従来どおり尊重する。
+Reason: 既定のオフラインは架空の例データしか持たず、実データで計算するには毎回オンラインへ切り替えが要った。実データのビルド同梱は ADR-0002 に反する。
+Impact: Web のみ(`web/src/master/cache/`・`main.tsx`・`calcMode.ts`・E2E 設定)。API・engine・iOS は無変更。オフラインで引ける種族は一度オンラインで選んだものに限り、持ち物の候補比較はオフラインでも選べない(公開 API に効果データが無い)。
 
 
 ## 2026-10-02: issue #236 の balance 側をクローズ(タイプバランスレーン → Web レーンへ。ADR-0413)
@@ -2031,6 +2047,15 @@ ErrorCode は `missing_header`(欠落・空)・`invalid_header`(UUID でない�
 Reason: Traefik 直結では gateway の検証が効かず、balance だけ緩い非空チェックだった。
 Impact: Web レーンへ: `web/src/api/balance.gen.ts` を再生成済み、`web/src/i18n/ja.ts` の `balanceErrorText` を `missing_header`/`invalid_header` に
 追従済み(`BalanceScreen.test.tsx` のコード一覧も)。`balanceClient.ts` は正準 UUID を送っており変更不要。他に balance の code 文字列に依存する箇所があれば確認してほしい。
+## 2026-10-02: 素早さに効く特性・持ち物のデータ(判定レーン → データレーン。issue #235・ADR-0710 第2段の依頼)
+
+- 判定レーンは第1段(素早さに反映した補正 `*SpeedApplied`・指定されたが反映していない入力 `*SpeedIgnored` を応答に返す)を実装した。
+  ユーザー決定: 反映する範囲は**全て**(天候特性・状態異常・持ち物。不要なら指摘される)
+- データレーンへ: 素早さ補正を持つ特性(天候・場・状態依存)と持ち物(こだわりスカーフ以外のすばやさ補正)を、balance の `abilities` read model の
+  `effects` と同じ流儀の正規化データとしてマスタ側に置き、内部 API(pokedex-svc)から引けるようにしてほしい。judge は ID の switch を持たず、
+  そのデータで反映する。状態異常(麻痺)は judge 側の入力 `status` の追加も要る(判定レーンが契約を足す)
+- 受け取り次第、判定レーンが第2段を実装し、反映できた要素を `*SpeedApplied` に足して `*SpeedIgnored` から外す
+
 ## 2026-10-02: 一括計算の defenderOverride に ranks・status を足した(API レーン → Web・iOS レーンへ。issue #274/#272・ADR-0216)
 
 - `BulkCalcRequest.defenderOverride` は `{ abilityId?, ranks?: RankBlock, status?: StatusCondition }`。全行(全プリセット × 持ち物 × 特性)に一律で当たる。ランクは各 -6..+6(外は 400 `invalid_input`)、未知の status は 400 `invalid_enum`
@@ -2048,6 +2073,30 @@ Reason: 既定案 A は変更が小さく、版を上げる PR でハッシュ�
 Impact: 版を上げる PR は config.json の `integrity` も更新する(不一致のときは stderr の実際のハッシュを、内容を確かめたうえで反映)。
 却下案 B(dist の vendoring)・C(現状維持)に変えるなら ADR-0101 追記と config.json の integrity を戻す。
 ユーザーの確認待ち: A でよいか(特に、期限切れの引き渡しを無視する TTL 7200 秒の扱い)。
+
+## 2026-10-02: issue #230 のタイプバランス系リモートブランチ 19 本を削除(タイプバランスレーン。ユーザー承認済み)
+Decision: 対応する PR(#6〜#66)がすべて MERGED の tb 系リモートブランチ 19 本をリモートから削除した。OPEN の PR のブランチ(#451・#456・#457・#458)と main は触っていない。
+Reason: ユーザー承認(AskUserQuestion、2026-10-02)。削除前に、全 19 本の PR が MERGED であることを PR 一覧で確認した。
+Impact: 復旧が必要なときは、下記の tip SHA から `git branch <名前> <SHA>` で作れる(GitHub 側で参照されなくなってから一定期間を過ぎると到達できなくなる)。#230 の残りの対象(Web・運用レーンのブランチ)は各レーンが判断する。
+- `feat/tb-readmodel-wiring`(tip 13f353e)
+- `feat/tb-tb0-argocd`(tip a4841f3)
+- `feat/tb-tb1-defense`(tip 94c44ce)
+- `feat/tb-tb1b-typechart`(tip 5e75b81)
+- `feat/tb-tb2-offense`(tip ed7888a)
+- `feat/tb-tb3-ability`(tip 352b5cf)
+- `feat/tb-tb4-threats`(tip a97a7fc)
+- `feat/tb-tb5-recommend`(tip c7fc41f)
+- `feat/tb-tb6-moverange`(tip c73193b)
+- `feat/tb-tb6-planning`(tip 12c8c45)
+- `fix/tb-deps-latest`(tip 64fedb0)
+- `fix/tb-doc`(tip f731d30)
+- `fix/tb-maint-cleanup`(tip dc8e4b6)
+- `fix/tb-pause-checkpoint`(tip 1e0cb8e)
+- `fix/tb-post-merge-state`(tip e03548f)
+- `fix/tb-push-permission`(tip 727bad3)
+- `fix/tb-runbook-retry`(tip 3569d95)
+- `fix/tb-runbooks`(tip 8faf353)
+- `fix/tb-tb0-done`(tip fcd83db)
 
 ## 2026-10-03: PR のマージは対象 PR の CI が全件成功のときだけ AI が実行してよい(ADR-0803。ユーザー決定)
 Decision: bash-guard の PR マージを無条件ブロックから、`gh pr checks` が終了コード 0 のときだけ通す条件付きに変更。`--admin`・`gh api` 直叩き・main への直接 push は引き続き不可。
@@ -2069,23 +2118,235 @@ Impact:
 - ADR-0802 の `{code,message}` への統一は iOS も前提にする(契約外のステータスでも本文が JSON ならその `code` を使う)。
 - 絶対ルール 5: speed の失敗は計算・構築に影響しない(`PokeCalcService` と別のプロトコルで、画面も独立)。
 - iOS が使う入力の範囲(SP 0〜32・ランク ±6)は `SPLimits`/`RankLimits` を共有し、契約との一致を `make ios-check-request-limits` が検査する。
+## 2026-10-02: 防御側のランクの文言を iOS も同じに揃える提案(Web レーン → iOS レーン。issue #274、ADR-0315)
+Decision: Web の「詳細」に防御側のランクを追加した。iOS も攻撃側のランクと同じ作りで揃えてほしい。
+文言は fieldset「防御側のランク」、ボタン「防御側のランクを上げる」「防御側のランクを下げる」、表示は「B +1」「D -2」「B ±0」。
+編集対象は選択中の技の分類で 物理・変化・技なし = def〈B〉、特殊 = spd〈D〉。def / spd は別々に保持する。
+Reason: 契約(`defenderOverride.ranks`、ADR-0216)は入っており、攻守で画面の作りを揃えるため。
+Impact: 既定(0・0)なら `defenderOverride` を送らない。どちらかが非 0 なら 5 項目の ranks を送り、特性(#272)と同じ `defenderOverride` に併存させる。防御側の状態異常は式に効かないので出さない。
+# Decisions(索引)
 
-## 2026-10-03: iOS に判定画面を作る(P6-25。iOS レーン → 判定・API レーンへ)
+決定は **1 件 1 ファイル**で `docs/ai-shared/decisions/` に置く(2026-10-03。全レーンが 1 つのファイルの末尾に追記して
+PR のたびに競合するのを避けるため)。過去の分は、元の順序のまま番号つきのファイルに移した(内容は変更していない)。
 
-Decision: ユーザー決定(2026-10-03)で、iOS に判定画面(「想定した相手を抜いて倒せるかを 1 回で確認」。requirements.md §2)を作る。iOS は `POST /api/judge/v1/outspeed-and-ko`(judge 自身の Ingress の `/api/judge` prefix。
-ホストは他の API と同じ)を使い始める。契約は `services/judge/api/openapi.yaml`。iOS は契約を変えず、root の `api/openapi.yaml` も変えない。生成は契約ごとに別ターゲット(`PokeCalcJudgeAPI`。ADR-0503 の形で `openapi-gen.sh` の配列に 1 行)。
-判断は ADR-0504、受け入れ条件は ADR-0501「P6-25 の受け入れ条件」。要求は Web の JD5 と同じ最小の形(format は single 固定・`field` は送らない・`speedField` は全候補共通。ADR-0705 §6)。
-Reason: Web にだけあった判定を iPhone でも使えるようにする。iOS は構築(端末内)から自分側・候補側を埋められるので、1 回の確認までの手数が Web より少ない。
-Impact:
-- **判定レーンへ(未対応の印の表示)**: iOS は `attackerKoUnsupported`/`defenderKoUnsupported`(ADR-0708)を**方向ごとに分けて**出す(混ぜない)。全候補に共通する印は結果の上に 1 回、一部の候補だけの印はその行に、
-  印のある方向の確定数には「当てにならない可能性がある」旨を添える(確定として見せない)。`target` は書き換えず「その calc から見た役割」のまま(逆方向の `attacker_*` はその候補)。`reason` の値は検査せず、
-  知らない値は「詳細は不明」として出す(ADR-0708 §4・§6 の立場と同じ。`reason` の追加で iOS が壊れることはない)。印の欄は必須(null・欠落にしない。欠けた応答は iOS では読めない応答になる。ADR-0708 §3)。
-- **契約を変えるとき(判定・API レーンへ)**: judge の契約を変える PR(`ErrorCode` の追加、`Matchup`・`KOChance`・`UnsupportedMark` の必須欄の増減、`Format`・`SpeedField` の変更、`defenders` の件数・`MoveId` の長さ・
-  `StatBlock`/`RankBlock` の範囲の変更など)は、iOS の生成物と同期テストが落ちる。変更する PR で `make ios-gen` を実行して生成物を同じ PR に含め、DECISIONS.md に 1 行残す(iOS レーンが文言・ドメインを追従する。
-  `make ios-gen-check` と `make ios-check-request-limits` が CI で検出する)。後方互換な追加(省略可の入力欄)は生成物の更新だけで済む。
-- `ErrorCode` に値を足すと、古い iOS アプリは応答をデコードできず「判定の API に接続できません」になる(素早さと同じ。`UnsupportedMark` の ADR-0215 と同じ問題)。エラー code を増やすときは、先に iOS 側の対応
-  (未知の code を許す形への変更)を相談する。
-- 判定の遅さ: 1 回の要求は上流を最大 27 回逐次で叩く(ADR-0704 §5)。iOS は専用のタイムアウトを持たず(URLSession の既定)、送信ボタンを押したときだけ呼び、判定中は「判定中」を出す。上流の期限(ADR-0707)を延ばすときは連絡する。
-- 絶対ルール 5: 判定の失敗は計算・構築に影響しない(`PokeCalcService` と別のプロトコルで、画面も独立)。
-- iOS が使う入力の範囲(SP 0〜32・合計 66・ランク ±6・候補 1〜6 件・技 ID 64 文字)は `SPLimits`/`RankLimits`/`RequestLimits` に写しを持ち、契約との一致を `make ios-check-request-limits` が検査する。
-- 実 Pokémon マスタデータは iOS のモック・テストに入れない(架空データのみ)。
+## 書き方
+- ファイル名: `decisions/<YYYY-MM-DD>-<レーン>-<短い題>.md`(番号 `NNN` は過去分だけ。新規は不要)。
+- 1 ファイルの本文は従来どおり `## <日付>: <題>` の見出しから始め、`Decision:` / `Reason:` / `Impact:` を書く。
+- この索引ファイルは編集しない(新規の決定は、ファイルを足すだけ。一覧は `ls docs/ai-shared/decisions/` で見る)。
+
+## 過去の決定(2026-10-03 時点)
+- [2026-09-21: ダメージ計算とタイプバランスは同一クラスタ・別サービス](decisions/2026-09-21-001-entry.md)
+- [2026-09-21: Argo CD を共通デプロイ基盤にする](decisions/2026-09-21-002-argo-cd.md)
+- [2026-09-21: balance-svc は pokedex-svc の API を呼ぶ(DB直結・Goモジュール共有はしない)](decisions/2026-09-21-003-balance-svc-pokedex-svc-api-db-go.md)
+- [2026-09-21: manifest は Kustomize に統一](decisions/2026-09-21-004-manifest-kustomize.md)
+- [2026-09-21: fix/codex-workflow-golden は保留(main へマージしない)【撤回済み: 下の「main へマージして各自 main から作業する」を参照】](decisions/2026-09-21-005-fix-codex-workflow-golden-main-main-main.md)
+- [2026-09-21: Git ブランチ運用ルールを導入する](decisions/2026-09-21-006-git.md)
+- [2026-09-21: fix/codex-workflow-golden を main へマージし、以後は各自 main から作業する](decisions/2026-09-21-007-fix-codex-workflow-golden-main-main.md)
+- [2026-09-21: Codex ブランチの main 取り込みはマージコーディネーター(Claude Code)が行う](decisions/2026-09-21-008-codex-main-claude-code.md)
+- [2026-09-21: TB0 タイプ相性データの取得元・契約を確認待ち](decisions/2026-09-21-009-tb0.md)
+- [2026-09-21: P1-6(golden 照合)の独立レビューが PASS。ゴールデンの種族集合は暫定](decisions/2026-09-21-010-p1-6-golden-pass.md)
+- [2026-09-21: 一括計算(P1-7)の防御側プリセットは engine が既定カタログを持つ(ADR-0009)](decisions/2026-09-21-011-p1-7-engine-adr-0009.md)
+- [2026-09-21: 「Codex の別モデルレビュー未実施(レートリミット)」の記述を訂正](decisions/2026-09-21-012-codex.md)
+- [2026-09-21: マスタデータ方針・防御プリセット・逆算・表示%のユーザー決定(ADR-0002 確定)](decisions/2026-09-21-013-adr-0002.md)
+- [2026-09-21: コーディング規約 docs/coding-rules.md(v2)を共通規約として起草。Codex の再確認は未了](decisions/2026-09-21-014-docs-coding-rules-md-v2-codex.md)
+- [2026-09-21: ユーザー回答(第三者データの基準・メガ・技の調査・丸め方針)](decisions/2026-09-21-015-entry.md)
+- [2026-09-21: コーディング規約 v2 を Codex が条件付き承認(条件2点を反映)](decisions/2026-09-21-016-v2-codex-2.md)
+- [2026-09-21: 監査(R-1)へのユーザー回答: module path のプレースホルダ・履歴書き換え・タイプ相性表のデータ化など](decisions/2026-09-21-017-r-1-module-path.md)
+- [2026-09-21: Claude Code から Codex へのレビュー依頼を行わない(ユーザー指示)](decisions/2026-09-21-018-claude-code-codex.md)
+- [2026-09-21: 履歴の書き換えは「公開用クリーンコピー」方式で行う(ユーザー承認)](decisions/2026-09-21-019-entry.md)
+- [2026-09-21: 共有状態は main 専用 worktree の docs/ai-shared を正本にする](decisions/2026-09-21-020-main-worktree-docs-ai-shared.md)
+- [2026-09-21: damage-calc と balance は兄弟のドメインモノリスとする](decisions/2026-09-21-021-damage-calc-balance.md)
+- [2026-09-21: TB0 のタイプ相性表は差し替え可能な temporary adapter とする](decisions/2026-09-21-022-tb0-temporary-adapter.md)
+- [2026-09-21: balance の API 契約はサービスローカル OpenAPI を正とする](decisions/2026-09-21-023-balance-api-openapi.md)
+- [2026-09-21: 共通マスタ候補 ADR-0002 は Claude feature branch 上の提案として参照する](decisions/2026-09-21-024-adr-0002-claude-feature-branch.md)
+- [2026-09-21: 公開用クリーンコピーの作成担当をClaude Codeへ固定しない](decisions/2026-09-21-025-claude-code.md)
+- [2026-09-21: 開発の正本を private のクリーンコピーへ移し、Claude と Codex の協調運用を「互いを待たない」形に改める(ユーザー指示)](decisions/2026-09-21-026-private-claude-codex.md)
+- [2026-09-21: 作業ディレクトリを ~/MyDamageCalcurater の1つに整理(Codex の worktree は必要なときだけ作る)](decisions/2026-09-21-027-mydamagecalcurater-1-codex-worktree.md)
+- [2026-09-21: レーン制に移行し、main への統合は PR 経由にする(ユーザー決定)](decisions/2026-09-21-028-main-pr.md)
+- [2026-09-21: 逆算の Recall の新定義を承認/実機の HP 減少は整数%で表示(ユーザー回答)](decisions/2026-09-21-029-recall-hp.md)
+- [2026-09-21: マスタのフォームの持ち方・更新運用・技の使用可否の裁定の進め方(ユーザー回答)](decisions/2026-09-21-030-entry.md)
+- [2026-09-21: 人間への質問は日中だけ、深夜は質問せずに作業を続ける(ユーザー決定)](decisions/2026-09-21-031-entry.md)
+- [2026-09-21: 「TB0 タイプ相性データの取得元・契約を確認待ち」は解決済み(タイプバランスレーン、Claude Code)](decisions/2026-09-21-032-tb0-claude-code.md)
+- [2026-09-21: `.gitignore` の `coverage.*` を `coverage.out` / `coverage.html` に絞る(タイプバランスレーンの提案を採用。データレーン)](decisions/2026-09-21-033-gitignore-coverage-coverage-out-coverage.md)
+- [2026-09-21: TB0 を main に統合(PR #3)/TB1 のポケモンタイプ取得は balance ローカルの read model(既定案。タイプバランスレーン、Claude Code)](decisions/2026-09-21-034-tb0-main-pr-3-tb1-balance-read-model-cla.md)
+- [2026-09-21: TB1 のタイプ取得・balance のテスト対象・相性表の出どころ(ユーザー決定。TB0 の critic セッション経由で受領)](decisions/2026-09-21-035-tb1-balance-tb0-critic.md)
+- [2026-09-21: 判断が必要なときの質問ルールと深夜の自律作業(ユーザー決定)](decisions/2026-09-21-036-entry.md)
+- [2026-09-21: 質問の時間帯ルールの重複を1つにまとめ、深夜の PR マージ条件を追加(ユーザー決定)](decisions/2026-09-21-037-1-pr.md)
+- [2026-09-21: TB2(攻撃範囲)の仕様3点(ユーザー回答)](decisions/2026-09-21-038-tb2-3.md)
+- [2026-09-21: ダメージ計算を3レーン(データ / API / Web)に分け、全体で4レーンを並列に進める(ユーザー決定)](decisions/2026-09-21-039-3-api-web-4.md)
+- [2026-09-21: ルートの .gitignore の `coverage.*` を Go のカバレッジ出力だけに絞る提案(タイプバランスレーンから。既定案)](decisions/2026-09-21-040-gitignore-coverage-go.md)
+- [2026-09-21: iOS レーンを追加して5レーンにする(ユーザー決定)](decisions/2026-09-21-041-ios-5.md)
+- [2026-09-21: iOS アプリの構成(iOS レーン。既定案で進行・ユーザー未確認)](decisions/2026-09-21-042-ios-ios.md)
+- [2026-09-21: 提案(iOS レーン → API レーン): 構築(team)と逆算の契約](decisions/2026-09-21-043-ios-api-team.md)
+- [2026-09-21: 提案(iOS レーン → データレーン): ルート Makefile の help が include したファイルのターゲットを正しく表示しない](decisions/2026-09-21-044-ios-makefile-help-include.md)
+- [2026-09-21: iOS レーンの既定案の確認(ユーザー回答)](decisions/2026-09-21-045-ios.md)
+- [2026-09-22: iOS レーンの版を最新の安定版で固定(同日のユーザー決定「言語・ミドルウェア・ライブラリを最新の安定版に」の iOS 分)](decisions/2026-09-22-046-ios-ios.md)
+- [2026-09-21: importer(P2-2b)の3点(ユーザー回答。既定案どおり)](decisions/2026-09-21-047-importer-p2-2b-3.md)
+- [2026-09-21: 言語・ミドルウェア・ライブラリは最新の安定版に上げ、正確な番号で固定する(ユーザー決定。全レーン)](decisions/2026-09-21-048-entry.md)
+- [2026-09-21: TB3(特性)の仕様3点(ユーザー回答)と細部の既定案](decisions/2026-09-21-049-tb3-3.md)
+- [2026-09-21: TB3 の既定案を確認、TB4 の方針、Argo CD の実同期をローカル k3d で行う(ユーザー回答)](decisions/2026-09-21-050-tb3-tb4-argo-cd-k3d.md)
+- [2026-09-21: ミドルウェア・ライブラリ・ツールは導入時点の最新の安定版にする(ユーザー決定)](decisions/2026-09-21-051-entry.md)
+- [2026-09-22: データレーンの依存を最新の安定版に固定(ADR-0018)。Go ツールチェーンは 1.27.1、MySQL は LTS(9.7)を既定にする](decisions/2026-09-22-052-adr-0018-go-1-27-1-mysql-lts-9-7.md)
+- [2026-09-22: ADR の番号をレーンごとの帯にする(データレーンの既定案・ユーザー未確認。深夜のため)](decisions/2026-09-22-053-adr.md)
+- [2026-09-22: TB5「おすすめタイプと該当ポケモン」を追加(ユーザー要望)](decisions/2026-09-22-054-tb5.md)
+- [2026-09-22: P2-2c の2点と ADR 番号の帯の承認、データレーンは Claude で続ける(ユーザー回答)](decisions/2026-09-22-055-p2-2c-2-adr-claude.md)
+- [2026-09-22: 習得技は進化前から継がない(Champions のルールに合わせる。ユーザー決定。直前の「案 b」を改める)](decisions/2026-09-22-056-champions-b.md)
+- [2026-09-22: API レーンの依頼(内部 API・性格のマスタ・showdownId)を受ける(データレーン)](decisions/2026-09-22-057-api-api-showdownid.md)
+- [2026-09-22: TB4(仮想敵診断)の仕様(ユーザー回答と既定案)](decisions/2026-09-22-058-tb4.md)
+- [2026-09-22: P3-1 calc-svc の API 契約(API レーン。既定案で進行・ユーザー未確認)](decisions/2026-09-22-059-p3-1-calc-svc-api-api.md)
+- [2026-09-22: API レーンの依存を最新の安定版へ(上の 2026-09-21「ミドルウェア・ライブラリ・ツールは導入時点の最新の安定版にする」の API レーン分)](decisions/2026-09-22-060-api-2026-09-21-api.md)
+- [2026-09-22: API レーンの ADR を 0200 台へ振り直し(データレーンが決めた ADR 番号の帯の規則に従う)](decisions/2026-09-22-061-api-adr-0200-adr.md)
+- [2026-09-22: Claude の上限時は Codex を最大2本(クリティカルパスのレーン+整備レーン)で動かす(ユーザー決定)](decisions/2026-09-22-062-claude-codex-2.md)
+- [2026-09-22: TB5 の詳細は既定案で進める/pokedex export に nameJa・abilityIds とレギュレーションでの絞り込みを依頼(タイプバランスレーン。既定案で進行・ユーザー未確認)](decisions/2026-09-22-063-tb5-pokedex-export-nameja-abilityids.md)
+- [2026-09-22: TB5 の既定案をユーザーが確認、該当ポケモンの範囲を変更(ユーザー回答)](decisions/2026-09-22-064-tb5.md)
+- [2026-09-22: PR #14(API P3-1 calc-svc・依存の最新化)を main に統合](decisions/2026-09-22-065-pr-14-api-p3-1-calc-svc-main.md)
+- [2026-09-22: ADR 番号の帯(データ 0100〜 / API 0200〜 / Web 0300〜 / タイプバランス 0400〜 / iOS 0500〜)をユーザーが承認](decisions/2026-09-22-066-adr-0100-api-0200-web-0300-0400-ios-0500.md)
+- [2026-09-22: check-publishable の自己テストを lint に含める(整備レーン MT-2 の既定案)](decisions/2026-09-22-067-check-publishable-lint-mt-2.md)
+- [2026-09-22: 整備レーン MT-1 / MT-2 を PR #24 で main に統合](decisions/2026-09-22-068-mt-1-mt-2-pr-24-main.md)
+- [2026-09-22: iOS の ADR を 0500 に振り直し(レーンごとの番号帯。データレーンの規則に従う)](decisions/2026-09-22-069-ios-adr-0500.md)
+- [2026-09-22: iOS の逆算画面の観測入力と PR の区切り(ユーザー回答)](decisions/2026-09-22-070-ios-pr.md)
+- [2026-09-22: 素早さ比較を3つ目のサービスとして新しいレーン(6本目)で作る(ユーザー決定)](decisions/2026-09-22-071-3-6.md)
+- [2026-09-22: 素早さ比較の未確定4点をユーザーが回答(素早さレーン)](decisions/2026-09-22-072-4.md)
+- [2026-09-22: 素早さ SP0 の設計(素早さレーンの判断)](decisions/2026-09-22-073-sp0.md)
+- [2026-09-21: Web レーンの構成(ADR-0300)と、他レーンへの提案2件(Web レーン、Claude Code。既定案で進行・ユーザー未確認)](decisions/2026-09-21-074-web-adr-0300-2-web-claude-code.md)
+- [2026-09-21: 言語・ミドルウェア・依存のバージョンは最新にする(ユーザー決定。Web レーンのセッションで受領)](decisions/2026-09-21-075-web.md)
+- [2026-09-22: Web P4-5 の方針(ADR-0301)と、API レーンへの連絡(Web レーン、Claude Code。既定案で進行・ユーザー未確認。深夜)](decisions/2026-09-22-076-web-p4-5-adr-0301-api-web-claude-code.md)
+- [2026-09-22: Web レーンの確認事項4件(ユーザー回答)と PR #22 の統合](decisions/2026-09-22-077-web-4-pr-22.md)
+- [2026-09-22: Claude の上限時の Codex は整備レーンだけにする(ユーザー決定。前エントリの「最大2本」を改める)](decisions/2026-09-22-078-claude-codex-2.md)
+- [2026-09-22: Web の E2E(P4-6)とルートの make への組み込み(Web レーン、Claude Code)](decisions/2026-09-22-079-web-e2e-p4-6-make-web-claude-code.md)
+- [2026-09-22: PR #23(API P3-2 gateway)を main に統合(深夜。ユーザーの指示に基づく)](decisions/2026-09-22-080-pr-23-api-p3-2-gateway-main.md)
+- [2026-09-22: 提案(データレーン・整備レーンへ): `make up` 後の calc・gateway のイメージ(API レーン。既定案)](decisions/2026-09-22-081-make-up-calc-gateway-api.md)
+- [2026-09-22: iOS レーンの統合(PR #31)](decisions/2026-09-22-082-ios-pr-31.md)
+- [2026-09-22: iOS の API 生成は pokedex・calc タグだけにする(API レーンからの連絡への回答)](decisions/2026-09-22-083-ios-api-pokedex-calc-api.md)
+- [2026-09-22: 素早さ SP0 を PR #32 で main に統合(素早さレーン)](decisions/2026-09-22-084-sp0-pr-32-main.md)
+- [2026-09-22: Web の統合記録(PR #22・#28)](decisions/2026-09-22-085-web-pr-22-28.md)
+- [2026-09-22: 逆算の表示は型でまとめない/次は design.md の演出(P4-8)(ユーザー回答)](decisions/2026-09-22-086-design-md-p4-8.md)
+- [2026-09-22: マスタの定期取込(P2-2d)の2点(ユーザー回答。既定案どおり)](decisions/2026-09-22-087-p2-2d-2.md)
+- [2026-09-22: Web P4-8 を統合(PR #33)](decisions/2026-09-22-088-web-p4-8-pr-33.md)
+- [2026-09-22: 素早さ SP1 を PR #36 で main に統合(素早さレーン)](decisions/2026-09-22-089-sp1-pr-36-main.md)
+- [2026-09-22: 手順書の書き方を全レーン共通のルールにする(ユーザー決定。Web レーンのセッションで受領)](decisions/2026-09-22-090-web.md)
+- [2026-09-22: README・手順書・構成図の規則(ユーザー決定。全レーン)](decisions/2026-09-22-091-readme.md)
+- [2026-09-22: calc-svc のマスタを pokedex-svc の内部 API から受け取る(ユーザー決定。ADR-0204)](decisions/2026-09-22-092-calc-svc-pokedex-svc-api-adr-0204.md)
+- [2026-09-22: 無効・吸収の特性は後続タスク P2-3b で engine と効果定義に足す(ユーザー決定)](decisions/2026-09-22-093-p2-3b-engine.md)
+- [2026-09-22: PR #30(API P3-3)・PR #42(API P3-4 マスタを pokedex-svc の内部 API から)を main に統合](decisions/2026-09-22-094-pr-30-api-p3-3-pr-42-api-p3-4-pokedex-sv.md)
+- [2026-09-22: Web P4-9 を統合(PR #35)](decisions/2026-09-22-095-web-p4-9-pr-35.md)
+- [2026-09-22: Web の画面・コンテナ化・手順書の方針(ユーザー回答)と、API レーンへの依頼](decisions/2026-09-22-096-web-api.md)
+- [2026-09-22: 素早さの画面は素早さレーン(SP3)のまま(ユーザー決定)](decisions/2026-09-22-097-sp3.md)
+- [2026-09-22: pokedex export の abilityIds 上限を 4 に、実データの配線をタイプバランスレーンが実装(データレーンの依頼への回答)](decisions/2026-09-22-098-pokedex-export-abilityids-4.md)
+- [2026-09-22: 各レーンのメインセッションは Sonnet で起動する(ユーザー決定)](decisions/2026-09-22-099-sonnet.md)
+- [2026-09-22: サブエージェントも重い作業のときだけ Opus にする(ユーザー決定。前エントリ「メインだけ Sonnet」を改める)](decisions/2026-09-22-100-opus-sonnet.md)
+- [2026-09-22: iOS レーンの統合(PR #53)](decisions/2026-09-22-101-ios-pr-53.md)
+- [2026-09-22: 素早さ DOC-speed を PR #52 で main に統合(素早さレーン)](decisions/2026-09-22-102-doc-speed-pr-52-main.md)
+- [2026-09-22: 素早さレーンを一時停止(ユーザー指示。データレーンへ利用枠を集中)](decisions/2026-09-22-103-entry.md)
+- [2026-09-22: 判定レーン(素早さ×ダメージ連動)を新設(ユーザー要望)](decisions/2026-09-22-104-entry.md)
+- [2026-09-22: P2-3b の設計判断(既定案どおり。データレーンで確認)](decisions/2026-09-22-105-p2-3b.md)
+- [2026-09-22: TB6 実装後の web の生成コードの再生成はWeb レーンの申し送り(タイプバランスレーンから)](decisions/2026-09-22-106-tb6-web-web.md)
+- [2026-09-22: 整備レーン(Claude の上限時の Codex)の仕組みを削除する(ユーザー決定)](decisions/2026-09-22-107-claude-codex.md)
+- [2026-09-22: JD0 の決定と、技の追加効果によるランク変化のデータをデータレーンへ提案(判定レーン)](decisions/2026-09-22-108-jd0.md)
+- [2026-09-22: 素早さ SP3 の設計(素早さレーンの判断)と Web レーンへの提案(既定案)](decisions/2026-09-22-109-sp3-web.md)
+- [2026-09-22: 素早さ SP3 の ja.ts への追記範囲(素早さレーンから Web レーンへの通知)](decisions/2026-09-22-110-sp3-ja-ts-web.md)
+- [2026-09-22: calc・gateway を pokedex-svc につなぐ(データレーンからの依頼d。ADR-0206。PR #87)](decisions/2026-09-22-111-calc-gateway-pokedex-svc-d-adr-0206-pr-8.md)
+- [2026-09-23: iOS レーンの統合(PR #91)](decisions/2026-09-23-112-ios-pr-91.md)
+- [2026-09-22: 判定 JD0(judge-svc 基盤)を PR #92 で main に統合](decisions/2026-09-22-113-jd0-judge-svc-pr-92-main.md)
+- [2026-09-23: 素早さ SP5(GitOps)の設計。balance-registry の共有と改名の提案(タイプバランスレーンへ)](decisions/2026-09-23-114-sp5-gitops-balance-registry.md)
+- [2026-09-23: 承認省略の設定(git push / gh pr create / gh pr merge を自動承認、rm は据え置き。ユーザー決定)](decisions/2026-09-23-115-git-push-gh-pr-create-gh-pr-merge-rm.md)
+- [2026-09-23: DOC-api(calc・gateway の README・手順書)の coding-rules §8 からの意図的な逸脱](decisions/2026-09-23-116-doc-api-calc-gateway-readme-coding-rules.md)
+- [2026-09-22: 判定 JD1(outspeed-and-ko)を PR #118 で main に統合](decisions/2026-09-22-117-jd1-outspeed-and-ko-pr-118-main.md)
+- [2026-09-22: JD2〜JD5 の範囲・順序をユーザーが確定。API レーンへの依頼(既定案付き。判定レーン)](decisions/2026-09-22-118-jd2-jd5-api.md)
+- [2026-09-23: 判定 JD2 の設計確定(場の効果 `speedField`)。素早さ補正の連結と丸めを @smogon/calc で確認(判定レーン)](decisions/2026-09-23-119-jd2-speedfield-smogon-calc.md)
+- [2026-09-23: iOS レーンの統合(PR #119)](decisions/2026-09-23-120-ios-pr-119.md)
+- [2026-09-23: iOS レーンの統合(PR #122)・M3 完了](decisions/2026-09-23-121-ios-pr-122-m3.md)
+- [2026-09-23: Codexレビュー issue #103・#111 の needs-decision をユーザーが決定](decisions/2026-09-23-122-codex-issue-103-111-needs-decision.md)
+- [2026-09-23: P5-6(技の追加効果)の設計とその判定レーンへの申し送り(データレーン)](decisions/2026-09-23-123-p5-6.md)
+- [0000-00-00: 2026-09-23(追記): P5-6 の独立レビュー指摘の反映(データレーン)](decisions/0000-00-00-124-2026-09-23-p5-6.md)
+- [2026-09-23: Web オンライン MasterSource — getSpecies.learnset の ID→実体化を提案(Web レーンからデータ/API レーンへ)](decisions/2026-09-23-125-web-mastersource-getspecies-learnset-id-.md)
+- [2026-09-23: iOS レーンの統合(PR #131)。Codex レビュー issue #100・#101 を修正](decisions/2026-09-23-126-ios-pr-131-codex-issue-100-101.md)
+- [2026-09-23: issue #71(攻撃側プリセットの単一化)はデータレーン(engine)が先に動く必要がある(iOSレーンからの確認)](decisions/2026-09-23-127-issue-71-engine-ios.md)
+- [2026-09-23: issue #68(検索上限200件)は Web と同じ「検索ベースUI」で対応する(契約変更なし)](decisions/2026-09-23-128-issue-68-200-web-ui.md)
+- [2026-09-23: calc の候補・観測件数に上限を置く(issue #110。API レーンから データ/Web/iOS レーンへ)](decisions/2026-09-23-129-calc-issue-110-api-web-ios.md)
+- [2026-09-23: P5-6(技の追加効果)を main へ統合(データレーン)](decisions/2026-09-23-130-p5-6-main.md)
+- [2026-09-23: iOS レーンの統合(PR #136)。issue #68(検索上限200件)を検索UIで解消](decisions/2026-09-23-131-ios-pr-136-issue-68-200-ui.md)
+- [2026-09-22: 判定 JD2(場の効果)を PR #127 で main に統合](decisions/2026-09-22-132-jd2-pr-127-main.md)
+- [2026-09-23: 判定 JD3 で outspeed-and-ko の契約を破壊的に変更する(判定レーン)](decisions/2026-09-23-133-jd3-outspeed-and-ko.md)
+- [2026-09-23: issue #110 のデータレーン担当分(engine/wasmapi)を実装(データレーン)](decisions/2026-09-23-134-issue-110-engine-wasmapi.md)
+- [2026-09-23: issue #110 のデータレーン担当分を main へ統合(データレーン)](decisions/2026-09-23-135-issue-110-main.md)
+- [2026-09-23: issue #106(手動importとCronJobの同時実行)を実装(データレーン)](decisions/2026-09-23-136-issue-106-import-cronjob.md)
+- [2026-09-23: 判定 JD3(複数の相手候補)を PR #143 で main に統合、JD4 は API レーンの依頼を待つ(判定レーン)](decisions/2026-09-23-137-jd3-pr-143-main-jd4-api.md)
+- [2026-09-23: リモートブランチの `--delete`(git push --delete)も自動承認にする(ユーザー決定)](decisions/2026-09-23-138-delete-git-push-delete.md)
+- [2026-09-23: issue #103 の設計を ADR-0209 で確定(API レーン。critic PASS(NG 2回のあと3回目))](decisions/2026-09-23-139-issue-103-adr-0209-api-critic-pass-ng-2-.md)
+- [2026-09-23: issue #148(クラウド公開前のアクセス境界・認証方針)をユーザーが決定](decisions/2026-09-23-140-issue-148.md)
+- [2026-09-23: issue #148 の API レーン担当分が完了(ADR-0210 §7 を転記)](decisions/2026-09-23-141-issue-148-api-adr-0210-7.md)
+- [2026-09-23: issue #106(手動importとCronJobの同時実行)を main へ統合(データレーン)](decisions/2026-09-23-142-issue-106-import-cronjob-main.md)
+- [2026-09-23: `GET /api/pokedex/moves/{key}`(getMove)を実装・main統合、判定レーン JD4 のブロック解消(API レーン)](decisions/2026-09-23-143-get-api-pokedex-moves-key-getmove-main-j.md)
+- [2026-09-24: 判定レーン JD4(返り討ち判定)の契約を確定・テスト先行(判定レーン)](decisions/2026-09-24-144-jd4.md)
+- [2026-09-24: 判定レーン JD4 の実装・critic PASS(判定レーン)](decisions/2026-09-24-145-jd4-critic-pass.md)
+- [2026-09-24: issue #69(技・持ち物検索の並びがOpenAPI契約と一致しない)を修正(API レーン)](decisions/2026-09-24-146-issue-69-openapi-api.md)
+- [2026-09-24: getMove(P3-7)のAPIレーン越境実装をレビュー(データレーン)](decisions/2026-09-24-147-getmove-p3-7-api.md)
+- [2026-09-24: issue #104(pokedexのDB資格情報を用途別の最小権限へ分離)を実装(データレーン)](decisions/2026-09-24-148-issue-104-pokedex-db.md)
+- [2026-09-24: issue #99(ライトテーマの danger コントラスト不足)の Web レーン担当分が完了。iOS レーンへ依頼](decisions/2026-09-24-149-issue-99-danger-web-ios.md)
+- [2026-09-24: iOS レーンの統合(PR #166)。issue #113(入力変更時の古い計算要求のキャンセル・debounce)の iOS 側を解消](decisions/2026-09-24-150-ios-pr-166-issue-113-debounce-ios.md)
+- [2026-09-24: iOS レーンの統合(PR #170)。issue #99(ライトテーマの danger コントラスト不足)の iOS 側が完了、issue クローズ](decisions/2026-09-24-151-ios-pr-170-issue-99-danger-ios-issue.md)
+- [2026-09-24: 判定 JD4(返り討ち判定)を PR #169 で main に統合(判定レーン)](decisions/2026-09-24-152-jd4-pr-169-main.md)
+- [2026-09-24: JD5(judge-svc を呼ぶ画面)の担当をユーザーが判定レーン自体に決定](decisions/2026-09-24-153-jd5-judge-svc.md)
+- [2026-09-24: 判定 JD5(Web 画面)の設計を確定し、受け入れ条件と失敗するテストを先に置いた(判定レーン)](decisions/2026-09-24-154-jd5-web.md)
+- [2026-09-24: issue #73(OpenAPIとengineの防御プリセット集合を同期検査する)を修正(API レーン)](decisions/2026-09-24-155-issue-73-openapi-engine-api.md)
+- [2026-09-24: issue #104(pokedexのDB資格情報を用途別の最小権限へ分離)を main へ統合(データレーン)](decisions/2026-09-24-156-issue-104-pokedex-db-main.md)
+- [2026-09-24: issue #109(pokedex HTTPサーバーにタイムアウトとgraceful shutdownを追加)を実装(データレーン)](decisions/2026-09-24-157-issue-109-pokedex-http-graceful-shutdown.md)
+- [2026-09-24: issue #109(pokedex HTTPタイムアウト・graceful shutdown)を main へ統合(データレーン)](decisions/2026-09-24-158-issue-109-pokedex-http-graceful-shutdown.md)
+- [2026-09-24: issue #112(pokedexのDB接続プールに上限と寿命を設定)を実装(データレーン)](decisions/2026-09-24-159-issue-112-pokedex-db.md)
+- [2026-09-24: issue #112(pokedexのDB接続プールに上限と寿命を設定)を main へ統合(データレーン)](decisions/2026-09-24-160-issue-112-pokedex-db-main.md)
+- [2026-09-24: 判定 JD5(Web 画面)を PR #182 で main に統合。JD0〜JD5 がすべて完了(判定レーン)](decisions/2026-09-24-161-jd5-web-pr-182-main-jd0-jd5.md)
+- [2026-09-24: 動作確認手順の抜け(web-k3d-open)と web-k3d-smoke の案内改善の提案(データレーン → Web レーン)](decisions/2026-09-24-162-web-k3d-open-web-k3d-smoke-web.md)
+- [2026-09-24: 確認場所・PR 統合の方針・コンテキスト節約(ユーザー決定。全レーンへの共有)](decisions/2026-09-24-163-pr.md)
+- [2026-09-24: iOS レーンの統合(PR #186)。issue #110(calc の候補・観測件数の上限)の iOS 側が完了、issue クローズ](decisions/2026-09-24-164-ios-pr-186-issue-110-calc-ios-issue.md)
+- [2026-09-24: issue #113(クライアントのcancel伝播)のAPIレーン連携分を修正(API レーン)](decisions/2026-09-24-165-issue-113-cancel-api-api.md)
+- [2026-09-24: P4-17(技のID解決の欠落)を解消。案Aではなくバッチ解決を採用(API レーン → Web レーンへ回答)](decisions/2026-09-24-166-p4-17-id-a-api-web.md)
+- [2026-09-24: getMovesByIdsのids上限64件について実データを確認(API レーン → Web レーンへ訂正)](decisions/2026-09-24-167-getmovesbyids-ids-64-api-web.md)
+- [2026-09-24: iOS レーンの統合(PR #199)。issue #68 の残り(選択中の技 ID の名前解決)を getMove で解消、issue クローズ](decisions/2026-09-24-168-ios-pr-199-issue-68-id-getmove-issue.md)
+- [2026-09-25: 全体レビュー issue の割り当て訂正と、素早さ関連 issue の分担確認](decisions/2026-09-25-169-issue-issue.md)
+- [2026-09-25: 攻撃側プリセットの正を engine/presets/attacker.json にした(issue #71。データレーン → Web・iOS レーンへ依頼)](decisions/2026-09-25-170-engine-presets-attacker-json-issue-71-we.md)
+- [2026-09-25: 共有 Makefile の既存ターゲットの変更と chainMods のクランプ(データレーン。PR #346)](decisions/2026-09-25-171-makefile-chainmods-pr-346.md)
+- [2026-09-25: フィールドの接地判定は特性の効果 `Airborne` で持つ(データレーン。issue #231・ADR-0116)](decisions/2026-09-25-172-airborne-issue-231-adr-0116.md)
+- [2026-09-25: 逆算の「受けたダメージ」に防御側プリセットを出す(issue #275。Web レーン。engine への一本化はデータレーンへ申し送り)](decisions/2026-09-25-173-issue-275-web-engine.md)
+- [2026-09-25: issue #236 の speed 側をクローズ(素早さレーン。ADR-0606)](decisions/2026-09-25-174-issue-236-speed-adr-0606.md)
+- [2026-09-25: 計算条件の入力 UI(iOS レーン。issue #274 → Web レーンは追従、API レーンへ提案)](decisions/2026-09-25-175-ui-ios-issue-274-web-api.md)
+- [2026-09-25: 相性表・効果定義・calc の版の「正」と一致の検査(データレーン。issue #280・ADR-0118)](decisions/2026-09-25-176-calc-issue-280-adr-0118.md)
+- [2026-09-25: 防御側プリセットの正を engine/presets/defender.json にした(データレーン。Web レーンの申し送りへの対応)](decisions/2026-09-25-177-engine-presets-defender-json-web.md)
+- [2026-09-25: issue #260 の判定レーン分をクローズ(判定レーン)](decisions/2026-09-25-178-issue-260.md)
+- [2026-09-25: 効果スキーマで表せる持ち物・特性をすべて定義し、表せないものを一覧で固定(データレーン。issue #270・ADR-0120)](decisions/2026-09-25-179-issue-270-adr-0120.md)
+- [2026-09-25: issue #274/#272 の「防御側の詳細(ランク・特性・状態異常)」を BulkCalcRequest に足す提案を採用(iOS レーン → API レーン)](decisions/2026-09-25-180-issue-274-272-bulkcalcrequest-ios-api.md)
+- [2026-09-25: 技の機構(多段・固定ダメージ・威力変動 等)を move_mechanisms 表としてマスタに持つ(データレーン。issue #271-a・ADR-0121)](decisions/2026-09-25-181-move-mechanisms-issue-271-a-adr-0121.md)
+- [2026-09-25: 正しく計算できない技・持ち物・特性に「未対応」の印を付け、サイコフィールドの先制技を無効にする(データレーン。issue #271-b・#270 案 B・ADR-0123)](decisions/2026-09-25-182-issue-271-b-270-b-adr-0123.md)
+- [2026-10-02: record-svc・team-svc を k3d に配線し、失効ジョブを CronJob にした(API レーン。他レーンへの連絡。ADR-0220)](decisions/2026-10-02-183-record-svc-team-svc-k3d-cronjob-api-adr-.md)
+- [2026-09-25: issue #271/#270 の API レーン担当分(mechanisms 公開・unsupported 印)を実装(API レーン → データ・Web・iOS レーンへ)](decisions/2026-09-25-184-issue-271-270-api-mechanisms-unsupported.md)
+- [2026-09-25: 未対応の印の表示(文言・置き場所)を決めた(iOS レーン → Web レーンへ。issue #271/#270・ADR-0123・ADR-0501「P6-17」)](decisions/2026-09-25-185-ios-web-issue-271-270-adr-0123-adr-0501-.md)
+- [2026-09-25: 全体レビューissueの担当拡大の範囲をユーザーが確定(タイプバランスレーン)](decisions/2026-09-25-186-issue.md)
+- [2026-09-25: issue #237(GitOps overlayのread model欠如)を既定案で決定](decisions/2026-09-25-187-issue-237-gitops-overlay-read-model.md)
+- [2026-09-25: issue #236(端末ID・セッションIDの検証・エラーコード不一致)の実装方針](decisions/2026-09-25-188-issue-236-id-id.md)
+- [2026-09-25: ユーザー決定 4 件(GitOps の範囲・API の入口・AI の権限・公開)](decisions/2026-09-25-189-4-gitops-api-ai.md)
+- [2026-09-25: issue #272 の engine 側 — 一括計算・逆算に特性の候補を渡し、結果が同じ特性はまとめる(データレーン。ADR-0126)](decisions/2026-09-25-190-issue-272-engine-adr-0126.md)
+- [2026-09-26: P6-18(issue #328)の非公式表示・データ出典の既定文言(iOS レーンから Web レーンへ)](decisions/2026-09-26-191-p6-18-issue-328-ios-web.md)
+- [2026-09-25: issue 272 の API レーン担当分(defenderOverride.abilityId・unknownAbilityId)を実装(API レーン → データ・Web・iOS レーンへ)](decisions/2026-09-25-192-issue-272-api-defenderoverride-abilityid.md)
+- [2026-09-25: issue #271/#270 の Web レーン実装を、iOS レーンのクロスプラットフォーム決定に合わせた(Web レーン)](decisions/2026-09-25-193-issue-271-270-web-ios-web.md)
+- [2026-09-26: P6-19(issue #272 の iOS 側)防御側・相手の特性の選択と、特性で分かれた行・候補の表示(iOS レーンから Web レーンへ)](decisions/2026-09-26-194-p6-19-issue-272-ios-ios-web.md)
+- [2026-09-26: issue #284 の API レーン担当分(balance・speed・judge を gateway の後ろにまとめる)を実装(API レーン → タイプバランス・素早さ・判定レーンへ)](decisions/2026-09-26-195-issue-284-api-balance-speed-judge-gatewa.md)
+- [2026-09-26: issue #284 critic 1回目 FAIL(重要2件)を修正](decisions/2026-09-26-196-issue-284-critic-1-fail-2.md)
+- [2026-10-01: UnsupportedMark の target・reason を string にした(API レーン → Web・iOS レーンへ)](decisions/2026-10-01-197-unsupportedmark-target-reason-string-api.md)
+- [2026-10-01: issue #211(オンラインの持ち物候補比較)の API 側の提案(Web レーン → API レーンへ)](decisions/2026-10-01-198-issue-211-api-web-api.md)
+- [2026-10-01: issue #260 のタイプバランス分をクローズ(タイプバランスレーン)](decisions/2026-10-01-199-issue-260.md)
+- [2026-10-01: 共通の context ガードとイメージタグ(データレーン → API・Web・タイプバランス・素早さ・判定レーンへ。issue #295・#291・#403 D07)](decisions/2026-10-01-200-context-api-web-issue-295-291-403-d07.md)
+- [2026-10-01: P6-7「この端末のデータを削除」の iOS 側の決定(iOS レーン → Web レーンへ。issue #103)](decisions/2026-10-01-201-p6-7-ios-ios-web-issue-103.md)
+- [2026-10-01: pokecalc namespace に NetworkPolicy(ingress の既定拒否)を入れた(データレーン → 全レーンへ。issue #240・ADR-0132)](decisions/2026-10-01-202-pokecalc-namespace-networkpolicy-ingress.md)
+- [2026-10-01: 既定の計算モードをオンラインに変更(ユーザー決定。Web レーン。issue #210 / ADR-0313)](decisions/2026-10-01-203-web-issue-210-adr-0313.md)
+- [2026-10-02: issue #236 の balance 側をクローズ(タイプバランスレーン → Web レーンへ。ADR-0413)](decisions/2026-10-02-204-issue-236-balance-web-adr-0413.md)
+- [2026-10-02: 素早さに効く特性・持ち物のデータ(判定レーン → データレーン。issue #235・ADR-0710 第2段の依頼)](decisions/2026-10-02-205-issue-235-adr-0710-2.md)
+- [2026-10-02: 一括計算の defenderOverride に ranks・status を足した(API レーン → Web・iOS レーンへ。issue #274/#272・ADR-0216)](decisions/2026-10-02-206-defenderoverride-ranks-status-api-web-io.md)
+- [2026-10-01: #222(Showdown 取得のサプライチェーン)を深夜のため既定案 A で進めた(データレーン。ユーザー確認待ち。issue #403 D19・#301)](decisions/2026-10-01-207-222-showdown-a-issue-403-d19-301.md)
+- [2026-10-02: issue #284 のタイプバランス分(balance の直結 Ingress を撤去し gateway 経由に。ADR-0414)](decisions/2026-10-02-208-issue-284-balance-ingress-gateway-adr-04.md)
+- [2026-10-03: PR のマージは対象 PR の CI が全件成功のときだけ AI が実行してよい(ADR-0803。ユーザー決定)](decisions/2026-10-03-209-pr-pr-ci-ai-adr-0803.md)
+- [2026-10-03: iOS レーンのユーザー決定 4 件(iOS レーンから API・データ・判定・素早さ・タイプバランス・Web レーンへ)](decisions/2026-10-03-210-ios-4-ios-api-web.md)
+- [2026-10-03: 技の対象(単体/全体)をマスタに持たせてほしい(判定レーン → データレーン。issue #288・ユーザー決定)](decisions/2026-10-03-211-issue-288.md)
+- [2026-10-02: issue #230 のタイプバランス系リモートブランチ 19 本を削除(タイプバランスレーン。ユーザー承認済み)](decisions/2026-10-02-212-issue-230-19.md)
+- [2026-10-03: PR のマージは対象 PR の CI が全件成功のときだけ AI が実行してよい(ADR-0803。ユーザー決定)](decisions/2026-10-03-213-pr-pr-ci-ai-adr-0803.md)
+- [2026-10-02: issue #236 の judge 分を API レーンが実施(ADR-0219)](decisions/2026-10-02-214-issue-236-judge-api-adr-0219.md)
+- [2026-10-02: 防御側のランクの文言を iOS も同じに揃える提案(Web レーン → iOS レーン。issue #274、ADR-0315)](decisions/2026-10-02-215-ios-web-ios-issue-274-adr-0315.md)

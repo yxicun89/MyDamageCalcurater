@@ -28,7 +28,9 @@ async function loadFixture() {
   try {
     const { exampleMasterSource } = await server.ssrLoadModule("/src/master/exampleSource.ts");
     const { handlePokedexRequest } = await server.ssrLoadModule("/e2e/support/pokedexFixture.ts");
-    const master = await exampleMasterSource.load();
+    const { withMegaFixture } = await server.ssrLoadModule("/src/test/megaMaster.ts");
+    // issue 515(ADR-0320): 架空のメガ種族・メガストーンを足す(単体テストと共有)。
+    const master = withMegaFixture(await exampleMasterSource.load());
     return { master, handlePokedexRequest };
   } finally {
     await server.close();

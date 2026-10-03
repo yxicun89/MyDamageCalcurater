@@ -1,6 +1,6 @@
 // P4-2: engine に渡すリクエストの組み立て(純粋関数)。形は ADR-0011 §3 の WASM 境界の DTO
 // (engine/wasmapi/dto.go・requests.go)。境界は未知のフィールドを拒否する(unknown_field)ので、
-// 画面のための追加フィールド(learnset)を engine に渡さない(toEngineSpecies)。
+// 画面のための追加フィールド(learnset・isMega・requiredItemId)を engine に渡さない(toEngineSpecies)。
 // 一括計算は presetKeys / presets を省き、engine の既定(技の分類で HB 系 / HD 系の5行)を使う(ADR-0009、ADR-0300 §6)。
 
 import type {
@@ -27,6 +27,9 @@ import { MAX_ABILITY_CANDIDATES, MAX_ITEM_VARIANTS, limitToMax } from "./request
 /** バトルのレベル。Lv50 固定(CLAUDE.md ドメイン規約)。 */
 export const BATTLE_LEVEL = 50;
 
+/** 6能力の表示順(能力ポイント・実数値の欄と1行表示で共通)。 */
+export const STAT_ORDER: readonly StatKey[] = ["hp", "atk", "def", "spa", "spd", "spe"];
+
 /** SP の1ステータスあたりの上限(CLAUDE.md ドメイン規約: 1ステータス最大32)。 */
 export const MAX_SP_PER_STAT = 32;
 
@@ -48,7 +51,7 @@ export const NO_ABILITY: Ability = { id: "", nameJa: "", effect: null };
  */
 export const NEUTRAL_MODIFIER = 4096;
 
-/** マスタの種族から engine の Species の形だけにする(画面のための learnset を落とす)。 */
+/** マスタの種族から engine の Species の形だけにする(画面のための learnset・isMega・requiredItemId を落とす)。 */
 export function toEngineSpecies(species: MasterSpecies): Species {
   const { key, dexNo, form, nameJa, types, baseStats, abilities } = species;
   return { key, dexNo, form, nameJa, types, baseStats, abilities };
@@ -127,12 +130,23 @@ export interface BuildBulkRequestInput {
   /** 急所(計算条件。false・省略は送らない)と場(省略は送らない。issue 274)。 */
   readonly critical?: boolean;
   readonly field?: Field;
+  /** 防御側のランク(省略は送らない。issue 274)。 */
+  readonly defenderOverride?: { readonly ranks?: Ranks };
 }
 
 /** 一括計算リクエスト。presetKeys・presets を省いて engine の既定の5行にする(ADR-0009)。 */
 export function buildBulkRequest(input: BuildBulkRequestInput): BulkRequest {
-  const { attacker, defenderSpecies, move, typeChart, itemVariants, defenderAbilities, critical, field } =
-    input;
+  const {
+    attacker,
+    defenderSpecies,
+    move,
+    typeChart,
+    itemVariants,
+    defenderAbilities,
+    critical,
+    field,
+    defenderOverride,
+  } = input;
   return {
     format: "single",
     attacker,
@@ -143,6 +157,7 @@ export function buildBulkRequest(input: BuildBulkRequestInput): BulkRequest {
     ...(defenderAbilities === undefined || defenderAbilities.length === 0 ? {} : { defenderAbilities }),
     ...(critical === true ? { critical } : {}),
     ...(field === undefined ? {} : { field }),
+    ...(defenderOverride === undefined ? {} : { defenderOverride }),
   };
 }
 

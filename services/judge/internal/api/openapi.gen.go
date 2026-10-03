@@ -11,10 +11,45 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for DefenderCandidateStatus.
+const (
+	DefenderCandidateStatusBadlyPoison DefenderCandidateStatus = "badly_poison"
+	DefenderCandidateStatusBurn        DefenderCandidateStatus = "burn"
+	DefenderCandidateStatusFreeze      DefenderCandidateStatus = "freeze"
+	DefenderCandidateStatusNone        DefenderCandidateStatus = "none"
+	DefenderCandidateStatusParalysis   DefenderCandidateStatus = "paralysis"
+	DefenderCandidateStatusPoison      DefenderCandidateStatus = "poison"
+	DefenderCandidateStatusSleep       DefenderCandidateStatus = "sleep"
+)
+
+// Valid indicates whether the value is a known member of the DefenderCandidateStatus enum.
+func (e DefenderCandidateStatus) Valid() bool {
+	switch e {
+	case DefenderCandidateStatusBadlyPoison:
+		return true
+	case DefenderCandidateStatusBurn:
+		return true
+	case DefenderCandidateStatusFreeze:
+		return true
+	case DefenderCandidateStatusNone:
+		return true
+	case DefenderCandidateStatusParalysis:
+		return true
+	case DefenderCandidateStatusPoison:
+		return true
+	case DefenderCandidateStatusSleep:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ErrorCode.
 const (
 	InternalError       ErrorCode = "internal_error"
+	InvalidHeader       ErrorCode = "invalid_header"
 	InvalidRequest      ErrorCode = "invalid_request"
+	MissingHeader       ErrorCode = "missing_header"
 	NotFound            ErrorCode = "not_found"
 	RequestTooLarge     ErrorCode = "request_too_large"
 	UnknownMove         ErrorCode = "unknown_move"
@@ -28,7 +63,11 @@ func (e ErrorCode) Valid() bool {
 	switch e {
 	case InternalError:
 		return true
+	case InvalidHeader:
+		return true
 	case InvalidRequest:
+		return true
+	case MissingHeader:
 		return true
 	case NotFound:
 		return true
@@ -74,6 +113,84 @@ const (
 func (e HealthStatus) Valid() bool {
 	switch e {
 	case Ok:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IndividualStatus.
+const (
+	IndividualStatusBadlyPoison IndividualStatus = "badly_poison"
+	IndividualStatusBurn        IndividualStatus = "burn"
+	IndividualStatusFreeze      IndividualStatus = "freeze"
+	IndividualStatusNone        IndividualStatus = "none"
+	IndividualStatusParalysis   IndividualStatus = "paralysis"
+	IndividualStatusPoison      IndividualStatus = "poison"
+	IndividualStatusSleep       IndividualStatus = "sleep"
+)
+
+// Valid indicates whether the value is a known member of the IndividualStatus enum.
+func (e IndividualStatus) Valid() bool {
+	switch e {
+	case IndividualStatusBadlyPoison:
+		return true
+	case IndividualStatusBurn:
+		return true
+	case IndividualStatusFreeze:
+		return true
+	case IndividualStatusNone:
+		return true
+	case IndividualStatusParalysis:
+		return true
+	case IndividualStatusPoison:
+		return true
+	case IndividualStatusSleep:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SpeedFactor.
+const (
+	SpeedFactorChoiceScarf SpeedFactor = "choiceScarf"
+	SpeedFactorParalysis   SpeedFactor = "paralysis"
+	SpeedFactorRank        SpeedFactor = "rank"
+	SpeedFactorTailwind    SpeedFactor = "tailwind"
+)
+
+// Valid indicates whether the value is a known member of the SpeedFactor enum.
+func (e SpeedFactor) Valid() bool {
+	switch e {
+	case SpeedFactorChoiceScarf:
+		return true
+	case SpeedFactorParalysis:
+		return true
+	case SpeedFactorRank:
+		return true
+	case SpeedFactorTailwind:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SpeedIgnoredInput.
+const (
+	AbilityId    SpeedIgnoredInput = "abilityId"
+	FieldWeather SpeedIgnoredInput = "fieldWeather"
+	ItemId       SpeedIgnoredInput = "itemId"
+)
+
+// Valid indicates whether the value is a known member of the SpeedIgnoredInput enum.
+func (e SpeedIgnoredInput) Valid() bool {
+	switch e {
+	case AbilityId:
+		return true
+	case FieldWeather:
+		return true
+	case ItemId:
 		return true
 	default:
 		return false
@@ -178,13 +295,25 @@ type DefenderCandidate struct {
 	//
 	// Example: 0445-000
 	SpeciesKey SpeciesKey `json:"speciesKey"`
+
+	// Status 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
+	// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+	// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
+	Status *DefenderCandidateStatus `json:"status,omitempty"`
 }
+
+// DefenderCandidateStatus 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
+// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
+type DefenderCandidateStatus string
 
 // Error defines model for Error.
 type Error struct {
 	// Code エラーの区分。judge は上流の事情(HTTP のステータス・接続エラーの文面・URL)をそのまま返さず、
 	// ADR-0700 §3・ADR-0701 §6 の対応表でこの列挙に畳む。
-	// invalid_request: ヘッダー・request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
+	// missing_header: X-Device-Id / X-Session-Id が無い・空(ADR-0219。gateway と同じ判定)。
+	// invalid_header: X-Device-Id / X-Session-Id が正準形 UUID でない、または同名ヘッダが重複している(ADR-0219)。
+	// invalid_request: request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
 	// unknown_species: speciesKey が pokedex-svc のマスタに無い。
 	// unknown_move: moveId が pokedex-svc の技のマスタに無い(攻撃側・候補側のどちらも。ADR-0704 §6)。
 	// unknown_nature: natureId が性格の一覧に無い。
@@ -198,7 +327,9 @@ type Error struct {
 
 // ErrorCode エラーの区分。judge は上流の事情(HTTP のステータス・接続エラーの文面・URL)をそのまま返さず、
 // ADR-0700 §3・ADR-0701 §6 の対応表でこの列挙に畳む。
-// invalid_request: ヘッダー・request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
+// missing_header: X-Device-Id / X-Session-Id が無い・空(ADR-0219。gateway と同じ判定)。
+// invalid_header: X-Device-Id / X-Session-Id が正準形 UUID でない、または同名ヘッダが重複している(ADR-0219)。
+// invalid_request: request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
 // unknown_species: speciesKey が pokedex-svc のマスタに無い。
 // unknown_move: moveId が pokedex-svc の技のマスタに無い(攻撃側・候補側のどちらも。ADR-0704 §6)。
 // unknown_nature: natureId が性格の一覧に無い。
@@ -231,7 +362,8 @@ type Health struct {
 type HealthStatus string
 
 // Individual 判定に使う個体。欄は docs/judge-design.md §3 JD1 の列挙そのまま。
-// status(状態異常)と teraType は JD1 では受け取らない(ADR-0701 §2)。
+// teraType は受け取らない(ADR-0701 §2)。status(状態異常)は省略可で、麻痺だけ素早さに反映し、
+// すべて calc-svc へそのまま転送する(ADR-0712)。
 type Individual struct {
 	// AbilityId 特性 ID。judge は解釈せず calc-svc にそのまま渡す。
 	AbilityId *string `json:"abilityId,omitempty"`
@@ -262,7 +394,17 @@ type Individual struct {
 	//
 	// Example: 0445-000
 	SpeciesKey SpeciesKey `json:"speciesKey"`
+
+	// Status 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
+	// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+	// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
+	Status *IndividualStatus `json:"status,omitempty"`
 }
+
+// IndividualStatus 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
+// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
+type IndividualStatus string
 
 // KOChance 確定数 / 乱数 n 発。calc-svc の KOChance をそのまま転記する(judge は再計算しない)。
 // 意味の正はルートの api/openapi.yaml の KOChance と ADR-0006・ADR-0010。
@@ -312,6 +454,22 @@ type Matchup struct {
 	// 攻撃側は 1 つに固定なので、すべての matchups で同じ値になる。
 	AttackerSpeed int `json:"attackerSpeed"`
 
+	// AttackerSpeedApplied attackerSpeed の計算に**実際に効かせた**素早さの補正(ADR-0710)。値は rank(素早さのランクが 0 でない)・
+	// tailwind(追い風)・choiceScarf(こだわりスカーフ)・paralysis(status が paralysis。連結のあとに ×0.5)。
+	// 効かせた補正が無ければ空配列(null にも欄の欠落にもしない)。順序は rank → tailwind → choiceScarf → paralysis で固定。
+	AttackerSpeedApplied []SpeedFactor `json:"attackerSpeedApplied"`
+
+	// AttackerSpeedIgnored 自分の入力のうち、素早さに影響しうるのに **attackerSpeed へ反映していない**もの(ADR-0710)。
+	// 値は abilityId(abilityId が指定されている。特性の素早さ補正は引けない)・
+	// itemId(こだわりスカーフ以外の itemId が指定されている)・
+	// fieldWeather(field.weather が none 以外で、かつ abilityId も指定されている。天候依存の素早さ特性があり得るため)。
+	// **「影響する」とは限らない**: 素早さに効かない特性・持ち物でも、指定されていればここに入る
+	// (judge は特性・持ち物の素早さ補正のデータを持たないため。第2段でデータ駆動にするまでの印)。
+	// 状態異常は麻痺を反映済みで、この欄には現れない(麻痺と abilityId が同時でも麻痺は常に ×0.5 で、abilityId はここに残る。ADR-0712)。画面は空でないとき
+	// 「素早さは特性・持ち物・天候を反映していない」旨を添える(文言は画面の持ち物)。
+	// 空配列が「素早さに影響する要素が無い」ことの保証になる。順序は abilityId → itemId → fieldWeather で固定。
+	AttackerSpeedIgnored []SpeedIgnoredInput `json:"attackerSpeedIgnored"`
+
 	// DefenderIndex この行が対応する request の defenders の位置(0 始まり)。matchups は defenders と
 	// 同じ順序で返るので i 番目は必ず i になるが、行を並べ替えて表示する画面が
 	// 対応を取り違えないように明示する。
@@ -336,6 +494,12 @@ type Matchup struct {
 
 	// DefenderSpeed この候補の戦闘中の素早さ(ランク・追い風・こだわりスカーフ適用後)。
 	DefenderSpeed int `json:"defenderSpeed"`
+
+	// DefenderSpeedApplied defenderSpeed について、attackerSpeedApplied と同じ意味(この候補側)。
+	DefenderSpeedApplied []SpeedFactor `json:"defenderSpeedApplied"`
+
+	// DefenderSpeedIgnored defenderSpeed について、attackerSpeedIgnored と同じ意味(この候補側。天候は共通の field.weather)。
+	DefenderSpeedIgnored []SpeedIgnoredInput `json:"defenderSpeedIgnored"`
 
 	// Outspeeds **素早さの比較で**自分が先に動く側か(ADR-0700 §6-1・ADR-0702 §3。値の意味は
 	// JD1〜JD3 から変わらない)。トリックルームが無ければ attackerSpeed > defenderSpeed、
@@ -440,6 +604,9 @@ type Screens struct {
 // Example: 0445-000
 type SpeciesKey = string
 
+// SpeedFactor 素早さの計算に効かせた補正(ADR-0710・ADR-0712)。
+type SpeedFactor string
+
 // SpeedField 素早さの判定にだけ効く場の効果(ADR-0702 §1)。judge が自分で解釈し、calc-svc には送らない。
 // トリックルーム・追い風はダメージに関与せず、calc-svc は場の効果として weather / terrain /
 // screens しか理解しないため、calc-svc へ転送する field とは別の欄にする。
@@ -463,6 +630,9 @@ type SpeedField struct {
 	TrickRoom *bool `json:"trickRoom,omitempty"`
 }
 
+// SpeedIgnoredInput 素早さに影響しうるが反映していない入力(ADR-0710)。
+type SpeedIgnoredInput string
+
 // StatBlock 6 ステータスの値。judge では Individual.sp(能力ポイント。各 0..32・合計 <= 66)に使う。
 // 意味の正はルートの api/openapi.yaml の StatBlock。
 type StatBlock struct {
@@ -484,16 +654,19 @@ type Terrain string
 // 重複除去・真偽値への丸めをしない。ADR-0708 §4)。judge が自分の契約に同じ定義を持つのは、
 // ルートの契約を $ref せず契約を独立に版管理するため(ADR-0012・ADR-0706 §2 の前例)。
 type UnsupportedMark struct {
-	// Id 印が付いた技・持ち物・特性の ID(calc-svc が返したまま)。
+	// Id 印が付いた技・持ち物・特性の ID、または format の印では対戦形式の値(calc-svc が返したまま)。
 	Id string `json:"id"`
 
-	// Reason 印の理由。技は機構の値(13 種)か zero_power(威力 0 の攻撃技)、持ち物・特性は
-	// unsupported_effect(効果スキーマで表せない)。judge はこの値を検査せず、
+	// Reason 印の理由。技は機構の値(13 種)か zero_power(威力 0 の攻撃技)・move_target_unknown(double で技の対象が
+	// 不明。ADR-0222)、持ち物・特性・テラス・未知の対戦形式は unsupported_effect(効果スキーマで表せない・計算に反映していない。ADR-0160)。judge はこの値を検査せず、
 	// この列挙に無い値もそのまま中継する(engine が理由を足したときに judge の版で落とさない。
 	// ADR-0708 §4・§6。契約は説明で、judge は印の意味を持たない)。
 	Reason string `json:"reason"`
 
-	// Target 印の対象(move・attacker_item・attacker_ability・defender_item・defender_ability。ADR-0215 で enum にしない)。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
+	// Target 印の対象(move・attacker_item・attacker_ability・defender_item・defender_ability・format。
+	// format は calc-svc に未知の形式が届いたときだけで、judge が送る single・double には付かない(ADR-0222 §5)。
+	// テラスの attacker_tera_type / defender_tera_type は judge が teraType を受けないので届かないが、
+	// 値の意味はルートの契約に従う。ADR-0215 で enum にしない)。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
 	// 一致しないことがある(ADR-0708 §5)。attackerKoUnsupported(順方向)では
 	// attacker_* = 自分・defender_* = その候補、defenderKoUnsupported(逆方向)では
 	// attacker_* = その候補・defender_* = 自分を指す。
@@ -511,7 +684,14 @@ type SessionId = string
 
 // OutspeedAndKoParams defines parameters for OutspeedAndKo.
 type OutspeedAndKoParams struct {
-	XDeviceId  DeviceId  `json:"X-Device-Id"`
+	// XDeviceId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+	XDeviceId DeviceId `json:"X-Device-Id"`
+
+	// XSessionId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0219, same rule as the gateway).
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 

@@ -261,8 +261,10 @@ public enum Operations {
     ///
     /// 素早さは 実数値(engine.RealStats)→ ランク補正 → 素早さ補正(追い風 ×2・こだわりスカーフ ×1.5)の
     /// 順で求める(ADR-0701 §2・ADR-0702 §2)。補正は 4096 基準で 1 つに連結してから 1 回だけ
-    /// 五捨五超入する(各補正ごとに丸めない)。状態異常(麻痺など)による素早さの変化は扱わないため、
-    /// Individual に status は無い。ko は calc-svc の計算結果をそのまま転記する(judge は確定数を再計算しない)。
+    /// 五捨五超入する(各補正ごとに丸めない)。状態異常は麻痺(paralysis)だけを素早さに反映し(連結・丸めのあとに
+    /// floor(x × 50 / 100)。@smogon/calc 0.12.0 の getFinalSpeed と同じ。ADR-0712)、特性・持ち物(スカーフ以外)・天候による
+    /// 素早さの変化は反映しない。反映した補正は *SpeedApplied、
+    /// 指定されたのに反映していない入力は *SpeedIgnored で各行に返す(ADR-0710)。ko は calc-svc の計算結果をそのまま転記する(judge は確定数を再計算しない)。
     ///
     /// 場の効果は 2 つの欄に分かれる(ADR-0702 §1)。ダメージに効く weather / terrain / screens は
     /// field に入れ、judge は解釈せず calc-svc へそのまま転送する。素早さにしか効かない
@@ -303,16 +305,26 @@ public enum Operations {
         public struct Input: Sendable, Hashable {
             /// - Remark: Generated from `#/paths/api/judge/v1/outspeed-and-ko/POST/header`.
             public struct Headers: Sendable, Hashable {
+                /// Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                /// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+                /// the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+                ///
+                ///
                 /// - Remark: Generated from `#/paths/api/judge/v1/outspeed-and-ko/POST/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
+                /// Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                /// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+                /// the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+                ///
+                ///
                 /// - Remark: Generated from `#/paths/api/judge/v1/outspeed-and-ko/POST/header/X-Session-Id`.
                 public var xSessionId: Components.Parameters.SessionId
                 public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.OutspeedAndKo.AcceptableContentType>]
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
-                ///   - xDeviceId:
-                ///   - xSessionId:
+                ///   - xDeviceId: Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                ///   - xSessionId: Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
                 ///   - accept:
                 public init(
                     xDeviceId: Components.Parameters.DeviceId,
@@ -424,7 +436,8 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// X-Device-Id / X-Session-Id が無い・空、body が 1 つの JSON オブジェクトでない・未知の欄がある、
+            /// X-Device-Id / X-Session-Id が無い・空(missing_header)、正準形 UUID でない・重複(invalid_header。ADR-0219)、
+            /// body が 1 つの JSON オブジェクトでない・未知の欄がある、
             /// 必須の欄が無い(候補の moveId を含む)、defenders が 1 件未満・6 件超、sp / ranks / format が範囲外、
             /// または calc-svc が計算要求を受け付けなかった(invalid_request。ADR-0701 §6・ADR-0703 §4)
             ///

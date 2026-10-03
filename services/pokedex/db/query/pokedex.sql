@@ -24,7 +24,7 @@ WHERE species_key = ?
 ORDER BY slot;
 
 -- name: ListMoves :many
-SELECT id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority
+SELECT id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority, target
 FROM moves
 ORDER BY id;
 
@@ -39,12 +39,12 @@ FROM move_mechanisms
 ORDER BY move_id, mechanism;
 
 -- name: GetMove :one
-SELECT id, name_ja, type, category, power, priority
+SELECT id, name_ja, type, category, power, priority, target
 FROM moves
 WHERE id = ?;
 
 -- name: GetMovesByIDs :many
-SELECT id, name_ja, type, category, power, priority
+SELECT id, name_ja, type, category, power, priority, target
 FROM moves
 WHERE id IN (sqlc.slice(ids));
 
@@ -192,8 +192,8 @@ INSERT INTO items (id, name_ja, name_ja_source, name_en)
 VALUES (?, ?, ?, ?);
 
 -- name: InsertMove :exec
-INSERT INTO moves (id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO moves (id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority, target)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: InsertSpecies :exec
 INSERT INTO species (`key`, dex_no, form, showdown_id, name_ja, name_ja_source, name_en, type1, type2,
@@ -336,7 +336,7 @@ ORDER BY s.dex_no, s.form
 LIMIT ?;
 
 -- name: SearchMoves :many
-SELECT m.id, m.name_ja, m.type, m.category, m.power, m.priority
+SELECT m.id, m.name_ja, m.type, m.category, m.power, m.priority, m.target
 FROM moves m
 JOIN regulation_moves rm ON rm.move_id = m.id
 WHERE rm.regulation_id = sqlc.arg(regulation_id) AND m.name_ja LIKE sqlc.arg(pattern)
@@ -344,17 +344,19 @@ ORDER BY m.name_ja, m.id
 LIMIT ?;
 
 -- name: SearchItems :many
-SELECT i.id, i.name_ja
+SELECT i.id, i.name_ja, ie.effect
 FROM items i
 JOIN regulation_items ri ON ri.item_id = i.id
+LEFT JOIN item_effects ie ON ie.item_id = i.id
 WHERE ri.regulation_id = sqlc.arg(regulation_id) AND i.name_ja LIKE sqlc.arg(pattern)
 ORDER BY i.name_ja, i.id
 LIMIT ?;
 
 -- name: ListSpeciesAbilityNames :many
-SELECT sa.slot, a.id, a.name_ja
+SELECT sa.slot, a.id, a.name_ja, ae.effect
 FROM species_abilities sa
 JOIN abilities a ON a.id = sa.ability_id
+LEFT JOIN ability_effects ae ON ae.ability_id = a.id
 WHERE sa.species_key = ?
 ORDER BY sa.slot;
 
@@ -364,3 +366,16 @@ FROM learnsets l
 JOIN regulation_moves rm ON rm.move_id = l.move_id
 WHERE l.species_key = sqlc.arg(species_key) AND rm.regulation_id = sqlc.arg(regulation_id)
 ORDER BY l.move_id;
+
+-- name: ListMoveLearners :many
+-- 技を覚える種族(learnset の逆引き。ADR-0251)。種族・技の両方が既定のレギュレーションの使用可能集合に
+-- あるものだけ(ListSpeciesLearnset と同じ規則)。並びは SearchSpecies と同じ dex_no, form(UNIQUE なので決定的)。
+-- learnsets の move_id には FK fk_learnsets_move の索引がある(MySQL が FK のために自動で作る。migration 不要)。
+SELECT s.`key`, s.dex_no, s.form, s.name_ja, s.type1, s.type2
+FROM learnsets l
+JOIN species s ON s.`key` = l.species_key
+JOIN regulation_species rs ON rs.species_key = l.species_key AND rs.regulation_id = sqlc.arg(regulation_id)
+JOIN regulation_moves rm ON rm.move_id = l.move_id AND rm.regulation_id = sqlc.arg(regulation_id)
+WHERE l.move_id = sqlc.arg(move_id)
+ORDER BY s.dex_no, s.form
+LIMIT ? OFFSET ?;

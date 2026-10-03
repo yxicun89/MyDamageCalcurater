@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -433,7 +435,7 @@ func (q *Querier) SearchMoves(_ context.Context, arg store.SearchMovesParams) ([
 	var out []store.SearchMovesRow
 	for _, m := range q.Moves {
 		if in[m.ID] && len(out) < int(arg.Limit) {
-			out = append(out, store.SearchMovesRow{ID: m.ID, NameJa: m.NameJa, Type: m.Type, Category: m.Category, Power: m.Power, Priority: m.Priority})
+			out = append(out, store.SearchMovesRow{ID: m.ID, NameJa: m.NameJa, Type: m.Type, Category: m.Category, Power: m.Power, Priority: m.Priority, Target: m.Target})
 		}
 	}
 	return out, nil
@@ -444,10 +446,16 @@ func (q *Querier) SearchItems(_ context.Context, arg store.SearchItemsParams) ([
 		return nil, err
 	}
 	in := set(q.RegulationItems[arg.RegulationID])
+	prefix := likePrefix(arg.Pattern)
+	effects := map[string]*json.RawMessage{} // 行が無ければ nil(LEFT JOIN の NULL)
+	for _, e := range q.ItemEffects {
+		effect := e.Effect
+		effects[e.ItemID] = &effect
+	}
 	var out []store.SearchItemsRow
 	for _, it := range q.Items {
-		if in[it.ID] && len(out) < int(arg.Limit) {
-			out = append(out, store.SearchItemsRow{ID: it.ID, NameJa: it.NameJa})
+		if in[it.ID] && strings.HasPrefix(it.NameJa, prefix) && len(out) < int(arg.Limit) {
+			out = append(out, store.SearchItemsRow{ID: it.ID, NameJa: it.NameJa, Effect: effects[it.ID]})
 		}
 	}
 	return out, nil
@@ -471,7 +479,7 @@ func (q *Querier) GetMove(_ context.Context, id string) (store.GetMoveRow, error
 	}
 	for _, m := range q.Moves {
 		if m.ID == id {
-			return store.GetMoveRow{ID: m.ID, NameJa: m.NameJa, Type: m.Type, Category: m.Category, Power: m.Power, Priority: m.Priority}, nil
+			return store.GetMoveRow{ID: m.ID, NameJa: m.NameJa, Type: m.Type, Category: m.Category, Power: m.Power, Priority: m.Priority, Target: m.Target}, nil
 		}
 	}
 	return store.GetMoveRow{}, sql.ErrNoRows
@@ -485,7 +493,7 @@ func (q *Querier) GetMovesByIDs(_ context.Context, ids []string) ([]store.GetMov
 	var out []store.GetMovesByIDsRow
 	for _, m := range q.Moves {
 		if in[m.ID] {
-			out = append(out, store.GetMovesByIDsRow{ID: m.ID, NameJa: m.NameJa, Type: m.Type, Category: m.Category, Power: m.Power, Priority: m.Priority})
+			out = append(out, store.GetMovesByIDsRow{ID: m.ID, NameJa: m.NameJa, Type: m.Type, Category: m.Category, Power: m.Power, Priority: m.Priority, Target: m.Target})
 		}
 	}
 	return out, nil
@@ -499,10 +507,15 @@ func (q *Querier) ListSpeciesAbilityNames(_ context.Context, speciesKey string) 
 	for _, a := range q.Abilities {
 		names[a.ID] = a.NameJa
 	}
+	effects := map[string]*json.RawMessage{} // 行が無ければ nil(LEFT JOIN の NULL)
+	for _, e := range q.AbilityEffects {
+		effect := e.Effect
+		effects[e.AbilityID] = &effect
+	}
 	var out []store.ListSpeciesAbilityNamesRow
 	for _, sa := range q.SpeciesAbilities {
 		if sa.SpeciesKey == speciesKey {
-			out = append(out, store.ListSpeciesAbilityNamesRow{Slot: sa.Slot, ID: sa.AbilityID, NameJa: names[sa.AbilityID]})
+			out = append(out, store.ListSpeciesAbilityNamesRow{Slot: sa.Slot, ID: sa.AbilityID, NameJa: names[sa.AbilityID], Effect: effects[sa.AbilityID]})
 		}
 	}
 	return out, nil
@@ -520,6 +533,46 @@ func (q *Querier) ListSpeciesLearnset(_ context.Context, arg store.ListSpeciesLe
 		}
 	}
 	return out, nil
+}
+
+// ListMoveLearners は技を覚える種族(ADR-0251)。実 DB のクエリと同じ規則で返す: learnsets のうち、
+// 種族が regulation_species、技が regulation_moves(どちらも arg.RegulationID)にあるものを、
+// species の (DexNo, Form) 昇順に並べ、Offset 件飛ばして Limit 件まで。
+func (q *Querier) ListMoveLearners(_ context.Context, arg store.ListMoveLearnersParams) ([]store.ListMoveLearnersRow, error) {
+	if err := q.record("ListMoveLearners", arg); err != nil {
+		return nil, err
+	}
+	if !set(q.RegulationMoves[arg.RegulationID])[arg.MoveID] {
+		return nil, nil
+	}
+	inSpecies := set(q.RegulationSpecies[arg.RegulationID])
+	learns := map[string]bool{}
+	for _, l := range q.Learnsets {
+		if l.MoveID == arg.MoveID {
+			learns[l.SpeciesKey] = true
+		}
+	}
+	var all []store.ListMoveLearnersRow
+	for _, s := range q.Species {
+		if inSpecies[s.Key] && learns[s.Key] {
+			all = append(all, store.ListMoveLearnersRow{Key: s.Key, DexNo: s.DexNo, Form: s.Form, NameJa: s.NameJa, Type1: s.Type1, Type2: s.Type2})
+		}
+	}
+	sort.Slice(all, func(i, j int) bool {
+		if all[i].DexNo != all[j].DexNo {
+			return all[i].DexNo < all[j].DexNo
+		}
+		return all[i].Form < all[j].Form
+	})
+	start := int(arg.Offset)
+	if start > len(all) {
+		start = len(all)
+	}
+	end := start + int(arg.Limit)
+	if end > len(all) {
+		end = len(all)
+	}
+	return all[start:end], nil
 }
 
 func set(ids []string) map[string]bool {
@@ -585,11 +638,13 @@ func New() *Querier {
 			{SpeciesKey: "9003-000", Slot: 1, AbilityID: "testunused"},
 		},
 		Moves: []store.Move{
-			{ID: "testflame", NameJa: "テストほのおわざ", NameJaSource: "pokeapi", NameEn: "Test Flame", Type: "fire", Category: "special", Power: 90, Accuracy: sql.NullInt16{Int16: 100, Valid: true}, Pp: 15, Priority: 0},
-			{ID: "teststrike", NameJa: "テストうちこみ", NameJaSource: "override", NameEn: "Test Strike", Type: "normal", Category: "physical", Power: 40, Accuracy: sql.NullInt16{Int16: 100, Valid: true}, Pp: 30, Priority: 1},
-			{ID: "testglare", NameJa: "テストにらみ", NameJaSource: "pokeapi", NameEn: "Test Glare", Type: "normal", Category: "status", Power: 0, Pp: 30, Priority: 0},
+			{ID: "testflame", NameJa: "テストほのおわざ", NameJaSource: "pokeapi", NameEn: "Test Flame", Type: "fire", Category: "special", Power: 90, Accuracy: sql.NullInt16{Int16: 100, Valid: true}, Pp: 15, Priority: 0, Target: ns("allAdjacentFoes")},
+			{ID: "teststrike", NameJa: "テストうちこみ", NameJaSource: "override", NameEn: "Test Strike", Type: "normal", Category: "physical", Power: 40, Accuracy: sql.NullInt16{Int16: 100, Valid: true}, Pp: 30, Priority: 1, Target: ns("normal")},
+			{ID: "testglare", NameJa: "テストにらみ", NameJaSource: "pokeapi", NameEn: "Test Glare", Type: "normal", Category: "status", Power: 0, Pp: 30, Priority: 0, Target: ns("self")},
 			{ID: "testbanned", NameJa: "テストきんじて", NameJaSource: "pokeapi", NameEn: "Test Banned", Type: "water", Category: "special", Power: 80, Accuracy: sql.NullInt16{Int16: 100, Valid: true}, Pp: 10, Priority: 0},
 		},
+		// 技の対象(moves.target。ADR-0136・ADR-0223): testflame は全体技(公開 API では spread)、teststrike は単体技、
+		// testglare は自分(公開 API では single)、testbanned はまだ取り込んでいない(NULL。内部 API は null・公開 API はキーを省く)。
 		// testflame は複数の機構を持つ(わざと逆順に入れて、応答が昇順に並び替わることを確認する。ADR-0121)。
 		// teststrike 等は機構を持たない(通常の技。応答は空配列になる)。
 		MoveMechanisms: []store.MoveMechanism{
@@ -649,4 +704,20 @@ func New() *Querier {
 			"test-b":            {"testunused"},
 		},
 	}
+}
+
+// 注意: 実 MySQL(照合順序 ja_0900_as_cs。かな種別・全角半角を区別しない)の LIKE より厳しい(バイト列の前方一致)。
+// 実 MySQL との一致は services/pokedex/importer の mysql タグのテストが確かめる。
+// likePrefix は前方一致の LIKE パターン("..." + "%"。\ \% \_ はエスケープ)から接頭辞を取り出す。
+func likePrefix(pattern string) string {
+	pattern = strings.TrimSuffix(pattern, "%")
+	var b strings.Builder
+	rs := []rune(pattern)
+	for i := 0; i < len(rs); i++ {
+		if rs[i] == '\\' && i+1 < len(rs) {
+			i++
+		}
+		b.WriteRune(rs[i])
+	}
+	return b.String()
 }

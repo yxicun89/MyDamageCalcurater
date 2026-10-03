@@ -155,6 +155,29 @@ public enum Operations {
                     }
                 }
             }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/species/get(searchSpecies)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
             public struct ServiceUnavailable: Sendable, Hashable {
                 /// - Remark: Generated from `#/paths/api/pokedex/species/GET/responses/503/content`.
                 @frozen public enum Body: Sendable, Hashable {
@@ -260,6 +283,7 @@ public enum Operations {
     ///
     /// 使用可能集合の外の種族も返す(絞り込みは検索の仕事)。`abilities` は slot 順、
     /// `learnset` は習得技 ∩ 既定のレギュレーションの使用可能な技(ID 昇順)。
+    /// `abilities` の各特性は効果を持てば `effect` を伴う(ADR-0218)。
     ///
     ///
     /// - Remark: HTTP `GET /api/pokedex/species/{key}`.
@@ -381,6 +405,29 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/species/{key}/get(getSpecies)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
                             response: self
                         )
                     }
@@ -670,6 +717,29 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/moves/get(searchMoves)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
                             response: self
                         )
                     }
@@ -1299,9 +1369,329 @@ public enum Operations {
             }
         }
     }
+    /// 技を覚えるポケモンの一覧(learnset の逆引き)
+    ///
+    /// 技 `key` を覚える種族の要約を返す(調整タブの機能 1。ADR-0251)。既定のレギュレーション
+    /// (コードに書かず DB から引く。ADR-0105)で絞る:
+    /// 種族が使用可能集合にあり、かつ技が使用可能集合にあるときだけ返す。`getSpecies` の `learnset`
+    /// (習得技 ∩ 使用可能な技)と同じ規則で、使用可能な種族 S について「S がこの一覧に出る」と
+    /// 「`getSpecies(S).learnset` にこの技がある」は一致する。技がマスタにあっても使用可能集合の外なら
+    /// 200 `[]`(404 ではない)。
+    /// 並びは `searchSpecies` と同じ図鑑番号・フォルム番号の昇順(決定的)。ページングは `limit` と
+    /// `offset`。返った件数が `limit` 未満なら最後のページ(総数は返さない)。
+    /// 既定のレギュレーションが無い(マスタ未投入)は 503 `master_unavailable`(一覧系の流儀。
+    /// `getMove` の 404 とは異なる)。既定のレギュレーションはあるが技がマスタに無いときは 404 `not_found`。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/pokedex/moves/{key}/learners`.
+    /// - Remark: Generated from `#/paths//api/pokedex/moves/{key}/learners/get(listMoveLearners)`.
+    public enum ListMoveLearners {
+        public static let id: Swift.String = "listMoveLearners"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/pokedex/moves/{key}/learners/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// 技の ID(例 highhorsepower)。マスタに無ければ 404 `not_found`
+                ///
+                /// - Remark: Generated from `#/paths/api/pokedex/moves/{key}/learners/GET/path/key`.
+                public var key: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - key: 技の ID(例 highhorsepower)。マスタに無ければ 404 `not_found`
+                public init(key: Swift.String) {
+                    self.key = key
+                }
+            }
+            public var path: Operations.ListMoveLearners.Input.Path
+            /// - Remark: Generated from `#/paths/api/pokedex/moves/{key}/learners/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// 1ページの件数。範囲外・整数でない値は 400 `invalid_input`
+                ///
+                /// - Remark: Generated from `#/paths/api/pokedex/moves/{key}/learners/GET/query/limit`.
+                public var limit: Swift.Int?
+                /// 先頭から飛ばす件数。範囲外・整数でない値は 400 `invalid_input`。末尾を超えれば 200 `[]`
+                ///
+                /// - Remark: Generated from `#/paths/api/pokedex/moves/{key}/learners/GET/query/offset`.
+                public var offset: Swift.Int?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - limit: 1ページの件数。範囲外・整数でない値は 400 `invalid_input`
+                ///   - offset: 先頭から飛ばす件数。範囲外・整数でない値は 400 `invalid_input`。末尾を超えれば 200 `[]`
+                public init(
+                    limit: Swift.Int? = nil,
+                    offset: Swift.Int? = nil
+                ) {
+                    self.limit = limit
+                    self.offset = offset
+                }
+            }
+            public var query: Operations.ListMoveLearners.Input.Query
+            /// - Remark: Generated from `#/paths/api/pokedex/moves/{key}/learners/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/pokedex/moves/{key}/learners/GET/header/X-Device-Id`.
+                public var xDeviceId: Components.Parameters.DeviceId
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/pokedex/moves/{key}/learners/GET/header/X-Session-Id`.
+                public var xSessionId: Components.Parameters.SessionId
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListMoveLearners.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///   - accept:
+                public init(
+                    xDeviceId: Components.Parameters.DeviceId,
+                    xSessionId: Components.Parameters.SessionId,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListMoveLearners.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.xDeviceId = xDeviceId
+                    self.xSessionId = xSessionId
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ListMoveLearners.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - query:
+            ///   - headers:
+            public init(
+                path: Operations.ListMoveLearners.Input.Path,
+                query: Operations.ListMoveLearners.Input.Query = .init(),
+                headers: Operations.ListMoveLearners.Input.Headers
+            ) {
+                self.path = path
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/pokedex/moves/{key}/learners/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/pokedex/moves/{key}/learners/GET/responses/200/content/application\/json`.
+                    case json([Components.Schemas.SpeciesSummary])
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: [Components.Schemas.SpeciesSummary] {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListMoveLearners.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListMoveLearners.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 技を覚える種族の要約(図鑑番号・フォルム番号の昇順。一致なしは `[]`)
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/moves/{key}/learners/get(listMoveLearners)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ListMoveLearners.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ListMoveLearners.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct NotFound: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/pokedex/moves/{key}/learners/GET/responses/404/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/pokedex/moves/{key}/learners/GET/responses/404/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListMoveLearners.Output.NotFound.Body
+                /// Creates a new `NotFound`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListMoveLearners.Output.NotFound.Body) {
+                    self.body = body
+                }
+            }
+            /// 技がマスタに無い(`not_found`)
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/moves/{key}/learners/get(listMoveLearners)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Operations.ListMoveLearners.Output.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Operations.ListMoveLearners.Output.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/pokedex/moves/{key}/learners/GET/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/pokedex/moves/{key}/learners/GET/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListMoveLearners.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListMoveLearners.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/moves/{key}/learners/get(listMoveLearners)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.ListMoveLearners.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.ListMoveLearners.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/moves/{key}/learners/get(listMoveLearners)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// 持ち物を日本語名で前方一致検索
     ///
     /// 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
+    /// 各持ち物は効果を持てば `effect` を伴う(ADR-0218)。効果を持つ持ち物だけに絞る検索条件は無い
+    /// (クライアントが `effect` の有無で絞る)。
+    ///
     ///
     /// - Remark: HTTP `GET /api/pokedex/items`.
     /// - Remark: Generated from `#/paths//api/pokedex/items/get(searchItems)`.
@@ -1431,6 +1821,29 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/pokedex/items/get(searchItems)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
                             response: self
                         )
                     }
@@ -2523,6 +2936,1107 @@ public enum Operations {
             /// エラー
             ///
             /// - Remark: Generated from `#/paths//api/calc/reverse/post(calcReverse)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// 調整の指数(火力指数・耐久指数)と HP の 16n / 16n-1 ライン
+    ///
+    /// 自分の個体1体の育成で決まる量を返す(ADR-0150 §2〜§4・ADR-0250)。ステートレスで、計算イベントは発行しない。
+    /// - 火力指数 = floor(攻撃実数値 × 威力 × modifier / 4096)。`moveId` を省略したら `firepowerIndex` は null。
+    ///   技の分類が physical なら A、special なら C。変化技・威力 0 の技は 400 `invalid_input`。
+    /// - 耐久指数 = floor(H × B(D) × 4096 / damageModifier)。物理・特殊の両方を返す(技は見ない)。
+    /// - 実数値はランク補正を含めない(`individual.ranks`・`status`・`itemId`・`abilityId` は指数に使わない。
+    ///   持ち物・特性・タイプ一致の倍率はクライアントが `modifier` / `damageModifier` に掛け合わせて渡す)。
+    /// - HP ラインは `individual.sp.hp` と種族の HP 種族値から求める(合計 66 は見ない。ADR-0150 §4)。
+    ///
+    ///
+    /// - Remark: HTTP `POST /api/calc/adjust/indices`.
+    /// - Remark: Generated from `#/paths//api/calc/adjust/indices/post(adjustIndices)`.
+    public enum AdjustIndices {
+        public static let id: Swift.String = "adjustIndices"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/calc/adjust/indices/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/calc/adjust/indices/POST/header/X-Device-Id`.
+                public var xDeviceId: Components.Parameters.DeviceId
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/calc/adjust/indices/POST/header/X-Session-Id`.
+                public var xSessionId: Components.Parameters.SessionId
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AdjustIndices.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///   - accept:
+                public init(
+                    xDeviceId: Components.Parameters.DeviceId,
+                    xSessionId: Components.Parameters.SessionId,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AdjustIndices.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.xDeviceId = xDeviceId
+                    self.xSessionId = xSessionId
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.AdjustIndices.Input.Headers
+            /// - Remark: Generated from `#/paths/api/calc/adjust/indices/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/calc/adjust/indices/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.AdjustIndicesRequest)
+            }
+            public var body: Operations.AdjustIndices.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.AdjustIndices.Input.Headers,
+                body: Operations.AdjustIndices.Input.Body
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/calc/adjust/indices/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/calc/adjust/indices/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.AdjustIndicesResult)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.AdjustIndicesResult {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.AdjustIndices.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.AdjustIndices.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 指数と HP ライン
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/indices/post(adjustIndices)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.AdjustIndices.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.AdjustIndices.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/indices/post(adjustIndices)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/indices/post(adjustIndices)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/calc/adjust/indices/POST/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/calc/adjust/indices/POST/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.AdjustIndices.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.AdjustIndices.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+            /// gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/indices/post(adjustIndices)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.AdjustIndices.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.AdjustIndices.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/indices/post(adjustIndices)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// 相手を n 発で倒せる最小の A / C の SP
+    ///
+    /// 自分 = `attacker`、相手 = `defender`。自分の A(物理)/ C(特殊)の SP を 0 から探し、`hits` 発で倒す確率が
+    /// `thresholdPercent` 以上になる最小の SP を返す(ADR-0150 §7・ADR-0250)。
+    /// - `attacker.sp` の探索する能力(物理なら atk、特殊なら spa)の値は無視する(上書きする)。それ以外の SP の合計が
+    ///   66 を超えると 400 `invalid_input`。
+    /// - 満たせない(上限まで振っても届かない・タイプ相性で無効)ときもエラーにせず `feasible: false` を返す。
+    /// - 変化技・威力 0 の技は 400 `invalid_input`。探索量は `hits`(1〜10)と SP 0〜32 で上限が決まる(ADR-0250 §5)。
+    /// - ステートレスで、計算イベントは発行しない。
+    ///
+    ///
+    /// - Remark: HTTP `POST /api/calc/adjust/min-sp-to-ko`.
+    /// - Remark: Generated from `#/paths//api/calc/adjust/min-sp-to-ko/post(adjustMinSpToKo)`.
+    public enum AdjustMinSpToKo {
+        public static let id: Swift.String = "adjustMinSpToKo"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-ko/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-ko/POST/header/X-Device-Id`.
+                public var xDeviceId: Components.Parameters.DeviceId
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-ko/POST/header/X-Session-Id`.
+                public var xSessionId: Components.Parameters.SessionId
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AdjustMinSpToKo.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///   - accept:
+                public init(
+                    xDeviceId: Components.Parameters.DeviceId,
+                    xSessionId: Components.Parameters.SessionId,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AdjustMinSpToKo.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.xDeviceId = xDeviceId
+                    self.xSessionId = xSessionId
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.AdjustMinSpToKo.Input.Headers
+            /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-ko/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-ko/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.AdjustSearchRequest)
+            }
+            public var body: Operations.AdjustMinSpToKo.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.AdjustMinSpToKo.Input.Headers,
+                body: Operations.AdjustMinSpToKo.Input.Body
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-ko/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-ko/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.AdjustKOResult)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.AdjustKOResult {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.AdjustMinSpToKo.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.AdjustMinSpToKo.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 最小の SP(または届かないときの上限での結果)
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/min-sp-to-ko/post(adjustMinSpToKo)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.AdjustMinSpToKo.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.AdjustMinSpToKo.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/min-sp-to-ko/post(adjustMinSpToKo)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/min-sp-to-ko/post(adjustMinSpToKo)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-ko/POST/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-ko/POST/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.AdjustMinSpToKo.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.AdjustMinSpToKo.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+            /// gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/min-sp-to-ko/post(adjustMinSpToKo)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.AdjustMinSpToKo.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.AdjustMinSpToKo.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/min-sp-to-ko/post(adjustMinSpToKo)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// 相手の技を n 発耐える最小の H と B / D の SP の組
+    ///
+    /// 自分 = `defender`、相手 = `attacker`。自分の H と B(物理)/ D(特殊)の SP の組を探し、`hits` 発受けて耐える
+    /// 確率が `thresholdPercent` 以上になる組のうち、合計 SP 最小(同点は耐久指数が大きい → H が小さい)を返す
+    /// (ADR-0150 §7・ADR-0250)。
+    /// - `defender.sp` の hp と探索する能力(物理なら def、特殊なら spd)の値は無視する(上書きする)。
+    /// - 満たせないときもエラーにせず `feasible: false` で、耐える確率が最大の組を返す。
+    /// - 変化技・威力 0 の技は 400 `invalid_input`。探索は最大 33² 組(ADR-0250 §5)。
+    /// - ステートレスで、計算イベントは発行しない。
+    ///
+    ///
+    /// - Remark: HTTP `POST /api/calc/adjust/min-sp-to-survive`.
+    /// - Remark: Generated from `#/paths//api/calc/adjust/min-sp-to-survive/post(adjustMinSpToSurvive)`.
+    public enum AdjustMinSpToSurvive {
+        public static let id: Swift.String = "adjustMinSpToSurvive"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-survive/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-survive/POST/header/X-Device-Id`.
+                public var xDeviceId: Components.Parameters.DeviceId
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-survive/POST/header/X-Session-Id`.
+                public var xSessionId: Components.Parameters.SessionId
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AdjustMinSpToSurvive.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///   - accept:
+                public init(
+                    xDeviceId: Components.Parameters.DeviceId,
+                    xSessionId: Components.Parameters.SessionId,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AdjustMinSpToSurvive.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.xDeviceId = xDeviceId
+                    self.xSessionId = xSessionId
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.AdjustMinSpToSurvive.Input.Headers
+            /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-survive/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-survive/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.AdjustSearchRequest)
+            }
+            public var body: Operations.AdjustMinSpToSurvive.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.AdjustMinSpToSurvive.Input.Headers,
+                body: Operations.AdjustMinSpToSurvive.Input.Body
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-survive/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-survive/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.AdjustSurviveResult)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.AdjustSurviveResult {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.AdjustMinSpToSurvive.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.AdjustMinSpToSurvive.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 最小の SP の組(または届かないときの最も耐える組)
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/min-sp-to-survive/post(adjustMinSpToSurvive)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.AdjustMinSpToSurvive.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.AdjustMinSpToSurvive.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/min-sp-to-survive/post(adjustMinSpToSurvive)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/min-sp-to-survive/post(adjustMinSpToSurvive)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-survive/POST/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/calc/adjust/min-sp-to-survive/POST/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.AdjustMinSpToSurvive.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.AdjustMinSpToSurvive.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+            /// gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/min-sp-to-survive/post(adjustMinSpToSurvive)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.AdjustMinSpToSurvive.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.AdjustMinSpToSurvive.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/min-sp-to-survive/post(adjustMinSpToSurvive)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// SP 配分の提案(指数最大の組と、目標を満たす最小 SP の組)
+    ///
+    /// `self.sp` を各能力の下限(「ここまで振りたい」)として固定し、残りの SP(66 − 下限の合計)を `mode` の側に回す
+    /// (ADR-0150 §8・ADR-0250)。
+    /// - `mode: bulk` は H・B・D に回す(素早さは見ない)。`focus` が必須。`minSpeed` は 0 以外なら 400 `invalid_input`。
+    /// - `mode: offense` は A(`offenseCategory: physical`)または C(`special`)と S に回す。`offenseCategory` が必須。
+    /// - `ceiling` は回す能力の上限。**省略した能力は 32**(engine のゼロ値「振らない」をそのまま渡さない。ADR-0150 §8)。
+    ///   明示した 0 は「下限より上には振らない」。下限 ≤ 上限 ≤ 32 でなければ 400 `invalid_input`。
+    /// - `goal` を渡したときだけ `minSp` を返す(省略時は null)。判定は min-sp-to-ko / min-sp-to-survive と同じ。
+    /// - 探索は耐久側で最大 33³ ≈ 3.6 万候補、攻撃側で 33² 候補(ADR-0250 §5)。ステートレスで、計算イベントは発行しない。
+    ///
+    ///
+    /// - Remark: HTTP `POST /api/calc/adjust/allocation`.
+    /// - Remark: Generated from `#/paths//api/calc/adjust/allocation/post(adjustAllocation)`.
+    public enum AdjustAllocation {
+        public static let id: Swift.String = "adjustAllocation"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/calc/adjust/allocation/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/calc/adjust/allocation/POST/header/X-Device-Id`.
+                public var xDeviceId: Components.Parameters.DeviceId
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/calc/adjust/allocation/POST/header/X-Session-Id`.
+                public var xSessionId: Components.Parameters.SessionId
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AdjustAllocation.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///   - accept:
+                public init(
+                    xDeviceId: Components.Parameters.DeviceId,
+                    xSessionId: Components.Parameters.SessionId,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AdjustAllocation.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.xDeviceId = xDeviceId
+                    self.xSessionId = xSessionId
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.AdjustAllocation.Input.Headers
+            /// - Remark: Generated from `#/paths/api/calc/adjust/allocation/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/calc/adjust/allocation/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.AdjustAllocationRequest)
+            }
+            public var body: Operations.AdjustAllocation.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.AdjustAllocation.Input.Headers,
+                body: Operations.AdjustAllocation.Input.Body
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/calc/adjust/allocation/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/calc/adjust/allocation/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.AdjustAllocationResult)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.AdjustAllocationResult {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.AdjustAllocation.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.AdjustAllocation.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 提案する SP の組
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/allocation/post(adjustAllocation)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.AdjustAllocation.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.AdjustAllocation.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/allocation/post(adjustAllocation)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/allocation/post(adjustAllocation)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/calc/adjust/allocation/POST/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/calc/adjust/allocation/POST/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.AdjustAllocation.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.AdjustAllocation.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+            /// gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/allocation/post(adjustAllocation)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.AdjustAllocation.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.AdjustAllocation.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/calc/adjust/allocation/post(adjustAllocation)/responses/default`.
             ///
             /// HTTP response code: `default`.
             case `default`(statusCode: Swift.Int, Components.Responses._Error)

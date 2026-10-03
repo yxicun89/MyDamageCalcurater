@@ -140,6 +140,9 @@ function mapSpeciesDetail(detail: Schemas["SpeciesDetail"]): MasterSpecies {
     baseStats: detail.baseStats,
     abilities: detail.abilities.map((ability) => ability.id),
     learnset: detail.learnset ?? [],
+    // issue 515: 応答が返さない(省略)ときは省略のまま(isMegaSpecies が「メガではない」と読む)。
+    ...(detail.isMega === undefined ? {} : { isMega: detail.isMega }),
+    ...(detail.requiredItemId === undefined ? {} : { requiredItemId: detail.requiredItemId }),
   };
 }
 

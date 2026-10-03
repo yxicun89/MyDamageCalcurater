@@ -11,13 +11,22 @@
 
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test } from "vitest";
 import type { components } from "../api/openapi.gen";
 import { teamScreenText } from "../i18n/ja";
+import { exampleMasterSource } from "../master/exampleSource";
+import type { MasterData } from "../master/types";
 import { MAX_TEAM_MEMBERS, MAX_TEAM_NAME_LENGTH, TeamScreen } from "./TeamScreen";
 import type { TeamClient, TeamResult } from "./teamClient";
 
 type Schemas = components["schemas"];
+
+// PR-A2 から TeamScreen は master を受け取る(一覧・作成・名前変更・削除のこのテストでは使わない)。
+let master: MasterData;
+
+beforeAll(async () => {
+  master = await exampleMasterSource.load();
+});
 
 // ---- fake の TeamClient(呼び出しを記録し、テストが応答を返す。JudgeScreen.test.tsx と同じ形) ----
 
@@ -114,7 +123,7 @@ const TEAM_B: Schemas["Team"] = {
 /** 画面を描き、list の応答(成功)を流す。 */
 async function renderWithTeams(teams: readonly Schemas["Team"][]): Promise<FakeTeamClient> {
   const client = createFakeTeamClient();
-  render(<TeamScreen teamClient={client} />);
+  render(<TeamScreen teamClient={client} master={master} />);
   await flush(() => {
     lastCall(client.listCalls, "list").resolve({ ok: true, value: [...teams] });
   });
@@ -124,7 +133,7 @@ async function renderWithTeams(teams: readonly Schemas["Team"][]): Promise<FakeT
 /** 画面を描き、list を失敗させる。 */
 async function renderWithListError(error: { code: string; message: string }): Promise<FakeTeamClient> {
   const client = createFakeTeamClient();
-  render(<TeamScreen teamClient={client} />);
+  render(<TeamScreen teamClient={client} master={master} />);
   await flush(() => {
     lastCall(client.listCalls, "list").resolve({ ok: false, error });
   });
@@ -159,7 +168,7 @@ function createButton(): HTMLElement {
 describe("AC-2 一覧(マウント時に1回だけ読む)", () => {
   test("マウント時に list を1回だけ呼び、応答が来るまで読み込み中を出す(書き込みの API は呼ばない)", () => {
     const client = createFakeTeamClient();
-    render(<TeamScreen teamClient={client} />);
+    render(<TeamScreen teamClient={client} master={master} />);
 
     expect(client.listCalls).toHaveLength(1);
     expect(client.createCalls).toHaveLength(0);
@@ -332,7 +341,7 @@ describe("list() 応答と書き込みの競合(critic 指摘: 消えて見え�
   test("list() が届く前に create() が成功すると、後から届いた古い list() の一覧で上書きしない", async () => {
     const user = userEvent.setup();
     const client = createFakeTeamClient();
-    render(<TeamScreen teamClient={client} />);
+    render(<TeamScreen teamClient={client} master={master} />);
 
     // list() はまだ保留のまま(応答を流さない)。この間に新規作成が成功する。
     await user.type(nameField(), "テスト構築C");
@@ -363,7 +372,7 @@ describe("list() 応答と書き込みの競合(critic 指摘: 消えて見え�
   test("list() が届く前に update()・remove() が成功しても、後から届いた古い list() の一覧で上書きしない", async () => {
     const user = userEvent.setup();
     const client = createFakeTeamClient();
-    render(<TeamScreen teamClient={client} />);
+    render(<TeamScreen teamClient={client} master={master} />);
 
     // list() が解決する前に、TEAM_A を直接与えることはできないので、まず作成→list より先に名前変更を行う。
     await user.type(nameField(), "テスト構築C");

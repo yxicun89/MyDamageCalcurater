@@ -15,6 +15,7 @@ final class SpeedLabelsTests: XCTestCase {
         "master_unavailable": "ポケモンのマスタを読み込めません",
         "internal_error": "素早さの計算に失敗しました",
         "not_found": "素早さの計算に失敗しました",
+        "overloaded": "素早さの計算に失敗しました",
     ]
 
     func testErrorMessagesByContractCode() {

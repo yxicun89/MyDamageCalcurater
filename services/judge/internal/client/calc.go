@@ -18,13 +18,14 @@ type RankBlock struct {
 }
 
 // Individual is judge's copy of the required fields of the root api/openapi.yaml Individual
-// that it needs to send (ADR-0700 §4): the rest of that schema (level, teraType, status, ...)
-// isn't something JD0 has a value for yet.
+// that it needs to send (ADR-0700 §4): the rest of that schema (level, teraType, ...)
+// isn't something judge has a value for. Status is forwarded as-is, omitted when unset (ADR-0712).
 type Individual struct {
 	SpeciesKey string    `json:"speciesKey"`
 	NatureID   string    `json:"natureId"`
 	AbilityID  string    `json:"abilityId,omitempty"`
 	ItemID     string    `json:"itemId,omitempty"`
+	Status     string    `json:"status,omitempty"`
 	SP         StatBlock `json:"sp"`
 	Ranks      RankBlock `json:"ranks"`
 }

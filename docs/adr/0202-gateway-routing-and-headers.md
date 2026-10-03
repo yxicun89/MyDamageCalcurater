@@ -5,6 +5,7 @@
 - 関連: ADR-0001(技術スタック)、ADR-0012(サービス境界。balance・speed・judge は兄弟サービス。**2026-09-25
   追記〈issue #284〉: 当初 `/api/balance` は独自の Ingress だったが、gateway の後ろに統合した**)、
   ADR-0200(calc-svc の契約・ErrorCode の語彙と HTTP ステータス・healthz の扱い)、ADR-0201(Echo v5)、
+  ADR-0414(balance の直結 Ingress の撤去と `GATEWAY_BALANCE_URL` の配線。2026-10-02),
   ADR-0606(speed-svc が独自に複製した端末ID/セッションID検証。issue #236。issue #284 統合後も残る二重化)、
   docs/requirements.md §3(認証なし・端末ID)・§4(アーキテクチャ)・§8(画像は gateway の `/assets/` から配信)、plan.md P3-2
 
@@ -197,3 +198,20 @@ calc-svc の `httpapi` / `master` は `services/calc/internal` にあり、Go �
 - P3-3 の契約テストは `TestGatewayErrorsMatchContract` / `TestRealCalcThroughGatewayMatchesContract` を土台にする。
 - k8s の manifest(deploy/k8s)は上の環境変数で gateway を設定する(本 ADR では manifest は変えない)。
 - ADR-0200 §1.6 の「重複は invalid_input」は本 ADR §9 で `invalid_header` に変わる。
+
+## 追記(2026-10-02。issue #246・#217。ログ・リクエスト ID・ビルドの版)
+
+- **ログは JSON 1 形式**: gateway・calc の `main` の先頭で `reqlog.Install(os.Stderr)`(`services/internal/reqlog`)が slog の既定ロガーを
+  JSON ハンドラにする。Echo の内部ログ(`e.Logger`)も同じロガー。1 リクエスト 1 行のアクセスログ(`access`: method・path・status・
+  duration_ms・remote_addr・request_id)を最も外側のミドルウェアが出す。`/healthz`・`/readyz`・`/metrics` は Debug(probe・scrape で
+  ログを埋めない)。
+- **`X-Request-Id`**(契約外の運用ヘッダ。openapi には載せない): gateway が、クライアントの値が 1〜64 文字の可視 ASCII ならそのまま、
+  無い・不正なら生成(128 bit の 16 進)して確定し、上流への要求ヘッダ・応答ヘッダ・context(`request_id` としてログに付く)に入れる。
+  上流が同じヘッダを返しても `ModifyResponse` で消し、応答には gateway の 1 つだけ。calc も同じミドルウェアで、受け取った値を通し、
+  直接アクセスなら生成する。gateway の自前エラー(404・400・503・panic の 500)にも付く。
+- **実クライアント IP(§5 の `X-Forwarded-For`)は変更しない**: クライアントの値を信用しない方針(§5・issue #326)を保つ。信頼できる前段が
+  1 つの構成で最右 1 段を残す案は、Traefik の信頼境界を決める運用判断なので別 issue(アクセスログには gateway から見た `remote_addr`)。
+- **ビルドの版(issue #217)**: `version.Version` を Dockerfile の `ARG VERSION`(既定 `0.0.0-dev`)から `-ldflags -X` で埋め込み、
+  `make api-docker-build` が `git rev-parse --short HEAD` を渡す。起動ログの先頭行(`version`)と `/healthz` の本文
+  (`{"status":"ok","version":"<版>"}`。gateway・calc)に出る。`/healthz` は openapi に載せない運用エンドポイントなので契約変更なし。
+  probe は status しか見ない(本文の消費者は gateway のテストだけ)。イメージ tag を SHA にする(`rollout restart` 不要にする)案は運用レーンの別件。

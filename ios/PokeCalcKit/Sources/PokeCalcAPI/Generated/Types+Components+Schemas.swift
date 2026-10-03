@@ -48,7 +48,7 @@ extension Components {
         /// | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
         /// | unknown_field | 契約にないフィールド | 400 |
         /// | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-        /// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
+        /// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。calc-svc では `sp` と StatBlock の6キー(null 値を含む)の欠落も含む(ADR-0200 §4)。`getMovesByIds` の `ids` の件数超過・欠落も含む。調整(`/api/calc/adjust/*`)の発数・しきい値・補正・上限(ceiling)の範囲外、変化技での探索、下限が上限を超える配分(ADR-0250)も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
         /// | unknown_preset | 未知の防御側プリセット | 400 |
         /// | duplicate_preset | 防御側プリセットの重複 | 400 |
         /// | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -104,6 +104,16 @@ extension Components {
             case storeUnavailable = "store_unavailable"
             case upstreamUnavailable = "upstream_unavailable"
         }
+        /// 対戦形式。計算(/api/calc・/api/calc/bulk・/api/calc/reverse)では double のとき次を掛ける(issue 232 案B のダブル分・ADR-0222)。
+        /// - 防御側の壁(リフレクター・ひかりのかべ・オーロラベール): ×2732/4096(single は ×1/2)。急所は壁を無視する
+        /// - 全体技(技の対象が相手全体・自分以外全体): 基礎ダメージに ×3072/4096(天候・急所より前)。
+        ///   1対1の計算なので、全体技は常に2体以上に当たる前提で掛ける。味方の効果(てだすけ等)は扱わない
+        /// 技の対象をマスタが持たない間(issue 288)は、double の攻撃技に UnsupportedMark
+        /// (target=move・reason=move_target_unknown)を付け、全体技の補正は掛けない(壁は掛ける)。
+        /// double は計算に反映するので形式の印は付けない。engine に未知の形式が届いたときだけ安全側で
+        /// target format・reason unsupported_effect の印が付く(ADR-0160・ADR-0222 §5)。
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/Format`.
         @frozen public enum Format: String, Codable, Hashable, Sendable, CaseIterable {
             case single = "single"
@@ -232,25 +242,46 @@ extension Components {
                 ///
                 /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2/learnset`.
                 public var learnset: [Swift.String]?
+                /// メガシンカ後の種族か(docs/mega-evolution-spec.md。issue 515)。pokedex-svc は常に返す。
+                /// 古いサーバーは返さないため、省略は「メガではない」と同じ扱い(クライアントの互換のため required にしていない)。
+                ///
+                ///
+                /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2/isMega`.
+                public var isMega: Swift.Bool?
+                /// メガシンカに要る持ち物(メガストーン)の ID。メガでなければ null。pokedex-svc は null でもキーを常に返す
+                /// (ADR-0218 の `effect` は「キーごと省く」ので逆。クライアントは省略も null も「メガではない」と読む)。
+                /// isMega が true の種族は、この ID の持ち物を持つ前提(クライアントが持ち物を固定する。ADR-0200 §4 の検証と同じ規則)。
+                ///
+                ///
+                /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2/requiredItemId`.
+                public var requiredItemId: Swift.String?
                 /// Creates a new `Value2Payload`.
                 ///
                 /// - Parameters:
                 ///   - baseStats:
                 ///   - abilities:
                 ///   - learnset: 覚える技の ID 一覧
+                ///   - isMega: メガシンカ後の種族か(docs/mega-evolution-spec.md。issue 515)。pokedex-svc は常に返す。
+                ///   - requiredItemId: メガシンカに要る持ち物(メガストーン)の ID。メガでなければ null。pokedex-svc は null でもキーを常に返す
                 public init(
                     baseStats: Components.Schemas.StatBlock,
                     abilities: [Components.Schemas.Ability],
-                    learnset: [Swift.String]? = nil
+                    learnset: [Swift.String]? = nil,
+                    isMega: Swift.Bool? = nil,
+                    requiredItemId: Swift.String? = nil
                 ) {
                     self.baseStats = baseStats
                     self.abilities = abilities
                     self.learnset = learnset
+                    self.isMega = isMega
+                    self.requiredItemId = requiredItemId
                 }
                 public enum CodingKeys: String, CodingKey {
                     case baseStats
                     case abilities
                     case learnset
+                    case isMega
+                    case requiredItemId
                 }
             }
             /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2`.
@@ -374,21 +405,61 @@ extension Components {
             public var id: Swift.String
             /// - Remark: Generated from `#/components/schemas/Ability/nameJa`.
             public var nameJa: Swift.String
+            /// 特性の効果定義(ability_effects の JSON。`getMasterExport` の `MasterAbility.effect` と同じ値・同じ形。
+            /// issue 211・ADR-0218)。効果を持たない特性は**キーごと省く**(null を返さない)。
+            /// pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeAbilityEffect`)で厳格に検証し、
+            /// 検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。古いサーバーはこのキーを
+            /// 返さないため、クライアントは「キーが無い」を「効果なし」と「効果データを返さない版」の
+            /// どちらとも区別できない。区別はクライアントの capabilities で行う(ADR-0304 A-1・ADR-0218 §4)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Ability/effect`.
+            public struct EffectPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/Ability/effect/value1`.
+                public var value1: Components.Schemas.MasterEffect
+                /// Creates a new `EffectPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.MasterEffect) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 特性の効果定義(ability_effects の JSON。`getMasterExport` の `MasterAbility.effect` と同じ値・同じ形。
+            /// issue 211・ADR-0218)。効果を持たない特性は**キーごと省く**(null を返さない)。
+            /// pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeAbilityEffect`)で厳格に検証し、
+            /// 検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。古いサーバーはこのキーを
+            /// 返さないため、クライアントは「キーが無い」を「効果なし」と「効果データを返さない版」の
+            /// どちらとも区別できない。区別はクライアントの capabilities で行う(ADR-0304 A-1・ADR-0218 §4)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Ability/effect`.
+            public var effect: Components.Schemas.Ability.EffectPayload?
             /// Creates a new `Ability`.
             ///
             /// - Parameters:
             ///   - id:
             ///   - nameJa:
+            ///   - effect: 特性の効果定義(ability_effects の JSON。`getMasterExport` の `MasterAbility.effect` と同じ値・同じ形。
             public init(
                 id: Swift.String,
-                nameJa: Swift.String
+                nameJa: Swift.String,
+                effect: Components.Schemas.Ability.EffectPayload? = nil
             ) {
                 self.id = id
                 self.nameJa = nameJa
+                self.effect = effect
             }
             public enum CodingKeys: String, CodingKey {
                 case id
                 case nameJa
+                case effect
             }
         }
         /// - Remark: Generated from `#/components/schemas/Move`.
@@ -407,6 +478,29 @@ extension Components {
             public var power: Swift.Int
             /// - Remark: Generated from `#/components/schemas/Move/priority`.
             public var priority: Swift.Int?
+            /// 技の対象の分類(issue 288・ADR-0223)。ダブルの計算に使う: `spread` は相手の場の複数に当たる全体技
+            /// (Showdown の allAdjacent・allAdjacentFoes。ダブルで ×3072/4096)、`single` はそれ以外(単体技・自分・味方・場の技)。
+            /// 値は engine の `MoveTarget`(WASM の技の `target`)と同じで、クライアントはそのまま渡せる。
+            /// pokedex-svc がマスタの対象(`MasterMove.target` の Showdown の文字列)から分類して返す。
+            /// 対象がまだ取り込まれていない技は**キーごと省く**(null を返さない)。古いサーバーもこのキーを返さないため、
+            /// クライアントは「キーが無い」を不明として扱う(ダブルの計算では単体として計算し、未対応の印 move_target_unknown が付く)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Move/target`.
+            @frozen public enum TargetPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case single = "single"
+                case spread = "spread"
+            }
+            /// 技の対象の分類(issue 288・ADR-0223)。ダブルの計算に使う: `spread` は相手の場の複数に当たる全体技
+            /// (Showdown の allAdjacent・allAdjacentFoes。ダブルで ×3072/4096)、`single` はそれ以外(単体技・自分・味方・場の技)。
+            /// 値は engine の `MoveTarget`(WASM の技の `target`)と同じで、クライアントはそのまま渡せる。
+            /// pokedex-svc がマスタの対象(`MasterMove.target` の Showdown の文字列)から分類して返す。
+            /// 対象がまだ取り込まれていない技は**キーごと省く**(null を返さない)。古いサーバーもこのキーを返さないため、
+            /// クライアントは「キーが無い」を不明として扱う(ダブルの計算では単体として計算し、未対応の印 move_target_unknown が付く)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Move/target`.
+            public var target: Components.Schemas.Move.TargetPayload?
             /// Creates a new `Move`.
             ///
             /// - Parameters:
@@ -416,13 +510,15 @@ extension Components {
             ///   - category:
             ///   - power: 威力(0 は変化技/固定ダメージ)
             ///   - priority:
+            ///   - target: 技の対象の分類(issue 288・ADR-0223)。ダブルの計算に使う: `spread` は相手の場の複数に当たる全体技
             public init(
                 id: Swift.String,
                 nameJa: Swift.String,
                 _type: Components.Schemas.PokeType,
                 category: Components.Schemas.MoveCategory,
                 power: Swift.Int,
-                priority: Swift.Int? = nil
+                priority: Swift.Int? = nil,
+                target: Components.Schemas.Move.TargetPayload? = nil
             ) {
                 self.id = id
                 self.nameJa = nameJa
@@ -430,6 +526,7 @@ extension Components {
                 self.category = category
                 self.power = power
                 self.priority = priority
+                self.target = target
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -438,6 +535,7 @@ extension Components {
                 case category
                 case power
                 case priority
+                case target
             }
         }
         /// - Remark: Generated from `#/components/schemas/Item`.
@@ -446,21 +544,57 @@ extension Components {
             public var id: Swift.String
             /// - Remark: Generated from `#/components/schemas/Item/nameJa`.
             public var nameJa: Swift.String
+            /// 持ち物の効果定義(item_effects の JSON。`getMasterExport` の `MasterItem.effect` と同じ値・同じ形。
+            /// issue 211・ADR-0218)。効果を持たない持ち物は**キーごと省く**(null を返さない)。
+            /// pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeItemEffect`)で厳格に検証し、
+            /// 検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/effect`.
+            public struct EffectPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/Item/effect/value1`.
+                public var value1: Components.Schemas.MasterEffect
+                /// Creates a new `EffectPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.MasterEffect) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 持ち物の効果定義(item_effects の JSON。`getMasterExport` の `MasterItem.effect` と同じ値・同じ形。
+            /// issue 211・ADR-0218)。効果を持たない持ち物は**キーごと省く**(null を返さない)。
+            /// pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeItemEffect`)で厳格に検証し、
+            /// 検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/effect`.
+            public var effect: Components.Schemas.Item.EffectPayload?
             /// Creates a new `Item`.
             ///
             /// - Parameters:
             ///   - id:
             ///   - nameJa:
+            ///   - effect: 持ち物の効果定義(item_effects の JSON。`getMasterExport` の `MasterItem.effect` と同じ値・同じ形。
             public init(
                 id: Swift.String,
-                nameJa: Swift.String
+                nameJa: Swift.String,
+                effect: Components.Schemas.Item.EffectPayload? = nil
             ) {
                 self.id = id
                 self.nameJa = nameJa
+                self.effect = effect
             }
             public enum CodingKeys: String, CodingKey {
                 case id
                 case nameJa
+                case effect
             }
         }
         /// - Remark: Generated from `#/components/schemas/Nature`.
@@ -554,12 +688,12 @@ extension Components {
             public var natureId: Swift.String
             /// - Remark: Generated from `#/components/schemas/Individual/abilityId`.
             public var abilityId: Swift.String?
+            /// 持ち物。メガシンカ後の種族(isMega)は、その requiredItemId の持ち物か持ち物なし(null・省略)だけ受け付け、
+            /// 別の持ち物は 400 `invalid_input`(ADR-0200 §4)。
+            ///
+            ///
             /// - Remark: Generated from `#/components/schemas/Individual/itemId`.
             public var itemId: Swift.String?
-            /// 攻撃側で使う技
-            ///
-            /// - Remark: Generated from `#/components/schemas/Individual/moveId`.
-            public var moveId: Swift.String?
             /// 能力ポイント。各 0..32、合計 <= 66
             ///
             /// - Remark: Generated from `#/components/schemas/Individual/sp`.
@@ -586,6 +720,11 @@ extension Components {
             public var sp: Components.Schemas.Individual.SpPayload
             /// - Remark: Generated from `#/components/schemas/Individual/ranks`.
             public var ranks: Components.Schemas.RankBlock?
+            /// テラスタイプ。受け付けるが計算には反映しない(テラスタルの補正は未実装)。指定すると数値は
+            /// テラスなしのまま、結果の unsupported に target attacker_tera_type / defender_tera_type・
+            /// reason unsupported_effect・id テラスタイプの印が付く(ADR-0160)。
+            ///
+            ///
             /// - Remark: Generated from `#/components/schemas/Individual/teraType`.
             public struct TeraTypePayload: Codable, Hashable, Sendable {
                 /// - Remark: Generated from `#/components/schemas/Individual/teraType/value1`.
@@ -604,6 +743,11 @@ extension Components {
                     try encoder.encodeToSingleValueContainer(self.value1)
                 }
             }
+            /// テラスタイプ。受け付けるが計算には反映しない(テラスタルの補正は未実装)。指定すると数値は
+            /// テラスなしのまま、結果の unsupported に target attacker_tera_type / defender_tera_type・
+            /// reason unsupported_effect・id テラスタイプの印が付く(ADR-0160)。
+            ///
+            ///
             /// - Remark: Generated from `#/components/schemas/Individual/teraType`.
             public var teraType: Components.Schemas.Individual.TeraTypePayload?
             /// - Remark: Generated from `#/components/schemas/Individual/status`.
@@ -615,11 +759,10 @@ extension Components {
             ///   - level:
             ///   - natureId:
             ///   - abilityId:
-            ///   - itemId:
-            ///   - moveId: 攻撃側で使う技
+            ///   - itemId: 持ち物。メガシンカ後の種族(isMega)は、その requiredItemId の持ち物か持ち物なし(null・省略)だけ受け付け、
             ///   - sp: 能力ポイント。各 0..32、合計 <= 66
             ///   - ranks:
-            ///   - teraType:
+            ///   - teraType: テラスタイプ。受け付けるが計算には反映しない(テラスタルの補正は未実装)。指定すると数値は
             ///   - status:
             public init(
                 speciesKey: Components.Schemas.SpeciesKey,
@@ -627,7 +770,6 @@ extension Components {
                 natureId: Swift.String,
                 abilityId: Swift.String? = nil,
                 itemId: Swift.String? = nil,
-                moveId: Swift.String? = nil,
                 sp: Components.Schemas.Individual.SpPayload,
                 ranks: Components.Schemas.RankBlock? = nil,
                 teraType: Components.Schemas.Individual.TeraTypePayload? = nil,
@@ -638,7 +780,6 @@ extension Components {
                 self.natureId = natureId
                 self.abilityId = abilityId
                 self.itemId = itemId
-                self.moveId = moveId
                 self.sp = sp
                 self.ranks = ranks
                 self.teraType = teraType
@@ -650,7 +791,6 @@ extension Components {
                 case natureId
                 case abilityId
                 case itemId
-                case moveId
                 case sp
                 case ranks
                 case teraType
@@ -746,7 +886,7 @@ extension Components {
             public var attacker: Components.Schemas.Individual
             /// - Remark: Generated from `#/components/schemas/CalcRequest/defender`.
             public var defender: Components.Schemas.Individual
-            /// 使用する技(attacker.moveId より優先)
+            /// 使用する技
             ///
             /// - Remark: Generated from `#/components/schemas/CalcRequest/moveId`.
             public var moveId: Swift.String
@@ -760,7 +900,7 @@ extension Components {
             ///   - format:
             ///   - attacker:
             ///   - defender:
-            ///   - moveId: 使用する技(attacker.moveId より優先)
+            ///   - moveId: 使用する技
             ///   - field:
             ///   - options:
             public init(
@@ -843,12 +983,15 @@ extension Components {
             }
         }
         /// 「この結果は正しくない可能性がある」印1つ(ADR-0123)。engine が正しく計算できない技の機構・
-        /// 持ち物・特性に、数値は通常の式のまま付ける(400 で拒否しない)。
+        /// 持ち物・特性と、受け付けるが計算に反映しないテラスタイプ・未知の対戦形式(ADR-0160・ADR-0222 §5)に、数値は
+        /// 通常の式のまま付ける(400 で拒否しない)。
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/UnsupportedMark`.
         public struct UnsupportedMark: Codable, Hashable, Sendable {
-            /// 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability。
+            /// 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability・
+            /// attacker_tera_type・defender_tera_type・format(並びもこの順)。format は engine に未知の形式が
+            /// 届いたときだけ(double は計算に反映するので付かない。ADR-0222 §5)。
             /// 値を足しても古いクライアントが応答全体をデコードできなくなるのを避けるため、enum にしない
             /// (クライアントは未知の値を「対象不明の印」として扱い、id をそのまま表示する。ADR-0215)。
             ///
@@ -858,23 +1001,27 @@ extension Components {
             /// 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種: alt_defense_stat・alt_offense_stat・
             /// always_crit・effectiveness_change・field_specific・fixed_damage・ignore_defense_ranks・
             /// move_specific・multi_hit・ohko・priority_change・type_change・variable_power)か
-            /// zero_power(威力0の攻撃技。威力が技の処理で決まるため)、持ち物・特性は
-            /// unsupported_effect(効果スキーマで表せない)。target と同じ理由で enum にしない
+            /// zero_power(威力0の攻撃技。威力が技の処理で決まるため)・move_target_unknown(double で技の対象が
+            /// 不明なため全体技の補正を判断できない。ADR-0222)、持ち物・特性は
+            /// unsupported_effect(効果スキーマで表せない)、テラスタイプ・未知の対戦形式も unsupported_effect
+            /// (効果を計算に反映していない。ADR-0160)。target と同じ理由で enum にしない
             /// (クライアントは未知の値を汎用の文言で扱う。ADR-0215)。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/UnsupportedMark/reason`.
             public var reason: Swift.String
-            /// 技・持ち物・特性の ID
+            /// 技・持ち物・特性の ID。target が attacker_tera_type / defender_tera_type のときはテラスタイプ
+            /// (PokeType の値)、format のときは対戦形式(Format の値)。
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/UnsupportedMark/id`.
             public var id: Swift.String
             /// Creates a new `UnsupportedMark`.
             ///
             /// - Parameters:
-            ///   - target: 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability。
+            ///   - target: 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability・
             ///   - reason: 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種: alt_defense_stat・alt_offense_stat・
-            ///   - id: 技・持ち物・特性の ID
+            ///   - id: 技・持ち物・特性の ID。target が attacker_tera_type / defender_tera_type のときはテラスタイプ
             public init(
                 target: Swift.String,
                 reason: Swift.String,
@@ -1115,6 +1262,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/BulkCalcRequest/presets`.
             public var presets: [Components.Schemas.DefenderPreset]?
             /// 差し替えて比較する持ち物 ID(省略時は素の1通り)。null 要素は「持ち物なし」。
+            /// defenderSpeciesKey がメガシンカ後の種族のとき、requiredItemId 以外の持ち物を含めると 400 `invalid_input`(ADR-0200 §4)。
             /// 65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
             /// 行の基本数は `len(presets) × len(itemVariants)`(上限 8 × 64 = 512)。特性ごとに結果が違う
             /// ときだけ、その基本数のうち最大3倍(特性の候補数。ADR-0126・ADR-0214)まで行が分かれる。
@@ -1469,7 +1617,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/side`.
             public var side: Components.Schemas.ReverseSide
             /// 既知の側(自分)の個体。side=defender なら自分=攻撃側、side=attacker なら自分=防御側。
-            /// known.moveId は使わない(技は moveId で指定する)。
+            /// Individual に moveId は無い(技は moveId で指定する)。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/known`.
@@ -1491,7 +1639,7 @@ extension Components {
                 }
             }
             /// 既知の側(自分)の個体。side=defender なら自分=攻撃側、side=attacker なら自分=防御側。
-            /// known.moveId は使わない(技は moveId で指定する)。
+            /// Individual に moveId は無い(技は moveId で指定する)。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/known`.
@@ -1537,6 +1685,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/options`.
             public var options: Components.Schemas.CalcOptions?
             /// 相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ。
+            /// unknownSpeciesKey がメガシンカ後の種族のとき、requiredItemId 以外の持ち物を含めると 400 `invalid_input`(ADR-0200 §4)。
             /// 65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
             ///
             ///
@@ -1837,6 +1986,1050 @@ extension Components {
                 case assumedHpSp
                 case exactCount
                 case candidates
+            }
+        }
+        /// 4096 基準の補正(×1.0 = 4096。engine の MinEffectModifier..MaxEffectModifier)。省略は 4096。
+        /// 明示した 0 と範囲外は 400 `invalid_input`。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/AdjustModifier`.
+        public typealias AdjustModifier = Swift.Int
+        /// 満たすべき確率(%)。省略は 100(確定 = 乱数の最悪側でも満たす)。比較は「確率 >= しきい値」。
+        /// 明示した 0・負・100 超は 400 `invalid_input`(engine のゼロ値「既定」をそのまま渡さない。ADR-0250 §3)。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/AdjustThresholdPercent`.
+        public typealias AdjustThresholdPercent = Swift.Double
+        /// 目標の発数 n(engine の MaxAdjustHits = 10)。範囲外は 400 `invalid_input`(ID の解決より前に検査する)
+        ///
+        /// - Remark: Generated from `#/components/schemas/AdjustHits`.
+        public typealias AdjustHits = Swift.Int
+        /// - Remark: Generated from `#/components/schemas/AdjustIndicesRequest`.
+        public struct AdjustIndicesRequest: Codable, Hashable, Sendable {
+            /// 指数を求める自分の個体(SP 各 0..32・合計 66 以下)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustIndicesRequest/individual`.
+            public struct IndividualPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AdjustIndicesRequest/individual/value1`.
+                public var value1: Components.Schemas.Individual
+                /// Creates a new `IndividualPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.Individual) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 指数を求める自分の個体(SP 各 0..32・合計 66 以下)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustIndicesRequest/individual`.
+            public var individual: Components.Schemas.AdjustIndicesRequest.IndividualPayload
+            /// 火力指数に使う技(分類と威力をマスタから引く)。省略すると firepowerIndex は null
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustIndicesRequest/moveId`.
+            public var moveId: Swift.String?
+            /// 火力指数の補正(タイプ一致・持ち物・特性などをクライアントが掛け合わせたもの)。
+            /// moveId を省略しても値域を検査する(明示した 0 と範囲外は 400 `invalid_input`)
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustIndicesRequest/modifier`.
+            public struct ModifierPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AdjustIndicesRequest/modifier/value1`.
+                public var value1: Components.Schemas.AdjustModifier
+                /// Creates a new `ModifierPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.AdjustModifier) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeToSingleValueContainer(self.value1)
+                }
+            }
+            /// 火力指数の補正(タイプ一致・持ち物・特性などをクライアントが掛け合わせたもの)。
+            /// moveId を省略しても値域を検査する(明示した 0 と範囲外は 400 `invalid_input`)
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustIndicesRequest/modifier`.
+            public var modifier: Components.Schemas.AdjustIndicesRequest.ModifierPayload?
+            /// 耐久指数の被ダメージ補正(受けるダメージの倍率。半減 2048 で指数が2倍)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustIndicesRequest/damageModifier`.
+            public struct DamageModifierPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AdjustIndicesRequest/damageModifier/value1`.
+                public var value1: Components.Schemas.AdjustModifier
+                /// Creates a new `DamageModifierPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.AdjustModifier) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeToSingleValueContainer(self.value1)
+                }
+            }
+            /// 耐久指数の被ダメージ補正(受けるダメージの倍率。半減 2048 で指数が2倍)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustIndicesRequest/damageModifier`.
+            public var damageModifier: Components.Schemas.AdjustIndicesRequest.DamageModifierPayload?
+            /// Creates a new `AdjustIndicesRequest`.
+            ///
+            /// - Parameters:
+            ///   - individual: 指数を求める自分の個体(SP 各 0..32・合計 66 以下)
+            ///   - moveId: 火力指数に使う技(分類と威力をマスタから引く)。省略すると firepowerIndex は null
+            ///   - modifier: 火力指数の補正(タイプ一致・持ち物・特性などをクライアントが掛け合わせたもの)。
+            ///   - damageModifier: 耐久指数の被ダメージ補正(受けるダメージの倍率。半減 2048 で指数が2倍)
+            public init(
+                individual: Components.Schemas.AdjustIndicesRequest.IndividualPayload,
+                moveId: Swift.String? = nil,
+                modifier: Components.Schemas.AdjustIndicesRequest.ModifierPayload? = nil,
+                damageModifier: Components.Schemas.AdjustIndicesRequest.DamageModifierPayload? = nil
+            ) {
+                self.individual = individual
+                self.moveId = moveId
+                self.modifier = modifier
+                self.damageModifier = damageModifier
+            }
+            public enum CodingKeys: String, CodingKey {
+                case individual
+                case moveId
+                case modifier
+                case damageModifier
+            }
+        }
+        /// HP 実数値が属するライン(16n = HP mod 16 が 0、16n-1 = 15、none = どちらでもない)
+        ///
+        /// - Remark: Generated from `#/components/schemas/HPLineKind`.
+        @frozen public enum HPLineKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case none = "none"
+            case _16n = "16n"
+            case _16n1 = "16n-1"
+        }
+        /// - Remark: Generated from `#/components/schemas/HPLinePoint`.
+        public struct HPLinePoint: Codable, Hashable, Sendable {
+            /// そのラインの HP 実数値
+            ///
+            /// - Remark: Generated from `#/components/schemas/HPLinePoint/hp`.
+            public var hp: Swift.Int
+            /// その HP にする HP の SP
+            ///
+            /// - Remark: Generated from `#/components/schemas/HPLinePoint/sp`.
+            public var sp: Swift.Int
+            /// 現在の SP からの差(次のラインは正、前のラインは負)
+            ///
+            /// - Remark: Generated from `#/components/schemas/HPLinePoint/spDelta`.
+            public var spDelta: Swift.Int
+            /// Creates a new `HPLinePoint`.
+            ///
+            /// - Parameters:
+            ///   - hp: そのラインの HP 実数値
+            ///   - sp: その HP にする HP の SP
+            ///   - spDelta: 現在の SP からの差(次のラインは正、前のラインは負)
+            public init(
+                hp: Swift.Int,
+                sp: Swift.Int,
+                spDelta: Swift.Int
+            ) {
+                self.hp = hp
+                self.sp = sp
+                self.spDelta = spDelta
+            }
+            public enum CodingKeys: String, CodingKey {
+                case hp
+                case sp
+                case spDelta
+            }
+        }
+        /// HP の 16n / 16n-1 ライン(ADR-0150 §4)。next* は SP が現在より大きい中で最小、prev* は小さい中で最大のライン。
+        /// HP の SP 0..32 の範囲に無ければ null。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/HPLineReport`.
+        public struct HPLineReport: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/HPLineReport/hp`.
+            public var hp: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/HPLineReport/sp`.
+            public var sp: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/HPLineReport/current`.
+            public var current: Components.Schemas.HPLineKind
+            /// - Remark: Generated from `#/components/schemas/HPLineReport/next16n`.
+            public struct Next16nPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/HPLineReport/next16n/value1`.
+                public var value1: Components.Schemas.HPLinePoint
+                /// Creates a new `Next16nPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.HPLinePoint) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/HPLineReport/next16n`.
+            public var next16n: Components.Schemas.HPLineReport.Next16nPayload?
+            /// - Remark: Generated from `#/components/schemas/HPLineReport/prev16n`.
+            public struct Prev16nPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/HPLineReport/prev16n/value1`.
+                public var value1: Components.Schemas.HPLinePoint
+                /// Creates a new `Prev16nPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.HPLinePoint) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/HPLineReport/prev16n`.
+            public var prev16n: Components.Schemas.HPLineReport.Prev16nPayload?
+            /// - Remark: Generated from `#/components/schemas/HPLineReport/next16nMinus1`.
+            public struct Next16nMinus1Payload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/HPLineReport/next16nMinus1/value1`.
+                public var value1: Components.Schemas.HPLinePoint
+                /// Creates a new `Next16nMinus1Payload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.HPLinePoint) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/HPLineReport/next16nMinus1`.
+            public var next16nMinus1: Components.Schemas.HPLineReport.Next16nMinus1Payload?
+            /// - Remark: Generated from `#/components/schemas/HPLineReport/prev16nMinus1`.
+            public struct Prev16nMinus1Payload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/HPLineReport/prev16nMinus1/value1`.
+                public var value1: Components.Schemas.HPLinePoint
+                /// Creates a new `Prev16nMinus1Payload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.HPLinePoint) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/HPLineReport/prev16nMinus1`.
+            public var prev16nMinus1: Components.Schemas.HPLineReport.Prev16nMinus1Payload?
+            /// Creates a new `HPLineReport`.
+            ///
+            /// - Parameters:
+            ///   - hp:
+            ///   - sp:
+            ///   - current:
+            ///   - next16n:
+            ///   - prev16n:
+            ///   - next16nMinus1:
+            ///   - prev16nMinus1:
+            public init(
+                hp: Swift.Int,
+                sp: Swift.Int,
+                current: Components.Schemas.HPLineKind,
+                next16n: Components.Schemas.HPLineReport.Next16nPayload? = nil,
+                prev16n: Components.Schemas.HPLineReport.Prev16nPayload? = nil,
+                next16nMinus1: Components.Schemas.HPLineReport.Next16nMinus1Payload? = nil,
+                prev16nMinus1: Components.Schemas.HPLineReport.Prev16nMinus1Payload? = nil
+            ) {
+                self.hp = hp
+                self.sp = sp
+                self.current = current
+                self.next16n = next16n
+                self.prev16n = prev16n
+                self.next16nMinus1 = next16nMinus1
+                self.prev16nMinus1 = prev16nMinus1
+            }
+            public enum CodingKeys: String, CodingKey {
+                case hp
+                case sp
+                case current
+                case next16n
+                case prev16n
+                case next16nMinus1
+                case prev16nMinus1
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/AdjustIndicesResult`.
+        public struct AdjustIndicesResult: Codable, Hashable, Sendable {
+            /// 実数値(ランク補正なし)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustIndicesResult/stats`.
+            public struct StatsPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AdjustIndicesResult/stats/value1`.
+                public var value1: Components.Schemas.StatBlock
+                /// Creates a new `StatsPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.StatBlock) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 実数値(ランク補正なし)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustIndicesResult/stats`.
+            public var stats: Components.Schemas.AdjustIndicesResult.StatsPayload
+            /// 火力指数。moveId を省略したら null
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustIndicesResult/firepowerIndex`.
+            public var firepowerIndex: Swift.Int64?
+            /// 物理耐久指数 floor(H × B × 4096 / damageModifier)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustIndicesResult/physicalBulkIndex`.
+            public var physicalBulkIndex: Swift.Int64
+            /// 特殊耐久指数 floor(H × D × 4096 / damageModifier)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustIndicesResult/specialBulkIndex`.
+            public var specialBulkIndex: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/AdjustIndicesResult/hpLines`.
+            public var hpLines: Components.Schemas.HPLineReport
+            /// Creates a new `AdjustIndicesResult`.
+            ///
+            /// - Parameters:
+            ///   - stats: 実数値(ランク補正なし)
+            ///   - firepowerIndex: 火力指数。moveId を省略したら null
+            ///   - physicalBulkIndex: 物理耐久指数 floor(H × B × 4096 / damageModifier)
+            ///   - specialBulkIndex: 特殊耐久指数 floor(H × D × 4096 / damageModifier)
+            ///   - hpLines:
+            public init(
+                stats: Components.Schemas.AdjustIndicesResult.StatsPayload,
+                firepowerIndex: Swift.Int64? = nil,
+                physicalBulkIndex: Swift.Int64,
+                specialBulkIndex: Swift.Int64,
+                hpLines: Components.Schemas.HPLineReport
+            ) {
+                self.stats = stats
+                self.firepowerIndex = firepowerIndex
+                self.physicalBulkIndex = physicalBulkIndex
+                self.specialBulkIndex = specialBulkIndex
+                self.hpLines = hpLines
+            }
+            public enum CodingKeys: String, CodingKey {
+                case stats
+                case firepowerIndex
+                case physicalBulkIndex
+                case specialBulkIndex
+                case hpLines
+            }
+        }
+        /// 最小 SP の探索の入力(ADR-0150 §7)。個体・技・場の指定は CalcRequest と同じ。どちらが自分かは操作で決まる
+        /// (min-sp-to-ko は attacker、min-sp-to-survive は defender)。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/AdjustSearchRequest`.
+        public struct AdjustSearchRequest: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/AdjustSearchRequest/format`.
+            public var format: Components.Schemas.Format
+            /// - Remark: Generated from `#/components/schemas/AdjustSearchRequest/attacker`.
+            public var attacker: Components.Schemas.Individual
+            /// - Remark: Generated from `#/components/schemas/AdjustSearchRequest/defender`.
+            public var defender: Components.Schemas.Individual
+            /// attacker が使う技(attacker.moveId は読まない)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustSearchRequest/moveId`.
+            public var moveId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/AdjustSearchRequest/field`.
+            public var field: Components.Schemas.FieldState?
+            /// - Remark: Generated from `#/components/schemas/AdjustSearchRequest/options`.
+            public var options: Components.Schemas.CalcOptions?
+            /// - Remark: Generated from `#/components/schemas/AdjustSearchRequest/hits`.
+            public var hits: Components.Schemas.AdjustHits
+            /// - Remark: Generated from `#/components/schemas/AdjustSearchRequest/thresholdPercent`.
+            public var thresholdPercent: Components.Schemas.AdjustThresholdPercent?
+            /// Creates a new `AdjustSearchRequest`.
+            ///
+            /// - Parameters:
+            ///   - format:
+            ///   - attacker:
+            ///   - defender:
+            ///   - moveId: attacker が使う技(attacker.moveId は読まない)
+            ///   - field:
+            ///   - options:
+            ///   - hits:
+            ///   - thresholdPercent:
+            public init(
+                format: Components.Schemas.Format,
+                attacker: Components.Schemas.Individual,
+                defender: Components.Schemas.Individual,
+                moveId: Swift.String,
+                field: Components.Schemas.FieldState? = nil,
+                options: Components.Schemas.CalcOptions? = nil,
+                hits: Components.Schemas.AdjustHits,
+                thresholdPercent: Components.Schemas.AdjustThresholdPercent? = nil
+            ) {
+                self.format = format
+                self.attacker = attacker
+                self.defender = defender
+                self.moveId = moveId
+                self.field = field
+                self.options = options
+                self.hits = hits
+                self.thresholdPercent = thresholdPercent
+            }
+            public enum CodingKeys: String, CodingKey {
+                case format
+                case attacker
+                case defender
+                case moveId
+                case field
+                case options
+                case hits
+                case thresholdPercent
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/AdjustKOResult`.
+        public struct AdjustKOResult: Codable, Hashable, Sendable {
+            /// 探索した能力(物理 → atk、特殊 → spa)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustKOResult/stat`.
+            public struct StatPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AdjustKOResult/stat/value1`.
+                public var value1: Components.Schemas.StatKey
+                /// Creates a new `StatPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.StatKey) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeToSingleValueContainer(self.value1)
+                }
+            }
+            /// 探索した能力(物理 → atk、特殊 → spa)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustKOResult/stat`.
+            public var stat: Components.Schemas.AdjustKOResult.StatPayload
+            /// 探索した SP の上限 = min(32, 66 − 固定 SP の合計)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustKOResult/searchLimit`.
+            public var searchLimit: Swift.Int
+            /// searchLimit 以内でしきい値を満たす SP があるか
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustKOResult/feasible`.
+            public var feasible: Swift.Bool
+            /// feasible なら満たす最小の SP、そうでなければ searchLimit
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustKOResult/sp`.
+            public var sp: Swift.Int
+            /// sp のときに hits 発で倒す確率(%。engine の生値。丸めない)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustKOResult/chancePercent`.
+            public var chancePercent: Swift.Double
+            /// 探索中の計算に付いた「未対応」の印(ADR-0123・ADR-0215)。SP によらず同じ。印なしは空配列
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustKOResult/unsupported`.
+            public var unsupported: [Components.Schemas.UnsupportedMark]
+            /// Creates a new `AdjustKOResult`.
+            ///
+            /// - Parameters:
+            ///   - stat: 探索した能力(物理 → atk、特殊 → spa)
+            ///   - searchLimit: 探索した SP の上限 = min(32, 66 − 固定 SP の合計)
+            ///   - feasible: searchLimit 以内でしきい値を満たす SP があるか
+            ///   - sp: feasible なら満たす最小の SP、そうでなければ searchLimit
+            ///   - chancePercent: sp のときに hits 発で倒す確率(%。engine の生値。丸めない)
+            ///   - unsupported: 探索中の計算に付いた「未対応」の印(ADR-0123・ADR-0215)。SP によらず同じ。印なしは空配列
+            public init(
+                stat: Components.Schemas.AdjustKOResult.StatPayload,
+                searchLimit: Swift.Int,
+                feasible: Swift.Bool,
+                sp: Swift.Int,
+                chancePercent: Swift.Double,
+                unsupported: [Components.Schemas.UnsupportedMark]
+            ) {
+                self.stat = stat
+                self.searchLimit = searchLimit
+                self.feasible = feasible
+                self.sp = sp
+                self.chancePercent = chancePercent
+                self.unsupported = unsupported
+            }
+            public enum CodingKeys: String, CodingKey {
+                case stat
+                case searchLimit
+                case feasible
+                case sp
+                case chancePercent
+                case unsupported
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/AdjustSurviveResult`.
+        public struct AdjustSurviveResult: Codable, Hashable, Sendable {
+            /// H と組にして探索した能力(物理 → def、特殊 → spd)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustSurviveResult/stat`.
+            public struct StatPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AdjustSurviveResult/stat/value1`.
+                public var value1: Components.Schemas.StatKey
+                /// Creates a new `StatPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.StatKey) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeToSingleValueContainer(self.value1)
+                }
+            }
+            /// H と組にして探索した能力(物理 → def、特殊 → spd)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustSurviveResult/stat`.
+            public var stat: Components.Schemas.AdjustSurviveResult.StatPayload
+            /// hpSp + statSp の上限 = 66 − 固定 SP の合計(各能力は別に 32 まで)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustSurviveResult/searchLimit`.
+            public var searchLimit: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AdjustSurviveResult/feasible`.
+            public var feasible: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/AdjustSurviveResult/hpSp`.
+            public var hpSp: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AdjustSurviveResult/statSp`.
+            public var statSp: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AdjustSurviveResult/totalSp`.
+            public var totalSp: Swift.Int
+            /// 選んだ組の耐久指数(等倍。H 実数値 × B(D) 実数値)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustSurviveResult/bulkIndex`.
+            public var bulkIndex: Swift.Int64
+            /// 選んだ組で hits 発受けて耐える確率(%。engine の生値)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustSurviveResult/chancePercent`.
+            public var chancePercent: Swift.Double
+            /// 探索中の計算に付いた「未対応」の印(ADR-0123・ADR-0215)。印なしは空配列
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustSurviveResult/unsupported`.
+            public var unsupported: [Components.Schemas.UnsupportedMark]
+            /// Creates a new `AdjustSurviveResult`.
+            ///
+            /// - Parameters:
+            ///   - stat: H と組にして探索した能力(物理 → def、特殊 → spd)
+            ///   - searchLimit: hpSp + statSp の上限 = 66 − 固定 SP の合計(各能力は別に 32 まで)
+            ///   - feasible:
+            ///   - hpSp:
+            ///   - statSp:
+            ///   - totalSp:
+            ///   - bulkIndex: 選んだ組の耐久指数(等倍。H 実数値 × B(D) 実数値)
+            ///   - chancePercent: 選んだ組で hits 発受けて耐える確率(%。engine の生値)
+            ///   - unsupported: 探索中の計算に付いた「未対応」の印(ADR-0123・ADR-0215)。印なしは空配列
+            public init(
+                stat: Components.Schemas.AdjustSurviveResult.StatPayload,
+                searchLimit: Swift.Int,
+                feasible: Swift.Bool,
+                hpSp: Swift.Int,
+                statSp: Swift.Int,
+                totalSp: Swift.Int,
+                bulkIndex: Swift.Int64,
+                chancePercent: Swift.Double,
+                unsupported: [Components.Schemas.UnsupportedMark]
+            ) {
+                self.stat = stat
+                self.searchLimit = searchLimit
+                self.feasible = feasible
+                self.hpSp = hpSp
+                self.statSp = statSp
+                self.totalSp = totalSp
+                self.bulkIndex = bulkIndex
+                self.chancePercent = chancePercent
+                self.unsupported = unsupported
+            }
+            public enum CodingKeys: String, CodingKey {
+                case stat
+                case searchLimit
+                case feasible
+                case hpSp
+                case statSp
+                case totalSp
+                case bulkIndex
+                case chancePercent
+                case unsupported
+            }
+        }
+        /// 残り SP を回す側(bulk = H・B・D、offense = A または C と S)
+        ///
+        /// - Remark: Generated from `#/components/schemas/AllocMode`.
+        @frozen public enum AllocMode: String, Codable, Hashable, Sendable, CaseIterable {
+            case bulk = "bulk"
+            case offense = "offense"
+        }
+        /// 耐久側の指数最大の基準(physical = H×B、special = H×D、both = min(H×B, H×D) → max)
+        ///
+        /// - Remark: Generated from `#/components/schemas/BulkFocus`.
+        @frozen public enum BulkFocus: String, Codable, Hashable, Sendable, CaseIterable {
+            case physical = "physical"
+            case special = "special"
+            case both = "both"
+        }
+        /// 回す能力の SP の上限(0..32)。**省略した能力は 32**(ADR-0150 §8 の「既定は境界の責務」)。
+        /// 明示した 0 は「下限より上には振らない」。回さない能力の値は検査の範囲(0..32)以外では使わない。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/AdjustCeiling`.
+        public struct AdjustCeiling: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/AdjustCeiling/hp`.
+            public var hp: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/AdjustCeiling/atk`.
+            public var atk: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/AdjustCeiling/def`.
+            public var def: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/AdjustCeiling/spa`.
+            public var spa: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/AdjustCeiling/spd`.
+            public var spd: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/AdjustCeiling/spe`.
+            public var spe: Swift.Int?
+            /// Creates a new `AdjustCeiling`.
+            ///
+            /// - Parameters:
+            ///   - hp:
+            ///   - atk:
+            ///   - def:
+            ///   - spa:
+            ///   - spd:
+            ///   - spe:
+            public init(
+                hp: Swift.Int? = nil,
+                atk: Swift.Int? = nil,
+                def: Swift.Int? = nil,
+                spa: Swift.Int? = nil,
+                spd: Swift.Int? = nil,
+                spe: Swift.Int? = nil
+            ) {
+                self.hp = hp
+                self.atk = atk
+                self.def = def
+                self.spa = spa
+                self.spd = spd
+                self.spe = spe
+            }
+            public enum CodingKeys: String, CodingKey {
+                case hp
+                case atk
+                case def
+                case spa
+                case spd
+                case spe
+            }
+        }
+        /// 最小 SP の組の目標(ADR-0150 §8)。bulk は「opponent の技を hits 発受けて耐える」、offense は
+        /// 「自分の技で opponent を hits 発で倒す」(技の分類は offenseCategory と一致させる。違えば 400 `invalid_input`)。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/AdjustAllocGoal`.
+        public struct AdjustAllocGoal: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocGoal/format`.
+            public var format: Components.Schemas.Format
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocGoal/opponent`.
+            public var opponent: Components.Schemas.Individual
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocGoal/moveId`.
+            public var moveId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocGoal/field`.
+            public var field: Components.Schemas.FieldState?
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocGoal/options`.
+            public var options: Components.Schemas.CalcOptions?
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocGoal/hits`.
+            public var hits: Components.Schemas.AdjustHits
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocGoal/thresholdPercent`.
+            public var thresholdPercent: Components.Schemas.AdjustThresholdPercent?
+            /// Creates a new `AdjustAllocGoal`.
+            ///
+            /// - Parameters:
+            ///   - format:
+            ///   - opponent:
+            ///   - moveId:
+            ///   - field:
+            ///   - options:
+            ///   - hits:
+            ///   - thresholdPercent:
+            public init(
+                format: Components.Schemas.Format,
+                opponent: Components.Schemas.Individual,
+                moveId: Swift.String,
+                field: Components.Schemas.FieldState? = nil,
+                options: Components.Schemas.CalcOptions? = nil,
+                hits: Components.Schemas.AdjustHits,
+                thresholdPercent: Components.Schemas.AdjustThresholdPercent? = nil
+            ) {
+                self.format = format
+                self.opponent = opponent
+                self.moveId = moveId
+                self.field = field
+                self.options = options
+                self.hits = hits
+                self.thresholdPercent = thresholdPercent
+            }
+            public enum CodingKeys: String, CodingKey {
+                case format
+                case opponent
+                case moveId
+                case field
+                case options
+                case hits
+                case thresholdPercent
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/AdjustAllocationRequest`.
+        public struct AdjustAllocationRequest: Codable, Hashable, Sendable {
+            /// 自分の個体。sp は各能力の下限(結果の SP は各能力でこれ以上)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocationRequest/self`.
+            public struct _SelfPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AdjustAllocationRequest/self/value1`.
+                public var value1: Components.Schemas.Individual
+                /// Creates a new `_SelfPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.Individual) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 自分の個体。sp は各能力の下限(結果の SP は各能力でこれ以上)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocationRequest/self`.
+            public var _self: Components.Schemas.AdjustAllocationRequest._SelfPayload
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocationRequest/ceiling`.
+            public var ceiling: Components.Schemas.AdjustCeiling?
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocationRequest/mode`.
+            public var mode: Components.Schemas.AllocMode
+            /// mode=bulk で必須(欠けたら 400 `invalid_input`)。offense では読まない
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocationRequest/focus`.
+            public struct FocusPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AdjustAllocationRequest/focus/value1`.
+                public var value1: Components.Schemas.BulkFocus
+                /// Creates a new `FocusPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.BulkFocus) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeToSingleValueContainer(self.value1)
+                }
+            }
+            /// mode=bulk で必須(欠けたら 400 `invalid_input`)。offense では読まない
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocationRequest/focus`.
+            public var focus: Components.Schemas.AdjustAllocationRequest.FocusPayload?
+            /// mode=offense で必須(physical → A、special → C。欠落・status は 400 `invalid_input`)。bulk では読まない
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocationRequest/offenseCategory`.
+            public struct OffenseCategoryPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AdjustAllocationRequest/offenseCategory/value1`.
+                public var value1: Components.Schemas.MoveCategory
+                /// Creates a new `OffenseCategoryPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.MoveCategory) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeToSingleValueContainer(self.value1)
+                }
+            }
+            /// mode=offense で必須(physical → A、special → C。欠落・status は 400 `invalid_input`)。bulk では読まない
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocationRequest/offenseCategory`.
+            public var offenseCategory: Components.Schemas.AdjustAllocationRequest.OffenseCategoryPayload?
+            /// offense の素早さの目標(S 実数値の下限。相手の S + 1 を渡せば「超え」)。0 は目標なし。bulk で 0 以外は 400 `invalid_input`
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocationRequest/minSpeed`.
+            public var minSpeed: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocationRequest/goal`.
+            public var goal: Components.Schemas.AdjustAllocGoal?
+            /// Creates a new `AdjustAllocationRequest`.
+            ///
+            /// - Parameters:
+            ///   - _self: 自分の個体。sp は各能力の下限(結果の SP は各能力でこれ以上)
+            ///   - ceiling:
+            ///   - mode:
+            ///   - focus: mode=bulk で必須(欠けたら 400 `invalid_input`)。offense では読まない
+            ///   - offenseCategory: mode=offense で必須(physical → A、special → C。欠落・status は 400 `invalid_input`)。bulk では読まない
+            ///   - minSpeed: offense の素早さの目標(S 実数値の下限。相手の S + 1 を渡せば「超え」)。0 は目標なし。bulk で 0 以外は 400 `invalid_input`
+            ///   - goal:
+            public init(
+                _self: Components.Schemas.AdjustAllocationRequest._SelfPayload,
+                ceiling: Components.Schemas.AdjustCeiling? = nil,
+                mode: Components.Schemas.AllocMode,
+                focus: Components.Schemas.AdjustAllocationRequest.FocusPayload? = nil,
+                offenseCategory: Components.Schemas.AdjustAllocationRequest.OffenseCategoryPayload? = nil,
+                minSpeed: Swift.Int? = nil,
+                goal: Components.Schemas.AdjustAllocGoal? = nil
+            ) {
+                self._self = _self
+                self.ceiling = ceiling
+                self.mode = mode
+                self.focus = focus
+                self.offenseCategory = offenseCategory
+                self.minSpeed = minSpeed
+                self.goal = goal
+            }
+            public enum CodingKeys: String, CodingKey {
+                case _self = "self"
+                case ceiling
+                case mode
+                case focus
+                case offenseCategory
+                case minSpeed
+                case goal
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/AdjustAllocPlan`.
+        public struct AdjustAllocPlan: Codable, Hashable, Sendable {
+            /// 全6能力の SP(回さない能力は下限のまま)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocPlan/sp`.
+            public struct SpPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AdjustAllocPlan/sp/value1`.
+                public var value1: Components.Schemas.StatBlock
+                /// Creates a new `SpPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.StatBlock) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 全6能力の SP(回さない能力は下限のまま)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocPlan/sp`.
+            public var sp: Components.Schemas.AdjustAllocPlan.SpPayload
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocPlan/totalSp`.
+            public var totalSp: Swift.Int
+            /// 実数値(ランク補正なし)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocPlan/stats`.
+            public struct StatsPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AdjustAllocPlan/stats/value1`.
+                public var value1: Components.Schemas.StatBlock
+                /// Creates a new `StatsPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.StatBlock) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 実数値(ランク補正なし)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocPlan/stats`.
+            public var stats: Components.Schemas.AdjustAllocPlan.StatsPayload
+            /// 等倍の物理耐久指数(H × B)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocPlan/physicalBulk`.
+            public var physicalBulk: Swift.Int64
+            /// 等倍の特殊耐久指数(H × D)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocPlan/specialBulk`.
+            public var specialBulk: Swift.Int64
+            /// 素早さの目標を満たすか(bulk・minSpeed=0 では常に true)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocPlan/speedMet`.
+            public var speedMet: Swift.Bool
+            /// goal を満たすか(goal を省略したら false)
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocPlan/goalMet`.
+            public var goalMet: Swift.Bool
+            /// goal の確率(bulk は耐える、offense は倒す確率。%)。goal を省略したら 0
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocPlan/chancePercent`.
+            public var chancePercent: Swift.Double
+            /// Creates a new `AdjustAllocPlan`.
+            ///
+            /// - Parameters:
+            ///   - sp: 全6能力の SP(回さない能力は下限のまま)
+            ///   - totalSp:
+            ///   - stats: 実数値(ランク補正なし)
+            ///   - physicalBulk: 等倍の物理耐久指数(H × B)
+            ///   - specialBulk: 等倍の特殊耐久指数(H × D)
+            ///   - speedMet: 素早さの目標を満たすか(bulk・minSpeed=0 では常に true)
+            ///   - goalMet: goal を満たすか(goal を省略したら false)
+            ///   - chancePercent: goal の確率(bulk は耐える、offense は倒す確率。%)。goal を省略したら 0
+            public init(
+                sp: Components.Schemas.AdjustAllocPlan.SpPayload,
+                totalSp: Swift.Int,
+                stats: Components.Schemas.AdjustAllocPlan.StatsPayload,
+                physicalBulk: Swift.Int64,
+                specialBulk: Swift.Int64,
+                speedMet: Swift.Bool,
+                goalMet: Swift.Bool,
+                chancePercent: Swift.Double
+            ) {
+                self.sp = sp
+                self.totalSp = totalSp
+                self.stats = stats
+                self.physicalBulk = physicalBulk
+                self.specialBulk = specialBulk
+                self.speedMet = speedMet
+                self.goalMet = goalMet
+                self.chancePercent = chancePercent
+            }
+            public enum CodingKeys: String, CodingKey {
+                case sp
+                case totalSp
+                case stats
+                case physicalBulk
+                case specialBulk
+                case speedMet
+                case goalMet
+                case chancePercent
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/AdjustAllocationResult`.
+        public struct AdjustAllocationResult: Codable, Hashable, Sendable {
+            /// 残り SP = 66 − 下限の合計
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocationResult/remaining`.
+            public var remaining: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocationResult/maxIndex`.
+            public var maxIndex: Components.Schemas.AdjustAllocPlan
+            /// goal を満たす最小 SP の組(満たせなければ最も近い組。GoalMet / SpeedMet で判別)。goal を省略したら null
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocationResult/minSp`.
+            public struct MinSpPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AdjustAllocationResult/minSp/value1`.
+                public var value1: Components.Schemas.AdjustAllocPlan
+                /// Creates a new `MinSpPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.AdjustAllocPlan) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// goal を満たす最小 SP の組(満たせなければ最も近い組。GoalMet / SpeedMet で判別)。goal を省略したら null
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocationResult/minSp`.
+            public var minSp: Components.Schemas.AdjustAllocationResult.MinSpPayload?
+            /// goal の計算に付いた「未対応」の印(ADR-0123)。goal を省略したら空配列
+            ///
+            /// - Remark: Generated from `#/components/schemas/AdjustAllocationResult/unsupported`.
+            public var unsupported: [Components.Schemas.UnsupportedMark]
+            /// Creates a new `AdjustAllocationResult`.
+            ///
+            /// - Parameters:
+            ///   - remaining: 残り SP = 66 − 下限の合計
+            ///   - maxIndex:
+            ///   - minSp: goal を満たす最小 SP の組(満たせなければ最も近い組。GoalMet / SpeedMet で判別)。goal を省略したら null
+            ///   - unsupported: goal の計算に付いた「未対応」の印(ADR-0123)。goal を省略したら空配列
+            public init(
+                remaining: Swift.Int,
+                maxIndex: Components.Schemas.AdjustAllocPlan,
+                minSp: Components.Schemas.AdjustAllocationResult.MinSpPayload? = nil,
+                unsupported: [Components.Schemas.UnsupportedMark]
+            ) {
+                self.remaining = remaining
+                self.maxIndex = maxIndex
+                self.minSp = minSp
+                self.unsupported = unsupported
+            }
+            public enum CodingKeys: String, CodingKey {
+                case remaining
+                case maxIndex
+                case minSp
+                case unsupported
+            }
+        }
+        /// 効果定義(item_effects / ability_effects の JSON をそのまま。ADR-0005)。null は補正なし。
+        /// 形は共通マスタ(`services/internal/master` の DecodeItemEffect / DecodeAbilityEffect)が受け付けるもので、
+        /// 受け取った側がそこで厳格に検証する(未知のキー・4096 基準の整数でない値・空のオブジェクトは不正)。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/MasterEffect`.
+        public struct MasterEffect: Codable, Hashable, Sendable {
+            /// A container of undocumented properties.
+            public var additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer
+            /// Creates a new `MasterEffect`.
+            ///
+            /// - Parameters:
+            ///   - additionalProperties: A container of undocumented properties.
+            public init(additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer = .init()) {
+                self.additionalProperties = additionalProperties
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeAdditionalProperties(additionalProperties)
             }
         }
         /// 「よく使う相手」1件(ADR-0209 §3 #2)。端末内の計算イベントの集計で、他端末のイベントは混ざらない。

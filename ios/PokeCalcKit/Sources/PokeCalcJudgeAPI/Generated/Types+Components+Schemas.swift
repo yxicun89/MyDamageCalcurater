@@ -155,7 +155,8 @@ extension Components {
             }
         }
         /// 判定に使う個体。欄は docs/judge-design.md §3 JD1 の列挙そのまま。
-        /// status(状態異常)と teraType は JD1 では受け取らない(ADR-0701 §2)。
+        /// teraType は受け取らない(ADR-0701 §2)。status(状態異常)は省略可で、麻痺だけ素早さに反映し、
+        /// すべて calc-svc へそのまま転送する(ADR-0712)。
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/Individual`.
@@ -179,6 +180,28 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Individual/itemId`.
             public var itemId: Swift.String?
+            /// 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
+            /// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+            /// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Individual/status`.
+            @frozen public enum StatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case none = "none"
+                case burn = "burn"
+                case paralysis = "paralysis"
+                case poison = "poison"
+                case badlyPoison = "badly_poison"
+                case sleep = "sleep"
+                case freeze = "freeze"
+            }
+            /// 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
+            /// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+            /// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Individual/status`.
+            public var status: Components.Schemas.Individual.StatusPayload?
             /// Creates a new `Individual`.
             ///
             /// - Parameters:
@@ -188,13 +211,15 @@ extension Components {
             ///   - ranks:
             ///   - abilityId: 特性 ID。judge は解釈せず calc-svc にそのまま渡す。
             ///   - itemId: 持ち物 ID。judge は calc-svc にそのまま渡すほか、こだわりスカーフの ID
+            ///   - status: 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
             public init(
                 speciesKey: Components.Schemas.SpeciesKey,
                 natureId: Components.Schemas.NatureId,
                 sp: Components.Schemas.StatBlock,
                 ranks: Components.Schemas.RankBlock? = nil,
                 abilityId: Swift.String? = nil,
-                itemId: Swift.String? = nil
+                itemId: Swift.String? = nil,
+                status: Components.Schemas.Individual.StatusPayload? = nil
             ) {
                 self.speciesKey = speciesKey
                 self.natureId = natureId
@@ -202,6 +227,7 @@ extension Components {
                 self.ranks = ranks
                 self.abilityId = abilityId
                 self.itemId = itemId
+                self.status = status
             }
             public enum CodingKeys: String, CodingKey {
                 case speciesKey
@@ -210,6 +236,7 @@ extension Components {
                 case ranks
                 case abilityId
                 case itemId
+                case status
             }
         }
         /// 相手候補 1 件(ADR-0704 §1)。Individual の全欄に加えて、**この候補が撃ち返してくる技
@@ -242,6 +269,28 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/DefenderCandidate/itemId`.
             public var itemId: Swift.String?
+            /// 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
+            /// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+            /// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/DefenderCandidate/status`.
+            @frozen public enum StatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case none = "none"
+                case burn = "burn"
+                case paralysis = "paralysis"
+                case poison = "poison"
+                case badlyPoison = "badly_poison"
+                case sleep = "sleep"
+                case freeze = "freeze"
+            }
+            /// 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
+            /// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+            /// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/DefenderCandidate/status`.
+            public var status: Components.Schemas.DefenderCandidate.StatusPayload?
             /// この候補が使う技(1 つ)。優先度は GET /api/pokedex/moves/{key} で引き、
             /// この技によるダメージは calc-svc を逆方向(この候補が攻撃側・自分が防御側)で
             /// 呼んで求める(ADR-0704 §4)。マスタに無ければ 422 unknown_move。
@@ -285,6 +334,7 @@ extension Components {
             ///   - ranks:
             ///   - abilityId: 特性 ID。judge は解釈せず calc-svc にそのまま渡す。
             ///   - itemId: 持ち物 ID。judge は calc-svc にそのまま渡すほか、こだわりスカーフの ID
+            ///   - status: 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
             ///   - moveId: この候補が使う技(1 つ)。優先度は GET /api/pokedex/moves/{key} で引き、
             public init(
                 speciesKey: Components.Schemas.SpeciesKey,
@@ -293,6 +343,7 @@ extension Components {
                 ranks: Components.Schemas.RankBlock? = nil,
                 abilityId: Swift.String? = nil,
                 itemId: Swift.String? = nil,
+                status: Components.Schemas.DefenderCandidate.StatusPayload? = nil,
                 moveId: Components.Schemas.DefenderCandidate.MoveIdPayload
             ) {
                 self.speciesKey = speciesKey
@@ -301,6 +352,7 @@ extension Components {
                 self.ranks = ranks
                 self.abilityId = abilityId
                 self.itemId = itemId
+                self.status = status
                 self.moveId = moveId
             }
             public enum CodingKeys: String, CodingKey {
@@ -310,6 +362,7 @@ extension Components {
                 case ranks
                 case abilityId
                 case itemId
+                case status
                 case moveId
             }
         }
@@ -610,7 +663,10 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/schemas/UnsupportedMark`.
         public struct UnsupportedMark: Codable, Hashable, Sendable {
-            /// 印の対象(move・attacker_item・attacker_ability・defender_item・defender_ability。ADR-0215 で enum にしない)。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
+            /// 印の対象(move・attacker_item・attacker_ability・defender_item・defender_ability・format。
+            /// format は calc-svc に未知の形式が届いたときだけで、judge が送る single・double には付かない(ADR-0222 §5)。
+            /// テラスの attacker_tera_type / defender_tera_type は judge が teraType を受けないので届かないが、
+            /// 値の意味はルートの契約に従う。ADR-0215 で enum にしない)。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
             /// 一致しないことがある(ADR-0708 §5)。attackerKoUnsupported(順方向)では
             /// attacker_* = 自分・defender_* = その候補、defenderKoUnsupported(逆方向)では
             /// attacker_* = その候補・defender_* = 自分を指す。
@@ -618,24 +674,24 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/UnsupportedMark/target`.
             public var target: Swift.String
-            /// 印の理由。技は機構の値(13 種)か zero_power(威力 0 の攻撃技)、持ち物・特性は
-            /// unsupported_effect(効果スキーマで表せない)。judge はこの値を検査せず、
+            /// 印の理由。技は機構の値(13 種)か zero_power(威力 0 の攻撃技)・move_target_unknown(double で技の対象が
+            /// 不明。ADR-0222)、持ち物・特性・テラス・未知の対戦形式は unsupported_effect(効果スキーマで表せない・計算に反映していない。ADR-0160)。judge はこの値を検査せず、
             /// この列挙に無い値もそのまま中継する(engine が理由を足したときに judge の版で落とさない。
             /// ADR-0708 §4・§6。契約は説明で、judge は印の意味を持たない)。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/UnsupportedMark/reason`.
             public var reason: Swift.String
-            /// 印が付いた技・持ち物・特性の ID(calc-svc が返したまま)。
+            /// 印が付いた技・持ち物・特性の ID、または format の印では対戦形式の値(calc-svc が返したまま)。
             ///
             /// - Remark: Generated from `#/components/schemas/UnsupportedMark/id`.
             public var id: Swift.String
             /// Creates a new `UnsupportedMark`.
             ///
             /// - Parameters:
-            ///   - target: 印の対象(move・attacker_item・attacker_ability・defender_item・defender_ability。ADR-0215 で enum にしない)。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
-            ///   - reason: 印の理由。技は機構の値(13 種)か zero_power(威力 0 の攻撃技)、持ち物・特性は
-            ///   - id: 印が付いた技・持ち物・特性の ID(calc-svc が返したまま)。
+            ///   - target: 印の対象(move・attacker_item・attacker_ability・defender_item・defender_ability・format。
+            ///   - reason: 印の理由。技は機構の値(13 種)か zero_power(威力 0 の攻撃技)・move_target_unknown(double で技の対象が
+            ///   - id: 印が付いた技・持ち物・特性の ID、または format の印では対戦形式の値(calc-svc が返したまま)。
             public init(
                 target: Swift.String,
                 reason: Swift.String,
@@ -820,6 +876,34 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Matchup/defenderKoUnsupported`.
             public var defenderKoUnsupported: [Components.Schemas.UnsupportedMark]
+            /// attackerSpeed の計算に**実際に効かせた**素早さの補正(ADR-0710)。値は rank(素早さのランクが 0 でない)・
+            /// tailwind(追い風)・choiceScarf(こだわりスカーフ)・paralysis(status が paralysis。連結のあとに ×0.5)。
+            /// 効かせた補正が無ければ空配列(null にも欄の欠落にもしない)。順序は rank → tailwind → choiceScarf → paralysis で固定。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Matchup/attackerSpeedApplied`.
+            public var attackerSpeedApplied: [Components.Schemas.SpeedFactor]
+            /// defenderSpeed について、attackerSpeedApplied と同じ意味(この候補側)。
+            ///
+            /// - Remark: Generated from `#/components/schemas/Matchup/defenderSpeedApplied`.
+            public var defenderSpeedApplied: [Components.Schemas.SpeedFactor]
+            /// 自分の入力のうち、素早さに影響しうるのに **attackerSpeed へ反映していない**もの(ADR-0710)。
+            /// 値は abilityId(abilityId が指定されている。特性の素早さ補正は引けない)・
+            /// itemId(こだわりスカーフ以外の itemId が指定されている)・
+            /// fieldWeather(field.weather が none 以外で、かつ abilityId も指定されている。天候依存の素早さ特性があり得るため)。
+            /// **「影響する」とは限らない**: 素早さに効かない特性・持ち物でも、指定されていればここに入る
+            /// (judge は特性・持ち物の素早さ補正のデータを持たないため。第2段でデータ駆動にするまでの印)。
+            /// 状態異常は麻痺を反映済みで、この欄には現れない(麻痺と abilityId が同時でも麻痺は常に ×0.5 で、abilityId はここに残る。ADR-0712)。画面は空でないとき
+            /// 「素早さは特性・持ち物・天候を反映していない」旨を添える(文言は画面の持ち物)。
+            /// 空配列が「素早さに影響する要素が無い」ことの保証になる。順序は abilityId → itemId → fieldWeather で固定。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Matchup/attackerSpeedIgnored`.
+            public var attackerSpeedIgnored: [Components.Schemas.SpeedIgnoredInput]
+            /// defenderSpeed について、attackerSpeedIgnored と同じ意味(この候補側。天候は共通の field.weather)。
+            ///
+            /// - Remark: Generated from `#/components/schemas/Matchup/defenderSpeedIgnored`.
+            public var defenderSpeedIgnored: [Components.Schemas.SpeedIgnoredInput]
             /// Creates a new `Matchup`.
             ///
             /// - Parameters:
@@ -836,6 +920,10 @@ extension Components {
             ///   - defenderKo: この候補の技(defenders[i].moveId)が自分に与えるダメージの確定数(ADR-0704 §3)。
             ///   - attackerKoUnsupported: attackerKo(順方向の計算。自分の技 → この候補)に付いた「正しく計算できていない可能性がある」印
             ///   - defenderKoUnsupported: defenderKo(逆方向の計算。この候補の技 → 自分)に付いた印(ADR-0708 §1)。
+            ///   - attackerSpeedApplied: attackerSpeed の計算に**実際に効かせた**素早さの補正(ADR-0710)。値は rank(素早さのランクが 0 でない)・
+            ///   - defenderSpeedApplied: defenderSpeed について、attackerSpeedApplied と同じ意味(この候補側)。
+            ///   - attackerSpeedIgnored: 自分の入力のうち、素早さに影響しうるのに **attackerSpeed へ反映していない**もの(ADR-0710)。
+            ///   - defenderSpeedIgnored: defenderSpeed について、attackerSpeedIgnored と同じ意味(この候補側。天候は共通の field.weather)。
             public init(
                 defenderIndex: Swift.Int,
                 outspeeds: Swift.Bool,
@@ -849,7 +937,11 @@ extension Components {
                 attackerKo: Components.Schemas.Matchup.AttackerKoPayload,
                 defenderKo: Components.Schemas.Matchup.DefenderKoPayload,
                 attackerKoUnsupported: [Components.Schemas.UnsupportedMark],
-                defenderKoUnsupported: [Components.Schemas.UnsupportedMark]
+                defenderKoUnsupported: [Components.Schemas.UnsupportedMark],
+                attackerSpeedApplied: [Components.Schemas.SpeedFactor],
+                defenderSpeedApplied: [Components.Schemas.SpeedFactor],
+                attackerSpeedIgnored: [Components.Schemas.SpeedIgnoredInput],
+                defenderSpeedIgnored: [Components.Schemas.SpeedIgnoredInput]
             ) {
                 self.defenderIndex = defenderIndex
                 self.outspeeds = outspeeds
@@ -864,6 +956,10 @@ extension Components {
                 self.defenderKo = defenderKo
                 self.attackerKoUnsupported = attackerKoUnsupported
                 self.defenderKoUnsupported = defenderKoUnsupported
+                self.attackerSpeedApplied = attackerSpeedApplied
+                self.defenderSpeedApplied = defenderSpeedApplied
+                self.attackerSpeedIgnored = attackerSpeedIgnored
+                self.defenderSpeedIgnored = defenderSpeedIgnored
             }
             public enum CodingKeys: String, CodingKey {
                 case defenderIndex
@@ -879,7 +975,28 @@ extension Components {
                 case defenderKo
                 case attackerKoUnsupported
                 case defenderKoUnsupported
+                case attackerSpeedApplied
+                case defenderSpeedApplied
+                case attackerSpeedIgnored
+                case defenderSpeedIgnored
             }
+        }
+        /// 素早さの計算に効かせた補正(ADR-0710・ADR-0712)。
+        ///
+        /// - Remark: Generated from `#/components/schemas/SpeedFactor`.
+        @frozen public enum SpeedFactor: String, Codable, Hashable, Sendable, CaseIterable {
+            case rank = "rank"
+            case tailwind = "tailwind"
+            case choiceScarf = "choiceScarf"
+            case paralysis = "paralysis"
+        }
+        /// 素早さに影響しうるが反映していない入力(ADR-0710)。
+        ///
+        /// - Remark: Generated from `#/components/schemas/SpeedIgnoredInput`.
+        @frozen public enum SpeedIgnoredInput: String, Codable, Hashable, Sendable, CaseIterable {
+            case abilityId = "abilityId"
+            case itemId = "itemId"
+            case fieldWeather = "fieldWeather"
         }
         /// - Remark: Generated from `#/components/schemas/Error`.
         public struct _Error: Codable, Hashable, Sendable {
@@ -906,7 +1023,9 @@ extension Components {
         }
         /// エラーの区分。judge は上流の事情(HTTP のステータス・接続エラーの文面・URL)をそのまま返さず、
         /// ADR-0700 §3・ADR-0701 §6 の対応表でこの列挙に畳む。
-        /// invalid_request: ヘッダー・request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
+        /// missing_header: X-Device-Id / X-Session-Id が無い・空(ADR-0219。gateway と同じ判定)。
+        /// invalid_header: X-Device-Id / X-Session-Id が正準形 UUID でない、または同名ヘッダが重複している(ADR-0219)。
+        /// invalid_request: request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
         /// unknown_species: speciesKey が pokedex-svc のマスタに無い。
         /// unknown_move: moveId が pokedex-svc の技のマスタに無い(攻撃側・候補側のどちらも。ADR-0704 §6)。
         /// unknown_nature: natureId が性格の一覧に無い。
@@ -918,6 +1037,8 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/schemas/ErrorCode`.
         @frozen public enum ErrorCode: String, Codable, Hashable, Sendable, CaseIterable {
+            case missingHeader = "missing_header"
+            case invalidHeader = "invalid_header"
             case invalidRequest = "invalid_request"
             case unknownSpecies = "unknown_species"
             case unknownMove = "unknown_move"

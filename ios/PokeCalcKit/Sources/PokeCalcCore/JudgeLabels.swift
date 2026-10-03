@@ -117,6 +117,8 @@ public enum JudgeLabels {
         case "unknown_nature": return "この性格はマスタにありません"
         case "request_too_large": return "入力が大きすぎます"
         case "upstream_unavailable": return "判定に必要なサービスに接続できません"
+        case "missing_header": return "端末の識別情報がありません"
+        case "invalid_header": return "端末の識別情報が正しくありません"
         case PokeCalcError.Code.transport, PokeCalcError.Code.decode, PokeCalcError.Code.unexpectedStatus: return unavailable
         default: return errorFallback  // internal_error・not_found・未知の code
         }

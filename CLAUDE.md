@@ -13,7 +13,7 @@ Claude Code / Codex の手順対応は [docs/development-workflow.md](docs/devel
 3. `docs/test-strategy.md` — テストの正
 4. `docs/design.md` — 画面・ビジュアルの正
 5. `docs/adr/` — 過去の設計判断
-6. `docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md` — Claude Code と Codex の共有状態(運用は [AGENTS.md](AGENTS.md))
+6. `docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md` — Claude Code と Codex の共有状態(運用は [AGENTS.md](AGENTS.md)) （2026-10-03: `CURRENT_STATE.md` はレーン別の `state/`、`DECISIONS.md` は 1 件 1 ファイルの `decisions/` に分割済み。COORDINATION.md「共有状態ファイルの分割」）
 7. `docs/coding-rules.md` — コーディング規約(公開できる状態を保つ・ハードコードしない・読みやすいコード。Claude Code / Codex 共通)
    手順書(verify・README の起動手順)は AGENTS.md「手順書の書き方」に従う(上から下へ1回で読める・動作を伴うコマンドと最低限の確認点だけ・ルートへの cd から始める)
 
@@ -140,3 +140,6 @@ ADR-0003 の適応を維持する。Codex では ADR-0007 と共通ワークフ�
 PR のマージは人間の確認を要さない(ADR-0803。ユーザー決定 2026-10-03)。ただし **対象 PR の CI が全件成功のときだけ**:
 PR 作成 → `gh pr checks N` 全件成功 → PR 番号を明示し、`gh pr view N --json headRefOid -q .headRefOid` の SHA を `--match-head-commit` に付けて単独で `gh pr merge N`。CI が赤・未完了なら止まって直す。`--admin`・`gh api` でのマージ・main への直接 push は不可
 (bash-guard が機械的に強制する)。
+推奨は `scripts/pr-merge.sh <PR番号>`(上の手順に加えて、使い捨て worktree でテスト・lint・公開前検査を流してからマージする。ADR-0804)。
+AI の権限・ガード・クラウド/費用に関わるファイル(`.claude/`・`.codex/`・`scripts/ai-guard/`・`scripts/pr-merge*.sh`・cloud overlay・terraform・workflows)を
+変える PR は人間がマージする(待たずに次の作業へ進む)。

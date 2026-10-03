@@ -376,3 +376,10 @@
 .reverse-results__unsupported-icon {
   line-height: 1;
 }
+
+/* メガ種族の持ち物固定の理由・固定のメガストーン名(issue 515、ADR-0320)。 */
+.reverse-card__reason {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-body);
+}

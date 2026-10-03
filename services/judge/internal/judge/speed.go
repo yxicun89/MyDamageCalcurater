@@ -30,6 +30,10 @@ const tailwindSpeedModifier = 8192
 // に沿った既定値(ADR-0701 §3)。cmd/api が環境変数で上書きできる。
 const DefaultChoiceScarfItemID = "choicescarf"
 
+// paralysisSpeedPercent はまひの素早さ補正(50%)。出典は @smogon/calc 0.12.0 の getFinalSpeed
+// (`floor(speed * 50 / 100)`。ADR-0712)。
+const paralysisSpeedPercent = 50
+
 // 入力検証の sentinel エラー。検証はコアが持つドメインの不変条件(coding-rules §3)。
 var (
 	// ErrInvalidBaseSpeed は素早さ種族値が 1〜255 の外であることを表す。
@@ -40,8 +44,8 @@ var (
 	ErrInvalidRank = errors.New("rank must be between -6 and +6")
 )
 
-// Individual は JD1 の素早さ計算に使う個体(ADR-0701 §2)。状態異常(status)・テラスタルは
-// JD1 では扱わないため持たない。
+// Individual は素早さ計算に使う個体(ADR-0701 §2)。状態異常は麻痺だけを Paralysis で持つ
+// (ADR-0712。他の状態異常は素早さに効かない)。テラスタルは持たない。
 type Individual struct {
 	BaseSpeed int
 	Nature    engine.Nature
@@ -51,6 +55,9 @@ type Individual struct {
 	// Tailwind は追い風がこの個体の側にかかっているか(ADR-0702 §4)。Scarf と同じ「その個体の
 	// 素早さに乗る補正」なので、CompareSpeed の引数ではなく Individual に置く。
 	Tailwind bool
+	// Paralysis は状態異常がまひか。連結・五捨五超入のあとに floor(x × 50 / 100) を掛ける
+	// (@smogon/calc 0.12.0 の getFinalSpeed と同じ。4096 基準の連結には含めない。ADR-0712)。
+	Paralysis bool
 }
 
 // SpeedField は CompareSpeed の第3引数で、比較そのものに効く場の効果を表す(ADR-0702 §4)。
@@ -102,6 +109,9 @@ func Speed(in Individual) (int, error) {
 	}
 	if len(mods) > 0 {
 		v = applySpeedModifiers(v, mods)
+	}
+	if in.Paralysis {
+		v = v * paralysisSpeedPercent / 100
 	}
 	return v, nil
 }
@@ -188,4 +198,58 @@ func IsChoiceScarf(itemID, scarfItemID string) bool {
 		scarfItemID = DefaultChoiceScarfItemID
 	}
 	return itemID == scarfItemID
+}
+
+// 素早さの計算に効かせた補正の名前(契約の SpeedFactor。ADR-0710)。
+const (
+	SpeedFactorRank        = "rank"
+	SpeedFactorTailwind    = "tailwind"
+	SpeedFactorChoiceScarf = "choiceScarf"
+	SpeedFactorParalysis   = "paralysis"
+)
+
+// AppliedSpeedFactors は Speed が実際に効かせる補正を、rank → tailwind → choiceScarf → paralysis の順で返す
+// (ADR-0710・ADR-0712)。効かせる補正が無ければ空のスライス(nil にはしない)。
+func AppliedSpeedFactors(in Individual) []string {
+	factors := []string{}
+	if in.Ranks.Spe != 0 {
+		factors = append(factors, SpeedFactorRank)
+	}
+	if in.Tailwind {
+		factors = append(factors, SpeedFactorTailwind)
+	}
+	if in.Scarf {
+		factors = append(factors, SpeedFactorChoiceScarf)
+	}
+	if in.Paralysis {
+		factors = append(factors, SpeedFactorParalysis)
+	}
+	return factors
+}
+
+// 素早さに影響しうるのに反映していない入力の名前(契約の SpeedIgnoredInput。ADR-0710)。
+const (
+	IgnoredSpeedAbility = "abilityId"
+	IgnoredSpeedItem    = "itemId"
+	IgnoredSpeedWeather = "fieldWeather"
+)
+
+// IgnoredSpeedInputs は、指定されたが素早さに反映していない入力を abilityId → itemId → fieldWeather の順で返す
+// (ADR-0710)。judge は特性・持ち物の素早さ補正のデータを持たないので、「影響するか」ではなく
+// 「指定されたか」で判定する(素早さに効かない特性でも入る。第2段のデータ駆動までの印)。
+//   - ability: abilityID が空でない
+//   - item: itemID が空でなく、こだわりスカーフではない(isScarf が false)
+//   - weather: 天候があり(none 以外)、かつ abilityID も指定されている(天候依存の素早さ特性があり得るため)
+func IgnoredSpeedInputs(abilityID, itemID string, isScarf, hasWeather bool) []string {
+	ignored := []string{}
+	if abilityID != "" {
+		ignored = append(ignored, IgnoredSpeedAbility)
+	}
+	if itemID != "" && !isScarf {
+		ignored = append(ignored, IgnoredSpeedItem)
+	}
+	if hasWeather && abilityID != "" {
+		ignored = append(ignored, IgnoredSpeedWeather)
+	}
+	return ignored
 }

@@ -43,6 +43,17 @@ enum への追加だけ行う」とする。破壊的変更は新しい `/vN` �
 末尾に `not_found` を足すだけで、どちらも後から取り込める(enum の追記行の衝突は両方を残して解決する)。
 
 ## 限界(対象外)
-- gateway が上流の非 JSON 応答(例 502 `text/html`)をそのまま通す経路と、Traefik 既定の 502/504 テキストは本 ADR では直さない
-  (別 issue。gateway の上流エラー整形と Traefik の errors middleware が要る)。
+- Traefik 直結の 502/504(gateway を経由しない、クラスタ側の応答)は本 ADR では直さない(Traefik の errors middleware が要る)。
+  gateway を経由する上流の非 JSON 5xx は、下の「追記(issue 514)」で正規化した。
 - 上の表の code の統一(§3)は未実施。
+
+## 追記(issue 514): gateway が上流の非 JSON 5xx を 503 upstream_unavailable に正規化する
+`/api/*` の上流(calc・pokedex・record・team・balance・speed・judge)が JSON でない 5xx(Traefik 等の `text/html` の 502、
+`text/plain` の 504 など)を返したら、gateway が 503 `upstream_unavailable` の Error JSON に書き換える(ADR-0202 §7 の本文)。
+- 判定は `newReverseProxy` の `apiUpstream`(`/api/*` の上流か)。`ModifyResponse` で、ステータスが 5xx かつ
+  Content-Type が JSON(`application/json`・charset 付き・`application/*+json`)でないときだけ正規化する。
+  JSON の 5xx・4xx(非 JSON を含む)・assets・Web は素通し。
+- 本文に上流の本文を出さない。**上流のステータスが 500 でも 503 に書き換わる**。上流が付けた `Retry-After` 等のヘッダも引き継がない
+  (正規化後の応答は gateway が作り直すため)。CORS は既存の処理で付く。
+- 正規化時は専用の WARN「上流が JSON でない 5xx を返した」に上流のステータス・Content-Type を残す(端末 ID は出さない)。
+- 範囲外: Traefik が gateway より前で返す 502/504(クラスタ側)。

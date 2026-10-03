@@ -152,7 +152,11 @@ public struct APIJudgeService: JudgeService {
             attackerMovesFirst: value.attackerMovesFirst, turnOrderTie: value.turnOrderTie,
             attackerKo: domainKO(value.attackerKo.value1), defenderKo: domainKO(value.defenderKo.value1),
             attackerKoUnsupported: value.attackerKoUnsupported.map(domainMark),
-            defenderKoUnsupported: value.defenderKoUnsupported.map(domainMark))
+            defenderKoUnsupported: value.defenderKoUnsupported.map(domainMark),
+            attackerSpeedApplied: value.attackerSpeedApplied.map(\.rawValue),
+            defenderSpeedApplied: value.defenderSpeedApplied.map(\.rawValue),
+            attackerSpeedIgnored: value.attackerSpeedIgnored.map(\.rawValue),
+            defenderSpeedIgnored: value.defenderSpeedIgnored.map(\.rawValue))
     }
 
     private static func domainResponse(_ response: Components.Schemas.OutspeedAndKoResponse) -> JudgeResponse {

@@ -1,0 +1,77 @@
+# ADR-0320: メガ種族の持ち物をメガストーンに固定する(Web の共通ドメインと計算・逆算画面。issue #515)
+
+- 状態: 採用
+- 日付: 2026-10-03
+- レーン: Web
+- 関連: issue #515、docs/mega-evolution-spec.md §4-3、ADR-0002 決定 10(メガ後の姿は別のポケモンとして登録し、持ち物はメガストーンで固定)、
+  ADR-0304(オンラインのマスタ取得口)、ADR-0313(マスタのキャッシュ)、ADR-0311・0312(計算画面の入力)、`docs/coding-rules.md`
+
+## 背景
+
+ADR-0002 決定 10 で、メガシンカ後の姿は別のポケモンとして登録し、その持ち物はメガストーンで固定すると決まった。API の検証
+(メガ種族に `requiredItemId` 以外の持ち物を持たせた計算は 400)は別 issue で進行中なので、UI は送れない入力を出さない。
+Web は種族を選んだあとの持ち物を独立した選択にしており、`isMega` / `requiredItemId` を使っていなかった。
+
+issue #515 の Web 分を2つの PR に分ける。**PR-A(この ADR の範囲)= 共通ドメイン + 計算画面 + 逆算画面。PR-B = 構築の編集・判定画面**
+(古い保存データの読み込み時の補正を含む。PR-B で必要なら追記する)。
+
+## 決定
+
+1. **共通ドメイン `web/src/domain/mega.ts`(純粋関数。PR-B が再利用する)**。名前・ID を直書きせず、マスタの `isMega` / `requiredItemId` だけから導く。
+   - `isMegaSpecies(species)`: `isMega === true` のときだけ true(省略・null は false)。
+   - `megaStoneItemIds(species[])`: メガ種族の `requiredItemId` に現れる ID の集合(「メガストーンを単独の選択肢に出さない」ための判別)。
+   - `selectableItems(items, stoneIds)`: その集合の持ち物を外した選択肢(順序・実体は保つ)。
+   - `megaItemLock(species, items)`: `none`(メガでない)/ `locked`(メガ + マスタにストーンあり。`item` を返す)/ `missing`(メガだがストーンを引けない)。
+   - `itemIdAfterSpeciesChange({ previous, next, items, currentItemId })`: 種族を変えたときの持ち物 ID。
+     メガへ → ストーンの ID(`missing` は空)、メガから非メガ・未選択へ → 空(メガストーンを残さない)、非メガどうし → 現在の持ち物を保つ。
+2. **文言は `i18n/ja.ts` の `megaItemText`**(`lockedReason`「メガシンカ: メガストーンを持ちます」・`missingReason`・`compareDisabledReason`・`fixedItemName(name)`)。
+   iOS は同じ語にそろえる(spec §4-3)。画面に直書きしない。
+3. **画面(計算・逆算の個体を選ぶすべての場所)**:
+   - メガ種族を選ぶと持ち物をストーンに設定し、持ち物欄を `disabled` にしてストーンの名前を見せる。理由を見える文言で出し、`aria-describedby` で欄に結び付ける。
+   - メガでない種族に変えたら固定を解除して未選択に戻す。メガストーンは単独の選択肢に出さない(「持ち物の候補も比較」の候補・逆算の持ち物候補にも混ぜない)。
+   - 「持ち物の候補も比較」は**防御側がメガ**のとき `disabled`(理由つき)にし、`itemVariants` はストーン1件。逆算は**相手がメガ**のとき
+     `itemCandidates` をストーン1件にする(`null` も混ぜない。メガ種族の持ち物なしは API が 400 にするため)。相手のカードには持ち物欄が無いので、理由とストーン名を文で出す。
+   - 攻守入れ替え・観測した側の切り替えは、持ち物が種族に付いて動くので固定が保たれる。
+4. **ストーンをマスタの持ち物から引けないメガ種族(`missing`)**: 固定せず持ち物は空にし、欄は `disabled` で理由(`missingReason`)を出す。逆算の相手は `itemCandidates = [null]`。
+   黙って別の持ち物にしない。API の 400 は最後の安全網で、UI は見せない(spec §4-3)。
+5. **マスタの型**: `MasterSpecies` に `isMega?: boolean`・`requiredItemId?: string | null` を足す(**省略可**。省略は非メガと同じ。既存の fixture・例データを変えずに済み、
+   公開 API が項目を返さない間も壊れない)。engine には渡さない(`toEngineSpecies` が落とす。境界は未知のフィールドを拒否する)。
+6. **公開 API の契約**: 公開 API の `SpeciesDetail` に `isMega` / `requiredItemId` を足した(`api/openapi.yaml`。API 分は完了済みで、Web 側は触らない)。
+   契約上は省略可(古いサーバー・クライアントの互換)だが、pokedex-svc は `requiredItemId` の null キーを常に出す
+   (ADR-0218 の `effect` は省略。方針の違いは意図的)。Web の写像は応答の値をそのまま写し、省略は省略のまま(`isMegaSpecies` が false と読む)。
+7. **メガストーンの集合の出どころ**: 種族の全件一覧があるマスタ(`speciesList`)は `master.species` から、検索で解決するマスタ(オンライン・キャッシュ済みオフライン)は
+   「いままでに解決した種族」(`useSpeciesResolutions` が持つ覚え書き + `master.species`)から導く。公開 API に持ち物がメガストーンかを示す項目が無いため、
+   **検索で解決するマスタでは、まだ解決していないメガ種族のストーンは単独の選択肢に残りうる**(その種族を選べば固定され、以後は出なくなる)。
+   完全にするには API 側の項目(例: `Item.isMegaStone`)が要る。別 issue にする。
+8. **マスタのキャッシュのスキーマ版を 1 → 2 に上げる**(ADR-0313 §5)。保存済みの種族はメガの項目を持たないので、版 1 の記録を使い続けると、メガ種族が `isMega` なしで再利用され固定されない。
+   版違いは破棄して空として扱う(次のオンライン取得で作り直す)。保存形そのもの(キー構造)は変えない。
+9. **E2E の pokedex フィクスチャ**に架空のメガ種族とメガストーン(`src/test/megaMaster.ts` の `withMegaFixture`。単体テストと共有)を足し、詳細の応答に `isMega` / `requiredItemId` を常に出す。
+
+## 検討した代替
+
+- **`isMega` を必須にする**: 既存の fixture・テストを全部直す必要があり、公開 API が項目を返さない移行期に型が嘘をつく。省略可にして読む側(`isMegaSpecies`)を1か所にした。
+- **メガストーンの判別を持ち物の名前(「ナイト」)・ID で行う**: ハードコード禁止(CLAUDE.md)。マスタの `requiredItemId` から導く。
+- **メガでも持ち物欄を操作可能のまま警告だけ出す**: 送れない入力が UI から出てしまう(spec §4-3)。
+- **逆算の相手がメガのとき `itemCandidates = [ストーン]`**: メガは持ち物が固定なので探索しない(spec §4-3)。`null`(持ち物なし)は API が受け付ける
+  (`checkMegaItem` は `item == nil` を許す)が、UI は固定するので入れない。ストーンが引けないとき(missing)だけ `[null]`。
+- **スナップショットへのメガの書き出しは未対応**: `exportSnapshot.ts` は `isMega`・`requiredItemId` を出すが `baseSpeciesKey` は null のまま
+  (calc-svc の共通マスタは、メガで `base_species_key` が無い行を拒否する)。現状の例データ(`web/scripts/export-example-master.mjs`)はメガを含まないので表に出ない。
+  メガを calc-svc 側の e2e で検証する段階で、`MasterSpecies` に省略可の `baseSpeciesKey` を足して写す。
+
+## 結果・追跡
+
+- 受け入れ条件は `docs/mega-evolution-spec.md` §5 の 3(UI)の Web 分(計算・逆算)。構築・判定と古い保存データ(同 4)は PR-B。
+- **PR-B の決定(構築の編集・判定画面。実装済み)**:
+  1. 構築・判定も `domain/mega.ts` と `MegaItemReason`・`megaItemText` を再利用する(欄の固定・理由・`aria-describedby`・ストーンを単独の選択肢に出さない。PR-A と同じ作法)。
+  2. `changeSpecies`(teamMember.ts)は `{ previous, items }` を受け取り、持ち物を `itemIdAfterSpeciesChange` で整合させる(省略時は従来どおり持ち物を保つ)。
+  3. **古い保存データの補正**: 純粋関数 `correctMegaItem(draft, species, items)` が、メガ種族に `requiredItemId` 以外(null を含む)の持ち物があるとき `requiredItemId` へ直し、
+     `fixed`(直した先のストーン)を返す。ストーンをマスタから引けない(missing)ときは持ち物を空にして `cleared` を返す(すでに空なら通知なし)。
+     非メガに持たせたメガストーンは直さない(API が非メガを検査しないため、挙動を変えない)。構築を開いた時点(種族の一覧があるマスタ)、
+     または保存済みメンバーの種族の解決後(オンライン・キャッシュ済みオフライン)に1回だけ適用する。解決に失敗したメンバーは書き換えない(ADR-0316 §7)。
+  4. 直したことは、そのメンバーの枠の中に `role="status"` で出す(`megaItemText.correctedNotice` / `clearedNotice`。「保存すると反映されます」)。
+     補正は下書きの変更(未保存)として持ち、自動では保存しない。閉じて開き直すと保存済みの値から再び補正される。
+  4a. 実装の要点: 補正は `TeamMemberEditor` の初期状態(一覧のあるマスタ)と種族の解決後(一覧の無いマスタ。開いた時点のメンバーだけ)で1回。メンバーが種族を変えると通知は消える。
+     非メガが現在値にメガストーンを持つときは、名前を引いて選択肢に足す(ID 表示を避ける)。ストーンの判別集合は `master.species` + 解決済みの種族。
+  5. 判定画面は自分・相手の候補の個体入力に同じ固定を入れる。要求の `itemId` にストーンが載る。技の入力は対象外。個体の状態(`IndividualFormState`)に選んだ種族の実体 `species` を持たせ、固定をそこから導く(オンライン検索のマスタでは一覧が空のため)。
+  6. 検討した代替: 読み込み時に黙って直す(他の持ち物を黙って使い続けないが、直したことが利用者に伝わらない)→ 却下。API 側で正規化する → API 分は別 issue のため不採用。
+- 追跡: `Item` がメガストーンかを返す項目(§決定 7 の残り)。

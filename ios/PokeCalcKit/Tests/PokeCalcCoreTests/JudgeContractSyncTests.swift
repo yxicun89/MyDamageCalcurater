@@ -20,12 +20,12 @@ final class JudgeContractSyncTests: XCTestCase {
         }
     }
 
-    /// 契約の ErrorCode の値の集合(8 値)そのものも固定する。値が増減したら、この期待値・文言・DECISIONS.md の連絡を一緒に直す。
-    func testErrorCodeSetIsTheEightKnownValues() {
+    /// 契約の ErrorCode の値の集合(10 値。v0.2.0 で missing_header・invalid_header が増えた)そのものも固定する。値が増減したら、この期待値・文言・DECISIONS.md の連絡を一緒に直す。
+    func testErrorCodeSetIsTheTenKnownValues() {
         XCTAssertEqual(
             Set(Components.Schemas.ErrorCode.allCases.map(\.rawValue)),
             ["invalid_request", "unknown_species", "unknown_move", "unknown_nature", "request_too_large",
-             "upstream_unavailable", "internal_error", "not_found"])
+             "upstream_unavailable", "internal_error", "not_found", "missing_header", "invalid_header"])
     }
 
     /// 未対応の印の `target`・`reason` は契約で enum にしない(ADR-0215・ADR-0708 §4)ので、生成型は文字列のまま。

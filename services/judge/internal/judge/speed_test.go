@@ -2,6 +2,7 @@ package judge
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"example.com/pokecalc/engine"
@@ -652,5 +653,126 @@ func TestCompareSpeedZeroSpeedFieldMatchesJD1(t *testing.T) {
 	want := SpeedComparison{AttackerSpeed: 167, DefenderSpeed: 120, Outspeeds: true, SpeedTie: false}
 	if got != want {
 		t.Errorf("CompareSpeed(SpeedField{}) = %+v, want %+v(JD1 と同じ)", got, want)
+	}
+}
+
+func TestAppliedSpeedFactors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   Individual
+		want []string
+	}{
+		{"補正なしは空(nil にしない)", Individual{}, []string{}},
+		{"素早さランク 0 は入らない・他ステータスのランクも入らない", Individual{Ranks: engine.Ranks{Atk: 2}}, []string{}},
+		{"全部乗ると rank → tailwind → choiceScarf", Individual{Ranks: engine.Ranks{Spe: -1}, Tailwind: true, Scarf: true},
+			[]string{SpeedFactorRank, SpeedFactorTailwind, SpeedFactorChoiceScarf}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := AppliedSpeedFactors(tt.in); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("AppliedSpeedFactors = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIgnoredSpeedInputs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                string
+		ability, item       string
+		isScarf, hasWeather bool
+		want                []string
+	}{
+		{"何も無い", "", "", false, false, []string{}},
+		{"天候だけでは入らない", "", "", false, true, []string{}},
+		{"スカーフは持ち物の無視に数えない", "", "scarf", true, false, []string{}},
+		{"スカーフ以外の持ち物", "", "other", false, false, []string{IgnoredSpeedItem}},
+		{"特性 + 天候", "a", "", false, true, []string{IgnoredSpeedAbility, IgnoredSpeedWeather}},
+		{"全部は ability → item → weather", "a", "other", false, true,
+			[]string{IgnoredSpeedAbility, IgnoredSpeedItem, IgnoredSpeedWeather}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := IgnoredSpeedInputs(tt.ability, tt.item, tt.isScarf, tt.hasWeather); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("IgnoredSpeedInputs = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSpeedParalysis: まひは素早さを ×0.5 する。出典は @smogon/calc 0.12.0 の getFinalSpeed:
+// 追い風・特性・持ち物の連結(chainMods)と五捨五超入を済ませた**あと**に
+// `floor(speed * 50 / 100)`(切り捨て)を掛ける。4096 基準の連結には含めない(issue #235・
+// ユーザー決定 2026-10-03)。実装担当は Individual に Paralysis bool を足す想定。
+func TestSpeedParalysis(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   Individual
+		want int
+	}{
+		// 種族値 100・無振り・性格補正なし = 120。
+		{"まひ単独は半分", Individual{BaseSpeed: 100, Nature: engine.NatureNeutral, Paralysis: true}, 60},
+		// 71 + 20 = 91(奇数)。91 / 2 = 45.5 → 切り捨てで 45(五捨五超入なら 46 になる)。
+		{"奇数は切り捨て(91 → 45)", Individual{BaseSpeed: 71, Nature: engine.NatureNeutral, Paralysis: true}, 45},
+		{"奇数は切り捨て(93 → 46)", Individual{BaseSpeed: 73, Nature: engine.NatureNeutral, Paralysis: true}, 46},
+		// 120 × 3 = 360(追い風 + スカーフ)→ 180。
+		{"追い風 + スカーフ + まひ", Individual{BaseSpeed: 100, Nature: engine.NatureNeutral, Tailwind: true, Scarf: true, Paralysis: true}, 180},
+		// 93 × 1.5: chain 6144 → floor((93×6144 + 2047) / 4096) = 139 → まひで 69。
+		// 連結に 0.5 を含めて 1 回で丸めた値と区別するための値。順序の区別は次の 91 のケースで行う。
+		{"スカーフ + まひ(補正の丸めが先)", Individual{BaseSpeed: 73, Nature: engine.NatureNeutral, Scarf: true, Paralysis: true}, 69},
+		// 91 × 1.5: chain 6144 → 136 → まひで 68。先にまひを掛けると 45 → 67 になり、この値で順序が区別できる。
+		{"スカーフ + まひ(91: 先にまひなら 67)", Individual{BaseSpeed: 71, Nature: engine.NatureNeutral, Scarf: true, Paralysis: true}, 68},
+		// ランク +1: 120 × 3/2 = 180 → まひで 90。
+		{"ランク +1 + まひ", Individual{BaseSpeed: 100, Nature: engine.NatureNeutral, Ranks: engine.Ranks{Spe: 1}, Paralysis: true}, 90},
+		{"Paralysis なしは JD1 と同じ(回帰)", Individual{BaseSpeed: 100, Nature: engine.NatureNeutral}, 120},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := Speed(tt.in)
+			if err != nil {
+				t.Fatalf("Speed(%+v): %v", tt.in, err)
+			}
+			if got != tt.want {
+				t.Errorf("Speed(%+v) = %d, want %d", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAppliedSpeedFactorsParalysis: まひは最後(rank → tailwind → choiceScarf → paralysis。
+// @smogon/calc の計算の連鎖順)。
+func TestAppliedSpeedFactorsParalysis(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   Individual
+		want []string
+	}{
+		{"まひだけ", Individual{Paralysis: true}, []string{SpeedFactorParalysis}},
+		{"全部乗ると rank → tailwind → choiceScarf → paralysis",
+			Individual{Ranks: engine.Ranks{Spe: -1}, Tailwind: true, Scarf: true, Paralysis: true},
+			[]string{SpeedFactorRank, SpeedFactorTailwind, SpeedFactorChoiceScarf, SpeedFactorParalysis}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := AppliedSpeedFactors(tt.in); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("AppliedSpeedFactors = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+	if SpeedFactorParalysis != "paralysis" {
+		t.Errorf("SpeedFactorParalysis = %q, want %q", SpeedFactorParalysis, "paralysis")
 	}
 }

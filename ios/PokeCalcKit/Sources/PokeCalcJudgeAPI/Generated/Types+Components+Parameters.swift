@@ -12,8 +12,18 @@ public import struct Foundation.Date
 extension Components {
     /// Types generated from the `#/components/parameters` section of the OpenAPI document.
     public enum Parameters {
+        /// Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+        /// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+        /// the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+        ///
+        ///
         /// - Remark: Generated from `#/components/parameters/DeviceId`.
         public typealias DeviceId = Swift.String
+        /// Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+        /// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+        /// the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+        ///
+        ///
         /// - Remark: Generated from `#/components/parameters/SessionId`.
         public typealias SessionId = Swift.String
     }

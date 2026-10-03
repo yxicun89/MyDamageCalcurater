@@ -52,6 +52,14 @@ import {
   defenderAbilityCandidates,
   selectableAbilities,
 } from "../domain/requests";
+import {
+  itemIdAfterSpeciesChange,
+  lockedOrChosenItem,
+  megaItemLock,
+  megaStoneItemIds,
+  selectableItems,
+  type MegaItemLock,
+} from "../domain/mega";
 import { reverseItemCandidates } from "../domain/reverseItems";
 import {
   formatSPRanges,
@@ -75,6 +83,7 @@ import type {
 } from "../engine/types";
 import {
   calcScreenText,
+  megaItemText,
   masterOnlineText,
   requestLimitText,
   reverseResultText,
@@ -89,6 +98,7 @@ import type {
   MasterSpeciesSearch,
 } from "../master/types";
 import { prefersReducedMotion } from "../ui/motion";
+import { MegaItemReason } from "./MegaItemReason";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
@@ -184,7 +194,13 @@ function resolveMoveId(species: MasterSpecies | null, moves: readonly Move[], cu
 export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenProps) {
   // P4-16b(ADR-0304 A-2・A-5・A-10・A-11): 使える機能。capabilities を省いたマスタは全部使える。
   const capabilities = masterCapabilities(master);
-  const { speciesFor, abilitiesFor, movesFor, register: registerSpeciesResolution } = useSpeciesResolutions();
+  const {
+    speciesFor,
+    abilitiesFor,
+    movesFor,
+    resolvedSpecies,
+    register: registerSpeciesResolution,
+  } = useSpeciesResolutions();
   // P4-19(issue 110): 観測の上限に達した理由(role="status")の id。ボタンの aria-describedby から指す。
   const observationLimitReasonId = useId();
   const [side, setSide] = useState<ReverseSide>("defender");
@@ -213,6 +229,10 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   // 両方を同時に更新するので、常に同じ参照になる。
   const [requestRows, setRequestRows] = useState<ObservationRow[]>(observations);
   const observationDebounceTimerRef = useRef<number | null>(null);
+  // 最新の観測。種族の解決(検索の応答。非同期)が届いた時点の flushObservationDebounce は、検索を始めたときの
+  // 古いレンダーのクロージャで動くので、state の observations ではなくこの ref から最新を読む(さもないと、
+  // 解決を待つ間に打った観測が requestRows に反映されず「計算中」のまま止まる。ADR-0313)。
+  const latestObservationsRef = useRef<ObservationRow[]>(observations);
   const [completed, setCompleted] = useState<CompletedReverse | null>(null);
   // 観測を2件以上入れて届いた結果に「絞り込み」の演出を出す(design.md「画面: 逆算」)。
   // lastCompleted は直近に判定した completed(react-hooks/set-state-in-effect を避けるため、
@@ -230,9 +250,18 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     () => speciesFor(master.species, theirsSpeciesKey),
     [master.species, theirsSpeciesKey, speciesFor],
   );
+  // issue 515(ADR-0320): メガ種族の持ち物はメガストーンに固定する(毎レンダー種族から導く)。
+  // メガストーンは単独の選択肢・持ち物候補に出さない(判別集合は、全件の一覧 + 検索で解決した種族から導く)。
+  const stoneIds = useMemo(
+    () => megaStoneItemIds([...master.species, ...resolvedSpecies]),
+    [master.species, resolvedSpecies],
+  );
+  const pickableItems = useMemo(() => selectableItems(master.items, stoneIds), [master.items, stoneIds]);
+  const myLock = useMemo(() => megaItemLock(mySpecies, master.items), [mySpecies, master.items]);
+  const theirsLock = useMemo(() => megaItemLock(theirsSpecies, master.items), [theirsSpecies, master.items]);
   const myItem = useMemo(
-    () => master.items.find((item) => item.id === myItemId) ?? null,
-    [master.items, myItemId],
+    () => lockedOrChosenItem(myLock, pickableItems, myItemId),
+    [myLock, pickableItems, myItemId],
   );
   // 特性の選択肢と、calcReverse に渡す特性(issue 272、ADR-0311)。
   const myAbilityOptions = useMemo(
@@ -287,13 +316,16 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   // P4-19(issue 110、ADR-0208): 持ち物候補(itemCandidates)を組み立て、上限で絞り込んだかを画面に出す。
   // useEffect の依存に truncated を含む新しい配列を毎回作らないよう、ここで useMemo にする
   // (react-hooks/set-state-in-effect の無限ループを避ける)。
-  const itemCandidatesResult = useMemo(
-    () =>
-      move === null
-        ? { candidates: [null], truncated: false }
-        : reverseItemCandidates(side, master.items, move),
-    [side, master.items, move],
-  );
+  // 相手がメガ種族のときは探索せず、メガストーン1件(引けなければ [null])に固定する。
+  const itemCandidatesResult = useMemo(() => {
+    if (theirsLock.kind === "locked") {
+      return { candidates: [theirsLock.item], truncated: false };
+    }
+    if (theirsLock.kind === "missing" || move === null) {
+      return { candidates: [null], truncated: false };
+    }
+    return reverseItemCandidates(side, pickableItems, move);
+  }, [side, pickableItems, move, theirsLock]);
 
   const parsedObservations = useMemo(
     () => observations.map((row) => parseObservation(row.unit, row.text)),
@@ -330,6 +362,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
    *   - "debounced"(テキスト編集): 待機中のタイマーを解除し直し、OBSERVATION_INPUT_DEBOUNCE_MS 後に追いつかせる。
    */
   function replaceObservations(next: ObservationRow[], timing: "debounced" | "immediate"): void {
+    latestObservationsRef.current = next;
     setObservations(next);
     if (observationDebounceTimerRef.current !== null) {
       window.clearTimeout(observationDebounceTimerRef.current);
@@ -356,7 +389,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     }
     window.clearTimeout(observationDebounceTimerRef.current);
     observationDebounceTimerRef.current = null;
-    setRequestRows(observations);
+    setRequestRows(latestObservationsRef.current);
   }
 
   function selectSide(nextSide: ReverseSide): void {
@@ -372,6 +405,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     flushObservationDebounce();
     setMySpeciesKey(key);
     setMyAbilityId("");
+    changeMyItem(speciesFor(master.species, key));
     if (side === "defender") {
       const species = speciesFor(master.species, key);
       setMoveId((prev) => resolveMoveId(species, movesFor(master.moves, key), prev));
@@ -398,6 +432,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     registerSpeciesResolution(resolution);
     setMySpeciesKey(resolution.species.key);
     setMyAbilityId("");
+    changeMyItem(resolution.species);
     if (side === "defender") {
       // movesFor(master.moves, key) は使わない(register の setState 直後はまだ古い覚え書きのまま)。
       // movesFor が最終的に返す形(master.moves + 解決で覚えた分)をここで直接組み立てる。
@@ -414,6 +449,18 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     if (side === "attacker") {
       setMoveId((prev) => resolveMoveId(resolution.species, [...master.moves, ...resolution.moves], prev));
     }
+  }
+
+  /** 自分の種族を変えたときの持ち物(メガは固定、メガから非メガへは未選択に戻す。issue 515)。 */
+  function changeMyItem(next: MasterSpecies | null): void {
+    setMyItemId(
+      itemIdAfterSpeciesChange({
+        previous: mySpecies,
+        next,
+        items: master.items,
+        currentItemId: myItem?.id ?? "",
+      }),
+    );
   }
 
   /** 自分の持ち物を選ぶ(確定操作。issue 113)。 */
@@ -649,9 +696,10 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
           speciesListAvailable={capabilities.speciesList}
           speciesList={master.species}
           masterSearch={masterSearch}
-          items={master.items}
+          items={pickableItems}
+          itemLock={myLock}
           selectedSpeciesKey={mySpeciesKey}
-          selectedItemId={myItemId}
+          selectedItemId={myItem?.id ?? ""}
           onSpeciesChange={selectMySpecies}
           onSpeciesResolved={handleMineResolved}
           onItemChange={selectMyItem}
@@ -687,7 +735,8 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
           speciesListAvailable={capabilities.speciesList}
           speciesList={master.species}
           masterSearch={masterSearch}
-          items={master.items}
+          items={pickableItems}
+          itemLock={theirsLock}
           selectedSpeciesKey={theirsSpeciesKey}
           selectedItemId=""
           onSpeciesChange={selectTheirsSpecies}
@@ -775,7 +824,10 @@ interface ReverseCardProps {
   readonly speciesListAvailable: boolean;
   readonly speciesList: readonly MasterSpecies[];
   readonly masterSearch: MasterSpeciesSearch | undefined;
+  /** 単独で選べる持ち物(メガストーンを除く)。 */
   readonly items: readonly Item[];
+  /** メガシンカの持ち物固定(issue 515、ADR-0320)。持ち物欄が無い相手側カードは理由とストーン名を文で出す。 */
+  readonly itemLock: MegaItemLock;
   readonly selectedSpeciesKey: string;
   readonly selectedItemId: string;
   readonly onSpeciesChange: (key: string) => void;
@@ -801,6 +853,7 @@ function ReverseCard({
   speciesList,
   masterSearch,
   items,
+  itemLock,
   selectedSpeciesKey,
   selectedItemId,
   onSpeciesChange,
@@ -811,6 +864,7 @@ function ReverseCard({
 }: ReverseCardProps) {
   const speciesSelectId = useId();
   const itemSelectId = useId();
+  const itemReasonId = useId();
   return (
     // section の accessible name は今までどおり aria-label(cardLabel、「自分のポケモン」等。変えない)。
     // h2 は見える見出し(regionLabel、「自分」「相手」)を足すためだけに置く(issue 304)。
@@ -859,19 +913,30 @@ function ReverseCard({
               id={itemSelectId}
               aria-label={itemSelectLabel}
               value={selectedItemId}
+              disabled={itemLock.kind !== "none"}
+              aria-describedby={itemLock.kind === "none" ? undefined : itemReasonId}
               onChange={(event) => {
                 onItemChange(event.target.value);
               }}
             >
               <option value="">{calcScreenText.noItemOption}</option>
-              {items.map((item) => (
+              {(itemLock.kind === "locked" ? [itemLock.item] : items).map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.nameJa}
                 </option>
               ))}
             </select>
+            <MegaItemReason id={itemReasonId} lock={itemLock} className="reverse-card__reason" />
           </>
         )}
+      {itemSelectLabel === undefined && itemLock.kind !== "none" && (
+        <>
+          <MegaItemReason id={itemReasonId} lock={itemLock} className="reverse-card__reason" />
+          {itemLock.kind === "locked" && (
+            <p className="reverse-card__reason">{megaItemText.fixedItemName(itemLock.item.nameJa)}</p>
+          )}
+        </>
+      )}
       {(speciesListAvailable || species !== null) && (
         <AbilitySelect labelClassName="reverse-card__label" {...abilitySelect} />
       )}

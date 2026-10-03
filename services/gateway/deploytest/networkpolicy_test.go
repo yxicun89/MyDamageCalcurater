@@ -34,6 +34,7 @@ const (
 	appNameLabel      = "app.kubernetes.io/name"
 	namespaceNameKey  = "kubernetes.io/metadata.name"
 	podPort           = 8080 // 各サービスの containerPort。Service の port 80 の targetPort
+	gatewayMetrics    = 9090 // gateway のメトリクス専用 containerPort(issue #216)。他サービスは podPort で /metrics を出す
 	mysqlPort         = 3306
 	natsPort          = 4222
 	tidbPort          = 4000
@@ -468,7 +469,8 @@ func app(name string) func(npWorld) npPod { return func(w npWorld) npPod { retur
 func ext(p npPod) func(npWorld) npPod     { return func(npWorld) npPod { return p } }
 
 // 8080 で受ける pokecalc のサービス(balance・speed・judge は各レーンの Pod だが同じ namespace に入る)。
-var httpServices = []string{"gateway", "calc", "pokedex", "balance", "speed", "judge"}
+// record・team は ADR-0220 §2 で追加(/metrics と ServiceMonitor を持つ)。
+var httpServices = []string{"gateway", "calc", "pokedex", "balance", "speed", "judge", "record", "team"}
 
 func allowedFlows() []npFlow {
 	var f []npFlow
@@ -480,8 +482,12 @@ func allowedFlows() []npFlow {
 		add("Traefik → "+n+"(Ingress)", ext(traefikPod), app(n), podPort)
 	}
 	// gateway の上流。balance・speed・judge は issue #284 の配線(GATEWAY_*_URL)が入ると必要になる。
-	for _, n := range []string{"calc", "pokedex", "web", "balance", "speed", "judge"} {
+	for _, n := range []string{"calc", "pokedex", "web", "balance", "speed", "judge", "record", "team"} {
 		add("gateway → "+n, app("gateway"), app(n), podPort)
+	}
+	// record・team は計算イベントを購読する(ADR-0212・ADR-0213 §5。ADR-0220 §2)。
+	for _, n := range []string{"record", "team"} {
+		add(n+" → nats(購読)", app(n), app("nats"), natsPort)
 	}
 	add("calc → pokedex(内部 API /internal/pokedex/master)", app("calc"), app("pokedex"), podPort)
 	add("calc → nats", app("calc"), app("nats"), natsPort)
@@ -492,14 +498,19 @@ func allowedFlows() []npFlow {
 		// balance・speed は initContainer readmodel-export(pokedex export)のため。ADR-0412 §4
 		add(n+" → mysql", app(n), app("mysql"), mysqlPort)
 	}
-	for _, n := range []string{"record-migrate", "team-migrate"} {
+	// record・team 本体と失効ジョブ(CronJob)は app ロールで TiDB へ(ADR-0220 §2)。
+	for _, n := range []string{"record-migrate", "team-migrate", "record", "team", "record-expire", "team-expire"} {
 		add(n+" → tidb", app(n), ext(tidbServerPod), tidbPort)
 	}
 	add("tidb 内部(tidb → pd)", ext(tidbServerPod), ext(tidbPDPod), 2379)
 	add("tidb 内部(pd → tidb)", ext(tidbPDPod), ext(tidbServerPod), 10080)
 	// 監視: Prometheus(observability)が ServiceMonitor 対象の /metrics を取る
 	for _, n := range httpServices {
-		add("Prometheus → "+n+" /metrics", ext(prometheusPod), app(n), podPort)
+		port := podPort
+		if n == "gateway" {
+			port = gatewayMetrics
+		}
+		add("Prometheus → "+n+" /metrics", ext(prometheusPod), app(n), port)
 	}
 	return f
 }
@@ -529,6 +540,20 @@ func deniedFlows() []npFlow {
 	add("nats → mysql", app("nats"), app("mysql"), mysqlPort)
 	add("balance → mysql の 8080 番(許可は 3306 だけ)", app("balance"), app("mysql"), podPort)
 	add("pokedex → tidb", app("pokedex"), ext(tidbServerPod), tidbPort)
+	// ADR-0220 §2: record・team は gateway の上流だけ。サービスは自分の DB にだけ触る(絶対ルール4)。
+	add("web → record", app("web"), app("record"), podPort)
+	add("calc → record(計算は保存に依存しない。絶対ルール5)", app("calc"), app("record"), podPort)
+	add("calc → team", app("calc"), app("team"), podPort)
+	add("record → team", app("record"), app("team"), podPort)
+	add("team → record", app("team"), app("record"), podPort)
+	add("record → mysql", app("record"), app("mysql"), mysqlPort)
+	add("team-expire → mysql", app("team-expire"), app("mysql"), mysqlPort)
+	add("record-expire → nats(失効ジョブは NATS に触れない)", app("record-expire"), app("nats"), natsPort)
+	add("record-expire → record", app("record-expire"), app("record"), podPort)
+	add("gateway → tidb", app("gateway"), ext(tidbServerPod), tidbPort)
+	add("calc → tidb", app("calc"), ext(tidbServerPod), tidbPort)
+	add("Traefik → record(Ingress の向き先ではない)", ext(traefikPod), app("record"), podPort)
+	add("default namespace の一時 Pod → team", ext(strayPod), app("team"), podPort)
 	// 他 namespace・外部
 	add("default namespace の一時 Pod → pokedex(/internal)", ext(strayPod), app("pokedex"), podPort)
 	add("default namespace の一時 Pod → calc(/metrics)", ext(strayPod), app("calc"), podPort)
@@ -536,6 +561,9 @@ func deniedFlows() []npFlow {
 	add("default namespace の一時 Pod → gateway", ext(strayPod), app("gateway"), podPort)
 	add("kube-dns → pokedex", ext(corednsPod), app("pokedex"), podPort)
 	add("observability の Grafana → calc(監視対象は Prometheus だけ)", ext(grafanaPod), app("calc"), podPort)
+	add("observability の Prometheus → gateway の公開ポート(/metrics は専用ポートだけ。issue #216)", ext(prometheusPod), app("gateway"), podPort)
+	add("Traefik → gateway のメトリクス専用ポート(公開入口から /metrics に届かない。issue #216)", ext(traefikPod), app("gateway"), gatewayMetrics)
+	add("default namespace の一時 Pod → gateway のメトリクス専用ポート", ext(strayPod), app("gateway"), gatewayMetrics)
 	add("observability の Prometheus → mysql(監視対象外のポート)", ext(prometheusPod), app("mysql"), mysqlPort)
 	add("observability の Prometheus → web(ServiceMonitor が無い)", ext(prometheusPod), app("web"), podPort)
 	add("default namespace の偽 Prometheus → calc(namespace まで見る)", ext(impostorPrometheusPod), app("calc"), podPort)

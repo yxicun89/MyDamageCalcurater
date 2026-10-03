@@ -76,7 +76,7 @@
     },
     {
       "scope": "battle",
-      "reason": "No double/tera/Dynamax/form transformations or unsupported status effects"
+      "reason": "Doubles are covered only by doubles.json and doubles-random.jsonl.gz (ADR-0222): screens 2732/4096 and spread 3072/4096 for allAdjacent/allAdjacentFoes moves. No tera (absent from Pokemon Champions; ADR-0222), ally effects (Helping Hand, Friend Guard), Dynamax, form transformations or unsupported status effects"
     },
     {
       "scope": "KO",
@@ -97,9 +97,12 @@
         "attack-species.jsonl.gz",
         "defense-species.jsonl.gz",
         "stats-species.jsonl.gz",
-        "typechart.json"
+        "typechart.json",
+        "doubles.json",
+        "doubles-random.jsonl.gz"
       ],
-      "koCrossChecks": 37
+      "koCrossChecks": 37,
+      "doublesRandomSeed": 1145195589
     },
     {
       "id": "gen9-legacy-effects",
@@ -151,6 +154,14 @@
     "legacy-effects.jsonl.gz": {
       "count": 3851,
       "sha256": "00c950bbead7ce8e20351bcab731ac7944606419b78d33f924803342172df725"
+    },
+    "doubles.json": {
+      "count": 33,
+      "sha256": "8eac597f09cc87222f86b9e10871cbebac7b92fa442ccccd74e2e2838aacd37d"
+    },
+    "doubles-random.jsonl.gz": {
+      "count": 3000,
+      "sha256": "75395eb6428a5f77e3e8fbc7c06fe0cf507662a9f1aa9b70db6e13e1d55f54a2"
     },
     "typechart.json": {
       "count": 324,

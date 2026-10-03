@@ -58,7 +58,7 @@ test-services: ## services のユニットテスト
 .PHONY: test-tools
 test-tools:
 	@cd tools && $(GO) test ./...
-	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs tools/importer/prune.test.mjs tools/importer/integrity.test.mjs tools/importer/fetch-integrity.test.mjs
+	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs tools/importer/prune.test.mjs tools/importer/integrity.test.mjs tools/importer/fetch-integrity.test.mjs tools/importer/fetch-snapshot-shape.test.mjs
 
 .PHONY: test-scripts
 test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406・計算API SLO ADR-0407・ルートの e2e ADR-0306・GitOps の AppProject/共通スクリプト/レジストリ ADR-0408・Makefile の help と未実装ターゲット。クラスタ・ネットワークに触らない)
@@ -67,8 +67,10 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/observability-slo_test.sh
 	@./scripts/e2e_test.sh
 	@./scripts/ai-guard/bash-guard_test.sh
+	@./scripts/pr-merge_test.sh
 	@./scripts/gitops_test.sh
 	@./scripts/make-targets_test.sh
+	@./scripts/check-master-version_test.sh
 	@./scripts/require-k3d-context_test.sh
 	@./scripts/image-tag_test.sh
 	@./scripts/up-secrets_test.sh
@@ -86,6 +88,7 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@cd services && $(GO) vet -tags nats ./calc/...
 	@cd tools && $(GO) vet ./...
 	@$(MAKE) --no-print-directory staticcheck
+	@scripts/check-conflict-markers.sh
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 	@for script in tools/importer/*.sh; do sh -n "$$script" || exit; done
 	@node --check tools/golden/generate.mjs
@@ -271,6 +274,10 @@ import-fetch: ## 取得元(calc/Showdown/PokeAPI)から実データを取得す�
 .PHONY: import-check-upstream
 import-check-upstream: ## 上流(calc/Showdown/PokeAPI)の最新版を検出して報告する(ネットワークが要る。取り込みはしない)
 	@cd tools/importer && npm ci && node check-upstream.mjs
+
+.PHONY: check-master-version
+check-master-version: ## calc・balance・speed が export した read model と同じ dataVersion で動いているか確かめる(読み取りだけ。要 k3d の context。ADR-0135)
+	@./scripts/check-master-version.sh
 
 .PHONY: pokedex-export
 pokedex-export: ## balance/speed 向けの read model を6ファイル(4ファイル+type-chart.json・metadata.json)書く(POKEDEX_DATABASE_DSN が必須。出力先 data/generated/readmodel/)

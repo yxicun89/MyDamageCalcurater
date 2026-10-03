@@ -162,11 +162,11 @@ func TestConvertMovesFollowP21cRules(t *testing.T) {
 	// 規則1: 両方にある技だけ。規則2: Showdown だけにある使用可の技は Showdown の値で補う。
 	// calc の type の無い断片で Showdown が使用可(testrevived)は「calc に無い」扱い → 規則2。
 	want := map[string]importer.MoveRow{
-		"testflame":   {ID: "testflame", NameEn: "Test Flame", Type: "fire", Category: "special", Power: 90, Accuracy: 100, PP: 15, Priority: 0},
-		"teststrike":  {ID: "teststrike", NameEn: "Test Strike", Type: "normal", Category: "physical", Power: 40, Accuracy: 0, PP: 30, Priority: 1},
-		"testglare":   {ID: "testglare", NameEn: "Test Glare", Type: "grass", Category: "status", Power: 0, Accuracy: 100, PP: 20, Priority: 0},
-		"testrevived": {ID: "testrevived", NameEn: "Test Revived", Type: "water", Category: "special", Power: 70, Accuracy: 90, PP: 10, Priority: 0},
-		"testsplash":  {ID: "testsplash", NameEn: "Test Splash", Type: "water", Category: "special", Power: 60, Accuracy: 100, PP: 20, Priority: 0},
+		"testflame":   {ID: "testflame", NameEn: "Test Flame", Type: "fire", Category: "special", Power: 90, Accuracy: 100, PP: 15, Priority: 0, Target: "allAdjacentFoes"},
+		"teststrike":  {ID: "teststrike", NameEn: "Test Strike", Type: "normal", Category: "physical", Power: 40, Accuracy: 0, PP: 30, Priority: 1, Target: "normal"},
+		"testglare":   {ID: "testglare", NameEn: "Test Glare", Type: "grass", Category: "status", Power: 0, Accuracy: 100, PP: 20, Priority: 0, Target: "normal"},
+		"testrevived": {ID: "testrevived", NameEn: "Test Revived", Type: "water", Category: "special", Power: 70, Accuracy: 90, PP: 10, Priority: 0, Target: "allAdjacent"},
+		"testsplash":  {ID: "testsplash", NameEn: "Test Splash", Type: "water", Category: "special", Power: 60, Accuracy: 100, PP: 20, Priority: 0, Target: "randomNormal"},
 	}
 	if !reflect.DeepEqual(keysOf(got), keysOf(want)) {
 		t.Fatalf("技の集合 = %v, want %v", keysOf(got), keysOf(want))

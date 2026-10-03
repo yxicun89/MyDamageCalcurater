@@ -55,11 +55,11 @@ readonly ALL_CONSTS="KUBE_PROMETHEUS_STACK_VERSION KUBE_PROMETHEUS_STACK_SHA256 
 readonly SHA_CONSTS="KUBE_PROMETHEUS_STACK_SHA256 LOKI_SHA256 ALLOY_SHA256"
 readonly VERSION_CONSTS="KUBE_PROMETHEUS_STACK_VERSION LOKI_VERSION ALLOY_VERSION"
 
-# ServiceMonitor の対象6サービスと、その既存 Service 定義の置き場所。
-readonly SERVICES="balance speed judge gateway pokedex calc"
+# ServiceMonitor の対象8サービスと、その既存 Service 定義の置き場所(record・team は ADR-0220 §2)。
+readonly SERVICES="balance speed judge gateway pokedex calc record team"
 service_yaml() {
   case "$1" in
-    gateway | pokedex | calc) echo "deploy/k8s/base/$1/service.yaml" ;;
+    gateway | pokedex | calc | record | team) echo "deploy/k8s/base/$1/service.yaml" ;;
     balance | speed | judge) echo "services/$1/deploy/k8s/base/service.yaml" ;;
   esac
 }
@@ -657,10 +657,13 @@ test_values_alloy() {
 # ---------------------------------------------------------------------------
 
 test_servicemonitors() {
-  local s f svc want_name want_port ns
+  local s f svc want_name want_port want_port_name ns
   ns=$(yaml_get "$ROOT/deploy/k8s/base/namespace.yaml" metadata name 2>/dev/null | tr -d '"')
   for s in $SERVICES; do
-    begin "ServiceMonitor: $s が既存 Service($(service_yaml "$s"))の app.kubernetes.io/name と http ポートの /metrics を指す"
+    # gateway だけ /metrics をメトリクス専用ポート metrics で出す(公開入口の http に出さない。issue #216)。
+    want_port_name=http
+    if [ "$s" = gateway ]; then want_port_name=metrics; fi
+    begin "ServiceMonitor: $s が既存 Service($(service_yaml "$s"))の app.kubernetes.io/name と $want_port_name ポートの /metrics を指す"
     f="$ROOT/$SM_REL/$s.yaml"
     svc="$ROOT/$(service_yaml "$s")"
     if [ ! -f "$svc" ]; then
@@ -669,9 +672,9 @@ test_servicemonitors() {
     fi
     # 期待値はテストに書き写さず、既存の Service 定義から読む。
     want_name=$(yaml_get "$svc" metadata labels app.kubernetes.io/name)
-    want_port=$(yaml_query "$svc" '{{ range (dig "spec" "ports" list $v) }}{{ if eq (toString .name) "http" }}# R http{{ end }}
+    want_port=$(yaml_query "$svc" '{{ range (dig "spec" "ports" list $v) }}{{ if eq (toString .name) "'"$want_port_name"'" }}# R '"$want_port_name"'{{ end }}
 {{ end }}')
-    if [ "$want_port" = http ]; then ok; else ng "$(service_yaml "$s") に http という名前のポートが無い"; fi
+    if [ "$want_port" = "$want_port_name" ]; then ok; else ng "$(service_yaml "$s") に $want_port_name という名前のポートが無い"; fi
     if [ ! -f "$f" ]; then
       ng "$SM_REL/$s.yaml が無い"
       continue
@@ -688,22 +691,22 @@ test_servicemonitors() {
 {{ end }}' || true)
     if [ -n "$eps" ]; then ok; else ng "$s.yaml に spec.endpoints が無い"; continue; fi
     # targetPort(番号・別ポート)ではなく、既存 Service の名前付きポート http を指す。
-    if [ "$eps" = "http|/metrics|targetPort=false" ]; then ok; else
-      ng "$s.yaml の endpoints が「port: http・path: /metrics」の1つだけでない(targetPort・別ポートを使わない。ADR-0406 §4): $(printf '%s' "$eps" | tr '\n' ';')"
+    if [ "$eps" = "$want_port_name|/metrics|targetPort=false" ]; then ok; else
+      ng "$s.yaml の endpoints が「port: $want_port_name・path: /metrics」の1つだけでない(targetPort・別ポートを使わない。ADR-0406 §4): $(printf '%s' "$eps" | tr '\n' ';')"
     fi
   done
 }
 
 test_kustomize_render() {
-  begin "kustomize: $OBS_REL が描画でき、6つの ServiceMonitor を含み、Ingress・Secret を含まない"
+  begin "kustomize: $OBS_REL が描画でき、8つの ServiceMonitor を含み、Ingress・Secret を含まない"
   if ! command -v kubectl >/dev/null 2>&1; then
     ng "kubectl が PATH に無い"
     return
   fi
   local out s
   if out=$(kubectl kustomize "$ROOT/$OBS_REL" 2>&1); then ok; else ng "kubectl kustomize $OBS_REL が失敗: $out"; return; fi
-  if [ "$(printf '%s\n' "$out" | grep -cE '^kind: ServiceMonitor$')" = 6 ]; then ok; else
-    ng "描画結果の ServiceMonitor が6つでない: $(printf '%s\n' "$out" | grep -cE '^kind: ServiceMonitor$')"
+  if [ "$(printf '%s\n' "$out" | grep -cE '^kind: ServiceMonitor$')" = 8 ]; then ok; else
+    ng "描画結果の ServiceMonitor が8つでない: $(printf '%s\n' "$out" | grep -cE '^kind: ServiceMonitor$')"
   fi
   printf '%s\n' "$out" >"$WORK/rendered.yaml"
   for s in $SERVICES; do

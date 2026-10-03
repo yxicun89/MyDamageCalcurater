@@ -41,13 +41,14 @@ final class APIJudgeServiceTests: XCTestCase {
     /// 候補ごとに違う値を持つ応答の1行(行の取り違えを検出する)。
     private static func matchupJSON(
         index: Int, defenderSpeed: Int, attackerKo: String, defenderKo: String, attackerMarks: String = "[]", defenderMarks: String = "[]",
-        outspeeds: Bool = true, speedTie: Bool = false, movesFirst: Bool = true, turnOrderTie: Bool = false, defenderPriority: Int = 0
+        outspeeds: Bool = true, speedTie: Bool = false, movesFirst: Bool = true, turnOrderTie: Bool = false, defenderPriority: Int = 0,
+        speedExtras: String = #""attackerSpeedApplied":[],"defenderSpeedApplied":[],"attackerSpeedIgnored":[],"defenderSpeedIgnored":[]"#
     ) -> String {
         """
         {"defenderIndex":\(index),"outspeeds":\(outspeeds),"speedTie":\(speedTie),"attackerSpeed":200,"defenderSpeed":\(defenderSpeed),
          "attackerMovePriority":0,"defenderMovePriority":\(defenderPriority),"attackerMovesFirst":\(movesFirst),"turnOrderTie":\(turnOrderTie),
          "attackerKo":\(attackerKo),"defenderKo":\(defenderKo),
-         "attackerKoUnsupported":\(attackerMarks),"defenderKoUnsupported":\(defenderMarks)}
+         "attackerKoUnsupported":\(attackerMarks),"defenderKoUnsupported":\(defenderMarks),\(speedExtras)}
         """
     }
 
@@ -222,6 +223,19 @@ final class APIJudgeServiceTests: XCTestCase {
         XCTAssertEqual(matchup.attackerKoUnsupported, [UnsupportedMark(target: .unknown, reason: .unknown, id: "stub-x")], "知らない値で応答全体を捨てない")
     }
 
+    /// 素早さの反映/無視の欄(契約 v0.2.0・ADR-0710)は並べ替えずに運び、方向(自分/候補)を取り違えない。
+    func testSpeedAppliedAndIgnoredAreCarriedPerSideKeepingOrder() async throws {
+        let row = Self.matchupJSON(
+            index: 0, defenderSpeed: 150, attackerKo: Self.koJSON(2, true, "100.0"), defenderKo: Self.koJSON(2, true, "100.0"),
+            speedExtras: #""attackerSpeedApplied":["rank","tailwind"],"defenderSpeedApplied":["choiceScarf"],"attackerSpeedIgnored":["itemId","abilityId"],"defenderSpeedIgnored":["fieldWeather"]"#)
+        let matchup = try await makeService(transport: RecordingTransport(json: #"{"matchups":[\#(row)]}"#))
+            .outspeedAndKo(Self.minimalRequest).matchups[0]
+        XCTAssertEqual(matchup.attackerSpeedApplied, ["rank", "tailwind"])
+        XCTAssertEqual(matchup.defenderSpeedApplied, ["choiceScarf"])
+        XCTAssertEqual(matchup.attackerSpeedIgnored, ["itemId", "abilityId"])
+        XCTAssertEqual(matchup.defenderSpeedIgnored, ["fieldWeather"])
+    }
+
     func testEmptyMarkArraysMapToEmpty() async throws {
         let matchups = try await makeService(transport: RecordingTransport(json: Self.responseJSON)).outspeedAndKo(Self.minimalRequest).matchups
         XCTAssertTrue(matchups.allSatisfy { $0.attackerKoUnsupported.isEmpty && $0.defenderKoUnsupported.isEmpty })
@@ -232,7 +246,8 @@ final class APIJudgeServiceTests: XCTestCase {
         let row = """
             {"defenderIndex":0,"outspeeds":true,"speedTie":false,"attackerSpeed":200,"defenderSpeed":150,"attackerMovePriority":0,
              "defenderMovePriority":0,"attackerMovesFirst":true,"turnOrderTie":false,
-             "attackerKo":\(Self.koJSON(1, true, "100.0")),"defenderKo":\(Self.koJSON(1, true, "100.0"))}
+             "attackerKo":\(Self.koJSON(1, true, "100.0")),"defenderKo":\(Self.koJSON(1, true, "100.0")),
+             "attackerSpeedApplied":[],"defenderSpeedApplied":[],"attackerSpeedIgnored":[],"defenderSpeedIgnored":[]}
             """
         let service = try makeService(transport: RecordingTransport(json: #"{"matchups":[\#(row)]}"#))
         let error = await assertThrowsPokeCalcError("印の欄が無い応答") { try await service.outspeedAndKo(Self.minimalRequest) }

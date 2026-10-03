@@ -1,4 +1,5 @@
-# Prometheus(observability)から ServiceMonitor 対象 6 サービスの /metrics(Pod ポート 8080)へ。
+# Prometheus(observability)から ServiceMonitor 対象 7 サービスの /metrics(Pod ポート 8080)へ。
+# gateway だけはメトリクス専用ポート(9090)なので allow-prometheus-gateway-metrics.yaml で許可する(issue #216)。
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -10,7 +11,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: In
-        values: [gateway, calc, pokedex, balance, speed, judge]
+        values: [calc, pokedex, balance, speed, judge, record, team]
   policyTypes:
     - Ingress
   ingress:

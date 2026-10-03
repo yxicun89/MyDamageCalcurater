@@ -1,0 +1,9 @@
+# PokeCalcBalanceAPI の生成設定(ADR-0415)。生成元は services/balance/api/openapi.yaml(balance 契約の正)。
+# アプリは gateway の /api/balance/* 経由で呼ぶ(ADR-0414)。schema 名(Error・TypeId 等)が
+# api/openapi.yaml と衝突するので PokeCalcAPI とは別モジュールにする。
+# 生成物は ios/PokeCalcKit/Sources/PokeCalcBalanceAPI/Generated/。
+generate:
+  - types
+  - client
+accessModifier: public
+namingStrategy: idiomatic
