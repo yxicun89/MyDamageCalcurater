@@ -23,7 +23,7 @@ func TestRobots_NoExponentialBlowup(t *testing.T) {
 	if !r.Allowed(path) {
 		t.Error("b が無いので許可されるはず")
 	}
-	if r.Allowed(path+"b") {
+	if r.Allowed(path + "b") {
 		t.Error("b で終わるパスは禁止のはず")
 	}
 	if d := time.Since(start); d > 2*time.Second {
