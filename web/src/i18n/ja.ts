@@ -118,7 +118,7 @@ export const calcScreenText = {
   attackerPresetGroupLabel: "攻撃側の調整",
 } as const;
 
-/** 計算画面の「詳細」(急所・やけど・天候・フィールド・防御側の壁・攻撃側のランク。issue 274、ADR-0312)の文言。iOS と同じ。 */
+/** 計算画面の「詳細」(急所・やけど・天候・フィールド・防御側の壁・攻撃側と防御側のランク。issue 274、ADR-0312)の文言。iOS と同じ。 */
 export const calcConditionsText = {
   toggleLabel: "詳細",
   criticalLabel: "急所",
@@ -127,6 +127,7 @@ export const calcConditionsText = {
   terrainLabel: "フィールド",
   screensLabel: "防御側の壁",
   ranksLabel: "攻撃側のランク",
+  defenderRanksLabel: "防御側のランク",
   weather: { none: "なし", sun: "はれ", rain: "あめ", sand: "すなあらし", snow: "ゆき" },
   terrain: {
     none: "なし",
@@ -138,6 +139,8 @@ export const calcConditionsText = {
   screens: { reflect: "リフレクター", lightScreen: "ひかりのかべ", auroraVeil: "オーロラベール" },
   rankUpLabel: "攻撃側のランクを上げる",
   rankDownLabel: "攻撃側のランクを下げる",
+  defenderRankUpLabel: "防御側のランクを上げる",
+  defenderRankDownLabel: "防御側のランクを下げる",
   /** ランクの増減ボタンの見た目の記号。 */
   rankUpSymbol: "+",
   rankDownSymbol: "-",

@@ -125,3 +125,25 @@ test("「詳細」を開いて 急所 とはれを入れると、先頭行の最
   const [closed] = await rowTexts(rows, DEFAULT_ROW_COUNT);
   expect(parsePercentRange(closed ?? "").max).toBeGreaterThan(beforeMax);
 });
+
+test("「詳細」で防御側のランク B を +1 にすると、物理技の先頭行の最大%が下がる(issue #274)", async ({
+  page,
+}) => {
+  await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
+  const rows = calcRows(page);
+  const [before] = await rowTexts(rows, DEFAULT_ROW_COUNT);
+  const beforeMax = parsePercentRange(before ?? "").max;
+
+  await page.getByRole("button", { name: "詳細", exact: true }).click();
+  const group = page.getByRole("group", { name: "防御側のランク", exact: true });
+  await expect(group.getByText("B ±0")).toBeVisible();
+  await group.getByRole("button", { name: "防御側のランクを上げる" }).click();
+  await expect(group.getByText("B +1")).toBeVisible();
+
+  await expect
+    .poll(async () => {
+      const [after] = await rowTexts(rows, DEFAULT_ROW_COUNT);
+      return parsePercentRange(after ?? "").max;
+    })
+    .toBeLessThan(beforeMax);
+});
