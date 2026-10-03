@@ -530,8 +530,8 @@ func (q *Queries) InsertLearnset(ctx context.Context, arg InsertLearnsetParams) 
 }
 
 const insertMove = `-- name: InsertMove :exec
-INSERT INTO moves (id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO moves (id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority, target)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertMoveParams struct {
@@ -545,6 +545,7 @@ type InsertMoveParams struct {
 	Accuracy     sql.NullInt16
 	Pp           uint8
 	Priority     int8
+	Target       sql.NullString
 }
 
 func (q *Queries) InsertMove(ctx context.Context, arg InsertMoveParams) error {
@@ -559,6 +560,7 @@ func (q *Queries) InsertMove(ctx context.Context, arg InsertMoveParams) error {
 		arg.Accuracy,
 		arg.Pp,
 		arg.Priority,
+		arg.Target,
 	)
 	return err
 }
@@ -1219,7 +1221,7 @@ func (q *Queries) ListMoveMechanisms(ctx context.Context) ([]MoveMechanism, erro
 }
 
 const listMoves = `-- name: ListMoves :many
-SELECT id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority
+SELECT id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority, target
 FROM moves
 ORDER BY id
 `
@@ -1244,6 +1246,7 @@ func (q *Queries) ListMoves(ctx context.Context) ([]Move, error) {
 			&i.Accuracy,
 			&i.Pp,
 			&i.Priority,
+			&i.Target,
 		); err != nil {
 			return nil, err
 		}
