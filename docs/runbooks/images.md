@@ -23,4 +23,21 @@ make dev
 
 ## 3. k3d
 
-k3d では現状は画像を出せない(gateway イメージは `FROM scratch` で `kubectl cp` できず、読み取り専用ファイルシステムで、Argo CD の selfHeal が `set env` を戻す)。`/images/*` は 404 のまま全機能が動く。恒久配線(volume mount)は別タスク。
+変換した画像を k3d のノードへ置き、gateway の `/images/*` で配信する(ADR-0807 追記)。`make up` 済みのクラスタをそのまま使う(作り直し不要)。
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+make assets          # data/generated/images/src → dist(WebP + manifest.json)
+make images-k3d      # dist の中身をノード(k3d-pokecalc-server-0)の /var/lib/pokecalc-images へ docker cp
+```
+
+gateway の local overlay だけが、そのディレクトリを hostPath(読み取り専用・`DirectoryOrCreate`)で `GATEWAY_IMAGES_DIR=/data/images` に見せる(`deploy/k8s/overlays/local/api/gateway-images-patch.yaml`。base と cloud には無い)。
+`make images-k3d` に gateway の再起動は要らない(2回目以降の入れ替えも同じ)。ただし先にこの overlay の gateway へ入れ替える(`make api-k3d-deploy`)必要がある。入れ替え前の gateway は volume を持たない。
+
+確認: `curl -s -w '\n%{http_code} %{content_type}\n' http://localhost:8080/images/manifest.json` が `200 application/json` で画像のキーを含む JSON を返す。
+入口(8080)は未知のパスを画面の HTML で返す場合があるので、ステータスだけでなく Content-Type が `application/json` かも見る。
+
+- 画像が無い(`dist/manifest.json` が無い)ときの `make images-k3d` は「画像なし」と表示して終了コード 0。gateway は volume が空でも起動し、`/images/*` は 404(エンブレム)。`make deploy-latest` は `api-k3d-deploy` の後にこれを呼ぶが、失敗しても止まらない。
+- 消すとき: `docker exec k3d-pokecalc-server-0 find /var/lib/pokecalc-images -mindepth 1 -delete`(ディレクトリ自体は消さない。作り直すと動作中の Pod の bind mount が古い実体を指して 404 になる。その場合は `kubectl -n pokecalc rollout restart deployment/gateway`)。
+- クラスタ(ノード)を作り直すとノード上の画像は消える。もう一度 `make images-k3d`。
+- Argo CD が gateway を管理している場合、手元の overlay は上書きされる。この手順は `make api-k3d-deploy` で入れた gateway 向け。
