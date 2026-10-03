@@ -14,11 +14,11 @@
 // 実データは持たない(架空の例データだけ。CLAUDE.md ドメイン規約・ADR-0002)。
 
 import type { components } from "../../src/api/openapi.gen";
-import type { Item, Move, Species } from "../../src/engine/types";
+import type { Item, Move } from "../../src/engine/types";
 import { toCalcSnapshotAbilityEffect, toCalcSnapshotItemEffect } from "../../src/master/exportSnapshot";
 import { MOVES_BATCH_MAX_IDS } from "../../src/master/onlineSource";
 import { matchesSpeciesName } from "../../src/master/speciesNameMatch";
-import type { MasterData } from "../../src/master/types";
+import type { MasterData, MasterSpecies } from "../../src/master/types";
 
 type Schemas = components["schemas"];
 
@@ -244,7 +244,8 @@ function handleSpeciesDetail(master: MasterData, key: string): FixtureResponse {
     // issue 515: optional の契約でも pokedex-svc は isMega・requiredItemId を常に出す(省略は非メガ・null)。
     isMega: species.isMega === true,
     requiredItemId: species.requiredItemId ?? null,
-    // ADR-0175: メガ種族は同じ図鑑番号の基本形(form 0)を基本種とする(例データの規則)。メガでなければ null。
+    // ADR-0175: メガ種族の基本種は、種族が持つ baseSpeciesKey(src/test/megaMaster.ts の架空のメガ種族)、無ければ
+    // 同じ図鑑番号の基本形(form 0)とする(例データの規則)。メガでなければ null。
     ...baseSpeciesFields(master, species),
   };
   return { status: 200, body };
@@ -252,12 +253,15 @@ function handleSpeciesDetail(master: MasterData, key: string): FixtureResponse {
 
 function baseSpeciesFields(
   master: MasterData,
-  species: Species,
+  species: MasterSpecies,
 ): Pick<Schemas["SpeciesDetail"], "baseSpeciesKey" | "baseSpeciesNameJa"> {
+  const declaredKey = species.baseSpeciesKey ?? null;
   const base =
-    species.isMega === true
-      ? master.species.find((candidate) => candidate.dexNo === species.dexNo && candidate.form === 0)
-      : undefined;
+    species.isMega !== true
+      ? undefined
+      : declaredKey !== null
+        ? master.species.find((candidate) => candidate.key === declaredKey)
+        : master.species.find((candidate) => candidate.dexNo === species.dexNo && candidate.form === 0);
   return { baseSpeciesKey: base?.key ?? null, baseSpeciesNameJa: base?.nameJa ?? null };
 }
 

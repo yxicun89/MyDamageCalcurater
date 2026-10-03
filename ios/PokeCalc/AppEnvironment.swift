@@ -27,14 +27,16 @@ enum AppEnvironment {
                 core = CoreServices(
                     pokeCalc: try MockPokeCalcService(),
                     frequentOpponents: MockFrequentOpponentsService(environment: environment),
-                    backendDescription: "モックデータで動作中")
+                    backendDescription: "モックデータで動作中",
+                    images: MockImageCatalog(environment: environment))
                 backend = .mock(environment: environment)
             case .api(let url):
                 let identity = ClientIdentity(defaults: .standard)
                 let service = APIPokeCalcService(baseURL: url, identity: identity)
                 core = CoreServices(
                     pokeCalc: service, frequentOpponents: service,
-                    backendDescription: "APIに接続中(\(url.host ?? url.absoluteString))")
+                    backendDescription: "APIに接続中(\(url.host ?? url.absoluteString))",
+                    images: RemoteImageCatalog(baseURL: url, fetcher: URLSessionImageManifestFetcher()))
                 backend = .api(baseURL: url, identity: identity, pokeCalc: service)
             }
             // 登録の検証(ID・並び順の重複など)→ 各機能のサービス登録 → 必要なサービスがそろっているかの検証。
@@ -59,6 +61,8 @@ struct CoreServices {
     let frequentOpponents: any FrequentOpponentsService
     /// 状態バッジに出す接続先の説明。
     let backendDescription: String
+    /// ポケモン画像の問い合わせ先(画面ではないので core。ADR-0508 §4)。既定は画像なし。
+    var images: any ImageCatalog = NoImageCatalog()
 }
 
 /// 各機能がサービスを作るときの材料(ADR-0507 §2)。

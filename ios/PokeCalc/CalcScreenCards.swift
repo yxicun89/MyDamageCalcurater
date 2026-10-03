@@ -118,7 +118,8 @@ struct SpeciesHeaderMenuLabel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x1) {
             HStack(spacing: SpacingToken.x2) {
-                SpeciesEmblemView(name: species?.nameJa ?? Self.placeholderName, types: species?.types ?? [])
+                SpeciesImageView(
+                    speciesKey: species?.key, name: species?.nameJa ?? Self.placeholderName, types: species?.types ?? [])
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.up.chevron.down")
                     .font(TextStyleToken.caption.font)
@@ -150,7 +151,7 @@ struct SpeciesEmblemView: View {
     let types: [PokeType]
     /// 批評 M3a: ヘッダーが1行に収まるよう、名前・チェブロンと釣り合う小さめの直径にする
     /// (design.md に数値指定は無いため実装側で決める)。
-    private static let diameter: CGFloat = 40
+    static let diameter: CGFloat = 40
 
     private var gradientColors: [Color] {
         let resolved = types.compactMap { TypeColorToken.color(forTypeID: $0.rawValue) }

@@ -7,6 +7,7 @@
 //     (「持ち物の候補も比較」の候補にもし出るなら防御側の候補に混ざる効果。単独の選択肢・候補から外れることを確かめる)
 //   - 9102-001 メガテストみず: 必要な持ち物 = みずナイト(マスタにある。効果なし)
 //   - 9103-001 メガテストくさ: 必要な持ち物の ID がマスタの持ち物に無い(固定できないときの扱いを確かめる)
+//   - 基本種の key・日本語名(baseSpeciesKey・baseSpeciesNameJa。ADR-0175 §3)を持つ(固定中の表示に使う。ADR-0326)
 // learnset は土台の種族と同じ(ダメージ技を覚える)ので、攻撃側にも選べる。
 
 import type { Item } from "../engine/types";
@@ -46,6 +47,8 @@ export const MEGA_FIRE: MasterSpecies = {
   baseStats: { hp: 80, atk: 130, def: 90, spa: 110, spd: 90, spe: 95 },
   isMega: true,
   requiredItemId: MEGA_FIRE_STONE.id,
+  baseSpeciesKey: "9001-000",
+  baseSpeciesNameJa: "テストほのお",
 };
 
 export const MEGA_WATER: MasterSpecies = {
@@ -57,6 +60,8 @@ export const MEGA_WATER: MasterSpecies = {
   baseStats: { hp: 90, atk: 95, def: 100, spa: 115, spd: 105, spe: 70 },
   isMega: true,
   requiredItemId: MEGA_WATER_STONE.id,
+  baseSpeciesKey: "9002-000",
+  baseSpeciesNameJa: "テストみず",
 };
 
 export const MEGA_ORPHAN: MasterSpecies = {
@@ -67,7 +72,17 @@ export const MEGA_ORPHAN: MasterSpecies = {
   nameJa: "メガテストくさ",
   isMega: true,
   requiredItemId: MISSING_STONE_ID,
+  baseSpeciesKey: "9001-000",
+  baseSpeciesNameJa: "テストほのお",
 };
+
+/**
+ * ADR-0326(ADR-0175 §4): メガ種族の固定中に持ち物欄へ出す名前の期待値(手書き)。ストーンの nameJa ではなく
+ * 「{基本種名}のメガストーン」。基本種名が無いメガ種族は「メガストーン」だけ。
+ */
+export const MEGA_FIRE_STONE_LABEL = "テストほのおのメガストーン";
+export const MEGA_WATER_STONE_LABEL = "テストみずのメガストーン";
+export const UNNAMED_MEGA_STONE_LABEL = "メガストーン";
 
 /** メガ種族(MEGA_ORPHAN を含む)。 */
 export const MEGA_SPECIES: readonly MasterSpecies[] = [MEGA_FIRE, MEGA_WATER, MEGA_ORPHAN];

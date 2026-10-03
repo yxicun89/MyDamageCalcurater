@@ -78,6 +78,9 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/image-tag_test.sh
 	@./scripts/k3d-deploy-tagged_test.sh
 	@./scripts/up-secrets_test.sh
+	@./scripts/images-k3d_test.sh
+	@./scripts/k3d-m2-deploy_test.sh
+	@./scripts/tidb-operator-bootstrap_test.sh
 	@./scripts/test-db-docker_test.sh
 	@./scripts/db-backup_test.sh
 	@./scripts/db-restore_test.sh
@@ -344,6 +347,10 @@ k8s-render-kubectl:
 assets: ## 手元の画像(data/generated/images/src)を WebP 2サイズ + manifest に変換する(画像なしでも成功。ADR-0807。ASSETS_SRC・ASSETS_OUT で場所を変更)
 	@[ -d tools/assets/node_modules ] || (cd tools/assets && npm ci --silent)
 	@cd tools/assets && node convert.mjs
+
+.PHONY: images-k3d
+images-k3d: ## make assets の出力(data/generated/images/dist)を k3d のノードへ置き、gateway の /images/* で配信する(make up 済み。画像が無ければ何もせず成功。ADR-0807)
+	@./scripts/images-k3d.sh
 
 ## --- 公開前の検査 -----------------------------------------------------
 .PHONY: check-publishable

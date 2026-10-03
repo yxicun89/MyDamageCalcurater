@@ -12,11 +12,12 @@
 import typeChartData from "@typechart";
 import type { ClientIds } from "../api/clientIds";
 import type { components } from "../api/openapi.gen";
-import type { Ability, Item, Move } from "../engine/types";
+import type { Ability, Move } from "../engine/types";
 import { typeChartFromData } from "./typeChart";
 import type {
   MasterCapabilities,
   MasterData,
+  MasterItem,
   MasterNature,
   MasterSpecies,
   MasterSpeciesResolution,
@@ -129,8 +130,15 @@ function fromPublicEffect(effect: Schemas["MasterEffect"] | undefined): Record<s
 }
 
 /** 持ち物(effect は省略可。省略は null。ADR-0218・ADR-0322)。 */
-function mapItem(item: Schemas["Item"]): Item {
-  return { id: item.id, nameJa: item.nameJa, effect: fromPublicEffect(item.effect) };
+function mapItem(item: Schemas["Item"]): MasterItem {
+  return {
+    id: item.id,
+    nameJa: item.nameJa,
+    effect: fromPublicEffect(item.effect),
+    // ADR-0326: 応答が返さないキーは作らない(省略は「分からない」で、役割では絞らない)。
+    ...(item.roles === undefined ? {} : { roles: item.roles }),
+    ...(item.isMegaStone === undefined ? {} : { isMegaStone: item.isMegaStone }),
+  };
 }
 
 /** 特性(effect は省略可。省略は null。ADR-0218・ADR-0322)。 */
@@ -184,6 +192,8 @@ function mapSpeciesDetail(detail: Schemas["SpeciesDetail"]): MasterSpecies {
     // issue 515: 応答が返さない(省略)ときは省略のまま(isMegaSpecies が「メガではない」と読む)。
     ...(detail.isMega === undefined ? {} : { isMega: detail.isMega }),
     ...(detail.requiredItemId === undefined ? {} : { requiredItemId: detail.requiredItemId }),
+    ...(detail.baseSpeciesKey === undefined ? {} : { baseSpeciesKey: detail.baseSpeciesKey }),
+    ...(detail.baseSpeciesNameJa === undefined ? {} : { baseSpeciesNameJa: detail.baseSpeciesNameJa }),
   };
 }
 

@@ -4,7 +4,8 @@
 # (例: pokedex に新しいエンドポイントが無い)ことがあるため。
 #
 # 対象: pokedex の DB(migrate-up)・pokedex(サーバー)・pokedex-importer(CronJob・import-k8s が使う)・
-# calc・gateway・web・judge・balance・speed。
+# calc・gateway・web・judge・balance・speed・M2(NATS・TiDB・record・team。scripts/k3d-m2-deploy.sh。ADR-0226)。
+# M2 が準備できなくても(TiDB の起動失敗等)他のサービスの入れ替えは続け、理由を表示して最後に非ゼロで終わる。
 # balance・speed は実データの read model(data/generated/readmodel。`make pokedex-export` の出力)で入れる。
 # 無ければ balance・speed は入れ替えず、理由を表示して最後に非ゼロで終わる(黙って成功扱いにしない)。
 set -euo pipefail
@@ -84,10 +85,18 @@ fi
 
 echo "== calc・gateway"
 make --no-print-directory api-k3d-deploy
+# 変換済みの画像があれば gateway へ見せる。無い・失敗しても画像なし(エンブレム)で動くので、deploy-latest は失敗させない。
+./scripts/images-k3d.sh || echo "deploy-latest: 画像の配置に失敗(画像なしで続行。make images-k3d で再試行)" >&2
 echo "== web"
 make --no-print-directory web-k3d-deploy
 echo "== judge"
 make --no-print-directory judge-k3d-deploy
+
+# M2(NATS・TiDB・record・team)。失敗しても他のサービスの入れ替えは済んでいるので続行し、最後に非ゼロで終わる。
+# calc・gateway・pokedex は計算を TiDB に依存しない(CLAUDE.md 絶対ルール5)。
+echo "== M2(NATS・TiDB・record・team)"
+m2_failed=0
+CLUSTER="$CLUSTER" ./scripts/k3d-m2-deploy.sh || m2_failed=1
 
 missing=0
 if [ -f "$READMODEL_DIR/speed-pokemon.json" ] && [ -f "$READMODEL_DIR/pokemon-types.json" ]; then
@@ -109,7 +118,10 @@ else
 fi
 
 kubectl -n pokecalc get deploy -o 'custom-columns=NAME:.metadata.name,READY:.status.readyReplicas,IMAGE:.spec.template.spec.containers[0].image'
-if [ "$missing" = 1 ]; then
+if [ "$m2_failed" = 1 ]; then
+  echo "deploy-latest: M2(NATS・TiDB・record・team)が準備できていない。理由は上の '== M2' の出力。他のサービスは入れ替え済み" >&2
+fi
+if [ "$missing" = 1 ] || [ "$m2_failed" = 1 ]; then
   exit 1
 fi
 echo "deploy-latest: 全サービスを $(git rev-parse --short HEAD) の内容で入れ替えた"

@@ -4,9 +4,9 @@
 
 M2 の Web 機能は、構築ビルダー(P5-5a/5b)・よく計算する相手(P5-5c)・「この端末のデータを削除」(P5-5d)。
 バックエンドは record-svc(計算イベント・よく計算する相手)と team-svc(構築)。
-**2026-10-02 時点で `make deploy-latest` は record・team・TiDB・NATS を k3d に入れない**(`scripts/k3d-deploy-latest.sh` の対象外。
-API レーンのデプロイ作業待ち。`docs/ai-shared/decisions/2026-10-03-214-web-m2-k3d-deploy.md`)。したがって §2 は k3d が揃ってから行い、
-それまでは §1 の自動テスト(fake のバックエンド)で確かめる。
+`make deploy-latest` は、calc・gateway・pokedex などに加えて NATS・TiDB・record・team も k3d に入れる
+(`scripts/k3d-m2-deploy.sh`。ADR-0226)。TiDB が準備できなくても他のサービスの入れ替えは続くが、その場合は理由を表示して
+非ゼロで終わる(§2 は M2 が揃ってから行う)。§1 の自動テスト(fake のバックエンド)は k3d が無くても行える。
 
 ## 1. 自動テスト(k3d 不要)
 

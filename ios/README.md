@@ -63,6 +63,7 @@ Xcode 27 が要る(`xcode-select` が CommandLineTools のままでも、スク�
 計算の防御側・逆算の相手のポケモン検索シートは、検索語が空のとき先頭に「よく使う相手」(過去に相手として計算した種族。
 `GET /api/record/frequent-opponents`)を出す。取得に失敗しても何も出さず、検索と計算は塞がない。
 モックの挙動は `POKECALC_MOCK_FREQUENT_OPPONENTS=empty|fail` で切り替える(ADR-0501「P6-23」)。
+ポケモン画像(ADR-0508)は既定でモックも画像なし(タイプ色エンブレム)。`POKECALC_MOCK_IMAGES=1` で架空キー 9001-000・9003-000 だけ小さな架空 PNG(data URL)が出る。API 接続では gateway の `/images/manifest.json` を起動時に1回だけ取得し、無ければエンブレムのまま。
 
 ### 構築のテキスト書き出し・取り込み(P6-20)
 
