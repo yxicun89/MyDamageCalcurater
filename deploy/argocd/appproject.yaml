@@ -25,5 +25,3 @@ spec:
       kind: Service
     - group: apps
       kind: Deployment
-    - group: networking.k8s.io
-      kind: Ingress

@@ -28,6 +28,7 @@ type rawSpecies struct {
 	type1, type2     string
 	stats            [6]int
 	isMega           bool
+	forme            string // Showdown のフォーム名(Mega・Mega-X など。メガ名の生成に使う)
 	baseSpeciesName  string
 	requiredItemName string
 	abilities        []master.SpeciesAbilityRow
@@ -188,7 +189,7 @@ func buildRawSpecies(c CalcSpecies, sd ShowdownSpecies, sdByName map[string]Show
 
 	r := rawSpecies{
 		showdownID: sd.ID, nameEn: sd.Name, dexNo: sd.Num, form: form,
-		type1: type1, type2: type2, stats: stats, isMega: isMega,
+		type1: type1, type2: type2, stats: stats, isMega: isMega, forme: sd.Forme,
 		baseSpeciesName: sd.BaseSpecies, requiredItemName: sd.RequiredItem,
 		abilities: abilities, fromCalc: fromCalc,
 	}
@@ -366,6 +367,37 @@ func convertSpecies(in Input, typeNameToID map[string]string, includedItems map[
 	pokeAPISpecies := newPokeAPILookup(in.PokeAPI.Species)
 	pokeAPIForms := newPokeAPILookup(in.PokeAPI.Forms)
 
+	// 日本語名は、メガ以外を先に解決する。メガの名前の生成(上流に無いときだけ)が基本種の名前を使うため。
+	resolveName := func(r rawSpecies) nameResolution {
+		names := pokeAPIForms[r.showdownID]
+		if r.form == 0 {
+			names = pokeAPISpecies[r.showdownID]
+		}
+		return resolveJaName(r.showdownID, in.Overrides.Species, names, in.Config.NameJaLanguages, r.nameEn, usedOverride)
+	}
+	resolved := map[string]nameResolution{}
+	for _, f := range finals {
+		if !f.raw.isMega {
+			resolved[f.raw.showdownID] = resolveName(f.raw)
+		}
+	}
+	for _, f := range finals {
+		r := f.raw
+		if !r.isMega {
+			continue
+		}
+		res := resolveName(r)
+		if res.Source == "fallback_en" {
+			// 上流に日本語名が無い: 基本種の日本語名があるときだけ、基本種名とフォーム識別子から作る(ADR-0324)。
+			if base, ok := resolved[toID(r.baseSpeciesName)]; ok && base.Source != "fallback_en" {
+				if name := master.MegaNameJa(base.NameJa, r.forme); name != "" {
+					res = nameResolution{NameJa: name, Source: "generated"}
+				}
+			}
+		}
+		resolved[r.showdownID] = res
+	}
+
 	var rows []SpeciesRow
 	var regulationKeys []string
 	regulationAbilitySet := map[string]bool{}
@@ -381,15 +413,12 @@ func convertSpecies(in Input, typeNameToID map[string]string, includedItems map[
 			itemID = toID(r.requiredItemName)
 		}
 
-		var names map[string]string
-		if r.form == 0 {
-			names = pokeAPISpecies[r.showdownID]
-		} else {
-			names = pokeAPIForms[r.showdownID]
-		}
-		res := resolveJaName(r.showdownID, in.Overrides.Species, names, in.Config.NameJaLanguages, r.nameEn, usedOverride)
-		if res.Source == "fallback_en" {
+		res := resolved[r.showdownID]
+		switch res.Source {
+		case "fallback_en":
 			warnings = append(warnings, Finding{Kind: KindNameFallback, ID: r.showdownID})
+		case "generated":
+			warnings = append(warnings, Finding{Kind: KindNameGenerated, ID: r.showdownID})
 		}
 
 		rows = append(rows, SpeciesRow{

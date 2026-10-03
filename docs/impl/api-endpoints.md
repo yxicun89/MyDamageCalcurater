@@ -12,8 +12,6 @@ Traefik は最長一致で選ぶ。ホスト 8080 が入口(`deploy/k3d.yaml`)�
 | Ingress | path(Prefix) | 転送先 Service:port | 定義 |
 |---|---|---|---|
 | `gateway` | `/` | `gateway`:http(80) | `deploy/k8s/base/gateway/ingress.yaml`(cloud overlay では削除) |
-| `speed` | `/api/speed` | `speed`:http | `services/speed/deploy/k8s/base/ingress.yaml` |
-| `judge` | `/api/judge` | `judge`:http | `services/judge/deploy/k8s/base/ingress.yaml` |
 
 - `/api/balance/*`・`/api/speed/*`・`/api/judge/*` は gateway を**通らない**(ID ヘッダの UUID 検証・CORS 処理なし)。
 - `http://localhost:5173`(`make web-k3d-open`)は Ingress ではなく `kubectl port-forward svc/web 5173:80`(`web/Makefile:86`)。
@@ -99,7 +97,7 @@ gateway(G3・G4)経由で到達。ID ヘッダは `/internal` 以外の 9 操作
 
 - 503 の条件: 該当 read model が未設定(`BALANCE_POKEMON_TYPES_PATH`・`BALANCE_MOVES_PATH`・`BALANCE_ABILITIES_PATH`)。
 
-## 7. speed-svc(`services/speed`。Traefik `/api/speed`)/ judge-svc(`services/judge`。Traefik `/api/judge`)
+## 7. speed-svc(`services/speed`)/ judge-svc(`services/judge`)。gateway の `/api/speed/*`・`/api/judge/*` が転送。独自の Ingress は無い(ADR-0416)
 
 ID ヘッダの検証: judge・speed とも gateway と同じ正準形 UUID 検証(speed は ADR-0606、judge は ADR-0219)、
 欠落は `missing_header`・不正/重複は `invalid_header`(各 `requestctx.go`)。

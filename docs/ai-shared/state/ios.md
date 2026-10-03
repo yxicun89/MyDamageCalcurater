@@ -1,7 +1,7 @@
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
 Active: なし(P6-19〈PR #432〉・P6-7 完了。残る Next は他レーン待ちのみ)
-Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
+Branch: 次は main から feat/ios-<名前> か fix/ios-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-ios。旧 feat/ios-p6 は main に統合済み)
 Status: **M3(iPhone で使える)は完了**。P6-1(ADR-0500)・P6-2a 計算画面・契約追従・P6-2b 逆算画面・P6-2c 構築ビルダー
 (一覧・編集・ニックネーム)・P6-2d(構築から個体を呼び出す配線)・P6-3・P6-4(手順書 `docs/runbooks/ios-device-install.md`)・
 生成の internal タグ除外・DOC-ios は main に統合済み(PR #31・#53・#91・#119・#122)。

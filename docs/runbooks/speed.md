@@ -20,6 +20,10 @@ SPEED_URL=http://localhost:8080 make speed-smoke
 確認: 最後の行が `speed smoke: health=200 pokemon=200 (count=8) missing_headers=400 table=200 (tiers=7, tie 219) invalid_presets=400 position=200 (146, 29/2/17) invalid_position=400 unknown_pokemon=422`
 (1回目がロールアウト直後で失敗したら、`SPEED_URL=http://localhost:8080 make speed-smoke` をもう一度)。
 
+入口は gateway(`/api/speed/*` を `GATEWAY_SPEED_URL=http://speed` へ転送。speed の Ingress は無い。ADR-0416)。
+先に `make api-k3d-deploy` 等で gateway を更新しておく。以前のデプロイで残った `Ingress/speed`・`Ingress/judge` があれば消す(クラスタ操作。共有クラスタは人間確認):
+`kubectl -n pokecalc delete ingress speed judge --ignore-not-found`。
+
 ## 3. pokedex export の read model で確かめる(export があるときだけ)
 
 データレーンの pokedex export(`make pokedex-export`。`POKEDEX_DATABASE_DSN` が必要)で

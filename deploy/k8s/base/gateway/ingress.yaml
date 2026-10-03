@@ -1,7 +1,6 @@
 # gateway はクライアントの唯一の入口(ADR-0202)。ホスト指定なし・path "/" Prefix で全トラフィックを受ける。
 # /api/balance/* は gateway が balance へ転送する(GATEWAY_BALANCE_URL。balance の直結 Ingress は撤去。ADR-0414)。
-# speed・judge の /api/speed・/api/judge は直結 Ingress が残っており、今も traefik の最長一致で直接届く
-# (gateway の転送は実装済み。撤去と GATEWAY_SPEED_URL・GATEWAY_JUDGE_URL の配線は各レーンの残り。docs/plan.md 参照)。
+# /api/speed/*・/api/judge/* も同様に gateway が転送する(GATEWAY_SPEED_URL・GATEWAY_JUDGE_URL。直結 Ingress は撤去。ADR-0416)。
 #
 # この Ingress は local(k3d/Traefik)専用。ホスト指定なし・TLS なしのため、クラウドの一般的な
 # Ingress Controller にそのまま渡すと公開ロードバランサーになりうる。cloud overlay では使わない
