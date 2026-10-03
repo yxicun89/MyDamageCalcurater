@@ -42,9 +42,13 @@ spec:
       storage: "1Gi"
       cpu: "200m"
       memory: "512Mi"
+    # 実測(Apple Silicon の k3d・TiKV v8.5.8。ADR-0226): 起動直後に常駐メモリが約 2.2GiB まで増えて安定する
+    # (スレッドプール・block cache・memtable の設定を絞っても変わらなかった)。limit 1Gi・1.5Gi では
+    # 起動直後に OOMKilled を繰り返す(ADR-0211 §3.2 の AC-T3「TiKV の limit が厳しすぎないか」の答え)。
+    # request は低いまま(スケジューリングは request で決まる)、limit だけ 3Gi にする。
     limits:
       cpu: "500m"
-      memory: "1Gi"
+      memory: "3Gi"
     config:
       storage:
         # 個人開発規模でディスクを使い切らないための設定(上流の basic 例と同じ)。

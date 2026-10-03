@@ -134,6 +134,7 @@
 削除の墓石(`devices.purged_at`)で JetStream の遅延イベントの復活を防ぐ。受け入れ条件は ADR-0209 の AC-D / AC-P / AC-R / AC-L。
 
 - [ ] P5-1 【担当: API レーン。M2 の必須の起点】 TiDB(ADR-0211。範囲は `devices`・purge journal の2表とプロビジョニングまで): スキーマ/migrate CLI(PR #205)と TidbCluster・TidbInitializer のマニフェストは実装済み。**残り**: 共有 k3d への実適用(AC-T3・AC-T8: TidbCluster・TidbInitializer が Ready/Completed になること)と、`tnir/mysqlclient`(amd64 専用)の Apple Silicon での起動可否の確認。purge journal の DB 外の保存先は P7-4 が決めるまで未充足(ADR-0209 追記・ADR-0211 §6)
+  **k3d 実適用済み(2026-10-03。ADR-0226)**: TidbCluster Ready・TidbInitializer Completed(AC-T3・AC-T8)・record/team の migrate Job 完了・NATS/record/team Running。`tnir/mysqlclient` は arm64 でもエミュレーションで起動する(実際の失敗は `initSql` の1行複数文。1行1文に修正)。`make deploy-latest` が NATS・TiDB・record・team まで入れる(`scripts/k3d-m2-deploy.sh`)。`make web-k3d-e2e` 成功。残: purge journal の DB 外の保存先は P7-4(ADR-0225)が決めるまで未充足。TiKV の常駐 約 2.2GiB(limit 3Gi)の原因は未特定
 - [x] P5-2 NATS JetStream と calc-svc からのイベント発行
 - [x] P5-3 record-svc
 - [x] P5-3b record-svc の残作業(実装: ADR-0220。base/record・gateway 配線・`record expire` と CronJob・NetworkPolicy・/metrics)(P5-3 の critic レビューより。2026-09-25): (1) `deploy/k8s/base/record` に Deployment・Service を追加し `GATEWAY_RECORD_URL` を配線、k3d で `/api/record/*` が届く(`scripts/up.sh` のイメージビルド対象に `record` の `server` を追加)。(2) ADR-0209 §4 の失効ジョブ(日次 CronJob。生イベント90日・お気に入り540日・devices 行30日・purge journal 90日。冪等・1回の上限あり)。team 側の同等ジョブも合わせて検討
@@ -204,6 +205,7 @@
 - [ ] お気に入り・計算履歴の iOS 表示(API レーンの契約追加待ち。DECISIONS.md 2026-10-03 で依頼済み)
 
 - [x] P6-21 タイプバッジ・エンブレムの文字色を design.md「タイプバッジ」の `typeInk` 規則(黒/白のコントラスト比が高い方。白は どく/ゴースト/ドラゴン/あく のみ)に準拠(エンブレム本体・バッジは実装済みで、残っていたのは文字色の白固定)。`TypeColorToken.ink(forTypeID:)` を追加。`swift test` 全件・`make ios-test` 全件成功(XCUITest 53件)。critic PASS。ADR-0501「P6-21」
+- [x] P8-1c iOS のポケモン画像表示(タイプバランスレーンの依頼。ADR-0807 の契約・ADR-0508)。gateway の `/images/manifest.json` を起動時に1回取得し、manifest にキーがあれば thumb を表示(計算・逆算・構築・調整・タイプバランスの種族ヘッダーと検索の行)、無ければ既存のタイプ色エンブレム。manifest の 404・不正・version 違いも画像なし。モックの既定は画像なし(AC-X)。detail は表示する画面が無いため後続。`swift test` 1158件・XCUITest 成功。critic PASS
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)

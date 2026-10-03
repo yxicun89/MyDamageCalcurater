@@ -4248,3 +4248,49 @@ View の色そのものは単体で検証しづらいため、ink の選択を�
   `TypeBadgeView` の文字色と `SpeciesEmblemView` の頭文字色(先頭タイプの ink)を ink に。未知 ID・タイプ無しは従来の白。
 - design.md の `typeInk(_:)` に当たる Swift 側の名前は `ink(forTypeID:)`(design.md は変更しない)。`ios/README.md` に追記すべき項目は無い。
 - 結果: `swift test` 全件成功(新規 7 件を含む)。critic PASS(軽微のみ。plan.md の項目追記と本章の更新を反映)。
+
+## P8-1c の受け入れ条件(ポケモン画像。2026-10-03。設計は ADR-0508、契約は ADR-0807)
+
+### 受け入れ条件(検証可能な形)
+
+- **AC-X(最優先)**: 画像が無い現状(モックの既定・manifest 404)で、既存の `swift test`・全 XCUITest が無変更で通る。モックの既定は画像なし(`POKECALC_MOCK_IMAGES` が無い/`1` 以外)。
+  既存テスト・identifier は変えない。
+- **AC-1 manifest**: `{"version":1,"images":{…}}` を decode し、キー・サイズ(thumb/detail)で相対パスを引ける。version が 1 以外・欠落・不正 JSON・形違い・`images` 欠落は throw せず画像なし。
+  未知の欄は無視し、1エントリの型違いが他のエントリを巻き込まない。
+- **AC-2 URL**: 基点 URL(末尾スラッシュ・パス接頭辞の有無を問わず)+ `/images/` + 相対パス。空・先頭 `/`・`..`・scheme 付き・`//host`・`?` `#` `\`・制御文字は画像なし。基点と同じ scheme/host/port。
+- **AC-3 カタログ**: manifest の取得は `<基点>/images/manifest.json` への1回(同時・繰り返しの引き当てでも1回。失敗も保持し再取得しない)。200 以外・通信失敗・不正本文・version 違い・危険なパスは throw せず画像なし。キーが manifest に無ければ画像なし。
+- **AC-4 モック**: 既定は全キー画像なし。`POKECALC_MOCK_IMAGES=1` では 9001-000・9003-000 だけ、外部通信しない data URL の小さな架空 PNG(9002-000 は画像なしのまま)。
+- **AC-5 表示判定**: 読み込み成功のときだけ画像、読み込み中・失敗はエンブレム。nil・空・空白のキーは問い合わせない。
+- **AC-6 画面**: 画像ありのとき、計算の種族ヘッダー・種族検索の行に `speciesImage-<key>` の枠が出て、manifest に無いキーの行はエンブレムのまま出る。選択の挙動は変わらない。
+  AX5 でも枠が画面幅に収まり、ヘッダーのボタンが操作できる。画像は装飾(label 無し)。アニメーションを付けない。
+- **AC-7 契約**: 画像取得に X-Device-Id を付けない。`api/openapi.yaml`・Generated は不変。ATS の例外を足さない。実画像・公式画像をコミットしない。
+
+### 追加したテスト
+
+- `PokeCalcKit/Tests/PokeCalcCoreTests/ImageManifestTests.swift`(15 件: manifest の decode 11・URL 組み立て 4)
+- `PokeCalcKit/Tests/PokeCalcCoreTests/ImageCatalogTests.swift`(15 件: カタログ 10〈成功・キー無し・取得先・非 200・不正・通信失敗・危険パス・1回取得・失敗の保持・NoImage〉、モック 3、表示判定 2)
+- `ios/PokeCalcUITests/SpeciesImageUITests.swift`(5 件: 画像なしの既定〈AC-X〉・計算ヘッダー・検索行・選択・AX5)
+- 足場: `PokeCalcKit/Sources/PokeCalcCore/ImageCatalog.swift`(全部「画像なし」を返す。`TODO(implementer P8-1c` で検索)
+
+### spec 時点の結果(2026-10-03)
+
+追加 30 件の単体テストのうち 15 件が失敗(アサーション 23 件。足場が画像なしを返すため)。既存 1128 件は全件成功(`swift test` 全体 1158 件)。
+XCUITest の追加 5 件はコンパイルのみ確認(構文解析)。画像ありの 4 件は identifier が無いので失敗する想定。`testNoImageFramesByDefault` は現状でも通る。
+
+### 実装者への注意
+
+- 足場の TODO を実装する: `ImageManifest(decoding:)`・`PokeImageURL.url`・`RemoteImageCatalog`・`URLSessionImageManifestFetcher`・`MockImageScenario`/`MockImageCatalog`(PNG はコードで生成。数十バイト)・`SpeciesImageDisplay`。
+- App 側: `SpeciesImageView` を足し、`SpeciesEmblemView` の3か所(`CalcScreenCards`・`MasterSearchSheet`・`BalanceMemberCard`)を置き換える。`CoreServices.images`(既定 `NoImageCatalog`)・Environment の注入は ADR-0508 §4。
+  `AppEnvironment.makeAtLaunch` はモックなら `MockImageCatalog(environment:)`、API なら `RemoteImageCatalog`。`.ready(core:features:)` の形・既存 identifier は変えない。
+- `speciesImage-<key>` を XCUITest から見えるようにする(`accessibilityHidden(true)` にすると見えない。ADR-0508 §6)。見えない場合はテストを弱めずに公開の仕方を直す。
+- 同期の `FakeFetcher`(テスト)は 20ms 待つので、取得を並行で1回に束ねる(actor の in-flight Task を保持する)実装でないと「1回」が通らない。
+- ADR-0507 の AppFeature は触らない(画像は画面ではない)。`ios/README.md` に `POKECALC_MOCK_IMAGES` を追記する。plan.md の更新は実装者(本タスクでは触っていない)。
+
+### 実装結果(2026-10-03)
+
+- `swift test` 1158 件・失敗 0(追加 30 件が全件成功。既存テスト無変更)。`make ios-lint ios-gen-check ios-check-request-limits` 成功、`xcodebuild build-for-testing` 成功。
+- `SpeciesImageUITests` 5 件を iPhone 18 Pro シミュレータで実行し 5 件成功(全体の XCUITest は別途)。
+- 実装: `ImageCatalog.swift` の TODO 実装(PNG は 8x8 単色をコードで生成)、`SpeciesImageView.swift`(`\.imageCatalog` Environment・`AsyncImage`・アニメーション無し)、
+  `SpeciesEmblemView` の3か所を置き換え(`SpeciesHeaderMenuLabel` 経由で逆算・調整・構築編集のヘッダーも画像対応)、`CoreServices.images`(既定 `NoImageCatalog`)、`RootView` で Environment 注入。
+- 判断: `accessibilityHidden` は使わず、成功した画像に `.accessibilityElement(children: .ignore)` + identifier を付けて公開したところ XCUITest から見えた(ADR-0508 §6 のリスクは発生せず)。
+  URL 検証は `%` と `:` も拒否(相対パスに現れない文字。エンコード回避・scheme 偽装の防止)。
