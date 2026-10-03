@@ -78,7 +78,7 @@ Status(追記): 2026-10-03 issue #315 のメガ部分実装済み(メガ種族+r
 
 Status(追記): 2026-10-02 issue #211 の API 分(ADR-0218)実装済み・critic PASS・コミット前。公開の `Item` / `Ability` に省略可の `effect` を足し、pokedex-svc が共通マスタで検証して返す(不正は 503)。Web・iOS への連絡は DECISIONS.md。
 Next(2026-10-03 更新):
-(1) 人間の判断待ち: teraType を calc に送られたときの扱い(#497 の未対応の印のまま/黙って無視/400/印を消す。iOS の構築メンバーが送っている。ADR-0222 §4)。ダブルで相手1体の全体技の見せ方。失効ジョブ(record-expire・team-expire)を実データへ初めて向ける承認(ADR-0209。承認までは suspend: true。runbooks/api.md §8)。
+(1) 人間の判断待ち: 防御側テラスで相性を変えるか(本編 SV は変える。既定案は oracle どおり反映しない。反映するなら known_diffs に ADR 付きで登録=承認が必要。ADR-0224 Q1)。teraType は PR #555 でオプション機能として反映済み(指定時のみ。省略時は従来どおり)。ダブルは現状のまま(なんでもよいとのユーザー回答)。失効ジョブ(record-expire・team-expire)を実データへ初めて向ける承認(ADR-0209。承認までは suspend: true。runbooks/api.md §8)。
 (2) 追跡中: #498(calc の打ち切り。engine は純粋なまま)、#505(wasmapi のメガ持ち物検証。データ・Web)、#211 の Web 追従(effect の写し)。
 (3) マージ後の実機確認: k3d で gateway の /metrics が公開側 404・専用ポート 9090 で取得、/healthz に version、/api/record・/api/team の疎通(#469・#490)。
 Status(追記): P5-3b・P5-4b 実装済み(ADR-0220。critic PASS・PR #490 で main 統合済み。失効 CronJob は承認まで suspend)。`deploy/k8s/base/{record,team}`(Deployment・Service・保持日数の ConfigMap・日次の失効 CronJob)、gateway の `GATEWAY_RECORD_URL`・`GATEWAY_TEAM_URL`(base)、`record expire`・`team expire`(同じバイナリのサブコマンド。`internal/expire`。冪等・1回の上限・終了コード 0/1/2)、NetworkPolicy 4本、/metrics と ServiceMonitor、cloud overlay での失効ジョブ suspend、up.sh の server イメージ build。TiDB 実機(`make test-db-docker`)の expire テスト含め green。k3d への実デプロイは未確認(人間が確認)。
