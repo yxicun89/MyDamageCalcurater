@@ -14,10 +14,12 @@
 //     契約上 400 invalid_request になるため)。
 
 import { useEffect, useId, useState, type ReactNode } from "react";
+import { MIN_RANK, MAX_RANK } from "../domain/calcConditions";
+import { MAX_SP_PER_STAT } from "../domain/requests";
 import { speedPresetText, speedScreenText } from "../i18n/ja";
 import "./SpeedScreen.css";
 import type { components } from "./speed.gen";
-import type { SpeedClient, SpeedResult } from "./speedClient";
+import type { SpeedClient, SpeedResult, SpeedTableField } from "./speedClient";
 
 type Schemas = components["schemas"];
 
@@ -80,6 +82,9 @@ interface SelfState {
   readonly pokemonId: string;
   readonly preset: Schemas["MinimalPresetId"];
   readonly scarf: boolean;
+  /** 自分の追い風・まひ(preset / custom のみ送る。ADR-0607 §1)。 */
+  readonly tailwind: boolean;
+  readonly paralysis: boolean;
   readonly sp: number;
   readonly nature: Schemas["NatureId"];
   readonly rank: number;
@@ -94,6 +99,8 @@ function initialSelfState(): SelfState {
     pokemonId: "",
     preset: "max",
     scarf: false,
+    tailwind: false,
+    paralysis: false,
     sp: 0,
     nature: "neutral",
     rank: 0,
@@ -101,11 +108,75 @@ function initialSelfState(): SelfState {
   };
 }
 
+/** 入力欄ごとの範囲外メッセージ(無ければ範囲内)。送信前に画面で止めるための検査(issue 307)。 */
+interface FieldErrors {
+  readonly sp?: string;
+  readonly rank?: string;
+  readonly raw?: string;
+}
+
+/**
+ * 今の mode で使う入力欄だけを検査する(判定画面 JudgeScreen の validationMessage と同じ規則: SP 0〜32、
+ * ランク -6〜+6、整数)。空欄の扱い:
+ *   - custom の SP・ランクは onChange(parseIntOr)が 0 とみなす(従来どおり。欄は 0 に戻り、エラーにしない)。
+ *   - raw の実数値は「未入力」で、呼ばずエラーも出さない。
+ * raw の実数値は契約の minimum(1)・整数だけをここで見る。上限は speed サービスが式から導く値で
+ * 画面に複製しない(契約の説明)ので、超過は API の 400 を日本語にして出す。
+ */
+function validateSelf(self: SelfState): FieldErrors {
+  if (self.mode === "custom") {
+    return {
+      sp:
+        self.sp < 0 || self.sp > MAX_SP_PER_STAT
+          ? speedScreenText.spRangeMessage(MAX_SP_PER_STAT)
+          : undefined,
+      rank:
+        self.rank < MIN_RANK || self.rank > MAX_RANK
+          ? speedScreenText.rankRangeMessage(MIN_RANK, MAX_RANK)
+          : undefined,
+    };
+  }
+  if (self.mode === "raw") {
+    const trimmed = self.rawValue.trim();
+    if (trimmed === "") {
+      return {};
+    }
+    const value = Number(trimmed);
+    return Number.isInteger(value) && value >= 1 ? {} : { raw: speedScreenText.rawRangeMessage };
+  }
+  return {};
+}
+
+/** サーバーの英語 message は出さず、code から日本語にする(未知の code は汎用の文言)。 */
+function errorMessage(error: { readonly code: string }): string {
+  const byCode: Readonly<Record<string, string | undefined>> = speedScreenText.errorByCode;
+  return byCode[error.code] ?? speedScreenText.errorFallback;
+}
+
 /**
  * self の入力から PositionRequest を作る。mode に要らない項目は含めない(契約上 400 invalid_request の
  * ため)。まだ送れない入力(preset/custom はポケモン未選択、raw は未入力・数でない)は null。
  */
-function buildPositionRequest(self: SelfState): Schemas["PositionRequest"] | null {
+function buildPositionRequest(self: SelfState, tableTailwind: boolean): Schemas["PositionRequest"] | null {
+  const request = buildBaseRequest(self);
+  if (request === null) {
+    return null;
+  }
+  // 省略は false と同じ応答なので、true のものだけを足す(すべて off なら従来と同じ本文。ADR-0607 §1)。
+  return {
+    ...request,
+    ...(request.mode !== "raw" && self.tailwind ? { tailwind: true } : {}),
+    ...(request.mode !== "raw" && self.paralysis ? { paralysis: true } : {}),
+    ...(tableTailwind ? { tableTailwind: true } : {}),
+  };
+}
+
+/** 場の効果を除いた、mode ごとの本文(buildPositionRequest が場の効果を足す)。 */
+function buildBaseRequest(self: SelfState): Schemas["PositionRequest"] | null {
+  const errors = validateSelf(self);
+  if (errors.sp !== undefined || errors.rank !== undefined || errors.raw !== undefined) {
+    return null;
+  }
   if (self.mode === "preset") {
     if (self.pokemonId === "") {
       return null;
@@ -157,8 +228,13 @@ interface Boundary {
  * 減ると基準が合わなくなる。絞り込みの有無によらず正しく引けるよう、tiers の speed だけを見る
  * (Web で自分の素早さを計算し直さない方針は保つ。2026-09-22 critic 指摘で computeBoundary から差し替え)。
  */
-function computeBoundary(tiers: readonly Schemas["SpeedTier"][], ownSpeed: number): Boundary {
-  const index = tiers.findIndex((tier) => tier.speed < ownSpeed);
+function computeBoundary(
+  tiers: readonly Schemas["SpeedTier"][],
+  ownSpeed: number,
+  trickRoom: boolean,
+): Boundary {
+  // トリックルーム中の表は昇順(遅い順)なので、自分より速い最初の段の前に引く(ADR-0607 §4)。
+  const index = tiers.findIndex((tier) => (trickRoom ? tier.speed > ownSpeed : tier.speed < ownSpeed));
   if (index === -1) {
     return { afterSpeed: tiers.at(-1)?.speed };
   }
@@ -199,14 +275,20 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
   // 選択された行だけを ADR-0601 §2 の順で並べたもの。全6行選択なら table() には省略して渡す
   // (presets: [] は契約上 400 invalid_request になるため、絞り込み UI 側で最低1つを保証する)。
   const activePresets = ALL_PRESET_IDS.filter((id) => selectedPresets.has(id));
-  const presetsKey = activePresets.join(",");
+  // 表の場の状態(追い風・トリックルーム。ADR-0607)。表の呼び直しの key に含める。
+  const [tableTailwind, setTableTailwind] = useState(false);
+  const [trickRoom, setTrickRoom] = useState(false);
+  const presetsKey = `${activePresets.join(",")}|${String(tableTailwind)}|${String(trickRoom)}`;
 
   const [completedTable, setCompletedTable] = useState<Completed<Schemas["TableResponse"]> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const presetsArg = activePresets.length === ALL_PRESET_IDS.length ? undefined : activePresets;
-    void speedClient.table(presetsArg).then((result) => {
+    // すべて off なら第2引数を渡さない(従来と同じ呼び出し)。
+    const fieldArg: SpeedTableField | undefined =
+      tableTailwind || trickRoom ? { tailwind: tableTailwind, trickRoom } : undefined;
+    void speedClient.table(presetsArg, fieldArg).then((result) => {
       if (!cancelled) {
         setCompletedTable({ key: presetsKey, result });
       }
@@ -244,7 +326,8 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
     setSelf((current) => ({ ...current, ...patch }));
   }
 
-  const request = buildPositionRequest(self);
+  const fieldErrors = validateSelf(self);
+  const request = buildPositionRequest(self, tableTailwind);
   const requestKey = request === null ? "" : JSON.stringify(request);
 
   const [completedPosition, setCompletedPosition] = useState<Completed<Schemas["PositionResponse"]> | null>(
@@ -278,6 +361,9 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
   const presetGroupName = useId();
   const natureGroupName = useId();
   const filterMinimumNoticeId = useId();
+  const spErrorId = useId();
+  const rankErrorId = useId();
+  const rawErrorId = useId();
 
   return (
     <div className="speed-screen">
@@ -315,23 +401,48 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
           )}
         </div>
 
+        <div role="group" aria-label={speedScreenText.fieldGroupLabel} className="speed-table__filter">
+          <label className="speed-table__filter-option">
+            <input
+              type="checkbox"
+              checked={tableTailwind}
+              onChange={(event) => {
+                setTableTailwind(event.target.checked);
+              }}
+            />
+            {speedScreenText.tableTailwindLabel}
+          </label>
+          <label className="speed-table__filter-option">
+            <input
+              type="checkbox"
+              checked={trickRoom}
+              onChange={(event) => {
+                setTrickRoom(event.target.checked);
+              }}
+            />
+            {speedScreenText.trickRoomLabel}
+          </label>
+        </div>
+
         {tableState.status === "loading" && (
           <p className="speed-screen__notice">{speedScreenText.loadingNotice}</p>
         )}
         {tableState.status === "error" && (
           <p role="alert" className="speed-screen__error">
-            {tableState.error.message}
+            {errorMessage(tableState.error)}
           </p>
         )}
         {tableState.status === "success" && (
-          <ul className="speed-table__tiers">{renderTierRows(tableState.value.tiers, positionState)}</ul>
+          <ul className="speed-table__tiers">
+            {renderTierRows(tableState.value.tiers, positionState, trickRoom)}
+          </ul>
         )}
       </section>
 
       <section className="speed-self" aria-label={speedScreenText.selfRegionLabel}>
         {pokemonState.status === "error" && (
           <p role="alert" className="speed-screen__error">
-            {pokemonState.error.message}
+            {errorMessage(pokemonState.error)}
           </p>
         )}
 
@@ -410,6 +521,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
               />
               {speedScreenText.scarfLabel}
             </label>
+            <SelfFieldChecks self={self} onChange={updateSelf} />
           </>
         )}
 
@@ -421,12 +533,19 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
                 type="number"
                 aria-label={speedScreenText.spLabel}
                 min={0}
-                max={32}
+                max={MAX_SP_PER_STAT}
+                aria-invalid={fieldErrors.sp !== undefined}
+                aria-describedby={fieldErrors.sp === undefined ? undefined : spErrorId}
                 value={self.sp}
                 onChange={(event) => {
                   updateSelf({ sp: parseIntOr(event.target.value, 0) });
                 }}
               />
+              {fieldErrors.sp !== undefined && (
+                <p id={spErrorId} role="alert" className="speed-screen__error">
+                  {fieldErrors.sp}
+                </p>
+              )}
             </div>
             <div
               role="radiogroup"
@@ -455,13 +574,20 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
               <input
                 type="number"
                 aria-label={speedScreenText.rankLabel}
-                min={-6}
-                max={6}
+                min={MIN_RANK}
+                max={MAX_RANK}
+                aria-invalid={fieldErrors.rank !== undefined}
+                aria-describedby={fieldErrors.rank === undefined ? undefined : rankErrorId}
                 value={self.rank}
                 onChange={(event) => {
                   updateSelf({ rank: parseIntOr(event.target.value, 0) });
                 }}
               />
+              {fieldErrors.rank !== undefined && (
+                <p id={rankErrorId} role="alert" className="speed-screen__error">
+                  {fieldErrors.rank}
+                </p>
+              )}
             </div>
             <label className="speed-self__field">
               <input
@@ -473,6 +599,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
               />
               {speedScreenText.scarfLabel}
             </label>
+            <SelfFieldChecks self={self} onChange={updateSelf} />
           </>
         )}
 
@@ -482,11 +609,19 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
             <input
               type="number"
               aria-label={speedScreenText.rawValueLabel}
+              min={1}
+              aria-invalid={fieldErrors.raw !== undefined}
+              aria-describedby={fieldErrors.raw === undefined ? undefined : rawErrorId}
               value={self.rawValue}
               onChange={(event) => {
                 updateSelf({ rawValue: event.target.value });
               }}
             />
+            {fieldErrors.raw !== undefined && (
+              <p id={rawErrorId} role="alert" className="speed-screen__error">
+                {fieldErrors.raw}
+              </p>
+            )}
           </div>
         )}
 
@@ -495,10 +630,12 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
         )}
         {positionState.status === "error" && (
           <p role="alert" className="speed-screen__error">
-            {positionState.error.message}
+            {errorMessage(positionState.error)}
           </p>
         )}
-        {positionState.status === "success" && <PositionResult value={positionState.value} />}
+        {positionState.status === "success" && (
+          <PositionResult value={positionState.value} trickRoom={trickRoom} />
+        )}
       </section>
     </div>
   );
@@ -512,12 +649,13 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
 function renderTierRows(
   tiers: readonly Schemas["SpeedTier"][],
   positionState: RequestState<Schemas["PositionResponse"]>,
+  trickRoom: boolean,
 ): ReactNode[] {
   const ownSpeed: number | null = positionState.status === "success" ? positionState.value.speed : null;
   const selfTieSpeed: number | null =
     ownSpeed !== null && tiers.some((tier) => tier.speed === ownSpeed) ? ownSpeed : null;
   const boundary: Boundary | null =
-    ownSpeed !== null && selfTieSpeed === null ? computeBoundary(tiers, ownSpeed) : null;
+    ownSpeed !== null && selfTieSpeed === null ? computeBoundary(tiers, ownSpeed, trickRoom) : null;
 
   const rows: ReactNode[] = [];
   if (boundary !== null && boundary.afterSpeed === undefined) {
@@ -598,17 +736,58 @@ function TierRow({ tier, selfTie }: TierRowProps) {
   );
 }
 
+interface SelfFieldChecksProps {
+  readonly self: SelfState;
+  readonly onChange: (patch: Partial<SelfState>) => void;
+}
+
+/** 自分の追い風・まひ(preset / custom のみ。raw は補正済みの値を入れるので出さない。ADR-0607 §1)。 */
+function SelfFieldChecks({ self, onChange }: SelfFieldChecksProps) {
+  return (
+    <>
+      <label className="speed-self__field">
+        <input
+          type="checkbox"
+          checked={self.tailwind}
+          onChange={(event) => {
+            onChange({ tailwind: event.target.checked });
+          }}
+        />
+        {speedScreenText.selfTailwindLabel}
+      </label>
+      <label className="speed-self__field">
+        <input
+          type="checkbox"
+          checked={self.paralysis}
+          onChange={(event) => {
+            onChange({ paralysis: event.target.checked });
+          }}
+        />
+        {speedScreenText.paralysisLabel}
+      </label>
+    </>
+  );
+}
+
 interface PositionResultProps {
   readonly value: Schemas["PositionResponse"];
+  /** トリックルーム中は faster/slower を行動順に読み替えた行を足す(ADR-0607 §4)。 */
+  readonly trickRoom: boolean;
 }
 
 /** 右の結果(実数値・速い/遅い件数・同速の一覧。応答のまま出す。ADR-0604 §4)。 */
-function PositionResult({ value }: PositionResultProps) {
+function PositionResult({ value, trickRoom }: PositionResultProps) {
   return (
     <div className="speed-self__result">
       <p className="speed-self__speed">{speedScreenText.selfSpeedLabel(value.speed)}</p>
       <p>{speedScreenText.fasterLabel(value.faster)}</p>
       <p>{speedScreenText.slowerLabel(value.slower)}</p>
+      {trickRoom && (
+        <>
+          <p>{speedScreenText.movesBeforeLabel(value.slower)}</p>
+          <p>{speedScreenText.movesAfterLabel(value.faster)}</p>
+        </>
+      )}
       <div>
         {/* BalanceScreen と同じく見出し要素は使わない(h1 の直下でレベルを飛ばさないため)。 */}
         <p className="speed-self__result-label">{speedScreenText.tieLabel}</p>

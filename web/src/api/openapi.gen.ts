@@ -726,7 +726,22 @@ export interface components {
      * @enum {string}
      */
     DefenderPreset: "none" | "hp" | "hb_boost" | "hb" | "hb_full" | "hd_boost" | "hd" | "hd_full";
-    /** @description 防御側の上書き(issue 272。ADR-0126・ADR-0214)。省略した項目は上書きしない。 */
+    /**
+     * @description 防御側の上書き(issue 272・274。ADR-0126・ADR-0214・ADR-0216)。省略した項目は上書きしない。
+     *     指定した値は生成するすべての行(全プリセット × 全 itemVariants × 全特性)の防御側に一律で当てる。
+     *     プリセットが決める SP・性格・持ち物には触れない。省略・空オブジェクト・ゼロ値(ranks がすべて 0、
+     *     status が none)の応答は、defenderOverride を送らないときとバイト単位で同じ。
+     *     逆算(ReverseRequest)には無い(既知の側は known.ranks / known.status で渡す。ADR-0216 §4)。
+     *
+     *     - `ranks`: 防御側のランク補正。省略した能力は 0。プリセットの防御側はランク 0 なので、指定した値が
+     *       そのまま全行に当たる。ダメージに効くのは技の分類が使う側だけ(物理は def、特殊は spd)で、
+     *       急所のときは正のランクを無視する(1対1の計算と同じ規則)。各値が -6..+6 の外なら
+     *       400 `invalid_input`(使わない側の能力でも拒否する)。応答の行(BulkDefender)にはランクを出さない
+     *       (`stats` はランク補正前の実数値のまま)。
+     *     - `status`: 防御側の状態異常。未知の値は 400 `invalid_enum`(Individual.status と同じ)。
+     *       **今のダメージ式は防御側の状態異常を見ない**(やけどの物理半減は攻撃側の状態だけ。ADR-0216 §3)ため、
+     *       現時点では結果を変えない。防御側の状態で威力・防御が変わる技・特性に対応したときに効くようになる。
+     */
     DefenderOverride: {
       /**
        * @description 防御側の特性を1つに固定する。省略時は防御側の種族が持つ特性(最大3件。4件目がある種族は
@@ -736,6 +751,8 @@ export interface components {
        *     400 `unknown_ability`。
        */
       abilityId?: string;
+      ranks?: components["schemas"]["RankBlock"];
+      status?: components["schemas"]["StatusCondition"];
     };
     BulkCalcRequest: {
       format: components["schemas"]["Format"];

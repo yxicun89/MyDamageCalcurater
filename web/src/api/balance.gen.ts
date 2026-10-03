@@ -212,7 +212,8 @@ export interface components {
       | "unknown_ability"
       | "master_unavailable"
       | "overloaded"
-      | "internal_error";
+      | "internal_error"
+      | "not_found";
     AnalyzeResponse: {
       /** @description One entry per request member, in request order. Duplicated pokemonId values are kept. */
       members: components["schemas"]["MemberDefense"][];

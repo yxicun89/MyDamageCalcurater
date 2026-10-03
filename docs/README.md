@@ -30,6 +30,7 @@
 | [architecture.md](architecture.md) | アーキテクチャ全体図 |
 | [requirements.md](requirements.md) | 要件の正 |
 | [plan.md](plan.md) | 進行状況とタスク(作業の起点) |
+| [plan-archive.md](plan-archive.md) | 完了したタスクの経過・解決済みのブロッカー(plan.md から移した記録) |
 | [test-strategy.md](test-strategy.md) | テスト戦略(層・ゴールデン・スモーク) |
 | [design.md](design.md) | 画面・ビジュアルのデザインガイド |
 | [coding-rules.md](coding-rules.md) | コーディング規約(公開できる状態・ハードコード禁止・読みやすさ) |
@@ -68,6 +69,7 @@
 ## ADR(adr/)
 
 番号帯: データ 0100〜 / API 0200〜 / Web 0300〜 / タイプバランス 0400〜 / iOS 0500〜 / 素早さ 0600〜 / 判定 0700〜(COORDINATION.md)。
+ADR-0207 は欠番(ファイルを作らないまま 0206 の次が 0208 になった。履歴にも無い。再利用しない)。
 
 | ADR | タイトル |
 |---|---|

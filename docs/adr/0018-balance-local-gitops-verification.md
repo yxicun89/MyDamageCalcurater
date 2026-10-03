@@ -47,3 +47,6 @@ TB0 の最後の項目「Git 変更 → Argo CD 同期 → Pod 更新」は、Ar
   `application.yaml` の `repoURL` は placeholder のままにし、適用時に `git remote get-url origin` から埋め込む。
 - Argo CD で同期した balance は gitops overlay に read model のマウントが無いので、analyze / coverage などは 503(health は 200)。
 
+
+## 追記(2026-09-25): gitops overlay の read model(ADR-0412)
+上の「read model のマウントが無いので 503」は TB0 時点の受け入れ。issue #237 で、gitops overlay に initContainer(pokedex export)→ emptyDir を足して実データを返す方針に変えた(ADR-0412)。

@@ -462,6 +462,7 @@ components:
         - master_unavailable
         - overloaded
         - internal_error
+        - not_found
     AnalyzeResponse:
       type: object
       additionalProperties: false

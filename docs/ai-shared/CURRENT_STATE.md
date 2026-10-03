@@ -29,7 +29,8 @@ Status: D12(issue #277・ADR-0131 採用)実装済み。migration 000009 の種�
 Status(追記): 2026-10-01、D25(issue #240・ADR-0132)。pokecalc に ingress の default-deny と許可リスト10本(`deploy/k8s/base/networkpolicy/`)を実装。受け入れテスト AC-N1〜N5 は green。k3d での実地確認(apply・smoke・拒否の確認)はメイン。
 Status: D27(#252・#319・#290・#221 の runbook 部分)実装済み。`docs/runbooks/{data,api}.md`・`docs/impl/{k8s-local,db-mysql,make-targets}.md`・`docs/verify-m1.md` §3 を今の main に合わせて直した(確認方法・Secret 5キー・NetworkPolicy・終了コード3と PVC 消失の復旧手順・行番号の除去)。新しいクラスタでの verify-m1 §3 の通し実行は人間の確認待ち。
 Status: D29(#226・#296・#314・#224・#254 の索引・#256 の C・#227 のデータ分)実装済み(文書のみ)。README を現状(動くもの・未実装は assets のみ・起動手順)に、overview の状態列を plan.md への委譲に、requirements に3機能と契約4本の索引、test-strategy にサービス別の索引、ゴールデン関連(known_diffs・gen9 表記・1,392 種族)を実態に直し、ADR-0002・0011・0012・0100・0101・0104・0105・0108 の状態欄を実装後の事実(PR 番号)に更新。CLAUDE.md・docs/impl の known_diffs 記述は他担当(D31)。0207 欠番は API レーンの判断。
-Next: issue #403 の「残りのパッケージ」を依存の順に(D19〈作業中〉→ D26 → D27〜D32。D21 は T04・S04・A06 待ち、D20 の #211-data は API レーンの契約待ち)。後続: 逆算の特性候補の計算量の最適化(ADR-0126 追記)、#349。1 パッケージ = 1 PR、importer に触れたら実データの dry-run、マージ後は make deploy-latest。
+Status: D19(issue #222 案A〈ユーザー確認待ち。DECISIONS.md〉・#301。ADR-0101 追記)実装済み。取得物の内容ハッシュ(Showdown 展開後ツリー・PokeAPI の各 CSV)を config.json の integrity と照合し、不一致は終了コード3。`npm ci --ignore-scripts`。CronJob を initContainer `fetch`(DSN なし)と `import` に分離し、cronjob.sh は fetch|import|引数なしと引き渡しファイルでロックの隙間を埋める。実データの再取得でハッシュ一致・dry-run は blockers: none。
+Next: データレーンの open issue を解消中(2026-10-02。triage → 実装済みのクローズ → 残りの実装)。#403 の残り: D26・D28〈T05 待ち〉・D30・D31〈CLAUDE.md・AGENTS.md はユーザー確認〉・D32・D21〈T04・S04・A06 待ち〉・#211-data〈API レーン待ち〉。後続: ADR-0126 の計算量の最適化。
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
@@ -106,7 +107,7 @@ critic 1回目FAILで発覚し修正済み)。deployment.yamlへの実URL配線�
 healthz例外の欠如・README.mdのルーティング表が古いまま〉→修正→2回目PASS)。**main未統合**。
 Status(追記): 2026-10-01 PR #416(issue #284: balance・speed・judgeをgatewayの後ろに統一)を main 統合。続けて UnsupportedMark の target・reason を string に緩めた(ADR-0215。Web・iOS の追従込み)。
 Next: キュー順に対応:
-(2) defenderOverride.ranks/status(issue 272残り。優先度低)、(3) P5-3b・P5-4b(失効ジョブ・Deployment配線。
+(2) defenderOverride.ranks/status は実装済み(ADR-0216。critic・コミット・PR 待ち)、(3) P5-3b・P5-4b(失効ジョブ・Deployment配線。
 issue #284のdeployment.yaml配線も含む。優先度低)。
 issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。
 60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
@@ -293,15 +294,21 @@ create/update/removeのレースコンディションで作成直後の構築が
 判定レーンがShowdown形式インポート/エクスポートをブランチ`feat/web-team-showdown-format`(`web/src/team/`
 配下)で並行して進めている(分担合意済み。member editorとファイルが重ならないよう次のPR着手前に確認)。
 Next: P5-5b(構築ビルダーのメンバー編集。種族検索・技/持ち物/特性選択・SP直接入力グリッド0〜32・
-テラスタイプ)に着手する。判定レーンのShowdown形式ブランチとの統合順を確認してから進める。その後
+テラスタイプ。特性セレクト〈ADR-0311〉と `selectableAbilities` を再利用できる)に着手する。判定レーンのShowdown形式ブランチとの統合順を確認してから進める。その後
 P5-5c(よく計算する相手の表示。`GET /api/record/frequent-opponents`、design.mdに既にチップのモックアップ
 枠あり)・P5-5d(ADR-0209 §8の文言で「この端末のデータを削除」UI、record/team両方のdevice-data削除を呼ぶ)。
 P5-5完了時はdocs/verify-m1.md(またはM2用手順書)にM2動作確認手順を追加し、make deploy-latestの対象に
 record・team・TiDB・NATSが要るかAPIレーンと確認すること(オーケストレーターの依頼)。
-P5-5の後、#219・#211(APIレーン連携)、#272・#274(PR #411/ADR-0214でAPI分実装済み・PR #402/
-ADR-0126でWASM側実装済み。攻撃側・防御側の特性選択UIを一緒に設計、防御側は省略時に種族の全特性〈最大3件〉
-が自動候補化され行数が増える点を表示に反映)、#210、#332(devDependencies更新)、#226(README等の実装状況の
-精度確認)。**新規キュー項目**: issue #328(非公開・私的利用・LICENSEなしで決定。design.mdに追記のうえ
+**2026-10-01〜02 に消化済み(1 issue = 1 PR)**: #218(PR #407 で解決済み・クローズ)・#219(PR #420・ADR-0310。nginx にセキュリティヘッダ)・
+#272 Web 分(PR #430・ADR-0311。特性セレクト)・#274 Web 分(PR #433・ADR-0312。計算画面の「詳細」)・#210(PR #451・ADR-0313。
+**既定の計算モードをオンラインに変更**〈ユーザー決定 2026-10-01〉+ IndexedDB キャッシュのオフライン)・#332 Web 分(PR #454。
+devDependencies 7 件と Web の Node 26.10.0)・#226(D29 でクローズ済み。Web 分に古い記述なし)・#271/#270 の Web 分は PR #412 で
+完了済み(issue にコメント)。**待ち**: #211(公開 API の Item/Ability に effect が必要。DECISIONS.md 2026-10-01 に API レーンへの提案を
+記録。入ったら Web が `effects:true` へ追従。オフラインのキャッシュは effect を持たないので「持ち物の候補も比較」は#211まで無効)・
+#332 の残り(`services/pokedex/Dockerfile` の Node〈データ〉・golang タグ統一・定期検出〈運用〉)・#274 の防御側ランク/状態異常
+(API の `defenderOverride.ranks/status` が未実装)・#271/#270 の判定画面表示(判定レーン)。
+**PR のマージは ADR-0800 §2 のガードで人間の端末実行が必須**(Claude は PR 作成と CI 確認まで。マージはユーザーが自分の端末で行う)。
+**新規キュー項目**: issue #328(非公開・私的利用・LICENSEなしで決定。design.mdに追記のうえ
 既存画面の邪魔にならない位置に出典・非公式である旨を表示。iOSは既にPR #415でmain統合済み〈AboutView.swift。
 非公式注記+データ出典4件〉。Webは同じ文言〈DECISIONS.md参照〉でフッターリンク→情報ページの形にする)。
 issue #284(balance/speed/judgeがgatewayの後ろに統一される。APIレーンの転送実装が出たら`/api/balance`・
@@ -354,7 +361,7 @@ record/team-svc(M2)が進んだら iOS の構築を端末内保存から API 保
 
 ## Type Balance Checker
 Lane: タイプバランス(どの AI が進めてもよい。COORDINATION.md)
-Active: Claude Code(M4 P7-1完了、P7-2に着手予定)
+Active: Claude Code(2026-10-02 再開。#263・#292・#298・#260・#276・#237 を実装。残りは下記 Next)
 Branch: 次は main から feat/tb-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-tb。git worktree)
 Status: 設計書(docs/type-balance-design.md)の TB0〜TB6 はすべて main に統合済み(TB6: 技範囲チェッカー、PR #65)。P2-3b(特性の無効・吸収)の実データ確認を完了(2026-09-23): データレーンが再生成した export(348 pokemon・moves・216 abilities)で `make balance-k3d-deploy-readmodel && make balance-smoke-readmodel` を実行し、`POST .../team-balance/analyze` でチリーン(levitate)への ground 攻撃が `{"category":"immune","effect":"immune","multiplier":"0","source":"ability"}` になること、`POST .../move-range/analyze`(thunderbolt)の `walledByAbility` にエモンガ(motordrive)が正しく含まれることを実データで確認済み。メガフォームの nameJa が英語表記のままの件はデータレーンへ確認候補として残る(ブロッカーではない)。
 Codexレビュー issue #105(Argo CD導入のハッシュ・digest固定)対応完了(2026-09-23。ADR-0405。PR #140)。
@@ -364,8 +371,8 @@ Codexレビュー issue #105(Argo CD導入のハッシュ・digest固定)対応�
 kube-prometheus-stack・Loki(SingleBinary)・Alloy を版・SHA-256固定で導入。実クラスタ(k3d-pokecalc)で実行し、
 全Pod起動・PVC Bound・6 ServiceMonitor適用・balance/calc/gatewayのscrapeがup・GrafanaのLokiデータソースで
 実ログ取得まで確認済み(judge/pokedex/speedは`/metrics`追加前の古いイメージのため404。各レーン再デプロイで解消見込み)。
-Next: M4 P7-2(SLO: 計算API p99<100ms・可用性、ダッシュボード)に着手予定。それ以外はタイプバランス設計書・issue対応は
-すべて完了、以後はユーザーからの新規要望待ち
+Status(追記): 2026-10-01〜02、タイプバランス担当 issue を処理。#263・#292(ADR-0408。AppProject pokecalc 限定・GitOps スクリプトを scripts/gitops/ に共通化・レジストリ PVC 化。PR #422)、#298(ADR-0409。recommendations のアロケーション削減 3.1→0.53MB/op・同時実行上限〈既定4。超過は 503 overloaded〉・GOMEMLIMIT。PR #426)、#260(type-balance-design.md を現在の設計に書き換え、旧版を ADR-0410 へ。PR #429)、#276(ADR-0411。API専用画面は計算モードに関係なくオンラインのマスタ・エラー日本語化。PR #448)、#237(ADR-0412。gitops overlay の pokedex export initContainer。PR #452。実クラスタ未適用)。P7-2(SLO。ADR-0407)は実装済み・実クラスタ未確認。
+Next: #237 の残り(人間確認が必要): ①`make pokedex-registry-push`(POKEDEX_REGISTRY_PUSH_CONFIRM=1)で pokedex image を balance-registry へ push し実 digest を overlay へ PR、②`deploy/k8s/base/networkpolicy/allow-mysql-ingress.yaml` に balance・speed を足す別 PR(ADR-0132 の許可表も)、③Argo CD sync と `make balance-smoke-readmodel`。①は データレーンへ依頼可。#259 は ADR-0118(DECISIONS 2026-09-25)により必須でなくなったので、タイプバランス側で閉じてよいか判断する(embedded と golden の一致テストは既存)。#236(balance/speed の端末ID検証・エラーコード不一致)と #284(balance・speed・judge を gateway の後ろへ)は別途。判定画面の補助行に英語 message が残る点は別 issue 候補(#276 の ADR-0411)。
 メモ: `make balance-k3d-deploy`(local overlay)で上書きすると Application は OutOfSync になる(manual sync なので戻らない)。GitOps に戻すときは Argo CD で Sync
 
 ## Speed
@@ -395,6 +402,11 @@ Status(追記): 2026-09-25、#236のspeed側を完了(ADR-0606。PR作成中)。
 `services/speed/internal/httpapi/requestctx.go`に複製(httpmetricsと同じ前例。共通パッケージ新設なし、APIレーン合意済み)。
 X-Device-Id/X-Session-Idの検証を正準形UUIDに強化し、エラーcodeを`invalid_request`から`missing_header`/`invalid_header`
 へ分離(契約の破壊的変更)。openapi.yaml 0.4.0・web/src/speed/speed.gen.tsを再生成・critic PASS。balance・judgeは各自対応。
+Status(追記): 2026-10-02 issue 307(素早さ画面の範囲外入力)を解消(critic PASS〈1回目〉)。カスタムの SP(0〜32)・ランク(-6〜+6)と
+実数値(1以上の整数)の範囲外は、送信前に日本語の role=alert・aria-invalid で止めて API を呼ばない。実数値の上限は契約に無いので
+画面では検査せず、API の 400 を `errorByCode` で日本語にする。空欄はカスタム SP・ランクは 0 とみなし、実数値は未入力で呼ばない。
+既知の積み残し: 数値欄で「-」を打つと値が空になり 0 に戻るため負数をキー入力しづらい(従来からの挙動。直すなら欄の state を文字列で持つ)・
+検証規則が JudgeScreen の validationMessage と二重管理(将来の共通化候補)。
 Next: #263・#237 はタイプバランスレーン/APIレーンからの連絡待ち(連絡が来たら speed 側の overlay・scripts を対応)。
 #105(Argo CD導入・digest固定の共有スクリプト化)は完了・追加対応不要。#108は データレーンからの連絡待ち(今は着手不要)。他は
 balance-registry → pokecalc-registry への改名提案(タイプバランスレーンへ既定案で提示済み。DECISIONS.md 2026-09-23)かユーザーからの

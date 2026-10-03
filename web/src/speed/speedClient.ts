@@ -22,6 +22,12 @@ export interface SpeedError {
 export type SpeedResult<T> =
   { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: SpeedError };
 
+/** table() に渡す場の状態(ADR-0607 §4)。true の項目だけをクエリに付ける(省略・false は付けない)。 */
+export interface SpeedTableField {
+  readonly tailwind?: boolean;
+  readonly trickRoom?: boolean;
+}
+
 /** createSpeedClient の引数(balanceClient.ts の CreateBalanceClientInput と同じ形)。 */
 export interface CreateSpeedClientInput {
   /** speed API の基点 URL(末尾はスラッシュ1つ。api/config.ts の apiBaseUrl() と同じ形)。 */
@@ -36,8 +42,11 @@ export interface CreateSpeedClientInput {
 export interface SpeedClient {
   /** 既定のレギュレーションで使用可能なポケモンの一覧(ADR-0600 §5)。 */
   pokemon(): Promise<SpeedResult<Schemas["PokemonListResponse"]>>;
-  /** 素早さの表。presets を省くと全6行(ADR-0601 §4)。 */
-  table(presets?: readonly Schemas["PresetId"][]): Promise<SpeedResult<Schemas["TableResponse"]>>;
+  /** 素早さの表。presets を省くと全6行(ADR-0601 §4)。field は追い風・トリックルーム(ADR-0607)。 */
+  table(
+    presets?: readonly Schemas["PresetId"][],
+    field?: SpeedTableField,
+  ): Promise<SpeedResult<Schemas["TableResponse"]>>;
   /** 自分のポケモンの実数値と、表の中の位置(ADR-0602 §3)。 */
   position(request: Schemas["PositionRequest"]): Promise<SpeedResult<Schemas["PositionResponse"]>>;
 }
@@ -141,10 +150,20 @@ export function createSpeedClient(input: CreateSpeedClientInput): SpeedClient {
     pokemon() {
       return getJson(SPEED_PATHS.pokemon);
     },
-    table(presets) {
-      const query =
-        presets === undefined ? undefined : new URLSearchParams({ presets: presets.join(",") }).toString();
-      return getJson(SPEED_PATHS.table, query);
+    table(presets, field) {
+      // presets → tailwind → trickRoom の順で、true のものだけを付ける(ADR-0607 §4)。
+      const params = new URLSearchParams();
+      if (presets !== undefined) {
+        params.set("presets", presets.join(","));
+      }
+      if (field?.tailwind === true) {
+        params.set("tailwind", "true");
+      }
+      if (field?.trickRoom === true) {
+        params.set("trickRoom", "true");
+      }
+      const query = params.toString();
+      return getJson(SPEED_PATHS.table, query === "" ? undefined : query);
     },
     position(request) {
       return postJson(SPEED_PATHS.position, request);

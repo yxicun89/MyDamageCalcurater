@@ -2030,3 +2030,20 @@ ErrorCode は `missing_header`(欠落・空)・`invalid_header`(UUID でない�
 Reason: Traefik 直結では gateway の検証が効かず、balance だけ緩い非空チェックだった。
 Impact: Web レーンへ: `web/src/api/balance.gen.ts` を再生成済み、`web/src/i18n/ja.ts` の `balanceErrorText` を `missing_header`/`invalid_header` に
 追従済み(`BalanceScreen.test.tsx` のコード一覧も)。`balanceClient.ts` は正準 UUID を送っており変更不要。他に balance の code 文字列に依存する箇所があれば確認してほしい。
+## 2026-10-02: 一括計算の defenderOverride に ranks・status を足した(API レーン → Web・iOS レーンへ。issue #274/#272・ADR-0216)
+
+- `BulkCalcRequest.defenderOverride` は `{ abilityId?, ranks?: RankBlock, status?: StatusCondition }`。全行(全プリセット × 持ち物 × 特性)に一律で当たる。ランクは各 -6..+6(外は 400 `invalid_input`)、未知の status は 400 `invalid_enum`
+- 防御側の status は現状のダメージ式に効かない(結果は変わらない。ADR-0216 §3)。UI で選ばせるなら、その旨を注記するか、式が対応するまで出さない判断をレーン側で行う
+- iOS の生成物(`Types+Components+Schemas.swift`)は API レーンで再生成済み(`make ios-gen-check` 緑)。Web の `openapi.gen.ts` も再生成済み
+- 逆算(`ReverseRequest`)には足していない(既知の側は `known.ranks` / `known.status`。`defenderOverride` を送ると 400 `unknown_field` のまま)
+
+## 2026-10-01: #222(Showdown 取得のサプライチェーン)を深夜のため既定案 A で進めた(データレーン。ユーザー確認待ち。issue #403 D19・#301)
+Decision: #222 は needs-decision(セキュリティ方針)だが、深夜のため人間に聞かず、issue 本文の既定案 A(推奨)で進めた。
+`npm ci --ignore-scripts` + 展開後のファイル木の内容ハッシュ(ソート済みパス+内容)を `data/importer/config.json` の `integrity` に pin し、
+不一致なら取得を止めて終了コード 3。PokeAPI の CSV も同じ(#301)。あわせて、取得・build 段(第三者のコードを実行)を CronJob の
+initContainer `fetch`(DSN・Secret なし)に分け、DSN は `import` だけが持つ。2コンテナの間のロックは flock + 有効期限付きの引き渡しファイル
+(ADR-0101 追記 2026-10-01)。
+Reason: 既定案 A は変更が小さく、版を上げる PR でハッシュも更新する運用に乗る。クラウド移行(#149)の前に塞ぎたい。
+Impact: 版を上げる PR は config.json の `integrity` も更新する(不一致のときは stderr の実際のハッシュを、内容を確かめたうえで反映)。
+却下案 B(dist の vendoring)・C(現状維持)に変えるなら ADR-0101 追記と config.json の integrity を戻す。
+ユーザーの確認待ち: A でよいか(特に、期限切れの引き渡しを無視する TTL 7200 秒の扱い)。

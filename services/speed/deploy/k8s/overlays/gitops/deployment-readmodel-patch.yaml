@@ -1,0 +1,49 @@
+# gitops overlay の read model(ADR-0412・issue #237)。initContainer が pokedex export を emptyDir に書き、
+# 本体は読み取り専用でマウントする。ConfigMap は使わない(ADR-0002)。本体には DSN を渡さない(ADR-0012 §6)。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: speed
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: readmodel-export
+          image: pokecalc/pokedex:0.1.0
+          imagePullPolicy: IfNotPresent
+          args: ["export", "-out", "/etc/speed/readmodel"]
+          env:
+            - name: POKEDEX_DATABASE_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-auth
+                  key: pokedex-reader-dsn
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+          volumeMounts:
+            - name: readmodel
+              mountPath: /etc/speed/readmodel
+      containers:
+        - name: speed
+          env:
+            - name: SPEED_POKEMON_PATH
+              value: /etc/speed/readmodel/speed-pokemon.json
+          volumeMounts:
+            - name: readmodel
+              mountPath: /etc/speed/readmodel
+              readOnly: true
+      volumes:
+        - name: readmodel
+          emptyDir: {}

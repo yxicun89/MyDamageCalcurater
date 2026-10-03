@@ -214,7 +214,25 @@ func DecodeConfig(raw []byte) (Config, error) {
 			return Config{}, err
 		}
 	}
+	if c.Integrity != nil {
+		if err := validateIntegrityConfig(c.Integrity); err != nil {
+			return Config{}, err
+		}
+	}
 	return c, nil
+}
+
+// validateIntegrityConfig は integrity の値が64桁の16進小文字であることを検証する(照合は Node)。
+func validateIntegrityConfig(in *IntegrityConfig) error {
+	if in.Showdown.TreeSha256 != "" && !sha256HexPattern.MatchString(in.Showdown.TreeSha256) {
+		return fmt.Errorf("%w: integrity.showdown.treeSha256 が64桁の16進小文字でない: %q", ErrInvalidInput, in.Showdown.TreeSha256)
+	}
+	for _, name := range sortedKeysRaw(in.PokeAPI.CSVSha256) {
+		if !sha256HexPattern.MatchString(in.PokeAPI.CSVSha256[name]) {
+			return fmt.Errorf("%w: integrity.pokeapi.csvSha256[%s] が64桁の16進小文字でない: %q", ErrInvalidInput, name, in.PokeAPI.CSVSha256[name])
+		}
+	}
+	return nil
 }
 
 // validateReconcileConfig は Config.Reconcile を厳格に検証する(ADR-0103 §5・§9)。
