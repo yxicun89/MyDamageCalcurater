@@ -109,3 +109,30 @@ export function toEngineItem(item: MasterItem): Item {
   }
   return { id: item.id, nameJa: item.nameJa, effect: item.effect };
 }
+
+/**
+ * 持ち物名を ID から引く表示用の一覧(結果の行・未対応の印)。メガストーンは nameJa を「{基本種名}のメガストーン」
+ * (その ID を requiredItemId に持つ species の基本種名。引けなければ「メガストーン」)に差し替え、英語名を画面に出さない
+ * (ADR-0326 §4)。ストーンが1つも無ければ同じ配列を返す。要求(engine)には使わない(表示専用)。
+ */
+export function itemsWithStoneLabels(
+  items: readonly MasterItem[],
+  species: readonly (MasterSpecies | null)[],
+  stoneIds?: ReadonlySet<string>,
+): readonly MasterItem[] {
+  const stones = stoneIds ?? new Set<string>();
+  const labels = new Map<string, string>();
+  for (const candidate of species) {
+    if (candidate?.isMega === true && candidate.requiredItemId != null) {
+      labels.set(candidate.requiredItemId, megaStoneLabel(candidate));
+    }
+  }
+  if (!items.some((item) => isMegaStoneItem(item, stones) || labels.has(item.id))) {
+    return items;
+  }
+  return items.map((item) =>
+    isMegaStoneItem(item, stones) || labels.has(item.id)
+      ? { ...item, nameJa: labels.get(item.id) ?? itemRoleText.megaStoneUnnamed }
+      : item,
+  );
+}

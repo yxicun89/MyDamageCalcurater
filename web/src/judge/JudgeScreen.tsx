@@ -10,7 +10,12 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { Move, Ranks } from "../engine/types";
 import { unsupportedMarkName } from "../domain/unsupportedLabels";
 import { formatMoveCategory } from "../domain/format";
-import { JUDGE_ITEM_ROLE_FILTER, itemsForRole, megaStoneLabel } from "../domain/itemRoles";
+import {
+  JUDGE_ITEM_ROLE_FILTER,
+  itemsForRole,
+  itemsWithStoneLabels,
+  megaStoneLabel,
+} from "../domain/itemRoles";
 import { megaItemLock, megaStoneItemIds } from "../domain/mega";
 import { MAX_SP_PER_STAT } from "../domain/requests";
 import { calcScreenText, judgeErrorText, judgeScreenText, unsupportedText } from "../i18n/ja";
@@ -806,8 +811,10 @@ function koUnsupportedNote(
   if (marks.length === 0) {
     return null;
   }
+  // メガストーンの英語名を出さない(ADR-0326 §4)。
+  const items = itemsWithStoneLabels(master.items, master.species, megaStoneItemIds(master.species));
   const labels = marks.map((mark) => {
-    const name = unsupportedMarkName(mark, moves, master.items, master.abilities);
+    const name = unsupportedMarkName(mark, moves, items, master.abilities);
     const reason =
       mark.reason === "unsupported_effect"
         ? ""

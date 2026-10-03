@@ -30,7 +30,7 @@ import {
   resolveDefenderPreset,
   type DefenderPresetKey,
 } from "../domain/defenderPresets";
-import { ADJUST_ITEM_ROLE_FILTER, itemsForRole } from "../domain/itemRoles";
+import { ADJUST_ITEM_ROLE_FILTER, itemsForRole, itemsWithStoneLabels } from "../domain/itemRoles";
 import { megaStoneItemIds } from "../domain/mega";
 import { isDamagingMove, learnsetMoves } from "../domain/moves";
 import { BATTLE_LEVEL, MAX_SP_PER_STAT, MAX_SP_TOTAL, STAT_ORDER } from "../domain/requests";
@@ -572,7 +572,7 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
         unsupportedLabels: unsupportedMarkLabels(
           uniqueMarks(marks),
           allMoves(),
-          master.items,
+          itemsWithStoneLabels(master.items, master.species, megaStoneItemIds(master.species)),
           allAbilities(),
         ),
       },

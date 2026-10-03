@@ -59,7 +59,13 @@ import {
   megaStoneItemIds,
   type MegaItemLock,
 } from "../domain/mega";
-import { itemAfterRoleChange, itemsForRole, megaStoneLabel, reverseMyItemRole } from "../domain/itemRoles";
+import {
+  itemAfterRoleChange,
+  itemsForRole,
+  itemsWithStoneLabels,
+  megaStoneLabel,
+  reverseMyItemRole,
+} from "../domain/itemRoles";
 import { reverseItemCandidates } from "../domain/reverseItems";
 import {
   formatSPRanges,
@@ -267,6 +273,11 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   const theirsPickable = useMemo(
     () => itemsForRole(master.items, side, stoneIds),
     [master.items, side, stoneIds],
+  );
+  // 結果の候補の行・未対応の印は持ち物を ID から引く。メガストーンの英語名を出さない(ADR-0326 §4)。
+  const displayItems = useMemo(
+    () => itemsWithStoneLabels(master.items, [mySpecies, theirsSpecies], stoneIds),
+    [master.items, mySpecies, theirsSpecies, stoneIds],
   );
   const myLock = useMemo(() => megaItemLock(mySpecies, master.items), [mySpecies, master.items]);
   const theirsLock = useMemo(() => megaItemLock(theirsSpecies, master.items), [theirsSpecies, master.items]);
@@ -826,7 +837,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
 
       <ResultsSection
         outcome={outcome}
-        items={master.items}
+        items={displayItems}
         moves={master.moves}
         abilities={master.abilities}
         theirsHasAbilityChoice={theirsAbilityOptions.length > 1}

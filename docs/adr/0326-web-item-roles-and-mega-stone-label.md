@@ -31,7 +31,7 @@ PR #579(ADR-0175)で pokedex-svc が `Item.roles`(`attacker`/`defender`。メガ
   `isMegaStone` が無い持ち物だけ `megaStoneItemIds`(種族から導く集合。ADR-0320 §7)で補う。
   `isMegaStone` があれば、まだ解決していないメガ種族のストーンも外れる(ADR-0320 §7 の追跡の解消)。
 - 並びはマスタの順のまま、実体も保つ。「持ち物なし」は返さない(欄が先頭に足す。従来どおり「なし」「未選択」「(なし)」)。
-- `domain/mega.ts` の `selectableItems` は `itemsForRole` に置き換える(呼び出し側を移したら削除してよい。`megaStoneItemIds`・
+- `domain/mega.ts` の `selectableItems` は `itemsForRole` に置き換え、削除した(`megaStoneItemIds`・
   `megaItemLock`・`itemIdAfterSpeciesChange` は残す)。
 
 ### 2. 画面と欄ごとの役割
@@ -63,6 +63,10 @@ PR #579(ADR-0175)で pokedex-svc が `Item.roles`(`attacker`/`defender`。メガ
 - 欄の表示は `megaStoneLabel(species)`: `baseSpeciesNameJa` があれば `itemRoleText.megaStoneOf(基本種名)`(「ルカリオのメガストーン」)、
   null・省略・空白なら `itemRoleText.megaStoneUnnamed`(「メガストーン」)。**ストーンの `nameJa` は画面に出さない**(名前を推測しない)。
 - 同じ名前を、逆算の相手のカードの文(`megaItemText.fixedItemName(...)`)と構築の補正の通知(`megaItemText.correctedNotice(...)`)にも使う。
+- 持ち物名を ID から引く場所もすべて同じ名前にする(ストーンの `nameJa` を画面・aria・title・テキストのどこにも出さない): 計算の結果の行(`.calc-results__item`)・
+  逆算の候補の行(`.reverse-results__item`)・未対応の印(計算・逆算・判定の確定数の注意・調整)。表示用の一覧 `itemsWithStoneLabels(items, species, stoneIds?)` が
+  ストーンの `nameJa` を `megaStoneLabel`(その ID を `requiredItemId` に持つ種族の基本種名。引けなければ「メガストーン」)に差し替え、
+  ID 引きはその一覧を通す(要求には使わない)。
 - 構築で非メガのメンバーが古いデータでメガストーンを持つとき(ADR-0320 PR-B 4a。値は直さない)、現在値の選択肢の表示は「メガストーン」。
 - 固定の理由(`megaItemText.lockedReason`・`missingReason`)と `aria-describedby` は変えない(iOS と同じ語)。
 - 固定に使うストーンは、絞り込む前の全件(`master.items`)から `megaItemLock` で引く(従来どおり)。ストーンの役割が欄の役割に合わなくても固定する。

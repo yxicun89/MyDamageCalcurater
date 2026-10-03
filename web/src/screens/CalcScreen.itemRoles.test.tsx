@@ -19,7 +19,7 @@ import { calcScreenText, megaItemText } from "../i18n/ja";
 import { itemRoleText } from "../i18n/items";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
-import { createFakeEngine, type FakeEngine } from "../test/fakeEngine";
+import { bulkRow, createFakeEngine, ok, type FakeEngine } from "../test/fakeEngine";
 import {
   BOTH_ITEM,
   DEF_ITEM,
@@ -79,9 +79,11 @@ function lastRequest(engine: FakeEngine): BulkRequest {
   return request;
 }
 
-function renderScreen(data: MasterData = master): { user: UserEvent; engine: FakeEngine } {
+function renderScreen(
+  data: MasterData = master,
+  engine: FakeEngine = createFakeEngine(),
+): { user: UserEvent; engine: FakeEngine } {
   const user = userEvent.setup();
-  const engine = createFakeEngine();
   render(<CalcScreen engine={engine} master={data} />);
   return { user, engine };
 }
@@ -300,5 +302,42 @@ describe("「持ち物の候補も比較」", () => {
     expect(variantIds).not.toContain(POWER_ITEM.id);
     expect(variantIds).not.toContain(NO_ROLE_ITEM.id);
     expect(variantIds).not.toContain(ROLE_MEGA_FIRE_STONE.id);
+  });
+});
+
+describe("結果の行・未対応の印にメガストーンの英語名を出さない", () => {
+  test("防御側がメガ種族なら、結果の各行の持ち物は「{基本種名}のメガストーン」", async () => {
+    const { user } = renderScreen();
+    await user.selectOptions(attackerSpeciesSelect(), normalSpecies(0).key);
+    await user.selectOptions(defenderSpeciesSelect(), MEGA_FIRE.key);
+
+    const list = await screen.findByRole("list", { name: calcScreenText.resultsListLabel });
+    const rows = within(list).getAllByRole("listitem");
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(within(row).getByText(MEGA_FIRE_STONE_LABEL)).toBeVisible();
+      expect(row).not.toHaveTextContent(MEGA_FIRE_STONE.nameJa);
+    }
+  });
+
+  test("未対応の印の持ち物名も、ストーンは「{基本種名}のメガストーン」", async () => {
+    const stoneMark = {
+      target: "defender_item",
+      reason: "unsupported_effect",
+      id: MEGA_FIRE_STONE.id,
+    } as const;
+    const engine = createFakeEngine((request) =>
+      ok({
+        defenderSpeciesKey: request.defenderSpecies.key,
+        rows: [bulkRow({ itemId: MEGA_FIRE_STONE.id, unsupported: [stoneMark] })],
+      }),
+    );
+    const { user } = renderScreen(master, engine);
+    await user.selectOptions(attackerSpeciesSelect(), normalSpecies(0).key);
+    await user.selectOptions(defenderSpeciesSelect(), MEGA_FIRE.key);
+
+    const matches = await screen.findAllByText(new RegExp(MEGA_FIRE_STONE_LABEL));
+    expect(matches.some((element) => element.closest('[role="status"]') !== null)).toBe(true);
+    expect(document.body).not.toHaveTextContent(MEGA_FIRE_STONE.nameJa);
   });
 });

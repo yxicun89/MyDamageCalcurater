@@ -13,7 +13,7 @@ import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import { OBSERVATION_INPUT_DEBOUNCE_MS } from "../domain/observations";
 import type { ReverseRequest } from "../engine/types";
-import { calcScreenText, megaItemText } from "../i18n/ja";
+import { calcScreenText, megaItemText, reverseScreenText } from "../i18n/ja";
 import { itemRoleText } from "../i18n/items";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterItem, MasterSpecies } from "../master/types";
@@ -34,6 +34,7 @@ import {
   MEGA_FIRE_STONE,
   MEGA_FIRE_STONE_LABEL,
   MEGA_WATER,
+  MEGA_WATER_STONE,
   MEGA_WATER_STONE_LABEL,
 } from "../test/megaMaster";
 import { ReverseScreen } from "./ReverseScreen";
@@ -234,5 +235,22 @@ describe("メガ種族の固定中の表示", () => {
 
     expect(within(theirCard()).getByText(megaItemText.fixedItemName(MEGA_WATER_STONE_LABEL))).toBeVisible();
     expect(within(theirCard()).getByText(megaItemText.lockedReason)).toBeVisible();
+  });
+});
+
+describe("結果の候補の行にメガストーンの英語名を出さない", () => {
+  test("相手がメガ種族なら、候補の行の持ち物は「{基本種名}のメガストーン」", async () => {
+    const { user } = renderScreen();
+    await user.selectOptions(mySpeciesSelect(), normalSpecies(0).key);
+    await user.selectOptions(theirSpeciesSelect(), MEGA_WATER.key);
+    await typeObservation(user, 1, "45");
+
+    const list = await screen.findByRole("list", { name: reverseScreenText.resultsListLabel });
+    const rows = within(list).getAllByRole("listitem");
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(within(row).getByText(MEGA_WATER_STONE_LABEL)).toBeVisible();
+      expect(row).not.toHaveTextContent(MEGA_WATER_STONE.nameJa);
+    }
   });
 });

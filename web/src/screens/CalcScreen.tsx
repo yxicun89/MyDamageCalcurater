@@ -41,7 +41,7 @@ import {
   megaStoneItemIds,
   type MegaItemLock,
 } from "../domain/mega";
-import { itemAfterRoleChange, itemsForRole, megaStoneLabel } from "../domain/itemRoles";
+import { itemAfterRoleChange, itemsForRole, itemsWithStoneLabels, megaStoneLabel } from "../domain/itemRoles";
 import { firstDamagingMove, learnsetMoves } from "../domain/moves";
 import { MAX_ITEM_VARIANTS } from "../domain/requestLimits";
 import {
@@ -367,6 +367,11 @@ export function CalcScreen({ engine, master, masterSearch, recordClient }: CalcS
   const defenderPickable = useMemo(
     () => itemsForRole(master.items, "defender", stoneIds),
     [master.items, stoneIds],
+  );
+  // 結果の行・未対応の印は持ち物を ID から引く。メガストーンの英語名を出さない(ADR-0326 §4)。
+  const displayItems = useMemo(
+    () => itemsWithStoneLabels(master.items, [attackerSpecies, defenderSpecies], stoneIds),
+    [master.items, attackerSpecies, defenderSpecies, stoneIds],
   );
   const attackerLock = useMemo(
     () => megaItemLock(attackerSpecies, master.items),
@@ -846,7 +851,7 @@ export function CalcScreen({ engine, master, masterSearch, recordClient }: CalcS
 
       <ResultsSection
         outcome={outcome}
-        items={master.items}
+        items={displayItems}
         moves={master.moves}
         abilities={master.abilities}
         moveType={move?.type}
