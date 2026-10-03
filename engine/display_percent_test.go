@@ -193,26 +193,33 @@ func TestDamageResultDisplayPercentRangeTenths(t *testing.T) {
 // 表示%が「整数%に丸めてから小数にした値」ではないことを、両者が食い違う例で示す。
 // P1-12 で ObservedPercent(整数%への round-half-up)は削除し、観測%は区間モデル
 // (Observation.Matches。ADR-0010 §R2)になった。ここでは「その整数%の観測と両立する」ことを見る。
+// 整数%の観測は実機と同じ切り捨て(ADR-0134)。旧版は四捨五入で読んだ値(74 / 50 / 48)を使っていたが、
+// 実機の表示は切り捨てなので 73 / 49 / 48 に改め、四捨五入で読んだ値が両立しなくなったことも見る。
 // requirements.md §2「HP 比率から直接求め、整数%に丸めてから表示しない」。
 func TestDisplayPercentIsNotDerivedFromObservedPercent(t *testing.T) {
 	tests := []struct {
 		name         string
 		damage       int
 		maxHP        int
-		wantObserved int // 整数%(四捨五入で読んだ観測。区間モデルと両立すること)
+		wantObserved int // 整数%(実機と同じ切り捨てで読んだ観測。区間モデルと両立すること)
+		halfUp       int // 四捨五入で読んだ整数%(wantObserved と違えば、両立してはならない。ADR-0134)
 		wantFloor    int // 0.1% 単位の切り捨て
 	}{
-		// 73.548…% : 整数%は 74、表示%(最小側)は 73.5。74.0 になってはいけない。
-		{"HP155 の 114 ダメージ", 114, 155, 74, 735},
-		// 49.714…% : 整数%は 50、表示%は 49.7。
-		{"HP175 の 87 ダメージ", 87, 175, 50, 497},
-		// 48.309…% : 整数%は 48、表示%は 48.3。
-		{"HP207 の 100 ダメージ", 100, 207, 48, 483},
+		// 73.548…% : 整数%は 73(四捨五入なら 74)、表示%(最小側)は 73.5。73.0 になってはいけない。
+		{"HP155 の 114 ダメージ", 114, 155, 73, 74, 735},
+		// 49.714…% : 整数%は 49(四捨五入なら 50)、表示%は 49.7。
+		{"HP175 の 87 ダメージ", 87, 175, 49, 50, 497},
+		// 48.309…% : 整数%は 48(四捨五入でも 48)、表示%は 48.3。
+		{"HP207 の 100 ダメージ", 100, 207, 48, 48, 483},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if o := (Observation{Percent: tt.wantObserved}); !o.Matches(tt.damage, tt.maxHP) {
 				t.Errorf("%+v.Matches(%d, %d) = false, want true", o, tt.damage, tt.maxHP)
+			}
+			if o := (Observation{Percent: tt.halfUp}); tt.halfUp != tt.wantObserved && o.Matches(tt.damage, tt.maxHP) {
+				t.Errorf("%+v.Matches(%d, %d) = true, want false(整数%%は切り捨て。四捨五入の値とは両立しない)",
+					o, tt.damage, tt.maxHP)
 			}
 			got := DisplayPercentTenthsFloor(tt.damage, tt.maxHP)
 			if got != tt.wantFloor {

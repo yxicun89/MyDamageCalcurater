@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"example.com/pokecalc/services/speed/internal/api"
+	"example.com/pokecalc/services/speed/internal/httpguard"
 	"example.com/pokecalc/services/speed/internal/speed"
 	"github.com/labstack/echo/v5"
 )
@@ -57,6 +58,9 @@ func getSpeedPosition(c *echo.Context, deps Dependencies) error {
 		return internalError(c, err)
 	}
 
+	if httpguard.Expired(c.Request().Context()) {
+		return overloaded(c)
+	}
 	result, err := speed.Position(roster, req)
 	if err != nil {
 		if errors.Is(err, speed.ErrUnknownPokemon) {

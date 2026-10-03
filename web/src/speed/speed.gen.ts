@@ -324,6 +324,7 @@ export interface components {
       | "unknown_pokemon"
       | "request_too_large"
       | "master_unavailable"
+      | "overloaded"
       | "internal_error"
       | "not_found";
   };
@@ -440,7 +441,7 @@ export interface operations {
           "application/json": components["schemas"]["Error"];
         };
       };
-      /** @description The pokemon read model is not configured (master_unavailable) */
+      /** @description The pokemon read model is not configured (master_unavailable), or the service is overloaded or past its request deadline (overloaded, with Retry-After; ADR-0801) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -529,7 +530,7 @@ export interface operations {
           "application/json": components["schemas"]["Error"];
         };
       };
-      /** @description The pokemon read model is not configured (master_unavailable) */
+      /** @description The pokemon read model is not configured (master_unavailable), or the service is overloaded or past its request deadline (overloaded, with Retry-After; ADR-0801) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -616,7 +617,7 @@ export interface operations {
           "application/json": components["schemas"]["Error"];
         };
       };
-      /** @description The pokemon read model is not configured (master_unavailable) */
+      /** @description The pokemon read model is not configured (master_unavailable), or the service is overloaded or past its request deadline (overloaded, with Retry-After; ADR-0801) */
       503: {
         headers: {
           [name: string]: unknown;
