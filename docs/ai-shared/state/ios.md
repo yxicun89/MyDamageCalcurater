@@ -1,7 +1,7 @@
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
 Active: なし(P6-19〈PR #432〉・P6-7 完了。残る Next は他レーン待ちのみ)
-Branch: feat/ios-p6(作業ディレクトリ ~/MyDamageCalcurater-ios)
+Branch: 次は main から feat/ios-<名前> か fix/ios-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-ios。旧 feat/ios-p6 は main に統合済み)
 Status: **M3(iPhone で使える)は完了**。P6-1(ADR-0500)・P6-2a 計算画面・契約追従・P6-2b 逆算画面・P6-2c 構築ビルダー
 (一覧・編集・ニックネーム)・P6-2d(構築から個体を呼び出す配線)・P6-3・P6-4(手順書 `docs/runbooks/ios-device-install.md`)・
 生成の internal タグ除外・DOC-ios は main に統合済み(PR #31・#53・#91・#119・#122)。
@@ -38,3 +38,4 @@ DECISIONS.md 2026-09-25 で採用、M2 の後に実装予定)を入れたら、i
 (5) P6-7(issue #103・ADR-0209 §8の削除UI)は完了(2026-10-01)。(1)〜(3) も完了済み(P6-18・P6-19・ADR-0215)。将来の候補:
 engine の Champions マスタが pokedex-svc 経由になったら iOS のモック/実マスタの差し替え動作を再確認、Web の
 record/team-svc(M2)が進んだら iOS の構築を端末内保存から API 保存へ移行するかを検討。
+画面レジストリ化(P6-28・ADR-0507。2026-10-03): iOS に画面を足すときは `ios/PokeCalc/Features/<名前>Feature.swift` を書き、`FeatureRegistry.swift` に1行足す。`RootView`・`AppEnvironment` は編集しない。未マージのブランチの移行手順は ADR-0507。

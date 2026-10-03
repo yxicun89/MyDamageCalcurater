@@ -13,7 +13,7 @@ Claude Code / Codex の手順対応は [docs/development-workflow.md](docs/devel
 3. `docs/test-strategy.md` — テストの正
 4. `docs/design.md` — 画面・ビジュアルの正
 5. `docs/adr/` — 過去の設計判断
-6. `docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md` — Claude Code と Codex の共有状態(運用は [AGENTS.md](AGENTS.md)) （2026-10-03: `CURRENT_STATE.md` はレーン別の `state/`、`DECISIONS.md` は 1 件 1 ファイルの `decisions/` に分割済み。COORDINATION.md「共有状態ファイルの分割」）
+6. `docs/ai-shared/CURRENT_STATE.md`(索引)→ 自レーンの `state/<レーン>.md`、決定は `decisions/`(1 件 1 ファイル。`DECISIONS.md` は過去分の索引。ADR-0805)— Claude Code と Codex の共有状態(運用は [AGENTS.md](AGENTS.md)・COORDINATION.md「共有状態ファイルの分割」)。人間の判断待ちの一覧は `docs/ai-shared/PENDING.md`
 7. `docs/coding-rules.md` — コーディング規約(公開できる状態を保つ・ハードコードしない・読みやすいコード。Claude Code / Codex 共通)
    手順書(verify・README の起動手順)は AGENTS.md「手順書の書き方」に従う(上から下へ1回で読める・動作を伴うコマンドと最低限の確認点だけ・ルートへの cd から始める)。M1〜M4 の動作確認の索引は `docs/verify-all.md`
 
@@ -25,27 +25,35 @@ engine/                 # 計算エンジン(純粋Go、I/O・外部依存なし
 engine/cmd/wasm/        # ブラウザ用WASMビルド(syscall/js の登録のみ)
 engine/wasmapi/         # WASM/JS 境界の DTO・検証・エラー整形(純粋。ネイティブでテスト可)
 engine/cmd/wasmexpect/  # Go/WASM 一致テストの期待値生成(ネイティブ Go の開発用ツール)
-services/gateway/       # Echo。クライアントの唯一の入口、/assets も配信
+services/gateway/       # Echo。クライアントの唯一の入口(/assets の配信は未実装。画像は計画外 #286)
 services/pokedex/       # マスタ参照(MySQL)
 services/calc/          # 計算(ステートレス)
+services/balance/       # タイプバランス(設計: docs/type-balance-design.md)
+services/speed/         # 素早さ比較(設計: docs/speed-design.md)
+services/judge/         # 判定。素早さ×ダメージ(設計: docs/judge-design.md)
 services/record/        # 計算イベント・お気に入り(TiDB: record DB)
 services/team/          # 構築(TiDB: team DB)
+services/balance/       # タイプバランス(analyze・coverage。Argo CD の GitOps 対象。services/balance/README.md)
+services/speed/         # 素早さ比較(docs/speed-design.md。gitops overlay と Application 定義あり・実クラスタへは未適用)
+services/judge/         # 素早さ×確定数の判定(docs/judge-design.md。gitops overlay と Application 定義あり・実クラスタへは未適用)
+services/internal/      # サービス間の共有 Go パッケージ(master・api 生成物・dbmigrate・httpguard 等)
 tools/importer/         # マスタの取得(Node。data/generated/ へ。変換・投入は services/pokedex/importer。ADR-0101)
 tools/golden/           # @smogon/calc からテストベクタ生成(Node)
-tools/assets/           # 画像変換・アップロード
+tools/assets/           # 画像変換・アップロード(未実装。.gitkeep のみ。make assets は終了コード 2)
 testdata/golden/        # 生成済みテストベクタ(コミットする)
 web/                    # Vite + React + TypeScript
 ios/                    # SwiftUI アプリ
-deploy/k8s/             # Kustomize(base / overlays/local / overlays/cloud)
-scripts/                # 環境チェック・補助スクリプト
-docs/
+deploy/k8s/             # Kustomize(base / overlays/local, local-api, local-web, cloud。各サービスは services/*/deploy/k8s にも)
+deploy/argocd/          # Argo CD の AppProject
+scripts/                # 環境チェック・補助スクリプト(scripts/ai-guard は AI の権限ガード)
+docs/                   # docs/history/ は役目を終えた起動指示(参照用)
 ```
 
 ## 絶対ルール
 
 1. **API変更は必ず `api/openapi.yaml` から**。手書きでハンドラやクライアントの型を作らない。変更後は `make gen`
 2. **`engine/` は純粋に保つ**。DB・HTTP・ファイル・時刻・乱数の外部取得を持ち込まない
-3. **計算ロジックを変更したら `make test-golden` が全件一致すること**。既知の差分は `testdata/golden/known_diffs.yaml` にADR付きで登録したものだけ許容
+3. **計算ロジックを変更したら `make test-golden` が全件一致すること**。差分を許容する仕組みは無い(`known_diffs.yaml` は存在しない。ADR-0002 追記 P2-1b)。必要になったら ADR で導入する
 4. **サービスは自分のDBにだけ触る**。他サービスのデータはAPIかイベント経由
 5. **計算はイベント保存に依存しない**。record/team/TiDB/NATSが落ちても計算APIは成功を返す
 6. **テストを消したり弱めたりして通さない**。期待値の変更は理由をコミットメッセージに書く
@@ -91,7 +99,7 @@ make e2e          # k3d 上のスモーク + Playwright
 make ios-test     # iOS シミュレータでテスト
 make wasm         # engine を WASM にビルドして web/public へ
 make import       # マスタデータ取込
-make assets       # 画像を WebP 2サイズに変換して MinIO へ
+make assets       # 画像を WebP 2サイズに変換して MinIO へ(未実装。終了コード 2)
 ```
 
 ## Claude Code 固有の開発ワークフロー
@@ -112,18 +120,18 @@ ADR-0003 の適応を維持する。Codex では ADR-0007 と共通ワークフ�
 - 完了条件: `make test` 成功 / engine 変更時は `make test-golden` 成功 / plan.md 更新 / 必要ならADR
 - 改善要望は `/improve`、全体確認は `/verify`
 - 上表のモデルは既存 Claude agent 定義の割り当て。Codex のモデルへ機械的に置換しない
-- **各レーンのメインセッションは Sonnet で起動する**(`--model sonnet`)。設計の判断が重いときだけ `/model opus` に切り替え、終わったら戻す。サブエージェントは、spec-writer・critic を **engine・逆算・DB・API 契約に関わるときだけ Opus**(上表の既定)にし、文書・k8s・スクリプト・軽い修正では Agent の `model: "sonnet"` で呼ぶ。利用枠が厳しいときは M1 のレーン(データ・API・Web)を優先し、他のレーンは区切りで止める。Max プランの5時間の利用枠を6レーンで使い切らないため(2026-09-22 ユーザー決定)
+- **各レーンのメインセッションは Sonnet で起動する**(`--model sonnet`)。設計の判断が重いときだけ `/model opus` に切り替え、終わったら戻す。サブエージェントは、spec-writer・critic を **engine・逆算・DB・API 契約に関わるときだけ Opus**(上表の既定)にし、文書・k8s・スクリプト・軽い修正では Agent の `model: "sonnet"` で呼ぶ。利用枠が厳しいときは M1 のレーン(データ・API・Web)を優先し、他のレーンは区切りで止める。Max プランの5時間の利用枠を複数レーンで使い切らないため(2026-09-22 ユーザー決定)
 - `.claude/settings.json` の gofmt フックとは別に、明示的な整形・lint・build の結果を確認する
 - レビューのスキップや未実装ターゲットの正常終了を成功と数えない。詳細は共通ワークフローを参照
-- ブランチ・統合: レーン制(ダメージ計算 `feat/calc-<phase名>` / タイプバランス `feat/tb-<stage名>`)。main へは PR で入れる
-  (直接 push・直接 merge をしない。Argo CD の GitOps が main を見ているため)。詳細は AGENTS.md「Git ブランチ運用」と COORDINATION.md
+- ブランチ・統合: レーン制(レーン一覧とブランチ名は COORDINATION.md の表)。main へは PR で入れる
+  (直接 push・直接 merge をしない。main を常に緑に保つため。CI・レビューの記録を残す。GitOps は balance だけが main を見ており、damage calc 系は `make deploy-latest`。ユーザー決定 2026-09-25)。詳細は AGENTS.md「Git ブランチ運用」と COORDINATION.md
 - タイプバランスレーンを Claude Code で進めるときは、`/phase` の代わりに `docs/type-balance-design.md` のステージ順で、
   同じ流れ(quick-scanner → spec-writer → implementer → critic)を使う
 
 ### Codexブランチの取り込み(廃止)とレーン制
 
 2026-09-21 に、Claude Code がマージコーディネーターを務める運用は**廃止**した。同日、担当を AI ではなくレーン
-(ダメージ計算 / タイプバランス)に持たせる運用に改めた。どちらの AI もどちらのレーンを進めてよく、止まった側の続きを
+(データ・API・Web・iOS・タイプバランス・素早さ・判定)に持たせる運用に改めた。どちらの AI もどちらのレーンを進めてよく、止まった側の続きを
 同じレーンのブランチの `Next` から続ける。手順・条件・競合の扱い・止まるときの作法は
 [docs/ai-shared/COORDINATION.md](docs/ai-shared/COORDINATION.md) を正とする。
 
@@ -133,7 +141,6 @@ ADR-0003 の適応を維持する。Codex では ADR-0007 と共通ワークフ�
 
 - Xcode の署名チームの設定と実機インストール
 - Codex / 外部サービスのログイン
-- `known_diffs.yaml` への追加(ADRを書いた上で、次の人間レビューで承認)
 - クラスタ削除・DBのデータ削除
 - クラウドへのデプロイ・課金が発生する操作、git への機密情報の公開
 

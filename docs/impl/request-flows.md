@@ -176,7 +176,7 @@ sequenceDiagram
 
 ## 7. judge-svc(POST /api/judge/v1/outspeed-and-ko)
 
-Traefik `/api/judge` → judge(gateway 非経由)。
+Traefik → gateway `/api/judge/*` → judge(ADR-0416)。
 
 | # | 場所 | 内容 | 失敗時 |
 |---|---|---|---|
@@ -192,7 +192,7 @@ Traefik `/api/judge` → judge(gateway 非経由)。
 | サービス | 経路 | 起動時 | リクエスト時の検査順 |
 |---|---|---|---|
 | balance | Traefik `/api/balance` → `services/balance/internal/httpapi/server.go:101` `New`(生成ラッパ + `requireRequestContext`)| `cmd/api/main.go:26`(`main`)が `BALANCE_{POKEMON_TYPES,MOVES,ABILITIES}_PATH` を読み(`config.go`)、未設定は nil のまま起動 | 検査順(`server.go:352-354` coverage、`recommendations.go:21-25`・`threats.go:14-18`・`moverange.go:19-23` のコメント): ヘッダ(400)→ 本文 16KiB(400/413)→ read model 有無(503)→ 未知 ID(422)→ 200。ハンドラ: analyze `server.go:149`・coverage `:355`・threats `threats.go:22`・recommendations `recommendations.go:28`・move-range `moverange.go:25` |
-| speed | Traefik `/api/speed` → `services/speed/internal/httpapi/server.go:38` `New` | `cmd/api/main.go` が `SPEED_POKEMON_PATH` を読む | 検査順は未確認(コード全行は未読)。ハンドラ: pokemon `:168`・table `:84`・position `position.go:25` |
+| speed | Traefik → gateway `/api/speed/*` → `services/speed/internal/httpapi/server.go:38` `New` | `cmd/api/main.go` が `SPEED_POKEMON_PATH` を読む | 検査順は未確認(コード全行は未読)。ハンドラ: pokemon `:168`・table `:84`・position `position.go:25` |
 
 - read model の作り方: `pokedex export -out <dir>`(`services/pokedex/cmd/pokedex/main.go:109`)→ `data/generated/readmodel/` → ConfigMap(`make balance-k3d-deploy-readmodel` 等。手順は B 章)。
 - ローカル overlay は架空データの ConfigMap(`services/{balance,speed}/deploy/k8s/overlays/local/`)。

@@ -106,6 +106,8 @@ type Querier interface {
 	// 公開の検索 API(/api/pokedex/*。ADR-0105 §3)。pattern は呼び出し側が LIKE の特殊文字(\ % _)を
 	// \ でエスケープし、末尾に % を付けた前方一致のパターン。name_ja の照合順序は utf8mb4_ja_0900_as_cs
 	// (ADR-0100 §2。ひらがなとカタカナを区別しない)。
+	// 種族は、メガ種族だけ「メガ + q」の前方一致でも当てる(mega_pattern。メガを除いた基本種名で検索すると基本種と
+	// メガの両方が出る。ADR-0324)。メガの接頭辞は呼び出し側が mega_pattern に入れる(SQL に名前を書かない)。
 	SearchSpecies(ctx context.Context, arg SearchSpeciesParams) ([]SearchSpeciesRow, error)
 	// 今の species のうち台帳に無い組を足す(台帳ができる前に投入した DB の移行)。
 	SeedSpeciesKeyLedgerFromSpecies(ctx context.Context, firstSeenAt time.Time) error

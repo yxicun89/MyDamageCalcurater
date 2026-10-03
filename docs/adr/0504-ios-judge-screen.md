@@ -129,3 +129,8 @@
 - `UnsupportedMark.target` に format が加わりうる件は、型が string のままで、未知の値は `.unknown` に写す既存の規則で足りる。
 
 **後続**: 素早さの反映/無視(`*SpeedApplied`/`*SpeedIgnored`)の画面表示と、状態異常の入力は後続(docs/plan.md に記載)。
+
+## 追記(2026-10-03): 機能レジストリ(ADR-0507)への追随
+#556(画面のレジストリ化)の移行手順どおり、`RootView.swift`・`AppEnvironment.swift` の判定画面の追加(導線・起動時の環境変数・Route・`.ready` の連想値・`#Preview`)は
+捨て、`ios/PokeCalc/Features/JudgeFeature.swift` と `FeatureRegistry.swift` の1行に置き換えた(`id: "judge"`・`order: 700`・識別子 `openJudgeScreen`・
+環境変数 `POKECALC_OPEN_JUDGE_SCREEN_AT_LAUNCH`・`JudgeService` をモック/API で登録。挙動・識別子は変えていない)。

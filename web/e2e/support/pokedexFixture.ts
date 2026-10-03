@@ -17,6 +17,7 @@ import type { components } from "../../src/api/openapi.gen";
 import type { Move } from "../../src/engine/types";
 import { toCalcSnapshotAbilityEffect, toCalcSnapshotItemEffect } from "../../src/master/exportSnapshot";
 import { MOVES_BATCH_MAX_IDS } from "../../src/master/onlineSource";
+import { matchesSpeciesName } from "../../src/master/speciesNameMatch";
 import type { MasterData } from "../../src/master/types";
 
 type Schemas = components["schemas"];
@@ -165,7 +166,9 @@ function handleSpeciesSearch(master: MasterData, query: URLSearchParams): Fixtur
   if (limit === null) {
     return errorResponse(400, "invalid_input", "limit が不正");
   }
-  const filtered = prefixFilter(master.species, query.get("q"), (species) => species.nameJa);
+  // pokedex-svc の検索と同じ規則(ADR-0324。メガ種族は「メガ + q」でも当たる)。
+  const q = query.get("q");
+  const filtered = master.species.filter((species) => matchesSpeciesName(species, q ?? ""));
   const sorted = [...filtered].sort((a, b) => compareStrings(a.key, b.key));
   const body: Schemas["SpeciesSummary"][] = sorted.slice(0, limit).map((species) => ({
     key: species.key,

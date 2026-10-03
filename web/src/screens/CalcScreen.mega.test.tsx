@@ -17,6 +17,7 @@ import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import type { BulkRequest } from "../engine/types";
 import { calcScreenText, megaItemText } from "../i18n/ja";
+import { exampleSpecies } from "../master/example/species";
 import { exampleMasterSource } from "../master/exampleSource";
 import { SPECIES_SEARCH_DEBOUNCE_MS } from "../master/onlineSource";
 import type { MasterCapabilities, MasterData, MasterSpecies, MasterSpeciesSearch } from "../master/types";
@@ -386,6 +387,37 @@ describe("種族を検索で解決するマスタ(オンライン・キャッシ
     expect(select).toBeDisabled();
     expect(select).toHaveDisplayValue(MEGA_FIRE_STONE.nameJa);
     expect(select).toHaveAccessibleDescription(megaItemText.lockedReason);
+  });
+
+  // issue #515・ADR-0324: 基本種名(メガを除いた名前)や「メガ」の入力でメガ種族が候補に出て、選ぶと固定される。
+  test("基本種名で検索すると基本種とメガ種族の両方が候補に出て、メガ種族を選ぶと持ち物が固定される", async () => {
+    const { user } = renderSearchScreen();
+    const card = attackerCard();
+    const input = within(card).getByRole("combobox", { name: "攻撃側のポケモン" });
+    const baseName = exampleSpecies.find((species) => species.key === "9001-000")?.nameJa ?? "";
+    expect(baseName).not.toBe("");
+    await user.type(input, baseName);
+    act(() => {
+      vi.advanceTimersByTime(SPECIES_SEARCH_DEBOUNCE_MS);
+    });
+    const options = (await within(card).findAllByRole("option")).map((option) => option.textContent);
+    expect(options).toEqual([baseName, MEGA_FIRE.nameJa]);
+    await user.click(within(card).getByRole("option", { name: MEGA_FIRE.nameJa }));
+
+    const select = await within(attackerCard()).findByRole("combobox", { name: "攻撃側の持ち物" });
+    expect(select).toBeDisabled();
+    expect(select).toHaveDisplayValue(MEGA_FIRE_STONE.nameJa);
+  });
+
+  test("「メガ」で検索すると、メガ種族だけが候補に出る", async () => {
+    const { user } = renderSearchScreen();
+    const card = attackerCard();
+    await user.type(within(card).getByRole("combobox", { name: "攻撃側のポケモン" }), "メガ");
+    act(() => {
+      vi.advanceTimersByTime(SPECIES_SEARCH_DEBOUNCE_MS);
+    });
+    const options = (await within(card).findAllByRole("option")).map((option) => option.textContent);
+    expect(options).toEqual(master.species.filter((species) => species.isMega === true).map((s) => s.nameJa));
   });
 
   test("検索で選んだメガ種族の要求に、固定した持ち物が載る", async () => {
