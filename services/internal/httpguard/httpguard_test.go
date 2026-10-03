@@ -192,3 +192,19 @@ func TestReleasesSlotOnPanic(t *testing.T) {
 		t.Fatalf("panic の後の status = %d, want 200(枠が返っていない)", rec.Code)
 	}
 }
+
+// 締め切りを過ぎた直後は、timer goroutine が ctx を終了させる前でも期限切れと数える(issue #538)。
+func TestExpiredCountsPassedDeadlineBeforeTimerFires(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
+	defer cancel()
+	time.Sleep(time.Millisecond)
+	if !httpguard.Expired(ctx) {
+		t.Error("締め切りを過ぎた context は期限切れ")
+	}
+	live, cancelLive := context.WithTimeout(context.Background(), time.Hour)
+	defer cancelLive()
+	if httpguard.Expired(live) {
+		t.Error("締め切りの前は期限切れでない")
+	}
+}
