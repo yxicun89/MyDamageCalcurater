@@ -58,7 +58,7 @@ function isAborted(signal: AbortSignal | undefined): boolean {
  * 無補正は「無補正の性格(マスタの plus == minus。null 同士だけでなく、同じステータスの plus/minus も含む)を
  * ID の昇順で並べた最初」、それ以外は (plus, minus) が一致する性格。該当なしは undefined。
  */
-function resolveNatureId(
+export function resolveNatureId(
   natures: CreateApiEngineInput["master"]["natures"],
   nature: Nature,
 ): string | undefined {

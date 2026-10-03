@@ -7,7 +7,7 @@
 // 画面 ID・パス・タブの表示名・文書タイトルの対応は app/routes.ts の SCREEN_ROUTES を正とする。
 // ADR-0323: 各画面(とそのクライアント)は登録ファイル(`*.screen.tsx`)が持つ。画面を足すときこのファイルは触らない。
 
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import "./App.css";
 import { createApiEngine } from "./api/apiEngine";
 import { apiBaseUrl } from "./api/config";
@@ -129,6 +129,11 @@ export function App({
   );
   // 端末データの削除で team が消えたとき進め、開いたままの構築一覧に取り直させる(ADR-0318 §6)。
   const [teamReloadToken, setTeamReloadToken] = useState(0);
+  // お気に入り一覧の取り直しの合図(P5-3c。ADR-0327 §5)。計算画面での追加と、端末データの削除(favorites も消える)で進める。
+  const [favoritesReloadToken, setFavoritesReloadToken] = useState(0);
+  const bumpFavoritesReloadToken = useCallback(() => {
+    setFavoritesReloadToken((token) => token + 1);
+  }, []);
 
   // 計算モード(オフライン = WASM / オンライン = API)。既定はオフラインで、選択は localStorage に覚える
   // (ADR-0301 §4)。マウント時に一度だけ読み、以後はこの state が正(他タブでの変更は追わない)。
@@ -381,6 +386,7 @@ export function App({
             teamClient={teamClient}
             onTeamDataDeleted={() => {
               setTeamReloadToken((token) => token + 1);
+              bumpFavoritesReloadToken();
             }}
           />
         )}
@@ -439,6 +445,8 @@ export function App({
                   activeMasterSearch={activeMasterSearch}
                   onlineMasterSource={onlineMasterSource}
                   teamReloadToken={teamReloadToken}
+                  favoritesReloadToken={favoritesReloadToken}
+                  onFavoriteAdded={bumpFavoritesReloadToken}
                   recordClient={recordClient}
                   mode={mode}
                   retryMasterLoad={retryMasterLoad}
@@ -484,6 +492,8 @@ interface AppTabPanelProps {
   readonly activeMasterSearch: MasterSpeciesSearch | undefined;
   readonly onlineMasterSource: MasterSource;
   readonly teamReloadToken: number;
+  readonly favoritesReloadToken: number;
+  readonly onFavoriteAdded: () => void;
   readonly recordClient: RecordClient | undefined;
   readonly mode: CalcMode;
   readonly retryMasterLoad: () => void;
@@ -507,6 +517,8 @@ function AppTabPanel({
   activeMasterSearch,
   onlineMasterSource,
   teamReloadToken,
+  favoritesReloadToken,
+  onFavoriteAdded,
   recordClient,
   mode,
   retryMasterLoad,
@@ -544,6 +556,8 @@ function AppTabPanel({
                   masterSearch: activeMasterSearch,
                   recordClient,
                   reloadToken: teamReloadToken,
+                  favoritesReloadToken,
+                  onFavoriteAdded,
                   onlineMasterSource,
                 })}
               </div>
@@ -555,7 +569,13 @@ function AppTabPanel({
             // key は ok 側の分岐と同じ id にする(上のコメントのとおり)。
             return (
               <div key={id} hidden={hidden}>
-                {screen.render({ masterSearch: activeMasterSearch, onlineMasterSource })}
+                {screen.render({
+                  masterSearch: activeMasterSearch,
+                  recordClient,
+                  favoritesReloadToken,
+                  onFavoriteAdded,
+                  onlineMasterSource,
+                })}
               </div>
             );
           }
