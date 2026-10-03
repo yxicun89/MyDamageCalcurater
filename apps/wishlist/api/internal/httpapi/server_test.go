@@ -339,6 +339,8 @@ func TestCreateItem_MultipartErrors(t *testing.T) {
 		{"存在しないジャンル", map[string]string{"genre_id": "99999999", "name": "x"}, testimg.PNG(), 422, "unprocessable"},
 		{"空の名前", map[string]string{"genre_id": "GENRE", "name": ""}, testimg.PNG(), 422, "unprocessable"},
 		{"負の min_price", map[string]string{"genre_id": "GENRE", "name": "x", "min_price": "-1"}, testimg.PNG(), 422, "unprocessable"},
+		{"source_url が javascript:", map[string]string{"genre_id": "GENRE", "name": "x", "source_url": "javascript:alert(1)"}, testimg.PNG(), 422, "unprocessable"},
+		{"source_url が ftp", map[string]string{"genre_id": "GENRE", "name": "x", "source_url": "ftp://example.com/x"}, testimg.PNG(), 422, "unprocessable"},
 		{"SVG", map[string]string{"genre_id": "GENRE", "name": "x"}, testimg.SVG(), 422, "unprocessable"},
 		{"10 MiB 超", map[string]string{"genre_id": "GENRE", "name": "x"}, testimg.PaddedPNG(storage.MaxImageBytes + 1), 422, "unprocessable"},
 	}
@@ -418,6 +420,23 @@ func TestCreateItem_JSONErrors(t *testing.T) {
 			}
 		})
 	}
+	// 入力が不正なら外部の画像を取りに行かない
+	t.Run("name が空なら取得しない", func(t *testing.T) {
+		e := newEnv(t)
+		e.remote.image = testimg.PNG()
+		expectError(t, e.json(t, http.MethodPost, "/api/items", map[string]any{"genre_id": e.genre.ID, "name": "", "image_url": "https://cdn.example.com/a.png"}), 422, "unprocessable")
+		if len(e.remote.calls) != 0 {
+			t.Errorf("取得した: %v", e.remote.calls)
+		}
+	})
+	t.Run("source_url が不正なら取得しない", func(t *testing.T) {
+		e := newEnv(t)
+		e.remote.image = testimg.PNG()
+		expectError(t, e.json(t, http.MethodPost, "/api/items", map[string]any{"genre_id": e.genre.ID, "name": "x", "source_url": "javascript:alert(1)", "image_url": "https://cdn.example.com/a.png"}), 422, "unprocessable")
+		if len(e.remote.calls) != 0 {
+			t.Errorf("取得した: %v", e.remote.calls)
+		}
+	})
 	t.Run("image_url なし", func(t *testing.T) {
 		e := newEnv(t)
 		expectError(t, e.json(t, http.MethodPost, "/api/items", map[string]any{"genre_id": e.genre.ID, "name": "x"}), 400, "bad_request")
@@ -588,6 +607,8 @@ func TestUpdateItem(t *testing.T) {
 	expectError(t, e.json(t, http.MethodPatch, path, map[string]any{"site_overrides": []map[string]any{{"site_id": 99999999, "enabled": true}}}), 422, "unprocessable")
 	expectError(t, e.json(t, http.MethodPatch, path, map[string]any{"name": ""}), 422, "unprocessable")
 	expectError(t, e.json(t, http.MethodPatch, path, map[string]any{"min_price": -1}), 422, "unprocessable")
+	expectError(t, e.json(t, http.MethodPatch, path, map[string]any{"source_url": "ftp://example.com/x"}), 422, "unprocessable")
+	expectError(t, e.json(t, http.MethodPatch, path, map[string]any{"source_url": "javascript:alert(1)"}), 422, "unprocessable")
 }
 
 // AC-H13: 画像の差し替え(古い画像は 404 になる)と削除(204、画像も消える)。

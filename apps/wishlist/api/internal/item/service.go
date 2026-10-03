@@ -53,7 +53,7 @@ func (s *Service) GetItem(ctx context.Context, id int64) (Item, error) {
 // CreateItem は image を保存してから商品を作る(in.ImagePath は無視して保存した名前にする)。
 // 商品の作成に失敗したら保存した画像を消す。画像のエラーは storage のエラー(ErrUnsupportedImage・ErrTooLarge)を包む。
 func (s *Service) CreateItem(ctx context.Context, in NewItem, image io.Reader) (Item, error) {
-	if err := validateNewItem(in); err != nil {
+	if err := ValidateNewItem(in); err != nil {
 		return Item{}, err
 	}
 	name, err := s.images.Save(ctx, image)
@@ -198,10 +198,10 @@ func invalid(format string, args ...any) error {
 // checkText は文字数(rune)の上限と、required なら空・空白だけでないことを検査する。
 func checkText(field, v string, max int, required bool) error {
 	if required && strings.TrimSpace(v) == "" {
-		return invalid("%s が空", field)
+		return invalid("%s must not be empty", field)
 	}
 	if utf8.RuneCountInString(v) > max {
-		return invalid("%s は %d 文字まで", field, max)
+		return invalid("%s must be at most %d characters", field, max)
 	}
 	return nil
 }
@@ -215,14 +215,14 @@ func checkOptText(field string, v *string, max int, required bool) error {
 
 func checkInt32(field string, v int) error {
 	if v < math.MinInt32 || v > math.MaxInt32 {
-		return invalid("%s が範囲外", field)
+		return invalid("%s is out of range", field)
 	}
 	return nil
 }
 
 func checkMinPrice(v int) error {
 	if v < 0 || v > math.MaxInt32 {
-		return invalid("min_price は 0 以上 %d 以下", math.MaxInt32)
+		return invalid("min_price must be between 0 and %d", math.MaxInt32)
 	}
 	return nil
 }
@@ -235,7 +235,7 @@ func checkSourceURL(v string) error {
 		return nil
 	}
 	if u, err := url.Parse(v); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
-		return invalid("source_url は http/https の URL")
+		return invalid("source_url must be an http(s) URL")
 	}
 	return nil
 }
@@ -255,10 +255,11 @@ func checkFetchType(t FetchType) error {
 	case FetchAPI, FetchScrape, FetchHeadless, FetchLinkOnly:
 		return nil
 	}
-	return invalid("fetch_type が不正: %q", t)
+	return invalid("fetch_type is invalid: %q", t)
 }
 
-func validateNewItem(in NewItem) error {
+// ValidateNewItem は商品の作成値を検査する(ErrInvalid)。外部取得など高コストな処理の前に呼べるよう公開している。
+func ValidateNewItem(in NewItem) error {
 	if err := checkText("name", in.Name, MaxItemNameLen, true); err != nil {
 		return err
 	}

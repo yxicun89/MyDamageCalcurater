@@ -55,7 +55,9 @@ func classify(err error) (int, api.ErrorCode, string) {
 		return http.StatusUnprocessableEntity, api.ErrorCodeUnprocessable, err.Error()
 	case errors.Is(err, storage.ErrUnsupportedImage):
 		return http.StatusUnprocessableEntity, api.ErrorCodeUnprocessable, "unsupported image type (jpeg, png, webp, gif only)"
-	case errors.Is(err, storage.ErrTooLarge), errors.Is(err, netguard.ErrTooLarge), errors.As(err, &mbe):
+	case errors.As(err, &mbe):
+		return http.StatusUnprocessableEntity, api.ErrorCodeUnprocessable, "request body is too large"
+	case errors.Is(err, storage.ErrTooLarge), errors.Is(err, netguard.ErrTooLarge):
 		return http.StatusUnprocessableEntity, api.ErrorCodeUnprocessable, "image is too large"
 	case errors.Is(err, http.ErrNotMultipart), errors.Is(err, http.ErrMissingBoundary), errors.Is(err, multipart.ErrMessageTooLarge):
 		return http.StatusBadRequest, api.ErrorCodeBadRequest, "expected multipart/form-data"

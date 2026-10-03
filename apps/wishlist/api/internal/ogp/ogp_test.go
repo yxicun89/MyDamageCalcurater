@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/text/encoding/japanese"
+
 	"example.com/pokecalc/apps/wishlist/api/internal/netguard"
 )
 
@@ -144,5 +146,26 @@ func TestFetcher_Image(t *testing.T) {
 	}
 	if _, err := testFetcher().Image(context.Background(), "file:///etc/passwd", 10); !errors.Is(err, netguard.ErrInvalidURL) {
 		t.Errorf("file err = %v", err)
+	}
+}
+
+// AC-O8: Shift_JIS のページ(Content-Type の charset)を UTF-8 として読む。内容は架空。
+func TestFetcher_Draft_ShiftJIS(t *testing.T) {
+	page := `<html><head><title>架空フィギュア テスト</title></head></html>`
+	enc, err := japanese.ShiftJIS.NewEncoder().String(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=Shift_JIS")
+		io.WriteString(w, enc)
+	}))
+	defer srv.Close()
+	d, err := testFetcher().Draft(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Title != "架空フィギュア テスト" {
+		t.Errorf("Title = %q", d.Title)
 	}
 }

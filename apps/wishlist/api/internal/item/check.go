@@ -13,7 +13,7 @@ func checkUniqueSiteIDs(ids []int64) error {
 	seen := make(map[int64]struct{}, len(ids))
 	for _, id := range ids {
 		if _, dup := seen[id]; dup {
-			return fmt.Errorf("%w: site_id %d が重複している", ErrInvalid, id)
+			return fmt.Errorf("%w: site_id %d is duplicated", ErrInvalid, id)
 		}
 		seen[id] = struct{}{}
 	}

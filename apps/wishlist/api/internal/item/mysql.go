@@ -69,7 +69,7 @@ func strPtr(n sql.NullString) *string {
 
 func toInt32(v int) (int32, error) {
 	if v < math.MinInt32 || v > math.MaxInt32 {
-		return 0, fmt.Errorf("%w: 数値が範囲外", ErrInvalid)
+		return 0, fmt.Errorf("%w: number is out of range", ErrInvalid)
 	}
 	return int32(v), nil
 }
@@ -312,8 +312,15 @@ func (r *MySQLRepository) ListGenres(ctx context.Context) ([]Genre, error) {
 	return out, nil
 }
 
-func (r *MySQLRepository) getGenre(ctx context.Context, q *store.Queries, id int64) (Genre, error) {
-	g, err := q.GetGenre(ctx, id)
+// getGenre はジャンルとその site_ids を読む。forUpdate なら行をロックする(更新の直前に読むとき)。
+func (r *MySQLRepository) getGenre(ctx context.Context, q *store.Queries, id int64, forUpdate bool) (Genre, error) {
+	var g store.Genre
+	var err error
+	if forUpdate {
+		g, err = q.GetGenreForUpdate(ctx, id)
+	} else {
+		g, err = q.GetGenre(ctx, id)
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return Genre{}, ErrNotFound
 	}
@@ -368,7 +375,7 @@ func (r *MySQLRepository) CreateGenre(ctx context.Context, in NewGenre) (Genre, 
 		if err := replaceGenreSites(ctx, q, id, in.SiteIDs); err != nil {
 			return err
 		}
-		out, err = r.getGenre(ctx, q, id)
+		out, err = r.getGenre(ctx, q, id, false)
 		return err
 	})
 	if err != nil {
@@ -385,7 +392,7 @@ func (r *MySQLRepository) UpdateGenre(ctx context.Context, id int64, p GenrePatc
 	}
 	var out Genre
 	err := r.inTx(ctx, func(q *store.Queries) error {
-		cur, err := r.getGenre(ctx, q, id)
+		cur, err := r.getGenre(ctx, q, id, true)
 		if err != nil {
 			return err
 		}
@@ -413,7 +420,7 @@ func (r *MySQLRepository) UpdateGenre(ctx context.Context, id int64, p GenrePatc
 				return err
 			}
 		}
-		out, err = r.getGenre(ctx, q, id)
+		out, err = r.getGenre(ctx, q, id, false)
 		return err
 	})
 	if err != nil {

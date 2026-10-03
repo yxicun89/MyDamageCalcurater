@@ -3,12 +3,12 @@
 package httpapi
 
 import (
-	"github.com/labstack/echo/v5"
-
 	"context"
-	"example.com/pokecalc/apps/wishlist/api/internal/api"
 	"log/slog"
 
+	"github.com/labstack/echo/v5"
+
+	"example.com/pokecalc/apps/wishlist/api/internal/api"
 	"example.com/pokecalc/apps/wishlist/api/internal/item"
 	"example.com/pokecalc/apps/wishlist/api/internal/ogp"
 	"example.com/pokecalc/apps/wishlist/api/internal/storage"

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/oapi-codegen/nullable"
+
 	"example.com/pokecalc/apps/wishlist/api/internal/deeplink"
 	"example.com/pokecalc/apps/wishlist/api/internal/item"
 	"example.com/pokecalc/apps/wishlist/api/internal/storage"
@@ -143,6 +145,18 @@ func TestService_Validation(t *testing.T) {
 		}},
 		{"ジャンル名が空白だけ", func() error {
 			_, err := e.svc.CreateGenre(ctx, item.NewGenre{Name: " "})
+			return err
+		}},
+		{"source_url が javascript:", func() error {
+			_, err := e.svc.CreateItem(ctx, item.NewItem{GenreID: e.genre.ID, Name: "x", SourceURL: strp("javascript:alert(1)")}, bytes.NewReader(testimg.PNG()))
+			return err
+		}},
+		{"source_url が ftp", func() error {
+			_, err := e.svc.CreateItem(ctx, item.NewItem{GenreID: e.genre.ID, Name: "x", SourceURL: strp("ftp://example.com/x")}, bytes.NewReader(testimg.PNG()))
+			return err
+		}},
+		{"更新で source_url を javascript: に", func() error {
+			_, err := e.svc.UpdateItem(ctx, it.ID, item.ItemPatch{SourceURL: nullable.NewNullableWithValue("javascript:alert(1)")})
 			return err
 		}},
 		{"サイトの検索 URL が不正", func() error {

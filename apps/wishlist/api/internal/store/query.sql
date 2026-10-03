@@ -7,6 +7,9 @@ SELECT id, name, query_template, sort_order FROM genres ORDER BY sort_order, id;
 -- name: GetGenre :one
 SELECT id, name, query_template, sort_order FROM genres WHERE id = ?;
 
+-- name: GetGenreForUpdate :one
+SELECT id, name, query_template, sort_order FROM genres WHERE id = ? FOR UPDATE;
+
 -- name: CreateGenre :execlastid
 INSERT INTO genres (name, query_template, sort_order) VALUES (?, ?, ?);
 

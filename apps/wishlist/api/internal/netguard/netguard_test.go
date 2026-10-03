@@ -242,6 +242,11 @@ func TestIsPublic(t *testing.T) {
 		{mapped(v4(8, 8, 8, 8)), true},
 		{v4(172, 32, 0, 1), true},
 		{v4(100, 128, 0, 1), true},
+		// IPv6 から IPv4 への変換・トンネル(中の IPv4 が内部向けでも通れてしまう)
+		{netip.MustParseAddr("64:ff9b::7f00:1"), false},     // NAT64(中身はループバック)
+		{netip.MustParseAddr("64:ff9b:1::1"), false},        // NAT64(ローカル用)
+		{netip.MustParseAddr("2002:7f00:1::1"), false},      // 6to4(中身はループバック)
+		{netip.MustParseAddr("2606:4700:4700::1111"), true}, // 通常の公開 IPv6
 	}
 	for _, c := range cases {
 		t.Run(c.addr.String(), func(t *testing.T) {

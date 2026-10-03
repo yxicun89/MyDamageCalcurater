@@ -131,6 +131,22 @@ func (q *Queries) GetGenre(ctx context.Context, id int64) (Genre, error) {
 	return i, err
 }
 
+const getGenreForUpdate = `-- name: GetGenreForUpdate :one
+SELECT id, name, query_template, sort_order FROM genres WHERE id = ? FOR UPDATE
+`
+
+func (q *Queries) GetGenreForUpdate(ctx context.Context, id int64) (Genre, error) {
+	row := q.db.QueryRowContext(ctx, getGenreForUpdate, id)
+	var i Genre
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.QueryTemplate,
+		&i.SortOrder,
+	)
+	return i, err
+}
+
 const getItem = `-- name: GetItem :one
 SELECT id, genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, created_at, updated_at
 FROM items WHERE id = ?

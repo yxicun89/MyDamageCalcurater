@@ -3,6 +3,7 @@
 package ogp
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"strings"
 
 	"golang.org/x/net/html"
+	"golang.org/x/net/html/charset"
 
 	"example.com/pokecalc/apps/wishlist/api/internal/netguard"
 )
@@ -122,44 +124,49 @@ func NewFetcher(client *http.Client) *Fetcher {
 // 相対 URL はリダイレクト後の最終 URL を基準に解決する。2xx 以外は ErrUpstreamStatus、
 // 上限超えは netguard.ErrTooLarge、URL 違反は netguard.ErrInvalidURL を包んで返す。
 func (f *Fetcher) Draft(ctx context.Context, rawURL string) (Draft, error) {
-	body, final, err := f.get(ctx, rawURL, netguard.MaxHTMLBytes)
+	body, final, ctype, err := f.get(ctx, rawURL, netguard.MaxHTMLBytes)
 	if err != nil {
 		return Draft{}, err
 	}
-	return Parse(final, strings.NewReader(string(body)))
+	// Content-Type・BOM・<meta charset> から文字コードを判定して UTF-8 にする(Shift_JIS 等の国内サイト向け)
+	r, err := charset.NewReader(bytes.NewReader(body), ctype)
+	if err != nil {
+		r = bytes.NewReader(body)
+	}
+	return Parse(final, r)
 }
 
 // Image は rawURL の画像を最大 max バイト読んで返す。形式の判定はしない(storage.Save が行う)。
 // エラーは Draft と同じ規則。
 func (f *Fetcher) Image(ctx context.Context, rawURL string, max int64) ([]byte, error) {
-	b, _, err := f.get(ctx, rawURL, max)
+	b, _, _, err := f.get(ctx, rawURL, max)
 	return b, err
 }
 
 // get は rawURL を取得し、本文(最大 max バイト)と最終 URL(リダイレクト後)を返す。
-func (f *Fetcher) get(ctx context.Context, rawURL string, max int64) ([]byte, *url.URL, error) {
+func (f *Fetcher) get(ctx context.Context, rawURL string, max int64) ([]byte, *url.URL, string, error) {
 	u, err := netguard.ValidateURL(rawURL)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %v", netguard.ErrInvalidURL, err)
+		return nil, nil, "", fmt.Errorf("%w: %v", netguard.ErrInvalidURL, err)
 	}
 	req.Header.Set("User-Agent", userAgent)
 	resp, err := f.client.Do(req)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, nil, fmt.Errorf("%w: %d", ErrUpstreamStatus, resp.StatusCode)
+		return nil, nil, "", fmt.Errorf("%w: %d", ErrUpstreamStatus, resp.StatusCode)
 	}
 	b, err := netguard.ReadLimited(resp.Body, max)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
-	return b, resp.Request.URL, nil
+	return b, resp.Request.URL, resp.Header.Get("Content-Type"), nil
 }
 
 // collapse は前後の空白を除き、連続する空白を半角空白 1 つに詰める。

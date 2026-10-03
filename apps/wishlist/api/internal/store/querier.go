@@ -16,6 +16,7 @@ type Querier interface {
 	DeleteItem(ctx context.Context, id int64) (int64, error)
 	DeleteItemSiteOverrides(ctx context.Context, itemID int64) error
 	GetGenre(ctx context.Context, id int64) (Genre, error)
+	GetGenreForUpdate(ctx context.Context, id int64) (Genre, error)
 	GetItem(ctx context.Context, id int64) (Item, error)
 	GetItemForUpdate(ctx context.Context, id int64) (Item, error)
 	GetSite(ctx context.Context, id int64) (Site, error)

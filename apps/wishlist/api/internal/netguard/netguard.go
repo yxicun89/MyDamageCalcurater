@@ -42,8 +42,9 @@ var (
 
 // Options は NewClient の設定。ゼロ値なら既定値を使う。
 type Options struct {
-	Timeout      time.Duration // 0 なら DefaultTimeout
-	MaxRedirects int           // 0 なら DefaultMaxRedirects
+	Timeout time.Duration // 0 なら DefaultTimeout
+	// MaxRedirects は追ってよいリダイレクトの回数(これを超える 1 回で ErrTooManyRedirects)。0 なら DefaultMaxRedirects
+	MaxRedirects int
 	// AllowAddr は接続してよいアドレスかを返す。nil なら IsPublic。テストで httptest(127.0.0.1)を許すために差し替える。
 	AllowAddr func(netip.Addr) bool
 }
@@ -151,6 +152,10 @@ var blockedPrefixes = []netip.Prefix{
 	v4Prefix(192, 0, 0, 0, 24),  // IETF プロトコル割り当て
 	v4Prefix(198, 18, 0, 0, 15), // ベンチマーク用
 	v4Prefix(240, 0, 0, 0, 4),   // 予約済み
+	// IPv6 から IPv4 への変換・トンネル用。中の IPv4 が内部向けでも通れてしまうため拒否する。
+	netip.MustParsePrefix("64:ff9b::/96"),   // NAT64
+	netip.MustParsePrefix("64:ff9b:1::/48"), // NAT64(ローカル用)
+	netip.MustParsePrefix("2002::/16"),      // 6to4
 }
 
 func v4Prefix(a, b, c, d byte, bits int) netip.Prefix {

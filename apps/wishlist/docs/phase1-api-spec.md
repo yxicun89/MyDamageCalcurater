@@ -16,6 +16,8 @@ API 契約は [../api/openapi.yaml](../api/openapi.yaml)。ここには、実装
 - **from-url / image_url の http(s) 以外**:422(外部取得はしない)
 - **画像の Cache-Control**:`public, max-age=31536000, immutable`(openapi.yaml にヘッダーを追記。下記「契約の変更」)。`X-Content-Type-Options: nosniff` も付ける
 - **存在しない商品への refresh**:404(存在すれば 501)
+- **文字コード**:OGP 取得は `golang.org/x/net/html/charset` で判定する(判定できなければ UTF-8 とみなす)
+- **SSRF の拒否範囲**:NAT64(64:ff9b::/96・64:ff9b:1::/48)と 6to4(2002::/16)も拒否する(中の IPv4 が内部向けでも通れてしまうため)
 - **画像の削除**:形式は正しいがファイルが無いときは成功扱い(冪等)。形式外の名前は ErrNotFound
 
 ## 受け入れ条件とテスト
@@ -73,6 +75,7 @@ API 契約は [../api/openapi.yaml](../api/openapi.yaml)。ここには、実装
 | AC-O4 | `<head>` の外の meta も読む | `TestParse` |
 | AC-O5 | `Fetcher.Draft` は取得して Parse。リダイレクト後の最終 URL を基準に解決 | `TestFetcher_Draft` |
 | AC-O6 | 2xx 以外 → `ErrUpstreamStatus`、HTML 2 MiB 超 → `netguard.ErrTooLarge`、URL 違反 → `netguard.ErrInvalidURL`、既定クライアントでループバック → `netguard.ErrForbiddenAddress` | `TestFetcher_Draft_Errors` |
+| AC-O8 | 取得した HTML の文字コードを Content-Type・BOM・`<meta charset>` から判定して UTF-8 として読む(Shift_JIS 等) | `TestFetcher_Draft_ShiftJIS` |
 | AC-O7 | `Fetcher.Image` は最大 max バイト(ちょうどは可)。エラーは Draft と同じ規則 | `TestFetcher_Image` |
 
 ### internal/item — Repository 契約 `internal/item/itemtest/contract.go`(メモリ実装 `memory_test.go`、MySQL 実装 `mysql_test.go`(`-tags mysql`))
@@ -96,7 +99,7 @@ API 契約は [../api/openapi.yaml](../api/openapi.yaml)。ここには、実装
 |---|---|---|
 | AC-V1 | 商品の作成で画像を保存し、ImagePath は保存した名前 | `TestService_CreateItem` |
 | AC-V2 | 作成に失敗したら画像を残さない。画像が不正なら商品を作らない。検査で弾くときは画像を保存しない | `TestService_CreateItem_Rollback` |
-| AC-V3 | 入力の検査 → `ErrInvalid`(空・空白だけの名前、文字数上限(rune)、負の min_price、不正な fetch_type、不正な検索 URL(`deeplink.ErrInvalidTemplate` も包む)) | `TestService_Validation` |
+| AC-V3 | 入力の検査 → `ErrInvalid`(空・空白だけの名前、文字数上限(rune)、負の min_price、不正な fetch_type、不正な検索 URL(`deeplink.ErrInvalidTemplate` も包む)、http/https 以外の source_url) | `TestService_Validation` |
 | AC-V4 | 既定値:query_template 省略 → `{name} {option}`、fetch_type 省略 → link_only | `TestService_Defaults` |
 | AC-V5 | 画像の差し替えは成功したら古い画像を消す。商品が無い・画像が不正なら新しい画像を残さず ImagePath も変えない | `TestService_ReplaceImage` |
 | AC-V6 | 商品の削除で画像も消す | `TestService_DeleteItem` |
@@ -109,14 +112,14 @@ API 契約は [../api/openapi.yaml](../api/openapi.yaml)。ここには、実装
 | AC-H2 | `/healthz`(`{"status":"ok"}`)と `/images/{name}` は認証なし | `TestNoAuthEndpoints` |
 | AC-H3 | エラーはすべて `{"code","message"}` だけ(存在しないパス 404・不正な id/クエリ 400・壊れた JSON 400・型違い 400) | `TestErrorShape` |
 | AC-H4 | multipart の登録 → 201。image_url は `images/<UUID v4>.<ext>`、site_overrides は `[]`、null の項目は null か省略 | `TestCreateItem_Multipart` |
-| AC-H5 | multipart の不正(画像・name 無し・genre_id が数でない → 400、存在しないジャンル・空の名前・負の min_price・SVG・10 MiB 超 → 422)。失敗時に画像を残さない | `TestCreateItem_MultipartErrors` |
+| AC-H5 | multipart の不正(画像・name 無し・genre_id が数でない → 400、存在しないジャンル・空の名前・負の min_price・http/https 以外の source_url・SVG・10 MiB 超 → 422)。失敗時に画像を残さない | `TestCreateItem_MultipartErrors` |
 | AC-H6 | JSON(image_url)の登録はサーバーが取得して保存する | `TestCreateItem_JSON` |
-| AC-H7 | image_url が http(s) 以外 → 422(取得しない)、禁止アドレス → 422、取得失敗 → 502、大きすぎ・画像でない → 422、image_url なし → 400、存在しないジャンル → 422。画像を残さない | `TestCreateItem_JSONErrors` |
+| AC-H7 | image_url が http(s) 以外 → 422(取得しない)、禁止アドレス → 422、取得失敗 → 502、大きすぎ・画像でない → 422、image_url なし → 400、存在しないジャンル → 422。画像を残さない。入力が不正(空の名前・不正な source_url)なら外部の画像を取りに行かない | `TestCreateItem_JSONErrors` |
 | AC-H8 | from-url は下書きを返し保存しない(genre_id はそのまま返す。省略なら null。画像なしは null) | `TestDraftFromURL` |
 | AC-H9 | from-url の失敗(http(s) 以外 → 422・取得しない、url なし → 400、禁止アドレス → 422、取得失敗・HTML 上限超え → 502) | `TestDraftFromURL_Errors` |
 | AC-H10 | 一覧の並びと genre_id の絞り込み。空でも `{"items":[]}` | `TestListItems` |
 | AC-H11 | 存在しない商品は GET/PATCH/DELETE/PUT image/estimates/refresh/listings すべて 404 | `TestItemNotFound` |
-| AC-H12 | PATCH:null で消す・省略は変えない・site_overrides 全件置き換え・422 の各条件 | `TestUpdateItem` |
+| AC-H12 | PATCH:null で消す・省略は変えない・site_overrides 全件置き換え・422 の各条件(http/https 以外の source_url を含む) | `TestUpdateItem` |
 | AC-H13 | PUT image で差し替え(古い画像は 404)、SVG は 422。DELETE は 204 で画像も消える | `TestReplaceImageAndDelete` |
 | AC-H14 | estimates は空の sites と refreshing:false、refresh は 501 `not_implemented`、listings は `{"listings":[]}`(W-06) | `TestEstimatesPhase1` |
 | AC-H15 | `/images/{name}` は Content-Type(png/jpeg/gif/webp)・`Cache-Control: public, max-age=31536000, immutable`・`X-Content-Type-Options: nosniff`。形式外・無い → 404 | `TestImages` |

@@ -140,16 +140,20 @@ func (s *server) CreateItem(ctx context.Context, req api.CreateItemRequestObject
 		if strings.TrimSpace(b.ImageUrl) == "" {
 			return nil, badRequest("image_url is required")
 		}
-		data, err := s.fetchImage(ctx, b.ImageUrl)
-		if err != nil {
-			return nil, err
-		}
 		in = item.NewItem{GenreID: b.GenreId, Name: b.Name, OptionText: b.OptionText, QueryOverride: b.QueryOverride, SourceURL: b.SourceUrl}
 		if b.MinPrice != nil {
 			in.MinPrice = b.MinPrice
 		}
 		if b.SortOrder != nil {
 			in.SortOrder = *b.SortOrder
+		}
+		// 外部の画像を取りに行く前に入力を検査する(無駄な取得をしない)
+		if err := item.ValidateNewItem(in); err != nil {
+			return nil, err
+		}
+		data, err := s.fetchImage(ctx, b.ImageUrl)
+		if err != nil {
+			return nil, err
 		}
 		image = bytes.NewReader(data)
 	case req.MultipartBody != nil:
