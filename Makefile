@@ -210,6 +210,14 @@ test-db: ## pokedex(MySQL)・record/team(TiDB)のDBを使うテスト(POKEDEX_TE
 test-db-docker: ## test-db を Docker の使い捨て MySQL・TiDB で流す(終了時に消す。Docker が無ければ失敗。make test には含めない。issue #223)
 	@./scripts/test-db-docker.sh
 
+.PHONY: db-backup
+db-backup: ## DB のバックアップ(MODE=full|journal KIND=pokedex|record|team。接続は DB_HOST/DB_PORT/DB_USER/DB_NAME と MYSQL_PWD。docs/runbooks/data.md。ADR-0225)
+	@./scripts/db-backup.sh "$(or $(MODE),full)" "$(KIND)"
+
+.PHONY: db-restore
+db-restore: ## DB の復元(KIND=… GEN=<世代|latest>。上書きなので CONFIRM_RESTORE=<DB名> が必須。サービスを止めてから。ADR-0225)
+	@./scripts/db-restore.sh "$(KIND)" "$(or $(GEN),latest)"
+
 .PHONY: test-db-backup
 test-db-backup: ## バックアップ→復元の実 DB 往復テスト(Docker の使い捨て TiDB・MySQL。Docker が無ければ失敗。make test には含めない。ADR-0225)
 	@./scripts/db-backup-restore_docker_test.sh

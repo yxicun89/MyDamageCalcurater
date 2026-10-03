@@ -109,7 +109,7 @@ $(ev ez1 dev-z 'DATE_SUB(NOW(6), INTERVAL 1 DAY)')
 $(ev ew1 dev-w 'DATE_SUB(NOW(6), INTERVAL 1 DAY)')
 INSERT INTO favorites (device_id, species_key, snapshot, created_at, updated_at) VALUES ('dev-w', 'k', '{}', NOW(6), NOW(6));
 " >/dev/null
-count() { sql "SELECT COUNT(*) FROM $1 WHERE device_id='$2'$3"; }
+count() { sql "SELECT COUNT(*) FROM $1 WHERE device_id='$2'${3:-}"; }
 
 # ---- 世代を取る
 scripts/db-backup.sh full record
@@ -133,7 +133,8 @@ if grep -q '^dev-w' "$BACKUP_DIR/journal/record.tsv"; then ok "世代取得後�
 # ---- 障害: DB を空から作り直す(クラスタ全損の想定。journal は別の場所なので残る)
 sql "DROP DATABASE record_test; CREATE DATABASE record_test;" >/dev/null 2>&1 || { export DB_NAME=mysql; sql "DROP DATABASE record_test; CREATE DATABASE record_test;" >/dev/null; export DB_NAME=record_test; }
 
-# ---- 復元(確認の値は DB 名)
+# ---- 復元(確認の値は DB 名)。ホストに元からある nats コンテナ(開発用)で誤検知しないよう、復元の前後の差で見る。
+nats_before="$(docker ps -a --format '{{.Names}}' | grep nats | sort || true)"
 CONFIRM_RESTORE=record_test scripts/db-restore.sh record "$gen" | tee "$work/restore.out" >/dev/null || ng "db-restore.sh が失敗した"
 if tail -1 "$work/restore.out" | grep -q '^restore-ok'; then ok "復元が最後まで成功し restore-ok を出す"; else ng "restore-ok が無い: $(cat "$work/restore.out")"; fi
 
@@ -155,8 +156,9 @@ else
   ng "dev-w の journal / 墓石が復元後の DB に無い"
 fi
 
-# ---- AC-B3: 復元スクリプトは JetStream に触れない(静的には db-restore_test.sh が見る)。ここでは実行中に nats コンテナを作っていないことだけ確かめる。
-if docker ps -a --format '{{.Names}}' | grep -q nats; then ng "復元の途中で nats に関わるコンテナがある"; else ok "復元は NATS / JetStream を使わない(AC-B3)"; fi
+# ---- AC-B3: 復元スクリプトは JetStream に触れない(静的には db-restore_test.sh が見る)。ここでは復元の前後で nats コンテナが増減していないことだけ確かめる。
+nats_after="$(docker ps -a --format '{{.Names}}' | grep nats | sort || true)"
+if [ "$nats_before" != "$nats_after" ]; then ng "復元の前後で nats に関わるコンテナが増減した"; else ok "復元は NATS / JetStream を使わない(AC-B3)"; fi
 
 # ---- pokedex(MySQL): マスタの往復
 use_mysql

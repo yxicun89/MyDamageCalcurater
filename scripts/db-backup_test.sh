@@ -134,7 +134,9 @@ if [ -e "$work/backups/team/$(gen_id $((now - 31 * day)))" ]; then ok "他の ki
 if [ -e "$work/backups/record/$(gen_id $now)/dump.sql.gz" ]; then ok "今回取った世代は消さない"; else ng "今回の世代が無い"; fi
 
 # 6) purge journal の同期: 世代と別の場所(journal/)に追記のみ。重複しない・既存行を書き換えない
-printf 'dev-a\t2026-10-01T00:00:00.000000Z\ndev-b\t2026-10-02T00:00:00.000000Z\n' > "$work/rows1"
+# 行の時刻は now からの相対(固定日付だと now=1800000000 の90日より古くなり、保持の判定で消える。ADR-0225 追記)
+ts_a=$(iso_us $((now - 10 * day))); ts_b=$(iso_us $((now - 9 * day))); ts_c=$(iso_us $((now - 8 * day))); ts_d=$(iso_us $((now - 7 * day)))
+printf 'dev-a\t%s\ndev-b\t%s\n' "$ts_a" "$ts_b" > "$work/rows1"
 EXTRA_ENV=(BACKUP_NOW=$now FAKE_JOURNAL_ROWS="$work/rows1")
 run_backup journal record
 journal="$work/backups/journal/record.tsv"
@@ -144,7 +146,7 @@ else
   ng "journal 同期(rc=${rc}): ${out} / $(cat "$journal" 2>&1)"
 fi
 head_before=$(cat "$journal" 2>/dev/null)
-printf 'dev-a\t2026-10-01T00:00:00.000000Z\ndev-b\t2026-10-02T00:00:00.000000Z\ndev-c\t2026-10-03T00:00:00.000000Z\n' > "$work/rows2"
+printf 'dev-a\t%s\ndev-b\t%s\ndev-c\t%s\n' "$ts_a" "$ts_b" "$ts_c" > "$work/rows2"
 EXTRA_ENV=(BACKUP_NOW=$now FAKE_JOURNAL_ROWS="$work/rows2")
 run_backup journal record
 if [ "$(wc -l < "$journal" | tr -d ' ')" = 3 ] && [ "$(head -2 "$journal")" = "$head_before" ] && [ "$(tail -1 "$journal" | cut -f1)" = dev-c ]; then
@@ -156,7 +158,7 @@ fi
 EXTRA_ENV=(BACKUP_NOW=$now FAKE_JOURNAL_ROWS="$work/rows3")
 run_backup journal record
 if [ "$(wc -l < "$journal" | tr -d ' ')" = 3 ]; then ok "DB 側の journal が空でも、保持した行は消えない"; else ng "journal の行が減った: $(cat "$journal")"; fi
-printf 'dev-d\t2026-10-04T00:00:00.000000Z\n' > "$work/rows4"
+printf 'dev-d\t%s\n' "$ts_d" > "$work/rows4"
 EXTRA_ENV=(BACKUP_NOW=$now FAKE_JOURNAL_ROWS="$work/rows4")
 run_backup full record
 if grep -q '^dev-d' "$journal"; then ok "full の実行でも journal を同期する"; else ng "full が journal を同期していない"; fi

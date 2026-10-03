@@ -1,6 +1,6 @@
 # ADR-0225: MySQL / TiDB のバックアップと復元(P7-4)
 
-- 状態: 提案(2026-10-03。spec-writer。テスト先行で、実装は後続。critic 未実施)
+- 状態: 実装済み(2026-10-03。critic 未実施)
 - 日付: 2026-10-03
 - 関連: ADR-0209 §3 #5・#5b・#7、§9(要件の正)、ADR-0211(TiDB。`devices`・`purge_journal`)、ADR-0220(失効ジョブ)、
   ADR-0100(pokedex の DB 運用)、docs/runbooks/data.md「d. 再生成できないものと MySQL の論理バックアップ」、
@@ -124,3 +124,15 @@ purge journal の DB 外保管、復元の順序を担うものが無い。一�
 
 - 実クラスタ・共有 k3d での実バックアップ・復元の初回実行(DB を上書きする。`CONFIRM_RESTORE` が必須)。
 - クラウドの保存先と暗号化(§7 の3)、purge journal の同時追記先(§7 の1)、#297 の方針。
+
+## 実装時の追記(2026-10-03)
+
+- **TiDB への mysqldump**: `--single-transaction` のままでは `UNLOCK TABLES` が TiDB で開いたトランザクションを確定し、後続の
+  `ROLLBACK TO SAVEPOINT sp` が `SAVEPOINT sp does not exist (1305)` で失敗する。record・team は `--init-command="SET autocommit=0"` を付ける
+  (SAVEPOINT 以降が1つのトランザクション = 一貫した読み取り)。ほかに `--no-tablespaces --set-gtid-purged=OFF` を付ける。
+  `tidb_snapshot` は unistore に GC セーフポイントが無く使えないので採らない。
+- **同じ秒の再実行**は、検証を通った新しい世代で同名の世代を置き換える(テストの `full` が同じ `BACKUP_NOW` で2回流れるため)。
+- **テストの期待値を2点変更**(弱めてはいない): (1) `db-backup_test.sh` の journal の行の時刻を固定日付から `now` 基準の相対にした。
+  `now=1800000000`(2027-01-15)に対し行が 2026-10-0x だと106日前で、保持90日の判定(正しい)で消えてしまい、期待(3行残る)と矛盾していたため。
+  (2) `db-backup-restore_docker_test.sh` の `count` が `$3` 無しで `set -u` に落ちていたので `${3:-}` にし、
+  nats の検査をホストに元からある開発用 nats コンテナで誤検知しないよう、復元の前後の差で見る形にした(意図は同じ)。

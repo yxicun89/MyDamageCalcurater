@@ -324,7 +324,7 @@ make deploy-latest
 何もしなくてよい。次の Job(`make import-k8s` か CronJob)が固定版を取り直す。
 PVC を作り直す手順は、上の「importer の PVC の容量」の c にある。
 
-### d. 再生成できないものと、MySQL の論理バックアップ(issue #262)
+### d. 再生成できないもの(issue #262)
 
 pokedex のマスタは上のとおり再生成できるのでバックアップ不要。**再生成できないもの**は次のとおり。
 
@@ -332,10 +332,65 @@ pokedex のマスタは上のとおり再生成できるのでバックアップ
 |---|---|---|
 | Secret `mysql-auth`(root・用途別ユーザーのパスワード・DSN) | 既存 PVC の MySQL に入れなくなる(`make up` は Secret が無いと乱数で作り直すため、PVC と食い違う) | Secret か PVC のどちらかだけを消さない。両方消すなら空の DB から作り直す(上の a) |
 | Secret `tidb-root-auth` | 既存の TiDB に入れなくなる | 同上 |
-| record・team の保存データ(TiDB) | 計算イベント・お気に入り・構築が戻らない | ローカルはバックアップ手順なし(`make down` で消える)。残したい間は `make down` しない。クラウドのバックアップは P7-4 |
+| record・team の保存データ(TiDB) | 計算イベント・お気に入り・構築が戻らない | 下の d2「論理バックアップと復元」(ADR-0225)。クラスタごと消す前に、先にバックアップする |
 | レジストリ(`balance-registry`)の image | balance が ImagePullBackOff | 作り直したら push し直す(`docs/runbooks/cluster-rebuild.md`) |
 
-手元の確認用に、DB の論理バックアップを取って**別名 DB** に戻せる。`pokedex` 本体は上書きしない。
+### d2. 論理バックアップと復元(P7-4・ADR-0225。pokedex・record・team)
+
+`scripts/db-backup.sh` と `scripts/db-restore.sh` を使う(`make db-backup`・`make db-restore` は薄い入口)。保存先は
+`data/generated/backups/`(Git の無視対象。無視されない場所は拒否される。ディレクトリ 0700・ファイル 0600)。
+ダンプには端末 ID・計算イベント・構築名が入るので機密として扱い、ログ・PR・Issue に中身を貼らない。暗号化はしない(ローカル限定。クラウド等へ出すなら別 ADR で暗号化を必須にする)。
+**実クラスタ(k3d)上の実バックアップ・復元は未実施**(TiDB・record/team の Deployment が未配備。配備後に1回通して結果を plan.md に書く)。
+
+接続は環境変数で渡す(パスワードは `MYSQL_PWD`。コマンドライン引数に出さない)。クラスタの DB へは `kubectl port-forward` で手元から届かせる。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+export DB_HOST=127.0.0.1 DB_PORT=4000 DB_USER=root DB_NAME=record
+read -rs -p 'DB password: ' MYSQL_PWD && export MYSQL_PWD   # 値は Secret から。画面・履歴に残さない
+scripts/db-backup.sh full record          # 世代を取る(devices が無いダンプは失敗し、世代を残さない)。世代は30日で失効
+scripts/db-backup.sh journal record       # purge journal の同期だけ(軽い)
+ls data/generated/backups/record data/generated/backups/journal
+```
+
+確認: `backup record <世代 ID> ...` と `journal record: N -> M 行` が出て、`data/generated/backups/record/<世代 ID>/` に `dump.sql.gz` と `MANIFEST`(tables に `devices` を含む)がある。
+
+**purge journal の定期同期**(削除要求の記録を、世代とは別の追記専用ファイル `journal/<kind>.tsv` に保つ。保持90日):
+cron / launchd から `scripts/db-backup.sh journal record` と `... journal team` を**1時間ごと〜日次**に流す。例(cron。環境変数は実行ユーザーの環境で用意する):
+
+```
+0 * * * * cd /path/to/repo && scripts/db-backup.sh journal record && scripts/db-backup.sh journal team
+```
+
+**穴(明記)**: 同期の間隔の間に受けた削除要求は、DB が全損するとこの保管先にも無く、復元後に再適用できない(世代取得後〜次の同期までに削除された端末のデータが復活しうる)。
+サービスが削除要求の受付時に DB 外へ同時に追記する実装は未対応(ADR-0225 §7 の1)。間隔を短くして穴を小さくする。
+
+**復元**(record・team。DB を上書きするので**人間の確認が要る操作**。`CONFIRM_RESTORE` に DB 名が必須):
+
+1. record-svc / team-svc の Deployment を 0 にして止める(配備後。名前は `kubectl -n pokecalc get deploy` で確かめる)。
+2. 失効ジョブを DB へ向けて流すコマンドを用意する(record は `record expire`、team は `team expire`)。必要な環境変数は record が
+   `RECORD_APP_DSN`・`RECORD_CALC_EVENTS_RETENTION_DAYS`・`RECORD_FAVORITES_RETENTION_DAYS`・`RECORD_DEVICE_ROW_EXPIRY_DAYS`・`RECORD_PURGE_JOURNAL_RETENTION_DAYS`・`RECORD_EXPIRE_BATCH_LIMIT`
+   (team は `TEAM_` 版)。保持日数は本番の ConfigMap と同じ値にする。
+3. 復元する(`latest` は検証を通る最新の世代。世代 ID を指定してもよい):
+
+```sh
+export RESTORE_EXPIRE_CMD='cd services && go run ./record/cmd/record expire'   # 上の環境変数を export した状態で
+CONFIRM_RESTORE="$DB_NAME" scripts/db-restore.sh record latest
+```
+
+   順序は「ダンプの読み込み → 保管済み journal の取り込み → 墓石・journal の再適用(削除済みデータの除去) → 失効ジョブの強制実行」。**最後の1行が `restore-ok record <世代 ID>` のときだけ**次へ進む(途中で失敗すると出ない。再実行してよい)。
+4. record-svc / team-svc を元の replicas に戻す。JetStream は再生しない(削除済みデータが戻るため)。
+5. 確認: 削除済みの端末のデータが出ないこと(`calc_events`・`favorites` 等を端末 ID で数える。API 越しの確認は配備後の人間確認)。
+
+pokedex(MySQL)は墓石も journal も無く、`scripts/db-backup.sh full pokedex` → `CONFIRM_RESTORE=pokedex scripts/db-restore.sh pokedex latest` で表を置き換える
+(マスタは再生成できるので、通常は取り込み直しで足りる)。
+
+自動テスト: `make test-scripts`(偽物の mysql/mysqldump。`make test` に含む)と、`make test-db-backup`(Docker の使い捨て TiDB・MySQL での往復。`make test` には含めない)。
+TiDB への `mysqldump` は `UNLOCK TABLES` で `SAVEPOINT` が消えて失敗するため、`--init-command="SET autocommit=0"` を付けている(2026-10-03 に実機で確認)。
+
+### d3. 手元の確認用に、別名 DB へ戻す(pokedex。k3d の MySQL)
+
+`pokedex` 本体は上書きしない。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
