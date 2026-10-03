@@ -28,6 +28,11 @@ CLUSTER="$CLUSTER" ./scripts/require-k3d-context.sh up.sh
 echo "namespace を作成します..."
 kubectl apply -f deploy/k8s/base/namespace.yaml
 
+# Traefik(k3s 同梱)のタイムアウト(issue #299・ADR-0801)。既定は無期限なので有限の値を置く。
+# kube-system の HelmChartConfig のため overlay の namespace 変換に含めず、ここで適用する。
+echo "Traefik のタイムアウトを設定します..."
+kubectl apply -f deploy/k8s/overlays/local/traefik/helmchartconfig.yaml
+
 # TiDB Operator の導入(ADR-0211 §3.1)。`make up` は6レーン共通の入口のため、この失敗で
 # record/team に無関係な他サービスの起動まで止めない(非致命。tidb_ready=0 の場合、以降の
 # TiDB 関連ステップは実行時にすべてスキップする)。

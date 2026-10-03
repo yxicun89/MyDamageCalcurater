@@ -2023,6 +2023,13 @@ Impact: Web レーンは文言・再送の上限・再試行の扱いを揃え�
 - 詰まったときの戻し方: `kubectl -n pokecalc delete networkpolicy default-deny-ingress`(許可だけが残る。データは消えない)
 
 
+## 2026-10-02: issue #236 の balance 側をクローズ(タイプバランスレーン → Web レーンへ。ADR-0413)
+Decision: balance の `X-Device-Id`/`X-Session-Id` を gateway と同じ正準 UUID 検証にした(素早さの ADR-0606 と同じ複製方式)。
+ErrorCode は `missing_header`(欠落・空)・`invalid_header`(UUID でない・重複)を追加し、`missing_request_context` を廃止した
+(`services/balance/api/openapi.yaml` 0.8.0。意図的な破壊的変更。判定順は不変)。
+Reason: Traefik 直結では gateway の検証が効かず、balance だけ緩い非空チェックだった。
+Impact: Web レーンへ: `web/src/api/balance.gen.ts` を再生成済み、`web/src/i18n/ja.ts` の `balanceErrorText` を `missing_header`/`invalid_header` に
+追従済み(`BalanceScreen.test.tsx` のコード一覧も)。`balanceClient.ts` は正準 UUID を送っており変更不要。他に balance の code 文字列に依存する箇所があれば確認してほしい。
 ## 2026-10-02: 一括計算の defenderOverride に ranks・status を足した(API レーン → Web・iOS レーンへ。issue #274/#272・ADR-0216)
 
 - `BulkCalcRequest.defenderOverride` は `{ abilityId?, ranks?: RankBlock, status?: StatusCondition }`。全行(全プリセット × 持ち物 × 特性)に一律で当たる。ランクは各 -6..+6(外は 400 `invalid_input`)、未知の status は 400 `invalid_enum`
@@ -2052,3 +2059,8 @@ Impact(他レーンへ):
   `make deploy-latest` に record/team を加えるかは運用レーンの判断(今回は触っていない)。up.sh は record/team の Ready を待たない。
 - 失効ジョブは local・cloud とも `suspend: true`(実データへ初めて向ける承認 ADR-0209・ADR-0220 未決事項 0 が済むまで。既定案。plan.md ブロッカー)。手動実行は `kubectl -n pokecalc create job --from=cronjob/record-expire record-expire-manual-...`。承認後に local の suspend patch を外す。
 - 保持日数は ConfigMap `record-retention`・`team-retention` の1か所(ADR-0211 §7 の既定値。変えるときは ADR も更新)。
+
+## 2026-10-03: PR のマージは対象 PR の CI が全件成功のときだけ AI が実行してよい(ADR-0803。ユーザー決定)
+Decision: bash-guard の PR マージを無条件ブロックから、`gh pr checks` が終了コード 0 のときだけ通す条件付きに変更。`--admin`・`gh api` 直叩き・main への直接 push は引き続き不可。
+Reason: ユーザー指示「全レーンでテストと CI が通っていれば AI が merge してよい。クラウドへの勝手なデプロイ(課金)と機密情報の公開以外は作業を止めたくない」。
+Impact: CLAUDE.md・AGENTS.md・COORDINATION.md・ADR-0800 を整合。.codex も同じ bash-guard を呼ぶため同じ規則が効く。
