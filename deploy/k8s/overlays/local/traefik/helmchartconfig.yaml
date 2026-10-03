@@ -1,0 +1,18 @@
+# k3d(k3s 同梱)の Traefik に有限のタイムアウトを置く(issue #299・ADR-0801)。
+# Traefik の既定は writeTimeout = 0 と responseHeaderTimeout = 0(どちらも無期限)で、balance・speed・judge の
+# Ingress は gateway を通らず直接届くため、サービスの WriteTimeout だけが上流側の締め切りになっていた。
+#   - responseHeaderTimeout 20s: 直接届くサービスの writeTimeout(15 秒)・gateway の上流の既定(10 秒)より長い
+#   - writeTimeout 70s: gateway の writeTimeout(60 秒。assets の転送)より長い
+# 値は services/gateway/deploytest/traefik_timeouts_test.go が各サービスの定数と突き合わせる。
+# namespace が kube-system なので overlays/local の kustomization(namespace: pokecalc)には含めず、
+# scripts/up.sh が kubectl apply -f で適用する。クラウド(Traefik を使わない構成)には置かない。
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    additionalArguments:
+      - "--entryPoints.web.transport.respondingTimeouts.writeTimeout=70s"
+      - "--serversTransport.forwardingTimeouts.responseHeaderTimeout=20s"
