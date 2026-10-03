@@ -46,7 +46,21 @@ func assertServiceURL(t *testing.T, envName string, u *url.URL, service string) 
 func TestManifestGatewayWorkload(t *testing.T) {
 	deploytest.AssertWorkload(t, deploytest.Workload{
 		Service: gatewayService, ImageRepo: gatewayImageRepo, AddrEnv: envAddr, DefaultAddr: defaultAddr,
+		MetricsPort: 9090, MetricsAddrEnv: envMetricsAddr, DefaultMetricsAddr: defaultMetricsAddr,
 	})
+}
+
+// issue #216: /metrics はメトリクス専用ポートにだけあり、公開入口(Ingress)は http ポートだけを向く。
+func TestManifestGatewayIngressDoesNotExposeMetrics(t *testing.T) {
+	var ing deploytest.Ingress
+	deploytest.Find(t, deploytest.BaseObjects(t, gatewayService), "Ingress", gatewayService).Decode(t, &ing)
+	for _, rule := range ing.Spec.Rules {
+		for _, p := range rule.HTTP.Paths {
+			if port := p.Backend.Service.Port; port.Name == deploytest.MetricsPortName || port.Number == 9090 {
+				t.Errorf("Ingress の backend が metrics ポート %+v を向いている(公開入口に /metrics を出さない)", port)
+			}
+		}
+	}
 }
 
 // AC-S3: gateway の Ingress は traefik・path "/" Prefix・ホスト指定なしで gateway の Service を指す

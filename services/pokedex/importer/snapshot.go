@@ -44,6 +44,9 @@ type CalcMove struct {
 	Category  string `json:"category"`
 	BasePower int    `json:"basePower"`
 	Priority  int    `json:"priority"`
+	// Target は技の対象。calc は全体技にだけ持つので、fetch-calc は省略を "" で出す。
+	// 必須(ADR-0136): キー自体が無い古い取得物はデコードで拒否する("" と「無い」を区別するため *string)。
+	Target *string `json:"target"`
 }
 
 // ShowdownSnapshot は Showdown の champions mod から抽出した正規化スナップショット。
@@ -105,6 +108,8 @@ type ShowdownMove struct {
 	// Mechanism は技の機構(多段・固定ダメージ・威力変動 等)の判定材料(ADR-0121)。必須:
 	// 無い(古い取得物)と全技が「通常の技」として黙って分類されるので、デコードで拒否する。
 	Mechanism *ShowdownMoveMechanism `json:"mechanism"`
+	// Target は技の対象(取得元の文字列のまま。全技が持つ)。必須(ADR-0136): 無い古い取得物はデコードで拒否する。
+	Target *string `json:"target"`
 }
 
 // ShowdownMoveMechanism は技の機構の判定材料。Showdown の技データの表現のまま持つ

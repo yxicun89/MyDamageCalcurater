@@ -24,7 +24,7 @@ WHERE species_key = ?
 ORDER BY slot;
 
 -- name: ListMoves :many
-SELECT id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority
+SELECT id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority, target
 FROM moves
 ORDER BY id;
 
@@ -192,8 +192,8 @@ INSERT INTO items (id, name_ja, name_ja_source, name_en)
 VALUES (?, ?, ?, ?);
 
 -- name: InsertMove :exec
-INSERT INTO moves (id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO moves (id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority, target)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: InsertSpecies :exec
 INSERT INTO species (`key`, dex_no, form, showdown_id, name_ja, name_ja_source, name_en, type1, type2,

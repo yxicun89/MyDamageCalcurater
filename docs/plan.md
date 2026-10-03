@@ -399,6 +399,11 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
       (`web/src/app/withOnlineMaster.tsx`。読めなければ日本語の案内と再試行)。balance のエラーはコードを日本語の文言に写像し、
       英語の message を出さない(`balanceErrorText`)。ヘッダーの切替の名前を「ダメージ計算の実行場所」に変更。契約・生成物の変更なし。
       判定のエラー補助行(サーバー message)は未対応(別 issue 候補)
+- [x] issue #216・#244・#246・#217(APIレーン。ADR-0406 追記・ADR-0202 追記): gateway の `/metrics` をメトリクス専用ポート(`GATEWAY_METRICS_ADDR` 既定 :9090・Service の `metrics` ポート・ServiceMonitor・NetworkPolicy `allow-prometheus-gateway-metrics`)に分け、公開側は 404 /
+  メトリクスの path ラベルをルート種別(calc・pokedex・assets・web・healthz・none 等)に(`httpmetrics` の複製は不変更) /
+  ログを JSON 1 形式にしアクセスログと `X-Request-Id`(生成・検証・上流転送・応答)を gateway・calc に(`services/internal/reqlog`) /
+  `version.Version` を Dockerfile の `ARG VERSION` と `-ldflags -X` で埋め込み、起動ログと `/healthz` に出す(`make api-docker-build` が git の短縮 SHA を渡す)。契約変更なし。
+
 - [x] issue #316・#245(APIレーン。ADR-0200 §4 追記): (#316) calc-svc が契約で必須の `sp`(と StatBlock の6キー)の欠落を 400 `invalid_input` にする
       (calc の attacker・defender、bulk の attacker、reverse の known。`decodeStrict` が生の JSON でキーの有無を確かめる。judge と同じ方式、生成型は不変)。
       (#245) `Individual.moveId` を契約から削除(Web は参照なし、iOS は同じ PR で追従。`attacker.moveId` は `unknown_field`)、pokedex の searchSpecies・getSpecies・searchMoves・searchItems に
@@ -458,3 +463,4 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
   WASM は素通し(特性は従来どおり `defenderAbilities`)。条件の置き場は `domain/calcConditions.ts`。防御側の状態異常は式に効かないので出さない。iOS は別レーン
   - [x] **P5-5c よく計算する相手(チップ。ADR-0317)**: recordClient(`web/src/record/`)・CalcScreen の結果の下のチップ(マウント時1回取得・失敗/0件は黙って非表示)・App はオンラインのときだけ接続・`SpeciesSearchField` に任意 prop `selectedName`。履歴一覧(API 無し)は対象外
   - [ ] **P5-5d 端末データの削除 UI**: record-svc の API と ADR-0209 §8 の文言
+- [x] issue #288 のデータレーン分(ADR-0136): 技の対象(`moves.target`。Showdown の15種の文字列のまま・NULL 可・CHECK。migration 000010)を取得(fetch-showdown/fetch-calc)・照合(全体技の食い違いは攻撃技 Blocker)・投入・`master.MoveTarget`(`IsSpread`)まで。engine・WASM・read model は不変。`MasterMove`/公開 API への追加は API レーンへ依頼。取得物は毎回作り直す(古い形で止まらないことをテストで固定)
