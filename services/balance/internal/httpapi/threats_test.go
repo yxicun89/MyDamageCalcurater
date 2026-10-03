@@ -59,8 +59,8 @@ func postThreats(t *testing.T, server http.Handler, body string) *httptest.Respo
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, threatsPath, strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("X-Device-Id", "test-device")
-	request.Header.Set("X-Session-Id", "test-session")
+	request.Header.Set("X-Device-Id", "11111111-1111-4111-8111-111111111111")
+	request.Header.Set("X-Session-Id", "22222222-2222-4222-a222-222222222222")
 	server.ServeHTTP(recorder, request)
 	return recorder
 }
@@ -433,12 +433,13 @@ func TestThreatsRequiresRequestContext(t *testing.T) {
 		name      string
 		deviceID  string
 		sessionID string
+		wantCode  api.ErrorCode
 	}{
-		{name: "missing both"},
-		{name: "missing device", sessionID: "test-session"},
-		{name: "missing session", deviceID: "test-device"},
-		{name: "blank device", deviceID: "   ", sessionID: "test-session"},
-		{name: "blank session", deviceID: "test-device", sessionID: "\t"},
+		{name: "missing both", wantCode: api.MissingHeader},
+		{name: "missing device", sessionID: "22222222-2222-4222-a222-222222222222", wantCode: api.MissingHeader},
+		{name: "missing session", deviceID: "11111111-1111-4111-8111-111111111111", wantCode: api.MissingHeader},
+		{name: "blank device", deviceID: "   ", sessionID: "22222222-2222-4222-a222-222222222222", wantCode: api.InvalidHeader},
+		{name: "blank session", deviceID: "11111111-1111-4111-8111-111111111111", sessionID: "\t", wantCode: api.InvalidHeader},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -456,8 +457,8 @@ func TestThreatsRequiresRequestContext(t *testing.T) {
 			if recorder.Code != http.StatusBadRequest {
 				t.Fatalf("status = %d, want 400; body=%s", recorder.Code, recorder.Body.String())
 			}
-			if got := decodeError(t, recorder.Body.Bytes()); got.Code != api.MissingRequestContext {
-				t.Errorf("code = %q, want missing_request_context", got.Code)
+			if got := decodeError(t, recorder.Body.Bytes()); got.Code != tt.wantCode {
+				t.Errorf("code = %q, want %q", got.Code, tt.wantCode)
 			}
 		})
 	}
@@ -502,7 +503,7 @@ func TestThreatsDecisionOrder(t *testing.T) {
 		wantCode    api.ErrorCode
 		wantMessage string
 	}{
-		{name: "headers before body and read models", deps: none, noHeaders: true, body: body(fiveMoves, plain), wantStatus: http.StatusBadRequest, wantCode: api.MissingRequestContext},
+		{name: "headers before body and read models", deps: none, noHeaders: true, body: body(fiveMoves, plain), wantStatus: http.StatusBadRequest, wantCode: api.MissingHeader},
 		{name: "invalid member body before missing read models", deps: none, body: body(fiveMoves, plain), wantStatus: http.StatusBadRequest, wantCode: api.InvalidRequest},
 		{name: "invalid threat body before missing read models", deps: none, body: body(plain, fiveMoves), wantStatus: http.StatusBadRequest, wantCode: api.InvalidRequest},
 		{name: "oversized body before missing read models", deps: none, body: oversized, wantStatus: http.StatusRequestEntityTooLarge, wantCode: api.RequestTooLarge},
@@ -531,8 +532,8 @@ func TestThreatsDecisionOrder(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, threatsPath, strings.NewReader(tt.body))
 			request.Header.Set("Content-Type", "application/json")
 			if !tt.noHeaders {
-				request.Header.Set("X-Device-Id", "test-device")
-				request.Header.Set("X-Session-Id", "test-session")
+				request.Header.Set("X-Device-Id", "11111111-1111-4111-8111-111111111111")
+				request.Header.Set("X-Session-Id", "22222222-2222-4222-a222-222222222222")
 			}
 			New(tt.deps).ServeHTTP(recorder, request)
 			if recorder.Code != tt.wantStatus {
