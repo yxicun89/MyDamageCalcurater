@@ -76,6 +76,7 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/image-tag_test.sh
 	@./scripts/k3d-deploy-tagged_test.sh
 	@./scripts/up-secrets_test.sh
+	@./scripts/k3d-m2-deploy_test.sh
 	@./scripts/test-db-docker_test.sh
 	@./scripts/db-backup_test.sh
 	@./scripts/db-restore_test.sh

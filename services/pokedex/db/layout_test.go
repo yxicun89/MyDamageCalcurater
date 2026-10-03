@@ -921,12 +921,13 @@ func TestUpScriptKeepsSecretValuesOutOfArgvAndLogs(t *testing.T) {
 // pokecalc namespace に確実に入ることを検査する(ADR-0211 §3.2・§9。critic レビューで
 // 判明: job-migrate.yaml は kustomize の namespace transformer を経由しない単独 apply の
 // ため、`-n pokecalc` を明示しないと k3d の既定 namespace〈default〉に作られてしまう)。
+// Job を apply する手順は scripts/k3d-m2-deploy.sh へ移した(ADR-0226。up.sh と deploy-latest が呼ぶ)。
 func TestUpScriptAppliesRecordTeamJobsWithNamespace(t *testing.T) {
-	s := readRepoFile(t, "scripts/up.sh")
+	s := readRepoFile(t, "scripts/k3d-m2-deploy.sh")
 	for _, svc := range []string{"record", "team"} {
 		re := regexp.MustCompile(`kubectl\s+-n\s+pokecalc\s+apply\s+-f\s+deploy/k8s/base/` + svc + `/job-migrate\.yaml`)
 		if !re.MatchString(s) {
-			t.Errorf("scripts/up.sh が deploy/k8s/base/%s/job-migrate.yaml を -n pokecalc 付きで apply していない", svc)
+			t.Errorf("scripts/k3d-m2-deploy.sh が deploy/k8s/base/%s/job-migrate.yaml を -n pokecalc 付きで apply していない", svc)
 		}
 	}
 }

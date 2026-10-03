@@ -91,6 +91,19 @@ var (
 	tidbPDPod = npPod{namespace: appNamespace, labels: map[string]string{
 		"app.kubernetes.io/instance": "pokecalc-tidb", "app.kubernetes.io/component": "pd",
 		"app.kubernetes.io/managed-by": "tidb-operator"}}
+	tidbKVPod = npPod{namespace: appNamespace, labels: map[string]string{
+		"app.kubernetes.io/instance": "pokecalc-tidb", "app.kubernetes.io/component": "tikv",
+		"app.kubernetes.io/managed-by": "tidb-operator"}}
+	// TiDB Operator の controller-manager(namespace tidb-admin)。k3d で実測したラベル(ADR-0226)。
+	tidbOperatorPod = npPod{namespace: "tidb-admin", labels: map[string]string{
+		appNameLabel: "tidb-operator", "app.kubernetes.io/component": "controller-manager",
+		"app.kubernetes.io/instance": "tidb-operator"}}
+	impostorTidbOperatorPod = npPod{namespace: "default", labels: tidbOperatorPod.labels}
+	// TidbInitializer が作る Job の Pod(k3d で実測したラベル。ADR-0226)。TiDB の 4000 へ入る。
+	tidbInitializerPod = npPod{namespace: appNamespace, labels: map[string]string{
+		appNameLabel: "pokecalc-tidb-initializer", "app.kubernetes.io/component": "initializer",
+		"app.kubernetes.io/instance": "pokecalc", "app.kubernetes.io/managed-by": "tidb-operator",
+		"app.kubernetes.io/part-of": "pokecalc"}}
 )
 
 // ---- 描画の読み込み ----
@@ -504,6 +517,11 @@ func allowedFlows() []npFlow {
 	}
 	add("tidb 内部(tidb → pd)", ext(tidbServerPod), ext(tidbPDPod), 2379)
 	add("tidb 内部(pd → tidb)", ext(tidbPDPod), ext(tidbServerPod), 10080)
+	// TiDB Operator は PD の health・TiDB の status・TiKV の status を見て、クラスタを順に立ち上げる(ADR-0226)。
+	add("TiDB Operator → pd(2379)", ext(tidbOperatorPod), ext(tidbPDPod), 2379)
+	add("TiDB Operator → tidb(status 10080)", ext(tidbOperatorPod), ext(tidbServerPod), 10080)
+	add("TiDB Operator → tikv(status 20180)", ext(tidbOperatorPod), ext(tidbKVPod), 20180)
+	add("TidbInitializer の Pod → tidb", ext(tidbInitializerPod), ext(tidbServerPod), tidbPort)
 	// 監視: Prometheus(observability)が ServiceMonitor 対象の /metrics を取る
 	for _, n := range httpServices {
 		port := podPort
@@ -551,6 +569,10 @@ func deniedFlows() []npFlow {
 	add("record-expire → nats(失効ジョブは NATS に触れない)", app("record-expire"), app("nats"), natsPort)
 	add("record-expire → record", app("record-expire"), app("record"), podPort)
 	add("gateway → tidb", app("gateway"), ext(tidbServerPod), tidbPort)
+	add("default namespace の偽 TiDB Operator → pd(namespace まで見る。ADR-0226)", ext(impostorTidbOperatorPod), ext(tidbPDPod), 2379)
+	add("TiDB Operator → tidb の 4000 番(許可は status ポートだけ)", ext(tidbOperatorPod), ext(tidbServerPod), tidbPort)
+	add("TiDB Operator → mysql", ext(tidbOperatorPod), app("mysql"), mysqlPort)
+	add("TidbInitializer の Pod → mysql", ext(tidbInitializerPod), app("mysql"), mysqlPort)
 	add("calc → tidb", app("calc"), ext(tidbServerPod), tidbPort)
 	add("Traefik → record(Ingress の向き先ではない)", ext(traefikPod), app("record"), podPort)
 	add("default namespace の一時 Pod → team", ext(strayPod), app("team"), podPort)

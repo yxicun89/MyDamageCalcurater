@@ -10,5 +10,6 @@ resources:
   - allow-prometheus-metrics.yaml
   - allow-tidb-client-ingress.yaml
   - allow-tidb-internal.yaml
+  - allow-tidb-operator-ingress.yaml
   - allow-traefik-ingress.yaml
   - default-deny-ingress.yaml

@@ -97,5 +97,21 @@ kubectl -n pokecalc logs "job/$JOB"
 ```
 確認: ログに `"msg":"expire done"` があり、`remaining` が `false`(`true` なら続きは次回。もう一度流す)。
 
-承認後に定期実行を有効にする: `deploy/k8s/overlays/local/cronjob-expire-suspend-patch.yaml` を消し、`overlays/local/kustomization.yaml` の `patches` の参照を外して `make up`(または overlay を apply)。
+承認後に定期実行を有効にする: `deploy/k8s/overlays/local/cronjob-expire-suspend-patch.yaml` と `overlays/local-m2/cronjob-expire-suspend-patch.yaml`(複製)を消し、それぞれの `kustomization.yaml` の `patches` の参照を外して `make up`(または overlay を apply)。
 
+## 9. M2(NATS・TiDB・record・team)を k3d に入れる・入れ直す
+
+`make deploy-latest` が最後に自動で行う(ADR-0226)。M2 だけを入れ直すときは単独で流せる(冪等。既存の Secret・DB のデータは変えない)。
+クラスタの削除・作り直し・PVC の削除はしない。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+./scripts/k3d-m2-deploy.sh
+kubectl -n pokecalc get pods
+```
+確認: 最後の行が `k3d-m2-deploy: NATS・TiDB・record・team を入れた`。`pokecalc-tidb-pd-0`・`-tikv-0`・`-tidb-0`・`record-*`・`team-*` が `Running`(`READY` が `1/1`、`tidb-0` は `2/2`)、
+`pokecalc-tidb-tidb-initializer-*`・`record-migrate-*`・`team-migrate-*` が `Completed`。失敗したときは `失敗 N 件` の下に理由が出る(calc・gateway・pokedex は影響を受けない)。
+
+TidbInitializer が `Failed` のとき(`kubectl -n pokecalc logs job/pokecalc-tidb-tidb-initializer -c mysql-client` にエラー)は、
+初期化 SQL が途中で止まり、root のパスワードだけ設定済みになっていることがある(再実行しても接続できない)。
+復旧は docs/adr/0226-api-m2-k3d-deploy.md の「復旧手順」に従う。
