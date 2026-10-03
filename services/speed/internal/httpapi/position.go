@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"example.com/pokecalc/services/speed/internal/api"
+	"example.com/pokecalc/services/speed/internal/httpguard"
 	"example.com/pokecalc/services/speed/internal/speed"
 	"github.com/labstack/echo/v5"
 )
@@ -57,6 +58,9 @@ func getSpeedPosition(c *echo.Context, deps Dependencies) error {
 		return internalError(c, err)
 	}
 
+	if httpguard.Expired(c.Request().Context()) {
+		return overloaded(c)
+	}
 	result, err := speed.Position(roster, req)
 	if err != nil {
 		if errors.Is(err, speed.ErrUnknownPokemon) {
@@ -132,10 +136,13 @@ func positionRequestFromPreset(body api.PositionRequest) (speed.PositionRequest,
 		return speed.PositionRequest{}, errInvalidPositionBody
 	}
 	return speed.PositionRequest{
-		Mode:      speed.PositionModePreset,
-		PokemonID: *body.PokemonId,
-		Preset:    speed.PresetID(*body.Preset),
-		Scarf:     *body.Scarf,
+		Mode:          speed.PositionModePreset,
+		PokemonID:     *body.PokemonId,
+		Preset:        speed.PresetID(*body.Preset),
+		Scarf:         *body.Scarf,
+		Tailwind:      optionalBool(body.Tailwind),
+		Paralysis:     optionalBool(body.Paralysis),
+		TableTailwind: optionalBool(body.TableTailwind),
 	}, nil
 }
 
@@ -159,12 +166,15 @@ func positionRequestFromCustom(body api.PositionRequest) (speed.PositionRequest,
 	}
 
 	return speed.PositionRequest{
-		Mode:      speed.PositionModeCustom,
-		PokemonID: *body.PokemonId,
-		SP:        *body.Sp,
-		Nature:    nature,
-		Rank:      *body.Rank,
-		Scarf:     *body.Scarf,
+		Mode:          speed.PositionModeCustom,
+		PokemonID:     *body.PokemonId,
+		SP:            *body.Sp,
+		Nature:        nature,
+		Rank:          *body.Rank,
+		Scarf:         *body.Scarf,
+		Tailwind:      optionalBool(body.Tailwind),
+		Paralysis:     optionalBool(body.Paralysis),
+		TableTailwind: optionalBool(body.TableTailwind),
 	}, nil
 }
 
@@ -174,7 +184,7 @@ func positionRequestFromRaw(body api.PositionRequest) (speed.PositionRequest, er
 	if body.Value == nil {
 		return speed.PositionRequest{}, errInvalidPositionBody
 	}
-	if body.Preset != nil || body.Scarf != nil || body.Sp != nil || body.Nature != nil || body.Rank != nil {
+	if body.Preset != nil || body.Scarf != nil || body.Tailwind != nil || body.Paralysis != nil || body.Sp != nil || body.Nature != nil || body.Rank != nil {
 		return speed.PositionRequest{}, errInvalidPositionBody
 	}
 
@@ -183,7 +193,7 @@ func positionRequestFromRaw(body api.PositionRequest) (speed.PositionRequest, er
 		return speed.PositionRequest{}, errInvalidPositionBody
 	}
 
-	req := speed.PositionRequest{Mode: speed.PositionModeRaw, Value: *body.Value}
+	req := speed.PositionRequest{Mode: speed.PositionModeRaw, Value: *body.Value, TableTailwind: optionalBool(body.TableTailwind)}
 	if body.PokemonId != nil {
 		if !pokemonIDPattern.MatchString(*body.PokemonId) {
 			return speed.PositionRequest{}, errInvalidPositionBody
@@ -226,4 +236,9 @@ func toPositionResponse(result speed.PositionResult) api.PositionResponse {
 		}
 	}
 	return response
+}
+
+// optionalBool は省略(nil)を false として読む(ADR-0607 §1。省略・null・false は同じ)。
+func optionalBool(b *bool) bool {
+	return b != nil && *b
 }

@@ -442,9 +442,9 @@ func TestHTTPSourceContextEndsWhileReadingBody(t *testing.T) {
 	}
 }
 
-// critic 指摘: 本文が上限(maxMasterExportBytes)を超えたら ErrInvalidMaster(内容の不正として扱う)。
+// critic 指摘: 本文が上限(MaxExportBytes)を超えたら ErrInvalidMaster(内容の不正として扱う)。
 func TestHTTPSourceRejectsOversizedBody(t *testing.T) {
-	huge := bytes.Repeat([]byte(" "), maxMasterExportBytes+1)
+	huge := bytes.Repeat([]byte(" "), MaxExportBytes+1)
 	_, srv := newFakePokedex(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -462,8 +462,39 @@ func TestHTTPSourceRejectsOversizedBody(t *testing.T) {
 
 // critic 指摘: DecodeExport 自身も本文の上限を超えたら ErrInvalidMaster にする(HTTPSource 経由に限らない)。
 func TestDecodeExportRejectsOversizedBody(t *testing.T) {
-	huge := bytes.Repeat([]byte(" "), maxMasterExportBytes+1)
+	huge := bytes.Repeat([]byte(" "), MaxExportBytes+1)
 	if _, err := DecodeExport(bytes.NewReader(huge)); !errors.Is(err, ErrInvalidMaster) {
 		t.Fatalf("DecodeExport(oversized) err = %v, want ErrInvalidMaster", err)
+	}
+}
+
+// issue #322: 上限ちょうどの本文(有効な JSON の後ろを空白で埋めた長さ MaxExportBytes)は読める。
+// 上限を 1 バイト超えると ErrInvalidMaster(LimitReader は limit+1 バイトまで読み、超過を検知する)。
+func TestExportBodyAtAndOverLimit(t *testing.T) {
+	example := readExample(t)
+	pad := func(n int) []byte {
+		return append(append([]byte{}, example...), bytes.Repeat([]byte(" "), n-len(example))...)
+	}
+	exact := pad(MaxExportBytes)
+	if len(exact) != MaxExportBytes {
+		t.Fatalf("len(exact) = %d, want %d", len(exact), MaxExportBytes)
+	}
+	if _, err := DecodeExport(bytes.NewReader(exact)); err != nil {
+		t.Errorf("DecodeExport(上限ちょうど) = %v, want nil", err)
+	}
+	if _, err := DecodeExport(bytes.NewReader(pad(MaxExportBytes + 1))); !errors.Is(err, ErrInvalidMaster) {
+		t.Errorf("DecodeExport(上限+1) = %v, want ErrInvalidMaster", err)
+	}
+
+	_, srv := newFakePokedex(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(exact)
+	})
+	src, err := NewHTTPSource(srv.URL, 10*time.Second)
+	if err != nil {
+		t.Fatalf("NewHTTPSource = %v", err)
+	}
+	if _, err := src.Fetch(context.Background()); err != nil {
+		t.Errorf("Fetch(上限ちょうど) = %v, want nil", err)
 	}
 }

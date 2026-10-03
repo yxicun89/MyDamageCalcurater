@@ -11,6 +11,7 @@ import (
 
 	"example.com/pokecalc/services/judge/internal/api"
 	"example.com/pokecalc/services/judge/internal/client"
+	"example.com/pokecalc/services/judge/internal/httpguard"
 	"example.com/pokecalc/services/judge/internal/httpmetrics"
 	"github.com/labstack/echo/v5"
 )
@@ -36,6 +37,11 @@ type Dependencies struct {
 	// that builds Dependencies without this field unaffected. cmd/api/main.go always passes a
 	// positive value (JUDGE_REQUEST_TIMEOUT, default 12s) in production.
 	RequestTimeout time.Duration
+
+	// Guard bounds the outspeed-and-ko requests handled at once (issue #299, ADR-0801). Only
+	// MaxInflight and Code are used here: the whole-request deadline is RequestTimeout above
+	// (ADR-0707), so Guard.Timeout stays zero. The zero value disables the limit.
+	Guard httpguard.Config
 }
 
 // New returns the judge HTTP handler.
@@ -44,10 +50,12 @@ func New(deps Dependencies) *echo.Echo {
 	e.HTTPErrorHandler = writeHTTPError
 	m := httpmetrics.New()
 	e.Use(m.Middleware())
+	e.Use(recoverMiddleware)
 	e.GET(httpmetrics.Path, m.Handler())
+	guard := httpguard.Middleware(deps.Guard)
 	api.RegisterHandlersWithOptions(e, handler{deps: deps}, api.RegisterHandlersOptions{
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
-			"outspeedAndKo": {requireRequestContext},
+			"outspeedAndKo": {guard, requireRequestContext},
 		},
 	})
 	return e
@@ -115,7 +123,36 @@ func writeHTTPError(c *echo.Context, err error) {
 		})
 		return
 	}
+	var statusCoder echo.HTTPStatusCoder
+	if errors.As(err, &statusCoder) {
+		switch statusCoder.StatusCode() {
+		case http.StatusNotFound, http.StatusMethodNotAllowed:
+			// ルートが無い・メソッドが違う。calc-svc と同じく not_found に畳む(ADR-0802 §1)。
+			_ = c.JSON(http.StatusNotFound, api.Error{Code: api.NotFound, Message: "route not found"})
+			return
+		}
+	}
 	echo.DefaultHTTPErrorHandler(false)(c, err)
+}
+
+// recoverMiddleware は panic を回復し、500 internal_error の JSON にする(スタック等を出さない。ADR-0802 §2)。
+func recoverMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c *echo.Context) (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("panic recovered", "path", c.Path(), "panic", r)
+				// 応答を書き始めた後の panic では、JSON を追記せず(本文が壊れる)ログだけ残す。
+				if response, _ := echo.UnwrapResponse(c.Response()); response != nil && response.Committed {
+					return
+				}
+				err = c.JSON(http.StatusInternalServerError, api.Error{
+					Code:    api.InternalError,
+					Message: "internal error",
+				})
+			}
+		}()
+		return next(c)
+	}
 }
 
 // internalError answers 500 internal_error with a fixed message (ADR-0701 §6): an unexpected

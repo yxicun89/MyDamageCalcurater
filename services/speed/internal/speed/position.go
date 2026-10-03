@@ -42,6 +42,11 @@ type PositionRequest struct {
 	Rank      int
 	Scarf     bool
 	Value     int
+	// Tailwind・Paralysis は自分だけに掛かる(preset / custom。raw は無視。ADR-0607 §1)。
+	Tailwind  bool
+	Paralysis bool
+	// TableTailwind は位置を数える表の全行に掛かる追い風(全 mode)。
+	TableTailwind bool
 }
 
 // PositionResult は自分の実数値と、表の中の位置(ADR-0602 §3)。
@@ -132,14 +137,14 @@ func resolvePokemon(roster Roster, pokemonID string) (Pokemon, error) {
 
 // positionResult は roster の 6 プリセットの表(ADR-0601 §2)を組み立て、speedValue の位置
 // (faster/slower/tie)を数える(ADR-0602 §3)。Tie は同速なしでも空 slice(nil にしない)。
-func positionResult(roster Roster, speedValue int, pokemon *Pokemon) (PositionResult, error) {
+func positionResult(roster Roster, req PositionRequest, speedValue int, pokemon *Pokemon) (PositionResult, error) {
 	defs := Presets()
 	ids := make([]PresetID, len(defs))
 	for i, p := range defs {
 		ids[i] = p.ID
 	}
 
-	table, err := BuildTable(roster, ids)
+	table, err := BuildTable(roster, ids, TableField{Tailwind: req.TableTailwind})
 	if err != nil {
 		return PositionResult{}, err
 	}
@@ -172,11 +177,11 @@ func positionFromPreset(roster Roster, req PositionRequest) (PositionResult, err
 	if !ok {
 		return PositionResult{}, ErrNotMinimalPreset
 	}
-	speedValue, err := Speed(Input{BaseSpeed: pokemon.BaseSpeed, SP: def.SP, Nature: def.Nature, Rank: def.Rank, Scarf: req.Scarf})
+	speedValue, err := Speed(Input{BaseSpeed: pokemon.BaseSpeed, SP: def.SP, Nature: def.Nature, Rank: def.Rank, Scarf: req.Scarf, Tailwind: req.Tailwind, Paralysis: req.Paralysis})
 	if err != nil {
 		return PositionResult{}, err
 	}
-	return positionResult(roster, speedValue, &pokemon)
+	return positionResult(roster, req, speedValue, &pokemon)
 }
 
 // positionFromCustom は mode=custom を計算する(ADR-0602 §2): SP・性格・ランクの検証は Speed に任せ
@@ -186,11 +191,11 @@ func positionFromCustom(roster Roster, req PositionRequest) (PositionResult, err
 	if err != nil {
 		return PositionResult{}, err
 	}
-	speedValue, err := Speed(Input{BaseSpeed: pokemon.BaseSpeed, SP: req.SP, Nature: req.Nature, Rank: req.Rank, Scarf: req.Scarf})
+	speedValue, err := Speed(Input{BaseSpeed: pokemon.BaseSpeed, SP: req.SP, Nature: req.Nature, Rank: req.Rank, Scarf: req.Scarf, Tailwind: req.Tailwind, Paralysis: req.Paralysis})
 	if err != nil {
 		return PositionResult{}, err
 	}
-	return positionResult(roster, speedValue, &pokemon)
+	return positionResult(roster, req, speedValue, &pokemon)
 }
 
 // positionFromRaw は mode=raw を計算する(ADR-0602 §2): value は RawSpeedRange の外なら
@@ -209,7 +214,7 @@ func positionFromRaw(roster Roster, req PositionRequest) (PositionResult, error)
 		}
 		pokemon = &resolved
 	}
-	return positionResult(roster, req.Value, pokemon)
+	return positionResult(roster, req, req.Value, pokemon)
 }
 
 // Position は自分の素早さを求め、roster の 6 プリセットの表(ADR-0601 §2)の中の位置を返す(ADR-0602 §3)。

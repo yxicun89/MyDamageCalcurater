@@ -96,12 +96,12 @@ type Observation struct {
 	Note string
 }
 
-// Matches は damage(実点数)が maxHP に対してこの観測を説明できるかを返す(ADR-0010 §R2)。
+// Matches は damage(実点数)が maxHP に対してこの観測を説明できるかを返す(ADR-0010 §R2・ADR-0134)。
 //
-// 真の値 p(観測と同じ単位、S = 100 or 1000)が開区間 (v-1, v+1) に入るかで判定する。
-// これは「切り捨て・四捨五入・切り上げのどの丸め規則で観測 v を作っても真値が入る」最小の区間と同値。
-// v が精度の最大値(100% / 100.0%)のときは、HP バーが頭打ちになるので上側を開ける
-// (99%超のダメージすべてと両立する)。
+// 整数%(Percent)は実機の表示が切り捨てなので、p = 100·damage/maxHP が [v, v+1) に入るかで判定する。
+// x = 100·damage − v·maxHP として、v = 100 は x >= 0(頭打ち)、それ以外は 0 <= x < maxHP。
+// 0.1% 精度(PercentTenths)は出所の丸めが未確認なので、真の値 p(0.1% 単位)が開区間 (v-1, v+1) に入るかで
+// 判定する(切り捨て・四捨五入・切り上げのどれで作っても真値が入る最小の区間。v = 1000 は上側を開ける)。
 // maxHP <= 0 は照合できない(false。panic しない)。
 func (o Observation) Matches(damage, maxHP int) bool {
 	if maxHP <= 0 {
@@ -110,11 +110,15 @@ func (o Observation) Matches(damage, maxHP int) bool {
 	if o.Damage != 0 {
 		return damage == o.Damage
 	}
-	scale, v := 100, o.Percent
-	if o.PercentTenths != 0 {
-		scale, v = 1000, o.PercentTenths
+	if o.PercentTenths == 0 {
+		x := 100*damage - o.Percent*maxHP
+		if o.Percent == 100 {
+			return x >= 0
+		}
+		return 0 <= x && x < maxHP
 	}
-	x := scale*damage - v*maxHP
+	v := o.PercentTenths
+	x := 1000*damage - v*maxHP
 	ax := x
 	if ax < 0 {
 		ax = -ax
@@ -122,7 +126,7 @@ func (o Observation) Matches(damage, maxHP int) bool {
 	if ax < maxHP {
 		return true
 	}
-	return v == scale && x >= 0
+	return v == 1000 && x >= 0
 }
 
 // distanceUnreachable は maxHP <= 0(照合できない)ときの距離。0 にはしない
@@ -148,15 +152,20 @@ func (o Observation) Distance(damage, maxHP int) int {
 	if o.Matches(damage, maxHP) {
 		return 0
 	}
-	scale, v, unit := 100, o.Percent, 10
-	if o.PercentTenths != 0 {
-		scale, v, unit = 1000, o.PercentTenths, 1
+	if o.PercentTenths == 0 {
+		// 区間 [v, v+1) の外側までの距離(ADR-0134 §3)。下限 1 で「0 ⇔ 説明できる」を守る。
+		x := 100*damage - o.Percent*maxHP
+		gap := -x
+		if x >= maxHP {
+			gap = x - maxHP
+		}
+		return max(1, 10*gap/maxHP)
 	}
-	x := scale*damage - v*maxHP
+	x := 1000*damage - o.PercentTenths*maxHP
 	if x < 0 {
 		x = -x
 	}
-	return (x / maxHP) * unit
+	return x / maxHP
 }
 
 // SPRange は候補が返す SP の1区間(両端を含む)。
