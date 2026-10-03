@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"example.com/pokecalc/services/internal/api"
+	"example.com/pokecalc/services/internal/reqlog"
 )
 
 // msgUpstreamUnavailable は上流に接続できない・タイムアウトしたときの固定文。
@@ -83,6 +84,8 @@ func newReverseProxy(target *url.URL, timeout time.Duration, override http.Round
 		// 上流が付けた Access-Control-* は外へ出さない。許可オリジンのときだけ gateway が
 		// 付け直す(ACAO はちょうど1つ。必須1)。
 		stripCORSHeaders(resp.Header)
+		// X-Request-Id は gateway が確定した 1 つだけを返す(上流が同じヘッダを返しても二重にしない。issue #246)。
+		resp.Header.Del(reqlog.Header)
 		if origin := resp.Request.Header.Get("Origin"); originAllowed(origin) {
 			setCORSAllowed(resp.Header, origin)
 		}
@@ -95,11 +98,11 @@ func newReverseProxy(target *url.URL, timeout time.Duration, override http.Round
 		// 出すと運用上のノイズになる。ADR-0202 §5 の「クライアントへは固定文だけ」は上流障害についての
 		// 規定で、クライアント起因の中断はそもそも応答を返す相手が居ないので何もしない(ADR-0202 §5 追記)。
 		if errors.Is(err, context.Canceled) {
-			slog.Debug("gateway: クライアントが要求を中断した", "upstream", target.Host)
+			slog.DebugContext(r.Context(), "gateway: クライアントが要求を中断した", "upstream", target.Host)
 			return
 		}
 		// クライアントへは固定文だけ(Go の内部情報を出さない)。詳細はログにだけ残す(推奨4)。
-		slog.Warn("gateway: 上流に到達できない", "upstream", target.Host, "error", err)
+		slog.WarnContext(r.Context(), "gateway: 上流に到達できない", "upstream", target.Host, "error", err)
 		// 上流に届かなかった応答にも CORS を付ける(必須2: 接続不可・タイムアウトの 503 で
 		// ACAO が抜け落ちる退行の修正)。r は Rewrite 後の outbound リクエストだが、
 		// Origin ヘッダは Rewrite で変更していないのでそのまま読める。

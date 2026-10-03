@@ -161,8 +161,8 @@ func TestWebDoesNotShadowReservedRoutes(t *testing.T) {
 				t.Errorf("status = %d, want %d; body=%s", rec.Code, tt.wantStatus, rec.Body.String())
 			}
 			if tt.path == "/healthz" && tt.method == http.MethodGet {
-				if got := strings.TrimSpace(rec.Body.String()); got != `{"status":"ok"}` {
-					t.Errorf("body = %s, want {\"status\":\"ok\"}(gateway 自身)", got)
+				if got := strings.TrimSpace(rec.Body.String()); !strings.HasPrefix(got, `{"status":"ok","version":`) {
+					t.Errorf("body = %s, want {\"status\":\"ok\",\"version\":...}(gateway 自身)", got)
 				}
 			}
 		})
