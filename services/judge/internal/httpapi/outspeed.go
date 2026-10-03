@@ -80,6 +80,8 @@ type individualWire struct {
 	Ranks      *rankBlockWire `json:"ranks"`
 	AbilityID  *string        `json:"abilityId"`
 	ItemID     *string        `json:"itemId"`
+	// Status は json.RawMessage で受け、型検査と enum 検査は toStatus に任せる(MoveID と同じ理由)。
+	Status json.RawMessage `json:"status"`
 }
 
 // defenderCandidateWire mirrors DefenderCandidate(ADR-0704 §1): individualWire の全欄に加えて、
@@ -101,7 +103,7 @@ type defenderCandidateWire struct {
 // ADR-0704 テストの期待値・plan.md の JD4/JD5 critic 指摘の積み残し)。
 var individualWireKeys = map[string]bool{
 	"speciesKey": true, "natureId": true, "sp": true, "ranks": true,
-	"abilityId": true, "itemId": true,
+	"abilityId": true, "itemId": true, "status": true,
 }
 
 // candidateWireKeys extends individualWireKeys with moveId (a defenders[] element is an
@@ -226,6 +228,7 @@ type individualInput struct {
 	ranks      engine.Ranks
 	abilityID  string
 	itemID     string
+	status     string
 }
 
 // defenderInput is one DefenderCandidate after validation (ADR-0704 §1): individualInput plus
@@ -343,6 +346,7 @@ func outspeedAndKo(c *echo.Context, deps Dependencies, params api.OutspeedAndKoP
 			Ranks:     req.attacker.ranks,
 			Scarf:     judge.IsChoiceScarf(req.attacker.itemID, deps.ChoiceScarfItemID),
 			Tailwind:  req.speedField.attackerTailwind,
+			Paralysis: isParalysis(req.attacker.status),
 		}
 		defenderSpeedInput := judge.Individual{
 			BaseSpeed: defenderSpecies[i].BaseStats.Spe,
@@ -351,6 +355,7 @@ func outspeedAndKo(c *echo.Context, deps Dependencies, params api.OutspeedAndKoP
 			Ranks:     defender.ranks,
 			Scarf:     judge.IsChoiceScarf(defender.itemID, deps.ChoiceScarfItemID),
 			Tailwind:  req.speedField.defenderTailwind,
+			Paralysis: isParalysis(defender.status),
 		}
 		comparison, err := judge.CompareSpeed(
 			attackerSpeedInput,
@@ -591,7 +596,38 @@ func toIndividualInput(wire individualWire) (individualInput, error) {
 	if wire.ItemID != nil {
 		input.itemID = *wire.ItemID
 	}
+	status, err := toStatus(wire.Status)
+	if err != nil {
+		return individualInput{}, err
+	}
+	input.status = status
 	return input, nil
+}
+
+// toStatus validates an Individual's optional status (ADR-0712). A missing key, an explicit
+// null, and "none" all mean no status (returned as "", so calc-svc isn't sent the field). Any
+// other value must be an exact (case-sensitive) member of the contract's enum; a non-string,
+// empty or unknown value is rejected. The enum is the generated api.IndividualStatus, not a copy.
+func toStatus(raw json.RawMessage) (string, error) {
+	if raw == nil || string(raw) == "null" {
+		return "", nil
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return "", errInvalidOutspeedBody
+	}
+	if !api.IndividualStatus(s).Valid() {
+		return "", errInvalidOutspeedBody
+	}
+	if api.IndividualStatus(s) == api.IndividualStatusNone {
+		return "", nil
+	}
+	return s, nil
+}
+
+// isParalysis reports whether status is paralysis (the only status that changes speed. ADR-0712).
+func isParalysis(status string) bool {
+	return api.IndividualStatus(status) == api.IndividualStatusParalysis
 }
 
 // toDefenderInput validates a DefenderCandidate: the shared Individual fields (via
@@ -668,6 +704,7 @@ func toClientIndividual(input individualInput) client.Individual {
 		NatureID:   input.natureID,
 		AbilityID:  input.abilityID,
 		ItemID:     input.itemID,
+		Status:     input.status,
 		SP: client.StatBlock{
 			HP: input.sp.HP, Atk: input.sp.Atk, Def: input.sp.Def,
 			SpA: input.sp.SpA, SpD: input.sp.SpD, Spe: input.sp.Spe,
