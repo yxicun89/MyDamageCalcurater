@@ -1,12 +1,12 @@
 # wishlist(apps/wishlist/CLAUDE.md)のターゲット。ルートの Makefile から include する(パスはリポジトリ直下基準)。
-#   make wishlist-test / wishlist-lint / wishlist-build / wishlist-kustomize
+#   make wishlist-test / wishlist-lint / wishlist-build / wishlist-kustomize / wishlist-gen / wishlist-test-mysql
 # ルートの go.work には入れず GOWORK=off で単独モジュールとして扱う(docs/design.md W-01)。
 
 GO ?= go
 WISHLIST_DIR ?= apps/wishlist
 WISHLIST_API_DIR ?= $(WISHLIST_DIR)/api
 
-.PHONY: wishlist-test wishlist-lint wishlist-build wishlist-kustomize
+.PHONY: wishlist-test wishlist-lint wishlist-build wishlist-kustomize wishlist-gen wishlist-test-mysql
 
 # ルートの make test / lint / build に wishlist を含める(CI で回すため。ユーザー決定 2026-10-03)。
 test: wishlist-test
@@ -27,3 +27,14 @@ wishlist-build:
 
 wishlist-kustomize:
 	@kubectl kustomize $(WISHLIST_DIR)/deploy/k8s/overlays/local >/dev/null
+
+# OpenAPI(oapi-codegen)と sqlc の生成。既存の services・tools モジュールの go tool を変更せずに使う(docs/design.md W-01)。
+# 生成物(internal/api/openapi.gen.go・internal/store/*.go)はコミットする(W-02)。
+wishlist-gen:
+	@cd services && GOWORK=off $(GO) tool oapi-codegen -config ../$(WISHLIST_API_DIR)/internal/api/cfg.yaml ../$(WISHLIST_API_DIR)/openapi.yaml
+	@cd tools && GOWORK=off $(GO) tool sqlc generate -f ../$(WISHLIST_API_DIR)/internal/store/sqlc.yaml
+	@echo "wishlist-gen: $(WISHLIST_API_DIR)/internal/api/openapi.gen.go・internal/store を生成"
+
+# MySQL 実装の契約テスト(-tags mysql)。WISHLIST_TEST_DSN が無ければ docker の mysql:9.7.2 を使い捨てで起動する。
+wishlist-test-mysql:
+	@$(WISHLIST_DIR)/scripts/test-mysql.sh

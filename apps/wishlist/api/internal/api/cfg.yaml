@@ -1,0 +1,11 @@
+# oapi-codegen 設定(docs/design.md W-02・W-08)。生成はリポジトリ直下で `make wishlist-gen`。
+# services モジュールの go tool(oapi-codegen)を変更せずに使うため、output は services/ からの相対パス。
+# nullable-type: PATCH の「省略」と「null」を区別する(nullable.Nullable[T])。
+package: api
+output: ../apps/wishlist/api/internal/api/openapi.gen.go
+generate:
+  models: true
+  echo5-server: true
+  strict-server: true
+output-options:
+  nullable-type: true
