@@ -67,6 +67,12 @@ func (r *calcRequest) run() (calcResultDTO, error) {
 	if err := validateIndividual("防御側", defender); err != nil {
 		return calcResultDTO{}, err
 	}
+	if err := r.Attacker.Species.checkMegaItem("攻撃側", r.Attacker.Item); err != nil {
+		return calcResultDTO{}, err
+	}
+	if err := r.Defender.Species.checkMegaItem("防御側", r.Defender.Item); err != nil {
+		return calcResultDTO{}, err
+	}
 
 	res, err := engine.CalcDamage(engine.DamageInput{
 		Format: format, Attacker: attacker, Defender: defender, Move: move, Field: field, Critical: r.Critical,
@@ -220,6 +226,12 @@ func (r *bulkRequest) run() (bulkResultDTO, error) {
 	if err := validateSpecies("防御側の種族", species); err != nil {
 		return bulkResultDTO{}, err
 	}
+	if err := r.Attacker.Species.checkMegaItem("攻撃側", r.Attacker.Item); err != nil {
+		return bulkResultDTO{}, err
+	}
+	if err := r.DefenderSpecies.checkMegaItems("itemVariants", r.ItemVariants); err != nil {
+		return bulkResultDTO{}, err
+	}
 
 	res, err := engine.CalcBulk(engine.BulkInput{
 		Format: format, Attacker: attacker, DefenderSpecies: species, Move: move, Field: field,
@@ -370,6 +382,12 @@ func (r *reverseRequest) run() (reverseResultDTO, error) {
 		return reverseResultDTO{}, err
 	}
 	if err := validateSpecies("推定側の種族", species); err != nil {
+		return reverseResultDTO{}, err
+	}
+	if err := r.Known.Species.checkMegaItem("既知の側", r.Known.Item); err != nil {
+		return reverseResultDTO{}, err
+	}
+	if err := r.UnknownSpecies.checkMegaItems("itemCandidates", r.ItemCandidates); err != nil {
 		return reverseResultDTO{}, err
 	}
 

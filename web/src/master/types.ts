@@ -7,14 +7,8 @@ import type { Ability, Item, Move, Species, StatKey, TypeChart } from "../engine
 /** マスタの種族。learnset は画面のための追加フィールド。 */
 export interface MasterSpecies extends Species {
   readonly learnset: readonly string[];
-  /**
-   * メガシンカ後の種族か(docs/mega-evolution-spec.md、ADR-0320)。画面のための追加フィールドで engine には渡さない
-   * (toEngineSpecies が落とす)。省略は false と同じ(公開 API・古いキャッシュが返さない間の互換)。読むときは
-   * domain/mega.ts の isMegaSpecies を通す。
-   */
-  readonly isMega?: boolean;
-  /** メガシンカに要る持ち物(メガストーン)の ID。メガでなければ null か省略。 */
-  readonly requiredItemId?: string | null;
+  // isMega・requiredItemId は Species(engine/types.ts)が持つ。メガ種族の持ち物の検証のため境界へも渡す
+  // (domain/requests.ts の toEngineSpecies。ADR-0321)。読むときは domain/mega.ts の isMegaSpecies を通す。
 }
 
 /**

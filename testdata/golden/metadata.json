@@ -76,7 +76,7 @@
     },
     {
       "scope": "battle",
-      "reason": "Doubles are covered only by doubles.json and doubles-random.jsonl.gz (ADR-0222): screens 2732/4096 and spread 3072/4096 for allAdjacent/allAdjacentFoes moves. No tera (absent from Pokemon Champions; ADR-0222), ally effects (Helping Hand, Friend Guard), Dynamax, form transformations or unsupported status effects"
+      "reason": "Doubles are covered only by doubles.json and doubles-random.jsonl.gz (ADR-0222): screens 2732/4096 and spread 3072/4096 for allAdjacent/allAdjacentFoes moves. Tera is absent from Pokemon Champions and appears only in tera.json and tera-random.jsonl.gz as an optional feature (ADR-0224): singles only; attacker STAB and has-type checks (grounding, Psychic Terrain priority, Sand/Snow defense) use the tera type, while defender type effectiveness ignores it (Champions generation quirk); no Stellar, Tera Blast or 60 BP floor (absent from the Champions generation). Doubles have no tera; ally effects (Helping Hand, Friend Guard), Dynamax, form transformations or unsupported status effects"
     },
     {
       "scope": "KO",
@@ -99,10 +99,13 @@
         "stats-species.jsonl.gz",
         "typechart.json",
         "doubles.json",
-        "doubles-random.jsonl.gz"
+        "doubles-random.jsonl.gz",
+        "tera.json",
+        "tera-random.jsonl.gz"
       ],
       "koCrossChecks": 37,
-      "doublesRandomSeed": 1145195589
+      "doublesRandomSeed": 1145195589,
+      "teraRandomSeed": 1413829185
     },
     {
       "id": "gen9-legacy-effects",
@@ -162,6 +165,14 @@
     "doubles-random.jsonl.gz": {
       "count": 3000,
       "sha256": "75395eb6428a5f77e3e8fbc7c06fe0cf507662a9f1aa9b70db6e13e1d55f54a2"
+    },
+    "tera.json": {
+      "count": 180,
+      "sha256": "7ab6bc3d480a0b7d13e9516177b4f5213a7e4d9d539e256f41171efaf0c4699d"
+    },
+    "tera-random.jsonl.gz": {
+      "count": 3000,
+      "sha256": "5263bdf50a47a4fa44018e6180e910fc7acf870627ba9b09ebb35ab83023a9ca"
     },
     "typechart.json": {
       "count": 324,

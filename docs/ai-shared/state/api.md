@@ -78,10 +78,11 @@ Status(追記): 2026-10-03 issue #315 のメガ部分実装済み(メガ種族+r
 
 Status(追記): 2026-10-02 issue #211 の API 分(ADR-0218)実装済み・critic PASS・コミット前。公開の `Item` / `Ability` に省略可の `effect` を足し、pokedex-svc が共通マスタで検証して返す(不正は 503)。Web・iOS への連絡は DECISIONS.md。
 Next(2026-10-03 更新):
-(1) 人間の判断待ち: teraType を calc に送られたときの扱い(#497 の未対応の印のまま/黙って無視/400/印を消す。iOS の構築メンバーが送っている。ADR-0222 §4)。ダブルで相手1体の全体技の見せ方。失効ジョブ(record-expire・team-expire)を実データへ初めて向ける承認(ADR-0209。承認までは suspend: true。runbooks/api.md §8)。
+(1) 人間の判断待ち: 防御側テラスで相性を変えるか(本編 SV は変える。既定案は oracle どおり反映しない。反映するなら known_diffs に ADR 付きで登録=承認が必要。ADR-0224 Q1)。teraType は PR #555 でオプション機能として反映済み(指定時のみ。省略時は従来どおり)。ダブルは現状のまま(なんでもよいとのユーザー回答)。失効ジョブ(record-expire・team-expire)を実データへ初めて向ける承認(ADR-0209。承認までは suspend: true。runbooks/api.md §8)。
 (2) 追跡中: #498(calc の打ち切り。engine は純粋なまま)、#505(wasmapi のメガ持ち物検証。データ・Web)、#211 の Web 追従(effect の写し)。
 (3) マージ後の実機確認: k3d で gateway の /metrics が公開側 404・専用ポート 9090 で取得、/healthz に version、/api/record・/api/team の疎通(#469・#490)。
 Status(追記): P5-3b・P5-4b 実装済み(ADR-0220。critic PASS・PR #490 で main 統合済み。失効 CronJob は承認まで suspend)。`deploy/k8s/base/{record,team}`(Deployment・Service・保持日数の ConfigMap・日次の失効 CronJob)、gateway の `GATEWAY_RECORD_URL`・`GATEWAY_TEAM_URL`(base)、`record expire`・`team expire`(同じバイナリのサブコマンド。`internal/expire`。冪等・1回の上限・終了コード 0/1/2)、NetworkPolicy 4本、/metrics と ServiceMonitor、cloud overlay での失効ジョブ suspend、up.sh の server イメージ build。TiDB 実機(`make test-db-docker`)の expire テスト含め green。k3d への実デプロイは未確認(人間が確認)。
 Status(追記): issue #288 の API 分(ADR-0223)実装済み(critic PASS・PR #536 で main 統合済み)。内部 API `MasterMove.target`(必須・nullable)・calc-svc→`engine.Move.Target`(`master.MoveTarget.Engine()`)・公開 `Move.target`(省略可 single/spread。NULL は省く・未知は 503)を配線。使い捨て mysql:9.7.2 で `go test -tags mysql -p 1 ./pokedex/...` 全緑。Web への連絡は decisions/2026-10-03-api-move-target-wiring.md
 Status(追記): 2026-10-03 issue 514 完了(PR #539 で main 統合済み。ADR-0802 追記)。gateway が `/api/*` の上流の非 JSON 5xx を 503 `upstream_unavailable` に正規化(上流の 500 も 503 になり `Retry-After` 等は落ちる)。閉じた下書き(fix/api-325-error-shape)の gateway 部分だけを現 main の proxy.go に手で再適用。critic PASS・PR #542 で main 統合済み。
 Status(追記): 2026-10-03 issue 538 完了(ブランチ fix/api-538-flaky-deadline-test。ADR-0801 追記)。`httpguard.Expired` が期限直後の context を取りこぼす競合を修正(4 複製)。critic PASS・PR #542 で main 統合済み。
+Status(追記): ADR-0224 テラスタルのオプション反映を engine に実装(feat/engine-tera-optional。攻撃側の印を外し防御側の印は残す。ゴールデン tera 全件一致・known_diffs 追加なし)。critic 待ち。

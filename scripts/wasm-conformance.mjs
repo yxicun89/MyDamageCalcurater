@@ -109,6 +109,13 @@ for (const v of vectors) {
   } catch {
     die(`期待値 ${v.name} が JSON ではない: ${e.slice(0, 120)}`);
   }
+  // expectError のベクタ(issue #505)は、その code の失敗封筒が期待値であること(同じバイト列を WASM と比べる)。
+  if (v.expectError) {
+    if (parsed.error?.code !== v.expectError) {
+      die(`期待値 ${v.name} が error.code=${v.expectError} でない: ${e.slice(0, 200)}`);
+    }
+    continue;
+  }
   if (parsed.result === undefined) {
     die(`期待値 ${v.name} が result を持たない(ネイティブ側が未実装かエラー): ${e.slice(0, 200)}`);
   }
