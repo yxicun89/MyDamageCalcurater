@@ -520,3 +520,28 @@ func equalJSON(a, b any) bool {
 	jb, errB := json.Marshal(b)
 	return errA == nil && errB == nil && bytes.Equal(ja, jb)
 }
+
+// MegaRequiredItem(issue #315): 例のマスタでは 9002-001 だけがメガで requiredItemId = testguardite。
+func TestMegaRequiredItem(t *testing.T) {
+	export, err := DecodeExport(bytes.NewReader(readExample(t)))
+	if err != nil {
+		t.Fatalf("DecodeExport(example) = %v", err)
+	}
+	store := newStore(t, export)
+	tests := []struct {
+		key      string
+		wantItem string
+		wantMega bool
+	}{
+		{"9002-001", "testguardite", true},
+		{"9002-000", "", false},
+		{"9001-000", "", false},
+		{"9999-000", "", false},
+	}
+	for _, tt := range tests {
+		id, ok := store.MegaRequiredItem(tt.key)
+		if id != tt.wantItem || ok != tt.wantMega {
+			t.Errorf("MegaRequiredItem(%q) = (%q, %v), want (%q, %v)", tt.key, id, ok, tt.wantItem, tt.wantMega)
+		}
+	}
+}
