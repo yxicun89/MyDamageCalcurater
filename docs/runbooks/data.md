@@ -62,20 +62,25 @@ kubectl -n pokecalc exec mysql-0 -- sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysq
 ## 5a. 投入後に calc・balance・speed へ反映し、動いている版を確かめる(issue #281・#108・ADR-0135)
 
 投入(§4)は DB を書き換えるだけで、calc・balance・speed は起動時に読んだマスタのまま動く(自動の再取得はしない。ADR-0204 §3)。
-投入のたびに、次の順で反映し、版が揃ったことを確かめる。`dataVersion` は `source=version@checksum先頭8桁` の連結で、中身が変わると変わる(ADR-0128)。
+投入のたびに、次の1コマンドで反映して版を揃える。`dataVersion` は `source=version@checksum先頭8桁` の連結で、中身が変わると変わる(ADR-0128)。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-make pokedex-export
-make deploy-latest
-make check-master-version
+make master-release
 ```
-確認: `deploy-latest` が `全サービスを <コミット> の内容で入れ替えた` で終わる(calc は再起動で DB の最新を取り直し、balance・speed は
-export した read model で入れ替わる)。`check-master-version` が calc・balance・speed の3行とも `ok` で、最後の行が
-`calc・balance・speed の版が一致`。`STALE <名前>` が出たら、その consumer がまだ旧版(終了コード 1)。
-`make pokedex-export` は `POKEDEX_DATABASE_DSN` が要る(手順は `docs/runbooks/speed.md`)。
+確認: 最後の行が `master-release: 完了(calc・balance・speed が同じ dataVersion で、smoke も成功)`(終了コード0)。
+中では次を上から順に行い、どこかで失敗すると非0で止まって、旧版の consumer を `STALE <名前>` で表示する。
 
-calc だけを入れ直すなら、`kubectl -n pokecalc rollout restart deployment/calc` のあと `kubectl -n pokecalc rollout status deployment/calc`。
+1. 最新の import Job(CronJob `pokedex-import` 由来。Job は作らない)の完了を待つ。Job が無いときは、先に §4 で投入を流すよう案内して止まる。失敗した Job でも止まる
+2. read model を export して検証(DB の接続は Secret の SELECT 専用 DSN を一時 port-forward で使い、値は表示しない)
+3. export の dataVersion が動いている版と同じなら、`master-release: 変化なし(再生成・rollout はしない)` で終了コード0(何も変えない)
+4. 違えば balance・speed の read model を入れ替え、calc を `rollout restart` して `/readyz` を待つ。Argo CD が管理する balance・speed は飛ばし、`docs/runbooks/<名前>.md` の sync を案内する(その場合、最後の版一致で `STALE` になり非0)
+5. 全 consumer の版一致(`make check-master-version` と同じ)→ `API_SMOKE_STRICT=1 make api-smoke` → balance・speed の readmodel smoke
+
+`STALE` が出たら、その consumer が旧版。原因を直して `make master-release` をもう一度流す(同じ版は何度流しても安全)。
+版の一致だけを読み取りで確かめたいときは `make check-master-version`(`make pokedex-export` 済みで要 `POKEDEX_DATABASE_DSN`)。
+importer の Pod には Kubernetes API の書き込み権限を与えていない。この反映は手元の make から行う。
+
 calc の起動ログ(`kubectl -n pokecalc logs deployment/calc | grep dataVersion`)と `GET /readyz` の本文にも、読み込んだ `dataVersion` が出る。
 
 ## 6. 手動実行と CronJob の重複を確かめる(issue #106 / ADR-0109)

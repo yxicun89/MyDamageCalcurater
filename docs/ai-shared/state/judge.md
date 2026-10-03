@@ -10,7 +10,7 @@ JD4(返り討ち判定。PR #169)・JD5(Web の画面。PR #182。ADR-0705)ま�
 Status(追記): 2026-10-02 issue 309 `web/src/judge/` を変更: 技は ID 自由入力から種族の learnset の select へ(ADR-0705 §5 を置き換え)、調整プリセット(無振り・最速・攻撃特化・HB/HD特化)、SP6欄・ランク5欄は「詳細」に畳む、検証エラーは欄ごとに aria-invalid+文言。ADR-0711。
 Status(追記): 2026-10-01 issue #258 judge の GitOps(gitops overlay・Argo CD Application・image 公開スクリプト。ADR-0709)を実装。
 実クラスタへの適用(`judge-argocd-app`・registry push・sync)は人間確認待ちで未実施。
-Status(追記): 2026-10-03 issue #288(ダブル)は技の対象のマスタ化待ち。データレーンへ依頼済み(DECISIONS.md)。暫定でダブルを非表示(PR #421)。
+Status(追記): 2026-10-03 issue #288(ダブル)は、データレーン(PR #534)・API レーン(PR #536・#510)で技の対象と engine のダブル補正が main に入ったため、判定画面に「ダブル」を戻した。
 Status(追記): 2026-10-02 issue #235 第1段(素早さに反映した補正・反映していない入力を応答と判定画面に出す。ADR-0710)を実装。
 第2段(特性・持ち物の素早さ補正のデータ駆動)はデータレーンへの依頼(DECISIONS.md)待ち。#258 は PR #419・#449 で overlay まで統合、Argo CD への登録・sync は未実施。
 Status(追記): 2026-10-03 issue #235 追加分: 判定に `status`(状態異常)を足し、まひを素早さに反映(ADR-0712。連結・丸めのあと floor(x×50/100)、`*SpeedApplied` の末尾に `paralysis`、全 status を calc-svc へ転送)。Web に「状態異常」select。

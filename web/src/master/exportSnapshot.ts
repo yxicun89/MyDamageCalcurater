@@ -138,11 +138,11 @@ function toPascalCaseEffect(effect: object | null): CalcSnapshotEffect | null {
   return out;
 }
 
-function toCalcSnapshotItemEffect(effect: ItemEffect | null): CalcSnapshotEffect | null {
+export function toCalcSnapshotItemEffect(effect: ItemEffect | null): CalcSnapshotEffect | null {
   return toPascalCaseEffect(effect);
 }
 
-function toCalcSnapshotAbilityEffect(effect: AbilityEffect | null): CalcSnapshotEffect | null {
+export function toCalcSnapshotAbilityEffect(effect: AbilityEffect | null): CalcSnapshotEffect | null {
   return toPascalCaseEffect(effect);
 }
 

@@ -57,7 +57,11 @@ export const MOVES_BATCH_MAX_IDS = 64;
  */
 export const SPECIES_SEARCH_DEBOUNCE_MS = 250;
 
-/** オンラインのマスタが使える機能(ADR-0304 §4)。種族は検索、技は未対応、効果データは公開 API に無い。 */
+/**
+ * オンラインのマスタが使える機能の基準(ADR-0304 §4)。種族は検索、技は未対応。
+ * effects は effect を返さない古いサーバーの値(false)。load() は、効果を持つ持ち物が応答に1件でもあれば
+ * true にする(ADR-0322。「キーが無い」は古いサーバーと効果なしを区別できないので応答の中身で判定する)。
+ */
 export const ONLINE_MASTER_CAPABILITIES: MasterCapabilities = {
   speciesList: false,
   moves: false,
@@ -91,14 +95,51 @@ function isErrorBody(value: unknown): value is Schemas["Error"] {
   return typeof record.code === "string" && typeof record.message === "string";
 }
 
-/** 持ち物(公開 API に効果データが無いので effect は常に null。ADR-0304 §追記 A-1)。 */
-function mapItem(item: Schemas["Item"]): Item {
-  return { id: item.id, nameJa: item.nameJa, effect: null };
+/** 値自身がフィールド名を持つオブジェクトの辞書(外側のキーはタイプ ID なので変換しない)。exportSnapshot.ts の逆変換。 */
+const NESTED_EFFECT_OBJECT_FIELDS = new Set<string>(["DefAbsorbTypes"]);
+
+function decapitalizeKey(key: string): string {
+  return `${key.charAt(0).toLowerCase()}${key.slice(1)}`;
 }
 
-/** 特性(公開 API に効果データが無いので effect は常に null。ADR-0304 §追記 A-1)。 */
+/**
+ * 公開 API の effect(DB の形 = PascalCase。ADR-0218)を engine の形(camelCase)にする。
+ * トップレベルのフィールド名だけを変換し、タイプ/ステータス ID をキーに持つ辞書(StatMods・DefResistType)の
+ * 中身は変えない。DefAbsorbTypes の値(AbsorbEffect)だけは値のフィールド名も変換する。
+ * 値の検証はしない(サーバーが共通マスタで検証済み。ADR-0218 §2)。省略は null。
+ */
+function fromPublicEffect(effect: Schemas["MasterEffect"] | undefined): Record<string, unknown> | null {
+  if (effect === undefined || effect === null) {
+    return null;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(effect)) {
+    if (NESTED_EFFECT_OBJECT_FIELDS.has(key) && typeof value === "object" && value !== null) {
+      out[decapitalizeKey(key)] = Object.fromEntries(
+        Object.entries(value).map(([id, nested]) => [
+          id,
+          fromPublicEffect(nested as Record<string, unknown>),
+        ]),
+      );
+      continue;
+    }
+    out[decapitalizeKey(key)] = value;
+  }
+  return out;
+}
+
+/** 持ち物(effect は省略可。省略は null。ADR-0218・ADR-0322)。 */
+function mapItem(item: Schemas["Item"]): Item {
+  return { id: item.id, nameJa: item.nameJa, effect: fromPublicEffect(item.effect) };
+}
+
+/** 特性(effect は省略可。省略は null。ADR-0218・ADR-0322)。 */
 function mapAbility(ability: Schemas["Ability"]): Ability {
-  return { id: ability.id, nameJa: ability.nameJa, effect: null };
+  return {
+    id: ability.id,
+    nameJa: ability.nameJa,
+    effect: fromPublicEffect(ability.effect),
+  };
 }
 
 /** 技(getMovesByIds の応答をそのまま MasterSpeciesResolution.moves に写す。ADR-0304 A-13)。 */
@@ -219,14 +260,18 @@ export function createOnlineMasterSource(input: CreateOnlineMasterSourceInput): 
       throw new Error("持ち物の応答が limit ちょうど返った(打ち切りの疑いがあるため中断)");
     }
     const natures = naturesRaw as Schemas["Nature"][];
+    const mappedItems = items.map(mapItem);
     return {
       species: [],
       moves: [],
-      items: items.map(mapItem),
+      items: mappedItems,
       abilities: [],
       natures: natures.map(mapNature),
       typeChart: typeChartFromData(typeChartData),
-      capabilities: ONLINE_MASTER_CAPABILITIES,
+      capabilities: {
+        ...ONLINE_MASTER_CAPABILITIES,
+        effects: mappedItems.some((item) => item.effect !== null),
+      },
     };
   }
 

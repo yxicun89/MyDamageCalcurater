@@ -261,10 +261,12 @@ describe("web/Makefile のコンテナ用ターゲット", () => {
 
   test("web-k3d-deploy は local-web overlay だけを apply する(共有の local overlay を丸ごと apply しない)", () => {
     const text = makefile();
-    expect(text).toMatch(/k3d image import pokecalc\/web:local/);
-    expect(text).toMatch(/kubectl apply -k deploy\/k8s\/overlays\/local-web\b/);
-    expect(text).not.toMatch(/kubectl apply -k deploy\/k8s\/overlays\/local\s*$/m);
-    expect(text).toMatch(/rollout status deployment\/web/);
+    // image import・apply・rollout status は scripts/k3d-deploy-tagged.sh へ移した(ADR-0806。コミット識別のタグ。
+    // 中身は scripts/k3d-deploy-tagged_test.sh が確かめる)。
+    expect(text).toMatch(
+      /k3d-deploy-tagged\.sh web-k3d-deploy deploy\/k8s\/overlays\/local-web pokecalc\/web\s*$/m,
+    );
+    expect(text).not.toMatch(/k3d-deploy-tagged\.sh web-k3d-deploy deploy\/k8s\/overlays\/local\s/);
   });
 
   test("web-k3d-smoke は web/scripts/k3d-smoke.sh を使い、web-e2e-container は先にイメージを作る", () => {

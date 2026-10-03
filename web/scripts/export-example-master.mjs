@@ -35,9 +35,13 @@ async function loadSnapshots() {
     const { toBalanceAbilities, toBalanceMoves, toBalancePokemonTypes } = await server.ssrLoadModule(
       "/src/master/exportBalanceReadModel.ts",
     );
+    const { MEGA_FIRE_STONE, MEGA_WATER_STONE } = await server.ssrLoadModule("/src/test/megaMaster.ts");
     const master = await exampleMasterSource.load();
     return {
-      calc: toCalcSnapshot(master),
+      // issue 211: オンラインの pokedex フィクスチャ(架空のメガストーンを足す。ADR-0320)が返す持ち物の ID を
+      // calc-svc も知っている必要がある(効果のある持ち物が候補比較で itemVariants に入るため)。
+      // メガ種族は足さない(calc-svc の検証がメガの基本種族・必要な持ち物の対を要求するため)。
+      calc: toCalcSnapshot({ ...master, items: [...master.items, MEGA_FIRE_STONE, MEGA_WATER_STONE] }),
       balancePokemonTypes: toBalancePokemonTypes(master),
       balanceMoves: toBalanceMoves(master),
       balanceAbilities: toBalanceAbilities(master),
