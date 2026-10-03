@@ -114,4 +114,39 @@ kubectl -n pokecalc get pods
 
 TidbInitializer が `Failed` のとき(`kubectl -n pokecalc logs job/pokecalc-tidb-tidb-initializer -c mysql-client` にエラー)は、
 初期化 SQL が途中で止まり、root のパスワードだけ設定済みになっていることがある(再実行しても接続できない)。
-復旧は docs/adr/0226-api-m2-k3d-deploy.md の「復旧手順」に従う。
+**k3d ローカル専用。cloud・本番では流さない**(root のパスワードを空に戻すため)。DB のデータは消さない。復旧する(上から下へ1回):
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl config current-context
+kubectl apply -f - <<'EOF'
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tidb-root-reset-once
+  namespace: pokecalc
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pokecalc-tidb-initializer
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: mysql
+          image: mysql:9.7.2@sha256:29abb0a179982e4a8928138bfc7f918af9eda64e7eeb1b1d084c1720a20159e6
+          env:
+            - name: MYSQL_PWD
+              valueFrom: { secretKeyRef: { name: tidb-root-auth, key: root } }
+          command: ["sh", "-c", "mysql -h pokecalc-tidb-tidb -P 4000 -uroot -e \"ALTER USER 'root'@'%' IDENTIFIED BY ''\""]
+EOF
+kubectl -n pokecalc wait --for=condition=complete job/tidb-root-reset-once --timeout=120s
+kubectl -n pokecalc delete tidbinitializer pokecalc
+kubectl -n pokecalc delete job pokecalc-tidb-tidb-initializer --ignore-not-found
+./scripts/k3d-m2-deploy.sh
+kubectl -n pokecalc get tidbinitializer pokecalc -o jsonpath='{.status.phase}{"\n"}'
+```
+確認: `context` が `k3d-pokecalc`、`job/tidb-root-reset-once condition met`、最後の出力が `Completed`、
+`k3d-m2-deploy: NATS・TiDB・record・team を入れた`。原因・背景は docs/adr/0226-api-m2-k3d-deploy.md。

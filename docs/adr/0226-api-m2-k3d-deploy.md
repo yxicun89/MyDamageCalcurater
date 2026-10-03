@@ -82,10 +82,14 @@ node メモリ使用は約 6GiB。余裕は小さい。メモリを減らせる�
 ### 6. TiDB の既存の状態の復旧手順(TidbInitializer が `Failed` のとき)
 
 初期化 SQL が途中で止まり root のパスワードだけ設定済みになった場合。DB のデータは消さない(PVC・TiKV には触れない)。
+**k3d ローカル専用。cloud・本番では流さない**(root のパスワードを空に戻すため)。
 (a) root のパスワードを空に戻す一回限りの Job を流し(`tidb-root-auth` は `secretKeyRef` で参照し、値は表示しない)、
 (b) 失敗した TidbInitializer を削除して作り直す(`kubectl apply -k deploy/k8s/overlays/local/tidb`)。
 
-```yaml
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl config current-context   # k3d-pokecalc であること
+kubectl apply -f - <<'EOF'
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -97,7 +101,7 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: pokecalc-tidb-initializer   # NetworkPolicy が TiDB の 4000 を許す名前
+        app.kubernetes.io/name: pokecalc-tidb-initializer
     spec:
       restartPolicy: Never
       containers:
@@ -107,17 +111,24 @@ spec:
             - name: MYSQL_PWD
               valueFrom: { secretKeyRef: { name: tidb-root-auth, key: root } }
           command: ["sh", "-c", "mysql -h pokecalc-tidb-tidb -P 4000 -uroot -e \"ALTER USER 'root'@'%' IDENTIFIED BY ''\""]
-```
-
-```sh
-cd "$(git rev-parse --show-toplevel)"
-kubectl apply -f <上の Job を保存したファイル>
+EOF
 kubectl -n pokecalc wait --for=condition=complete job/tidb-root-reset-once --timeout=120s
 kubectl -n pokecalc delete tidbinitializer pokecalc
 kubectl -n pokecalc delete job pokecalc-tidb-tidb-initializer --ignore-not-found
 ./scripts/k3d-m2-deploy.sh
 ```
 確認: `kubectl -n pokecalc get tidbinitializer pokecalc` の `phase` が `Completed`、`k3d-m2-deploy: NATS・TiDB・record・team を入れた`。
+
+## 補足(確認方法と既知の限界)
+
+- `archive_sha256` は `f69dc040956302fa2a9cd61987158cf88978db9b1f5a1a4a70849310118d2a2a`(`scripts/tidb-operator-bootstrap.sh`)。取得元は
+  `https://github.com/pingcap/tidb-operator/archive/refs/tags/v1.6.6.tar.gz`。確認方法: `curl -fsSL <取得元> | shasum -a 256` を2回流して同じ値になること(2026-10-03 に確認)。
+  不一致なら helm を呼ばず非ゼロで終わる(`scripts/tidb-operator-bootstrap_test.sh`)。GitHub のタグは動かせるので、版を上げるときは値を取り直す。
+- 既知の限界: CRD(`crd.yaml`)は `raw.githubusercontent.com` のタグ参照で、ハッシュを固定していない。
+- initializer の許可(`allow-tidb-client-ingress`)は `app.kubernetes.io/name` ラベルの一致だけを見る。同じ namespace の Pod がその名前を名乗れば TiDB の 4000 に届く。
+  ローカル(個人開発の k3d)用の設計で、認証の代わりにしない(TiDB には root パスワードがある)。
+- メモリが逼迫したとき(TiKV が約 2.2GiB 常駐): まず `kubectl top nodes` と `kubectl -n pokecalc get pods` で OOMKilled・Evicted を見る。
+  Docker Desktop の VM のメモリを増やすか、M2 が不要なら `kubectl -n pokecalc scale deploy/record deploy/team --replicas=0` で record・team を止める(TiDB は残す)。
 
 ## 結果(実機。2026-10-03)
 

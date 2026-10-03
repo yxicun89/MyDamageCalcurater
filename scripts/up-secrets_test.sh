@@ -35,6 +35,11 @@ check_file() {
   else
     ok "${name} は --save-config を使わない"
   fi
+  if grep -qE '^[[:space:]]*(set[[:space:]]+-[a-z]*x|set[[:space:]]+-o[[:space:]]+xtrace)' "$stripped"; then
+    ng "${name} が set -x を使っている(コマンドが表示され Secret の値がログに出る)"
+  else
+    ok "${name} は set -x を使わない"
+  fi
   if grep -qE 'create[[:space:]]+secret.*--from-literal' "$stripped"; then
     ng "${name} が --from-literal で値をコマンドラインに出している"
   else
