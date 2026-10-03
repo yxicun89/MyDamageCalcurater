@@ -131,3 +131,9 @@
   font-size: var(--font-size-caption);
   color: var(--text-secondary);
 }
+
+/* 確定数の直下の「未対応」の注意文(issue 271)。文字で伝え、色だけに頼らない */
+.judge-screen__ko-unsupported {
+  margin: 0;
+  font-size: var(--font-size-caption);
+}
