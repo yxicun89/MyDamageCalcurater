@@ -31,17 +31,20 @@
 | calc :8080 | gateway、judge | `GATEWAY_CALC_URL`、`JUDGE_CALC_BASE_URL` |
 | pokedex :8080 | gateway、calc、judge | `GATEWAY_POKEDEX_URL`、`CALC_MASTER_URL`(内部 API)、`JUDGE_POKEDEX_BASE_URL` |
 | web :8080 | gateway | `GATEWAY_WEB_URL` |
-| mysql :3306 | pokedex、pokedex-migrate、pokedex-import | DSN・migrate Job・importer CronJob |
+| mysql :3306 | pokedex、pokedex-migrate、pokedex-import、balance、speed | DSN・migrate Job・importer CronJob。balance・speed は initContainer `readmodel-export`(`pokedex export`。ADR-0412 §4。2026-10-02 追記) |
 | nats :4222 | calc | `CALC_NATS_URL` |
 | TiDB(operator ラベル `instance=pokecalc-tidb`)tidb :4000 | record-migrate、team-migrate | `pokecalc-tidb-tidb:4000` |
 | TiDB の pd・tikv・tidb 相互 | 同じ `instance=pokecalc-tidb` の Pod | TiDB クラスタ内通信(下記の注意) |
 | gateway・calc・pokedex・balance・speed・judge :8080 | observability の Prometheus(`app.kubernetes.io/name=prometheus`) | ServiceMonitor(`/metrics`) |
 
-拒否の例(テストが検査): web → pokedex・calc・mysql・nats、calc・gateway・judge → mysql、importer → pokedex、
+拒否の例(テストが検査): web → pokedex・calc・mysql・nats、calc・gateway・judge・web・nats・record-migrate・team-migrate → mysql、importer → pokedex、
 default namespace の一時 Pod → pokedex・calc・mysql・gateway、kube-dns → pokedex、observability の Grafana → calc、
 別 namespace に同じラベルを付けた偽 Prometheus / pokecalc 内の偽 Traefik、Service の port 80 での到達。
 
 ### 限界
+
+- mysql :3306 の許可は Pod 単位。balance・speed は initContainer だけが DB に接続する設計(DSN は initContainer にのみ渡す。ADR-0412 §2)だが、
+  NetworkPolicy は Pod 内のコンテナを区別できないので、本体コンテナも同じ Pod として mysql に届く(2026-10-02 追記)。DSN を持たないことが残りの防壁。
 
 - L3/L4 のポリシーなので**パスは区別できない**。pokedex :8080 を許された calc・judge・Prometheus は `/internal` も `/metrics` も叩ける。
   gateway が `/internal` を 404 にする(ADR-0204)層は残す。多層の1層目であって、パス単位の制御ではない。

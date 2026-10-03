@@ -260,7 +260,8 @@ export const balanceClientText = {
  * 内部メッセージ)を出さず、コードからここを引く。Web 側の balance_unavailable も同じ表で引く。
  */
 export const balanceErrorText = {
-  missing_request_context: "端末の情報を送れませんでした。ページを開き直してください",
+  missing_header: "端末の情報を送れませんでした。ページを開き直してください",
+  invalid_header: "端末の情報が正しくありません。ページを開き直してください",
   invalid_request: "リクエストが正しくありません。入力を見直してください",
   request_too_large: "入力が大きすぎます。メンバーや技を減らしてください",
   unknown_pokemon: "選んだポケモンがサーバーのマスタにありません。選び直してください",
@@ -448,6 +449,17 @@ export const speedScreenText = {
   selfSpeedLabel: (speed: number): string => `実数値 ${String(speed)}`,
   fasterLabel: (rows: number): string => `自分より速い ${String(rows)}行`,
   slowerLabel: (rows: number): string => `自分より遅い ${String(rows)}行`,
+  // ---- 場の状態・追い風・まひ・トリックルーム(ADR-0607) ----
+  /** 左の表の場の状態のグループ(相手側の追い風・トリックルーム)。 */
+  fieldGroupLabel: "場の状態",
+  tableTailwindLabel: "追い風(相手側)",
+  trickRoomLabel: "トリックルーム",
+  /** 右の自分の追い風・まひ(preset / custom のみ)。 */
+  selfTailwindLabel: "追い風(自分側)",
+  paralysisLabel: "まひ",
+  /** トリックルーム中の行動順の読み替え(速い = 後に動く、遅い = 先に動く。ADR-0607 §4)。 */
+  movesBeforeLabel: (rows: number): string => `自分より先に動く ${String(rows)}行`,
+  movesAfterLabel: (rows: number): string => `自分より後に動く ${String(rows)}行`,
 } as const;
 
 /**

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"errors"
+	"example.com/pokecalc/services/balance/internal/httpguard"
 	"net/http"
 
 	"example.com/pokecalc/services/balance/internal/api"
@@ -74,6 +75,9 @@ func moveRange(c *echo.Context, deps Dependencies) error {
 		return internalError(c, err)
 	}
 
+	if httpguard.Expired(c.Request().Context()) {
+		return overloaded(c)
+	}
 	analysis, err := balance.AnalyzeMoveRange(deps.TypeChart, moves, catalog, deps.Abilities)
 	if err != nil {
 		if errors.Is(err, balance.ErrMoveRangeNoAttackMove) {
