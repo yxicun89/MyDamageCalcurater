@@ -80,6 +80,8 @@ wishlist-k3d-deploy: wishlist-docker-build wishlist-web-docker-build
 	@k3d image import $(WISHLIST_API_IMAGE) $(WISHLIST_WEB_IMAGE) -c $(CLUSTER)
 	@kubectl -n wishlist delete job wishlist-migrate --ignore-not-found
 	@kubectl apply -k $(WISHLIST_DIR)/deploy/k8s/overlays/local
+	@# イメージのタグは :local で変わらないため、取り込んだ新しいイメージで Pod を作り直す
+	@kubectl -n wishlist rollout restart deploy/wishlist-api deploy/wishlist-web
 
 # ---- iOS(SwiftUI。apps/wishlist/ios。ダメ計の ios-* と同じ構成)----
 # CI は Linux なので wishlist-test / wishlist-lint(構文だけ)/ wishlist-build には iOS を含めない(ダメ計 iOS と同じ扱い)。
