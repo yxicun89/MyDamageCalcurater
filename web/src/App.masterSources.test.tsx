@@ -29,7 +29,9 @@ const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
-  window.localStorage.removeItem(CALC_MODE_STORAGE_KEY);
+  // ADR-0313: 既定がオンラインになったため、このファイルの「オフラインから切り替える」系のテストは
+  // 保存済みのモードがオフラインである前提で始める(既存利用者の選択)。既定の確認は専用のテストで消す。
+  window.localStorage.setItem(CALC_MODE_STORAGE_KEY, "offline");
 });
 
 afterEach(() => {
@@ -126,7 +128,7 @@ async function attackerOptionLabels(): Promise<string[]> {
     .map((option) => option.textContent);
 }
 
-test("既定(オフライン)では offline のマスタだけを読む", async () => {
+test("保存済みがオフラインなら offline のマスタだけを読む", async () => {
   const { offline, online } = await masters();
   const offlineSource = countingSource(offline);
   const onlineSource = countingSource(online);
@@ -140,6 +142,24 @@ test("既定(オフライン)では offline のマスタだけを読む", async 
   expect((await attackerOptionLabels())[0]).toBe(offline.species[0]?.nameJa);
   expect(offlineSource.load).toHaveBeenCalledTimes(1);
   expect(onlineSource.load).not.toHaveBeenCalled();
+});
+
+test("既定(保存値なし)ではオンラインのマスタだけを読む(ADR-0313)", async () => {
+  window.localStorage.removeItem(CALC_MODE_STORAGE_KEY);
+  const { offline, online } = await masters();
+  const offlineSource = countingSource(offline);
+  const onlineSource = countingSource(online);
+  render(
+    <App
+      engine={createFakeEngine()}
+      masterSources={() => ({ offline: offlineSource.source, online: onlineSource.source })}
+    />,
+  );
+
+  expect((await attackerOptionLabels())[0]).toBe(online.species[0]?.nameJa);
+  expect(onlineSource.load).toHaveBeenCalledTimes(1);
+  expect(offlineSource.load).not.toHaveBeenCalled();
+  expect(modeRadios().online).toBeChecked();
 });
 
 test("オンラインに切り替えるとオンラインのマスタを読み、その種族が画面に出る", async () => {
@@ -242,11 +262,11 @@ describe("issue #308 マスタの読み込みに失敗したときの立て直�
     return { user, online };
   }
 
-  test("失敗してもタブ一覧は消えない(6つの画面すべてが選べる)", async () => {
+  test("失敗してもタブ一覧は消えない(7つの画面すべてが選べる)", async () => {
     await renderOnlineFailure([new Error("テストの読み込み失敗")]);
 
-    // P5-5 PR-A1: 構築(/team)を末尾に足した(ADR-0309 §1)。
-    expect(tabLabels()).toEqual(["計算", "逆算", "タイプバランス", "素早さ", "判定", "構築"]);
+    // P5-5 PR-A1: 構築(/team)を末尾に足した(ADR-0309 §1)。AJ6: 調整(/adjust)をその後ろに足した(ADR-0319 §1)。
+    expect(tabLabels()).toEqual(["計算", "逆算", "タイプバランス", "素早さ", "判定", "構築", "調整"]);
   });
 
   // P5-5 PR-A1(ADR-0309 §1): 構築は usesMaster: true。PR-A2 のメンバー編集で種族・技・持ち物・特性の
@@ -307,7 +327,7 @@ describe("issue #308 マスタの読み込みに失敗したときの立て直�
     });
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(retryButton()).toBeInTheDocument();
-    expect(tabLabels()).toHaveLength(6);
+    expect(tabLabels()).toHaveLength(7);
   });
 
   test("「オフラインに切り替える」でオフラインのマスタに戻り、選択も保存される", async () => {
@@ -335,7 +355,7 @@ describe("issue #308 マスタの読み込みに失敗したときの立て直�
     );
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
-    expect(tabLabels()).toHaveLength(6);
+    expect(tabLabels()).toHaveLength(7);
 
     await user.click(retryButton());
 
@@ -357,7 +377,7 @@ describe("issue #308 マスタの読み込みに失敗したときの立て直�
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(retryButton()).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "オフラインに切り替える" })).toBeNull();
-    expect(tabLabels()).toHaveLength(6);
+    expect(tabLabels()).toHaveLength(7);
   });
 });
 

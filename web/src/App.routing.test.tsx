@@ -9,7 +9,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "./App";
-import { teamScreenText } from "./i18n/ja";
+import { adjustScreenText, teamScreenText } from "./i18n/ja";
 import type { MasterData, MasterSource } from "./master/types";
 import { createFakeEngine } from "./test/fakeEngine";
 
@@ -337,5 +337,41 @@ describe("P5-5 構築のタブ", () => {
     expect(window.location.pathname).toBe("/team");
     expect(pushSpy).toHaveBeenCalledTimes(1);
     expect(await screen.findByRole("region", { name: teamScreenText.regionLabel })).toBeInTheDocument();
+  });
+});
+
+// AJ6(ADR-0319 §1): 調整の画面。ルート表に1件足し、タブ「調整」と /adjust で開く(末尾)。
+// 画面は API 専用(ADR-0411 の withOnlineMaster で包む)で、「調整する」を押すまで調整 API を呼ばない(ADR-0319 §4)。
+describe("AJ6 調整のタブ", () => {
+  /** fetch の呼び出しのうち調整・技の逆引きの API のもの。 */
+  function adjustRequests(fetchSpy: { mock: { calls: unknown[][] } }): string[] {
+    return fetchSpy.mock.calls
+      .map(([url]) => (typeof url === "string" ? url : url instanceof URL ? url.href : ""))
+      .filter((url) => url.includes("api/calc/adjust") || url.includes("/learners"));
+  }
+
+  test("タブ「調整」があり、/adjust を直接開くと選択され、自分の領域を出す(調整 API はまだ呼ばない)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    setPath("/adjust");
+    render(<App engine={createFakeEngine()} />);
+
+    expect(await screen.findByRole("tab", { name: "調整" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "計算" })).toHaveAttribute("aria-selected", "false");
+    expect(await screen.findByRole("region", { name: adjustScreenText.selfRegionLabel })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/adjust");
+    expect(document.title).toBe("調整 | pokecalc");
+    expect(adjustRequests(fetchSpy)).toEqual([]);
+  });
+
+  test("調整のタブのクリックで /adjust を pushState し、画面を切り替える", async () => {
+    const user = userEvent.setup();
+    render(<App engine={createFakeEngine()} />);
+    await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
+    const pushSpy = vi.spyOn(window.history, "pushState");
+
+    await user.click(screen.getByRole("tab", { name: "調整" }));
+    expect(window.location.pathname).toBe("/adjust");
+    expect(pushSpy).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole("region", { name: adjustScreenText.selfRegionLabel })).toBeInTheDocument();
   });
 });

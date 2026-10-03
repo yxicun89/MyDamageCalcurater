@@ -2,6 +2,7 @@ package judge
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"example.com/pokecalc/engine"
@@ -652,5 +653,55 @@ func TestCompareSpeedZeroSpeedFieldMatchesJD1(t *testing.T) {
 	want := SpeedComparison{AttackerSpeed: 167, DefenderSpeed: 120, Outspeeds: true, SpeedTie: false}
 	if got != want {
 		t.Errorf("CompareSpeed(SpeedField{}) = %+v, want %+v(JD1 と同じ)", got, want)
+	}
+}
+
+func TestAppliedSpeedFactors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   Individual
+		want []string
+	}{
+		{"補正なしは空(nil にしない)", Individual{}, []string{}},
+		{"素早さランク 0 は入らない・他ステータスのランクも入らない", Individual{Ranks: engine.Ranks{Atk: 2}}, []string{}},
+		{"全部乗ると rank → tailwind → choiceScarf", Individual{Ranks: engine.Ranks{Spe: -1}, Tailwind: true, Scarf: true},
+			[]string{SpeedFactorRank, SpeedFactorTailwind, SpeedFactorChoiceScarf}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := AppliedSpeedFactors(tt.in); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("AppliedSpeedFactors = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIgnoredSpeedInputs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                string
+		ability, item       string
+		isScarf, hasWeather bool
+		want                []string
+	}{
+		{"何も無い", "", "", false, false, []string{}},
+		{"天候だけでは入らない", "", "", false, true, []string{}},
+		{"スカーフは持ち物の無視に数えない", "", "scarf", true, false, []string{}},
+		{"スカーフ以外の持ち物", "", "other", false, false, []string{IgnoredSpeedItem}},
+		{"特性 + 天候", "a", "", false, true, []string{IgnoredSpeedAbility, IgnoredSpeedWeather}},
+		{"全部は ability → item → weather", "a", "other", false, true,
+			[]string{IgnoredSpeedAbility, IgnoredSpeedItem, IgnoredSpeedWeather}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := IgnoredSpeedInputs(tt.ability, tt.item, tt.isScarf, tt.hasWeather); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("IgnoredSpeedInputs = %#v, want %#v", got, tt.want)
+			}
+		})
 	}
 }

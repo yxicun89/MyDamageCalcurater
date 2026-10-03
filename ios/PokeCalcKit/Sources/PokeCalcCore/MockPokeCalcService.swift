@@ -353,7 +353,7 @@ public struct MockPokeCalcService: PokeCalcService {
 
     /// 技の `mechanisms` から `target: move` の印を作る(昇順)。変化技には付けない。
     /// 未知の値は `fixtureInvalid`(フィクスチャの不整合。ADR-0123 の機構13種のどれかのはず)。
-    private static func moveMarks(_ move: MockFixtures.MoveEntry, category: MoveCategory) throws -> [UnsupportedMark] {
+    static func moveMarks(_ move: MockFixtures.MoveEntry, category: MoveCategory) throws -> [UnsupportedMark] {
         guard category != .status, let mechanisms = move.mechanisms else { return [] }
         return try mechanisms.sorted().map { mechanism in
             guard let reason = UnsupportedReason(rawValue: mechanism) else {
@@ -405,7 +405,7 @@ public struct MockPokeCalcService: PokeCalcService {
 
     // MARK: - フィクスチャ → ドメイン
 
-    private static func notFoundError(_ kind: String, _ id: String) -> PokeCalcError {
+    static func notFoundError(_ kind: String, _ id: String) -> PokeCalcError {
         PokeCalcError(code: PokeCalcError.Code.notFound, message: "\(kind)が見つからない: \(id)")
     }
 
@@ -416,7 +416,7 @@ public struct MockPokeCalcService: PokeCalcService {
         return type
     }
 
-    private static func domainMoveCategory(_ raw: String) throws -> MoveCategory {
+    static func domainMoveCategory(_ raw: String) throws -> MoveCategory {
         guard let category = MoveCategory(rawValue: raw) else {
             throw PokeCalcError(code: PokeCalcError.Code.fixtureInvalid, message: "未知の分類: \(raw)")
         }
@@ -430,7 +430,7 @@ public struct MockPokeCalcService: PokeCalcService {
         return key
     }
 
-    private static func domainSpeciesSummary(_ entry: MockFixtures.SpeciesEntry) throws -> SpeciesSummary {
+    static func domainSpeciesSummary(_ entry: MockFixtures.SpeciesEntry) throws -> SpeciesSummary {
         SpeciesSummary(
             key: entry.key, dexNo: entry.dexNo, form: entry.form, nameJa: entry.nameJa,
             types: try entry.types.map(domainPokeType)
