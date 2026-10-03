@@ -42,6 +42,24 @@ describe("matchesSpeciesName", () => {
     expect(matchesSpeciesName(BASE_FIRE, "メガテストほのお")).toBe(false);
   });
 
+  // 名前が「メガ」で始まる非メガ種族(実データのメガニウム・メガヤンマ相当。架空名)。isMega ガードの回帰。
+  test("名前が「メガ」で始まる非メガ種族は、『メガ + q』の規則では当たらない", () => {
+    const lookalike: MasterSpecies = {
+      ...BASE_FIRE,
+      key: "9201-000",
+      dexNo: 9201,
+      form: 0,
+      nameJa: "メガテストそう",
+    };
+    expect(lookalike.isMega).not.toBe(true);
+    expect(matchesSpeciesName(lookalike, "テストそう")).toBe(false);
+    expect(matchesSpeciesName(lookalike, "メガ")).toBe(true);
+    expect(matchesSpeciesName(lookalike, "メガテスト")).toBe(true);
+    // 同じ名前でもメガ種族なら q = 「テストそう」でも当たる(isMega だけが違い)。
+    expect(matchesSpeciesName({ ...lookalike, isMega: true }, "テストそう")).toBe(true);
+    expect(searchSpeciesByName([lookalike, MEGA_FIRE], "テストそう")).toEqual([]);
+  });
+
   test("空の q は全件", () => {
     expect(matchesSpeciesName(MEGA_FIRE, "")).toBe(true);
     expect(matchesSpeciesName(BASE_FIRE, "")).toBe(true);

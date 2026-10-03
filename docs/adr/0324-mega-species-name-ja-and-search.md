@@ -25,7 +25,7 @@ importer は上書き → PokeAPI → 英語名の順で `nameJa` を決める�
   (英語名を混ぜた「メガLucario」のような名前を作らない)。
 - 実装は、メガ以外の種族を先に解決してから、メガを解決する(`convert_species.go`)。
 - `species.name_ja_source` に値 `generated` を足す(migration 000011。species だけ。他の表は生成しない)。
-  down は `generated` の行を `fallback_en` に寄せてから CHECK を戻す。
+  down は `generated` の行を `fallback_en` に寄せてから CHECK を戻す(`generated` の行がある実 MySQL で通ることを `species_search_mysql_test.go` で確かめる)。
 - 報告: 生成した種族ごとに警告 `name-generated`(`KindNameGenerated`。止めない)を出し、reconcile の `names.species` に `generated`(件数)と
   `generatedIds` を足す。英語名のままのものは従来どおり `name-fallback`・`fallbackIds`。
 - 既存 DB は、変換結果の版(ADR-0122)が変わるので、次の取り込みで全行が入れ直される(`nameJa` が変わる)。
@@ -51,7 +51,8 @@ importer は上書き → PokeAPI → 英語名の順で `nameJa` を決める�
 | q | 結果 |
 |---|---|
 | `メガルカリオ` | メガルカリオ(1 の規則) |
-| `メガ` | 全メガ種族(1 の規則。レギュレーションの使用可能集合の中だけ) |
+| `メガ` | 全メガ種族(1 の規則。レギュレーションの使用可能集合の中だけ)。規則 1 により、名前が「メガ」で始まる非メガ種族(メガニウム・メガヤンマなど)も出る |
+| `ニウム`(非メガの名前の後半) | メガ種族だけが規則 2 で当たる。名前が「メガ」で始まる非メガ種族は規則 2 では当たらない(`is_mega` で絞る) |
 | `ルカリオ` | ルカリオ(基本種)とメガルカリオの両方(基本種は 1、メガは 2) |
 | `リザードン` | リザードン、メガリザードンX、メガリザードンY |
 | `リザードンX` | メガリザードンX だけ |
