@@ -2,7 +2,7 @@
 
 - 更新日: 2026-09-24
 - 状態: SP0〜SP5 すべて完了(main 統合済み。実データでの疎通も確認済み)。設計の正はこの文書と `docs/adr/0600〜`(素早さレーンの帯)
-- ユーザーの仕様: `docs/plan.md` の「SP: 素早さ比較」と `docs/ai-shared/DECISIONS.md`(2026-09-22)
+- ユーザーの仕様: `docs/plan/speed.md` の「SP: 素早さ比較」と `docs/ai-shared/DECISIONS.md`(2026-09-22)
 
 ## 1. 目的
 

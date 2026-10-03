@@ -75,7 +75,7 @@ flowchart LR
 ```
 
 - 実マスタ・スナップショットは Git に入れない(ADR-0002)。Git にあるのはコード・schema・架空データ・版の記録だけ。
-- 動作確認の手順は `docs/runbooks/`、進捗は `docs/plan.md`、AI の運用は `docs/ai-shared/COORDINATION.md`。
+- 動作確認の手順は `docs/runbooks/`、進捗は `docs/plan.md`(索引)と `docs/plan/`、AI の運用は `docs/ai-shared/COORDINATION.md`。
 
 ## Kustomize overlay
 

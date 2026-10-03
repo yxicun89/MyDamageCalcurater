@@ -9,7 +9,7 @@
 - サービス: gateway・calc・pokedex(マスタ取込を含む)・balance・speed・judge・record・team(k3d。各レーンの overlay は docs/runbooks/)。`make dev` が起動するのは calc と gateway だけ
 - iOS アプリ(SwiftUI。`make ios-test`)
 - 未実装: `make assets`(画像の変換・配信。終了コード 2)と、k3d の有無で変わる E2E の一部(クラスタ分は `make up` が前提)
-- 進捗と残りの作業は [docs/plan.md](docs/plan.md)(状態の正)。要件・テスト・設計の入口は [docs/README.md](docs/README.md)
+- 進捗と残りの作業は [docs/plan.md](docs/plan.md)(索引)から辿る区画のファイル `docs/plan/`(状態の正)。要件・テスト・設計の入口は [docs/README.md](docs/README.md)
 
 ## 起動する
 
