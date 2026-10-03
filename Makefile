@@ -1,5 +1,5 @@
 # pokecalc Makefile
-# 各ターゲットは docs/plan.md の Phase 進行に合わせて実装を埋めていく。
+# 各ターゲットは docs/plan/ の Phase 進行に合わせて実装を埋めていく。
 # 未実装のターゲットは理由を表示して非0(終了コード 2)で終わる。成功と数えないため(issue #261・#294)。
 
 SHELL := /usr/bin/env bash
@@ -99,6 +99,7 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/ensure-gen_test.sh
 	@./scripts/db-backup_test.sh
 	@./scripts/db-restore_test.sh
+	@./scripts/check-plan_test.sh
 
 .PHONY: lint
 lint: gen-go-all ## gofmt / go vet / shell・Node構文チェック
@@ -113,6 +114,7 @@ lint: gen-go-all ## gofmt / go vet / shell・Node構文チェック
 	@cd tools && $(GO) vet ./...
 	@$(MAKE) --no-print-directory staticcheck
 	@scripts/check-conflict-markers.sh
+	@scripts/check-plan.sh
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 	@for script in tools/importer/*.sh; do sh -n "$$script" || exit; done
 	@node --check tools/golden/generate.mjs

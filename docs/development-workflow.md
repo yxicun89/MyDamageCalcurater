@@ -1,6 +1,6 @@
 # Claude Code / Codex 開発ワークフロー
 
-規約は `CLAUDE.md` と `AGENTS.md`、進捗は `docs/plan.md` を正とする。
+規約は `CLAUDE.md` と `AGENTS.md`、進捗は `docs/plan.md`(索引)と `docs/plan/<区画>.md` を正とする(ADR-0172)。
 この文書は手順を再利用するためのもの。各回の実行結果・未完了タスクは plan と引き継ぎ記録に残す。
 
 ## 引き継ぎ時に確認した Claude 環境
@@ -23,8 +23,8 @@
 
 リポジトリ内に独立した `.claude/commands/`、MCP 設定、他の hooks 定義は見つからなかった。
 ユーザー領域の Claude 設定・MCP・セッション履歴は今回の調査対象外で、存在しないとは判断しない。
-`docs/plan.md` と Git 履歴から作業を復元する。起動プロンプトがあることは、全手順を実行した証拠ではない。
-`docs/plan.md` には各タスクの1行の状態と未完了の受け入れ条件だけを置き、完了したタスクの経過(critic の往復・テスト件数)と解決済みのブロッカーは `docs/plan-archive.md` に移す。軽微指摘は issue に書き、plan.md には書かない(二重管理しない)。
+`docs/plan/` と Git 履歴から作業を復元する。起動プロンプトがあることは、全手順を実行した証拠ではない。
+`docs/plan/` の区画のファイルには各タスクの1行の状態と未完了の受け入れ条件だけを置き、完了したタスクの経過(critic の往復・テスト件数)と解決済みのブロッカーは `docs/plan-archive.md` に移す。軽微指摘は issue に書き、plan には書かない(二重管理しない)。
 
 既存 phase の順序は **scanner → spec → implementer → critic → 必要時に外部 Codex**。
 FAIL は implementer へ戻し、同じ失敗で最大 3 回まで。未解決は `[!]` とブロッカーに残す。
