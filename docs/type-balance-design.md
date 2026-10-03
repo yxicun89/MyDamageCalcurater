@@ -117,7 +117,7 @@ services/balance/
   1 リクエストのメモリも削減した(1,500 件のカタログで約 3.1 MB → 約 0.53 MB)。`GOMEMLIMIT=56MiB` と合わせて、同時 30 でも OOMKill しない(ADR-0409)。
   他のエンドポイントへの上限は、問題が出てから広げる(別 issue)。
 - **メトリクス**: `GET /metrics`(Prometheus 形式。`http_requests_total`・`http_request_duration_seconds`)。
-  ServiceMonitor は `deploy/k8s/base/observability/servicemonitors/balance.yaml`(ADR-0406)。SLO・ダッシュボードの対象は calc だけで、balance は対象外(ADR-0407)。
+  ServiceMonitor は `deploy/k8s/base/observability/servicemonitors/balance.yaml`(ADR-0406)。SLO・ダッシュボードは calc(ADR-0407)と balance(ADR-0420)。
 
 ## 9. GitOps(Argo CD)
 
@@ -146,7 +146,7 @@ services/balance/
 | ApplicationSet・App-of-Apps・judge/calc 系の Application | なし |
 | クラウドへのデプロイ(EKS / GKE の選択・クラウドのレジストリ・実データの GitOps 配布) | 未決(クラウド公開はしない方針。ADR-0210) |
 | recommendations 以外の同時実行上限・HPA | なし(問題が出てから) |
-| balance の SLO・ダッシュボード | なし(calc のみ。ADR-0407) |
+| balance の SLO・アラート | SLO(p99 < 500ms・可用性)とダッシュボードは ADR-0420 で追加済み(実クラスタ確認は未実施)。アラートは作らない(ADR-0407 §2) |
 | 実データ・永続化(パーティ保存・お気に入り) | balance は DB を持たない。保存は team-svc の責務 |
 | 他のレーンに依存する部分 | レギュレーションの使用可能集合や日本語名は pokedex export の内容で決まる(データレーン) |
 
