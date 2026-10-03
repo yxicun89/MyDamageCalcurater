@@ -5,7 +5,8 @@
 
 import type { components } from "../api/openapi.gen";
 import { MAX_SP_PER_STAT, MAX_SP_TOTAL } from "../domain/requests";
-import type { Ability, StatKey } from "../engine/types";
+import { itemIdAfterSpeciesChange, megaItemLock, isMegaSpecies } from "../domain/mega";
+import type { Ability, Item, StatKey } from "../engine/types";
 import type { MasterSpecies } from "../master/types";
 
 type Schemas = components["schemas"];
@@ -170,15 +171,73 @@ export function changeSpecies(
   draft: MemberDraft,
   species: MasterSpecies,
   abilities: readonly Ability[],
+  options?: ChangeSpeciesOptions,
 ): MemberDraft {
   const keepsAbility = abilities.some((ability) => ability.id === draft.abilityId);
   const keptMoves = draft.moves.filter(
     (moveId): moveId is string => moveId !== null && species.learnset.includes(moveId),
   );
+  const itemId =
+    options === undefined
+      ? draft.itemId
+      : nullIfEmpty(
+          itemIdAfterSpeciesChange({
+            previous: options.previous,
+            next: species,
+            items: options.items,
+            currentItemId: draft.itemId ?? "",
+          }),
+        );
   return {
     ...draft,
     speciesKey: species.key,
+    itemId,
     abilityId: keepsAbility ? draft.abilityId : (abilities[0]?.id ?? null),
     moves: toMoveSlots(keptMoves),
   };
+}
+
+function nullIfEmpty(value: string): string | null {
+  return value === "" ? null : value;
+}
+
+/** changeSpecies の持ち物整合の入力(メガ ⇔ 非メガの切り替えで持ち物を直す)。 */
+export interface ChangeSpeciesOptions {
+  /** 変更前の種族(未選択・未解決は null)。 */
+  readonly previous: MasterSpecies | null;
+  /** メガストーンを引くマスタの持ち物。 */
+  readonly items: readonly Item[];
+}
+
+/** 古い保存データの補正の種類。fixed = メガストーンへ直した、cleared = ストーンを引けず持ち物を空にした。 */
+export type MegaItemCorrection =
+  { readonly kind: "fixed"; readonly item: Item } | { readonly kind: "cleared" };
+
+export interface MegaItemCorrectionResult {
+  readonly draft: MemberDraft;
+  /** 直さなかったときは null。 */
+  readonly correction: MegaItemCorrection | null;
+}
+
+/**
+ * 古い保存データの補正(issue 515・ADR-0320)。メガ種族に requiredItemId 以外の持ち物があれば直す。
+ * 非メガ・種族未解決は直さない(非メガに持たせたメガストーンも含む)。
+ */
+export function correctMegaItem(
+  draft: MemberDraft,
+  species: MasterSpecies | null,
+  items: readonly Item[],
+): MegaItemCorrectionResult {
+  if (species === null || !isMegaSpecies(species)) {
+    return { draft, correction: null };
+  }
+  const lock = megaItemLock(species, items);
+  if (lock.kind === "locked") {
+    return lock.item.id === draft.itemId
+      ? { draft, correction: null }
+      : { draft: { ...draft, itemId: lock.item.id }, correction: { kind: "fixed", item: lock.item } };
+  }
+  return draft.itemId === null
+    ? { draft, correction: null }
+    : { draft: { ...draft, itemId: null }, correction: { kind: "cleared" } };
 }
