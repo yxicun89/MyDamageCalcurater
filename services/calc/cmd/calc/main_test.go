@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,6 +17,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"example.com/pokecalc/services/internal/reqlog"
+	"example.com/pokecalc/services/internal/version"
 )
 
 const (
@@ -488,4 +492,26 @@ func TestRunURLModeStartsWithoutUpstream(t *testing.T) {
 	base := srv.URL
 	srv.Close() // 接続できない上流
 	assertRunsUntilCanceled(t, map[string]string{envAddr: "127.0.0.1:0", envMasterURL: base})
+}
+
+// issue #217・#246: 起動ログの 1 行目(JSON)に version が出る。
+func TestRunLogsVersionAsJSON(t *testing.T) {
+	prevVersion, prevLogger := version.Version, slog.Default()
+	t.Cleanup(func() { version.Version = prevVersion; slog.SetDefault(prevLogger) })
+	version.Version = "abc1234"
+	var buf bytes.Buffer
+	slog.SetDefault(reqlog.NewLogger(&buf, slog.LevelInfo))
+
+	env := fileEnv()
+	env[envAddr] = "127.0.0.1:0"
+	assertRunsUntilCanceled(t, env)
+
+	first, _, _ := strings.Cut(buf.String(), "\n")
+	var rec map[string]any
+	if err := json.Unmarshal([]byte(first), &rec); err != nil {
+		t.Fatalf("起動ログの 1 行目が JSON でない: %q: %v", first, err)
+	}
+	if rec["version"] != "abc1234" {
+		t.Errorf("起動ログ = %v, want version=abc1234", rec)
+	}
 }

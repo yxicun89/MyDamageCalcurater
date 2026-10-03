@@ -114,6 +114,12 @@ func TestAPIDockerfiles(t *testing.T) {
 			if final := strings.Fields(froms[len(froms)-1])[0]; final != "scratch" {
 				t.Errorf("%s の最終段 = %q, want scratch", path, final)
 			}
+			// issue #217: ビルドの版を -ldflags -X で version.Version に埋め込む(--build-arg VERSION。未指定は 0.0.0-dev)。
+			for _, want := range []string{"ARG VERSION=0.0.0-dev", "-X example.com/pokecalc/services/internal/version.Version=${VERSION}"} {
+				if !strings.Contains(src, want) {
+					t.Errorf("%s に %q が無い(デプロイ済みビルドを識別できるようにする。issue #217)", path, want)
+				}
+			}
 			for _, want := range []string{"COPY engine ", "COPY services ", "CGO_ENABLED=0", "./" + svc + "/cmd/" + svc} {
 				if !strings.Contains(src, want) {
 					t.Errorf("%s に %q が無い(コンテキストはリポジトリ直下。services は ../engine を replace で参照する)", path, want)
@@ -173,7 +179,7 @@ func TestAPIMakefile(t *testing.T) {
 	}
 
 	wants := map[string][]string{
-		"api-docker-build": {"services/calc/Dockerfile", "services/gateway/Dockerfile"},
+		"api-docker-build": {"services/calc/Dockerfile", "services/gateway/Dockerfile", "--build-arg VERSION=", "git rev-parse --short HEAD"},
 		"api-k3d-deploy":   {"k3d image import", "kubectl apply -k", deploytest.LocalAPIOnlyOverlayDir, "rollout status"},
 		"api-smoke":        {"scripts/smoke.sh"},
 		"api-kustomize":    {"kubectl kustomize"},

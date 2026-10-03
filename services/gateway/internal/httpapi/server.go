@@ -19,6 +19,8 @@ import (
 
 	"example.com/pokecalc/services/internal/api"
 	"example.com/pokecalc/services/internal/httpmetrics"
+	"example.com/pokecalc/services/internal/reqlog"
+	"example.com/pokecalc/services/internal/version"
 )
 
 // ErrInvalidConfig は Config が不正(CalcURL が無い等)なときに NewHandler が包んで返すエラー。
@@ -73,10 +75,28 @@ type gateway struct {
 	webProxy     *httputil.ReverseProxy // nil なら予約パス以外の GET / HEAD は 404(WebURL 未設定。ADR-0205)
 }
 
-// NewHandler は gateway の HTTP ハンドラ全体を組み立てる。Config が不正なら ErrInvalidConfig を包んで返す。
+// Handlers は gateway が待ち受ける 2 つのハンドラ。
+//   - Public: 公開入口(Ingress の向き先)。/metrics は持たない(予約パスとして 404。issue #216)。
+//   - Metrics: メトリクス専用ポート(クラスタ内の Prometheus だけが scrape する。ADR-0406 §1 追記)。
+//     GET /metrics だけに答える。
+type Handlers struct {
+	Public, Metrics http.Handler
+}
+
+// NewHandler は公開側のハンドラだけを返す(テスト・簡易用途向け)。Config が不正なら ErrInvalidConfig を包んで返す。
 func NewHandler(cfg Config) (http.Handler, error) {
-	if err := validateConfig(cfg); err != nil {
+	hs, err := NewHandlers(cfg)
+	if err != nil {
 		return nil, err
+	}
+	return hs.Public, nil
+}
+
+// NewHandlers は gateway の公開ハンドラとメトリクス専用ハンドラを組み立てる(同じ計測を共有する)。
+// Config が不正なら ErrInvalidConfig を包んで返す。
+func NewHandlers(cfg Config) (Handlers, error) {
+	if err := validateConfig(cfg); err != nil {
+		return Handlers{}, err
 	}
 
 	g := &gateway{cfg: cfg}
@@ -108,15 +128,42 @@ func NewHandler(cfg Config) (http.Handler, error) {
 
 	e := echo.New()
 	e.HTTPErrorHandler = httpErrorHandler
-	if cfg.logger != nil {
-		e.Logger = cfg.logger
+	logger := cfg.logger
+	if logger == nil {
+		logger = slog.Default() // main が JSON ハンドラを既定にした後に呼ばれるので、Echo の内部ログも同じ形式になる
 	}
+	e.Logger = logger
 	m := httpmetrics.New()
+	e.Use(reqlog.Middleware(logger)) // 最も外側: ID の確定と、最終ステータスのアクセスログ(issue #246)
 	e.Use(m.Middleware())
+	e.Use(pathLabelMiddleware) // メトリクスの path ラベルをルート種別にする(issue #244)
 	e.Use(g.recoverMiddleware)
-	e.GET(httpmetrics.Path, m.Handler())
 	e.Any("/*", g.serve)
-	return e, nil
+
+	// メトリクス専用: 別ポートで /metrics だけに答える(公開入口から見せない。issue #216)。
+	me := echo.New()
+	me.HTTPErrorHandler = func(c *echo.Context, _ error) {
+		_ = c.JSON(http.StatusNotFound, api.Error{Code: api.NotFound, Message: msgNotFound})
+	}
+	me.Logger = logger
+	me.GET(httpmetrics.Path, m.Handler())
+	return Handlers{Public: e, Metrics: me}, nil
+}
+
+// routeKindKey は serve が決めたルート種別(routeKind の名前)を echo.Context に預けるキー。
+const routeKindKey = "gateway.routeKind"
+
+// pathLabelMiddleware は serve が決めたルート種別で c.Path()(httpmetrics の path ラベル)を置き換える。
+// gateway は "/*" の 1 ルートしか持たないので、そのままでは全リクエストが同じ path になってしまう。
+// 内側のミドルウェアが返った後(ルーティングは終わっている)に書き換えるので、副作用は計測のラベルだけ。
+// 値は routeKind.String() の固定集合なのでカーディナリティは有限。
+func pathLabelMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c *echo.Context) error {
+		err := next(c)
+		kind, _ := c.Get(routeKindKey).(routeKind)
+		c.SetPath(kind.String())
+		return err
+	}
 }
 
 // validateConfig は NewHandler が受け付けられない Config を ErrInvalidConfig で拒否する
@@ -176,11 +223,12 @@ func (g *gateway) serve(c *echo.Context) error {
 		}
 		kind = routeWeb
 	}
+	c.Set(routeKindKey, kind) // メトリクスの path ラベル用(pathLabelMiddleware)
 	if kind == routeHealthz {
 		if allowed {
 			setCORSAllowed(c.Response().Header(), origin)
 		}
-		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+		return c.JSON(http.StatusOK, map[string]string{"status": "ok", "version": version.Version})
 	}
 
 	// 4. /api/* だけヘッダを検証する。失敗は gateway 自身の応答。
