@@ -28,7 +28,7 @@
 
 | 内容 | 場所 | 起票 | 宛先レーン |
 |---|---|---|---|
-| Wishlist フェーズ4 の既定案(辞書・価格推移・公式の販売状況・PWA の Web Push。iOS ネイティブのプッシュはしない) | `decisions/2026-10-04-wishlist-phase4-plan.md` | 2026-10-04 | Wishlist |
+| Wishlist フェーズ4 の既定案(辞書・価格推移・公式の販売状況。通知は作らない〈ユーザー指示〉) | `decisions/2026-10-04-wishlist-phase4-plan.md` | 2026-10-04 | Wishlist |
 | Argo CD 管理の gitops overlay が read model を持たず、同期された balance / speed の業務 API が 503 になる(既定案: initContainer で read model を書く) | issue #237 | 2026-09-24 | タイプバランス・素早さ・データ |
 | 判定が素早さに効く特性・持ち物・状態異常を無視して `outspeeds` が誤る | issue #235 | 2026-09-24 | 判定 |
 | gateway が中断しても calc-svc の逆算が完走する(engine に打ち切り口を入れるか) | issue #498 | 2026-10-02 | API・データ |
