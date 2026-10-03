@@ -20,7 +20,7 @@
 - ダメージ計算(damage-calc)・素早さ(speed)・判定(judge)と並ぶ独立サービス `services/balance/`(ADR-0012 のサービス境界)。
   他サービスの実行時 API に依存しない。engine も import しない(自前の純粋な Go のコア)。DB を持たない。
 - マスタ(ポケモンのタイプ・技・特性)は pokedex の export を **read model(JSON)として起動時に 1 回だけ読む**(§7)。
-- 画面は Web の「タイプバランス」タブ(`web/src/screens/BalanceScreen.tsx`、ADR-0303)。iOS の画面は未対応(§11)。
+- 画面は Web の「タイプバランス」タブ(`web/src/screens/BalanceScreen.tsx`、ADR-0303)。iOS の画面は第1〜2段を実装中・第3段は未対応(§11・ADR-0415)。
 - 認証なし。端末 ID・セッション ID のヘッダを必須とする(§5)。
 
 ## 3. 構成
@@ -140,7 +140,7 @@ services/balance/
 
 | 項目 | 状態 |
 |---|---|
-| iOS のタイプバランス画面 | 未対応(Web のみ) |
+| iOS のタイプバランス画面 | 第1段(防御相性・集計)+第2段(攻撃範囲)は ADR-0415 / P6-21、第3段(threats・recommendations・move-range)は P6-22(PR #493)で実装。シミュレータでの見た目確認は未実施 |
 | gateway 経由への一本化 | balance は完了(直結 Ingress を撤去し `GATEWAY_BALANCE_URL` を配線。ADR-0414)。speed・judge の直結 Ingress は各レーンで残り |
 | 自動 sync・prune・selfHeal | 意図的に無効。有効化は未決 |
 | ApplicationSet・App-of-Apps・judge/calc 系の Application | なし |

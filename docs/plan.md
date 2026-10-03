@@ -141,7 +141,13 @@
     マスタ(種族・技・持ち物・特性の名前解決)を使うのはここから。実装: `web/src/team/` の `TeamMemberEditor`・`TeamMemberFields`・
     `teamMember`(純粋関数)・`teamMemberOptions`。update 全置換・応答待ち・失敗時は下書き保持・SP は明示エラー。ADR-0316。
     Web: vitest 全件・typecheck・lint と e2e(`web/e2e/team.spec.ts`)
+  - [x] Showdown 形式の変換部(判定レーン。`web/src/team/showdownFormat.ts`。ADR-0310。画面への配線は P5-5b 側)
   - [ ] **P5-5c 履歴・よく計算する相手・端末データの削除(PR-A3 以降)**: record-svc の API と ADR-0209 §8 の文言
+  - [x] **P5-5d 端末データの削除(Web。issue #103 の Web 分。ADR-0318)**: 情報ページの「データの扱い」節に説明(ADR-0209 §8)と
+    「この端末のデータを削除」(アプリ内 alertdialog・初期フォーカス=キャンセル)。`recordClient`/`teamClient` の `deleteDeviceData`、
+    手順は純粋関数 `deviceData/deleteDeviceData.ts`(record/team 独立・partial は対象ごと最大20回・通信エラーは自動再送せず再試行)。
+    ローカルの端末 ID・設定は消さない(iOS と同じ)。team が消えたら構築一覧を取り直す(`reloadToken`)。
+    `web` の vitest 1998件・typecheck・lint・`make web-e2e`(49件)・`make check-publishable` green
 - [x] P5-6 技の追加効果
 
 - [x] issue #219(Web 配信にセキュリティヘッダが無い)
@@ -169,6 +175,11 @@
 - [x] P6-17 issue #271/#270 の iOS 側
 - [x] P6-18 issue #328
 - [x] P6-19 issue #272 の iOS 側
+
+- [ ] P6-24 素早さ比較画面(iOS。ユーザー決定 2026-10-03〈DECISIONS.md〉。Web の `SpeedScreen` が参照実装、契約は `services/speed/api/openapi.yaml`〈gateway `/api/speed/*`〉。生成設定への取り込み方を spec で決める)
+- [ ] P6-25 判定画面(iOS。契約は `services/judge/api/openapi.yaml`。P6-24 の取り込み方に揃える。判定の応答の `unsupported` の印も表示する)
+- [ ] P6-26 タイプバランス画面(iOS。契約は `services/balance/api/openapi.yaml`。構築をそのまま渡す導線を検討)
+- [ ] お気に入り・計算履歴の iOS 表示(API レーンの契約追加待ち。DECISIONS.md 2026-10-03 で依頼済み)
 
 - [x] P6-21 タイプバッジ・エンブレムの文字色を design.md「タイプバッジ」の `typeInk` 規則(黒/白のコントラスト比が高い方。白は どく/ゴースト/ドラゴン/あく のみ)に準拠(エンブレム本体・バッジは実装済みで、残っていたのは文字色の白固定)。`TypeColorToken.ink(forTypeID:)` を追加。`swift test` 全件・`make ios-test` 全件成功(XCUITest 53件)。critic PASS。ADR-0501「P6-21」
 
@@ -268,6 +279,8 @@
 requirements.md の項目のうち、計画に無かったものをここに置く。着手の順・可否はユーザー判断(急ぎではない)。
 - [ ] P5-3c お気に入り(手動ピン留め)の作成・削除・一覧 API と画面(requirements.md §2「あれば便利」。担当: API レーン→ Web・iOS。`favorites` の表・保持期間・全削除の件数は ADR-0209 で実装済みで、API・画面が未着手。ADR-0209 の「record にお気に入りの CRUD を足すときに検証する」を併せて行う)
 - [ ] P6-20 iOS の Showdown 形式のインポート/エクスポート(requirements.md §2 は必須。P6-2 で後回しにしたまま。担当: iOS レーン。P5-4 の後。Web は P5-5・team-svc は P5-4)
+- [x] P6-21 iOS のタイプバランス画面 第1段(チーム最大6体の防御相性表・チーム集計・日本語の倍率表示)+第2段(攻撃範囲 coverage)(ADR-0415。タイプバランスレーン〈iOS 実装〉。実施: `PokeCalcCore` に `BalanceDomainTypes`・`BalanceService`(+`UnavailableBalanceService`)・`APIBalanceService`・`BalanceLabels`・`BalanceViewModel`、`ios/PokeCalc` に `BalanceScreenView`・`BalanceMemberCard`・`BalanceResultViews`、`RootView` の入口・`AppEnvironment`〈`.api`→`APIBalanceService`、`.mock`→`UnavailableBalanceService`〉。gateway `/api/balance/*` 経由。マスタは既存の PokeCalcService を再利用しフォールバックしない。`swift test`〈macOS〉617件・アプリの simulator ビルド成功。**未実施・要人間確認**: シミュレータ/実機での見た目〈Dynamic Type 最大・ダークモード・色以外で弱点が分かること〉と XCTest/XCUITest のシミュレータ実行〈`make ios-test`〉、balance 0.8.0〈ADR-0413。PR #458〉が main に入った後の `make ios-gen` 再生成〈生成物は 0.7.0 のまま。エラー文言の写像は両コード対応済み〉、gateway 配線〈ADR-0414。PR #478〉後の実機 E2E)
+- [ ] P6-22 iOS のタイプバランス画面 第3段(仮想敵 threats・おすすめタイプ recommendations・技範囲チェッカー move-range)(**未実施**。P6-21 の後。ADR-0415 §1)
 - [ ] P8-1 ポケモン画像の配信(任意。M1 の後。requirements.md「ポケモン画像」: MinIO・gateway の画像パス・`manifest.json`・`make assets`・無ければタイプ色のエンブレム。担当: 運用(deploy・scripts)+ API + Web。gateway の予約パス `/assets/*` は未設定で常に 404 なので `/images/` に移す〈issue #286 所見1〉。`make assets` は実装まで終了コード 2 のスタブ)
 - 公開時の名称・画像の差し替え構造(requirements.md「知財」): **後回し**。公開のタイミング(R-2-9・LICENSE・issue #328。ブロッカー節)と同時に決める。画像は P8-1 でキー(`{図鑑番号4桁}-{フォルム3桁}`)による差し替え構造になる
 

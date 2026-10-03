@@ -1,4 +1,4 @@
-// P5-5c: 記録 API(record-svc)のクライアント(ADR-0317 §1)。teamClient.ts と同じ流儀:
+// P5-5c/P5-5d: 記録 API(record-svc)のクライアント(ADR-0317 §1、ADR-0318 §1)。teamClient.ts と同じ流儀:
 // 例外を投げず、常に RecordResult<T>(判別 union)で返す。型はルートの api/openapi.gen.ts を使う。
 
 import type { ClientIds } from "../api/clientIds";
@@ -27,11 +27,17 @@ export interface CreateRecordClientInput {
 export interface RecordClient {
   /** この端末のよく計算する相手(スコア降順。記録が無ければ空配列)。 */
   listFrequentOpponents(signal?: AbortSignal): Promise<RecordResult<Schemas["FrequentOpponent"][]>>;
+  /**
+   * この端末の履歴・お気に入りをサーバーから削除する(ADR-0209 §5)。1回の呼び出しは1回の HTTP 要求。
+   * partial のときの繰り返しは呼び出し側(deviceData/deleteDeviceData.ts)の仕事。
+   */
+  deleteDeviceData(): Promise<RecordResult<Schemas["RecordDeletionResult"]>>;
 }
 
 /** 記録 API のパス(基点 URL からの相対)。 */
 export const RECORD_PATHS = {
   frequentOpponents: "api/record/frequent-opponents",
+  deviceData: "api/record/device-data",
 } as const;
 
 /** チップに出す上限として API へ渡す limit(openapi の 1〜50 の範囲内。ADR-0317 §1)。 */
@@ -50,6 +56,14 @@ function isErrorBody(value: unknown): value is Schemas["Error"] {
   }
   const record = value as Record<string, unknown>;
   return typeof record.code === "string" && typeof record.message === "string";
+}
+
+function isDeletionResult(value: unknown): value is Schemas["RecordDeletionResult"] {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const status = (value as Record<string, unknown>).status;
+  return status === "completed" || status === "partial";
 }
 
 function unavailableResult<T>(): RecordResult<T> {
@@ -89,6 +103,29 @@ export function createRecordClient(input: CreateRecordClientInput): RecordClient
       return Array.isArray(parsed)
         ? { ok: true, value: parsed as Schemas["FrequentOpponent"][] }
         : unavailableResult();
+    },
+    async deleteDeviceData() {
+      let response: Response;
+      try {
+        response = await fetchImpl(`${baseUrl}${RECORD_PATHS.deviceData}`, {
+          method: "DELETE",
+          headers: { "X-Device-Id": ids.deviceId, "X-Session-Id": ids.sessionId },
+        });
+      } catch {
+        return unavailableResult();
+      }
+      let parsed: unknown;
+      try {
+        parsed = await response.json();
+      } catch {
+        return unavailableResult();
+      }
+      if (!response.ok) {
+        return isErrorBody(parsed)
+          ? { ok: false, error: { code: parsed.code, message: parsed.message } }
+          : unavailableResult();
+      }
+      return isDeletionResult(parsed) ? { ok: true, value: parsed } : unavailableResult();
     },
   };
 }
