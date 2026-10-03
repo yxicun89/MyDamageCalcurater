@@ -88,6 +88,7 @@ import { useFrequentOpponents } from "../record/useFrequentOpponents";
 import { MegaItemReason } from "./MegaItemReason";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
+import { PokemonImage } from "../images/PokemonImage";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
 import { CalcConditionsPanel } from "./CalcConditionsPanel";
 import "./CalcScreen.css";
@@ -976,10 +977,17 @@ function SpeciesCard({
       )}
       {species !== null && primaryType !== undefined && (
         <div className="calc-card__info">
-          <span
-            className="calc-card__emblem"
-            data-testid="type-emblem"
-            style={{ backgroundColor: `var(--type-${primaryType})` }}
+          <PokemonImage
+            speciesKey={species.key}
+            size="thumb"
+            className="calc-card__image"
+            fallback={
+              <span
+                className="calc-card__emblem"
+                data-testid="type-emblem"
+                style={{ backgroundColor: `var(--type-${primaryType})` }}
+              />
+            }
           />
           <h3 className="calc-card__name">{species.nameJa}</h3>
           <ul className="calc-card__types">

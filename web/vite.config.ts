@@ -24,7 +24,7 @@ export const baseConfig: UserConfig = {
 };
 
 export default defineConfig(({ mode }) => {
-  // API_PROXY_TARGET・BALANCE_PROXY_TARGET・POKEDEX_PROXY_TARGET は開発サーバーのプロキシだけが読む Node 側の値。
+  // API_PROXY_TARGET・BALANCE_PROXY_TARGET・POKEDEX_PROXY_TARGET・IMAGES_PROXY_TARGET は開発サーバーのプロキシだけが読む Node 側の値。
   // `VITE_` 接頭辞を付けないのでクライアントのバンドルには入らない。VITE_API_BASE_URL(ブラウザで読む基点 URL。
   // api/config.ts)とは別(ADR-0301 §4)。BALANCE_PROXY_TARGET は P4-12a(ADR-0303 §5)の balance API 用、
   // POKEDEX_PROXY_TARGET は PR2(ADR-0307)の pokedex フィクスチャ用で、どちらも /api とは別の転送先に送る。
@@ -32,6 +32,8 @@ export default defineConfig(({ mode }) => {
   const apiProxyTarget = env.API_PROXY_TARGET ?? "";
   const balanceProxyTarget = env.BALANCE_PROXY_TARGET ?? "";
   const pokedexProxyTarget = env.POKEDEX_PROXY_TARGET ?? "";
+  // P8-1c(ADR-0325): ポケモン画像(gateway の /images/*)。設定したときだけ転送する(未設定なら従来どおり)。
+  const imagesProxyTarget = env.IMAGES_PROXY_TARGET ?? "";
   // /api/balance・/api/pokedex は /api より前に置く(Vite のプロキシは定義順に前方一致で選ぶため、/api が先だと
   // balance・pokedex への要求が calc に行ってしまう)。
   const proxy: Record<string, { target: string; changeOrigin: boolean }> = {};
@@ -40,6 +42,9 @@ export default defineConfig(({ mode }) => {
   }
   if (pokedexProxyTarget !== "") {
     proxy["/api/pokedex"] = { target: pokedexProxyTarget, changeOrigin: true };
+  }
+  if (imagesProxyTarget !== "") {
+    proxy["/images"] = { target: imagesProxyTarget, changeOrigin: true };
   }
   if (apiProxyTarget !== "") {
     proxy["/api"] = { target: apiProxyTarget, changeOrigin: true };

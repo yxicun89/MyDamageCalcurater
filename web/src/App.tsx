@@ -28,6 +28,7 @@ import {
 import { browserWasmLoader } from "./engine/browserWasmLoader";
 import type { CalcEngine } from "./engine/types";
 import { createWasmEngine } from "./engine/wasmEngine";
+import { PokemonImagesProvider } from "./images/PokemonImagesContext";
 import { AboutScreen } from "./AboutScreen";
 import { aboutText, appText } from "./i18n/ja";
 import { isSearchableMasterSource } from "./master/capabilities";
@@ -73,6 +74,8 @@ export interface AppProps {
    * 省くと両モードとも masterSource(既定は架空の例データ)。本番の組み立ては main.tsx が渡す。
    */
   readonly masterSources?: (ids: ClientIds) => MasterSources;
+  /** ポケモン画像の manifest を取る fetch(P8-1c、ADR-0325)。省くと globalThis.fetch。テストで差し替える。 */
+  readonly imageFetch?: typeof fetch;
 }
 
 /** masterSource.load() の結果(成功/失敗のどちらか)。読み込み中は state を持たず null のまま表す。 */
@@ -93,7 +96,13 @@ interface MasterLoadState {
  * アプリの最上位。ヘッダーと計算画面(CalcScreen)を出す。マスタを読み込むまでは「読み込み中」、
  * 読み込みに失敗したら role=alert で知らせる。
  */
-export function App({ engine, engines, masterSource = exampleMasterSource, masterSources }: AppProps) {
+export function App({
+  engine,
+  engines,
+  masterSource = exampleMasterSource,
+  masterSources,
+  imageFetch = globalThis.fetch,
+}: AppProps) {
   // 既定のオフライン(WASM)エンジンはマウント時に1回だけ作る(呼び出しのたびに作り直すと、計算のたびに
   // 読み込み状態がリセットされる)。createWasmEngine 自体は engine.wasm を読まない(初回の計算まで遅延)。
   const [fallbackOfflineEngine] = useState<CalcEngine>(() => createWasmEngine(browserWasmLoader()));
@@ -356,7 +365,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   }, [tab, aboutOpen]);
 
   return (
-    <>
+    <PokemonImagesProvider fetch={imageFetch}>
       {/* main の外に置く: main の内側だと header は banner ランドマークにならない(HTML-AAM)。 */}
       <header className="app-header">
         <h1>{appText.title}</h1>
@@ -461,7 +470,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
           {aboutText.footerLinkLabel}
         </a>
       </footer>
-    </>
+    </PokemonImagesProvider>
   );
 }
 
