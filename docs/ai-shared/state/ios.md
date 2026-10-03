@@ -38,3 +38,4 @@ DECISIONS.md 2026-09-25 で採用、M2 の後に実装予定)を入れたら、i
 (5) P6-7(issue #103・ADR-0209 §8の削除UI)は完了(2026-10-01)。(1)〜(3) も完了済み(P6-18・P6-19・ADR-0215)。将来の候補:
 engine の Champions マスタが pokedex-svc 経由になったら iOS のモック/実マスタの差し替え動作を再確認、Web の
 record/team-svc(M2)が進んだら iOS の構築を端末内保存から API 保存へ移行するかを検討。
+画面レジストリ化(P6-28・ADR-0507。2026-10-03): iOS に画面を足すときは `ios/PokeCalc/Features/<名前>Feature.swift` を書き、`FeatureRegistry.swift` に1行足す。`RootView`・`AppEnvironment` は編集しない。未マージのブランチの移行手順は ADR-0507。

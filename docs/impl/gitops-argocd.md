@@ -11,7 +11,7 @@
 
 | 事実 | 根拠 |
 |---|---|
-| Git の Application は **2 件だけ**(`pokecalc-balance`・`pokecalc-speed`)。ApplicationSet・AppProject の定義は Git に **0 件** | §2 |
+| Git の Application は **3 件**(`pokecalc-balance`・`pokecalc-speed`・`pokecalc-judge`。judge は 2026-10 に追加)。ApplicationSet は **0 件**、AppProject は `pokecalc` の **1 件**(2026-10 に追加。ADR-0408)。以下の §2 以降は調査時点(2 件・AppProject なし)の記録 | §2 |
 | calc・gateway・web・pokedex・mysql・judge は **Argo CD の管理外**。`make up` / `make api-k3d-deploy` / `make web-k3d-deploy` / `make judge-*` が `kubectl apply` する | §5 |
 | 2 件とも **manual sync**(`syncPolicy` なし。`check-gitops.sh` が `automated:` を検出すると失敗) | `scripts/gitops/check-gitops.sh` |
 | 実クラスタの Application は `pokecalc-balance` の **1 件のみ**(OutOfSync / Healthy)。`pokecalc-speed` は未適用 | §7 |

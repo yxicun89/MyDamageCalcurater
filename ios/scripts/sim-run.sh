@@ -4,7 +4,7 @@
 #   ios/scripts/sim-run.sh <シミュレータ名> <画面: root | calc | reverse | team | speed> <外観: light | dark> <文字サイズ>
 #
 # 文字サイズは simctl の content_size(large が標準。extra-extra-large・accessibility-large など)。
-# 画面を直接開く環境変数は ios/PokeCalc/RootView.swift の POKECALC_OPEN_*_AT_LAUNCH と同じ。
+# 画面を直接開く環境変数は ios/PokeCalc/Features/*Feature.swift の openAtLaunchEnvironmentKey と同じ(ADR-0507)。
 set -euo pipefail
 
 if [ "$#" -ne 4 ]; then
