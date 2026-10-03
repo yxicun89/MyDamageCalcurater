@@ -10,7 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	"example.com/pokecalc/services/judge/internal/api"
 	"example.com/pokecalc/services/judge/internal/httpapi"
+	"example.com/pokecalc/services/judge/internal/httpguard"
 )
 
 const (
@@ -19,7 +21,14 @@ const (
 	writeTimeout      = 15 * time.Second
 	idleTimeout       = 60 * time.Second
 	maxHeaderBytes    = 16 * 1024
+
+	// maxInflight は同時に処理する判定リクエストの数。超えた分は待たせず 503 upstream_unavailable +
+	// Retry-After(issue #299・ADR-0801)。全体の締め切りは JUDGE_REQUEST_TIMEOUT(ADR-0707)。
+	maxInflight = 16
 )
+
+// guard は同時実行の上限だけを持つ(締め切りは requestTimeout が担う)。code は契約が宣言済みのもの。
+var guard = httpguard.Config{MaxInflight: maxInflight, Code: string(api.UpstreamUnavailable)}
 
 func main() {
 	port := portFromEnv(os.LookupEnv)
@@ -43,6 +52,7 @@ func main() {
 			Calc:              upstreams.Calc,
 			ChoiceScarfItemID: choiceScarfItemID,
 			RequestTimeout:    requestTimeout,
+			Guard:             guard,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,

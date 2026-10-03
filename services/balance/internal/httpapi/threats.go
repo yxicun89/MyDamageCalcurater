@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"errors"
+	"example.com/pokecalc/services/balance/internal/httpguard"
 	"net/http"
 
 	"example.com/pokecalc/services/balance/internal/api"
@@ -98,6 +99,9 @@ func threats(c *echo.Context, deps Dependencies) error {
 		return resolveError(c, err)
 	}
 
+	if httpguard.Expired(c.Request().Context()) {
+		return overloaded(c)
+	}
 	analysis, err := balance.AnalyzeThreats(deps.TypeChart, memberCombatants, threatCombatants)
 	if err != nil {
 		return internalError(c, err)
