@@ -36,6 +36,7 @@ export interface paths {
      * 種族の詳細(タイプ・種族値・特性・覚える技)
      * @description 使用可能集合の外の種族も返す(絞り込みは検索の仕事)。`abilities` は slot 順、
      *     `learnset` は習得技 ∩ 既定のレギュレーションの使用可能な技(ID 昇順)。
+     *     `abilities` の各特性は効果を持てば `effect` を伴う(ADR-0218)。
      */
     get: operations["getSpecies"];
     put?: never;
@@ -152,6 +153,8 @@ export interface paths {
     /**
      * 持ち物を日本語名で前方一致検索
      * @description 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
+     *     各持ち物は効果を持てば `effect` を伴う(ADR-0218)。効果を持つ持ち物だけに絞る検索条件は無い
+     *     (クライアントが `effect` の有無で絞る)。
      */
     get: operations["searchItems"];
     put?: never;
@@ -694,6 +697,15 @@ export interface components {
     Ability: {
       id: string;
       nameJa: string;
+      /**
+       * @description 特性の効果定義(ability_effects の JSON。`getMasterExport` の `MasterAbility.effect` と同じ値・同じ形。
+       *     issue 211・ADR-0218)。効果を持たない特性は**キーごと省く**(null を返さない)。
+       *     pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeAbilityEffect`)で厳格に検証し、
+       *     検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。古いサーバーはこのキーを
+       *     返さないため、クライアントは「キーが無い」を「効果なし」と「効果データを返さない版」の
+       *     どちらとも区別できない。区別はクライアントの capabilities で行う(ADR-0304 A-1・ADR-0218 §4)。
+       */
+      effect?: components["schemas"]["MasterEffect"];
     };
     Move: {
       id: string;
@@ -708,6 +720,13 @@ export interface components {
     Item: {
       id: string;
       nameJa: string;
+      /**
+       * @description 持ち物の効果定義(item_effects の JSON。`getMasterExport` の `MasterItem.effect` と同じ値・同じ形。
+       *     issue 211・ADR-0218)。効果を持たない持ち物は**キーごと省く**(null を返さない)。
+       *     pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeItemEffect`)で厳格に検証し、
+       *     検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。
+       */
+      effect?: components["schemas"]["MasterEffect"];
     };
     Nature: {
       /** @example adamant */
