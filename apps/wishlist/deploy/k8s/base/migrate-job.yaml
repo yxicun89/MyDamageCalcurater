@@ -1,0 +1,52 @@
+# スキーマの migrate(api イメージの `migrate up`)。Job の template は変更できないため、
+# 2 回目以降は `kubectl -n wishlist delete job wishlist-migrate --ignore-not-found` してから apply する
+# (デプロイ用の Makefile ターゲットは API の実装と一緒に足す)。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wishlist-migrate
+  labels:
+    app.kubernetes.io/name: wishlist-migrate
+    app.kubernetes.io/part-of: wishlist
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wishlist-migrate
+        app.kubernetes.io/part-of: wishlist
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: migrate
+          image: wishlist/api:0.1.0
+          imagePullPolicy: IfNotPresent
+          args: ["migrate", "up"]
+          env:
+            - name: WISHLIST_DATABASE_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: wishlist-api
+                  key: database-dsn
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault

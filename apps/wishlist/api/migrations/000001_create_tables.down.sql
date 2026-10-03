@@ -1,0 +1,7 @@
+DROP TABLE IF EXISTS estimates;
+DROP TABLE IF EXISTS listings;
+DROP TABLE IF EXISTS item_site_overrides;
+DROP TABLE IF EXISTS items;
+DROP TABLE IF EXISTS genre_sites;
+DROP TABLE IF EXISTS sites;
+DROP TABLE IF EXISTS genres;
