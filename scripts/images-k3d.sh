@@ -13,6 +13,22 @@ DIST=${ASSETS_OUT:-data/generated/images/dist}
 NODE=${NODE:-k3d-${CLUSTER}-server-0}
 NODE_DIR=${NODE_DIR:-/var/lib/pokecalc-images}
 
+# 中身を消す(find -delete)対象を、固定の置き場とその配下だけに限る(NODE_DIR=/ などの誤指定でノードの全体を消さない)。
+# manifest の有無より前に検査する(画像が無くても誤指定は常に拒否する)。
+case "$NODE_DIR" in
+  /var/lib/pokecalc-images | /var/lib/pokecalc-images/*) ;;
+  *)
+    echo "images-k3d: NODE_DIR は /var/lib/pokecalc-images(かその配下)だけ指定できる: $NODE_DIR" >&2
+    exit 1
+    ;;
+esac
+case "$NODE_DIR" in
+  *..* | *"'"*)
+    echo "images-k3d: NODE_DIR に .. や ' は使えない: $NODE_DIR" >&2
+    exit 1
+    ;;
+esac
+
 if [ ! -f "$DIST/manifest.json" ]; then
   echo "images-k3d: $DIST/manifest.json が無いので画像なしのまま(エンブレム表示)。画像を使うには data/generated/images/src に置いて make assets"
   exit 0

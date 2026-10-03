@@ -70,6 +70,19 @@ grep -q "docker cp $repo/out/. k3d-pokecalc-server-0:/var/lib/pokecalc-images" "
 rc=$?
 [ "$rc" != 0 ] && [ ! -s "$FAKE_LOG" ] && ok "別 context では失敗し docker に触らない" || ng "別 context の扱い rc=$rc"
 
+grep -q "find '/var/lib/pokecalc-images' -mindepth 1 -delete" "$FAKE_LOG" || true
+: > "$FAKE_LOG"
+(cd "$repo" && PATH="$work/bin:$PATH" ASSETS_OUT="$repo/out" bash scripts/images-k3d.sh) > "$work/o4" 2>&1
+grep -q "find '/var/lib/pokecalc-images' -mindepth 1 -delete" "$FAKE_LOG" && ok "削除の対象は固定の置き場だけ" || ng "find -delete の対象が想定と違う: $(cat "$FAKE_LOG")"
+
+# NODE_DIR の誤指定(/ ・ 配下外 ・ .. ・ 引用符)は docker に触れず失敗する(find -delete で広く消さない)。
+for bad in / /var /var/lib /var/lib/pokecalc-images/../.. /etc "/var/lib/pokecalc-images'x"; do
+  : > "$FAKE_LOG"
+  (cd "$repo" && NODE_DIR="$bad" PATH="$work/bin:$PATH" ASSETS_OUT="$repo/out" bash scripts/images-k3d.sh) > "$work/o5" 2>&1
+  rc=$?
+  [ "$rc" != 0 ] && [ ! -s "$FAKE_LOG" ] && ok "NODE_DIR=$bad は拒否し docker に触らない" || ng "NODE_DIR=$bad が通った rc=$rc log=$(cat "$FAKE_LOG")"
+done
+
 if [ "$failures" -ne 0 ]; then
   echo "images-k3d_test: $failures 件失敗" >&2
   exit 1
