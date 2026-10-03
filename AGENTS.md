@@ -9,7 +9,7 @@
 ## 共有状態(docs/ai-shared/)
 
 Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-shared/` だけ。
-**作業は AI ではなく「レーン」(ダメージ計算 / タイプバランス)に属する**。どちらの AI がどのレーンを進めてもよく、
+**作業は AI ではなく「レーン」に属する(レーン一覧は COORDINATION.md の表)**。どちらの AI がどのレーンを進めてもよく、
 同じレーンは同時に1セッションだけ。レーン・ディレクトリ・ブランチ・PR での統合・止まるときの作法は
 `docs/ai-shared/COORDINATION.md` を正とする(2026-09-21 ユーザー決定)。
 
@@ -54,8 +54,8 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 マージコーディネーターは廃止。手順・条件・止まるときの作法は `docs/ai-shared/COORDINATION.md` を正とする)。
 
 1. `docs/ai-shared/CURRENT_STATE.md` （2026-10-03: `CURRENT_STATE.md` はレーン別の `state/`、`DECISIONS.md` は 1 件 1 ファイルの `decisions/` に分割済み。COORDINATION.md「共有状態ファイルの分割」）
-   - 自分が進めているレーンの欄(`## Damage Calculator` / `## Type Balance Checker`)だけを編集する。
-     他のレーン欄は読むだけ。コンフリクトが起きても、該当欄を残すだけで解決できる。
+   - 自分が進めているレーンのファイル(`docs/ai-shared/state/<レーン>.md`)だけを編集する。
+     他のレーンのファイルは読むだけ。コンフリクトが起きても、該当欄を残すだけで解決できる。
 2. `docs/ai-shared/DECISIONS.md`
    - 追記のみ。既存エントリは編集しない。ファイル末尾に新エントリを足す。
 3. `go.work`(Go ワークスペース)
@@ -144,7 +144,7 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
   ルート `api/openapi.yaml` は既存 damage/gateway 契約の正として Codex は変更しない
 - 認証なし。pokecalc と同じ端末ID/セッションIDの流儀に合わせる
 - manifest は Kustomize(`services/balance/deploy/k8s/base` + `overlays/local`)
-- Argo CD Application は balance 専用に分ける。Sync は最初 manual
+- Argo CD Application は balance 専用に分ける。Sync は最初 manual(現状: リポジトリには balance・speed・judge の Application 定義があり、いずれも manual sync。GitOps で常時 Synced にするのは balance だけ。ユーザー決定 2026-09-25)
 
 ### 完了条件
 
