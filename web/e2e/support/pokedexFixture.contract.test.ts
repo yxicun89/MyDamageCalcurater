@@ -60,8 +60,16 @@ const SPECIES_DETAIL_KEYS = [
   "abilities",
   "learnset",
 ] as const satisfies readonly (keyof Schemas["SpeciesDetail"])[];
+// 省略可のキー(issue #515: メガシンカ。isMega は常に返るが、古いサーバーとの互換で契約上は optional)。
+const SPECIES_DETAIL_OPTIONAL_KEYS = [
+  "isMega",
+  "requiredItemId",
+] as const satisfies readonly (keyof Schemas["SpeciesDetail"])[];
 export type SpeciesDetailKeysAreComplete = AssertNever<
-  Exclude<keyof Schemas["SpeciesDetail"], (typeof SPECIES_DETAIL_KEYS)[number]>
+  Exclude<
+    keyof Schemas["SpeciesDetail"],
+    (typeof SPECIES_DETAIL_KEYS)[number] | (typeof SPECIES_DETAIL_OPTIONAL_KEYS)[number]
+  >
 >;
 
 const MOVE_KEYS = [
@@ -208,14 +216,17 @@ function isSpeciesSummary(value: unknown): value is Schemas["SpeciesSummary"] {
 
 function isSpeciesDetail(value: unknown): value is Schemas["SpeciesDetail"] {
   return (
-    hasExactKeys(value, [...SPECIES_DETAIL_KEYS]) &&
+    hasKeys(value, [...SPECIES_DETAIL_KEYS], [...SPECIES_DETAIL_OPTIONAL_KEYS]) &&
     isSpeciesSummaryShape(value) &&
     isRecord(value) &&
     isStatBlock(value.baseStats) &&
     Array.isArray(value.abilities) &&
     value.abilities.every(isAbility) &&
     Array.isArray(value.learnset) &&
-    value.learnset.every(isString)
+    value.learnset.every(isString) &&
+    // メガの項目(issue 515)は省略可。在るときは型まで確かめる(requiredItemId は null も可)。
+    (value.isMega === undefined || typeof value.isMega === "boolean") &&
+    (value.requiredItemId === undefined || value.requiredItemId === null || isString(value.requiredItemId))
   );
 }
 
