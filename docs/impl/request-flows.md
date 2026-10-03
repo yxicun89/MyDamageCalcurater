@@ -180,7 +180,7 @@ Traefik `/api/judge` → judge(gateway 非経由)。
 
 | # | 場所 | 内容 | 失敗時 |
 |---|---|---|---|
-| 1 | `judge/internal/httpapi/server.go:34` `New`、`:79` `requireRequestContext` | ヘッダ非空(UUID 検証なし) | 400 `invalid_request` |
+| 1 | `judge/internal/httpapi/server.go:34` `New`、`:79` `requireRequestContext` | 正準 UUID 検証(`requestctx.go`。ADR-0219) | 400 `missing_header` / `invalid_header` |
 | 2 | `outspeed.go:120` `outspeedAndKo` | 本文(上限・形)→ defenders 件数 1..6 → sp/ranks/format → 性格 → 種族 → calc の順(コメント `:113-119`) | 400/413 `request_too_large` |
 | 3 | `outspeed.go:144` | `deps.Pokedex == nil \|\| deps.Calc == nil`(`JUDGE_*_BASE_URL` 未設定) | 503 `upstream_unavailable` |
 | 4 | `client/pokedex.go:118` `Natures`、`:36` `Species` | `GET http://pokedex/api/pokedex/natures`・`/species/{key}`(端末 ID/セッション ID を転送) | 404 → `unknown_species` 等 / 503 |

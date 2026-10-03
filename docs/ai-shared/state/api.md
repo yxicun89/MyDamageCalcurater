@@ -72,6 +72,7 @@ critic 1回目FAILで発覚し修正済み)。deployment.yamlへの実URL配線�
 同じく別タスクとして残す(コードのみ今回のスコープ)。critic 2ラウンド(1回目FAIL〈重要2件:
 healthz例外の欠如・README.mdのルーティング表が古いまま〉→修正→2回目PASS)。**main未統合**。
 Status(追記): 2026-10-01 PR #416(issue #284: balance・speed・judgeをgatewayの後ろに統一)を main 統合。続けて UnsupportedMark の target・reason を string に緩めた(ADR-0215。Web・iOS の追従込み)。
+Status(追記): 2026-10-02、issue #236 の judge 分を完了(ADR-0219。ブランチ fix/api-236-header-validation、PR 待ち。balance は PR #458)。端末ID・セッションIDを gateway・speed と同じ正準 UUID 検証に揃え、code は `missing_header`/`invalid_header`。judge は非 UUID を calc へ転送しない。judge の openapi・Web 生成型・ja.ts を更新。
 Next: キュー順に対応:
 (2) defenderOverride.ranks/status は実装済み(ADR-0216。critic・コミット・PR 待ち)、(3) P5-3b・P5-4b(失効ジョブ・Deployment配線。
 issue #284のdeployment.yaml配線も含む。優先度低)。

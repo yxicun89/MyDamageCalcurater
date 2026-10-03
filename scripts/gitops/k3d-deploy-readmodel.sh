@@ -79,3 +79,12 @@ printf '%s\n' "$rendered" | grep -q "readmodel-hash: \"${hash}\"" \
 printf '%s\n' "$rendered" | kubectl --context "$context" apply --server-side --force-conflicts -f - >/dev/null
 kubectl --context "$context" -n pokecalc rollout restart "deployment/$SERVICE" >/dev/null
 kubectl --context "$context" -n pokecalc rollout status "deployment/$SERVICE" --timeout=120s
+
+# 動いている版を確かめられるよう、export の metadata.json の dataVersion を Deployment の注釈に残す
+# (scripts/check-master-version.sh が読む。ADR-0135)。metadata.json が無い古い export では付けない。
+if [ -f "$readmodel_dir/metadata.json" ]; then
+  data_version=$(jq -r '.dataVersion // empty' "$readmodel_dir/metadata.json")
+  if [ -n "$data_version" ]; then
+    kubectl --context "$context" -n pokecalc annotate "deployment/$SERVICE" "pokecalc.example/data-version=${data_version}" --overwrite >/dev/null
+  fi
+fi

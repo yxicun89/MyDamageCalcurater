@@ -136,6 +136,7 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
   StatusCondition`(全行に一律で上書き)。abilityId(上記)とは独立に追加できる。engine 側の変更
   (`BulkInput`/`ReverseInput` へのオーバーライド追加。プリセット解決後・計算前に当てる)を伴うため
   ADR-0003 の test-first + 独立 critic の対象。優先度は低い(iOS レーンから「急ぎではない」と明記済み)
+- [x] issue #236 の judge 分(speed は #360/ADR-0606、balance は PR #458/ADR-0413)端末ID・セッションIDの検証を gateway と同じ正準 UUID に揃えた(ADR-0219)
 - [x] issue #328 の Web 分(ADR-0314): アプリ下部のフッター(`<footer>`、main の外)に「このアプリについて」リンクを置き、
   `/about`(ADR-0300 §1 のパス連動。タブには入れない)で非公式の注記とデータの出典4件を出す。文言は `aboutText`
   (iOS の `AboutText` と一字一句同じ)、画面は `AboutScreen.tsx`。タブ列は出さず他タブは hidden で DOM に残す(入力を保つ)。
@@ -143,3 +144,5 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
 - [x] issue #274 の Web 分の残り(ADR-0315): 「詳細」に防御側のランク(選択中の技の分類で B か D を ±1、-6..+6、def / spd は別保持)を追加。
   触った分だけ `defenderOverride.ranks`(5項目)を要求に載せ(既定は従来とバイト同一)、API は特性(#272)と同じ `defenderOverride` に合成、
   WASM は素通し(特性は従来どおり `defenderAbilities`)。条件の置き場は `domain/calcConditions.ts`。防御側の状態異常は式に効かないので出さない。iOS は別レーン
+  - [x] **P5-5c よく計算する相手(チップ。ADR-0317)**: recordClient(`web/src/record/`)・CalcScreen の結果の下のチップ(マウント時1回取得・失敗/0件は黙って非表示)・App はオンラインのときだけ接続・`SpeciesSearchField` に任意 prop `selectedName`。履歴一覧(API 無し)は対象外
+  - [ ] **P5-5d 端末データの削除 UI**: record-svc の API と ADR-0209 §8 の文言
