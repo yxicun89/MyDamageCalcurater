@@ -240,6 +240,7 @@ Decision: (1) P1-12 の Recall の新定義(返した SP 範囲が総当たり�
 Reason: ユーザーが確認の質問に回答した。
 Impact: 逆算の観測は整数%(`Percent`)が主の入力。丸め方が未確認なので、照合は切り捨て・四捨五入・切り上げのどれでも真値を落とさない区間のまま(ADR-0010 §R)。
 丸め方が確認できたら区間を狭める(1か所の差し替え)。plan.md のブロッカー「観測ダメージの入力と丸め」は「丸め方のみ未確認」に縮小。
+→ 2026-10-03 に確認済み(減少量そのものの切り捨て)。整数%の区間は [v, v+1) に狭めた(ADR-0134)。
 
 ## 2026-09-21: マスタのフォームの持ち方・更新運用・技の使用可否の裁定の進め方(ユーザー回答)
 Decision: (1) 見た目だけ違うフォーム(種族値・タイプ・特性が同じ)はマスタで1件にまとめる。性能が違うフォーム(メガ・リージョンフォーム等)は別ポケモンとして登録する(メガは既決のとおり `is_mega` / `base_species_key` / `required_item_id`)。
@@ -2021,6 +2022,10 @@ Impact: Web レーンは文言・再送の上限・再試行の扱いを揃え�
 - API レーンへ: TiDB(record/team)を k3d に上げる前に ADR-0132「確認の結果」の手順を行う(tidb-operator からの許可を足す)。
   M2 で record・team の本体を足すときも許可が要る。PR #416(#284)で gateway → balance/speed/judge は既に許可済み
 - 詰まったときの戻し方: `kubectl -n pokecalc delete networkpolicy default-deny-ingress`(許可だけが残る。データは消えない)
+## 2026-10-01: 既定の計算モードをオンラインに変更(ユーザー決定。Web レーン。issue #210 / ADR-0313)
+Decision: Web の既定の計算モードを「オンライン」にする(ADR-0301 §4 の「既定はオフライン」を変更)。オンラインで取得したマスタ(持ち物・性格・解決した種族/特性/技)を IndexedDB に保存し、オフライン(WASM)はそのキャッシュだけから読む。保存済みのモード(localStorage)は従来どおり尊重する。
+Reason: 既定のオフラインは架空の例データしか持たず、実データで計算するには毎回オンラインへ切り替えが要った。実データのビルド同梱は ADR-0002 に反する。
+Impact: Web のみ(`web/src/master/cache/`・`main.tsx`・`calcMode.ts`・E2E 設定)。API・engine・iOS は無変更。オフラインで引ける種族は一度オンラインで選んだものに限り、持ち物の候補比較はオフラインでも選べない(公開 API に効果データが無い)。
 
 
 ## 2026-10-02: issue #236 の balance 側をクローズ(タイプバランスレーン → Web レーンへ。ADR-0413)
@@ -2052,6 +2057,30 @@ Impact: 版を上げる PR は config.json の `integrity` も更新する(不�
 Decision: `services/balance/deploy/k8s/base/ingress.yaml` を削除し、gateway の base Deployment に `GATEWAY_BALANCE_URL=http://balance` を配線した。balance の smoke は固定の架空 UUID を付ける(gateway は UUID だけを通す)。
 Reason: 2026-09-25 ユーザー決定 #2(balance・speed・judge も gateway の後ろにまとめる)。API レーンの「gateway の配線が済んでから直結 Ingress を撤去」の申し送りに沿った。
 Impact: **speed・judge レーンへ**: 同じ形(Ingress 削除・`GATEWAY_SPEED_URL`/`GATEWAY_JUDGE_URL` を gateway base に追加・smoke の UUID 化)が残っている。共有クラスタは未適用で、旧 `Ingress/balance` は Argo CD が prune しないため手動削除が要る(人間確認)。
+
+## 2026-10-02: issue #230 のタイプバランス系リモートブランチ 19 本を削除(タイプバランスレーン。ユーザー承認済み)
+Decision: 対応する PR(#6〜#66)がすべて MERGED の tb 系リモートブランチ 19 本をリモートから削除した。OPEN の PR のブランチ(#451・#456・#457・#458)と main は触っていない。
+Reason: ユーザー承認(AskUserQuestion、2026-10-02)。削除前に、全 19 本の PR が MERGED であることを PR 一覧で確認した。
+Impact: 復旧が必要なときは、下記の tip SHA から `git branch <名前> <SHA>` で作れる(GitHub 側で参照されなくなってから一定期間を過ぎると到達できなくなる)。#230 の残りの対象(Web・運用レーンのブランチ)は各レーンが判断する。
+- `feat/tb-readmodel-wiring`(tip 13f353e)
+- `feat/tb-tb0-argocd`(tip a4841f3)
+- `feat/tb-tb1-defense`(tip 94c44ce)
+- `feat/tb-tb1b-typechart`(tip 5e75b81)
+- `feat/tb-tb2-offense`(tip ed7888a)
+- `feat/tb-tb3-ability`(tip 352b5cf)
+- `feat/tb-tb4-threats`(tip a97a7fc)
+- `feat/tb-tb5-recommend`(tip c7fc41f)
+- `feat/tb-tb6-moverange`(tip c73193b)
+- `feat/tb-tb6-planning`(tip 12c8c45)
+- `fix/tb-deps-latest`(tip 64fedb0)
+- `fix/tb-doc`(tip f731d30)
+- `fix/tb-maint-cleanup`(tip dc8e4b6)
+- `fix/tb-pause-checkpoint`(tip 1e0cb8e)
+- `fix/tb-post-merge-state`(tip e03548f)
+- `fix/tb-push-permission`(tip 727bad3)
+- `fix/tb-runbook-retry`(tip 3569d95)
+- `fix/tb-runbooks`(tip 8faf353)
+- `fix/tb-tb0-done`(tip fcd83db)
 
 ## 2026-10-03: PR のマージは対象 PR の CI が全件成功のときだけ AI が実行してよい(ADR-0803。ユーザー決定)
 Decision: bash-guard の PR マージを無条件ブロックから、`gh pr checks` が終了コード 0 のときだけ通す条件付きに変更。`--admin`・`gh api` 直叩き・main への直接 push は引き続き不可。
