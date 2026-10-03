@@ -100,4 +100,36 @@ public enum WishlistFixtures {
         for value in priceHistories.values { service.setPriceHistory(value) }
         return service
     }
+
+    // MARK: - フェーズ4-3・4-1(`WISHLIST_USE_FAKE=official`。docs/phase4-spec.md AC-IOS-OFF-UI-01・AC-IOS-ALI-UI-01)
+
+    /// 公式の販売状況の確認時刻(JST 2026-10-04 3:00 → `10/4 確認`)
+    public static let officialCheckedAt = Date(timeIntervalSince1970: 1_791_050_400)
+
+    /// 商品 12 グリスを監視中(予約受付中・根拠 2 語)にした商品の一覧。11 ボルシャックは監視しない(`items` と同じ)
+    public static var officialItems: [Item] {
+        items.map { item in
+            guard item.id == 12 else { return item }
+            var watched = item
+            watched.sourceURL = "https://tamashii.example/item/12/"
+            watched.watchOfficial = true
+            watched.officialStatus = OfficialStatus(status: .preorder, evidence: ["予約受付中", "予約する"], checkedAt: officialCheckedAt)
+            return watched
+        }
+    }
+
+    /// ジャンル 1 S.H.Figuarts に別名グループ `S.H.Figuarts, SHフィギュアーツ` を持たせた一覧(他は `genres` と同じ)
+    public static var officialGenres: [Genre] {
+        genres.map { genre in
+            guard genre.id == 1 else { return genre }
+            var withAliases = genre
+            withAliases.aliases = [["S.H.Figuarts", "SHフィギュアーツ"]]
+            return withAliases
+        }
+    }
+
+    /// `WISHLIST_USE_FAKE=official` のモック。商品は `officialItems`、ジャンルは `officialGenres`、サイトは `sites`(目安価格なし)
+    public static func makeServiceWithOfficial() -> FakeWishlistService {
+        FakeWishlistService(items: officialItems, genres: officialGenres, sites: sites)
+    }
 }

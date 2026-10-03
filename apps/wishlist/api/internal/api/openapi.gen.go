@@ -113,6 +113,78 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
+// Defines values for OfficialState.
+const (
+	OfficialStateAmbiguous OfficialState = "ambiguous"
+	OfficialStateAvailable OfficialState = "available"
+	OfficialStateBlocked   OfficialState = "blocked"
+	OfficialStateEnded     OfficialState = "ended"
+	OfficialStateFailed    OfficialState = "failed"
+	OfficialStatePreorder  OfficialState = "preorder"
+	OfficialStateSoldout   OfficialState = "soldout"
+	OfficialStateUnknown   OfficialState = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the OfficialState enum.
+func (e OfficialState) Valid() bool {
+	switch e {
+	case OfficialStateAmbiguous:
+		return true
+	case OfficialStateAvailable:
+		return true
+	case OfficialStateBlocked:
+		return true
+	case OfficialStateEnded:
+		return true
+	case OfficialStateFailed:
+		return true
+	case OfficialStatePreorder:
+		return true
+	case OfficialStateSoldout:
+		return true
+	case OfficialStateUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OfficialStatusPreviousStatus.
+const (
+	OfficialStatusPreviousStatusAmbiguous OfficialStatusPreviousStatus = "ambiguous"
+	OfficialStatusPreviousStatusAvailable OfficialStatusPreviousStatus = "available"
+	OfficialStatusPreviousStatusBlocked   OfficialStatusPreviousStatus = "blocked"
+	OfficialStatusPreviousStatusEnded     OfficialStatusPreviousStatus = "ended"
+	OfficialStatusPreviousStatusFailed    OfficialStatusPreviousStatus = "failed"
+	OfficialStatusPreviousStatusPreorder  OfficialStatusPreviousStatus = "preorder"
+	OfficialStatusPreviousStatusSoldout   OfficialStatusPreviousStatus = "soldout"
+	OfficialStatusPreviousStatusUnknown   OfficialStatusPreviousStatus = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the OfficialStatusPreviousStatus enum.
+func (e OfficialStatusPreviousStatus) Valid() bool {
+	switch e {
+	case OfficialStatusPreviousStatusAmbiguous:
+		return true
+	case OfficialStatusPreviousStatusAvailable:
+		return true
+	case OfficialStatusPreviousStatusBlocked:
+		return true
+	case OfficialStatusPreviousStatusEnded:
+		return true
+	case OfficialStatusPreviousStatusFailed:
+		return true
+	case OfficialStatusPreviousStatusPreorder:
+		return true
+	case OfficialStatusPreviousStatusSoldout:
+		return true
+	case OfficialStatusPreviousStatusUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SuspiciousReason.
 const (
 	BelowMin      SuspiciousReason = "below_min"
@@ -234,15 +306,22 @@ type Item struct {
 
 	// ImageUrl 画像のパス `images/<name>`(先頭に / を付けない)。API のベース URL(例 `https://<host>/wishlist/`)を基準に解決する
 	// (オリジン基準で解決すると前置 `/wishlist` が抜けるため。docs/design.md W-03)
-	ImageUrl      string                    `json:"image_url"`
-	MinPrice      nullable.Nullable[int]    `json:"min_price,omitempty"`
-	Name          string                    `json:"name"`
-	OptionText    nullable.Nullable[string] `json:"option_text,omitempty"`
-	QueryOverride nullable.Nullable[string] `json:"query_override,omitempty"`
-	SiteOverrides []SiteOverride            `json:"site_overrides"`
-	SortOrder     int                       `json:"sort_order"`
-	SourceUrl     nullable.Nullable[string] `json:"source_url,omitempty"`
-	UpdatedAt     time.Time                 `json:"updated_at"`
+	ImageUrl string                 `json:"image_url"`
+	MinPrice nullable.Nullable[int] `json:"min_price,omitempty"`
+	Name     string                 `json:"name"`
+
+	// OfficialStatus 公式ページの販売状況(フェーズ4-3)。まだ確かめていなければ null。サーバーは常に返す
+	OfficialStatus nullable.Nullable[OfficialStatus] `json:"official_status,omitempty"`
+	OptionText     nullable.Nullable[string]         `json:"option_text,omitempty"`
+	QueryOverride  nullable.Nullable[string]         `json:"query_override,omitempty"`
+	SiteOverrides  []SiteOverride                    `json:"site_overrides"`
+	SortOrder      int                               `json:"sort_order"`
+	SourceUrl      nullable.Nullable[string]         `json:"source_url,omitempty"`
+	UpdatedAt      time.Time                         `json:"updated_at"`
+
+	// WatchOfficial 公式ページ(source_url)の販売状況を夜間に監視するか(フェーズ4-3。docs/phase4-spec.md)。
+	// サーバーは常に返す(required にしないのは、古い応答・キャッシュを読めるようにするため。無ければ false として扱う)
+	WatchOfficial *bool `json:"watch_official,omitempty"`
 }
 
 // ItemCreateJSON defines model for ItemCreateJSON.
@@ -257,6 +336,9 @@ type ItemCreateJSON struct {
 	QueryOverride *string `json:"query_override,omitempty"`
 	SortOrder     *int    `json:"sort_order,omitempty"`
 	SourceUrl     *string `json:"source_url,omitempty"`
+
+	// WatchOfficial true にするには source_url が必要(無ければ 422)
+	WatchOfficial *bool `json:"watch_official,omitempty"`
 }
 
 // ItemCreateMultipart defines model for ItemCreateMultipart.
@@ -269,6 +351,9 @@ type ItemCreateMultipart struct {
 	QueryOverride *string            `json:"query_override,omitempty"`
 	SortOrder     *int               `json:"sort_order,omitempty"`
 	SourceUrl     *string            `json:"source_url,omitempty"`
+
+	// WatchOfficial `true` / `false`(それ以外は 400)。true にするには source_url が必要(無ければ 422)
+	WatchOfficial *bool `json:"watch_official,omitempty"`
 }
 
 // ItemDraft defines model for ItemDraft.
@@ -309,6 +394,9 @@ type ItemFields struct {
 	QueryOverride *string `json:"query_override,omitempty"`
 	SortOrder     *int    `json:"sort_order,omitempty"`
 	SourceUrl     *string `json:"source_url,omitempty"`
+
+	// WatchOfficial true にするには source_url が必要(無ければ 422)
+	WatchOfficial *bool `json:"watch_official,omitempty"`
 }
 
 // ItemUpdate defines model for ItemUpdate.
@@ -321,6 +409,10 @@ type ItemUpdate struct {
 	SiteOverrides *[]SiteOverride           `json:"site_overrides,omitempty"`
 	SortOrder     *int                      `json:"sort_order,omitempty"`
 	SourceUrl     nullable.Nullable[string] `json:"source_url,omitempty"`
+
+	// WatchOfficial 更新後の商品に source_url が無いのに true になるなら 422(source_url を null にするときは false も送る)。
+	// source_url を別の値・null に変えると、保存済みの official_status は消える
+	WatchOfficial *bool `json:"watch_official,omitempty"`
 }
 
 // Listing defines model for Listing.
@@ -337,6 +429,43 @@ type Listing struct {
 	Title             string             `json:"title"`
 	Url               string             `json:"url"`
 }
+
+// OfficialState 公式ページの販売状況。available 販売中 / preorder 予約受付中 / soldout 在庫切れ / ended 販売終了 /
+// unknown 決まった語が無い(判定できない)/ ambiguous 別の種類の語が両方ある(判定できない)/
+// blocked robots.txt が許していないので取得しない / failed 取得できなかった
+type OfficialState string
+
+// OfficialStatus status は最後に判定できた状態。最後の試行が failed・blocked でも、判定済みの status は上書きしない
+// (そのときは last_result・last_attempt_at だけが変わる)。一度も判定できていなければ status は failed・blocked のまま
+type OfficialStatus struct {
+	// ChangedAt status が前回の判定から変わった時刻(変わったことが無ければ null)
+	ChangedAt nullable.Nullable[time.Time] `json:"changed_at"`
+
+	// CheckedAt status を確かめた時刻
+	CheckedAt time.Time `json:"checked_at"`
+
+	// Evidence 判定の根拠にした語(最大 3。ページに現れた順)。unknown・failed・blocked は空
+	Evidence []string `json:"evidence"`
+
+	// LastAttemptAt 最後に試した時刻(failed・blocked を含む)
+	LastAttemptAt time.Time `json:"last_attempt_at"`
+
+	// LastResult 公式ページの販売状況。available 販売中 / preorder 予約受付中 / soldout 在庫切れ / ended 販売終了 /
+	// unknown 決まった語が無い(判定できない)/ ambiguous 別の種類の語が両方ある(判定できない)/
+	// blocked robots.txt が許していないので取得しない / failed 取得できなかった
+	LastResult OfficialState `json:"last_result"`
+
+	// PreviousStatus changed_at のときの変化前の status
+	PreviousStatus nullable.Nullable[OfficialStatusPreviousStatus] `json:"previous_status"`
+
+	// Status 公式ページの販売状況。available 販売中 / preorder 予約受付中 / soldout 在庫切れ / ended 販売終了 /
+	// unknown 決まった語が無い(判定できない)/ ambiguous 別の種類の語が両方ある(判定できない)/
+	// blocked robots.txt が許していないので取得しない / failed 取得できなかった
+	Status OfficialState `json:"status"`
+}
+
+// OfficialStatusPreviousStatus changed_at のときの変化前の status
+type OfficialStatusPreviousStatus string
 
 // PriceHistory defines model for PriceHistory.
 type PriceHistory struct {

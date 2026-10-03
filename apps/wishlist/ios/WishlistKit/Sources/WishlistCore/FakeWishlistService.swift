@@ -177,6 +177,7 @@ public final class FakeWishlistService: WishlistService {
             Self.apply(patch.minPrice, to: &item.minPrice)
             if let v = patch.sortOrder { item.sortOrder = v }
             if let v = patch.siteOverrides { item.siteOverrides = v }
+            if let v = patch.watchOfficial { item.watchOfficial = v }
             s.items[index] = item
             return item
         }
@@ -252,7 +253,7 @@ public final class FakeWishlistService: WishlistService {
         return state.withLock { s in
             let genre = Genre(
                 id: s.nextGenreID, name: body.name, queryTemplate: body.queryTemplate ?? "{name} {option}",
-                sortOrder: body.sortOrder ?? 0, siteIDs: body.siteIDs ?? [])
+                sortOrder: body.sortOrder ?? 0, siteIDs: body.siteIDs ?? [], aliases: body.aliases ?? [])
             s.nextGenreID += 1
             s.genres.append(genre)
             return genre
@@ -267,6 +268,7 @@ public final class FakeWishlistService: WishlistService {
             if let v = patch.queryTemplate { s.genres[index].queryTemplate = v }
             if let v = patch.sortOrder { s.genres[index].sortOrder = v }
             if let v = patch.siteIDs { s.genres[index].siteIDs = v }
+            if let v = patch.aliases { s.genres[index].aliases = v }
             return s.genres[index]
         }
     }

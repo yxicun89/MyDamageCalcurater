@@ -11,6 +11,8 @@ public final class EditItemViewModel {
     public var genreID: Int
     /// 最低価格(円)。空なら未設定
     public var minPriceText: String
+    /// 公式ページを監視する(フェーズ4-3)。`canWatchOfficial` が false のときは変えても送らない
+    public var watchOfficial: Bool
     public private(set) var replacementImage: ImageUpload?
     public private(set) var isBusy = false
     public private(set) var errorMessage: String?
@@ -26,6 +28,17 @@ public final class EditItemViewModel {
         queryOverride = item.queryOverride ?? ""
         genreID = item.genreID
         minPriceText = item.minPrice.map(String.init) ?? ""
+        watchOfficial = item.watchOfficial
+    }
+
+    /// 監視を切り替えられるか(元の商品に空でない sourceURL があるとき。編集画面では sourceURL を変えない)。
+    public var canWatchOfficial: Bool {
+        false // TODO(implementer)
+    }
+
+    /// 切り替えられないときの理由(`公式ページの URL が無いので監視できません`)。切り替えられるなら nil
+    public var watchOfficialHint: String? {
+        nil // TODO(implementer)
     }
 
     private static func trimmed(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -51,6 +64,7 @@ public final class EditItemViewModel {
     public func setReplacementImage(_ image: ImageUpload?) { replacementImage = image }
 
     /// 元の商品との差分(前後の空白を除いて比べる)。
+    /// watchOfficial は `canWatchOfficial` で、元と違うときだけ入れる(TODO implementer。docs/phase4-spec.md AC-IOS-OFF-06)。
     /// 変えた項目だけ入れる。option・検索ワード上書き・最低価格を空にしたら、元が値ありのときだけ `.clear`(null)。元も空なら `.keep`。
     public var patch: ItemPatch {
         var result = ItemPatch()

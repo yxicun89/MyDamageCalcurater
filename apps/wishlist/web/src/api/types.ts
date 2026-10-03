@@ -22,3 +22,5 @@ export type PriceHistory = S["PriceHistory"];
 export type SitePriceHistory = S["SitePriceHistory"];
 export type PricePoint = S["PricePoint"];
 export type DayLow = S["DayLow"];
+export type OfficialStatus = S["OfficialStatus"];
+export type OfficialState = S["OfficialState"];

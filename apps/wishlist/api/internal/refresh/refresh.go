@@ -22,6 +22,7 @@ import (
 	"example.com/pokecalc/apps/wishlist/api/internal/estimate"
 	"example.com/pokecalc/apps/wishlist/api/internal/fetcher"
 	"example.com/pokecalc/apps/wishlist/api/internal/item"
+	"example.com/pokecalc/apps/wishlist/api/internal/official"
 	"example.com/pokecalc/apps/wishlist/api/internal/query"
 )
 
@@ -75,6 +76,16 @@ type Deps struct {
 	BaseContext   context.Context // 裏の更新に使う ctx(リクエストの ctx は使わない)。nil なら context.Background()
 	// OnJoin は、実行中の更新に合流した(新しく取得を始めなかった)RefreshItem が待ち始める直前に呼ばれる(テスト用。nil で何もしない)。
 	OnJoin func(itemID int64)
+	// Official は公式ページの販売状況の取得と判定(フェーズ4-3。本番は refresher だけが *official.Checker を渡す)。
+	// nil なら監視しない(api のプロセス)。RefreshAll だけが使い、RefreshItem・Estimates・Refresh は使わない。
+	Official OfficialChecker
+	// Officials は販売状況の保存先(Official があるときは必須)。
+	Officials item.OfficialRepository
+}
+
+// OfficialChecker は公式ページを取得して判定する(official.Checker)。エラーは返さず状態で表す。
+type OfficialChecker interface {
+	Check(ctx context.Context, rawURL string) official.Result
 }
 
 // Report は 1 商品の更新結果。
@@ -88,6 +99,10 @@ type Report struct {
 type AllReport struct {
 	Items  int // 処理した商品の数
 	Failed int // 失敗した商品の数(RefreshItem がエラー、または対象サイトがあって 1 つも取得できなかった)
+	// 公式ページの監視(フェーズ4-3)。OfficialChecked は確かめた商品の数(item.WatchTarget が true のもの)、
+	// OfficialFailed はそのうち結果が failed だった・保存に失敗した数(blocked は数えない)。Failed には含めない。
+	OfficialChecked int
+	OfficialFailed  int
 }
 
 // View は API に返す目安。
@@ -427,6 +442,8 @@ func sanitize(ls []fetcher.Listing) []fetcher.Listing {
 }
 
 // RefreshAll は全商品を順番に ModeNightly で更新する。1 商品の失敗で止めない(ctx が終わったときだけ止める)。
+// フェーズ4-3(TODO implementer):価格をすべて更新したあと、Deps.Official があれば item.WatchTarget が true の商品を順番に
+// Official.Check して Officials.SaveOfficialCheck で保存する(docs/phase4-spec.md AC-O22〜O25)。
 func (s *Service) RefreshAll(ctx context.Context) (AllReport, error) {
 	s.pruneHistory(ctx)
 	items, err := s.d.Items.ListItems(ctx, nil)

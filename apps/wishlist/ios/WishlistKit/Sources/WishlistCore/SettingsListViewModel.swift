@@ -121,4 +121,25 @@ public final class SettingsListViewModel {
             return nil
         }
     }
+
+    // MARK: - フェーズ4-1 表記揺れの辞書(docs/phase4-spec.md AC-IOS-ALI-02〜05)
+
+    /// 編集画面に出す行(1 グループ = 1 行。`AliasLines.format`)。辞書が無ければ空
+    public static func aliasLines(of genre: Genre) -> [String] {
+        [] // TODO(implementer)
+    }
+
+    /// ジャンルを追加する(`addGenre(name:queryTemplate:siteIDs:)` と同じ規則に加えて辞書)。
+    /// `aliasLines` を `AliasLines.parseGroups` で読み、1 語だけの行があれば API を呼ばず
+    /// `errorMessage = AliasLines.invalidRowMessage(行)` にして nil。それ以外は常に `aliases`(空の行を除く。無ければ [])を送る。
+    public func addGenre(name: String, queryTemplate: String, siteIDs: [Int], aliasLines: [String]) async -> Genre? {
+        nil // TODO(implementer)
+    }
+
+    /// ジャンルを編集する(`updateGenre(_:name:queryTemplate:siteIDs:)` と同じ規則に加えて辞書)。
+    /// 1 語だけの行の扱いは addGenre と同じ。読み直したグループが元(`genre.aliases`)と違うときだけ `aliases` を送る(全部消したら [])。
+    /// 何も変えていなければ API を呼ばず元のジャンルを返す。
+    public func updateGenre(_ genre: Genre, name: String, queryTemplate: String, siteIDs: [Int], aliasLines: [String]) async -> Genre? {
+        nil // TODO(implementer)
+    }
 }

@@ -412,6 +412,36 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/Item/updated_at`.
             public var updatedAt: Foundation.Date
+            /// 公式ページ(source_url)の販売状況を夜間に監視するか(フェーズ4-3。docs/phase4-spec.md)。
+            /// サーバーは常に返す(required にしないのは、古い応答・キャッシュを読めるようにするため。無ければ false として扱う)
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/watch_official`.
+            public var watchOfficial: Swift.Bool?
+            /// 公式ページの販売状況(フェーズ4-3)。まだ確かめていなければ null。サーバーは常に返す
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/official_status`.
+            public struct OfficialStatusPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/Item/official_status/value1`.
+                public var value1: Components.Schemas.OfficialStatus
+                /// Creates a new `OfficialStatusPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.OfficialStatus) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 公式ページの販売状況(フェーズ4-3)。まだ確かめていなければ null。サーバーは常に返す
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/official_status`.
+            public var officialStatus: Components.Schemas.Item.OfficialStatusPayload?
             /// Creates a new `Item`.
             ///
             /// - Parameters:
@@ -427,6 +457,8 @@ extension Components {
             ///   - siteOverrides:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - watchOfficial: 公式ページ(source_url)の販売状況を夜間に監視するか(フェーズ4-3。docs/phase4-spec.md)。
+            ///   - officialStatus: 公式ページの販売状況(フェーズ4-3)。まだ確かめていなければ null。サーバーは常に返す
             public init(
                 id: Components.Schemas.Id,
                 genreId: Components.Schemas.Id,
@@ -439,7 +471,9 @@ extension Components {
                 sortOrder: Swift.Int,
                 siteOverrides: [Components.Schemas.SiteOverride],
                 createdAt: Foundation.Date,
-                updatedAt: Foundation.Date
+                updatedAt: Foundation.Date,
+                watchOfficial: Swift.Bool? = nil,
+                officialStatus: Components.Schemas.Item.OfficialStatusPayload? = nil
             ) {
                 self.id = id
                 self.genreId = genreId
@@ -453,6 +487,8 @@ extension Components {
                 self.siteOverrides = siteOverrides
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.watchOfficial = watchOfficial
+                self.officialStatus = officialStatus
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -467,6 +503,104 @@ extension Components {
                 case siteOverrides = "site_overrides"
                 case createdAt = "created_at"
                 case updatedAt = "updated_at"
+                case watchOfficial = "watch_official"
+                case officialStatus = "official_status"
+            }
+        }
+        /// 公式ページの販売状況。available 販売中 / preorder 予約受付中 / soldout 在庫切れ / ended 販売終了 /
+        /// unknown 決まった語が無い(判定できない)/ ambiguous 別の種類の語が両方ある(判定できない)/
+        /// blocked robots.txt が許していないので取得しない / failed 取得できなかった
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/OfficialState`.
+        @frozen public enum OfficialState: String, Codable, Hashable, Sendable, CaseIterable {
+            case available = "available"
+            case preorder = "preorder"
+            case soldout = "soldout"
+            case ended = "ended"
+            case unknown = "unknown"
+            case ambiguous = "ambiguous"
+            case blocked = "blocked"
+            case failed = "failed"
+        }
+        /// status は最後に判定できた状態。最後の試行が failed・blocked でも、判定済みの status は上書きしない
+        /// (そのときは last_result・last_attempt_at だけが変わる)。一度も判定できていなければ status は failed・blocked のまま
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/OfficialStatus`.
+        public struct OfficialStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OfficialStatus/status`.
+            public var status: Components.Schemas.OfficialState
+            /// 判定の根拠にした語(最大 3。ページに現れた順)。unknown・failed・blocked は空
+            ///
+            /// - Remark: Generated from `#/components/schemas/OfficialStatus/evidence`.
+            public var evidence: [Swift.String]
+            /// status を確かめた時刻
+            ///
+            /// - Remark: Generated from `#/components/schemas/OfficialStatus/checked_at`.
+            public var checkedAt: Foundation.Date
+            /// status が前回の判定から変わった時刻(変わったことが無ければ null)
+            ///
+            /// - Remark: Generated from `#/components/schemas/OfficialStatus/changed_at`.
+            public var changedAt: Foundation.Date?
+            /// changed_at のときの変化前の status
+            ///
+            /// - Remark: Generated from `#/components/schemas/OfficialStatus/previous_status`.
+            @frozen public enum PreviousStatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case available = "available"
+                case preorder = "preorder"
+                case soldout = "soldout"
+                case ended = "ended"
+                case unknown = "unknown"
+                case ambiguous = "ambiguous"
+                case blocked = "blocked"
+                case failed = "failed"
+            }
+            /// changed_at のときの変化前の status
+            ///
+            /// - Remark: Generated from `#/components/schemas/OfficialStatus/previous_status`.
+            public var previousStatus: Components.Schemas.OfficialStatus.PreviousStatusPayload?
+            /// - Remark: Generated from `#/components/schemas/OfficialStatus/last_result`.
+            public var lastResult: Components.Schemas.OfficialState
+            /// 最後に試した時刻(failed・blocked を含む)
+            ///
+            /// - Remark: Generated from `#/components/schemas/OfficialStatus/last_attempt_at`.
+            public var lastAttemptAt: Foundation.Date
+            /// Creates a new `OfficialStatus`.
+            ///
+            /// - Parameters:
+            ///   - status:
+            ///   - evidence: 判定の根拠にした語(最大 3。ページに現れた順)。unknown・failed・blocked は空
+            ///   - checkedAt: status を確かめた時刻
+            ///   - changedAt: status が前回の判定から変わった時刻(変わったことが無ければ null)
+            ///   - previousStatus: changed_at のときの変化前の status
+            ///   - lastResult:
+            ///   - lastAttemptAt: 最後に試した時刻(failed・blocked を含む)
+            public init(
+                status: Components.Schemas.OfficialState,
+                evidence: [Swift.String],
+                checkedAt: Foundation.Date,
+                changedAt: Foundation.Date? = nil,
+                previousStatus: Components.Schemas.OfficialStatus.PreviousStatusPayload? = nil,
+                lastResult: Components.Schemas.OfficialState,
+                lastAttemptAt: Foundation.Date
+            ) {
+                self.status = status
+                self.evidence = evidence
+                self.checkedAt = checkedAt
+                self.changedAt = changedAt
+                self.previousStatus = previousStatus
+                self.lastResult = lastResult
+                self.lastAttemptAt = lastAttemptAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case status
+                case evidence
+                case checkedAt = "checked_at"
+                case changedAt = "changed_at"
+                case previousStatus = "previous_status"
+                case lastResult = "last_result"
+                case lastAttemptAt = "last_attempt_at"
             }
         }
         /// - Remark: Generated from `#/components/schemas/ItemFields`.
@@ -485,6 +619,10 @@ extension Components {
             public var minPrice: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/ItemFields/sort_order`.
             public var sortOrder: Swift.Int?
+            /// true にするには source_url が必要(無ければ 422)
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemFields/watch_official`.
+            public var watchOfficial: Swift.Bool?
             /// Creates a new `ItemFields`.
             ///
             /// - Parameters:
@@ -495,6 +633,7 @@ extension Components {
             ///   - sourceUrl:
             ///   - minPrice:
             ///   - sortOrder:
+            ///   - watchOfficial: true にするには source_url が必要(無ければ 422)
             public init(
                 genreId: Components.Schemas.Id,
                 name: Swift.String,
@@ -502,7 +641,8 @@ extension Components {
                 queryOverride: Swift.String? = nil,
                 sourceUrl: Swift.String? = nil,
                 minPrice: Swift.Int? = nil,
-                sortOrder: Swift.Int? = nil
+                sortOrder: Swift.Int? = nil,
+                watchOfficial: Swift.Bool? = nil
             ) {
                 self.genreId = genreId
                 self.name = name
@@ -511,6 +651,7 @@ extension Components {
                 self.sourceUrl = sourceUrl
                 self.minPrice = minPrice
                 self.sortOrder = sortOrder
+                self.watchOfficial = watchOfficial
             }
             public enum CodingKeys: String, CodingKey {
                 case genreId = "genre_id"
@@ -520,6 +661,7 @@ extension Components {
                 case sourceUrl = "source_url"
                 case minPrice = "min_price"
                 case sortOrder = "sort_order"
+                case watchOfficial = "watch_official"
             }
         }
         /// - Remark: Generated from `#/components/schemas/ItemCreateJSON`.
@@ -652,6 +794,18 @@ extension Components {
                 }
             }
             case sortOrder(OpenAPIRuntime.MultipartPart<Components.Schemas.ItemCreateMultipart.SortOrderPayload>)
+            /// - Remark: Generated from `#/components/schemas/ItemCreateMultipart/watch_official`.
+            public struct WatchOfficialPayload: Sendable, Hashable {
+                public var body: OpenAPIRuntime.HTTPBody
+                /// Creates a new `WatchOfficialPayload`.
+                ///
+                /// - Parameters:
+                ///   - body:
+                public init(body: OpenAPIRuntime.HTTPBody) {
+                    self.body = body
+                }
+            }
+            case watchOfficial(OpenAPIRuntime.MultipartPart<Components.Schemas.ItemCreateMultipart.WatchOfficialPayload>)
             /// - Remark: Generated from `#/components/schemas/ItemCreateMultipart/image`.
             public struct ImagePayload: Sendable, Hashable {
                 public var body: OpenAPIRuntime.HTTPBody
@@ -684,6 +838,12 @@ extension Components {
             public var sortOrder: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/ItemUpdate/site_overrides`.
             public var siteOverrides: [Components.Schemas.SiteOverride]?
+            /// 更新後の商品に source_url が無いのに true になるなら 422(source_url を null にするときは false も送る)。
+            /// source_url を別の値・null に変えると、保存済みの official_status は消える
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemUpdate/watch_official`.
+            public var watchOfficial: Swift.Bool?
             /// Creates a new `ItemUpdate`.
             ///
             /// - Parameters:
@@ -695,6 +855,7 @@ extension Components {
             ///   - minPrice:
             ///   - sortOrder:
             ///   - siteOverrides:
+            ///   - watchOfficial: 更新後の商品に source_url が無いのに true になるなら 422(source_url を null にするときは false も送る)。
             public init(
                 genreId: Components.Schemas.Id? = nil,
                 name: Swift.String? = nil,
@@ -703,7 +864,8 @@ extension Components {
                 sourceUrl: Swift.String? = nil,
                 minPrice: Swift.Int? = nil,
                 sortOrder: Swift.Int? = nil,
-                siteOverrides: [Components.Schemas.SiteOverride]? = nil
+                siteOverrides: [Components.Schemas.SiteOverride]? = nil,
+                watchOfficial: Swift.Bool? = nil
             ) {
                 self.genreId = genreId
                 self.name = name
@@ -713,6 +875,7 @@ extension Components {
                 self.minPrice = minPrice
                 self.sortOrder = sortOrder
                 self.siteOverrides = siteOverrides
+                self.watchOfficial = watchOfficial
             }
             public enum CodingKeys: String, CodingKey {
                 case genreId = "genre_id"
@@ -723,6 +886,7 @@ extension Components {
                 case minPrice = "min_price"
                 case sortOrder = "sort_order"
                 case siteOverrides = "site_overrides"
+                case watchOfficial = "watch_official"
             }
         }
         /// - Remark: Generated from `#/components/schemas/FromURLRequest`.
