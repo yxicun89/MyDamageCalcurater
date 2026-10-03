@@ -2053,6 +2053,30 @@ Impact: 版を上げる PR は config.json の `integrity` も更新する(不�
 却下案 B(dist の vendoring)・C(現状維持)に変えるなら ADR-0101 追記と config.json の integrity を戻す。
 ユーザーの確認待ち: A でよいか(特に、期限切れの引き渡しを無視する TTL 7200 秒の扱い)。
 
+## 2026-10-02: issue #230 のタイプバランス系リモートブランチ 19 本を削除(タイプバランスレーン。ユーザー承認済み)
+Decision: 対応する PR(#6〜#66)がすべて MERGED の tb 系リモートブランチ 19 本をリモートから削除した。OPEN の PR のブランチ(#451・#456・#457・#458)と main は触っていない。
+Reason: ユーザー承認(AskUserQuestion、2026-10-02)。削除前に、全 19 本の PR が MERGED であることを PR 一覧で確認した。
+Impact: 復旧が必要なときは、下記の tip SHA から `git branch <名前> <SHA>` で作れる(GitHub 側で参照されなくなってから一定期間を過ぎると到達できなくなる)。#230 の残りの対象(Web・運用レーンのブランチ)は各レーンが判断する。
+- `feat/tb-readmodel-wiring`(tip 13f353e)
+- `feat/tb-tb0-argocd`(tip a4841f3)
+- `feat/tb-tb1-defense`(tip 94c44ce)
+- `feat/tb-tb1b-typechart`(tip 5e75b81)
+- `feat/tb-tb2-offense`(tip ed7888a)
+- `feat/tb-tb3-ability`(tip 352b5cf)
+- `feat/tb-tb4-threats`(tip a97a7fc)
+- `feat/tb-tb5-recommend`(tip c7fc41f)
+- `feat/tb-tb6-moverange`(tip c73193b)
+- `feat/tb-tb6-planning`(tip 12c8c45)
+- `fix/tb-deps-latest`(tip 64fedb0)
+- `fix/tb-doc`(tip f731d30)
+- `fix/tb-maint-cleanup`(tip dc8e4b6)
+- `fix/tb-pause-checkpoint`(tip 1e0cb8e)
+- `fix/tb-post-merge-state`(tip e03548f)
+- `fix/tb-push-permission`(tip 727bad3)
+- `fix/tb-runbook-retry`(tip 3569d95)
+- `fix/tb-runbooks`(tip 8faf353)
+- `fix/tb-tb0-done`(tip fcd83db)
+
 ## 2026-10-03: PR のマージは対象 PR の CI が全件成功のときだけ AI が実行してよい(ADR-0803。ユーザー決定)
 Decision: bash-guard の PR マージを無条件ブロックから、`gh pr checks` が終了コード 0 のときだけ通す条件付きに変更。`--admin`・`gh api` 直叩き・main への直接 push は引き続き不可。
 Reason: ユーザー指示「全レーンでテストと CI が通っていれば AI が merge してよい。クラウドへの勝手なデプロイ(課金)と機密情報の公開以外は作業を止めたくない」。
