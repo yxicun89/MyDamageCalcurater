@@ -47,6 +47,10 @@ readonly BACKUP_DIR
 check_gen() {
   local dir="$BACKUP_DIR/$KIND/$1"
   [ -f "$dir/MANIFEST" ] && [ -f "$dir/dump.sql.gz" ] || { echo "世代 $1: MANIFEST か dump.sql.gz が無い" >&2; return 1; }
+  # 世代の元の DB と復元先が違えば拒否(別の kind の墓石で置き換える事故を防ぐ)。別名 DB へ戻すときだけ RESTORE_FROM_DB で元の DB 名を明示する。
+  local src
+  src=$(sed -n 's/^db: //p' "$dir/MANIFEST" | head -1)
+  [ "$src" = "${RESTORE_FROM_DB:-$DB_NAME}" ] || { echo "世代 $1: 元の DB(${src})と復元先(${DB_NAME})が違う。別名 DB へ戻すときは RESTORE_FROM_DB=${src} を明示する" >&2; return 1; }
   if [ "$HAS_JOURNAL" = 1 ]; then
     gzip -dc "$dir/dump.sql.gz" | grep -q '^CREATE TABLE `devices`' || { echo "世代 $1: devices(墓石)を含まない。復元しない(ADR-0209 §9-1)" >&2; return 1; }
   fi
@@ -67,6 +71,23 @@ fi
 conn=(-h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER")
 run_sql() { "$MYSQL_BIN" "${conn[@]}" "$DB_NAME"; } # SQL は標準入力で渡す
 
+# 保管済み journal の検証と SQL の組み立て(DB に触れる前に。不正な行があれば何も流さず中止)。
+sql=$(mktemp)
+trap 'rm -f "$sql"' EXIT
+n=0
+journal="$BACKUP_DIR/journal/$KIND.tsv"
+if [ "$HAS_JOURNAL" = 1 ] && [ -s "$journal" ]; then
+  while IFS=$'\t' read -r dev ts; do
+    [ -n "$dev" ] || continue
+    [[ "$dev" =~ ^[A-Za-z0-9_-]{1,36}$ ]] || die "journal の device_id が不正(DB に触れずに中止): 形式違反"
+    [[ "$ts" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$ ]] || die "journal の requested_at が不正(DB に触れずに中止。device_id=${dev})"
+    t="${ts/T/ }"
+    t="${t%Z}"
+    printf "INSERT INTO purge_journal (device_id, requested_at) SELECT '%s', '%s' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM purge_journal WHERE device_id = '%s' AND requested_at = '%s');\n" "$dev" "$t" "$dev" "$t" >> "$sql"
+    n=$((n + 1))
+  done < "$journal"
+fi
+
 echo "restore $KIND $gen -> db=$DB_NAME"
 
 # 2) ダンプの読み込み(mysqldump の DROP TABLE IF EXISTS で、その DB の表を置き換える)
@@ -74,23 +95,7 @@ gzip -dc "$BACKUP_DIR/$KIND/$gen/dump.sql.gz" | run_sql || die "ダンプの読�
 echo "loaded dump"
 
 if [ "$HAS_JOURNAL" = 1 ]; then
-  # 3) 保管済み journal(世代取得後の削除要求を含む)を DB の purge_journal へ。重複は入れない。
-  journal="$BACKUP_DIR/journal/$KIND.tsv"
-  n=0
-  if [ -s "$journal" ]; then
-    sql=$(mktemp)
-    trap 'rm -f "$sql"' EXIT
-    while IFS=$'\t' read -r dev ts; do
-      [ -n "$dev" ] || continue
-      [[ "$dev" =~ ^[A-Za-z0-9_-]{1,36}$ ]] || die "journal の device_id が不正(行をスキップせず中止): 形式違反"
-      [[ "$ts" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$ ]] || die "journal の requested_at が不正(device_id=${dev})"
-      t="${ts/T/ }"
-      t="${t%Z}"
-      printf "INSERT INTO purge_journal (device_id, requested_at) SELECT '%s', '%s' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM purge_journal WHERE device_id = '%s' AND requested_at = '%s');\n" "$dev" "$t" "$dev" "$t" >> "$sql"
-      n=$((n + 1))
-    done < "$journal"
-    run_sql < "$sql" || die "journal の取り込みに失敗した"
-  fi
+  if [ -s "$sql" ]; then run_sql < "$sql" || die "journal の取り込みに失敗した"; fi
   echo "journal merged: ${n} 行"
 
   # 4) 再適用(どちらも冪等)。a. journal の端末を devices に反映(墓石 purged_at = max(既存, requested_at))

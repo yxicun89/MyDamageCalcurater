@@ -125,11 +125,13 @@ now=1800000000
 mkdir -p "$work/backups/record/$(gen_id $((now - 31 * day)))" "$work/backups/record/$(gen_id $((now - 29 * day)))" "$work/backups/team/$(gen_id $((now - 31 * day)))"
 EXTRA_ENV=(BACKUP_NOW=$now)
 run_backup full record
+mkdir -p "$work/backups/record/$(gen_id $((now - 30 * day)))"
 if [ ! -e "$work/backups/record/$(gen_id $((now - 31 * day)))" ] && [ -e "$work/backups/record/$(gen_id $((now - 29 * day)))" ]; then
   ok "31日前の世代を消し、29日前の世代は残す(世代30日)"
 else
   ng "世代の削除: $(ls "$work/backups/record")"
 fi
+if [ -e "$work/backups/record/$(gen_id $((now - 30 * day)))" ]; then ok "ちょうど30日前の世代は残す(境界)"; else ng "ちょうど30日前の世代を消した"; fi
 if [ -e "$work/backups/team/$(gen_id $((now - 31 * day)))" ]; then ok "他の kind の世代は、その kind の実行では消さない"; else ng "別 kind の世代を消した"; fi
 if [ -e "$work/backups/record/$(gen_id $now)/dump.sql.gz" ]; then ok "今回取った世代は消さない"; else ng "今回の世代が無い"; fi
 

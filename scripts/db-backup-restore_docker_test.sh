@@ -103,11 +103,15 @@ sql "
 INSERT INTO devices (device_id, last_seen_at, purged_at) VALUES
   ('dev-x', NOW(6), DATE_SUB(NOW(6), INTERVAL 1 DAY)), ('dev-y', NOW(6), NULL), ('dev-z', NOW(6), NULL), ('dev-w', NOW(6), NULL);
 $(ev ex1 dev-x 'DATE_SUB(NOW(6), INTERVAL 2 DAY)')
+$(ev ex-new dev-x 'NOW(6)')
 $(ev ey-old dev-y 'DATE_SUB(NOW(6), INTERVAL 100 DAY)')
 $(ev ey-new dev-y 'DATE_SUB(NOW(6), INTERVAL 1 DAY)')
 $(ev ez1 dev-z 'DATE_SUB(NOW(6), INTERVAL 1 DAY)')
 $(ev ew1 dev-w 'DATE_SUB(NOW(6), INTERVAL 1 DAY)')
-INSERT INTO favorites (device_id, species_key, snapshot, created_at, updated_at) VALUES ('dev-w', 'k', '{}', NOW(6), NOW(6));
+INSERT INTO favorites (device_id, species_key, snapshot, created_at, updated_at) VALUES
+  ('dev-w', 'k', '{}', NOW(6), NOW(6)),
+  ('dev-x', 'k-old', '{}', DATE_SUB(NOW(6), INTERVAL 2 DAY), DATE_SUB(NOW(6), INTERVAL 2 DAY)),
+  ('dev-x', 'k-new', '{}', NOW(6), NOW(6));
 " >/dev/null
 count() { sql "SELECT COUNT(*) FROM $1 WHERE device_id='$2'${3:-}"; }
 
@@ -138,7 +142,12 @@ nats_before="$(docker ps -a --format '{{.Names}}' | grep nats | sort || true)"
 CONFIRM_RESTORE=record_test scripts/db-restore.sh record "$gen" | tee "$work/restore.out" >/dev/null || ng "db-restore.sh が失敗した"
 if tail -1 "$work/restore.out" | grep -q '^restore-ok'; then ok "復元が最後まで成功し restore-ok を出す"; else ng "restore-ok が無い: $(cat "$work/restore.out")"; fi
 
-if [ "$(count calc_events dev-x)" = 0 ]; then ok "世代取得前に削除済みの端末 X のイベントが復元後に出ない(墓石の再適用。AC-B2)"; else ng "dev-x のイベントが復活した"; fi
+if [ "$(count calc_events dev-x " AND event_id='ex1'")" = 0 ]; then ok "世代取得前に削除済みの端末 X のイベントが復元後に出ない(墓石の再適用。AC-B2)"; else ng "dev-x のイベントが復活した"; fi
+if [ "$(count calc_events dev-x " AND event_id='ex-new'")" = 1 ] && [ "$(count favorites dev-x " AND species_key='k-new'")" = 1 ] && [ "$(count favorites dev-x " AND species_key='k-old'")" = 0 ]; then
+  ok "墓石(purged_at)より後の行は復元後も残り、以前の行だけ消える(再適用の時刻条件)"
+else
+  ng "purged_at より後の行の扱いが正しくない"
+fi
 if [ "$(count calc_events dev-y " AND event_id='ey-old'")" = 0 ] && [ "$(count calc_events dev-y " AND event_id='ey-new'")" = 1 ]; then
   ok "期限切れイベントは復元後に消え、期限内は残る(失効ジョブの強制実行。AC-B2)"
 else
@@ -159,6 +168,51 @@ fi
 # ---- AC-B3: 復元スクリプトは JetStream に触れない(静的には db-restore_test.sh が見る)。ここでは復元の前後で nats コンテナが増減していないことだけ確かめる。
 nats_after="$(docker ps -a --format '{{.Names}}' | grep nats | sort || true)"
 if [ "$nats_before" != "$nats_after" ]; then ng "復元の前後で nats に関わるコンテナが増減した"; else ok "復元は NATS / JetStream を使わない(AC-B3)"; fi
+
+# ---- team DB(TiDB)の往復: 再適用 SQL(teams・team_members)を実スキーマで流す
+use_tidb
+export DB_NAME=mysql
+sql "CREATE DATABASE IF NOT EXISTS team_test;" >/dev/null
+(cd services && TEAM_DATABASE_DSN="root:@tcp(127.0.0.1:${tidb_port})/team_test?parseTime=true" go run ./team/cmd/migrate up)
+export DB_NAME=team_test
+cat > "$work/team-expire" <<EOF
+#!/usr/bin/env bash
+cd "$PWD/services"
+export TEAM_APP_DSN="root:@tcp(127.0.0.1:${tidb_port})/team_test?parseTime=true"
+export TEAM_RETENTION_DAYS=540 TEAM_DEVICE_ROW_EXPIRY_DAYS=30 TEAM_PURGE_JOURNAL_RETENTION_DAYS=90 TEAM_EXPIRE_BATCH_LIMIT=1000
+exec go run ./team/cmd/team expire
+EOF
+chmod +x "$work/team-expire"
+tm() { echo "INSERT INTO teams (id, device_id, name, created_at, updated_at) VALUES ('$1','$2','n',$3,$3); INSERT INTO team_members (team_id, slot, device_id, species_key, move_ids, nature_id, sp_hp, sp_atk, sp_def, sp_spa, sp_spd, sp_spe) VALUES ('$1',1,'$2','k','[]','adamant',0,0,0,0,0,0);"; }
+# tdev-x: 世代取得前に削除済み(墓石)。t-x-old は墓石より前 → 消える / t-x-new は墓石より後 → 残る。 tdev-z: 普通。 tdev-w: 世代取得後に削除される。
+sql "
+INSERT INTO devices (device_id, last_seen_at, purged_at) VALUES
+  ('tdev-x', NOW(6), DATE_SUB(NOW(6), INTERVAL 1 DAY)), ('tdev-z', NOW(6), NULL), ('tdev-w', NOW(6), NULL);
+$(tm t-x-old tdev-x 'DATE_SUB(NOW(6), INTERVAL 2 DAY)')
+$(tm t-x-new tdev-x 'NOW(6)')
+$(tm t-z tdev-z 'DATE_SUB(NOW(6), INTERVAL 1 DAY)')
+$(tm t-w tdev-w 'DATE_SUB(NOW(6), INTERVAL 1 DAY)')
+" >/dev/null
+scripts/db-backup.sh full team
+tgen="$(ls "$BACKUP_DIR/team" | tail -1)"
+sql "
+UPDATE devices SET purged_at = NOW(6) WHERE device_id='tdev-w';
+INSERT INTO purge_journal (device_id, requested_at) VALUES ('tdev-w', NOW(6));
+DELETE FROM team_members WHERE device_id='tdev-w';
+DELETE FROM teams WHERE device_id='tdev-w';
+" >/dev/null
+scripts/db-backup.sh journal team
+export DB_NAME=mysql
+sql "DROP DATABASE team_test; CREATE DATABASE team_test;" >/dev/null
+export DB_NAME=team_test
+export RESTORE_EXPIRE_CMD="$work/team-expire"
+CONFIRM_RESTORE=team_test scripts/db-restore.sh team "$tgen" | tee "$work/team-restore.out" >/dev/null || ng "team の db-restore.sh が失敗した"
+if tail -1 "$work/team-restore.out" | grep -q '^restore-ok'; then ok "team の復元が最後まで成功し restore-ok を出す"; else ng "team の restore-ok が無い"; fi
+tcount() { sql "SELECT COUNT(*) FROM $1 WHERE $2"; }
+if [ "$(tcount teams "id='t-x-old'")" = 0 ] && [ "$(tcount team_members "team_id='t-x-old'")" = 0 ]; then ok "team: 墓石より前の構築とメンバーが復元後に出ない(AC-B2)"; else ng "t-x-old が復活した"; fi
+if [ "$(tcount teams "id='t-x-new'")" = 1 ] && [ "$(tcount team_members "team_id='t-x-new'")" = 1 ]; then ok "team: 墓石より後の構築は残る"; else ng "t-x-new が消えた"; fi
+if [ "$(tcount teams "id='t-w'")" = 0 ] && [ "$(tcount team_members "team_id='t-w'")" = 0 ]; then ok "team: 世代取得後に削除された端末の構築が復元後に出ない(journal の再適用。AC-B2b)"; else ng "t-w が復活した"; fi
+if [ "$(tcount teams "id='t-z'")" = 1 ] && [ "$(tcount team_members "team_id='t-z'")" = 1 ]; then ok "team: 無関係の端末の構築は残る"; else ng "t-z が消えた"; fi
 
 # ---- pokedex(MySQL): マスタの往復
 use_mysql

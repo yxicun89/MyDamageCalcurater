@@ -347,13 +347,17 @@ pokedex のマスタは上のとおり再生成できるのでバックアップ
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 export DB_HOST=127.0.0.1 DB_PORT=4000 DB_USER=root DB_NAME=record
-read -rs -p 'DB password: ' MYSQL_PWD && export MYSQL_PWD   # 値は Secret から。画面・履歴に残さない
+# パスワードは画面・履歴に残さず入力する(zsh: 次の行。bash: `read -rs -p 'DB password: ' MYSQL_PWD`)
+read -rs "MYSQL_PWD?DB password: "; export MYSQL_PWD
 scripts/db-backup.sh full record          # 世代を取る(devices が無いダンプは失敗し、世代を残さない)。世代は30日で失効
 scripts/db-backup.sh journal record       # purge journal の同期だけ(軽い)
 ls data/generated/backups/record data/generated/backups/journal
 ```
 
 確認: `backup record <世代 ID> ...` と `journal record: N -> M 行` が出て、`data/generated/backups/record/<世代 ID>/` に `dump.sql.gz` と `MANIFEST`(tables に `devices` を含む)がある。
+
+**cron の注意**: cron には対話の環境変数も port-forward も無い。`MYSQL_PWD` は権限 600 のファイル等から cron 用のラッパーで読み込み(crontab に値を書かない)、
+`kubectl port-forward` を張った状態(常駐させる)でだけ流す。届かなければ `db-backup.sh` が失敗するので、失敗を見落とさないようにする(同期が止まると下の穴が広がる)。
 
 **purge journal の定期同期**(削除要求の記録を、世代とは別の追記専用ファイル `journal/<kind>.tsv` に保つ。保持90日):
 cron / launchd から `scripts/db-backup.sh journal record` と `... journal team` を**1時間ごと〜日次**に流す。例(cron。環境変数は実行ユーザーの環境で用意する):
@@ -370,8 +374,19 @@ cron / launchd から `scripts/db-backup.sh journal record` と `... journal tea
 1. record-svc / team-svc の Deployment を 0 にして止める(配備後。名前は `kubectl -n pokecalc get deploy` で確かめる)。
 2. 失効ジョブを DB へ向けて流すコマンドを用意する(record は `record expire`、team は `team expire`)。必要な環境変数は record が
    `RECORD_APP_DSN`・`RECORD_CALC_EVENTS_RETENTION_DAYS`・`RECORD_FAVORITES_RETENTION_DAYS`・`RECORD_DEVICE_ROW_EXPIRY_DAYS`・`RECORD_PURGE_JOURNAL_RETENTION_DAYS`・`RECORD_EXPIRE_BATCH_LIMIT`
-   (team は `TEAM_` 版)。保持日数は本番の ConfigMap と同じ値にする。
-3. 復元する(`latest` は検証を通る最新の世代。世代 ID を指定してもよい):
+   team が `TEAM_APP_DSN`・`TEAM_RETENTION_DAYS`・`TEAM_DEVICE_ROW_EXPIRY_DAYS`・`TEAM_PURGE_JOURNAL_RETENTION_DAYS`・`TEAM_EXPIRE_BATCH_LIMIT`
+   (`services/team/cmd/team/config.go`・`expire.go`)。保持日数は本番の ConfigMap と同じ値にする。
+   **`RESTORE_EXPIRE_CMD` の DSN は `DB_NAME` と同じ DB を指していること**(違う DB に失効ジョブを流すと、復元した DB は失効されないまま `restore-ok` が出る)。
+   `db-restore.sh` は、世代の元の DB(MANIFEST の `db:`)と `DB_NAME` が違えば拒否する(別名 DB へ戻すときだけ `RESTORE_FROM_DB=<元の DB 名>` を付ける)。
+3. 復元前の現状を退避する(失敗したときに戻れるように。`full` は新しい世代を作る):
+
+```sh
+scripts/db-backup.sh full record
+ls data/generated/backups/record      # 退避した世代が一番新しい
+```
+
+   退避した世代が最新になるので、**この場合 `latest` は退避世代を選んでしまう。復元する世代 ID を明示する**(`ls` で選ぶ)。
+4. 復元する(`latest` は検証を通る最新の世代。退避した後は世代 ID を明示する):
 
 ```sh
 export RESTORE_EXPIRE_CMD='cd services && go run ./record/cmd/record expire'   # 上の環境変数を export した状態で
@@ -379,8 +394,8 @@ CONFIRM_RESTORE="$DB_NAME" scripts/db-restore.sh record latest
 ```
 
    順序は「ダンプの読み込み → 保管済み journal の取り込み → 墓石・journal の再適用(削除済みデータの除去) → 失効ジョブの強制実行」。**最後の1行が `restore-ok record <世代 ID>` のときだけ**次へ進む(途中で失敗すると出ない。再実行してよい)。
-4. record-svc / team-svc を元の replicas に戻す。JetStream は再生しない(削除済みデータが戻るため)。
-5. 確認: 削除済みの端末のデータが出ないこと(`calc_events`・`favorites` 等を端末 ID で数える。API 越しの確認は配備後の人間確認)。
+5. record-svc / team-svc を元の replicas に戻す。JetStream は再生しない(削除済みデータが戻るため)。
+6. 確認: 削除済みの端末のデータが出ないこと(`calc_events`・`favorites` 等を端末 ID で数える。API 越しの確認は配備後の人間確認)。
 
 pokedex(MySQL)は墓石も journal も無く、`scripts/db-backup.sh full pokedex` → `CONFIRM_RESTORE=pokedex scripts/db-restore.sh pokedex latest` で表を置き換える
 (マスタは再生成できるので、通常は取り込み直しで足りる)。

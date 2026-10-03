@@ -55,16 +55,16 @@ run_restore() {
   local envs=()
   while [ "$#" -gt 0 ] && [[ "$1" == *=* ]]; do envs+=("$1"); shift; done
   out=$(cd "$ROOT" && env FAKE_LOG="$work/log" BACKUP_DIR="$backups" MYSQL_BIN="$work/bin/mysql" RESTORE_EXPIRE_CMD="$work/bin/expire" \
-    DB_HOST=127.0.0.1 DB_PORT=4000 DB_USER=root DB_NAME=record_test MYSQL_PWD="$fakepw" "${envs[@]}" "$SCRIPT" "$@" 2>&1) || rc=$?
+    DB_HOST=127.0.0.1 DB_PORT=4000 DB_USER=root DB_NAME=record_test MYSQL_PWD="$fakepw" ${envs[@]+"${envs[@]}"} "$SCRIPT" "$@" 2>&1) || rc=$?
   log=$(cat "$work/log")
 }
 line_of() { grep -n -m1 -- "$1" "$work/log" | cut -d: -f1; }
 
 # 1) 確認なしでは何もしない(DB を上書きする操作。人間の確認 = CONFIRM_RESTORE に DB 名)
 run_restore record 20261001T000000Z
-if [ "$rc" -ne 0 ] && [ -z "$log" ]; then ok "CONFIRM_RESTORE が無ければ DB に触れずに失敗する"; else ng "確認なしで動いた(rc=${rc}): ${log}"; fi
+if [ "$rc" -ne 0 ] && [ -z "$log" ] && echo "$out" | grep -q "CONFIRM_RESTORE"; then ok "CONFIRM_RESTORE が無ければ DB に触れずに失敗する(スクリプト自身の拒否メッセージ)"; else ng "確認なしで動いた(rc=${rc}): ${log}"; fi
 run_restore CONFIRM_RESTORE=other_db record 20261001T000000Z
-if [ "$rc" -ne 0 ] && [ -z "$log" ]; then ok "CONFIRM_RESTORE が DB 名と違えば失敗する"; else ng "別 DB 名で動いた"; fi
+if [ "$rc" -ne 0 ] && [ -z "$log" ] && echo "$out" | grep -q "CONFIRM_RESTORE"; then ok "CONFIRM_RESTORE が DB 名と違えば失敗する(スクリプト自身の拒否メッセージ)"; else ng "別 DB 名で動いた"; fi
 
 # 2) devices の無い世代は拒否(AC-B1)。DB に触れない
 run_restore CONFIRM_RESTORE=record_test record 20260901T000000Z
@@ -96,6 +96,32 @@ fi
 if grep -q 'purged_at' "$work/log"; then ok "墓石 devices.purged_at を基準にした再適用 SQL を流す(AC-B2)"; else ng "purged_at を使っていない"; fi
 if echo "$out" | tail -1 | grep -q "^restore-ok"; then ok "最後の行(restore-ok)は全工程の成功後にだけ出す(Ready の前提の印)"; else ng "restore-ok が最後に無い: ${out}"; fi
 if grep "^CALL" "$work/log" | grep -q "FAKESECRET"; then ng "パスワードの値が引数に出ている"; else ok "パスワードの値を引数に出さない"; fi
+
+# 3b) 時刻以後の行は残す: 墓石の時刻との比較(<= purged_at)を、イベント・お気に入りの時刻列に対して行う
+if grep -q 'occurred_at <= d.purged_at' "$work/log" && grep -q 'created_at <= d.purged_at' "$work/log"; then
+  ok "削除は墓石の時刻以前(occurred_at / created_at <= purged_at)の行だけ。以後の行は残す"
+else
+  ng "時刻条件が SQL に無い"
+fi
+
+# 3c) 世代の元の DB と復元先が違えば、DB に触れずに拒否(kind の取り違え)。別名 DB へは RESTORE_FROM_DB で明示
+run_restore CONFIRM_RESTORE=team_test DB_NAME=team_test record 20261001T000000Z
+if [ "$rc" -ne 0 ] && [ -z "$log" ] && echo "$out" | grep -q "RESTORE_FROM_DB"; then
+  ok "世代の元の DB と復元先 DB が違えば、DB に触れずに拒否する(RESTORE_FROM_DB の案内を出す)"
+else
+  ng "DB 名の不一致を許した(rc=${rc}): ${out} / ${log}"
+fi
+run_restore CONFIRM_RESTORE=record_copy DB_NAME=record_copy RESTORE_FROM_DB=record_test record 20261001T000000Z
+if [ "$rc" -eq 0 ] && echo "$out" | tail -1 | grep -q "^restore-ok"; then ok "RESTORE_FROM_DB を明示すれば別名 DB へ戻せる"; else ng "別名 DB への復元(rc=${rc}): ${out}"; fi
+run_restore CONFIRM_RESTORE=team_test DB_NAME=team_test record latest
+if [ "$rc" -ne 0 ] && [ -z "$log" ]; then ok "latest でも、元の DB が違う世代は選ばない"; else ng "latest が別 DB の世代を選んだ(rc=${rc})"; fi
+
+# 3d) journal に不正な行があれば、DB に触れる前に中止する(ダンプも流さない)
+cp "$backups/journal/record.tsv" "$work/record.tsv.bak"
+printf "dev-x'; DROP TABLE devices; --\t2026-10-01T00:00:00.000000Z\n" >> "$backups/journal/record.tsv"
+run_restore CONFIRM_RESTORE=record_test record 20261001T000000Z
+if [ "$rc" -ne 0 ] && [ -z "$log" ]; then ok "不正な journal 行は DB に触れる前に中止する(SQL に入れない)"; else ng "不正行で DB に触れた(rc=${rc}): ${log}"; fi
+cp "$work/record.tsv.bak" "$backups/journal/record.tsv"
 
 # 4) latest は最新の世代を選ぶ
 run_restore CONFIRM_RESTORE=record_test record latest

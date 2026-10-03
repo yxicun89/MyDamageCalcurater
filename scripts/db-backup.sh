@@ -56,6 +56,11 @@ case "$BACKUP_DIR/" in
     ;;
 esac
 
+# 途中で失敗しても一時ファイル・一時ディレクトリを残さない(EXIT で消す)。
+cleanup_paths=()
+cleanup() { [ "${#cleanup_paths[@]}" -eq 0 ] || rm -rf "${cleanup_paths[@]}"; }
+trap cleanup EXIT
+
 epoch_fmt() { # epoch format
   date -u -r "$1" "+$2" 2>/dev/null || date -u -d "@$1" "+$2"
 }
@@ -70,10 +75,9 @@ sync_journal() {
   mkdir -p "$dir"
   chmod 700 "$dir"
   [ -f "$file" ] || { : > "$file"; chmod 600 "$file"; }
-  rows=$(mktemp)
-  tmp=$(mktemp)
-  # shellcheck disable=SC2064
-  trap "rm -f '$rows' '$tmp'" RETURN
+  rows=$(mktemp "$dir/.sync-rows.XXXXXX")
+  tmp=$(mktemp "$dir/.sync-new.XXXXXX")
+  cleanup_paths+=("$rows" "$tmp")
   "$MYSQL_BIN" "${conn[@]}" -N -B "$DB_NAME" \
     -e "SELECT device_id, DATE_FORMAT(requested_at, '%Y-%m-%dT%H:%i:%s.%fZ') FROM purge_journal ORDER BY id" > "$rows"
   before=$(wc -l < "$file" | tr -d ' ')
@@ -98,8 +102,7 @@ fi
 gen=$(epoch_fmt "$NOW" %Y%m%dT%H%M%SZ)
 final="$BACKUP_DIR/$KIND/$gen"
 tmpdir="$BACKUP_DIR/$KIND/.tmp-$gen-$$"
-cleanup() { rm -rf "$tmpdir"; }
-trap cleanup EXIT
+cleanup_paths+=("$tmpdir")
 mkdir -p "$tmpdir"
 chmod 700 "$tmpdir"
 
