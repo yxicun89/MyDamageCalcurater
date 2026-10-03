@@ -122,7 +122,7 @@
 | `400` + `missing_header` / `invalid_header` | gateway(`gw/headers.go:19`) | `X-Device-Id` / `X-Session-Id` が無い・非 UUID。**smoke の異常系は正常** | ブラウザ: `web/src/api/apiEngine.ts:240-241` が付与(ID は `clientIds.ts`)。curl は 2 ヘッダを足す |
 | `400` + `invalid_json` / `unknown_field` / `invalid_enum` | calc(`calc/errors.go:95`、`convert.go:16`) | 本文の不正 | `logs deployment/calc`、[api-endpoints.md](api-endpoints.md) §4・§9 |
 | `400` + `unknown_species` 等(`unknown_*`) | calc(`convert.go:117,165`) | マスタに無い ID(例データの ID を実マスタに送った等) | pokedex の `GET /api/pokedex/species` で ID を確認 |
-| `400` + `missing_request_context` / `invalid_request` | balance / speed・judge | ヘッダ欠落・不正のコードがサービスごとに異なる([architecture.md](architecture.md) §6) | 各サービスの表([api-endpoints.md](api-endpoints.md) §6・§7) |
+| `400` + `missing_header` / `invalid_header` / `invalid_request` | balance・speed / judge | balance・speed はヘッダ起因が `missing_header`/`invalid_header`、judge は `invalid_request`([architecture.md](architecture.md) §6) | 各サービスの表([api-endpoints.md](api-endpoints.md) §6・§7) |
 | `422` + `unknown_pokemon` / `unknown_move` / `unknown_ability` | balance / speed | read model に無い ID | `data/generated/readmodel`(balance/speed の read model) |
 | 画面が白い(200 だが空) | web / gateway | index.html が読む `/static/*.js` が 404(予約パスとの衝突。issue #268)、`engine.wasm` 未同梱・MIME 違い、API モードで例データ ID を送る(ADR-0301 §4) | ブラウザの Network / Console。`make web-k3d-smoke` の項目 4・5・8 |
 
