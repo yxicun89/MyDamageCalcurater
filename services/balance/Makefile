@@ -17,7 +17,7 @@ build: balance-build
 # 生成物は Git に置かない(ADR-0807)。出力が無いか入力が新しいときだけ生成する(ルート Makefile の GEN_STALE)。
 balance-gen:
 	@if $(GEN_STALE) services/balance/internal/api/openapi.gen.go -- services/balance/api/openapi.yaml services/balance/internal/api/cfg.yaml services/go.mod; then \
-		(cd services && $(GO) tool oapi-codegen -config balance/internal/api/cfg.yaml balance/api/openapi.yaml) && \
+		(cd services && GOWORK=off $(GO) tool oapi-codegen -config balance/internal/api/cfg.yaml balance/api/openapi.yaml) && \
 		echo "balance-gen: services/balance/internal/api/openapi.gen.go を生成"; \
 	fi
 

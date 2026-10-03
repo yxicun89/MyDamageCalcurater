@@ -46,6 +46,13 @@ main に入り、`make ios-gen-check` が赤になった(2026-10-03)。
   macOS 標準の GNU Make 3.81 でも動くよう、複数出力の判定をスクリプトに寄せる。iOS は出力がディレクトリなので、
   生成のたびに `ios/.gen-stamps/<名前>`(Git 管理外)を更新し、それを出力として比べる。
 - 強制は `GEN_FORCE=1`、削除は `make gen-clean`(iOS も消す)。
+- Go の生成器(oapi-codegen・sqlc)は `GOWORK=off` で、版を固定したモジュール(`services`・`tools`)単体の
+  `go.mod`/`go.sum` から実行する。ワークスペースのまま実行すると、`go.work.sum` がワークスペース全体の依存に
+  合わせて書き換わることがあり(main の `go.work.sum` が `tools/go.mod` の更新に追従していない時期に再現した)、
+  生成のたびに作業ツリーが汚れて無関係な差分がコミットに混ざる(このPRのマージで一度混入した)。
+- Web の生成は `web/scripts/gen-api-types.mjs` 自身の更新も入力に含める(Go 側が cfg.yaml を含めるのと対称)。
+- 一覧(`ensure-gen.sh list`)と生成の手順(Makefile の `gen-*`・`gen-api-types.mjs`)が両方向で一致すること、
+  一覧が `.gitignore` で無視されることを `scripts/ensure-gen_test.sh`(`make test`)が検査する。
 - Makefile: Go のパッケージをビルドするターゲット(`test`・`lint`・`build`・`staticcheck`・`test-services`・
   `test-db*`・`test-nats`・`migrate-*`・`import*`・`pokedex-export`・`up`・`dev`・`e2e`・`deploy-latest`・
   各レーンの `*-test`/`*-lint`/`*-build`/`*-docker-build`・`*-k3d-deploy*`・`api-docker-build`・
@@ -59,7 +66,8 @@ main に入り、`make ios-gen-check` が赤になった(2026-10-03)。
   ファイルをビルドコンテキストから受け取る(Makefile のターゲットが先に生成する)。イメージ内で生成器
   (特に cgo を要する sqlc)を毎回ビルドするのは遅いため。無いときは Dockerfile の `RUN test -f …` が
   「make gen を実行してから」と案内して止まる。Web のイメージは `npm run build` の `prebuild` がイメージ内で
-  生成する(仕様の YAML をコンテキストから COPY する)。
+  生成する(仕様の YAML をコンテキストから COPY する)。手元の古い `*.gen.ts` を持ち込まないよう、`.dockerignore` で
+  `web/src/**/*.gen.ts` を除く。
 - CI(`.github/workflows/ci.yml`): `make test` の前に `make gen` を明示のステップとして走らせ、所要時間を
   ログに出す(`time`)。「openapi.yaml・SQL から生成してビルド・テストできる」ことを毎回確かめる。
   コミットとの差分検査は無くなる。iOS は従来どおり CI の対象外(ADR-0119)。

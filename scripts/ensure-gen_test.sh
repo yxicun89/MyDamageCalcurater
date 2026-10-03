@@ -3,6 +3,7 @@
 #
 # 固定すること:
 #   - 生成物の一覧がすべて .gitignore で無視され、追跡されていない
+#   - 一覧と生成の手順(Makefile の gen-*・web/scripts/gen-api-types.mjs)が両方向で一致する
 #   - 生成物の一覧に iOS の出力先(ios/scripts/openapi-targets.sh の全対象)が入る
 #   - stale: 出力が無い・入力が新しい・入力が無い・入力ディレクトリ内の削除/改名・GEN_FORCE=1 で「要る」(0)、
 #     出力が新しければ「要らない」(1)
@@ -35,6 +36,28 @@ while IFS= read -r f; do
     ng "$f が追跡されている(git rm --cached で外す)"
   fi
 done <<<"$list"
+
+# --- 一覧と生成の手順(Makefile の gen-*・web/scripts/gen-api-types.mjs)の一致 ------------------
+# Go の出力はルートと各レーンの Makefile の gen-* が、TS の出力は gen-api-types.mjs が書く。両方向で突き合わせる。
+makefiles=("$ROOT/Makefile" "$ROOT"/services/*/Makefile)
+web_gen="$ROOT/web/scripts/gen-api-types.mjs"
+while IFS= read -r f; do
+  case "$f" in
+    *.go)
+      if grep -qF "$f" "${makefiles[@]}"; then ok "$f を Makefile の gen-* が生成する"; else ng "$f が Makefile の gen-* に無い"; fi
+      ;;
+    web/*.ts)
+      if grep -qF "\"${f#web/}\"" "$web_gen"; then ok "$f を gen-api-types.mjs が生成する"; else ng "$f が gen-api-types.mjs に無い"; fi
+      ;;
+  esac
+done <<<"$list"
+# 逆向き: gen-* と gen-api-types.mjs が書く出力が、すべて一覧にある
+while IFS= read -r f; do
+  if grep -Fxq "$f" <<<"$list"; then ok "Makefile の出力 $f は一覧にある"; else ng "Makefile が生成する $f が scripts/ensure-gen.sh の一覧に無い"; fi
+done < <(grep -hoE 'services/[a-z/]+(openapi\.gen\.go|store/[a-z.]+\.go)' "${makefiles[@]}" | sort -u)
+while IFS= read -r f; do
+  if grep -Fxq "web/$f" <<<"$list"; then ok "gen-api-types.mjs の出力 web/$f は一覧にある"; else ng "gen-api-types.mjs が生成する web/$f が一覧に無い"; fi
+done < <(grep -oE '"src/[a-z/]+\.gen\.ts"' "$web_gen" | tr -d '"' | sort -u)
 
 # shellcheck source=ios/scripts/openapi-targets.sh
 source "$ROOT/ios/scripts/openapi-targets.sh"

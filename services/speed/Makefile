@@ -20,7 +20,7 @@ build: speed-build
 # 生成物は Git に置かない(ADR-0807)。出力が無いか入力が新しいときだけ生成する(ルート Makefile の GEN_STALE)。
 speed-gen:
 	@if $(GEN_STALE) services/speed/internal/api/openapi.gen.go -- services/speed/api/openapi.yaml services/speed/internal/api/cfg.yaml services/go.mod; then \
-		(cd services && $(GO) tool oapi-codegen -config speed/internal/api/cfg.yaml speed/api/openapi.yaml) && \
+		(cd services && GOWORK=off $(GO) tool oapi-codegen -config speed/internal/api/cfg.yaml speed/api/openapi.yaml) && \
 		echo "speed-gen: services/speed/internal/api/openapi.gen.go を生成"; \
 	fi
 

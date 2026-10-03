@@ -19,7 +19,7 @@ build: judge-build
 # 生成物は Git に置かない(ADR-0807)。出力が無いか入力が新しいときだけ生成する(ルート Makefile の GEN_STALE)。
 judge-gen:
 	@if $(GEN_STALE) services/judge/internal/api/openapi.gen.go -- services/judge/api/openapi.yaml services/judge/internal/api/cfg.yaml services/go.mod; then \
-		(cd services && $(GO) tool oapi-codegen -config judge/internal/api/cfg.yaml judge/api/openapi.yaml) && \
+		(cd services && GOWORK=off $(GO) tool oapi-codegen -config judge/internal/api/cfg.yaml judge/api/openapi.yaml) && \
 		echo "judge-gen: services/judge/internal/api/openapi.gen.go を生成"; \
 	fi
 

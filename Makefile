@@ -27,6 +27,9 @@ doctor: ## 前提ツールの確認
 # 固定するファイル)が新しいときだけ生成器を呼ぶので、何度呼んでも速い。強制は GEN_FORCE=1。
 # Go のパッケージをビルドするターゲット(test・lint・build・docker-build 等)は、これを前提条件に持つ。
 # iOS の生成物は ios-gen(ios/Makefile。macOS だけで動くので gen には含めない)。
+# 生成器は GOWORK=off で、版を固定したモジュール(services・tools)単体の go.mod/go.sum から実行する。
+# ワークスペースのまま実行すると、go.work.sum がワークスペース全体の依存に合わせて書き換わることがあり、
+# 生成のたびに作業ツリーが汚れる(2026-10-03、PR #526 のマージで混入した。ADR-0807)。
 GEN_STALE := ./scripts/ensure-gen.sh stale
 export GEN_FORCE
 
@@ -36,7 +39,7 @@ gen: gen-go gen-sql gen-ts balance-gen speed-gen judge-gen ## OpenAPI / sqlc の
 .PHONY: gen-go
 gen-go: ## Go サーバ/型を api/openapi.yaml から生成(services/internal/api/openapi.gen.go)
 	@if $(GEN_STALE) services/internal/api/openapi.gen.go -- api/openapi.yaml services/internal/api/cfg.yaml services/go.mod; then \
-		(cd services && $(GO) tool oapi-codegen -config internal/api/cfg.yaml ../api/openapi.yaml) && \
+		(cd services && GOWORK=off $(GO) tool oapi-codegen -config internal/api/cfg.yaml ../api/openapi.yaml) && \
 		echo "gen-go: services/internal/api/openapi.gen.go を生成"; \
 	fi
 
@@ -45,7 +48,7 @@ gen-sql: ## pokedex の DB 行の型・クエリを sqlc から生成(ADR-0100 �
 	@if $(GEN_STALE) services/pokedex/internal/store/db.go services/pokedex/internal/store/models.go \
 		services/pokedex/internal/store/pokedex.sql.go services/pokedex/internal/store/querier.go \
 		-- services/pokedex/db/sqlc.yaml services/pokedex/db/migrations services/pokedex/db/query tools/go.mod; then \
-		(cd tools && $(GO) tool sqlc generate -f ../services/pokedex/db/sqlc.yaml) && \
+		(cd tools && GOWORK=off $(GO) tool sqlc generate -f ../services/pokedex/db/sqlc.yaml) && \
 		echo "gen-sql: services/pokedex/internal/store を生成"; \
 	fi
 
