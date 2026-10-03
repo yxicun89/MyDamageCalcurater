@@ -7,6 +7,8 @@ struct BalanceFeature: AppFeature {
     let order = 500
     let entry = FeatureEntry.rootButton(title: "タイプバランス", accessibilityIdentifier: "openBalanceScreen")
 
+    let requiredServices = [ServiceKey((any BalanceService).self)]
+
     func registerServices(for backend: FeatureBackend, into services: inout FeatureServices) throws {
         switch backend {
         case .mock:
@@ -19,7 +21,7 @@ struct BalanceFeature: AppFeature {
     }
 
     @MainActor func destination(in context: FeatureContext) -> AnyView {
-        guard let balance = context.services.resolve((any BalanceService).self) else { return AnyView(EmptyView()) }
+        guard let balance = context.services.resolve((any BalanceService).self) else { return unavailableView() }
         return AnyView(BalanceScreenView(balance: balance, service: context.core.pokeCalc, teamStore: context.teamStore))
     }
 }

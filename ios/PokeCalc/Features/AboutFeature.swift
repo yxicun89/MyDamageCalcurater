@@ -8,6 +8,9 @@ struct AboutFeature: AppFeature {
     let entry = FeatureEntry.toolbarIcon(
         systemImage: "info.circle", accessibilityLabel: "このアプリについて", accessibilityIdentifier: "openAboutScreen")
 
+    let requiredServices = [ServiceKey((any DeviceDataService).self)]
+    let availableWithoutServices = true
+
     func registerServices(for backend: FeatureBackend, into services: inout FeatureServices) throws {
         switch backend {
         case .mock(let environment):
@@ -22,7 +25,7 @@ struct AboutFeature: AppFeature {
         AnyView(AboutView(deviceDataService: context.services.resolve((any DeviceDataService).self)))
     }
 
-    @MainActor func destinationWithoutServices() -> AnyView? {
+    @MainActor func destinationWithoutServices() -> AnyView {
         AnyView(AboutView())
     }
 }

@@ -12,26 +12,53 @@ protocol AppFeature: Sendable {
     var order: Int { get }
     /// 入口の形(ルートのピル/右上のアイコン)。
     var entry: FeatureEntry { get }
-    /// 起動時にこの画面を開く環境変数(値が `FeatureRegistry.openAtLaunchValue` のとき開く。
+    /// 起動時にこの画面を開く環境変数(値が `FeatureCatalog.openAtLaunchValue` のとき開く。
     /// XCUITest を介さずスクリーンショットを撮る用途)。無ければ `nil`。
     var openAtLaunchEnvironmentKey: String? { get }
+    /// `destination(in:)` が `FeatureServices` から引くサービス。起動時にすべて登録されていることを検証し、
+    /// 足りなければ設定エラーにする(登録漏れ・登録と取り出しの型違いで空白の画面を出さない)。
+    var requiredServices: [ServiceKey] { get }
+    /// 設定エラーでサービスが無いときも開けるか(`destinationWithoutServices()` を実装した画面だけ `true`)。
+    var availableWithoutServices: Bool { get }
 
     /// この画面だけが使うサービスを登録する(モック/API)。複数の画面が共有するものは `CoreServices`。
     func registerServices(for backend: FeatureBackend, into services: inout FeatureServices) throws
 
-    /// 遷移先の画面(サービスがそろっているとき)。
+    /// 遷移先の画面(サービスがそろっているとき)。サービスが引けないときは `unavailableView()` を返す。
     @MainActor func destination(in context: FeatureContext) -> AnyView
 
-    /// 設定エラーでサービスが無いときの遷移先。`nil` なら何も出さない(設定エラー時も入口が出る右上のアイコンの画面だけが使う)。
-    @MainActor func destinationWithoutServices() -> AnyView?
+    /// 設定エラーでサービスが無いときの遷移先。**入口が `.toolbarIcon` の画面では必須**(設定エラー時も入口が出る
+    /// ため)。実装したら `availableWithoutServices` を `true` にする(`.toolbarIcon` で `false` なら起動時に設定エラー)。
+    @MainActor func destinationWithoutServices() -> AnyView
 }
 
 extension AppFeature {
     var openAtLaunchEnvironmentKey: String? { nil }
+    var requiredServices: [ServiceKey] { [] }
+    var availableWithoutServices: Bool { false }
 
     func registerServices(for backend: FeatureBackend, into services: inout FeatureServices) throws {}
 
-    @MainActor func destinationWithoutServices() -> AnyView? { nil }
+    @MainActor func destinationWithoutServices() -> AnyView { unavailableView() }
+
+    /// サービスが引けず画面を出せないときの表示(空白にしない)。
+    @MainActor func unavailableView() -> AnyView {
+        AnyView(
+            ContentUnavailableView(
+                FeatureRegistryText.unavailableTitle, systemImage: "exclamationmark.triangle",
+                description: Text(FeatureRegistryText.unavailableDescription)
+            )
+            .accessibilityIdentifier("featureUnavailable"))
+    }
+
+    /// 検証・起動時の選択に使う、View に依存しない登録情報。
+    var spec: FeatureSpec {
+        let isToolbarEntry = if case .toolbarIcon = entry { true } else { false }
+        return FeatureSpec(
+            id: id, order: order, openAtLaunchEnvironmentKey: openAtLaunchEnvironmentKey,
+            requiredServices: requiredServices, isToolbarEntry: isToolbarEntry,
+            availableWithoutServices: availableWithoutServices)
+    }
 }
 
 /// 入口の形。

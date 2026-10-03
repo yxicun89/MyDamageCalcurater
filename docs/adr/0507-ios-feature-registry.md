@@ -22,15 +22,22 @@
 - 1画面 = 1ファイルの `AppFeature` 実装(`CalcFeature.swift` など)。持つもの:
   - `id`: 画面の識別子。`ios/scripts/sim-run.sh` の `IOS_SCREEN` の画面名と同じ値(`calc`・`reverse`・`team`・`adjust`・`speed`。
     名前を持たなかった画面は `balance`・`about`)
-  - `order`: 入口の並び順(小さい順。100 刻み。間に入れるときは間の値を使う)
+  - `order`: 入口の並び順(小さい順。100 刻み。間に入れるときは間の値を使う)。**重複は起動時の設定エラー**(同順位を id で並べる案は、
+    並びが ID の綴りで暗黙に決まるので採らない)
   - `entry`: 入口の形。`.rootButton(title:accessibilityIdentifier:)`(ルートのピル)または
     `.toolbarIcon(systemImage:accessibilityLabel:accessibilityIdentifier:)`(右上のアイコン。「このアプリについて」)
   - `openAtLaunchEnvironmentKey`: 起動時にその画面を開く環境変数(`POKECALC_OPEN_*_SCREEN_AT_LAUNCH`。無い画面は `nil`)
   - `registerServices(for:into:)`: 自分の画面が使うサービスの生成(モック/API)を宣言する
-  - `destination(in:)`: 遷移先の View。設定エラー時でも開ける画面(「このアプリについて」)だけ `destinationWithoutServices()` を持つ
+  - `requiredServices`: `destination(in:)` が `FeatureServices` から引くサービスの型(`ServiceKey`)
+  - `destination(in:)`: 遷移先の View。それでもサービスが引けないときは空白にせず `unavailableView()`(`ContentUnavailableView`。
+    文言は PokeCalcCore の `FeatureRegistryText`)を出す
+  - `destinationWithoutServices()` と `availableWithoutServices`: 設定エラー時でも開ける画面(「このアプリについて」)の遷移先。
+    **入口が `.toolbarIcon` の画面では必須**(設定エラー時も入口が出るため)。`.toolbarIcon` で `availableWithoutServices == false` なら起動時の設定エラー
 - 遷移は1つの値型 `FeatureRoute(featureID:)` に統一し、`RootView` は `navigationDestination(for: FeatureRoute.self)` 1つで
   レジストリから View を引く。入口・起動時の画面・遷移先はすべて `FeatureRegistry.features`(`order` 順)から作る。
-- 起動時に開く画面は、従来の else-if と同じく「並び順で最初に `=1` だった1つ」。
+- 起動時に開く画面は、従来の else-if と同じく「並び順で最初に `=1` だった1つ」(設定エラー時は開かない)。
+- 検証と起動時の選択は View に依存しない `FeatureSpec`(各 `AppFeature` の `spec`)に対する純粋関数 `FeatureCatalog`
+  (PokeCalcCore)にし、XCTest で確かめる(アプリのターゲットには単体テストのバンドルが無いため)。
 
 ### 2. サービスは型で引くコンテナ `FeatureServices`(`PokeCalcCore`)
 
@@ -44,7 +51,10 @@
 - 各機能の `registerServices` は `FeatureBackend`(`.mock(environment:)` / `.api(baseURL:identity:pokeCalc:)`)を受け取る。
   API の `ClientIdentity` は全機能で1つ(セッション ID を起動ごとに1つに保つ。ADR-0500 §5)。
 - 既存のサービス型(`AdjustService`・`BalanceService`・`SpeedService`・`DeviceDataService` など)の定義は変えない。
-- 機能 ID が重複していても起動時の設定エラーにする(後から登録した画面に到達できなくなるのを黙らせない)。
+- 起動時の組み立ては `FeatureCatalog.buildServices`: 登録の検証(ID・`order` の重複、`.toolbarIcon` の設定エラー時の遷移先)→
+  各機能の `registerServices` → **全画面の `requiredServices` が登録されていることの検証**。どれかが失敗したら `.configurationError`。
+  位置引数の `.ready` ではコンパイル時に分かった「サービスの渡し忘れ」を、起動時の検証で代わりに検出する(登録漏れ・
+  登録と取り出しの型違いで空白の画面を出さない)。
 
 ### 3. 共有ファイルに残る1行(正直な記録)
 
@@ -55,7 +65,8 @@ Swift にはファイルの glob が無く、登録を自動で集める仕組�
 - 2つのブランチが同時に末尾へ1行ずつ足すと、隣接行の追加として Git は競合を出す。解決は「両方の行を残す」だけで、
   他の行の書き換えは起きない(`.gitattributes` の `merge=union` は GitHub のマージで効く保証が無いので採らない)。
 - 起動時に開く画面を `make ios-sim-run IOS_SCREEN=<名前>` でも開きたいときは、`ios/scripts/sim-run.sh` の `case` に1行足す
-  (任意。XCUITest は環境変数を直接渡すので不要)。
+  (任意。XCUITest は環境変数を直接渡すので不要)。足すのは `case` の1行だけで、usage 行・エラー文言は書き換えない
+  (書き換えると他のブランチと競合する)。
 
 ### 4. 既存の挙動は変えない
 
@@ -69,7 +80,8 @@ Swift にはファイルの glob が無く、登録を自動で集める仕組�
 1. main を自分のブランチに merge する。`RootView.swift`・`AppEnvironment.swift` が競合したら **main 側を採る**(自分の追加は捨てる)。
 2. 自分の画面の `AppFeature` を `ios/PokeCalc/Features/<名前>Feature.swift` に新規で書く(既存の `SpeedFeature.swift` などが見本)。
    - 入口の文言・識別子・環境変数のキーは、捨てた `RootView` の差分からそのまま移す。`order` は既存の並びの間か後ろの値。
-   - サービスは `registerServices` で `services.register((any XxxService).self, ...)`。モック/API の生成は捨てた `AppEnvironment` の差分から移す。
+   - サービスは `registerServices` で `services.register((any XxxService).self, ...)`、同じ型を `requiredServices` に `ServiceKey((any XxxService).self)` で宣言する。
+     モック/API の生成は捨てた `AppEnvironment` の差分から移す。
    - 遷移先は `destination(in:)` で `context.services.resolve(...)`・`context.core.pokeCalc`・`context.teamStore`・`context.path` を使う。
 3. `FeatureRegistry.swift` の配列の末尾に `XxxFeature(),` を1行足す。
 4. `#Preview` や `.ready(...)` を直接作っていた箇所は `AppEnvironment.makeAtLaunch(environment: [AppConfiguration.useMockEnvironmentKey: "1"])` にする。

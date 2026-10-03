@@ -19,7 +19,6 @@ enum AppEnvironment {
         features: [any AppFeature] = FeatureRegistry.features
     ) -> AppEnvironment {
         do {
-            try FeatureRegistry.validateUniqueIDs(features)
             let configuration = try AppConfiguration(infoDictionary: infoDictionary, environment: environment)
             let core: CoreServices
             let backend: FeatureBackend
@@ -38,9 +37,11 @@ enum AppEnvironment {
                     backendDescription: "APIに接続中(\(url.host ?? url.absoluteString))")
                 backend = .api(baseURL: url, identity: identity, pokeCalc: service)
             }
-            var services = FeatureServices()
-            for feature in features {
-                try feature.registerServices(for: backend, into: &services)
+            // 登録の検証(ID・並び順の重複など)→ 各機能のサービス登録 → 必要なサービスがそろっているかの検証。
+            let services = try FeatureCatalog.buildServices(for: features.map(\.spec)) { services in
+                for feature in features {
+                    try feature.registerServices(for: backend, into: &services)
+                }
             }
             return .ready(core: core, features: services)
         } catch {

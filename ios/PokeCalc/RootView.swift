@@ -93,15 +93,12 @@ struct RootView: View {
             }
         }
         .task {
-            guard case .ready = environment else { return }
-            let env = ProcessInfo.processInfo.environment
-            // 従来の else-if と同じく、並び順で最初に指定された1画面だけを開く。
-            let launched = FeatureRegistry.features.first { feature in
-                guard let key = feature.openAtLaunchEnvironmentKey else { return false }
-                return env[key] == FeatureRegistry.openAtLaunchValue
-            }
-            if let launched {
-                path.append(FeatureRoute(featureID: launched.id))
+            let isReady = if case .ready = environment { true } else { false }
+            // 従来の else-if と同じく、並び順で最初に指定された1画面だけを開く(設定エラー時は開かない)。
+            if let id = FeatureCatalog.featureToOpenAtLaunch(
+                FeatureRegistry.specs, environment: ProcessInfo.processInfo.environment, servicesReady: isReady)
+            {
+                path.append(FeatureRoute(featureID: id))
             }
         }
     }
@@ -114,8 +111,8 @@ struct RootView: View {
                 feature.destination(
                     in: FeatureContext(core: core, services: services, teamStore: teamStore, path: $path))
             case .configurationError:
-                if let view = feature.destinationWithoutServices() {
-                    view
+                if feature.availableWithoutServices {
+                    feature.destinationWithoutServices()
                 }
             }
         }

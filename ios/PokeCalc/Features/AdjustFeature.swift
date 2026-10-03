@@ -8,6 +8,8 @@ struct AdjustFeature: AppFeature {
     let entry = FeatureEntry.rootButton(title: AdjustText.screenTitle, accessibilityIdentifier: "openAdjustScreen")
     let openAtLaunchEnvironmentKey: String? = "POKECALC_OPEN_ADJUST_SCREEN_AT_LAUNCH"
 
+    let requiredServices = [ServiceKey((any AdjustService).self)]
+
     func registerServices(for backend: FeatureBackend, into services: inout FeatureServices) throws {
         switch backend {
         case .mock:
@@ -19,7 +21,7 @@ struct AdjustFeature: AppFeature {
     }
 
     @MainActor func destination(in context: FeatureContext) -> AnyView {
-        guard let adjust = context.services.resolve((any AdjustService).self) else { return AnyView(EmptyView()) }
+        guard let adjust = context.services.resolve((any AdjustService).self) else { return unavailableView() }
         return AnyView(
             AdjustScreenView(
                 service: context.core.pokeCalc, adjust: adjust, backendDescription: context.core.backendDescription))

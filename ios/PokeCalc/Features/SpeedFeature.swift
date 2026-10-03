@@ -8,6 +8,8 @@ struct SpeedFeature: AppFeature {
     let entry = FeatureEntry.rootButton(title: SpeedLabels.openButton, accessibilityIdentifier: "openSpeedScreen")
     let openAtLaunchEnvironmentKey: String? = "POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH"
 
+    let requiredServices = [ServiceKey((any SpeedService).self)]
+
     func registerServices(for backend: FeatureBackend, into services: inout FeatureServices) throws {
         switch backend {
         case .mock(let environment):
@@ -19,7 +21,7 @@ struct SpeedFeature: AppFeature {
     }
 
     @MainActor func destination(in context: FeatureContext) -> AnyView {
-        guard let speed = context.services.resolve((any SpeedService).self) else { return AnyView(EmptyView()) }
+        guard let speed = context.services.resolve((any SpeedService).self) else { return unavailableView() }
         return AnyView(SpeedScreenView(service: speed))
     }
 }
