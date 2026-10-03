@@ -31,7 +31,7 @@ for f in "$backup" "$drill"; do
   has "$f" 'trap .*EXIT' && ok "$n: EXIT で後始末" || ng "$n: EXIT trap が無い"
   has "$f" 'umask 077' && ok "$n: umask 077" || ng "$n: umask 077 が無い"
   # 値を出さない: dsn / root_pw / MYSQL_PWD の値を echo・printf で出していない。
-  if grep -nE '(echo|printf)[^|]*\$\{?(dsn|root_pw|MYSQL_PWD)' "$f" >/dev/null; then ng "$n: 秘密の値を出力しうる"; else ok "$n: 秘密の値を出力しない"; fi
+  if grep -vF 'printf -v MYSQL_PWD' "$f" | grep -nE '(echo|printf)[^|]*\$\{?(dsn|root_pw|MYSQL_PWD)' >/dev/null; then ng "$n: 秘密の値を出力しうる"; else ok "$n: 秘密の値を出力しない"; fi
   if grep -nE '(-p"?\$|--password)' "$f" >/dev/null; then ng "$n: パスワードをコマンド行に渡している"; else ok "$n: パスワードをコマンド行に渡さない"; fi
   if grep -nE '\bset -x\b' "$f" >/dev/null; then ng "$n: set -x がある"; else ok "$n: set -x が無い"; fi
 done
@@ -49,8 +49,26 @@ has "$backup" 'record \| team \| pokedex' && ok "backup: record・team・pokedex
 
 # drill: 別名 DB 名の厳密な検査・DROP は created_db のみ・既存の別名 DB は消さない・CONFIRM_RESTORE は別名 DB。
 has "$drill" '\^\(record\|team\)_restore_drill\$' && ok "drill: 別名 DB 名を厳密に検査" || ng "drill: 別名 DB 名の検査が無い"
-if grep -n 'DROP DATABASE' "$drill" | grep -v '^[0-9]*:#' | grep -v 'created_db' >/dev/null; then ng "drill: created_db 以外への DROP がありうる"; else ok "drill: DROP は created_db(自分が作った別名 DB)だけ"; fi
-has "$drill" 'SHOW DATABASES LIKE' && ok "drill: 既存の別名 DB を検査して消さない" || ng "drill: 既存の別名 DB の検査が無い"
+# DROP は(コメントを除き)ちょうど1箇所で、その行は `${created_db}` への DROP DATABASE IF EXISTS を1回だけ含む。
+code=$(grep -v '^[[:space:]]*#' "$drill")
+drop_lines=$(printf '%s\n' "$code" | grep -c 'DROP ')
+drop_ok=$(printf '%s\n' "$code" | grep -cF 'DROP DATABASE IF EXISTS \`${created_db}\`')
+drop_all=$(printf '%s\n' "$code" | grep 'DROP ' | grep -o 'DROP DATABASE' | wc -l | tr -d ' ')
+if [ "$drop_lines" = 1 ] && [ "$drop_ok" = 1 ] && [ "$drop_all" = 1 ]; then ok "drill: DROP は created_db(自分が作った別名 DB)の1箇所だけ"; else ng "drill: DROP が created_db の1箇所だけではない(lines=${drop_lines} ok=${drop_ok} all=${drop_all})"; fi
+# 別名 DB 名の正規表現は、ループ内(作成前)と drop_created(DROP 前の再検査)の2回。
+re_count=$(printf '%s\n' "$code" | grep -cE '=~ \^\(record\|team\)_restore_drill\$')
+if [ "$re_count" = 2 ]; then ok "drill: 別名 DB 名の検査が2箇所(作成前・DROP 前)"; else ng "drill: 別名 DB 名の検査が2箇所でない(${re_count})"; fi
+has "$drill" 'drop_created\(\) *\{' && printf '%s\n' "$code" | sed -n '/^drop_created()/,/^}/p' | grep -q '=~ \^(record|team)_restore_drill\$' && ok "drill: drop_created が DROP 前に名前を再検査" || ng "drill: drop_created に名前の再検査が無い"
+has "$drill" 'SCHEMATA WHERE SCHEMA_NAME = ' && ok "drill: 既存の別名 DB を完全一致で検査して消さない" || ng "drill: 既存の別名 DB の検査が無い"
+# 失効ジョブの DSN は別名 DB を向く(元 DB を向けると復元していない DB に失効を流す)。DB_NAME も別名 DB。
+has "$drill" '_APP_DSN=.*/\$\{drill\}\?' && ok "drill: 失効ジョブの DSN は別名 DB" || ng "drill: 失効ジョブの DSN が別名 DB を向いていない"
+if grep -nE '_APP_DSN=.*/\$\{?kind' "$drill" >/dev/null; then ng "drill: 失効ジョブの DSN が元 DB を向いている"; else ok "drill: 失効ジョブの DSN は元 DB を向かない"; fi
+has "$drill" 'DB_NAME="\$drill"' && ok "drill: DB_NAME は別名 DB" || ng "drill: DB_NAME が別名 DB でない"
+has "$drill" 'unset "\$\{upper\}_APP_DSN"' && ok "drill: 復元後に APP_DSN を unset" || ng "drill: APP_DSN を unset していない"
+# MANIFEST の tables は空でなく、devices・purge_journal を含むことを必須にする(空の照合で ok にしない)。
+has "$drill" '\[ -n "\$tables" \]' && ok "drill: tables の空を拒否" || ng "drill: tables が空でも進む"
+has "$drill" '\*" devices "\*\)' && has "$drill" '\*" purge_journal "\*\)' && ok "drill: devices・purge_journal を必須化" || ng "drill: devices・purge_journal の必須化が無い"
+has "$drill" '\^\$\{upper\}_\[A-Z_\]\+\$' && ok "drill: ConfigMap キーを kind の接頭辞に限る" || ng "drill: ConfigMap キーの検査が広い"
 has "$drill" 'CONFIRM_RESTORE="\$drill"' && ok "drill: CONFIRM_RESTORE は別名 DB" || ng "drill: CONFIRM_RESTORE が別名 DB でない"
 has "$drill" 'RESTORE_FROM_DB="\$kind"' && ok "drill: RESTORE_FROM_DB は元 DB" || ng "drill: RESTORE_FROM_DB が無い"
 has "$drill" 'restore-ok' && ok "drill: restore-ok を確認する" || ng "drill: restore-ok の確認が無い"

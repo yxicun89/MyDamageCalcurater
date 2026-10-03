@@ -76,7 +76,7 @@ WRAP
     done
     MYSQL_BIN="$KDB_TMP/mysql"
     MYSQLDUMP_BIN="$KDB_TMP/mysqldump"
-    KDB_HOST=host.docker.internal
+    KDB_HOST=host.docker.internal # Docker Desktop 前提(Linux の docker では --add-host が要るので、その場合はホストに mysql クライアントを入れる)
   fi
   export MYSQL_BIN MYSQLDUMP_BIN
 }

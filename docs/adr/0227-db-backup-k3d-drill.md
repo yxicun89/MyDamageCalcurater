@@ -16,7 +16,7 @@
      root のパスワードもスクリプト内部で読み、権限付与の追加はしない(TidbInitializer・SQL への GRANT 追加は不要)。
    - DROP は「今回このスクリプトが作った別名 DB」だけ。名前を `^(record|team)_restore_drill$` で検査し、既存の同名 DB があれば作らず失敗する(自動では消さない)。
    - 復元手順5の失効ジョブは、別名 DB に向けて実際に `record expire` / `team expire` を流す(保持日数は本番の ConfigMap と同じ値)。
-3. ホストに `mysql`・`mysqldump` が無いときは、固定 digest の mysql イメージの docker ラッパー(`-e MYSQL_PWD` で値を渡さず継承)を使い、
+3. ホストに `mysql`・`mysqldump` が無いときは、固定 digest の mysql イメージの docker ラッパー(`-e MYSQL_PWD` で値を渡さず継承)を使い、(`host.docker.internal` は Docker Desktop 前提)
    接続先は `host.docker.internal` にする(`scripts/k3d-db-lib.sh`)。
 4. 静的検査は `scripts/db-backup-k3d_test.sh`(`make test-scripts`)。実クラスタでの実行は下の §実行記録。
 

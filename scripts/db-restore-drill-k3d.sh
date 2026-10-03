@@ -43,10 +43,11 @@ kdb_forward pokecalc-tidb-tidb "$TIDB_PORT" 4000
 
 root_pw=$(kdb_secret tidb-root-auth root)
 [ -n "$root_pw" ] || kdb_die "Secret tidb-root-auth に root が無い(make deploy-latest で作る)"
-MYSQL_PWD="$root_pw"
+printf -v MYSQL_PWD '%s' "$root_pw"
 export MYSQL_PWD
 
 sql() { "$MYSQL_BIN" -h "$KDB_HOST" -P "$TIDB_PORT" -u root -N -B -e "$1"; }
+db_exists() { sql "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = '$1'"; } # 完全一致(LIKE の _ を使わない)
 count() { sql "SELECT COUNT(*) FROM \`$1\`.\`$2\`$3"; }
 
 failures=0
@@ -58,10 +59,15 @@ for kind in "${kinds[@]}"; do
   latest=$(ls -1 "$BACKUP_DIR/$kind" 2>/dev/null | grep -E '^[0-9]{8}T[0-9]{6}Z$' | sort -r | head -1 || true)
   [ -n "$latest" ] || kdb_die "${kind} の世代が無い(先に make db-backup-k3d)"
   tables=$(sed -n 's/^tables: //p' "$BACKUP_DIR/$kind/$latest/MANIFEST")
+  # 表の一覧が空・devices か purge_journal が無ければ、空の照合で ok にならないよう中止する。
+  [ -n "$tables" ] || kdb_die "世代 ${latest} の MANIFEST に tables が無い(空の照合になるので中止)"
   for t in $tables; do [[ "$t" =~ ^[a-z_0-9]+$ ]] || kdb_die "MANIFEST の表名が不正"; done
+  case " $tables " in *" devices "*) ;; *) kdb_die "MANIFEST の tables に devices が無い" ;; esac
+  case " $tables " in *" purge_journal "*) ;; *) kdb_die "MANIFEST の tables に purge_journal が無い" ;; esac
+  upper=$(printf '%s' "$kind" | tr '[:lower:]' '[:upper:]')
 
   # 既存の別名 DB は消さない(自分が作ったものではないので)。
-  [ -z "$(sql "SHOW DATABASES LIKE '${drill}'")" ] || kdb_die "別名 DB ${drill} が既にある(前回の残りなら手で確認して削除する。自動では消さない)"
+  [ -z "$(db_exists "$drill")" ] || kdb_die "別名 DB ${drill} が既にある(前回の残りなら手で確認して削除する。自動では消さない)"
   sql "CREATE DATABASE \`${drill}\`"
   created_db="$drill"
 
@@ -70,10 +76,9 @@ for kind in "${kinds[@]}"; do
   [ -n "$retention_env" ] || kdb_die "ConfigMap ${kind}-retention を読めなかった"
   while IFS='=' read -r k v; do
     [ -n "$k" ] || continue
-    [[ "$k" =~ ^[A-Z_]+$ && "$v" =~ ^[0-9]+$ ]] || kdb_die "ConfigMap ${kind}-retention の値が想定外"
+    [[ "$k" =~ ^${upper}_[A-Z_]+$ && "$v" =~ ^[0-9]+$ ]] || kdb_die "ConfigMap ${kind}-retention の値が想定外"
     export "$k=$v"
   done <<< "$retention_env"
-  upper=$(printf '%s' "$kind" | tr '[:lower:]' '[:upper:]')
   export "${upper}_EXPIRE_BATCH_LIMIT=1000"
   # go の DSN は 127.0.0.1 の port-forward 向け(docker ラッパー使用時も、失効ジョブはホストの go が流す)。
   export "${upper}_APP_DSN=root:${root_pw}@tcp(127.0.0.1:${TIDB_PORT})/${drill}?parseTime=true"
@@ -82,6 +87,7 @@ for kind in "${kinds[@]}"; do
     RESTORE_FROM_DB="$kind" CONFIRM_RESTORE="$drill" \
     RESTORE_EXPIRE_CMD="cd services && go run ./${kind}/cmd/${kind} expire" \
     ./scripts/db-restore.sh "$kind" "$latest" | tee "$KDB_TMP/restore.out" | grep -E '^(restore|loaded|journal|reapplied|expire|restore-ok)' || true
+  unset "${upper}_APP_DSN" # root の DSN を以降の子プロセスに残さない
   grep -q "^restore-ok ${kind} ${latest}\$" "$KDB_TMP/restore.out" || { echo "NG: restore-ok が出なかった(${kind})" >&2; failures=$((failures + 1)); drop_created; continue; }
 
   for t in $tables; do
@@ -92,7 +98,7 @@ for kind in "${kinds[@]}"; do
   if [ "$a" = "$b" ]; then echo "ok: 墓石(devices.purged_at 有り) ${a} 行"; else echo "NG: 墓石 元 ${a} / 復元 ${b}" >&2; failures=$((failures + 1)); fi
 
   drop_created
-  [ -z "$(sql "SHOW DATABASES LIKE '${drill}'")" ] && echo "ok: 別名 DB ${drill} を削除した" || { echo "NG: 別名 DB ${drill} が残っている" >&2; failures=$((failures + 1)); }
+  [ -z "$(db_exists "$drill")" ] && echo "ok: 別名 DB ${drill} を削除した" || { echo "NG: 別名 DB ${drill} が残っている" >&2; failures=$((failures + 1)); }
 done
 
 [ "$failures" = 0 ] || { echo "db-restore-drill-k3d: ${failures} 件失敗" >&2; exit 1; }

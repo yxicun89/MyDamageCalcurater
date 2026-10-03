@@ -32,20 +32,20 @@ for kind in "${kinds[@]}"; do
     record | team)
       if [ "$forwarded_tidb" = 0 ]; then kdb_forward pokecalc-tidb-tidb "$TIDB_PORT" 4000; forwarded_tidb=1; fi
       port=$TIDB_PORT
-      secret="${kind}-db-auth"
-      key="${kind}-migrator-dsn"
+      auth_obj="${kind}-db-auth"
+      dsn_field="${kind}-migrator-dsn"
       ;;
     pokedex)
       if [ "$forwarded_mysql" = 0 ]; then kdb_forward mysql "$MYSQL_PORT" 3306; forwarded_mysql=1; fi
       port=$MYSQL_PORT
-      secret=mysql-auth
-      key=pokedex-reader-dsn
+      auth_obj=mysql-auth
+      dsn_field=pokedex-reader-dsn
       ;;
   esac
-  dsn=$(kdb_secret "$secret" "$key")
-  [ -n "$dsn" ] || kdb_die "Secret ${secret} に ${key} が無い(make deploy-latest で作る)"
+  dsn=$(kdb_secret "$auth_obj" "$dsn_field")
+  [ -n "$dsn" ] || kdb_die "Secret ${auth_obj} に ${dsn_field} が無い(make deploy-latest で作る)"
   user=$(kdb_dsn_user "$dsn")
-  MYSQL_PWD=$(kdb_dsn_pass "$dsn")
+  printf -v MYSQL_PWD '%s' "$(kdb_dsn_pass "$dsn")"
   export MYSQL_PWD
   unset dsn
   echo "== ${kind}"
