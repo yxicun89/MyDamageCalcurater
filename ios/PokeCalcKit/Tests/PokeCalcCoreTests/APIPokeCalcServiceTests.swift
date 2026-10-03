@@ -198,7 +198,7 @@ final class APIPokeCalcServiceTests: XCTestCase {
         XCTAssertEqual(options["critical"] as? Bool, true)
     }
 
-    /// openapi `Individual` の残りのフィールド(level・abilityId・moveId・ranks・teraType・status)も
+    /// openapi `Individual` の残りのフィールド(level・abilityId・ranks・teraType・status)も
     /// 正しく送る。攻撃側に値ありを、防御側(クラスの `defender` フィクスチャ)に既定値を置いて
     /// 「値がある」「省略・既定のまま」の両方を1テストで確かめる。
     func testCalcDamageRequestBodyMapsRanksTeraTypeStatusAbilityMoveLevel() async throws {
@@ -218,7 +218,7 @@ final class APIPokeCalcServiceTests: XCTestCase {
         let attackerJSON = try XCTUnwrap(body["attacker"] as? [String: Any])
         XCTAssertEqual(attackerJSON["level"] as? Int, 50)
         XCTAssertEqual(attackerJSON["abilityId"] as? String, "test-ability-alpha")
-        XCTAssertEqual(attackerJSON["moveId"] as? String, "test-move-physical")
+        XCTAssertNil(attackerJSON["moveId"], "Individual に moveId は無い(契約から削除。#245)")
         XCTAssertEqual(attackerJSON["teraType"] as? String, "fairy")
         XCTAssertEqual(attackerJSON["status"] as? String, "badly_poison")
         let ranks = try XCTUnwrap(attackerJSON["ranks"] as? [String: Int])

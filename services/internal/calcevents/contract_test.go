@@ -9,7 +9,7 @@ import (
 // TestContractFieldsExist は api/openapi.yaml から生成される型の、この package が前提にしている
 // フィールドが存在することを固定する(ADR-0212 §7・AC-N8)。CalcDetail は api.Individual・
 // api.FieldState・api.CalcOptions を丸ごと埋め込むが、値を写す側(calc-svc のハンドラ)は
-// api.CalcRequest.MoveId(トップレベル。Individual.MoveId ではない)・
+// api.CalcRequest.MoveId(トップレベル)・
 // api.CalcResult.MinPercent/MaxPercent という*個別のフィールド*に依存する。
 // これらが openapi.yaml の変更でリネーム・削除されると、この関数のフィールドアクセスが
 // コンパイルできなくなり、ビルド時に検知できる(services/internal/api/client_id_semantics_test.go
@@ -22,7 +22,7 @@ func TestContractFieldsExist(t *testing.T) {
 	// (openapi.yaml の変更でこれらのフィールドが消える・リネームされると go build/go test の
 	// コンパイル段階で失敗する)。
 	var detail CalcDetail
-	detail.MoveID = req.MoveId // トップレベルの moveId。req.Attacker.MoveId ではない。
+	detail.MoveID = req.MoveId // トップレベルの moveId。
 	detail.MinPercent = result.MinPercent
 	detail.MaxPercent = result.MaxPercent
 	detail.Attacker = req.Attacker

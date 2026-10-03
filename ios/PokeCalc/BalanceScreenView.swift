@@ -2,7 +2,8 @@ import PokeCalcCore
 import PokeCalcDesign
 import SwiftUI
 
-// BalanceScreenView: タイプバランス画面(P6-21。ADR-0415 第1段=防御相性・チーム集計、第2段=攻撃範囲)。
+// BalanceScreenView: タイプバランス画面(P6-21・P6-22。ADR-0415 第1段=防御相性・チーム集計、第2段=攻撃範囲、
+// 第3段=仮想敵・おすすめタイプ・技範囲チェッカー)。
 //
 // ロジックは持たない。`BalanceViewModel`(PokeCalcCore)の状態を描き、操作をメソッドへつなぐだけ(ADR-0500 §1)。
 // 倍率・集計は balance の応答をそのまま出す(iOS で相性を計算しない)。弱点/耐性/無効は色だけでなく文字でも出す。
@@ -32,6 +33,12 @@ struct BalanceScreenView: View {
                 membersSection
                 addMemberSection
                 BalanceResultsView(viewModel: viewModel)
+                // 第3段(ADR-0415 §8)。仮想敵・おすすめはメンバーが要る。技範囲はメンバーと無関係。
+                BalanceThreatsView(viewModel: viewModel)
+                if !viewModel.members.isEmpty {
+                    BalanceRecommendationsView(viewModel: viewModel)
+                }
+                BalanceMoveRangeView(viewModel: viewModel)
             }
             .padding(SpacingToken.x4)
         }

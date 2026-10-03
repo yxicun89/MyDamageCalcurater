@@ -96,6 +96,17 @@ engine は性格を構造値 `{Plus, Minus}` で持ち、ID を持たない。ca
   HTTP では required)、`moveId` の欠落は `unknown_move`、`observations` の欠落は `no_observation`、`side` の欠落は上のとおり。
 - **観測はキーの有無で数える**(HTTP だけ)。`percent: 0` は「指定したが範囲外」なので `{percent: 0, damage: 50}` は `invalid_observation`
   (契約上 percent は 1..100)。WASM はキーの有無を区別できず 0 を未指定とみなすが、失敗の食い違いではない(WASM では成功する入力で、契約違反)。
+- **`sp`(と StatBlock の6キー)の欠落は 400 `invalid_input`**(issue #316)。契約で必須だが、生成型は値型でゼロ値が入るため
+  キーの欠落が無振りの計算に化けていた。`decodeStrict` が本文直下の Individual(calc は attacker・defender、bulk は attacker、
+  reverse は known)の `sp` が存在し(null でなく)`hp/atk/def/spa/spd/spe` の6キーそろうことを生の JSON で確かめる
+  (judge-svc の `toStats` と同じ「キーの有無を見る」方式。生成型は変えない)。code は `invalid_input`: JSON の構文・型は正しく、
+  値の契約違反(必須の欠落)なので `invalid_json`(構文・型)ではなく既存の入力不正の語彙に揃える。Individual 自体の欠落は従来どおり
+  `unknown_species`。検査は未知フィールド・型の検査の後、列挙・ID 解決より前。キーは大文字小文字を区別せず探す(encoding/json の束縛に合わせる。`"Attacker"` もすり抜けない)。値が null のキーも欠落として扱う(judge の `toStats` と同じ)。
+  なお WASM 境界(engine/wasmapi)は sp の欠落を 0 として受ける(DTO が値型。キーの有無を区別できない。観測の percent と同じ差。コードは変えない)。
+- **`Individual.moveId` は契約から削除した**(issue #245)。calc-svc は一度も読まず(技は `CalcRequest.moveId` 等のトップレベル)、
+  `attacker.moveId: "nosuchmove"` が黙って 200 になっていた。削除後は `attacker.moveId` を送ると `unknown_field`。
+  Web に参照が無いことを確認済み。iOS は生成型 Individual の初期化に `moveId:` を渡していたため、同じ PR で追従した(ドメイン型 `Individual.moveId` は構築の技選択で使うので残し、API に送らない)。AC-2 の「本文の moveId が attacker.moveId より優先」は
+  「技は本文の moveId のみ」に読み替える(`TestCalcDamageMoveIDIsTopLevelOnly`)。
 - `maxCandidates` が負なら 400 `invalid_input`(契約上 minimum 0。engine は負を無制限とみなすが、契約違反を黙って通さない)。
 - **メソッド違い**(例 `GET /api/calc`)も 404 `not_found`。ErrorCode にメソッド違いの語彙を持たず、「その操作は無い」として扱う。
 - `KOChance.chancePercent` は契約上 optional だが、calc-svc は WASM と同じく**常に返す**(engine の生値。確定・倒せないときは 0)。
@@ -107,10 +118,10 @@ engine は性格を構造値 `{Plus, Minus}` で持ち、ID を持たない。ca
 | AC | 内容 | テスト |
 |---|---|---|
 | AC-1 | 契約が OpenAPI として妥当で、検証ヘルパーが空振りしない(null の性格補正が通り、category 欠落・語彙外の code が落ちる) | `httpapi.TestContractDocumentIsValid` / `TestContractHelperIsNotVacuous` |
-| AC-2 | `/api/calc` の成功は `engine.CalcDamage` の写し(rolls・min/maxDamage・defenderHP・effectiveness・stab・category・ko、表示%は tenths÷10)。本文の moveId が attacker.moveId より優先。Store 以外に依存しない | `TestCalcDamageMatchesEngine` / `TestCalcDamageMoveIDTakesPrecedence` / `TestCalcDamageNeedsOnlyStore` |
+| AC-2 | `/api/calc` の成功は `engine.CalcDamage` の写し(rolls・min/maxDamage・defenderHP・effectiveness・stab・category・ko、表示%は tenths÷10)。技は本文の moveId のみ(attacker.moveId は unknown_field。#245)。Store 以外に依存しない | `TestCalcDamageMatchesEngine` / `TestCalcDamageMoveIDIsTopLevelOnly` / `TestCalcDamageNeedsOnlyStore` |
 | AC-3 | `/api/calc/bulk`: 省略と `[]` が同じ既定セット、変化技は none/hp、指定順、preset-major、itemVariants の null、defender{sp,nature,natureId,stats}、重複は duplicate_preset | `TestCalcBulkDefaultPresets` / `TestCalcBulkRowOrderIsPresetMajor` / `TestCalcBulkNatureIDMapping` / `TestCalcBulkErrors` |
 | AC-4 | `/api/calc/reverse`: side=defender / attacker の成功が `engine.CalcReverse` の写し(順序・ranges・spCount・exact・mismatch・support・表示%・natureClass・natureId・assumedHpSp・exactCount)、観測・side・ID の不正 | `TestCalcReverseMatchesEngine` / `TestCalcReverseNatureIDs` / `TestCalcReverseErrors` |
-| AC-5 | エラーの共通語彙とステータス、検証の順序(wasmapi と同じ段の順: 構文 → format の列挙 → 個体ごとに列挙[status/teraType]と ID 解決 → 入力検証[Validate]は最後。critic 指摘 R5) | `TestCalcDamageErrorVocabulary` / `TestCalcDamageValidationOrder` |
+| AC-5 | エラーの共通語彙とステータス、検証の順序(wasmapi と同じ段の順: 構文・未知フィールド → 本文直下の Individual の sp(6キー)の欠落[invalid_input。§4] → format の列挙 → 個体ごとに列挙[status/teraType]と ID 解決 → 入力検証[Validate]は最後。critic 指摘 R5) | `TestCalcDamageErrorVocabulary` / `TestCalcDamageValidationOrder` / `TestRequiredSPIsCheckedBeforeFormatEnum` |
 | AC-6 | ヘッダの欠落・空は 400 missing_header(3操作)。UUID 形式は見ない | `TestMissingHeaders` |
 | AC-7 | pokedex ルート・未知のルート・メソッド違いは 404 not_found(Error 形式)、panic は 500 internal(内部情報を出さない) | `TestPokedexRoutesAreNotFound` / `TestUnknownRoutesAreNotFound` / `TestPanicIsRecoveredAsInternal` |
 | AC-8 | `GET /healthz` は 200 `{"status":"ok"}` | `TestHealthz` |

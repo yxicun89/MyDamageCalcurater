@@ -48,7 +48,7 @@ extension Components {
         /// | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
         /// | unknown_field | 契約にないフィールド | 400 |
         /// | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-        /// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む。調整(`/api/calc/adjust/*`)の発数・しきい値・補正・上限(ceiling)の範囲外、変化技での探索、下限が上限を超える配分(ADR-0250)も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
+        /// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。calc-svc では `sp` と StatBlock の6キー(null 値を含む)の欠落も含む(ADR-0200 §4)。`getMovesByIds` の `ids` の件数超過・欠落も含む。調整(`/api/calc/adjust/*`)の発数・しきい値・補正・上限(ceiling)の範囲外、変化技での探索、下限が上限を超える配分(ADR-0250)も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
         /// | unknown_preset | 未知の防御側プリセット | 400 |
         /// | duplicate_preset | 防御側プリセットの重複 | 400 |
         /// | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -632,10 +632,6 @@ extension Components {
             public var abilityId: Swift.String?
             /// - Remark: Generated from `#/components/schemas/Individual/itemId`.
             public var itemId: Swift.String?
-            /// 攻撃側で使う技
-            ///
-            /// - Remark: Generated from `#/components/schemas/Individual/moveId`.
-            public var moveId: Swift.String?
             /// 能力ポイント。各 0..32、合計 <= 66
             ///
             /// - Remark: Generated from `#/components/schemas/Individual/sp`.
@@ -692,7 +688,6 @@ extension Components {
             ///   - natureId:
             ///   - abilityId:
             ///   - itemId:
-            ///   - moveId: 攻撃側で使う技
             ///   - sp: 能力ポイント。各 0..32、合計 <= 66
             ///   - ranks:
             ///   - teraType:
@@ -703,7 +698,6 @@ extension Components {
                 natureId: Swift.String,
                 abilityId: Swift.String? = nil,
                 itemId: Swift.String? = nil,
-                moveId: Swift.String? = nil,
                 sp: Components.Schemas.Individual.SpPayload,
                 ranks: Components.Schemas.RankBlock? = nil,
                 teraType: Components.Schemas.Individual.TeraTypePayload? = nil,
@@ -714,7 +708,6 @@ extension Components {
                 self.natureId = natureId
                 self.abilityId = abilityId
                 self.itemId = itemId
-                self.moveId = moveId
                 self.sp = sp
                 self.ranks = ranks
                 self.teraType = teraType
@@ -726,7 +719,6 @@ extension Components {
                 case natureId
                 case abilityId
                 case itemId
-                case moveId
                 case sp
                 case ranks
                 case teraType
@@ -822,7 +814,7 @@ extension Components {
             public var attacker: Components.Schemas.Individual
             /// - Remark: Generated from `#/components/schemas/CalcRequest/defender`.
             public var defender: Components.Schemas.Individual
-            /// 使用する技(attacker.moveId より優先)
+            /// 使用する技
             ///
             /// - Remark: Generated from `#/components/schemas/CalcRequest/moveId`.
             public var moveId: Swift.String
@@ -836,7 +828,7 @@ extension Components {
             ///   - format:
             ///   - attacker:
             ///   - defender:
-            ///   - moveId: 使用する技(attacker.moveId より優先)
+            ///   - moveId: 使用する技
             ///   - field:
             ///   - options:
             public init(
@@ -1545,7 +1537,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/side`.
             public var side: Components.Schemas.ReverseSide
             /// 既知の側(自分)の個体。side=defender なら自分=攻撃側、side=attacker なら自分=防御側。
-            /// known.moveId は使わない(技は moveId で指定する)。
+            /// Individual に moveId は無い(技は moveId で指定する)。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/known`.
@@ -1567,7 +1559,7 @@ extension Components {
                 }
             }
             /// 既知の側(自分)の個体。side=defender なら自分=攻撃側、side=attacker なら自分=防御側。
-            /// known.moveId は使わない(技は moveId で指定する)。
+            /// Individual に moveId は無い(技は moveId で指定する)。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/ReverseRequest/known`.

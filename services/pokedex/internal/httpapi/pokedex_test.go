@@ -449,7 +449,7 @@ func TestPublicInputValidation(t *testing.T) {
 }
 
 // 応答だけの契約検証が空振りしていない(契約の Error に合わない 400 の本文を拒否する)ことを確かめる(#74)。
-// 400 は契約上 default(Error)で受けるので、status ではなく本文の形で見る。
+// 400 は契約上 `'400'`(Error)で受けるが、status ではなく本文の形で見る。
 func TestResponseContractCheckIsNotVacuous(t *testing.T) {
 	h := newHandler(t, storetest.New())
 	const target = "/api/pokedex/species?limit=0"
