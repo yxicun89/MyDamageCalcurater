@@ -131,37 +131,41 @@ struct RootView: View {
                 }
             }
             .navigationDestination(for: CalcScreenRoute.self) { _ in
-                if case .ready(let service, _, let backendDescription, _, _, _) = environment {
-                    CalcScreenView(service: service, teamStore: teamStore, backendDescription: backendDescription)
+                if case .ready(let service, _, let backendDescription, _, _, let frequentOpponents, _) = environment {
+                    CalcScreenView(
+                        service: service, teamStore: teamStore, backendDescription: backendDescription,
+                        frequentOpponentsService: frequentOpponents)
                 }
             }
             .navigationDestination(for: ReverseScreenRoute.self) { _ in
-                if case .ready(let service, _, let backendDescription, _, _, _) = environment {
-                    ReverseScreenView(service: service, teamStore: teamStore, backendDescription: backendDescription)
+                if case .ready(let service, _, let backendDescription, _, _, let frequentOpponents, _) = environment {
+                    ReverseScreenView(
+                        service: service, teamStore: teamStore, backendDescription: backendDescription,
+                        frequentOpponentsService: frequentOpponents)
                 }
             }
             .navigationDestination(for: TeamListScreenRoute.self) { _ in
-                if case .ready(let service, _, _, _, _, _) = environment {
+                if case .ready(let service, _, _, _, _, _, _) = environment {
                     TeamListView(store: teamStore, service: service, path: $path)
                 }
             }
             .navigationDestination(for: AdjustScreenRoute.self) { _ in
-                if case .ready(let service, _, let backendDescription, let adjust, _, _) = environment {
+                if case .ready(let service, _, let backendDescription, let adjust, _, _, _) = environment {
                     AdjustScreenView(service: service, adjust: adjust, backendDescription: backendDescription)
                 }
             }
             .navigationDestination(for: BalanceScreenRoute.self) { _ in
-                if case .ready(let service, _, _, _, let balance, _) = environment {
+                if case .ready(let service, _, _, _, let balance, _, _) = environment {
                     BalanceScreenView(balance: balance, service: service, teamStore: teamStore)
                 }
             }
             .navigationDestination(for: SpeedScreenRoute.self) { _ in
-                if case .ready(_, _, _, _, _, let speed) = environment {
+                if case .ready(_, _, _, _, _, _, let speed) = environment {
                     SpeedScreenView(service: speed)
                 }
             }
             .navigationDestination(for: AboutScreenRoute.self) { _ in
-                if case .ready(_, let deviceData, _, _, _, _) = environment {
+                if case .ready(_, let deviceData, _, _, _, _, _) = environment {
                     AboutView(deviceDataService: deviceData)
                 } else {
                     AboutView()
@@ -188,7 +192,7 @@ struct RootView: View {
     @ViewBuilder
     private var statusBadge: some View {
         switch environment {
-        case .ready(_, _, let description, _, _, _):
+        case .ready(_, _, let description, _, _, _, _):
             Text(description)
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
@@ -249,7 +253,8 @@ private struct AboutScreenRoute: Hashable {}
         RootView(
             environment: .ready(
                 service: mock, deviceData: MockDeviceDataService(), backendDescription: "モックデータで動作中", adjust: adjust,
-                balance: UnavailableBalanceService(), speed: MockSpeedService()))
+                balance: UnavailableBalanceService(), frequentOpponents: MockFrequentOpponentsService(),
+                speed: MockSpeedService()))
     } else {
         Text("プレビュー用モックの読み込みに失敗")
     }

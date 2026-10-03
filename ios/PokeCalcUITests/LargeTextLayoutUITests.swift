@@ -660,7 +660,6 @@ final class LargeTextLayoutUITests: XCTestCase {
     }
 
     /// P6-18 本体: AX5(最大の文字サイズ)でも、非公式の注記(長文)とデータの出典一覧が横にはみ出さない。
-    /// 現時点(未実装)では identifier が見つからず失敗してよい。
     func testAboutScreenNoHorizontalOverflowAtAX5() {
         let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
         openAboutScreen(app)
@@ -676,6 +675,20 @@ final class LargeTextLayoutUITests: XCTestCase {
             identifiers: ["deviceDataSection", "deleteDeviceDataButton"]
                 + (0..<3).map { "deviceDataExplanation-\($0)" }
         )
+    }
+
+    // MARK: - よく使う相手(P6-23・ADR-0501「P6-23」)
+
+    /// P6-23: AX5 でも、種族シートの「よく使う相手」セクションと行が横にはみ出さない。
+    func testFrequentOpponentsSectionNoHorizontalOverflowAtAX5() {
+        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        openCalcScreen(app)
+        let picker = element(app, "defenderSpeciesPicker")
+        XCTAssertTrue(picker.waitForExistence(timeout: Self.existenceTimeout))
+        picker.tap()
+        XCTAssertTrue(element(app, "speciesSearchSheet").waitForExistence(timeout: Self.existenceTimeout))
+        assertNoHorizontalOverflow(
+            app, identifiers: ["frequentOpponentsSection", "frequentOpponentRow-9003-000", "frequentOpponentRow-9001-000"])
     }
     // MARK: - 素早さ比較画面(P6-24。ADR-0501「P6-24 の受け入れ条件」の AX5)
 

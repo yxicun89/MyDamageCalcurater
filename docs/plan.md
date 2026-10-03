@@ -179,6 +179,10 @@
 - [x] P6-24 素早さ比較画面(iOS。ユーザー決定 2026-10-03〈DECISIONS.md〉。Web の `SpeedScreen` が参照実装、契約は `services/speed/api/openapi.yaml`〈gateway `/api/speed/*`〉。生成設定への取り込み方を spec で決める)
   - 完了(2026-10-03): 契約ごとに別ターゲットで生成(`PokeCalcSpeedAPI`。`openapi-gen.sh` を契約のループに拡張。P6-25・26 も同形で追加できる。ADR-0503)。`SpeedService` は `PokeCalcService` と別プロトコル。Web と同じ入力(preset・custom・raw・絞り込み・相手側追い風・トリックルーム)。`swift test` 689件・`make ios-test` 全件成功(XCUITest 69件)。critic PASS
 
+- [x] P6-23 よく使う相手の候補(requirements.md §2「計算履歴から頻度×時間減衰で上位を表示」。`GET /api/record/frequent-opponents` を種族ピッカーの空クエリ時に「よく使う」として出す。頻度は calc-svc → NATS → record-svc が自動で貯める。取得失敗・空・未解決は黙って省き検索と計算を塞がない。受け入れ条件・判断は ADR-0501「P6-23」)
+  - 完了(2026-10-02): 計算の防御側・逆算の相手の種族ピッカーの空クエリ時に「よく使う相手」を先頭に表示(limit 10・名前は `species(key:)` で同時4件まで解決・失敗/空/未解決は黙って省く)。`PokeCalcService` とは別プロトコル。`swift test` 610件・`make ios-test` 全件成功(XCUITest 60件。検索欄のクリアは削除キーで操作)。critic PASS
+- [-] P6-27 構築メンバーの並べ替え(**不要と判断**。番号は他レーンの P6-22 と重ならないよう付け替え。requirements.md・design.md・Web に要件が無い。team API は配列順を保存するので、要求が出たら ViewModel の `move` と `onMove` で足りる〈S〉)
+
 - [x] P6-20 構築の Showdown 形式のインポート/エクスポート(requirements.md §2 の必須。ADR-0213 §4: クライアント側の担当。
   2026-09-21 の「後回し」は 2026-10-02 のユーザー指示「iOS レーンの未実装機能をすべて実施」で解除)。構築編集画面から
   1体または6体を Showdown 形式のテキストで書き出し(共有・コピー)/貼り付けて取り込み。名前 ⇔ ID は pokedex の検索・`getMovesByIds` で解決。
@@ -187,7 +191,7 @@
   - 完了(2026-10-02): 日本語名の Showdown 風テキスト(ユーザー決定。実 Showdown 非互換。ADR-0506)。書き出し(コピー・共有)・貼り付け取り込み(取り込めなかった行を一覧し、取り込める分だけ追加)。`swift test` 633件・`make ios-test` 全件成功(XCUITest 61件)。critic PASS(指摘対応済み)
 - [ ] P6-24 素早さ比較画面(iOS。ユーザー決定 2026-10-03〈DECISIONS.md〉。Web の `SpeedScreen` が参照実装、契約は `services/speed/api/openapi.yaml`〈gateway `/api/speed/*`〉。生成設定への取り込み方を spec で決める)
 - [ ] P6-25 判定画面(iOS。契約は `services/judge/api/openapi.yaml`。P6-24 の取り込み方に揃える。判定の応答の `unsupported` の印も表示する)
-- [ ] P6-26 タイプバランス画面(iOS。契約は `services/balance/api/openapi.yaml`。構築をそのまま渡す導線を検討)
+- [-] P6-26 タイプバランス画面(iOS)は**取り下げ**(2026-10-03 ユーザー決定)。タイプバランスレーンが P6-21(ADR-0415)として第1〜2段を main に実装済みで、重複する PR #512 を閉じた。第3段は P6-22(タイプバランスレーン)
 - [ ] お気に入り・計算履歴の iOS 表示(API レーンの契約追加待ち。DECISIONS.md 2026-10-03 で依頼済み)
 
 - [x] P6-21 タイプバッジ・エンブレムの文字色を design.md「タイプバッジ」の `typeInk` 規則(黒/白のコントラスト比が高い方。白は どく/ゴースト/ドラゴン/あく のみ)に準拠(エンブレム本体・バッジは実装済みで、残っていたのは文字色の白固定)。`TypeColorToken.ink(forTypeID:)` を追加。`swift test` 全件・`make ios-test` 全件成功(XCUITest 53件)。critic PASS。ADR-0501「P6-21」
@@ -445,6 +449,7 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
 - [x] issue #232 のダブル分(ADR-0222)ダブルの壁(2732/4096)と全体技(×3072/4096)を engine・wasmapi に反映。`Move.Target`(single/spread)・ダブルで技の対象が不明な攻撃技は move_target_unknown の印。テラスはゲームに無いので実装しない。ゴールデン doubles 全件一致・既存9ファイル不変。#497 マージ後の format 印の整理は ADR-0222 §5
 
 - [x] issue #315 のメガ部分(API レーン)メガシンカ後の種族に requiredItemId 以外の持ち物を持たせた計算を 400 invalid_input で拒否(ADR-0200 §4 追記。テラスタイプは別作業、WASM 側の規則は未実装で issue #505 で追跡)
+- [x] issue #515 の API 分(Web レーンが越境): `GET /api/pokedex/species/{key}` の `SpeciesDetail` に `isMega`(常に)・`requiredItemId`(メガでなければ null。キーは常に出す)を追加。`SpeciesSummary` には足さない(docs/mega-evolution-spec.md §2 の「公開 API に既にある」を訂正)
 
 - [x] issue #211(API レーン分。ADR-0218): 公開 API の Item / Ability に省略可の `effect` を足した(searchItems・getSpecies.abilities。共通マスタで厳格に検証し、不正は 503 master_unavailable。内部 API は変更なし。critic PASS)
 
