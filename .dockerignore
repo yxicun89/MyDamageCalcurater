@@ -11,3 +11,5 @@ web/dist/
 ios/build/
 ios/DerivedData/
 *.wasm
+# Web の API 型(*.gen.ts)はイメージ内の npm run build(prebuild)が仕様から作る。手元の古い生成物を持ち込まない(ADR-0807 §2)
+web/src/**/*.gen.ts

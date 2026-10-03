@@ -2,7 +2,7 @@
 
 まず `CLAUDE.md` を読む。プロジェクトの絶対ルール・ドメイン規約・技術規約の正は
 `CLAUDE.md`、Git・役割分担・引き継ぎの共通運用はこのファイルとする。
-続いて `docs/plan.md`、`docs/requirements.md`、`docs/test-strategy.md`、
+続いて `docs/plan.md`(と `docs/plan/`)、`docs/requirements.md`、`docs/test-strategy.md`、
 `docs/design.md`、関連する `docs/adr/`、コードを書く・直す・レビューするときは `docs/coding-rules.md`(共通のコーディング規約)を読む。
 手順と Claude → Codex の対応は `docs/development-workflow.md` を参照。
 
@@ -31,7 +31,7 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 - 依頼された範囲の最小変更に留め、無関係な整形、依存更新、大規模リファクタリングを混ぜない。
   レビューのみの依頼では変更しない。
 - コミットはメインエージェントが担当する。1タスク = 1コミットを基本とし、先に
-  `docs/plan.md` を更新する。直前に `git diff` と `git diff --cached` を確認し、
+  `docs/plan/` を更新する。直前に `git diff` と `git diff --cached` を確認し、
   対象ファイルを明示して stage する。無関係な既存変更を一括で取り込まない。
   作業ブランチへの push は区切りごとに行う。main へは PR 経由でのみ入れる(直接 push・直接 merge をしない。COORDINATION.md)。
   PR のマージは、`gh pr checks N` で CI が全件成功のときだけ、PR 番号を明示し `gh pr view N --json headRefOid -q .headRefOid` の SHA を `--match-head-commit` に付けて単独で `gh pr merge N` してよい(`--admin`・`gh api` でのマージは不可。
@@ -72,7 +72,8 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 
 `CLAUDE.md` の全規約を適用する。特に次を最優先で確認する。
 
-- API は `api/openapi.yaml` を先に変更して `make gen`。生成型を手書きしない。
+- API は `api/openapi.yaml` を先に変更して `make gen`。生成型を手書きしない。Go・TypeScript の生成物は Git に置かない
+  (コミットしない。ADR-0807)。iOS の生成物も同じ(`make ios-gen`。`make ios-*` は前段で自動に生成する)。
 - engine に DB・HTTP・ファイル等の I/O や外部依存を導入しない。
 - 4096 基準の固定小数、五捨五超入、補正と丸めの順序を守る。float で近似しない。
 - SP は各 0〜32・合計 66 以下。ゴールデン照合時の EV は `max(0, 8×SP−4)`。
@@ -154,14 +155,15 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 
 - 変更に応じて test / lint / build を実行する。利用可能なターゲットは Makefile を確認する。
   最低限 `make test`、計算変更は `make test-golden`、実数値・網羅性の変更は
-  `make test-all-species`。API 変更は生成差分も確認する。
+  `make test-all-species`。API 変更は iOS も生成してテストする(`make ios-test`。前段で `ios-gen`)。
 - Go の変更ファイルを `gofmt` し、静的検査は `go vet`、ビルドは `go build` を各 Go モジュールで行う。
+  `go` を直接使う前に `make gen`(生成物は Git に無い。欠けているものは `scripts/ensure-gen.sh check`)。
   `make lint` / `make build` が定義されていればそれを使う。
   Web 等は package.json の scripts が実装されている範囲で型検査・lint・test・build を実行する。
 - コマンドの終了コードだけで合格としない。対象テスト 0 件、`[no tests to run]`、
   未実装の echo ターゲット、レビューの skip は「未実施 / 未実装」と記録する。
 - 同じ失敗で 3 回修正を繰り返しても進まない場合、原因・試行・依存を
-  `docs/plan.md` のブロッカーに残し、依存しない許可済みタスクを進める。
-- 終了時は `docs/plan.md` に実施内容・検証結果・残作業・既知の問題・次の開始点を残す。
+  `docs/plan/blockers/<レーン>.md` に残し、依存しない許可済みタスクを進める。
+- 終了時は `docs/plan/` に実施内容・検証結果・残作業・既知の問題・次の開始点を残す。
   詳細は `docs/ai-shared/` のログ・状態に書き、別途の引き継ぎ資料は作らない。最終報告に変更点、
   ブランチ、実行した検証と未実施理由を示す。

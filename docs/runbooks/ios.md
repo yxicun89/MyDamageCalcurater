@@ -4,11 +4,14 @@
 
 ## 1. テストを通す
 
+API の生成物は Git に置かない(ADR-0807)。`make ios-*` は前段で生成する。Xcode で直接開くときは、先に
+`make ios-gen` を1回実行する。
+
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 make ios-test | grep '^ios-'
 ```
-確認: 出力が次の5行(`ios-gen-check: PokeCalcAPI/Generated は api/openapi.yaml と一致` / `ios-gen-check: PokeCalcSpeedAPI/Generated は services/speed/api/openapi.yaml と一致` / `ios-test-unit: 全 N 件 / 成功 N / 失敗 0 / スキップ 0 / 想定内の失敗 0` / `ios-test-ui: 全 N 件 / 成功 N / 失敗 0 / スキップ 0 / 想定内の失敗 0` / `ios-check-infoplist: … が入っている`)。
+確認: 初回や仕様の変更後は先頭に `ios-gen: … を生成` の行が出る。続いて `ios/scripts/openapi-targets.sh` の各対象について `ios-gen-check: <名前> の生成物は <仕様> と一致`(PokeCalcAPI・PokeCalcBalanceAPI・PokeCalcSpeedAPI)、そのあとに次の3行(`ios-test-unit: 全 N 件 / 成功 N / 失敗 0 / スキップ 0 / 想定内の失敗 0` / `ios-test-ui: 全 N 件 / 成功 N / 失敗 0 / スキップ 0 / 想定内の失敗 0` / `ios-check-infoplist: … が入っている`)。
 
 ## 2. ルート画面を開く
 

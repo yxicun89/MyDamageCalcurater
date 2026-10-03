@@ -17,17 +17,21 @@ test: speed-test
 lint: speed-lint
 build: speed-build
 
+# 生成物は Git に置かない(ADR-0807)。出力が無いか入力が新しいときだけ生成する(ルート Makefile の GEN_STALE)。
 speed-gen:
-	@cd services && $(GO) tool oapi-codegen -config speed/internal/api/cfg.yaml speed/api/openapi.yaml
+	@if $(GEN_STALE) services/speed/internal/api/openapi.gen.go -- services/speed/api/openapi.yaml services/speed/internal/api/cfg.yaml services/go.mod; then \
+		(cd services && GOWORK=off $(GO) tool oapi-codegen -config speed/internal/api/cfg.yaml speed/api/openapi.yaml) && \
+		echo "speed-gen: services/speed/internal/api/openapi.gen.go を生成"; \
+	fi
 
-speed-test:
+speed-test: speed-gen
 	@cd $(SPEED_DIR) && GOWORK=off $(GO) test ./...
 
-speed-lint:
+speed-lint: speed-gen
 	@test -z "$$(gofmt -l $(SPEED_DIR))" || { gofmt -l $(SPEED_DIR); exit 1; }
 	@cd $(SPEED_DIR) && GOWORK=off $(GO) vet ./...
 
-speed-build:
+speed-build: speed-gen
 	@cd $(SPEED_DIR) && GOWORK=off $(GO) build ./...
 
 speed-kustomize:
@@ -44,14 +48,18 @@ speed-gitops-check: speed-kustomize
 	@SERVICE=speed scripts/gitops/check-gitops.sh ready
 
 # engine を含むため、ビルドコンテキストはリポジトリのルート(ADR-0600 §2)。
-speed-docker-build:
+speed-docker-build: speed-gen
 	@docker build -f $(SPEED_DIR)/Dockerfile -t $(SPEED_IMAGE) .
 
+# 公開用のイメージは手元の生成物の鮮度に頼らず、push の前に必ず作り直す(ADR-0807)
 speed-docker-push:
+	@$(MAKE) --no-print-directory speed-gen GEN_FORCE=1
 	@SERVICE=speed scripts/gitops/publish-image.sh
 
 # balance レーンのクラスタ内レジストリを共有する(ADR-0605 §1)。専用の registry-apply は持たない。
+# 公開用のイメージは手元の生成物の鮮度に頼らず、push の前に必ず作り直す(ADR-0807)
 speed-registry-push:
+	@$(MAKE) --no-print-directory speed-gen GEN_FORCE=1
 	@SERVICE=speed SPEED_REGISTRY_PORT=$(SPEED_REGISTRY_PORT) scripts/gitops/local-registry-push.sh
 
 speed-argocd-app:
@@ -64,7 +72,7 @@ speed-smoke:
 	@SPEED_URL=$(SPEED_URL) $(SPEED_DIR)/scripts/smoke.sh
 
 # pokedex export の実データの read model を ConfigMap にして k3d の speed に読ませる(ADR-0603)
-speed-k3d-deploy-readmodel:
+speed-k3d-deploy-readmodel: speed-gen
 	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh speed-k3d-deploy-readmodel
 	@SERVICE=speed SPEED_IMAGE=$(SPEED_IMAGE) SPEED_READMODEL_DIR=$(SPEED_READMODEL_DIR) CLUSTER=$(CLUSTER) scripts/gitops/k3d-deploy-readmodel.sh
 
