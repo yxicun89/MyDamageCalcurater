@@ -674,6 +674,17 @@ export interface components {
       abilities: components["schemas"]["Ability"][];
       /** @description 覚える技の ID 一覧 */
       learnset?: string[];
+      /**
+       * @description メガシンカ後の種族か(docs/mega-evolution-spec.md。issue 515)。pokedex-svc は常に返す。
+       *     古いサーバーは返さないため、省略は「メガではない」と同じ扱い(クライアントの互換のため required にしていない)。
+       */
+      isMega?: boolean;
+      /**
+       * @description メガシンカに要る持ち物(メガストーン)の ID。メガでなければ null。pokedex-svc は null でもキーを常に返す
+       *     (ADR-0218 の `effect` は「キーごと省く」ので逆。クライアントは省略も null も「メガではない」と読む)。
+       *     isMega が true の種族は、この ID の持ち物を持つ前提(クライアントが持ち物を固定する。ADR-0200 §4 の検証と同じ規則)。
+       */
+      requiredItemId?: string | null;
     };
     /** @description 6ステータスの値(種族値・実数値・SPなどに共用) */
     StatBlock: {

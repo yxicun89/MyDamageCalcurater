@@ -241,10 +241,19 @@ func (s *Server) GetSpecies(ctx *echo.Context, key api.SpeciesKey, params api.Ge
 		BaseStats: api.StatBlock{Hp: int(sp.BaseHp), Atk: int(sp.BaseAtk), Def: int(sp.BaseDef), Spa: int(sp.BaseSpa), Spd: int(sp.BaseSpd), Spe: int(sp.BaseSpe)},
 		Abilities: abilities, Learnset: &learnset,
 	}
+	isMega := sp.IsMega
+	detail.IsMega = &isMega
 	if err := tx.Commit(); err != nil {
 		return unavailable("GetSpecies/Commit", err)
 	}
-	return ctx.JSON(http.StatusOK, detail)
+	return ctx.JSON(http.StatusOK, speciesDetailBody{SpeciesDetail: detail, RequiredItemId: nullStringPtr(sp.RequiredItemID)})
+}
+
+// speciesDetailBody は SpeciesDetail の応答本文。requiredItemId は契約上 optional なので生成型は omitempty だが、
+// 公開 API はメガでなくてもキーを出す(null)。外側の同名フィールドが埋め込み側より優先され、キーが重複しない。
+type speciesDetailBody struct {
+	api.SpeciesDetail
+	RequiredItemId *string `json:"requiredItemId"`
 }
 
 // GetMove は GET /api/pokedex/moves/{key}。使用可能集合の外の技も返す(絞り込みは検索の仕事)。
