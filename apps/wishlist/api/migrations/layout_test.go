@@ -58,16 +58,21 @@ var confirmedURLs = []string{
 	"https://slist.amiami.jp/top/search/list?s_keywords={q}&s_sortkey=pricea",
 	"https://shopping.yahoo.co.jp/search/{q}/0/?X=2",
 	"https://www.suruga-ya.jp/search?category=&search_word={q}&rankBy=price%3Aascending&inStock=On",
+	// 000006(リンク用。link_only)。プレバンは検索ページが robots で機械取得禁止なので、人がブラウザで開くリンクとしてだけ出す
+	// (検索語の文字コードが UTF-8 でよいかは未確認。sites.md)。魂ウェブ・ポケセンは 2026-10-04 に headless で確認(sites-headless.md)。
+	"https://tamashiiweb.com/item/?wo={q}",
+	"https://www.pokemoncenter-online.com/search/?q={q}",
+	"https://p-bandai.jp/search_bst/?q={q}",
 }
 
 // 初期データのサイトは、仕様で確認済みの URL だけであること(推測で URL を足さない。CLAUDE.md §5)。
-// 000002 に加えて、サイトを足す 000004 も対象(対象を足しただけで、検査は弱めていない)。
+// 000002 に加えて、サイトを足す 000004・000006 も対象(対象を足しただけで、検査は弱めていない)。
 func TestSeedSitesAreConfirmedOnly(t *testing.T) {
 	confirmed := map[string]bool{}
 	for _, u := range confirmedURLs {
 		confirmed[u] = true
 	}
-	for _, name := range []string{"000002_seed.up.sql", "000004_seed_sites.up.sql"} {
+	for _, name := range []string{"000002_seed.up.sql", "000004_seed_sites.up.sql", "000006_seed_link_sites.up.sql"} {
 		t.Run(name, func(t *testing.T) {
 			b, err := FS.ReadFile(name)
 			if err != nil {
@@ -87,7 +92,8 @@ func TestSeedSitesAreConfirmedOnly(t *testing.T) {
 }
 
 // 確認済みの一覧は docs/sites.md と一致させる(sites.md に書かれていない URL を確認済みにしない)。
-// 人が登録するための候補(プレバン・魂ウェブ・ポケセン)は未確認の点があるので、確認済みに入れない。
+// 確認済みの一覧に入れてよいのは sites.md に書いた URL だけ。ポケセンの旧 URL(?word=…&main_page=search_result)は検索結果にならないと分かったので、確認済みに入れない
+// (プレバン・魂ウェブは 000006 でリンク用として入れるため、2026-10-04 に「未確認」の除外から外した。プレバンの文字コードは sites.md に未確認と明記)。
 func TestConfirmedURLsMatchSitesDoc(t *testing.T) {
 	b, err := os.ReadFile("../../docs/sites.md")
 	if err != nil {
@@ -99,7 +105,7 @@ func TestConfirmedURLsMatchSitesDoc(t *testing.T) {
 			t.Errorf("確認済みの URL が docs/sites.md に無い: %s", u)
 		}
 	}
-	for _, u := range []string{"https://p-bandai.jp/search_bst/?q={q}", "https://tamashiiweb.com/item/?wo={q}", "https://www.pokemoncenter-online.com/?word={q}&main_page=search_result"} {
+	for _, u := range []string{"https://www.pokemoncenter-online.com/?word={q}&main_page=search_result"} {
 		for _, c := range confirmedURLs {
 			if c == u {
 				t.Errorf("未確認の点があるサイトが確認済みに入っている: %s", u)
