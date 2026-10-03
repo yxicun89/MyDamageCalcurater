@@ -2047,6 +2047,15 @@ ErrorCode は `missing_header`(欠落・空)・`invalid_header`(UUID でない�
 Reason: Traefik 直結では gateway の検証が効かず、balance だけ緩い非空チェックだった。
 Impact: Web レーンへ: `web/src/api/balance.gen.ts` を再生成済み、`web/src/i18n/ja.ts` の `balanceErrorText` を `missing_header`/`invalid_header` に
 追従済み(`BalanceScreen.test.tsx` のコード一覧も)。`balanceClient.ts` は正準 UUID を送っており変更不要。他に balance の code 文字列に依存する箇所があれば確認してほしい。
+## 2026-10-02: 素早さに効く特性・持ち物のデータ(判定レーン → データレーン。issue #235・ADR-0710 第2段の依頼)
+
+- 判定レーンは第1段(素早さに反映した補正 `*SpeedApplied`・指定されたが反映していない入力 `*SpeedIgnored` を応答に返す)を実装した。
+  ユーザー決定: 反映する範囲は**全て**(天候特性・状態異常・持ち物。不要なら指摘される)
+- データレーンへ: 素早さ補正を持つ特性(天候・場・状態依存)と持ち物(こだわりスカーフ以外のすばやさ補正)を、balance の `abilities` read model の
+  `effects` と同じ流儀の正規化データとしてマスタ側に置き、内部 API(pokedex-svc)から引けるようにしてほしい。judge は ID の switch を持たず、
+  そのデータで反映する。状態異常(麻痺)は judge 側の入力 `status` の追加も要る(判定レーンが契約を足す)
+- 受け取り次第、判定レーンが第2段を実装し、反映できた要素を `*SpeedApplied` に足して `*SpeedIgnored` から外す
+
 ## 2026-10-02: 一括計算の defenderOverride に ranks・status を足した(API レーン → Web・iOS レーンへ。issue #274/#272・ADR-0216)
 
 - `BulkCalcRequest.defenderOverride` は `{ abilityId?, ranks?: RankBlock, status?: StatusCondition }`。全行(全プリセット × 持ち物 × 特性)に一律で当たる。ランクは各 -6..+6(外は 400 `invalid_input`)、未知の status は 400 `invalid_enum`
