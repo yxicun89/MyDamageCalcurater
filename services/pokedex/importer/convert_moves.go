@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"example.com/pokecalc/services/internal/master"
 )
 
 // sentinelMoveName は calc の技一覧の番兵(実在しない技。ADR-0002 追記 P2-1c)。
@@ -44,6 +46,19 @@ func validateMoveRange(m ShowdownMove) error {
 		return fmt.Errorf("%w: 技 %q の accuracy %d が 0(必中)または %d..%d の外", ErrInvalidData, m.ID, m.Accuracy, MoveAccuracyMin, MoveAccuracyMax)
 	}
 	return nil
+}
+
+// moveTargetOf は Showdown の技の対象を検証して返す。無い・空・未知の値は ErrInvalidData
+// (黙って既定の対象にしない。ADR-0115・ADR-0136 §3)。
+func moveTargetOf(m ShowdownMove) (string, error) {
+	if m.Target == nil || !master.IsMoveTarget(*m.Target) {
+		got := "(無い)"
+		if m.Target != nil {
+			got = fmt.Sprintf("%q", *m.Target)
+		}
+		return "", fmt.Errorf("%w: 技 %q の target が不正: %s", ErrInvalidData, m.ID, got)
+	}
+	return *m.Target, nil
 }
 
 type moveConversion struct {
@@ -94,6 +109,13 @@ func convertMoves(in Input, typeNameToID map[string]string) (moveConversion, []F
 			if err := validateMoveRange(sm); err != nil {
 				return moveConversion{}, nil, nil, err
 			}
+			target, err := moveTargetOf(sm)
+			if err != nil {
+				return moveConversion{}, nil, nil, err
+			}
+			if cm.Target == nil {
+				return moveConversion{}, nil, nil, fmt.Errorf("%w: calc の技 %q に target が無い", ErrInvalidData, id)
+			}
 			finalCategory := resolveCalcCategory(cm.Category)
 			if cm.Type != sm.Type {
 				f := Finding{Kind: KindMoveTypeMismatch, ID: id}
@@ -112,10 +134,19 @@ func convertMoves(in Input, typeNameToID map[string]string) (moveConversion, []F
 			if cm.Priority != sm.Priority {
 				warnings = append(warnings, Finding{Kind: KindMoveValueMismatch, ID: id, Detail: "priority"})
 			}
+			// calc は全体技にだけ target を持つ(省略は "")。持つなら Showdown と同じ値、省略なら Showdown は全体技でない。
+			if (*cm.Target != "" && *cm.Target != target) || (*cm.Target == "" && master.MoveTarget(target).IsSpread()) {
+				f := Finding{Kind: KindMoveValueMismatch, ID: id, Detail: "target"}
+				if finalCategory == "status" {
+					warnings = append(warnings, f)
+				} else {
+					blockers = append(blockers, f)
+				}
+			}
 			included[id] = true
 			rows = append(rows, MoveRow{
 				ID: id, NameEn: sm.Name, Type: typeID, Category: finalCategory,
-				Power: cm.BasePower, Accuracy: sm.Accuracy, PP: sm.PP, Priority: sm.Priority,
+				Power: cm.BasePower, Accuracy: sm.Accuracy, PP: sm.PP, Priority: sm.Priority, Target: target,
 			})
 		case calcFull:
 			warnings = append(warnings, Finding{Kind: KindMoveExcluded, ID: id})
@@ -127,11 +158,15 @@ func convertMoves(in Input, typeNameToID map[string]string) (moveConversion, []F
 			if err := validateMoveRange(sm); err != nil {
 				return moveConversion{}, nil, nil, err
 			}
+			target, err := moveTargetOf(sm)
+			if err != nil {
+				return moveConversion{}, nil, nil, err
+			}
 			warnings = append(warnings, Finding{Kind: KindMoveShowdownOnly, ID: id})
 			included[id] = true
 			rows = append(rows, MoveRow{
 				ID: id, NameEn: sm.Name, Type: typeID, Category: strings.ToLower(sm.Category),
-				Power: sm.BasePower, Accuracy: sm.Accuracy, PP: sm.PP, Priority: sm.Priority,
+				Power: sm.BasePower, Accuracy: sm.Accuracy, PP: sm.PP, Priority: sm.Priority, Target: target,
 			})
 		case calcHas && ce.fragment:
 			warnings = append(warnings, Finding{Kind: KindMoveExcluded, ID: id})
