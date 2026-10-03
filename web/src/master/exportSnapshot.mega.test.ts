@@ -1,5 +1,6 @@
 // issue #515・ADR-0320: 例データ→ calc-svc の共通マスタのスナップショット(MasterExport)で、メガ種族の
-// isMega・requiredItemId を false・null 固定にせず MasterSpecies のとおり出す(E2E の calc-svc がメガを検証できる)。
+// isMega・requiredItemId を false・null 固定にせず MasterSpecies のとおり出す。
+// (baseSpeciesKey は未対応で null のまま。calc-svc がメガを含むスナップショットを読むには別途要る。ADR-0320。)
 
 import { beforeAll, expect, test } from "vitest";
 import { MEGA_FIRE, MEGA_FIRE_STONE, withMegaFixture } from "../test/megaMaster";

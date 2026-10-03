@@ -191,6 +191,9 @@ function handleSpeciesDetail(master: MasterData, key: string): FixtureResponse {
     baseStats: species.baseStats,
     abilities: species.abilities.map((id) => resolveAbility(master, id)),
     learnset: [...species.learnset],
+    // issue 515: optional の契約でも pokedex-svc は isMega・requiredItemId を常に出す(省略は非メガ・null)。
+    isMega: species.isMega === true,
+    requiredItemId: species.requiredItemId ?? null,
   };
   return { status: 200, body };
 }

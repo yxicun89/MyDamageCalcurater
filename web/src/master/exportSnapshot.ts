@@ -184,9 +184,9 @@ export function toCalcSnapshot(master: MasterData): CalcSnapshot {
       type1,
       type2: type2 ?? null,
       baseStats: entry.baseStats,
-      isMega: false,
+      isMega: entry.isMega === true,
       baseSpeciesKey: null,
-      requiredItemId: null,
+      requiredItemId: entry.requiredItemId ?? null,
       abilities: entry.abilities.map((abilityId, index) => ({ slot: index + 1, abilityId })),
     };
   });

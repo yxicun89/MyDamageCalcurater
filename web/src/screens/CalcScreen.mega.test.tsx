@@ -72,7 +72,7 @@ function lastRequest(engine: FakeEngine): BulkRequest {
 function optionNames(select: HTMLElement): string[] {
   return within(select)
     .queryAllByRole("option")
-    .map((option) => option.textContent ?? "");
+    .map((option) => option.textContent);
 }
 
 function renderScreen(data: MasterData = master): { user: UserEvent; engine: FakeEngine } {

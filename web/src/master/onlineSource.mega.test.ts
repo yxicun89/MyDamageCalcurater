@@ -51,7 +51,7 @@ function fetchFor(detail: unknown, items: Schemas["Item"][] = []): typeof fetch 
       return Promise.resolve(jsonResponse(detail));
     }
     return Promise.resolve(new Response("{}", { status: 404 }));
-  }) as unknown as typeof fetch;
+  });
 }
 
 function sourceFor(detail: unknown, items?: Schemas["Item"][]) {
@@ -77,7 +77,9 @@ test("メガでない種族の応答(isMega=false・requiredItemId=null)はそ�
 });
 
 test("項目を返さない応答でも解決でき、メガとしては扱われない(省略のまま)", async () => {
-  const { isMega: _isMega, requiredItemId: _requiredItemId, ...withoutMega } = megaDetail;
+  const withoutMega: Schemas["SpeciesDetail"] = { ...megaDetail };
+  delete withoutMega.isMega;
+  delete withoutMega.requiredItemId;
   const resolved = await sourceFor(withoutMega).search.resolveSpecies("9101-001");
   expect(resolved.species.isMega).toBeUndefined();
   expect(resolved.species.requiredItemId).toBeUndefined();

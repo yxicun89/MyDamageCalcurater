@@ -1,6 +1,6 @@
 # ADR-0320: メガ種族の持ち物をメガストーンに固定する(Web の共通ドメインと計算・逆算画面。issue #515)
 
-- 状態: 提案
+- 状態: 採用
 - 日付: 2026-10-03
 - レーン: Web
 - 関連: issue #515、docs/mega-evolution-spec.md §4-3、ADR-0002 決定 10(メガ後の姿は別のポケモンとして登録し、持ち物はメガストーンで固定)、
@@ -36,10 +36,9 @@ issue #515 の Web 分を2つの PR に分ける。**PR-A(この ADR の範囲)=
    黙って別の持ち物にしない。API の 400 は最後の安全網で、UI は見せない(spec §4-3)。
 5. **マスタの型**: `MasterSpecies` に `isMega?: boolean`・`requiredItemId?: string | null` を足す(**省略可**。省略は非メガと同じ。既存の fixture・例データを変えずに済み、
    公開 API が項目を返さない間も壊れない)。engine には渡さない(`toEngineSpecies` が落とす。境界は未知のフィールドを拒否する)。
-6. **公開 API の契約**: 公開 API の `SpeciesDetail` には `isMega` / `requiredItemId` が無かった(`MasterSpecies` は内部の共通マスタのスキーマ)。
-   `api/openapi.yaml` の `SpeciesDetail` に**省略可の項目として**足した(pokedex-svc が `species.is_mega`・`required_item_id` を返すまで、Go の応答は項目を返さない。
-   required にすると Go が false・null を常に出して、メガ種族を非メガと誤って返すため)。**pokedex-svc の応答の実装は別レーン(API・データ)の作業**。
-   Web の写像は応答の値をそのまま写し、省略は省略のまま(`isMegaSpecies` が false と読む)。
+6. **公開 API の契約**: 公開 API の `SpeciesDetail` に `isMega` / `requiredItemId` を足した(`api/openapi.yaml`。API 分は完了済みで、Web 側は触らない)。
+   契約上は省略可(古いサーバー・クライアントの互換)だが、pokedex-svc は `requiredItemId` の null キーを常に出す
+   (ADR-0218 の `effect` は省略。方針の違いは意図的)。Web の写像は応答の値をそのまま写し、省略は省略のまま(`isMegaSpecies` が false と読む)。
 7. **メガストーンの集合の出どころ**: 種族の全件一覧があるマスタ(`speciesList`)は `master.species` から、検索で解決するマスタ(オンライン・キャッシュ済みオフライン)は
    「いままでに解決した種族」(`useSpeciesResolutions` が持つ覚え書き + `master.species`)から導く。公開 API に持ち物がメガストーンかを示す項目が無いため、
    **検索で解決するマスタでは、まだ解決していないメガ種族のストーンは単独の選択肢に残りうる**(その種族を選べば固定され、以後は出なくなる)。
@@ -53,9 +52,13 @@ issue #515 の Web 分を2つの PR に分ける。**PR-A(この ADR の範囲)=
 - **`isMega` を必須にする**: 既存の fixture・テストを全部直す必要があり、公開 API が項目を返さない移行期に型が嘘をつく。省略可にして読む側(`isMegaSpecies`)を1か所にした。
 - **メガストーンの判別を持ち物の名前(「ナイト」)・ID で行う**: ハードコード禁止(CLAUDE.md)。マスタの `requiredItemId` から導く。
 - **メガでも持ち物欄を操作可能のまま警告だけ出す**: 送れない入力が UI から出てしまう(spec §4-3)。
-- **逆算の相手がメガのとき `itemCandidates = [null, ストーン]`**: `null` はメガ種族の持ち物なしで API が 400 にするので入れない。
+- **逆算の相手がメガのとき `itemCandidates = [ストーン]`**: メガは持ち物が固定なので探索しない(spec §4-3)。`null`(持ち物なし)は API が受け付ける
+  (`checkMegaItem` は `item == nil` を許す)が、UI は固定するので入れない。ストーンが引けないとき(missing)だけ `[null]`。
+- **スナップショットへのメガの書き出しは未対応**: `exportSnapshot.ts` は `isMega`・`requiredItemId` を出すが `baseSpeciesKey` は null のまま
+  (calc-svc の共通マスタは、メガで `base_species_key` が無い行を拒否する)。現状の例データ(`web/scripts/export-example-master.mjs`)はメガを含まないので表に出ない。
+  メガを calc-svc 側の e2e で検証する段階で、`MasterSpecies` に省略可の `baseSpeciesKey` を足して写す。
 
 ## 結果・追跡
 
 - 受け入れ条件は `docs/mega-evolution-spec.md` §5 の 3(UI)の Web 分(計算・逆算)。構築・判定と古い保存データ(同 4)は PR-B。
-- 追跡: pokedex-svc の応答に `isMega`・`requiredItemId` を載せる(API・データ)。`Item` がメガストーンかを返す項目(§決定 7 の残り)。
+- 追跡: `Item` がメガストーンかを返す項目(§決定 7 の残り)。
