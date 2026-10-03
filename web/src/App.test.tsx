@@ -89,7 +89,12 @@ describe("P4-2 計算画面の組み込み", () => {
     render(<App />);
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toBeInTheDocument();
 
-    expect(fetchSpy).not.toHaveBeenCalled();
+    // ADR-0317 §3: 既定(オンライン)では「よく計算する相手」のために /api/record を読む(表示専用)。
+    // engine.wasm・計算 API・マスタは読まない。
+    const nonRecordCalls = fetchSpy.mock.calls.filter(
+      ([input]) => !requestUrl(input).includes("/api/record/"),
+    );
+    expect(nonRecordCalls).toEqual([]);
     expect(headAppendSpy).not.toHaveBeenCalled();
     expect(headAppendChildSpy).not.toHaveBeenCalled();
   });

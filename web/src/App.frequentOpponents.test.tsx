@@ -32,7 +32,9 @@ function recordCalls(fetchMock: ReturnType<typeof vi.fn<typeof fetch>>) {
   return fetchMock.mock.calls.filter(([url]) => urlText(url).includes("/api/record/"));
 }
 
-test("オフライン(既定)では record に触れず、チップも出ない", async () => {
+test("オフライン(選択中)では record に触れず、チップも出ない", async () => {
+  // ADR-0313: 既定の計算モードはオンラインになったので、オフラインを保存済みにして始める。
+  window.localStorage.setItem(CALC_MODE_STORAGE_KEY, "offline");
   const fetchMock = vi.fn<typeof fetch>(() => Promise.resolve(new Response("[]", { status: 200 })));
   vi.stubGlobal("fetch", fetchMock);
   render(<App engine={createFakeEngine()} masterSource={exampleMasterSource} />);
