@@ -62,6 +62,12 @@ cat >"$BIN/npm" <<'EOF'
 #!/usr/bin/env bash
 echo "npm $*" >>"$FAKE_CALLS"
 EOF
+# pr-merge.sh の iOS ゲートは `command -v xcodebuild` で Xcode の有無を確かめる。Ubuntu の CI には無いので、
+# テストは実機の環境に依存しないよう偽の xcodebuild を置く(make は偽なので、実際には呼ばれない)。
+cat >"$BIN/xcodebuild" <<'EOF'
+#!/usr/bin/env bash
+echo "xcodebuild $*" >>"$FAKE_CALLS"
+EOF
 chmod +x "$BIN"/*
 
 # run_gate 引数... — 環境変数は呼び出し側で設定。結果は GATE_RC・$WORK/out・$WORK/calls。
