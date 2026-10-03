@@ -203,7 +203,8 @@ export interface components {
     };
     /** @enum {string} */
     ErrorCode:
-      | "missing_request_context"
+      | "missing_header"
+      | "invalid_header"
       | "invalid_request"
       | "request_too_large"
       | "unknown_pokemon"
@@ -211,7 +212,8 @@ export interface components {
       | "unknown_ability"
       | "master_unavailable"
       | "overloaded"
-      | "internal_error";
+      | "internal_error"
+      | "not_found";
     AnalyzeResponse: {
       /** @description One entry per request member, in request order. Duplicated pokemonId values are kept. */
       members: components["schemas"]["MemberDefense"][];
@@ -539,7 +541,17 @@ export interface components {
   };
   responses: never;
   parameters: {
+    /**
+     * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+     *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+     *     the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+     */
     DeviceId: string;
+    /**
+     * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+     *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+     *     the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+     */
     SessionId: string;
   };
   requestBodies: never;
@@ -592,7 +604,17 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+         */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -613,7 +635,7 @@ export interface operations {
           "application/json": components["schemas"]["AnalyzeResponse"];
         };
       };
-      /** @description Invalid request or missing request context */
+      /** @description Invalid request (invalid_request), or a missing / invalid X-Device-Id / X-Session-Id (missing_header / invalid_header) */
       400: {
         headers: {
           [name: string]: unknown;
@@ -672,7 +694,17 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+         */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -693,7 +725,7 @@ export interface operations {
           "application/json": components["schemas"]["CoverageResponse"];
         };
       };
-      /** @description Invalid request or missing request context */
+      /** @description Invalid request (invalid_request), or a missing / invalid X-Device-Id / X-Session-Id (missing_header / invalid_header) */
       400: {
         headers: {
           [name: string]: unknown;
@@ -747,7 +779,17 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+         */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -768,7 +810,7 @@ export interface operations {
           "application/json": components["schemas"]["ThreatsResponse"];
         };
       };
-      /** @description Invalid request or missing request context */
+      /** @description Invalid request (invalid_request), or a missing / invalid X-Device-Id / X-Session-Id (missing_header / invalid_header) */
       400: {
         headers: {
           [name: string]: unknown;
@@ -827,7 +869,17 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+         */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -848,7 +900,7 @@ export interface operations {
           "application/json": components["schemas"]["RecommendationsResponse"];
         };
       };
-      /** @description Invalid request or missing request context */
+      /** @description Invalid request (invalid_request), or a missing / invalid X-Device-Id / X-Session-Id (missing_header / invalid_header) */
       400: {
         headers: {
           [name: string]: unknown;
@@ -912,7 +964,17 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+         */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -934,7 +996,7 @@ export interface operations {
         };
       };
       /**
-       * @description Invalid request or missing request context (invalid_request / missing_request_context):
+       * @description Invalid request, or a missing / invalid request context header (invalid_request / missing_header / invalid_header):
        *     moveIds absent, empty, more than four, malformed, duplicated, or resolving to status moves only.
        */
       400: {
