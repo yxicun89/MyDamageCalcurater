@@ -86,7 +86,7 @@ gateway(G3・G4)経由で到達。ID ヘッダは `/internal` 以外の 9 操作
 
 ## 6. balance-svc(`services/balance`。Traefik `/api/balance`)
 
-`internal/httpapi/server.go:101` `New` が `api.RegisterHandlersWithOptions` で登録(業務 5 操作に `requireRequestContext`)。ID ヘッダは**非空のみ**検証、不足は 400 `missing_request_context`。本文上限 16KiB(`maxAnalyzeBodyBytes`)。
+`internal/httpapi/server.go:101` `New` が `api.RegisterHandlersWithOptions` で登録(業務 5 操作に `requireRequestContext`)。ID ヘッダは gateway と同じ正準形 UUID 検証(ADR-0413)、欠落は 400 `missing_header`・不正/重複は `invalid_header`(`requestctx.go`)。本文上限 16KiB(`maxAnalyzeBodyBytes`)。
 
 | # | メソッド | パス | operationId | ID ヘッダ | ハンドラ | 契約のステータス |
 |---|---|---|---|---|---|---|
@@ -135,7 +135,7 @@ ID ヘッダの検証: judge・speed とも gateway と同じ正準形 UUID 検�
 | サービス | code の出所 | 400 | 404 | 413 | 422 | 500 | 503 |
 |---|---|---|---|---|---|---|---|
 | gateway・calc・pokedex(ルート契約 `ErrorCode`) | `api/openapi.yaml` `ErrorCode`(24 値) | `invalid_json`・`unknown_field`・`invalid_enum`・`invalid_input`・`unknown_preset`・`duplicate_preset`・`invalid_preset`・`invalid_reverse_side`・`no_observation`・`invalid_observation`・`unknown_type`・`missing_header`・`invalid_header`・`unknown_species`/`move`/`item`/`ability`/`nature` | `not_found` | — | — | `internal`・`type_chart_missing`・`invalid_type_chart`(calc `errors.go:42` `statusForCode`) | `master_unavailable`・`upstream_unavailable` |
-| balance | `services/balance/api/openapi.yaml` | `missing_request_context`・`invalid_request` | — | `request_too_large` | `unknown_pokemon`・`unknown_move`・`unknown_ability` | `internal_error` | `master_unavailable` |
+| balance | `services/balance/api/openapi.yaml` | `missing_header`・`invalid_header`・`invalid_request` | — | `request_too_large` | `unknown_pokemon`・`unknown_move`・`unknown_ability` | `internal_error` | `master_unavailable` |
 | speed | 同上 | `missing_header`・`invalid_header`・`invalid_request` | — | `request_too_large` | `unknown_pokemon` | `internal_error` | `master_unavailable` |
 | judge | 同上 | `missing_header`・`invalid_header`・`invalid_request` | — | `request_too_large` | `unknown_species`・`unknown_nature` | `internal_error` | `upstream_unavailable` |
 
