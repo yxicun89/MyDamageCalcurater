@@ -30,7 +30,17 @@ Status(追記): 2026-10-02 issue 307(素早さ画面の範囲外入力)を解消
 画面では検査せず、API の 400 を `errorByCode` で日本語にする。空欄はカスタム SP・ランクは 0 とみなし、実数値は未入力で呼ばない。
 既知の積み残し: 数値欄で「-」を打つと値が空になり 0 に戻るため負数をキー入力しづらい(従来からの挙動。直すなら欄の state を文字列で持つ)・
 検証規則が JudgeScreen の validationMessage と二重管理(将来の共通化候補)。
-Next: #263・#237 はタイプバランスレーン/APIレーンからの連絡待ち(連絡が来たら speed 側の overlay・scripts を対応)。
+Status(追記): 2026-10-03 素早さの SP6(追い風・まひ・トリックルーム。ユーザー決定。特性は対象外)を完了(ADR-0607。PR #485。critic〈Opus〉PASS)。
+追い風 ×2 は(追い風 8192・スカーフ 6144 を4096基準で連結)→1回だけ五捨五超入(判定サービスと同じ式)、まひ ×0.5 は連結の後に整数 floor(v*50/100)
+(@smogon/calc 0.12.0 Champions 世代で確認)、トリックルームは表の段の順だけを反転(同速は1段・段内は反転しない)。契約 0.5.0 は追加のみ・後方互換。
+素早さの 999 上限は入れない(実機で 999 超。ユーザー回答)。speed-design.md に「9. テスト」節(PR #456)。
+運用: PR #484(ADR-0801)で speed に共通の httpguard(同時実行上限で 503 overloaded+Retry-After・締め切り)、PR #487(ADR-0802)で未知ルート/405 の
+404 not_found JSON と panic の 500 internal_error JSON、PR #520(ADR-0804)で preStop と停止処理を追加。
+Next: #263・#292・#284 は他レーンが main 統合済みで、素早さ側の追加対応は無い。#237・#235 は人間の判断待ち。#108 は balance・speed 本体の loader が
+dataVersion を保持・表示する変更が残る(ADR-0135。各レーンの持ち物。今は配備時の Deployment 注釈で代用)。#523(calc の shutdownTimeout)は API レーン向け。
+実地確認が未実施: #299(Docker 負荷試験・k3d の Traefik HelmChartConfig)と、k3d 上の版一致確認(make check-master-version)。
+既知の積み残し: 素早さ画面の数値欄で「-」を打つと 0 に戻り負数をキー入力しづらい(従来から)。
+(旧)Next: #263・#237 はタイプバランスレーン/APIレーンからの連絡待ち(連絡が来たら speed 側の overlay・scripts を対応)。
 #105(Argo CD導入・digest固定の共有スクリプト化)は完了・追加対応不要。#108は データレーンからの連絡待ち(今は着手不要)。他は
 balance-registry → pokecalc-registry への改名提案(タイプバランスレーンへ既定案で提示済み。DECISIONS.md 2026-09-23)かユーザーからの
 新規要望待ち。
