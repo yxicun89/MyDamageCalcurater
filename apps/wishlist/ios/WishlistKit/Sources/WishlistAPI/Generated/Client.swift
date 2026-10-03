@@ -1355,8 +1355,10 @@ public struct Client: APIProtocol {
             }
         )
     }
-    /// キャッシュを即返す。24時間より古ければ裏で更新を起動し `refreshing: true` を付ける。
-    /// フェーズ1では取得を実装していないため、常に空の `sites` と `refreshing: false` を返す。
+    /// キャッシュ(保存済みの目安)を即返す。取得できる対象サイトの目安が無い・失敗している・24時間より古いときは
+    /// 裏で更新を起動し `refreshing: true` を付ける(更新が実行中のときも true)。
+    /// `sites` はジャンルの表示順で、取得できる対象サイトのうち目安を保存済みのものだけ(docs/phase3-api-spec.md)。
+    /// 取得できる対象サイトが 1 つも無ければ、空の `sites` と `refreshing: false`。
     ///
     ///
     /// - Remark: HTTP `GET /api/items/{id}/estimates`.
@@ -1485,7 +1487,7 @@ public struct Client: APIProtocol {
             }
         )
     }
-    /// 手動で更新を起動する。フェーズ1では 501。
+    /// 手動で更新を起動する(全対象サイトを取り直す)。すでに実行中なら新たに起動せず 202。
     ///
     /// - Remark: HTTP `POST /api/items/{id}/estimates/refresh`.
     /// - Remark: Generated from `#/paths//api/items/{id}/estimates/refresh/post(refreshItemEstimates)`.
@@ -1601,28 +1603,6 @@ public struct Client: APIProtocol {
                         preconditionFailure("bestContentType chose an invalid content type.")
                     }
                     return .internalServerError(.init(body: body))
-                case 501:
-                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
-                    let body: Components.Responses.NotImplemented.Body
-                    let chosenContentType = try converter.bestContentType(
-                        received: contentType,
-                        options: [
-                            "application/json"
-                        ]
-                    )
-                    switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            Components.Schemas._Error.self,
-                            from: responseBody,
-                            transforming: { value in
-                                .json(value)
-                            }
-                        )
-                    default:
-                        preconditionFailure("bestContentType chose an invalid content type.")
-                    }
-                    return .notImplemented(.init(body: body))
                 default:
                     return .undocumented(
                         statusCode: response.status.code,

@@ -45,14 +45,16 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PUT /api/items/{id}/image`.
     /// - Remark: Generated from `#/paths//api/items/{id}/image/put(replaceItemImage)`.
     func replaceItemImage(_ input: Operations.ReplaceItemImage.Input) async throws -> Operations.ReplaceItemImage.Output
-    /// キャッシュを即返す。24時間より古ければ裏で更新を起動し `refreshing: true` を付ける。
-    /// フェーズ1では取得を実装していないため、常に空の `sites` と `refreshing: false` を返す。
+    /// キャッシュ(保存済みの目安)を即返す。取得できる対象サイトの目安が無い・失敗している・24時間より古いときは
+    /// 裏で更新を起動し `refreshing: true` を付ける(更新が実行中のときも true)。
+    /// `sites` はジャンルの表示順で、取得できる対象サイトのうち目安を保存済みのものだけ(docs/phase3-api-spec.md)。
+    /// 取得できる対象サイトが 1 つも無ければ、空の `sites` と `refreshing: false`。
     ///
     ///
     /// - Remark: HTTP `GET /api/items/{id}/estimates`.
     /// - Remark: Generated from `#/paths//api/items/{id}/estimates/get(getItemEstimates)`.
     func getItemEstimates(_ input: Operations.GetItemEstimates.Input) async throws -> Operations.GetItemEstimates.Output
-    /// 手動で更新を起動する。フェーズ1では 501。
+    /// 手動で更新を起動する(全対象サイトを取り直す)。すでに実行中なら新たに起動せず 202。
     ///
     /// - Remark: HTTP `POST /api/items/{id}/estimates/refresh`.
     /// - Remark: Generated from `#/paths//api/items/{id}/estimates/refresh/post(refreshItemEstimates)`.
@@ -181,8 +183,10 @@ extension APIProtocol {
             body: body
         ))
     }
-    /// キャッシュを即返す。24時間より古ければ裏で更新を起動し `refreshing: true` を付ける。
-    /// フェーズ1では取得を実装していないため、常に空の `sites` と `refreshing: false` を返す。
+    /// キャッシュ(保存済みの目安)を即返す。取得できる対象サイトの目安が無い・失敗している・24時間より古いときは
+    /// 裏で更新を起動し `refreshing: true` を付ける(更新が実行中のときも true)。
+    /// `sites` はジャンルの表示順で、取得できる対象サイトのうち目安を保存済みのものだけ(docs/phase3-api-spec.md)。
+    /// 取得できる対象サイトが 1 つも無ければ、空の `sites` と `refreshing: false`。
     ///
     ///
     /// - Remark: HTTP `GET /api/items/{id}/estimates`.
@@ -196,7 +200,7 @@ extension APIProtocol {
             headers: headers
         ))
     }
-    /// 手動で更新を起動する。フェーズ1では 501。
+    /// 手動で更新を起動する(全対象サイトを取り直す)。すでに実行中なら新たに起動せず 202。
     ///
     /// - Remark: HTTP `POST /api/items/{id}/estimates/refresh`.
     /// - Remark: Generated from `#/paths//api/items/{id}/estimates/refresh/post(refreshItemEstimates)`.

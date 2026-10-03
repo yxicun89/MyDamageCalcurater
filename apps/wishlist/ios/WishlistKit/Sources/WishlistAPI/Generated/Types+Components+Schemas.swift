@@ -771,7 +771,8 @@ extension Components {
             case failed = "failed"
             case noResult = "no_result"
         }
-        /// サイトごとの目安。仕様 §3 の「状態(在庫あり等)」をどの項目で表すかはフェーズ3で決める(docs/design.md §7 の未決事項)。
+        /// サイトごとの目安。仕様 §3 の「状態(在庫あり等)」は `in_stock_count` で表す(docs/phase3-api-spec.md)。
+        /// `status` が failed のとき、low・mid・count・suspicious_count・in_stock_count・fetched_at は前回の値。
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/SiteEstimate`.
@@ -786,10 +787,18 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/SiteEstimate/mid`.
             public var mid: Swift.Int?
+            /// 参考外を除いた件数
+            ///
             /// - Remark: Generated from `#/components/schemas/SiteEstimate/count`.
             public var count: Swift.Int
+            /// 参考外の件数
+            ///
             /// - Remark: Generated from `#/components/schemas/SiteEstimate/suspicious_count`.
             public var suspiciousCount: Swift.Int
+            /// 参考外を除き、在庫ありの件数
+            ///
+            /// - Remark: Generated from `#/components/schemas/SiteEstimate/in_stock_count`.
+            public var inStockCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/SiteEstimate/status`.
             public var status: Components.Schemas.EstimateStatus
             /// - Remark: Generated from `#/components/schemas/SiteEstimate/fetched_at`.
@@ -800,8 +809,9 @@ extension Components {
             ///   - siteId:
             ///   - low: 下位25パーセンタイル(件数3未満なら最小値)
             ///   - mid: 中央値(件数3未満なら null)
-            ///   - count:
-            ///   - suspiciousCount:
+            ///   - count: 参考外を除いた件数
+            ///   - suspiciousCount: 参考外の件数
+            ///   - inStockCount: 参考外を除き、在庫ありの件数
             ///   - status:
             ///   - fetchedAt:
             public init(
@@ -810,6 +820,7 @@ extension Components {
                 mid: Swift.Int? = nil,
                 count: Swift.Int,
                 suspiciousCount: Swift.Int,
+                inStockCount: Swift.Int,
                 status: Components.Schemas.EstimateStatus,
                 fetchedAt: Foundation.Date
             ) {
@@ -818,6 +829,7 @@ extension Components {
                 self.mid = mid
                 self.count = count
                 self.suspiciousCount = suspiciousCount
+                self.inStockCount = inStockCount
                 self.status = status
                 self.fetchedAt = fetchedAt
             }
@@ -827,6 +839,7 @@ extension Components {
                 case mid
                 case count
                 case suspiciousCount = "suspicious_count"
+                case inStockCount = "in_stock_count"
                 case status
                 case fetchedAt = "fetched_at"
             }
@@ -835,10 +848,16 @@ extension Components {
         public struct ItemEstimates: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ItemEstimates/item_id`.
             public var itemId: Components.Schemas.Id
+            /// `sites` の low の最小(low を持つサイトが無ければ null)
+            ///
             /// - Remark: Generated from `#/components/schemas/ItemEstimates/summary_low`.
             public var summaryLow: Swift.Int?
+            /// summary_low を出したサイトの mid(その mid が null なら summary_low)
+            ///
             /// - Remark: Generated from `#/components/schemas/ItemEstimates/summary_mid`.
             public var summaryMid: Swift.Int?
+            /// low を持つサイトの fetched_at のうち最も古いもの
+            ///
             /// - Remark: Generated from `#/components/schemas/ItemEstimates/summary_fetched_at`.
             public var summaryFetchedAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/ItemEstimates/sites`.
@@ -849,9 +868,9 @@ extension Components {
             ///
             /// - Parameters:
             ///   - itemId:
-            ///   - summaryLow:
-            ///   - summaryMid:
-            ///   - summaryFetchedAt:
+            ///   - summaryLow: `sites` の low の最小(low を持つサイトが無ければ null)
+            ///   - summaryMid: summary_low を出したサイトの mid(その mid が null なら summary_low)
+            ///   - summaryFetchedAt: low を持つサイトの fetched_at のうち最も古いもの
             ///   - sites:
             ///   - refreshing:
             public init(

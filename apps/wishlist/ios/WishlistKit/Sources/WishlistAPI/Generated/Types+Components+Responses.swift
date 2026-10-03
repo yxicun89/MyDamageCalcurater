@@ -180,33 +180,5 @@ extension Components {
                 self.body = body
             }
         }
-        public struct NotImplemented: Sendable, Hashable {
-            /// - Remark: Generated from `#/components/responses/NotImplemented/content`.
-            @frozen public enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/components/responses/NotImplemented/content/application\/json`.
-                case json(Components.Schemas._Error)
-                /// The associated value of the enum case if `self` is `.json`.
-                ///
-                /// - Throws: An error if `self` is not `.json`.
-                /// - SeeAlso: `.json`.
-                public var json: Components.Schemas._Error {
-                    get throws {
-                        switch self {
-                        case let .json(body):
-                            return body
-                        }
-                    }
-                }
-            }
-            /// Received HTTP response body
-            public var body: Components.Responses.NotImplemented.Body
-            /// Creates a new `NotImplemented`.
-            ///
-            /// - Parameters:
-            ///   - body: Received HTTP response body
-            public init(body: Components.Responses.NotImplemented.Body) {
-                self.body = body
-            }
-        }
     }
 }

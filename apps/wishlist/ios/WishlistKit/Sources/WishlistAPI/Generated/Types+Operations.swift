@@ -1699,8 +1699,10 @@ public enum Operations {
             }
         }
     }
-    /// キャッシュを即返す。24時間より古ければ裏で更新を起動し `refreshing: true` を付ける。
-    /// フェーズ1では取得を実装していないため、常に空の `sites` と `refreshing: false` を返す。
+    /// キャッシュ(保存済みの目安)を即返す。取得できる対象サイトの目安が無い・失敗している・24時間より古いときは
+    /// 裏で更新を起動し `refreshing: true` を付ける(更新が実行中のときも true)。
+    /// `sites` はジャンルの表示順で、取得できる対象サイトのうち目安を保存済みのものだけ(docs/phase3-api-spec.md)。
+    /// 取得できる対象サイトが 1 つも無ければ、空の `sites` と `refreshing: false`。
     ///
     ///
     /// - Remark: HTTP `GET /api/items/{id}/estimates`.
@@ -1898,7 +1900,7 @@ public enum Operations {
             }
         }
     }
-    /// 手動で更新を起動する。フェーズ1では 501。
+    /// 手動で更新を起動する(全対象サイトを取り直す)。すでに実行中なら新たに起動せず 202。
     ///
     /// - Remark: HTTP `POST /api/items/{id}/estimates/refresh`.
     /// - Remark: Generated from `#/paths//api/items/{id}/estimates/refresh/post(refreshItemEstimates)`.
@@ -1972,7 +1974,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// 更新を起動した
+            /// 更新を起動した(または実行中)。本文は現時点のキャッシュで `refreshing` は取得できる対象サイトがあれば true
             ///
             /// - Remark: Generated from `#/paths//api/items/{id}/estimates/refresh/post(refreshItemEstimates)/responses/202`.
             ///
@@ -2059,29 +2061,6 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "internalServerError",
-                            response: self
-                        )
-                    }
-                }
-            }
-            /// まだ実装していない(フェーズ3の機能)
-            ///
-            /// - Remark: Generated from `#/paths//api/items/{id}/estimates/refresh/post(refreshItemEstimates)/responses/501`.
-            ///
-            /// HTTP response code: `501 notImplemented`.
-            case notImplemented(Components.Responses.NotImplemented)
-            /// The associated value of the enum case if `self` is `.notImplemented`.
-            ///
-            /// - Throws: An error if `self` is not `.notImplemented`.
-            /// - SeeAlso: `.notImplemented`.
-            public var notImplemented: Components.Responses.NotImplemented {
-                get throws {
-                    switch self {
-                    case let .notImplemented(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "notImplemented",
                             response: self
                         )
                     }
@@ -2221,7 +2200,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// 出品一覧(参考外も含む)
+            /// 出品一覧(参考外も含む。price 昇順・同額は id 昇順)
             ///
             /// - Remark: Generated from `#/paths//api/items/{id}/listings/get(listItemListings)/responses/200`.
             ///
