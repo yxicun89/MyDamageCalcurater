@@ -1,0 +1,115 @@
+/*
+ * AJ6: 調整の画面(docs/adr/0319-web-adjust-screen.md)。領域を縦に並べ、欄は折り返して並べる。
+ * 色は必ず tokens.css の CSS 変数で参照する(web/src/styles/noColorLiterals.test.ts)。
+ * 常時動くアニメーションは入れない(CLAUDE.md ドメイン規約)。
+ */
+
+.adjust-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+.adjust-screen__region,
+.adjust-screen__subregion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.adjust-screen__subregion {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--bg-glass-blur));
+  padding: var(--space-3);
+}
+
+.adjust-screen__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.adjust-screen__field,
+.adjust-screen__move {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-primary);
+}
+
+.adjust-screen__move {
+  gap: var(--space-2);
+}
+
+.adjust-screen__field select,
+.adjust-screen__field input[type="number"] {
+  max-width: 100%;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  padding: var(--space-2) var(--space-3);
+}
+
+.adjust-screen__fixed-sp {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  min-width: 0;
+}
+
+.adjust-screen__modes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.adjust-screen__choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-primary);
+}
+
+.adjust-screen__hint {
+  flex-basis: 100%;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.adjust-screen__notice {
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-secondary);
+}
+
+.adjust-screen__error {
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--danger);
+}
+
+.adjust-screen__lines,
+.adjust-screen__learners {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}

@@ -31,6 +31,7 @@ import type { CalcEngine } from "./engine/types";
 import { createWasmEngine } from "./engine/wasmEngine";
 import { AboutScreen } from "./AboutScreen";
 import { aboutText, appText } from "./i18n/ja";
+import { createAdjustClient, type AdjustClient } from "./adjust/adjustClient";
 import { createJudgeClient, type JudgeClient } from "./judge/judgeClient";
 import { isSearchableMasterSource } from "./master/capabilities";
 import { exampleMasterSource } from "./master/exampleSource";
@@ -115,6 +116,10 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   // createJudgeClient 自体は fetch しない(判定のタブを開くだけでは呼ばれない。judge/JudgeScreen.tsx)。
   const [judgeClient] = useState(() =>
     createJudgeClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
+  );
+  // AJ6: 調整 API のクライアント(ADR-0319 §1)。createAdjustClient 自体は fetch しない(調整のタブを開くだけでは呼ばれない)。
+  const [adjustClient] = useState(() =>
+    createAdjustClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
   );
   // P5-5 PR-A1: team API のクライアント(ADR-0309 §2・§3)。同じ基点 URL・端末 ID・セッション ID を使う。
   // createTeamClient 自体は fetch しない(構築のタブを開くまで呼ばれない。team/TeamScreen.tsx)。
@@ -435,6 +440,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
                   judgeClient={judgeClient}
                   teamClient={teamClient}
                   teamReloadToken={teamReloadToken}
+                  adjustClient={adjustClient}
                   mode={mode}
                   retryMasterLoad={retryMasterLoad}
                   selectMode={selectMode}
@@ -481,6 +487,7 @@ interface AppTabPanelProps {
   readonly judgeClient: JudgeClient;
   readonly teamClient: TeamClient;
   readonly teamReloadToken: number;
+  readonly adjustClient: AdjustClient;
   readonly mode: CalcMode;
   readonly retryMasterLoad: () => void;
   readonly selectMode: (mode: CalcMode) => void;
@@ -506,6 +513,7 @@ function AppTabPanel({
   judgeClient,
   teamClient,
   teamReloadToken,
+  adjustClient,
   mode,
   retryMasterLoad,
   selectMode,
@@ -542,6 +550,7 @@ function AppTabPanel({
                 judgeClient={judgeClient}
                 teamClient={teamClient}
                 reloadToken={teamReloadToken}
+                adjustClient={adjustClient}
                 masterSearch={activeMasterSearch}
                 onlineMasterSource={onlineMasterSource}
               />
@@ -560,6 +569,7 @@ function AppTabPanel({
                 speedClient={speedClient}
                 judgeClient={judgeClient}
                 teamClient={teamClient}
+                adjustClient={adjustClient}
                 masterSearch={activeMasterSearch}
                 onlineMasterSource={onlineMasterSource}
               />

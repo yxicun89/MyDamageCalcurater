@@ -1,0 +1,90 @@
+# team-svc(構築の保存。ADR-0209・ADR-0211・ADR-0213)。
+# DB の DSN は Secret team-db-auth の app ロール(SELECT・INSERT・UPDATE・DELETE。ADR-0211 §4)から渡す。
+# 起動時に DB へ接続しない(sql.Open だけ)。TiDB・Secret・NATS が無くても Pod は起動し、readiness(/readyz)が
+# DB に届くまで Ready にならないだけ。calc・gateway・pokedex には影響しない(CLAUDE.md 絶対ルール5。ADR-0220 §1)。
+# 保持日数は ConfigMap team-retention から読む(失効ジョブの CronJob と同じ値)。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: team
+  labels:
+    app.kubernetes.io/name: team
+    app.kubernetes.io/part-of: pokecalc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: team
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: team
+        app.kubernetes.io/part-of: pokecalc
+    spec:
+      automountServiceAccountToken: false
+      # preStop(5秒)+ shutdownTimeout(cmd/team/main.go。10秒)より長い。ADR-0129 §4。
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: team
+          image: pokecalc/team:0.1.0
+          imagePullPolicy: IfNotPresent
+          args: ["serve"]
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: team-retention
+          env:
+            - name: TEAM_APP_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: team-db-auth
+                  key: team-app-dsn
+            # 計算イベントの購読(calc と同じ NATS)。NATS が落ちていても起動する。
+            - name: TEAM_NATS_URL
+              value: nats://nats:4222
+            - name: TEAM_PURGE_BATCH_LIMIT
+              value: "500"
+            # limits.memory の 128Mi に対して少し余裕を持たせた値(GC が OOMKill の前に働くように)。
+            - name: GOMEMLIMIT
+              value: 100MiB
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+      securityContext:
+        runAsNonRoot: true
+        # イメージ(services/team/Dockerfile)の server ターゲットの USER 65532:65532 と合わせて明示する。
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault

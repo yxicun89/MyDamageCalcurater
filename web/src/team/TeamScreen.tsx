@@ -1,6 +1,6 @@
 // P5-5 PR-A1: 構築ビルダーの画面(ADR-0309 §4)。
 // この段階で扱うのは **一覧・新規作成(名前だけ・メンバーは空)・名前変更・削除** まで。
-// メンバー(種族・技・持ち物・特性・性格・SP・テラスタイプ)の編集は PR-A2、
+// メンバー(種族・技・持ち物・特性・性格・SP・テラスタイプ)の編集は PR-A2(TeamMemberEditor.tsx。ADR-0316)、
 // Showdown 形式の入出力は判定レーンの web/src/team/showdownFormat.ts(別担当)。
 //
 // 状態の作り(SpeedScreen.tsx・BalanceScreen.tsx と同じ考え方):
@@ -10,8 +10,10 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { components } from "../api/openapi.gen";
-import { teamScreenText } from "../i18n/ja";
+import { teamMemberText, teamScreenText } from "../i18n/ja";
+import type { MasterData, MasterSpeciesSearch } from "../master/types";
 import "./TeamScreen.css";
+import { TeamMemberEditor } from "./TeamMemberEditor";
 import type { TeamClient, TeamError } from "./teamClient";
 
 type Schemas = components["schemas"];
@@ -24,8 +26,8 @@ export const MAX_TEAM_NAME_LENGTH = 50;
 
 /**
  * 画面の props(App.tsx が app/screens.tsx 経由で注入する。ADR-0309 §2)。
- * PR-A1 の一覧・作成・名前変更・削除は master も engine も使わないが、ルート表では
- * `usesMaster: true` にしてある(PR-A2 のメンバー編集で必要になるため。ADR-0309 §1)。
+ * 一覧・作成・名前変更・削除は master を使わないが、メンバー編集(PR-A2。ADR-0316)が種族・技・持ち物などの
+ * 選択肢をマスタから作る。種族の一覧が無いマスタ(オンライン)では masterSearch で都度引く。
  */
 export interface TeamScreenProps {
   readonly teamClient: TeamClient;
@@ -34,6 +36,8 @@ export interface TeamScreenProps {
    * マウント後に値が変わったら list() を呼び直す(最初の値ではマウント時の1回だけ)。
    */
   readonly reloadToken?: number;
+  readonly master: MasterData;
+  readonly masterSearch?: MasterSpeciesSearch;
 }
 
 /** list() 呼び出し1本の状態。読み込みに失敗しても新規作成のフォームは使える(ADR-0309 §4)。 */
@@ -106,7 +110,7 @@ function removeTeamFromList(list: ListState, teamId: string): ListState {
 /**
  * 構築ビルダーの画面(ADR-0309 §4)。
  */
-export function TeamScreen({ teamClient, reloadToken }: TeamScreenProps): ReactNode {
+export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: TeamScreenProps): ReactNode {
   const [list, setList] = useState<ListState>({ status: "loading" });
   // create()/update()/remove() が一度でも成功したら true にする。list() は mount 時に1回しか呼ばないが、
   // その応答が書き込みの成功より後に届くと、古いスナップショットで手元の一覧を上書きしてしまう
@@ -177,7 +181,7 @@ export function TeamScreen({ teamClient, reloadToken }: TeamScreenProps): ReactN
   }
 
   async function saveRename(team: Schemas["Team"]): Promise<void> {
-    if (renameState === null || renameState.teamId !== team.id || renameState.submitting) {
+    if (renameState === null || renameState.teamId !== team.id || renameState.submitting || editorSaving) {
       return;
     }
     // 送信前の検査は新規作成と同じ範囲(契約と同じ。ADR-0309 §4)。範囲外は update() を呼ばずに理由を出す。
@@ -238,6 +242,11 @@ export function TeamScreen({ teamClient, reloadToken }: TeamScreenProps): ReactN
     }
   }
 
+  // メンバー編集の領域は同時に1つだけ(開いている構築の id)。開く・閉じるで API は呼ばない(ADR-0316 §1)。
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
+  // メンバー保存の送信中(名前変更と同時に送ると、全置換の update の一方が失われる)。
+  const [editorSaving, setEditorSaving] = useState(false);
+
   return (
     <section aria-label={teamScreenText.regionLabel} className="team-screen">
       <div className="team-screen__create">
@@ -291,6 +300,30 @@ export function TeamScreen({ teamClient, reloadToken }: TeamScreenProps): ReactN
               team={team}
               renameState={renameState !== null && renameState.teamId === team.id ? renameState : null}
               deleteState={deleteState !== null && deleteState.teamId === team.id ? deleteState : null}
+              editor={
+                editingTeamId === team.id ? (
+                  <TeamMemberEditor
+                    team={team}
+                    maxMembers={MAX_TEAM_MEMBERS}
+                    master={master}
+                    masterSearch={masterSearch}
+                    teamClient={teamClient}
+                    onSaved={(updated) => {
+                      hasWrittenRef.current = true;
+                      setList((current) => replaceTeam(current, updated));
+                    }}
+                    onClose={() => {
+                      setEditingTeamId(null);
+                    }}
+                    onSavingChange={setEditorSaving}
+                    locked={renameState !== null && renameState.teamId === team.id && renameState.submitting}
+                  />
+                ) : null
+              }
+              onOpenEditor={() => {
+                setEditingTeamId(team.id);
+              }}
+              renameLocked={editorSaving}
               onOpenRename={() => {
                 openRename(team);
               }}
@@ -320,6 +353,11 @@ interface TeamRowProps {
   readonly team: Schemas["Team"];
   readonly renameState: RenameState | null;
   readonly deleteState: DeleteState | null;
+  /** メンバー編集の領域(開いているときだけ。null は閉じている)。 */
+  readonly editor: ReactNode;
+  readonly onOpenEditor: () => void;
+  /** メンバー保存の送信中(true の間は名前変更を保存できない)。 */
+  readonly renameLocked: boolean;
   readonly onOpenRename: () => void;
   readonly onChangeRenameName: (name: string) => void;
   readonly onCancelRename: () => void;
@@ -334,6 +372,9 @@ function TeamRow({
   team,
   renameState,
   deleteState,
+  editor,
+  onOpenEditor,
+  renameLocked,
   onOpenRename,
   onChangeRenameName,
   onCancelRename,
@@ -370,7 +411,7 @@ function TeamRow({
               }}
             />
           </div>
-          <button type="button" disabled={renameState.submitting} onClick={onSaveRename}>
+          <button type="button" disabled={renameState.submitting || renameLocked} onClick={onSaveRename}>
             {teamScreenText.renameSaveLabel}
           </button>
           <button type="button" disabled={renameState.submitting} onClick={onCancelRename}>
@@ -384,6 +425,12 @@ function TeamRow({
             </div>
           )}
         </div>
+      )}
+
+      {editor === null && (
+        <button type="button" onClick={onOpenEditor}>
+          {teamMemberText.editLabel(team.name)}
+        </button>
       )}
 
       {deleteState === null ? (
@@ -407,6 +454,8 @@ function TeamRow({
           )}
         </div>
       )}
+
+      {editor}
     </li>
   );
 }

@@ -3,6 +3,8 @@
 // ここに1件足す。Record<ScreenId, ...> なので、どちらかの足し忘れは型エラーになる(App.tsx は触らない)。
 
 import type { ComponentType } from "react";
+import { AdjustScreen } from "../adjust/AdjustScreen";
+import type { AdjustClient } from "../adjust/adjustClient";
 import type { BalanceClient } from "../api/balanceClient";
 import type { CalcEngine } from "../engine/types";
 import { JudgeScreen } from "../judge/JudgeScreen";
@@ -34,6 +36,8 @@ export interface ScreenProps {
   readonly teamClient: TeamClient;
   /** P5-5d(ADR-0318 §6): 構築一覧の取り直しの合図(端末データの削除後に App が進める)。 */
   readonly reloadToken?: number;
+  /** AJ6(ADR-0319 §1): 調整の画面も専用のフィールドで受け取る。 */
+  readonly adjustClient: AdjustClient;
   /**
    * P4-16b(ADR-0304 A-10): 種族を都度引く口。App は今選ばれているマスタの取得口が検索付きのとき
    * (`isSearchableMasterSource`)だけ渡す。`master.capabilities.speciesList` が false の画面は、
@@ -59,6 +63,8 @@ export const SCREEN_COMPONENTS: Record<ScreenId, ComponentType<ScreenProps>> = {
   judge: withOnlineMaster(JudgeScreen),
   // P5-5 PR-A1(ADR-0309 §2): 構築ビルダー。画面の中身は web/src/team/ にある(レーンの境界)。
   team: TeamScreen,
+  // AJ6(ADR-0319 §1): 調整。API 専用なのでオンラインのマスタを使う。中身は web/src/adjust/ にある。
+  adjust: withOnlineMaster(AdjustScreen),
 };
 
 /**

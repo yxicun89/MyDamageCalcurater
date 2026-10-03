@@ -406,3 +406,22 @@ describe("計算の取り消し(AbortSignal。issue 113)", () => {
     expect(runtime.calls.map((entry) => entry.fn)).toEqual([fn]);
   });
 });
+
+describe("防御側のランク(issue #274 残り・ADR-0315 案)", () => {
+  test("defenderOverride.ranks を JSON にそのまま載せる。defenderAbilities とも併存する", async () => {
+    const runtime = createFakeRuntime();
+    const defenderOverride = { ranks: { atk: 0, def: 1, spa: 0, spd: -2, spe: 0 } };
+    const defenderAbilities = [{ id: "exampleabilityone", nameJa: "テスト", effect: null }];
+    const request = { ...bulkRequest, defenderAbilities, defenderOverride };
+    await createWasmEngine(runtime.loader).calcBulk(request);
+    const sent = JSON.parse(String(runtime.calls[0]?.args[0])) as Record<string, unknown>;
+    expect(sent.defenderOverride).toEqual(defenderOverride);
+    expect(sent.defenderAbilities).toEqual(defenderAbilities);
+  });
+
+  test("渡さなければ defenderOverride のキーは JSON に無い", async () => {
+    const runtime = createFakeRuntime();
+    await createWasmEngine(runtime.loader).calcBulk(bulkRequest);
+    expect(JSON.parse(String(runtime.calls[0]?.args[0]))).not.toHaveProperty("defenderOverride");
+  });
+});
