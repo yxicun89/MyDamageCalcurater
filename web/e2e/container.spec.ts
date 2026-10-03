@@ -180,6 +180,9 @@ test.describe("セキュリティヘッダ", () => {
     // 種族を2つ選ぶとオンラインの計算(/api/calc)が走るが、コンテナには calc-svc が無い。404 はブラウザが
     // コンソールエラーにするので、無害な応答(内容は使わない。この後オフラインで開き直す)で受ける。
     await page.route("**/api/calc/**", (route) => route.fulfill({ status: 200, json: {} }));
+    // 同じく「よく計算する相手」(P5-5c。オンラインのとき GET /api/record/frequent-opponents)も、コンテナには record-svc が無く
+    // 404 がコンソールエラーになるので、空の一覧で受ける(チップは0件のとき黙って非表示)。
+    await page.route("**/api/record/**", (route) => route.fulfill({ status: 200, json: [] }));
     await openAppOffline(page);
     await page.unroute("**/api/pokedex/**");
     await page.route("**/api/**", (route) => route.abort("connectionrefused"));

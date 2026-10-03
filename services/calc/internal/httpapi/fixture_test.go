@@ -223,7 +223,6 @@ type indiv struct {
 	natureID   string
 	abilityID  string // "" は省略
 	itemID     string // "" は省略(持ち物なし)
-	moveID     string // "" は省略(Individual.moveId)
 	sp         engine.Stats
 	ranks      engine.Ranks
 	tera       engine.Type   // "" は省略
@@ -251,9 +250,6 @@ func (in indiv) http() map[string]any {
 	}
 	if in.itemID != "" {
 		m["itemId"] = in.itemID
-	}
-	if in.moveID != "" {
-		m["moveId"] = in.moveID
 	}
 	if in.tera != "" {
 		m["teraType"] = string(in.tera)
