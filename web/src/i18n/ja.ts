@@ -505,10 +505,20 @@ export const judgeScreenText = {
   natureLabel: "性格",
   abilityLabel: "特性",
   itemLabel: "持ち物",
-  moveIdLabel: "技の ID",
-  /** 技を一覧から選べない理由(ADR-0304 §3 の既知の欠落。ADR-0705 §5)。 */
-  moveIdHint: "技は ID で入力します(ID から技を引く API がまだありません)",
   unselectedOption: "未選択",
+  // ---- issue 309: 技はポケモンの覚える技から選ぶ。調整はプリセット。数値欄は「詳細」に畳む ----
+  /** 技の select の名前(自分側・候補で共通。計算画面の calcScreenText.moveLabel と同じ語)。 */
+  moveLabel: "技",
+  /** 覚える技を1件も引けないとき(learnset が空・技の実体を解決できない)。技の select は disabled のまま。 */
+  moveUnavailableNotice: "この種族の技を読み込めません",
+  /** 数値の直接入力(SP6欄・ランク5欄)を畳む <details> の summary。 */
+  detailsSummaryLabel: "詳細",
+  /** 調整プリセットの radiogroup の名前(自分側・候補で共通。候補の group で絞り込む)。 */
+  presetGroupLabel: "調整",
+  /** 最速プリセット(S 全振り + 素早さ上昇の性格)の表示名。無振り・A特化は attackerPresetText、HB/HD特化は defenderPresetText から。 */
+  fastestPresetLabel: "最速",
+  /** 検証エラーの「どの体か」(自分側。候補は candidateGroupLabel(n) を使う)。 */
+  attackerWhoLabel: "自分",
   spLabel: (stat: StatKey): string => `${statLetterJa[stat]} のポイント`,
   rankLabel: (stat: StatKey): string => `${statLetterJa[stat]} のランク`,
   formatLabel: "対戦形式",
@@ -533,7 +543,7 @@ export const judgeScreenText = {
   spRangeMessage: (max: number): string => `能力ポイントは0〜${max}の整数で入力してください`,
   spTotalMessage: (max: number): string => `能力ポイントの合計は${max}までです`,
   rankRangeMessage: "ランクは-6〜+6の整数で入力してください",
-  requiredMessage: "ポケモン・性格・技の ID をすべて入力してください",
+  requiredMessage: "ポケモン・性格・技をすべて選んでください",
   // ---- 結果(ADR-0705 §8)。judge の値をそのまま出す ----
   speedLabel: (attacker: number, defender: number): string => `素早さ ${attacker} 対 ${defender}`,
   priorityLabel: (attacker: number, defender: number): string => `優先度 ${attacker} 対 ${defender}`,
