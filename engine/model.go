@@ -32,7 +32,17 @@ type Move struct {
 	Priority   int
 	Effect     *MoveEffect
 	Mechanisms []MoveMechanism
+	// Target は技の対象(ADR-0222)。ダブルの全体技の補正に使う。"" は不明(マスタが持つまでの既定。単体扱い)。
+	Target MoveTarget
 }
+
+// MoveTarget は技の対象の分類。oracle の allAdjacent・allAdjacentFoes が spread、それ以外が single。
+type MoveTarget string
+
+const (
+	MoveTargetSingle MoveTarget = "single"
+	MoveTargetSpread MoveTarget = "spread"
+)
 
 // Item は持ち物データ。Effect はダメージ補正の定義(マスタから解決)。nil は補正なし。
 type Item struct {

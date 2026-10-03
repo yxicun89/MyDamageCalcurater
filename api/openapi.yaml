@@ -1038,9 +1038,14 @@ components:
     Format:
       type: string
       description: |
-        対戦形式。計算(/api/calc・/api/calc/bulk・/api/calc/reverse)は double を受け付けるが計算には
-        反映しない(ダブル固有の補正は後続 Phase)。double を指定すると数値はシングルのまま、結果の
-        unsupported に target format・reason unsupported_effect・id double の印が付く(ADR-0160)。
+        対戦形式。計算(/api/calc・/api/calc/bulk・/api/calc/reverse)では double のとき次を掛ける(issue 232 案B のダブル分・ADR-0222)。
+        - 防御側の壁(リフレクター・ひかりのかべ・オーロラベール): ×2732/4096(single は ×1/2)。急所は壁を無視する
+        - 全体技(技の対象が相手全体・自分以外全体): 基礎ダメージに ×3072/4096(天候・急所より前)。
+          1対1の計算なので、全体技は常に2体以上に当たる前提で掛ける。味方の効果(てだすけ等)は扱わない
+        技の対象をマスタが持たない間(issue 288)は、double の攻撃技に UnsupportedMark
+        (target=move・reason=move_target_unknown)を付け、全体技の補正は掛けない(壁は掛ける)。
+        double は計算に反映するので形式の印は付けない。engine に未知の形式が届いたときだけ安全側で
+        target format・reason unsupported_effect の印が付く(ADR-0160・ADR-0222 §5)。
       enum: [single, double]
       default: single
 
@@ -1274,7 +1279,7 @@ components:
       type: object
       description: |
         「この結果は正しくない可能性がある」印1つ(ADR-0123)。engine が正しく計算できない技の機構・
-        持ち物・特性と、受け付けるが計算に反映しないテラスタイプ・対戦形式(ADR-0160)に、数値は
+        持ち物・特性と、受け付けるが計算に反映しないテラスタイプ・未知の対戦形式(ADR-0160・ADR-0222 §5)に、数値は
         通常の式のまま付ける(400 で拒否しない)。
       required: [target, reason, id]
       properties:
@@ -1282,7 +1287,8 @@ components:
           type: string
           description: |
             印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability・
-            attacker_tera_type・defender_tera_type・format(並びもこの順)。
+            attacker_tera_type・defender_tera_type・format(並びもこの順)。format は engine に未知の形式が
+            届いたときだけ(double は計算に反映するので付かない。ADR-0222 §5)。
             値を足しても古いクライアントが応答全体をデコードできなくなるのを避けるため、enum にしない
             (クライアントは未知の値を「対象不明の印」として扱い、id をそのまま表示する。ADR-0215)。
         reason:
@@ -1291,8 +1297,9 @@ components:
             印の理由。技は機構の値(MasterMove.mechanisms と同じ13種: alt_defense_stat・alt_offense_stat・
             always_crit・effectiveness_change・field_specific・fixed_damage・ignore_defense_ranks・
             move_specific・multi_hit・ohko・priority_change・type_change・variable_power)か
-            zero_power(威力0の攻撃技。威力が技の処理で決まるため)、持ち物・特性は
-            unsupported_effect(効果スキーマで表せない)、テラスタイプ・対戦形式も unsupported_effect
+            zero_power(威力0の攻撃技。威力が技の処理で決まるため)・move_target_unknown(double で技の対象が
+            不明なため全体技の補正を判断できない。ADR-0222)、持ち物・特性は
+            unsupported_effect(効果スキーマで表せない)、テラスタイプ・未知の対戦形式も unsupported_effect
             (効果を計算に反映していない。ADR-0160)。target と同じ理由で enum にしない
             (クライアントは未知の値を汎用の文言で扱う。ADR-0215)。
         id:

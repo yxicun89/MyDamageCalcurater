@@ -1,0 +1,4533 @@
+[
+  {
+    "id": "doubles/single-target/no-screen",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Dragon Claw"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "dragonclaw",
+        "Type": "dragon",
+        "Category": "physical",
+        "Power": 80,
+        "Priority": 0,
+        "Target": "single"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        81,
+        82,
+        82,
+        84,
+        84,
+        85,
+        87,
+        87,
+        88,
+        90,
+        90,
+        91,
+        93,
+        93,
+        94,
+        96
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "doubles/screen/reflect",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Dragon Claw"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "dragonclaw",
+        "Type": "dragon",
+        "Category": "physical",
+        "Power": 80,
+        "Priority": 0,
+        "Target": "single"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": true,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        54,
+        55,
+        55,
+        56,
+        56,
+        57,
+        58,
+        58,
+        59,
+        60,
+        60,
+        61,
+        62,
+        62,
+        63,
+        64
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 4,
+        "Guaranteed": false,
+        "ChancePercent": 52.8564453125
+      }
+    }
+  },
+  {
+    "id": "doubles/screen/reflect/critical",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Dragon Claw"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "dragonclaw",
+        "Type": "dragon",
+        "Category": "physical",
+        "Power": 80,
+        "Priority": 0,
+        "Target": "single"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": true,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": true
+    },
+    "expected": {
+      "rolls": [
+        121,
+        123,
+        124,
+        126,
+        127,
+        129,
+        130,
+        132,
+        133,
+        135,
+        136,
+        138,
+        139,
+        141,
+        142,
+        144
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 2,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "doubles/screen/light-screen",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Snorlax",
+      "move": "Flamethrower"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "flamethrower",
+        "Type": "fire",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Target": "single"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": true,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        34,
+        35,
+        35,
+        36,
+        36,
+        36,
+        37,
+        37,
+        38,
+        38,
+        38,
+        39,
+        39,
+        40,
+        40,
+        41
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 6,
+        "Guaranteed": false,
+        "ChancePercent": 1.993042230606079
+      }
+    }
+  },
+  {
+    "id": "doubles/screen/light-screen/critical",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Snorlax",
+      "move": "Flamethrower"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "flamethrower",
+        "Type": "fire",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Target": "single"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": true,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": true
+    },
+    "expected": {
+      "rolls": [
+        76,
+        78,
+        79,
+        79,
+        81,
+        81,
+        82,
+        84,
+        84,
+        85,
+        85,
+        87,
+        88,
+        88,
+        90,
+        91
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": false,
+        "ChancePercent": 98.8525390625
+      }
+    }
+  },
+  {
+    "id": "doubles/screen/aurora-veil-physical",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Dragon Claw"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "dragonclaw",
+        "Type": "dragon",
+        "Category": "physical",
+        "Power": 80,
+        "Priority": 0,
+        "Target": "single"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": true
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        54,
+        55,
+        55,
+        56,
+        56,
+        57,
+        58,
+        58,
+        59,
+        60,
+        60,
+        61,
+        62,
+        62,
+        63,
+        64
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 4,
+        "Guaranteed": false,
+        "ChancePercent": 52.8564453125
+      }
+    }
+  },
+  {
+    "id": "doubles/screen/aurora-veil-physical/critical",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Dragon Claw"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "dragonclaw",
+        "Type": "dragon",
+        "Category": "physical",
+        "Power": 80,
+        "Priority": 0,
+        "Target": "single"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": true
+        }
+      },
+      "Critical": true
+    },
+    "expected": {
+      "rolls": [
+        121,
+        123,
+        124,
+        126,
+        127,
+        129,
+        130,
+        132,
+        133,
+        135,
+        136,
+        138,
+        139,
+        141,
+        142,
+        144
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 2,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "doubles/screen/aurora-veil-special",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Snorlax",
+      "move": "Flamethrower"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "flamethrower",
+        "Type": "fire",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Target": "single"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": true
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        34,
+        35,
+        35,
+        36,
+        36,
+        36,
+        37,
+        37,
+        38,
+        38,
+        38,
+        39,
+        39,
+        40,
+        40,
+        41
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 6,
+        "Guaranteed": false,
+        "ChancePercent": 1.993042230606079
+      }
+    }
+  },
+  {
+    "id": "doubles/screen/aurora-veil-special/critical",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Snorlax",
+      "move": "Flamethrower"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "flamethrower",
+        "Type": "fire",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Target": "single"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": true
+        }
+      },
+      "Critical": true
+    },
+    "expected": {
+      "rolls": [
+        76,
+        78,
+        79,
+        79,
+        81,
+        81,
+        82,
+        84,
+        84,
+        85,
+        85,
+        87,
+        88,
+        88,
+        90,
+        91
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": false,
+        "ChancePercent": 98.8525390625
+      }
+    }
+  },
+  {
+    "id": "doubles/screen/light-screen-vs-physical",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Dragon Claw"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "dragonclaw",
+        "Type": "dragon",
+        "Category": "physical",
+        "Power": 80,
+        "Priority": 0,
+        "Target": "single"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": true,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        81,
+        82,
+        82,
+        84,
+        84,
+        85,
+        87,
+        87,
+        88,
+        90,
+        90,
+        91,
+        93,
+        93,
+        94,
+        96
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "doubles/spread/all-adjacent/earthquake",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Earthquake"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "earthquake",
+        "Type": "ground",
+        "Category": "physical",
+        "Power": 100,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        75,
+        75,
+        76,
+        76,
+        78,
+        79,
+        79,
+        81,
+        81,
+        82,
+        84,
+        84,
+        85,
+        85,
+        87,
+        88
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": false,
+        "ChancePercent": 87.5732421875
+      }
+    }
+  },
+  {
+    "id": "doubles/single-control/spread/all-adjacent/earthquake",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Earthquake"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "earthquake",
+        "Type": "ground",
+        "Category": "physical",
+        "Power": 100,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        100,
+        100,
+        102,
+        103,
+        105,
+        106,
+        106,
+        108,
+        109,
+        111,
+        112,
+        112,
+        114,
+        115,
+        117,
+        118
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 2,
+        "Guaranteed": false,
+        "ChancePercent": 1.171875
+      }
+    }
+  },
+  {
+    "id": "doubles/spread/all-adjacent/surf",
+    "oracle": {
+      "attacker": "Blastoise",
+      "defender": "Snorlax",
+      "move": "Surf"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "blastoise",
+          "Types": [
+            "water"
+          ],
+          "BaseStats": {
+            "hp": 79,
+            "atk": 83,
+            "def": 100,
+            "spa": 85,
+            "spd": 105,
+            "spe": 78
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "surf",
+        "Type": "water",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        31,
+        31,
+        31,
+        33,
+        33,
+        33,
+        33,
+        34,
+        34,
+        34,
+        34,
+        36,
+        36,
+        36,
+        36,
+        37
+      ],
+      "attackerStats": {
+        "hp": 154,
+        "atk": 103,
+        "def": 120,
+        "spa": 105,
+        "spd": 125,
+        "spe": 98
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 7,
+        "Guaranteed": false,
+        "ChancePercent": 70.0930055230856
+      }
+    }
+  },
+  {
+    "id": "doubles/single-control/spread/all-adjacent/surf",
+    "oracle": {
+      "attacker": "Blastoise",
+      "defender": "Snorlax",
+      "move": "Surf"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "blastoise",
+          "Types": [
+            "water"
+          ],
+          "BaseStats": {
+            "hp": 79,
+            "atk": 83,
+            "def": 100,
+            "spa": 85,
+            "spd": 105,
+            "spe": 78
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "surf",
+        "Type": "water",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        42,
+        42,
+        42,
+        43,
+        43,
+        43,
+        45,
+        45,
+        45,
+        46,
+        46,
+        46,
+        48,
+        48,
+        48,
+        49
+      ],
+      "attackerStats": {
+        "hp": 154,
+        "atk": 103,
+        "def": 120,
+        "spa": 105,
+        "spd": 125,
+        "spe": 98
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 5,
+        "Guaranteed": false,
+        "ChancePercent": 3.8756370544433594
+      }
+    }
+  },
+  {
+    "id": "doubles/spread/all-adjacent/discharge",
+    "oracle": {
+      "attacker": "Pikachu",
+      "defender": "Snorlax",
+      "move": "Discharge"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "pikachu",
+          "Types": [
+            "electric"
+          ],
+          "BaseStats": {
+            "hp": 35,
+            "atk": 55,
+            "def": 40,
+            "spa": 50,
+            "spd": 50,
+            "spe": 90
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "discharge",
+        "Type": "electric",
+        "Category": "special",
+        "Power": 80,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        18,
+        18,
+        19,
+        19,
+        19,
+        19,
+        19,
+        19,
+        19,
+        21,
+        21,
+        21,
+        21,
+        21,
+        21,
+        22
+      ],
+      "attackerStats": {
+        "hp": 110,
+        "atk": 75,
+        "def": 60,
+        "spa": 70,
+        "spd": 70,
+        "spe": 110
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 11,
+        "Guaranteed": false,
+        "ChancePercent": 0.0008062125687047228
+      }
+    }
+  },
+  {
+    "id": "doubles/single-control/spread/all-adjacent/discharge",
+    "oracle": {
+      "attacker": "Pikachu",
+      "defender": "Snorlax",
+      "move": "Discharge"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "pikachu",
+          "Types": [
+            "electric"
+          ],
+          "BaseStats": {
+            "hp": 35,
+            "atk": 55,
+            "def": 40,
+            "spa": 50,
+            "spd": 50,
+            "spe": 90
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "discharge",
+        "Type": "electric",
+        "Category": "special",
+        "Power": 80,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        25,
+        25,
+        25,
+        25,
+        25,
+        27,
+        27,
+        27,
+        27,
+        27,
+        28,
+        28,
+        28,
+        28,
+        28,
+        30
+      ],
+      "attackerStats": {
+        "hp": 110,
+        "atk": 75,
+        "def": 60,
+        "spa": 70,
+        "spd": 70,
+        "spe": 110
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 8,
+        "Guaranteed": false,
+        "ChancePercent": 0.000051711685955524445
+      }
+    }
+  },
+  {
+    "id": "doubles/spread/all-adjacent-foes/rock-slide",
+    "oracle": {
+      "attacker": "Tyranitar",
+      "defender": "Charizard",
+      "move": "Rock Slide"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "tyranitar",
+          "Types": [
+            "rock",
+            "dark"
+          ],
+          "BaseStats": {
+            "hp": 100,
+            "atk": 134,
+            "def": 110,
+            "spa": 95,
+            "spd": 100,
+            "spe": 61
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "rockslide",
+        "Type": "rock",
+        "Category": "physical",
+        "Power": 75,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        204,
+        204,
+        204,
+        208,
+        208,
+        216,
+        216,
+        216,
+        220,
+        220,
+        228,
+        228,
+        228,
+        232,
+        232,
+        240
+      ],
+      "attackerStats": {
+        "hp": 175,
+        "atk": 154,
+        "def": 130,
+        "spa": 115,
+        "spd": 120,
+        "spe": 81
+      },
+      "defenderStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "ko": {
+        "Hits": 1,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "doubles/single-control/spread/all-adjacent-foes/rock-slide",
+    "oracle": {
+      "attacker": "Tyranitar",
+      "defender": "Charizard",
+      "move": "Rock Slide"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "tyranitar",
+          "Types": [
+            "rock",
+            "dark"
+          ],
+          "BaseStats": {
+            "hp": 100,
+            "atk": 134,
+            "def": 110,
+            "spa": 95,
+            "spd": 100,
+            "spe": 61
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "rockslide",
+        "Type": "rock",
+        "Category": "physical",
+        "Power": 75,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        268,
+        268,
+        276,
+        276,
+        280,
+        280,
+        288,
+        288,
+        292,
+        292,
+        300,
+        300,
+        304,
+        304,
+        312,
+        316
+      ],
+      "attackerStats": {
+        "hp": 175,
+        "atk": 154,
+        "def": 130,
+        "spa": 115,
+        "spd": 120,
+        "spe": 81
+      },
+      "defenderStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "ko": {
+        "Hits": 1,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "doubles/spread/all-adjacent-foes/hyper-voice",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Snorlax",
+      "move": "Hyper Voice"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "hypervoice",
+        "Type": "normal",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        25,
+        25,
+        25,
+        25,
+        25,
+        27,
+        27,
+        27,
+        27,
+        27,
+        28,
+        28,
+        28,
+        28,
+        28,
+        30
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 8,
+        "Guaranteed": false,
+        "ChancePercent": 0.000051711685955524445
+      }
+    }
+  },
+  {
+    "id": "doubles/single-control/spread/all-adjacent-foes/hyper-voice",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Snorlax",
+      "move": "Hyper Voice"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "hypervoice",
+        "Type": "normal",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        33,
+        34,
+        34,
+        34,
+        36,
+        36,
+        36,
+        36,
+        37,
+        37,
+        37,
+        37,
+        39,
+        39,
+        39,
+        40
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 6,
+        "Guaranteed": false,
+        "ChancePercent": 0.0375211238861084
+      }
+    }
+  },
+  {
+    "id": "doubles/spread/all-adjacent-foes/heat-wave",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Snorlax",
+      "move": "Heat Wave"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "heatwave",
+        "Type": "fire",
+        "Category": "special",
+        "Power": 95,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        40,
+        40,
+        40,
+        42,
+        42,
+        42,
+        43,
+        43,
+        43,
+        45,
+        45,
+        45,
+        46,
+        46,
+        46,
+        48
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 5,
+        "Guaranteed": false,
+        "ChancePercent": 0.0301361083984375
+      }
+    }
+  },
+  {
+    "id": "doubles/single-control/spread/all-adjacent-foes/heat-wave",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Snorlax",
+      "move": "Heat Wave"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "heatwave",
+        "Type": "fire",
+        "Category": "special",
+        "Power": 95,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        54,
+        54,
+        55,
+        55,
+        57,
+        57,
+        58,
+        58,
+        58,
+        60,
+        60,
+        61,
+        61,
+        63,
+        63,
+        64
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 4,
+        "Guaranteed": false,
+        "ChancePercent": 49.58343505859375
+      }
+    }
+  },
+  {
+    "id": "doubles/spread/all-adjacent-foes/dazzling-gleam",
+    "oracle": {
+      "attacker": "Clefable",
+      "defender": "Garchomp",
+      "move": "Dazzling Gleam"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "clefable",
+          "Types": [
+            "fairy"
+          ],
+          "BaseStats": {
+            "hp": 95,
+            "atk": 70,
+            "def": 73,
+            "spa": 95,
+            "spd": 90,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "dazzlinggleam",
+        "Type": "fairy",
+        "Category": "special",
+        "Power": 80,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        74,
+        74,
+        78,
+        78,
+        78,
+        80,
+        80,
+        80,
+        80,
+        84,
+        84,
+        84,
+        86,
+        86,
+        86,
+        90
+      ],
+      "attackerStats": {
+        "hp": 170,
+        "atk": 90,
+        "def": 93,
+        "spa": 115,
+        "spd": 110,
+        "spe": 80
+      },
+      "defenderStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "doubles/single-control/spread/all-adjacent-foes/dazzling-gleam",
+    "oracle": {
+      "attacker": "Clefable",
+      "defender": "Garchomp",
+      "move": "Dazzling Gleam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "clefable",
+          "Types": [
+            "fairy"
+          ],
+          "BaseStats": {
+            "hp": 95,
+            "atk": 70,
+            "def": 73,
+            "spa": 95,
+            "spd": 90,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "dazzlinggleam",
+        "Type": "fairy",
+        "Category": "special",
+        "Power": 80,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        102,
+        102,
+        102,
+        104,
+        104,
+        108,
+        108,
+        108,
+        110,
+        110,
+        114,
+        114,
+        114,
+        116,
+        116,
+        120
+      ],
+      "attackerStats": {
+        "hp": 170,
+        "atk": 90,
+        "def": 93,
+        "spa": 115,
+        "spd": 110,
+        "spe": 80
+      },
+      "defenderStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "ko": {
+        "Hits": 2,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "doubles/spread/rain",
+    "oracle": {
+      "attacker": "Blastoise",
+      "defender": "Snorlax",
+      "move": "Surf"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "blastoise",
+          "Types": [
+            "water"
+          ],
+          "BaseStats": {
+            "hp": 79,
+            "atk": 83,
+            "def": 100,
+            "spa": 85,
+            "spd": 105,
+            "spe": 78
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "surf",
+        "Type": "water",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "rain",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        46,
+        46,
+        48,
+        48,
+        48,
+        49,
+        49,
+        51,
+        51,
+        51,
+        52,
+        52,
+        52,
+        54,
+        54,
+        55
+      ],
+      "attackerStats": {
+        "hp": 154,
+        "atk": 103,
+        "def": 120,
+        "spa": 105,
+        "spd": 125,
+        "spe": 98
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 5,
+        "Guaranteed": false,
+        "ChancePercent": 99.89013671875
+      }
+    }
+  },
+  {
+    "id": "doubles/spread/critical",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Earthquake"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "earthquake",
+        "Type": "ground",
+        "Category": "physical",
+        "Power": 100,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": true
+    },
+    "expected": {
+      "rolls": [
+        111,
+        112,
+        114,
+        115,
+        117,
+        118,
+        120,
+        120,
+        121,
+        123,
+        124,
+        126,
+        127,
+        129,
+        130,
+        132
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 2,
+        "Guaranteed": false,
+        "ChancePercent": 80.078125
+      }
+    }
+  },
+  {
+    "id": "doubles/spread/reflect",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Earthquake"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "earthquake",
+        "Type": "ground",
+        "Category": "physical",
+        "Power": 100,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": true,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        50,
+        50,
+        51,
+        51,
+        52,
+        53,
+        53,
+        54,
+        54,
+        55,
+        56,
+        56,
+        57,
+        57,
+        58,
+        59
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 4,
+        "Guaranteed": false,
+        "ChancePercent": 0.00762939453125
+      }
+    }
+  },
+  {
+    "id": "doubles/spread/light-screen",
+    "oracle": {
+      "attacker": "Charizard",
+      "defender": "Snorlax",
+      "move": "Heat Wave"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "charizard",
+          "Types": [
+            "fire",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 78,
+            "atk": 84,
+            "def": 78,
+            "spa": 109,
+            "spd": 85,
+            "spe": 100
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "heatwave",
+        "Type": "fire",
+        "Category": "special",
+        "Power": 95,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": true,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        27,
+        27,
+        27,
+        28,
+        28,
+        28,
+        29,
+        29,
+        29,
+        30,
+        30,
+        30,
+        31,
+        31,
+        31,
+        32
+      ],
+      "attackerStats": {
+        "hp": 153,
+        "atk": 104,
+        "def": 98,
+        "spa": 129,
+        "spd": 105,
+        "spe": 120
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 8,
+        "Guaranteed": false,
+        "ChancePercent": 40.92980327550322
+      }
+    }
+  },
+  {
+    "id": "doubles/spread/aurora-veil-critical",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Earthquake"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "earthquake",
+        "Type": "ground",
+        "Category": "physical",
+        "Power": 100,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": true
+        }
+      },
+      "Critical": true
+    },
+    "expected": {
+      "rolls": [
+        111,
+        112,
+        114,
+        115,
+        117,
+        118,
+        120,
+        120,
+        121,
+        123,
+        124,
+        126,
+        127,
+        129,
+        130,
+        132
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 2,
+        "Guaranteed": false,
+        "ChancePercent": 80.078125
+      }
+    }
+  },
+  {
+    "id": "doubles/spread/burn-life-orb",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Earthquake"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "burn",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": {
+          "ID": "Life Orb",
+          "Effect": {
+            "DamageMod": 5324
+          }
+        }
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "earthquake",
+        "Type": "ground",
+        "Category": "physical",
+        "Power": 100,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        48,
+        48,
+        49,
+        49,
+        51,
+        51,
+        51,
+        52,
+        52,
+        53,
+        55,
+        55,
+        55,
+        55,
+        56,
+        57
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 5,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "doubles/spread/immune",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Corviknight",
+      "move": "Earthquake"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "corviknight",
+          "Types": [
+            "flying",
+            "steel"
+          ],
+          "BaseStats": {
+            "hp": 98,
+            "atk": 87,
+            "def": 105,
+            "spa": 53,
+            "spd": 85,
+            "spe": 67
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "earthquake",
+        "Type": "ground",
+        "Category": "physical",
+        "Power": 100,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 173,
+        "atk": 107,
+        "def": 125,
+        "spa": 73,
+        "spd": 105,
+        "spe": 87
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "doubles/spread/levitate",
+    "oracle": {
+      "attacker": "Garchomp",
+      "defender": "Snorlax",
+      "move": "Earthquake"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "garchomp",
+          "Types": [
+            "dragon",
+            "ground"
+          ],
+          "BaseStats": {
+            "hp": 108,
+            "atk": 130,
+            "def": 95,
+            "spa": 80,
+            "spd": 85,
+            "spe": 102
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Levitate",
+          "Effect": {
+            "DefImmuneTypes": [
+              "ground"
+            ],
+            "Airborne": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "earthquake",
+        "Type": "ground",
+        "Category": "physical",
+        "Power": 100,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 183,
+        "atk": 150,
+        "def": 115,
+        "spa": 100,
+        "spd": 105,
+        "spe": 122
+      },
+      "defenderStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "doubles/spread/bulky-defender",
+    "oracle": {
+      "attacker": "Pikachu",
+      "defender": "Snorlax",
+      "move": "Surf"
+    },
+    "input": {
+      "Format": "double",
+      "Attacker": {
+        "Species": {
+          "Key": "pikachu",
+          "Types": [
+            "electric"
+          ],
+          "BaseStats": {
+            "hp": 35,
+            "atk": 55,
+            "def": 40,
+            "spa": 50,
+            "spd": 50,
+            "spe": 90
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {
+          "Plus": "spd",
+          "Minus": "atk"
+        },
+        "SP": {
+          "hp": 32,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 32,
+          "spe": 0
+        },
+        "Ranks": {
+          "spd": 6
+        },
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "surf",
+        "Type": "water",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Target": "spread"
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        4
+      ],
+      "attackerStats": {
+        "hp": 110,
+        "atk": 75,
+        "def": 60,
+        "spa": 70,
+        "spd": 70,
+        "spe": 110
+      },
+      "defenderStats": {
+        "hp": 267,
+        "atk": 117,
+        "def": 85,
+        "spa": 85,
+        "spd": 178,
+        "spe": 50
+      },
+      "ko": {
+        "Hits": 67,
+        "Guaranteed": false,
+        "ChancePercent": 2.1210902261779813e-76
+      }
+    }
+  }
+]

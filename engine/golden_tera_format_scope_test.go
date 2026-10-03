@@ -8,6 +8,7 @@ import "testing"
 // その前提として、ゴールデンのベクタ(oracle の対象範囲。metadata.json の "No double/tera")には
 // テラス指定もダブルも無く、印(テラス・形式)が1件も付かないことを固定する。
 // ここが崩れたら、oracle がテラス・ダブルを計算した期待値を engine の「未適用」の数値と照合している。
+// (ダブルは ADR-0222 で計算に反映し、doubles* の別ファイルで照合する。このリストには入れない。ADR-0222 §3.4)
 func TestGoldenInputsHaveNoTeraOrDouble(t *testing.T) {
 	meta := readGoldenMetadata(t)
 	chart := mustTypeChart(t)

@@ -24,6 +24,8 @@ import {
   emptyIndividual,
   type IndividualFormState,
   JUDGE_PRESET_KEYS,
+  JUDGE_STATUS_KEYS,
+  type JudgeStatusKey,
   judgePresetLabel,
   moveCategoryOf,
   parseRank,
@@ -106,6 +108,9 @@ function buildIndividual(state: IndividualFormState): Schemas["Individual"] {
   }
   if (state.itemId !== "") {
     individual.itemId = state.itemId;
+  }
+  if (state.status !== "none") {
+    individual.status = state.status;
   }
   return individual;
 }
@@ -609,6 +614,24 @@ function IndividualFields({
           {master.items.map((item) => (
             <option key={item.id} value={item.id}>
               {item.nameJa}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="judge-individual__field">
+        <span>{judgeScreenText.statusLabel}</span>
+        <select
+          aria-label={judgeScreenText.statusLabel}
+          value={value.status}
+          onChange={(event) => {
+            const status = event.target.value as JudgeStatusKey;
+            onChange((current) => ({ ...current, status }));
+          }}
+        >
+          {JUDGE_STATUS_KEYS.map((key) => (
+            <option key={key} value={key}>
+              {judgeScreenText.statusOptionLabel[key]}
             </option>
           ))}
         </select>

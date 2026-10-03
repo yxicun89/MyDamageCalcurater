@@ -80,3 +80,20 @@ Web(`unsupportedTargetLabel`)・iOS(`UnsupportedTarget`・`UnsupportedMarkLabel`
 - 数値・ゴールデンは不変。`TestCalcBulkFormatDouble` が注記していた「Format が CalcDamage へ素通しされているかを
   検証できない」問題は、format の印で検証できるようになった。
 - テラス・ダブルを正しく計算する(案 B)ときは、実装した側から印の条件を外し、本 ADR に追記する。
+
+## 追記(2026-10-03。ADR-0222 で置き換え: format=double の印)
+
+ADR-0222(issue #232 案B のダブル分)で `Format=double` の壁(2732/4096)・全体技(×3072/4096)を engine に反映したので、
+§2 の表の「`Format` が `""` でも `single` でもない」行のうち **double には形式の印を付けない**(ADR-0222 §5)。
+
+- 形式の印(target `format`)は、engine に直接届いた**未知の形式**(`""`・`single`・`double` 以外。HTTP・WASM は enum で拒否する)
+  にだけ安全側で付ける(`ErrUnknownFormat` は作らない)。
+- ダブルで技の対象(`Move.Target`)が不明な攻撃技には、技の印 `{target: move, reason: move_target_unknown}` が付く
+  (ADR-0222 §3.1。マスタが技の対象を持つまで calc-svc のダブルは全攻撃技に付く。issue #288)。
+- テラスの印(`attacker_tera_type` / `defender_tera_type`)は本 ADR のまま変えない。テラスの扱いの見直し
+  (黙って無視・400・印を消す)は ADR-0222 §4 Q2 の未決事項(人間の判断待ち)。
+- §3 の「judge に届くのは format の印だけ」は、judge が送る形式は single・double だけなので、ダブルで届くのは
+  `move_target_unknown` の技の印になる。
+- テストの期待値(engine・wasmapi・calc-svc・judge の `*TeraAndFormat*`・`TestDamageRelaysMoveTargetUnknownMark`、
+  ベクタ `*/tera-double-marks` の検査)を「ダブルは形式の印なし・技の対象が不明な技の印あり」に直した。
+  未知の形式とテラスの印の期待は残した。

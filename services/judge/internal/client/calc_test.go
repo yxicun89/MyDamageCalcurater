@@ -237,9 +237,11 @@ func TestDamageAcceptsUnknownUnsupportedReason(t *testing.T) {
 	}
 }
 
-// TestDamageRelaysFormatUnsupportedMark: calc-svc が付ける format の印(ADR-0160。judge は teraType を
-// 受け取らないので届くのは format だけ)も、解釈せず calc-svc が返した並びのまま運ぶ(ADR-0708 §4)。
-func TestDamageRelaysFormatUnsupportedMark(t *testing.T) {
+// TestDamageRelaysMoveTargetUnknownMark: format=double で calc-svc が付ける技の印 move_target_unknown
+// (ADR-0222。技の対象がマスタに無い間はダブルの全攻撃技に付く)も、解釈せず calc-svc が返した並びのまま運ぶ
+// (ADR-0708 §4)。format=double の形式の印(ADR-0160)は ADR-0222 §5 で外れたので、ダブルで届くのはこの印。
+// judge は teraType を受け取らないのでテラスの印は届かない。
+func TestDamageRelaysMoveTargetUnknownMark(t *testing.T) {
 	t.Parallel()
 
 	server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
@@ -247,8 +249,8 @@ func TestDamageRelaysFormatUnsupportedMark(t *testing.T) {
 		_, _ = w.Write([]byte(`{"minDamage":100,"maxDamage":115,"defenderHP":172,
 		  "ko":{"hits":2,"guaranteed":true,"displayChancePercent":100},
 		  "unsupported":[
-		    {"target":"defender_item","reason":"unsupported_effect","id":"test-item-vest"},
-		    {"target":"format","reason":"unsupported_effect","id":"double"}]}`))
+		    {"target":"move","reason":"move_target_unknown","id":"test-move"},
+		    {"target":"defender_item","reason":"unsupported_effect","id":"test-item-vest"}]}`))
 	})
 
 	got, err := newCalc(t, server.URL, testTimeout).Damage(t.Context(), requestContext, exampleCalcRequest())
@@ -256,8 +258,8 @@ func TestDamageRelaysFormatUnsupportedMark(t *testing.T) {
 		t.Fatalf("Damage: %v", err)
 	}
 	want := []UnsupportedMark{
+		{Target: "move", Reason: "move_target_unknown", ID: "test-move"},
 		{Target: "defender_item", Reason: "unsupported_effect", ID: "test-item-vest"},
-		{Target: "format", Reason: "unsupported_effect", ID: "double"},
 	}
 	if !reflect.DeepEqual(got.Unsupported, want) {
 		t.Errorf("Unsupported = %+v, want %+v", got.Unsupported, want)

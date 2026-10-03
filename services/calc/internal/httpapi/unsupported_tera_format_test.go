@@ -1,9 +1,12 @@
 package httpapi
 
 // issue #232 / ADR-0160: calc-svc は teraType・format=double を拒否せず(iOS の構築メンバーは teraType を
-// 送る)、engine が付けたテラス・形式の「未対応」の印を CalcResult.unsupported(BulkCalcRow.result も同じ)・
+// 送る)、engine が付けたテラスの「未対応」の印を CalcResult.unsupported(BulkCalcRow.result も同じ)・
 // ReverseCandidate.unsupported に写す。契約の形は変えない(target・reason は enum にしない。ADR-0215)。
 // HTTP と WASM で印を含めて同じ応答になる。
+//
+// format=double は ADR-0222 で壁・全体技を計算に反映したので形式の印は付かない(ADR-0222 §5)。マスタが技の
+// 対象を持たない間(issue #288)、ダブルの攻撃技には技の印 move_target_unknown が先頭(技の印の位置)に付く。
 
 import (
 	"net/http"
@@ -17,7 +20,8 @@ import (
 var (
 	markAttackerTeraFire = unsupportedMark{"attacker_tera_type", "unsupported_effect", "fire"}
 	markDefenderTeraFire = unsupportedMark{"defender_tera_type", "unsupported_effect", "fire"}
-	markFormatDouble     = unsupportedMark{"format", "unsupported_effect", "double"}
+	// ダブルで技の対象が不明な攻撃技の印(ADR-0222 §3.1)。movePhysical の ID は test-beam。
+	markMoveTargetUnknown = unsupportedMark{"move", "move_target_unknown", movePhysical}
 )
 
 func TestCalcTeraAndFormatMarks(t *testing.T) {
@@ -31,9 +35,9 @@ func TestCalcTeraAndFormatMarks(t *testing.T) {
 		{"テラスなし・シングルは印なし", "", "", "single", []unsupportedMark{}},
 		{"攻撃側のテラス", engine.TypeFire, "", "single", []unsupportedMark{markAttackerTeraFire}},
 		{"防御側のテラス", "", engine.TypeFire, "single", []unsupportedMark{markDefenderTeraFire}},
-		{"ダブル", "", "", "double", []unsupportedMark{markFormatDouble}},
-		{"両側のテラス + ダブル(攻撃側 → 防御側 → 形式の順)", engine.TypeFire, engine.TypeFire, "double",
-			[]unsupportedMark{markAttackerTeraFire, markDefenderTeraFire, markFormatDouble}},
+		{"ダブルは形式の印なし(技の対象が不明な技の印だけ。ADR-0222 §5)", "", "", "double", []unsupportedMark{markMoveTargetUnknown}},
+		{"両側のテラス + ダブル(技 → 攻撃側 → 防御側の順。形式の印なし)", engine.TypeFire, engine.TypeFire, "double",
+			[]unsupportedMark{markMoveTargetUnknown, markAttackerTeraFire, markDefenderTeraFire}},
 	}
 	store := newFakeStore(t)
 	h := NewHandler(store, nil)
@@ -64,7 +68,7 @@ func TestCalcTeraAndFormatMarks(t *testing.T) {
 func TestBulkAndReverseTeraAndFormatMarks(t *testing.T) {
 	store := newFakeStore(t)
 	h := NewHandler(store, nil)
-	want := []unsupportedMark{markAttackerTeraFire, markFormatDouble}
+	want := []unsupportedMark{markMoveTargetUnknown, markAttackerTeraFire}
 
 	attacker := bulkAttacker()
 	attacker.tera = engine.TypeFire
@@ -135,7 +139,7 @@ func TestTeraAndFormatParityWithWasm(t *testing.T) {
 		// 一致していても両方とも印が無いのでは意味がない(写し漏れが両側で揃う退行)。
 		marks, _ := got.(map[string]any)["unsupported"].([]any)
 		if len(marks) != 3 {
-			t.Errorf("unsupported = %v, want 3 件(攻撃側テラス・防御側テラス・形式)", marks)
+			t.Errorf("unsupported = %v, want 3 件(技の対象が不明・攻撃側テラス・防御側テラス。ADR-0222 §5)", marks)
 		}
 	})
 
@@ -161,7 +165,7 @@ func TestTeraAndFormatParityWithWasm(t *testing.T) {
 				t.Errorf("candidates[%d] が WASM と違う\nHTTP: %s\nWASM: %s", i, mustJSON(t, g), mustJSON(t, wantCands[i]))
 			}
 			if marks, _ := g["unsupported"].([]any); len(marks) != 2 {
-				t.Errorf("candidates[%d].unsupported = %v, want 2 件(攻撃側テラス・形式)", i, marks)
+				t.Errorf("candidates[%d].unsupported = %v, want 2 件(技の対象が不明・攻撃側テラス。ADR-0222 §5)", i, marks)
 			}
 		}
 	})

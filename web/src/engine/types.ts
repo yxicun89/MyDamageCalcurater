@@ -224,7 +224,8 @@ export interface ReverseRequest {
 /**
  * 「未対応」の印の対象(engine.UnsupportedTarget の写し。ADR-0123 §2)。
  * attacker / defender は**その計算から見た**役割(攻撃側・防御側)。
- * engine は ADR-0160 で attacker_tera_type・defender_tera_type・format も返すが、この型への追加と
+ * engine は ADR-0160 で attacker_tera_type・defender_tera_type・format(未知の形式だけ。double には
+ * ADR-0222 §5 で付けない)も返すが、この型への追加と
  * 表示(ラベル)は後続(ADR-0160 §5)。それまでは UnsupportedMark.target の汎用表示(ADR-0215)で出る。
  */
 export type UnsupportedTarget =
@@ -233,7 +234,7 @@ export type UnsupportedTarget =
 /**
  * 「未対応」の印の理由(engine.UnsupportedReason の写し。ADR-0123 §2)。技は機構の値(13 種)か
  * zero_power(威力 0 の攻撃技)、持ち物・特性は unsupported_effect(効果スキーマで表せない)。
- * テラス・対戦形式(ADR-0160)も unsupported_effect。
+ * テラス・未知の対戦形式(ADR-0160)も unsupported_effect。
  */
 export type UnsupportedReason =
   | "alt_defense_stat"
