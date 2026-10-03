@@ -2028,6 +2028,13 @@ Reason: 既定のオフラインは架空の例データしか持たず、実デ
 Impact: Web のみ(`web/src/master/cache/`・`main.tsx`・`calcMode.ts`・E2E 設定)。API・engine・iOS は無変更。オフラインで引ける種族は一度オンラインで選んだものに限り、持ち物の候補比較はオフラインでも選べない(公開 API に効果データが無い)。
 
 
+## 2026-10-02: issue #236 の balance 側をクローズ(タイプバランスレーン → Web レーンへ。ADR-0413)
+Decision: balance の `X-Device-Id`/`X-Session-Id` を gateway と同じ正準 UUID 検証にした(素早さの ADR-0606 と同じ複製方式)。
+ErrorCode は `missing_header`(欠落・空)・`invalid_header`(UUID でない・重複)を追加し、`missing_request_context` を廃止した
+(`services/balance/api/openapi.yaml` 0.8.0。意図的な破壊的変更。判定順は不変)。
+Reason: Traefik 直結では gateway の検証が効かず、balance だけ緩い非空チェックだった。
+Impact: Web レーンへ: `web/src/api/balance.gen.ts` を再生成済み、`web/src/i18n/ja.ts` の `balanceErrorText` を `missing_header`/`invalid_header` に
+追従済み(`BalanceScreen.test.tsx` のコード一覧も)。`balanceClient.ts` は正準 UUID を送っており変更不要。他に balance の code 文字列に依存する箇所があれば確認してほしい。
 ## 2026-10-02: 素早さに効く特性・持ち物のデータ(判定レーン → データレーン。issue #235・ADR-0710 第2段の依頼)
 
 - 判定レーンは第1段(素早さに反映した補正 `*SpeedApplied`・指定されたが反映していない入力 `*SpeedIgnored` を応答に返す)を実装した。
@@ -2037,14 +2044,6 @@ Impact: Web のみ(`web/src/master/cache/`・`main.tsx`・`calcMode.ts`・E2E �
   そのデータで反映する。状態異常(麻痺)は judge 側の入力 `status` の追加も要る(判定レーンが契約を足す)
 - 受け取り次第、判定レーンが第2段を実装し、反映できた要素を `*SpeedApplied` に足して `*SpeedIgnored` から外す
 
-
-## 2026-10-02: issue #236 の balance 側をクローズ(タイプバランスレーン → Web レーンへ。ADR-0413)
-Decision: balance の `X-Device-Id`/`X-Session-Id` を gateway と同じ正準 UUID 検証にした(素早さの ADR-0606 と同じ複製方式)。
-ErrorCode は `missing_header`(欠落・空)・`invalid_header`(UUID でない・重複)を追加し、`missing_request_context` を廃止した
-(`services/balance/api/openapi.yaml` 0.8.0。意図的な破壊的変更。判定順は不変)。
-Reason: Traefik 直結では gateway の検証が効かず、balance だけ緩い非空チェックだった。
-Impact: Web レーンへ: `web/src/api/balance.gen.ts` を再生成済み、`web/src/i18n/ja.ts` の `balanceErrorText` を `missing_header`/`invalid_header` に
-追従済み(`BalanceScreen.test.tsx` のコード一覧も)。`balanceClient.ts` は正準 UUID を送っており変更不要。他に balance の code 文字列に依存する箇所があれば確認してほしい。
 ## 2026-10-02: 一括計算の defenderOverride に ranks・status を足した(API レーン → Web・iOS レーンへ。issue #274/#272・ADR-0216)
 
 - `BulkCalcRequest.defenderOverride` は `{ abilityId?, ranks?: RankBlock, status?: StatusCondition }`。全行(全プリセット × 持ち物 × 特性)に一律で当たる。ランクは各 -6..+6(外は 400 `invalid_input`)、未知の status は 400 `invalid_enum`
