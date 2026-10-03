@@ -1871,7 +1871,8 @@ const searchSpecies = `-- name: SearchSpecies :many
 SELECT s.` + "`" + `key` + "`" + `, s.dex_no, s.form, s.name_ja, s.type1, s.type2
 FROM species s
 JOIN regulation_species rs ON rs.species_key = s.` + "`" + `key` + "`" + `
-WHERE rs.regulation_id = ? AND s.name_ja LIKE ?
+WHERE rs.regulation_id = ?
+  AND (s.name_ja LIKE ? OR (s.is_mega AND s.name_ja LIKE ?))
 ORDER BY s.dex_no, s.form
 LIMIT ?
 `
@@ -1879,6 +1880,7 @@ LIMIT ?
 type SearchSpeciesParams struct {
 	RegulationID string
 	Pattern      string
+	MegaPattern  string
 	Limit        int32
 }
 
@@ -1895,8 +1897,15 @@ type SearchSpeciesRow struct {
 // 公開の検索 API(/api/pokedex/*。ADR-0105 §3)。pattern は呼び出し側が LIKE の特殊文字(\ % _)を
 // \ でエスケープし、末尾に % を付けた前方一致のパターン。name_ja の照合順序は utf8mb4_ja_0900_as_cs
 // (ADR-0100 §2。ひらがなとカタカナを区別しない)。
+// 種族は、メガ種族だけ「メガ + q」の前方一致でも当てる(mega_pattern。メガを除いた基本種名で検索すると基本種と
+// メガの両方が出る。ADR-0324)。メガの接頭辞は呼び出し側が mega_pattern に入れる(SQL に名前を書かない)。
 func (q *Queries) SearchSpecies(ctx context.Context, arg SearchSpeciesParams) ([]SearchSpeciesRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchSpecies, arg.RegulationID, arg.Pattern, arg.Limit)
+	rows, err := q.db.QueryContext(ctx, searchSpecies,
+		arg.RegulationID,
+		arg.Pattern,
+		arg.MegaPattern,
+		arg.Limit,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -3,6 +3,7 @@
 // 画面は「オンラインかどうか」ではなく capabilities の各項目で分岐する(ADR-0304 A-2)ので、
 // ここでも項目ごとに欠けさせられるようにし、「種族だけ検索・技はある」(P4-17 の形)も作れるようにする。
 
+import { searchSpeciesByName } from "../master/speciesNameMatch";
 import type { Ability, Move } from "../engine/types";
 import type {
   MasterCapabilities,
@@ -72,10 +73,7 @@ export function createFakeSpeciesSearch(options: FakeSpeciesSearchOptions): Fake
     resolvedKeys,
     searchSpecies(query, signal) {
       searchCalls.push({ query, signal });
-      const found = options.species
-        .filter((species) => species.nameJa.startsWith(query.trim()))
-        .slice(0, limit)
-        .map(toSummary);
+      const found = searchSpeciesByName(options.species, query.trim()).slice(0, limit).map(toSummary);
       return Promise.resolve(found);
     },
     resolveSpecies(key) {

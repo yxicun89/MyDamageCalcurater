@@ -457,6 +457,7 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
 - [x] issue #515 の API 分(Web レーンが越境): `GET /api/pokedex/species/{key}` の `SpeciesDetail` に `isMega`(常に)・`requiredItemId`(メガでなければ null。キーは常に出す)を追加。`SpeciesSummary` には足さない(docs/mega-evolution-spec.md §2 の「公開 API に既にある」を訂正)
 - [x] issue #515 の Web 分 PR-A(ADR-0320): メガ種族の持ち物をメガストーンに固定する共通ドメイン(`web/src/domain/mega.ts`。PR-B〈構築の編集・判定〉が再利用)と、計算画面・逆算画面(持ち物欄 disabled+理由+aria-describedby、メガストーンは単独の選択肢・候補比較・逆算の持ち物候補に出さない、防御側/相手がメガのときは探索しない)。マスタ写像(`isMega`・`requiredItemId`)・キャッシュのスキーマ版 1→2・E2E フィクスチャ(`withMegaFixture`)まで。構築の編集・判定と古い保存データの補正は PR-B
 - [x] issue #515 の Web 分 PR-B(ADR-0320): 構築のメンバー編集(`changeSpecies` の持ち物整合・`correctMegaItem`・持ち物欄の固定+理由+ストーン名表示。古い保存データは開いたとき〈一覧の無いマスタは種族の解決後〉に1回だけストーンへ直し、メンバーの枠に `role="status"` で通知。未保存の変更として持ち、自動保存しない)と、判定画面の自分・相手の候補の個体入力(同じ固定。要求の `itemId` にストーン)。これで issue #515 の Web 分は完了
+- [x] issue #515 のデータ・検索・Web 分(ADR-0324): メガ種族の `nameJa` を、上流(上書き・PokeAPI)に無いときだけ「メガ + 基本種名 + フォーム識別子(Mega-X → X)」から importer が生成(`name_ja_source` = `generated`〈migration 000011〉・警告 `name-generated`・report の `names.species.generated`。基本種名が無ければ生成せず英語名のまま)。メガストーンの名前は機械的に作れないので生成せず上書き設定と report の欠落一覧で扱う(ADR に既知の制約)。検索は「`nameJa` が q で始まる、またはメガ種族で `メガ`+q で始まる」に統一(pokedex の SQL・Web のオフライン検索・テストの偽物・E2E フィクスチャ。`q=ルカリオ` で基本種とメガの両方、`q=メガ` で全メガ)。API 契約は不変。iOS の入力 UI(自動固定・UI テスト)は iOS レーンに残る(issue #515 は閉じない)
 
 - [x] issue #211(API レーン分。ADR-0218): 公開 API の Item / Ability に省略可の `effect` を足した(searchItems・getSpecies.abilities。共通マスタで厳格に検証し、不正は 503 master_unavailable。内部 API は変更なし。critic PASS)
 

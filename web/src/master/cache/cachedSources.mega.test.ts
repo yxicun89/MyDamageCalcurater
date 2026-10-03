@@ -10,6 +10,7 @@ import { appText } from "../../i18n/ja";
 import { createMemoryMasterCacheStore } from "../../test/memoryMasterCacheStore";
 import { MEGA_FIRE, MEGA_FIRE_STONE } from "../../test/megaMaster";
 import { exampleItems } from "../example/items";
+import { exampleSpecies } from "../example/species";
 import { exampleNatures } from "../example/natures";
 import { ONLINE_MASTER_CAPABILITIES } from "../onlineSource";
 import type { MasterSpeciesResolution, SearchableMasterSource } from "../types";
@@ -72,5 +73,42 @@ describe("メガ種族のキャッシュ", () => {
     await expect(createCachedOfflineMasterSource({ store }).load()).rejects.toThrow(
       appText.masterCacheEmptyError,
     );
+  });
+});
+
+// issue #515・ADR-0324: オフライン(キャッシュ)の検索も、オンライン(pokedex-svc)と同じ規則・並びにする。
+describe("メガ種族のオフライン検索", () => {
+  async function offlineWithMegaAndBase(): Promise<ReturnType<typeof createCachedOfflineMasterSource>> {
+    const store = createMemoryMasterCacheStore();
+    const base = exampleSpecies.find((species) => species.key === "9001-000");
+    if (base === undefined) {
+      throw new Error("例データに 9001-000 が無い");
+    }
+    const resolutions: Record<string, MasterSpeciesResolution> = {
+      [MEGA_FIRE.key]: { species: MEGA_FIRE, abilities: [], moves: [] },
+      [base.key]: { species: base, abilities: [], moves: [] },
+    };
+    const source = {
+      ...fakeOnline(),
+      search: {
+        searchSpecies: vi.fn(() => Promise.resolve([])),
+        resolveSpecies: vi.fn((key: string) => Promise.resolve(resolutions[key] as MasterSpeciesResolution)),
+      },
+    } as unknown as SearchableMasterSource;
+    const online = createCachingMasterSource({ source, store });
+    await online.load();
+    await online.search.resolveSpecies(MEGA_FIRE.key);
+    await online.search.resolveSpecies(base.key);
+    return createCachedOfflineMasterSource({ store });
+  }
+
+  test("メガの名前・「メガ」・基本種名でメガ種族が返る(基本種名では基本種が先)", async () => {
+    const offline = await offlineWithMegaAndBase();
+    const keys = async (query: string): Promise<string[]> =>
+      (await offline.search.searchSpecies(query)).map((species) => species.key);
+
+    expect(await keys(MEGA_FIRE.nameJa)).toEqual([MEGA_FIRE.key]);
+    expect(await keys("メガ")).toEqual([MEGA_FIRE.key]);
+    expect(await keys("テストほのお")).toEqual(["9001-000", MEGA_FIRE.key]);
   });
 });
