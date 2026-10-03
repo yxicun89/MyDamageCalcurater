@@ -289,6 +289,8 @@
   Ready の前に墓石の再適用・purge journal の再適用・失効ジョブの強制実行 / JetStream は再生しない / 世代30日。
   受け入れ条件は AC-B1〜B3・AC-B2b)
 
+- [x] 確認手順書 M1〜M4(`docs/verify-all.md`。verify-m1 の read model 書き出しを `make pokedex-export-k3d` に集約、verify-m3・verify-m4 を新設。タイプバランスレーン・ドキュメントのみ)
+
 ## 後続: 要件との対応(issue #286。M1〜M4 の後。担当レーン付き)
 requirements.md の項目のうち、計画に無かったものをここに置く。着手の順・可否はユーザー判断(急ぎではない)。
 - [ ] P5-3c お気に入り(手動ピン留め)の作成・削除・一覧 API と画面(requirements.md §2「あれば便利」。担当: API レーン→ Web・iOS。`favorites` の表・保持期間・全削除の件数は ADR-0209 で実装済みで、API・画面が未着手。ADR-0209 の「record にお気に入りの CRUD を足すときに検証する」を併せて行う)

@@ -279,6 +279,10 @@ import-check-upstream: ## 上流(calc/Showdown/PokeAPI)の最新版を検出し�
 check-master-version: ## calc・balance・speed が export した read model と同じ dataVersion で動いているか確かめる(読み取りだけ。要 k3d の context。ADR-0135)
 	@./scripts/check-master-version.sh
 
+.PHONY: pokedex-export-k3d
+pokedex-export-k3d: ## k3d の mysql から read model を data/generated/readmodel/ に書く(port-forward と DSN の取得を内部で行う。make up・import 済みが前提)
+	@./scripts/pokedex-export-local.sh
+
 .PHONY: pokedex-export
 pokedex-export: ## balance/speed 向けの read model を6ファイル(4ファイル+type-chart.json・metadata.json)書く(POKEDEX_DATABASE_DSN が必須。出力先 data/generated/readmodel/)
 	@cd services && $(GO) run ./pokedex/cmd/pokedex export -out ../data/generated/readmodel

@@ -15,7 +15,7 @@ Claude Code / Codex の手順対応は [docs/development-workflow.md](docs/devel
 5. `docs/adr/` — 過去の設計判断
 6. `docs/ai-shared/CURRENT_STATE.md` と `DECISIONS.md` — Claude Code と Codex の共有状態(運用は [AGENTS.md](AGENTS.md)) （2026-10-03: `CURRENT_STATE.md` はレーン別の `state/`、`DECISIONS.md` は 1 件 1 ファイルの `decisions/` に分割済み。COORDINATION.md「共有状態ファイルの分割」）
 7. `docs/coding-rules.md` — コーディング規約(公開できる状態を保つ・ハードコードしない・読みやすいコード。Claude Code / Codex 共通)
-   手順書(verify・README の起動手順)は AGENTS.md「手順書の書き方」に従う(上から下へ1回で読める・動作を伴うコマンドと最低限の確認点だけ・ルートへの cd から始める)
+   手順書(verify・README の起動手順)は AGENTS.md「手順書の書き方」に従う(上から下へ1回で読める・動作を伴うコマンドと最低限の確認点だけ・ルートへの cd から始める)。M1〜M4 の動作確認の索引は `docs/verify-all.md`
 
 ## リポジトリ構成
 
