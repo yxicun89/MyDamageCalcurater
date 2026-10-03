@@ -32,7 +32,9 @@ var pokemonIDPattern = regexp.MustCompile(`^\d{4}-\d{3}$`)
 // Dependencies は HTTP アダプタの差し替え可能な境界。
 // Pokemon が nil でも起動はし、/healthz は 200、ポケモンを使う API は 503 master_unavailable(ADR-0600 §4)。
 type Dependencies struct {
-	Pokemon speed.PokemonProvider
+	// DataVersion は起動時に読んだ read model の版(metadata.json)。空は版不明で、ヘルスに出さない(ADR-0138)。
+	DataVersion string
+	Pokemon     speed.PokemonProvider
 
 	// Guard bounds concurrent requests and puts a deadline on the whole handler (issue #299,
 	// ADR-0801). The zero value disables both, which keeps tests that build Dependencies
@@ -65,12 +67,12 @@ type handler struct {
 
 var _ api.ServerInterface = handler{}
 
-func (handler) Health(c *echo.Context) error {
-	return health(c)
+func (h handler) Health(c *echo.Context) error {
+	return health(c, h.deps)
 }
 
-func (handler) PublicHealth(c *echo.Context) error {
-	return health(c)
+func (h handler) PublicHealth(c *echo.Context) error {
+	return health(c, h.deps)
 }
 
 func (h handler) ListPokemon(c *echo.Context, _ api.ListPokemonParams) error {
@@ -178,8 +180,12 @@ func toTableResponse(table speed.Table) api.TableResponse {
 	}
 }
 
-func health(c *echo.Context) error {
-	return c.JSON(http.StatusOK, api.Health{Status: api.Ok})
+func health(c *echo.Context, deps Dependencies) error {
+	body := api.Health{Status: api.Ok}
+	if deps.DataVersion != "" {
+		body.DataVersion = &deps.DataVersion
+	}
+	return c.JSON(http.StatusOK, body)
 }
 
 // listPokemon implements GET /api/speed/v1/pokemon (ADR-0600 §5): read model absent (503) →

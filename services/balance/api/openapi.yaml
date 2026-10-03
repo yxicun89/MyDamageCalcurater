@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: pokecalc balance API
-  version: 0.8.0
+  version: 0.9.0
   description: |
     パーティのタイプバランスを分析する独立サービスの契約。
     TB1 は防御タイプバランス(18 攻撃タイプごとの各メンバーの倍率とチーム集計)を返す。
@@ -407,6 +407,11 @@ components:
           type: string
           enum:
             - ok
+        dataVersion:
+          type: string
+          description: |
+            Version of the read model this process loaded (metadata.json next to the read model, ADR-0138).
+            Omitted when the read model has no metadata.json (unknown). Public master data version only.
     AnalyzeRequest:
       type: object
       additionalProperties: false

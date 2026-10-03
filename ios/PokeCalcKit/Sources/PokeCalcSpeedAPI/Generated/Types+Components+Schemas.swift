@@ -20,15 +20,27 @@ extension Components {
             }
             /// - Remark: Generated from `#/components/schemas/Health/status`.
             public var status: Components.Schemas.Health.StatusPayload
+            /// Version of the read model this process loaded (metadata.json next to the read model, ADR-0138).
+            /// Omitted when the read model has no metadata.json (unknown). Public master data version only.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Health/dataVersion`.
+            public var dataVersion: Swift.String?
             /// Creates a new `Health`.
             ///
             /// - Parameters:
             ///   - status:
-            public init(status: Components.Schemas.Health.StatusPayload) {
+            ///   - dataVersion: Version of the read model this process loaded (metadata.json next to the read model, ADR-0138).
+            public init(
+                status: Components.Schemas.Health.StatusPayload,
+                dataVersion: Swift.String? = nil
+            ) {
                 self.status = status
+                self.dataVersion = dataVersion
             }
             public enum CodingKeys: String, CodingKey {
                 case status
+                case dataVersion
             }
         }
         /// - Remark: Generated from `#/components/schemas/PokemonListResponse`.

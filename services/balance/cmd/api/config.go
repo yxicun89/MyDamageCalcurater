@@ -71,6 +71,16 @@ func abilityProviderFromEnv(lookup func(string) (string, bool)) (balance.Ability
 	return model, nil
 }
 
+// dataVersionFromEnv は BALANCE_POKEMON_TYPES_PATH と同じディレクトリの metadata.json から read model の版を読む
+// (ADR-0138)。パス未設定・metadata.json 無しは ("", nil)(版不明)。あるのに不正ならエラー(main は非 0 で終了する)。
+func dataVersionFromEnv(lookup func(string) (string, bool)) (string, error) {
+	path, ok := lookup(pokemonTypesPathEnv)
+	if !ok || path == "" {
+		return "", nil
+	}
+	return master.LoadDataVersionNextTo(path)
+}
+
 // maxConcurrentRecommendationsEnv caps the recommendations computed at once (issue #298, ADR-0409).
 const maxConcurrentRecommendationsEnv = "BALANCE_MAX_CONCURRENT_RECOMMENDATIONS"
 
