@@ -1,0 +1,861 @@
+openapi: 3.0.3
+info:
+  title: wishlist API
+  version: 0.1.0
+  description: |
+    自分専用の欲しいものリスト(apps/wishlist/CLAUDE.md)。API 契約の唯一の正。
+    Go のサーバー型(oapi-codegen)と Web の型(openapi-typescript)はここから生成する。
+
+    - `/api/*` は `Authorization: Bearer <token>` が必要。
+    - `/images/{name}` と `/healthz` は認証なし(docs/design.md W-04)。
+    - エラーは Error スキーマで返す。
+    - 検索ワードとディープリンクはクライアントが組み立てる(サーバーは返さない)。
+    - クラスタでは前置 `/wishlist` の下で公開する(Ingress が外してから API に渡す。docs/design.md W-03)。
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+tags:
+  - name: items
+  - name: estimates
+  - name: settings
+  - name: images
+paths:
+  /healthz:
+    get:
+      operationId: getHealthz
+      security: []
+      responses:
+        '200':
+          description: 生存確認
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+
+  /api/items:
+    get:
+      operationId: listItems
+      tags: [items]
+      parameters:
+        - name: genre_id
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ID'
+      responses:
+        '200':
+          description: 商品の一覧(sort_order 昇順、同順は id 降順)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Item'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/Internal' }
+    post:
+      operationId: createItem
+      tags: [items]
+      description: |
+        登録。画像は multipart の `image`(ファイル)か、JSON の `image_url`(サーバーが取得して保存)のどちらか。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ItemCreateMultipart'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemCreateJSON'
+      responses:
+        '201':
+          description: 登録した商品
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+
+  /api/items/from-url:
+    post:
+      operationId: draftItemFromURL
+      tags: [items]
+      description: URL の OGP から下書きを返す。保存はしない(確定は POST /api/items)。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FromURLRequest'
+      responses:
+        '200':
+          description: 下書き
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemDraft'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+
+  /api/items/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ItemID'
+    get:
+      operationId: getItem
+      tags: [items]
+      responses:
+        '200':
+          description: 商品
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+    patch:
+      operationId: updateItem
+      tags: [items]
+      description: |
+        指定した項目だけ更新する。nullable な項目に null を渡すと消す(項目を省略したときは変えない。
+        サーバーは oapi-codegen の nullable-type で両者を区別する。docs/design.md W-08)。
+        `site_overrides` を渡すと全件置き換え。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemUpdate'
+      responses:
+        '200':
+          description: 更新後の商品
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/Internal' }
+    delete:
+      operationId: deleteItem
+      tags: [items]
+      responses:
+        '204':
+          description: 削除した(画像ファイルも消す)
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/items/{id}/image:
+    parameters:
+      - $ref: '#/components/parameters/ItemID'
+    put:
+      operationId: replaceItemImage
+      tags: [items]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: 更新後の商品
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/items/{id}/estimates:
+    parameters:
+      - $ref: '#/components/parameters/ItemID'
+    get:
+      operationId: getItemEstimates
+      tags: [estimates]
+      description: |
+        キャッシュを即返す。24時間より古ければ裏で更新を起動し `refreshing: true` を付ける。
+        フェーズ1では取得を実装していないため、常に空の `sites` と `refreshing: false` を返す。
+      responses:
+        '200':
+          description: 目安価格
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemEstimates'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/items/{id}/estimates/refresh:
+    parameters:
+      - $ref: '#/components/parameters/ItemID'
+    post:
+      operationId: refreshItemEstimates
+      tags: [estimates]
+      description: 手動で更新を起動する。フェーズ1では 501。
+      responses:
+        '202':
+          description: 更新を起動した
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemEstimates'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '501': { $ref: '#/components/responses/NotImplemented' }
+
+  /api/items/{id}/listings:
+    parameters:
+      - $ref: '#/components/parameters/ItemID'
+    get:
+      operationId: listItemListings
+      tags: [estimates]
+      parameters:
+        - name: site_id
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ID'
+      responses:
+        '200':
+          description: 出品一覧(参考外も含む)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [listings]
+                properties:
+                  listings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Listing'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/genres:
+    get:
+      operationId: listGenres
+      tags: [settings]
+      responses:
+        '200':
+          description: ジャンル(sort_order 昇順)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [genres]
+                properties:
+                  genres:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Genre'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/Internal' }
+    post:
+      operationId: createGenre
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenreCreate'
+      responses:
+        '201':
+          description: 作成したジャンル
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Genre'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/genres/{id}:
+    parameters:
+      - $ref: '#/components/parameters/GenreID'
+    patch:
+      operationId: updateGenre
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenreUpdate'
+      responses:
+        '200':
+          description: 更新後のジャンル
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Genre'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/sites:
+    get:
+      operationId: listSites
+      tags: [settings]
+      responses:
+        '200':
+          description: サイト(id 昇順。表示順はジャンルの site_ids が持つ)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sites]
+                properties:
+                  sites:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Site'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/Internal' }
+    post:
+      operationId: createSite
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SiteCreate'
+      responses:
+        '201':
+          description: 作成したサイト
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/sites/{id}:
+    parameters:
+      - $ref: '#/components/parameters/SiteID'
+    patch:
+      operationId: updateSite
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SiteUpdate'
+      responses:
+        '200':
+          description: 更新後のサイト
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /images/{name}:
+    get:
+      operationId: getImage
+      tags: [images]
+      security: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: 保存時に付けたファイル名(UUID v4 + 拡張子)。それ以外の形式は 404
+          schema:
+            type: string
+            pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpg|png|webp|gif)$'
+      responses:
+        '200':
+          description: 画像
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  parameters:
+    ItemID:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ID'
+    GenreID:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ID'
+    SiteID:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ID'
+
+  responses:
+    BadRequest:
+      description: 形式が不正
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: トークンが無い・違う
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: 見つからない
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unprocessable:
+      description: 値が規則に合わない(存在しないジャンル・重複した名前・大きすぎる画像・対応外の画像形式など)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Internal:
+      description: サーバー内部のエラー(DB に届かない等)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    BadGateway:
+      description: 外部 URL の取得に失敗した
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotImplemented:
+      description: まだ実装していない(フェーズ3の機能)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    ID:
+      type: integer
+      format: int64
+      minimum: 1
+
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum:
+            - bad_request
+            - unauthorized
+            - not_found
+            - unprocessable
+            - bad_gateway
+            - not_implemented
+            - internal
+        message:
+          type: string
+
+    FetchType:
+      type: string
+      enum: [api, scrape, headless, link_only]
+
+    Genre:
+      type: object
+      required: [id, name, query_template, sort_order, site_ids]
+      properties:
+        id: { $ref: '#/components/schemas/ID' }
+        name:
+          type: string
+        query_template:
+          type: string
+          description: '`{name}` と `{option}` を埋め込む'
+        sort_order:
+          type: integer
+        site_ids:
+          type: array
+          description: 表示するサイト(表示順)
+          items: { $ref: '#/components/schemas/ID' }
+
+    GenreCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        query_template:
+          type: string
+          minLength: 1
+          maxLength: 255
+          default: '{name} {option}'
+        sort_order:
+          type: integer
+          default: 0
+        site_ids:
+          type: array
+          items: { $ref: '#/components/schemas/ID' }
+
+    GenreUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        query_template:
+          type: string
+          minLength: 1
+          maxLength: 255
+        sort_order:
+          type: integer
+        site_ids:
+          type: array
+          description: 渡すと表示するサイトと順序を全件置き換える
+          items: { $ref: '#/components/schemas/ID' }
+
+    Site:
+      type: object
+      required: [id, name, search_url_template, fetch_type, is_reference]
+      properties:
+        id: { $ref: '#/components/schemas/ID' }
+        name:
+          type: string
+        search_url_template:
+          type: string
+          description: '`{q}` を encodeURIComponent(検索ワード) で置き換える'
+        fetch_type: { $ref: '#/components/schemas/FetchType' }
+        is_reference:
+          type: boolean
+
+    SiteCreate:
+      type: object
+      required: [name, search_url_template]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        search_url_template:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          description: http(s) の URL で、`{q}` を含むこと
+        fetch_type:
+          allOf:
+            - $ref: '#/components/schemas/FetchType'
+          default: link_only
+        is_reference:
+          type: boolean
+          default: false
+
+    SiteUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        search_url_template:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        fetch_type: { $ref: '#/components/schemas/FetchType' }
+        is_reference:
+          type: boolean
+
+    SiteOverride:
+      type: object
+      required: [site_id, enabled]
+      properties:
+        site_id: { $ref: '#/components/schemas/ID' }
+        query:
+          type: string
+          nullable: true
+          maxLength: 255
+          description: このサイトだけで使う検索ワード(テンプレート・query_override より優先)
+        enabled:
+          type: boolean
+          description: false ならこの商品ではこのサイトを出さない
+
+    Item:
+      type: object
+      required: [id, genre_id, name, image_url, sort_order, site_overrides, created_at, updated_at]
+      properties:
+        id: { $ref: '#/components/schemas/ID' }
+        genre_id: { $ref: '#/components/schemas/ID' }
+        name:
+          type: string
+        option_text:
+          type: string
+          nullable: true
+        query_override:
+          type: string
+          nullable: true
+        image_url:
+          type: string
+          description: |
+            画像のパス `images/<name>`(先頭に / を付けない)。API のベース URL(例 `https://<host>/wishlist/`)を基準に解決する
+            (オリジン基準で解決すると前置 `/wishlist` が抜けるため。docs/design.md W-03)
+        source_url:
+          type: string
+          nullable: true
+        min_price:
+          type: integer
+          nullable: true
+        sort_order:
+          type: integer
+        site_overrides:
+          type: array
+          items: { $ref: '#/components/schemas/SiteOverride' }
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ItemFields:
+      type: object
+      required: [genre_id, name]
+      properties:
+        genre_id: { $ref: '#/components/schemas/ID' }
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        option_text:
+          type: string
+          maxLength: 255
+        query_override:
+          type: string
+          maxLength: 255
+        source_url:
+          type: string
+          maxLength: 1024
+        min_price:
+          type: integer
+          minimum: 0
+        sort_order:
+          type: integer
+
+    ItemCreateJSON:
+      allOf:
+        - $ref: '#/components/schemas/ItemFields'
+        - type: object
+          required: [image_url]
+          properties:
+            image_url:
+              type: string
+              maxLength: 1024
+              description: http(s) の画像 URL。サーバーが取得して保存する
+
+    ItemCreateMultipart:
+      type: object
+      required: [genre_id, name, image]
+      properties:
+        genre_id: { $ref: '#/components/schemas/ID' }
+        name:
+          type: string
+        option_text:
+          type: string
+        query_override:
+          type: string
+        source_url:
+          type: string
+        min_price:
+          type: integer
+        sort_order:
+          type: integer
+        image:
+          type: string
+          format: binary
+
+    ItemUpdate:
+      type: object
+      properties:
+        genre_id: { $ref: '#/components/schemas/ID' }
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        option_text:
+          type: string
+          nullable: true
+          maxLength: 255
+        query_override:
+          type: string
+          nullable: true
+          maxLength: 255
+        source_url:
+          type: string
+          nullable: true
+          maxLength: 1024
+        min_price:
+          type: integer
+          nullable: true
+          minimum: 0
+        sort_order:
+          type: integer
+        site_overrides:
+          type: array
+          items: { $ref: '#/components/schemas/SiteOverride' }
+
+    FromURLRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          maxLength: 1024
+          description: http(s) の商品ページ URL
+        genre_id: { $ref: '#/components/schemas/ID' }
+
+    ItemDraft:
+      type: object
+      required: [name, source_url]
+      properties:
+        name:
+          type: string
+          description: og:title(無ければ <title>)
+        image_url:
+          type: string
+          nullable: true
+          description: og:image の絶対 URL(無ければ null)
+        source_url:
+          type: string
+        genre_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: リクエストの genre_id をそのまま返す(未指定なら null)
+
+    EstimateStatus:
+      type: string
+      enum: [ok, failed, no_result]
+
+    SiteEstimate:
+      type: object
+      description: |
+        サイトごとの目安。仕様 §3 の「状態(在庫あり等)」をどの項目で表すかはフェーズ3で決める(docs/design.md §7 の未決事項)。
+      required: [site_id, count, suspicious_count, status, fetched_at]
+      properties:
+        site_id: { $ref: '#/components/schemas/ID' }
+        low:
+          type: integer
+          nullable: true
+          description: 下位25パーセンタイル(件数3未満なら最小値)
+        mid:
+          type: integer
+          nullable: true
+          description: 中央値(件数3未満なら null)
+        count:
+          type: integer
+        suspicious_count:
+          type: integer
+        status: { $ref: '#/components/schemas/EstimateStatus' }
+        fetched_at:
+          type: string
+          format: date-time
+
+    ItemEstimates:
+      type: object
+      required: [item_id, sites, refreshing]
+      properties:
+        item_id: { $ref: '#/components/schemas/ID' }
+        summary_low:
+          type: integer
+          nullable: true
+        summary_mid:
+          type: integer
+          nullable: true
+        summary_fetched_at:
+          type: string
+          format: date-time
+          nullable: true
+        sites:
+          type: array
+          items: { $ref: '#/components/schemas/SiteEstimate' }
+        refreshing:
+          type: boolean
+
+    SuspiciousReason:
+      type: string
+      enum: [title_mismatch, too_cheap, below_min]
+
+    Listing:
+      type: object
+      required: [id, site_id, title, price, url, in_stock, suspicious_reasons, fetched_at]
+      properties:
+        id: { $ref: '#/components/schemas/ID' }
+        site_id: { $ref: '#/components/schemas/ID' }
+        title:
+          type: string
+        price:
+          type: integer
+        url:
+          type: string
+        image_url:
+          type: string
+          nullable: true
+        in_stock:
+          type: boolean
+        suspicious_reasons:
+          type: array
+          description: 空なら参考にしている出品
+          items: { $ref: '#/components/schemas/SuspiciousReason' }
+        fetched_at:
+          type: string
+          format: date-time

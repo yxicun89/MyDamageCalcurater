@@ -397,3 +397,4 @@ include services/judge/Makefile
 include services/gateway/Makefile
 include web/Makefile
 include ios/Makefile
+include apps/wishlist/Makefile
