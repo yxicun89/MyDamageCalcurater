@@ -1,6 +1,6 @@
 # ADR-0223: 技の対象を内部 API・calc-svc・公開 API に通す(issue 288 の API レーン分)
 
-- 状態: 提案(spec-writer。実装・critic 前)
+- 状態: 採用(critic PASS。2026-10-03)
 - 日付: 2026-10-03
 - 関連: ADR-0136(データレーン。moves.target と `services/internal/master` の MoveTarget)、ADR-0222(engine のダブルの
   壁・全体技と `move_target_unknown` の印)、ADR-0121(MasterMove.mechanisms。内部 API で enum を付けない理由)、
