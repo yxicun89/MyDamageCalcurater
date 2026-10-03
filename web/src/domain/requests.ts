@@ -22,6 +22,7 @@ import type {
   TypeChart,
 } from "../engine/types";
 import type { MasterSpecies } from "../master/types";
+import { toEngineItem } from "./itemRoles";
 import { MAX_ABILITY_CANDIDATES, MAX_ITEM_VARIANTS, limitToMax } from "./requestLimits";
 
 /** バトルのレベル。Lv50 固定(CLAUDE.md ドメイン規約)。 */
@@ -62,6 +63,11 @@ export function toEngineSpecies(species: MasterSpecies): Species {
     return base;
   }
   return { ...base, isMega: true, requiredItemId: species.requiredItemId ?? null };
+}
+
+/** 持ち物なし(null)はそのまま、あれば engine の形にする(ADR-0326。roles・isMegaStone を境界へ渡さない)。 */
+function engineItemOrNull(item: Item | null): Item | null {
+  return item === null ? null : toEngineItem(item);
 }
 
 /** 種族の特性の先頭(特性一覧に解決できるもの)を使う。1つも解決できなければ特性なし。 */
@@ -118,7 +124,7 @@ export function buildIndividual(species: MasterSpecies, input: BuildIndividualIn
     level: BATTLE_LEVEL,
     nature: input.nature,
     ability: input.ability,
-    item: input.item,
+    item: input.item === null ? null : toEngineItem(input.item),
     sp: input.sp,
     ...(input.status === undefined ? {} : { status: input.status }),
     ...(input.ranks === undefined ? {} : { ranks: input.ranks }),
@@ -160,7 +166,7 @@ export function buildBulkRequest(input: BuildBulkRequestInput): BulkRequest {
     defenderSpecies: toEngineSpecies(defenderSpecies),
     move,
     typeChart,
-    ...(itemVariants === undefined ? {} : { itemVariants }),
+    ...(itemVariants === undefined ? {} : { itemVariants: itemVariants.map(engineItemOrNull) }),
     ...(defenderAbilities === undefined || defenderAbilities.length === 0 ? {} : { defenderAbilities }),
     ...(critical === true ? { critical } : {}),
     ...(field === undefined ? {} : { field }),
@@ -287,7 +293,7 @@ export function buildReverseRequest(input: BuildReverseRequestInput): ReverseReq
     unknownSpecies: toEngineSpecies(unknownSpecies),
     move,
     typeChart,
-    itemCandidates,
+    itemCandidates: itemCandidates.map(engineItemOrNull),
     observations,
     ...(unknownAbilities === undefined || unknownAbilities.length === 0 ? {} : { unknownAbilities }),
   };

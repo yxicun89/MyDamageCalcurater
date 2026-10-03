@@ -6,8 +6,15 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { components } from "../api/openapi.gen";
 import { megaStoneItemIds } from "../domain/mega";
 import { megaItemText, teamMemberText } from "../i18n/ja";
+import { itemRoleText } from "../i18n/items";
+import { megaStoneLabel } from "../domain/itemRoles";
 import { masterCapabilities } from "../master/capabilities";
-import type { MasterData, MasterSpeciesResolution, MasterSpeciesSearch } from "../master/types";
+import type {
+  MasterData,
+  MasterSpecies,
+  MasterSpeciesResolution,
+  MasterSpeciesSearch,
+} from "../master/types";
 import { selectableAbilities } from "../domain/requests";
 import { useSpeciesResolutions } from "../screens/speciesResolution";
 import "./TeamMemberEditor.css";
@@ -74,12 +81,15 @@ function initialState(members: readonly Schemas["TeamMember"][], master: MasterD
   };
 }
 
-function correctionNoticeText(correction: MegaItemCorrection | null): string | null {
+function correctionNoticeText(
+  correction: MegaItemCorrection | null,
+  species: MasterSpecies | null,
+): string | null {
   if (correction === null) {
     return null;
   }
   return correction.kind === "fixed"
-    ? megaItemText.correctedNotice(correction.item.nameJa)
+    ? megaItemText.correctedNotice(species === null ? itemRoleText.megaStoneUnnamed : megaStoneLabel(species))
     : megaItemText.clearedNotice;
 }
 
@@ -282,7 +292,7 @@ export function TeamMemberEditor({
             movePool={key === null ? master.moves : resolutions.movesFor(master.moves, key)}
             resolveFailed={key !== null && species === null && failedKeys.has(key)}
             stoneIds={stoneIds}
-            correctionNotice={correctionNoticeText(entry.correction)}
+            correctionNotice={correctionNoticeText(entry.correction, species)}
             onChange={(next) => {
               updateDraft(entry.id, next);
             }}

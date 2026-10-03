@@ -191,7 +191,7 @@ test("メンバーでメガ種族を選ぶと持ち物がメガストーンに�
 
   await selectMemberSpecies(member, MEGA.fire.nameJa);
   await expect(item).toBeDisabled();
-  await expect(item.locator("option:checked")).toHaveText(MEGA.fire.stoneNameJa);
+  await expect(item.locator("option:checked")).toHaveText(MEGA.fire.lockedLabel);
   await expect(member.getByText(MEGA.lockedReason)).toBeVisible();
   await expect(item).toHaveAccessibleDescription(MEGA.lockedReason);
 

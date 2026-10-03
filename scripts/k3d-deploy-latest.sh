@@ -85,6 +85,8 @@ fi
 
 echo "== calc・gateway"
 make --no-print-directory api-k3d-deploy
+# 変換済みの画像があれば gateway へ見せる。無い・失敗しても画像なし(エンブレム)で動くので、deploy-latest は失敗させない。
+./scripts/images-k3d.sh || echo "deploy-latest: 画像の配置に失敗(画像なしで続行。make images-k3d で再試行)" >&2
 echo "== web"
 make --no-print-directory web-k3d-deploy
 echo "== judge"

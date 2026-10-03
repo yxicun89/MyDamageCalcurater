@@ -129,7 +129,8 @@ describe("M1 メガ種族を選ぶと持ち物がストーンに固定される"
     const item = itemSelect(region());
     expect(item).toBeDisabled();
     expect(item).toHaveValue(STONE.id);
-    expect(item).toHaveDisplayValue(STONE.nameJa);
+    // ADR-0326: ストーンの nameJa ではなく「{基本種名}のメガストーン」。この MEGA は基本種名を持たないので「メガストーン」。
+    expect(item).toHaveDisplayValue("メガストーン");
     expect(within(region()).getByText(megaItemText.lockedReason)).toBeVisible();
     expect(item).toHaveAccessibleDescription(megaItemText.lockedReason);
   });
