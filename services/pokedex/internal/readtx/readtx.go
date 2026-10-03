@@ -30,8 +30,8 @@ type Beginner interface {
 	BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error)
 }
 
-// DB は autocommit の読み出し(検索の各操作。1回の SELECT で完結する)と、
-// スナップショットの読み出し(BeginTx)の両方ができる。本番は *sql.DB を包んだもの、
+// DB は autocommit の読み出し(searchSpecies・searchMoves など、1回の SELECT で完結する検索)と、
+// スナップショットの読み出し(BeginTx。内部 API・searchItems・getSpecies。ADR-0127・ADR-0218 §3)の両方ができる。本番は *sql.DB を包んだもの、
 // テストは storetest.Querier が満たす。
 type DB interface {
 	store.Querier

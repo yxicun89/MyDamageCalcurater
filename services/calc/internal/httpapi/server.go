@@ -221,7 +221,7 @@ func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) erro
 		return err
 	}
 	var req api.CalcRequest
-	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
+	if err := decodeStrict(limitedBody(ctx), &req, "attacker", "defender"); err != nil {
 		return err
 	}
 	format, err := parseFormat(req.Format)
@@ -250,6 +250,12 @@ func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) erro
 	if err := validateIndividual("防御側", defender); err != nil {
 		return err
 	}
+	if err := s.checkMegaItem("攻撃側", attacker.Species, attacker.Item); err != nil {
+		return err
+	}
+	if err := s.checkMegaItem("防御側", defender.Species, defender.Item); err != nil {
+		return err
+	}
 
 	if err := checkDeadline(ctx.Request().Context()); err != nil {
 		return err
@@ -263,7 +269,6 @@ func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) erro
 	}
 	result := calcResultFrom(res)
 	// イベント発行は非同期・応答をブロックしない(CLAUDE.md 絶対ルール5・ADR-0212 §6)。
-	// req.Attacker.MoveId ではなく req.MoveId(トップレベル)を使う(calc-svc は前者を読まない)。
 	// Publish 自体は ctx.JSON より前に呼ぶ(前後どちらでも安全。ADR-0212 §6 参照)。
 	s.publisher.Publish(params.XDeviceId, params.XSessionId, calcevents.OperationCalc, time.Now().UTC(), &calcevents.CalcDetail{
 		Format: string(req.Format), Attacker: req.Attacker, Defender: req.Defender,
@@ -279,7 +284,7 @@ func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 		return err
 	}
 	var req api.BulkCalcRequest
-	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
+	if err := decodeStrict(limitedBody(ctx), &req, "attacker"); err != nil {
 		return err
 	}
 	if err := checkBulkLimits(req); err != nil {
@@ -313,6 +318,12 @@ func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 		return err
 	}
 	if err := validateIndividual("防御側の種族", engine.Individual{Species: species}); err != nil {
+		return err
+	}
+	if err := s.checkMegaItem("攻撃側", attacker.Species, attacker.Item); err != nil {
+		return err
+	}
+	if err := s.checkMegaItems("itemVariants", species, variants); err != nil {
 		return err
 	}
 	var defenderAbilityOverride *string
@@ -353,7 +364,7 @@ func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) er
 		return err
 	}
 	var req api.ReverseRequest
-	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
+	if err := decodeStrict(limitedBody(ctx), &req, "known"); err != nil {
 		return err
 	}
 	if err := checkReverseLimits(req); err != nil {
@@ -391,6 +402,12 @@ func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) er
 		return err
 	}
 	if err := validateIndividual("推定側の種族", engine.Individual{Species: species}); err != nil {
+		return err
+	}
+	if err := s.checkMegaItem("既知の側", known.Species, known.Item); err != nil {
+		return err
+	}
+	if err := s.checkMegaItems("itemCandidates", species, items); err != nil {
 		return err
 	}
 	maxCandidates := derefInt(req.MaxCandidates)

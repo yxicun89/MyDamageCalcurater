@@ -696,12 +696,16 @@ func assertAllFieldsSet(t *testing.T, name string, v any) {
 	}
 }
 
-// zeroAllowed はゼロ値が正しい値であるフィールド(フォルム0 = 基本の姿、追加効果なしの技)。
+// zeroAllowed はゼロ値が正しい値であるフィールド(フォルム0 = 基本の姿、追加効果なしの技、マスタ化前の技の対象)。
 func zeroAllowed(structName, field string) bool {
 	if structName == "engine.Species" && field == "Form" {
 		return true
 	}
 	if structName == "engine.Move" && field == "Effect" {
+		return true
+	}
+	// 技の対象はマスタが持つまで(issue #288・ADR-0222)常に不明("")。マスタ化したらこの許可を外す。
+	if structName == "engine.Move" && field == "Target" {
 		return true
 	}
 	return false

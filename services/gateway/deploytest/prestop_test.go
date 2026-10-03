@@ -34,8 +34,11 @@ type preStopDeployment struct {
 
 // mainFile が空のサービスは shutdownTimeout を持たない(nginx)ので 0 として扱う。
 var preStopServices = []struct{ name, manifest, mainFile string }{
-	{"calc", "deploy/k8s/base/calc/deployment.yaml", "services/calc/cmd/calc/main.go"},
+	{"calc", "deploy/k8s/base/calc/deployment.yaml", "services/calc/cmd/calc/shutdown.go"},
 	{"gateway", "deploy/k8s/base/gateway/deployment.yaml", "services/gateway/cmd/gateway/main.go"},
+	{"judge", "services/judge/deploy/k8s/base/deployment.yaml", "services/judge/cmd/api/shutdown.go"},
+	{"speed", "services/speed/deploy/k8s/base/deployment.yaml", "services/speed/cmd/api/shutdown.go"},
+	{"balance", "services/balance/deploy/k8s/base/deployment.yaml", "services/balance/cmd/api/shutdown.go"},
 	{"web", "deploy/k8s/base/web/deployment.yaml", ""},
 	// ADR-0220 §1
 	{"record", "deploy/k8s/base/record/deployment.yaml", "services/record/cmd/record/main.go"},
@@ -69,6 +72,31 @@ func TestDeploymentsHavePreStopAndGracePeriod(t *testing.T) {
 			}
 			if grace := spec.TerminationGracePeriodSeconds; grace <= preStop+shutdown {
 				t.Errorf("%s: terminationGracePeriodSeconds=%d は preStop(%d)+shutdownTimeout(%d) より長いこと", s.manifest, grace, preStop, shutdown)
+			}
+		})
+	}
+}
+
+// issue #523: 処理中のリクエストを停止時に切らないよう、shutdownTimeout は writeTimeout 以上(ADR-0804)。
+var writeTimeoutRe = regexp.MustCompile(`writeTimeout\s*=\s*(\d+)\s*\*\s*time\.Second`)
+
+func TestShutdownTimeoutCoversWriteTimeout(t *testing.T) {
+	for _, s := range []struct{ name, shutdownFile, mainFile string }{
+		{"calc", "services/calc/cmd/calc/shutdown.go", "services/calc/cmd/calc/main.go"},
+		{"judge", "services/judge/cmd/api/shutdown.go", "services/judge/cmd/api/main.go"},
+		{"speed", "services/speed/cmd/api/shutdown.go", "services/speed/cmd/api/main.go"},
+		{"balance", "services/balance/cmd/api/shutdown.go", "services/balance/cmd/api/main.go"},
+	} {
+		t.Run(s.name, func(t *testing.T) {
+			sm := shutdownTimeoutRe.FindStringSubmatch(readRepoFile(t, s.shutdownFile))
+			wm := writeTimeoutRe.FindStringSubmatch(readRepoFile(t, s.mainFile))
+			if sm == nil || wm == nil {
+				t.Fatalf("shutdownTimeout(%v)または writeTimeout(%v)の定数が見つからない", sm, wm)
+			}
+			shutdown, _ := strconv.Atoi(sm[1])
+			write, _ := strconv.Atoi(wm[1])
+			if shutdown < write {
+				t.Errorf("shutdownTimeout(%ds)が writeTimeout(%ds)より短い", shutdown, write)
 			}
 		})
 	}

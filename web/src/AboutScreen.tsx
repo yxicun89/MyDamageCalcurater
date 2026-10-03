@@ -2,6 +2,8 @@
 // マスタ・engine は使わない(読み込み中・失敗中でも出す)。文言は i18n/ja.ts の aboutText が正。
 
 import { useEffect, useRef } from "react";
+import { DeviceDataSection } from "./deviceData/DeviceDataSection";
+import type { DeviceDataDeleter } from "./deviceData/deleteDeviceData";
 import { aboutText } from "./i18n/ja";
 
 interface AboutScreenProps {
@@ -10,9 +12,23 @@ interface AboutScreenProps {
   readonly onBack: () => void;
   /** 開いた直後に h2 へフォーカスを移すか(リンクで開いたときだけ。直接開いたときは移さない)。 */
   readonly focusOnMount: boolean;
+  /**
+   * 「データの扱い」節(P5-5d。ADR-0318 §3)に渡す record / team のクライアントと、team 削除後の合図。
+   * 3つとも渡されたときだけ節を出す。
+   */
+  readonly recordClient?: DeviceDataDeleter;
+  readonly teamClient?: DeviceDataDeleter;
+  readonly onTeamDataDeleted?: () => void;
 }
 
-export function AboutScreen({ backHref, onBack, focusOnMount }: AboutScreenProps) {
+export function AboutScreen({
+  backHref,
+  onBack,
+  focusOnMount,
+  recordClient,
+  teamClient,
+  onTeamDataDeleted,
+}: AboutScreenProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (focusOnMount) {
@@ -41,6 +57,13 @@ export function AboutScreen({ backHref, onBack, focusOnMount }: AboutScreenProps
           ))}
         </ul>
       </section>
+      {recordClient !== undefined && teamClient !== undefined && onTeamDataDeleted !== undefined && (
+        <DeviceDataSection
+          recordClient={recordClient}
+          teamClient={teamClient}
+          onTeamDataDeleted={onTeamDataDeleted}
+        />
+      )}
       <a
         href={backHref}
         className="about__back"

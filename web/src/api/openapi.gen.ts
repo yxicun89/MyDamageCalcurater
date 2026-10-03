@@ -36,6 +36,7 @@ export interface paths {
      * 種族の詳細(タイプ・種族値・特性・覚える技)
      * @description 使用可能集合の外の種族も返す(絞り込みは検索の仕事)。`abilities` は slot 順、
      *     `learnset` は習得技 ∩ 既定のレギュレーションの使用可能な技(ID 昇順)。
+     *     `abilities` の各特性は効果を持てば `effect` を伴う(ADR-0218)。
      */
     get: operations["getSpecies"];
     put?: never;
@@ -152,6 +153,8 @@ export interface paths {
     /**
      * 持ち物を日本語名で前方一致検索
      * @description 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
+     *     各持ち物は効果を持てば `effect` を伴う(ADR-0218)。効果を持つ持ち物だけに絞る検索条件は無い
+     *     (クライアントが `effect` の有無で絞る)。
      */
     get: operations["searchItems"];
     put?: never;
@@ -549,7 +552,7 @@ export interface components {
      *     | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
      *     | unknown_field | 契約にないフィールド | 400 |
      *     | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-     *     | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む。調整(`/api/calc/adjust/*`)の発数・しきい値・補正・上限(ceiling)の範囲外、変化技での探索、下限が上限を超える配分(ADR-0250)も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
+     *     | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。calc-svc では `sp` と StatBlock の6キー(null 値を含む)の欠落も含む(ADR-0200 §4)。`getMovesByIds` の `ids` の件数超過・欠落も含む。調整(`/api/calc/adjust/*`)の発数・しきい値・補正・上限(ceiling)の範囲外、変化技での探索、下限が上限を超える配分(ADR-0250)も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
      *     | unknown_preset | 未知の防御側プリセット | 400 |
      *     | duplicate_preset | 防御側プリセットの重複 | 400 |
      *     | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -604,6 +607,12 @@ export interface components {
       | "store_unavailable"
       | "upstream_unavailable";
     /**
+     * @description 対戦形式。計算(/api/calc・/api/calc/bulk・/api/calc/reverse)では double のとき次を掛ける(issue 232 案B のダブル分・ADR-0222)。
+     *     - 防御側の壁(リフレクター・ひかりのかべ・オーロラベール): ×2732/4096(single は ×1/2)。急所は壁を無視する
+     *     - 全体技(技の対象が相手全体・自分以外全体): 基礎ダメージに ×3072/4096(天候・急所より前)。
+     *       1対1の計算なので、全体技は常に2体以上に当たる前提で掛ける。味方の効果(てだすけ等)は扱わない
+     *     技の対象をマスタが持たない間(issue 288)は、double の攻撃技に UnsupportedMark
+     *     (target=move・reason=move_target_unknown)を付け、全体技の補正は掛けない(壁は掛ける)。
      * @default single
      * @enum {string}
      */
@@ -691,6 +700,15 @@ export interface components {
     Ability: {
       id: string;
       nameJa: string;
+      /**
+       * @description 特性の効果定義(ability_effects の JSON。`getMasterExport` の `MasterAbility.effect` と同じ値・同じ形。
+       *     issue 211・ADR-0218)。効果を持たない特性は**キーごと省く**(null を返さない)。
+       *     pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeAbilityEffect`)で厳格に検証し、
+       *     検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。古いサーバーはこのキーを
+       *     返さないため、クライアントは「キーが無い」を「効果なし」と「効果データを返さない版」の
+       *     どちらとも区別できない。区別はクライアントの capabilities で行う(ADR-0304 A-1・ADR-0218 §4)。
+       */
+      effect?: components["schemas"]["MasterEffect"];
     };
     Move: {
       id: string;
@@ -705,6 +723,13 @@ export interface components {
     Item: {
       id: string;
       nameJa: string;
+      /**
+       * @description 持ち物の効果定義(item_effects の JSON。`getMasterExport` の `MasterItem.effect` と同じ値・同じ形。
+       *     issue 211・ADR-0218)。効果を持たない持ち物は**キーごと省く**(null を返さない)。
+       *     pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeItemEffect`)で厳格に検証し、
+       *     検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。
+       */
+      effect?: components["schemas"]["MasterEffect"];
     };
     Nature: {
       /** @example adamant */
@@ -723,9 +748,11 @@ export interface components {
       level: number;
       natureId: string;
       abilityId?: string | null;
+      /**
+       * @description 持ち物。メガシンカ後の種族(isMega)は、その requiredItemId の持ち物か持ち物なし(null・省略)だけ受け付け、
+       *     別の持ち物は 400 `invalid_input`(ADR-0200 §4)。
+       */
       itemId?: string | null;
-      /** @description 攻撃側で使う技 */
-      moveId?: string | null;
       /** @description 能力ポイント。各 0..32、合計 <= 66 */
       sp: components["schemas"]["StatBlock"];
       ranks?: components["schemas"]["RankBlock"];
@@ -757,7 +784,7 @@ export interface components {
       format: components["schemas"]["Format"];
       attacker: components["schemas"]["Individual"];
       defender: components["schemas"]["Individual"];
-      /** @description 使用する技(attacker.moveId より優先) */
+      /** @description 使用する技 */
       moveId: string;
       field?: components["schemas"]["FieldState"];
       options?: components["schemas"]["CalcOptions"];
@@ -802,7 +829,8 @@ export interface components {
        * @description 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種: alt_defense_stat・alt_offense_stat・
        *     always_crit・effectiveness_change・field_specific・fixed_damage・ignore_defense_ranks・
        *     move_specific・multi_hit・ohko・priority_change・type_change・variable_power)か
-       *     zero_power(威力0の攻撃技。威力が技の処理で決まるため)、持ち物・特性は
+       *     zero_power(威力0の攻撃技。威力が技の処理で決まるため)・move_target_unknown(double で技の対象が
+       *     不明なため全体技の補正を判断できない。ADR-0222)、持ち物・特性は
        *     unsupported_effect(効果スキーマで表せない)。target と同じ理由で enum にしない
        *     (クライアントは未知の値を汎用の文言で扱う。ADR-0215)。
        */
@@ -909,6 +937,7 @@ export interface components {
       presets?: components["schemas"]["DefenderPreset"][];
       /**
        * @description 差し替えて比較する持ち物 ID(省略時は素の1通り)。null 要素は「持ち物なし」。
+       *     defenderSpeciesKey がメガシンカ後の種族のとき、requiredItemId 以外の持ち物を含めると 400 `invalid_input`(ADR-0200 §4)。
        *     65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
        *     行の基本数は `len(presets) × len(itemVariants)`(上限 8 × 64 = 512)。特性ごとに結果が違う
        *     ときだけ、その基本数のうち最大3倍(特性の候補数。ADR-0126・ADR-0214)まで行が分かれる。
@@ -989,7 +1018,7 @@ export interface components {
       side: components["schemas"]["ReverseSide"];
       /**
        * @description 既知の側(自分)の個体。side=defender なら自分=攻撃側、side=attacker なら自分=防御側。
-       *     known.moveId は使わない(技は moveId で指定する)。
+       *     Individual に moveId は無い(技は moveId で指定する)。
        */
       known: components["schemas"]["Individual"];
       /** @description 逆算する相手の種族。SP・性格・持ち物は探索対象なので渡さない */
@@ -1007,6 +1036,7 @@ export interface components {
       options?: components["schemas"]["CalcOptions"];
       /**
        * @description 相手の持ち物の候補(ID)。null 要素は「持ち物なし」。省略・空配列は [null] と同じ。
+       *     unknownSpeciesKey がメガシンカ後の種族のとき、requiredItemId 以外の持ち物を含めると 400 `invalid_input`(ADR-0200 §4)。
        *     65 件以上、または同じ値(null どうしを含む)の重複は 400 `invalid_input`(ADR-0208)。
        */
       itemCandidates?: (string | null)[];
@@ -1620,6 +1650,7 @@ export interface operations {
           "application/json": components["schemas"]["SpeciesSummary"][];
         };
       };
+      400: components["responses"]["Error"];
       /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
@@ -1671,6 +1702,7 @@ export interface operations {
           "application/json": components["schemas"]["SpeciesDetail"];
         };
       };
+      400: components["responses"]["Error"];
       /** @description 該当する種族が無い(`not_found`) */
       404: {
         headers: {
@@ -1733,6 +1765,7 @@ export interface operations {
           "application/json": components["schemas"]["Move"][];
         };
       };
+      400: components["responses"]["Error"];
       /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
@@ -1968,6 +2001,7 @@ export interface operations {
           "application/json": components["schemas"]["Item"][];
         };
       };
+      400: components["responses"]["Error"];
       /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {

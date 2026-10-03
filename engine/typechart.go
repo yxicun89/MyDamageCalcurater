@@ -19,6 +19,8 @@ var (
 	ErrTypeChartMissing = errors.New("タイプ相性表が入力に無い")
 	// ErrUnknownType は入力に現れたタイプ ID が表に無い(黙って等倍にしない)。
 	ErrUnknownType = errors.New("タイプ相性表に無いタイプ")
+	// ErrUnknownMoveTarget は技の対象が "", single, spread 以外(形式に関係なく拒否。ADR-0222)。
+	ErrUnknownMoveTarget = errors.New("未知の技の対象")
 )
 
 // 倍率コード。倍率を2倍した整数で表す(ADR-0013 §決定1)。

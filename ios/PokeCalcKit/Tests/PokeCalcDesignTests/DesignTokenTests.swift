@@ -105,6 +105,80 @@ final class DesignTokenTests: XCTestCase {
         XCTAssertNil(TypeColorToken.rgba(forTypeID: "Fire"), "ID は英小文字で完全一致")
     }
 
+    // MARK: - タイプバッジの文字色(P6-21。design.md「タイプバッジ」)
+
+    /// design.md「タイプバッジ」の文字色表を書き写した期待値(白は4タイプだけ)。
+    /// Web の `--type-<id>-ink`(tokens.css)も同じ表(tokens.test.ts が design.md と照合)。iOS からは web/ を読めないので、
+    /// 両者が design.md を介して一致する構成にする(design.md を変えたら Web と本表を同じ変更で直す)。
+    private static let expectedWhiteInkTypeIDs: Set<String> = ["poison", "ghost", "dragon", "dark"]
+
+    private static let black = RGBA(red: 0, green: 0, blue: 0, alpha: 1.0)
+    private static let white = RGBA(red: 0xFF, green: 0xFF, blue: 0xFF, alpha: 1.0)
+
+    func testTypeInkMatchesDesignDocTableForAll18Types() throws {
+        for typeID in TypeColorToken.allTypeIDs {
+            let expected = Self.expectedWhiteInkTypeIDs.contains(typeID) ? Self.white : Self.black
+            let ink = try XCTUnwrap(TypeColorToken.ink(forTypeID: typeID), "\(typeID) の文字色が無い")
+            assertRGBA(ink, expected, typeID)
+        }
+    }
+
+    func testOnlyFourTypesUseWhiteInk() {
+        let whites = TypeColorToken.allTypeIDs.filter { TypeColorToken.ink(forTypeID: $0) == Self.white }
+        XCTAssertEqual(Set(whites), Self.expectedWhiteInkTypeIDs)
+        XCTAssertEqual(whites.count, 4)
+    }
+
+    func testTypeInkContrastIsAtLeast4_5ForAll18Types() throws {
+        for typeID in TypeColorToken.allTypeIDs {
+            let background = try XCTUnwrap(TypeColorToken.rgba(forTypeID: typeID))
+            let ink = try XCTUnwrap(TypeColorToken.ink(forTypeID: typeID))
+            XCTAssertGreaterThanOrEqual(contrastRatio(ink, background), wcagNormalTextMinContrast, typeID)
+        }
+    }
+
+    /// 黒・白のうちコントラスト比が高い方(独立実装の ColorContrast で検算する)。
+    func testTypeInkIsTheHigherContrastOfBlackAndWhite() throws {
+        for typeID in TypeColorToken.allTypeIDs {
+            let background = try XCTUnwrap(TypeColorToken.rgba(forTypeID: typeID))
+            let best = contrastRatio(Self.white, background) > contrastRatio(Self.black, background) ? Self.white : Self.black
+            assertRGBA(try XCTUnwrap(TypeColorToken.ink(forTypeID: typeID)), best, typeID)
+        }
+    }
+
+    /// 最小は かくとう の 4.59:1、次が どく の 4.79:1(design.md)。
+    func testMinimumTypeInkContrastIsAbout4_59() throws {
+        var ratios: [(id: String, ratio: Double)] = []
+        for typeID in TypeColorToken.allTypeIDs {
+            let background = try XCTUnwrap(TypeColorToken.rgba(forTypeID: typeID))
+            let ink = try XCTUnwrap(TypeColorToken.ink(forTypeID: typeID))
+            ratios.append((typeID, contrastRatio(ink, background)))
+        }
+        let sorted = ratios.sorted { $0.ratio < $1.ratio }
+        XCTAssertEqual(sorted[0].id, "fighting")
+        XCTAssertEqual(sorted[0].ratio, 4.59, accuracy: 0.01)
+        XCTAssertEqual(sorted[1].id, "poison")
+        XCTAssertEqual(sorted[1].ratio, 4.79, accuracy: 0.01)
+    }
+
+    /// 純粋関数 `preferredInk(over:)` の境界: 黒背景→白、白背景→黒、中間の灰(#777777 は黒 4.69:1 / 白 4.48:1 で黒、#757575 は白 4.61 / 黒 4.56 で白、#707070 は白)。
+    func testPreferredInkSelectsByContrast() {
+        XCTAssertEqual(TypeColorToken.preferredInk(over: Self.black), Self.white)
+        XCTAssertEqual(TypeColorToken.preferredInk(over: Self.white), Self.black)
+        XCTAssertEqual(TypeColorToken.preferredInk(over: RGBA(red: 0x77, green: 0x77, blue: 0x77, alpha: 1.0)), Self.black)
+        XCTAssertEqual(TypeColorToken.preferredInk(over: RGBA(red: 0x75, green: 0x75, blue: 0x75, alpha: 1.0)), Self.white,
+                       "#757575 は白 4.61 : 黒 4.56 で白(境界)")
+        XCTAssertEqual(TypeColorToken.preferredInk(over: RGBA(red: 0x70, green: 0x70, blue: 0x70, alpha: 1.0)), Self.white,
+                       "#707070 は白 4.95 : 黒 4.24 で白")
+    }
+
+    func testUnknownTypeIDHasNoInk() {
+        XCTAssertNil(TypeColorToken.ink(forTypeID: "test-unknown-type"))
+        XCTAssertNil(TypeColorToken.ink(forTypeID: "Fire"))
+        XCTAssertNil(TypeColorToken.inkColor(forTypeID: "test-unknown-type"))
+        XCTAssertNotNil(TypeColorToken.inkColor(forTypeID: "fire"))
+    }
+
     // MARK: - 文字・形・余白
 
     /// design.md「文字」: 結果の%表示 28 / 見出し 17 / 本文 15 / 補足 12。

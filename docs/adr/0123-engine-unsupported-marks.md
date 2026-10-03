@@ -36,6 +36,8 @@ issue #271 は「未対応と分かる印」か「400 で拒否」を、#270 は
 一括計算は各行の `Result`、逆算は各候補の `Unsupported`(SP によらない)に同じ印が付く(どちらも CalcDamage の合成)。
 変化技は印を付けない(ダメージを持たないので 0 が正しい。issue #271 の異常系)。
 
+追記(ADR-0222): `move` の理由に `move_target_unknown` を足した(ダブルで技の対象が不明な攻撃技。zero_power の後)。
+
 ### 3. 技の印の条件(過検出を減らす)
 
 `engine.Move.Mechanisms` を持たせ(マスタ → `services/internal/master.Move`、WASM の `move.mechanisms` の両経路)、

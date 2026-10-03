@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -54,9 +55,6 @@ const (
 	defaultMasterRetryMax     = 30 * time.Second
 	// defaultMasterFetchTimeout は1回の取得のタイムアウト(マスタ一式は数百 KB 程度の想定)。
 	defaultMasterFetchTimeout = 10 * time.Second
-
-	// shutdownTimeout は ctx 終了後、進行中のリクエストを待つ猶予。
-	shutdownTimeout = 5 * time.Second
 
 	// http.Server のタイムアウト(critic 指摘 R7。遅い・止まったクライアントに接続を占有され続けない)。
 	readHeaderTimeout = 5 * time.Second
@@ -142,7 +140,8 @@ func newHandler(ctx context.Context, cfg config) (http.Handler, *events.Publishe
 		if err != nil {
 			return nil, publisher, fmt.Errorf("マスタファイル %s の検証に失敗: %w", cfg.MasterPath, err)
 		}
-		return httpapi.NewHandler(store, publisher), publisher, nil
+		logLoadedMaster(store)
+		return withReadyzDataVersion(httpapi.NewHandler(store, publisher), store.DataVersion), publisher, nil
 	}
 
 	src, err := master.NewHTTPSource(cfg.MasterURL, cfg.MasterFetchTimeout)
@@ -159,7 +158,12 @@ func newHandler(ctx context.Context, cfg config) (http.Handler, *events.Publishe
 		}
 		return s
 	}, publisher)
-	return handler, publisher, nil
+	return withReadyzDataVersion(handler, func() string {
+		if s := current.Load(); s != nil {
+			return s.DataVersion()
+		}
+		return ""
+	}), publisher, nil
 }
 
 // fetchMasterLoop はマスタ一式が取得・検証できるまで指数バックオフで再試行し、成功したら current に
@@ -172,6 +176,7 @@ func fetchMasterLoop(ctx context.Context, src master.Source, retry retryPolicy, 
 			store, err = master.FromExport(export)
 			if err == nil {
 				current.Store(store)
+				logLoadedMaster(store)
 				return
 			}
 		}
@@ -187,6 +192,26 @@ func fetchMasterLoop(ctx context.Context, src master.Source, retry retryPolicy, 
 		case <-timer.C:
 		}
 	}
+}
+
+// logLoadedMaster は読み込んだマスタの版を起動ログに残す(動いている版の確認用。issue #281)。
+func logLoadedMaster(store *master.MemoryStore) {
+	slog.Info("calc-svc: マスタを読み込んだ", "dataVersion", store.DataVersion())
+}
+
+// withReadyzDataVersion は、マスタ読み込み済み(version が空でない)の GET /readyz の本文に dataVersion を足す
+// (公開データの版だけ。issue #281)。読み込み前の 503 などそれ以外は next に任せる。
+func withReadyzDataVersion(next http.Handler, version func() string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/readyz" {
+			if v := version(); v != "" {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "dataVersion": v})
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // backoffDelay は attempt 回目(0 始まり)の失敗の後に待つ時間。Initial から倍々に伸ばし、Max で止める
@@ -249,10 +274,9 @@ func run(ctx context.Context, lookup func(string) (string, bool)) error {
 	case err := <-serveErr:
 		return err
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-		defer cancel()
-		if err := srv.Shutdown(shutdownCtx); err != nil {
-			return err
+		// 待ち切れなければ残りの接続を閉じ、警告だけにして正常終了する(ADR-0804)。
+		if err := gracefulShutdown(srv, shutdownTimeout); err != nil {
+			slog.Warn("calc-svc の停止が間に合わず、残りの接続を閉じた", "error", err)
 		}
 		<-serveErr
 		return nil

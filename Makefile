@@ -70,6 +70,7 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/pr-merge_test.sh
 	@./scripts/gitops_test.sh
 	@./scripts/make-targets_test.sh
+	@./scripts/check-master-version_test.sh
 	@./scripts/require-k3d-context_test.sh
 	@./scripts/image-tag_test.sh
 	@./scripts/up-secrets_test.sh
@@ -87,6 +88,7 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@cd services && $(GO) vet -tags nats ./calc/...
 	@cd tools && $(GO) vet ./...
 	@$(MAKE) --no-print-directory staticcheck
+	@scripts/check-conflict-markers.sh
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 	@for script in tools/importer/*.sh; do sh -n "$$script" || exit; done
 	@node --check tools/golden/generate.mjs
@@ -272,6 +274,10 @@ import-fetch: ## 取得元(calc/Showdown/PokeAPI)から実データを取得す�
 .PHONY: import-check-upstream
 import-check-upstream: ## 上流(calc/Showdown/PokeAPI)の最新版を検出して報告する(ネットワークが要る。取り込みはしない)
 	@cd tools/importer && npm ci && node check-upstream.mjs
+
+.PHONY: check-master-version
+check-master-version: ## calc・balance・speed が export した read model と同じ dataVersion で動いているか確かめる(読み取りだけ。要 k3d の context。ADR-0135)
+	@./scripts/check-master-version.sh
 
 .PHONY: pokedex-export
 pokedex-export: ## balance/speed 向けの read model を6ファイル(4ファイル+type-chart.json・metadata.json)書く(POKEDEX_DATABASE_DSN が必須。出力先 data/generated/readmodel/)
