@@ -1188,6 +1188,8 @@ func TestCalcBulkPassesThroughAllOptionsCombined(t *testing.T) {
 		{"やけど", func(in *BulkInput) { in.Attacker.Status = StatusNone }, true},
 		{"攻撃側の持ち物", func(in *BulkInput) { in.Attacker.Item = nil }, true},
 		{"攻撃側の特性", func(in *BulkInput) { in.Attacker.Ability = Ability{} }, true},
+		// ADR-0224: テラス(元タイプと同じ水)× てきおうりょくは ×2.25。剥がすと ×2.0 に戻る。
+		{"攻撃側のテラス", func(in *BulkInput) { in.Attacker.TeraType = TypeNone }, true},
 	}
 	for _, critical := range []bool{false, true} {
 		name := "非急所"
@@ -1229,11 +1231,12 @@ func TestCalcBulkPassesThroughAllOptionsCombined(t *testing.T) {
 			}
 		})
 	}
-	// TeraType は CalcDamage が参照しない(未実装)ため、結果には現れない。
-	// フィクスチャには載せてあり、CalcDamage が使うようになれば checkedBulk が素通しを検証する。
+	// TeraType は ADR-0224 で CalcDamage が参照するようになったので、上の strips(「攻撃側のテラス」)で
+	// 剥がすと全行のダメージが変わること・checkedBulk が素通しを検証することで守る。
+	// ここでは向き(テラス=元タイプ × てきおうりょく ×2.25 > テラス無し ×2.0)も確かめる。
 	withTera := checkedBulk(t, sink(false))
 	in := sink(false)
 	in.Attacker.TeraType = TypeNone
 	withoutTera := checkedBulk(t, in)
-	maxDamageCompare(t, "TeraType は現状ダメージに影響しない", withTera, withoutTera, 0)
+	maxDamageCompare(t, "TeraType(元タイプ)× てきおうりょくはダメージを上げる", withTera, withoutTera, 1)
 }

@@ -525,6 +525,8 @@ func TestVectorsCoverRequiredScenarios(t *testing.T) {
 		"float", "defaults",
 		// issue #232 / ADR-0160: テラス・ダブルの「未対応」の印を Go/WASM で照合する。
 		"unsupported", "tera", "double",
+		// ADR-0224: テラスを計算に反映する入力(タイプ一致・「そのタイプを持つか」)の数値を Go/WASM で照合する。
+		"teraStab", "teraHasType",
 	}
 	for _, tag := range required {
 		if tags[tag] == 0 {

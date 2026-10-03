@@ -1,8 +1,9 @@
 package wasmapi_test
 
 // issue #232 / ADR-0160: WASM 境界は teraType を拒否せず受け取り、engine が付けた
-// 「未対応」の印(attacker_tera_type / defender_tera_type。reason は unsupported_effect)を
-// 結果の unsupported にそのまま写す。数値は印の有無で変わらない。
+// 「未対応」の印(reason は unsupported_effect)を結果の unsupported にそのまま写す。
+// ADR-0224: 攻撃側のテラスは計算に反映するので印(attacker_tera_type)は付かない。防御側のテラスは
+// 「そのタイプを持つか」には反映するが相性には反映しない(oracle の癖)ので、印(defender_tera_type)が残る。
 //
 // format=double は ADR-0222 で壁・全体技を計算に反映したので形式の印を付けない(ADR-0222 §5)。
 // 技の対象(move.target)が不明なダブルの攻撃技には、技の印 move_target_unknown が技の印の最後に付く。
@@ -25,9 +26,9 @@ func TestWasmTeraAndFormatMarks(t *testing.T) {
 			sub(t, req, "attacker")["teraType"] = ""
 			req["format"] = ""
 		}, []markView{}},
-		{"攻撃側の teraType", func(req map[string]any) {
+		{"攻撃側の teraType は印を付けない(ADR-0224 §3)", func(req map[string]any) {
 			sub(t, req, "attacker")["teraType"] = "fire"
-		}, []markView{{"attacker_tera_type", "unsupported_effect", "fire"}}},
+		}, []markView{}},
 		{"防御側の teraType", func(req map[string]any) {
 			sub(t, req, "defender")["teraType"] = "ghost"
 		}, []markView{{"defender_tera_type", "unsupported_effect", "ghost"}}},
@@ -38,7 +39,7 @@ func TestWasmTeraAndFormatMarks(t *testing.T) {
 			req["format"] = "double"
 			sub(t, req, "move")["target"] = "single"
 		}, []markView{}},
-		{"技の印(機構 → move_target_unknown)の後に テラス(攻撃側 → 防御側)。ダブルの形式の印は無い", func(req map[string]any) {
+		{"技の印(機構 → move_target_unknown)の後に 防御側のテラス。攻撃側のテラス・ダブルの形式の印は無い", func(req map[string]any) {
 			sub(t, req, "move")["mechanisms"] = []any{"multi_hit"}
 			sub(t, req, "attacker")["teraType"] = "fire"
 			sub(t, req, "defender")["teraType"] = "water"
@@ -46,7 +47,6 @@ func TestWasmTeraAndFormatMarks(t *testing.T) {
 		}, []markView{
 			{"move", "multi_hit", "bodyslam"},
 			{"move", "move_target_unknown", "bodyslam"},
-			{"attacker_tera_type", "unsupported_effect", "fire"},
 			{"defender_tera_type", "unsupported_effect", "water"},
 		}},
 	}
@@ -61,35 +61,60 @@ func TestWasmTeraAndFormatMarks(t *testing.T) {
 	}
 }
 
-// 数値(rolls・ko 等)は teraType の有無で変わらない(unsupported 以外のキーが完全に同じ)。
-// format=double も、この入力(壁なし・技の対象が不明=単体扱い)では数値が変わらない(ADR-0222 §3.1)。
+// calcResultWithoutMarks は calc の result から unsupported を除いたもの(数値の比較用)。
+func calcResultWithoutMarks(t *testing.T, req map[string]any) map[string]any {
+	t.Helper()
+	var env struct {
+		Result map[string]any `json:"result"`
+	}
+	resp := invoke(t, "calc", mustJSON(t, req))
+	if err := json.Unmarshal([]byte(resp), &env); err != nil || env.Result == nil {
+		t.Fatalf("calc: %v\n%s", err, resp)
+	}
+	delete(env.Result, "unsupported")
+	return env.Result
+}
+
+// 防御側の teraType はタイプ相性に反映しない(ADR-0224 §2。oracle = Champions 世代の癖)ので、この入力
+// (天候・フィールドなし)では数値が変わらない。format=double も、この入力(壁なし・技の対象が不明=単体扱い)では
+// 数値が変わらない(ADR-0222 §3.1)。攻撃側の teraType が技と一致しない(元タイプの技 = ×1.5 のまま。T2)入力も同じ。
 // 壁・全体技でダブルの数値が変わることは double_test.go とベクタ calc/double-* が検証する。
 func TestWasmTeraAndFormatDoNotChangeNumbers(t *testing.T) {
-	result := func(req map[string]any) map[string]any {
-		t.Helper()
-		var env struct {
-			Result map[string]any `json:"result"`
-		}
-		resp := invoke(t, "calc", mustJSON(t, req))
-		if err := json.Unmarshal([]byte(resp), &env); err != nil || env.Result == nil {
-			t.Fatalf("calc: %v\n%s", err, resp)
-		}
-		delete(env.Result, "unsupported")
-		return env.Result
-	}
-	plain := result(baseCalc())
+	plain := calcResultWithoutMarks(t, baseCalc())
 	marked := baseCalc()
-	sub(t, marked, "attacker")["teraType"] = "normal" // 技と同じタイプ(実装されれば STAB が変わる入力)
-	sub(t, marked, "defender")["teraType"] = "ghost"  // 実装されれば無効になる入力
+	sub(t, marked, "attacker")["teraType"] = "fire"  // 元タイプ(ノーマル)の技はテラスが別タイプでも ×1.5 のまま(T2)
+	sub(t, marked, "defender")["teraType"] = "ghost" // 相性に反映しない(本編 SV なら無効になる入力)
 	marked["format"] = "double"
-	if got := result(marked); !reflect.DeepEqual(got, plain) {
+	if got := calcResultWithoutMarks(t, marked); !reflect.DeepEqual(got, plain) {
 		t.Errorf("テラス・ダブルで数値が変わった\n got %v\nwant %v", got, plain)
+	}
+}
+
+// ADR-0224 §1: 攻撃側の teraType はタイプ一致に反映する(境界が engine へ素通ししていること)。
+// カビゴン(ノーマル)にテラスノーマルでのしかかり → ×2.0(T1)。「テラス無しのてきおうりょく」(×2.0)と同じ数値になる。
+func TestWasmAttackerTeraChangesNumbers(t *testing.T) {
+	plain := calcResultWithoutMarks(t, baseCalc())
+	tera := baseCalc()
+	sub(t, tera, "attacker")["teraType"] = "normal"
+	got := calcResultWithoutMarks(t, tera)
+	adapt := baseCalc()
+	sub(t, adapt, "attacker")["ability"] = map[string]any{"id": "Adaptability", "effect": map[string]any{"stabMod": 8192}}
+	want := calcResultWithoutMarks(t, adapt)
+	if reflect.DeepEqual(got, plain) {
+		t.Errorf("攻撃側の teraType で数値が変わらない(engine に渡っていない): %v", got)
+	}
+	if !reflect.DeepEqual(got["rolls"], want["rolls"]) || got["stab"] != true {
+		t.Errorf("テラス=元タイプ=技の rolls=%v stab=%v, want %v true(×2.0)", got["rolls"], got["stab"], want["rolls"])
+	}
+	if marks := calcMarks(t, tera); len(marks) != 0 {
+		t.Errorf("unsupported = %+v, want [](攻撃側のテラスは印なし)", marks)
 	}
 }
 
 func TestWasmTeraAndFormatMarksInBulkAndReverse(t *testing.T) {
 	// ダブルは形式の印ではなく、技の対象が不明な技の印で分かる(ADR-0222 §5)。
-	want := []markView{{"move", "move_target_unknown", "bodyslam"}, {"attacker_tera_type", "unsupported_effect", "fire"}}
+	// 攻撃側のテラスは反映するので印なし(ADR-0224 §3)。
+	want := []markView{{"move", "move_target_unknown", "bodyslam"}}
 
 	bulk := baseBulk()
 	sub(t, bulk, "attacker")["teraType"] = "fire"
@@ -132,9 +157,30 @@ func TestWasmTeraAndFormatMarksInBulkAndReverse(t *testing.T) {
 			t.Errorf("candidates[%d].unsupported = %+v, want %+v", i, c.Unsupported, want)
 		}
 	}
+
+	// 相手が攻撃側: 既知の防御側のテラスは相性に反映しないので、全候補に防御側のテラスの印が付く(ADR-0224 §3)。
+	revAtk := baseReverse()
+	revAtk["side"] = "attacker"
+	revAtk["known"] = defenderIndividual()
+	revAtk["unknownSpecies"] = snorlaxSpecies()
+	sub(t, revAtk, "known")["teraType"] = "ghost"
+	revAtk["format"] = "double"
+	resp = invoke(t, "calcReverse", mustJSON(t, revAtk))
+	r.Result.Candidates = nil
+	if err := json.Unmarshal([]byte(resp), &r); err != nil || len(r.Result.Candidates) == 0 {
+		t.Fatalf("calcReverse(side=attacker): %v\n%s", err, resp)
+	}
+	wantDef := []markView{{"move", "move_target_unknown", "bodyslam"}, {"defender_tera_type", "unsupported_effect", "ghost"}}
+	for i, c := range r.Result.Candidates {
+		if !reflect.DeepEqual(c.Unsupported, wantDef) {
+			t.Errorf("side=attacker candidates[%d].unsupported = %+v, want %+v", i, c.Unsupported, wantDef)
+		}
+	}
 }
 
-// Go/WASM 一致のベクタ(tag "tera" / "double")が、テラスの印を実際に出す入力であること。
+// Go/WASM 一致のベクタ(tag "tera" / "double")の印が ADR-0224 §3 のとおりであること:
+// 攻撃側のテラスの印は出ず、防御側のテラス(calc の defender.teraType、逆算 side=attacker の known.teraType)を
+// 持つ入力には防御側のテラスの印が出る。tag tera のベクタは攻撃側か防御側のテラスを持つ。
 // tag double のベクタには形式の印が付かず(ADR-0222 §5)、技の対象(move.target)が無いものには
 // move_target_unknown の印が付くこと。
 // ベクタは scripts/wasm-conformance.mjs で WASM とバイト比較されるので、印の写しの Go/WASM 一致もこれで守る。
@@ -196,29 +242,54 @@ func TestVectorsTeraAndDoubleProduceMarks(t *testing.T) {
 			continue
 		}
 		seen[v.Fn] = true
+		type teraOnly struct {
+			TeraType string `json:"teraType"`
+		}
 		var req struct {
 			Move struct {
 				Target string `json:"target"`
 			} `json:"move"`
+			Side     string   `json:"side"`
+			Attacker teraOnly `json:"attacker"`
+			Defender teraOnly `json:"defender"`
+			Known    teraOnly `json:"known"`
 		}
 		if err := json.Unmarshal(v.Request, &req); err != nil {
 			t.Fatalf("%s: %v", v.Name, err)
 		}
 		moveHasTarget := req.Move.Target != ""
+		atkTera, defTera := req.Attacker.TeraType, req.Defender.TeraType
+		if v.Fn == "calcReverse" {
+			if req.Side == "attacker" {
+				defTera = req.Known.TeraType
+			} else {
+				atkTera = req.Known.TeraType
+			}
+		}
+		if tera && atkTera == "" && defTera == "" {
+			t.Errorf("%s: tag tera なのにテラスを持たない", v.Name)
+		}
 		t.Run(v.Name, func(t *testing.T) {
 			sets := collect(v.Fn, fns[v.Fn](requestWithTypeChart(t, v.Request)))
 			if len(sets) == 0 {
 				t.Fatal("結果が空(行・候補が無い)")
 			}
 			for i, marks := range sets {
-				var hasTera, hasFormat, hasTargetUnknown bool
+				var hasAtkTera, hasFormat, hasTargetUnknown bool
+				defTeraMark := ""
 				for _, m := range marks {
-					hasTera = hasTera || m.Target == "attacker_tera_type" || m.Target == "defender_tera_type"
+					hasAtkTera = hasAtkTera || m.Target == "attacker_tera_type"
+					if m.Target == "defender_tera_type" {
+						defTeraMark = m.ID
+					}
 					hasFormat = hasFormat || m.Target == "format"
 					hasTargetUnknown = hasTargetUnknown || (m.Target == "move" && m.Reason == "move_target_unknown")
 				}
-				if tera && !hasTera {
-					t.Errorf("[%d] tag tera なのにテラスの印が無い: %+v", i, marks)
+				if hasAtkTera {
+					t.Errorf("[%d] 攻撃側のテラスの印がある(ADR-0224 §3 で外した): %+v", i, marks)
+				}
+				if defTeraMark != defTera {
+					t.Errorf("[%d] 防御側のテラスの印 = %q, want %q: %+v", i, defTeraMark, defTera, marks)
 				}
 				if double && hasFormat {
 					t.Errorf("[%d] tag double なのに format の印がある(ADR-0222 §5 で外した): %+v", i, marks)

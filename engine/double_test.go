@@ -1,8 +1,8 @@
 package engine
 
 // issue #232 案B のダブル分・#288(ユーザー決定 2026-10-03)・ADR-0222: 形式 Format=double を計算に反映する
-// (防御側の壁 2732/4096・全体技 3072/4096)。テラスタルはポケモンチャンピオンズに無いので計算に使わない
-// (ADR-0222 §1。teraType の扱いは PR #497 / ADR-0160 の未対応の印に従う)。
+// (防御側の壁 2732/4096・全体技 3072/4096)。テラスタルはポケモンチャンピオンズに無いが、オプションの機能として
+// 指定したときだけシングルと同じ規則で反映する(ADR-0224。ADR-0222 §1 の追記)。
 // 規則は @smogon/calc 0.12.0 の Champions 世代が反映するものに合わせる
 // (照合は testdata/golden/doubles.json・doubles-random.jsonl.gz。ここは手計算で固定する単体の規則)。
 //
@@ -162,12 +162,20 @@ func TestDoubleSpreadMinimumOne(t *testing.T) {
 	}
 }
 
-// テラスタイプはダブルの計算にも使わない(ポケモンチャンピオンズにテラスタルは無い。ADR-0222 §1)。
-func TestDoubleIgnoresTeraType(t *testing.T) {
+// テラスタイプはダブルでもシングルと同じ規則で反映する(ADR-0224。ダブルの壁・全体技とは独立)。
+// 攻撃側のテラス(ノーマル技にテラスノーマル)はタイプ一致に効き、防御側のテラス(ゴースト)は相性に効かない
+// (oracle = Champions 世代の癖。ADR-0224 §2)。「テラスノーマルの水タイプ」は「元からノーマルの個体」と同じ数値になる。
+func TestDoubleTeraTypeSameRuleAsSingle(t *testing.T) {
 	in := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, CategoryPhysical, TypeNormal)
 	in.Format = FormatDouble
 	in.Move.Target = MoveTargetSpread
 	base, err := calcDamage(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	same := in
+	same.Attacker.Species.Types = []Type{TypeNormal}
+	want, err := calcDamage(same)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,8 +185,11 @@ func TestDoubleIgnoresTeraType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tera.Rolls != base.Rolls || tera.Effectiveness != base.Effectiveness || tera.STAB != base.STAB {
-		t.Errorf("テラスで数値が変わった: %v vs %v", tera.Rolls, base.Rolls)
+	if tera.Rolls != want.Rolls || !tera.STAB || tera.Effectiveness != base.Effectiveness {
+		t.Errorf("ダブルのテラス: rolls=%v STAB=%v eff=%v, want %v true %v", tera.Rolls, tera.STAB, tera.Effectiveness, want.Rolls, base.Effectiveness)
+	}
+	if tera.Rolls == base.Rolls {
+		t.Errorf("攻撃側のテラスがダブルで効いていない: %v", tera.Rolls)
 	}
 }
 
