@@ -4,7 +4,7 @@
 // app/screens.tsx の SCREEN_COMPONENTS に1件足す(App.tsx は触らない。足し忘れは型エラーになる)。
 // パスは Vite の BASE_URL(import.meta.env.BASE_URL、末尾は "/")からの相対として扱う。
 
-import { appText } from "../i18n/ja";
+import { aboutText, appText } from "../i18n/ja";
 
 /** 画面 ID・URL の区切り・タブの表示名の1エントリ。 */
 export interface ScreenRoute {
@@ -112,4 +112,29 @@ export function pathForScreen(id: ScreenId, base: string): string {
 /** 文書のタイトル(「<画面名> | pokecalc」)。 */
 export function documentTitle(id: ScreenId): string {
   return `${findRoute(id).label} | ${appText.siteTitle}`;
+}
+
+/**
+ * 「このアプリについて」(ADR-0314)。タブ(SCREEN_ROUTES)ではない情報ページなので、画面 ID の表とは別に持つ。
+ * パスの読み方は screenFromPath と同じ(末尾の "/" 1つは同じ画面。大文字小文字違い・深いパスは別物)。
+ */
+const ABOUT_SEGMENT = "about";
+
+/** pathname が情報ページ(/about)か。 */
+export function isAboutPath(pathname: string, base: string): boolean {
+  if (!pathname.startsWith(base)) {
+    return false;
+  }
+  const rest = pathname.slice(base.length);
+  return (rest.endsWith("/") ? rest.slice(0, -1) : rest) === ABOUT_SEGMENT;
+}
+
+/** 情報ページの、base(末尾 "/")付きのパス。 */
+export function pathForAbout(base: string): string {
+  return `${base}${ABOUT_SEGMENT}`;
+}
+
+/** 情報ページの文書のタイトル。 */
+export function aboutDocumentTitle(): string {
+  return `${aboutText.pageHeading} | ${appText.siteTitle}`;
 }

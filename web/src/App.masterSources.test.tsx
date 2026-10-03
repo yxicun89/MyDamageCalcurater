@@ -29,7 +29,9 @@ const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
-  window.localStorage.removeItem(CALC_MODE_STORAGE_KEY);
+  // ADR-0313: 既定がオンラインになったため、このファイルの「オフラインから切り替える」系のテストは
+  // 保存済みのモードがオフラインである前提で始める(既存利用者の選択)。既定の確認は専用のテストで消す。
+  window.localStorage.setItem(CALC_MODE_STORAGE_KEY, "offline");
 });
 
 afterEach(() => {
@@ -126,7 +128,7 @@ async function attackerOptionLabels(): Promise<string[]> {
     .map((option) => option.textContent);
 }
 
-test("既定(オフライン)では offline のマスタだけを読む", async () => {
+test("保存済みがオフラインなら offline のマスタだけを読む", async () => {
   const { offline, online } = await masters();
   const offlineSource = countingSource(offline);
   const onlineSource = countingSource(online);
@@ -140,6 +142,24 @@ test("既定(オフライン)では offline のマスタだけを読む", async 
   expect((await attackerOptionLabels())[0]).toBe(offline.species[0]?.nameJa);
   expect(offlineSource.load).toHaveBeenCalledTimes(1);
   expect(onlineSource.load).not.toHaveBeenCalled();
+});
+
+test("既定(保存値なし)ではオンラインのマスタだけを読む(ADR-0313)", async () => {
+  window.localStorage.removeItem(CALC_MODE_STORAGE_KEY);
+  const { offline, online } = await masters();
+  const offlineSource = countingSource(offline);
+  const onlineSource = countingSource(online);
+  render(
+    <App
+      engine={createFakeEngine()}
+      masterSources={() => ({ offline: offlineSource.source, online: onlineSource.source })}
+    />,
+  );
+
+  expect((await attackerOptionLabels())[0]).toBe(online.species[0]?.nameJa);
+  expect(onlineSource.load).toHaveBeenCalledTimes(1);
+  expect(offlineSource.load).not.toHaveBeenCalled();
+  expect(modeRadios().online).toBeChecked();
 });
 
 test("オンラインに切り替えるとオンラインのマスタを読み、その種族が画面に出る", async () => {
