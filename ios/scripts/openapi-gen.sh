@@ -12,9 +12,11 @@ repo_dir="$(cd "$ios_dir/.." && pwd)"
 source "$script_dir/xcode-env.sh"
 
 readonly tool_dir="$ios_dir/tools/openapi-gen"
-readonly spec="$repo_dir/api/openapi.yaml"
-readonly config="$tool_dir/openapi-generator-config.yaml"
-readonly generated_dir="$ios_dir/PokeCalcKit/Sources/PokeCalcAPI/Generated"
+# 生成対象は「名前|仕様|設定|出力先」の組(ADR-0415。balance は schema 名が衝突するので別モジュール)。
+readonly targets=(
+  "PokeCalcAPI|$repo_dir/api/openapi.yaml|$tool_dir/openapi-generator-config.yaml|$ios_dir/PokeCalcKit/Sources/PokeCalcAPI/Generated"
+  "PokeCalcBalanceAPI|$repo_dir/services/balance/api/openapi.yaml|$tool_dir/openapi-generator-balance-config.yaml|$ios_dir/PokeCalcKit/Sources/PokeCalcBalanceAPI/Generated"
+)
 
 mode="write"
 case "${1:-}" in
@@ -28,9 +30,9 @@ generator="$(swift build --package-path "$tool_dir" -c release --show-bin-path)/
 
 # 生成器は成功時も詳細を stderr に出すので、失敗したときだけ表示する。
 generate_into() {
-  local log
+  local config="$1" out="$2" spec="$3" log
   log="$(mktemp)"
-  if ! "$generator" generate --config "$config" --output-directory "$1" "$spec" >"$log" 2>&1; then
+  if ! "$generator" generate --config "$config" --output-directory "$out" "$spec" >"$log" 2>&1; then
     cat "$log" >&2
     rm -f "$log"
     return 1
@@ -38,19 +40,22 @@ generate_into() {
   rm -f "$log"
 }
 
-if [ "$mode" = "write" ]; then
-  mkdir -p "$generated_dir"
-  generate_into "$generated_dir"
-  echo "ios-gen: $generated_dir を生成"
-  exit 0
-fi
-
-work_dir="$(mktemp -d)"
-trap 'rm -rf "$work_dir"' EXIT
-generate_into "$work_dir"
-if ! diff -r "$work_dir" "$generated_dir" >/dev/null; then
-  echo "ios-gen-check: 生成物が api/openapi.yaml と一致しない。make ios-gen を実行してコミットする" >&2
-  diff -r "$work_dir" "$generated_dir" | head -40 >&2 || true
-  exit 1
-fi
-echo "ios-gen-check: 生成物は api/openapi.yaml と一致"
+for target in "${targets[@]}"; do
+  IFS='|' read -r name spec config generated_dir <<<"$target"
+  if [ "$mode" = "write" ]; then
+    mkdir -p "$generated_dir"
+    generate_into "$config" "$generated_dir" "$spec"
+    echo "ios-gen: $name: $generated_dir を生成"
+    continue
+  fi
+  work_dir="$(mktemp -d)"
+  generate_into "$config" "$work_dir" "$spec"
+  if ! diff -r "$work_dir" "$generated_dir" >/dev/null; then
+    echo "ios-gen-check: $name の生成物が $spec と一致しない。make ios-gen を実行してコミットする" >&2
+    diff -r "$work_dir" "$generated_dir" | head -40 >&2 || true
+    rm -rf "$work_dir"
+    exit 1
+  fi
+  rm -rf "$work_dir"
+  echo "ios-gen-check: $name の生成物は $spec と一致"
+done

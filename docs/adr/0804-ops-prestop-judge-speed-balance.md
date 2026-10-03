@@ -17,5 +17,8 @@ SIGTERM で即座にリスナーが閉じて Endpoints から外れる前の新�
    正常終了する(停止要求への応答としての終了は異常ではない)。
 4. 各サービスは独立した Go module のため、小さな `shutdown.go` を 3 つに複製した(共有パッケージを作るほどの量ではない)。
 
-## 対象外
-calc の shutdownTimeout(5 秒)< writeTimeout(10 秒)は PR #467 の決定のまま。変更するときは別 issue にする。
+## 追記(issue #523): calc の shutdownTimeout
+calc の shutdownTimeout(5 秒)は writeTimeout(10 秒)より短く、停止時に長い計算が切られる余地があった。
+`services/calc/cmd/calc/shutdown.go` に同じ `gracefulShutdown` と `shutdownTimeout = 10s`(= writeTimeout)を置き、
+5(preStop)+ 10 < 30(terminationGracePeriodSeconds)を deploytest が固定する。deploytest は calc・judge・speed・balance の
+shutdownTimeout >= writeTimeout も固定する。Shutdown が間に合わないときは Close して Warn にし、正常終了する(§3 と同じ)。

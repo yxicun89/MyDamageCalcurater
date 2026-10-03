@@ -11,6 +11,7 @@ let package = Package(
     platforms: [.iOS(.v27), .macOS(.v27)],
     products: [
         .library(name: "PokeCalcAPI", targets: ["PokeCalcAPI"]),
+        .library(name: "PokeCalcBalanceAPI", targets: ["PokeCalcBalanceAPI"]),
         .library(name: "PokeCalcCore", targets: ["PokeCalcCore"]),
         .library(name: "PokeCalcDesign", targets: ["PokeCalcDesign"]),
     ],
@@ -29,6 +30,14 @@ let package = Package(
                 .product(name: "HTTPTypes", package: "swift-http-types"),
             ]
         ),
+        // balance 契約(services/balance/api/openapi.yaml)の生成物だけ。schema 名が PokeCalcAPI と衝突するので別モジュール(ADR-0415)
+        .target(
+            name: "PokeCalcBalanceAPI",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "HTTPTypes", package: "swift-http-types"),
+            ]
+        ),
         // デザイントークン(docs/design.md と同じ名前・値)。SwiftUI だけに依存する
         .target(name: "PokeCalcDesign"),
         // ドメインの型・PokeCalcService・API 実装・モック(架空データは Resources/)
@@ -36,6 +45,7 @@ let package = Package(
             name: "PokeCalcCore",
             dependencies: [
                 "PokeCalcAPI",
+                "PokeCalcBalanceAPI",
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
             ],
@@ -47,6 +57,7 @@ let package = Package(
             dependencies: [
                 "PokeCalcCore",
                 "PokeCalcAPI",
+                "PokeCalcBalanceAPI",
                 // PokeType の全ケースにタイプ色があることの同期テストに使う
                 "PokeCalcDesign",
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
