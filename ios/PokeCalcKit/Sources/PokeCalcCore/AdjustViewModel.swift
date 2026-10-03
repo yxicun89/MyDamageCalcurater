@@ -696,3 +696,14 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
 
 /// 種族の検索欄(`MasterSearchField` の別名。`MasterSearchField<SpeciesSummary>` を1か所の名前で呼ぶ)。
 private typealias MasterSpeciesSearchField = MasterSearchField<SpeciesSummary>
+
+// MARK: - 持ち物の役割・メガ固定(ADR-0509。spec-writer のスタブ。implementer が本体に組み込む)
+
+extension AdjustViewModel {
+    /// 自分の持ち物の選択肢(`.any`。モードを後から変えられるため)。
+    public var ownItemOptions: [Item] { itemOptions }
+    public var ownItemLock: MegaItemLock { .none }
+    public func itemLabel(for itemId: String?) -> String {
+        BulkRowDisplay.itemLabel(itemId: itemId, items: itemOptions)
+    }
+}

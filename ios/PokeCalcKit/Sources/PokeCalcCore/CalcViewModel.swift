@@ -790,3 +790,20 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         return !ResultEntryIdentity.splitBaseIDs(baseIDs).isEmpty
     }
 }
+
+// MARK: - 持ち物の役割・メガ固定(ADR-0509。spec-writer のスタブ。implementer が本体に組み込む)
+
+extension CalcViewModel {
+    /// 攻撃側の持ち物の選択肢(`.attacker`。いまの選択は `keeping` で残す。固定中は View が出さない)。
+    public var attackerItemOptions: [Item] { itemOptions }
+    /// 「持ち物の候補も比較」の選択肢(`.defender`)。
+    public var defenderCompareItemOptions: [Item] { itemOptions }
+    /// 攻撃側の固定(攻撃側の `species(key:)` から作る)。
+    public var attackerItemLock: MegaItemLock { .none }
+    /// 防御側の固定(防御側の詳細を読んだ後だけ分かる。ADR-0509 §4 L1・L2)。
+    public var defenderItemLock: MegaItemLock { .none }
+    /// 画面に出す持ち物名(`ItemDisplayName`。この VM が知るメガ種族のストーンは「{基本種名}のメガストーン」)。
+    public func itemLabel(for itemId: String?) -> String {
+        BulkRowDisplay.itemLabel(itemId: itemId, items: itemOptions)
+    }
+}

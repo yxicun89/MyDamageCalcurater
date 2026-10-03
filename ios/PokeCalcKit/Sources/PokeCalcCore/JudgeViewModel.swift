@@ -606,3 +606,14 @@ public final class JudgeViewModel: MasterSpeciesSearchProviding, MasterMoveSearc
             ranks: draft.ranks == RankBlock() ? nil : draft.ranks, abilityId: draft.abilityId, itemId: draft.itemId)
     }
 }
+
+// MARK: - 持ち物の役割・メガ固定(ADR-0509。spec-writer のスタブ。implementer が本体に組み込む)
+
+extension JudgeViewModel {
+    /// 自分・候補の持ち物の選択肢(`.any`。判定は攻守の両方をするため)。
+    public var selectableItemOptions: [Item] { itemOptions }
+    public func itemLock(for target: JudgeTarget) -> MegaItemLock { .none }
+    public func itemLabel(for itemId: String?) -> String {
+        BulkRowDisplay.itemLabel(itemId: itemId, items: itemOptions)
+    }
+}

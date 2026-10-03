@@ -436,3 +436,16 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
         }
     }
 }
+
+// MARK: - 持ち物の役割・メガ固定(ADR-0509。spec-writer のスタブ。implementer が本体に組み込む)
+
+extension TeamEditViewModel {
+    /// メンバーの持ち物の選択肢(`.any`。そのメンバーのいまの持ち物は `keeping` で残す)。
+    public func itemOptions(forMember id: String) -> [Item] { itemOptions }
+    public func itemLock(forMember id: String) -> MegaItemLock { .none }
+    /// 保存データを読み込み時に直したときの通知(`MegaItemText.correctedNotice` / `clearedNotice`)。無ければ nil。
+    public func itemNotice(forMember id: String) -> String? { nil }
+    public func itemLabel(for itemId: String?) -> String {
+        BulkRowDisplay.itemLabel(itemId: itemId, items: itemOptions)
+    }
+}

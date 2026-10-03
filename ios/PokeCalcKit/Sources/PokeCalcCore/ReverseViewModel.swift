@@ -805,3 +805,19 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
         )
     }
 }
+
+// MARK: - 持ち物の役割・メガ固定(ADR-0509。spec-writer のスタブ。implementer が本体に組み込む)
+
+extension ReverseViewModel {
+    /// 自分の持ち物の選択肢(与えたダメージ = `.attacker`、受けたダメージ = `.defender`)。
+    public var myItemOptions: [Item] { itemOptions }
+    /// 相手の持ち物候補の選択肢(与えたダメージ = `.defender`、受けたダメージ = `.attacker`)。
+    public var opponentItemCandidateOptions: [Item] { itemOptions }
+    public var myItemLock: MegaItemLock { .none }
+    public var opponentItemLock: MegaItemLock { .none }
+    /// 受けたダメージで自分の種族の詳細を読む(View が自分の種族の変更ごとに呼ぶ。ADR-0509 §4 L2)。
+    public func loadMySpeciesDetail() async {}
+    public func itemLabel(for itemId: String?) -> String {
+        BulkRowDisplay.itemLabel(itemId: itemId, items: itemOptions)
+    }
+}
