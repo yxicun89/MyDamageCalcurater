@@ -654,16 +654,19 @@ type Terrain string
 // 重複除去・真偽値への丸めをしない。ADR-0708 §4)。judge が自分の契約に同じ定義を持つのは、
 // ルートの契約を $ref せず契約を独立に版管理するため(ADR-0012・ADR-0706 §2 の前例)。
 type UnsupportedMark struct {
-	// Id 印が付いた技・持ち物・特性の ID(calc-svc が返したまま)。
+	// Id 印が付いた技・持ち物・特性の ID、または format の印では対戦形式の値(calc-svc が返したまま)。
 	Id string `json:"id"`
 
-	// Reason 印の理由。技は機構の値(13 種)か zero_power(威力 0 の攻撃技)、持ち物・特性は
-	// unsupported_effect(効果スキーマで表せない)。judge はこの値を検査せず、
+	// Reason 印の理由。技は機構の値(13 種)か zero_power(威力 0 の攻撃技)・move_target_unknown(double で技の対象が
+	// 不明。ADR-0222)、持ち物・特性・テラス・未知の対戦形式は unsupported_effect(効果スキーマで表せない・計算に反映していない。ADR-0160)。judge はこの値を検査せず、
 	// この列挙に無い値もそのまま中継する(engine が理由を足したときに judge の版で落とさない。
 	// ADR-0708 §4・§6。契約は説明で、judge は印の意味を持たない)。
 	Reason string `json:"reason"`
 
-	// Target 印の対象(move・attacker_item・attacker_ability・defender_item・defender_ability。ADR-0215 で enum にしない)。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
+	// Target 印の対象(move・attacker_item・attacker_ability・defender_item・defender_ability・format。
+	// format は calc-svc に未知の形式が届いたときだけで、judge が送る single・double には付かない(ADR-0222 §5)。
+	// テラスの attacker_tera_type / defender_tera_type は judge が teraType を受けないので届かないが、
+	// 値の意味はルートの契約に従う。ADR-0215 で enum にしない)。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
 	// 一致しないことがある(ADR-0708 §5)。attackerKoUnsupported(順方向)では
 	// attacker_* = 自分・defender_* = その候補、defenderKoUnsupported(逆方向)では
 	// attacker_* = その候補・defender_* = 自分を指す。

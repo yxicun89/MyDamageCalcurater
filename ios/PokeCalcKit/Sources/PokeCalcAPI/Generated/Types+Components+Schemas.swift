@@ -110,6 +110,8 @@ extension Components {
         ///   1対1の計算なので、全体技は常に2体以上に当たる前提で掛ける。味方の効果(てだすけ等)は扱わない
         /// 技の対象をマスタが持たない間(issue 288)は、double の攻撃技に UnsupportedMark
         /// (target=move・reason=move_target_unknown)を付け、全体技の補正は掛けない(壁は掛ける)。
+        /// double は計算に反映するので形式の印は付けない。engine に未知の形式が届いたときだけ安全側で
+        /// target format・reason unsupported_effect の印が付く(ADR-0160・ADR-0222 §5)。
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/Format`.
@@ -670,6 +672,11 @@ extension Components {
             public var sp: Components.Schemas.Individual.SpPayload
             /// - Remark: Generated from `#/components/schemas/Individual/ranks`.
             public var ranks: Components.Schemas.RankBlock?
+            /// テラスタイプ。受け付けるが計算には反映しない(テラスタルの補正は未実装)。指定すると数値は
+            /// テラスなしのまま、結果の unsupported に target attacker_tera_type / defender_tera_type・
+            /// reason unsupported_effect・id テラスタイプの印が付く(ADR-0160)。
+            ///
+            ///
             /// - Remark: Generated from `#/components/schemas/Individual/teraType`.
             public struct TeraTypePayload: Codable, Hashable, Sendable {
                 /// - Remark: Generated from `#/components/schemas/Individual/teraType/value1`.
@@ -688,6 +695,11 @@ extension Components {
                     try encoder.encodeToSingleValueContainer(self.value1)
                 }
             }
+            /// テラスタイプ。受け付けるが計算には反映しない(テラスタルの補正は未実装)。指定すると数値は
+            /// テラスなしのまま、結果の unsupported に target attacker_tera_type / defender_tera_type・
+            /// reason unsupported_effect・id テラスタイプの印が付く(ADR-0160)。
+            ///
+            ///
             /// - Remark: Generated from `#/components/schemas/Individual/teraType`.
             public var teraType: Components.Schemas.Individual.TeraTypePayload?
             /// - Remark: Generated from `#/components/schemas/Individual/status`.
@@ -702,7 +714,7 @@ extension Components {
             ///   - itemId: 持ち物。メガシンカ後の種族(isMega)は、その requiredItemId の持ち物か持ち物なし(null・省略)だけ受け付け、
             ///   - sp: 能力ポイント。各 0..32、合計 <= 66
             ///   - ranks:
-            ///   - teraType:
+            ///   - teraType: テラスタイプ。受け付けるが計算には反映しない(テラスタルの補正は未実装)。指定すると数値は
             ///   - status:
             public init(
                 speciesKey: Components.Schemas.SpeciesKey,
@@ -923,12 +935,15 @@ extension Components {
             }
         }
         /// 「この結果は正しくない可能性がある」印1つ(ADR-0123)。engine が正しく計算できない技の機構・
-        /// 持ち物・特性に、数値は通常の式のまま付ける(400 で拒否しない)。
+        /// 持ち物・特性と、受け付けるが計算に反映しないテラスタイプ・未知の対戦形式(ADR-0160・ADR-0222 §5)に、数値は
+        /// 通常の式のまま付ける(400 で拒否しない)。
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/UnsupportedMark`.
         public struct UnsupportedMark: Codable, Hashable, Sendable {
-            /// 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability。
+            /// 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability・
+            /// attacker_tera_type・defender_tera_type・format(並びもこの順)。format は engine に未知の形式が
+            /// 届いたときだけ(double は計算に反映するので付かない。ADR-0222 §5)。
             /// 値を足しても古いクライアントが応答全体をデコードできなくなるのを避けるため、enum にしない
             /// (クライアントは未知の値を「対象不明の印」として扱い、id をそのまま表示する。ADR-0215)。
             ///
@@ -940,22 +955,25 @@ extension Components {
             /// move_specific・multi_hit・ohko・priority_change・type_change・variable_power)か
             /// zero_power(威力0の攻撃技。威力が技の処理で決まるため)・move_target_unknown(double で技の対象が
             /// 不明なため全体技の補正を判断できない。ADR-0222)、持ち物・特性は
-            /// unsupported_effect(効果スキーマで表せない)。target と同じ理由で enum にしない
+            /// unsupported_effect(効果スキーマで表せない)、テラスタイプ・未知の対戦形式も unsupported_effect
+            /// (効果を計算に反映していない。ADR-0160)。target と同じ理由で enum にしない
             /// (クライアントは未知の値を汎用の文言で扱う。ADR-0215)。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/UnsupportedMark/reason`.
             public var reason: Swift.String
-            /// 技・持ち物・特性の ID
+            /// 技・持ち物・特性の ID。target が attacker_tera_type / defender_tera_type のときはテラスタイプ
+            /// (PokeType の値)、format のときは対戦形式(Format の値)。
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/UnsupportedMark/id`.
             public var id: Swift.String
             /// Creates a new `UnsupportedMark`.
             ///
             /// - Parameters:
-            ///   - target: 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability。
+            ///   - target: 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability・
             ///   - reason: 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種: alt_defense_stat・alt_offense_stat・
-            ///   - id: 技・持ち物・特性の ID
+            ///   - id: 技・持ち物・特性の ID。target が attacker_tera_type / defender_tera_type のときはテラスタイプ
             public init(
                 target: Swift.String,
                 reason: Swift.String,
