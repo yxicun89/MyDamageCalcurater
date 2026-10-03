@@ -103,3 +103,22 @@ func tableBody(t *testing.T, sql, table string) string {
 	}
 	return m[1]
 }
+
+// ADR-0227 §2(P5-3c): お気に入りの二重作成を DB で防ぐため、favorites は内容のハッシュ
+// snapshot_hash(正規化した snapshot の SHA-256。16進64文字)を持ち、(device_id, snapshot_hash) に
+// 一意制約を張る。同時に同じ要求が2つ来ても行は1つになる(アプリ側の「先に探してから入れる」だけでは
+// 競合ですり抜ける)。既存の 000005 は書き換えず、新しい版の migration で足す(適用済みの版を変えない)。
+func TestFavoritesHasUniqueSnapshotHashPerDevice(t *testing.T) {
+	sql := allUpSQL(t)
+	if !regexp.MustCompile(`(?is)ALTER\s+TABLE\s+favorites\b.*?\bsnapshot_hash\s+(CHAR|BINARY|VARCHAR)\s*\(\s*64\s*\)`).MatchString(sql) {
+		t.Errorf("favorites に snapshot_hash CHAR(64) を足す migration が無い(ADR-0227 §2)")
+	}
+	if !regexp.MustCompile("(?is)UNIQUE\\s+(KEY|INDEX)\\s+`?[a-z0-9_]*`?\\s*\\(\\s*`?device_id`?\\s*,\\s*`?snapshot_hash`?\\s*\\)").MatchString(sql) {
+		t.Errorf("favorites に UNIQUE (device_id, snapshot_hash) が無い(同じ内容の二重作成を DB で防ぐ。ADR-0227 §2)")
+	}
+	// 000005(P5-3 で適用済み)の CREATE TABLE favorites は書き換えない(適用済みの版を変えると
+	// 既存の DB と migration の履歴がずれる)。
+	if body := tableBody(t, sql, "favorites"); regexp.MustCompile(`(?i)snapshot_hash`).MatchString(body) {
+		t.Errorf("snapshot_hash を 000005 の CREATE TABLE に直接足している(新しい版で ALTER TABLE する)")
+	}
+}

@@ -51,7 +51,8 @@ type deviceState struct {
 	purgedAt   time.Time // ゼロ値なら墓石なし
 	events     []store.CalcEvent
 	aggregates []store.FrequentOpponent
-	favorites  int
+	// favorites は保存済みのお気に入り(ADR-0227)。seed で件数だけ積んだ行は Snapshot が行ごとに違う。
+	favorites []store.Favorite
 }
 
 // fakeStore は store.Store の架空実装。端末ごとに状態を分けて持ち、
@@ -77,6 +78,9 @@ type fakeStore struct {
 	calls []storeCall
 	// seenEventIDs は SaveCalcEvent の重複排除の記録。
 	seenEventIDs map[string]bool
+	// nextFavoriteID は fake が発行するお気に入りの ID(全端末で通し番号。AUTO_INCREMENT と同じく
+	// 端末をまたいで一意なので、他端末の ID を指す AC-D2 のテストが書ける)。
+	nextFavoriteID int64
 }
 
 type storeCall struct {
@@ -86,11 +90,12 @@ type storeCall struct {
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{
-		devices:      map[string]*deviceState{},
-		now:          time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC),
-		tick:         time.Second,
-		purgeLimit:   1000,
-		seenEventIDs: map[string]bool{},
+		devices:        map[string]*deviceState{},
+		now:            time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC),
+		tick:           time.Second,
+		purgeLimit:     1000,
+		seenEventIDs:   map[string]bool{},
+		nextFavoriteID: 1,
 	}
 }
 
@@ -196,11 +201,11 @@ func (f *fakeStore) PurgeDevice(ctx context.Context, deviceID string, now time.T
 	d.aggregates = d.aggregates[n:]
 	del.Aggregates = n
 
-	n = take(d.favorites)
-	d.favorites -= n
+	n = take(len(d.favorites))
+	d.favorites = d.favorites[n:]
 	del.Favorites = n
 
-	remaining := len(d.events)+len(d.aggregates)+d.favorites > 0
+	remaining := len(d.events)+len(d.aggregates)+len(d.favorites) > 0
 	return store.PurgeResult{PurgedAt: d.purgedAt, Deleted: del, Remaining: remaining}, nil
 }
 
@@ -244,6 +249,85 @@ func (f *fakeStore) bumpAggregate(d *deviceState, ev store.CalcEvent) {
 	})
 }
 
+// --- お気に入り(ADR-0227。P5-3c)---------------------------------------------
+//
+// fake は store.Store の docstring の規則をそのまま写す: 端末で絞ってから照合・同じ Snapshot は
+// 作らず UpdatedAt だけ進める(上限より先)・上限 store.MaxFavoritesPerDevice・他端末の ID は ErrNotFound。
+// 時刻は引数の now を使う(httpapi が渡す time.Now())。
+
+// insertFavoriteLocked は f.mu を持った状態で1行足す(seed と CreateFavorite が使う)。
+func (f *fakeStore) insertFavoriteLocked(deviceID, speciesKey string, snapshot []byte, now time.Time) store.Favorite {
+	fav := store.Favorite{
+		ID: f.nextFavoriteID, SpeciesKey: speciesKey, Snapshot: append([]byte(nil), snapshot...),
+		CreatedAt: now, UpdatedAt: now,
+	}
+	f.nextFavoriteID++
+	d := f.state(deviceID)
+	d.favorites = append(d.favorites, fav)
+	return fav
+}
+
+func (f *fakeStore) ListFavorites(ctx context.Context, deviceID string) ([]store.Favorite, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.record("ListFavorites", deviceID)
+	if f.unavailable {
+		return nil, fmt.Errorf("fake: %w", store.ErrUnavailable)
+	}
+	rows := append([]store.Favorite(nil), f.state(deviceID).favorites...)
+	sort.SliceStable(rows, func(i, j int) bool {
+		if !rows[i].UpdatedAt.Equal(rows[j].UpdatedAt) {
+			return rows[i].UpdatedAt.After(rows[j].UpdatedAt)
+		}
+		return rows[i].ID > rows[j].ID
+	})
+	return rows, nil
+}
+
+func (f *fakeStore) CreateFavorite(ctx context.Context, deviceID string, fav store.Favorite, now time.Time) (store.Favorite, store.FavoriteOutcome, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.record("CreateFavorite", deviceID)
+	if f.unavailable {
+		return store.Favorite{}, 0, fmt.Errorf("fake: %w", store.ErrUnavailable)
+	}
+	d := f.state(deviceID)
+	for i := range d.favorites {
+		if bytes.Equal(d.favorites[i].Snapshot, fav.Snapshot) {
+			d.favorites[i].UpdatedAt = now
+			return d.favorites[i], store.FavoriteExisted, nil
+		}
+	}
+	if len(d.favorites) >= store.MaxFavoritesPerDevice {
+		return store.Favorite{}, 0, store.ErrFavoriteLimitReached
+	}
+	return f.insertFavoriteLocked(deviceID, fav.SpeciesKey, fav.Snapshot, now), store.FavoriteCreated, nil
+}
+
+func (f *fakeStore) DeleteFavorite(ctx context.Context, deviceID string, favoriteID int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.record("DeleteFavorite", deviceID)
+	if f.unavailable {
+		return fmt.Errorf("fake: %w", store.ErrUnavailable)
+	}
+	d := f.state(deviceID)
+	for i := range d.favorites {
+		if d.favorites[i].ID == favoriteID {
+			d.favorites = append(d.favorites[:i], d.favorites[i+1:]...)
+			return nil
+		}
+	}
+	return store.ErrNotFound
+}
+
+// favoritesOf はその端末に保存されている行の写し(テストが中身・件数を直接見るため)。
+func (f *fakeStore) favoritesOf(deviceID string) []store.Favorite {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]store.Favorite(nil), f.state(deviceID).favorites...)
+}
+
 // seed は端末にデータを積む(件数だけを決め、中身は問わない)。
 func (f *fakeStore) seed(deviceID string, events, aggregates, favorites int) {
 	f.mu.Lock()
@@ -258,7 +342,17 @@ func (f *fakeStore) seed(deviceID string, events, aggregates, favorites int) {
 			LastCalculatedAt: f.now,
 		})
 	}
-	d.favorites = favorites
+	for i := 0; i < favorites; i++ {
+		f.insertFavoriteLocked(deviceID, speciesGuard, seedFavoriteSnapshot(i), f.now)
+	}
+}
+
+// seedFavoriteSnapshot は seed が積むお気に入りの Snapshot(正規化済みの形。ADR-0227 §2)。
+// label が行ごとに違うので、互いにも、テストが API で作る行とも重複しない。
+func seedFavoriteSnapshot(i int) []byte {
+	return []byte(fmt.Sprintf(`{"label":"seed-%d","individual":{"speciesKey":"%s","level":50,"natureId":"fake-nature",`+
+		`"sp":{"hp":0,"atk":0,"def":0,"spa":0,"spd":0,"spe":0},"ranks":{"atk":0,"def":0,"spa":0,"spd":0,"spe":0},"status":"none"}}`,
+		i, speciesGuard))
 }
 
 // rowsLeft はその端末に残っている行数の合計。
@@ -266,7 +360,7 @@ func (f *fakeStore) rowsLeft(deviceID string) int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	d := f.state(deviceID)
-	return len(d.events) + len(d.aggregates) + d.favorites
+	return len(d.events) + len(d.aggregates) + len(d.favorites)
 }
 
 // --- HTTP の呼び出しヘルパ ----------------------------------------------------

@@ -18,3 +18,17 @@ func (s *Server) DeleteRecordDeviceData(ctx *echo.Context, params api.DeleteReco
 func (s *Server) ListFrequentOpponents(ctx *echo.Context, params api.ListFrequentOpponentsParams) error {
 	return notFoundForCalc()
 }
+
+// お気に入り(record-svc の担当。ADR-0227)。
+
+func (s *Server) ListFavorites(ctx *echo.Context, params api.ListFavoritesParams) error {
+	return notFoundForCalc()
+}
+
+func (s *Server) CreateFavorite(ctx *echo.Context, params api.CreateFavoriteParams) error {
+	return notFoundForCalc()
+}
+
+func (s *Server) DeleteFavorite(ctx *echo.Context, favoriteId api.FavoriteId, params api.DeleteFavoriteParams) error {
+	return notFoundForCalc()
+}
