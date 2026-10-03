@@ -452,10 +452,17 @@ func (q *Querier) SearchItems(_ context.Context, arg store.SearchItemsParams) ([
 		effect := e.Effect
 		effects[e.ItemID] = &effect
 	}
+	// SQL の is_mega_stone と同じ: いずれかのメガ種族の required_item_id に現れる(使用可能集合で絞らない。ADR-0175 §2)。
+	megaStones := map[string]bool{}
+	for _, s := range q.Species {
+		if s.IsMega && s.RequiredItemID.Valid {
+			megaStones[s.RequiredItemID.String] = true
+		}
+	}
 	var out []store.SearchItemsRow
 	for _, it := range q.Items {
 		if in[it.ID] && strings.HasPrefix(it.NameJa, prefix) && len(out) < int(arg.Limit) {
-			out = append(out, store.SearchItemsRow{ID: it.ID, NameJa: it.NameJa, Effect: effects[it.ID]})
+			out = append(out, store.SearchItemsRow{ID: it.ID, NameJa: it.NameJa, Effect: effects[it.ID], IsMegaStone: megaStones[it.ID]})
 		}
 	}
 	return out, nil
