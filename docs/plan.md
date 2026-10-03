@@ -133,7 +133,7 @@
 端末単位の全削除はサービスごとに1本(`DELETE /api/record/device-data`・`DELETE /api/team/device-data`。冪等・`partial` の繰り返し)/
 削除の墓石(`devices.purged_at`)で JetStream の遅延イベントの復活を防ぐ。受け入れ条件は ADR-0209 の AC-D / AC-P / AC-R / AC-L。
 
-- [ ] P5-1 【担当: API レーン。M2 の必須の起点】 TiDB(ADR-0211。範囲は `devices`・purge journal の2表とプロビジョニングまで): スキーマ/migrate CLI(PR #205)と TidbCluster・TidbInitializer のマニフェストは実装済み。**残り**: 共有 k3d への実適用(AC-T3・AC-T8: TidbCluster・TidbInitializer が Ready/Completed になること)と、`tnir/mysqlclient`(amd64 専用)の Apple Silicon での起動可否の確認。purge journal の DB 外の保存先は P7-4 が決めるまで未充足(ADR-0209 追記・ADR-0211 §6)
+- [x] P5-1 【担当: API レーン。M2 の必須の起点】 TiDB(ADR-0211。範囲は `devices`・purge journal の2表とプロビジョニングまで): スキーマ/migrate CLI(PR #205)と TidbCluster・TidbInitializer のマニフェストは実装済み。**残り**: 共有 k3d への実適用(AC-T3・AC-T8: TidbCluster・TidbInitializer が Ready/Completed になること)と、`tnir/mysqlclient`(amd64 専用)の Apple Silicon での起動可否の確認。purge journal の DB 外の保存先は P7-4 が決めるまで未充足(ADR-0209 追記・ADR-0211 §6)(**完了 2026-10-03〜04**。k3d 実適用は下の「k3d 実適用済み」。未充足の purge journal の DB 外の保存先は P7-4 の項目で追跡する)
   **k3d 実適用済み(2026-10-03。ADR-0226)**: TidbCluster Ready・TidbInitializer Completed(AC-T3・AC-T8)・record/team の migrate Job 完了・NATS/record/team Running。`tnir/mysqlclient` は arm64 でもエミュレーションで起動する(実際の失敗は `initSql` の1行複数文。1行1文に修正)。`make deploy-latest` が NATS・TiDB・record・team まで入れる(`scripts/k3d-m2-deploy.sh`)。`make web-k3d-e2e` 成功。残: purge journal の DB 外の保存先は P7-4(ADR-0225)が決めるまで未充足。TiKV の常駐 約 2.2GiB(limit 3Gi)の原因は未特定
 - [x] P5-2 NATS JetStream と calc-svc からのイベント発行
 - [x] P5-3 record-svc
@@ -308,7 +308,7 @@
 
 ## 後続: 要件との対応(issue #286。M1〜M4 の後。担当レーン付き)
 requirements.md の項目のうち、計画に無かったものをここに置く。着手の順・可否はユーザー判断(急ぎではない)。
-- [ ] P5-3c お気に入り(手動ピン留め)の作成・削除・一覧 API と画面(requirements.md §2「あれば便利」。担当: API レーン→ Web・iOS。`favorites` の表・保持期間・全削除の件数は ADR-0209 で実装済みで、API・画面が未着手。ADR-0209 の「record にお気に入りの CRUD を足すときに検証する」を併せて行う)
+- [x] P5-3c お気に入り(手動ピン留め)の作成・削除・一覧 API と画面(requirements.md §2「あれば便利」。担当: API レーン→ Web・iOS。`favorites` の表・保持期間・全削除の件数は ADR-0209 で実装済みで、API は PR #592(ADR-0227。実 TiDB の同時実行テスト済み・k3d 反映済み)で実装済み。**画面は Web・iOS レーン**(decisions/2026-10-03-api-p5-3c-favorites.md に依頼)。ADR-0209 の「record にお気に入りの CRUD を足すときに検証する」を併せて行う)
   - 進行(2026-10-03。API レーン): record-svc に実装済み(ADR-0227。critic PASS・採用 2026-10-04)。`GET`/`POST /api/record/favorites`・`DELETE /api/record/favorites/{favoriteId}`(更新なし)・`FavoriteInput`/`Favorite`(`Individual` + 任意の `label`)・同じ内容の再作成は 200 で既存を返す(`snapshot_hash` の一意制約。migration 000006・000007)・1端末100件。calc/pokedex/team は 404 スタブのみ。実 TiDB(`make test-db-docker`)で一意制約・同時作成・上限を検証済み。残り: Web・iOS の画面(依頼内容は ADR-0227 §7。各レーン)
   - 進行(2026-10-04。Web レーン): Web 画面を実装済み・コミット前(ADR-0327 採用)。新タブ「お気に入り」(`web/src/favorites/`。一覧・件数 n/100件・2段階削除・オフライン案内)と、計算画面の「攻撃側をお気に入りに追加」(`AddFavoriteButton`)。`recordClient` に `listFavorites`/`createFavorite`/`deleteFavorite`。計算画面で追加すると App が `favoritesReloadToken` を進め、先に開いたタブの一覧を取り直す。反映(お気に入りを計算に入れる)は P5-3d 候補。残り: iOS の画面。
 - [x] P6-21 iOS のタイプバランス画面 第1段(チーム最大6体の防御相性表・チーム集計・日本語の倍率表示)+第2段(攻撃範囲 coverage)(ADR-0415。タイプバランスレーン〈iOS 実装〉。実施: `PokeCalcCore` に `BalanceDomainTypes`・`BalanceService`(+`UnavailableBalanceService`)・`APIBalanceService`・`BalanceLabels`・`BalanceViewModel`、`ios/PokeCalc` に `BalanceScreenView`・`BalanceMemberCard`・`BalanceResultViews`、`RootView` の入口・`AppEnvironment`〈`.api`→`APIBalanceService`、`.mock`→`UnavailableBalanceService`〉。gateway `/api/balance/*` 経由。マスタは既存の PokeCalcService を再利用しフォールバックしない。`swift test`〈macOS〉617件・アプリの simulator ビルド成功。**未実施・要人間確認**: シミュレータ/実機での見た目〈Dynamic Type 最大・ダークモード・色以外で弱点が分かること〉と XCTest/XCUITest のシミュレータ実行〈`make ios-test`〉、balance 0.8.0〈ADR-0413。PR #458〉が main に入った後の `make ios-gen` 再生成〈生成物は 0.7.0 のまま。エラー文言の写像は両コード対応済み〉、gateway 配線〈ADR-0414。PR #478〉後の実機 E2E)
@@ -334,7 +334,7 @@ requirements.md の項目のうち、計画に無かったものをここに置�
 
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)
-- [ ] お気に入り(手動ピン留め)のCRUD API(requirements.md §2「あれば便利(マストではない)」)。
+- [x] お気に入り(手動ピン留め)のCRUD API(requirements.md §2「あれば便利(マストではない)」)。(重複行。P5-3c の API は PR #592・ADR-0227 で実装済み)
   `favorites`テーブル・保持期間(540日)・全削除時の件数カウントはADR-0209で設計・実装済みだが、
   作成・削除・一覧のAPI自体は未着手(ADR-0209にも「recordにお気に入りのCRUDを足すときに検証する」と
   将来課題として記述されている)。Webレーンからの問い合わせ(2026-09-25。P5-5着手時)で未実装であることを
@@ -490,7 +490,7 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
   実装中に見つけた退行も直した: 攻守入れ替えで種族の検索欄の名前が追従しない(`SpeciesSearchField.selectedNameJa`)、
   種族の解決待ちの間に打った逆算の観測が計算に反映されない(`ReverseScreen` の `latestObservationsRef`)。
   E2E は pokedex フィクスチャでオンライン→オフラインを確かめる(コンテナは CSP の下の WASM 計算を `container.spec.ts` だけで確認)
-- [ ] issue #274/#272 の API レーン担当分の残り: `defenderOverride.ranks: RankBlock` / `defenderOverride.status:
+- [x] issue #274/#272 の API レーン担当分の残り: `defenderOverride.ranks: RankBlock` / `defenderOverride.status:(**実装済み**: PR #450・ADR-0216。`BulkCalcRequest.defenderOverride.ranks/status`。iOS・Web は生成物の再生成で追従可能)
   StatusCondition`(全行に一律で上書き)。abilityId(上記)とは独立に追加できる。engine 側の変更
   (`BulkInput`/`ReverseInput` へのオーバーライド追加。プリセット解決後・計算前に当てる)を伴うため
   ADR-0003 の test-first + 独立 critic の対象。優先度は低い(iOS レーンから「急ぎではない」と明記済み)
