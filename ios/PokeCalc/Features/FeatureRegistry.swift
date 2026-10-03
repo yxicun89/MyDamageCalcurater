@@ -11,6 +11,7 @@ enum FeatureRegistry {
         AdjustFeature(),
         BalanceFeature(),
         SpeedFeature(),
+        JudgeFeature(),
         AboutFeature(),
     ]
 
