@@ -69,6 +69,10 @@ type Querier interface {
 	ListItems(ctx context.Context) ([]Item, error)
 	ListMoveEffects(ctx context.Context) ([]MoveEffect, error)
 	ListMoveIDs(ctx context.Context) ([]string, error)
+	// 技を覚える種族(learnset の逆引き。ADR-0251)。種族・技の両方が既定のレギュレーションの使用可能集合に
+	// あるものだけ(ListSpeciesLearnset と同じ規則)。並びは SearchSpecies と同じ dex_no, form(UNIQUE なので決定的)。
+	// learnsets の move_id には FK fk_learnsets_move の索引がある(MySQL が FK のために自動で作る。migration 不要)。
+	ListMoveLearners(ctx context.Context, arg ListMoveLearnersParams) ([]ListMoveLearnersRow, error)
 	ListMoveMechanisms(ctx context.Context) ([]MoveMechanism, error)
 	ListMoves(ctx context.Context) ([]Move, error)
 	// ---------------------------------------------------------------------------------------------

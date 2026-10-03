@@ -131,10 +131,17 @@ func presetByID(id PresetID) (Preset, bool) {
 	return Preset{}, false
 }
 
+// TableField は表の場の効果(ADR-0607 §4・§6)。Tailwind は表の全行に掛かる追い風、TrickRoom は
+// 段の並びだけを昇順(行動順)にする。
+type TableField struct {
+	Tailwind  bool
+	TrickRoom bool
+}
+
 // BuildTable は roster の各ポケモンについて presets の各行の素早さを Speed で計算し、同じ値を 1 つの段に
-// まとめた表を返す(ADR-0601 §3)。段は素早さの降順、段の中は pokemonId の昇順 → ADR-0601 §2 の順。
+// まとめた表を返す(ADR-0601 §3)。段は素早さの降順(field.TrickRoom なら昇順。段の中は反転しない)、段の中は pokemonId の昇順 → ADR-0601 §2 の順。
 // presets の検証は NormalizePresets と同じ。Speed のエラー(種族値の範囲外など)は包んで返す。
-func BuildTable(roster Roster, presets []PresetID) (Table, error) {
+func BuildTable(roster Roster, presets []PresetID, field TableField) (Table, error) {
 	normalized, err := NormalizePresets(presets)
 	if err != nil {
 		return Table{}, err
@@ -162,6 +169,7 @@ func BuildTable(roster Roster, presets []PresetID) (Table, error) {
 				Nature:    def.Nature,
 				Rank:      def.Rank,
 				Scarf:     def.Scarf,
+				Tailwind:  field.Tailwind,
 			})
 			if err != nil {
 				return Table{}, fmt.Errorf("pokemon %s preset %s: %w", pokemon.PokemonID, id, err)
@@ -186,6 +194,13 @@ func BuildTable(roster Roster, presets []PresetID) (Table, error) {
 			tiers = append(tiers, Tier{Speed: r.speed})
 		}
 		tiers[len(tiers)-1].Entries = append(tiers[len(tiers)-1].Entries, r.entry)
+	}
+
+	if field.TrickRoom {
+		// 段の並びだけを反転する。段の中の並びは行動順の意味を持たないので触らない(ADR-0607 §4)。
+		for i, j := 0, len(tiers)-1; i < j; i, j = i+1, j-1 {
+			tiers[i], tiers[j] = tiers[j], tiers[i]
+		}
 	}
 
 	return Table{RegulationID: roster.RegulationID, Presets: normalized, Tiers: tiers}, nil

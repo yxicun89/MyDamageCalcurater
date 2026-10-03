@@ -9,3 +9,5 @@ resources:
 components:
   - api
   - web
+patches:
+  - path: cronjob-expire-suspend-patch.yaml

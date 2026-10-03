@@ -10,11 +10,12 @@ import {
   SPECIES,
   calcRows,
   combobox,
-  openApp,
+  openAppOffline,
   parsePercentRange,
   reverseRows,
   rowTexts,
   selectMatchup,
+  selectReverseMatchup,
 } from "./support/calcPage.ts";
 
 /** 計算画面の「H32・B0」行(2行目)の表示%の範囲に入る整数%を返す。範囲に整数が無ければ失敗させる。 */
@@ -34,7 +35,8 @@ async function openReverseTab(page: Page): Promise<void> {
 }
 
 test.beforeEach(async ({ page }) => {
-  await openApp(page);
+  // ADR-0313: キャッシュを温めてからオフライン(WASM)で確かめる(既定はオンライン)。
+  await openAppOffline(page);
 });
 
 test("与えたダメージの観測%を入れると、H32 前提の注記と SP 範囲つきの候補が出る", async ({ page }) => {
@@ -43,8 +45,7 @@ test("与えたダメージの観測%を入れると、H32 前提の注記と SP
 
   // 既定の側は「与えたダメージ」(相手 = 防御側を推定する)。
   await expect(page.getByRole("radio", { name: "与えたダメージ", exact: true })).toBeChecked();
-  await combobox(page, "自分のポケモン").selectOption({ label: SPECIES.fire.nameJa });
-  await combobox(page, "相手のポケモン").selectOption({ label: SPECIES.water.nameJa });
+  await selectReverseMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
   // 技は自分(攻撃側)の最初のダメージ技が自動で選ばれる(計算画面と同じ技)。
   await expect(combobox(page, "技").locator("option:checked")).toContainText("威力");
 
@@ -65,8 +66,7 @@ test("与えたダメージの観測%を入れると、H32 前提の注記と SP
 test("観測を追加すると、候補は絞られるか同じ数のまま(増えない)", async ({ page }) => {
   const percent = await observablePercent(page);
   await openReverseTab(page);
-  await combobox(page, "自分のポケモン").selectOption({ label: SPECIES.fire.nameJa });
-  await combobox(page, "相手のポケモン").selectOption({ label: SPECIES.water.nameJa });
+  await selectReverseMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
   await page.getByRole("textbox", { name: "観測1", exact: true }).fill(String(percent));
 
   const rows = reverseRows(page);
@@ -87,8 +87,7 @@ test("観測を追加すると、候補は絞られるか同じ数のまま(増�
 
 test("観測に範囲外の値を入れると、検証メッセージが出て候補を出さない", async ({ page }) => {
   await openReverseTab(page);
-  await combobox(page, "自分のポケモン").selectOption({ label: SPECIES.fire.nameJa });
-  await combobox(page, "相手のポケモン").selectOption({ label: SPECIES.water.nameJa });
+  await selectReverseMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
 
   const observation = page.getByRole("textbox", { name: "観測1", exact: true });
   await observation.fill("101");

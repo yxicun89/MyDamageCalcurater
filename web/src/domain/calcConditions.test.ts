@@ -31,6 +31,8 @@ describe("既定値と選択肢", () => {
       terrain: "none",
       defenderScreens: { reflect: false, lightScreen: false, auroraVeil: false },
       ranks: { atk: 0, spa: 0 },
+      // issue #274 残り(ADR-0315): 防御側のランク。既定 0 のときは要求に何も載せない。
+      defenderRanks: { def: 0, spd: 0 },
     });
   });
 

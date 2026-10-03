@@ -16,7 +16,9 @@ import { createFakeEngine } from "./test/fakeEngine";
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
-  window.localStorage.removeItem(CALC_MODE_STORAGE_KEY);
+  // ADR-0313: 既定の計算モードはオンラインになった。このファイルは「オフライン選択中でも API 専用画面は
+  // オンラインのマスタを使う」を確かめるので、保存済みモードをオフラインにして始める(テストの意図は不変)。
+  window.localStorage.setItem(CALC_MODE_STORAGE_KEY, "offline");
 });
 
 afterEach(() => {

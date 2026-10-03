@@ -30,6 +30,9 @@ type vector struct {
 // (ADR-0011 §13)。注入を持たない旧版のベクタは「未知の schemaVersion」として拒否する。
 const vectorSchemaVersion = 2
 
+// fnWithoutTypeChart は相性表を注入しない fn(リクエストの契約に typeChart が無い。ADR-0250 §4)。
+const fnWithoutTypeChart = "adjustIndices"
+
 type vectorFile struct {
 	SchemaVersion int `json:"schemaVersion"`
 	// TypeChart はファイル先頭で1度だけ定義したタイプ相性表。各リクエストの typeChart として注入する。
@@ -54,6 +57,7 @@ func main() {
 
 // requestWithTypeChart はリクエストに共有の typeChart を足した JSON 文字列を返す。
 // リクエストに typeChart が直書きされていたら、表を1か所で定義する方針に反するので失敗にする。
+// adjustIndices は契約に typeChart を持たない(注入すると unknown_field)ので足さない(ADR-0250 §4)。
 func requestWithTypeChart(v vector, typeChart json.RawMessage) (string, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(v.Request, &fields); err != nil {
@@ -62,7 +66,9 @@ func requestWithTypeChart(v vector, typeChart json.RawMessage) (string, error) {
 	if _, dup := fields["typeChart"]; dup {
 		return "", fmt.Errorf("ベクタ %q に typeChart が直書きされている(表はファイル先頭で1度だけ定義する)", v.Name)
 	}
-	fields["typeChart"] = typeChart
+	if v.Fn != fnWithoutTypeChart {
+		fields["typeChart"] = typeChart
+	}
 	b, err := json.Marshal(fields)
 	if err != nil {
 		return "", fmt.Errorf("ベクタ %q のリクエストを組み立てられない: %w", v.Name, err)
@@ -105,6 +111,14 @@ func run(vectorsPath, outPath string) error {
 			out[v.Name] = wasmapi.CalcBulk(req)
 		case "calcReverse":
 			out[v.Name] = wasmapi.CalcReverse(req)
+		case "adjustIndices":
+			out[v.Name] = wasmapi.AdjustIndices(req)
+		case "adjustMinSpToKo":
+			out[v.Name] = wasmapi.AdjustMinSPToKO(req)
+		case "adjustMinSpToSurvive":
+			out[v.Name] = wasmapi.AdjustMinSPToSurvive(req)
+		case "adjustAllocation":
+			out[v.Name] = wasmapi.AdjustAllocation(req)
 		default:
 			return fmt.Errorf("ベクタ %q の fn=%q は未知", v.Name, v.Fn)
 		}

@@ -16,8 +16,11 @@ import { loadCalcMode, saveCalcMode, type CalcMode } from "./app/calcMode";
 import {
   DEFAULT_SCREEN,
   SCREEN_ROUTES,
+  aboutDocumentTitle,
   documentTitle,
+  isAboutPath,
   isMasterlessScreen,
+  pathForAbout,
   pathForScreen,
   screenFromPath,
   screenLabel,
@@ -26,7 +29,9 @@ import {
 import { browserWasmLoader } from "./engine/browserWasmLoader";
 import type { CalcEngine } from "./engine/types";
 import { createWasmEngine } from "./engine/wasmEngine";
-import { appText } from "./i18n/ja";
+import { AboutScreen } from "./AboutScreen";
+import { aboutText, appText } from "./i18n/ja";
+import { createAdjustClient, type AdjustClient } from "./adjust/adjustClient";
 import { createJudgeClient, type JudgeClient } from "./judge/judgeClient";
 import { isSearchableMasterSource } from "./master/capabilities";
 import { exampleMasterSource } from "./master/exampleSource";
@@ -111,6 +116,10 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   // createJudgeClient 自体は fetch しない(判定のタブを開くだけでは呼ばれない。judge/JudgeScreen.tsx)。
   const [judgeClient] = useState(() =>
     createJudgeClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
+  );
+  // AJ6: 調整 API のクライアント(ADR-0319 §1)。createAdjustClient 自体は fetch しない(調整のタブを開くだけでは呼ばれない)。
+  const [adjustClient] = useState(() =>
+    createAdjustClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
   );
   // P5-5 PR-A1: team API のクライアント(ADR-0309 §2・§3)。同じ基点 URL・端末 ID・セッション ID を使う。
   // createTeamClient 自体は fetch しない(構築のタブを開くまで呼ばれない。team/TeamScreen.tsx)。
@@ -238,6 +247,29 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
     () => screenFromPath(window.location.pathname, base) ?? DEFAULT_SCREEN,
   );
 
+  // 「このアプリについて」(ADR-0314)。タブではなく別扱いの情報ページ。開いている間も tab は保ち、
+  // 他タブの画面は hidden で DOM に残す(ADR-0308。往復で入力を失わない)。
+  const [aboutOpen, setAboutOpen] = useState<boolean>(() => isAboutPath(window.location.pathname, base));
+  // リンクで開いたときだけ見出しへフォーカスを移す(直接開く・popstate では移さない)。
+  const [focusAbout, setFocusAbout] = useState(false);
+
+  /** フッターのリンク: /about を pushState して情報ページを開く。 */
+  function openAbout(): void {
+    if (!aboutOpen) {
+      window.history.pushState(null, "", pathForAbout(base));
+    }
+    setFocusAbout(true);
+    setAboutOpen(true);
+  }
+
+  /** 「計算に戻る」: /calc を pushState して計算タブへ。 */
+  function closeAbout(): void {
+    window.history.pushState(null, "", pathForScreen(DEFAULT_SCREEN, base));
+    setFocusAbout(false);
+    setAboutOpen(false);
+    selectTab(DEFAULT_SCREEN);
+  }
+
   /** タブを選ぶ(クリック・キーボード・popstate 共通の入口)。 */
   function selectTab(nextTab: ScreenId): void {
     setTab(nextTab);
@@ -295,7 +327,10 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   // マウント時: URL が既知のパスでなければ /calc に置き換える(push でなく replace。履歴を増やさない)。
   // マスタの読み込みを待たない(state の初期値は既に既定になっているので、ここは URL の見た目を直すだけ)。
   useEffect(() => {
-    if (screenFromPath(window.location.pathname, base) === null) {
+    if (
+      screenFromPath(window.location.pathname, base) === null &&
+      !isAboutPath(window.location.pathname, base)
+    ) {
       window.history.replaceState(null, "", pathForScreen(DEFAULT_SCREEN, base));
     }
     // base は import.meta.env.BASE_URL(実行中は不変)なので依存配列に含めない。
@@ -306,6 +341,12 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   // 計算タブを出し、URL も /calc に置き換える(push はしない)。アンマウントで購読を外す。
   useEffect(() => {
     function handlePopState(): void {
+      if (isAboutPath(window.location.pathname, base)) {
+        setFocusAbout(false);
+        setAboutOpen(true);
+        return;
+      }
+      setAboutOpen(false);
       const next = screenFromPath(window.location.pathname, base);
       if (next === null) {
         window.history.replaceState(null, "", pathForScreen(DEFAULT_SCREEN, base));
@@ -324,8 +365,8 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
 
   // 文書のタイトル(「<画面名> | pokecalc」)。タブの切り替え・popstate に追従し、マスタ読み込み中も設定する。
   useEffect(() => {
-    document.title = documentTitle(tab);
-  }, [tab]);
+    document.title = aboutOpen ? aboutDocumentTitle() : documentTitle(tab);
+  }, [tab, aboutOpen]);
 
   return (
     <>
@@ -335,66 +376,102 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
         <CalcModeSelector value={mode} onChange={selectMode} />
       </header>
       <main className="app-main">
-        {currentMasterLoad === null && <p>{appText.loading}</p>}
-        {currentMasterLoad !== null && (
-          <div className="app-tabs">
-            <div role="tablist" aria-label={appText.tabsLabel} className="app-tabs__list">
-              {TAB_ORDER.map((id, index) => {
-                const selected = tab === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    role="tab"
-                    id={tabElementId(id)}
-                    aria-selected={selected}
-                    aria-controls={panelId}
-                    // ロービング tabIndex(WAI-ARIA Authoring Practices): 選択中のタブだけ Tab キーで
-                    // 止まり、他のタブは矢印キー(handleTabKeyDown)でだけ選ぶ。
-                    tabIndex={selected ? 0 : -1}
-                    ref={(element) => {
-                      tabRefs.current[id] = element ?? undefined;
-                    }}
-                    className="app-tabs__tab"
-                    onClick={() => {
-                      navigateToTab(id);
-                    }}
-                    onKeyDown={(event) => {
-                      handleTabKeyDown(event, index);
-                    }}
-                  >
-                    {screenLabel(id)}
-                  </button>
-                );
-              })}
-            </div>
-            <div role="tabpanel" id={panelId} aria-labelledby={tabElementId(tab)} className="app-tabs__panel">
-              {/* issue 218(ADR-0308 決定1・2・3): 訪れたタブの画面だけを mount したまま並べ、
+        {aboutOpen && (
+          <AboutScreen
+            backHref={pathForScreen(DEFAULT_SCREEN, base)}
+            onBack={closeAbout}
+            focusOnMount={focusAbout}
+          />
+        )}
+        <div hidden={aboutOpen}>
+          {currentMasterLoad === null && <p>{appText.loading}</p>}
+          {currentMasterLoad !== null && (
+            <div className="app-tabs">
+              <div role="tablist" aria-label={appText.tabsLabel} className="app-tabs__list">
+                {TAB_ORDER.map((id, index) => {
+                  const selected = tab === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      role="tab"
+                      id={tabElementId(id)}
+                      aria-selected={selected}
+                      aria-controls={panelId}
+                      // ロービング tabIndex(WAI-ARIA Authoring Practices): 選択中のタブだけ Tab キーで
+                      // 止まり、他のタブは矢印キー(handleTabKeyDown)でだけ選ぶ。
+                      tabIndex={selected ? 0 : -1}
+                      ref={(element) => {
+                        tabRefs.current[id] = element ?? undefined;
+                      }}
+                      className="app-tabs__tab"
+                      onClick={() => {
+                        navigateToTab(id);
+                      }}
+                      onKeyDown={(event) => {
+                        handleTabKeyDown(event, index);
+                      }}
+                    >
+                      {screenLabel(id)}
+                    </button>
+                  );
+                })}
+              </div>
+              <div
+                role="tabpanel"
+                id={panelId}
+                aria-labelledby={tabElementId(tab)}
+                className="app-tabs__panel"
+              >
+                {/* issue 218(ADR-0308 決定1・2・3): 訪れたタブの画面だけを mount したまま並べ、
                   選択中でないものは内側の包み要素に hidden を付けて隠す(role=tabpanel 自体は1つのまま)。
                   訪れたタブの集合(visitedTabs)は AppTabPanel 自身の state に持たせてある。この
                   {currentMasterLoad !== null && ...} の分岐が false→true になるたびに AppTabPanel は
                   作り直される(取得口が変わって一旦 currentMasterLoad が null になったとき。
                   ADR-0304 §追記 A-6)ので、マスタが入れ替わったときは自動的に訪問履歴もリセットされる
                   (決定3)。「再試行」(取得口は変わらない)では null を経由しないので保たれる。 */}
-              <AppTabPanel
-                tab={tab}
-                currentMasterLoad={currentMasterLoad}
-                resolvedEngine={resolvedEngine}
-                activeMasterSearch={activeMasterSearch}
-                onlineMasterSource={onlineMasterSource}
-                balanceClient={balanceClient}
-                speedClient={speedClient}
-                judgeClient={judgeClient}
-                teamClient={teamClient}
-                recordClient={recordClient}
-                mode={mode}
-                retryMasterLoad={retryMasterLoad}
-                selectMode={selectMode}
-              />
+                <AppTabPanel
+                  tab={tab}
+                  currentMasterLoad={currentMasterLoad}
+                  resolvedEngine={resolvedEngine}
+                  activeMasterSearch={activeMasterSearch}
+                  onlineMasterSource={onlineMasterSource}
+                  balanceClient={balanceClient}
+                  speedClient={speedClient}
+                  judgeClient={judgeClient}
+                  teamClient={teamClient}
+                  adjustClient={adjustClient}
+                  recordClient={recordClient}
+                  mode={mode}
+                  retryMasterLoad={retryMasterLoad}
+                  selectMode={selectMode}
+                />
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </main>
+      <footer className="app-footer">
+        <a
+          href={pathForAbout(base)}
+          className="app-footer__link"
+          onClick={(event) => {
+            if (
+              event.defaultPrevented ||
+              event.button !== 0 ||
+              event.metaKey ||
+              event.ctrlKey ||
+              event.shiftKey
+            ) {
+              return;
+            }
+            event.preventDefault();
+            openAbout();
+          }}
+        >
+          {aboutText.footerLinkLabel}
+        </a>
+      </footer>
     </>
   );
 }
@@ -410,6 +487,7 @@ interface AppTabPanelProps {
   readonly speedClient: SpeedClient;
   readonly judgeClient: JudgeClient;
   readonly teamClient: TeamClient;
+  readonly adjustClient: AdjustClient;
   readonly recordClient: RecordClient | undefined;
   readonly mode: CalcMode;
   readonly retryMasterLoad: () => void;
@@ -435,6 +513,7 @@ function AppTabPanel({
   speedClient,
   judgeClient,
   teamClient,
+  adjustClient,
   recordClient,
   mode,
   retryMasterLoad,
@@ -471,6 +550,7 @@ function AppTabPanel({
                 speedClient={speedClient}
                 judgeClient={judgeClient}
                 teamClient={teamClient}
+                adjustClient={adjustClient}
                 recordClient={recordClient}
                 masterSearch={activeMasterSearch}
                 onlineMasterSource={onlineMasterSource}
@@ -490,6 +570,7 @@ function AppTabPanel({
                 speedClient={speedClient}
                 judgeClient={judgeClient}
                 teamClient={teamClient}
+                adjustClient={adjustClient}
                 masterSearch={activeMasterSearch}
                 onlineMasterSource={onlineMasterSource}
               />

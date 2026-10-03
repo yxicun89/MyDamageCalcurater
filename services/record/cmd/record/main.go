@@ -1,6 +1,7 @@
 // Command record は record-svc の唯一のバイナリ(ADR-0209・ADR-0211)。
 //
 //	record serve   # HTTP(/api/record/*・/healthz・/readyz)+ NATS JetStream の購読
+//	record expire  # 失効ジョブを1巡して終わる(CronJob。ADR-0209 §4・ADR-0220)
 //
 // 設定は環境変数(config.go)。RECORD_APP_DSN は必須、RECORD_NATS_URL は任意
 // (未設定なら購読を無効化するだけで起動は失敗しない。CLAUDE.md 絶対ルール5)。
@@ -13,6 +14,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -42,22 +44,41 @@ func lookupEnv(k string) string {
 }
 
 func main() {
-	os.Exit(run())
+	os.Exit(run(os.Args[1:], lookupEnv, os.Stderr))
 }
 
-func run() int {
+// run はサブコマンドに振り分け、終了コードを返す(pokedex の `pokedex serve | export` と同じ形。ADR-0220 §3)。
+// 0 成功(expire の「残りあり」を含む)・1 実行時・設定の失敗・2 使い方の誤り(サブコマンド無し・不明)。
+func run(args []string, getenv func(string) string, stderr io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprintln(stderr, usage)
+		return 2
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	switch args[0] {
+	case "serve":
+		return runServe(ctx, getenv, stderr)
+	case "expire":
+		return runExpire(ctx, getenv, stderr)
+	default:
+		fmt.Fprintf(stderr, "不明なサブコマンド %q\n%s\n", args[0], usage)
+		return 2
+	}
+}
 
-	cfg, err := loadConfig(lookupEnv)
+const usage = "usage: record serve | record expire"
+
+func runServe(ctx context.Context, getenv func(string) string, stderr io.Writer) int {
+	cfg, err := loadConfig(getenv)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "record serve:", err)
+		fmt.Fprintln(stderr, "record serve:", err)
 		return 1
 	}
 
 	db, err := openDB(cfg.DatabaseDSN)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "record serve: DB を開けない:", err)
+		fmt.Fprintln(stderr, "record serve: DB を開けない:", err)
 		return 1
 	}
 	defer db.Close()
@@ -68,7 +89,7 @@ func run() int {
 
 	handler := httpapi.NewHandler(st)
 	if err := serve(ctx, cfg.Addr, handler); err != nil {
-		fmt.Fprintln(os.Stderr, "record serve:", err)
+		fmt.Fprintln(stderr, "record serve:", err)
 		return 1
 	}
 	return 0
