@@ -1,4 +1,4 @@
-// 画面の登録ファイル(`*.screen.tsx`)の型と、その定義を作る defineScreen(ADR-0173)。
+// 画面の登録ファイル(`*.screen.tsx`)の型と、その定義を作る defineScreen(ADR-0323)。
 // 画面を足すレーンは、自分のディレクトリに `<id>.screen.tsx` を1つ置き、`export default defineScreen({...})` を書く。
 // App.tsx・app/screens.tsx・app/routes.ts・i18n/ja.ts は触らない(app/screens.tsx が import.meta.glob で集める)。
 
@@ -19,7 +19,7 @@ export interface ScreenClientDeps {
 }
 
 /**
- * App がどの画面にも渡す、アプリ全体の値(ADR-0173 §2)。画面ごとのクライアントはここに入れない
+ * App がどの画面にも渡す、アプリ全体の値(ADR-0323 §2)。画面ごとのクライアントはここに入れない
  * (クライアントは登録ファイルの createClient が作り、render の第2引数で受け取る)。
  */
 export interface ScreenEnvironment {
@@ -51,7 +51,7 @@ interface ScreenDefinitionBase<C> {
   readonly segment: string;
   /** タブの表示名(文言資源の語をそのまま使う)。 */
   readonly label: string;
-  /** タブの並び順(昇順。重複不可)。既存は 100 刻み(ADR-0173 §1)。間に挿入するときは間の値を使う。 */
+  /** タブの並び順(昇順。重複不可)。既存は 100 刻み(ADR-0323 §1)。間に挿入するときは間の値を使う。 */
   readonly order: number;
   /** 画面のクライアントを作る(App のマウント時に1回だけ呼ぶ。ここで通信しない)。 */
   readonly createClient: (deps: ScreenClientDeps) => C;

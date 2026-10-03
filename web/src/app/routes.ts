@@ -1,6 +1,6 @@
 // P4-10: URL で画面を切り替える(ルーターのライブラリは入れない。ADR-0300 §1)。
 // 画面 ID ↔ パスの区切り・タブの表示名・文書のタイトルの対応は、各画面の登録ファイル(`*.screen.tsx`)が正で、
-// app/screens.tsx が集めた SCREENS からこの表を導く(ADR-0173。画面を足すときこのファイルは触らない)。
+// app/screens.tsx が集めた SCREENS からこの表を導く(ADR-0323。画面を足すときこのファイルは触らない)。
 // パスは Vite の BASE_URL(import.meta.env.BASE_URL、末尾は "/")からの相対として扱う。
 
 import { aboutText, appText } from "../i18n/ja";
@@ -21,7 +21,7 @@ export interface ScreenRoute {
 }
 
 /**
- * 画面 ID(登録ファイルの id。ADR-0173 で登録ファイルからの導出に変えたため文字列。
+ * 画面 ID(登録ファイルの id。ADR-0323 で登録ファイルからの導出に変えたため文字列。
  * 重複・欠落は app/screens.tsx の buildScreenRegistry と app/screenRegistry.test.ts が守る)。
  */
 export type ScreenId = string;

@@ -1,4 +1,4 @@
-// 判定(JD5・ADR-0705)の文言。ADR-0173 で i18n/ja.ts から移した(ja.ts が再エクスポートする)。
+// 判定(JD5・ADR-0705)の文言。ADR-0323 で i18n/ja.ts から移した(ja.ts が再エクスポートする)。
 // このレーンの文言はこのファイルにだけ足す(ja.ts は触らない)。
 
 import type { StatKey } from "../engine/types";

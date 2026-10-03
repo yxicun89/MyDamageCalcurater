@@ -3,7 +3,7 @@
 // オフラインの架空の例データの ID を送ると 422 になるので、ダメージ計算の実行場所(ヘッダーの切替)に
 // 関係なく、常にオンラインの取得口から読んだマスタを画面へ渡す。画面を開いたとき(mount)に1回だけ読む。
 // 読めなければ、オフラインの架空データへ静かに落とさず、日本語の案内と「再試行」を出す。
-// ADR-0173: 以前の高階コンポーネント withOnlineMaster(共有の ScreenProps 専用)を、各画面の Props の型を崩さずに
+// ADR-0323: 以前の高階コンポーネント withOnlineMaster(共有の ScreenProps 専用)を、各画面の Props の型を崩さずに
 // 使える render-prop に置き換えた(画面の登録ファイルの render が children で画面を描く)。挙動は同じ。
 
 import { useEffect, useState, type ReactNode } from "react";

@@ -1,4 +1,4 @@
-// 素早さ比較の画面の登録(SP3・ADR-0604 §2。ADR-0173)。
+// 素早さ比較の画面の登録(SP3・ADR-0604 §2。ADR-0323)。
 // engine(WASM)・master(pokedex のマスタ)のどちらも使わない(ADR-0604 §5)。issue 308: マスタの読み込みに
 // 失敗していても、このタブだけは使える(usesMaster: false)。
 import { defineScreen } from "../app/screenDefinition";

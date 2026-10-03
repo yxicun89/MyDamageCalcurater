@@ -1,4 +1,4 @@
-// 構築ビルダーの画面の登録(P5-5 PR-A1・ADR-0309 §1・§2。ADR-0173)。
+// 構築ビルダーの画面の登録(P5-5 PR-A1・ADR-0309 §1・§2。ADR-0323)。
 // PR-A2 のメンバー編集で種族・技・持ち物・特性の名前解決にマスタが要るため usesMaster: true。
 import { defineScreen } from "../app/screenDefinition";
 import { appText } from "../i18n/ja";

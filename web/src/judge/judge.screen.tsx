@@ -1,4 +1,4 @@
-// 判定(抜けて倒せるか・返り討ちに遭うか)の画面の登録(JD5・ADR-0705 §1。ADR-0173)。
+// 判定(抜けて倒せるか・返り討ちに遭うか)の画面の登録(JD5・ADR-0705 §1。ADR-0323)。
 // issue 276(ADR-0411): API 専用なので、計算モードに関係なくオンラインのマスタを使う。
 import { OnlineMasterGate } from "../app/onlineMasterGate";
 import { defineScreen } from "../app/screenDefinition";

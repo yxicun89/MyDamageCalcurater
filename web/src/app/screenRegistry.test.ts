@@ -1,4 +1,4 @@
-// ADR-0173: 画面の登録ファイル(`*.screen.tsx`)の整合テスト。各レーンが共有ファイルを触らずに画面を足せる代わりに、
+// ADR-0323: 画面の登録ファイル(`*.screen.tsx`)の整合テスト。各レーンが共有ファイルを触らずに画面を足せる代わりに、
 // 重複・欠落・形の誤りはここ(と起動時の buildScreenRegistry)で検出する。
 
 import { describe, expect, test } from "vitest";
@@ -77,6 +77,25 @@ describe("buildScreenRegistry の検証", () => {
 
   test("既定エクスポートが無い登録ファイルは例外", () => {
     expect(() => buildScreenRegistry({ "./x.screen.tsx": undefined })).toThrow(/x\.screen\.tsx/);
+  });
+
+  test("defineScreen を使わずコンポーネントを既定エクスポートにした登録ファイルは、ファイル名入りの例外", () => {
+    function FooScreen() {
+      return null;
+    }
+    expect(() => buildScreenRegistry({ "../foo/foo.screen.tsx": FooScreen })).toThrow(
+      /foo\.screen\.tsx.*defineScreen/,
+    );
+  });
+
+  test.each([
+    ["id が文字列でない", { ...fakeScreen(), id: 1 }],
+    ["segment が文字列でない", { ...fakeScreen(), segment: null }],
+    ["label が文字列でない", { ...fakeScreen(), label: undefined }],
+    ["order が数値でない", { ...fakeScreen(), order: "100" }],
+    ["instantiate が関数でない", { ...fakeScreen(), instantiate: "x" }],
+  ])("%s 登録ファイルは、ファイル名入りの例外", (_name, value) => {
+    expect(() => buildScreenRegistry({ "./bad.screen.tsx": value })).toThrow(/bad\.screen\.tsx/);
   });
 
   test("id の重複は例外", () => {

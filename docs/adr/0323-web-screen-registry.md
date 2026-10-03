@@ -1,6 +1,7 @@
-# ADR-0173: Web の画面レジストリ(画面・タブを足しても共有ファイルを編集しない)
+# ADR-0323: Web の画面レジストリ(画面・タブを足しても共有ファイルを編集しない)
 
 - 状態: 採用
+- 番号: 当初 0173 で起票したが、Web の ADR は Web 帯(0300〜)に集める規約(COORDINATION.md)に合わせて 0323 に付け替えた
 - 日付: 2026-10-03
 - レーン: Web(ユーザー決定 2026-10-03「画面レジストリ化」。iOS は別 PR で同じ考え方を取る)
 - 関連: ADR-0300 §1(URL で画面を切り替える。ルーターのライブラリは入れない)、ADR-0304 追記6(issue 308: マスタ不要の画面)、
@@ -24,13 +25,16 @@
    (`web/src/screens/calc.screen.tsx`・`reverse.screen.tsx`・`balance.screen.tsx`、`web/src/speed/speed.screen.tsx`、
    `web/src/judge/judge.screen.tsx`、`web/src/team/team.screen.tsx`、`web/src/adjust/adjust.screen.tsx`)。
    中身は `defineScreen({ id, segment, label, order, usesMaster, createClient, render })` の既定エクスポート。
-   - `app/screens.tsx` が `import.meta.glob("../**/*.screen.tsx", { eager: true, import: "default" })` で集め、
+   - `app/screens.tsx` が `import.meta.glob(["../**/*.screen.tsx", "!../**/*.test.screen.tsx"], { eager: true, import: "default" })` で集め、
      `buildScreenRegistry` で検証して `order` の昇順に並べる(`SCREENS`)。`app/routes.ts` の `SCREEN_ROUTES` はそこから導く。
    - **新しい画面を足すレーンは、自分のディレクトリに登録ファイルを置くだけ**(`App.tsx`・`app/screens.tsx`・`app/routes.ts`・
      `i18n/ja.ts` は触らない)。eager なので遅延読み込みにはならず、バンドルの分割・初期表示は今までと同じ。
    - `order` は既存の並びを再現する値を、間を空けて振る: 計算 100・逆算 200・タイプバランス 300・素早さ 400・判定 500・
      構築 600・調整 700。間に挿入するときは間の値(例 450)を使う。
-   - `buildScreenRegistry` は、既定エクスポートの欠落・id の重複・segment の重複・order の重複・segment の形
+   - **テスト用の fixture には `.screen.tsx` の名前を使わない**(glob に拾われて本番に取り込まれ、タブになる)。念のため `*.test.screen.tsx` は glob から除外している。
+     テストで登録を試すときは、ファイルを作らず `buildScreenRegistry` に偽の登録を渡す。
+   - `buildScreenRegistry` は、既定エクスポートの欠落・形の誤り(id・segment・label が文字列、order が数値、usesMaster が真偽値、
+     instantiate が関数でない。defineScreen を使わずコンポーネントを既定エクスポートにした場合など)・id の重複・segment の重複・order の重複・segment の形
      (小文字英数字とハイフン)・予約済みの segment(`about`)・空の表示名を検出して例外を投げる(起動時に気付ける)。
      `app/screenRegistry.test.ts`(登録の整合テスト)が、実際の登録と偽の登録の両方でこれを確かめる。
    - 画面 ID(`ScreenId`)は `string` になる(以前は `SCREEN_ROUTES` の `as const` から導いた union)。足し忘れの型エラーは、
@@ -64,7 +68,7 @@
      そのレーンの i18n ファイルに置く。
 4. **共有ファイルに残るもの**: 画面を足すときに共有ファイルを編集する必要は無い。アプリ全体の値(全画面が使いうる値)を
    `ScreenEnvironment` に足すときだけ `app/screenDefinition.ts` と `App.tsx` を編集する(これはアプリの骨組みの変更なので Web レーンが行う)。
-5. **他レーンの未マージ PR の移行手順**(この PR のマージ後、`App.tsx`・`app/screens.tsx`・`app/routes.ts`・`i18n/ja.ts` を
+5. **他レーンの未マージ PR の移行手順**(App.tsx 等を編集している Web の PR など)(この PR のマージ後、`App.tsx`・`app/screens.tsx`・`app/routes.ts`・`i18n/ja.ts` を
    編集していた PR は衝突する):
    1. `origin/main` を自分のブランチに merge する。
    2. 4ファイルの衝突は、**main 側(この PR の形)を採る**。

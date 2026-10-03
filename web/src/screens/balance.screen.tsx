@@ -1,4 +1,4 @@
-// タイプバランスの画面の登録(P4-12a・ADR-0303 §2。ADR-0173)。
+// タイプバランスの画面の登録(P4-12a・ADR-0303 §2。ADR-0323)。
 // issue 276(ADR-0411): API 専用なので、計算モードに関係なくオンラインのマスタを使う。
 import { createBalanceClient } from "../api/balanceClient";
 import { OnlineMasterGate } from "../app/onlineMasterGate";

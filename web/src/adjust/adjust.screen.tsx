@@ -1,4 +1,4 @@
-// 調整(指数・16n・SP 配分・最小 SP)の画面の登録(AJ6・ADR-0319 §1。ADR-0173)。
+// 調整(指数・16n・SP 配分・最小 SP)の画面の登録(AJ6・ADR-0319 §1。ADR-0323)。
 // API 専用なので、計算モードに関係なくオンラインのマスタを使う(ADR-0411)。
 import { OnlineMasterGate } from "../app/onlineMasterGate";
 import { defineScreen } from "../app/screenDefinition";

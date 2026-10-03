@@ -1,4 +1,4 @@
-// 調整(AJ6・ADR-0319)の文言。ADR-0173 で i18n/ja.ts から移した(ja.ts が再エクスポートする)。
+// 調整(AJ6・ADR-0319)の文言。ADR-0323 で i18n/ja.ts から移した(ja.ts が再エクスポートする)。
 // このレーンの文言はこのファイルにだけ足す(ja.ts は触らない)。
 
 import { STAT_ORDER } from "../domain/requests";

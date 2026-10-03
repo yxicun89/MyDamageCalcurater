@@ -1,4 +1,4 @@
-// 逆算の画面の登録(P4-4。ADR-0173)。
+// 逆算の画面の登録(P4-4。ADR-0323)。
 import { defineScreen, noClient } from "../app/screenDefinition";
 import { appText } from "../i18n/ja";
 import { ReverseScreen } from "./ReverseScreen";

@@ -1,4 +1,4 @@
-// 画面の登録(ADR-0173)。各レーンのディレクトリにある `*.screen.tsx`(登録ファイル)を import.meta.glob で集め、
+// 画面の登録(ADR-0323)。各レーンのディレクトリにある `*.screen.tsx`(登録ファイル)を import.meta.glob で集め、
 // 検証して order の昇順に並べる。画面を足すレーンは、自分のディレクトリに登録ファイルを置くだけでよい
 // (このファイル・App.tsx・app/routes.ts・i18n/ja.ts は触らない)。
 
@@ -13,12 +13,34 @@ export const RESERVED_SEGMENTS: readonly string[] = [ABOUT_SEGMENT];
 const SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**
- * 登録ファイル(パス → 既定エクスポート)を検証して order の昇順に並べる。次のときは例外を投げる:
- * 既定エクスポートが無い・id/segment/order の重複・segment の形が不正・予約済みの segment・空の表示名・order が有限の数でない。
+ * 登録ファイルの既定エクスポートが defineScreen の結果の形か(id・segment・label が文字列、order が数値、
+ * usesMaster が真偽値、instantiate が関数)。React コンポーネントをそのまま既定エクスポートにした誤りなどを弾く。
  */
-export function buildScreenRegistry(
-  modules: Readonly<Record<string, RegisteredScreen | undefined>>,
-): readonly RegisteredScreen[] {
+function isRegisteredScreen(value: unknown): value is RegisteredScreen {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  return (
+    "id" in value &&
+    typeof value.id === "string" &&
+    "segment" in value &&
+    typeof value.segment === "string" &&
+    "label" in value &&
+    typeof value.label === "string" &&
+    "order" in value &&
+    typeof value.order === "number" &&
+    "usesMaster" in value &&
+    typeof value.usesMaster === "boolean" &&
+    "instantiate" in value &&
+    typeof value.instantiate === "function"
+  );
+}
+
+/**
+ * 登録ファイル(パス → 既定エクスポート)を検証して order の昇順に並べる。次のときは例外を投げる:
+ * 既定エクスポートが無い・defineScreen の結果の形でない・id/segment/order の重複・segment の形が不正・予約済みの segment・空の表示名・order が有限の数でない。
+ */
+export function buildScreenRegistry(modules: Readonly<Record<string, unknown>>): readonly RegisteredScreen[] {
   const screens: RegisteredScreen[] = [];
   const seenIds = new Map<string, string>();
   const seenSegments = new Map<string, string>();
@@ -26,6 +48,11 @@ export function buildScreenRegistry(
   for (const [path, screen] of Object.entries(modules)) {
     if (screen === undefined) {
       throw new Error(`screen registry: ${path} に既定エクスポート(defineScreen)がありません`);
+    }
+    if (!isRegisteredScreen(screen)) {
+      throw new Error(
+        `screen registry: ${path} の既定エクスポートが defineScreen の結果ではありません(コンポーネントを直接エクスポートしていないか確認)`,
+      );
     }
     const duplicateId = seenIds.get(screen.id);
     if (duplicateId !== undefined) {
@@ -63,8 +90,11 @@ export function buildScreenRegistry(
   return screens.sort((a, b) => a.order - b.order);
 }
 
-/** 登録ファイル(eager: 遅延読み込みにはしない。バンドルの形は今までと同じ)。 */
-const registeredModules = import.meta.glob<RegisteredScreen | undefined>("../**/*.screen.tsx", {
+/**
+ * 登録ファイル(eager: 遅延読み込みにはしない。バンドルの形は今までと同じ)。`*.screen.tsx` は本番に取り込まれてタブになるので、
+ * テスト用の fixture にはこの名前を使わない(念のため `*.test.screen.tsx` は除外する)。
+ */
+const registeredModules = import.meta.glob<unknown>(["../**/*.screen.tsx", "!../**/*.test.screen.tsx"], {
   eager: true,
   import: "default",
 });

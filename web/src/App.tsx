@@ -5,7 +5,7 @@
 // 単一の engine を渡すと(既存の使い方のまま)両モードでその engine を使う。
 // P4-10: タブの選択は URL(History API)と連動する(ADR-0300 §1: ルーターのライブラリは入れない)。
 // 画面 ID・パス・タブの表示名・文書タイトルの対応は app/routes.ts の SCREEN_ROUTES を正とする。
-// ADR-0173: 各画面(とそのクライアント)は登録ファイル(`*.screen.tsx`)が持つ。画面を足すときこのファイルは触らない。
+// ADR-0323: 各画面(とそのクライアント)は登録ファイル(`*.screen.tsx`)が持つ。画面を足すときこのファイルは触らない。
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import "./App.css";
@@ -99,7 +99,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   const [fallbackOfflineEngine] = useState<CalcEngine>(() => createWasmEngine(browserWasmLoader()));
   // 端末 ID・セッション ID はマウント時に1回だけ作る(ADR-0301 §3: セッション ID はページを開くたびに新しく)。
   const [clientIds] = useState<ClientIds>(() => createClientIds());
-  // ADR-0173: 各画面のクライアント(balance・speed・judge・team・adjust など)は、画面の登録ファイルの createClient が
+  // ADR-0323: 各画面のクライアント(balance・speed・judge・team・adjust など)は、画面の登録ファイルの createClient が
   // 作る。マウント時に1回だけ、計算と同じ基点 URL・端末 ID・セッション ID で全画面分を作る(どれも生成時に fetch しない)。
   const [screenInstances] = useState<readonly ScreenInstance[]>(() =>
     instantiateScreens(SCREENS, {
@@ -467,7 +467,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
 
 interface AppTabPanelProps {
   readonly tab: ScreenId;
-  /** 登録された画面の描画の口(タブの並び順。ADR-0173)。 */
+  /** 登録された画面の描画の口(タブの並び順。ADR-0323)。 */
   readonly screens: readonly ScreenInstance[];
   /** currentMasterLoad !== null が確かめられてから渡される(App 側の分岐)。 */
   readonly currentMasterLoad: MasterLoadResult;
@@ -542,7 +542,7 @@ function AppTabPanel({
           }
           if (!screen.usesMaster) {
             // issue 308: マスタを使わない画面(素早さ)は、失敗中でも master・engine を渡さずに
-            // 描画する(登録ファイルの render は両方を持たない値しか受け取らない。ADR-0304 追記6・ADR-0173)。
+            // 描画する(登録ファイルの render は両方を持たない値しか受け取らない。ADR-0304 追記6・ADR-0323)。
             // key は ok 側の分岐と同じ id にする(上のコメントのとおり)。
             return (
               <div key={id} hidden={hidden}>

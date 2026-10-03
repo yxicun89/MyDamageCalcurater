@@ -8,7 +8,7 @@ import type { ObservationUnit } from "../domain/observations";
 import type { ReverseSide, UnsupportedMark, UnsupportedReason, UnsupportedTarget } from "../engine/types";
 import { abilityFieldLabel, itemFieldLabel, pokemonFieldLabel, speciesPlaceholderOption } from "./common";
 
-// ADR-0173: レーン固有の文言はレーン別のファイルに置き、既存の import 先(i18n/ja)を変えないためにここで再エクスポートする。
+// ADR-0323: レーン固有の文言はレーン別のファイルに置き、既存の import 先(i18n/ja)を変えないためにここで再エクスポートする。
 // 新しいレーンは i18n/<レーン>.ts を作って画面から直接 import する(この一覧に行を足さない)。
 export { statLetterJa } from "./common";
 export * from "./balance";
@@ -78,7 +78,7 @@ export function isTypeId(value: string): value is TypeId {
 const attackerRegionLabel = "攻撃側";
 const defenderRegionLabel = "防御側";
 // 入力欄の見えるラベルの語(pokemonFieldLabel・itemFieldLabel・abilityFieldLabel)は、レーン別の文言ファイルも使うので
-// i18n/common.ts に置く(ADR-0173)。
+// i18n/common.ts に置く(ADR-0323)。
 
 /**
  * メガシンカの持ち物固定の文言(issue 515、ADR-0320、docs/mega-evolution-spec.md §4-3)。iOS は同じ語にそろえる。
