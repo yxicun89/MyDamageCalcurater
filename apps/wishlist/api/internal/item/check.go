@@ -6,6 +6,8 @@ import (
 	"slices"
 
 	"github.com/oapi-codegen/nullable"
+
+	"example.com/pokecalc/apps/wishlist/api/internal/query"
 )
 
 // checkUniqueSiteIDs は site_ids に重複が無いことを確かめる(重複は ErrInvalid。DB に書く前に弾く)。
@@ -56,4 +58,32 @@ func applyNullable[T any](cur *T, n nullable.Nullable[T]) *T {
 	}
 	v := n.MustGet()
 	return &v
+}
+
+// checkAliasDuplicates は、正規化後の語がジャンル内で重複しないことを確かめる(重複は ErrInvalid)。
+// 空の語・グループの大きさの検査は Service が行う。
+func checkAliasDuplicates(groups [][]string) error {
+	seen := map[string]struct{}{}
+	for _, g := range groups {
+		for _, w := range g {
+			n := query.Normalize(w)
+			if _, dup := seen[n]; dup {
+				return fmt.Errorf("%w: alias %q is duplicated after normalization", ErrInvalid, w)
+			}
+			seen[n] = struct{}{}
+		}
+	}
+	return nil
+}
+
+// cloneAliases は辞書の深いコピー(常に非 nil)。
+func cloneAliases(groups [][]string) [][]string {
+	out := make([][]string, len(groups))
+	for i, g := range groups {
+		out[i] = slices.Clone(g)
+		if out[i] == nil {
+			out[i] = []string{}
+		}
+	}
+	return out
 }

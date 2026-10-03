@@ -64,7 +64,11 @@ func toAPIGenre(g item.Genre) api.Genre {
 	if ids == nil {
 		ids = []int64{}
 	}
-	return api.Genre{Id: g.ID, Name: g.Name, QueryTemplate: g.QueryTemplate, SortOrder: g.SortOrder, SiteIds: ids}
+	aliases := g.Aliases
+	if aliases == nil {
+		aliases = [][]string{}
+	}
+	return api.Genre{Id: g.ID, Name: g.Name, QueryTemplate: g.QueryTemplate, SortOrder: g.SortOrder, SiteIds: ids, Aliases: &aliases}
 }
 
 func toAPISite(s item.Site) api.Site {
@@ -385,6 +389,9 @@ func (s *server) CreateGenre(ctx context.Context, req api.CreateGenreRequestObje
 	if b.SiteIds != nil {
 		in.SiteIDs = *b.SiteIds
 	}
+	if b.Aliases != nil {
+		in.Aliases = *b.Aliases
+	}
 	g, err := s.items.CreateGenre(ctx, in)
 	if err != nil {
 		return nil, err
@@ -400,7 +407,7 @@ func (s *server) UpdateGenre(ctx context.Context, req api.UpdateGenreRequestObje
 	if b == nil {
 		return nil, badRequest("request body is required")
 	}
-	g, err := s.items.UpdateGenre(ctx, req.Id, item.GenrePatch{Name: b.Name, QueryTemplate: b.QueryTemplate, SortOrder: b.SortOrder, SiteIDs: b.SiteIds})
+	g, err := s.items.UpdateGenre(ctx, req.Id, item.GenrePatch{Name: b.Name, QueryTemplate: b.QueryTemplate, SortOrder: b.SortOrder, SiteIDs: b.SiteIds, Aliases: b.Aliases})
 	if err != nil {
 		return nil, err
 	}

@@ -87,6 +87,15 @@ func (q *Queries) CreateSite(ctx context.Context, arg CreateSiteParams) (int64, 
 	return result.LastInsertId()
 }
 
+const deleteGenreAliases = `-- name: DeleteGenreAliases :exec
+DELETE FROM genre_aliases WHERE genre_id = ?
+`
+
+func (q *Queries) DeleteGenreAliases(ctx context.Context, genreID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteGenreAliases, genreID)
+	return err
+}
+
 const deleteGenreSites = `-- name: DeleteGenreSites :exec
 DELETE FROM genre_sites WHERE genre_id = ?
 `
@@ -230,6 +239,27 @@ func (q *Queries) GetSite(ctx context.Context, id int64) (Site, error) {
 	return i, err
 }
 
+const insertGenreAlias = `-- name: InsertGenreAlias :exec
+INSERT INTO genre_aliases (genre_id, group_no, alias, normalized) VALUES (?, ?, ?, ?)
+`
+
+type InsertGenreAliasParams struct {
+	GenreID    int64
+	GroupNo    int32
+	Alias      string
+	Normalized string
+}
+
+func (q *Queries) InsertGenreAlias(ctx context.Context, arg InsertGenreAliasParams) error {
+	_, err := q.db.ExecContext(ctx, insertGenreAlias,
+		arg.GenreID,
+		arg.GroupNo,
+		arg.Alias,
+		arg.Normalized,
+	)
+	return err
+}
+
 const insertGenreSite = `-- name: InsertGenreSite :exec
 INSERT INTO genre_sites (genre_id, site_id, sort_order) VALUES (?, ?, ?)
 `
@@ -334,6 +364,72 @@ func (q *Queries) ListEstimatesByItem(ctx context.Context, itemID int64) ([]List
 			&i.InStockCount,
 			&i.Status,
 			&i.FetchedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGenreAliases = `-- name: ListGenreAliases :many
+SELECT id, genre_id, group_no, alias, normalized FROM genre_aliases ORDER BY genre_id, group_no, id
+`
+
+func (q *Queries) ListGenreAliases(ctx context.Context) ([]GenreAlias, error) {
+	rows, err := q.db.QueryContext(ctx, listGenreAliases)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GenreAlias
+	for rows.Next() {
+		var i GenreAlias
+		if err := rows.Scan(
+			&i.ID,
+			&i.GenreID,
+			&i.GroupNo,
+			&i.Alias,
+			&i.Normalized,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGenreAliasesByGenre = `-- name: ListGenreAliasesByGenre :many
+SELECT id, genre_id, group_no, alias, normalized FROM genre_aliases WHERE genre_id = ? ORDER BY group_no, id
+`
+
+func (q *Queries) ListGenreAliasesByGenre(ctx context.Context, genreID int64) ([]GenreAlias, error) {
+	rows, err := q.db.QueryContext(ctx, listGenreAliasesByGenre, genreID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GenreAlias
+	for rows.Next() {
+		var i GenreAlias
+		if err := rows.Scan(
+			&i.ID,
+			&i.GenreID,
+			&i.GroupNo,
+			&i.Alias,
+			&i.Normalized,
 		); err != nil {
 			return nil, err
 		}

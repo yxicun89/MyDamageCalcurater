@@ -265,6 +265,7 @@ export interface components {
             sort_order: number;
             /** @description 表示するサイト(表示順) */
             site_ids: components["schemas"]["ID"][];
+            aliases?: components["schemas"]["AliasGroups"];
         };
         GenreCreate: {
             name: string;
@@ -273,6 +274,7 @@ export interface components {
             /** @default 0 */
             sort_order: number;
             site_ids?: components["schemas"]["ID"][];
+            aliases?: components["schemas"]["AliasGroups"];
         };
         GenreUpdate: {
             name?: string;
@@ -280,7 +282,15 @@ export interface components {
             sort_order?: number;
             /** @description 渡すと表示するサイトと順序を全件置き換える */
             site_ids?: components["schemas"]["ID"][];
+            aliases?: components["schemas"]["AliasGroups"];
         };
+        /**
+         * @description 表記揺れの辞書(フェーズ4-1。docs/phase4-spec.md)。1 グループは同じものを指す語の集合(例 `["S.H.Figuarts", "SHフィギュアーツ", "フィギュアーツ"]`)。
+         *     参考外の判定(title_mismatch)で、商品名のトークンがグループの語と正規化して一致すれば、同じグループのどの語がタイトルに含まれても一致とみなす。
+         *     応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)。
+         *     各語は前後の空白を除いて 1〜64 文字、1 グループは 2 語以上、正規化後の語はジャンル内で重複しない(違反は 422)
+         */
+        AliasGroups: string[][];
         Site: {
             id: components["schemas"]["ID"];
             name: string;

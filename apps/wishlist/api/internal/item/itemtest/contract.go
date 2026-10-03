@@ -485,4 +485,7 @@ func RunRepositoryContract(t *testing.T, newRepo func(t *testing.T) item.Reposit
 			t.Error("削除した商品が一覧に残っている")
 		}
 	})
+
+	// フェーズ4-1: 表記揺れの辞書(docs/phase4-spec.md AC-A1〜A3)。
+	runAliasContract(t, newRepo)
 }
