@@ -127,6 +127,38 @@ export const judgeScreenText = {
   turnOrderTieLabel: "どちらが先に動くか決まらない",
   attackerKoLabel: "自分の技で相手を",
   defenderKoLabel: "相手の技で自分が",
+  // ---- calc-svc の「未対応」の印(issue 271・ADR-0708)。確定数の行の直下に方向ごとに出す ----
+  /**
+   * 印の注意文。direction は印の付いた確定数(attackerKo = 自分の技の確定数 / defenderKo = 相手の技の確定数)。
+   * labels は 印ごとに組み立て済みの印の文言(読点区切りで並べる)。
+   */
+  koUnsupportedNote: (direction: "attackerKo" | "defenderKo", labels: readonly string[]): string =>
+    `${direction === "attackerKo" ? "自分の技" : "相手の技"}の確定数は当てにならないかもしれません(未対応: ${labels.join("、")})`,
+  /**
+   * 印の target の読み替え(ADR-0708 §5)。attacker_* / defender_* は「その calc から見た」役割なので、
+   * 順方向(attackerKo)は attacker = 自分・defender = 相手候補、逆方向(defenderKo)はその逆。
+   * 契約は target を enum にしない(ADR-0215)ので、未知の値は向きの無い汎用の語を返す。
+   */
+  koUnsupportedTargetLabel: (direction: "attackerKo" | "defenderKo", target: string): string => {
+    const self = "自分";
+    const opponent = "相手候補";
+    const attackerSide = direction === "attackerKo" ? self : opponent;
+    const defenderSide = direction === "attackerKo" ? opponent : self;
+    switch (target) {
+      case "move":
+        return `${attackerSide}の技`;
+      case "attacker_item":
+        return `${attackerSide}の持ち物`;
+      case "attacker_ability":
+        return `${attackerSide}の特性`;
+      case "defender_item":
+        return `${defenderSide}の持ち物`;
+      case "defender_ability":
+        return `${defenderSide}の特性`;
+      default:
+        return "項目";
+    }
+  },
   koGuaranteed: (hits: number): string => `確定${hits}発`,
   koRandom: (hits: number, percent: number): string => `乱数${hits}発(${percent}%)`,
   koNone: "倒せない",

@@ -6,7 +6,7 @@
 import type { Ability, Item, Move, UnsupportedMark } from "../engine/types";
 import { unsupportedText } from "../i18n/ja";
 
-function unsupportedMarkName(
+export function unsupportedMarkName(
   mark: UnsupportedMark,
   moves: readonly Move[],
   items: readonly Item[],
