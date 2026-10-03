@@ -511,3 +511,41 @@ func TestPublicUnavailable(t *testing.T) {
 		})
 	}
 }
+
+// AC-P4c: 種族の詳細は isMega(常に)と requiredItemId(キーは常に。メガでなければ null)を返す(issue 515)。
+// requiredItemId は契約上 optional なので生成型は omitempty だが、公開 API は null でもキーを出す。
+func TestGetSpeciesMegaFields(t *testing.T) {
+	h := newHandler(t, storetest.New())
+	tests := []struct {
+		name     string
+		key      string
+		isMega   bool
+		wantItem any // nil は JSON の null
+	}{
+		{"メガ種族", "9001-001", true, "teststone"},
+		{"非メガ種族", "9001-000", false, nil},
+		{"レギュレーション外の非メガ", "9003-000", false, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := do(t, h, http.MethodGet, "/api/pokedex/species/"+tt.key, true)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d\nbody=%s", rec.Code, rec.Body.String())
+			}
+			var raw map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+				t.Fatal(err)
+			}
+			if got, ok := raw["isMega"]; !ok || got != tt.isMega {
+				t.Errorf("isMega = %v (present=%v), want %v", got, ok, tt.isMega)
+			}
+			got, ok := raw["requiredItemId"]
+			if !ok {
+				t.Fatalf("requiredItemId のキーが無い: %s", rec.Body.String())
+			}
+			if got != tt.wantItem {
+				t.Errorf("requiredItemId = %v, want %v", got, tt.wantItem)
+			}
+		})
+	}
+}
