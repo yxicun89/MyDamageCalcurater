@@ -14,6 +14,7 @@ import {
   SPECIES,
   calcRows,
   chooseRadio,
+  combobox,
   openApp,
   rowTexts,
   selectMatchup,
@@ -250,7 +251,10 @@ test("IndexedDB が使えなくても、オンラインの計算は成功する(
   });
   await openApp(page);
   await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
-  // オンライン(既定)の計算は calc-svc が無いので結果行までは見ない。マスタ・種族の取得が成功して
-  // 画面にエラーが出ないことを確かめる。
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  // オンライン(既定)の計算は calc-svc が無いので、結果行は出ず計算のエラー(role=alert)が出るのが正しい
+  // (CI のような遅い環境では確実に出るので、alert の有無では確かめない)。確かめたいのは「IndexedDB が使えなくても
+  // マスタ・種族の取得は成功し、選んだ種族が画面に残る」こと。マスタの読み込み失敗の画面(「再試行」)は出ない。
+  await expect(combobox(page, "攻撃側のポケモン")).toHaveValue(SPECIES.fire.nameJa);
+  await expect(combobox(page, "防御側のポケモン")).toHaveValue(SPECIES.water.nameJa);
+  await expect(page.getByRole("button", { name: "再試行", exact: true })).toHaveCount(0);
 });

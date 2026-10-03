@@ -5,7 +5,8 @@
 //   - load() は「1回で全件取れるもの」だけを読む = 持ち物(limit=200)と性格(listNatures)の2本だけ。
 //     種族・技は読まない(公開 API では一括取得できない。ADR-0304 §1)
 //   - 全リクエストに X-Device-Id・X-Session-Id を付ける(CLAUDE.md 技術規約)
-//   - 持ち物・特性は公開 API に効果データが無いので effect は null(capabilities.effects が false)
+//   - 持ち物・特性の effect は、公開 API の省略可の effect(DB の形 = PascalCase。ADR-0218)を engine の形(camelCase)に
+//     写す。省略は null。効果を持つ持ち物が1件も無い応答(古いサーバー)は capabilities.effects を false にする(ADR-0322)
 //   - 持ち物が limit ちょうど返ってきたら、打ち切られた可能性を黙って無視せず失敗する
 //   - 種族は searchSpecies(前方一致・limit=50)で都度引き、空クエリでは fetch しない
 //   - resolveSpecies は getSpecies を引き、learnset の ID を順序どおり保つ
@@ -611,4 +612,70 @@ test("moves/batch にも端末 ID・セッション ID を付ける", async () =
   const { init } = callTo(fetchMock, PATHS.movesBatch);
   expect(headerOf(init, "X-Device-Id")).toBe(ids.deviceId);
   expect(headerOf(init, "X-Session-Id")).toBe(ids.sessionId);
+});
+
+// issue 211・ADR-0218・ADR-0322: 公開 Item/Ability の effect(PascalCase)を engine の形(camelCase)に写す。
+const effectItemsResponse: Schemas["Item"][] = [
+  { id: "example-item-def", nameJa: "テストぼうぎょだま", effect: { StatMods: { def: 6144 } } },
+  { id: "example-item-plain", nameJa: "テストなにもなし" },
+  { id: "example-item-berry", nameJa: "テストきのみ", effect: { ResistBerryType: "fire", DamageMod: 2048 } },
+];
+
+describe("公開 API の effect(issue 211)", () => {
+  test("持ち物の effect を camelCase に写し、省略は null にする", async () => {
+    const fetchMock = okFetch({ [PATHS.items]: () => jsonResponse(200, effectItemsResponse) });
+    const master = await createSource(fetchMock).load();
+    expect(master.items).toEqual([
+      { id: "example-item-def", nameJa: "テストぼうぎょだま", effect: { statMods: { def: 6144 } } },
+      { id: "example-item-plain", nameJa: "テストなにもなし", effect: null },
+      {
+        id: "example-item-berry",
+        nameJa: "テストきのみ",
+        effect: { resistBerryType: "fire", damageMod: 2048 },
+      },
+    ]);
+  });
+
+  test("効果を持つ持ち物が1件でもあれば capabilities.effects は true(ほかは従来どおり)", async () => {
+    const fetchMock = okFetch({ [PATHS.items]: () => jsonResponse(200, effectItemsResponse) });
+    const master = await createSource(fetchMock).load();
+    expect(master.capabilities).toEqual({ ...ONLINE_MASTER_CAPABILITIES, effects: true });
+  });
+
+  test("効果を持つ持ち物が1件も無い応答(古いサーバー)は effects: false のまま", async () => {
+    const master = await createSource(okFetch()).load();
+    expect(master.capabilities?.effects).toBe(false);
+  });
+
+  test("特性の effect は入れ子(DefAbsorbTypes の値・辞書のキー)を保って camelCase にする", async () => {
+    const detail: Schemas["SpeciesDetail"] = {
+      ...speciesDetail,
+      abilities: [
+        {
+          id: "example-ability-absorb",
+          nameJa: "テストちょすい",
+          effect: {
+            DefAbsorbTypes: { water: { HealNumerator: 1, HealDenominator: 4 } },
+            DefResistType: { fire: 2048 },
+            IgnoresBurn: true,
+          },
+        },
+        { id: "example-ability-none", nameJa: "テストなし" },
+      ],
+    };
+    const fetchMock = okFetch({ detail: () => jsonResponse(200, detail) });
+    const resolved = await createSource(fetchMock).search.resolveSpecies("9001-000");
+    expect(resolved.abilities).toEqual([
+      {
+        id: "example-ability-absorb",
+        nameJa: "テストちょすい",
+        effect: {
+          defAbsorbTypes: { water: { healNumerator: 1, healDenominator: 4 } },
+          defResistType: { fire: 2048 },
+          ignoresBurn: true,
+        },
+      },
+      { id: "example-ability-none", nameJa: "テストなし", effect: null },
+    ]);
+  });
 });

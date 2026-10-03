@@ -284,6 +284,10 @@ check-master-version: ## calc・balance・speed が export した read model と
 master-release: ## マスタ更新を calc・balance・speed へ反映する(import Job 完了待ち→export 検証→変化なしなら終了→入れ替え・rollout→版一致→smoke。要 k3d の context。ADR-0135)
 	@./scripts/master-release.sh
 
+.PHONY: pokedex-export-k3d
+pokedex-export-k3d: ## k3d の mysql から read model を data/generated/readmodel/ に書く(port-forward と DSN の取得を内部で行う。make up・import 済みが前提)
+	@./scripts/pokedex-export-local.sh
+
 .PHONY: pokedex-export
 pokedex-export: ## balance/speed 向けの read model を6ファイル(4ファイル+type-chart.json・metadata.json)書く(POKEDEX_DATABASE_DSN が必須。出力先 data/generated/readmodel/)
 	@cd services && $(GO) run ./pokedex/cmd/pokedex export -out ../data/generated/readmodel
