@@ -69,7 +69,10 @@ for (const v of vectors) {
 
 // 呼び出す直前にだけ typeChart を足す。ネイティブ側(wasmexpect)とキー順序が違っても、
 // 比べるのはレスポンスなので一致の仕組みは壊れない。
+// adjustIndices は契約に typeChart を持たない(注入すると unknown_field)ので足さない(ADR-0250 §4)。
+const fnsWithoutTypeChart = new Set(['adjustIndices']);
 function requestJSON(v) {
+  if (fnsWithoutTypeChart.has(v.fn)) return JSON.stringify(v.request);
   return JSON.stringify({ ...v.request, typeChart: vectorDoc.typeChart });
 }
 
@@ -130,7 +133,15 @@ if (goExited !== null) die(`WASM プログラムが起動直後に終了した($
 if (globalThis.pokecalcReady !== true) die('globalThis.pokecalcReady が立たない(engine/cmd/wasm が未実装)');
 
 const api = globalThis.pokecalc;
-for (const fn of ['calc', 'calcBulk', 'calcReverse']) {
+for (const fn of [
+  'calc',
+  'calcBulk',
+  'calcReverse',
+  'adjustIndices',
+  'adjustMinSpToKo',
+  'adjustMinSpToSurvive',
+  'adjustAllocation',
+]) {
   if (typeof api?.[fn] !== 'function') die(`globalThis.pokecalc.${fn} が登録されていない`);
 }
 
