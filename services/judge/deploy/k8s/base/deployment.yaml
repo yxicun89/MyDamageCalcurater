@@ -20,6 +20,8 @@ spec:
         app.kubernetes.io/part-of: pokecalc
     spec:
       automountServiceAccountToken: false
+      # preStop(5秒)+ shutdownTimeout(judge/cmd/api/shutdown.go。15秒)より長い。ADR-0804・issue #324。
+      terminationGracePeriodSeconds: 30
       containers:
         - name: judge
           image: pokecalc/judge:0.1.0
@@ -35,6 +37,10 @@ spec:
             # limits.memory の 64Mi に対して少し余裕を持たせた値(GC が OOMKill の前に働くように)。
             - name: GOMEMLIMIT
               value: 56MiB
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
           readinessProbe:
             httpGet:
               path: /healthz

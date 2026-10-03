@@ -107,7 +107,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 |---|---|---|---|
 | `api-docker-build` | — | `docker build -f services/calc/Dockerfile -t pokecalc/calc:local . ⏎ docker build -f services/gateway/Dockerfile -t pokecalc/gateway:local .` | docker イメージ作成 |
 | `api-k3d-deploy` | api-docker-build | `k3d image import pokecalc/calc:local pokecalc/gateway:local --cluster $(API_CLUSTER) ⏎ kubectl apply -k deploy/k8s/overlays/local-api ⏎ kubectl -n pokecalc rollout res…` | k3d ノードへ image import, **クラスタへ apply**, Pod 再起動 |
-| `api-smoke` | — | `API_URL=$(API_URL) services/gateway/scripts/smoke.sh` | なし(HTTP のみ。DB は gateway 経由で読むだけ。balance の Ingress 有無を kubectl で確認) |
+| `api-smoke` | — | `API_URL=$(API_URL) services/gateway/scripts/smoke.sh` | なし(HTTP のみ。DB は gateway 経由で読むだけ。balance の Service 有無を kubectl で確認) |
 | `api-kustomize` | — | `kubectl kustomize deploy/k8s/base >/dev/null ⏎ kubectl kustomize deploy/k8s/overlays/local >/dev/null ⏎ kubectl kustomize deploy/k8s/overlays/local-api >/dev/null` | なし(kustomize 描画のみ) |
 
 ### `web/Makefile`(21 定義)

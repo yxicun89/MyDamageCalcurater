@@ -28,7 +28,8 @@ flowchart LR
 
 | パス | 役割 |
 |---|---|
-| `PokeCalcKit/Sources/PokeCalcAPI/Generated` | `api/openapi.yaml` の生成物(`pokedex`・`calc` タグだけ。コミットする・手で編集しない。Go・TS と違い追跡を続ける。衝突は merge ドライバ `ios/scripts/merge-generated.sh` が再生成で解く。ADR-0171 §5) |
+| `PokeCalcKit/Sources/PokeCalcAPI/Generated` | `api/openapi.yaml` の生成物(`pokedex`・`calc` タグだけ。コミットする・手で編集しない) |
+| `PokeCalcKit/Sources/PokeCalcBalanceAPI/Generated` | `services/balance/api/openapi.yaml` の生成物(タイプバランス。schema 名が衝突するので別モジュール。ADR-0415) |
 | `PokeCalcKit/Sources/PokeCalcCore` | ドメインの型・`PokeCalcService`(API 実装とモック)・ViewModel・表示の整形・設定・端末 ID |
 | `PokeCalcKit/Sources/PokeCalcCore/Resources` | モックの架空データ(JSON。名前はすべて「テスト」で始める) |
 | `PokeCalcKit/Sources/PokeCalcDesign` | デザイントークン(docs/design.md と同じ名前・値) |
@@ -44,7 +45,7 @@ flowchart LR
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 make ios-test                        # 生成物の一致・XCTest・XCUITest(シミュレータ)・Info.plist の検査
-make ios-gen                         # api/openapi.yaml を変えたら(ルートの make gen には含めない。結果をコミットする)
+make ios-gen                         # api/openapi.yaml を変えたら(ルートの make gen には含めない)
 make ios-sim-run IOS_SCREEN=calc     # モックで起動してスクリーンショット(root / calc / reverse / team)
 cd ios/PokeCalcKit && swift test     # ロジックだけを macOS で手早く
 ```
