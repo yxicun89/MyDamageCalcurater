@@ -123,7 +123,8 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/ErrorCode`.
         @frozen public enum ErrorCode: String, Codable, Hashable, Sendable, CaseIterable {
-            case missingRequestContext = "missing_request_context"
+            case missingHeader = "missing_header"
+            case invalidHeader = "invalid_header"
             case invalidRequest = "invalid_request"
             case requestTooLarge = "request_too_large"
             case unknownPokemon = "unknown_pokemon"
@@ -132,6 +133,7 @@ extension Components {
             case masterUnavailable = "master_unavailable"
             case overloaded = "overloaded"
             case internalError = "internal_error"
+            case notFound = "not_found"
         }
         /// - Remark: Generated from `#/components/schemas/AnalyzeResponse`.
         public struct AnalyzeResponse: Codable, Hashable, Sendable {

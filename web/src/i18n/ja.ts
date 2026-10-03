@@ -4,6 +4,7 @@
 // TypeId のユニオンは手書きの複製だが、相性表と過不足なく一致することを ja.test.ts が検査して同期を保つ
 // (コーディング規約 §2 の「独立した検証」)。
 
+import { STAT_ORDER } from "../domain/requests";
 import type { ObservationUnit } from "../domain/observations";
 import type {
   ReverseSide,
@@ -118,7 +119,7 @@ export const calcScreenText = {
   attackerPresetGroupLabel: "攻撃側の調整",
 } as const;
 
-/** 計算画面の「詳細」(急所・やけど・天候・フィールド・防御側の壁・攻撃側のランク。issue 274、ADR-0312)の文言。iOS と同じ。 */
+/** 計算画面の「詳細」(急所・やけど・天候・フィールド・防御側の壁・攻撃側と防御側のランク。issue 274、ADR-0312)の文言。iOS と同じ。 */
 export const calcConditionsText = {
   toggleLabel: "詳細",
   criticalLabel: "急所",
@@ -127,6 +128,7 @@ export const calcConditionsText = {
   terrainLabel: "フィールド",
   screensLabel: "防御側の壁",
   ranksLabel: "攻撃側のランク",
+  defenderRanksLabel: "防御側のランク",
   weather: { none: "なし", sun: "はれ", rain: "あめ", sand: "すなあらし", snow: "ゆき" },
   terrain: {
     none: "なし",
@@ -138,6 +140,8 @@ export const calcConditionsText = {
   screens: { reflect: "リフレクター", lightScreen: "ひかりのかべ", auroraVeil: "オーロラベール" },
   rankUpLabel: "攻撃側のランクを上げる",
   rankDownLabel: "攻撃側のランクを下げる",
+  defenderRankUpLabel: "防御側のランクを上げる",
+  defenderRankDownLabel: "防御側のランクを下げる",
   /** ランクの増減ボタンの見た目の記号。 */
   rankUpSymbol: "+",
   rankDownSymbol: "-",
@@ -189,6 +193,8 @@ export const appText = {
    */
   masterLoadErrorDetailLabel: "原因",
   masterLoadRetryLabel: "再試行",
+  /** ADR-0313: オフラインでキャッシュが空(初回・未取得・破棄後)のときの案内。 */
+  masterCacheEmptyError: "オフラインで使うには、一度オンラインで開いてマスタを取得してください",
   masterLoadSwitchToOfflineLabel: "オフラインに切り替える",
   /** 計算・逆算の切り替えタブ(P4-4、ADR-0300 §7)。 */
   tabsLabel: "画面の切り替え",
@@ -204,6 +210,8 @@ export const appText = {
   judgeTabLabel: "判定",
   /** P5-5 PR-A1: 構築ビルダーのタブ(ADR-0309 §1)。 */
   teamTabLabel: "構築",
+  /** AJ6: 調整(指数・16n・SP 配分・最小 SP・技を覚えるポケモン)のタブ(ADR-0319 §1)。 */
+  adjustTabLabel: "調整",
   /** 計算モード(オフライン = WASM / オンライン = API)の切り替え(P4-5、ADR-0301 §4)。 */
   calcModeGroupLabel: "ダメージ計算の実行場所",
   calcModeOfflineLabel: "オフライン(WASM)",
@@ -260,7 +268,8 @@ export const balanceClientText = {
  * 内部メッセージ)を出さず、コードからここを引く。Web 側の balance_unavailable も同じ表で引く。
  */
 export const balanceErrorText = {
-  missing_request_context: "端末の情報を送れませんでした。ページを開き直してください",
+  missing_header: "端末の情報を送れませんでした。ページを開き直してください",
+  invalid_header: "端末の情報が正しくありません。ページを開き直してください",
   invalid_request: "リクエストが正しくありません。入力を見直してください",
   request_too_large: "入力が大きすぎます。メンバーや技を減らしてください",
   unknown_pokemon: "選んだポケモンがサーバーのマスタにありません。選び直してください",
@@ -448,6 +457,17 @@ export const speedScreenText = {
   selfSpeedLabel: (speed: number): string => `実数値 ${String(speed)}`,
   fasterLabel: (rows: number): string => `自分より速い ${String(rows)}行`,
   slowerLabel: (rows: number): string => `自分より遅い ${String(rows)}行`,
+  // ---- 場の状態・追い風・まひ・トリックルーム(ADR-0607) ----
+  /** 左の表の場の状態のグループ(相手側の追い風・トリックルーム)。 */
+  fieldGroupLabel: "場の状態",
+  tableTailwindLabel: "追い風(相手側)",
+  trickRoomLabel: "トリックルーム",
+  /** 右の自分の追い風・まひ(preset / custom のみ)。 */
+  selfTailwindLabel: "追い風(自分側)",
+  paralysisLabel: "まひ",
+  /** トリックルーム中の行動順の読み替え(速い = 後に動く、遅い = 先に動く。ADR-0607 §4)。 */
+  movesBeforeLabel: (rows: number): string => `自分より先に動く ${String(rows)}行`,
+  movesAfterLabel: (rows: number): string => `自分より後に動く ${String(rows)}行`,
 } as const;
 
 /**
@@ -465,6 +485,8 @@ export const judgeClientText = {
  * この見出しとは別に、補助の行として画面が出す。未知のコードは message だけを出す。
  */
 export const judgeErrorText = {
+  missing_header: "端末の情報を送れませんでした。ページを開き直してください",
+  invalid_header: "端末の情報が正しくありません。ページを開き直してください",
   invalid_request: "入力の形が正しくありません",
   unknown_species: "このポケモンはマスタにありません",
   unknown_move: "この技の ID はマスタにありません",
@@ -491,10 +513,20 @@ export const judgeScreenText = {
   natureLabel: "性格",
   abilityLabel: "特性",
   itemLabel: "持ち物",
-  moveIdLabel: "技の ID",
-  /** 技を一覧から選べない理由(ADR-0304 §3 の既知の欠落。ADR-0705 §5)。 */
-  moveIdHint: "技は ID で入力します(ID から技を引く API がまだありません)",
   unselectedOption: "未選択",
+  // ---- issue 309: 技はポケモンの覚える技から選ぶ。調整はプリセット。数値欄は「詳細」に畳む ----
+  /** 技の select の名前(自分側・候補で共通。計算画面の calcScreenText.moveLabel と同じ語)。 */
+  moveLabel: "技",
+  /** 覚える技を1件も引けないとき(learnset が空・技の実体を解決できない)。技の select は disabled のまま。 */
+  moveUnavailableNotice: "この種族の技を読み込めません",
+  /** 数値の直接入力(SP6欄・ランク5欄)を畳む <details> の summary。 */
+  detailsSummaryLabel: "詳細",
+  /** 調整プリセットの radiogroup の名前(自分側・候補で共通。候補の group で絞り込む)。 */
+  presetGroupLabel: "調整",
+  /** 最速プリセット(S 全振り + 素早さ上昇の性格)の表示名。無振り・A特化は attackerPresetText、HB/HD特化は defenderPresetText から。 */
+  fastestPresetLabel: "最速",
+  /** 検証エラーの「どの体か」(自分側。候補は candidateGroupLabel(n) を使う)。 */
+  attackerWhoLabel: "自分",
   spLabel: (stat: StatKey): string => `${statLetterJa[stat]} のポイント`,
   rankLabel: (stat: StatKey): string => `${statLetterJa[stat]} のランク`,
   formatLabel: "対戦形式",
@@ -519,9 +551,21 @@ export const judgeScreenText = {
   spRangeMessage: (max: number): string => `能力ポイントは0〜${max}の整数で入力してください`,
   spTotalMessage: (max: number): string => `能力ポイントの合計は${max}までです`,
   rankRangeMessage: "ランクは-6〜+6の整数で入力してください",
-  requiredMessage: "ポケモン・性格・技の ID をすべて入力してください",
+  requiredMessage: "ポケモン・性格・技をすべて選んでください",
   // ---- 結果(ADR-0705 §8)。judge の値をそのまま出す ----
   speedLabel: (attacker: number, defender: number): string => `素早さ ${attacker} 対 ${defender}`,
+  /**
+   * 素早さに反映した補正・反映していない入力(ADR-0710。issue 235)。judge が返した欄をそのまま文にする。
+   * 反映していない入力は「指定されたが素早さには掛けていない」の意味で、効果が無い特性・持ち物でも出る。
+   */
+  speedAppliedNote: (side: string, names: readonly string[]): string =>
+    `${side}の素早さに反映: ${names.join("・")}`,
+  speedIgnoredNote: (side: string, names: readonly string[]): string =>
+    `${side}の素早さに${names.join("・")}は反映していません`,
+  speedSideSelf: "自分",
+  speedSideOpponent: "相手",
+  speedFactorLabel: { rank: "ランク補正", tailwind: "追い風", choiceScarf: "こだわりスカーフ" } as const,
+  speedIgnoredLabel: { abilityId: "特性", itemId: "持ち物", fieldWeather: "天候" } as const,
   priorityLabel: (attacker: number, defender: number): string => `優先度 ${attacker} 対 ${defender}`,
   outspeedsTrueLabel: "素早さで上回る",
   outspeedsFalseLabel: "素早さで下回る",
@@ -545,6 +589,19 @@ export const judgeScreenText = {
  */
 export const teamClientText = {
   unavailable: "構築の API に接続できません",
+} as const;
+
+/**
+ * P5-5c: 記録 API(record-svc)のクライアント(record/recordClient.ts、ADR-0317)の文言。
+ * 失敗は画面に出さない(黙って非表示)ので、使うのはクライアントが返す Error.message だけ。
+ */
+export const recordClientText = {
+  unavailable: "記録の API に接続できません",
+} as const;
+
+/** P5-5c: 計算画面の「よく計算する相手」チップ(ADR-0317)。 */
+export const frequentOpponentsText = {
+  groupLabel: "よく計算する相手",
 } as const;
 
 /**
@@ -587,6 +644,54 @@ export const teamScreenText = {
   createErrorHeading: "構築を作成できませんでした",
   renameErrorHeading: "構築の名前を変えられませんでした",
   deleteErrorHeading: "構築を削除できませんでした",
+} as const;
+
+/**
+ * P5-5b PR-A2(ADR-0316): 構築のメンバー編集の文言。画面は web/src/team/ にある。
+ * 種族・持ち物などのコントロールの accessible name は「メンバーの group(legend = 「1体目」)」の中で引くので、
+ * 体の番号は名前に含めない。SP の6欄だけは statLetterJa の1文字表記を使う。
+ */
+export const teamMemberText = {
+  /** 構築の行から編集領域を開く / 領域の名前 / 閉じる(未保存の編集は捨てる。API は呼ばない)。 */
+  editLabel: (name: string): string => `「${name}」のメンバーを編集`,
+  editorLabel: (name: string): string => `「${name}」のメンバー編集`,
+  closeLabel: "編集を閉じる",
+  /** パーティ全体を保存する(update は全置換。ADR-0309 §4)。 */
+  saveLabel: "メンバーを保存",
+  savedNotice: "保存しました",
+  saveErrorHeading: "メンバーを保存できませんでした",
+  /** メンバーの追加・削除・並べ替え。 */
+  addLabel: "メンバーを追加",
+  addDisabledNotice: (max: number): string => `メンバーは${max}体までです`,
+  memberLegend: (position: number): string => `${position}体目`,
+  removeLabel: (position: number): string => `${position}体目を削除`,
+  moveUpLabel: (position: number): string => `${position}体目を上へ`,
+  moveDownLabel: (position: number): string => `${position}体目を下へ`,
+  /** 各項目のラベル(メンバーの group の中で引く)。 */
+  speciesLabel: "ポケモン",
+  speciesPlaceholder: "選んでください",
+  unknownSpeciesOption: (key: string): string => `不明なポケモン(${key})`,
+  speciesResolveError: "ポケモンの情報を読み込めませんでした",
+  moveLabel: (slot: number): string => `技${slot}`,
+  moveNone: "(なし)",
+  itemLabel: "持ち物",
+  itemNone: "(なし)",
+  abilityLabel: "特性",
+  /** 特性が未設定(null)のメンバー用。開いた時点で先頭の特性で黙って埋めない(ADR-0316 §12)。 */
+  abilityUnset: "(未選択)",
+  natureLabel: "性格",
+  teraLabel: "テラスタイプ",
+  teraNone: "(なし)",
+  /** SP のグリッド。 */
+  spLegend: "能力ポイント(SP)",
+  spLabel: (letter: string): string => `SP ${letter}`,
+  spSummary: (total: number, max: number, remaining: number): string =>
+    `合計 ${total}/${max}(残り ${remaining})`,
+  /** 入力の検査(role="alert")。 */
+  spStatError: (letter: string, max: number): string => `${letter}は0〜${max}の整数で入力してください`,
+  spTotalError: (over: number, max: number): string => `合計が${max}を${over}超えています`,
+  speciesRequiredError: "ポケモンを選んでください",
+  moveDuplicateError: "同じ技は1体に1つだけ選べます",
 } as const;
 
 /**
@@ -813,4 +918,209 @@ export const resultText = {
   effectivenessNeutral: "等倍",
   effectivenessSuper: (multiplier: number): string => `ばつぐん(×${multiplier})`,
   moveCategory: { physical: "物理", special: "特殊", status: "変化" },
+} as const;
+
+/**
+ * AJ6: 調整 API のクライアント(adjust/adjustClient.ts)が作る文言(ADR-0319 §3。judgeClientText と同じ形)。
+ * サーバーが返す `Error.message`(英語の内部メッセージを含みうる)は画面に出さない(ADR-0411 §3 と同じ)。
+ */
+export const adjustClientText = {
+  unavailable: "調整の API に接続できません",
+  /** 画面が新しい送信・画面を閉じたことで取り消した呼び出し(REQUEST_ABORTED_CODE)。画面には出さない。 */
+  aborted: "新しい入力で調整を取り消しました",
+} as const;
+
+/**
+ * AJ6: 調整の画面に出すエラーの文言(ADR-0319 §6)。キーは api/openapi.yaml の ErrorCode と、
+ * Web 側の adjust_unavailable(adjustClient.ts)。サーバーの message は出さず、コードからこの文言を引く。
+ * 未知のコードは fallback(adjust/adjustFormat.ts の adjustErrorMessage が引き分ける)。
+ */
+export const adjustErrorText = {
+  invalid_json: "入力の形が正しくありません",
+  unknown_field: "入力の形が正しくありません",
+  invalid_enum: "選んだ項目の値が正しくありません",
+  invalid_input: "入力の値が範囲の外です。能力ポイント・上限・発数・確率を確かめてください",
+  unknown_species: "このポケモンはマスタにありません",
+  unknown_move: "この技はマスタにありません",
+  unknown_nature: "この性格はマスタにありません",
+  unknown_item: "この持ち物はマスタにありません",
+  unknown_ability: "この特性はマスタにありません",
+  not_found: "見つかりませんでした。入力を確かめてください",
+  missing_header: "端末の識別子を送れませんでした。ページを読み込み直してください",
+  invalid_header: "端末の識別子を送れませんでした。ページを読み込み直してください",
+  type_chart_missing: "タイプ相性表を読み込めていません。しばらくしてからお試しください",
+  master_unavailable: "マスタの準備ができていません。しばらくしてからお試しください",
+  upstream_unavailable: "調整に必要なサービスに接続できません",
+  /** Web 側のコード(adjustClient.ts。通信できない・応答が読めない)。 */
+  adjust_unavailable: "調整の API に接続できません",
+  /** 上のどれにも当たらないコード。 */
+  fallback: "調整に失敗しました",
+} as const;
+
+/** AJ6: 調整のモード(ADR-0319 §2)。画面の state と文言のキー。 */
+export type AdjustModeKey = "indices" | "bulk" | "offense" | "minKo" | "minSurvive";
+
+/** AJ6: HP のライン(api/openapi.yaml の HPLineKind と同じ値)。 */
+type AdjustHpLineKind = "none" | "16n" | "16n-1";
+
+/** 6能力の数値(SP・実数値)を「H 4 / A 0 / …」の1行にする。 */
+function statsLine(values: Readonly<Record<StatKey, number>>): string {
+  return STAT_ORDER.map((stat) => `${statLetterJa[stat]} ${values[stat]}`).join(" / ");
+}
+
+/**
+ * AJ6: 調整の画面(adjust/AdjustScreen.tsx、ADR-0319)の文言。
+ * 見える見出し・ラベルの語と accessible name は同じ語から組み立てる(docs/design.md「入力のラベル」・issue 304)。
+ * 欄の accessible name は「<領域の見出しの語>の<ラベルの語>」(例「自分」+「ポケモン」→「自分のポケモン」)。
+ */
+export const adjustScreenText = {
+  // ---- 領域(h2 の見出しと region の名前。ADR-0319 §2) ----
+  selfRegionLabel: "自分",
+  modeRegionLabel: "調整の内容",
+  opponentRegionLabel: "相手",
+  goalRegionLabel: "目標",
+  resultRegionLabel: "調整の結果",
+  learnersRegionLabel: "この技を覚えるポケモン",
+  // ---- 欄の見えるラベル(短い語)と、組み立て済みの accessible name ----
+  speciesFieldLabel: "ポケモン",
+  natureFieldLabel: "性格",
+  abilityFieldLabel: "特性",
+  itemFieldLabel: "持ち物",
+  moveFieldLabel: "技",
+  presetFieldLabel: "調整",
+  selfSpeciesLabel: "自分のポケモン",
+  selfNatureLabel: "自分の性格",
+  selfAbilityLabel: "自分の特性",
+  selfItemLabel: "自分の持ち物",
+  selfMoveLabel: "自分の技",
+  opponentSpeciesLabel: "相手のポケモン",
+  opponentPresetLabel: "相手の調整",
+  opponentMoveLabel: "相手の技",
+  /** 未選択の select の先頭に出す文言(空の表示にしない。issue 304)。 */
+  speciesPlaceholder: "ポケモンを選ぶ",
+  naturePlaceholder: "性格を選ぶ",
+  movePlaceholder: "技を選ぶ",
+  unselectedOption: "未選択",
+  // ---- 固定する SP(下限。ADR-0150 §8・ADR-0319 §2) ----
+  fixedSpGroupLabel: "固定する能力ポイント",
+  fixedSpLabel: (stat: StatKey): string => `${statLetterJa[stat]} の固定ポイント`,
+  fixedSpTotal: (total: number, max: number): string => `合計 ${total} / ${max}`,
+  fixedSpHint: "ここで決めた値より下には振りません。残りを調整に回します",
+  // ---- モード(ADR-0319 §2) ----
+  modeGroupLabel: "調整の内容",
+  modeLabel: {
+    indices: "指数と 16n を見る",
+    bulk: "耐久に振る",
+    offense: "攻撃と素早さに振る",
+    minKo: "倒せる最小の振り方",
+    minSurvive: "耐えられる最小の振り方",
+  } satisfies Record<AdjustModeKey, string>,
+  // 耐久側(bulk)
+  focusLabel: "耐久の基準",
+  focusOption: { physical: "物理(H×B)", special: "特殊(H×D)", both: "物理と特殊の両方" } as const,
+  ceilingGroupLabel: "振ってよい上限",
+  ceilingLabel: (stat: StatKey): string => `${statLetterJa[stat]} の上限`,
+  // 攻撃側(offense)
+  offenseCategoryLabel: "攻撃の分類",
+  offenseCategoryOption: { physical: "物理(A)", special: "特殊(C)" } as const,
+  minSpeedLabel: "素早さの目標(実数値)",
+  minSpeedHint: "この実数値以上になるように S に振ります。空なら目標なし",
+  /** 耐久側・攻撃側で、目標(相手と発数)を足すかどうか。 */
+  useGoalLabel: "目標を指定する",
+  // ---- 目標(ADR-0319 §2。数値入力をさせずプリセットから選ぶ) ----
+  hitsLabel: "発数",
+  hitsOption: (hits: number): string => `${hits}発`,
+  thresholdLabel: "確率",
+  thresholdOption: (percent: number): string => (percent === 100 ? "確定(100%)" : `${percent}% 以上`),
+  // ---- 送信(ADR-0319 §4) ----
+  submitLabel: "調整する",
+  loadingNotice: "計算中",
+  emptyResultNotice: "「調整する」を押すと結果が出ます",
+  // ---- 送信前の検査(ADR-0319 §4。違反していれば API を呼ばずに理由を出す) ----
+  selfRequiredMessage: "自分のポケモンと性格を選んでください",
+  selfMoveRequiredMessage: "自分の技を選んでください",
+  opponentRequiredMessage: "相手のポケモンを選んでください",
+  opponentMoveRequiredMessage: "相手の技を選んでください",
+  spRangeMessage: (max: number): string => `能力ポイントは0〜${max}の整数で入力してください`,
+  spTotalMessage: (max: number): string => `能力ポイントの合計は${max}までです`,
+  ceilingBelowFixedMessage: "上限は固定する能力ポイント以上にしてください",
+  categoryMismatchMessage: "攻撃の分類と自分の技の分類をそろえてください",
+  minSpeedMessage: "素早さの目標は0以上の整数で入力してください",
+  natureNotFoundMessage: "相手の調整に合う性格がマスタにありません",
+  // ---- 結果: 指数と 16n(adjustIndices) ----
+  indicesHeading: "今の振り方の指数",
+  statsLine: (stats: Readonly<Record<StatKey, number>>): string => `実数値 ${statsLine(stats)}`,
+  firepowerIndexLabel: "火力指数",
+  firepowerIndexNone: "技を選ぶと出します",
+  physicalBulkLabel: "物理耐久指数",
+  specialBulkLabel: "特殊耐久指数",
+  indexLine: (label: string, value: number | string): string => `${label} ${value}`,
+  /** 指数に含める補正の範囲(ADR-0319 §5)。 */
+  indexNote: "火力指数の補正はタイプ一致だけを含めます(持ち物・特性・テラスタルは含めません)",
+  hpLineHeading: "HP の 16n",
+  hpLineKindLabel: {
+    none: "16n でも 16n-1 でもない",
+    "16n": "16n",
+    "16n-1": "16n-1",
+  } satisfies Record<AdjustHpLineKind, string>,
+  hpCurrent: (hp: number, kindLabel: string): string => `HP ${hp}(${kindLabel})`,
+  next16nLabel: "次の 16n",
+  prev16nLabel: "前の 16n",
+  next16nMinus1Label: "次の 16n-1",
+  prev16nMinus1Label: "前の 16n-1",
+  hpLinePoint: (label: string, hp: number, sp: number, spDelta: number): string =>
+    `${label}: HP ${hp}(H ${sp}、${spDelta > 0 ? "+" : ""}${spDelta})`,
+  hpLineNone: (label: string): string => `${label}: なし`,
+  // ---- 結果: 最小 SP(adjustMinSpToKo / adjustMinSpToSurvive)。chance は formatChancePercent 済みの文字 ----
+  koFeasible: (stat: StatKey, sp: number, hits: number, chance: string): string =>
+    `${statLetterJa[stat]} に ${sp} 振れば ${hits}発で倒せます(確率 ${chance})`,
+  koInfeasible: (stat: StatKey, sp: number, hits: number, chance: string): string =>
+    `${statLetterJa[stat]} に ${sp} 振っても ${hits}発では倒せません(確率 ${chance})`,
+  surviveFeasible: (stat: StatKey, hpSp: number, statSp: number, hits: number, chance: string): string =>
+    `H に ${hpSp}・${statLetterJa[stat]} に ${statSp} 振れば ${hits}発耐えます(確率 ${chance})`,
+  surviveInfeasible: (stat: StatKey, hpSp: number, statSp: number, hits: number, chance: string): string =>
+    `H に ${hpSp}・${statLetterJa[stat]} に ${statSp} 振っても ${hits}発は耐えられません(確率 ${chance})`,
+  // ---- 結果: 配分の提案(adjustAllocation) ----
+  remainingLabel: (remaining: number): string => `残りの能力ポイント ${remaining}`,
+  maxIndexHeading: "指数が最大になる振り方",
+  minSpHeading: "目標を満たす最小の振り方",
+  minSpNotRequested: "目標を指定すると、目標を満たす最小の振り方も出します",
+  planSpLine: (sp: Readonly<Record<StatKey, number>>): string => `能力ポイント ${statsLine(sp)}`,
+  planTotal: (total: number): string => `合計 ${total}`,
+  goalMet: (chance: string): string => `目標を満たします(確率 ${chance})`,
+  goalNotMet: (chance: string): string => `目標に届きません(確率 ${chance})`,
+  speedMet: "素早さの目標を満たします",
+  speedNotMet: "素早さの目標に届きません",
+  // ---- 技を覚えるポケモン(listMoveLearners。ADR-0319 §7) ----
+  /** ボタンの見える文字(accessible name はどちらの技かを前に足す。SC 2.5.3)。 */
+  learnersButtonLabel: "覚えるポケモン",
+  selfLearnersButtonName: "自分の技を覚えるポケモン",
+  opponentLearnersButtonName: "相手の技を覚えるポケモン",
+  learnersHeading: (moveName: string): string => `${moveName}を覚えるポケモン`,
+  learnersEmpty: "この技を覚えるポケモンはいません",
+  learnersMore: "続きを読み込む",
+  learnersLoading: "読み込み中",
+} as const;
+
+/**
+ * 「このアプリについて」(issue 328 / P6-18、ADR-0314)の文言。非公式の注記・データの出典4件は iOS の
+ * PokeCalcCore.AboutText と一字一句同じ(正は docs/ai-shared/DECISIONS.md 2026-09-26「P6-18」と ADR-0002「責務の分離」表)。
+ * 出典を増減するときは ADR-0002・ADR-0501「P6-18」・iOS と同時に直す。
+ */
+export const aboutText = {
+  footerLinkLabel: "このアプリについて",
+  pageHeading: "このアプリについて",
+  unofficialHeading: "非公式表示",
+  unofficialNotice:
+    "このアプリは個人が私的に使うための非公式ツールです。" +
+    "任天堂・クリーチャーズ・ゲームフリーク・株式会社ポケモンとは関係ありません。" +
+    "ポケモン・Pokémon および関連する名称は各社の商標です。",
+  dataSourcesHeading: "データの出典",
+  dataSources: [
+    { title: "ダメージ計算の検証", detail: "@smogon/calc(MIT License)" },
+    { title: "ポケモン・技・習得技の照合", detail: "Pokémon Showdown(MIT License)" },
+    { title: "日本語名・図鑑番号", detail: "PokeAPI" },
+    { title: "使用可能なポケモン等の基準", detail: "Pokémon HOME・Pokémon Champions の公式情報" },
+  ],
+  backLabel: "計算に戻る",
 } as const;

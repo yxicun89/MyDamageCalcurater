@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"example.com/pokecalc/services/speed/internal/httpapi"
+	"example.com/pokecalc/services/speed/internal/httpguard"
 )
 
 const (
@@ -19,7 +20,14 @@ const (
 	writeTimeout      = 15 * time.Second
 	idleTimeout       = 60 * time.Second
 	maxHeaderBytes    = 16 * 1024
+
+	// maxInflight は同時に処理する API リクエストの数。超えた分は待たせず 503 overloaded + Retry-After
+	// (issue #299・ADR-0801)。
+	maxInflight = 32
 )
+
+// guard はハンドラ全体の締め切り(writeTimeout - 1 秒)と同時実行の上限。
+var guard = httpguard.Config{MaxInflight: maxInflight, Timeout: httpguard.DeadlineFor(writeTimeout)}
 
 func main() {
 	port := portFromEnv(os.LookupEnv)
@@ -32,7 +40,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           httpapi.New(httpapi.Dependencies{Pokemon: pokemon}),
+		Handler:           httpapi.New(httpapi.Dependencies{Pokemon: pokemon, Guard: guard}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,
@@ -56,11 +64,8 @@ func main() {
 			os.Exit(1)
 		}
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := server.Shutdown(shutdownCtx); err != nil {
-			slog.Error("speed API shutdown failed", "error", err)
-			os.Exit(1)
+		if err := gracefulShutdown(server, shutdownTimeout); err != nil {
+			slog.Warn("speed API shutdown did not finish in time; remaining connections closed", "error", err)
 		}
 	}
 }

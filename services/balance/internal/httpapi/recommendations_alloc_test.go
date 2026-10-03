@@ -25,8 +25,8 @@ func TestRecommendationsAllocationBudget(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodPost, recommendationsPath, strings.NewReader(benchMembersBody))
 			request.Header.Set("Content-Type", "application/json")
-			request.Header.Set("X-Device-Id", "bench-device")
-			request.Header.Set("X-Session-Id", "bench-session")
+			request.Header.Set("X-Device-Id", "11111111-1111-4111-8111-111111111111")
+			request.Header.Set("X-Session-Id", "22222222-2222-4222-a222-222222222222")
 			server.ServeHTTP(recorder, request)
 			if recorder.Code != http.StatusOK {
 				b.Fatalf("status = %d, want 200", recorder.Code)

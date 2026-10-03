@@ -23,14 +23,15 @@ fi
 
 # TB1: the local overlay mounts testdata/pokemon-types.example.json (fictional IDs from 9001-000)
 # and sets BALANCE_POKEMON_TYPES_PATH, so a known ID must return 200 with the analysis.
-# Right after a rollout the Ingress can briefly route to a terminating Pod (502/503), so retry only those.
+# The headers are fixed fictional UUIDs: the gateway (the only entrance, issue #284) accepts only canonical UUIDs.
+# Right after a rollout the gateway or balance can briefly route to a terminating Pod (502/503), so retry only those.
 attempt=0
 while :; do
   analyze_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
     -X POST "$base_url/api/balance/v1/team-balance/analyze" \
     -H 'Content-Type: application/json' \
-    -H 'X-Device-Id: smoke-device' \
-    -H 'X-Session-Id: smoke-session' \
+    -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+    -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' \
     --data '{"members":[{"pokemonId":"9001-000"},{"pokemonId":"9002-000"}]}' || printf '000')
   case "$analyze_status" in
     000|502|503) ;;
@@ -58,8 +59,8 @@ done
 unknown_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   -X POST "$base_url/api/balance/v1/team-balance/analyze" \
   -H 'Content-Type: application/json' \
-  -H 'X-Device-Id: smoke-device' \
-  -H 'X-Session-Id: smoke-session' \
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' \
   --data '{"members":[{"pokemonId":"9999-999"}]}')
 if [ "$unknown_status" != "422" ] || ! grep -qF '"code":"unknown_pokemon"' "$body_file"; then
   echo "balance analyze unknown pokemon: HTTP $unknown_status, want 422 unknown_pokemon" >&2
@@ -73,8 +74,8 @@ fi
 coverage_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   -X POST "$base_url/api/balance/v1/team-balance/coverage" \
   -H 'Content-Type: application/json' \
-  -H 'X-Device-Id: smoke-device' \
-  -H 'X-Session-Id: smoke-session' \
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' \
   --data '{"members":[{"pokemonId":"9001-000","moveIds":["move-9001","move-9002","move-9006"]},{"pokemonId":"9002-000","moveIds":["move-9005"]}]}' || printf '000')
 if [ "$coverage_status" != "200" ]; then
   echo "balance coverage failed: HTTP $coverage_status (is the example move read model mounted?)" >&2
@@ -92,8 +93,8 @@ done
 unknown_move_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   -X POST "$base_url/api/balance/v1/team-balance/coverage" \
   -H 'Content-Type: application/json' \
-  -H 'X-Device-Id: smoke-device' \
-  -H 'X-Session-Id: smoke-session' \
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' \
   --data '{"members":[{"pokemonId":"9001-000","moveIds":["move-9999"]}]}')
 if [ "$unknown_move_status" != "422" ] || ! grep -qF '"code":"unknown_move"' "$body_file"; then
   echo "balance coverage unknown move: HTTP $unknown_move_status, want 422 unknown_move" >&2
@@ -107,8 +108,8 @@ fi
 ability_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   -X POST "$base_url/api/balance/v1/team-balance/analyze" \
   -H 'Content-Type: application/json' \
-  -H 'X-Device-Id: smoke-device' \
-  -H 'X-Session-Id: smoke-session' \
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' \
   --data '{"members":[{"pokemonId":"9002-000","abilityId":"ability-9002"},{"pokemonId":"9003-000","abilityId":"ability-9004"}]}' || printf '000')
 if [ "$ability_status" != "200" ]; then
   echo "balance analyze with abilityId failed: HTTP $ability_status (is the example ability read model mounted?)" >&2
@@ -126,8 +127,8 @@ done
 unknown_ability_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   -X POST "$base_url/api/balance/v1/team-balance/analyze" \
   -H 'Content-Type: application/json' \
-  -H 'X-Device-Id: smoke-device' \
-  -H 'X-Session-Id: smoke-session' \
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' \
   --data '{"members":[{"pokemonId":"9001-000","abilityId":"ability-9999"}]}')
 if [ "$unknown_ability_status" != "422" ] || ! grep -qF '"code":"unknown_ability"' "$body_file"; then
   echo "balance analyze unknown ability: HTTP $unknown_ability_status, want 422 unknown_ability" >&2
@@ -141,8 +142,8 @@ fi
 threats_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   -X POST "$base_url/api/balance/v1/team-balance/threats" \
   -H 'Content-Type: application/json' \
-  -H 'X-Device-Id: smoke-device' \
-  -H 'X-Session-Id: smoke-session' \
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' \
   --data '{"members":[{"pokemonId":"9002-000","moveIds":["move-9001"]},{"pokemonId":"9003-000","moveIds":[],"abilityId":"ability-9004"}],"threats":[{"pokemonId":"9005-000","moveIds":["move-9008"]}]}' || printf '000')
 if [ "$threats_status" != "200" ]; then
   echo "balance threats failed: HTTP $threats_status (are the example read models mounted?)" >&2
@@ -160,8 +161,8 @@ done
 unknown_threat_move_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   -X POST "$base_url/api/balance/v1/team-balance/threats" \
   -H 'Content-Type: application/json' \
-  -H 'X-Device-Id: smoke-device' \
-  -H 'X-Session-Id: smoke-session' \
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' \
   --data '{"members":[{"pokemonId":"9002-000","moveIds":[]}],"threats":[{"pokemonId":"9005-000","moveIds":["move-9999"]}]}')
 if [ "$unknown_threat_move_status" != "422" ] || ! grep -qF '"code":"unknown_move"' "$body_file" || ! grep -qF '"message":"unknown moveId: move-9999"' "$body_file"; then
   echo "balance threats unknown move: HTTP $unknown_threat_move_status, want 422 unknown_move" >&2
@@ -176,8 +177,8 @@ fi
 recommendations_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   -X POST "$base_url/api/balance/v1/team-balance/recommendations" \
   -H 'Content-Type: application/json' \
-  -H 'X-Device-Id: smoke-device' \
-  -H 'X-Session-Id: smoke-session' \
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' \
   --data '{"members":[{"pokemonId":"9005-000","moveIds":[]}]}' || printf '000')
 if [ "$recommendations_status" != "200" ]; then
   echo "balance recommendations failed: HTTP $recommendations_status (is the example pokemon read model mounted?)" >&2
@@ -198,8 +199,8 @@ done
 move_range_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   -X POST "$base_url/api/balance/v1/move-range/analyze" \
   -H 'Content-Type: application/json' \
-  -H 'X-Device-Id: smoke-device' \
-  -H 'X-Session-Id: smoke-session' \
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' \
   --data '{"moveIds":["move-9003"]}' || printf '000')
 if [ "$move_range_status" != "200" ]; then
   echo "balance move-range failed: HTTP $move_range_status (are the example read models mounted?)" >&2
@@ -217,8 +218,8 @@ done
 unknown_range_move_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   -X POST "$base_url/api/balance/v1/move-range/analyze" \
   -H 'Content-Type: application/json' \
-  -H 'X-Device-Id: smoke-device' \
-  -H 'X-Session-Id: smoke-session' \
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' \
   --data '{"moveIds":["move-9999"]}')
 if [ "$unknown_range_move_status" != "422" ] || ! grep -qF '"code":"unknown_move"' "$body_file"; then
   echo "balance move-range unknown move: HTTP $unknown_range_move_status, want 422 unknown_move" >&2
@@ -230,8 +231,8 @@ fi
 status_only_range=$(curl -sS -o "$body_file" -w '%{http_code}' \
   -X POST "$base_url/api/balance/v1/move-range/analyze" \
   -H 'Content-Type: application/json' \
-  -H 'X-Device-Id: smoke-device' \
-  -H 'X-Session-Id: smoke-session' \
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' \
   --data '{"moveIds":["move-9006","move-9012"]}')
 if [ "$status_only_range" != "400" ] || ! grep -qF '"code":"invalid_request"' "$body_file"; then
   echo "balance move-range status-only move set: HTTP $status_only_range, want 400 invalid_request" >&2

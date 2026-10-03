@@ -12,6 +12,7 @@ import (
 
 	"example.com/pokecalc/services/balance/internal/balance"
 	"example.com/pokecalc/services/balance/internal/httpapi"
+	"example.com/pokecalc/services/balance/internal/httpguard"
 	"example.com/pokecalc/services/balance/internal/master"
 )
 
@@ -21,7 +22,14 @@ const (
 	writeTimeout      = 15 * time.Second
 	idleTimeout       = 60 * time.Second
 	maxHeaderBytes    = 16 * 1024
+
+	// maxInflight は全操作あわせて同時に処理する API リクエストの数。超えた分は待たせず
+	// 503 overloaded + Retry-After(issue #299・ADR-0801。recommendations 単独の上限は ADR-0409)。
+	maxInflight = 32
 )
+
+// guard はハンドラ全体の締め切り(writeTimeout - 1 秒)と同時実行の上限。
+var guard = httpguard.Config{MaxInflight: maxInflight, Timeout: httpguard.DeadlineFor(writeTimeout)}
 
 func main() {
 	port := os.Getenv("PORT")
@@ -75,6 +83,7 @@ func main() {
 			PokemonCatalog: pokemonCatalog,
 
 			MaxConcurrentRecommendations: maxConcurrentRecommendations,
+			Guard:                        guard,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
@@ -99,11 +108,8 @@ func main() {
 			os.Exit(1)
 		}
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := server.Shutdown(shutdownCtx); err != nil {
-			slog.Error("balance API shutdown failed", "error", err)
-			os.Exit(1)
+		if err := gracefulShutdown(server, shutdownTimeout); err != nil {
+			slog.Warn("balance API shutdown did not finish in time; remaining connections closed", "error", err)
 		}
 	}
 }

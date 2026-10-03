@@ -17,6 +17,8 @@ import HTTPTypes
 /// TB4 は仮想敵(最大 6 体)ごとに、各メンバーが受ける最大倍率と与える最大倍率、安全に受けられる人数を返す。
 /// TB5 はチームの防御の穴・攻撃範囲の穴をふさげるタイプの候補と、そのタイプを持つポケモン、特性で穴をふさげるポケモンを返す。
 /// TB6 は技構成(技 ID 1〜4 件)そのものの攻撃範囲と、その技構成を半減以下で受けられる実在ポケモン(タイプだけ・特性ありの別枠)を返す。
+/// 0.8.0: X-Device-Id / X-Session-Id を gateway と同じ正準形 UUID で検証し、ヘッダー起因の 400 の code を
+/// missing_header / invalid_header に分けた(missing_request_context は廃止。破壊的変更。ADR-0413)。
 /// 契約の正は docs/adr/0014-balance-tb1-defense-analysis.md、docs/adr/0016-balance-tb2-offense-coverage.md、
 /// docs/adr/0017-balance-tb3-ability-effects.md、docs/adr/0400-balance-tb4-threat-check.md、
 /// docs/adr/0401-balance-tb5-recommend-types.md、docs/adr/0404-balance-tb6-move-range-checker.md。

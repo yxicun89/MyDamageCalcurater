@@ -1,0 +1,19 @@
+# record-svc の保持期間(日。ADR-0209 §3・ADR-0211 §7 の人間が了承した既定値)。
+# Deployment(record serve の起動時検証)と CronJob(record-expire)の両方が envFrom で読む(同じ値を2か所に書かない)。
+# 変えるときは ADR-0211 §7 も更新する。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: record-retention
+  labels:
+    app.kubernetes.io/name: record
+    app.kubernetes.io/part-of: pokecalc
+data:
+  # 生イベント(calc_events)と集計。作成から90日
+  RECORD_CALC_EVENTS_RETENTION_DAYS: "90"
+  # お気に入り。最後の使用または更新から540日(18か月)
+  RECORD_FAVORITES_RETENTION_DAYS: "540"
+  # devices 行。データが無くなってから30日(JetStream max_age 7日より大きい)
+  RECORD_DEVICE_ROW_EXPIRY_DAYS: "30"
+  # 全削除の記録(purge_journal)。90日
+  RECORD_PURGE_JOURNAL_RETENTION_DAYS: "90"

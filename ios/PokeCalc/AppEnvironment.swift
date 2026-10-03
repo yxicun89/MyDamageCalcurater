@@ -8,7 +8,7 @@ import PokeCalcCore
 enum AppEnvironment {
     case ready(
         service: any PokeCalcService, deviceData: any DeviceDataService, backendDescription: String,
-        balance: any BalanceService
+        adjust: any AdjustService, balance: any BalanceService
     )
     case configurationError(String)
 
@@ -25,10 +25,11 @@ enum AppEnvironment {
             case .mock:
                 let service = try MockPokeCalcService()
                 let deviceData = MockDeviceDataService(environment: environment)
+                let adjust = try MockAdjustService()
                 // タイプバランスはモックを持たない(架空の相性表を作らない。ADR-0415 §4)。
                 return .ready(
                     service: service, deviceData: deviceData, backendDescription: "モックデータで動作中",
-                    balance: UnavailableBalanceService())
+                    adjust: adjust, balance: UnavailableBalanceService())
             case .api(let url):
                 let identity = ClientIdentity(defaults: .standard)
                 let service = APIPokeCalcService(baseURL: url, identity: identity)
@@ -36,7 +37,7 @@ enum AppEnvironment {
                 let balance = APIBalanceService(baseURL: url, identity: identity)
                 return .ready(
                     service: service, deviceData: service,
-                    backendDescription: "APIに接続中(\(url.host ?? url.absoluteString))", balance: balance)
+                    backendDescription: "APIに接続中(\(url.host ?? url.absoluteString))", adjust: service, balance: balance)
             }
         } catch {
             return .configurationError("\(configurationErrorPrefix)\(error)")

@@ -248,16 +248,26 @@ public enum Operations {
         public struct Input: Sendable, Hashable {
             /// - Remark: Generated from `#/paths/api/balance/v1/team-balance/analyze/POST/header`.
             public struct Headers: Sendable, Hashable {
+                /// Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                /// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+                /// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+                ///
+                ///
                 /// - Remark: Generated from `#/paths/api/balance/v1/team-balance/analyze/POST/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
+                /// Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                /// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+                /// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+                ///
+                ///
                 /// - Remark: Generated from `#/paths/api/balance/v1/team-balance/analyze/POST/header/X-Session-Id`.
                 public var xSessionId: Components.Parameters.SessionId
                 public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AnalyzeTeamBalance.AcceptableContentType>]
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
-                ///   - xDeviceId:
-                ///   - xSessionId:
+                ///   - xDeviceId: Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                ///   - xSessionId: Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
                 ///   - accept:
                 public init(
                     xDeviceId: Components.Parameters.DeviceId,
@@ -369,7 +379,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// Invalid request or missing request context
+            /// Invalid request (invalid_request), or a missing / invalid X-Device-Id / X-Session-Id (missing_header / invalid_header)
             ///
             /// - Remark: Generated from `#/paths//api/balance/v1/team-balance/analyze/post(analyzeTeamBalance)/responses/400`.
             ///
@@ -649,16 +659,26 @@ public enum Operations {
         public struct Input: Sendable, Hashable {
             /// - Remark: Generated from `#/paths/api/balance/v1/team-balance/coverage/POST/header`.
             public struct Headers: Sendable, Hashable {
+                /// Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                /// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+                /// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+                ///
+                ///
                 /// - Remark: Generated from `#/paths/api/balance/v1/team-balance/coverage/POST/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
+                /// Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                /// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+                /// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+                ///
+                ///
                 /// - Remark: Generated from `#/paths/api/balance/v1/team-balance/coverage/POST/header/X-Session-Id`.
                 public var xSessionId: Components.Parameters.SessionId
                 public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AnalyzeTeamCoverage.AcceptableContentType>]
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
-                ///   - xDeviceId:
-                ///   - xSessionId:
+                ///   - xDeviceId: Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                ///   - xSessionId: Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
                 ///   - accept:
                 public init(
                     xDeviceId: Components.Parameters.DeviceId,
@@ -770,7 +790,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// Invalid request or missing request context
+            /// Invalid request (invalid_request), or a missing / invalid X-Device-Id / X-Session-Id (missing_header / invalid_header)
             ///
             /// - Remark: Generated from `#/paths//api/balance/v1/team-balance/coverage/post(analyzeTeamCoverage)/responses/400`.
             ///
@@ -1047,16 +1067,26 @@ public enum Operations {
         public struct Input: Sendable, Hashable {
             /// - Remark: Generated from `#/paths/api/balance/v1/team-balance/threats/POST/header`.
             public struct Headers: Sendable, Hashable {
+                /// Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                /// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+                /// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+                ///
+                ///
                 /// - Remark: Generated from `#/paths/api/balance/v1/team-balance/threats/POST/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
+                /// Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                /// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+                /// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+                ///
+                ///
                 /// - Remark: Generated from `#/paths/api/balance/v1/team-balance/threats/POST/header/X-Session-Id`.
                 public var xSessionId: Components.Parameters.SessionId
                 public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AnalyzeTeamThreats.AcceptableContentType>]
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
-                ///   - xDeviceId:
-                ///   - xSessionId:
+                ///   - xDeviceId: Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                ///   - xSessionId: Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
                 ///   - accept:
                 public init(
                     xDeviceId: Components.Parameters.DeviceId,
@@ -1168,7 +1198,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// Invalid request or missing request context
+            /// Invalid request (invalid_request), or a missing / invalid X-Device-Id / X-Session-Id (missing_header / invalid_header)
             ///
             /// - Remark: Generated from `#/paths//api/balance/v1/team-balance/threats/post(analyzeTeamThreats)/responses/400`.
             ///
@@ -1457,16 +1487,26 @@ public enum Operations {
         public struct Input: Sendable, Hashable {
             /// - Remark: Generated from `#/paths/api/balance/v1/team-balance/recommendations/POST/header`.
             public struct Headers: Sendable, Hashable {
+                /// Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                /// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+                /// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+                ///
+                ///
                 /// - Remark: Generated from `#/paths/api/balance/v1/team-balance/recommendations/POST/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
+                /// Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                /// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+                /// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+                ///
+                ///
                 /// - Remark: Generated from `#/paths/api/balance/v1/team-balance/recommendations/POST/header/X-Session-Id`.
                 public var xSessionId: Components.Parameters.SessionId
                 public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RecommendTeamTypes.AcceptableContentType>]
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
-                ///   - xDeviceId:
-                ///   - xSessionId:
+                ///   - xDeviceId: Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                ///   - xSessionId: Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
                 ///   - accept:
                 public init(
                     xDeviceId: Components.Parameters.DeviceId,
@@ -1578,7 +1618,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// Invalid request or missing request context
+            /// Invalid request (invalid_request), or a missing / invalid X-Device-Id / X-Session-Id (missing_header / invalid_header)
             ///
             /// - Remark: Generated from `#/paths//api/balance/v1/team-balance/recommendations/post(recommendTeamTypes)/responses/400`.
             ///
@@ -1889,16 +1929,26 @@ public enum Operations {
         public struct Input: Sendable, Hashable {
             /// - Remark: Generated from `#/paths/api/balance/v1/move-range/analyze/POST/header`.
             public struct Headers: Sendable, Hashable {
+                /// Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                /// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+                /// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+                ///
+                ///
                 /// - Remark: Generated from `#/paths/api/balance/v1/move-range/analyze/POST/header/X-Device-Id`.
                 public var xDeviceId: Components.Parameters.DeviceId
+                /// Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                /// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+                /// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+                ///
+                ///
                 /// - Remark: Generated from `#/paths/api/balance/v1/move-range/analyze/POST/header/X-Session-Id`.
                 public var xSessionId: Components.Parameters.SessionId
                 public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AnalyzeMoveRange.AcceptableContentType>]
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
-                ///   - xDeviceId:
-                ///   - xSessionId:
+                ///   - xDeviceId: Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+                ///   - xSessionId: Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
                 ///   - accept:
                 public init(
                     xDeviceId: Components.Parameters.DeviceId,
@@ -2010,7 +2060,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// Invalid request or missing request context (invalid_request / missing_request_context):
+            /// Invalid request, or a missing / invalid request context header (invalid_request / missing_header / invalid_header):
             /// moveIds absent, empty, more than four, malformed, duplicated, or resolving to status moves only.
             ///
             ///
