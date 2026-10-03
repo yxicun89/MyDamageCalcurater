@@ -302,4 +302,6 @@ func RunPriceRepositoryContract(t *testing.T, newRepo func(t *testing.T) FullRep
 			t.Errorf("listings = %v, %v", ls, err)
 		}
 	})
+
+	runPriceHistoryContract(t, newRepo)
 }

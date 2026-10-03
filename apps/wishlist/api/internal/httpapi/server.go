@@ -35,6 +35,8 @@ type Estimator interface {
 	Refresh(ctx context.Context, itemID int64) (refresh.View, error)
 	// Listings は GET /api/items/{id}/listings。
 	Listings(ctx context.Context, itemID int64, siteID *int64) ([]item.Listing, error)
+	// PriceHistory は GET /api/items/{id}/price-history(フェーズ4-2。days は検査済みの 1〜refresh.MaxHistoryDays)。
+	PriceHistory(ctx context.Context, itemID int64, days int) (refresh.History, error)
 }
 
 var _ Estimator = (*refresh.Service)(nil)

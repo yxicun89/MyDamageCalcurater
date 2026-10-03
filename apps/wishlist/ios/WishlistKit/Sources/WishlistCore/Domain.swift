@@ -331,3 +331,56 @@ public struct Listing: Codable, Sendable, Equatable, Identifiable {
         self.fetchedAt = fetchedAt
     }
 }
+
+// MARK: - フェーズ4-2 価格の推移(docs/phase4-spec.md 4-2)
+
+/// 1 サイトの 1 日(JST)の目安(`GET /api/items/{id}/price-history`)。`day` は API の `YYYY-MM-DD` のまま持つ。
+public struct PricePoint: Codable, Sendable, Equatable {
+    public var day: String
+    public var low: Int
+    /// 件数 3 未満の日は nil
+    public var mid: Int?
+
+    public init(day: String, low: Int, mid: Int? = nil) {
+        self.day = day
+        self.low = low
+        self.mid = mid
+    }
+}
+
+/// 1 サイトの推移(day 昇順。点のある日だけ)
+public struct SitePriceHistory: Codable, Sendable, Equatable {
+    public var siteID: Int
+    public var points: [PricePoint]
+
+    public init(siteID: Int, points: [PricePoint]) {
+        self.siteID = siteID
+        self.points = points
+    }
+}
+
+/// その日の全サイトの low の最小
+public struct DayLow: Codable, Sendable, Equatable {
+    public var day: String
+    public var low: Int
+
+    public init(day: String, low: Int) {
+        self.day = day
+        self.low = low
+    }
+}
+
+/// 価格の推移。`sites` は点のあるサイトだけ(ジャンルの表示順)、`overall` は day 昇順
+public struct PriceHistory: Codable, Sendable, Equatable {
+    public var itemID: Int
+    public var days: Int
+    public var sites: [SitePriceHistory]
+    public var overall: [DayLow]
+
+    public init(itemID: Int, days: Int = 90, sites: [SitePriceHistory] = [], overall: [DayLow] = []) {
+        self.itemID = itemID
+        self.days = days
+        self.sites = sites
+        self.overall = overall
+    }
+}

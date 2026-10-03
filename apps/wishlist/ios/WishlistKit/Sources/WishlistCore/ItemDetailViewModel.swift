@@ -226,6 +226,35 @@ public final class ItemDetailViewModel {
         isRefreshing = false
     }
 
+    // MARK: - フェーズ4-2: 価格の推移(docs/phase4-spec.md 4-2)
+
+    /// 「価格の推移」の折りたたみの状態。開いたときに `loadPriceHistory()` で取る
+    public private(set) var priceHistory: PriceHistoryState = .notLoaded
+    /// 凡例で表示を選んだサイト(既定は空 = 全体の最安だけ)
+    public private(set) var selectedHistorySiteIDs: Set<Int> = []
+
+    /// `GET price-history`(days は付けない)。取得中・取得済み(`.loaded`・`.empty`)なら何もしない。失敗(`.failed`)のあとは取り直す。
+    /// 全体の最安の点が 2 未満なら `.empty`。通信できなければ `.failed(WishlistText.offline)`、それ以外は `.failed(WishlistText.priceHistoryFailed)`。
+    /// 目安価格(`summary`・`estimates`)は変えない。
+    public func loadPriceHistory() async {
+        // TODO(implementer): docs/phase4-spec.md AC-IOS-HIS-01〜03
+    }
+
+    /// 凡例のボタン: そのサイトの線の表示を切り替える(推移に無いサイトは無視)
+    public func toggleHistorySite(_ siteID: Int) {
+        _ = siteID  // TODO(implementer): AC-IOS-HIS-04
+    }
+
+    /// 凡例(推移の `sites` の順。`.loaded` 以外は空)
+    public var historyLegend: [HistoryLegendItem] {
+        []  // TODO(implementer): AC-IOS-HIS-04
+    }
+
+    /// 描く線: 全体の最安 + 選んだサイト(凡例の順)。`.loaded` 以外は空
+    public var visibleHistorySeries: [HistorySeries] {
+        []  // TODO(implementer): AC-IOS-HIS-04
+    }
+
     /// 保存済みの検索ワード(サイト別の上書きを除く。検索ワード欄に出す値)
     public var displayQuery: String { SiteLinks.itemQuery(item: item, genre: genre) }
 

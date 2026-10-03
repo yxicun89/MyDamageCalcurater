@@ -62,6 +62,13 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/items/{id}/listings`.
     /// - Remark: Generated from `#/paths//api/items/{id}/listings/get(listItemListings)`.
     func listItemListings(_ input: Operations.ListItemListings.Input) async throws -> Operations.ListItemListings.Output
+    /// 価格の推移(docs/phase4-spec.md 4-2)。取得に成功した日(status ok)のサイト別の目安を、1 商品×1 サイト×1 日(JST)1 点で返す。
+    /// 出品が無い日・失敗した日は点を作らない。期間は今日(JST)を含む直近 `days` 日。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/items/{id}/price-history`.
+    /// - Remark: Generated from `#/paths//api/items/{id}/price-history/get(getItemPriceHistory)`.
+    func getItemPriceHistory(_ input: Operations.GetItemPriceHistory.Input) async throws -> Operations.GetItemPriceHistory.Output
     /// - Remark: HTTP `GET /api/genres`.
     /// - Remark: Generated from `#/paths//api/genres/get(listGenres)`.
     func listGenres(_ input: Operations.ListGenres.Input) async throws -> Operations.ListGenres.Output
@@ -221,6 +228,23 @@ extension APIProtocol {
         headers: Operations.ListItemListings.Input.Headers = .init()
     ) async throws -> Operations.ListItemListings.Output {
         try await listItemListings(Operations.ListItemListings.Input(
+            path: path,
+            query: query,
+            headers: headers
+        ))
+    }
+    /// 価格の推移(docs/phase4-spec.md 4-2)。取得に成功した日(status ok)のサイト別の目安を、1 商品×1 サイト×1 日(JST)1 点で返す。
+    /// 出品が無い日・失敗した日は点を作らない。期間は今日(JST)を含む直近 `days` 日。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/items/{id}/price-history`.
+    /// - Remark: Generated from `#/paths//api/items/{id}/price-history/get(getItemPriceHistory)`.
+    public func getItemPriceHistory(
+        path: Operations.GetItemPriceHistory.Input.Path,
+        query: Operations.GetItemPriceHistory.Input.Query = .init(),
+        headers: Operations.GetItemPriceHistory.Input.Headers = .init()
+    ) async throws -> Operations.GetItemPriceHistory.Output {
+        try await getItemPriceHistory(Operations.GetItemPriceHistory.Input(
             path: path,
             query: query,
             headers: headers

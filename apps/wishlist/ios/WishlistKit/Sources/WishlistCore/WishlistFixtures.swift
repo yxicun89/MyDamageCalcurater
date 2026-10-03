@@ -66,11 +66,38 @@ public enum WishlistFixtures {
         ]
     }
 
+    /// 価格の推移(フェーズ4-2。`WISHLIST_USE_FAKE=estimates` の XCUITest が依存する。架空の値)。
+    /// - 12 グリス: メルカリ(1)だけ 3 日分(10/1 ¥3,200・10/2 ¥3,000・10/3 ¥3,000。10/3 は estimates と同じ)
+    ///   → 要約 `価格の推移 10/1〜10/3 最安 ¥3,000 最高 ¥3,200`
+    /// - 11 ボルシャック: 推移なし(→ `推移はまだありません`)
+    public static var priceHistories: [Int: PriceHistory] {
+        [
+            12: PriceHistory(
+                itemID: 12,
+                sites: [
+                    SitePriceHistory(
+                        siteID: 1,
+                        points: [
+                            PricePoint(day: "2026-10-01", low: 3200, mid: 3600),
+                            PricePoint(day: "2026-10-02", low: 3000, mid: 4000),
+                            PricePoint(day: "2026-10-03", low: 3000, mid: 4500),
+                        ])
+                ],
+                overall: [
+                    DayLow(day: "2026-10-01", low: 3200),
+                    DayLow(day: "2026-10-02", low: 3000),
+                    DayLow(day: "2026-10-03", low: 3000),
+                ]),
+            11: PriceHistory(itemID: 11),
+        ]
+    }
+
     /// 目安価格つきのモック(`WISHLIST_USE_FAKE=estimates`)。商品・ジャンル・サイトは `items` / `genres` / `sites` と同じ。
     public static func makeServiceWithEstimates() -> FakeWishlistService {
         let service = FakeWishlistService(items: items, genres: genres, sites: sites)
         for value in estimates.values { service.setEstimates(value) }
         service.setListings(listings)
+        for value in priceHistories.values { service.setPriceHistory(value) }
         return service
     }
 }

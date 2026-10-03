@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import type { Genre, Item, ItemEstimates, Listing, Site } from "../api/types";
+import type { Genre, Item, ItemEstimates, Listing, PriceHistory, Site } from "../api/types";
 import { NOW, makeItem } from "./factories";
 import { urlOf } from "./net";
 
@@ -34,6 +34,10 @@ export interface FakeApi {
   failEstimates: boolean;
   /** true の間、POST estimates/refresh だけが通信失敗(TypeError)になる */
   failRefresh: boolean;
+  /** GET /api/items/:id/price-history の本文(フェーズ4-2)。既定は推移なし(sites・overall が空・days 90) */
+  priceHistory: (itemId: number) => PriceHistory;
+  /** GET price-history を失敗させる。"network" は通信失敗(TypeError)、数字はその HTTP ステータスのエラー応答 */
+  failPriceHistory: "network" | number | null;
   /** 返す Promise が解決するまで応答を遅らせる(本文は呼び出し時点で決まる)。undefined なら即返す */
   delay?: (call: Call) => Promise<void> | undefined;
   /** path の接頭辞が合う呼び出しのうち method 一致のもの */
@@ -65,6 +69,8 @@ export function installFakeApi(init: { items?: Item[]; genres?: Genre[]; sites?:
     listings: [],
     failEstimates: false,
     failRefresh: false,
+    priceHistory: (itemId) => ({ item_id: itemId, days: 90, sites: [], overall: [] }),
+    failPriceHistory: null,
     callsTo: (method, prefix) => api.calls.filter((c) => c.method === method && c.path.startsWith(prefix)),
   };
   let nextId = 1000;
@@ -82,6 +88,8 @@ export function installFakeApi(init: { items?: Item[]; genres?: Genre[]; sites?:
     if (api.failEstimates && method === "GET" && /^\/api\/items\/\d+\/estimates$/.test(path))
       throw new TypeError("Failed to fetch");
     if (api.failRefresh && method === "POST" && /\/estimates\/refresh$/.test(path))
+      throw new TypeError("Failed to fetch");
+    if (api.failPriceHistory === "network" && method === "GET" && /\/price-history$/.test(path))
       throw new TypeError("Failed to fetch");
     if (headers.get("Authorization") !== "Bearer test-token") return errRes(401, "unauthorized");
     const body = call.json as Record<string, unknown> | undefined;
@@ -148,6 +156,12 @@ export function installFakeApi(init: { items?: Item[]; genres?: Genre[]; sites?:
       return jsonRes({
         listings: sid ? api.listings.filter((l) => l.site_id === Number(sid)) : api.listings,
       });
+    }
+    m = /^\/api\/items\/(\d+)\/price-history$/.exec(path);
+    if (m && method === "GET") {
+      if (typeof api.failPriceHistory === "number")
+        return errRes(api.failPriceHistory, api.failPriceHistory === 404 ? "not_found" : "internal");
+      return jsonRes(api.priceHistory(Number(m[1])));
     }
     if (path === "/api/genres" && method === "GET") return jsonRes({ genres: api.genres });
     if (path === "/api/genres" && method === "POST") {

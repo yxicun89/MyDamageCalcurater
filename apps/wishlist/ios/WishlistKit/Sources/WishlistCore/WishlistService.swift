@@ -18,6 +18,8 @@ public protocol WishlistService: Sendable {
     func refreshEstimates(itemID: Int) async throws -> ItemEstimates
     /// `GET /api/items/{id}/listings`(参考外も含む。`siteID` を渡すとそのサイトだけ)
     func listings(itemID: Int, siteID: Int?) async throws -> [Listing]
+    /// `GET /api/items/{id}/price-history`(フェーズ4-2)。`days` が nil ならクエリを付けない(サーバーの既定 90 日)
+    func priceHistory(itemID: Int, days: Int?) async throws -> PriceHistory
 
     func listGenres() async throws -> [Genre]
     func createGenre(_ body: GenreCreate) async throws -> Genre

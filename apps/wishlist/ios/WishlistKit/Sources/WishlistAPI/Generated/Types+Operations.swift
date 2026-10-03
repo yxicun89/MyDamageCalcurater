@@ -2346,6 +2346,246 @@ public enum Operations {
             }
         }
     }
+    /// 価格の推移(docs/phase4-spec.md 4-2)。取得に成功した日(status ok)のサイト別の目安を、1 商品×1 サイト×1 日(JST)1 点で返す。
+    /// 出品が無い日・失敗した日は点を作らない。期間は今日(JST)を含む直近 `days` 日。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/items/{id}/price-history`.
+    /// - Remark: Generated from `#/paths//api/items/{id}/price-history/get(getItemPriceHistory)`.
+    public enum GetItemPriceHistory {
+        public static let id: Swift.String = "getItemPriceHistory"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/items/{id}/price-history/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/items/{id}/price-history/GET/path/id`.
+                public var id: Components.Parameters.ItemID
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                public init(id: Components.Parameters.ItemID) {
+                    self.id = id
+                }
+            }
+            public var path: Operations.GetItemPriceHistory.Input.Path
+            /// - Remark: Generated from `#/paths/api/items/{id}/price-history/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// 直近何日分か(今日を含む)。省略は 90。1〜180 の外は 400
+                ///
+                /// - Remark: Generated from `#/paths/api/items/{id}/price-history/GET/query/days`.
+                public var days: Swift.Int?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - days: 直近何日分か(今日を含む)。省略は 90。1〜180 の外は 400
+                public init(days: Swift.Int? = nil) {
+                    self.days = days
+                }
+            }
+            public var query: Operations.GetItemPriceHistory.Input.Query
+            /// - Remark: Generated from `#/paths/api/items/{id}/price-history/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetItemPriceHistory.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetItemPriceHistory.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetItemPriceHistory.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - query:
+            ///   - headers:
+            public init(
+                path: Operations.GetItemPriceHistory.Input.Path,
+                query: Operations.GetItemPriceHistory.Input.Query = .init(),
+                headers: Operations.GetItemPriceHistory.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/items/{id}/price-history/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/items/{id}/price-history/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.PriceHistory)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.PriceHistory {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetItemPriceHistory.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetItemPriceHistory.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 価格の推移
+            ///
+            /// - Remark: Generated from `#/paths//api/items/{id}/price-history/get(getItemPriceHistory)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetItemPriceHistory.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetItemPriceHistory.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// 形式が不正
+            ///
+            /// - Remark: Generated from `#/paths//api/items/{id}/price-history/get(getItemPriceHistory)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses.BadRequest)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses.BadRequest {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// トークンが無い・違う
+            ///
+            /// - Remark: Generated from `#/paths//api/items/{id}/price-history/get(getItemPriceHistory)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// 見つからない
+            ///
+            /// - Remark: Generated from `#/paths//api/items/{id}/price-history/get(getItemPriceHistory)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// サーバー内部のエラー(DB に届かない等)
+            ///
+            /// - Remark: Generated from `#/paths//api/items/{id}/price-history/get(getItemPriceHistory)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.Internal)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses.Internal {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// - Remark: HTTP `GET /api/genres`.
     /// - Remark: Generated from `#/paths//api/genres/get(listGenres)`.
     public enum ListGenres {

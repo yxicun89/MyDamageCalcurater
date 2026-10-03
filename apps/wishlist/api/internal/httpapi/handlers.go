@@ -360,6 +360,13 @@ func (s *server) ListItemListings(ctx context.Context, req api.ListItemListingsR
 	return api.ListItemListings200JSONResponse{Listings: out}, nil
 }
 
+// GetItemPriceHistory は GET /api/items/{id}/price-history(フェーズ4-2。docs/phase4-spec.md AC-H11〜H13)。
+func (s *server) GetItemPriceHistory(ctx context.Context, req api.GetItemPriceHistoryRequestObject) (api.GetItemPriceHistoryResponseObject, error) {
+	_ = ctx
+	_ = req
+	return nil, errors.New("price history is not implemented") // TODO(implementer)
+}
+
 // ---- ジャンル・サイト ----
 
 func (s *server) ListGenres(ctx context.Context, _ api.ListGenresRequestObject) (api.ListGenresResponseObject, error) {

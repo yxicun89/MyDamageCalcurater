@@ -18,3 +18,7 @@ export type ApiErrorBody = S["Error"];
 export type SiteEstimate = S["SiteEstimate"];
 export type Listing = S["Listing"];
 export type SuspiciousReason = S["SuspiciousReason"];
+export type PriceHistory = S["PriceHistory"];
+export type SitePriceHistory = S["SitePriceHistory"];
+export type PricePoint = S["PricePoint"];
+export type DayLow = S["DayLow"];

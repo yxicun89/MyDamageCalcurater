@@ -22,6 +22,7 @@ public final class FakeWishlistService: WishlistService {
         case estimates(itemID: Int)
         case refreshEstimates(itemID: Int)
         case listings(itemID: Int, siteID: Int?)
+        case priceHistory(itemID: Int, days: Int?)
         case createGenre(GenreCreate)
         case updateGenre(id: Int, patch: GenreUpdate)
         case createSite(SiteCreate)
@@ -41,6 +42,7 @@ public final class FakeWishlistService: WishlistService {
         var estimates: [Int: [ItemEstimates]] = [:]
         var refreshResponses: [Int: ItemEstimates] = [:]
         var listings: [Listing] = []
+        var priceHistories: [Int: PriceHistory] = [:]
         var gate: (@Sendable (Call) async -> Void)?
         var nextItemID: Int
         var nextGenreID: Int
@@ -88,7 +90,9 @@ public final class FakeWishlistService: WishlistService {
     public func setRefreshResponse(_ estimates: ItemEstimates) { state.withLock { $0.refreshResponses[estimates.itemID] = estimates } }
     /// GET listings が返す出品(全商品分。`itemID` ごとに分けず、`siteID` だけで絞る。並びはそのまま)
     public func setListings(_ listings: [Listing]) { state.withLock { $0.listings = listings } }
-    /// estimates・refreshEstimates・listings の応答を返す直前に呼ばれる(応答は呼び出し時点で決まる)。
+    /// GET price-history の応答(商品ごと)。未設定の商品は推移なし(`days` は要求の値、nil なら 90)
+    public func setPriceHistory(_ history: PriceHistory) { state.withLock { $0.priceHistories[history.itemID] = history } }
+    /// estimates・refreshEstimates・listings・priceHistory の応答を返す直前に呼ばれる(応答は呼び出し時点で決まる)。
     /// 応答を保留して順序の入れ替わり(古い応答)をテストするために使う。
     public var gate: (@Sendable (Call) async -> Void)? {
         get { state.withLock { $0.gate } }
@@ -233,6 +237,13 @@ public final class FakeWishlistService: WishlistService {
         try enter(.listings(itemID: itemID, siteID: siteID))
         let response = state.withLock { s in s.listings.filter { siteID == nil || $0.siteID == siteID } }
         await state.withLock { $0.gate }?(.listings(itemID: itemID, siteID: siteID))
+        return response
+    }
+
+    public func priceHistory(itemID: Int, days: Int?) async throws -> PriceHistory {
+        try enter(.priceHistory(itemID: itemID, days: days))
+        let response = state.withLock { s in s.priceHistories[itemID] ?? PriceHistory(itemID: itemID, days: days ?? 90) }
+        await state.withLock { $0.gate }?(.priceHistory(itemID: itemID, days: days))
         return response
     }
 

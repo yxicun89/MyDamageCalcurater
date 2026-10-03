@@ -174,6 +174,12 @@ public struct APIWishlistService: WishlistService {
         }
     }
 
+    /// TODO(implementer): docs/phase4-spec.md AC-IOS-HIS-API-01(生成クライアントの `getItemPriceHistory`。days が nil ならクエリなし)
+    public func priceHistory(itemID: Int, days: Int?) async throws -> PriceHistory {
+        _ = (itemID, days)
+        throw WishlistError.stub
+    }
+
     private static func estimates(_ e: Schemas.ItemEstimates) -> ItemEstimates {
         ItemEstimates(
             itemID: Int(e.itemId), summaryLow: e.summaryLow, summaryMid: e.summaryMid, summaryFetchedAt: e.summaryFetchedAt,

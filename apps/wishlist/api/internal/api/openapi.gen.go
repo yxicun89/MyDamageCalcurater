@@ -140,6 +140,12 @@ func (e SuspiciousReason) Valid() bool {
 // 各語は前後の空白を除いて 1〜64 文字、1 グループは 2 語以上、正規化後の語はジャンル内で重複しない(違反は 422)
 type AliasGroups = [][]string
 
+// DayLow その日の全サイトの low の最小
+type DayLow struct {
+	Day openapi_types.Date `json:"day"`
+	Low int                `json:"low"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	Code    ErrorCode `json:"code"`
@@ -332,6 +338,29 @@ type Listing struct {
 	Url               string             `json:"url"`
 }
 
+// PriceHistory defines model for PriceHistory.
+type PriceHistory struct {
+	// Days 返した期間(日数。省略時は 90)
+	Days   int `json:"days"`
+	ItemId ID  `json:"item_id"`
+
+	// Overall day 昇順。点のある日だけ
+	Overall []DayLow `json:"overall"`
+
+	// Sites 点のあるサイトだけ。ジャンルの表示順、ジャンルに無いサイトはその後に site_id 昇順
+	Sites []SitePriceHistory `json:"sites"`
+}
+
+// PricePoint 1 サイトの 1 日(JST)の目安。その日の最後に取得した値
+type PricePoint struct {
+	// Day JST の日付(YYYY-MM-DD)
+	Day openapi_types.Date `json:"day"`
+	Low int                `json:"low"`
+
+	// Mid 件数 3 未満の日は null
+	Mid nullable.Nullable[int] `json:"mid,omitempty"`
+}
+
 // Site defines model for Site.
 type Site struct {
 	FetchType   FetchType `json:"fetch_type"`
@@ -385,6 +414,13 @@ type SiteOverride struct {
 	SiteId ID                        `json:"site_id"`
 }
 
+// SitePriceHistory defines model for SitePriceHistory.
+type SitePriceHistory struct {
+	// Points day 昇順。点のある日だけ
+	Points []PricePoint `json:"points"`
+	SiteId ID           `json:"site_id"`
+}
+
 // SiteUpdate defines model for SiteUpdate.
 type SiteUpdate struct {
 	FetchType         *FetchType `json:"fetch_type,omitempty"`
@@ -436,6 +472,12 @@ type ReplaceItemImageMultipartBody struct {
 // ListItemListingsParams defines parameters for ListItemListings.
 type ListItemListingsParams struct {
 	SiteId *ID `form:"site_id,omitempty" json:"site_id,omitempty"`
+}
+
+// GetItemPriceHistoryParams defines parameters for GetItemPriceHistory.
+type GetItemPriceHistoryParams struct {
+	// Days 直近何日分か(今日を含む)。省略は 90。1〜180 の外は 400
+	Days *int `form:"days,omitempty" json:"days,omitempty"`
 }
 
 // CreateGenreJSONRequestBody defines body for CreateGenre for application/json ContentType.
@@ -506,6 +548,9 @@ type ServerInterface interface {
 
 	// (GET /api/items/{id}/listings)
 	ListItemListings(ctx *echo.Context, id ItemID, params ListItemListingsParams) error
+
+	// (GET /api/items/{id}/price-history)
+	GetItemPriceHistory(ctx *echo.Context, id ItemID, params GetItemPriceHistoryParams) error
 
 	// (GET /api/sites)
 	ListSites(ctx *echo.Context) error
@@ -719,6 +764,31 @@ func (w *ServerInterfaceWrapper) ListItemListings(ctx *echo.Context) error {
 	return err
 }
 
+// GetItemPriceHistory converts echo context to params.
+func (w *ServerInterfaceWrapper) GetItemPriceHistory(ctx *echo.Context) error {
+	var err error
+	// ------------- Path parameter "id" -------------
+	var id ItemID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", ctx.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: ctx.Request().URL.RawPath == ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetItemPriceHistoryParams
+	// ------------- Optional query parameter "days" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "days", ctx.QueryParams(), &params.Days, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter days: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.GetItemPriceHistory(ctx, id, params)
+	return err
+}
+
 // ListSites converts echo context to params.
 func (w *ServerInterfaceWrapper) ListSites(ctx *echo.Context) error {
 	var err error
@@ -836,6 +906,7 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 	router.GET(options.BaseURL+"/api/items/:id/estimates", wrapper.GetItemEstimates, options.OperationMiddlewares["getItemEstimates"]...)
 	router.POST(options.BaseURL+"/api/items/:id/estimates/refresh", wrapper.RefreshItemEstimates, options.OperationMiddlewares["refreshItemEstimates"]...)
 	router.GET(options.BaseURL+"/api/items/:id/listings", wrapper.ListItemListings, options.OperationMiddlewares["listItemListings"]...)
+	router.GET(options.BaseURL+"/api/items/:id/price-history", wrapper.GetItemPriceHistory, options.OperationMiddlewares["getItemPriceHistory"]...)
 	router.GET(options.BaseURL+"/api/genres", wrapper.ListGenres, options.OperationMiddlewares["listGenres"]...)
 	router.POST(options.BaseURL+"/api/genres", wrapper.CreateGenre, options.OperationMiddlewares["createGenre"]...)
 	router.PATCH(options.BaseURL+"/api/genres/:id", wrapper.UpdateGenre, options.OperationMiddlewares["updateGenre"]...)
@@ -1848,6 +1919,85 @@ func (response ListItemListings500JSONResponse) VisitListItemListingsResponse(w 
 	return err
 }
 
+type GetItemPriceHistoryRequestObject struct {
+	Id     ItemID `json:"id"`
+	Params GetItemPriceHistoryParams
+}
+
+type GetItemPriceHistoryResponseObject interface {
+	VisitGetItemPriceHistoryResponse(w http.ResponseWriter) error
+}
+
+type GetItemPriceHistory200JSONResponse PriceHistory
+
+func (response GetItemPriceHistory200JSONResponse) VisitGetItemPriceHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetItemPriceHistory400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetItemPriceHistory400JSONResponse) VisitGetItemPriceHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetItemPriceHistory401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetItemPriceHistory401JSONResponse) VisitGetItemPriceHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetItemPriceHistory404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetItemPriceHistory404JSONResponse) VisitGetItemPriceHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetItemPriceHistory500JSONResponse struct{ InternalJSONResponse }
+
+func (response GetItemPriceHistory500JSONResponse) VisitGetItemPriceHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListSitesRequestObject struct {
 }
 
@@ -2183,6 +2333,9 @@ type StrictServerInterface interface {
 
 	// (GET /api/items/{id}/listings)
 	ListItemListings(ctx context.Context, request ListItemListingsRequestObject) (ListItemListingsResponseObject, error)
+
+	// (GET /api/items/{id}/price-history)
+	GetItemPriceHistory(ctx context.Context, request GetItemPriceHistoryRequestObject) (GetItemPriceHistoryResponseObject, error)
 
 	// (GET /api/sites)
 	ListSites(ctx context.Context, request ListSitesRequestObject) (ListSitesResponseObject, error)
@@ -2620,6 +2773,32 @@ func (sh *strictHandler) ListItemListings(ctx *echo.Context, id ItemID, params L
 		return err
 	} else if validResponse, ok := response.(ListItemListingsResponseObject); ok {
 		return validResponse.VisitListItemListingsResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
+// GetItemPriceHistory operation middleware
+func (sh *strictHandler) GetItemPriceHistory(ctx *echo.Context, id ItemID, params GetItemPriceHistoryParams) error {
+	var request GetItemPriceHistoryRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetItemPriceHistory(ctx.Request().Context(), request.(GetItemPriceHistoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetItemPriceHistory")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(GetItemPriceHistoryResponseObject); ok {
+		return validResponse.VisitGetItemPriceHistoryResponse(ctx.Response())
 	} else if response != nil {
 		return fmt.Errorf("unexpected response type: %T", response)
 	}

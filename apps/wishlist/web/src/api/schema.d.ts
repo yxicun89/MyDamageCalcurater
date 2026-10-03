@@ -156,6 +156,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/items/{id}/price-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ItemID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * @description 価格の推移(docs/phase4-spec.md 4-2)。取得に成功した日(status ok)のサイト別の目安を、1 商品×1 サイト×1 日(JST)1 点で返す。
+         *     出品が無い日・失敗した日は点を作らない。期間は今日(JST)を含む直近 `days` 日。
+         */
+        get: operations["getItemPriceHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/genres": {
         parameters: {
             query?: never;
@@ -442,6 +464,37 @@ export interface components {
             suspicious_reasons: components["schemas"]["SuspiciousReason"][];
             /** Format: date-time */
             fetched_at: string;
+        };
+        /** @description 1 サイトの 1 日(JST)の目安。その日の最後に取得した値 */
+        PricePoint: {
+            /**
+             * Format: date
+             * @description JST の日付(YYYY-MM-DD)
+             */
+            day: string;
+            low: number;
+            /** @description 件数 3 未満の日は null */
+            mid?: number | null;
+        };
+        SitePriceHistory: {
+            site_id: components["schemas"]["ID"];
+            /** @description day 昇順。点のある日だけ */
+            points: components["schemas"]["PricePoint"][];
+        };
+        /** @description その日の全サイトの low の最小 */
+        DayLow: {
+            /** Format: date */
+            day: string;
+            low: number;
+        };
+        PriceHistory: {
+            item_id: components["schemas"]["ID"];
+            /** @description 返した期間(日数。省略時は 90) */
+            days: number;
+            /** @description 点のあるサイトだけ。ジャンルの表示順、ジャンルに無いサイトはその後に site_id 昇順 */
+            sites: components["schemas"]["SitePriceHistory"][];
+            /** @description day 昇順。点のある日だけ */
+            overall: components["schemas"]["DayLow"][];
         };
     };
     responses: {
@@ -802,6 +855,35 @@ export interface operations {
                     "application/json": {
                         listings: components["schemas"]["Listing"][];
                     };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["Internal"];
+        };
+    };
+    getItemPriceHistory: {
+        parameters: {
+            query?: {
+                /** @description 直近何日分か(今日を含む)。省略は 90。1〜180 の外は 400 */
+                days?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["ItemID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 価格の推移 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceHistory"];
                 };
             };
             400: components["responses"]["BadRequest"];
