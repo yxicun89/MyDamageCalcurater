@@ -111,16 +111,16 @@ func decodeSpeedMod(elem json.RawMessage) (engine.SpeedMod, error) {
 	}
 	var condition string
 	if err := json.Unmarshal(rawCondition, &condition); err != nil || condition == "" {
-		return engine.SpeedMod{}, errors.New("Condition must be a non-empty string")
+		return engine.SpeedMod{}, errors.New("condition must be a non-empty string")
 	}
 	// Unknown conditions are accepted here and judged undeterminable at evaluation, so a newer
 	// master vocabulary does not invalidate the other elements or ids.
 	modifier, err := strconv.ParseInt(string(rawModifier), 10, 64)
 	if err != nil {
-		return engine.SpeedMod{}, errors.New("Modifier must be an integer")
+		return engine.SpeedMod{}, errors.New("modifier must be an integer")
 	}
 	if modifier < engine.MinEffectModifier || modifier > engine.MaxEffectModifier || modifier == engine.Modifier4096 {
-		return engine.SpeedMod{}, errors.New("Modifier is out of range or neutral")
+		return engine.SpeedMod{}, errors.New("modifier is out of range or neutral")
 	}
 	return engine.SpeedMod{Condition: engine.SpeedCondition(condition), Modifier: int(modifier)}, nil
 }

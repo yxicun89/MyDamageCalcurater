@@ -17,7 +17,7 @@ import (
 const masterExportBody = `{
   "schemaVersion": 1,
   "dataVersion": "test-version",
-  "types": [{"id":"fire","sortOrder":1,"nameJa":"ほのお"}],
+  "types": [{"id":"fire","sortOrder":1,"nameJa":"テストタイプ"}],
   "typeChart": [],
   "species": [{"key":"9001-000","dexNo":9001,"form":0,"showdownId":"testmon","nameJa":"テスト",
     "type1":"fire","type2":null,"baseStats":{"hp":1,"atk":1,"def":1,"spa":1,"spd":1,"spe":1},
