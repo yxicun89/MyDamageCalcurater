@@ -295,3 +295,43 @@ input[type="checkbox"] {
 .settings section {
   margin-bottom: 24px;
 }
+.site-list a {
+  gap: 8px;
+}
+.site-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.site-meta {
+  font-size: 13px;
+  color: var(--muted);
+}
+.suspicious summary {
+  padding: 12px 4px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.suspicious-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.suspicious-list li {
+  display: flex;
+  gap: 10px;
+  padding: 10px 4px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+.suspicious-list img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.suspicious-list .reason {
+  color: var(--muted);
+  font-size: 13px;
+}

@@ -3,6 +3,7 @@ module example.com/pokecalc/apps/wishlist/api
 go 1.27.1
 
 require (
+	github.com/PuerkitoBio/goquery v1.13.0
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/golang-migrate/migrate/v4 v4.20.1
 	github.com/google/uuid v1.6.0
@@ -15,5 +16,6 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
+	github.com/andybalholm/cascadia v1.3.4 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 )

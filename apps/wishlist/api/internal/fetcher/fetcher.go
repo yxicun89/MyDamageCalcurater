@@ -2,8 +2,9 @@
 //
 // 取得方式(sites.fetch_type)ごとの実装:
 //   - api      : Yahoo!ショッピング(Yahoo。appid が無ければ使わない)
-//   - scrape   : 未実装(カードラッシュ・ドラゴンスター・あみあみ・駿河屋)。TODO: 実サイトの HTML を確認して fixture を保存してから作る
-//   - headless : 未実装(メルカリ・Yahoo!フリマ。chromedp)。TODO: 同上
+//   - scrape   : カードラッシュ・あみあみ・Yahoo!フリマ(検索 URL のホスト名で選ぶ。ForSite)。
+//     駿河屋は robots.txt の扱いが判断待ちなので登録しない(NewSurugaya はある)。ドラゴンスターは取得不可(docs/sites.md)
+//   - headless : 未実装(メルカリ。chromedp)。TODO: fixture を保存してから作る
 //   - link_only: 取得しない
 //
 // 実サイトへのアクセスはテストからは行わない(fixture・httptest を使う。仕様 §13)。
@@ -13,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -148,6 +150,8 @@ type Config struct {
 // Registry は fetch_type から Fetcher を選ぶ表。
 type Registry struct {
 	m map[item.FetchType]Fetcher
+	// scrape は検索 URL テンプレートのホスト名(小文字)ごとの Fetcher。NewRegistryWith では使わない。
+	scrape map[string]Fetcher
 }
 
 // NewRegistry は本番の表を作る。api は Yahoo(YahooAppID があるときだけ)。scrape・headless は未実装、link_only は取得しない。
@@ -167,7 +171,12 @@ func NewRegistry(cfg Config) *Registry {
 		y.Endpoint = cfg.YahooEndpoint
 		m[item.FetchAPI] = Throttle(y, interval, clock)
 	}
-	return &Registry{m: m}
+	scrape := map[string]Fetcher{
+		"www.cardrush-dm.jp":           Throttle(NewCardrush(cfg.Client), interval, clock),
+		"slist.amiami.jp":              Throttle(NewAmiami(cfg.Client), interval, clock),
+		"paypayfleamarket.yahoo.co.jp": Throttle(NewYahooFurima(cfg.Client), interval, clock),
+	}
+	return &Registry{m: m, scrape: scrape}
 }
 
 // NewRegistryWith は m をそのまま使う表(テスト用。Throttle で包まない)。link_only は m にあっても使わない。
@@ -185,4 +194,18 @@ func NewRegistryWith(m map[item.FetchType]Fetcher) *Registry {
 func (r *Registry) For(t item.FetchType) (Fetcher, bool) {
 	f, ok := r.m[t]
 	return f, ok
+}
+
+// ForSite は site を取得する Fetcher を返す。scrape は fetch_type と検索 URL テンプレートのホスト名(完全一致・
+// 大文字小文字とポートは無視)で選ぶ。それ以外は For(fetch_type)。NewRegistryWith の表はホストを見ない。
+func (r *Registry) ForSite(site Site) (Fetcher, bool) {
+	if site.FetchType == item.FetchScrape && r.scrape != nil {
+		u, err := url.Parse(site.SearchURLTemplate)
+		if err != nil {
+			return nil, false
+		}
+		f, ok := r.scrape[strings.ToLower(u.Hostname())]
+		return f, ok
+	}
+	return r.For(site.FetchType)
 }

@@ -182,7 +182,7 @@ func (s *Service) targets(ctx context.Context, itemID int64) (item.Item, []targe
 		if hasOverride && !o.Enabled {
 			continue
 		}
-		f, ok := s.d.Fetchers.For(st.FetchType)
+		f, ok := s.d.Fetchers.ForSite(st)
 		if !ok {
 			continue
 		}
