@@ -13,6 +13,8 @@
 #      terraform/・.github/workflows/ のデプロイ系)。ゲート自身を AI が緩めて通すことを防ぐ。
 #   4. PR の先頭コミットを使い捨ての worktree に取り出し、`make lint`・`make check-publishable`・`make test` を通す。
 #      engine/ または testdata/golden/ を変える PR は `make test-golden` も(make test に含まれるが明示して確認)。
+#      web/・engine/wasmapi/・engine/cmd/wasm/ を変える PR は Web の E2E(`make web-e2e`。Playwright・chromium。
+#      engine.wasm のビルドを含む)も通す(2026-10-03 追記。Web レーンの主要なテストで、CI の対象外のため)。
 #      web/ に package-lock.json があれば先に `npm ci` する。機密・実データ・個人情報の混入は
 #      check-publishable が検査する(ユーザー指示 2026-10-03: 機密の公開と費用の発生だけは止める)。
 #
@@ -94,6 +96,9 @@ run_local_gate() {
   make lint && make check-publishable && make test || return 1
   if printf '%s\n' "$files" | grep -qE '^(engine/|testdata/golden/)'; then
     make test-golden || return 1
+  fi
+  if printf '%s\n' "$files" | grep -qE '^(web/|engine/wasmapi/|engine/cmd/wasm/)'; then
+    make web-e2e || return 1
   fi
 }
 (run_local_gate) || die "ローカル検証に失敗しました(PR #$PR @ ${sha:0:7})"

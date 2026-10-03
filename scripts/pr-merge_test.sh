@@ -136,6 +136,19 @@ grep -q '^make test-golden$' "$WORK/calls" && ok || ng "engine 変更で test-go
 FAKE_FILES=docs/a.md run_gate 5
 grep -q '^make test-golden$' "$WORK/calls" && ng "docs だけで test-golden を流した" || ok
 
+begin "Web を変える PR だけ make web-e2e も流し、落ちたらマージしない"
+for f in web/src/App.tsx engine/wasmapi/requests.go engine/cmd/wasm/main.go; do
+  FAKE_FILES="$f" run_gate 5
+  grep -q '^make web-e2e$' "$WORK/calls" && ok || ng "$f の変更で web-e2e を流していない"
+  [ "$GATE_RC" = 0 ] && merged && ok || ng "web-e2e が通ればマージするはず($f): $(cat "$WORK/out")"
+done
+FAKE_FILES=docs/a.md run_gate 5
+grep -q '^make web-e2e$' "$WORK/calls" && ng "docs だけで web-e2e を流した" || ok
+FAKE_FILES=ios/PokeCalc/a.swift run_gate 5
+grep -q '^make web-e2e$' "$WORK/calls" && ng "ios だけで web-e2e を流した" || ok
+FAKE_FILES=web/src/App.tsx FAKE_MAKE_FAIL=web-e2e run_gate 5
+expect_stop "ローカル検証に失敗"
+
 begin "PR の先頭が取得した SHA と違えば中止"
 FAKE_SHA_FORCE=0000000000000000000000000000000000000001 run_gate 5
 expect_stop "一致しません"

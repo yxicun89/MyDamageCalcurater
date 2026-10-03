@@ -25,7 +25,8 @@ ADR-0800 は、意図しない main への反映を防ぐため、素の `gh pr 
    (AI がゲート自身や権限を緩めて通すことを防ぐ)、`deploy/k8s/overlays/cloud/`・`terraform/`・`.github/workflows/`
    (クラウドへのデプロイ・費用に関わる設定)。
 4. PR の先頭コミットを使い捨ての worktree に取り出し、`make lint`・`make check-publishable`・`make test` を通す。
-   `engine/`・`testdata/golden/` を変える PR は `make test-golden` も。機密・実データ・個人情報の混入は
+   `engine/`・`testdata/golden/` を変える PR は `make test-golden` も。`web/`・`engine/wasmapi/`・`engine/cmd/wasm/` を変える PR は
+   `make web-e2e`(Playwright。Web レーンの主要なテスト)も(2026-10-03 追記)。機密・実データ・個人情報の混入は
    `check-publishable` が検査する(ユーザーが止めたい「機密の公開」の自動検査)。
 5. マージは `--merge --match-head-commit <検証した SHA>`。検証後に PR が更新されたらマージされない。`--admin` は使わない。
 
@@ -48,7 +49,9 @@ COORDINATION.md の統合手順の最後を、素のマージコマンドから 
 - **環境変数でゲートを省略できるようにする**: AI が省略して通せてしまうので、省略の手段は作らない。
 
 ## 影響・限界
-- ローカル検証は PR の先頭コミットで行う。iOS の `make ios-test`・Playwright e2e・k3d への実適用は含まない(CI 同様。
-  CI の対象外と同じ理由)。それらを必要とする変更(iOS・e2e)は、PR 本文に実施した検証を書く。
+- ローカル検証は PR の先頭コミットで行う。iOS の `make ios-test`・k3d への実適用は含まない(CI 同様。
+  CI の対象外と同じ理由)。それらを必要とする変更(iOS)は、PR 本文に実施した検証を書く。Web の E2E(`make web-e2e`)は
+  Web を変える PR のゲートに含める(上記 §1-4。2026-10-03 追記)。E2E は固定ポート(18319 付近)を使うので、同じ端末で
+  別の E2E が動いている間にゲートを走らせると失敗する(そのときは待って再実行する)。
 - 実行時間が長くなる(`make test` 一式)。`--check` で先に確かめ、ゲートの結果を再利用するキャッシュは持たない(単純さ優先)。
 - ゲートは「AI が誤って壊す」ことを防ぐもので、悪意ある AI への防御ではない(ADR-0800 と同じ立場)。
