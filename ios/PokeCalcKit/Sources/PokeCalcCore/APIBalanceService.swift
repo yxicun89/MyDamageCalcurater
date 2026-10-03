@@ -65,6 +65,69 @@ public struct APIBalanceService: BalanceService {
         }
     }
 
+    public func threats(members: [BalanceMemberInput], threats: [BalanceMemberInput]) async throws -> BalanceThreatsAnalysis {
+        let body = Components.Schemas.ThreatsRequest(
+            members: members.map(Self.threatsPokemon), threats: threats.map(Self.threatsPokemon))
+        let output = try await send {
+            try await client.analyzeTeamThreats(.init(
+                headers: .init(xDeviceId: identity.deviceID, xSessionId: identity.sessionID),
+                body: .json(body)
+            ))
+        }
+        switch output {
+        case .ok(let ok): return try Self.domainThreats(ok.body.json)
+        case .badRequest(let r): throw try Self.domainError(r.body.json)
+        case .contentTooLarge(let r): throw try Self.domainError(r.body.json)
+        case .unprocessableContent(let r): throw try Self.domainError(r.body.json)
+        case .serviceUnavailable(let r): throw try Self.domainError(r.body.json)
+        case .internalServerError(let r): throw try Self.domainError(r.body.json)
+        case .undocumented(let status, _): throw Self.undocumentedError(status)
+        }
+    }
+
+    public func recommendations(members: [BalanceMemberInput], limit: Int?) async throws -> BalanceRecommendations {
+        let body = Components.Schemas.RecommendationsRequest(
+            members: members.map {
+                .init(pokemonId: $0.pokemonId, moveIds: $0.moveIds, abilityId: $0.abilityId)
+            },
+            limit: limit
+        )
+        let output = try await send {
+            try await client.recommendTeamTypes(.init(
+                headers: .init(xDeviceId: identity.deviceID, xSessionId: identity.sessionID),
+                body: .json(body)
+            ))
+        }
+        switch output {
+        case .ok(let ok): return try Self.domainRecommendations(ok.body.json)
+        case .badRequest(let r): throw try Self.domainError(r.body.json)
+        case .contentTooLarge(let r): throw try Self.domainError(r.body.json)
+        case .unprocessableContent(let r): throw try Self.domainError(r.body.json)
+        case .serviceUnavailable(let r): throw try Self.domainError(r.body.json)
+        case .internalServerError(let r): throw try Self.domainError(r.body.json)
+        case .undocumented(let status, _): throw Self.undocumentedError(status)
+        }
+    }
+
+    public func moveRange(moveIds: [String]) async throws -> BalanceMoveRange {
+        let body = Components.Schemas.MoveRangeRequest(moveIds: moveIds)
+        let output = try await send {
+            try await client.analyzeMoveRange(.init(
+                headers: .init(xDeviceId: identity.deviceID, xSessionId: identity.sessionID),
+                body: .json(body)
+            ))
+        }
+        switch output {
+        case .ok(let ok): return try Self.domainMoveRange(ok.body.json)
+        case .badRequest(let r): throw try Self.domainError(r.body.json)
+        case .contentTooLarge(let r): throw try Self.domainError(r.body.json)
+        case .unprocessableContent(let r): throw try Self.domainError(r.body.json)
+        case .serviceUnavailable(let r): throw try Self.domainError(r.body.json)
+        case .internalServerError(let r): throw try Self.domainError(r.body.json)
+        case .undocumented(let status, _): throw Self.undocumentedError(status)
+        }
+    }
+
     // MARK: - 通信失敗 → PokeCalcError(`APIPokeCalcService` と同じ規則)
 
     /// 接続できない(`transport`)と応答をデコードできない(`decode`)を区別する。キャンセルは包まずに投げ直す。
@@ -153,6 +216,78 @@ public struct APIBalanceService: BalanceService {
                 )
             }
         )
+    }
+
+    // MARK: 第3段
+
+    private static func threatsPokemon(_ input: BalanceMemberInput) -> Components.Schemas.ThreatsRequestPokemon {
+        .init(pokemonId: input.pokemonId, moveIds: input.moveIds, abilityId: input.abilityId)
+    }
+
+    private static func domainThreats(_ response: Components.Schemas.ThreatsResponse) throws -> BalanceThreatsAnalysis {
+        BalanceThreatsAnalysis(
+            threats: try response.threats.map { threat in
+                BalanceThreatResult(
+                    pokemonId: threat.pokemonId, abilityId: threat.abilityId?.value1,
+                    attackTypes: try threat.attackTypes.map(domainType),
+                    matchups: threat.matchups.map {
+                        BalanceThreatMatchup(
+                            pokemonId: $0.pokemonId, incoming: $0.incoming, outgoing: $0.outgoing,
+                            safe: $0.safe, superEffective: $0.superEffective)
+                    },
+                    safeMembers: threat.safeMembers, superEffectiveMembers: threat.superEffectiveMembers)
+            })
+    }
+
+    private static func domainRecommendations(
+        _ response: Components.Schemas.RecommendationsResponse
+    ) throws -> BalanceRecommendations {
+        BalanceRecommendations(
+            defenseHoles: try response.defenseHoles.map(domainType),
+            offenseHoles: try response.offenseHoles.map(domainType),
+            candidates: try response.candidates.map { candidate in
+                BalanceTypeCandidate(
+                    types: try candidate.types.map(domainType),
+                    defenseCovered: try candidate.defenseCovered.map(domainType),
+                    offenseCovered: try candidate.offenseCovered.map(domainType),
+                    weaknesses: candidate.weaknesses,
+                    pokemon: try candidate.pokemon.map {
+                        BalanceCandidatePokemon(
+                            pokemonId: $0.pokemonId, nameJa: $0.nameJa, types: try $0.types.map(domainType),
+                            exactMatch: $0.exactMatch)
+                    })
+            },
+            abilityOptions: try response.abilityOptions.map { option in
+                BalanceAbilityOption(
+                    attackType: try domainType(option.attackType),
+                    pokemon: option.pokemon.map {
+                        BalanceAbilityOptionPokemon(
+                            pokemonId: $0.pokemonId, nameJa: $0.nameJa, abilityId: $0.abilityId.value1,
+                            multiplier: $0.multiplier)
+                    })
+            })
+    }
+
+    private static func domainMoveRange(_ response: Components.Schemas.MoveRangeResponse) throws -> BalanceMoveRange {
+        BalanceMoveRange(
+            attackTypes: try response.attackTypes.map(domainType),
+            typeChart: try response.typeChart.map { entry in
+                let raw = entry.bestMultiplier.rawValue
+                return BalanceMoveRangeEntry(
+                    defenseType: try domainType(entry.defenseType),
+                    bestMultiplier: try mapped(BalanceCoverageMultiplier(rawValue: raw), raw),
+                    effective: entry.effective, superEffective: entry.superEffective)
+            },
+            walledBy: try response.walledBy.map {
+                BalanceWalledByPokemon(
+                    pokemonId: $0.pokemonId, nameJa: $0.nameJa, types: try $0.types.map(domainType),
+                    bestMultiplier: $0.bestMultiplier)
+            },
+            walledByAbility: response.walledByAbility.map {
+                BalanceWalledByAbilityPokemon(
+                    pokemonId: $0.pokemonId, nameJa: $0.nameJa, abilityId: $0.abilityId.value1,
+                    bestMultiplier: $0.bestMultiplier)
+            })
     }
 
     // 生成の enum とドメインの enum は rawValue(契約の文字列)で写す。知らない値は decode エラー。
