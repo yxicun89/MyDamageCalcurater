@@ -46,7 +46,7 @@ struct BalanceMemberCard: View {
 
     private var header: some View {
         HStack(spacing: SpacingToken.x2) {
-            SpeciesEmblemView(name: member.nameJa, types: member.types)
+            SpeciesImageView(speciesKey: member.speciesKey, name: member.nameJa, types: member.types)
             VStack(alignment: .leading, spacing: SpacingToken.x1) {
                 Text(member.nameJa)
                     .font(TextStyleToken.heading.font)

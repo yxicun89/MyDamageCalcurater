@@ -204,6 +204,7 @@
 - [ ] お気に入り・計算履歴の iOS 表示(API レーンの契約追加待ち。DECISIONS.md 2026-10-03 で依頼済み)
 
 - [x] P6-21 タイプバッジ・エンブレムの文字色を design.md「タイプバッジ」の `typeInk` 規則(黒/白のコントラスト比が高い方。白は どく/ゴースト/ドラゴン/あく のみ)に準拠(エンブレム本体・バッジは実装済みで、残っていたのは文字色の白固定)。`TypeColorToken.ink(forTypeID:)` を追加。`swift test` 全件・`make ios-test` 全件成功(XCUITest 53件)。critic PASS。ADR-0501「P6-21」
+- [x] P8-1c iOS のポケモン画像表示(タイプバランスレーンの依頼。ADR-0807 の契約・ADR-0508)。gateway の `/images/manifest.json` を起動時に1回取得し、manifest にキーがあれば thumb を表示(計算・逆算・構築・調整・タイプバランスの種族ヘッダーと検索の行)、無ければ既存のタイプ色エンブレム。manifest の 404・不正・version 違いも画像なし。モックの既定は画像なし(AC-X)。detail は表示する画面が無いため後続。`swift test` 1158件・XCUITest 成功。critic PASS
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)
