@@ -3,6 +3,7 @@
 // 未知のパスに index.html を返す(SPA のフォールバック)ことの確認を兼ねる。
 
 import { expect, test, type Page } from "@playwright/test";
+import { SPECIES, openAppOffline, selectSpeciesBySearch } from "./support/calcPage.ts";
 
 const TABLIST_NAME = "画面の切り替え";
 
@@ -76,18 +77,17 @@ test("未知のパスを開くと /calc に置き換わる", async ({ page }) =>
 // 実装後に見るのは「逆算タブにいる間も攻撃側の select が DOM に1つあり、role では取れない」ことと、
 // 「計算タブに戻ると選んだ値がそのまま残っている」こと。
 test("タブを往復しても計算画面の入力が残り、非選択の間も DOM から消えない", async ({ page }) => {
-  await page.goto("/calc");
-  await waitForTabs(page);
+  // ADR-0313: 種族は検索欄(<input>)で選ぶ。キャッシュを温めてオフラインで開く。
+  await openAppOffline(page, "/calc");
   const attacker = page.getByRole("combobox", { name: "攻撃側のポケモン", exact: true });
-  // 先頭の option はプレースホルダ(hidden)なので、その次(最初の種族)を選ぶ。
-  await attacker.selectOption({ index: 1 });
+  await selectSpeciesBySearch(page, "攻撃側のポケモン", SPECIES.fire.nameJa);
   const selected = await attacker.inputValue();
-  expect(selected).not.toBe("");
+  expect(selected).toBe(SPECIES.fire.nameJa);
 
   await tab(page, "逆算").click();
   await expect(page.getByRole("combobox", { name: "自分のポケモン", exact: true })).toBeVisible();
   // 隠れているだけで DOM には残る(= unmount されていない)。支援技術からは見えない。
-  await expect(page.locator('select[aria-label="攻撃側のポケモン"]')).toHaveCount(1);
+  await expect(page.locator('input[aria-label="攻撃側のポケモン"]')).toHaveCount(1);
   await expect(attacker).toBeHidden();
 
   await tab(page, "計算").click();
@@ -95,10 +95,9 @@ test("タブを往復しても計算画面の入力が残り、非選択の間�
 });
 
 test("戻る・進むでタブが切り替わっても、それぞれの画面の入力が残る", async ({ page }) => {
-  await page.goto("/calc");
-  await waitForTabs(page);
+  await openAppOffline(page, "/calc");
   const attacker = page.getByRole("combobox", { name: "攻撃側のポケモン", exact: true });
-  await attacker.selectOption({ index: 1 });
+  await selectSpeciesBySearch(page, "攻撃側のポケモン", SPECIES.fire.nameJa);
   const selected = await attacker.inputValue();
 
   await tab(page, "逆算").click();

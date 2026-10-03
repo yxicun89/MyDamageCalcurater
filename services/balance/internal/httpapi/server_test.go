@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"example.com/pokecalc/services/balance/internal/api"
 	"example.com/pokecalc/services/balance/internal/balance"
 )
 
@@ -51,26 +52,27 @@ func TestAnalyzeRequiresRequestContextHeaders(t *testing.T) {
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
 	}
-	if !strings.Contains(recorder.Body.String(), `"code":"missing_request_context"`) {
+	if !strings.Contains(recorder.Body.String(), `"code":"missing_header"`) {
 		t.Errorf("body = %s", recorder.Body.String())
 	}
 }
 
-func TestAnalyzeNormalizesGeneratedParameterErrors(t *testing.T) {
+// 同名ヘッダの重複は、生成コードのバインドより先に requireRequestContext が invalid_header で返す(ADR-0413。旧: invalid_request)。
+func TestAnalyzeDuplicateHeaderIsInvalidHeader(t *testing.T) {
 	t.Parallel()
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/balance/v1/team-balance/analyze", strings.NewReader(`{"members":[{"pokemonId":"9001-000"}]}`))
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Add("X-Device-Id", "first-device")
-	request.Header.Add("X-Device-Id", "second-device")
-	request.Header.Set("X-Session-Id", "test-session")
+	request.Header.Add("X-Device-Id", "11111111-1111-4111-8111-111111111111")
+	request.Header.Add("X-Device-Id", "33333333-3333-4333-8333-333333333333")
+	request.Header.Set("X-Session-Id", "22222222-2222-4222-a222-222222222222")
 	newTestServer().ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
 	}
-	if !strings.Contains(recorder.Body.String(), `"code":"invalid_request"`) {
+	if !strings.Contains(recorder.Body.String(), `"code":"invalid_header"`) {
 		t.Errorf("body = %s", recorder.Body.String())
 	}
 }
@@ -81,8 +83,8 @@ func TestAnalyzeReturnsDefenseBalance(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/balance/v1/team-balance/analyze", strings.NewReader(`{"members":[{"pokemonId":"9001-000"}]}`))
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("X-Device-Id", "test-device")
-	request.Header.Set("X-Session-Id", "test-session")
+	request.Header.Set("X-Device-Id", "11111111-1111-4111-8111-111111111111")
+	request.Header.Set("X-Session-Id", "22222222-2222-4222-a222-222222222222")
 	newTestServer().ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
@@ -116,8 +118,8 @@ func TestAnalyzeRejectsInvalidBody(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodPost, "/api/balance/v1/team-balance/analyze", strings.NewReader(tt.body))
 			request.Header.Set("Content-Type", "application/json")
-			request.Header.Set("X-Device-Id", "test-device")
-			request.Header.Set("X-Session-Id", "test-session")
+			request.Header.Set("X-Device-Id", "11111111-1111-4111-8111-111111111111")
+			request.Header.Set("X-Session-Id", "22222222-2222-4222-a222-222222222222")
 			newTestServer().ServeHTTP(recorder, request)
 
 			if recorder.Code != http.StatusBadRequest {
@@ -137,8 +139,8 @@ func TestAnalyzeRejectsOversizedBody(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/balance/v1/team-balance/analyze", strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("X-Device-Id", "test-device")
-	request.Header.Set("X-Session-Id", "test-session")
+	request.Header.Set("X-Device-Id", "11111111-1111-4111-8111-111111111111")
+	request.Header.Set("X-Session-Id", "22222222-2222-4222-a222-222222222222")
 	newTestServer().ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusRequestEntityTooLarge {
@@ -156,11 +158,12 @@ func TestAnalyzeRejectsPartialOrBlankRequestContext(t *testing.T) {
 		name      string
 		deviceID  string
 		sessionID string
+		wantCode  api.ErrorCode
 	}{
-		{name: "missing device", sessionID: "test-session"},
-		{name: "missing session", deviceID: "test-device"},
-		{name: "blank device", deviceID: "   ", sessionID: "test-session"},
-		{name: "blank session", deviceID: "test-device", sessionID: "\t"},
+		{name: "missing device", sessionID: "22222222-2222-4222-a222-222222222222", wantCode: api.MissingHeader},
+		{name: "missing session", deviceID: "11111111-1111-4111-8111-111111111111", wantCode: api.MissingHeader},
+		{name: "blank device", deviceID: "   ", sessionID: "22222222-2222-4222-a222-222222222222", wantCode: api.InvalidHeader},
+		{name: "blank session", deviceID: "11111111-1111-4111-8111-111111111111", sessionID: "\t", wantCode: api.InvalidHeader},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -179,8 +182,8 @@ func TestAnalyzeRejectsPartialOrBlankRequestContext(t *testing.T) {
 			if recorder.Code != http.StatusBadRequest {
 				t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
 			}
-			if !strings.Contains(recorder.Body.String(), `"code":"missing_request_context"`) {
-				t.Errorf("body = %s", recorder.Body.String())
+			if got := decodeError(t, recorder.Body.Bytes()); got.Code != tt.wantCode {
+				t.Errorf("code = %q, want %q", got.Code, tt.wantCode)
 			}
 		})
 	}
@@ -209,8 +212,8 @@ func TestAnalyzeAcceptsBoundaryInputs(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodPost, "/api/balance/v1/team-balance/analyze", strings.NewReader(tt.body))
 			request.Header.Set("Content-Type", "application/json")
-			request.Header.Set("X-Device-Id", "test-device")
-			request.Header.Set("X-Session-Id", "test-session")
+			request.Header.Set("X-Device-Id", "11111111-1111-4111-8111-111111111111")
+			request.Header.Set("X-Session-Id", "22222222-2222-4222-a222-222222222222")
 			newTestServer().ServeHTTP(recorder, request)
 
 			// TB1 accepts boundary inputs and returns the analysis.

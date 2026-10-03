@@ -322,3 +322,38 @@ describe("通信・応答の失敗は speed_unavailable(自動の切り替えは
     await expect(client.pokemon()).resolves.toMatchObject({ ok: false });
   });
 });
+
+// ADR-0607: 表の場の状態(追い風・トリックルーム)。true の項目だけをクエリに付け、false・省略は付けない
+// (省略は false と同じ応答。サーバーの既定に任せる)。
+describe("table の場の状態(ADR-0607)", () => {
+  test.each([
+    ["追い風", undefined, { tailwind: true }, "http://speed.test/api/speed/v1/table?tailwind=true"],
+    ["トリックルーム", undefined, { trickRoom: true }, "http://speed.test/api/speed/v1/table?trickRoom=true"],
+    [
+      "両方",
+      undefined,
+      { tailwind: true, trickRoom: true },
+      "http://speed.test/api/speed/v1/table?tailwind=true&trickRoom=true",
+    ],
+    [
+      "presets と組み合わせ",
+      ["max", "max-scarf"],
+      { tailwind: true, trickRoom: false },
+      "http://speed.test/api/speed/v1/table?presets=max%2Cmax-scarf&tailwind=true",
+    ],
+    [
+      "false だけなら付けない",
+      undefined,
+      { tailwind: false, trickRoom: false },
+      "http://speed.test/api/speed/v1/table",
+    ],
+    ["空のオブジェクトなら付けない", undefined, {}, "http://speed.test/api/speed/v1/table"],
+  ] as const)("%s", async (_name, presets, field, expectedUrl) => {
+    const fetchMock = fakeFetch(jsonResponse(200, tableResponse));
+    const client = createSpeedClient({ baseUrl: BASE_URL, fetch: fetchMock, ids });
+
+    await client.table(presets, field);
+
+    expect(callAt(fetchMock).url).toBe(expectedUrl);
+  });
+});

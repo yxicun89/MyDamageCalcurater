@@ -27,6 +27,18 @@ export const CALC_SVC_PORT = 18317;
  */
 export const POKEDEX_FIXTURE_PORT = 18319;
 
+/**
+ * ADR-0313: オフライン(既定の playwright.config.ts)用に起動する pokedex フィクスチャのポート。
+ * 既定の計算モードがオンラインになり、マスタは /api/pokedex から読む(一度読んだものを IndexedDB に
+ * 保存してオフラインで使う)ため、オフライン設定でも pokedex フィクスチャが要る(calc-svc は不要)。
+ */
+
+/**
+ * ADR-0313: コンテナ(playwright.container.config.ts)の E2E 用 pokedex フィクスチャのポート。コンテナの nginx は
+ * /api を配らない(404)ので、container.spec.ts が page.route でこのサーバーへ /api/pokedex を転送する。
+ */
+export const CONTAINER_POKEDEX_FIXTURE_PORT = 18321;
+
 /** P4-12a: タイプバランス(balance API)用の preview サーバーのポート。 */
 export const BALANCE_PORT = 4320;
 
