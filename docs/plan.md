@@ -398,6 +398,12 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
       (`web/src/app/withOnlineMaster.tsx`。読めなければ日本語の案内と再試行)。balance のエラーはコードを日本語の文言に写像し、
       英語の message を出さない(`balanceErrorText`)。ヘッダーの切替の名前を「ダメージ計算の実行場所」に変更。契約・生成物の変更なし。
       判定のエラー補助行(サーバー message)は未対応(別 issue 候補)
+- [x] issue #316・#245(APIレーン。ADR-0200 §4 追記): (#316) calc-svc が契約で必須の `sp`(と StatBlock の6キー)の欠落を 400 `invalid_input` にする
+      (calc の attacker・defender、bulk の attacker、reverse の known。`decodeStrict` が生の JSON でキーの有無を確かめる。judge と同じ方式、生成型は不変)。
+      (#245) `Individual.moveId` を契約から削除(Web は参照なし、iOS は同じ PR で追従。`attacker.moveId` は `unknown_field`)、pokedex の searchSpecies・getSpecies・searchMoves・searchItems に
+      `'400'` を明記、`services/internal/api/cfg.yaml` の `strict-server: false`(StrictServerInterface は未使用。生成差分のみ)。`make gen`・`make ios-gen` 済み。
+      Web・iOS レーンへの連絡は DECISIONS.md
+
 - [x] issue #322(担当: API。ADR-0204 追記): calc-svc のマスタ本文の上限を 16MiB から 4MiB に下げた
       (`master.MaxExportBytes`。実マスタは見積り 0.5〜1MB で数倍の余裕)。上限ちょうど・+1(ErrInvalidMaster)のテストと、
       「基礎 32MiB + 4 × 上限 ≤ limits.memory の 8 割」を固定する `TestMasterBodyLimitFitsMemoryLimit` を追加。契約・生成物の変更なし。
