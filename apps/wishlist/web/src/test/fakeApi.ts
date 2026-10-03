@@ -32,6 +32,10 @@ export interface FakeApi {
   listings: Listing[];
   /** true の間、GET estimates だけが通信失敗(TypeError)になる。ほかは通る */
   failEstimates: boolean;
+  /** true の間、POST estimates/refresh だけが通信失敗(TypeError)になる */
+  failRefresh: boolean;
+  /** 返す Promise が解決するまで応答を遅らせる(本文は呼び出し時点で決まる)。undefined なら即返す */
+  delay?: (call: Call) => Promise<void> | undefined;
   /** path の接頭辞が合う呼び出しのうち method 一致のもの */
   callsTo(method: string, pathPrefix: string): Call[];
 }
@@ -60,6 +64,7 @@ export function installFakeApi(init: { items?: Item[]; genres?: Genre[]; sites?:
     estimates: (itemId) => ({ item_id: itemId, sites: [], refreshing: false }),
     listings: [],
     failEstimates: false,
+    failRefresh: false,
     callsTo: (method, prefix) => api.calls.filter((c) => c.method === method && c.path.startsWith(prefix)),
   };
   let nextId = 1000;
@@ -75,6 +80,8 @@ export function installFakeApi(init: { items?: Item[]; genres?: Genre[]; sites?:
     api.calls.push(call);
 
     if (api.failEstimates && method === "GET" && /^\/api\/items\/\d+\/estimates$/.test(path))
+      throw new TypeError("Failed to fetch");
+    if (api.failRefresh && method === "POST" && /\/estimates\/refresh$/.test(path))
       throw new TypeError("Failed to fetch");
     if (headers.get("Authorization") !== "Bearer test-token") return errRes(401, "unauthorized");
     const body = call.json as Record<string, unknown> | undefined;
@@ -180,7 +187,9 @@ export function installFakeApi(init: { items?: Item[]; genres?: Genre[]; sites?:
   const handler = (input: RequestInfo | URL, reqInit: RequestInit = {}): Promise<Response> => {
     if (api.offline) return Promise.reject(new TypeError("Failed to fetch"));
     try {
-      return Promise.resolve(route(input, reqInit));
+      const res = route(input, reqInit);
+      const wait = api.delay?.(api.calls[api.calls.length - 1] as Call);
+      return wait ? wait.then(() => res) : Promise.resolve(res);
     } catch (e) {
       return Promise.reject(e instanceof Error ? e : new TypeError("Failed to fetch"));
     }

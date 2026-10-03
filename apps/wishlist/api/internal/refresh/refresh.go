@@ -57,6 +57,9 @@ const (
 	ModeStale Mode = iota
 	// ModeAll はすべての対象サイトを取る(手動の更新・CronJob)。
 	ModeAll
+	// ModeNightly は ModeAll に加えて、夜間だけ取るサイト(fetcher.NightlyOnlyHosts。駿河屋)も取る(CronJob の RefreshAll だけ)。
+	// ModeStale・ModeAll では夜間専用のサイトは取らずに飛ばす(前回値は残す)。
+	ModeNightly
 )
 
 // Deps は New の依存。
@@ -136,9 +139,10 @@ func New(d Deps) *Service {
 
 // target は更新の対象サイト(表示順)。
 type target struct {
-	site  item.Site
-	f     fetcher.Fetcher
-	query string
+	site        item.Site
+	f           fetcher.Fetcher
+	query       string
+	nightlyOnly bool
 }
 
 // targets は商品の対象サイトを返す。商品が無ければ item.ErrNotFound。
@@ -194,7 +198,7 @@ func (s *Service) targets(ctx context.Context, itemID int64) (item.Item, []targe
 		if it.OptionText != nil {
 			opt = *it.OptionText
 		}
-		out = append(out, target{site: st, f: f, query: query.Build(genre.QueryTemplate, it.Name, opt, it.QueryOverride, siteQuery)})
+		out = append(out, target{site: st, f: f, nightlyOnly: s.d.Fetchers.NightlyOnly(st), query: query.Build(genre.QueryTemplate, it.Name, opt, it.QueryOverride, siteQuery)})
 	}
 	return it, out, nil
 }
@@ -202,7 +206,10 @@ func (s *Service) targets(ctx context.Context, itemID int64) (item.Item, []targe
 // needsFetch は t を今回取るべきか。ModeAll は常に取る。ModeStale は「目安が無い・failed・MaxAge より古い」うち、
 // 最後に試してから RetryInterval 以上たったものだけ。
 func (s *Service) needsFetch(itemID int64, t target, est *item.Estimate, mode Mode, now time.Time) bool {
-	if mode == ModeAll {
+	if t.nightlyOnly && mode != ModeNightly {
+		return false
+	}
+	if mode == ModeAll || mode == ModeNightly {
 		return true
 	}
 	stale := est == nil || est.Status == item.EstimateFailed || now.Sub(est.FetchedAt) > s.d.MaxAge
@@ -419,7 +426,7 @@ func sanitize(ls []fetcher.Listing) []fetcher.Listing {
 	return out
 }
 
-// RefreshAll は全商品を順番に ModeAll で更新する。1 商品の失敗で止めない(ctx が終わったときだけ止める)。
+// RefreshAll は全商品を順番に ModeNightly で更新する。1 商品の失敗で止めない(ctx が終わったときだけ止める)。
 func (s *Service) RefreshAll(ctx context.Context) (AllReport, error) {
 	items, err := s.d.Items.ListItems(ctx, nil)
 	if err != nil {
@@ -430,7 +437,7 @@ func (s *Service) RefreshAll(ctx context.Context) (AllReport, error) {
 		if err := ctx.Err(); err != nil {
 			return r, err
 		}
-		rep, err := s.RefreshItem(ctx, it.ID, ModeAll)
+		rep, err := s.RefreshItem(ctx, it.ID, ModeNightly)
 		r.Items++
 		switch {
 		case err != nil:
@@ -500,7 +507,7 @@ func (s *Service) Estimates(ctx context.Context, itemID int64) (View, error) {
 }
 
 // Refresh は裏で ModeAll の更新を起動し(実行中なら起動しない)、保存済みの目安を返す。
-// Refreshing は対象サイトがあれば true。商品が無ければ item.ErrNotFound。
+// Refreshing は夜間専用でない対象サイトがあれば true。商品が無ければ item.ErrNotFound。
 func (s *Service) Refresh(ctx context.Context, itemID int64) (View, error) {
 	_, targets, err := s.targets(ctx, itemID)
 	if err != nil {
@@ -510,8 +517,11 @@ func (s *Service) Refresh(ctx context.Context, itemID int64) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
-	if len(targets) > 0 {
-		v.Refreshing = s.startBackground(itemID, ModeAll)
+	for _, t := range targets {
+		if !t.nightlyOnly { // 夜間専用のサイトだけなら、取るものが無いので起動しない
+			v.Refreshing = s.startBackground(itemID, ModeAll)
+			break
+		}
 	}
 	return v, nil
 }

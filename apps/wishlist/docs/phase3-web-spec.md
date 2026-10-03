@@ -18,12 +18,16 @@ API は [../api/openapi.yaml](../api/openapi.yaml) と [phase3-api-spec.md](phas
   - `status=ok`: サイト名・`¥low〜¥mid`(mid が null なら `¥low〜`)・`N件`(`count`)・在庫(`in_stock_count > 0` → `在庫あり`、0 → `在庫なし`)
   - `status=failed`: 前回の値(`low` があれば上と同じ表示)に `最終取得: N日前`(`fetched_at` と現在の **JST の暦日の差**。同じ日なら `最終取得: 今日`。月単位にしない)。
     前回値が無い(`low` が null)なら `取得できませんでした`(`最終取得` は出さない)。エラー表示(`alert`)にはしない
-  - `status=no_result`: `見つかりません`(価格は出さない)
+  - `status=no_result`: `出品ないかも` だけ(金額・件数・在庫は出さない。リンクは今までどおり。ユーザー指示 2026-10-04: 無理に金額を出さず、嘘の情報を避ける)
 - **再取得(ポーリング)**: `refreshing: true` の応答を受けたら、`setTimeout` で **5000ms 後**にもう一度 GET する(連鎖する `setTimeout`。`setInterval` は不可)。
   再取得は最大 6 回(最初と合わせて GET は最大 7 回)。`refreshing: false` で止まる。打ち切ったときは `更新中…` を消し、取得済みの値は残す。
   シートを閉じたら予約を `clearTimeout` する(閉じたあとの GET なし)。通信失敗・offline のときは予約しない
 - **更新ボタン**: シートに `button`「更新」。押すと `POST estimates/refresh`(202。本文は GET と同じ形)を呼び、本文を反映して(`refreshing: true` なので `更新中…`)上の再取得に入る。
   オフライン(サマリが「オフライン」)のあいだは `disabled`
+- **失敗しても前回値を残す**: 一度でも estimates を取得できたら、更新・再取得が失敗してもその値(サマリ・サイト別の目安)を出し続け、短い文を添える
+  (通信失敗は `オフライン(前回の値)`、それ以外は `更新できませんでした`)。最初の取得が失敗したときだけ `オフライン` / `価格情報を取得できませんでした`。
+- **サマリの「出品ないかも」**(ユーザー指示 2026-10-04): estimates があり、目安を出せるサイトが無く(summary_low が null)、すべて `no_result` のときはサマリを `出品ないかも` にする。estimates が空なら従来どおり `まだ価格情報はありません`。
+- **更新ボタンの disabled**: 「オフライン」のほか、POST の応答待ちと `refreshing` で再取得している間も押せない。
 - **参考外**: `suspicious_count` の合計が 0 のときは「参考外」の文字を出さず、listings も取らない。1 以上なら折りたたみ(`<details><summary>参考外 N件</summary>` を推奨。`aria-expanded` でも可。N は合計)。
   **開いたときに** `GET listings`(`site_id` なし)を呼び、`suspicious_reasons` が空でない出品だけを `ul[aria-label="参考外の出品"]` に並べる(API の並びのまま)。
   各 `<li>`: 画像(`<img alt=タイトル>`)・タイトル・価格(`¥300`)・理由(`商品名が一致しない` / `安すぎる` / `下限価格未満`)・出品へのリンク(`<a href target="_blank" rel="noopener">`)
@@ -52,9 +56,14 @@ API は [../api/openapi.yaml](../api/openapi.yaml) と [phase3-api-spec.md](phas
 | AC-EST-07 | estimates が通信失敗: 「オフライン」・リンクは出る・alert なし・「更新」は disabled・再取得の予約なし | 同 「AC-EST-07 …」 |
 | AC-EST-08 | 整形の純粋関数(金額の桁区切り・range・JST の M/D(年またぎ・UTC との日付差)・N日前(JST の暦日・未来)・理由の文言・http(s) 判定) | `src/lib/price.test.ts`(テーブル駆動) |
 | AC-API-08 | `refreshEstimates`(POST・202 でも本文を返す)・`listListings`(GET・配列だけ・`site_id` クエリ)・失敗は ApiError(通信失敗は network) | `src/lib/api.test.ts` 「createApiClient(フェーズ3)」 |
+| AC-EST-10 | 一度でも取得できた estimates は、あとの更新(POST)・ポーリング(GET)が失敗しても表示し続ける。サマリに「オフライン(前回の値)」(通信失敗)/「更新できませんでした」(それ以外)を添え、再取得は予約しない。最初の取得の失敗は従来どおり「オフライン」 | 同 「AC-EST-10 …」2 件 |
+| AC-EST-11 | 更新中(POST の応答待ち・refreshing の間)は「更新」が disabled。連打しても POST は重ならない | 同 「AC-EST-11 …」 |
+| AC-EST-12 | 世代番号で、遅れて返った古い GET は新しい POST の結果を上書きしない | 同 「AC-EST-12 …」(`fakeApi.delay` で GET を保留) |
 | AC-EST-09 | 常時アニメーションなし | 既存 AC-PWA-02(`src/pwa/pwaFiles.test.ts`)と AC-EST-02 の `progressbar` なし |
 
-既存テストの期待は変えていない(AC-SHEET-05 の「まだ価格情報はありません」・AC-OFF-02 の「オフライン」はそのまま通る)。
+`fakeApi` に `failRefresh`(POST refresh だけ通信失敗)・`delay(call)`(応答の保留)を追加(既存の振る舞いは不変)。
+
+既存テストの期待は、ユーザー指示(2026-10-04「該当なしは金額を出さず『出品ないかも』」)に合わせて AC-EST-02・03 だけ書き換えた(AC-EST-02 は「estimates が空」と「すべて no_result」に分割、AC-EST-03 は文言を「出品ないかも」に変え、件数・在庫が出ないこととリンク属性の検査を追加)。AC-SHEET-05・AC-OFF-02 はそのまま通る。
 
 ## implementer への注意
 

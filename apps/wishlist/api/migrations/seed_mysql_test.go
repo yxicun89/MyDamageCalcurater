@@ -150,7 +150,7 @@ var wantSites = map[string]siteRow{
 	"カードラッシュ":      {"カードラッシュ", "https://www.cardrush-dm.jp/product-list?keyword={q}&order=asc&available=1&num=20", "scrape", true},
 	"あみあみ":         {"あみあみ", "https://slist.amiami.jp/top/search/list?s_keywords={q}&s_sortkey=pricea", "scrape", true},
 	"Yahoo!ショッピング": {"Yahoo!ショッピング", "https://shopping.yahoo.co.jp/search/{q}/0/?X=2", "api", true},
-	"駿河屋":          {"駿河屋", "https://www.suruga-ya.jp/search?category=&search_word={q}&rankBy=price%3Aascending&inStock=On", "link_only", false},
+	"駿河屋":          {"駿河屋", "https://www.suruga-ya.jp/search?category=&search_word={q}&rankBy=price%3Aascending&inStock=On", "scrape", true},
 }
 
 var wantOrder = map[string][]string{

@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ItemEstimates, Listing, SiteEstimate } from "./api/types";
 import type { FakeApi } from "./test/fakeApi";
@@ -97,7 +97,16 @@ describe("目安価格: サマリ", () => {
     expect(status(dialog)).not.toHaveTextContent("〜¥");
   });
 
-  it("AC-EST-02 目安が無ければ「まだ価格情報はありません」(sites が空、または summary_low が null)", async () => {
+  it("AC-EST-02 目安が無く estimates が空なら「まだ価格情報はありません」", async () => {
+    const { dialog } = await openSheet((a) => {
+      a.estimates = () => est({ sites: [], summary_low: null, summary_mid: null, summary_fetched_at: null });
+    });
+    await waitFor(() => {
+      expect(status(dialog)).toHaveTextContent("まだ価格情報はありません");
+    });
+  });
+
+  it("AC-EST-02 目安を出せるサイトが無く、すべて no_result なら「出品ないかも」(ユーザー指示 2026-10-04)", async () => {
     const { dialog } = await openSheet((a) => {
       a.estimates = () =>
         est({
@@ -108,7 +117,7 @@ describe("目安価格: サマリ", () => {
         });
     });
     await waitFor(() => {
-      expect(status(dialog)).toHaveTextContent("まだ価格情報はありません");
+      expect(status(dialog)).toHaveTextContent("出品ないかも");
     });
     expect(status(dialog)).not.toHaveTextContent("時点");
   });
@@ -171,7 +180,7 @@ describe("目安価格: サイト行", () => {
     });
     const linkOnly = siteRows(dialog)[2];
     expect(linkOnly?.textContent).toContain("その他");
-    for (const w of ["¥", "件", "在庫", "最終取得", "見つかりません"])
+    for (const w of ["¥", "件", "在庫", "最終取得", "出品ないかも"])
       expect(linkOnly).not.toHaveTextContent(w);
   });
 
@@ -219,7 +228,7 @@ describe("目安価格: サイト行", () => {
     expect(siteRows(dialog)[1]).not.toHaveTextContent("最終取得");
   });
 
-  it("AC-EST-03 status=no_result は「見つかりません」(価格は出さない)", async () => {
+  it("AC-EST-03 status=no_result は「出品ないかも」だけ(金額・件数・在庫は出さず、検索結果へのリンクは残す)", async () => {
     const { dialog } = await openSheet((a) => {
       a.estimates = () =>
         est({
@@ -227,9 +236,11 @@ describe("目安価格: サイト行", () => {
         });
     });
     await waitFor(() => {
-      expect(siteRows(dialog)[0]).toHaveTextContent("見つかりません");
+      expect(siteRows(dialog)[0]).toHaveTextContent("出品ないかも");
     });
-    expect(siteRows(dialog)[0]).not.toHaveTextContent("¥");
+    for (const w of ["¥", "件", "在庫"]) expect(siteRows(dialog)[0]).not.toHaveTextContent(w);
+    expect(siteRows(dialog)[0]).toHaveAttribute("target", "_blank");
+    expect(siteRows(dialog)[0]).toHaveAttribute("rel", "noopener");
   });
 });
 
@@ -440,5 +451,97 @@ describe("目安価格: 取得失敗", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "更新" })).toBeDisabled();
     expect(clock.pendingCount()).toBe(0);
+  });
+
+  it("AC-EST-10 表示中に更新(POST)が失敗しても、サイト別の目安と前回のサマリが残り、短い文が添えられる", async () => {
+    const { api, clock, dialog, user } = await openSheet((a) => {
+      a.estimates = () => est();
+      a.failRefresh = true;
+    });
+    await waitFor(() => {
+      expect(status(dialog)).toHaveTextContent("だいたい");
+    });
+    await user.click(within(dialog).getByRole("button", { name: "更新" }));
+    await waitFor(() => {
+      expect(status(dialog)).toHaveTextContent("オフライン(前回の値)");
+    });
+    expect(status(dialog)).toHaveTextContent("だいたい");
+    expect(within(dialog).getByText(/5件/)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(clock.pendingCount()).toBe(0);
+    expect(api.callsTo("POST", "/api/items/12/estimates/refresh")).toHaveLength(1);
+  });
+
+  it("AC-EST-10 ポーリング中の GET が失敗しても、前回の目安が残る", async () => {
+    const { api, clock, dialog } = await openSheet((a) => {
+      a.estimates = () => est({ refreshing: true });
+    });
+    await waitFor(() => {
+      expect(status(dialog)).toHaveTextContent("更新中…");
+    });
+    api.failEstimates = true;
+    await clock.advance(5000);
+    await waitFor(() => {
+      expect(status(dialog)).toHaveTextContent("オフライン(前回の値)");
+    });
+    expect(status(dialog)).toHaveTextContent("だいたい");
+    expect(status(dialog)).not.toHaveTextContent("更新中");
+    expect(within(dialog).getByText(/5件/)).toBeInTheDocument();
+    expect(clock.pendingCount()).toBe(0);
+  });
+});
+
+describe("目安価格: 更新中の操作と応答の順序", () => {
+  it("AC-EST-11 更新中(POST の応答待ち・refreshing の間)は「更新」が押せず、POST は 1 回だけ", async () => {
+    let release: () => void = () => undefined;
+    const { api, clock, dialog, user } = await openSheet((a) => {
+      a.estimates = () => est();
+      a.delay = (c) => (c.method === "POST" ? new Promise<void>((r) => (release = r)) : undefined);
+    });
+    await waitFor(() => {
+      expect(status(dialog)).toHaveTextContent("だいたい");
+    });
+    const button = within(dialog).getByRole("button", { name: "更新" });
+    await user.click(button);
+    await waitFor(() => {
+      expect(button).toBeDisabled(); // POST の応答待ち
+    });
+    release();
+    await waitFor(() => {
+      expect(status(dialog)).toHaveTextContent("更新中…");
+    });
+    expect(button).toBeDisabled(); // refreshing の間
+    expect(api.callsTo("POST", "/api/items/12/estimates/refresh")).toHaveLength(1);
+    await clock.advance(5000);
+    await waitFor(() => {
+      expect(button).toBeEnabled();
+    });
+  });
+
+  it("AC-EST-12 遅れて返った古い GET は、新しい POST の結果を上書きしない", async () => {
+    let release: () => void = () => undefined;
+    const { api, dialog, user } = await openSheet((a) => {
+      a.estimates = (_id, nth) =>
+        nth === 0
+          ? est({ summary_low: 1111, summary_mid: 1222 })
+          : est({ summary_low: 2222, summary_mid: 2333 });
+      a.delay = (c) =>
+        c.method === "GET" && c.path === "/api/items/12/estimates" && gets(a).length === 1
+          ? new Promise<void>((r) => (release = r))
+          : undefined;
+    });
+    await waitFor(() => {
+      expect(gets(api)).toHaveLength(1); // 最初の GET は保留中
+    });
+    await user.click(within(dialog).getByRole("button", { name: "更新" }));
+    await waitFor(() => {
+      expect(status(dialog)).toHaveTextContent("2,222");
+    });
+    release(); // 古い GET がここで返る
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(status(dialog)).toHaveTextContent("2,222");
+    expect(status(dialog)).not.toHaveTextContent("1,111");
   });
 });

@@ -20,7 +20,7 @@ const MAX_POLLS = 6;
 
 type Summary =
   | { kind: "loading" }
-  | { kind: "ok"; estimates: ItemEstimates; gaveUp: boolean }
+  | { kind: "ok"; estimates: ItemEstimates; gaveUp: boolean; notice: string | null }
   | { kind: "offline" }
   | { kind: "error" };
 
@@ -38,16 +38,19 @@ function summaryText(s: Summary): string {
     case "ok": {
       const { sites, summary_low: low, summary_mid: mid, summary_fetched_at: at } = s.estimates;
       const refreshing = s.estimates.refreshing && !s.gaveUp ? " 更新中…" : "";
-      if (sites.length === 0 || low == null) return `まだ価格情報はありません${refreshing}`;
+      const notice = s.notice ? ` ${s.notice}` : "";
+      if (sites.length > 0 && low == null && sites.every((e) => e.status === "no_result"))
+        return `出品ないかも${refreshing}${notice}`;
+      if (sites.length === 0 || low == null) return `まだ価格情報はありません${refreshing}${notice}`;
       const when = at ? `(${formatJstDate(at)} 時点)` : "";
-      return `だいたい ${formatRange(low, mid)} で買えそう${when}${refreshing}`;
+      return `だいたい ${formatRange(low, mid)} で買えそう${when}${refreshing}${notice}`;
     }
   }
 }
 
 /** サイト行の目安(estimates にあるサイトだけ) */
 function SiteDetail({ est, now }: { est: SiteEstimate; now: Date }) {
-  if (est.status === "no_result") return <span className="site-meta">見つかりません</span>;
+  if (est.status === "no_result") return <span className="site-meta">出品ないかも</span>;
   if (est.low == null) return <span className="site-meta">取得できませんでした</span>;
   return (
     <>
@@ -76,6 +79,9 @@ export function Sheet({ item, genre, sites, client, baseUrl, onClose, onUpdated 
   const gen = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const alive = useRef(false);
+  // 一度でも取得できた estimates(失敗しても表示し続ける)。
+  const last = useRef<ItemEstimates | null>(null);
+  const [posting, setPosting] = useState(false);
   const poll = useRef<(attempt: number) => void>(() => undefined);
 
   // 要求(GET か POST)を出し、応答を反映する。refreshing:true なら 5 秒後の再取得を予約する(連鎖する setTimeout)。
@@ -85,8 +91,10 @@ export function Sheet({ item, genre, sites, client, baseUrl, onClose, onUpdated 
     request().then(
       (estimates) => {
         if (!alive.current || g !== gen.current) return;
+        setPosting(false);
+        last.current = estimates;
         const more = estimates.refreshing && attempt < MAX_POLLS;
-        setSummary({ kind: "ok", estimates, gaveUp: estimates.refreshing && !more });
+        setSummary({ kind: "ok", estimates, gaveUp: estimates.refreshing && !more, notice: null });
         if (more) {
           timer.current = setTimeout(() => {
             poll.current(attempt + 1);
@@ -95,13 +103,23 @@ export function Sheet({ item, genre, sites, client, baseUrl, onClose, onUpdated 
       },
       (e: unknown) => {
         if (!alive.current || g !== gen.current) return;
-        setSummary({ kind: e instanceof ApiError && e.code === "network" ? "offline" : "error" });
+        setPosting(false);
+        const offline = e instanceof ApiError && e.code === "network";
+        const prev = last.current;
+        if (prev) {
+          // 前回値を残し、失敗は短い文で添える(再取得は予約しない)。
+          const notice = offline ? "オフライン(前回の値)" : "更新できませんでした";
+          setSummary({ kind: "ok", estimates: prev, gaveUp: true, notice });
+        } else {
+          setSummary({ kind: offline ? "offline" : "error" });
+        }
       },
     );
   }, []);
 
   useEffect(() => {
     alive.current = true;
+    last.current = null;
     poll.current = (attempt) => {
       run(() => client.getEstimates(itemId), attempt);
     };
@@ -112,6 +130,7 @@ export function Sheet({ item, genre, sites, client, baseUrl, onClose, onUpdated 
     };
   }, [client, itemId, run]);
 
+  const busy = posting || (summary.kind === "ok" && summary.estimates.refreshing && !summary.gaveUp);
   const estimates = summary.kind === "ok" ? summary.estimates : null;
   const suspiciousTotal = estimates?.sites.reduce((n, s) => n + s.suspicious_count, 0) ?? 0;
 
@@ -197,8 +216,9 @@ export function Sheet({ item, genre, sites, client, baseUrl, onClose, onUpdated 
         <button
           type="button"
           className="text-button"
-          disabled={summary.kind === "offline"}
+          disabled={summary.kind === "offline" || busy}
           onClick={() => {
+            setPosting(true);
             run(() => client.refreshEstimates(itemId), 0);
           }}
         >

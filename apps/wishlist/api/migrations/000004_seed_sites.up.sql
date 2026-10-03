@@ -1,4 +1,4 @@
--- 確認済みサイトの初期データ(docs/sites.md)。Yahoo!フリマ・カードラッシュ・あみあみ・Yahoo!ショッピング・駿河屋の 5 サイト。
+-- 確認済みサイトの初期データ(docs/sites.md)。Yahoo!フリマ・カードラッシュ・あみあみ・Yahoo!ショッピング・駿河屋の 5 サイト。駿河屋は robots.txt の Crawl-delay 30 秒を守る夜間取得のみ(ユーザー決定 2026-10-04)なので scrape・基準サイト。
 -- すでに使われている DB に流しても壊れないように、sites は id を書かず、同じ名前があれば足さない(既存の行は変えない)。
 -- genre_sites は名前で引き、無い組だけを足す(既存の行・sort_order は変えない)。ジャンルは足さない。
 -- 未確認のサイトは入れない(sites.md に人が登録する候補として残す)。
@@ -14,7 +14,7 @@ FROM (
   UNION ALL
   SELECT 'Yahoo!ショッピング', 'https://shopping.yahoo.co.jp/search/{q}/0/?X=2', 'api', TRUE
   UNION ALL
-  SELECT '駿河屋', 'https://www.suruga-ya.jp/search?category=&search_word={q}&rankBy=price%3Aascending&inStock=On', 'link_only', FALSE
+  SELECT '駿河屋', 'https://www.suruga-ya.jp/search?category=&search_word={q}&rankBy=price%3Aascending&inStock=On', 'scrape', TRUE
 ) AS v
 WHERE NOT EXISTS (SELECT 1 FROM sites s WHERE s.name = v.name);
 

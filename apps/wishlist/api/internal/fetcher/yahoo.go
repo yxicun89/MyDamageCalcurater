@@ -77,6 +77,7 @@ func (y *Yahoo) Fetch(ctx context.Context, _ Site, query string) ([]Listing, err
 	if err != nil {
 		return nil, errors.New("fetcher: yahoo: invalid request")
 	}
+	req.Header.Set("User-Agent", UserAgent)
 	resp, err := client.Do(req)
 	if err != nil {
 		// *url.Error は URL(appid を含む)を文言に持つので、中身のエラーだけを errors.Is できる形で包む。
@@ -100,7 +101,7 @@ func (y *Yahoo) Fetch(ctx context.Context, _ Site, query string) ([]Listing, err
 	}
 	out := make([]Listing, 0, len(r.Hits))
 	for _, h := range r.Hits {
-		if h.Price < 1 || h.Name == "" || h.URL == "" {
+		if !validPrice(h.Price) || h.Name == "" || h.URL == "" {
 			continue
 		}
 		img := h.Image.Small

@@ -29,8 +29,8 @@ API 契約は [../api/openapi.yaml](../api/openapi.yaml)。書き方はフェー
   「取得できるサイト」= 登録表に Fetcher があるサイト。appid が無い・空白だけなら api も取得しない(エラーにしない)
 - **Yahoo のリクエスト**:`GET …/V3/itemSearch?appid&query&sort=%2Bprice&results=20`。`in_stock` は付けない(在庫の有無を `in_stock_count` で見せるため)
 - **Yahoo の応答**:`hits[].name`・`price`・`url`・`image.small`(無ければ `exImage.url`、どちらも無ければ空)・`inStock`。
-  price が 1 未満・name か url が空の hit は除く。応答本文は 2 MiB まで。エラーの文言に appid を含めない(`*url.Error` は URL を含むため包み直す)
-- **アクセスの節度**:同じサイト(sites.id)へのリクエストは直列にし、前回の取得が**終わってから** 5 秒あける(失敗した取得も数える。初回は待たない)。
+  price が 1 未満または上限超え・name か url が空の hit は除く。応答本文は 2 MiB まで。エラーの文言に appid を含めない(`*url.Error` は URL を含むため包み直す)
+- **アクセスの節度**:同じ**ホスト**(検索 URL テンプレートのホスト名。小文字・ポートなし。読めなければ sites.id)へのリクエストは、サイト行が別でも直列にし、前回の取得が**終わってから** 5 秒あける(失敗した取得も数える。初回は待たない)。
   違うサイトは互いに待たない。待ちは差し替えられる時計(`fetcher.Clock`)で行い、テストでは実際に待たない。
   本番の登録表(`NewRegistry`)はすべての Fetcher をこの待ちで包む
 - **外部取得**:既存の `netguard` のクライアント(SSRF 対策・タイムアウト 10 秒)を使う
@@ -94,7 +94,7 @@ API 契約は [../api/openapi.yaml](../api/openapi.yaml)。書き方はフェー
 
 | ID | 条件 | テスト |
 |---|---|---|
-| AC-F1 | 同じサイトは直列・前回の終わりから 5 秒あける(失敗も数える・初回は待たない・違うサイトは待たない)。待ち中の取り消しは inner を呼ばない。並列に呼ばれても重ならない | `TestThrottle_Interval`・`TestThrottle_FromEndAndFailures`・`TestThrottle_CanceledWhileWaiting`・`TestThrottle_NoParallelSameSite` |
+| AC-F1 | 同じホストは直列・前回の終わりから 5 秒あける(失敗も数える・初回は待たない・違うホストは待たない。同じホストの別サイト行も 5 秒あく。ホストが読めなければ ID)。待ち中の取り消しは inner を呼ばない。並列に呼ばれても重ならない | `TestThrottle_Interval`・`TestThrottle_SameHostDifferentSites`・`TestThrottle_SameHostNoParallel`・`TestThrottle_UnparsableHostFallsBackToID`・`TestThrottle_HostMinIntervals`(駿河屋 30 秒)・`TestThrottle_FromEndAndFailures`・`TestThrottle_CanceledWhileWaiting`・`TestThrottle_NoParallelSameSite` |
 | AC-F2 | 登録表:api は appid があるときだけ、scrape・headless・link_only は使えない。本番の表の Yahoo は Endpoint・Client の設定を使い、待ちで包まれている | `TestNewRegistry`・`TestNewRegistryWith`・`TestNewRegistry_YahooIsThrottled` |
 | AC-F3 | Yahoo のリクエスト(appid・query・`sort=%2Bprice`・results=20 だけ)と応答の変換(画像の代替・不正な hit の除外・20 件まで)。エンドポイントは公式の URL | `TestYahooEndpoint`・`TestYahoo_Request`・`TestYahoo_Parse`・`TestYahoo_Limit` |
 | AC-F4 | 失敗:2xx 以外 → `ErrUpstreamStatus`、2 MiB 超 → `netguard.ErrTooLarge`、壊れた JSON → エラー、既定クライアントでループバック → `netguard.ErrForbiddenAddress`、取り消し → `context.Canceled`。文言に appid を出さない。appid なし → 取得せず `ErrUnavailable` | `TestYahoo_Errors`・`TestYahoo_NoAppID` |
@@ -172,7 +172,7 @@ fixture は `internal/fetcher/testdata/{cardrush,amiami,surugaya,yahoofurima}.ht
 - **Yahoo!フリマの JSON**:`script#__NEXT_DATA__` の `props.initialState.searchState.search.result.items[]`。items のパスが無い・JSON が壊れている・script が無いのは**エラー**(0 件と区別する。構造の変化に気づくため)。
   `items: []` は 0 件(エラーにしない)。商品 URL は `/item/{id}` を検索ページ基準で絶対化
 - **カードラッシュ・あみあみ・駿河屋の 0 件**:HTML に出品の要素が無ければ 0 件(エラーにしない。レイアウト変更との区別はつかない)
-- **除く出品**:価格が読めない・1 円未満・タイトルまたは URL が空(Yahoo!フリマは id も空)の出品は黙って除く
+- **除く出品**:価格が読めない・1 円未満・1 億円以上(上限 `MaxPrice` = 99,999,999 円。既定案。ParseYen・Yahoo!フリマの float・Yahoo!ショッピングの price で同じ。DB の price INT のあふれで更新全体が失敗しないため)・タイトルまたは URL が空(Yahoo!フリマは id も空)の出品は黙って除く
 - **価格の表記**:`ParseYen` は NFKC で半角にし、最初に現れる数字(カンマ区切り可)を円とする(`50円`・`1,280円`・`8,080`・`￥500 税込`・`税込 1,234円`)。数字が無い・0 は読めない扱い
 - **在庫(InStock)**:
   - カードラッシュ:`.stock` の「在庫数 N枚」が 0 なら false、それ以外(読めない・無いを含む)は true
@@ -182,8 +182,9 @@ fixture は `internal/fetcher/testdata/{cardrush,amiami,surugaya,yahoofurima}.ht
 - **駿河屋の販売価格**:`.item_price .price_teika strong`(中古の販売価格)、無ければ `.item_price .price` が円として読めるもの。どちらも無い(定価だけ)商品は除く
 - **URL・画像**:商品 URL・画像 URL は検索ページの URL を基準に絶対 URL にする。あみあみの画像は `data-src`(`src` は blank.gif)
 - **外部取得**:既存の netguard クライアント(Client が nil なら既定。ループバックは `ErrForbiddenAddress`)。応答は `MaxResponseBytes` まで
-- **駿河屋は取得しない**:robots.txt に `Crawl-delay: 30` と `Disallow: /search/` があり、人の判断が要るため。`NewSurugaya` とパーサのテストは置くが**登録表には入れない**
-  (判断待ち。採用するなら 30 秒以上あける専用の間隔も要る)。駿河屋のサイトは `link_only` で初期データに入れる(リンクのみ)
+- **駿河屋(ユーザー決定 2026-10-04: robots.txt の Crawl-delay 30 秒を守り、夜間の CronJob だけで取得)**:`NewSurugaya` を登録表に入れ、`ForSite` で `www.suruga-ya.jp` を選ぶ。
+  ホストごとの最小間隔は `fetcher.HostMinIntervals`(既定 5 秒、`www.suruga-ya.jp` は 30 秒。`ThrottleWith`)。夜間だけの印は `fetcher.NightlyOnlyHosts`(`Registry.NightlyOnly`)。
+  refresh は `ModeNightly`(`RefreshAll` = cmd/refresher の CronJob だけ)のときだけ夜間専用のサイトを取る。`ModeAll`(手動)・`ModeStale`(api の裏の更新)では取らずに飛ばし、前回値を残し、夜間専用だけの商品では裏の更新も起動しない。駿河屋は fetch_type=scrape・is_reference=true(ショップ)で初期データに入れる
 - **依存**:`github.com/PuerkitoBio/goquery` を最新の安定版(2026-10-03 時点 v1.13.0)に完全固定して足し、go.sum も更新する(テストは goquery を import しない)
 - **初期データ(migration 000004_seed_sites)**:sites.md で確認できた 5 サイトだけを足す(プレバン・魂ウェブ・ポケセンは未確認の点があるので入れず、sites.md に人が登録する候補として残す)。
 
@@ -193,7 +194,7 @@ fixture は `internal/fetcher/testdata/{cardrush,amiami,surugaya,yahoofurima}.ht
   | カードラッシュ | scrape | true | `https://www.cardrush-dm.jp/product-list?keyword={q}&order=asc&available=1&num=20` |
   | あみあみ | scrape | true | `https://slist.amiami.jp/top/search/list?s_keywords={q}&s_sortkey=pricea` |
   | Yahoo!ショッピング | api | true | `https://shopping.yahoo.co.jp/search/{q}/0/?X=2`(人が開く URL。価格は公式 API) |
-  | 駿河屋 | link_only | false | `https://www.suruga-ya.jp/search?category=&search_word={q}&rankBy=price%3Aascending&inStock=On` |
+  | 駿河屋 | scrape | true | `https://www.suruga-ya.jp/search?category=&search_word={q}&rankBy=price%3Aascending&inStock=On` |
 
   ジャンルの表示順(既定案。メルカリ・Amazon は 000002 の行のまま、sort_order 10・20 を変えない。新しい行は各ジャンル内で重ならない sort_order にする):
   デュエマ = カードラッシュ → Yahoo!フリマ → メルカリ → Yahoo!ショッピング → Amazon /
@@ -220,8 +221,8 @@ fixture は `internal/fetcher/testdata/{cardrush,amiami,surugaya,yahoofurima}.ht
 | AC-S8 | Yahoo!フリマはクエリ・# なしの `/search/{q}` だけを 1 回取得 | `TestYahooFurima_NoQueryParameters` |
 | AC-S9 | Yahoo!フリマの埋め込み JSON:同額は元の順、構造の欠落・壊れた JSON はエラー | `TestYahooFurima_PageStructure` |
 | AC-S10 | 価格表記を円にする(全角・円記号・税込・カンマ・読めない・0) | `TestParseYen` |
-| AC-S11 | 登録表:scrape はホスト名で選ぶ(3 サイトだけ。駿河屋・未対応・前方一致・読めないテンプレートは不可)。headless・link_only は不可、api は appid があるときだけ。`For(fetch_type)` は従来どおり、`NewRegistryWith` は型の表のまま | `TestRegistry_ForSite`・`TestRegistry_ForTypeUnchangedForScrape`・`TestRegistryWith_ForSite` |
-| AC-S12 | 本番の表の scrape は Config.Client を使い、同じサイトを Throttle で 5 秒あける(違うサイトは待たない) | `TestRegistry_ScrapeUsesClientAndThrottle` |
+| AC-S11 | 登録表:scrape はホスト名で選ぶ(4 サイトだけ。駿河屋を含む。未対応・前方一致・読めないテンプレートは不可)。headless・link_only は不可、api は appid があるときだけ。`For(fetch_type)` は従来どおり、`NewRegistryWith` は型の表のまま | `TestRegistry_ForSite`・`TestRegistry_ForTypeUnchangedForScrape`・`TestRegistryWith_ForSite` |
+| AC-S12 | 本番の表の scrape は Config.Client を使い、同じホストを Throttle で 5 秒あける(違うホストは待たない) | `TestRegistry_ScrapeUsesClientAndThrottle` |
 | AC-S13 | refresh は ForSite で対象を決める(対応済みの scrape だけ取得し、他は取得も目安の行もなし) | `internal/refresh/refresh_scrape_test.go` の `TestRefreshItem_UsesForSite` |
 
 `migrations/`(layout_test.go は MySQL 不要。seed_mysql_test.go は `-tags mysql`・`make wishlist-test-mysql`)
@@ -234,12 +235,22 @@ fixture は `internal/fetcher/testdata/{cardrush,amiami,surugaya,yahoofurima}.ht
 | AC-D3 | 使われている DB:同名のサイトは足さず変えない。既存の genre_sites の行は不変。足りない分だけ増える | `TestSeed000004_ExistingDB` |
 | AC-D4 | down:空の DB は 000002 の状態に戻る。ユーザーが登録した同名(別 URL)のサイトと紐づけは消さない | `TestSeed000004_DownFresh`・`TestSeed000004_DownKeepsUserRows` |
 
+### 夜間専用(駿河屋)のテスト
+
+`TestRefresh_NightlyOnlySite`(ModeAll・ModeStale・Refresh では取らない、RefreshAll で取る、前回値は残る)・`TestRegistry_SurugayaThrottleAndNightlyOnly`・`TestHostIntervalTable`
+
+### 取得の安全側の決めごと(critic の推奨)
+
+- **User-Agent**:scrape・Yahoo の取得は定数 `fetcher.UserAgent`(`wishlist-price-checker/0.1 (personal use; +https://github.com/)`。偽装せず目的が分かる短い文字列。リポジトリの URL・個人情報は入れない)を送る。UA は正直に名乗る。403 が返るサイトは取得せずリンクだけにする判断を人に仰ぐ(UA を偽って回避しない)。`TestUserAgent_Sent`
+- **価格の上限**:`MaxPrice` = 99,999,999 円(1 億円以上は除外)。`TestParseYen_UpperBound`・`TestYahooFurima_PriceRange`・`TestYahoo_PriceRange`
+- **応答本文の上限 2 MiB**:Yahoo!フリマの実ページが足りるかは未確認。初回の手動確認で ErrTooLarge が出たら上限を見直す(値は変えていない)
+
 ### 残りの TODO
 
 | サイト | 状態 |
 |---|---|
 | ドラゴンスター | Cloudflare のチャレンジで取得不可。未確認のまま(登録しない) |
-| 駿河屋 | **判断待ち**(robots.txt の Crawl-delay 30・`Disallow: /search/`)。パーサだけあり、初期データは link_only |
+| 駿河屋 | ユーザー決定 2026-10-04: 30 秒間隔で夜間のみ取得(robots.txt の Crawl-delay 30)。初期データは scrape・基準サイト |
 | メルカリ | headless。chromedp の導入(イメージ・リソース。仕様 §11)と fixture が要る |
 | プレバン・魂ウェブ・ポケセン | 未確認の点があるので初期データに入れない(sites.md に候補) |
 | Amazon | link_only(取得しない) |

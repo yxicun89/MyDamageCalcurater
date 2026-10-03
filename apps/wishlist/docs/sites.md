@@ -30,7 +30,7 @@
 - Yahoo!フリマ: `/search/*?*sort=` `*order=` `*conditions=` `*minPrice=` `*maxPrice=` `*sold=` `*open=` `*specs=` `*showFilter=` が禁止。**並び替え・絞り込みのパラメータ付き検索ページは取得してはならない**。fetcher は `/search/{q}` のみ(パラメータなし)を使う。人向けのリンクに sort を付けるかは別途判断(付けた場合の挙動は未確認)。
 - Yahoo!ショッピング: /search は禁止されていない。`/searchbff/*/itemsInfo` は禁止。`/category/*?...` の絞り込みパラメータが多数禁止(/search には無かった)。価格取得は公式 API を使う。
 - カードラッシュ(cardrush.jp / cardrush-dm.jp どちらも同内容): GPTBot・Bytespider・TikTokSpider・meta-externalagent のみ全面禁止。他は制限なし。
-- 駿河屋: `User-agent: *` に **Crawl-delay: 30**。`Disallow: /search/`(末尾スラッシュ付き)があり、実際の検索 URL は `/search?...`(スラッシュなし)なのでパターン上は該当しないが、禁止の意図がある可能性が高い。**fetcher 化は要判断(人間に確認推奨)**。fetcher を作る場合は 30 秒以上あける。
+- 駿河屋: `User-agent: *` に **Crawl-delay: 30**。`Disallow: /search/`(末尾スラッシュ付き)があり、実際の検索 URL は `/search?...`(スラッシュなし)なのでパターン上は該当しないが、禁止の意図がある可能性が高い。**ユーザー決定 2026-10-04: 30 秒間隔で夜間のみ取得**(Crawl-delay を守る。取るのは夜間の CronJob だけ)。
 - あみあみ: robots.txt が 404(制限の記載なし)。www.amiami.jp は curl の UA だと Cloudflare に 403 でブロックされた(検索は slist.amiami.jp なら 200)。
 - ドラゴンスター: robots.txt も検索も Cloudflare の "Just a moment..." チャレンジで 403。回避は試みていない。**scrape 不可の可能性が高く、headless でも突破できるかは未確認**。
 - プレミアムバンダイ: `Disallow: /search/` と `/search_bst/`。検索結果ページは機械取得禁止。リンクのみ(link_only)なら問題なし。
@@ -79,7 +79,7 @@
   - 在庫: 確認できた手掛かりは `.product_icon` 内の `icon_preowned`(中古)のみ。在庫あり/なしの表示は検索一覧からは確認できず**未確認**(詳細ページ側にある可能性)。
 - fixture: amiami.fixture.html
 
-### 駿河屋(scrape。robots の扱いに注意)
+### 駿河屋(scrape。ユーザー決定 2026-10-04: 30 秒間隔で夜間のみ取得)
 - フォーム項目: `category`(空可)、`search_word`、`adult_s`。
 - 並び替えは select `rankBy`: `price:ascending`(値段が安い順)/ `price:descending` / `modificationTime:descending` / `release_date(int):descending` / `relavancy(int)`(関連順)。在庫ありは `inStock=On`(ページ内リンクの href より)。
 - ただし `rankBy=price:ascending&inStock=On` を付けた 2 回目の取得でも品切れ表示が並んだため、**パラメータが効いているかは未確認**(検索語「グリス」では在庫のある商品自体が少なかった可能性もある)。
@@ -90,7 +90,7 @@
   - 価格: `.item_price .price_teika` → 「中古：￥500 税込」「定価：￥660」。新品の販売価格欄 `.item_price .price` は「品切れ」の表示を確認(在庫のある新品の表記は未確認)。中古価格は `.price_teika strong` の「￥500」(税込)。
   - 在庫: `.price` が「品切れ」なら新品は在庫なし。
 - fixture: surugaya.fixture.html
-- Crawl-delay 30、`/search/` 禁止の記載があるため、fetcher の採用は人間判断を推奨。リンク(link_only)にする案もある。
+- Crawl-delay 30 を守り、取得は夜間の CronJob だけ(ユーザー決定 2026-10-04: 30 秒間隔で夜間のみ取得)。403 が返るようなら取得せずリンクだけにする判断を人に仰ぐ。
 
 ### Yahoo!ショッピング
 - 人が開く URL: `https://shopping.yahoo.co.jp/search?p={q}` は `/search/{q}/0/` にリダイレクトされ、クエリ(sort)は落ちた。ページ内の並び替えリンクは `https://shopping.yahoo.co.jp/search/{q}/0/?X=2`(価格が安い順)、`X=12`(価格+送料が安い順)。
@@ -110,8 +110,7 @@
 
 ## 判断待ち・人が登録するための候補
 
-- **駿河屋の fetcher 化は判断待ち**(robots.txt の `Crawl-delay: 30` と `Disallow: /search/`)。パーサ(`NewSurugaya`)は用意したが登録表には入れていない。
-  初期データ(migration 000004)の駿河屋は `link_only`(リンクのみ)。採用するなら 30 秒以上あける専用の間隔も要る
+- **駿河屋**:ユーザー決定 2026-10-04: 30 秒間隔で夜間のみ取得(robots.txt の `Crawl-delay: 30`)。登録表に入れ(`NewSurugaya`)、初期データ(migration 000004)は scrape・基準サイト
 - 初期データ(000004)に入れたのは、上の一覧で確認済みの Yahoo!フリマ・カードラッシュ・あみあみ・Yahoo!ショッピング・駿河屋。URL は一覧のテンプレートと同じ文字列
 - 次の 3 サイトは未確認の点があるので初期データに入れていない。人が設定画面から登録する場合の候補(いずれも `link_only`、`is_reference` は false):
   - プレミアムバンダイ `https://p-bandai.jp/search_bst/?q={q}`(検索ページは robots で禁止のためリンクのみ。検索語の文字コードが UTF-8 でよいか未確認)
@@ -120,7 +119,7 @@
 - ドラゴンスターは URL も未確認(403)なので候補にも載せない
 
 ## 取得方式の見立て(まとめ)
-- scrape(静的 HTML): カードラッシュ、あみあみ(slist ホスト)、駿河屋(robots 要判断)
+- scrape(静的 HTML): カードラッシュ、あみあみ(slist ホスト)、駿河屋(30 秒間隔・夜間のみ)
 - scrape(埋め込み JSON): Yahoo!フリマ(sort 指定は禁止のため付けない)
 - headless: メルカリ、ドラゴンスター(要チャレンジ突破。可否未確認)
 - api: Yahoo!ショッピング

@@ -32,11 +32,16 @@ func ParseYen(s string) (price int, ok bool) {
 		return 0, false
 	}
 	n, err := strconv.Atoi(strings.ReplaceAll(m, ",", ""))
-	if err != nil || n < 1 {
+	if err != nil || !validPrice(n) {
 		return 0, false
 	}
 	return n, true
 }
+
+// MaxPrice は取り込む価格の上限(円)。1 億円以上は出品として扱わない(DB の INT のあふれ防止)。
+const MaxPrice = 99_999_999
+
+func validPrice(n int) bool { return n >= 1 && n <= MaxPrice }
 
 // scrapeSite はサイトごとの違い(検索 URL の作り方とページの読み方)。
 type scrapeSite struct {
@@ -66,6 +71,7 @@ func (s scraper) Fetch(ctx context.Context, site Site, query string) ([]Listing,
 	if err != nil {
 		return nil, fmt.Errorf("fetcher: %s: invalid request", s.site.name)
 	}
+	req.Header.Set("User-Agent", UserAgent)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetcher: %s request failed: %w", s.site.name, err)
@@ -250,8 +256,11 @@ var yahooFurima = scrapeSite{
 		}
 		out := []Listing{}
 		for _, it := range *items {
+			if !(it.Price >= 1 && it.Price <= MaxPrice) {
+				continue
+			}
 			price := int(it.Price)
-			if price < 1 || it.Title == "" || it.ID == "" {
+			if !validPrice(price) || it.Title == "" || it.ID == "" {
 				continue
 			}
 			out = append(out, Listing{
@@ -277,5 +286,5 @@ func NewAmiami(client *http.Client) Fetcher { return scraper{amiami, client} }
 // NewYahooFurima は Yahoo!フリマ(paypayfleamarket.yahoo.co.jp)の scrape Fetcher。パラメータなしの /search/{q} だけを取得する。
 func NewYahooFurima(client *http.Client) Fetcher { return scraper{yahooFurima, client} }
 
-// NewSurugaya は駿河屋の scrape Fetcher。登録表には入れない(判断待ち。docs/sites.md)。
+// NewSurugaya は駿河屋の scrape Fetcher。登録表に入れる(30 秒間隔・夜間のみ。ユーザー決定 2026-10-04。docs/sites.md)。
 func NewSurugaya(client *http.Client) Fetcher { return scraper{surugaya, client} }

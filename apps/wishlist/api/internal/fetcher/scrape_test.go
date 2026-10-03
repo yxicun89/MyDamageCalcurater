@@ -98,7 +98,7 @@ var scrapeCases = []scrapeFetcher{
 		},
 	},
 	{
-		// 駿河屋は登録表には入れない(判断待ち)が、パーサは用意する。
+		// 駿河屋は登録表に入れる(30 秒間隔・夜間のみ)。
 		name: "surugaya", newF: fetcher.NewSurugaya, fixture: "surugaya.html",
 		template: base + "/search?category=&search_word={q}&rankBy=price%3Aascending&inStock=On",
 		wantURI:  "/search?category=&search_word=" + qTest + "&rankBy=price%3Aascending&inStock=On",
@@ -514,8 +514,8 @@ func siteOf(id int64, ft item.FetchType, tmpl string) fetcher.Site {
 }
 
 // AC-S11: 登録表は fetch_type と検索 URL テンプレートのホスト名で Fetcher を選ぶ。
-//   - scrape は www.cardrush-dm.jp・slist.amiami.jp・paypayfleamarket.yahoo.co.jp だけ(大文字小文字は区別しない・ポートは無視)
-//   - 駿河屋(www.suruga-ya.jp)・未対応のホストの scrape は取得しない(判断待ち・未実装)
+//   - scrape は www.cardrush-dm.jp・slist.amiami.jp・paypayfleamarket.yahoo.co.jp・www.suruga-ya.jp だけ(大文字小文字は区別しない・ポートは無視)
+//   - 未対応のホストの scrape は取得しない(未実装)
 //   - headless・link_only は、ホストが対応済みでも取得しない
 //   - api は fetch_type だけ(appid があるときだけ)
 //   - テンプレートが読めない scrape は取得しない
@@ -531,7 +531,7 @@ func TestRegistry_ForSite(t *testing.T) {
 		{"Yahoo!フリマ", siteOf(3, item.FetchScrape, furimaTemplate), "", true},
 		{"ホストは大文字小文字を区別しない", siteOf(4, item.FetchScrape, "https://WWW.CardRush-DM.jp/product-list?keyword={q}"), "", true},
 		{"ポート付き", siteOf(5, item.FetchScrape, "https://slist.amiami.jp:443/top/search/list?s_keywords={q}"), "", true},
-		{"駿河屋は判断待ちで取得しない", siteOf(6, item.FetchScrape, surugayaTemplate), "", false},
+		{"駿河屋(30 秒間隔・夜間のみ。ユーザー決定 2026-10-04)", siteOf(6, item.FetchScrape, surugayaTemplate), "", true},
 		{"未対応ホストの scrape", siteOf(7, item.FetchScrape, "https://shop.example.com/s?q={q}"), "", false},
 		{"ドラゴンスター(未確認)", siteOf(8, item.FetchScrape, "https://dorasuta.jp/dm/product-list?keyword={q}"), "", false},
 		{"ホストが別物(前方一致では選ばない)", siteOf(9, item.FetchScrape, "https://www.cardrush-dm.jp.evil.example/s?k={q}"), "", false},
