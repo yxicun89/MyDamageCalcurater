@@ -2,6 +2,7 @@
 package main
 
 import (
+	"example.com/pokecalc/services/team/internal/expire"
 	"fmt"
 	"strconv"
 	"time"
@@ -25,7 +26,7 @@ const defaultAddr = ":8080"
 // jetStreamMaxAge は calc-svc が発行する CALC_EVENTS ストリームの max_age(固定7日。
 // services/calc/internal/events/events.go の streamMaxAge と同じ値。ADR-0212 §4)。
 // TEAM_DEVICE_ROW_EXPIRY_DAYS はこれより大きいことを起動時に検証する(ADR-0211 §7・AC-R8)。
-const jetStreamMaxAge = 7 * 24 * time.Hour
+const jetStreamMaxAge = expire.JetStreamMaxAge
 
 // day は日数を Duration に換算する単位(ADR-0209 §3 の「日」の定義: 経過時間 24h × 日数)。
 const day = 24 * time.Hour
@@ -37,10 +38,8 @@ type config struct {
 	// NATSURL は空なら購読を無効化する(calc-svc の CALC_NATS_URL と同じ流儀。CLAUDE.md 絶対ルール5)。
 	NATSURL string
 
-	// Retention・PurgeJournalRetention は、この serve バイナリの起動時検証(ADR-0211 §7・AC-R8)にだけ
-	// 使う。これらを実際に消す失効ジョブ(ADR-0209 §4)は別バイナリで追加する(P5-4b。record-svc の
-	// config.go と同じ先取りの考え方)。DeviceRowExpiry は §7 の起動時検証(JetStream max_age との関係)に
-	// 使うため、参照はゼロではない。
+	// Retention・PurgeJournalRetention は、serve の起動時検証(ADR-0211 §7・AC-R8)に使う。
+	// 実際に消すのは失効ジョブ(`team expire`。expire.go・ADR-0220)で、同じ ConfigMap の同じ日数を読む。
 	Retention             time.Duration
 	DeviceRowExpiry       time.Duration
 	PurgeJournalRetention time.Duration

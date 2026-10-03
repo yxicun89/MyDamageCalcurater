@@ -7,7 +7,8 @@ import PokeCalcCore
 /// 決める。設定が壊れているときは画面にエラーを出す(クラッシュしない。coding-rules §2)。
 enum AppEnvironment {
     case ready(
-        service: any PokeCalcService, deviceData: any DeviceDataService, speed: any SpeedService, backendDescription: String)
+        service: any PokeCalcService, deviceData: any DeviceDataService, backendDescription: String, adjust: any AdjustService,
+        speed: any SpeedService)
     case configurationError(String)
 
     /// 設定エラー時に画面へ出す文言の接頭辞。
@@ -23,16 +24,18 @@ enum AppEnvironment {
             case .mock:
                 let service = try MockPokeCalcService()
                 let deviceData = MockDeviceDataService(environment: environment)
+                let adjust = try MockAdjustService()
                 let speed = MockSpeedService(environment: environment)
-                return .ready(service: service, deviceData: deviceData, speed: speed, backendDescription: "モックデータで動作中")
+                return .ready(
+                    service: service, deviceData: deviceData, backendDescription: "モックデータで動作中", adjust: adjust, speed: speed)
             case .api(let url):
                 let identity = ClientIdentity(defaults: .standard)
                 let service = APIPokeCalcService(baseURL: url, identity: identity)
                 // 素早さも同じ gateway(`/api/speed/*`)・同じ端末 ID/セッション ID(ADR-0503 §3)。
                 let speed = APISpeedService(baseURL: url, identity: identity)
                 return .ready(
-                    service: service, deviceData: service, speed: speed,
-                    backendDescription: "APIに接続中(\(url.host ?? url.absoluteString))")
+                    service: service, deviceData: service,
+                    backendDescription: "APIに接続中(\(url.host ?? url.absoluteString))", adjust: service, speed: speed)
             }
         } catch {
             return .configurationError("\(configurationErrorPrefix)\(error)")

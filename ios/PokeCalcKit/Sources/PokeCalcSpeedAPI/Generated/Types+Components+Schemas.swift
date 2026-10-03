@@ -649,6 +649,7 @@ extension Components {
             case unknownPokemon = "unknown_pokemon"
             case requestTooLarge = "request_too_large"
             case masterUnavailable = "master_unavailable"
+            case overloaded = "overloaded"
             case internalError = "internal_error"
             case notFound = "not_found"
         }

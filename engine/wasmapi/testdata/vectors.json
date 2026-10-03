@@ -3444,6 +3444,554 @@
         ],
         "maxCandidates": 10
       }
+    },
+    {
+      "name": "adjust/indices-physical-with-modifiers",
+      "fn": "adjustIndices",
+      "tags": [
+        "adjust",
+        "indices",
+        "modifier"
+      ],
+      "source": "手書き(ADR-0250 §1・§3)",
+      "request": {
+        "individual": {
+          "species": {
+            "key": "garchomp",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "baseStats": {
+              "hp": 108,
+              "atk": 130,
+              "def": 95,
+              "spa": 80,
+              "spd": 85,
+              "spe": 102
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 20,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 14
+          },
+          "status": "none"
+        },
+        "move": {
+          "id": "earthquake",
+          "nameJa": "テストわざ2",
+          "type": "ground",
+          "category": "physical",
+          "power": 100,
+          "priority": 0
+        },
+        "modifier": 6144,
+        "damageModifier": 2048
+      }
+    },
+    {
+      "name": "adjust/indices-no-move-defaults",
+      "fn": "adjustIndices",
+      "tags": [
+        "adjust",
+        "indices",
+        "defaults"
+      ],
+      "source": "手書き(ADR-0250 §3。moveId なしは firepowerIndex null、補正の省略は 4096)",
+      "request": {
+        "individual": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "",
+            "minus": ""
+          },
+          "sp": {
+            "hp": 17,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        }
+      }
+    },
+    {
+      "name": "adjust/min-sp-to-ko-guaranteed",
+      "fn": "adjustMinSpToKo",
+      "tags": [
+        "adjust",
+        "minSpToKo",
+        "defaults"
+      ],
+      "source": "手書き(ADR-0150 §7。しきい値の省略は確定)",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "garchomp",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "baseStats": {
+              "hp": 108,
+              "atk": 130,
+              "def": 95,
+              "spa": 80,
+              "spd": 85,
+              "spe": 102
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 32,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 32
+          },
+          "status": "none"
+        },
+        "defender": {
+          "species": {
+            "key": "magmortar",
+            "types": [
+              "fire"
+            ],
+            "baseStats": {
+              "hp": 75,
+              "atk": 95,
+              "def": 67,
+              "spa": 125,
+              "spd": 95,
+              "spe": 83
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "",
+            "minus": ""
+          },
+          "sp": {
+            "hp": 32,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "move": {
+          "id": "earthquake",
+          "nameJa": "テストわざ2",
+          "type": "ground",
+          "category": "physical",
+          "power": 100,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "hits": 1
+      }
+    },
+    {
+      "name": "adjust/min-sp-to-ko-threshold",
+      "fn": "adjustMinSpToKo",
+      "tags": [
+        "adjust",
+        "minSpToKo",
+        "threshold"
+      ],
+      "source": "手書き(ADR-0150 §7。乱数込みのしきい値)",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 32,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "",
+            "minus": ""
+          },
+          "sp": {
+            "hp": 32,
+            "atk": 0,
+            "def": 32,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "hits": 3,
+        "thresholdPercent": 50
+      }
+    },
+    {
+      "name": "adjust/min-sp-to-survive-special",
+      "fn": "adjustMinSpToSurvive",
+      "tags": [
+        "adjust",
+        "minSpToSurvive"
+      ],
+      "source": "手書き(ADR-0150 §7)",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "magmortar",
+            "types": [
+              "fire"
+            ],
+            "baseStats": {
+              "hp": 75,
+              "atk": 95,
+              "def": 67,
+              "spa": 125,
+              "spd": 95,
+              "spe": 83
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "spa",
+            "minus": "atk"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 32,
+            "spd": 0,
+            "spe": 32
+          },
+          "status": "none"
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "",
+            "minus": ""
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "move": {
+          "id": "flamethrower",
+          "nameJa": "テストわざ3",
+          "type": "fire",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "hits": 2
+      }
+    },
+    {
+      "name": "adjust/allocation-bulk-goal",
+      "fn": "adjustAllocation",
+      "tags": [
+        "adjust",
+        "allocation",
+        "bulk",
+        "ceiling"
+      ],
+      "source": "手書き(ADR-0150 §8・ADR-0250 §3。ceiling の省略は 32)",
+      "request": {
+        "self": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "",
+            "minus": ""
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "ceiling": {
+          "hp": 28
+        },
+        "mode": "bulk",
+        "focus": "both",
+        "goal": {
+          "format": "single",
+          "opponent": {
+            "species": {
+              "key": "garchomp",
+              "types": [
+                "dragon",
+                "ground"
+              ],
+              "baseStats": {
+                "hp": 108,
+                "atk": 130,
+                "def": 95,
+                "spa": 80,
+                "spd": 85,
+                "spe": 102
+              }
+            },
+            "level": 50,
+            "nature": {
+              "plus": "atk",
+              "minus": "spa"
+            },
+            "sp": {
+              "hp": 0,
+              "atk": 32,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 32
+            },
+            "status": "none"
+          },
+          "move": {
+            "id": "earthquake",
+            "nameJa": "テストわざ2",
+            "type": "ground",
+            "category": "physical",
+            "power": 100,
+            "priority": 0
+          },
+          "field": {
+            "weather": "none",
+            "terrain": "none"
+          },
+          "critical": false,
+          "hits": 2
+        }
+      }
+    },
+    {
+      "name": "adjust/allocation-offense-speed",
+      "fn": "adjustAllocation",
+      "tags": [
+        "adjust",
+        "allocation",
+        "offense",
+        "speed"
+      ],
+      "source": "手書き(ADR-0150 §8)",
+      "request": {
+        "self": {
+          "species": {
+            "key": "garchomp",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "baseStats": {
+              "hp": 108,
+              "atk": 130,
+              "def": 95,
+              "spa": 80,
+              "spd": 85,
+              "spe": 102
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "mode": "offense",
+        "offenseCategory": "physical",
+        "minSpeed": 150,
+        "goal": {
+          "format": "single",
+          "opponent": {
+            "species": {
+              "key": "magmortar",
+              "types": [
+                "fire"
+              ],
+              "baseStats": {
+                "hp": 75,
+                "atk": 95,
+                "def": 67,
+                "spa": 125,
+                "spd": 95,
+                "spe": 83
+              }
+            },
+            "level": 50,
+            "nature": {
+              "plus": "",
+              "minus": ""
+            },
+            "sp": {
+              "hp": 32,
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0
+            },
+            "status": "none"
+          },
+          "move": {
+            "id": "earthquake",
+            "nameJa": "テストわざ2",
+            "type": "ground",
+            "category": "physical",
+            "power": 100,
+            "priority": 0
+          },
+          "field": {
+            "weather": "none",
+            "terrain": "none"
+          },
+          "critical": false,
+          "hits": 1,
+          "thresholdPercent": 50
+        }
+      }
     }
   ]
 }

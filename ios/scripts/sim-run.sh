@@ -33,8 +33,9 @@ case "$screen" in
   calc) open_key="POKECALC_OPEN_CALC_SCREEN_AT_LAUNCH" ;;
   reverse) open_key="POKECALC_OPEN_REVERSE_SCREEN_AT_LAUNCH" ;;
   team) open_key="POKECALC_OPEN_TEAM_LIST_SCREEN_AT_LAUNCH" ;;
+  adjust) open_key="POKECALC_OPEN_ADJUST_SCREEN_AT_LAUNCH" ;;
   speed) open_key="POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH" ;;
-  *) echo "画面は root / calc / reverse / team / speed のどれか: ${screen}" >&2; exit 2 ;;
+  *) echo "画面は root / calc / reverse / team / adjust / speed のどれか: ${screen}" >&2; exit 2 ;;
 esac
 
 xcrun simctl boot "$simulator" 2>/dev/null || true
