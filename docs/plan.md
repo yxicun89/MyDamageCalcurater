@@ -116,6 +116,7 @@
 - [x] issue #305
 - [x] issue #248
 - [x] issue #218
+- [x] 画面レジストリ化(ユーザー決定 2026-10-03。ADR-0323): 画面・タブを足すとき `App.tsx`・`app/screens.tsx`・`app/routes.ts`・`i18n/ja.ts` を編集しない構造にした(登録ファイル `*.screen.tsx`・クライアントは `createClient`・文言は `i18n/<レーン>.ts`)。既存の挙動・テストの期待値は不変
 - [x] issue #271 / issue #270
 - [ ] 判定画面(JD5 `JudgeScreen`)の「未対応」の印への追従(issue #271 / #270 の判定レーン分。**上の
   Web レーンの PR の対象外**)。judge の契約は計算・逆算と別の形(`attackerKoUnsupported` /
@@ -288,6 +289,8 @@
   Ready の前に墓石の再適用・purge journal の再適用・失効ジョブの強制実行 / JetStream は再生しない / 世代30日。
   受け入れ条件は AC-B1〜B3・AC-B2b)
 
+- [x] 確認手順書 M1〜M4(`docs/verify-all.md`。verify-m1 の read model 書き出しを `make pokedex-export-k3d` に集約、verify-m3・verify-m4 を新設。タイプバランスレーン・ドキュメントのみ)
+
 ## 後続: 要件との対応(issue #286。M1〜M4 の後。担当レーン付き)
 requirements.md の項目のうち、計画に無かったものをここに置く。着手の順・可否はユーザー判断(急ぎではない)。
 - [ ] P5-3c お気に入り(手動ピン留め)の作成・削除・一覧 API と画面(requirements.md §2「あれば便利」。担当: API レーン→ Web・iOS。`favorites` の表・保持期間・全削除の件数は ADR-0209 で実装済みで、API・画面が未着手。ADR-0209 の「record にお気に入りの CRUD を足すときに検証する」を併せて行う)
@@ -446,8 +449,10 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
 - [x] issue #276
 - [x] issue #232(データ/APIレーン)テラス・ダブルを指定した計算に「未対応」の印を付ける(ADR-0160)。Web・iOS の表示文言(ラベル・型)は別 issue。#510(ADR-0222)の後に取り込み、ADR-0222 §5 で format=double の印を外した(未知の形式とテラスの印は残す)
 - [x] issue #232 のダブル分(ADR-0222)ダブルの壁(2732/4096)と全体技(×3072/4096)を engine・wasmapi に反映。`Move.Target`(single/spread)・ダブルで技の対象が不明な攻撃技は move_target_unknown の印。テラスはゲームに無いので実装しない。ゴールデン doubles 全件一致・既存9ファイル不変。#497 マージ後の format 印の整理は ADR-0222 §5
+- [x] issue #232 のテラス分(ADR-0224)テラスタルをオプションの機能として engine・wasmapi に反映(ユーザー決定 2026-10-03「機能だけ追加し、オプションで選択できる」)。teraType を指定したときだけ、攻撃側のタイプ一致補正(元タイプ一致・テラス一致・てきおうりょく)と「タイプを持つか」の判定(接地・サイコフィールドの先制技・すなあらし/ゆき)に反映。省略時は従来と完全に同じ。攻撃側の attacker_tera_type の印は外し、防御側の defender_tera_type の印は残す(防御側テラスは oracle に合わせて相性に反映しない)。ゴールデン tera・tera-random 全件一致、既存9ファイルは不変、known_diffs への追加なし。**人間の確認待ち(既定案付き)**: 防御側テラスで相性を変えるか(本編 SV は変える。既定案は oracle どおり反映しない。反映するなら known_diffs に ADR 付きで登録=人間の承認が必要。ADR-0224 Q1)
 
-- [x] issue #315 のメガ部分(API レーン)メガシンカ後の種族に requiredItemId 以外の持ち物を持たせた計算を 400 invalid_input で拒否(ADR-0200 §4 追記。テラスタイプは別作業、WASM 側の規則は未実装で issue #505 で追跡)
+- [x] issue #315 のメガ部分(API レーン)メガシンカ後の種族に requiredItemId 以外の持ち物を持たせた計算を 400 invalid_input で拒否(ADR-0200 §4 追記。テラスタイプは別作業)
+- [x] issue #505(データレーン)wasmapi(オフライン計算)にメガ種族の持ち物検証を入れ calc-svc と揃える(ADR-0321。parity テスト・Go/WASM 一致ベクタ。Web の toEngineSpecies がメガ種族の isMega・requiredItemId を境界へ渡す変更も同じ PR)
 - [x] issue #515 の API 分(Web レーンが越境): `GET /api/pokedex/species/{key}` の `SpeciesDetail` に `isMega`(常に)・`requiredItemId`(メガでなければ null。キーは常に出す)を追加。`SpeciesSummary` には足さない(docs/mega-evolution-spec.md §2 の「公開 API に既にある」を訂正)
 - [x] issue #515 の Web 分 PR-A(ADR-0320): メガ種族の持ち物をメガストーンに固定する共通ドメイン(`web/src/domain/mega.ts`。PR-B〈構築の編集・判定〉が再利用)と、計算画面・逆算画面(持ち物欄 disabled+理由+aria-describedby、メガストーンは単独の選択肢・候補比較・逆算の持ち物候補に出さない、防御側/相手がメガのときは探索しない)。マスタ写像(`isMega`・`requiredItemId`)・キャッシュのスキーマ版 1→2・E2E フィクスチャ(`withMegaFixture`)まで。構築の編集・判定と古い保存データの補正は PR-B
 - [x] issue #515 の Web 分 PR-B(ADR-0320): 構築のメンバー編集(`changeSpecies` の持ち物整合・`correctMegaItem`・持ち物欄の固定+理由+ストーン名表示。古い保存データは開いたとき〈一覧の無いマスタは種族の解決後〉に1回だけストーンへ直し、メンバーの枠に `role="status"` で通知。未保存の変更として持ち、自動保存しない)と、判定画面の自分・相手の候補の個体入力(同じ固定。要求の `itemId` にストーン)。これで issue #515 の Web 分は完了
@@ -459,7 +464,7 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
   オンラインで取得した持ち物・性格と、解決した種族・特性・技を IndexedDB に保存(`master/cache/`。`MasterCacheStore`・
   スキーマ版つき。書き込み・読み出しの失敗は握りつぶす)し、オフラインはそのキャッシュだけから読む(オンラインを呼ばない・
   架空データを出さない。空・壊れ・版違いは `appText.masterCacheEmptyError` の案内+再試行)。`main.tsx` は例データをやめて
-  `createCachedMasterSources` に差し替え。オフラインでは持ち物の候補比較は選べない(公開 API に効果データが無い)。
+  `createCachedMasterSources` に差し替え。オフラインでは持ち物の候補比較は選べない(キャッシュは効果データを使わない)。オンラインは issue #211 で公開 API の effect により選べる(ADR-0322)。
   実装中に見つけた退行も直した: 攻守入れ替えで種族の検索欄の名前が追従しない(`SpeciesSearchField.selectedNameJa`)、
   種族の解決待ちの間に打った逆算の観測が計算に反映されない(`ReverseScreen` の `latestObservationsRef`)。
   E2E は pokedex フィクスチャでオンライン→オフラインを確かめる(コンテナは CSP の下の WASM 計算を `container.spec.ts` だけで確認)

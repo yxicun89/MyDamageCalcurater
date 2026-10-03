@@ -58,11 +58,7 @@ speed-argocd-app:
 	@SERVICE=speed scripts/gitops/argocd-local-app.sh
 
 speed-k3d-deploy: speed-docker-build ## k3d へ speed を直接デプロイ(local overlay。架空データの read model)
-	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh speed-k3d-deploy
-	@k3d image import $(SPEED_IMAGE) --cluster $(CLUSTER)
-	@kubectl apply -k $(SPEED_DIR)/deploy/k8s/overlays/local
-	@kubectl -n pokecalc rollout restart deployment/speed
-	@kubectl -n pokecalc rollout status deployment/speed --timeout=120s
+	@CLUSTER=$(CLUSTER) TAG_PATHS="$(SPEED_DIR) engine" ./scripts/k3d-deploy-tagged.sh speed-k3d-deploy $(SPEED_DIR)/deploy/k8s/overlays/local pokecalc/speed
 
 speed-smoke:
 	@SPEED_URL=$(SPEED_URL) $(SPEED_DIR)/scripts/smoke.sh

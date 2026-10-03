@@ -1,6 +1,6 @@
 # 動作確認との対応表
 
-- 対象: [../verify-m1.md](../verify-m1.md) §1〜§7、`make web-k3d-smoke`、`make api-smoke`、`make web-k3d-e2e`、他レーンの smoke / e2e。
+- 対象: [../verify-m1.md](../verify-m1.md) §1〜§7(M1〜M4 の索引は [../verify-all.md](../verify-all.md)。M3・M4 は [../verify-m3.md](../verify-m3.md)・[../verify-m4.md](../verify-m4.md))、`make web-k3d-smoke`、`make api-smoke`、`make web-k3d-e2e`、他レーンの smoke / e2e。
 - 2026-09-25 に verify-m1.md を再構成した(§3 初回準備・§4 `make deploy-latest`・§5 自動確認・§6 ブラウザ〈6-1 オフライン / 6-2 オンライン〉・§7 iOS)。本書の §1 の表の「画面確認 #n」は旧 §4 の番号で、新しい §6-1 の 1〜9 と §6-2 に対応する。
 - 基準: `origin/main` 取り込み後(3379b03 + 更新)。行番号は同時点。
 - 詳細は重複させずリンク: コマンドの裏側 [runbook-commands.md](runbook-commands.md) / ターゲット [make-targets.md](make-targets.md) / ルート・ステータス [api-endpoints.md](api-endpoints.md) / 処理フロー [request-flows.md](request-flows.md) / リソースとポート [k8s-local.md](k8s-local.md) / DB [db-mysql.md](db-mysql.md) / 環境変数 [config-env.md](config-env.md)。

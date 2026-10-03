@@ -133,9 +133,11 @@ describe("メガ種族を選ぶと持ち物が固定される", () => {
     const request = lastRequest(engine);
     expect(request.attacker.item).toEqual(MEGA_FIRE_STONE);
     expect(request.itemVariants).toEqual([MEGA_WATER_STONE]);
-    // 画面のための追加フィールドは engine に渡さない。
-    expect(request.attacker.species).not.toHaveProperty("isMega");
-    expect(request.defenderSpecies).not.toHaveProperty("requiredItemId");
+    // メガ種族は isMega・requiredItemId を境界へ渡す(オフラインでもオンラインと同じ検証。ADR-0321)。
+    expect(request.attacker.species.isMega).toBe(true);
+    expect(request.attacker.species.requiredItemId).toBe(MEGA_FIRE_STONE.id);
+    expect(request.defenderSpecies.isMega).toBe(true);
+    expect(request.defenderSpecies.requiredItemId).toBe(MEGA_WATER_STONE.id);
   });
 });
 

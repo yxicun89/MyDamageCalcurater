@@ -6,8 +6,11 @@ name: CI
 # 対象外(理由):
 #   - iOS(`make ios-test`): macOS ランナー + Xcode が要り、無料枠(private は月2,000分。macOS ランナーは
 #     消費倍率10倍)の消費が大きい。署名・実機確認は人間の作業(CLAUDE.md)。
-#   - Playwright e2e(`make e2e` / `web-e2e*`)・k3d へ実際に apply するもの(`make up`・`*-k3d-deploy` 等):
+#   - k3d へ実際に apply するもの(`make up`・`*-k3d-deploy`・`web-k3d-e2e` 等):
 #     k3d クラスタの起動が要り、GitHub-hosted ランナーだけでは完結しない(#72 で別途検討)。
+#   (Web の Playwright e2e のうち k3d を使わないもの〈`web-e2e`・`web-e2e-online`・`web-e2e-container`〉は、
+#    2026-10-03 から別ジョブ `web-e2e` で走らせる。種族欄が select から検索欄に変わったとき e2e だけが壊れて
+#    CI を素通りした事故を受けた。ADR-0119 追記)
 #
 # バージョンはワークフローに二重に書かず、リポジトリ内の正から読む:
 #   - Go: go-version-file に go.work(全 Go モジュール共通の `go 1.27.1` を1箇所で宣言している)
@@ -102,3 +105,52 @@ jobs:
         run: make check-publishable
         timeout-minutes: 3
 
+  # Web の Playwright e2e(k3d を使わない3つ)。上のジョブと並行して走らせる(待ち時間を増やさない)。
+  # web-e2e: 本番ビルドを preview で配りオフライン(WASM)・キャッシュ・画面の流れを確かめる(engine.wasm のビルドに Go が要る)。
+  # web-e2e-online: 例データで calc-svc を起動してオンライン(API)を確かめる(Go が要る)。
+  # web-e2e-container: 本番イメージ(nginx)を docker で起動し、配信設定・CSP・WASM をコンテナ越しに確かめる(docker は ubuntu-latest にある)。
+  web-e2e:
+    name: web e2e (playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+
+      - name: setup go (go.work の go ディレクティブから版を読む)
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        timeout-minutes: 5
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: '**/go.sum'
+
+      - name: setup node (web/.node-version から版を読む)
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        timeout-minutes: 5
+        with:
+          node-version-file: web/.node-version
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: npm ci
+        run: make web-deps
+        timeout-minutes: 5
+
+      # Linux のランナーは chromium の実行に要るシステムライブラリも入れる(--with-deps)。
+      - name: playwright の chromium を入れる
+        run: cd web && npx --no-install playwright install --with-deps chromium
+        timeout-minutes: 8
+
+      - name: make web-e2e
+        run: make web-e2e
+        timeout-minutes: 10
+
+      - name: make web-e2e-online
+        run: make web-e2e-online
+        timeout-minutes: 8
+
+      - name: make web-e2e-container
+        run: make web-e2e-container
+        timeout-minutes: 12
