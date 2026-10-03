@@ -21,8 +21,8 @@
 | 失効ジョブ(record-expire・team-expire)を k3d の実データへ初めて向ける承認 | plan.md ブロッカー・ADR-0209・ADR-0220 | 2026-09-26 | API(ユーザー) |
 | 共有クラスタへの apply(NetworkPolicy・Grafana 管理者 Secret・pokedex の実 digest 確定 → overlay の PR → Sync) | state/type-balance.md Next・issue #237 | 2026-09-24 | タイプバランス・素早さ・データ(ユーザー) |
 | iOS のシミュレータ・実機での見た目確認と `make ios-test`。Xcode の署名チーム・実機インストール | state/ios.md・state/type-balance.md Next ④ | 2026-09-26 | iOS(ユーザー) |
-| 残骸ブランチ(main に無いコミットを持つリモートブランチ 21 本)の削除 | issue #230 | 2026-09-24 | データ・タイプバランス・Web(ユーザー) |
-| GitHub リポジトリ設定(main の保護・Dependabot・マージ後のブランチ削除) | issue #243 | 2026-09-24 | データ(ユーザー) |
+| main のブランチ保護の有効化(PR 必須・CI 必須・force push と削除の禁止。AI の自動モードが CI 設定の変更として止めたため人間が実行。他の #243 の設定〈Dependabot・マージ後のブランチ削除・squash/rebase の無効化〉は 2026-10-03 に適用済み) | issue #243・decisions/2026-10-03-data-github-settings-243.md | 2026-10-03 | データ(ユーザー) |
+| リポジトリを非公開に戻すか(戻すなら先に Argo CD へ GitHub の認証〈PAT〉を登録しないと Argo CD が取得できなくなる。非公開の無料プランではブランチ保護が使えない) | issue #328・#243 | 2026-10-03 | データ(ユーザー) |
 
 ## 既定案で進行中(ユーザー未確認)
 
