@@ -62,6 +62,11 @@ cat >"$BIN/npm" <<'EOF'
 #!/usr/bin/env bash
 echo "npm $*" >>"$FAKE_CALLS"
 EOF
+# iOS ゲートは `command -v xcodebuild` で Xcode の有無を確かめる。CI(Linux)にも手元の Mac にも本物に頼らないよう偽物を置く。
+cat >"$BIN/xcodebuild" <<'EOF'
+#!/usr/bin/env bash
+echo "xcodebuild $*" >>"$FAKE_CALLS"
+EOF
 chmod +x "$BIN"/*
 
 # run_gate 引数... — 環境変数は呼び出し側で設定。結果は GATE_RC・$WORK/out・$WORK/calls。
