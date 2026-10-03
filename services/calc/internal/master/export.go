@@ -73,6 +73,7 @@ func FromExport(export api.MasterExport) (*MemoryStore, error) {
 	if err != nil {
 		return nil, err
 	}
+	megaItems := buildMegaItems(export.Species)
 	moves, err := buildMoves(export.Moves, chart)
 	if err != nil {
 		return nil, err
@@ -84,7 +85,7 @@ func FromExport(export api.MasterExport) (*MemoryStore, error) {
 
 	return &MemoryStore{
 		species: species, moves: moves, items: items, abilities: abilities,
-		natures: natures, chart: chart, dataVersion: export.DataVersion,
+		natures: natures, megaItems: megaItems, chart: chart, dataVersion: export.DataVersion,
 	}, nil
 }
 
@@ -221,6 +222,23 @@ func buildSpecies(
 		out[string(s.Key)] = sp
 	}
 	return out, nil
+}
+
+// buildMegaItems はメガ種族の requiredItemId を種族キーで引ける形にする(issue #315)。
+// 整合(isMega と requiredItemId の組・ID の存在)は buildSpecies が検証済み。
+func buildMegaItems(list []api.MasterSpecies) map[string]string {
+	out := map[string]string{}
+	for _, s := range list {
+		if !s.IsMega {
+			continue
+		}
+		id := ""
+		if s.RequiredItemId != nil {
+			id = *s.RequiredItemId
+		}
+		out[string(s.Key)] = id
+	}
+	return out
 }
 
 // buildMoves は moves の行を共通マスタの写像で engine.Move にする。ID の重複は calc-svc 側で見る。
