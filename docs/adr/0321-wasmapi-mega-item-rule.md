@@ -33,8 +33,9 @@ ADR-0320 は、当時の境界が `unknown_field` で拒否するため、`toEng
 この ADR で境界が両方を受け付けるので、**メガ種族に限り `isMega: true` と `requiredItemId`(無ければ null)を渡す**ように改めた
 (メガでない種族は従来どおり渡さず、リクエストは不変)。`learnset` は引き続き落とす。Web の `Species` 型(`engine/types.ts`)に両フィールドを任意で足し、
 `MasterSpecies` はそれを継承する。値の出どころはマスタ(公開 API の `MasterSpecies.isMega`・`requiredItemId`。calc-svc が使うのと同じ項目で、
-`master/onlineSource.ts`・キャッシュ・エクスポートが既に持つ)。calc・逆算・判定の個体と相手の種族はすべて `buildIndividual`・`toEngineSpecies` を通るので、
-オフライン計算(WASM)でもオンラインと同じ検証が効く。ADR-0320 の対応テスト `requests.mega.test.ts` は「落とす」から「メガ種族だけ渡す」検証に更新した
+`master/onlineSource.ts`・キャッシュ・エクスポートが既に持つ)。計算・逆算(WASM 境界へ渡す個体と相手の種族)は `domain/requests.ts` の `buildIndividual`・`toEngineSpecies` を通るので、
+オフライン計算(WASM)でもオンラインと同じ検証が効く。判定画面(`judge/JudgeScreen.tsx`)は独自の `buildIndividual` で HTTP の `Schemas` を
+組み立てており、WASM 境界を通らないので対象外。調整(`adjust*`)の WASM 入力は calc-svc の `adjust.go` と同じくメガ検査を持たず、parity は保たれているが範囲外。ADR-0320 の対応テスト `requests.mega.test.ts` は「落とす」から「メガ種族だけ渡す」検証に更新した
 (弱めず、渡すこと・メガでない種族は渡さないこと・learnset は落とすことを見る)。
 
 ## 結果

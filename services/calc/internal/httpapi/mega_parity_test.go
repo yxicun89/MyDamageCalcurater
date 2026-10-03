@@ -165,3 +165,35 @@ func TestMegaItemRuleParityWithWasm(t *testing.T) {
 		t.Errorf("拒否と受理の両方のケースが必要(reject=%v accept=%v)", sawReject, sawAccept)
 	}
 }
+
+// requiredItemId が空のメガ種族(もう一方のメッセージ分岐)も HTTP と WASM で code・メッセージが一致する。
+func TestMegaWithoutRequiredItemParityWithWasm(t *testing.T) {
+	f := newMegaStore(t)
+	f.megaItems[speciesMega] = ""
+	h := NewHandler(f, nil)
+
+	cc := calcCases()[0]
+	cc.attacker = megaIndiv(itemOrb)
+	wb := calcWasmBody(t, f, cc)
+	wb["attacker"] = wasmMegaIndiv(t, f, megaIndiv(itemOrb))
+
+	rec := post(t, h, "/api/calc", mustJSON(t, cc.httpBody()), false)
+	assertError(t, rec, http.StatusBadRequest, "invalid_input")
+	out := wasmapi.Calc(string(mustJSON(t, wb)))
+	if code := wasmError(t, out); code != "invalid_input" {
+		t.Fatalf("WASM の code = %q, want invalid_input; out=%s", code, out)
+	}
+	if hm, wm := decodeErrorBody(t, rec).Message, wasmErrorMessage(t, out); hm != wm {
+		t.Errorf("メッセージが不一致:\n HTTP=%q\n WASM=%q", hm, wm)
+	}
+
+	// 持ち物なしは両方とも受理。
+	cc.attacker = megaIndiv("")
+	wb["attacker"] = wasmMegaIndiv(t, f, megaIndiv(""))
+	if rec := post(t, h, "/api/calc", mustJSON(t, cc.httpBody()), false); rec.Code != http.StatusOK {
+		t.Errorf("HTTP status = %d", rec.Code)
+	}
+	if code := wasmError(t, wasmapi.Calc(string(mustJSON(t, wb)))); code != "" {
+		t.Errorf("WASM が失敗: %s", code)
+	}
+}
