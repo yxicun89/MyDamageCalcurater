@@ -19,7 +19,6 @@ func TestEventJSONGoldenWithDetail(t *testing.T) {
 	level := 50
 	abilityID := "test-ability"
 	itemID := "test-item"
-	moveIDOnIndividual := "test-individual-move" // Individual.MoveId(使わない方。CalcDetail.MoveID は別経路)
 	teraType := api.PokeType("fire")
 	status := api.StatusCondition("burn")
 	critical := true
@@ -30,7 +29,6 @@ func TestEventJSONGoldenWithDetail(t *testing.T) {
 		Level:      &level,
 		AbilityId:  &abilityID,
 		ItemId:     &itemID,
-		MoveId:     &moveIDOnIndividual,
 		Sp:         api.StatBlock{Hp: 1, Atk: 2, Def: 3, Spa: 4, Spd: 5, Spe: 6},
 		Ranks:      &api.RankBlock{Atk: &rankAtk, Def: &rankDef, Spa: &rankSpa, Spd: &rankSpd, Spe: &rankSpe},
 		Status:     &status,
@@ -84,7 +82,7 @@ func TestEventJSONGoldenWithDetail(t *testing.T) {
 
 	const want = `{"schemaVersion":1,"deviceId":"device-1","sessionId":"session-1","operation":"calc","occurredAt":"2026-09-25T12:00:00Z",` +
 		`"detail":{"format":"single",` +
-		`"attacker":{"abilityId":"test-ability","itemId":"test-item","level":50,"moveId":"test-individual-move","natureId":"adamant",` +
+		`"attacker":{"abilityId":"test-ability","itemId":"test-item","level":50,"natureId":"adamant",` +
 		`"ranks":{"atk":1,"def":-1,"spa":2,"spd":-2,"spe":0},"sp":{"atk":2,"def":3,"hp":1,"spa":4,"spd":5,"spe":6},` +
 		`"speciesKey":"0001-000","status":"burn","teraType":"fire"},` +
 		`"defender":{"natureId":"bold","sp":{"atk":20,"def":30,"hp":10,"spa":40,"spd":50,"spe":60},"speciesKey":"0002-000"},` +

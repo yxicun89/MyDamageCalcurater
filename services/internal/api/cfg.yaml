@@ -4,7 +4,7 @@ output: internal/api/openapi.gen.go
 generate:
   models: true
   echo5-server: true
-  strict-server: true
+  strict-server: false
   embedded-spec: true
 output-options:
   skip-prune: true

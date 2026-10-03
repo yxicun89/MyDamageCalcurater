@@ -5,7 +5,7 @@ AI 同士は記憶を共有していない前提で運用する。共有記憶�
 
 ## 正本と作業ディレクトリ
 
-- 現在状態の正本: `origin/main` の `docs/ai-shared/`(読むだけなら `git show origin/main:docs/ai-shared/CURRENT_STATE.md`)。
+- 現在状態の正本: `origin/main` の `docs/ai-shared/`(読むだけなら `git show origin/main:docs/ai-shared/CURRENT_STATE.md`)。 （2026-10-03: `CURRENT_STATE.md` はレーン別の `state/`、`DECISIONS.md` は 1 件 1 ファイルの `decisions/` に分割済み。COORDINATION.md「共有状態ファイルの分割」）
   ただし未マージの作業の続きは、`CURRENT_STATE.md` のレーン欄の `Branch` の最新コミットにある(止まる前にそこへ commit・push するため)。
 - 作業ディレクトリ(レーンごとに1つ。どの AI が使ってもよい。同時に2セッションで開かない):
   - ダメージ計算: `~/MyDamageCalcurater`

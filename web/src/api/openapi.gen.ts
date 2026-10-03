@@ -549,7 +549,7 @@ export interface components {
      *     | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
      *     | unknown_field | 契約にないフィールド | 400 |
      *     | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-     *     | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。`getMovesByIds` の `ids` の件数超過・欠落も含む。調整(`/api/calc/adjust/*`)の発数・しきい値・補正・上限(ceiling)の範囲外、変化技での探索、下限が上限を超える配分(ADR-0250)も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
+     *     | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。calc-svc では `sp` と StatBlock の6キー(null 値を含む)の欠落も含む(ADR-0200 §4)。`getMovesByIds` の `ids` の件数超過・欠落も含む。調整(`/api/calc/adjust/*`)の発数・しきい値・補正・上限(ceiling)の範囲外、変化技での探索、下限が上限を超える配分(ADR-0250)も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
      *     | unknown_preset | 未知の防御側プリセット | 400 |
      *     | duplicate_preset | 防御側プリセットの重複 | 400 |
      *     | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -727,8 +727,6 @@ export interface components {
       natureId: string;
       abilityId?: string | null;
       itemId?: string | null;
-      /** @description 攻撃側で使う技 */
-      moveId?: string | null;
       /** @description 能力ポイント。各 0..32、合計 <= 66 */
       sp: components["schemas"]["StatBlock"];
       ranks?: components["schemas"]["RankBlock"];
@@ -765,7 +763,7 @@ export interface components {
       format: components["schemas"]["Format"];
       attacker: components["schemas"]["Individual"];
       defender: components["schemas"]["Individual"];
-      /** @description 使用する技(attacker.moveId より優先) */
+      /** @description 使用する技 */
       moveId: string;
       field?: components["schemas"]["FieldState"];
       options?: components["schemas"]["CalcOptions"];
@@ -1003,7 +1001,7 @@ export interface components {
       side: components["schemas"]["ReverseSide"];
       /**
        * @description 既知の側(自分)の個体。side=defender なら自分=攻撃側、side=attacker なら自分=防御側。
-       *     known.moveId は使わない(技は moveId で指定する)。
+       *     Individual に moveId は無い(技は moveId で指定する)。
        */
       known: components["schemas"]["Individual"];
       /** @description 逆算する相手の種族。SP・性格・持ち物は探索対象なので渡さない */
@@ -1634,6 +1632,7 @@ export interface operations {
           "application/json": components["schemas"]["SpeciesSummary"][];
         };
       };
+      400: components["responses"]["Error"];
       /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
@@ -1685,6 +1684,7 @@ export interface operations {
           "application/json": components["schemas"]["SpeciesDetail"];
         };
       };
+      400: components["responses"]["Error"];
       /** @description 該当する種族が無い(`not_found`) */
       404: {
         headers: {
@@ -1747,6 +1747,7 @@ export interface operations {
           "application/json": components["schemas"]["Move"][];
         };
       };
+      400: components["responses"]["Error"];
       /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
@@ -1982,6 +1983,7 @@ export interface operations {
           "application/json": components["schemas"]["Item"][];
         };
       };
+      400: components["responses"]["Error"];
       /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {

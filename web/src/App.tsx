@@ -126,6 +126,13 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   const [teamClient] = useState(() =>
     createTeamClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
   );
+  // P5-5d: record API のクライアント(ADR-0318 §1)。「この端末のデータを削除」が使う(押されるまで fetch しない)。
+  // モードに関係なく作る(オフライン選択中でもサーバーのデータは消せる)。チップ(P5-5c)用の recordClient は下のオンライン限定の版。
+  const [recordApiClient] = useState(() =>
+    createRecordClient({ baseUrl: apiBaseUrl(), fetch: globalThis.fetch.bind(globalThis), ids: clientIds }),
+  );
+  // 端末データの削除で team が消えたとき進め、開いたままの構築一覧に取り直させる(ADR-0318 §6)。
+  const [teamReloadToken, setTeamReloadToken] = useState(0);
 
   // 計算モード(オフライン = WASM / オンライン = API)。既定はオフラインで、選択は localStorage に覚える
   // (ADR-0301 §4)。マウント時に一度だけ読み、以後はこの state が正(他タブでの変更は追わない)。
@@ -133,15 +140,8 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   const [mode, setMode] = useState<CalcMode>(() => loadCalcMode());
   // P5-5c(ADR-0317 §2): 記録 API はオンラインのときだけ使う(オフラインは /api に触れない)。
   const recordClient = useMemo(
-    () =>
-      mode === "online"
-        ? createRecordClient({
-            baseUrl: apiBaseUrl(),
-            fetch: globalThis.fetch.bind(globalThis),
-            ids: clientIds,
-          })
-        : undefined,
-    [mode, clientIds],
+    () => (mode === "online" ? recordApiClient : undefined),
+    [mode, recordApiClient],
   );
 
   function selectMode(nextMode: CalcMode): void {
@@ -381,6 +381,11 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
             backHref={pathForScreen(DEFAULT_SCREEN, base)}
             onBack={closeAbout}
             focusOnMount={focusAbout}
+            recordClient={recordApiClient}
+            teamClient={teamClient}
+            onTeamDataDeleted={() => {
+              setTeamReloadToken((token) => token + 1);
+            }}
           />
         )}
         <div hidden={aboutOpen}>
@@ -440,6 +445,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
                   speedClient={speedClient}
                   judgeClient={judgeClient}
                   teamClient={teamClient}
+                  teamReloadToken={teamReloadToken}
                   adjustClient={adjustClient}
                   recordClient={recordClient}
                   mode={mode}
@@ -487,6 +493,7 @@ interface AppTabPanelProps {
   readonly speedClient: SpeedClient;
   readonly judgeClient: JudgeClient;
   readonly teamClient: TeamClient;
+  readonly teamReloadToken: number;
   readonly adjustClient: AdjustClient;
   readonly recordClient: RecordClient | undefined;
   readonly mode: CalcMode;
@@ -513,6 +520,7 @@ function AppTabPanel({
   speedClient,
   judgeClient,
   teamClient,
+  teamReloadToken,
   adjustClient,
   recordClient,
   mode,
@@ -550,6 +558,7 @@ function AppTabPanel({
                 speedClient={speedClient}
                 judgeClient={judgeClient}
                 teamClient={teamClient}
+                reloadToken={teamReloadToken}
                 adjustClient={adjustClient}
                 recordClient={recordClient}
                 masterSearch={activeMasterSearch}

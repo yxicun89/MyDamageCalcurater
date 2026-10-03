@@ -54,9 +54,6 @@ const (
 	// defaultMasterFetchTimeout は1回の取得のタイムアウト(マスタ一式は数百 KB 程度の想定)。
 	defaultMasterFetchTimeout = 10 * time.Second
 
-	// shutdownTimeout は ctx 終了後、進行中のリクエストを待つ猶予。
-	shutdownTimeout = 5 * time.Second
-
 	// http.Server のタイムアウト(critic 指摘 R7。遅い・止まったクライアントに接続を占有され続けない)。
 	readHeaderTimeout = 5 * time.Second
 	readTimeout       = 10 * time.Second
@@ -273,10 +270,9 @@ func run(ctx context.Context, lookup func(string) (string, bool)) error {
 	case err := <-serveErr:
 		return err
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-		defer cancel()
-		if err := srv.Shutdown(shutdownCtx); err != nil {
-			return err
+		// 待ち切れなければ残りの接続を閉じ、警告だけにして正常終了する(ADR-0804)。
+		if err := gracefulShutdown(srv, shutdownTimeout); err != nil {
+			slog.Warn("calc-svc の停止が間に合わず、残りの接続を閉じた", "error", err)
 		}
 		<-serveErr
 		return nil

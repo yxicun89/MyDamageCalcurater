@@ -13,6 +13,18 @@
    PR は、テスト・lint・公開前検査が通った作業だけ。WIP は PR にしない。
 5. **相談は「既定値付きの提案」**: 判断が要るときは既定案を添えて `DECISIONS.md` に書き、既定案で先へ進む。人間の確認が本当に必要なものだけ `docs/plan.md` のブロッカーに書く。
 
+## 共有状態ファイルの分割(2026-10-03。競合の根本対策)
+
+全レーンが `CURRENT_STATE.md`・`DECISIONS.md` を書き換えて、PR のたびに競合していた。次のとおり**書き込み先をレーン・1件ごとに分けた**。
+
+- **レーンの状態**: `docs/ai-shared/state/<レーン>.md`(data・api・web・ios・type-balance・speed・judge・ops・shared-interfaces)。
+  自分のレーンのファイルだけを書き換える。`CURRENT_STATE.md` は索引なので編集しない(レーンを足すときだけ 1 行足す)。
+- **決定・提案**: `docs/ai-shared/decisions/<YYYY-MM-DD>-<レーン>-<短い題>.md` を**新規ファイルとして足す**(1 件 1 ファイル。既存ファイルは編集しない)。
+  `DECISIONS.md` は過去分の索引なので編集しない。本文は従来どおり `## <日付>: <題>` の見出しと `Decision:` / `Reason:` / `Impact:`。
+- 古い記述の「`CURRENT_STATE.md` のレーン欄」は `state/<レーン>.md`、「`DECISIONS.md` に追記」は `decisions/` に新規ファイルを足す、と読み替える。
+- `docs/plan.md` は共有のまま。**自分のレーンの節のチェック・行だけを編集する**(他レーンの行を整形・並べ替えしない)。
+- コンフリクトマーカー(`<<<<<<<`・`>>>>>>>`)が残ったまま commit しないよう、`make lint` が検査する(`scripts/check-conflict-markers.sh`)。
+
 ## レーン・ディレクトリ・ブランチ
 
 | レーン | 作業ディレクトリ | ブランチ | 範囲 |
@@ -39,7 +51,7 @@
 - **両方が触る共有ファイル**:
   - `docs/plan.md`: 自分のレーンのタスクの行(とブロッカー節の自分の項目)だけを更新する。
   - ルートの `Makefile`・`go.work`: 自分のレーンのターゲット・`use` 行の追加だけ。統合時の競合は両方を残して解決する。
-  - `docs/ai-shared/CURRENT_STATE.md`: 自分のレーンの欄だけ。
+  - `docs/ai-shared/state/<自分のレーン>.md`: 自分のレーンのファイルだけ。決定・提案は `docs/ai-shared/decisions/` に新規ファイルを足す。
 - 単発の修正は `fix/<レーン>-...`(例 `fix/calc-...`)。1つのブランチに複数の Phase/ステージを積まない。
 - git の作者情報は、このリポジトリのローカル設定(`pokecalc-dev <noreply@example.com>`)を使う。個人の identity をコミットしない。
 - リモートの URL・認証情報を文書・コミットに書かない。リポジトリを公開(public)にするのは、ユーザーの明示的な指示と `make check-publishable-full` の後だけ。
@@ -135,7 +147,7 @@ scripts/pr-merge.sh <番号>         # 推奨: 上の3つに加えてローカ�
   `scripts/ai-guard/`・`deploy/k8s/overlays/cloud/` 等)を変更する PR は、人間のマージ待ちとして次の作業へ進む(止まらない)。
 - 止めるのは「クラウドへのデプロイなど費用が発生すること」と「機密情報を Git で公開すること」だけ。
 - PR の本文には、テスト・lint・公開前検査の結果と、独立レビューの判定を書く。
-- **競合の解決**: `CURRENT_STATE.md` は自分のレーン欄を残し、他のレーン欄は main 側を採用。`DECISIONS.md` は両方の追記を残す。
+- **競合の解決**: 共有状態は分割済み(上の節)なので、`state/`・`decisions/` では通常競合しない。`docs/plan.md` は自分のレーンの行を残し、他レーンの行は main 側を採用する。
   それ以外のファイルで別レーンの変更と競合したら、**推測で解決しない**。PR を作らず、`DECISIONS.md` に内容と既定案を書いて、自分の作業を続ける。
 - マージしたら `DECISIONS.md` に「何を統合したか(PR 番号)」を1行追記し、レーン欄を更新する(次の PR に含める)。
 - Phase/ステージが完了してマージしたブランチは削除する。途中の区切りで PR を出したブランチは、そのまま続けて使ってよい。
@@ -144,7 +156,7 @@ scripts/pr-merge.sh <番号>         # 推奨: 上の3つに加えてローカ�
 
 | ファイル | 規約 |
 |---|---|
-| `docs/ai-shared/CURRENT_STATE.md` | 自分が進めているレーンの欄だけ編集する |
+| `docs/ai-shared/state/<レーン>.md` | 自分が進めているレーンのファイルだけ編集する(`CURRENT_STATE.md` は索引) |
 | `docs/ai-shared/DECISIONS.md` | 追記のみ。既存エントリは編集しない |
 | `go.work` | 自分のレーンのモジュールの `use` 行を追記してよい(タイプバランスは `./services/balance`) |
 | ルートの `Makefile` | 自分のレーンのサービスの `include <path>/Makefile` の1行を追記してよい(タイプバランスは `include services/balance/Makefile`。ターゲット名は `balance-` 接頭辞) |

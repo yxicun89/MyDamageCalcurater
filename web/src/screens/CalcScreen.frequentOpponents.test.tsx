@@ -49,7 +49,11 @@ interface FakeRecord extends RecordClient {
 
 function fakeRecord(result: () => Promise<RecordResult<Opponent[]>>): FakeRecord {
   const listMock = vi.fn<RecordClient["listFrequentOpponents"]>(() => result());
-  return { listFrequentOpponents: listMock, listMock };
+  return {
+    listFrequentOpponents: listMock,
+    deleteDeviceData: () => Promise.reject(new Error("このテストでは使わない")),
+    listMock,
+  };
 }
 
 function okRecord(...opponents: Opponent[]): FakeRecord {
