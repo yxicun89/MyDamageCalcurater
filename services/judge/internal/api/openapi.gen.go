@@ -11,6 +11,39 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for DefenderCandidateStatus.
+const (
+	DefenderCandidateStatusBadlyPoison DefenderCandidateStatus = "badly_poison"
+	DefenderCandidateStatusBurn        DefenderCandidateStatus = "burn"
+	DefenderCandidateStatusFreeze      DefenderCandidateStatus = "freeze"
+	DefenderCandidateStatusNone        DefenderCandidateStatus = "none"
+	DefenderCandidateStatusParalysis   DefenderCandidateStatus = "paralysis"
+	DefenderCandidateStatusPoison      DefenderCandidateStatus = "poison"
+	DefenderCandidateStatusSleep       DefenderCandidateStatus = "sleep"
+)
+
+// Valid indicates whether the value is a known member of the DefenderCandidateStatus enum.
+func (e DefenderCandidateStatus) Valid() bool {
+	switch e {
+	case DefenderCandidateStatusBadlyPoison:
+		return true
+	case DefenderCandidateStatusBurn:
+		return true
+	case DefenderCandidateStatusFreeze:
+		return true
+	case DefenderCandidateStatusNone:
+		return true
+	case DefenderCandidateStatusParalysis:
+		return true
+	case DefenderCandidateStatusPoison:
+		return true
+	case DefenderCandidateStatusSleep:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ErrorCode.
 const (
 	InternalError       ErrorCode = "internal_error"
@@ -86,21 +119,57 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
+// Defines values for IndividualStatus.
+const (
+	IndividualStatusBadlyPoison IndividualStatus = "badly_poison"
+	IndividualStatusBurn        IndividualStatus = "burn"
+	IndividualStatusFreeze      IndividualStatus = "freeze"
+	IndividualStatusNone        IndividualStatus = "none"
+	IndividualStatusParalysis   IndividualStatus = "paralysis"
+	IndividualStatusPoison      IndividualStatus = "poison"
+	IndividualStatusSleep       IndividualStatus = "sleep"
+)
+
+// Valid indicates whether the value is a known member of the IndividualStatus enum.
+func (e IndividualStatus) Valid() bool {
+	switch e {
+	case IndividualStatusBadlyPoison:
+		return true
+	case IndividualStatusBurn:
+		return true
+	case IndividualStatusFreeze:
+		return true
+	case IndividualStatusNone:
+		return true
+	case IndividualStatusParalysis:
+		return true
+	case IndividualStatusPoison:
+		return true
+	case IndividualStatusSleep:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SpeedFactor.
 const (
-	ChoiceScarf SpeedFactor = "choiceScarf"
-	Rank        SpeedFactor = "rank"
-	Tailwind    SpeedFactor = "tailwind"
+	SpeedFactorChoiceScarf SpeedFactor = "choiceScarf"
+	SpeedFactorParalysis   SpeedFactor = "paralysis"
+	SpeedFactorRank        SpeedFactor = "rank"
+	SpeedFactorTailwind    SpeedFactor = "tailwind"
 )
 
 // Valid indicates whether the value is a known member of the SpeedFactor enum.
 func (e SpeedFactor) Valid() bool {
 	switch e {
-	case ChoiceScarf:
+	case SpeedFactorChoiceScarf:
 		return true
-	case Rank:
+	case SpeedFactorParalysis:
 		return true
-	case Tailwind:
+	case SpeedFactorRank:
+		return true
+	case SpeedFactorTailwind:
 		return true
 	default:
 		return false
@@ -226,7 +295,17 @@ type DefenderCandidate struct {
 	//
 	// Example: 0445-000
 	SpeciesKey SpeciesKey `json:"speciesKey"`
+
+	// Status 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
+	// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+	// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
+	Status *DefenderCandidateStatus `json:"status,omitempty"`
 }
+
+// DefenderCandidateStatus 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
+// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
+type DefenderCandidateStatus string
 
 // Error defines model for Error.
 type Error struct {
@@ -283,7 +362,8 @@ type Health struct {
 type HealthStatus string
 
 // Individual 判定に使う個体。欄は docs/judge-design.md §3 JD1 の列挙そのまま。
-// status(状態異常)と teraType は JD1 では受け取らない(ADR-0701 §2)。
+// teraType は受け取らない(ADR-0701 §2)。status(状態異常)は省略可で、麻痺だけ素早さに反映し、
+// すべて calc-svc へそのまま転送する(ADR-0712)。
 type Individual struct {
 	// AbilityId 特性 ID。judge は解釈せず calc-svc にそのまま渡す。
 	AbilityId *string `json:"abilityId,omitempty"`
@@ -314,7 +394,17 @@ type Individual struct {
 	//
 	// Example: 0445-000
 	SpeciesKey SpeciesKey `json:"speciesKey"`
+
+	// Status 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
+	// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+	// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
+	Status *IndividualStatus `json:"status,omitempty"`
 }
+
+// IndividualStatus 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
+// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
+type IndividualStatus string
 
 // KOChance 確定数 / 乱数 n 発。calc-svc の KOChance をそのまま転記する(judge は再計算しない)。
 // 意味の正はルートの api/openapi.yaml の KOChance と ADR-0006・ADR-0010。
@@ -365,8 +455,8 @@ type Matchup struct {
 	AttackerSpeed int `json:"attackerSpeed"`
 
 	// AttackerSpeedApplied attackerSpeed の計算に**実際に効かせた**素早さの補正(ADR-0710)。値は rank(素早さのランクが 0 でない)・
-	// tailwind(追い風)・choiceScarf(こだわりスカーフ)。効かせた補正が無ければ空配列
-	// (null にも欄の欠落にもしない)。順序は rank → tailwind → choiceScarf で固定。
+	// tailwind(追い風)・choiceScarf(こだわりスカーフ)・paralysis(status が paralysis。連結のあとに ×0.5)。
+	// 効かせた補正が無ければ空配列(null にも欄の欠落にもしない)。順序は rank → tailwind → choiceScarf → paralysis で固定。
 	AttackerSpeedApplied []SpeedFactor `json:"attackerSpeedApplied"`
 
 	// AttackerSpeedIgnored 自分の入力のうち、素早さに影響しうるのに **attackerSpeed へ反映していない**もの(ADR-0710)。
@@ -375,7 +465,7 @@ type Matchup struct {
 	// fieldWeather(field.weather が none 以外で、かつ abilityId も指定されている。天候依存の素早さ特性があり得るため)。
 	// **「影響する」とは限らない**: 素早さに効かない特性・持ち物でも、指定されていればここに入る
 	// (judge は特性・持ち物の素早さ補正のデータを持たないため。第2段でデータ駆動にするまでの印)。
-	// 状態異常(麻痺など)は入力に無いので、この欄にも現れない。画面は空でないとき
+	// 状態異常は麻痺を反映済みで、この欄には現れない(麻痺と abilityId が同時でも麻痺は常に ×0.5 で、abilityId はここに残る。ADR-0712)。画面は空でないとき
 	// 「素早さは特性・持ち物・天候を反映していない」旨を添える(文言は画面の持ち物)。
 	// 空配列が「素早さに影響する要素が無い」ことの保証になる。順序は abilityId → itemId → fieldWeather で固定。
 	AttackerSpeedIgnored []SpeedIgnoredInput `json:"attackerSpeedIgnored"`
@@ -514,7 +604,7 @@ type Screens struct {
 // Example: 0445-000
 type SpeciesKey = string
 
-// SpeedFactor 素早さの計算に効かせた補正(ADR-0710)。
+// SpeedFactor 素早さの計算に効かせた補正(ADR-0710・ADR-0712)。
 type SpeedFactor string
 
 // SpeedField 素早さの判定にだけ効く場の効果(ADR-0702 §1)。judge が自分で解釈し、calc-svc には送らない。

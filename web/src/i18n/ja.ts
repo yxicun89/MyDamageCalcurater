@@ -513,6 +513,17 @@ export const judgeScreenText = {
   natureLabel: "性格",
   abilityLabel: "特性",
   itemLabel: "持ち物",
+  /** 状態異常の select の名前。選択肢は契約の StatusCondition(none が先頭で既定。issue 235)。 */
+  statusLabel: "状態異常",
+  statusOptionLabel: {
+    none: "なし",
+    burn: "やけど",
+    paralysis: "まひ",
+    poison: "どく",
+    badly_poison: "もうどく",
+    sleep: "ねむり",
+    freeze: "こおり",
+  } as const,
   unselectedOption: "未選択",
   // ---- issue 309: 技はポケモンの覚える技から選ぶ。調整はプリセット。数値欄は「詳細」に畳む ----
   /** 技の select の名前(自分側・候補で共通。計算画面の calcScreenText.moveLabel と同じ語)。 */
@@ -564,7 +575,12 @@ export const judgeScreenText = {
     `${side}の素早さに${names.join("・")}は反映していません`,
   speedSideSelf: "自分",
   speedSideOpponent: "相手",
-  speedFactorLabel: { rank: "ランク補正", tailwind: "追い風", choiceScarf: "こだわりスカーフ" } as const,
+  speedFactorLabel: {
+    rank: "ランク補正",
+    tailwind: "追い風",
+    choiceScarf: "こだわりスカーフ",
+    paralysis: "まひ",
+  } as const,
   speedIgnoredLabel: { abilityId: "特性", itemId: "持ち物", fieldWeather: "天候" } as const,
   priorityLabel: (attacker: number, defender: number): string => `優先度 ${attacker} 対 ${defender}`,
   outspeedsTrueLabel: "素早さで上回る",
