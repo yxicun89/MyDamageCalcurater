@@ -169,7 +169,10 @@ type ErrorCode string
 
 // Health defines model for Health.
 type Health struct {
-	Status HealthStatus `json:"status"`
+	// DataVersion Version of the read model this process loaded (metadata.json next to the read model, ADR-0138).
+	// Omitted when the read model has no metadata.json (unknown). Public master data version only.
+	DataVersion *string      `json:"dataVersion,omitempty"`
+	Status      HealthStatus `json:"status"`
 }
 
 // HealthStatus defines model for Health.Status.

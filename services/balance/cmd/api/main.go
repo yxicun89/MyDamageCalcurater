@@ -55,6 +55,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	dataVersion, err := dataVersionFromEnv(os.LookupEnv)
+	if err != nil {
+		slog.Error("balance API failed to read the read model metadata", "error", err)
+		os.Exit(1)
+	}
+	if dataVersion == "" {
+		slog.Warn("balance API: read model dataVersion is unknown (no metadata.json next to the read model)")
+	} else {
+		slog.Info("balance API: read model loaded", "dataVersion", dataVersion)
+	}
+
 	maxConcurrentRecommendations, err := maxConcurrentRecommendationsFromEnv(os.LookupEnv)
 	if err != nil {
 		slog.Error("balance API has an invalid concurrency limit", "error", err)
@@ -76,6 +87,7 @@ func main() {
 	server := &http.Server{
 		Addr: ":" + port,
 		Handler: httpapi.New(httpapi.Dependencies{
+			DataVersion:    dataVersion,
 			TypeChart:      typeChart,
 			PokemonTypes:   pokemonTypes,
 			Moves:          moves,
