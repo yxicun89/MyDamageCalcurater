@@ -11,6 +11,8 @@ struct BalanceMemberCard: View {
     let member: BalanceMember
     /// 1 始まりの並び順(アクセシビリティ用の「メンバー1」)。
     let number: Int
+    /// 自分のメンバーか仮想敵か(ラベルと削除の宛先だけが違う。ADR-0415 §8)。
+    var kind: BalanceMemberKind = .party
     /// 非 nil のとき、その index の技スロットの検索シートが開いている(シートはカードに1つ)。
     @State private var moveSearchSlot: MoveSlotTarget?
 
@@ -38,7 +40,7 @@ struct BalanceMemberCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(BalanceScreenText.memberGroupLabel(number))
+        .accessibilityLabel(kind.groupLabel(number))
         .accessibilityIdentifier("balanceMemberCard-\(member.id)")
     }
 
@@ -57,14 +59,17 @@ struct BalanceMemberCard: View {
             }
             Spacer(minLength: 0)
             Button {
-                viewModel.removeMember(id: member.id)
+                switch kind {
+                case .party: viewModel.removeMember(id: member.id)
+                case .threat: viewModel.removeThreat(id: member.id)
+                }
             } label: {
                 Image(systemName: "trash")
                     .foregroundStyle(ColorToken.danger.color)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("balanceMemberDelete-\(member.id)")
-            .accessibilityLabel(BalanceScreenText.removeMemberLabel(number))
+            .accessibilityLabel(kind.removeLabel(number))
         }
     }
 
@@ -123,4 +128,24 @@ struct BalanceMemberCard: View {
 private struct MoveSlotTarget: Identifiable, Equatable {
     let index: Int
     var id: Int { index }
+}
+
+/// `BalanceMemberCard` が描く対象。自分のパーティのメンバーか、仮想敵か。
+enum BalanceMemberKind {
+    case party
+    case threat
+
+    func groupLabel(_ number: Int) -> String {
+        switch self {
+        case .party: return BalanceScreenText.memberGroupLabel(number)
+        case .threat: return BalanceScreenText.threatGroupLabel(number)
+        }
+    }
+
+    func removeLabel(_ number: Int) -> String {
+        switch self {
+        case .party: return BalanceScreenText.removeMemberLabel(number)
+        case .threat: return BalanceScreenText.removeThreatLabel(number)
+        }
+    }
 }

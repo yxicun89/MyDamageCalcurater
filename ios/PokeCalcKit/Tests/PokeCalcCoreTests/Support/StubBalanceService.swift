@@ -106,6 +106,162 @@ actor StubBalanceService: BalanceService {
         }
     }
 
+    // MARK: - 第3段(threats・recommendations・moveRange)。analyze/coverage と同じ流儀で、それぞれ独立に記録・保留する
+
+    struct ThreatsRequest: Equatable {
+        let members: [BalanceMemberInput]
+        let threats: [BalanceMemberInput]
+    }
+
+    struct RecommendationsRequest: Equatable {
+        let members: [BalanceMemberInput]
+        let limit: Int?
+    }
+
+    private var threatsMode: Mode = .immediate
+    private var recommendationsMode: Mode = .immediate
+    private var moveRangeMode: Mode = .immediate
+    private var threatsError: PokeCalcError?
+    private var recommendationsError: PokeCalcError?
+    private var moveRangeError: PokeCalcError?
+    private(set) var threatsRequests: [ThreatsRequest] = []
+    private(set) var recommendationsRequests: [RecommendationsRequest] = []
+    private(set) var moveRangeRequests: [[String]] = []
+    private var pendingThreats: [Int: CheckedContinuation<BalanceThreatsAnalysis, any Error>] = [:]
+    private var pendingRecommendations: [Int: CheckedContinuation<BalanceRecommendations, any Error>] = [:]
+    private var pendingMoveRange: [Int: CheckedContinuation<BalanceMoveRange, any Error>] = [:]
+    private(set) var cancelledThreatsRequests: Set<Int> = []
+    private(set) var cancelledRecommendationsRequests: Set<Int> = []
+    private(set) var cancelledMoveRangeRequests: Set<Int> = []
+    /// 即時応答の中身をテストが差し替える(nil なら要求の形を写した既定の応答)。
+    private var recommendationsResult: BalanceRecommendations?
+    private var moveRangeResult: BalanceMoveRange?
+
+    func setThreatsMode(_ mode: Mode) { threatsMode = mode }
+    func setRecommendationsMode(_ mode: Mode) { recommendationsMode = mode }
+    func setMoveRangeMode(_ mode: Mode) { moveRangeMode = mode }
+    func setThreatsError(_ error: PokeCalcError?) { threatsError = error }
+    func setRecommendationsError(_ error: PokeCalcError?) { recommendationsError = error }
+    func setMoveRangeError(_ error: PokeCalcError?) { moveRangeError = error }
+    func setRecommendationsResult(_ result: BalanceRecommendations?) { recommendationsResult = result }
+    func setMoveRangeResult(_ result: BalanceMoveRange?) { moveRangeResult = result }
+
+    func resolveThreats(at index: Int, with result: Result<BalanceThreatsAnalysis, PokeCalcError>) {
+        guard let continuation = pendingThreats.removeValue(forKey: index) else {
+            XCTFail("保留中の threats が無い: index \(index)")
+            return
+        }
+        continuation.resume(with: result.mapError { $0 as any Error })
+    }
+
+    func resolveRecommendations(at index: Int, with result: Result<BalanceRecommendations, PokeCalcError>) {
+        guard let continuation = pendingRecommendations.removeValue(forKey: index) else {
+            XCTFail("保留中の recommendations が無い: index \(index)")
+            return
+        }
+        continuation.resume(with: result.mapError { $0 as any Error })
+    }
+
+    func resolveMoveRange(at index: Int, with result: Result<BalanceMoveRange, PokeCalcError>) {
+        guard let continuation = pendingMoveRange.removeValue(forKey: index) else {
+            XCTFail("保留中の moveRange が無い: index \(index)")
+            return
+        }
+        continuation.resume(with: result.mapError { $0 as any Error })
+    }
+
+    func waitForThreatsRequests(_ count: Int) async {
+        for _ in 0..<Self.waitPollLimit where threatsRequests.count < count {
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        if threatsRequests.count < count { XCTFail("threats の要求が \(count) 件に届かない: \(threatsRequests.count)") }
+    }
+
+    func waitForRecommendationsRequests(_ count: Int) async {
+        for _ in 0..<Self.waitPollLimit where recommendationsRequests.count < count {
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        if recommendationsRequests.count < count {
+            XCTFail("recommendations の要求が \(count) 件に届かない: \(recommendationsRequests.count)")
+        }
+    }
+
+    func waitForMoveRangeRequests(_ count: Int) async {
+        for _ in 0..<Self.waitPollLimit where moveRangeRequests.count < count {
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        if moveRangeRequests.count < count { XCTFail("moveRange の要求が \(count) 件に届かない: \(moveRangeRequests.count)") }
+    }
+
+    func threats(members: [BalanceMemberInput], threats: [BalanceMemberInput]) async throws -> BalanceThreatsAnalysis {
+        let index = threatsRequests.count
+        threatsRequests.append(ThreatsRequest(members: members, threats: threats))
+        if let threatsError { throw threatsError }
+        switch threatsMode {
+        case .immediate:
+            return BalanceFixtures.threatsAnalysis(threatIds: threats.map(\.pokemonId), memberIds: members.map(\.pokemonId))
+        case .manual:
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    pendingThreats[index] = continuation
+                }
+            } onCancel: {
+                Task { await self.markThreatsCancelled(index) }
+            }
+        }
+    }
+
+    func recommendations(members: [BalanceMemberInput], limit: Int?) async throws -> BalanceRecommendations {
+        let index = recommendationsRequests.count
+        recommendationsRequests.append(RecommendationsRequest(members: members, limit: limit))
+        if let recommendationsError { throw recommendationsError }
+        switch recommendationsMode {
+        case .immediate:
+            return recommendationsResult ?? BalanceFixtures.recommendations(tag: members.count)
+        case .manual:
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    pendingRecommendations[index] = continuation
+                }
+            } onCancel: {
+                Task { await self.markRecommendationsCancelled(index) }
+            }
+        }
+    }
+
+    func moveRange(moveIds: [String]) async throws -> BalanceMoveRange {
+        let index = moveRangeRequests.count
+        moveRangeRequests.append(moveIds)
+        if let moveRangeError { throw moveRangeError }
+        switch moveRangeMode {
+        case .immediate:
+            return moveRangeResult ?? BalanceFixtures.moveRange()
+        case .manual:
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    pendingMoveRange[index] = continuation
+                }
+            } onCancel: {
+                Task { await self.markMoveRangeCancelled(index) }
+            }
+        }
+    }
+
+    private func markThreatsCancelled(_ index: Int) {
+        cancelledThreatsRequests.insert(index)
+        pendingThreats.removeValue(forKey: index)?.resume(throwing: CancellationError())
+    }
+
+    private func markRecommendationsCancelled(_ index: Int) {
+        cancelledRecommendationsRequests.insert(index)
+        pendingRecommendations.removeValue(forKey: index)?.resume(throwing: CancellationError())
+    }
+
+    private func markMoveRangeCancelled(_ index: Int) {
+        cancelledMoveRangeRequests.insert(index)
+        pendingMoveRange.removeValue(forKey: index)?.resume(throwing: CancellationError())
+    }
+
     private func markAnalyzeCancelled(_ index: Int) {
         cancelledAnalyzeRequests.insert(index)
         pendingAnalyze.removeValue(forKey: index)?.resume(throwing: CancellationError())
@@ -157,5 +313,42 @@ enum BalanceFixtures {
                 BalanceTeamCoverageEntry(defenseType: $0, bestMultiplier: nil, effectiveMembers: 0, superEffectiveMembers: 0)
             }
         )
+    }
+
+    // MARK: - 第3段
+
+    /// 仮想敵ごとに、全メンバーとの相性を1行ずつ持つ応答(倍率に意味は無い)。
+    static func threatsAnalysis(threatIds: [String], memberIds: [String]) -> BalanceThreatsAnalysis {
+        BalanceThreatsAnalysis(
+            threats: threatIds.map { threatId in
+                BalanceThreatResult(
+                    pokemonId: threatId, abilityId: nil, attackTypes: [.fire],
+                    matchups: memberIds.map {
+                        BalanceThreatMatchup(pokemonId: $0, incoming: "1", outgoing: nil, safe: false, superEffective: false)
+                    },
+                    safeMembers: 0, superEffectiveMembers: 0)
+            })
+    }
+
+    /// `tag`(メンバー数)ぶんだけ防御の穴の数が変わる、世代の区別用の応答。
+    static func recommendations(tag: Int) -> BalanceRecommendations {
+        BalanceRecommendations(
+            defenseHoles: Array(PokeType.allCases.prefix(tag)), offenseHoles: [], candidates: [], abilityOptions: [])
+    }
+
+    static func moveRangeEntries(best: BalanceCoverageMultiplier = .neutral) -> [BalanceMoveRangeEntry] {
+        PokeType.allCases.map {
+            BalanceMoveRangeEntry(
+                defenseType: $0, bestMultiplier: best, effective: best == .neutral || best == .double,
+                superEffective: best == .double)
+        }
+    }
+
+    static func moveRange(
+        attackTypes: [PokeType] = [.normal], walledBy: [BalanceWalledByPokemon] = [],
+        walledByAbility: [BalanceWalledByAbilityPokemon] = []
+    ) -> BalanceMoveRange {
+        BalanceMoveRange(
+            attackTypes: attackTypes, typeChart: moveRangeEntries(), walledBy: walledBy, walledByAbility: walledByAbility)
     }
 }
