@@ -186,7 +186,7 @@ Next: **Web レーンの実装は完了**(2026-10-03。#451・#459・#462・#481
 P5-5d(#489・ADR-0318。この端末のデータを削除。issue #103 の Web 側)。#226 は D29 でクローズ済み、#271/#270 の Web 分は #412 で完了。
 2026-10-03 追加: #515(メガ種族を選ぶと持ち物をメガストーンに固定)の Web 分が完了・main 統合済み(#535 公開 API の SpeciesDetail に isMega/requiredItemId〈Web レーンが越境して実装。ユーザー決定〉・
 #537 PR-A〈共通ドメイン+計算・逆算〉・#540 PR-B〈構築の編集・判定・古い保存データの補正〉。ADR-0320)。残りはデータレーン(メガ名の生成・検索)と iOS レーン(同じ挙動。文言は `megaItemText` に揃える)。
-**待ち(他レーン)**: (1) #211: 公開 API の Item/Ability に `effect` が必要(API レーン。入ったら Web が `effects:true` へ追従。それまでオフライン〈キャッシュ〉の「持ち物の候補も比較」は無効)。
+**待ち(他レーン)**: (1) #211: Web 分は完了(ADR-0321。オンラインは `effect` を camelCase に写し、効果ありの持ち物が1件でもあれば `effects:true`。オフライン〈キャッシュ〉の「持ち物の候補も比較」は無効のまま)。残りは iOS 分(decisions/2026-10-03-web-211-online-effects.md)。
 (2) M2 の実機確認: `make deploy-latest` に record・team・TiDB・NATS が無い(API レーン。決定ファイル `decisions/2026-10-03-214-web-m2-k3d-deploy.md`)。入ったら `docs/verify-m2.md` §2 を実機で確認し前提の注記を直す。
 (3) #332 の残り(`services/pokedex/Dockerfile` の Node〈データ〉・golang タグ統一・定期検出〈運用〉)。(4) #271/#270 の判定画面での表示(判定レーン)。
 (5) iOS へ防御側ランク文言の統一提案(ADR-0315・`decisions/` の該当ファイル)。

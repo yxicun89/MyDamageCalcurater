@@ -77,9 +77,11 @@ describe("createOnlineMasterSource がフィクスチャから読める(ADR-0307
       master.natures.map((nature) => nature.id).sort(),
     );
     expect(loaded.typeChart.types.length).toBeGreaterThan(0);
-    // 公開 API に効果データは無いので、持ち物の effect は null(ADR-0304 A-1)。
-    expect(loaded.items.every((item) => item.effect === null)).toBe(true);
-    expect(loaded.capabilities).toEqual(ONLINE_MASTER_CAPABILITIES);
+    // issue 211: 公開 API の effect(PascalCase)が例データの effect(camelCase)に戻る。
+    expect(loaded.items.map((item) => [item.id, item.effect]).sort()).toEqual(
+      master.items.map((item) => [item.id, item.effect]).sort(),
+    );
+    expect(loaded.capabilities).toEqual({ ...ONLINE_MASTER_CAPABILITIES, effects: true });
     expect(loaded.species).toEqual([]);
     expect(loaded.moves).toEqual([]);
   });
@@ -100,8 +102,10 @@ describe("createOnlineMasterSource がフィクスチャから読める(ADR-0307
     expect(resolution.species.baseStats).toEqual(fire.baseStats);
     expect(resolution.species.learnset).toEqual(fire.learnset);
     expect(resolution.abilities.map((ability) => ability.id)).toEqual(fire.abilities);
-    // 公開 API に効果データは無い(ADR-0304 A-1)。
-    expect(resolution.abilities.every((ability) => ability.effect === null)).toBe(true);
+    // issue 211: 特性の effect も例データに戻る。
+    expect(resolution.abilities.map((ability) => ability.effect)).toEqual(
+      fire.abilities.map((id) => master.abilities.find((ability) => ability.id === id)?.effect),
+    );
     // P4-17: learnset の順のまま技の実体に解決できる(ADR-0304 A-13)。
     expect(resolution.moves.map((move) => move.id)).toEqual(fire.learnset);
     const expected = fire.learnset.map((id) => master.moves.find((move) => move.id === id)?.nameJa);

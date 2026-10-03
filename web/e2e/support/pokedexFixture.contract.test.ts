@@ -307,19 +307,28 @@ function fireSpeciesKey(): string {
 // --- 正常系: 契約のスキーマちょうど ---------------------------------------------------------------
 
 describe("正常系の本文が公開 API のスキーマを過不足なく満たす(api/openapi.yaml)", () => {
-  test("GET /api/pokedex/items は Item[](id と nameJa だけ。例データの effect を漏らさない)", () => {
+  test("GET /api/pokedex/items は Item[](効果を持つ持ち物だけ effect を伴い、形は PascalCase)", () => {
     const body = okArray(get("/api/pokedex/items", { limit: String(SEARCH_LIMIT_MAX) }));
     expect(body.length).toBe(master.items.length);
     for (const item of body) {
       expect(isItem(item), `Item の契約に合わない: ${JSON.stringify(item)}`).toBe(true);
-      // 契約上 effect は省略可(ADR-0218)だが、例データの effect は Web 内部の形(camelCase)で、
-      // 公開 API の形(item_effects の JSON そのまま)ではない。フィクスチャが effect を返すようにするのは
-      // Web レーンの #211 追従で(形の変換を含めて)行う。それまでは漏らさない。
-      expect(item, `例データの effect が漏れた: ${JSON.stringify(item)}`).not.toHaveProperty("effect");
+      // 契約上 effect は省略可(ADR-0218): 効果を持つ持ち物だけ伴い、キーは DB の形(PascalCase)。
+      const source = master.items.find((candidate) => candidate.id === (item as Schemas["Item"]).id);
+      expect(
+        Object.hasOwn(item as object, "effect"),
+        `effect の有無が例データと違う: ${JSON.stringify(item)}`,
+      ).toBe(source?.effect != null);
+      if ("effect" in (item as object)) {
+        expect(Object.keys((item as Schemas["Item"]).effect ?? {}).every((key) => /^[A-Z]/.test(key))).toBe(
+          true,
+        );
+      }
     }
     expect(new Set(body.map((item) => (item as Schemas["Item"]).id))).toEqual(
       new Set(master.items.map((item) => item.id)),
     );
+    // effects を有効にする(ADR-0321)ので、効果を持つ持ち物が1件以上ある。
+    expect(body.some((item) => "effect" in (item as object))).toBe(true);
   });
 
   test("GET /api/pokedex/natures は Nature[](全件・無補正は plus/minus が null)", () => {
@@ -354,8 +363,11 @@ describe("正常系の本文が公開 API のスキーマを過不足なく満�
     expect(detail.learnset).toEqual(source?.learnset);
     expect(detail.abilities.map((ability) => ability.id)).toEqual(source?.abilities);
     for (const ability of detail.abilities) {
-      // Item と同じ理由で、フィクスチャはまだ effect を返さない(Web レーンの #211 追従で変える)。
-      expect(ability, `例データの effect が漏れた: ${JSON.stringify(ability)}`).not.toHaveProperty("effect");
+      const abilitySource = master.abilities.find((candidate) => candidate.id === ability.id);
+      expect(
+        Object.hasOwn(ability, "effect"),
+        `effect の有無が例データと違う: ${JSON.stringify(ability)}`,
+      ).toBe(abilitySource?.effect != null);
     }
   });
 
