@@ -6,7 +6,7 @@
 // capabilities.speciesList が false のマスタ(検索)では、master.species・master.abilities が空なので、
 // resolveSpecies で返った実体をここに足していく。
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { Ability, Move } from "../engine/types";
 import type { MasterSpecies, MasterSpeciesResolution } from "../master/types";
 
@@ -21,6 +21,11 @@ export interface SpeciesResolutions {
    * learnsetMoves にそのまま渡せる形(abilitiesFor と同じ「全件の一覧 + 解決で覚えた分」)。
    */
   readonly movesFor: (masterMoves: readonly Move[], key: string) => readonly Move[];
+  /**
+   * issue 515(ADR-0320): 検索で解決した種族の実体(メガストーンの判別集合に足す)。
+   * capabilities.speciesList が true のマスタでは常に空(master.species に全件ある)。
+   */
+  readonly resolvedSpecies: readonly MasterSpecies[];
   /** resolveSpecies の結果を覚える。 */
   readonly register: (resolution: MasterSpeciesResolution) => void;
 }
@@ -59,5 +64,10 @@ export function useSpeciesResolutions(): SpeciesResolutions {
     [resolved],
   );
 
-  return { speciesFor, abilitiesFor, movesFor, register };
+  const resolvedSpecies = useMemo(
+    () => [...resolved.values()].map((resolution) => resolution.species),
+    [resolved],
+  );
+
+  return { speciesFor, abilitiesFor, movesFor, resolvedSpecies, register };
 }

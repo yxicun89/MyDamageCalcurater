@@ -17,7 +17,7 @@ test: speed-test
 lint: speed-lint
 build: speed-build
 
-# 生成物は Git に置かない(ADR-0806)。出力が無いか入力が新しいときだけ生成する(ルート Makefile の GEN_STALE)。
+# 生成物は Git に置かない(ADR-0807)。出力が無いか入力が新しいときだけ生成する(ルート Makefile の GEN_STALE)。
 speed-gen:
 	@if $(GEN_STALE) services/speed/internal/api/openapi.gen.go -- services/speed/api/openapi.yaml services/speed/internal/api/cfg.yaml services/go.mod; then \
 		(cd services && $(GO) tool oapi-codegen -config speed/internal/api/cfg.yaml speed/api/openapi.yaml) && \
@@ -51,13 +51,13 @@ speed-gitops-check: speed-kustomize
 speed-docker-build: speed-gen
 	@docker build -f $(SPEED_DIR)/Dockerfile -t $(SPEED_IMAGE) .
 
-# 公開用のイメージは手元の生成物の鮮度に頼らず、push の前に必ず作り直す(ADR-0806)
+# 公開用のイメージは手元の生成物の鮮度に頼らず、push の前に必ず作り直す(ADR-0807)
 speed-docker-push:
 	@$(MAKE) --no-print-directory speed-gen GEN_FORCE=1
 	@SERVICE=speed scripts/gitops/publish-image.sh
 
 # balance レーンのクラスタ内レジストリを共有する(ADR-0605 §1)。専用の registry-apply は持たない。
-# 公開用のイメージは手元の生成物の鮮度に頼らず、push の前に必ず作り直す(ADR-0806)
+# 公開用のイメージは手元の生成物の鮮度に頼らず、push の前に必ず作り直す(ADR-0807)
 speed-registry-push:
 	@$(MAKE) --no-print-directory speed-gen GEN_FORCE=1
 	@SERVICE=speed SPEED_REGISTRY_PORT=$(SPEED_REGISTRY_PORT) scripts/gitops/local-registry-push.sh
@@ -66,11 +66,7 @@ speed-argocd-app:
 	@SERVICE=speed scripts/gitops/argocd-local-app.sh
 
 speed-k3d-deploy: speed-docker-build ## k3d へ speed を直接デプロイ(local overlay。架空データの read model)
-	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh speed-k3d-deploy
-	@k3d image import $(SPEED_IMAGE) --cluster $(CLUSTER)
-	@kubectl apply -k $(SPEED_DIR)/deploy/k8s/overlays/local
-	@kubectl -n pokecalc rollout restart deployment/speed
-	@kubectl -n pokecalc rollout status deployment/speed --timeout=120s
+	@CLUSTER=$(CLUSTER) TAG_PATHS="$(SPEED_DIR) engine" ./scripts/k3d-deploy-tagged.sh speed-k3d-deploy $(SPEED_DIR)/deploy/k8s/overlays/local pokecalc/speed
 
 speed-smoke:
 	@SPEED_URL=$(SPEED_URL) $(SPEED_DIR)/scripts/smoke.sh

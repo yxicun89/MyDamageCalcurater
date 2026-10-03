@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# 各 openapi.yaml から Swift の API クライアントを生成する(ADR-0500 §2・ADR-0415・ADR-0806)。
+# 各 openapi.yaml から Swift の API クライアントを生成する(ADR-0500 §2・ADR-0415・ADR-0807)。
 #
 #   ios/scripts/openapi-gen.sh           出力が無いか入力が新しい対象だけ生成する(強制は GEN_FORCE=1)
 #   ios/scripts/openapi-gen.sh --check   一時ディレクトリに生成し、作業ツリーの生成物と差分が無いことを確かめる
 #
-# 生成物は Git に置かない(ADR-0806)。make ios-* の各ターゲットが前段で呼ぶ。
+# 生成物は Git に置かない(ADR-0807)。make ios-* の各ターゲットが前段で呼ぶ。
 # Xcode で直接開く前は、リポジトリのルートで make ios-gen を1回流す。
 # 生成対象の一覧は ios/scripts/openapi-targets.sh。
 set -euo pipefail
@@ -77,7 +77,7 @@ for target in "${pending[@]}"; do
   work_dir="$(mktemp -d)"
   generate_into "$config" "$work_dir" "$spec"
   if ! diff -r "$work_dir" "$generated_dir" >/dev/null 2>&1; then
-    echo "ios-gen-check: $name の生成物が ${spec#"$repo_dir"/} と一致しない(または無い)。make ios-gen を実行する(ADR-0806)" >&2
+    echo "ios-gen-check: $name の生成物が ${spec#"$repo_dir"/} と一致しない(または無い)。make ios-gen を実行する(ADR-0807)" >&2
     diff -r "$work_dir" "$generated_dir" 2>&1 | head -40 >&2 || true
     rm -rf "$work_dir"
     exit 1

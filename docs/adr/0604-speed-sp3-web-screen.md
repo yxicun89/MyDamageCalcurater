@@ -28,7 +28,7 @@ COORDINATION.md は `web/src/speed/` を素早さレーンの持ち物と定め�
   5. `web/src/App.tsx` に `speedClient` の作成(`useState` 1行)と `<ActiveScreen ... speedClient={speedClient} />` の1引数を追加
 - 型生成(`speed.gen.ts`)は `make gen-ts`(ルート Makefile。Web レーンの持ち物)を変更せず、`npx openapi-typescript
   ../services/speed/api/openapi.yaml -o src/speed/speed.gen.ts` を手動で実行してコミットする(再生成コマンドはファイル冒頭にコメントで残す)。
-  (2026-10-03 追記: **ADR-0806 で置き換え**。生成物は Git に置かず、使う前に `make gen` / `make ios-gen` で作る)
+  (2026-10-03 追記: **ADR-0807 で置き換え**。生成物は Git に置かず、使う前に `make gen` / `make ios-gen` で作る)
   `make gen-ts` へ組み込むかは Web レーンの都合に任せる(DECISIONS.md に提案として記録)。
 
 ### 3. API クライアント(`speedClient.ts`)

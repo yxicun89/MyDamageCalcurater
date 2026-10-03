@@ -3757,6 +3757,183 @@ XCUITest(`AboutScreenUITests` 2件・`LargeTextLayoutUITests.testAboutScreenNoHo
   ios-check-request-limits` 成功 / `make ios-test-ui` 53 件中 1 件失敗(`testFailureThenRetryCompletes`。上記の矛盾のみ。
   AX5 の新規テストを含む他は全件成功)。
 
+## P6-24 の受け入れ条件(素早さ比較画面。判断は ADR-0503。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+契約は `services/speed/api/openapi.yaml`(gateway `/api/speed/*`)。参照実装は Web の `SpeedScreen`。生成方式・境界・ピッカー・モック・識別子は ADR-0503。
+足場(型・プロトコル・`SpeedLabels` の固定文言・各実装の空の殻)は `TODO(implementer P6-24)` 付きで追加済み。生成ターゲット
+(`PokeCalcSpeedAPI`)は足場がコンパイルするために spec の段階で作った(`make ios-gen-check` 成功)。
+
+1. **生成**: `ios/scripts/openapi-gen.sh`(と `--check`)が「契約・設定・出力先」の組のループで `PokeCalcAPI`(不変)と `PokeCalcSpeedAPI` を扱い、
+   `make ios-gen-check` が成功する。契約の enum(`PresetId`・`MinimalPresetId`・`NatureId`・`ModePayload`・`ErrorCode`)とドメインの enum が値・順序とも一致し
+   (`SpeedContractSyncTests`)、SP の最大・ランクの範囲は `SPLimits`/`RankLimits` と契約が一致する(`make ios-check-request-limits`)。
+2. **API 写像**(`APISpeedService`): 全操作に `X-Device-Id`/`X-Session-Id`。`GET /api/speed/v1/pokemon`(クエリなし)、`GET /api/speed/v1/table`
+   (`presets` は 1 つのパラメータにカンマ区切り・全 6 行なら省略・`tailwind`/`trickRoom` は true のときだけ)、`POST /api/speed/v1/position`
+   (本文は mode に要る項目だけ。false の `tailwind`/`paralysis`/`tableTailwind` は載せない。`scarf` は preset・custom で常に載せる)。応答は並びを変えずにドメインへ写す。
+   400/413/422/500/503 は `code` をそのまま運ぶ `PokeCalcError`、通信不能は `transport`、読めない 200 は `decode`、契約外のステータスは本文が `{code,message}` ならその
+   `code`・読めなければ `client_unexpected_status`、タスクのキャンセルは `CancellationError` のまま。
+3. **入力 → 要求**(`SpeedViewModel`): Web と同じ既定(preset・最速・スカーフ無し・ポケモン未選択)。preset・custom はポケモン未選択では送らない。raw はポケモン任意で、
+   自分の追い風・まひ・スカーフは載せない。SP は 0…`SPLimits.maxPerStat`、ランクは `RankLimits` に収める。raw の実数値は前後の空白を落として 1 以上の整数だけ送り、
+   空欄は未入力(エラーなし)、それ以外は「実数値は1以上の整数で入力してください」を出して送らない(上限の判定はサーバー)。
+4. **表と結果の整形**: 絞り込みは全 6 行なら `presets` を省き、そうでなければ選んだ行を契約の順で渡す。最後の 1 つは外せず(取り直さない)説明を出す。トリックルームは表だけ、
+   相手側の追い風は表と位置の両方を取り直す。表の並びは応答のまま。境界線・「自分と同速」の強調は表示中の段の speed と自分の実数値の直接比較で決める
+   (同じ speed の段があれば強調して境界なし。通常は降順、トリックルーム中は昇順。位置が読めていなければ引かない)。結果は応答のまま整形し、トリックルーム中だけ
+   「先に動く(= slower)/後に動く(= faster)」の行を足す。
+5. **非同期**: 連続入力は debounce で確定値の要求 1 回にまとめ、新しい入力・画面破棄で先行の要求を cancel する。最新の世代の応答だけ反映し(cancel を無視する
+   サービスの古い応答も捨てる)、`CancellationError` は失敗として出さない。ポケモン一覧・表・位置は互いの失敗に巻き込まれず、`load()` は throw しない(絶対ルール 5)。
+   エラーはサーバーの英語 message を出さず `code` から日本語にする。
+6. **ピッカーとモック**: ピッカーは speed の一覧だけを使い、前後の空白を落としたひらがな/カタカナの部分一致で絞る(絞り込みは選択・要求に影響しない)。
+   `MockSpeedService` は ADR-0503 §8 の固定の事実(4 体・24 行・同速あり・シナリオ)を満たす。
+7. **画面(XCUITest・モック)**: ルートの `openSpeedScreen` と `POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH=1` で開く。表の段・絞り込み・最後の 1 つを外せないこと・トリックルームの並び替え・
+   実数値 1 の境界線(最下部・同じ段なし)・同速の強調・カスタムの入力部品・ピッカーの絞り込み・不正な実数値の説明が動く。表だけ・位置だけ・一覧だけ失敗しても他は使え、
+   全面的に失敗しても計算画面は開く(絶対ルール 5)。AX5 でも入力・表・結果・シートが横にはみ出さない。
+8. **文言・デザイン・不変条件**: 文言は `SpeedLabels` に集約し Web の `ja.ts` と同じ(`SpeedLabelsTests` が固定)。design.md のトークンのみ、`lineLimit`・`minimumScaleFactor` なし、
+   常時アニメーションなし。既存のテスト・identifier・`PokeCalcAPI` の生成物は不変。
+
+### 追加したテスト(spec 時点)
+
+- 単体(XCTest。`ios/PokeCalcKit/Tests/PokeCalcCoreTests/`)**113 件**: `SpeedContractSyncTests` 6・`SpeedLabelsTests` 9・`APISpeedServiceTests` 22・`MockSpeedServiceTests` 16・
+  `SpeedViewModelInputTests` 16・`SpeedViewModelTableTests` 22・`SpeedViewModelAsyncTests` 14・`SpeedViewModelPickerTests` 8。
+  足場: `Support/StubSpeedService.swift`(呼び出しの記録・hold/release・cancel の記録・cancel を無視するモード)。
+  `swift test` は全 689 件中、新規の 87 件が失敗(足場が空の殻のため。意図どおり)、新規の 26 件(同期・固定文言・初期値など)と既存の 576 件は成功。
+- 契約の範囲の同期: `ios/scripts/check-request-limits.sh` に speed(`PositionRequest.sp.maximum`・`rank.minimum/maximum` ↔ `SPLimits.maxPerStat`・`RankLimits`)を追加(成功。
+  契約を 1 つ書き換えて失敗することも確認済み)。
+- XCUITest(`ios/PokeCalcUITests/`)**16 件**(コンパイル確認のみ。View が未実装のため実行すると失敗する): `SpeedScreenUITests` 13 件、
+  `LargeTextLayoutUITests` に AX5 の 3 件(`testSpeedScreenNoHorizontalOverflowAtAX5`・`testSpeedScreenResultAndTableNoHorizontalOverflowAtAX5`・`testSpeedPokemonSheetNoHorizontalOverflowAtAX5`)。
+- `make ios-gen-check`・`make ios-lint`・`make ios-check-request-limits` 成功。`xcodebuild build-for-testing`(PokeCalc スキーム)成功。
+
+### 実装者への注意
+
+- 足場の公開 API(名前・case 名・引数・ID の文字列)をテストが固定している。変えるときは理由をコミットに書く。`TODO(implementer P6-24` を grep して全部埋める
+  (`SpeedLabels.errorMessage`・`SpeedViewModel`・`APISpeedService`・`MockSpeedService`)。
+- `SpeedViewModel`: 入力の変更は同期で状態を変え(`positionState = .loading` も同期)、要求は `LatestTaskRunner`(位置・表で別々)に予約する。応答の反映は世代で守る
+  (Task のキャンセル確認だけに頼らない。`ignoringCancellation` のテストがある)。`settle()` は最新の予約済み Task を await する。表の取り直し・`load()` は debounce しない
+  (`SpeedViewModelAsyncTests` は `debounce: .seconds(30)` でも `load()` が進む前提)。`selectedPokemon` は一覧から引く。`mode` を変えたら要求を作り直す。
+- `APISpeedService.swift` は `PokeCalcSpeedAPI` だけを読み込む(root の `PokeCalcAPI` と `Client` が衝突する)。`presets` は `explode: false` の 1 パラメータ
+  (生成クライアントに任せればカンマ区切りになる)。optional な本文項目は nil なら載らない(生成型の既定の符号化)。`undocumented` の本文は
+  `UndocumentedPayload.body` を読んで `{code,message}` を試す。`ErrorCode` の enum にない code はデコード失敗(`decode`)になる点に注意。
+- `MockSpeedService`: 表と位置は同じ内部の計算を共有する(最速 + スカーフ == 最速+1 の同値が自然に出る)。「テスト」で始まる架空の名前。`Resources/` を足すなら `MockFixtures` の流儀に従う。
+- アプリ側: `AppEnvironment.ready` に `speed` を足し、`RootView`・`#Preview`・既存のパターンマッチをすべて更新する(API は同じ `ClientIdentity` を共有)。
+  `RootView` に `openSpeedScreen` と `POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH`(既存の else-if の並びに足す)、`ios/scripts/sim-run.sh` の `IOS_SCREEN=speed`、
+  `docs/runbooks/ios.md`・`ios/README.md`・`docs/plan.md`(P6-24)を更新する。View は `PokeCalcCore` の `SpeedViewModel` を `@State` で持ち、
+  `.task` で `load()`、`.onDisappear` で `cancelPendingWork()`。
+- View の制約: 段は `VStack`(`LazyVStack` にしない)、段・結果の行は `.accessibilityElement(children: .contain)` を付けて子の識別子を飲み込ませない。
+  オン/オフの操作は選択ボタンで `isSelected` を出す。`Menu`・メニュー形式の `Picker` は使わない。`lineLimit`・`minimumScaleFactor` なし、AX5 では長いピルが折り返す。
+  色はタイプのエンブレムだけが持つ(design.md)。エンブレムの色は `PokeType` ではなく文字列のタイプ ID なので、未知の ID は無彩色のフォールバックにする。
+- 範囲(32・±6)は `SPLimits`・`RankLimits` から。`SpeedLabels` に数値を直書きしない。
+- 完了条件: `make ios-test`(lint・gen-check・check-request-limits・単体・UI・infoplist)がすべて成功する。UI テストはモック固定の事実(24 行)に頼る箇所が 1 つある
+  (`testRawValueBelowEveryRowDrawsTheBoundaryAtTheBottom`)。モックを変えるなら ADR-0503 §8 とそのテストを同時に直す。
+
+
+### 実装結果(implementer)
+
+- `swift test`(`ios/PokeCalcKit`): 全 689 件 成功 / 失敗 0(新規 113 件を含む。spec 時点の失敗 87 件はすべて解消)。
+- `make ios-lint ios-gen-check ios-check-request-limits` 成功。`xcodebuild build-for-testing`(PokeCalc スキーム・iPhone 18 Pro)成功。XCUITest(16 件)は実行していない(コンパイルのみ確認)。
+- 判断: 位置の再取得は「入力を変えた結果の要求が変わったとき」だけ予約する(preset のまま実数値欄を触る等では送らない)。
+  ポケモンのシートの検索欄は `.searchable` ではなく通常の `TextField`(`speedPokemonSearchField` を入力できる要素にするため)。
+  `SpeedPill`/`SpeedFlowLayout` は折り返すピル(既存の `ChipButton` は1行固定のため別に持つ)。`SpeedLabels` に `close`・`spIncrement`・`spDecrement` を追加。
+- テストの矛盾: なし(テスト・既存の期待値は変更していない)。
+
+## P6-23 の受け入れ条件(iOS: 種族ピッカーの「よく使う相手」。ADR-0209・requirements.md §2。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+- 日付: 2026-10-02 / 担当レーン: iOS / 関連: api/openapi.yaml(`listFrequentOpponents`・`FrequentOpponent`)、ADR-0209(頻度の保存・減衰・
+  プライバシー)、ADR-0212、本 ADR「P6-7」(別プロトコル・モックの流儀)・「issue #68」(種族検索シート)、CLAUDE.md 絶対ルール5、
+  DECISIONS.md 本タスクの新規エントリ「P6-23」、docs/plan.md P6-23
+- 背景: `GET /api/record/frequent-opponents`(ヘッダー `X-Device-Id`・`X-Session-Id`、クエリ `limit` 1〜50〈既定10、範囲外は 400〉)は
+  `FrequentOpponent[]`(`speciesKey`・`score`・`count`・`lastCalculatedAt`)をスコア降順・同点は `speciesKey` 昇順で返す。記録が無ければ
+  空配列(404 にしない)。503 は `store_unavailable` / `upstream_unavailable`。**名前・タイプは返さない**ので pokedex で解決する。
+  頻度は calc-svc が計算のたびに NATS へ非同期発行し record-svc が保存する(**クライアントは記録を POST しない**)。
+  iOS の生成クライアントに record タグは含まれる(P6-7)が、`listFrequentOpponents` を呼ぶ口は無かった。Web は `frequent-opponents` 未使用。
+
+### 1. 事実と判断の要約
+
+| 論点 | 決定 | 理由 |
+|---|---|---|
+| どのピッカーに出すか | **計算の防御側・逆算の相手のみ**。攻撃側・逆算の自分・構築メンバー(新規含む)には出さない | 頻度は「相手(防御側)として計算した回数」(ADR-0209 §4)。攻撃側・自分・構築メンバーは相手ではなく、出すと意味が混ざる |
+| いつ出すか | 空クエリのときだけ、一覧の先頭に「よく使う相手」セクション。検索語がある間は出さない(消せば戻る) | 検索結果に別の並びを混ぜない。`MasterSearchRow.hint`(空クエリの案内)はそのまま残す |
+| 件数 | `limit` = 10(`FrequentOpponents.defaultLimit`) | openapi の既定。セクション1つに収まる量 |
+| 名前解決 | `PokeCalcService.species(key:)` を1件ずつ。同時実行は 4(`maxConcurrentResolutions`)。解決できない key(`not_found`・通信失敗等)は黙って省く。重複 key は1回だけ解決・1行だけ表示。サーバーが `limit` を超えて返しても `limit` 件までしか引かない | 検索 API は key 指定に向かない。マスタに無い・古い key があっても残りを出す |
+| 失敗・空 | 取得失敗(通信・503・400)・空配列・全件未解決は**何も出さない**(エラー表示なし)。検索 UI と計算は塞がない | 絶対ルール5。この機能は補助 |
+| 取得のタイミング | **シートを開くたびに1回**(`.task`)。再取得中は前回の候補を出したまま(ちらつかせない)。取得失敗で前回の候補を消す | 計算のたびにスコアが変わる。1シート=1リクエスト |
+| 古い応答・キャンセル | 新しい `refresh()` は先行を無効にして cancel(古い応答・古い名前解決は反映しない)。Task cancel(シートを閉じる)では候補を変えず、解決中の `species(key:)` も cancel | `LatestTaskRunner` / 検索の世代管理と同じ規則 |
+| 選んだとき | 通常の検索結果と同じ `onSelect(SpeciesSummary)`(防御側なら `selectDefender(speciesKey:)`、逆算の相手なら `selectOpponentSpecies(key:)`)→ シートを閉じる | 反映の経路を増やさない |
+| 依存の形 | `PokeCalcService` とは別のプロトコル `FrequentOpponentsService`(`DeviceDataService` と同じ理由)。`CalcViewModel`/`ReverseViewModel`/`TeamEditViewModel` には依存を足さない。`FrequentOpponentsViewModel`(Core、`@MainActor @Observable`)が取得・解決・世代管理を持ち、`SpeciesSearchSheet` が任意引数 `frequentOpponents: FrequentOpponentsViewModel? = nil` で受け取る | 計算系の呼び出し回数・テストを不変に保つ |
+| 依存の渡し方 | `AppEnvironment.ready` に値を足す(P6-7 の `deviceData` と同じ流儀)。モックは `MockFrequentOpponentsService(environment:)`、API は同じ `APIPokeCalcService`(extension で準拠) | 既存の流儀 |
+| 文言 | `FrequentOpponentsLabels.sectionTitle = "よく使う相手"`(Core に1か所) | coding-rules §2 |
+| identifier(追加のみ) | セクション `frequentOpponentsSection`、行 `frequentOpponentRow-<speciesKey>`(行のボタンのラベルは種族名)。既存の `speciesSearchResult-<key>` は変えない | 既存 XCUITest 不変 |
+
+### 2. 状態の仕様
+
+- `FrequentOpponentsViewModel(service:resolver:limit:maxConcurrentResolutions:)`。`service == nil` なら何もしない。
+- `refresh()`: `service.frequentOpponents(limit:)` → 先頭 `limit` 件の重複を除いた key を同時 4 件までで `resolver.species(key:)` →
+  サーバーの順で `items`(`SpeciesSummary`)を置き換える。`isLoading` は進行中だけ true。
+- `visibleItems(forQuery:)`: 前後空白を除いて空なら `items`、そうでなければ `[]`(View はこれだけを見て描く)。
+- モック(XCUITest 用): `POKECALC_MOCK_FREQUENT_OPPONENTS` = なし/未知で `list`(`9003-000`・`9001-000`・`9999-000`〈マスタに無い〉の
+  3件を `prefix(limit)`、スコア降順)/ `empty`(空配列)/ `fail`(transport エラー)。**既存の `MockPokeCalcService` と
+  `species(key:)` の呼び出し回数は変えない**(別の service なので)。
+
+### 3. 受け入れ条件(検証可能な形)
+
+1. API 写像(`APIFrequentOpponentsServiceTests`): GET・パス `/api/record/frequent-opponents`・クエリ `limit` がそのまま載る(範囲外もクライアントで
+   丸めない)・`X-Device-Id`/`X-Session-Id`・200 の全フィールドとサーバー順の保持・空配列は成功・400(`invalid_input`)・503
+   (`store_unavailable`/`upstream_unavailable`)の code 保持・通信不能は `transport`。
+2. `FrequentOpponentsViewModel` の解決: 既定 `limit` 10 で取得、名前はサーバーの順で `species(key:)` から引く(検索 API は呼ばない)。
+   未解決・解決失敗の key は黙って省き順序を保つ。`limit` 超過分は引かない。重複は1回。
+3. 失敗・空: 取得失敗(`store_unavailable`・`upstream_unavailable`・`invalid_input`・`transport`)・空配列・service なし・全件未解決は
+   `items == []` で例外を出さず、失敗時は `species(key:)` を呼ばない。成功後の失敗は古い候補を消す。
+4. 再取得: `refresh()` のたびに取得し直し、前回の候補は再取得中も出したまま、完了で置き換える。
+5. 古い応答の破棄: 新しい `refresh()` が先行を cancel し、先行の取得・名前解決の応答は新しい結果を上書きしない。
+6. キャンセル: Task cancel で候補を変えず `isLoading` を戻し、取得中・解決中の要求を cancel する。
+7. 同時実行: 名前解決の同時実行は上限(テストでは 3)を超えず、1件返ると次が始まる。結果の順序はサーバーの順。
+8. `visibleItems(forQuery:)` は空・空白だけで `items`、検索語ありで `[]`。
+9. 既存への影響なし: `CalcViewModel`・`ReverseViewModel` は `FrequentOpponentsService` に依存せず(呼ばない)、`refresh()` は検索 API を呼ばない。
+10. モック(`MockFrequentOpponentsServiceTests`): 環境変数の写像、`list` の順序と `limit`、`empty`、`fail`、架空の key(9xxx)のみ。
+11. XCUITest(`FrequentOpponentsUITests`・モック): 防御側ピッカーでセクションと行がサーバー順に出て未解決 key は出ない・行を選ぶとシートが
+    閉じ防御側が変わる・検索語でセクションが消え消すと戻る・攻撃側には出ない・逆算は相手だけに出て自分には出ない・`empty`/`fail` では
+    セクションが出ず検索結果と計算結果の行は出る。
+12. AX5 で `frequentOpponentsSection` と行が横にはみ出さない(`LargeTextLayoutUITests.testFrequentOpponentsSectionNoHorizontalOverflowAtAX5`)。
+13. 既存の XCTest・XCUITest・identifier は1つも編集・変更しない(`LargeTextLayoutUITests` へのメソッド追加のみ)。
+    `api/openapi.yaml`・Generated は変更しない(契約の変更なし)。
+
+### 4. 追加したテスト(spec 時点)
+
+- 足場(既定値付き。`TODO(implementer` を検索): `PokeCalcCore/FrequentOpponents.swift`(`FrequentOpponent`・`FrequentOpponentsService`・
+  `FrequentOpponents`〈定数〉・`FrequentOpponentsLabels`・`FrequentOpponentsViewModel`〈何もしない〉)、
+  `PokeCalcCore/MockFrequentOpponentsService.swift`(空配列)、`APIPokeCalcService.swift` 末尾の extension(空配列)
+- `Tests/PokeCalcCoreTests/APIFrequentOpponentsServiceTests.swift`(7件)・`MockFrequentOpponentsServiceTests.swift`(6件)・
+  `FrequentOpponentsViewModelTests.swift`(21件)・`Support/StubFrequentOpponentsService.swift`(台本・保留・cancel 観測付きのスタブ)
+- `PokeCalcUITests/FrequentOpponentsUITests.swift`(6件)と `LargeTextLayoutUITests.testFrequentOpponentsSectionNoHorizontalOverflowAtAX5`(既存は無編集)
+
+`swift test`(`ios/PokeCalcKit`): 610件中、新規34件のうち25件(47アサーション)が失敗。足場が何もしないため。残り9件(失敗・空・nil の
+「何も出さない」系)は足場でも成立する。既存576件は成功。`xcodebuild build-for-testing`(XCUITest 7件を含む)は `** TEST BUILD SUCCEEDED **`。
+XCUITest の実行は未実施(identifier 未実装のため失敗する)。
+
+### 5. 実装者への注意
+
+- 構築編集(`TeamEditView`・`TeamEditMemberCard`)と計算の攻撃側・逆算の自分の `SpeciesSearchSheet` 呼び出しは `frequentOpponents` を渡さない
+  (既定 nil で今まで通り)。防御側(`CalcScreenCards` の防御側)と逆算の相手(`ReverseScreenCards`)だけ渡す。
+- `FrequentOpponentsViewModel` は View(または `RootView`)が `@State` で持ち、計算系 ViewModel には持たせない。シートの `.task` で
+  `refresh()` を呼ぶ(シートを閉じれば Task が cancel される)。`resolver` は計算と同じ `PokeCalcService`。
+- `refresh()` の「新しい呼び出しが先行を cancel する」は、内部で保持する Task を cancel するか、世代番号+`Task.checkCancellation` で実現する。
+  テスト `testStaleServiceResponseIsDiscarded`・`testStaleNameResolutionIsDiscarded` は先行の要求が cancel されることまで確認する。
+- 同時実行の上限は `withThrowingTaskGroup` に最大 N 件だけ追加し、1件終わるごとに次を追加する形(テスト `testNameResolutionRespectsConcurrencyCap`)。
+  結果は index で並べ直す。
+- 失敗は握りつぶして `items = []`(ログは任意)。`PokeCalcError` を画面のエラー表示(`CalcScreenError` 等)に流さない。
+- セクションは `List` の `Section` か先頭の行群。見出し文言は `FrequentOpponentsLabels.sectionTitle`。行の見た目は `MasterSearchRow.species` を共用し、
+  `.accessibilityLabel(option.nameJa)` を付ける(既存の検索結果と同じ)。AX5 では行が折り返してもはみ出さない。
+- `AppEnvironment.ready` に値を足すと `RootView` の `case .ready(let service, _, let backendDescription)` が壊れるので直す。
+- `ios/README.md` の操作説明・`docs/plan.md`(P6-23 のチェック)を更新する。
+
+### 6. 実装結果(P6-23。implementer)
+
+- `swift test`(`ios/PokeCalcKit`): 610件すべて成功(新規34件を含む。3回連続で安定)。`make ios-lint ios-gen-check ios-check-request-limits` 成功。
+  `xcodebuild build-for-testing`(iPhone 18 Pro)は `** TEST BUILD SUCCEEDED **`。XCUITest は未実行(別途実行)。
+- `refresh()` は内部 Task + 世代番号で先行を無効化・cancel(呼び出し元の cancel は `withTaskCancellationHandler` で内側へ伝える)。
+  名前解決は `withTaskGroup` で最大 N 件(1件終わるごとに次を追加、index で並べ直し)。
+- View: `SpeciesSearchSheet` の先頭に `Section`(見出し Text に `frequentOpponentsSection`、行は `MasterSearchRow.species` を共用)。
+  identifier は `Section` ではなく見出し Text に付けた(List 内の Section 自体への identifier は XCUITest から見えない場合があるため)。
+  `FrequentOpponentsViewModel` は `CalcScreenView`・`ReverseScreenView` が `@State` で持ち、防御側カード・相手カードだけに渡す。
+- テストの矛盾は無かった。
+
 ## P6-20 の受け入れ条件(構築の Showdown 風テキストのインポート/エクスポート。spec-writer: 受け入れ条件とテストのみ。実装はしない)
 
 - 日付: 2026-10-02 / 担当レーン: iOS / 関連: requirements.md §2、ADR-0213 §4、ADR-0506(日本語名・非互換の決定)、ADR-0500 §4、

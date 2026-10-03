@@ -291,17 +291,17 @@ forbidden_kind() {
     data/generated/* | */data/generated/*) echo "追跡禁止(第三者由来の生成データ data/generated/)"; return 0 ;;
     .reviews/* | */.reviews/*) echo "追跡禁止(レビュー成果物 .reviews/)"; return 0 ;;
     node_modules/* | */node_modules/*) echo "追跡禁止(node_modules/)"; return 0 ;;
-    ios/PokeCalcKit/Sources/*/Generated/*) echo "追跡禁止(iOS の API 生成物。make ios-gen で作る。ADR-0806)"; return 0 ;;
+    ios/PokeCalcKit/Sources/*/Generated/*) echo "追跡禁止(iOS の API 生成物。make ios-gen で作る。ADR-0807)"; return 0 ;;
     services/pokedex/internal/store/*.go)
       [ "$base" = "gen_required.go" ] && return 1
-      echo "追跡禁止(sqlc の生成物。make gen で作る。ADR-0806)"; return 0 ;;
+      echo "追跡禁止(sqlc の生成物。make gen で作る。ADR-0807)"; return 0 ;;
   esac
   case "$base" in
     .env.example) return 1 ;;
     .env | .env.*) echo "追跡禁止(環境変数ファイル。サンプルは .env.example だけ)"; return 0 ;;
     *.pem | *.key | *.p12 | *.pfx | *.jks) echo "追跡禁止(鍵・証明書)"; return 0 ;;
     *.wasm) echo "追跡禁止(WASM 生成物。make wasm で作る)"; return 0 ;;
-    *.gen.go | *.gen.ts) echo "追跡禁止(API 契約の生成物。make gen で作る。ADR-0806)"; return 0 ;;
+    *.gen.go | *.gen.ts) echo "追跡禁止(API 契約の生成物。make gen で作る。ADR-0807)"; return 0 ;;
     kubeconfig*) echo "追跡禁止(kubeconfig)"; return 0 ;;
     .envrc) echo "追跡禁止(direnv の環境変数ファイル .envrc)"; return 0 ;;
     id_rsa | id_ed25519 | id_ecdsa | id_dsa) echo "追跡禁止(SSH の秘密鍵)"; return 0 ;;
@@ -472,7 +472,7 @@ check_f() {
   fi
 
   # 生成コードを仕様から作れること: make gen が成功し、生成物が揃うこと。
-  # (生成物は Git に置かないので、コミットとの差分は検査しない。ADR-0806)
+  # (生成物は Git に置かないので、コミットとの差分は検査しない。ADR-0807)
   if [ ! -f Makefile ]; then
     note "F(生成コード): スキップ(Makefile が無い)"
     return 0

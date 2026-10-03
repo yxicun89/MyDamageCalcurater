@@ -267,7 +267,7 @@ func TestSqlcConfig(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("services/pokedex/internal/store に sqlc の生成物が無い(リポジトリのルートで make gen を実行する。ADR-0806)")
+		t.Error("services/pokedex/internal/store に sqlc の生成物が無い(リポジトリのルートで make gen を実行する。ADR-0807)")
 	}
 }
 

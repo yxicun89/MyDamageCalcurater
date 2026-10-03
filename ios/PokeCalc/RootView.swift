@@ -2,30 +2,17 @@ import PokeCalcCore
 import PokeCalcDesign
 import SwiftUI
 
-/// ルート画面(P6-1)。モックで動いていることの表示と、計算画面(P6-2)への入口だけを持つ。
+/// ルート画面(P6-1)。モックで動いていることの表示と、登録された画面(`FeatureRegistry`。ADR-0507)への
+/// 入口だけを持つ。画面を足すときはこのファイルを編集しない。
 struct RootView: View {
     private let environment: AppEnvironment
-    /// 構築(team)の永続化(P6-2c・ADR-0500 §4)。`RootView` が1回だけ作り、一覧・編集画面へ
-    /// 渡す(`AppEnvironment` は計算/逆算が使う `PokeCalcService` の生成元なので、契約が別の
+    /// 構築(team)の永続化(P6-2c・ADR-0500 §4)。`RootView` が1回だけ作り、使う画面へ
+    /// `FeatureContext` で渡す(`AppEnvironment` は起動時の設定から作るサービスの生成元なので、契約が別の
     /// `TeamStore` をそこに混ぜない)。
     @State private var teamStore: any TeamStore
-    /// 計算画面への遷移を値ベースにし、起動時に自動で遷移させられるようにする(下記の
-    /// `openCalcScreenAtLaunchEnvironmentKey` 用。テスト・スクリーンショット撮影専用)。
+    /// 画面への遷移を値ベースにし、起動時に自動で遷移させられるようにする(各 `AppFeature` の
+    /// `openAtLaunchEnvironmentKey` 用。テスト・スクリーンショット撮影専用。ADR-0501「P6-2a」参照)。
     @State private var path = NavigationPath()
-
-    /// 起動時にいきなり計算画面を開かせる環境変数(XCUITest を介さずスクリーンショットを撮る用途。
-    /// 通常の起動には影響しない。ADR-0501「P6-2a」参照)。
-    static let openCalcScreenAtLaunchEnvironmentKey = "POKECALC_OPEN_CALC_SCREEN_AT_LAUNCH"
-    private static let openCalcScreenAtLaunchValue = "1"
-    /// 起動時にいきなり逆算画面を開かせる環境変数(同上。ADR-0501「P6-2b」参照)。
-    static let openReverseScreenAtLaunchEnvironmentKey = "POKECALC_OPEN_REVERSE_SCREEN_AT_LAUNCH"
-    private static let openReverseScreenAtLaunchValue = "1"
-    /// 起動時にいきなり構築一覧画面を開かせる環境変数(同上。ADR-0501「P6-2c」参照)。
-    static let openTeamListScreenAtLaunchEnvironmentKey = "POKECALC_OPEN_TEAM_LIST_SCREEN_AT_LAUNCH"
-    private static let openTeamListScreenAtLaunchValue = "1"
-    /// 起動時にいきなり調整画面を開かせる環境変数(同上。ADR-0502 §1)。
-    static let openAdjustScreenAtLaunchEnvironmentKey = "POKECALC_OPEN_ADJUST_SCREEN_AT_LAUNCH"
-    private static let openAdjustScreenAtLaunchValue = "1"
 
     /// `environment` は既定でも作れる(#Preview 用)。実行時は `PokeCalcApp` が `@State` で
     /// 1回だけ作ったものを渡す(セッション ID を起動ごとに1つに保つため)。
@@ -67,35 +54,13 @@ struct RootView: View {
                 Spacer()
                 if case .ready = environment {
                     VStack(spacing: SpacingToken.x4) {
-                        NavigationLink(value: CalcScreenRoute()) {
-                            Text("計算する")
+                        ForEach(Self.rootButtons) { button in
+                            NavigationLink(value: FeatureRoute(featureID: button.id)) {
+                                Text(button.title)
+                            }
+                            .buttonStyle(PillButtonStyle())
+                            .accessibilityIdentifier(button.accessibilityIdentifier)
                         }
-                        .buttonStyle(PillButtonStyle())
-                        .accessibilityIdentifier("openCalcScreen")
-
-                        NavigationLink(value: ReverseScreenRoute()) {
-                            Text("逆算する")
-                        }
-                        .buttonStyle(PillButtonStyle())
-                        .accessibilityIdentifier("openReverseScreen")
-
-                        NavigationLink(value: TeamListScreenRoute()) {
-                            Text("構築")
-                        }
-                        .buttonStyle(PillButtonStyle())
-                        .accessibilityIdentifier("openTeamListScreen")
-
-                        NavigationLink(value: AdjustScreenRoute()) {
-                            Text(AdjustText.screenTitle)
-                        }
-                        .buttonStyle(PillButtonStyle())
-                        .accessibilityIdentifier("openAdjustScreen")
-
-                        NavigationLink(value: BalanceScreenRoute()) {
-                            Text("タイプバランス")
-                        }
-                        .buttonStyle(PillButtonStyle())
-                        .accessibilityIdentifier("openBalanceScreen")
                     }
                 }
                 Spacer()
@@ -112,59 +77,43 @@ struct RootView: View {
                         .foregroundStyle(ColorToken.textPrimary.color)
                 }
                 // P6-18(issue #328): 非公式の表示とデータの出典への控えめな入口。
-                // `.principal` は上記の見出しで埋まっているため `.topBarTrailing` に置く。
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink(value: AboutScreenRoute()) {
-                        Image(systemName: "info.circle")
+                // `.principal` は上記の見出しで埋まっているため `.topBarTrailing` に置く。設定エラー時も出す。
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    ForEach(Self.toolbarIcons) { icon in
+                        NavigationLink(value: FeatureRoute(featureID: icon.id)) {
+                            Image(systemName: icon.systemImage)
+                        }
+                        .accessibilityIdentifier(icon.accessibilityIdentifier)
+                        .accessibilityLabel(icon.accessibilityLabel)
                     }
-                    .accessibilityIdentifier("openAboutScreen")
-                    .accessibilityLabel("このアプリについて")
                 }
             }
-            .navigationDestination(for: CalcScreenRoute.self) { _ in
-                if case .ready(let service, _, let backendDescription, _, _) = environment {
-                    CalcScreenView(service: service, teamStore: teamStore, backendDescription: backendDescription)
-                }
-            }
-            .navigationDestination(for: ReverseScreenRoute.self) { _ in
-                if case .ready(let service, _, let backendDescription, _, _) = environment {
-                    ReverseScreenView(service: service, teamStore: teamStore, backendDescription: backendDescription)
-                }
-            }
-            .navigationDestination(for: TeamListScreenRoute.self) { _ in
-                if case .ready(let service, _, _, _, _) = environment {
-                    TeamListView(store: teamStore, service: service, path: $path)
-                }
-            }
-            .navigationDestination(for: AdjustScreenRoute.self) { _ in
-                if case .ready(let service, _, let backendDescription, let adjust, _) = environment {
-                    AdjustScreenView(service: service, adjust: adjust, backendDescription: backendDescription)
-                }
-            }
-            .navigationDestination(for: BalanceScreenRoute.self) { _ in
-                if case .ready(let service, _, _, _, let balance) = environment {
-                    BalanceScreenView(balance: balance, service: service, teamStore: teamStore)
-                }
-            }
-            .navigationDestination(for: AboutScreenRoute.self) { _ in
-                if case .ready(_, let deviceData, _, _, _) = environment {
-                    AboutView(deviceDataService: deviceData)
-                } else {
-                    AboutView()
-                }
+            .navigationDestination(for: FeatureRoute.self) { route in
+                destination(for: route)
             }
         }
         .task {
-            let env = ProcessInfo.processInfo.environment
-            guard case .ready = environment else { return }
-            if env[Self.openCalcScreenAtLaunchEnvironmentKey] == Self.openCalcScreenAtLaunchValue {
-                path.append(CalcScreenRoute())
-            } else if env[Self.openReverseScreenAtLaunchEnvironmentKey] == Self.openReverseScreenAtLaunchValue {
-                path.append(ReverseScreenRoute())
-            } else if env[Self.openTeamListScreenAtLaunchEnvironmentKey] == Self.openTeamListScreenAtLaunchValue {
-                path.append(TeamListScreenRoute())
-            } else if env[Self.openAdjustScreenAtLaunchEnvironmentKey] == Self.openAdjustScreenAtLaunchValue {
-                path.append(AdjustScreenRoute())
+            let isReady = if case .ready = environment { true } else { false }
+            // 従来の else-if と同じく、並び順で最初に指定された1画面だけを開く(設定エラー時は開かない)。
+            if let id = FeatureCatalog.featureToOpenAtLaunch(
+                FeatureRegistry.specs, environment: ProcessInfo.processInfo.environment, servicesReady: isReady)
+            {
+                path.append(FeatureRoute(featureID: id))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func destination(for route: FeatureRoute) -> some View {
+        if let feature = FeatureRegistry.feature(id: route.featureID) {
+            switch environment {
+            case .ready(let core, let services):
+                feature.destination(
+                    in: FeatureContext(core: core, services: services, teamStore: teamStore, path: $path))
+            case .configurationError:
+                if feature.availableWithoutServices {
+                    feature.destinationWithoutServices()
+                }
             }
         }
     }
@@ -172,8 +121,8 @@ struct RootView: View {
     @ViewBuilder
     private var statusBadge: some View {
         switch environment {
-        case .ready(_, _, let description, _, _):
-            Text(description)
+        case .ready(let core, _):
+            Text(core.backendDescription)
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
                 .padding(.horizontal, SpacingToken.x3)
@@ -207,31 +156,34 @@ struct PillButtonStyle: ButtonStyle {
     }
 }
 
-/// `NavigationPath` に積む計算画面の行き先(値だけで、状態は持たない)。
-private struct CalcScreenRoute: Hashable {}
+/// ルートのピルの入口(`FeatureEntry.rootButton`)。
+private struct RootButtonEntry: Identifiable {
+    let id: String
+    let title: String
+    let accessibilityIdentifier: String
+}
 
-/// `NavigationPath` に積む逆算画面の行き先(値だけで、状態は持たない)。
-private struct ReverseScreenRoute: Hashable {}
+/// 右上のアイコンの入口(`FeatureEntry.toolbarIcon`)。
+private struct ToolbarIconEntry: Identifiable {
+    let id: String
+    let systemImage: String
+    let accessibilityLabel: String
+    let accessibilityIdentifier: String
+}
 
-/// `NavigationPath` に積む構築一覧画面の行き先(値だけで、状態は持たない)。
-private struct TeamListScreenRoute: Hashable {}
+extension RootView {
+    fileprivate static let rootButtons: [RootButtonEntry] = FeatureRegistry.features.compactMap { feature in
+        guard case .rootButton(let title, let identifier) = feature.entry else { return nil }
+        return RootButtonEntry(id: feature.id, title: title, accessibilityIdentifier: identifier)
+    }
 
-/// `NavigationPath` に積む調整画面の行き先(値だけで、状態は持たない。ADR-0502)。
-private struct AdjustScreenRoute: Hashable {}
-
-/// `NavigationPath` に積むタイプバランス画面の行き先(値だけで、状態は持たない。P6-21)。
-private struct BalanceScreenRoute: Hashable {}
-
-/// `NavigationPath` に積む「このアプリについて」画面の行き先(値だけで、状態は持たない。P6-18)。
-private struct AboutScreenRoute: Hashable {}
+    fileprivate static let toolbarIcons: [ToolbarIconEntry] = FeatureRegistry.features.compactMap { feature in
+        guard case .toolbarIcon(let systemImage, let label, let identifier) = feature.entry else { return nil }
+        return ToolbarIconEntry(
+            id: feature.id, systemImage: systemImage, accessibilityLabel: label, accessibilityIdentifier: identifier)
+    }
+}
 
 #Preview {
-    if let mock = try? MockPokeCalcService(), let adjust = try? MockAdjustService() {
-        RootView(
-            environment: .ready(
-                service: mock, deviceData: MockDeviceDataService(), backendDescription: "モックデータで動作中", adjust: adjust,
-                balance: UnavailableBalanceService()))
-    } else {
-        Text("プレビュー用モックの読み込みに失敗")
-    }
+    RootView(environment: .makeAtLaunch(environment: [AppConfiguration.useMockEnvironmentKey: "1"]))
 }

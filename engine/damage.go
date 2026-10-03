@@ -158,15 +158,32 @@ func (r DamageResult) MaxDamage() int { return r.Rolls[15] }
 
 // stabModifier はタイプ一致補正値を返す(通常 ModifierStab、てきおうりょく等 AbilityEffect.StabMod
 // (ModifierAdaptability)、不一致 Modifier4096)。
+// 4096 を基準に、元のタイプ一致で +2048、テラスタイプ一致(teraType 指定時。ADR-0224)で +2048 を足す
+// (テラス = 元のタイプ = 技で ×2.0、テラスが別タイプでも元タイプの技は ×1.5 のまま、テラスだけ一致で ×1.5)。
+// 特性の強化分(StabMod − ModifierStab)は「そのタイプを持つ」技のときだけ足し、テラスが元のタイプのときは
+// その半分にする(@smogon/calc の getStabMod と同じ)。
 func stabModifier(in DamageInput, moveType Type) (int, bool) {
-	if moveType == TypeNone || !hasType(in.Attacker, moveType) {
+	if moveType == TypeNone {
 		return Modifier4096, false
 	}
-	mod := ModifierStab
-	if ae := in.Attacker.Ability.Effect; ae != nil && ae.StabMod != 0 {
-		mod = ae.StabMod
+	const stabBonus = ModifierStab - Modifier4096 // 一致1種類あたりの加算分
+	mod := Modifier4096
+	if hasOriginalType(in.Attacker, moveType) {
+		mod += stabBonus
 	}
-	return mod, true
+	teraMatch := in.Attacker.TeraType != TypeNone && in.Attacker.TeraType == moveType
+	if teraMatch {
+		mod += stabBonus
+	}
+	// てきおうりょく等: 技のタイプを持つときだけ加算。テラスが元タイプのときは半分(ADR-0224)。
+	if ae := in.Attacker.Ability.Effect; ae != nil && ae.StabMod != 0 && hasType(in.Attacker, moveType) {
+		bonus := ae.StabMod - ModifierStab
+		if teraMatch && hasOriginalType(in.Attacker, moveType) {
+			bonus /= 2
+		}
+		mod += bonus
+	}
+	return mod, mod != Modifier4096
 }
 
 // burnModifier は物理やけどによる攻撃半減(ModifierHalf)を返す。

@@ -107,3 +107,11 @@
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+
+/* メガ種族の持ち物固定の理由・補正の通知(issue 515、ADR-0320)。 */
+.team-member__reason,
+.team-member__notice {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+}

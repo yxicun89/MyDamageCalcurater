@@ -7,9 +7,8 @@
 //
 // PR2 での変更(ADR-0307):
 //   - 種族の選択は `<select>` ではなく検索欄(ADR-0304 A-4・A-10)なので selectMatchupBySearch を使う。
-//   - 「持ち物の候補も比較」はオンラインでは押せない(公開 API に効果データが無く
-//     ONLINE_MASTER_CAPABILITIES.effects が false。ADR-0304 A-1)。以前はこれをオンにして比較していたが
-//     成立しないので、**disabled であることを確かめたうえで**既定の5行を比較する(検査は増やして減らさない)。
+//   - issue 211(ADR-0322): 公開 API が effect を返すので、オンラインでも「持ち物の候補も比較」を押せる。
+//     オフライン(キャッシュ。effects: false)では押せないままなので、そちらは disabled を確かめる。
 
 import { expect, test, type Page, type Request } from "@playwright/test";
 import {
@@ -103,6 +102,19 @@ test("オンラインでは /api/calc/bulk(200)で計算し、engine.wasm を取
   expect(wasmRequests, "オンラインでは engine.wasm を読まない").toEqual([]);
 });
 
+test("オンラインで「持ち物の候補も比較」をオンにすると、防御側の候補持ち物の行が増える(issue 211)", async ({
+  page,
+}) => {
+  await openApp(page);
+  await selectMode(page, "オンライン(API)");
+  await selectMatchupBySearch(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
+  await expect(calcRows(page)).toHaveCount(DEFAULT_ROW_COUNT);
+  const compare = page.getByRole("checkbox", { name: "持ち物の候補も比較", exact: true });
+  await compare.check();
+  await expect.poll(async () => calcRows(page).count()).toBeGreaterThan(DEFAULT_ROW_COUNT);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
 test("同じ画面操作で、オンライン(API)とオフライン(WASM)の結果の行が一致する", async ({ page }) => {
   await openApp(page);
   await selectMode(page, "オンライン(API)");
@@ -113,9 +125,9 @@ test("同じ画面操作で、オンライン(API)とオフライン(WASM)の結
   );
   await selectMatchupBySearch(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
   expect((await bulkResponse).status()).toBe(200);
-  // 公開 API に効果データが無いので、持ち物の候補比較はオンラインでは選べない(ADR-0304 A-1)。
+  // 公開 API が effect を返す(issue 211)ので、持ち物の候補比較はオンラインで選べる(既定はオフ)。
   const compare = page.getByRole("checkbox", { name: "持ち物の候補も比較", exact: true });
-  await expect(compare).toBeDisabled();
+  await expect(compare).toBeEnabled();
   await expect(compare).not.toBeChecked();
   const online = await rowTexts(calcRows(page), DEFAULT_ROW_COUNT);
 

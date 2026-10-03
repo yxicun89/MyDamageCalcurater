@@ -25,7 +25,7 @@ flowchart LR
 | `src/app/`                 | ルート表(`routes.ts`)・画面の対応(`screens.tsx`)・計算モードの保存                                                                              |
 | `src/screens/`             | 計算画面・逆算画面                                                                                                                              |
 | `src/engine/`              | 計算の差し替え口 `CalcEngine` と WASM 実装・ローダー                                                                                            |
-| `src/api/`                 | API 実装(実体 → ID の写像)・生成型 `openapi.gen.ts`(Git に置かない。`npm run gen`/`make gen-ts`。dev・build・test 等の前に自動で生成。ADR-0806) |
+| `src/api/`                 | API 実装(実体 → ID の写像)・生成型 `openapi.gen.ts`(Git に置かない。`npm run gen`/`make gen-ts`。dev・build・test 等の前に自動で生成。ADR-0807) |
 | `src/domain/`              | リクエストの組み立て・プリセット・候補の抽出・表示の書式(純粋関数)                                                                              |
 | `src/master/`              | マスタの型と架空の例データ(実マスタは置かない)                                                                                                  |
 | `src/i18n/ja.ts`           | 画面の文言                                                                                                                                      |

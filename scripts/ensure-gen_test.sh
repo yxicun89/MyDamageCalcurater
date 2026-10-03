@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/ensure-gen.sh の自動テスト(ADR-0806)。`make test-scripts`(make test に含む)から流す。
+# scripts/ensure-gen.sh の自動テスト(ADR-0807)。`make test-scripts`(make test に含む)から流す。
 #
 # 固定すること:
 #   - 生成物の一覧がすべて .gitignore で無視され、追跡されていない

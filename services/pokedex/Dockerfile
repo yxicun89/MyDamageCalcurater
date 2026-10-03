@@ -9,8 +9,8 @@ COPY engine ./engine
 COPY services ./services
 WORKDIR /src/services
 RUN go mod download
-# API 契約・SQL の生成物は Git に置かず、ホストで make gen したものをコンテキストから受け取る(ADR-0806)。
-RUN test -f internal/api/openapi.gen.go && test -f pokedex/internal/store/querier.go || { echo "生成物が無い: リポジトリのルートで make gen を実行してから docker build する(ADR-0806)" >&2; exit 1; }
+# API 契約・SQL の生成物は Git に置かず、ホストで make gen したものをコンテキストから受け取る(ADR-0807)。
+RUN test -f internal/api/openapi.gen.go && test -f pokedex/internal/store/querier.go || { echo "生成物が無い: リポジトリのルートで make gen を実行してから docker build する(ADR-0807)" >&2; exit 1; }
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pokedex-migrate ./pokedex/cmd/migrate
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pokedex-import ./pokedex/cmd/import
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pokedex ./pokedex/cmd/pokedex

@@ -80,3 +80,10 @@ writeTimeout 15 秒 < Traefik の responseHeaderTimeout 20 秒 < gateway の wri
 - 契約の変更は speed の `overloaded` の追記と、ルート `api/openapi.yaml` の `upstream_unavailable` の説明文の追記のみ(型は変えない)。
   Web の生成物(`web/src/speed/speed.gen.ts`・`judge.gen.ts`・`balance.gen.ts`・`openapi.gen.ts`)は再生成で変わる(型の enum の追加と説明文)。
   iOS の生成物(`ios/PokeCalcKit/Sources/PokeCalcAPI/Generated`)も `ios/scripts/openapi-gen.sh` で再生成し、説明文の差分(コメントのみ)をコミットした。
+
+## 追記(2026-10-03): 期限切れ判定の取りこぼしを直した(issue 538)
+
+`httpguard.Expired` は `ctx.Err() != nil` だけを見ていた。`context.WithTimeout` は期限になると timer の goroutine で context を終了させるため、
+締め切りを過ぎた直後(特に 1 ナノ秒などごく短い締め切り)は `Err()` がまだ nil のことがあり、期限切れの要求が engine まで進んで 200 を返した
+(calc の `TestExpiredDeadlineSkipsEngine` が bulk で数百回に 1 回失敗した原因。テストの sleep や実時間ではなく実装側の競合)。
+`Expired` は `ctx.Deadline()` と現在時刻も比べるようにした。4 つの複製(services・balance・speed・judge)に同じ変更を入れた。

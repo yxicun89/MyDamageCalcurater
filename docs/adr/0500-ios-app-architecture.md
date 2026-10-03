@@ -42,7 +42,7 @@ ios/
 ### 2. API クライアントの生成
 - `make ios-gen` が `ios/tools/openapi-gen` の swift-openapi-generator(版は `Package.resolved` で完全固定)を実行し、
   `api/openapi.yaml` から `PokeCalcAPI/Generated/{Types,Client}.swift` を作る。**生成物はコミットする**(Go の `openapi.gen.go` と同じ扱い)。
-  (2026-10-03 追記: **ADR-0806 で置き換え**。生成物は Git に置かず、使う前に `make gen` / `make ios-gen` で作る)
+  (2026-10-03 追記: **ADR-0807 で置き換え**。生成物は Git に置かず、使う前に `make gen` / `make ios-gen` で作る)
   ビルドプラグインは使わない(Xcode のプラグイン信頼の確認と、パッケージ外のファイル参照を避けるため)。
 - `make ios-gen-check` は再生成して差分が無いことを確かめる(`make ios-test` から呼ぶ)。
 - ルートの `make gen` には入れない(Swift/Xcode を持たない他のレーンの `make gen` を壊さないため)。

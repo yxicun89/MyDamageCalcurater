@@ -54,7 +54,10 @@ const (
 	// ではなく参考情報のため)。
 	KindAbilityShowdownOnly FindingKind = "ability-showdown-only"
 
-	KindNameFallback   FindingKind = "name-fallback"
+	KindNameFallback FindingKind = "name-fallback"
+	// KindNameGenerated は、上流に日本語名が無いメガ種族の名前を、基本種の日本語名とフォーム識別子から
+	// 生成したとき(issue #515・ADR-0324。止めない。name_ja_source は generated)。
+	KindNameGenerated  FindingKind = "name-generated"
 	KindOverrideUnused FindingKind = "override-unused"
 	KindEffectUnused   FindingKind = "effect-unused"
 

@@ -15,10 +15,12 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"mime"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"time"
 
 	"example.com/pokecalc/services/internal/api"
@@ -29,10 +31,12 @@ import (
 // dial・アドレス・context のエラー文などの Go の内部情報は出さない(ADR-0202 §5)。
 const msgUpstreamUnavailable = "上流を利用できない"
 
-// newReverseProxy の restoreVerifiedIDs に渡す値(呼び出し側で意図が読めるように名前を付ける)。
+// newReverseProxy の apiUpstream に渡す値(呼び出し側で意図が読めるように名前を付ける)。
+// apiUpstream は「/api/* の上流か」。true の上流にだけ、検証済み ID の付け直しと、非 JSON 5xx の
+// 503 upstream_unavailable への正規化(issue #514。ADR-0802 追記)を行う。
 const (
-	restoreIDs  = true  // /api/* の上流: 検証済みの X-Device-Id / X-Session-Id を付け直す
-	keepIDsAsIs = false // 検証しない上流(assets・Web): 付け直さない
+	restoreIDs  = true  // /api/* の上流: 検証済みの X-Device-Id / X-Session-Id を付け直し、非 JSON 5xx を正規化する
+	keepIDsAsIs = false // /api/* 以外の上流(assets・Web): どちらもせず素通し
 )
 
 // newReverseProxy は target への ReverseProxy を作る。
@@ -41,16 +45,18 @@ const (
 //   - timeout: 上流の応答ヘッダを待つ上限(dial にも同じ値を使う)。override が nil のときの
 //     既定 Transport にだけ効く。
 //   - override: 上流への RoundTripper の差し替え(テストだけが使う。nil なら既定の Transport)。
-//   - restoreVerifiedIDs: true なら、gateway が検証した X-Device-Id / X-Session-Id を上流へ付け直す
-//     (/api/* の上流だけ。クライアントが Connection に列挙すると ReverseProxy が hop-by-hop として
-//     消してしまうため。issue #326)。
+//   - apiUpstream: /api/* の上流なら true。(1) gateway が検証した X-Device-Id / X-Session-Id を
+//     上流へ付け直す(クライアントが Connection に列挙すると ReverseProxy が hop-by-hop として
+//     消してしまうため。issue #326)。(2) 上流が JSON でない 5xx(Traefik 等の text/html の 502/504 など)を
+//     返したら 503 upstream_unavailable の Error JSON に正規化する(上流の本文・Retry-After 等は引き継がない。
+//     JSON の 5xx・4xx は素通し。issue #514)。
 //   - originAllowed: CORS の許可オリジン判定。ModifyResponse(上流の応答が届いたとき)と
 //     ErrorHandler(上流に接続できない・タイムアウトしたとき)の両方で、Access-Control-* を
 //     いったん取り除いてから、許可オリジンのときだけ gateway 自身の ACAO を付け直すために使う
 //     (必須1・必須2)。
 //
 // 接続できない・タイムアウトしたときは ErrorHandler が 503 upstream_unavailable を返す。
-func newReverseProxy(target *url.URL, timeout time.Duration, override http.RoundTripper, restoreVerifiedIDs bool, originAllowed func(string) bool) *httputil.ReverseProxy {
+func newReverseProxy(target *url.URL, timeout time.Duration, override http.RoundTripper, apiUpstream bool, originAllowed func(string) bool) *httputil.ReverseProxy {
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)  // Host も target のホストに書き換わる(推奨3)。
@@ -64,7 +70,7 @@ func newReverseProxy(target *url.URL, timeout time.Duration, override http.Round
 			// SetXForwarded が付け直す。Forwarded は ReverseProxy が Rewrite の前に消すが、意図を明示する。
 			pr.Out.Header.Del("X-Real-Ip")
 			pr.Out.Header.Del("Forwarded")
-			if restoreVerifiedIDs {
+			if apiUpstream {
 				// ReverseProxy は Rewrite の前に Connection に列挙されたヘッダを消す。serve が検証した
 				// 受信側の値(ちょうど1つ)を付け直し、検証済みの ID が必ず上流に届くようにする。
 				for _, name := range verifiedIDHeaders {
@@ -81,6 +87,11 @@ func newReverseProxy(target *url.URL, timeout time.Duration, override http.Round
 		proxy.Transport = defaultUpstreamTransport(timeout)
 	}
 	proxy.ModifyResponse = func(resp *http.Response) error {
+		// /api/* の上流が JSON でない 5xx を返したら、契約に無い本文をそのまま通さず、
+		// ErrorHandler 経由で 503 upstream_unavailable にする(issue #514)。
+		if apiUpstream && resp.StatusCode >= http.StatusInternalServerError && !isJSONContentType(resp.Header.Get("Content-Type")) {
+			return &nonJSONUpstream5xxError{status: resp.StatusCode, contentType: resp.Header.Get("Content-Type")}
+		}
 		// 上流が付けた Access-Control-* は外へ出さない。許可オリジンのときだけ gateway が
 		// 付け直す(ACAO はちょうど1つ。必須1)。
 		stripCORSHeaders(resp.Header)
@@ -102,7 +113,14 @@ func newReverseProxy(target *url.URL, timeout time.Duration, override http.Round
 			return
 		}
 		// クライアントへは固定文だけ(Go の内部情報を出さない)。詳細はログにだけ残す(推奨4)。
-		slog.WarnContext(r.Context(), "gateway: 上流に到達できない", "upstream", target.Host, "error", err)
+		var nonJSON *nonJSONUpstream5xxError
+		if errors.As(err, &nonJSON) {
+			// 上流には届いたが JSON でない 5xx だった。元のステータス・Content-Type はログにだけ残す。
+			slog.WarnContext(r.Context(), "gateway: 上流が JSON でない 5xx を返した", "upstream", target.Host,
+				"upstreamStatus", nonJSON.status, "contentType", nonJSON.contentType)
+		} else {
+			slog.WarnContext(r.Context(), "gateway: 上流に到達できない", "upstream", target.Host, "error", err)
+		}
 		// 上流に届かなかった応答にも CORS を付ける(必須2: 接続不可・タイムアウトの 503 で
 		// ACAO が抜け落ちる退行の修正)。r は Rewrite 後の outbound リクエストだが、
 		// Origin ヘッダは Rewrite で変更していないのでそのまま読める。
@@ -113,6 +131,25 @@ func newReverseProxy(target *url.URL, timeout time.Duration, override http.Round
 		writeJSONError(w, http.StatusServiceUnavailable, api.UpstreamUnavailable, msgUpstreamUnavailable)
 	}
 	return proxy
+}
+
+// nonJSONUpstream5xxError は /api/* の上流が JSON でない 5xx を返したことを ErrorHandler へ伝える。
+type nonJSONUpstream5xxError struct {
+	status      int
+	contentType string
+}
+
+func (e *nonJSONUpstream5xxError) Error() string {
+	return "上流が JSON でない 5xx を返した"
+}
+
+// isJSONContentType は Content-Type が JSON(application/json、application/*+json)かを返す。
+func isJSONContentType(contentType string) bool {
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return false
+	}
+	return mediaType == "application/json" || strings.HasSuffix(mediaType, "+json")
 }
 
 // defaultUpstreamTransport は上流ごとの既定の RoundTripper。dial と応答ヘッダ待ちの両方に

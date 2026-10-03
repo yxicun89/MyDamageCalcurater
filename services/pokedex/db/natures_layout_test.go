@@ -90,7 +90,7 @@ func TestNaturesMigrationDeclaresConstraints(t *testing.T) {
 }
 
 // AC-N4: sqlc のクエリに P2-3 が使う読み出し・投入がある(ADR-0105 §2・§3・§4)。
-// 生成物(internal/store)は Git に置かず make gen が毎回このクエリから作る(ADR-0806)。
+// 生成物(internal/store)は Git に置かず make gen が毎回このクエリから作る(ADR-0807)。
 func TestQueriesDeclareP23Reads(t *testing.T) {
 	raw, err := os.ReadFile("query/pokedex.sql")
 	if err != nil {

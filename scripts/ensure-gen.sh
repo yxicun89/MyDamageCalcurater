@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Git に置かない生成物(ADR-0806)の一覧・欠落の案内・再生成の要否判定。
+# Git に置かない生成物(ADR-0807)の一覧・欠落の案内・再生成の要否判定。
 #
 #   scripts/ensure-gen.sh check                    Go・TypeScript の生成物が揃っているか。欠けていれば一覧と「make gen」の案内を出して 1
 #   scripts/ensure-gen.sh check-ios                iOS の生成物(ディレクトリ)が揃っているか。欠けていれば「make ios-gen」を案内して 1
@@ -47,7 +47,7 @@ report_missing() {
   local command="$1"
   shift
   {
-    echo "生成物が無い(API 契約・SQL から作るファイルは Git に置かない。ADR-0806):"
+    echo "生成物が無い(API 契約・SQL から作るファイルは Git に置かない。ADR-0807):"
     printf '  %s\n' "$@"
     echo "リポジトリのルートで $command を実行してから、もう一度実行する。"
   } >&2

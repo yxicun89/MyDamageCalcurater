@@ -9,10 +9,12 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { Move, Ranks } from "../engine/types";
 import { formatMoveCategory } from "../domain/format";
+import { megaItemLock, megaStoneItemIds, selectableItems } from "../domain/mega";
 import { MAX_SP_PER_STAT } from "../domain/requests";
 import { calcScreenText, judgeErrorText, judgeScreenText } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type { MasterData, MasterSpeciesSearch } from "../master/types";
+import { MegaItemReason } from "../screens/MegaItemReason";
 import { SpeciesSearchField } from "../screens/SpeciesSearchField";
 import "./JudgeScreen.css";
 import {
@@ -336,8 +338,8 @@ export function JudgeScreen({ judgeClient, master, masterSearch }: JudgeScreenPr
               setFormat(event.target.value as Schemas["Format"]);
             }}
           >
-            {/* ダブルは壁・全体技の補正が未実装のため選択肢に出さない(issue 288。実装は技の対象データ待ち) */}
             <option value="single">{judgeScreenText.formatOption.single}</option>
+            <option value="double">{judgeScreenText.formatOption.double}</option>
           </select>
         </label>
 
@@ -498,6 +500,14 @@ function IndividualFields({
   masterSearch,
 }: IndividualFieldsProps) {
   const uid = useId();
+  // issue 515・ADR-0320: メガ種族の持ち物はメガストーンに固定する(固定は選んだ種族から毎回導く)。
+  // メガストーンは単独の選択肢に出さない(判別集合は、全件の一覧 + この体で選んだ種族から導く)。
+  const itemLock = megaItemLock(value.species, master.items);
+  const pickableItems = selectableItems(
+    master.items,
+    megaStoneItemIds(value.species === null ? master.species : [...master.species, value.species]),
+  );
+  const itemReasonId = `${uid}-item-reason`;
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const natures = master.natures;
   const category = moveCategoryOf(value);
@@ -533,7 +543,7 @@ function IndividualFields({
             onChange={(event) => {
               const species = master.species.find((candidate) => candidate.key === event.target.value);
               if (species !== undefined) {
-                onChange((current) => chooseSpecies(current, species, master.moves, natures));
+                onChange((current) => chooseSpecies(current, species, master.moves, natures, master.items));
               }
             }}
           >
@@ -552,7 +562,13 @@ function IndividualFields({
           onResolved={(resolution) => {
             // 検索で解決した種族の技(resolveSpecies が返す learnset の実体)から選ぶ。
             onChange((current) =>
-              chooseSpecies(current, resolution.species, [...master.moves, ...resolution.moves], natures),
+              chooseSpecies(
+                current,
+                resolution.species,
+                [...master.moves, ...resolution.moves],
+                natures,
+                master.items,
+              ),
             );
           }}
         />
@@ -604,20 +620,25 @@ function IndividualFields({
         <span>{judgeScreenText.itemLabel}</span>
         <select
           aria-label={judgeScreenText.itemLabel}
-          value={value.itemId}
+          value={
+            itemLock.kind === "locked" ? itemLock.item.id : itemLock.kind === "missing" ? "" : value.itemId
+          }
+          disabled={itemLock.kind !== "none"}
+          aria-describedby={itemLock.kind === "none" ? undefined : itemReasonId}
           onChange={(event) => {
             const itemId = event.target.value;
             onChange((current) => ({ ...current, itemId }));
           }}
         >
           <option value="">{judgeScreenText.unselectedOption}</option>
-          {master.items.map((item) => (
+          {(itemLock.kind === "locked" ? [itemLock.item] : pickableItems).map((item) => (
             <option key={item.id} value={item.id}>
               {item.nameJa}
             </option>
           ))}
         </select>
       </label>
+      <MegaItemReason id={itemReasonId} lock={itemLock} className="judge-individual__reason" />
 
       <label className="judge-individual__field">
         <span>{judgeScreenText.statusLabel}</span>

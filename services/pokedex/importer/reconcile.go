@@ -92,11 +92,14 @@ type EffectCoverage struct {
 
 // NameStats は1カテゴリの日本語名の解決状況(ADR-0103 §8)。
 type NameStats struct {
-	Override    int            `json:"override"`
-	PokeAPI     int            `json:"pokeApi"`
-	FallbackEn  int            `json:"fallbackEn"`
-	ByLanguage  map[string]int `json:"byLanguage"`
-	FallbackIDs []string       `json:"fallbackIds"`
+	Override   int `json:"override"`
+	PokeAPI    int `json:"pokeApi"`
+	FallbackEn int `json:"fallbackEn"`
+	// Generated は上流に名前が無く、基本種名とフォーム識別子から生成したメガ種族の数(ADR-0324)。
+	Generated    int            `json:"generated"`
+	GeneratedIDs []string       `json:"generatedIds"`
+	ByLanguage   map[string]int `json:"byLanguage"`
+	FallbackIDs  []string       `json:"fallbackIds"`
 }
 
 // ShowdownOnlySpecies は Showdown だけにある種族1件(ADR-0103 §8)。

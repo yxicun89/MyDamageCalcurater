@@ -27,7 +27,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | 既定ゴール | `help` | `Makefile` 冒頭 |
 | `help` の出し方 | 全 Makefile(`include` 先を含む)の `## ` 付きターゲットを、左列にターゲット名で出す。数字入りの名前も出る | `scripts/make-targets_test.sh`(`make test-scripts`)が固定 |
 | `test`/`lint`/`build` | 複数 Makefile が**前提条件だけ追記**(レシピを持たない)。結果は下表 | 各 Makefile 冒頭 |
-| k3d 対象の安全弁 | kubectl の context が `k3d-$(CLUSTER)` でなければ中断するのは、`up`(`scripts/up.sh`)・`import-k8s`・`deploy-latest`・`pokedex-registry-push`(いずれも `scripts/require-k3d-context.sh`)と `web-k3d-deploy`(`web/Makefile` の自前の検査)。`api-k3d-deploy`・`balance-k3d-deploy`・`speed-k3d-deploy`・`judge-k3d-deploy` はまだ検査しない(各レーンへ依頼済み。docs/ai-shared/DECISIONS.md 2026-10-01) | `scripts/require-k3d-context.sh`、`scripts/require-k3d-context_test.sh` |
+| k3d 対象の安全弁 | kubectl の context が `k3d-$(CLUSTER)` でなければ中断するのは、`up`(`scripts/up.sh`)・`import-k8s`・`deploy-latest`・`pokedex-registry-push`(いずれも `scripts/require-k3d-context.sh`)。`api-k3d-deploy`・`web-k3d-deploy`・`balance-k3d-deploy`・`speed-k3d-deploy`・`judge-k3d-deploy` は `scripts/k3d-deploy-tagged.sh` の先頭で同じ検査をする(ADR-0806) | `scripts/require-k3d-context.sh`、`scripts/require-k3d-context_test.sh` |
 | イメージのタグ | ローカルでビルドするイメージのタグは `scripts/image-tag.sh`(git の短いコミット+未コミットなら `-dirty`)で出せる | `scripts/image-tag.sh`、`scripts/image-tag_test.sh` |
 
 ### `test` / `lint` / `build` の合成結果(`make -pqRr` で確認)
@@ -49,7 +49,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 |---|---|---|---|
 | `help` | — | 全 Makefile の `## ` 付きターゲットを一覧表示 | なし |
 | `doctor` | — | `scripts/doctor.sh` | なし(読み取り/検査) |
-| `gen` | gen-go gen-sql gen-ts balance-gen speed-gen judge-gen | (レシピなし)。生成物は Git に置かない(ADR-0806)。各 gen-* は出力が無いか入力が新しいときだけ生成(`scripts/ensure-gen.sh stale`)。強制は `GEN_FORCE=1` | なし(前提条件のみ) |
+| `gen` | gen-go gen-sql gen-ts balance-gen speed-gen judge-gen | (レシピなし)。生成物は Git に置かない(ADR-0807)。各 gen-* は出力が無いか入力が新しいときだけ生成(`scripts/ensure-gen.sh stale`)。強制は `GEN_FORCE=1` | なし(前提条件のみ) |
 | `gen-go` | — | oapi-codegen で `api/openapi.yaml` から Go サーバ/型を生成 | 生成物を書換(Git 管理外) |
 | `gen-sql` | — | sqlc で pokedex の DB 行の型・クエリを生成 | 生成物を書換(Git 管理外) |
 | `gen-ts` | web-deps | `cd web && npm run gen`(openapi-typescript で web の4つの `*.gen.ts` を生成。Web の pre* フックと同じ) | 生成物を書換(Git 管理外) |
@@ -106,7 +106,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | ターゲット | 前提 | 実行内容(レシピ要約) | 副作用 |
 |---|---|---|---|
 | `api-docker-build` | — | `docker build -f services/calc/Dockerfile -t pokecalc/calc:local . ⏎ docker build -f services/gateway/Dockerfile -t pokecalc/gateway:local .` | docker イメージ作成 |
-| `api-k3d-deploy` | api-docker-build | `k3d image import pokecalc/calc:local pokecalc/gateway:local --cluster $(API_CLUSTER) ⏎ kubectl apply -k deploy/k8s/overlays/local-api ⏎ kubectl -n pokecalc rollout res…` | k3d ノードへ image import, **クラスタへ apply**, Pod 再起動 |
+| `api-k3d-deploy` | api-docker-build | `scripts/k3d-deploy-tagged.sh api-k3d-deploy deploy/k8s/overlays/local-api pokecalc/calc pokecalc/gateway` (context 検査 → コミットのタグへ付け替え → k3d import → 描画した image だけ置換して apply → rollout status。ADR-0806) | k3d ノードへ image import, **クラスタへ apply**。`-dirty` のときだけ Pod 再起動。context が k3d-<CLUSTER> でなければ中断 |
 | `api-smoke` | — | `API_URL=$(API_URL) services/gateway/scripts/smoke.sh` | なし(HTTP のみ。DB は gateway 経由で読むだけ。balance の Service 有無を kubectl で確認) |
 | `api-kustomize` | — | `kubectl kustomize deploy/k8s/base >/dev/null ⏎ kubectl kustomize deploy/k8s/overlays/local >/dev/null ⏎ kubectl kustomize deploy/k8s/overlays/local-api >/dev/null` | なし(kustomize 描画のみ) |
 
@@ -131,7 +131,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `web-e2e-balance` | wasm web-deps | `cd $(WEB_DIR) && npm run e2e:balance` | chromium・vite preview・balance-svc(go run)を一時起動 |
 | `web-docker-build` | — | `docker build -f web/Dockerfile -t pokecalc/web:local .` | docker イメージ作成 |
 | `web-e2e-container` | web-docker-build web-deps | `cd $(WEB_DIR) && npm run e2e:container` | docker run で web イメージを一時起動+chromium |
-| `web-k3d-deploy` | web-docker-build | `test "$$(kubectl config current-context)" = "k3d-$(CLUSTER)" \|\| { echo "web-k3d-deploy: kubectl のコンテキストが k3d-$(CLUSTER) ではない" >&2; exit 1; } ⏎ k3d image import pokecal…` | docker イメージ作成, k3d ノードへ image import, **クラスタへ apply**(overlays/local-web), Pod 再起動。context が k3d-<CLUSTER> でなければ中断 |
+| `web-k3d-deploy` | web-docker-build | `scripts/k3d-deploy-tagged.sh web-k3d-deploy deploy/k8s/overlays/local-web pokecalc/web`(ADR-0806) | k3d ノードへ image import, **クラスタへ apply**(overlays/local-web)。`-dirty` のときだけ Pod 再起動。context が k3d-<CLUSTER> でなければ中断 |
 | `web-k3d-open` | — | `kubectl -n pokecalc port-forward svc/web 5173:80` | port-forward 常駐 |
 | `web-k3d-smoke` | — | `WEB_URL=$(WEB_URL) web/scripts/k3d-smoke.sh` | なし(HTTP のみ) |
 | `web-kustomize` | — | `kubectl kustomize deploy/k8s/base >/dev/null ⏎ kubectl kustomize deploy/k8s/overlays/local >/dev/null ⏎ kubectl kustomize deploy/k8s/overlays/local-web >/dev/null` | なし(kustomize 描画のみ) |
@@ -152,7 +152,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `balance-gitops-check` | balance-kustomize | `SERVICE=balance scripts/gitops/check-gitops.sh ready` | なし(kustomize 描画+検査。digest 確定を要求) |
 | `balance-docker-build` | — | `docker build -t $(BALANCE_IMAGE) $(BALANCE_DIR)` | docker イメージ作成 |
 | `balance-docker-push` | — | `SERVICE=balance scripts/gitops/publish-image.sh` | **レジストリへ push**(docker buildx --push。BALANCE_RELEASE_IMAGE 必須) |
-| `balance-k3d-deploy` | balance-docker-build | `k3d image import $(BALANCE_IMAGE) --cluster $(CLUSTER) ⏎ kubectl apply -k $(BALANCE_DIR)/deploy/k8s/overlays/local ⏎ kubectl -n pokecalc rollout restart deployment/bal…` | k3d ノードへ image import, **クラスタへ apply**, Pod 再起動 |
+| `balance-k3d-deploy` | balance-docker-build | `scripts/k3d-deploy-tagged.sh balance-k3d-deploy <overlays/local> pokecalc/balance`(ADR-0806) | k3d ノードへ image import, **クラスタへ apply**。`-dirty` のときだけ Pod 再起動。context が k3d-<CLUSTER> でなければ中断 |
 | `balance-smoke` | — | `BALANCE_URL=$(BALANCE_URL) $(BALANCE_DIR)/scripts/smoke.sh` | なし(HTTP のみ) |
 | `balance-sync-typechart` | — | `cp testdata/golden/typechart.json $(BALANCE_DIR)/internal/master/data/typechart.json` | balance/internal/master/data/typechart.json を上書き |
 | `balance-registry-apply` | — | `kubectl apply -k $(BALANCE_DIR)/deploy/local-registry ⏎ kubectl -n balance-registry rollout status deployment/registry --timeout=120s` | **クラスタへ apply**(PVC `registry-data` を含む。ADR-0408 §3) |
@@ -179,7 +179,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `speed-docker-push` | — | `SERVICE=speed scripts/gitops/publish-image.sh` | **レジストリへ push**(docker buildx --push。SPEED_RELEASE_IMAGE 必須) |
 | `speed-registry-push` | — | `SERVICE=speed SPEED_REGISTRY_PORT=$(SPEED_REGISTRY_PORT) scripts/gitops/local-registry-push.sh` | docker build/save, レジストリへ port-forward(5002)して crane push |
 | `speed-argocd-app` | — | `SERVICE=speed scripts/gitops/argocd-local-app.sh` | **AppProject `pokecalc` と Argo CD Application を apply**(AppProject が先。ADR-0408 §1・§2) |
-| `speed-k3d-deploy` | speed-docker-build | `k3d image import $(SPEED_IMAGE) --cluster $(CLUSTER) ⏎ kubectl apply -k $(SPEED_DIR)/deploy/k8s/overlays/local ⏎ kubectl -n pokecalc rollout restart deployment/speed ⏎…` | k3d ノードへ image import, **クラスタへ apply**, Pod 再起動 |
+| `speed-k3d-deploy` | speed-docker-build | `scripts/k3d-deploy-tagged.sh speed-k3d-deploy <overlays/local> pokecalc/speed`(ADR-0806) | k3d ノードへ image import, **クラスタへ apply**。`-dirty` のときだけ Pod 再起動。context が k3d-<CLUSTER> でなければ中断 |
 | `speed-smoke` | — | `SPEED_URL=$(SPEED_URL) $(SPEED_DIR)/scripts/smoke.sh` | なし(HTTP のみ) |
 | `speed-k3d-deploy-readmodel` | — | `SERVICE=speed SPEED_IMAGE=$(SPEED_IMAGE) SPEED_READMODEL_DIR=$(SPEED_READMODEL_DIR) CLUSTER=$(CLUSTER) scripts/gitops/k3d-deploy-readmodel.sh` | docker build, k3d image import, ConfigMap speed-readmodel 作成/更新, **apply**, Pod 再起動 |
 | `speed-smoke-readmodel` | — | `SPEED_URL=$(SPEED_URL) SPEED_READMODEL_DIR=$(SPEED_READMODEL_DIR) $(SPEED_DIR)/scripts/smoke-readmodel.sh` | なし(HTTP のみ) |
@@ -197,14 +197,14 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `judge-build` | — | `cd $(JUDGE_DIR) && GOWORK=off $(GO) build ./...` | なし(読み取り/検査) |
 | `judge-kustomize` | — | `kubectl kustomize $(JUDGE_DIR)/deploy/k8s/overlays/local >/dev/null` | なし(kustomize 描画のみ) |
 | `judge-docker-build` | — | `docker build -f $(JUDGE_DIR)/Dockerfile -t $(JUDGE_IMAGE) .` | docker イメージ作成 |
-| `judge-k3d-deploy` | judge-docker-build | `k3d image import $(JUDGE_IMAGE) --cluster $(CLUSTER) ⏎ kubectl apply -k $(JUDGE_DIR)/deploy/k8s/overlays/local ⏎ kubectl -n pokecalc rollout restart deployment/judge ⏎…` | k3d ノードへ image import, **クラスタへ apply**, Pod 再起動 |
+| `judge-k3d-deploy` | judge-docker-build | `scripts/k3d-deploy-tagged.sh judge-k3d-deploy <overlays/local> pokecalc/judge`(ADR-0806) | k3d ノードへ image import, **クラスタへ apply**。`-dirty` のときだけ Pod 再起動。context が k3d-<CLUSTER> でなければ中断 |
 | `judge-smoke` | — | `JUDGE_URL=$(JUDGE_URL) $(JUDGE_DIR)/scripts/smoke.sh` | なし(HTTP のみ。healthz だけ。scripts/smoke.sh) |
 
 ### `ios/Makefile`(9 定義)
 
 | ターゲット | 前提 | 実行内容(レシピ要約) | 副作用 |
 |---|---|---|---|
-| `ios-gen` | — | `./ios/scripts/openapi-gen.sh`(`ios/scripts/openapi-targets.sh` の各対象。出力が無いか入力が新しいときだけ。強制は `GEN_FORCE=1`。ADR-0806) | `ios/PokeCalcKit/Sources/*/Generated` を書換(Git 管理外) |
+| `ios-gen` | — | `./ios/scripts/openapi-gen.sh`(`ios/scripts/openapi-targets.sh` の各対象。出力が無いか入力が新しいときだけ。強制は `GEN_FORCE=1`。ADR-0807) | `ios/PokeCalcKit/Sources/*/Generated` を書換(Git 管理外) |
 | `ios-gen-check` | — | `./ios/scripts/openapi-gen.sh --check` | なし(一時ディレクトリに生成して手元の生成物と差分検査) |
 | `ios-test` | ios-gen ios-lint ios-gen-check ios-check-request-limits ios-test-unit ios-test-ui ios-check-infoplist | (レシピなし)。他の `ios-*`(`ios-gen-check` を除く)も `ios-gen` を前提に持つ | なし(前提条件のみ) |
 | `ios-lint` | — | `for script in ios/scripts/*.sh; do bash -n "$$script" \|\| exit; done` | なし |

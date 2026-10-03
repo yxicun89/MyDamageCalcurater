@@ -75,7 +75,7 @@
 | `make balance-smoke` | balance §2・§9 | `services/balance/scripts/smoke.sh`(`BALANCE_URL` 既定 8080)。`/api/balance/healthz` と `v1/team-balance/{analyze,coverage,recommendations,threats}`・`v1/move-range/analyze` を叩く | host → 8080 | — |
 | `make balance-k3d-deploy-readmodel` | balance §2b | `k3d-deploy-readmodel.sh`: `docker build` → `k3d image import` → `kubectl create configmap balance-readmodel … \| apply --server-side` → `apply -k overlays/local-readmodel` → `rollout restart`/`status` | host → k3d | **要 `make pokedex-export` 済み**(実データ由来の read model を ConfigMap に載せる) |
 | `make balance-smoke-readmodel` | balance §2b | `smoke-readmodel.sh`: 先頭のポケモンで analyze と recommendations が 200 | host → 8080 | — |
-| `make speed-k3d-deploy` | speed §2 | `docker build -f services/speed/Dockerfile -t pokecalc/speed:local .`(engine を含むためコンテキストはルート)→ import → `apply -k …/speed/deploy/k8s/overlays/local` → restart/status | host → k3d | Ingress `/api/speed` |
+| `make speed-k3d-deploy` | speed §2 | `docker build -f services/speed/Dockerfile -t pokecalc/speed:local .`(engine を含むためコンテキストはルート)→ import → `apply -k …/speed/deploy/k8s/overlays/local` → restart/status | host → k3d | gateway 経由 `/api/speed` |
 | `SPEED_URL=http://localhost:8080 make speed-smoke` | speed §2 | `speed/scripts/smoke.sh`: `/api/speed/healthz` `v1/pokemon` `v1/position` `v1/table?presets=max-scarf`(および `unknown` の異常系) | host → 8080 | — |
 | `kubectl -n pokecalc port-forward svc/mysql 3306:3306 >/tmp/mysql-pf.log 2>&1 &` `PF_PID=$!` `sleep 2` | speed §3 | mysql への一時 port-forward(バックグラウンド) | host → k3d(svc/mysql) | ホスト 3306 → headless mysql:3306 |
 | `export POKEDEX_DATABASE_DSN=$(kubectl … get secret mysql-auth -o jsonpath='{.data.pokedex-reader-dsn}' \| base64 -d \| sed 's/@tcp(mysql:/@tcp(127.0.0.1:/')` | speed §3 | Secret の DSN のホスト部を 127.0.0.1 に書換え(port-forward 越しに繋ぐ) | host | 値は画面に出さない(環境変数のみ)。**Git の Secret のキー名前提**([k8s-local.md §9 #1](k8s-local.md)) |
@@ -106,7 +106,7 @@
 | コマンド | 出現 | 裏で走るもの | 場所 | つなぐもの / 副作用 |
 |---|---|---|---|---|
 | `make ios-test \| grep '^ios-'` | ios §1 | `ios-lint`(`ios/scripts/*.sh` 構文)→ `ios-gen-check`(`openapi-gen.sh --check`: 一時ディレクトリに生成し差分検査)→ `ios-test-unit`(`cd ios/PokeCalcKit && run-xcode-tests.sh … -scheme PokeCalcKit-Package`)→ `ios-test-ui`(`-project ios/PokeCalc.xcodeproj -scheme PokeCalc`。モック強制)→ `ios-check-infoplist`(`xcodebuild build` で Info.plist に `PokeCalcAPIBaseURL` が入るか) | host(Xcode・シミュレータ) | k3d・gateway 不要(モック)。`run-xcode-tests.sh` はスキップ・空実行も失敗にする |
-| `make ios-sim-run IOS_SCREEN=root\|calc\|reverse\|team [IOS_APPEARANCE=… IOS_CONTENT_SIZE=…]` | ios §2〜 | `sim-run.sh`: `xcrun simctl boot`/`bootstatus` → `xcodebuild build` → インストール・モック起動 | host(シミュレータ) | 画面を直接開く環境変数 `POKECALC_OPEN_*_AT_LAUNCH`(`RootView.swift`) |
+| `make ios-sim-run IOS_SCREEN=root\|calc\|reverse\|team [IOS_APPEARANCE=… IOS_CONTENT_SIZE=…]` | ios §2〜 | `sim-run.sh`: `xcrun simctl boot`/`bootstatus` → `xcodebuild build` → インストール・モック起動 | host(シミュレータ) | 画面を直接開く環境変数 `POKECALC_OPEN_*_AT_LAUNCH`(`ios/PokeCalc/Features/*Feature.swift`。ADR-0507) |
 | `tailscale serve https / http://localhost:8080` | ios-device §2 | Tailscale の HTTPS 入口を host:8080(k3d serverlb → gateway)へ転送 | host(tailnet) | **端末から gateway を tailnet 経由で公開**(人間の作業)。`tailscale serve off` で解除 |
 | `make ios-check-infoplist` | ios-device §3 | 上記の xcodebuild 検査 | host | `POKECALC_API_BASE_URL` は `https:/$()/<host>`(`//` がコメント扱いになるため。ADR-0500 §5) |
 

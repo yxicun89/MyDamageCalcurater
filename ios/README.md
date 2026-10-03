@@ -28,9 +28,10 @@ flowchart LR
 
 | パス | 役割 |
 |---|---|
-| `PokeCalcKit/Sources/PokeCalcAPI/Generated` | `api/openapi.yaml` の生成物(`pokedex`・`calc` タグだけ。Git に置かない・手で編集しない。ADR-0806) |
+| `PokeCalcKit/Sources/PokeCalcAPI/Generated` | `api/openapi.yaml` の生成物(`pokedex`・`calc` タグだけ。Git に置かない・手で編集しない。ADR-0807) |
 | `PokeCalcKit/Sources/PokeCalcBalanceAPI/Generated` | `services/balance/api/openapi.yaml` の生成物(タイプバランス。schema 名が衝突するので別モジュール。ADR-0415。Git に置かない) |
-| `PokeCalcKit/Sources/*/GenRequired.swift` | 生成物が無いときに `make ios-gen` を案内する手書きファイル(ADR-0806) |
+| `PokeCalcKit/Sources/PokeCalcSpeedAPI/Generated` | `services/speed/api/openapi.yaml` の生成物(素早さ比較。P6-24。Git に置かない) |
+| `PokeCalcKit/Sources/*/GenRequired.swift` | 生成物が無いときに `make ios-gen` を案内する手書きファイル(ADR-0807) |
 | `PokeCalcKit/Sources/PokeCalcCore` | ドメインの型・`PokeCalcService`(API 実装とモック)・ViewModel・表示の整形・設定・端末 ID |
 | `PokeCalcKit/Sources/PokeCalcCore/Resources` | モックの架空データ(JSON。名前はすべて「テスト」で始める) |
 | `PokeCalcKit/Sources/PokeCalcDesign` | デザイントークン(docs/design.md と同じ名前・値) |
@@ -47,12 +48,12 @@ flowchart LR
 cd "$(git rev-parse --show-toplevel)"
 make ios-gen                         # 生成物を作る(Git に置かない。変更が無ければ何もしない。Xcode で開く前に1回)
 make ios-test                        # 生成・生成物の一致・XCTest・XCUITest(シミュレータ)・Info.plist の検査
-make ios-sim-run IOS_SCREEN=calc     # モックで起動してスクリーンショット(root / calc / reverse / team)
+make ios-sim-run IOS_SCREEN=calc     # モックで起動してスクリーンショット(root / calc / reverse / team / speed)
 cd ios/PokeCalcKit && swift test     # ロジックだけを macOS で手早く
 ```
 
 Xcode 27 が要る(`xcode-select` が CommandLineTools のままでも、スクリプトが `DEVELOPER_DIR` を Xcode に向ける)。
-API の生成物は Git に置かない(ADR-0806)。`make ios-*` は前段で `make ios-gen` を流すが、**Xcode で
+API の生成物は Git に置かない(ADR-0807)。`make ios-*` は前段で `make ios-gen` を流すが、**Xcode で
 `PokeCalc.xcodeproj` を直接開いてビルドするときは、先にリポジトリのルートで `make ios-gen` を1回実行する**
 (仕様を変えたときも同じ)。無いと `GenRequired.swift` に「cannot find type 'Client'」が出る。
 生成対象の一覧は `scripts/openapi-targets.sh`。生成器のビルド結果は `tools/openapi-gen/.build`(Git 管理外)に残り、
@@ -61,6 +62,12 @@ API の生成物は Git に置かない(ADR-0806)。`make ios-*` は前段で `m
 
 「このアプリについて」(ホーム右上の i)の「データの扱い」から「この端末のデータを削除」(サーバーの履歴・お気に入り・構築。
 端末内の構築は消さない)。モックの挙動は `POKECALC_MOCK_DEVICE_DATA=partial|fail-once` で切り替える(ADR-0501「P6-7」)。
+素早さ比較画面(ホームの「素早さを比べる」。P6-24。契約は `services/speed/api/openapi.yaml`)のモックは `POKECALC_MOCK_SPEED=table-error|position-error|pokemon-error|all-error`、
+起動時に開くのは `POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH=1`(ADR-0503)。
+
+計算の防御側・逆算の相手のポケモン検索シートは、検索語が空のとき先頭に「よく使う相手」(過去に相手として計算した種族。
+`GET /api/record/frequent-opponents`)を出す。取得に失敗しても何も出さず、検索と計算は塞がない。
+モックの挙動は `POKECALC_MOCK_FREQUENT_OPPONENTS=empty|fail` で切り替える(ADR-0501「P6-23」)。
 
 ### 構築のテキスト書き出し・取り込み(P6-20)
 

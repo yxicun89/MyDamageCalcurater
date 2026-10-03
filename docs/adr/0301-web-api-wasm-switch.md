@@ -150,7 +150,7 @@ Web 側だけで完結する対処(例: e2e 専用の軽量な pokedex フィク
 
 - ルートの `Makefile` の `gen-ts`(Web の持ち物)を実装する: `openapi-typescript`(7.13.0。完全固定)で `web/src/api/openapi.gen.ts` を生成し、Prettier で整形する。
   生成物はコミットする(Go の `openapi.gen.go` と同じ。`make check-publishable-full` が `make gen` の差分で陳腐化を検出する)。
-  (2026-10-03 追記: **ADR-0806 で置き換え**。生成物は Git に置かず、使う前に `make gen` / `make ios-gen` で作る)
+  (2026-10-03 追記: **ADR-0807 で置き換え**。生成物は Git に置かず、使う前に `make gen` / `make ios-gen` で作る)
 - `web/node_modules` が無ければ `gen-ts` は**失敗**する(黙ってスキップしない)。`api/openapi.yaml` を変えるレーン(API)は、一度 `make web-install` が要る。
 - `openapi-typescript` の peer は `typescript ^5` だが、`typescript` は ESLint 用の 6 系の別名(ADR-0300 §1)なので、`overrides` でそれに合わせる。
 

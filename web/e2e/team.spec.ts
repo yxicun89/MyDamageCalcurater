@@ -5,7 +5,7 @@
 // PUT に全置換で送られ、一覧のメンバー数が変わる / SP 合計 67 は保存できない / タブを切り替えても下書きが残る(ADR-0308)。
 
 import { expect, test, type Page, type Route, type Locator } from "@playwright/test";
-import { SPECIES, combobox, openApp } from "./support/calcPage.ts";
+import { MEGA, SPECIES, combobox, openApp } from "./support/calcPage.ts";
 
 interface FakeTeam {
   id: string;
@@ -86,6 +86,11 @@ async function selectMemberSpecies(member: Locator, name: string): Promise<void>
     .getByRole("option", { name, exact: true })
     .click();
   await expect(input).toHaveValue(name);
+  // 入力欄の値は選んだ直後に変わるが、メンバーへの反映は種族の解決(非同期)の後。解決前は「ポケモンを選んでください」が
+  // alert に出るので、これが消えるのを待ってから次の操作に進む(待たないと後続の alert 検証が解決の遅れと競合する)。
+  await expect(member.getByRole("alert").getByText("ポケモンを選んでください", { exact: true })).toHaveCount(
+    0,
+  );
 }
 
 test("メンバーを追加して種族・技・SP を入れて保存すると、PUT に全置換で送られ一覧のメンバー数が変わる", async ({
@@ -168,4 +173,35 @@ test("編集中にタブを切り替えて戻っても、未保存の下書き�
   await expect(restored.getByRole("combobox", { name: "ポケモン", exact: true })).toHaveValue(
     SPECIES.water.nameJa,
   );
+});
+
+// issue #515・ADR-0320 PR-B: 構築でメガ種族を選ぶと持ち物がメガストーンに固定され、保存の PUT にストーンが載る。
+test("メンバーでメガ種族を選ぶと持ち物がメガストーンに固定され、保存に載り、非メガに変えると解除される", async ({
+  page,
+}) => {
+  const backend = await installTeamBackend(page);
+  await openApp(page);
+  await openTeamTab(page);
+  await createTeam(page, "メガ構築");
+  await page.getByRole("button", { name: "「メガ構築」のメンバーを編集", exact: true }).click();
+  const editor = page.getByRole("region", { name: "「メガ構築」のメンバー編集", exact: true });
+  await editor.getByRole("button", { name: "メンバーを追加", exact: true }).click();
+  const member = editor.getByRole("group", { name: "1体目", exact: true });
+  const item = member.getByRole("combobox", { name: "持ち物", exact: true });
+
+  await selectMemberSpecies(member, MEGA.fire.nameJa);
+  await expect(item).toBeDisabled();
+  await expect(item.locator("option:checked")).toHaveText(MEGA.fire.stoneNameJa);
+  await expect(member.getByText(MEGA.lockedReason)).toBeVisible();
+  await expect(item).toHaveAccessibleDescription(MEGA.lockedReason);
+
+  await editor.getByRole("button", { name: "メンバーを保存", exact: true }).click();
+  await expect(editor.getByRole("status")).toContainText("保存しました");
+  const body = backend.putBodies[0] as { members: { itemId: string | null }[] };
+  expect(body.members[0]?.itemId).toBe("examplemegastonefire");
+
+  await selectMemberSpecies(member, SPECIES.fire.nameJa);
+  await expect(item).toBeEnabled();
+  await expect(item).toHaveValue("");
+  await expect(item.getByRole("option", { name: MEGA.fire.stoneNameJa })).toHaveCount(0);
 });

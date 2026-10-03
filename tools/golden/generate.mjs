@@ -21,6 +21,8 @@ const effects = JSON.parse(readFileSync(`${out}/effects.json`));
 const keys = ['hp','atk','def','spa','spd','spe'];
 const stats = (value = 0) => Object.fromEntries(keys.map(k => [k,value]));
 const id = name => name.toLowerCase().replace(/[^a-z0-9]/g,'');
+// テラスタイプ(ADR-0224)。oracle の18タイプ(??? とステラを除く)。ステラは Champions 世代に無い効果なので使わない。
+const teraTypeNames = [...genC.types].filter(t => t.id !== '' && t.id !== 'stellar').map(t => t.name).sort();
 
 // --- Champions 種族集合(内部フォーム除外) ----------------------------------
 // Aegislash-Both は calc が攻守フォームを1つの計算で扱うための擬似フォームで、ゲーム内で選べる姿ではない。
@@ -84,16 +86,27 @@ function individual(gen, name, options = {}) {
     assert(!ability || !legacyAbilities.has(ability), `Champions ベクタが legacy 特性 ${ability} を使おうとした`);
   }
   const evs = gen.num === 0 ? {...sp} : Object.fromEntries(keys.map(k => [k,Math.max(0,8*sp[k]-4)]));
+  // options.tera はテラスのベクタ(tera*。ADR-0224)だけが使う。oracle は teraType を渡すだけで「テラスタル済み」と扱う。
+  // Champions のテラスのベクタだけで使い、gen9(legacy)では使わない(gen9 は防御側の相性もテラスで見るため)。
+  const tera = options.tera || '';
+  if (tera) {
+    assert.equal(gen.num, 0, 'テラスのベクタは Champions 世代だけ(ADR-0224)');
+    assert(teraTypeNames.includes(tera), `未知のテラスタイプ ${tera}`);
+  }
   // Empty ability alone is insufficient: Pokemon.clone() otherwise restores the species default.
   const p = new Pokemon(gen, name, {level:50, ivs:stats(31),
     evs, nature:options.nature || 'Serious', boosts:options.ranks || {}, ability, item,
-    status:options.burn ? 'brn' : '', overrides:{abilities:{0:''}}});
+    status:options.burn ? 'brn' : '', overrides:{abilities:{0:''}}, ...(tera ? {teraType:tera} : {})});
   assert.equal(p.ability || '', ability);
   assert.equal(p.clone().ability || '', ability);
-  return {p, input:{Species:{Key:p.species.id,Types:p.types.map(t => t.toLowerCase()),BaseStats:p.species.baseStats},
+  assert.equal(p.clone().teraType || '', tera);
+  const input={Species:{Key:p.species.id,Types:p.types.map(t => t.toLowerCase()),BaseStats:p.species.baseStats},
     Level:50, Nature:nature(gen, p.nature), SP:sp, Ranks:options.ranks || {}, Status:options.burn ? 'burn':'none',
     Ability:{ID:ability,Effect:effects.abilities[ability] || null},
-    Item:item ? {ID:item,Effect:effects.items[item]} : null}};
+    Item:item ? {ID:item,Effect:effects.items[item]} : null};
+  // テラス無しのベクタは従来と同じバイト列にするため、キー自体を出さない。
+  if (tera) input.TeraType=tera.toLowerCase();
+  return {p, input};
 }
 // Independent ADR-0006 probability: convolve shortfalls from max damage; discard outcomes
 // whose shortfall exceeds n*max-HP. Inputs are exclusively the external damage rolls.
@@ -630,6 +643,115 @@ for(let i=0;i<3000;i++) {
   ]) assert(count(pred)>=min, `doubles-random の層「${label}」が ${count(pred)} 件(下限 ${min})`);
 }
 
+// --- テラスタル(オプションの機能。ADR-0224) ------------------------------------------------------
+// ポケモンチャンピオンズ本編にテラスタルは無いが、指定したときだけ反映する機能として照合する(ユーザー決定 2026-10-03)。
+// oracle(Champions 世代)は Pokemon.teraType を渡すだけで「テラスタル済み」と扱い、次を反映する(ADR-0224 §1 の表):
+//   - 攻撃側のタイプ一致(util.getStabMod): 元タイプ一致 +2048、テラス=技 +2048、てきおうりょくは hasType(技)のとき
+//     テラスが元タイプなら +1024・そうでなければ +2048(hasType はテラス中ならテラスだけを見る)
+//   - 「そのタイプを持つか」(Pokemon.hasType): 接地(ひこう)・サイコフィールドの先制技・すなあらし(いわ)・ゆき(こおり)
+// 防御側のタイプ相性はテラスを見ない(champions.js は defender.types で相性を引く。gen9 の mechanics とは違う oracle の癖)。
+// 既存ファイルには足さない(バイト列を変えないため)。各ケースは対照(テラス無し)と比べて oracle のダメージが
+// 変わる/変わらないをここでも確かめ、oracle の版やデータの変更で前提が黙って崩れないようにする。
+const teraFixed=[];
+function teraCase(label, a, d, moveName, options, expectChange) {
+  const v=vector(genC,`tera/${label}`,a,d,moveName,options);
+  const strip=o=>o?Object.fromEntries(Object.entries(o).filter(([k])=>k!=='tera')):o;
+  const base=vector(genC,`tera/${label}/control`,a,d,moveName,{...options,a:strip(options.a),d:strip(options.d)});
+  assert(v.input.Attacker.TeraType || v.input.Defender.TeraType, `tera/${label}: テラスが無い`);
+  assert.equal(!sameRolls(v,base), expectChange, `tera/${label}: 対照と比べた oracle の変化が想定(${expectChange ? '変わる' : '変わらない'})と違う`);
+  teraFixed.push(v);
+}
+// T1〜T11(ADR-0224 §1 の表と同じ番号)。
+teraCase('t1/stab-tera-is-original','Charizard','Snorlax','Flamethrower',{a:{tera:'Fire'}},true);           // ×1.5 → ×2.0
+teraCase('t1/stab-tera-is-original-dual','Garchomp','Snorlax','Earth Power',{a:{tera:'Ground'}},true);
+teraCase('t2/original-move-other-tera','Charizard','Snorlax','Flamethrower',{a:{tera:'Water'}},false);      // ×1.5 のまま
+teraCase('t2/other-original-move-dual','Garchomp','Snorlax','Earth Power',{a:{tera:'Dragon'}},false);
+teraCase('t3/tera-only','Charizard','Snorlax','Thunderbolt',{a:{tera:'Electric'}},true);                   // ×1.0 → ×1.5
+teraCase('t3/tera-only-physical','Snorlax','Snorlax','Drain Punch',{a:{tera:'Fighting'}},true);
+teraCase('t4/no-match','Charizard','Snorlax','Thunderbolt',{a:{tera:'Water'}},false);
+teraCase('t5/adaptability/tera-is-original','Charizard','Snorlax','Flamethrower',{a:{tera:'Fire',ability:'Adaptability'}},true);     // ×2.0 → ×2.25
+teraCase('t5/adaptability/tera-only','Charizard','Snorlax','Thunderbolt',{a:{tera:'Electric',ability:'Adaptability'}},true);       // ×1.0 → ×2.0
+teraCase('t5/adaptability/original-move-other-tera','Charizard','Snorlax','Flamethrower',{a:{tera:'Water',ability:'Adaptability'}},true); // ×2.0 → ×1.5
+teraCase('t5/adaptability/other-original-move-dual','Garchomp','Snorlax','Earth Power',{a:{tera:'Dragon',ability:'Adaptability'}},true); // ×2.0 → ×1.5
+teraCase('t5/adaptability/no-match','Charizard','Snorlax','Thunderbolt',{a:{tera:'Water',ability:'Adaptability'}},false);
+teraCase('t6/attacker-tera-flying-not-grounded','Pikachu','Snorlax','Thunderbolt',{terrain:'electric',a:{tera:'Flying'}},true);   // 補正が外れる
+teraCase('t6/flying-attacker-tera-grounded','Charizard','Snorlax','Thunderbolt',{terrain:'electric',a:{tera:'Fire'}},true);       // 元ひこうでもテラス中は接地
+teraCase('t6/flying-attacker-tera-flying','Charizard','Snorlax','Thunderbolt',{terrain:'electric',a:{tera:'Flying'}},false);
+teraCase('t6/levitate-attacker-stays-airborne','Pikachu','Snorlax','Thunderbolt',{terrain:'electric',a:{tera:'Normal',ability:'Levitate'}},false);
+teraCase('t6/tera-stab-and-grounded','Charizard','Snorlax','Thunderbolt',{terrain:'electric',a:{tera:'Electric'}},true);
+teraCase('t7/defender-tera-flying-not-grounded','Goodra','Snorlax','Dragon Claw',{terrain:'misty',d:{tera:'Flying'}},true);
+teraCase('t7/flying-defender-tera-grounded','Goodra','Corviknight','Dragon Claw',{terrain:'misty',d:{tera:'Steel'}},true);
+teraCase('t8/psychic-priority-defender-tera-flying','Garchomp','Snorlax','Quick Attack',{terrain:'psychic',d:{tera:'Flying'}},true);   // 当たる
+teraCase('t8/psychic-priority-flying-defender-tera-normal','Garchomp','Corviknight','Quick Attack',{terrain:'psychic',d:{tera:'Normal'}},true); // 当たらない
+teraCase('t9/sand-defender-tera-rock','Charizard','Snorlax','Flamethrower',{weather:'sand',d:{tera:'Rock'}},true);
+teraCase('t9/sand-rock-defender-tera-other','Charizard','Tyranitar','Flamethrower',{weather:'sand',d:{tera:'Fire'}},true);
+teraCase('t9/sand-physical-unchanged','Snorlax','Snorlax','Body Slam',{weather:'sand',d:{tera:'Rock'}},false);
+teraCase('t10/snow-defender-tera-ice','Snorlax','Snorlax','Body Slam',{weather:'snow',d:{tera:'Ice'}},true);
+teraCase('t10/snow-ice-defender-tera-other','Snorlax','Abomasnow','Body Slam',{weather:'snow',d:{tera:'Grass'}},true);
+teraCase('t10/snow-special-unchanged','Charizard','Snorlax','Thunderbolt',{weather:'snow',d:{tera:'Ice'}},false);
+teraCase('t11/defender-tera-ghost-not-immune','Snorlax','Snorlax','Body Slam',{d:{tera:'Ghost'}},false);
+teraCase('t11/defender-tera-fairy-dragon','Garchomp','Garchomp','Dragon Claw',{d:{tera:'Fairy'}},false);
+teraCase('t11/defender-tera-flying-ground','Garchomp','Snorlax','Earth Power',{d:{tera:'Flying'}},false);
+teraCase('t11/defender-tera-grass-fire','Charizard','Snorlax','Flamethrower',{d:{tera:'Grass'}},false);
+teraCase('t11/defender-tera-expert-belt','Charizard','Snorlax','Flamethrower',{a:{item:'Expert Belt'},d:{tera:'Grass'}},false);
+// 組合せ(急所・やけど・持ち物・天候・ランク)の中でもテラスの補正の位置(タイプ一致の段)が合うこと。
+teraCase('combo/critical-life-orb','Charizard','Snorlax','Flamethrower',{critical:true,a:{tera:'Fire',item:'Life Orb'}},true);
+teraCase('combo/sun-adaptability','Charizard','Snorlax','Flamethrower',{weather:'sun',a:{tera:'Fire',ability:'Adaptability'}},true);
+teraCase('combo/burn-ranks-screen','Snorlax','Garchomp','Drain Punch',{screen:'Reflect',a:{tera:'Fighting',burn:true,ranks:{atk:2}}},true);
+teraCase('combo/both-sides','Garchomp','Garchomp','Dragon Claw',{a:{tera:'Dragon'},d:{tera:'Fairy'}},true);
+// 総当たり: 18タイプそれぞれを、攻撃側・防御側・両側に置く(どのタイプでも上の規則から外れないこと)。
+for (const t of teraTypeNames) {
+  const tid=id(t);
+  teraFixed.push(vector(genC,`tera/all/atk/${tid}/charizard-flamethrower`,'Charizard','Snorlax','Flamethrower',{a:{tera:t}}));
+  teraFixed.push(vector(genC,`tera/all/atk/${tid}/charizard-thunderbolt-electric`,'Charizard','Snorlax','Thunderbolt',{terrain:'electric',a:{tera:t}}));
+  teraFixed.push(vector(genC,`tera/all/atk/${tid}/adaptability-garchomp-dragon-claw`,'Garchomp','Snorlax','Dragon Claw',{a:{tera:t,ability:'Adaptability'}}));
+  teraFixed.push(vector(genC,`tera/all/def/${tid}/tyranitar-flamethrower-sand`,'Charizard','Tyranitar','Flamethrower',{weather:'sand',d:{tera:t}}));
+  teraFixed.push(vector(genC,`tera/all/def/${tid}/abomasnow-body-slam-snow`,'Snorlax','Abomasnow','Body Slam',{weather:'snow',d:{tera:t}}));
+  teraFixed.push(vector(genC,`tera/all/def/${tid}/corviknight-dragon-claw-misty`,'Goodra','Corviknight','Dragon Claw',{terrain:'misty',d:{tera:t}}));
+  teraFixed.push(vector(genC,`tera/all/def/${tid}/corviknight-quick-attack-psychic`,'Garchomp','Corviknight','Quick Attack',{terrain:'psychic',d:{tera:t}}));
+  teraFixed.push(vector(genC,`tera/all/both/${tid}/garchomp-earth-power`,'Garchomp','Garchomp','Earth Power',{a:{tera:t},d:{tera:t}}));
+}
+
+// ランダム(別の乱数列。他のファイルの列は変えない)。形式はシングルだけ(ダブルとの組合せは対象外。ユーザー決定 2026-10-03)。
+const teraRandomSeed = 0x54455241; // "TERA"
+let teraState = teraRandomSeed;
+function teraRandom(){teraState^=teraState<<13;teraState^=teraState>>>17;teraState^=teraState<<5;return (teraState>>>0)/4294967296;}
+const teraPick=xs=>xs[Math.floor(teraRandom()*xs.length)];
+const teraRandomCases=[];
+for(let i=0;i<3000;i++) {
+  const terrain=teraPick(['none','electric','grassy','misty','psychic']);
+  const a=teraPick(species),d=teraPick(species);
+  // 4割は元タイプの技(タイプ一致とテラスの重なりを十分に出す)。代表技は18タイプすべてを持つ。
+  const m=teraRandom()<0.4 ? teraPick(moves.filter(x=>a.types.includes(x.type))) : teraPick(moves);
+  // 攻撃側のテラスは「技のタイプ」「元のタイプ」「任意」「無し」から選び、タイプ一致の各分岐が十分に出るようにする。
+  const attackTera=teraPick(['',m.type,a.types[0],a.types[a.types.length-1],teraPick(teraTypeNames),teraPick(teraTypeNames)]);
+  const defendTera=teraPick(['',teraPick(teraTypeNames),teraPick(teraTypeNames)]);
+  const rank=()=>Object.fromEntries(keys.slice(1).map(k=>[k,Math.floor(teraRandom()*13)-6]));
+  teraRandomCases.push(vector(genC,`tera-random/${String(i).padStart(5,'0')}`,a.name,d.name,m.name,{
+    terrain,weather:teraPick(Object.keys(weatherNames)),
+    critical:teraRandom()<0.1,screen:teraPick(['','Reflect','LightScreen','AuroraVeil']),
+    a:{sp:randomSP(teraRandom),nature:teraPick(['Serious','Adamant','Modest','Bold','Calm']),item:teraPick(['','Life Orb','Expert Belt','Charcoal','Muscle Band','Wise Glasses']),ability:teraPick(['','Adaptability','Adaptability','Water Bubble','Levitate']),burn:teraRandom()<0.2,ranks:rank(),tera:attackTera},
+    d:{sp:randomSP(teraRandom),nature:teraPick(['Serious','Adamant','Modest','Bold','Calm']),item:teraPick(['','Occa Berry','Chilan Berry']),ability:teraPick(['','Thick Fat','Filter','Solid Rock','Water Bubble','Levitate']),ranks:rank(),tera:defendTera}}));
+}
+{
+  // 層の網羅(弱い生成で黙って偏らないように)。
+  const count=pred=>teraRandomCases.filter(pred).length;
+  const at=v=>v.input.Attacker.TeraType, dt=v=>v.input.Defender.TeraType;
+  const orig=(v,t)=>v.input.Attacker.Species.Types.includes(t);
+  const adapt=v=>v.input.Attacker.Ability.ID==='Adaptability';
+  for (const [label,pred,min] of [
+    ['攻撃側テラス=技=元タイプ', v=>at(v)&&at(v)===v.input.Move.Type&&orig(v,at(v)),200],
+    ['攻撃側テラス=技(元タイプでない)', v=>at(v)&&at(v)===v.input.Move.Type&&!orig(v,at(v)),200],
+    ['攻撃側テラス≠技・技=元タイプ', v=>at(v)&&at(v)!==v.input.Move.Type&&orig(v,v.input.Move.Type),200],
+    ['てきおうりょく × 攻撃側テラス', v=>at(v)&&adapt(v),300],
+    ['攻撃側テラス × フィールド', v=>at(v)&&v.input.Field.Terrain!=='none',300],
+    ['防御側テラス × すなあらし/ゆき', v=>dt(v)&&['sand','snow'].includes(v.input.Field.Weather),200],
+    ['防御側テラス × ミスト/サイコ', v=>dt(v)&&['misty','psychic'].includes(v.input.Field.Terrain),200],
+    ['両側テラス', v=>at(v)&&dt(v),500],
+    ['テラス無し(対照)', v=>!at(v)&&!dt(v),100],
+  ]) assert(count(pred)>=min, `tera-random の層「${label}」が ${count(pred)} 件(下限 ${min})`);
+}
+
 // ADR-0009 §1/§6: engine の DefenderPresetCatalog と同じ8件。名前は engine の PresetKey と同一文字列。
 const defensePresets=[
   ['none',{}],
@@ -665,6 +787,7 @@ function save(name,data,compressed=false){const raw=compressed?data.map(v=>JSON.
 save('fixed.json',championsFixed);save('random.jsonl.gz',randomCases,true);save('attack-species.jsonl.gz',attacks,true);save('defense-species.jsonl.gz',defenses,true);save('stats-species.jsonl.gz',statCases,true);
 save('legacy-effects.jsonl.gz',legacyEffectsCases,true);
 save('doubles.json',doubleFixed);save('doubles-random.jsonl.gz',doubleRandomCases,true);
+save('tera.json',teraFixed);save('tera-random.jsonl.gz',teraRandomCases,true);
 
 // ADR-0013 §P1-13.5: oracle のタイプ相性表を engine に渡す入力として出力する。表の正しさは oracle の責務。
 // 倍率は oracle の値(0/0.5/1/2)を2倍した整数コード(0=無効/1=いまひとつ/2=等倍/4=抜群)。
@@ -700,7 +823,7 @@ assert.equal(Object.keys(typeChart).length*engineTypes.length,324);
 }
 
 // --- metadata.json(schemaVersion 2。ADR-0002 §決定4 / P2-1b) -----------------
-const championsFiles=['fixed.json','random.jsonl.gz','attack-species.jsonl.gz','defense-species.jsonl.gz','stats-species.jsonl.gz','typechart.json','doubles.json','doubles-random.jsonl.gz'];
+const championsFiles=['fixed.json','random.jsonl.gz','attack-species.jsonl.gz','defense-species.jsonl.gz','stats-species.jsonl.gz','typechart.json','doubles.json','doubles-random.jsonl.gz','tera.json','tera-random.jsonl.gz'];
 const legacyFiles=['legacy-effects.jsonl.gz'];
 const metadata={
   schemaVersion:2,
@@ -722,7 +845,7 @@ const metadata={
     {scope:'moves',reason:'Only the listed fixed-power single-hit moves; excludes variable/fixed damage, multi-hit, forced criticals, alternate attack/defense stats, screen removal, terrain-specific move mechanics, tera/Z/Max moves'},
     {scope:'abilities/items',reason:'Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2). Every non-legacy effects.json entry with a type-dependent effect has an apply/control pair (effects/<id>/...; issue #270 / ADR-0120). Champions items/abilities that change damage but are not representable by the effect schema are listed with reasons in tools/golden/unsupported-effects.json and never appear in vectors'},
     {scope:'terrain',reason:'Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; the Psychic Terrain priority block is covered by psychic-priority/* (ADR-0123); terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Terrain Pulse etc.) are outside the move list and carry an unsupported mark in the engine (ADR-0123)'},
-    {scope:'battle',reason:'Doubles are covered only by doubles.json and doubles-random.jsonl.gz (ADR-0222): screens 2732/4096 and spread 3072/4096 for allAdjacent/allAdjacentFoes moves. No tera (absent from Pokemon Champions; ADR-0222), ally effects (Helping Hand, Friend Guard), Dynamax, form transformations or unsupported status effects'},
+    {scope:'battle',reason:'Doubles are covered only by doubles.json and doubles-random.jsonl.gz (ADR-0222): screens 2732/4096 and spread 3072/4096 for allAdjacent/allAdjacentFoes moves. Tera is absent from Pokemon Champions and appears only in tera.json and tera-random.jsonl.gz as an optional feature (ADR-0224): singles only; attacker STAB and has-type checks (grounding, Psychic Terrain priority, Sand/Snow defense) use the tera type, while defender type effectiveness ignores it (Champions generation quirk); no Stellar, Tera Blast or 60 BP floor (absent from the Champions generation). Doubles have no tera; ally effects (Helping Hand, Friend Guard), Dynamax, form transformations or unsupported status effects'},
     {scope:'KO',reason:'Smogon residual/consumable multi-turn model differs from ADR-0006; direct smogonKO cross-check only residual/consumable-free fixed cases with 1-4 hits'},
   ],
   oracles:[
@@ -730,6 +853,7 @@ const metadata={
       id:'champions', source:'@smogon/calc', version, generation:'champions', generationNum:0,
       spInput:'direct', files:championsFiles, koCrossChecks:championsKoCrossChecks,
       doublesRandomSeed:doubleRandomSeed,
+      teraRandomSeed,
     },
     {
       id:'gen9-legacy-effects', source:'@smogon/calc', version, generation:'gen9', generationNum:9,

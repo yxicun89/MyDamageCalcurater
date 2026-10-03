@@ -23,7 +23,7 @@ make web-dev
 ```
 
 API 契約・SQL から作る生成物(Go・TypeScript・iOS)は Git に置きません。`make` の各ターゲットと Web の
-`npm run dev`・`build`・`test` 等が先に生成します(ADR-0806)。生成器の初回ビルドは数分かかり、以降は
+`npm run dev`・`build`・`test` 等が先に生成します(ADR-0807)。生成器の初回ビルドは数分かかり、以降は
 Go・SwiftPM のビルドキャッシュが効きます。
 
 表示された URL をブラウザで開きます。k3d(`make up` → `http://localhost:8080`)・iOS・DB を使う手順は
@@ -57,7 +57,7 @@ main 上なら既存の未コミット変更を保持して `git switch -c feat/
 Claude Code は `.claude/skills/` の `/phase <タスクID>`、`/improve`、`/verify` を使用できます。
 Codex は同じタスク ID を指定して [共通ワークフロー](docs/development-workflow.md) に従います。
 役割定義は `.codex/agents/`。単純な作業はメインだけ、重要な計算変更は独立レビューを挟みます。
-`KICKOFF.md` は当初の M1 開始指示です。既存リポジトリを再初期化する手順として使わないでください。
+`docs/history/KICKOFF.md` は当初の M1 開始指示(履歴)です。既存リポジトリを再初期化する手順として使わないでください。
 
 ## ツールと検証
 
@@ -81,7 +81,7 @@ make build
 モジュールごとに調べる場合は次を使います。
 
 ```sh
-make gen                                          # 生成物は Git に置かない。go を直接使う前に1回(ADR-0806)
+make gen                                          # 生成物は Git に置かない。go を直接使う前に1回(ADR-0807)
 (cd engine && go vet ./... && go build ./...)
 (cd services && go vet ./... && go build ./...)   # balance・speed・judge は別モジュール。make lint / make build が検査する
 (cd tools && go vet ./... && go build ./...)

@@ -23,14 +23,14 @@ fi
 
 # SP0 (ADR-0600 §4/§5): the local overlay mounts testdata/pokemon.example.json (fictional IDs
 # from 9001-000) and sets SPEED_POKEMON_PATH, so the pokemon list must answer 200 with the
-# 8 example pokemon. Right after a rollout the Ingress can briefly route to a terminating Pod
+# 8 example pokemon. Right after a rollout the gateway can briefly route to a terminating Pod
 # (502/503), so retry only those.
 attempt=0
 while :; do
   pokemon_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
     "$base_url/api/speed/v1/pokemon" \
-    -H 'X-Device-Id: 11111111-1111-1111-1111-111111111111' \
-    -H 'X-Session-Id: 22222222-2222-2222-2222-222222222222' || printf '000')
+    -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+    -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' || printf '000')
   case "$pokemon_status" in
     000|502|503) ;;
     *) break ;;
@@ -71,8 +71,8 @@ fi
 # speed 81, so their max-scarf rows (146 x 1.5 = 219) form one tie tier, in pokemonId order.
 table_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   "$base_url/api/speed/v1/table?presets=max-scarf" \
-  -H 'X-Device-Id: 11111111-1111-1111-1111-111111111111' \
-  -H 'X-Session-Id: 22222222-2222-2222-2222-222222222222' || printf '000')
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' || printf '000')
 if [ "$table_status" != "200" ]; then
   echo "speed table failed: HTTP $table_status" >&2
   cat "$body_file" >&2
@@ -101,8 +101,8 @@ fi
 
 invalid_presets_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   "$base_url/api/speed/v1/table?presets=unknown" \
-  -H 'X-Device-Id: 11111111-1111-1111-1111-111111111111' \
-  -H 'X-Session-Id: 22222222-2222-2222-2222-222222222222')
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222')
 if [ "$invalid_presets_status" != "400" ] || ! grep -qF '"code":"invalid_request"' "$body_file"; then
   echo "speed table with unknown presets: HTTP $invalid_presets_status, want 400 invalid_request" >&2
   cat "$body_file" >&2
@@ -114,8 +114,8 @@ fi
 # the 48 rows (8 pokemon x 6 presets).
 position_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   "$base_url/api/speed/v1/position" \
-  -H 'X-Device-Id: 11111111-1111-1111-1111-111111111111' \
-  -H 'X-Session-Id: 22222222-2222-2222-2222-222222222222' \
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' \
   -H 'Content-Type: application/json' \
   -d '{"mode":"preset","pokemonId":"9002-000","preset":"max","scarf":false}' || printf '000')
 if [ "$position_status" != "200" ]; then
@@ -133,8 +133,8 @@ done
 
 invalid_position_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   "$base_url/api/speed/v1/position" \
-  -H 'X-Device-Id: 11111111-1111-1111-1111-111111111111' \
-  -H 'X-Session-Id: 22222222-2222-2222-2222-222222222222' \
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' \
   -H 'Content-Type: application/json' \
   -d '{"mode":"preset","pokemonId":"9002-000","preset":"max","scarf":false,"sp":32}')
 if [ "$invalid_position_status" != "400" ] || ! grep -qF '"code":"invalid_request"' "$body_file"; then
@@ -145,8 +145,8 @@ fi
 
 unknown_position_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
   "$base_url/api/speed/v1/position" \
-  -H 'X-Device-Id: 11111111-1111-1111-1111-111111111111' \
-  -H 'X-Session-Id: 22222222-2222-2222-2222-222222222222' \
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' \
   -H 'Content-Type: application/json' \
   -d '{"mode":"preset","pokemonId":"9999-000","preset":"max","scarf":false}')
 if [ "$unknown_position_status" != "422" ] || ! grep -qF '"code":"unknown_pokemon"' "$body_file"; then

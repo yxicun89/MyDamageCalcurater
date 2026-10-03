@@ -10,7 +10,7 @@
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
-# API 契約・SQL の生成物は Git に置かない。無ければ make gen を案内して止まる(make 経由なら先に生成済み。ADR-0806)
+# API 契約・SQL の生成物は Git に置かない。無ければ make gen を案内して止まる(make 経由なら先に生成済み。ADR-0807)
 ./scripts/ensure-gen.sh check
 
 CLUSTER=${CLUSTER:-pokecalc}

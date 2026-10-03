@@ -8,7 +8,7 @@ IOS_SCREEN ?= root
 IOS_APPEARANCE ?= light
 IOS_CONTENT_SIZE ?= large
 
-# Swift の生成物は Git に置かない(ADR-0806)。ios-gen は出力が無いか入力が新しい対象だけ生成するので、
+# Swift の生成物は Git に置かない(ADR-0807)。ios-gen は出力が無いか入力が新しい対象だけ生成するので、
 # 下の ios-* はすべて前段に ios-gen を持つ。Xcode で直接開く前も make ios-gen を1回流す。
 .PHONY: ios-gen
 ios-gen: ## Swift の API クライアントを各 openapi.yaml から生成(Git 管理外。変更が無ければ何もしない。強制は GEN_FORCE=1)
@@ -48,5 +48,5 @@ ios-swift-test: ios-gen ## PokeCalcKit の XCTest を macOS で実行(Xcode 無�
 	@cd ios/PokeCalcKit && swift test
 
 .PHONY: ios-sim-run
-ios-sim-run: ios-gen ## アプリをシミュレータでモック起動(IOS_SCREEN=root|calc|reverse|team|adjust IOS_APPEARANCE IOS_CONTENT_SIZE)
+ios-sim-run: ios-gen ## アプリをシミュレータでモック起動(IOS_SCREEN=root|calc|reverse|team|adjust|speed IOS_APPEARANCE IOS_CONTENT_SIZE)
 	@./ios/scripts/sim-run.sh "$(IOS_SIMULATOR)" "$(IOS_SCREEN)" "$(IOS_APPEARANCE)" "$(IOS_CONTENT_SIZE)"

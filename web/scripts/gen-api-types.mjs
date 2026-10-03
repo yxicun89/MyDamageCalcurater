@@ -1,4 +1,4 @@
-// API 契約(各 openapi.yaml)から Web の型(*.gen.ts)を生成する(ADR-0806)。
+// API 契約(各 openapi.yaml)から Web の型(*.gen.ts)を生成する(ADR-0807)。
 //
 // 生成物は Git に置かない。package.json の pre* フック(dev・build・typecheck・lint・test・e2e)と
 // ルートの `make gen-ts` がこのスクリプトを呼ぶ。出力が無いか、仕様・package-lock.json(生成器の版)が

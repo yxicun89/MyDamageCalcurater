@@ -5,13 +5,13 @@
 
 ## 原則
 
-1. **担当は AI ではなく「レーン」に持たせる**: 作業は2本のレーンに分かれ、どの AI(Claude Code / Codex)がどのレーンを進めてもよい。
+1. **担当は AI ではなく「レーン」に持たせる**: 作業はレーン(下の表)に分かれ、どの AI(Claude Code / Codex)がどのレーンを進めてもよい。
    引き継ぎ資料は作らない。レーンのブランチと `CURRENT_STATE.md` のレーン欄の `Next` がそのまま引き継ぎになる。
 2. **1レーン = 同時に1セッション**: 同じレーンを2つのセッションで同時に進めない。着手時に `CURRENT_STATE.md` のレーン欄の `Active` を自分にして push する。
 3. **止まる前に安全な場所へ**: 未コミットの作業を残さない。区切りごとに commit・push し、`Next` を具体的に書く。
-4. **main は常に緑。main へは PR でしか入れない**: 直接 push・直接 merge をしない(Argo CD の GitOps が main を見ているため。ユーザー決定)。
+4. **main は常に緑。main へは PR でしか入れない**: 直接 push・直接 merge をしない(main を常に緑に保つため。CI・レビューの記録を残す。GitOps は balance だけが main を見ており、damage calc 系は `make deploy-latest`。ユーザー決定 2026-09-25)。
    PR は、テスト・lint・公開前検査が通った作業だけ。WIP は PR にしない。
-5. **相談は「既定値付きの提案」**: 判断が要るときは既定案を添えて `DECISIONS.md` に書き、既定案で先へ進む。人間の確認が本当に必要なものだけ `docs/plan.md` のブロッカーに書く。
+5. **相談は「既定値付きの提案」**: 判断が要るときは既定案を添えて `DECISIONS.md` に書き、既定案で先へ進む。人間の確認が本当に必要なものだけ `docs/plan.md` のブロッカーに書く。**判断待ちは `docs/ai-shared/PENDING.md` に 1 行足す**(回答済みは消す)。
 
 ## 共有状態ファイルの分割(2026-10-03。競合の根本対策)
 
@@ -29,8 +29,8 @@
 
 | レーン | 作業ディレクトリ | ブランチ | 範囲 |
 |---|---|---|---|
-| **データ**(damage calc: engine・マスタ) | `~/MyDamageCalcurater` | `feat/calc-<phase名>`(既存の `feat/claude-p1-engine` はマージまでそのまま使う) | `engine/`、`tools/golden/`・`testdata/golden/`、Phase 2(`services/pokedex/`・`tools/importer/`・`services/internal/master/`・MySQL の k8s 定義)、および他のレーンに属さない M1〜M4 のタスク |
-| **API**(damage calc: サービス) | `~/MyDamageCalcurater-api` | `feat/api-<phase名>` | Phase 3(`services/calc/`・`services/gateway/`・契約テスト・k3d のスモーク)。**`api/openapi.yaml` を変更できるのはこのレーンだけ**(生成物 `services/internal/api/openapi.gen.go` は Git に置かない。ADR-0806) |
+| **データ**(damage calc: engine・マスタ) | `~/MyDamageCalcurater` | `feat/calc-<phase名>`(既存の `feat/claude-p1-engine` はマージまでそのまま使う) | `engine/`、`tools/golden/`・`testdata/golden/`、Phase 2(`services/pokedex/`・`tools/importer/`・`services/internal/master/`・MySQL の k8s 定義)、および他のレーンに属さない M1〜M4 のタスク。**M4(監視・SLO・GitOps・バックアップ)と、Tailscale 等の到達経路・運用(deploy・scripts・runbook・up.sh・k8s)の持ち主はこのレーン**(ユーザー決定 2026-10-03・issue #285。「運用レーン」は作らない) |
+| **API**(damage calc: サービス) | `~/MyDamageCalcurater-api` | `feat/api-<phase名>` | Phase 3(`services/calc/`・`services/gateway/`・契約テスト・k3d のスモーク)と **M2(`services/record/`・`services/team/`・TiDB・NATS。画面は Web レーン)**(ユーザー決定 2026-10-03)。**`api/openapi.yaml` を変更できるのはこのレーンだけ**(生成物 `services/internal/api/openapi.gen.go` は Git に置かない。ADR-0807) |
 | **Web**(damage calc: 画面) | `~/MyDamageCalcurater-web` | `feat/web-<phase名>` | Phase 4(`web/`・Playwright)。`make wasm` の成果物を使う |
 | **タイプバランス**(type balance) | `~/MyDamageCalcurater-tb`(同じリポジトリの git worktree) | `feat/tb-<stage名>`(既存の `feat/codex-tb0-foundation` はマージまでそのまま使う) | `services/balance/` とその Kustomize / Argo CD 定義。設計の正は `docs/type-balance-design.md` |
 | **iOS**(damage calc: iOS アプリ) | `~/MyDamageCalcurater-ios` | `feat/ios-<phase名>` | M3 の Phase 6(`ios/`)。API クライアントは `api/openapi.yaml` から swift-openapi-generator で生成し、手で書かない。署名・実機インストールは人間(CLAUDE.md) |
@@ -40,7 +40,7 @@
 - ディレクトリはレーンの数だけ(いまは7つ)にする。レーンの作業ディレクトリは、どの AI が使ってもよい(同時に2つのセッションで開かない)。
 - レーンの worktree が無いときは作る: `git -C ~/MyDamageCalcurater worktree add ~/MyDamageCalcurater-<レーン> <ブランチ>`
 
-### レーン間の依存と共有ファイル(4レーン。2026-09-21 ユーザー決定)
+### レーン間の依存と共有ファイル(2026-09-21 ユーザー決定)
 
 - **他のレーンの範囲のファイルは変更しない**。必要な変更は `DECISIONS.md` に既定案付きの提案として書き、そのレーンに任せる。待たずに進めるため、暫定の境界(インターフェース・架空データ・fake)を自分のレーン内に置いてよい。
   - API レーン: マスタの読み込みは `services/internal/master`(データレーン)の写像が main に入るまで、自分の中の差し替え可能なインターフェースと架空データで作る。engine は変更せず、公開 API を呼ぶだけ。
@@ -152,7 +152,7 @@ scripts/pr-merge.sh <番号>         # 推奨: 上の3つに加えてローカ�
 - マージしたら `DECISIONS.md` に「何を統合したか(PR 番号)」を1行追記し、レーン欄を更新する(次の PR に含める)。
 - Phase/ステージが完了してマージしたブランチは削除する。途中の区切りで PR を出したブランチは、そのまま続けて使ってよい。
 
-## 生成物を追跡から外したあとの取り込み(2026-10-03 ユーザー決定。ADR-0806)
+## 生成物を追跡から外したあとの取り込み(2026-10-03 ユーザー決定。ADR-0807)
 
 API 契約・SQL から作る生成物(Go・TypeScript・iOS。一覧は `scripts/ensure-gen.sh list`)は Git に置かない。
 
@@ -183,8 +183,10 @@ git commit
 |---|---|
 | `docs/ai-shared/state/<レーン>.md` | 自分が進めているレーンのファイルだけ編集する(`CURRENT_STATE.md` は索引) |
 | `docs/ai-shared/DECISIONS.md` | 追記のみ。既存エントリは編集しない |
+| Web の画面・タブ(`web/src/App.tsx`・`app/screens.tsx`・`app/routes.ts`・`i18n/ja.ts`) | 画面の追加では編集しない。自分のディレクトリに登録ファイル `<id>.screen.tsx` を置き、文言は `web/src/i18n/<レーン>.ts` に足す(ADR-0323) |
 | `go.work` | 自分のレーンのモジュールの `use` 行を追記してよい(タイプバランスは `./services/balance`) |
 | ルートの `Makefile` | 自分のレーンのサービスの `include <path>/Makefile` の1行を追記してよい(タイプバランスは `include services/balance/Makefile`。ターゲット名は `balance-` 接頭辞) |
+| `ios/PokeCalc/Features/FeatureRegistry.swift` | iOS に画面を足すレーンは配列の末尾に自分の `AppFeature` の1行を足すだけ。`RootView.swift`・`AppEnvironment.swift` は編集しない(ADR-0507) |
 | `AGENTS.md` / `CLAUDE.md` / 本ファイル | 運用ルールの変更は、ユーザーの決定があったときだけ。変更したら `DECISIONS.md` に記録する |
 | `docs/adr/` | **新しい ADR の番号はレーンごとの帯から取る**(2026-09-22。並列で「main の最新の次」を取ると衝突するため): データ `0100〜` / API `0200〜` / Web `0300〜` / タイプバランス `0400〜` / iOS `0500〜` / 素早さ `0600〜` / 判定 `0700〜`。帯の中で自分のレーンの最新の次を使う。`0001〜0019` の既存の番号はそのまま(衝突しているものは、後から統合する側が自分の帯へ振り直す) |
 

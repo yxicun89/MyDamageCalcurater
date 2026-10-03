@@ -6,12 +6,15 @@
 
 ## マイルストーン
 
+**優先順(ユーザー決定 2026-10-03。ADR-0137)**: 新しい機能を増やさず、**M2 の必須**(計算結果の自動保存・よく使うポケモン・Web の構築ビルダー・Showdown 形式のインポート/エクスポート)を先に終える。
+タイプバランス(TB)・素早さ(SP)・判定(JD)・調整(AJ)は要件に追加した実装済みの機能で、必須ではない(requirements.md §2)。M2 は API レーン、M4 と到達経路・運用はデータレーンが持つ(COORDINATION.md)。
+
 | ID | ゴール | 人間の確認方法 |
 |---|---|---|
 | **M1** | **ブラウザで計算できる**(Mac上のk3d) | `make up` → http://localhost:8080 で計算・一括表示・逆算を触る |
-| M2 | 計算の自動保存・よく使う・構築 | 計算後に履歴と「よく計算する相手」が出る |
+| **M2(次に終える。必須)** | 計算の自動保存・よく使う・構築(担当: API レーン + Web) | 計算後に履歴と「よく計算する相手」が出る |
 | M3 | iPhone で使える | Xcode から実機に入れて Tailscale 経由で計算 |
-| M4 | 運用(監視・SLO・GitOps) | Grafana でSLOダッシュボードを見る |
+| M4 | 運用(監視・SLO・GitOps。担当: データレーン) | Grafana でSLOダッシュボードを見る |
 | +α | クラウド移行 / ダブル / 推薦ML | |
 
 **キックオフでは M1 完了まで自動で進める。** M2 以降は人間が `/phase M2` などで開始する。
@@ -103,7 +106,7 @@
 - [x] P4-18
 - [x] P4-21 Codex コードレビューの次点 issue
 - [x] P4-19 issue #110
-- [ ] P4-20 issue #148(クラウド公開前のアクセス境界。ADR-0210。API レーン分は PR #157 で完了): Web 側のコード変更は不要(`apiBaseUrl()` の既定は同一オリジン、CORS は gateway 側)。残りは、運用側が到達経路(Tailscale Operator か subnet router + tailscale serve)を選んだあと、MagicDNS 名を `VITE_API_BASE_URL` にデプロイ時設定する運用作業(issue #285)
+- [ ] P4-20 【担当: データレーン(到達経路の選定・運用。ユーザー決定 2026-10-03・issue #285)】 issue #148(クラウド公開前のアクセス境界。ADR-0210。API レーン分は PR #157 で完了): Web 側のコード変更は不要(`apiBaseUrl()` の既定は同一オリジン、CORS は gateway 側)。残りは、運用側が到達経路(Tailscale Operator か subnet router + tailscale serve)を選んだあと、MagicDNS 名を `VITE_API_BASE_URL` にデプロイ時設定する運用作業(issue #285)
 - [x] P4-22 issue #72
 - [x] `make e2e` の `web-e2e-online` 修復・PR1
 - [x] `make e2e` の `web-e2e-online` 修復・PR2
@@ -116,6 +119,7 @@
 - [x] issue #305
 - [x] issue #248
 - [x] issue #218
+- [x] 画面レジストリ化(ユーザー決定 2026-10-03。ADR-0323): 画面・タブを足すとき `App.tsx`・`app/screens.tsx`・`app/routes.ts`・`i18n/ja.ts` を編集しない構造にした(登録ファイル `*.screen.tsx`・クライアントは `createClient`・文言は `i18n/<レーン>.ts`)。既存の挙動・テストの期待値は不変
 - [x] issue #271 / issue #270
 - [ ] 判定画面(JD5 `JudgeScreen`)の「未対応」の印への追従(issue #271 / #270 の判定レーン分。**上の
   Web レーンの PR の対象外**)。judge の契約は計算・逆算と別の形(`attackerKoUnsupported` /
@@ -129,13 +133,13 @@
 端末単位の全削除はサービスごとに1本(`DELETE /api/record/device-data`・`DELETE /api/team/device-data`。冪等・`partial` の繰り返し)/
 削除の墓石(`devices.purged_at`)で JetStream の遅延イベントの復活を防ぐ。受け入れ条件は ADR-0209 の AC-D / AC-P / AC-R / AC-L。
 
-- [ ] P5-1 TiDB(ADR-0211。範囲は `devices`・purge journal の2表とプロビジョニングまで): スキーマ/migrate CLI(PR #205)と TidbCluster・TidbInitializer のマニフェストは実装済み。**残り**: 共有 k3d への実適用(AC-T3・AC-T8: TidbCluster・TidbInitializer が Ready/Completed になること)と、`tnir/mysqlclient`(amd64 専用)の Apple Silicon での起動可否の確認。purge journal の DB 外の保存先は P7-4 が決めるまで未充足(ADR-0209 追記・ADR-0211 §6)
+- [ ] P5-1 【担当: API レーン。M2 の必須の起点】 TiDB(ADR-0211。範囲は `devices`・purge journal の2表とプロビジョニングまで): スキーマ/migrate CLI(PR #205)と TidbCluster・TidbInitializer のマニフェストは実装済み。**残り**: 共有 k3d への実適用(AC-T3・AC-T8: TidbCluster・TidbInitializer が Ready/Completed になること)と、`tnir/mysqlclient`(amd64 専用)の Apple Silicon での起動可否の確認。purge journal の DB 外の保存先は P7-4 が決めるまで未充足(ADR-0209 追記・ADR-0211 §6)
 - [x] P5-2 NATS JetStream と calc-svc からのイベント発行
 - [x] P5-3 record-svc
 - [x] P5-3b record-svc の残作業(実装: ADR-0220。base/record・gateway 配線・`record expire` と CronJob・NetworkPolicy・/metrics)(P5-3 の critic レビューより。2026-09-25): (1) `deploy/k8s/base/record` に Deployment・Service を追加し `GATEWAY_RECORD_URL` を配線、k3d で `/api/record/*` が届く(`scripts/up.sh` のイメージビルド対象に `record` の `server` を追加)。(2) ADR-0209 §4 の失効ジョブ(日次 CronJob。生イベント90日・お気に入り540日・devices 行30日・purge journal 90日。冪等・1回の上限あり)。team 側の同等ジョブも合わせて検討
 - [x] P5-4 team-svc
 - [x] P5-4b team-svc の残作業(実装: ADR-0220。P5-3b と同じ形)(P5-3b と対): (1) `deploy/k8s/base/team` に Deployment・Service を追加し `GATEWAY_TEAM_URL` を配線、k3d で `/api/team/*` が届く(`scripts/up.sh` に `team` を追加)。(2) ADR-0209 §4 の失効ジョブ(構築540日・devices 行30日・purge journal 90日を `TEAM_*` 環境変数で判定。冪等・1回の上限あり)。P5-3b と同じ形なので一緒に実装してよい
-- [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー(Showdown 形式のインポート/エクスポートを含む。requirements.md §2・ADR-0213 §4。ADR-0209 §8 の文言と「この端末のデータを削除」の UI を含む)。PR 単位に分割(Web レーン)。Showdown 形式の変換部は判定レーンが `web/src/team/showdownFormat.ts` で担当
+- [ ] P5-5 【担当: Web レーン。M2 の必須】 Web: 履歴・よく計算する相手・構築ビルダー(Showdown 形式のインポート/エクスポートを含む。requirements.md §2・ADR-0213 §4。ADR-0209 §8 の文言と「この端末のデータを削除」の UI を含む)。PR 単位に分割(Web レーン)。Showdown 形式の変換部は判定レーンが `web/src/team/showdownFormat.ts` で担当
   - [x] **P5-5a 構築ビルダーの骨格(PR-A1。2026-09-26)**: 構築の一覧・新規作成(名前だけ)・名前変更・削除。ADR-0309。詳細は plan-archive.md。
   - [x] **P5-5b メンバー編集(PR-A2)**: 6体の枠と個体(種族検索・技・持ち物・特性・性格・SP のグリッド・テラスタイプ)。
     マスタ(種族・技・持ち物・特性の名前解決)を使うのはここから。実装: `web/src/team/` の `TeamMemberEditor`・`TeamMemberFields`・
@@ -176,6 +180,14 @@
 - [x] P6-18 issue #328
 - [x] P6-19 issue #272 の iOS 側
 
+- [x] P6-24 素早さ比較画面(iOS。ユーザー決定 2026-10-03〈DECISIONS.md〉。Web の `SpeedScreen` が参照実装、契約は `services/speed/api/openapi.yaml`〈gateway `/api/speed/*`〉。生成設定への取り込み方を spec で決める)
+  - 完了(2026-10-03): 契約ごとに別ターゲットで生成(`PokeCalcSpeedAPI`。`openapi-gen.sh` を契約のループに拡張。P6-25・26 も同形で追加できる。ADR-0503)。`SpeedService` は `PokeCalcService` と別プロトコル。Web と同じ入力(preset・custom・raw・絞り込み・相手側追い風・トリックルーム)。`swift test` 689件・`make ios-test` 全件成功(XCUITest 69件)。critic PASS
+
+- [x] P6-23 よく使う相手の候補(requirements.md §2「計算履歴から頻度×時間減衰で上位を表示」。`GET /api/record/frequent-opponents` を種族ピッカーの空クエリ時に「よく使う」として出す。頻度は calc-svc → NATS → record-svc が自動で貯める。取得失敗・空・未解決は黙って省き検索と計算を塞がない。受け入れ条件・判断は ADR-0501「P6-23」)
+  - 完了(2026-10-02): 計算の防御側・逆算の相手の種族ピッカーの空クエリ時に「よく使う相手」を先頭に表示(limit 10・名前は `species(key:)` で同時4件まで解決・失敗/空/未解決は黙って省く)。`PokeCalcService` とは別プロトコル。`swift test` 610件・`make ios-test` 全件成功(XCUITest 60件。検索欄のクリアは削除キーで操作)。critic PASS
+- [-] P6-27 構築メンバーの並べ替え(**不要と判断**。番号は他レーンの P6-22 と重ならないよう付け替え。requirements.md・design.md・Web に要件が無い。team API は配列順を保存するので、要求が出たら ViewModel の `move` と `onMove` で足りる〈S〉)
+- [x] P6-28 画面レジストリ化(ユーザー決定 2026-10-03。画面を足すたびに `RootView`・`AppEnvironment` を全レーンが編集して衝突する問題の構造的な解決。`AppFeature`・`FeatureRegistry`・型で引く `FeatureServices`、`.ready(core:features:)`。既存の挙動は不変。共有ファイルに残るのは `FeatureRegistry.swift` の1行。移行手順は ADR-0507)
+
 - [x] P6-20 構築の Showdown 形式のインポート/エクスポート(requirements.md §2 の必須。ADR-0213 §4: クライアント側の担当。
   2026-09-21 の「後回し」は 2026-10-02 のユーザー指示「iOS レーンの未実装機能をすべて実施」で解除)。構築編集画面から
   1体または6体を Showdown 形式のテキストで書き出し(共有・コピー)/貼り付けて取り込み。名前 ⇔ ID は pokedex の検索・`getMovesByIds` で解決。
@@ -184,7 +196,7 @@
   - 完了(2026-10-02): 日本語名の Showdown 風テキスト(ユーザー決定。実 Showdown 非互換。ADR-0506)。書き出し(コピー・共有)・貼り付け取り込み(取り込めなかった行を一覧し、取り込める分だけ追加)。`swift test` 633件・`make ios-test` 全件成功(XCUITest 61件)。critic PASS(指摘対応済み)
 - [ ] P6-24 素早さ比較画面(iOS。ユーザー決定 2026-10-03〈DECISIONS.md〉。Web の `SpeedScreen` が参照実装、契約は `services/speed/api/openapi.yaml`〈gateway `/api/speed/*`〉。生成設定への取り込み方を spec で決める)
 - [ ] P6-25 判定画面(iOS。契約は `services/judge/api/openapi.yaml`。P6-24 の取り込み方に揃える。判定の応答の `unsupported` の印も表示する)
-- [ ] P6-26 タイプバランス画面(iOS。契約は `services/balance/api/openapi.yaml`。構築をそのまま渡す導線を検討)
+- [-] P6-26 タイプバランス画面(iOS)は**取り下げ**(2026-10-03 ユーザー決定)。タイプバランスレーンが P6-21(ADR-0415)として第1〜2段を main に実装済みで、重複する PR #512 を閉じた。第3段は P6-22(タイプバランスレーン)
 - [ ] お気に入り・計算履歴の iOS 表示(API レーンの契約追加待ち。DECISIONS.md 2026-10-03 で依頼済み)
 
 - [x] P6-21 タイプバッジ・エンブレムの文字色を design.md「タイプバッジ」の `typeInk` 規則(黒/白のコントラスト比が高い方。白は どく/ゴースト/ドラゴン/あく のみ)に準拠(エンブレム本体・バッジは実装済みで、残っていたのは文字色の白固定)。`TypeColorToken.ink(forTypeID:)` を追加。`swift test` 全件・`make ios-test` 全件成功(XCUITest 53件)。critic PASS。ADR-0501「P6-21」
@@ -265,6 +277,7 @@
 - [x] DOC-api: `services/calc/README.md`・`services/gateway/README.md` を §8 の形に、手順書
 - [x] DOC-web: `web/README.md`、手順書
 - [x] issue #284 のタイプバランス分(ADR-0414): balance の直結 Ingress を撤去し gateway の `GATEWAY_BALANCE_URL=http://balance` を base に配線。**残り**: speed・judge の直結 Ingress の撤去と URL 配線(各レーン)、共有クラスタの旧 `Ingress/balance` の手動削除と `allow-traefik-ingress` の balance 除外(人間確認)
+- [x] issue #284 の speed・judge 分(ADR-0416): speed・judge の直結 Ingress を撤去し gateway の `GATEWAY_SPEED_URL=http://speed`・`GATEWAY_JUDGE_URL=http://judge` を base に配線(ADR-0414 と同じ方式。静的検査は各 `cmd/api/manifest_test.go` と gateway の `TestManifestGatewaySpeedJudgeURL`)。**残り(人間確認)**: 共有クラスタの旧 `Ingress/speed`・`Ingress/judge` の手動削除(gateway 更新後)と `allow-traefik-ingress` の speed・judge・balance 除外。これで issue #284 の Ingress 撤去は3サービスとも完了
 - [x] DOC-tb: `services/balance/README.md` を §8 の形に、手順書 `docs/runbooks/balance.md`
 - [x] DOC-speed
 - [x] DOC-ios: `ios/README.md`
@@ -273,18 +286,21 @@
 ## M4: 運用
 - [x] P7-1 kube-prometheus-stack / Loki、各サービスのメトリクス
   - [x] issue #293 の残り(2026-10-02): 一次切り分けの runbook(observability.md §7)と `make k8s-render` に base/observability
-- [x] issue #299(タイムアウトの連鎖。ADR-0801): calc・balance・speed にハンドラ全体の締め切り(writeTimeout − 1 秒)と同時実行の上限(超過は待たせず 503 + Retry-After)、judge・pokedex に上限、k3d の Traefik に有限のタイムアウト(`scripts/up.sh` が適用)。Docker 負荷試験(同時 120 で EOF 0 件)はメインでの実地確認。issue #330(httpmetrics の複製のずれ検出)は先行コミット a8db4fa で解消済み
+- [x] issue #299(タイムアウトの連鎖。ADR-0801): calc・balance・speed にハンドラ全体の締め切り(writeTimeout − 1 秒)と同時実行の上限(超過は待たせず 503 + Retry-After)、judge・pokedex に上限、k3d の Traefik に有限のタイムアウト(`scripts/up.sh` が適用)。Docker 負荷試験(同時 120 で EOF 0 件)はメインでの実地確認。issue #330(httpmetrics の複製のずれ検出)は先行コミット a8db4fa で解消済み。issue 538(calc の期限切れテストの不安定): 原因は `httpguard.Expired` が期限直後に `ctx.Err()` の更新前だと取りこぼす競合で、Deadline との比較を加えて修正(ADR-0801 追記)
 - [x] P7-2 SLO(計算API p99 < 100ms、可用性)とダッシュボード
   - [x] balance 分(2026-10-02、ADR-0420。p99 < 500ms・可用性。記録ルール・ダッシュボード・静的検査。実クラスタ確認は未実施)
-- [x] 生成物のコミットをやめる(2026-10-03 ユーザー決定。ADR-0806。PR #526): Go・TypeScript の生成物(oapi-codegen・sqlc・openapi-typescript)を
+- [x] 生成物のコミットをやめる(2026-10-03 ユーザー決定。ADR-0807。PR #526): Go・TypeScript の生成物(oapi-codegen・sqlc・openapi-typescript)を
   追跡から外し、`make gen`(冪等)を test・lint・build・Docker・CI・Web の pre* フックの前段に置いた。iOS の生成物も
-  追跡から外し、`make ios-*` の前段で `ios-gen`(Xcode で直接開く前は `make ios-gen` を1回)。merge ドライバ案は却下(ADR-0806)。
+  追跡から外し、`make ios-*` の前段で `ios-gen`(Xcode で直接開く前は `make ios-gen` を1回)。merge ドライバ案は却下(ADR-0807)。
   他ブランチの移行手順は COORDINATION.md「生成物を追跡から外したあとの取り込み」
-- [~] P7-3 ArgoCD(GitOps): balance は Argo CD 管理。speed・judge の実クラスタ適用は人間確認待ち(CURRENT_STATE.md)。残りは issue #292・#263・#237(NetworkPolicy の balance・speed → mysql は base に反映済み=ADR-0412 追記。残りは共有クラスタへの apply の人間確認と pokedex の実 digest 確定)
-- [ ] P7-4 MySQL/TiDB バックアップと復元テスト(ADR-0209 §9 を要件に含める: バックアップに `devices`〈墓石〉を含める /
+- [~] P7-3 【担当: データレーン】 ArgoCD(GitOps): balance は Argo CD 管理。speed・judge の実クラスタ適用は人間確認待ち(CURRENT_STATE.md)。残りは issue #292・#263・#237(NetworkPolicy の balance・speed → mysql は base に反映済み=ADR-0412 追記。残りは共有クラスタへの apply の人間確認と pokedex の実 digest 確定)
+- [ ] P7-4 【担当: データレーン】 MySQL/TiDB バックアップと復元テスト(ADR-0209 §9 を要件に含める: バックアップに `devices`〈墓石〉を含める /
   purge journal(#5b。世代取得後の削除要求。保持90日)をバックアップ世代と別に保持し復元時に再適用 /
   Ready の前に墓石の再適用・purge journal の再適用・失効ジョブの強制実行 / JetStream は再生しない / 世代30日。
   受け入れ条件は AC-B1〜B3・AC-B2b)
+  - [x] スクリプトとテスト(2026-10-03。ADR-0225。運用の空席をタイプバランスレーンが代行): `scripts/db-backup.sh`(full/journal)・`scripts/db-restore.sh`・`make db-backup`/`db-restore`・runbook(data.md d2)を実装。`make test-scripts` の偽物テスト2本と、Docker の使い捨て TiDB・MySQL での実往復 `make test-db-backup`(AC-B1〜B3・B2b)が通る。**未実施**: 実クラスタ(k3d)上の実バックアップ・復元(TiDB 未配備・record/team 未配備)、クラウド保存先・暗号化、PVC スナップショット、サービスが削除要求の受付時に DB 外へ同時追記する実装(同期間隔の穴が残る。ADR-0225 §7)、Argo CD/レジストリ image の復元(#297)
+
+- [x] 確認手順書 M1〜M4(`docs/verify-all.md`。verify-m1 の read model 書き出しを `make pokedex-export-k3d` に集約、verify-m3・verify-m4 を新設。タイプバランスレーン・ドキュメントのみ)
 
 ## 後続: 要件との対応(issue #286。M1〜M4 の後。担当レーン付き)
 requirements.md の項目のうち、計画に無かったものをここに置く。着手の順・可否はユーザー判断(急ぎではない)。
@@ -444,9 +460,14 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
 - [x] issue #276
 - [x] issue #232(データ/APIレーン)テラス・ダブルを指定した計算に「未対応」の印を付ける(ADR-0160)。Web・iOS の表示文言(ラベル・型)は別 issue。#510(ADR-0222)の後に取り込み、ADR-0222 §5 で format=double の印を外した(未知の形式とテラスの印は残す)
 - [x] issue #232 のダブル分(ADR-0222)ダブルの壁(2732/4096)と全体技(×3072/4096)を engine・wasmapi に反映。`Move.Target`(single/spread)・ダブルで技の対象が不明な攻撃技は move_target_unknown の印。テラスはゲームに無いので実装しない。ゴールデン doubles 全件一致・既存9ファイル不変。#497 マージ後の format 印の整理は ADR-0222 §5
+- [x] issue #232 のテラス分(ADR-0224)テラスタルをオプションの機能として engine・wasmapi に反映(ユーザー決定 2026-10-03「機能だけ追加し、オプションで選択できる」)。teraType を指定したときだけ、攻撃側のタイプ一致補正(元タイプ一致・テラス一致・てきおうりょく)と「タイプを持つか」の判定(接地・サイコフィールドの先制技・すなあらし/ゆき)に反映。省略時は従来と完全に同じ。攻撃側の attacker_tera_type の印は外し、防御側の defender_tera_type の印は残す(防御側テラスは oracle に合わせて相性に反映しない)。ゴールデン tera・tera-random 全件一致、既存9ファイルは不変、known_diffs への追加なし。**人間の確認待ち(既定案付き)**: 防御側テラスで相性を変えるか(本編 SV は変える。既定案は oracle どおり反映しない。反映するなら known_diffs に ADR 付きで登録=人間の承認が必要。ADR-0224 Q1)
 
-- [x] issue #315 のメガ部分(API レーン)メガシンカ後の種族に requiredItemId 以外の持ち物を持たせた計算を 400 invalid_input で拒否(ADR-0200 §4 追記。テラスタイプは別作業、WASM 側の規則は未実装で issue #505 で追跡)
+- [x] issue #315 のメガ部分(API レーン)メガシンカ後の種族に requiredItemId 以外の持ち物を持たせた計算を 400 invalid_input で拒否(ADR-0200 §4 追記。テラスタイプは別作業)
+- [x] issue #505(データレーン)wasmapi(オフライン計算)にメガ種族の持ち物検証を入れ calc-svc と揃える(ADR-0321。parity テスト・Go/WASM 一致ベクタ。Web の toEngineSpecies がメガ種族の isMega・requiredItemId を境界へ渡す変更も同じ PR)
 - [x] issue #515 の API 分(Web レーンが越境): `GET /api/pokedex/species/{key}` の `SpeciesDetail` に `isMega`(常に)・`requiredItemId`(メガでなければ null。キーは常に出す)を追加。`SpeciesSummary` には足さない(docs/mega-evolution-spec.md §2 の「公開 API に既にある」を訂正)
+- [x] issue #515 の Web 分 PR-A(ADR-0320): メガ種族の持ち物をメガストーンに固定する共通ドメイン(`web/src/domain/mega.ts`。PR-B〈構築の編集・判定〉が再利用)と、計算画面・逆算画面(持ち物欄 disabled+理由+aria-describedby、メガストーンは単独の選択肢・候補比較・逆算の持ち物候補に出さない、防御側/相手がメガのときは探索しない)。マスタ写像(`isMega`・`requiredItemId`)・キャッシュのスキーマ版 1→2・E2E フィクスチャ(`withMegaFixture`)まで。構築の編集・判定と古い保存データの補正は PR-B
+- [x] issue #515 の Web 分 PR-B(ADR-0320): 構築のメンバー編集(`changeSpecies` の持ち物整合・`correctMegaItem`・持ち物欄の固定+理由+ストーン名表示。古い保存データは開いたとき〈一覧の無いマスタは種族の解決後〉に1回だけストーンへ直し、メンバーの枠に `role="status"` で通知。未保存の変更として持ち、自動保存しない)と、判定画面の自分・相手の候補の個体入力(同じ固定。要求の `itemId` にストーン)。これで issue #515 の Web 分は完了
+- [x] issue #515 のデータ・検索・Web 分(ADR-0324): メガ種族の `nameJa` を、上流(上書き・PokeAPI)に無いときだけ「メガ + 基本種名 + フォーム識別子(Mega-X → X)」から importer が生成(`name_ja_source` = `generated`〈migration 000011〉・警告 `name-generated`・report の `names.species.generated`。基本種名が無ければ生成せず英語名のまま)。メガストーンの名前は機械的に作れないので生成せず上書き設定と report の欠落一覧で扱う(ADR に既知の制約)。検索は「`nameJa` が q で始まる、またはメガ種族で `メガ`+q で始まる」に統一(pokedex の SQL・Web のオフライン検索・テストの偽物・E2E フィクスチャ。`q=ルカリオ` で基本種とメガの両方、`q=メガ` で全メガ)。API 契約は不変。iOS の入力 UI(自動固定・UI テスト)は iOS レーンに残る(issue #515 は閉じない)
 
 - [x] issue #211(API レーン分。ADR-0218): 公開 API の Item / Ability に省略可の `effect` を足した(searchItems・getSpecies.abilities。共通マスタで厳格に検証し、不正は 503 master_unavailable。内部 API は変更なし。critic PASS)
 
@@ -455,7 +476,7 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
   オンラインで取得した持ち物・性格と、解決した種族・特性・技を IndexedDB に保存(`master/cache/`。`MasterCacheStore`・
   スキーマ版つき。書き込み・読み出しの失敗は握りつぶす)し、オフラインはそのキャッシュだけから読む(オンラインを呼ばない・
   架空データを出さない。空・壊れ・版違いは `appText.masterCacheEmptyError` の案内+再試行)。`main.tsx` は例データをやめて
-  `createCachedMasterSources` に差し替え。オフラインでは持ち物の候補比較は選べない(公開 API に効果データが無い)。
+  `createCachedMasterSources` に差し替え。オフラインでは持ち物の候補比較は選べない(キャッシュは効果データを使わない)。オンラインは issue #211 で公開 API の effect により選べる(ADR-0322)。
   実装中に見つけた退行も直した: 攻守入れ替えで種族の検索欄の名前が追従しない(`SpeciesSearchField.selectedNameJa`)、
   種族の解決待ちの間に打った逆算の観測が計算に反映されない(`ReverseScreen` の `latestObservationsRef`)。
   E2E は pokedex フィクスチャでオンライン→オフラインを確かめる(コンテナは CSP の下の WASM 計算を `container.spec.ts` だけで確認)
@@ -474,3 +495,5 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
   - [x] **P5-5c よく計算する相手(チップ。ADR-0317)**: recordClient(`web/src/record/`)・CalcScreen の結果の下のチップ(マウント時1回取得・失敗/0件は黙って非表示)・App はオンラインのときだけ接続・`SpeciesSearchField` に任意 prop `selectedName`。履歴一覧(API 無し)は対象外
   - [ ] **P5-5d 端末データの削除 UI**: record-svc の API と ADR-0209 §8 の文言
 - [x] issue #288 のデータレーン分(ADR-0136): 技の対象(`moves.target`。Showdown の15種の文字列のまま・NULL 可・CHECK。migration 000010)を取得(fetch-showdown/fetch-calc)・照合(全体技の食い違いは攻撃技 Blocker)・投入・`master.MoveTarget`(`IsSpread`)まで。engine・WASM・read model は不変。`MasterMove`/公開 API への追加は API レーンへ依頼。取得物は毎回作り直す(古い形で止まらないことをテストで固定)
+- [x] issue #288 の API レーン分(ADR-0223): 内部 API `MasterMove.target`(必須キー・nullable・値は Showdown の文字列のまま)→ calc-svc の `buildMoves` → `master.Move` が `engine.Move.Target`(single/spread/不明は空)に写す。公開 `Move.target`(省略可・single/spread。NULL はキーごと省く・未知の値は 503)を getMove・getMovesByIds・searchMoves に追加。ダブルの `move_target_unknown` の印は対象が不明な技だけに付く。シングル・ゴールデンは不変。Web の `exportSnapshot` は `target: null`
+- [x] issue 514(API レーン。gateway): `/api/*` の上流が JSON でない 5xx(502 text/html・504 text/plain 等)を返したら、503 `upstream_unavailable` の Error JSON に正規化(ADR-0802 追記)。判定は `newReverseProxy` の `apiUpstream`。JSON の 5xx・4xx・assets・Web は素通し。上流の本文・`Retry-After` は引き継がず、専用 WARN に上流のステータス・Content-Type を残す。`upstream_nonjson_test.go`(5 上流×正規化7件+素通し5件)。実装を外すと正規化7件が落ちることを確認。範囲外: Traefik 直結の 502/504。

@@ -76,11 +76,7 @@ web-e2e-container: web-docker-build web-deps ## 作ったイメージを docker 
 # 自分の Deployment だけを apply する。
 .PHONY: web-k3d-deploy
 web-k3d-deploy: web-docker-build ## k3d(既存クラスタ。make up 済み)へ Web だけをデプロイする
-	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh web-k3d-deploy
-	@k3d image import pokecalc/web:local --cluster $(CLUSTER)
-	@kubectl apply -k deploy/k8s/overlays/local-web
-	@kubectl -n pokecalc rollout restart deployment/web
-	@kubectl -n pokecalc rollout status deployment/web --timeout=120s
+	@CLUSTER=$(CLUSTER) TAG_PATHS="web engine testdata/golden/typechart.json" ./scripts/k3d-deploy-tagged.sh web-k3d-deploy deploy/k8s/overlays/local-web pokecalc/web
 
 .PHONY: web-k3d-open
 web-k3d-open: ## 診断用: gateway を通さず Web の Service へ port-forward する(localhost:5173。Ctrl-C で終了)

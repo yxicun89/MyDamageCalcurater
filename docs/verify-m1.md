@@ -59,20 +59,14 @@ kubectl -n pokecalc get pods -l app.kubernetes.io/name=pokedex
 `wait` が `job.batch/<job名> condition met` で終わる(`make import-k8s` は Job を作るだけで待たないので、`wait` までを流す)。
 数秒〜10秒ほどで `pokedex` が `1/1` になる。`make import-fetch` がネットワーク無しで失敗したら、そこで止める(ネットワークを戻して再実行する。DB は変わっていない)。
 
-タイプバランス・素早さが読む read model を書き出す(`mysql` へ一時的に port-forward する)。
+タイプバランス・素早さが読む read model を書き出す(`mysql` への port-forward と DSN の読み取りは内部で行い、DSN は表示しない)。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-kubectl -n pokecalc port-forward svc/mysql 3306:3306 >/dev/null 2>&1 &
-PF_PID=$!
-sleep 2
-export POKEDEX_DATABASE_DSN=$(kubectl -n pokecalc get secret mysql-auth -o jsonpath='{.data.pokedex-reader-dsn}' | base64 -d | sed 's/@tcp(mysql:/@tcp(127.0.0.1:/')
-make pokedex-export
-kill $PF_PID
-unset POKEDEX_DATABASE_DSN PF_PID
+make pokedex-export-k3d
 ```
 → `export: ../data/generated/readmodel に書いた`。`data/generated/readmodel` に `metadata.json`・`type-chart.json` を含む6ファイルがある。
-ホストの 3306 を `make db-local-up` の MySQL が使っているときは、port-forward 先を `13306:3306` にし、`sed` の `127.0.0.1:` の後も `13306` にする。
+ホストの 13307 が使用中なら `EXPORT_LOCAL_PORT=<空きポート> make pokedex-export-k3d`。
 
 ## 4. 最新のコードを k3d に入れる(動作確認の前に毎回)
 
@@ -95,6 +89,7 @@ make web-k3d-e2e
 → `web smoke: すべて成功(http://localhost:8080)`。`api-smoke` の最終行に `calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=200 internal=404 balance=200 web=200`
 (`API_SMOKE_STRICT=1` は web・balance が 200 でなければ非0で終わる。`missing_header=400`・`invalid_header=400`・`internal=404` は異常系を意図して確かめた結果で、この値が正常)。
 `web-k3d-e2e` は `2 passed`(実ブラウザで 8080 を開き、オフラインとオンライン〈実マスタ〉の両方で計算結果が出ることを確かめる)。
+注記: record-svc が k3d に未デプロイ(M2。API レーンの P5-3b)の間は、`503 /api/record/frequent-opponents` で 2 件失敗する。これは既知の状態(2026-10-03 に確認)で、M1 の失敗ではない。
 
 ## 6. ブラウザで確認する(Chrome と Safari)
 
@@ -108,7 +103,7 @@ make web-k3d-e2e
 2. 防御側も同じように選ぶ → 結果が5行出る(Network に `POST /api/calc/bulk` が 200)。
 3. 技を変える → 結果が変わる。「A特化」にする → 各行の%が上がる。
 4. 「逆算」タブで自分・相手を選び、観測に%を入れる → 候補が出る(`POST /api/calc/reverse` が 200)。
-5. 「タイプバランス」タブ → メンバーを2体選ぶ → 防御相性の表(18タイプ)とチームの集計、「おすすめタイプ」が出る。
+5. 「タイプバランス」タブ(balance は gateway 経由の `/api/balance/*`。直結の Ingress は無い。ADR-0414。計算モードがオフラインでも、このタブと「判定」タブはオンラインのマスタを使う。ADR-0411)→ メンバーを2体選ぶ → 防御相性の表(18タイプ)とチームの集計、「おすすめタイプ」が出る。
    技を選ぶ → 攻撃範囲の表が更新される。「仮想敵を追加」で1体選ぶ → 相性の表と人数の集計が出る。
 6. 「素早さ」タブ → ポケモンを選ぶ → 自分より速い・同速・遅いポケモンの一覧が出る。
 7. 「判定」タブ → 自分と相手のポケモン・性格を選び、両方の「技の ID」に技の ID(英小文字。例: 計算タブの技の欄の技を英語表記の小文字・記号なしにしたもの)を入れて「判定する」 → 素早さの比較と「自分の技で相手を 乱数N発」が出る(技は ID の手入力: issue #309)。
@@ -169,7 +164,7 @@ k3d のバックエンドが動いていることを確認する。
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/api/pokedex/natures \
   -H 'X-Device-Id: 00000000-0000-4000-8000-00000000d001' -H 'X-Session-Id: 00000000-0000-4000-8000-00000000d002'
 ```
-→ `200`(動いていなければ §3・§4)。
+→ `200`(動いていなければ §3・§4)。端末ID・セッションIDは正準 UUID(ハイフン区切りの 8-4-4-4-12)でないと 400 になる(ADR-0413)。
 
 #### 7-B. シミュレータで k3d の API を使って計算する(確認済み)
 
@@ -267,7 +262,7 @@ Xcode で `ios/PokeCalc.xcodeproj` を開き、署名チームを設定して実
 | 8080 で画面が真っ白 | 古い web イメージ(JS が 404。issue #268) | §4 `make deploy-latest` |
 | 「マスタデータの読み込みに失敗しました」 | 5173(Web 直。API が無い)で開いている / pokedex にマスタが無い | 8080 で開く / §3 `make import-k8s` |
 | ポケモンを選ぶと「ポケモンの検索に失敗しました」 | pokedex が古い(`/api/pokedex/moves/batch` が 404) | §4 `make deploy-latest` |
-| タイプバランス・素早さが 503 | read model が入っていない | §3 `make pokedex-export` → §4 |
+| タイプバランス・素早さが 503 | read model が入っていない | §3 `make pokedex-export-k3d` → §4 |
 | `curl localhost:8080` が接続できない | k3d が止まっている・8080 を別のプロセスが使用 | `k3d cluster list`、`lsof -nP -iTCP:8080 -sTCP:LISTEN` |
 
 詳しい切り分けは [impl/verify-mapping.md](impl/verify-mapping.md) §4。`make web-k3d-open`(localhost:5173)は gateway を通さず画面だけを

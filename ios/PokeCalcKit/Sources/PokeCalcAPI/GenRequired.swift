@@ -1,4 +1,4 @@
-// 生成物の欠落を分かりやすくするための手書きファイル(ADR-0806)。
+// 生成物の欠落を分かりやすくするための手書きファイル(ADR-0807)。
 //
 // このターゲットの Generated/ は api/openapi.yaml から swift-openapi-generator で作り、Git に置かない。
 // このファイルで「cannot find type 'Client' in scope」になったら、生成物が無い。

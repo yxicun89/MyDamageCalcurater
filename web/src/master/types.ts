@@ -7,6 +7,8 @@ import type { Ability, Item, Move, Species, StatKey, TypeChart } from "../engine
 /** マスタの種族。learnset は画面のための追加フィールド。 */
 export interface MasterSpecies extends Species {
   readonly learnset: readonly string[];
+  // isMega・requiredItemId は Species(engine/types.ts)が持つ。メガ種族の持ち物の検証のため境界へも渡す
+  // (domain/requests.ts の toEngineSpecies。ADR-0321)。読むときは domain/mega.ts の isMegaSpecies を通す。
 }
 
 /**

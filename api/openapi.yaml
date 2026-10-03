@@ -1172,6 +1172,18 @@ components:
         category: { $ref: '#/components/schemas/MoveCategory' }
         power: { type: integer, description: 威力(0 は変化技/固定ダメージ) }
         priority: { type: integer, default: 0 }
+        target:
+          type: string
+          enum: [single, spread]
+          # Format の single と定数名が衝突しないよう名前を明示する(衝突すると oapi-codegen が既存の定数名を変える)。
+          x-enum-varnames: [MoveTargetSingle, MoveTargetSpread]
+          description: |
+            技の対象の分類(issue 288・ADR-0223)。ダブルの計算に使う: `spread` は相手の場の複数に当たる全体技
+            (Showdown の allAdjacent・allAdjacentFoes。ダブルで ×3072/4096)、`single` はそれ以外(単体技・自分・味方・場の技)。
+            値は engine の `MoveTarget`(WASM の技の `target`)と同じで、クライアントはそのまま渡せる。
+            pokedex-svc がマスタの対象(`MasterMove.target` の Showdown の文字列)から分類して返す。
+            対象がまだ取り込まれていない技は**キーごと省く**(null を返さない)。古いサーバーもこのキーを返さないため、
+            クライアントは「キーが無い」を不明として扱う(ダブルの計算では単体として計算し、未対応の印 move_target_unknown が付く)。
 
     Item:
       type: object
@@ -1223,9 +1235,14 @@ components:
         ranks: { $ref: '#/components/schemas/RankBlock' }
         teraType:
           description: |
-            テラスタイプ。受け付けるが計算には反映しない(テラスタルの補正は未実装)。指定すると数値は
-            テラスなしのまま、結果の unsupported に target attacker_tera_type / defender_tera_type・
-            reason unsupported_effect・id テラスタイプの印が付く(ADR-0160)。
+            テラスタイプ。省略・null はテラスタル無し(従来どおり)。ポケモンチャンピオンズ本編には無いが、
+            指定したときだけテラスタル済みとして計算に反映する(オプションの機能。ADR-0224)。照合の正は
+            @smogon/calc 0.12.0 の Champions 世代: 攻撃側はタイプ一致補正(テラス=元タイプ=技 ×2.0、
+            テラスだけ一致 ×1.5、てきおうりょくはテラス=元タイプ ×2.25・テラスだけ一致 ×2.0)に、
+            両側とも「そのタイプを持つか」の判定(接地・サイコフィールドの先制技・すなあらし/ゆきの防御補正)に使う。
+            防御側のテラスはタイプ相性に反映しない(照合先の Champions 世代の挙動。本編 SV とは違う)ので、
+            防御側に指定すると結果の unsupported に target defender_tera_type・reason unsupported_effect・
+            id テラスタイプの印が付く(ADR-0160・ADR-0224 §3)。攻撃側のテラスには印を付けない。
           nullable: true
           allOf: [ { $ref: '#/components/schemas/PokeType' } ]
         status: { $ref: '#/components/schemas/StatusCondition' }
@@ -1291,8 +1308,8 @@ components:
       type: object
       description: |
         「この結果は正しくない可能性がある」印1つ(ADR-0123)。engine が正しく計算できない技の機構・
-        持ち物・特性と、受け付けるが計算に反映しないテラスタイプ・未知の対戦形式(ADR-0160・ADR-0222 §5)に、数値は
-        通常の式のまま付ける(400 で拒否しない)。
+        持ち物・特性と、タイプ相性に反映しない防御側のテラスタイプ・未知の対戦形式(ADR-0160・ADR-0222 §5・
+        ADR-0224 §3)に、数値は通常の式のまま付ける(400 で拒否しない)。
       required: [target, reason, id]
       properties:
         target:
@@ -1300,7 +1317,8 @@ components:
           description: |
             印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability・
             attacker_tera_type・defender_tera_type・format(並びもこの順)。format は engine に未知の形式が
-            届いたときだけ(double は計算に反映するので付かない。ADR-0222 §5)。
+            届いたときだけ(double は計算に反映するので付かない。ADR-0222 §5)。attacker_tera_type は
+            攻撃側のテラスを計算に反映したので現在は付かない(値は互換のため残す。ADR-0224 §3)。
             値を足しても古いクライアントが応答全体をデコードできなくなるのを避けるため、enum にしない
             (クライアントは未知の値を「対象不明の印」として扱い、id をそのまま表示する。ADR-0215)。
         reason:
@@ -1311,8 +1329,8 @@ components:
             move_specific・multi_hit・ohko・priority_change・type_change・variable_power)か
             zero_power(威力0の攻撃技。威力が技の処理で決まるため)・move_target_unknown(double で技の対象が
             不明なため全体技の補正を判断できない。ADR-0222)、持ち物・特性は
-            unsupported_effect(効果スキーマで表せない)、テラスタイプ・未知の対戦形式も unsupported_effect
-            (効果を計算に反映していない。ADR-0160)。target と同じ理由で enum にしない
+            unsupported_effect(効果スキーマで表せない)、防御側のテラスタイプ・未知の対戦形式も unsupported_effect
+            (効果を計算に反映していない。防御側のテラスはタイプ相性に反映しない。ADR-0160・ADR-0224 §3)。target と同じ理由で enum にしない
             (クライアントは未知の値を汎用の文言で扱う。ADR-0215)。
         id:
           type: string
@@ -2030,7 +2048,7 @@ components:
     MasterMove:
       type: object
       description: moves テーブルの行(計算に使う列だけ)+ move_effects の effect(ADR-0107)
-      required: [id, nameJa, type, category, power, priority, effect, mechanisms]
+      required: [id, nameJa, type, category, power, priority, effect, mechanisms, target]
       properties:
         id: { type: string }
         nameJa: { type: string }
@@ -2056,6 +2074,18 @@ components:
             enum にすると oapi-codegen が別の Go 型を生成し、両サービスで `[]string` との相互変換が
             必要になるだけで、二重の検証にしかならない。
           items: { type: string }
+        target:
+          type: string
+          nullable: true
+          description: |
+            技の対象(moves.target。ADR-0136・ADR-0223。issue 288)。Showdown の技データの `target` の文字列を
+            そのまま返す(15種。正は `services/internal/master.AllMoveTargets`)。null はまだ取り込んでいない行
+            (対象が不明)。キーは省かない(null を返す)。
+            enum は付けない(mechanisms と同じ理由。値の検証は受け取った calc-svc が `master.MoveTargetOf` で行う)。
+            calc-svc は全体技(allAdjacent・allAdjacentFoes)を engine の spread、その他の既知の値を single、
+            null を不明("")として engine.Move.Target に写す(ダブルで不明の攻撃技には move_target_unknown の印。ADR-0222)。
+            古い pokedex-svc(このキーを返さない版)からの取り込みは、キーが無いことを null と同じ「不明」として受け付ける
+            (入れ替えの順序に依存させない。ADR-0223 §3)。
 
     MasterEffect:
       type: object

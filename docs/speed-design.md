@@ -31,14 +31,14 @@ services/speed/
 ├─ testdata/               # 架空データの example
 ├─ scripts/                # smoke・k3d への read model デプロイ・GitOps の検査・イメージの push
 └─ deploy/
-   ├─ k8s/base                    # Deployment・Service・Ingress /api/speed
+   ├─ k8s/base                    # Deployment・Service(Ingress なし。/api/speed は gateway 経由。ADR-0416)
    ├─ k8s/overlays/local          # 架空データの read model(ConfigMap)
    ├─ k8s/overlays/local-readmodel # pokedex export の実データ(ADR-0603)
    ├─ k8s/overlays/gitops         # digest 固定(ADR-0605)
    └─ argocd/                     # Argo CD Application pokecalc-speed(ADR-0605)
 ```
 
-Ingress は `/api/speed`(balance の `/api/balance` と同じ形)。
+入口は gateway の `/api/speed/*`(`GATEWAY_SPEED_URL=http://speed`。直結 Ingress は ADR-0416 で撤去。balance と同じ形)。
 
 ## 4. 素早さの計算(SP0 のコア)
 
