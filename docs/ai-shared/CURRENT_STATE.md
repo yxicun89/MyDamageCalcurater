@@ -111,6 +111,7 @@ Next: キュー順に対応:
 issue #284のdeployment.yaml配線も含む。優先度低)。
 issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。
 60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
+Status(追記): P5-3b・P5-4b 実装済み(ADR-0220。critic 待ち)。`deploy/k8s/base/{record,team}`(Deployment・Service・保持日数の ConfigMap・日次の失効 CronJob)、gateway の `GATEWAY_RECORD_URL`・`GATEWAY_TEAM_URL`(base)、`record expire`・`team expire`(同じバイナリのサブコマンド。`internal/expire`。冪等・1回の上限・終了コード 0/1/2)、NetworkPolicy 4本、/metrics と ServiceMonitor、cloud overlay での失効ジョブ suspend、up.sh の server イメージ build。TiDB 実機(`make test-db-docker`)の expire テスト含め green。k3d への実デプロイは未確認(人間が確認)。
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
@@ -424,6 +425,8 @@ JD4(返り討ち判定。PR #169)・JD5(Web の画面。PR #182。ADR-0705)ま�
 Status(追記): 2026-10-02 issue 309 `web/src/judge/` を変更: 技は ID 自由入力から種族の learnset の select へ(ADR-0705 §5 を置き換え)、調整プリセット(無振り・最速・攻撃特化・HB/HD特化)、SP6欄・ランク5欄は「詳細」に畳む、検証エラーは欄ごとに aria-invalid+文言。ADR-0711。
 Status(追記): 2026-10-01 issue #258 judge の GitOps(gitops overlay・Argo CD Application・image 公開スクリプト。ADR-0709)を実装。
 実クラスタへの適用(`judge-argocd-app`・registry push・sync)は人間確認待ちで未実施。
+Status(追記): 2026-10-02 issue #235 第1段(素早さに反映した補正・反映していない入力を応答と判定画面に出す。ADR-0710)を実装。
+第2段(特性・持ち物の素早さ補正のデータ駆動)はデータレーンへの依頼(DECISIONS.md)待ち。#258 は PR #419・#449 で overlay まで統合、Argo CD への登録・sync は未実施。
 Next: issue 309 の critic レビューと PR(共通部品化〈MoveSelect・プリセット選択〉と SpeciesSearchField の aria-invalid 対応は別タスク提案。ADR-0711)。以降は新規要望待ち。軽微な積み残しは解消済み(2026-09-25。`attacker`単数の`Individual`にも`defenders`候補と
 同じ大文字小文字厳密なキー検査〈`individualWireKeys`〉を適用。PR #342 main 統合済み)。
 issue #234(moveId/natureId の形式検証。ADR-0706)も解消(2026-09-25。critic 2ラウンド。PR #365 main 統合済み):

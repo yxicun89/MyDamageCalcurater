@@ -118,7 +118,7 @@ export const calcScreenText = {
   attackerPresetGroupLabel: "攻撃側の調整",
 } as const;
 
-/** 計算画面の「詳細」(急所・やけど・天候・フィールド・防御側の壁・攻撃側のランク。issue 274、ADR-0312)の文言。iOS と同じ。 */
+/** 計算画面の「詳細」(急所・やけど・天候・フィールド・防御側の壁・攻撃側と防御側のランク。issue 274、ADR-0312)の文言。iOS と同じ。 */
 export const calcConditionsText = {
   toggleLabel: "詳細",
   criticalLabel: "急所",
@@ -127,6 +127,7 @@ export const calcConditionsText = {
   terrainLabel: "フィールド",
   screensLabel: "防御側の壁",
   ranksLabel: "攻撃側のランク",
+  defenderRanksLabel: "防御側のランク",
   weather: { none: "なし", sun: "はれ", rain: "あめ", sand: "すなあらし", snow: "ゆき" },
   terrain: {
     none: "なし",
@@ -138,6 +139,8 @@ export const calcConditionsText = {
   screens: { reflect: "リフレクター", lightScreen: "ひかりのかべ", auroraVeil: "オーロラベール" },
   rankUpLabel: "攻撃側のランクを上げる",
   rankDownLabel: "攻撃側のランクを下げる",
+  defenderRankUpLabel: "防御側のランクを上げる",
+  defenderRankDownLabel: "防御側のランクを下げる",
   /** ランクの増減ボタンの見た目の記号。 */
   rankUpSymbol: "+",
   rankDownSymbol: "-",
@@ -546,6 +549,18 @@ export const judgeScreenText = {
   requiredMessage: "ポケモン・性格・技をすべて選んでください",
   // ---- 結果(ADR-0705 §8)。judge の値をそのまま出す ----
   speedLabel: (attacker: number, defender: number): string => `素早さ ${attacker} 対 ${defender}`,
+  /**
+   * 素早さに反映した補正・反映していない入力(ADR-0710。issue 235)。judge が返した欄をそのまま文にする。
+   * 反映していない入力は「指定されたが素早さには掛けていない」の意味で、効果が無い特性・持ち物でも出る。
+   */
+  speedAppliedNote: (side: string, names: readonly string[]): string =>
+    `${side}の素早さに反映: ${names.join("・")}`,
+  speedIgnoredNote: (side: string, names: readonly string[]): string =>
+    `${side}の素早さに${names.join("・")}は反映していません`,
+  speedSideSelf: "自分",
+  speedSideOpponent: "相手",
+  speedFactorLabel: { rank: "ランク補正", tailwind: "追い風", choiceScarf: "こだわりスカーフ" } as const,
+  speedIgnoredLabel: { abilityId: "特性", itemId: "持ち物", fieldWeather: "天候" } as const,
   priorityLabel: (attacker: number, defender: number): string => `優先度 ${attacker} 対 ${defender}`,
   outspeedsTrueLabel: "素早さで上回る",
   outspeedsFalseLabel: "素早さで下回る",

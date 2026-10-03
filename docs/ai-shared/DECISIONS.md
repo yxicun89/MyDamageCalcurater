@@ -1747,6 +1747,18 @@ Impact: 既存の正常な入力の数値は不変(ゴールデン全件一致)�
 **API レーンへの依頼**(契約は変えていない。既定案は ADR-0123 §7): (1) `MasterMove.mechanisms: string[]`(昇順・通常の技は空配列。ADR-0121 の依頼の再掲)。(2) `CalcResponse`・`BulkRow.result`・`ReverseCandidate` に `unsupported: UnsupportedMark[]`(必須・印なしは `[]`)、`UnsupportedMark = {target: move|attacker_item|attacker_ability|defender_item|defender_ability, reason: <機構 13 種>|zero_power|unsupported_effect, id: string}`。入ったら `services/calc/internal/httpapi/parity_test.go` の `dropEmptyUnsupported` を消して印も比べる。
 **Web / iOS レーンへ**: 印の表示(「未対応」の注記)は各レーンの作業。WASM の形は ADR-0123 §6。
 
+## 2026-10-02: record-svc・team-svc を k3d に配線し、失効ジョブを CronJob にした(API レーン。他レーンへの連絡。ADR-0220)
+Decision: `deploy/k8s/base/{record,team}` を追加し、base の kustomization と gateway(`GATEWAY_RECORD_URL=http://record`・`GATEWAY_TEAM_URL=http://team`)に配線した。
+失効(ADR-0209 §4)は同じバイナリのサブコマンド `record expire` / `team expire` を日次 CronJob(`record-expire`・`team-expire`。日本時間 12:00)で起動する。
+Reason: 設定の解釈を serve と共有でき、イメージを増やさない(ADR-0220 §3)。
+Impact(他レーンへ):
+- Web・iOS: `make up` 後、k3d で `/api/record/*`・`/api/team/*` が gateway 経由で届く(TiDB の導入に成功し record/team の Pod が Ready のとき。無ければ従来どおり 503 `upstream_unavailable`)。
+- 運用: 失効ジョブの CronJob が増えた(失敗は kube_job_status_failed で見る。削除件数はログの `expire done` 1行)。cloud overlay では TiDB・Secret が無いので suspend 済み。
+  NetworkPolicy は record/team の gateway 上流・TiDB・NATS(購読)・Prometheus を許可し、record ↔ team・calc → record/team・record/team → mysql を拒否する。ServiceMonitor は8サービスになった。
+  `make deploy-latest` に record/team を加えるかは運用レーンの判断(今回は触っていない)。up.sh は record/team の Ready を待たない。
+- 失効ジョブは local・cloud とも `suspend: true`(実データへ初めて向ける承認 ADR-0209・ADR-0220 未決事項 0 が済むまで。既定案。plan.md ブロッカー)。手動実行は `kubectl -n pokecalc create job --from=cronjob/record-expire record-expire-manual-...`。承認後に local の suspend patch を外す。
+- 保持日数は ConfigMap `record-retention`・`team-retention` の1か所(ADR-0211 §7 の既定値。変えるときは ADR も更新)。
+
 ## 2026-09-25: issue #271/#270 の API レーン担当分(mechanisms 公開・unsupported 印)を実装(API レーン → データ・Web・iOS レーンへ)
 Decision: データレーンからの依頼(ADR-0121 §4・ADR-0123 §7)を反映した。
 `api/openapi.yaml`: `MasterMove.mechanisms: string[]`(必須・昇順・通常の技は空配列)を追加。
@@ -2035,6 +2047,15 @@ ErrorCode は `missing_header`(欠落・空)・`invalid_header`(UUID でない�
 Reason: Traefik 直結では gateway の検証が効かず、balance だけ緩い非空チェックだった。
 Impact: Web レーンへ: `web/src/api/balance.gen.ts` を再生成済み、`web/src/i18n/ja.ts` の `balanceErrorText` を `missing_header`/`invalid_header` に
 追従済み(`BalanceScreen.test.tsx` のコード一覧も)。`balanceClient.ts` は正準 UUID を送っており変更不要。他に balance の code 文字列に依存する箇所があれば確認してほしい。
+## 2026-10-02: 素早さに効く特性・持ち物のデータ(判定レーン → データレーン。issue #235・ADR-0710 第2段の依頼)
+
+- 判定レーンは第1段(素早さに反映した補正 `*SpeedApplied`・指定されたが反映していない入力 `*SpeedIgnored` を応答に返す)を実装した。
+  ユーザー決定: 反映する範囲は**全て**(天候特性・状態異常・持ち物。不要なら指摘される)
+- データレーンへ: 素早さ補正を持つ特性(天候・場・状態依存)と持ち物(こだわりスカーフ以外のすばやさ補正)を、balance の `abilities` read model の
+  `effects` と同じ流儀の正規化データとしてマスタ側に置き、内部 API(pokedex-svc)から引けるようにしてほしい。judge は ID の switch を持たず、
+  そのデータで反映する。状態異常(麻痺)は judge 側の入力 `status` の追加も要る(判定レーンが契約を足す)
+- 受け取り次第、判定レーンが第2段を実装し、反映できた要素を `*SpeedApplied` に足して `*SpeedIgnored` から外す
+
 ## 2026-10-02: 一括計算の defenderOverride に ranks・status を足した(API レーン → Web・iOS レーンへ。issue #274/#272・ADR-0216)
 
 - `BulkCalcRequest.defenderOverride` は `{ abilityId?, ranks?: RankBlock, status?: StatusCondition }`。全行(全プリセット × 持ち物 × 特性)に一律で当たる。ランクは各 -6..+6(外は 400 `invalid_input`)、未知の status は 400 `invalid_enum`
@@ -2081,3 +2102,9 @@ Impact: 復旧が必要なときは、下記の tip SHA から `git branch <名�
 Decision: bash-guard の PR マージを無条件ブロックから、`gh pr checks` が終了コード 0 のときだけ通す条件付きに変更。`--admin`・`gh api` 直叩き・main への直接 push は引き続き不可。
 Reason: ユーザー指示「全レーンでテストと CI が通っていれば AI が merge してよい。クラウドへの勝手なデプロイ(課金)と機密情報の公開以外は作業を止めたくない」。
 Impact: CLAUDE.md・AGENTS.md・COORDINATION.md・ADR-0800 を整合。.codex も同じ bash-guard を呼ぶため同じ規則が効く。
+## 2026-10-02: 防御側のランクの文言を iOS も同じに揃える提案(Web レーン → iOS レーン。issue #274、ADR-0315)
+Decision: Web の「詳細」に防御側のランクを追加した。iOS も攻撃側のランクと同じ作りで揃えてほしい。
+文言は fieldset「防御側のランク」、ボタン「防御側のランクを上げる」「防御側のランクを下げる」、表示は「B +1」「D -2」「B ±0」。
+編集対象は選択中の技の分類で 物理・変化・技なし = def〈B〉、特殊 = spd〈D〉。def / spd は別々に保持する。
+Reason: 契約(`defenderOverride.ranks`、ADR-0216)は入っており、攻守で画面の作りを揃えるため。
+Impact: 既定(0・0)なら `defenderOverride` を送らない。どちらかが非 0 なら 5 項目の ranks を送り、特性(#272)と同じ `defenderOverride` に併存させる。防御側の状態異常は式に効かないので出さない。
